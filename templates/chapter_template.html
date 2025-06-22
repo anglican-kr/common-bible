@@ -5,12 +5,26 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{{ chapter.title }}</title>
   <link rel="stylesheet" href="verse-style.css">
+  <link rel="stylesheet" href="audio-player.css">
 </head>
 <body>
   <!-- 절 검색 UI -->
   <div class="search-container">
-    <input type="text" id="verse-search" placeholder="절 ID 입력 (예: 창세-1-3 또는 창세기 1:3)">
-    <button id="verse-search-btn">이동</button>
+    <form id="verse-search-form" role="search" aria-label="성경 구절 검색">
+      <label for="verse-search" class="screen-reader-text">절 검색</label>
+      <input type="text" id="verse-search" placeholder="절 ID 또는 단어 검색 (예: 창세 1:3, 하느님)" aria-describedby="search-help">
+      <button id="verse-search-btn" type="submit">이동</button>
+    </form>
+    <p id="search-help" class="search-help-text">책 장:절 형식으로 검색하거나 단어를 입력하세요. 예: '창세 1:1' 또는 '하느님'</p>
+  </div>
+  
+  <!-- 오디오 플레이어 (접근성 고려) -->
+  <div class="audio-player-container">
+    <h2 class="screen-reader-text">성경 오디오</h2>
+    <audio controls class="bible-audio" aria-label="{{ chapter.title }} 오디오">
+      <source src="{{ chapter.audio_path }}" type="audio/mpeg">
+      <p>브라우저가 오디오 재생을 지원하지 않습니다. <a href="{{ chapter.audio_path }}">오디오 파일 다운로드</a></p>
+    </audio>
   </div>
 
   <article id="{{ chapter.id }}">
@@ -19,6 +33,14 @@
     {{ verse_content|safe }}
   </article>
   
+  <!-- 추가 메타정보 -->
+  <div class="bible-meta">
+    <p>공동번역성서 개정판</p>
+    <p class="copyright">재단법인 대한성서공회의 승인을 받아 게재하였습니다.</p>
+    <p class="audio-credit">오디오: 대한성공회 서울교구 선교교육국</p>
+  </div>
+  
   <script src="verse-navigator.js"></script>
+  <script src="accessibility.js"></script>
 </body>
 </html>
