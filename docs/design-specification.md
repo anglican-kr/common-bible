@@ -619,8 +619,10 @@ python -m src.cli pipeline --status private
   <!-- 추가 메타정보 -->
   <div class="bible-meta">
     <p>공동번역성서 개정판</p>
-    <p class="audio-credit">오디오: 서울교구 성서모임</p>
+    <p class="copyright">재단법인 대한성서공회의 승인을 받아 게재하였습니다.</p>
+    <p class="audio-credit">오디오는 대한성공회 서울교구 선교교육국에서 제작하였습니다.</p>
   </div>
+
 </article>
 ```
 
@@ -636,7 +638,7 @@ python -m src.main --parse --input data/common-bible-kr.txt --split-chapters
 python -m src.main --generate-html --json-input data/output/chapters --with-audio
 
 # 워드프레스 게시만 실행
-python -m src.main --publish --status private --url https://seoul.anglican.kr --author admin@anglican
+python -m src.main --publish --status private --url https://seoul.anglican.kr --author YOUR_USERNAME
 
 # 인증 테스트만 실행
 python -m src.main --test-auth --url https://seoul.anglican.kr
@@ -650,7 +652,7 @@ def publish_to_wordpress(chapter: Chapter, html_content: str, audio_path: str):
     # 기본 설정
     wp_url = "https://seoul.anglican.kr"
     endpoint = f"{wp_url}/wp-json/wp/v2/posts"
-    auth_user = "admin@anglican"
+    auth_user = "YOUR_USERNAME"
     auth_pass = os.environ.get("WP_AUTH_PASSWORD")
     
     # 게시물 데이터 준비

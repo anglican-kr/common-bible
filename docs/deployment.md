@@ -19,6 +19,9 @@
 # Python 패키지
 pip install requests beautifulsoup4 lxml pyyaml python-dotenv
 
+# 오디오 파일 처리 (필수)
+pip install pydub wave
+
 # 선택적 (개발용)
 pip install pytest pytest-cov black flake8
 ```
@@ -53,8 +56,10 @@ cp config/.env.example config/.env
 **config/.env 파일 편집:**
 ```env
 # 워드프레스 설정
-WP_BASE_URL=https://your-wordpress-site.com
+WP_BASE_URL=https://seoul.anglican.kr
+WP_AUTH_USER=YOUR_USERNAME
 WP_AUTH_TOKEN=your_application_password_here
+WP_PUBLISH_DATE=2025-07-01
 
 # API 설정
 WP_API_RATE_LIMIT=60
@@ -72,14 +77,16 @@ FORCE_HTTPS=true
 INPUT_FILE=data/common-bible-kr.txt
 OUTPUT_DIR=data/output
 TEMPLATE_DIR=templates
+AUDIO_DIR=audio
+AUDIO_MAPPING_FILE=data/audio_mappings.json
 ```
 
 ### 3. 디렉터리 생성
 
 ```bash
 # 필요한 디렉터리 생성
-mkdir -p logs data/output config
-chmod 755 logs data/output
+mkdir -p logs data/output config audio
+chmod 755 logs data/output audio
 ```
 
 ---
@@ -157,14 +164,17 @@ cp data/common-bible-kr.txt data/backup/$(date +%Y%m%d)_common-bible-kr.txt
 # 파싱 실행
 python src/parser.py --input data/common-bible-kr.txt --output data/parsed_chapters.json
 
-# HTML 생성
-python src/html_generator.py --input data/parsed_chapters.json --output data/output/
+# 오디오 매핑 검증
+python src/audio_manager.py --validate-mappings
+
+# HTML 생성 (오디오 포함)
+python src/html_generator.py --input data/parsed_chapters.json --output data/output/ --with-audio
 ```
 
 #### Stage 2: 미리보기 배포 (비공개)
 ```bash
-# 비공개 상태로 업로드
-python src/wp_publisher.py --upload-all --status=private --dry-run=false
+# 비공개 상태로 업로드 (서울교구 사이트)
+python src/wp_publisher.py --upload-all --status=private --url=https://seoul.anglican.kr --author=YOUR_USERNAME --publish-date=2025-07-01 --dry-run=false
 
 # 업로드 로그 확인
 tail -f logs/bible_converter.log
@@ -263,6 +273,15 @@ def monitor_system():
 3. 배치 처리 크기 감소
 ```
 
+#### 4. 오디오 파일 문제
+```bash
+# 해결 방법
+1. 오디오 파일 경로 확인
+2. 파일 형식 및 인코딩 확인 (MP3 형식)
+3. audio_mappings.json 파일 검증
+4. 수동으로 오디오 파일 업로드 및 연결
+```
+
 ### 로그 분석
 
 ```bash
@@ -282,6 +301,8 @@ grep -c "ERROR" logs/bible_converter.log
 - [ ] 모든 테스트 통과
 - [ ] 환경변수 설정 완료
 - [ ] 워드프레스 인증 테스트 통과
+- [ ] 오디오 파일 매핑 검증
+- [ ] 접근성 요소 검증
 - [ ] 백업 생성 완료
 - [ ] 로그 디렉터리 권한 설정
 
@@ -294,20 +315,22 @@ grep -c "ERROR" logs/bible_converter.log
 ### 배포 후 확인사항
 - [ ] 모든 장 업로드 완료
 - [ ] 검색 기능 정상 작동
-- [ ] 접근성 테스트 통과
+- [ ] 오디오 플레이어 정상 작동
+- [ ] 접근성 테스트 통과 (스크린리더 테스트)
+- [ ] 단어/문구 검색 기능 정상 작동
 - [ ] 성능 모니터링 정상
+- [ ] 메타데이터 정확성 확인
 - [ ] 백업 및 로그 확인
 
 ---
 
-## 📞 지원 및 문의
+## 📞 문의
 
 배포 과정에서 문제가 발생하면:
 
 1. 로그 파일 확인 (`logs/bible_converter.log`)
 2. 트러블슈팅 가이드 참조
 3. GitHub Issues 등록
-4. 문의: [연락처]
 
 ---
 
