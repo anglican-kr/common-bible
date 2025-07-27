@@ -102,7 +102,9 @@ def parse(input, output, split):
 @click.option('--input', '-i', help='입력 JSON 파일 또는 디렉토리')
 @click.option('--output', '-o', help='출력 HTML 디렉토리')
 @click.option('--template', '-t', help='템플릿 디렉토리')
-def generate(input, output, template):
+@click.option('--cleanup', '-c', is_flag=True, help='이전 파일들을 정리하고 새로 생성')
+@click.option('--info', is_flag=True, help='생성된 파일 정보 출력')
+def generate(input, output, template, cleanup, info):
     """구조화된 데이터를 HTML로 변환"""
     try:
         # 입력/출력 경로 설정
@@ -113,6 +115,14 @@ def generate(input, output, template):
             output = os.path.join(config.paths['output_dir'], 'html')
         
         console.print(f"[bold]HTML 생성 시작[/bold]: {input}")
+        
+        # HTML 생성기 초기화
+        generator = HTMLGenerator(template, output)
+        
+        # 이전 파일 정리
+        if cleanup:
+            console.print("[yellow]이전 파일들을 정리합니다...[/yellow]")
+            generator.cleanup_old_files()
         
         # HTML 생성 시작
         start_time = time.time()
@@ -125,27 +135,16 @@ def generate(input, output, template):
         ) as progress:
             task = progress.add_task("[cyan]HTML 생성 중...", total=100)
             
-            # HTML 생성기 초기화
-            generator = HTMLGenerator(template)
-            progress.update(task, completed=30)
-            
-            # 출력 디렉토리 설정
-            if output:
-                generator.output_dir = output
-                if not os.path.exists(output):
-                    os.makedirs(output)
-            
             # 입력 경로에 따라 처리
             if os.path.isdir(input):
                 result = generator.generate_html_from_json(input)
+                progress.update(task, completed=100)
             elif os.path.isfile(input) and input.endswith('.json'):
                 console.print("[yellow]단일 JSON 파일 처리는 아직 구현되지 않았습니다[/yellow]")
                 result = {}
             else:
                 console.print(f"[bold red]잘못된 입력 경로: {input}[/bold red]")
                 return False
-            
-            progress.update(task, completed=100)
         
         elapsed_time = time.time() - start_time
         
@@ -153,6 +152,23 @@ def generate(input, output, template):
         console.print(f"[green]HTML 생성 완료[/green] (소요 시간: {elapsed_time:.2f}초)")
         console.print(f"총 {len(result)}개 HTML 파일 생성됨")
         console.print(f"결과 저장: {output}")
+        
+        # 체계적인 디렉터리 구조 정보 출력
+        console.print(f"\n[bold]생성된 디렉터리 구조:[/bold]")
+        console.print(f"📁 {output}/")
+        console.print(f"  📁 books/          # 책별 HTML 파일")
+        console.print(f"  📁 chapters/       # 장별 파일 (향후 확장)")
+        console.print(f"  📁 assets/         # 정적 파일 (향후 확장)")
+        console.print(f"  📁 metadata/       # 메타데이터 파일")
+        
+        # 생성된 파일 정보 출력
+        if info:
+            files_info = generator.get_generated_files_info()
+            console.print(f"\n[bold]생성된 파일 정보:[/bold]")
+            console.print(f"📊 총 파일 수: {files_info['total_files']}")
+            
+            for book_abbr, book_info in files_info['books'].items():
+                console.print(f"📖 {book_abbr}: {book_info['total_files']}개 장")
         
         return True
     

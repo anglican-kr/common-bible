@@ -98,3 +98,4 @@ htmlcov/
 # 캐시
 .cache/
 *.cache
+.direnv

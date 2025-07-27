@@ -19,8 +19,8 @@ import requests
 from typing import Dict, List, Any, Optional, Tuple
 from pathlib import Path
 
-from models import Chapter
-from config import config
+from src.models import Chapter
+from src.config import config
 
 
 class WordPressPublisher:
