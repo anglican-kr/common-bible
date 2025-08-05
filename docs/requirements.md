@@ -64,12 +64,21 @@
   </div>
 
   <!-- 오디오 플레이어 (접근성 고려) -->
-  <div class="audio-player-container">
+  <!-- 오디오 파일이 있는 경우 -->
+  <div class="audio-player-container" id="audio-container">
     <h2 class="screen-reader-text">성경 오디오</h2>
     <audio controls class="bible-audio" aria-label="창세기 1장 오디오">
-      <source src="audio/genesis-1.mp3" type="audio/mpeg">    
-      <p>브라우저가 오디오 재생을 지원하지 않습니다. <a href="audio/genesis-1.mp3">오디오 파일 다운로드</a></p>
+      <source src="data/audio/genesis-1.mp3" type="audio/mpeg">    
+      <p>브라우저가 오디오 재생을 지원하지 않습니다. <a href="data/audio/genesis-1.mp3">오디오 파일 다운로드</a></p>
     </audio>
+  </div>
+  
+  <!-- 오디오 파일이 없는 경우 (특히 외경) -->
+  <div class="audio-unavailable-notice" id="audio-unavailable" style="display: none;">
+    <p class="notice-text" aria-live="polite">
+      <span class="icon" aria-hidden="true">🎵</span>
+      이 장의 오디오는 현재 준비 중입니다. 곧 추가될 예정입니다.
+    </p>
   </div>
 
   <article id="창세-1">
@@ -106,7 +115,12 @@
 ## 🔊 오디오 플레이어 요구사항
 
 - 각 장별로 해당하는 오디오 파일을 HTML 페이지에 포함한다.
-- 오디오 파일 명명 규칙: `audio/{book-name}-{chapter}.mp3` (예: `audio/genesis-1.mp3`)
+- 오디오 파일 명명 규칙: `data/audio/{book-name}-{chapter}.mp3` (예: `data/audio/genesis-1.mp3`)
+- **오디오 파일 가용성**:
+  - 모든 장에 대한 오디오 파일이 즉시 사용 가능하지 않을 수 있음
+  - 특히 외경(토비트, 유딧, 마카베오상/하, 지혜서, 집회서, 바룩) 등의 오디오 파일은 추후 추가 예정
+  - 오디오 파일이 없는 경우, 오디오 플레이어를 숨기거나 "오디오 준비 중" 메시지 표시
+  - 오디오 파일 존재 여부를 체크하여 동적으로 플레이어 표시/숨김 처리
 - 오디오 플레이어는 접근성을 고려하여 WAI-ARIA 속성을 사용한다.
   - `<audio>` 요소에는 적절한 `aria-label` 속성을 추가한다. (예: `aria-label="창세기 1장 오디오"`)
   - 재생 제어 버튼에도 적절한 `aria-label` 속성을 추가한다.
@@ -155,6 +169,9 @@
 - 입력 파일을 파싱하여 장/절 단위로 분할
 - HTML 변환 템플릿에 맞춰 출력 파일 생성
 - 오디오 파일 경로 자동 생성 및 매핑
+  - 오디오 파일 존재 여부 확인 로직 포함
+  - 파일이 없는 경우 대체 UI 표시를 위한 플래그 설정
+  - 외경 등 특정 책에 대한 오디오 누락 예상 처리
 
 ### 2. HTML/CSS 스타일
 - `verse-number`, `paragraph-marker` 등 스타일 정의
@@ -192,7 +209,10 @@
 ### 단위 테스트
 - 파서 기능 테스트: 장/절/단락 구분 정확도 검증
 - HTML 생성기 테스트: 입력 데이터에 따른 출력 HTML 검증
-- 오디오 매핑 테스트: 오디오 파일 경로 생성 로직 검증
+- 오디오 매핑 테스트: 
+  - 오디오 파일 경로 생성 로직 검증
+  - 오디오 파일 존재/부재 시 적절한 HTML 생성 검증
+  - 외경 등 예상되는 누락 파일에 대한 처리 검증
 
 ### 통합 테스트
 - 전체 파이프라인 테스트: 입력 파일부터 HTML 출력까지
@@ -283,6 +303,8 @@
 - [ ] 성경 장별 파싱 로직 구현
 - [ ] 절 번호 + 본문을 HTML로 출력하는 템플릿 정의
 - [ ] 접근성을 고려한 마크업 구성 (`aria-hidden`, `id` 앵커 등)
+- [ ] 오디오 파일 존재 여부 확인 및 조건부 표시 로직 구현
+- [ ] 오디오 파일이 없는 경우 적절한 대체 메시지 표시
 - [ ] 장별 HTML 파일 저장 또는 워드프레스 포스트로 업로드
 - [ ] 워드프레스 REST API 인증 방식 준비
 - [ ] 사용자 정의 스타일(CSS) 반영

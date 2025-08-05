@@ -419,7 +419,7 @@ class Chapter:
     verses: List[Verse]      # 절 객체 리스트
     id: str = ""            # "창세-1"
     book_abbr: str = ""     # "창세"
-    audio_path: str = ""    # "audio/genesis-1.mp3"
+    audio_path: str = ""    # "data/audio/genesis-1.mp3"
     slug: str = ""          # "genesis-1"
 ```
 
@@ -591,8 +591,8 @@ python -m src.cli pipeline --status private
   <div class="audio-player-container">
     <h2 class="screen-reader-text">성경 오디오</h2>
     <audio controls class="bible-audio" aria-label="창세기 1장 오디오">
-      <source src="audio/genesis-1.mp3" type="audio/mpeg">
-      <p>브라우저가 오디오 재생을 지원하지 않습니다. <a href="audio/genesis-1.mp3">오디오 파일 다운로드</a></p>
+      <source src="data/audio/genesis-1.mp3" type="audio/mpeg">
+      <p>브라우저가 오디오 재생을 지원하지 않습니다. <a href="data/audio/genesis-1.mp3">오디오 파일 다운로드</a></p>
     </audio>
   </div>
   

@@ -98,4 +98,14 @@ htmlcov/
 # 캐시
 .cache/
 *.cache
+
+# 오디오 파일 (용량이 큰 파일들은 Git LFS나 별도 저장소 사용)
+data/audio/
+*.mp3
+*.wav
+*.ogg
+*.m4a
+*.aac
+
+# direnv 설정 파일
 .direnv
