@@ -1,0 +1,22 @@
+{
+  "venvPath": ".",
+  "venv": ".venv",
+  "pythonVersion": "3.13",
+  "typeCheckingMode": "basic",
+  "reportMissingImports": true,
+  "reportGeneralTypeIssues": "warning",
+  "include": [
+    "src",
+    "tests",
+    "setup.py",
+    "run.py"
+  ],
+  "exclude": [
+    "**/node_modules",
+    "**/__pycache__",
+    ".git",
+    "venv",
+    ".venv"
+  ],
+  "_comment": "로컬 환경에 맞게 venvPath와 venv를 수정해주세요"
+}
