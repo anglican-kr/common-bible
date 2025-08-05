@@ -30,7 +30,7 @@
 - 접근성 강화된 오디오 플레이어 (`aria-label`, 키보드 조작 지원)
 
 ### 🔊 오디오 통합
-- 각 장별 오디오 파일 제공 (`audio/{book-name}-{chapter}.mp3`)
+- 각 장별 오디오 파일 제공 (`data/audio/{book-name}-{chapter}.mp3`)
 - 접근성을 갖춘 HTML5 오디오 플레이어
 - 스크린리더를 통한 오디오 플레이어 접근 및 조작 지원
 - 오디오 파일 미지원 시 대체 텍스트 및 다운로드 링크 제공
@@ -73,8 +73,8 @@ common-bible/
 │   ├── common-bible-kr.txt # 원본 텍스트
 │   ├── bible_book_mappings.json # 성경 책 이름 매핑
 │   ├── audio_mappings.json  # 오디오 파일 매핑 데이터
+│   ├── audio/             # 오디오 파일 저장소
 │   └── output/            # 생성된 HTML
-├── audio/                 # 오디오 파일 저장소
 ├── config/               # 설정 파일
 ├── logs/                 # 로그 파일
 └── tests/                # 테스트
@@ -107,12 +107,25 @@ git clone git@github.com:joshua-in-boots/common-bible.git
 cd common-bible
 
 # 가상환경 생성 및 활성화
-python -m venv venv
-source venv/bin/activate  # Linux/Mac
-# venv\Scripts\activate   # Windows
+python -m venv .venv
+source .venv/bin/activate  # Linux/Mac
+# .venv\Scripts\activate   # Windows
 
 # 의존성 설치
 pip install -r requirements.txt
+```
+
+### 타입 체킹 설정 (선택사항)
+
+프로젝트는 Python 타입 힌트와 `pyright`를 사용하여 코드 품질을 관리합니다.
+
+```bash
+# pyrightconfig.json 커스터마이징 (필요시)
+cp pyrightconfig.json.example pyrightconfig.json
+# 필요한 경우 venvPath와 venv 경로를 수정하세요
+
+# VS Code/Cursor 사용 시
+# Python 인터프리터를 .venv로 설정하면 자동으로 타입 체킹이 활성화됩니다
 ```
 
 ### 2. 환경변수 설정
@@ -256,8 +269,8 @@ python -m pytest --cov=src tests/
   <div class="audio-player-container">
     <h2 class="screen-reader-text">성경 오디오</h2>
     <audio controls class="bible-audio" aria-label="창세기 1장 오디오">
-      <source src="audio/genesis-1.mp3" type="audio/mpeg">
-      <p>브라우저가 오디오 재생을 지원하지 않습니다. <a href="audio/genesis-1.mp3">오디오 파일 다운로드</a></p>
+      <source src="data/audio/genesis-1.mp3" type="audio/mpeg">
+      <p>브라우저가 오디오 재생을 지원하지 않습니다. <a href="data/audio/genesis-1.mp3">오디오 파일 다운로드</a></p>
     </audio>
   </div>
   
@@ -312,10 +325,28 @@ python -m pytest --cov=src tests/
 
 ### 개발 가이드라인
 
-- PEP 8 코딩 스타일 준수
-- 모든 기능에 대한 단위 테스트 작성
-- 접근성 가이드라인 (WCAG 2.1 AA) 준수
-- 보안 모범 사례 적용
+- **코딩 스타일**: PEP 8 준수 (Black으로 자동 포맷팅)
+- **타입 힌트**: 모든 함수와 메서드에 타입 힌트 작성
+- **타입 체킹**: Pyright/Pylance를 통한 정적 타입 검사
+- **테스트**: 모든 기능에 대한 단위 테스트 작성 (pytest 사용)
+- **접근성**: WCAG 2.1 AA 가이드라인 준수
+- **보안**: 환경변수를 통한 민감정보 관리, 입력값 검증
+
+#### 개발 환경 설정 팁
+
+```bash
+# Black으로 코드 포맷팅
+black src/ tests/
+
+# 타입 체킹 실행
+pyright src/
+
+# 린팅
+flake8 src/ tests/
+
+# 테스트 실행
+pytest tests/ -v
+```
 
 ## 📄 라이선스
 

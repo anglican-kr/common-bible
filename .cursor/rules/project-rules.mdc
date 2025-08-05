@@ -1,0 +1,67 @@
+---
+alwaysApply: true
+---
+# Project Rules
+
+## 1. Architecture & Design
+- Follow the **SOLID principles** and write modular, maintainable code.
+- Separate concerns: parsing logic, API logic, and configuration should live in separate modules.
+- Avoid circular dependencies and maintain a clear dependency hierarchy.
+- Design for scalability and easy extension.
+
+## 2. Python Guidelines
+- Follow [PEP 8](https://peps.python.org/pep-0008/) coding standards.
+- Use **type hints** and validate types with `mypy`.
+- Format code with **black** and lint with **ruff** or **flake8`.
+- Use `dataclass` or well-structured classes for data representation instead of plain dictionaries.
+- Avoid hardcoded values; use `.env` files or environment variables for credentials and configuration.
+- Log all critical events with meaningful messages.
+
+## 3. HTML Parsing & Conversion
+- Use libraries like **BeautifulSoup** or **lxml** for parsing and sanitizing HTML.
+- Ensure semantic HTML output (e.g., use `<h1>`, `<p>`, `<ul>` appropriately).
+- Escape or sanitize user-generated content to prevent XSS vulnerabilities.
+- Validate and ensure the final HTML is UTF-8 compliant and well-formed.
+
+## 4. WordPress API Integration
+- Use the **WordPress REST API** (`/wp-json/wp/v2/...`) for content publishing.
+- Authenticate using **Application Passwords** or OAuth2 (avoid Basic Auth in production).
+- Implement **idempotent post creation** (check for duplicates before publishing).
+- Handle API errors gracefully and log detailed error information.
+- Include categories, tags, and featured images when posting, if applicable.
+
+## 5. PHP & WordPress Guidelines
+- Follow the [WordPress Coding Standards](https://developer.wordpress.org/coding-standards/wordpress-coding-standards/php/).
+- Avoid modifying WordPress core files.
+- Use built-in WordPress functions like `wp_insert_post` instead of direct database queries.
+- Keep PHP logic separate from templates (avoid inline PHP in HTML).
+
+## 6. Testing
+- Write **unit tests with `pytest`** for all critical features.
+- Target at least **80% code coverage** for business logic.
+- Test not only the happy paths but also edge cases and error scenarios.
+- Use mock APIs to test WordPress API calls without hitting the production server.
+
+## 7. Security & Quality
+- Never commit secrets, API keys, or credentials to version control.
+- Validate all inputs and outputs, especially when generating HTML content.
+- Escape all dynamic content to prevent injection attacks.
+- Use secure libraries for cryptography or hashing (never write custom crypto).
+
+## 8. Deployment & CI/CD
+- Provide a `.env.example` with all required environment variables.
+- Exclude `.env`, cache files, and `*.pyc` files via `.gitignore`.
+- Deploy to a staging environment for verification before production release.
+- Use CI/CD pipelines for automated linting, testing, and deployment.
+
+## 9. Error Handling & Logging
+- Implement retry logic with exponential backoff for all WordPress API calls.
+- Set request timeouts (e.g., 5 seconds) to prevent hanging connections.
+- Log both the request payload and response details for debugging failed API calls.
+- Use structured logging formats (e.g., JSON logs) if possible.
+
+## 10. Pull Requests & Code Review
+- Keep pull requests **small and focused** on a single feature or bug fix.
+- Provide **clear and descriptive PR titles and summaries**.
+- Address code review feedback promptly and respectfully.
+- Document architectural decisions in the repository (e.g., `/docs/architecture.md`).
