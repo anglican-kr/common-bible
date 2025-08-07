@@ -15,16 +15,16 @@
 ## 📋 주요 기능
 
 ### ✨ 텍스트 처리
-- 공동번역성서 텍스트 파일 자동 파싱
-- 성경 책 이름 매핑 데이터 활용 (약칭 → 전체 이름)
-- 장/절 단위 구조 분석
-- `¶` 기호 기반 단락 구분 처리
-- 절 세분화 지원 (`창세-1-4a`, `창세-1-4b`)
+- 공동번역성서 텍스트 파일 자동 파싱 (첫 번째 절 특수 처리 포함)
+- 성경 책 이름 매핑 데이터 활용 (약칭 → 전체 이름, 구분 정보 포함)
+- 장/절 단위 구조 분석 및 JSON 저장/로드 지원
+- `¶` 기호 원본 보존 및 접근성 고려 HTML 변환
+- 캐시 시스템으로 빠른 재실행 지원
 
 ### ♿️ 웹 접근성
-- 스크린리더가 본문을 읽을 때에는 절 번호를 읽지 않도록 처리 (`aria-hidden="true"`)
-- 절 번호를 검색할 때에는 접근 가능하도록 처리
-- 각 절별 고유 ID를 통한 직접 링크
+- **이중 접근성**: 시각 사용자는 절 번호와 `¶` 기호를 보고, 스크린리더 사용자는 본문만 들음
+- 절 번호와 단락 기호에 `aria-hidden="true"` 적용
+- 각 절별 고유 ID를 통한 직접 링크 (`#창세-1-3`)
 - 시맨틱 HTML 구조 (`<article>`, `<section>`)
 - 키보드 네비게이션 지원
 - 접근성 강화된 오디오 플레이어 (`aria-label`, 키보드 조작 지원)
@@ -42,60 +42,82 @@
 - 하이라이트 효과로 시각적 피드백
 - 스크린리더 사용자를 위한 검색 결과 접근성 지원
 
-### 🚀 자동 게시
+### 🚀 자동 게시 (설계 완료)
 - 워드프레스 REST API 연동 (https://seoul.anglican.kr)
+- **자동 카테고리/태그 생성**: 없는 카테고리나 태그 자동 생성 후 ID 획득
+- **3단계 태그 체계**: `공동번역성서` → `구약/외경/신약` → `책이름`
 - 메타데이터 자동 설정 (제목, 슬러그, 태그, 카테고리)
-- 비공개 상태 초기 업로드 (2025년 7월 1일 게시일 설정)
-- 준비 완료 후 일괄 공개 가능
+- 비공개 상태 초기 업로드, 준비 완료 후 일괄 공개 가능
 - 오류 처리 및 재시도 로직
 
 ## 🏗️ 프로젝트 구조
 
 ```
 common-bible/
-├── docs/                   # 문서
+├── docs/                   # 📚 문서
 │   ├── requirements.md     # 요구사항 명세
-│   ├── design-specification.md # 설계서
-│   ├── verse-style.css     # 스타일시트
-│   └── verse-navigator.js  # 검색/네비게이션 스크립트
-├── src/                    # 소스코드
-│   ├── parser.py          # 텍스트 파싱 엔진
-│   ├── html_generator.py  # HTML 생성기
-│   ├── wp_publisher.py    # 워드프레스 게시 클래스
-│   ├── audio_manager.py   # 오디오 파일 관리
-│   ├── search.py          # 검색 기능 구현
-│   ├── accessibility.py   # 접근성 기능 지원
-│   └── config.py          # 설정 관리
-├── templates/             # HTML 템플릿
-│   ├── chapter_template.html  # 기본 장 템플릿
-│   └── audio_player.html     # 오디오 플레이어 템플릿
-├── data/                  # 데이터 파일
-│   ├── common-bible-kr.txt # 원본 텍스트
-│   ├── bible_book_mappings.json # 성경 책 이름 매핑
-│   ├── audio_mappings.json  # 오디오 파일 매핑 데이터
+│   ├── design-specification.md # 상세 설계서
+│   └── parser-usage-guide.md   # 파서 사용 가이드
+├── src/                    # 💻 소스코드
+│   ├── __init__.py        # 패키지 초기화
+│   ├── parser.py          # ✅ 텍스트 파싱 엔진 (구현 완료)
+│   ├── config.py          # ✅ 설정 관리 (구현 완료)
+│   ├── html_generator.py  # 🚧 HTML 생성기 (설계 완료)
+│   ├── wordpress_api.py   # 🚧 워드프레스 API (설계 완료)
+│   └── main.py            # 🚧 메인 실행 파일 (설계 완료)
+├── templates/             # 🎨 HTML 템플릿
+│   └── chapter.html       # 기본 장 템플릿
+├── static/                # 🎨 정적 자원
+│   ├── verse-style.css    # 스타일시트
+│   └── verse-navigator.js # 검색/네비게이션 스크립트
+├── data/                  # 📊 데이터 파일
+│   ├── common-bible-kr.txt # 원본 텍스트 (5.6MB)
+│   ├── book_mappings.json  # 성경 책 이름 매핑 (73권)
 │   ├── audio/             # 오디오 파일 저장소
-│   └── output/            # 생성된 HTML
-├── config/               # 설정 파일
-├── logs/                 # 로그 파일
-└── tests/                # 테스트
+│   └── output/            # 생성된 JSON/HTML
+├── output/                # 📁 파싱 결과 저장소
+├── tests/                 # 🧪 테스트 (설계 완료)
+├── logs/                  # 📋 로그 파일
+├── env.example            # ⚙️ 환경변수 예제
+├── requirements.txt       # 📦 Python 의존성
+└── README.md              # 📖 프로젝트 가이드
 ```
 
 ## 📊 데이터 구조
 
 ### 성경 책 이름 매핑
-프로젝트는 `data/bible_book_mappings.json`을 사용하여 성경 책의 약칭을 전체 이름으로 변환합니다:
+프로젝트는 `data/book_mappings.json` 파일로 성경 책의 약칭을 전체 이름으로 변환하고 구분 정보를 관리합니다:
 
 ```json
 {
   "약칭": "창세",
   "전체 이름": "창세기", 
-  "영문 이름": "Genesis"
+  "영문 이름": "Genesis",
+  "구분": "구약"
 }
 ```
 
-이를 통해 다음과 같은 변환이 가능합니다:
-- `"창세 1:1"` → `"창세기 1장"`
-- `"2마카 2:1"` → `"마카베오하 2장"`
+**주요 특징:**
+- 총 73권의 성경 책 매핑 데이터
+- 구분 정보: `구약`, `외경`, `신약`
+- 워드프레스 태그 자동 생성에 활용
+- 변환 예시: `"창세 1:1"` → `"창세기 1장"`, `"2마카 2:1"` → `"마카베오하 2장"`
+
+### 파싱된 데이터 구조
+```json
+{
+  "book_name": "창세기",
+  "book_abbr": "창세", 
+  "chapter_number": 1,
+  "verses": [
+    {
+      "number": 1,
+      "text": "¶ 한처음에 하느님께서 하늘과 땅을 지어내셨다.",
+      "has_paragraph": true
+    }
+  ]
+}
+```
 
 ## 🚀 빠른 시작
 
@@ -103,133 +125,130 @@ common-bible/
 
 ```bash
 # 프로젝트 클론
-git clone git@github.com:joshua-in-boots/common-bible.git
+git clone https://github.com/joshua-in-boots/common-bible.git
 cd common-bible
 
 # 가상환경 생성 및 활성화
-python -m venv .venv
-source .venv/bin/activate  # Linux/Mac
-# .venv\Scripts\activate   # Windows
+python -m venv venv
+source venv/bin/activate  # Linux/Mac
+# venv\Scripts\activate   # Windows
 
 # 의존성 설치
 pip install -r requirements.txt
 ```
 
-### 타입 체킹 설정 (선택사항)
-
-프로젝트는 Python 타입 힌트와 `pyright`를 사용하여 코드 품질을 관리합니다.
+### 2. 환경변수 설정 (선택사항)
 
 ```bash
-# pyrightconfig.json 커스터마이징 (필요시)
-cp pyrightconfig.json.example pyrightconfig.json
-# 필요한 경우 venvPath와 venv 경로를 수정하세요
+# 환경변수 파일 생성 (워드프레스 게시용)
+cp env.example .env
 
-# VS Code/Cursor 사용 시
-# Python 인터프리터를 .venv로 설정하면 자동으로 타입 체킹이 활성화됩니다
+# .env 파일 편집 (필요시)
+nano .env
 ```
 
-### 2. 환경변수 설정
-
-```bash
-# 환경변수 파일 생성
-cp config/.env.example config/.env
-
-# .env 파일 편집
-nano config/.env
-```
-
-필수 환경변수:
+환경변수 예시:
 ```env
-WP_BASE_URL=https://seoul.anglican.kr
-WP_AUTH_USER=YOUR_USERNAME
-WP_AUTH_TOKEN=your_application_password
-WP_API_RATE_LIMIT=60
-PUBLISH_DATE=2025-07-01
-LOG_LEVEL=INFO
+# 워드프레스 설정
+WP_SITE_URL=https://seoul.anglican.kr
+WP_USERNAME=your_username
+WP_PASSWORD=your_application_password
+WP_BASE_CATEGORY=공동번역성서
+WP_BASE_TAG=공동번역성서
+WP_DEFAULT_STATUS=private
+WP_TIMEOUT=30
 ```
 
 ### 3. 실행
 
 ```bash
-# 텍스트 파싱
-python src/parser.py --input data/common-bible-kr.txt
+# 📖 텍스트 파싱 (기본)
+python src/parser.py data/common-bible-kr.txt
 
-# 오디오 파일 매핑 확인
-python src/audio_manager.py --check-all
+# 💾 JSON 저장
+python src/parser.py data/common-bible-kr.txt --save-json output/bible_data.json
 
-# HTML 생성 (오디오 포함)
-python src/html_generator.py --chapters data/output/chapters.json --with-audio
+# ⚡ 캐시 사용 (빠른 재실행)
+python src/parser.py data/common-bible-kr.txt --use-cache
 
-# 워드프레스 게시 (테스트)
-python src/wp_publisher.py --test-auth --url https://seoul.anglican.kr
-
-# 실제 게시 (비공개)
-python src/wp_publisher.py --upload-all --status=private --date 2025-07-01 --author YOURE_USERNAME
+# 📊 파싱 결과 확인
+# 총 1382개 장, 31102개 절 파싱됨
+# 창세기 1장: 31절 (첫 절 포함)
 ```
 
 ## 📖 사용법
 
-### 기본 파싱 및 변환
+### 파서 사용법
 
 ```python
 from src.parser import BibleParser
-from src.html_generator import HTMLGenerator
-from src.audio_manager import AudioManager
 
-# 파싱 (성경 책 이름 매핑 자동 로드)
-parser = BibleParser('data/common-bible-kr.txt')
-chapters = parser.parse_file()
+# 1. 파서 초기화 (책 매핑 파일 로드)
+parser = BibleParser('data/book_mappings.json')
 
-# 책 이름 식별 예시
-book_name = parser.identify_book("창세 1:1")  # "창세기" 반환
+# 2. 텍스트 파싱
+chapters = parser.parse_file('data/common-bible-kr.txt')
+print(f"총 {len(chapters)}개 장 파싱 완료")
 
-# 오디오 관리자 초기화
-audio_manager = AudioManager('audio', 'data/audio_mappings.json')
+# 3. JSON 저장
+parser.save_to_json(chapters, 'output/parsed_bible.json')
 
-# HTML 생성 (오디오 포함)
-generator = HTMLGenerator('templates/chapter_template.html', audio_manager=audio_manager)
-html_content = generator.generate_chapter_html(chapters[0])
+# 4. JSON 로드 (재사용)
+chapters = parser.load_from_json('output/parsed_bible.json')
 
-# 검색 기능 초기화
-from src.search import SearchEngine
-search_engine = SearchEngine(chapters)
-results = search_engine.search_text("하느님") # 단어 검색
-verse = search_engine.find_verse_by_reference("창세 1:3") # 참조 검색
+# 5. 캐시 사용 (자동 관리)
+chapters = parser.parse_file_with_cache(
+    'data/common-bible-kr.txt',
+    'output/bible_cache.json'
+)
+
+# 6. 데이터 탐색
+first_chapter = chapters[0]
+print(f"{first_chapter.book_name} {first_chapter.chapter_number}장")
+for verse in first_chapter.verses[:3]:
+    print(f"  {verse.number}. {verse.text[:50]}...")
 ```
 
-### 워드프레스 게시
+### 워드프레스 게시 (설계 완료, 구현 예정)
 
 ```python
-from src.wp_publisher import WordPressPublisher
-import os
+from src.wordpress_api import WordPressAPI
+from src.config import Config
 
-# 게시자 초기화
-publisher = WordPressPublisher(
-    wp_url=os.getenv('WP_BASE_URL'),
-    auth_user=os.getenv('WP_AUTH_USER'),
-    auth_token=os.getenv('WP_AUTH_TOKEN')
+# 설정 로드
+config = Config()
+
+# WordPress API 클라이언트 초기화
+wp_api = WordPressAPI(
+    site_url=config.wp_site_url,
+    username=config.wp_username,
+    password=config.wp_password,
+    book_mappings=parser.book_mappings  # 태그 생성용
 )
 
-# 오디오 파일 경로 가져오기
-audio_path = audio_manager.get_audio_path(chapter)
-
-# 개별 장 게시 (오디오 포함)
-result = publisher.publish_chapter(
-    chapter=chapter, 
-    html_content=html_content,
-    audio_path=audio_path,
-    status='private',
-    publish_date=os.getenv('PUBLISH_DATE', '2025-07-01')
-)
-
-# 일괄 공개
-published_results = publisher.batch_publish_all(chapters, html_contents, audio_paths, status='private')
-
-# 게시물 상태 일괄 업데이트
-publisher.update_post_status(post_id=result['id'], status='publish')
+# 인증 확인
+if wp_api.validate_auth():
+    print("WordPress 인증 성공!")
+    
+    # 개별 장 게시 (자동 카테고리/태그 생성)
+    result = wp_api.create_post_with_auto_taxonomy(
+        chapter=chapters[0],
+        content="<p>HTML 변환된 내용</p>",
+        status="private",
+        base_category="공동번역성서"
+    )
+    
+    print(f"게시 완료: ID {result['id']}")
+else:
+    print("인증 실패")
 ```
 
-## 🧪 테스트
+**자동 생성되는 태그:**
+- `공동번역성서` (기본)
+- `구약`/`외경`/`신약` (구분별)
+- `창세기`, `마태오의 복음서` 등 (책별)
+
+## 🧪 테스트 (설계 완료)
 
 ```bash
 # 전체 테스트 실행
@@ -237,10 +256,21 @@ python -m pytest tests/
 
 # 특정 모듈 테스트
 python -m pytest tests/test_parser.py -v
+python -m pytest tests/test_html_generator.py -v
+python -m pytest tests/test_wordpress_api.py -v
 
 # 커버리지 포함 테스트
 python -m pytest --cov=src tests/
+
+# 통합 테스트
+python -m pytest tests/test_integration.py -v
 ```
+
+**테스트 범위:**
+- 파서: 장/절 파싱, 첫 절 처리, 단락 구분, JSON 저장/로드
+- HTML 생성기: 접근성 마크업, 템플릿 렌더링, 오디오 처리
+- WordPress API: 인증, 카테고리/태그 자동 생성, 게시물 생성
+- 통합: 전체 워크플로우 검증
 
 ## 📝 HTML 출력 예시
 
@@ -280,20 +310,24 @@ python -m pytest --cov=src tests/
     <p>
       <span id="창세-1-1">
         <span aria-hidden="true" class="verse-number">1</span>
-        <span aria-hidden="true" class="paragraph-marker">¶</span>
+        <span class="paragraph-marker" aria-hidden="true">¶</span> 
         한처음에 하느님께서 하늘과 땅을 지어내셨다.
       </span>
       <span id="창세-1-2">
         <span aria-hidden="true" class="verse-number">2</span>
-        땅은 아직 모양을 갖추지 않고...
+        땅은 아직 모양을 갖추지 않고 아무것도 생기지 않았는데, 어둠이 깊은 물 위에...
       </span>
     </p>
     
     <p>
       <span id="창세-1-3">
         <span aria-hidden="true" class="verse-number">3</span>
-        <span aria-hidden="true" class="paragraph-marker">¶</span>
-        하느님께서 "빛이 생겨라!" 하시자...
+        <span class="paragraph-marker" aria-hidden="true">¶</span> 
+        하느님께서 "빛이 생겨라!" 하시자 빛이 생겨났다.
+      </span>
+      <span id="창세-1-4">
+        <span aria-hidden="true" class="verse-number">4</span>
+        그 빛이 하느님 보시기에 좋았다. 하느님께서는 빛과 어둠을 나누시고...
       </span>
     </p>
   </article>
@@ -313,8 +347,24 @@ python -m pytest --cov=src tests/
 
 ## 📚 문서
 
-- [요구사항 명세서](docs/requirements.md)
-- [상세 설계서](docs/design-specification.md)
+- [📋 요구사항 명세서](docs/requirements.md) - 프로젝트 요구사항 및 접근성 가이드
+- [🎨 상세 설계서](docs/design-specification.md) - 시스템 아키텍처 및 모듈 설계
+- [📖 파서 사용 가이드](docs/parser-usage-guide.md) - parser.py 모듈 상세 사용법
+
+## 📊 현재 진행 상황
+
+### ✅ 완료된 기능
+- **텍스트 파서**: 1382개 장, 31102개 절 파싱 지원
+- **JSON 저장/로드**: 파싱 결과 영속화 및 캐시 시스템
+- **책 매핑**: 73권 성경 책 이름 변환 및 구분 정보
+- **접근성 설계**: 이중 접근성 고려한 마크업 설계
+- **WordPress API 설계**: 자동 카테고리/태그 생성 설계
+
+### 🚧 구현 예정
+- HTML 생성기 구현 (설계 완료)
+- WordPress API 클라이언트 구현 (설계 완료)
+- 메인 실행 파일 구현 (설계 완료)
+- 단위 테스트 구현 (설계 완료)
 
 ## 🤝 기여하기
 
@@ -325,28 +375,11 @@ python -m pytest --cov=src tests/
 
 ### 개발 가이드라인
 
-- **코딩 스타일**: PEP 8 준수 (Black으로 자동 포맷팅)
+- **코딩 스타일**: PEP 8 준수
 - **타입 힌트**: 모든 함수와 메서드에 타입 힌트 작성
-- **타입 체킹**: Pyright/Pylance를 통한 정적 타입 검사
-- **테스트**: 모든 기능에 대한 단위 테스트 작성 (pytest 사용)
+- **테스트**: pytest를 사용한 단위 테스트 작성
 - **접근성**: WCAG 2.1 AA 가이드라인 준수
-- **보안**: 환경변수를 통한 민감정보 관리, 입력값 검증
-
-#### 개발 환경 설정 팁
-
-```bash
-# Black으로 코드 포맷팅
-black src/ tests/
-
-# 타입 체킹 실행
-pyright src/
-
-# 린팅
-flake8 src/ tests/
-
-# 테스트 실행
-pytest tests/ -v
-```
+- **보안**: 환경변수를 통한 민감정보 관리
 
 ## 📄 라이선스
 

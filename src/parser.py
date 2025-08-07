@@ -1,412 +1,285 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
-텍스트 파싱 엔진
-
-공동번역성서 텍스트 파일을 파싱하여 구조화된 데이터로 변환합니다.
-- 성경 책 식별
-- 장/절 분리
-- 단락 구분 처리
-- 텍스트 정규화
+공동번역성서 텍스트 파일 파서
+텍스트 파일을 읽어 장(Chapter) 단위로 분리하고 구조화된 데이터로 변환
 """
 
 import re
 import json
-import logging
 import os
-from pathlib import Path
-from typing import List, Dict, Optional, Tuple, Any
-import argparse
+from typing import List, Dict, Optional
+from dataclasses import dataclass, asdict
 
-from src.models import Bible, Book, Chapter, Verse
-from src.config import config
+
+@dataclass
+class Verse:
+    """절 데이터"""
+    number: int
+    text: str
+    has_paragraph: bool = False
+
+
+@dataclass
+class Chapter:
+    """장 데이터"""
+    book_name: str
+    book_abbr: str
+    chapter_number: int
+    verses: List[Verse]
 
 
 class BibleParser:
-    """공동번역성서 텍스트 파서 클래스"""
+    """성경 텍스트 파서"""
 
-    def __init__(self, file_path: Optional[str] = None):
-        """
-        파서 초기화
+    def __init__(self, book_mappings_path: str):
+        self.book_mappings = self._load_book_mappings(book_mappings_path)
+        self.chapter_pattern = re.compile(r'([가-힣0-9]+)\s+(\d+):(\d+)')
 
-        Args:
-            file_path: 텍스트 파일 경로 (기본값: config에서 설정된 경로)
-        """
-        self.logger = logging.getLogger(__name__)
+    def _load_book_mappings(self, book_mappings_path: str) -> Dict[str, Dict]:
+        """책 이름 매핑 데이터를 로드하고 딕셔너리로 변환"""
+        with open(book_mappings_path, 'r', encoding='utf-8') as f:
+            mappings_list = json.load(f)
 
-        # 설정 로드
-        self.book_mappings = config.load_book_mappings()
+        # 리스트를 딕셔너리로 변환하여 빠른 검색 가능
+        mappings_dict = {}
+        for book in mappings_list:
+            mappings_dict[book['약칭']] = {
+                'full_name': book['전체 이름'],
+                'english_name': book['영문 이름'],
+                '구분': book.get('구분', '구약')  # 기본값은 구약
+            }
 
-        # 파일 경로 설정
-        if file_path is None:
-            data_dir = config.paths['data_dir']
-            file_path = os.path.join(data_dir, 'common-bible-kr.txt')
-        self.file_path = file_path
+        return mappings_dict
 
-        # 결과 저장용 객체
-        self.bible = Bible(title="공동번역성서")
-        self.current_book = None
-        self.current_chapter = None
+    def _get_full_book_name(self, abbr: str) -> str:
+        """약칭으로 전체 이름 반환"""
+        if abbr in self.book_mappings:
+            return self.book_mappings[abbr]['full_name']
+        else:
+            # 매핑이 없으면 약칭 그대로 반환 (에러 방지)
+            return abbr
 
-        self.logger.info(f"파서 초기화: {file_path}")
+    def _get_english_book_name(self, abbr: str) -> str:
+        """약칭으로 영문 이름 반환"""
+        if abbr in self.book_mappings:
+            return self.book_mappings[abbr]['english_name']
+        else:
+            return abbr
 
-    def parse_file(self) -> Bible:
-        """
-        전체 파일을 파싱하여 Bible 객체 반환
+    def parse_file(self, file_path: str) -> List[Chapter]:
+        """텍스트 파일을 파싱하여 장 리스트 반환"""
+        with open(file_path, 'r', encoding='utf-8') as f:
+            content = f.read()
 
-        Returns:
-            파싱된 Bible 객체
-        """
-        self.logger.info(f"파일 파싱 시작: {self.file_path}")
-
-        # 텍스트 파일 불러오기
-        try:
-            with open(self.file_path, 'r', encoding='utf-8') as f:
-                content = f.read()
-        except Exception as e:
-            self.logger.error(f"파일 읽기 실패: {e}")
-            return self.bible
-
-        # 파일 내용 정규화
-        content = self._normalize_text(content)
-
-        # 장 단위로 분할
-        chapters_text = self._split_chapters(content)
-
-        # 각 장 파싱
-        for chapter_text in chapters_text:
-            self._parse_chapter(chapter_text)
-
-        self.logger.info(f"파싱 완료: {len(self.bible.books)}권 파싱됨")
-        return self.bible
-
-    def _normalize_text(self, text: str) -> str:
-        """
-        텍스트 정규화 (공백, 개행 등 처리)
-
-        Args:
-            text: 원본 텍스트
-
-        Returns:
-            정규화된 텍스트
-        """
-        # 불필요한 공백 제거
-        text = re.sub(r'\s+', ' ', text)
-
-        # Windows 개행 문자 처리
-        text = text.replace('\r\n', '\n')
-
-        return text.strip()
-
-    def _split_chapters(self, content: str) -> List[str]:
-        """
-        텍스트를 장 단위로 분할
-
-        Args:
-            content: 원본 텍스트
-
-        Returns:
-            장 텍스트 리스트
-        """
-        # 장 시작 패턴: "책명 장번호:절번호" 형태
-        # 예: "창세 1:1", "2마카 2:1"
-        chapter_pattern = r'([가-힣0-9]+)\s+([0-9]+):([0-9]+)'
-
-        # 장 시작 위치 찾기
-        chapter_matches = list(re.finditer(chapter_pattern, content))
-
-        # 장 텍스트 추출 (빈 줄 기반 분할)
         chapters = []
-        for i in range(len(chapter_matches)):
-            start_pos = chapter_matches[i].start()
+        current_chapter = None
+        current_verses = []
 
-            # 다음 장 시작 위치 찾기
-            if i < len(chapter_matches) - 1:
-                next_start = chapter_matches[i+1].start()
-                chapter_content = content[start_pos:next_start]
-            else:
-                chapter_content = content[start_pos:]
+        for line in content.split('\n'):
+            # 장 시작 확인
+            match = self.chapter_pattern.match(line)
+            if match:
+                # 이전 장 저장
+                if current_chapter:
+                    current_chapter.verses = current_verses
+                    chapters.append(current_chapter)
 
-            # 빈 줄을 기준으로 장 끝 찾기 (유연한 처리)
-            chapter_text = self._find_chapter_end(chapter_content)
+                # 새 장 시작
+                book_abbr = match.group(1)
+                chapter_num = int(match.group(2))
+                book_name = self._get_full_book_name(book_abbr)
 
-            # 장 시작 패턴이 있는 경우만 추가
-            if chapter_text.strip():
-                chapters.append(chapter_text.strip())
+                current_chapter = Chapter(
+                    book_name=book_name,
+                    book_abbr=book_abbr,
+                    chapter_number=chapter_num,
+                    verses=[]
+                )
+                current_verses = []
 
-        self.logger.info(f"장 분할: {len(chapters)}개 장 발견")
+                # 장 시작 라인에서 첫 번째 절 내용 추출
+                first_verse = self._extract_first_verse_from_chapter_line(line)
+                if first_verse:
+                    current_verses.append(first_verse)
+
+            # 절 파싱
+            elif current_chapter and line.strip():
+                verse = self._parse_verse_line(line)
+                if verse:
+                    current_verses.append(verse)
+
+        # 마지막 장 저장
+        if current_chapter:
+            current_chapter.verses = current_verses
+            chapters.append(current_chapter)
+
         return chapters
 
-    def _find_chapter_end(self, chapter_content: str) -> str:
-        """
-        장 내용에서 실제 장 끝 위치를 찾기 (빈 줄 기반)
+    def _parse_verse_line(self, line: str) -> Optional[Verse]:
+        """절 라인 파싱"""
+        # 절 번호와 텍스트 분리
+        parts = line.strip().split(' ', 1)
+        if len(parts) < 2 or not parts[0].isdigit():
+            return None
 
-        Args:
-            chapter_content: 장 내용
+        verse_num = int(parts[0])
+        text = parts[1]
 
-        Returns:
-            장 끝까지의 텍스트
-        """
-        lines = chapter_content.split('\n')
-
-        # 장 시작 패턴 확인 (첫 번째 비어있지 않은 줄이 장 시작 패턴인지 확인)
-        chapter_start_pattern = r'^([가-힣0-9]+)\s+([0-9]+):([0-9]+)'
-
-        # 첫 번째 비어있지 않은 줄 찾기
-        first_content_line = None
-        for line in lines:
-            if line.strip():
-                first_content_line = line.strip()
-                break
-
-        # 장 시작 패턴이 없으면 빈 문자열 반환 (장으로 인식하지 않음)
-        if not first_content_line or not re.match(chapter_start_pattern, first_content_line):
-            self.logger.warning(f"장 시작 패턴이 없음: {first_content_line}")
-            return ""
-
-        # 뒤에서부터 빈 줄 패턴 찾기
-        # 요구사항: 두 줄의 빈 줄 또는 한 줄의 빈 줄도 장의 끝으로 인식
-        empty_line_count = 0
-        chapter_end_index = len(lines)
-
-        for i in range(len(lines) - 1, -1, -1):
-            line = lines[i].strip()
-
-            if line == '':
-                empty_line_count += 1
-            else:
-                # 빈 줄이 아닌 내용을 만났을 때
-                if empty_line_count >= 1:  # 한 줄 이상의 빈 줄이 있었으면 장의 끝
-                    chapter_end_index = i + empty_line_count + 1
-                    break
-                empty_line_count = 0
-
-        # 장 끝까지의 텍스트 반환
-        return '\n'.join(lines[:chapter_end_index])
-
-    def _parse_chapter(self, chapter_text: str) -> None:
-        """
-        장 텍스트 파싱
-
-        Args:
-            chapter_text: 장 텍스트
-        """
-        # 장 제목 추출 (예: "창세 1:1")
-        title_match = re.match(
-            r'([가-힣0-9]+)\s+([0-9]+):([0-9]+)', chapter_text)
-        if not title_match:
-            self.logger.warning(f"장 제목 파싱 실패: {chapter_text[:50]}...")
-            return
-
-        book_abbr, chapter_num, first_verse_num = title_match.groups()
-
-        # 책 식별 및 생성
-        book_info = self._identify_book(book_abbr)
-        if not book_info:
-            self.logger.warning(f"알 수 없는 성경 책: {book_abbr}")
-            return
-
-        book_name = book_info['전체 이름']
-        book_eng = book_info.get('영문 이름', '')
-
-        # 현재 처리 중인 책이 바뀐 경우 새로운 Book 객체 생성
-        if not self.current_book or self.current_book.name != book_name:
-            book = Book(name=book_name, abbr=book_abbr, eng_name=book_eng)
-            self.bible.add_book(book)
-            self.current_book = book
-            self.logger.info(f"새 책 처리 시작: {book_name}")
-
-        # 장 객체 생성
-        chapter = Chapter(
-            book_name=book_name,
-            chapter_number=int(chapter_num),
-            book_abbr=book_abbr
-        )
-
-        # 절 파싱
-        verses = self._parse_verses(chapter_text)
-        for verse in verses:
-            chapter.add_verse(verse)
-
-        # 책에 장 추가
-        self.current_book.add_chapter(chapter)
-        self.current_chapter = chapter
-
-        self.logger.debug(
-            f"장 파싱 완료: {book_name} {chapter_num}장, {len(verses)}절")
-
-    def _parse_verses(self, chapter_text: str) -> List[Verse]:
-        """
-        장 텍스트에서 절 파싱
-
-        Args:
-            chapter_text: 장 텍스트
-
-        Returns:
-            파싱된 절 리스트
-        """
-        verses = []
-
-        # 책 약칭과 장 번호 추출
-        title_match = re.match(
-            r'([가-힣0-9]+)\s+([0-9]+):([0-9]+)', chapter_text)
-        if not title_match:
-            self.logger.warning(f"장 제목 파싱 실패: {chapter_text[:50]}...")
-            return []
-
-        book_abbr, chapter_num, _ = title_match.groups()
-
-        # 절 패턴: "절번호 본문"
-        verse_pattern = r'([0-9]+)\s+([^0-9]+?)(?=\s+[0-9]+\s+|$)'
-        verse_matches = re.finditer(verse_pattern, chapter_text)
-
-        for match in verse_matches:
-            verse_num, verse_text = match.groups()
-            verse_num = int(verse_num)
-            verse_text = verse_text.strip()
-
-            # _parse_verse 메서드를 사용하여 단락 시작 여부 처리
-            verse = self._parse_verse(
-                verse_text, book_abbr, chapter_num, verse_num)
-            verses.append(verse)
-
-        return verses
-
-    def _split_verse_by_paragraph(self, verse_text: str) -> List[str]:
-        """
-        단독 ¶ 기호로 절 분할
-
-        Args:
-            verse_text: 절 텍스트
-
-        Returns:
-            분할된 하위 파트 리스트 (없으면 빈 리스트)
-        """
-        # 단독 ¶로 분할
-        if " ¶ " in verse_text:
-            return [part.strip() for part in verse_text.split(" ¶ ")]
-        return []
-
-    def _identify_book(self, abbr: str) -> Optional[Dict[str, str]]:
-        """
-        약칭으로 성경 책 찾기
-
-        Args:
-            abbr: 책 약칭
-
-        Returns:
-            책 정보 사전 또는 None
-        """
-        for book in self.book_mappings:
-            if book['약칭'] == abbr:
-                return book
-        return None
-
-    def save_to_json(self, output_path: Optional[str] = None) -> None:
-        """
-        파싱 결과를 JSON으로 저장
-
-        Args:
-            output_path: 출력 파일 경로 (기본값: data/output/bible.json)
-        """
-        if output_path is None:
-            output_path = os.path.join(
-                config.paths['output_dir'], 'bible.json')
-
-        # 출력 디렉토리 확인 및 생성
-        output_dir = os.path.dirname(output_path)
-        if not os.path.exists(output_dir):
-            os.makedirs(output_dir)
-
-        # JSON 저장
-        try:
-            with open(output_path, 'w', encoding='utf-8') as f:
-                json.dump(self.bible.to_dict(), f,
-                          ensure_ascii=False, indent=2)
-            self.logger.info(f"JSON 저장 완료: {output_path}")
-        except Exception as e:
-            self.logger.error(f"JSON 저장 실패: {e}")
-
-    def save_chapters_json(self, output_dir: Optional[str] = None) -> None:
-        """
-        각 장을 개별 JSON 파일로 저장
-
-        Args:
-            output_dir: 출력 디렉토리 경로 (기본값: data/output/chapters)
-        """
-        if output_dir is None:
-            output_dir = os.path.join(config.paths['output_dir'], 'chapters')
-
-        # 출력 디렉토리 확인 및 생성
-        if not os.path.exists(output_dir):
-            os.makedirs(output_dir)
-
-        # 각 책과 장에 대해 JSON 파일 생성
-        for book in self.bible.books:
-            book_dir = os.path.join(output_dir, book.abbr)
-            if not os.path.exists(book_dir):
-                os.makedirs(book_dir)
-
-            for chapter in book.chapters:
-                file_path = os.path.join(book_dir, f"{chapter.id}.json")
-
-                try:
-                    with open(file_path, 'w', encoding='utf-8') as f:
-                        json.dump(chapter.to_dict(), f,
-                                  ensure_ascii=False, indent=2)
-                except Exception as e:
-                    self.logger.error(f"장 JSON 저장 실패: {file_path} - {e}")
-
-        self.logger.info(f"모든 장 JSON 저장 완료: {output_dir}")
-
-    def _parse_verse(self, text, book_abbr, chapter_num, verse_num):
-        """
-        개별 절 파싱
-
-        단락 시작 여부를 식별하여 verse.has_paragraph에 설정
-        """
-        # 단락 마커 존재 여부 확인
-        has_paragraph = "¶" in text
-
-        # 단락 마커는 내부 처리용이므로 출력 텍스트에서 제거
-        if has_paragraph:
-            text = text.replace("¶", "").strip()
-
-        verse_id = f"{book_abbr}-{chapter_num}-{verse_num}"
+        # 단락 구분 기호 확인 (원본 텍스트 보존)
+        has_paragraph = '¶' in text
+        # ¶ 기호는 제거하지 않고 보존 (HTML 변환 시 접근성 처리)
 
         return Verse(
-            number=int(verse_num),
+            number=verse_num,
             text=text,
-            has_paragraph=has_paragraph,
-            id=verse_id
+            has_paragraph=has_paragraph
         )
+
+    def _extract_first_verse_from_chapter_line(self, line: str) -> Optional[Verse]:
+        """장 시작 라인에서 첫 번째 절 내용을 추출"""
+        # 패턴: "창세 1:1 ¶ 한처음에 하느님께서..."
+        # 장:절 번호 이후의 내용을 첫 번째 절로 추출
+
+        # 장:절 패턴 이후의 텍스트 찾기
+        match = self.chapter_pattern.match(line)
+        if not match:
+            return None
+
+        # 매치된 부분 이후의 텍스트 추출
+        full_match = match.group(0)  # 전체 매치 (예: "창세 1:1")
+        remaining_text = line[len(full_match):].strip()
+
+        if not remaining_text:
+            return None
+
+        # 단락 구분 기호 확인 (원본 텍스트 보존)
+        has_paragraph = '¶' in remaining_text
+        # ¶ 기호는 제거하지 않고 보존 (HTML 변환 시 접근성 처리)
+
+        # 첫 번째 절은 항상 절 번호 1
+        return Verse(
+            number=1,
+            text=remaining_text,
+            has_paragraph=has_paragraph
+        )
+
+    def save_to_json(self, chapters: List[Chapter], output_path: str) -> None:
+        """파싱된 데이터를 JSON 파일로 저장"""
+        # 디렉토리가 없으면 생성
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+
+        # dataclass를 딕셔너리로 변환
+        data = [asdict(chapter) for chapter in chapters]
+
+        with open(output_path, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+
+        print(f"파싱 결과를 {output_path}에 저장했습니다.")
+
+    def load_from_json(self, json_path: str) -> List[Chapter]:
+        """JSON 파일에서 파싱 데이터 로드"""
+        with open(json_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+
+        chapters = []
+        for chapter_data in data:
+            verses = [
+                Verse(
+                    number=verse_data['number'],
+                    text=verse_data['text'],
+                    has_paragraph=verse_data['has_paragraph']
+                )
+                for verse_data in chapter_data['verses']
+            ]
+
+            chapter = Chapter(
+                book_name=chapter_data['book_name'],
+                book_abbr=chapter_data['book_abbr'],
+                chapter_number=chapter_data['chapter_number'],
+                verses=verses
+            )
+            chapters.append(chapter)
+
+        print(f"{json_path}에서 {len(chapters)}개 장을 로드했습니다.")
+        return chapters
+
+    def parse_file_with_cache(self, file_path: str, cache_path: str = "output/parsed_bible.json") -> List[Chapter]:
+        """캐시 파일이 있으면 로드, 없으면 파싱 후 캐시 저장"""
+        # 캐시 파일이 존재하고 원본보다 최신이면 캐시 사용
+        if os.path.exists(cache_path) and os.path.exists(file_path):
+            cache_mtime = os.path.getmtime(cache_path)
+            source_mtime = os.path.getmtime(file_path)
+
+            if cache_mtime > source_mtime:
+                print(f"캐시 파일 {cache_path}를 사용합니다.")
+                return self.load_from_json(cache_path)
+
+        # 캐시가 없거나 구버전이면 새로 파싱
+        print(f"텍스트 파일 {file_path}를 파싱합니다...")
+        chapters = self.parse_file(file_path)
+
+        # 파싱 결과를 캐시에 저장
+        self.save_to_json(chapters, cache_path)
+
+        return chapters
 
 
 def main():
-    """CLI 진입점"""
-    parser = argparse.ArgumentParser(description='성경 텍스트 파싱 도구')
-    parser.add_argument('--input', '-i', help='입력 파일 경로')
-    parser.add_argument('--output', '-o', help='출력 JSON 파일 경로')
-    parser.add_argument('--split-chapters', '-s',
-                        action='store_true', help='장별로 분할하여 저장')
-    args = parser.parse_args()
+    """테스트를 위한 메인 함수"""
+    import sys
 
-    # 파서 초기화 및 실행
-    bible_parser = BibleParser(args.input)
-    bible = bible_parser.parse_file()
+    if len(sys.argv) < 2:
+        print(
+            "사용법: python parser.py <bible_text_file> [--save-json output_path] [--use-cache]")
+        print("예시:")
+        print("  python parser.py data/common-bible-kr.txt")
+        print("  python parser.py data/common-bible-kr.txt --save-json output/bible.json")
+        print("  python parser.py data/common-bible-kr.txt --use-cache")
+        sys.exit(1)
 
-    # 결과 저장
-    if args.output:
-        bible_parser.save_to_json(args.output)
+    text_file = sys.argv[1]
+    save_json = False
+    use_cache = False
+    output_path = "output/parsed_bible.json"
+
+    # 명령행 인수 처리
+    i = 2
+    while i < len(sys.argv):
+        if sys.argv[i] == "--save-json" and i + 1 < len(sys.argv):
+            save_json = True
+            output_path = sys.argv[i + 1]
+            i += 2
+        elif sys.argv[i] == "--use-cache":
+            use_cache = True
+            i += 1
+        else:
+            i += 1
+
+    # 파서 초기화
+    parser = BibleParser('data/book_mappings.json')
+
+    # 파일 파싱 (캐시 사용 여부에 따라)
+    if use_cache:
+        chapters = parser.parse_file_with_cache(text_file, output_path)
     else:
-        bible_parser.save_to_json()
+        chapters = parser.parse_file(text_file)
+        if save_json:
+            parser.save_to_json(chapters, output_path)
 
-    # 장별 저장
-    if args.split_chapters:
-        bible_parser.save_chapters_json()
+    # 결과 출력
+    print(f"\n총 {len(chapters)}개의 장을 파싱했습니다.")
 
-    print(
-        f"파싱 완료: {len(bible.books)}권, 총 {sum(len(book.chapters) for book in bible.books)}장")
+    # 처음 몇 개 장의 정보 출력
+    for i, chapter in enumerate(chapters[:3]):
+        print(f"\n[{i+1}] {chapter.book_name} {chapter.chapter_number}장")
+        print(f"    약칭: {chapter.book_abbr}")
+        print(f"    절 수: {len(chapter.verses)}")
+        if chapter.verses:
+            print(
+                f"    첫 절: {chapter.verses[0].number}. {chapter.verses[0].text[:50]}...")
+
+    print(f"\n✅ 파싱 완료! 다른 프로그램에서 재사용하려면:")
+    if save_json or use_cache:
+        print(f"   parser.load_from_json('{output_path}') 사용")
 
 
 if __name__ == "__main__":
