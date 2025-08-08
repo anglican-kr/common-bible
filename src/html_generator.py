@@ -6,6 +6,7 @@ HTML 생성기 모듈
 import os
 import re
 import shutil
+import hashlib
 from urllib.parse import urlparse
 import argparse
 from string import Template
@@ -299,6 +300,45 @@ class HtmlGenerator:
         return os.path.exists(audio_path)
 
 
+def _sha256_of_file(file_path: str) -> str:
+    """파일의 SHA-256 해시를 계산하여 반환"""
+    hash_obj = hashlib.sha256()
+    with open(file_path, 'rb') as f:
+        for chunk in iter(lambda: f.read(8192), b''):
+            hash_obj.update(chunk)
+    return hash_obj.hexdigest()
+
+
+def _copy_dir_dedup(src_dir: str, dst_dir: str) -> None:
+    """디렉터리를 복사하되, 동일한 파일은 건너뛰고 다른 내용이면 덮어쓴다.
+
+    - 디렉터리 구조는 유지한다
+    - 대상에 기존 파일이 있어도 제거하지 않으며, 소스에 없는 대상 파일은 남겨둔다
+    """
+    os.makedirs(dst_dir, exist_ok=True)
+    for root, dirs, files in os.walk(src_dir):
+        rel = os.path.relpath(root, src_dir)
+        target_root = dst_dir if rel == '.' else os.path.join(dst_dir, rel)
+        os.makedirs(target_root, exist_ok=True)
+
+        for d in dirs:
+            os.makedirs(os.path.join(target_root, d), exist_ok=True)
+
+        for fname in files:
+            src_file = os.path.join(root, fname)
+            dst_file = os.path.join(target_root, fname)
+            if os.path.exists(dst_file):
+                try:
+                    if _sha256_of_file(src_file) == _sha256_of_file(dst_file):
+                        # 동일 파일 → 복사 생략
+                        continue
+                except Exception:
+                    # 해시 실패 시 안전하게 덮어쓰기
+                    pass
+            # 신규 또는 다른 내용 → 덮어쓰기
+            shutil.copy2(src_file, dst_file)
+
+
 def main():
     """CLI: 파서 출력(JSON)에서 HTML 파일 생성"""
     from src.parser import BibleParser
@@ -439,17 +479,16 @@ def main():
 
     # 필요 시 정적/오디오 복사
     if copy_static:
-        dst = os.path.join(output_abs, os.path.basename(project_static_abs))
-        if os.path.exists(dst):
-            shutil.rmtree(dst)
-        shutil.copytree(project_static_abs, dst)
+        dst = os.path.join(output_abs, "static")
+        _copy_dir_dedup(project_static_abs, dst)
+        # 복사했으면 HTML에서 로컬 static 경로 사용
+        static_base = "static"
     if copy_audio:
         src_audio = project_audio_abs
-        dst_audio = os.path.join(output_abs, "data", "audio")
-        os.makedirs(os.path.dirname(dst_audio), exist_ok=True)
-        if os.path.exists(dst_audio):
-            shutil.rmtree(dst_audio)
-        shutil.copytree(src_audio, dst_audio)
+        dst_audio = os.path.join(output_abs, "audio")
+        _copy_dir_dedup(src_audio, dst_audio)
+        # 복사했으면 HTML에서 로컬 audio 경로 사용
+        audio_base = "audio"
 
     # HTML 생성기
     generator = HtmlGenerator(template_path)

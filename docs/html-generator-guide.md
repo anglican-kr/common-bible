@@ -173,6 +173,17 @@ python src/html_generator.py templates/chapter.html output/html/ --static-base .
 python src/html_generator.py templates/chapter.html output/html/ --copy-static --copy-audio
 ```
 
+#### 복사 옵션 동작(`--copy-static`, `--copy-audio`)
+
+-   출력 디렉터리에 `static/` 또는 `audio/`(원본: `data/audio/`)를 생성합니다.
+-   생성되는 HTML의 경로가 자동으로 로컬 상대경로로 전환됩니다.
+    -   CSS: `static/verse-style.css`
+    -   오디오: `audio/<slug>-<chapter>.mp3`
+-   파일 복사 규칙(디듀프): 대상에 동일 파일명이 있을 때 SHA‑256 해시로 비교합니다.
+    -   동일한 파일이면 복사 생략
+    -   다른 내용이면 덮어쓰기
+    -   소스에 없는 대상 파일은 삭제하지 않습니다(동기화가 필요하면 별도 옵션으로 확장 가능)
+
 지원 옵션 요약:
 
 -   `--json`: 파서 출력 JSON 경로 (기본: `output/parsed_bible.json`)
@@ -183,6 +194,8 @@ python src/html_generator.py templates/chapter.html output/html/ --copy-static -
 -   `--static-base`: 정적 리소스(CSS/JS) 기본 경로/URL (템플릿의 `${static_base}`로 주입, 미지정 시 자동 보정)
 -   `--copy-static`: `static/` 디렉터리를 출력 디렉터리로 복사
 -   `--copy-audio`: `data/audio/` 디렉터리를 출력 디렉터리로 복사
+
+주의: 복사 옵션을 사용하면 HTML 내부 링크는 로컬 상대경로(`static/...`, `audio/...`)로 강제 설정됩니다. 복사 옵션을 사용하지 않고 CDN/테마 경로를 쓰려면 `--static-base`, `--audio-base`를 절대 URL로 지정하세요.
 
 ### 3. 커스텀 오디오 경로
 
@@ -292,6 +305,7 @@ python src/html_generator.py templates/custom-chapter.html output/
 -   **별칭 지원**: `data/book_mappings.json`의 `aliases`를 HTML에 주입하여 다양한 호칭 인식
 -   **텍스트 검색**: 단어/구문 검색
 -   **하이라이트**: 검색 결과 강조
+-   **오디오 초기화**: 페이지 로드시 오디오는 항상 멈춤 상태로 표시되도록 강제(`preload="metadata"`, `pause()`, `currentTime=0` 적용)
 -   **키보드 네비게이션**: ESC로 하이라이트 해제
 
 ```javascript
@@ -301,6 +315,9 @@ window.BibleNavigator = {
     clearHighlight: function(),
     searchByText: function(query)
 };
+// 내부 동작: DOMContentLoaded 시 오디오 플레이어 초기화
+// - autoplay 비활성화, preload=metadata
+// - loadedmetadata/loadeddata 이벤트 시 pause() + currentTime=0
 ```
 
 ## 💡 실제 사용 예시
