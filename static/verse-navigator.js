@@ -1,133 +1,356 @@
-// 성경 책 이름 매핑 데이터 (bible_book_mappings.json과 동기화)
-const BOOK_MAPPINGS = {
-  '창세기': '창세', '출애굽기': '출애', '레위기': '레위', '민수기': '민수', '신명기': '신명',
-  '여호수아': '여호', '판관기': '판관', '룻기': '룻기', 
-  '사무엘상': '1사무', '사무엘하': '2사무',
-  '열왕기상': '1열왕', '열왕기하': '2열왕',
-  '역대기상': '1역대', '역대기하': '2역대',
-  '에즈라': '에즈', '느헤미야': '느헤', '토비트': '토비', '유딧': '유딧', '에스델': '에스',
-  '마카베오상': '1마카', '마카베오하': '2마카',
-  '욥기': '욥기', '시편': '시편', '잠언': '잠언', '전도서': '전도', '아가': '아가',
-  '지혜서': '지혜', '집회서': '집회',
-  '이사야': '이사', '예레미야': '예레', '애가': '애가', '바룩': '바룩', '에제키엘': '에제', '다니엘': '다니',
-  '호세아': '호세', '요엘': '요엘', '아모스': '아모', '오바디야': '오바', '요나': '요나', '미가': '미가',
-  '나훔': '나훔', '하바꾹': '하바', '스바니야': '스바', '하깨': '하깨', '즈가리야': '즈가', '말라기': '말라',
-  '마태오의 복음서': '마태', '마르코의 복음서': '마르', '루가의 복음서': '루가', '요한의 복음서': '요한',
-  '사도행전': '사도',
-  '로마인들에게 보낸 편지': '로마',
-  '고린토인들에게 보낸 첫째 편지': '1고린', '고린토인들에게 보낸 둘째 편지': '2고린',
-  '갈라디아인들에게 보낸 편지': '갈라', '에페소인들에게 보낸 편지': '에페',
-  '필립비인들에게 보낸 편지': '필립', '골로사이인들에게 보낸 편지': '골로',
-  '데살로니카인들에게 보낸 첫째 편지': '1데살', '데살로니카인들에게 보낸 둘째 편지': '2데살',
-  '디모테오에게 보낸 첫째 편지': '1디모', '디모테오에게 보낸 둘째 편지': '2디모',
-  '디도에게 보낸 편지': '디도', '필레몬에게 보낸 편지': '필레',
-  '히브리인들에게 보낸 편지': '히브', '야고보의 편지': '야고',
-  '베드로의 첫째 편지': '1베드', '베드로의 둘째 편지': '2베드',
-  '요한의 첫째 편지': '1요한', '요한의 둘째 편지': '2요한', '요한의 셋째 편지': '3요한',
-  '유다의 편지': '유다', '요한의 묵시록': '묵시'
-};
+/**
+ * 공동번역성서 프로젝트 - 성경 구절 네비게이션 스크립트
+ * 절 검색 및 하이라이트 기능 제공
+ */
 
-// 입력된 텍스트를 절 ID로 변환
-function parseSearchInput(input) {
-  input = input.trim();
-  
-  // 1. 이미 절 ID 형식인 경우 (예: "창세-1-3")
-  if (input.match(/^[가-힣]+-\d+-\d+[a-z]?$/)) {
-    return [input];
+(function () {
+  'use strict';
+
+  // DOM 요소들
+  let searchForm;
+  let searchInput;
+  let searchButton;
+
+  // 현재 하이라이트된 요소
+  let currentHighlight = null;
+
+  // 주입된 별칭/슬러그 데이터
+  const injected = window.BIBLE_ALIAS || { aliasToAbbr: {}, abbrToSlug: {} };
+  const bookNameToAbbr = injected.aliasToAbbr;
+  const abbrToSlug = injected.abbrToSlug;
+
+  /**
+   * 초기화 함수
+   */
+  function init() {
+    // DOM 요소 가져오기
+    searchForm = document.getElementById('verse-search-form');
+    searchInput = document.getElementById('verse-search');
+    searchButton = document.getElementById('verse-search-btn');
+
+    if (!searchForm || !searchInput || !searchButton) {
+      console.warn('검색 UI 요소를 찾을 수 없습니다.');
+      return;
+    }
+
+    // 이벤트 리스너 등록
+    searchForm.addEventListener('submit', handleSearch);
+    searchInput.addEventListener('keydown', handleKeyDown);
+
+    // URL 해시가 있으면 해당 절로 이동
+    if (window.location.hash) {
+      highlightVerse(window.location.hash.substring(1));
+    }
+
+    // 오디오 플레이어 초기화 (엄격한 멈춤 상태 강조)
+    initializeAudioPlayers();
+
+    console.log('성경 구절 네비게이션 초기화 완료');
   }
-  
-  // 2. "창세기 1:3" 또는 "창세 1:3" 형식 처리
-  const bookChapterVerseMatch = input.match(/^(.+?)\s+(\d+):(\d+)(?:-(\d+))?$/);
-  if (bookChapterVerseMatch) {
-    const [, bookName, chapter, startVerse, endVerse] = bookChapterVerseMatch;
-    
-    // 책 이름을 약칭으로 변환
-    const shortName = BOOK_MAPPINGS[bookName] || bookName;
-    
-    if (endVerse) {
-      // 범위 검색 (예: "창세 1:1-3")
-      const results = [];
-      for (let verse = parseInt(startVerse); verse <= parseInt(endVerse); verse++) {
-        results.push(`${shortName}-${chapter}-${verse}`);
+
+  /**
+   * 오디오 플레이어 초기화: 초기에 항상 멈춤 상태로 고정
+   */
+  function initializeAudioPlayers() {
+    const audios = document.querySelectorAll('audio.bible-audio');
+    for (const audio of audios) {
+      try { audio.autoplay = false; } catch (_) {}
+      try { audio.preload = 'metadata'; } catch (_) {}
+
+      const reset = () => {
+        try { audio.pause(); } catch (_) {}
+        try { audio.currentTime = 0; } catch (_) {}
+      };
+
+      // 메타데이터/데이터 로드 시점에 항상 리셋
+      audio.addEventListener('loadedmetadata', reset, { once: true });
+      audio.addEventListener('loadeddata', reset, { once: true });
+      // 혹시나 이미 로드된 경우도 처리
+      if (audio.readyState >= 1) {
+        reset();
       }
-      return results;
+    }
+  }
+
+  /**
+   * 검색 폼 제출 처리
+   */
+  function handleSearch(event) {
+    event.preventDefault();
+
+    const query = searchInput.value.trim();
+    if (!query) {
+      return;
+    }
+
+    // 절 참조 형식인지 확인 (예: "창세 1:1", "창세기 1:1")
+    const verseRefMatch = query.match(/^(.+?)\s+(\d+):(\d+)$/);
+    if (verseRefMatch) {
+      searchByReference(verseRefMatch[1], verseRefMatch[2], verseRefMatch[3]);
     } else {
-      // 단일 절 (예: "창세 1:3")
-      return [`${shortName}-${chapter}-${startVerse}`];
+      // 텍스트 검색
+      searchByText(query);
     }
   }
-  
-  // 3. 다른 형식은 그대로 반환
-  return [input];
-}
 
-// 검색창에서 입력한 절 번호로 이동 (다중 절 지원)
-function goToVerse(searchInput) {
-  const verseIds = parseSearchInput(searchInput);
-  let foundAny = false;
-  
-  // 이전 하이라이트 제거
-  document.querySelectorAll('.highlighted-verse').forEach(el => {
-    el.classList.remove('highlighted-verse');
-    el.style.backgroundColor = '';
-  });
-  
-  verseIds.forEach((verseId, index) => {
-    const element = document.getElementById(verseId);
-    if (element) {
-      foundAny = true;
-      
-      // 첫 번째 절로 스크롤
-      if (index === 0) {
-        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
-      
-      // 하이라이트 효과
-      element.classList.add('highlighted-verse');
-      element.style.backgroundColor = '#ffff99';
+  /**
+   * 키보드 입력 처리
+   */
+  function handleKeyDown(event) {
+    // ESC 키로 하이라이트 제거
+    if (event.key === 'Escape') {
+      clearHighlight();
+      searchInput.blur();
     }
-  });
-  
-  if (!foundAny) {
-    alert('해당 절을 찾을 수 없습니다: ' + searchInput);
-  } else {
-    // 3초 후 하이라이트 제거
+  }
+
+  /**
+   * 절 참조로 검색
+   */
+  function searchByReference(bookName, chapter, verse) {
+    // 현재 페이지의 책 이름과 장 번호 추출
+    const articleId = document.querySelector('article').id;
+    const currentMatch = articleId.match(/^(.+?)-(\d+)$/);
+
+    if (!currentMatch) {
+      showMessage('현재 페이지 정보를 찾을 수 없습니다.', 'error');
+      return;
+    }
+
+    const currentBookAbbr = currentMatch[1];
+    const currentChapter = currentMatch[2];
+
+    const targetBookAbbr = bookNameToAbbr[bookName] || bookName;
+
+    // 같은 책·장 → 현재 페이지에서 이동
+    if (targetBookAbbr === currentBookAbbr && chapter === currentChapter) {
+      const verseId = `${targetBookAbbr}-${chapter}-${verse}`;
+      const found = highlightVerse(verseId);
+
+      if (found) {
+        showMessage(`${bookName} ${chapter}:${verse}로 이동했습니다.`, 'success');
+        // URL 해시 업데이트
+        history.replaceState(null, null, `#${verseId}`);
+      } else {
+        showMessage(`${bookName} ${chapter}:${verse}를 찾을 수 없습니다.`, 'error');
+      }
+    } else {
+      // 다른 책/장 → 파일로 리다이렉트
+      const slug = abbrToSlug[targetBookAbbr];
+      if (!slug) {
+        showMessage('해당 책을 찾을 수 없습니다.', 'error');
+        return;
+      }
+      const basePath = window.location.pathname.replace(/[^/]+$/, '');
+      const filename = `${slug}-${chapter}.html#${targetBookAbbr}-${chapter}-${verse}`;
+      window.location.href = basePath + filename;
+    }
+  }
+
+  /**
+   * 텍스트로 검색
+   */
+  function searchByText(query) {
+    const verses = document.querySelectorAll('span[id*="-"]');
+    let found = false;
+
+    // 이전 하이라이트 제거
+    clearTextHighlight();
+
+    for (const verse of verses) {
+      const text = verse.textContent || verse.innerText;
+      if (text.toLowerCase().includes(query.toLowerCase())) {
+        // 텍스트 하이라이트
+        highlightTextInElement(verse, query);
+
+        if (!found) {
+          // 첫 번째 결과로 스크롤
+          verse.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          found = true;
+        }
+      }
+    }
+
+    if (found) {
+      showMessage(`"${query}" 검색 완료`, 'success');
+    } else {
+      showMessage(`"${query}"를 찾을 수 없습니다.`, 'error');
+    }
+  }
+
+  /**
+   * 절 하이라이트
+   */
+  function highlightVerse(verseId) {
+    const verseElement = document.getElementById(verseId);
+
+    if (!verseElement) {
+      return false;
+    }
+
+    // 이전 하이라이트 제거
+    clearHighlight();
+
+    // 새 하이라이트 적용
+    verseElement.classList.add('verse-highlight');
+    currentHighlight = verseElement;
+
+    // 해당 요소로 스크롤
+    verseElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+    // 포커스 설정 (접근성)
+    verseElement.setAttribute('tabindex', '-1');
+    verseElement.focus();
+
+    return true;
+  }
+
+  /**
+   * 요소 내 텍스트 하이라이트
+   */
+  function highlightTextInElement(element, query) {
+    const walker = document.createTreeWalker(
+      element,
+      NodeFilter.SHOW_TEXT,
+      null,
+      false
+    );
+
+    const textNodes = [];
+    let node;
+
+    while (node = walker.nextNode()) {
+      if (node.parentElement.classList.contains('verse-number') ||
+        node.parentElement.classList.contains('paragraph-marker')) {
+        continue; // 절 번호나 단락 마커는 제외
+      }
+      textNodes.push(node);
+    }
+
+    for (const textNode of textNodes) {
+      const text = textNode.textContent;
+      const regex = new RegExp(`(${escapeRegExp(query)})`, 'gi');
+
+      if (regex.test(text)) {
+        const highlightedText = text.replace(regex, '<span class="text-highlight">$1</span>');
+        const wrapper = document.createElement('div');
+        wrapper.innerHTML = highlightedText;
+
+        while (wrapper.firstChild) {
+          textNode.parentNode.insertBefore(wrapper.firstChild, textNode);
+        }
+        textNode.remove();
+      }
+    }
+  }
+
+  /**
+   * 정규식 이스케이프
+   */
+  function escapeRegExp(string) {
+    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  /**
+   * 하이라이트 제거
+   */
+  function clearHighlight() {
+    if (currentHighlight) {
+      currentHighlight.classList.remove('verse-highlight');
+      currentHighlight.removeAttribute('tabindex');
+      currentHighlight = null;
+    }
+
+    clearTextHighlight();
+  }
+
+  /**
+   * 텍스트 하이라이트 제거
+   */
+  function clearTextHighlight() {
+    const highlighted = document.querySelectorAll('.text-highlight');
+    for (const element of highlighted) {
+      const parent = element.parentNode;
+      parent.replaceChild(document.createTextNode(element.textContent), element);
+      parent.normalize();
+    }
+  }
+
+  /**
+   * 메시지 표시
+   */
+  function showMessage(message, type = 'info') {
+    // 기존 메시지 제거
+    const existingMessage = document.querySelector('.search-message');
+    if (existingMessage) {
+      existingMessage.remove();
+    }
+
+    // 새 메시지 생성
+    const messageElement = document.createElement('div');
+    messageElement.className = `search-message search-message-${type}`;
+    messageElement.textContent = message;
+    messageElement.setAttribute('role', 'status');
+    messageElement.setAttribute('aria-live', 'polite');
+
+    // 스타일 적용
+    Object.assign(messageElement.style, {
+      position: 'fixed',
+      top: '20px',
+      right: '20px',
+      padding: '10px 15px',
+      borderRadius: '4px',
+      color: 'white',
+      fontWeight: 'bold',
+      zIndex: '1000',
+      opacity: '0',
+      transition: 'opacity 0.3s ease'
+    });
+
+    // 타입별 색상
+    switch (type) {
+      case 'success':
+        messageElement.style.backgroundColor = '#28a745';
+        break;
+      case 'error':
+        messageElement.style.backgroundColor = '#dc3545';
+        break;
+      case 'info':
+      default:
+        messageElement.style.backgroundColor = '#17a2b8';
+        break;
+    }
+
+    document.body.appendChild(messageElement);
+
+    // 애니메이션
     setTimeout(() => {
-      document.querySelectorAll('.highlighted-verse').forEach(el => {
-        el.style.backgroundColor = '';
-        el.classList.remove('highlighted-verse');
-      });
+      messageElement.style.opacity = '1';
+    }, 10);
+
+    // 3초 후 제거
+    setTimeout(() => {
+      messageElement.style.opacity = '0';
+      setTimeout(() => {
+        if (messageElement.parentNode) {
+          messageElement.parentNode.removeChild(messageElement);
+        }
+      }, 300);
     }, 3000);
   }
-}
 
-// 예시: URL에 #창세-1-3 이 있으면 자동 이동
-window.addEventListener('DOMContentLoaded', () => {
-  const hash = window.location.hash.replace('#', '');
-  if (hash) {
-    goToVerse(hash);
+  // DOM 로드 후 초기화
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
   }
 
-  // 검색 박스 이벤트 바인딩
-  const searchBox = document.getElementById('verse-search');
-  const searchBtn = document.getElementById('verse-search-btn');
+  // 전역 접근을 위한 API 노출
+  window.BibleNavigator = {
+    highlightVerse: highlightVerse,
+    clearHighlight: clearHighlight,
+    searchByText: searchByText
+  };
 
-  if (searchBox && searchBtn) {
-    searchBtn.addEventListener('click', () => {
-      const value = searchBox.value.trim();
-      if (value) goToVerse(value);
-    });
-
-    searchBox.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        const value = searchBox.value.trim();
-        if (value) goToVerse(value);
-      }
-    });
-    
-    // 검색 예시를 placeholder에 표시
-    if (searchBox) {
-      searchBox.placeholder = "예: 창세-1-3, 창세기 1:3, 창세 1:1-3";
-    }
-  }
-});
+})();

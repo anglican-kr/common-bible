@@ -45,7 +45,8 @@ class BibleParser:
             mappings_dict[book['약칭']] = {
                 'full_name': book['전체 이름'],
                 'english_name': book['영문 이름'],
-                '구분': book.get('구분', '구약')  # 기본값은 구약
+                '구분': book.get('구분', '구약'),  # 기본값은 구약
+                'aliases': book.get('aliases', [book['약칭'], book['전체 이름']])
             }
 
         return mappings_dict

@@ -1,26 +1,327 @@
-/* 절 번호 시각적 표시용 */
+/* 공동번역성서 프로젝트 - 성경 구절 스타일시트 */
+
+/* 기본 설정 */
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Noto Sans KR', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  line-height: 1.6;
+  color: #333;
+  background-color: #fafafa;
+  margin: 0;
+  padding: 20px;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+/* 접근성: 스크린리더 전용 텍스트 */
+.screen-reader-text {
+  position: absolute;
+  left: -10000px;
+  top: auto;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+/* 검색 컨테이너 */
+.search-container {
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 30px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+#verse-search-form {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+#verse-search {
+  flex: 1;
+  padding: 12px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 16px;
+}
+
+#verse-search:focus {
+  outline: 2px solid #0066cc;
+  border-color: #0066cc;
+}
+
+#verse-search-btn {
+  padding: 12px 20px;
+  background: #0066cc;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 16px;
+  transition: background-color 0.2s;
+}
+
+#verse-search-btn:hover {
+  background: #0052a3;
+}
+
+#verse-search-btn:focus {
+  outline: 2px solid #004080;
+}
+
+.search-help-text {
+  color: #666;
+  font-size: 14px;
+  margin: 0;
+}
+
+/* 오디오 플레이어 */
+.audio-player-container {
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 30px;
+  text-align: center;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.bible-audio {
+  width: 100%;
+  max-width: 500px;
+}
+
+.audio-unavailable-notice {
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 30px;
+  text-align: center;
+}
+
+.notice-text {
+  color: #6c757d;
+  margin: 0;
+  font-style: italic;
+}
+
+.notice-text .icon {
+  margin-right: 8px;
+  font-size: 1.2em;
+}
+
+/* 메인 콘텐츠 */
+article {
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 30px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+h1 {
+  color: #2c3e50;
+  border-bottom: 3px solid #0066cc;
+  padding-bottom: 10px;
+  margin-bottom: 30px;
+  font-size: 2em;
+}
+
+/* 단락 스타일 */
+p {
+  margin: 1.5em 0;
+  text-align: justify;
+  font-size: 18px;
+  line-height: 1.8;
+}
+
+/* 성경 본문 단락 - 연속 공백 문자 유지 */
+.scripture-paragraph {
+  margin: 1.5em 0;
+  text-align: justify;
+  font-size: 18px;
+  line-height: 1.8;
+  white-space: pre-wrap;
+}
+
+/* 절 스타일 */
+span[id^="창세-"],
+span[id^="출애-"],
+span[id^="레위-"],
+span[id^="민수-"],
+span[id^="신명-"],
+span[id^="여호-"],
+span[id^="판관-"],
+span[id^="룻기-"],
+span[id^="사무상-"],
+span[id^="사무하-"],
+span[id^="열왕상-"],
+span[id^="열왕하-"],
+span[id^="역상-"],
+span[id^="역하-"],
+span[id^="에스-"],
+span[id^="느헤-"],
+span[id^="에스더-"],
+span[id^="욥기-"],
+span[id^="시편-"],
+span[id^="잠언-"],
+span[id^="전도-"],
+span[id^="아가-"],
+span[id^="이사-"],
+span[id^="예레-"],
+span[id^="애가-"],
+span[id^="에제-"],
+span[id^="다니-"],
+span[id^="호세-"],
+span[id^="요엘-"],
+span[id^="아모-"],
+span[id^="오바-"],
+span[id^="요나-"],
+span[id^="미가-"],
+span[id^="나훔-"],
+span[id^="하바-"],
+span[id^="스바-"],
+span[id^="학개-"],
+span[id^="스가-"],
+span[id^="말라-"],
+span[id^="마태-"],
+span[id^="마가-"],
+span[id^="누가-"],
+span[id^="요한-"],
+span[id^="사도-"],
+span[id^="로마-"],
+span[id^="고전-"],
+span[id^="고후-"],
+span[id^="갈라-"],
+span[id^="에베-"],
+span[id^="빌립-"],
+span[id^="골로-"],
+span[id^="살전-"],
+span[id^="살후-"],
+span[id^="딤전-"],
+span[id^="딤후-"],
+span[id^="디도-"],
+span[id^="빌레-"],
+span[id^="히브-"],
+span[id^="야고-"],
+span[id^="베전-"],
+span[id^="베후-"],
+span[id^="요일-"],
+span[id^="요이-"],
+span[id^="요삼-"],
+span[id^="유다-"],
+span[id^="계시-"] {
+  /* 절 ID를 가진 span 요소들 */
+  position: relative;
+  transition: background-color 0.3s ease;
+}
+
+/* 절 번호 스타일 */
 .verse-number {
   font-weight: bold;
-  margin-right: 0.3em;
-  color: #888;
+  color: #999999;
   font-size: 0.9em;
+  margin-right: 4px;
 }
 
-/* 스크린리더에 숨기는 스타일 */
-[aria-hidden="true"] {
-  display: inline;
-}
-
-/* 절 구분 span 태그에 약간의 여백 */
-article p span {
-  margin: 0.2em 0;
-  line-height: 1.6;
-}
-
-/* 단락 표시 기호 (¶) 스타일 - 스크린리더에 숨김 */
+/* 단락 표시 스타일 */
 .paragraph-marker {
+  color: #999999;
   font-weight: bold;
-  margin-right: 0.2em;
-  color: #888;
-  font-size: 0.9em;
+  margin-right: 4px;
+  font-size: 1.1em;
+}
+
+/* 하이라이트 효과 (검색 결과용) */
+.verse-highlight {
+  background-color: #fff3cd !important;
+  border-left: 4px solid #ffc107;
+  padding-left: 8px;
+  margin-left: -8px;
+  border-radius: 4px;
+}
+
+/* 검색 결과 텍스트 하이라이트 */
+.text-highlight {
+  background-color: #ffeb3b;
+  padding: 2px 4px;
+  border-radius: 2px;
+  font-weight: bold;
+}
+
+/* 포커스 시 강조 */
+span[id]:target {
+  background-color: #e3f2fd;
+  border-left: 4px solid #2196f3;
+  padding-left: 8px;
+  margin-left: -8px;
+  border-radius: 4px;
+  animation: highlight-fade 3s ease-out;
+}
+
+@keyframes highlight-fade {
+  0% {
+    background-color: #ffeb3b;
+  }
+
+  100% {
+    background-color: #e3f2fd;
+  }
+}
+
+/* 반응형 디자인 */
+@media (max-width: 768px) {
+  body {
+    padding: 10px;
+  }
+
+  article {
+    padding: 20px;
+  }
+
+  h1 {
+    font-size: 1.5em;
+  }
+
+  p {
+    font-size: 16px;
+  }
+
+  #verse-search-form {
+    flex-direction: column;
+  }
+
+  #verse-search-btn {
+    width: 100%;
+  }
+}
+
+/* 인쇄 스타일 */
+@media print {
+  body {
+    background: white;
+    color: black;
+  }
+
+  .search-container,
+  .audio-player-container,
+  .audio-unavailable-notice {
+    display: none;
+  }
+
+  article {
+    box-shadow: none;
+    border: none;
+  }
+
+  .verse-number,
+  .paragraph-marker {
+    color: #999999;
+  }
 }
