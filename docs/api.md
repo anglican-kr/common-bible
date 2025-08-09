@@ -2,142 +2,89 @@
 
 ## 📖 개요
 
-이 문서는 공동번역성서 프로젝트의 주요 클래스와 함수들의 API를 설명합니다.
+이 문서는 현재 저장소에 포함된 주요 모듈들의 공개 API를 설명합니다.
 
 ---
 
-## 🔧 BibleParser 클래스
+## 🔧 BibleParser (src/parser.py)
 
 ### 초기화
 
 ```python
-parser = BibleParser(file_path: str)
+from src.parser import BibleParser
+parser = BibleParser(book_mappings_path: str)
 ```
 
 **매개변수:**
-- `file_path`: 공동번역성서 텍스트 파일 경로
+
+- `book_mappings_path`: `data/book_mappings.json` 경로
 
 ### 메서드
 
-#### `load_book_mappings() -> None`
-성경 책 이름 매핑 데이터를 `data/bible_book_mappings.json`에서 로드합니다.
+#### 공개 메서드
 
-#### `identify_book(text: str) -> Optional[str]`
-텍스트에서 성경 책 이름을 식별하여 전체 이름을 반환합니다.
-
-**매개변수:**
-- `text`: 분석할 텍스트 (예: "창세 1:1")
-
-**반환값:**
-- 성공 시: 전체 책 이름 (예: "창세기")
-- 실패 시: `None`
-
-#### `parse_file() -> List[Chapter]`
-전체 파일을 파싱하여 장 단위로 분할합니다.
-
-**반환값:**
-- `List[Chapter]`: 파싱된 장들의 목록
-
-#### `parse_chapter(chapter_text: str) -> Chapter`
-개별 장을 파싱하여 절 단위로 분할합니다.
-
-**매개변수:**
-- `chapter_text`: 장 텍스트
-
-**반환값:**
-- `Chapter`: 파싱된 장 객체
-
-#### `parse_verse(verse_text: str) -> Verse`
-절 텍스트를 파싱하여 단락 구분을 처리합니다.
-
-**매개변수:**
-- `verse_text`: 절 텍스트
-
-**반환값:**
-- `Verse`: 파싱된 절 객체
+- `parse_file(file_path: str) -> List[Chapter]`
+- `parse_file_with_cache(file_path: str, cache_path: str = "output/parsed_bible.json") -> List[Chapter]`
+- `save_to_json(chapters: List[Chapter], output_path: str) -> None`
+- `load_from_json(json_path: str) -> List[Chapter]`
 
 ---
 
-## 🎨 HTMLGenerator 클래스
+## 🎨 HtmlGenerator (src/html_generator.py)
 
 ### 초기화
 
 ```python
-generator = HTMLGenerator(template_path: str)
+from src.html_generator import HtmlGenerator
+generator = HtmlGenerator(template_path: str)
 ```
-
-**매개변수:**
-- `template_path`: HTML 템플릿 파일 경로
 
 ### 메서드
 
-#### `generate_chapter_html(chapter: Chapter) -> str`
-장 단위 HTML을 생성합니다.
+#### 공개 메서드
 
-**매개변수:**
-- `chapter`: 장 객체
+- `generate_chapter_html(chapter: Chapter, audio_base_url: str = "data/audio", static_base: str = "../static", audio_check_base: Optional[str] = None, css_href: Optional[str] = None, js_src: Optional[str] = None) -> str`
+  - 장을 HTML로 변환. 오디오 경로/존재 여부 및 정적 리소스 경로를 주입
+  - css_href/js_src 지정 시 본문에 링크/스크립트 태그를 삽입(차일드 테마 enqueue 시 생략)
 
-**반환값:**
-- `str`: 생성된 HTML 문자열
+#### 보조 메서드(내부)
 
-#### `generate_verse_span(verse: Verse) -> str`
-절 HTML 요소를 생성합니다.
-
-**매개변수:**
-- `verse`: 절 객체
-
-**반환값:**
-- `str`: 절 HTML 문자열
-
-#### `apply_accessibility_attributes(element: str) -> str`
-접근성 속성을 적용합니다.
-
-**매개변수:**
-- `element`: HTML 요소 문자열
-
-**반환값:**
-- `str`: 접근성 속성이 적용된 HTML
+- `_generate_verses_html(chapter: Chapter) -> str`
+- `_generate_verse_span(chapter: Chapter, verse: Verse) -> str`
+- `_get_audio_filename(chapter: Chapter) -> str`
+- `_check_audio_exists(audio_path: str) -> bool`
+- `_get_book_slug(book_abbr: str) -> str`
 
 ---
 
-## 🚀 WordPressPublisher 클래스
+## 🚀 WordPress Publisher (src/wordpress_api.py)
 
-### 초기화
+워드프레스 게시 오케스트레이션을 위한 공개 API입니다. 현재 기본 구현은 안전한 DRY 로그 중심이며, 실제 HTTP 호출은 교체/확장 가능합니다.
 
-```python
-publisher = WordPressPublisher(wp_url: str, auth_token: str)
-```
+### 클래스
 
-**매개변수:**
-- `wp_url`: 워드프레스 사이트 URL
-- `auth_token`: 인증 토큰
+#### WordPressClient
 
-### 메서드
+- `upload_media_from_path(file_path: str, desired_slug: str, mime_hint: str) -> AssetRecord`
+- `find_media_by_slug(slug: str) -> Optional[AssetRecord]`
+- `ensure_category(name: str) -> int`
+- `ensure_tag(name: str) -> int`
+- `create_or_update_post(slug: str, title: str, content_html: str, status: str, category_ids: list[int], tag_ids: list[int]) -> int`
+- `update_post_status(post_id: int, status: str, scheduled_iso: Optional[str] = None) -> int`
+- `list_posts(status: str, category_id: Optional[int] = None, tag_ids: Optional[list[int]] = None, slug_prefix: Optional[str] = None, per_page: int = 100, page: int = 1) -> list[dict]`
 
-#### `validate_auth() -> bool`
-인증 상태를 확인합니다.
+#### AssetRegistry
 
-**반환값:**
-- `bool`: 인증 성공 여부
+- `load() -> None`
+- `save() -> None`
+- `get(local_path: Path) -> Optional[AssetRecord]`
+- `upsert(local_path: Path, record: AssetRecord) -> None`
 
-#### `publish_chapter(chapter: Chapter, html_content: str) -> bool`
-개별 장을 워드프레스에 게시합니다.
+#### Publisher
 
-**매개변수:**
-- `chapter`: 장 객체
-- `html_content`: HTML 콘텐츠
-
-**반환값:**
-- `bool`: 게시 성공 여부
-
-#### `batch_publish_all(chapters: List[Chapter]) -> List[str]`
-모든 장을 일괄 공개합니다.
-
-**매개변수:**
-- `chapters`: 장 객체들의 목록
-
-**반환값:**
-- `List[str]`: 게시된 포스트 ID 목록
+- `ensure_policy_assets(css_path: Path, audio_dir: Optional[Path] = None) -> dict`
+- `render_and_publish_chapter(html_path: Path, meta: ChapterPostMeta, status: Optional[str] = None, dry_run: bool = True) -> int`
+- `bulk_update_status(target_status: str, *, category: str = "공동번역성서", division_tag: Optional[str] = None, slug_prefix: Optional[str] = None, scheduled_iso: Optional[str] = None, dry_run: bool = False, per_page: int = 100) -> dict`
 
 ---
 
@@ -149,91 +96,63 @@ publisher = WordPressPublisher(wp_url: str, auth_token: str)
 @dataclass
 class Chapter:
     book_name: str          # 책 이름 (예: "창세기")
-    chapter_number: int     # 장 번호 (예: 1)
-    verses: List[Verse]     # 절 목록
-    id: str                # 장 ID (예: "창세-1")
+    book_abbr: str
+    chapter_number: int
+    verses: List[Verse]
 ```
 
 ### Verse 클래스
+
+### AssetRecord (wordpress_api)
+
+```python
+@dataclass
+class AssetRecord:
+    slug: str
+    sha256: str
+    wp_media_id: Optional[int]
+    source_url: Optional[str]
+    mime_type: Optional[str]
+    uploaded_at: Optional[str]
+```
+
+### ChapterPostMeta (wordpress_api)
+
+```python
+@dataclass
+class ChapterPostMeta:
+    book_name: str
+    book_abbr: str
+    english_name: str
+    division: str
+    chapter_number: int
+```
 
 ```python
 @dataclass
 class Verse:
     number: int             # 절 번호 (예: 1)
-    text: str              # 절 텍스트
-    has_paragraph: bool    # ¶ 기호 유무
-    sub_parts: List[str]   # 단독 ¶로 분할된 경우
-    id: str               # 절 ID (예: "창세-1-1")
+    text: str
+    has_paragraph: bool
 ```
 
 ---
 
-## 🌐 JavaScript API (verse-navigator.js)
+## 🌐 JavaScript API (static/verse-navigator.js)
 
 ### 함수
 
-#### `parseSearchInput(input: string) -> string[]`
-검색 입력을 절 ID 배열로 변환합니다.
+전역 API:
 
-**매개변수:**
-- `input`: 검색 입력 (예: "창세 1:1-3")
+- `highlightVerse(verseId: string): boolean`
+- `clearHighlight(): void`
+- `searchByText(query: string): void`
 
-**반환값:**
-- `string[]`: 절 ID 배열 (예: ["창세-1-1", "창세-1-2", "창세-1-3"])
-
-#### `goToVerse(searchInput: string) -> void`
-검색된 절로 이동하고 하이라이트합니다.
-
-**매개변수:**
-- `searchInput`: 검색 입력
-
-#### 지원하는 검색 형식
-- `"창세-1-3"`: 직접 ID 형식
-- `"창세기 1:3"`: 전체 책 이름 + 장:절
-- `"창세 1:3"`: 약칭 + 장:절
-- `"창세 1:1-5"`: 범위 검색
+별칭/슬러그 데이터는 `window.BIBLE_ALIAS`로 주입됩니다.
 
 ---
 
-## 🔒 SecurityManager 클래스
-
-### 메서드
-
-#### `load_credentials() -> None`
-환경변수에서 인증 정보를 로드합니다.
-
-#### `validate_https(url: str) -> bool`
-HTTPS 연결을 검증합니다.
-
-**매개변수:**
-- `url`: 검증할 URL
-
-**반환값:**
-- `bool`: HTTPS 여부
-
-#### `sanitize_input(text: str) -> str`
-입력 데이터를 새니타이징합니다.
-
-**매개변수:**
-- `text`: 새니타이징할 텍스트
-
-**반환값:**
-- `str`: 새니타이징된 텍스트
-
----
-
-## ⚠️ 예외 처리
-
-### ParseError
-텍스트 파싱 중 발생하는 오류
-
-### AuthenticationError
-워드프레스 인증 실패 시 발생
-
-### PublishError
-게시 중 발생하는 오류
-
----
+> 참고: 보안/예외 유틸리티는 별도 명세에서 다룹니다. 현재 저장소에는 `SecurityManager`, 전용 예외 클래스는 포함되어 있지 않습니다.
 
 ## 📋 사용 예시
 
@@ -241,37 +160,20 @@ HTTPS 연결을 검증합니다.
 
 ```python
 # 1. 파싱
-parser = BibleParser('data/common-bible-kr.txt')
-chapters = parser.parse_file()
+parser = BibleParser('data/book_mappings.json')
+chapters = parser.parse_file_with_cache('data/common-bible-kr.txt', 'output/parsed_bible.json')
 
 # 2. HTML 생성
-generator = HTMLGenerator('templates/chapter_template.html')
+generator = HtmlGenerator('templates/chapter.html')
 html_content = generator.generate_chapter_html(chapters[0])
 
-# 3. 워드프레스 게시
-publisher = WordPressPublisher(
-    wp_url=os.getenv('WP_BASE_URL'),
-    auth_token=os.getenv('WP_AUTH_TOKEN')
-)
-
-if publisher.validate_auth():
-    success = publisher.publish_chapter(chapters[0], html_content)
-    print(f"게시 결과: {success}")
-```
-
-### 책 이름 식별
-
-```python
-parser = BibleParser('data/common-bible-kr.txt')
-book_name = parser.identify_book("창세 1:1")  # "창세기"
-book_name = parser.identify_book("마태 5:3")  # "마태오의 복음서"
+# (선택) Publisher를 사용해 게시/상태 변경 수행
 ```
 
 ### JavaScript 검색
 
 ```javascript
-// 다양한 검색 방식
-goToVerse("창세-1-3");              // 직접 ID
-goToVerse("창세기 1:3");            // 전체 이름
-goToVerse("창세 1:1-5");            // 범위 검색
+// 전역 API 사용 예시
+BibleNavigator.searchByText("한처음에");
+BibleNavigator.highlightVerse("창세-1-3");
 ```

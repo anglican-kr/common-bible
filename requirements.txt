@@ -20,8 +20,8 @@ pytest-cov>=4.1.0
 black>=23.7.0
 flake8>=6.0.0
 
-# 워드프레스 연동용
-python-wordpress-xmlrpc>=2.3
+# 워드프레스 연동/테스트
+responses>=0.25.0
 
 # 로깅 및 모니터링
 colorlog>=6.7.0

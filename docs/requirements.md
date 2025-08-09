@@ -10,25 +10,25 @@
 - 전체 성경 본문이 포함되어 있음
 - 한 장의 본문은 다음 규칙에 따라 구분됨:
 
-| 요소      | 설명                                                                |
-| --------- | ------------------------------------------------------------------- |
-| 장 시작   | `"창세 1:1"`, `"2마카 2:1"` 등의 형태로 시작 (숫자 앞머리는 선택적) |
-| **첫 절** | **장 시작 라인에 첫 번째 절 내용이 포함됨** (예: `창세 1:1 ¶ 한처음에...`) |
-| 절 번호   | 두 번째 절부터는 절 번호로 시작함 (예: `2 땅은 아직...`, `3 ¶ 하느님께서...`)                  |
-| 단락 구분 | `¶` 기호가 단락(paragraph)의 시작을 표시함                          |
-| 장 종료   | 다음 장 시작 패턴이 나타나거나 파일 끝까지 (빈 줄은 보조 역할)        |
+| 요소      | 설명                                                                          |
+| --------- | ----------------------------------------------------------------------------- |
+| 장 시작   | `"창세 1:1"`, `"2마카 2:1"` 등의 형태로 시작 (숫자 앞머리는 선택적)           |
+| **첫 절** | **장 시작 라인에 첫 번째 절 내용이 포함됨** (예: `창세 1:1 ¶ 한처음에...`)    |
+| 절 번호   | 두 번째 절부터는 절 번호로 시작함 (예: `2 땅은 아직...`, `3 ¶ 하느님께서...`) |
+| 단락 구분 | `¶` 기호가 단락(paragraph)의 시작을 표시함                                    |
+| 장 종료   | 다음 장 시작 패턴이 나타나거나 파일 끝까지 (빈 줄은 보조 역할)                |
 
 > ⚠️ **주의 사항:**  
-**장 구분은 "장 시작" 패턴을 기준으로 합니다.** `"창세 1:1"`, `"2마카 2:1"` 등의 형태로 시작하는 패턴이 있을 때만 새로운 장으로 인식합니다.  
-빈 줄만 있거나 장 시작 패턴이 없는 텍스트는 장으로 인식하지 않습니다.  
-이렇게 하면 입력 파일의 오류나 편집 실수에 관계없이 **명확하고 일관된 장 구분**이 가능합니다.  
-장 종료는 다음 장 시작 패턴이 나타나거나 파일 끝에 도달할 때까지이며, 빈 줄의 개수는 보조적인 역할만 합니다.
+> **장 구분은 "장 시작" 패턴을 기준으로 합니다.** `"창세 1:1"`, `"2마카 2:1"` 등의 형태로 시작하는 패턴이 있을 때만 새로운 장으로 인식합니다.  
+> 빈 줄만 있거나 장 시작 패턴이 없는 텍스트는 장으로 인식하지 않습니다.  
+> 이렇게 하면 입력 파일의 오류나 편집 실수에 관계없이 **명확하고 일관된 장 구분**이 가능합니다.  
+> 장 종료는 다음 장 시작 패턴이 나타나거나 파일 끝에 도달할 때까지이며, 빈 줄의 개수는 보조적인 역할만 합니다.
 
 ### 장 식별 정규표현식
 
 - 패턴: `([가-힣0-9]+)\s+([0-9]+):([0-9]+)`
 - 예시: `창세 1:1`, `2마카 2:1`
-- 설명: 
+- 설명:
   - `([가-힣0-9]+)`: 한글과 숫자가 조합된 책 이름 (예: "창세", "2마카")
   - `\s+`: 하나 이상의 공백
   - `([0-9]+):([0-9]+)`: 장:절 번호 형태
@@ -43,6 +43,7 @@
 ```
 
 **중요 특징:**
+
 - **첫 번째 라인**: 장 식별자 + 첫 번째 절 내용 (절 번호 1은 생략됨)
 - **두 번째 라인부터**: 일반적인 절 번호 + 내용 패턴
 - **단락 구분**: `¶` 기호로 단락 시작 표시 (첫 절과 다른 절 모두 가능)
@@ -61,57 +62,89 @@
 ```html
 <!DOCTYPE html>
 <html lang="ko">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>창세기 1장</title>
-  <link rel="stylesheet" href="verse-style.css">
-</head>
-<body>
-  <!-- 검색 UI -->
-  <div class="search-container">
-    <form id="verse-search-form" role="search" aria-label="성경 구절 검색">
-      <label for="verse-search" class="screen-reader-text">검색</label>
-      <input type="text" id="verse-search" placeholder="절 ID 또는 단어 검색 (예: 창세 1:3, 하느님)" aria-describedby="search-help">
-      <button id="verse-search-btn" type="submit">이동</button>
-    </form>
-    <p id="search-help" class="search-help-text">책 장:절 형식으로 검색하거나 단어를 입력하세요. 예: '창세 1:1' 또는 '하느님'</p>
-  </div>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>창세기 1장</title>
+    <!-- 권장: 차일드 테마에서 CSS enqueue로 로드 (본문 링크 생략) -->
+    <!-- 필요 시 생성기 CLI의 --css-href 옵션으로 링크 삽입 가능 -->
+  </head>
+  <body>
+    <!-- 검색 UI -->
+    <div class="search-container">
+      <form id="verse-search-form" role="search" aria-label="성경 구절 검색">
+        <label for="verse-search" class="screen-reader-text">검색</label>
+        <input
+          type="text"
+          id="verse-search"
+          placeholder="절 ID 또는 단어 검색 (예: 창세 1:3, 하느님)"
+          aria-describedby="search-help"
+        />
+        <button id="verse-search-btn" type="submit">이동</button>
+      </form>
+      <p id="search-help" class="search-help-text">
+        책 장:절 형식으로 검색하거나 단어를 입력하세요. 예: '창세 1:1' 또는
+        '하느님'
+      </p>
+    </div>
 
-  <!-- 오디오 플레이어 (접근성 고려) -->
-  <!-- 오디오 파일이 있는 경우 -->
-  <div class="audio-player-container" id="audio-container">
-    <h2 class="screen-reader-text">성경 오디오</h2>
-    <audio controls class="bible-audio" aria-label="창세기 1장 오디오">
-      <source src="data/audio/genesis-1.mp3" type="audio/mpeg">    
-      <p>브라우저가 오디오 재생을 지원하지 않습니다. <a href="data/audio/genesis-1.mp3">오디오 파일 다운로드</a></p>
-    </audio>
-  </div>
-  
-  <!-- 오디오 파일이 없는 경우 (특히 외경) -->
-  <div class="audio-unavailable-notice" id="audio-unavailable" style="display: none;">
-    <p class="notice-text" aria-live="polite">
-      <span class="icon" aria-hidden="true">🎵</span>
-      이 장의 오디오는 현재 준비 중입니다. 곧 추가될 예정입니다.
-    </p>
-  </div>
+    <!-- 오디오 플레이어 (접근성 고려) -->
+    <!-- 오디오 파일이 있는 경우 -->
+    <div class="audio-player-container" id="audio-container">
+      <h2 class="screen-reader-text">성경 오디오</h2>
+      <audio controls class="bible-audio" aria-label="창세기 1장 오디오">
+        <source src="data/audio/genesis-1.mp3" type="audio/mpeg" />
+        <p>
+          브라우저가 오디오 재생을 지원하지 않습니다.
+          <a href="data/audio/genesis-1.mp3">오디오 파일 다운로드</a>
+        </p>
+      </audio>
+    </div>
 
-  <article id="창세-1">
-    <h1>창세기 1장</h1>
+    <!-- 오디오 파일이 없는 경우 (특히 외경) -->
+    <div
+      class="audio-unavailable-notice"
+      id="audio-unavailable"
+      style="display: none;"
+    >
+      <p class="notice-text" aria-live="polite">
+        <span class="icon" aria-hidden="true">🎵</span>
+        이 장의 오디오는 현재 준비 중입니다. 곧 추가될 예정입니다.
+      </p>
+    </div>
 
-    <p>
-      <span id="창세-1-1"><span aria-hidden="true" class="verse-number">1</span> <span class="paragraph-marker" aria-hidden="true">¶</span> 한처음에 하느님께서 하늘과 땅을 지어내셨다.</span>
-      <span id="창세-1-2"><span aria-hidden="true" class="verse-number">2</span> 땅은 아직 모양을 갖추지 않고 아무것도 생기지 않았는데, 어둠이 깊은 물 위에...</span>
-    </p>
+    <article id="창세-1">
+      <h1>창세기 1장</h1>
 
-    <p>
-      <span id="창세-1-3"><span aria-hidden="true" class="verse-number">3</span> <span class="paragraph-marker" aria-hidden="true">¶</span> 하느님께서 "빛이 생겨라!" 하시자 빛이 생겨났다.</span>
-      <span id="창세-1-4"><span aria-hidden="true" class="verse-number">4</span> 그 빛이 하느님 보시기에 좋았다. 하느님께서는 빛과 어둠을 나누시고...</span>
-    </p>
-  </article>
+      <p>
+        <span id="창세-1-1"
+          ><span aria-hidden="true" class="verse-number">1</span>
+          <span class="paragraph-marker" aria-hidden="true">¶</span>
+          한처음에 하느님께서 하늘과 땅을 지어내셨다.</span
+        >
+        <span id="창세-1-2"
+          ><span aria-hidden="true" class="verse-number">2</span> 땅은 아직
+          모양을 갖추지 않고 아무것도 생기지 않았는데, 어둠이 깊은 물
+          위에...</span
+        >
+      </p>
 
-  <script src="verse-navigator.js"></script>
-</body>
+      <p>
+        <span id="창세-1-3"
+          ><span aria-hidden="true" class="verse-number">3</span>
+          <span class="paragraph-marker" aria-hidden="true">¶</span>
+          하느님께서 "빛이 생겨라!" 하시자 빛이 생겨났다.</span
+        >
+        <span id="창세-1-4"
+          ><span aria-hidden="true" class="verse-number">4</span> 그 빛이 하느님
+          보시기에 좋았다. 하느님께서는 빛과 어둠을 나누시고...</span
+        >
+      </p>
+    </article>
+
+    <!-- 권장: 차일드 테마에서 JS enqueue로 로드 (본문 스크립트 생략) -->
+    <!-- 필요 시 생성기 CLI의 --js-src 옵션으로 스크립트 삽입 가능 -->
+  </body>
 </html>
 ```
 
@@ -134,19 +167,20 @@
 ```html
 <!-- 단락이 시작되는 절 -->
 <span id="창세-1-1">
-  <span aria-hidden="true" class="verse-number">1</span> 
-  <span class="paragraph-marker" aria-hidden="true">¶</span> 
+  <span aria-hidden="true" class="verse-number">1</span>
+  <span class="paragraph-marker" aria-hidden="true">¶</span>
   한처음에 하느님께서 하늘과 땅을 지어내셨다.
 </span>
 
 <!-- 일반 절 -->
 <span id="창세-1-2">
-  <span aria-hidden="true" class="verse-number">2</span> 
+  <span aria-hidden="true" class="verse-number">2</span>
   땅은 아직 모양을 갖추지 않고 아무것도 생기지 않았는데...
 </span>
 ```
 
 이렇게 하면:
+
 - **시각 사용자**: 절 번호와 `¶` 기호를 모두 볼 수 있음
 - **스크린리더 사용자**: 절 번호와 `¶` 기호 없이 본문만 들을 수 있음
 
@@ -158,21 +192,38 @@
   - 모든 장에 대한 오디오 파일이 즉시 사용 가능하지 않을 수 있음
   - 특히 외경(토비트, 유딧, 마카베오상/하, 지혜서, 집회서, 바룩) 등의 오디오 파일은 추후 추가 예정
   - 오디오 파일이 없는 경우, 오디오 플레이어를 숨기거나 "오디오 준비 중" 메시지 표시
-  - 오디오 파일 존재 여부를 체크하여 동적으로 플레이어 표시/숨김 처리
+- 오디오 파일 존재 여부를 체크하여 동적으로 플레이어 표시/숨김 처리 (존재 시 `id="audio-unavailable"`를 숨기고, 부재 시 `id="audio-container"`를 숨김)
 - 오디오 플레이어는 접근성을 고려하여 WAI-ARIA 속성을 사용한다.
   - `<audio>` 요소에는 적절한 `aria-label` 속성을 추가한다. (예: `aria-label="창세기 1장 오디오"`)
   - 재생 제어 버튼에도 적절한 `aria-label` 속성을 추가한다.
 - 오디오 플레이어는 키보드로 접근 및 조작이 가능해야 한다.
 - 브라우저가 오디오를 지원하지 않는 경우 대체 텍스트와 다운로드 링크를 제공한다.
 
+## 🎨 CSS/JS 로딩 정책
+
+- 기본 정책(권장): 워드프레스 차일드 테마의 `functions.php`에서 `wp_enqueue_style/script`로 로드한다.
+  - 본문 HTML에는 CSS/JS 링크를 넣지 않는다.
+  - 가이드는 `docs/wordpress-publisher-guide.md` 참고.
+- 예외적으로 본문에 직접 링크가 필요할 경우, HTML 생성기 CLI에서 다음 옵션으로 삽입한다.
+  - `--css-href <URL 또는 상대 경로>`
+  - `--js-src <URL 또는 상대 경로>`
+  - 로컬 미리보기/정적 호스팅: `--copy-static`과 함께 `./static/...` 상대 경로 사용 권장
+  - 워드프레스 게시: 절대 URL 또는 사이트 루트 기준 경로 사용 권장
+
 ## 🔍 검색 기능 요구사항
 
-- 본문 내 특정 절로 직접 이동할 수 있는 검색 기능 제공
+- 본문 내 특정 절로 직접 이동할 수 있는 검색 기능 제공 (`static/verse-navigator.js` 제공)
 - 검색 유형:
   1. **절 ID 검색**: `창세 1:3`과 같은 형식으로 특정 절을 입력하면 해당 절로 이동
   2. **단어 검색**: 특정 단어나 문구를 검색하면 결과 목록을 표시하고 해당 절로 이동 가능
-- 검색 결과 본문에서는 하이라이트 처리 필요
+- 검색 결과 본문에서는 하이라이트 처리 필요 (`.verse-highlight`, `.text-highlight` 클래스 사용)
 - 검색 UI는 스크린리더 사용자를 위해 적절한 `aria` 속성을 포함해야 함
+
+### HTML 생성기 CLI 요구사항
+
+- 링크 삽입 옵션 제공: `--css-href`, `--js-src`
+- 정적/오디오 복사 옵션: `--copy-static`, `--copy-audio`
+- 경로 자동 보정: 출력 디렉터리 기준 상대 경로 자동화(`--static-base`, `--audio-base`)
 
 ## 🌐 워드프레스 게시물 자동화 요구사항
 
@@ -207,6 +258,7 @@
 ## ⚙️ 자동화 구성 요소
 
 ### 1. 파서/변환기 (Python 스크립트)
+
 - 입력 파일을 파싱하여 장/절 단위로 분할
   - **장 시작 라인 처리**: 장 식별자와 첫 번째 절 내용이 함께 있는 형태 처리
   - **절 번호 처리**: 첫 절은 번호 없이, 두 번째 절부터 번호 있는 형태 처리
@@ -218,12 +270,14 @@
   - 외경 등 특정 책에 대한 오디오 누락 예상 처리
 
 ### 2. HTML/CSS 스타일
+
 - `verse-number`, `paragraph-marker` 등 스타일 정의
 - 오디오 플레이어 및 검색 UI 스타일
 - 반응형 디자인 적용 (모바일 친화적)
 - WordPress 테마에 적용 가능
 
 ### 3. 워드프레스 발행기
+
 - REST API를 통한 게시물 자동 생성/업데이트
 - 메타데이터 및 오디오 파일 연결 자동화
 - **태그 자동 생성 및 관리**:
@@ -233,6 +287,7 @@
 - 오류 처리 및 로깅
 
 ### 4. CLI 도구
+
 - 커맨드라인을 통한 일괄 처리 도구
 - 특정 책/장 선택적 처리 기능
 - 배치 처리 및 로깅 기능
@@ -255,29 +310,33 @@
 ## ✅ 테스트 요구사항
 
 ### 단위 테스트
+
 - 파서 기능 테스트: 장/절/단락 구분 정확도 검증
   - **장 시작 라인 파싱**: 첫 번째 절 내용이 포함된 라인 처리 테스트
   - **절 번호 없는 첫 절**: 절 번호 1이 생략된 형태 처리 테스트
   - **일반 절 파싱**: 두 번째 절부터의 번호 있는 형태 처리 테스트
   - **단락 구분**: `¶` 기호 인식 및 단락 분리 테스트
 - HTML 생성기 테스트: 입력 데이터에 따른 출력 HTML 검증
-- 오디오 매핑 테스트: 
+- 오디오 매핑 테스트:
   - 오디오 파일 경로 생성 로직 검증
   - 오디오 파일 존재/부재 시 적절한 HTML 생성 검증
   - 외경 등 예상되는 누락 파일에 대한 처리 검증
 
 ### 통합 테스트
+
 - 전체 파이프라인 테스트: 입력 파일부터 HTML 출력까지
 - 워드프레스 API 연동 테스트: 게시물 생성 및 업데이트 검증
 - 오류 처리 및 복구 테스트
 
 ### 접근성 테스트
+
 - WCAG 2.1 AA 기준 준수 검증
 - 스크린리더 호환성 테스트
 - 키보드 네비게이션 테스트
 - 오디오 플레이어 접근성 테스트
 
 ### 성능 테스트
+
 - 대용량 입력 파일 처리 성능
 - API 요청 처리 성능
 - 메모리 사용량 모니터링
@@ -285,18 +344,21 @@
 ## 📚 문서화 요구사항
 
 ### 사용자 문서
+
 - 설치 및 설정 가이드
 - CLI 도구 사용법
 - 오류 해결 가이드
 - FAQ 문서
 
 ### 개발자 문서
+
 - 아키텍처 및 데이터 흐름 다이어그램
 - API 명세 및 사용 예제
 - 코드 주석 및 API 문서
 - 환경 설정 및 의존성 관리 방법
 
 ### 유지보수 문서
+
 - 버전 관리 및 릴리스 정책
 - 기여 가이드라인
 - 코드 스타일 가이드
@@ -305,48 +367,56 @@
 ## 🌐 확장성 및 미래 지원
 
 ### 고급 검색 기능
+
 - 전문 검색(Full-text search) 지원
 - 주제별, 구절별 검색 기능
 - 검색 결과 필터링 및 정렬
 
 ### 접근성 지속 개선
+
 - 최신 WCAG 기준 준수를 위한 주기적 업데이트
 - 다양한 보조 기술 지원 확대
 
 ### 게시 자동화
-- 워드프레스 REST API를 사용한 자동 게시
+
+- 워드프레스 REST API를 사용한 자동 게시 및 상태 관리
   - `POST /wp-json/wp/v2/posts`
   - 제목, slug, 카테고리, 태그, 콘텐츠(body) 전달
   - **게시 상태**: `status: 'private'`로 설정하여 비공개 상태로 게시
-  - 추후 일괄 공개: `status: 'publish'`로 업데이트하여 한꺼번에 공개 가능
+  - 일괄 공개/예약 공개: `PUT /wp-json/wp/v2/posts/{id}`로 상태 변경(`publish`), 필요한 경우 `date/date_gmt`로 예약 발행
+  - 자산 업로드 중복 방지: 미디어 업로드 시 콘텐츠 해시(SHA-256) 기반 스킵/버전 관리
 - 대안: WP CLI 이용 (`wp post create --post_status=draft`)
 
 ## 🛠 워드프레스 설정 필요사항
 
-| 항목          | 설명                                                                                                                                                    |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| REST API 인증 | JWT Auth 플러그인, Application Password 등 사용                                                                                                         |
-| 사용자 권한   | `editor` 또는 `administrator` 권한 필요                                                                                                                 |
-| CSS 정의      | `Customizer`나 테마의 `style.css`에 접근성 관련 CSS 추가                                                                                                |
-| 카테고리 설정 | `공동번역성서` 카테고리 생성 (ID 확인 필요)                                                                                                              |
-| 태그 자동 생성| 시스템이 자동으로 태그 생성<br>- `공동번역성서`, `구약`, `외경`, `신약`<br>- 각 성경 책 이름 (73개)<br>**총 77개 태그 자동 생성**                      |
-| 포스트 구성   | 각 장마다 별도의 포스트로 생성, 자동 태그 지정<br>**초기 상태**: 비공개(`private`)로 생성<br>**일괄 공개**: 준비 완료 후 `publish` 상태로 변경 |
+| 항목           | 설명                                                                                                                                           |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| REST API 인증  | JWT Auth 플러그인, Application Password 등 사용                                                                                                |
+| 사용자 권한    | `editor` 또는 `administrator` 권한 필요                                                                                                        |
+| CSS 정의       | `Customizer`나 테마의 `style.css`에 접근성 관련 CSS 추가                                                                                       |
+| 차일드 테마    | CSS/JS는 차일드 테마에서 enqueue로 로드(권장). 코드 예시는 `docs/wordpress-publisher-guide.md` 참고                                            |
+| 카테고리 설정  | `공동번역성서` 카테고리 생성 (ID 확인 필요)                                                                                                    |
+| 태그 자동 생성 | 시스템이 자동으로 태그 생성<br>- `공동번역성서`, `구약`, `외경`, `신약`<br>- 각 성경 책 이름 (73개)<br>**총 77개 태그 자동 생성**              |
+| 포스트 구성    | 각 장마다 별도의 포스트로 생성, 자동 태그 지정<br>**초기 상태**: 비공개(`private`)로 생성<br>**일괄 공개**: 준비 완료 후 `publish` 상태로 변경 |
 
 ## 🔒 보안 요구사항
 
 ### API 보안
+
 - **인증 토큰 관리**: Application Password 또는 JWT 토큰을 환경변수나 보안 설정 파일에 저장
 - **HTTPS 통신**: 모든 REST API 호출은 HTTPS를 통해서만 수행
 - **토큰 만료 관리**: JWT 토큰의 만료 시간 설정 및 자동 갱신 로직 구현
 - **API 레이트 리미팅**: 과도한 요청 방지를 위한 요청 제한 설정
 
 ### 워드프레스 보안
+
 - **사용자 권한 최소화**: 게시 전용 계정 생성 (`editor` 권한만 부여)
 - **IP 제한**: 가능한 경우 특정 IP에서만 API 접근 허용
 - **플러그인 보안**: 사용하는 인증 플러그인의 최신 버전 유지
 - **백업**: 게시 전 데이터베이스 백업 수행
 
 ### 데이터 보안
+
 - **입력 검증**: 성경 텍스트 파싱 시 악성 코드 삽입 방지
 - **HTML 새니타이징**: 사용자 입력이 포함된 경우 XSS 방지 처리
 - **로그 관리**: API 호출 및 오류 로그를 안전한 위치에 저장

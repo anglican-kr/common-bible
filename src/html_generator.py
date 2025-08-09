@@ -33,6 +33,8 @@ class HtmlGenerator:
         audio_base_url: str = "data/audio",
         static_base: str = "../static",
         audio_check_base: str | None = None,
+        css_href: Optional[str] = None,
+        js_src: Optional[str] = None,
     ) -> str:
         """
         장을 HTML로 변환
@@ -117,6 +119,14 @@ class HtmlGenerator:
             audio_exists = self._check_audio_exists(fs_path)
 
         # 템플릿 렌더링
+        # CSS/JS 태그 구성 (차일드 테마에서 로드하는 경우 None로 두어 템플릿에서 비움)
+        css_link_tag = (
+            f'<link rel="stylesheet" href="{css_href}">' if css_href else ""
+        )
+        js_script_tag = (
+            f'<script src="{js_src}"></script>' if js_src else ""
+        )
+
         html = self.template.substitute(
             book_name=chapter.book_name,
             chapter_number=chapter.chapter_number,
@@ -125,7 +135,9 @@ class HtmlGenerator:
             audio_path=audio_path if audio_exists else "#",
             audio_title=f"{chapter.book_name} {chapter.chapter_number}장 오디오",
             static_base=static_base,
-            alias_data_script=alias_data_script
+            alias_data_script=alias_data_script,
+            css_link_tag=css_link_tag,
+            js_script_tag=js_script_tag,
         )
 
         # 오디오 파일 존재 여부에 따라 CSS 스타일 조정
@@ -392,6 +404,18 @@ def main():
         help="정적 리소스(CSS/JS) 기본 경로/URL (기본: 출력 디렉터리 기준 'static'으로 자동 보정)",
     )
     parser.add_argument(
+        "--css-href",
+        dest="css_href",
+        default=None,
+        help="본문에 삽입할 CSS 링크 URL (차일드 테마에서 자동 로드하면 지정하지 않음)",
+    )
+    parser.add_argument(
+        "--js-src",
+        dest="js_src",
+        default=None,
+        help="본문에 삽입할 JS 스크립트 URL (차일드 테마에서 자동 로드하면 지정하지 않음)",
+    )
+    parser.add_argument(
         "--copy-static",
         action="store_true",
         help="생성된 출력 디렉터리에 static/ 디렉터리를 복사",
@@ -414,6 +438,8 @@ def main():
     static_base_arg: str = args.static_base
     copy_static: bool = args.copy_static
     copy_audio: bool = args.copy_audio
+    css_href: Optional[str] = args.css_href
+    js_src: Optional[str] = args.js_src
 
     if not os.path.exists(json_path):
         print(f"❌ 파서 결과 JSON이 없습니다: {json_path}")
@@ -515,6 +541,8 @@ def main():
                 static_base=static_base,
                 audio_check_base=(os.path.join(output_abs, audio_base) if not urlparse(
                     audio_base).scheme else audio_base),
+                css_href=css_href,
+                js_src=js_src,
             )
             slug = compute_slug(chapter.book_abbr)
             filename = f"{slug}-{chapter.chapter_number}.html"

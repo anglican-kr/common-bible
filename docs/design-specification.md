@@ -37,25 +37,23 @@
 common-bible/
 ├── src/
 │   ├── __init__.py
-│   ├── parser.py           # 텍스트 파일 파싱
-│   ├── html_generator.py   # HTML 생성 (접근성 포함)
+│   ├── parser.py           # 텍스트 파일 파싱 및 JSON 저장/로드, 캐시 지원
+│   ├── html_generator.py   # HTML 생성 (접근성/오디오/정적자원 경로 주입, CLI 포함)
 │   ├── wordpress_api.py    # WordPress REST API 클라이언트
-│   ├── config.py           # 설정 관리
-│   └── main.py             # 메인 실행 파일
+│   ├── main.py             # 메인 실행 파일
+│   └── config.py           # 설정 관리(환경변수 로드) - 선택적 사용
 ├── templates/
-│   └── chapter.html        # HTML 템플릿
+│   └── chapter.html        # HTML 템플릿 (String Template 변수 사용)
 ├── static/
-│   ├── verse-style.css     # 스타일시트
-│   └── verse-navigator.js  # 검색 기능 JavaScript
+│   ├── verse-style.css     # 스타일시트 (기본 글꼴 Pretendard)
+│   └── verse-navigator.js  # 검색/하이라이트/오디오 초기화 스크립트
 ├── data/
 │   ├── common-bible-kr.txt # 원본 텍스트
-│   ├── audio/              # 오디오 파일 디렉토리
-│   │   └── *.mp3
-│   └── book_mappings.json  # 성경 책 이름 매핑
-├── output/                 # 생성된 HTML 파일 (임시)
-├── logs/                   # 로그 파일
-├── tests/                  # 테스트 파일
-├── .env.example            # 환경변수 예제
+│   ├── audio/              # 오디오 파일 디렉토리 (*.mp3)
+│   └── book_mappings.json  # 성경 책 이름/별칭 매핑
+├── output/                 # 파서/생성기 출력 디렉터리
+├── logs/                   # 로그 파일 (필요 시)
+├── .env.example            # 환경변수 예제 (선택)
 ├── requirements.txt        # Python 패키지 목록
 └── README.md               # 프로젝트 설명서
 ```
@@ -66,543 +64,375 @@ common-bible/
 
 ### 1. 텍스트 파서 (parser.py)
 
+요구사항([requirements.md](./requirements.md))에 맞춘 파서 설계입니다. 장 식별, 첫 절 포함 라인 처리, 단락(`¶`) 인식, JSON 캐시, CLI를 포함합니다.
+
+#### 1.1 입력 포맷 규칙 요약
+
+- 장 시작 패턴: `([가-힣0-9]+)\s+([0-9]+):([0-9]+)\s*(.*)?`
+  - 예: `창세 1:1 ¶ 한처음에...` (첫 절 내용이 같은 줄에 등장)
+- 두 번째 줄부터: `^([0-9]+)\s+(.*)$`
+- 단락 구분: `¶`가 새 단락 시작을 의미
+
+#### 1.2 데이터 모델
+
+- `Verse { number: int, text: str, has_paragraph: bool }`
+- `Chapter { book_name: str, book_abbr: str, chapter_number: int, verses: List[Verse] }`
+- 확장 계획(옵션): `VersePart`(a/b 분절) 지원. 현재는 HTML 단계에서 단락 시각 처리를 수행하며, 미래 확장에서 `창세-1-4a/4b` 고유 ID 분절까지 지원할 수 있도록 스키마 확장 가능.
+
+#### 1.3 파싱 알고리즘
+
+1. 파일을 줄 단위로 순회
+2. 장 시작 정규식 매칭 시 현재 장을 종료/저장하고 새 장을 시작
+   - 같은 줄의 첫 절 텍스트가 존재하면 `number=1`로 생성하고 `has_paragraph`는 텍스트 내 `¶` 여부로 설정
+3. 일반 절 라인은 숫자+공백 패턴으로 파싱
+4. 파일 종료 시 마지막 장을 저장
+
+에지 케이스
+
+- 빈 줄은 무시 (장 구분은 오직 패턴으로 수행)
+- 잘못된 라인은 스킵 (로그로 보고)
+- 책 약칭 매핑이 없으면 원문 약칭 그대로 사용
+
+#### 1.4 정규식
+
+- 장: `r"^([가-힣0-9]+)\s+([0-9]+):([0-9]+)\s*(.*)?$"`
+- 절: `r"^([0-9]+)\s+(.*)$"`
+
+#### 1.5 JSON 캐시/스키마
+
+- 출력: `output/parsed_bible.json`
+- 스키마(요약):
+  - `chapters[]` 배열, 각 원소는 `Chapter` 직렬화
+  - 파일 크기 최적화를 위해 책 매핑(약칭→전체/영문)은 별도 `data/book_mappings.json` 활용
+
+#### 1.6 인터페이스(요약)
+
 ```python
-import re
-import json
-from typing import List, Dict, Optional
-from dataclasses import dataclass
-
-@dataclass
-class Verse:
-    """절 데이터"""
-    number: int
-    text: str
-    has_paragraph: bool = False
-
-@dataclass
-class Chapter:
-    """장 데이터"""
-    book_name: str
-    book_abbr: str
-    chapter_number: int
-    verses: List[Verse]
-
 class BibleParser:
-    """성경 텍스트 파서"""
-
-    def __init__(self, book_mappings_path: str):
-        self.book_mappings = self._load_book_mappings(book_mappings_path)
-        self.chapter_pattern = re.compile(r'([가-힣0-9]+)\s+(\d+):(\d+)')
-
-    def _load_book_mappings(self, book_mappings_path: str) -> Dict[str, Dict]:
-        """책 이름 매핑 데이터를 로드하고 딕셔너리로 변환"""
-        with open(book_mappings_path, 'r', encoding='utf-8') as f:
-            mappings_list = json.load(f)
-
-        # 리스트를 딕셔너리로 변환하여 빠른 검색 가능
-        mappings_dict = {}
-        for book in mappings_list:
-            mappings_dict[book['약칭']] = {
-                'full_name': book['전체 이름'],
-                'english_name': book['영문 이름'],
-                '구분': book.get('구분', '구약')  # 기본값은 구약
-            }
-
-        return mappings_dict
-
-    def _get_full_book_name(self, abbr: str) -> str:
-        """약칭으로 전체 이름 반환"""
-        if abbr in self.book_mappings:
-            return self.book_mappings[abbr]['full_name']
-        else:
-            # 매핑이 없으면 약칭 그대로 반환 (에러 방지)
-            return abbr
-
-    def _get_english_book_name(self, abbr: str) -> str:
-        """약칭으로 영문 이름 반환"""
-        if abbr in self.book_mappings:
-            return self.book_mappings[abbr]['english_name']
-        else:
-            return abbr
-
-    def parse_file(self, file_path: str) -> List[Chapter]:
-        """텍스트 파일을 파싱하여 장 리스트 반환"""
-        with open(file_path, 'r', encoding='utf-8') as f:
-            content = f.read()
-
-        chapters = []
-        current_chapter = None
-        current_verses = []
-
-        for line in content.split('\n'):
-            # 장 시작 확인
-            match = self.chapter_pattern.match(line)
-            if match:
-                # 이전 장 저장
-                if current_chapter:
-                    current_chapter.verses = current_verses
-                    chapters.append(current_chapter)
-
-                # 새 장 시작
-                book_abbr = match.group(1)
-                chapter_num = int(match.group(2))
-                book_name = self._get_full_book_name(book_abbr)
-
-                current_chapter = Chapter(
-                    book_name=book_name,
-                    book_abbr=book_abbr,
-                    chapter_number=chapter_num,
-                    verses=[]
-                )
-                current_verses = []
-
-            # 절 파싱
-            elif current_chapter and line.strip():
-                verse = self._parse_verse_line(line)
-                if verse:
-                    current_verses.append(verse)
-
-        # 마지막 장 저장
-        if current_chapter:
-            current_chapter.verses = current_verses
-            chapters.append(current_chapter)
-
-        return chapters
-
-    def _parse_verse_line(self, line: str) -> Optional[Verse]:
-        """절 라인 파싱"""
-        # 절 번호와 텍스트 분리
-        parts = line.strip().split(' ', 1)
-        if len(parts) < 2 or not parts[0].isdigit():
-        return None
-
-        verse_num = int(parts[0])
-        text = parts[1]
-
-        # 단락 구분 기호 확인
-        has_paragraph = '¶' in text
-        if has_paragraph:
-            text = text.replace('¶', '').strip()
-
-        return Verse(
-            number=verse_num,
-            text=text,
-            has_paragraph=has_paragraph
-        )
+    def __init__(self, book_mappings_path: str): ...
+    def parse_file(self, file_path: str) -> list[Chapter]: ...
+    def save_to_json(self, chapters: list[Chapter], path: str) -> None: ...
+    def load_from_json(self, path: str) -> list[Chapter]: ...
+    # 내부 유틸: _load_book_mappings, _get_full_book_name, _get_english_book_name, _parse_verse_line
 ```
+
+#### 1.7 CLI
+
+```bash
+python src/parser.py data/common-bible-kr.txt \
+  --save-json output/parsed_bible.json \
+  --book-mappings data/book_mappings.json
+```
+
+옵션: `--save-json`, `--book-filter`, `--chapter-range`, `--strict`(형식 오류 시 실패), `--log-level` 등 확장 가능.
+
+#### 1.8 테스트 항목(요약)
+
+- 장 식별/첫 절 동일 라인 파싱
+- 절 번호/본문 분리, `¶` 인식
+- 장 종료 처리(파일 끝 포함)
+- 매핑 누락 시 폴백 동작
+- JSON 저장/로드 일관성
 
 ### 2. HTML 생성기 (html_generator.py)
 
-```python
-import os
-from string import Template
-from typing import Optional
+접근성/검색/오디오/정적 리소스 처리를 포함한 HTML 변환기 설계입니다.
 
+#### 2.1 동작
+
+- 절 ID/접근성 마크업 생성(절번호/¶ 시각 표시, 스크린리더 숨김)
+- 단락 그룹화(¶ 기준) 및 시맨틱 `<p>` 구성
+- 오디오 파일 경로 생성 및 존재 여부에 따른 UI 토글
+- 책 별칭/슬러그 데이터 `window.BIBLE_ALIAS` 주입
+- CSS/JS 링크 주입(옵션) 또는 차일드 테마 enqueue 연동
+
+#### 2.2 인터페이스(요약)
+
+```python
 class HtmlGenerator:
-    """HTML 생성기"""
-
-    def __init__(self, template_path: str):
-        with open(template_path, 'r', encoding='utf-8') as f:
-            self.template = Template(f.read())
-
-    def generate_chapter_html(self, chapter: Chapter, audio_base_url: str = "data/audio") -> str:
-        """장을 HTML로 변환"""
-        # 오디오 파일 경로 생성
-        audio_filename = self._get_audio_filename(chapter)
-        audio_path = f"{audio_base_url}/{audio_filename}"
-        audio_exists = self._check_audio_exists(audio_path)
-
-        # 절 HTML 생성
-        verses_html = self._generate_verses_html(chapter)
-
-        # 템플릿 렌더링
-        return self.template.substitute(
-            book_name=chapter.book_name,
-            chapter_number=chapter.chapter_number,
-            chapter_id=f"{chapter.book_abbr}-{chapter.chapter_number}",
-            verses_content=verses_html,
-            audio_path=audio_path if audio_exists else "",
-            audio_title=f"{chapter.book_name} {chapter.chapter_number}장 오디오"
-        )
-
-    def _generate_verses_html(self, chapter: Chapter) -> str:
-        """절들을 HTML로 변환"""
-        paragraphs = []
-        current_paragraph = []
-
-        for verse in chapter.verses:
-            verse_html = self._generate_verse_span(chapter, verse)
-
-            if verse.has_paragraph and current_paragraph:
-                # 새 단락 시작
-                paragraphs.append(f'<p>{" ".join(current_paragraph)}</p>')
-                current_paragraph = [verse_html]
-            else:
-                current_paragraph.append(verse_html)
-
-        # 마지막 단락 추가
-        if current_paragraph:
-            paragraphs.append(f'<p>{" ".join(current_paragraph)}</p>')
-
-        return '\n'.join(paragraphs)
-
-    def _generate_verse_span(self, chapter: Chapter, verse: Verse) -> str:
-        """절을 span 요소로 변환"""
-        verse_id = f"{chapter.book_abbr}-{chapter.chapter_number}-{verse.number}"
-
-        # 접근성을 고려한 텍스트 처리
-        # 1. 원본 텍스트에서 ¶ 기호를 분리
-        # 2. ¶ 기호는 시각적으로만 표시 (스크린리더에서 숨김)
-        # 3. 절 번호도 스크린리더에서 숨김
-
-        verse_text = verse.text
-        if '¶' in verse_text:
-            # ¶ 기호를 접근성 고려 마크업으로 교체
-            verse_text = verse_text.replace(
-                '¶',
-                '<span class="paragraph-marker" aria-hidden="true">¶</span> '
-            ).strip()
-
-        return (
-            f'<span id="{verse_id}">'
-            f'<span aria-hidden="true" class="verse-number">{verse.number}</span> '
-            f'{verse_text}'
-            f'</span>'
-        )
-
-    def _get_audio_filename(self, chapter: Chapter) -> str:
-        """오디오 파일명 생성"""
-        book_slug = chapter.book_abbr.lower()
-        # 영문 매핑이 필요한 경우 처리
-        book_slug_map = {
-            "창세": "genesis",
-            "출애": "exodus",
-            # ... 추가 매핑
-        }
-        book_slug = book_slug_map.get(chapter.book_abbr, book_slug)
-        return f"{book_slug}-{chapter.chapter_number}.mp3"
-
-    def _check_audio_exists(self, audio_path: str) -> bool:
-        """오디오 파일 존재 여부 확인"""
-        import os
-        return os.path.exists(audio_path)
+    def __init__(self, template_path: str): ...
+    def generate_chapter_html(
+        self,
+        chapter: Chapter,
+        audio_base_url: str = "data/audio",
+        static_base: str = "../static",
+        audio_check_base: Optional[str] = None,
+        css_href: Optional[str] = None,
+        js_src: Optional[str] = None,
+    ) -> str: ...
+    # 내부 유틸: _generate_verses_html, _generate_verse_span, _get_book_slug, _check_audio_exists
 ```
 
-### 3. WordPress API 클라이언트 (wordpress_api.py)
+#### 2.3 템플릿 변수
 
-```python
-import requests
-from requests.auth import HTTPBasicAuth
-from typing import Dict, Any, Optional, List
-import time
-import logging
+- `${book_name}`, `${chapter_number}`, `${chapter_id}`
+- `${verses_content}`: 본문
+- `${audio_path}`, `${audio_title}`
+- `${alias_data_script}`: 별칭 주입 스크립트
+- `${css_link_tag}`, `${js_script_tag}`: 선택적 링크/스크립트 삽입 슬롯
 
-class WordPressAPI:
-    """WordPress REST API 클라이언트 - 카테고리/태그 자동 생성 지원"""
+#### 2.4 오디오 처리
 
-    def __init__(self, site_url: str, username: str, password: str, book_mappings: Dict[str, Dict] = None):
-        self.site_url = site_url.rstrip('/')
-        self.auth = HTTPBasicAuth(username, password)
-        self.api_url = f"{self.site_url}/wp-json/wp/v2"
-        self.book_mappings = book_mappings or {}
-        self.logger = logging.getLogger(__name__)
+- 파일명 규칙: `{english_slug}-{chapter}.mp3`
+- 존재 확인: `audio_check_base`가 파일시스템 경로면 실존 확인, URL이면 존재로 간주
+- UI 토글: 존재 시 `#audio-unavailable` 숨김, 부재 시 `#audio-container` 숨김
 
-        # 캐시 - API 호출 최소화
-        self._category_cache = {}
-        self._tag_cache = {}
+#### 2.5 단락/ID 규칙
 
-    def get_or_create_category(self, category_name: str) -> int:
-        """카테고리가 있으면 ID 반환, 없으면 생성 후 ID 반환"""
-        # 캐시 확인
-        if category_name in self._category_cache:
-            return self._category_cache[category_name]
+- 절 ID: `{약칭}-{장}-{절}` (예: `창세-1-3`)
+- 단락 시작(`has_paragraph=True`) 시 이전 절 묶음을 종료하고 새 `<p>`를 시작
+- 미래 확장: 단일 절 내 `¶`에 의한 a/b 분절 ID(`-4a`, `-4b`) 지원 가능(현 버전은 시각 표시만)
 
-        self.logger.info(f"카테고리 확인 중: {category_name}")
+#### 2.6 CSS/JS 주입 모드
 
-        # 1. 기존 카테고리 검색
-        response = requests.get(
-            f"{self.api_url}/categories",
-            params={'search': category_name, 'per_page': 100},
-            auth=self.auth,
-            timeout=30
-        )
+- 테마 모드(권장, 기본): 차일드 테마 `functions.php`에서 enqueue → `css_href/js_src` 미지정
+- 링크 주입 모드: CLI로 `--css-href`, `--js-src` 지정하여 본문에 직접 삽입
+  - 로컬 미리보기: `--copy-static`과 함께 `./static/...` 상대 경로 사용
+  - 워드프레스 게시: 절대 URL 또는 사이트 루트 경로 권장
 
-        if response.status_code == 200:
-            categories = response.json()
-            for category in categories:
-                if category['name'] == category_name:
-                    self._category_cache[category_name] = category['id']
-                    self.logger.info(f"기존 카테고리 발견: {category_name} (ID: {category['id']})")
-                    return category['id']
+#### 2.7 CLI(요약)
 
-        # 2. 카테고리가 없으면 생성
-        self.logger.info(f"카테고리 생성 중: {category_name}")
-        create_response = requests.post(
-            f"{self.api_url}/categories",
-            json={
-                'name': category_name,
-                'description': f'{category_name} 관련 게시물'
-            },
-            auth=self.auth,
-            timeout=30
-        )
-
-        if create_response.status_code == 201:
-            category_id = create_response.json()['id']
-            self._category_cache[category_name] = category_id
-            self.logger.info(f"카테고리 생성 완료: {category_name} (ID: {category_id})")
-            return category_id
-        else:
-            raise Exception(f"카테고리 생성 실패: {create_response.status_code} - {create_response.text}")
-
-    def get_or_create_tag(self, tag_name: str) -> int:
-        """태그가 있으면 ID 반환, 없으면 생성 후 ID 반환"""
-        # 캐시 확인
-        if tag_name in self._tag_cache:
-            return self._tag_cache[tag_name]
-
-        self.logger.debug(f"태그 확인 중: {tag_name}")
-
-        # 1. 기존 태그 검색
-        response = requests.get(
-            f"{self.api_url}/tags",
-            params={'search': tag_name, 'per_page': 100},
-            auth=self.auth,
-            timeout=30
-        )
-
-        if response.status_code == 200:
-            tags = response.json()
-            for tag in tags:
-                if tag['name'] == tag_name:
-                    self._tag_cache[tag_name] = tag['id']
-                    self.logger.debug(f"기존 태그 발견: {tag_name} (ID: {tag['id']})")
-                    return tag['id']
-
-        # 2. 태그가 없으면 생성
-        self.logger.debug(f"태그 생성 중: {tag_name}")
-        create_response = requests.post(
-            f"{self.api_url}/tags",
-            json={
-                'name': tag_name,
-                'description': f'{tag_name} 관련 게시물'
-            },
-            auth=self.auth,
-            timeout=30
-        )
-
-        if create_response.status_code == 201:
-            tag_id = create_response.json()['id']
-            self._tag_cache[tag_name] = tag_id
-            self.logger.debug(f"태그 생성 완료: {tag_name} (ID: {tag_id})")
-            return tag_id
-        else:
-            raise Exception(f"태그 생성 실패: {create_response.status_code} - {create_response.text}")
-
-    def generate_post_tags(self, chapter) -> List[int]:
-        """Chapter 정보로 태그 ID 리스트 생성"""
-        # book_mappings에서 구분 정보 가져오기
-        book_info = self.book_mappings.get(chapter.book_abbr, {})
-        testament = book_info.get('구분', '구약')
-
-        # 필요한 태그 이름들
-        tag_names = [
-            "공동번역성서",           # 기본 태그
-            testament,               # 구분 태그 (구약/외경/신약)
-            chapter.book_name        # 책 이름 태그
-        ]
-
-        self.logger.info(f"태그 생성 중: {tag_names}")
-
-        # 각 태그에 대해 ID 확인/생성
-        tag_ids = []
-        for tag_name in tag_names:
-            try:
-                tag_id = self.get_or_create_tag(tag_name)
-                tag_ids.append(tag_id)
-                # API 호출 제한 고려 - 짧은 지연
-                time.sleep(0.1)
-            except Exception as e:
-                self.logger.error(f"태그 처리 실패: {tag_name} - {e}")
-                # 태그 하나 실패해도 계속 진행
-
-        self.logger.info(f"태그 ID 목록: {tag_ids}")
-        return tag_ids
-
-    def create_post_with_auto_taxonomy(
-        self,
-        chapter,
-        content: str,
-        status: str = 'private',
-        base_category: str = "공동번역성서"
-    ) -> Dict[str, Any]:
-        """카테고리/태그 자동 관리하며 게시물 생성"""
-
-        # 1. 카테고리 확인/생성
-        category_id = self.get_or_create_category(base_category)
-
-        # 2. 태그들 확인/생성
-        tag_ids = self.generate_post_tags(chapter)
-
-        # 3. 게시물 생성
-        title = f"{chapter.book_name} {chapter.chapter_number}장"
-        slug = f"{chapter.book_abbr}-{chapter.chapter_number}"
-
-        return self.create_post(
-            title=title,
-            content=content,
-            slug=slug,
-            status=status,
-            categories=[category_id],
-            tags=tag_ids,
-            meta={
-                'bible_book': chapter.book_name,
-                'bible_chapter': chapter.chapter_number,
-                'bible_book_abbr': chapter.book_abbr
-            }
-        )
-
-    def create_post(
-        self,
-        title: str,
-        content: str,
-        slug: str,
-        status: str = 'private',
-        categories: List[int] = None,
-        tags: List[int] = None,
-        meta: Dict[str, Any] = None
-    ) -> Dict[str, Any]:
-        """포스트 생성"""
-        post_data = {
-            'title': title,
-            'content': content,
-            'slug': slug,
-            'status': status,
-            'categories': categories or [],
-            'tags': tags or [],
-            'meta': meta or {}
-        }
-
-        self.logger.info(f"게시물 생성 중: {title}")
-
-        response = requests.post(
-            f"{self.api_url}/posts",
-            json=post_data,
-            auth=self.auth,
-            headers={'Content-Type': 'application/json'},
-            timeout=30
-        )
-
-        if response.status_code not in [200, 201]:
-            raise Exception(f"WordPress API Error: {response.status_code} - {response.text}")
-
-        result = response.json()
-        self.logger.info(f"게시물 생성 완료: {title} (ID: {result['id']})")
-        return result
-
-    def update_post_status(self, post_id: int, status: str) -> Dict[str, Any]:
-        """포스트 상태 업데이트"""
-        response = requests.post(
-            f"{self.api_url}/posts/{post_id}",
-            json={'status': status},
-            auth=self.auth,
-            timeout=30
-        )
-
-        if response.status_code != 200:
-            raise Exception(f"WordPress API Error: {response.status_code}")
-
-        return response.json()
-
-    def validate_auth(self) -> bool:
-        """인증 상태 확인"""
-        try:
-            response = requests.get(
-                f"{self.api_url}/users/me",
-                auth=self.auth,
-                timeout=10
-            )
-            return response.status_code == 200
-        except Exception as e:
-            self.logger.error(f"인증 확인 실패: {e}")
-            return False
+```bash
+python src/html_generator.py templates/chapter.html output/html/ \
+  --json output/parsed_bible.json \
+  --book 창세 --chapters 1,2,3 --limit 50 \
+  --audio-base data/audio --static-base ../static \
+  --copy-static --copy-audio \
+  --css-href ./static/verse-style.css --js-src ./static/verse-navigator.js
 ```
 
-### 4. 메인 실행 파일 (main.py)
+#### 2.8 테스트 항목(요약)
+
+- 절 span 생성(접근성 속성 포함)
+- 단락 그룹화(`<p>` 개수/경계)
+- 오디오 파일명/존재 여부에 따른 토글
+- CSS/JS 링크 주입 유무 및 값 검증
+
+### 3. WordPress 게시 모듈 (wordpress_api.py)
+
+요구사항([requirements.md](./requirements.md))을 충족하는 게시 모듈을 설계합니다. 책임은 다음과 같습니다.
+
+- 정책 리소스 업로드(CSS, mp3)와 중복 방지
+- 게시용 HTML 업로드(비공개 상태, 태그/카테고리 부여)
+- 이미 업로드된 리소스를 HTML에서 참조하도록 링크 재작성
+- 모든 API 호출의 타임아웃/재시도/로깅
+
+#### 3.1 아키텍처 개요
+
+- `WordPressClient`: REST API 호출 래퍼(인증/재시도/오류 처리)
+- `AssetRegistry`: 로컬 파일 ↔️ WP 미디어 매핑 인덱스(JSON)
+- `Publisher`: 리소스 보장(ensure) + HTML 게시 오케스트레이션
+- 데이터 모델
+  - `AssetRecord`: `{ slug, sha256, wp_media_id, source_url, mime_type, uploaded_at }`
+  - `ChapterPostMeta`: `{ book_name, book_abbr, english_name, division, chapter_number }`
+
+파일 배치:
+
+- `src/wordpress_api.py`: 위 클래스/함수 구현
+- `output/wp_asset_index.json`: 자산 인덱스 파일(자동 생성/갱신)
+
+#### 3.2 리소스 업로드 정책(CSS, mp3)
+
+- 대상
+  - CSS: `static/verse-style.css`
+  - 오디오: `data/audio/{english_book_slug}-{chapter}.mp3`
+- 식별자
+  - 콘텐츠 기반 식별: `sha256(file)`
+  - 파일 슬러그 규칙
+    - CSS: `verse-style-{hash8}.css` (캐시 무효화 목적, 내용 변경 시 파일명 변경)
+    - mp3: `{english_book_slug}-{chapter}.mp3`
+- 업로드 결정 로직
+  1. `AssetRegistry`에 레코드가 있고 `sha256` 동일하며, `wp_media_id`가 유효하고 `source_url`이 200이면 업로드 생략
+  2. 레코드가 없거나 `sha256` 변경
+     - CSS: 새 파일명 `verse-style-{hash8}.css`로 업로드
+     - mp3: 동일 슬러그가 이미 존재하고 내용이 다르면 새 파일명 `{slug}-{hash8}.mp3`로 업로드(기존 보존)
+  3. 서버 측 중복 확인: `GET /wp-json/wp/v2/media?search={slug}&per_page=100`로 슬러그 후보 조회 후 정확 슬러그 일치 항목을 선택
+- 업로드 구현
+  - `POST /wp-json/wp/v2/media` (multipart/form-data, 헤더 `Content-Disposition: attachment; filename="{filename}"`)
+  - 응답의 `id`, `source_url`, `mime_type`로 `AssetRegistry` 갱신
+- 메타 저장
+  - 별도 서버 설정 없이 동작하도록, 파일 해시는 `description`(또는 `caption`)에 접두어로 저장: `cb:sha256={hex}`
+  - 검색성은 낮지만 인덱스 복구 시 참고 가능
+
+#### 3.3 HTML 업로드(게시물 생성/갱신)
+
+- 입력: 장별 HTML 문자열 또는 파일 경로, `ChapterPostMeta`
+- 사전 처리(링크 재작성)
+  - `<link rel="stylesheet" href="...verse-style.css">` → 업로드된 CSS의 `source_url`
+  - `<audio>`/`<source>`의 `src` → 해당 장 mp3 `source_url`(없으면 대체 블록 유지)
+- 게시물 필드
+  - 제목: `{책이름} {장}장` (예: `창세기 1장`)
+  - 슬러그: `{english_book_slug}-{chapter}` (예: `genesis-1`)
+  - 상태: `private` (초기 비공개)
+  - 카테고리: `공동번역성서` 1개
+  - 태그: 3단계 태그 체계
+    - 기본: `공동번역성서`
+    - 구분: `구약`/`외경`/`신약`
+    - 책 이름: 전체 이름(예: `창세기`)
+- 용어 보장(존재하면 재사용, 없으면 생성)
+  - `GET/POST /wp-json/wp/v2/categories`
+  - `GET/POST /wp-json/wp/v2/tags`
+- 게시물 생성/갱신(idempotent)
+  - 동일 슬러그 게시물이 존재하면 `PUT /wp-json/wp/v2/posts/{id}`로 콘텐츠/카테고리/태그 갱신
+  - 없으면 `POST /wp-json/wp/v2/posts`
+
+#### 3.4 클래스/메서드 인터페이스(요약)
 
 ```python
-#!/usr/bin/env python3
-import os
-import sys
-import logging
-from pathlib import Path
-from config import Config
+class WordPressClient:
+    def upload_media_from_path(self, file_path: str, desired_slug: str, mime_hint: str) -> AssetRecord: ...
+    def find_media_by_slug(self, slug: str) -> Optional[AssetRecord]: ...
+    def ensure_category(self, name: str) -> int: ...  # returns term_id
+    def ensure_tag(self, name: str) -> int: ...
+    def create_or_update_post(self, slug: str, title: str, content_html: str,
+                              status: str, category_ids: list[int], tag_ids: list[int]) -> int: ...
+    def update_post_status(self, post_id: int, status: str, scheduled_iso: Optional[str] = None) -> int: ...
+    def list_posts(self, status: str, category_id: Optional[int] = None,
+                   tag_ids: Optional[list[int]] = None, slug_prefix: Optional[str] = None,
+                   per_page: int = 100, page: int = 1) -> list[dict]: ...
 
-def setup_logging():
-    """로깅 설정"""
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.FileHandler('logs/bible_converter.log'),
-            logging.StreamHandler(sys.stdout)
-        ]
-    )
+class AssetRegistry:
+    def load(self, path: str = "output/wp_asset_index.json") -> None: ...
+    def save(self) -> None: ...
+    def get(self, local_path: str) -> Optional[AssetRecord]: ...
+    def upsert(self, local_path: str, record: AssetRecord) -> None: ...
 
-def main():
-    """메인 실행 함수"""
-    setup_logging()
-    logger = logging.getLogger(__name__)
+class Publisher:
+    def ensure_policy_assets(self, css_path: str) -> AssetRecord: ...
+    def ensure_audio_asset(self, english_book_slug: str, chapter: int, local_audio_path: str) -> Optional[AssetRecord]: ...
+    def render_and_publish_chapter(self, html_path: str, meta: ChapterPostMeta) -> int: ...
+    def bulk_update_status(self, target_status: str, *,
+                           category: str = "공동번역성서",
+                           division_tag: Optional[str] = None,
+                           slug_prefix: Optional[str] = None,
+                           scheduled_iso: Optional[str] = None,
+                           dry_run: bool = False,
+                           per_page: int = 100) -> dict: ...
+```
 
-    # 설정 로드
-    config = Config()
+구현 세부(요약)
 
-    # 1. 텍스트 파싱
-    logger.info("성경 텍스트 파싱 시작...")
-    parser = BibleParser(config.book_mappings_path)
-    chapters = parser.parse_file(config.bible_text_path)
-    logger.info(f"{len(chapters)}개 장 파싱 완료")
+- 인증: Application Password(HTTPS Basic) 사용
+- 타임아웃: 5초, 재시도: 최대 3회(지수 백오프 0.5s, 1s, 2s), 4xx는 즉시 실패, 429/5xx는 재시도
+- 로깅: 요청 메서드/URL/상태코드/소요시간 및 요약 응답(JSON), 인증정보 마스킹
+- 입력 검증: 파일 존재/크기/확장자, HTML UTF-8 보장, 태그/카테고리 이름 유효성
 
-    # 2. HTML 생성
-    logger.info("HTML 생성 시작...")
-    html_generator = HtmlGenerator(config.template_path)
+#### 3.5 파일명/슬러그 규칙
 
-    # 3. WordPress API 연결 (book_mappings 전달)
-    wp_api = WordPressAPI(
-        site_url=config.wp_site_url,
-        username=config.wp_username,
-        password=config.wp_password,
-        book_mappings=parser.book_mappings
-    )
+- CSS: `verse-style-{hash8}.css` → 여러 버전 공존 가능, 최신 버전을 HTML에 연결
+- mp3: 기본 `genesis-1.mp3` 등 고정 슬러그. 내용 변경 시 보존을 위해 `genesis-1-{hash8}.mp3` 새 업로드, HTML은 최신으로 갱신
+- 정확한 매칭을 위해 업로드 전 슬러그 충돌 검사 및 필요 시 해시 접미어 부여
 
-    # 인증 확인
-    if not wp_api.validate_auth():
-        logger.error("WordPress 인증 실패. 설정을 확인하세요.")
-        return
+#### 3.6 보안/구성(.env)
 
-    # 4. 각 장 처리
-    for chapter in chapters:
-        try:
-            # HTML 생성
-            html_content = html_generator.generate_chapter_html(chapter)
+- `WP_SITE_URL`, `WP_USERNAME`, `WP_PASSWORD`, `WP_DEFAULT_STATUS=private`
+- 요청은 반드시 HTTPS
+- 비밀정보는 절대 로그/레포지토리에 노출 금지
 
-            # WordPress 게시 (카테고리/태그 자동 생성)
-            result = wp_api.create_post_with_auto_taxonomy(
-                chapter=chapter,
-                content=html_content,
-                status=config.wp_default_status,
-                base_category=config.wp_base_category
-            )
+#### 3.7 게시물 상태 변경(공개/예약 공개)
 
-            logger.info(f"게시 완료: {chapter.book_name} {chapter.chapter_number}장 (ID: {result['id']})")
+- 목적: 초기 `private`로 생성된 장별 게시물을 일괄 `publish`(또는 지정 상태)로 전환
+- 엔드포인트: `PUT /wp-json/wp/v2/posts/{id}` with body `{ status: "publish" }`
+- 예약 공개: `date`(로컬) 또는 `date_gmt`(UTC ISO8601) 지정 시 워드프레스 예약 발행 동작 이용
+- 검색/대상 선택 기준
+  - 카테고리: `공동번역성서`
+  - 태그: 선택적 `구분` 태그(`구약`/`외경`/`신약`)
+  - 슬러그 접두사: 예) `genesis-`, `matthew-`
+  - 현재 상태: 기본 `private`
+- 처리 로직(일괄)
+  1. 페이징으로 대상 수집(`list_posts`)
+  2. 각 항목에 대해 `update_post_status` 호출
+  3. 429/5xx 재시도, 4xx 즉시 실패 기록
+  4. 드라이런(`dry_run=True`) 시 변경 없이 요약 보고서 반환
+- 출력: `{ total, succeeded, failed, skipped, details: [...] }`
 
-        except Exception as e:
-            logger.error(f"게시 실패: {chapter.book_name} {chapter.chapter_number}장 - {e}")
+#### 3.8 테스트 항목(요약)
 
-    logger.info("모든 작업 완료!")
+- 리소스 업로드: 최초 업로드/재실행 시 스킵/내용 변경 시 새 파일명 처리
+- 미디어 조회 실패/네트워크 오류/타임아웃 재시도
+- 태그/카테고리 ensure 로직(존재/미존재)
+- 게시물 생성 vs 갱신(동일 슬러그)
+- HTML 링크 재작성(CSS/audio) 및 오디오 미존재 시 대체 블록 유지
+- 게시물 상태 변경(공개/예약 공개)
 
-if __name__ == "__main__":
-    main()
+### 4. CLI 실행 (parser, html_generator)
+
+별도 `main.py` 대신 각 모듈이 CLI를 제공합니다.
+
+```bash
+# 파서: 텍스트 → JSON (캐시/저장 지원)
+python src/parser.py data/common-bible-kr.txt --save-json output/parsed_bible.json
+
+# HTML 생성기: JSON → 장별 HTML (정적/오디오 경로 자동 보정, 복사 옵션)
+python src/html_generator.py templates/chapter.html output/html/ \
+  --json output/parsed_bible.json \
+  --copy-static --copy-audio
+```
+
+#### 4.1 WordPress Publisher CLI (wordpress_api.py)
+
+`src/wordpress_api.py`는 게시 오케스트레이션용 CLI를 제공합니다.
+
+사용법 개요:
+
+```bash
+python src/wordpress_api.py <command> [options]
+```
+
+명령 목록:
+
+- `ensure-assets`: 정책 리소스(CSS, mp3) 업로드/스킵 결정 및 인덱스 갱신
+  - 옵션:
+    - `--css static/verse-style.css` (필수)
+    - `--audio-dir data/audio` (선택)
+    - `--index output/wp_asset_index.json` (기본값 동일)
+    - `--update-only` (이미 등록된 파일만 확인)
+- `publish-chapter`: 단일 장 HTML 게시(없으면 생성, 있으면 갱신)
+  - 옵션:
+    - `--html output/html/genesis-1.html`
+    - 메타 직접 지정: `--book-name 창세기 --book-abbr 창세 --english-name Genesis --division 구약 --chapter 1`
+    - 혹은 메타 JSON: `--meta-json path/to/meta.json` (키: book_name, book_abbr, english_name, division, chapter_number)
+    - `--status private` (기본)
+    - `--index output/wp_asset_index.json`
+    - `--dry-run`
+- `publish-batch`: 디렉터리 내 모든 HTML 일괄 게시
+  - 옵션:
+    - `--html-dir output/html`
+    - 필터: `--book-abbr 창세` `--from-chapter 1` `--to-chapter 50`
+    - `--status private` (기본)
+    - `--concurrency 3`
+    - `--index output/wp_asset_index.json`
+    - `--dry-run`
+- `bulk-status`: 조건에 맞는 게시물 상태 일괄 변경(공개/비공개/초안/예약)
+  - 옵션:
+    - `--to publish|private|draft|pending`
+    - `--category 공동번역성서` (기본값)
+    - `--division-tag 구약|외경|신약` (선택)
+    - `--slug-prefix genesis-` (선택)
+    - `--schedule 2025-12-24T09:00:00Z` (선택, 예약 공개)
+    - `--dry-run`
+- `list-posts`: 조건에 맞는 게시물 나열(디버그용)
+  - 옵션: `--status private --category 공동번역성서 --division-tag 구약 --slug-prefix genesis-`
+
+예시:
+
+```bash
+# 1) 정책 리소스 보장(CSS/오디오 업로드 또는 스킵)
+python src/wordpress_api.py ensure-assets --css static/verse-style.css --audio-dir data/audio
+
+# 2) 단일 장 게시(비공개)
+python src/wordpress_api.py publish-chapter \
+  --html output/html/genesis-1.html \
+  --book-name 창세기 --book-abbr 창세 --english-name Genesis --division 구약 --chapter 1
+
+# 3) 일괄 게시(창세기 1~5장만)
+python src/wordpress_api.py publish-batch --html-dir output/html --book-abbr 창세 --from-chapter 1 --to-chapter 5
+
+# 4) 공개 전환(구약만, 드라이런)
+python src/wordpress_api.py bulk-status --to publish --division-tag 구약 --dry-run
+
+# 5) 12월 24일 09:00(UTC) 예약 공개
+python src/wordpress_api.py bulk-status --to publish --schedule 2025-12-24T09:00:00Z
 ```
 
 ### 5. 설정 파일 (config.py)
@@ -642,42 +472,42 @@ class Config:
 ```html
 <!-- 검색 UI -->
 <div class="search-container">
-    <form id="verse-search-form" role="search" aria-label="성경 구절 검색">
-        <label for="verse-search" class="screen-reader-text">검색</label>
-        <input
-            type="text"
-            id="verse-search"
-            placeholder="절 ID 또는 단어 검색 (예: ${book_name} ${chapter_number}:3)"
-        />
-        <button type="submit">검색</button>
-    </form>
+  <form id="verse-search-form" role="search" aria-label="성경 구절 검색">
+    <label for="verse-search" class="screen-reader-text">검색</label>
+    <input
+      type="text"
+      id="verse-search"
+      placeholder="절 ID 또는 단어 검색 (예: ${book_name} ${chapter_number}:3)"
+    />
+    <button type="submit">검색</button>
+  </form>
 </div>
 
 <!-- 오디오 플레이어 (오디오 파일이 있는 경우) -->
 $audio_path and '''
 <div class="audio-player-container">
-    <h2 class="screen-reader-text">성경 오디오</h2>
-    <audio controls class="bible-audio" aria-label="${audio_title}">
-        <source src="${audio_path}" type="audio/mpeg" />
-        <p>
-            브라우저가 오디오 재생을 지원하지 않습니다.
-            <a href="${audio_path}">오디오 파일 다운로드</a>
-        </p>
-    </audio>
+  <h2 class="screen-reader-text">성경 오디오</h2>
+  <audio controls class="bible-audio" aria-label="${audio_title}">
+    <source src="${audio_path}" type="audio/mpeg" />
+    <p>
+      브라우저가 오디오 재생을 지원하지 않습니다.
+      <a href="${audio_path}">오디오 파일 다운로드</a>
+    </p>
+  </audio>
 </div>
 ''' or '''
 <div class="audio-unavailable-notice">
-    <p class="notice-text" aria-live="polite">
-        <span class="icon" aria-hidden="true">🎵</span>
-        이 장의 오디오는 현재 준비 중입니다.
-    </p>
+  <p class="notice-text" aria-live="polite">
+    <span class="icon" aria-hidden="true">🎵</span>
+    이 장의 오디오는 현재 준비 중입니다.
+  </p>
 </div>
 '''
 
 <!-- 성경 본문 -->
 <article id="${chapter_id}">
-    <h1>${book_name} ${chapter_number}장</h1>
-    ${verses_content}
+  <h1>${book_name} ${chapter_number}장</h1>
+  ${verses_content}
 </article>
 
 <script src="/static/verse-navigator.js"></script>
@@ -950,159 +780,9 @@ class TestHtmlGenerator:
             os.unlink(temp_path)
 ```
 
-### 3. WordPress API 테스트 (tests/test_wordpress_api.py)
+### 3. WordPress API 테스트
 
-```python
-import pytest
-import responses
-from src.wordpress_api import WordPressAPI
-from src.parser import Chapter, Verse
-
-class TestWordPressAPI:
-    """WordPress API 클라이언트 테스트"""
-
-    @pytest.fixture
-    def wp_api(self):
-        """WordPress API 인스턴스"""
-        book_mappings = {
-            "창세": {
-                "full_name": "창세기",
-                "english_name": "Genesis",
-                "구분": "구약"
-            }
-        }
-        return WordPressAPI(
-            site_url="https://test.example.com",
-            username="testuser",
-            password="testpass",
-            book_mappings=book_mappings
-        )
-
-    @pytest.fixture
-    def sample_chapter(self):
-        """테스트용 장 데이터"""
-        verses = [Verse(number=1, text="테스트 절", has_paragraph=False)]
-        return Chapter(
-            book_name="창세기",
-            book_abbr="창세",
-            chapter_number=1,
-            verses=verses
-        )
-
-    @responses.activate
-    def test_validate_auth_success(self, wp_api):
-        """인증 확인 성공 테스트"""
-        responses.add(
-            responses.GET,
-            "https://test.example.com/wp-json/wp/v2/users/me",
-            json={"id": 1, "name": "testuser"},
-            status=200
-        )
-
-        assert wp_api.validate_auth() == True
-
-    @responses.activate
-    def test_validate_auth_failure(self, wp_api):
-        """인증 확인 실패 테스트"""
-        responses.add(
-            responses.GET,
-            "https://test.example.com/wp-json/wp/v2/users/me",
-            json={"code": "rest_forbidden"},
-            status=403
-        )
-
-        assert wp_api.validate_auth() == False
-
-    @responses.activate
-    def test_get_or_create_category_existing(self, wp_api):
-        """기존 카테고리 조회 테스트"""
-        responses.add(
-            responses.GET,
-            "https://test.example.com/wp-json/wp/v2/categories",
-            json=[{"id": 5, "name": "공동번역성서"}],
-            status=200
-        )
-
-        category_id = wp_api.get_or_create_category("공동번역성서")
-        assert category_id == 5
-        assert "공동번역성서" in wp_api._category_cache
-
-    @responses.activate
-    def test_get_or_create_category_new(self, wp_api):
-        """새 카테고리 생성 테스트"""
-        # 검색 결과 없음
-        responses.add(
-            responses.GET,
-            "https://test.example.com/wp-json/wp/v2/categories",
-            json=[],
-            status=200
-        )
-
-        # 카테고리 생성
-        responses.add(
-            responses.POST,
-            "https://test.example.com/wp-json/wp/v2/categories",
-            json={"id": 10, "name": "공동번역성서"},
-            status=201
-        )
-
-        category_id = wp_api.get_or_create_category("공동번역성서")
-        assert category_id == 10
-
-    @responses.activate
-    def test_get_or_create_tag(self, wp_api):
-        """태그 생성/조회 테스트"""
-        # 검색 결과 없음
-        responses.add(
-            responses.GET,
-            "https://test.example.com/wp-json/wp/v2/tags",
-            json=[],
-            status=200
-        )
-
-        # 태그 생성
-        responses.add(
-            responses.POST,
-            "https://test.example.com/wp-json/wp/v2/tags",
-            json={"id": 15, "name": "구약"},
-            status=201
-        )
-
-        tag_id = wp_api.get_or_create_tag("구약")
-        assert tag_id == 15
-
-    def test_generate_post_tags(self, wp_api, sample_chapter):
-        """게시물 태그 생성 테스트"""
-        # Mock the get_or_create_tag method
-        wp_api.get_or_create_tag = lambda name: {"공동번역성서": 1, "구약": 2, "창세기": 3}[name]
-
-        tag_ids = wp_api.generate_post_tags(sample_chapter)
-
-        assert len(tag_ids) == 3
-        assert 1 in tag_ids  # 공동번역성서
-        assert 2 in tag_ids  # 구약
-        assert 3 in tag_ids  # 창세기
-
-    @responses.activate
-    def test_create_post(self, wp_api):
-        """게시물 생성 테스트"""
-        responses.add(
-            responses.POST,
-            "https://test.example.com/wp-json/wp/v2/posts",
-            json={"id": 100, "title": {"rendered": "창세기 1장"}},
-            status=201
-        )
-
-        result = wp_api.create_post(
-            title="창세기 1장",
-            content="<p>테스트 내용</p>",
-            slug="genesis-1",
-            categories=[5],
-            tags=[1, 2, 3]
-        )
-
-        assert result["id"] == 100
-```
+현재 저장소에는 WordPress 클라이언트가 포함되어 있지 않습니다. 게시 자동화 테스트는 별도 모듈이 추가된 이후에 구성하세요.
 
 ### 4. 설정 테스트 (tests/test_config.py)
 
@@ -1155,7 +835,6 @@ import json
 import os
 from src.parser import BibleParser
 from src.html_generator import HtmlGenerator
-from src.wordpress_api import WordPressAPI
 
 class TestIntegration:
     """통합 테스트"""
@@ -1192,40 +871,16 @@ class TestIntegration:
         os.unlink(text_path)
         os.unlink(template_path)
 
-    @responses.activate
     def test_full_workflow(self, full_setup):
-        """전체 워크플로우 테스트"""
-        # WordPress API Mock 설정
-        responses.add(responses.GET, "https://test.example.com/wp-json/wp/v2/users/me", json={"id": 1}, status=200)
-        responses.add(responses.GET, "https://test.example.com/wp-json/wp/v2/categories", json=[], status=200)
-        responses.add(responses.POST, "https://test.example.com/wp-json/wp/v2/categories", json={"id": 5}, status=201)
-        responses.add(responses.GET, "https://test.example.com/wp-json/wp/v2/tags", json=[], status=200)
-        responses.add(responses.POST, "https://test.example.com/wp-json/wp/v2/tags", json={"id": 10}, status=201)
-        responses.add(responses.POST, "https://test.example.com/wp-json/wp/v2/posts", json={"id": 100}, status=201)
-
+        """전체 워크플로우 테스트 (파싱 → HTML 생성)"""
         # 1. 파싱
         parser = BibleParser(full_setup['mappings_path'])
         chapters = parser.parse_file(full_setup['text_path'])
 
         # 2. HTML 생성
         html_generator = HtmlGenerator(full_setup['template_path'])
-        html_content = html_generator.generate_chapter_html(chapters[0])
+        html_content = html_generator.generate_chapter_html(chapters[0], static_base="../static")
 
-        # 3. WordPress 게시
-        wp_api = WordPressAPI(
-            site_url="https://test.example.com",
-            username="test",
-            password="test",
-            book_mappings=parser.book_mappings
-        )
-
-        result = wp_api.create_post_with_auto_taxonomy(
-            chapter=chapters[0],
-            content=html_content,
-            status="private"
-        )
-
-        assert result["id"] == 100
         assert len(chapters) == 1
         assert "창세기 1장" in html_content
 ```
@@ -1269,14 +924,14 @@ pytest-responses==0.5.1
 
 ## ✅ 체크리스트
 
--   [ ] 텍스트 파일 파싱 (장/절/단락 구분)
--   [ ] 접근성 HTML 생성 (aria-hidden, 고유 ID)
--   [ ] 오디오 파일 통합 및 조건부 표시
--   [ ] WordPress REST API 연동
--   [ ] 카테고리/태그 자동 생성 및 관리
--   [ ] 비공개 게시물로 생성
--   [ ] 로깅 및 오류 처리
--   [ ] 3단계 태그 시스템 (공동번역성서, 구분, 책이름)
+- [ ] 텍스트 파일 파싱 (장/절/단락 구분)
+- [ ] 접근성 HTML 생성 (aria-hidden, 고유 ID)
+- [ ] 오디오 파일 통합 및 조건부 표시
+- [ ] WordPress REST API 연동
+- [ ] 카테고리/태그 자동 생성 및 관리
+- [ ] 비공개 게시물로 생성
+- [ ] 로깅 및 오류 처리
+- [ ] 3단계 태그 시스템 (공동번역성서, 구분, 책이름)
 
 ---
 

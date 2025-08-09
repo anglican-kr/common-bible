@@ -17,6 +17,7 @@
 ## 📂 데이터 구조
 
 ### Chapter (장)
+
 ```python
 @dataclass
 class Chapter:
@@ -27,6 +28,7 @@ class Chapter:
 ```
 
 ### Verse (절)
+
 ```python
 @dataclass
 class Verse:
@@ -44,6 +46,7 @@ class Verse:
 ### 1. 기본 사용법
 
 #### 명령행에서 실행
+
 ```bash
 # 기본 파싱 (메모리에만 저장)
 python src/parser.py data/common-bible-kr.txt
@@ -56,6 +59,7 @@ python src/parser.py data/common-bible-kr.txt --use-cache
 ```
 
 #### Python 코드에서 사용
+
 ```python
 from src.parser import BibleParser
 
@@ -71,16 +75,18 @@ print(f"총 {len(chapters)}개 장 파싱 완료")
 ### 2. JSON 저장 및 로드
 
 #### 저장
+
 ```python
 # 파싱 후 JSON으로 저장
 chapters = parser.parse_file('data/common-bible-kr.txt')
-parser.save_to_json(chapters, 'output/bible_data.json')
+parser.save_to_json(chapters, 'output/parsed_bible.json')
 ```
 
 #### 로드
+
 ```python
 # 기존 JSON 파일에서 로드
-chapters = parser.load_from_json('output/bible_data.json')
+chapters = parser.load_from_json('output/parsed_bible.json')
 
 # 이제 chapters를 바로 사용 가능
 for chapter in chapters[:3]:
@@ -93,10 +99,10 @@ for chapter in chapters[:3]:
 # 캐시 자동 관리 (권장)
 chapters = parser.parse_file_with_cache(
     file_path='data/common-bible-kr.txt',
-    cache_path='output/bible_cache.json'
+    cache_path='output/parsed_bible.json'
 )
 
-# 첫 실행: 텍스트 파싱 후 캐시 저장
+# 첫 실행: 텍스트 파싱 후 캐시 저장 (output/parsed_bible.json)
 # 재실행: 캐시 파일에서 빠르게 로드
 ```
 
@@ -105,16 +111,17 @@ chapters = parser.parse_file_with_cache(
 ## 📋 명령행 옵션
 
 ### 기본 구문
+
 ```bash
 python src/parser.py <텍스트파일> [옵션]
 ```
 
 ### 옵션 목록
 
-| 옵션 | 설명 | 예시 |
-|------|------|------|
+| 옵션                 | 설명                         | 예시                           |
+| -------------------- | ---------------------------- | ------------------------------ |
 | `--save-json <경로>` | 파싱 결과를 JSON 파일로 저장 | `--save-json output/data.json` |
-| `--use-cache` | 캐시 파일 자동 관리 | `--use-cache` |
+| `--use-cache`        | 캐시 파일 자동 관리          | `--use-cache`                  |
 
 ### 사용 예시
 
@@ -137,6 +144,7 @@ python src/parser.py
 ## 📊 출력 예시
 
 ### 명령행 출력
+
 ```
 $ python src/parser.py data/common-bible-kr.txt --save-json output/bible.json
 
@@ -164,6 +172,7 @@ $ python src/parser.py data/common-bible-kr.txt --save-json output/bible.json
 ```
 
 ### JSON 파일 구조
+
 ```json
 [
   {
@@ -191,6 +200,7 @@ $ python src/parser.py data/common-bible-kr.txt --save-json output/bible.json
 ## 🔧 고급 사용법
 
 ### 1. 특정 책만 필터링
+
 ```python
 parser = BibleParser('data/book_mappings.json')
 chapters = parser.parse_file('data/common-bible-kr.txt')
@@ -201,6 +211,7 @@ print(f"창세기 총 {len(genesis_chapters)}장")
 ```
 
 ### 2. 단락 구분 활용
+
 ```python
 for chapter in chapters:
     for verse in chapter.verses:
@@ -209,6 +220,7 @@ for chapter in chapters:
 ```
 
 ### 3. 책 구분별 통계
+
 ```python
 parser = BibleParser('data/book_mappings.json')
 chapters = parser.parse_file('data/common-bible-kr.txt')
@@ -220,7 +232,7 @@ new_testament = []
 for chapter in chapters:
     book_info = parser.book_mappings.get(chapter.book_abbr, {})
     testament = book_info.get('구분', '구약')
-    
+
     if testament == '구약':
         old_testament.append(chapter)
     elif testament == '신약':
@@ -230,16 +242,17 @@ print(f"구약: {len(old_testament)}장, 신약: {len(new_testament)}장")
 ```
 
 ### 4. 데이터 검증
+
 ```python
 def validate_parsing_result(chapters):
     """파싱 결과 검증"""
     total_chapters = len(chapters)
     total_verses = sum(len(ch.verses) for ch in chapters)
-    
+
     print(f"검증 결과:")
     print(f"  총 장 수: {total_chapters}")
     print(f"  총 절 수: {total_verses}")
-    
+
     # 빈 장 확인
     empty_chapters = [ch for ch in chapters if not ch.verses]
     if empty_chapters:
@@ -256,6 +269,7 @@ validate_parsing_result(chapters)
 ## 🎨 다양한 활용 사례
 
 ### 1. 웹 API 개발
+
 ```python
 from flask import Flask, jsonify
 from src.parser import BibleParser
@@ -268,7 +282,7 @@ chapters = parser.load_from_json('output/bible_cache.json')
 
 @app.route('/api/chapter/<book>/<int:chapter_num>')
 def get_chapter(book, chapter_num):
-    chapter = next((ch for ch in chapters 
+    chapter = next((ch for ch in chapters
                    if ch.book_abbr == book and ch.chapter_number == chapter_num), None)
     if chapter:
         return jsonify(asdict(chapter))
@@ -276,6 +290,7 @@ def get_chapter(book, chapter_num):
 ```
 
 ### 2. 검색 기능
+
 ```python
 def search_verses(chapters, keyword):
     """키워드로 절 검색"""
@@ -298,6 +313,7 @@ for result in results[:5]:
 ```
 
 ### 3. 통계 분석
+
 ```python
 def analyze_bible_stats(chapters):
     """성경 통계 분석"""
@@ -307,13 +323,13 @@ def analyze_bible_stats(chapters):
         'books': set(ch.book_name for ch in chapters),
         'paragraphs': sum(1 for ch in chapters for v in ch.verses if v.has_paragraph)
     }
-    
+
     print(f"📊 성경 통계:")
     print(f"   책 수: {len(stats['books'])}")
     print(f"   장 수: {stats['total_chapters']}")
     print(f"   절 수: {stats['total_verses']}")
     print(f"   단락 수: {stats['paragraphs']}")
-    
+
     return stats
 
 stats = analyze_bible_stats(chapters)
@@ -326,32 +342,41 @@ stats = analyze_bible_stats(chapters)
 ### 일반적인 문제들
 
 #### 1. `FileNotFoundError`
+
 ```
 FileNotFoundError: [Errno 2] No such file or directory: 'data/book_mappings.json'
 ```
+
 **해결방법**: `book_mappings.json` 파일이 올바른 위치에 있는지 확인
 
 #### 2. 인코딩 오류
+
 ```
 UnicodeDecodeError: 'utf-8' codec can't decode
 ```
+
 **해결방법**: 텍스트 파일이 UTF-8 인코딩인지 확인
 
 #### 3. 메모리 부족
+
 ```
 MemoryError: Unable to allocate array
 ```
+
 **해결방법**: 큰 파일의 경우 청크 단위로 처리하거나 더 많은 메모리 할당
 
 #### 4. JSON 저장 실패
+
 ```
 PermissionError: [Errno 13] Permission denied
 ```
+
 **해결방법**: 출력 디렉토리에 쓰기 권한이 있는지 확인
 
 ### 디버깅 팁
 
 #### 1. 상세한 로깅 활성화
+
 ```python
 import logging
 logging.basicConfig(level=logging.DEBUG)
@@ -361,6 +386,7 @@ chapters = parser.parse_file('data/common-bible-kr.txt')
 ```
 
 #### 2. 부분 파싱 테스트
+
 ```python
 # 작은 샘플 파일로 테스트
 with open('sample.txt', 'w', encoding='utf-8') as f:
@@ -390,4 +416,4 @@ print(f"테스트 결과: {len(chapters)}장 파싱됨")
 
 ---
 
-*이 가이드는 parser.py v1.0 기준으로 작성되었습니다.*
+_이 가이드는 parser.py v1.0 기준으로 작성되었습니다._
