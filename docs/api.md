@@ -154,6 +154,32 @@ class Verse:
 
 > 참고: 보안/예외 유틸리티는 별도 명세에서 다룹니다. 현재 저장소에는 `SecurityManager`, 전용 예외 클래스는 포함되어 있지 않습니다.
 
+---
+
+## 🔎 Web Worker 메시지 규약 (static/search-worker.js)
+
+### 요청 메시지
+
+- `init`: `{ type: 'init' }` — 워커 준비 신호
+- `config`: `{ type: 'config', indexUrl: string }` — 인덱스 URL 설정
+- `query`: `{ type: 'query', q: string, limit?: number, page?: number }` — 전역 검색 실행
+- `check`: `{ type: 'check', id: string }` — 절 ID 존재 여부 확인
+- `chapters` (신규): `{ type: 'chapters', book: string }` — 특정 책의 실제 장 번호 목록 요청
+
+### 응답 메시지
+
+- `ready`: `{ type: 'ready' }`
+- `results`: `{ type: 'results', q, results, page, total, pageSize }`
+- `checkResult`: `{ type: 'checkResult', id, ok: boolean, href?: string|null }`
+- `chapters` (신규): `{ type: 'chapters', book: string, chapters: number[] }`
+- `error`: `{ type: 'error', message: string }`
+
+### 동작 상세
+
+- 인덱스를 최초 한 번만 지연 로드하여 메모리에 유지한다.
+- `chapters` 요청 시, 인덱스 항목의 `{ b: 약칭, c: 장 }`를 수집·정렬하여 반환한다.
+- 동일 책의 장 목록은 내부 메모이제이션 캐시에 보관하여 반복 요청 비용을 줄인다.
+
 ## 📋 사용 예시
 
 ### 기본 파이프라인

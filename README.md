@@ -309,7 +309,7 @@ python -m pytest tests/test_integration.py -v
         <button id="verse-search-btn" type="submit">이동</button>
       </form>
       <p id="search-help" class="search-help-text">
-        책 장:절 형식으로 검색하거나 단어를 입력하세요. 예: '창세 1:1' 또는
+        "책 장:절" 형식으로 검색하거나 단어를 입력하세요. 예: '창세 1:1' 또는
         '하느님'
       </p>
     </div>

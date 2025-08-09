@@ -8,8 +8,10 @@
 
 let INDEX_URL = null;
 let entries = null; // [{ i, t, h, b, c, v, bo }]
+let byId = null; // Map id -> href (built after load)
 let isLoading = false;
 let pendingQuery = null;
+let chaptersCache = new Map(); // bookAbbr -> [chapters]
 
 function post(type, payload) {
   postMessage(Object.assign({ type }, payload || {}));
@@ -35,9 +37,32 @@ async function ensureIndexLoaded() {
     if (!res.ok) throw new Error("인덱스 로드 실패: " + res.status);
     entries = await res.json();
     if (!Array.isArray(entries)) entries = [];
+    // Build quick lookup map
+    byId = new Map();
+    for (let i = 0; i < entries.length; i += 1) {
+      const e = entries[i];
+      if (e && e.i && (e.h || e.href)) {
+        byId.set(e.i, e.h || e.href);
+      }
+    }
   } finally {
     isLoading = false;
   }
+}
+
+function getChaptersForBook(bookAbbr) {
+  if (!entries) return [];
+  if (chaptersCache.has(bookAbbr)) return chaptersCache.get(bookAbbr);
+  const set = new Set();
+  for (let i = 0; i < entries.length; i += 1) {
+    const e = entries[i];
+    if (e && e.b === bookAbbr && typeof e.c === "number") {
+      set.add(e.c);
+    }
+  }
+  const arr = Array.from(set).sort((a, b) => a - b);
+  chaptersCache.set(bookAbbr, arr);
+  return arr;
 }
 
 function compareByBookChapterVerse(a, b) {
@@ -91,6 +116,31 @@ onmessage = (ev) => {
   if (data.type === "config") {
     INDEX_URL = data.indexUrl || INDEX_URL;
     // config 후 즉시 로드하지 않고 지연 로드
+    return;
+  }
+  if (data.type === "check") {
+    // 존재 여부 확인: id 기반
+    const doCheck = async () => {
+      await ensureIndexLoaded();
+      const id = String(data.id || "");
+      const href = byId && byId.get(id);
+      post("checkResult", { id, ok: !!href, href: href || null });
+    };
+    doCheck().catch((err) =>
+      post("error", { message: String((err && err.message) || err) })
+    );
+    return;
+  }
+  if (data.type === "chapters") {
+    const doCh = async () => {
+      await ensureIndexLoaded();
+      const book = String(data.book || "");
+      const chapters = getChaptersForBook(book);
+      post("chapters", { book, chapters });
+    };
+    doCh().catch((err) =>
+      post("error", { message: String((err && err.message) || err) })
+    );
     return;
   }
   if (data.type === "query") {

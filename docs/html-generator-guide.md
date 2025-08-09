@@ -118,6 +118,18 @@ class Chapter:
 
 ### 1. 기본 사용법
 
+### 1.5 템플릿에 브레드크럼 컨테이너 추가(신규)
+
+상단에 브레드크럼 영역을 추가하여 권역/책/장 탐색 허브를 제공합니다. `templates/chapter.html` 내 `<body>` 시작부에 다음 컨테이너를 배치합니다.
+
+```html
+<nav id="bible-breadcrumb" aria-label="Breadcrumb"></nav>
+```
+
+`static/verse-style.css`에는 `.page-wrap` 래퍼와 브레드크럼/검색/본문 간 여백을 정의합니다. 브레드크럼, 검색 섹션, 본문은 동일 래퍼 내부에서 좌측 정렬과 일관된 여백을 갖습니다.
+
+장 드롭다운은 정적 범위가 아니라 Web Worker가 제공하는 실제 장 목록으로 구성됩니다. 메시지 규격은 [api.md](api.md)를 참고하세요.
+
 ```python
 from src.html_generator import HtmlGenerator
 from src.parser import BibleParser

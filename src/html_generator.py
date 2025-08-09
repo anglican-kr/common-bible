@@ -49,6 +49,7 @@ class HtmlGenerator:
         audio_check_base: str | None = None,
         css_href: Optional[str] = None,
         js_src: Optional[str] = None,
+        books_meta: Optional[list[dict]] = None,
     ) -> str:
         """
         장을 HTML로 변환
@@ -103,8 +104,15 @@ class HtmlGenerator:
             'aliasToAbbr': alias_to_abbr,
             'abbrToSlug': abbr_to_slug,
         }
-        alias_data_script = '<script>window.BIBLE_ALIAS = ' + \
-            _json.dumps(alias_payload, ensure_ascii=False) + ';</script>'
+        # 별칭/슬러그 + 브레드크럼 메타 주입
+        script_parts = [
+            'window.BIBLE_ALIAS = ' +
+            _json.dumps(alias_payload, ensure_ascii=False) + ';'
+        ]
+        if books_meta:
+            script_parts.append('window.BIBLE_BOOKS = ' +
+                                _json.dumps(books_meta, ensure_ascii=False) + ';')
+        alias_data_script = '<script>' + ''.join(script_parts) + '</script>'
 
         # 오디오 파일 슬러그 계산: 매핑 우선, 없으면 영문 이름 기반
         # abbr_to_english 맵 구성
@@ -169,6 +177,66 @@ class HtmlGenerator:
                                 'id="audio-container" style="display: none;"')
 
         return html
+
+    def generate_index_html(
+        self,
+        chapters: list[Chapter],
+        static_base: str,
+        title: str = "공동번역 성서 - 목차",
+    ) -> str:
+        """생성된 장 목록을 기반으로 간단한 목차(index.html) 생성
+
+        - 동일 책의 가장 이른 장으로 링크한다
+        - 책 정렬 순서는 `data/book_mappings.json`의 나열 순서를 따른다
+        """
+        # 책별로 가장 작은 장 번호만 취득
+        by_book: dict[str, tuple[str, int]] = {}
+        for ch in chapters:
+            key = ch.book_abbr
+            if key not in by_book or ch.chapter_number < by_book[key][1]:
+                by_book[key] = (ch.book_name, ch.chapter_number)
+
+        # 정렬: 공동번역 책 순서
+        def order_key(item: tuple[str, tuple[str, int]]) -> int:
+            book_abbr, _ = item
+            return HtmlGenerator.get_book_order_index(book_abbr)
+
+        sorted_items = sorted(by_book.items(), key=order_key)
+
+        # 링크 파일명 계산: 이미 main에서 사용하는 규칙과 동일하게 slug는 외부에서 계산하도록 함
+        # 여기서는 파일명만 비워두고, 호출하는 쪽에서 치환한다.
+        css_link_tag = f'<link rel="stylesheet" href="{static_base}/verse-style.css">' if static_base else ""
+
+        # 본문 UL 구성은 호출부에서 파일명 계산 후 치환되므로 여기서는 placeholder 사용
+        html_parts: list[str] = [
+            "<!doctype html>",
+            '<html lang="ko">',
+            "<head>",
+            '<meta charset="utf-8"/>',
+            f"<title>{title}</title>",
+            css_link_tag,
+            "</head>",
+            "<body>",
+            f"<h1>{title}</h1>",
+            "<ul class=\"book-index\">",
+        ]
+
+        for book_abbr, (book_name, first_chapter) in sorted_items:
+            # 파일명은 호출부에서 계산한 값을 사용하도록, data-attrs에 필요한 정보를 담아두지 않고
+            # 여기서 바로 완성해 반환한다. 호출부에서 slug를 넘겨 받기 어려우므로
+            # generate_index_html는 호출부가 완성된 링크를 제공하는 것이 자연스럽지만,
+            # 현재 구조에서는 slug 계산 함수를 main 내에 두고 있으므로, 간단히 여기에서 재계산한다.
+            # 내부 규칙은 _get_book_slug와 영어 이름 보정과 동일하게 main에서 재사용한다.
+            # 다만 여기서는 기본 슬러그만 사용하고, main에서 호출 시 동일 로직을 적용하도록 한다.
+            # 안전을 위해 기본 슬러그 기반 파일명을 먼저 구성한다.
+            base_slug = self._get_book_slug(book_abbr)
+            filename = f"{base_slug}-{first_chapter}.html"
+            html_parts.append(
+                f'<li><a href="{filename}">{book_name}</a></li>'
+            )
+
+        html_parts.extend(["</ul>", "</body>", "</html>"])
+        return "\n".join(html_parts)
 
     def _generate_verses_html(self, chapter: Chapter) -> str:
         """
@@ -464,6 +532,11 @@ def main():
         default=None,
         help="검색 인덱스 출력 경로 (기본: <output_dir>/static/search/search-index.json)",
     )
+    parser.add_argument(
+        "--no-index",
+        action="store_true",
+        help="index.html 생성을 비활성화 (기본: 생성)",
+    )
 
     args = parser.parse_args()
 
@@ -482,6 +555,7 @@ def main():
     search_index_out: Optional[str] = args.search_index_out
     css_href: Optional[str] = args.css_href
     js_src: Optional[str] = args.js_src
+    emit_index: bool = not args.no_index
 
     if not os.path.exists(json_path):
         print(f"❌ 파서 결과 JSON이 없습니다: {json_path}")
@@ -580,6 +654,14 @@ def main():
     search_entries: list[dict] = []
     for i, chapter in enumerate(chapters, start=1):
         try:
+            # 브레드크럼 메타: 책 목록 그대로 주입 (구분/약칭/전체 이름/영문 이름/aliases)
+            books_meta: list[dict] | None = None
+            try:
+                with open('data/book_mappings.json', 'r', encoding='utf-8') as _bmf:
+                    books_meta = json.load(_bmf)
+            except Exception:
+                books_meta = None
+
             html = generator.generate_chapter_html(
                 chapter,
                 audio_base_url=audio_base,
@@ -588,6 +670,7 @@ def main():
                     audio_base).scheme else audio_base),
                 css_href=css_href,
                 js_src=js_src,
+                books_meta=books_meta,
             )
             slug = compute_slug(chapter.book_abbr)
             filename = f"{slug}-{chapter.chapter_number}.html"
@@ -634,6 +717,38 @@ def main():
                 f"🗂️  전역 검색 인덱스 생성: {search_index_out} (엔트리 {len(search_entries)}개)")
         except Exception as e:
             print(f"❌ 검색 인덱스 생성 실패: {e}")
+
+    # index.html 생성
+    if emit_index:
+        try:
+            # HtmlGenerator의 기본 슬러그 규칙으로 일단 생성
+            index_html = generator.generate_index_html(chapters, static_base)
+
+            # 가능한 경우, 파일명 슬러그를 실제 생성 규칙에 맞춰 보정
+            # main 내부의 compute_slug와 동일 규칙으로 링크를 치환한다.
+            # 각 책의 첫 장 파일명을 재계산하여 치환
+            # 책별 첫 장 계산
+            first_chapter_by_book: dict[str, int] = {}
+            book_name_by_book: dict[str, str] = {}
+            for ch in chapters:
+                if ch.book_abbr not in first_chapter_by_book or ch.chapter_number < first_chapter_by_book[ch.book_abbr]:
+                    first_chapter_by_book[ch.book_abbr] = ch.chapter_number
+                    book_name_by_book[ch.book_abbr] = ch.book_name
+
+            for book_abbr, first_ch in first_chapter_by_book.items():
+                real_slug = compute_slug(book_abbr)
+                base_slug = generator._get_book_slug(book_abbr)
+                # generate_index_html에서 사용한 기본 파일명을 실제 파일명으로 교체
+                src_name = f"{base_slug}-{first_ch}.html"
+                dst_name = f"{real_slug}-{first_ch}.html"
+                if src_name != dst_name:
+                    index_html = index_html.replace(src_name, dst_name)
+
+            with open(os.path.join(output_dir, "index.html"), "w", encoding="utf-8") as f:
+                f.write(index_html)
+            print("📄 index.html 생성 완료")
+        except Exception as e:
+            print(f"❌ index.html 생성 실패: {e}")
 
     print(f"\n✅ HTML 생성 완료! 파일 위치: {output_dir}")
 

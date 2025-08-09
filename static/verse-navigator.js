@@ -10,6 +10,7 @@
   let searchForm;
   let searchInput;
   let searchButton;
+  let breadcrumbNav;
 
   // 현재 하이라이트된 요소
   let currentHighlight = null;
@@ -17,9 +18,39 @@
   // 전역 검색(Web Worker) 관련
   let searchWorker = null;
   let resultsPanel = null;
+  let resultsToggleBtn = null;
   let pagination = { page: 1, pageSize: 50, q: "" };
   let isWorkerReady = false;
   let pendingQueries = [];
+  // 로컬/전역 검색 메시지 조율용 상태
+  let suppressLocalToast = false;
+  let lastLocalFound = false;
+  let lastQueryText = "";
+  let pendingRefCheck = null;
+  const SEARCH_STATE_KEY = "BIBLE_SEARCH_STATE";
+  const PANEL_STATE_KEY = "BIBLE_SEARCH_PANEL";
+  let isCollapsed = false;
+  const MOBILE_BREAKPOINT = 768; // px
+  let autoManagedCollapse = false;
+
+  function clearSavedSearchState() {
+    try {
+      sessionStorage.removeItem(SEARCH_STATE_KEY);
+    } catch (_) {}
+  }
+
+  function resetResultsPanel() {
+    if (!resultsPanel) return;
+    const list = resultsPanel.querySelector(".search-results-list");
+    if (list) list.innerHTML = "";
+    hideResultsPanel();
+  }
+
+  function resetSearchUI() {
+    clearSavedSearchState();
+    resetResultsPanel();
+    if (searchInput) searchInput.value = "";
+  }
 
   // 주입된 별칭/슬러그 데이터
   const injected = window.BIBLE_ALIAS || { aliasToAbbr: {}, abbrToSlug: {} };
@@ -35,6 +66,8 @@
     searchInput = document.getElementById("verse-search");
     searchButton = document.getElementById("verse-search-btn");
 
+    breadcrumbNav = document.getElementById("bible-breadcrumb");
+
     if (!searchForm || !searchInput || !searchButton) {
       console.warn("검색 UI 요소를 찾을 수 없습니다.");
       return;
@@ -44,8 +77,54 @@
     searchForm.addEventListener("submit", handleSearch);
     searchInput.addEventListener("keydown", handleKeyDown);
 
+    // 검색창 옆 결과 패널 토글 버튼 추가
+    try {
+      resultsToggleBtn = document.createElement("button");
+      resultsToggleBtn.type = "button";
+      resultsToggleBtn.className = "search-results-toggle-btn";
+      resultsToggleBtn.setAttribute("aria-label", "검색 결과 패널 열기");
+      resultsToggleBtn.setAttribute("aria-expanded", "false");
+      resultsToggleBtn.setAttribute(
+        "aria-controls",
+        "bible-search-results-panel"
+      );
+      // 간단 스타일
+      Object.assign(resultsToggleBtn.style, {
+        marginLeft: "6px",
+        padding: "6px 10px",
+        border: "1px solid #d1d5db",
+        background: "#ffffff",
+        borderRadius: "6px",
+        cursor: "pointer",
+        lineHeight: "1",
+      });
+      resultsToggleBtn.innerHTML = iconSvg("panel");
+      resultsToggleBtn.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        // 패널 없으면 생성 후 열기
+        if (!resultsPanel) createResultsPanel();
+        const isHidden = !resultsPanel || resultsPanel.style.display === "none";
+        if (isHidden) {
+          showResultsPanel(true);
+        } else {
+          hideResultsPanel();
+        }
+      });
+      // 검색 버튼 뒤에 삽입
+      if (searchButton && searchButton.parentNode) {
+        searchButton.insertAdjacentElement("afterend", resultsToggleBtn);
+      }
+    } catch (_) {}
+
     // 전역 검색 초기화
     initializeGlobalSearch();
+
+    // 브레드크럼 렌더링
+    try {
+      renderBreadcrumb();
+    } catch (e) {
+      console.warn("브레드크럼 렌더링 실패:", e);
+    }
 
     // URL 해시가 있으면 해당 절로 이동
     if (window.location.hash) {
@@ -56,6 +135,314 @@
     initializeAudioPlayers();
 
     console.log("성경 구절 네비게이션 초기화 완료");
+  }
+
+  function renderBreadcrumb() {
+    if (!breadcrumbNav) return;
+    const booksData = window.BIBLE_BOOKS || [];
+    // 현재 페이지 정보
+    const articleEl = document.querySelector("article");
+    if (!articleEl || !articleEl.id) return;
+    const m = articleEl.id.match(/^(.+?)-(\d+)$/);
+    if (!m) return;
+    const currentAbbr = m[1];
+    const currentChapter = parseInt(m[2], 10);
+
+    // 현재 책 메타
+    let currentBookMeta = null;
+    const divisions = ["구약", "외경", "신약"];
+    const byDivision = { 구약: [], 외경: [], 신약: [] };
+    for (const b of booksData) {
+      const div = b["구분"]; // 구약/외경/신약
+      if (divisions.includes(div)) {
+        byDivision[div].push(b);
+      }
+      if (b["약칭"] === currentAbbr) currentBookMeta = b;
+    }
+
+    // 컨테이너 스타일
+    breadcrumbNav.innerHTML = "";
+    const wrap = document.createElement("div");
+    Object.assign(wrap.style, {
+      display: "flex",
+      alignItems: "center",
+      gap: "8px",
+      flexWrap: "wrap",
+    });
+    breadcrumbNav.appendChild(wrap);
+    // 검색 섹션과 간격 확보
+    try {
+      breadcrumbNav.style.marginBottom = "12px";
+    } catch (_) {}
+
+    // index.html 이동 버튼/링크 (브레드크럼 앞)
+    const basePath = window.location.pathname.replace(/[^/]+$/, "");
+    const indexBtn = document.createElement("a");
+    indexBtn.href = basePath + "index.html";
+    indexBtn.setAttribute("aria-label", "목차로 이동");
+    indexBtn.title = "목차";
+    indexBtn.innerHTML = `${iconSvg(
+      "home"
+    )}<span style="margin-left:6px">목차</span>`;
+    Object.assign(indexBtn.style, {
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: "6px 10px",
+      minHeight: "36px",
+      border: "1px solid #d1d5db",
+      background: "#ffffff",
+      borderRadius: "6px",
+      cursor: "pointer",
+      textDecoration: "none",
+      color: "#111",
+      fontSize: "14px",
+      lineHeight: "1",
+      gap: "6px",
+    });
+    indexBtn.addEventListener(
+      "mouseenter",
+      () => (indexBtn.style.background = "#f3f4f6")
+    );
+    indexBtn.addEventListener(
+      "mouseleave",
+      () => (indexBtn.style.background = "#ffffff")
+    );
+    wrap.appendChild(indexBtn);
+
+    // 공통 드롭다운 생성기
+    function createDropdown(labelText) {
+      const container = document.createElement("div");
+      Object.assign(container.style, { position: "relative" });
+
+      const button = document.createElement("button");
+      button.type = "button";
+      button.setAttribute("aria-haspopup", "listbox");
+      button.setAttribute("aria-expanded", "false");
+      button.textContent = labelText;
+      Object.assign(button.style, {
+        padding: "6px 10px",
+        minHeight: "36px",
+        border: "1px solid #d1d5db",
+        background: "#fff",
+        borderRadius: "6px",
+        cursor: "pointer",
+        fontSize: "14px",
+        lineHeight: "1",
+        color: "#111",
+      });
+
+      const list = document.createElement("ul");
+      list.setAttribute("role", "listbox");
+      Object.assign(list.style, {
+        position: "absolute",
+        top: "calc(100% + 6px)",
+        left: 0,
+        minWidth: "200px",
+        maxHeight: "280px",
+        overflow: "auto",
+        background: "#fff",
+        border: "1px solid #e5e7eb",
+        borderRadius: "8px",
+        boxShadow: "0 8px 20px rgba(0,0,0,0.12)",
+        padding: "6px",
+        display: "none",
+        zIndex: 1002,
+      });
+
+      button.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        // 모바일: 바텀시트 전환
+        if (window.innerWidth < MOBILE_BREAKPOINT) {
+          const items = (button._mobileItems || []).slice();
+          openBottomSheet(button.textContent, items);
+          return;
+        }
+        const opened = list.style.display === "block";
+        list.style.display = opened ? "none" : "block";
+        button.setAttribute("aria-expanded", opened ? "false" : "true");
+      });
+      document.addEventListener("click", () => {
+        list.style.display = "none";
+        button.setAttribute("aria-expanded", "false");
+      });
+
+      container.appendChild(button);
+      container.appendChild(list);
+      return { container, button, list };
+    }
+
+    // 1단계: 권역(구약/외경/신약)
+    const div1 = createDropdown(
+      currentBookMeta ? currentBookMeta["구분"] : "권역"
+    );
+    const div1MobileItems = [];
+    for (const name of divisions) {
+      const li = document.createElement("li");
+      li.setAttribute("role", "option");
+      li.textContent = name;
+      Object.assign(li.style, {
+        padding: "6px 8px",
+        borderRadius: "6px",
+        cursor: "pointer",
+      });
+      li.addEventListener(
+        "mouseenter",
+        () => (li.style.background = "#f3f4f6")
+      );
+      li.addEventListener(
+        "mouseleave",
+        () => (li.style.background = "transparent")
+      );
+      li.addEventListener("click", () => {
+        // 해당 권역의 첫 책 첫 장으로 이동
+        const listBooks = byDivision[name] || [];
+        if (listBooks.length === 0) return;
+        const target = listBooks[0];
+        navigateToBookChapter(target["약칭"], 1);
+      });
+      div1.list.appendChild(li);
+      div1MobileItems.push({
+        label: name,
+        action: () => {
+          const listBooks = byDivision[name] || [];
+          if (listBooks.length === 0) return;
+          const target = listBooks[0];
+          navigateToBookChapter(target["약칭"], 1);
+        },
+      });
+    }
+    div1.button._mobileItems = div1MobileItems;
+    wrap.appendChild(div1.container);
+
+    // 2단계: 책 선택 (현재 권역의 책 목록)
+    const currentDivision = currentBookMeta
+      ? currentBookMeta["구분"]
+      : divisions[0];
+    const div2 = createDropdown(
+      currentBookMeta ? currentBookMeta["전체 이름"] : "책"
+    );
+    const div2MobileItems = [];
+    for (const b of byDivision[currentDivision] || []) {
+      const li = document.createElement("li");
+      li.setAttribute("role", "option");
+      li.textContent = b["전체 이름"] || b["약칭"];
+      Object.assign(li.style, {
+        padding: "6px 8px",
+        borderRadius: "6px",
+        cursor: "pointer",
+      });
+      li.addEventListener(
+        "mouseenter",
+        () => (li.style.background = "#f3f4f6")
+      );
+      li.addEventListener(
+        "mouseleave",
+        () => (li.style.background = "transparent")
+      );
+      li.addEventListener("click", () => {
+        // 선택된 책의 1장으로 이동 (또는 현재 장 1로 초기화)
+        navigateToBookChapter(b["약칭"], 1);
+        // 장 드롭다운을 실제 장 수로 갱신
+        requestChaptersAndRender(b["약칭"], div3);
+      });
+      div2.list.appendChild(li);
+      div2MobileItems.push({
+        label: (b["전체 이름"] || b["약칭"]) + " 1장",
+        action: () => navigateToBookChapter(b["약칭"], 1),
+      });
+    }
+    div2.button._mobileItems = div2MobileItems;
+    wrap.appendChild(div2.container);
+
+    // 3단계: 장 선택 (해당 책의 장 목록)
+    const div3 = createDropdown(`${currentChapter}장`);
+    requestChaptersAndRender(currentAbbr, div3);
+    // 드롭다운 버튼 클릭 시, 최신 장 목록을 보장하기 위해 재요청
+    try {
+      div3.button.addEventListener("click", () => {
+        if (isWorkerReady)
+          requestChaptersAndRender(
+            (document.querySelector("article").id || "").split("-")[0],
+            div3
+          );
+      });
+    } catch (_) {}
+    wrap.appendChild(div3.container);
+  }
+
+  function requestChaptersAndRender(bookAbbr, drop) {
+    const render = (book, chapters) => {
+      drop.list.innerHTML = "";
+      const mobileItems = [];
+      const list = Array.isArray(chapters) && chapters.length ? chapters : [];
+      for (const n of list) {
+        const li = document.createElement("li");
+        li.setAttribute("role", "option");
+        li.textContent = `${n}장`;
+        Object.assign(li.style, {
+          padding: "6px 8px",
+          borderRadius: "6px",
+          cursor: "pointer",
+        });
+        li.addEventListener(
+          "mouseenter",
+          () => (li.style.background = "#f3f4f6")
+        );
+        li.addEventListener(
+          "mouseleave",
+          () => (li.style.background = "transparent")
+        );
+        li.addEventListener("click", () => navigateToBookChapter(book, n));
+        drop.list.appendChild(li);
+        mobileItems.push({
+          label: `${n}장`,
+          action: () => navigateToBookChapter(book, n),
+        });
+      }
+      drop.button._mobileItems = mobileItems;
+    };
+    // 워커 준비 전이면 잠시 후 재시도
+    if (!searchWorker || !isWorkerReady) {
+      // 로딩 표시
+      try {
+        drop.list.innerHTML = "";
+        const p = document.createElement("li");
+        p.textContent = "로딩 중…";
+        Object.assign(p.style, { padding: "6px 8px", color: "#666" });
+        drop.list.appendChild(p);
+      } catch (_) {}
+      setTimeout(() => requestChaptersAndRender(bookAbbr, drop), 200);
+      return;
+    }
+    if (searchWorker) {
+      const handler = (ev) => {
+        const d = ev.data || {};
+        if (d.type === "chapters" && d.book === bookAbbr) {
+          searchWorker.removeEventListener("message", handler);
+          render(bookAbbr, d.chapters);
+        }
+      };
+      searchWorker.addEventListener("message", handler);
+      try {
+        searchWorker.postMessage({ type: "chapters", book: bookAbbr });
+      } catch (_) {
+        searchWorker.removeEventListener("message", handler);
+      }
+    }
+  }
+
+  function navigateToBookChapter(bookAbbr, chapterNumber) {
+    const abbrToSlug =
+      (window.BIBLE_ALIAS && window.BIBLE_ALIAS.abbrToSlug) || {};
+    const slug = abbrToSlug[bookAbbr];
+    if (!slug) {
+      showMessage("해당 책을 찾을 수 없습니다.", "error");
+      return;
+    }
+    const basePath = window.location.pathname.replace(/[^/]+$/, "");
+    const filename = `${slug}-${chapterNumber}.html`;
+    window.location.href = basePath + filename;
   }
 
   /**
@@ -110,6 +497,8 @@
               searchWorker.postMessage({ type: "query", q, limit: 50 });
             }
           }
+          // 저장된 상태 복구
+          restoreSearchState();
           return;
         }
         if (data.type === "results") {
@@ -134,15 +523,172 @@
     }
   }
 
+  // 아이콘 SVG 헬퍼 (헤더/툴바 공용)
+  function iconSvg(icon) {
+    const map = {
+      chevronUp:
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#111" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="18 15 12 9 6 15"></polyline></svg>',
+      chevronDown:
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#111" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>',
+      trash:
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#111" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path></svg>',
+      close:
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#111" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>',
+      panel:
+        '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#111" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" ry="2"></rect><line x1="9" y1="4" x2="9" y2="20"></line></svg>',
+      home: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#111" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-8 9 8"></path><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg>',
+    };
+    return map[icon] || "";
+  }
+
+  // 바텀시트(모바일)
+  function openBottomSheet(title, items) {
+    closeBottomSheet();
+    const overlay = document.createElement("div");
+    overlay.className = "bible-bottomsheet-overlay";
+    Object.assign(overlay.style, {
+      position: "fixed",
+      inset: 0,
+      background: "rgba(17,24,39,0.45)",
+      zIndex: 1003,
+      display: "flex",
+      alignItems: "flex-end",
+      justifyContent: "center",
+    });
+
+    const sheet = document.createElement("div");
+    Object.assign(sheet.style, {
+      width: "100%",
+      maxWidth: "640px",
+      background: "#fff",
+      borderTopLeftRadius: "16px",
+      borderTopRightRadius: "16px",
+      boxShadow: "0 -8px 24px rgba(0,0,0,0.18)",
+      padding: "12px 12px 16px",
+      maxHeight: "70vh",
+      overflow: "auto",
+    });
+
+    const header = document.createElement("div");
+    Object.assign(header.style, {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: "8px",
+    });
+    const h = document.createElement("div");
+    h.textContent = title || "선택";
+    Object.assign(h.style, { fontWeight: "bold", fontSize: "16px" });
+    const close = document.createElement("button");
+    close.type = "button";
+    close.setAttribute("aria-label", "닫기");
+    close.innerHTML = iconSvg("close");
+    Object.assign(close.style, {
+      border: "1px solid #d1d5db",
+      background: "#fff",
+      borderRadius: "6px",
+      padding: "6px 8px",
+      cursor: "pointer",
+    });
+    close.addEventListener("click", closeBottomSheet);
+    header.appendChild(h);
+    header.appendChild(close);
+
+    const list = document.createElement("div");
+    for (const it of items) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.textContent = it.label;
+      Object.assign(btn.style, {
+        width: "100%",
+        textAlign: "left",
+        padding: "10px 12px",
+        border: "1px solid #e5e7eb",
+        background: "#fff",
+        borderRadius: "8px",
+        cursor: "pointer",
+        marginBottom: "8px",
+      });
+      btn.addEventListener("click", () => {
+        try {
+          it.action && it.action();
+        } finally {
+          closeBottomSheet();
+        }
+      });
+      list.appendChild(btn);
+    }
+
+    sheet.appendChild(header);
+    sheet.appendChild(list);
+    overlay.appendChild(sheet);
+
+    overlay.addEventListener("click", (ev) => {
+      if (ev.target === overlay) closeBottomSheet();
+    });
+
+    document.body.appendChild(overlay);
+  }
+
+  function closeBottomSheet() {
+    const exist = document.querySelector(".bible-bottomsheet-overlay");
+    if (exist && exist.parentNode) exist.parentNode.removeChild(exist);
+  }
+
+  function saveSearchState() {
+    try {
+      const state = { q: pagination.q || "", page: pagination.page || 1 };
+      sessionStorage.setItem(SEARCH_STATE_KEY, JSON.stringify(state));
+      if (history && history.replaceState) {
+        history.replaceState(state, document.title);
+      }
+    } catch (_) {}
+  }
+
+  function getSavedState() {
+    try {
+      const h = (history && history.state) || null;
+      if (h && typeof h === "object" && (h.q || h.page)) return h;
+      const raw = sessionStorage.getItem(SEARCH_STATE_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch (_) {}
+    return null;
+  }
+
+  function restoreSearchState() {
+    const st = getSavedState();
+    if (!st || !st.q) return;
+    if (searchInput) searchInput.value = st.q;
+    // 패널 표시 및 로딩
+    createResultsPanel();
+    resultsPanel.style.display = "block";
+    renderGlobalResults(st.q, null);
+    pagination.q = st.q;
+    pagination.page = st.page || 1;
+    try {
+      if (searchWorker && isWorkerReady) {
+        searchWorker.postMessage({
+          type: "query",
+          q: pagination.q,
+          limit: pagination.pageSize,
+          page: pagination.page,
+        });
+      } else {
+        pendingQueries.push(pagination.q);
+      }
+    } catch (_) {}
+  }
+
   /**
-   * 전역 검색 결과 패널 생성
+   * 검색 결과 패널 생성
    */
   function createResultsPanel() {
     if (resultsPanel) return;
     resultsPanel = document.createElement("div");
     resultsPanel.className = "search-results-panel";
+    resultsPanel.id = "bible-search-results-panel";
     resultsPanel.setAttribute("role", "dialog");
-    resultsPanel.setAttribute("aria-label", "전역 검색 결과");
+    resultsPanel.setAttribute("aria-label", "검색 결과");
 
     Object.assign(resultsPanel.style, {
       position: "fixed",
@@ -160,19 +706,88 @@
     });
 
     const header = document.createElement("div");
-    header.textContent = "전역 검색 결과";
     Object.assign(header.style, {
       padding: "10px 12px",
       fontWeight: "bold",
       borderBottom: "1px solid #eee",
       background: "#f9fafb",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      position: "sticky",
+      top: "0",
+      zIndex: "1",
     });
     resultsPanel.appendChild(header);
+
+    // 제목(줄바꿈 방지, 여유 여백)
+    const headerTitle = document.createElement("span");
+    headerTitle.textContent = "검색 결과";
+    Object.assign(headerTitle.style, {
+      whiteSpace: "nowrap",
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      padding: "0 8px",
+      marginRight: "6px",
+    });
+    header.appendChild(headerTitle);
+
+    // 헤더 액션 컨테이너
+    const headerActions = document.createElement("div");
+    Object.assign(headerActions.style, {
+      display: "flex",
+      gap: "6px",
+      alignItems: "center",
+    });
+    header.appendChild(headerActions);
+
+    // 접기/펼치기 토글 버튼
+    function setButtonBaseStyles(btn) {
+      Object.assign(btn.style, {
+        padding: "4px 8px",
+        border: "1px solid #d1d5db",
+        background: "#ffffff",
+        borderRadius: "999px",
+        cursor: "pointer",
+        fontSize: "12px",
+        lineHeight: "1",
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "6px",
+      });
+      btn.addEventListener(
+        "mouseenter",
+        () => (btn.style.background = "#f3f4f6")
+      );
+      btn.addEventListener(
+        "mouseleave",
+        () => (btn.style.background = "#ffffff")
+      );
+    }
+
+    const toggleBtn = document.createElement("button");
+    toggleBtn.type = "button";
+    toggleBtn.setAttribute("aria-label", "검색 결과 창 접기");
+    setButtonBaseStyles(toggleBtn);
+    toggleBtn.innerHTML = iconSvg("chevronUp");
+    headerActions.appendChild(toggleBtn);
+
+    // 바디 컨테이너
+    const body = document.createElement("div");
+    body.className = "search-results-body";
+    resultsPanel.appendChild(body);
 
     const list = document.createElement("div");
     list.className = "search-results-list";
     Object.assign(list.style, { padding: "8px 10px" });
-    resultsPanel.appendChild(list);
+    body.appendChild(list);
+    // 초기 상태: 검색 결과 없음 메시지 표시
+    try {
+      const empty = document.createElement("p");
+      empty.textContent = "검색 결과 없음";
+      Object.assign(empty.style, { color: "#666", margin: "8px 4px" });
+      list.appendChild(empty);
+    } catch (_) {}
 
     const footer = document.createElement("div");
     Object.assign(footer.style, {
@@ -183,6 +798,7 @@
     });
     const navLeft = document.createElement("button");
     navLeft.type = "button";
+    navLeft.className = "search-page-prev";
     navLeft.textContent = "이전";
     Object.assign(navLeft.style, {
       padding: "6px 10px",
@@ -201,6 +817,7 @@
 
     const navRight = document.createElement("button");
     navRight.type = "button";
+    navRight.className = "search-page-next";
     navRight.textContent = "다음";
     Object.assign(navRight.style, {
       padding: "6px 10px",
@@ -212,26 +829,143 @@
     });
     navRight.addEventListener("click", () => navigatePage(1));
 
+    const clearBtn = document.createElement("button");
+    clearBtn.type = "button";
+    clearBtn.innerHTML = iconSvg("trash");
+    clearBtn.setAttribute("aria-label", "검색 결과 지우기");
+    setButtonBaseStyles(clearBtn);
+    clearBtn.addEventListener("click", () => {
+      // 검색 상태/입력/결과/페이지네이션 완전 초기화
+      try {
+        clearSavedSearchState();
+      } catch (_) {}
+      if (searchInput) searchInput.value = "";
+      const listEl = resultsPanel.querySelector(".search-results-list");
+      if (listEl) listEl.innerHTML = "";
+      // 페이지네이션 초기화 및 버튼 비활성화
+      pagination.q = "";
+      pagination.page = 1;
+      updatePageInfo(0, 0, 0);
+      // 패널에 빈 상태 메시지 표시
+      showGlobalResultsMessage("검색 결과 없음");
+    });
+
     const closeBtn = document.createElement("button");
     closeBtn.type = "button";
-    closeBtn.textContent = "닫기";
-    Object.assign(closeBtn.style, {
-      padding: "6px 10px",
-      border: "1px solid #ccc",
-      background: "#fff",
-      borderRadius: "4px",
-      cursor: "pointer",
-    });
+    closeBtn.innerHTML = iconSvg("close");
+    setButtonBaseStyles(closeBtn);
     closeBtn.addEventListener("click", () => {
-      resultsPanel.style.display = "none";
+      hideResultsPanel();
     });
     footer.appendChild(navLeft);
     footer.appendChild(pageInfo);
     footer.appendChild(navRight);
-    footer.appendChild(closeBtn);
-    resultsPanel.appendChild(footer);
+    headerActions.appendChild(clearBtn);
+    headerActions.appendChild(closeBtn);
+    body.appendChild(footer);
 
     document.body.appendChild(resultsPanel);
+
+    function setCollapsed(state, persist = true) {
+      isCollapsed = !!state;
+      body.style.display = isCollapsed ? "none" : "block";
+      toggleBtn.innerHTML = isCollapsed
+        ? iconSvg("chevronDown")
+        : iconSvg("chevronUp");
+      toggleBtn.setAttribute(
+        "aria-label",
+        isCollapsed ? "검색 결과 창 펼치기" : "검색 결과 창 접기"
+      );
+      toggleBtn.setAttribute("aria-expanded", String(!isCollapsed));
+      // 너비를 조금 줄여 헤더만 보이도록
+      if (isCollapsed) {
+        resultsPanel.style.width = "220px";
+      } else {
+        resultsPanel.style.width = "380px";
+      }
+      if (persist) {
+        try {
+          sessionStorage.setItem(
+            PANEL_STATE_KEY,
+            JSON.stringify({ collapsed: isCollapsed })
+          );
+        } catch (_) {}
+      }
+    }
+    // 외부에서 펼치기/접기 호출할 수 있도록 보조 핸들러 부착
+    resultsPanel._setCollapsed = setCollapsed;
+
+    // 버튼/헤더 클릭으로 토글
+    toggleBtn.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      autoManagedCollapse = false;
+      setCollapsed(!isCollapsed);
+    });
+    header.addEventListener("dblclick", (ev) => {
+      ev.stopPropagation();
+      autoManagedCollapse = false;
+      setCollapsed(!isCollapsed);
+    });
+
+    // 패널이 접힌 상태에서 패널 영역 클릭 시 펼치기
+    resultsPanel.addEventListener("click", () => {
+      if (isCollapsed) {
+        autoManagedCollapse = false;
+        setCollapsed(false);
+      }
+    });
+
+    // 패널 바깥 클릭 시 접기
+    document.addEventListener("click", (ev) => {
+      if (!resultsPanel || resultsPanel.style.display === "none") return;
+      const target = ev.target;
+      if (resultsPanel.contains(target)) return;
+      if (!isCollapsed) {
+        autoManagedCollapse = false;
+        setCollapsed(true);
+      }
+    });
+
+    // 저장된 패널 상태 복원
+    try {
+      const raw = sessionStorage.getItem(PANEL_STATE_KEY);
+      if (raw) {
+        const st = JSON.parse(raw);
+        if (st && typeof st.collapsed === "boolean") setCollapsed(st.collapsed);
+      } else {
+        // 모바일 초기 진입 시 자동 접기(사용자 동작 시 해제)
+        if (window.innerWidth < MOBILE_BREAKPOINT) {
+          autoManagedCollapse = true;
+          setCollapsed(true, false);
+        }
+      }
+    } catch (_) {}
+
+    // 화면 크기 변경에 따른 자동 접기/펼치기
+    function handleResize() {
+      // 자동 접기: 모바일 폭 미만이고 현재 펼쳐져 있으며 자동 관리 중일 때
+      if (window.innerWidth < MOBILE_BREAKPOINT) {
+        if (!isCollapsed) {
+          autoManagedCollapse = true;
+          setCollapsed(true, false);
+        }
+      } else {
+        // 데스크탑 폭 이상이고 자동 관리 상태이며 저장된 값이 펼치기라면 복원
+        if (autoManagedCollapse) {
+          try {
+            const raw = sessionStorage.getItem(PANEL_STATE_KEY);
+            const st = raw ? JSON.parse(raw) : { collapsed: false };
+            if (!st || st.collapsed === false) {
+              setCollapsed(false, false);
+            }
+          } catch (_) {
+            setCollapsed(false, false);
+          }
+          autoManagedCollapse = false;
+        }
+      }
+    }
+    window.addEventListener("resize", handleResize);
   }
 
   /**
@@ -280,11 +1014,23 @@
     // 절 참조 형식인지 확인 (예: "창세 1:1", "창세기 1:1")
     const verseRefMatch = query.match(/^(.+?)\s+(\d+):(\d+)$/);
     if (verseRefMatch) {
-      searchByReference(verseRefMatch[1], verseRefMatch[2], verseRefMatch[3]);
+      // 참조 검색은 상태를 저장하지 않고, 기존 키워드 검색 상태를 제거
+      resetSearchUI();
+      // 참조 검색 전 존재 검증(워커가 준비되어 있으면 빠르게 체크)
+      const bookName = verseRefMatch[1];
+      const chapter = verseRefMatch[2];
+      const verse = verseRefMatch[3];
+      searchByReference(bookName, chapter, verse);
     } else {
       // 텍스트 검색: 1) 현재 문서 내 검색 2) 전역 검색
+      suppressLocalToast = true;
+      lastQueryText = query;
       searchByText(query);
+      suppressLocalToast = false;
+      // 새로운 키워드 검색: 기존 결과 초기화 후 저장
+      resetResultsPanel();
       globalSearch(query);
+      saveSearchState();
     }
   }
 
@@ -317,24 +1063,34 @@
 
     const targetBookAbbr = bookNameToAbbr[bookName] || bookName;
 
-    // 같은 책·장 → 현재 페이지에서 이동
+    // 같은 책·장 → 현재 페이지에서 이동 (존재 검증 포함)
     if (targetBookAbbr === currentBookAbbr && chapter === currentChapter) {
       const verseId = `${targetBookAbbr}-${chapter}-${verse}`;
+      // 우선 DOM에서 시도
       const found = highlightVerse(verseId);
-
       if (found) {
         showMessage(
           `${bookName} ${chapter}:${verse}로 이동했습니다.`,
           "success"
         );
-        // URL 해시 업데이트
         history.replaceState(null, null, `#${verseId}`);
-      } else {
-        showMessage(
-          `${bookName} ${chapter}:${verse}를 찾을 수 없습니다.`,
-          "error"
-        );
+        return;
       }
+      // DOM에 없으면 전역 인덱스에서 존재 여부 확인(워커 사용)
+      checkReferenceExistence(verseId, (ok) => {
+        if (ok) {
+          // 현재 문서에 없으면 전역 파일로 이동
+          const slug = abbrToSlug[targetBookAbbr];
+          const basePath = window.location.pathname.replace(/[^/]+$/, "");
+          const filename = `${slug}-${chapter}.html#${verseId}`;
+          window.location.href = basePath + filename;
+        } else {
+          showMessage(
+            `${bookName} ${chapter}:${verse}은(는) 없는 구절입니다.`,
+            "error"
+          );
+        }
+      });
     } else {
       // 다른 책/장 → 파일로 리다이렉트
       const slug = abbrToSlug[targetBookAbbr];
@@ -342,9 +1098,43 @@
         showMessage("해당 책을 찾을 수 없습니다.", "error");
         return;
       }
-      const basePath = window.location.pathname.replace(/[^/]+$/, "");
-      const filename = `${slug}-${chapter}.html#${targetBookAbbr}-${chapter}-${verse}`;
-      window.location.href = basePath + filename;
+      const verseId = `${targetBookAbbr}-${chapter}-${verse}`;
+      // 이동 전 전역 인덱스에서 존재 여부 확인(워커)
+      checkReferenceExistence(verseId, (ok) => {
+        if (!ok) {
+          showMessage(
+            `${bookName} ${chapter}:${verse}은(는) 없는 구절입니다.`,
+            "error"
+          );
+          return;
+        }
+        const basePath = window.location.pathname.replace(/[^/]+$/, "");
+        const filename = `${slug}-${chapter}.html#${verseId}`;
+        window.location.href = basePath + filename;
+      });
+    }
+  }
+
+  // 전역 인덱스에서 해당 절 ID 존재 여부 확인
+  function checkReferenceExistence(verseId, cb) {
+    if (!searchWorker) {
+      // 워커 미구성: 보수적으로 존재한다고 가정하고 이동 시도
+      cb(true);
+      return;
+    }
+    const handler = (ev) => {
+      const data = ev.data || {};
+      if (data.type === "checkResult" && data.id === verseId) {
+        searchWorker.removeEventListener("message", handler);
+        cb(!!data.ok);
+      }
+    };
+    searchWorker.addEventListener("message", handler);
+    try {
+      searchWorker.postMessage({ type: "check", id: verseId });
+    } catch (_) {
+      searchWorker.removeEventListener("message", handler);
+      cb(true);
     }
   }
 
@@ -372,10 +1162,10 @@
       }
     }
 
-    if (found) {
+    // 로컬 검색 결과 토스트는 전역 검색과 충돌하지 않도록 조절
+    lastLocalFound = found;
+    if (found && !suppressLocalToast) {
       showMessage(`"${query}" 검색 완료`, "success");
-    } else {
-      showMessage(`"${query}"를 찾을 수 없습니다.`, "error");
     }
   }
 
@@ -495,8 +1285,7 @@
       return;
     }
     createResultsPanel();
-    // 패널 표시 및 로딩 메시지
-    resultsPanel.style.display = "block";
+    showResultsPanel(true);
     renderGlobalResults(query, null); // 로딩 상태
 
     const trimmed = query.trim();
@@ -507,6 +1296,7 @@
 
     if (!isWorkerReady) {
       pendingQueries.push(trimmed);
+      saveSearchState();
       return;
     }
     try {
@@ -516,6 +1306,7 @@
         limit: pagination.pageSize,
         page: pagination.page,
       });
+      saveSearchState();
     } catch (e) {
       showGlobalResultsMessage("검색 요청 중 오류가 발생했습니다.");
     }
@@ -532,6 +1323,7 @@
         limit: pagination.pageSize,
         page: pagination.page,
       });
+      saveSearchState();
     } catch {}
   }
 
@@ -541,10 +1333,12 @@
     if (!list) return;
     list.innerHTML = "";
     const p = document.createElement("p");
-    p.textContent = message;
+    p.textContent = message || "검색 결과 없음";
     Object.assign(p.style, { color: "#666", margin: "8px 4px" });
     list.appendChild(p);
-    resultsPanel.style.display = "block";
+    // 메시지 출력은 결과가 없음을 의미 → 페이지네이션 초기화
+    updatePageInfo(0, 0, 0);
+    showResultsPanel(false);
   }
 
   function renderGlobalResults(
@@ -573,6 +1367,10 @@
       Object.assign(empty.style, { color: "#666", margin: "8px 4px" });
       list.appendChild(empty);
       updatePageInfo(0, 0, 0);
+      // 전역/로컬 모두 실패한 경우에만 에러 토스트 표시
+      if (query === lastQueryText && !lastLocalFound) {
+        showMessage(`"${query}"를 찾을 수 없습니다.`, "error");
+      }
       return;
     }
 
@@ -588,6 +1386,30 @@
         color: "#111",
         textDecoration: "none",
       });
+
+      // 레퍼런스(책 장:절) 표시 추가
+      const bookAbbr = item.b || (item.i || item.id || "").split("-")[0] || "";
+      let chap = item.c;
+      let ver = item.v;
+      if (chap == null || ver == null) {
+        const parts = String(item.i || item.id || "").split("-");
+        if (parts.length >= 3) {
+          chap = chap == null ? parseInt(parts[1], 10) : chap;
+          ver = ver == null ? parseInt(parts[2], 10) : ver;
+        }
+      }
+      if (bookAbbr && chap && ver) {
+        const ref = document.createElement("span");
+        ref.className = "search-result-ref";
+        ref.textContent = ` — ${bookAbbr} ${chap}:${ver}`;
+        Object.assign(ref.style, {
+          marginLeft: "6px",
+          color: "#555",
+          fontSize: "12px",
+        });
+        a.appendChild(ref);
+      }
+
       a.addEventListener("mouseenter", () => {
         a.style.background = "#f3f4f6";
       });
@@ -600,17 +1422,68 @@
     updatePageInfo(page, pageSize, total);
   }
 
+  // 패널 표시/숨김 공통 처리 (토글 버튼 접근성 상태 포함)
+  function showResultsPanel(expandIfCollapsed) {
+    createResultsPanel();
+    if (resultsPanel) {
+      resultsPanel.style.display = "block";
+      if (
+        expandIfCollapsed &&
+        typeof resultsPanel._setCollapsed === "function" &&
+        isCollapsed
+      ) {
+        try {
+          resultsPanel._setCollapsed(false, true);
+        } catch (_) {}
+      }
+    }
+    if (resultsToggleBtn) {
+      resultsToggleBtn.setAttribute("aria-expanded", "true");
+      resultsToggleBtn.setAttribute("aria-label", "검색 결과 패널 닫기");
+    }
+  }
+
+  function hideResultsPanel() {
+    if (resultsPanel) {
+      resultsPanel.style.display = "none";
+    }
+    if (resultsToggleBtn) {
+      resultsToggleBtn.setAttribute("aria-expanded", "false");
+      resultsToggleBtn.setAttribute("aria-label", "검색 결과 패널 열기");
+    }
+  }
+
   function updatePageInfo(page, pageSize, total) {
     const pageInfo =
       resultsPanel && resultsPanel.querySelector(".search-page-info");
+    const prevBtn =
+      resultsPanel && resultsPanel.querySelector(".search-page-prev");
+    const nextBtn =
+      resultsPanel && resultsPanel.querySelector(".search-page-next");
     if (!pageInfo) return;
     const totalPages =
       pageSize > 0 ? Math.max(1, Math.ceil(total / pageSize)) : 1;
     pageInfo.textContent =
       total > 0 ? `${page}/${totalPages} (총 ${total}건)` : "";
+    // 버튼 활성/비활성
+    if (prevBtn) prevBtn.disabled = !(total > 0 && page > 1);
+    if (nextBtn) nextBtn.disabled = !(total > 0 && page < totalPages);
     pagination.page = page || 1;
     pagination.pageSize = pageSize || 50;
+    // 검색어가 없거나 total=0이면 상태 저장 지움
+    if (!pagination.q || !(total > 0)) {
+      try {
+        sessionStorage.removeItem(SEARCH_STATE_KEY);
+      } catch (_) {}
+    } else {
+      saveSearchState();
+    }
   }
+
+  // 브라우저 뒤/앞 이동 시 상태 복구
+  window.addEventListener("popstate", () => {
+    restoreSearchState();
+  });
 
   function highlightSnippet(text, query) {
     const q = escapeRegExp(query);
