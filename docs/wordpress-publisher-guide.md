@@ -7,6 +7,7 @@
 - 경로 예시(차일드 테마):
   - `wp-content/themes/<your-child-theme>/assets/verse-style.css`
   - `wp-content/themes/<your-child-theme>/assets/verse-navigator.js` (선택)
+  - `wp-content/themes/<your-child-theme>/assets/search-worker.js` (전역 검색 사용 시)
 
 ### functions.php에 추가할 코드
 
@@ -38,6 +39,18 @@ add_action('wp_enqueue_scripts', function () {
         get_stylesheet_directory_uri() . $js_rel,
         [],
         filemtime($js_path),
+        true
+      );
+    }
+    // 전역 검색 Worker를 별도 파일로 둘 경우, 필요 시 등록
+    $worker_rel  = '/assets/search-worker.js';
+    $worker_path = get_stylesheet_directory() . $worker_rel;
+    if (file_exists($worker_path)) {
+      wp_register_script(
+        'bible-search-worker',
+        get_stylesheet_directory_uri() . $worker_rel,
+        [],
+        filemtime($worker_path),
         true
       );
     }
@@ -92,6 +105,17 @@ python src/wordpress_api.py publish-chapter \
   --html output/html/genesis-1.html \
   --book-name 창세기 --book-abbr 창세 --english-name Genesis --division 구약 --chapter 1
 
+# 2.5) (선택) 본문/테마에 전역 검색 설정 주입
+# 본문 상단 또는 테마에서 아래 스니펫으로 Worker/Index 경로 지정
+cat <<'EOF'
+<script>
+  window.BIBLE_SEARCH_CONFIG = {
+    workerUrl: "/wp-content/themes/your-child/assets/search-worker.js",
+    searchIndexUrl: "/wp-content/uploads/common-bible/search/search-index.json",
+  };
+</script>
+EOF
+
 # 3) 준비 완료 후 공개 전환(필요 시 예약 공개)
 python src/wordpress_api.py bulk-status --to publish --division-tag 구약
 # 예약 공개 예시(UTC)
@@ -134,6 +158,7 @@ python src/wordpress_api.py bulk-status --to publish --division-tag 구약 --dry
 - 카테고리 `공동번역성서`가 존재하고 해당 게시물에 적용되어 있는가?
 - 게시물 화면에서 CSS가 정상 적용되는가(브라우저 DevTools 네트워크 탭으로 확인)?
 - 오디오 `source_url`이 유효한가(404/권한 문제 없는지)?
+- 전역 검색이 동작하는가(검색 패널, 페이지네이션, 다른 문서 링크 이동)?
 - 공개 전환 시점이 맞는가(예약 공개 `date/date_gmt` 확인)?
 
 ## 5) 참고

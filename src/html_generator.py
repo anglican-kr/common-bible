@@ -11,6 +11,7 @@ from urllib.parse import urlparse
 import argparse
 from string import Template
 from typing import Optional
+import json
 from src.parser import Chapter, Verse
 
 
@@ -26,6 +27,19 @@ class HtmlGenerator:
         """
         with open(template_path, 'r', encoding='utf-8') as f:
             self.template = Template(f.read())
+
+    @staticmethod
+    def get_book_order_index(book_abbr: str) -> int:
+        """공동번역 약칭/외경 포함 순서를 `data/book_mappings.json`의 나열 순서로 정의한다."""
+        try:
+            with open('data/book_mappings.json', 'r', encoding='utf-8') as f:
+                books = json.load(f)
+            for idx, b in enumerate(books):
+                if b.get('약칭') == book_abbr:
+                    return idx
+        except Exception:
+            pass
+        return 10_000
 
     def generate_chapter_html(
         self,
@@ -49,7 +63,7 @@ class HtmlGenerator:
         # 절 HTML 생성 (오디오 슬러그 계산 전, 본문부터 생성)
         verses_html = self._generate_verses_html(chapter)
 
-        # 별칭/슬러그 매핑 주입 데이터 구성
+        # 별칭/슬러그 매핑 주입 데이터 구성 (공동번역 약칭/외경 포함)
         alias_to_abbr = {}
         abbr_to_slug = {}
         try:
@@ -66,8 +80,14 @@ class HtmlGenerator:
                 aliases = b.get('aliases', [])
                 if not abbr:
                     continue
-                # 약칭→슬러그
-                abbr_to_slug[abbr] = self._get_book_slug(abbr)
+                # 약칭→슬러그: 영문 이름 기반으로 ASCII 슬러그 생성 (없으면 보조 규칙)
+                if isinstance(eng, str) and eng:
+                    slug = re.sub(r'[^a-z0-9]+', '', eng.lower())
+                else:
+                    slug = re.sub(r'[^a-z0-9]+', '', str(abbr).lower())
+                if not slug:
+                    slug = self._get_book_slug(abbr)
+                abbr_to_slug[abbr] = slug
                 # 모든 별칭→약칭
                 for name in set([abbr, full, *aliases]):
                     if name:
@@ -425,6 +445,25 @@ def main():
         action="store_true",
         help="생성된 출력 디렉터리에 data/audio/ 디렉터리를 복사",
     )
+    # 기본: 전역 검색 인덱스 생성 활성화
+    parser.add_argument(
+        "--emit-search-index",
+        action="store_true",
+        default=True,
+        help="전역 검색용 단일 인덱스(JSON) 생성 (기본: 활성화)",
+    )
+    # 명시적 비활성화 옵션
+    parser.add_argument(
+        "--no-emit-search-index",
+        action="store_true",
+        help="전역 검색 인덱스 생성을 비활성화",
+    )
+    parser.add_argument(
+        "--search-index-out",
+        dest="search_index_out",
+        default=None,
+        help="검색 인덱스 출력 경로 (기본: <output_dir>/static/search/search-index.json)",
+    )
 
     args = parser.parse_args()
 
@@ -438,6 +477,9 @@ def main():
     static_base_arg: str = args.static_base
     copy_static: bool = args.copy_static
     copy_audio: bool = args.copy_audio
+    # 기본 활성화, --no-emit-search-index로 비활성화
+    emit_search_index: bool = not args.no_emit_search_index
+    search_index_out: Optional[str] = args.search_index_out
     css_href: Optional[str] = args.css_href
     js_src: Optional[str] = args.js_src
 
@@ -533,6 +575,9 @@ def main():
         return slug
 
     print(f"HTML 생성 시작... ({len(chapters)}개 장)")
+
+    # 전역 검색 인덱스: 전체 절을 하나의 JSON으로 직렬화
+    search_entries: list[dict] = []
     for i, chapter in enumerate(chapters, start=1):
         try:
             html = generator.generate_chapter_html(
@@ -551,9 +596,44 @@ def main():
                 f.write(html)
             print(
                 f"[{i}/{len(chapters)}] {chapter.book_name} {chapter.chapter_number}장 → {filename}")
+
+            # 검색 인덱스 엔트리 적재
+            if emit_search_index:
+                for verse in chapter.verses:
+                    verse_id = f"{chapter.book_abbr}-{chapter.chapter_number}-{verse.number}"
+                    href = f"{slug}-{chapter.chapter_number}.html#{verse_id}"
+                    # 텍스트에서 접근성 기호는 검색 품질을 위해 제거/단순화
+                    verse_text = verse.text.replace(
+                        '\u00B6', ' ').replace('¶', ' ').strip()
+                    search_entries.append({
+                        "i": verse_id,
+                        "t": verse_text,
+                        "h": href,
+                        "b": chapter.book_abbr,
+                        "c": chapter.chapter_number,
+                        "v": verse.number,
+                        "bo": HtmlGenerator.get_book_order_index(chapter.book_abbr),
+                    })
         except Exception as e:
             print(
                 f"❌ 생성 실패: {chapter.book_name} {chapter.chapter_number}장 - {e}")
+
+    # 검색 인덱스 파일 저장
+    if emit_search_index:
+        # 기본 경로: <output_dir>/static/search/search-index.json
+        if not search_index_out:
+            search_index_out = os.path.join(
+                output_dir, 'static', 'search', 'search-index.json')
+        # 출력 디렉터리 생성
+        os.makedirs(os.path.dirname(search_index_out), exist_ok=True)
+        try:
+            with open(search_index_out, 'w', encoding='utf-8') as f:
+                json.dump(search_entries, f, ensure_ascii=False,
+                          separators=(',', ':'))
+            print(
+                f"🗂️  전역 검색 인덱스 생성: {search_index_out} (엔트리 {len(search_entries)}개)")
+        except Exception as e:
+            print(f"❌ 검색 인덱스 생성 실패: {e}")
 
     print(f"\n✅ HTML 생성 완료! 파일 위치: {output_dir}")
 

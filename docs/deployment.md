@@ -9,12 +9,14 @@
 ## 📋 사전 요구사항
 
 ### 시스템 요구사항
+
 - Python 3.8+
 - WordPress 5.0+ (REST API 지원)
 - 최소 2GB RAM, 10GB 디스크 공간
 - HTTPS 지원 웹서버
 
 ### 필수 소프트웨어
+
 ```bash
 # Python 패키지
 pip install requests beautifulsoup4 lxml pyyaml python-dotenv
@@ -54,6 +56,7 @@ cp config/.env.example config/.env
 ```
 
 **config/.env 파일 편집:**
+
 ```env
 # 워드프레스 설정
 WP_BASE_URL=https://seoul.anglican.kr
@@ -96,6 +99,7 @@ chmod 755 logs data/output audio
 ### 1. REST API 활성화
 
 워드프레스 관리자 패널에서:
+
 1. **설정 > 고유주소** 에서 기본값이 아닌 구조 선택
 2. **사용자 > 프로필** 에서 Application Password 생성
 
@@ -157,6 +161,7 @@ python scripts/validate_mappings.py data/bible_book_mappings.json
 ### 3. 단계별 배포
 
 #### Stage 1: 파싱 및 HTML 생성
+
 ```bash
 # 백업 생성
 cp data/common-bible-kr.txt data/backup/$(date +%Y%m%d)_common-bible-kr.txt
@@ -172,6 +177,7 @@ python src/html_generator.py --input data/parsed_chapters.json --output data/out
 ```
 
 #### Stage 2: 미리보기 배포 (비공개)
+
 ```bash
 # 비공개 상태로 업로드 (서울교구 사이트)
 python src/wp_publisher.py --upload-all --status=private --url=https://seoul.anglican.kr --author=YOUR_USERNAME --publish-date=2025-07-01 --dry-run=false
@@ -181,6 +187,7 @@ tail -f logs/bible_converter.log
 ```
 
 #### Stage 3: 검토 및 테스트
+
 ```bash
 # 생성된 포스트 확인
 python scripts/verify_posts.py --check-all
@@ -190,6 +197,7 @@ python scripts/accessibility_test.py --url=https://your-site.com
 ```
 
 #### Stage 4: 공개 배포
+
 ```bash
 # 모든 포스트 공개
 python src/wp_publisher.py --publish-all --confirm
@@ -239,7 +247,7 @@ def monitor_system():
     cpu_usage = psutil.cpu_percent()
     memory_usage = psutil.virtual_memory().percent
     disk_usage = psutil.disk_usage('/').percent
-    
+
     print(f"CPU: {cpu_usage}%, Memory: {memory_usage}%, Disk: {disk_usage}%")
 ```
 
@@ -250,6 +258,7 @@ def monitor_system():
 ### 자주 발생하는 문제들
 
 #### 1. 인증 실패
+
 ```bash
 # 해결 방법
 1. Application Password 재생성
@@ -258,6 +267,7 @@ def monitor_system():
 ```
 
 #### 2. 메모리 부족
+
 ```bash
 # 해결 방법
 1. 배치 크기 줄이기 (--batch-size=10)
@@ -266,6 +276,7 @@ def monitor_system():
 ```
 
 #### 3. API 레이트 리미팅
+
 ```bash
 # 해결 방법
 1. WP_API_RATE_LIMIT 값 조정
@@ -274,6 +285,7 @@ def monitor_system():
 ```
 
 #### 4. 오디오 파일 문제
+
 ```bash
 # 해결 방법
 1. 오디오 파일 경로 확인
@@ -298,6 +310,7 @@ grep -c "ERROR" logs/bible_converter.log
 ## 🚦 배포 체크리스트
 
 ### 배포 전 확인사항
+
 - [ ] 모든 테스트 통과
 - [ ] 환경변수 설정 완료
 - [ ] 워드프레스 인증 테스트 통과
@@ -307,14 +320,16 @@ grep -c "ERROR" logs/bible_converter.log
 - [ ] 로그 디렉터리 권한 설정
 
 ### 배포 중 확인사항
+
 - [ ] 파싱 과정 오류 없음
 - [ ] HTML 생성 정상 완료
 - [ ] 비공개 업로드 성공
 - [ ] 생성된 포스트 샘플 확인
 
 ### 배포 후 확인사항
+
 - [ ] 모든 장 업로드 완료
-- [ ] 검색 기능 정상 작동
+- [ ] 검색 기능 정상 작동 (전역 검색 패널/페이지네이션/정렬 포함)
 - [ ] 오디오 플레이어 정상 작동
 - [ ] 접근성 테스트 통과 (스크린리더 테스트)
 - [ ] 단어/문구 검색 기능 정상 작동

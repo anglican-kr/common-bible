@@ -45,6 +45,18 @@
 - URL 해시를 통한 직접 접근 (`#창세-1-3`)
 - 하이라이트 효과로 시각적 피드백
 - 스크린리더 사용자를 위한 검색 결과 접근성 지원
+- 전역 검색(다른 문서 포함): Web Worker 기반, 책→장→절 정렬, 페이지네이션(기본 50건)
+  - 인덱스 자동 생성(기본 활성화, 비활성화: `--no-emit-search-index`)
+  - 경로가 다르면 설정 주입으로 지정 가능:
+    ```html
+    <script>
+      window.BIBLE_SEARCH_CONFIG = {
+        workerUrl: "/wp-content/themes/child/assets/search-worker.js",
+        searchIndexUrl:
+          "/wp-content/uploads/common-bible/search/search-index.json",
+      };
+    </script>
+    ```
 
 ### 🚀 자동 게시 (설계/CLI 스켈레톤 완료)
 
@@ -59,34 +71,37 @@
 
 ```
 common-bible/
-├── docs/                   # 📚 문서
-│   ├── requirements.md     # 요구사항 명세
+├── docs/                       # 📚 문서
+│   ├── requirements.md         # 요구사항 명세
 │   ├── design-specification.md # 상세 설계서
 │   └── parser-usage-guide.md   # 파서 사용 가이드
-├── src/                    # 💻 소스코드
-│   ├── __init__.py        # 패키지 초기화
-│   ├── parser.py          # ✅ 텍스트 파싱 엔진 (구현 완료)
-│   ├── config.py          # ✅ 설정 관리 (구현 완료)
-│   ├── html_generator.py  # 🚧 HTML 생성기 (설계 완료)
-│   ├── wordpress_api.py   # 🚧 워드프레스 API (설계 완료)
-│   └── main.py            # 🚧 메인 실행 파일 (설계 완료)
-├── templates/             # 🎨 HTML 템플릿
-│   └── chapter.html       # 기본 장 템플릿
-├── static/                # 🎨 정적 자원
-│   ├── verse-style.css    # 스타일시트
-│   └── verse-navigator.js # 검색/네비게이션 스크립트
-├── data/                  # 📊 데이터 파일
-│   ├── common-bible-kr.txt # 원본 텍스트 (5.6MB)
-│   ├── book_mappings.json  # 성경 책 이름 매핑 (73권)
-│   ├── audio/             # 오디오 파일 저장소
-│   └── output/            # 생성된 JSON/HTML
-├── output/                # 📁 파싱 결과 저장소
-├── tests/                 # 🧪 테스트 (설계 완료)
-├── logs/                  # 📋 로그 파일
-├── env.example            # ⚙️ 환경변수 예제
-├── requirements.txt       # 📦 Python 의존성
-└── README.md              # 📖 프로젝트 가이드
+├── src/                        # 💻 소스코드
+│   ├── __init__.py             # 패키지 초기화
+│   ├── parser.py               # ✅ 텍스트 파싱 엔진 (구현 완료)
+│   ├── config.py               # ✅ 설정 관리 (구현 완료)
+│   ├── html_generator.py       # 🚧 HTML 생성기 (구현 중)
+│   ├── wordpress_api.py        # 🚧 워드프레스 API (구현 중)
+│   └── main.py                 # 🚧 메인 실행 파일 (설계 완료)
+├── templates/                  # 🎨 HTML 템플릿
+│   └── chapter.html            # 기본 장 템플릿
+├── static/                     # 🎨 정적 자원
+│   ├── verse-style.css         # 스타일시트
+│   ├── verse-navigator.js      # 검색/네비게이션 스크립트(전역 검색 패널 포함)
+│   └── search-worker.js        # 전역 검색 Web Worker
+├── data/                       # 📊 데이터 파일
+│   ├── common-bible-kr.txt     # 원본 텍스트 (5.6MB)
+│   ├── book_mappings.json      # 성경 책 이름 매핑 (73권)
+│   ├── audio/                  # 오디오 파일 저장소
+│   └── output/                 # 생성된 JSON/HTML
+├── output/                     # 📁 파싱 결과 저장소
+├── tests/                      # 🧪 테스트 (설계 완료)
+├── logs/                       # 📋 로그 파일
+├── env.example                 # ⚙️ 환경변수 예제
+├── requirements.txt            # 📦 Python 의존성
+└── README.md                   # 📖 프로젝트 가이드
 ```
+
+전역 검색 인덱스(JSON)는 빌드 시 기본으로 생성되며, 기본 경로는 `output/html/static/search/search-index.json` 입니다.
 
 ## 📊 데이터 구조
 

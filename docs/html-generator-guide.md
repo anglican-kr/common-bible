@@ -192,7 +192,7 @@ python src/html_generator.py templates/chapter.html output/html/ --copy-static -
 
 - 권장(테마 모드): 차일드 테마 `functions.php`에서 enqueue로 로드 → `--css-href/--js-src` 미지정
   - 장점: 게시물마다 링크 관리 불필요, 캐시/버전 관리 용이
-  - 사용: `docs/wordpress-publisher-guide.md`의 `functions.php` 코드 적용
+  - 사용: [wordpress-publisher-guide.md](wordpress-publisher-guide.md)의 `functions.php` 코드 적용
 - 링크 주입 모드: 본문에 직접 링크 삽입 → `--css-href/--js-src` 지정
   - 로컬/정적 호스팅: `--copy-static`과 `./static/...` 상대 경로 권장
   - 워드프레스 게시: 절대 URL 또는 사이트 루트 경로(`/wp-content/...`) 권장
@@ -220,6 +220,9 @@ python src/html_generator.py templates/chapter.html output/html/ --copy-static -
 - `--copy-audio`: `data/audio/` 디렉터리를 출력 디렉터리로 복사
 - `--css-href`: 본문에 삽입할 CSS 링크(URL 또는 상대 경로)
 - `--js-src`: 본문에 삽입할 JS 링크(URL 또는 상대 경로)
+- `--js-src`: 본문에 삽입할 JS 링크(URL 또는 상대 경로)
+- `--no-emit-search-index`: 전역 검색 인덱스 생성 비활성화(기본은 생성)
+- `--search-index-out`: 전역 검색 인덱스 출력 경로 지정(기본: `<output_dir>/static/search/search-index.json`)
 
 주의: 복사 옵션을 사용하면 HTML 내부 링크는 로컬 상대 경로(`static/...`, `audio/...`)로 강제 설정됩니다. 복사 옵션을 사용하지 않고 CDN/테마 경로를 쓰려면 `--static-base`, `--audio-base`를 절대 URL로 지정하세요. CSS/JS를 차일드 테마에서 자동 로드하는 경우 `--css-href`, `--js-src`는 지정하지 않는 것을 권장합니다.
 
@@ -350,6 +353,7 @@ body {
 - **하이라이트**: 검색 결과 강조
 - **오디오 초기화**: 페이지 로드시 오디오는 항상 멈춤 상태로 표시되도록 강제(`autoplay=false`, `preload="metadata"`, `pause()`, `currentTime=0` 적용). `loadedmetadata`/`loadeddata` 시점에 재생 위치를 0으로 맞춥니다.
 - **키보드 네비게이션**: ESC로 하이라이트 해제
+- **전역 검색(단일 인덱스 + Web Worker)**: 다른 장/책의 구절도 우측 패널에 리스트로 표시. 기본 50건/페이지, 이전/다음 버튼 제공, 책/장/절 기준 정렬. 설정이 필요하면 `window.BIBLE_SEARCH_CONFIG`로 `workerUrl`/`searchIndexUrl` 주입
 
 ```javascript
 // 전역 API

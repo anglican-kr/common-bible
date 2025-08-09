@@ -203,7 +203,7 @@
 
 - 기본 정책(권장): 워드프레스 차일드 테마의 `functions.php`에서 `wp_enqueue_style/script`로 로드한다.
   - 본문 HTML에는 CSS/JS 링크를 넣지 않는다.
-  - 가이드는 `docs/wordpress-publisher-guide.md` 참고.
+  - 가이드는 [wordpress-publisher-guide.md](wordpress-publisher-guide.md) 참고.
 - 예외적으로 본문에 직접 링크가 필요할 경우, HTML 생성기 CLI에서 다음 옵션으로 삽입한다.
   - `--css-href <URL 또는 상대 경로>`
   - `--js-src <URL 또는 상대 경로>`
@@ -219,11 +219,58 @@
 - 검색 결과 본문에서는 하이라이트 처리 필요 (`.verse-highlight`, `.text-highlight` 클래스 사용)
 - 검색 UI는 스크린리더 사용자를 위해 적절한 `aria` 속성을 포함해야 함
 
+### 전역 텍스트 검색(A안: 단일 인덱스 + Web Worker)
+
+- 목적: 현재 문서 외 다른 장/책까지 포함한 전역 검색 제공(정적/워드프레스 공통)
+- 동작 방식
+  - 빌드 시 전체 절을 단일 JSON 인덱스로 직렬화(`search-index.json`)
+  - 런타임에서 Web Worker(`static/search-worker.js`)가 최초 쿼리 시 인덱스를 지연 로드(lazy load)
+  - 메인 스레드는 결과 패널 렌더만 수행하여 모바일에서도 프리즈 방지
+- 파일 배치(권장)
+  - Worker: `static/search-worker.js`
+  - 인덱스: `output/html/static/search/search-index.json` (기본)
+- 경로/설정
+  - 자동 추정: `verse-navigator.js` 로드 경로 기준으로 같은 디렉터리의 `search-worker.js` 및 `search/search-index.json`
+  - 명시 설정(워드프레스/절대경로 필요 시):
+    ```html
+    <script>
+      window.BIBLE_SEARCH_CONFIG = {
+        workerUrl: "/wp-content/themes/child/assets/search-worker.js",
+        searchIndexUrl:
+          "/wp-content/uploads/common-bible/search/search-index.json",
+      };
+    </script>
+    ```
+- 성능 기준(모바일 고려)
+  - 인덱스는 최초 쿼리 시 1회 로드(지연 로딩)
+  - 결과 상위 50개 제한, 간단 스니펫 하이라이트만 표시
+  - 네트워크 오류 시 메시지 표시, 재시도는 사용자 입력 재개로 유도
+
+#### 정렬/페이지네이션 요구사항
+
+- 정렬: 책 → 장 → 절 순으로 정렬
+  - 책 정렬은 `data/book_mappings.json`의 나열 순서를 사용(외경 포함, 공동번역 약칭 준수)
+  - 인덱스 항목 메타: `bo`(책 정렬용 인덱스), `b`(약칭), `c`(장), `v`(절)
+- 페이지네이션: 기본 50건/페이지, “이전/다음” 버튼 제공, 페이지 정보 표시
+  - Worker 응답: `{ q, results, page, total, pageSize }`
+  - UI는 응답 기반으로 페이지 정보/버튼 활성화 결정
+
 ### HTML 생성기 CLI 요구사항
 
 - 링크 삽입 옵션 제공: `--css-href`, `--js-src`
 - 정적/오디오 복사 옵션: `--copy-static`, `--copy-audio`
 - 경로 자동 보정: 출력 디렉터리 기준 상대 경로 자동화(`--static-base`, `--audio-base`)
+- 전역 검색 인덱스 생성
+  - 기본 동작: 단일 전역 검색 인덱스(JSON) 자동 생성
+  - 비활성화: `--no-emit-search-index`
+  - 출력 경로: 기본 `<output_dir>/static/search/search-index.json` (변경: `--search-index-out`)
+  - 산출 포맷: `[{ "i": "창세-1-1", "t": "…", "h": "genesis-1.html#창세-1-1", "b": "창세", "c": 1, "v": 1, "bo": 0 }, ...]`
+
+#### 약칭/매핑 정책
+
+- 약칭과 별칭, 슬러그, 정렬 순서는 `data/book_mappings.json`을 단일 소스로 사용
+- 외경 (토비트, 유딧, 마카베오상/하, 지혜서, 집회서, 바룩 등) 약칭을 포함
+- 슬러그 생성: 영문 이름을 우선 정규화하여 ASCII로 생성(부재 시 약칭 정규화, 최종 폴백 내부 규칙)
 
 ## 🌐 워드프레스 게시물 자동화 요구사항
 
@@ -394,7 +441,7 @@
 | REST API 인증  | JWT Auth 플러그인, Application Password 등 사용                                                                                                |
 | 사용자 권한    | `editor` 또는 `administrator` 권한 필요                                                                                                        |
 | CSS 정의       | `Customizer`나 테마의 `style.css`에 접근성 관련 CSS 추가                                                                                       |
-| 차일드 테마    | CSS/JS는 차일드 테마에서 enqueue로 로드(권장). 코드 예시는 `docs/wordpress-publisher-guide.md` 참고                                            |
+| 차일드 테마    | CSS/JS는 차일드 테마에서 enqueue로 로드(권장). 코드 예시는 [wordpress-publisher-guide.md](wordpress-publisher-guide.md) 참고                   |
 | 카테고리 설정  | `공동번역성서` 카테고리 생성 (ID 확인 필요)                                                                                                    |
 | 태그 자동 생성 | 시스템이 자동으로 태그 생성<br>- `공동번역성서`, `구약`, `외경`, `신약`<br>- 각 성경 책 이름 (73개)<br>**총 77개 태그 자동 생성**              |
 | 포스트 구성    | 각 장마다 별도의 포스트로 생성, 자동 태그 지정<br>**초기 상태**: 비공개(`private`)로 생성<br>**일괄 공개**: 준비 완료 후 `publish` 상태로 변경 |

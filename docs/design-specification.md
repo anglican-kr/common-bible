@@ -144,7 +144,9 @@ python src/parser.py data/common-bible-kr.txt \
 - 단락 그룹화(¶ 기준) 및 시맨틱 `<p>` 구성
 - 오디오 파일 경로 생성 및 존재 여부에 따른 UI 토글
 - 책 별칭/슬러그 데이터 `window.BIBLE_ALIAS` 주입
+- 약칭/정렬은 `data/book_mappings.json`의 순서를 단일 기준으로 사용(외경 포함)
 - CSS/JS 링크 주입(옵션) 또는 차일드 테마 enqueue 연동
+- 전역 검색 인덱스 생성 지원: 기본 활성화(비활성화는 `--no-emit-search-index`). 전체 절 텍스트/앵커/정렬 메타를 단일 JSON으로 출력
 
 #### 2.2 인터페이스(요약)
 
@@ -199,6 +201,9 @@ python src/html_generator.py templates/chapter.html output/html/ \
   --audio-base data/audio --static-base ../static \
   --copy-static --copy-audio \
   --css-href ./static/verse-style.css --js-src ./static/verse-navigator.js
+  # 전역 검색 인덱스는 기본 생성됨
+  # 비활성화하려면 --no-emit-search-index 사용
+  --search-index-out output/html/static/search/search-index.json
 ```
 
 #### 2.8 테스트 항목(요약)
@@ -512,6 +517,49 @@ $audio_path and '''
 
 <script src="/static/verse-navigator.js"></script>
 ```
+
+---
+
+## 🔍 전역 검색 설계(단일 인덱스 + Web Worker)
+
+### 개요
+
+- 정적/워드프레스 공통으로 사용할 수 있는 전역 텍스트 검색
+- 단일 인덱스 JSON을 Web Worker가 최초 쿼리 시 지연 로드하여 메인 스레드 부하 최소화
+
+### 산출물
+
+- `static/search-worker.js`: 인덱스 로드 및 검색 수행(Worker)
+- `static/verse-navigator.js`: 검색 UI/로컬 검색 + 전역 검색 패널, Worker와 메시지 연동
+- 인덱스 JSON(기본): `<output_dir>/static/search/search-index.json`
+  - 포맷: `[{ "i": "창세-1-1", "t": "…", "h": "genesis-1.html#창세-1-1", "b": "창세", "c": 1, "v": 1, "bo": 0 }, ...]`
+
+### 동작
+
+1. 페이지 로드 시 `verse-navigator.js`가 Worker를 초기화(`init`)
+2. Worker `ready` → `config`로 인덱스 URL 전달(자동 추정 또는 설정 주입)
+3. 사용자가 단어 검색 제출 시
+   - 현재 문서 내 로컬 검색 수행(기존)
+   - 동시에 Worker에 `{ type: 'query', q, limit: 50 }` 전송
+4. Worker는 최초 쿼리에서 인덱스를 fetch 후 선형 스캔 → 책/장/절 기준 정렬 → 요청 페이지 분량만 슬라이스하여 반환
+5. 결과 패널에 스니펫을 하이라이트하여 표시. 하단에 이전/다음 버튼과 페이지 정보. 항목 클릭 시 `h`로 이동(해시 포함)
+
+### 설정 주입(워드프레스/절대 경로 사용 시)
+
+```html
+<script>
+  window.BIBLE_SEARCH_CONFIG = {
+    workerUrl: "/wp-content/themes/child/assets/search-worker.js",
+    searchIndexUrl: "/wp-content/uploads/common-bible/search/search-index.json",
+  };
+</script>
+```
+
+### 성능/모바일 고려
+
+- 인덱스는 최초 쿼리 때만 로드(초기 다운로드 최소화)
+- 검색/정렬/페이지네이션은 Worker에서 수행 → 메인 스레드는 결과 렌더만 담당
+- 기본 50건/페이지, 스니펫 길이 제한(±40자)로 페인트 비용 절감
 
 ---
 
