@@ -9,59 +9,61 @@
 
   <body>
     <div class="page-wrap">
-      <!-- 브레드크럼 -->
-      <nav
-        id="bible-breadcrumb"
-        aria-label="Breadcrumb"
-        style="margin: 10px 0 12px; padding: 0"
-      >
-        <!-- 동적으로 채워짐 -->
-      </nav>
-      <!-- 검색 UI -->
-      <div class="search-container">
-        <form id="verse-search-form" role="search" aria-label="성경 구절 검색">
+      <!-- 상단 행: 브레드크럼(좌) + 검색 폼(우) -->
+      <div class="breadcrumb-row">
+        <nav id="bible-breadcrumb" aria-label="Breadcrumb">
+          <!-- 동적으로 채워짐 -->
+        </nav>
+        <form
+          id="verse-search-form"
+          class="breadcrumb-search"
+          role="search"
+          aria-label="성경 구절 검색"
+        >
           <label for="verse-search" class="screen-reader-text">검색</label>
           <input
             type="text"
             id="verse-search"
-            placeholder="절 ID 또는 단어 검색 (예: ${book_name} ${chapter_number}:3)"
+            placeholder="절 ID 또는 단어 검색 (예: '${book_name} ${chapter_number}:3' 또는 '하느님')"
             aria-describedby="search-help"
           />
           <button id="verse-search-btn" type="submit">검색</button>
         </form>
-        <p id="search-help" class="search-help-text">
-          "책 장:절" 형식으로 검색하거나 단어를 입력하세요. 예: '${book_name}
-          ${chapter_number}:3' 또는 '하느님'
-        </p>
       </div>
 
-      <!-- 오디오 플레이어 (오디오 파일이 있는 경우) -->
-      <div class="audio-player-container" id="audio-container">
-        <h2 class="screen-reader-text">성경 오디오</h2>
-        <audio
-          controls
-          preload="metadata"
-          class="bible-audio"
-          aria-label="$audio_title"
-        >
-          <source src="$audio_path" type="audio/mpeg" />
-          <p>
-            브라우저가 오디오 재생을 지원하지 않습니다.
-            <a href="$audio_path">오디오 파일 다운로드</a>
-          </p>
-        </audio>
-      </div>
-
-      <!-- 오디오 파일이 없는 경우 -->
-      <div class="audio-unavailable-notice" id="audio-unavailable">
-        <p class="notice-text" aria-live="polite">
-          <span class="icon" aria-hidden="true">🎵</span>
-          이 장의 오디오는 현재 준비 중입니다.
-        </p>
+      <!-- 장 제목 (오디오 플레이어 위쪽) -->
+      <div class="chapter-title-row">
+        ${prev_button_html}
+        <h1 class="chapter-title">${book_name} ${chapter_number}장</h1>
+        ${next_button_html}
       </div>
 
       <article id="${chapter_id}">
-        <h1>${book_name} ${chapter_number}장</h1>
+        <!-- 오디오 플레이어 (오디오 파일이 있는 경우) -->
+        <div class="audio-player-container" id="audio-container">
+          <h2 class="screen-reader-text">성경 오디오</h2>
+          <span class="audio-label" aria-hidden="true">오디오 듣기</span>
+          <audio
+            controls
+            preload="metadata"
+            class="bible-audio"
+            aria-label="$audio_title"
+          >
+            <source src="$audio_path" type="audio/mpeg" />
+            <p>
+              브라우저가 오디오 재생을 지원하지 않습니다.
+              <a href="$audio_path">오디오 파일 다운로드</a>
+            </p>
+          </audio>
+        </div>
+
+        <!-- 오디오 파일이 없는 경우 -->
+        <div class="audio-unavailable-notice" id="audio-unavailable">
+          <p class="notice-text" aria-live="polite">
+            <span class="icon" aria-hidden="true">🎵</span>
+            이 장의 오디오는 현재 준비 중입니다.
+          </p>
+        </div>
 
         ${verses_content}
       </article>

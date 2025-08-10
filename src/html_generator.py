@@ -50,6 +50,8 @@ class HtmlGenerator:
         css_href: Optional[str] = None,
         js_src: Optional[str] = None,
         books_meta: Optional[list[dict]] = None,
+        prev_button_html: str = "",
+        next_button_html: str = "",
     ) -> str:
         """
         장을 HTML로 변환
@@ -166,6 +168,8 @@ class HtmlGenerator:
             alias_data_script=alias_data_script,
             css_link_tag=css_link_tag,
             js_script_tag=js_script_tag,
+            prev_button_html=prev_button_html,
+            next_button_html=next_button_html,
         )
 
         # 오디오 파일 존재 여부에 따라 CSS 스타일 조정
@@ -183,6 +187,7 @@ class HtmlGenerator:
         chapters: list[Chapter],
         static_base: str,
         title: str = "공동번역 성서 - 목차",
+        books_meta: Optional[list[dict]] = None,
     ) -> str:
         """생성된 장 목록을 기반으로 간단한 목차(index.html) 생성
 
@@ -196,18 +201,55 @@ class HtmlGenerator:
             if key not in by_book or ch.chapter_number < by_book[key][1]:
                 by_book[key] = (ch.book_name, ch.chapter_number)
 
-        # 정렬: 공동번역 책 순서
+        # 정렬 함수: 공동번역 책 순서
         def order_key(item: tuple[str, tuple[str, int]]) -> int:
             book_abbr, _ = item
             return HtmlGenerator.get_book_order_index(book_abbr)
 
-        sorted_items = sorted(by_book.items(), key=order_key)
+        # 신약 약칭 집합 (fallback 분류용)
+        new_testament_abbrs = {
+            "마태", "마가", "누가", "요한", "사도", "로마", "고전", "고후", "갈라", "에베",
+            "빌립", "골로", "살전", "살후", "딤전", "딤후", "디도", "빌레", "히브", "야고",
+            "베전", "베후", "요일", "요이", "요삼", "유다", "계시"
+        }
+
+        # 책 약칭 → 구분 매핑 구성 (구약/신약/외경)
+        abbr_to_div: dict[str, str] = {}
+        if books_meta:
+            for b in books_meta:
+                abbr = b.get("약칭")
+                div = b.get("구분")
+                if abbr and isinstance(div, str):
+                    abbr_to_div[abbr] = div
+
+        # 그룹핑: 구약(외경 포함), 신약
+        ot_items: list[tuple[str, tuple[str, int]]] = []
+        nt_items: list[tuple[str, tuple[str, int]]] = []
+        for item in by_book.items():
+            abbr = item[0]
+            div = abbr_to_div.get(abbr)
+            if div:
+                norm = str(div)
+                # 외경은 구약으로 포함
+                if "신약" in norm:
+                    nt_items.append(item)
+                else:
+                    ot_items.append(item)
+            else:
+                # 메타가 없으면 약칭 기반 fallback
+                if abbr in new_testament_abbrs:
+                    nt_items.append(item)
+                else:
+                    ot_items.append(item)
+
+        ot_items.sort(key=order_key)
+        nt_items.sort(key=order_key)
 
         # 링크 파일명 계산: 이미 main에서 사용하는 규칙과 동일하게 slug는 외부에서 계산하도록 함
         # 여기서는 파일명만 비워두고, 호출하는 쪽에서 치환한다.
         css_link_tag = f'<link rel="stylesheet" href="{static_base}/verse-style.css">' if static_base else ""
 
-        # 본문 UL 구성은 호출부에서 파일명 계산 후 치환되므로 여기서는 placeholder 사용
+        # 본문: 구약/신약 두 섹션으로 나눠 렌더링
         html_parts: list[str] = [
             "<!doctype html>",
             '<html lang="ko">',
@@ -218,24 +260,31 @@ class HtmlGenerator:
             "</head>",
             "<body>",
             f"<h1>{title}</h1>",
-            "<ul class=\"book-index\">",
         ]
 
-        for book_abbr, (book_name, first_chapter) in sorted_items:
-            # 파일명은 호출부에서 계산한 값을 사용하도록, data-attrs에 필요한 정보를 담아두지 않고
-            # 여기서 바로 완성해 반환한다. 호출부에서 slug를 넘겨 받기 어려우므로
-            # generate_index_html는 호출부가 완성된 링크를 제공하는 것이 자연스럽지만,
-            # 현재 구조에서는 slug 계산 함수를 main 내에 두고 있으므로, 간단히 여기에서 재계산한다.
-            # 내부 규칙은 _get_book_slug와 영어 이름 보정과 동일하게 main에서 재사용한다.
-            # 다만 여기서는 기본 슬러그만 사용하고, main에서 호출 시 동일 로직을 적용하도록 한다.
-            # 안전을 위해 기본 슬러그 기반 파일명을 먼저 구성한다.
+        # 구약 섹션
+        html_parts.append('<section class="testament-section ot-section">')
+        html_parts.append('<h2 class="section-title">구약</h2>')
+        html_parts.append('<ul class="book-index ot">')
+        for book_abbr, (book_name, first_chapter) in ot_items:
             base_slug = self._get_book_slug(book_abbr)
             filename = f"{base_slug}-{first_chapter}.html"
-            html_parts.append(
-                f'<li><a href="{filename}">{book_name}</a></li>'
-            )
+            html_parts.append(f'<li><a href="{filename}">{book_name}</a></li>')
+        html_parts.append('</ul>')
+        html_parts.append('</section>')
 
-        html_parts.extend(["</ul>", "</body>", "</html>"])
+        # 신약 섹션
+        html_parts.append('<section class="testament-section nt-section">')
+        html_parts.append('<h2 class="section-title">신약</h2>')
+        html_parts.append('<ul class="book-index nt">')
+        for book_abbr, (book_name, first_chapter) in nt_items:
+            base_slug = self._get_book_slug(book_abbr)
+            filename = f"{base_slug}-{first_chapter}.html"
+            html_parts.append(f'<li><a href="{filename}">{book_name}</a></li>')
+        html_parts.append('</ul>')
+        html_parts.append('</section>')
+
+        html_parts.extend(["</body>", "</html>"])
         return "\n".join(html_parts)
 
     def _generate_verses_html(self, chapter: Chapter) -> str:
@@ -288,6 +337,13 @@ class HtmlGenerator:
         # 3. 절 번호도 스크린리더에서 숨김
 
         verse_text = verse.text
+        # 1절이 문단 기호로 시작하면 절 번호(1)를 생략
+        trimmed = verse_text.lstrip()
+        starts_with_paragraph_marker = trimmed.startswith(
+            '¶') or trimmed.startswith('\u00B6')
+        omit_verse_number = (
+            verse.number == 1 and starts_with_paragraph_marker)
+
         if '¶' in verse_text:
             # ¶ 기호를 접근성 고려 마크업으로 교체
             verse_text = verse_text.replace(
@@ -295,12 +351,20 @@ class HtmlGenerator:
                 '<span class="paragraph-marker" aria-hidden="true">¶</span>'
             ).strip()
 
-        return (
-            f'<span id="{verse_id}">'
-            f'<span aria-hidden="true" class="verse-number">{verse.number}</span> '
-            f'{verse_text}'
-            f'</span>'
-        )
+        if omit_verse_number:
+            # 숫자 1을 시각적으로 생략
+            return (
+                f'<span id="{verse_id}">'  # 번호 없음
+                f'{verse_text}'
+                f'</span>'
+            )
+        else:
+            return (
+                f'<span id="{verse_id}">'
+                f'<span aria-hidden="true" class="verse-number">{verse.number}</span> '
+                f'{verse_text}'
+                f'</span>'
+            )
 
     def _get_audio_filename(self, chapter: Chapter) -> str:
         """
@@ -582,7 +646,8 @@ def main():
 
     # 파서 JSON 로드
     bible_parser = BibleParser('data/book_mappings.json')
-    chapters = bible_parser.load_from_json(json_path)
+    all_chapters = bible_parser.load_from_json(json_path)
+    chapters = list(all_chapters)
 
     # 필터링: 책 약칭
     if book_filter:
@@ -662,6 +727,107 @@ def main():
             except Exception:
                 books_meta = None
 
+            # 이전/다음 장 링크 계산
+            # 책 순서 목록과 각 책의 장 수 계산 (전체 본문 기준)
+            book_list: list[dict] = books_meta or []
+            # 별칭 → 표준 약칭(books_meta의 "약칭") 매핑
+            alias_to_canonical: dict[str, str] = {}
+            for b in book_list:
+                can = b.get('약칭')
+                if isinstance(can, str) and can:
+                    alias_to_canonical[can] = can
+                    full = b.get('전체 이름')
+                    if isinstance(full, str) and full:
+                        alias_to_canonical[full] = can
+                    for al in (b.get('aliases') or []):
+                        if isinstance(al, str) and al:
+                            alias_to_canonical[al] = can
+
+            # 표준 약칭 순서 (메타 순서 그대로)
+            abbr_sequence: list[str] = []
+            for b in book_list:
+                can = b.get('약칭')
+                if isinstance(can, str) and can:
+                    abbr_sequence.append(can)
+
+            # 각 책의 총 장 수 계산 (전체 장 컬렉션 기준, 표준 약칭 키)
+            chapters_by_book: dict[str, set[int]] = {}
+            canonical_to_actual_abbr: dict[str, str] = {}
+            for ch2 in all_chapters:
+                canonical = alias_to_canonical.get(
+                    ch2.book_abbr, ch2.book_abbr)
+                chapters_by_book.setdefault(
+                    canonical, set()).add(ch2.chapter_number)
+                # 대표 약칭(실제 파일명 슬러그 계산 시 사용)을 기록
+                canonical_to_actual_abbr.setdefault(canonical, ch2.book_abbr)
+
+            def get_total_chapters(abbr: str) -> int:
+                nums = chapters_by_book.get(abbr)
+                if not nums:
+                    return 0
+                return max(nums)
+
+            def compute_prev_next(current_abbr: str, current_ch: int) -> tuple[tuple[str, int] | None, tuple[str, int] | None]:
+                # 이전
+                prev_target: tuple[str, int] | None = None
+                next_target: tuple[str, int] | None = None
+
+                if current_abbr in abbr_sequence:
+                    idx = abbr_sequence.index(current_abbr)
+                else:
+                    idx = 0
+
+                # 이전 장
+                if current_ch > 1:
+                    prev_target = (current_abbr, current_ch - 1)
+                else:
+                    # 이전 책 마지막 장으로
+                    if idx > 0:
+                        prev_abbr = abbr_sequence[idx - 1]
+                        prev_total = get_total_chapters(prev_abbr)
+                        if prev_total > 0:
+                            prev_target = (prev_abbr, prev_total)
+
+                # 다음 장
+                total_current = get_total_chapters(current_abbr)
+                if total_current and current_ch < total_current:
+                    next_target = (current_abbr, current_ch + 1)
+                else:
+                    # 다음 책 1장
+                    if idx < len(abbr_sequence) - 1:
+                        next_abbr = abbr_sequence[idx + 1]
+                        if get_total_chapters(next_abbr) > 0:
+                            next_target = (next_abbr, 1)
+
+                return prev_target, next_target
+
+            current_canonical = alias_to_canonical.get(
+                chapter.book_abbr, chapter.book_abbr)
+            prev_target, next_target = compute_prev_next(
+                current_canonical, chapter.chapter_number)
+
+            def btn_svg(direction: str) -> str:
+                if direction == 'left':
+                    return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>'
+                else:
+                    return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.59 16.59 10 18l6-6-6-6-1.41 1.41L13.17 12z"/></svg>'
+
+            def build_nav_button(target: tuple[str, int] | None, is_prev: bool) -> str:
+                if not target:
+                    # 비활성 버튼
+                    return f'<span class="nav-btn disabled" aria-disabled="true">{btn_svg("left" if is_prev else "right")}</span>'
+                t_canonical, t_ch = target
+                # 실제 생성 파일의 약칭(로컬 약칭)으로 매핑
+                t_actual_abbr = canonical_to_actual_abbr.get(
+                    t_canonical, t_canonical)
+                t_slug = compute_slug(t_actual_abbr)
+                href = f"{t_slug}-{t_ch}.html"
+                aria_label = ("이전 장" if is_prev else "다음 장")
+                return f'<a class="nav-btn" href="{href}" aria-label="{aria_label}">{btn_svg("left" if is_prev else "right")}</a>'
+
+            prev_btn_html = build_nav_button(prev_target, True)
+            next_btn_html = build_nav_button(next_target, False)
+
             html = generator.generate_chapter_html(
                 chapter,
                 audio_base_url=audio_base,
@@ -671,6 +837,8 @@ def main():
                 css_href=css_href,
                 js_src=js_src,
                 books_meta=books_meta,
+                prev_button_html=prev_btn_html,
+                next_button_html=next_btn_html,
             )
             slug = compute_slug(chapter.book_abbr)
             filename = f"{slug}-{chapter.chapter_number}.html"
@@ -721,8 +889,16 @@ def main():
     # index.html 생성
     if emit_index:
         try:
-            # HtmlGenerator의 기본 슬러그 규칙으로 일단 생성
-            index_html = generator.generate_index_html(chapters, static_base)
+            # HtmlGenerator의 기본 슬러그 규칙으로 일단 생성 (books_meta 전달로 구약/신약 분할 정확도 향상)
+            books_meta_full: list[dict] | None = None
+            try:
+                with open('data/book_mappings.json', 'r', encoding='utf-8') as _bmf2:
+                    books_meta_full = json.load(_bmf2)
+            except Exception:
+                books_meta_full = None
+
+            index_html = generator.generate_index_html(
+                chapters, static_base, books_meta=books_meta_full)
 
             # 가능한 경우, 파일명 슬러그를 실제 생성 규칙에 맞춰 보정
             # main 내부의 compute_slug와 동일 규칙으로 링크를 치환한다.

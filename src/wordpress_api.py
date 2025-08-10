@@ -24,6 +24,7 @@ import time
 import mimetypes
 from urllib.parse import urljoin
 import requests
+from requests.auth import HTTPBasicAuth
 from typing import Any, Dict, List, Optional
 
 from .config import Config
@@ -108,7 +109,13 @@ class WordPressClient:
         self.max_retries = int(getattr(config, "wp_retry_count", 3))
         self.verify_ssl = getattr(config, "verify_ssl", True)
         self.session = requests.Session()
-        self.session.auth = (config.wp_username, config.wp_password)
+        username = config.wp_username
+        password = config.wp_password
+        if username is None or password is None:
+            raise ValueError(
+                "Missing WordPress credentials: set WP_USERNAME and WP_PASSWORD"
+            )
+        self.session.auth = HTTPBasicAuth(username, password)
 
     def _request(
         self,

@@ -18,6 +18,12 @@
   // 전역 검색(Web Worker) 관련
   let searchWorker = null;
   let resultsPanel = null;
+  // 모바일 바텀시트 결과 렌더 타깃
+  let mobileResultsContainer = null;
+  let useMobileResults = false;
+  let mobileResultsBody = null; // 높이 측정용
+  let mobilePagesContainer = null; // 모바일 페이지 번호 컨테이너
+  let lastTotalResults = 0; // 총 결과 수 저장
   let resultsToggleBtn = null;
   let pagination = { page: 1, pageSize: 50, q: "" };
   let isWorkerReady = false;
@@ -36,7 +42,9 @@
   function clearSavedSearchState() {
     try {
       sessionStorage.removeItem(SEARCH_STATE_KEY);
-    } catch (_) {}
+    } catch (error) {
+      // sessionStorage 접근 실패 시 무시 (프라이빗 모드 등)
+    }
   }
 
   function resetResultsPanel() {
@@ -77,6 +85,31 @@
     searchForm.addEventListener("submit", handleSearch);
     searchInput.addEventListener("keydown", handleKeyDown);
 
+    // 전역 키보드 이벤트 리스너 추가 (Esc 키 처리용)
+    document.addEventListener("keydown", handleGlobalKeyDown);
+
+    // 데스크탑 검색 버튼을 돋보기 아이콘으로 변경
+    if (searchButton) {
+      searchButton.innerHTML = iconSvg("search");
+      searchButton.setAttribute("aria-label", "검색");
+      searchButton.title = "검색";
+      // 모바일 FAB와 유사한 스타일 적용
+      Object.assign(searchButton.style, {
+        width: "40px",
+        height: "40px",
+        padding: "0",
+        border: "1px solid #d1d5db",
+        background: "#0066cc",
+        color: "#ffffff",
+        borderRadius: "6px",
+        cursor: "pointer",
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontSize: "0", // 텍스트 숨기기
+      });
+    }
+
     // 검색창 옆 결과 패널 토글 버튼 추가
     try {
       resultsToggleBtn = document.createElement("button");
@@ -110,11 +143,52 @@
           hideResultsPanel();
         }
       });
-      // 검색 버튼 뒤에 삽입
+      // 검색 버튼 뒤에 삽입 (데스크톱)
       if (searchButton && searchButton.parentNode) {
         searchButton.insertAdjacentElement("afterend", resultsToggleBtn);
       }
-    } catch (_) {}
+
+      // 모바일: 플로팅 액션 버튼(FAB) 추가
+      const fab = document.createElement("button");
+      fab.type = "button";
+      fab.className = "search-fab";
+      fab.setAttribute("aria-label", "검색 열기");
+      fab.innerHTML = iconSvg("search");
+      Object.assign(fab.style, {
+        position: "fixed",
+        right: "16px",
+        bottom: "16px",
+        width: "56px",
+        height: "56px",
+        borderRadius: "50%",
+        border: "1px solid #d0d7de",
+        background: "#ffffff",
+        color: "#0066cc",
+        display: "none",
+        alignItems: "center",
+        justifyContent: "center",
+        boxShadow: "0 6px 16px rgba(0,0,0,.22)",
+        zIndex: 1100,
+        cursor: "pointer",
+      });
+      document.body.appendChild(fab);
+
+      function updateFabVisibility() {
+        if (window.innerWidth < MOBILE_BREAKPOINT) {
+          fab.style.display = "inline-flex";
+        } else {
+          fab.style.display = "none";
+        }
+      }
+      updateFabVisibility();
+      window.addEventListener("resize", updateFabVisibility);
+
+      fab.addEventListener("click", () => {
+        openMobileSearchSheet();
+      });
+    } catch (error) {
+      // UI 요소 생성 실패 시 무시 (기본 기능은 계속 동작)
+    }
 
     // 전역 검색 초기화
     initializeGlobalSearch();
@@ -133,10 +207,279 @@
 
     // 오디오 플레이어 초기화 (엄격한 멈춤 상태 강조)
     initializeAudioPlayers();
-
-    console.log("성경 구절 네비게이션 초기화 완료");
   }
 
+  // 모바일 검색 바텀시트
+  function openMobileSearchSheet() {
+    const sheetId = "mobile-search-sheet";
+    let sheet = document.getElementById(sheetId);
+    if (!sheet) {
+      sheet = document.createElement("div");
+      sheet.id = sheetId;
+      Object.assign(sheet.style, {
+        position: "fixed",
+        left: 0,
+        right: 0,
+        bottom: 0,
+        height: "65vh",
+        background: "#fff",
+        borderTopLeftRadius: "16px",
+        borderTopRightRadius: "16px",
+        boxShadow: "0 -12px 24px rgba(0,0,0,0.18)",
+        zIndex: 1101,
+        display: "none",
+        padding: "0", // 패딩 제거하여 내부 요소들이 정확한 위치에 배치되도록 함
+        display: "flex",
+        flexDirection: "column",
+      });
+
+      // 시트 외부를 덮는 오버레이(닫기 용도)
+      const overlay = document.createElement("div");
+      overlay.id = "mobile-search-overlay";
+      Object.assign(overlay.style, {
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,0.3)",
+        zIndex: 1100,
+        display: "none",
+      });
+      overlay.addEventListener("click", () => closeMobileSearchSheet());
+      document.body.appendChild(overlay);
+
+      const grip = document.createElement("div");
+      Object.assign(grip.style, {
+        width: "40px",
+        height: "4px",
+        background: "#e5e7eb",
+        borderRadius: "999px",
+        margin: "12px auto 16px", // 상단 여백 추가
+      });
+      sheet.appendChild(grip);
+
+      const row = document.createElement("div");
+      Object.assign(row.style, {
+        display: "flex",
+        alignItems: "center",
+        gap: "8px",
+        marginBottom: "10px",
+        padding: "0 12px", // 좌우 패딩 추가
+      });
+      const input = document.createElement("input");
+      input.type = "text";
+      input.placeholder = "절 ID 또는 단어 검색";
+      input.value = searchInput ? searchInput.value : "";
+      Object.assign(input.style, {
+        flex: 1,
+        height: "40px",
+        border: "1px solid #ccc",
+        borderRadius: "6px",
+        padding: "0 12px",
+        fontSize: "16px",
+      });
+      const goBtn = document.createElement("button");
+      goBtn.setAttribute("aria-label", "검색");
+      goBtn.title = "검색";
+      goBtn.innerHTML = iconSvg("search");
+      Object.assign(goBtn.style, {
+        height: "40px",
+        width: "40px",
+        padding: 0,
+        background: "#0066cc",
+        color: "#fff",
+        border: "none",
+        borderRadius: "8px",
+        cursor: "pointer",
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+      });
+      // 지우기 버튼
+      const clearBtn = document.createElement("button");
+      clearBtn.setAttribute("aria-label", "검색 결과 지우기");
+      clearBtn.title = "지우기";
+      clearBtn.innerHTML = iconSvg("trash");
+      Object.assign(clearBtn.style, {
+        height: "40px",
+        width: "40px",
+        padding: 0,
+        background: "#ffffff",
+        color: "#111",
+        border: "1px solid #d1d5db",
+        borderRadius: "8px",
+        cursor: "pointer",
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+      });
+      row.appendChild(input);
+      row.appendChild(goBtn);
+      row.appendChild(clearBtn);
+      sheet.appendChild(row);
+
+      const body = document.createElement("div");
+      body.id = "mobile-search-results";
+      Object.assign(body.style, {
+        position: "relative",
+        overflow: "auto", // 스크롤바 표시
+        height: "auto", // 동적 높이로 설정하여 내용에 맞게 자동 조정
+        maxHeight: "calc(65vh - 146px)", // 최대 높이 제한으로 스크롤바 표시
+        padding: "0 12px", // 좌우 패딩 추가
+        // 모바일 스크롤바 스타일링
+        scrollbarWidth: "thin",
+        scrollbarColor: "rgba(0, 0, 0, 0.2) transparent",
+        webkitOverflowScrolling: "touch",
+        overscrollBehavior: "contain",
+      });
+
+      // 웹킷 기반 브라우저용 스크롤바 스타일링
+      const scrollbarStyle = document.createElement("style");
+      scrollbarStyle.textContent = `
+        #mobile-search-results::-webkit-scrollbar {
+          width: 6px;
+        }
+        #mobile-search-results::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        #mobile-search-results::-webkit-scrollbar-thumb {
+          background: rgba(0, 0, 0, 0.2);
+          border-radius: 3px;
+        }
+        #mobile-search-results::-webkit-scrollbar-thumb:hover {
+          background: rgba(0, 0, 0, 0.3);
+        }
+      `;
+      document.head.appendChild(scrollbarStyle);
+
+      // 모바일 전용 결과 컨테이너 설정
+      const list = document.createElement("div");
+      list.className = "search-results-list";
+      Object.assign(list.style, { padding: "8px 0 0 0" }); // 상단 패딩만 유지, 하단 패딩 제거
+      body.appendChild(list);
+      mobileResultsContainer = list;
+      mobileResultsBody = body;
+      sheet.appendChild(body);
+
+      // 모바일 페이지네이션 푸터
+      const footer = document.createElement("div");
+      Object.assign(footer.style, {
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        padding: "12px 12px 12px 12px", // 좌우 패딩 추가, 하단 여백 유지
+        gap: "8px",
+        borderTop: "none", // 상단 테두리 제거하여 여백 감소
+        marginTop: "0", // 상단 여백 제거
+        flexShrink: "0",
+        background: "#fff",
+        position: "absolute", // 절대 위치로 변경
+        bottom: "0", // 하단에 고정
+        left: "0",
+        right: "0",
+        zIndex: "1",
+      });
+      const mPrev = document.createElement("button");
+      mPrev.id = "mobile-search-prev";
+      mPrev.setAttribute("aria-label", "이전 페이지");
+      mPrev.innerHTML = iconSvg("chevronLeft");
+      Object.assign(mPrev.style, {
+        width: "40px",
+        height: "40px",
+        padding: "0",
+        border: "1px solid #d1d5db",
+        background: "#fff",
+        borderRadius: "6px",
+        cursor: "pointer",
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+      });
+      const mInfo = document.createElement("span");
+      mInfo.id = "mobile-search-info";
+      Object.assign(mInfo.style, {
+        color: "#555",
+        fontSize: "14px",
+        textAlign: "center",
+        flex: "1",
+      });
+      const mNext = document.createElement("button");
+      mNext.id = "mobile-search-next";
+      mNext.setAttribute("aria-label", "다음 페이지");
+      mNext.innerHTML = iconSvg("chevronRight");
+      Object.assign(mNext.style, {
+        width: "40px",
+        height: "40px",
+        padding: "0",
+        border: "1px solid #d1d5db",
+        background: "#fff",
+        borderRadius: "6px",
+        cursor: "pointer",
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+      });
+      mPrev.addEventListener("click", () => navigatePage(-1));
+      mNext.addEventListener("click", () => navigatePage(1));
+      footer.appendChild(mPrev);
+      footer.appendChild(mInfo);
+      footer.appendChild(mNext);
+      sheet.appendChild(footer);
+
+      document.body.appendChild(sheet);
+
+      function triggerMobileSearch() {
+        if (!input.value.trim()) return;
+        if (searchInput) searchInput.value = input.value;
+        // 모바일 검색 모드 강제 설정
+        useMobileResults = true;
+        // 검색 실행
+        handleSearch(new Event("submit"));
+      }
+      goBtn.addEventListener("click", triggerMobileSearch);
+      input.addEventListener("keydown", (ev) => {
+        if (ev.key === "Enter") {
+          ev.preventDefault();
+          triggerMobileSearch();
+        } else if (ev.key === "Escape") {
+          ev.preventDefault();
+          closeMobileSearchSheet();
+        }
+      });
+
+      clearBtn.addEventListener("click", () => {
+        try {
+          clearSavedSearchState();
+        } catch (error) {
+          // 상태 초기화 실패 시 무시
+        }
+        if (searchInput) searchInput.value = "";
+        input.value = "";
+        if (mobileResultsContainer) mobileResultsContainer.innerHTML = "";
+        lastLocalFound = false;
+        updatePageInfo(0, 0, 0);
+        // 모바일 검색 시트 닫기
+        closeMobileSearchSheet();
+      });
+    }
+    // 열기
+    const overlay = document.getElementById("mobile-search-overlay");
+    if (overlay) overlay.style.display = "block";
+    sheet.style.display = "block";
+    const inputEl = sheet.querySelector("input");
+    try {
+      inputEl && inputEl.focus();
+    } catch (error) {
+      // 포커스 설정 실패 시 무시
+    }
+  }
+
+  function closeMobileSearchSheet() {
+    const sheet = document.getElementById("mobile-search-sheet");
+    const overlay = document.getElementById("mobile-search-overlay");
+    if (sheet) sheet.style.display = "none";
+    if (overlay) overlay.style.display = "none";
+    // 모바일 렌더 모드는 유지하여 결과를 보존
+    useMobileResults = true;
+  }
   function renderBreadcrumb() {
     if (!breadcrumbNav) return;
     const booksData = window.BIBLE_BOOKS || [];
@@ -170,10 +513,12 @@
       flexWrap: "wrap",
     });
     breadcrumbNav.appendChild(wrap);
-    // 검색 섹션과 간격 확보
+    // 상단 레이아웃이 한 줄(Grid)로 배치되므로 여백을 주지 않는다
     try {
-      breadcrumbNav.style.marginBottom = "12px";
-    } catch (_) {}
+      breadcrumbNav.style.marginBottom = "0";
+    } catch (error) {
+      // 스타일 적용 실패 시 무시
+    }
 
     // index.html 이동 버튼/링크 (브레드크럼 앞)
     const basePath = window.location.pathname.replace(/[^/]+$/, "");
@@ -189,7 +534,7 @@
       alignItems: "center",
       justifyContent: "center",
       padding: "6px 10px",
-      minHeight: "36px",
+      minHeight: "40px",
       border: "1px solid #d1d5db",
       background: "#ffffff",
       borderRadius: "6px",
@@ -222,7 +567,7 @@
       button.textContent = labelText;
       Object.assign(button.style, {
         padding: "6px 10px",
-        minHeight: "36px",
+        minHeight: "40px",
         border: "1px solid #d1d5db",
         background: "#fff",
         borderRadius: "6px",
@@ -248,7 +593,31 @@
         padding: "6px",
         display: "none",
         zIndex: 1002,
+        // 모바일 스크롤바 스타일링
+        scrollbarWidth: "thin",
+        scrollbarColor: "rgba(0, 0, 0, 0.2) transparent",
+        webkitOverflowScrolling: "touch",
+        overscrollBehavior: "contain",
       });
+
+      // 웹킷 기반 브라우저용 스크롤바 스타일링
+      const scrollbarStyle = document.createElement("style");
+      scrollbarStyle.textContent = `
+        .bible-breadcrumb ul::-webkit-scrollbar {
+          width: 6px;
+        }
+        .bible-breadcrumb ul::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .bible-breadcrumb ul::-webkit-scrollbar-thumb {
+          background: rgba(0, 0, 0, 0.2);
+          border-radius: 3px;
+        }
+        .bible-breadcrumb ul::-webkit-scrollbar-thumb:hover {
+          background: rgba(0, 0, 0, 0.3);
+        }
+      `;
+      document.head.appendChild(scrollbarStyle);
 
       button.addEventListener("click", (ev) => {
         ev.stopPropagation();
@@ -367,7 +736,9 @@
             div3
           );
       });
-    } catch (_) {}
+    } catch (error) {
+      // 이벤트 리스너 부착 실패 시 무시
+    }
     wrap.appendChild(div3.container);
   }
 
@@ -411,7 +782,9 @@
         p.textContent = "로딩 중…";
         Object.assign(p.style, { padding: "6px 8px", color: "#666" });
         drop.list.appendChild(p);
-      } catch (_) {}
+      } catch (error) {
+        // 로딩 표시 생성 실패 시 무시
+      }
       setTimeout(() => requestChaptersAndRender(bookAbbr, drop), 200);
       return;
     }
@@ -426,7 +799,8 @@
       searchWorker.addEventListener("message", handler);
       try {
         searchWorker.postMessage({ type: "chapters", book: bookAbbr });
-      } catch (_) {
+      } catch (error) {
+        // 워커 메시지 전송 실패 시 리스너 정리 후 무시
         searchWorker.removeEventListener("message", handler);
       }
     }
@@ -526,10 +900,16 @@
   // 아이콘 SVG 헬퍼 (헤더/툴바 공용)
   function iconSvg(icon) {
     const map = {
+      search:
+        '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>',
       chevronUp:
         '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#111" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="18 15 12 9 6 15"></polyline></svg>',
       chevronDown:
         '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#111" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>',
+      chevronLeft:
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#111" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"></polyline></svg>',
+      chevronRight:
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#111" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 6 15 12 9 18"></polyline></svg>',
       trash:
         '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#111" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path></svg>',
       close:
@@ -567,7 +947,31 @@
       padding: "12px 12px 16px",
       maxHeight: "70vh",
       overflow: "auto",
+      // 모바일 스크롤바 스타일링
+      scrollbarWidth: "thin",
+      scrollbarColor: "rgba(0, 0, 0, 0.2) transparent",
+      webkitOverflowScrolling: "touch",
+      overscrollBehavior: "contain",
     });
+
+    // 웹킷 기반 브라우저용 스크롤바 스타일링
+    const scrollbarStyle = document.createElement("style");
+    scrollbarStyle.textContent = `
+      .bible-bottomsheet-overlay .bible-bottomsheet-overlay > div::-webkit-scrollbar {
+        width: 6px;
+      }
+      .bible-bottomsheet-overlay .bible-bottomsheet-overlay > div::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      .bible-bottomsheet-overlay .bible-bottomsheet-overlay > div::-webkit-scrollbar-thumb {
+        background: rgba(0, 0, 0, 0.2);
+        border-radius: 3px;
+      }
+      .bible-bottomsheet-overlay .bible-bottomsheet-overlay > div::-webkit-scrollbar-thumb:hover {
+        background: rgba(0, 0, 0, 0.3);
+      }
+    `;
+    document.head.appendChild(scrollbarStyle);
 
     const header = document.createElement("div");
     Object.assign(header.style, {
@@ -612,6 +1016,8 @@
       btn.addEventListener("click", () => {
         try {
           it.action && it.action();
+        } catch (error) {
+          // 액션 실행 중 오류는 사용자 인터랙션을 막지 않음
         } finally {
           closeBottomSheet();
         }
@@ -642,7 +1048,9 @@
       if (history && history.replaceState) {
         history.replaceState(state, document.title);
       }
-    } catch (_) {}
+    } catch (error) {
+      // 상태 저장 실패 시 무시 (프라이빗 모드 등)
+    }
   }
 
   function getSavedState() {
@@ -651,7 +1059,9 @@
       if (h && typeof h === "object" && (h.q || h.page)) return h;
       const raw = sessionStorage.getItem(SEARCH_STATE_KEY);
       if (raw) return JSON.parse(raw);
-    } catch (_) {}
+    } catch (error) {
+      // 저장된 상태 읽기 실패 시 무시
+    }
     return null;
   }
 
@@ -659,9 +1069,14 @@
     const st = getSavedState();
     if (!st || !st.q) return;
     if (searchInput) searchInput.value = st.q;
-    // 패널 표시 및 로딩
+    // 패널 생성만 하고 표시하지 않음 (사용자가 직접 열어야 함)
     createResultsPanel();
-    resultsPanel.style.display = "block";
+    // 데스크탑에서는 패널을 숨김 상태로 유지
+    if (window.innerWidth >= MOBILE_BREAKPOINT) {
+      resultsPanel.style.display = "none";
+    } else {
+      resultsPanel.style.display = "block";
+    }
     renderGlobalResults(st.q, null);
     pagination.q = st.q;
     pagination.page = st.page || 1;
@@ -676,7 +1091,9 @@
       } else {
         pendingQueries.push(pagination.q);
       }
-    } catch (_) {}
+    } catch (error) {
+      // 검색 상태 복원 실패 시 무시
+    }
   }
 
   /**
@@ -694,9 +1111,9 @@
       position: "fixed",
       top: "70px",
       right: "20px",
-      width: "380px",
-      maxHeight: "60vh",
-      overflow: "auto",
+      width: "480px", // 380px에서 480px로 폭 확장
+      height: "60vh", // maxHeight에서 height로 변경하여 고정 높이 설정
+      overflow: "hidden",
       backgroundColor: "#ffffff",
       border: "1px solid #ddd",
       boxShadow: "0 4px 12px rgba(0,0,0,0.12)",
@@ -775,57 +1192,118 @@
     // 바디 컨테이너
     const body = document.createElement("div");
     body.className = "search-results-body";
+
+    // 정확한 높이 설정: 패널 전체 높이 - 헤더 높이 - 푸터 높이
+    const calculateBodyHeight = () => {
+      const panelHeight = (60 * window.innerHeight) / 100; // 60vh
+      const headerHeight = 40; // 헤더 높이 (고정값)
+      const footerHeight = 40; // 푸터 높이 (고정값)
+      return Math.max(0, panelHeight - headerHeight - footerHeight);
+    };
+
+    // 초기 높이 설정
+    Object.assign(body.style, {
+      height: `${calculateBodyHeight()}px`,
+      zIndex: "1", // 스크롤바 스타일링을 위한 z-index
+    });
+
+    // 웹킷 기반 브라우저용 스크롤바 스타일링
+    const scrollbarStyle = document.createElement("style");
+    scrollbarStyle.textContent = `
+      .search-results-body::-webkit-scrollbar {
+        width: 6px;
+      }
+      .search-results-body::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      .search-results-body::-webkit-scrollbar-thumb {
+        background: rgba(0, 0, 0, 0.2);
+        border-radius: 3px;
+      }
+      .search-results-body::-webkit-scrollbar-thumb:hover {
+        background: rgba(0, 0, 0, 0.3);
+      }
+    `;
+    document.head.appendChild(scrollbarStyle);
+
     resultsPanel.appendChild(body);
 
     const list = document.createElement("div");
     list.className = "search-results-list";
-    Object.assign(list.style, { padding: "8px 10px" });
+    // 스크롤을 위한 스타일 설정
+    Object.assign(list.style, {
+      height: "100%",
+      overflowY: "auto",
+      overflowX: "hidden",
+    });
     body.appendChild(list);
     // 초기 상태: 검색 결과 없음 메시지 표시
     try {
       const empty = document.createElement("p");
       empty.textContent = "검색 결과 없음";
-      Object.assign(empty.style, { color: "#666", margin: "8px 4px" });
+      Object.assign(empty.style, { color: "#666", margin: "8px 4px 0px 4px" }); // 하단 여백 제거
       list.appendChild(empty);
-    } catch (_) {}
+    } catch (error) {
+      // 초기 메시지 생성 실패 시 무시
+    }
 
     const footer = document.createElement("div");
+    footer.className = "search-results-footer";
+    // 명시적으로 높이 설정
     Object.assign(footer.style, {
-      padding: "8px 10px",
-      borderTop: "1px solid #eee",
-      textAlign: "right",
-      background: "#f9fafb",
+      height: "40px",
+      minHeight: "40px",
+      zIndex: "1", // 헤더와 동일한 z-index
     });
     const navLeft = document.createElement("button");
     navLeft.type = "button";
     navLeft.className = "search-page-prev";
-    navLeft.textContent = "이전";
+    navLeft.setAttribute("aria-label", "이전 페이지");
+    navLeft.innerHTML = iconSvg("chevronLeft");
     Object.assign(navLeft.style, {
-      padding: "6px 10px",
-      marginRight: "8px",
-      border: "1px solid #ccc",
+      width: "32px",
+      height: "32px",
+      padding: "0",
+      border: "1px solid #d0d7de",
       background: "#fff",
-      borderRadius: "4px",
+      borderRadius: "6px",
       cursor: "pointer",
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+      flexShrink: "0",
+      marginRight: "8px",
     });
     navLeft.addEventListener("click", () => navigatePage(-1));
 
     const pageInfo = document.createElement("span");
     pageInfo.className = "search-page-info";
-    Object.assign(pageInfo.style, { marginRight: "8px", color: "#555" });
+    Object.assign(pageInfo.style, {
+      color: "#555",
+      fontSize: "14px",
+      textAlign: "center",
+      flex: "1",
+    });
     pageInfo.textContent = "";
 
     const navRight = document.createElement("button");
     navRight.type = "button";
     navRight.className = "search-page-next";
-    navRight.textContent = "다음";
+    navRight.setAttribute("aria-label", "다음 페이지");
+    navRight.innerHTML = iconSvg("chevronRight");
     Object.assign(navRight.style, {
-      padding: "6px 10px",
-      marginRight: "8px",
-      border: "1px solid #ccc",
+      width: "32px",
+      height: "32px",
+      padding: "0",
+      border: "1px solid #d0d7de",
       background: "#fff",
-      borderRadius: "4px",
+      borderRadius: "6px",
       cursor: "pointer",
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+      flexShrink: "0",
+      marginLeft: "8px",
     });
     navRight.addEventListener("click", () => navigatePage(1));
 
@@ -838,7 +1316,9 @@
       // 검색 상태/입력/결과/페이지네이션 완전 초기화
       try {
         clearSavedSearchState();
-      } catch (_) {}
+      } catch (error) {
+        // 상태 초기화 실패 시 무시
+      }
       if (searchInput) searchInput.value = "";
       const listEl = resultsPanel.querySelector(".search-results-list");
       if (listEl) listEl.innerHTML = "";
@@ -857,12 +1337,17 @@
     closeBtn.addEventListener("click", () => {
       hideResultsPanel();
     });
+    // 왼쪽에 이전 버튼 배치
     footer.appendChild(navLeft);
+    // 중앙에 페이지 정보 배치
     footer.appendChild(pageInfo);
+    // 오른쪽에 다음 버튼 배치
     footer.appendChild(navRight);
     headerActions.appendChild(clearBtn);
     headerActions.appendChild(closeBtn);
-    body.appendChild(footer);
+
+    // 푸터를 패널에 직접 추가 (body가 아닌)
+    resultsPanel.appendChild(footer);
 
     document.body.appendChild(resultsPanel);
 
@@ -889,7 +1374,9 @@
             PANEL_STATE_KEY,
             JSON.stringify({ collapsed: isCollapsed })
           );
-        } catch (_) {}
+        } catch (error) {
+          // 상태 저장 실패 시 무시 (프라이빗 모드 등)
+        }
       }
     }
     // 외부에서 펼치기/접기 호출할 수 있도록 보조 핸들러 부착
@@ -933,13 +1420,18 @@
         const st = JSON.parse(raw);
         if (st && typeof st.collapsed === "boolean") setCollapsed(st.collapsed);
       } else {
-        // 모바일 초기 진입 시 자동 접기(사용자 동작 시 해제)
+        // 데스크탑: 기본적으로 패널 숨김, 모바일: 자동 접기
         if (window.innerWidth < MOBILE_BREAKPOINT) {
           autoManagedCollapse = true;
           setCollapsed(true, false);
+        } else {
+          // 데스크탑: 패널을 숨김 상태로 설정
+          resultsPanel.style.display = "none";
         }
       }
-    } catch (_) {}
+    } catch (error) {
+      // 저장된 상태 복원 실패 시 무시
+    }
 
     // 화면 크기 변경에 따른 자동 접기/펼치기
     function handleResize() {
@@ -958,7 +1450,8 @@
             if (!st || st.collapsed === false) {
               setCollapsed(false, false);
             }
-          } catch (_) {
+          } catch (error) {
+            // 패널 상태 복원 실패 시 기본값으로 복원
             setCollapsed(false, false);
           }
           autoManagedCollapse = false;
@@ -976,18 +1469,26 @@
     for (const audio of audios) {
       try {
         audio.autoplay = false;
-      } catch (_) {}
+      } catch (error) {
+        // autoplay 설정 실패 시 무시
+      }
       try {
         audio.preload = "metadata";
-      } catch (_) {}
+      } catch (error) {
+        // preload 설정 실패 시 무시
+      }
 
       const reset = () => {
         try {
           audio.pause();
-        } catch (_) {}
+        } catch (error) {
+          // 오디오 정지 실패 시 무시
+        }
         try {
           audio.currentTime = 0;
-        } catch (_) {}
+        } catch (error) {
+          // 오디오 시간 초기화 실패 시 무시
+        }
       };
 
       // 메타데이터/데이터 로드 시점에 항상 리셋
@@ -1035,13 +1536,33 @@
   }
 
   /**
-   * 키보드 입력 처리
+   * 키보드 입력 처리 (검색 입력창 전용)
    */
   function handleKeyDown(event) {
     // ESC 키로 하이라이트 제거
     if (event.key === "Escape") {
       clearHighlight();
       searchInput.blur();
+    }
+  }
+
+  /**
+   * 전역 키보드 이벤트 처리 (Esc 키로 UI 닫기)
+   */
+  function handleGlobalKeyDown(event) {
+    if (event.key === "Escape") {
+      // 검색 결과 패널이 열려있으면 닫기
+      if (resultsPanel && resultsPanel.style.display !== "none") {
+        hideResultsPanel();
+        return;
+      }
+
+      // 모바일 바텀시트가 열려있으면 닫기
+      const mobileSheet = document.getElementById("mobile-search-sheet");
+      if (mobileSheet && mobileSheet.style.display !== "none") {
+        closeMobileSearchSheet();
+        return;
+      }
     }
   }
 
@@ -1132,7 +1653,7 @@
     searchWorker.addEventListener("message", handler);
     try {
       searchWorker.postMessage({ type: "check", id: verseId });
-    } catch (_) {
+    } catch (error) {
       searchWorker.removeEventListener("message", handler);
       cb(true);
     }
@@ -1284,9 +1805,30 @@
       showGlobalResultsMessage("전역 검색을 사용할 수 없습니다.");
       return;
     }
-    createResultsPanel();
-    showResultsPanel(true);
-    renderGlobalResults(query, null); // 로딩 상태
+
+    // 모바일 검색 시트가 열려있으면 모바일 모드로 설정
+    const mobileSheet = document.getElementById("mobile-search-sheet");
+    if (mobileSheet && mobileSheet.style.display !== "none") {
+      useMobileResults = true;
+    }
+
+    if (useMobileResults) {
+      // 바텀시트 높이에 맞춰 페이지 크기 산정
+      try {
+        const newSize = getMobilePageSize();
+        if (newSize && newSize !== pagination.pageSize) {
+          pagination.pageSize = newSize;
+        }
+      } catch (error) {
+        // 모바일 페이지 크기 계산 실패 시 무시
+      }
+      // 모바일: 패널 생성/표시는 생략, 바텀시트 컨테이너에 렌더
+      renderGlobalResults(query, null);
+    } else {
+      createResultsPanel();
+      showResultsPanel(true);
+      renderGlobalResults(query, null); // 로딩 상태
+    }
 
     const trimmed = query.trim();
     if (!trimmed) return;
@@ -1307,7 +1849,8 @@
         page: pagination.page,
       });
       saveSearchState();
-    } catch (e) {
+    } catch (error) {
+      // 검색 요청 실패 시 사용자 메시지 표시
       showGlobalResultsMessage("검색 요청 중 오류가 발생했습니다.");
     }
   }
@@ -1324,21 +1867,48 @@
         page: pagination.page,
       });
       saveSearchState();
-    } catch {}
+    } catch (error) {
+      // 페이지 이동 실패 시 무시
+    }
   }
 
   function showGlobalResultsMessage(message) {
-    createResultsPanel();
-    const list = resultsPanel.querySelector(".search-results-list");
-    if (!list) return;
-    list.innerHTML = "";
-    const p = document.createElement("p");
-    p.textContent = message || "검색 결과 없음";
-    Object.assign(p.style, { color: "#666", margin: "8px 4px" });
-    list.appendChild(p);
-    // 메시지 출력은 결과가 없음을 의미 → 페이지네이션 초기화
-    updatePageInfo(0, 0, 0);
-    showResultsPanel(false);
+    // 모바일 검색 시트가 열려있으면 모바일 모드로 강제 설정
+    const mobileSheet = document.getElementById("mobile-search-sheet");
+    if (mobileSheet && mobileSheet.style.display !== "none") {
+      useMobileResults = true;
+    }
+
+    if (useMobileResults && mobileResultsContainer) {
+      mobileResultsContainer.innerHTML = "";
+      const p = document.createElement("p");
+      p.textContent = message || "검색 결과가 없습니다.";
+      Object.assign(p.style, {
+        color: "#666",
+        margin: "8px 4px",
+        textAlign: "center",
+        fontSize: "14px",
+        padding: "20px 0",
+        display: "block", // 명시적으로 표시
+        visibility: "visible", // 가시성 보장
+        opacity: "1", // 투명도 보장
+        position: "static", // 위치 보장
+        zIndex: "1", // 레이어 순서 보장
+      });
+      mobileResultsContainer.appendChild(p);
+      updatePageInfo(0, 0, 0);
+    } else {
+      createResultsPanel();
+      const list = resultsPanel.querySelector(".search-results-list");
+      if (!list) return;
+      list.innerHTML = "";
+      const p = document.createElement("p");
+      p.textContent = message || "검색 결과가 없습니다.";
+      Object.assign(p.style, { color: "#666", margin: "8px 4px" });
+      list.appendChild(p);
+      updatePageInfo(0, 0, 0);
+      showResultsPanel(false);
+    }
   }
 
   function renderGlobalResults(
@@ -1348,24 +1918,69 @@
     total = 0,
     pageSize = 50
   ) {
-    createResultsPanel();
-    const list = resultsPanel.querySelector(".search-results-list");
-    if (!list) return;
-    list.innerHTML = "";
+    // 모바일 검색 시트가 열려있으면 모바일 모드로 강제 설정
+    const mobileSheet = document.getElementById("mobile-search-sheet");
+    if (mobileSheet && mobileSheet.style.display !== "none") {
+      useMobileResults = true;
+      // 디버그 로깅 제거
+    }
+
+    let list;
+    if (useMobileResults && mobileResultsContainer) {
+      list = mobileResultsContainer;
+      list.innerHTML = "";
+      // 디버그 로깅 제거
+    } else {
+      createResultsPanel();
+      list = resultsPanel.querySelector(".search-results-list");
+      if (!list) return;
+      list.innerHTML = "";
+      // 디버그 로깅 제거
+    }
 
     if (results === null) {
       const loading = document.createElement("p");
       loading.textContent = `"${query}" 검색 중…`;
-      Object.assign(loading.style, { color: "#666", margin: "8px 4px" });
+      Object.assign(loading.style, {
+        color: "#666",
+        margin: "8px 4px 0px 4px", // 하단 여백 제거
+      });
       list.appendChild(loading);
       return;
     }
 
     if (!Array.isArray(results) || results.length === 0) {
+      // 이전 로딩 메시지 제거
+      const existingLoading = list.querySelector("p");
+      if (existingLoading && existingLoading.textContent.includes("검색 중")) {
+        existingLoading.remove();
+      }
+
       const empty = document.createElement("p");
-      empty.textContent = `"${query}" 결과가 없습니다.`;
-      Object.assign(empty.style, { color: "#666", margin: "8px 4px" });
+      if (useMobileResults && mobileResultsContainer) {
+        empty.textContent = "검색 결과가 없습니다.";
+        Object.assign(empty.style, {
+          color: "#666",
+          margin: "8px 4px",
+          textAlign: "center",
+          fontSize: "14px",
+          padding: "20px 0",
+          display: "block", // 명시적으로 표시
+          visibility: "visible", // 가시성 보장
+          opacity: "1", // 투명도 보장
+          position: "static", // 위치 보장
+          zIndex: "1", // 레이어 순서 보장
+        });
+      } else {
+        empty.textContent = `"${query}" 결과가 없습니다.`;
+        Object.assign(empty.style, {
+          color: "#666",
+          margin: "8px 4px 0px 4px", // 하단 여백 제거
+        });
+      }
       list.appendChild(empty);
+      // 디버그 상세 로깅 제거
+
       updatePageInfo(0, 0, 0);
       // 전역/로컬 모두 실패한 경우에만 에러 토스트 표시
       if (query === lastQueryText && !lastLocalFound) {
@@ -1416,6 +2031,12 @@
       a.addEventListener("mouseleave", () => {
         a.style.background = "transparent";
       });
+
+      // 마지막 항목인 경우 하단 여백 제거
+      if (results.indexOf(item) === results.length - 1) {
+        a.style.marginBottom = "0";
+      }
+
       list.appendChild(a);
     }
 
@@ -1434,7 +2055,9 @@
       ) {
         try {
           resultsPanel._setCollapsed(false, true);
-        } catch (_) {}
+        } catch (error) {
+          // 패널 펼치기 실패 시 무시
+        }
       }
     }
     if (resultsToggleBtn) {
@@ -1474,9 +2097,73 @@
     if (!pagination.q || !(total > 0)) {
       try {
         sessionStorage.removeItem(SEARCH_STATE_KEY);
-      } catch (_) {}
+      } catch (error) {
+        // 상태 저장 지우기 실패 시 무시
+      }
     } else {
       saveSearchState();
+    }
+
+    // 모바일 바텀시트 푸터 동기화
+    const mPrev = document.getElementById("mobile-search-prev");
+    const mInfo = document.getElementById("mobile-search-info");
+    const mNext = document.getElementById("mobile-search-next");
+    if (mInfo) mInfo.textContent = total > 0 ? `${page}/${totalPages}` : "";
+    if (mPrev) mPrev.disabled = !(total > 0 && page > 1);
+    if (mNext) mNext.disabled = !(total > 0 && page < totalPages);
+
+    // 모바일 페이지 번호 렌더링
+    lastTotalResults = total || 0;
+  }
+
+  function getMobilePageSize() {
+    // 바텀시트의 높이를 고려해서 검색 결과 영역에 표시할 수 있는 항목 수 계산
+    try {
+      const sheet = document.getElementById("mobile-search-sheet");
+      if (!sheet) return pagination.pageSize;
+
+      // 바텀시트 전체 높이 (65vh)
+      const sheetHeight = sheet.clientHeight || 0;
+
+      // 검색 행 높이 (44px + 여백 10px)
+      const searchRowHeight = 54;
+
+      // 페이지네이션 네비게이션 높이 (44px + 여백 8px)
+      const paginationHeight = 52;
+
+      // 검색 결과 영역에 사용 가능한 높이
+      const availableHeight = sheetHeight - searchRowHeight - paginationHeight;
+
+      // 각 검색 결과 항목의 높이 (대략 68px/항목: 링크 2줄 + 여백)
+      const perItemHeight = 68;
+
+      // 표시 가능한 항목 수 (최소 4개)
+      const items = Math.max(4, Math.floor(availableHeight / perItemHeight));
+
+      return items;
+    } catch (error) {
+      return pagination.pageSize;
+    }
+  }
+
+  function gotoPage(targetPage) {
+    if (!searchWorker || !isWorkerReady || !pagination.q) return;
+    const totalPages =
+      pagination.pageSize > 0
+        ? Math.max(1, Math.ceil((lastTotalResults || 0) / pagination.pageSize))
+        : 1;
+    const next = Math.min(Math.max(1, targetPage), totalPages);
+    pagination.page = next;
+    try {
+      searchWorker.postMessage({
+        type: "query",
+        q: pagination.q,
+        limit: pagination.pageSize,
+        page: pagination.page,
+      });
+      saveSearchState();
+    } catch (error) {
+      // 페이지 이동 실패 시 무시
     }
   }
 

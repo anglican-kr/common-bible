@@ -2,6 +2,9 @@
 /* 공동번역성서 프로젝트 - 성경 구절 스타일시트 */
 
 /* 기본 설정 */
+:root {
+  --breadcrumb-height: 40px;
+}
 * {
   box-sizing: border-box;
 }
@@ -23,6 +26,40 @@ body {
   margin: 0 auto;
 }
 
+/* 브레드크럼 + 검색 레이아웃 */
+.breadcrumb-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-areas: "breadcrumb search";
+  gap: 12px;
+  align-items: center;
+  margin: 0;
+  min-height: var(--breadcrumb-height);
+}
+
+/* 행 내부 모든 아이템을 수직 중앙 정렬 */
+.breadcrumb-row > * {
+  align-self: center;
+}
+
+#bible-breadcrumb {
+  grid-area: breadcrumb;
+  display: flex;
+  align-items: center;
+  height: 100%;
+  padding: 0;
+  margin: 0;
+}
+
+#bible-breadcrumb ol,
+#bible-breadcrumb ul {
+  margin: 0;
+  padding: 0;
+}
+#bible-breadcrumb li {
+  margin: 0;
+}
+
 /* 접근성: 스크린리더 전용 텍스트 */
 .screen-reader-text {
   position: absolute;
@@ -34,24 +71,33 @@ body {
 }
 
 /* 검색 컨테이너 */
-.search-container {
-  background: #fff;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  padding: 20px;
-  margin: 0 0 30px 0;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+/* 브레드크럼 우측 검색 폼 */
+.breadcrumb-search {
+  grid-area: search;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 100%;
+}
+
+/* 검색 결과 토글 버튼(스크립트로 생성)의 높이/정렬을 브레드크럼 칩과 통일 */
+.search-results-toggle-btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  height: var(--breadcrumb-height) !important;
 }
 
 #verse-search-form {
   display: flex;
-  gap: 10px;
-  margin-bottom: 10px;
+  gap: 8px;
+  margin: 0;
 }
 
 #verse-search {
-  flex: 1;
-  padding: 12px;
+  flex: 1 1 auto; /* 남은 공간 모두 사용 */
+  min-width: 0; /* 그리드/플렉스에서 overflow 방지 */
+  height: 100%;
+  padding: 0 12px;
   border: 1px solid #ccc;
   border-radius: 4px;
   font-size: 16px;
@@ -63,7 +109,10 @@ body {
 }
 
 #verse-search-btn {
-  padding: 12px 20px;
+  display: inline-flex;
+  align-items: center;
+  height: 100%;
+  padding: 0 16px;
   background: #0066cc;
   color: white;
   border: none;
@@ -71,6 +120,12 @@ body {
   cursor: pointer;
   font-size: 16px;
   transition: background-color 0.2s;
+}
+
+/* 브레드크럼 칩 높이에 검색 입력/버튼 높이를 맞춤 */
+.breadcrumb-search #verse-search,
+.breadcrumb-search #verse-search-btn {
+  height: var(--breadcrumb-height);
 }
 
 #verse-search-btn:hover {
@@ -84,23 +139,34 @@ body {
 .search-help-text {
   color: #666;
   font-size: 14px;
-  margin: 0;
+  margin: 6px 0 0;
 }
 
 /* 오디오 플레이어 */
 .audio-player-container {
-  background: #fff;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  padding: 20px;
-  margin-bottom: 30px;
-  text-align: center;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0 0 20px;
+  margin-bottom: 10px;
+  box-shadow: none;
+  display: flex;
+  align-items: center; /* 라벨과 플레이어 수직 중앙 정렬 */
+  justify-content: center; /* 전체를 가운데 정렬 */
+  gap: 12px; /* 라벨-플레이어 간격 */
+  flex-wrap: wrap; /* 좁은 화면에서 줄바꿈 허용 */
 }
 
 .bible-audio {
   width: 100%;
-  max-width: 500px;
+  max-width: 700px;
+}
+
+.audio-label {
+  display: inline-block;
+  margin-right: 0;
+  font-weight: 600;
+  color: #2c3e50;
 }
 
 .audio-unavailable-notice {
@@ -134,10 +200,64 @@ article {
 
 h1 {
   color: #2c3e50;
-  border-bottom: 3px solid #0066cc;
-  padding-bottom: 10px;
-  margin-bottom: 30px;
+  /* 장 제목 아래 파란 줄 제거 */
+  border-bottom: none;
+  padding-bottom: 0;
+  margin-bottom: 0;
   font-size: 2em;
+}
+
+/* 장 제목 + 이전/다음 버튼 행 */
+.chapter-title-row {
+  display: grid;
+  grid-template-columns: 40px 1fr 40px;
+  align-items: center;
+  gap: 8px;
+  margin: 20px 0 30px;
+}
+
+.chapter-title-row .chapter-title {
+  text-align: center;
+  border-bottom: none;
+  margin: 12px 0;
+  padding: 10px 0;
+}
+
+.nav-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
+  border: 1px solid #d0d7de;
+  background: #ffffff;
+  color: #1f2328;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease,
+    transform 0.05s ease;
+  text-decoration: none;
+}
+
+.nav-btn:hover {
+  background: #f6f8fa;
+}
+
+.nav-btn:active {
+  transform: translateY(1px);
+}
+
+.nav-btn[aria-disabled="true"],
+.nav-btn.disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.nav-btn svg {
+  width: 20px;
+  height: 20px;
+  fill: currentColor;
 }
 
 /* 단락 스타일 */
@@ -231,7 +351,7 @@ span[id^="계시-"] {
 
 /* 절 번호 스타일 */
 .verse-number {
-  font-weight: bold;
+  /* font-weight: bold; */
   color: #999999;
   font-size: 0.9em;
   margin-right: 4px;
@@ -240,7 +360,7 @@ span[id^="계시-"] {
 /* 단락 표시 스타일 */
 .paragraph-marker {
   color: #999999;
-  font-weight: bold;
+  /* font-weight: bold; */
   margin-right: 4px;
   font-size: 1.1em;
 }
@@ -289,7 +409,7 @@ span[id]:target {
   }
 
   article {
-    padding: 20px;
+    padding: 16px;
   }
 
   h1 {
@@ -298,14 +418,119 @@ span[id]:target {
 
   p {
     font-size: 16px;
+    margin: 0.9em 0;
+    line-height: 1.6;
   }
 
+  /* 데스크탑에서 검색 폼(입력, 검색 버튼, 토글 버튼)을 항상 한 줄로 유지 */
   #verse-search-form {
-    flex-direction: column;
+    flex-direction: row;
   }
 
   #verse-search-btn {
-    width: 100%;
+    width: auto;
+  }
+  .breadcrumb-row {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "breadcrumb"
+      "search";
+  }
+
+  .breadcrumb-search {
+    display: none !important;
+  }
+  /* 특이도 강화를 위해 ID에도 숨김 적용 */
+  #verse-search-form {
+    display: none !important;
+  }
+
+  /* 모바일에서 브레드크럼/검색은 상단에 남기고, 실제 실행은 FAB로 접근 */
+  .search-fab {
+    position: fixed;
+    right: 16px;
+    bottom: 16px;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: #ffffff;
+    color: #0066cc;
+    border: 1px solid #d0d7de;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.22);
+    z-index: 1100;
+  }
+
+  /* 모바일에서는 기본 검색 결과 패널 숨김(우상단 고정 패널) */
+  .search-results-panel {
+    display: none !important;
+  }
+
+  /* 데스크탑 검색 결과 패널 스타일 */
+  .search-results-panel {
+    position: fixed;
+    top: 70px;
+    right: 20px;
+    width: 480px;
+    height: 60vh;
+    background-color: #ffffff;
+    border: 1px solid #ddd;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+    border-radius: 6px;
+    z-index: 1001;
+  }
+
+  .search-results-panel .search-results-body {
+    /* JavaScript에서 동적으로 높이 계산 */
+    overflow: hidden;
+    padding: 0;
+    box-sizing: border-box;
+    position: relative;
+  }
+
+  .search-results-panel .search-results-list {
+    padding: 8px 10px 0px 10px;
+    margin-bottom: 0;
+  }
+
+  .search-results-panel > .search-results-footer {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 40px !important;
+    min-height: 40px !important;
+    max-height: 40px !important;
+    background: #f9fafb;
+    border-top: 1px solid #eee;
+    display: flex;
+    align-items: center;
+    padding: 4px 10px;
+    box-sizing: border-box;
+    z-index: 2;
+  }
+  /* 바텀시트 내부에 있을 때만 보이도록 허용 */
+  #mobile-search-results .search-results-panel {
+    display: block !important;
+  }
+
+  /* 모바일: 제목/오디오/문단 여백 축소 */
+  .chapter-title-row {
+    margin: 10px 0 16px;
+  }
+  .chapter-title-row .chapter-title {
+    margin: 6px 0;
+    padding: 6px 0;
+  }
+  .scripture-paragraph {
+    margin: 0.9em 0;
+    line-height: 1.6;
+  }
+  .audio-player-container {
+    padding-bottom: 12px;
+    margin-bottom: 8px;
   }
 }
 
