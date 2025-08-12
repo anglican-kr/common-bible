@@ -33,6 +33,7 @@
   let lastLocalFound = false;
   let lastQueryText = "";
   let pendingRefCheck = null;
+  let lastClickedItem = null; // 마지막으로 클릭한 검색 결과 항목 정보
   const SEARCH_STATE_KEY = "BIBLE_SEARCH_STATE";
   const PANEL_STATE_KEY = "BIBLE_SEARCH_PANEL";
   const MOBILE_BREAKPOINT = 768; // px
@@ -43,6 +44,7 @@
     } catch (error) {
       // sessionStorage 접근 실패 시 무시 (프라이빗 모드 등)
     }
+    lastClickedItem = null; // 마지막 클릭 항목 초기화
   }
 
   function resetResultsPanel() {
@@ -55,6 +57,7 @@
   function resetSearchUI() {
     clearSavedSearchState();
     resetResultsPanel();
+    lastClickedItem = null; // 마지막 클릭 항목 초기화
     if (searchInput) searchInput.value = "";
   }
 
@@ -108,7 +111,7 @@
       });
     }
 
-    // 검색창 옆 결과 패널 토글 버튼 추가
+    // 검색창 옆 결과 패널 토글 버튼 추가 (모바일에서만 표시)
     try {
       resultsToggleBtn = document.createElement("button");
       resultsToggleBtn.type = "button";
@@ -120,7 +123,7 @@
         "bible-search-results-panel"
       );
       resultsToggleBtn.title = "검색 결과 패널";
-      // 간단 스타일
+      // 간단 스타일 - 데스크탑에서는 숨김
       Object.assign(resultsToggleBtn.style, {
         marginLeft: "6px",
         padding: "6px 10px",
@@ -129,6 +132,7 @@
         borderRadius: "6px",
         cursor: "pointer",
         lineHeight: "1",
+        display: window.innerWidth < MOBILE_BREAKPOINT ? "inline-flex" : "none",
       });
       resultsToggleBtn.innerHTML = iconSvg("panel");
       resultsToggleBtn.addEventListener("click", (ev) => {
@@ -142,7 +146,18 @@
           hideResultsPanel();
         }
       });
-      // 검색 버튼 뒤에 삽입 (데스크톱)
+
+      // 반응형 표시/숨김 처리
+      function updateToggleBtnVisibility() {
+        if (window.innerWidth < MOBILE_BREAKPOINT) {
+          resultsToggleBtn.style.display = "inline-flex";
+        } else {
+          resultsToggleBtn.style.display = "none";
+        }
+      }
+      window.addEventListener("resize", updateToggleBtnVisibility);
+
+      // 검색 버튼 뒤에 삽입
       if (searchButton && searchButton.parentNode) {
         searchButton.insertAdjacentElement("afterend", resultsToggleBtn);
       }
@@ -456,6 +471,8 @@
         // 입력값 초기화
         if (searchInput) searchInput.value = "";
         input.value = "";
+        // 마지막 클릭 항목 초기화
+        lastClickedItem = null;
         // 본문 하이라이트 제거 (절/텍스트 모두)
         try {
           clearHighlight();
@@ -1065,7 +1082,11 @@
 
   function saveSearchState() {
     try {
-      const state = { q: pagination.q || "", page: pagination.page || 1 };
+      const state = {
+        q: pagination.q || "",
+        page: pagination.page || 1,
+        lastClickedItem: lastClickedItem,
+      };
       sessionStorage.setItem(SEARCH_STATE_KEY, JSON.stringify(state));
       if (history && history.replaceState) {
         history.replaceState(state, document.title);
@@ -1091,6 +1112,8 @@
     const st = getSavedState();
     if (!st || !st.q) return;
     if (searchInput) searchInput.value = st.q;
+    // 마지막 클릭 항목 정보 복원
+    lastClickedItem = st.lastClickedItem || null;
     // 패널 생성만 하고 표시하지 않음 (사용자가 직접 열어야 함)
     createResultsPanel();
     // 데스크탑에서는 패널을 숨김 상태로 유지
@@ -1338,6 +1361,8 @@
         // 상태 초기화 실패 시 무시
       }
       if (searchInput) searchInput.value = "";
+      // 마지막 클릭 항목 초기화
+      lastClickedItem = null;
       const listEl = resultsPanel.querySelector(".search-results-list");
       if (listEl) listEl.innerHTML = "";
       // 페이지네이션 초기화 및 버튼 비활성화
@@ -1441,7 +1466,34 @@
     event.preventDefault();
 
     const query = searchInput.value.trim();
+
+    // 빈 입력창인 경우: 빈 검색 결과 패널 열기
     if (!query) {
+      createResultsPanel();
+      showResultsPanel();
+      showGlobalResultsMessage("검색 결과 없음");
+      return;
+    }
+
+    // 동일한 검색어로 기존 결과가 있는지 확인
+    const savedState = getSavedState();
+    if (savedState && savedState.q === query && pagination.q === query) {
+      // 기존 검색 결과가 있으면 패널을 열고 마지막 페이지로 이동
+      createResultsPanel();
+      showResultsPanel();
+
+      // 마지막 클릭 항목 정보 복원
+      lastClickedItem = savedState.lastClickedItem || null;
+
+      // 저장된 페이지로 이동 (워커가 준비되어 있으면 검색 재실행)
+      if (searchWorker && isWorkerReady) {
+        searchWorker.postMessage({
+          type: "query",
+          q: pagination.q,
+          limit: pagination.pageSize,
+          page: savedState.page || pagination.page,
+        });
+      }
       return;
     }
 
@@ -1462,6 +1514,7 @@
       searchByText(query);
       suppressLocalToast = false;
       // 새로운 키워드 검색: 기존 결과 초기화 후 저장
+      lastClickedItem = null; // 새로운 검색어이므로 마지막 클릭 항목 초기화
       resetResultsPanel();
       globalSearch(query);
       saveSearchState();
@@ -1977,6 +2030,13 @@
       a.href = item.h || item.href;
       a.title = item.i || item.id;
       a.innerHTML = highlightSnippet(item.t || item.text || "", query);
+
+      // 마지막으로 클릭한 항목인지 확인
+      const isLastClicked =
+        lastClickedItem &&
+        lastClickedItem.href === (item.h || item.href) &&
+        lastClickedItem.id === (item.i || item.id);
+
       Object.assign(a.style, {
         display: "block",
         padding: "8px 6px",
@@ -1984,6 +2044,9 @@
         color: "#111",
         textDecoration: "none",
         pointerEvents: "auto", // 명시적으로 클릭 가능하도록 설정
+        // 마지막 클릭 항목이면 하이라이트 배경 적용
+        background: isLastClicked ? "#e3f2fd" : "transparent",
+        borderLeft: isLastClicked ? "3px solid #2196f3" : "none",
       });
 
       // 레퍼런스(책 장:절) 표시 추가
@@ -2010,14 +2073,25 @@
       }
 
       a.addEventListener("mouseenter", () => {
-        a.style.background = "#f3f4f6";
+        if (!isLastClicked) {
+          a.style.background = "#f3f4f6";
+        }
       });
       a.addEventListener("mouseleave", () => {
-        a.style.background = "transparent";
+        // 마지막 클릭 항목이면 원래 하이라이트로 되돌리기
+        a.style.background = isLastClicked ? "#e3f2fd" : "transparent";
       });
 
       // 클릭 시 고정 헤더를 고려한 스크롤
       a.addEventListener("click", (e) => {
+        // 클릭한 항목 정보 저장 (페이지 이동 전에 먼저 저장)
+        lastClickedItem = {
+          href: item.h || item.href,
+          id: item.i || item.id,
+          text: item.t || item.text || "",
+        };
+        saveSearchState(); // 즉시 상태 저장
+
         const href = a.href;
         const currentUrl = window.location.href.split("#")[0];
         const linkUrl = href.split("#")[0];

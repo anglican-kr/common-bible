@@ -111,9 +111,15 @@ body {
 
 /* 검색 결과 토글 버튼(스크립트로 생성)의 높이/정렬을 브레드크럼 칩과 통일 */
 .search-results-toggle-btn {
-  display: inline-flex !important;
   align-items: center !important;
   height: var(--breadcrumb-height) !important;
+}
+
+/* 데스크탑에서는 검색 결과 패널 버튼 숨김 */
+@media (min-width: 769px) {
+  .search-results-toggle-btn {
+    display: none !important;
+  }
 }
 
 #verse-search-form {
