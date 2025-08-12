@@ -35,9 +35,7 @@
   let pendingRefCheck = null;
   const SEARCH_STATE_KEY = "BIBLE_SEARCH_STATE";
   const PANEL_STATE_KEY = "BIBLE_SEARCH_PANEL";
-  let isCollapsed = false;
   const MOBILE_BREAKPOINT = 768; // px
-  let autoManagedCollapse = false;
 
   function clearSavedSearchState() {
     try {
@@ -121,6 +119,7 @@
         "aria-controls",
         "bible-search-results-panel"
       );
+      resultsToggleBtn.title = "검색 결과 패널";
       // 간단 스타일
       Object.assign(resultsToggleBtn.style, {
         marginLeft: "6px",
@@ -138,7 +137,7 @@
         if (!resultsPanel) createResultsPanel();
         const isHidden = !resultsPanel || resultsPanel.style.display === "none";
         if (isHidden) {
-          showResultsPanel(true);
+          showResultsPanel();
         } else {
           hideResultsPanel();
         }
@@ -153,6 +152,7 @@
       fab.type = "button";
       fab.className = "search-fab";
       fab.setAttribute("aria-label", "검색 열기");
+      fab.title = "검색";
       fab.innerHTML = iconSvg("search");
       Object.assign(fab.style, {
         position: "fixed",
@@ -380,6 +380,7 @@
       const mPrev = document.createElement("button");
       mPrev.id = "mobile-search-prev";
       mPrev.setAttribute("aria-label", "이전 페이지");
+      mPrev.title = "이전 페이지";
       mPrev.innerHTML = iconSvg("chevronLeft");
       Object.assign(mPrev.style, {
         width: "40px",
@@ -404,6 +405,7 @@
       const mNext = document.createElement("button");
       mNext.id = "mobile-search-next";
       mNext.setAttribute("aria-label", "다음 페이지");
+      mNext.title = "다음 페이지";
       mNext.innerHTML = iconSvg("chevronRight");
       Object.assign(mNext.style, {
         width: "40px",
@@ -451,10 +453,22 @@
         } catch (error) {
           // 상태 초기화 실패 시 무시
         }
+        // 입력값 초기화
         if (searchInput) searchInput.value = "";
         input.value = "";
-        if (mobileResultsContainer) mobileResultsContainer.innerHTML = "";
+        // 본문 하이라이트 제거 (절/텍스트 모두)
+        try {
+          clearHighlight();
+        } catch (error) {
+          // 하이라이트 제거 실패 시 무시
+        }
+        // 결과/페이지네이션 초기화
+        pagination.q = "";
+        pagination.page = 1;
         lastLocalFound = false;
+        lastTotalResults = 0;
+        // UI에 빈 상태 메시지 표시
+        showGlobalResultsMessage("검색 결과 없음");
         updatePageInfo(0, 0, 0);
         // 모바일 검색 시트 닫기
         closeMobileSearchSheet();
@@ -564,6 +578,7 @@
       button.type = "button";
       button.setAttribute("aria-haspopup", "listbox");
       button.setAttribute("aria-expanded", "false");
+      button.title = labelText + " 선택";
       button.textContent = labelText;
       Object.assign(button.style, {
         padding: "6px 10px",
@@ -579,6 +594,7 @@
 
       const list = document.createElement("ul");
       list.setAttribute("role", "listbox");
+      list.setAttribute("aria-label", `${labelText} 선택 목록`);
       Object.assign(list.style, {
         position: "absolute",
         top: "calc(100% + 6px)",
@@ -641,14 +657,15 @@
       return { container, button, list };
     }
 
-    // 1단계: 권역(구약/외경/신약)
+    // 1단계: 구분(구약/외경/신약)
     const div1 = createDropdown(
-      currentBookMeta ? currentBookMeta["구분"] : "권역"
+      currentBookMeta ? currentBookMeta["구분"] : "구분"
     );
     const div1MobileItems = [];
     for (const name of divisions) {
       const li = document.createElement("li");
       li.setAttribute("role", "option");
+      li.setAttribute("aria-label", `${name} 선택`);
       li.textContent = name;
       Object.assign(li.style, {
         padding: "6px 8px",
@@ -664,7 +681,7 @@
         () => (li.style.background = "transparent")
       );
       li.addEventListener("click", () => {
-        // 해당 권역의 첫 책 첫 장으로 이동
+        // 해당 구분의 첫 책 첫 장으로 이동
         const listBooks = byDivision[name] || [];
         if (listBooks.length === 0) return;
         const target = listBooks[0];
@@ -684,7 +701,7 @@
     div1.button._mobileItems = div1MobileItems;
     wrap.appendChild(div1.container);
 
-    // 2단계: 책 선택 (현재 권역의 책 목록)
+    // 2단계: 책 선택 (현재 구분의 책 목록)
     const currentDivision = currentBookMeta
       ? currentBookMeta["구분"]
       : divisions[0];
@@ -695,7 +712,9 @@
     for (const b of byDivision[currentDivision] || []) {
       const li = document.createElement("li");
       li.setAttribute("role", "option");
-      li.textContent = b["전체 이름"] || b["약칭"];
+      const bookName = b["전체 이름"] || b["약칭"];
+      li.setAttribute("aria-label", `${bookName} 선택`);
+      li.textContent = bookName;
       Object.assign(li.style, {
         padding: "6px 8px",
         borderRadius: "6px",
@@ -750,6 +769,7 @@
       for (const n of list) {
         const li = document.createElement("li");
         li.setAttribute("role", "option");
+        li.setAttribute("aria-label", `${n}장 선택`);
         li.textContent = `${n}장`;
         Object.assign(li.style, {
           padding: "6px 8px",
@@ -986,6 +1006,7 @@
     const close = document.createElement("button");
     close.type = "button";
     close.setAttribute("aria-label", "닫기");
+    close.title = "닫기";
     close.innerHTML = iconSvg("close");
     Object.assign(close.style, {
       border: "1px solid #d1d5db",
@@ -1002,6 +1023,7 @@
     for (const it of items) {
       const btn = document.createElement("button");
       btn.type = "button";
+      btn.title = it.label;
       btn.textContent = it.label;
       Object.assign(btn.style, {
         width: "100%",
@@ -1158,7 +1180,7 @@
     });
     header.appendChild(headerActions);
 
-    // 접기/펼치기 토글 버튼
+    // 버튼 공통 스타일 함수
     function setButtonBaseStyles(btn) {
       Object.assign(btn.style, {
         padding: "4px 8px",
@@ -1181,13 +1203,6 @@
         () => (btn.style.background = "#ffffff")
       );
     }
-
-    const toggleBtn = document.createElement("button");
-    toggleBtn.type = "button";
-    toggleBtn.setAttribute("aria-label", "검색 결과 창 접기");
-    setButtonBaseStyles(toggleBtn);
-    toggleBtn.innerHTML = iconSvg("chevronUp");
-    headerActions.appendChild(toggleBtn);
 
     // 바디 컨테이너
     const body = document.createElement("div");
@@ -1259,6 +1274,7 @@
     navLeft.type = "button";
     navLeft.className = "search-page-prev";
     navLeft.setAttribute("aria-label", "이전 페이지");
+    navLeft.title = "이전 페이지";
     navLeft.innerHTML = iconSvg("chevronLeft");
     Object.assign(navLeft.style, {
       width: "32px",
@@ -1290,6 +1306,7 @@
     navRight.type = "button";
     navRight.className = "search-page-next";
     navRight.setAttribute("aria-label", "다음 페이지");
+    navRight.title = "다음 페이지";
     navRight.innerHTML = iconSvg("chevronRight");
     Object.assign(navRight.style, {
       width: "32px",
@@ -1311,6 +1328,7 @@
     clearBtn.type = "button";
     clearBtn.innerHTML = iconSvg("trash");
     clearBtn.setAttribute("aria-label", "검색 결과 지우기");
+    clearBtn.title = "검색 결과 지우기";
     setButtonBaseStyles(clearBtn);
     clearBtn.addEventListener("click", () => {
       // 검색 상태/입력/결과/페이지네이션 완전 초기화
@@ -1326,13 +1344,20 @@
       pagination.q = "";
       pagination.page = 1;
       updatePageInfo(0, 0, 0);
-      // 패널에 빈 상태 메시지 표시
-      showGlobalResultsMessage("검색 결과 없음");
+      // 본문 하이라이트 제거 (절/텍스트 모두)
+      try {
+        clearHighlight();
+      } catch (error) {
+        // 하이라이트 제거 실패 시 무시
+      }
+      // 패널 닫기 (검색 결과 지우고 패널 닫기)
+      hideResultsPanel();
     });
 
     const closeBtn = document.createElement("button");
     closeBtn.type = "button";
     closeBtn.innerHTML = iconSvg("close");
+    closeBtn.title = "패널 닫기";
     setButtonBaseStyles(closeBtn);
     closeBtn.addEventListener("click", () => {
       hideResultsPanel();
@@ -1351,114 +1376,22 @@
 
     document.body.appendChild(resultsPanel);
 
-    function setCollapsed(state, persist = true) {
-      isCollapsed = !!state;
-      body.style.display = isCollapsed ? "none" : "block";
-      toggleBtn.innerHTML = isCollapsed
-        ? iconSvg("chevronDown")
-        : iconSvg("chevronUp");
-      toggleBtn.setAttribute(
-        "aria-label",
-        isCollapsed ? "검색 결과 창 펼치기" : "검색 결과 창 접기"
-      );
-      toggleBtn.setAttribute("aria-expanded", String(!isCollapsed));
-      // 너비를 조금 줄여 헤더만 보이도록
-      if (isCollapsed) {
-        resultsPanel.style.width = "220px";
-      } else {
-        resultsPanel.style.width = "380px";
-      }
-      if (persist) {
-        try {
-          sessionStorage.setItem(
-            PANEL_STATE_KEY,
-            JSON.stringify({ collapsed: isCollapsed })
-          );
-        } catch (error) {
-          // 상태 저장 실패 시 무시 (프라이빗 모드 등)
-        }
-      }
-    }
-    // 외부에서 펼치기/접기 호출할 수 있도록 보조 핸들러 부착
-    resultsPanel._setCollapsed = setCollapsed;
-
-    // 버튼/헤더 클릭으로 토글
-    toggleBtn.addEventListener("click", (ev) => {
-      ev.stopPropagation();
-      autoManagedCollapse = false;
-      setCollapsed(!isCollapsed);
-    });
-    header.addEventListener("dblclick", (ev) => {
-      ev.stopPropagation();
-      autoManagedCollapse = false;
-      setCollapsed(!isCollapsed);
-    });
-
-    // 패널이 접힌 상태에서 패널 영역 클릭 시 펼치기
-    resultsPanel.addEventListener("click", () => {
-      if (isCollapsed) {
-        autoManagedCollapse = false;
-        setCollapsed(false);
-      }
-    });
-
-    // 패널 바깥 클릭 시 접기
+    // 패널 바깥 클릭 시 패널 완전히 숨기기
     document.addEventListener("click", (ev) => {
       if (!resultsPanel || resultsPanel.style.display === "none") return;
       const target = ev.target;
-      if (resultsPanel.contains(target)) return;
-      if (!isCollapsed) {
-        autoManagedCollapse = false;
-        setCollapsed(true);
-      }
+      // 패널 자체나 검색 토글 버튼 클릭은 무시
+      if (
+        resultsPanel.contains(target) ||
+        (resultsToggleBtn && resultsToggleBtn.contains(target))
+      )
+        return;
+      // 패널을 완전히 숨김
+      hideResultsPanel();
     });
 
-    // 저장된 패널 상태 복원
-    try {
-      const raw = sessionStorage.getItem(PANEL_STATE_KEY);
-      if (raw) {
-        const st = JSON.parse(raw);
-        if (st && typeof st.collapsed === "boolean") setCollapsed(st.collapsed);
-      } else {
-        // 데스크탑: 기본적으로 패널 숨김, 모바일: 자동 접기
-        if (window.innerWidth < MOBILE_BREAKPOINT) {
-          autoManagedCollapse = true;
-          setCollapsed(true, false);
-        } else {
-          // 데스크탑: 패널을 숨김 상태로 설정
-          resultsPanel.style.display = "none";
-        }
-      }
-    } catch (error) {
-      // 저장된 상태 복원 실패 시 무시
-    }
-
-    // 화면 크기 변경에 따른 자동 접기/펼치기
-    function handleResize() {
-      // 자동 접기: 모바일 폭 미만이고 현재 펼쳐져 있으며 자동 관리 중일 때
-      if (window.innerWidth < MOBILE_BREAKPOINT) {
-        if (!isCollapsed) {
-          autoManagedCollapse = true;
-          setCollapsed(true, false);
-        }
-      } else {
-        // 데스크탑 폭 이상이고 자동 관리 상태이며 저장된 값이 펼치기라면 복원
-        if (autoManagedCollapse) {
-          try {
-            const raw = sessionStorage.getItem(PANEL_STATE_KEY);
-            const st = raw ? JSON.parse(raw) : { collapsed: false };
-            if (!st || st.collapsed === false) {
-              setCollapsed(false, false);
-            }
-          } catch (error) {
-            // 패널 상태 복원 실패 시 기본값으로 복원
-            setCollapsed(false, false);
-          }
-          autoManagedCollapse = false;
-        }
-      }
-    }
-    window.addEventListener("resize", handleResize);
+    // 기본적으로 패널을 숨김 상태로 설정
+    resultsPanel.style.display = "none";
   }
 
   /**
@@ -1676,8 +1609,8 @@
         highlightTextInElement(verse, query);
 
         if (!found) {
-          // 첫 번째 결과로 스크롤
-          verse.scrollIntoView({ behavior: "smooth", block: "center" });
+          // 첫 번째 결과로 스크롤 (고정 헤더 높이 고려)
+          scrollToElementWithOffset(verse);
           found = true;
         }
       }
@@ -1707,14 +1640,64 @@
     verseElement.classList.add("verse-highlight");
     currentHighlight = verseElement;
 
-    // 해당 요소로 스크롤
-    verseElement.scrollIntoView({ behavior: "smooth", block: "center" });
+    // 고정 헤더 높이를 고려한 스크롤
+    scrollToElementWithOffset(verseElement);
 
     // 포커스 설정 (접근성)
     verseElement.setAttribute("tabindex", "-1");
     verseElement.focus();
 
     return true;
+  }
+
+  /**
+   * 안전한 URL 디코딩 (에러 처리 + 더블 인코딩 대응)
+   */
+  function safeDecodeVerseId(encodedId) {
+    try {
+      // 1차: 기본 디코딩 시도
+      const decoded = decodeURIComponent(encodedId);
+
+      // 2차: 여전히 인코딩되어 있는지 확인 (더블 인코딩 대응)
+      if (decoded.includes("%")) {
+        return decodeURIComponent(decoded);
+      }
+
+      return decoded;
+    } catch (e) {
+      // 3차: 디코딩 실패 시 원본 그대로 시도
+      console.warn("URL 디코딩 실패:", encodedId, e);
+      return encodedId;
+    }
+  }
+
+  /**
+   * 고정 헤더 높이를 고려하여 요소로 스크롤
+   */
+  function scrollToElementWithOffset(element) {
+    // 실제 고정 헤더 높이 동적 측정
+    const fixedHeader = document.querySelector(".fixed-header");
+    let headerHeight = 0;
+
+    if (fixedHeader) {
+      headerHeight = fixedHeader.offsetHeight;
+    } else {
+      // 폴백: 화면 크기에 따른 기본값 + 여유분
+      const isMobile = window.innerWidth < MOBILE_BREAKPOINT;
+      headerHeight = isMobile ? 160 : 140; // 기존값보다 20px씩 증가
+    }
+
+    // 추가 여백 (텍스트가 헤더에 바로 붙지 않도록)
+    const extraPadding = 20;
+    const totalOffset = headerHeight + extraPadding;
+
+    const elementPosition = element.offsetTop;
+    const offsetPosition = elementPosition - totalOffset;
+
+    window.scrollTo({
+      top: Math.max(0, offsetPosition), // 음수 방지
+      behavior: "smooth",
+    });
   }
 
   /**
@@ -1826,7 +1809,7 @@
       renderGlobalResults(query, null);
     } else {
       createResultsPanel();
-      showResultsPanel(true);
+      showResultsPanel();
       renderGlobalResults(query, null); // 로딩 상태
     }
 
@@ -1907,7 +1890,7 @@
       Object.assign(p.style, { color: "#666", margin: "8px 4px" });
       list.appendChild(p);
       updatePageInfo(0, 0, 0);
-      showResultsPanel(false);
+      showResultsPanel();
     }
   }
 
@@ -2000,6 +1983,7 @@
         borderRadius: "4px",
         color: "#111",
         textDecoration: "none",
+        pointerEvents: "auto", // 명시적으로 클릭 가능하도록 설정
       });
 
       // 레퍼런스(책 장:절) 표시 추가
@@ -2032,6 +2016,37 @@
         a.style.background = "transparent";
       });
 
+      // 클릭 시 고정 헤더를 고려한 스크롤
+      a.addEventListener("click", (e) => {
+        const href = a.href;
+        const currentUrl = window.location.href.split("#")[0];
+        const linkUrl = href.split("#")[0];
+
+        // 같은 페이지 내의 해시 링크인 경우에만 커스텀 처리
+        if (currentUrl === linkUrl && href.includes("#")) {
+          e.preventDefault(); // 이 경우에만 기본 동작 방지
+
+          // 모바일 바텀시트가 열려있으면 먼저 닫기
+          const mobileSheet = document.getElementById("mobile-search-sheet");
+          if (mobileSheet && mobileSheet.style.display !== "none") {
+            closeMobileSearchSheet();
+          }
+
+          const verseId = href.split("#")[1];
+          if (verseId) {
+            // 안전한 URL 디코딩으로 실제 절 ID 얻기
+            const decodedVerseId = safeDecodeVerseId(verseId);
+            // 우리의 highlightVerse 함수 사용 (고정 헤더 오프셋 포함)
+            const success = highlightVerse(decodedVerseId);
+            if (success) {
+              // URL 해시 업데이트 (디코딩된 ID 사용)
+              history.replaceState(null, null, `#${decodedVerseId}`);
+            }
+          }
+        }
+        // 다른 페이지로의 링크는 기본 동작 허용
+      });
+
       // 마지막 항목인 경우 하단 여백 제거
       if (results.indexOf(item) === results.length - 1) {
         a.style.marginBottom = "0";
@@ -2044,21 +2059,10 @@
   }
 
   // 패널 표시/숨김 공통 처리 (토글 버튼 접근성 상태 포함)
-  function showResultsPanel(expandIfCollapsed) {
+  function showResultsPanel() {
     createResultsPanel();
     if (resultsPanel) {
       resultsPanel.style.display = "block";
-      if (
-        expandIfCollapsed &&
-        typeof resultsPanel._setCollapsed === "function" &&
-        isCollapsed
-      ) {
-        try {
-          resultsPanel._setCollapsed(false, true);
-        } catch (error) {
-          // 패널 펼치기 실패 시 무시
-        }
-      }
     }
     if (resultsToggleBtn) {
       resultsToggleBtn.setAttribute("aria-expanded", "true");

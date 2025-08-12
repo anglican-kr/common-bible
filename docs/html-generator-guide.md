@@ -120,7 +120,7 @@ class Chapter:
 
 ### 1.5 템플릿에 브레드크럼 컨테이너 추가(신규)
 
-상단에 브레드크럼 영역을 추가하여 권역/책/장 탐색 허브를 제공합니다. `templates/chapter.html` 내 `<body>` 시작부에 다음 컨테이너를 배치합니다.
+상단에 브레드크럼 영역을 추가하여 구분/책/장 탐색 허브를 제공합니다. `templates/chapter.html` 내 `<body>` 시작부에 다음 컨테이너를 배치합니다.
 
 ```html
 <nav id="bible-breadcrumb" aria-label="Breadcrumb"></nav>

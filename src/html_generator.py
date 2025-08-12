@@ -172,13 +172,13 @@ class HtmlGenerator:
             next_button_html=next_button_html,
         )
 
-        # 오디오 파일 존재 여부에 따라 CSS 스타일 조정
+        # 오디오 파일 존재 여부에 따라 CSS 클래스 조정
         if audio_exists:
-            html = html.replace('id="audio-unavailable"',
-                                'id="audio-unavailable" style="display: none;"')
+            html = html.replace('class="audio-unavailable-notice"',
+                                'class="audio-unavailable-notice hidden"')
         else:
-            html = html.replace('id="audio-container"',
-                                'id="audio-container" style="display: none;"')
+            html = html.replace('class="audio-player-container"',
+                                'class="audio-player-container hidden"')
 
         return html
 

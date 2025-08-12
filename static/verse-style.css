@@ -24,6 +24,25 @@ body {
 .page-wrap {
   max-width: 1100px;
   margin: 0 auto;
+  padding-top: 120px; /* 고정 헤더를 위한 상단 여백 */
+}
+
+/* 고정 헤더 스타일 */
+.fixed-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  background: #ffffff;
+  z-index: 900; /* 검색 패널(1001)보다 낮게 설정 */
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  border-bottom: 1px solid #e5e5e5;
+}
+
+.fixed-header-content {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 10px 20px;
 }
 
 /* 브레드크럼 + 검색 레이아웃 */
@@ -35,6 +54,11 @@ body {
   align-items: center;
   margin: 0;
   min-height: var(--breadcrumb-height);
+}
+
+/* 고정 헤더 내부의 브레드크럼 행 */
+.fixed-header .breadcrumb-row {
+  margin-bottom: 8px;
 }
 
 /* 행 내부 모든 아이템을 수직 중앙 정렬 */
@@ -68,6 +92,11 @@ body {
   width: 1px;
   height: 1px;
   overflow: hidden;
+}
+
+/* 유틸리티: 요소 숨김 */
+.hidden {
+  display: none !important;
 }
 
 /* 검색 컨테이너 */
@@ -216,11 +245,23 @@ h1 {
   margin: 20px 0 30px;
 }
 
+/* 고정 헤더 내부의 장 제목 행 */
+.fixed-header .chapter-title-row {
+  margin: 0;
+}
+
 .chapter-title-row .chapter-title {
   text-align: center;
   border-bottom: none;
   margin: 12px 0;
   padding: 10px 0;
+}
+
+/* 고정 헤더 내부의 장 제목 */
+.fixed-header .chapter-title {
+  font-size: 1.5em;
+  margin: 8px 0;
+  padding: 5px 0;
 }
 
 .nav-btn {
@@ -402,8 +443,68 @@ span[id]:target {
   }
 }
 
+/* 데스크탑 검색 결과 패널 스타일 */
+.search-results-panel {
+  position: fixed;
+  top: 70px;
+  right: 20px;
+  width: 480px;
+  height: 60vh;
+  background-color: #ffffff;
+  border: 1px solid #ddd;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  border-radius: 6px;
+  z-index: 1001;
+}
+
+.search-results-panel .search-results-body {
+  /* JavaScript에서 동적으로 높이 계산 */
+  overflow: hidden;
+  padding: 0;
+  box-sizing: border-box;
+  position: relative;
+}
+
+.search-results-panel .search-results-list {
+  padding: 8px 10px 0px 10px;
+  margin-bottom: 0;
+}
+
+.search-results-panel > .search-results-footer {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 40px !important;
+  min-height: 40px !important;
+  max-height: 40px !important;
+  background: #f9fafb;
+  border-top: 1px solid #eee;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 10px;
+  box-sizing: border-box;
+  z-index: 2;
+}
+
 /* 반응형 디자인 */
 @media (max-width: 768px) {
+  /* 모바일에서 고정 헤더 패딩 조정 */
+  .page-wrap {
+    padding-top: 140px;
+  }
+
+  .fixed-header-content {
+    padding: 8px 10px;
+  }
+
+  .fixed-header .chapter-title {
+    font-size: 1.2em;
+    margin: 6px 0;
+    padding: 4px 0;
+  }
+
   body {
     padding: 10px;
   }
@@ -468,49 +569,6 @@ span[id]:target {
     display: none !important;
   }
 
-  /* 데스크탑 검색 결과 패널 스타일 */
-  .search-results-panel {
-    position: fixed;
-    top: 70px;
-    right: 20px;
-    width: 480px;
-    height: 60vh;
-    background-color: #ffffff;
-    border: 1px solid #ddd;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
-    border-radius: 6px;
-    z-index: 1001;
-  }
-
-  .search-results-panel .search-results-body {
-    /* JavaScript에서 동적으로 높이 계산 */
-    overflow: hidden;
-    padding: 0;
-    box-sizing: border-box;
-    position: relative;
-  }
-
-  .search-results-panel .search-results-list {
-    padding: 8px 10px 0px 10px;
-    margin-bottom: 0;
-  }
-
-  .search-results-panel > .search-results-footer {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    height: 40px !important;
-    min-height: 40px !important;
-    max-height: 40px !important;
-    background: #f9fafb;
-    border-top: 1px solid #eee;
-    display: flex;
-    align-items: center;
-    padding: 4px 10px;
-    box-sizing: border-box;
-    z-index: 2;
-  }
   /* 바텀시트 내부에 있을 때만 보이도록 허용 */
   #mobile-search-results .search-results-panel {
     display: block !important;
@@ -529,8 +587,12 @@ span[id]:target {
     line-height: 1.6;
   }
   .audio-player-container {
-    padding-bottom: 12px;
-    margin-bottom: 8px;
+    padding: 16px 0 12px; /* 상단 여백 추가 */
+    margin-bottom: 16px; /* 하단 여백도 약간 증가 */
+  }
+  .audio-unavailable-notice {
+    margin: 16px 0; /* 상하단 여백 통일 */
+    padding: 16px; /* 패딩 약간 축소 */
   }
 }
 
