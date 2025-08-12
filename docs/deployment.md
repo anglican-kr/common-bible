@@ -18,14 +18,18 @@
 ### 필수 소프트웨어
 
 ```bash
-# Python 패키지
-pip install requests beautifulsoup4 lxml pyyaml python-dotenv
+# 프로젝트 의존성 설치 (requirements.txt에 정의됨)
+pip install -r requirements.txt
 
-# 오디오 파일 처리 (필수)
-pip install pydub wave
-
-# 선택적 (개발용)
-pip install pytest pytest-cov black flake8
+# 주요 패키지:
+# - python-dotenv: 환경변수 관리
+# - requests: HTTP 요청 처리
+# - beautifulsoup4: HTML 파싱
+# - lxml: XML/HTML 처리
+# - PyYAML: YAML 파일 처리
+# - jinja2: 템플릿 엔진
+# - rich: 터미널 출력 포맷팅
+# - pytest: 테스트 프레임워크 (개발용)
 ```
 
 ---
@@ -52,36 +56,46 @@ pip install -r requirements.txt
 
 ```bash
 # 환경변수 파일 생성
-cp config/.env.example config/.env
+cp env.example .env
 ```
 
-**config/.env 파일 편집:**
+**.env 파일 편집:**
 
 ```env
-# 워드프레스 설정
-WP_BASE_URL=https://seoul.anglican.kr
-WP_AUTH_USER=YOUR_USERNAME
-WP_AUTH_TOKEN=your_application_password_here
-WP_PUBLISH_DATE=2025-07-01
-
-# API 설정
-WP_API_RATE_LIMIT=60
+# 워드프레스 설정 (필수)
+WP_SITE_URL=https://seoul.anglican.kr
+WP_USERNAME=your_username
+WP_PASSWORD=your_application_password
+WP_DEFAULT_STATUS=private
 WP_TIMEOUT=30
+WP_RETRY_COUNT=3
+
+# 카테고리/태그 자동 생성 설정 (선택사항)
+WP_BASE_CATEGORY=공동번역성서
+WP_BASE_TAG=공동번역성서
+
+# 파일 경로 설정 (선택사항 - 기본값 사용 가능)
+BIBLE_TEXT_PATH=data/common-bible-kr.txt
+BOOK_MAPPINGS_PATH=data/book_mappings.json
+TEMPLATE_PATH=templates/chapter.html
+OUTPUT_DIR=output
+LOG_DIR=logs
+AUDIO_BASE_URL=data/audio
 
 # 로깅 설정
 LOG_LEVEL=INFO
-LOG_FILE=logs/bible_converter.log
+LOG_TO_CONSOLE=true
+LOG_COLOR=true
 
 # 보안 설정
-ALLOWED_IPS=127.0.0.1,your.server.ip
-FORCE_HTTPS=true
+VERIFY_SSL=true
 
-# 데이터 설정
-INPUT_FILE=data/common-bible-kr.txt
-OUTPUT_DIR=data/output
-TEMPLATE_DIR=templates
-AUDIO_DIR=audio
-AUDIO_MAPPING_FILE=data/audio_mappings.json
+# 성능 설정
+MAX_WORKERS=4
+
+# 개발/운영 환경 설정
+ENVIRONMENT=development
+DEBUG=false
 ```
 
 ### 3. 디렉터리 생성
