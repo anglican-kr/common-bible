@@ -983,28 +983,25 @@
       boxShadow: "0 -8px 24px rgba(0,0,0,0.18)",
       padding: "12px 12px 16px",
       maxHeight: "70vh",
-      overflow: "auto",
-      // 모바일 스크롤바 스타일링
-      scrollbarWidth: "thin",
-      scrollbarColor: "rgba(0, 0, 0, 0.2) transparent",
-      webkitOverflowScrolling: "touch",
-      overscrollBehavior: "contain",
+      display: "flex",
+      flexDirection: "column",
+      overflow: "hidden", // 전체 시트의 overflow 숨김
     });
 
-    // 웹킷 기반 브라우저용 스크롤바 스타일링
+    // 웹킷 기반 브라우저용 스크롤바 스타일링 (리스트 영역 전용)
     const scrollbarStyle = document.createElement("style");
     scrollbarStyle.textContent = `
-      .bible-bottomsheet-overlay .bible-bottomsheet-overlay > div::-webkit-scrollbar {
+      .bible-bottomsheet-list::-webkit-scrollbar {
         width: 6px;
       }
-      .bible-bottomsheet-overlay .bible-bottomsheet-overlay > div::-webkit-scrollbar-track {
+      .bible-bottomsheet-list::-webkit-scrollbar-track {
         background: transparent;
       }
-      .bible-bottomsheet-overlay .bible-bottomsheet-overlay > div::-webkit-scrollbar-thumb {
+      .bible-bottomsheet-list::-webkit-scrollbar-thumb {
         background: rgba(0, 0, 0, 0.2);
         border-radius: 3px;
       }
-      .bible-bottomsheet-overlay .bible-bottomsheet-overlay > div::-webkit-scrollbar-thumb:hover {
+      .bible-bottomsheet-list::-webkit-scrollbar-thumb:hover {
         background: rgba(0, 0, 0, 0.3);
       }
     `;
@@ -1016,6 +1013,8 @@
       alignItems: "center",
       justifyContent: "space-between",
       marginBottom: "8px",
+      flexShrink: 0, // 헤더 크기 고정
+      minHeight: "40px", // 최소 높이 보장
     });
     const h = document.createElement("div");
     h.textContent = title || "선택";
@@ -1037,6 +1036,16 @@
     header.appendChild(close);
 
     const list = document.createElement("div");
+    list.className = "bible-bottomsheet-list"; // 스크롤바 스타일링을 위한 클래스명
+    Object.assign(list.style, {
+      flex: 1, // 남은 공간 모두 차지
+      overflow: "auto", // 리스트 영역에서만 스크롤
+      // 모바일 스크롤바 스타일링
+      scrollbarWidth: "thin",
+      scrollbarColor: "rgba(0, 0, 0, 0.2) transparent",
+      webkitOverflowScrolling: "touch",
+      overscrollBehavior: "contain",
+    });
     for (const it of items) {
       const btn = document.createElement("button");
       btn.type = "button";
