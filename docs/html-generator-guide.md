@@ -76,6 +76,47 @@ generator = HtmlGenerator('templates/chapter.html')
 
 - 완전한 HTML 문서 문자열
 
+#### `generate_index_html(chapters: List[Chapter], static_base: str, title: str = "공동번역 성서 - 목차", books_meta: Optional[List[Dict]] = None) -> str`
+
+전체 성경 목차 HTML을 생성합니다.
+
+**매개변수:**
+
+- `chapters`: 모든 장 데이터 리스트
+- `static_base`: 정적 리소스(CSS/JS) 기본 경로/URL
+- `title`: HTML 문서 제목 (기본값: "공동번역 성서 - 목차")
+- `books_meta`: 책 메타데이터 리스트 (book_mappings.json 데이터)
+
+**반환값:**
+
+- 목차 HTML 문서 문자열
+
+### 정적 메서드
+
+#### `@staticmethod get_book_order_index(book_abbr: str) -> int`
+
+책 약칭에 대한 정렬 순서 인덱스를 반환합니다. `data/book_mappings.json`의 나열 순서를 따릅니다.
+
+**매개변수:**
+
+- `book_abbr`: 책 약칭 (예: "창세", "마태")
+
+**반환값:**
+
+- 정렬 인덱스 (찾을 수 없으면 9999)
+
+#### `@staticmethod compute_slug(book_abbr: str) -> str`
+
+책 약칭으로부터 URL 슬러그를 생성합니다.
+
+**매개변수:**
+
+- `book_abbr`: 책 약칭 (예: "창세", "마태")
+
+**반환값:**
+
+- URL 슬러그 (예: "genesis", "matthew")
+
 ## 📊 데이터 구조
 
 ### 입력 데이터
@@ -235,6 +276,7 @@ python src/html_generator.py templates/chapter.html output/html/ --copy-static -
 - `--js-src`: 본문에 삽입할 JS 링크(URL 또는 상대 경로)
 - `--no-emit-search-index`: 전역 검색 인덱스 생성 비활성화(기본은 생성)
 - `--search-index-out`: 전역 검색 인덱스 출력 경로 지정(기본: `<output_dir>/static/search/search-index.json`)
+- `--no-index`: index.html 생성을 비활성화(기본은 생성)
 
 주의: 복사 옵션을 사용하면 HTML 내부 링크는 로컬 상대 경로(`static/...`, `audio/...`)로 강제 설정됩니다. 복사 옵션을 사용하지 않고 CDN/테마 경로를 쓰려면 `--static-base`, `--audio-base`를 절대 URL로 지정하세요. CSS/JS를 차일드 테마에서 자동 로드하는 경우 `--css-href`, `--js-src`는 지정하지 않는 것을 권장합니다.
 

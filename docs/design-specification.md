@@ -37,24 +37,26 @@
 common-bible/
 ├── src/
 │   ├── __init__.py
-│   ├── parser.py           # 텍스트 파일 파싱 및 JSON 저장/로드, 캐시 지원
+│   ├── parser.py           # 텍스트 파일 파싱 및 JSON 저장/로드, 캐시 지원, CLI 포함
 │   ├── html_generator.py   # HTML 생성 (접근성/오디오/정적자원 경로 주입, CLI 포함)
-│   ├── wordpress_api.py    # WordPress REST API 클라이언트
-│   ├── main.py             # 메인 실행 파일
-│   └── config.py           # 설정 관리(환경변수 로드) - 선택적 사용
+│   ├── wordpress_api.py    # WordPress REST API 클라이언트 및 Publisher, CLI 포함
+│   └── config.py           # 설정 관리(환경변수 로드)
 ├── templates/
 │   └── chapter.html        # HTML 템플릿 (String Template 변수 사용)
 ├── static/
 │   ├── verse-style.css     # 스타일시트 (기본 글꼴 Pretendard)
-│   └── verse-navigator.js  # 검색/하이라이트/오디오 초기화 스크립트
+│   ├── verse-navigator.js  # 검색/하이라이트/오디오 초기화 스크립트
+│   └── search-worker.js    # 전역 검색 Web Worker
 ├── data/
 │   ├── common-bible-kr.txt # 원본 텍스트
 │   ├── audio/              # 오디오 파일 디렉토리 (*.mp3)
 │   └── book_mappings.json  # 성경 책 이름/별칭 매핑
 ├── output/                 # 파서/생성기 출력 디렉터리
 ├── logs/                   # 로그 파일 (필요 시)
-├── .env.example            # 환경변수 예제 (선택)
+├── env.example             # 환경변수 예제
 ├── requirements.txt        # Python 패키지 목록
+├── run.py                  # CLI 실행 헬퍼 (레거시)
+├── setup.py                # 패키지 설정
 └── README.md               # 프로젝트 설명서
 ```
 
@@ -605,8 +607,15 @@ cp .env.example .env
 ### 2. 실행
 
 ```bash
-# 전체 프로세스 실행
-python src/main.py
+# 각 모듈별 실행
+# 1. 텍스트 파싱
+python src/parser.py data/common-bible-kr.txt --save-json output/parsed_bible.json
+
+# 2. HTML 생성
+python src/html_generator.py templates/chapter.html output/html/
+
+# 3. WordPress 게시
+python src/wordpress_api.py publish-chapter --html output/html/genesis-1.html --book-name 창세기 --book-abbr 창세 --english-name Genesis --division 구약 --chapter 1
 
 # 테스트 실행
 python -m pytest tests/

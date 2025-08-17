@@ -47,6 +47,17 @@ generator = HtmlGenerator(template_path: str)
   - 장을 HTML로 변환. 오디오 경로/존재 여부 및 정적 리소스 경로를 주입
   - css_href/js_src 지정 시 본문에 링크/스크립트 태그를 삽입(차일드 테마 enqueue 시 생략)
 
+- `generate_index_html(chapters: List[Chapter], static_base: str = "../static", css_href: Optional[str] = None, js_src: Optional[str] = None) -> str`
+  - 전체 성경 목차 HTML 생성
+
+#### 정적 메서드
+
+- `@staticmethod get_book_order_index(book_abbr: str) -> int`
+  - 공동번역 약칭/외경 포함 순서를 `data/book_mappings.json`의 나열 순서로 정의
+
+- `@staticmethod compute_slug(book_abbr: str) -> str`
+  - 책 약칭으로부터 URL 슬러그 생성
+
 #### 보조 메서드(내부)
 
 - `_generate_verses_html(chapter: Chapter) -> str`
@@ -69,9 +80,9 @@ generator = HtmlGenerator(template_path: str)
 - `find_media_by_slug(slug: str) -> Optional[AssetRecord]`
 - `ensure_category(name: str) -> int`
 - `ensure_tag(name: str) -> int`
-- `create_or_update_post(slug: str, title: str, content_html: str, status: str, category_ids: list[int], tag_ids: list[int]) -> int`
+- `create_or_update_post(slug: str, title: str, content_html: str, status: str, category_ids: List[int], tag_ids: List[int]) -> int`
 - `update_post_status(post_id: int, status: str, scheduled_iso: Optional[str] = None) -> int`
-- `list_posts(status: str, category_id: Optional[int] = None, tag_ids: Optional[list[int]] = None, slug_prefix: Optional[str] = None, per_page: int = 100, page: int = 1) -> list[dict]`
+- `list_posts(status: str, category_id: Optional[int] = None, tag_ids: Optional[List[int]] = None, slug_prefix: Optional[str] = None, per_page: int = 100, page: int = 1) -> List[Dict[str, Any]]`
 
 #### AssetRegistry
 
@@ -82,9 +93,9 @@ generator = HtmlGenerator(template_path: str)
 
 #### Publisher
 
-- `ensure_policy_assets(css_path: Path, audio_dir: Optional[Path] = None) -> dict`
+- `ensure_policy_assets(css_path: Path, audio_dir: Optional[Path] = None) -> Dict[str, Any]`
 - `render_and_publish_chapter(html_path: Path, meta: ChapterPostMeta, status: Optional[str] = None, dry_run: bool = True) -> int`
-- `bulk_update_status(target_status: str, *, category: str = "공동번역성서", division_tag: Optional[str] = None, slug_prefix: Optional[str] = None, scheduled_iso: Optional[str] = None, dry_run: bool = False, per_page: int = 100) -> dict`
+- `bulk_update_status(target_status: str, *, category: str = "공동번역성서", division_tag: Optional[str] = None, slug_prefix: Optional[str] = None, scheduled_iso: Optional[str] = None, dry_run: bool = False, per_page: int = 100) -> Dict[str, Any]`
 
 ---
 
