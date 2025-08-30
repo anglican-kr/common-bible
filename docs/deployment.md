@@ -1,8 +1,8 @@
-# 공동번역성서 프로젝트 배포 가이드
+# 공동번역성서 PWA 배포 가이드
 
 ## 🎯 배포 개요
 
-이 가이드는 공동번역성서 프로젝트를 개발 환경에서 프로덕션 환경으로 배포하는 과정을 설명합니다.
+이 가이드는 공동번역성서 PWA를 정적 파일 호스팅 서비스나 웹 서버에 배포하는 과정을 설명합니다.
 
 ---
 
@@ -11,30 +11,28 @@
 ### 시스템 요구사항
 
 - Python 3.8+
-- WordPress 5.0+ (REST API 지원)
-- 최소 2GB RAM, 10GB 디스크 공간
-- HTTPS 지원 웹서버
+- 웹 서버 (Apache, Nginx) 또는 정적 파일 호스팅 서비스
+- HTTPS 지원 (PWA 필수 요구사항)
+- 최소 1GB 디스크 공간
 
 ### 필수 소프트웨어
 
 ```bash
-# 프로젝트 의존성 설치 (requirements.txt에 정의됨)
+# 프로젝트 의존성 설치
 pip install -r requirements.txt
 
 # 주요 패키지:
 # - python-dotenv: 환경변수 관리
-# - requests: HTTP 요청 처리
 # - beautifulsoup4: HTML 파싱
 # - lxml: XML/HTML 처리
-# - PyYAML: YAML 파일 처리
 # - jinja2: 템플릿 엔진
-# - rich: 터미널 출력 포맷팅
+# - Pillow: 이미지 처리 (아이콘 최적화)
 # - pytest: 테스트 프레임워크 (개발용)
 ```
 
 ---
 
-## 🔧 환경 설정
+## 🔧 로컬 개발 환경 설정
 
 ### 1. 프로젝트 클론 및 설정
 
@@ -52,317 +50,489 @@ source venv/bin/activate  # Linux/Mac
 pip install -r requirements.txt
 ```
 
-### 2. 환경변수 설정
+### 2. 환경 변수 설정
 
 ```bash
-# 환경변수 파일 생성
-cp env.example .env
+# .env 파일 생성
+cp .env.example .env
+
+# .env 파일 내용 편집
+nano .env
 ```
 
-**.env 파일 편집:**
+### 3. PWA 환경 변수 설정
 
 ```env
-# 워드프레스 설정 (필수)
-WP_SITE_URL=https://seoul.anglican.kr
-WP_USERNAME=your_username
-WP_PASSWORD=your_application_password
-WP_DEFAULT_STATUS=private
-WP_TIMEOUT=30
-WP_RETRY_COUNT=3
+# PWA 기본 설정
+PWA_APP_NAME="공동번역성서"
+PWA_SHORT_NAME="공동번역성서"
+PWA_THEME_COLOR="#4CAF50"
+PWA_BACKGROUND_COLOR="#FFFFFF"
+PWA_START_URL="index.html"
+PWA_DISPLAY="standalone"
 
-# 카테고리/태그 자동 생성 설정 (선택사항)
-WP_BASE_CATEGORY=공동번역성서
-WP_BASE_TAG=공동번역성서
+# 빌드 설정
+BUILD_OUTPUT_DIR="output/pwa"
+ENABLE_MINIFICATION=true
+CACHE_BUST_ENABLED=false
 
-# 파일 경로 설정 (선택사항 - 기본값 사용 가능)
-BIBLE_TEXT_PATH=data/common-bible-kr.txt
-BOOK_MAPPINGS_PATH=data/book_mappings.json
-TEMPLATE_PATH=templates/chapter.html
-OUTPUT_DIR=output
-LOG_DIR=logs
-AUDIO_BASE_URL=data/audio
+# 디렉토리 경로
+STATIC_DIR="static"
+AUDIO_DIR="data/audio"
+ICONS_DIR="static/icons"
 
-# 로깅 설정
+# 로그 설정
 LOG_LEVEL=INFO
-LOG_TO_CONSOLE=true
-LOG_COLOR=true
-
-# 보안 설정
-VERIFY_SSL=true
-
-# 성능 설정
-MAX_WORKERS=4
-
-# 개발/운영 환경 설정
-ENVIRONMENT=development
-DEBUG=false
-```
-
-### 3. 디렉터리 생성
-
-```bash
-# 필요한 디렉터리 생성
-mkdir -p logs data/output config audio
-chmod 755 logs data/output audio
+LOG_FILE="logs/pwa_build.log"
 ```
 
 ---
 
-## 🔐 워드프레스 설정
+## 🚀 PWA 빌드 프로세스
 
-### 1. REST API 활성화
-
-워드프레스 관리자 패널에서:
-
-1. **설정 > 고유주소** 에서 기본값이 아닌 구조 선택
-2. **사용자 > 프로필** 에서 Application Password 생성
-
-### 2. 필수 플러그인 설치
+### 1. 텍스트 파싱
 
 ```bash
-# JWT Authentication (선택적)
-# 또는 Application Password 사용 (권장)
+# 성경 텍스트 파싱
+python src/parser.py data/common-bible-kr.txt \
+  --save-json output/parsed_bible.json \
+  --book-mappings data/book_mappings.json \
+  --log-level INFO
 ```
 
-### 3. 사용자 권한 설정
+### 2. HTML 생성
 
 ```bash
-# 전용 계정 생성 (권장)
-# 역할: Editor
-# 권한: 포스트 작성, 편집, 게시
+# 장별 HTML 파일 생성
+python src/html_generator.py templates/chapter.html output/html/ \
+  --json output/parsed_bible.json \
+  --copy-static --copy-audio \
+  --css-href "static/verse-style.css" \
+  --js-src "static/verse-navigator.js"
 ```
 
-### 4. 보안 설정
+### 3. PWA 빌드
 
-```php
-// wp-config.php에 추가
-define('WP_REST_API_DEBUG', false);
+```bash
+# 완전한 PWA 빌드
+python src/pwa_builder.py build \
+  --input-dir output/html \
+  --output-dir output/pwa \
+  --json output/parsed_bible.json \
+  --include-manifest \
+  --include-service-worker \
+  --include-index \
+  --minify-css \
+  --optimize-images
+```
 
-// .htaccess에 IP 제한 (선택적)
-<RequireAll>
-    Require ip YOUR_SERVER_IP
-    Require ssl
-</RequireAll>
+### 4. 빌드 검증
+
+```bash
+# PWA 필수 요소 확인
+ls -la output/pwa/
+# 확인 항목:
+# - index.html (목차 페이지)
+# - manifest.json (PWA 매니페스트)
+# - sw.js (서비스 워커)
+# - icon-*.png (PWA 아이콘)
+# - static/ (CSS, JS 파일들)
+# - *.html (장별 HTML 파일들)
+
+# PWA 유효성 검사
+python scripts/validate_pwa.py output/pwa/
 ```
 
 ---
 
-## 🚀 배포 프로세스
+## 🌐 정적 파일 호스팅 배포
 
-### 1. 개발 환경 테스트
+### GitHub Pages
 
 ```bash
-# 전체 테스트 실행
-python -m pytest tests/ -v
+# 1. gh-pages 브랜치 생성
+git checkout -b gh-pages
 
-# 통합 테스트
-python tests/integration_test.py
+# 2. PWA 파일들을 루트로 복사
+cp -r output/pwa/* .
+git add .
+git commit -m "Deploy PWA to GitHub Pages"
 
-# 인증 테스트
-python src/wp_publisher.py --test-auth
+# 3. GitHub Pages에 푸시
+git push origin gh-pages
+
+# 4. GitHub 저장소 설정에서 Pages 활성화
+# Settings → Pages → Source: Deploy from branch → gh-pages
 ```
 
-### 2. 데이터 검증
+### Netlify
 
 ```bash
-# 입력 파일 검증
-python scripts/validate_input.py data/common-bible-kr.txt
+# 1. netlify.toml 설정 파일 생성
+cat > netlify.toml << EOF
+[build]
+  publish = "output/pwa"
+  command = "python src/pwa_builder.py build --input-dir output/html --output-dir output/pwa --json output/parsed_bible.json --include-manifest --include-service-worker --include-index"
 
-# 매핑 데이터 검증
-python scripts/validate_mappings.py data/bible_book_mappings.json
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+    Service-Worker-Allowed = "/"
+
+[[headers]]
+  for = "/manifest.json"
+  [headers.values]
+    Content-Type = "application/manifest+json"
+
+[[headers]]
+  for = "*.html"
+  [headers.values]
+    Cache-Control = "public, max-age=3600"
+
+[[headers]]
+  for = "/static/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000"
+EOF
+
+# 2. Netlify CLI로 배포
+npm install -g netlify-cli
+netlify deploy --prod --dir=output/pwa
 ```
 
-### 3. 단계별 배포
-
-#### Stage 1: 파싱 및 HTML 생성
+### Vercel
 
 ```bash
-# 백업 생성
-cp data/common-bible-kr.txt data/backup/$(date +%Y%m%d)_common-bible-kr.txt
+# 1. vercel.json 설정 파일 생성
+cat > vercel.json << EOF
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "src/pwa_builder.py",
+      "use": "@vercel/python"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/sw.js",
+      "headers": {
+        "Cache-Control": "public, max-age=0, must-revalidate",
+        "Service-Worker-Allowed": "/"
+      }
+    },
+    {
+      "src": "/manifest.json",
+      "headers": {
+        "Content-Type": "application/manifest+json"
+      }
+    },
+    {
+      "src": "/static/(.*)",
+      "headers": {
+        "Cache-Control": "public, max-age=31536000"
+      }
+    }
+  ],
+  "outputDirectory": "output/pwa"
+}
+EOF
 
-# 파싱 실행
-python src/parser.py --input data/common-bible-kr.txt --output data/parsed_chapters.json
-
-# 오디오 매핑 검증
-python src/audio_manager.py --validate-mappings
-
-# HTML 생성 (오디오 포함)
-python src/html_generator.py --input data/parsed_chapters.json --output data/output/ --with-audio
-```
-
-#### Stage 2: 미리보기 배포 (비공개)
-
-```bash
-# 비공개 상태로 업로드 (서울교구 사이트)
-python src/wp_publisher.py --upload-all --status=private --url=https://seoul.anglican.kr --author=YOUR_USERNAME --publish-date=2025-07-01 --dry-run=false
-
-# 업로드 로그 확인
-tail -f logs/bible_converter.log
-```
-
-#### Stage 3: 검토 및 테스트
-
-```bash
-# 생성된 포스트 확인
-python scripts/verify_posts.py --check-all
-
-# 접근성 테스트
-python scripts/accessibility_test.py --url=https://your-site.com
-```
-
-#### Stage 4: 공개 배포
-
-```bash
-# 모든 포스트 공개
-python src/wp_publisher.py --publish-all --confirm
-
-# 배포 완료 확인
-python scripts/deployment_check.py
+# 2. Vercel CLI로 배포
+npm install -g vercel
+vercel --prod
 ```
 
 ---
 
-## 📊 모니터링 및 유지보수
+## 🖥️ 웹 서버 배포
 
-### 1. 로그 모니터링
+### Apache 설정
 
-```bash
-# 실시간 로그 모니터링
-tail -f logs/bible_converter.log
+```apache
+# /etc/apache2/sites-available/common-bible.conf
 
-# 오류 로그 필터링
-grep "ERROR" logs/bible_converter.log
+<VirtualHost *:443>
+    ServerName bible.example.com
+    DocumentRoot /var/www/common-bible
 
-# 로그 로테이션 설정
-logrotate config/logrotate.conf
+    # SSL 설정 (PWA 필수)
+    SSLEngine on
+    SSLCertificateFile /path/to/certificate.crt
+    SSLCertificateKeyFile /path/to/private.key
+
+    # PWA 최적화 헤더
+    <Files "sw.js">
+        Header set Cache-Control "public, max-age=0, must-revalidate"
+        Header set Service-Worker-Allowed "/"
+    </Files>
+
+    <Files "manifest.json">
+        Header set Content-Type "application/manifest+json"
+    </Files>
+
+    # 정적 자원 캐싱
+    <Directory "/var/www/common-bible/static">
+        Header set Cache-Control "public, max-age=31536000"
+    </Directory>
+
+    # 오디오 파일 캐싱
+    <Directory "/var/www/common-bible/audio">
+        Header set Cache-Control "public, max-age=2592000"
+    </Directory>
+
+    # Gzip 압축
+    <IfModule mod_deflate.c>
+        AddOutputFilterByType DEFLATE text/html text/css application/javascript application/json
+    </IfModule>
+
+    # HTTPS 리다이렉트
+    <IfModule mod_rewrite.c>
+        RewriteEngine On
+        RewriteCond %{HTTPS} off
+        RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+    </IfModule>
+</VirtualHost>
 ```
 
-### 2. 백업 전략
+### Nginx 설정
 
-```bash
-# 일일 백업 스크립트 (crontab)
-0 2 * * * /path/to/backup_script.sh
+```nginx
+# /etc/nginx/sites-available/common-bible
 
-# 백업 스크립트 예시
-#!/bin/bash
-DATE=$(date +%Y%m%d)
-mysqldump -u user -p wordpress > backup/wp_${DATE}.sql
-tar -czf backup/files_${DATE}.tar.gz data/ config/ logs/
-```
+server {
+    listen 443 ssl http2;
+    server_name bible.example.com;
+    root /var/www/common-bible;
+    index index.html;
 
-### 3. 성능 모니터링
+    # SSL 설정 (PWA 필수)
+    ssl_certificate /path/to/certificate.crt;
+    ssl_certificate_key /path/to/private.key;
+    ssl_protocols TLSv1.2 TLSv1.3;
 
-```python
-# scripts/performance_monitor.py
-import time
-import psutil
+    # PWA 서비스 워커 헤더
+    location = /sw.js {
+        add_header Cache-Control "public, max-age=0, must-revalidate";
+        add_header Service-Worker-Allowed "/";
+    }
 
-def monitor_system():
-    cpu_usage = psutil.cpu_percent()
-    memory_usage = psutil.virtual_memory().percent
-    disk_usage = psutil.disk_usage('/').percent
+    # PWA 매니페스트
+    location = /manifest.json {
+        add_header Content-Type "application/manifest+json";
+    }
 
-    print(f"CPU: {cpu_usage}%, Memory: {memory_usage}%, Disk: {disk_usage}%")
+    # 정적 자원 캐싱
+    location /static/ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+
+    # 오디오 파일 캐싱
+    location /audio/ {
+        expires 30d;
+        add_header Cache-Control "public";
+    }
+
+    # HTML 파일 캐싱
+    location ~* \.html$ {
+        expires 1h;
+        add_header Cache-Control "public";
+    }
+
+    # Gzip 압축
+    gzip on;
+    gzip_types text/css application/javascript application/json text/html;
+
+    # 보안 헤더
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "no-referrer-when-downgrade" always;
+}
+
+# HTTP → HTTPS 리다이렉트
+server {
+    listen 80;
+    server_name bible.example.com;
+    return 301 https://$server_name$request_uri;
+}
 ```
 
 ---
 
-## 🔧 트러블슈팅
+## 📱 PWA 기능 검증
 
-### 자주 발생하는 문제들
-
-#### 1. 인증 실패
+### 로컬 테스트
 
 ```bash
-# 해결 방법
-1. Application Password 재생성
-2. URL 확인 (https:// 포함)
-3. 네트워크 방화벽 확인
+# 로컬 HTTPS 서버 실행 (PWA 테스트용)
+python scripts/serve_https.py output/pwa --port 8443
+
+# 또는 간단한 HTTP 서버 (localhost는 PWA 예외)
+python -m http.server 8000 --directory output/pwa
 ```
 
-#### 2. 메모리 부족
+### PWA 점검 항목
+
+1. **Lighthouse 점검**: Chrome DevTools → Lighthouse → PWA 점수 확인
+2. **매니페스트 검증**: Chrome DevTools → Application → Manifest
+3. **서비스 워커 확인**: Chrome DevTools → Application → Service Workers
+4. **오프라인 동작**: Network 탭에서 Offline 모드 테스트
+5. **홈 화면 추가**: 모바일에서 "홈 화면에 추가" 기능 테스트
+
+### 성능 측정
 
 ```bash
-# 해결 방법
-1. 배치 크기 줄이기 (--batch-size=10)
-2. 메모리 증설
-3. 스왑 파일 설정
+# PageSpeed Insights 점수 확인
+curl "https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=https://bible.example.com&category=PERFORMANCE&category=PWA"
+
+# 또는 Lighthouse CI 사용
+npm install -g @lhci/cli
+lhci autorun --upload.target=temporary-public-storage
 ```
 
-#### 3. API 레이트 리미팅
+---
+
+## 🔒 보안 및 최적화
+
+### HTTPS 설정
 
 ```bash
-# 해결 방법
-1. WP_API_RATE_LIMIT 값 조정
-2. 요청 간 지연 시간 증가
-3. 배치 처리 크기 감소
+# Let's Encrypt 인증서 발급 (Ubuntu)
+sudo apt install certbot python3-certbot-apache
+sudo certbot --apache -d bible.example.com
+
+# 자동 갱신 설정
+sudo crontab -e
+# 다음 줄 추가:
+# 0 12 * * * /usr/bin/certbot renew --quiet
 ```
 
-#### 4. 오디오 파일 문제
+### 보안 헤더
+
+```nginx
+# 추가 보안 헤더 (nginx)
+add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self';" always;
+add_header Permissions-Policy "geolocation=(), microphone=(), camera=()";
+```
+
+### 성능 최적화
 
 ```bash
-# 해결 방법
-1. 오디오 파일 경로 확인
-2. 파일 형식 및 인코딩 확인 (MP3 형식)
-3. audio_mappings.json 파일 검증
-4. 수동으로 오디오 파일 업로드 및 연결
+# 이미지 최적화 (WebP 변환)
+find output/pwa -name "*.png" -exec cwebp {} -o {}.webp \;
+
+# CSS/JS 압축 검증
+du -sh output/pwa/static/
+
+# 캐시 무효화 해시 생성
+python scripts/generate_cache_bust.py output/pwa/
 ```
+
+---
+
+## 📊 모니터링 및 분석
+
+### 기본 분석
+
+```html
+<!-- Google Analytics 4 (선택사항) -->
+<script
+  async
+  src="https://www.googletagmanager.com/gtag/js?id=GA_MEASUREMENT_ID"
+></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag() {
+    dataLayer.push(arguments);
+  }
+  gtag("js", new Date());
+  gtag("config", "GA_MEASUREMENT_ID", {
+    page_title: document.title,
+    page_location: window.location.href,
+  });
+</script>
+```
+
+### PWA 사용 통계
+
+```javascript
+// PWA 설치 추적
+window.addEventListener("beforeinstallprompt", (e) => {
+  gtag("event", "pwa_install_prompt_shown");
+});
+
+window.addEventListener("appinstalled", (e) => {
+  gtag("event", "pwa_installed");
+});
+
+// 오프라인 사용 추적
+window.addEventListener("online", () => {
+  gtag("event", "online_status", { status: "online" });
+});
+
+window.addEventListener("offline", () => {
+  gtag("event", "online_status", { status: "offline" });
+});
+```
+
+---
+
+## 🚨 문제 해결
+
+### 일반적인 문제
+
+**문제: PWA가 홈 화면에 추가되지 않음**
+
+- 해결: HTTPS 확인, 매니페스트 파일 유효성 검사, 192x192, 512x512 아이콘 존재 확인
+
+**문제: 서비스 워커가 등록되지 않음**
+
+- 해결: HTTPS 환경 확인, 서비스 워커 파일 경로 확인, 브라우저 콘솔 오류 메시지 확인
+
+**문제: 오프라인에서 페이지가 로드되지 않음**
+
+- 해결: 서비스 워커의 캐시 전략 확인, 캐시된 파일 목록 검증
 
 ### 로그 분석
 
 ```bash
-# 오류 패턴 분석
-awk '/ERROR/ {print $0}' logs/bible_converter.log | sort | uniq -c
+# 빌드 로그 확인
+tail -f logs/pwa_build.log
 
-# 성공률 계산
-grep -c "SUCCESS" logs/bible_converter.log
-grep -c "ERROR" logs/bible_converter.log
+# 서버 로그 확인 (Apache)
+sudo tail -f /var/log/apache2/access.log
+sudo tail -f /var/log/apache2/error.log
+
+# 서버 로그 확인 (Nginx)
+sudo tail -f /var/log/nginx/access.log
+sudo tail -f /var/log/nginx/error.log
 ```
 
 ---
 
-## 🚦 배포 체크리스트
+## 📚 추가 자료
 
-### 배포 전 확인사항
-
-- [ ] 모든 테스트 통과
-- [ ] 환경변수 설정 완료
-- [ ] 워드프레스 인증 테스트 통과
-- [ ] 오디오 파일 매핑 검증
-- [ ] 접근성 요소 검증
-- [ ] 백업 생성 완료
-- [ ] 로그 디렉터리 권한 설정
-
-### 배포 중 확인사항
-
-- [ ] 파싱 과정 오류 없음
-- [ ] HTML 생성 정상 완료
-- [ ] 비공개 업로드 성공
-- [ ] 생성된 포스트 샘플 확인
-
-### 배포 후 확인사항
-
-- [ ] 모든 장 업로드 완료
-- [ ] 검색 기능 정상 작동 (전역 검색 패널/페이지네이션/정렬 포함)
-- [ ] 오디오 플레이어 정상 작동
-- [ ] 접근성 테스트 통과 (스크린리더 테스트)
-- [ ] 단어/문구 검색 기능 정상 작동
-- [ ] 성능 모니터링 정상
-- [ ] 메타데이터 정확성 확인
-- [ ] 백업 및 로그 확인
+- [PWA 빌더 가이드](pwa-builder-guide.md) - 상세한 PWA 빌드 과정
+- [요구사항](requirements.md) - PWA 기능 요구사항
+- [설계 명세서](design-specification.md) - 시스템 아키텍처
+- [HTML 생성기 가이드](html-generator-guide.md) - HTML 생성 프로세스
 
 ---
 
-## 📞 문의
+## 🎉 배포 완료 체크리스트
 
-배포 과정에서 문제가 발생하면:
+- [ ] 📁 PWA 빌드 완료 (`output/pwa/` 디렉토리)
+- [ ] 🔒 HTTPS 설정 완료
+- [ ] 📱 PWA 매니페스트 검증 완료
+- [ ] ⚙️ 서비스 워커 동작 확인
+- [ ] 🌐 정적 파일 호스팅 또는 웹서버 배포 완료
+- [ ] 📊 Lighthouse PWA 점수 90+ 확인
+- [ ] 📱 모바일에서 "홈 화면에 추가" 테스트 완료
+- [ ] 🔌 오프라인 모드 동작 확인
+- [ ] 🎵 오디오 파일 재생 테스트 완료
+- [ ] 🔍 검색 기능 동작 확인
 
-1. 로그 파일 확인 (`logs/bible_converter.log`)
-2. 트러블슈팅 가이드 참조
-3. GitHub Issues 등록
-
----
-
-**배포 버전**: 1.0.0  
-**최종 업데이트**: 2025년 6월 20일  
-**지원 환경**: Ubuntu 20.04+, CentOS 8+, Windows 10+
+축하합니다! 공동번역성서 PWA가 성공적으로 배포되었습니다. 🎊
