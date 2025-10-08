@@ -63,8 +63,7 @@ class HtmlGenerator:
         Returns:
             생성된 HTML 문자열
         """
-        # 절 HTML 생성 (오디오 슬러그 계산 전, 본문부터 생성)
-        verses_html = self._generate_verses_html(chapter)
+        # 절 HTML은 슬러그 확정 후 생성한다
 
         # 별칭/슬러그 매핑 주입 데이터 구성 (공동번역 약칭/외경 포함)
         alias_to_abbr = {}
@@ -116,7 +115,7 @@ class HtmlGenerator:
                                 _json.dumps(books_meta, ensure_ascii=False) + ';')
         alias_data_script = '<script>' + ''.join(script_parts) + '</script>'
 
-        # 오디오 파일 슬러그 계산: 매핑 우선, 없으면 영문 이름 기반
+        # 오디오/챕터 공통 슬러그 계산: 매핑 우선, 없으면 영문 이름 기반
         # abbr_to_english 맵 구성
         abbr_to_english = {}
         try:
@@ -131,9 +130,15 @@ class HtmlGenerator:
         except Exception:
             pass
 
-        audio_slug = abbr_to_slug.get(chapter.book_abbr) or abbr_to_english.get(
-            chapter.book_abbr) or self._get_book_slug(chapter.book_abbr)
+        chapter_slug = (
+            abbr_to_slug.get(chapter.book_abbr)
+            or abbr_to_english.get(chapter.book_abbr)
+            or self._get_book_slug(chapter.book_abbr)
+        )
+        audio_slug = chapter_slug
         # 최종 보정: 비ASCII면 영어명으로 강제 대체
+        if not chapter_slug.isascii():
+            chapter_slug = abbr_to_english.get(chapter.book_abbr, chapter_slug)
         if not audio_slug.isascii():
             audio_slug = abbr_to_english.get(chapter.book_abbr, audio_slug)
         audio_filename = f"{audio_slug}-{chapter.chapter_number}.mp3"
@@ -157,28 +162,32 @@ class HtmlGenerator:
             f'<script src="{js_src}"></script>' if js_src else ""
         )
 
+        # hidden 속성 플레이스홀더 구성 (오디오 존재 여부에 따라 토글)
+        audio_container_hidden = "" if audio_exists else "hidden"
+        audio_unavailable_hidden = "hidden" if audio_exists else ""
+
+        # data-audio-src 및 다운로드 링크에 사용할 경로: 없으면 빈 문자열
+        safe_audio_path = audio_path if audio_exists else ""
+
+        # 절 HTML 생성 (슬러그 기반 ID)
+        verses_html = self._generate_verses_html(chapter, chapter_slug)
+
         html = self.template.substitute(
-            book_name=chapter.book_name,
+            book_name=chapter.book_name_ko,
             chapter_number=chapter.chapter_number,
-            chapter_id=f"{chapter.book_abbr}-{chapter.chapter_number}",
+            chapter_id=f"{chapter_slug}-{chapter.chapter_number}",
             verses_content=verses_html,
-            audio_path=audio_path if audio_exists else "#",
-            audio_title=f"{chapter.book_name} {chapter.chapter_number}장 오디오",
+            audio_path=safe_audio_path,
+            audio_title=f"{chapter.book_name_ko} {chapter.chapter_number}장 오디오",
             static_base=static_base,
             alias_data_script=alias_data_script,
             css_link_tag=css_link_tag,
             js_script_tag=js_script_tag,
             prev_button_html=prev_button_html,
             next_button_html=next_button_html,
+            audio_container_hidden=audio_container_hidden,
+            audio_unavailable_hidden=audio_unavailable_hidden,
         )
-
-        # 오디오 파일 존재 여부에 따라 CSS 클래스 조정
-        if audio_exists:
-            html = html.replace('class="audio-unavailable-notice"',
-                                'class="audio-unavailable-notice hidden"')
-        else:
-            html = html.replace('class="audio-player-container"',
-                                'class="audio-player-container hidden"')
 
         return html
 
@@ -199,7 +208,7 @@ class HtmlGenerator:
         for ch in chapters:
             key = ch.book_abbr
             if key not in by_book or ch.chapter_number < by_book[key][1]:
-                by_book[key] = (ch.book_name, ch.chapter_number)
+                by_book[key] = (ch.book_name_ko, ch.chapter_number)
 
         # 정렬 함수: 공동번역 책 순서
         def order_key(item: tuple[str, tuple[str, int]]) -> int:
@@ -287,7 +296,7 @@ class HtmlGenerator:
         html_parts.extend(["</body>", "</html>"])
         return "\n".join(html_parts)
 
-    def _generate_verses_html(self, chapter: Chapter) -> str:
+    def _generate_verses_html(self, chapter: Chapter, chapter_slug: str) -> str:
         """
         절들을 HTML로 변환 (단락 구분 고려)
 
@@ -301,7 +310,8 @@ class HtmlGenerator:
         current_paragraph = []
 
         for verse in chapter.verses:
-            verse_html = self._generate_verse_span(chapter, verse)
+            verse_html = self._generate_verse_span(
+                chapter, verse, chapter_slug)
 
             if verse.has_paragraph and current_paragraph:
                 # 새 단락 시작 - CSS 클래스로 공백 유지
@@ -318,7 +328,7 @@ class HtmlGenerator:
 
         return '\n    '.join(paragraphs)
 
-    def _generate_verse_span(self, chapter: Chapter, verse: Verse) -> str:
+    def _generate_verse_span(self, chapter: Chapter, verse: Verse, chapter_slug: str) -> str:
         """
         절을 span 요소로 변환 (접근성 고려)
 
@@ -329,7 +339,7 @@ class HtmlGenerator:
         Returns:
             절의 HTML span 요소
         """
-        verse_id = f"{chapter.book_abbr}-{chapter.chapter_number}-{verse.number}"
+        verse_id = f"{chapter_slug}-{chapter.chapter_number}-{verse.number}"
 
         # 접근성을 고려한 텍스트 처리
         # 1. 원본 텍스트에서 ¶ 기호를 분리
@@ -846,12 +856,12 @@ def main():
             with open(filepath, 'w', encoding='utf-8') as f:
                 f.write(html)
             print(
-                f"[{i}/{len(chapters)}] {chapter.book_name} {chapter.chapter_number}장 → {filename}")
+                f"[{i}/{len(chapters)}] {chapter.book_name_ko} {chapter.chapter_number}장 → {filename}")
 
             # 검색 인덱스 엔트리 적재
             if emit_search_index:
                 for verse in chapter.verses:
-                    verse_id = f"{chapter.book_abbr}-{chapter.chapter_number}-{verse.number}"
+                    verse_id = f"{slug}-{chapter.chapter_number}-{verse.number}"
                     href = f"{slug}-{chapter.chapter_number}.html#{verse_id}"
                     # 텍스트에서 접근성 기호는 검색 품질을 위해 제거/단순화
                     verse_text = verse.text.replace(
@@ -867,7 +877,7 @@ def main():
                     })
         except Exception as e:
             print(
-                f"❌ 생성 실패: {chapter.book_name} {chapter.chapter_number}장 - {e}")
+                f"❌ 생성 실패: {chapter.book_name_ko} {chapter.chapter_number}장 - {e}")
 
     # 검색 인덱스 파일 저장
     if emit_search_index:
@@ -909,7 +919,7 @@ def main():
             for ch in chapters:
                 if ch.book_abbr not in first_chapter_by_book or ch.chapter_number < first_chapter_by_book[ch.book_abbr]:
                     first_chapter_by_book[ch.book_abbr] = ch.chapter_number
-                    book_name_by_book[ch.book_abbr] = ch.book_name
+                    book_name_by_book[ch.book_abbr] = ch.book_name_ko
 
             for book_abbr, first_ch in first_chapter_by_book.items():
                 real_slug = compute_slug(book_abbr)

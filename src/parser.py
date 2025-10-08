@@ -6,7 +6,7 @@
 import re
 import json
 import os
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 from dataclasses import dataclass, asdict
 
 
@@ -21,8 +21,12 @@ class Verse:
 @dataclass
 class Chapter:
     """장 데이터"""
-    book_name: str
+    book_id: str
+    book_name_ko: str
+    book_name_en: str
     book_abbr: str
+    division_ko: str
+    division_en: str
     chapter_number: int
     verses: List[Verse]
 
@@ -34,30 +38,74 @@ class BibleParser:
         self.book_mappings = self._load_book_mappings(book_mappings_path)
         self.chapter_pattern = re.compile(r'([가-힣0-9]+)\s+(\d+):(\d+)')
 
-    def _load_book_mappings(self, book_mappings_path: str) -> Dict[str, Dict]:
-        """책 이름 매핑 데이터를 로드하고 딕셔너리로 변환"""
+    def _load_book_mappings(self, book_mappings_path: str) -> Dict[str, Any]:
+        """책 메타데이터 로드"""
         with open(book_mappings_path, 'r', encoding='utf-8') as f:
-            mappings_list = json.load(f)
+            items = json.load(f)
 
-        # 리스트를 딕셔너리로 변환하여 빠른 검색 가능
-        mappings_dict = {}
-        for book in mappings_list:
-            mappings_dict[book['약칭']] = {
-                'full_name': book['전체 이름'],
-                'english_name': book['영문 이름'],
-                '구분': book.get('구분', '구약'),  # 기본값은 구약
-                'aliases': book.get('aliases', [book['약칭'], book['전체 이름']])
-            }
+        def get_english_abbr(english_name: str) -> str:
+            name = (english_name or '').lower()
+            if ' ' in name:
+                parts = name.split()
+                if parts[0].isdigit():
+                    return f"{parts[0]}-{parts[1][:3]}"
+                else:
+                    return parts[0][:4]
+            return name[:4]
 
-        return mappings_dict
+        by_id: Dict[str, Any] = {}
+        ko_alias_to_id: Dict[str, str] = {}
 
-    def _get_full_book_name(self, abbr: str) -> str:
-        """약칭으로 전체 이름 반환"""
-        if abbr in self.book_mappings:
-            return self.book_mappings[abbr]['full_name']
-        else:
-            # 매핑이 없으면 약칭 그대로 반환 (에러 방지)
-            return abbr
+        for raw in items:
+            if 'id' in raw and 'names' in raw:
+                bid = raw['id']
+                names = raw.get('names', {})
+                division = raw.get('division', {})
+                aliases = raw.get('aliases', {})
+                book_order = raw.get('book_order', -1)
+                by_id[bid] = {
+                    'names': {'ko': names.get('ko', ''), 'en': names.get('en', '')},
+                    'division': {'ko': division.get('ko', ''), 'en': division.get('en', '')},
+                    'aliases': {'ko': aliases.get('ko', []), 'en': aliases.get('en', [])},
+                    'book_order': book_order,
+                }
+                for a in set([names.get('ko', '')] + aliases.get('ko', [])):
+                    if a:
+                        ko_alias_to_id[a] = bid
+            else:
+                abbr = raw.get('abbr') or raw.get('약칭')
+                ko = raw.get('korean_name') or raw.get('전체 이름') or ''
+                en = raw.get('english_name') or raw.get('영문 이름') or ''
+                div = raw.get('division') or raw.get('구분') or ''
+                aliases = raw.get('aliases') or []
+                bid = get_english_abbr(en) if en else (abbr or ko)
+                by_id[bid] = {
+                    'names': {'ko': ko, 'en': en},
+                    'division': {'ko': div, 'en': 'Old Testament' if div == '구약' else ('Apocrypha' if div == '외경' else 'New Testament')},
+                    'aliases': {'ko': list({abbr, ko, *aliases} - {None, ''}), 'en': [bid, en] if en else [bid]},
+                    'book_order': -1,
+                }
+                for a in by_id[bid]['aliases']['ko'] + ([ko] if ko else []):
+                    if a:
+                        ko_alias_to_id[a] = bid
+
+        return {'by_id': by_id, 'ko_alias_to_id': ko_alias_to_id}
+
+    def _resolve_book(self, token_ko: str) -> Dict[str, str]:
+        """한국어 약칭/이름으로 책 메타 해석."""
+        by_id = self.book_mappings['by_id']
+        ko_map = self.book_mappings['ko_alias_to_id']
+        bid = ko_map.get(token_ko)
+        if not bid:
+            return {'id': token_ko, 'name_ko': token_ko, 'name_en': token_ko, 'division_ko': '', 'division_en': ''}
+        meta = by_id[bid]
+        return {
+            'id': bid,
+            'name_ko': meta['names'].get('ko', ''),
+            'name_en': meta['names'].get('en', ''),
+            'division_ko': meta['division'].get('ko', ''),
+            'division_en': meta['division'].get('en', ''),
+        }
 
     def _get_english_book_name(self, abbr: str) -> str:
         """약칭으로 영문 이름 반환"""
@@ -87,11 +135,15 @@ class BibleParser:
                 # 새 장 시작
                 book_abbr = match.group(1)
                 chapter_num = int(match.group(2))
-                book_name = self._get_full_book_name(book_abbr)
+                resolved = self._resolve_book(book_abbr)
 
                 current_chapter = Chapter(
-                    book_name=book_name,
+                    book_id=resolved['id'],
+                    book_name_ko=resolved['name_ko'] or book_abbr,
+                    book_name_en=resolved['name_en'] or resolved['id'],
                     book_abbr=book_abbr,
+                    division_ko=resolved['division_ko'],
+                    division_en=resolved['division_en'],
                     chapter_number=chapter_num,
                     verses=[]
                 )
@@ -192,12 +244,28 @@ class BibleParser:
                 for verse_data in chapter_data['verses']
             ]
 
-            chapter = Chapter(
-                book_name=chapter_data['book_name'],
-                book_abbr=chapter_data['book_abbr'],
-                chapter_number=chapter_data['chapter_number'],
-                verses=verses
-            )
+            if 'book_id' in chapter_data:
+                chapter = Chapter(
+                    book_id=chapter_data.get('book_id', ''),
+                    book_name_ko=chapter_data.get('book_name_ko', ''),
+                    book_name_en=chapter_data.get('book_name_en', ''),
+                    book_abbr=chapter_data.get('book_abbr', ''),
+                    division_ko=chapter_data.get('division_ko', ''),
+                    division_en=chapter_data.get('division_en', ''),
+                    chapter_number=chapter_data['chapter_number'],
+                    verses=verses
+                )
+            else:
+                chapter = Chapter(
+                    book_id='',
+                    book_name_ko=chapter_data.get('book_name', ''),
+                    book_name_en=chapter_data.get('english_name', ''),
+                    book_abbr=chapter_data.get('book_abbr', ''),
+                    division_ko=chapter_data.get('division_ko', ''),
+                    division_en=chapter_data.get('division_en', ''),
+                    chapter_number=chapter_data['chapter_number'],
+                    verses=verses
+                )
             chapters.append(chapter)
 
         print(f"{json_path}에서 {len(chapters)}개 장을 로드했습니다.")
@@ -271,8 +339,10 @@ def main():
 
     # 처음 몇 개 장의 정보 출력
     for i, chapter in enumerate(chapters[:3]):
-        print(f"\n[{i+1}] {chapter.book_name} {chapter.chapter_number}장")
-        print(f"    약칭: {chapter.book_abbr}")
+        print(
+            f"\n[{i+1}] {chapter.book_name_ko} {chapter.chapter_number}장 (id={chapter.book_id})")
+        print(
+            f"    약칭: {chapter.book_abbr} / 구분: {chapter.division_ko or '-'}")
         print(f"    절 수: {len(chapter.verses)}")
         if chapter.verses:
             print(

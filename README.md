@@ -74,7 +74,11 @@ common-bible/
 ├── docs/                       # 📚 문서
 │   ├── requirements.md         # 요구사항 명세
 │   ├── design-specification.md # 상세 설계서
-│   └── parser-usage-guide.md   # 파서 사용 가이드
+│   ├── parser-usage-guide.md   # 파서 사용 가이드
+│   ├── design-system.md        # 디자인 시스템
+│   ├── wireframes.md           # 와이어프레임
+│   └── assets/                 # 문서 자산
+│       └── wireframes/         # 와이어프레임 이미지
 ├── src/                        # 💻 소스코드
 │   ├── __init__.py             # 패키지 초기화
 │   ├── parser.py               # ✅ 텍스트 파싱 엔진 (구현 완료)
@@ -369,9 +373,16 @@ python -m pytest tests/test_integration.py -v
 
 ## 📚 문서
 
+### 기능 및 설계
+
 - [📋 요구사항 명세서](docs/requirements.md) - 프로젝트 요구사항 및 접근성 가이드
 - [🎨 상세 설계서](docs/design-specification.md) - 시스템 아키텍처 및 모듈 설계
 - [📖 파서 사용 가이드](docs/parser-usage-guide.md) - parser.py 모듈 상세 사용법
+
+### 디자인
+
+- [🎨 디자인 시스템](docs/design-system.md) - 컬러, 타이포그래피, 간격, 컴포넌트 명세
+- [📐 와이어프레임](docs/wireframes.md) - 주요 화면 레이아웃 및 Figma 디자인 파일
 
 ## 📊 현재 진행 상황
 

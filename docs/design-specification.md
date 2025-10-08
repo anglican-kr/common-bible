@@ -18,7 +18,7 @@
 
 ## 📅 개발 계획 (Phase별 로드맵)
 
-### **Phase 1: 국제화/현지화 최소 기반 확보** (4-6주)
+### **Phase 1: 국제화/현지화 기반 확보** (4-6주)
 
 #### 목표
 
@@ -35,7 +35,7 @@
 #### 지원 언어
 
 - **UI 언어**: 한국어(기본) + 영어
-- **본문 언어**: 한국어 공동번역성서만
+- **본문 언어**: 한국어 공동번역성서
 - **검색**: 한영 혼용 책 이름 검색 지원
 
 #### 성공 기준
@@ -45,12 +45,41 @@
 - [ ] 오프라인에서도 언어 설정 유지
 - [ ] "Genesis" 검색으로 창세기 매칭 동작
 
-### **Phase 2: 멀티 에디션 & 다국어 성서 지원** (8-12주)
+### **Phase 2: 고급 기능 & 커뮤니티** (12-16주)
 
 #### 목표
 
-- 한국어: 공동번역 + 새번역 + 개역개정 지원
-- 영어: ESV, NIV 등 주요 번역본 지원
+- 전례독서 시스템 구축
+- 사용자 콘텐츠 & 커뮤니티 기능
+- AI 기반 기능 실험
+
+#### 주요 기능
+
+- **개인화 기능**: 북마크 & 하이라이트, 개인 노트, 읽기 계획 추적
+- **커뮤니티 기능**: 구절 공유(SNS 연동)
+- **AI 실험 기능**: 구절 의미 검색(시맨틱), 주제별 구절 추천
+
+#### 기술 스택 확장
+
+- **백엔드**: Firebase/Supabase (사용자 데이터)
+- **AI**: OpenAI API 또는 Gemini API
+- **분석**: Google Analytics, 사용자 행동 추적
+- **CDN**: 글로벌 콘텐츠 배포
+
+#### 성공 기준
+
+- [ ] 전례독서 시스템 정상 동작
+- [ ] 연구 도구로 구절 간 상호참조/주석 탐색 원활
+- [ ] 사용자 개인화 데이터 로컬 저장 또는 선택적 동기화
+- [ ] 커뮤니티 공유 기능 정상 동작
+- [ ] 시맨틱 검색 프로토타입 동작
+
+### **Phase 3: 멀티 에디션 & 다국어 성서 지원** (8-12주)
+
+#### 목표
+
+- 한국어: 공동번역 개정판
+- 영어: KJV (잉글랜드 성공회는 공식적인 자리에서 KJV 사용)
 - 에디션별 독립적 관리 시스템 구축
 
 #### 주요 기능
@@ -65,46 +94,14 @@
 ```
 data/editions/
 ├── korean-common/      # 공동번역성서
-├── korean-new/         # 새번역
-├── korean-revised/     # 개역개정
-├── english-esv/        # ESV
-└── english-niv/        # NIV
+├── english-kjv/        # KJV
 ```
-
-#### 성공 기준
-
-- [ ] 에디션 간 구절 동기화 (창세기 1:1 = Genesis 1:1)
-- [ ] 5개 이상 주요 번역본 지원
-- [ ] 에디션별 독립적 오프라인 저장
-- [ ] 검색 결과에서 번역본 차이 시각화
-
-### **Phase 3: 고급 기능 & 커뮤니티** (12-16주)
-
-#### 목표
-
-- 성경 연구 도구 통합
-- 사용자 콘텐츠 & 커뮤니티 기능
-- AI 기반 기능 실험
-
-#### 주요 기능
-
-- **연구 도구**: 구절 간 상호참조, 주석/해설 통합, 성경 지도 연동
-- **개인화 기능**: 북마크 & 하이라이트, 개인 노트, 읽기 계획 추적
-- **커뮤니티 기능**: 구절 공유(SNS 연동), 큐레이션된 읽기 계획
-- **AI 실험 기능**: 구절 의미 검색(시맨틱), 주제별 구절 추천
-
-#### 기술 스택 확장
-
-- **백엔드**: Firebase/Supabase (사용자 데이터)
-- **AI**: OpenAI API, 로컬 임베딩 모델
-- **분석**: Google Analytics, 사용자 행동 추적
-- **CDN**: 글로벌 콘텐츠 배포
 
 #### 핵심 가치
 
-- **Phase 1**: "글로벌 접근성" - 언어 장벽 해소
-- **Phase 2**: "선택의 자유" - 다양한 번역본 비교
-- **Phase 3**: "깊이 있는 연구" - 종합적 성경 연구 플랫폼
+- **Phase 1**: 언어 장벽 해소
+- **Phase 2**: 전례독서에 따른 성서 읽기/공유 플랫폼
+- **Phase 3**: 공동번역성서/KJV 번역본 비교
 
 ---
 
@@ -154,7 +151,9 @@ common-bible/
 │   │   └── language-detector.js  # 브라우저 언어 감지
 │   └── icons/              # PWA 아이콘 파일들
 │       ├── icon-192x192.png
+│       ├── icon-256x256.png
 │       ├── icon-512x512.png
+│       ├── apple-touch-icon-180.png
 │       └── favicon.ico
 ├── data/
 │   ├── common-bible-kr.txt # 원본 텍스트 (공동번역성서)
@@ -178,10 +177,10 @@ common-bible/
 # Phase 2/3 예정 파일들 (현재 미구현)
 # ├── static/
 # │   ├── search-worker.js    # 전역 검색 Web Worker (Phase 2)
-# │   └── lectionary.js       # 전례독서 시스템 (Phase 3)
+# │   └── lectionary.js       # 전례독서 시스템 (Phase 2)
 # ├── data/
-# │   ├── editions/           # 멀티 에디션 지원 (Phase 2)
-# │   └── lectionary/         # 전례독서 데이터 (Phase 3)
+# │   ├── editions/           # 멀티 에디션 지원 (Phase 3)
+# │   └── lectionary/         # 전례독서 데이터 (Phase 2)
 ```
 
 ---
@@ -198,26 +197,32 @@ from typing import List
 
 @dataclass
 class Chapter:
-    """성경 장 데이터 모델"""
-    book_name: str          # 한국어 책 이름 (예: "창세기")
-    book_abbr: str          # 한국어 약칭 (예: "창세")
-    english_name: str       # 영어 책 이름 (예: "Genesis")
-    division_ko: str        # 한국어 구분 (예: "구약")
-    division_en: str        # 영어 구분 (예: "Old Testament")
+    """성경 장 데이터 모델 (언어 비종속 코어만 유지)"""
+    book_id: str            # 책 ID (언어 중립, 예: "gen")
     chapter_number: int     # 장 번호 (예: 1)
     verses: List[Verse]     # 절 목록
+    # 선택적: 원문 약칭 보존이 필요할 때만 사용
+    source_abbr: str | None = None
 
     # 파생 속성 (계산됨)
     @property
     def chapter_id(self) -> str:
-        """장 고유 ID (영어 기반)"""
-        return f"{self.english_slug}-{self.chapter_number}"
+        """장 고유 ID (언어 중립 id 기반)"""
+        return f"{self.book_id}-{self.chapter_number}"
 
     @property
     def english_slug(self) -> str:
-        """영어 기반 URL 슬러그"""
-        return get_english_abbr(self.english_name)
+        """영어 기반 URL 슬러그 (파일명 생성용, 예: genesis)
+
+        주입 시점: 빌드 또는 런타임에서 book_id → names.en로 해석해 생성
+        """
+        return resolve_english_slug(self.book_id)
 ```
+
+`book_mappings.json` 파일과의 정합:
+
+- 검색/앵커 ID는 언어 중립 `id`(예: `gen`)를 사용하고, 파일명은 `english_slug`(예: `genesis`)를 사용합니다.
+- `id`는 `book_mappings.json`의 `id` 필드에서 오며, UI 표시는 `names.{ko,en}`를 사용합니다.
 
 #### Verse 클래스 (절 데이터)
 
@@ -248,17 +253,17 @@ class Verse:
 ```python
 @dataclass
 class BookMapping:
-    """책 메타데이터 모델 (book_mappings.json 구조)"""
-    abbr: str              # 한국어 약칭 (예: "창세")
-    korean_name: str       # 한국어 전체 이름 (예: "창세기")
-    english_name: str      # 영어 이름 (예: "Genesis")
-    division: str          # 구분 (예: "구약")
-    aliases: List[str]     # 검색 별칭 (예: ["창세", "창세기", "창"])
+    """책 메타데이터 모델 (book_mappings.json Option A 스키마)"""
+    id: str                        # 언어 중립 ID (영문 약칭 기반, 예: "gen")
+    book_order: int                # 정렬용 순서 (0부터 시작, 외경 포함 일관)
+    names: dict                    # 다국어 이름 {"ko": "창세기", "en": "Genesis"}
+    division: dict                 # 다국어 구분 {"ko": "구약", "en": "Old Testament"}
+    aliases: dict                  # 다국어 별칭 {"ko": ["창세", ...], "en": ["gen", ...]}
 
     @property
     def english_abbr(self) -> str:
-        """영어 약칭 (ID 생성용)"""
-        return get_english_abbr(self.english_name)
+        """영어 약칭 (ID 생성 및 파일명 슬러그에 사용)"""
+        return get_english_abbr(self.names.get("en", ""))
 ```
 
 ### 검색 인덱스 구조
@@ -269,10 +274,10 @@ class BookMapping:
 @dataclass
 class SearchIndexEntry:
     """검색 인덱스 항목 (JSON 압축을 위해 단축키 사용)"""
-    i: str    # id: 절 ID (예: "gen-1-1")
+    i: str    # id: 절 ID (book_id 기반, 예: "gen-1-1")
     t: str    # text: 절 내용
     h: str    # href: HTML 파일 경로 (예: "genesis-1.html#gen-1-1")
-    b: str    # book: 영어 약칭 (예: "gen")
+    b: str    # book: book_id (언어 중립, 예: "gen")
     c: int    # chapter: 장 번호
     v: int    # verse: 절 번호
     bo: int   # book_order: 책 순서 (정렬용)
@@ -317,18 +322,9 @@ class PWAConfig:
     def __post_init__(self):
         if self.icons is None:
             self.icons = [
-                {
-                    "src": "static/icons/icon-192x192.png",
-                    "sizes": "192x192",
-                    "type": "image/png",
-                    "purpose": "maskable any"
-                },
-                {
-                    "src": "static/icons/icon-512x512.png",
-                    "sizes": "512x512",
-                    "type": "image/png",
-                    "purpose": "maskable any"
-                }
+                {"src": "static/icons/icon-192x192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+                {"src": "static/icons/icon-256x256.png", "sizes": "256x256", "type": "image/png", "purpose": "any"},
+                {"src": "static/icons/icon-512x512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"}
             ]
 
         if self.supported_languages is None:
@@ -337,7 +333,7 @@ class PWAConfig:
 
 ### 유틸리티 함수
 
-#### 영어 약칭 생성
+#### 영어 약칭 생성 (ID 규칙 참고)
 
 ```python
 def get_english_abbr(english_name: str) -> str:
@@ -400,8 +396,9 @@ flowchart TD
 
 ##### 1.1.1 입력 포맷 규칙 요약
 
-- 장 시작 패턴: `([가-힣0-9]+)\s+([0-9]+):([0-9]+)\s*(.*)?`
-  - 예: `창세 1:1 ¶ 한처음에...` (첫 절 내용이 같은 줄에 등장)
+- 장 시작 패턴: `^([^\s]+)\s+([0-9]+)[.:：,]([0-9]+)\s*(.*)?$`
+  - 첫 토큰은 별칭/이름/ID를 `book_mappings.json`으로 정규화하여 `book_id`로 해석
+  - 예: `창세 1:1 …`, `Gen 1:1 …` (첫 줄에 1절 본문 포함 가능)
 - 두 번째 줄부터: `^([0-9]+)\s+(.*)$`
 - 단락 구분: `¶`가 새 단락 시작을 의미
 
@@ -459,17 +456,36 @@ flowchart TD
 **추상 데이터 구조:**
 
 - `Verse { number: int, text: str, has_paragraph: bool }`
-- `Chapter { book_name: str, book_abbr: str, chapter_number: int, verses: List[Verse] }`
-- **Phase 1 확장**: `{ english_name: str, division_ko: str, division_en: str }` 필드 추가
+- `Chapter { book_id: str, chapter_number: int, verses: List[Verse] }`
+- **라벨 주입(빌드/런타임)**: `resolve_book_label(book_id, lang) → { name, abbr, division }`
 
-**`parsed_bible.json` 파일 구조 예시:**
+**`parsed_bible.json` 파일 구조 예시 (언어 중립 코어 + 언어별 오버레이):**
+
+Phase 1: 코어(본문만 저장, 언어 중립 ID 기반) — 라벨은 런타임 해석
+
+```json
+{
+  "book_id": "gen",
+  "chapter_number": 1,
+  "verses": [
+    {
+      "number": 1,
+      "text": "한처음에 하느님께서 하늘과 땅을 지어내셨다.",
+      "has_paragraph": true
+    }
+  ]
+}
+```
+
+Phase 2: 다국어/라벨 확장(필요 시 메타 포함, 혹은 별도 라벨 파일)
 
 앞서 본 `common-bible-kr.txt` 입력이 `parser.py`로 처리되면 `output/parsed_bible.json`에 다음과 같은 구조로 저장됩니다:
 
 ```json
 {
-  "book_name": "창세기",
-  "book_abbr": "창세",
+  "book_id": "gen", // book_mappings.json의 id
+  "book_name": "창세기", // 렌더링 시점 언어에 따라 names.{lang}
+  "book_abbr": "창세", // aliases.{lang}[0] 우선
   "chapter_number": 1,
   "verses": [
     {
@@ -503,15 +519,11 @@ flowchart TD
 
 **다국어 메타데이터 확장 (Phase 1):**
 
-`parser.py`가 `parsed_bible.json` 생성 시, `book_mappings.json`의 `"division": "구약"` 구조를 다국어 필드로 확장합니다:
+`parser.py`가 `parsed_bible.json` 생성 시, 코어만 저장하며 라벨은 빌드/런타임에 주입합니다:
 
 ```json
 {
-  "book_name": "창세기",           // 한국어 전체 이름 (book_mappings.json의 names.ko)
-  "book_abbr": "창세",            // 원본 텍스트의 약칭
-  "english_name": "Genesis",      // 영어 이름 (book_mappings.json의 names.en)
-  "division_ko": "구약",          // 한국어 구분 (book_mappings.json의 division 값)
-  "division_en": "Old Testament", // 영어 구분 (파싱 시 추가)
+  "book_id": "gen",                 // book_mappings.json id
   "chapter_number": 1,
   "verses": [...]
 }
@@ -521,11 +533,7 @@ flowchart TD
 
 ```json
 {
-  "book_name": "토비트",
-  "book_abbr": "토비",
-  "english_name": "Tobit",
-  "division_ko": "외경",
-  "division_en": "Apocrypha",
+  "book_id": "tob",
   "chapter_number": 1,
   "verses": [
     {
@@ -555,9 +563,9 @@ flowchart TD
 
 **키 명명 규칙 정리:**
 
-- **`book_mappings.json` 파일**: `"division": "구약"` (현재 Phase 1)
-- **`parsed_bible.json`의 Chapter 객체**: `"division_ko": "구약", "division_en": "Old Testament"` (다국어 확장)
-- **Phase 2+ 계획**: `"division": { "ko": "구약", "en": "Old Testament" }` (중첩 객체)
+- **`book_mappings.json`**: `{ id, book_order, names.{ko,en}, division.{ko,en}, aliases.{ko,en} }`
+- **`parsed_bible.json`의 Chapter 객체**: `{ book_name, book_abbr, english_name, division_ko, division_en, ... }`
+- **검색 인덱스**: `{ b: id, i: "{id}-{c}-{v}" }` 형태로 언어 중립 유지
 
 **데이터 플로우 요약:**
 
@@ -673,8 +681,11 @@ groups: ("27", "그들이 예수께 말하였다.")
 ```json
 {
   "chapters": [
+    // id는 book_mappings.json의 id 사용, 파일명은 english_slug 사용
     {
-      "book_name": "창세기",
+      "book_id": "gen",
+      "book_name_ko": "창세기",
+      "book_name_en": "Genesis",
       "book_abbr": "창세",
       "chapter_number": 1,
       "verses": [
@@ -697,62 +708,74 @@ groups: ("27", "그들이 예수께 말하였다.")
 
 **책 매핑 파일 구조** (`data/book_mappings.json`):
 
-매핑 파일에서 쓰이는 약칭은 공동번역성서 기준으로 사용합니다.
+언어 중립 `id`와 `book_order`를 단일 기준으로 유지하고, 다국어 필드는 객체로 포함합니다.
 
 ```json
 [
   {
-    "abbr": "창세",
-    "korean_name": "창세기",
-    "english_name": "Genesis",
-    "division": "구약",
-    "aliases": ["창세", "창세기", "창"]
+    "id": "gen",
+    "book_order": 0,
+    "names": { "ko": "창세기", "en": "Genesis" },
+    "division": { "ko": "구약", "en": "Old Testament" },
+    "aliases": { "ko": ["창세", "창세기", "창"], "en": ["gen", "genesis"] }
   },
   {
-    "abbr": "출애",
-    "korean_name": "출애굽기",
-    "english_name": "Exodus",
-    "division": "구약",
-    "aliases": ["출애", "출애굽기", "출"]
+    "id": "exod",
+    "book_order": 1,
+    "names": { "ko": "출애굽기", "en": "Exodus" },
+    "division": { "ko": "구약", "en": "Old Testament" },
+    "aliases": { "ko": ["출애", "출애굽기", "출"], "en": ["exod", "exodus"] }
   },
   {
-    "abbr": "토비",
-    "korean_name": "토비트",
-    "english_name": "Tobit",
-    "division": "외경",
-    "aliases": ["토비", "토비트", "토빗기", "토"]
+    "id": "tob",
+    "book_order": 38,
+    "names": { "ko": "토비트", "en": "Tobit" },
+    "division": { "ko": "외경", "en": "Apocrypha" },
+    "aliases": {
+      "ko": ["토비", "토비트", "토빗기", "토"],
+      "en": ["tob", "tobit"]
+    }
   },
   {
-    "abbr": "1마카",
-    "korean_name": "마카베오 상권",
-    "english_name": "1 Maccabees",
-    "division": "외경",
-    "aliases": ["1마카", "마카베오상", "카상"]
+    "id": "1macc",
+    "book_order": 43,
+    "names": { "ko": "마카베오 상권", "en": "1 Maccabees" },
+    "division": { "ko": "외경", "en": "Apocrypha" },
+    "aliases": {
+      "ko": ["1마카", "마카베오상", "카상"],
+      "en": ["1macc", "1 maccabees"]
+    }
   },
   {
-    "abbr": "마태",
-    "korean_name": "마태오의 복음서",
-    "english_name": "Matthew",
-    "division": "신약",
-    "aliases": ["마태", "마태복음", "마태오복음", "마태오의 복음서", "마"]
+    "id": "matt",
+    "book_order": 65,
+    "names": { "ko": "마태오의 복음서", "en": "Matthew" },
+    "division": { "ko": "신약", "en": "New Testament" },
+    "aliases": {
+      "ko": ["마태", "마태복음", "마태오복음", "마태오의 복음서", "마"],
+      "en": ["matt", "matthew"]
+    }
   },
   {
-    "abbr": "묵시",
-    "korean_name": "요한 묵시록",
-    "english_name": "Revelation",
-    "division": "신약",
-    "aliases": ["묵시", "요한의 묵시록", "요한계시록", "계"]
+    "id": "rev",
+    "book_order": 90,
+    "names": { "ko": "요한 묵시록", "en": "Revelation" },
+    "division": { "ko": "신약", "en": "New Testament" },
+    "aliases": {
+      "ko": ["묵시", "요한의 묵시록", "요한계시록", "계"],
+      "en": ["rev", "revelation"]
+    }
   }
 ]
 ```
 
 **매핑 활용 방식**:
 
-- **abbr**: 원본 텍스트 파싱 시 책 식별자로 사용
-- **korean_name**: HTML 제목 및 PWA 목차에서 표시
-- **english_name**: 파일명 생성 시 슬러그로 변환 (`genesis-1.html`)
-- **division**: PWA 목차에서 구약/외경/신약 분류 및 태그 생성
-- **aliases**: 검색 및 사용자 입력 시 다양한 책 이름 인식용 (공동번역, 개신교 표기 포함)
+- **id**: 언어 중립 약칭(ID), 절/파일명/검색 인덱스 키에 사용 (`gen-1.html`, `gen-1-1`)
+- **book_order**: 정렬용 고정 순서(구약→외경→신약 포함)
+- **names**: UI 표시용 이름(언어별)
+- **division**: 분류/필터링(언어별)
+- **aliases**: 책 이름 검색 시 한·영/다양 표기 매칭
 
 **외경 포함 정책**: 공동번역성서 기준으로 73권 전체 지원
 
@@ -830,7 +853,7 @@ class HtmlGenerator:
 
 ##### 1.2.3 템플릿 변수
 
-- `${book_name}`, `${chapter_number}`, `${chapter_id}`
+- `${book_name_ko}`, `${chapter_number}`, `${chapter_id}`
 - `${verses_content}`: 본문
 - `${audio_path}`, `${audio_title}`
 - `${alias_data_script}`: 별칭 주입 스크립트
@@ -845,8 +868,8 @@ class HtmlGenerator:
 
 ##### 1.2.5 단락/ID 규칙
 
-- **절 ID**: `{약칭}-{장}-{절}` (예: `gen-1-3`, `exod-20-1`)
-  - **언어 중립적**: `book_mappings.json`의 `english_name`에서 **영어** 약칭 추출(국제화/현지화를 고려해야 함)
+- **절 ID**: `{id}-{장}-{절}` (예: `gen-1-3`, `exod-20-1`)
+  - **언어 중립적**: `book_mappings.json`의 `id`(영문 약칭 기반)를 사용
 - 단락 시작(`has_paragraph=True`) 시 이전 절 묶음을 종료하고 새 `<p>`를 시작
 - 미래 확장: 단일 절 내 `¶`에 의한 a/b 분절 ID(`-4a`, `-4b`) 지원 가능(현 버전은 시각 표시만)
 
@@ -957,6 +980,7 @@ python src/html_generator.py templates/chapter.html output/html/ \
   - 검색 기능 UI 포함
 - **PWA 기능**
   - 매니페스트 링크: `<link rel="manifest" href="manifest.json">`
+  - iOS 전용 아이콘: `<link rel="apple-touch-icon" href="static/icons/apple-touch-icon-180.png" sizes="180x180">`
   - 서비스 워커 등록 스크립트 포함
   - "홈 화면에 추가" 프롬프트 제공
 - **접근성**
@@ -1010,7 +1034,9 @@ class PWAConfig:
 - **CSS**: `static/verse-style.css` (버전 관리 시 해시 추가 가능)
 - **JavaScript**: `static/verse-navigator.js`, `static/search-worker.js`
 - **오디오**: `audio/{english_book_slug}-{chapter}.mp3`
-- **아이콘**: `icon-{size}.png` (예: `icon-192x192.png`)
+- **아이콘**: `icon-{size}.png` (예: `icon-192x192.png`, `icon-256x256.png`, `icon-512x512.png`)
+  - **iOS 홈화면**: `apple-touch-icon-180.png`
+  - **데스크톱 탭**: `favicon.ico` (16/32px 포함)
 - **PWA 파일**: `manifest.json`, `sw.js` (루트에 배치)
 
 #### 2.6 PWA 구성
@@ -1045,7 +1071,7 @@ class PWAConfig:
 
 - **정적 자원 처리**: 파일 복사, 경로 해결, 최적화 결과 검증
 - **목차 페이지 생성**: 책별 분류, 장 링크, 검색 UI 포함 여부
-- **PWA 매니페스트**: 필수 속성, 아이콘 경로, 시작 URL 검증
+- **PWA 매니페스트**: 필수 속성, 아이콘 경로(192, 256, 512 + maskable), 시작 URL 검증
 - **서비스 워커**: 캐시 등록, 오프라인 동작, 업데이트 전략 테스트
 - **HTML 구조**: 상대 경로 링크, 접근성 마크업, 오디오 조건부 표시
 - **빌드 프로세스**: 선택적 빌드, 오류 처리, 보고서 생성
@@ -1292,7 +1318,7 @@ class Config:
     <input
       type="text"
       id="verse-search"
-      placeholder="절 ID 또는 단어 검색 (예: ${book_name} ${chapter_number}:3)"
+      placeholder="절 ID 또는 단어 검색 (예: ${book_name_ko}/${book_name_en} ${chapter_number}:3)"
     />
     <button type="submit">검색</button>
   </form>
@@ -1359,7 +1385,7 @@ class Config:
 
 <!-- 성경 본문 -->
 <article id="${chapter_id}">
-  <h1>${book_name} ${chapter_number}장</h1>
+  <h1>${book_name_ko} ${chapter_number}장</h1>
   ${verses_content}
 </article>
 
@@ -1401,7 +1427,7 @@ class Config:
 
 #### 4. 검색 UI 컴포넌트
 
-- **검색 입력창**: 통합 검색 인터페이스
+- **검색 입력창**: 통합 검색 인터페이스 (한국어 UI에서도 영어 책 이름/약칭 검색 허용)
 - **결과 표시**: 매칭된 구절 또는 책 링크
 - **다국어 플레이스홀더**: 언어별 안내 텍스트
 
@@ -1448,9 +1474,9 @@ class Config:
     "t": "한처음에 하느님께서 하늘과 땅을 지어내셨다.", // 한국어 텍스트
     "h": "genesis-1.html#gen-1-1", // 언어 중립 앵커
     "b": "gen", // 영어 약칭 (언어 중립, book_mappings.json의 english_name 기반)
-    "c": 1,
-    "v": 1,
-    "bo": 0
+    "c": 1, // chapter: 장 번호
+    "v": 1, // verse: 절 번호
+    "bo": 0 // book_order: 책 순서 (정렬용, 0=창세기)
   }
 ]
 ```
@@ -1465,7 +1491,7 @@ class Config:
     "t": "한처음에 하느님께서 하늘과 땅을 지어내셨다.",
     "h": "ko/genesis-1.html#gen-1-1",
     "b": "gen",
-    "c": 1, "v": 1, "bo": 0
+    "c": 1, "v": 1, "bo": 0  // chapter, verse, book_order
   }
 ]
 
@@ -1476,7 +1502,7 @@ class Config:
     "t": "In the beginning God created the heavens and the earth.",
     "h": "en/genesis-1.html#gen-1-1",
     "b": "gen",
-    "c": 1, "v": 1, "bo": 0
+    "c": 1, "v": 1, "bo": 0  // chapter, verse, book_order
   }
 ]
 ```
@@ -1792,6 +1818,26 @@ function switchLanguage(langCode) {
   "short_name": "공동번역성서",
   "lang": "ko",
   "dir": "ltr",
+  "icons": [
+    {
+      "src": "static/icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "static/icons/icon-256x256.png",
+      "sizes": "256x256",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "static/icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
   "locales": {
     "en": {
       "name": "Korean Common Bible",
@@ -2005,11 +2051,11 @@ class TestHtmlGenerator:
         return """<!DOCTYPE html>
 <html>
 <head>
-    <title>${book_name} ${chapter_number}장</title>
+    <title>${book_name_ko} ${chapter_number}장</title>
 </head>
 <body>
     <article id="${chapter_id}">
-        <h1>${book_name} ${chapter_number}장</h1>
+        <h1>${book_name_ko} ${chapter_number}장</h1>
         ${verses_content}
         ${audio_path and f'<audio src="{audio_path}"></audio>' or ''}
     </article>
@@ -2217,7 +2263,7 @@ class TestIntegration:
             text_path = f.name
 
         # 템플릿 파일들
-        chapter_template = "<h1>${book_name} ${chapter_number}장</h1>${verses_content}"
+        chapter_template = "<h1>${book_name_ko} ${chapter_number}장</h1>${verses_content}"
         index_template = "<html><body><h1>성경 목차</h1></body></html>"
 
         # 임시 디렉토리 생성
@@ -2368,7 +2414,7 @@ pytest-responses==0.5.1
 - `form-action 'self'`: 폼 제출을 동일 출처로 제한
 - `frame-ancestors 'none'`: 다른 사이트에서 iframe 삽입 차단
 
-### 서브리소스 무결성 (SRI) 구현
+### 2. 서브리소스 무결성 (SRI) 구현
 
 **빌드 시 SRI 해시 자동 생성:**
 
@@ -2487,7 +2533,33 @@ def build_with_sri():
 />
 ```
 
-### Pretendard 폰트 구현 방법
+### 3. AI 호출 보안 (API 키 보호, Phase 2)
+
+- 설계 원칙
+
+  - API 키는 클라이언트(PWA, 서비스 워커, 정적 파일)에 절대 포함하지 않는다.
+  - 서버/서버리스 프록시(예: Cloudflare Workers, Vercel/Netlify Functions)를 통해서만 외부 AI API 호출
+
+- 구현 지침 (프록시)
+
+  - 키 저장: 환경변수/Secret Manager 보관, 최소 권한, 주기적 키 로테이션
+  - 입력 검증: 프롬프트 길이/형식 제한, PII 마스킹, 허용 목록 기반 모델/엔드포인트만 허용
+  - 호출 제어: 타임아웃(기본 5s), 재시도(지수 백오프, 최대 2회), 레이트 리미트(IP/세션/토큰)
+  - 응답 처리: 민감정보 제거 로깅, 캐시 금지(No-Store), 오류 세부정보 최소화
+  - 네트워크: HTTPS 강제, CORS는 정확한 오리진만 허용, CSRF 방어(토큰 또는 SameSite 쿠키)
+
+- 구현 지침 (클라이언트/PWA)
+
+  - 호출 경로: 외부 API 직접 호출 금지, 프록시 경로(`/api/ai`)만 사용
+  - 캐싱: `/api/*` 응답은 서비스 워커에서 캐시 금지(네트워크 우선, no-store)
+  - 설정: `connect-src`에 프록시 오리진만 허용, `media`/`font`/`img` 등은 기존 정책 유지
+
+- CSP 업데이트 예시
+  - `connect-src 'self' https://your-serverless.example.com;`
+
+---
+
+### 4. Pretendard 폰트 구현 방법
 
 #### **방법 1: 로컬 폰트 (권장 - 최고 보안 + 완전한 오프라인)**
 
@@ -2905,11 +2977,39 @@ def security_audit():
 - [ ] **PWA 매니페스트 보안** - start_url, scope 검증
 - [ ] **빌드 시 보안 감사** - 취약점 스캔, 무결성 검증
 
+#### Phase 2: AI 호출 보안 (API 키 보호)
+
+- 설계 원칙
+
+  - API 키는 클라이언트(PWA, 서비스 워커, 정적 파일)에 절대 포함하지 않는다.
+  - 서버/서버리스 프록시(예: Cloudflare Workers, Vercel/Netlify Functions)를 통해서만 외부 AI API 호출
+
+- 구현 지침 (프록시)
+
+  - 키 저장: 환경변수/Secret Manager 보관, 최소 권한, 주기적 키 로테이션
+  - 입력 검증: 프롬프트 길이/형식 제한, PII 마스킹, 허용 목록 기반 모델/엔드포인트만 허용
+  - 호출 제어: 타임아웃(기본 5s), 재시도(지수 백오프, 최대 2회), 레이트 리미트(IP/세션/토큰)
+  - 응답 처리: 민감정보 제거 로깅, 캐시 금지(No-Store), 오류 세부정보 최소화
+  - 네트워크: HTTPS 강제, CORS는 정확한 오리진만 허용, CSRF 방어(토큰 또는 SameSite 쿠키)
+
+- 구현 지침 (클라이언트/PWA)
+
+  - 호출 경로: 외부 API 직접 호출 금지, 프록시 경로(`/api/ai`)만 사용
+  - 캐싱: `/api/*` 응답은 서비스 워커에서 캐시 금지(네트워크 우선, no-store)
+  - 설정: `connect-src`에 프록시 오리진만 허용, `media`/`font`/`img` 등은 기존 정책 유지
+
+- CSP 업데이트 예시
+
+  - `connect-src 'self' https://your-serverless.example.com;`
+
+- 대안 (API 미사용 경로)
+  - 빌드타임 전처리로 임베딩/검색 인덱스 생성 → 런타임 AI 호출 제거로 키 관리 이슈 회피
+
 ---
 
 ## 🚀 향후 확장 계획 (Phase 2/3)
 
-### Phase 2: 멀티 에디션 & 다국어 성서 지원
+### Phase 2: 고급 기능 & 커뮤니티
 
 #### 에디션 시스템 확장
 

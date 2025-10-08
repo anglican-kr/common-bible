@@ -1,0 +1,22 @@
+# 와이어프레임 이미지 디렉터리
+
+이 폴더에 Figma에서 내보낸 와이어프레임 이미지를 저장합니다.
+
+## 파일 명명 규칙
+
+- `index-desktop.png` - 목차 페이지 (데스크톱)
+- `index-mobile.png` - 목차 페이지 (모바일)
+- `chapter-desktop.png` - 장 페이지 (데스크톱)
+- `chapter-mobile.png` - 장 페이지 (모바일)
+- `search-desktop.png` - 검색 결과 (데스크톱)
+- `search-mobile.png` - 검색 결과 (모바일)
+- `offline-fallback.png` - 오프라인 폴백 페이지
+
+## 컴포넌트 이미지
+
+`components/` 하위 디렉터리:
+- `buttons.png`
+- `cards.png`
+- `inputs.png`
+- `modals.png`
+

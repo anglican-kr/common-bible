@@ -18,10 +18,9 @@
 | 단락 구분 | `¶` 기호가 단락(paragraph)의 시작을 표시함                                    |
 | 장 종료   | 다음 장 시작 패턴이 나타나거나 파일 끝까지 (빈 줄은 보조 역할)                |
 
-> ⚠️ **주의 사항:**  
-> **장 구분은 "장 시작" 패턴을 기준으로 합니다.** `"창세 1:1"`, `"2마카 2:1"` 등의 형태로 시작하는 패턴이 있을 때만 새로운 장으로 인식합니다.  
-> 빈 줄만 있거나 장 시작 패턴이 없는 텍스트는 장으로 인식하지 않습니다.  
-> 이렇게 하면 입력 파일의 오류나 편집 실수에 관계없이 **명확하고 일관된 장 구분**이 가능합니다.  
+> ⚠️ **주의 사항:** > **장 구분은 "장 시작" 패턴을 기준으로 합니다.** `"창세 1:1"`, `"2마카 2:1"` 등의 형태로 시작하는 패턴이 있을 때만 새로운 장으로 인식합니다.
+> 빈 줄만 있거나 장 시작 패턴이 없는 텍스트는 장으로 인식하지 않습니다.
+> 이렇게 하면 입력 파일의 오류나 편집 실수에 관계없이 **명확하고 일관된 장 구분**이 가능합니다.
 > 장 종료는 다음 장 시작 패턴이 나타나거나 파일 끝에 도달할 때까지이며, 빈 줄의 개수는 보조적인 역할만 합니다.
 
 ### 장 식별 정규표현식
@@ -57,7 +56,7 @@
 
 ## 🧱 출력 HTML 구조
 
-각 장은 하나의 워드프레스 포스트로 변환되며, 다음과 같은 시맨틱 구조를 가짐:
+각 장은 하나의 HTML 파일로 변환되며, 다음과 같은 시맨틱 구조를 가짐:
 
 ```html
 <!DOCTYPE html>
@@ -66,8 +65,6 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>창세기 1장</title>
-    <!-- 권장: 차일드 테마에서 CSS enqueue로 로드 (본문 링크 생략) -->
-    <!-- 필요 시 생성기 CLI의 --css-href 옵션으로 링크 삽입 가능 -->
   </head>
   <body>
     <!-- 검색 UI -->
@@ -88,7 +85,7 @@
       </p>
     </div>
 
-    <!-- 오디오 플레이어 (접근성 고려) -->
+    <!-- 오디오 플레이어 -->
     <!-- 오디오 파일이 있는 경우 -->
     <div class="audio-player-container" id="audio-container">
       <h2 class="screen-reader-text">성경 오디오</h2>
@@ -101,7 +98,7 @@
       </audio>
     </div>
 
-    <!-- 오디오 파일이 없는 경우 (특히 외경) -->
+    <!-- 오디오 파일이 없는 경우 -->
     <div
       class="audio-unavailable-notice"
       id="audio-unavailable"
@@ -141,9 +138,6 @@
         >
       </p>
     </article>
-
-    <!-- 권장: 차일드 테마에서 JS enqueue로 로드 (본문 스크립트 생략) -->
-    <!-- 필요 시 생성기 CLI의 --js-src 옵션으로 스크립트 삽입 가능 -->
   </body>
 </html>
 ```
@@ -153,27 +147,27 @@
 | 방법                 | 목적                                                        | 적용 방식                                                                                                                |
 | -------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
 | `aria-hidden="true"` | 절 번호, `¶` 기호를 시각적으로 표시하되 스크린리더에선 숨김 | `<span aria-hidden="true" class="verse-number">1</span>`<br>`<span aria-hidden="true" class="paragraph-marker">¶</span>` |
-| `id` 앵커            | 각 절에 직접 링크 가능                                      | `<span id="창세-1-3">...</span>`                                                                                         |
+| `id` 앵커            | 각 절에 직접 링크 가능                                      | `<span id="genesis-1-3">...</span>`                                                                                      |
 
 ## ♿️ 시각 장애인을 위한 접근성 요구사항
 
 - **절 번호 처리**: 절 번호(예: "1", "2" 등)는 시각적으로 표시하되 스크린리더가 읽지 않도록 `aria-hidden="true"` 속성 사용
 - **단락 기호 처리**: `¶` 기호도 시각적으로 표시하되 스크린리더가 읽지 않도록 `aria-hidden="true"` 속성 사용
 - **데이터 보존**: 파서는 원본 텍스트의 `¶` 기호와 절 번호를 보존하고, HTML 변환 시 접근성 마크업 적용
-- **고유 ID**: 본문 내 각 절에는 고유한 `id`를 부여하여, 본문 검색 시 해당 절로 바로 이동할 수 있도록 한다. (예: `<span id="창세-1-3">`)
+- **고유 ID**: 본문 내 각 절에는 고유한 `id`를 부여하여, 본문 검색 시 해당 절로 바로 이동할 수 있도록 한다. (예: `<span id="genesis-1-3">`)
 
 ### 접근성 마크업 예시
 
 ```html
 <!-- 단락이 시작되는 절 -->
-<span id="창세-1-1">
+<span id="genesis-1-1">
   <span aria-hidden="true" class="verse-number">1</span>
   <span class="paragraph-marker" aria-hidden="true">¶</span>
   한처음에 하느님께서 하늘과 땅을 지어내셨다.
 </span>
 
 <!-- 일반 절 -->
-<span id="창세-1-2">
+<span id="genesis-1-2">
   <span aria-hidden="true" class="verse-number">2</span>
   땅은 아직 모양을 갖추지 않고 아무것도 생기지 않았는데...
 </span>
@@ -181,7 +175,7 @@
 
 이렇게 하면:
 
-- **시각 사용자**: 절 번호와 `¶` 기호를 모두 볼 수 있음
+- **비시각장애인**: 절 번호와 `¶` 기호를 모두 볼 수 있음
 - **스크린리더 사용자**: 절 번호와 `¶` 기호 없이 본문만 들을 수 있음
 
 ## 🔊 오디오 플레이어 요구사항
@@ -199,45 +193,64 @@
 - 오디오 플레이어는 키보드로 접근 및 조작이 가능해야 한다.
 - 브라우저가 오디오를 지원하지 않는 경우 대체 텍스트와 다운로드 링크를 제공한다.
 
-## 🎨 CSS/JS 로딩 정책
+## 🎨 CSS/JS 로딩 정책 (PWA)
 
-- 기본 정책(권장): 워드프레스 차일드 테마의 `functions.php`에서 `wp_enqueue_style/script`로 로드한다.
-  - 본문 HTML에는 CSS/JS 링크를 넣지 않는다.
-  - 가이드는 [wordpress-publisher-guide.md](wordpress-publisher-guide.md) 참고.
+- 기본 정책(권장): 정적 호스팅 기준으로 HTML에서 매니페스트/서비스워커/pwa 부트스트랩을 등록한다.
+  - `<link rel="manifest" href="/static/manifest.webmanifest">`
+  - `<script src="/static/pwa.js" defer></script>` (서비스워커 등록 포함)
+  - CSS/JS는 `/static/verse-style.css`, `/static/verse-navigator.js`를 사용
 - 예외적으로 본문에 직접 링크가 필요할 경우, HTML 생성기 CLI에서 다음 옵션으로 삽입한다.
   - `--css-href <URL 또는 상대 경로>`
   - `--js-src <URL 또는 상대 경로>`
-  - 로컬 미리보기/정적 호스팅: `--copy-static`과 함께 `./static/...` 상대 경로 사용 권장
-  - 워드프레스 게시: 절대 URL 또는 사이트 루트 기준 경로 사용 권장
+  - 정적 호스팅: `--copy-static`과 함께 `./static/...` 상대 경로 사용 권장
+
+### 🌐 서버 호스팅/설치형(PWA) 동시 지원 요건
+
+- **경로 독립성**: 정적 자산/워커/인덱스는 파일 기준 상대 경로를 사용한다.
+  - 템플릿은 `${static_base}`를 사용하고, 런타임은 `verse-navigator.js` 로드 경로를 기준으로 `search-worker.js`, `search/search-index.json`을 추정한다.
+- **서비스 워커 스코프**: `pwa.js`는 자신의 경로를 기준으로 `sw.js`를 등록해 서브경로·설치형 모두 동작하게 한다.
+  - 권장 배치: `pwa.js`와 `sw.js`는 동일 디렉터리(`/static/`)에 둔다.
+- **매니페스트 설정**: `manifest.webmanifest`에서 `start_url`은 `./`(또는 `./index.html`), `scope`는 앱 루트(`./` 또는 서브경로)로 지정하고, `icons.src`는 매니페스트 파일 기준 상대 경로를 사용한다.
+- **ID/파일명 일관성**: 앵커 ID는 슬러그 기반(`genesis-1-3`), 파일명은 `genesis-1.html` 형식으로 환경과 무관하게 동작한다.
+- **오프라인 폴백(선택)**: 필요 시 `sw.js`에 HTML 폴백 라우트를 추가해 오프라인 내비게이션을 강화한다.
+
+검증 체크리스트:
+
+- 서버 호스팅(예: `https://host/app/`): 검색/내비게이션/오프라인 캐싱 정상 동작
+- 설치형(PWA): 홈 화면 설치 후 오프라인 상태에서 동일 기능 동작
 
 ## 🔍 검색 기능 요구사항
 
 - 본문 내 특정 절로 직접 이동할 수 있는 검색 기능 제공 (`static/verse-navigator.js` 제공)
 - 검색 유형:
-  1. **절 ID 검색**: `창세 1:3`과 같은 형식으로 특정 절을 입력하면 해당 절로 이동
+  1. **절 ID 검색**
+     - `창세 1:3`과 같은 형식으로 특정 절을 입력하면 해당 절로 이동
+     - `창세 1:3-11`과 같은 형식으로 특정 절을 범위 형식으로 입력하면 지정된 범위의 절로 이동
   2. **단어 검색**: 특정 단어나 문구를 검색하면 결과 목록을 표시하고 해당 절로 이동 가능
+- 절 ID는 천주교회/성공회가 사용하는 형식(예: 창세 1:1), 개신교가 사용하는 형식(예: 창 1:1)을 모두 지원
+  - 책의 약자(alias) 매핑은 `book_mappings.json`에 정의되어 있음
 - 검색 결과 본문에서는 하이라이트 처리 필요 (`.verse-highlight`, `.text-highlight` 클래스 사용)
 - 검색 UI는 스크린리더 사용자를 위해 적절한 `aria` 속성을 포함해야 함
 
 ### 전역 텍스트 검색(A안: 단일 인덱스 + Web Worker)
 
-- 목적: 현재 문서 외 다른 장/책까지 포함한 전역 검색 제공(정적/워드프레스 공통)
+- 목적: 현재 문서 외 다른 장/책까지 포함한 전역 검색 제공(정적 PWA)
 - 동작 방식
   - 빌드 시 전체 절을 단일 JSON 인덱스로 직렬화(`search-index.json`)
   - 런타임에서 Web Worker(`static/search-worker.js`)가 최초 쿼리 시 인덱스를 지연 로드(lazy load)
-  - 메인 스레드는 결과 패널 렌더만 수행하여 모바일에서도 프리즈 방지
+  - 메인 스레드는 결과 패널 렌더링만 수행함으로써 모바일 환경에서 프리즈 방지
 - 파일 배치(권장)
-  - Worker: `static/search-worker.js`
+  - 부트스트랩: `static/pwa.js`
+  - 서비스워커: `static/search-worker.js`
   - 인덱스: `output/html/static/search/search-index.json` (기본)
 - 경로/설정
-  - 자동 추정: `verse-navigator.js` 로드 경로 기준으로 같은 디렉터리의 `search-worker.js` 및 `search/search-index.json`
-  - 명시 설정(워드프레스/절대경로 필요 시):
+  - 자동 추정: `verse-navigator.js` 로드 경로 기준으로 정적 자산 디렉터리의 `search-worker.js` 및 `search/search-index.json`(빌드 타입에 생성되는 JSON 파일)
+  - 명시 설정(절대경로 필요 시):
     ```html
     <script>
       window.BIBLE_SEARCH_CONFIG = {
-        workerUrl: "/wp-content/themes/child/assets/search-worker.js",
-        searchIndexUrl:
-          "/wp-content/uploads/common-bible/search/search-index.json",
+        workerUrl: "/static/search-worker.js",
+        searchIndexUrl: "/static/search/search-index.json",
       };
     </script>
     ```
@@ -251,7 +264,7 @@
 - 정렬: 책 → 장 → 절 순으로 정렬
   - 책 정렬은 `data/book_mappings.json`의 나열 순서를 사용(외경 포함, 공동번역 약칭 준수)
   - 인덱스 항목 메타: `bo`(책 정렬용 인덱스), `b`(약칭), `c`(장), `v`(절)
-- 페이지네이션: 기본 50건/페이지, “이전/다음” 버튼 제공, 페이지 정보 표시
+- 페이지네이션: 기본 50건/페이지, "이전/다음" 버튼 제공, 페이지 정보 표시
   - Worker 응답: `{ q, results, page, total, pageSize }`
   - UI는 응답 기반으로 페이지 정보/버튼 활성화 결정
 
@@ -275,7 +288,7 @@
 - 경로 자동 보정: 출력 디렉터리 기준 상대 경로 자동화(`--static-base`, `--audio-base`)
 - 전역 검색 인덱스 생성
   - 기본 동작: 단일 전역 검색 인덱스(JSON) 자동 생성
-  - 비활성화: `--no-emit-search-index`
+  <!-- - 비활성화: `--no-emit-search-index` -->
   - 출력 경로: 기본 `<output_dir>/static/search/search-index.json` (변경: `--search-index-out`)
   - 산출 포맷: `[{ "i": "창세-1-1", "t": "…", "h": "genesis-1.html#창세-1-1", "b": "창세", "c": 1, "v": 1, "bo": 0 }, ...]`
 
@@ -284,6 +297,245 @@
 - 약칭과 별칭, 슬러그, 정렬 순서는 `data/book_mappings.json`을 단일 소스로 사용
 - 외경 (토비트, 유딧, 마카베오상/하, 지혜서, 집회서, 바룩 등) 약칭을 포함
 - 슬러그 생성: 영문 이름을 우선 정규화하여 ASCII로 생성(부재 시 약칭 정규화, 최종 폴백 내부 규칙)
+
+## 🗺️ 앱 구조 및 네비게이션
+
+### 전체 네비게이션 구조
+
+```
+공동번역성서 PWA
+│
+├── 📄 index.html (목차 페이지 - 앱 진입점)
+│   ├── 전역 검색 바
+│   ├── 구약 섹션 (39권)
+│   │   ├── 창세기 → [1장, 2장, ..., 50장]
+│   │   ├── 탈출기 → [1장, 2장, ..., 40장]
+│   │   └── ...
+│   ├── 외경 섹션 (7권)
+│   │   ├── 토비트 → [1장, 2장, ..., 14장]
+│   │   ├── 유딧 → [1장, 2장, ..., 16장]
+│   │   └── ...
+│   └── 신약 섹션 (27권)
+│       ├── 마태오 → [1장, 2장, ..., 28장]
+│       ├── 마르코 → [1장, 2장, ..., 16장]
+│       └── ...
+│
+└── 📖 [책이름]-[장].html (각 장 페이지)
+    ├── 브레드크럼 네비게이션 (목차 ← 구분 ← 책 ← 장)
+    ├── 전역 검색 바
+    ├── 오디오 플레이어 (있는 경우)
+    ├── 본문 (절별 구성)
+    └── 이전/다음 장 네비게이션
+```
+
+### 시각화
+
+```mermaid
+graph TD
+    Start[사용자 진입] --> Index[index.html - 목차]
+
+    Index --> OT[구약 39권]
+    Index --> DC[외경 7권]
+    Index --> NT[신약 27권]
+
+    OT --> Book1[창세기]
+    OT --> Book2[탈출기]
+    OT --> BookN[...]
+
+    DC --> Book3[토비트]
+    DC --> Book4[유딧]
+
+    NT --> Book5[마태오]
+    NT --> Book6[마르코]
+
+    Book1 --> Ch1[genesis-1.html]
+    Book1 --> Ch2[genesis-2.html]
+    Book1 --> ChN[genesis-50.html]
+
+    Ch1 --> Verse[절별 본문]
+    Ch1 --> Audio[오디오 재생]
+    Ch1 --> Search[전역 검색]
+    Ch1 --> Nav[브레드크럼 네비게이션]
+
+    Search -.-> Index
+    Search -.-> Ch1
+    Search -.-> Ch2
+
+    Nav --> Index
+    Nav --> Breadcrumb[구분/책/장 선택]
+```
+
+### 페이지 유형 및 URL 구조
+
+| 페이지 유형 | URL 패턴                     | 설명                            | 예시                                 |
+| ----------- | ---------------------------- | ------------------------------- | ------------------------------------ |
+| 목차        | `index.html`                 | PWA 시작 페이지, 전체 성경 목차 | `https://example.com/`               |
+| 장 페이지   | `{book-slug}-{chapter}.html` | 각 장의 본문 + 오디오 + 검색    | `genesis-1.html`<br>`matthew-5.html` |
+| 정적 자산   | `/static/...`                | CSS, JS, 아이콘, 매니페스트     | `/static/verse-style.css`            |
+| 오디오      | `/data/audio/...`            | 장별 오디오 파일                | `/data/audio/genesis-1.mp3`          |
+
+### 첫 페이지(index.html) 상세 정의
+
+#### UI 컴포넌트 구성
+
+```html
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>공동번역성서</title>
+    <link rel="manifest" href="/static/manifest.webmanifest" />
+  </head>
+  <body>
+    <!-- 앱 헤더 -->
+    <header class="app-header">
+      <h1>공동번역성서</h1>
+      <p class="subtitle">구약·외경·신약 전체</p>
+    </header>
+
+    <!-- 전역 검색 -->
+    <section class="search-section">
+      <form id="global-search-form" role="search">
+        <input
+          type="text"
+          placeholder="절 ID 또는 단어 검색 (예: 창세 1:3, 하느님)"
+        />
+        <button type="submit">검색</button>
+      </form>
+    </section>
+
+    <!-- 성경 목차 -->
+    <main class="bible-toc">
+      <!-- 구약 -->
+      <section class="testament-section" id="old-testament">
+        <h2>구약 (39권)</h2>
+        <div class="book-grid">
+          <article class="book-card">
+            <h3>창세기</h3>
+            <nav class="chapter-list">
+              <a href="genesis-1.html">1장</a>
+              <a href="genesis-2.html">2장</a>
+              <!-- ... -->
+            </nav>
+          </article>
+          <!-- 다른 책들... -->
+        </div>
+      </section>
+
+      <!-- 외경 -->
+      <section class="testament-section" id="deuterocanonical">
+        <h2>외경 (7권)</h2>
+        <div class="book-grid">
+          <!-- 토비트, 유딧, 마카베오상/하, 지혜서, 집회서, 바룩 -->
+        </div>
+      </section>
+
+      <!-- 신약 -->
+      <section class="testament-section" id="new-testament">
+        <h2>신약 (27권)</h2>
+        <div class="book-grid">
+          <!-- 마태오, 마르코, ... -->
+        </div>
+      </section>
+    </main>
+
+    <!-- PWA 설치 프롬프트 -->
+    <aside
+      class="pwa-install-banner"
+      id="install-banner"
+      style="display: none;"
+    >
+      <p>홈 화면에 추가하여 오프라인에서도 이용하세요</p>
+      <button id="install-btn">설치</button>
+      <button id="dismiss-btn">닫기</button>
+    </aside>
+
+    <!-- 오프라인 상태 표시 -->
+    <div
+      class="offline-indicator"
+      id="offline-indicator"
+      style="display: none;"
+    >
+      <span>📡 오프라인 모드</span>
+    </div>
+  </body>
+</html>
+```
+
+#### 인터랙션 및 동작
+
+| 요소            | 동작                                                                                      | 접근성                        |
+| --------------- | ----------------------------------------------------------------------------------------- | ----------------------------- |
+| 전역 검색 입력  | - 절 ID 입력 시 해당 장 페이지로 이동<br>- 단어 검색 시 검색 결과 패널 표시 (모달/드로어) | `role="search"`, `aria-label` |
+| 책 카드         | - 클릭/탭 시 장 목록 토글 (아코디언 방식)<br>- 모바일: 바텀시트로 확장 가능               | `aria-expanded`, 키보드 접근  |
+| 장 링크         | - 해당 장 페이지로 이동<br>- 터치 영역 최소 44x44px                                       | `role="link"`, 충분한 패딩    |
+| PWA 설치 배너   | - `beforeinstallprompt` 이벤트 감지 시 표시<br>- "설치" 클릭 시 네이티브 프롬프트 호출    | `aria-live="polite"`          |
+| 오프라인 표시기 | - `navigator.onLine` 변경 시 자동 표시/숨김                                               | `role="status"`, `aria-live`  |
+
+#### 레이아웃 반응형 정책
+
+| 화면 크기           | 레이아웃                                                 | 비고                 |
+| ------------------- | -------------------------------------------------------- | -------------------- |
+| 모바일 (<768px)     | - 단일 컬럼<br>- 책 카드 전체 너비<br>- 장 목록 바텀시트 | 터치 최적화          |
+| 태블릿 (768-1024px) | - 2컬럼 그리드<br>- 책 카드 아코디언                     | 하이브리드 UI        |
+| 데스크톱 (>1024px)  | - 3컬럼 그리드<br>- 호버 효과<br>- 사이드바 고정 가능    | 마우스/키보드 최적화 |
+
+### 사용자 이동 흐름
+
+#### 흐름 1: 특정 장 읽기
+
+```
+1. 사용자가 index.html 진입
+2. "구약" 섹션 스크롤
+3. "창세기" 카드 클릭 → 장 목록 표시
+4. "1장" 링크 클릭
+5. genesis-1.html 로드
+   → 브레드크럼: [목차] > [구약] > [창세기] > [1장]
+   → 본문 읽기
+   → 오디오 재생 (선택)
+```
+
+#### 흐름 2: 검색으로 절 찾기
+
+```
+1. index.html 검색 바에 "창세 1:3" 입력
+2. Enter 키 또는 검색 버튼 클릭
+3. genesis-1.html#창세-1-3 으로 이동
+4. 해당 절이 하이라이트되어 표시
+```
+
+#### 흐름 3: 전역 단어 검색
+
+```
+1. 장 페이지(예: matthew-5.html)에서 "사랑" 검색
+2. Web Worker가 전체 인덱스 검색
+3. 결과 패널에 50개 항목 표시:
+   - 요한 3:16
+   - 1고린 13:4
+   - ...
+4. 결과 항목 클릭 → 해당 장 페이지로 이동
+```
+
+#### 흐름 4: 브레드크럼 네비게이션
+
+```
+1. genesis-50.html 에서 브레드크럼 "목차" 클릭
+   → index.html 로 이동
+2. 또는 "구약" 드롭다운 → "외경" 선택
+   → index.html#deuterocanonical 앵커로 이동
+3. 또는 "책" 드롭다운 → "탈출기" 선택
+   → index.html에서 탈출기 카드로 스크롤
+```
+
+### PWA 오프라인 시나리오
+
+| 시나리오                  | 동작                                                                      | 기술                   |
+| ------------------------- | ------------------------------------------------------------------------- | ---------------------- |
+| 첫 방문 (온라인)          | - index.html 로드<br>- 앱 셸 + 정적 자산 캐싱<br>- 서비스 워커 등록       | Cache First (sw.js)    |
+| 장 페이지 방문            | - HTML + 오디오 파일 캐싱<br>- 검색 인덱스 캐싱                           | Stale-While-Revalidate |
+| 재방문 (오프라인)         | - 캐시된 페이지 즉시 로드<br>- 검색/네비게이션 정상 동작                  | Cache First            |
+| 미방문 장 요청 (오프라인) | - 오프라인 폴백 페이지 표시<br>- "온라인 상태에서 다시 시도하세요" 메시지 | Fallback Route         |
 
 ## 🌐 PWA 빌드 및 배포 요구사항
 
@@ -354,7 +606,7 @@
 - 정적 파일의 안전한 호스팅 및 배포
 - HTTPS를 통한 모든 콘텐츠 제공 (권장)
 - 클라이언트 사이드 XSS 방지를 위한 콘텐츠 이스케이프 처리
-- 입력 데이터 검증 및 필터링 (검색 쿼리 등)
+- 입력 데이터 검증 및 필터링 (XSS 방지)
 - 서비스 워커의 안전한 캐싱 정책
 
 ## 📊 모니터링 및 로깅
@@ -419,6 +671,12 @@
 - API 명세 및 사용 예제
 - 코드 주석 및 API 문서
 - 환경 설정 및 의존성 관리 방법
+
+### 디자인 문서
+
+- [디자인 시스템](design-system.md) - 컬러, 타이포그래피, 간격, 컴포넌트 명세
+- [와이어프레임](wireframes.md) - 주요 화면 레이아웃 및 Figma 디자인 파일
+- 접근성 가이드라인 (본 문서 [♿️ 섹션](#♿️-시각-장애인을-위한-접근성-요구사항) 참조)
 
 ### 유지보수 문서
 

@@ -519,7 +519,20 @@
     if (!articleEl || !articleEl.id) return;
     const m = articleEl.id.match(/^(.+?)-(\d+)$/);
     if (!m) return;
-    const currentAbbr = m[1];
+    const currentSlug = m[1];
+    // slug -> 약칭 역매핑 (주입된 매핑 사용)
+    const abbrToSlug =
+      (window.BIBLE_ALIAS && window.BIBLE_ALIAS.abbrToSlug) || {};
+    let currentAbbr = null;
+    try {
+      for (const [abbr, slug] of Object.entries(abbrToSlug)) {
+        if (slug === currentSlug) {
+          currentAbbr = abbr;
+          break;
+        }
+      }
+    } catch (e) {}
+    currentAbbr = currentAbbr || currentSlug;
     const currentChapter = parseInt(m[2], 10);
 
     // 현재 책 메타
@@ -1432,6 +1445,58 @@
    * 오디오 플레이어 초기화: 초기에 항상 멈춤 상태로 고정
    */
   function initializeAudioPlayers() {
+    // 데이터 훅 기반 오디오 소스 주입 및 표시 토글
+    try {
+      const audioHost = document.querySelector('[data-controller="audio"]');
+      const audioContainer = document.getElementById("audio-container");
+      const unavailable = document.getElementById("audio-unavailable");
+      const source = audioContainer && audioContainer.querySelector("source");
+      const download = audioContainer && audioContainer.querySelector("a");
+      const audioSrc = (
+        (audioHost && audioHost.dataset && audioHost.dataset.audioSrc) ||
+        ""
+      ).trim();
+
+      if (audioSrc && source) {
+        try {
+          source.src = audioSrc;
+        } catch (e) {}
+        if (download) {
+          try {
+            download.href = audioSrc;
+          } catch (e) {}
+        }
+        if (audioContainer) {
+          try {
+            audioContainer.removeAttribute("hidden");
+          } catch (e) {}
+        }
+        if (unavailable) {
+          try {
+            unavailable.setAttribute("hidden", "");
+          } catch (e) {}
+        }
+        try {
+          const audioEl =
+            audioContainer && audioContainer.querySelector("audio");
+          audioEl && audioEl.load && audioEl.load();
+        } catch (e) {}
+      } else {
+        if (audioContainer) {
+          try {
+            audioContainer.setAttribute("hidden", "");
+          } catch (e) {}
+        }
+        if (unavailable) {
+          try {
+            unavailable.removeAttribute("hidden");
+          } catch (e) {}
+        }
+      }
+    } catch (error) {
+      // 초기화 실패는 치명적이지 않음
+    }
+
     const audios = document.querySelectorAll("audio.bible-audio");
     for (const audio of audios) {
       try {
@@ -1574,7 +1639,19 @@
       return;
     }
 
-    const currentBookAbbr = currentMatch[1];
+    // article id는 slug-장. 약칭으로 역매핑 필요
+    const currentSlug = currentMatch[1];
+    const abbrToSlug =
+      (window.BIBLE_ALIAS && window.BIBLE_ALIAS.abbrToSlug) || {};
+    let currentBookAbbr = currentSlug;
+    try {
+      for (const [abbr, slug] of Object.entries(abbrToSlug)) {
+        if (slug === currentSlug) {
+          currentBookAbbr = abbr;
+          break;
+        }
+      }
+    } catch (e) {}
     const currentChapter = currentMatch[2];
 
     const targetBookAbbr = bookNameToAbbr[bookName] || bookName;

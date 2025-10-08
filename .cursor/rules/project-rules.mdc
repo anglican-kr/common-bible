@@ -7,15 +7,16 @@ alwaysApply: true
 ## 1. Architecture & Design
 
 - Follow the **SOLID principles** and write modular, maintainable code.
-- Separate concerns: parsing logic, API logic, and configuration should live in separate modules.
+- Separate concerns: parsing logic, data access layer, frontend (PWA) UI, and configuration should live in separate modules.
 - Avoid circular dependencies and maintain a clear dependency hierarchy.
 - Design for scalability and easy extension.
+  - For PWA: keep service worker, manifest, caching strategies, and UI components loosely coupled.
 
 ## 2. Python Guidelines
 
 - Follow [PEP 8](https://peps.python.org/pep-0008/) coding standards.
 - Use **type hints** and validate types with `mypy`.
-- Format code with **black** and lint with **ruff** or \*\*flake8`.
+- Format code with **black** and lint with **ruff** or **flake8**.
 - Use `dataclass` or well-structured classes for data representation instead of plain dictionaries.
 - Avoid hardcoded values; use `.env` files or environment variables for credentials and configuration.
 - Log all critical events with meaningful messages.
@@ -27,57 +28,64 @@ alwaysApply: true
 - Escape or sanitize user-generated content to prevent XSS vulnerabilities.
 - Validate and ensure the final HTML is UTF-8 compliant and well-formed.
 
-## 4. WordPress API Integration
+## 4. PWA Frontend
 
-- Use the **WordPress REST API** (`/wp-json/wp/v2/...`) for content publishing.
-- Authenticate using **Application Passwords** or OAuth2 (avoid Basic Auth in production).
-- Implement **idempotent post creation** (check for duplicates before publishing).
-- Handle API errors gracefully and log detailed error information.
-- Include categories, tags, and featured images when posting, if applicable.
+- Use TypeScript with ES modules and keep UI components, state, and data layer modular.
+- Include a Web App Manifest (`manifest.webmanifest`) with icons, `start_url`, `scope`, and `display`.
+- Provide a Service Worker (prefer **Workbox**) with clear strategies:
+  - App shell: Precache.
+  - JSON/text content: Stale-While-Revalidate with sensible `maxEntries`/`maxAgeSeconds`.
+  - Images/fonts: Cache First with expiration.
+  - Audio/media: Cache First with versioning and range request support if needed.
+- Offline-first: cache critical routes and store large content in IndexedDB (e.g., via `idb`).
+- Background sync: queue writes or deferred fetches and flush when online (if applicable).
+- Accessibility: preserve semantic HTML and `aria-*` metadata from templates; ensure focus management.
+- Performance: code-splitting, lazy-loading, and efficient asset pipelines (e.g., Vite).
 
-## 5. PHP & WordPress Guidelines
-
-- Follow the [WordPress Coding Standards](https://developer.wordpress.org/coding-standards/wordpress-coding-standards/php/).
-- Avoid modifying WordPress core files.
-- Use built-in WordPress functions like `wp_insert_post` instead of direct database queries.
-- Keep PHP logic separate from templates (avoid inline PHP in HTML).
-
-## 6. Testing
+## 5. Testing
 
 - Write **unit tests with `pytest`** for all critical features.
 - Target at least **80% code coverage** for business logic.
 - Test not only the happy paths but also edge cases and error scenarios.
-- Use mock APIs to test WordPress API calls without hitting the production server.
+- Mock network requests and service worker events; avoid live endpoints.
+- Add frontend tests: unit (Vitest/Jest), e2e (Playwright) including offline and caching scenarios.
 
-## 7. Security & Quality
+## 6. Security & Quality
 
 - Never commit secrets, API keys, or credentials to version control.
 - Validate all inputs and outputs, especially when generating HTML content.
 - Escape all dynamic content to prevent injection attacks.
 - Use secure libraries for cryptography or hashing (never write custom crypto).
+- Enforce HTTPS, set CSP where possible, and scope the service worker appropriately.
+- Consider Subresource Integrity (SRI) for external assets and safe `postMessage` usage.
+- Web Push: use VAPID keys, apply RFC 8291 payload encryption, avoid sensitive data in notifications, and remove dead subscriptions on 410/404 responses.
+- Polling: use ETag/If-None-Match conditional requests, enforce minimum polling intervals/quotas, and set timeouts with exponential backoff.
+- Service Worker (push/sync): validate push payload schema, restrict `clients.openWindow` to a whitelist of URLs, and keep the service worker scope minimal.
 
-## 8. Deployment & CI/CD
+## 7. Deployment & CI/CD
 
 - Provide a `.env.example` with all required environment variables.
 - Exclude `.env`, cache files, and `*.pyc` files via `.gitignore`.
+- Build static assets for the PWA (e.g., via Vite) and deploy to static hosting with HTTPS.
+- Run Lighthouse (Perf/Accessibility/Best Practices/SEO) in CI, plus unit/e2e suites.
 - Deploy to a staging environment for verification before production release.
 - Use CI/CD pipelines for automated linting, testing, and deployment.
 
-## 9. Error Handling & Logging
+## 8. Error Handling & Logging
 
-- Implement retry logic with exponential backoff for all WordPress API calls.
+- Implement retry logic with exponential backoff for network requests (fetch) and background sync.
 - Set request timeouts (e.g., 5 seconds) to prevent hanging connections.
-- Log both the request payload and response details for debugging failed API calls.
+- Log both the request payload and response details for debugging failed network calls.
 - Use structured logging formats (e.g., JSON logs) if possible.
 
-## 10. Pull Requests & Code Review
+## 9. Pull Requests & Code Review
 
 - Keep pull requests **small and focused** on a single feature or bug fix.
 - Provide **clear and descriptive PR titles and summaries**.
 - Address code review feedback promptly and respectfully.
 - Document architectural decisions in the repository (e.g., `/docs/architecture.md`).
 
-## 11. Documentation Linking (docs/)
+## 10. Documentation Linking (docs/)
 
 - When referencing another document inside the `docs/` directory, always add a clickable hyperlink to it.
   - Example: write `See requirements.md` as `[requirements.md](../docs/requirements.md)` if linking from outside `docs/`,
