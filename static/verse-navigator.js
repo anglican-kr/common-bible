@@ -551,41 +551,6 @@
       // 스타일 적용 실패 시 무시
     }
 
-    // index.html 이동 버튼/링크 (브레드크럼 앞)
-    const basePath = window.location.pathname.replace(/[^/]+$/, "");
-    const indexBtn = document.createElement("a");
-    indexBtn.href = basePath + "index.html";
-    indexBtn.setAttribute("aria-label", "목차로 이동");
-    indexBtn.title = "목차";
-    indexBtn.innerHTML = `${iconSvg(
-      "home"
-    )}<span style="margin-left:6px">목차</span>`;
-    Object.assign(indexBtn.style, {
-      display: "inline-flex",
-      alignItems: "center",
-      justifyContent: "center",
-      padding: "6px 10px",
-      minHeight: "40px",
-      border: "1px solid #d1d5db",
-      background: "#ffffff",
-      borderRadius: "6px",
-      cursor: "pointer",
-      textDecoration: "none",
-      color: "#111",
-      fontSize: "14px",
-      lineHeight: "1",
-      gap: "6px",
-    });
-    indexBtn.addEventListener(
-      "mouseenter",
-      () => (indexBtn.style.background = "#f3f4f6")
-    );
-    indexBtn.addEventListener(
-      "mouseleave",
-      () => (indexBtn.style.background = "#ffffff")
-    );
-    wrap.appendChild(indexBtn);
-
     // 공통 드롭다운 생성기
     function createDropdown(labelText) {
       const container = document.createElement("div");
@@ -596,17 +561,31 @@
       button.setAttribute("aria-haspopup", "listbox");
       button.setAttribute("aria-expanded", "false");
       button.title = labelText + " 선택";
-      button.textContent = labelText;
+      button.innerHTML = `${labelText} <span style="margin-left: 4px; font-size: 10px; opacity: 0.6;">▼</span>`;
       Object.assign(button.style, {
-        padding: "6px 10px",
+        padding: "6px 12px",
         minHeight: "40px",
         border: "1px solid #d1d5db",
-        background: "#fff",
+        background: "#ffffff",
         borderRadius: "6px",
         cursor: "pointer",
         fontSize: "14px",
         lineHeight: "1",
         color: "#111",
+        boxShadow: "0 1px 3px rgba(0, 0, 0, 0.08)",
+        transition: "all 0.2s ease",
+      });
+
+      // 호버 효과
+      button.addEventListener("mouseenter", () => {
+        button.style.background = "#f3f4f6";
+        button.style.borderColor = "#9ca3af";
+        button.style.boxShadow = "0 2px 6px rgba(0, 0, 0, 0.12)";
+      });
+      button.addEventListener("mouseleave", () => {
+        button.style.background = "#ffffff";
+        button.style.borderColor = "#d1d5db";
+        button.style.boxShadow = "0 1px 3px rgba(0, 0, 0, 0.08)";
       });
 
       const list = document.createElement("ul");

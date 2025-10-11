@@ -25,6 +25,7 @@ body {
   max-width: 1100px;
   margin: 0 auto;
   padding-top: 120px; /* 고정 헤더를 위한 상단 여백 */
+  padding-bottom: 50px; /* 플로팅 푸터를 위한 하단 여백 */
 }
 
 /* 고정 헤더 스타일 */
@@ -33,10 +34,11 @@ body {
   top: 0;
   left: 0;
   right: 0;
-  background: #ffffff;
+  background: rgba(205, 205, 205, 0.95);
   z-index: 900; /* 검색 패널(1001)보다 낮게 설정 */
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  border-bottom: 1px solid #e5e5e5;
+  border-bottom: 1px solid #b8b8b8;
+  backdrop-filter: blur(5px);
 }
 
 .fixed-header-content {
@@ -261,6 +263,7 @@ h1 {
   border-bottom: none;
   margin: 12px 0;
   padding: 10px 0;
+  color: #000000;
 }
 
 /* 고정 헤더 내부의 장 제목 */
@@ -454,8 +457,10 @@ span[id]:target {
   position: fixed;
   top: 70px;
   right: 20px;
+  bottom: 60px; /* 푸터 높이 + 여백을 고려하여 하단 여백 확보 */
   width: 480px;
-  height: 60vh;
+  max-height: calc(100vh - 70px - 60px); /* 상단 헤더와 하단 여백 제외 */
+  height: auto;
   background-color: #ffffff;
   border: 1px solid #ddd;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
@@ -556,7 +561,7 @@ span[id]:target {
   .search-fab {
     position: fixed;
     right: 16px;
-    bottom: 16px;
+    bottom: 70px; /* 푸터를 가리지 않도록 위로 이동 */
     width: 56px;
     height: 56px;
     border-radius: 50%;
@@ -623,5 +628,104 @@ span[id]:target {
   .verse-number,
   .paragraph-marker {
     color: #999999;
+  }
+
+  /* 인쇄 시 푸터 숨김 */
+  .page-footer {
+    display: none;
+  }
+}
+
+/* 푸터 스타일 - 플로팅 */
+.page-footer {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background-color: rgba(205, 205, 205, 0.95);
+  color: #2c3e50;
+  padding: 8px 0;
+  border-top: 1px solid #b8b8b8;
+  box-shadow: 0 -2px 6px rgba(0, 0, 0, 0.1);
+  z-index: 800;
+  backdrop-filter: blur(5px);
+}
+
+.footer-content {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0 20px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 4px;
+}
+
+.footer-section {
+  display: inline-block;
+}
+
+.footer-inline {
+  white-space: nowrap;
+}
+
+.footer-separator {
+  margin: 0 8px;
+}
+
+.footer-text {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.4;
+  display: inline;
+}
+
+.footer-text a {
+  color: #2c3e50;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.footer-text a:hover {
+  text-decoration: underline;
+}
+
+.footer-text a.github-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: opacity 0.2s;
+  vertical-align: middle;
+  line-height: 1.4;
+}
+
+.footer-text a.github-link:hover {
+  opacity: 0.7;
+}
+
+.footer-text a.github-link svg {
+  display: inline-block;
+  height: 1em;
+  width: auto;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
+/* 모바일 푸터 스타일 */
+@media (max-width: 768px) {
+  .page-footer {
+    padding: 6px 0;
+  }
+
+  .footer-content {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 0 10px;
+    font-size: 10px;
+  }
+
+  .footer-text {
+    font-size: 11px;
   }
 }

@@ -41,6 +41,15 @@ class HtmlGenerator:
             pass
         return 10_000
 
+    @staticmethod
+    def read_version() -> str:
+        """VERSION 파일에서 버전 정보를 읽어옴"""
+        try:
+            with open('VERSION', 'r', encoding='utf-8') as f:
+                return f.read().strip()
+        except Exception:
+            return "0.0.0"
+
     def generate_chapter_html(
         self,
         chapter: Chapter,
@@ -170,6 +179,7 @@ class HtmlGenerator:
             js_script_tag=js_script_tag,
             prev_button_html=prev_button_html,
             next_button_html=next_button_html,
+            version=self.read_version(),
         )
 
         # 오디오 파일 존재 여부에 따라 CSS 클래스 조정
@@ -886,43 +896,19 @@ def main():
         except Exception as e:
             print(f"❌ 검색 인덱스 생성 실패: {e}")
 
-    # index.html 생성
+    # index.html 생성 (창세기 1장을 index.html로 복사)
     if emit_index:
         try:
-            # HtmlGenerator의 기본 슬러그 규칙으로 일단 생성 (books_meta 전달로 구약/신약 분할 정확도 향상)
-            books_meta_full: list[dict] | None = None
-            try:
-                with open('data/book_mappings.json', 'r', encoding='utf-8') as _bmf2:
-                    books_meta_full = json.load(_bmf2)
-            except Exception:
-                books_meta_full = None
+            # 창세기 1장 파일을 index.html로 복사
+            genesis_1_path = os.path.join(output_dir, "genesis-1.html")
+            index_path = os.path.join(output_dir, "index.html")
 
-            index_html = generator.generate_index_html(
-                chapters, static_base, books_meta=books_meta_full)
-
-            # 가능한 경우, 파일명 슬러그를 실제 생성 규칙에 맞춰 보정
-            # main 내부의 compute_slug와 동일 규칙으로 링크를 치환한다.
-            # 각 책의 첫 장 파일명을 재계산하여 치환
-            # 책별 첫 장 계산
-            first_chapter_by_book: dict[str, int] = {}
-            book_name_by_book: dict[str, str] = {}
-            for ch in chapters:
-                if ch.book_abbr not in first_chapter_by_book or ch.chapter_number < first_chapter_by_book[ch.book_abbr]:
-                    first_chapter_by_book[ch.book_abbr] = ch.chapter_number
-                    book_name_by_book[ch.book_abbr] = ch.book_name
-
-            for book_abbr, first_ch in first_chapter_by_book.items():
-                real_slug = compute_slug(book_abbr)
-                base_slug = generator._get_book_slug(book_abbr)
-                # generate_index_html에서 사용한 기본 파일명을 실제 파일명으로 교체
-                src_name = f"{base_slug}-{first_ch}.html"
-                dst_name = f"{real_slug}-{first_ch}.html"
-                if src_name != dst_name:
-                    index_html = index_html.replace(src_name, dst_name)
-
-            with open(os.path.join(output_dir, "index.html"), "w", encoding="utf-8") as f:
-                f.write(index_html)
-            print("📄 index.html 생성 완료")
+            if os.path.exists(genesis_1_path):
+                import shutil
+                shutil.copy2(genesis_1_path, index_path)
+                print("📄 index.html 생성 완료 (창세기 1장)")
+            else:
+                print("⚠️ genesis-1.html 파일이 없어 index.html을 생성할 수 없습니다.")
         except Exception as e:
             print(f"❌ index.html 생성 실패: {e}")
 
