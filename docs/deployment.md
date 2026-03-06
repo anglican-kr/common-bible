@@ -516,8 +516,8 @@ sudo tail -f /var/log/nginx/error.log
 ## 📚 추가 자료
 
 - [PWA 빌더 가이드](pwa-builder-guide.md) - 상세한 PWA 빌드 과정
-- [요구사항](requirements.md) - PWA 기능 요구사항
-- [설계 명세서](design-specification.md) - 시스템 아키텍처
+- [요구사항](prd.md) - PWA 기능 요구사항
+- [설계 명세서](technical-design.md) - 시스템 아키텍처
 - [HTML 생성기 가이드](html-generator-guide.md) - HTML 생성 프로세스
 
 ---
