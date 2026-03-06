@@ -1,854 +1,817 @@
 [
   {
-    "abbr": "창세",
+    "id": "gen",
     "korean_name": "창세기",
     "english_name": "Genesis",
-    "division": "old_testament",
-    "aliases": [
-      "창세",
-      "창세기",
-      "창"
+    "testament": "old_testament",
+    "aliases_ko": [
+      "창",
+      "창세"
     ]
   },
   {
-    "abbr": "출애",
+    "id": "exo",
     "korean_name": "출애굽기",
     "english_name": "Exodus",
-    "division": "old_testament",
-    "aliases": [
+    "testament": "old_testament",
+    "aliases_ko": [
+      "출",
       "출애",
-      "출애굽기",
-      "출"
+      "탈출"
     ]
   },
   {
-    "abbr": "레위",
+    "id": "lev",
     "korean_name": "레위기",
     "english_name": "Leviticus",
-    "division": "old_testament",
-    "aliases": [
-      "레위",
-      "레위기",
-      "레"
+    "testament": "old_testament",
+    "aliases_ko": [
+      "레",
+      "레위"
     ]
   },
   {
-    "abbr": "민수",
+    "id": "num",
     "korean_name": "민수기",
     "english_name": "Numbers",
-    "division": "old_testament",
-    "aliases": [
-      "민수",
-      "민수기",
-      "민"
+    "testament": "old_testament",
+    "aliases_ko": [
+      "민",
+      "민수"
     ]
   },
   {
-    "abbr": "신명",
+    "id": "deu",
     "korean_name": "신명기",
     "english_name": "Deuteronomy",
-    "division": "old_testament",
-    "aliases": [
-      "신명",
-      "신명기",
-      "신"
+    "testament": "old_testament",
+    "aliases_ko": [
+      "신",
+      "신명"
     ]
   },
   {
-    "abbr": "여호",
+    "id": "jos",
     "korean_name": "여호수아",
     "english_name": "Joshua",
-    "division": "old_testament",
-    "aliases": [
-      "여호",
-      "여호수아",
-      "수"
+    "testament": "old_testament",
+    "aliases_ko": [
+      "수",
+      "여호"
     ]
   },
   {
-    "abbr": "판관",
+    "id": "jdg",
     "korean_name": "판관기",
     "english_name": "Judges",
-    "division": "old_testament",
-    "aliases": [
-      "판관",
-      "판관기",
-      "사사기",
-      "삿"
+    "testament": "old_testament",
+    "aliases_ko": [
+      "삿",
+      "판관"
     ]
   },
   {
-    "abbr": "룻기",
+    "id": "rut",
     "korean_name": "룻기",
     "english_name": "Ruth",
-    "division": "old_testament",
-    "aliases": [
+    "testament": "old_testament",
+    "aliases_ko": [
       "룻기",
       "룻"
     ]
   },
   {
-    "abbr": "1사무",
+    "id": "1sa",
     "korean_name": "사무엘상",
     "english_name": "1 Samuel",
-    "division": "old_testament",
-    "aliases": [
-      "1사무",
-      "사무상",
-      "사무엘상",
-      "삼상"
+    "testament": "old_testament",
+    "aliases_ko": [
+      "삼상",
+      "1사무"
     ]
   },
   {
-    "abbr": "2사무",
+    "id": "2sa",
     "korean_name": "사무엘하",
     "english_name": "2 Samuel",
-    "division": "old_testament",
-    "aliases": [
-      "2사무",
-      "사무엘하",
-      "사무하",
-      "삼하"
+    "testament": "old_testament",
+    "aliases_ko": [
+      "삼하",
+      "2사무"
     ]
   },
   {
-    "abbr": "1열왕",
+    "id": "1ki",
     "korean_name": "열왕기상",
     "english_name": "1 Kings",
-    "division": "old_testament",
-    "aliases": [
-      "1열왕",
-      "열왕기상",
-      "열왕상",
-      "왕상"
+    "testament": "old_testament",
+    "aliases_ko": [
+      "왕상",
+      "1열왕"
     ]
   },
   {
-    "abbr": "2열왕",
+    "id": "2ki",
     "korean_name": "열왕기하",
     "english_name": "2 Kings",
-    "division": "old_testament",
-    "aliases": [
-      "2열왕",
-      "열왕기하",
-      "열왕하",
-      "왕하"
+    "testament": "old_testament",
+    "aliases_ko": [
+      "왕하",
+      "2열왕"
     ]
   },
   {
-    "abbr": "1역대",
+    "id": "1ch",
     "korean_name": "역대기상",
     "english_name": "1 Chronicles",
-    "division": "old_testament",
-    "aliases": [
-      "1역대",
-      "역대기상",
-      "역상",
-      "역대상",
-      "대상"
+    "testament": "old_testament",
+    "aliases_ko": [
+      "대상",
+      "1역대"
     ]
   },
   {
-    "abbr": "2역대",
+    "id": "2ch",
     "korean_name": "역대기하",
     "english_name": "2 Chronicles",
-    "division": "old_testament",
-    "aliases": [
-      "2역대",
-      "역대기하",
-      "역하",
-      "역대하",
-      "대하"
+    "testament": "old_testament",
+    "aliases_ko": [
+      "대하",
+      "2역대"
     ]
   },
   {
-    "abbr": "에즈",
+    "id": "ezr",
     "korean_name": "에즈라",
     "english_name": "Ezra",
-    "division": "old_testament",
-    "aliases": [
-      "에즈",
-      "에즈라",
-      "에스라",
+    "testament": "old_testament",
+    "aliases_ko": [
       "스",
-      "라"
+      "에즈"
     ]
   },
   {
-    "abbr": "느헤",
+    "id": "neh",
     "korean_name": "느헤미야",
     "english_name": "Nehemiah",
-    "division": "old_testament",
-    "aliases": [
-      "느헤",
-      "느헤미야",
-      "느"
+    "testament": "old_testament",
+    "aliases_ko": [
+      "느",
+      "느헤"
     ]
   },
   {
-    "abbr": "토비",
+    "id": "tob",
     "korean_name": "토비트",
     "english_name": "Tobit",
-    "division": "deuterocanon",
-    "aliases": [
+    "testament": "deuterocanon",
+    "aliases_ko": [
       "토비",
-      "토비트",
       "토빗기",
-      "토"
+      "토빗"
     ]
   },
   {
-    "abbr": "유딧",
+    "id": "jdt",
     "korean_name": "유딧",
     "english_name": "Judith",
-    "division": "deuterocanon",
-    "aliases": [
+    "testament": "deuterocanon",
+    "aliases_ko": [
       "유딧",
-      "유딧기",
-      "윧"
+      "유딧기"
     ]
   },
   {
-    "abbr": "에스",
+    "id": "est",
     "korean_name": "에스델",
     "english_name": "Esther",
-    "division": "old_testament",
-    "aliases": [
-      "에스",
-      "에스더",
-      "에스델",
-      "에스드라기",
-      "에스테르",
+    "testament": "old_testament",
+    "aliases_ko": [
       "에",
-      "더"
+      "에스테르기",
+      "에스"
     ]
   },
   {
-    "abbr": "1마카",
+    "id": "1macc",
     "korean_name": "마카베오상",
     "english_name": "1 Maccabees",
-    "division": "deuterocanon",
-    "aliases": [
+    "testament": "deuterocanon",
+    "aliases_ko": [
       "1마카",
-      "마카베오상",
-      "카상"
+      "마카베오기 상권"
     ]
   },
   {
-    "abbr": "2마카",
+    "id": "2macc",
     "korean_name": "마카베오하",
     "english_name": "2 Maccabees",
-    "division": "deuterocanon",
-    "aliases": [
+    "testament": "deuterocanon",
+    "aliases_ko": [
       "2마카",
-      "마카베오하",
-      "카하"
+      "마카베오기 하권"
     ]
   },
   {
-    "abbr": "욥기",
+    "id": "job",
     "korean_name": "욥기",
     "english_name": "Job",
-    "division": "old_testament",
-    "aliases": [
-      "욥기",
+    "testament": "old_testament",
+    "aliases_ko": [
       "욥"
     ]
   },
   {
-    "abbr": "시편",
+    "id": "psa",
     "korean_name": "시편",
     "english_name": "Psalms",
-    "division": "old_testament",
-    "aliases": [
-      "시편",
-      "시"
+    "testament": "old_testament",
+    "aliases_ko": [
+      "시",
+      "시편"
     ]
   },
   {
-    "abbr": "잠언",
+    "id": "pro",
     "korean_name": "잠언",
     "english_name": "Proverbs",
-    "division": "old_testament",
-    "aliases": [
-      "잠언",
-      "잠"
+    "testament": "old_testament",
+    "aliases_ko": [
+      "잠",
+      "잠언"
     ]
   },
   {
-    "abbr": "전도",
+    "id": "ecc",
     "korean_name": "전도서",
     "english_name": "Ecclesiastes",
-    "division": "old_testament",
-    "aliases": [
+    "testament": "old_testament",
+    "aliases_ko": [
+      "전",
       "전도",
-      "전도서",
-      "코헬렛",
-      "전"
+      "코헬",
+      "코헬렛"
     ]
   },
   {
-    "abbr": "아가",
+    "id": "sng",
     "korean_name": "아가",
     "english_name": "Song of Songs",
-    "division": "old_testament",
-    "aliases": [
-      "아가",
-      "아"
+    "testament": "old_testament",
+    "aliases_ko": [
+      "아",
+      "아가"
     ]
   },
   {
-    "abbr": "지혜",
+    "id": "wis",
     "korean_name": "지혜서",
     "english_name": "Wisdom",
-    "division": "deuterocanon",
-    "aliases": [
-      "지혜",
-      "지혜서"
+    "testament": "deuterocanon",
+    "aliases_ko": [
+      "지혜"
     ]
   },
   {
-    "abbr": "집회",
+    "id": "sir",
     "korean_name": "집회서",
     "english_name": "Sirach",
-    "division": "deuterocanon",
-    "aliases": [
-      "집회",
-      "집회서",
-      "집"
+    "testament": "deuterocanon",
+    "aliases_ko": [
+      "집회"
     ]
   },
   {
-    "abbr": "이사",
+    "id": "isa",
     "korean_name": "이사야",
     "english_name": "Isaiah",
-    "division": "old_testament",
-    "aliases": [
+    "testament": "old_testament",
+    "aliases_ko": [
+      "사",
       "이사",
-      "이사야",
-      "사"
+      "이사야서"
     ]
   },
   {
-    "abbr": "예레",
+    "id": "jer",
     "korean_name": "예레미야",
     "english_name": "Jeremiah",
-    "division": "old_testament",
-    "aliases": [
+    "testament": "old_testament",
+    "aliases_ko": [
+      "렘",
       "예레",
-      "예레미야",
-      "렘"
+      "예레미야서"
     ]
   },
   {
-    "abbr": "애가",
+    "id": "lam",
     "korean_name": "애가",
     "english_name": "Lamentations",
-    "division": "old_testament",
-    "aliases": [
-      "애가",
-      "애"
+    "testament": "old_testament",
+    "aliases_ko": [
+      "애",
+      "애가"
     ]
   },
   {
-    "abbr": "바룩",
+    "id": "bar",
     "korean_name": "바룩",
     "english_name": "Baruch",
-    "division": "deuterocanon",
-    "aliases": [
+    "testament": "deuterocanon",
+    "aliases_ko": [
       "바룩",
-      "바룩서",
-      "바"
+      "바룩서"
     ]
   },
   {
-    "abbr": "에제",
+    "id": "ezk",
     "korean_name": "에제키엘",
     "english_name": "Ezekiel",
-    "division": "old_testament",
-    "aliases": [
+    "testament": "old_testament",
+    "aliases_ko": [
+      "겔",
       "에제",
-      "에제키엘",
-      "에스겔",
-      "겔"
+      "에제키엘서"
     ]
   },
   {
-    "abbr": "다니",
+    "id": "dan",
     "korean_name": "다니엘",
     "english_name": "Daniel",
-    "division": "old_testament",
-    "aliases": [
+    "testament": "old_testament",
+    "aliases_ko": [
+      "단",
       "다니",
-      "다니엘",
-      "단"
+      "다니엘서"
     ]
   },
   {
-    "abbr": "호세",
+    "id": "hos",
     "korean_name": "호세아",
     "english_name": "Hosea",
-    "division": "old_testament",
-    "aliases": [
+    "testament": "old_testament",
+    "aliases_ko": [
+      "호",
       "호세",
-      "호세아",
-      "호"
+      "호세야서"
     ]
   },
   {
-    "abbr": "요엘",
+    "id": "jol",
     "korean_name": "요엘",
     "english_name": "Joel",
-    "division": "old_testament",
-    "aliases": [
+    "testament": "old_testament",
+    "aliases_ko": [
+      "욜",
       "요엘",
-      "욜"
+      "요엘서"
     ]
   },
   {
-    "abbr": "아모",
+    "id": "amo",
     "korean_name": "아모스",
     "english_name": "Amos",
-    "division": "old_testament",
-    "aliases": [
+    "testament": "old_testament",
+    "aliases_ko": [
+      "암",
       "아모",
-      "아모스",
-      "암"
+      "아모스서"
     ]
   },
   {
-    "abbr": "오바",
+    "id": "oba",
     "korean_name": "오바디야",
     "english_name": "Obadiah",
-    "division": "old_testament",
-    "aliases": [
+    "testament": "old_testament",
+    "aliases_ko": [
+      "옵",
       "오바",
-      "오바디야",
-      "오바댜",
-      "옵"
+      "오바드야서"
     ]
   },
   {
-    "abbr": "요나",
+    "id": "jnh",
     "korean_name": "요나",
     "english_name": "Jonah",
-    "division": "old_testament",
-    "aliases": [
+    "testament": "old_testament",
+    "aliases_ko": [
+      "욘",
       "요나",
-      "욘"
+      "요나서"
     ]
   },
   {
-    "abbr": "미가",
+    "id": "mic",
     "korean_name": "미가",
     "english_name": "Micah",
-    "division": "old_testament",
-    "aliases": [
+    "testament": "old_testament",
+    "aliases_ko": [
+      "미",
       "미가",
-      "미"
+      "미카",
+      "미카서"
     ]
   },
   {
-    "abbr": "나훔",
+    "id": "nam",
     "korean_name": "나훔",
     "english_name": "Nahum",
-    "division": "old_testament",
-    "aliases": [
+    "testament": "old_testament",
+    "aliases_ko": [
+      "나",
       "나훔",
-      "나"
+      "나훔서"
     ]
   },
   {
-    "abbr": "하바",
+    "id": "hab",
     "korean_name": "하바꾹",
     "english_name": "Habakkuk",
-    "division": "old_testament",
-    "aliases": [
+    "testament": "old_testament",
+    "aliases_ko": [
+      "합",
       "하바",
-      "하바꾹",
-      "하박국",
-      "합"
+      "하바쿡서"
     ]
   },
   {
-    "abbr": "스바",
+    "id": "zep",
     "korean_name": "스바니야",
     "english_name": "Zephaniah",
-    "division": "old_testament",
-    "aliases": [
+    "testament": "old_testament",
+    "aliases_ko": [
+      "습",
       "스바",
-      "스바니야",
-      "스바냐",
-      "습"
+      "스바니야서"
     ]
   },
   {
-    "abbr": "하깨",
+    "id": "hag",
     "korean_name": "하깨",
     "english_name": "Haggai",
-    "division": "old_testament",
-    "aliases": [
+    "testament": "old_testament",
+    "aliases_ko": [
+      "학",
       "하깨",
-      "학개",
-      "학"
+      "하까",
+      "하까이서"
     ]
   },
   {
-    "abbr": "즈가",
+    "id": "zec",
     "korean_name": "즈가리야",
     "english_name": "Zechariah",
-    "division": "old_testament",
-    "aliases": [
+    "testament": "old_testament",
+    "aliases_ko": [
+      "슥",
       "즈가",
-      "즈가리야",
-      "스가랴",
-      "슥"
+      "즈카",
+      "즈카르야서"
     ]
   },
   {
-    "abbr": "말라",
+    "id": "mal",
     "korean_name": "말라기",
     "english_name": "Malachi",
-    "division": "old_testament",
-    "aliases": [
+    "testament": "old_testament",
+    "aliases_ko": [
+      "말",
       "말라",
-      "말라기",
-      "말"
+      "말라키서"
     ]
   },
   {
-    "abbr": "마태",
+    "id": "mat",
     "korean_name": "마태오의 복음서",
     "english_name": "Matthew",
-    "division": "new_testament",
-    "aliases": [
+    "testament": "new_testament",
+    "aliases_ko": [
+      "마",
       "마태",
-      "마태복음",
-      "마태오복음",
-      "마태오의 복음서",
-      "마"
+      "마태오 복음서",
+      "마태복음"
     ]
   },
   {
-    "abbr": "마르",
+    "id": "mrk",
     "korean_name": "마르코의 복음서",
     "english_name": "Mark",
-    "division": "new_testament",
-    "aliases": [
-      "마가",
-      "마가복음",
+    "testament": "new_testament",
+    "aliases_ko": [
+      "막",
       "마르",
-      "마르코복음",
-      "마르코의 복음서",
-      "막"
+      "마르코 복음서",
+      "마가복음"
     ]
   },
   {
-    "abbr": "루가",
+    "id": "luk",
     "korean_name": "루가의 복음서",
     "english_name": "Luke",
-    "division": "new_testament",
-    "aliases": [
-      "누가",
-      "누가복음",
+    "testament": "new_testament",
+    "aliases_ko": [
+      "눅",
       "루가",
-      "루가복음",
-      "루가의 복음서",
-      "눅"
+      "루카 복음서",
+      "누가복음"
     ]
   },
   {
-    "abbr": "요한",
+    "id": "jhn",
     "korean_name": "요한의 복음서",
     "english_name": "John",
-    "division": "new_testament",
-    "aliases": [
+    "testament": "new_testament",
+    "aliases_ko": [
+      "요",
       "요한",
-      "요한복음",
-      "요한의 복음서",
-      "요"
+      "요한 복음서",
+      "요한복음"
     ]
   },
   {
-    "abbr": "사도",
+    "id": "act",
     "korean_name": "사도행전",
     "english_name": "Acts",
-    "division": "new_testament",
-    "aliases": [
-      "사도",
-      "사도행전",
-      "행"
+    "testament": "new_testament",
+    "aliases_ko": [
+      "행",
+      "사도"
     ]
   },
   {
-    "abbr": "로마",
+    "id": "rom",
     "korean_name": "로마인들에게 보낸 편지",
     "english_name": "Romans",
-    "division": "new_testament",
-    "aliases": [
+    "testament": "new_testament",
+    "aliases_ko": [
+      "롬",
       "로마",
-      "로마인들에게 보낸 편지",
-      "로마서",
-      "롬"
+      "로마 신자들에게 보낸 서간",
+      "로마서"
     ]
   },
   {
-    "abbr": "1고린",
+    "id": "1co",
     "korean_name": "고린토인들에게 보낸 첫째 편지",
     "english_name": "1 Corinthians",
-    "division": "new_testament",
-    "aliases": [
+    "testament": "new_testament",
+    "aliases_ko": [
+      "고전",
       "1고린",
-      "고린토인들에게 보낸 첫째 편지",
-      "고린도전서",
-      "고전"
+      "1코린",
+      "고린토 신자들에게 보낸 첫째 서간",
+      "고린도전서"
     ]
   },
   {
-    "abbr": "2고린",
+    "id": "2co",
     "korean_name": "고린토인들에게 보낸 둘째 편지",
     "english_name": "2 Corinthians",
-    "division": "new_testament",
-    "aliases": [
+    "testament": "new_testament",
+    "aliases_ko": [
+      "고후",
       "2고린",
-      "고린토인들에게 보낸 둘째 편지",
-      "고린도후서",
-      "고후"
+      "2코린",
+      "고린토 신자들에게 보낸 둘째 서간",
+      "고린도후서"
     ]
   },
   {
-    "abbr": "갈라",
+    "id": "gal",
     "korean_name": "갈라디아인들에게 보낸 편지",
     "english_name": "Galatians",
-    "division": "new_testament",
-    "aliases": [
+    "testament": "new_testament",
+    "aliases_ko": [
+      "갈",
       "갈라",
-      "갈라디아인들에게 보낸 편지",
-      "갈라디아서",
-      "갈"
+      "갈라티아 신자들에게 보낸 서간",
+      "갈라디아서"
     ]
   },
   {
-    "abbr": "에페",
+    "id": "eph",
     "korean_name": "에페소인들에게 보낸 편지",
     "english_name": "Ephesians",
-    "division": "new_testament",
-    "aliases": [
-      "에베",
+    "testament": "new_testament",
+    "aliases_ko": [
+      "엡",
       "에페",
-      "에페소서",
-      "에페소인들에게 보낸 편지",
-      "에베소서",
-      "엡"
+      "에페소 신자들에게 보낸 서간",
+      "에베소서"
     ]
   },
   {
-    "abbr": "필립",
+    "id": "php",
     "korean_name": "필립비인들에게 보낸 편지",
     "english_name": "Philippians",
-    "division": "new_testament",
-    "aliases": [
-      "빌립",
-      "빌립보서",
-      "빌립비서",
+    "testament": "new_testament",
+    "aliases_ko": [
+      "빌",
       "필립",
-      "필립비인들에게 보낸 편지",
-      "빌"
+      "필리",
+      "필리피 신자들에게 보낸 서간",
+      "빌립보서"
     ]
   },
   {
-    "abbr": "골로",
+    "id": "col",
     "korean_name": "골로사이인들에게 보낸 편지",
     "english_name": "Colossians",
-    "division": "new_testament",
-    "aliases": [
+    "testament": "new_testament",
+    "aliases_ko": [
+      "골",
       "골로",
-      "골로사이서",
-      "골로사이인들에게 보낸 편지",
-      "골로새서",
-      "골"
+      "콜로",
+      "콜로새 신자들에게 보낸 서간",
+      "골로새서"
     ]
   },
   {
-    "abbr": "1데살",
+    "id": "1th",
     "korean_name": "데살로니카인들에게 보낸 첫째 편지",
     "english_name": "1 Thessalonians",
-    "division": "new_testament",
-    "aliases": [
-      "1데살",
-      "데살로니가전서",
-      "데살로니카인들에게 보낸 첫째 편지",
+    "testament": "new_testament",
+    "aliases_ko": [
       "살전",
-      "테살로니카전서"
-    ]
+      "1데살",
+      "1테살",
+      "테살로니카 신자들에게 보낸 첫째 서간",
+      "데살로니가전서"
+    ] 
   },
   {
-    "abbr": "2데살",
+    "id": "2th",
     "korean_name": "데살로니카인들에게 보낸 둘째 편지",
     "english_name": "2 Thessalonians",
-    "division": "new_testament",
-    "aliases": [
-      "2데살",
-      "데살로니가후서",
-      "데살로니카인들에게 보낸 둘째 편지",
+    "testament": "new_testament",
+    "aliases_ko": [
       "살후",
-      "테살로니카후서"
+      "2데살",
+      "2테살",
+      "테살로니카 신자들에게 보낸 둘째 서간",
+      "데살로니가후서"
     ]
   },
   {
-    "abbr": "1디모",
+    "id": "1ti",
     "korean_name": "디모테오에게 보낸 첫째 편지",
     "english_name": "1 Timothy",
-    "division": "new_testament",
-    "aliases": [
-      "1디모",
-      "디모데전서",
-      "디모테오에게 보낸 첫째 편지",
+    "testament": "new_testament",
+    "aliases_ko": [
       "딤전",
-      "티모테오전서"
+      "1디모",
+      "1티모",
+      "티모테오에게 보낸 첫째 서간",
+      "디모데전서"
     ]
   },
   {
-    "abbr": "2디모",
+    "id": "2ti",
     "korean_name": "디모테오에게 보낸 둘째 편지",
     "english_name": "2 Timothy",
-    "division": "new_testament",
-    "aliases": [
-      "2디모",
-      "디모데후서",
-      "디모테오에게 보낸 둘째 편지",
+    "testament": "new_testament",
+    "aliases_ko": [
       "딤후",
-      "티모테오후서"
+      "2디모",
+      "2티모",
+      "티모테오에게 보낸 둘째 서간",
+      "디모데후서"
     ]
   },
   {
-    "abbr": "디도",
+    "id": "tit",
     "korean_name": "디도에게 보낸 편지",
     "english_name": "Titus",
-    "division": "new_testament",
-    "aliases": [
+    "testament": "new_testament",
+    "aliases_ko": [
+      "딛",
       "디도",
-      "디도에게 보낸 편지",
-      "디도서",
-      "딛"
+      "티토",
+      "티토에게 보낸 서간",
+      "디도서"
     ]
   },
   {
-    "abbr": "필레",
+    "id": "phm",
     "korean_name": "필레몬에게 보낸 편지",
     "english_name": "Philemon",
-    "division": "new_testament",
-    "aliases": [
+    "testament": "new_testament",
+    "aliases_ko": [
+      "몬",
       "필레",
-      "필레몬에게 보낸 편지"
+      "필레몬에게 보낸 서간",
+      "빌레몬서"
     ]
   },
   {
-    "abbr": "히브",
+    "id": "heb",
     "korean_name": "히브리인들에게 보낸 편지",
     "english_name": "Hebrews",
-    "division": "new_testament",
-    "aliases": [
+    "testament": "new_testament",
+    "aliases_ko": [
+      "히",
       "히브",
-      "히브리인들에게 보낸 편지",
-      "히브리서",
-      "히"
+      "히브리인들에게 보낸 서간",
+      "히브리서"
     ]
   },
   {
-    "abbr": "야고",
+    "id": "jas",
     "korean_name": "야고보의 편지",
     "english_name": "James",
-    "division": "new_testament",
-    "aliases": [
+    "testament": "new_testament",
+    "aliases_ko": [
+      "약",
       "야고",
-      "야고보의 편지",
-      "야고보서",
-      "약"
+      "야고보 서간",
+      "야고보서"
     ]
   },
   {
-    "abbr": "1베드",
+    "id": "1pe",
     "korean_name": "베드로의 첫째 편지",
     "english_name": "1 Peter",
-    "division": "new_testament",
-    "aliases": [
+    "testament": "new_testament",
+    "aliases_ko": [
+      "벧전",
       "1베드",
-      "베드로의 첫째 편지",
-      "베드로전서",
-      "벧전"
+      "베드로의 첫째 서간",
+      "베드로전서"
     ]
   },
   {
-    "abbr": "2베드",
+    "id": "2pe",
     "korean_name": "베드로의 둘째 편지",
     "english_name": "2 Peter",
-    "division": "new_testament",
-    "aliases": [
+    "testament": "new_testament",
+    "aliases_ko": [
+      "벧후",
       "2베드",
-      "베드로의 둘째 편지",
-      "베드로후서",
-      "벧후"
+      "베드로의 둘째 서간",
+      "베드로후서"
     ]
   },
   {
-    "abbr": "1요한",
+    "id": "1jn",
     "korean_name": "요한의 첫째 편지",
     "english_name": "1 John",
-    "division": "new_testament",
-    "aliases": [
+    "testament": "new_testament",
+    "aliases_ko": [
+      "요일",
+      "요1",
       "1요한",
-      "요한의 첫째 편지",
-      "요한1서",
-      "요일"
+      "요한의 첫째 서간",
+      "요한1서"
     ]
   },
   {
-    "abbr": "2요한",
+    "id": "2jn",
     "korean_name": "요한의 둘째 편지",
     "english_name": "2 John",
-    "division": "new_testament",
-    "aliases": [
+    "testament": "new_testament",
+    "aliases_ko": [
+      "요이",
+      "요2",
       "2요한",
-      "요한의 둘째 편지",
-      "요한2서",
-      "요이"
+      "요한의 둘째 서간",
+      "요한2서"
     ]
   },
   {
-    "abbr": "3요한",
+    "id": "3jn",
     "korean_name": "요한의 셋째 편지",
     "english_name": "3 John",
-    "division": "new_testament",
-    "aliases": [
+    "testament": "new_testament",
+    "aliases_ko": [
+      "요삼",
+      "요3",
       "3요한",
-      "요한의 셋째 편지",
-      "요한3서",
-      "요삼"
+      "요한의 셋째 서간",
+      "요한3서"
     ]
   },
   {
-    "abbr": "유다",
+    "id": "jud",
     "korean_name": "유다의 편지",
     "english_name": "Jude",
-    "division": "new_testament",
-    "aliases": [
+    "testament": "new_testament",
+    "aliases_ko": [
+      "유",
       "유다",
-      "유다의 편지",
-      "유다서",
-      "유"
+      "유다 서간",
+      "유다서"
     ]
   },
   {
-    "abbr": "묵시",
+    "id": "rev",
     "korean_name": "요한의 묵시록",
     "english_name": "Revelation",
-    "division": "new_testament",
-    "aliases": [
+    "testament": "new_testament",
+    "aliases_ko": [
+      "계",
       "묵시",
-      "요한의 묵시록",
-      "요한계시록",
-      "계"
+      "요한 묵시록",
+      "요한계시록"
     ]
   }
 ]
