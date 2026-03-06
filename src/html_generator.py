@@ -106,13 +106,32 @@ class HtmlGenerator:
             'abbrToSlug': abbr_to_slug,
         }
         # 별칭/슬러그 + 브레드크럼 메타 주입
-        script_parts = [
-            'window.BIBLE_ALIAS = ' +
-            _json.dumps(alias_payload, ensure_ascii=False) + ';'
-        ]
+        # 현재 모든 장 정보를 바탕으로 각 책의 총 장 수를 계산
+        book_total_chapters = {}
+        if 'all_chapters' in locals() or 'all_chapters' in globals():
+            for ch in all_chapters:
+                abbr = ch.book_abbr
+                book_total_chapters[abbr] = max(book_total_chapters.get(abbr, 0), ch.chapter_number)
+
+        # books_meta에 장 수 정보 추가
+        enriched_books = []
         if books_meta:
-            script_parts.append('window.BIBLE_BOOKS = ' +
-                                _json.dumps(books_meta, ensure_ascii=False) + ';')
+            for b in books_meta:
+                nb = b.copy()
+                abbr = b.get('약칭')
+                nb['total_chapters'] = book_total_chapters.get(abbr, 50) # 데이터 없으면 기본 50
+                enriched_books.append(nb)
+
+        alias_payload = {
+            'aliasToAbbr': alias_to_abbr,
+            'abbrToSlug': abbr_to_slug,
+        }
+        
+        script_parts = [
+            'window.BIBLE_ALIAS = ' + _json.dumps(alias_payload, ensure_ascii=False) + ';'
+        ]
+        if enriched_books:
+            script_parts.append('window.BIBLE_BOOKS = ' + _json.dumps(enriched_books, ensure_ascii=False) + ';')
         alias_data_script = '<script>' + ''.join(script_parts) + '</script>'
 
         # 오디오/챕터 공통 슬러그 계산: 매핑 우선, 없으면 영문 이름 기반
@@ -240,7 +259,7 @@ class HtmlGenerator:
             if div:
                 norm = str(div)
                 # 외경은 구약으로 포함
-                if "신약" in norm:
+                if norm == "new_testament":
                     nt_items.append(item)
                 else:
                     ot_items.append(item)

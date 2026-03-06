@@ -3,7 +3,7 @@
     "abbr": "창세",
     "korean_name": "창세기",
     "english_name": "Genesis",
-    "division": "구약",
+    "division": "old_testament",
     "aliases": [
       "창세",
       "창세기",
@@ -14,7 +14,7 @@
     "abbr": "출애",
     "korean_name": "출애굽기",
     "english_name": "Exodus",
-    "division": "구약",
+    "division": "old_testament",
     "aliases": [
       "출애",
       "출애굽기",
@@ -25,7 +25,7 @@
     "abbr": "레위",
     "korean_name": "레위기",
     "english_name": "Leviticus",
-    "division": "구약",
+    "division": "old_testament",
     "aliases": [
       "레위",
       "레위기",
@@ -36,7 +36,7 @@
     "abbr": "민수",
     "korean_name": "민수기",
     "english_name": "Numbers",
-    "division": "구약",
+    "division": "old_testament",
     "aliases": [
       "민수",
       "민수기",
@@ -47,7 +47,7 @@
     "abbr": "신명",
     "korean_name": "신명기",
     "english_name": "Deuteronomy",
-    "division": "구약",
+    "division": "old_testament",
     "aliases": [
       "신명",
       "신명기",
@@ -58,7 +58,7 @@
     "abbr": "여호",
     "korean_name": "여호수아",
     "english_name": "Joshua",
-    "division": "구약",
+    "division": "old_testament",
     "aliases": [
       "여호",
       "여호수아",
@@ -69,7 +69,7 @@
     "abbr": "판관",
     "korean_name": "판관기",
     "english_name": "Judges",
-    "division": "구약",
+    "division": "old_testament",
     "aliases": [
       "판관",
       "판관기",
@@ -81,7 +81,7 @@
     "abbr": "룻기",
     "korean_name": "룻기",
     "english_name": "Ruth",
-    "division": "구약",
+    "division": "old_testament",
     "aliases": [
       "룻기",
       "룻"
@@ -91,7 +91,7 @@
     "abbr": "1사무",
     "korean_name": "사무엘상",
     "english_name": "1 Samuel",
-    "division": "구약",
+    "division": "old_testament",
     "aliases": [
       "1사무",
       "사무상",
@@ -103,7 +103,7 @@
     "abbr": "2사무",
     "korean_name": "사무엘하",
     "english_name": "2 Samuel",
-    "division": "구약",
+    "division": "old_testament",
     "aliases": [
       "2사무",
       "사무엘하",
@@ -115,7 +115,7 @@
     "abbr": "1열왕",
     "korean_name": "열왕기상",
     "english_name": "1 Kings",
-    "division": "구약",
+    "division": "old_testament",
     "aliases": [
       "1열왕",
       "열왕기상",
@@ -127,7 +127,7 @@
     "abbr": "2열왕",
     "korean_name": "열왕기하",
     "english_name": "2 Kings",
-    "division": "구약",
+    "division": "old_testament",
     "aliases": [
       "2열왕",
       "열왕기하",
@@ -139,7 +139,7 @@
     "abbr": "1역대",
     "korean_name": "역대기상",
     "english_name": "1 Chronicles",
-    "division": "구약",
+    "division": "old_testament",
     "aliases": [
       "1역대",
       "역대기상",
@@ -152,7 +152,7 @@
     "abbr": "2역대",
     "korean_name": "역대기하",
     "english_name": "2 Chronicles",
-    "division": "구약",
+    "division": "old_testament",
     "aliases": [
       "2역대",
       "역대기하",
@@ -165,7 +165,7 @@
     "abbr": "에즈",
     "korean_name": "에즈라",
     "english_name": "Ezra",
-    "division": "구약",
+    "division": "old_testament",
     "aliases": [
       "에즈",
       "에즈라",
@@ -178,7 +178,7 @@
     "abbr": "느헤",
     "korean_name": "느헤미야",
     "english_name": "Nehemiah",
-    "division": "구약",
+    "division": "old_testament",
     "aliases": [
       "느헤",
       "느헤미야",
@@ -189,7 +189,7 @@
     "abbr": "토비",
     "korean_name": "토비트",
     "english_name": "Tobit",
-    "division": "외경",
+    "division": "deuterocanon",
     "aliases": [
       "토비",
       "토비트",
@@ -201,7 +201,7 @@
     "abbr": "유딧",
     "korean_name": "유딧",
     "english_name": "Judith",
-    "division": "외경",
+    "division": "deuterocanon",
     "aliases": [
       "유딧",
       "유딧기",
@@ -212,7 +212,7 @@
     "abbr": "에스",
     "korean_name": "에스델",
     "english_name": "Esther",
-    "division": "구약",
+    "division": "old_testament",
     "aliases": [
       "에스",
       "에스더",
@@ -227,7 +227,7 @@
     "abbr": "1마카",
     "korean_name": "마카베오상",
     "english_name": "1 Maccabees",
-    "division": "외경",
+    "division": "deuterocanon",
     "aliases": [
       "1마카",
       "마카베오상",
@@ -238,7 +238,7 @@
     "abbr": "2마카",
     "korean_name": "마카베오하",
     "english_name": "2 Maccabees",
-    "division": "외경",
+    "division": "deuterocanon",
     "aliases": [
       "2마카",
       "마카베오하",
@@ -249,7 +249,7 @@
     "abbr": "욥기",
     "korean_name": "욥기",
     "english_name": "Job",
-    "division": "구약",
+    "division": "old_testament",
     "aliases": [
       "욥기",
       "욥"
@@ -259,7 +259,7 @@
     "abbr": "시편",
     "korean_name": "시편",
     "english_name": "Psalms",
-    "division": "구약",
+    "division": "old_testament",
     "aliases": [
       "시편",
       "시"
@@ -269,7 +269,7 @@
     "abbr": "잠언",
     "korean_name": "잠언",
     "english_name": "Proverbs",
-    "division": "구약",
+    "division": "old_testament",
     "aliases": [
       "잠언",
       "잠"
@@ -279,7 +279,7 @@
     "abbr": "전도",
     "korean_name": "전도서",
     "english_name": "Ecclesiastes",
-    "division": "구약",
+    "division": "old_testament",
     "aliases": [
       "전도",
       "전도서",
@@ -291,7 +291,7 @@
     "abbr": "아가",
     "korean_name": "아가",
     "english_name": "Song of Songs",
-    "division": "구약",
+    "division": "old_testament",
     "aliases": [
       "아가",
       "아"
@@ -301,7 +301,7 @@
     "abbr": "지혜",
     "korean_name": "지혜서",
     "english_name": "Wisdom",
-    "division": "외경",
+    "division": "deuterocanon",
     "aliases": [
       "지혜",
       "지혜서"
@@ -311,7 +311,7 @@
     "abbr": "집회",
     "korean_name": "집회서",
     "english_name": "Sirach",
-    "division": "외경",
+    "division": "deuterocanon",
     "aliases": [
       "집회",
       "집회서",
@@ -322,7 +322,7 @@
     "abbr": "이사",
     "korean_name": "이사야",
     "english_name": "Isaiah",
-    "division": "구약",
+    "division": "old_testament",
     "aliases": [
       "이사",
       "이사야",
@@ -333,7 +333,7 @@
     "abbr": "예레",
     "korean_name": "예레미야",
     "english_name": "Jeremiah",
-    "division": "구약",
+    "division": "old_testament",
     "aliases": [
       "예레",
       "예레미야",
@@ -344,7 +344,7 @@
     "abbr": "애가",
     "korean_name": "애가",
     "english_name": "Lamentations",
-    "division": "구약",
+    "division": "old_testament",
     "aliases": [
       "애가",
       "애"
@@ -354,7 +354,7 @@
     "abbr": "바룩",
     "korean_name": "바룩",
     "english_name": "Baruch",
-    "division": "외경",
+    "division": "deuterocanon",
     "aliases": [
       "바룩",
       "바룩서",
@@ -365,7 +365,7 @@
     "abbr": "에제",
     "korean_name": "에제키엘",
     "english_name": "Ezekiel",
-    "division": "구약",
+    "division": "old_testament",
     "aliases": [
       "에제",
       "에제키엘",
@@ -377,7 +377,7 @@
     "abbr": "다니",
     "korean_name": "다니엘",
     "english_name": "Daniel",
-    "division": "구약",
+    "division": "old_testament",
     "aliases": [
       "다니",
       "다니엘",
@@ -388,7 +388,7 @@
     "abbr": "호세",
     "korean_name": "호세아",
     "english_name": "Hosea",
-    "division": "구약",
+    "division": "old_testament",
     "aliases": [
       "호세",
       "호세아",
@@ -399,7 +399,7 @@
     "abbr": "요엘",
     "korean_name": "요엘",
     "english_name": "Joel",
-    "division": "구약",
+    "division": "old_testament",
     "aliases": [
       "요엘",
       "욜"
@@ -409,7 +409,7 @@
     "abbr": "아모",
     "korean_name": "아모스",
     "english_name": "Amos",
-    "division": "구약",
+    "division": "old_testament",
     "aliases": [
       "아모",
       "아모스",
@@ -420,7 +420,7 @@
     "abbr": "오바",
     "korean_name": "오바디야",
     "english_name": "Obadiah",
-    "division": "구약",
+    "division": "old_testament",
     "aliases": [
       "오바",
       "오바디야",
@@ -432,7 +432,7 @@
     "abbr": "요나",
     "korean_name": "요나",
     "english_name": "Jonah",
-    "division": "구약",
+    "division": "old_testament",
     "aliases": [
       "요나",
       "욘"
@@ -442,7 +442,7 @@
     "abbr": "미가",
     "korean_name": "미가",
     "english_name": "Micah",
-    "division": "구약",
+    "division": "old_testament",
     "aliases": [
       "미가",
       "미"
@@ -452,7 +452,7 @@
     "abbr": "나훔",
     "korean_name": "나훔",
     "english_name": "Nahum",
-    "division": "구약",
+    "division": "old_testament",
     "aliases": [
       "나훔",
       "나"
@@ -462,7 +462,7 @@
     "abbr": "하바",
     "korean_name": "하바꾹",
     "english_name": "Habakkuk",
-    "division": "구약",
+    "division": "old_testament",
     "aliases": [
       "하바",
       "하바꾹",
@@ -474,7 +474,7 @@
     "abbr": "스바",
     "korean_name": "스바니야",
     "english_name": "Zephaniah",
-    "division": "구약",
+    "division": "old_testament",
     "aliases": [
       "스바",
       "스바니야",
@@ -486,7 +486,7 @@
     "abbr": "하깨",
     "korean_name": "하깨",
     "english_name": "Haggai",
-    "division": "구약",
+    "division": "old_testament",
     "aliases": [
       "하깨",
       "학개",
@@ -497,7 +497,7 @@
     "abbr": "즈가",
     "korean_name": "즈가리야",
     "english_name": "Zechariah",
-    "division": "구약",
+    "division": "old_testament",
     "aliases": [
       "즈가",
       "즈가리야",
@@ -509,7 +509,7 @@
     "abbr": "말라",
     "korean_name": "말라기",
     "english_name": "Malachi",
-    "division": "구약",
+    "division": "old_testament",
     "aliases": [
       "말라",
       "말라기",
@@ -520,7 +520,7 @@
     "abbr": "마태",
     "korean_name": "마태오의 복음서",
     "english_name": "Matthew",
-    "division": "신약",
+    "division": "new_testament",
     "aliases": [
       "마태",
       "마태복음",
@@ -533,7 +533,7 @@
     "abbr": "마르",
     "korean_name": "마르코의 복음서",
     "english_name": "Mark",
-    "division": "신약",
+    "division": "new_testament",
     "aliases": [
       "마가",
       "마가복음",
@@ -547,7 +547,7 @@
     "abbr": "루가",
     "korean_name": "루가의 복음서",
     "english_name": "Luke",
-    "division": "신약",
+    "division": "new_testament",
     "aliases": [
       "누가",
       "누가복음",
@@ -561,7 +561,7 @@
     "abbr": "요한",
     "korean_name": "요한의 복음서",
     "english_name": "John",
-    "division": "신약",
+    "division": "new_testament",
     "aliases": [
       "요한",
       "요한복음",
@@ -573,7 +573,7 @@
     "abbr": "사도",
     "korean_name": "사도행전",
     "english_name": "Acts",
-    "division": "신약",
+    "division": "new_testament",
     "aliases": [
       "사도",
       "사도행전",
@@ -584,7 +584,7 @@
     "abbr": "로마",
     "korean_name": "로마인들에게 보낸 편지",
     "english_name": "Romans",
-    "division": "신약",
+    "division": "new_testament",
     "aliases": [
       "로마",
       "로마인들에게 보낸 편지",
@@ -596,7 +596,7 @@
     "abbr": "1고린",
     "korean_name": "고린토인들에게 보낸 첫째 편지",
     "english_name": "1 Corinthians",
-    "division": "신약",
+    "division": "new_testament",
     "aliases": [
       "1고린",
       "고린토인들에게 보낸 첫째 편지",
@@ -608,7 +608,7 @@
     "abbr": "2고린",
     "korean_name": "고린토인들에게 보낸 둘째 편지",
     "english_name": "2 Corinthians",
-    "division": "신약",
+    "division": "new_testament",
     "aliases": [
       "2고린",
       "고린토인들에게 보낸 둘째 편지",
@@ -620,7 +620,7 @@
     "abbr": "갈라",
     "korean_name": "갈라디아인들에게 보낸 편지",
     "english_name": "Galatians",
-    "division": "신약",
+    "division": "new_testament",
     "aliases": [
       "갈라",
       "갈라디아인들에게 보낸 편지",
@@ -632,7 +632,7 @@
     "abbr": "에페",
     "korean_name": "에페소인들에게 보낸 편지",
     "english_name": "Ephesians",
-    "division": "신약",
+    "division": "new_testament",
     "aliases": [
       "에베",
       "에페",
@@ -646,7 +646,7 @@
     "abbr": "필립",
     "korean_name": "필립비인들에게 보낸 편지",
     "english_name": "Philippians",
-    "division": "신약",
+    "division": "new_testament",
     "aliases": [
       "빌립",
       "빌립보서",
@@ -660,7 +660,7 @@
     "abbr": "골로",
     "korean_name": "골로사이인들에게 보낸 편지",
     "english_name": "Colossians",
-    "division": "신약",
+    "division": "new_testament",
     "aliases": [
       "골로",
       "골로사이서",
@@ -673,7 +673,7 @@
     "abbr": "1데살",
     "korean_name": "데살로니카인들에게 보낸 첫째 편지",
     "english_name": "1 Thessalonians",
-    "division": "신약",
+    "division": "new_testament",
     "aliases": [
       "1데살",
       "데살로니가전서",
@@ -686,7 +686,7 @@
     "abbr": "2데살",
     "korean_name": "데살로니카인들에게 보낸 둘째 편지",
     "english_name": "2 Thessalonians",
-    "division": "신약",
+    "division": "new_testament",
     "aliases": [
       "2데살",
       "데살로니가후서",
@@ -699,7 +699,7 @@
     "abbr": "1디모",
     "korean_name": "디모테오에게 보낸 첫째 편지",
     "english_name": "1 Timothy",
-    "division": "신약",
+    "division": "new_testament",
     "aliases": [
       "1디모",
       "디모데전서",
@@ -712,7 +712,7 @@
     "abbr": "2디모",
     "korean_name": "디모테오에게 보낸 둘째 편지",
     "english_name": "2 Timothy",
-    "division": "신약",
+    "division": "new_testament",
     "aliases": [
       "2디모",
       "디모데후서",
@@ -725,7 +725,7 @@
     "abbr": "디도",
     "korean_name": "디도에게 보낸 편지",
     "english_name": "Titus",
-    "division": "신약",
+    "division": "new_testament",
     "aliases": [
       "디도",
       "디도에게 보낸 편지",
@@ -737,7 +737,7 @@
     "abbr": "필레",
     "korean_name": "필레몬에게 보낸 편지",
     "english_name": "Philemon",
-    "division": "신약",
+    "division": "new_testament",
     "aliases": [
       "필레",
       "필레몬에게 보낸 편지"
@@ -747,7 +747,7 @@
     "abbr": "히브",
     "korean_name": "히브리인들에게 보낸 편지",
     "english_name": "Hebrews",
-    "division": "신약",
+    "division": "new_testament",
     "aliases": [
       "히브",
       "히브리인들에게 보낸 편지",
@@ -759,7 +759,7 @@
     "abbr": "야고",
     "korean_name": "야고보의 편지",
     "english_name": "James",
-    "division": "신약",
+    "division": "new_testament",
     "aliases": [
       "야고",
       "야고보의 편지",
@@ -771,7 +771,7 @@
     "abbr": "1베드",
     "korean_name": "베드로의 첫째 편지",
     "english_name": "1 Peter",
-    "division": "신약",
+    "division": "new_testament",
     "aliases": [
       "1베드",
       "베드로의 첫째 편지",
@@ -783,7 +783,7 @@
     "abbr": "2베드",
     "korean_name": "베드로의 둘째 편지",
     "english_name": "2 Peter",
-    "division": "신약",
+    "division": "new_testament",
     "aliases": [
       "2베드",
       "베드로의 둘째 편지",
@@ -795,7 +795,7 @@
     "abbr": "1요한",
     "korean_name": "요한의 첫째 편지",
     "english_name": "1 John",
-    "division": "신약",
+    "division": "new_testament",
     "aliases": [
       "1요한",
       "요한의 첫째 편지",
@@ -807,7 +807,7 @@
     "abbr": "2요한",
     "korean_name": "요한의 둘째 편지",
     "english_name": "2 John",
-    "division": "신약",
+    "division": "new_testament",
     "aliases": [
       "2요한",
       "요한의 둘째 편지",
@@ -819,7 +819,7 @@
     "abbr": "3요한",
     "korean_name": "요한의 셋째 편지",
     "english_name": "3 John",
-    "division": "신약",
+    "division": "new_testament",
     "aliases": [
       "3요한",
       "요한의 셋째 편지",
@@ -831,7 +831,7 @@
     "abbr": "유다",
     "korean_name": "유다의 편지",
     "english_name": "Jude",
-    "division": "신약",
+    "division": "new_testament",
     "aliases": [
       "유다",
       "유다의 편지",
@@ -843,7 +843,7 @@
     "abbr": "묵시",
     "korean_name": "요한의 묵시록",
     "english_name": "Revelation",
-    "division": "신약",
+    "division": "new_testament",
     "aliases": [
       "묵시",
       "요한의 묵시록",

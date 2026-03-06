@@ -77,11 +77,12 @@ class BibleParser:
                 ko = raw.get('korean_name') or raw.get('전체 이름') or ''
                 en = raw.get('english_name') or raw.get('영문 이름') or ''
                 div = raw.get('division') or raw.get('구분') or ''
+                _DIV_KO = {'old_testament': '구약', 'deuterocanon': '외경', 'new_testament': '신약'}
                 aliases = raw.get('aliases') or []
                 bid = get_english_abbr(en) if en else (abbr or ko)
                 by_id[bid] = {
                     'names': {'ko': ko, 'en': en},
-                    'division': {'ko': div, 'en': 'Old Testament' if div == '구약' else ('Apocrypha' if div == '외경' else 'New Testament')},
+                    'division': {'ko': _DIV_KO.get(div, div), 'en': div},
                     'aliases': {'ko': list({abbr, ko, *aliases} - {None, ''}), 'en': [bid, en] if en else [bid]},
                     'book_order': -1,
                 }

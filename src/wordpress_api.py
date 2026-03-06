@@ -638,7 +638,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                 book_name=args.book_abbr,  # placeholder
                 book_abbr=args.book_abbr,
                 english_name=args.book_abbr,
-                division="구약",
+                division="old_testament",
                 chapter_number=args.from_chapter,
             )
             post_id = publisher.render_and_publish_chapter(
