@@ -5,9 +5,7 @@
   "reportGeneralTypeIssues": "warning",
   "include": [
     "src",
-    "tests",
-    "setup.py",
-    "run.py"
+    "tests"
   ],
   "exclude": [
     "**/node_modules",

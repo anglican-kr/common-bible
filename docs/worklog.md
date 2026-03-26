@@ -49,6 +49,11 @@
   - 호스팅 레벨 설정으로 분리하여 명세
 - 배포 URL 명시: https://bible.anglican.kr
 
+### book_mappings.json 별칭 정리
+- 별칭 추가: 탈출기, 사무엘기 상/하권, 열왕기 상/하권, 역대기 상/하권, 에즈라기, 느헤미야기
+- 오타 수정: 호세야서 → 호세아서
+- 중복/부정확 별칭 제거: 시편(abbr와 동일), 잠언(abbr와 동일), 바룩, 요나, 미가, 나훔, 하깨
+
 ### 다음 작업
 - [ ] parsed_bible.json → 장별 JSON 분리 스크립트 작성
 - [ ] SPA 뼈대 구현 (index.html + app.js + router)
