@@ -10,7 +10,7 @@
     ]
   },
   {
-    "id": "exo",
+    "id": "exod",
     "korean_name": "출애굽기",
     "english_name": "Exodus",
     "testament": "old_testament",
@@ -42,7 +42,7 @@
     ]
   },
   {
-    "id": "deu",
+    "id": "deut",
     "korean_name": "신명기",
     "english_name": "Deuteronomy",
     "testament": "old_testament",
@@ -52,7 +52,7 @@
     ]
   },
   {
-    "id": "jos",
+    "id": "josh",
     "korean_name": "여호수아",
     "english_name": "Joshua",
     "testament": "old_testament",
@@ -62,7 +62,7 @@
     ]
   },
   {
-    "id": "jdg",
+    "id": "judg",
     "korean_name": "판관기",
     "english_name": "Judges",
     "testament": "old_testament",
@@ -72,7 +72,7 @@
     ]
   },
   {
-    "id": "rut",
+    "id": "ruth",
     "korean_name": "룻기",
     "english_name": "Ruth",
     "testament": "old_testament",
@@ -82,7 +82,7 @@
     ]
   },
   {
-    "id": "1sa",
+    "id": "1sam",
     "korean_name": "사무엘상",
     "english_name": "1 Samuel",
     "testament": "old_testament",
@@ -93,7 +93,7 @@
     ]
   },
   {
-    "id": "2sa",
+    "id": "2sam",
     "korean_name": "사무엘하",
     "english_name": "2 Samuel",
     "testament": "old_testament",
@@ -104,7 +104,7 @@
     ]
   },
   {
-    "id": "1ki",
+    "id": "1kgs",
     "korean_name": "열왕기상",
     "english_name": "1 Kings",
     "testament": "old_testament",
@@ -115,7 +115,7 @@
     ]
   },
   {
-    "id": "2ki",
+    "id": "2kgs",
     "korean_name": "열왕기하",
     "english_name": "2 Kings",
     "testament": "old_testament",
@@ -126,7 +126,7 @@
     ]
   },
   {
-    "id": "1ch",
+    "id": "1chr",
     "korean_name": "역대기상",
     "english_name": "1 Chronicles",
     "testament": "old_testament",
@@ -137,7 +137,7 @@
     ]
   },
   {
-    "id": "2ch",
+    "id": "2chr",
     "korean_name": "역대기하",
     "english_name": "2 Chronicles",
     "testament": "old_testament",
@@ -148,7 +148,7 @@
     ]
   },
   {
-    "id": "ezr",
+    "id": "ezra",
     "korean_name": "에즈라",
     "english_name": "Ezra",
     "testament": "old_testament",
@@ -191,7 +191,7 @@
     ]
   },
   {
-    "id": "est",
+    "id": "esth",
     "korean_name": "에스델",
     "english_name": "Esther",
     "testament": "old_testament",
@@ -231,7 +231,7 @@
     ]
   },
   {
-    "id": "psa",
+    "id": "ps",
     "korean_name": "시편",
     "english_name": "Psalms",
     "testament": "old_testament",
@@ -240,7 +240,7 @@
     ]
   },
   {
-    "id": "pro",
+    "id": "prov",
     "korean_name": "잠언",
     "english_name": "Proverbs",
     "testament": "old_testament",
@@ -249,7 +249,7 @@
     ]
   },
   {
-    "id": "ecc",
+    "id": "eccl",
     "korean_name": "전도서",
     "english_name": "Ecclesiastes",
     "testament": "old_testament",
@@ -261,7 +261,7 @@
     ]
   },
   {
-    "id": "sng",
+    "id": "song",
     "korean_name": "아가",
     "english_name": "Song of Songs",
     "testament": "old_testament",
@@ -330,7 +330,7 @@
     ]
   },
   {
-    "id": "ezk",
+    "id": "ezek",
     "korean_name": "에제키엘",
     "english_name": "Ezekiel",
     "testament": "old_testament",
@@ -363,7 +363,7 @@
     ]
   },
   {
-    "id": "jol",
+    "id": "joel",
     "korean_name": "요엘",
     "english_name": "Joel",
     "testament": "old_testament",
@@ -374,7 +374,7 @@
     ]
   },
   {
-    "id": "amo",
+    "id": "amos",
     "korean_name": "아모스",
     "english_name": "Amos",
     "testament": "old_testament",
@@ -385,7 +385,7 @@
     ]
   },
   {
-    "id": "oba",
+    "id": "obad",
     "korean_name": "오바디야",
     "english_name": "Obadiah",
     "testament": "old_testament",
@@ -396,7 +396,7 @@
     ]
   },
   {
-    "id": "jnh",
+    "id": "jonah",
     "korean_name": "요나",
     "english_name": "Jonah",
     "testament": "old_testament",
@@ -417,7 +417,7 @@
     ]
   },
   {
-    "id": "nam",
+    "id": "nah",
     "korean_name": "나훔",
     "english_name": "Nahum",
     "testament": "old_testament",
@@ -438,7 +438,7 @@
     ]
   },
   {
-    "id": "zep",
+    "id": "zeph",
     "korean_name": "스바니야",
     "english_name": "Zephaniah",
     "testament": "old_testament",
@@ -460,7 +460,7 @@
     ]
   },
   {
-    "id": "zec",
+    "id": "zech",
     "korean_name": "즈가리야",
     "english_name": "Zechariah",
     "testament": "old_testament",
@@ -483,7 +483,7 @@
     ]
   },
   {
-    "id": "mat",
+    "id": "matt",
     "korean_name": "마태오의 복음서",
     "english_name": "Matthew",
     "testament": "new_testament",
@@ -495,7 +495,7 @@
     ]
   },
   {
-    "id": "mrk",
+    "id": "mark",
     "korean_name": "마르코의 복음서",
     "english_name": "Mark",
     "testament": "new_testament",
@@ -507,7 +507,7 @@
     ]
   },
   {
-    "id": "luk",
+    "id": "luke",
     "korean_name": "루가의 복음서",
     "english_name": "Luke",
     "testament": "new_testament",
@@ -519,7 +519,7 @@
     ]
   },
   {
-    "id": "jhn",
+    "id": "john",
     "korean_name": "요한의 복음서",
     "english_name": "John",
     "testament": "new_testament",
@@ -531,7 +531,7 @@
     ]
   },
   {
-    "id": "act",
+    "id": "acts",
     "korean_name": "사도행전",
     "english_name": "Acts",
     "testament": "new_testament",
@@ -553,7 +553,7 @@
     ]
   },
   {
-    "id": "1co",
+    "id": "1cor",
     "korean_name": "고린토인들에게 보낸 첫째 편지",
     "english_name": "1 Corinthians",
     "testament": "new_testament",
@@ -566,7 +566,7 @@
     ]
   },
   {
-    "id": "2co",
+    "id": "2cor",
     "korean_name": "고린토인들에게 보낸 둘째 편지",
     "english_name": "2 Corinthians",
     "testament": "new_testament",
@@ -603,7 +603,7 @@
     ]
   },
   {
-    "id": "php",
+    "id": "phil",
     "korean_name": "필립비인들에게 보낸 편지",
     "english_name": "Philippians",
     "testament": "new_testament",
@@ -629,7 +629,7 @@
     ]
   },
   {
-    "id": "1th",
+    "id": "1thess",
     "korean_name": "데살로니카인들에게 보낸 첫째 편지",
     "english_name": "1 Thessalonians",
     "testament": "new_testament",
@@ -639,10 +639,10 @@
       "1테살",
       "테살로니카 신자들에게 보낸 첫째 서간",
       "데살로니가전서"
-    ] 
+    ]
   },
   {
-    "id": "2th",
+    "id": "2thess",
     "korean_name": "데살로니카인들에게 보낸 둘째 편지",
     "english_name": "2 Thessalonians",
     "testament": "new_testament",
@@ -655,7 +655,7 @@
     ]
   },
   {
-    "id": "1ti",
+    "id": "1tim",
     "korean_name": "디모테오에게 보낸 첫째 편지",
     "english_name": "1 Timothy",
     "testament": "new_testament",
@@ -668,7 +668,7 @@
     ]
   },
   {
-    "id": "2ti",
+    "id": "2tim",
     "korean_name": "디모테오에게 보낸 둘째 편지",
     "english_name": "2 Timothy",
     "testament": "new_testament",
@@ -681,7 +681,7 @@
     ]
   },
   {
-    "id": "tit",
+    "id": "titus",
     "korean_name": "디도에게 보낸 편지",
     "english_name": "Titus",
     "testament": "new_testament",
@@ -694,7 +694,7 @@
     ]
   },
   {
-    "id": "phm",
+    "id": "phlm",
     "korean_name": "필레몬에게 보낸 편지",
     "english_name": "Philemon",
     "testament": "new_testament",
@@ -730,7 +730,7 @@
     ]
   },
   {
-    "id": "1pe",
+    "id": "1pet",
     "korean_name": "베드로의 첫째 편지",
     "english_name": "1 Peter",
     "testament": "new_testament",
@@ -742,7 +742,7 @@
     ]
   },
   {
-    "id": "2pe",
+    "id": "2pet",
     "korean_name": "베드로의 둘째 편지",
     "english_name": "2 Peter",
     "testament": "new_testament",
@@ -754,7 +754,7 @@
     ]
   },
   {
-    "id": "1jn",
+    "id": "1john",
     "korean_name": "요한의 첫째 편지",
     "english_name": "1 John",
     "testament": "new_testament",
@@ -767,7 +767,7 @@
     ]
   },
   {
-    "id": "2jn",
+    "id": "2john",
     "korean_name": "요한의 둘째 편지",
     "english_name": "2 John",
     "testament": "new_testament",
@@ -780,7 +780,7 @@
     ]
   },
   {
-    "id": "3jn",
+    "id": "3john",
     "korean_name": "요한의 셋째 편지",
     "english_name": "3 John",
     "testament": "new_testament",
@@ -793,7 +793,7 @@
     ]
   },
   {
-    "id": "jud",
+    "id": "jude",
     "korean_name": "유다의 편지",
     "english_name": "Jude",
     "testament": "new_testament",

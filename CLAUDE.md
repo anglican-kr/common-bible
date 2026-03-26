@@ -28,9 +28,10 @@ style.css               ← 스타일
 sw.js                   ← 서비스 워커 (오프라인)
 manifest.webmanifest    ← PWA 매니페스트
 data/
-  books.json            ← 73권 목록 (메타데이터)
+  books.json            ← 73권 목록 (메타데이터, has_prologue 플래그 포함)
   bible/
     {book_id}-{chapter}.json  ← 장별 성경 데이터
+    sir-prologue.json   ← 집회서 머리말 (ADR-002)
   audio/
     {book_slug}-{chapter}.mp3 ← 장별 오디오
 src/
@@ -48,6 +49,8 @@ docs/
 data/common-bible-kr.txt
   → (parser.py) → output/parsed_bible.json
   → (split_bible.py) → data/bible/{book_id}-{chapter}.json
+                      → data/bible/sir-prologue.json (집회서 머리말, 원본 텍스트에서 직접 추출)
+                      → data/books.json
 ```
 
 ## 장기 로드맵

@@ -16,6 +16,7 @@ class Verse:
     number: int
     text: str
     has_paragraph: bool = False
+    chapter_ref: Optional[int] = None  # set when verse physically appears in a different chapter
 
 
 @dataclass
@@ -116,52 +117,73 @@ class BibleParser:
             return abbr
 
     def parse_file(self, file_path: str) -> List[Chapter]:
-        """텍스트 파일을 파싱하여 장 리스트 반환"""
+        """텍스트 파일을 파싱하여 장 리스트 반환.
+
+        Chapter boundary rule (physical-chapter approach, ADR-002):
+        A new chapter starts only when verse number == 1 AND that
+        (book_abbr, chapter_num) pair has not been seen before, OR when
+        the book changes.  Mid-chapter verse references (e.g. '아모 6:9'
+        inside amos-6) and cross-chapter scholarly relocations (e.g.
+        '이사 41:6' inside isa-40) are kept in the physically enclosing
+        chapter with a chapter_ref annotation.
+        """
         with open(file_path, 'r', encoding='utf-8') as f:
             content = f.read()
 
         chapters = []
         current_chapter = None
         current_verses = []
+        opened_chapter_keys: set = set()  # (book_abbr, chapter_num) pairs seen so far
 
         for line in content.split('\n'):
-            # 장 시작 확인
             match = self.chapter_pattern.match(line)
             if match:
-                # 이전 장 저장
-                if current_chapter:
-                    current_chapter.verses = current_verses
-                    chapters.append(current_chapter)
-
-                # 새 장 시작
                 book_abbr = match.group(1)
                 chapter_num = int(match.group(2))
-                resolved = self._resolve_book(book_abbr)
+                verse_num = int(match.group(3))
+                key = (book_abbr, chapter_num)
 
-                current_chapter = Chapter(
-                    book_id=resolved['id'],
-                    book_name_ko=resolved['name_ko'] or book_abbr,
-                    book_name_en=resolved['name_en'] or resolved['id'],
-                    book_abbr=book_abbr,
-                    division_ko=resolved['division_ko'],
-                    division_en=resolved['division_en'],
-                    chapter_number=chapter_num,
-                    verses=[]
+                is_new_chapter = (
+                    current_chapter is None
+                    or book_abbr != current_chapter.book_abbr
+                    or (key not in opened_chapter_keys and verse_num == 1)
                 )
-                current_verses = []
 
-                # 장 시작 라인에서 첫 번째 절 내용 추출
-                first_verse = self._extract_first_verse_from_chapter_line(line)
-                if first_verse:
-                    current_verses.append(first_verse)
+                if is_new_chapter:
+                    if current_chapter:
+                        current_chapter.verses = current_verses
+                        chapters.append(current_chapter)
 
-            # 절 파싱
+                    resolved = self._resolve_book(book_abbr)
+                    current_chapter = Chapter(
+                        book_id=resolved['id'],
+                        book_name_ko=resolved['name_ko'] or book_abbr,
+                        book_name_en=resolved['name_en'] or resolved['id'],
+                        book_abbr=book_abbr,
+                        division_ko=resolved['division_ko'],
+                        division_en=resolved['division_en'],
+                        chapter_number=chapter_num,
+                        verses=[]
+                    )
+                    current_verses = []
+                    opened_chapter_keys.add(key)
+
+                    verse = self._extract_verse_from_chapter_line(line, match, None)
+                    if verse:
+                        current_verses.append(verse)
+                else:
+                    # Same-chapter continuation or cross-chapter scholarly relocation
+                    verse = self._extract_verse_from_chapter_line(
+                        line, match, current_chapter.chapter_number
+                    )
+                    if verse:
+                        current_verses.append(verse)
+
             elif current_chapter and line.strip():
                 verse = self._parse_verse_line(line)
                 if verse:
                     current_verses.append(verse)
 
-        # 마지막 장 저장
         if current_chapter:
             current_chapter.verses = current_verses
             chapters.append(current_chapter)
@@ -188,32 +210,33 @@ class BibleParser:
             has_paragraph=has_paragraph
         )
 
-    def _extract_first_verse_from_chapter_line(self, line: str) -> Optional[Verse]:
-        """장 시작 라인에서 첫 번째 절 내용을 추출"""
-        # 패턴: "창세 1:1 ¶ 한처음에 하느님께서..."
-        # 장:절 번호 이후의 내용을 첫 번째 절로 추출
+    def _extract_verse_from_chapter_line(
+        self, line: str, match: re.Match, current_chapter_num: Optional[int]
+    ) -> Optional[Verse]:
+        """Extract a verse from a line that begins with the book+chapter:verse pattern.
 
-        # 장:절 패턴 이후의 텍스트 찾기
-        match = self.chapter_pattern.match(line)
-        if not match:
-            return None
-
-        # 매치된 부분 이후의 텍스트 추출
-        full_match = match.group(0)  # 전체 매치 (예: "창세 1:1")
-        remaining_text = line[len(full_match):].strip()
+        current_chapter_num: the chapter number of the enclosing chapter object.
+            Pass None when this verse IS the chapter opener (no cross-chapter annotation needed).
+        """
+        chapter_num = int(match.group(2))
+        verse_num = int(match.group(3))
+        remaining_text = line[len(match.group(0)):].strip()
 
         if not remaining_text:
             return None
 
-        # 단락 구분 기호 확인 (원본 텍스트 보존)
         has_paragraph = '¶' in remaining_text
-        # ¶ 기호는 제거하지 않고 보존 (HTML 변환 시 접근성 처리)
+        chapter_ref = (
+            chapter_num
+            if current_chapter_num is not None and chapter_num != current_chapter_num
+            else None
+        )
 
-        # 첫 번째 절은 항상 절 번호 1
         return Verse(
-            number=1,
+            number=verse_num,
             text=remaining_text,
-            has_paragraph=has_paragraph
+            has_paragraph=has_paragraph,
+            chapter_ref=chapter_ref,
         )
 
     def save_to_json(self, chapters: List[Chapter], output_path: str) -> None:
@@ -240,7 +263,8 @@ class BibleParser:
                 Verse(
                     number=verse_data['number'],
                     text=verse_data['text'],
-                    has_paragraph=verse_data['has_paragraph']
+                    has_paragraph=verse_data['has_paragraph'],
+                    chapter_ref=verse_data.get('chapter_ref'),
                 )
                 for verse_data in chapter_data['verses']
             ]
