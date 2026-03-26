@@ -183,6 +183,10 @@ class BibleParser:
                 verse = self._parse_verse_line(line)
                 if verse:
                     current_verses.append(verse)
+                elif current_verses and line.strip().startswith('¶'):
+                    # Continuation of the previous verse (scholarly paragraph break mid-verse)
+                    current_verses[-1].text += '\n' + line.strip()
+                    current_verses[-1].has_paragraph = True
 
         if current_chapter:
             current_chapter.verses = current_verses

@@ -108,6 +108,24 @@
   - Level 3 스냅샷: cross-chapter 6곳, 재배치 구간 고정값 검증
 - 픽스처 생성 스크립트(`generate_fixtures.py`)와 테스트 코드 작성은 다음 세션으로 미룸
 
+### ¶ 연속 줄 이어붙이기 처리 (parser.py)
+
+- **발견**: 원문에서 하나의 절이 두 줄에 걸쳐 표기되고 둘째 줄이 `¶`로 시작하는 패턴 59곳 발견
+  ```
+  20 예루살렘과 유다는 야훼의 진노를 사 마침내 그 앞에서 쫓겨나고 말았다.
+  ¶ 시드키야가 바빌론 왕에게 반기를 들었다.
+  ```
+- **원인**: `_parse_verse_line`이 `parts[0].isdigit()` 조건으로 파싱하므로 `¶`로 시작하는 줄을 `None` 반환 → 텍스트 유실
+- **결정**: A안(이어붙이기) — `¶`를 단락 구분자로 유지하며 이전 절 텍스트에 `\n¶ ...`로 연결
+- **수정**: `parse_file`의 continuation 처리 로직 추가
+  ```python
+  elif current_verses and line.strip().startswith('¶'):
+      current_verses[-1].text += '\n' + line.strip()
+      current_verses[-1].has_paragraph = True
+  ```
+- **결과**: 열왕기하 24:20 등 59곳 텍스트 완전 복구, `has_paragraph: true` 올바르게 설정
+- parser.py → parsed_bible.json → data/bible/ 파이프라인 재실행 완료
+
 ### 다음 작업
 - [ ] SPA 뼈대 구현 (index.html + app.js + router)
 - [ ] 기본 성경 읽기 기능 구현
