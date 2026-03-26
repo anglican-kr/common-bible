@@ -98,6 +98,17 @@
   - 이사야 40장 ← 41:6절, 잠언 5장 ← 6:22절, 호세아 14장 ← 13:14절 등
 - **데이터 모델 변경**: `Verse`에 `chapter_ref: Optional[int]` 필드 추가
 
+### 데이터 파이프라인 테스트 전략 수립 (ADR-004)
+
+- 원본 텍스트 저작권 제약으로 CI에서 직접 사용 불가
+- 픽스처 기반 접근 채택: 절 번호 시퀀스만 추출해 저장소에 커밋 (본문 미포함)
+- 3단계 테스트 기준 정의:
+  - Level 1 완전성: 73권, 1328개 장 파일, books.json 정합성
+  - Level 2 순서 보존: 픽스처와 JSON 출력물 비교 (CI 가능)
+  - Level 3 스냅샷: cross-chapter 6곳, 재배치 구간 고정값 검증
+- 픽스처 생성 스크립트(`generate_fixtures.py`)와 테스트 코드 작성은 다음 세션으로 미룸
+
 ### 다음 작업
 - [ ] SPA 뼈대 구현 (index.html + app.js + router)
 - [ ] 기본 성경 읽기 기능 구현
+- [ ] 테스트 코드 작성 (generate_fixtures.py, test_completeness.py, test_ordering.py, test_snapshots.py)
