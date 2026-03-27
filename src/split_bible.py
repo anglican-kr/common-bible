@@ -56,10 +56,12 @@ def split_chapters(chapters, output_dir):
         verses = []
         for v in ch["verses"]:
             verse = {"number": v["number"], "text": v["text"], "has_paragraph": v["has_paragraph"]}
-            if v.get("chapter_ref") is not None:
-                verse["chapter_ref"] = v["chapter_ref"]
+            for field in ("chapter_ref", "range_end", "part", "alt_ref"):
+                if v.get(field) is not None:
+                    verse[field] = v[field]
             verses.append(verse)
 
+        has_dual = any(v.get("alt_ref") is not None for v in ch["verses"])
         data = {
             "book_id": bid,
             "book_name_ko": ch["book_name_ko"],
@@ -67,6 +69,8 @@ def split_chapters(chapters, output_dir):
             "chapter": num,
             "verses": verses,
         }
+        if has_dual:
+            data["has_dual_numbering"] = True
         path = os.path.join(output_dir, f"{bid}-{num}.json")
         with open(path, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False)

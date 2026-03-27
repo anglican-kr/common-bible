@@ -17,6 +17,9 @@ class Verse:
     text: str
     has_paragraph: bool = False
     chapter_ref: Optional[int] = None  # set when verse physically appears in a different chapter
+    range_end: Optional[int] = None    # set for merged verse ranges (e.g. 17-18)
+    part: Optional[str] = None         # set for split verses relocated by scholars (e.g. "a", "b")
+    alt_ref: Optional[int] = None      # secondary verse number from a different manuscript tradition
 
 
 @dataclass
@@ -183,8 +186,9 @@ class BibleParser:
                 verse = self._parse_verse_line(line)
                 if verse:
                     current_verses.append(verse)
-                elif current_verses and line.strip().startswith('¶'):
-                    # Continuation of the previous verse (scholarly paragraph break mid-verse)
+                elif current_verses and not line.strip()[0].isdigit():
+                    # Paragraph continuation of the previous verse:
+                    # either a ¶-prefixed line or a plain line after a blank line
                     current_verses[-1].text += '\n' + line.strip()
                     current_verses[-1].has_paragraph = True
 
@@ -194,25 +198,39 @@ class BibleParser:
 
         return chapters
 
+    # Patterns for non-standard verse tokens
+    _RANGE_PAT = re.compile(r'^(\d+)-(\d+)$')     # 17-18
+    _SUB_PAT   = re.compile(r'^(\d+)([a-z])$')    # 2a, 3b
+    _UNDER_PAT = re.compile(r'^(\d+)_(\d+)$')     # 1_2, 96_29
+
     def _parse_verse_line(self, line: str) -> Optional[Verse]:
         """절 라인 파싱"""
-        # 절 번호와 텍스트 분리
         parts = line.strip().split(' ', 1)
-        if len(parts) < 2 or not parts[0].isdigit():
+        if len(parts) < 2:
             return None
 
-        verse_num = int(parts[0])
-        text = parts[1]
-
-        # 단락 구분 기호 확인 (원본 텍스트 보존)
+        token, text = parts[0], parts[1]
         has_paragraph = '¶' in text
-        # ¶ 기호는 제거하지 않고 보존 (HTML 변환 시 접근성 처리)
 
-        return Verse(
-            number=verse_num,
-            text=text,
-            has_paragraph=has_paragraph
-        )
+        if token.isdigit():
+            return Verse(number=int(token), text=text, has_paragraph=has_paragraph)
+
+        m = self._RANGE_PAT.match(token)
+        if m:
+            return Verse(number=int(m.group(1)), text=text, has_paragraph=has_paragraph,
+                         range_end=int(m.group(2)))
+
+        m = self._SUB_PAT.match(token)
+        if m:
+            return Verse(number=int(m.group(1)), text=text, has_paragraph=has_paragraph,
+                         part=m.group(2))
+
+        m = self._UNDER_PAT.match(token)
+        if m:
+            return Verse(number=int(m.group(1)), text=text, has_paragraph=has_paragraph,
+                         alt_ref=int(m.group(2)))
+
+        return None
 
     def _extract_verse_from_chapter_line(
         self, line: str, match: re.Match, current_chapter_num: Optional[int]
@@ -225,6 +243,13 @@ class BibleParser:
         chapter_num = int(match.group(2))
         verse_num = int(match.group(3))
         remaining_text = line[len(match.group(0)):].strip()
+
+        # Detect dual-numbering suffix: _N (e.g. "에스 1:1_1 text")
+        alt_ref = None
+        alt_suffix = re.match(r'^_(\d+)\s*(.*)', remaining_text, re.DOTALL)
+        if alt_suffix:
+            alt_ref = int(alt_suffix.group(1))
+            remaining_text = alt_suffix.group(2).strip()
 
         if not remaining_text:
             return None
@@ -241,6 +266,7 @@ class BibleParser:
             text=remaining_text,
             has_paragraph=has_paragraph,
             chapter_ref=chapter_ref,
+            alt_ref=alt_ref,
         )
 
     def save_to_json(self, chapters: List[Chapter], output_path: str) -> None:
@@ -269,6 +295,9 @@ class BibleParser:
                     text=verse_data['text'],
                     has_paragraph=verse_data['has_paragraph'],
                     chapter_ref=verse_data.get('chapter_ref'),
+                    range_end=verse_data.get('range_end'),
+                    part=verse_data.get('part'),
+                    alt_ref=verse_data.get('alt_ref'),
                 )
                 for verse_data in chapter_data['verses']
             ]
