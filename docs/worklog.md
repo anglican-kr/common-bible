@@ -286,3 +286,60 @@
 - [ ] 테스트 코드 작성
 
 - [ ] PWA 아이콘 생성 (static/icon-192.png, static/icon-512.png)
+
+## 2026-03-29
+
+### 전역 검색 기능 구현 (3단계 핵심)
+
+- **검색 인덱스 생성**: `src/search_indexer.py` 작성. `data/bible/*.json` → `data/search-index.json` (35,482절, 301개 별칭, 6.51MB)
+  - `meta.aliases`: `book_mappings.json`의 `korean_name` + `aliases_ko` → book `id` 매핑
+  - `meta.books`: 정렬 인덱스(`bo`) + 한국어 이름
+  - 텍스트 클리닝: `¶` 제거, `\n` → 공백. 프롤로그 제외
+  - `.gitignore`에 `data/search-index.json` 추가
+
+- **Web Worker 검색 엔진**: `search-worker.js` (프로젝트 루트) 신규 생성
+  - 메시지 프로토콜: `init` → `ready`, `search` → `results`/`error`
+  - 절 참조 감지: 정규식으로 "창세 1:3" 패턴 인식 → `meta.aliases`로 bookId 변환
+  - 전문 검색: 선형 스캔 + `String.includes` (대소문자 무시), 페이지네이션 슬라이스
+
+- **반응형 검색 UI**:
+  - **데스크탑 (≥769px)**: 브레드크럼 행 우측 인라인 검색바 (pill 형태, 포커스 시 확장). 400ms 디바운스 → `#/search?q=...` 해시 라우트. 결과는 메인 영역에 렌더링
+  - **모바일 (≤768px)**: FAB 버튼 → 바텀시트(Bottom Sheet) 패턴. 드래그 핸들로 높이 조절 (30%~90vh), 아래로 많이 내리면 자동 닫힘. 결과는 시트 내부 렌더링
+  - 브라우저 네이티브 검색 × 버튼 숨김 (커스텀 클리어 버튼 사용)
+
+- **동적 페이지네이션**: 데스크탑·모바일 모두 뷰포트/시트 높이 기반으로 pageSize 자동 계산 (고정 50건 → 화면 맞춤)
+
+- **검색 결과 → 본문 하이라이트**:
+  - 검색 결과 클릭 시 `#/{bookId}/{chapter}?hl=검색어&v=절` 해시로 이동
+  - `renderChapter`에서 `<mark class="search-highlight">` 래핑 + 해당 절 `.verse-highlight` 클래스 + 자동 스크롤
+
+- **서비스 워커 업데이트**: `CACHE_NAME` → `"bible-v2"`, `SHELL_FILES`에 `search-worker.js` 추가, `data/search-index.json` 네트워크 우선 캐싱
+
+- **헤더 여백 조정**: `#page-title`에 상하 마진 추가 (상 0.3rem, 하 0.2rem)
+
+### ADR-005: 검색 인덱싱 전략
+
+- 플랫 JSON 배열 + 선형 스캔 방식 채택 (C안)
+- 검토한 대안: A안(외부 라이브러리 lunr.js 등), B안(역색인)
+- 채택 근거: 35,482절은 선형 스캔으로 수십 ms 이내 처리 가능, 한국어 교착어 특성상 부분 문자열 매칭이 역색인보다 자연스러움, 외부 의존성 제로
+- 향후 코퍼스 10만 건 이상 확장 시 역색인 또는 `Intl.Segmenter` 기반 토크나이저 재검토
+
+### 수정 파일 요약
+
+| 파일 | 변경 유형 |
+|---|---|
+| `src/search_indexer.py` | 신규 — 검색 인덱스 생성 스크립트 |
+| `search-worker.js` | 신규 — Web Worker 검색 엔진 |
+| `index.html` | 수정 — 인라인 검색바, FAB, 바텀시트 마크업 |
+| `app.js` | 수정 — 해시 라우팅 확장, Worker 통합, 검색 UI, 하이라이트 |
+| `style.css` | 수정 — 검색바, FAB, 바텀시트, 하이라이트, 페이지네이션 스타일 |
+| `sw.js` | 수정 — 캐싱 전략 추가, 버전 범프 |
+| `.gitignore` | 수정 — `data/search-index.json` 추가 |
+| `docs/prd.md` | 수정 — 3단계 체크리스트 갱신, 검색 UI 상세 추가 |
+
+### 다음 작업
+
+- [ ] 테스트 코드 작성
+- [ ] PWA 아이콘 생성 (static/icon-192.png, static/icon-512.png)
+- [ ] 정적 파일 배포 설정 및 보안 검토
+- [ ] 성능 최적화 및 오류 로깅 체계 구축

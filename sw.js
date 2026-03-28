@@ -1,10 +1,11 @@
-const CACHE_NAME = "bible-v1";
+const CACHE_NAME = "bible-v2";
 
 const SHELL_FILES = [
   "/",
   "/index.html",
   "/app.js",
   "/style.css",
+  "/search-worker.js",
   "/data/books.json",
   "/manifest.webmanifest",
 ];
@@ -31,7 +32,7 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
 
-  if (url.pathname.startsWith("/data/bible/")) {
+  if (url.pathname.startsWith("/data/bible/") || url.pathname === "/data/search-index.json") {
     // Network-first for chapter data (cache as accessed)
     event.respondWith(
       fetch(event.request)
