@@ -325,6 +325,12 @@ body {
   margin-top: 0.9em;
 }
 
+.pilcrow {
+  color: var(--paragraph-mark);
+  margin-right: 0.2em;
+  user-select: none;
+}
+
 /* Dual numbering (alt_ref) */
 .alt-ref {
   font-size: 0.6rem;

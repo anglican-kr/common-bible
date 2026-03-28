@@ -350,7 +350,6 @@ function renderChapter(data, book) {
       article.appendChild(el("span", { className: "paragraph-break", role: "presentation" }));
     }
 
-    const text = v.text.replace(/^¶\s*/, "");
     const verseLabel = formatVerseLabel(v);
     let verseId = `v${v.number}`;
     if (v.part) verseId += v.part;
@@ -361,21 +360,71 @@ function renderChapter(data, book) {
 
     // Verse number
     const sup = el("sup", { className: "verse-num", "aria-label": `${verseLabel}절` }, verseLabel);
-    // Cross-chapter reference: inline with verse number e.g. "14(13장)"
     if (v.chapter_ref) {
       sup.appendChild(el("span", { className: "cross-ref-tag" }, `(${v.chapter_ref}장)`));
     }
-    // Dual numbering: add alt_ref as secondary superscript
     if (v.alt_ref != null) {
       sup.appendChild(el("span", { className: "alt-ref" }, `(${v.alt_ref})`));
     }
     span.appendChild(sup);
 
-    span.appendChild(document.createTextNode(text + " "));
+    // Render text, handling ¶ marks and mid-verse paragraph breaks (\n¶)
+    const segments = v.text.split("\n");
+    const hasSplit = segments.length > 1;
+
+    function appendSegText(target, raw) {
+      if (raw.startsWith("¶")) {
+        target.appendChild(el("span", { className: "pilcrow", "aria-hidden": "true" }, "¶"));
+        target.appendChild(document.createTextNode(raw.replace(/^¶\s*/, "") + " "));
+      } else {
+        target.appendChild(document.createTextNode(raw + " "));
+      }
+    }
+
+    span.setAttribute("data-vref", hasSplit ? `${verseLabel}a` : verseLabel);
+    appendSegText(span, segments[0]);
     article.appendChild(span);
+
+    // Mid-verse continuation paragraphs
+    const partLetters = "bcdefgh";
+    for (let pi = 1; pi < segments.length; pi++) {
+      article.appendChild(el("span", { className: "paragraph-break", role: "presentation" }));
+      const cont = el("span", { className: classes, "data-vref": `${verseLabel}${partLetters[pi - 1]}` });
+      appendSegText(cont, segments[pi]);
+      article.appendChild(cont);
+    }
 
     isFirst = false;
   }
+
+  // Copy handler: append reference metadata to copied text
+  article.addEventListener("copy", (e) => {
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed) return;
+
+    const range = sel.getRangeAt(0);
+    const allVerseSpans = article.querySelectorAll(".verse[data-vref]");
+    let firstRef = null;
+    let lastRef = null;
+
+    for (const vs of allVerseSpans) {
+      if (range.intersectsNode(vs)) {
+        const vref = vs.getAttribute("data-vref");
+        if (!firstRef) firstRef = vref;
+        lastRef = vref;
+      }
+    }
+
+    if (!firstRef) return;
+
+    const ref = firstRef === lastRef
+      ? `${book.name_ko} ${ch}:${firstRef}`
+      : `${book.name_ko} ${ch}:${firstRef}-${lastRef}`;
+
+    const plainText = sel.toString().trim();
+    e.clipboardData.setData("text/plain", `${plainText}\n\n— ${ref} (공동번역성서)`);
+    e.preventDefault();
+  });
 
   $app.appendChild(article);
   $app.appendChild(buildChapterNav(book, ch));
