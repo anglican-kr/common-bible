@@ -4,8 +4,25 @@ const DATA_DIR = "data";
 const $app = document.getElementById("app");
 const $title = document.getElementById("page-title");
 const $breadcrumb = document.getElementById("breadcrumb");
+const $announce = document.getElementById("a11y-announce");
 
 let booksCache = null;
+
+// ── Accessibility ──
+
+function announce(msg) {
+  $announce.textContent = "";
+  requestAnimationFrame(() => { $announce.textContent = msg; });
+}
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    document.querySelectorAll(".chapter-popover:not([hidden]), .bc-division-popover:not([hidden]), .settings-popover:not([hidden]), .title-division-popover:not([hidden])")
+      .forEach((p) => { p.hidden = true; });
+    document.querySelectorAll("[aria-expanded='true']")
+      .forEach((b) => { b.setAttribute("aria-expanded", "false"); b.focus(); });
+  }
+});
 
 // ── Reading position persistence ──
 
@@ -76,11 +93,11 @@ function initSettings() {
 
     btnMinus.addEventListener("click", () => {
       const cur = FONT_SIZES.indexOf(loadFontSize());
-      if (cur > 0) { const ns = FONT_SIZES[cur - 1]; saveFontSize(ns); applyFontSize(ns); rebuild(); }
+      if (cur > 0) { const ns = FONT_SIZES[cur - 1]; saveFontSize(ns); applyFontSize(ns); rebuild(); announce(`글자 크기 ${ns}px`); }
     });
     btnPlus.addEventListener("click", () => {
       const cur = FONT_SIZES.indexOf(loadFontSize());
-      if (cur < FONT_SIZES.length - 1) { const ns = FONT_SIZES[cur + 1]; saveFontSize(ns); applyFontSize(ns); rebuild(); }
+      if (cur < FONT_SIZES.length - 1) { const ns = FONT_SIZES[cur + 1]; saveFontSize(ns); applyFontSize(ns); rebuild(); announce(`글자 크기 ${ns}px`); }
     });
 
     sizeRow.appendChild(btnMinus);
@@ -100,6 +117,7 @@ function initSettings() {
       saveTheme(next);
       applyTheme(next);
       rebuild();
+      announce(next === "dark" ? "다크 모드" : "라이트 모드");
     });
     themeRow.appendChild(btnTheme);
     popover.appendChild(themeRow);
@@ -197,12 +215,14 @@ function setTitle(text) {
   clearNode($title);
   $title.appendChild(document.createTextNode(text));
   document.title = text === "공동번역성서" ? text : `${text} — 공동번역성서`;
+  announce(text);
 }
 
 function setTitleWithDivisionPicker(activeDivision) {
   clearNode($title);
   const label = DIVISION_LABELS[activeDivision];
   document.title = `${label} — 공동번역성서`;
+  announce(label);
 
   const btn = el(
     "button",
@@ -210,7 +230,7 @@ function setTitleWithDivisionPicker(activeDivision) {
     label
   );
 
-  const popover = el("ul", { className: "bc-division-popover title-division-popover" });
+  const popover = el("ul", { className: "bc-division-popover title-division-popover", role: "listbox", "aria-label": "구분 선택" });
   popover.hidden = true;
 
   for (const div of DIVISION_ORDER) {
@@ -245,6 +265,7 @@ function setTitleWithDivisionPicker(activeDivision) {
 function setTitleWithChapterPicker(book, currentCh) {
   clearNode($title);
   document.title = `${book.name_ko} ${currentCh}장 — 공동번역성서`;
+  announce(`${book.name_ko} ${currentCh}장`);
 
   const btn = el(
     "button",
@@ -252,7 +273,7 @@ function setTitleWithChapterPicker(book, currentCh) {
     `${book.name_ko} ${currentCh}장`
   );
 
-  const popover = el("div", { className: "chapter-popover" });
+  const popover = el("div", { className: "chapter-popover", role: "listbox", "aria-label": "장 선택" });
   popover.hidden = true;
 
   if (book.has_prologue) {
@@ -311,9 +332,9 @@ function setBreadcrumb(crumbs) {
 function buildDivisionBreadcrumb(label, activeDivision) {
   const wrapper = el("span", { className: "bc-division-picker" });
 
-  const btn = el("button", { className: "bc-division-btn" }, label);
+  const btn = el("button", { className: "bc-division-btn", "aria-expanded": "false", "aria-label": `${label} — 구분 선택` }, label);
 
-  const popover = el("ul", { className: "bc-division-popover" });
+  const popover = el("ul", { className: "bc-division-popover", role: "listbox", "aria-label": "구분 선택" });
   popover.hidden = true;
 
   for (const div of DIVISION_ORDER) {
@@ -325,17 +346,21 @@ function buildDivisionBreadcrumb(label, activeDivision) {
   }
 
   btn.addEventListener("click", () => {
-    popover.hidden = !popover.hidden;
+    const open = !popover.hidden;
+    popover.hidden = open;
+    btn.setAttribute("aria-expanded", String(!open));
   });
 
   document.addEventListener("click", (e) => {
     if (!popover.hidden && !wrapper.contains(e.target)) {
       popover.hidden = true;
+      btn.setAttribute("aria-expanded", "false");
     }
   });
 
   popover.addEventListener("click", () => {
     popover.hidden = true;
+    btn.setAttribute("aria-expanded", "false");
   });
 
   wrapper.appendChild(btn);
@@ -478,7 +503,7 @@ function renderChapter(data, book) {
     const span = el("span", { className: classes, id: verseId });
 
     // Verse number
-    const sup = el("sup", { className: "verse-num", "aria-label": `${verseLabel}절` }, verseLabel);
+    const sup = el("sup", { className: "verse-num", "aria-hidden": "true" }, verseLabel);
     if (v.chapter_ref) {
       sup.appendChild(el("span", { className: "cross-ref-tag" }, `(${v.chapter_ref}장)`));
     }
@@ -515,6 +540,12 @@ function renderChapter(data, book) {
 
     isFirst = false;
   }
+
+  // Announce verse number on click/tap for screen reader users
+  article.addEventListener("click", (e) => {
+    const vs = e.target.closest(".verse[data-vref]");
+    if (vs) announce(`${vs.getAttribute("data-vref")}절`);
+  });
 
   // Copy handler: append reference metadata to copied text
   article.addEventListener("copy", (e) => {
