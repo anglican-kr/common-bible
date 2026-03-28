@@ -99,6 +99,9 @@ htmlcov/
 .cache/
 *.cache
 
+# 성경 데이터 (저작권 준수를 위해 업로드 금지)
+data/bible/
+
 # 오디오 파일 (용량이 큰 파일들은 Git LFS나 별도 저장소 사용)
 data/audio/
 *.mp3
