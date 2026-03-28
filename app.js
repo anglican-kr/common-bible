@@ -500,7 +500,7 @@ function renderChapter(data, book) {
 
   if (data.has_dual_numbering) {
     $app.appendChild(
-      el("p", { className: "dual-numbering-note" }, "※ 위첨자 번호는 그리스어 사본 절 번호입니다.")
+      el("p", { className: "dual-numbering-note" }, "※ 괄호 안 번호는 70인역 사본(그리스어)의 절 번호입니다.")
     );
   }
 
