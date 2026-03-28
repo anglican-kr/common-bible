@@ -6,6 +6,14 @@ const $title = document.getElementById("page-title");
 const $breadcrumb = document.getElementById("breadcrumb");
 const $announce = document.getElementById("a11y-announce");
 const $audioBar = document.getElementById("audio-bar");
+const $searchInput = document.getElementById("search-input");
+const $searchClear = document.getElementById("search-clear");
+const $searchFab = document.getElementById("search-fab");
+const $searchScrim = document.getElementById("search-scrim");
+const $searchSheet = document.getElementById("search-sheet");
+const $searchSheetInput = document.getElementById("search-sheet-input");
+const $searchSheetClear = document.getElementById("search-sheet-clear");
+const $searchSheetResults = document.getElementById("search-sheet-results");
 
 let booksCache = null;
 let currentAudio = null;
@@ -19,6 +27,11 @@ function announce(msg) {
 
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
+    // Close search overlay if open
+    if ($searchSheet && !$searchSheet.hidden) {
+      closeSearchSheet();
+      return;
+    }
     document.querySelectorAll(".chapter-popover:not([hidden]), .bc-division-popover:not([hidden]), .settings-popover:not([hidden]), .title-division-popover:not([hidden])")
       .forEach((p) => { p.hidden = true; });
     document.querySelectorAll("[aria-expanded='true']")
@@ -488,8 +501,12 @@ function formatVerseLabel(v) {
   return label;
 }
 
-function renderChapter(data, book) {
+function renderChapter(data, book, opts) {
   const ch = data.chapter;
+  const hlQuery = opts && opts.highlightQuery;
+  const hlVerse = opts && opts.highlightVerse;
+  const hlVerseEnd = opts && opts.highlightVerseEnd;
+
   setTitleWithChapterPicker(book, ch);
   setBreadcrumb([
     { label: "목록", href: "#/" },
@@ -516,7 +533,12 @@ function renderChapter(data, book) {
     let verseId = `v${v.number}`;
     if (v.part) verseId += v.part;
     if (v.alt_ref != null) verseId += `_${v.alt_ref}`;
-    const classes = v.chapter_ref ? "verse verse-cross-ref" : "verse";
+    let classes = v.chapter_ref ? "verse verse-cross-ref" : "verse";
+
+    // Verse highlight (from verse reference navigation)
+    const vn = v.number;
+    const isHighlightedVerse = hlVerse && vn >= hlVerse && vn <= (hlVerseEnd || hlVerse);
+    if (isHighlightedVerse) classes += " verse-highlight";
 
     const span = el("span", { className: classes, id: verseId });
 
@@ -535,12 +557,12 @@ function renderChapter(data, book) {
     const hasSplit = segments.length > 1;
 
     function appendSegText(target, raw) {
-      if (raw.startsWith("¶")) {
+      const hasPilcrow = raw.startsWith("¶");
+      if (hasPilcrow) {
         target.appendChild(el("span", { className: "pilcrow", "aria-hidden": "true" }, "¶"));
-        target.appendChild(document.createTextNode(raw.replace(/^¶\s*/, "") + " "));
-      } else {
-        target.appendChild(document.createTextNode(raw + " "));
       }
+      const textContent = hasPilcrow ? raw.replace(/^¶\s*/, "") : raw;
+      appendTextWithHighlight(target, textContent + " ", hlQuery);
     }
 
     span.setAttribute("data-vref", hasSplit ? `${verseLabel}a` : verseLabel);
@@ -597,7 +619,16 @@ function renderChapter(data, book) {
   $app.appendChild(article);
   $app.appendChild(buildChapterNav(book, ch));
   showAudioPlayer(book.id, ch);
-  window.scrollTo(0, 0);
+
+  // Scroll to highlighted verse or top
+  if (hlVerse) {
+    const target = document.getElementById(`v${hlVerse}`);
+    if (target) {
+      requestAnimationFrame(() => target.scrollIntoView({ behavior: "smooth", block: "center" }));
+    }
+  } else {
+    window.scrollTo(0, 0);
+  }
 }
 
 function renderPrologue(data, book) {
@@ -660,19 +691,75 @@ function parseHash() {
   const hash = location.hash.replace(/^#\/?/, "");
   if (!hash) return { view: "books" };
 
+  // Search route: #/search?q=...&page=...
+  if (hash.startsWith("search")) {
+    const params = new URLSearchParams(hash.replace(/^search\??/, ""));
+    return {
+      view: "search",
+      query: params.get("q") || "",
+      page: parseInt(params.get("page"), 10) || 1,
+    };
+  }
+
   const parts = hash.split("/");
   if (parts.length === 1) {
     if (DIVISION_LABELS[parts[0]]) return { view: "division", division: parts[0] };
     return { view: "chapters", bookId: parts[0] };
   }
   if (parts[1] === "prologue") return { view: "prologue", bookId: parts[0] };
-  return { view: "chapter", bookId: parts[0], chapter: parseInt(parts[1], 10) };
+
+  // Chapter with optional highlight params: #/gen/1?hl=빛&v=3&ve=11
+  const qIdx = parts[1].indexOf("?");
+  let chapterStr = parts[1];
+  let highlightQuery = null;
+  let highlightVerse = null;
+  let highlightVerseEnd = null;
+  if (qIdx !== -1) {
+    chapterStr = parts[1].substring(0, qIdx);
+    const cp = new URLSearchParams(parts[1].substring(qIdx + 1));
+    highlightQuery = cp.get("hl") || null;
+    highlightVerse = parseInt(cp.get("v"), 10) || null;
+    highlightVerseEnd = parseInt(cp.get("ve"), 10) || null;
+  }
+  return {
+    view: "chapter",
+    bookId: parts[0],
+    chapter: parseInt(chapterStr, 10),
+    highlightQuery,
+    highlightVerse,
+    highlightVerseEnd,
+  };
 }
 
 async function route() {
-  const { view, bookId, chapter, division } = parseHash();
+  const parsed = parseHash();
+  const { view, bookId, chapter, division } = parsed;
+
+  // Sync search input with current route
+  if (view === "search") {
+    if (isMobile()) {
+      // On mobile, redirect search route to overlay
+      openSearchSheet(parsed.query);
+      return;
+    }
+    $searchInput.value = parsed.query;
+    $searchClear.hidden = !parsed.query;
+  } else {
+    $searchInput.value = "";
+    $searchClear.hidden = true;
+  }
 
   try {
+    if (view === "search") {
+      if (parsed.query) {
+        await renderSearchResults(parsed.query, parsed.page);
+      } else {
+        const books = await loadBooks();
+        renderBookList(books);
+      }
+      return;
+    }
+
     const books = await loadBooks();
 
     if (view === "books") {
@@ -711,7 +798,11 @@ async function route() {
         return;
       }
       const data = await loadChapter(bookId, chapter);
-      renderChapter(data, book);
+      renderChapter(data, book, {
+        highlightQuery: parsed.highlightQuery,
+        highlightVerse: parsed.highlightVerse,
+        highlightVerseEnd: parsed.highlightVerseEnd,
+      });
       saveReadingPosition(bookId, chapter);
     }
   } catch (err) {
@@ -847,6 +938,372 @@ function showAudioUnavailable() {
   $audioBar.hidden = false;
   $audioBar.style.position = "static";
 }
+
+// ── Search ──
+
+let searchWorker = null;
+let pendingSearchCb = null;
+
+function ensureSearchWorker() {
+  if (searchWorker) return searchWorker;
+  searchWorker = new Worker("search-worker.js");
+  searchWorker.addEventListener("message", (ev) => {
+    const msg = ev.data;
+    if (msg.type === "results" || msg.type === "error") {
+      if (pendingSearchCb) {
+        const cb = pendingSearchCb;
+        pendingSearchCb = null;
+        cb(msg.type === "error" ? null : msg);
+      }
+    }
+  });
+  searchWorker.postMessage({ type: "init", indexUrl: `${DATA_DIR}/search-index.json` });
+  return searchWorker;
+}
+
+function doSearch(query, page, pageSize) {
+  return new Promise((resolve) => {
+    const worker = ensureSearchWorker();
+    pendingSearchCb = resolve;
+    worker.postMessage({ type: "search", q: query, page, pageSize });
+  });
+}
+
+// Text highlight helper: splits text on query matches and wraps in <mark>
+function appendTextWithHighlight(target, text, query) {
+  if (!query) {
+    target.appendChild(document.createTextNode(text));
+    return;
+  }
+  const lower = text.toLowerCase();
+  const qLower = query.toLowerCase();
+  let pos = 0;
+  let idx = lower.indexOf(qLower, pos);
+  if (idx === -1) {
+    target.appendChild(document.createTextNode(text));
+    return;
+  }
+  while (idx !== -1) {
+    if (idx > pos) target.appendChild(document.createTextNode(text.substring(pos, idx)));
+    target.appendChild(el("mark", { className: "search-highlight" }, text.substring(idx, idx + query.length)));
+    pos = idx + query.length;
+    idx = lower.indexOf(qLower, pos);
+  }
+  if (pos < text.length) target.appendChild(document.createTextNode(text.substring(pos)));
+}
+
+// Build snippet with highlighted query for search results
+function buildSnippet(text, query) {
+  const frag = document.createDocumentFragment();
+  const span = el("span", { className: "search-result-text" });
+
+  const lower = text.toLowerCase();
+  const qLower = query.toLowerCase();
+  const matchIdx = lower.indexOf(qLower);
+
+  // Show ~40 chars before/after match
+  let displayText = text;
+  let prefix = "";
+  let suffix = "";
+  if (text.length > 100 && matchIdx > 40) {
+    displayText = text.substring(matchIdx - 30);
+    prefix = "…";
+  }
+  if (displayText.length > 100) {
+    displayText = displayText.substring(0, 100);
+    suffix = "…";
+  }
+
+  if (prefix) span.appendChild(document.createTextNode(prefix));
+  appendTextWithHighlight(span, displayText, query);
+  if (suffix) span.appendChild(document.createTextNode(suffix));
+  frag.appendChild(span);
+  return frag;
+}
+
+function buildSearchPagination(query, currentPage, totalPages) {
+  const nav = el("nav", { className: "search-pagination", "aria-label": "검색 결과 페이지" });
+  const encoded = encodeURIComponent(query);
+
+  if (currentPage > 1) {
+    nav.appendChild(el("a", { href: `#/search?q=${encoded}&page=${currentPage - 1}` }, "← 이전"));
+  } else {
+    nav.appendChild(el("span", { className: "placeholder" }));
+  }
+
+  nav.appendChild(el("span", { className: "search-page-info" }, `${currentPage} / ${totalPages}`));
+
+  if (currentPage < totalPages) {
+    nav.appendChild(el("a", { href: `#/search?q=${encoded}&page=${currentPage + 1}` }, "다음 →"));
+  } else {
+    nav.appendChild(el("span", { className: "placeholder" }));
+  }
+
+  return nav;
+}
+
+async function renderSearchResults(query, page) {
+  setTitle(`"${query}" 검색`);
+  setBreadcrumb([{ label: "목록", href: "#/" }]);
+  hideAudioBar();
+  clearNode($app);
+
+  $app.appendChild(el("div", { className: "loading", "aria-live": "polite" }, "검색 중…"));
+
+  // Estimate page size from available viewport height
+  const headerH = document.getElementById("app-header").offsetHeight || 80;
+  const availH = window.innerHeight - headerH - 40;
+  const itemH = 80;
+  const pageSize = Math.max(5, Math.floor(availH / itemH));
+
+  const result = await doSearch(query, page, pageSize);
+
+  if (!result) {
+    renderError("검색에 실패했습니다.");
+    return;
+  }
+
+  // Verse reference match → navigate directly
+  if (result.refMatch) {
+    const ref = result.refMatch;
+    let hash = `#/${ref.bookId}/${ref.chapter}`;
+    const params = [];
+    if (ref.verse) params.push(`v=${ref.verse}`);
+    if (ref.verseEnd) params.push(`ve=${ref.verseEnd}`);
+    if (params.length) hash += `?${params.join("&")}`;
+    location.replace(hash);
+    return;
+  }
+
+  clearNode($app);
+
+  if (result.total === 0) {
+    $app.appendChild(el("p", { className: "search-empty" }, `"${query}"에 대한 검색 결과가 없습니다.`));
+    announce("검색 결과 없음");
+    return;
+  }
+
+  const totalPages = Math.ceil(result.total / pageSize);
+  $app.appendChild(el("p", { className: "search-count" },
+    `총 ${result.total}건 (${page}/${totalPages}쪽)`));
+
+  const list = el("ul", { className: "search-results", role: "list" });
+  for (const r of result.results) {
+    const li = el("li", { className: "search-result-item" });
+    const link = el("a", {
+      href: `#/${r.b}/${r.c}?hl=${encodeURIComponent(query)}&v=${r.v}`,
+    });
+    link.appendChild(el("span", { className: "search-result-ref" }, `${r.bookNameKo} ${r.c}:${r.v}`));
+    link.appendChild(buildSnippet(r.t, query));
+    li.appendChild(link);
+    list.appendChild(li);
+  }
+  $app.appendChild(list);
+
+  if (totalPages > 1) {
+    $app.appendChild(buildSearchPagination(query, page, totalPages));
+  }
+
+  announce(`"${query}" 검색 결과 ${result.total}건`);
+  window.scrollTo(0, 0);
+}
+
+// ── Search input event handlers (Desktop inline) ──
+
+let searchDebounceTimer = null;
+
+$searchInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    clearTimeout(searchDebounceTimer);
+    const q = $searchInput.value.trim();
+    if (q) location.hash = `#/search?q=${encodeURIComponent(q)}`;
+  }
+});
+
+$searchInput.addEventListener("input", () => {
+  const q = $searchInput.value.trim();
+  $searchClear.hidden = !q;
+  clearTimeout(searchDebounceTimer);
+  if (!q) return;
+  searchDebounceTimer = setTimeout(() => {
+    location.hash = `#/search?q=${encodeURIComponent(q)}`;
+  }, 400);
+});
+
+$searchClear.addEventListener("click", () => {
+  $searchInput.value = "";
+  $searchClear.hidden = true;
+  $searchInput.focus();
+  if (parseHash().view === "search") location.hash = "#/";
+});
+
+// ── Search bottom sheet (Mobile FAB) ──
+
+function isMobile() {
+  return window.matchMedia("(max-width: 768px)").matches;
+}
+
+function openSearchSheet(query) {
+  $searchScrim.hidden = false;
+  $searchSheet.hidden = false;
+  $searchSheetInput.value = query || "";
+  $searchSheetClear.hidden = !query;
+  $searchFab.hidden = true;
+  requestAnimationFrame(() => $searchSheetInput.focus());
+  if (query) runSheetSearch(query, 1);
+}
+
+function closeSearchSheet() {
+  $searchScrim.hidden = true;
+  $searchSheet.hidden = true;
+  $searchSheet.style.height = "";
+  $searchFab.hidden = false;
+  clearNode($searchSheetResults);
+}
+
+let sheetDebounceTimer = null;
+
+function getSheetPageSize() {
+  // Estimate how many results fit in the visible sheet area
+  const resultsH = $searchSheetResults.clientHeight || (window.innerHeight * 0.55 - 90);
+  const itemH = 80; // approx height per result item
+  return Math.max(5, Math.floor(resultsH / itemH));
+}
+
+async function runSheetSearch(query, page) {
+  clearNode($searchSheetResults);
+  if (!query) return;
+
+  $searchSheetResults.appendChild(el("div", { className: "loading" }, "검색 중…"));
+
+  const pageSize = getSheetPageSize();
+  const result = await doSearch(query, page, pageSize);
+  clearNode($searchSheetResults);
+
+  if (!result) {
+    $searchSheetResults.appendChild(el("div", { className: "error" }, "검색에 실패했습니다."));
+    return;
+  }
+
+  // Verse reference → navigate and close
+  if (result.refMatch) {
+    const ref = result.refMatch;
+    let hash = `#/${ref.bookId}/${ref.chapter}`;
+    const params = [];
+    if (ref.verse) params.push(`v=${ref.verse}`);
+    if (ref.verseEnd) params.push(`ve=${ref.verseEnd}`);
+    if (params.length) hash += `?${params.join("&")}`;
+    closeSearchSheet();
+    location.hash = hash;
+    return;
+  }
+
+  if (result.total === 0) {
+    $searchSheetResults.appendChild(el("p", { className: "search-empty" }, `"${query}"에 대한 검색 결과가 없습니다.`));
+    return;
+  }
+
+  const totalPages = Math.ceil(result.total / pageSize);
+  $searchSheetResults.appendChild(el("p", { className: "search-count" },
+    `총 ${result.total}건 (${page}/${totalPages}쪽)`));
+
+  const list = el("ul", { className: "search-results", role: "list" });
+  for (const r of result.results) {
+    const li = el("li", { className: "search-result-item" });
+    const link = el("a", {
+      href: `#/${r.b}/${r.c}?hl=${encodeURIComponent(query)}&v=${r.v}`,
+    });
+    link.appendChild(el("span", { className: "search-result-ref" }, `${r.bookNameKo} ${r.c}:${r.v}`));
+    link.appendChild(buildSnippet(r.t, query));
+    link.addEventListener("click", () => closeSearchSheet());
+    li.appendChild(link);
+    list.appendChild(li);
+  }
+  $searchSheetResults.appendChild(list);
+
+  if (totalPages > 1) {
+    const nav = el("nav", { className: "search-pagination", "aria-label": "검색 결과 페이지" });
+    if (page > 1) {
+      const prev = el("a", { href: "#", "aria-label": "이전 페이지" }, "← 이전");
+      prev.addEventListener("click", (e) => { e.preventDefault(); runSheetSearch(query, page - 1); $searchSheetResults.scrollTop = 0; });
+      nav.appendChild(prev);
+    } else {
+      nav.appendChild(el("span", { className: "placeholder" }));
+    }
+    nav.appendChild(el("span", { className: "search-page-info" }, `${page} / ${totalPages}`));
+    if (page < totalPages) {
+      const next = el("a", { href: "#", "aria-label": "다음 페이지" }, "다음 →");
+      next.addEventListener("click", (e) => { e.preventDefault(); runSheetSearch(query, page + 1); $searchSheetResults.scrollTop = 0; });
+      nav.appendChild(next);
+    } else {
+      nav.appendChild(el("span", { className: "placeholder" }));
+    }
+    $searchSheetResults.appendChild(nav);
+  }
+
+  announce(`"${query}" 검색 결과 ${result.total}건`);
+}
+
+$searchFab.addEventListener("click", () => openSearchSheet(""));
+
+$searchScrim.addEventListener("click", closeSearchSheet);
+
+$searchSheetInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    clearTimeout(sheetDebounceTimer);
+    const q = $searchSheetInput.value.trim();
+    if (q) runSheetSearch(q, 1);
+  }
+});
+
+$searchSheetInput.addEventListener("input", () => {
+  const q = $searchSheetInput.value.trim();
+  $searchSheetClear.hidden = !q;
+  clearTimeout(sheetDebounceTimer);
+  if (!q) { clearNode($searchSheetResults); return; }
+  sheetDebounceTimer = setTimeout(() => runSheetSearch(q, 1), 400);
+});
+
+$searchSheetClear.addEventListener("click", () => {
+  $searchSheetInput.value = "";
+  $searchSheetClear.hidden = true;
+  clearNode($searchSheetResults);
+  $searchSheetInput.focus();
+});
+
+// Drag handle to resize sheet
+(function initSheetDrag() {
+  const handle = document.getElementById("search-sheet-handle");
+  let startY = 0;
+  let startH = 0;
+
+  function onMove(clientY) {
+    const delta = startY - clientY;
+    const newH = Math.min(Math.max(startH + delta, window.innerHeight * 0.3), window.innerHeight * 0.9);
+    $searchSheet.style.height = `${newH}px`;
+  }
+
+  handle.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    startY = e.clientY;
+    startH = $searchSheet.offsetHeight;
+    handle.setPointerCapture(e.pointerId);
+    handle.addEventListener("pointermove", onPointerMove);
+    handle.addEventListener("pointerup", onPointerUp, { once: true });
+  });
+
+  function onPointerMove(e) { onMove(e.clientY); }
+  function onPointerUp() {
+    handle.removeEventListener("pointermove", onPointerMove);
+    // Snap close if dragged very low
+    if ($searchSheet.offsetHeight < window.innerHeight * 0.2) {
+      closeSearchSheet();
+      $searchSheet.style.height = "";
+    }
+  }
+})();
 
 // ── Service Worker Registration ──
 
