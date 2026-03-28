@@ -411,13 +411,15 @@ function renderDivisionList(books, division) {
   $app.appendChild(section);
 }
 
-function renderChapterList(book) {
+function renderChapterList(book, books) {
   setTitle(book.name_ko);
   setBreadcrumb([
     { label: "목록", href: "#/" },
     { divisionPicker: true, label: DIVISION_LABELS[book.division], activeDivision: book.division },
   ]);
   clearNode($app);
+
+  renderResumeBanner(books);
 
   const grid = el("div", { className: "chapter-grid" });
 
@@ -640,7 +642,7 @@ async function route() {
     }
 
     if (view === "chapters") {
-      renderChapterList(book);
+      renderChapterList(book, books);
       return;
     }
 

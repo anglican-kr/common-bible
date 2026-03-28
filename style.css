@@ -504,7 +504,6 @@ body {
   align-items: center;
   margin-top: 2rem;
   padding-top: 1rem;
-  border-top: 1px solid var(--border);
 }
 
 .chapter-nav a {
@@ -525,6 +524,34 @@ body {
 
 .chapter-nav .placeholder {
   width: 4rem;
+}
+
+/* ── Footer ── */
+#app-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: 0.4rem 1rem;
+  text-align: center;
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+}
+
+.footer-sep {
+  margin: 0 0.3em;
+}
+
+#app-footer a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+#app-footer a:hover {
+  text-decoration: underline;
 }
 
 /* ── Loading / Error ── */
