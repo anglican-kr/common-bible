@@ -262,6 +262,25 @@
 - **절 번호 스크린리더 처리**: 연속 읽기 시 절 번호 숨김(`aria-hidden`), 절 텍스트 클릭/탭 시 "N절" 온디맨드 알림(`announce()`)
 - **`.sr-only` 유틸리티**: 시각적으로 숨기되 스크린리더에는 보이는 CSS 클래스
 
+### 오디오 플레이어 구현
+
+- **푸터 → 설정 팝오버 이동**: `<footer>` 제거, 저작권 표기·GitHub 링크를 설정(⚙) 팝오버 하단으로 이동. 하단 영역을 오디오 플레이어 전용으로 확보
+- **Sticky bottom bar 오디오 플레이어**: 장(chapter) 뷰·머리말(prologue) 뷰 진입 시 하단에 오디오 플레이어 표시
+  - 재생/일시정지 버튼 (CSS 아이콘), 프로그레스 바 (재생 구간 accent 색 채움), 시간 표시
+  - 반투명 배경 + `backdrop-filter: blur` 처리
+  - 장 이동 시 이전 오디오 정지 후 새 오디오 로드
+  - 오디오 파일 없는 경우 (토비트): static 위치에 "🎧 오디오 파일을 준비 중입니다." 메시지 (스크롤하면 사라짐)
+- **키보드 단축키**: Space 키로 재생/정지 토글 (입력 필드 외)
+- **접근성**: `aria-label`(재생/일시정지/재생 위치), `announce()` 상태 알림, 프로그레스 바 `role="slider"`
+- **집회서 머리말 오디오**: `sir-0.mp3` 재생 지원 (`showAudioPlayer(book.id, 0)`)
+- **이어읽기 머리말 지원**: `saveReadingPosition(bookId, "prologue")` 저장, 이어읽기 배너에 "머리말" 표시
+
+### 책 목록 그리드 UI 개선
+
+- **버튼 높이 통일**: `display: flex; align-items: center; height: 100%`로 같은 행 내 동일 높이
+- **텍스트 가운데 정렬**: `justify-content: center; text-align: center`
+- **단어 단위 줄바꿈**: `word-break: keep-all`로 한국어 단어가 잘리지 않게 처리
+
 ### 다음 작업
 
 - [ ] 테스트 코드 작성

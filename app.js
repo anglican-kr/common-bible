@@ -5,8 +5,10 @@ const $app = document.getElementById("app");
 const $title = document.getElementById("page-title");
 const $breadcrumb = document.getElementById("breadcrumb");
 const $announce = document.getElementById("a11y-announce");
+const $audioBar = document.getElementById("audio-bar");
 
 let booksCache = null;
+let currentAudio = null;
 
 // ── Accessibility ──
 
@@ -21,6 +23,11 @@ document.addEventListener("keydown", (e) => {
       .forEach((p) => { p.hidden = true; });
     document.querySelectorAll("[aria-expanded='true']")
       .forEach((b) => { b.setAttribute("aria-expanded", "false"); b.focus(); });
+  }
+  // Space to toggle audio playback (when not in an input/button)
+  if (e.key === " " && currentAudio && !["INPUT", "BUTTON", "TEXTAREA", "SELECT"].includes(e.target.tagName)) {
+    e.preventDefault();
+    if (currentAudio.paused) currentAudio.play(); else currentAudio.pause();
   }
 });
 
@@ -121,6 +128,12 @@ function initSettings() {
     });
     themeRow.appendChild(btnTheme);
     popover.appendChild(themeRow);
+
+    // About
+    const aboutRow = el("div", { className: "settings-about" });
+    aboutRow.appendChild(document.createTextNode("대한성서공회 허락 하에 대한성공회 사용 · "));
+    aboutRow.appendChild(el("a", { href: "https://github.com/anglican-kr/common-bible", target: "_blank", rel: "noopener" }, "공동번역성서 2.0"));
+    popover.appendChild(aboutRow);
   }
 
   btn.addEventListener("click", () => {
@@ -381,6 +394,7 @@ const DIVISION_ORDER = ["old_testament", "deuterocanon", "new_testament"];
 function renderBookList(books) {
   setTitle("공동번역성서");
   setBreadcrumb([]);
+  hideAudioBar();
   clearNode($app);
 
   renderResumeBanner(books);
@@ -411,15 +425,18 @@ function renderResumeBanner(books) {
   if (!pos) return;
   const lastBook = books.find((b) => b.id === pos.bookId);
   if (!lastBook) return;
-  $app.appendChild(
-    el("a", { className: "resume-banner", href: `#/${pos.bookId}/${pos.chapter}` },
-      `이어읽기: ${lastBook.name_ko} ${pos.chapter}장`)
-  );
+  const isPrologue = pos.chapter === "prologue";
+  const href = `#/${pos.bookId}/${pos.chapter}`;
+  const label = isPrologue
+    ? `이어읽기: ${lastBook.name_ko} 머리말`
+    : `이어읽기: ${lastBook.name_ko} ${pos.chapter}장`;
+  $app.appendChild(el("a", { className: "resume-banner", href }, label));
 }
 
 function renderDivisionList(books, division) {
   setTitleWithDivisionPicker(division);
   setBreadcrumb([{ label: "목록", href: "#/" }]);
+  hideAudioBar();
   clearNode($app);
 
   renderResumeBanner(books);
@@ -438,6 +455,7 @@ function renderDivisionList(books, division) {
 
 function renderChapterList(book, books) {
   setTitle(book.name_ko);
+  hideAudioBar();
   setBreadcrumb([
     { label: "목록", href: "#/" },
     { divisionPicker: true, label: DIVISION_LABELS[book.division], activeDivision: book.division },
@@ -578,6 +596,7 @@ function renderChapter(data, book) {
 
   $app.appendChild(article);
   $app.appendChild(buildChapterNav(book, ch));
+  showAudioPlayer(book.id, ch);
   window.scrollTo(0, 0);
 }
 
@@ -601,7 +620,7 @@ function renderPrologue(data, book) {
   nav.appendChild(el("span", { className: "placeholder" }));
   nav.appendChild(el("a", { href: `#/${book.id}/1` }, "1장 →"));
   $app.appendChild(nav);
-
+  showAudioPlayer(book.id, 0);
   window.scrollTo(0, 0);
 }
 
@@ -682,6 +701,7 @@ async function route() {
     if (view === "prologue") {
       const data = await loadPrologue(bookId);
       renderPrologue(data, book);
+      saveReadingPosition(bookId, "prologue");
       return;
     }
 
@@ -702,6 +722,131 @@ async function route() {
 
 window.addEventListener("hashchange", route);
 window.addEventListener("DOMContentLoaded", route);
+
+// ── Audio Player ──
+
+function formatTime(sec) {
+  if (!isFinite(sec)) return "0:00";
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+function hideAudioBar() {
+  if (currentAudio) { currentAudio.pause(); currentAudio = null; }
+  $audioBar.hidden = true;
+  clearNode($audioBar);
+}
+
+function showAudioPlayer(bookId, chapter) {
+  if (currentAudio) { currentAudio.pause(); currentAudio = null; }
+  const src = `${DATA_DIR}/audio/${bookId}-${chapter}.mp3`;
+  clearNode($audioBar);
+
+  const audio = new Audio();
+  audio.preload = "metadata";
+  currentAudio = audio;
+
+  // Build player UI
+  const container = el("div", { className: "audio-player" });
+
+  const playBtn = el("button", {
+    className: "audio-play-btn",
+    "aria-label": "재생",
+  });
+  const playIcon = el("span", { className: "audio-icon-play", "aria-hidden": "true" });
+  playBtn.appendChild(playIcon);
+
+  const progress = document.createElement("input");
+  progress.type = "range";
+  progress.className = "audio-progress";
+  progress.min = "0";
+  progress.max = "100";
+  progress.value = "0";
+  progress.setAttribute("aria-label", "재생 위치");
+
+  function updateProgressFill() {
+    const pct = progress.max > 0 ? (Number(progress.value) / Number(progress.max)) * 100 : 0;
+    progress.style.setProperty("--fill", `${pct}%`);
+  }
+  updateProgressFill();
+
+  const timeDisplay = el("span", { className: "audio-time" }, "0:00");
+
+  const progressWrap = el("div", { className: "audio-progress-wrap" });
+  progressWrap.appendChild(progress);
+  progressWrap.appendChild(timeDisplay);
+
+  container.appendChild(playBtn);
+  container.appendChild(progressWrap);
+
+  // Play/pause toggle
+  playBtn.addEventListener("click", () => {
+    if (audio.paused) {
+      audio.play();
+    } else {
+      audio.pause();
+    }
+  });
+
+  audio.addEventListener("play", () => {
+    playIcon.className = "audio-icon-pause";
+    playBtn.setAttribute("aria-label", "일시정지");
+    announce("재생");
+  });
+
+  audio.addEventListener("pause", () => {
+    playIcon.className = "audio-icon-play";
+    playBtn.setAttribute("aria-label", "재생");
+    announce("일시정지");
+  });
+
+  // Progress updates
+  audio.addEventListener("loadedmetadata", () => {
+    progress.max = String(Math.floor(audio.duration));
+    timeDisplay.textContent = formatTime(audio.duration);
+  });
+
+  audio.addEventListener("timeupdate", () => {
+    if (!seekingByUser) {
+      progress.value = String(Math.floor(audio.currentTime));
+    }
+    updateProgressFill();
+    timeDisplay.textContent = `${formatTime(audio.currentTime)} / ${formatTime(audio.duration)}`;
+  });
+
+  // Seeking
+  let seekingByUser = false;
+  progress.addEventListener("input", () => {
+    seekingByUser = true;
+    audio.currentTime = Number(progress.value);
+    updateProgressFill();
+  });
+  progress.addEventListener("change", () => {
+    seekingByUser = false;
+  });
+
+  // Error: audio not found → show unavailable message
+  audio.addEventListener("error", () => {
+    currentAudio = null;
+    showAudioUnavailable();
+  });
+
+  $audioBar.appendChild(container);
+  $audioBar.hidden = false;
+  $audioBar.style.position = "sticky";
+  audio.src = src;
+}
+
+function showAudioUnavailable() {
+  clearNode($audioBar);
+  const msg = el("p", { className: "audio-unavailable" });
+  msg.appendChild(el("span", { className: "audio-unavailable-icon", "aria-hidden": "true" }));
+  msg.appendChild(document.createTextNode(" 오디오 파일을 준비 중입니다."));
+  $audioBar.appendChild(msg);
+  $audioBar.hidden = false;
+  $audioBar.style.position = "static";
+}
 
 // ── Service Worker Registration ──
 

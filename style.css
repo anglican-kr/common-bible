@@ -401,8 +401,13 @@ body {
 }
 
 .book-list a {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  height: 100%;
   padding: 0.5rem 0.7rem;
+  word-break: keep-all;
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -556,32 +561,192 @@ body {
   width: 4rem;
 }
 
-/* ── Footer ── */
-#app-footer {
-  position: sticky;
-  bottom: 0;
-  z-index: 10;
-  background: var(--bg);
+/* ── Settings about row ── */
+.settings-about {
   border-top: 1px solid var(--border);
-  max-width: var(--max-width);
-  margin: 0 auto;
-  padding: 0.4rem 1rem;
-  text-align: center;
-  font-size: 0.7rem;
+  margin-top: 0.4rem;
+  padding-top: 0.4rem;
+  font-size: 0.65rem;
   color: var(--text-secondary);
+  white-space: normal;
+  max-width: 14rem;
+  line-height: 1.4;
 }
 
-.footer-sep {
-  margin: 0 0.3em;
-}
-
-#app-footer a {
+.settings-about a {
   color: var(--accent);
   text-decoration: none;
 }
 
-#app-footer a:hover {
+.settings-about a:hover {
   text-decoration: underline;
+}
+
+/* ── Audio Bar ── */
+#audio-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+  background: color-mix(in srgb, var(--bg) 85%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-top: 1px solid var(--border);
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: 0.5rem 1rem;
+}
+
+#audio-bar[hidden] {
+  display: none;
+}
+
+.audio-player {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+/* Play/pause button — CSS icons, no unicode glyphs */
+.audio-play-btn {
+  flex-shrink: 0;
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: 50%;
+  border: none;
+  background: var(--accent);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: transform 0.1s ease, box-shadow 0.15s ease;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+}
+
+.audio-play-btn:hover {
+  transform: scale(1.08);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.audio-play-btn:active {
+  transform: scale(0.96);
+}
+
+/* Play triangle */
+.audio-icon-play {
+  display: block;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 0.4rem 0 0.4rem 0.7rem;
+  border-color: transparent transparent transparent var(--bg);
+  margin-left: 0.15rem;
+}
+
+/* Pause bars */
+.audio-icon-pause {
+  display: flex;
+  gap: 0.18rem;
+}
+
+.audio-icon-pause::before,
+.audio-icon-pause::after {
+  content: "";
+  display: block;
+  width: 0.22rem;
+  height: 0.7rem;
+  background: var(--bg);
+  border-radius: 1px;
+}
+
+/* Progress bar */
+.audio-progress-wrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.audio-progress {
+  --fill: 0%;
+  flex: 1;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 3px;
+  background: linear-gradient(to right, var(--accent) var(--fill), var(--border) var(--fill));
+  border-radius: 1.5px;
+  outline: none;
+  cursor: pointer;
+  transition: height 0.15s ease;
+}
+
+.audio-progress:hover {
+  height: 5px;
+}
+
+.audio-progress::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent);
+  cursor: pointer;
+  transition: box-shadow 0.15s ease;
+}
+
+.audio-progress:hover::-webkit-slider-thumb {
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+.audio-progress::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent);
+  cursor: pointer;
+}
+
+.audio-progress::-moz-range-track {
+  height: 3px;
+  background: transparent;
+  border: none;
+}
+
+.audio-time {
+  font-size: 0.68rem;
+  color: var(--text-secondary);
+  min-width: 6.5em;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+/* Unavailable message */
+.audio-unavailable {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4em;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  padding: 0.15rem 0;
+}
+
+.audio-unavailable-icon {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  background: currentColor;
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 18v-6a9 9 0 0 1 18 0v6'/%3E%3Cpath d='M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 18v-6a9 9 0 0 1 18 0v6'/%3E%3Cpath d='M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z'/%3E%3C/svg%3E");
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  vertical-align: -0.15em;
 }
 
 /* ── Loading / Error ── */
