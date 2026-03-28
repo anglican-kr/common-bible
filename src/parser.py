@@ -244,6 +244,13 @@ class BibleParser:
         verse_num = int(match.group(3))
         remaining_text = line[len(match.group(0)):].strip()
 
+        # Detect part suffix: single letter before text (e.g. "욥기 38:37b 하늘에서..." → part='b')
+        part = None
+        part_suffix = re.match(r'^([a-z])\s+(.*)', remaining_text, re.DOTALL)
+        if part_suffix:
+            part = part_suffix.group(1)
+            remaining_text = part_suffix.group(2).strip()
+
         # Detect dual-numbering suffix: _N (e.g. "에스 1:1_1 text")
         alt_ref = None
         alt_suffix = re.match(r'^_(\d+)\s*(.*)', remaining_text, re.DOTALL)
@@ -267,6 +274,7 @@ class BibleParser:
             has_paragraph=has_paragraph,
             chapter_ref=chapter_ref,
             alt_ref=alt_ref,
+            part=part,
         )
 
     def save_to_json(self, chapters: List[Chapter], output_path: str) -> None:
