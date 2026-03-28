@@ -48,54 +48,80 @@ function applyFontSize(size) {
   document.documentElement.style.fontSize = `${size}px`;
 }
 
-const $toolbar = document.getElementById("toolbar");
+// ── Settings popover ──
 
-function showToolbar(book, currentCh) {
-  clearNode($toolbar);
-  $toolbar.classList.remove("hidden");
+const $settingsAnchor = document.getElementById("settings-anchor");
 
-  // Chapter picker (only in chapter view)
-  if (book && currentCh) {
-    $toolbar.appendChild(buildChapterPicker(book, currentCh));
+function initSettings() {
+  clearNode($settingsAnchor);
+
+  const wrapper = el("div", { className: "settings-wrapper" });
+  const btn = el("button", { className: "settings-btn", "aria-label": "설정", "aria-expanded": "false" }, "\u2699");
+  const popover = el("div", { className: "settings-popover" });
+  popover.hidden = true;
+
+  function rebuild() {
+    clearNode(popover);
+
+    // Font size
+    const sizeRow = el("div", { className: "settings-row" });
+    sizeRow.appendChild(el("span", { className: "settings-label" }, "글자 크기"));
+    const size = loadFontSize();
+    const idx = FONT_SIZES.indexOf(size);
+
+    const btnMinus = el("button", { className: "toolbar-btn", "aria-label": "글자 작게" }, "A-");
+    const btnPlus = el("button", { className: "toolbar-btn", "aria-label": "글자 크게" }, "A+");
+    if (idx <= 0) btnMinus.disabled = true;
+    if (idx >= FONT_SIZES.length - 1) btnPlus.disabled = true;
+
+    btnMinus.addEventListener("click", () => {
+      const cur = FONT_SIZES.indexOf(loadFontSize());
+      if (cur > 0) { const ns = FONT_SIZES[cur - 1]; saveFontSize(ns); applyFontSize(ns); rebuild(); }
+    });
+    btnPlus.addEventListener("click", () => {
+      const cur = FONT_SIZES.indexOf(loadFontSize());
+      if (cur < FONT_SIZES.length - 1) { const ns = FONT_SIZES[cur + 1]; saveFontSize(ns); applyFontSize(ns); rebuild(); }
+    });
+
+    sizeRow.appendChild(btnMinus);
+    sizeRow.appendChild(btnPlus);
+    popover.appendChild(sizeRow);
+
+    // Theme
+    const themeRow = el("div", { className: "settings-row" });
+    themeRow.appendChild(el("span", { className: "settings-label" }, "테마"));
+    const btnTheme = el(
+      "button",
+      { className: "toolbar-btn", "aria-label": "다크/라이트 모드 전환" },
+      loadTheme() === "dark" ? "☀ 라이트" : "☾ 다크"
+    );
+    btnTheme.addEventListener("click", () => {
+      const next = loadTheme() === "dark" ? "light" : "dark";
+      saveTheme(next);
+      applyTheme(next);
+      rebuild();
+    });
+    themeRow.appendChild(btnTheme);
+    popover.appendChild(themeRow);
   }
 
-  const size = loadFontSize();
-  const btnMinus = el("button", { className: "toolbar-btn", "aria-label": "글자 작게" }, "A-");
-  const btnPlus = el("button", { className: "toolbar-btn", "aria-label": "글자 크게" }, "A+");
-
-  const idx = FONT_SIZES.indexOf(size);
-  if (idx <= 0) btnMinus.disabled = true;
-  if (idx >= FONT_SIZES.length - 1) btnPlus.disabled = true;
-
-  btnMinus.addEventListener("click", () => {
-    const cur = FONT_SIZES.indexOf(loadFontSize());
-    if (cur > 0) { const ns = FONT_SIZES[cur - 1]; saveFontSize(ns); applyFontSize(ns); showToolbar(book, currentCh); }
-  });
-  btnPlus.addEventListener("click", () => {
-    const cur = FONT_SIZES.indexOf(loadFontSize());
-    if (cur < FONT_SIZES.length - 1) { const ns = FONT_SIZES[cur + 1]; saveFontSize(ns); applyFontSize(ns); showToolbar(book, currentCh); }
+  btn.addEventListener("click", () => {
+    const open = !popover.hidden;
+    if (!open) rebuild();
+    popover.hidden = open;
+    btn.setAttribute("aria-expanded", String(!open));
   });
 
-  const btnTheme = el(
-    "button",
-    { className: "toolbar-btn", "aria-label": "다크/라이트 모드 전환" },
-    loadTheme() === "dark" ? "☀" : "☾"
-  );
-  btnTheme.addEventListener("click", () => {
-    const next = loadTheme() === "dark" ? "light" : "dark";
-    saveTheme(next);
-    applyTheme(next);
-    showToolbar(book, currentCh);
+  document.addEventListener("click", (e) => {
+    if (!popover.hidden && !wrapper.contains(e.target)) {
+      popover.hidden = true;
+      btn.setAttribute("aria-expanded", "false");
+    }
   });
 
-  $toolbar.appendChild(btnMinus);
-  $toolbar.appendChild(btnPlus);
-  $toolbar.appendChild(btnTheme);
-}
-
-function hideToolbar() {
-  $toolbar.classList.add("hidden");
-  clearNode($toolbar);
+  wrapper.appendChild(btn);
+  wrapper.appendChild(popover);
+  $settingsAnchor.appendChild(wrapper);
 }
 
 // ── Theme ──
@@ -119,6 +145,7 @@ function applyTheme(theme) {
 // Apply saved settings on load
 applyFontSize(loadFontSize());
 applyTheme(loadTheme());
+initSettings();
 
 // ── Helpers ──
 
@@ -172,19 +199,57 @@ function setTitle(text) {
   document.title = text === "공동번역성서" ? text : `${text} — 공동번역성서`;
 }
 
-function setTitleWithChapter(book, currentCh) {
+function setTitleWithDivisionPicker(activeDivision) {
   clearNode($title);
-  document.title = `${book.name_ko} ${currentCh}장 — 공동번역성서`;
-  $title.appendChild(document.createTextNode(`${book.name_ko} ${currentCh}장`));
-}
-
-function buildChapterPicker(book, currentCh) {
-  const wrapper = el("div", { className: "chapter-picker-wrapper" });
+  const label = DIVISION_LABELS[activeDivision];
+  document.title = `${label} — 공동번역성서`;
 
   const btn = el(
     "button",
-    { className: "toolbar-btn chapter-picker-btn", "aria-label": "장 선택", "aria-expanded": "false" },
-    `${currentCh}장`
+    { className: "title-picker-btn", "aria-label": "구분 선택", "aria-expanded": "false" },
+    label
+  );
+
+  const popover = el("ul", { className: "bc-division-popover title-division-popover" });
+  popover.hidden = true;
+
+  for (const div of DIVISION_ORDER) {
+    const cls = div === activeDivision ? "bc-division-item active" : "bc-division-item";
+    popover.appendChild(el("li", null, el("a", { className: cls, href: `#/${div}` }, DIVISION_LABELS[div])));
+  }
+
+  btn.addEventListener("click", () => {
+    const open = !popover.hidden;
+    popover.hidden = open;
+    btn.setAttribute("aria-expanded", String(!open));
+  });
+
+  document.addEventListener("click", (e) => {
+    if (!popover.hidden && !$title.contains(e.target)) {
+      popover.hidden = true;
+      btn.setAttribute("aria-expanded", "false");
+    }
+  });
+
+  popover.addEventListener("click", (e) => {
+    if (e.target.tagName === "A") {
+      popover.hidden = true;
+      btn.setAttribute("aria-expanded", "false");
+    }
+  });
+
+  $title.appendChild(btn);
+  $title.appendChild(popover);
+}
+
+function setTitleWithChapterPicker(book, currentCh) {
+  clearNode($title);
+  document.title = `${book.name_ko} ${currentCh}장 — 공동번역성서`;
+
+  const btn = el(
+    "button",
+    { className: "title-picker-btn", "aria-label": "장 선택", "aria-expanded": "false" },
+    `${book.name_ko} ${currentCh}장`
   );
 
   const popover = el("div", { className: "chapter-popover" });
@@ -209,7 +274,7 @@ function buildChapterPicker(book, currentCh) {
   });
 
   document.addEventListener("click", (e) => {
-    if (!popover.hidden && !wrapper.contains(e.target)) {
+    if (!popover.hidden && !$title.contains(e.target)) {
       popover.hidden = true;
       btn.setAttribute("aria-expanded", "false");
     }
@@ -222,9 +287,8 @@ function buildChapterPicker(book, currentCh) {
     }
   });
 
-  wrapper.appendChild(btn);
-  wrapper.appendChild(popover);
-  return wrapper;
+  $title.appendChild(btn);
+  $title.appendChild(popover);
 }
 
 function setBreadcrumb(crumbs) {
@@ -236,10 +300,47 @@ function setBreadcrumb(crumbs) {
     }
     if (c.href) {
       $breadcrumb.appendChild(el("a", { href: c.href }, c.label));
+    } else if (c.divisionPicker) {
+      $breadcrumb.appendChild(buildDivisionBreadcrumb(c.label, c.activeDivision));
     } else {
       $breadcrumb.appendChild(el("span", null, c.label));
     }
   });
+}
+
+function buildDivisionBreadcrumb(label, activeDivision) {
+  const wrapper = el("span", { className: "bc-division-picker" });
+
+  const btn = el("button", { className: "bc-division-btn" }, label);
+
+  const popover = el("ul", { className: "bc-division-popover" });
+  popover.hidden = true;
+
+  for (const div of DIVISION_ORDER) {
+    const cls = div === activeDivision ? "bc-division-item active" : "bc-division-item";
+    const item = el("li", null,
+      el("a", { className: cls, href: `#/${div}` }, DIVISION_LABELS[div])
+    );
+    popover.appendChild(item);
+  }
+
+  btn.addEventListener("click", () => {
+    popover.hidden = !popover.hidden;
+  });
+
+  document.addEventListener("click", (e) => {
+    if (!popover.hidden && !wrapper.contains(e.target)) {
+      popover.hidden = true;
+    }
+  });
+
+  popover.addEventListener("click", () => {
+    popover.hidden = true;
+  });
+
+  wrapper.appendChild(btn);
+  wrapper.appendChild(popover);
+  return wrapper;
 }
 
 const DIVISION_LABELS = {
@@ -255,21 +356,9 @@ const DIVISION_ORDER = ["old_testament", "deuterocanon", "new_testament"];
 function renderBookList(books) {
   setTitle("공동번역성서");
   setBreadcrumb([]);
-  hideToolbar();
   clearNode($app);
 
-  const pos = loadReadingPosition();
-  if (pos) {
-    const lastBook = books.find((b) => b.id === pos.bookId);
-    if (lastBook) {
-      const banner = el(
-        "a",
-        { className: "resume-banner", href: `#/${pos.bookId}/${pos.chapter}` },
-        `이어읽기: ${lastBook.name_ko} ${pos.chapter}장`
-      );
-      $app.appendChild(banner);
-    }
-  }
+  renderResumeBanner(books);
 
   const grouped = {};
   for (const b of books) {
@@ -292,13 +381,42 @@ function renderBookList(books) {
   }
 }
 
+function renderResumeBanner(books) {
+  const pos = loadReadingPosition();
+  if (!pos) return;
+  const lastBook = books.find((b) => b.id === pos.bookId);
+  if (!lastBook) return;
+  $app.appendChild(
+    el("a", { className: "resume-banner", href: `#/${pos.bookId}/${pos.chapter}` },
+      `이어읽기: ${lastBook.name_ko} ${pos.chapter}장`)
+  );
+}
+
+function renderDivisionList(books, division) {
+  setTitleWithDivisionPicker(division);
+  setBreadcrumb([{ label: "목록", href: "#/" }]);
+  clearNode($app);
+
+  renderResumeBanner(books);
+
+  const list = books.filter((b) => b.division === division);
+  const section = el("section", { className: "division" });
+  section.appendChild(el("h2", { className: "division-title" }, DIVISION_LABELS[division]));
+
+  const ul = el("ul", { className: "book-list", role: "list" });
+  for (const b of list) {
+    ul.appendChild(el("li", null, el("a", { href: `#/${b.id}` }, b.name_ko)));
+  }
+  section.appendChild(ul);
+  $app.appendChild(section);
+}
+
 function renderChapterList(book) {
   setTitle(book.name_ko);
   setBreadcrumb([
     { label: "목록", href: "#/" },
-    { label: DIVISION_LABELS[book.division] },
+    { divisionPicker: true, label: DIVISION_LABELS[book.division], activeDivision: book.division },
   ]);
-  hideToolbar();
   clearNode($app);
 
   const grid = el("div", { className: "chapter-grid" });
@@ -327,11 +445,10 @@ function formatVerseLabel(v) {
 
 function renderChapter(data, book) {
   const ch = data.chapter;
-  setTitleWithChapter(book, ch);
-  showToolbar(book, ch);
+  setTitleWithChapterPicker(book, ch);
   setBreadcrumb([
     { label: "목록", href: "#/" },
-    { label: DIVISION_LABELS[book.division] },
+    { divisionPicker: true, label: DIVISION_LABELS[book.division], activeDivision: book.division },
     { label: book.name_ko, href: `#/${book.id}` },
   ]);
   clearNode($app);
@@ -433,10 +550,9 @@ function renderChapter(data, book) {
 
 function renderPrologue(data, book) {
   setTitle(`${book.name_ko} 머리말`);
-  showToolbar();
   setBreadcrumb([
     { label: "목록", href: "#/" },
-    { label: DIVISION_LABELS[book.division] },
+    { divisionPicker: true, label: DIVISION_LABELS[book.division], activeDivision: book.division },
     { label: book.name_ko, href: `#/${book.id}` },
   ]);
   clearNode($app);
@@ -493,19 +609,27 @@ function parseHash() {
   if (!hash) return { view: "books" };
 
   const parts = hash.split("/");
-  if (parts.length === 1) return { view: "chapters", bookId: parts[0] };
+  if (parts.length === 1) {
+    if (DIVISION_LABELS[parts[0]]) return { view: "division", division: parts[0] };
+    return { view: "chapters", bookId: parts[0] };
+  }
   if (parts[1] === "prologue") return { view: "prologue", bookId: parts[0] };
   return { view: "chapter", bookId: parts[0], chapter: parseInt(parts[1], 10) };
 }
 
 async function route() {
-  const { view, bookId, chapter } = parseHash();
+  const { view, bookId, chapter, division } = parseHash();
 
   try {
     const books = await loadBooks();
 
     if (view === "books") {
       renderBookList(books);
+      return;
+    }
+
+    if (view === "division") {
+      renderDivisionList(books, division);
       return;
     }
 

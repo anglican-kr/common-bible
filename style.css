@@ -60,22 +60,56 @@ body {
   margin: 0 auto;
 }
 
-#header-row {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  align-items: end;
-}
-
-/* ── Toolbar ── */
-#toolbar {
+#breadcrumb-row {
   display: flex;
-  gap: 0.3rem;
+  justify-content: space-between;
   align-items: center;
-  flex-shrink: 0;
 }
 
-#toolbar.hidden {
-  display: none;
+/* ── Settings ── */
+.settings-wrapper {
+  position: relative;
+}
+
+.settings-btn {
+  font-size: 1rem;
+  color: var(--text-secondary);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.1em 0.2em;
+  line-height: 1;
+}
+
+.settings-btn:hover {
+  color: var(--accent);
+}
+
+.settings-popover {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 25;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  padding: 0.5rem;
+  margin-top: 0.3rem;
+  white-space: nowrap;
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.25rem 0;
+}
+
+.settings-label {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  min-width: 4em;
 }
 
 .toolbar-btn {
@@ -123,26 +157,118 @@ body {
   color: var(--border);
 }
 
+/* ── Breadcrumb Division Picker ── */
+.bc-division-picker {
+  position: relative;
+  display: inline;
+}
+
+.bc-division-btn {
+  font-family: inherit;
+  font-size: inherit;
+  color: var(--accent);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  line-height: inherit;
+}
+
+.bc-division-btn:hover {
+  text-decoration: underline;
+}
+
+.bc-division-popover {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 25;
+  list-style: none;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  padding: 0.3rem 0;
+  margin-top: 0.3rem;
+  min-width: 6rem;
+  white-space: nowrap;
+}
+
+.bc-division-item {
+  display: block;
+  padding: 0.35rem 0.8rem;
+  font-size: 0.82rem;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.bc-division-item:hover {
+  background: var(--accent);
+  color: #fff;
+}
+
+.bc-division-item.active {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.title-division-popover {
+  left: 50%;
+  transform: translateX(-50%);
+}
+
 #page-title {
   font-size: 1.15rem;
   font-weight: 700;
   line-height: 1.4;
   text-align: center;
-}
-
-/* ── Chapter Picker ── */
-.chapter-picker-wrapper {
   position: relative;
 }
 
-.chapter-picker-btn {
-  font-weight: 700;
+/* ── Chapter Picker ── */
+.title-picker-btn {
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  color: var(--text);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  line-height: inherit;
+}
+
+.title-picker-btn::after {
+  content: "";
+  display: inline-block;
+  width: 0.4em;
+  height: 0.4em;
+  border-right: 2px solid var(--text-secondary);
+  border-bottom: 2px solid var(--text-secondary);
+  transform: rotate(45deg);
+  margin-left: 0.4em;
+  vertical-align: 0.15em;
+  transition: transform 0.15s;
+}
+
+.title-picker-btn[aria-expanded="true"]::after {
+  transform: rotate(-135deg);
+  vertical-align: -0.05em;
+}
+
+.title-picker-btn:hover {
+  color: var(--accent);
+}
+
+.title-picker-btn:hover::after {
+  border-color: var(--accent);
 }
 
 .chapter-popover {
   position: absolute;
   top: 100%;
-  right: 0;
+  left: 50%;
+  transform: translateX(-50%);
   z-index: 20;
   background: var(--bg-card);
   border: 1px solid var(--border);
