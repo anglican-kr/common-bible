@@ -93,7 +93,25 @@ function initSettings() {
   clearNode($settingsAnchor);
 
   const wrapper = el("div", { className: "settings-wrapper" });
-  const btn = el("button", { className: "settings-btn", "aria-label": "설정", "aria-expanded": "false" }, "\u2699");
+  const btn = el("button", { className: "settings-btn", "aria-label": "설정", "aria-expanded": "false" });
+  const settingsSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  settingsSvg.setAttribute("width", "18");
+  settingsSvg.setAttribute("height", "18");
+  settingsSvg.setAttribute("viewBox", "0 0 24 24");
+  settingsSvg.setAttribute("fill", "none");
+  settingsSvg.setAttribute("stroke", "currentColor");
+  settingsSvg.setAttribute("stroke-width", "2");
+  settingsSvg.setAttribute("stroke-linecap", "round");
+  settingsSvg.setAttribute("stroke-linejoin", "round");
+  const gearCircle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+  gearCircle.setAttribute("cx", "12");
+  gearCircle.setAttribute("cy", "12");
+  gearCircle.setAttribute("r", "3");
+  const gearPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  gearPath.setAttribute("d", "M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z");
+  settingsSvg.appendChild(gearCircle);
+  settingsSvg.appendChild(gearPath);
+  btn.appendChild(settingsSvg);
   const popover = el("div", { className: "settings-popover" });
   popover.hidden = true;
 
@@ -107,13 +125,21 @@ function initSettings() {
     const idx = FONT_SIZES.indexOf(size);
 
     const btnMinus = el("button", { className: "toolbar-btn", "aria-label": "글자 작게" }, "A-");
+    const btnReset = el("button", { className: "toolbar-btn", "aria-label": "글자 크기 초기화" }, "A");
     const btnPlus = el("button", { className: "toolbar-btn", "aria-label": "글자 크게" }, "A+");
     if (idx <= 0) btnMinus.disabled = true;
     if (idx >= FONT_SIZES.length - 1) btnPlus.disabled = true;
+    if (size === DEFAULT_FONT_SIZE) btnReset.disabled = true;
 
     btnMinus.addEventListener("click", () => {
       const cur = FONT_SIZES.indexOf(loadFontSize());
       if (cur > 0) { const ns = FONT_SIZES[cur - 1]; saveFontSize(ns); applyFontSize(ns); rebuild(); announce(`글자 크기 ${ns}px`); }
+    });
+    btnReset.addEventListener("click", () => {
+      saveFontSize(DEFAULT_FONT_SIZE);
+      applyFontSize(DEFAULT_FONT_SIZE);
+      rebuild();
+      announce("글자 크기 초기화");
     });
     btnPlus.addEventListener("click", () => {
       const cur = FONT_SIZES.indexOf(loadFontSize());
@@ -121,6 +147,7 @@ function initSettings() {
     });
 
     sizeRow.appendChild(btnMinus);
+    sizeRow.appendChild(btnReset);
     sizeRow.appendChild(btnPlus);
     popover.appendChild(sizeRow);
 
@@ -147,22 +174,28 @@ function initSettings() {
     popover.appendChild(aboutRow);
   }
 
+  function positionPopover() {
+    const rect = btn.getBoundingClientRect();
+    popover.style.top = `${rect.bottom + 4}px`;
+    popover.style.right = `${window.innerWidth - rect.right}px`;
+  }
+
   btn.addEventListener("click", () => {
     const open = !popover.hidden;
-    if (!open) rebuild();
+    if (!open) { rebuild(); positionPopover(); }
     popover.hidden = open;
     btn.setAttribute("aria-expanded", String(!open));
   });
 
   document.addEventListener("click", (e) => {
-    if (!popover.hidden && !wrapper.contains(e.target)) {
+    if (!popover.hidden && !wrapper.contains(e.target) && !popover.contains(e.target)) {
       popover.hidden = true;
       btn.setAttribute("aria-expanded", "false");
     }
   });
 
   wrapper.appendChild(btn);
-  wrapper.appendChild(popover);
+  document.body.appendChild(popover);
   $settingsAnchor.appendChild(wrapper);
 }
 
@@ -554,15 +587,13 @@ function renderChapter(data, book, opts) {
 
     const span = el("span", { className: classes, id: verseId });
 
-    // Verse number
-    const sup = el("sup", { className: "verse-num", "aria-hidden": "true" }, verseLabel);
-    if (v.chapter_ref) {
-      sup.appendChild(el("span", { className: "cross-ref-tag" }, `(${v.chapter_ref}장)`));
-    }
-    if (v.alt_ref != null) {
-      sup.appendChild(el("span", { className: "alt-ref" }, `(${v.alt_ref})`));
-    }
+    // Verse number (rendered via CSS ::before to exclude from clipboard)
+    let dataV = verseLabel;
+    if (v.chapter_ref) dataV += `(${v.chapter_ref}장)`;
+    if (v.alt_ref != null) dataV += `(${v.alt_ref})`;
+    const sup = el("sup", { className: "verse-num", "aria-hidden": "true", "data-v": dataV });
     span.appendChild(sup);
+    span.appendChild(document.createTextNode("\u2060")); // word joiner: prevent line break after verse number
 
     // Render text, handling ¶ marks and mid-verse paragraph breaks (\n¶)
     const segments = v.text.split("\n");
@@ -1379,6 +1410,16 @@ $searchSheetClear.addEventListener("click", () => {
       $searchSheet.style.height = "";
     }
   }
+})();
+
+// ── Compact Header on Scroll ──
+
+(function () {
+  const header = document.getElementById("app-header");
+  const THRESHOLD = 50;
+  window.addEventListener("scroll", () => {
+    header.classList.toggle("compact", window.scrollY > THRESHOLD);
+  }, { passive: true });
 })();
 
 // ── Service Worker Registration ──

@@ -85,10 +85,18 @@ body {
   top: 0;
   z-index: 10;
   background: var(--bg);
-  border-bottom: 1px solid var(--border);
+  border-bottom: none;
   padding: 0.6rem 1rem;
   max-width: var(--max-width);
   margin: 0 auto;
+}
+
+#app-header::after {
+  content: "";
+  display: block;
+  height: 1px;
+  margin-top: 0.6rem;
+  background: linear-gradient(to right, transparent, var(--border) 20%, var(--border) 80%, transparent);
 }
 
 #breadcrumb-row {
@@ -96,6 +104,17 @@ body {
   justify-content: space-between;
   align-items: center;
   gap: 0.5rem;
+  max-height: 4rem;
+  opacity: 1;
+  overflow: visible;
+  transition: max-height 0.25s ease, opacity 0.2s ease;
+}
+
+#app-header.compact #breadcrumb-row {
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
 }
 
 #header-actions {
@@ -111,12 +130,14 @@ body {
 }
 
 .settings-btn {
-  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   color: var(--text-secondary);
   background: none;
   border: none;
   cursor: pointer;
-  padding: 0.1em 0.2em;
+  padding: 0.2em;
   line-height: 1;
 }
 
@@ -125,16 +146,13 @@ body {
 }
 
 .settings-popover {
-  position: absolute;
-  top: 100%;
-  right: 0;
+  position: fixed;
   z-index: 25;
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
   padding: 0.5rem;
-  margin-top: 0.3rem;
   white-space: nowrap;
 }
 
@@ -442,7 +460,7 @@ body {
   box-shadow: 0 3px 12px rgba(0, 0, 0, 0.25);
   align-items: center;
   justify-content: center;
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, bottom 0.25s ease;
 }
 
 #search-fab:hover {
@@ -748,6 +766,7 @@ mark.search-highlight {
 
 /* ── Chapter Grid ── */
 .chapter-grid {
+  font-family: "Noto Sans KR", sans-serif;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(3.2rem, 1fr));
   gap: 0.4rem;
@@ -781,7 +800,12 @@ mark.search-highlight {
   padding: 0.5rem;
   font-size: 0.85rem;
   color: var(--accent) !important;
-  border-style: dashed !important;
+  border-style: solid !important;
+}
+
+.prologue-link:hover,
+.prologue-link:focus-visible {
+  color: #fff !important;
 }
 
 /* ── Chapter View (verses) ── */
@@ -797,11 +821,15 @@ mark.search-highlight {
 .verse-num {
   font-family: "Noto Sans KR", sans-serif;
   font-size: 0.7rem;
-  font-weight: 700;
+  font-weight: 400;
   color: var(--verse-num);
   vertical-align: super;
   margin-right: 0.15em;
   user-select: none;
+}
+
+.verse-num::before {
+  content: attr(data-v);
 }
 
 .paragraph-break {
@@ -810,6 +838,7 @@ mark.search-highlight {
 }
 
 .pilcrow {
+  font-family: "Noto Sans KR", sans-serif;
   color: var(--paragraph-mark);
   margin-right: 0.2em;
   user-select: none;
@@ -915,10 +944,20 @@ mark.search-highlight {
   background: color-mix(in srgb, var(--bg) 85%, transparent);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border-top: 1px solid var(--border);
+  border-top: none;
   max-width: var(--max-width);
   margin: 0 auto;
   padding: 0.5rem 1rem;
+}
+
+#audio-bar::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(to right, transparent, var(--border) 20%, var(--border) 80%, transparent);
 }
 
 #audio-bar[hidden] {
@@ -1131,7 +1170,12 @@ mark.search-highlight {
   }
 
   .book-list {
-    grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(5.5rem, 1fr));
+  }
+
+  .book-list a {
+    font-size: 0.82rem;
+    padding: 0.4rem 0.4rem;
   }
 
   .chapter-grid {
