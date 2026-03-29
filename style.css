@@ -423,7 +423,6 @@ body {
 #search-fab {
   display: none;
   position: fixed;
-  bottom: 1.5rem;
   right: 1.2rem;
   z-index: 30;
   width: 3.2rem;
@@ -448,9 +447,14 @@ body {
   transform: scale(0.95);
 }
 
+/* Lift FAB above chapter-nav when it scrolls into view */
+#search-fab {
+  bottom: max(1.5rem, var(--fab-lift-nav, 0px));
+}
+
 /* Lift FAB when audio bar is visible */
 #audio-bar:not([hidden]) ~ #search-fab {
-  bottom: 5rem;
+  bottom: max(5rem, calc(var(--fab-lift-nav, 0px) + 3.5rem));
 }
 
 /* ── Search Bottom Sheet (Mobile only) ── */
@@ -560,6 +564,7 @@ body {
   color: var(--text-secondary);
   margin-bottom: 0.8rem;
 }
+
 
 .search-empty {
   text-align: center;
@@ -1087,6 +1092,11 @@ mark.search-highlight {
 
   #search-fab {
     display: flex;
+  }
+
+  /* Extra top margin so FAB (3.2rem) fits in the gap above chapter-nav */
+  .chapter-nav {
+    margin-top: 4.5rem;
   }
 }
 
