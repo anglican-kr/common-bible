@@ -127,19 +127,17 @@ function initSettings() {
     // Theme
     const themeRow = el("div", { className: "settings-row" });
     themeRow.appendChild(el("span", { className: "settings-label" }, "테마"));
-    const btnTheme = el(
-      "button",
-      { className: "toolbar-btn", "aria-label": "다크/라이트 모드 전환" },
-      loadTheme() === "dark" ? "☀ 라이트" : "☾ 다크"
-    );
-    btnTheme.addEventListener("click", () => {
-      const next = loadTheme() === "dark" ? "light" : "dark";
-      saveTheme(next);
-      applyTheme(next);
-      rebuild();
-      announce(next === "dark" ? "다크 모드" : "라이트 모드");
-    });
-    themeRow.appendChild(btnTheme);
+    const current = loadTheme();
+    for (const [value, label] of [["light", "라이트"], ["system", "시스템"], ["dark", "다크"]]) {
+      const btn = el("button", { className: "toolbar-btn", "aria-pressed": String(current === value) }, label);
+      btn.addEventListener("click", () => {
+        saveTheme(value);
+        applyTheme(value);
+        rebuild();
+        announce(label + " 테마");
+      });
+      themeRow.appendChild(btn);
+    }
     popover.appendChild(themeRow);
 
     // About
@@ -173,17 +171,31 @@ function initSettings() {
 function loadTheme() {
   try {
     const saved = localStorage.getItem(THEME_KEY);
-    if (saved === "dark" || saved === "light") return saved;
+    if (saved === "dark" || saved === "light" || saved === "system") return saved;
   } catch (_) {}
-  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  return "system";
 }
 
 function saveTheme(theme) {
   try { localStorage.setItem(THEME_KEY, theme); } catch (_) {}
 }
 
+let _systemThemeListener = null;
+const _darkMQ = window.matchMedia("(prefers-color-scheme: dark)");
+
 function applyTheme(theme) {
-  document.documentElement.setAttribute("data-theme", theme);
+  if (_systemThemeListener) {
+    _darkMQ.removeEventListener("change", _systemThemeListener);
+    _systemThemeListener = null;
+  }
+  const resolved = theme === "system" ? (_darkMQ.matches ? "dark" : "light") : theme;
+  document.documentElement.setAttribute("data-theme", resolved);
+  if (theme === "system") {
+    _systemThemeListener = (e) => {
+      document.documentElement.setAttribute("data-theme", e.matches ? "dark" : "light");
+    };
+    _darkMQ.addEventListener("change", _systemThemeListener);
+  }
 }
 
 // Apply saved settings on load
