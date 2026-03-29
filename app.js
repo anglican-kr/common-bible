@@ -145,7 +145,7 @@ function initSettings() {
     // About
     const aboutRow = el("div", { className: "settings-about" });
     aboutRow.appendChild(document.createTextNode("대한성서공회 허락 하에 대한성공회 사용 · "));
-    aboutRow.appendChild(el("a", { href: "https://github.com/anglican-kr/common-bible", target: "_blank", rel: "noopener" }, "공동번역성서 2.0"));
+    aboutRow.appendChild(el("a", { href: "https://github.com/anglican-kr/common-bible", target: "_blank", rel: "noopener" }, "공동번역성서 1.0"));
     popover.appendChild(aboutRow);
   }
 
@@ -619,6 +619,7 @@ function renderChapter(data, book, opts) {
   $app.appendChild(article);
   $app.appendChild(buildChapterNav(book, ch));
   showAudioPlayer(book.id, ch);
+  observeFabLift();
 
   // Scroll to highlighted verse or top
   if (hlVerse) {
@@ -652,6 +653,7 @@ function renderPrologue(data, book) {
   nav.appendChild(el("a", { href: `#/${book.id}/1` }, "1장 →"));
   $app.appendChild(nav);
   showAudioPlayer(book.id, 0);
+  observeFabLift();
   window.scrollTo(0, 0);
 }
 
@@ -752,7 +754,9 @@ async function route() {
   try {
     if (view === "search") {
       if (parsed.query) {
-        await renderSearchResults(parsed.query, parsed.page);
+        const autoNav = searchAutoNavigate;
+        searchAutoNavigate = false;
+        await renderSearchResults(parsed.query, parsed.page, autoNav);
       } else {
         const books = await loadBooks();
         renderBookList(books);
@@ -821,6 +825,28 @@ function formatTime(sec) {
   const m = Math.floor(sec / 60);
   const s = Math.floor(sec % 60);
   return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+// Lift FAB above chapter-nav when it scrolls into view on mobile
+let _fabNavObserver = null;
+function observeFabLift() {
+  if (_fabNavObserver) { _fabNavObserver.disconnect(); _fabNavObserver = null; }
+  const nav = $app.querySelector(".chapter-nav");
+  if (!nav) return;
+  _fabNavObserver = new IntersectionObserver((entries) => {
+    const visible = entries[0].isIntersecting;
+    if (visible) {
+      // Center the FAB vertically in the gap (margin-top: 4.5rem) above chapter-nav
+      const navH = nav.offsetHeight;
+      const fabH = $searchFab.offsetHeight;
+      const gapPx = parseFloat(getComputedStyle(nav).marginTop);
+      const liftPx = navH + (gapPx - fabH) / 2;
+      $searchFab.style.setProperty("--fab-lift-nav", `${Math.max(liftPx, navH + 4)}px`);
+    } else {
+      $searchFab.style.removeProperty("--fab-lift-nav");
+    }
+  }, { threshold: 0 });
+  _fabNavObserver.observe(nav);
 }
 
 function hideAudioBar() {
@@ -1042,7 +1068,7 @@ function buildSearchPagination(query, currentPage, totalPages) {
   return nav;
 }
 
-async function renderSearchResults(query, page) {
+async function renderSearchResults(query, page, autoNavigate = false) {
   setTitle(`"${query}" 검색`);
   setBreadcrumb([{ label: "목록", href: "#/" }]);
   hideAudioBar();
@@ -1063,7 +1089,9 @@ async function renderSearchResults(query, page) {
     return;
   }
 
-  // Verse reference match → navigate directly
+  // Verse reference match — navigate only when explicitly confirmed (Enter key).
+  // On debounce, show a clickable card so partial input (e.g. "요한 3:1" while
+  // typing "요한 3:16") doesn't cause premature navigation.
   if (result.refMatch) {
     const ref = result.refMatch;
     let hash = `#/${ref.bookId}/${ref.chapter}`;
@@ -1071,7 +1099,9 @@ async function renderSearchResults(query, page) {
     if (ref.verse) params.push(`v=${ref.verse}`);
     if (ref.verseEnd) params.push(`ve=${ref.verseEnd}`);
     if (params.length) hash += `?${params.join("&")}`;
-    location.replace(hash);
+    if (autoNavigate) {
+      location.replace(hash);
+    }
     return;
   }
 
@@ -1111,29 +1141,54 @@ async function renderSearchResults(query, page) {
 // ── Search input event handlers (Desktop inline) ──
 
 let searchDebounceTimer = null;
+// True only when search was explicitly confirmed via Enter — allows verse ref auto-navigation.
+// Debounce path keeps this false so partial refs (e.g. "요한 3:1" while typing "요한 3:16")
+// are shown as a clickable card instead of immediately navigating.
+let searchAutoNavigate = false;
 
 $searchInput.addEventListener("keydown", (e) => {
   if (e.key === "Enter") {
     e.preventDefault();
     clearTimeout(searchDebounceTimer);
+    clearTimeout(searchAutoNavTimer);
     const q = $searchInput.value.trim();
-    if (q) location.hash = `#/search?q=${encodeURIComponent(q)}`;
+    if (!q) return;
+    searchAutoNavigate = true;
+    const newHash = `#/search?q=${encodeURIComponent(q)}`;
+    // If hash is unchanged, hashchange won't fire — call route() directly.
+    if (location.hash === newHash) {
+      route();
+    } else {
+      location.hash = newHash;
+    }
   }
 });
+
+let searchAutoNavTimer = null;
 
 $searchInput.addEventListener("input", () => {
   const q = $searchInput.value.trim();
   $searchClear.hidden = !q;
   clearTimeout(searchDebounceTimer);
+  clearTimeout(searchAutoNavTimer);
   if (!q) return;
   searchDebounceTimer = setTimeout(() => {
+    searchAutoNavigate = false;
     location.hash = `#/search?q=${encodeURIComponent(q)}`;
   }, 400);
+  // After 3s of no input, treat as Enter (auto-navigate on verse ref match)
+  searchAutoNavTimer = setTimeout(() => {
+    searchAutoNavigate = true;
+    const newHash = `#/search?q=${encodeURIComponent(q)}`;
+    if (location.hash === newHash) { route(); } else { location.hash = newHash; }
+  }, 3000);
 });
 
 $searchClear.addEventListener("click", () => {
   $searchInput.value = "";
   $searchClear.hidden = true;
+  clearTimeout(searchDebounceTimer);
+  clearTimeout(searchAutoNavTimer);
   $searchInput.focus();
   if (parseHash().view === "search") location.hash = "#/";
 });
@@ -1171,7 +1226,7 @@ function getSheetPageSize() {
   return Math.max(5, Math.floor(resultsH / itemH));
 }
 
-async function runSheetSearch(query, page) {
+async function runSheetSearch(query, page, autoNavigate = false) {
   clearNode($searchSheetResults);
   if (!query) return;
 
@@ -1186,7 +1241,7 @@ async function runSheetSearch(query, page) {
     return;
   }
 
-  // Verse reference → navigate and close
+  // Verse reference — navigate only when explicitly confirmed (Enter key).
   if (result.refMatch) {
     const ref = result.refMatch;
     let hash = `#/${ref.bookId}/${ref.chapter}`;
@@ -1194,8 +1249,10 @@ async function runSheetSearch(query, page) {
     if (ref.verse) params.push(`v=${ref.verse}`);
     if (ref.verseEnd) params.push(`ve=${ref.verseEnd}`);
     if (params.length) hash += `?${params.join("&")}`;
-    closeSearchSheet();
-    location.hash = hash;
+    if (autoNavigate) {
+      closeSearchSheet();
+      location.hash = hash;
+    }
     return;
   }
 
@@ -1249,12 +1306,15 @@ $searchFab.addEventListener("click", () => openSearchSheet(""));
 
 $searchScrim.addEventListener("click", closeSearchSheet);
 
+let sheetAutoNavTimer = null;
+
 $searchSheetInput.addEventListener("keydown", (e) => {
   if (e.key === "Enter") {
     e.preventDefault();
     clearTimeout(sheetDebounceTimer);
+    clearTimeout(sheetAutoNavTimer);
     const q = $searchSheetInput.value.trim();
-    if (q) runSheetSearch(q, 1);
+    if (q) runSheetSearch(q, 1, true);
   }
 });
 
@@ -1262,13 +1322,17 @@ $searchSheetInput.addEventListener("input", () => {
   const q = $searchSheetInput.value.trim();
   $searchSheetClear.hidden = !q;
   clearTimeout(sheetDebounceTimer);
+  clearTimeout(sheetAutoNavTimer);
   if (!q) { clearNode($searchSheetResults); return; }
-  sheetDebounceTimer = setTimeout(() => runSheetSearch(q, 1), 400);
+  sheetDebounceTimer = setTimeout(() => runSheetSearch(q, 1, false), 400);
+  sheetAutoNavTimer = setTimeout(() => runSheetSearch(q, 1, true), 3000);
 });
 
 $searchSheetClear.addEventListener("click", () => {
   $searchSheetInput.value = "";
   $searchSheetClear.hidden = true;
+  clearTimeout(sheetDebounceTimer);
+  clearTimeout(sheetAutoNavTimer);
   clearNode($searchSheetResults);
   $searchSheetInput.focus();
 });
