@@ -80,6 +80,7 @@ body {
 
 /* ── Header ── */
 #app-header {
+  font-family: "Noto Sans KR", sans-serif;
   position: sticky;
   top: 0;
   z-index: 10;
@@ -165,6 +166,12 @@ body {
 }
 
 .toolbar-btn:hover:not(:disabled) {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+.toolbar-btn[aria-pressed="true"] {
   background: var(--accent);
   color: #fff;
   border-color: var(--accent);
@@ -471,6 +478,7 @@ body {
 }
 
 #search-sheet {
+  font-family: "Noto Sans KR", sans-serif;
   display: none;
   position: fixed;
   bottom: 0;
@@ -673,6 +681,7 @@ mark.search-highlight {
 
 /* ── Resume Banner ── */
 .resume-banner {
+  font-family: "Noto Sans KR", sans-serif;
   display: block;
   padding: 0.7rem 1rem;
   margin-bottom: 1.2rem;
@@ -691,6 +700,7 @@ mark.search-highlight {
 
 /* ── Book List ── */
 .division {
+  font-family: "Noto Sans KR", sans-serif;
   margin-bottom: 1.8rem;
 }
 
@@ -785,6 +795,7 @@ mark.search-highlight {
 }
 
 .verse-num {
+  font-family: "Noto Sans KR", sans-serif;
   font-size: 0.7rem;
   font-weight: 700;
   color: var(--verse-num);
@@ -846,6 +857,7 @@ mark.search-highlight {
 
 /* ── Chapter Navigation ── */
 .chapter-nav {
+  font-family: "Noto Sans KR", sans-serif;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -896,6 +908,7 @@ mark.search-highlight {
 
 /* ── Audio Bar ── */
 #audio-bar {
+  font-family: "Noto Sans KR", sans-serif;
   position: sticky;
   bottom: 0;
   z-index: 10;
