@@ -666,6 +666,7 @@ body {
 
 .search-result-text {
   display: block;
+  font-family: "Noto Serif KR", serif;
   font-size: 0.85rem;
   line-height: 1.6;
   color: var(--text-secondary);
