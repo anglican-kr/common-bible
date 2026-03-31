@@ -146,6 +146,7 @@ body {
 }
 
 .settings-popover {
+  font-family: "Noto Sans KR", sans-serif;
   position: fixed;
   z-index: 25;
   background: var(--bg-card);
@@ -167,6 +168,26 @@ body {
   font-size: 0.78rem;
   color: var(--text-secondary);
   min-width: 4em;
+}
+
+.btn-group {
+  display: flex;
+}
+
+.btn-group .toolbar-btn {
+  border-radius: 0;
+}
+
+.btn-group .toolbar-btn + .toolbar-btn {
+  border-left: none;
+}
+
+.btn-group .toolbar-btn:first-child {
+  border-radius: 4px 0 0 4px;
+}
+
+.btn-group .toolbar-btn:last-child {
+  border-radius: 0 4px 4px 0;
 }
 
 .toolbar-btn {
@@ -700,20 +721,45 @@ mark.search-highlight {
 /* ── Resume Banner ── */
 .resume-banner {
   font-family: "Noto Sans KR", sans-serif;
-  display: block;
-  padding: 0.7rem 1rem;
+  display: flex;
+  align-items: center;
   margin-bottom: 1.2rem;
   background: var(--accent);
-  color: #fff;
   border-radius: var(--radius);
-  text-decoration: none;
-  font-size: 0.9rem;
-  text-align: center;
+  overflow: hidden;
   transition: opacity 0.15s;
 }
 
-.resume-banner:hover {
+.resume-banner-link {
+  flex: 1;
+  padding: 0.7rem 1rem;
+  color: #fff;
+  text-decoration: none;
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+.resume-banner-link:hover {
   opacity: 0.85;
+}
+
+.resume-banner-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.2rem;
+  border: none;
+  border-left: 1px solid rgba(255, 255, 255, 0.3);
+  background: transparent;
+  color: #fff;
+  font-size: 1.1rem;
+  cursor: pointer;
+  padding: 0.7rem 0;
+  flex-shrink: 0;
+}
+
+.resume-banner-close:hover {
+  background: rgba(0, 0, 0, 0.15);
 }
 
 /* ── Book List ── */
@@ -899,7 +945,7 @@ mark.search-highlight {
   text-decoration: none;
   font-size: 0.88rem;
   padding: 0.4rem 0.8rem;
-  border: 1px solid var(--border);
+  border: none;
   border-radius: var(--radius);
   transition: background 0.15s;
 }
@@ -907,7 +953,6 @@ mark.search-highlight {
 .chapter-nav a:hover {
   background: var(--accent);
   color: #fff;
-  border-color: var(--accent);
 }
 
 .chapter-nav .placeholder {
@@ -924,6 +969,7 @@ mark.search-highlight {
   white-space: normal;
   max-width: 14rem;
   line-height: 1.4;
+  text-align: center;
 }
 
 .settings-about a {
