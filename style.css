@@ -193,7 +193,7 @@ body {
 .toolbar-btn {
   font-family: inherit;
   font-size: 0.78rem;
-  font-weight: 700;
+  font-weight: 400;
   color: var(--text-secondary);
   background: var(--bg-card);
   border: 1px solid var(--border);
@@ -723,11 +723,15 @@ mark.search-highlight {
   font-family: "Noto Sans KR", sans-serif;
   display: flex;
   align-items: center;
+  position: sticky;
+  top: 0;
+  z-index: 15;
   margin-bottom: 1.2rem;
   background: var(--accent);
   border-radius: var(--radius);
   overflow: hidden;
   transition: opacity 0.15s;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
 .resume-banner-link {
@@ -775,7 +779,11 @@ mark.search-highlight {
   text-transform: uppercase;
   letter-spacing: 0.05em;
   padding-bottom: 0.4rem;
-  border-bottom: 2px solid var(--accent);
+  border-bottom: none;
+  background-image: linear-gradient(to right, transparent, var(--accent) 15%, var(--accent) 85%, transparent);
+  background-repeat: no-repeat;
+  background-position: bottom;
+  background-size: 100% 2px;
   margin-bottom: 0.6rem;
 }
 
