@@ -146,15 +146,18 @@ function initSettings() {
       if (cur < FONT_SIZES.length - 1) { const ns = FONT_SIZES[cur + 1]; saveFontSize(ns); applyFontSize(ns); rebuild(); announce(`글자 크기 ${ns}px`); }
     });
 
-    sizeRow.appendChild(btnMinus);
-    sizeRow.appendChild(btnReset);
-    sizeRow.appendChild(btnPlus);
+    const sizeGroup = el("div", { className: "btn-group" });
+    sizeGroup.appendChild(btnMinus);
+    sizeGroup.appendChild(btnReset);
+    sizeGroup.appendChild(btnPlus);
+    sizeRow.appendChild(sizeGroup);
     popover.appendChild(sizeRow);
 
     // Theme
     const themeRow = el("div", { className: "settings-row" });
     themeRow.appendChild(el("span", { className: "settings-label" }, "테마"));
     const current = loadTheme();
+    const themeGroup = el("div", { className: "btn-group" });
     for (const [value, label] of [["light", "라이트"], ["system", "시스템"], ["dark", "다크"]]) {
       const btn = el("button", { className: "toolbar-btn", "aria-pressed": String(current === value) }, label);
       btn.addEventListener("click", () => {
@@ -163,14 +166,16 @@ function initSettings() {
         rebuild();
         announce(label + " 테마");
       });
-      themeRow.appendChild(btn);
+      themeGroup.appendChild(btn);
     }
+    themeRow.appendChild(themeGroup);
     popover.appendChild(themeRow);
 
     // About
     const aboutRow = el("div", { className: "settings-about" });
-    aboutRow.appendChild(document.createTextNode("대한성서공회 허락 하에 대한성공회 사용 · "));
-    aboutRow.appendChild(el("a", { href: "https://github.com/anglican-kr/common-bible", target: "_blank", rel: "noopener" }, "공동번역성서 1.0"));
+    aboutRow.appendChild(document.createTextNode("대한성서공회 허락 하에 대한성공회 사용"));
+    aboutRow.appendChild(el("br"));
+    aboutRow.appendChild(el("a", { href: "https://github.com/anglican-kr/common-bible", target: "_blank", rel: "noopener" }, "공동번역성서 1.0.0"));
     popover.appendChild(aboutRow);
   }
 
@@ -478,6 +483,12 @@ function renderBookList(books) {
   }
 }
 
+function clearReadingPosition() {
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch (_) {}
+}
+
 function renderResumeBanner(books) {
   const pos = loadReadingPosition();
   if (!pos) return;
@@ -488,7 +499,23 @@ function renderResumeBanner(books) {
   const label = isPrologue
     ? `이어읽기: ${lastBook.name_ko} 머리말`
     : `이어읽기: ${lastBook.name_ko} ${pos.chapter}장`;
-  $app.appendChild(el("a", { className: "resume-banner", href }, label));
+
+  const wrapper = el("div", { className: "resume-banner" });
+  wrapper.appendChild(el("a", { className: "resume-banner-link", href }, label));
+
+  const closeBtn = el("button", {
+    className: "resume-banner-close",
+    type: "button",
+    "aria-label": "이어읽기 기록 삭제",
+  }, "\u00d7");
+  closeBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    clearReadingPosition();
+    wrapper.remove();
+  });
+  wrapper.appendChild(closeBtn);
+
+  $app.appendChild(wrapper);
 }
 
 function renderDivisionList(books, division) {
