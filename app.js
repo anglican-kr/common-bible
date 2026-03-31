@@ -175,7 +175,7 @@ function initSettings() {
     const aboutRow = el("div", { className: "settings-about" });
     aboutRow.appendChild(document.createTextNode("대한성서공회 허락 하에 대한성공회 사용"));
     aboutRow.appendChild(el("br"));
-    aboutRow.appendChild(el("a", { href: "https://github.com/anglican-kr/common-bible", target: "_blank", rel: "noopener" }, "공동번역성서 1.0.1"));
+    aboutRow.appendChild(el("a", { href: "https://github.com/anglican-kr/common-bible", target: "_blank", rel: "noopener" }, "공동번역성서 1.0.2"));
     popover.appendChild(aboutRow);
   }
 
@@ -471,15 +471,15 @@ function renderBookList(books) {
     const list = grouped[div];
     if (!list) continue;
 
-    const section = el("section", { className: "division" });
-    section.appendChild(el("h2", { className: "division-title" }, DIVISION_LABELS[div]));
+    const details = el("details", { className: "division", open: "" });
+    details.appendChild(el("summary", { className: "division-title" }, DIVISION_LABELS[div]));
 
     const ul = el("ul", { className: "book-list", role: "list" });
     for (const b of list) {
       ul.appendChild(el("li", null, el("a", { href: `#/${b.id}` }, b.name_ko)));
     }
-    section.appendChild(ul);
-    $app.appendChild(section);
+    details.appendChild(ul);
+    $app.appendChild(details);
   }
 }
 
@@ -527,15 +527,15 @@ function renderDivisionList(books, division) {
   renderResumeBanner(books);
 
   const list = books.filter((b) => b.division === division);
-  const section = el("section", { className: "division" });
-  section.appendChild(el("h2", { className: "division-title" }, DIVISION_LABELS[division]));
+  const details = el("details", { className: "division", open: "" });
+  details.appendChild(el("summary", { className: "division-title" }, DIVISION_LABELS[division]));
 
   const ul = el("ul", { className: "book-list", role: "list" });
   for (const b of list) {
     ul.appendChild(el("li", null, el("a", { href: `#/${b.id}` }, b.name_ko)));
   }
-  section.appendChild(ul);
-  $app.appendChild(section);
+  details.appendChild(ul);
+  $app.appendChild(details);
 }
 
 function renderChapterList(book, books) {
