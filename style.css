@@ -909,6 +909,21 @@ mark.search-highlight {
   display: inline;
 }
 
+.verse.verse-poetry {
+  display: block;
+  padding-left: 2rem;
+}
+
+.verse.verse-poetry .verse-num {
+  display: inline-block;
+  box-sizing: border-box;
+  margin-left: -2rem;
+  width: 2rem;
+  padding-right: 0.4rem;
+  text-align: right;
+  margin-right: 0;
+}
+
 .verse-num {
   font-family: "Noto Sans KR", sans-serif;
   font-size: 0.7rem;
@@ -926,6 +941,15 @@ mark.search-highlight {
 .paragraph-break {
   display: block;
   margin-top: 0.9em;
+}
+
+.hemistich-break {
+  display: block;
+}
+
+.stanza-break {
+  display: block;
+  margin-top: 1.5em;
 }
 
 .pilcrow {

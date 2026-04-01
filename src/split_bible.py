@@ -56,6 +56,8 @@ def split_chapters(chapters, output_dir):
         verses = []
         for v in ch["verses"]:
             verse = {"number": v["number"], "text": v["text"], "has_paragraph": v["has_paragraph"]}
+            if v.get("stanza_break"):
+                verse["stanza_break"] = True
             for field in ("chapter_ref", "range_end", "part", "alt_ref"):
                 if v.get(field) is not None:
                     verse[field] = v[field]

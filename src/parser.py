@@ -16,6 +16,7 @@ class Verse:
     number: int
     text: str
     has_paragraph: bool = False
+    stanza_break: bool = False         # stanza break precedes this verse (ADR-006)
     chapter_ref: Optional[int] = None  # set when verse physically appears in a different chapter
     range_end: Optional[int] = None    # set for merged verse ranges (e.g. 17-18)
     part: Optional[str] = None         # set for split verses relocated by scholars (e.g. "a", "b")
@@ -137,10 +138,12 @@ class BibleParser:
         current_chapter = None
         current_verses = []
         opened_chapter_keys: set = set()  # (book_abbr, chapter_num) pairs seen so far
+        pending_blank_line = False  # tracks single blank line for stanza breaks (ADR-006)
 
         for line in content.split('\n'):
             match = self.chapter_pattern.match(line)
             if match:
+                pending_blank_line = False
                 book_abbr = match.group(1)
                 chapter_num = int(match.group(2))
                 verse_num = int(match.group(3))
@@ -182,12 +185,32 @@ class BibleParser:
                     if verse:
                         current_verses.append(verse)
 
+            elif current_chapter and not line.strip():
+                # Blank line within a chapter — may be stanza break (ADR-006)
+                # or paragraph continuation separator (ADR-003)
+                pending_blank_line = True
+
+            elif current_chapter and line.startswith('  ') and current_verses:
+                # 2-space indented line = hemistich continuation (ADR-006)
+                stripped = line.strip()
+                if pending_blank_line:
+                    # Mid-verse stanza break: blank line + indented continuation
+                    current_verses[-1].text += '\n\n' + stripped
+                    pending_blank_line = False
+                else:
+                    # Regular hemistich continuation
+                    current_verses[-1].text += '\n' + stripped
+
             elif current_chapter and line.strip():
+                was_blank = pending_blank_line
+                pending_blank_line = False
                 verse = self._parse_verse_line(line)
                 if verse:
+                    if was_blank:
+                        verse.stanza_break = True
                     current_verses.append(verse)
                 elif current_verses and not line.strip()[0].isdigit():
-                    # Paragraph continuation of the previous verse:
+                    # Paragraph continuation of the previous verse (ADR-003):
                     # either a ¶-prefixed line or a plain line after a blank line
                     current_verses[-1].text += '\n' + line.strip()
                     current_verses[-1].has_paragraph = True
@@ -302,6 +325,7 @@ class BibleParser:
                     number=verse_data['number'],
                     text=verse_data['text'],
                     has_paragraph=verse_data['has_paragraph'],
+                    stanza_break=verse_data.get('stanza_break', False),
                     chapter_ref=verse_data.get('chapter_ref'),
                     range_end=verse_data.get('range_end'),
                     part=verse_data.get('part'),
