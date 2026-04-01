@@ -175,7 +175,7 @@ function initSettings() {
     const aboutRow = el("div", { className: "settings-about" });
     aboutRow.appendChild(document.createTextNode("대한성서공회 허락 하에 대한성공회 사용"));
     aboutRow.appendChild(el("br"));
-    aboutRow.appendChild(el("a", { href: "https://github.com/anglican-kr/common-bible", target: "_blank", rel: "noopener" }, "공동번역성서 1.0.2"));
+    aboutRow.appendChild(el("a", { href: "https://github.com/anglican-kr/common-bible", target: "_blank", rel: "noopener" }, "공동번역성서 1.0.3"));
     popover.appendChild(aboutRow);
   }
 
@@ -596,9 +596,23 @@ function renderChapter(data, book, opts) {
   const article = el("article", { className: "chapter-text", lang: "ko" });
   let isFirst = true;
 
+  let inPoetryStanza = false;
   for (const v of data.verses) {
-    if (v.has_paragraph && !isFirst) {
-      article.appendChild(el("span", { className: "paragraph-break", role: "presentation" }));
+    const isPoetry = v.text.includes("\n");
+    // Enter poetry context on any poetry verse; exit when a prose paragraph marker appears
+    if (isPoetry) inPoetryStanza = true;
+    else if (v.has_paragraph) inPoetryStanza = false;
+    const renderAsPoetry = isPoetry || inPoetryStanza;
+
+    // Inter-verse break: poetry uses hemistich/stanza breaks, prose uses paragraph-break
+    if (!isFirst) {
+      if (v.stanza_break) {
+        article.appendChild(el("span", { className: "stanza-break", role: "presentation" }));
+      } else if (renderAsPoetry) {
+        article.appendChild(el("span", { className: "hemistich-break", role: "presentation" }));
+      } else if (v.has_paragraph) {
+        article.appendChild(el("span", { className: "paragraph-break", role: "presentation" }));
+      }
     }
 
     const verseLabel = formatVerseLabel(v);
@@ -606,6 +620,7 @@ function renderChapter(data, book, opts) {
     if (v.part) verseId += v.part;
     if (v.alt_ref != null) verseId += `_${v.alt_ref}`;
     let classes = v.chapter_ref ? "verse verse-cross-ref" : "verse";
+    if (renderAsPoetry) classes += " verse-poetry";
 
     // Verse highlight (from verse reference navigation)
     const vn = v.number;
@@ -622,7 +637,7 @@ function renderChapter(data, book, opts) {
     span.appendChild(sup);
     span.appendChild(document.createTextNode("\u2060")); // word joiner: prevent line break after verse number
 
-    // Render text, handling ¶ marks and mid-verse paragraph breaks (\n¶)
+    // Render text, handling ¶ marks and intra-verse line/stanza breaks
     const segments = v.text.split("\n");
     const hasSplit = segments.length > 1;
 
@@ -639,13 +654,23 @@ function renderChapter(data, book, opts) {
     appendSegText(span, segments[0]);
     article.appendChild(span);
 
-    // Mid-verse continuation paragraphs
+    // Intra-verse continuation: hemistich breaks (\n) and mid-verse stanza breaks (\n\n)
     const partLetters = "bcdefgh";
+    let partIdx = 0;
     for (let pi = 1; pi < segments.length; pi++) {
-      article.appendChild(el("span", { className: "paragraph-break", role: "presentation" }));
-      const cont = el("span", { className: classes, "data-vref": `${verseLabel}${partLetters[pi - 1]}` });
-      appendSegText(cont, segments[pi]);
-      article.appendChild(cont);
+      const seg = segments[pi];
+      if (seg === "") {
+        // Empty segment from \n\n = mid-verse stanza break
+        article.appendChild(el("span", { className: "stanza-break", role: "presentation" }));
+      } else {
+        article.appendChild(el("span", {
+          className: isPoetry ? "hemistich-break" : "paragraph-break",
+          role: "presentation"
+        }));
+        const cont = el("span", { className: classes, "data-vref": `${verseLabel}${partLetters[partIdx++]}` });
+        appendSegText(cont, seg);
+        article.appendChild(cont);
+      }
     }
 
     isFirst = false;

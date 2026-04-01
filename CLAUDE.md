@@ -53,6 +53,50 @@ data/common-bible-kr.txt
                       → data/books.json
 ```
 
+### 전체 재생성 (원본 텍스트 변경 시)
+
+```bash
+# 프로젝트 루트에서 실행
+python src/parser.py data/common-bible-kr.txt --save-json output/parsed_bible.json
+python src/split_bible.py
+```
+
+### 특정 책만 교체 (부분 작업 시)
+
+`split_bible.py`를 거치지 않고 파서로 직접 해당 책의 장별 JSON을 덮어쓴다.
+
+```python
+from src.parser import BibleParser
+import json, os
+
+parser = BibleParser('data/book_mappings.json')
+chapters = parser.parse_file('data/common-bible-psalm.txt')  # 작업 파일
+
+for ch in chapters:
+    verses = []
+    for v in ch.verses:
+        verse = {'number': v.number, 'text': v.text, 'has_paragraph': v.has_paragraph}
+        if v.stanza_break:
+            verse['stanza_break'] = True
+        for field, val in [('chapter_ref', v.chapter_ref), ('range_end', v.range_end),
+                           ('part', v.part), ('alt_ref', v.alt_ref)]:
+            if val is not None:
+                verse[field] = val
+        verses.append(verse)
+    data = {'book_id': ch.book_id, 'book_name_ko': ch.book_name_ko,
+            'book_name_en': ch.book_name_en, 'chapter': ch.chapter_number, 'verses': verses}
+    with open(f'data/bible/{ch.book_id}-{ch.chapter_number}.json', 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False)
+```
+
+### split_bible.py 출력 상세
+
+| 출력 파일 | 설명 |
+|-----------|------|
+| `data/bible/{book_id}-{chapter}.json` | 장별 성경 데이터. `null` 필드 생략, `stanza_break`는 `true`일 때만 포함 |
+| `data/bible/sir-prologue.json` | 집회서 머리말. 원본 텍스트에서 직접 추출 (ADR-002) |
+| `data/books.json` | 73권 메타데이터. 책 순서, 장 수, `has_prologue` 플래그 포함 |
+
 ## 장기 로드맵
 
 1. Phase 1: 성경 읽기 PWA (현재)
