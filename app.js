@@ -175,7 +175,7 @@ function initSettings() {
     const aboutRow = el("div", { className: "settings-about" });
     aboutRow.appendChild(document.createTextNode("대한성서공회 허락 하에 대한성공회 사용"));
     aboutRow.appendChild(el("br"));
-    aboutRow.appendChild(el("a", { href: "https://github.com/anglican-kr/common-bible", target: "_blank", rel: "noopener" }, "공동번역성서 1.0.3"));
+    aboutRow.appendChild(el("a", { href: "https://github.com/anglican-kr/common-bible", target: "_blank", rel: "noopener" }, "공동번역성서 1.0.4"));
     popover.appendChild(aboutRow);
   }
 
@@ -598,7 +598,7 @@ function renderChapter(data, book, opts) {
 
   let inPoetryStanza = false;
   for (const v of data.verses) {
-    const isPoetry = v.text.includes("\n");
+    const isPoetry = /\n(?!¶)/.test(v.text);
     // Enter poetry context on any poetry verse; exit when a prose paragraph marker appears
     if (isPoetry) inPoetryStanza = true;
     else if (v.has_paragraph) inPoetryStanza = false;
