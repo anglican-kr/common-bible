@@ -919,9 +919,12 @@ mark.search-highlight {
   box-sizing: border-box;
   margin-left: -2rem;
   width: 2rem;
-  padding-right: 0.4rem;
-  text-align: right;
+  text-align: left;
   margin-right: 0;
+}
+
+.verse.verse-poetry .hanging-quote {
+  margin-left: -0.4em;
 }
 
 .verse-num {

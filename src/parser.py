@@ -11,10 +11,17 @@ from dataclasses import dataclass, asdict
 
 
 @dataclass
+class Segment:
+    """절 내부의 산문/운문 구분 단위"""
+    type: str   # "prose" or "poetry"
+    text: str   # prose: single text, poetry: \n for hemistich, \n\n for stanza break
+
+
+@dataclass
 class Verse:
     """절 데이터"""
     number: int
-    text: str
+    segments: List[Segment]
     has_paragraph: bool = False
     stanza_break: bool = False         # stanza break precedes this verse (ADR-006)
     chapter_ref: Optional[int] = None  # set when verse physically appears in a different chapter
@@ -41,7 +48,6 @@ class BibleParser:
 
     def __init__(self, book_mappings_path: str):
         self.book_mappings = self._load_book_mappings(book_mappings_path)
-        self.chapter_pattern = re.compile(r'([가-힣0-9]+)\s+(\d+):(\d+)')
 
     def _load_book_mappings(self, book_mappings_path: str) -> Dict[str, Any]:
         """책 메타데이터 로드"""
@@ -97,208 +103,195 @@ class BibleParser:
 
         return {'by_id': by_id, 'ko_alias_to_id': ko_alias_to_id}
 
-    def _resolve_book(self, token_ko: str) -> Dict[str, str]:
-        """한국어 약칭/이름으로 책 메타 해석."""
+    # --- Markdown (.md) parser ---
+
+    _MD_CHAPTER = re.compile(r'^# (\d+)(장|편)\s*$')
+    _MD_VERSE   = re.compile(r'^\[(\d+)(?:-(\d+))?(?:([a-z]))?(?:_(\d+))?\]\s*(.*)')
+    _MD_BQ      = re.compile(r'^>\s?(.*)')
+
+    def _resolve_book_by_id(self, book_id: str) -> Dict[str, str]:
+        """book_id (e.g. 'gen') 로 책 메타 해석."""
         by_id = self.book_mappings['by_id']
-        ko_map = self.book_mappings['ko_alias_to_id']
-        bid = ko_map.get(token_ko)
-        if not bid:
-            return {'id': token_ko, 'name_ko': token_ko, 'name_en': token_ko, 'division_ko': '', 'division_en': ''}
-        meta = by_id[bid]
+        meta = by_id.get(book_id)
+        if not meta:
+            return {'id': book_id, 'name_ko': book_id, 'name_en': book_id,
+                    'division_ko': '', 'division_en': '', 'book_order': -1}
         return {
-            'id': bid,
+            'id': book_id,
             'name_ko': meta['names'].get('ko', ''),
             'name_en': meta['names'].get('en', ''),
             'division_ko': meta['division'].get('ko', ''),
             'division_en': meta['division'].get('en', ''),
+            'book_order': meta.get('book_order', -1),
         }
 
-    def _get_english_book_name(self, abbr: str) -> str:
-        """약칭으로 영문 이름 반환"""
-        if abbr in self.book_mappings:
-            return self.book_mappings[abbr]['english_name']
-        else:
-            return abbr
+    def parse_md_file(self, file_path: str) -> List[Chapter]:
+        """마크다운 소스 파일을 파싱하여 장 리스트 반환.
 
-    def parse_file(self, file_path: str) -> List[Chapter]:
-        """텍스트 파일을 파싱하여 장 리스트 반환.
-
-        Chapter boundary rule (physical-chapter approach, ADR-002):
-        A new chapter starts only when verse number == 1 AND that
-        (book_abbr, chapter_num) pair has not been seen before, OR when
-        the book changes.  Mid-chapter verse references (e.g. '아모 6:9'
-        inside amos-6) and cross-chapter scholarly relocations (e.g.
-        '이사 41:6' inside isa-40) are kept in the physically enclosing
-        chapter with a chapter_ref annotation.
+        Poetry is identified by blockquote syntax (>).
+        All other text is treated as prose.
         """
         with open(file_path, 'r', encoding='utf-8') as f:
             content = f.read()
 
-        chapters = []
-        current_chapter = None
-        current_verses = []
-        opened_chapter_keys: set = set()  # (book_abbr, chapter_num) pairs seen so far
-        pending_blank_line = False  # tracks single blank line for stanza breaks (ADR-006)
+        book_id = os.path.splitext(os.path.basename(file_path))[0]
+        resolved = self._resolve_book_by_id(book_id)
+
+        chapters: List[Chapter] = []
+        current_chapter: Optional[Chapter] = None
+        current_verses: List[Verse] = []
+        current_verse: Optional[Verse] = None
+        poetry_lines: List[str] = []       # accumulated poetry lines in blockquote
+        in_blockquote = False
+        pending_blank = False
+        pending_stanza_in_bq = False
+
+        def flush_poetry():
+            """Flush accumulated poetry lines as a poetry segment on current_verse."""
+            nonlocal poetry_lines
+            if poetry_lines and current_verse is not None:
+                current_verse.segments.append(
+                    Segment(type="poetry", text='\n'.join(poetry_lines))
+                )
+            poetry_lines = []
+
+        def finalize_verse():
+            """Finalize current_verse: flush poetry, append to current_verses."""
+            nonlocal current_verse
+            if current_verse is not None:
+                flush_poetry()
+                current_verses.append(current_verse)
+                current_verse = None
+
+        def finalize_chapter():
+            """Finalize current chapter: finalize verse, append to chapters."""
+            nonlocal current_chapter, current_verses, in_blockquote
+            finalize_verse()
+            if current_chapter is not None:
+                current_chapter.verses = current_verses
+                chapters.append(current_chapter)
+                current_chapter = None
+                current_verses = []
+            in_blockquote = False
+
+        def make_verse_from_match(m: re.Match, text: str, is_poetry: bool = False) -> Verse:
+            """Create a Verse from a verse marker regex match."""
+            number = int(m.group(1))
+            range_end = int(m.group(2)) if m.group(2) else None
+            part = m.group(3) if m.group(3) else None
+            alt_ref = int(m.group(4)) if m.group(4) else None
+            has_paragraph = '¶' in text if text else False
+            segments: List[Segment] = []
+            if text:
+                segments.append(Segment(
+                    type="poetry" if is_poetry else "prose",
+                    text=text
+                ))
+            return Verse(
+                number=number, segments=segments,
+                has_paragraph=has_paragraph,
+                range_end=range_end, part=part, alt_ref=alt_ref,
+            )
 
         for line in content.split('\n'):
-            match = self.chapter_pattern.match(line)
-            if match:
-                pending_blank_line = False
-                book_abbr = match.group(1)
-                chapter_num = int(match.group(2))
-                verse_num = int(match.group(3))
-                key = (book_abbr, chapter_num)
-
-                is_new_chapter = (
-                    current_chapter is None
-                    or book_abbr != current_chapter.book_abbr
-                    or (key not in opened_chapter_keys and verse_num == 1)
+            # --- Chapter header ---
+            ch_match = self._MD_CHAPTER.match(line)
+            if ch_match:
+                finalize_chapter()
+                pending_blank = False
+                current_chapter = Chapter(
+                    book_id=resolved['id'],
+                    book_name_ko=resolved['name_ko'] or book_id,
+                    book_name_en=resolved['name_en'] or book_id,
+                    book_abbr=book_id,
+                    division_ko=resolved['division_ko'],
+                    division_en=resolved['division_en'],
+                    chapter_number=int(ch_match.group(1)),
+                    verses=[]
                 )
+                current_verses = []
+                continue
 
-                if is_new_chapter:
-                    if current_chapter:
-                        current_chapter.verses = current_verses
-                        chapters.append(current_chapter)
+            if current_chapter is None:
+                continue
 
-                    resolved = self._resolve_book(book_abbr)
-                    current_chapter = Chapter(
-                        book_id=resolved['id'],
-                        book_name_ko=resolved['name_ko'] or book_abbr,
-                        book_name_en=resolved['name_en'] or resolved['id'],
-                        book_abbr=book_abbr,
-                        division_ko=resolved['division_ko'],
-                        division_en=resolved['division_en'],
-                        chapter_number=chapter_num,
-                        verses=[]
-                    )
-                    current_verses = []
-                    opened_chapter_keys.add(key)
+            # --- Blockquote line ---
+            bq_match = self._MD_BQ.match(line)
+            if bq_match:
+                bq_content = bq_match.group(1).strip()
 
-                    verse = self._extract_verse_from_chapter_line(line, match, None)
-                    if verse:
-                        current_verses.append(verse)
+                # Empty blockquote = stanza break within blockquote
+                if not bq_content:
+                    pending_stanza_in_bq = True
+                    continue
+
+                # Check for verse marker inside blockquote: > [N] text
+                verse_in_bq = self._MD_VERSE.match(bq_content)
+                if verse_in_bq:
+                    # Finalize previous verse (flush its poetry)
+                    finalize_verse()
+                    text_after = verse_in_bq.group(5).strip() if verse_in_bq.group(5) else ''
+                    current_verse = make_verse_from_match(verse_in_bq, '', is_poetry=True)
+                    if pending_stanza_in_bq:
+                        current_verse.stanza_break = True
+                        pending_stanza_in_bq = False
+                    # Start accumulating poetry lines
+                    if text_after:
+                        poetry_lines = [text_after]
+                    in_blockquote = True
+                    pending_blank = False
+                    continue
+
+                # Regular blockquote content (no verse marker)
+                if not in_blockquote:
+                    in_blockquote = True
+
+                if pending_stanza_in_bq:
+                    # Insert mid-verse stanza break
+                    if poetry_lines:
+                        poetry_lines.append('')  # empty string → \n\n when joined
+                        poetry_lines.append(bq_content)
+                    else:
+                        poetry_lines.append(bq_content)
+                    pending_stanza_in_bq = False
                 else:
-                    # Same-chapter continuation or cross-chapter scholarly relocation
-                    verse = self._extract_verse_from_chapter_line(
-                        line, match, current_chapter.chapter_number
-                    )
-                    if verse:
-                        current_verses.append(verse)
+                    poetry_lines.append(bq_content)
 
-            elif current_chapter and not line.strip():
-                # Blank line within a chapter — may be stanza break (ADR-006)
-                # or paragraph continuation separator (ADR-003)
-                pending_blank_line = True
+                pending_blank = False
+                continue
 
-            elif current_chapter and line.startswith('  ') and current_verses:
-                # 2-space indented line = hemistich continuation (ADR-006)
-                stripped = line.strip()
-                if pending_blank_line:
-                    # Mid-verse stanza break: blank line + indented continuation
-                    current_verses[-1].text += '\n\n' + stripped
-                    pending_blank_line = False
-                else:
-                    # Regular hemistich continuation
-                    current_verses[-1].text += '\n' + stripped
+            # --- Blank line ---
+            if not line.strip():
+                if in_blockquote:
+                    # End blockquote: flush poetry to current verse
+                    flush_poetry()
+                    in_blockquote = False
+                pending_blank = True
+                continue
 
-            elif current_chapter and line.strip():
-                was_blank = pending_blank_line
-                pending_blank_line = False
-                verse = self._parse_verse_line(line)
-                if verse:
-                    if was_blank:
-                        verse.stanza_break = True
-                    current_verses.append(verse)
-                elif current_verses and not line.strip()[0].isdigit():
-                    # Paragraph continuation of the previous verse (ADR-003):
-                    # either a ¶-prefixed line or a plain line after a blank line
-                    current_verses[-1].text += '\n' + line.strip()
-                    current_verses[-1].has_paragraph = True
+            # --- Verse marker outside blockquote ---
+            verse_match = self._MD_VERSE.match(line)
+            if verse_match:
+                finalize_verse()
+                text_after = verse_match.group(5).strip() if verse_match.group(5) else ''
+                current_verse = make_verse_from_match(verse_match, text_after, is_poetry=False)
+                if pending_blank:
+                    current_verse.stanza_break = True
+                pending_blank = False
+                continue
 
-        if current_chapter:
-            current_chapter.verses = current_verses
-            chapters.append(current_chapter)
+            # --- Prose continuation (plain text, no verse marker, not blockquote) ---
+            if current_verse is not None:
+                text = line.strip()
+                current_verse.segments.append(Segment(type="prose", text=text))
+                if '¶' in text:
+                    current_verse.has_paragraph = True
+                pending_blank = False
+
+        # Finalize remaining
+        finalize_chapter()
 
         return chapters
-
-    # Patterns for non-standard verse tokens
-    _RANGE_PAT = re.compile(r'^(\d+)-(\d+)$')     # 17-18
-    _SUB_PAT   = re.compile(r'^(\d+)([a-z])$')    # 2a, 3b
-    _UNDER_PAT = re.compile(r'^(\d+)_(\d+)$')     # 1_2, 96_29
-
-    def _parse_verse_line(self, line: str) -> Optional[Verse]:
-        """절 라인 파싱"""
-        parts = line.strip().split(' ', 1)
-        if len(parts) < 2:
-            return None
-
-        token, text = parts[0], parts[1]
-        has_paragraph = '¶' in text
-
-        if token.isdigit():
-            return Verse(number=int(token), text=text, has_paragraph=has_paragraph)
-
-        m = self._RANGE_PAT.match(token)
-        if m:
-            return Verse(number=int(m.group(1)), text=text, has_paragraph=has_paragraph,
-                         range_end=int(m.group(2)))
-
-        m = self._SUB_PAT.match(token)
-        if m:
-            return Verse(number=int(m.group(1)), text=text, has_paragraph=has_paragraph,
-                         part=m.group(2))
-
-        m = self._UNDER_PAT.match(token)
-        if m:
-            return Verse(number=int(m.group(1)), text=text, has_paragraph=has_paragraph,
-                         alt_ref=int(m.group(2)))
-
-        return None
-
-    def _extract_verse_from_chapter_line(
-        self, line: str, match: re.Match, current_chapter_num: Optional[int]
-    ) -> Optional[Verse]:
-        """Extract a verse from a line that begins with the book+chapter:verse pattern.
-
-        current_chapter_num: the chapter number of the enclosing chapter object.
-            Pass None when this verse IS the chapter opener (no cross-chapter annotation needed).
-        """
-        chapter_num = int(match.group(2))
-        verse_num = int(match.group(3))
-        remaining_text = line[len(match.group(0)):].strip()
-
-        # Detect part suffix: single letter before text (e.g. "욥기 38:37b 하늘에서..." → part='b')
-        part = None
-        part_suffix = re.match(r'^([a-z])\s+(.*)', remaining_text, re.DOTALL)
-        if part_suffix:
-            part = part_suffix.group(1)
-            remaining_text = part_suffix.group(2).strip()
-
-        # Detect dual-numbering suffix: _N (e.g. "에스 1:1_1 text")
-        alt_ref = None
-        alt_suffix = re.match(r'^_(\d+)\s*(.*)', remaining_text, re.DOTALL)
-        if alt_suffix:
-            alt_ref = int(alt_suffix.group(1))
-            remaining_text = alt_suffix.group(2).strip()
-
-        if not remaining_text:
-            return None
-
-        has_paragraph = '¶' in remaining_text
-        chapter_ref = (
-            chapter_num
-            if current_chapter_num is not None and chapter_num != current_chapter_num
-            else None
-        )
-
-        return Verse(
-            number=verse_num,
-            text=remaining_text,
-            has_paragraph=has_paragraph,
-            chapter_ref=chapter_ref,
-            alt_ref=alt_ref,
-            part=part,
-        )
 
     def save_to_json(self, chapters: List[Chapter], output_path: str) -> None:
         """파싱된 데이터를 JSON 파일로 저장"""
@@ -320,19 +313,19 @@ class BibleParser:
 
         chapters = []
         for chapter_data in data:
-            verses = [
-                Verse(
+            verses = []
+            for verse_data in chapter_data['verses']:
+                segments = [Segment(type=s['type'], text=s['text']) for s in verse_data['segments']]
+                verses.append(Verse(
                     number=verse_data['number'],
-                    text=verse_data['text'],
-                    has_paragraph=verse_data['has_paragraph'],
+                    segments=segments,
+                    has_paragraph=verse_data.get('has_paragraph', False),
                     stanza_break=verse_data.get('stanza_break', False),
                     chapter_ref=verse_data.get('chapter_ref'),
                     range_end=verse_data.get('range_end'),
                     part=verse_data.get('part'),
                     alt_ref=verse_data.get('alt_ref'),
-                )
-                for verse_data in chapter_data['verses']
-            ]
+                ))
 
             if 'book_id' in chapter_data:
                 chapter = Chapter(
@@ -361,86 +354,46 @@ class BibleParser:
         print(f"{json_path}에서 {len(chapters)}개 장을 로드했습니다.")
         return chapters
 
-    def parse_file_with_cache(self, file_path: str, cache_path: str = "output/parsed_bible.json") -> List[Chapter]:
-        """캐시 파일이 있으면 로드, 없으면 파싱 후 캐시 저장"""
-        # 캐시 파일이 존재하고 원본보다 최신이면 캐시 사용
-        if os.path.exists(cache_path) and os.path.exists(file_path):
-            cache_mtime = os.path.getmtime(cache_path)
-            source_mtime = os.path.getmtime(file_path)
-
-            if cache_mtime > source_mtime:
-                print(f"캐시 파일 {cache_path}를 사용합니다.")
-                return self.load_from_json(cache_path)
-
-        # 캐시가 없거나 구버전이면 새로 파싱
-        print(f"텍스트 파일 {file_path}를 파싱합니다...")
-        chapters = self.parse_file(file_path)
-
-        # 파싱 결과를 캐시에 저장
-        self.save_to_json(chapters, cache_path)
-
-        return chapters
 
 
 def main():
-    """테스트를 위한 메인 함수"""
+    """CLI: .md 소스 파일을 파싱하여 JSON으로 저장"""
     import sys
+    import glob as glob_mod
 
     if len(sys.argv) < 2:
-        print(
-            "사용법: python parser.py <bible_text_file> [--save-json output_path] [--use-cache]")
+        print("사용법: python parser.py <source.md | source_dir/> [--save-json output_path]")
         print("예시:")
-        print("  python parser.py data/common-bible-kr.txt")
-        print("  python parser.py data/common-bible-kr.txt --save-json output/bible.json")
-        print("  python parser.py data/common-bible-kr.txt --use-cache")
+        print("  python parser.py data/source/gen.md")
+        print("  python parser.py data/source/ --save-json output/parsed_bible.json")
         sys.exit(1)
 
-    text_file = sys.argv[1]
-    save_json = False
-    use_cache = False
-    output_path = "output/parsed_bible.json"
-
-    # 명령행 인수 처리
-    i = 2
-    while i < len(sys.argv):
-        if sys.argv[i] == "--save-json" and i + 1 < len(sys.argv):
-            save_json = True
+    source = sys.argv[1]
+    output_path = None
+    for i, arg in enumerate(sys.argv[2:], 2):
+        if arg == "--save-json" and i + 1 < len(sys.argv):
             output_path = sys.argv[i + 1]
-            i += 2
-        elif sys.argv[i] == "--use-cache":
-            use_cache = True
-            i += 1
-        else:
-            i += 1
 
-    # 파서 초기화
     parser = BibleParser('data/book_mappings.json')
 
-    # 파일 파싱 (캐시 사용 여부에 따라)
-    if use_cache:
-        chapters = parser.parse_file_with_cache(text_file, output_path)
+    # Collect .md files
+    if os.path.isdir(source):
+        md_files = sorted(glob_mod.glob(os.path.join(source, '*.md')))
     else:
-        chapters = parser.parse_file(text_file)
-        if save_json:
-            parser.save_to_json(chapters, output_path)
+        md_files = [source]
 
-    # 결과 출력
-    print(f"\n총 {len(chapters)}개의 장을 파싱했습니다.")
+    all_chapters = []
+    for md_path in md_files:
+        chapters = parser.parse_md_file(md_path)
+        total_v = sum(len(ch.verses) for ch in chapters)
+        book = os.path.splitext(os.path.basename(md_path))[0]
+        print(f"  {book}: {len(chapters)}장, {total_v}절")
+        all_chapters.extend(chapters)
 
-    # 처음 몇 개 장의 정보 출력
-    for i, chapter in enumerate(chapters[:3]):
-        print(
-            f"\n[{i+1}] {chapter.book_name_ko} {chapter.chapter_number}장 (id={chapter.book_id})")
-        print(
-            f"    약칭: {chapter.book_abbr} / 구분: {chapter.division_ko or '-'}")
-        print(f"    절 수: {len(chapter.verses)}")
-        if chapter.verses:
-            print(
-                f"    첫 절: {chapter.verses[0].number}. {chapter.verses[0].text[:50]}...")
+    print(f"\n총 {len(all_chapters)}개 장 파싱 완료")
 
-    print(f"\n✅ 파싱 완료! 다른 프로그램에서 재사용하려면:")
-    if save_json or use_cache:
-        print(f"   parser.load_from_json('{output_path}') 사용")
+    if output_path:
+        parser.save_to_json(all_chapters, output_path)
 
 
 if __name__ == "__main__":

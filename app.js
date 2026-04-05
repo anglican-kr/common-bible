@@ -595,22 +595,21 @@ function renderChapter(data, book, opts) {
 
   const article = el("article", { className: "chapter-text", lang: "ko" });
   let isFirst = true;
+  let prevVerseEndType = null;
 
-  let inPoetryStanza = false;
   for (const v of data.verses) {
-    const isPoetry = /\n(?!¶)/.test(v.text);
-    // Enter poetry context on any poetry verse; exit when a prose paragraph marker appears
-    if (isPoetry) inPoetryStanza = true;
-    else if (v.has_paragraph) inPoetryStanza = false;
-    const renderAsPoetry = isPoetry || inPoetryStanza;
+    const segs = v.segments || [{ type: "prose", text: v.text || "" }];
 
-    // Inter-verse break: poetry uses hemistich/stanza breaks, prose uses paragraph-break
+    // Inter-verse break
+    // hemistich-break (no gap): only when both prev and current are poetry (stanza continuation)
+    // paragraph-break (gap): prose→poetry transition, or ¶ marker
+    const startsWithPoetry = segs[0]?.type === "poetry";
     if (!isFirst) {
       if (v.stanza_break) {
         article.appendChild(el("span", { className: "stanza-break", role: "presentation" }));
-      } else if (renderAsPoetry) {
+      } else if (startsWithPoetry && prevVerseEndType === "poetry") {
         article.appendChild(el("span", { className: "hemistich-break", role: "presentation" }));
-      } else if (v.has_paragraph) {
+      } else if (startsWithPoetry || v.has_paragraph) {
         article.appendChild(el("span", { className: "paragraph-break", role: "presentation" }));
       }
     }
@@ -619,27 +618,16 @@ function renderChapter(data, book, opts) {
     let verseId = `v${v.number}`;
     if (v.part) verseId += v.part;
     if (v.alt_ref != null) verseId += `_${v.alt_ref}`;
-    let classes = v.chapter_ref ? "verse verse-cross-ref" : "verse";
-    if (renderAsPoetry) classes += " verse-poetry";
+    const baseClasses = v.chapter_ref ? "verse verse-cross-ref" : "verse";
 
     // Verse highlight (from verse reference navigation)
     const vn = v.number;
     const isHighlightedVerse = hlVerse && vn >= hlVerse && vn <= (hlVerseEnd || hlVerse);
-    if (isHighlightedVerse) classes += " verse-highlight";
-
-    const span = el("span", { className: classes, id: verseId });
 
     // Verse number (rendered via CSS ::before to exclude from clipboard)
     let dataV = verseLabel;
     if (v.chapter_ref) dataV += `(${v.chapter_ref}장)`;
     if (v.alt_ref != null) dataV += `(${v.alt_ref})`;
-    const sup = el("sup", { className: "verse-num", "aria-hidden": "true", "data-v": dataV });
-    span.appendChild(sup);
-    span.appendChild(document.createTextNode("\u2060")); // word joiner: prevent line break after verse number
-
-    // Render text, handling ¶ marks and intra-verse line/stanza breaks
-    const segments = v.text.split("\n");
-    const hasSplit = segments.length > 1;
 
     function appendSegText(target, raw) {
       const hasPilcrow = raw.startsWith("¶");
@@ -650,29 +638,70 @@ function renderChapter(data, book, opts) {
       appendTextWithHighlight(target, textContent + " ", hlQuery);
     }
 
-    span.setAttribute("data-vref", hasSplit ? `${verseLabel}a` : verseLabel);
-    appendSegText(span, segments[0]);
-    article.appendChild(span);
-
-    // Intra-verse continuation: hemistich breaks (\n) and mid-verse stanza breaks (\n\n)
-    const partLetters = "bcdefgh";
+    // Count total lines across all segments to determine if multi-part
+    const totalLines = segs.reduce((n, s) => n + s.text.split("\n").filter(l => l !== "").length, 0);
+    const isMultiPart = totalLines > 1;
+    const partLetters = "bcdefghijklmnop";
     let partIdx = 0;
-    for (let pi = 1; pi < segments.length; pi++) {
-      const seg = segments[pi];
-      if (seg === "") {
-        // Empty segment from \n\n = mid-verse stanza break
-        article.appendChild(el("span", { className: "stanza-break", role: "presentation" }));
-      } else {
-        article.appendChild(el("span", {
-          className: isPoetry ? "hemistich-break" : "paragraph-break",
-          role: "presentation"
-        }));
-        const cont = el("span", { className: classes, "data-vref": `${verseLabel}${partLetters[partIdx++]}` });
-        appendSegText(cont, seg);
-        article.appendChild(cont);
+    let isFirstLine = true;
+    let prevSegType = null;
+
+    for (const seg of segs) {
+      const isPoetry = seg.type === "poetry";
+      const isSegChange = prevSegType !== null && prevSegType !== seg.type;
+      const lines = seg.text.split("\n");
+
+      for (let li = 0; li < lines.length; li++) {
+        const line = lines[li];
+
+        if (line === "") {
+          // Empty line from \n\n = mid-verse stanza break
+          article.appendChild(el("span", { className: "stanza-break", role: "presentation" }));
+          continue;
+        }
+
+        // Break before non-first lines
+        if (!isFirstLine) {
+          const breakClass = (isSegChange && li === 0) ? "paragraph-break"
+            : isPoetry ? "hemistich-break" : "paragraph-break";
+          article.appendChild(el("span", {
+            className: breakClass,
+            role: "presentation"
+          }));
+        }
+
+        let classes = baseClasses;
+        if (isPoetry) classes += " verse-poetry";
+        if (isHighlightedVerse) classes += " verse-highlight";
+
+        const span = el("span", { className: classes });
+        if (isFirstLine) {
+          span.id = verseId;
+          const sup = el("sup", { className: "verse-num", "aria-hidden": "true", "data-v": dataV });
+          span.appendChild(sup);
+          span.appendChild(document.createTextNode("\u2060"));
+        }
+
+        const vref = isFirstLine && !isMultiPart
+          ? verseLabel
+          : isFirstLine
+            ? `${verseLabel}a`
+            : `${verseLabel}${partLetters[partIdx++]}`;
+        span.setAttribute("data-vref", vref);
+        // Hanging punctuation: pull leading quote outside the indent
+        if (isPoetry && (line[0] === '"' || line[0] === "'")) {
+          span.appendChild(el("span", { className: "hanging-quote" }, line[0]));
+          appendSegText(span, line.slice(1));
+        } else {
+          appendSegText(span, line);
+        }
+        article.appendChild(span);
+        isFirstLine = false;
       }
+      prevSegType = seg.type;
     }
 
+    prevVerseEndType = segs[segs.length - 1]?.type;
     isFirst = false;
   }
 

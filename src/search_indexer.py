@@ -82,7 +82,11 @@ def main():
         ch = data["chapter"]
 
         for v in data["verses"]:
-            text = clean_text(v["text"])
+            # Support both old 'text' format and new 'segments' format
+            if "segments" in v:
+                text = clean_text(" ".join(s["text"] for s in v["segments"]))
+            else:
+                text = clean_text(v["text"])
             if not text:
                 continue
             verses.append({

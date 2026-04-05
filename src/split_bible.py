@@ -55,7 +55,16 @@ def split_chapters(chapters, output_dir):
         # Omit null chapter_ref to keep verse objects lean
         verses = []
         for v in ch["verses"]:
-            verse = {"number": v["number"], "text": v["text"], "has_paragraph": v["has_paragraph"]}
+            # Support both old 'text' format and new 'segments' format
+            if "segments" in v:
+                segments = [{"type": s["type"], "text": s["text"]} for s in v["segments"]]
+            else:
+                text = v["text"]
+                seg_type = "poetry" if '\n' in text and not text.split('\n')[1].startswith('¶') else "prose"
+                segments = [{"type": seg_type, "text": text}]
+            verse = {"number": v["number"], "segments": segments}
+            if v.get("has_paragraph"):
+                verse["has_paragraph"] = True
             if v.get("stanza_break"):
                 verse["stanza_break"] = True
             for field in ("chapter_ref", "range_end", "part", "alt_ref"):

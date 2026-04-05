@@ -1,5 +1,51 @@
 # 작업 일지
 
+## 2026-04-06
+
+### 마크다운 소스 파서 구현 및 데이터 파이프라인 전환
+
+- **소스 포맷 전환**: `.txt` → `.md` 형식으로 전면 전환
+  - `src/convert_txt_to_md.py` 신규 — 71개 `.txt` 파일을 `.md`로 일괄 변환
+  - 장 헤더 `# N장`, 절 마커 `[N]`, 특수 토큰(`[N-M]`, `[Na]`, `[N_M]`) 정확 변환
+  - 기존 `gen.md`, `ps.md` 보존 (총 73개 `.md` 소스 파일)
+
+- **파서 리팩터링**: `.txt` 파서 제거, `.md` 파서(`parse_md_file`)만 유지
+  - `parse_file()`, `_parse_verse_line()`, `_extract_verse_from_chapter_line()` 등 삭제
+  - `parse_file_with_cache()`, `chapter_pattern` 등 `.txt` 전용 코드 제거
+  - `load_from_json()`의 old `text` 호환 코드 제거
+  - `main()` CLI를 `.md` 파일/디렉터리 입력으로 교체
+
+- **전체 파이프라인 재실행**: 73권 1328장 35,482절 파싱 및 분리 완료
+  - `data/source/*.md` → `output/parsed_bible.json` → `data/bible/*.json`
+
+### 렌더러 개선 — segments 기반 산문/운문 처리
+
+- **절 간 break 로직 개선**: `prevVerseEndType` 추적
+  - `hemistich-break`: 이전 절·현재 절 모두 운문일 때만 (스탠자 내 반행 연결)
+  - `paragraph-break`: 산문→운문 전환, 또는 `¶` 마커
+  - 기존 `inPoetryStanza` 휴리스틱 완전 제거
+
+- **절 내 세그먼트 전환 여백**: 산문→운문, 운문→산문 전환 시 `paragraph-break` 삽입
+  - `prevSegType`으로 세그먼트 타입 변경 감지
+
+- **운문 hanging punctuation**: `"`, `'`로 시작하는 운문 행의 따옴표를 왼쪽으로 내어쓰기
+  - `.hanging-quote { margin-left: -0.4em }` — 따옴표 뒤 첫 글자가 들여쓰기 기준선에 정렬
+
+- **운문 절 번호 왼쪽 정렬**: `text-align: right` → `text-align: left`
+  - 절 번호가 산문 시작 위치에 맞춰 정렬
+
+### 수정 파일 요약
+
+| 파일 | 변경 유형 |
+|---|---|
+| `src/convert_txt_to_md.py` | 신규 — `.txt` → `.md` 일괄 변환 스크립트 |
+| `src/parser.py` | 수정 — `.txt` 파서 제거, `.md` 파서만 유지, CLI 교체 |
+| `src/split_bible.py` | 수정 — segments 출력 (기존 호환 유지) |
+| `src/search_indexer.py` | 수정 — segments에서 텍스트 추출 (기존 호환 유지) |
+| `app.js` | 수정 — segments 기반 렌더링, 절 간/세그먼트 간 break 로직, hanging punctuation |
+| `style.css` | 수정 — 절 번호 왼쪽 정렬, hanging-quote 스타일 |
+| `data/source/*.md` | 신규 — 71개 마크다운 소스 파일 |
+
 ## 2026-03-25
 
 ### 프로젝트 방향 전환 논의
