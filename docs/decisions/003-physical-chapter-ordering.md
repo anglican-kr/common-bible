@@ -161,12 +161,13 @@ is_new_chapter = (
 @dataclass
 class Verse:
     number: int
-    text: str
+    segments: List[Segment]                # 산문/운문 명시적 구분 (ADR-006 v2)
     has_paragraph: bool = False
-    chapter_ref: Optional[int] = None  # 다른 장의 절 삽입 시 원래 장 번호
-    range_end: Optional[int] = None    # 절 범위 (예: 17-18 → range_end=18)
-    part: Optional[str] = None         # 부분절 식별자 (예: "a", "b")
-    alt_ref: Optional[int] = None      # 사본 이중 번호의 히브리어 사본 절 번호
+    stanza_break: bool = False             # 이 절 앞 스탠자 구분 (ADR-006)
+    chapter_ref: Optional[int] = None      # 다른 장의 절 삽입 시 원래 장 번호
+    range_end: Optional[int] = None        # 절 범위 (예: 17-18 → range_end=18)
+    part: Optional[str] = None             # 부분절 식별자 (예: "a", "b")
+    alt_ref: Optional[int] = None          # 사본 이중 번호의 히브리어 사본 절 번호
 ```
 
 모든 Optional 필드는 값이 있을 때만 JSON에 포함 (null 생략).
@@ -174,10 +175,10 @@ class Verse:
 ### 장별 JSON 예시
 
 ```json
-{ "number": 17, "range_end": 18, "text": "...", "has_paragraph": false }
-{ "number": 2, "part": "a", "text": "...", "has_paragraph": false }
-{ "number": 96, "alt_ref": 29, "text": "...", "has_paragraph": false }
-{ "number": 6, "chapter_ref": 41, "text": "...", "has_paragraph": false }
+{ "number": 17, "range_end": 18, "segments": [{"type": "prose", "text": "..."}] }
+{ "number": 2, "part": "a", "segments": [{"type": "prose", "text": "..."}] }
+{ "number": 96, "alt_ref": 29, "segments": [{"type": "prose", "text": "..."}] }
+{ "number": 6, "chapter_ref": 41, "segments": [{"type": "prose", "text": "..."}] }
 ```
 
 ### 사본 이중 번호 장 JSON 플래그

@@ -35,8 +35,9 @@ data/
   audio/
     {book_slug}-{chapter}.mp3 ← 장별 오디오
 src/
+  parser.py             ← .md 소스 → parsed_bible.json (segments 기반)
   split_bible.py        ← parsed_bible.json → 장별 JSON 분리 스크립트
-  parser.py             ← 원본 텍스트 → parsed_bible.json (완성됨)
+  convert_txt_to_md.py  ← .txt → .md 일괄 변환 (일회성)
   config.py             ← 설정 관리 (완성됨)
 docs/
   decisions/            ← ADR (아키텍처 결정 기록)
@@ -46,45 +47,37 @@ docs/
 ## 데이터 파이프라인
 
 ```
-data/common-bible-kr.txt
+data/source/*.md  (73권 마크다운 소스)
   → (parser.py) → output/parsed_bible.json
   → (split_bible.py) → data/bible/{book_id}-{chapter}.json
                       → data/bible/sir-prologue.json (집회서 머리말, 원본 텍스트에서 직접 추출)
                       → data/books.json
+  → (search_indexer.py) → data/search-index.json
 ```
 
-### 전체 재생성 (원본 텍스트 변경 시)
+### 전체 재생성 (소스 변경 시)
 
 ```bash
 # 프로젝트 루트에서 실행
-python src/parser.py data/common-bible-kr.txt --save-json output/parsed_bible.json
+python src/parser.py data/source/ --save-json output/parsed_bible.json
 python src/split_bible.py
+python src/search_indexer.py
 ```
 
 ### 특정 책만 교체 (부분 작업 시)
 
-`split_bible.py`를 거치지 않고 파서로 직접 해당 책의 장별 JSON을 덮어쓴다.
-
 ```python
 from src.parser import BibleParser
-import json, os
+from dataclasses import asdict
+import json
 
 parser = BibleParser('data/book_mappings.json')
-chapters = parser.parse_file('data/common-bible-psalm.txt')  # 작업 파일
+chapters = parser.parse_md_file('data/source/ps.md')
 
 for ch in chapters:
-    verses = []
-    for v in ch.verses:
-        verse = {'number': v.number, 'text': v.text, 'has_paragraph': v.has_paragraph}
-        if v.stanza_break:
-            verse['stanza_break'] = True
-        for field, val in [('chapter_ref', v.chapter_ref), ('range_end', v.range_end),
-                           ('part', v.part), ('alt_ref', v.alt_ref)]:
-            if val is not None:
-                verse[field] = val
-        verses.append(verse)
-    data = {'book_id': ch.book_id, 'book_name_ko': ch.book_name_ko,
-            'book_name_en': ch.book_name_en, 'chapter': ch.chapter_number, 'verses': verses}
+    data = asdict(ch)
+    del data['book_abbr'], data['division_ko'], data['division_en']
+    data['chapter'] = data.pop('chapter_number')
     with open(f'data/bible/{ch.book_id}-{ch.chapter_number}.json', 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False)
 ```
