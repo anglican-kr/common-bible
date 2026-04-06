@@ -5,6 +5,33 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="공동번역성서 — 대한성공회 서울교구">
   <meta name="theme-color" content="#1a1a2e">
+  <link rel="canonical" href="https://bible.anglican.kr/">
+  <!-- Open Graph -->
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="공동번역성서">
+  <meta property="og:description" content="대한성공회 서울교구 공동번역성서. 구약·신약 73권 전문을 오프라인에서도 읽을 수 있는 웹 앱.">
+  <meta property="og:url" content="https://bible.anglican.kr/">
+  <meta property="og:locale" content="ko_KR">
+  <meta property="og:image" content="https://bible.anglican.kr/static/icon-512.png">
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="공동번역성서">
+  <meta name="twitter:description" content="대한성공회 서울교구 공동번역성서. 구약·신약 73권 전문을 오프라인에서도 읽을 수 있는 웹 앱.">
+  <!-- Structured Data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "공동번역성서",
+    "description": "대한성공회 서울교구 공동번역성서. 구약·신약 73권 전문을 오프라인에서도 읽을 수 있는 웹 앱.",
+    "url": "https://bible.anglican.kr",
+    "applicationCategory": "ReligiousApp",
+    "operatingSystem": "All",
+    "browserRequirements": "Requires JavaScript",
+    "offers": { "@type": "Offer", "price": "0" },
+    "inLanguage": "ko"
+  }
+  </script>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="static/favicon.ico" sizes="any">
   <title>공동번역성서</title>
@@ -30,6 +57,13 @@
     <h1 id="page-title">공동번역성서</h1>
   </header>
   <main id="app" aria-label="성경 본문"></main>
+  <noscript>
+    <div style="max-width:40rem;margin:2rem auto;padding:0 1rem;font-family:sans-serif">
+      <h2>공동번역성서</h2>
+      <p>대한성공회 서울교구 공동번역성서 웹 앱입니다. 구약 46권, 신약 27권, 총 73권의 전문을 제공합니다.</p>
+      <p>이 앱은 JavaScript가 필요합니다. 브라우저 설정에서 JavaScript를 활성화해 주세요.</p>
+    </div>
+  </noscript>
   <div id="audio-bar" hidden></div>
   <button id="search-fab" type="button" aria-label="검색">
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>

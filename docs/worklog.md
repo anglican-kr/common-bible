@@ -1,5 +1,34 @@
 # 작업 일지
 
+## 2026-04-07
+
+### 첫 페이지 SEO 기본 정보 노출
+
+- **Open Graph / Twitter Card 메타 태그 추가**: SNS 공유 시 제목·설명·이미지 미리보기 지원
+- **canonical URL**: `https://bible.anglican.kr/` 지정
+- **JSON-LD 구조화 데이터**: `WebApplication` 스키마 (Schema.org) — 검색 엔진 리치 결과 지원
+- **`<noscript>` 폴백**: JS 미실행 크롤러 및 스크린리더를 위한 서비스 설명 텍스트
+- **`robots.txt`**: 크롤링 허용 + sitemap 경로 명시
+- **`sitemap.xml`**: 첫 페이지 URL 포함 (SPA 단일 페이지)
+
+### 서브모듈 업데이트
+
+- **`data/source` (song.md)**: 아가 전문을 산문체에서 시(詩) 행 구분 형식으로 재구성, 화자 지시(신부, 신랑, 합창단)를 별도 행으로 분리
+
+### 버전 범프
+
+- `app.js`: 1.0.4 → 1.0.5
+
+### 수정 파일 요약
+
+| 파일 | 변경 유형 |
+|---|---|
+| `index.html` | 수정 — OG/Twitter/JSON-LD 메타 태그, noscript 추가 |
+| `robots.txt` | 신규 — 크롤링 허용 + sitemap 경로 |
+| `sitemap.xml` | 신규 — 첫 페이지 URL |
+| `app.js` | 수정 — 버전 1.0.5 |
+| `data/source` | 서브모듈 업데이트 — 아가 시행 구분 재구성 |
+
 ## 2026-04-06
 
 ### 마크다운 소스 파서 구현 및 데이터 파이프라인 전환
