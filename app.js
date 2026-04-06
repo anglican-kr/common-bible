@@ -1,6 +1,8 @@
 "use strict";
 
 const DATA_DIR = "data";
+// Psalms use "편" instead of "장" as the chapter unit
+function chUnit(bookId) { return bookId === "ps" ? "편" : "장"; }
 const $app = document.getElementById("app");
 const $title = document.getElementById("page-title");
 const $breadcrumb = document.getElementById("breadcrumb");
@@ -49,6 +51,7 @@ document.addEventListener("keydown", (e) => {
 const STORAGE_KEY = "bible-last-read";
 const FONT_SIZE_KEY = "bible-font-size";
 const THEME_KEY = "bible-theme";
+const BOOK_ORDER_KEY = "bible-book-order";
 const FONT_SIZES = [16, 18, 20, 22, 24];
 const DEFAULT_FONT_SIZE = 18;
 
@@ -171,6 +174,24 @@ function initSettings() {
     themeRow.appendChild(themeGroup);
     popover.appendChild(themeRow);
 
+    // Book order
+    const orderRow = el("div", { className: "settings-row" });
+    orderRow.appendChild(el("span", { className: "settings-label" }, "책 배열"));
+    const currentOrder = loadBookOrder();
+    const orderGroup = el("div", { className: "btn-group", role: "group", "aria-label": "책 배열 선택" });
+    for (const [value, label] of [["canonical", "성공회"], ["vulgate", "불가타"]]) {
+      const orderBtn = el("button", { className: "toolbar-btn", "aria-pressed": String(currentOrder === value) }, label);
+      orderBtn.addEventListener("click", () => {
+        saveBookOrder(value);
+        route();
+        rebuild();
+        announce(label + " 배열");
+      });
+      orderGroup.appendChild(orderBtn);
+    }
+    orderRow.appendChild(orderGroup);
+    popover.appendChild(orderRow);
+
     // About
     const aboutRow = el("div", { className: "settings-about" });
     aboutRow.appendChild(document.createTextNode("대한성서공회 허락 하에 대한성공회 사용"));
@@ -236,6 +257,20 @@ function applyTheme(theme) {
   }
 }
 
+// ── Book order ──
+
+function loadBookOrder() {
+  try {
+    const v = localStorage.getItem(BOOK_ORDER_KEY);
+    if (v === "canonical" || v === "vulgate") return v;
+  } catch (_) {}
+  return "canonical";
+}
+
+function saveBookOrder(order) {
+  try { localStorage.setItem(BOOK_ORDER_KEY, order); } catch (_) {}
+}
+
 // Apply saved settings on load
 applyFontSize(loadFontSize());
 applyTheme(loadTheme());
@@ -296,7 +331,9 @@ function setTitle(text) {
 
 function setTitleWithDivisionPicker(activeDivision) {
   clearNode($title);
-  const label = DIVISION_LABELS[activeDivision];
+  const labels = divisionLabels();
+  const order = divisionOrder();
+  const label = labels[activeDivision];
   document.title = `${label} — 공동번역성서`;
   announce(label);
 
@@ -309,9 +346,9 @@ function setTitleWithDivisionPicker(activeDivision) {
   const popover = el("ul", { className: "bc-division-popover title-division-popover", role: "listbox", "aria-label": "구분 선택" });
   popover.hidden = true;
 
-  for (const div of DIVISION_ORDER) {
+  for (const div of order) {
     const cls = div === activeDivision ? "bc-division-item active" : "bc-division-item";
-    popover.appendChild(el("li", null, el("a", { className: cls, href: `#/${div}` }, DIVISION_LABELS[div])));
+    popover.appendChild(el("li", null, el("a", { className: cls, href: `#/${div}` }, labels[div])));
   }
 
   btn.addEventListener("click", () => {
@@ -340,16 +377,17 @@ function setTitleWithDivisionPicker(activeDivision) {
 
 function setTitleWithChapterPicker(book, currentCh) {
   clearNode($title);
-  document.title = `${book.name_ko} ${currentCh}장 — 공동번역성서`;
-  announce(`${book.name_ko} ${currentCh}장`);
+  const unit = chUnit(book.id);
+  document.title = `${book.name_ko} ${currentCh}${unit} — 공동번역성서`;
+  announce(`${book.name_ko} ${currentCh}${unit}`);
 
   const btn = el(
     "button",
-    { className: "title-picker-btn", "aria-label": "장 선택", "aria-expanded": "false" },
-    `${book.name_ko} ${currentCh}장`
+    { className: "title-picker-btn", "aria-label": `${unit} 선택`, "aria-expanded": "false" },
+    `${book.name_ko} ${currentCh}${unit}`
   );
 
-  const popover = el("div", { className: "chapter-popover", role: "listbox", "aria-label": "장 선택" });
+  const popover = el("div", { className: "chapter-popover", role: "listbox", "aria-label": `${unit} 선택` });
   popover.hidden = true;
 
   if (book.has_prologue) {
@@ -413,10 +451,12 @@ function buildDivisionBreadcrumb(label, activeDivision) {
   const popover = el("ul", { className: "bc-division-popover", role: "listbox", "aria-label": "구분 선택" });
   popover.hidden = true;
 
-  for (const div of DIVISION_ORDER) {
+  const labels = divisionLabels();
+  const order = divisionOrder();
+  for (const div of order) {
     const cls = div === activeDivision ? "bc-division-item active" : "bc-division-item";
     const item = el("li", null,
-      el("a", { className: cls, href: `#/${div}` }, DIVISION_LABELS[div])
+      el("a", { className: cls, href: `#/${div}` }, labels[div])
     );
     popover.appendChild(item);
   }
@@ -452,6 +492,27 @@ const DIVISION_LABELS = {
 
 const DIVISION_ORDER = ["old_testament", "deuterocanon", "new_testament"];
 
+const VULGATE_DIVISION_LABELS = {
+  old_testament: "구약",
+  new_testament: "신약",
+};
+
+const VULGATE_DIVISION_ORDER = ["old_testament", "new_testament"];
+
+// Returns the appropriate labels/order for the current book-order setting
+function divisionLabels() {
+  return loadBookOrder() === "vulgate" ? VULGATE_DIVISION_LABELS : DIVISION_LABELS;
+}
+function divisionOrder() {
+  return loadBookOrder() === "vulgate" ? VULGATE_DIVISION_ORDER : DIVISION_ORDER;
+}
+
+// In vulgate mode, deuterocanon books are grouped under old_testament
+function effectiveDivision(book) {
+  if (loadBookOrder() === "vulgate" && book.division === "deuterocanon") return "old_testament";
+  return book.division;
+}
+
 // ── Views ──
 
 function renderBookList(books) {
@@ -462,17 +523,21 @@ function renderBookList(books) {
 
   renderResumeBanner(books);
 
+  const labels = divisionLabels();
+  const order = divisionOrder();
+
   const grouped = {};
   for (const b of books) {
-    (grouped[b.division] ??= []).push(b);
+    const key = effectiveDivision(b);
+    (grouped[key] ??= []).push(b);
   }
 
-  for (const div of DIVISION_ORDER) {
+  for (const div of order) {
     const list = grouped[div];
     if (!list) continue;
 
     const details = el("details", { className: "division", open: "" });
-    details.appendChild(el("summary", { className: "division-title" }, DIVISION_LABELS[div]));
+    details.appendChild(el("summary", { className: "division-title" }, labels[div]));
 
     const ul = el("ul", { className: "book-list", role: "list" });
     for (const b of list) {
@@ -498,7 +563,7 @@ function renderResumeBanner(books) {
   const href = `#/${pos.bookId}/${pos.chapter}`;
   const label = isPrologue
     ? `이어읽기: ${lastBook.name_ko} 머리말`
-    : `이어읽기: ${lastBook.name_ko} ${pos.chapter}장`;
+    : `이어읽기: ${lastBook.name_ko} ${pos.chapter}${chUnit(lastBook.id)}`;
 
   const wrapper = el("div", { className: "resume-banner" });
   wrapper.appendChild(el("a", { className: "resume-banner-link", href }, label));
@@ -526,9 +591,13 @@ function renderDivisionList(books, division) {
 
   renderResumeBanner(books);
 
-  const list = books.filter((b) => b.division === division);
+  // In vulgate mode, old_testament division includes deuterocanon books (in file order)
+  const list = (loadBookOrder() === "vulgate" && division === "old_testament")
+    ? books.filter((b) => b.division !== "new_testament")
+    : books.filter((b) => b.division === division);
+
   const details = el("details", { className: "division", open: "" });
-  details.appendChild(el("summary", { className: "division-title" }, DIVISION_LABELS[division]));
+  details.appendChild(el("summary", { className: "division-title" }, divisionLabels()[division]));
 
   const ul = el("ul", { className: "book-list", role: "list" });
   for (const b of list) {
@@ -541,9 +610,10 @@ function renderDivisionList(books, division) {
 function renderChapterList(book, books) {
   setTitle(book.name_ko);
   hideAudioBar();
+  const effDiv = effectiveDivision(book);
   setBreadcrumb([
     { label: "목록", href: "#/" },
-    { divisionPicker: true, label: DIVISION_LABELS[book.division], activeDivision: book.division },
+    { divisionPicker: true, label: divisionLabels()[effDiv], activeDivision: effDiv },
   ]);
   clearNode($app);
 
@@ -559,7 +629,7 @@ function renderChapterList(book, books) {
 
   for (let i = 1; i <= book.chapter_count; i++) {
     grid.appendChild(
-      el("a", { href: `#/${book.id}/${i}`, "aria-label": `${book.name_ko} ${i}장` }, String(i))
+      el("a", { href: `#/${book.id}/${i}`, "aria-label": `${book.name_ko} ${i}${chUnit(book.id)}` }, String(i))
     );
   }
 
@@ -580,9 +650,10 @@ function renderChapter(data, book, opts) {
   const hlVerseEnd = opts && opts.highlightVerseEnd;
 
   setTitleWithChapterPicker(book, ch);
+  const effDiv = effectiveDivision(book);
   setBreadcrumb([
     { label: "목록", href: "#/" },
-    { divisionPicker: true, label: DIVISION_LABELS[book.division], activeDivision: book.division },
+    { divisionPicker: true, label: divisionLabels()[effDiv], activeDivision: effDiv },
     { label: book.name_ko, href: `#/${book.id}` },
   ]);
   clearNode($app);
@@ -758,9 +829,10 @@ function renderChapter(data, book, opts) {
 
 function renderPrologue(data, book) {
   setTitle(`${book.name_ko} 머리말`);
+  const effDiv = effectiveDivision(book);
   setBreadcrumb([
     { label: "목록", href: "#/" },
-    { divisionPicker: true, label: DIVISION_LABELS[book.division], activeDivision: book.division },
+    { divisionPicker: true, label: divisionLabels()[effDiv], activeDivision: effDiv },
     { label: book.name_ko, href: `#/${book.id}` },
   ]);
   clearNode($app);
@@ -774,7 +846,7 @@ function renderPrologue(data, book) {
 
   const nav = el("nav", { className: "chapter-nav", "aria-label": "장 이동" });
   nav.appendChild(el("span", { className: "placeholder" }));
-  nav.appendChild(el("a", { href: `#/${book.id}/1` }, "1장 →"));
+  nav.appendChild(el("a", { href: `#/${book.id}/1` }, `1${chUnit(book.id)} →`));
   $app.appendChild(nav);
   showAudioPlayer(book.id, 0);
   observeFabLift();
@@ -782,10 +854,11 @@ function renderPrologue(data, book) {
 }
 
 function buildChapterNav(book, currentCh) {
-  const nav = el("nav", { className: "chapter-nav", "aria-label": "장 이동" });
+  const unit = chUnit(book.id);
+  const nav = el("nav", { className: "chapter-nav", "aria-label": `${unit} 이동` });
 
   if (currentCh > 1) {
-    nav.appendChild(el("a", { href: `#/${book.id}/${currentCh - 1}` }, `← ${currentCh - 1}장`));
+    nav.appendChild(el("a", { href: `#/${book.id}/${currentCh - 1}` }, `← ${currentCh - 1}${unit}`));
   } else if (book.has_prologue) {
     nav.appendChild(el("a", { href: `#/${book.id}/prologue` }, "← 머리말"));
   } else {
@@ -793,7 +866,7 @@ function buildChapterNav(book, currentCh) {
   }
 
   if (currentCh < book.chapter_count) {
-    nav.appendChild(el("a", { href: `#/${book.id}/${currentCh + 1}` }, `${currentCh + 1}장 →`));
+    nav.appendChild(el("a", { href: `#/${book.id}/${currentCh + 1}` }, `${currentCh + 1}${unit} →`));
   } else {
     nav.appendChild(el("span", { className: "placeholder" }));
   }
@@ -896,6 +969,11 @@ async function route() {
     }
 
     if (view === "division") {
+      // In vulgate mode, deuterocanon has no separate page — redirect to old_testament
+      if (division === "deuterocanon" && loadBookOrder() === "vulgate") {
+        location.hash = "#/old_testament";
+        return;
+      }
       renderDivisionList(books, division);
       return;
     }
