@@ -1,3 +1,0 @@
-[submodule "data/bible"]
-	path = data/bible
-	url = git@github.com:anglican-kr/common-bible-text.git
