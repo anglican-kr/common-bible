@@ -276,7 +276,10 @@ class BibleParser:
                 text_after = verse_match.group(5).strip() if verse_match.group(5) else ''
                 current_verse = make_verse_from_match(verse_match, text_after, is_poetry=False)
                 if pending_blank:
-                    current_verse.stanza_break = True
+                    if current_verse.segments and current_verse.segments[0].type == "poetry":
+                        current_verse.stanza_break = True
+                    else:
+                        current_verse.has_paragraph = True
                 pending_blank = False
                 continue
 
