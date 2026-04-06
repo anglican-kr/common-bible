@@ -5,18 +5,19 @@
 
 배포 URL: https://bible.anglican.kr
 
-> 실제 공동번역성서 개정판의 저작권은 대한성서공회에 있으며, 이 프로젝트는 비상업적 용도로만 사용됩니다. 공동번역성서 원본 텍스트를 요구하지 말아주세요.
+> 실제 공동번역성서 개정판의 저작권은 대한성서공회에 있으며, 이 프로젝트는 비상업적 용도로만 사용됩니다. 성경 원본 텍스트는 비공개 서브모듈로 관리되며, 접근 권한이 있는 사용자만 이용할 수 있습니다.
 
 ## 아키텍처
 
-Python 스크립트로 원본 텍스트를 JSON으로 전처리하고, 브라우저가 JSON을 직접 읽어 렌더링하는 SPA 방식.
+Python 스크립트로 마크다운 소스를 JSON으로 전처리하고, 브라우저가 JSON을 직접 읽어 렌더링하는 SPA 방식.
 
 ```
-data/common-bible-kr.txt
+data/source/*.md  (비공개 서브모듈, 73권 마크다운 소스)
   → (parser.py) → output/parsed_bible.json
   → (split_bible.py) → data/bible/{book_id}-{chapter}.json (1328개)
                       → data/bible/sir-prologue.json
                       → data/books.json
+  → (search_indexer.py) → data/search-index.json
 ```
 
 ## 기술 스택
@@ -35,59 +36,37 @@ style.css               ← 스타일
 sw.js                   ← 서비스 워커 (오프라인)
 manifest.webmanifest    ← PWA 매니페스트
 data/
-  books.json            ← 73권 목록 (메타데이터)
-  bible/
-    {book_id}-{chapter}.json  ← 장별 성경 데이터 (1328개)
-    sir-prologue.json   ← 집회서 머리말
+  source/               ← 비공개 서브모듈 (73권 마크다운 원본)
+  books.json            ← 73권 목록 (메타데이터, has_prologue 플래그 포함)
+  bible/                ← 장별 성경 JSON (gitignore, 파서 출력물)
   audio/
     {book_slug}-{chapter}.mp3
 src/
-  parser.py             ← 원본 텍스트 → parsed_bible.json
+  parser.py             ← .md 소스 → parsed_bible.json (segments 기반)
   split_bible.py        ← parsed_bible.json → 장별 JSON 분리
+  search_indexer.py     ← 검색 인덱스 생성
   config.py             ← 설정 관리
 docs/
   decisions/            ← 아키텍처 결정 기록 (ADR)
   worklog.md            ← 작업 일지
 ```
 
-## 데이터 구조
-
-### 장별 JSON (`data/bible/{book_id}-{chapter}.json`)
-
-```json
-{
-  "book_id": "gen",
-  "book_name_ko": "창세기",
-  "book_name_en": "Genesis",
-  "chapter": 1,
-  "verses": [
-    { "number": 1, "text": "¶ 한처음에 하느님께서 하늘과 땅을 지어내셨다.", "has_paragraph": true },
-    { "number": 2, "text": "땅은 아직 모양을 갖추지 않고...", "has_paragraph": false }
-  ]
-}
-```
-
-절 번호 재배치(학자 사본 반영)가 있는 경우 `chapter_ref` 필드로 원래 장 번호를 표기합니다 (ADR-003).
-
-### books.json
-
-```json
-[
-  { "id": "gen", "name_ko": "창세기", "name_en": "Genesis",
-    "division": "old_testament", "chapter_count": 50, "has_prologue": false }
-]
-```
-
 ## 데이터 파이프라인 실행
 
-원본 텍스트(`data/common-bible-kr.txt`)가 있는 로컬 환경에서만 실행:
+`data/source/` 서브모듈 접근 권한이 있는 환경에서만 실행:
 
 ```bash
-# 1. 원본 텍스트 파싱
-python src/parser.py data/common-bible-kr.txt --save-json output/parsed_bible.json
+# 서브모듈 초기화 (최초 1회)
+git submodule update --init
+
+# 1. 마크다운 소스 파싱
+python src/parser.py data/source/ --save-json output/parsed_bible.json
 
 # 2. 장별 JSON 분리
 python src/split_bible.py
+
+# 3. 검색 인덱스 생성
+python src/search_indexer.py
 ```
 
 ## 장기 로드맵
@@ -99,5 +78,5 @@ python src/split_bible.py
 
 ## 문서
 
-- [아키텍처 결정 기록](docs/decisions/) — ADR-001~004
+- [아키텍처 결정 기록](docs/decisions/) — ADR-001~006
 - [작업 일지](docs/worklog.md)
