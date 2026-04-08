@@ -106,7 +106,7 @@ class BibleParser:
     # --- Markdown (.md) parser ---
 
     _MD_CHAPTER = re.compile(r'^# (\d+)(장|편)\s*$')
-    _MD_VERSE   = re.compile(r'^\[(\d+)(?:-(\d+))?(?:([a-z]))?(?:_(\d+))?\]\s*(.*)')
+    _MD_VERSE   = re.compile(r'^\[(?:(\d+):)?(\d+)(?:-(\d+))?(?:([a-z]))?(?:_(\d+))?\]\s*(.*)')
     _MD_BQ      = re.compile(r'^>\s?(.*)')
 
     def _resolve_book_by_id(self, book_id: str) -> Dict[str, str]:
@@ -175,11 +175,15 @@ class BibleParser:
             in_blockquote = False
 
         def make_verse_from_match(m: re.Match, text: str, is_poetry: bool = False) -> Verse:
-            """Create a Verse from a verse marker regex match."""
-            number = int(m.group(1))
-            range_end = int(m.group(2)) if m.group(2) else None
-            part = m.group(3) if m.group(3) else None
-            alt_ref = int(m.group(4)) if m.group(4) else None
+            """Create a Verse from a verse marker regex match.
+
+            Groups: (1) chapter_ref?, (2) number, (3) range_end?, (4) part?, (5) alt_ref?, (6) text
+            """
+            chapter_ref = int(m.group(1)) if m.group(1) else None
+            number = int(m.group(2))
+            range_end = int(m.group(3)) if m.group(3) else None
+            part = m.group(4) if m.group(4) else None
+            alt_ref = int(m.group(5)) if m.group(5) else None
             has_paragraph = '¶' in text if text else False
             segments: List[Segment] = []
             if text:
@@ -190,7 +194,7 @@ class BibleParser:
             return Verse(
                 number=number, segments=segments,
                 has_paragraph=has_paragraph,
-                range_end=range_end, part=part, alt_ref=alt_ref,
+                chapter_ref=chapter_ref, range_end=range_end, part=part, alt_ref=alt_ref,
             )
 
         for line in content.split('\n'):
