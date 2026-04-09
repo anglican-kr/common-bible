@@ -234,7 +234,7 @@ class BibleParser:
                 if verse_in_bq:
                     # Finalize previous verse (flush its poetry)
                     finalize_verse()
-                    text_after = verse_in_bq.group(5).strip() if verse_in_bq.group(5) else ''
+                    text_after = verse_in_bq.group(6).strip() if verse_in_bq.group(6) else ''
                     current_verse = make_verse_from_match(verse_in_bq, '', is_poetry=True)
                     if pending_stanza_in_bq:
                         current_verse.stanza_break = True
@@ -277,7 +277,7 @@ class BibleParser:
             verse_match = self._MD_VERSE.match(line)
             if verse_match:
                 finalize_verse()
-                text_after = verse_match.group(5).strip() if verse_match.group(5) else ''
+                text_after = verse_match.group(6).strip() if verse_match.group(6) else ''
                 current_verse = make_verse_from_match(verse_match, text_after, is_poetry=False)
                 if pending_blank:
                     if current_verse.segments and current_verse.segments[0].type == "poetry":

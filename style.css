@@ -981,8 +981,6 @@ mark.search-highlight {
 
 /* Cross-chapter reference */
 .verse-cross-ref {
-  background: rgba(107, 58, 42, 0.06);
-  border-radius: 2px;
   padding: 0 0.1em;
 }
 

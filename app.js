@@ -696,8 +696,7 @@ function renderChapter(data, book, opts) {
     const isHighlightedVerse = hlVerse && vn >= hlVerse && vn <= (hlVerseEnd || hlVerse);
 
     // Verse number (rendered via CSS ::before to exclude from clipboard)
-    let dataV = verseLabel;
-    if (v.chapter_ref) dataV += `(${v.chapter_ref}장)`;
+    let dataV = v.chapter_ref ? `${v.chapter_ref}:${verseLabel}` : verseLabel;
     if (v.alt_ref != null) dataV += `(${v.alt_ref})`;
 
     function appendSegText(target, raw) {
