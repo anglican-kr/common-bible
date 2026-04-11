@@ -1,6 +1,6 @@
 // Bump this version whenever books.json or shell files change (app.js, style.css, etc.).
 // Bible chapter data (data/bible/*.json) is network-first and does not need a version bump.
-const CACHE_NAME = "rev-6";
+const CACHE_NAME = "rev-7";
 
 const SHELL_FILES = [
   "/",
@@ -10,6 +10,7 @@ const SHELL_FILES = [
   "/style.css",
   "/search-worker.js",
   "/data/books.json",
+  "/data/search-meta.json",
   "/manifest.webmanifest",
   "/favicon.ico",
   "/icon-192.png",
@@ -38,7 +39,8 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
 
-  if (url.pathname.startsWith("/data/bible/") || url.pathname === "/data/search-index.json") {
+  if (url.pathname.startsWith("/data/bible/") ||
+      (url.pathname.startsWith("/data/search-") && url.pathname !== "/data/search-meta.json")) {
     // Network-first for chapter data (cache as accessed)
     event.respondWith(
       fetch(event.request)

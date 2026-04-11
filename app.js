@@ -196,7 +196,7 @@ function initSettings() {
     const aboutRow = el("div", { className: "settings-about" });
     aboutRow.appendChild(document.createTextNode("대한성서공회 허락 하에 대한성공회 사용"));
     aboutRow.appendChild(el("br"));
-    aboutRow.appendChild(el("a", { href: "https://github.com/anglican-kr/common-bible", target: "_blank", rel: "noopener noreferrer" }, "공동번역성서 1.0.7"));
+    aboutRow.appendChild(el("a", { href: "https://github.com/anglican-kr/common-bible", target: "_blank", rel: "noopener noreferrer" }, "공동번역성서 1.0.8"));
     popover.appendChild(aboutRow);
   }
 
@@ -1248,29 +1248,46 @@ function showAudioUnavailable() {
 
 let searchWorker = null;
 let pendingSearchCb = null;
+let activeSearchId = 0;
+// Called when partial results arrive before all chunks are loaded.
+// Overwritten by renderSearchResults / runSheetSearch for each search.
+let partialResultsCb = null;
 
 function ensureSearchWorker() {
   if (searchWorker) return searchWorker;
   searchWorker = new Worker("search-worker.js");
   searchWorker.addEventListener("message", (ev) => {
     const msg = ev.data;
+    if (msg.type === "partial-results" && msg.searchId === activeSearchId) {
+      if (partialResultsCb) partialResultsCb(msg);
+    }
     if (msg.type === "results" || msg.type === "error") {
-      if (pendingSearchCb) {
+      if (pendingSearchCb && msg.searchId === activeSearchId) {
         const cb = pendingSearchCb;
         pendingSearchCb = null;
         cb(msg.type === "error" ? null : msg);
       }
     }
   });
-  searchWorker.postMessage({ type: "init", indexUrl: `${DATA_DIR}/search-index.json` });
+  searchWorker.postMessage({
+    type: "init",
+    metaUrl: `${DATA_DIR}/search-meta.json`,
+    chunks: [
+      { name: "nt", url: `${DATA_DIR}/search-nt.json` },
+      { name: "dc", url: `${DATA_DIR}/search-dc.json` },
+      { name: "ot", url: `${DATA_DIR}/search-ot.json` },
+    ],
+  });
   return searchWorker;
 }
 
-function doSearch(query, page, pageSize) {
+function doSearch(query, page, pageSize, onPartial) {
   return new Promise((resolve) => {
     const worker = ensureSearchWorker();
+    activeSearchId += 1;
     pendingSearchCb = resolve;
-    worker.postMessage({ type: "search", q: query, page, pageSize });
+    partialResultsCb = onPartial || null;
+    worker.postMessage({ type: "search", q: query, page, pageSize, searchId: activeSearchId });
   });
 }
 
@@ -1347,6 +1364,36 @@ function buildSearchPagination(query, currentPage, totalPages) {
   return nav;
 }
 
+// Render search result list into a container node (used by both page and sheet views)
+function renderSearchResultList(container, result, query, page, pageSize, paginationBuilder) {
+  clearNode(container);
+  if (result.total === 0) {
+    container.appendChild(el("p", { className: "search-empty" }, `"${query}"에 대한 검색 결과가 없습니다.`));
+    return;
+  }
+  const totalPages = Math.ceil(result.total / pageSize);
+  const isPending = result.pendingChunks && result.pendingChunks.length > 0;
+  const countLabel = isPending
+    ? `"${query}" 검색 중… (현재 ${result.total}건)`
+    : `총 ${result.total}건 (${page}/${totalPages}쪽)`;
+  container.appendChild(el("p", { className: "search-count" }, countLabel));
+
+  const list = el("ul", { className: "search-results", role: "list" });
+  for (const r of result.results) {
+    const li = el("li", { className: "search-result-item" });
+    const link = el("a", { href: `#/${r.b}/${r.c}?hl=${encodeURIComponent(query)}&v=${r.v}` });
+    link.appendChild(el("span", { className: "search-result-ref" }, `${r.bookNameKo} ${r.c}:${r.v}`));
+    link.appendChild(buildSnippet(r.t, query));
+    li.appendChild(link);
+    list.appendChild(li);
+  }
+  container.appendChild(list);
+
+  if (!isPending && totalPages > 1 && paginationBuilder) {
+    container.appendChild(paginationBuilder(query, page, totalPages));
+  }
+}
+
 async function renderSearchResults(query, page, autoNavigate = false) {
   setTitle(`"${query}" 검색`);
   setBreadcrumb([{ label: "목록", href: "#/" }]);
@@ -1361,7 +1408,12 @@ async function renderSearchResults(query, page, autoNavigate = false) {
   const itemH = 80;
   const pageSize = Math.max(5, Math.floor(availH / itemH));
 
-  const result = await doSearch(query, page, pageSize);
+  function onPartial(partial) {
+    renderSearchResultList($app, partial, query, page, pageSize, buildSearchPagination);
+    announce(`"${query}" 검색 중… 현재 ${partial.total}건`);
+  }
+
+  const result = await doSearch(query, page, pageSize, onPartial);
 
   if (!result) {
     renderError("검색에 실패했습니다.");
@@ -1384,34 +1436,7 @@ async function renderSearchResults(query, page, autoNavigate = false) {
     return;
   }
 
-  clearNode($app);
-
-  if (result.total === 0) {
-    $app.appendChild(el("p", { className: "search-empty" }, `"${query}"에 대한 검색 결과가 없습니다.`));
-    announce("검색 결과 없음");
-    return;
-  }
-
-  const totalPages = Math.ceil(result.total / pageSize);
-  $app.appendChild(el("p", { className: "search-count" },
-    `총 ${result.total}건 (${page}/${totalPages}쪽)`));
-
-  const list = el("ul", { className: "search-results", role: "list" });
-  for (const r of result.results) {
-    const li = el("li", { className: "search-result-item" });
-    const link = el("a", {
-      href: `#/${r.b}/${r.c}?hl=${encodeURIComponent(query)}&v=${r.v}`,
-    });
-    link.appendChild(el("span", { className: "search-result-ref" }, `${r.bookNameKo} ${r.c}:${r.v}`));
-    link.appendChild(buildSnippet(r.t, query));
-    li.appendChild(link);
-    list.appendChild(li);
-  }
-  $app.appendChild(list);
-
-  if (totalPages > 1) {
-    $app.appendChild(buildSearchPagination(query, page, totalPages));
-  }
+  renderSearchResultList($app, result, query, page, pageSize, buildSearchPagination);
 
   announce(`"${query}" 검색 결과 ${result.total}건`);
   window.scrollTo(0, 0);
@@ -1505,6 +1530,26 @@ function getSheetPageSize() {
   return Math.max(5, Math.floor(resultsH / itemH));
 }
 
+function buildSheetPagination(query, page, totalPages) {
+  const nav = el("nav", { className: "search-pagination", "aria-label": "검색 결과 페이지" });
+  if (page > 1) {
+    const prev = el("a", { href: "#", "aria-label": "이전 페이지" }, "← 이전");
+    prev.addEventListener("click", (e) => { e.preventDefault(); runSheetSearch(query, page - 1); $searchSheetResults.scrollTop = 0; });
+    nav.appendChild(prev);
+  } else {
+    nav.appendChild(el("span", { className: "placeholder" }));
+  }
+  nav.appendChild(el("span", { className: "search-page-info" }, `${page} / ${totalPages}`));
+  if (page < totalPages) {
+    const next = el("a", { href: "#", "aria-label": "다음 페이지" }, "다음 →");
+    next.addEventListener("click", (e) => { e.preventDefault(); runSheetSearch(query, page + 1); $searchSheetResults.scrollTop = 0; });
+    nav.appendChild(next);
+  } else {
+    nav.appendChild(el("span", { className: "placeholder" }));
+  }
+  return nav;
+}
+
 async function runSheetSearch(query, page, autoNavigate = false) {
   clearNode($searchSheetResults);
   if (!query) return;
@@ -1512,7 +1557,20 @@ async function runSheetSearch(query, page, autoNavigate = false) {
   $searchSheetResults.appendChild(el("div", { className: "loading" }, "검색 중…"));
 
   const pageSize = getSheetPageSize();
-  const result = await doSearch(query, page, pageSize);
+
+  function onPartial(partial) {
+    // Add click-to-close to each result link for sheet view
+    const frag = document.createDocumentFragment();
+    const tempDiv = el("div");
+    renderSearchResultList(tempDiv, partial, query, page, pageSize, null);
+    // Attach closeSearchSheet to all links
+    tempDiv.querySelectorAll("a[href]").forEach((a) => a.addEventListener("click", () => closeSearchSheet()));
+    while (tempDiv.firstChild) frag.appendChild(tempDiv.firstChild);
+    clearNode($searchSheetResults);
+    $searchSheetResults.appendChild(frag);
+  }
+
+  const result = await doSearch(query, page, pageSize, onPartial);
   clearNode($searchSheetResults);
 
   if (!result) {
@@ -1535,48 +1593,9 @@ async function runSheetSearch(query, page, autoNavigate = false) {
     return;
   }
 
-  if (result.total === 0) {
-    $searchSheetResults.appendChild(el("p", { className: "search-empty" }, `"${query}"에 대한 검색 결과가 없습니다.`));
-    return;
-  }
-
-  const totalPages = Math.ceil(result.total / pageSize);
-  $searchSheetResults.appendChild(el("p", { className: "search-count" },
-    `총 ${result.total}건 (${page}/${totalPages}쪽)`));
-
-  const list = el("ul", { className: "search-results", role: "list" });
-  for (const r of result.results) {
-    const li = el("li", { className: "search-result-item" });
-    const link = el("a", {
-      href: `#/${r.b}/${r.c}?hl=${encodeURIComponent(query)}&v=${r.v}`,
-    });
-    link.appendChild(el("span", { className: "search-result-ref" }, `${r.bookNameKo} ${r.c}:${r.v}`));
-    link.appendChild(buildSnippet(r.t, query));
-    link.addEventListener("click", () => closeSearchSheet());
-    li.appendChild(link);
-    list.appendChild(li);
-  }
-  $searchSheetResults.appendChild(list);
-
-  if (totalPages > 1) {
-    const nav = el("nav", { className: "search-pagination", "aria-label": "검색 결과 페이지" });
-    if (page > 1) {
-      const prev = el("a", { href: "#", "aria-label": "이전 페이지" }, "← 이전");
-      prev.addEventListener("click", (e) => { e.preventDefault(); runSheetSearch(query, page - 1); $searchSheetResults.scrollTop = 0; });
-      nav.appendChild(prev);
-    } else {
-      nav.appendChild(el("span", { className: "placeholder" }));
-    }
-    nav.appendChild(el("span", { className: "search-page-info" }, `${page} / ${totalPages}`));
-    if (page < totalPages) {
-      const next = el("a", { href: "#", "aria-label": "다음 페이지" }, "다음 →");
-      next.addEventListener("click", (e) => { e.preventDefault(); runSheetSearch(query, page + 1); $searchSheetResults.scrollTop = 0; });
-      nav.appendChild(next);
-    } else {
-      nav.appendChild(el("span", { className: "placeholder" }));
-    }
-    $searchSheetResults.appendChild(nav);
-  }
+  renderSearchResultList($searchSheetResults, result, query, page, pageSize, buildSheetPagination);
+  // Attach closeSearchSheet to all result links
+  $searchSheetResults.querySelectorAll("a[href^='#/']").forEach((a) => a.addEventListener("click", () => closeSearchSheet()));
 
   announce(`"${query}" 검색 결과 ${result.total}건`);
 }
@@ -1652,9 +1671,18 @@ $searchSheetClear.addEventListener("click", () => {
 
 (function () {
   const header = document.getElementById("app-header");
-  const THRESHOLD = 50;
+  const THRESHOLD_ON = 60;   // collapse breadcrumb when scrolling down past this
+  const THRESHOLD_OFF = 10;  // restore breadcrumb only when near the very top
+  let isCompact = false;
   window.addEventListener("scroll", () => {
-    header.classList.toggle("compact", window.scrollY > THRESHOLD);
+    const y = window.scrollY;
+    if (!isCompact && y > THRESHOLD_ON) {
+      isCompact = true;
+      header.classList.add("compact");
+    } else if (isCompact && y < THRESHOLD_OFF) {
+      isCompact = false;
+      header.classList.remove("compact");
+    }
   }, { passive: true });
 })();
 

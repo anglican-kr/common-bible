@@ -1,47 +1,82 @@
 "use strict";
 
 /*
- * Global search Web Worker
+ * Global search Web Worker — chunked index edition
  *
  * Protocol:
  *   Main → Worker:
- *     { type: "init", indexUrl: "data/search-index.json" }
- *     { type: "search", q: "keyword", page: 1, pageSize: 50 }
+ *     { type: "init", metaUrl: "data/search-meta.json",
+ *       chunks: [{ name, url }, ...] }
+ *     { type: "search", q: "keyword", page: 1, pageSize: 50, searchId: N }
  *
  *   Worker → Main:
  *     { type: "ready" }
- *     { type: "results", q, refMatch, results, total, page, pageSize }
+ *     { type: "partial-results", searchId, q, results, total, page, pageSize,
+ *       loadedChunks: [...names], pendingChunks: [...names] }
+ *     { type: "results", searchId, q, refMatch, results, total, page, pageSize }
  *     { type: "error", message }
  */
 
-let indexUrl = null;
-let meta = null;   // { aliases, books }
-let verses = null; // [{ b, c, v, t }]
-let loading = false;
+let meta = null;          // { aliases, books }
+let metaPromise = null;
+let metaUrl = null;
+
+let loadedChunks = {};    // { name: { books, bArr, cArr, vArr, tArr } }
+let loadingPromises = {}; // { name: Promise }
+let chunkConfig = [];     // [{ name, url }, ...]
+
+let currentSearchId = 0;
 
 function post(type, payload) {
   postMessage(Object.assign({ type }, payload));
 }
 
-async function loadIndex() {
-  if (verses) return;
-  if (loading) {
-    // Wait for in-flight load
-    await new Promise((resolve) => {
-      const id = setInterval(() => {
-        if (verses) { clearInterval(id); resolve(); }
-      }, 50);
-    });
-    return;
-  }
-  loading = true;
-  const res = await fetch(indexUrl);
-  if (!res.ok) throw new Error("인덱스 로드 실패: " + res.status);
-  const data = await res.json();
-  meta = data.meta;
-  verses = data.verses;
-  loading = false;
+// ── Meta loading ──
+
+async function loadMeta() {
+  if (meta) return;
+  if (metaPromise) return metaPromise;
+  metaPromise = fetch(metaUrl)
+    .then((r) => {
+      if (!r.ok) throw new Error("meta 로드 실패: " + r.status);
+      return r.json();
+    })
+    .then((data) => { meta = data; });
+  return metaPromise;
 }
+
+// ── Chunk loading ──
+
+function loadChunk(name, url) {
+  if (loadedChunks[name]) return Promise.resolve();
+  if (loadingPromises[name]) return loadingPromises[name];
+
+  loadingPromises[name] = fetch(url)
+    .then((r) => {
+      if (!r.ok) throw new Error(`${name} 청크 로드 실패: ${r.status}`);
+      return r.json();
+    })
+    .then((data) => {
+      const n = data.t.length;
+      // Expand RLE [[bookIdx, count], ...] into a flat Uint16Array
+      const bArr = new Uint16Array(n);
+      let pos = 0;
+      for (const [idx, cnt] of data.b) {
+        bArr.fill(idx, pos, pos + cnt);
+        pos += cnt;
+      }
+      loadedChunks[name] = {
+        books: data.books,
+        bArr,
+        cArr: new Uint16Array(data.c),
+        vArr: new Uint16Array(data.v),
+        tArr: data.t,
+      };
+    });
+  return loadingPromises[name];
+}
+
+// ── Search helpers ──
 
 // Verse reference pattern: "창세 1:3" or "창세 1:3-11"
 const REF_RE = /^([가-힣a-zA-Z0-9\s]+?)\s*(\d+)\s*:\s*(\d+)(?:\s*[-–]\s*(\d+))?\s*$/;
@@ -55,64 +90,68 @@ function tryVerseRef(query) {
   const verse = parseInt(m[3], 10);
   const verseEnd = m[4] ? parseInt(m[4], 10) : null;
 
-  // Look up alias
   let bookId = meta.aliases[bookQuery];
-
-  // Fallback: try matching full book name from meta.books
   if (!bookId) {
     for (const [id, info] of Object.entries(meta.books)) {
       if (info.ko === bookQuery) { bookId = id; break; }
     }
   }
-
   if (!bookId || !meta.books[bookId]) return null;
 
-  return {
-    bookId,
-    chapter,
-    verse,
-    verseEnd,
-    bookNameKo: meta.books[bookId].ko,
-  };
+  return { bookId, chapter, verse, verseEnd, bookNameKo: meta.books[bookId].ko };
 }
 
-function search(query, page, pageSize) {
-  const q = query.toLowerCase();
-  const matched = [];
-
-  for (let i = 0; i < verses.length; i++) {
-    if (verses[i].t.toLowerCase().includes(q)) {
-      matched.push(verses[i]);
+function gatherResults(q, chunkNames) {
+  const qLower = q.toLowerCase();
+  const allMatched = [];
+  for (const name of chunkNames) {
+    const chunk = loadedChunks[name];
+    if (!chunk) continue;
+    const { books, bArr, cArr, vArr, tArr } = chunk;
+    const n = tArr.length;
+    for (let i = 0; i < n; i++) {
+      if (tArr[i].toLowerCase().includes(qLower)) {
+        allMatched.push({
+          b: books[bArr[i]],
+          c: cArr[i],
+          v: vArr[i],
+          t: tArr[i],
+        });
+      }
     }
   }
+  return allMatched;
+}
 
-  // Already sorted by book order/chapter/verse from index build
-  const total = matched.length;
+function paginate(allMatched, page, pageSize) {
+  const total = allMatched.length;
   const start = (page - 1) * pageSize;
   const end = Math.min(total, start + pageSize);
-  const results = [];
-
-  for (let i = start; i < end; i++) {
-    const e = matched[i];
-    results.push({
-      b: e.b,
-      c: e.c,
-      v: e.v,
-      t: e.t,
-      bookNameKo: meta.books[e.b].ko,
-    });
-  }
-
+  const results = allMatched.slice(start, end).map((e) => ({
+    b: e.b,
+    c: e.c,
+    v: e.v,
+    t: e.t,
+    bookNameKo: meta.books[e.b].ko,
+  }));
   return { results, total };
 }
+
+// ── Message handler ──
 
 onmessage = async (ev) => {
   const msg = ev.data;
 
   if (msg.type === "init") {
-    indexUrl = msg.indexUrl;
+    metaUrl = msg.metaUrl;
+    chunkConfig = msg.chunks;
+
     try {
-      await loadIndex();
+      await loadMeta();
+      // Start loading all chunks in parallel (priority order: NT, DC, OT)
+      for (const { name, url } of chunkConfig) {
+        loadChunk(name, url);
+      }
       post("ready", {});
     } catch (err) {
       post("error", { message: err.message });
@@ -121,27 +160,58 @@ onmessage = async (ev) => {
   }
 
   if (msg.type === "search") {
+    const { q, page, pageSize, searchId } = msg;
+    currentSearchId = searchId;
+
     try {
-      await loadIndex();
-      const q = (msg.q || "").trim();
-      const page = msg.page || 1;
-      const pageSize = msg.pageSize || 50;
+      const trimmed = (q || "").trim();
 
-      if (!q) {
-        post("results", { q, refMatch: null, results: [], total: 0, page, pageSize });
+      if (!trimmed) {
+        post("results", { searchId, q: trimmed, refMatch: null,
+          results: [], total: 0, page, pageSize });
         return;
       }
 
-      // Try verse reference first
-      const refMatch = tryVerseRef(q);
+      await loadMeta();
+
+      const refMatch = tryVerseRef(trimmed);
       if (refMatch) {
-        post("results", { q, refMatch, results: [], total: 0, page, pageSize });
+        post("results", { searchId, q: trimmed, refMatch,
+          results: [], total: 0, page, pageSize });
         return;
       }
 
-      // Full-text search
-      const { results, total } = search(q, page, pageSize);
-      post("results", { q, refMatch: null, results, total, page, pageSize });
+      // Wait for first chunk (NT) if nothing is loaded yet
+      const firstChunk = chunkConfig[0];
+      if (!loadedChunks[firstChunk.name]) {
+        await loadingPromises[firstChunk.name];
+      }
+
+      // Abort if a newer search has started
+      if (searchId !== currentSearchId) return;
+
+      const loadedNames = chunkConfig.map((c) => c.name).filter((n) => loadedChunks[n]);
+      const pendingNames = chunkConfig.map((c) => c.name).filter((n) => !loadedChunks[n]);
+
+      // Send partial results if some chunks are still loading
+      if (pendingNames.length > 0) {
+        const partial = gatherResults(trimmed, loadedNames);
+        const { results, total } = paginate(partial, page, pageSize);
+        post("partial-results", {
+          searchId, q: trimmed, results, total, page, pageSize,
+          loadedChunks: loadedNames, pendingChunks: pendingNames,
+        });
+
+        // Wait for remaining chunks
+        await Promise.all(pendingNames.map((n) => loadingPromises[n]));
+        if (searchId !== currentSearchId) return;
+      }
+
+      // Full search across all chunks
+      const allMatched = gatherResults(trimmed, chunkConfig.map((c) => c.name));
+      const { results, total } = paginate(allMatched, page, pageSize);
+      post("results", { searchId, q: trimmed, refMatch: null, results, total, page, pageSize });
+
     } catch (err) {
       post("error", { message: err.message });
     }
