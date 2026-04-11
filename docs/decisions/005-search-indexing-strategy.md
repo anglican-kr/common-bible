@@ -78,8 +78,73 @@
 
 코퍼스가 기도서·성무일과 등으로 확장되어 10만 건 이상이 되면 선형 스캔의 지연이 체감될 수 있다. 그 시점에 B안(역색인) 또는 `Intl.Segmenter` 기반 토크나이저 도입을 재검토한다.
 
+---
+
+## 개정: 청크 분할 및 컬럼형 포맷 (2026-04-11)
+
+- 상태: 승인됨
+
+### 맥락
+
+C안(플랫 JSON + 선형 스캔)의 검색 알고리즘 자체는 ~16ms로 충분히 빠르지만, 단일 파일(`search-index.json`, 6.6MB) 구조에 두 가지 문제가 있다:
+
+1. **첫 검색 대기**: 검색 워커가 전체 파일을 로드해야 첫 검색이 가능. 신약 7,940절만 있으면 대부분의 검색이 의미 있는 결과를 보여줄 수 있음에도 구약 23,430절까지 기다려야 함.
+2. **확장성**: 교회력·성무일과 텍스트 추가 시 단일 파일이 계속 커지는 구조. 새 콘텐츠를 추가할 때마다 전체 인덱스를 재빌드·재다운로드해야 함.
+
+### 변경 내용
+
+#### 파일 분할
+
+단일 `search-index.json` → 4개 파일:
+
+| 파일 | 내용 | 크기 |
+|------|------|------|
+| `data/search-meta.json` | aliases + books 메타데이터 | ~9KB |
+| `data/search-nt.json` | 신약 7,940절 | ~1.3MB |
+| `data/search-dc.json` | 제2경전 4,114절 | ~700KB |
+| `data/search-ot.json` | 구약 23,430절 | ~3.8MB |
+
+로딩 우선순위: NT → DC → OT. NT 완료 즉시 첫 검색 가능 (progressive search).
+향후 교회력 텍스트는 `search-lectionary.json` 등 청크 추가만으로 확장.
+
+#### 컬럼형 포맷 + RLE
+
+기존 row-per-verse 방식에서 키 이름(`b`, `c`, `v`, `t`)이 35,484번 반복되는 오버헤드를 제거.
+
+```json
+{
+  "books": ["matt", "mark", "luke", ...],
+  "b": [[0, 1071], [1, 678], ...],
+  "c": [1, 1, 1, ..., 2, 2, ...],
+  "v": [1, 2, 3, ...],
+  "t": ["한처음에...", "땅은 아직...", ...]
+}
+```
+
+- `b`: RLE 인코딩. `[bookIndex, count]` 쌍으로 연속된 동일 책을 압축
+- Worker에서 `Uint16Array`로 전개하여 메모리 절감
+
+#### Progressive search
+
+Worker 프로토콜에 `partial-results` 메시지 추가:
+
+1. 첫 번째 청크(NT) 로드 완료 → 해당 청크만 검색 → `partial-results` 전송
+2. 나머지 청크 로드 완료 → 전체 검색 → `results` 전송
+
+앱은 `partial-results`를 받으면 로딩 스피너를 중간 결과로 교체, 최종 `results` 도착 시 전체 결과로 갱신.
+
+### 검색 알고리즘
+
+변경 없음. C안(선형 스캔 + `String.includes`)을 유지한다.
+
+### 하위 호환성
+
+- `sw.js` `CACHE_NAME` 버전 올림으로 구 `search-index.json` 캐시 자동 삭제
+- `search-meta.json`은 SHELL_FILES에 포함 (오프라인 즉시 사용)
+- 청크 파일들은 network-first 캐싱 (기존 `data/bible/*.json`과 동일 전략)
+
 ## 참고
 
 - PRD §3.3 검색 기능
-- `src/search_indexer.py` — 인덱스 생성 스크립트
-- `search-worker.js` — Web Worker 검색 엔진
+- `src/search_indexer.py` — 인덱스 생성 스크립트 (4개 파일 출력)
+- `search-worker.js` — Web Worker 검색 엔진 (청크 로딩 + progressive search)

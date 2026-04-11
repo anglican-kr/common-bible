@@ -55,6 +55,25 @@
 | `tests/test_parser.py` | 삭제 — 구 아키텍처 잔재 |
 | `tests/test_completeness.py` | 신규 — ADR-004 Level 1 완전성 검증 |
 
+### 검색 인덱스 분할 로딩 (ADR-005 개정)
+
+- `search-index.json`(6.6MB 단일) → 4개 파일 분리:
+  - `search-meta.json` (~9KB) — aliases + books 메타데이터
+  - `search-nt.json` (~1.3MB) — 신약 7,940절
+  - `search-dc.json` (~700KB) — 제2경전 4,114절
+  - `search-ot.json` (~3.8MB) — 구약 23,430절
+- 컬럼형 포맷 + RLE 인코딩: 키 이름 반복 제거, Worker에서 `Uint16Array`로 메모리 절감
+- Progressive search: NT 로드 즉시 partial-results 전송, 전체 로드 후 최종 결과로 교체
+- `search-worker.js` 전면 재작성, `app.js` 검색 관련 코드 리팩터링
+- `sw.js` CACHE_NAME rev-7, `search-meta.json` SHELL_FILES 추가
+- ADR-005 개정 섹션 추가
+
+### compact 헤더 진동 수정
+
+- 이어읽기 배너 `position: sticky` 제거 (불필요한 stacking context 원인)
+- compact 헤더 hysteresis 적용: 접기 60px / 펴기 10px 임계값 분리로 피드백 루프 방지
+- `#app-header` z-index 10→20으로 조정 (드롭다운이 배너에 가려지는 문제 해결)
+
 ### 보안 강화 및 Google Analytics 연동
 
 - **Content Security Policy(CSP)** 메타태그 추가 — `'unsafe-inline'` 없이 최소 권한 정책 적용
