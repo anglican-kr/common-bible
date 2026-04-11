@@ -390,12 +390,12 @@ function setTitleWithChapterPicker(book, currentCh) {
   const popover = el("div", { className: "chapter-popover", role: "listbox", "aria-label": `${unit} 선택` });
   popover.hidden = true;
 
+  const grid = el("div", { className: "popover-grid" });
   if (book.has_prologue) {
-    popover.appendChild(
+    grid.appendChild(
       el("a", { className: "popover-item popover-prologue", href: `#/${book.id}/prologue` }, "머리말")
     );
   }
-  const grid = el("div", { className: "popover-grid" });
   for (let i = 1; i <= book.chapter_count; i++) {
     const cls = i === currentCh ? "popover-item current" : "popover-item";
     grid.appendChild(el("a", { className: cls, href: `#/${book.id}/${i}` }, String(i)));
