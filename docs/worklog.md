@@ -1,5 +1,60 @@
 # 작업 일지
 
+## 2026-04-11
+
+### 불필요 파일 정리
+
+- `static/sw.js` 삭제 — 구 아키텍처 서비스 워커, 아무데서도 참조 안 됨
+- `static/pwa.js` 삭제 — 삭제된 static/sw.js 등록용
+- `static/search-worker.js` 삭제 — 루트 search-worker.js의 구버전
+- `static/verse-navigator.js` 삭제 — 구 독립 컴포넌트, app.js로 통합됨
+- `static/verse-style.css` 삭제 — 구 CSS, style.css로 통합됨
+- `static/manifest.webmanifest` 삭제 — 구버전 (경로 오류, 루트 manifest가 현재 버전)
+- `deploy-20260410-232707.zip` 삭제 — 빌드 아티팩트, 저장소 불필요
+
+### PWA 업데이트 감지 및 자동 새로고침 구현
+
+- `app.js` SW 등록 로직 강화:
+  - `hadController` 플래그로 첫 방문 vs. 업데이트 구분
+  - `controllerchange` 이벤트 → `window.location.reload()` (업데이트 시에만)
+- `sw.js` CACHE_NAME 변경 시점 주석 추가
+- 운용 방침: 성경 장 JSON은 network-first로 자동 처리, books.json·셸 파일 변경 시에만 CACHE_NAME 버전업
+
+### 문서 현행화
+
+- `CLAUDE.md`: 프로젝트 구조(search-worker.js 추가, config.py 제거, static/ 정리), 현재 상태 갱신
+- `docs/prd.md`: 데이터 파이프라인 입력 소스(.txt → .md), 프로젝트 구조 갱신, 인덱싱 단계 추가
+- `tests/test_parser.py` 삭제 — 구 아키텍처(src.config, src.models) 기반, 실행 불가
+- `tests/test_completeness.py` 신규 — ADR-004 Level 1 완전성 검증 (8개 테스트, 원본 텍스트 불필요)
+  - 73권 존재, 1328개 장 파일, books.json 정합성, has_prologue 플래그, sir-prologue.json 구조, segments 스키마
+
+### 구약 소분류 UI 추가
+
+- `/#/` (홈) 및 `/#/old_testament` 페이지의 구약 목록을 4개 소분류로 세분화
+  - **오경**: 창세기–신명기 (5권)
+  - **역사서**: 여호수아–느헤미야·에스델 (12권, 불가타 모드에서 토비트·유딧·마카베오상하 포함)
+  - **시서와 지혜서**: 욥기·시편·잠언·전도서·아가 (5권, 불가타 모드에서 지혜서·집회서 포함)
+  - **예언서**: 이사야–말라기 (17권, 불가타 모드에서 바룩 포함)
+- `OT_SUBCATEGORY` 맵으로 책 ID → 소분류 매핑, 불가타 모드(제2경전 혼합)에도 대응
+- `style.css` `.ot-subcategory-title` 소제목 스타일 추가
+
+### 수정 파일 요약
+
+| 파일 | 변경 유형 |
+|------|-----------|
+| `static/sw.js`, `static/pwa.js`, `static/search-worker.js`, `static/verse-navigator.js`, `static/verse-style.css`, `static/manifest.webmanifest` | 삭제 |
+| `deploy-20260410-232707.zip` | 삭제 |
+| `app.js` | 수정 — SW controllerchange 자동 새로고침, 구약 소분류 UI, 버전 1.0.7 |
+| `sw.js` | 수정 — CACHE_NAME 변경 시점 주석, 아이콘 파일 SHELL_FILES 추가 |
+| `style.css` | 수정 — `.ot-subcategory-title` 소제목 스타일 |
+| `index.html` | 수정 — 아이콘·OG 이미지 경로 루트로 수정 |
+| `manifest.webmanifest` | 수정 — 아이콘 경로 루트로 수정 |
+| `favicon.ico`, `icon-192.png`, `icon-512.png` | 신규 — 루트로 이동 |
+| `CLAUDE.md` | 수정 — 구조·현재 상태 현행화 |
+| `docs/prd.md` | 수정 — 파이프라인·구조 현행화 |
+| `tests/test_parser.py` | 삭제 — 구 아키텍처 잔재 |
+| `tests/test_completeness.py` | 신규 — ADR-004 Level 1 완전성 검증 |
+
 ## 2026-04-07
 
 ### 첫 페이지 SEO 기본 정보 노출

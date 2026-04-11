@@ -115,28 +115,34 @@
 
 ### 5.2 데이터 흐름 및 프로젝트 구조
 
-1. **수집 (Ingest)**: `parser.py`가 `common-bible-kr.txt`를 읽고 단락/절 단위로 JSON 분할 → `output/parsed_bible.json`.
+1. **수집 (Ingest)**: `parser.py`가 `data/source/*.md`(73권 마크다운 소스)를 읽고 segments(산문/운문) 단위로 파싱 → `output/parsed_bible.json`.
 2. **분리 (Split)**: `split_bible.py`가 `parsed_bible.json`을 장별 JSON 파일과 `books.json`(메타데이터)으로 분리.
-3. **렌더링 (Runtime)**: 브라우저에서 `app.js`가 JSON을 fetch하여 DOM으로 렌더링. 빌드 시 HTML 생성 없음.
+3. **인덱싱 (Index)**: `search_indexer.py`가 장별 JSON에서 `data/search-index.json` 생성 (빌드 시 실행, .gitignore).
+4. **렌더링 (Runtime)**: 브라우저에서 `app.js`가 JSON을 fetch하여 DOM으로 렌더링. 빌드 시 HTML 생성 없음.
 
 ```text
 common-bible/
 ├── index.html                  # SPA 진입점 (단일 HTML)
-├── app.js                      # 라우팅, 렌더링, UI 로직
+├── app.js                      # 라우팅, 렌더링, 검색 UI, 오디오 플레이어
 ├── style.css                   # 스타일
 ├── sw.js                       # 서비스 워커 (오프라인)
-├── manifest.webmanifest        # PWA 매니페스트
 ├── search-worker.js            # 검색 Web Worker (→ ADR-005)
+├── manifest.webmanifest        # PWA 매니페스트
+├── favicon.ico                 # 파비콘
 ├── data/
 │   ├── books.json              # 73권 목록 (메타데이터)
+│   ├── book_mappings.json      # 책 ID·이름·별칭·구분 매핑
 │   ├── search-index.json       # 검색 인덱스 (빌드 생성, .gitignore)
+│   ├── source/                 # 73권 마크다운 소스 (서브모듈)
 │   ├── bible/                  # 장별 성경 JSON ({book_id}-{chapter}.json)
 │   └── audio/                  # 장별 오디오 MP3
-├── src/                        # 데이터 전처리 스크립트 (일회성)
-│   ├── parser.py               # 원본 텍스트 → parsed_bible.json
+├── src/                        # 데이터 전처리 스크립트
+│   ├── parser.py               # .md 소스 → parsed_bible.json (segments 기반)
 │   ├── split_bible.py          # parsed_bible.json → 장별 JSON 분리
-│   └── search_indexer.py       # 장별 JSON → 검색 인덱스 생성
-└── static/                     # PWA 보조 파일
+│   ├── search_indexer.py       # 장별 JSON → 검색 인덱스 생성
+│   └── convert_txt_to_md.py    # .txt → .md 일괄 변환 (일회성, 완료됨)
+└── tests/
+    └── test_completeness.py    # Level 1 완전성 검증 (→ ADR-004)
 ```
 
 ### 5.3 접근성 구현 세부사항

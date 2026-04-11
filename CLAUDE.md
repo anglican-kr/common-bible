@@ -23,22 +23,29 @@
 
 ```
 index.html              ← SPA 진입점 (단일 HTML)
-app.js                  ← 라우팅, 렌더링
+app.js                  ← 라우팅, 렌더링, 검색 UI, 오디오 플레이어
 style.css               ← 스타일
 sw.js                   ← 서비스 워커 (오프라인)
+search-worker.js        ← Web Worker 기반 전역 검색 엔진 (ADR-005)
 manifest.webmanifest    ← PWA 매니페스트
+favicon.ico             ← 파비콘
 data/
   books.json            ← 73권 목록 (메타데이터, has_prologue 플래그 포함)
+  book_mappings.json    ← 책 ID·이름·별칭·구분 매핑
   bible/
     {book_id}-{chapter}.json  ← 장별 성경 데이터
     sir-prologue.json   ← 집회서 머리말 (ADR-002)
   audio/
     {book_slug}-{chapter}.mp3 ← 장별 오디오
+  source/
+    {book_id}.md        ← 73권 마크다운 소스 (서브모듈)
 src/
   parser.py             ← .md 소스 → parsed_bible.json (segments 기반)
   split_bible.py        ← parsed_bible.json → 장별 JSON 분리 스크립트
-  convert_txt_to_md.py  ← .txt → .md 일괄 변환 (일회성)
-  config.py             ← 설정 관리 (완성됨)
+  search_indexer.py     ← 장별 JSON → data/search-index.json
+  convert_txt_to_md.py  ← .txt → .md 일괄 변환 (일회성, 완료됨)
+tests/
+  test_completeness.py  ← Level 1 완전성 검증 (ADR-004)
 docs/
   decisions/            ← ADR (아키텍처 결정 기록)
   worklog.md            ← 작업 일지
@@ -119,6 +126,6 @@ for ch in chapters:
 
 ## 현재 상태
 
-- Phase 1 시작 단계
-- 프로젝트 문서화 구조 수립 완료
-- 다음 작업: parsed_bible.json → 장별 JSON 분리, SPA 뼈대 구현
+- Phase 1 완료: 성경 읽기 PWA (73권, 오프라인, 검색, 오디오, 접근성)
+- 진행 중: 운문 본문 재구성 (data/source/*.md 편집 후 파이프라인 재실행)
+- 미완료: 앱 테스트 체계(ADR-004 Level 2·3)
