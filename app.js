@@ -196,7 +196,7 @@ function initSettings() {
     const aboutRow = el("div", { className: "settings-about" });
     aboutRow.appendChild(document.createTextNode("대한성서공회 허락 하에 대한성공회 사용"));
     aboutRow.appendChild(el("br"));
-    aboutRow.appendChild(el("a", { href: "https://github.com/anglican-kr/common-bible", target: "_blank", rel: "noopener" }, "공동번역성서 1.0.6"));
+    aboutRow.appendChild(el("a", { href: "https://github.com/anglican-kr/common-bible", target: "_blank", rel: "noopener" }, "공동번역성서 1.0.7"));
     popover.appendChild(aboutRow);
   }
 
@@ -1583,5 +1583,15 @@ $searchSheetClear.addEventListener("click", () => {
 // ── Service Worker Registration ──
 
 if ("serviceWorker" in navigator) {
+  // Capture before register() — true means an existing SW was already controlling this page.
+  // Used to distinguish "first install" (no reload needed) from "update" (reload to apply new cache).
+  const hadController = !!navigator.serviceWorker.controller;
+
   navigator.serviceWorker.register("sw.js").catch(() => {});
+
+  // When a new SW takes control (skipWaiting + clients.claim), reload to serve updated shell files.
+  // hadController guard prevents an unnecessary reload on first install.
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (hadController) window.location.reload();
+  });
 }
