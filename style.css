@@ -824,6 +824,20 @@ mark.search-highlight {
   vertical-align: -0.1em;
 }
 
+.ot-subcategory {
+  margin-bottom: 1rem;
+}
+
+.ot-subcategory-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--fg-muted, #888);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  margin: 0.8rem 0 0.4rem;
+  padding-left: 0.2rem;
+}
+
 .book-list {
   list-style: none;
   display: grid;

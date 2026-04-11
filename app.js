@@ -492,6 +492,28 @@ const DIVISION_LABELS = {
 
 const DIVISION_ORDER = ["old_testament", "deuterocanon", "new_testament"];
 
+// Old Testament subcategories (also covers deuterocanon books for vulgate mode)
+const OT_SUBCATEGORY = {
+  gen: "pentateuch", exod: "pentateuch", lev: "pentateuch", num: "pentateuch", deut: "pentateuch",
+  josh: "history", judg: "history", ruth: "history",
+  "1sam": "history", "2sam": "history", "1kgs": "history", "2kgs": "history",
+  "1chr": "history", "2chr": "history", ezra: "history", neh: "history",
+  tob: "history", jdt: "history", esth: "history", "1macc": "history", "2macc": "history",
+  job: "wisdom", ps: "wisdom", prov: "wisdom", eccl: "wisdom", song: "wisdom",
+  wis: "wisdom", sir: "wisdom",
+  isa: "prophets", jer: "prophets", lam: "prophets", bar: "prophets",
+  ezek: "prophets", dan: "prophets", hos: "prophets", joel: "prophets", amos: "prophets",
+  obad: "prophets", jonah: "prophets", mic: "prophets", nah: "prophets", hab: "prophets",
+  zeph: "prophets", hag: "prophets", zech: "prophets", mal: "prophets",
+};
+const OT_SUBCATEGORY_ORDER = ["pentateuch", "history", "wisdom", "prophets"];
+const OT_SUBCATEGORY_LABELS = {
+  pentateuch: "오경",
+  history: "역사서",
+  wisdom: "시서와 지혜서",
+  prophets: "예언서",
+};
+
 const VULGATE_DIVISION_LABELS = {
   old_testament: "구약",
   new_testament: "신약",
@@ -539,11 +561,32 @@ function renderBookList(books) {
     const details = el("details", { className: "division", open: "" });
     details.appendChild(el("summary", { className: "division-title" }, labels[div]));
 
-    const ul = el("ul", { className: "book-list", role: "list" });
-    for (const b of list) {
-      ul.appendChild(el("li", null, el("a", { href: `#/${b.id}` }, b.name_ko)));
+    if (div === "old_testament") {
+      // Group OT books into subcategories
+      const subGrouped = {};
+      for (const b of list) {
+        const sub = OT_SUBCATEGORY[b.id] ?? "other";
+        (subGrouped[sub] ??= []).push(b);
+      }
+      for (const sub of OT_SUBCATEGORY_ORDER) {
+        const subList = subGrouped[sub];
+        if (!subList) continue;
+        const section = el("div", { className: "ot-subcategory" });
+        section.appendChild(el("h3", { className: "ot-subcategory-title" }, OT_SUBCATEGORY_LABELS[sub]));
+        const ul = el("ul", { className: "book-list", role: "list" });
+        for (const b of subList) {
+          ul.appendChild(el("li", null, el("a", { href: `#/${b.id}` }, b.name_ko)));
+        }
+        section.appendChild(ul);
+        details.appendChild(section);
+      }
+    } else {
+      const ul = el("ul", { className: "book-list", role: "list" });
+      for (const b of list) {
+        ul.appendChild(el("li", null, el("a", { href: `#/${b.id}` }, b.name_ko)));
+      }
+      details.appendChild(ul);
     }
-    details.appendChild(ul);
     $app.appendChild(details);
   }
 }
@@ -599,11 +642,31 @@ function renderDivisionList(books, division) {
   const details = el("details", { className: "division", open: "" });
   details.appendChild(el("summary", { className: "division-title" }, divisionLabels()[division]));
 
-  const ul = el("ul", { className: "book-list", role: "list" });
-  for (const b of list) {
-    ul.appendChild(el("li", null, el("a", { href: `#/${b.id}` }, b.name_ko)));
+  if (division === "old_testament") {
+    const subGrouped = {};
+    for (const b of list) {
+      const sub = OT_SUBCATEGORY[b.id] ?? "other";
+      (subGrouped[sub] ??= []).push(b);
+    }
+    for (const sub of OT_SUBCATEGORY_ORDER) {
+      const subList = subGrouped[sub];
+      if (!subList) continue;
+      const section = el("div", { className: "ot-subcategory" });
+      section.appendChild(el("h3", { className: "ot-subcategory-title" }, OT_SUBCATEGORY_LABELS[sub]));
+      const ul = el("ul", { className: "book-list", role: "list" });
+      for (const b of subList) {
+        ul.appendChild(el("li", null, el("a", { href: `#/${b.id}` }, b.name_ko)));
+      }
+      section.appendChild(ul);
+      details.appendChild(section);
+    }
+  } else {
+    const ul = el("ul", { className: "book-list", role: "list" });
+    for (const b of list) {
+      ul.appendChild(el("li", null, el("a", { href: `#/${b.id}` }, b.name_ko)));
+    }
+    details.appendChild(ul);
   }
-  details.appendChild(ul);
   $app.appendChild(details);
 }
 
