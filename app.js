@@ -992,6 +992,15 @@ function parseHash() {
   };
 }
 
+function trackPageView() {
+  if (typeof gtag !== "function") return;
+  gtag("event", "page_view", {
+    page_title: document.title,
+    page_location: location.href,
+    page_path: location.hash || "/",
+  });
+}
+
 async function route() {
   const parsed = parseHash();
   const { view, bookId, chapter, division } = parsed;
@@ -1020,6 +1029,7 @@ async function route() {
         const books = await loadBooks();
         renderBookList(books);
       }
+      trackPageView();
       return;
     }
 
@@ -1027,6 +1037,7 @@ async function route() {
 
     if (view === "books") {
       renderBookList(books);
+      trackPageView();
       return;
     }
 
@@ -1037,6 +1048,7 @@ async function route() {
         return;
       }
       renderDivisionList(books, division);
+      trackPageView();
       return;
     }
 
@@ -1048,6 +1060,7 @@ async function route() {
 
     if (view === "chapters") {
       renderChapterList(book, books);
+      trackPageView();
       return;
     }
 
@@ -1057,6 +1070,7 @@ async function route() {
       const data = await loadPrologue(bookId);
       renderPrologue(data, book);
       saveReadingPosition(bookId, "prologue");
+      trackPageView();
       return;
     }
 
@@ -1072,6 +1086,7 @@ async function route() {
         highlightVerseEnd: parsed.highlightVerseEnd,
       });
       saveReadingPosition(bookId, chapter);
+      trackPageView();
     }
   } catch (err) {
     renderError("데이터를 불러올 수 없습니다.");
