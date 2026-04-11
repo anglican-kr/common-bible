@@ -16,17 +16,23 @@ echo "Building deployment package..."
 zip -r "$OUTPUT_FILE" \
   index.html \
   app.js \
+  gtag-init.js \
   style.css \
   sw.js \
   search-worker.js \
   manifest.webmanifest \
+  favicon.ico \
+  icon-192.png \
+  icon-512.png \
   robots.txt \
   sitemap.xml \
-  static/ \
   data/bible/ \
   data/books.json \
   data/book_mappings.json \
-  data/search-index.json \
+  data/search-meta.json \
+  data/search-nt.json \
+  data/search-dc.json \
+  data/search-ot.json \
   -x "*.DS_Store" "*.gitkeep"
 
 echo "Done: $OUTPUT_FILE"
