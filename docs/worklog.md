@@ -55,6 +55,20 @@
 | `tests/test_parser.py` | 삭제 — 구 아키텍처 잔재 |
 | `tests/test_completeness.py` | 신규 — ADR-004 Level 1 완전성 검증 |
 
+### 보안 강화 및 Google Analytics 연동
+
+- **Content Security Policy(CSP)** 메타태그 추가 — `'unsafe-inline'` 없이 최소 권한 정책 적용
+  - `script-src 'self' googletagmanager.com`
+  - `style-src 'self' fonts.googleapis.com`
+  - `font-src fonts.gstatic.com`
+  - `connect-src 'self' google-analytics.com analytics.google.com`
+  - `object-src 'none'` / `base-uri 'self'`
+- **Google Analytics (GA4)** 연동 (`G-2Q4SRGVNQN`)
+  - 인라인 스크립트 대신 `gtag-init.js` 분리 (CSP 호환)
+  - `sw.js` SHELL_FILES에 `gtag-init.js` 추가
+- `<noscript>` 인라인 스타일 → `.noscript-fallback` CSS 클래스 분리 (CSP 대응)
+- `rel="noopener"` → `rel="noopener noreferrer"` 수정 (Referrer 노출 방지)
+
 ## 2026-04-07
 
 ### 첫 페이지 SEO 기본 정보 노출

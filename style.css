@@ -1,3 +1,11 @@
+/* ── Noscript fallback ── */
+.noscript-fallback {
+  max-width: 40rem;
+  margin: 2rem auto;
+  padding: 0 1rem;
+  font-family: sans-serif;
+}
+
 /* ── Accessibility ── */
 .skip-link {
   position: absolute;

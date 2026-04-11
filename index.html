@@ -2,6 +2,7 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'self' https://www.googletagmanager.com; worker-src 'self'; connect-src 'self' https://www.google-analytics.com https://analytics.google.com; media-src 'self'; img-src 'self' https://www.google-analytics.com; object-src 'none'; base-uri 'self'">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="공동번역성서 — 대한성공회 서울교구">
   <meta name="theme-color" content="#1a1a2e">
@@ -58,7 +59,7 @@
   </header>
   <main id="app" aria-label="성경 본문"></main>
   <noscript>
-    <div style="max-width:40rem;margin:2rem auto;padding:0 1rem;font-family:sans-serif">
+    <div class="noscript-fallback">
       <h2>공동번역성서</h2>
       <p>대한성공회 서울교구 공동번역성서 웹 앱입니다. 구약 46권, 신약 27권, 총 73권의 전문을 제공합니다.</p>
       <p>이 앱은 JavaScript가 필요합니다. 브라우저 설정에서 JavaScript를 활성화해 주세요.</p>
@@ -77,6 +78,9 @@
     </div>
     <div id="search-sheet-results"></div>
   </div>
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-2Q4SRGVNQN"></script>
+  <script src="gtag-init.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
