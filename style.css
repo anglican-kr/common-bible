@@ -91,7 +91,7 @@ body {
   font-family: "Noto Sans KR", sans-serif;
   position: sticky;
   top: 0;
-  z-index: 10;
+  z-index: 20;
   background: var(--bg);
   border-bottom: none;
   padding: 0.6rem 1rem;
@@ -744,9 +744,6 @@ mark.search-highlight {
   font-family: "Noto Sans KR", sans-serif;
   display: flex;
   align-items: center;
-  position: sticky;
-  top: 0;
-  z-index: 15;
   margin-bottom: 1.2rem;
   background: var(--accent);
   border-radius: var(--radius);
