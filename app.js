@@ -27,6 +27,27 @@ function announce(msg) {
   requestAnimationFrame(() => { $announce.textContent = msg; });
 }
 
+// Focus trap: keeps Tab cycling within a container while it is open.
+// Returns a cleanup function to remove the listener.
+function trapFocus(container) {
+  function handler(e) {
+    if (e.key !== "Tab") return;
+    const focusable = container.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])');
+    if (!focusable.length) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  }
+  container.addEventListener("keydown", handler);
+  return () => container.removeEventListener("keydown", handler);
+}
+
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
     // Close search overlay if open
@@ -237,17 +258,27 @@ function initSettings() {
     popover.style.right = `${window.innerWidth - rect.right}px`;
   }
 
+  let cleanupTrap = null;
+
   btn.addEventListener("click", () => {
     const open = !popover.hidden;
     if (!open) { rebuild(); positionPopover(); }
     popover.hidden = open;
     btn.setAttribute("aria-expanded", String(!open));
+    if (!open) {
+      cleanupTrap = trapFocus(popover);
+      const first = popover.querySelector('button, a[href], input');
+      if (first) first.focus();
+    } else if (cleanupTrap) {
+      cleanupTrap(); cleanupTrap = null;
+    }
   });
 
   document.addEventListener("click", (e) => {
     if (!popover.hidden && !wrapper.contains(e.target) && !popover.contains(e.target)) {
       popover.hidden = true;
       btn.setAttribute("aria-expanded", "false");
+      if (cleanupTrap) { cleanupTrap(); cleanupTrap = null; }
     }
   });
 
@@ -484,16 +515,26 @@ function setTitleWithDivisionPicker(activeDivision) {
     popover.appendChild(el("li", null, el("a", { className: cls, href: `#/${div}` }, labels[div])));
   }
 
+  let cleanupTrap = null;
+
   btn.addEventListener("click", () => {
     const open = !popover.hidden;
     popover.hidden = open;
     btn.setAttribute("aria-expanded", String(!open));
+    if (!open) {
+      cleanupTrap = trapFocus(popover);
+      const first = popover.querySelector('a[href]');
+      if (first) first.focus();
+    } else if (cleanupTrap) {
+      cleanupTrap(); cleanupTrap = null;
+    }
   });
 
   document.addEventListener("click", (e) => {
     if (!popover.hidden && !$title.contains(e.target)) {
       popover.hidden = true;
       btn.setAttribute("aria-expanded", "false");
+      if (cleanupTrap) { cleanupTrap(); cleanupTrap = null; }
     }
   });
 
@@ -501,6 +542,7 @@ function setTitleWithDivisionPicker(activeDivision) {
     if (e.target.tagName === "A") {
       popover.hidden = true;
       btn.setAttribute("aria-expanded", "false");
+      if (cleanupTrap) { cleanupTrap(); cleanupTrap = null; }
     }
   });
 
@@ -535,16 +577,26 @@ function setTitleWithChapterPicker(book, currentCh) {
   }
   popover.appendChild(grid);
 
+  let cleanupTrap = null;
+
   btn.addEventListener("click", () => {
     const open = !popover.hidden;
     popover.hidden = open;
     btn.setAttribute("aria-expanded", String(!open));
+    if (!open) {
+      cleanupTrap = trapFocus(popover);
+      const first = popover.querySelector('a[href]');
+      if (first) first.focus();
+    } else if (cleanupTrap) {
+      cleanupTrap(); cleanupTrap = null;
+    }
   });
 
   document.addEventListener("click", (e) => {
     if (!popover.hidden && !$title.contains(e.target)) {
       popover.hidden = true;
       btn.setAttribute("aria-expanded", "false");
+      if (cleanupTrap) { cleanupTrap(); cleanupTrap = null; }
     }
   });
 
@@ -552,6 +604,7 @@ function setTitleWithChapterPicker(book, currentCh) {
     if (e.target.tagName === "A") {
       popover.hidden = true;
       btn.setAttribute("aria-expanded", "false");
+      if (cleanupTrap) { cleanupTrap(); cleanupTrap = null; }
     }
   });
 
@@ -594,22 +647,33 @@ function buildDivisionBreadcrumb(label, activeDivision) {
     popover.appendChild(item);
   }
 
+  let cleanupTrap = null;
+
   btn.addEventListener("click", () => {
     const open = !popover.hidden;
     popover.hidden = open;
     btn.setAttribute("aria-expanded", String(!open));
+    if (!open) {
+      cleanupTrap = trapFocus(popover);
+      const first = popover.querySelector('a[href]');
+      if (first) first.focus();
+    } else if (cleanupTrap) {
+      cleanupTrap(); cleanupTrap = null;
+    }
   });
 
   document.addEventListener("click", (e) => {
     if (!popover.hidden && !wrapper.contains(e.target)) {
       popover.hidden = true;
       btn.setAttribute("aria-expanded", "false");
+      if (cleanupTrap) { cleanupTrap(); cleanupTrap = null; }
     }
   });
 
   popover.addEventListener("click", () => {
     popover.hidden = true;
     btn.setAttribute("aria-expanded", "false");
+    if (cleanupTrap) { cleanupTrap(); cleanupTrap = null; }
   });
 
   wrapper.appendChild(btn);
@@ -1443,7 +1507,7 @@ function appendTextWithHighlight(target, text, query) {
   }
   while (idx !== -1) {
     if (idx > pos) target.appendChild(document.createTextNode(text.substring(pos, idx)));
-    target.appendChild(el("mark", { className: "search-highlight" }, text.substring(idx, idx + query.length)));
+    target.appendChild(el("mark", { className: "search-highlight", role: "presentation" }, text.substring(idx, idx + query.length)));
     pos = idx + query.length;
     idx = lower.indexOf(qLower, pos);
   }
@@ -1822,18 +1886,50 @@ $searchSheetClear.addEventListener("click", () => {
   }, { passive: true });
 })();
 
-// ── Service Worker Registration ──
+// ── Service Worker Registration & Update ──
 
 if ("serviceWorker" in navigator) {
-  // Capture before register() — true means an existing SW was already controlling this page.
-  // Used to distinguish "first install" (no reload needed) from "update" (reload to apply new cache).
-  const hadController = !!navigator.serviceWorker.controller;
-
-  navigator.serviceWorker.register("sw.js").catch(() => {});
-
-  // When a new SW takes control (skipWaiting + clients.claim), reload to serve updated shell files.
-  // hadController guard prevents an unnecessary reload on first install.
+  let refreshing = false;
   navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if (hadController) window.location.reload();
+    if (refreshing) return;
+    refreshing = true;
+    window.location.reload();
   });
+
+  function showUpdateToast(waitingSW) {
+    // Prevent duplicate toasts
+    if (document.getElementById("sw-update-toast")) return;
+    const btn = el("button", { id: "sw-update-btn", "aria-label": "새 버전으로 업데이트" }, "업데이트");
+    const toast = el("div", { id: "sw-update-toast", role: "alert", "aria-label": "앱 업데이트 알림" },
+      el("span", { "aria-hidden": "true" }, "새 버전이 있습니다."),
+      btn,
+    );
+    btn.addEventListener("click", () => {
+      waitingSW.postMessage({ type: "SKIP_WAITING" });
+      toast.remove();
+    });
+    document.body.appendChild(toast);
+    btn.focus();
+  }
+
+  function trackInstalling(reg) {
+    reg.installing.addEventListener("statechange", () => {
+      if (reg.waiting) showUpdateToast(reg.waiting);
+    });
+  }
+
+  navigator.serviceWorker.register("sw.js").then((reg) => {
+    // A waiting SW already exists (e.g. installed on a previous visit)
+    if (reg.waiting) {
+      showUpdateToast(reg.waiting);
+      return;
+    }
+    // A new SW is being installed right now
+    if (reg.installing) {
+      trackInstalling(reg);
+      return;
+    }
+    // Listen for future updates
+    reg.addEventListener("updatefound", () => trackInstalling(reg));
+  }).catch(() => {});
 }

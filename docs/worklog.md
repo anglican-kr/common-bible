@@ -2,6 +2,32 @@
 
 ## 2026-04-12
 
+### 스크린리더 접근성 개선
+
+- `index.html`
+  - `#audio-bar`에 `role="region" aria-label="오디오 플레이어"` 추가 — 랜드마크 탐색 지원
+  - `#search-scrim`에 `aria-hidden="true"` 추가 — 시각적 오버레이를 AT에서 숨김
+  - `#search-sheet`에 `role="dialog" aria-label="검색"` 추가 — 모달 다이얼로그로 명시
+  - `#search-sheet-handle`에 `aria-hidden="true"` 추가 — 포인터 전용 드래그 핸들 숨김
+- `app.js`
+  - `trapFocus(container)` 헬퍼 추가 — Tab 키를 열린 팝오버 안에서 순환시키고 클린업 함수 반환
+  - 설정 팝오버, 타이틀 구분 선택, 장/편 선택, 브레드크럼 구분 선택 등 4개 팝오버에 포커스 트랩 적용
+    - 팝오버 열릴 때 첫 항목으로 포커스 이동, 닫힐 때(버튼·외부클릭·ESC) 트랩 해제
+  - `<mark class="search-highlight">`에 `role="presentation"` 추가 — 검색 하이라이트 의미 중복 읽힘 방지
+  - SW 업데이트 토스트 접근성 강화
+    - 토스트 표시 시 업데이트 버튼으로 `focus()` 이동 — 키보드/스크린리더로 즉시 대응 가능
+    - 버튼 `aria-label="새 버전으로 업데이트"` 추가
+    - 토스트 `aria-label="앱 업데이트 알림"` 추가
+    - 텍스트 스팬에 `aria-hidden="true"` — `role="alert"` + 버튼 레이블 중복 읽힘 방지
+- 절 번호(`<sup class="verse-num" aria-hidden="true">`)는 독서 몰입을 위한 의도적 설계로 유지
+
+### PWA 업데이트 토스트 구현
+
+- `sw.js`: `install` 이벤트에서 `self.skipWaiting()` 제거, `SKIP_WAITING` 메시지 수신 시에만 발동
+  - 사용자가 토스트에서 "업데이트" 버튼을 눌러야만 새 SW가 활성화됨
+- `style.css`: `#sw-update-toast`, `#sw-update-btn`, `@keyframes toast-in` 추가
+- `app.js`: `showUpdateToast(waitingSW)` 함수 — waiting SW 감지 시 하단 토스트 표시, 클릭 시 `SKIP_WAITING` 전송
+
 ### 런치 스크린 추가
 
 - 앱 실행 시 테마 색상(`--accent`) 배경에 흰색 십자가(skh-cross.svg)를 표시하는 런치 스크린 구현

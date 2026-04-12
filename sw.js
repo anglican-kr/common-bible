@@ -17,12 +17,19 @@ const SHELL_FILES = [
   "/icon-512.png",
 ];
 
-// Cache app shell on install
+// Cache app shell on install — do NOT skipWaiting() automatically.
+// The client will send a SKIP_WAITING message after user confirms the update.
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => cache.addAll(SHELL_FILES))
   );
-  self.skipWaiting();
+});
+
+// Allow the client to trigger skipWaiting via postMessage
+self.addEventListener("message", (event) => {
+  if (event.data && event.data.type === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
 });
 
 // Remove old caches on activate
