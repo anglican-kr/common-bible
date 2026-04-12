@@ -52,7 +52,15 @@ const STORAGE_KEY = "bible-last-read";
 const FONT_SIZE_KEY = "bible-font-size";
 const THEME_KEY = "bible-theme";
 const BOOK_ORDER_KEY = "bible-book-order";
+const COLOR_SCHEME_KEY = "bible-color-scheme";
 const FONT_SIZES = [16, 18, 20, 22, 24];
+
+const COLOR_SCHEMES = [
+  { id: "navy",       name: "네이비",   swatch: "#1e3a5f", iconBg: "#1a1a2e" },
+  { id: "terracotta", name: "버건디",   swatch: "#6b3a2a", iconBg: "#6b3a2a" },
+  { id: "green",      name: "초록",     swatch: "#1a6b50", iconBg: "#1a6b50" },
+  { id: "purple",     name: "보라",     swatch: "#5a2d82", iconBg: "#5a2d82" },
+];
 const DEFAULT_FONT_SIZE = 18;
 
 function saveReadingPosition(bookId, chapter) {
@@ -174,6 +182,29 @@ function initSettings() {
     themeRow.appendChild(themeGroup);
     popover.appendChild(themeRow);
 
+    // Color scheme
+    const colorRow = el("div", { className: "settings-row" });
+    colorRow.appendChild(el("span", { className: "settings-label" }, "색상"));
+    const currentScheme = loadColorScheme();
+    const swatches = el("div", { className: "color-swatches", role: "group", "aria-label": "색상 테마 선택" });
+    for (const scheme of COLOR_SCHEMES) {
+      const swatchBtn = el("button", {
+        className: "color-swatch",
+        "aria-label": scheme.name,
+        "aria-pressed": String(currentScheme === scheme.id),
+      });
+      swatchBtn.style.setProperty("--swatch-color", scheme.swatch);
+      swatchBtn.addEventListener("click", () => {
+        saveColorScheme(scheme.id);
+        applyColorScheme(scheme.id);
+        rebuild();
+        announce(scheme.name + " 색상");
+      });
+      swatches.appendChild(swatchBtn);
+    }
+    colorRow.appendChild(swatches);
+    popover.appendChild(colorRow);
+
     // Book order
     const orderRow = el("div", { className: "settings-row" });
     orderRow.appendChild(el("span", { className: "settings-label" }, "책 배열"));
@@ -196,7 +227,7 @@ function initSettings() {
     const aboutRow = el("div", { className: "settings-about" });
     aboutRow.appendChild(document.createTextNode("대한성서공회 허락 하에 대한성공회 사용"));
     aboutRow.appendChild(el("br"));
-    aboutRow.appendChild(el("a", { href: "https://github.com/anglican-kr/common-bible", target: "_blank", rel: "noopener noreferrer" }, "공동번역성서 1.0.8"));
+    aboutRow.appendChild(el("a", { href: "https://github.com/anglican-kr/common-bible", target: "_blank", rel: "noopener noreferrer" }, "공동번역성서 1.0.9"));
     popover.appendChild(aboutRow);
   }
 
@@ -225,6 +256,86 @@ function initSettings() {
   $settingsAnchor.appendChild(wrapper);
 }
 
+// ── Icon recoloring ──
+
+function hexToRgb(hex) {
+  return [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)];
+}
+
+// Luminance of the original icon background (#1a1a2e)
+const ICON_BG_LUM = (26 * 0.299 + 26 * 0.587 + 46 * 0.114) / 255; // ≈ 0.111
+
+let _origIconData = null;
+
+function loadOrigIcon() {
+  if (_origIconData) return Promise.resolve(_origIconData);
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0);
+      _origIconData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      resolve(_origIconData);
+    };
+    img.onerror = reject;
+    img.src = "icon-192.png";
+  });
+}
+
+function updateAppIcons(scheme) {
+  loadOrigIcon().then((origData) => {
+    const [nr, ng, nb] = hexToRgb(scheme.iconBg);
+    const canvas = document.createElement("canvas");
+    canvas.width = origData.width;
+    canvas.height = origData.height;
+    const ctx = canvas.getContext("2d");
+    const imgData = new ImageData(new Uint8ClampedArray(origData.data), origData.width, origData.height);
+    const d = imgData.data;
+    for (let i = 0; i < d.length; i += 4) {
+      // Normalize luminance: 0 = original bg, 1 = white cross
+      const lum = (d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114) / 255;
+      const t = Math.max(0, Math.min(1, (lum - ICON_BG_LUM) / (1 - ICON_BG_LUM)));
+      d[i]     = Math.round(nr + (255 - nr) * t);
+      d[i + 1] = Math.round(ng + (255 - ng) * t);
+      d[i + 2] = Math.round(nb + (255 - nb) * t);
+    }
+    ctx.putImageData(imgData, 0, 0);
+    const dataUrl = canvas.toDataURL("image/png");
+    const faviconLink = document.querySelector("link[rel='icon']");
+    if (faviconLink) faviconLink.href = dataUrl;
+    const appleLink = document.querySelector("link[rel='apple-touch-icon']");
+    if (appleLink) appleLink.href = dataUrl;
+  }).catch(() => { /* non-critical */ });
+}
+
+// ── Color scheme ──
+
+function loadColorScheme() {
+  try {
+    const v = localStorage.getItem(COLOR_SCHEME_KEY);
+    if (COLOR_SCHEMES.some(s => s.id === v)) return v;
+  } catch (_) {}
+  return "navy";
+}
+
+function saveColorScheme(scheme) {
+  try { localStorage.setItem(COLOR_SCHEME_KEY, scheme); } catch (_) {}
+}
+
+function applyColorScheme(schemeName) {
+  const scheme = COLOR_SCHEMES.find(s => s.id === schemeName) || COLOR_SCHEMES[0];
+  if (schemeName === "navy") {
+    document.documentElement.removeAttribute("data-color-scheme");
+  } else {
+    document.documentElement.setAttribute("data-color-scheme", schemeName);
+  }
+  updateThemeMetaColor();
+  updateAppIcons(scheme);
+}
+
 // ── Theme ──
 
 function loadTheme() {
@@ -242,6 +353,12 @@ function saveTheme(theme) {
 let _systemThemeListener = null;
 const _darkMQ = window.matchMedia("(prefers-color-scheme: dark)");
 
+function updateThemeMetaColor() {
+  const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute("content", isDark ? "#1a1a2e" : "#faf8f5");
+}
+
 function applyTheme(theme) {
   if (_systemThemeListener) {
     _darkMQ.removeEventListener("change", _systemThemeListener);
@@ -249,9 +366,11 @@ function applyTheme(theme) {
   }
   const resolved = theme === "system" ? (_darkMQ.matches ? "dark" : "light") : theme;
   document.documentElement.setAttribute("data-theme", resolved);
+  updateThemeMetaColor();
   if (theme === "system") {
     _systemThemeListener = (e) => {
       document.documentElement.setAttribute("data-theme", e.matches ? "dark" : "light");
+      updateThemeMetaColor();
     };
     _darkMQ.addEventListener("change", _systemThemeListener);
   }
@@ -274,7 +393,21 @@ function saveBookOrder(order) {
 // Apply saved settings on load
 applyFontSize(loadFontSize());
 applyTheme(loadTheme());
+applyColorScheme(loadColorScheme());
 initSettings();
+
+// ── Launch Screen ──
+
+let _launchScreenDismissed = false;
+
+function dismissLaunchScreen() {
+  if (_launchScreenDismissed) return;
+  _launchScreenDismissed = true;
+  const el = document.getElementById("launch-screen");
+  if (!el) return;
+  el.classList.add("fade-out");
+  el.addEventListener("animationend", () => el.remove(), { once: true });
+}
 
 // ── Helpers ──
 
@@ -1010,6 +1143,7 @@ async function route() {
     if (isMobile()) {
       // On mobile, redirect search route to overlay
       openSearchSheet(parsed.query);
+      dismissLaunchScreen();
       return;
     }
     $searchInput.value = parsed.query;
@@ -1091,6 +1225,8 @@ async function route() {
   } catch (err) {
     renderError("데이터를 불러올 수 없습니다.");
     console.error(err);
+  } finally {
+    dismissLaunchScreen();
   }
 }
 
