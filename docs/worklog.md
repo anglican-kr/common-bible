@@ -1,5 +1,16 @@
 # 작업 일지
 
+## 2026-04-12
+
+### 런치 스크린 추가
+
+- 앱 실행 시 테마 색상(`--accent`) 배경에 흰색 십자가(skh-cross.svg)를 표시하는 런치 스크린 구현
+- 십자가가 scale-up되며 3초간 페이드아웃, 이후 DOM에서 제거
+- `index.html`: `#launch-screen` div에 SVG 인라인 삽입 (fill white)
+- `style.css`: 런치 스크린 오버레이 스타일 + `launch-screen-out`, `launch-cross-out` 키프레임 애니메이션
+- `app.js`: `dismissLaunchScreen()` 함수, `route()` 첫 렌더 완료 시 1회 호출 (플래그 기반 중복 방지)
+- `scripts/build-deploy.sh`: `skh-cross.svg` 배포 패키지에 추가
+
 ## 2026-04-11
 
 ### 불필요 파일 정리

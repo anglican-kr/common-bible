@@ -22,6 +22,7 @@ zip -r "$OUTPUT_FILE" \
   search-worker.js \
   manifest.webmanifest \
   favicon.ico \
+  skh-cross.svg \
   icon-192.png \
   icon-512.png \
   robots.txt \
