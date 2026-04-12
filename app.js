@@ -231,7 +231,7 @@ function initSettings() {
     orderRow.appendChild(el("span", { className: "settings-label" }, "책 배열"));
     const currentOrder = loadBookOrder();
     const orderGroup = el("div", { className: "btn-group", role: "group", "aria-label": "책 배열 선택" });
-    for (const [value, label] of [["canonical", "성공회"], ["vulgate", "불가타"]]) {
+    for (const [value, label] of [["canonical", "외경 분리"], ["vulgate", "구약에 외경 포함"]]) {
       const orderBtn = el("button", { className: "toolbar-btn", "aria-pressed": String(currentOrder === value) }, label);
       orderBtn.addEventListener("click", () => {
         saveBookOrder(value);
@@ -248,7 +248,7 @@ function initSettings() {
     const aboutRow = el("div", { className: "settings-about" });
     aboutRow.appendChild(document.createTextNode("대한성서공회 허락 하에 대한성공회 사용"));
     aboutRow.appendChild(el("br"));
-    aboutRow.appendChild(el("a", { href: "https://github.com/anglican-kr/common-bible", target: "_blank", rel: "noopener noreferrer" }, "공동번역성서 1.0.9"));
+    aboutRow.appendChild(el("a", { href: "https://github.com/anglican-kr/common-bible", target: "_blank", rel: "noopener noreferrer" }, "공동번역성서 1.0.10"));
     popover.appendChild(aboutRow);
   }
 
