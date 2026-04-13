@@ -1405,12 +1405,21 @@ mark.search-highlight {
   pointer-events: none;
 }
 
+#launch-screen svg {
+  animation: launch-cross-in 1s ease-out both;
+}
+
 #launch-screen.fade-out {
-  animation: launch-screen-out 3s ease-out forwards;
+  animation: launch-screen-out 5s ease-out forwards;
 }
 
 #launch-screen.fade-out svg {
-  animation: launch-cross-out 3s ease-out forwards;
+  animation: launch-cross-out 5s ease-out forwards;
+}
+
+@keyframes launch-cross-in {
+  from { opacity: 0; transform: scale(0.9); }
+  to { opacity: 1; transform: scale(1); }
 }
 
 @keyframes launch-screen-out {

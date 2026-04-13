@@ -17,6 +17,7 @@ zip -r "$OUTPUT_FILE" \
   index.html \
   app.js \
   gtag-init.js \
+  pre-paint.css \
   style.css \
   sw.js \
   search-worker.js \

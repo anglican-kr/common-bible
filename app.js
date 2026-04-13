@@ -388,8 +388,10 @@ const _darkMQ = window.matchMedia("(prefers-color-scheme: dark)");
 
 function updateThemeMetaColor() {
   const isDark = document.documentElement.getAttribute("data-theme") === "dark";
-  const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.setAttribute("content", isDark ? "#1a1a2e" : "#faf8f5");
+  const color = isDark ? "#1a1a2e" : "#faf8f5";
+  document.querySelectorAll('meta[name="theme-color"]').forEach((meta) => {
+    meta.setAttribute("content", color);
+  });
 }
 
 function applyTheme(theme) {
@@ -439,7 +441,12 @@ function dismissLaunchScreen() {
   const el = document.getElementById("launch-screen");
   if (!el) return;
   el.classList.add("fade-out");
-  el.addEventListener("animationend", () => el.remove(), { once: true });
+  const handler = (e) => {
+    if (e.target !== el || e.animationName !== "launch-screen-out") return;
+    el.removeEventListener("animationend", handler);
+    el.remove();
+  };
+  el.addEventListener("animationend", handler);
 }
 
 // ── Helpers ──
