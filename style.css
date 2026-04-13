@@ -989,6 +989,10 @@ mark.search-highlight {
   margin-left: -0.4em;
 }
 
+.verse.verse-poetry .hanging-quote--single {
+  margin-left: -0.2em;
+}
+
 .verse-num {
   font-family: "Noto Sans KR", sans-serif;
   font-size: 0.7rem;

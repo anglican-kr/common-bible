@@ -90,7 +90,9 @@ function tryVerseRef(query) {
   const verse = parseInt(m[3], 10);
   const verseEnd = m[4] ? parseInt(m[4], 10) : null;
 
-  let bookId = meta.aliases[bookQuery];
+  // Case-insensitive lookup for English ids (e.g. "Gen", "GEN" → "gen").
+  // toLowerCase() is a no-op on Hangul, so Korean aliases remain unaffected.
+  let bookId = meta.aliases[bookQuery] || meta.aliases[bookQuery.toLowerCase()];
   if (!bookId) {
     for (const [id, info] of Object.entries(meta.books)) {
       if (info.ko === bookQuery) { bookId = id; break; }

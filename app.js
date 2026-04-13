@@ -907,7 +907,24 @@ function renderChapter(data, book, opts) {
   const ch = data.chapter;
   const hlQuery = opts && opts.highlightQuery;
   const hlVerse = opts && opts.highlightVerse;
-  const hlVerseEnd = opts && opts.highlightVerseEnd;
+  let hlVerseEnd = opts && opts.highlightVerseEnd;
+
+  // Clip verseEnd to the chapter's actual max verse so "창세 3:1-100"
+  // behaves as "창세 3:1-24" when the chapter only has 24 verses.
+  if (hlVerseEnd) {
+    let maxVerse = 0;
+    for (const v of data.verses) {
+      const vn = v.range_end != null ? v.range_end : v.number;
+      if (vn > maxVerse) maxVerse = vn;
+    }
+    if (hlVerseEnd > maxVerse) {
+      hlVerseEnd = maxVerse;
+      const cp = new URLSearchParams(location.hash.split("?")[1] || "");
+      cp.set("ve", String(maxVerse));
+      const base = location.hash.split("?")[0];
+      history.replaceState(null, "", `${base}?${cp.toString()}`);
+    }
+  }
 
   setTitleWithChapterPicker(book, ch);
   const effDiv = effectiveDivision(book);
@@ -1018,9 +1035,11 @@ function renderChapter(data, book, opts) {
             ? `${verseLabel}a`
             : `${verseLabel}${partLetters[partIdx++]}`;
         span.setAttribute("data-vref", vref);
-        // Hanging punctuation: pull leading quote outside the indent
+        // Hanging punctuation: pull leading quote outside the indent.
+        // Single quote is narrower, so it uses a smaller offset (see .hanging-quote--single).
         if (isPoetry && (line[0] === '"' || line[0] === "'")) {
-          span.appendChild(el("span", { className: "hanging-quote" }, line[0]));
+          const cls = line[0] === '"' ? "hanging-quote" : "hanging-quote hanging-quote--single";
+          span.appendChild(el("span", { className: cls }, line[0]));
           appendSegText(span, line.slice(1));
         } else {
           appendSegText(span, line);

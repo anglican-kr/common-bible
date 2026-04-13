@@ -114,6 +114,7 @@ def main():
     aliases = {}
     for m in mappings:
         bid = m["id"]
+        aliases[bid] = bid
         aliases[m["korean_name"]] = bid
         for alias in m.get("aliases_ko", []):
             aliases[alias] = bid

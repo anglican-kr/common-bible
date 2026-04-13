@@ -2,6 +2,27 @@
 
 ## 2026-04-13
 
+### 절 범위 검색 clamp (미릴리즈)
+
+- 현재 `search-worker.js`의 `REF_RE`가 이미 `창세 3:1-17` 같은 범위 입력을 파싱하고, `app.js`의 하이라이트 조건 `vn >= hlVerse && vn <= (hlVerseEnd || hlVerse)`가 범위 표시를 자연스럽게 처리하고 있었음 — 사실상 이미 동작
+- 개선: `renderChapter`에서 장의 실제 마지막 절 번호로 `hlVerseEnd`를 clamp. `창세 3:1-100`을 입력해도 24절에 멈추고, URL 해시도 `history.replaceState`로 `ve=24`로 교정돼 공유 링크가 정확한 범위를 반영
+- `v.range_end`(절 범위를 가진 절)도 고려해 max verse 계산
+
+### 절 참조 검색에 책 id 별칭 추가 (미릴리즈)
+
+- 목적: 기존에는 `창세 3:1`, `창 3:1`처럼 `korean_name`·`aliases_ko`로만 절 참조 검색 가능. 내부 id(`gen`, `rev`, `sir` 등)로도 동일 검색이 되도록 확장
+- `src/search_indexer.py`: `aliases` 생성 블록에 `aliases[bid] = bid` 한 줄 추가 — 책 id 자체를 별칭 키로 등록
+- `data/search-meta.json` 재생성: 별칭 수 301 → 374 (+73권 id), 파일 크기 약 10.3 KB
+- `search-worker.js`: `tryVerseRef` 별칭 조회를 `meta.aliases[bookQuery] || meta.aliases[bookQuery.toLowerCase()]`로 변경 — `Gen 3:1`·`GEN 3:1`처럼 대소문자 혼용 id 입력도 매칭. `toLowerCase()`는 한글에 무영향이라 기존 한국어 별칭에는 영향 없음
+- `python -m pytest tests/test_completeness.py` 22건 통과
+
+### 운문 행 hanging punctuation — 작은따옴표 offset 보정 (미릴리즈)
+
+- 증상: 운문 단락 첫 글자가 `"`일 때 왼쪽으로 내어쓰기(hanging)되도록 했으나, `'`로 시작하는 단락도 동일 offset(`-0.4em`)으로 내어쓰기가 되면서 정렬이 어긋남
+- 원인: `app.js`의 조건문이 `"`와 `'`을 동일하게 처리하고, CSS `.hanging-quote`는 큰따옴표 폭 기준으로만 조정돼 있었음
+- `app.js` (`renderChapterView` 내부): `'` 시작 행에는 `hanging-quote hanging-quote--single` 수식자 클래스 부여
+- `style.css`: `.verse.verse-poetry .hanging-quote--single { margin-left: -0.2em; }` 추가 — 큰따옴표 offset의 50%
+
 ### PWA 업데이트 후 stale 셸 수정 (버전 1.0.12)
 
 - 증상: Linux 데스크탑 PWA에서 1.0.10 사용 중 업데이트 토스트 확인 → 새로고침 → 여전히 1.0.10 노출
