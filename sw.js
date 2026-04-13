@@ -1,6 +1,6 @@
 // Bump this version whenever books.json or shell files change (app.js, style.css, etc.).
 // Bible chapter data (data/bible/*.json) is network-first and does not need a version bump.
-const CACHE_NAME = "rev-11";
+const CACHE_NAME = "rev-12";
 
 const SHELL_FILES = [
   "/",
@@ -19,9 +19,13 @@ const SHELL_FILES = [
 
 // Cache app shell on install — do NOT skipWaiting() automatically.
 // The client will send a SKIP_WAITING message after user confirms the update.
+// Use { cache: "reload" } to bypass the HTTP cache; otherwise an immutable/max-age
+// response for a prior shell revision can poison the new SW's cache with stale content.
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(SHELL_FILES))
+    caches.open(CACHE_NAME).then((cache) =>
+      cache.addAll(SHELL_FILES.map((url) => new Request(url, { cache: "reload" })))
+    )
   );
 });
 
@@ -61,16 +65,18 @@ self.addEventListener("fetch", (event) => {
         .catch(() => caches.match(event.request))
     );
   } else {
-    // Stale-while-revalidate for shell files
+    // Stale-while-revalidate for shell files.
+    // Revalidate via { cache: "reload" } so a long-lived HTTP cache entry does not
+    // overwrite the SW cache with stale bytes during background refresh.
     event.respondWith(
       caches.match(event.request).then((cached) => {
-        const fetched = fetch(event.request).then((res) => {
+        const fetched = fetch(new Request(event.request, { cache: "reload" })).then((res) => {
           if (res.ok) {
             const clone = res.clone();
             caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
           }
           return res;
-        });
+        }).catch(() => cached);
         return cached || fetched;
       })
     );

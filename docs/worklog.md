@@ -2,6 +2,17 @@
 
 ## 2026-04-13
 
+### PWA 업데이트 후 stale 셸 수정 (버전 1.0.12)
+
+- 증상: Linux 데스크탑 PWA에서 1.0.10 사용 중 업데이트 토스트 확인 → 새로고침 → 여전히 1.0.10 노출
+- 원인: 서버가 셸 파일에 `Cache-Control: max-age=2592000, public, immutable` 헤더를 내려주어, SW install 단계의 `cache.addAll()` 네트워크 요청이 브라우저 HTTP 캐시에서 이전 버전 바이트를 재사용. 새 `CACHE_NAME`에 stale 셸이 저장됨
+- `sw.js`
+  - `install`: `cache.addAll(SHELL_FILES.map((url) => new Request(url, { cache: "reload" })))` — HTTP 캐시 우회
+  - `fetch` 셸 분기: 백그라운드 재검증도 `new Request(event.request, { cache: "reload" })`로 강제 재요청, 실패 시 캐시 fallback
+  - `CACHE_NAME` rev-11 → rev-12
+- `app.js`: About 링크 버전 표기 1.0.11 → 1.0.12
+- 참고: 서버 측 헤더에서 셸 파일의 `immutable` 제거 및 짧은 `max-age`로 변경하는 것이 근본 해결책이나, 본 패치는 SW 레벨에서 선제적으로 우회
+
 ### 신약 전권 마크다운 리포맷 (data/source)
 
 - **신약 성서** (`acts.md`, `john.md`, `luke.md`, `mark.md`, `matt.md`, `rom.md`, `1cor.md`, `2cor.md`, `gal.md`, `eph.md`, `phil.md`, `col.md`, `1tim.md`, `2tim.md`, `heb.md`, `1pet.md`, `1john.md`, `rev.md`)
