@@ -18,6 +18,7 @@ const $searchSheetClear = document.getElementById("search-sheet-clear");
 const $searchSheetResults = document.getElementById("search-sheet-results");
 
 let booksCache = null;
+let appVersion = null;
 let currentAudio = null;
 
 // ── Accessibility ──
@@ -248,7 +249,8 @@ function initSettings() {
     const aboutRow = el("div", { className: "settings-about" });
     aboutRow.appendChild(document.createTextNode("대한성서공회 허락 하에 대한성공회 사용"));
     aboutRow.appendChild(el("br"));
-    aboutRow.appendChild(el("a", { href: "https://github.com/anglican-kr/common-bible", target: "_blank", rel: "noopener noreferrer" }, "공동번역성서 1.0.13"));
+    const versionLabel = appVersion ? `공동번역성서 ${appVersion}` : "공동번역성서";
+    aboutRow.appendChild(el("a", { href: "https://github.com/anglican-kr/common-bible", target: "_blank", rel: "noopener noreferrer" }, versionLabel));
     popover.appendChild(aboutRow);
   }
 
@@ -470,6 +472,18 @@ async function loadBooks() {
   if (!res.ok) throw new Error("Failed to load books.json");
   booksCache = await res.json();
   return booksCache;
+}
+
+async function loadVersion() {
+  if (appVersion) return appVersion;
+  try {
+    const res = await fetch("version.json");
+    const data = await res.json();
+    appVersion = data.version;
+  } catch {
+    appVersion = "";
+  }
+  return appVersion;
 }
 
 async function loadChapter(bookId, chapter) {
@@ -1314,7 +1328,10 @@ async function route() {
 }
 
 window.addEventListener("hashchange", route);
-window.addEventListener("DOMContentLoaded", route);
+window.addEventListener("DOMContentLoaded", () => {
+  loadVersion(); // fire-and-forget; result cached in appVersion before settings are opened
+  route();
+});
 
 // ── Audio Player ──
 

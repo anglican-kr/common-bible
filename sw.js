@@ -1,6 +1,6 @@
 // Bump this version whenever books.json or shell files change (app.js, style.css, etc.).
 // Bible chapter data (data/bible/*.json) is network-first and does not need a version bump.
-const CACHE_NAME = "rev-12";
+const CACHE_NAME = "rev-15";
 
 const SHELL_FILES = [
   "/",
@@ -9,6 +9,7 @@ const SHELL_FILES = [
   "/gtag-init.js",
   "/style.css",
   "/search-worker.js",
+  "/version.json",
   "/data/books.json",
   "/data/search-meta.json",
   "/manifest.webmanifest",

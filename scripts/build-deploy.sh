@@ -20,6 +20,7 @@ zip -r "$OUTPUT_FILE" \
   style.css \
   sw.js \
   search-worker.js \
+  version.json \
   manifest.webmanifest \
   favicon.ico \
   skh-cross.svg \
