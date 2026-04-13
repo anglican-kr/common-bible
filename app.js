@@ -651,55 +651,7 @@ function setBreadcrumb(crumbs) {
 }
 
 function buildDivisionBreadcrumb(label, activeDivision) {
-  const wrapper = el("span", { className: "bc-division-picker" });
-
-  const btn = el("button", { className: "bc-division-btn", "aria-expanded": "false", "aria-label": `${label} — 구분 선택` }, label);
-
-  const popover = el("ul", { className: "bc-division-popover", role: "listbox", "aria-label": "구분 선택" });
-  popover.hidden = true;
-
-  const labels = divisionLabels();
-  const order = divisionOrder();
-  for (const div of order) {
-    const cls = div === activeDivision ? "bc-division-item active" : "bc-division-item";
-    const item = el("li", null,
-      el("a", { className: cls, href: `#/${div}` }, labels[div])
-    );
-    popover.appendChild(item);
-  }
-
-  let cleanupTrap = null;
-
-  btn.addEventListener("click", () => {
-    const open = !popover.hidden;
-    popover.hidden = open;
-    btn.setAttribute("aria-expanded", String(!open));
-    if (!open) {
-      cleanupTrap = trapFocus(popover);
-      const first = popover.querySelector('a[href]');
-      if (first) first.focus();
-    } else if (cleanupTrap) {
-      cleanupTrap(); cleanupTrap = null;
-    }
-  });
-
-  document.addEventListener("click", (e) => {
-    if (!popover.hidden && !wrapper.contains(e.target)) {
-      popover.hidden = true;
-      btn.setAttribute("aria-expanded", "false");
-      if (cleanupTrap) { cleanupTrap(); cleanupTrap = null; }
-    }
-  });
-
-  popover.addEventListener("click", () => {
-    popover.hidden = true;
-    btn.setAttribute("aria-expanded", "false");
-    if (cleanupTrap) { cleanupTrap(); cleanupTrap = null; }
-  });
-
-  wrapper.appendChild(btn);
-  wrapper.appendChild(popover);
-  return wrapper;
+  return el("a", { href: `#/${activeDivision}` }, label);
 }
 
 const DIVISION_LABELS = {
@@ -952,7 +904,6 @@ function renderChapter(data, book, opts) {
   setBreadcrumb([
     { label: "목록", href: "#/" },
     { divisionPicker: true, label: divisionLabels()[effDiv], activeDivision: effDiv },
-    { label: book.name_ko, href: `#/${book.id}` },
   ]);
   clearNode($app);
 
@@ -1081,31 +1032,42 @@ function renderChapter(data, book, opts) {
     if (vs) announce(`${vs.getAttribute("data-vref")}절`);
   });
 
-  // Copy handler: append reference metadata to copied text
+  // Copy handler: serialize the selection ourselves so that stanza breaks
+  // become blank lines and the appended reference uses plain verse numbers
+  // (no line-part letters like "1a").
   article.addEventListener("copy", (e) => {
     const sel = window.getSelection();
     if (!sel || sel.isCollapsed) return;
 
-    const range = sel.getRangeAt(0);
-    const allVerseSpans = article.querySelectorAll(".verse[data-vref]");
-    let firstRef = null;
-    let lastRef = null;
+    const work = document.createElement("div");
+    work.appendChild(sel.getRangeAt(0).cloneContents());
 
-    for (const vs of allVerseSpans) {
-      if (range.intersectsNode(vs)) {
-        const vref = vs.getAttribute("data-vref");
-        if (!firstRef) firstRef = vref;
-        lastRef = vref;
-      }
+    // Drop the aria-hidden verse-number glyph; it is rendered via ::before.
+    work.querySelectorAll(".verse-num").forEach((n) => n.remove());
+    // Stanza breaks become blank lines; inline line breaks become newlines.
+    work.querySelectorAll(".stanza-break").forEach((n) => { n.textContent = "\n\n"; });
+    work.querySelectorAll(".paragraph-break, .hemistich-break").forEach((n) => { n.textContent = "\n"; });
+
+    let firstNum = null;
+    let lastNum = null;
+    for (const vs of work.querySelectorAll(".verse[data-vref]")) {
+      const n = parseInt(vs.getAttribute("data-vref"), 10);
+      if (!Number.isFinite(n)) continue;
+      if (firstNum === null) firstNum = n;
+      lastNum = n;
     }
+    if (firstNum === null) return;
 
-    if (!firstRef) return;
+    const plainText = work.textContent
+      .replace(/\u2060/g, "")
+      .replace(/[ \t]+\n/g, "\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
 
-    const ref = firstRef === lastRef
-      ? `${book.name_ko} ${ch}:${firstRef}`
-      : `${book.name_ko} ${ch}:${firstRef}-${lastRef}`;
+    const ref = firstNum === lastNum
+      ? `${book.name_ko} ${ch}:${firstNum}`
+      : `${book.name_ko} ${ch}:${firstNum}-${lastNum}`;
 
-    const plainText = sel.toString().trim();
     e.clipboardData.setData("text/plain", `${plainText}\n\n— ${ref} (공동번역성서)`);
     e.preventDefault();
   });
@@ -1132,7 +1094,6 @@ function renderPrologue(data, book) {
   setBreadcrumb([
     { label: "목록", href: "#/" },
     { divisionPicker: true, label: divisionLabels()[effDiv], activeDivision: effDiv },
-    { label: book.name_ko, href: `#/${book.id}` },
   ]);
   clearNode($app);
 

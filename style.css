@@ -303,26 +303,6 @@ body {
 }
 
 /* ── Breadcrumb Division Picker ── */
-.bc-division-picker {
-  position: relative;
-  display: inline;
-}
-
-.bc-division-btn {
-  font-family: inherit;
-  font-size: inherit;
-  color: var(--accent);
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 0;
-  line-height: inherit;
-}
-
-.bc-division-btn:hover {
-  text-decoration: underline;
-}
-
 .bc-division-popover {
   position: absolute;
   top: 100%;
