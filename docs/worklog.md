@@ -1,5 +1,18 @@
 # 작업 일지
 
+## 2026-04-13
+
+### 신약 전권 마크다운 리포맷 (data/source)
+
+- **신약 성서** (`acts.md`, `john.md`, `luke.md`, `mark.md`, `matt.md`, `rom.md`, `1cor.md`, `2cor.md`, `gal.md`, `eph.md`, `phil.md`, `col.md`, `1tim.md`, `2tim.md`, `heb.md`, `1pet.md`, `1john.md`, `rev.md`)
+  - 시 구절 verse-line 적용, 단락 구분 정리
+  - 신약 27권 전체 마크다운 형식 정리 완료
+
+### 버전 1.0.11 및 SW 캐시 갱신
+
+- `app.js`: About 링크 버전 표기 1.0.10 → 1.0.11
+- `sw.js`: `CACHE_NAME` rev-10 → rev-11
+
 ## 2026-04-12
 
 ### 스크린리더 접근성 개선
@@ -27,6 +40,22 @@
   - 사용자가 토스트에서 "업데이트" 버튼을 눌러야만 새 SW가 활성화됨
 - `style.css`: `#sw-update-toast`, `#sw-update-btn`, `@keyframes toast-in` 추가
 - `app.js`: `showUpdateToast(waitingSW)` 함수 — waiting SW 감지 시 하단 토스트 표시, 클릭 시 `SKIP_WAITING` 전송
+
+### iOS Safari PWA 업데이트 미감지 수정
+
+- `app.js`: `navigator.serviceWorker.register("sw.js", { updateViaCache: "none" })` — HTTP 캐시 우회로 iOS Safari에서 SW 파일 변경 감지 보장
+- `sw.js`: `CACHE_NAME` rev-9 → rev-10 bump
+
+### 책 배열 설정 레이블 명확화 및 버전 표기
+
+- `app.js`: 설정 팝오버 책 배열 버튼 레이블 변경
+  - `"성공회"` → `"외경 분리"` (canonical 모드)
+  - `"불가타"` → `"구약에 외경 포함"` (vulgate 모드)
+  - About 링크 버전 표기 1.0.9 → 1.0.10
+
+### SW 업데이트 토스트 자동 포커스 제거
+
+- `app.js`: `showUpdateToast()` 내 `btn.focus()` 제거 — 토스트 표시 시 포커스 강제 이동하지 않음
 
 ### 런치 스크린 추가
 
