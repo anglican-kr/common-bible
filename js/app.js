@@ -1513,11 +1513,11 @@ function ensureSearchWorker() {
   });
   searchWorker.postMessage({
     type: "init",
-    metaUrl: `${DATA_DIR}/search-meta.json`,
+    metaUrl: `/${DATA_DIR}/search-meta.json`,
     chunks: [
-      { name: "nt", url: `${DATA_DIR}/search-nt.json` },
-      { name: "dc", url: `${DATA_DIR}/search-dc.json` },
-      { name: "ot", url: `${DATA_DIR}/search-ot.json` },
+      { name: "nt", url: `/${DATA_DIR}/search-nt.json` },
+      { name: "dc", url: `/${DATA_DIR}/search-dc.json` },
+      { name: "ot", url: `/${DATA_DIR}/search-ot.json` },
     ],
   });
   return searchWorker;

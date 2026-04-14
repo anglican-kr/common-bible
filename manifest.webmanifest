@@ -1,6 +1,6 @@
 {
   "name": "공동번역성서",
-  "short_name": "성서",
+  "short_name": "공동번역성서",
   "description": "대한성공회 공동번역성서",
   "start_url": "/",
   "display": "standalone",
