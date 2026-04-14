@@ -34,7 +34,6 @@ js/
   gtag-init.js          ← Google Analytics 초기화
 css/
   style.css             ← 메인 스타일
-  pre-paint.css         ← Critical CSS (첫 페인트 전 배경·런치 스크린)
 assets/
   icons/
     icon-192.png        ← PWA 홈 화면 아이콘

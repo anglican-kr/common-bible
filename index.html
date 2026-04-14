@@ -52,7 +52,20 @@
   <link rel="apple-touch-startup-image" media="(device-width: 834px) and (device-height: 1194px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" href="/assets/splash/dark-ipad-pro-11.png">
   <link rel="apple-touch-startup-image" media="(device-width: 1024px) and (device-height: 1366px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" href="/assets/splash/dark-ipad-pro-129.png">
   <title>공동번역성서</title>
-  <link rel="stylesheet" href="/css/pre-paint.css">
+  <style>
+    /* Critical pre-paint styles — inlined to apply before any network request.
+       Eliminates the white flash between HTML parse and stylesheet load. */
+    html { background: #faf8f5; }
+    @media (prefers-color-scheme: dark) { html { background: #1a1a2e; } }
+    html[data-theme="light"] { background: #faf8f5; }
+    html[data-theme="dark"]  { background: #1a1a2e; }
+    body { margin: 0; background: inherit; }
+    #launch-screen {
+      position: fixed; inset: 0; z-index: 9999;
+      display: flex; align-items: center; justify-content: center;
+      background: #1a1a2e;
+    }
+  </style>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&family=Noto+Serif+KR:wght@400;700&display=swap">
