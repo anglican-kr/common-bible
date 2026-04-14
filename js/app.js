@@ -1236,6 +1236,7 @@ async function route() {
 
     if (view === "books") {
       renderBookList(books);
+      dismissLaunchScreen();
       trackPageView();
       return;
     }
@@ -1247,6 +1248,7 @@ async function route() {
         return;
       }
       renderDivisionList(books, division);
+      dismissLaunchScreen();
       trackPageView();
       return;
     }
@@ -1259,11 +1261,15 @@ async function route() {
 
     if (view === "chapters") {
       renderChapterList(book, books);
+      dismissLaunchScreen();
       trackPageView();
       return;
     }
 
+    // For chapter/prologue: dismiss as soon as the loading placeholder appears,
+    // so the user sees the skeleton instead of the launch screen while data loads.
     renderLoading();
+    dismissLaunchScreen();
 
     if (view === "prologue") {
       const data = await loadPrologue(bookId);
@@ -1291,14 +1297,15 @@ async function route() {
     renderError("데이터를 불러올 수 없습니다.");
     console.error(err);
   } finally {
-    dismissLaunchScreen();
+    dismissLaunchScreen(); // safety fallback (already a no-op if called above)
   }
 }
 
 window.addEventListener("hashchange", route);
 window.addEventListener("DOMContentLoaded", () => {
   loadVersion(); // fire-and-forget; result cached in appVersion before settings are opened
-  route();
+  const idle = window.requestIdleCallback ?? ((cb) => setTimeout(cb, 50));
+  route().finally(() => idle(initCompactHeader));
 });
 
 // ── Audio Player ──
@@ -1872,8 +1879,9 @@ $searchSheetClear.addEventListener("click", () => {
 })();
 
 // ── Compact Header on Scroll ──
+// Deferred: not needed until after first render and first scroll.
 
-(function () {
+function initCompactHeader() {
   const header = document.getElementById("app-header");
   const THRESHOLD_ON = 60;   // collapse breadcrumb when scrolling down past this
   const THRESHOLD_OFF = 10;  // restore breadcrumb only when near the very top
@@ -1888,7 +1896,7 @@ $searchSheetClear.addEventListener("click", () => {
       header.classList.remove("compact");
     }
   }, { passive: true });
-})();
+}
 
 // ── Service Worker Registration & Update ──
 
