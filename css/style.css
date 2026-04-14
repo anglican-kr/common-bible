@@ -1103,6 +1103,37 @@ mark.search-highlight {
   outline-color: var(--text);
 }
 
+.cache-clear-btn {
+  font-family: inherit;
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: #c0392b;
+  background: none;
+  border: 1px solid #e6a9a4;
+  border-radius: 4px;
+  padding: 0.2em 0.6em;
+  cursor: pointer;
+  line-height: 1;
+  transition: background 0.15s, color 0.15s;
+}
+
+.cache-clear-btn:hover {
+  background: #c0392b;
+  color: #fff;
+  border-color: #c0392b;
+}
+
+[data-theme="dark"] .cache-clear-btn {
+  color: #e88;
+  border-color: #844;
+}
+
+[data-theme="dark"] .cache-clear-btn:hover {
+  background: #a33;
+  color: #fff;
+  border-color: #a33;
+}
+
 .settings-about {
   border-top: 1px solid var(--border);
   margin-top: 0.4rem;

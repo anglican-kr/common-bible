@@ -118,6 +118,27 @@ function applyFontSize(size) {
   document.documentElement.style.fontSize = `${size}px`;
 }
 
+// ── Cache management ──
+
+async function clearAllCaches() {
+  if (!("caches" in window)) return;
+  if (!navigator.onLine) {
+    alert("오프라인 상태에서는 캐시를 초기화할 수 없습니다.\n인터넷에 연결된 후 다시 시도해 주세요.");
+    return;
+  }
+  if (!confirm("캐시를 초기화하면 오프라인 데이터가 삭제됩니다.\n계속하시겠습니까?")) return;
+  try {
+    const keys = await caches.keys();
+    await Promise.all(keys.map((k) => caches.delete(k)));
+    const reg = await navigator.serviceWorker.getRegistration();
+    if (reg) await reg.unregister();
+    window.location.reload();
+  } catch (err) {
+    console.error("Cache clear failed:", err);
+    alert("캐시 초기화에 실패했습니다. 다시 시도해 주세요.");
+  }
+}
+
 // ── Settings popover ──
 
 const $settingsAnchor = document.getElementById("settings-anchor");
@@ -244,6 +265,16 @@ function initSettings() {
     }
     orderRow.appendChild(orderGroup);
     popover.appendChild(orderRow);
+
+    // Cache clear
+    if ("caches" in window) {
+      const cacheRow = el("div", { className: "settings-row" });
+      cacheRow.appendChild(el("span", { className: "settings-label" }, "캐시"));
+      const clearBtn = el("button", { className: "cache-clear-btn", "aria-label": "캐시 초기화" }, "초기화");
+      clearBtn.addEventListener("click", () => clearAllCaches());
+      cacheRow.appendChild(clearBtn);
+      popover.appendChild(cacheRow);
+    }
 
     // About
     const aboutRow = el("div", { className: "settings-about" });
