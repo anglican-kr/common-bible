@@ -314,7 +314,7 @@ function loadOrigIcon() {
       resolve(_origIconData);
     };
     img.onerror = reject;
-    img.src = "icon-192.png";
+    img.src = "/assets/icons/icon-512-maskable.png";
   });
 }
 
@@ -1459,7 +1459,7 @@ let partialResultsCb = null;
 
 function ensureSearchWorker() {
   if (searchWorker) return searchWorker;
-  searchWorker = new Worker("search-worker.js");
+  searchWorker = new Worker("/js/search-worker.js");
   searchWorker.addEventListener("message", (ev) => {
     const msg = ev.data;
     if (msg.type === "partial-results" && msg.searchId === activeSearchId) {

@@ -1,22 +1,23 @@
 // Bump this version whenever books.json or shell files change (app.js, style.css, etc.).
 // Bible chapter data (data/bible/*.json) is network-first and does not need a version bump.
-const CACHE_NAME = "rev-18";
+const CACHE_NAME = "rev-20";
 
 const SHELL_FILES = [
   "/",
   "/index.html",
-  "/app.js",
-  "/gtag-init.js",
-  "/pre-paint.css",
-  "/style.css",
-  "/search-worker.js",
+  "/js/app.js",
+  "/js/gtag-init.js",
+  "/js/search-worker.js",
+  "/css/pre-paint.css",
+  "/css/style.css",
   "/version.json",
   "/data/books.json",
   "/data/search-meta.json",
   "/manifest.webmanifest",
   "/favicon.ico",
-  "/icon-192.png",
-  "/icon-512.png",
+  "/assets/icons/icon-192.png",
+  "/assets/icons/icon-512.png",
+  "/assets/icons/icon-512-maskable.png",
 ];
 
 // Cache app shell on install — do NOT skipWaiting() automatically.

@@ -2,6 +2,49 @@
 
 ## 2026-04-14
 
+### iOS PWA 스플래시 화면 추가
+
+- iOS는 `apple-touch-startup-image` 부재 시 앱 실행 때마다 흰 화면 노출 — `background_color` manifest 값은 iOS가 무시함
+- `src/generate_splash.py` 신규: cairosvg + Pillow로 `assets/icons/skh-cross.svg`를 렌더링, 디바이스별 PNG 생성 스크립트
+- `assets/splash/dark-{device}.png` 13장 생성 (iPhone SE 2세대 ~ iPhone 15 Pro Max, iPad mini ~ iPad Pro 12.9")
+  - 배경 `#1a1a2e`(icon-512.png와 동일), 십자가 `#faf8f5`
+  - `prefers-color-scheme` 구분 없이 단일 다크 테마로 통일
+- `index.html`: `<link rel="apple-touch-startup-image">` 13개 추가 (디바이스별 portrait 미디어 쿼리)
+- `sw.js`: CACHE_NAME rev-18 → rev-19 (SHELL_FILES 경로 변경 반영)
+
+### iOS 런치 스크린 — apple-touch-startup-image와 일관성 맞추기
+
+- **페이드인 애니메이션 제거**: `css/style.css`의 `launch-cross-in` keyframe 및 SVG animation 삭제
+- **배경색 고정**: `var(--accent)` 대신 `#1a1a2e` 고정 (테마색 무관) — `css/pre-paint.css`·`css/style.css` 모두 적용, 테마별 분기 제거
+- **십자가 크기 통일**: `width: 25vmin; aspect-ratio: 494 / 671` — 스플래시 생성 공식 `min(px_w, px_h) × 0.25`와 DPR 무관하게 동일한 물리적 크기
+- **십자가 색상 통일**: `fill="white"` → `fill="#faf8f5"` (스플래시 이미지와 동일)
+- `index.html`: SVG 인라인 `width="140" height="190"` 속성 제거 (CSS로 제어)
+
+### Android 스플래시 대응 + iOS 잠금 화면 아이콘 이중 라운딩 수정
+
+- **원인**: `icon-192.png`·`icon-512.png`에 rounded corner가 구워져 있어 iOS 잠금 화면 미디어 위젯이 자체 클리핑을 한 번 더 적용 → 이중 라운딩
+- **`assets/icons/icon-512-maskable.png`** 신규: 512×512 정사각형, 라운딩 없음, 십자가가 safe zone(중앙 80%) 내 65% 높이로 배치
+- `manifest.webmanifest`:
+  - `background_color` `#faf8f5` → `#1a1a2e` (Android 스플래시 배경 통일)
+  - maskable 아이콘 항목 추가 (`purpose: "maskable"`)
+- `js/app.js`: Media Session artwork 소스를 `icon-192.png` → `icon-512-maskable.png` (잠금 화면 이중 라운딩 해소)
+- `sw.js`: SHELL_FILES에 `icon-512-maskable.png` 추가, CACHE_NAME rev-19 → rev-20
+- `src/generate_splash.py`: `make_maskable_icon()` 함수 추가
+
+### 프로젝트 파일 구조 정리 (chore)
+
+루트 디렉터리 과밀 해소 — 성격별로 서브디렉터리로 이동
+
+| 이동 전 (루트) | 이동 후 |
+|---|---|
+| `app.js`, `gtag-init.js`, `search-worker.js` | `js/` |
+| `pre-paint.css`, `style.css` | `css/` |
+| `icon-192.png`, `icon-512.png`, `skh-cross.svg` | `assets/icons/` |
+
+루트 유지 파일: `index.html`, `sw.js`(스코프 필수), `manifest.webmanifest`, `favicon.ico`, `robots.txt`, `sitemap.xml`, `version.json`
+
+참조 업데이트: `index.html`, `js/app.js`, `manifest.webmanifest`, `sw.js` SHELL_FILES, `src/generate_splash.py`, `scripts/build-deploy.sh`
+
 ### 런치 스크린 흰 플래시 제거 — pre-paint.css (버전 1.0.14)
 
 - 증상: PWA 앱 실행 시 메인 스타일시트가 로드되기 전 순간적으로 흰 배경이 노출

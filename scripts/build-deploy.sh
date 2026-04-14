@@ -15,20 +15,16 @@ echo "Building deployment package..."
 
 zip -r "$OUTPUT_FILE" \
   index.html \
-  app.js \
-  gtag-init.js \
-  pre-paint.css \
-  style.css \
   sw.js \
-  search-worker.js \
   version.json \
   manifest.webmanifest \
   favicon.ico \
-  skh-cross.svg \
-  icon-192.png \
-  icon-512.png \
   robots.txt \
   sitemap.xml \
+  js/ \
+  css/ \
+  assets/icons/ \
+  assets/splash/ \
   data/bible/ \
   data/books.json \
   data/book_mappings.json \

@@ -23,12 +23,25 @@
 
 ```
 index.html              ← SPA 진입점 (단일 HTML)
-app.js                  ← 라우팅, 렌더링, 검색 UI, 오디오 플레이어
-style.css               ← 스타일
-sw.js                   ← 서비스 워커 (오프라인)
-search-worker.js        ← Web Worker 기반 전역 검색 엔진 (ADR-005)
+sw.js                   ← 서비스 워커 (오프라인, 루트 필수)
 manifest.webmanifest    ← PWA 매니페스트
-favicon.ico             ← 파비콘
+favicon.ico             ← 파비콘 (루트 필수)
+robots.txt / sitemap.xml
+version.json            ← 앱 버전 (release.py로 관리)
+js/
+  app.js                ← 라우팅, 렌더링, 검색 UI, 오디오 플레이어
+  search-worker.js      ← Web Worker 기반 전역 검색 엔진 (ADR-005)
+  gtag-init.js          ← Google Analytics 초기화
+css/
+  style.css             ← 메인 스타일
+  pre-paint.css         ← Critical CSS (첫 페인트 전 배경·런치 스크린)
+assets/
+  icons/
+    icon-192.png        ← PWA 홈 화면 아이콘
+    icon-512.png        ← PWA 홈 화면 아이콘 (고해상도)
+    skh-cross.svg       ← 성공회 십자가 SVG (스플래시 생성용 소스)
+  splash/
+    dark-{device}.png   ← iOS apple-touch-startup-image (13 디바이스)
 data/
   books.json            ← 73권 목록 (메타데이터, has_prologue 플래그 포함)
   book_mappings.json    ← 책 ID·이름·별칭·구분 매핑
@@ -43,7 +56,11 @@ src/
   parser.py             ← .md 소스 → parsed_bible.json (segments 기반)
   split_bible.py        ← parsed_bible.json → 장별 JSON 분리 스크립트
   search_indexer.py     ← 장별 JSON → data/search-index.json
+  generate_splash.py    ← iOS 스플래시 PNG 생성 (cairosvg + Pillow)
   convert_txt_to_md.py  ← .txt → .md 일괄 변환 (일회성, 완료됨)
+scripts/
+  build-deploy.sh       ← 배포 zip 생성
+  release.py            ← version.json + sw.js CACHE_NAME 동시 bump
 tests/
   test_completeness.py  ← Level 1 완전성 검증 (ADR-004)
 docs/

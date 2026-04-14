@@ -1378,7 +1378,7 @@ mark.search-highlight {
   position: fixed;
   inset: 0;
   z-index: 9999;
-  background: var(--accent);
+  background: #1a1a2e;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1386,7 +1386,8 @@ mark.search-highlight {
 }
 
 #launch-screen svg {
-  animation: launch-cross-in 1s ease-out both;
+  width: 25vmin;
+  aspect-ratio: 494 / 671;
 }
 
 #launch-screen.fade-out {
@@ -1395,11 +1396,6 @@ mark.search-highlight {
 
 #launch-screen.fade-out svg {
   animation: launch-cross-out 5s ease-out forwards;
-}
-
-@keyframes launch-cross-in {
-  from { opacity: 0; transform: scale(0.9); }
-  to { opacity: 1; transform: scale(1); }
 }
 
 @keyframes launch-screen-out {
