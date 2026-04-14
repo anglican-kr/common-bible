@@ -1,5 +1,31 @@
 # 작업 일지
 
+## 2026-04-14
+
+### 런치 스크린 흰 플래시 제거 — pre-paint.css (버전 1.0.14)
+
+- 증상: PWA 앱 실행 시 메인 스타일시트가 로드되기 전 순간적으로 흰 배경이 노출
+- 원인: 브라우저가 `style.css` 파싱 완료 전에 첫 페인트를 실행, 배경색과 런치 스크린 레이아웃이 적용되지 않은 상태가 노출
+- `pre-paint.css` 신규: 메인 스타일시트 로드 전 테마색 배경과 런치 스크린 레이아웃만 담은 critical CSS
+- `index.html`: `theme-color` 메타를 라이트/다크 `media` 쿼리로 분리, `pre-paint.css` 링크 추가
+- `app.js`: `updateThemeMetaColor`가 복수 `theme-color` 메타를 모두 갱신; `dismissLaunchScreen` 핸들러를 `launch-screen-out` 애니메이션에만 반응하도록 필터링
+- `style.css`: `launch-cross-in` keyframe 추가, fade-out `3s` → `5s`
+- `sw.js`: `SHELL_FILES`에 `pre-paint.css` 추가, `CACHE_NAME` rev-15 → rev-17
+- `scripts/build-deploy.sh`: 배포 zip에 `pre-paint.css` 포함
+- `version.json`: 1.0.13 → 1.0.14
+
+### 브레드크럼 구분 링크화 및 클립보드 복사 개선
+
+- **브레드크럼 구분 링크화**: 브레드크럼의 구약/외경/신약 구분 항목을 드롭다운 피커에서 직접 링크로 변경 — 클릭 시 즉시 해당 구분의 첫 책으로 이동
+- **브레드크럼 책이름 제거**: 장 보기 및 머리말 보기 브레드크럼에서 중복 노출이던 책이름 항목 제거
+- **클립보드 복사 개선**: 절 복사 시 연(stanza) 나누기를 빈 줄로, 절 번호를 숫자만 사용 (마침표·공백 제외)
+- `app.js`: 브레드크럼 렌더링 로직 단순화, 클립보드 핸들러 수정
+- `style.css`: 미사용 CSS 제거 — `.bc-division-picker`, `.bc-division-btn`
+
+### 소스 파일 업데이트
+
+- `data/source` 서브모듈 최신 커밋으로 갱신
+
 ## 2026-04-13
 
 ### 절 범위 검색 clamp (미릴리즈)
