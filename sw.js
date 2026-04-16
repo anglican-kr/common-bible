@@ -1,6 +1,6 @@
-// Bump this version whenever books.json or shell files change (app.js, style.css, etc.).
-// Bible chapter data (data/bible/*.json) is network-first and does not need a version bump.
-const CACHE_NAME = "rev-24";
+// Bump this version on every release. Activating a new CACHE_NAME clears all
+// prior caches (shell + data), ensuring bible/search updates reach clients.
+const CACHE_NAME = "rev-25";
 
 const SHELL_FILES = [
   "/",
@@ -48,39 +48,22 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
-// Network-first for JSON data, cache-first for shell
+// Stale-while-revalidate for everything.
+// Revalidate via { cache: "reload" } so a long-lived HTTP cache entry does not
+// overwrite the SW cache with stale bytes during background refresh.
+// Bible/search data updates are propagated by bumping CACHE_NAME on release,
+// which clears the old cache during activate().
 self.addEventListener("fetch", (event) => {
-  const url = new URL(event.request.url);
-
-  if (url.pathname.startsWith("/data/bible/") ||
-      (url.pathname.startsWith("/data/search-") && url.pathname !== "/data/search-meta.json")) {
-    // Network-first for chapter data (cache as accessed)
-    event.respondWith(
-      fetch(event.request)
-        .then((res) => {
-          if (res.ok) {
-            const clone = res.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-          }
-          return res;
-        })
-        .catch(() => caches.match(event.request))
-    );
-  } else {
-    // Stale-while-revalidate for shell files.
-    // Revalidate via { cache: "reload" } so a long-lived HTTP cache entry does not
-    // overwrite the SW cache with stale bytes during background refresh.
-    event.respondWith(
-      caches.match(event.request).then((cached) => {
-        const fetched = fetch(new Request(event.request, { cache: "reload" })).then((res) => {
-          if (res.ok) {
-            const clone = res.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-          }
-          return res;
-        }).catch(() => cached);
-        return cached || fetched;
-      })
-    );
-  }
+  event.respondWith(
+    caches.match(event.request).then((cached) => {
+      const fetched = fetch(new Request(event.request, { cache: "reload" })).then((res) => {
+        if (res.ok) {
+          const clone = res.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+        }
+        return res;
+      }).catch(() => cached);
+      return cached || fetched;
+    })
+  );
 });
