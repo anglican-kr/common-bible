@@ -1335,6 +1335,7 @@ mark.search-highlight {
 
 /* ── Loading / Error ── */
 .loading {
+  font-family: "Noto Sans KR", sans-serif;
   text-align: center;
   padding: 3rem 1rem;
   color: var(--text-secondary);
@@ -1422,11 +1423,11 @@ mark.search-highlight {
 }
 
 #launch-screen.fade-out {
-  animation: launch-screen-out 5s ease-out forwards;
+  animation: launch-screen-out 0.8s ease-out forwards;
 }
 
 #launch-screen.fade-out svg {
-  animation: launch-cross-out 5s ease-out forwards;
+  animation: launch-cross-out 0.8s ease-out forwards;
 }
 
 @keyframes launch-screen-out {
@@ -1437,9 +1438,18 @@ mark.search-highlight {
   to { transform: scale(1.35); opacity: 0; }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  #launch-screen.fade-out,
+  #launch-screen.fade-out svg {
+    animation: none;
+    opacity: 0;
+  }
+}
+
 /* ── SW Update Toast ── */
 
 #sw-update-toast {
+  font-family: "Noto Sans KR", sans-serif;
   position: fixed;
   bottom: calc(env(safe-area-inset-bottom, 0px) + 1rem);
   left: 50%;
