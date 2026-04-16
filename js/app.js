@@ -469,6 +469,7 @@ let _launchScreenDismissed = false;
 function dismissLaunchScreen() {
   if (_launchScreenDismissed) return;
   _launchScreenDismissed = true;
+  document.documentElement.classList.add("launch-done");
   const el = document.getElementById("launch-screen");
   if (!el) return;
   el.classList.add("fade-out");
