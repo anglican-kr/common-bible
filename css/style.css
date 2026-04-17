@@ -1415,28 +1415,28 @@ mark.search-highlight {
   align-items: center;
   justify-content: center;
   pointer-events: none;
+  will-change: opacity;
 }
 
 #launch-screen svg {
-  width: 25vmin;
+  width: 30vmin;
   aspect-ratio: 494 / 671;
+  will-change: transform, opacity;
 }
 
 #launch-screen.fade-out {
-  animation: launch-screen-out 0.8s ease-out forwards;
+  animation: launch-screen-out 2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
 #launch-screen.fade-out svg {
-  animation: launch-cross-out 0.8s ease-out forwards;
+  animation: launch-screen-out 2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
 @keyframes launch-screen-out {
   to { opacity: 0; }
 }
 
-@keyframes launch-cross-out {
-  to { transform: scale(1.35); opacity: 0; }
-}
+/* launch-cross-out is no longer used, kept launch-screen-out for both */
 
 @media (prefers-reduced-motion: reduce) {
   #launch-screen.fade-out,

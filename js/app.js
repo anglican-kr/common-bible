@@ -469,12 +469,23 @@ let _launchScreenDismissed = false;
 function dismissLaunchScreen() {
   if (_launchScreenDismissed) return;
   _launchScreenDismissed = true;
-  document.documentElement.classList.add("launch-done");
   const el = document.getElementById("launch-screen");
-  if (!el) return;
-  el.classList.add("fade-out");
+  if (!el) {
+    document.documentElement.classList.add("launch-done");
+    return;
+  }
+  
+  // Decouple from heavy rendering task for smoother start
+  requestAnimationFrame(() => {
+    el.classList.add("fade-out");
+    // Change background early to avoid flash but after animation has committed
+    setTimeout(() => {
+      document.documentElement.classList.add("launch-done");
+    }, 50);
+  });
+
   const handler = (e) => {
-    if (e.target !== el || e.animationName !== "launch-screen-out") return;
+    if (e.target !== el || (e.animationName !== "launch-screen-out")) return;
     el.removeEventListener("animationend", handler);
     el.remove();
   };
@@ -507,9 +518,12 @@ function clearNode(node) {
 
 async function loadBooks() {
   if (booksCache) return booksCache;
-  const res = await fetch(`${DATA_DIR}/books.json`);
-  if (!res.ok) throw new Error("Failed to load books.json");
-  booksCache = await res.json();
+  // Use pre-fetched promise if available
+  const promise = window.booksPromise || fetch(`${DATA_DIR}/books.json`).then(res => {
+    if (!res.ok) throw new Error("Failed to load books.json");
+    return res.json();
+  });
+  booksCache = await promise;
   return booksCache;
 }
 
@@ -1224,10 +1238,13 @@ function parseHash() {
 
 function trackPageView() {
   if (typeof gtag !== "function") return;
-  gtag("event", "page_view", {
-    page_title: document.title,
-    page_location: location.href,
-    page_path: location.hash || "/",
+  const idle = window.requestIdleCallback ?? ((cb) => setTimeout(cb, 200));
+  idle(() => {
+    gtag("event", "page_view", {
+      page_title: document.title,
+      page_location: location.href,
+      page_path: location.hash || "/",
+    });
   });
 }
 
@@ -1267,8 +1284,8 @@ async function route() {
     const books = await loadBooks();
 
     if (view === "books") {
+      dismissLaunchScreen(); // Start fade-out immediately
       renderBookList(books);
-      dismissLaunchScreen();
       trackPageView();
       return;
     }
@@ -1279,8 +1296,8 @@ async function route() {
         location.hash = "#/old_testament";
         return;
       }
+      dismissLaunchScreen(); // Start fade-out immediately
       renderDivisionList(books, division);
-      dismissLaunchScreen();
       trackPageView();
       return;
     }
@@ -1288,12 +1305,13 @@ async function route() {
     const book = books.find((b) => b.id === bookId);
     if (!book) {
       renderError("해당 성경을 찾을 수 없습니다.");
+      dismissLaunchScreen();
       return;
     }
 
     if (view === "chapters") {
+      dismissLaunchScreen(); // Start fade-out immediately
       renderChapterList(book, books);
-      dismissLaunchScreen();
       trackPageView();
       return;
     }
@@ -1335,9 +1353,16 @@ async function route() {
 
 window.addEventListener("hashchange", route);
 window.addEventListener("DOMContentLoaded", () => {
-  loadVersion(); // fire-and-forget; result cached in appVersion before settings are opened
-  const idle = window.requestIdleCallback ?? ((cb) => setTimeout(cb, 50));
-  route().finally(() => idle(initCompactHeader));
+  const idle = window.requestIdleCallback ?? ((cb) => setTimeout(cb, 200));
+  
+  // 1. Prioritize UI rendering
+  route().finally(() => {
+    // 2. Load non-critical data after first paint
+    idle(() => {
+      loadVersion();
+      initCompactHeader();
+    });
+  });
 });
 
 // ── Audio Player ──
