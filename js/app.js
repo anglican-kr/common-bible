@@ -1087,14 +1087,33 @@ function renderChapter(data, book, opts) {
     const sel = window.getSelection();
     if (!sel || sel.isCollapsed) return;
 
-    const work = document.createElement("div");
-    work.appendChild(sel.getRangeAt(0).cloneContents());
+    // Expand partial selections to full verse boundaries so a dragged-across
+    // fragment still yields a complete citation.
+    const range = sel.getRangeAt(0);
+    let firstVerse = null;
+    let lastVerse = null;
+    for (const v of article.querySelectorAll(".verse")) {
+      if (range.intersectsNode(v)) {
+        if (!firstVerse) firstVerse = v;
+        lastVerse = v;
+      }
+    }
+    if (!firstVerse) return;
 
-    // Drop the aria-hidden verse-number glyph; it is rendered via ::before.
+    const expanded = document.createRange();
+    expanded.setStartBefore(firstVerse);
+    expanded.setEndAfter(lastVerse);
+
+    const work = document.createElement("div");
+    work.appendChild(expanded.cloneContents());
+
+    // Drop aria-hidden verse-number glyphs (rendered via ::before).
     work.querySelectorAll(".verse-num").forEach((n) => n.remove());
-    // Stanza breaks become blank lines; inline line breaks become newlines.
-    work.querySelectorAll(".stanza-break").forEach((n) => { n.textContent = "\n\n"; });
-    work.querySelectorAll(".paragraph-break, .hemistich-break").forEach((n) => { n.textContent = "\n"; });
+    // Stanza and paragraph boundaries become blank lines; pilcrow markers also
+    // emit a blank line (redundant \n\n adjacent to a paragraph-break collapses
+    // via the \n{3,} rule below). Hemistich breaks stay as a single line break.
+    work.querySelectorAll(".stanza-break, .paragraph-break, .pilcrow").forEach((n) => { n.textContent = "\n\n"; });
+    work.querySelectorAll(".hemistich-break").forEach((n) => { n.textContent = "\n"; });
 
     let firstNum = null;
     let lastNum = null;
