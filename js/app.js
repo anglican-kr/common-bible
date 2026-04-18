@@ -1339,6 +1339,7 @@ async function route() {
       } else {
         const books = await loadBooks();
         renderBookList(books);
+        dismissLaunchScreen();
       }
       trackPageView();
       return;
@@ -1593,7 +1594,11 @@ function ensureSearchWorker() {
       if (partialResultsCb) partialResultsCb(msg);
     }
     if (msg.type === "results" || msg.type === "error") {
-      if (pendingSearchCb && msg.searchId === activeSearchId) {
+      // Worker init/load failures may emit error without searchId in some browsers.
+      // Treat those as terminal for the current pending search to avoid stuck UI.
+      const isCurrentSearch =
+        msg.searchId == null ? msg.type === "error" : msg.searchId === activeSearchId;
+      if (pendingSearchCb && isCurrentSearch) {
         const cb = pendingSearchCb;
         pendingSearchCb = null;
         cb(msg.type === "error" ? null : msg);
@@ -1698,26 +1703,59 @@ function buildSearchPagination(query, currentPage, totalPages) {
 // Render search result list into a container node (used by both page and sheet views)
 function renderSearchResultList(container, result, query, page, pageSize, paginationBuilder) {
   clearNode(container);
-  if (result.total === 0) {
+
+  const hasRef = !!result.refMatch;
+  const hasResults = result.results && result.results.length > 0;
+
+  if (!hasRef && result.total === 0) {
     container.appendChild(el("p", { className: "search-empty" }, `"${query}"에 대한 검색 결과가 없습니다.`));
     return;
   }
-  const totalPages = Math.ceil(result.total / pageSize);
-  const isPending = result.pendingChunks && result.pendingChunks.length > 0;
-  const countLabel = isPending
-    ? `"${query}" 검색 중… (현재 ${result.total}건)`
-    : `총 ${result.total}건 (${page}/${totalPages}쪽)`;
-  container.appendChild(el("p", { className: "search-count" }, countLabel));
 
   const list = el("ul", { className: "search-results", role: "list" });
-  for (const r of result.results) {
-    const li = el("li", { className: "search-result-item" });
-    const link = el("a", { href: `#/${r.b}/${r.c}/${r.v}?hl=${encodeURIComponent(query)}` });
-    link.appendChild(el("span", { className: "search-result-ref" }, `${r.bookNameKo} ${r.c}:${r.v}`));
-    link.appendChild(buildSnippet(r.t, query));
+
+  // 1. Display Reference Match Card if exists
+  if (hasRef) {
+    const ref = result.refMatch;
+    const unit = chUnit(ref.bookId);
+    let label = `${ref.bookNameKo} ${ref.chapter}${unit}`;
+    if (ref.verse) label += ` ${ref.verse}절`;
+    if (ref.verseEnd) label += `-${ref.verseEnd}절`;
+
+    let hash = `#/${ref.bookId}/${ref.chapter}`;
+    if (ref.verse) {
+      hash += `/${ref.verse}`;
+      if (ref.verseEnd) hash += `-${ref.verseEnd}`;
+    }
+
+    const li = el("li", { className: "search-result-item ref-match-item" });
+    const link = el("a", { href: hash, className: "search-result-ref-card" });
+    link.appendChild(el("span", { className: "search-result-ref-label" }, "구절 바로가기"));
+    link.appendChild(el("span", { className: "search-result-ref-title" }, label));
     li.appendChild(link);
     list.appendChild(li);
   }
+
+  // 2. Display existing Search Results
+  const totalPages = Math.ceil(result.total / pageSize);
+  const isPending = result.pendingChunks && result.pendingChunks.length > 0;
+
+  if (hasResults || isPending) {
+    const countLabel = isPending
+      ? `"${query}" 검색 중… (현재 ${result.total}건)`
+      : `총 ${result.total}건 (${page}/${totalPages}쪽)`;
+    container.appendChild(el("p", { className: "search-count" }, countLabel));
+
+    for (const r of result.results) {
+      const li = el("li", { className: "search-result-item" });
+      const link = el("a", { href: `#/${r.b}/${r.c}/${r.v}?hl=${encodeURIComponent(query)}` });
+      link.appendChild(el("span", { className: "search-result-ref" }, `${r.bookNameKo} ${r.c}:${r.v}`));
+      link.appendChild(buildSnippet(r.t, query));
+      li.appendChild(link);
+      list.appendChild(li);
+    }
+  }
+
   container.appendChild(list);
 
   if (!isPending && totalPages > 1 && paginationBuilder) {
@@ -1762,12 +1800,18 @@ async function renderSearchResults(query, page, autoNavigate = false) {
       if (ref.verseEnd) hash += `-${ref.verseEnd}`;
     }
     if (autoNavigate) {
+      dismissLaunchScreen();
       location.replace(hash);
+    } else {
+      // Show the refMatch as a clickable result, and ensure UI is visible
+      renderSearchResultList($app, result, query, page, pageSize, buildSearchPagination);
+      dismissLaunchScreen();
     }
     return;
   }
 
   renderSearchResultList($app, result, query, page, pageSize, buildSearchPagination);
+  dismissLaunchScreen();
 
   announce(`"${query}" 검색 결과 ${result.total}건`);
   window.scrollTo(0, 0);
@@ -1805,18 +1849,11 @@ $searchInput.addEventListener("input", () => {
   const q = $searchInput.value.trim();
   $searchClear.hidden = !q;
   clearTimeout(searchDebounceTimer);
-  clearTimeout(searchAutoNavTimer);
   if (!q) return;
   searchDebounceTimer = setTimeout(() => {
     searchAutoNavigate = false;
     location.hash = `#/search?q=${encodeURIComponent(q)}`;
   }, 400);
-  // After 3s of no input, treat as Enter (auto-navigate on verse ref match)
-  searchAutoNavTimer = setTimeout(() => {
-    searchAutoNavigate = true;
-    const newHash = `#/search?q=${encodeURIComponent(q)}`;
-    if (location.hash === newHash) { route(); } else { location.hash = newHash; }
-  }, 3000);
 });
 
 $searchClear.addEventListener("click", () => {
@@ -1920,6 +1957,11 @@ async function runSheetSearch(query, page, autoNavigate = false) {
     if (autoNavigate) {
       closeSearchSheet();
       location.hash = hash;
+    } else {
+      // Show the refMatch as a clickable result in the sheet
+      renderSearchResultList($searchSheetResults, result, query, page, pageSize, null);
+      // Attach closeSearchSheet to the reference link
+      $searchSheetResults.querySelectorAll("a[href^='#/']").forEach((a) => a.addEventListener("click", () => closeSearchSheet()));
     }
     return;
   }
@@ -1951,10 +1993,8 @@ $searchSheetInput.addEventListener("input", () => {
   const q = $searchSheetInput.value.trim();
   $searchSheetClear.hidden = !q;
   clearTimeout(sheetDebounceTimer);
-  clearTimeout(sheetAutoNavTimer);
   if (!q) { clearNode($searchSheetResults); return; }
   sheetDebounceTimer = setTimeout(() => runSheetSearch(q, 1, false), 400);
-  sheetAutoNavTimer = setTimeout(() => runSheetSearch(q, 1, true), 3000);
 });
 
 $searchSheetClear.addEventListener("click", () => {

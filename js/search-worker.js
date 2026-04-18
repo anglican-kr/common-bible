@@ -156,7 +156,8 @@ onmessage = async (ev) => {
       }
       post("ready", {});
     } catch (err) {
-      post("error", { message: err.message });
+      // Include searchId so the main thread can resolve the correct pending Promise.
+      post("error", { searchId, message: err.message });
     }
     return;
   }

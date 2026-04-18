@@ -1629,3 +1629,46 @@ mark.search-highlight {
   from { opacity: 0; transform: translateX(-50%) translateY(1rem); }
   to { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
+
+/* ── Search Reference Match Card ── */
+.ref-match-item {
+  margin-bottom: 1rem;
+  border-bottom: 2px solid var(--border) !important;
+}
+
+.search-result-ref-card {
+  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  display: flex !important;
+  flex-direction: column;
+  padding: 1rem !important;
+  background: var(--bg-card);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  text-decoration: none;
+  transition: transform 0.15s ease, box-shadow 0.15s ease !important;
+}
+
+.search-result-ref-card:hover {
+  background: var(--accent) !important;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.search-result-ref-card:hover .search-result-ref-label,
+.search-result-ref-card:hover .search-result-ref-title {
+  color: #fff !important;
+}
+
+.search-result-ref-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 0.25rem;
+}
+
+.search-result-ref-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text);
+}
