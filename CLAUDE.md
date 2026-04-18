@@ -62,6 +62,20 @@ scripts/
   release.py            ← version.json + sw.js CACHE_NAME 동시 bump
 tests/
   test_completeness.py  ← Level 1 완전성 검증 (ADR-004)
+  test_ordering.py      ← Level 2 절 순서 검증 (ADR-004)
+  test_snapshots.py     ← Level 3 특수 케이스 스냅샷 (ADR-004)
+  fixtures/
+    verse_sequence.json ← 1328장 절 순서 스냅샷 (generate_fixtures.py로 생성)
+  generate_fixtures.py  ← 픽스처 재생성 스크립트 (로컬 전용, 원본 텍스트 필요)
+  e2e/
+    test_search.py      ← 검색 파이프라인 + 새로고침 회귀
+    test_navigation.py  ← URL 라우팅 8케이스
+    test_copy.py        ← 클립보드 복사 경계 확장
+    test_install_guide.py ← 플랫폼별 설치 안내 모달
+    test_features.py    ← 이어읽기 배너, 모바일 FAB
+.github/
+  workflows/
+    test.yml            ← CI: Level 1-3 자동 실행
 docs/
   decisions/            ← ADR (아키텍처 결정 기록)
   worklog.md            ← 작업 일지
@@ -113,6 +127,46 @@ for ch in chapters:
 | `data/bible/sir-prologue.json` | 집회서 머리말. 원본 텍스트에서 직접 추출 (ADR-002) |
 | `data/books.json` | 73권 메타데이터. 책 순서, 장 수, `has_prologue` 플래그 포함 |
 
+## 테스트
+
+### 데이터 파이프라인 테스트 (Level 1-3)
+
+원본 텍스트 없이 실행 가능. CI에서 자동 실행됨.
+
+```bash
+# 전체 실행
+pytest tests/test_completeness.py tests/test_ordering.py tests/test_snapshots.py -v
+
+# Level별 개별 실행
+pytest tests/test_completeness.py   # Level 1: 파일 수, 구조 완전성
+pytest tests/test_ordering.py       # Level 2: 1328장 절 순서 = 픽스처 일치
+pytest tests/test_snapshots.py      # Level 3: cross-chapter·재배치 고정값
+```
+
+### 픽스처 갱신 (parser.py 또는 split_bible.py 변경 시)
+
+```bash
+python tests/generate_fixtures.py   # data/bible/ 읽어 verse_sequence.json 재생성
+# 결과 파일을 커밋에 포함
+```
+
+### E2E 테스트 (브라우저, 로컬 전용)
+
+```bash
+# 1. 의존성 설치 (최초 1회)
+pip install pytest-playwright
+playwright install chromium
+
+# 2. 개발 서버 실행 (별도 터미널)
+python3 -m http.server 8080
+
+# 3. 테스트 실행
+pytest tests/e2e/ -v
+```
+
+e2e 테스트는 서버가 `http://localhost:8080`에 실행 중이어야 합니다.
+CI에서는 실행하지 않으며 로컬에서 기능 개발 후 수동으로 확인합니다.
+
 ## 장기 로드맵
 
 1. Phase 1: 성경 읽기 PWA (현재)
@@ -144,4 +198,4 @@ for ch in chapters:
 
 - Phase 1 완료: 성경 읽기 PWA (73권, 오프라인, 검색, 오디오, 접근성)
 - 진행 중: 운문 본문 재구성 (data/source/*.md 편집 후 파이프라인 재실행)
-- 미완료: 앱 테스트 체계(ADR-004 Level 2·3)
+- 완료: 테스트 체계 (ADR-004 Level 1-3 + e2e)

@@ -1,5 +1,117 @@
 # 작업 일지
 
+## 2026-04-18
+
+### 초기 로딩 최적화 및 PWA 정리 (버전 1.0.21)
+
+- `js/pre-fetch.js` 신규: HTML 파싱 중 즉시 `books.json` fetch 시작 (app.js 로딩 대기 제거)
+- GA `page_view`, `loadVersion`, `initCompactHeader`를 `requestIdleCallback`으로 지연
+- 런치 스크린 fade-out을 `requestAnimationFrame`으로 분리, 애니메이션 `2s`로 완화
+- critical CSS에 디자인 토큰 변수 인라인, CSP `style-src` 해시 갱신
+- `manifest.webmanifest`: `purpose: "any"` 명시, `short_name`/`start_url` 정리, `og:image` 경로 수정
+- `apple-touch-icon`을 maskable 아이콘으로 교체, `skh-cross.svg` viewBox 타이트닝
+
+### URL 라우팅 — 절 단위 확장 (`/#/{book}/{chapter}/{verse}[-{verse}]`)
+
+- 해시 경로에 절(범위) 세그먼트 추가 — 검색 결과·딥링크에서 특정 절 강조 표시
+- 기존 레거시 쿼리 폼(`?v=&ve=`) 제거, `?hl=` 텍스트 하이라이트는 유지
+- 범위 오버플로 clamp, 역순 정규화, 동일값 처리 후 `replaceState`로 URL 재작성
+- 향후 본문 공유(카드 이미지 생성) 기반
+
+### 본문 복사 개선
+
+- 단락 기호(¶) 제거, 산문 단락 경계를 빈 줄로 구분
+- 절의 일부만 선택해도 절 전체 경계로 자동 확장해 복사
+
+### iOS 시스템 한글 글꼴 스택 적용
+
+- Noto Sans KR 대신 `-apple-system` → `Apple SD Gothic Neo` 우선 적용
+- iOS 네이티브 폰트 일관성·소형 화면 가독성 확보, macOS Chromium 커버를 위해 `BlinkMacSystemFont` 함께 명시
+
+### PWA 설치 가이드 추가 (ADR-008)
+
+플랫폼별 안내 내용이 다른 설치 가이드 모달을 설정 팝오버에 추가했다.
+
+- **iOS Safari**: 공유 버튼 → '홈 화면에 추가' 수동 가이드 (SVG 일러스트 포함)
+- **iOS 타 브라우저**: Safari로 열기 유도 + 주소 복사 버튼
+- **Android/데스크탑 Chromium**: `beforeinstallprompt` 기반 CTA 버튼
+- **standalone 모드**: 이미 설치된 상태에서는 진입점 숨김
+- `assets/install-guide/ios-*.svg` 플레이스홀더 추가 (실기기 스크린샷으로 차후 교체)
+- `docs/decisions/008-pwa-install-guide.md` ADR 작성
+- 접근성 보완: 모달 열림 시 배경에 `inert` + `aria-hidden`, `aria-disabled` 포커스 트랩, min 44×44px 터치 타깃, 다크 모드 대비비 수정
+
+### 설정 팝오버 구조 개선 및 검색 UX 개선 (버전 1.0.22)
+
+- 설정 항목을 **외경 배치 / 타이포그래피 / 앱 관리** 세 섹션으로 범주화, 글자 크기 확대
+- 구절 참조('요한 3:16') 검색 시 자동 이동 대신 '구절 바로가기' 카드 상단 표시 (3초 자동 이동 타이머 제거)
+- 검색 시트에서도 구절 카드 표시, 클릭 시 시트 닫기
+- 검색 워커 오류 시 `searchId` 없어도 pending 콜백 정리 (UI 멈춤 방지)
+
+### 테스트 체계 구축 (ADR-004 완성 + e2e)
+
+#### 배경
+
+미커밋 상태로 남아 있던 `verify_*.py` 11개 파일(Playwright ad-hoc 스크립트)을 정리하면서
+ADR-004에서 설계만 하고 구현하지 않았던 Level 2·3 테스트와
+체계적인 e2e 테스트 디렉터리를 함께 구축했다.
+
+#### 데이터 파이프라인 테스트 (Level 2·3)
+
+**Level 2 — 절 순서 검증** (`tests/test_ordering.py`)
+- `tests/generate_fixtures.py`: `data/bible/` 전체를 읽어 각 장의 절 번호 시퀀스를
+  `tests/fixtures/verse_sequence.json`으로 저장 (로컬 전용, 원본 텍스트 필요)
+- `verse_sequence.json`: 1328장 × 절 번호 배열. cross-chapter 절은 `{"n": num, "chapter_ref": ch}` 형태
+- `test_ordering.py`: 1328개 파라미터화 테스트 — 현재 `data/bible/` 파일이 픽스처와 정확히 일치하는지 검증
+- `parser.py` 또는 `split_bible.py` 변경 후 `generate_fixtures.py` 재실행 → 픽스처 커밋
+
+**Level 3 — 특수 케이스 스냅샷** (`tests/test_snapshots.py`)
+- Cross-chapter 삽입 6곳 고정값 검증
+  - 이사야 40장: 41:6·7절 삽입 확인 + 41장에서 6·7절 누락 확인
+  - 잠언 5장: 6:22절 삽입
+  - 호세아 14장: 13:14절이 5절 직후에 위치
+  - 호세아 13장: 14절 부재
+  - 욥기 27장: 24:18-24절 삽입
+- 같은 장 내 재배치 3개 검증 (아모스 5·6장, 이사야 40장 순서)
+
+#### e2e 테스트 (`tests/e2e/`)
+
+기존 `verify_*.py` 중 품질 좋은 것들을 pytest-playwright 형식으로 변환.
+진단/일회성 스크립트(`verify_loading*.py`, `verify_timeline.py`,
+`verify_keyword_search.py`, `verify_verse_search.py`)는 중복이므로 삭제.
+
+| 파일 | 커버 범위 |
+|------|-----------|
+| `test_search.py` | 키워드 검색, 절 참조 자동 이동, Worker 오류 UI 노출, 검색 URL 새로고침 회귀 |
+| `test_navigation.py` | URL 라우팅 8케이스 (단일 절, 범위, over-range 클램프, 역순 정규화, legacy form, hl 파라미터, 유효하지 않은 절) |
+| `test_copy.py` | 부분 선택 시 절 전체로 확장, 절 경계 걸친 선택 처리 |
+| `test_install_guide.py` | iOS Safari/Chrome, Android, Desktop UA별 모달 내용, standalone 모드 진입점 숨김 |
+| `test_features.py` | 이어읽기 배너, 모바일 검색 FAB → 바텀시트 |
+
+e2e는 서버가 `http://localhost:8080`에서 실행 중이어야 하므로 CI 대상 아님.
+
+#### CI
+
+`.github/workflows/test.yml`: push/PR 시 Level 1-3 자동 실행 (e2e 제외).
+
+#### 수정 파일 요약
+
+| 파일 | 변경 유형 |
+|------|-----------|
+| `tests/test_ordering.py` | 신규 — Level 2 |
+| `tests/test_snapshots.py` | 신규 — Level 3 |
+| `tests/fixtures/verse_sequence.json` | 신규 — 1328장 픽스처 |
+| `tests/generate_fixtures.py` | 신규 — 픽스처 생성 스크립트 |
+| `tests/e2e/conftest.py` | 신규 — BASE_URL, wait_app_ready |
+| `tests/e2e/test_search.py` | 신규 |
+| `tests/e2e/test_navigation.py` | 신규 |
+| `tests/e2e/test_copy.py` | 신규 |
+| `tests/e2e/test_install_guide.py` | 신규 |
+| `tests/e2e/test_features.py` | 신규 |
+| `.github/workflows/test.yml` | 신규 — CI |
+| `requirements.txt` | 수정 — pytest-playwright 추가 |
+| `CLAUDE.md` | 수정 — 테스트 섹션, 프로젝트 구조, 현재 상태 갱신 |
+| `tests/verify_*.py` (11개) | 삭제 |
+
 ## 2026-04-14
 
 ### iOS PWA 스플래시 화면 추가
@@ -68,6 +180,63 @@
 ### 소스 파일 업데이트
 
 - `data/source` 서브모듈 최신 커밋으로 갱신
+
+### 데이터 업데이트 및 초기 로딩 최적화 (버전 1.0.16–1.0.18)
+
+**데이터 업데이트:**
+- 검색 인덱스 재생성 (`search-dc.json` — 외경 데이터 변경 반영)
+- 구약 데이터 업데이트 → 버전 1.0.16
+
+**pre-paint.css 인라인 전환 (버전 1.0.17):**
+- `css/pre-paint.css`를 `index.html` `<style>` 블록으로 인라인화 — 별도 네트워크 요청 제거
+- SW 캐시 여부와 무관하게 첫 페인트 즉시 배경색 적용됨
+- `css/pre-paint.css` 삭제, `sw.js` SHELL_FILES에서 제거
+
+**초기 로딩 경량화:**
+- `index.html`: `books.json` preload 추가 — JS 파싱과 병렬로 fetch 시작
+- `app.js`: 목록·장목차 뷰는 렌더 직후, 장 뷰는 `renderLoading()` 직후 `dismissLaunchScreen()` 호출 (장 데이터 로드 전에 런치 스크린 먼저 해제)
+- `initCompactHeader()`를 `requestIdleCallback`으로 지연 등록
+
+**캐시 초기화 기능 추가 (버전 1.0.18):**
+- 설정 팝오버에 '캐시 · 초기화' 버튼 추가 (`caches` API 지원 환경에서만 노출)
+- `clearAllCaches()`: SW 캐시 전체 삭제 + SW 등록 해제 후 새로고침 (오프라인 상태에서는 차단, 실행 전 confirm)
+- `.cache-clear-btn` 스타일 추가 (라이트/다크)
+
+## 2026-04-15
+
+### 검색 워커 데이터 경로 버그 수정 (버전 1.0.19)
+
+- **원인**: `js/` 디렉터리로 파일 이동 후 `search-worker.js` 내 `fetch()`가 상대경로를 워커 스크립트 기준(`/js/`)으로 해석 → 404로 검색 전체 불능
+- **수정**: `DATA_DIR` 경로에 `/` 접두사 추가 (`data/...` → `/data/...`) — 절대 경로 강제
+- `manifest.webmanifest`: `short_name`을 '공동번역성서'로 변경
+
+## 2026-04-17
+
+### 초기 로딩 성능 집중 개선 (버전 1.0.20)
+
+**렌더링 차단 해소:**
+- Google Fonts stylesheet를 `media=print onload` 패턴으로 비차단화
+- `app.js`, `gtag-init.js`에 `defer` 속성 추가
+- `launch-screen` 마크업을 `<body>` 첫 자식으로 이동 — 헤더·메인보다 먼저 파싱
+- `dismissLaunchScreen`에서 `.launch-done` 클래스로 라이트 모드 본문 색 전환
+
+**런치 스크린 품질:**
+- fade-out 애니메이션 `5s` → `0.8s` 단축, `prefers-reduced-motion` 대응
+- `body::before` 다크 오버레이로 launch-screen 파싱 전 흰 화면 완전 차단
+- `.loading`, `#sw-update-toast`에 시스템 폰트 fallback 명시 (폰트 swap 중 안정성)
+
+**인라인 SVG 최적화:**
+- svgo `--multipass --precision=2`로 path 좌표 정밀도 축소
+- `index.html` 37KB → 15KB (인라인 SVG 28KB → 6KB), 시각적 회귀 없음
+
+**서비스 워커 캐싱 전략 단순화 (버전 1.0.20):**
+- chapter/search JSON의 network-first 분기 제거, shell과 동일한 stale-while-revalidate 패턴으로 일원화
+- 이미 본 chapter는 캐시에서 즉시 반환, 백그라운드 revalidate
+- 본문 수정은 release 시 `CACHE_NAME` bump → activate에서 옛 캐시 자동 삭제
+
+**브랜드 표기 정리:**
+- 문서·메타데이터의 '대한성공회 서울교구' → '대한성공회' 통일 (8곳)
+- CSP: 인라인 `<style>`, JSON-LD `<script>`, `onload` 이벤트 핸들러용 SHA-256 해시 추가
 
 ## 2026-04-13
 
