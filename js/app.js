@@ -2165,15 +2165,16 @@ function buildInstallBody(platform) {
 
     const updateCta = (state) => {
       if (state.canPrompt) {
-        cta.disabled = false;
         cta.removeAttribute("aria-disabled");
       } else {
-        cta.disabled = true;
         cta.setAttribute("aria-disabled", "true");
       }
     };
 
     cta.addEventListener("click", async () => {
+      // Keep aria-disabled (not native `disabled`) so the button stays focusable
+      // while the focus trap is active. Guard the action here instead.
+      if (cta.getAttribute("aria-disabled") === "true") return;
       const { outcome } = await install.triggerPrompt();
       if (outcome === "accepted") {
         closeInstallModal();
@@ -2200,12 +2201,29 @@ function buildInstallBody(platform) {
     "Chrome, Edge, Safari(iOS) 등에서 열면 앱으로 설치할 수 있습니다."));
 }
 
+// Siblings of the modal/scrim that should become inert while the modal is open,
+// so assistive tech and sequential focus skip the background.
+const INSTALL_INERT_SELECTORS = "#app-header, main#app, #audio-bar, #search-fab, #search-sheet, #search-scrim, #launch-screen";
+
+function setBackgroundInert(on) {
+  document.querySelectorAll(INSTALL_INERT_SELECTORS).forEach((n) => {
+    if (on) {
+      n.inert = true;
+      n.setAttribute("aria-hidden", "true");
+    } else {
+      n.inert = false;
+      n.removeAttribute("aria-hidden");
+    }
+  });
+}
+
 function openInstallModal() {
   const platform = install.detectPlatform();
   buildInstallBody(platform);
   installModalLastFocus = document.activeElement;
   $installScrim.hidden = false;
   $installModal.hidden = false;
+  setBackgroundInert(true);
   installModalTrap = trapFocus($installModal);
   requestAnimationFrame(() => $installModalClose.focus());
 }
@@ -2215,6 +2233,7 @@ function closeInstallModal() {
   $installModal.dispatchEvent(new Event("install:cleanup"));
   $installScrim.hidden = true;
   $installModal.hidden = true;
+  setBackgroundInert(false);
   if (installModalTrap) { installModalTrap(); installModalTrap = null; }
   if (installModalLastFocus && installModalLastFocus.focus) {
     try { installModalLastFocus.focus(); } catch {}
