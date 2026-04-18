@@ -17,7 +17,10 @@ data/source/*.md  (비공개 서브모듈, 73권 마크다운 소스)
   → (split_bible.py) → data/bible/{book_id}-{chapter}.json (1328개)
                       → data/bible/sir-prologue.json
                       → data/books.json
-  → (search_indexer.py) → data/search-index.json
+  → (search_indexer.py) → data/search-meta.json (별칭·책 메타데이터)
+                         → data/search-ot.json   (구약)
+                         → data/search-nt.json   (신약)
+                         → data/search-dc.json   (외경)
 ```
 
 ## 기술 스택
@@ -30,24 +33,51 @@ data/source/*.md  (비공개 서브모듈, 73권 마크다운 소스)
 ## 프로젝트 구조
 
 ```
-index.html              ← SPA 진입점
-app.js                  ← 라우팅, 렌더링
-style.css               ← 스타일
+index.html              ← SPA 진입점 (단일 HTML)
 sw.js                   ← 서비스 워커 (오프라인)
 manifest.webmanifest    ← PWA 매니페스트
+version.json            ← 앱 버전
+js/
+  app.js                ← 라우팅, 렌더링, 검색 UI, 오디오 플레이어
+  search-worker.js      ← Web Worker 기반 전역 검색 엔진
+  pre-fetch.js          ← books.json 선패치 (초기 로딩 성능)
+  gtag-init.js          ← Google Analytics 초기화
+css/
+  style.css             ← 메인 스타일
+assets/
+  icons/                ← PWA 아이콘 (192·512·maskable)
+  install-guide/        ← iOS 설치 안내 SVG 이미지
+  splash/               ← iOS 런치 스크린 (13 디바이스)
 data/
-  source/               ← 비공개 서브모듈 (73권 마크다운 원본)
   books.json            ← 73권 목록 (메타데이터, has_prologue 플래그 포함)
+  book_mappings.json    ← 책 ID·이름·별칭·구분 매핑
+  search-meta.json      ← 검색용 별칭·책 메타데이터
+  search-ot.json        ← 구약 절 검색 인덱스
+  search-nt.json        ← 신약 절 검색 인덱스
+  search-dc.json        ← 외경 절 검색 인덱스
   bible/                ← 장별 성경 JSON (gitignore, 파서 출력물)
   audio/
     {book_slug}-{chapter}.mp3
+  source/               ← 비공개 서브모듈 (73권 마크다운 원본)
 src/
   parser.py             ← .md 소스 → parsed_bible.json (segments 기반)
   split_bible.py        ← parsed_bible.json → 장별 JSON 분리
-  search_indexer.py     ← 검색 인덱스 생성
-  config.py             ← 설정 관리
+  search_indexer.py     ← 검색 인덱스 생성 (구약/신약/외경 분리)
+  generate_splash.py    ← iOS 스플래시 PNG 생성
+scripts/
+  build-deploy.sh       ← 배포 zip 생성
+  release.py            ← version.json + sw.js CACHE_NAME 동시 bump
+tests/
+  test_completeness.py  ← Level 1 완전성 검증
+  test_ordering.py      ← Level 2 절 순서 검증
+  test_snapshots.py     ← Level 3 특수 케이스 스냅샷
+  e2e/                  ← 브라우저 E2E 테스트 (로컬 전용)
+.github/
+  workflows/
+    test.yml            ← CI: Level 1-3 자동 실행
 docs/
-  decisions/            ← 아키텍처 결정 기록 (ADR)
+  decisions/            ← 아키텍처 결정 기록 (ADR-001~008)
+  prd.md                ← 제품 요구사항 문서
   worklog.md            ← 작업 일지
 ```
 
@@ -69,6 +99,17 @@ python src/split_bible.py
 python src/search_indexer.py
 ```
 
+## 테스트
+
+```bash
+# 데이터 파이프라인 검증 (원본 텍스트 불필요, CI 자동 실행)
+pytest tests/test_completeness.py tests/test_ordering.py tests/test_snapshots.py -v
+
+# E2E 테스트 (로컬, 서버 실행 필요)
+python3 -m http.server 8080
+pytest tests/e2e/ -v
+```
+
 ## 장기 로드맵
 
 1. Phase 1: 성경 읽기 PWA (현재)
@@ -78,5 +119,6 @@ python src/search_indexer.py
 
 ## 문서
 
-- [아키텍처 결정 기록](docs/decisions/) — ADR-001~006
+- [아키텍처 결정 기록](docs/decisions/) — ADR-001~008
+- [제품 요구사항](docs/prd.md)
 - [작업 일지](docs/worklog.md)

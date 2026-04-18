@@ -28,9 +28,11 @@ manifest.webmanifest    ← PWA 매니페스트
 favicon.ico             ← 파비콘 (루트 필수)
 robots.txt / sitemap.xml
 version.json            ← 앱 버전 (release.py로 관리)
+requirements.txt        ← Python 의존성
 js/
   app.js                ← 라우팅, 렌더링, 검색 UI, 오디오 플레이어
   search-worker.js      ← Web Worker 기반 전역 검색 엔진 (ADR-005)
+  pre-fetch.js          ← books.json 선패치 (초기 로딩 성능)
   gtag-init.js          ← Google Analytics 초기화
 css/
   style.css             ← 메인 스타일
@@ -38,12 +40,20 @@ assets/
   icons/
     icon-192.png        ← PWA 홈 화면 아이콘
     icon-512.png        ← PWA 홈 화면 아이콘 (고해상도)
+    icon-512-maskable.png ← PWA maskable 아이콘
     skh-cross.svg       ← 성공회 십자가 SVG (스플래시 생성용 소스)
+  install-guide/
+    ios-iphone-share.svg ← iOS iPhone 설치 안내 이미지 (ADR-008)
+    ios-ipad-share.svg   ← iOS iPad 설치 안내 이미지 (ADR-008)
   splash/
-    dark-{device}.png   ← iOS apple-touch-startup-image (13 디바이스)
+    dark-{device}.png   ← iOS apple-touch-startup-image (13 디바이스, ADR-007)
 data/
   books.json            ← 73권 목록 (메타데이터, has_prologue 플래그 포함)
   book_mappings.json    ← 책 ID·이름·별칭·구분 매핑
+  search-meta.json      ← 검색용 별칭·책 메타데이터 (~9 KB)
+  search-ot.json        ← 구약 절 검색 인덱스 (~3.8 MB)
+  search-nt.json        ← 신약 절 검색 인덱스 (~1.3 MB)
+  search-dc.json        ← 외경 절 검색 인덱스 (~700 KB)
   bible/
     {book_id}-{chapter}.json  ← 장별 성경 데이터
     sir-prologue.json   ← 집회서 머리말 (ADR-002)
@@ -54,8 +64,8 @@ data/
 src/
   parser.py             ← .md 소스 → parsed_bible.json (segments 기반)
   split_bible.py        ← parsed_bible.json → 장별 JSON 분리 스크립트
-  search_indexer.py     ← 장별 JSON → data/search-index.json
-  generate_splash.py    ← iOS 스플래시 PNG 생성 (cairosvg + Pillow)
+  search_indexer.py     ← 장별 JSON → data/search-{meta,ot,nt,dc}.json
+  generate_splash.py    ← iOS 스플래시 PNG 생성 (cairosvg + Pillow, ADR-007)
   convert_txt_to_md.py  ← .txt → .md 일괄 변환 (일회성, 완료됨)
 scripts/
   build-deploy.sh       ← 배포 zip 생성
@@ -77,7 +87,8 @@ tests/
   workflows/
     test.yml            ← CI: Level 1-3 자동 실행
 docs/
-  decisions/            ← ADR (아키텍처 결정 기록)
+  decisions/            ← ADR (아키텍처 결정 기록, ADR-001~008)
+  prd.md                ← 제품 요구사항 문서
   worklog.md            ← 작업 일지
 ```
 
@@ -89,7 +100,10 @@ data/source/*.md  (73권 마크다운 소스)
   → (split_bible.py) → data/bible/{book_id}-{chapter}.json
                       → data/bible/sir-prologue.json (집회서 머리말, 원본 텍스트에서 직접 추출)
                       → data/books.json
-  → (search_indexer.py) → data/search-index.json
+  → (search_indexer.py) → data/search-meta.json (별칭·책 메타데이터)
+                         → data/search-ot.json   (구약)
+                         → data/search-nt.json   (신약)
+                         → data/search-dc.json   (외경)
 ```
 
 ### 전체 재생성 (소스 변경 시)
