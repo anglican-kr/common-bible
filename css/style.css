@@ -546,6 +546,99 @@ body {
   bottom: max(5rem, calc(var(--fab-lift-nav, 0px) + 3.5rem));
 }
 
+/* ── Install guide modal ── */
+#install-scrim {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(0, 0, 0, 0.45);
+}
+#install-scrim:not([hidden]) {
+  display: block;
+}
+#install-modal {
+  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  display: none;
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 61;
+  width: min(92vw, 420px);
+  max-height: 85vh;
+  overflow-y: auto;
+  background: var(--bg-card);
+  color: var(--text);
+  border-radius: 14px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+  padding: 1.25rem 1.25rem 1rem;
+}
+#install-modal:not([hidden]) {
+  display: block;
+}
+#install-modal-title {
+  margin: 0 0 0.75rem;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+#install-modal-close {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.6rem;
+  background: transparent;
+  border: 0;
+  color: var(--text-secondary);
+  font-size: 1.6rem;
+  line-height: 1;
+  padding: 0.2rem 0.5rem;
+  cursor: pointer;
+}
+#install-modal-close:hover { color: var(--text); }
+#install-modal-body p { margin: 0.5rem 0; line-height: 1.6; }
+#install-modal-body ol { padding-left: 1.3rem; margin: 0.5rem 0; }
+#install-modal-body ol li { margin: 0.35rem 0; line-height: 1.6; }
+#install-modal-body .install-figure {
+  margin: 0.75rem 0;
+  text-align: center;
+}
+#install-modal-body .install-figure img {
+  max-width: 100%;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+#install-modal-body .install-figure figcaption {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin-top: 0.3rem;
+}
+#install-modal-body .install-cta {
+  display: inline-block;
+  margin-top: 0.75rem;
+  padding: 0.55rem 1.1rem;
+  background: var(--accent);
+  color: #fff;
+  border: 0;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+#install-modal-body .install-cta:hover { opacity: 0.9; }
+#install-modal-body .install-note {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin-top: 0.75rem;
+}
+#install-modal-body kbd {
+  display: inline-block;
+  padding: 0.05rem 0.35rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 0.85em;
+  font-family: inherit;
+}
+
 /* ── Search Bottom Sheet (Mobile only) ── */
 #search-scrim {
   display: none;

@@ -266,6 +266,21 @@ function initSettings() {
     orderRow.appendChild(orderGroup);
     popover.appendChild(orderRow);
 
+    // Install app
+    if (typeof install !== "undefined" && install.detectPlatform() !== "installed") {
+      const installRow = el("div", { className: "settings-row" });
+      installRow.appendChild(el("span", { className: "settings-label" }, "앱 설치"));
+      const installBtn = el("button", { className: "cache-clear-btn", "aria-label": "앱으로 설치 안내 열기" }, "안내");
+      installBtn.addEventListener("click", () => {
+        popover.hidden = true;
+        btn.setAttribute("aria-expanded", "false");
+        if (cleanupTrap) { cleanupTrap(); cleanupTrap = null; }
+        openInstallModal();
+      });
+      installRow.appendChild(installBtn);
+      popover.appendChild(installRow);
+    }
+
     // Cache clear
     if ("caches" in window) {
       const cacheRow = el("div", { className: "settings-row" });
@@ -1986,6 +2001,231 @@ function initCompactHeader() {
     }
   }, { passive: true });
 }
+
+// ── PWA install detection ──
+//
+// Platforms:
+//   "installed"    — already running as a standalone PWA, nothing to show
+//   "ios-safari"   — iPhone/iPad Safari; manual "Add to Home Screen" guide
+//   "ios-other"    — iOS Chrome/Firefox/etc (WebKit wrapper); prompt user to open in Safari
+//   "android"      — Chromium-based Android; beforeinstallprompt available
+//   "desktop"      — Chromium-based desktop; beforeinstallprompt available
+//   "unsupported"  — Firefox/Safari desktop, etc; hide install entry
+//
+// beforeinstallprompt is captured and stored so the install modal can call prompt()
+// on user gesture. The `appinstalled` event and display-mode change both flip state.
+
+const install = (() => {
+  let deferredPrompt = null;
+  const listeners = new Set();
+
+  function isStandalone() {
+    return (
+      window.matchMedia("(display-mode: standalone)").matches ||
+      window.matchMedia("(display-mode: fullscreen)").matches ||
+      window.navigator.standalone === true
+    );
+  }
+
+  function detectPlatform() {
+    if (isStandalone()) return "installed";
+    const ua = navigator.userAgent;
+    const isIOS = /iPad|iPhone|iPod/.test(ua) ||
+      (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1); // iPadOS 13+
+    if (isIOS) {
+      // On iOS all browsers use WebKit, but only Safari can install.
+      // Safari UA does not include CriOS/FxiOS/EdgiOS/OPiOS.
+      const isSafari = !/CriOS|FxiOS|EdgiOS|OPiOS|GSA/.test(ua);
+      return isSafari ? "ios-safari" : "ios-other";
+    }
+    if (deferredPrompt) {
+      // Android UA: "Android" token. Otherwise treat as desktop.
+      return /Android/.test(ua) ? "android" : "desktop";
+    }
+    // No beforeinstallprompt seen yet — guess from UA.
+    if (/Android/.test(ua)) return "android";
+    const isChromium = /Chrome|Chromium|Edg/.test(ua) && !/Edge\//.test(ua);
+    return isChromium ? "desktop" : "unsupported";
+  }
+
+  function notify() {
+    const state = { platform: detectPlatform(), canPrompt: !!deferredPrompt };
+    listeners.forEach((fn) => { try { fn(state); } catch {} });
+  }
+
+  function subscribe(fn) {
+    listeners.add(fn);
+    fn({ platform: detectPlatform(), canPrompt: !!deferredPrompt });
+    return () => listeners.delete(fn);
+  }
+
+  async function triggerPrompt() {
+    if (!deferredPrompt) return { outcome: "unavailable" };
+    const evt = deferredPrompt;
+    deferredPrompt = null;
+    notify();
+    evt.prompt();
+    const choice = await evt.userChoice;
+    return { outcome: choice.outcome };
+  }
+
+  window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    notify();
+  });
+
+  window.addEventListener("appinstalled", () => {
+    deferredPrompt = null;
+    notify();
+  });
+
+  // display-mode changes when the PWA is launched after install.
+  try {
+    window.matchMedia("(display-mode: standalone)").addEventListener("change", notify);
+  } catch {}
+
+  return { isStandalone, detectPlatform, subscribe, triggerPrompt };
+})();
+
+// ── Install guide modal ──
+
+const $installScrim = document.getElementById("install-scrim");
+const $installModal = document.getElementById("install-modal");
+const $installModalBody = document.getElementById("install-modal-body");
+const $installModalClose = document.getElementById("install-modal-close");
+
+let installModalTrap = null;
+let installModalLastFocus = null;
+
+function buildInstallBody(platform) {
+  clearNode($installModalBody);
+
+  if (platform === "installed") {
+    $installModalBody.appendChild(el("p", {}, "이미 앱으로 설치되어 있습니다."));
+    return;
+  }
+
+  if (platform === "ios-safari") {
+    const isIPad = /iPad/.test(navigator.userAgent) ||
+      (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    $installModalBody.appendChild(el("p", {},
+      "홈 화면에 추가하면 주소창 없이 앱처럼 실행되고, 오프라인에서도 사용할 수 있습니다."));
+    const fig = el("figure", { className: "install-figure" });
+    const img = el("img", {
+      src: isIPad
+        ? "/assets/install-guide/ios-ipad-share.svg"
+        : "/assets/install-guide/ios-iphone-share.svg",
+      alt: "Safari 공유 시트에서 '홈 화면에 추가' 위치",
+      loading: "lazy",
+    });
+    fig.appendChild(img);
+    fig.appendChild(el("figcaption", {}, isIPad
+      ? "Safari 주소창 오른쪽의 공유 버튼을 누르세요."
+      : "Safari 하단의 공유 버튼(□↑)을 누르세요."));
+    $installModalBody.appendChild(fig);
+    const ol = el("ol");
+    ol.appendChild(el("li", {}, el("span", {},
+      "Safari ", isIPad ? "주소창 오른쪽" : "하단", "의 공유 버튼을 누릅니다.")));
+    ol.appendChild(el("li", {}, "목록을 내려 \u2018홈 화면에 추가\u2019를 선택합니다."));
+    ol.appendChild(el("li", {}, "오른쪽 위 \u2018추가\u2019를 누르면 홈 화면에 아이콘이 생깁니다."));
+    $installModalBody.appendChild(ol);
+    $installModalBody.appendChild(el("p", { className: "install-note" },
+      "iOS 버전에 따라 메뉴 위치가 조금 다를 수 있습니다."));
+    return;
+  }
+
+  if (platform === "ios-other") {
+    $installModalBody.appendChild(el("p", {},
+      "iOS에서는 Safari에서만 홈 화면에 앱을 설치할 수 있습니다."));
+    $installModalBody.appendChild(el("p", {},
+      "이 페이지 주소를 복사해 Safari에서 열어 주세요."));
+    const btn = el("button", { className: "install-cta", type: "button" }, "주소 복사");
+    btn.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(location.origin + "/");
+        btn.textContent = "복사됨";
+        setTimeout(() => { btn.textContent = "주소 복사"; }, 2000);
+      } catch {
+        btn.textContent = "복사 실패";
+      }
+    });
+    $installModalBody.appendChild(btn);
+    return;
+  }
+
+  if (platform === "android" || platform === "desktop") {
+    $installModalBody.appendChild(el("p", {},
+      platform === "android"
+        ? "홈 화면에 추가하면 앱처럼 실행되고 오프라인에서도 사용할 수 있습니다."
+        : "바탕화면·시작 메뉴에 추가하면 독립된 창으로 실행됩니다."));
+
+    const cta = el("button", { className: "install-cta", type: "button" },
+      platform === "android" ? "홈 화면에 추가" : "앱 설치");
+
+    const updateCta = (state) => {
+      if (state.canPrompt) {
+        cta.disabled = false;
+        cta.removeAttribute("aria-disabled");
+      } else {
+        cta.disabled = true;
+        cta.setAttribute("aria-disabled", "true");
+      }
+    };
+
+    cta.addEventListener("click", async () => {
+      const { outcome } = await install.triggerPrompt();
+      if (outcome === "accepted") {
+        closeInstallModal();
+      }
+    });
+
+    $installModalBody.appendChild(cta);
+
+    const fallback = el("p", { className: "install-note" },
+      platform === "desktop"
+        ? "브라우저 주소창 오른쪽의 설치 아이콘을 눌러도 됩니다."
+        : "브라우저 메뉴의 \u2018앱 설치\u2019 또는 \u2018홈 화면에 추가\u2019를 선택해도 됩니다.");
+    $installModalBody.appendChild(fallback);
+
+    const unsub = install.subscribe(updateCta);
+    $installModal.addEventListener("install:cleanup", unsub, { once: true });
+    return;
+  }
+
+  // unsupported
+  $installModalBody.appendChild(el("p", {},
+    "이 브라우저는 홈 화면 설치를 지원하지 않습니다."));
+  $installModalBody.appendChild(el("p", { className: "install-note" },
+    "Chrome, Edge, Safari(iOS) 등에서 열면 앱으로 설치할 수 있습니다."));
+}
+
+function openInstallModal() {
+  const platform = install.detectPlatform();
+  buildInstallBody(platform);
+  installModalLastFocus = document.activeElement;
+  $installScrim.hidden = false;
+  $installModal.hidden = false;
+  installModalTrap = trapFocus($installModal);
+  requestAnimationFrame(() => $installModalClose.focus());
+}
+
+function closeInstallModal() {
+  if ($installModal.hidden) return;
+  $installModal.dispatchEvent(new Event("install:cleanup"));
+  $installScrim.hidden = true;
+  $installModal.hidden = true;
+  if (installModalTrap) { installModalTrap(); installModalTrap = null; }
+  if (installModalLastFocus && installModalLastFocus.focus) {
+    try { installModalLastFocus.focus(); } catch {}
+  }
+}
+
+$installModalClose.addEventListener("click", closeInstallModal);
+$installScrim.addEventListener("click", closeInstallModal);
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !$installModal.hidden) closeInstallModal();
+});
 
 // ── Service Worker Registration & Update ──
 
