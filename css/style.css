@@ -129,7 +129,7 @@ body {
 
 /* ── Header ── */
 #app-header {
-  font-family: "Noto Sans KR", sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
   position: sticky;
   top: 0;
   z-index: 20;
@@ -207,7 +207,7 @@ body {
 }
 
 .settings-popover {
-  font-family: "Noto Sans KR", sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
   position: fixed;
   z-index: 25;
   background: var(--bg-card);
@@ -560,7 +560,7 @@ body {
 }
 
 #search-sheet {
-  font-family: "Noto Sans KR", sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
   display: none;
   position: fixed;
   bottom: 0;
@@ -764,7 +764,7 @@ mark.search-highlight {
 
 /* ── Resume Banner ── */
 .resume-banner {
-  font-family: "Noto Sans KR", sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
   display: flex;
   align-items: center;
   margin-bottom: 1.2rem;
@@ -809,7 +809,7 @@ mark.search-highlight {
 
 /* ── Book List ── */
 .division {
-  font-family: "Noto Sans KR", sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
   margin-bottom: 1.8rem;
 }
 
@@ -899,7 +899,7 @@ mark.search-highlight {
 
 /* ── Chapter Grid ── */
 .chapter-grid {
-  font-family: "Noto Sans KR", sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(3.2rem, 1fr));
   gap: 0.4rem;
@@ -974,7 +974,7 @@ mark.search-highlight {
 }
 
 .verse-num {
-  font-family: "Noto Sans KR", sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
   font-size: 0.7rem;
   font-weight: 400;
   color: var(--verse-num);
@@ -1002,7 +1002,7 @@ mark.search-highlight {
 }
 
 .pilcrow {
-  font-family: "Noto Sans KR", sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
   color: var(--paragraph-mark);
   margin-right: 0.2em;
   user-select: none;
@@ -1048,7 +1048,7 @@ mark.search-highlight {
 
 /* ── Chapter Navigation ── */
 .chapter-nav {
-  font-family: "Noto Sans KR", sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -1157,7 +1157,7 @@ mark.search-highlight {
 
 /* ── Audio Bar ── */
 #audio-bar {
-  font-family: "Noto Sans KR", sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
   position: sticky;
   bottom: 0;
   z-index: 10;
@@ -1335,7 +1335,7 @@ mark.search-highlight {
 
 /* ── Loading / Error ── */
 .loading {
-  font-family: "Noto Sans KR", sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
   text-align: center;
   padding: 3rem 1rem;
   color: var(--text-secondary);
@@ -1449,7 +1449,7 @@ mark.search-highlight {
 /* ── SW Update Toast ── */
 
 #sw-update-toast {
-  font-family: "Noto Sans KR", sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
   position: fixed;
   bottom: calc(env(safe-area-inset-bottom, 0px) + 1rem);
   left: 50%;
