@@ -25,6 +25,7 @@ zip -r "$OUTPUT_FILE" \
   css/ \
   assets/icons/ \
   assets/splash/ \
+  assets/install-guide/ \
   data/bible/ \
   data/books.json \
   data/book_mappings.json \

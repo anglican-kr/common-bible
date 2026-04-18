@@ -172,6 +172,32 @@ function initSettings() {
   function rebuild() {
     clearNode(popover);
 
+    // ── Section 1: Book order (deuterocanon placement) ──
+    const section1 = el("section", { className: "settings-section" });
+    const orderRow = el("div", { className: "settings-row" });
+    orderRow.appendChild(el("span", { className: "settings-label" }, "외경"));
+    const currentOrder = loadBookOrder();
+    const orderGroup = el("div", { className: "btn-group", role: "group", "aria-label": "외경 배치 선택" });
+    for (const [value, label, announceLabel] of [
+      ["canonical", "분리", "외경 분리"],
+      ["vulgate", "구약에 포함", "구약에 외경 포함"],
+    ]) {
+      const orderBtn = el("button", { className: "toolbar-btn", "aria-pressed": String(currentOrder === value) }, label);
+      orderBtn.addEventListener("click", () => {
+        saveBookOrder(value);
+        route();
+        rebuild();
+        announce(announceLabel);
+      });
+      orderGroup.appendChild(orderBtn);
+    }
+    orderRow.appendChild(orderGroup);
+    section1.appendChild(orderRow);
+    popover.appendChild(section1);
+
+    // ── Section 2: Typography & appearance ──
+    const section2 = el("section", { className: "settings-section" });
+
     // Font size
     const sizeRow = el("div", { className: "settings-row" });
     sizeRow.appendChild(el("span", { className: "settings-label" }, "글자 크기"));
@@ -205,7 +231,7 @@ function initSettings() {
     sizeGroup.appendChild(btnReset);
     sizeGroup.appendChild(btnPlus);
     sizeRow.appendChild(sizeGroup);
-    popover.appendChild(sizeRow);
+    section2.appendChild(sizeRow);
 
     // Theme
     const themeRow = el("div", { className: "settings-row" });
@@ -213,17 +239,17 @@ function initSettings() {
     const current = loadTheme();
     const themeGroup = el("div", { className: "btn-group" });
     for (const [value, label] of [["light", "라이트"], ["system", "시스템"], ["dark", "다크"]]) {
-      const btn = el("button", { className: "toolbar-btn", "aria-pressed": String(current === value) }, label);
-      btn.addEventListener("click", () => {
+      const tbtn = el("button", { className: "toolbar-btn", "aria-pressed": String(current === value) }, label);
+      tbtn.addEventListener("click", () => {
         saveTheme(value);
         applyTheme(value);
         rebuild();
         announce(label + " 테마");
       });
-      themeGroup.appendChild(btn);
+      themeGroup.appendChild(tbtn);
     }
     themeRow.appendChild(themeGroup);
-    popover.appendChild(themeRow);
+    section2.appendChild(themeRow);
 
     // Color scheme
     const colorRow = el("div", { className: "settings-row" });
@@ -246,49 +272,39 @@ function initSettings() {
       swatches.appendChild(swatchBtn);
     }
     colorRow.appendChild(swatches);
-    popover.appendChild(colorRow);
+    section2.appendChild(colorRow);
+    popover.appendChild(section2);
 
-    // Book order
-    const orderRow = el("div", { className: "settings-row" });
-    orderRow.appendChild(el("span", { className: "settings-label" }, "책 배열"));
-    const currentOrder = loadBookOrder();
-    const orderGroup = el("div", { className: "btn-group", role: "group", "aria-label": "책 배열 선택" });
-    for (const [value, label] of [["canonical", "외경 분리"], ["vulgate", "구약에 외경 포함"]]) {
-      const orderBtn = el("button", { className: "toolbar-btn", "aria-pressed": String(currentOrder === value) }, label);
-      orderBtn.addEventListener("click", () => {
-        saveBookOrder(value);
-        route();
-        rebuild();
-        announce(label + " 배열");
-      });
-      orderGroup.appendChild(orderBtn);
-    }
-    orderRow.appendChild(orderGroup);
-    popover.appendChild(orderRow);
+    // ── Section 3: App lifecycle (install, cache) ──
+    const showInstall = typeof install !== "undefined" && install.detectPlatform() !== "installed";
+    const showCache = "caches" in window;
+    if (showInstall || showCache) {
+      const section3 = el("section", { className: "settings-section" });
 
-    // Install app
-    if (typeof install !== "undefined" && install.detectPlatform() !== "installed") {
-      const installRow = el("div", { className: "settings-row" });
-      installRow.appendChild(el("span", { className: "settings-label" }, "앱 설치"));
-      const installBtn = el("button", { className: "cache-clear-btn", "aria-label": "앱으로 설치 안내 열기" }, "안내");
-      installBtn.addEventListener("click", () => {
-        popover.hidden = true;
-        btn.setAttribute("aria-expanded", "false");
-        if (cleanupTrap) { cleanupTrap(); cleanupTrap = null; }
-        openInstallModal();
-      });
-      installRow.appendChild(installBtn);
-      popover.appendChild(installRow);
-    }
+      if (showInstall) {
+        const installRow = el("div", { className: "settings-row" });
+        installRow.appendChild(el("span", { className: "settings-label" }, "앱 설치"));
+        const installBtn = el("button", { className: "settings-action-btn", "aria-label": "앱으로 설치 안내 열기" }, "안내");
+        installBtn.addEventListener("click", () => {
+          popover.hidden = true;
+          btn.setAttribute("aria-expanded", "false");
+          if (cleanupTrap) { cleanupTrap(); cleanupTrap = null; }
+          openInstallModal();
+        });
+        installRow.appendChild(installBtn);
+        section3.appendChild(installRow);
+      }
 
-    // Cache clear
-    if ("caches" in window) {
-      const cacheRow = el("div", { className: "settings-row" });
-      cacheRow.appendChild(el("span", { className: "settings-label" }, "캐시"));
-      const clearBtn = el("button", { className: "cache-clear-btn", "aria-label": "캐시 초기화" }, "초기화");
-      clearBtn.addEventListener("click", () => clearAllCaches());
-      cacheRow.appendChild(clearBtn);
-      popover.appendChild(cacheRow);
+      if (showCache) {
+        const cacheRow = el("div", { className: "settings-row" });
+        cacheRow.appendChild(el("span", { className: "settings-label" }, "캐시"));
+        const clearBtn = el("button", { className: "cache-clear-btn", "aria-label": "캐시 초기화" }, "초기화");
+        clearBtn.addEventListener("click", () => clearAllCaches());
+        cacheRow.appendChild(clearBtn);
+        section3.appendChild(cacheRow);
+      }
+
+      popover.appendChild(section3);
     }
 
     // About
@@ -2069,8 +2085,12 @@ const install = (() => {
     return { outcome: choice.outcome };
   }
 
+  // Note: we intentionally do NOT call e.preventDefault() here.
+  // Modern Chromium (>=76) no longer auto-shows a mini-infobar, and calling
+  // preventDefault() without a matching prompt() produces a noisy console
+  // warning ("Banner not shown: beforeinstallpromptevent.preventDefault()
+  // called..."). Capturing the event is sufficient to defer the prompt.
   window.addEventListener("beforeinstallprompt", (e) => {
-    e.preventDefault();
     deferredPrompt = e;
     notify();
   });
@@ -2259,7 +2279,7 @@ if ("serviceWorker" in navigator) {
   function showUpdateToast(waitingSW) {
     // Prevent duplicate toasts
     if (document.getElementById("sw-update-toast")) return;
-    const btn = el("button", { id: "sw-update-btn", "aria-label": "새 버전으로 업데이트" }, "업데이트");
+    const btn = el("button", { id: "sw-update-btn", "aria-label": "새 버전이 있습니다." }, "업데이트");
     const toast = el("div", { id: "sw-update-toast", role: "alert", "aria-label": "앱 업데이트 알림" },
       el("span", { "aria-hidden": "true" }, "새 버전이 있습니다."),
       btn,
