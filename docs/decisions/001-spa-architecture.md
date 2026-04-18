@@ -46,4 +46,4 @@ Python은 데이터 전처리(파싱, JSON 분리)에만 사용하고, 런타임
 - Python 빌드 파이프라인 대신 브라우저 런타임에서 JSON → DOM 렌더링
 - parsed_bible.json을 장별 JSON으로 분리하여 필요 시 fetch
 - 기존 html_generator.py, wordpress_api.py, pwa_builder.py는 더 이상 사용하지 않음
-- 기존 parser.py, config.py, parsed_bible.json은 그대로 활용
+- 기존 parser.py, parsed_bible.json은 그대로 활용 (config.py는 이후 불필요해져 제거됨)

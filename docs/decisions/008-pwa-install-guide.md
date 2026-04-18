@@ -51,7 +51,7 @@
 
 ### 1. 플랫폼·설치 상태 감지
 
-`js/app.js`의 `install` IIFE(`2036`~)가 다음 상태를 노출한다.
+`js/app.js`의 `install` IIFE(`2074`~)가 다음 상태를 노출한다.
 
 ```
 installed   / 이미 standalone으로 실행 중
@@ -120,7 +120,7 @@ SHELL_FILES에는 추가하지 **않는다**. 안내 이미지는 최초 설치 
 - `index.html` `#install-scrim`, `#install-modal` — 모달 마크업
 - `css/style.css` `#install-scrim`, `#install-modal` — 모달 스타일
 - `assets/install-guide/ios-iphone-share.svg`, `ios-ipad-share.svg` — 안내 SVG (플레이스홀더)
-- `tests/verify_install_guide.py` — 플랫폼별 UA override 검증
+- `tests/e2e/test_install_guide.py` — 플랫폼별 UA override 검증
 
 ## 향후 재검토 조건
 
