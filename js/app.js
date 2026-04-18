@@ -938,10 +938,12 @@ function renderChapter(data, book, opts) {
     }
     if (hlVerseEnd > maxVerse) {
       hlVerseEnd = maxVerse;
-      const cp = new URLSearchParams(location.hash.split("?")[1] || "");
-      cp.set("ve", String(maxVerse));
-      const base = location.hash.split("?")[0];
-      history.replaceState(null, "", `${base}?${cp.toString()}`);
+      const [base, qs] = location.hash.split("?");
+      const pathMatch = base.match(/^(#\/[^/]+\/\d+\/\d+)-\d+$/);
+      if (pathMatch) {
+        const suffix = qs ? `?${qs}` : "";
+        history.replaceState(null, "", `${pathMatch[1]}-${maxVerse}${suffix}`);
+      }
     }
   }
 
@@ -1196,40 +1198,51 @@ function parseHash() {
   const hash = location.hash.replace(/^#\/?/, "");
   if (!hash) return { view: "books" };
 
+  const [pathStr, queryStr] = hash.split("?");
+  const query = new URLSearchParams(queryStr || "");
+
   // Search route: #/search?q=...&page=...
-  if (hash.startsWith("search")) {
-    const params = new URLSearchParams(hash.replace(/^search\??/, ""));
+  if (pathStr === "search") {
     return {
       view: "search",
-      query: params.get("q") || "",
-      page: parseInt(params.get("page"), 10) || 1,
+      query: query.get("q") || "",
+      page: parseInt(query.get("page"), 10) || 1,
     };
   }
 
-  const parts = hash.split("/");
+  const parts = pathStr.split("/");
   if (parts.length === 1) {
     if (DIVISION_LABELS[parts[0]]) return { view: "division", division: parts[0] };
     return { view: "chapters", bookId: parts[0] };
   }
   if (parts[1] === "prologue") return { view: "prologue", bookId: parts[0] };
 
-  // Chapter with optional highlight params: #/gen/1?hl=빛&v=3&ve=11
-  const qIdx = parts[1].indexOf("?");
-  let chapterStr = parts[1];
-  let highlightQuery = null;
+  // Chapter view with optional verse deep-link: #/john/3/16 or #/john/3/16-20.
+  // ?hl=... carries the search-term highlight as a separate concern.
+  const highlightQuery = query.get("hl") || null;
   let highlightVerse = null;
   let highlightVerseEnd = null;
-  if (qIdx !== -1) {
-    chapterStr = parts[1].substring(0, qIdx);
-    const cp = new URLSearchParams(parts[1].substring(qIdx + 1));
-    highlightQuery = cp.get("hl") || null;
-    highlightVerse = parseInt(cp.get("v"), 10) || null;
-    highlightVerseEnd = parseInt(cp.get("ve"), 10) || null;
+
+  if (parts[2]) {
+    const m = parts[2].match(/^(\d+)(?:-(\d+))?$/);
+    if (m) {
+      const v1 = parseInt(m[1], 10);
+      const v2 = m[2] ? parseInt(m[2], 10) : null;
+      if (v1 > 0) {
+        if (v2 && v2 > 0 && v2 !== v1) {
+          highlightVerse = Math.min(v1, v2);
+          highlightVerseEnd = Math.max(v1, v2);
+        } else {
+          highlightVerse = v1;
+        }
+      }
+    }
   }
+
   return {
     view: "chapter",
     bookId: parts[0],
-    chapter: parseInt(chapterStr, 10),
+    chapter: parseInt(parts[1], 10),
     highlightQuery,
     highlightVerse,
     highlightVerseEnd,
@@ -1649,7 +1662,7 @@ function renderSearchResultList(container, result, query, page, pageSize, pagina
   const list = el("ul", { className: "search-results", role: "list" });
   for (const r of result.results) {
     const li = el("li", { className: "search-result-item" });
-    const link = el("a", { href: `#/${r.b}/${r.c}?hl=${encodeURIComponent(query)}&v=${r.v}` });
+    const link = el("a", { href: `#/${r.b}/${r.c}/${r.v}?hl=${encodeURIComponent(query)}` });
     link.appendChild(el("span", { className: "search-result-ref" }, `${r.bookNameKo} ${r.c}:${r.v}`));
     link.appendChild(buildSnippet(r.t, query));
     li.appendChild(link);
@@ -1694,10 +1707,10 @@ async function renderSearchResults(query, page, autoNavigate = false) {
   if (result.refMatch) {
     const ref = result.refMatch;
     let hash = `#/${ref.bookId}/${ref.chapter}`;
-    const params = [];
-    if (ref.verse) params.push(`v=${ref.verse}`);
-    if (ref.verseEnd) params.push(`ve=${ref.verseEnd}`);
-    if (params.length) hash += `?${params.join("&")}`;
+    if (ref.verse) {
+      hash += `/${ref.verse}`;
+      if (ref.verseEnd) hash += `-${ref.verseEnd}`;
+    }
     if (autoNavigate) {
       location.replace(hash);
     }
@@ -1850,10 +1863,10 @@ async function runSheetSearch(query, page, autoNavigate = false) {
   if (result.refMatch) {
     const ref = result.refMatch;
     let hash = `#/${ref.bookId}/${ref.chapter}`;
-    const params = [];
-    if (ref.verse) params.push(`v=${ref.verse}`);
-    if (ref.verseEnd) params.push(`ve=${ref.verseEnd}`);
-    if (params.length) hash += `?${params.join("&")}`;
+    if (ref.verse) {
+      hash += `/${ref.verse}`;
+      if (ref.verseEnd) hash += `-${ref.verseEnd}`;
+    }
     if (autoNavigate) {
       closeSearchSheet();
       location.hash = hash;
