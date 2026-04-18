@@ -253,8 +253,11 @@ body {
   border-radius: 4px;
   padding: 0 0.8em;
   cursor: pointer;
-  min-height: 30px;
+  height: 28px;
   min-width: 3.5em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   line-height: 1;
 }
 .settings-action-btn:hover {
@@ -295,9 +298,12 @@ body {
   border: 1px solid var(--border);
   border-radius: 4px;
   padding: 0 0.7em;
-  min-height: 30px;
+  height: 28px;
   min-width: 2.4em;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   line-height: 1;
   transition: background 0.15s;
 }
@@ -1256,9 +1262,12 @@ mark.search-highlight {
   border: 1px solid #e6a9a4;
   border-radius: 4px;
   padding: 0 0.8em;
-  min-height: 30px;
+  height: 28px;
   min-width: 3.5em;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   line-height: 1;
   transition: background 0.15s, color 0.15s;
 }
