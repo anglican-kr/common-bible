@@ -974,7 +974,7 @@ mark.search-highlight {
   background-image: linear-gradient(to right, transparent, var(--accent) 15%, var(--accent) 85%, transparent);
   background-repeat: no-repeat;
   background-position: bottom;
-  background-size: 100% 2px;
+  background-size: 100% 1px;
   margin-bottom: 0.6rem;
   cursor: pointer;
   list-style: none;
