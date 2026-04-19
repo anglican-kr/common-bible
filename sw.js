@@ -1,6 +1,6 @@
 // Bump this version on every release. Activating a new CACHE_NAME clears all
 // prior caches (shell + data), ensuring bible/search updates reach clients.
-const CACHE_NAME = "rev-28";
+const CACHE_NAME = "rev-30";
 
 const SHELL_FILES = [
   "/",
