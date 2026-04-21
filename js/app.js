@@ -1495,7 +1495,7 @@ function showAudioPlayer(bookId, chapter) {
   clearNode($audioBar);
 
   const audio = new Audio();
-  audio.preload = "metadata";
+  audio.preload = "none";
   currentAudio = audio;
 
   // Build player UI
@@ -1528,11 +1528,36 @@ function showAudioPlayer(bookId, chapter) {
   progressWrap.appendChild(progress);
   progressWrap.appendChild(timeDisplay);
 
+  const SPEEDS = [1, 1.25, 1.5];
+  let speedIndex = 0;
+  const speedBtn = el("button", {
+    className: "audio-speed-btn",
+    "aria-label": "재생 속도 1배속",
+  }, "1×");
+  speedBtn.addEventListener("click", () => {
+    speedIndex = (speedIndex + 1) % SPEEDS.length;
+    const rate = SPEEDS[speedIndex];
+    audio.playbackRate = rate;
+    const label = `재생 속도 ${rate}배속`;
+    speedBtn.setAttribute("aria-label", label);
+    speedBtn.textContent = `${rate}×`;
+    announce(label);
+  });
+
   container.appendChild(playBtn);
   container.appendChild(progressWrap);
+  container.appendChild(speedBtn);
 
-  // Play/pause toggle
+  // Play/pause toggle — load src lazily on first click
+  let srcLoaded = false;
   playBtn.addEventListener("click", () => {
+    if (!srcLoaded) {
+      srcLoaded = true;
+      playIcon.className = "audio-icon-loading";
+      audio.src = src;
+      audio.play().catch(() => {});
+      return;
+    }
     if (audio.paused) {
       audio.play();
     } else {
@@ -1541,9 +1566,16 @@ function showAudioPlayer(bookId, chapter) {
   });
 
   audio.addEventListener("play", () => {
-    playIcon.className = "audio-icon-pause";
     playBtn.setAttribute("aria-label", "일시정지");
     announce("재생");
+  });
+
+  audio.addEventListener("playing", () => {
+    playIcon.className = "audio-icon-pause";
+  });
+
+  audio.addEventListener("waiting", () => {
+    playIcon.className = "audio-icon-loading";
   });
 
   audio.addEventListener("pause", () => {
@@ -1586,7 +1618,6 @@ function showAudioPlayer(bookId, chapter) {
   $audioBar.appendChild(container);
   $audioBar.hidden = false;
   $audioBar.style.position = "sticky";
-  audio.src = src;
 }
 
 function showAudioUnavailable() {
