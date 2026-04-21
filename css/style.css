@@ -1268,8 +1268,15 @@ mark.search-highlight {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 0.3em;
   line-height: 1;
   transition: background 0.15s, color 0.15s;
+}
+
+.warn-icon {
+  width: 1em;
+  height: 1em;
+  flex-shrink: 0;
 }
 
 .cache-clear-btn:hover {
