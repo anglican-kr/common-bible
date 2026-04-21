@@ -77,6 +77,7 @@ const THEME_KEY = "bible-theme";
 const BOOK_ORDER_KEY = "bible-book-order";
 const COLOR_SCHEME_KEY = "bible-color-scheme";
 const STARTUP_BEHAVIOR_KEY = "bible-startup"; // "resume" | "home"
+const AUDIO_POS_KEY = "bible-audio-pos";
 const FONT_SIZES = [16, 18, 20, 22, 24];
 
 const COLOR_SCHEMES = [
@@ -131,6 +132,24 @@ function loadReadingPosition() {
   } catch (_) {
     return null;
   }
+}
+
+function saveAudioTime(bookId, chapter, time) {
+  try {
+    localStorage.setItem(AUDIO_POS_KEY, JSON.stringify({ bookId, chapter, time }));
+  } catch (_) {}
+}
+
+function loadAudioTime(bookId, chapter) {
+  try {
+    const pos = JSON.parse(localStorage.getItem(AUDIO_POS_KEY));
+    if (pos && pos.bookId === bookId && pos.chapter === chapter && pos.time > 0) return pos.time;
+  } catch (_) {}
+  return null;
+}
+
+function clearAudioTime() {
+  try { localStorage.removeItem(AUDIO_POS_KEY); } catch (_) {}
 }
 
 function loadStartupBehavior() {
@@ -1586,8 +1605,18 @@ function showAudioPlayer(bookId, chapter) {
   clearNode($audioBar);
 
   const audio = new Audio();
-  audio.preload = "none";
   currentAudio = audio;
+
+  const savedTime = loadAudioTime(bookId, chapter);
+  let srcLoaded = false;
+  if (savedTime) {
+    // Eagerly load metadata to restore seek position before first play
+    srcLoaded = true;
+    audio.preload = "metadata";
+    audio.src = src;
+  } else {
+    audio.preload = "none";
+  }
 
   // Build player UI
   const container = el("div", { className: "audio-player" });
@@ -1639,8 +1668,7 @@ function showAudioPlayer(bookId, chapter) {
   container.appendChild(progressWrap);
   container.appendChild(speedBtn);
 
-  // Play/pause toggle — load src lazily on first click
-  let srcLoaded = false;
+  // Play/pause toggle — load src lazily on first click (srcLoaded declared above)
   playBtn.addEventListener("click", () => {
     if (!srcLoaded) {
       srcLoaded = true;
@@ -1678,15 +1706,31 @@ function showAudioPlayer(bookId, chapter) {
   // Progress updates
   audio.addEventListener("loadedmetadata", () => {
     progress.max = String(Math.floor(audio.duration));
-    timeDisplay.textContent = formatTime(audio.duration);
+    if (savedTime && savedTime < audio.duration - 3) {
+      audio.currentTime = savedTime;
+      progress.value = String(Math.floor(savedTime));
+      updateProgressFill();
+      timeDisplay.textContent = `${formatTime(savedTime)} / ${formatTime(audio.duration)}`;
+    } else {
+      timeDisplay.textContent = formatTime(audio.duration);
+    }
   });
 
+  let saveAudioTimer = null;
   audio.addEventListener("timeupdate", () => {
     if (!seekingByUser) {
       progress.value = String(Math.floor(audio.currentTime));
     }
     updateProgressFill();
     timeDisplay.textContent = `${formatTime(audio.currentTime)} / ${formatTime(audio.duration)}`;
+    clearTimeout(saveAudioTimer);
+    saveAudioTimer = setTimeout(() => {
+      if (audio.currentTime > 0 && !audio.ended) saveAudioTime(bookId, chapter, Math.floor(audio.currentTime));
+    }, 1000);
+  });
+
+  audio.addEventListener("ended", () => {
+    clearAudioTime();
   });
 
   // Seeking
