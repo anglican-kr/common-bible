@@ -8,6 +8,7 @@ const $title = document.getElementById("page-title");
 const $breadcrumb = document.getElementById("breadcrumb");
 const $announce = document.getElementById("a11y-announce");
 const $audioBar = document.getElementById("audio-bar");
+const $resumeBannerSlot = document.getElementById("resume-banner-slot");
 const $searchInput = document.getElementById("search-input");
 const $searchClear = document.getElementById("search-clear");
 const $searchFab = document.getElementById("search-fab");
@@ -956,7 +957,8 @@ function renderResumeBanner(books) {
   });
   wrapper.appendChild(closeBtn);
 
-  $app.appendChild(wrapper);
+  clearNode($resumeBannerSlot);
+  $resumeBannerSlot.appendChild(wrapper);
 }
 
 function renderDivisionList(books, division) {
@@ -1404,6 +1406,7 @@ async function route() {
   const isInitialLoad = _isInitialLoad;
   _isInitialLoad = false;
   if (_scrollTrackCleanup) _scrollTrackCleanup();
+  clearNode($resumeBannerSlot);
   const parsed = parseHash();
   const { view, bookId, chapter, division } = parsed;
 
@@ -2405,7 +2408,7 @@ function buildInstallBody(platform) {
 
 // Siblings of the modal/scrim that should become inert while the modal is open,
 // so assistive tech and sequential focus skip the background.
-const INSTALL_INERT_SELECTORS = "#app-header, main#app, #audio-bar, #search-fab, #search-sheet, #search-scrim, #launch-screen";
+const INSTALL_INERT_SELECTORS = "#sticky-group, main#app, #audio-bar, #search-fab, #search-sheet, #search-scrim, #launch-screen";
 
 function setBackgroundInert(on) {
   document.querySelectorAll(INSTALL_INERT_SELECTORS).forEach((n) => {
