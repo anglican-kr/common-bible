@@ -123,10 +123,10 @@ function applyFontSize(size) {
 async function clearAllCaches() {
   if (!("caches" in window)) return;
   if (!navigator.onLine) {
-    alert("오프라인 상태에서는 캐시를 초기화할 수 없습니다.\n인터넷에 연결된 후 다시 시도해 주세요.");
+    alert("오프라인 상태에서는 캐시를 비울 수 없습니다.\n인터넷에 연결된 후 다시 시도해 주세요.");
     return;
   }
-  if (!confirm("캐시를 초기화하면 오프라인 데이터가 삭제됩니다.\n계속하시겠습니까?")) return;
+  if (!confirm("캐시를 비우면 저장된 데이터가 모두 사라집니다.\n비울까요?")) return;
   try {
     const keys = await caches.keys();
     await Promise.all(keys.map((k) => caches.delete(k)));
@@ -135,7 +135,7 @@ async function clearAllCaches() {
     window.location.reload();
   } catch (err) {
     console.error("Cache clear failed:", err);
-    alert("캐시 초기화에 실패했습니다. 다시 시도해 주세요.");
+    alert("캐시를 비우지 못했습니다. 다시 시도해 주세요.");
   }
 }
 
@@ -298,7 +298,7 @@ function initSettings() {
       if (showCache) {
         const cacheRow = el("div", { className: "settings-row" });
         cacheRow.appendChild(el("span", { className: "settings-label" }, "캐시"));
-        const clearBtn = el("button", { className: "cache-clear-btn", "aria-label": "캐시 초기화" });
+        const clearBtn = el("button", { className: "cache-clear-btn", "aria-label": "캐시 비우기" });
         const ns = "http://www.w3.org/2000/svg";
         const warnIcon = document.createElementNS(ns, "svg");
         warnIcon.setAttribute("viewBox", "0 0 20 20");
