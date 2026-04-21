@@ -75,6 +75,7 @@ const FONT_SIZE_KEY = "bible-font-size";
 const THEME_KEY = "bible-theme";
 const BOOK_ORDER_KEY = "bible-book-order";
 const COLOR_SCHEME_KEY = "bible-color-scheme";
+const STARTUP_BEHAVIOR_KEY = "bible-startup"; // "resume" | "home"
 const FONT_SIZES = [16, 18, 20, 22, 24];
 
 const COLOR_SCHEMES = [
@@ -85,10 +86,42 @@ const COLOR_SCHEMES = [
 ];
 const DEFAULT_FONT_SIZE = 18;
 
-function saveReadingPosition(bookId, chapter) {
+let _scrollTrackCleanup = null;
+let _isInitialLoad = true;
+
+function saveReadingPosition(bookId, chapter, verse = null) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ bookId, chapter }));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ bookId, chapter, verse }));
   } catch (_) {}
+}
+
+function startScrollTracking(bookId, chapter) {
+  if (_scrollTrackCleanup) _scrollTrackCleanup();
+  let timer = null;
+  const handler = () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      const verses = document.querySelectorAll(".verse[data-vref]");
+      let currentVerse = null;
+      for (const v of verses) {
+        const n = parseInt(v.getAttribute("data-vref"), 10);
+        if (!Number.isFinite(n)) continue;
+        const top = v.getBoundingClientRect().top;
+        if (top <= 80) {
+          currentVerse = n;
+        } else {
+          break;
+        }
+      }
+      if (currentVerse !== null) saveReadingPosition(bookId, chapter, currentVerse);
+    }, 500);
+  };
+  window.addEventListener("scroll", handler, { passive: true });
+  _scrollTrackCleanup = () => {
+    clearTimeout(timer);
+    window.removeEventListener("scroll", handler);
+    _scrollTrackCleanup = null;
+  };
 }
 
 function loadReadingPosition() {
@@ -97,6 +130,14 @@ function loadReadingPosition() {
   } catch (_) {
     return null;
   }
+}
+
+function loadStartupBehavior() {
+  return localStorage.getItem(STARTUP_BEHAVIOR_KEY) || "resume";
+}
+
+function saveStartupBehavior(val) {
+  localStorage.setItem(STARTUP_BEHAVIOR_KEY, val);
 }
 
 // ── Font size ──
@@ -193,6 +234,28 @@ function initSettings() {
     }
     orderRow.appendChild(orderGroup);
     section1.appendChild(orderRow);
+
+    // Startup behavior
+    const startupRow = el("div", { className: "settings-row" });
+    startupRow.appendChild(el("span", { className: "settings-label" }, "시작 화면"));
+    const startupCurrent = loadStartupBehavior();
+    const startupGroup = el("div", { className: "btn-group", role: "group", "aria-label": "앱 시작 화면 선택" });
+    for (const { val, label } of [{ val: "resume", label: "읽던 곳" }, { val: "home", label: "첫 페이지" }]) {
+      const startupBtn = el("button", {
+        className: "toolbar-btn",
+        "aria-pressed": String(startupCurrent === val),
+      }, label);
+      startupBtn.addEventListener("click", () => {
+        saveStartupBehavior(val);
+        startupGroup.querySelectorAll(".toolbar-btn").forEach((b) =>
+          b.setAttribute("aria-pressed", String(b === startupBtn))
+        );
+        announce(`시작 화면: ${label}`);
+      });
+      startupGroup.appendChild(startupBtn);
+    }
+    startupRow.appendChild(startupGroup);
+    section1.appendChild(startupRow);
     popover.appendChild(section1);
 
     // ── Section 2: Typography & appearance ──
@@ -873,7 +936,7 @@ function renderResumeBanner(books) {
   const lastBook = books.find((b) => b.id === pos.bookId);
   if (!lastBook) return;
   const isPrologue = pos.chapter === "prologue";
-  const href = `#/${pos.bookId}/${pos.chapter}`;
+  const href = `#/${pos.bookId}/${pos.chapter}?resume=1`;
   const label = isPrologue
     ? `이어읽기: ${lastBook.name_ko} 머리말`
     : `이어읽기: ${lastBook.name_ko} ${pos.chapter}${chUnit(lastBook.id)}`;
@@ -1198,11 +1261,13 @@ function renderChapter(data, book, opts) {
   showAudioPlayer(book.id, ch);
   observeFabLift();
 
-  // Scroll to highlighted verse or top
-  if (hlVerse) {
-    const target = document.getElementById(`v${hlVerse}`);
+  // Scroll to highlighted verse, resumed position, or top
+  const scrollVerse = hlVerse || (opts && opts.resumeVerse) || null;
+  if (scrollVerse) {
+    const target = document.getElementById(`v${scrollVerse}`);
     if (target) {
-      requestAnimationFrame(() => target.scrollIntoView({ behavior: "smooth", block: "center" }));
+      const behavior = hlVerse ? "smooth" : "instant";
+      requestAnimationFrame(() => target.scrollIntoView({ behavior, block: hlVerse ? "center" : "start" }));
     }
   } else {
     window.scrollTo(0, 0);
@@ -1319,6 +1384,7 @@ function parseHash() {
     highlightQuery,
     highlightVerse,
     highlightVerseEnd,
+    resume: query.has("resume"),
   };
 }
 
@@ -1335,6 +1401,9 @@ function trackPageView() {
 }
 
 async function route() {
+  const isInitialLoad = _isInitialLoad;
+  _isInitialLoad = false;
+  if (_scrollTrackCleanup) _scrollTrackCleanup();
   const parsed = parseHash();
   const { view, bookId, chapter, division } = parsed;
 
@@ -1371,6 +1440,13 @@ async function route() {
     const books = await loadBooks();
 
     if (view === "books") {
+      if (isInitialLoad && loadStartupBehavior() === "resume") {
+        const savedPos = loadReadingPosition();
+        if (savedPos && savedPos.bookId) {
+          location.hash = `#/${savedPos.bookId}/${savedPos.chapter}?resume=1`;
+          return; // hashchange triggers route() again
+        }
+      }
       dismissLaunchScreen(); // Start fade-out immediately
       renderBookList(books);
       trackPageView();
@@ -1422,12 +1498,24 @@ async function route() {
         return;
       }
       const data = await loadChapter(bookId, chapter);
+      const savedPos = loadReadingPosition();
+      const autoRestore = isInitialLoad
+        && loadStartupBehavior() === "resume"
+        && savedPos
+        && savedPos.bookId === bookId
+        && savedPos.chapter === chapter
+        && savedPos.verse;
+      const resumeVerse = (parsed.resume || autoRestore) && savedPos && savedPos.verse
+        ? savedPos.verse
+        : null;
       renderChapter(data, book, {
         highlightQuery: parsed.highlightQuery,
         highlightVerse: parsed.highlightVerse,
         highlightVerseEnd: parsed.highlightVerseEnd,
+        resumeVerse,
       });
-      saveReadingPosition(bookId, chapter);
+      saveReadingPosition(bookId, chapter, resumeVerse);
+      startScrollTracking(bookId, chapter);
       trackPageView();
     }
   } catch (err) {
