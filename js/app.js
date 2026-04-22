@@ -819,6 +819,30 @@ function setTitleWithChapterPicker(book, currentCh) {
     }
   });
 
+  const chevron = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  chevron.setAttribute("viewBox", "0 0 24 24");
+  chevron.setAttribute("aria-hidden", "true");
+  chevron.setAttribute("class", "title-back-icon");
+  const chevronPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  chevronPath.setAttribute("d", "M15.5 5 8.5 12l7 7");
+  chevronPath.setAttribute("stroke", "currentColor");
+  chevronPath.setAttribute("stroke-width", "2");
+  chevronPath.setAttribute("stroke-linecap", "round");
+  chevronPath.setAttribute("stroke-linejoin", "round");
+  chevronPath.setAttribute("fill", "none");
+  chevron.appendChild(chevronPath);
+
+  const backBtn = el(
+    "button",
+    { className: "title-back-btn", "aria-label": `${book.name_ko} 목록으로` },
+    chevron
+  );
+  backBtn.addEventListener("click", () => {
+    if (history.length > 1) history.back();
+    else location.hash = `#/${book.id}`;
+  });
+
+  $title.appendChild(backBtn);
   $title.appendChild(btn);
   $title.appendChild(popover);
 }

@@ -397,6 +397,34 @@ body {
   margin: 0.3rem 0 0.2rem;
 }
 
+/* ── Chapter Title Back Button ── */
+.title-back-btn {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.2rem;
+  height: 2.2rem;
+  padding: 0;
+  color: var(--accent);
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.title-back-btn:active {
+  opacity: 0.4;
+}
+
+.title-back-icon {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
 /* ── Chapter Picker ── */
 .title-picker-btn {
   font-family: inherit;
