@@ -229,6 +229,7 @@ function initSettings() {
   btn.appendChild(settingsSvg);
   const popover = el("div", { className: "settings-popover" });
   popover.hidden = true;
+  popover.addEventListener("click", (e) => e.stopPropagation());
 
   function rebuild() {
     clearNode(popover);
@@ -246,7 +247,8 @@ function initSettings() {
       const orderBtn = el("button", { className: "toolbar-btn", "aria-pressed": String(currentOrder === value) }, label);
       orderBtn.addEventListener("click", () => {
         saveBookOrder(value);
-        route();
+        const { view } = parseHash();
+        if (view !== "chapter" && view !== "prologue") route();
         rebuild();
         announce(announceLabel);
       });
@@ -420,6 +422,11 @@ function initSettings() {
     const versionLabel = appVersion ? `공동번역성서 ${appVersion}` : "공동번역성서";
     aboutRow.appendChild(el("a", { href: "https://github.com/anglican-kr/common-bible", target: "_blank", rel: "noopener noreferrer" }, versionLabel));
     popover.appendChild(aboutRow);
+
+    if (!popover.hidden) {
+      const firstFocusable = popover.querySelector("button:not([disabled]), a[href], input:not([disabled])");
+      if (firstFocusable) firstFocusable.focus();
+    }
   }
 
   function positionPopover() {
