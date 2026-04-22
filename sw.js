@@ -2,6 +2,10 @@
 // prior caches (shell + data), ensuring bible/search updates reach clients.
 const CACHE_NAME = "rev-30";
 
+// Separate cache for Google Font files (fonts.gstatic.com).
+// Never cleared on CACHE_NAME bump — font files are content-addressed and immutable.
+const FONT_CACHE = "fonts-v1";
+
 const SHELL_FILES = [
   "/",
   "/index.html",
@@ -39,22 +43,43 @@ self.addEventListener("message", (event) => {
   }
 });
 
-// Remove old caches on activate
+// Remove old caches on activate (preserve FONT_CACHE across releases)
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
+      Promise.all(keys.filter((k) => k !== CACHE_NAME && k !== FONT_CACHE).map((k) => caches.delete(k)))
     )
   );
   self.clients.claim();
 });
 
-// Stale-while-revalidate for everything.
+// Cache-first for Google Font files: immutable, content-addressed URLs.
+// Stored in FONT_CACHE which persists across CACHE_NAME bumps.
+function handleFontFile(event) {
+  event.respondWith(
+    caches.open(FONT_CACHE).then((cache) =>
+      cache.match(event.request).then((cached) => {
+        if (cached) return cached;
+        return fetch(event.request).then((res) => {
+          if (res.ok) cache.put(event.request, res.clone());
+          return res;
+        });
+      })
+    )
+  );
+}
+
+// Stale-while-revalidate for everything else.
 // Revalidate via { cache: "reload" } so a long-lived HTTP cache entry does not
 // overwrite the SW cache with stale bytes during background refresh.
 // Bible/search data updates are propagated by bumping CACHE_NAME on release,
 // which clears the old cache during activate().
 self.addEventListener("fetch", (event) => {
+  if (new URL(event.request.url).hostname === "fonts.gstatic.com") {
+    handleFontFile(event);
+    return;
+  }
+
   event.respondWith(
     caches.match(event.request).then((cached) => {
       const fetched = fetch(new Request(event.request, { cache: "reload" })).then((res) => {
