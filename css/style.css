@@ -1366,7 +1366,7 @@ mark.search-highlight {
   border-top: none;
   max-width: var(--max-width);
   margin: 0 auto;
-  padding: 0.5rem 1rem;
+  padding: 0.5rem 1.25rem max(0.75rem, env(safe-area-inset-bottom, 0px));
 }
 
 #audio-bar::before {
