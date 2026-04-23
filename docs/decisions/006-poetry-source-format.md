@@ -8,6 +8,7 @@
 | v1.1 | 2026-03-31 | 절 내부 스탠자 구분, 산문·운문 혼합 처리 추가                  |
 | v1.2 | 2026-04-01 | 단일 반행(monocolon) 처리, 절 내 산문+운문 혼합 포맷 규칙 추가 |
 | v2   | 2026-04-06 | `.md` 블록인용(`>`) 통일, `segments` 데이터 모델, `.txt` 파서 제거 |
+| v2.1 | 2026-04-24 | 단락 구분 플래그를 절 레벨(`has_paragraph`)에서 세그먼트 레벨(`paragraph_break`)로 이동 |
 
 - 상태: 승인됨
 
@@ -24,7 +25,7 @@
 | 스탠자 구분 (절 간) | 빈 `>` 행 + 다음 `> [N]` | 다음 절에 `stanza_break: true` |
 | 스탠자 구분 (절 내) | 빈 `>` 행 + 다음 `> text` | 같은 segment 텍스트에 `\n\n` 삽입 |
 | 장 헤더 | `# N장` / `# N편` | Chapter 경계 |
-| 단락 구분 | `¶` (기존 규칙 유지) | `has_paragraph: true` |
+| 단락 구분 | `¶` 또는 절 앞 빈 줄 | 해당 segment에 `paragraph_break: true` |
 
 ---
 
@@ -37,6 +38,25 @@
 1. **한 절 안에서 산문/운문을 구별할 수 없다** — `text: str` 단일 필드로는 "이 부분은 산문, 이 부분은 운문"을 표현 불가
 2. **렌더러가 `\n` 포함 여부로 운문을 추측** — `inPoetryStanza` 휴리스틱이 취약하고 엣지 케이스 다수
 3. **4칸 들여쓰기와 블록인용 혼재** — 시편은 4칸 들여쓰기, 창세기는 `>` 블록인용으로 표기 불일치
+
+### v2.1 전환 동기 — 단락 구분 플래그 이동
+
+v2까지 단락 구분은 절 레벨 `has_paragraph: bool` 필드로 관리했다. 그런데 이 설계에는 구조적 결함이 있었다.
+
+**버그 사례 (요한 5:8–9):**
+```
+[8] 예수께서 "일어나 요를 걷어들고 걸어가거라." 하시자
+[9] 그 사람은 어느새 병이 나아서 요를 걷어들고 걸어갔다.
+¶ 그 날은 마침 안식일이었다.
+```
+
+9절 본문 뒤에 오는 continuation 줄(`¶ 그 날은...`)의 `¶`를 파서가 감지하여 9절 자체에 `has_paragraph: true`를 설정했다. 렌더러는 이를 "9절 앞에 단락 간격"으로 해석하여 8절과 9절 사이에 불필요한 gap을 삽입했다.
+
+**근본 원인:** `has_paragraph`가 두 가지 의미를 혼용했다.
+- "이 절이 새 단락을 시작함" (절 앞에 gap)
+- "이 절 내부에서 단락 전환이 일어남" (특정 segment 앞에 gap)
+
+**해결:** 단락 구분 정보를 `Verse.has_paragraph`(절 레벨)에서 `Segment.paragraph_break`(세그먼트 레벨)로 이동. 모든 단락 구분(`¶`, 빈 줄)이 동일한 방식으로 처리되며, gap이 삽입될 정확한 위치(segment)에 플래그가 붙는다.
 
 ### v2 전환 동기
 
@@ -142,9 +162,15 @@
 ```python
 @dataclass
 class Segment:
-    type: str   # "prose" 또는 "poetry"
-    text: str   # 산문: 한 줄, 운문: \n으로 반행 구분, \n\n으로 스탠자 구분
+    type: str              # "prose" 또는 "poetry"
+    text: str              # 산문: 한 줄, 운문: \n으로 반행 구분, \n\n으로 스탠자 구분
+    paragraph_break: bool = False  # 이 segment 앞에 단락 간격 삽입
 ```
+
+`paragraph_break`가 설정되는 세 가지 경우:
+1. **절 줄 자체에 `¶`** — `[N] ¶ text` 형태, 첫 번째 segment에 설정
+2. **절 앞 빈 줄** — `pending_blank` 상태에서 산문 절이 시작될 때, 첫 번째 segment에 설정
+3. **continuation 줄에 `¶`** — 절 번호 없는 연속 줄에 `¶`가 포함된 경우, 해당 segment에 설정
 
 ### Verse 데이터클래스
 
@@ -153,7 +179,6 @@ class Segment:
 class Verse:
     number: int
     segments: List[Segment]               # 산문/운문 명시적 구분
-    has_paragraph: bool = False            # ¶ 포함 여부
     stanza_break: bool = False             # 이 절 앞 스탠자 구분
     chapter_ref: Optional[int] = None
     range_end: Optional[int] = None
@@ -163,9 +188,9 @@ class Verse:
 
 ### JSON 출력 예시
 
-**산문 절:**
+**단락 시작 산문 절 (`¶` in verse line):**
 ```json
-{"number": 1, "has_paragraph": true, "segments": [{"type": "prose", "text": "¶ 한처음에 하느님께서..."}]}
+{"number": 1, "segments": [{"type": "prose", "text": "¶ 한처음에 하느님께서...", "paragraph_break": true}]}
 ```
 
 **순수 운문 절:**
@@ -173,13 +198,13 @@ class Verse:
 {"number": 1, "segments": [{"type": "poetry", "text": "복되어라.\n악을 꾸미는 자리에...\n죄인들의 길을..."}]}
 ```
 
-**혼합 절 (산문 + 운문):**
+**혼합 절 — continuation에 `¶` (단락이 절 중간에서 전환):**
 ```json
 {
-  "number": 14,
+  "number": 9,
   "segments": [
-    {"type": "prose", "text": "야훼 하느님께서 뱀에게 말씀하셨다."},
-    {"type": "poetry", "text": "\"네가 이런 일을 저질렀으니\n온갖 집짐승과..."}
+    {"type": "prose", "text": "그 사람은 어느새 병이 나아서 요를 걷어들고 걸어갔다."},
+    {"type": "prose", "text": "¶ 그 날은 마침 안식일이었다.", "paragraph_break": true}
   ]
 }
 ```
@@ -194,9 +219,9 @@ class Verse:
 |---|---|---|
 | poetry | poetry | `hemistich-break` (여백 없음, 스탠자 내 연결) |
 | prose | poetry | `paragraph-break` (여백, 단락 전환) |
-| * | * (`¶` 있음) | `paragraph-break` |
+| * | * (첫 segment에 `paragraph_break: true`) | `paragraph-break` |
 | * | * (`stanza_break`) | `stanza-break` (큰 여백) |
-| * | prose (`¶` 없음) | break 없음 (같은 단락) |
+| * | prose (첫 segment에 `paragraph_break` 없음) | break 없음 (같은 단락) |
 
 ### 절 내 segment 간 break
 
@@ -226,6 +251,7 @@ current_verse: Optional[Verse]
 poetry_lines: List[str]           # 블록인용 내 축적 중인 운문 행
 in_blockquote: bool               # 블록인용 컨텍스트 내부 여부
 pending_blank: bool               # 직전에 빈 줄이 있었는지
+pending_paragraph: bool           # 다음 segment에 paragraph_break 설정 대기
 pending_stanza_in_bq: bool        # 블록인용 내 빈 > 행 후 스탠자 대기
 ```
 
@@ -234,12 +260,12 @@ pending_stanza_in_bq: bool        # 블록인용 내 빈 > 행 후 스탠자 대
 | 라인 패턴 | 동작 |
 |---|---|
 | `# N장` | 현재 절/장 마무리, 새 Chapter 생성 |
-| `[N] text` (블록인용 외) | 현재 절 마무리, 새 Verse 생성, prose segment |
-| `> [N] text` (블록인용 내) | 현재 절 flush, 새 Verse 생성, poetry 축적 시작 |
+| `[N] text` (블록인용 외) | 현재 절 마무리, 새 Verse 생성, prose segment; `¶` 포함 시 첫 segment에 `paragraph_break: true`; `pending_blank`이면 첫 segment에 `paragraph_break: true` (또는 segment 없으면 `pending_paragraph = True`) |
+| `> [N] text` (블록인용 내) | 현재 절 flush, 새 Verse 생성, poetry 축적 시작; `pending_blank`이면 `stanza_break: true` |
 | `> text` (절 마커 없음) | poetry_lines에 추가 |
 | `>` (빈 블록인용) | `pending_stanza_in_bq = True` (블록인용 유지) |
 | 빈 줄 (`>` 없음) | 블록인용 종료, poetry flush, `pending_blank = True` |
-| 기타 텍스트 | 현재 절에 prose segment 추가 |
+| 기타 텍스트 | 현재 절에 prose segment 추가; `¶` 포함 또는 `pending_paragraph`이면 `paragraph_break: true` |
 
 ---
 
