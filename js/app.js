@@ -1146,7 +1146,7 @@ function renderChapter(data, book, opts) {
         article.appendChild(el("span", { className: "stanza-break", role: "presentation" }));
       } else if (startsWithPoetry && prevVerseEndType === "poetry") {
         article.appendChild(el("span", { className: "hemistich-break", role: "presentation" }));
-      } else if (startsWithPoetry || v.has_paragraph) {
+      } else if (startsWithPoetry || segs[0]?.paragraph_break) {
         article.appendChild(el("span", { className: "paragraph-break", role: "presentation" }));
       }
     }
@@ -1198,7 +1198,7 @@ function renderChapter(data, book, opts) {
 
         // Break before non-first lines
         if (!isFirstLine) {
-          const breakClass = (isSegChange && li === 0) ? "paragraph-break"
+          const breakClass = ((seg.paragraph_break || isSegChange) && li === 0) ? "paragraph-break"
             : isPoetry ? "hemistich-break" : "paragraph-break";
           article.appendChild(el("span", {
             className: breakClass,

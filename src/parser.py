@@ -15,6 +15,7 @@ class Segment:
     """절 내부의 산문/운문 구분 단위"""
     type: str   # "prose" or "poetry"
     text: str   # prose: single text, poetry: \n for hemistich, \n\n for stanza break
+    paragraph_break: bool = False  # visual gap before this segment (¶ or blank line)
 
 
 @dataclass
@@ -22,7 +23,6 @@ class Verse:
     """절 데이터"""
     number: int
     segments: List[Segment]
-    has_paragraph: bool = False
     stanza_break: bool = False         # stanza break precedes this verse (ADR-006)
     chapter_ref: Optional[int] = None  # set when verse physically appears in a different chapter
     range_end: Optional[int] = None    # set for merged verse ranges (e.g. 17-18)
@@ -144,6 +144,7 @@ class BibleParser:
         poetry_lines: List[str] = []       # accumulated poetry lines in blockquote
         in_blockquote = False
         pending_blank = False
+        pending_paragraph = False  # next segment added should have paragraph_break=True
         pending_stanza_in_bq = False
 
         def flush_poetry():
@@ -184,16 +185,14 @@ class BibleParser:
             range_end = int(m.group(3)) if m.group(3) else None
             part = m.group(4) if m.group(4) else None
             alt_ref = int(m.group(5)) if m.group(5) else None
-            has_paragraph = '¶' in text if text else False
             segments: List[Segment] = []
             if text:
-                segments.append(Segment(
-                    type="poetry" if is_poetry else "prose",
-                    text=text
-                ))
+                seg = Segment(type="poetry" if is_poetry else "prose", text=text)
+                if '¶' in text:
+                    seg.paragraph_break = True
+                segments.append(seg)
             return Verse(
                 number=number, segments=segments,
-                has_paragraph=has_paragraph,
                 chapter_ref=chapter_ref, range_end=range_end, part=part, alt_ref=alt_ref,
             )
 
@@ -282,17 +281,21 @@ class BibleParser:
                 if pending_blank:
                     if current_verse.segments and current_verse.segments[0].type == "poetry":
                         current_verse.stanza_break = True
+                    elif current_verse.segments:
+                        current_verse.segments[0].paragraph_break = True
                     else:
-                        current_verse.has_paragraph = True
+                        pending_paragraph = True
                 pending_blank = False
                 continue
 
             # --- Prose continuation (plain text, no verse marker, not blockquote) ---
             if current_verse is not None:
                 text = line.strip()
-                current_verse.segments.append(Segment(type="prose", text=text))
-                if '¶' in text:
-                    current_verse.has_paragraph = True
+                seg = Segment(type="prose", text=text)
+                if '¶' in text or pending_paragraph:
+                    seg.paragraph_break = True
+                pending_paragraph = False
+                current_verse.segments.append(seg)
                 pending_blank = False
 
         # Finalize remaining
@@ -322,11 +325,14 @@ class BibleParser:
         for chapter_data in data:
             verses = []
             for verse_data in chapter_data['verses']:
-                segments = [Segment(type=s['type'], text=s['text']) for s in verse_data['segments']]
+                segments = [
+                    Segment(type=s['type'], text=s['text'],
+                            paragraph_break=s.get('paragraph_break', False))
+                    for s in verse_data['segments']
+                ]
                 verses.append(Verse(
                     number=verse_data['number'],
                     segments=segments,
-                    has_paragraph=verse_data.get('has_paragraph', False),
                     stanza_break=verse_data.get('stanza_break', False),
                     chapter_ref=verse_data.get('chapter_ref'),
                     range_end=verse_data.get('range_end'),
