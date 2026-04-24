@@ -1,5 +1,55 @@
 # 작업 일지
 
+## 2026-04-24
+
+### SEO 개선 — History API 라우팅 전환 (v1.0.30, ADR-009)
+
+해시 기반 라우팅(`#/gen/1`)을 History API 경로 라우팅(`/gen/1`)으로 전환하고
+SEO 관련 개선 사항을 일괄 적용했다.
+
+#### 라우팅 전환 (js/app.js)
+
+- `parseHash()` → `parsePath()`: `location.pathname + location.search` 기반으로 재작성
+- `navigate(path)` 헬퍼 추가: `history.pushState` + `route()` 조합
+- `hashchange` → `popstate` 이벤트 리스너 전환
+- 전역 클릭 인터셉터: 내부 링크를 `navigate()`로 처리, Cmd/Ctrl/Shift 클릭은 브라우저 기본 동작 유지
+- 레거시 해시 URL 호환: `DOMContentLoaded`에서 `#/path` → `/path` 자동 `replaceState`
+
+#### SEO 개선
+
+- `updatePageMeta()` 신규: 라우트별 `<title>`, `<meta description>`, `og:title`, `og:url`, `canonical` 동적 갱신
+  - 장 뷰: "창세기 1장 — 공동번역성서"
+  - 책 뷰: "창세기 — 공동번역성서"
+  - 구분 뷰: "구약 — 공동번역성서"
+  - 머리말 뷰: "집회서 머리말 — 공동번역성서"
+- `sitemap.xml`: 루트 1개 → 73권 × 전 장 + 머리말 = 1,403개 URL
+
+#### PWA 대응
+
+- `sw.js`: navigation 요청 전용 핸들러 추가 — 캐시에서 `/index.html` 즉시 반환 (오프라인 임의 경로 접근 지원)
+- `manifest.webmanifest`: `start_url "/#/"` → `"/"`
+- `sw.js`: `CACHE_NAME` rev-33 → rev-34 (기존 PWA 사용자 SW 강제 갱신)
+- `version.json`: 1.0.29 → 1.0.30
+
+#### 배포 요구사항
+
+nginx에 SPA fallback 설정 선적용 필수:
+```nginx
+location / { try_files $uri $uri/ /index.html; }
+```
+
+#### 수정 파일 요약
+
+| 파일 | 변경 유형 |
+|---|---|
+| `js/app.js` | 수정 — History API 라우팅, updatePageMeta, 클릭 인터셉터, 레거시 해시 호환 |
+| `sw.js` | 수정 — navigation fallback, CACHE_NAME rev-34 |
+| `manifest.webmanifest` | 수정 — start_url "/" |
+| `sitemap.xml` | 수정 — 1,403개 URL |
+| `version.json` | 수정 — 1.0.30 |
+| `docs/decisions/009-history-api-routing.md` | 신규 — ADR-009 |
+| `docs/decisions/001-spa-architecture.md` | 수정 — SEO 불이익 해소 반영 |
+
 ## 2026-04-18
 
 ### 초기 로딩 최적화 및 PWA 정리 (버전 1.0.21)
