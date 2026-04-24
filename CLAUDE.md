@@ -43,8 +43,9 @@ assets/
     icon-512-maskable.png ← PWA maskable 아이콘
     skh-cross.svg       ← 성공회 십자가 SVG (스플래시 생성용 소스)
   install-guide/
-    ios-iphone-share.svg ← iOS iPhone 설치 안내 이미지 (ADR-008)
-    ios-ipad-share.svg   ← iOS iPad 설치 안내 이미지 (ADR-008)
+    install-step-1.webp  ← iOS 설치 안내 스크린샷 1: Safari 앱 화면 (ADR-008)
+    install-step-2.webp  ← iOS 설치 안내 스크린샷 2: ··· 메뉴 (ADR-008)
+    install-step-3.webp  ← iOS 설치 안내 스크린샷 3: 홈 화면에 추가 (ADR-008)
   splash/
     dark-{device}.png   ← iOS apple-touch-startup-image (13 디바이스, ADR-007)
 data/

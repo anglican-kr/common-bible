@@ -2387,33 +2387,90 @@ function buildInstallBody(platform) {
   }
 
   if (platform === "ios-safari") {
-    const isIPad = /iPad/.test(navigator.userAgent) ||
-      (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-    $installModalBody.appendChild(el("p", {},
-      "홈 화면에 추가하면 주소창 없이 앱처럼 실행되고, 오프라인에서도 사용할 수 있습니다."));
-    const fig = el("figure", { className: "install-figure" });
-    const img = el("img", {
-      src: isIPad
-        ? "/assets/install-guide/ios-ipad-share.svg"
-        : "/assets/install-guide/ios-iphone-share.svg",
-      alt: "Safari 공유 시트에서 '홈 화면에 추가' 위치",
-      loading: "lazy",
+    const steps = [
+      {
+        img: "/assets/install-guide/install-step-1.webp",
+        alt: "Safari 주소창 하단의 ··· 버튼",
+        caption: "Safari에서 페이지를 연 뒤, 주소창 오른쪽 ··· 버튼을 누릅니다.",
+        objectPosition: "50% 85%",
+      },
+      {
+        img: "/assets/install-guide/install-step-2.webp",
+        alt: "··· 메뉴에서 공유 선택",
+        caption: "메뉴에서 ‘공유’를 선택합니다.",
+        objectPosition: "50% 45%",
+      },
+      {
+        img: "/assets/install-guide/install-step-3.webp",
+        alt: "공유 시트에서 홈 화면에 추가 선택",
+        caption: "‘홈 화면에 추가’를 누르면 앱처럼 설치됩니다.",
+        objectPosition: "50% 20%",
+      },
+    ];
+
+    let currentStep = 0;
+
+    const wrap = el("div", { className: "install-slider-wrap" });
+    const track = el("div", { className: "install-slider-track" });
+    steps.forEach(({ img, alt, objectPosition }) => {
+      const slide = el("div", { className: "install-slide" });
+      const image = el("img", { src: img, alt, loading: "lazy" });
+      image.style.objectPosition = objectPosition;
+      slide.appendChild(image);
+      track.appendChild(slide);
     });
-    fig.appendChild(img);
-    fig.appendChild(el("figcaption", {}, isIPad
-      ? "Safari 주소창 오른쪽의 공유 버튼을 누르세요."
-      : "Safari 하단의 공유 버튼(□↑)을 누르세요."));
-    $installModalBody.appendChild(fig);
-    const ol = el("ol");
-    ol.appendChild(el("li", {}, el("span", {},
-      "Safari ", isIPad ? "주소창 오른쪽" : "하단", "의 공유 버튼을 누릅니다.")));
-    ol.appendChild(el("li", {}, "목록을 내려 \u2018홈 화면에 추가\u2019를 선택합니다."));
-    ol.appendChild(el("li", {}, "오른쪽 위 \u2018추가\u2019를 누르면 홈 화면에 아이콘이 생깁니다."));
-    $installModalBody.appendChild(ol);
+    wrap.appendChild(track);
+    $installModalBody.appendChild(wrap);
+
+    const dotsEl = el("div", { className: "install-dots", role: "tablist", "aria-label": "설치 단계" });
+    const dotBtns = steps.map((_, i) => {
+      const btn = el("button", {
+        type: "button",
+        className: "install-dot",
+        role: "tab",
+        "aria-label": `${i + 1}단계`,
+        "aria-selected": i === 0 ? "true" : "false",
+      });
+      btn.addEventListener("click", () => goToStep(i));
+      dotsEl.appendChild(btn);
+      return btn;
+    });
+    $installModalBody.appendChild(dotsEl);
+
+    const captionEl = el("p", { className: "install-step-caption" });
+    $installModalBody.appendChild(captionEl);
+
+    function goToStep(index) {
+      currentStep = index;
+      track.style.transform = `translateX(${-index * 100}%)`;
+      dotBtns.forEach((btn, i) => {
+        btn.classList.toggle("active", i === index);
+        btn.setAttribute("aria-selected", i === index ? "true" : "false");
+      });
+      captionEl.textContent = `${index + 1}. ${steps[index].caption}`;
+    }
+
+    let touchStartX = 0;
+    let touchStartTime = 0;
+    track.addEventListener("touchstart", (e) => {
+      touchStartX = e.touches[0].clientX;
+      touchStartTime = Date.now();
+    }, { passive: true });
+    track.addEventListener("touchend", (e) => {
+      const dx = e.changedTouches[0].clientX - touchStartX;
+      if (Math.abs(dx) > 40 && Date.now() - touchStartTime < 400) {
+        if (dx < 0 && currentStep < steps.length - 1) goToStep(currentStep + 1);
+        else if (dx > 0 && currentStep > 0) goToStep(currentStep - 1);
+      }
+    }, { passive: true });
+
+    goToStep(0);
+
     $installModalBody.appendChild(el("p", { className: "install-note" },
-      "iOS 버전에 따라 메뉴 위치가 조금 다를 수 있습니다."));
+      "마지막으로 오른쪽 위 ‘추가’를 누르면 홈 화면에 아이콘이 생깁니다."));
     return;
   }
+
 
   if (platform === "ios-other") {
     $installModalBody.appendChild(el("p", {},
