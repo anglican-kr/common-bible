@@ -1643,7 +1643,12 @@ document.addEventListener("click", (e) => {
 window.addEventListener("popstate", route);
 window.addEventListener("DOMContentLoaded", () => {
   const idle = window.requestIdleCallback ?? ((cb) => setTimeout(cb, 200));
-  
+
+  // Redirect legacy hash URLs: bible.anglican.kr/#/gen/1 → /gen/1
+  if (location.hash.startsWith("#/")) {
+    history.replaceState(null, "", location.hash.slice(1));
+  }
+
   // 1. Prioritize UI rendering
   route().finally(() => {
     // 2. Load non-critical data after first paint
