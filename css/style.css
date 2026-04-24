@@ -701,6 +701,11 @@ body {
   display: flex;
   transition: transform 0.32s cubic-bezier(0.25, 0.46, 0.45, 0.94);
   will-change: transform;
+  touch-action: pan-y;
+  cursor: grab;
+}
+.install-slider-track:active {
+  cursor: grabbing;
 }
 .install-slide {
   flex: 0 0 100%;
@@ -713,6 +718,7 @@ body {
   display: block;
   user-select: none;
   -webkit-user-drag: none;
+  pointer-events: none;
 }
 .install-dots {
   display: flex;

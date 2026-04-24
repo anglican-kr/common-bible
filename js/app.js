@@ -2397,13 +2397,13 @@ function buildInstallBody(platform) {
       {
         img: "/assets/install-guide/install-step-2.webp",
         alt: "··· 메뉴에서 공유 선택",
-        caption: "메뉴에서 ‘공유’를 선택합니다.",
+        caption: "메뉴에서 '공유'를 선택합니다.",
         objectPosition: "50% 45%",
       },
       {
         img: "/assets/install-guide/install-step-3.webp",
         alt: "공유 시트에서 홈 화면에 추가 선택",
-        caption: "‘홈 화면에 추가’를 누르면 앱처럼 설치됩니다.",
+        caption: "'홈 화면에 추가'를 누르면 앱처럼 설치됩니다.",
         objectPosition: "50% 20%",
       },
     ];
@@ -2412,12 +2412,18 @@ function buildInstallBody(platform) {
 
     const wrap = el("div", { className: "install-slider-wrap" });
     const track = el("div", { className: "install-slider-track" });
-    steps.forEach(({ img, alt, objectPosition }) => {
-      const slide = el("div", { className: "install-slide" });
+    const slides = steps.map(({ img, alt, objectPosition }, i) => {
+      const slide = el("div", {
+        className: "install-slide",
+        role: "tabpanel",
+        id: `install-slide-${i}`,
+        "aria-label": `${i + 1}단계`,
+      });
       const image = el("img", { src: img, alt, loading: "lazy" });
       image.style.objectPosition = objectPosition;
       slide.appendChild(image);
       track.appendChild(slide);
+      return slide;
     });
     wrap.appendChild(track);
     $installModalBody.appendChild(wrap);
@@ -2430,46 +2436,83 @@ function buildInstallBody(platform) {
         role: "tab",
         "aria-label": `${i + 1}단계`,
         "aria-selected": i === 0 ? "true" : "false",
+        "aria-controls": `install-slide-${i}`,
+        tabindex: i === 0 ? "0" : "-1",
       });
-      btn.addEventListener("click", () => goToStep(i));
+      btn.addEventListener("click", () => { goToStep(i); resetTimer(); dotBtns[i].focus(); });
       dotsEl.appendChild(btn);
       return btn;
     });
+    // Arrow key navigation (WAI-ARIA tab pattern)
+    dotsEl.addEventListener("keydown", (e) => {
+      let next = -1;
+      if (e.key === "ArrowRight") next = (currentStep + 1) % steps.length;
+      else if (e.key === "ArrowLeft") next = (currentStep - 1 + steps.length) % steps.length;
+      if (next !== -1) {
+        goToStep(next);
+        resetTimer();
+        dotBtns[next].focus();
+        e.preventDefault();
+      }
+    });
     $installModalBody.appendChild(dotsEl);
 
-    const captionEl = el("p", { className: "install-step-caption" });
+    // aria-live: announces caption changes to screen readers
+    const captionEl = el("p", {
+      className: "install-step-caption",
+      "aria-live": "polite",
+      "aria-atomic": "true",
+    });
     $installModalBody.appendChild(captionEl);
 
     function goToStep(index) {
       currentStep = index;
       track.style.transform = `translateX(${-index * 100}%)`;
+      slides.forEach((slide, i) => {
+        const active = i === index;
+        slide.setAttribute("aria-hidden", active ? "false" : "true");
+      });
       dotBtns.forEach((btn, i) => {
-        btn.classList.toggle("active", i === index);
-        btn.setAttribute("aria-selected", i === index ? "true" : "false");
+        const active = i === index;
+        btn.classList.toggle("active", active);
+        btn.setAttribute("aria-selected", active ? "true" : "false");
+        btn.setAttribute("tabindex", active ? "0" : "-1");
       });
       captionEl.textContent = `${index + 1}. ${steps[index].caption}`;
     }
 
-    let touchStartX = 0;
-    let touchStartTime = 0;
-    track.addEventListener("touchstart", (e) => {
-      touchStartX = e.touches[0].clientX;
-      touchStartTime = Date.now();
-    }, { passive: true });
-    track.addEventListener("touchend", (e) => {
-      const dx = e.changedTouches[0].clientX - touchStartX;
-      if (Math.abs(dx) > 40 && Date.now() - touchStartTime < 400) {
+    // Auto-advance every 3 s; skip if user prefers reduced motion
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    let timer = reducedMotion ? null : setInterval(() => goToStep((currentStep + 1) % steps.length), 3000);
+    function resetTimer() {
+      if (reducedMotion) return;
+      clearInterval(timer);
+      timer = setInterval(() => goToStep((currentStep + 1) % steps.length), 3000);
+    }
+    $installModal.addEventListener("install:cleanup", () => clearInterval(timer), { once: true });
+
+    // Pointer-based swipe (touch + mouse)
+    let pointerStartX = 0;
+    let pointerStartTime = 0;
+    track.addEventListener("pointerdown", (e) => {
+      pointerStartX = e.clientX;
+      pointerStartTime = Date.now();
+      track.setPointerCapture(e.pointerId);
+    });
+    track.addEventListener("pointerup", (e) => {
+      const dx = e.clientX - pointerStartX;
+      if (Math.abs(dx) > 40 && Date.now() - pointerStartTime < 400) {
         if (dx < 0 && currentStep < steps.length - 1) goToStep(currentStep + 1);
         else if (dx > 0 && currentStep > 0) goToStep(currentStep - 1);
+        resetTimer();
       }
-    }, { passive: true });
+    });
 
     goToStep(0);
-
-    $installModalBody.appendChild(el("p", { className: "install-note" },
-      "마지막으로 오른쪽 위 ‘추가’를 누르면 홈 화면에 아이콘이 생깁니다."));
     return;
   }
+
+
 
 
   if (platform === "ios-other") {
