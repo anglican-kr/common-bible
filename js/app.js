@@ -1,6 +1,6 @@
 "use strict";
 
-const DATA_DIR = "data";
+const DATA_DIR = "/data";
 // Psalms use "편" instead of "장" as the chapter unit
 function chUnit(bookId) { return bookId === "ps" ? "편" : "장"; }
 const $app = document.getElementById("app");
@@ -689,7 +689,7 @@ async function loadBooks() {
 async function loadVersion() {
   if (appVersion) return appVersion;
   try {
-    const res = await fetch("version.json");
+    const res = await fetch("/version.json");
     const data = await res.json();
     appVersion = data.version;
   } catch {
@@ -1902,11 +1902,11 @@ function ensureSearchWorker() {
   });
   searchWorker.postMessage({
     type: "init",
-    metaUrl: `/${DATA_DIR}/search-meta.json`,
+    metaUrl: `${DATA_DIR}/search-meta.json`,
     chunks: [
-      { name: "nt", url: `/${DATA_DIR}/search-nt.json` },
-      { name: "dc", url: `/${DATA_DIR}/search-dc.json` },
-      { name: "ot", url: `/${DATA_DIR}/search-ot.json` },
+      { name: "nt", url: `${DATA_DIR}/search-nt.json` },
+      { name: "dc", url: `${DATA_DIR}/search-dc.json` },
+      { name: "ot", url: `${DATA_DIR}/search-ot.json` },
     ],
   });
   return searchWorker;
