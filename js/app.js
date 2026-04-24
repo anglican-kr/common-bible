@@ -2749,7 +2749,7 @@ if ("serviceWorker" in navigator) {
     });
   }
 
-  navigator.serviceWorker.register("sw.js", { updateViaCache: "none" }).then((reg) => {
+  navigator.serviceWorker.register("/sw.js", { updateViaCache: "none" }).then((reg) => {
     // A waiting SW already exists (e.g. installed on a previous visit)
     if (reg.waiting) {
       showUpdateToast(reg.waiting);
