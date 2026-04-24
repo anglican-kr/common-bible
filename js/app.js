@@ -1508,6 +1508,9 @@ async function route() {
         const autoNav = searchAutoNavigate;
         searchAutoNavigate = false;
         await renderSearchResults(parsed.query, parsed.page, autoNav);
+        // If renderSearchResults auto-navigated to a chapter, the inner route() call
+        // already handles meta and analytics for that view — don't overwrite.
+        if (parsePath().view !== "search") return;
         updatePageMeta({
           title: `"${parsed.query}" 검색`,
           description: `공동번역성서에서 "${parsed.query}" 검색 결과`,
