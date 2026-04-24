@@ -1407,6 +1407,7 @@ mark.search-highlight {
   white-space: normal;
   line-height: 1.4;
   text-align: center;
+  font-family: sans-serif;
 }
 
 .settings-about a {
@@ -1416,6 +1417,12 @@ mark.search-highlight {
 
 .settings-about a:hover {
   text-decoration: underline;
+}
+
+.github-icon {
+  vertical-align: middle;
+  fill: currentColor;
+  margin-bottom: 1px;
 }
 
 /* ── Audio Bar ── */
