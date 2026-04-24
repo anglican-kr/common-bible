@@ -83,7 +83,7 @@ self.addEventListener("fetch", (event) => {
   // Serve app shell for all navigation requests (History API SPA routing).
   if (event.request.mode === "navigate") {
     event.respondWith(
-      caches.match("/index.html").then((cached) => cached || fetch(event.request))
+      caches.match("/index.html").then((cached) => cached || fetch("/index.html"))
     );
     return;
   }

@@ -1631,6 +1631,7 @@ document.addEventListener("click", (e) => {
   const url = new URL(a.href, location.origin);
   if (url.origin !== location.origin) return;
   if (a.target === "_blank") return;
+  if (e.ctrlKey || e.metaKey || e.shiftKey || e.altKey || e.button !== 0) return;
   e.preventDefault();
   const path = url.pathname + url.search;
   if (path === location.pathname + location.search) {
