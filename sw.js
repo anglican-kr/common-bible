@@ -1,6 +1,6 @@
 // Bump this version on every release. Activating a new CACHE_NAME clears all
 // prior caches (shell + data), ensuring bible/search updates reach clients.
-const CACHE_NAME = "rev-35";
+const CACHE_NAME = "rev-36";
 
 // Separate cache for Google Font files (fonts.gstatic.com).
 // Never cleared on CACHE_NAME bump — font files are content-addressed and immutable.
@@ -88,16 +88,18 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  // Cache-first: serve from cache if available, otherwise fetch and cache.
+  // Cache invalidation is handled by bumping CACHE_NAME on each release.
   event.respondWith(
     caches.match(event.request).then((cached) => {
-      const fetched = fetch(new Request(event.request, { cache: "reload" })).then((res) => {
+      if (cached) return cached;
+      return fetch(new Request(event.request, { cache: "reload" })).then((res) => {
         if (res.ok) {
           const clone = res.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
         }
         return res;
-      }).catch(() => cached);
-      return cached || fetched;
+      });
     })
   );
 });
