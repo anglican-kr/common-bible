@@ -247,7 +247,7 @@ function initSettings() {
       const orderBtn = el("button", { className: "toolbar-btn", "aria-pressed": String(currentOrder === value) }, label);
       orderBtn.addEventListener("click", () => {
         saveBookOrder(value);
-        const { view } = parseHash();
+        const { view } = parsePath();
         if (view !== "chapter" && view !== "prologue") route();
         rebuild();
         announce(announceLabel);
@@ -738,7 +738,7 @@ function setTitleWithDivisionPicker(activeDivision) {
 
   for (const div of order) {
     const cls = div === activeDivision ? "bc-division-item active" : "bc-division-item";
-    popover.appendChild(el("li", null, el("a", { className: cls, href: `#/${div}` }, labels[div])));
+    popover.appendChild(el("li", null, el("a", { className: cls, href: `/${div}` }, labels[div])));
   }
 
   let cleanupTrap = null;
@@ -794,12 +794,12 @@ function setTitleWithChapterPicker(book, currentCh) {
   const grid = el("div", { className: "popover-grid" });
   if (book.has_prologue) {
     grid.appendChild(
-      el("a", { className: "popover-item popover-prologue", href: `#/${book.id}/prologue` }, "머리말")
+      el("a", { className: "popover-item popover-prologue", href: `/${book.id}/prologue` }, "머리말")
     );
   }
   for (let i = 1; i <= book.chapter_count; i++) {
     const cls = i === currentCh ? "popover-item current" : "popover-item";
-    grid.appendChild(el("a", { className: cls, href: `#/${book.id}/${i}` }, String(i)));
+    grid.appendChild(el("a", { className: cls, href: `/${book.id}/${i}` }, String(i)));
   }
   popover.appendChild(grid);
 
@@ -854,7 +854,7 @@ function setTitleWithChapterPicker(book, currentCh) {
   );
   backBtn.addEventListener("click", () => {
     if (history.length > 1) history.back();
-    else location.hash = `#/${book.id}`;
+    else navigate(`/${book.id}`);
   });
 
   $title.appendChild(backBtn);
@@ -880,7 +880,7 @@ function setBreadcrumb(crumbs) {
 }
 
 function buildDivisionBreadcrumb(label, activeDivision) {
-  return el("a", { href: `#/${activeDivision}` }, label);
+  return el("a", { href: `/${activeDivision}` }, label);
 }
 
 const DIVISION_LABELS = {
@@ -974,7 +974,7 @@ function renderBookList(books) {
         section.appendChild(el("h3", { className: "ot-subcategory-title" }, OT_SUBCATEGORY_LABELS[sub]));
         const ul = el("ul", { className: "book-list", role: "list" });
         for (const b of subList) {
-          ul.appendChild(el("li", null, el("a", { href: `#/${b.id}` }, b.name_ko)));
+          ul.appendChild(el("li", null, el("a", { href: `/${b.id}` }, b.name_ko)));
         }
         section.appendChild(ul);
         details.appendChild(section);
@@ -982,7 +982,7 @@ function renderBookList(books) {
     } else {
       const ul = el("ul", { className: "book-list", role: "list" });
       for (const b of list) {
-        ul.appendChild(el("li", null, el("a", { href: `#/${b.id}` }, b.name_ko)));
+        ul.appendChild(el("li", null, el("a", { href: `/${b.id}` }, b.name_ko)));
       }
       details.appendChild(ul);
     }
@@ -1002,7 +1002,7 @@ function renderResumeBanner(books) {
   const lastBook = books.find((b) => b.id === pos.bookId);
   if (!lastBook) return;
   const isPrologue = pos.chapter === "prologue";
-  const href = `#/${pos.bookId}/${pos.chapter}?resume=1`;
+  const href = `/${pos.bookId}/${pos.chapter}?resume=1`;
   const label = isPrologue
     ? `이어읽기: ${lastBook.name_ko} 머리말`
     : `이어읽기: ${lastBook.name_ko} ${pos.chapter}${chUnit(lastBook.id)}`;
@@ -1028,7 +1028,7 @@ function renderResumeBanner(books) {
 
 function renderDivisionList(books, division) {
   setTitleWithDivisionPicker(division);
-  setBreadcrumb([{ label: "목록", href: "#/" }]);
+  setBreadcrumb([{ label: "목록", href: "/" }]);
   hideAudioBar();
   clearNode($app);
 
@@ -1055,7 +1055,7 @@ function renderDivisionList(books, division) {
       section.appendChild(el("h3", { className: "ot-subcategory-title" }, OT_SUBCATEGORY_LABELS[sub]));
       const ul = el("ul", { className: "book-list", role: "list" });
       for (const b of subList) {
-        ul.appendChild(el("li", null, el("a", { href: `#/${b.id}` }, b.name_ko)));
+        ul.appendChild(el("li", null, el("a", { href: `/${b.id}` }, b.name_ko)));
       }
       section.appendChild(ul);
       details.appendChild(section);
@@ -1063,7 +1063,7 @@ function renderDivisionList(books, division) {
   } else {
     const ul = el("ul", { className: "book-list", role: "list" });
     for (const b of list) {
-      ul.appendChild(el("li", null, el("a", { href: `#/${b.id}` }, b.name_ko)));
+      ul.appendChild(el("li", null, el("a", { href: `/${b.id}` }, b.name_ko)));
     }
     details.appendChild(ul);
   }
@@ -1075,7 +1075,7 @@ function renderChapterList(book, books) {
   hideAudioBar();
   const effDiv = effectiveDivision(book);
   setBreadcrumb([
-    { label: "목록", href: "#/" },
+    { label: "목록", href: "/" },
     { divisionPicker: true, label: divisionLabels()[effDiv], activeDivision: effDiv },
   ]);
   clearNode($app);
@@ -1086,13 +1086,13 @@ function renderChapterList(book, books) {
 
   if (book.has_prologue) {
     grid.appendChild(
-      el("a", { className: "prologue-link", href: `#/${book.id}/prologue` }, "머리말")
+      el("a", { className: "prologue-link", href: `/${book.id}/prologue` }, "머리말")
     );
   }
 
   for (let i = 1; i <= book.chapter_count; i++) {
     grid.appendChild(
-      el("a", { href: `#/${book.id}/${i}`, "aria-label": `${book.name_ko} ${i}${chUnit(book.id)}` }, String(i))
+      el("a", { href: `/${book.id}/${i}`, "aria-label": `${book.name_ko} ${i}${chUnit(book.id)}` }, String(i))
     );
   }
 
@@ -1122,11 +1122,9 @@ function renderChapter(data, book, opts) {
     }
     if (hlVerseEnd > maxVerse) {
       hlVerseEnd = maxVerse;
-      const [base, qs] = location.hash.split("?");
-      const pathMatch = base.match(/^(#\/[^/]+\/\d+\/\d+)-\d+$/);
+      const pathMatch = location.pathname.match(/^(\/[^/]+\/\d+\/\d+)-\d+$/);
       if (pathMatch) {
-        const suffix = qs ? `?${qs}` : "";
-        history.replaceState(null, "", `${pathMatch[1]}-${maxVerse}${suffix}`);
+        history.replaceState(null, "", `${pathMatch[1]}-${maxVerse}${location.search}`);
       }
     }
   }
@@ -1134,7 +1132,7 @@ function renderChapter(data, book, opts) {
   setTitleWithChapterPicker(book, ch);
   const effDiv = effectiveDivision(book);
   setBreadcrumb([
-    { label: "목록", href: "#/" },
+    { label: "목록", href: "/" },
     { divisionPicker: true, label: divisionLabels()[effDiv], activeDivision: effDiv },
   ]);
   clearNode($app);
@@ -1345,7 +1343,7 @@ function renderPrologue(data, book) {
   setTitle(`${book.name_ko} 머리말`);
   const effDiv = effectiveDivision(book);
   setBreadcrumb([
-    { label: "목록", href: "#/" },
+    { label: "목록", href: "/" },
     { divisionPicker: true, label: divisionLabels()[effDiv], activeDivision: effDiv },
   ]);
   clearNode($app);
@@ -1359,7 +1357,7 @@ function renderPrologue(data, book) {
 
   const nav = el("nav", { className: "chapter-nav", "aria-label": "장 이동" });
   nav.appendChild(el("span", { className: "placeholder" }));
-  nav.appendChild(el("a", { href: `#/${book.id}/1` }, `1${chUnit(book.id)} →`));
+  nav.appendChild(el("a", { href: `/${book.id}/1` }, `1${chUnit(book.id)} →`));
   $app.appendChild(nav);
   showAudioPlayer(book.id, 0);
   observeFabLift();
@@ -1371,15 +1369,15 @@ function buildChapterNav(book, currentCh) {
   const nav = el("nav", { className: "chapter-nav", "aria-label": `${unit} 이동` });
 
   if (currentCh > 1) {
-    nav.appendChild(el("a", { href: `#/${book.id}/${currentCh - 1}` }, `← ${currentCh - 1}${unit}`));
+    nav.appendChild(el("a", { href: `/${book.id}/${currentCh - 1}` }, `← ${currentCh - 1}${unit}`));
   } else if (book.has_prologue) {
-    nav.appendChild(el("a", { href: `#/${book.id}/prologue` }, "← 머리말"));
+    nav.appendChild(el("a", { href: `/${book.id}/prologue` }, "← 머리말"));
   } else {
     nav.appendChild(el("span", { className: "placeholder" }));
   }
 
   if (currentCh < book.chapter_count) {
-    nav.appendChild(el("a", { href: `#/${book.id}/${currentCh + 1}` }, `${currentCh + 1}${unit} →`));
+    nav.appendChild(el("a", { href: `/${book.id}/${currentCh + 1}` }, `${currentCh + 1}${unit} →`));
   } else {
     nav.appendChild(el("span", { className: "placeholder" }));
   }
@@ -1399,15 +1397,14 @@ function renderError(msg) {
 
 // ── Routing ──
 
-function parseHash() {
-  const hash = location.hash.replace(/^#\/?/, "");
-  if (!hash) return { view: "books" };
+function parsePath() {
+  const pathname = location.pathname.replace(/^\//, "");
+  if (!pathname) return { view: "books" };
 
-  const [pathStr, queryStr] = hash.split("?");
-  const query = new URLSearchParams(queryStr || "");
+  const query = new URLSearchParams(location.search || "");
 
-  // Search route: #/search?q=...&page=...
-  if (pathStr === "search") {
+  // Search route: /search?q=...&page=...
+  if (pathname === "search") {
     return {
       view: "search",
       query: query.get("q") || "",
@@ -1415,14 +1412,14 @@ function parseHash() {
     };
   }
 
-  const parts = pathStr.split("/");
+  const parts = pathname.split("/");
   if (parts.length === 1) {
     if (DIVISION_LABELS[parts[0]]) return { view: "division", division: parts[0] };
     return { view: "chapters", bookId: parts[0] };
   }
   if (parts[1] === "prologue") return { view: "prologue", bookId: parts[0] };
 
-  // Chapter view with optional verse deep-link: #/john/3/16 or #/john/3/16-20.
+  // Chapter view with optional verse deep-link: /john/3/16 or /john/3/16-20.
   // ?hl=... carries the search-term highlight as a separate concern.
   const highlightQuery = query.get("hl") || null;
   let highlightVerse = null;
@@ -1455,6 +1452,21 @@ function parseHash() {
   };
 }
 
+function navigate(path) {
+  history.pushState(null, "", path);
+  route();
+}
+
+function updatePageMeta({ title, description } = {}) {
+  const fullTitle = title ? `${title} — 공동번역성서` : "공동번역성서";
+  document.title = fullTitle;
+  document.querySelector('meta[name="description"]')?.setAttribute("content", description ?? "대한성공회 공동번역성서. 구약·신약 73권 전문을 오프라인에서도 읽을 수 있는 웹 앱.");
+  document.querySelector('meta[property="og:title"]')?.setAttribute("content", fullTitle);
+  document.querySelector('meta[property="og:description"]')?.setAttribute("content", description ?? "대한성공회 공동번역성서. 구약·신약 73권 전문을 오프라인에서도 읽을 수 있는 웹 앱.");
+  document.querySelector('meta[property="og:url"]')?.setAttribute("content", `https://bible.anglican.kr${location.pathname}`);
+  document.querySelector('link[rel="canonical"]')?.setAttribute("href", `https://bible.anglican.kr${location.pathname}`);
+}
+
 function trackPageView() {
   if (typeof gtag !== "function") return;
   const idle = window.requestIdleCallback ?? ((cb) => setTimeout(cb, 200));
@@ -1462,7 +1474,7 @@ function trackPageView() {
     gtag("event", "page_view", {
       page_title: document.title,
       page_location: location.href,
-      page_path: location.hash || "/",
+      page_path: location.pathname + location.search,
     });
   });
 }
@@ -1472,7 +1484,7 @@ async function route() {
   _isInitialLoad = false;
   if (_scrollTrackCleanup) _scrollTrackCleanup();
   clearNode($resumeBannerSlot);
-  const parsed = parseHash();
+  const parsed = parsePath();
   const { view, bookId, chapter, division } = parsed;
 
   // Sync search input with current route
@@ -1496,10 +1508,15 @@ async function route() {
         const autoNav = searchAutoNavigate;
         searchAutoNavigate = false;
         await renderSearchResults(parsed.query, parsed.page, autoNav);
+        updatePageMeta({
+          title: `"${parsed.query}" 검색`,
+          description: `공동번역성서에서 "${parsed.query}" 검색 결과`,
+        });
       } else {
         const books = await loadBooks();
         renderBookList(books);
         dismissLaunchScreen();
+        updatePageMeta();
       }
       trackPageView();
       return;
@@ -1511,12 +1528,13 @@ async function route() {
       if (isInitialLoad && loadStartupBehavior() === "resume") {
         const savedPos = loadReadingPosition();
         if (savedPos && savedPos.bookId) {
-          location.hash = `#/${savedPos.bookId}/${savedPos.chapter}?resume=1`;
-          return; // hashchange triggers route() again
+          navigate(`/${savedPos.bookId}/${savedPos.chapter}?resume=1`);
+          return;
         }
       }
       dismissLaunchScreen(); // Start fade-out immediately
       renderBookList(books);
+      updatePageMeta();
       trackPageView();
       return;
     }
@@ -1524,11 +1542,12 @@ async function route() {
     if (view === "division") {
       // In vulgate mode, deuterocanon has no separate page — redirect to old_testament
       if (division === "deuterocanon" && loadBookOrder() === "vulgate") {
-        location.hash = "#/old_testament";
+        navigate("/old_testament");
         return;
       }
       dismissLaunchScreen(); // Start fade-out immediately
       renderDivisionList(books, division);
+      updatePageMeta();
       trackPageView();
       return;
     }
@@ -1543,6 +1562,10 @@ async function route() {
     if (view === "chapters") {
       dismissLaunchScreen(); // Start fade-out immediately
       renderChapterList(book, books);
+      updatePageMeta({
+        title: book.name_ko,
+        description: `${book.name_ko} — 공동번역성서 전문 읽기`,
+      });
       trackPageView();
       return;
     }
@@ -1556,6 +1579,10 @@ async function route() {
       const data = await loadPrologue(bookId);
       renderPrologue(data, book);
       saveReadingPosition(bookId, "prologue");
+      updatePageMeta({
+        title: `${book.name_ko} 머리말`,
+        description: `${book.name_ko} 머리말 — 공동번역성서`,
+      });
       trackPageView();
       return;
     }
@@ -1584,6 +1611,10 @@ async function route() {
       });
       saveReadingPosition(bookId, chapter, resumeVerse);
       startScrollTracking(bookId, chapter);
+      updatePageMeta({
+        title: `${book.name_ko} ${chapter}${chUnit(book.id)}`,
+        description: `${book.name_ko} ${chapter}${chUnit(book.id)} — 공동번역성서`,
+      });
       trackPageView();
     }
   } catch (err) {
@@ -1594,7 +1625,22 @@ async function route() {
   }
 }
 
-window.addEventListener("hashchange", route);
+document.addEventListener("click", (e) => {
+  const a = e.target.closest("a[href]");
+  if (!a) return;
+  const url = new URL(a.href, location.origin);
+  if (url.origin !== location.origin) return;
+  if (a.target === "_blank") return;
+  e.preventDefault();
+  const path = url.pathname + url.search;
+  if (path === location.pathname + location.search) {
+    route();
+  } else {
+    navigate(path);
+  }
+});
+
+window.addEventListener("popstate", route);
 window.addEventListener("DOMContentLoaded", () => {
   const idle = window.requestIdleCallback ?? ((cb) => setTimeout(cb, 200));
   
@@ -1919,7 +1965,7 @@ function buildSearchPagination(query, currentPage, totalPages) {
   const encoded = encodeURIComponent(query);
 
   if (currentPage > 1) {
-    nav.appendChild(el("a", { href: `#/search?q=${encoded}&page=${currentPage - 1}` }, "← 이전"));
+    nav.appendChild(el("a", { href: `/search?q=${encoded}&page=${currentPage - 1}` }, "← 이전"));
   } else {
     nav.appendChild(el("span", { className: "placeholder" }));
   }
@@ -1927,7 +1973,7 @@ function buildSearchPagination(query, currentPage, totalPages) {
   nav.appendChild(el("span", { className: "search-page-info" }, `${currentPage} / ${totalPages}`));
 
   if (currentPage < totalPages) {
-    nav.appendChild(el("a", { href: `#/search?q=${encoded}&page=${currentPage + 1}` }, "다음 →"));
+    nav.appendChild(el("a", { href: `/search?q=${encoded}&page=${currentPage + 1}` }, "다음 →"));
   } else {
     nav.appendChild(el("span", { className: "placeholder" }));
   }
@@ -1957,14 +2003,14 @@ function renderSearchResultList(container, result, query, page, pageSize, pagina
     if (ref.verse) label += ` ${ref.verse}절`;
     if (ref.verseEnd) label += `-${ref.verseEnd}절`;
 
-    let hash = `#/${ref.bookId}/${ref.chapter}`;
+    let path = `/${ref.bookId}/${ref.chapter}`;
     if (ref.verse) {
-      hash += `/${ref.verse}`;
-      if (ref.verseEnd) hash += `-${ref.verseEnd}`;
+      path += `/${ref.verse}`;
+      if (ref.verseEnd) path += `-${ref.verseEnd}`;
     }
 
     const li = el("li", { className: "search-result-item ref-match-item" });
-    const link = el("a", { href: hash, className: "search-result-ref-card" });
+    const link = el("a", { href: path, className: "search-result-ref-card" });
     link.appendChild(el("span", { className: "search-result-ref-label" }, "구절 바로가기"));
     link.appendChild(el("span", { className: "search-result-ref-title" }, label));
     li.appendChild(link);
@@ -1983,7 +2029,7 @@ function renderSearchResultList(container, result, query, page, pageSize, pagina
 
     for (const r of result.results) {
       const li = el("li", { className: "search-result-item" });
-      const link = el("a", { href: `#/${r.b}/${r.c}/${r.v}?hl=${encodeURIComponent(query)}` });
+      const link = el("a", { href: `/${r.b}/${r.c}/${r.v}?hl=${encodeURIComponent(query)}` });
       link.appendChild(el("span", { className: "search-result-ref" }, `${r.bookNameKo} ${r.c}:${r.v}`));
       link.appendChild(buildSnippet(r.t, query));
       li.appendChild(link);
@@ -2000,7 +2046,7 @@ function renderSearchResultList(container, result, query, page, pageSize, pagina
 
 async function renderSearchResults(query, page, autoNavigate = false) {
   setTitle(`"${query}" 검색`);
-  setBreadcrumb([{ label: "목록", href: "#/" }]);
+  setBreadcrumb([{ label: "목록", href: "/" }]);
   hideAudioBar();
   clearNode($app);
 
@@ -2029,14 +2075,15 @@ async function renderSearchResults(query, page, autoNavigate = false) {
   // typing "요한 3:16") doesn't cause premature navigation.
   if (result.refMatch) {
     const ref = result.refMatch;
-    let hash = `#/${ref.bookId}/${ref.chapter}`;
+    let path = `/${ref.bookId}/${ref.chapter}`;
     if (ref.verse) {
-      hash += `/${ref.verse}`;
-      if (ref.verseEnd) hash += `-${ref.verseEnd}`;
+      path += `/${ref.verse}`;
+      if (ref.verseEnd) path += `-${ref.verseEnd}`;
     }
     if (autoNavigate) {
       dismissLaunchScreen();
-      location.replace(hash);
+      history.replaceState(null, "", path);
+      route();
     } else {
       // Show the refMatch as a clickable result, and ensure UI is visible
       renderSearchResultList($app, result, query, page, pageSize, buildSearchPagination);
@@ -2068,12 +2115,12 @@ $searchInput.addEventListener("keydown", (e) => {
     const q = $searchInput.value.trim();
     if (!q) return;
     searchAutoNavigate = true;
-    const newHash = `#/search?q=${encodeURIComponent(q)}`;
-    // If hash is unchanged, hashchange won't fire — call route() directly.
-    if (location.hash === newHash) {
+    const newPath = `/search?q=${encodeURIComponent(q)}`;
+    // If path is unchanged, popstate won't fire — call route() directly.
+    if (location.pathname + location.search === newPath) {
       route();
     } else {
-      location.hash = newHash;
+      navigate(newPath);
     }
   }
 });
@@ -2087,7 +2134,7 @@ $searchInput.addEventListener("input", () => {
   if (!q) return;
   searchDebounceTimer = setTimeout(() => {
     searchAutoNavigate = false;
-    location.hash = `#/search?q=${encodeURIComponent(q)}`;
+    navigate(`/search?q=${encodeURIComponent(q)}`);
   }, 400);
 });
 
@@ -2097,7 +2144,7 @@ $searchClear.addEventListener("click", () => {
   clearTimeout(searchDebounceTimer);
   clearTimeout(searchAutoNavTimer);
   $searchInput.focus();
-  if (parseHash().view === "search") location.hash = "#/";
+  if (parsePath().view === "search") navigate("/");
 });
 
 // ── Search bottom sheet (Mobile FAB) ──
@@ -2184,26 +2231,26 @@ async function runSheetSearch(query, page, autoNavigate = false) {
   // Verse reference — navigate only when explicitly confirmed (Enter key).
   if (result.refMatch) {
     const ref = result.refMatch;
-    let hash = `#/${ref.bookId}/${ref.chapter}`;
+    let path = `/${ref.bookId}/${ref.chapter}`;
     if (ref.verse) {
-      hash += `/${ref.verse}`;
-      if (ref.verseEnd) hash += `-${ref.verseEnd}`;
+      path += `/${ref.verse}`;
+      if (ref.verseEnd) path += `-${ref.verseEnd}`;
     }
     if (autoNavigate) {
       closeSearchSheet();
-      location.hash = hash;
+      navigate(path);
     } else {
       // Show the refMatch as a clickable result in the sheet
       renderSearchResultList($searchSheetResults, result, query, page, pageSize, null);
       // Attach closeSearchSheet to the reference link
-      $searchSheetResults.querySelectorAll("a[href^='#/']").forEach((a) => a.addEventListener("click", () => closeSearchSheet()));
+      $searchSheetResults.querySelectorAll("a[href^='/']").forEach((a) => a.addEventListener("click", () => closeSearchSheet()));
     }
     return;
   }
 
   renderSearchResultList($searchSheetResults, result, query, page, pageSize, buildSheetPagination);
   // Attach closeSearchSheet to all result links
-  $searchSheetResults.querySelectorAll("a[href^='#/']").forEach((a) => a.addEventListener("click", () => closeSearchSheet()));
+  $searchSheetResults.querySelectorAll("a[href^='/']").forEach((a) => a.addEventListener("click", () => closeSearchSheet()));
 
   announce(`"${query}" 검색 결과 ${result.total}건`);
 }
