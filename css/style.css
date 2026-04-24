@@ -767,6 +767,10 @@ body {
 [data-theme="dark"] #install-modal-body .install-cta {
   color: #1a1a2e;
 }
+#install-modal-body .install-cta--end {
+  display: block;
+  margin-left: auto;
+}
 #install-modal-body .install-cta:hover { opacity: 0.9; }
 #install-modal-body .install-cta[aria-disabled="true"] {
   opacity: 0.5;

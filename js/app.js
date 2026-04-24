@@ -255,7 +255,6 @@ function initSettings() {
       orderGroup.appendChild(orderBtn);
     }
     orderRow.appendChild(orderGroup);
-    section1.appendChild(orderRow);
 
     // Startup behavior
     const startupRow = el("div", { className: "settings-row" });
@@ -278,6 +277,7 @@ function initSettings() {
     }
     startupRow.appendChild(startupGroup);
     section1.appendChild(startupRow);
+    section1.appendChild(orderRow);
     popover.appendChild(section1);
 
     // ── Section 2: Typography & appearance ──
@@ -2540,8 +2540,10 @@ function buildInstallBody(platform) {
         ? "홈 화면에 추가하면 앱처럼 실행되고 오프라인에서도 사용할 수 있습니다."
         : "바탕화면·시작 메뉴에 추가하면 독립된 창으로 실행됩니다."));
 
-    const cta = el("button", { className: "install-cta", type: "button" },
-      platform === "android" ? "홈 화면에 추가" : "앱 설치");
+    const cta = el("button", {
+      className: platform === "desktop" ? "install-cta install-cta--end" : "install-cta",
+      type: "button",
+    }, platform === "android" ? "홈 화면에 추가" : "앱 설치");
 
     const updateCta = (state) => {
       if (state.canPrompt) {
