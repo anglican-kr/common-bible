@@ -1550,7 +1550,11 @@ async function route() {
       }
       dismissLaunchScreen(); // Start fade-out immediately
       renderDivisionList(books, division);
-      updatePageMeta();
+      const divLabel = DIVISION_LABELS[division] ?? division;
+      updatePageMeta({
+        title: divLabel,
+        description: `공동번역성서 ${divLabel} 목록`,
+      });
       trackPageView();
       return;
     }
