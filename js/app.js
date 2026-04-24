@@ -2391,7 +2391,7 @@ function buildInstallBody(platform) {
       {
         img: "/assets/install-guide/install-step-1.webp",
         alt: "Safari 주소창 하단의 ··· 버튼",
-        caption: "Safari에서 페이지를 연 뒤, 주소창 오른쪽 ··· 버튼을 누릅니다.",
+        caption: "Safari에서 주소창 오른쪽 ··· 버튼을 누릅니다.",
         objectPosition: "50% 85%",
       },
       {
@@ -2403,7 +2403,7 @@ function buildInstallBody(platform) {
       {
         img: "/assets/install-guide/install-step-3.webp",
         alt: "공유 시트에서 홈 화면에 추가 선택",
-        caption: "'홈 화면에 추가'를 누르면 앱처럼 설치됩니다.",
+        caption: "'홈 화면에 추가'를 누르면 홈 화면에 아이콘이 생깁니다.",
         objectPosition: "50% 20%",
       },
     ];
