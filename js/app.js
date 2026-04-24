@@ -1635,6 +1635,7 @@ async function route() {
 document.addEventListener("click", (e) => {
   const a = e.target.closest("a[href]");
   if (!a) return;
+  if (e.defaultPrevented) return;
   const url = new URL(a.href, location.origin);
   if (url.origin !== location.origin) return;
   if (a.target === "_blank") return;
