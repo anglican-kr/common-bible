@@ -2,7 +2,7 @@
   "name": "공동번역성서",
   "short_name": "공동번역성서",
   "description": "대한성공회 공동번역성서 웹 앱",
-  "start_url": "/#/",
+  "start_url": "/",
   "display": "standalone",
   "background_color": "#1a1a2e",
   "theme_color": "#faf8f5",

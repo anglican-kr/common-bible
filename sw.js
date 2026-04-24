@@ -1,6 +1,6 @@
 // Bump this version on every release. Activating a new CACHE_NAME clears all
 // prior caches (shell + data), ensuring bible/search updates reach clients.
-const CACHE_NAME = "rev-33";
+const CACHE_NAME = "rev-34";
 
 // Separate cache for Google Font files (fonts.gstatic.com).
 // Never cleared on CACHE_NAME bump — font files are content-addressed and immutable.
@@ -77,6 +77,14 @@ function handleFontFile(event) {
 self.addEventListener("fetch", (event) => {
   if (new URL(event.request.url).hostname === "fonts.gstatic.com") {
     handleFontFile(event);
+    return;
+  }
+
+  // Serve app shell for all navigation requests (History API SPA routing).
+  if (event.request.mode === "navigate") {
+    event.respondWith(
+      caches.match("/index.html").then((cached) => cached || fetch("/index.html"))
+    );
     return;
   }
 
