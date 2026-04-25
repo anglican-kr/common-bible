@@ -1396,21 +1396,50 @@ function renderChapter(data, book, opts) {
   const hlVerse = opts && opts.highlightVerse;
   let hlVerseEnd = opts && opts.highlightVerseEnd;
   const hlVerseSpec = opts && opts.highlightVerseSpec;
-  const hlSegments = hlVerseSpec ? parseVerseSpec(hlVerseSpec) : null;
+  let hlSegments = hlVerseSpec ? parseVerseSpec(hlVerseSpec) : null;
 
-  // Clip verseEnd to the chapter's actual max verse so "창세 3:1-100"
-  // behaves as "창세 3:1-24" when the chapter only has 24 verses.
-  if (hlVerseEnd) {
-    let maxVerse = 0;
-    for (const v of data.verses) {
-      const vn = v.range_end != null ? v.range_end : v.number;
-      if (vn > maxVerse) maxVerse = vn;
-    }
-    if (hlVerseEnd > maxVerse) {
-      hlVerseEnd = maxVerse;
+  // Compute max verse number once; used by both clipping paths below.
+  let _maxVerse = 0;
+  for (const v of data.verses) {
+    const vn = v.range_end != null ? v.range_end : v.number;
+    if (vn > _maxVerse) _maxVerse = vn;
+  }
+
+  // ── Single simple range: clip hlVerseEnd to chapter max ──
+  // e.g. "창세 3:1-100" → "창세 3:1-24"
+  if (hlVerseEnd && !hlSegments) {
+    if (hlVerseEnd > _maxVerse) {
+      hlVerseEnd = _maxVerse;
       const pathMatch = location.pathname.match(/^(\/[^/]+\/\d+\/\d+)-\d+$/);
       if (pathMatch) {
-        history.replaceState(null, "", `${pathMatch[1]}-${maxVerse}${location.search}`);
+        history.replaceState(null, "", `${pathMatch[1]}-${_maxVerse}${location.search}`);
+      }
+    }
+    // Also drop a single verse that is entirely out of range.
+    if (hlVerse > _maxVerse) {
+      const pathMatch = location.pathname.match(/^(\/[^/]+\/\d+)\/\d+.*$/);
+      if (pathMatch) history.replaceState(null, "", pathMatch[1] + location.search);
+    }
+  }
+
+  // ── Multi-segment: clamp each segment end to chapter max, drop out-of-range ──
+  if (hlSegments) {
+    const clamped = hlSegments
+      .map(s => ({ start: s.start, end: Math.min(s.end, _maxVerse) }))
+      .filter(s => s.start <= _maxVerse);
+    const pathBase = location.pathname.match(/^(\/[^/]+\/\d+)/)?.[1];
+    if (clamped.length === 0) {
+      hlSegments = null;
+      if (pathBase) history.replaceState(null, "", pathBase + location.search);
+    } else {
+      const needsRewrite = clamped.length !== hlSegments.length ||
+        clamped.some((s, i) => s.end !== hlSegments[i].end);
+      hlSegments = clamped;
+      if (needsRewrite && pathBase) {
+        const newSpec = clamped
+          .map(s => s.start === s.end ? `${s.start}` : `${s.start}-${s.end}`)
+          .join(",");
+        history.replaceState(null, "", `${pathBase}/${newSpec}${location.search}`);
       }
     }
   }
@@ -1778,7 +1807,12 @@ function parsePath() {
     } else if (/^[\d,\-]+$/.test(spec)) {
       const segs = parseVerseSpec(spec);
       if (segs.length > 0) {
-        highlightVerseSpec = spec;
+        // Sort ascending and re-serialize so raw inputs like ",5", "10,3", "1-5,10-"
+        // are stored as clean normalized specs.
+        segs.sort((a, b) => a.start - b.start);
+        highlightVerseSpec = segs
+          .map(s => s.start === s.end ? `${s.start}` : `${s.start}-${s.end}`)
+          .join(",");
         highlightVerse = segs[0].start;
         highlightVerseEnd = segs[segs.length - 1].end;
       }
