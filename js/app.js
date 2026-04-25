@@ -78,6 +78,7 @@ const BOOK_ORDER_KEY = "bible-book-order";
 const COLOR_SCHEME_KEY = "bible-color-scheme";
 const STARTUP_BEHAVIOR_KEY = "bible-startup"; // "resume" | "home"
 const AUDIO_POS_KEY = "bible-audio-pos";
+const BOOKMARK_KEY = "bible-bookmarks";
 const FONT_SIZES = [16, 18, 20, 22, 24];
 
 const COLOR_SCHEMES = [
@@ -90,6 +91,18 @@ const DEFAULT_FONT_SIZE = 18;
 
 let _scrollTrackCleanup = null;
 let _isInitialLoad = true;
+
+// ── Bookmark state ──
+let _verseSelectMode = false;
+let _selectedVerseNums = new Set();
+let _currentBookId = null;
+let _currentChapter = null;
+let _bookmarkDrawerBook = null;
+let _bookmarkDrawerChapter = null;
+let _bookmarkDrawerTrap = null;
+let _bookmarkDrawerLastFocus = null;
+let _bmSaveModalTrap = null;
+let _bmMergeResolve = null;
 
 function saveReadingPosition(bookId, chapter, verse = null) {
   try {
@@ -673,6 +686,143 @@ function clearNode(node) {
   while (node.firstChild) node.removeChild(node.firstChild);
 }
 
+// ── Bookmark storage helpers ──
+
+function generateId() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2);
+}
+
+function loadBookmarks() {
+  try {
+    const raw = localStorage.getItem(BOOKMARK_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch (_) { return []; }
+}
+
+function saveBookmarks(store) {
+  try {
+    localStorage.setItem(BOOKMARK_KEY, JSON.stringify(store));
+  } catch (_) {}
+}
+
+// ── Verse spec utilities ──
+
+// "1-5,10-15" → [{start:1,end:5},{start:10,end:15}]
+function parseVerseSpec(spec) {
+  if (!spec || spec === "all") return [];
+  return spec.split(",").reduce((acc, seg) => {
+    const m = seg.trim().match(/^(\d+)(?:-(\d+))?$/);
+    if (m) {
+      const s = parseInt(m[1], 10);
+      const e = m[2] ? parseInt(m[2], 10) : s;
+      if (s > 0) acc.push({ start: Math.min(s, e), end: Math.max(s, e) });
+    }
+    return acc;
+  }, []);
+}
+
+// Sorted array of verse numbers → "1-5,10-15"
+function selectedVersesToSpec(sortedNums) {
+  if (!sortedNums.length) return "all";
+  const ranges = [];
+  let rangeStart = sortedNums[0];
+  let rangeEnd = sortedNums[0];
+  for (let i = 1; i < sortedNums.length; i++) {
+    if (sortedNums[i] === rangeEnd + 1) {
+      rangeEnd = sortedNums[i];
+    } else {
+      ranges.push(rangeStart === rangeEnd ? `${rangeStart}` : `${rangeStart}-${rangeEnd}`);
+      rangeStart = rangeEnd = sortedNums[i];
+    }
+  }
+  ranges.push(rangeStart === rangeEnd ? `${rangeStart}` : `${rangeStart}-${rangeEnd}`);
+  return ranges.join(",");
+}
+
+// Union of two verse spec strings
+function mergeVerseSpecs(specA, specB) {
+  if (specA === "all" || specB === "all") return "all";
+  const segsA = parseVerseSpec(specA);
+  const segsB = parseVerseSpec(specB);
+  const nums = new Set();
+  for (const seg of [...segsA, ...segsB]) {
+    for (let n = seg.start; n <= seg.end; n++) nums.add(n);
+  }
+  return selectedVersesToSpec([...nums].sort((a, b) => a - b));
+}
+
+// ── Bookmark query helpers ──
+
+function _walkBookmarks(store, fn) {
+  for (const item of store) {
+    if (fn(item, store) === false) return false;
+    if (item.type === "folder") {
+      if (_walkBookmarks(item.children, fn) === false) return false;
+    }
+  }
+  return true;
+}
+
+function bookmarkExistsForChapter(bookId, chapter) {
+  let found = false;
+  _walkBookmarks(loadBookmarks(), (item) => {
+    if (item.type === "bookmark" && item.bookId === bookId && item.chapter === chapter) {
+      found = true;
+      return false;
+    }
+  });
+  return found;
+}
+
+function findExistingChapterBookmarks(bookId, chapter) {
+  const results = [];
+  _walkBookmarks(loadBookmarks(), (item) => {
+    if (item.type === "bookmark" && item.bookId === bookId && item.chapter === chapter) {
+      results.push(item);
+    }
+  });
+  return results;
+}
+
+function _findItemInStore(store, id) {
+  for (let i = 0; i < store.length; i++) {
+    if (store[i].id === id) return { item: store[i], parent: store, index: i };
+    if (store[i].type === "folder") {
+      const found = _findItemInStore(store[i].children, id);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+function removeItemById(store, id) {
+  const found = _findItemInStore(store, id);
+  if (found) found.parent.splice(found.index, 1);
+}
+
+function insertItem(store, folderId, item) {
+  if (!folderId) {
+    store.push(item);
+    return;
+  }
+  const found = _findItemInStore(store, folderId);
+  if (found && found.item.type === "folder") {
+    found.item.children.push(item);
+  } else {
+    store.push(item);
+  }
+}
+
+function collectFolderOptions(store, depth = 0, options = []) {
+  for (const item of store) {
+    if (item.type === "folder") {
+      options.push({ id: item.id, label: " ".repeat(depth * 2) + "📁 " + item.name });
+      collectFolderOptions(item.children, depth + 1, options);
+    }
+  }
+  return options;
+}
+
 // ── Data fetching ──
 
 async function loadBooks() {
@@ -860,6 +1010,7 @@ function setTitleWithChapterPicker(book, currentCh) {
   $title.appendChild(backBtn);
   $title.appendChild(btn);
   $title.appendChild(popover);
+  $title.appendChild(buildBookmarkHeaderBtn(book.id, currentCh));
 }
 
 function setBreadcrumb(crumbs) {
@@ -1111,6 +1262,8 @@ function renderChapter(data, book, opts) {
   const hlQuery = opts && opts.highlightQuery;
   const hlVerse = opts && opts.highlightVerse;
   let hlVerseEnd = opts && opts.highlightVerseEnd;
+  const hlVerseSpec = opts && opts.highlightVerseSpec;
+  const hlSegments = hlVerseSpec ? parseVerseSpec(hlVerseSpec) : null;
 
   // Clip verseEnd to the chapter's actual max verse so "창세 3:1-100"
   // behaves as "창세 3:1-24" when the chapter only has 24 verses.
@@ -1172,7 +1325,9 @@ function renderChapter(data, book, opts) {
 
     // Verse highlight (from verse reference navigation)
     const vn = v.number;
-    const isHighlightedVerse = hlVerse && vn >= hlVerse && vn <= (hlVerseEnd || hlVerse);
+    const isHighlightedVerse = hlSegments
+      ? hlSegments.some(s => vn >= s.start && vn <= s.end)
+      : (hlVerse && vn >= hlVerse && vn <= (hlVerseEnd || hlVerse));
 
     // Verse number (rendered via CSS ::before to exclude from clipboard)
     let dataV = v.chapter_ref ? `${v.chapter_ref}:${verseLabel}` : verseLabel;
@@ -1256,11 +1411,58 @@ function renderChapter(data, book, opts) {
     isFirst = false;
   }
 
-  // Announce verse number on click/tap for screen reader users
+  // Track current chapter context for verse selection mode
+  _currentBookId = book.id;
+  _currentChapter = ch;
+
+  // Announce verse number on click/tap for screen reader users,
+  // or toggle verse selection when in select mode.
   article.addEventListener("click", (e) => {
     const vs = e.target.closest(".verse[data-vref]");
-    if (vs) announce(`${vs.getAttribute("data-vref")}절`);
+    if (!vs) return;
+    if (_verseSelectMode) {
+      e.stopPropagation();
+      const n = parseInt(vs.getAttribute("data-vref"), 10);
+      if (!Number.isFinite(n)) return;
+      if (_selectedVerseNums.has(n)) {
+        _selectedVerseNums.delete(n);
+      } else {
+        _selectedVerseNums.add(n);
+      }
+      article.querySelectorAll(".verse[data-vref]").forEach(v => {
+        v.classList.toggle("verse-selected",
+          _selectedVerseNums.has(parseInt(v.getAttribute("data-vref"), 10)));
+      });
+      updateVerseSelectBar();
+    } else {
+      announce(`${vs.getAttribute("data-vref")}절`);
+    }
   });
+
+  // Long-press (300ms) to enter verse selection mode
+  let _longPressTimer = null;
+  article.addEventListener("pointerdown", (e) => {
+    if (_verseSelectMode) return;
+    const vs = e.target.closest(".verse[data-vref]");
+    if (!vs) return;
+    _longPressTimer = setTimeout(() => {
+      _longPressTimer = null;
+      enterVerseSelectMode(book.id, ch);
+      const n = parseInt(vs.getAttribute("data-vref"), 10);
+      if (Number.isFinite(n)) {
+        _selectedVerseNums.add(n);
+        article.querySelectorAll(".verse[data-vref]").forEach(v => {
+          v.classList.toggle("verse-selected",
+            _selectedVerseNums.has(parseInt(v.getAttribute("data-vref"), 10)));
+        });
+        updateVerseSelectBar();
+      }
+    }, 300);
+  });
+  const cancelLongPress = () => { if (_longPressTimer) { clearTimeout(_longPressTimer); _longPressTimer = null; } };
+  article.addEventListener("pointerup", cancelLongPress);
+  article.addEventListener("pointermove", cancelLongPress);
+  article.addEventListener("pointercancel", cancelLongPress);
 
   // Copy handler: serialize the selection ourselves so that stanza breaks
   // become blank lines and the appended reference uses plain verse numbers
@@ -1420,16 +1622,18 @@ function parsePath() {
   if (parts[1] === "prologue") return { view: "prologue", bookId: parts[0] };
 
   // Chapter view with optional verse deep-link: /john/3/16 or /john/3/16-20.
-  // ?hl=... carries the search-term highlight as a separate concern.
+  // Multi-segment: /john/3/1-5,10-15  ?hl=... carries search-term highlight.
   const highlightQuery = query.get("hl") || null;
   let highlightVerse = null;
   let highlightVerseEnd = null;
+  let highlightVerseSpec = null;
 
   if (parts[2]) {
-    const m = parts[2].match(/^(\d+)(?:-(\d+))?$/);
-    if (m) {
-      const v1 = parseInt(m[1], 10);
-      const v2 = m[2] ? parseInt(m[2], 10) : null;
+    const spec = parts[2];
+    const simpleMatch = spec.match(/^(\d+)(?:-(\d+))?$/);
+    if (simpleMatch) {
+      const v1 = parseInt(simpleMatch[1], 10);
+      const v2 = simpleMatch[2] ? parseInt(simpleMatch[2], 10) : null;
       if (v1 > 0) {
         if (v2 && v2 > 0 && v2 !== v1) {
           highlightVerse = Math.min(v1, v2);
@@ -1437,6 +1641,13 @@ function parsePath() {
         } else {
           highlightVerse = v1;
         }
+      }
+    } else if (/^[\d,\-]+$/.test(spec)) {
+      const segs = parseVerseSpec(spec);
+      if (segs.length > 0) {
+        highlightVerseSpec = spec;
+        highlightVerse = segs[0].start;
+        highlightVerseEnd = segs[segs.length - 1].end;
       }
     }
   }
@@ -1448,6 +1659,7 @@ function parsePath() {
     highlightQuery,
     highlightVerse,
     highlightVerseEnd,
+    highlightVerseSpec,
     resume: query.has("resume"),
   };
 }
@@ -1614,6 +1826,7 @@ async function route() {
         highlightQuery: parsed.highlightQuery,
         highlightVerse: parsed.highlightVerse,
         highlightVerseEnd: parsed.highlightVerseEnd,
+        highlightVerseSpec: parsed.highlightVerseSpec,
         resumeVerse,
       });
       saveReadingPosition(bookId, chapter, resumeVerse);
@@ -2716,6 +2929,480 @@ $installModalClose.addEventListener("click", closeInstallModal);
 $installScrim.addEventListener("click", closeInstallModal);
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && !$installModal.hidden) closeInstallModal();
+});
+
+// ── Bookmark UI ──
+
+const $bookmarkScrim = document.getElementById("bookmark-scrim");
+const $bookmarkDrawer = document.getElementById("bookmark-drawer");
+const $bookmarkDrawerClose = document.getElementById("bookmark-drawer-close");
+const $bookmarkDrawerBody = document.getElementById("bookmark-drawer-body");
+const $bmSaveChapterBtn = document.getElementById("bm-save-chapter-btn");
+const $bmSelectVersesBtn = document.getElementById("bm-select-verses-btn");
+const $bmAddFolderBtn = document.getElementById("bm-add-folder-btn");
+const $bmSaveScrim = document.getElementById("bm-save-scrim");
+const $bmSaveModal = document.getElementById("bm-save-modal");
+const $bmSaveClose = document.getElementById("bm-save-close");
+const $bmSaveTitle = document.getElementById("bm-save-title");
+const $bmSaveBody = document.getElementById("bm-save-body");
+const $bmMergeScrim = document.getElementById("bm-merge-scrim");
+const $bmMergeModal = document.getElementById("bm-merge-modal");
+const $bmMergeBody = document.getElementById("bm-merge-body");
+const $bmMergeYes = document.getElementById("bm-merge-yes");
+const $bmMergeNo = document.getElementById("bm-merge-no");
+const $bmMergeCancel = document.getElementById("bm-merge-cancel");
+const $verseSelectBar = document.getElementById("verse-select-bar");
+const $verseSelectCount = document.getElementById("verse-select-count");
+const $verseSelectBookmarkBtn = document.getElementById("verse-select-bookmark-btn");
+const $verseSelectCancelBtn = document.getElementById("verse-select-cancel-btn");
+
+// Build the bookmark icon SVG button for the chapter header
+function buildBookmarkHeaderBtn(bookId, chapter) {
+  const btn = el("button", {
+    className: "title-bookmark-btn",
+    "aria-label": "책갈피",
+    type: "button",
+  });
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("width", "20");
+  svg.setAttribute("height", "20");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("fill", "none");
+  svg.setAttribute("stroke", "currentColor");
+  svg.setAttribute("stroke-width", "2");
+  svg.setAttribute("stroke-linecap", "round");
+  svg.setAttribute("stroke-linejoin", "round");
+  svg.setAttribute("aria-hidden", "true");
+  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  path.setAttribute("d", "M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z");
+  svg.appendChild(path);
+  btn.appendChild(svg);
+  if (bookmarkExistsForChapter(bookId, chapter)) btn.classList.add("has-bookmark");
+  btn.addEventListener("click", () => openBookmarkDrawer(bookId, chapter));
+  return btn;
+}
+
+function refreshBookmarkHeaderBtn() {
+  const btn = document.querySelector(".title-bookmark-btn");
+  if (!btn || !_bookmarkDrawerBook) return;
+  btn.classList.toggle("has-bookmark",
+    bookmarkExistsForChapter(_bookmarkDrawerBook, _bookmarkDrawerChapter));
+}
+
+function openBookmarkDrawer(bookId, chapter) {
+  _bookmarkDrawerBook = bookId;
+  _bookmarkDrawerChapter = chapter;
+  _bookmarkDrawerLastFocus = document.activeElement;
+  $bookmarkScrim.hidden = false;
+  $bookmarkDrawer.hidden = false;
+  // Update toolbar visibility based on whether we're in a chapter
+  const inChapter = bookId && chapter;
+  $bmSaveChapterBtn.disabled = !inChapter;
+  $bmSelectVersesBtn.disabled = !inChapter;
+  renderBookmarkTree();
+  setBackgroundInert(true);
+  const scrollY = window.scrollY;
+  document.body.style.overflow = "hidden";
+  document.body.style.position = "fixed";
+  document.body.style.top = `-${scrollY}px`;
+  document.body.style.width = "100%";
+  document.body.dataset.scrollY = scrollY;
+  _bookmarkDrawerTrap = trapFocus($bookmarkDrawer);
+  requestAnimationFrame(() => $bookmarkDrawerClose.focus());
+}
+
+function closeBookmarkDrawer() {
+  if ($bookmarkDrawer.hidden) return;
+  $bookmarkScrim.hidden = true;
+  $bookmarkDrawer.hidden = true;
+  setBackgroundInert(false);
+  const scrollY = parseInt(document.body.dataset.scrollY || "0", 10);
+  document.body.style.overflow = "";
+  document.body.style.position = "";
+  document.body.style.top = "";
+  document.body.style.width = "";
+  window.scrollTo(0, scrollY);
+  if (_bookmarkDrawerTrap) { _bookmarkDrawerTrap(); _bookmarkDrawerTrap = null; }
+  if (_bookmarkDrawerLastFocus && _bookmarkDrawerLastFocus.focus) {
+    try { _bookmarkDrawerLastFocus.focus(); } catch {}
+  }
+}
+
+// ── Bookmark tree rendering ──
+
+function _bookmarkHref(bm) {
+  if (bm.verseSpec === "all") return `/${bm.bookId}/${bm.chapter}`;
+  return `/${bm.bookId}/${bm.chapter}/${bm.verseSpec}`;
+}
+
+function _buildBookmarkItem(bm, depth) {
+  const li = el("li", { role: "treeitem", className: "bm-bookmark", "data-id": bm.id, tabIndex: "-1" });
+  if (depth > 0) li.setAttribute("aria-level", String(depth + 1));
+  const row = el("div", { className: "bm-bookmark-row" });
+  const link = el("a", { className: "bm-bookmark-link", href: _bookmarkHref(bm) });
+  link.appendChild(el("span", { className: "bm-bookmark-label" }, bm.label));
+  if (bm.verseSpec !== "all") {
+    link.appendChild(el("span", { className: "bm-bookmark-ref" }, bm.verseSpec));
+  }
+  link.addEventListener("click", (e) => {
+    e.preventDefault();
+    closeBookmarkDrawer();
+    navigate(_bookmarkHref(bm));
+  });
+  const actions = el("div", { className: "bm-item-actions" });
+  const editBtn = el("button", { className: "bm-action-btn bm-edit-btn", type: "button" }, "수정");
+  editBtn.addEventListener("click", () => openSaveModal("edit", { existingId: bm.id }));
+  const delBtn = el("button", { className: "bm-action-btn bm-delete-btn", type: "button" }, "삭제");
+  delBtn.addEventListener("click", () => {
+    if (!window.confirm(`"${bm.label}" 책갈피를 삭제할까요?`)) return;
+    const store = loadBookmarks();
+    removeItemById(store, bm.id);
+    saveBookmarks(store);
+    refreshBookmarkHeaderBtn();
+    renderBookmarkTree();
+  });
+  actions.appendChild(editBtn);
+  actions.appendChild(delBtn);
+  row.appendChild(link);
+  row.appendChild(actions);
+  li.appendChild(row);
+  return li;
+}
+
+function _buildFolderItem(folder, depth) {
+  const expanded = folder.expanded !== false;
+  const li = el("li", {
+    role: "treeitem",
+    className: "bm-folder",
+    "data-id": folder.id,
+    "aria-expanded": String(expanded),
+    tabIndex: "-1",
+  });
+  if (depth > 0) li.setAttribute("aria-level", String(depth + 1));
+  const row = el("div", { className: "bm-folder-row" });
+  const toggle = el("button", { className: "bm-folder-toggle", type: "button", "aria-label": "펼치기/접기" }, "▶");
+  toggle.addEventListener("click", () => {
+    const store = loadBookmarks();
+    const found = _findItemInStore(store, folder.id);
+    if (found) found.item.expanded = li.getAttribute("aria-expanded") !== "true";
+    saveBookmarks(store);
+    li.setAttribute("aria-expanded", String(found ? found.item.expanded : false));
+  });
+  const icon = el("span", { className: "bm-folder-icon", "aria-hidden": "true" }, "📁");
+  const name = el("span", { className: "bm-folder-name" }, folder.name);
+  const actions = el("div", { className: "bm-item-actions" });
+  const renameBtn = el("button", { className: "bm-action-btn", type: "button" }, "수정");
+  renameBtn.addEventListener("click", () => {
+    const newName = window.prompt("폴더 이름:", folder.name);
+    if (!newName || !newName.trim()) return;
+    const store = loadBookmarks();
+    const found = _findItemInStore(store, folder.id);
+    if (found) found.item.name = newName.trim();
+    saveBookmarks(store);
+    renderBookmarkTree();
+  });
+  const delBtn = el("button", { className: "bm-action-btn bm-delete-btn", type: "button" }, "삭제");
+  delBtn.addEventListener("click", () => {
+    const childCount = folder.children ? folder.children.length : 0;
+    const msg = childCount > 0
+      ? `"${folder.name}" 폴더와 안의 항목 ${childCount}개를 모두 삭제할까요?`
+      : `"${folder.name}" 폴더를 삭제할까요?`;
+    if (!window.confirm(msg)) return;
+    const store = loadBookmarks();
+    removeItemById(store, folder.id);
+    saveBookmarks(store);
+    renderBookmarkTree();
+  });
+  actions.appendChild(renameBtn);
+  actions.appendChild(delBtn);
+  row.appendChild(toggle);
+  row.appendChild(icon);
+  row.appendChild(name);
+  row.appendChild(actions);
+  li.appendChild(row);
+  const children = el("ul", { role: "group", className: "bm-folder-children" });
+  for (const child of (folder.children || [])) {
+    children.appendChild(child.type === "folder"
+      ? _buildFolderItem(child, depth + 1)
+      : _buildBookmarkItem(child, depth + 1));
+  }
+  li.appendChild(children);
+  return li;
+}
+
+function renderBookmarkTree() {
+  clearNode($bookmarkDrawerBody);
+  const store = loadBookmarks();
+  if (!store.length) {
+    $bookmarkDrawerBody.appendChild(el("li", { className: "bm-empty" }, "저장된 책갈피가 없습니다."));
+    return;
+  }
+  for (const item of store) {
+    $bookmarkDrawerBody.appendChild(item.type === "folder"
+      ? _buildFolderItem(item, 0)
+      : _buildBookmarkItem(item, 0));
+  }
+}
+
+// ── Save bookmark modal ──
+
+function openSaveModal(mode, opts = {}) {
+  const bookId = _bookmarkDrawerBook;
+  const chapter = _bookmarkDrawerChapter;
+  let verseSpec = "all";
+  let existingId = opts.existingId || null;
+  let existing = null;
+
+  if (existingId) {
+    const found = _findItemInStore(loadBookmarks(), existingId);
+    if (found && found.item.type === "bookmark") existing = found.item;
+  }
+
+  if (mode === "verses") {
+    const nums = Array.from(_selectedVerseNums).sort((a, b) => a - b);
+    verseSpec = nums.length ? selectedVersesToSpec(nums) : "all";
+  } else if (existing) {
+    verseSpec = existing.verseSpec;
+  }
+
+  // Merge check (skip for edit mode)
+  if (mode !== "edit" && bookId && chapter) {
+    const sameChapterBms = findExistingChapterBookmarks(bookId, chapter)
+      .filter(bm => !existingId || bm.id !== existingId);
+    if (sameChapterBms.length > 0) {
+      openMergeDialog(sameChapterBms[0], verseSpec, mode);
+      return;
+    }
+  }
+
+  _showSaveModal(mode, bookId, chapter, verseSpec, existing);
+}
+
+function _showSaveModal(mode, bookId, chapter, verseSpec, existing) {
+  const store = loadBookmarks();
+  const folderOptions = collectFolderOptions(store);
+
+  const book = booksCache && booksCache.find(b => b.id === bookId);
+  const bookName = book ? book.name_ko : bookId;
+  const unit = chUnit(bookId);
+  let defaultLabel;
+  if (existing) {
+    defaultLabel = existing.label;
+  } else if (verseSpec === "all") {
+    defaultLabel = `${bookName} ${chapter}${unit}`;
+  } else {
+    defaultLabel = `${bookName} ${chapter}:${verseSpec}`;
+  }
+
+  clearNode($bmSaveBody);
+  $bmSaveTitle.textContent = existing ? "책갈피 수정" : "책갈피 저장";
+
+  const labelField = el("div", { className: "bm-form-field" });
+  labelField.appendChild(el("label", { className: "bm-form-label", for: "bm-label-input" }, "제목"));
+  const labelInput = el("input", {
+    id: "bm-label-input",
+    className: "bm-form-input",
+    type: "text",
+    value: defaultLabel,
+  });
+  labelField.appendChild(labelInput);
+
+  const noteField = el("div", { className: "bm-form-field" });
+  noteField.appendChild(el("label", { className: "bm-form-label", for: "bm-note-input" }, "메모 (선택)"));
+  const noteInput = el("textarea", {
+    id: "bm-note-input",
+    className: "bm-form-textarea",
+    placeholder: "메모를 입력하세요",
+  }, existing ? existing.note || "" : "");
+  noteField.appendChild(noteInput);
+
+  const folderField = el("div", { className: "bm-form-field" });
+  folderField.appendChild(el("label", { className: "bm-form-label", for: "bm-folder-select" }, "저장 위치"));
+  const folderSelect = el("select", { id: "bm-folder-select", className: "bm-form-select" });
+  folderSelect.appendChild(el("option", { value: "" }, "최상위"));
+  for (const opt of folderOptions) {
+    const option = el("option", { value: opt.id }, opt.label);
+    if (existing) {
+      const found = _findItemInStore(loadBookmarks(), existing.id);
+      if (found && found.parent !== loadBookmarks() && found.parent === _findItemInStore(loadBookmarks(), opt.id)?.item?.children) {
+        option.selected = true;
+      }
+    }
+    folderSelect.appendChild(option);
+  }
+  folderField.appendChild(folderSelect);
+
+  const actions = el("div", { className: "bm-form-actions" });
+  const saveBtn = el("button", { className: "bm-btn-primary", type: "button" }, existing ? "수정" : "저장");
+  const cancelBtn = el("button", { className: "bm-btn-secondary", type: "button" }, "취소");
+  saveBtn.addEventListener("click", () => {
+    const label = labelInput.value.trim() || defaultLabel;
+    const note = noteInput.value.trim();
+    const folderId = folderSelect.value || null;
+    commitSaveBookmark(existing ? existing.id : null, label, note, folderId, bookId, chapter, verseSpec);
+    closeSaveModal();
+    if (mode === "verses") exitVerseSelectMode();
+  });
+  cancelBtn.addEventListener("click", closeSaveModal);
+  actions.appendChild(cancelBtn);
+  actions.appendChild(saveBtn);
+
+  $bmSaveBody.appendChild(labelField);
+  $bmSaveBody.appendChild(noteField);
+  $bmSaveBody.appendChild(folderField);
+  $bmSaveBody.appendChild(actions);
+
+  $bmSaveScrim.hidden = false;
+  $bmSaveModal.hidden = false;
+  _bmSaveModalTrap = trapFocus($bmSaveModal);
+  requestAnimationFrame(() => labelInput.focus());
+}
+
+function closeSaveModal() {
+  $bmSaveScrim.hidden = true;
+  $bmSaveModal.hidden = true;
+  if (_bmSaveModalTrap) { _bmSaveModalTrap(); _bmSaveModalTrap = null; }
+}
+
+function commitSaveBookmark(existingId, label, note, folderId, bookId, chapter, verseSpec) {
+  const store = loadBookmarks();
+  if (existingId) {
+    const found = _findItemInStore(store, existingId);
+    if (found && found.item.type === "bookmark") {
+      found.item.label = label;
+      found.item.note = note;
+      found.item.verseSpec = verseSpec;
+      if (folderId !== null) {
+        removeItemById(store, existingId);
+        insertItem(store, folderId, found.item);
+      }
+    }
+  } else {
+    const bm = {
+      type: "bookmark",
+      id: generateId(),
+      bookId,
+      chapter,
+      verseSpec,
+      label,
+      note,
+      createdAt: Date.now(),
+    };
+    insertItem(store, folderId, bm);
+  }
+  saveBookmarks(store);
+  renderBookmarkTree();
+  refreshBookmarkHeaderBtn();
+  announce(existingId ? "책갈피를 수정했습니다" : "책갈피를 저장했습니다");
+}
+
+// ── Merge dialog ──
+
+function openMergeDialog(existing, incomingSpec, mode) {
+  $bmMergeBody.textContent =
+    `이 장에 이미 책갈피("${existing.label}")가 있습니다. 절을 합칠까요?`;
+  $bmMergeScrim.hidden = false;
+  $bmMergeModal.hidden = false;
+
+  function cleanup() {
+    $bmMergeScrim.hidden = true;
+    $bmMergeModal.hidden = true;
+    $bmMergeYes.onclick = null;
+    $bmMergeNo.onclick = null;
+    $bmMergeCancel.onclick = null;
+  }
+
+  $bmMergeYes.onclick = () => {
+    const merged = mergeVerseSpecs(existing.verseSpec, incomingSpec);
+    const store = loadBookmarks();
+    const found = _findItemInStore(store, existing.id);
+    if (found) found.item.verseSpec = merged;
+    saveBookmarks(store);
+    renderBookmarkTree();
+    refreshBookmarkHeaderBtn();
+    if (mode === "verses") exitVerseSelectMode();
+    announce("책갈피를 합쳤습니다");
+    cleanup();
+  };
+
+  $bmMergeNo.onclick = () => {
+    cleanup();
+    _showSaveModal(mode, _bookmarkDrawerBook, _bookmarkDrawerChapter, incomingSpec, null);
+  };
+
+  $bmMergeCancel.onclick = cleanup;
+}
+
+// ── Verse selection mode ──
+
+function enterVerseSelectMode(bookId, chapter) {
+  _verseSelectMode = true;
+  _selectedVerseNums.clear();
+  _currentBookId = bookId;
+  _currentChapter = chapter;
+  document.body.classList.add("verse-select-active");
+  $verseSelectBar.hidden = false;
+  updateVerseSelectBar();
+  announce("절 선택 모드. 절을 탭해서 선택하세요.");
+}
+
+function exitVerseSelectMode() {
+  _verseSelectMode = false;
+  _selectedVerseNums.clear();
+  document.body.classList.remove("verse-select-active");
+  $verseSelectBar.hidden = true;
+  document.querySelectorAll(".verse-selected").forEach(v => v.classList.remove("verse-selected"));
+}
+
+function updateVerseSelectBar() {
+  const count = _selectedVerseNums.size;
+  $verseSelectCount.textContent = count === 0 ? "절을 눌러 선택하세요" : `${count}개 절 선택됨`;
+  $verseSelectBookmarkBtn.disabled = count === 0;
+}
+
+// ── Drawer toolbar event handlers ──
+
+$bookmarkDrawerClose.addEventListener("click", closeBookmarkDrawer);
+$bookmarkScrim.addEventListener("click", closeBookmarkDrawer);
+
+$bmSaveClose.addEventListener("click", closeSaveModal);
+$bmSaveScrim.addEventListener("click", closeSaveModal);
+
+$bmSaveChapterBtn.addEventListener("click", () => {
+  openSaveModal("chapter");
+});
+
+$bmSelectVersesBtn.addEventListener("click", () => {
+  closeBookmarkDrawer();
+  enterVerseSelectMode(_bookmarkDrawerBook, _bookmarkDrawerChapter);
+});
+
+$bmAddFolderBtn.addEventListener("click", () => {
+  const name = window.prompt("폴더 이름:");
+  if (!name || !name.trim()) return;
+  const store = loadBookmarks();
+  store.push({ type: "folder", id: generateId(), name: name.trim(), children: [], expanded: true });
+  saveBookmarks(store);
+  renderBookmarkTree();
+});
+
+$verseSelectCancelBtn.addEventListener("click", exitVerseSelectMode);
+$verseSelectBookmarkBtn.addEventListener("click", () => openSaveModal("verses"));
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    if (!$bmMergeModal.hidden) {
+      $bmMergeScrim.hidden = true;
+      $bmMergeModal.hidden = true;
+      $bmMergeYes.onclick = null;
+      $bmMergeNo.onclick = null;
+      $bmMergeCancel.onclick = null;
+      return;
+    }
+    if (!$bmSaveModal.hidden) { closeSaveModal(); return; }
+    if (!$bookmarkDrawer.hidden) { closeBookmarkDrawer(); return; }
+    if (_verseSelectMode) { exitVerseSelectMode(); return; }
+  }
 });
 
 // ── Service Worker Registration & Update ──

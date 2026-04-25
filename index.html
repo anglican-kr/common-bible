@@ -151,6 +151,48 @@
     </div>
     <div id="search-sheet-results"></div>
   </div>
+  <!-- ── Bookmark Drawer ── -->
+  <div id="bookmark-scrim" aria-hidden="true" hidden></div>
+  <div id="bookmark-drawer" role="dialog" aria-modal="true" aria-labelledby="bookmark-drawer-title" hidden>
+    <div id="bookmark-drawer-header">
+      <h2 id="bookmark-drawer-title">책갈피</h2>
+      <button id="bookmark-drawer-close" type="button" aria-label="닫기">&times;</button>
+    </div>
+    <div id="bookmark-drawer-toolbar">
+      <button id="bm-save-chapter-btn" type="button" class="bm-toolbar-btn">이 장 저장</button>
+      <button id="bm-select-verses-btn" type="button" class="bm-toolbar-btn">절 선택</button>
+      <button id="bm-add-folder-btn" type="button" class="bm-toolbar-btn">새 폴더</button>
+    </div>
+    <ul id="bookmark-drawer-body" role="tree" aria-label="책갈피 목록"></ul>
+  </div>
+
+  <!-- ── Save Bookmark Modal ── -->
+  <div id="bm-save-scrim" aria-hidden="true" hidden></div>
+  <div id="bm-save-modal" role="dialog" aria-modal="true" aria-labelledby="bm-save-title" hidden>
+    <button id="bm-save-close" type="button" aria-label="닫기">&times;</button>
+    <h2 id="bm-save-title">책갈피 저장</h2>
+    <div id="bm-save-body"></div>
+  </div>
+
+  <!-- ── Merge Confirmation Modal ── -->
+  <div id="bm-merge-scrim" aria-hidden="true" hidden></div>
+  <div id="bm-merge-modal" role="dialog" aria-modal="true" aria-labelledby="bm-merge-title" hidden>
+    <h2 id="bm-merge-title">이미 저장된 책갈피</h2>
+    <p id="bm-merge-body"></p>
+    <div id="bm-merge-actions">
+      <button id="bm-merge-yes" type="button">합치기</button>
+      <button id="bm-merge-no" type="button">따로 저장</button>
+      <button id="bm-merge-cancel" type="button">취소</button>
+    </div>
+  </div>
+
+  <!-- ── Verse Selection Action Bar ── -->
+  <div id="verse-select-bar" hidden>
+    <span id="verse-select-count" aria-live="polite">절을 눌러 선택하세요</span>
+    <button id="verse-select-bookmark-btn" type="button" disabled>책갈피</button>
+    <button id="verse-select-cancel-btn" type="button" aria-label="선택 취소">취소</button>
+  </div>
+
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-2Q4SRGVNQN"></script>
   <script defer src="/js/gtag-init.js"></script>
