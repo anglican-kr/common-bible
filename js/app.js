@@ -729,6 +729,35 @@ function parseVerseSpec(spec) {
   }, []);
 }
 
+// If all rendered spans of a multi-part verse are selected, collapse "3a,3b" → "3".
+// Single-part verses ("3" with no alpha suffix) are unchanged.
+function collapseFullVerseRefs(refs, article) {
+  if (!article) return refs;
+  const selected = new Set(refs);
+  // Group by integer verse number
+  const byVerse = {};
+  for (const ref of refs) {
+    const n = parseInt(ref, 10);
+    if (!byVerse[n]) byVerse[n] = [];
+    byVerse[n].push(ref);
+  }
+  const result = [];
+  for (const [n, verseRefs] of Object.entries(byVerse)) {
+    // All spans rendered for this verse number
+    const allSpanRefs = [...article.querySelectorAll(".verse[data-vref]")]
+      .map(s => s.getAttribute("data-vref"))
+      .filter(r => parseInt(r, 10) === Number(n));
+    const hasAlpha = allSpanRefs.some(r => /[a-z]$/.test(r));
+    const allSelected = allSpanRefs.length > 0 && allSpanRefs.every(r => selected.has(r));
+    if (hasAlpha && allSelected) {
+      result.push(`${n}`);
+    } else {
+      result.push(...verseRefs);
+    }
+  }
+  return result;
+}
+
 // Compare verse refs: "3" < "3a" < "3b" < "4"
 function _compareRefs(a, b) {
   const na = parseInt(a, 10), nb = parseInt(b, 10);
@@ -3370,7 +3399,8 @@ function openSaveModal(mode, opts = {}) {
   }
 
   if (mode === "verses") {
-    const refs = Array.from(_selectedVerseRefs);
+    const article = document.querySelector("article.chapter-text");
+    const refs = collapseFullVerseRefs(Array.from(_selectedVerseRefs), article);
     verseSpec = refs.length ? selectedVersesToSpec(refs) : "all";
   } else if (existing) {
     verseSpec = existing.verseSpec;
