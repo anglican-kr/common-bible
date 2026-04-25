@@ -47,3 +47,34 @@ Python은 데이터 전처리(파싱, JSON 분리)에만 사용하고, 런타임
 - parsed_bible.json을 장별 JSON으로 분리하여 필요 시 fetch
 - 기존 html_generator.py, wordpress_api.py, pwa_builder.py는 더 이상 사용하지 않음
 - 기존 parser.py, parsed_bible.json은 그대로 활용 (config.py는 이후 불필요해져 제거됨)
+
+## 서비스 워커 캐시 전략
+
+SPA 오프라인 지원은 `sw.js`의 서비스 워커가 담당한다. 리소스 유형에 따라 세 가지 전략을 구분한다.
+
+### 앱 셸 (Shell)
+
+설치 시 `SHELL_FILES` 목록 전체를 `CACHE_NAME` 캐시에 선점재 캐싱한다.
+`{ cache: "reload" }` 옵션으로 브라우저 HTTP 캐시를 우회하여, 이전 릴리스의 장기 캐시 헤더가 새 SW 캐시를 오염시키는 것을 방지한다.
+
+History API SPA 라우팅상 모든 navigation 요청(`/bible/gen/1` 등)은 캐시된 `/index.html`로 응답한다.
+
+### 성경·검색 데이터
+
+**Cache-first** 전략을 사용한다. 캐시에 있으면 즉시 반환하고, 없으면 네트워크에서 받아 캐시에 저장한다.
+
+초기에는 stale-while-revalidate를 적용했으나 다음 문제가 확인되어 전환했다:
+- 백그라운드 재검증 요청이 대량 발생하여 불필요한 네트워크 트래픽을 유발
+- 성경 데이터는 릴리스 단위로만 바뀌므로 매 방문마다 재검증할 이유가 없음
+
+데이터 갱신은 재검증 대신 **`CACHE_NAME` 범프**로 처리한다. 릴리스마다 `CACHE_NAME`을 올리면 activate 단계에서 이전 캐시 전체가 삭제되고, 새 데이터가 순차적으로 채워진다.
+
+### Google Fonts
+
+`fonts.gstatic.com` 파일은 콘텐츠 주소 기반의 불변 URL이므로 별도 `FONT_CACHE`에 저장한다.
+`CACHE_NAME` 범프 시에도 삭제되지 않아 릴리스 간 폰트 재다운로드를 방지한다.
+
+### 업데이트 흐름
+
+새 SW가 설치되어도 기존 탭이 열려 있으면 자동으로 활성화되지 않는다.
+앱이 사용자에게 업데이트 알림을 표시하고, 사용자가 확인하면 `SKIP_WAITING` 메시지를 SW로 전송하여 전환한다.

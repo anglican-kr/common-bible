@@ -1,5 +1,50 @@
 # 작업 일지
 
+## 2026-04-25
+
+### 하위 URL 리소스 경로 버그 수정 (버전 1.1.0~1.1.2)
+
+SEO 전환(ADR-009) 이후 서브 경로(`/bible/gen/1` 등)에서 진입 시 상대 경로 fetch가 실패하는 문제를 연속 수정했다.
+
+#### 버전 1.1.0
+
+- `js/app.js`: `books.json`, 장별 JSON, 오디오 파일 fetch 경로를 모두 절대 경로로 통일
+- `js/pre-fetch.js`: `books.json` fetch 경로 절대 경로로 수정
+
+#### 버전 1.1.1
+
+- `js/search-worker.js`: `DATA_DIR` 상수를 `'data/'` → `'/data/'`로 변경 (워커 스크립트 기준 상대 경로 오류 재발 수정)
+- `sw.js`: `CACHE_NAME` rev-35 범프
+
+#### 버전 1.1.2 — SW 캐시 전략 전환 (perf)
+
+- `sw.js`: fetch 핸들러의 stale-while-revalidate → **cache-first**로 전환
+  - 이유: 성경/검색 데이터는 릴리스 단위로만 변경되므로 매 방문마다 백그라운드 재검증이 불필요, 불필요한 네트워크 트래픽 유발
+  - 캐시 무효화는 기존과 동일하게 `CACHE_NAME` 범프(activate 단계 전체 삭제)로 처리
+- `sw.js`: `CACHE_NAME` rev-36 범프
+
+### SEO 후속 조치
+
+- Google Search Console에서 신규 History API URL에 대한 수동 크롤링 요청 제출
+- 네이버 서치어드바이저 사이트 소유 확인 태그 추가 (`index.html` `<head>`)
+
+### 문서 보완
+
+- `docs/decisions/001-spa-architecture.md`: **서비스 워커 캐시 전략** 섹션 추가
+  - 앱 셸, 성경·검색 데이터(SWR → cache-first 전환 이유), Google Fonts, 업데이트 흐름 기술
+
+#### 수정 파일 요약
+
+| 파일 | 변경 유형 |
+|------|-----------|
+| `js/app.js` | 수정 — fetch 경로 절대 경로화 |
+| `js/pre-fetch.js` | 수정 — books.json fetch 절대 경로 |
+| `js/search-worker.js` | 수정 — DATA_DIR 절대 경로 |
+| `sw.js` | 수정 — cache-first 전환, CACHE_NAME rev-36 |
+| `version.json` | 수정 — 1.1.2 |
+| `docs/decisions/001-spa-architecture.md` | 수정 — SW 캐시 전략 섹션 추가 |
+| `index.html` | 수정 — 네이버 서치어드바이저 소유 확인 태그 추가 |
+
 ## 2026-04-24
 
 ### SEO 개선 — History API 라우팅 전환 (v1.0.30, ADR-009)
