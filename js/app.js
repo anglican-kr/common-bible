@@ -102,7 +102,6 @@ let _bookmarkDrawerChapter = null;
 let _bookmarkDrawerTrap = null;
 let _bookmarkDrawerLastFocus = null;
 let _bmSaveModalTrap = null;
-let _bmMergeResolve = null;
 let _dragState = null; // { id, ghost, origLi, startY, origTop }
 
 function saveReadingPosition(bookId, chapter, verse = null) {
