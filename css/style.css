@@ -2430,6 +2430,72 @@ body.verse-select-active .verse[data-vref]:hover {
   color: var(--text-secondary);
 }
 
+/* ── Drag & drop ── */
+
+.bm-drag-handle {
+  cursor: grab;
+  color: var(--text-secondary);
+  opacity: 0;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  padding: 0 0.2rem;
+  transition: opacity 0.1s;
+  touch-action: none;
+}
+
+.bm-folder-row:hover .bm-drag-handle,
+.bm-bookmark-row:hover .bm-drag-handle,
+.bm-folder-row:focus-within .bm-drag-handle,
+.bm-bookmark-row:focus-within .bm-drag-handle {
+  opacity: 0.4;
+}
+
+.bm-drag-handle:hover {
+  opacity: 1 !important;
+  color: var(--accent);
+}
+
+.bm-drag-handle:active {
+  cursor: grabbing;
+}
+
+.bm-folder.bm-dragging > .bm-folder-row,
+.bm-bookmark.bm-dragging > .bm-bookmark-row {
+  opacity: 0.3;
+}
+
+.bm-drag-ghost {
+  position: fixed;
+  z-index: 9999;
+  pointer-events: none;
+  opacity: 0.88;
+  background: var(--bg-card);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.22);
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.bm-folder.drag-over-before > .bm-folder-row,
+.bm-bookmark.drag-over-before > .bm-bookmark-row {
+  box-shadow: inset 0 2px 0 var(--accent);
+}
+
+.bm-folder.drag-over-after > .bm-folder-row,
+.bm-bookmark.drag-over-after > .bm-bookmark-row {
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+.bm-folder.drag-over-into > .bm-folder-row {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border-radius: var(--radius);
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
 /* ── Reduced motion ── */
 
 @media (prefers-reduced-motion: reduce) {

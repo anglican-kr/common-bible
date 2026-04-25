@@ -103,6 +103,7 @@ let _bookmarkDrawerTrap = null;
 let _bookmarkDrawerLastFocus = null;
 let _bmSaveModalTrap = null;
 let _bmMergeResolve = null;
+let _dragState = null; // { id, ghost, origLi, startY, origTop }
 
 function saveReadingPosition(bookId, chapter, verse = null) {
   try {
@@ -821,6 +822,138 @@ function collectFolderOptions(store, depth = 0, options = []) {
     }
   }
   return options;
+}
+
+// ── Drag & drop helpers ──
+
+function _isDescendant(folder, id) {
+  return (folder.children || []).some(c =>
+    c.id === id || (c.type === "folder" && _isDescendant(c, id)));
+}
+
+function moveBookmarkItem(draggedId, targetId, position) {
+  if (draggedId === targetId) return;
+  const store = loadBookmarks();
+
+  // "into" only valid for folders; validate no circular drop
+  if (position === "into") {
+    const t = _findItemInStore(store, targetId);
+    if (!t || t.item.type !== "folder") position = "after";
+    else if (_isDescendant(t.item, draggedId)) return;
+  }
+
+  const df = _findItemInStore(store, draggedId);
+  if (!df) return;
+  const draggedItem = df.item;
+  df.parent.splice(df.index, 1); // remove from current location
+
+  if (position === "into") {
+    const tf = _findItemInStore(store, targetId);
+    if (tf) tf.item.children.unshift(draggedItem);
+    else store.push(draggedItem);
+  } else {
+    const tf = _findItemInStore(store, targetId);
+    if (!tf) {
+      store.push(draggedItem);
+    } else {
+      tf.parent.splice(position === "before" ? tf.index : tf.index + 1, 0, draggedItem);
+    }
+  }
+
+  saveBookmarks(store);
+  renderBookmarkTree();
+}
+
+function _buildDragHandle() {
+  const handle = document.createElement("div");
+  handle.className = "bm-drag-handle";
+  handle.setAttribute("aria-hidden", "true");
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("width", "10");
+  svg.setAttribute("height", "14");
+  svg.setAttribute("viewBox", "0 0 10 14");
+  svg.setAttribute("fill", "currentColor");
+  for (const [cx, cy] of [[2,2],[6,2],[2,6],[6,6],[2,10],[6,10]]) {
+    const c = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+    c.setAttribute("cx", cx); c.setAttribute("cy", cy); c.setAttribute("r", "1.5");
+    svg.appendChild(c);
+  }
+  handle.appendChild(svg);
+  return handle;
+}
+
+function _clearDragIndicators() {
+  document.querySelectorAll(".drag-over-before, .drag-over-after, .drag-over-into")
+    .forEach(n => n.classList.remove("drag-over-before", "drag-over-after", "drag-over-into"));
+}
+
+function _updateDragIndicators(clientX, clientY) {
+  _clearDragIndicators();
+  const el = document.elementFromPoint(clientX, clientY);
+  const target = el?.closest("[data-id]");
+  if (!target || target.dataset.id === _dragState?.id) return;
+  const rowEl = target.querySelector(".bm-folder-row, .bm-bookmark-row");
+  const r = (rowEl || target).getBoundingClientRect();
+  const isFolder = target.classList.contains("bm-folder");
+  const rel = clientY - r.top;
+  if (isFolder && rel > r.height * 0.3 && rel < r.height * 0.7) {
+    target.classList.add("drag-over-into");
+  } else {
+    target.classList.add(rel < r.height / 2 ? "drag-over-before" : "drag-over-after");
+  }
+}
+
+function _setupDragHandle(li, handle) {
+  handle.addEventListener("pointerdown", (e) => {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    const rect = li.getBoundingClientRect();
+    const ghost = document.createElement("li");
+    ghost.className = "bm-drag-ghost";
+    ghost.style.width = rect.width + "px";
+    ghost.style.top = rect.top + "px";
+    ghost.style.left = rect.left + "px";
+    const rowClone = (li.querySelector(".bm-folder-row, .bm-bookmark-row") || li.firstElementChild).cloneNode(true);
+    ghost.appendChild(rowClone);
+    document.body.appendChild(ghost);
+
+    handle.setPointerCapture(e.pointerId);
+    li.classList.add("bm-dragging");
+    _dragState = { id: li.dataset.id, ghost, origLi: li, startY: e.clientY, origTop: rect.top };
+  });
+
+  handle.addEventListener("pointermove", (e) => {
+    if (!_dragState) return;
+    _dragState.ghost.style.top = (_dragState.origTop + (e.clientY - _dragState.startY)) + "px";
+    _updateDragIndicators(e.clientX, e.clientY);
+  });
+
+  function _finishDrag(e) {
+    if (!_dragState) return;
+    const ds = _dragState;
+    _dragState = null;
+    ds.ghost.remove();
+    ds.origLi.classList.remove("bm-dragging");
+
+    const overItem = document.querySelector(".drag-over-before, .drag-over-after, .drag-over-into");
+    if (overItem) {
+      const pos = overItem.classList.contains("drag-over-into") ? "into"
+        : overItem.classList.contains("drag-over-before") ? "before" : "after";
+      moveBookmarkItem(ds.id, overItem.dataset.id, pos);
+    }
+    _clearDragIndicators();
+  }
+
+  handle.addEventListener("pointerup", _finishDrag);
+  handle.addEventListener("pointercancel", () => {
+    if (!_dragState) return;
+    _dragState.ghost.remove();
+    _dragState.origLi.classList.remove("bm-dragging");
+    _clearDragIndicators();
+    _dragState = null;
+  });
 }
 
 // ── Data fetching ──
@@ -3039,6 +3172,9 @@ function _buildBookmarkItem(bm, depth) {
   const li = el("li", { role: "treeitem", className: "bm-bookmark", "data-id": bm.id, tabIndex: "-1" });
   if (depth > 0) li.setAttribute("aria-level", String(depth + 1));
   const row = el("div", { className: "bm-bookmark-row" });
+  const handle = _buildDragHandle();
+  row.appendChild(handle);
+  _setupDragHandle(li, handle);
   const link = el("a", { className: "bm-bookmark-link", href: _bookmarkHref(bm) });
   link.appendChild(el("span", { className: "bm-bookmark-label" }, bm.label));
   if (bm.verseSpec !== "all") {
@@ -3080,6 +3216,8 @@ function _buildFolderItem(folder, depth) {
   });
   if (depth > 0) li.setAttribute("aria-level", String(depth + 1));
   const row = el("div", { className: "bm-folder-row" });
+  const handle = _buildDragHandle();
+  _setupDragHandle(li, handle);
   const toggle = el("button", { className: "bm-folder-toggle", type: "button", "aria-label": "펼치기/접기" }, "▶");
   toggle.addEventListener("click", () => {
     const store = loadBookmarks();
@@ -3115,6 +3253,7 @@ function _buildFolderItem(folder, depth) {
   });
   actions.appendChild(renameBtn);
   actions.appendChild(delBtn);
+  row.appendChild(handle);
   row.appendChild(toggle);
   row.appendChild(icon);
   row.appendChild(name);
