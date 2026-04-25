@@ -856,6 +856,18 @@ function _findItemInStore(store, id) {
   return null;
 }
 
+// Returns the parent folder's id (null = root), or undefined if not found.
+function _findParentFolderId(store, id, parentId = null) {
+  for (const item of store) {
+    if (item.id === id) return parentId;
+    if (item.type === "folder") {
+      const r = _findParentFolderId(item.children, id, item.id);
+      if (r !== undefined) return r;
+    }
+  }
+  return undefined;
+}
+
 function removeItemById(store, id) {
   const found = _findItemInStore(store, id);
   if (found) found.parent.splice(found.index, 1);
@@ -1670,12 +1682,17 @@ function renderChapter(data, book, opts) {
     }
   });
 
-  // Long-press (300ms) to enter verse selection mode
+  // Long-press (300ms) to enter verse selection mode.
+  // pointermove only cancels after >10px of movement to tolerate natural finger drift.
   let _longPressTimer = null;
+  let _longPressStartX = 0;
+  let _longPressStartY = 0;
   article.addEventListener("pointerdown", (e) => {
     if (_verseSelectMode) return;
     const vs = e.target.closest(".verse[data-vref]");
     if (!vs) return;
+    _longPressStartX = e.clientX;
+    _longPressStartY = e.clientY;
     _longPressTimer = setTimeout(() => {
       _longPressTimer = null;
       enterVerseSelectMode(book.id, ch);
@@ -1689,7 +1706,16 @@ function renderChapter(data, book, opts) {
       }
     }, 300);
   });
-  const cancelLongPress = () => { if (_longPressTimer) { clearTimeout(_longPressTimer); _longPressTimer = null; } };
+  const cancelLongPress = (e) => {
+    if (!_longPressTimer) return;
+    if (e && e.type === "pointermove") {
+      const dx = e.clientX - _longPressStartX;
+      const dy = e.clientY - _longPressStartY;
+      if (dx * dx + dy * dy < 100) return; // ignore drift < 10px
+    }
+    clearTimeout(_longPressTimer);
+    _longPressTimer = null;
+  };
   article.addEventListener("pointerup", cancelLongPress);
   article.addEventListener("pointermove", cancelLongPress);
   article.addEventListener("pointercancel", cancelLongPress);
@@ -3387,8 +3413,9 @@ function renderBookmarkTree() {
 // ── Save bookmark modal ──
 
 function openSaveModal(mode, opts = {}) {
-  const bookId = _bookmarkDrawerBook;
-  const chapter = _bookmarkDrawerChapter;
+  // Drawer may not be open when entering via long-press; fall back to current context.
+  const bookId = _bookmarkDrawerBook || _currentBookId;
+  const chapter = _bookmarkDrawerChapter || _currentChapter;
   let verseSpec = "all";
   let existingId = opts.existingId || null;
   let existing = null;
@@ -3461,14 +3488,10 @@ function _showSaveModal(mode, bookId, chapter, verseSpec, existing) {
   folderField.appendChild(el("label", { className: "bm-form-label", for: "bm-folder-select" }, "저장 위치"));
   const folderSelect = el("select", { id: "bm-folder-select", className: "bm-form-select" });
   folderSelect.appendChild(el("option", { value: "" }, "최상위"));
+  const currentParentFolderId = existing ? _findParentFolderId(store, existing.id) : undefined;
   for (const opt of folderOptions) {
     const option = el("option", { value: opt.id }, opt.label);
-    if (existing) {
-      const found = _findItemInStore(loadBookmarks(), existing.id);
-      if (found && found.parent !== loadBookmarks() && found.parent === _findItemInStore(loadBookmarks(), opt.id)?.item?.children) {
-        option.selected = true;
-      }
-    }
+    if (currentParentFolderId === opt.id) option.selected = true;
     folderSelect.appendChild(option);
   }
   folderField.appendChild(folderSelect);
@@ -3513,10 +3536,9 @@ function commitSaveBookmark(existingId, label, note, folderId, bookId, chapter, 
       found.item.label = label;
       found.item.note = note;
       found.item.verseSpec = verseSpec;
-      if (folderId !== null) {
-        removeItemById(store, existingId);
-        insertItem(store, folderId, found.item);
-      }
+      const updatedItem = found.item;
+      removeItemById(store, existingId);
+      insertItem(store, folderId, updatedItem);
     }
   } else {
     const bm = {
