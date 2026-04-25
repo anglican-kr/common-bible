@@ -94,7 +94,7 @@ let _isInitialLoad = true;
 
 // ── Bookmark state ──
 let _verseSelectMode = false;
-let _selectedVerseNums = new Set();
+let _selectedVerseRefs = new Set();
 let _currentBookId = null;
 let _currentChapter = null;
 let _bookmarkDrawerBook = null;
@@ -708,11 +708,18 @@ function saveBookmarks(store) {
 
 // ── Verse spec utilities ──
 
-// "1-5,10-15" → [{start:1,end:5},{start:10,end:15}]
+// "1-5,10-15,3a,3b" → [{start:1,end:5},{start:10,end:15},{start:3,end:3,part:"a"},...]
 function parseVerseSpec(spec) {
   if (!spec || spec === "all") return [];
   return spec.split(",").reduce((acc, seg) => {
-    const m = seg.trim().match(/^(\d+)(?:-(\d+))?$/);
+    const trimmed = seg.trim();
+    const alphaMatch = trimmed.match(/^(\d+)([a-z])$/);
+    if (alphaMatch) {
+      const n = parseInt(alphaMatch[1], 10);
+      if (n > 0) acc.push({ start: n, end: n, part: alphaMatch[2] });
+      return acc;
+    }
+    const m = trimmed.match(/^(\d+)(?:-(\d+))?$/);
     if (m) {
       const s = parseInt(m[1], 10);
       const e = m[2] ? parseInt(m[2], 10) : s;
@@ -722,34 +729,58 @@ function parseVerseSpec(spec) {
   }, []);
 }
 
-// Sorted array of verse numbers → "1-5,10-15"
-function selectedVersesToSpec(sortedNums) {
-  if (!sortedNums.length) return "all";
-  const ranges = [];
-  let rangeStart = sortedNums[0];
-  let rangeEnd = sortedNums[0];
-  for (let i = 1; i < sortedNums.length; i++) {
-    if (sortedNums[i] === rangeEnd + 1) {
-      rangeEnd = sortedNums[i];
+// Compare verse refs: "3" < "3a" < "3b" < "4"
+function _compareRefs(a, b) {
+  const na = parseInt(a, 10), nb = parseInt(b, 10);
+  if (na !== nb) return na - nb;
+  const pa = a.match(/[a-z]$/)?.[0] || "";
+  const pb = b.match(/[a-z]$/)?.[0] || "";
+  return pa.localeCompare(pb);
+}
+
+// Array of data-vref strings (e.g. ["3a","3b","5","6","7"]) → "3a,3b,5-7"
+// Consecutive integer-only refs are compressed into ranges; alpha refs kept individually.
+function selectedVersesToSpec(refs) {
+  if (!refs.length) return "all";
+  const unique = [...new Set(refs)].sort(_compareRefs);
+  const result = [];
+  let intRun = [];
+
+  function flushRun() {
+    if (!intRun.length) return;
+    let s = intRun[0], e = intRun[0];
+    for (let i = 1; i < intRun.length; i++) {
+      if (intRun[i] === e + 1) { e = intRun[i]; }
+      else { result.push(s === e ? `${s}` : `${s}-${e}`); s = e = intRun[i]; }
+    }
+    result.push(s === e ? `${s}` : `${s}-${e}`);
+    intRun = [];
+  }
+
+  for (const ref of unique) {
+    if (/^\d+$/.test(ref)) {
+      intRun.push(parseInt(ref, 10));
     } else {
-      ranges.push(rangeStart === rangeEnd ? `${rangeStart}` : `${rangeStart}-${rangeEnd}`);
-      rangeStart = rangeEnd = sortedNums[i];
+      flushRun();
+      result.push(ref);
     }
   }
-  ranges.push(rangeStart === rangeEnd ? `${rangeStart}` : `${rangeStart}-${rangeEnd}`);
-  return ranges.join(",");
+  flushRun();
+  return result.join(",");
 }
 
 // Union of two verse spec strings
 function mergeVerseSpecs(specA, specB) {
   if (specA === "all" || specB === "all") return "all";
-  const segsA = parseVerseSpec(specA);
-  const segsB = parseVerseSpec(specB);
-  const nums = new Set();
-  for (const seg of [...segsA, ...segsB]) {
-    for (let n = seg.start; n <= seg.end; n++) nums.add(n);
+  const refs = new Set();
+  for (const seg of [...parseVerseSpec(specA), ...parseVerseSpec(specB)]) {
+    if (seg.part) {
+      refs.add(`${seg.start}${seg.part}`);
+    } else {
+      for (let n = seg.start; n <= seg.end; n++) refs.add(`${n}`);
+    }
   }
-  return selectedVersesToSpec([...nums].sort((a, b) => a - b));
+  return selectedVersesToSpec([...refs]);
 }
 
 // ── Bookmark query helpers ──
@@ -1422,10 +1453,12 @@ function renderChapter(data, book, opts) {
     }
   }
 
-  // ── Multi-segment: clamp each segment end to chapter max, drop out-of-range ──
+  // ── Multi-segment: clamp integer segments to chapter max; drop out-of-range.
+  // Alpha-part segments (e.g. {start:3,end:3,part:"a"}) are kept as-is since
+  // they don't extend beyond a single verse.
   if (hlSegments) {
     const clamped = hlSegments
-      .map(s => ({ start: s.start, end: Math.min(s.end, _maxVerse) }))
+      .map(s => s.part ? s : { start: s.start, end: Math.min(s.end, _maxVerse) })
       .filter(s => s.start <= _maxVerse);
     const pathBase = location.pathname.match(/^(\/[^/]+\/\d+)/)?.[1];
     if (clamped.length === 0) {
@@ -1437,7 +1470,7 @@ function renderChapter(data, book, opts) {
       hlSegments = clamped;
       if (needsRewrite && pathBase) {
         const newSpec = clamped
-          .map(s => s.start === s.end ? `${s.start}` : `${s.start}-${s.end}`)
+          .map(s => s.part ? `${s.start}${s.part}` : s.start === s.end ? `${s.start}` : `${s.start}-${s.end}`)
           .join(",");
         history.replaceState(null, "", `${pathBase}/${newSpec}${location.search}`);
       }
@@ -1485,11 +1518,7 @@ function renderChapter(data, book, opts) {
     if (v.alt_ref != null) verseId += `_${v.alt_ref}`;
     const baseClasses = v.chapter_ref ? "verse verse-cross-ref" : "verse";
 
-    // Verse highlight (from verse reference navigation)
     const vn = v.number;
-    const isHighlightedVerse = hlSegments
-      ? hlSegments.some(s => vn >= s.start && vn <= s.end)
-      : (hlVerse && vn >= hlVerse && vn <= (hlVerseEnd || hlVerse));
 
     // Verse number (rendered via CSS ::before to exclude from clipboard)
     let dataV = v.chapter_ref ? `${v.chapter_ref}:${verseLabel}` : verseLabel;
@@ -1536,9 +1565,26 @@ function renderChapter(data, book, opts) {
           }));
         }
 
+        // Compute vref before classes so per-span highlight can use it.
+        let vref;
+        if (isFirstLine && !isMultiPart) {
+          vref = verseLabel;
+        } else if (isFirstLine) {
+          vref = `${verseLabel}a`;
+        } else {
+          vref = `${verseLabel}${partLetters[partIdx]}`;
+          partIdx++;
+        }
+
+        // Per-span highlight: alpha-part segments match only the specific span;
+        // integer-range segments match all spans of that verse.
+        const isHighlightedSpan = hlSegments
+          ? hlSegments.some(s => s.part ? vref === `${s.start}${s.part}` : (vn >= s.start && vn <= s.end))
+          : (hlVerse && vn >= hlVerse && vn <= (hlVerseEnd || hlVerse));
+
         let classes = baseClasses;
         if (isPoetry) classes += " verse-poetry";
-        if (isHighlightedVerse) classes += " verse-highlight";
+        if (isHighlightedSpan) classes += " verse-highlight";
 
         const span = el("span", { className: classes });
         if (isFirstLine) {
@@ -1548,11 +1594,6 @@ function renderChapter(data, book, opts) {
           span.appendChild(document.createTextNode("\u2060"));
         }
 
-        const vref = isFirstLine && !isMultiPart
-          ? verseLabel
-          : isFirstLine
-            ? `${verseLabel}a`
-            : `${verseLabel}${partLetters[partIdx++]}`;
         span.setAttribute("data-vref", vref);
         // Hanging punctuation: pull leading quote outside the indent.
         // Single quote is narrower, so it uses a smaller offset (see .hanging-quote--single).
@@ -1584,16 +1625,15 @@ function renderChapter(data, book, opts) {
     if (!vs) return;
     if (_verseSelectMode) {
       e.stopPropagation();
-      const n = parseInt(vs.getAttribute("data-vref"), 10);
-      if (!Number.isFinite(n)) return;
-      if (_selectedVerseNums.has(n)) {
-        _selectedVerseNums.delete(n);
+      const vref = vs.getAttribute("data-vref");
+      if (!vref) return;
+      if (_selectedVerseRefs.has(vref)) {
+        _selectedVerseRefs.delete(vref);
       } else {
-        _selectedVerseNums.add(n);
+        _selectedVerseRefs.add(vref);
       }
       article.querySelectorAll(".verse[data-vref]").forEach(v => {
-        v.classList.toggle("verse-selected",
-          _selectedVerseNums.has(parseInt(v.getAttribute("data-vref"), 10)));
+        v.classList.toggle("verse-selected", _selectedVerseRefs.has(v.getAttribute("data-vref")));
       });
       updateVerseSelectBar();
     } else {
@@ -1610,12 +1650,11 @@ function renderChapter(data, book, opts) {
     _longPressTimer = setTimeout(() => {
       _longPressTimer = null;
       enterVerseSelectMode(book.id, ch);
-      const n = parseInt(vs.getAttribute("data-vref"), 10);
-      if (Number.isFinite(n)) {
-        _selectedVerseNums.add(n);
+      const vref = vs.getAttribute("data-vref");
+      if (vref) {
+        _selectedVerseRefs.add(vref);
         article.querySelectorAll(".verse[data-vref]").forEach(v => {
-          v.classList.toggle("verse-selected",
-            _selectedVerseNums.has(parseInt(v.getAttribute("data-vref"), 10)));
+          v.classList.toggle("verse-selected", _selectedVerseRefs.has(v.getAttribute("data-vref")));
         });
         updateVerseSelectBar();
       }
@@ -1804,15 +1843,14 @@ function parsePath() {
           highlightVerse = v1;
         }
       }
-    } else if (/^[\d,\-]+$/.test(spec)) {
+    } else if (/^[\d,\-a-z]+$/.test(spec)) {
       const segs = parseVerseSpec(spec);
       if (segs.length > 0) {
-        // Sort ascending and re-serialize so raw inputs like ",5", "10,3", "1-5,10-"
-        // are stored as clean normalized specs.
-        segs.sort((a, b) => a.start - b.start);
-        highlightVerseSpec = segs
-          .map(s => s.start === s.end ? `${s.start}` : `${s.start}-${s.end}`)
-          .join(",");
+        // Sort ascending (by start, then part letter) and re-serialize for canonical URLs.
+        segs.sort((a, b) => a.start !== b.start ? a.start - b.start : (a.part || "").localeCompare(b.part || ""));
+        highlightVerseSpec = selectedVersesToSpec(
+          segs.flatMap(s => s.part ? [`${s.start}${s.part}`] : Array.from({ length: s.end - s.start + 1 }, (_, i) => `${s.start + i}`))
+        );
         highlightVerse = segs[0].start;
         highlightVerseEnd = segs[segs.length - 1].end;
       }
@@ -3332,8 +3370,8 @@ function openSaveModal(mode, opts = {}) {
   }
 
   if (mode === "verses") {
-    const nums = Array.from(_selectedVerseNums).sort((a, b) => a - b);
-    verseSpec = nums.length ? selectedVersesToSpec(nums) : "all";
+    const refs = Array.from(_selectedVerseRefs);
+    verseSpec = refs.length ? selectedVersesToSpec(refs) : "all";
   } else if (existing) {
     verseSpec = existing.verseSpec;
   }
@@ -3510,7 +3548,7 @@ function openMergeDialog(existing, incomingSpec, mode) {
 
 function enterVerseSelectMode(bookId, chapter) {
   _verseSelectMode = true;
-  _selectedVerseNums.clear();
+  _selectedVerseRefs.clear();
   _currentBookId = bookId;
   _currentChapter = chapter;
   document.body.classList.add("verse-select-active");
@@ -3521,15 +3559,15 @@ function enterVerseSelectMode(bookId, chapter) {
 
 function exitVerseSelectMode() {
   _verseSelectMode = false;
-  _selectedVerseNums.clear();
+  _selectedVerseRefs.clear();
   document.body.classList.remove("verse-select-active");
   $verseSelectBar.hidden = true;
   document.querySelectorAll(".verse-selected").forEach(v => v.classList.remove("verse-selected"));
 }
 
 function updateVerseSelectBar() {
-  const count = _selectedVerseNums.size;
-  $verseSelectCount.textContent = count === 0 ? "절을 눌러 선택하세요" : `${count}개 절 선택됨`;
+  const count = _selectedVerseRefs.size;
+  $verseSelectCount.textContent = count === 0 ? "절을 눌러 선택하세요" : `${count}개 줄 선택됨`;
   $verseSelectBookmarkBtn.disabled = count === 0;
 }
 
