@@ -1,5 +1,136 @@
 # 작업 일지
 
+## 2026-04-26
+
+### 북마크(책갈피) 기능 전체 구현 — `feat/bookmark` 브랜치 (ADR-010)
+
+오늘 하루 동안 북마크 기능의 핵심 UX를 완성했다. 커밋 6개 기준으로 작업을 정리한다.
+
+---
+
+#### 1. long-press 저장 후 헤더 아이콘 갱신 버그 수정 (8762b3c)
+
+롱프레스(300ms)로 절 선택 없이 직접 저장한 경우 헤더의 `bookmarks` 아이콘이 갱신되지 않던 문제.  
+`openSaveModal()` 내 `refreshBookmarkHeaderBtn()` 호출 위치를 저장 완료 시점으로 이동했다.  
+e2e 테스트(`tests/e2e/test_features.py`)에 롱프레스 저장 케이스 추가.
+
+| 파일 | 변경 유형 |
+|------|-----------|
+| `js/app.js` | 수정 — 헤더 갱신 호출 위치 교정 |
+| `tests/e2e/test_features.py` | 수정 — 롱프레스 저장 e2e 케이스 추가 |
+
+---
+
+#### 2. 북마크 저장 모달 — 폴더 선택 커스텀 콤보박스 (8707c53)
+
+기본 `<select>`를 제거하고 SVG 폴더 아이콘이 포함된 커스텀 콤보박스(`_buildFolderCombobox()`)로 교체.  
+트리 뷰와 동일한 Material Icons 폴더 아이콘을 저장 위치 선택에서도 사용.  
+`overflow: visible`로 모달 밖으로 드롭다운 열림.  
+`scripts/serve.py` 신규 추가 (History API SPA를 위한 로컬 개발 서버).  
+`tests/e2e/test_bookmark.py` 신규 작성 (저장·수정·삭제·폴더 기본 플로우).
+
+| 파일 | 변경 유형 |
+|------|-----------|
+| `js/app.js` | 수정 — `_buildFolderCombobox()` 구현, 저장 모달 교체 |
+| `css/style.css` | 수정 — 콤보박스 스타일 |
+| `scripts/serve.py` | 신규 — SPA 로컬 서버 |
+| `tests/e2e/test_bookmark.py` | 신규 — 북마크 e2e 테스트 |
+| `CLAUDE.md` | 수정 — serve.py 사용법 안내 추가 |
+
+---
+
+#### 3. e2e 북마크 테스트 URL 경로 수정 (ae10f6b)
+
+`test_features.py`에서 북마크 관련 assertion의 URL을 hash 방식 → History API path 방식으로 정정.
+
+| 파일 | 변경 유형 |
+|------|-----------|
+| `tests/e2e/test_features.py` | 수정 — URL 경로 기반으로 정정 |
+
+---
+
+#### 4. 폴더 드롭 순환 참조 판정 방향 수정 (16b70ae)
+
+`_isDescendant(potentialAncestor, potentialDescendant)` 인자 순서가 뒤바뀌어  
+폴더를 자신의 자식 폴더 안으로 드롭할 때 순환 참조를 막지 못하던 버그 수정.
+
+| 파일 | 변경 유형 |
+|------|-----------|
+| `js/app.js` | 수정 — `_isDescendant()` 호출 인자 순서 교정 |
+
+---
+
+#### 5. 북마크 드로어 UX 전면 개선 (cb56689)
+
+| 항목 | 내용 |
+|------|------|
+| 반응형 레이아웃 | 모바일 ≤768px: 바텀시트, 데스크탑 ≥769px: 우측 슬라이드인 패널 |
+| 애니메이션 | `@keyframes` 입장·퇴장 (검색 시트와 속도 통일) |
+| 패널 너비 조절 | 데스크탑 좌측 엣지 드래그 핸들 (`#bookmark-drawer-resize`) |
+| 폴더 생성 UI | `window.prompt` 제거 → 인라인 입력 폼 (placeholder: "예: 대림1주일") |
+| 절 선택 바 | "N개 줄" → "3-5절 선택됨" 형식, 드래그로 연속 범위 선택 지원 |
+| 합치기 다이얼로그 | 같은 장 북마크 복수 시 대상 선택 UI, 합치기 후 제목 자동 갱신 |
+| 북마크 제목 | 책 full name → `short_name_ko` (약자) 사용 |
+| 폴더 들여쓰기 | 자식 항목 `padding-left: 3rem` (폴더 아이콘 기준 정렬) |
+| 드래그 ghost | `font-family` serif 깨짐 수정 |
+
+`data/book_mappings.json`에 `short_name_ko` 필드 추가 (73권).  
+`data/books.json` 재생성 (`short_name_ko` 포함).  
+`src/split_bible.py`에 `short_name_ko` 출력 추가.
+
+| 파일 | 변경 유형 |
+|------|-----------|
+| `js/app.js` | 수정 — 반응형·애니메이션·폴더 생성·절 선택·합치기 로직 |
+| `css/style.css` | 수정 — 바텀시트/패널 레이아웃, 애니메이션, 핸들 스타일 |
+| `index.html` | 수정 — 드로어 핸들 요소 추가 |
+| `data/book_mappings.json` | 수정 — `short_name_ko` 73권 추가 |
+| `data/books.json` | 수정 — `short_name_ko` 포함 재생성 |
+| `src/split_bible.py` | 수정 — `short_name_ko` 출력 |
+
+---
+
+#### 6. 북마크 드로어 UI 전면 개선 (3ea28de)
+
+| 항목 | 내용 |
+|------|------|
+| 폴더 아이콘 | 열림/닫힘 상태에 따라 `folder_open` / `folder` Material Icons SVG로 전환 |
+| 드래그 핸들 | 전용 6-dot 핸들 제거 → row 전체 드래그 (5px `Math.hypot` 임계값으로 클릭·드래그 구분) |
+| 북마크 타입 아이콘 | 비활성: outlined `bookmark` / 활성: filled `bookmark` SVG |
+| 활성 북마크 강조 | `.bm-active` 클래스: 배경색 + 아이콘·레이블 accent 색상 |
+| 활성 폴더 자동 펼침 | `_hasActiveDescendant()` true인 폴더만 드로어 열 때 펼침, 나머지 접힘 |
+| 헤더 북마크 버튼 | `bookmarks` SVG 아이콘으로 교체, 장 북마크 여부 표시(`.has-bookmark`) 제거 |
+| 툴바 | 텍스트 버튼 → 아이콘 전용 버튼 (create_new_folder / bookmark_add / text_select_move_forward_character), 우측 정렬 |
+| 검색 드로어 | 닫기 버튼(`#search-sheet-close`) 추가 (WCAG 일관성) |
+| 세부 스타일 | 폴더 이름 bold 제거, 드로어 헤더 간소화, 구분선 그라데이션, 절 선택 border-radius 5px, 오디오 투명도 |
+
+| 파일 | 변경 유형 |
+|------|-----------|
+| `js/app.js` | 수정 — 아이콘 빌더, 드래그 핸들, 활성 강조, 헤더 버튼, 툴바 |
+| `css/style.css` | 수정 — 아이콘 스타일, 활성 강조, 툴바, 검색 드로어 닫기 버튼 |
+| `index.html` | 수정 — 검색 드로어 닫기 버튼 요소, 툴바 구조 변경 |
+
+---
+
+#### 7. 북마크 드로어 키보드 트리 탐색 구현 (미커밋, ADR-010 미결 사항)
+
+WAI-ARIA Tree Pattern 키보드 스펙에 따라 북마크 드로어 트리 전체 키보드 탐색 구현.
+
+| 키 | 동작 |
+|----|------|
+| `↑` / `↓` | 이전/다음 보이는 treeitem으로 포커스 이동 |
+| `→` | 폴더 접힘: 열기 / 폴더 열림: 첫 자식으로 이동 / 북마크: 무시 |
+| `←` | 폴더 열림: 닫기 / 접힘 또는 북마크: 부모 treeitem으로 이동 |
+| `Enter` / `Space` | 폴더: 토글 / 북마크: 링크 활성화 (navigate) |
+| `Home` / `End` | 첫 번째/마지막 아이템으로 이동 |
+
+`.bm-item-actions`·`.bm-bookmark-link` 내부에서는 트리 키 무시 (버튼·링크 자체 동작 보존).  
+`renderBookmarkTree()` 렌더링 후 roving tabindex 초기화 (첫 아이템 `tabIndex="0"`).
+
+| 파일 | 변경 유형 |
+|------|-----------|
+| `js/app.js` | 수정 — `_getVisibleTreeItems()`, `_focusTreeItem()`, `_toggleFolder()`, keydown 핸들러 |
+| `docs/decisions/010-bookmark-feature.md` | 수정 — 미결→해소 이동 |
+
 ## 2026-04-25
 
 ### 하위 URL 리소스 경로 버그 수정 (버전 1.1.0~1.1.2)

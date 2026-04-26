@@ -3707,7 +3707,98 @@ function renderBookmarkTree() {
       ? _buildFolderItem(item, 0)
       : _buildBookmarkItem(item, 0));
   }
+  // Set roving tabindex: first treeitem is reachable, rest are -1
+  const items = _getVisibleTreeItems();
+  items.forEach((item, i) => item.setAttribute("tabIndex", i === 0 ? "0" : "-1"));
 }
+
+// Returns all currently visible treeitems in DOM order (skips children of collapsed folders)
+function _getVisibleTreeItems() {
+  const result = [];
+  function walk(ul) {
+    for (const li of ul.children) {
+      if (!li.matches("[role=treeitem]")) continue;
+      result.push(li);
+      const expanded = li.getAttribute("aria-expanded") === "true";
+      const group = li.querySelector(":scope > [role=group]");
+      if (expanded && group) walk(group);
+    }
+  }
+  walk($bookmarkDrawerBody);
+  return result;
+}
+
+function _focusTreeItem(item) {
+  _getVisibleTreeItems().forEach(i => i.setAttribute("tabIndex", "-1"));
+  item.setAttribute("tabIndex", "0");
+  item.focus();
+}
+
+function _toggleFolder(li) {
+  const toggle = li.querySelector(".bm-folder-toggle");
+  const newExpanded = li.getAttribute("aria-expanded") !== "true";
+  li.setAttribute("aria-expanded", String(newExpanded));
+  if (toggle) toggle.replaceChildren(_buildFolderToggleIcon(newExpanded));
+}
+
+$bookmarkDrawerBody.addEventListener("keydown", (e) => {
+  // Ignore keypresses originating from interactive controls inside the row (buttons, inputs)
+  if (e.target.closest(".bm-item-actions, .bm-bookmark-link")) return;
+  const item = e.target.closest("[role=treeitem]");
+  if (!item || !$bookmarkDrawerBody.contains(item)) return;
+
+  const items = _getVisibleTreeItems();
+  const idx = items.indexOf(item);
+  const isFolder = item.classList.contains("bm-folder");
+
+  if (e.key === "ArrowDown") {
+    e.preventDefault();
+    if (idx < items.length - 1) _focusTreeItem(items[idx + 1]);
+  } else if (e.key === "ArrowUp") {
+    e.preventDefault();
+    if (idx > 0) _focusTreeItem(items[idx - 1]);
+  } else if (e.key === "ArrowRight") {
+    e.preventDefault();
+    if (isFolder) {
+      if (item.getAttribute("aria-expanded") !== "true") {
+        _toggleFolder(item);
+        // after expand, re-query and stay on same item
+        _focusTreeItem(item);
+      } else {
+        const group = item.querySelector(":scope > [role=group]");
+        const firstChild = group && group.querySelector("[role=treeitem]");
+        if (firstChild) _focusTreeItem(firstChild);
+      }
+    }
+  } else if (e.key === "ArrowLeft") {
+    e.preventDefault();
+    if (isFolder && item.getAttribute("aria-expanded") === "true") {
+      _toggleFolder(item);
+      _focusTreeItem(item);
+    } else {
+      // Move to parent treeitem
+      const parentGroup = item.closest("[role=group]");
+      const parentItem = parentGroup && parentGroup.closest("[role=treeitem]");
+      if (parentItem) _focusTreeItem(parentItem);
+    }
+  } else if (e.key === "Home") {
+    e.preventDefault();
+    if (items.length) _focusTreeItem(items[0]);
+  } else if (e.key === "End") {
+    e.preventDefault();
+    if (items.length) _focusTreeItem(items[items.length - 1]);
+  } else if (e.key === "Enter" || e.key === " ") {
+    e.preventDefault();
+    if (isFolder) {
+      _toggleFolder(item);
+      _focusTreeItem(item);
+    } else {
+      // Activate bookmark: follow its link
+      const link = item.querySelector(".bm-bookmark-link");
+      if (link) link.click();
+    }
+  }
+});
 
 // ── Save bookmark modal ──
 
