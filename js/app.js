@@ -906,17 +906,17 @@ function _isDescendant(folder, id) {
 function moveBookmarkItem(draggedId, targetId, position) {
   if (draggedId === targetId) return;
   const store = loadBookmarks();
+  const df = _findItemInStore(store, draggedId);
+  if (!df) return;
+  const draggedItem = df.item;
 
   // "into" only valid for folders; validate no circular drop
   if (position === "into") {
     const t = _findItemInStore(store, targetId);
     if (!t || t.item.type !== "folder") position = "after";
-    else if (_isDescendant(t.item, draggedId)) return;
+    else if (draggedItem.type === "folder" && _isDescendant(draggedItem, targetId)) return;
   }
 
-  const df = _findItemInStore(store, draggedId);
-  if (!df) return;
-  const draggedItem = df.item;
   df.parent.splice(df.index, 1); // remove from current location
 
   if (position === "into") {
