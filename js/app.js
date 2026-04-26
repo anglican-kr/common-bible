@@ -911,7 +911,6 @@ function moveBookmarkItem(draggedId, targetId, position) {
   } else if (draggedItem.type === "folder" && _isDescendant(draggedItem, targetId)) {
     return;
   }
-
   df.parent.splice(df.index, 1); // remove from current location
 
   if (position === "into") {
@@ -3242,12 +3241,13 @@ function buildInstallBody(platform) {
     "Chrome, Edge, Safari(iOS) 등에서 열면 앱으로 설치할 수 있습니다."));
 }
 
-// Siblings of the modal/scrim that should become inert while the modal is open,
-// so assistive tech and sequential focus skip the background.
-const INSTALL_INERT_SELECTORS = "#sticky-group, main#app, #audio-bar, #search-fab, #search-sheet, #search-scrim, #launch-screen, #install-scrim, #install-modal, #bookmark-scrim, #bookmark-drawer, #verse-select-bar";
+// Elements that become inert (background) while a modal/drawer is open.
+// Each selector excludes the modal/drawer that is currently active.
+const INSTALL_INERT_SELECTORS = "#sticky-group, main#app, #audio-bar, #search-fab, #search-sheet, #search-scrim, #launch-screen, #bookmark-scrim, #bookmark-drawer, #verse-select-bar";
+const BOOKMARK_INERT_SELECTORS = "#sticky-group, main#app, #audio-bar, #search-fab, #search-sheet, #search-scrim, #launch-screen, #install-scrim, #install-modal, #verse-select-bar";
 
-function setBackgroundInert(on) {
-  document.querySelectorAll(INSTALL_INERT_SELECTORS).forEach((n) => {
+function setInert(on, selectors) {
+  document.querySelectorAll(selectors).forEach((n) => {
     if (on) {
       n.inert = true;
       n.setAttribute("aria-hidden", "true");
@@ -3257,6 +3257,9 @@ function setBackgroundInert(on) {
     }
   });
 }
+
+function setBackgroundInert(on) { setInert(on, INSTALL_INERT_SELECTORS); }
+function setBookmarkBackgroundInert(on) { setInert(on, BOOKMARK_INERT_SELECTORS); }
 
 function openInstallModal() {
   const platform = install.detectPlatform();
@@ -3364,7 +3367,7 @@ function openBookmarkDrawer(bookId, chapter) {
   $bmSaveChapterBtn.disabled = !inChapter;
   $bmSelectVersesBtn.disabled = !inChapter;
   renderBookmarkTree();
-  setBackgroundInert(true);
+  setBookmarkBackgroundInert(true);
   const scrollY = window.scrollY;
   document.body.style.overflow = "hidden";
   document.body.style.position = "fixed";
@@ -3382,7 +3385,7 @@ function closeBookmarkDrawer() {
   $bookmarkDrawer.classList.add("drawer-closing");
 
   // Restore body scroll and focus immediately so the page feels responsive
-  setBackgroundInert(false);
+  setBookmarkBackgroundInert(false);
   const scrollY = parseInt(document.body.dataset.scrollY || "0", 10);
   document.body.style.overflow = "";
   document.body.style.position = "";

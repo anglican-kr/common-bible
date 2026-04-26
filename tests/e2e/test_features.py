@@ -17,6 +17,7 @@ def test_resume_banner_appears_after_last_read_set(browser):
 
     page.evaluate("""() => {
         localStorage.setItem('bible-last-read', JSON.stringify({bookId: 'gen', chapter: 1}));
+        localStorage.setItem('bible-startup', 'home');
     }""")
     page.reload()
 
