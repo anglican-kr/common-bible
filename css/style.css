@@ -843,8 +843,35 @@ body {
 }
 
 #search-sheet-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0 0.5rem 0.6rem 0.8rem;
+}
+
+#search-sheet-input-wrap {
   position: relative;
-  padding: 0 0.8rem 0.6rem;
+  flex: 1;
+}
+
+#search-sheet-close {
+  flex-shrink: 0;
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-secondary);
+  border-radius: 4px;
+  padding: 0;
+  transition: color 0.15s;
+}
+
+#search-sheet-close:hover {
+  color: var(--text);
 }
 
 #search-sheet-input {
@@ -853,7 +880,7 @@ body {
   font-size: 0.95rem;
   padding: 0.55rem 2.2rem 0.55rem 0.8rem;
   border: 1px solid var(--border);
-  border-radius: 1.5rem;
+  border-radius: 0.6rem;
   background: var(--bg-card);
   color: var(--text);
   outline: none;
@@ -964,7 +991,7 @@ mark.search-highlight {
 
 .verse-highlight {
   background: rgba(107, 58, 42, 0.08) !important;
-  border-radius: 2px;
+  border-radius: 5px;
   padding: 0.1em 0.15em;
 }
 
@@ -1275,7 +1302,7 @@ mark.search-highlight {
   margin-bottom: 0.8rem;
   padding: 0.4rem 0.6rem;
   background: var(--bg-card);
-  border: 1px dashed var(--border);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
 }
 
@@ -1433,7 +1460,7 @@ mark.search-highlight {
   position: sticky;
   bottom: 0;
   z-index: 10;
-  background: color-mix(in srgb, var(--bg) 85%, transparent);
+  background: color-mix(in srgb, var(--bg) 50%, transparent);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border-top: none;
@@ -1597,7 +1624,9 @@ mark.search-highlight {
 
 .audio-speed-btn {
   flex-shrink: 0;
-  padding: 0.15rem 0.4rem;
+  width: 3rem;
+  text-align: center;
+  padding: 0.15rem 0;
   border: 1px solid var(--border);
   border-radius: 0.3rem;
   background: transparent;
@@ -1861,13 +1890,6 @@ mark.search-highlight {
   color: var(--accent);
 }
 
-.title-bookmark-btn.has-bookmark {
-  color: var(--accent);
-}
-
-.title-bookmark-btn.has-bookmark svg {
-  fill: var(--accent);
-}
 
 /* ── Verse selection mode ── */
 
@@ -1877,7 +1899,8 @@ body.verse-select-active {
 
 body.verse-select-active .verse[data-vref] {
   cursor: pointer;
-  border-radius: 2px;
+  border-radius: 5px;
+  padding: 0.1em 0.15em;
   transition: background 0.1s;
 }
 
@@ -1887,7 +1910,7 @@ body.verse-select-active .verse[data-vref]:hover {
 
 .verse.verse-selected {
   background: color-mix(in srgb, var(--accent) 20%, transparent) !important;
-  border-radius: 2px;
+  border-radius: 5px;
 }
 
 /* ── Verse selection action bar ── */
@@ -2107,25 +2130,25 @@ body.verse-select-active .verse[data-vref]:hover {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.5rem 1rem 0.7rem;
-  border-bottom: 1px solid var(--border);
+  padding: 0.3rem 0.75rem 0.3rem 1rem;
   flex-shrink: 0;
 }
 
 #bookmark-drawer-title {
-  font-size: 1rem;
-  font-weight: 700;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-secondary);
   margin: 0;
 }
 
 #bookmark-drawer-close {
-  width: 2.2rem;
-  height: 2.2rem;
+  width: 2rem;
+  height: 2rem;
   background: none;
   border: none;
   cursor: pointer;
   color: var(--text-secondary);
-  font-size: 1.5rem;
+  font-size: 1.3rem;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2140,35 +2163,50 @@ body.verse-select-active .verse[data-vref]:hover {
 
 #bookmark-drawer-toolbar {
   display: flex;
-  gap: 0.4rem;
-  padding: 0.5rem 1rem;
-  border-bottom: 1px solid var(--border);
+  gap: 0.25rem;
+  padding: 0.4rem 0.75rem;
   flex-shrink: 0;
-  flex-wrap: wrap;
+  justify-content: flex-end;
+  position: relative;
+}
+
+#bookmark-drawer-toolbar::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(to right, transparent, var(--border) 20%, var(--border) 80%, transparent);
 }
 
 .bm-toolbar-btn {
-  font-family: inherit;
-  font-size: 0.78rem;
-  padding: 0.3rem 0.65rem;
+  width: 2.2rem;
+  height: 2.2rem;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   background: none;
-  border: 1px solid var(--border);
+  border: none;
   border-radius: var(--radius);
   cursor: pointer;
-  color: var(--accent);
-  transition: background 0.15s, color 0.15s;
+  color: var(--text-secondary);
+  transition: color 0.15s, background 0.15s;
 }
 
 .bm-toolbar-btn:hover {
-  background: var(--accent);
-  color: var(--bg);
-  border-color: var(--accent);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
 }
 
 .bm-toolbar-btn:disabled {
-  opacity: 0.4;
+  color: var(--text-secondary);
+  opacity: 0.35;
   cursor: default;
+  background: none;
 }
+
 
 .bm-new-folder-form {
   display: flex;
@@ -2230,39 +2268,34 @@ body.verse-select-active .verse[data-vref]:hover {
   background: color-mix(in srgb, var(--accent) 8%, transparent);
 }
 
+.bm-bookmark-row.bm-active {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border-radius: var(--radius);
+  margin-right: 0.5rem;
+}
+
+.bm-bookmark-row.bm-active .bm-bookmark-type-icon {
+  color: var(--accent);
+}
+
+.bm-bookmark-row.bm-active .bm-bookmark-label {
+  color: var(--accent);
+  font-weight: 600;
+}
+
 .bm-folder-toggle {
-  background: none;
-  border: none;
-  cursor: pointer;
   width: 1.4rem;
   height: 1.4rem;
   flex-shrink: 0;
-  color: var(--text-secondary);
-  font-size: 0.65rem;
+  color: var(--accent);
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 0;
-  transition: transform 0.15s;
-}
-
-.bm-folder[aria-expanded="true"] > .bm-folder-row > .bm-folder-toggle {
-  transform: rotate(90deg);
-}
-
-.bm-folder-icon {
-  flex-shrink: 0;
-  color: var(--accent);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  line-height: 0;
 }
 
 .bm-folder-name {
   flex: 1;
   font-size: 0.88rem;
-  font-weight: 600;
   color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2270,10 +2303,11 @@ body.verse-select-active .verse[data-vref]:hover {
 }
 
 .bm-folder-children {
-  padding-left: 3rem;
+  padding-left: 1.8rem;
   margin: 0;
   list-style: none;
 }
+
 
 .bm-folder[aria-expanded="false"] > .bm-folder-children {
   display: none;
@@ -2287,6 +2321,15 @@ body.verse-select-active .verse[data-vref]:hover {
   flex-direction: column;
   gap: 0.1rem;
   min-width: 0;
+}
+
+.bm-bookmark-type-icon {
+  flex-shrink: 0;
+  color: var(--accent);
+  display: inline-flex;
+  align-items: center;
+  width: 1.4rem;
+  justify-content: center;
 }
 
 .bm-bookmark-label {
@@ -2371,8 +2414,7 @@ body.verse-select-active .verse[data-vref]:hover {
   transform: translate(-50%, -50%);
   z-index: 73;
   width: min(92vw, 420px);
-  max-height: 85vh;
-  overflow-y: auto;
+  overflow: visible;
   background: var(--bg-card);
   color: var(--text);
   border-radius: 14px;
@@ -2701,32 +2743,23 @@ body.verse-select-active .verse[data-vref]:hover {
 
 /* ── Drag & drop ── */
 
-.bm-drag-handle {
+.bm-folder-row,
+.bm-bookmark-row {
   cursor: grab;
-  color: var(--text-secondary);
-  opacity: 0;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  padding: 0 0.2rem;
-  transition: opacity 0.1s;
   touch-action: none;
 }
 
-.bm-folder-row:hover .bm-drag-handle,
-.bm-bookmark-row:hover .bm-drag-handle,
-.bm-folder-row:focus-within .bm-drag-handle,
-.bm-bookmark-row:focus-within .bm-drag-handle {
-  opacity: 0.4;
-}
-
-.bm-drag-handle:hover {
-  opacity: 1 !important;
-  color: var(--accent);
-}
-
-.bm-drag-handle:active {
+.bm-folder-row:active,
+.bm-bookmark-row:active {
   cursor: grabbing;
+}
+
+.bm-folder-row button,
+.bm-folder-row a,
+.bm-bookmark-row button,
+.bm-bookmark-row a {
+  cursor: pointer;
+  touch-action: auto;
 }
 
 .bm-folder.bm-dragging > .bm-folder-row,

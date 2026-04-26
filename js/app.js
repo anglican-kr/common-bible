@@ -16,6 +16,7 @@ const $searchScrim = document.getElementById("search-scrim");
 const $searchSheet = document.getElementById("search-sheet");
 const $searchSheetInput = document.getElementById("search-sheet-input");
 const $searchSheetClear = document.getElementById("search-sheet-clear");
+const $searchSheetClose = document.getElementById("search-sheet-close");
 const $searchSheetResults = document.getElementById("search-sheet-results");
 
 let booksCache = null;
@@ -936,23 +937,6 @@ function moveBookmarkItem(draggedId, targetId, position) {
   renderBookmarkTree();
 }
 
-function _buildDragHandle() {
-  const handle = document.createElement("div");
-  handle.className = "bm-drag-handle";
-  handle.setAttribute("aria-hidden", "true");
-  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  svg.setAttribute("width", "10");
-  svg.setAttribute("height", "14");
-  svg.setAttribute("viewBox", "0 0 10 14");
-  svg.setAttribute("fill", "currentColor");
-  for (const [cx, cy] of [[2,2],[6,2],[2,6],[6,6],[2,10],[6,10]]) {
-    const c = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-    c.setAttribute("cx", cx); c.setAttribute("cy", cy); c.setAttribute("r", "1.5");
-    svg.appendChild(c);
-  }
-  handle.appendChild(svg);
-  return handle;
-}
 
 function _clearDragIndicators() {
   document.querySelectorAll(".drag-over-before, .drag-over-after, .drag-over-into")
@@ -975,56 +959,68 @@ function _updateDragIndicators(clientX, clientY) {
   }
 }
 
-function _setupDragHandle(li, handle) {
-  handle.addEventListener("pointerdown", (e) => {
+function _setupDragHandle(li, row) {
+  row.addEventListener("pointerdown", (e) => {
     if (e.pointerType === "mouse" && e.button !== 0) return;
-    e.preventDefault();
-    e.stopPropagation();
+    if (e.target.closest("button")) return;
 
-    const rect = li.getBoundingClientRect();
-    const ghost = document.createElement("li");
-    ghost.className = "bm-drag-ghost";
-    ghost.style.width = rect.width + "px";
-    ghost.style.top = rect.top + "px";
-    ghost.style.left = rect.left + "px";
-    const rowClone = (li.querySelector(".bm-folder-row, .bm-bookmark-row") || li.firstElementChild).cloneNode(true);
-    ghost.appendChild(rowClone);
-    document.body.appendChild(ghost);
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const origRect = li.getBoundingClientRect();
+    let dragStarted = false;
 
-    handle.setPointerCapture(e.pointerId);
-    li.classList.add("bm-dragging");
-    _dragState = { id: li.dataset.id, ghost, origLi: li, startY: e.clientY, origTop: rect.top };
-  });
-
-  handle.addEventListener("pointermove", (e) => {
-    if (!_dragState) return;
-    _dragState.ghost.style.top = (_dragState.origTop + (e.clientY - _dragState.startY)) + "px";
-    _updateDragIndicators(e.clientX, e.clientY);
-  });
-
-  function _finishDrag(e) {
-    if (!_dragState) return;
-    const ds = _dragState;
-    _dragState = null;
-    ds.ghost.remove();
-    ds.origLi.classList.remove("bm-dragging");
-
-    const overItem = document.querySelector(".drag-over-before, .drag-over-after, .drag-over-into");
-    if (overItem) {
-      const pos = overItem.classList.contains("drag-over-into") ? "into"
-        : overItem.classList.contains("drag-over-before") ? "before" : "after";
-      moveBookmarkItem(ds.id, overItem.dataset.id, pos);
+    function onMove(e) {
+      if (!dragStarted) {
+        if (Math.hypot(e.clientX - startX, e.clientY - startY) < 5) return;
+        dragStarted = true;
+        const ghost = document.createElement("li");
+        ghost.className = "bm-drag-ghost";
+        ghost.style.width = origRect.width + "px";
+        ghost.style.left = origRect.left + "px";
+        const rowClone = (li.querySelector(".bm-folder-row, .bm-bookmark-row") || li.firstElementChild).cloneNode(true);
+        ghost.appendChild(rowClone);
+        document.body.appendChild(ghost);
+        row.setPointerCapture(e.pointerId);
+        li.classList.add("bm-dragging");
+        _dragState = { id: li.dataset.id, ghost, origLi: li, startY, origTop: origRect.top };
+      }
+      if (!_dragState) return;
+      _dragState.ghost.style.top = (_dragState.origTop + (e.clientY - _dragState.startY)) + "px";
+      _updateDragIndicators(e.clientX, e.clientY);
     }
-    _clearDragIndicators();
-  }
 
-  handle.addEventListener("pointerup", _finishDrag);
-  handle.addEventListener("pointercancel", () => {
-    if (!_dragState) return;
-    _dragState.ghost.remove();
-    _dragState.origLi.classList.remove("bm-dragging");
-    _clearDragIndicators();
-    _dragState = null;
+    function finish() {
+      row.removeEventListener("pointermove", onMove);
+      row.removeEventListener("pointerup", finish);
+      row.removeEventListener("pointercancel", cancel);
+      if (!_dragState) return;
+      const ds = _dragState;
+      _dragState = null;
+      ds.ghost.remove();
+      ds.origLi.classList.remove("bm-dragging");
+      const overItem = document.querySelector(".drag-over-before, .drag-over-after, .drag-over-into");
+      if (overItem) {
+        const pos = overItem.classList.contains("drag-over-into") ? "into"
+          : overItem.classList.contains("drag-over-before") ? "before" : "after";
+        moveBookmarkItem(ds.id, overItem.dataset.id, pos);
+      }
+      _clearDragIndicators();
+    }
+
+    function cancel() {
+      row.removeEventListener("pointermove", onMove);
+      row.removeEventListener("pointerup", finish);
+      row.removeEventListener("pointercancel", cancel);
+      if (!_dragState) return;
+      _dragState.ghost.remove();
+      _dragState.origLi.classList.remove("bm-dragging");
+      _clearDragIndicators();
+      _dragState = null;
+    }
+
+    row.addEventListener("pointermove", onMove);
+    row.addEventListener("pointerup", finish);
+    row.addEventListener("pointercancel", cancel);
   });
 }
 
@@ -2792,6 +2788,7 @@ async function runSheetSearch(query, page, autoNavigate = false) {
 $searchFab.addEventListener("click", () => openSearchSheet(""));
 
 $searchScrim.addEventListener("click", closeSearchSheet);
+$searchSheetClose.addEventListener("click", closeSearchSheet);
 
 let sheetAutoNavTimer = null;
 
@@ -3332,30 +3329,20 @@ function buildBookmarkHeaderBtn(bookId, chapter) {
     type: "button",
   });
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  svg.setAttribute("width", "20");
-  svg.setAttribute("height", "20");
-  svg.setAttribute("viewBox", "0 0 24 24");
-  svg.setAttribute("fill", "none");
-  svg.setAttribute("stroke", "currentColor");
-  svg.setAttribute("stroke-width", "2");
-  svg.setAttribute("stroke-linecap", "round");
-  svg.setAttribute("stroke-linejoin", "round");
+  svg.setAttribute("width", "22");
+  svg.setAttribute("height", "22");
+  svg.setAttribute("viewBox", "0 -960 960 960");
+  svg.setAttribute("fill", "currentColor");
   svg.setAttribute("aria-hidden", "true");
   const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-  path.setAttribute("d", "M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z");
+  path.setAttribute("d", "M160-80v-560q0-33 23.5-56.5T240-720h320q33 0 56.5 23.5T640-640v560L400-200 160-80Zm80-121 160-86 160 86v-439H240v439Zm480-39v-560H280v-80h440q33 0 56.5 23.5T800-800v560h-80ZM240-640h320-320Z");
   svg.appendChild(path);
   btn.appendChild(svg);
-  if (bookmarkExistsForChapter(bookId, chapter)) btn.classList.add("has-bookmark");
   btn.addEventListener("click", () => openBookmarkDrawer(bookId, chapter));
   return btn;
 }
 
-function refreshBookmarkHeaderBtn() {
-  const btn = document.querySelector(".title-bookmark-btn");
-  if (!btn || !_currentBookId || !_currentChapter) return;
-  btn.classList.toggle("has-bookmark",
-    bookmarkExistsForChapter(_currentBookId, _currentChapter));
-}
+function refreshBookmarkHeaderBtn() {}
 
 function openBookmarkDrawer(bookId, chapter) {
   _bookmarkDrawerBook = bookId;
@@ -3420,11 +3407,12 @@ function _bookmarkHref(bm) {
 function _buildBookmarkItem(bm, depth) {
   const li = el("li", { role: "treeitem", className: "bm-bookmark", "data-id": bm.id, tabIndex: "-1" });
   if (depth > 0) li.setAttribute("aria-level", String(depth + 1));
-  const row = el("div", { className: "bm-bookmark-row" });
-  const handle = _buildDragHandle();
-  row.appendChild(handle);
-  _setupDragHandle(li, handle);
-  const link = el("a", { className: "bm-bookmark-link", href: _bookmarkHref(bm) });
+  const isActive = _isActiveBookmark(bm);
+  const row = el("div", { className: "bm-bookmark-row" + (isActive ? " bm-active" : "") });
+  _setupDragHandle(li, row);
+  const typeIcon = el("span", { className: "bm-bookmark-type-icon" });
+  typeIcon.appendChild(_buildBookmarkTypeIcon(isActive));
+  const link = el("a", { className: "bm-bookmark-link", href: _bookmarkHref(bm), draggable: "false" });
   link.appendChild(el("span", { className: "bm-bookmark-label" }, bm.label));
   if (bm.verseSpec !== "all") {
     link.appendChild(el("span", { className: "bm-bookmark-ref" }, bm.verseSpec));
@@ -3448,6 +3436,7 @@ function _buildBookmarkItem(bm, depth) {
   });
   actions.appendChild(editBtn);
   actions.appendChild(delBtn);
+  row.appendChild(typeIcon);
   row.appendChild(link);
   row.appendChild(actions);
   li.appendChild(row);
@@ -3458,23 +3447,65 @@ function _buildBookmarkItem(bm, depth) {
  * Material Icons "folder" (24dp) — same contour as the filled symbol, stroked only (hollow).
  * @param {{ size?: number }} [opts]
  */
+function _buildBookmarkTypeIcon(active = false, size = 20) {
+  const ns = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(ns, "svg");
+  svg.setAttribute("width", String(size));
+  svg.setAttribute("height", String(size));
+  svg.setAttribute("fill", "currentColor");
+  svg.setAttribute("aria-hidden", "true");
+  const path = document.createElementNS(ns, "path");
+  if (active) {
+    svg.setAttribute("viewBox", "0 0 24 24");
+    path.setAttribute("d", "M17 3H7c-1.1 0-2 .9-2 2v16l7-3 7 3V5c0-1.1-.9-2-2-2z");
+  } else {
+    svg.setAttribute("viewBox", "0 -960 960 960");
+    path.setAttribute("d", "M200-120v-640q0-33 23.5-56.5T280-840h400q33 0 56.5 23.5T760-760v640L480-240 200-120Zm80-122 200-86 200 86v-518H280v518Zm0-518h400-400Z");
+  }
+  svg.appendChild(path);
+  return svg;
+}
+
+function _isActiveBookmark(bm) {
+  return window.location.pathname === _bookmarkHref(bm);
+}
+
+function _hasActiveDescendant(folder) {
+  for (const child of (folder.children || [])) {
+    if (child.type === "bookmark" && _isActiveBookmark(child)) return true;
+    if (child.type === "folder" && _hasActiveDescendant(child)) return true;
+  }
+  return false;
+}
+
 function _buildMaterialFolderIcon({ size = 18 } = {}) {
   const ns = "http://www.w3.org/2000/svg";
   const svg = document.createElementNS(ns, "svg");
   svg.setAttribute("width", String(size));
   svg.setAttribute("height", String(size));
-  svg.setAttribute("viewBox", "0 0 24 24");
-  svg.setAttribute("fill", "none");
-  svg.setAttribute("stroke", "currentColor");
-  svg.setAttribute("stroke-width", "1.4");
-  svg.setAttribute("stroke-linejoin", "round");
-  svg.setAttribute("stroke-linecap", "round");
+  svg.setAttribute("viewBox", "0 -960 960 960");
+  svg.setAttribute("fill", "currentColor");
   svg.setAttribute("aria-hidden", "true");
   const path = document.createElementNS(ns, "path");
-  path.setAttribute(
-    "d",
-    "M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z",
-  );
+  path.setAttribute("d", "M160-160q-33 0-56.5-23.5T80-240v-480q0-33 23.5-56.5T160-800h240l80 80h320q33 0 56.5 23.5T880-640v400q0 33-23.5 56.5T800-160H160Zm0-80h640v-400H447l-80-80H160v480Zm0 0v-480 480Z");
+  svg.appendChild(path);
+  return svg;
+}
+
+function _buildFolderToggleIcon(open, size = 20) {
+  const ns = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(ns, "svg");
+  svg.setAttribute("width", String(size));
+  svg.setAttribute("height", String(size));
+  svg.setAttribute("viewBox", "0 -960 960 960");
+  svg.setAttribute("fill", "currentColor");
+  svg.setAttribute("aria-hidden", "true");
+  const path = document.createElementNS(ns, "path");
+  if (open) {
+    path.setAttribute("d", "M160-160q-33 0-56.5-23.5T80-240v-480q0-33 23.5-56.5T160-800h240l80 80h320q33 0 56.5 23.5T880-640H447l-80-80H160v480l96-320h684L837-217q-8 26-29.5 41.5T760-160H160Zm84-80h516l72-240H316l-72 240Zm0 0 72-240-72 240Zm-84-400v-80 80Z");
+  } else {
+    path.setAttribute("d", "M160-160q-33 0-56.5-23.5T80-240v-480q0-33 23.5-56.5T160-800h240l80 80h320q33 0 56.5 23.5T880-640v400q0 33-23.5 56.5T800-160H160Zm0-80h640v-400H447l-80-80H160v480Zm0 0v-480 480Z");
+  }
   svg.appendChild(path);
   return svg;
 }
@@ -3605,7 +3636,7 @@ function _buildFolderCombobox(folderOptions, selectedFolderId) {
 }
 
 function _buildFolderItem(folder, depth) {
-  const expanded = folder.expanded !== false;
+  const expanded = _hasActiveDescendant(folder);
   const li = el("li", {
     role: "treeitem",
     className: "bm-folder",
@@ -3615,19 +3646,16 @@ function _buildFolderItem(folder, depth) {
   });
   if (depth > 0) li.setAttribute("aria-level", String(depth + 1));
   const row = el("div", { className: "bm-folder-row" });
-  const handle = _buildDragHandle();
-  _setupDragHandle(li, handle);
-  const toggle = el("button", { className: "bm-folder-toggle", type: "button", "aria-label": "펼치기/접기" }, "▶");
-  toggle.addEventListener("click", () => {
-    const store = loadBookmarks();
-    const found = _findItemInStore(store, folder.id);
-    if (found) found.item.expanded = li.getAttribute("aria-expanded") !== "true";
-    saveBookmarks(store);
-    li.setAttribute("aria-expanded", String(found ? found.item.expanded : false));
-  });
-  const icon = el("span", { className: "bm-folder-icon", "aria-hidden": "true" });
-  icon.appendChild(_buildMaterialFolderIcon());
+  _setupDragHandle(li, row);
+  const toggle = el("span", { className: "bm-folder-toggle", "aria-hidden": "true" });
+  toggle.appendChild(_buildFolderToggleIcon(expanded));
   const name = el("span", { className: "bm-folder-name" }, folder.name);
+  row.addEventListener("click", (e) => {
+    if (e.target.closest(".bm-item-actions")) return;
+    const newExpanded = li.getAttribute("aria-expanded") !== "true";
+    li.setAttribute("aria-expanded", String(newExpanded));
+    toggle.replaceChildren(_buildFolderToggleIcon(newExpanded));
+  });
   const actions = el("div", { className: "bm-item-actions" });
   const renameBtn = el("button", { className: "bm-action-btn", type: "button" }, "수정");
   renameBtn.addEventListener("click", () => {
@@ -3653,9 +3681,7 @@ function _buildFolderItem(folder, depth) {
   });
   actions.appendChild(renameBtn);
   actions.appendChild(delBtn);
-  row.appendChild(handle);
   row.appendChild(toggle);
-  row.appendChild(icon);
   row.appendChild(name);
   row.appendChild(actions);
   li.appendChild(row);
@@ -3978,7 +4004,7 @@ $bmAddFolderBtn.addEventListener("click", () => {
     const name = input.value.trim();
     if (!name) { cleanup(); return; }
     const store = loadBookmarks();
-    store.push({ type: "folder", id: generateId(), name, children: [], expanded: true });
+    store.push({ type: "folder", id: generateId(), name, children: [], expanded: false });
     saveBookmarks(store);
     renderBookmarkTree();
     cleanup();
