@@ -95,6 +95,7 @@ let _isInitialLoad = true;
 // ── Bookmark state ──
 let _verseSelectMode = false;
 let _selectedVerseRefs = new Set();
+let _verseSelectDrag = null; // { startIdx, allVerses, isAdding, moved }
 let _currentBookId = null;
 let _currentChapter = null;
 let _bookmarkDrawerBook = null;
@@ -1664,21 +1665,10 @@ function renderChapter(data, book, opts) {
     const vs = e.target.closest(".verse[data-vref]");
     if (!vs) return;
     if (_verseSelectMode) {
-      e.stopPropagation();
-      const vref = vs.getAttribute("data-vref");
-      if (!vref) return;
-      if (_selectedVerseRefs.has(vref)) {
-        _selectedVerseRefs.delete(vref);
-      } else {
-        _selectedVerseRefs.add(vref);
-      }
-      article.querySelectorAll(".verse[data-vref]").forEach(v => {
-        v.classList.toggle("verse-selected", _selectedVerseRefs.has(v.getAttribute("data-vref")));
-      });
-      updateVerseSelectBar();
-    } else {
-      announce(`${vs.getAttribute("data-vref")}절`);
+      e.stopPropagation(); // selection is handled by pointer events
+      return;
     }
+    announce(`${vs.getAttribute("data-vref")}절`);
   });
 
   // Long-press (300ms) to enter verse selection mode.
@@ -1687,7 +1677,17 @@ function renderChapter(data, book, opts) {
   let _longPressStartX = 0;
   let _longPressStartY = 0;
   article.addEventListener("pointerdown", (e) => {
-    if (_verseSelectMode) return;
+    if (_verseSelectMode) {
+      const vs = e.target.closest(".verse[data-vref]");
+      if (!vs) return;
+      e.preventDefault(); // prevent text selection during drag
+      const allVerses = [...article.querySelectorAll(".verse[data-vref]")];
+      const startIdx = allVerses.indexOf(vs);
+      const isAdding = !_selectedVerseRefs.has(vs.getAttribute("data-vref"));
+      _verseSelectDrag = { startIdx, allVerses, isAdding, moved: false };
+      article.setPointerCapture(e.pointerId);
+      return;
+    }
     const vs = e.target.closest(".verse[data-vref]");
     if (!vs) return;
     _longPressStartX = e.clientX;
@@ -1715,9 +1715,57 @@ function renderChapter(data, book, opts) {
     clearTimeout(_longPressTimer);
     _longPressTimer = null;
   };
-  article.addEventListener("pointerup", cancelLongPress);
-  article.addEventListener("pointermove", cancelLongPress);
-  article.addEventListener("pointercancel", cancelLongPress);
+
+  article.addEventListener("pointermove", (e) => {
+    if (_verseSelectDrag) {
+      const target = document.elementFromPoint(e.clientX, e.clientY);
+      const vs = target && target.closest(".verse[data-vref]");
+      if (!vs) return;
+      const { startIdx, allVerses, isAdding } = _verseSelectDrag;
+      const currentIdx = allVerses.indexOf(vs);
+      if (currentIdx === -1) return;
+      if (!_verseSelectDrag.moved && currentIdx === startIdx) return;
+      _verseSelectDrag.moved = true;
+      const [lo, hi] = startIdx <= currentIdx ? [startIdx, currentIdx] : [currentIdx, startIdx];
+      allVerses.forEach((v, i) => {
+        const vref = v.getAttribute("data-vref");
+        if (i >= lo && i <= hi) {
+          if (isAdding) _selectedVerseRefs.add(vref);
+          else _selectedVerseRefs.delete(vref);
+        }
+        v.classList.toggle("verse-selected", _selectedVerseRefs.has(vref));
+      });
+      updateVerseSelectBar();
+      return;
+    }
+    cancelLongPress(e);
+  });
+
+  article.addEventListener("pointerup", (e) => {
+    if (_verseSelectDrag) {
+      if (!_verseSelectDrag.moved) {
+        // Simple tap: toggle start verse
+        const vs = _verseSelectDrag.allVerses[_verseSelectDrag.startIdx];
+        if (vs) {
+          const vref = vs.getAttribute("data-vref");
+          if (_verseSelectDrag.isAdding) _selectedVerseRefs.add(vref);
+          else _selectedVerseRefs.delete(vref);
+          _verseSelectDrag.allVerses.forEach(v => {
+            v.classList.toggle("verse-selected", _selectedVerseRefs.has(v.getAttribute("data-vref")));
+          });
+          updateVerseSelectBar();
+        }
+      }
+      _verseSelectDrag = null;
+      return;
+    }
+    cancelLongPress(e);
+  });
+
+  article.addEventListener("pointercancel", (e) => {
+    if (_verseSelectDrag) { _verseSelectDrag = null; return; }
+    cancelLongPress(e);
+  });
 
   // Copy handler: serialize the selection ourselves so that stanza breaks
   // become blank lines and the appended reference uses plain verse numbers
@@ -2806,6 +2854,67 @@ $searchSheetClear.addEventListener("click", () => {
   }
 })();
 
+// Drag handle to resize bookmark drawer
+(function initBookmarkSheetDrag() {
+  const handle = document.getElementById("bookmark-drawer-handle");
+  const drawer = document.getElementById("bookmark-drawer");
+  let startY = 0;
+  let startH = 0;
+
+  function onMove(clientY) {
+    const delta = startY - clientY;
+    const newH = Math.min(Math.max(startH + delta, window.innerHeight * 0.3), window.innerHeight * 0.92);
+    drawer.style.height = `${newH}px`;
+  }
+
+  handle.addEventListener("pointerdown", (e) => {
+    if (window.innerWidth >= 769) return; // desktop uses fixed-size side panel
+    e.preventDefault();
+    startY = e.clientY;
+    startH = drawer.offsetHeight;
+    handle.setPointerCapture(e.pointerId);
+    handle.addEventListener("pointermove", onPointerMove);
+    handle.addEventListener("pointerup", onPointerUp, { once: true });
+  });
+
+  function onPointerMove(e) { onMove(e.clientY); }
+  function onPointerUp() {
+    handle.removeEventListener("pointermove", onPointerMove);
+    if (drawer.offsetHeight < window.innerHeight * 0.2) {
+      closeBookmarkDrawer();
+      drawer.style.height = "";
+    }
+  }
+})();
+
+// Drag handle to resize bookmark drawer width (desktop only)
+(function initBookmarkDrawerResize() {
+  const handle = document.getElementById("bookmark-drawer-resize");
+  const drawer = document.getElementById("bookmark-drawer");
+  let startX = 0;
+  let startW = 0;
+
+  handle.addEventListener("pointerdown", (e) => {
+    if (window.innerWidth < 769) return;
+    e.preventDefault();
+    startX = e.clientX;
+    startW = drawer.offsetWidth;
+    handle.setPointerCapture(e.pointerId);
+    handle.addEventListener("pointermove", onPointerMove);
+    handle.addEventListener("pointerup", onPointerUp, { once: true });
+  });
+
+  function onPointerMove(e) {
+    const delta = startX - e.clientX; // drag left = wider
+    const newW = Math.min(Math.max(startW + delta, 240), window.innerWidth * 0.85);
+    drawer.style.width = `${newW}px`;
+  }
+
+  function onPointerUp() {
+    handle.removeEventListener("pointermove", onPointerMove);
+  }
+})();
+
 // ── Compact Header on Scroll ──
 // Deferred: not needed until after first render and first scroll.
 
@@ -3271,9 +3380,11 @@ function openBookmarkDrawer(bookId, chapter) {
 }
 
 function closeBookmarkDrawer() {
-  if ($bookmarkDrawer.hidden) return;
+  if ($bookmarkDrawer.hidden || $bookmarkDrawer.classList.contains("drawer-closing")) return;
   $bookmarkScrim.hidden = true;
-  $bookmarkDrawer.hidden = true;
+  $bookmarkDrawer.classList.add("drawer-closing");
+
+  // Restore body scroll and focus immediately so the page feels responsive
   setBackgroundInert(false);
   const scrollY = parseInt(document.body.dataset.scrollY || "0", 10);
   document.body.style.overflow = "";
@@ -3285,6 +3396,18 @@ function closeBookmarkDrawer() {
   if (_bookmarkDrawerLastFocus && _bookmarkDrawerLastFocus.focus) {
     try { _bookmarkDrawerLastFocus.focus(); } catch {}
   }
+
+  let finalized = false;
+  const finalize = () => {
+    if (finalized) return;
+    finalized = true;
+    $bookmarkDrawer.hidden = true;
+    $bookmarkDrawer.classList.remove("drawer-closing");
+    $bookmarkDrawer.style.height = "";
+    $bookmarkDrawer.style.width = "";
+  };
+  $bookmarkDrawer.addEventListener("animationend", finalize, { once: true });
+  setTimeout(finalize, 350); // fallback
 }
 
 // ── Bookmark tree rendering ──
@@ -3588,7 +3711,7 @@ function openSaveModal(mode, opts = {}) {
     const sameChapterBms = findExistingChapterBookmarks(bookId, chapter)
       .filter(bm => !existingId || bm.id !== existingId);
     if (sameChapterBms.length > 0) {
-      openMergeDialog(sameChapterBms[0], verseSpec, mode);
+      openMergeDialog(sameChapterBms, verseSpec, mode);
       return;
     }
   }
@@ -3604,7 +3727,7 @@ function _showSaveModal(mode, bookId, chapter, verseSpec, existing) {
   const folderOptions = collectFolderOptions(store);
 
   const book = booksCache && booksCache.find(b => b.id === bookId);
-  const bookName = book ? book.name_ko : bookId;
+  const bookName = book ? (book.short_name_ko || book.name_ko) : bookId;
   const unit = chUnit(bookId);
   let defaultLabel;
   if (existing) {
@@ -3710,9 +3833,34 @@ function commitSaveBookmark(existingId, label, note, folderId, bookId, chapter, 
 
 // ── Merge dialog ──
 
-function openMergeDialog(existing, incomingSpec, mode) {
-  $bmMergeBody.textContent =
-    `이 장에 이미 책갈피("${existing.label}")가 있습니다. 절을 합칠까요?`;
+function openMergeDialog(candidates, incomingSpec, mode) {
+  clearNode($bmMergeBody);
+
+  let target = candidates[0];
+
+  if (candidates.length === 1) {
+    const desc = el("p", { className: "bm-merge-desc" },
+      `이 장에 이미 책갈피("${candidates[0].label}")가 있습니다. 절을 합칠까요?`);
+    $bmMergeBody.appendChild(desc);
+  } else {
+    $bmMergeBody.appendChild(
+      el("p", { className: "bm-merge-desc" }, "이 장에 여러 책갈피가 있습니다. 어느 책갈피에 합칠까요?")
+    );
+    const radioGroup = el("div", { className: "bm-merge-radio-group" });
+    candidates.forEach((bm, i) => {
+      const id = `bm-merge-r${i}`;
+      const labelEl = el("label", { className: "bm-merge-radio", for: id });
+      const input = el("input", { type: "radio", id, name: "bm-merge-target" });
+      if (i === 0) input.checked = true;
+      input.addEventListener("change", () => { target = bm; });
+      const specNote = bm.verseSpec !== "all" ? ` (${bm.verseSpec}절)` : "";
+      labelEl.appendChild(input);
+      labelEl.appendChild(el("span", {}, bm.label + specNote));
+      radioGroup.appendChild(labelEl);
+    });
+    $bmMergeBody.appendChild(radioGroup);
+  }
+
   $bmMergeScrim.hidden = false;
   $bmMergeModal.hidden = false;
 
@@ -3725,10 +3873,19 @@ function openMergeDialog(existing, incomingSpec, mode) {
   }
 
   $bmMergeYes.onclick = () => {
-    const merged = mergeVerseSpecs(existing.verseSpec, incomingSpec);
+    const merged = mergeVerseSpecs(target.verseSpec, incomingSpec);
     const store = loadBookmarks();
-    const found = _findItemInStore(store, existing.id);
-    if (found) found.item.verseSpec = merged;
+    const found = _findItemInStore(store, target.id);
+    if (found) {
+      found.item.verseSpec = merged;
+      // Sync label to reflect the merged verse spec
+      const book = booksCache && booksCache.find(b => b.id === target.bookId);
+      const bookName = book ? (book.short_name_ko || book.name_ko) : target.bookId;
+      const unit = chUnit(target.bookId);
+      found.item.label = merged === "all"
+        ? `${bookName} ${target.chapter}${unit}`
+        : `${bookName} ${target.chapter}:${merged}`;
+    }
     saveBookmarks(store);
     renderBookmarkTree();
     refreshBookmarkHeaderBtn();
@@ -3768,7 +3925,16 @@ function exitVerseSelectMode() {
 
 function updateVerseSelectBar() {
   const count = _selectedVerseRefs.size;
-  $verseSelectCount.textContent = count === 0 ? "절을 눌러 선택하세요" : `${count}개 줄 선택됨`;
+  if (count === 0) {
+    $verseSelectCount.textContent = "절을 눌러 선택하세요";
+  } else {
+    const articleEl = document.querySelector("article.chapter-text");
+    const refs = collapseFullVerseRefs(Array.from(_selectedVerseRefs), articleEl);
+    const spec = refs.length
+      ? selectedVersesToSpec(refs)
+      : selectedVersesToSpec(Array.from(_selectedVerseRefs));
+    $verseSelectCount.textContent = `${spec}절 선택됨`;
+  }
   $verseSelectBookmarkBtn.disabled = count === 0;
 }
 
@@ -3790,12 +3956,46 @@ $bmSelectVersesBtn.addEventListener("click", () => {
 });
 
 $bmAddFolderBtn.addEventListener("click", () => {
-  const name = window.prompt("폴더 이름:");
-  if (!name || !name.trim()) return;
-  const store = loadBookmarks();
-  store.push({ type: "folder", id: generateId(), name: name.trim(), children: [], expanded: true });
-  saveBookmarks(store);
-  renderBookmarkTree();
+  const toolbar = document.getElementById("bookmark-drawer-toolbar");
+  if (toolbar.querySelector(".bm-new-folder-form")) return; // already open
+  $bmAddFolderBtn.disabled = true;
+
+  const form = el("div", { className: "bm-new-folder-form" });
+  const input = el("input", {
+    type: "text",
+    className: "bm-new-folder-input",
+    placeholder: "예: 대림1주일",
+    maxlength: "50",
+  });
+  const confirmBtn = el("button", { type: "button", className: "bm-toolbar-btn" }, "추가");
+  const cancelBtn = el("button", { type: "button", className: "bm-toolbar-btn" }, "취소");
+
+  function cleanup() {
+    form.remove();
+    $bmAddFolderBtn.disabled = false;
+  }
+  function commit() {
+    const name = input.value.trim();
+    if (!name) { cleanup(); return; }
+    const store = loadBookmarks();
+    store.push({ type: "folder", id: generateId(), name, children: [], expanded: true });
+    saveBookmarks(store);
+    renderBookmarkTree();
+    cleanup();
+  }
+
+  confirmBtn.addEventListener("click", commit);
+  cancelBtn.addEventListener("click", cleanup);
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); commit(); }
+    if (e.key === "Escape") cleanup();
+  });
+
+  form.appendChild(input);
+  form.appendChild(confirmBtn);
+  form.appendChild(cancelBtn);
+  toolbar.appendChild(form);
+  requestAnimationFrame(() => input.focus());
 });
 
 $verseSelectCancelBtn.addEventListener("click", exitVerseSelectMode);

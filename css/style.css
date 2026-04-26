@@ -802,6 +802,7 @@ body {
 
 #search-scrim:not([hidden]) {
   display: block;
+  animation: bm-scrim-in 0.25s ease both;
 }
 
 #search-sheet {
@@ -823,6 +824,7 @@ body {
 
 #search-sheet:not([hidden]) {
   display: flex;
+  animation: bm-drawer-in-up 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
 }
 
 #search-sheet-handle {
@@ -1961,35 +1963,151 @@ body.verse-select-active .verse[data-vref]:hover {
 
 #bookmark-scrim:not([hidden]) {
   display: block;
+  animation: bm-scrim-in 0.25s ease both;
 }
 
+@keyframes bm-scrim-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* ── Bookmark drawer (mobile: bottom sheet) ── */
 #bookmark-drawer {
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
   display: none;
   position: fixed;
-  top: 0;
-  right: 0;
   bottom: 0;
-  width: min(360px, 90vw);
+  left: 0;
+  right: 0;
+  height: 70vh;
+  max-height: 85vh;
   z-index: 71;
   background: var(--bg);
-  border-left: 1px solid var(--border);
-  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.15);
+  border-radius: 16px 16px 0 0;
+  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.15);
   flex-direction: column;
-  transform: translateX(100%);
-  transition: transform 0.28s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  overflow: hidden;
 }
 
-#bookmark-drawer:not([hidden]) {
+#bookmark-drawer:not([hidden]):not(.drawer-closing) {
   display: flex;
-  transform: translateX(0);
+  animation: bm-drawer-in-up 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+}
+
+#bookmark-drawer.drawer-closing {
+  display: flex;
+  animation: bm-drawer-out-down 0.22s ease-in both;
+  pointer-events: none;
+}
+
+@keyframes bm-drawer-in-up {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+
+@keyframes bm-drawer-out-down {
+  from { transform: translateY(0); }
+  to   { transform: translateY(100%); }
+}
+
+/* ── Bookmark drawer (desktop: right side panel) ── */
+@media (min-width: 769px) {
+  #bookmark-drawer {
+    top: 2.5vh;
+    right: 0;
+    bottom: auto;
+    left: auto;
+    width: min(360px, 90vw);
+    height: 95vh;
+    max-height: none;
+    border-radius: 16px 0 0 16px;
+    box-shadow: -4px 0 24px rgba(0, 0, 0, 0.15);
+  }
+
+  #bookmark-drawer:not([hidden]):not(.drawer-closing) {
+    animation-name: bm-drawer-in-right;
+  }
+
+  #bookmark-drawer.drawer-closing {
+    animation-name: bm-drawer-out-right;
+  }
+
+  @keyframes bm-drawer-in-right {
+    from { transform: translateX(100%); }
+    to   { transform: translateX(0); }
+  }
+
+  @keyframes bm-drawer-out-right {
+    from { transform: translateX(0); }
+    to   { transform: translateX(100%); }
+  }
+
+  #bookmark-drawer-header {
+    padding-top: 0.9rem;
+  }
+}
+
+#bookmark-drawer-handle {
+  display: flex;
+  justify-content: center;
+  padding: 0.5rem 0 0.3rem;
+  cursor: grab;
+  touch-action: none;
+  flex-shrink: 0;
+}
+
+#bookmark-drawer-handle span {
+  width: 2.2rem;
+  height: 0.22rem;
+  background: var(--border);
+  border-radius: 2px;
+}
+
+/* Hide drag handle on desktop (must come after the base style above) */
+@media (min-width: 769px) {
+  #bookmark-drawer-handle {
+    display: none;
+  }
+}
+
+#bookmark-drawer-resize {
+  display: none;
+}
+
+@media (min-width: 769px) {
+  #bookmark-drawer-resize {
+    display: flex;
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: calc(0.22rem + 0.5rem * 2);
+    cursor: ew-resize;
+    align-items: center;
+    justify-content: center;
+    touch-action: none;
+    z-index: 1;
+  }
+
+  #bookmark-drawer-resize::after {
+    content: '';
+    width: 0.22rem;
+    height: 2.2rem;
+    background: var(--border);
+    border-radius: 2px;
+    transition: background 0.15s;
+  }
+
+  #bookmark-drawer-resize:hover::after {
+    background: var(--accent);
+  }
 }
 
 #bookmark-drawer-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.9rem 1rem 0.7rem;
+  padding: 0.5rem 1rem 0.7rem;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
@@ -2050,6 +2168,36 @@ body.verse-select-active .verse[data-vref]:hover {
 .bm-toolbar-btn:disabled {
   opacity: 0.4;
   cursor: default;
+}
+
+.bm-new-folder-form {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  width: 100%;
+  padding: 0.3rem 0;
+}
+
+.bm-new-folder-input {
+  flex: 1;
+  min-width: 0;
+  font-family: inherit;
+  font-size: 0.82rem;
+  padding: 0.28rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text);
+  outline: none;
+}
+
+.bm-new-folder-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(30, 58, 95, 0.1);
+}
+
+[data-theme="dark"] .bm-new-folder-input:focus {
+  box-shadow: 0 0 0 2px rgba(138, 180, 216, 0.15);
 }
 
 #bookmark-drawer-body {
@@ -2122,7 +2270,7 @@ body.verse-select-active .verse[data-vref]:hover {
 }
 
 .bm-folder-children {
-  padding-left: 1rem;
+  padding-left: 3rem;
   margin: 0;
   list-style: none;
 }
@@ -2480,6 +2628,37 @@ body.verse-select-active .verse[data-vref]:hover {
   line-height: 1.5;
 }
 
+.bm-merge-desc {
+  margin: 0 0 0.75rem;
+}
+
+.bm-merge-radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-bottom: 0.25rem;
+}
+
+.bm-merge-radio {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-size: 0.88rem;
+  color: var(--text);
+}
+
+.bm-merge-radio:hover {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.bm-merge-radio input[type="radio"] {
+  accent-color: var(--accent);
+  flex-shrink: 0;
+}
+
 #bm-merge-actions {
   display: flex;
   gap: 0.5rem;
@@ -2567,6 +2746,7 @@ body.verse-select-active .verse[data-vref]:hover {
   list-style: none;
   padding: 0;
   margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
 }
 
 .bm-folder.drag-over-before > .bm-folder-row,

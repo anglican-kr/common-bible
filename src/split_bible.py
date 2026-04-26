@@ -122,6 +122,7 @@ def build_books_json(chapters, mappings):
         books.append({
             "id": bid,
             "name_ko": item.get("korean_name", ""),
+            "short_name_ko": item.get("short_name_ko", item.get("korean_name", "")),
             "name_en": item.get("english_name", ""),
             "division": item.get("testament", ""),
             "chapter_count": chapter_counts.get(bid, 0),

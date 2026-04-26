@@ -2,6 +2,7 @@
   {
     "id": "gen",
     "name_ko": "창세기",
+    "short_name_ko": "창세",
     "name_en": "Genesis",
     "division": "old_testament",
     "chapter_count": 50,
@@ -10,6 +11,7 @@
   {
     "id": "exod",
     "name_ko": "출애굽기",
+    "short_name_ko": "출애",
     "name_en": "Exodus",
     "division": "old_testament",
     "chapter_count": 40,
@@ -18,6 +20,7 @@
   {
     "id": "lev",
     "name_ko": "레위기",
+    "short_name_ko": "레위",
     "name_en": "Leviticus",
     "division": "old_testament",
     "chapter_count": 27,
@@ -26,6 +29,7 @@
   {
     "id": "num",
     "name_ko": "민수기",
+    "short_name_ko": "민수",
     "name_en": "Numbers",
     "division": "old_testament",
     "chapter_count": 36,
@@ -34,6 +38,7 @@
   {
     "id": "deut",
     "name_ko": "신명기",
+    "short_name_ko": "신명",
     "name_en": "Deuteronomy",
     "division": "old_testament",
     "chapter_count": 34,
@@ -42,6 +47,7 @@
   {
     "id": "josh",
     "name_ko": "여호수아",
+    "short_name_ko": "여호",
     "name_en": "Joshua",
     "division": "old_testament",
     "chapter_count": 24,
@@ -50,6 +56,7 @@
   {
     "id": "judg",
     "name_ko": "판관기",
+    "short_name_ko": "판관",
     "name_en": "Judges",
     "division": "old_testament",
     "chapter_count": 21,
@@ -58,6 +65,7 @@
   {
     "id": "ruth",
     "name_ko": "룻기",
+    "short_name_ko": "룻기",
     "name_en": "Ruth",
     "division": "old_testament",
     "chapter_count": 4,
@@ -66,6 +74,7 @@
   {
     "id": "1sam",
     "name_ko": "사무엘상",
+    "short_name_ko": "1사무",
     "name_en": "1 Samuel",
     "division": "old_testament",
     "chapter_count": 31,
@@ -74,6 +83,7 @@
   {
     "id": "2sam",
     "name_ko": "사무엘하",
+    "short_name_ko": "2사무",
     "name_en": "2 Samuel",
     "division": "old_testament",
     "chapter_count": 24,
@@ -82,6 +92,7 @@
   {
     "id": "1kgs",
     "name_ko": "열왕기상",
+    "short_name_ko": "1열왕",
     "name_en": "1 Kings",
     "division": "old_testament",
     "chapter_count": 22,
@@ -90,6 +101,7 @@
   {
     "id": "2kgs",
     "name_ko": "열왕기하",
+    "short_name_ko": "2열왕",
     "name_en": "2 Kings",
     "division": "old_testament",
     "chapter_count": 25,
@@ -98,6 +110,7 @@
   {
     "id": "1chr",
     "name_ko": "역대기상",
+    "short_name_ko": "1역대",
     "name_en": "1 Chronicles",
     "division": "old_testament",
     "chapter_count": 29,
@@ -106,6 +119,7 @@
   {
     "id": "2chr",
     "name_ko": "역대기하",
+    "short_name_ko": "2역대",
     "name_en": "2 Chronicles",
     "division": "old_testament",
     "chapter_count": 36,
@@ -114,6 +128,7 @@
   {
     "id": "ezra",
     "name_ko": "에즈라",
+    "short_name_ko": "에즈",
     "name_en": "Ezra",
     "division": "old_testament",
     "chapter_count": 10,
@@ -122,6 +137,7 @@
   {
     "id": "neh",
     "name_ko": "느헤미야",
+    "short_name_ko": "느헤",
     "name_en": "Nehemiah",
     "division": "old_testament",
     "chapter_count": 13,
@@ -130,6 +146,7 @@
   {
     "id": "tob",
     "name_ko": "토비트",
+    "short_name_ko": "토비",
     "name_en": "Tobit",
     "division": "deuterocanon",
     "chapter_count": 14,
@@ -138,6 +155,7 @@
   {
     "id": "jdt",
     "name_ko": "유딧",
+    "short_name_ko": "유딧",
     "name_en": "Judith",
     "division": "deuterocanon",
     "chapter_count": 16,
@@ -146,6 +164,7 @@
   {
     "id": "esth",
     "name_ko": "에스델",
+    "short_name_ko": "에스",
     "name_en": "Esther",
     "division": "old_testament",
     "chapter_count": 10,
@@ -154,6 +173,7 @@
   {
     "id": "1macc",
     "name_ko": "마카베오상",
+    "short_name_ko": "1마카",
     "name_en": "1 Maccabees",
     "division": "deuterocanon",
     "chapter_count": 16,
@@ -162,6 +182,7 @@
   {
     "id": "2macc",
     "name_ko": "마카베오하",
+    "short_name_ko": "2마카",
     "name_en": "2 Maccabees",
     "division": "deuterocanon",
     "chapter_count": 15,
@@ -170,6 +191,7 @@
   {
     "id": "job",
     "name_ko": "욥기",
+    "short_name_ko": "욥기",
     "name_en": "Job",
     "division": "old_testament",
     "chapter_count": 42,
@@ -178,6 +200,7 @@
   {
     "id": "ps",
     "name_ko": "시편",
+    "short_name_ko": "시편",
     "name_en": "Psalms",
     "division": "old_testament",
     "chapter_count": 150,
@@ -186,6 +209,7 @@
   {
     "id": "prov",
     "name_ko": "잠언",
+    "short_name_ko": "잠언",
     "name_en": "Proverbs",
     "division": "old_testament",
     "chapter_count": 31,
@@ -194,6 +218,7 @@
   {
     "id": "eccl",
     "name_ko": "전도서",
+    "short_name_ko": "전도",
     "name_en": "Ecclesiastes",
     "division": "old_testament",
     "chapter_count": 12,
@@ -202,6 +227,7 @@
   {
     "id": "song",
     "name_ko": "아가",
+    "short_name_ko": "아가",
     "name_en": "Song of Songs",
     "division": "old_testament",
     "chapter_count": 8,
@@ -210,6 +236,7 @@
   {
     "id": "wis",
     "name_ko": "지혜서",
+    "short_name_ko": "지혜",
     "name_en": "Wisdom",
     "division": "deuterocanon",
     "chapter_count": 19,
@@ -218,6 +245,7 @@
   {
     "id": "sir",
     "name_ko": "집회서",
+    "short_name_ko": "집회",
     "name_en": "Sirach",
     "division": "deuterocanon",
     "chapter_count": 51,
@@ -226,6 +254,7 @@
   {
     "id": "isa",
     "name_ko": "이사야",
+    "short_name_ko": "이사",
     "name_en": "Isaiah",
     "division": "old_testament",
     "chapter_count": 66,
@@ -234,6 +263,7 @@
   {
     "id": "jer",
     "name_ko": "예레미야",
+    "short_name_ko": "예레",
     "name_en": "Jeremiah",
     "division": "old_testament",
     "chapter_count": 52,
@@ -242,6 +272,7 @@
   {
     "id": "lam",
     "name_ko": "애가",
+    "short_name_ko": "애가",
     "name_en": "Lamentations",
     "division": "old_testament",
     "chapter_count": 5,
@@ -250,6 +281,7 @@
   {
     "id": "bar",
     "name_ko": "바룩",
+    "short_name_ko": "바룩",
     "name_en": "Baruch",
     "division": "deuterocanon",
     "chapter_count": 6,
@@ -258,6 +290,7 @@
   {
     "id": "ezek",
     "name_ko": "에제키엘",
+    "short_name_ko": "에제",
     "name_en": "Ezekiel",
     "division": "old_testament",
     "chapter_count": 48,
@@ -266,6 +299,7 @@
   {
     "id": "dan",
     "name_ko": "다니엘",
+    "short_name_ko": "다니",
     "name_en": "Daniel",
     "division": "old_testament",
     "chapter_count": 14,
@@ -274,6 +308,7 @@
   {
     "id": "hos",
     "name_ko": "호세아",
+    "short_name_ko": "호세",
     "name_en": "Hosea",
     "division": "old_testament",
     "chapter_count": 14,
@@ -282,6 +317,7 @@
   {
     "id": "joel",
     "name_ko": "요엘",
+    "short_name_ko": "요엘",
     "name_en": "Joel",
     "division": "old_testament",
     "chapter_count": 4,
@@ -290,6 +326,7 @@
   {
     "id": "amos",
     "name_ko": "아모스",
+    "short_name_ko": "아모",
     "name_en": "Amos",
     "division": "old_testament",
     "chapter_count": 9,
@@ -298,6 +335,7 @@
   {
     "id": "obad",
     "name_ko": "오바디야",
+    "short_name_ko": "오바",
     "name_en": "Obadiah",
     "division": "old_testament",
     "chapter_count": 1,
@@ -306,6 +344,7 @@
   {
     "id": "jonah",
     "name_ko": "요나",
+    "short_name_ko": "요나",
     "name_en": "Jonah",
     "division": "old_testament",
     "chapter_count": 4,
@@ -314,6 +353,7 @@
   {
     "id": "mic",
     "name_ko": "미가",
+    "short_name_ko": "미가",
     "name_en": "Micah",
     "division": "old_testament",
     "chapter_count": 7,
@@ -322,6 +362,7 @@
   {
     "id": "nah",
     "name_ko": "나훔",
+    "short_name_ko": "나훔",
     "name_en": "Nahum",
     "division": "old_testament",
     "chapter_count": 3,
@@ -330,6 +371,7 @@
   {
     "id": "hab",
     "name_ko": "하바꾹",
+    "short_name_ko": "하바",
     "name_en": "Habakkuk",
     "division": "old_testament",
     "chapter_count": 3,
@@ -338,6 +380,7 @@
   {
     "id": "zeph",
     "name_ko": "스바니야",
+    "short_name_ko": "스바",
     "name_en": "Zephaniah",
     "division": "old_testament",
     "chapter_count": 3,
@@ -346,6 +389,7 @@
   {
     "id": "hag",
     "name_ko": "하깨",
+    "short_name_ko": "하깨",
     "name_en": "Haggai",
     "division": "old_testament",
     "chapter_count": 2,
@@ -354,6 +398,7 @@
   {
     "id": "zech",
     "name_ko": "즈가리야",
+    "short_name_ko": "즈가",
     "name_en": "Zechariah",
     "division": "old_testament",
     "chapter_count": 14,
@@ -362,6 +407,7 @@
   {
     "id": "mal",
     "name_ko": "말라기",
+    "short_name_ko": "말라",
     "name_en": "Malachi",
     "division": "old_testament",
     "chapter_count": 3,
@@ -370,6 +416,7 @@
   {
     "id": "matt",
     "name_ko": "마태오의 복음서",
+    "short_name_ko": "마태",
     "name_en": "Matthew",
     "division": "new_testament",
     "chapter_count": 28,
@@ -378,6 +425,7 @@
   {
     "id": "mark",
     "name_ko": "마르코의 복음서",
+    "short_name_ko": "마르",
     "name_en": "Mark",
     "division": "new_testament",
     "chapter_count": 16,
@@ -386,6 +434,7 @@
   {
     "id": "luke",
     "name_ko": "루가의 복음서",
+    "short_name_ko": "루가",
     "name_en": "Luke",
     "division": "new_testament",
     "chapter_count": 24,
@@ -394,6 +443,7 @@
   {
     "id": "john",
     "name_ko": "요한의 복음서",
+    "short_name_ko": "요한",
     "name_en": "John",
     "division": "new_testament",
     "chapter_count": 21,
@@ -402,6 +452,7 @@
   {
     "id": "acts",
     "name_ko": "사도행전",
+    "short_name_ko": "사도",
     "name_en": "Acts",
     "division": "new_testament",
     "chapter_count": 28,
@@ -410,6 +461,7 @@
   {
     "id": "rom",
     "name_ko": "로마인들에게 보낸 편지",
+    "short_name_ko": "로마",
     "name_en": "Romans",
     "division": "new_testament",
     "chapter_count": 16,
@@ -418,6 +470,7 @@
   {
     "id": "1cor",
     "name_ko": "고린토인들에게 보낸 첫째 편지",
+    "short_name_ko": "1고린",
     "name_en": "1 Corinthians",
     "division": "new_testament",
     "chapter_count": 16,
@@ -426,6 +479,7 @@
   {
     "id": "2cor",
     "name_ko": "고린토인들에게 보낸 둘째 편지",
+    "short_name_ko": "2고린",
     "name_en": "2 Corinthians",
     "division": "new_testament",
     "chapter_count": 13,
@@ -434,6 +488,7 @@
   {
     "id": "gal",
     "name_ko": "갈라디아인들에게 보낸 편지",
+    "short_name_ko": "갈라",
     "name_en": "Galatians",
     "division": "new_testament",
     "chapter_count": 6,
@@ -442,6 +497,7 @@
   {
     "id": "eph",
     "name_ko": "에페소인들에게 보낸 편지",
+    "short_name_ko": "에페",
     "name_en": "Ephesians",
     "division": "new_testament",
     "chapter_count": 6,
@@ -450,6 +506,7 @@
   {
     "id": "phil",
     "name_ko": "필립비인들에게 보낸 편지",
+    "short_name_ko": "필립",
     "name_en": "Philippians",
     "division": "new_testament",
     "chapter_count": 4,
@@ -458,6 +515,7 @@
   {
     "id": "col",
     "name_ko": "골로사이인들에게 보낸 편지",
+    "short_name_ko": "골로",
     "name_en": "Colossians",
     "division": "new_testament",
     "chapter_count": 4,
@@ -466,6 +524,7 @@
   {
     "id": "1thess",
     "name_ko": "데살로니카인들에게 보낸 첫째 편지",
+    "short_name_ko": "1데살",
     "name_en": "1 Thessalonians",
     "division": "new_testament",
     "chapter_count": 5,
@@ -474,6 +533,7 @@
   {
     "id": "2thess",
     "name_ko": "데살로니카인들에게 보낸 둘째 편지",
+    "short_name_ko": "2데살",
     "name_en": "2 Thessalonians",
     "division": "new_testament",
     "chapter_count": 3,
@@ -482,6 +542,7 @@
   {
     "id": "1tim",
     "name_ko": "디모테오에게 보낸 첫째 편지",
+    "short_name_ko": "1디모",
     "name_en": "1 Timothy",
     "division": "new_testament",
     "chapter_count": 6,
@@ -490,6 +551,7 @@
   {
     "id": "2tim",
     "name_ko": "디모테오에게 보낸 둘째 편지",
+    "short_name_ko": "2디모",
     "name_en": "2 Timothy",
     "division": "new_testament",
     "chapter_count": 4,
@@ -498,6 +560,7 @@
   {
     "id": "titus",
     "name_ko": "디도에게 보낸 편지",
+    "short_name_ko": "디도",
     "name_en": "Titus",
     "division": "new_testament",
     "chapter_count": 3,
@@ -506,6 +569,7 @@
   {
     "id": "phlm",
     "name_ko": "필레몬에게 보낸 편지",
+    "short_name_ko": "필레",
     "name_en": "Philemon",
     "division": "new_testament",
     "chapter_count": 1,
@@ -514,6 +578,7 @@
   {
     "id": "heb",
     "name_ko": "히브리인들에게 보낸 편지",
+    "short_name_ko": "히브",
     "name_en": "Hebrews",
     "division": "new_testament",
     "chapter_count": 13,
@@ -522,6 +587,7 @@
   {
     "id": "jas",
     "name_ko": "야고보의 편지",
+    "short_name_ko": "야고",
     "name_en": "James",
     "division": "new_testament",
     "chapter_count": 5,
@@ -530,6 +596,7 @@
   {
     "id": "1pet",
     "name_ko": "베드로의 첫째 편지",
+    "short_name_ko": "1베드",
     "name_en": "1 Peter",
     "division": "new_testament",
     "chapter_count": 5,
@@ -538,6 +605,7 @@
   {
     "id": "2pet",
     "name_ko": "베드로의 둘째 편지",
+    "short_name_ko": "2베드",
     "name_en": "2 Peter",
     "division": "new_testament",
     "chapter_count": 3,
@@ -546,6 +614,7 @@
   {
     "id": "1john",
     "name_ko": "요한의 첫째 편지",
+    "short_name_ko": "1요한",
     "name_en": "1 John",
     "division": "new_testament",
     "chapter_count": 5,
@@ -554,6 +623,7 @@
   {
     "id": "2john",
     "name_ko": "요한의 둘째 편지",
+    "short_name_ko": "2요한",
     "name_en": "2 John",
     "division": "new_testament",
     "chapter_count": 1,
@@ -562,6 +632,7 @@
   {
     "id": "3john",
     "name_ko": "요한의 셋째 편지",
+    "short_name_ko": "3요한",
     "name_en": "3 John",
     "division": "new_testament",
     "chapter_count": 1,
@@ -570,6 +641,7 @@
   {
     "id": "jude",
     "name_ko": "유다의 편지",
+    "short_name_ko": "유다",
     "name_en": "Jude",
     "division": "new_testament",
     "chapter_count": 1,
@@ -578,6 +650,7 @@
   {
     "id": "rev",
     "name_ko": "요한의 묵시록",
+    "short_name_ko": "묵시",
     "name_en": "Revelation",
     "division": "new_testament",
     "chapter_count": 22,
