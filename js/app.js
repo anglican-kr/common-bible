@@ -1513,13 +1513,11 @@ function renderChapter(data, book, opts) {
       hlSegments = null;
       if (pathBase) history.replaceState(null, "", pathBase + location.search);
     } else {
-      const needsRewrite = clamped.length !== hlSegments.length ||
-        clamped.some((s, i) => s.end !== hlSegments[i].end);
+      const serializeSeg = s => s.part ? `${s.start}${s.part}` : s.start === s.end ? `${s.start}` : `${s.start}-${s.end}`;
+      const newSpec = clamped.map(serializeSeg).join(",");
+      const needsRewrite = newSpec !== hlSegments.map(serializeSeg).join(",");
       hlSegments = clamped;
       if (needsRewrite && pathBase) {
-        const newSpec = clamped
-          .map(s => s.part ? `${s.start}${s.part}` : s.start === s.end ? `${s.start}` : `${s.start}-${s.end}`)
-          .join(",");
         history.replaceState(null, "", `${pathBase}/${newSpec}${location.search}`);
       }
     }
