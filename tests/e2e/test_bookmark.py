@@ -5,8 +5,8 @@ import json
 BASE = "http://localhost:8080"
 
 
-def _open_chapter_and_wait(page, hash_path: str) -> None:
-    page.goto(f"{BASE}/{hash_path}")
+def _open_chapter_and_wait(page, path: str) -> None:
+    page.goto(f"{BASE}/{path}")
     page.wait_for_selector("article.chapter-text .verse")
     page.wait_for_timeout(200)
 
@@ -18,7 +18,7 @@ def test_bookmark_drawer_opens_shows_empty_state(browser):
     page.add_init_script(
         "localStorage.removeItem('bible-bookmarks');"
     )
-    _open_chapter_and_wait(page, "#/gen/1")
+    _open_chapter_and_wait(page, "gen/1")
 
     page.locator(".title-bookmark-btn").click()
     page.wait_for_selector("#bookmark-drawer:not([hidden])")
@@ -36,7 +36,7 @@ def test_save_chapter_bookmark_appears_and_header_flag(browser):
     page.add_init_script(
         "localStorage.removeItem('bible-bookmarks');"
     )
-    _open_chapter_and_wait(page, "#/gen/1")
+    _open_chapter_and_wait(page, "gen/1")
 
     page.locator(".title-bookmark-btn").click()
     page.wait_for_selector("#bookmark-drawer:not([hidden])")
