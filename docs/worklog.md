@@ -2,6 +2,23 @@
 
 ## 2026-04-26
 
+### `refreshBookmarkHeaderBtn` 및 `has-bookmark` dead code 제거 (9d6c4b4)
+
+PR #8 버그봇 리포트(`refreshBookmarkHeaderBtn` 빈 함수) 검토 결과,
+ADR-010의 의도적 결정(헤더 북마크 여부 표시 제거)과 일치하므로 기능 복원이 아닌 dead code 정리로 처리.
+
+- `js/app.js`: `refreshBookmarkHeaderBtn()` 함수 정의 및 3곳 호출 모두 삭제
+- `tests/e2e/test_bookmark.py`: `has-bookmark` assertion 제거, 테스트명 단순화
+- `tests/e2e/test_features.py`: `has-bookmark` 체크 제거 → localStorage 저장 여부로 대체
+
+| 파일 | 변경 유형 |
+|------|-----------|
+| `js/app.js` | 수정 — dead code 제거 |
+| `tests/e2e/test_bookmark.py` | 수정 — 구버전 assertion 제거 |
+| `tests/e2e/test_features.py` | 수정 — 구버전 assertion 제거 |
+
+---
+
 ### 북마크(책갈피) 기능 전체 구현 — `feat/bookmark` 브랜치 (ADR-010)
 
 오늘 하루 동안 북마크 기능의 핵심 UX를 완성했다. 커밋 6개 기준으로 작업을 정리한다.
