@@ -1890,6 +1890,10 @@ mark.search-highlight {
   color: var(--accent);
 }
 
+.title-bookmark-btn.has-bookmark {
+  color: var(--accent);
+}
+
 
 /* ── Verse selection mode ── */
 

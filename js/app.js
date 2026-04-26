@@ -3339,10 +3339,20 @@ function buildBookmarkHeaderBtn(bookId, chapter) {
   svg.appendChild(path);
   btn.appendChild(svg);
   btn.addEventListener("click", () => openBookmarkDrawer(bookId, chapter));
+  if (bookmarkExistsForChapter(bookId, chapter)) {
+    btn.classList.add("has-bookmark");
+  }
   return btn;
 }
 
-function refreshBookmarkHeaderBtn() {}
+function refreshBookmarkHeaderBtn() {
+  const btn = document.querySelector(".title-bookmark-btn");
+  if (!btn) return;
+  const has = _currentBookId && _currentChapter
+    ? bookmarkExistsForChapter(_currentBookId, _currentChapter)
+    : false;
+  btn.classList.toggle("has-bookmark", has);
+}
 
 function openBookmarkDrawer(bookId, chapter) {
   _bookmarkDrawerBook = bookId;
