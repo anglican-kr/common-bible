@@ -104,6 +104,8 @@ let _bookmarkDrawerChapter = null;
 let _bookmarkDrawerTrap = null;
 let _bookmarkDrawerLastFocus = null;
 let _bmSaveModalTrap = null;
+let _bookmarkDrawerCloseSeq = 0;
+let _bookmarkDrawerCloseTimer = null;
 let _dragState = null; // { id, ghost, origLi, startY, origTop }
 
 function saveReadingPosition(bookId, chapter, verse = null) {
@@ -964,12 +966,23 @@ function _setupDragHandle(li, row) {
     if (e.pointerType === "mouse" && e.button !== 0) return;
     if (e.target.closest("button")) return;
 
+    const pointerId = e.pointerId;
     const startX = e.clientX;
     const startY = e.clientY;
     const origRect = li.getBoundingClientRect();
     let dragStarted = false;
 
+    const cleanupPointerHandlers = () => {
+      document.removeEventListener("pointermove", onMove);
+      document.removeEventListener("pointerup", finish);
+      document.removeEventListener("pointercancel", cancel);
+      if (row.hasPointerCapture(pointerId)) {
+        try { row.releasePointerCapture(pointerId); } catch {}
+      }
+    };
+
     function onMove(e) {
+      if (e.pointerId !== pointerId) return;
       if (!dragStarted) {
         if (Math.hypot(e.clientX - startX, e.clientY - startY) < 5) return;
         dragStarted = true;
@@ -989,10 +1002,9 @@ function _setupDragHandle(li, row) {
       _updateDragIndicators(e.clientX, e.clientY);
     }
 
-    function finish() {
-      row.removeEventListener("pointermove", onMove);
-      row.removeEventListener("pointerup", finish);
-      row.removeEventListener("pointercancel", cancel);
+    function finish(e) {
+      if (e.pointerId !== pointerId) return;
+      cleanupPointerHandlers();
       if (!_dragState) return;
       const ds = _dragState;
       _dragState = null;
@@ -1007,10 +1019,9 @@ function _setupDragHandle(li, row) {
       _clearDragIndicators();
     }
 
-    function cancel() {
-      row.removeEventListener("pointermove", onMove);
-      row.removeEventListener("pointerup", finish);
-      row.removeEventListener("pointercancel", cancel);
+    function cancel(e) {
+      if (e.pointerId !== pointerId) return;
+      cleanupPointerHandlers();
       if (!_dragState) return;
       _dragState.ghost.remove();
       _dragState.origLi.classList.remove("bm-dragging");
@@ -1018,9 +1029,9 @@ function _setupDragHandle(li, row) {
       _dragState = null;
     }
 
-    row.addEventListener("pointermove", onMove);
-    row.addEventListener("pointerup", finish);
-    row.addEventListener("pointercancel", cancel);
+    document.addEventListener("pointermove", onMove);
+    document.addEventListener("pointerup", finish);
+    document.addEventListener("pointercancel", cancel);
   });
 }
 
@@ -3343,6 +3354,12 @@ function buildBookmarkHeaderBtn(bookId, chapter) {
 }
 
 function openBookmarkDrawer(bookId, chapter) {
+  _bookmarkDrawerCloseSeq += 1;
+  if (_bookmarkDrawerCloseTimer) {
+    clearTimeout(_bookmarkDrawerCloseTimer);
+    _bookmarkDrawerCloseTimer = null;
+  }
+  $bookmarkDrawer.classList.remove("drawer-closing");
   _bookmarkDrawerBook = bookId;
   _bookmarkDrawerChapter = chapter;
   _bookmarkDrawerLastFocus = document.activeElement;
@@ -3366,6 +3383,7 @@ function openBookmarkDrawer(bookId, chapter) {
 
 function closeBookmarkDrawer() {
   if ($bookmarkDrawer.hidden || $bookmarkDrawer.classList.contains("drawer-closing")) return;
+  const closeSeq = ++_bookmarkDrawerCloseSeq;
   $bookmarkScrim.hidden = true;
   $bookmarkDrawer.classList.add("drawer-closing");
 
@@ -3384,15 +3402,22 @@ function closeBookmarkDrawer() {
 
   let finalized = false;
   const finalize = () => {
-    if (finalized) return;
+    if (finalized || closeSeq !== _bookmarkDrawerCloseSeq) return;
     finalized = true;
+    if (_bookmarkDrawerCloseTimer) {
+      clearTimeout(_bookmarkDrawerCloseTimer);
+      _bookmarkDrawerCloseTimer = null;
+    }
     $bookmarkDrawer.hidden = true;
     $bookmarkDrawer.classList.remove("drawer-closing");
     $bookmarkDrawer.style.height = "";
     $bookmarkDrawer.style.width = "";
   };
   $bookmarkDrawer.addEventListener("animationend", finalize, { once: true });
-  setTimeout(finalize, 350); // fallback
+  _bookmarkDrawerCloseTimer = setTimeout(() => {
+    _bookmarkDrawerCloseTimer = null;
+    finalize();
+  }, 350); // fallback
 }
 
 // ── Bookmark tree rendering ──
@@ -3826,7 +3851,7 @@ function openSaveModal(mode, opts = {}) {
     const sameChapterBms = findExistingChapterBookmarks(bookId, chapter)
       .filter(bm => !existingId || bm.id !== existingId);
     if (sameChapterBms.length > 0) {
-      openMergeDialog(sameChapterBms, verseSpec, mode);
+      openMergeDialog(sameChapterBms, verseSpec, mode, { bookId, chapter });
       return;
     }
   }
@@ -3947,8 +3972,12 @@ function commitSaveBookmark(existingId, label, note, folderId, bookId, chapter, 
 
 // ── Merge dialog ──
 
-function openMergeDialog(candidates, incomingSpec, mode) {
+function openMergeDialog(candidates, incomingSpec, mode, fallbackContext = null) {
   clearNode($bmMergeBody);
+  const resolvedBookId =
+    (fallbackContext && fallbackContext.bookId) || _bookmarkDrawerBook || _currentBookId;
+  const resolvedChapter =
+    (fallbackContext && fallbackContext.chapter) || _bookmarkDrawerChapter || _currentChapter;
 
   let target = candidates[0];
 
@@ -4010,7 +4039,7 @@ function openMergeDialog(candidates, incomingSpec, mode) {
 
   $bmMergeNo.onclick = () => {
     cleanup();
-    _showSaveModal(mode, _bookmarkDrawerBook, _bookmarkDrawerChapter, incomingSpec, null);
+    _showSaveModal(mode, resolvedBookId, resolvedChapter, incomingSpec, null);
   };
 
   $bmMergeCancel.onclick = cleanup;

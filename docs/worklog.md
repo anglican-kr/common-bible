@@ -2,6 +2,41 @@
 
 ## 2026-04-26
 
+### 버그 수정 3건 (미커밋)
+
+#### 1. 드래그 포인터 이벤트 리스너를 document 레벨로 이동
+
+`pointermove`/`pointerup`/`pointercancel`을 `row`에 붙이던 방식에서 `document`로 이동.
+드래그 중 포인터가 row 영역 밖으로 이탈하면 이벤트를 놓쳐 ghost가 남거나 드롭이 취소되지 않던 문제 수정.
+`pointerId` 필터링으로 멀티터치 오작동 방지. `cleanupPointerHandlers()` 헬퍼로 해제 로직 통합.
+
+| 파일 | 변경 유형 |
+|------|-----------|
+| `js/app.js` | 수정 — `_setupDragHandle()` 이벤트 리스너 위치 및 정리 로직 |
+
+#### 2. 드로어 열기/닫기 race condition 수정
+
+빠르게 open→close→open 반복 시 닫힘 애니메이션의 `finalize` 콜백이 뒤늦게 실행되어
+새로 열린 드로어를 숨겨버리던 문제.
+`_bookmarkDrawerCloseSeq` 시퀀스 번호로 stale finalize를 차단하고,
+`_bookmarkDrawerCloseTimer`를 open 시점에 취소하여 타이머 충돌 방지.
+
+| 파일 | 변경 유형 |
+|------|-----------|
+| `js/app.js` | 수정 — `openBookmarkDrawer()`, `closeBookmarkDrawer()` |
+
+#### 3. 병합 다이얼로그 컨텍스트 유실 수정
+
+롱프레스로 드로어 없이 저장할 때 `_bookmarkDrawerBook`/`_bookmarkDrawerChapter`가 `null`이어서
+병합 다이얼로그에서 "따로 저장" 선택 시 저장 모달이 빈 컨텍스트로 열리던 문제.
+`openMergeDialog()`에 `fallbackContext` 파라미터 추가, `openSaveModal()`에서 `{ bookId, chapter }` 전달.
+
+| 파일 | 변경 유형 |
+|------|-----------|
+| `js/app.js` | 수정 — `openMergeDialog()`, `openSaveModal()` |
+
+---
+
 ### `refreshBookmarkHeaderBtn` 및 `has-bookmark` dead code 제거 (9d6c4b4)
 
 PR #8 버그봇 리포트(`refreshBookmarkHeaderBtn` 빈 함수) 검토 결과,
