@@ -173,7 +173,9 @@ pip install pytest-playwright
 playwright install chromium
 
 # 2. 개발 서버 실행 (별도 터미널)
-python3 -m http.server 8080
+#    SPA-aware 서버를 사용해야 Ctrl+Shift+R(강제 새로고침)이 정상 동작함.
+#    python -m http.server는 /gen/1 같은 History API 경로를 404로 반환하므로 사용하지 말 것.
+python3 scripts/serve.py 8080
 
 # 3. 테스트 실행
 pytest tests/e2e/ -v

@@ -888,7 +888,7 @@ function insertItem(store, folderId, item) {
 function collectFolderOptions(store, depth = 0, options = []) {
   for (const item of store) {
     if (item.type === "folder") {
-      options.push({ id: item.id, label: " ".repeat(depth * 2) + "📁 " + item.name });
+      options.push({ id: item.id, name: item.name, depth });
       collectFolderOptions(item.children, depth + 1, options);
     }
   }
@@ -3331,6 +3331,156 @@ function _buildBookmarkItem(bm, depth) {
   return li;
 }
 
+/**
+ * Material Icons "folder" (24dp) — same contour as the filled symbol, stroked only (hollow).
+ * @param {{ size?: number }} [opts]
+ */
+function _buildMaterialFolderIcon({ size = 18 } = {}) {
+  const ns = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(ns, "svg");
+  svg.setAttribute("width", String(size));
+  svg.setAttribute("height", String(size));
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("fill", "none");
+  svg.setAttribute("stroke", "currentColor");
+  svg.setAttribute("stroke-width", "1.4");
+  svg.setAttribute("stroke-linejoin", "round");
+  svg.setAttribute("stroke-linecap", "round");
+  svg.setAttribute("aria-hidden", "true");
+  const path = document.createElementNS(ns, "path");
+  path.setAttribute(
+    "d",
+    "M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z",
+  );
+  svg.appendChild(path);
+  return svg;
+}
+
+/**
+ * @param {Array<{ id: string, name: string, depth: number }>} folderOptions
+ * @param {string|null|undefined} selectedFolderId
+ * @returns {{ el: HTMLElement, getValue: () => string|null, close: () => void }}
+ */
+function _buildFolderCombobox(folderOptions, selectedFolderId) {
+  const initial = selectedFolderId != null && String(selectedFolderId) !== "" ? String(selectedFolderId) : "";
+  const wrap = el("div", { className: "bm-folder-combobox", id: "bm-folder-combobox" });
+  const hidden = el("input", { type: "hidden", className: "bm-folder-combobox-input", value: initial });
+  const listId = "bm-folder-listbox";
+  const iconSlot = el("span", { className: "bm-folder-combobox-btn-icon" });
+  iconSlot.appendChild(_buildMaterialFolderIcon({ size: 16 }));
+  const textSlot = el("span", { className: "bm-folder-combobox-btn-label" });
+  const chevron = el("span", { className: "bm-folder-combobox-chevron", "aria-hidden": "true" }, "▾");
+  const btn = el("button", {
+    type: "button",
+    id: "bm-folder-combobox-btn",
+    className: "bm-folder-combobox-btn",
+    "aria-haspopup": "listbox",
+    "aria-expanded": "false",
+    "aria-controls": listId,
+  });
+  btn.appendChild(iconSlot);
+  btn.appendChild(textSlot);
+  btn.appendChild(chevron);
+
+  const list = el("ul", { id: listId, className: "bm-folder-combobox-list", role: "listbox" });
+  list.hidden = true;
+
+  function labelForId(id) {
+    if (id === "" || id == null) return "최상위";
+    const o = folderOptions.find(f => f.id === id);
+    return o ? o.name : "최상위";
+  }
+
+  function updateButton() {
+    const id = hidden.value;
+    textSlot.textContent = labelForId(id);
+    btn.setAttribute("aria-label", `저장 위치: ${labelForId(id)}`);
+  }
+
+  function updateOptionSelected() {
+    const v = hidden.value;
+    for (const opt of list.querySelectorAll("[role=option]")) {
+      const oid = opt.getAttribute("data-id") || "";
+      opt.setAttribute("aria-selected", oid === v ? "true" : "false");
+    }
+  }
+
+  let docHandler = null;
+  let keyHandler = null;
+
+  function closeList() {
+    list.hidden = true;
+    btn.setAttribute("aria-expanded", "false");
+    if (docHandler) {
+      document.removeEventListener("click", docHandler, true);
+      if (keyHandler) document.removeEventListener("keydown", keyHandler, true);
+      docHandler = null;
+      keyHandler = null;
+    }
+  }
+
+  function openList() {
+    list.hidden = false;
+    btn.setAttribute("aria-expanded", "true");
+    updateOptionSelected();
+    keyHandler = (e) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        closeList();
+        btn.focus();
+      }
+    };
+    docHandler = (e) => {
+      if (!wrap.contains(e.target)) closeList();
+    };
+    setTimeout(() => {
+      document.addEventListener("keydown", keyHandler, true);
+      document.addEventListener("click", docHandler, true);
+    }, 0);
+  }
+
+  function addOption(dataId, displayName, depth) {
+    const li = el("li", { role: "option", className: "bm-folder-combobox-option", "data-id": dataId });
+    if (depth > 0) li.style.paddingLeft = `calc(0.55rem + ${depth} * 0.9rem)`;
+    const oIcon = el("span", { className: "bm-folder-combobox-option-icon" });
+    oIcon.appendChild(_buildMaterialFolderIcon({ size: 16 }));
+    li.appendChild(oIcon);
+    li.appendChild(el("span", { className: "bm-folder-combobox-option-label" }, displayName));
+    li.addEventListener("click", (e) => {
+      e.stopPropagation();
+      hidden.value = dataId;
+      updateButton();
+      updateOptionSelected();
+      closeList();
+      btn.focus();
+    });
+    list.appendChild(li);
+  }
+
+  addOption("", "최상위", 0);
+  for (const o of folderOptions) addOption(String(o.id), o.name, o.depth);
+  updateButton();
+  updateOptionSelected();
+
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (list.hidden) openList();
+    else closeList();
+  });
+
+  wrap._bmClose = closeList;
+  wrap.appendChild(hidden);
+  wrap.appendChild(btn);
+  wrap.appendChild(list);
+
+  return {
+    el: wrap,
+    getValue: () => (hidden.value ? hidden.value : null),
+    close: closeList,
+  };
+}
+
 function _buildFolderItem(folder, depth) {
   const expanded = folder.expanded !== false;
   const li = el("li", {
@@ -3352,7 +3502,8 @@ function _buildFolderItem(folder, depth) {
     saveBookmarks(store);
     li.setAttribute("aria-expanded", String(found ? found.item.expanded : false));
   });
-  const icon = el("span", { className: "bm-folder-icon", "aria-hidden": "true" }, "📁");
+  const icon = el("span", { className: "bm-folder-icon", "aria-hidden": "true" });
+  icon.appendChild(_buildMaterialFolderIcon());
   const name = el("span", { className: "bm-folder-name" }, folder.name);
   const actions = el("div", { className: "bm-item-actions" });
   const renameBtn = el("button", { className: "bm-action-btn", type: "button" }, "수정");
@@ -3446,6 +3597,9 @@ function openSaveModal(mode, opts = {}) {
 }
 
 function _showSaveModal(mode, bookId, chapter, verseSpec, existing) {
+  const prevCombo = document.getElementById("bm-folder-combobox");
+  if (prevCombo && prevCombo._bmClose) prevCombo._bmClose();
+
   const store = loadBookmarks();
   const folderOptions = collectFolderOptions(store);
 
@@ -3484,16 +3638,10 @@ function _showSaveModal(mode, bookId, chapter, verseSpec, existing) {
   noteField.appendChild(noteInput);
 
   const folderField = el("div", { className: "bm-form-field" });
-  folderField.appendChild(el("label", { className: "bm-form-label", for: "bm-folder-select" }, "저장 위치"));
-  const folderSelect = el("select", { id: "bm-folder-select", className: "bm-form-select" });
-  folderSelect.appendChild(el("option", { value: "" }, "최상위"));
+  folderField.appendChild(el("label", { className: "bm-form-label", for: "bm-folder-combobox-btn" }, "저장 위치"));
   const currentParentFolderId = existing ? _findParentFolderId(store, existing.id) : undefined;
-  for (const opt of folderOptions) {
-    const option = el("option", { value: opt.id }, opt.label);
-    if (currentParentFolderId === opt.id) option.selected = true;
-    folderSelect.appendChild(option);
-  }
-  folderField.appendChild(folderSelect);
+  const folderCombo = _buildFolderCombobox(folderOptions, currentParentFolderId);
+  folderField.appendChild(folderCombo.el);
 
   const actions = el("div", { className: "bm-form-actions" });
   const saveBtn = el("button", { className: "bm-btn-primary", type: "button" }, existing ? "수정" : "저장");
@@ -3501,7 +3649,7 @@ function _showSaveModal(mode, bookId, chapter, verseSpec, existing) {
   saveBtn.addEventListener("click", () => {
     const label = labelInput.value.trim() || defaultLabel;
     const note = noteInput.value.trim();
-    const folderId = folderSelect.value || null;
+    const folderId = folderCombo.getValue();
     commitSaveBookmark(existing ? existing.id : null, label, note, folderId, bookId, chapter, verseSpec);
     closeSaveModal();
     if (mode === "verses") exitVerseSelectMode();
@@ -3522,6 +3670,8 @@ function _showSaveModal(mode, bookId, chapter, verseSpec, existing) {
 }
 
 function closeSaveModal() {
+  const c = document.getElementById("bm-folder-combobox");
+  if (c && c._bmClose) c._bmClose();
   $bmSaveScrim.hidden = true;
   $bmSaveModal.hidden = true;
   if (_bmSaveModalTrap) { _bmSaveModalTrap(); _bmSaveModalTrap = null; }
