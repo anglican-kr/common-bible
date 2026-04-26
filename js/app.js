@@ -205,7 +205,7 @@ async function clearAllCaches() {
     alert("오프라인 상태에서는 캐시를 비울 수 없습니다.\n인터넷에 연결된 후 다시 시도해 주세요.");
     return;
   }
-  if (!confirm("캐시를 비우면 저장된 데이터가 모두 사라집니다.\n비울까요?")) return;
+  if (!confirm("캐시를 비우면 오프라인 데이터가 삭제됩니다.\n저장된 북마크는 사라지지 않습니다.\n비울까요?")) return;
   try {
     const keys = await caches.keys();
     await Promise.all(keys.map((k) => caches.delete(k)));
@@ -3175,17 +3175,20 @@ function buildInstallBody(platform) {
     });
 
     goToStep(0);
+
+    const bookmarkNotice = el("p", { className: "install-bookmark-notice" },
+      "홈 화면에 추가하면 북마크가 영구 보존됩니다. Safari에서만 열면 7일 이상 방문하지 않을 경우 북마크가 삭제될 수 있습니다.");
+    $installModalBody.appendChild(bookmarkNotice);
     return;
   }
-
-
-
 
   if (platform === "ios-other") {
     $installModalBody.appendChild(el("p", {},
       "iOS에서는 Safari에서만 홈 화면에 앱을 설치할 수 있습니다."));
     $installModalBody.appendChild(el("p", {},
       "이 페이지 주소를 복사해 Safari에서 열어 주세요."));
+    $installModalBody.appendChild(el("p", { className: "install-bookmark-notice" },
+      "홈 화면에 추가하면 북마크가 영구 보존됩니다. Safari에서만 열면 7일 이상 방문하지 않을 경우 북마크가 삭제될 수 있습니다."));
     const btn = el("button", { className: "install-cta", type: "button" }, "주소 복사");
     btn.addEventListener("click", async () => {
       try {

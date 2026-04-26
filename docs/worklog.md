@@ -2,6 +2,25 @@
 
 ## 2026-04-26
 
+### iOS ITP 경고 문구 추가 + ADR-011 Phase 2 계획 착수
+
+iOS Safari의 7일 비활성 자동 삭제(ITP) 위험을 사용자에게 알리고, 서버 동기화 계획을 ADR로 기록했다.
+
+- `js/app.js`: iOS Safari 설치 안내 모달(`ios-safari`, `ios-other`) 하단에 북마크 유지 경고 문구 추가
+  ("홈 화면에 추가하면 북마크가 영구 보존됩니다. Safari에서만 열면 7일 이상 방문하지 않을 경우 북마크가 삭제될 수 있습니다.")
+- `css/style.css`: `.install-bookmark-notice` 스타일 추가 (라이트/다크 모드)
+- `docs/decisions/011-bookmark-sync-phase2.md`: 신규 ADR 작성
+  - Phase 2a: 내보내기/가져오기 (즉시 착수 가능)
+  - Phase 2b: 서버 동기화 (검토 중)
+
+| 파일 | 변경 유형 |
+|------|-----------|
+| `js/app.js` | 수정 — 설치 안내 경고 문구 |
+| `css/style.css` | 수정 — `.install-bookmark-notice` 스타일 |
+| `docs/decisions/011-bookmark-sync-phase2.md` | 신규 — Phase 2 동기화 계획 ADR |
+
+---
+
 ### 버그 수정 3건 (미커밋)
 
 #### 1. 드래그 포인터 이벤트 리스너를 document 레벨로 이동

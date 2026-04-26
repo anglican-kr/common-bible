@@ -88,7 +88,7 @@ tests/
   workflows/
     test.yml            ← CI: Level 1-3 자동 실행
 docs/
-  decisions/            ← ADR (아키텍처 결정 기록, ADR-001~010)
+  decisions/            ← ADR (아키텍처 결정 기록, ADR-001~011)
   prd.md                ← 제품 요구사항 문서
   worklog.md            ← 작업 일지
 ```
