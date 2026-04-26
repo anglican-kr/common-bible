@@ -65,7 +65,7 @@ def test_long_press_save_updates_header_bookmark_icon(browser):
         ),
     )
 
-    page.goto(f"{BASE}/#/john/3")
+    page.goto(f"{BASE}/john/3")
     page.wait_for_selector("article.chapter-text .verse")
 
     has_bookmark_before = page.evaluate(
