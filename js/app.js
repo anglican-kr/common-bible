@@ -3243,9 +3243,9 @@ function buildBookmarkHeaderBtn(bookId, chapter) {
 
 function refreshBookmarkHeaderBtn() {
   const btn = document.querySelector(".title-bookmark-btn");
-  if (!btn || !_bookmarkDrawerBook) return;
+  if (!btn || !_currentBookId || !_currentChapter) return;
   btn.classList.toggle("has-bookmark",
-    bookmarkExistsForChapter(_bookmarkDrawerBook, _bookmarkDrawerChapter));
+    bookmarkExistsForChapter(_currentBookId, _currentChapter));
 }
 
 function openBookmarkDrawer(bookId, chapter) {
