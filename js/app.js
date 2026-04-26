@@ -825,17 +825,6 @@ function _walkBookmarks(store, fn) {
   return true;
 }
 
-function bookmarkExistsForChapter(bookId, chapter) {
-  let found = false;
-  _walkBookmarks(loadBookmarks(), (item) => {
-    if (item.type === "bookmark" && item.bookId === bookId && item.chapter === chapter) {
-      found = true;
-      return false;
-    }
-  });
-  return found;
-}
-
 function findExistingChapterBookmarks(bookId, chapter) {
   const results = [];
   _walkBookmarks(loadBookmarks(), (item) => {
