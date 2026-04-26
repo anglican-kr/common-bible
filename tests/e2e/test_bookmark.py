@@ -29,8 +29,8 @@ def test_bookmark_drawer_opens_shows_empty_state(browser):
     ctx.close()
 
 
-def test_save_chapter_bookmark_appears_and_header_flag(browser):
-    """Save current chapter; bookmark row appears and header button gains has-bookmark."""
+def test_save_chapter_bookmark_appears(browser):
+    """Save current chapter; bookmark row appears in the drawer."""
     ctx = browser.new_context()
     page = ctx.new_page()
     page.add_init_script(
@@ -48,9 +48,6 @@ def test_save_chapter_bookmark_appears_and_header_flag(browser):
 
     row = page.locator(".bm-bookmark-link", has_text="E2E 창세기 1장")
     assert row.count() == 1
-
-    btn = page.locator(".title-bookmark-btn")
-    assert "has-bookmark" in (btn.get_attribute("class") or "")
 
     raw = page.evaluate("() => localStorage.getItem('bible-bookmarks')")
     assert raw

@@ -3342,8 +3342,6 @@ function buildBookmarkHeaderBtn(bookId, chapter) {
   return btn;
 }
 
-function refreshBookmarkHeaderBtn() {}
-
 function openBookmarkDrawer(bookId, chapter) {
   _bookmarkDrawerBook = bookId;
   _bookmarkDrawerChapter = chapter;
@@ -3431,7 +3429,7 @@ function _buildBookmarkItem(bm, depth) {
     const store = loadBookmarks();
     removeItemById(store, bm.id);
     saveBookmarks(store);
-    refreshBookmarkHeaderBtn();
+
     renderBookmarkTree();
   });
   actions.appendChild(editBtn);
@@ -3944,7 +3942,6 @@ function commitSaveBookmark(existingId, label, note, folderId, bookId, chapter, 
   }
   saveBookmarks(store);
   renderBookmarkTree();
-  refreshBookmarkHeaderBtn();
   announce(existingId ? "책갈피를 수정했습니다" : "책갈피를 저장했습니다");
 }
 
@@ -4005,7 +4002,7 @@ function openMergeDialog(candidates, incomingSpec, mode) {
     }
     saveBookmarks(store);
     renderBookmarkTree();
-    refreshBookmarkHeaderBtn();
+
     if (mode === "verses") exitVerseSelectMode();
     announce("책갈피를 합쳤습니다");
     cleanup();

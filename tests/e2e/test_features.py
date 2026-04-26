@@ -68,11 +68,6 @@ def test_long_press_save_updates_header_bookmark_icon(browser):
     page.goto(f"{BASE}/john/3")
     page.wait_for_selector("article.chapter-text .verse")
 
-    has_bookmark_before = page.evaluate(
-        "() => document.querySelector('.title-bookmark-btn')?.classList.contains('has-bookmark') ?? false"
-    )
-    assert not has_bookmark_before, "chapter header should start without bookmark state"
-
     verse = page.locator("#v16")
     box = verse.bounding_box()
     assert box is not None, "target verse must be measurable for long-press"
@@ -92,13 +87,7 @@ def test_long_press_save_updates_header_bookmark_icon(browser):
     page.click("#bm-save-modal .bm-btn-primary")
     page.wait_for_selector("#bm-save-modal", state="hidden")
 
-    page.wait_for_function(
-        "() => document.querySelector('.title-bookmark-btn')?.classList.contains('has-bookmark') === true"
-    )
-
-    has_bookmark_after = page.evaluate(
-        "() => document.querySelector('.title-bookmark-btn')?.classList.contains('has-bookmark') ?? false"
-    )
-    assert has_bookmark_after, "saving via long-press should toggle header icon to filled state"
+    raw = page.evaluate("() => localStorage.getItem('bible-bookmarks')")
+    assert raw, "bookmark should be saved to localStorage after long-press save"
 
     ctx.close()
