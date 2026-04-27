@@ -45,3 +45,49 @@ def test_mobile_search_fab_opens_bottom_sheet(browser):
     page.wait_for_selector("#search-sheet", state="visible")
 
     ctx.close()
+
+
+def test_long_press_save_updates_header_bookmark_icon(browser):
+    """Saving from long-press flow updates the chapter header bookmark state."""
+    ctx = browser.new_context(service_workers="block")
+    ctx.add_init_script("localStorage.removeItem('bible-bookmarks');")
+    page = ctx.new_page()
+    page.route(
+        "**/data/bible/john-3.json",
+        lambda route: route.fulfill(
+            status=200,
+            content_type="application/json; charset=utf-8",
+            body=(
+                '{"book_id":"john","chapter":3,"verses":['
+                '{"number":16,"text":"하느님께서는 세상을 극진히 사랑하셔서 외아들을 보내 주시어."},'
+                '{"number":17,"text":"세상을 단죄하시려는 것이 아니라 구원하시려는 것이다."}'
+                "]}"),
+        ),
+    )
+
+    page.goto(f"{BASE}/john/3")
+    page.wait_for_selector("article.chapter-text .verse")
+
+    verse = page.locator("#v16")
+    box = verse.bounding_box()
+    assert box is not None, "target verse must be measurable for long-press"
+
+    page.mouse.move(box["x"] + 10, box["y"] + 10)
+    page.mouse.down()
+    page.wait_for_timeout(350)
+    page.mouse.up()
+
+    page.wait_for_selector("#verse-select-bar:not([hidden])")
+    if page.locator("#verse-select-bookmark-btn").is_disabled():
+        page.click("#v16")
+    assert not page.locator("#verse-select-bookmark-btn").is_disabled()
+
+    page.click("#verse-select-bookmark-btn")
+    page.wait_for_selector("#bm-save-modal:not([hidden])")
+    page.click("#bm-save-modal .bm-btn-primary")
+    page.wait_for_selector("#bm-save-modal", state="hidden")
+
+    raw = page.evaluate("() => localStorage.getItem('bible-bookmarks')")
+    assert raw, "bookmark should be saved to localStorage after long-press save"
+
+    ctx.close()
