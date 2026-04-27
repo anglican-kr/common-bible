@@ -919,6 +919,8 @@ function moveBookmarkItem(draggedId, targetId, position) {
     const t = _findItemInStore(store, targetId);
     if (!t || t.item.type !== "folder") position = "after";
     else if (draggedItem.type === "folder" && _isDescendant(draggedItem, targetId)) return;
+  } else if (draggedItem.type === "folder" && _isDescendant(draggedItem, targetId)) {
+    return;
   }
 
   df.parent.splice(df.index, 1); // remove from current location
