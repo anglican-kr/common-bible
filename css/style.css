@@ -2805,4 +2805,8 @@ body.verse-select-active .verse[data-vref]:hover {
   #bookmark-drawer {
     transition: none;
   }
+  #bookmark-drawer:not([hidden]):not(.drawer-closing),
+  #bookmark-drawer.drawer-closing {
+    animation: none;
+  }
 }
