@@ -104,6 +104,7 @@ let _bookmarkDrawerChapter = null;
 let _bookmarkDrawerTrap = null;
 let _bookmarkDrawerLastFocus = null;
 let _bmSaveModalTrap = null;
+let _bmMergeModalTrap = null;
 let _bookmarkDrawerCloseSeq = 0;
 let _bookmarkDrawerCloseTimer = null;
 let _dragState = null; // { id, ghost, origLi, startY, origTop }
@@ -4004,10 +4005,13 @@ function openMergeDialog(candidates, incomingSpec, mode, fallbackContext = null)
 
   $bmMergeScrim.hidden = false;
   $bmMergeModal.hidden = false;
+  _bmMergeModalTrap = trapFocus($bmMergeModal);
+  requestAnimationFrame(() => $bmMergeYes.focus());
 
   function cleanup() {
     $bmMergeScrim.hidden = true;
     $bmMergeModal.hidden = true;
+    if (_bmMergeModalTrap) { _bmMergeModalTrap(); _bmMergeModalTrap = null; }
     $bmMergeYes.onclick = null;
     $bmMergeNo.onclick = null;
     $bmMergeCancel.onclick = null;
@@ -4147,6 +4151,7 @@ document.addEventListener("keydown", (e) => {
     if (!$bmMergeModal.hidden) {
       $bmMergeScrim.hidden = true;
       $bmMergeModal.hidden = true;
+      if (_bmMergeModalTrap) { _bmMergeModalTrap(); _bmMergeModalTrap = null; }
       $bmMergeYes.onclick = null;
       $bmMergeNo.onclick = null;
       $bmMergeCancel.onclick = null;
