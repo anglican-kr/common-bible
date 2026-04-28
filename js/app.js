@@ -950,8 +950,8 @@ function _clearDragIndicators() {
 
 function _updateDragIndicators(clientX, clientY) {
   _clearDragIndicators();
-  const el = document.elementFromPoint(clientX, clientY);
-  const target = el?.closest("[data-id]");
+  const hitEl = document.elementFromPoint(clientX, clientY);
+  const target = hitEl?.closest("[data-id]");
   if (!target || target.dataset.id === _dragState?.id) return;
   const rowEl = target.querySelector(".bm-folder-row, .bm-bookmark-row");
   const r = (rowEl || target).getBoundingClientRect();
