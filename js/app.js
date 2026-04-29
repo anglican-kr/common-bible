@@ -2000,6 +2000,7 @@ async function route() {
   _isInitialLoad = false;
   if (_scrollTrackCleanup) _scrollTrackCleanup();
   clearNode($resumeBannerSlot);
+  if (_verseSelectMode) exitVerseSelectMode();
   const parsed = parsePath();
   const { view, bookId, chapter, division } = parsed;
 
@@ -3243,7 +3244,7 @@ function buildInstallBody(platform) {
 
 // Siblings of the modal/scrim that should become inert while the modal is open,
 // so assistive tech and sequential focus skip the background.
-const INSTALL_INERT_SELECTORS = "#sticky-group, main#app, #audio-bar, #search-fab, #search-sheet, #search-scrim, #launch-screen";
+const INSTALL_INERT_SELECTORS = "#sticky-group, main#app, #audio-bar, #search-fab, #search-sheet, #search-scrim, #launch-screen, #install-scrim, #install-modal, #bookmark-scrim, #bookmark-drawer, #verse-select-bar";
 
 function setBackgroundInert(on) {
   document.querySelectorAll(INSTALL_INERT_SELECTORS).forEach((n) => {
