@@ -22,6 +22,8 @@ const $searchSheetResults = document.getElementById("search-sheet-results");
 let booksCache = null;
 let appVersion = null;
 let currentAudio = null;
+let _audioController = null;
+let _audioSaveTimer = null;
 
 // ── Accessibility ──
 
@@ -2216,14 +2218,22 @@ function observeFabLift() {
   _fabNavObserver.observe(nav);
 }
 
-function hideAudioBar() {
+function _teardownAudio() {
+  if (_audioController) { _audioController.abort(); _audioController = null; }
+  clearTimeout(_audioSaveTimer); _audioSaveTimer = null;
   if (currentAudio) { currentAudio.pause(); currentAudio = null; }
+}
+
+function hideAudioBar() {
+  _teardownAudio();
   $audioBar.hidden = true;
   clearNode($audioBar);
 }
 
 function showAudioPlayer(bookId, chapter) {
-  if (currentAudio) { currentAudio.pause(); currentAudio = null; }
+  _teardownAudio();
+  _audioController = new AbortController();
+  const { signal } = _audioController;
   const src = `${DATA_DIR}/audio/${bookId}-${chapter}.mp3`;
   clearNode($audioBar);
 
@@ -2310,21 +2320,21 @@ function showAudioPlayer(bookId, chapter) {
   audio.addEventListener("play", () => {
     playBtn.setAttribute("aria-label", "일시정지");
     announce("재생");
-  });
+  }, { signal });
 
   audio.addEventListener("playing", () => {
     playIcon.className = "audio-icon-pause";
-  });
+  }, { signal });
 
   audio.addEventListener("waiting", () => {
     playIcon.className = "audio-icon-loading";
-  });
+  }, { signal });
 
   audio.addEventListener("pause", () => {
     playIcon.className = "audio-icon-play";
     playBtn.setAttribute("aria-label", "재생");
     announce("일시정지");
-  });
+  }, { signal });
 
   // Progress updates
   audio.addEventListener("loadedmetadata", () => {
@@ -2337,24 +2347,23 @@ function showAudioPlayer(bookId, chapter) {
     } else {
       timeDisplay.textContent = formatTime(audio.duration);
     }
-  });
+  }, { signal });
 
-  let saveAudioTimer = null;
   audio.addEventListener("timeupdate", () => {
     if (!seekingByUser) {
       progress.value = String(Math.floor(audio.currentTime));
     }
     updateProgressFill();
     timeDisplay.textContent = `${formatTime(audio.currentTime)} / ${formatTime(audio.duration)}`;
-    clearTimeout(saveAudioTimer);
-    saveAudioTimer = setTimeout(() => {
+    clearTimeout(_audioSaveTimer);
+    _audioSaveTimer = setTimeout(() => {
       if (audio.currentTime > 0 && !audio.ended) saveAudioTime(bookId, chapter, Math.floor(audio.currentTime));
     }, 1000);
-  });
+  }, { signal });
 
   audio.addEventListener("ended", () => {
     clearAudioTime();
-  });
+  }, { signal });
 
   // Seeking
   let seekingByUser = false;
@@ -2369,9 +2378,9 @@ function showAudioPlayer(bookId, chapter) {
 
   // Error: audio not found → show unavailable message
   audio.addEventListener("error", () => {
-    currentAudio = null;
+    _teardownAudio();
     showAudioUnavailable();
-  });
+  }, { signal });
 
   $audioBar.appendChild(container);
   $audioBar.hidden = false;
@@ -3486,8 +3495,10 @@ function _buildBookmarkTypeIcon(active = false, size = 20) {
   return svg;
 }
 
+let _renderPathname = "";
+
 function _isActiveBookmark(bm) {
-  return window.location.pathname === _bookmarkHref(bm);
+  return _renderPathname === _bookmarkHref(bm);
 }
 
 function _hasActiveDescendant(folder) {
@@ -3716,6 +3727,7 @@ function _buildFolderItem(folder, depth) {
 }
 
 function renderBookmarkTree() {
+  _renderPathname = window.location.pathname;
   clearNode($bookmarkDrawerBody);
   const store = loadBookmarks();
   if (!store.length) {
@@ -3749,7 +3761,8 @@ function _getVisibleTreeItems() {
 }
 
 function _focusTreeItem(item) {
-  _getVisibleTreeItems().forEach(i => i.setAttribute("tabIndex", "-1"));
+  const prev = $bookmarkDrawerBody.querySelector("[role=treeitem][tabindex='0']");
+  if (prev && prev !== item) prev.setAttribute("tabIndex", "-1");
   item.setAttribute("tabIndex", "0");
   item.focus();
 }
