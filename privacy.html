@@ -7,24 +7,47 @@
   <meta name="theme-color" content="#1a1a2e" media="(prefers-color-scheme: dark)">
   <meta name="robots" content="noindex">
   <title>개인정보처리방침 — 공동번역성서</title>
+  <script>
+    (function () {
+      try {
+        var theme = localStorage.getItem('bible-theme') || 'system';
+        var scheme = localStorage.getItem('bible-color-scheme') || 'navy';
+        var isDark = theme === 'dark' ||
+          (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+        if (scheme !== 'navy') {
+          document.documentElement.setAttribute('data-color-scheme', scheme);
+        }
+        if (theme === 'system') {
+          window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function (e) {
+            document.documentElement.setAttribute('data-theme', e.matches ? 'dark' : 'light');
+          });
+        }
+      } catch (_) {}
+    })();
+  </script>
   <style>
     :root {
       --bg: #faf8f5;
       --text: #1a1a1a;
-      --text-muted: #666;
+      --text-muted: #6b5e52;
       --border: #e0ddd8;
-      --accent: #6b4c3b;
+      --accent: #1e3a5f;
       font-family: "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
     }
-    @media (prefers-color-scheme: dark) {
-      :root {
-        --bg: #1a1a2e;
-        --text: #e8e6e1;
-        --text-muted: #aaa;
-        --border: #333;
-        --accent: #c49a6c;
-      }
+    [data-theme="dark"] {
+      --bg: #1a1a2e;
+      --text: #e0dcd6;
+      --text-muted: #a0a0a0;
+      --border: #3a3a55;
+      --accent: #8ab4d8;
     }
+    [data-color-scheme="terracotta"]              { --accent: #6b3a2a; }
+    [data-color-scheme="terracotta"][data-theme="dark"] { --accent: #c49a6c; }
+    [data-color-scheme="green"]                   { --accent: #1a6b50; }
+    [data-color-scheme="green"][data-theme="dark"]      { --accent: #5ab896; }
+    [data-color-scheme="purple"]                  { --accent: #5a2d82; }
+    [data-color-scheme="purple"][data-theme="dark"]     { --accent: #c09ad8; }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       background: var(--bg);
@@ -72,7 +95,7 @@
 
   <h3>1-1. Google Analytics (자동 수집)</h3>
   <p>
-    앱 이용 현황을 파악하기 위해 Google Analytics 4(GA4)를 사용합니다.
+    앱 이용 현황을 파악하기 위해 구글 어낼리틱스Google Analytics를 사용합니다.
     Google이 자동으로 수집하는 정보는 다음과 같습니다.
   </p>
   <table>
@@ -91,11 +114,11 @@
     개인을 특정할 수 없는 집계 데이터만 운영자에게 제공됩니다.
   </p>
 
-  <h3>1-2. 기기 내 저장 (localStorage)</h3>
-  <p>아래 데이터는 사용자 기기의 브라우저 저장소(localStorage)에만 저장됩니다. 외부 서버로 전송되지 않습니다.</p>
+  <h3>1-2. 기기 내 저장</h3>
+  <p>아래 데이터는 사용자 기기의 브라우저 저장소에만 저장됩니다. 사용자 데이터는 외부 서버로 전송되지 않습니다.</p>
   <ul>
-    <li>북마크(책갈피): 저장한 성경 구절, 폴더 구조, 메모</li>
-    <li>읽기 설정: 글자 크기</li>
+    <li>북마크: 저장한 성경 구절, 폴더 구조, 메모</li>
+    <li>앱 설정: 글자 크기, 테마, 색상</li>
     <li>이어읽기 위치: 마지막으로 읽은 장</li>
   </ul>
 
@@ -135,7 +158,7 @@
   <h2>4. 보유 및 이용 기간</h2>
   <ul>
     <li>Google Analytics 데이터: Google 정책에 따름 (기본 설정 14개월, 이후 자동 삭제)</li>
-    <li>기기 내 저장 데이터(localStorage): 사용자가 직접 삭제하거나 브라우저 데이터 초기화 시까지</li>
+    <li>기기 내 저장 데이터: 사용자가 직접 삭제하거나 브라우저 데이터 초기화 시까지</li>
   </ul>
   <p class="notice" style="margin-top:0.5rem">
     ⚠ iOS Safari에서 홈 화면에 설치하지 않고 사용하는 경우, Safari의 자동 데이터 정리 정책에 의해
@@ -172,8 +195,8 @@
   <h2>9. 문의</h2>
   <p>
     개인정보 관련 문의는 아래로 연락해 주세요.<br>
-    운영: 대한성공회<br>
-    웹사이트: <a href="https://bible.anglican.kr">bible.anglican.kr</a>
+    운영: 대한성공회 서울교구 선교교육국<br>
+    메일: admin@anglican.kr
   </p>
 </div>
 </body>

@@ -82,6 +82,7 @@ const COLOR_SCHEME_KEY = "bible-color-scheme";
 const STARTUP_BEHAVIOR_KEY = "bible-startup"; // "resume" | "home"
 const AUDIO_POS_KEY = "bible-audio-pos";
 const BOOKMARK_KEY = "bible-bookmarks";
+const INSTALL_NUDGE_KEY = "bible-install-nudge";
 const FONT_SIZES = [16, 18, 20, 22, 24];
 
 const COLOR_SCHEMES = [
@@ -437,9 +438,17 @@ function initSettings() {
 
     // About
     const aboutRow = el("div", { className: "settings-about" });
-    aboutRow.appendChild(document.createTextNode("공동번역성서 © 대한성서공회"));
+    aboutRow.appendChild(document.createTextNode("공동번역성서 개정판 © 대한성서공회"));
     aboutRow.appendChild(el("br"));
     aboutRow.appendChild(document.createTextNode("서비스 © 대한성공회"));
+    aboutRow.appendChild(el("br"));
+    const privacyLink = el("a", {
+      href: "/privacy.html",
+      target: "_blank",
+      rel: "noopener noreferrer",
+      className: "settings-privacy-link",
+    }, "개인정보처리방침");
+    aboutRow.appendChild(privacyLink);
     aboutRow.appendChild(el("br"));
     const versionLabel = appVersion ? `공동번역성서 ${appVersion}` : "공동번역성서";
     const githubLink = el("a", { href: "https://github.com/anglican-kr/common-bible", target: "_blank", rel: "noopener noreferrer" });
@@ -2085,7 +2094,7 @@ async function route() {
 
     const book = books.find((b) => b.id === bookId);
     if (!book) {
-      renderError("해당 성경을 찾을 수 없습니다.");
+      renderError("해당 성서를 찾을 수 없습니다.");
       dismissLaunchScreen();
       return;
     }
@@ -2161,6 +2170,7 @@ document.addEventListener("click", (e) => {
   const a = e.target.closest("a[href]");
   if (!a) return;
   if (e.defaultPrevented) return;
+  if (a.href.startsWith("blob:")) return;
   const url = new URL(a.href, location.origin);
   if (url.origin !== location.origin) return;
   if (a.target === "_blank") return;
@@ -3181,8 +3191,9 @@ function buildInstallBody(platform) {
     goToStep(0);
 
     const bookmarkNotice = el("p", { className: "install-bookmark-notice" },
-      "홈 화면에 추가하면 북마크가 영구 보존됩니다. Safari에서만 열면 7일 이상 방문하지 않을 경우 북마크가 삭제될 수 있습니다.");
+      "Safari에서 이용하시는 경우, 7일 이상 방문하지 않으면 앱에 저장한 북마크가 삭제될 수 있으므로 홈 화면에 추가해서 사용하세요.");
     $installModalBody.appendChild(bookmarkNotice);
+    $installModalBody.appendChild(_buildNeverShowRow());
     return;
   }
 
@@ -3192,7 +3203,7 @@ function buildInstallBody(platform) {
     $installModalBody.appendChild(el("p", {},
       "이 페이지 주소를 복사해 Safari에서 열어 주세요."));
     $installModalBody.appendChild(el("p", { className: "install-bookmark-notice" },
-      "홈 화면에 추가하면 북마크가 영구 보존됩니다. Safari에서만 열면 7일 이상 방문하지 않을 경우 북마크가 삭제될 수 있습니다."));
+      "Safari에서 이용하시는 경우, 7일 이상 방문하지 않으면 앱에 저장한 북마크가 삭제될 수 있으므로 홈 화면에 추가해서 사용하세요."));
     const btn = el("button", { className: "install-cta", type: "button" }, "주소 복사");
     btn.addEventListener("click", async () => {
       try {
@@ -3246,6 +3257,7 @@ function buildInstallBody(platform) {
 
     const unsub = install.subscribe(updateCta);
     $installModal.addEventListener("install:cleanup", unsub, { once: true });
+    $installModalBody.appendChild(_buildNeverShowRow());
     return;
   }
 
@@ -3276,6 +3288,15 @@ function setInert(on, selectors) {
 function setBackgroundInert(on) { setInert(on, INSTALL_INERT_SELECTORS); }
 function setBookmarkBackgroundInert(on) { setInert(on, BOOKMARK_INERT_SELECTORS); }
 
+function _buildNeverShowRow() {
+  const row = el("div", { className: "install-never-show-row" });
+  const checkbox = el("input", { type: "checkbox", id: "install-never-show" });
+  const label = el("label", { for: "install-never-show" }, " 다시 열지 않음");
+  row.appendChild(checkbox);
+  row.appendChild(label);
+  return row;
+}
+
 function openInstallModal() {
   const platform = install.detectPlatform();
   buildInstallBody(platform);
@@ -3296,6 +3317,12 @@ function openInstallModal() {
 
 function closeInstallModal() {
   if ($installModal.hidden) return;
+  const neverShowCb = document.getElementById("install-never-show");
+  if (neverShowCb && neverShowCb.checked) {
+    const state = _loadNudgeState();
+    state.neverShow = true;
+    _saveNudgeState(state);
+  }
   $installModal.dispatchEvent(new Event("install:cleanup"));
   $installScrim.hidden = true;
   $installModal.hidden = true;
@@ -3319,6 +3346,45 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && !$installModal.hidden) closeInstallModal();
 });
 
+// ── Install nudge (auto-show) ──
+
+function _loadNudgeState() {
+  try {
+    const raw = localStorage.getItem(INSTALL_NUDGE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (_) {}
+  return { visits: 0, nextShow: 1, neverShow: false };
+}
+
+function _saveNudgeState(state) {
+  try { localStorage.setItem(INSTALL_NUDGE_KEY, JSON.stringify(state)); } catch (_) {}
+}
+
+function maybeShowInstallNudge() {
+  const platform = install.detectPlatform();
+  // Only nudge platforms where installation is meaningful and possible
+  const nudgeable = platform === "ios-safari" || platform === "android";
+  if (!nudgeable) return;
+  if (_loadNudgeState().neverShow) return;
+
+  const state = _loadNudgeState();
+  state.visits += 1;
+  _saveNudgeState(state);
+
+  if (state.visits < state.nextShow) return;
+
+  // Delay so the page content renders first
+  setTimeout(() => {
+    // Re-check in case the user just installed between page load and timeout
+    if (install.detectPlatform() === "installed") return;
+    // Mark next show before opening, preventing double-shows on rapid reloads
+    const current = _loadNudgeState();
+    current.nextShow = current.visits + 3;
+    _saveNudgeState(current);
+    openInstallModal();
+  }, 1500);
+}
+
 // ── Bookmark UI ──
 
 const $bookmarkScrim = document.getElementById("bookmark-scrim");
@@ -3328,6 +3394,17 @@ const $bookmarkDrawerBody = document.getElementById("bookmark-drawer-body");
 const $bmSaveChapterBtn = document.getElementById("bm-save-chapter-btn");
 const $bmSelectVersesBtn = document.getElementById("bm-select-verses-btn");
 const $bmAddFolderBtn = document.getElementById("bm-add-folder-btn");
+const $bmOverflowBtn = document.getElementById("bm-overflow-btn");
+const $bmOverflowPanel = document.getElementById("bm-overflow-panel");
+const $bmExportBtn = document.getElementById("bm-export-btn");
+const $bmImportBtn = document.getElementById("bm-import-btn");
+const $bmImportInput = document.getElementById("bm-import-input");
+const $bmImportScrim = document.getElementById("bm-import-scrim");
+const $bmImportModal = document.getElementById("bm-import-modal");
+const $bmImportBody = document.getElementById("bm-import-body");
+const $bmImportMerge = document.getElementById("bm-import-merge");
+const $bmImportOverwrite = document.getElementById("bm-import-overwrite");
+const $bmImportCancel = document.getElementById("bm-import-cancel");
 const $bmSaveScrim = document.getElementById("bm-save-scrim");
 const $bmSaveModal = document.getElementById("bm-save-modal");
 const $bmSaveClose = document.getElementById("bm-save-close");
@@ -3407,6 +3484,8 @@ function openBookmarkDrawer(bookId, chapter) {
 
 function closeBookmarkDrawer() {
   if ($bookmarkDrawer.hidden || $bookmarkDrawer.classList.contains("drawer-closing")) return;
+  $bmOverflowPanel.hidden = true;
+  $bmOverflowBtn.setAttribute("aria-expanded", "false");
   const closeSeq = ++_bookmarkDrawerCloseSeq;
   $bookmarkScrim.hidden = true;
   $bookmarkDrawer.classList.add("drawer-closing");
@@ -4078,6 +4157,122 @@ function openMergeDialog(candidates, incomingSpec, mode, fallbackContext = null)
   $bmMergeCancel.onclick = cleanup;
 }
 
+// ── Export / Import bookmarks (Phase 2a) ──
+
+function exportBookmarks() {
+  const store = loadBookmarks();
+  const payload = {
+    _version: 1,
+    exportedAt: Date.now(),
+    bookmarks: store,
+  };
+  const json = JSON.stringify(payload, null, 2);
+  const blob = new Blob([json], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const date = new Date().toISOString().slice(0, 10);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `bible-bookmarks-${date}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  announce("북마크를 내보냈습니다.");
+}
+
+function _validateImportData(data) {
+  if (!data || typeof data !== "object") return false;
+  if (!Array.isArray(data.bookmarks)) return false;
+  return true;
+}
+
+function _mergeBookmarkStores(existing, incoming) {
+  const existingIds = new Set();
+  function collectIds(items) {
+    for (const item of items) {
+      existingIds.add(item.id);
+      if (item.type === "folder" && Array.isArray(item.children)) {
+        collectIds(item.children);
+      }
+    }
+  }
+  collectIds(existing);
+
+  function filterNew(items) {
+    const result = [];
+    for (const item of items) {
+      if (item.type === "folder") {
+        if (!existingIds.has(item.id)) {
+          const mergedChildren = filterNew(item.children || []);
+          result.push({ ...item, children: mergedChildren });
+        }
+      } else {
+        if (!existingIds.has(item.id)) {
+          result.push(item);
+        }
+      }
+    }
+    return result;
+  }
+
+  return [...existing, ...filterNew(incoming)];
+}
+
+let _bmImportModalTrap = null;
+
+function _countBookmarks(items) {
+  let count = 0;
+  for (const item of items) {
+    if (item.type === "bookmark") {
+      count += 1;
+    } else if (item.type === "folder" && Array.isArray(item.children)) {
+      count += _countBookmarks(item.children);
+    }
+  }
+  return count;
+}
+
+function openImportModal(incoming) {
+  const bmCount = _countBookmarks(incoming.bookmarks);
+  clearNode($bmImportBody);
+  $bmImportBody.appendChild(
+    el("p", {}, `북마크 ${bmCount}개를 현재 목록에 병합하거나 덮어쓸 수 있습니다.`)
+  );
+
+  $bmImportScrim.hidden = false;
+  $bmImportModal.hidden = false;
+  _bmImportModalTrap = trapFocus($bmImportModal);
+  requestAnimationFrame(() => $bmImportMerge.focus());
+
+  function cleanup() {
+    $bmImportScrim.hidden = true;
+    $bmImportModal.hidden = true;
+    if (_bmImportModalTrap) { _bmImportModalTrap(); _bmImportModalTrap = null; }
+    $bmImportMerge.onclick = null;
+    $bmImportOverwrite.onclick = null;
+    $bmImportCancel.onclick = null;
+    $bmImportInput.value = "";
+  }
+
+  $bmImportMerge.onclick = () => {
+    const existing = loadBookmarks();
+    const merged = _mergeBookmarkStores(existing, incoming.bookmarks);
+    saveBookmarks(merged);
+    renderBookmarkTree();
+    announce("북마크를 병합했습니다.");
+    cleanup();
+  };
+
+  $bmImportOverwrite.onclick = () => {
+    saveBookmarks(incoming.bookmarks);
+    renderBookmarkTree();
+    announce("북마크를 덮어썼습니다.");
+    cleanup();
+  };
+
+  $bmImportCancel.onclick = cleanup;
+}
+
 // ── Verse selection mode ──
 
 function enterVerseSelectMode(bookId, chapter) {
@@ -4177,8 +4372,66 @@ $bmAddFolderBtn.addEventListener("click", () => {
 $verseSelectCancelBtn.addEventListener("click", exitVerseSelectMode);
 $verseSelectBookmarkBtn.addEventListener("click", () => openSaveModal("verses"));
 
+$bmOverflowBtn.addEventListener("click", () => {
+  const isOpen = !$bmOverflowPanel.hidden;
+  $bmOverflowPanel.hidden = isOpen;
+  $bmOverflowBtn.setAttribute("aria-expanded", String(!isOpen));
+});
+
+$bmExportBtn.addEventListener("click", exportBookmarks);
+
+$bmImportBtn.addEventListener("click", () => {
+  $bmImportInput.value = "";
+  $bmImportInput.click();
+});
+
+$bmImportInput.addEventListener("change", () => {
+  const file = $bmImportInput.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    let data;
+    try {
+      data = JSON.parse(e.target.result);
+    } catch (_) {
+      announce("파일을 읽을 수 없습니다. 올바른 JSON 파일인지 확인해 주세요.");
+      $bmImportInput.value = "";
+      return;
+    }
+    if (!_validateImportData(data)) {
+      announce("북마크 파일 형식이 올바르지 않습니다.");
+      $bmImportInput.value = "";
+      return;
+    }
+    openImportModal(data);
+  };
+  reader.readAsText(file);
+});
+
+$bmImportScrim.addEventListener("click", () => {
+  if (!$bmImportModal.hidden) {
+    $bmImportScrim.hidden = true;
+    $bmImportModal.hidden = true;
+    if (_bmImportModalTrap) { _bmImportModalTrap(); _bmImportModalTrap = null; }
+    $bmImportMerge.onclick = null;
+    $bmImportOverwrite.onclick = null;
+    $bmImportCancel.onclick = null;
+    $bmImportInput.value = "";
+  }
+});
+
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
+    if (!$bmImportModal.hidden) {
+      $bmImportScrim.hidden = true;
+      $bmImportModal.hidden = true;
+      if (_bmImportModalTrap) { _bmImportModalTrap(); _bmImportModalTrap = null; }
+      $bmImportMerge.onclick = null;
+      $bmImportOverwrite.onclick = null;
+      $bmImportCancel.onclick = null;
+      $bmImportInput.value = "";
+      return;
+    }
     if (!$bmMergeModal.hidden) {
       $bmMergeScrim.hidden = true;
       $bmMergeModal.hidden = true;
@@ -4240,3 +4493,5 @@ if ("serviceWorker" in navigator) {
     reg.addEventListener("updatefound", () => trackInstalling(reg));
   }).catch(() => {});
 }
+
+maybeShowInstallNudge();

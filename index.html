@@ -162,7 +162,7 @@
     <div id="bookmark-drawer-resize" aria-hidden="true"></div>
     <div id="bookmark-drawer-handle" aria-hidden="true"><span></span></div>
     <div id="bookmark-drawer-header">
-      <h2 id="bookmark-drawer-title">책갈피</h2>
+      <h2 id="bookmark-drawer-title">북마크</h2>
       <button id="bookmark-drawer-close" type="button" aria-label="닫기">&times;</button>
     </div>
     <div id="bookmark-drawer-toolbar">
@@ -175,22 +175,46 @@
       <button id="bm-select-verses-btn" type="button" class="bm-toolbar-btn" aria-label="절 선택" title="절 선택">
         <svg width="22" height="22" viewBox="0 -960 960 960" fill="currentColor" aria-hidden="true"><path d="M440-120v-80h80v80h-80Zm0-640v-80h80v80h-80Zm160 640v-80h80v80h-80Zm0-640v-80h80v80h-80Zm160 640v-80h80v80h-80Zm0-640v-80h80v80h-80ZM120-120v-80h80v-560h-80v-80h240v80h-80v560h80v80H120Zm560-200-56-56 63-64H400v-80h287l-63-64 56-56 160 160-160 160Z"/></svg>
       </button>
+      <button id="bm-overflow-btn" type="button" class="bm-toolbar-btn" aria-label="더 보기" title="더 보기" aria-expanded="false">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 10c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm12 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm-6 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>
+      </button>
+      <div id="bm-overflow-panel" hidden>
+        <button id="bm-export-btn" type="button" class="bm-toolbar-btn" aria-label="내보내기" title="내보내기">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M9 16h6v-6h4l-7-7-7 7h4v6zm-4 2h14v2H5v-2z"/></svg>
+        </button>
+        <button id="bm-import-btn" type="button" class="bm-toolbar-btn" aria-label="가져오기" title="가져오기">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+        </button>
+      </div>
+      <input id="bm-import-input" type="file" accept=".json" hidden aria-hidden="true">
     </div>
-    <ul id="bookmark-drawer-body" role="tree" aria-label="책갈피 목록"></ul>
+    <ul id="bookmark-drawer-body" role="tree" aria-label="북마크 목록"></ul>
   </div>
 
   <!-- ── Save Bookmark Modal ── -->
   <div id="bm-save-scrim" aria-hidden="true" hidden></div>
   <div id="bm-save-modal" role="dialog" aria-modal="true" aria-labelledby="bm-save-title" hidden>
     <button id="bm-save-close" type="button" aria-label="닫기">&times;</button>
-    <h2 id="bm-save-title">책갈피 저장</h2>
+    <h2 id="bm-save-title">북마크 저장</h2>
     <div id="bm-save-body"></div>
+  </div>
+
+  <!-- ── Import Bookmarks Modal ── -->
+  <div id="bm-import-scrim" aria-hidden="true" hidden></div>
+  <div id="bm-import-modal" role="dialog" aria-modal="true" aria-labelledby="bm-import-title" hidden>
+    <h2 id="bm-import-title">북마크 가져오기</h2>
+    <div id="bm-import-body"></div>
+    <div id="bm-import-actions">
+      <button id="bm-import-merge" type="button">병합</button>
+      <button id="bm-import-overwrite" type="button">덮어쓰기</button>
+      <button id="bm-import-cancel" type="button">취소</button>
+    </div>
   </div>
 
   <!-- ── Merge Confirmation Modal ── -->
   <div id="bm-merge-scrim" aria-hidden="true" hidden></div>
   <div id="bm-merge-modal" role="dialog" aria-modal="true" aria-labelledby="bm-merge-title" hidden>
-    <h2 id="bm-merge-title">이미 저장된 책갈피</h2>
+    <h2 id="bm-merge-title">이미 저장된 북마크</h2>
     <div id="bm-merge-body"></div>
     <div id="bm-merge-actions">
       <button id="bm-merge-yes" type="button">합치기</button>
@@ -202,7 +226,7 @@
   <!-- ── Verse Selection Action Bar ── -->
   <div id="verse-select-bar" hidden>
     <span id="verse-select-count" aria-live="polite">절을 눌러 선택하세요</span>
-    <button id="verse-select-bookmark-btn" type="button" disabled>책갈피</button>
+    <button id="verse-select-bookmark-btn" type="button" disabled>북마크</button>
     <button id="verse-select-cancel-btn" type="button" aria-label="선택 취소">취소</button>
   </div>
 
