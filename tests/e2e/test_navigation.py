@@ -98,7 +98,7 @@ def test_verse_url(page, label, hash_, expected_ids, hash_re, expected_mark):
     assert ids == expected_ids, f"[{label}] highlighted={ids}, expected={expected_ids}"
 
     if hash_re is not None:
-        current = page.evaluate("() => location.hash")
+        current = page.evaluate("() => location.pathname")
         assert re.search(hash_re, current), (
             f"[{label}] URL after replaceState: {current!r} — expected match /{hash_re}/"
         )

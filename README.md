@@ -76,7 +76,7 @@ tests/
   workflows/
     test.yml            ← CI: Level 1-3 자동 실행
 docs/
-  decisions/            ← 아키텍처 결정 기록 (ADR-001~008)
+  decisions/            ← 아키텍처 결정 기록 (ADR-001~011)
   prd.md                ← 제품 요구사항 문서
   worklog.md            ← 작업 일지
 ```
@@ -119,6 +119,6 @@ pytest tests/e2e/ -v
 
 ## 문서
 
-- [아키텍처 결정 기록](docs/decisions/) — ADR-001~008
+- [아키텍처 결정 기록](docs/decisions/) — ADR-001~011
 - [제품 요구사항](docs/prd.md)
 - [작업 일지](docs/worklog.md)

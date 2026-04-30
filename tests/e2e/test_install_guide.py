@@ -47,14 +47,14 @@ def _open_modal_body(browser, ua: str) -> str | None:
         (
             "iOS Safari shows Add-to-Home-Screen guide",
             _IOS_SAFARI_UA,
-            ["공유 버튼", "홈 화면에 추가"],
+            ["··· 버튼", "홈 화면에 추가"],
             [],
         ),
         (
             "iOS Chrome prompts to open in Safari",
             _IOS_CHROME_UA,
             ["Safari", "주소 복사"],
-            ["홈 화면에 추가"],
+            ["··· 버튼"],
         ),
         (
             "Android shows install CTA",
