@@ -807,15 +807,20 @@ function selectedVersesToSpec(refs) {
 // Union of two verse spec strings
 function mergeVerseSpecs(specA, specB) {
   if (specA === "all" || specB === "all") return "all";
-  const refs = new Set();
+  const intRefs = new Set();
+  const partRefs = new Set();
   for (const seg of [...parseVerseSpec(specA), ...parseVerseSpec(specB)]) {
     if (seg.part) {
-      refs.add(`${seg.start}${seg.part}`);
+      partRefs.add(`${seg.start}${seg.part}`);
     } else {
-      for (let n = seg.start; n <= seg.end; n++) refs.add(`${n}`);
+      for (let n = seg.start; n <= seg.end; n++) intRefs.add(n);
     }
   }
-  return selectedVersesToSpec([...refs]);
+  const refs = [...intRefs].map(String);
+  for (const pr of partRefs) {
+    if (!intRefs.has(parseInt(pr, 10))) refs.push(pr);
+  }
+  return selectedVersesToSpec(refs);
 }
 
 // ── Bookmark query helpers ──
@@ -1487,11 +1492,11 @@ function renderChapter(data, book, opts) {
         history.replaceState(null, "", `${pathMatch[1]}-${_maxVerse}${location.search}`);
       }
     }
-    // Also drop a single verse that is entirely out of range.
-    if (hlVerse > _maxVerse) {
-      const pathMatch = location.pathname.match(/^(\/[^/]+\/\d+)\/\d+.*$/);
-      if (pathMatch) history.replaceState(null, "", pathMatch[1] + location.search);
-    }
+  }
+  // Drop a single verse that is entirely out of range (works for both simple and range URLs).
+  if (!hlSegments && hlVerse > _maxVerse) {
+    const pathMatch = location.pathname.match(/^(\/[^/]+\/\d+)\/\d+.*$/);
+    if (pathMatch) history.replaceState(null, "", pathMatch[1] + location.search);
   }
 
   // ── Multi-segment: clamp integer segments to chapter max; drop out-of-range.
@@ -1682,7 +1687,7 @@ function renderChapter(data, book, opts) {
       const allVerses = [...article.querySelectorAll(".verse[data-vref]")];
       const startIdx = allVerses.indexOf(vs);
       const isAdding = !_selectedVerseRefs.has(vs.getAttribute("data-vref"));
-      _verseSelectDrag = { startIdx, allVerses, isAdding, moved: false };
+      _verseSelectDrag = { startIdx, allVerses, isAdding, moved: false, snapshot: new Set(_selectedVerseRefs) };
       article.setPointerCapture(e.pointerId);
       return;
     }
@@ -1719,12 +1724,13 @@ function renderChapter(data, book, opts) {
       const target = document.elementFromPoint(e.clientX, e.clientY);
       const vs = target && target.closest(".verse[data-vref]");
       if (!vs) return;
-      const { startIdx, allVerses, isAdding } = _verseSelectDrag;
+      const { startIdx, allVerses, isAdding, snapshot } = _verseSelectDrag;
       const currentIdx = allVerses.indexOf(vs);
       if (currentIdx === -1) return;
       if (!_verseSelectDrag.moved && currentIdx === startIdx) return;
       _verseSelectDrag.moved = true;
       const [lo, hi] = startIdx <= currentIdx ? [startIdx, currentIdx] : [currentIdx, startIdx];
+      _selectedVerseRefs = new Set(snapshot);
       allVerses.forEach((v, i) => {
         const vref = v.getAttribute("data-vref");
         if (i >= lo && i <= hi) {
