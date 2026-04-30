@@ -34,9 +34,13 @@ data/source/*.md  (비공개 서브모듈, 73권 마크다운 소스)
 
 ```
 index.html              ← SPA 진입점 (단일 HTML)
-sw.js                   ← 서비스 워커 (오프라인)
+privacy.html            ← 개인정보처리방침
+sw.js                   ← 서비스 워커 (오프라인, 루트 필수)
 manifest.webmanifest    ← PWA 매니페스트
-version.json            ← 앱 버전
+favicon.ico             ← 파비콘 (루트 필수)
+robots.txt / sitemap.xml
+version.json            ← 앱 버전 (release.py로 관리)
+requirements.txt        ← Python 의존성
 js/
   app.js                ← 라우팅, 렌더링, 검색 UI, 오디오 플레이어
   search-worker.js      ← Web Worker 기반 전역 검색 엔진
@@ -45,16 +49,20 @@ js/
 css/
   style.css             ← 메인 스타일
 assets/
-  icons/                ← PWA 아이콘 (192·512·maskable)
-  install-guide/        ← iOS 설치 안내 SVG 이미지
-  splash/               ← iOS 런치 스크린 (13 디바이스)
+  icons/
+    icon-192.png        ← PWA 홈 화면 아이콘
+    icon-512.png        ← PWA 홈 화면 아이콘 (고해상도)
+    icon-512-maskable.png ← PWA maskable 아이콘
+    skh-cross.svg       ← 성공회 십자가 SVG (스플래시 생성용 소스)
+  install-guide/        ← iOS 설치 안내 스크린샷 (webp, 3단계)
+  splash/               ← iOS apple-touch-startup-image (13 디바이스)
 data/
   books.json            ← 73권 목록 (메타데이터, has_prologue 플래그 포함)
   book_mappings.json    ← 책 ID·이름·별칭·구분 매핑
-  search-meta.json      ← 검색용 별칭·책 메타데이터
-  search-ot.json        ← 구약 절 검색 인덱스
-  search-nt.json        ← 신약 절 검색 인덱스
-  search-dc.json        ← 외경 절 검색 인덱스
+  search-meta.json      ← 검색용 별칭·책 메타데이터 (~9 KB)
+  search-ot.json        ← 구약 절 검색 인덱스 (~3.8 MB)
+  search-nt.json        ← 신약 절 검색 인덱스 (~1.3 MB)
+  search-dc.json        ← 외경 절 검색 인덱스 (~700 KB)
   bible/                ← 장별 성경 JSON (gitignore, 파서 출력물)
   audio/
     {book_slug}-{chapter}.mp3
@@ -63,14 +71,18 @@ src/
   parser.py             ← .md 소스 → parsed_bible.json (segments 기반)
   split_bible.py        ← parsed_bible.json → 장별 JSON 분리
   search_indexer.py     ← 검색 인덱스 생성 (구약/신약/외경 분리)
-  generate_splash.py    ← iOS 스플래시 PNG 생성
+  generate_splash.py    ← iOS 스플래시 PNG 생성 (cairosvg + Pillow)
 scripts/
   build-deploy.sh       ← 배포 zip 생성
   release.py            ← version.json + sw.js CACHE_NAME 동시 bump
+  serve.py              ← SPA-aware 로컬 개발 서버
 tests/
   test_completeness.py  ← Level 1 완전성 검증
   test_ordering.py      ← Level 2 절 순서 검증
   test_snapshots.py     ← Level 3 특수 케이스 스냅샷
+  fixtures/
+    verse_sequence.json ← 1328장 절 순서 스냅샷
+  generate_fixtures.py  ← 픽스처 재생성 스크립트 (로컬 전용)
   e2e/                  ← 브라우저 E2E 테스트 (로컬 전용)
 .github/
   workflows/
@@ -105,8 +117,8 @@ python src/search_indexer.py
 # 데이터 파이프라인 검증 (원본 텍스트 불필요, CI 자동 실행)
 pytest tests/test_completeness.py tests/test_ordering.py tests/test_snapshots.py -v
 
-# E2E 테스트 (로컬, 서버 실행 필요)
-python3 -m http.server 8080
+# E2E 테스트 (로컬, SPA-aware 서버 실행 필요)
+python3 scripts/serve.py 8080
 pytest tests/e2e/ -v
 ```
 

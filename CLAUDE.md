@@ -23,6 +23,7 @@
 
 ```
 index.html              ← SPA 진입점 (단일 HTML)
+privacy.html            ← 개인정보처리방침
 sw.js                   ← 서비스 워커 (오프라인, 루트 필수)
 manifest.webmanifest    ← PWA 매니페스트
 favicon.ico             ← 파비콘 (루트 필수)
@@ -71,6 +72,7 @@ src/
 scripts/
   build-deploy.sh       ← 배포 zip 생성
   release.py            ← version.json + sw.js CACHE_NAME 동시 bump
+  serve.py              ← SPA-aware 로컬 개발 서버 (History API 경로 지원)
 tests/
   test_completeness.py  ← Level 1 완전성 검증 (ADR-004)
   test_ordering.py      ← Level 2 절 순서 검증 (ADR-004)
