@@ -3342,7 +3342,7 @@ const $verseSelectCancelBtn = document.getElementById("verse-select-cancel-btn")
 function buildBookmarkHeaderBtn(bookId, chapter) {
   const btn = el("button", {
     className: "title-bookmark-btn",
-    "aria-label": "책갈피",
+    "aria-label": "북마크",
     type: "button",
   });
   if (findExistingChapterBookmarks(bookId, chapter).length > 0) {
@@ -3468,7 +3468,7 @@ function _buildBookmarkItem(bm, depth) {
   editBtn.addEventListener("click", () => openSaveModal("edit", { existingId: bm.id }));
   const delBtn = el("button", { className: "bm-action-btn bm-delete-btn", type: "button" }, "삭제");
   delBtn.addEventListener("click", () => {
-    if (!window.confirm(`"${bm.label}" 책갈피를 삭제할까요?`)) return;
+    if (!window.confirm(`"${bm.label}" 북마크를 삭제할까요?`)) return;
     const store = loadBookmarks();
     removeItemById(store, bm.id);
     saveBookmarks(store);
@@ -3743,7 +3743,7 @@ function renderBookmarkTree() {
   clearNode($bookmarkDrawerBody);
   const store = loadBookmarks();
   if (!store.length) {
-    $bookmarkDrawerBody.appendChild(el("li", { className: "bm-empty" }, "저장된 책갈피가 없습니다."));
+    $bookmarkDrawerBody.appendChild(el("li", { className: "bm-empty" }, "저장된 북마크가 없습니다."));
     return;
   }
   for (const item of store) {
@@ -3901,7 +3901,7 @@ function _showSaveModal(mode, bookId, chapter, verseSpec, existing) {
   }
 
   clearNode($bmSaveBody);
-  $bmSaveTitle.textContent = existing ? "책갈피 수정" : "책갈피 저장";
+  $bmSaveTitle.textContent = existing ? "북마크 수정" : "북마크 저장";
 
   const labelField = el("div", { className: "bm-form-field" });
   labelField.appendChild(el("label", { className: "bm-form-label", for: "bm-label-input" }, "제목"));
@@ -3990,7 +3990,7 @@ function commitSaveBookmark(existingId, label, note, folderId, bookId, chapter, 
   saveBookmarks(store);
   renderBookmarkTree();
   refreshBookmarkHeaderBtn();
-  announce(existingId ? "책갈피를 수정했습니다" : "책갈피를 저장했습니다");
+  announce(existingId ? "북마크를 수정했습니다." : "북마크를 저장했습니다.");
 }
 
 // ── Merge dialog ──
@@ -4006,11 +4006,11 @@ function openMergeDialog(candidates, incomingSpec, mode, fallbackContext = null)
 
   if (candidates.length === 1) {
     const desc = el("p", { className: "bm-merge-desc" },
-      `이 장에 이미 책갈피("${candidates[0].label}")가 있습니다. 절을 합칠까요?`);
+      `이 장에 이미 북마크("${candidates[0].label}")가 있습니다. 절을 합칠까요?`);
     $bmMergeBody.appendChild(desc);
   } else {
     $bmMergeBody.appendChild(
-      el("p", { className: "bm-merge-desc" }, "이 장에 여러 책갈피가 있습니다. 어느 책갈피에 합칠까요?")
+      el("p", { className: "bm-merge-desc" }, "이 장에 여러 북마크가 있습니다. 어느 북마크에 합칠까요?")
     );
     const radioGroup = el("div", { className: "bm-merge-radio-group" });
     candidates.forEach((bm, i) => {
@@ -4060,7 +4060,7 @@ function openMergeDialog(candidates, incomingSpec, mode, fallbackContext = null)
     refreshBookmarkHeaderBtn();
 
     if (mode === "verses") exitVerseSelectMode();
-    announce("책갈피를 합쳤습니다");
+    announce("북마크를 합쳤습니다.");
     cleanup();
   };
 
@@ -4096,7 +4096,7 @@ function exitVerseSelectMode() {
 function updateVerseSelectBar() {
   const count = _selectedVerseRefs.size;
   if (count === 0) {
-    $verseSelectCount.textContent = "절을 눌러 선택하세요";
+    $verseSelectCount.textContent = "절을 눌러 선택하세요.";
   } else {
     const articleEl = document.querySelector("article.chapter-text");
     const refs = collapseFullVerseRefs(Array.from(_selectedVerseRefs), articleEl);
