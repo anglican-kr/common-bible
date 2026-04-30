@@ -23,8 +23,8 @@ def test_bookmark_drawer_opens_shows_empty_state(browser):
     page.locator(".title-bookmark-btn").click()
     page.wait_for_selector("#bookmark-drawer:not([hidden])")
     expect_title = page.locator("#bookmark-drawer-title")
-    assert expect_title.inner_text() == "책갈피"
-    assert "저장된 책갈피가 없습니다" in page.inner_text("#bookmark-drawer-body")
+    assert expect_title.inner_text() == "북마크"
+    assert "저장된 북마크가 없습니다" in page.inner_text("#bookmark-drawer-body")
 
     ctx.close()
 
