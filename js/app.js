@@ -3345,6 +3345,9 @@ function buildBookmarkHeaderBtn(bookId, chapter) {
     "aria-label": "책갈피",
     type: "button",
   });
+  if (findExistingChapterBookmarks(bookId, chapter).length > 0) {
+    btn.classList.add("has-bookmark");
+  }
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   svg.setAttribute("width", "22");
   svg.setAttribute("height", "22");
@@ -3357,6 +3360,15 @@ function buildBookmarkHeaderBtn(bookId, chapter) {
   btn.appendChild(svg);
   btn.addEventListener("click", () => openBookmarkDrawer(bookId, chapter));
   return btn;
+}
+
+function refreshBookmarkHeaderBtn() {
+  const btn = document.querySelector(".title-bookmark-btn");
+  if (!btn || !_currentBookId || !_currentChapter) return;
+  btn.classList.toggle(
+    "has-bookmark",
+    findExistingChapterBookmarks(_currentBookId, _currentChapter).length > 0
+  );
 }
 
 function openBookmarkDrawer(bookId, chapter) {
@@ -3460,8 +3472,8 @@ function _buildBookmarkItem(bm, depth) {
     const store = loadBookmarks();
     removeItemById(store, bm.id);
     saveBookmarks(store);
-
     renderBookmarkTree();
+    refreshBookmarkHeaderBtn();
   });
   actions.appendChild(editBtn);
   actions.appendChild(delBtn);
@@ -3977,6 +3989,7 @@ function commitSaveBookmark(existingId, label, note, folderId, bookId, chapter, 
   }
   saveBookmarks(store);
   renderBookmarkTree();
+  refreshBookmarkHeaderBtn();
   announce(existingId ? "책갈피를 수정했습니다" : "책갈피를 저장했습니다");
 }
 
@@ -4044,6 +4057,7 @@ function openMergeDialog(candidates, incomingSpec, mode, fallbackContext = null)
     }
     saveBookmarks(store);
     renderBookmarkTree();
+    refreshBookmarkHeaderBtn();
 
     if (mode === "verses") exitVerseSelectMode();
     announce("책갈피를 합쳤습니다");

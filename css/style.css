@@ -1899,7 +1899,8 @@ mark.search-highlight {
   padding: 0;
 }
 
-.title-bookmark-btn:hover {
+.title-bookmark-btn:hover,
+.title-bookmark-btn.has-bookmark {
   color: var(--accent);
 }
 
