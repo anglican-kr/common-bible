@@ -15,6 +15,7 @@ echo "Building deployment package..."
 
 zip -r "$OUTPUT_FILE" \
   index.html \
+  privacy.html \
   sw.js \
   version.json \
   manifest.webmanifest \
