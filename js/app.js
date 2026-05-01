@@ -517,6 +517,11 @@ function hexToRgb(hex) {
 // Luminance of the original icon background (#1a1a2e)
 const ICON_BG_LUM = (26 * 0.299 + 26 * 0.587 + 46 * 0.114) / 255; // ≈ 0.111
 
+// Monotonically-increasing counter used to cancel stale updateAppIcons calls.
+// Incremented each time applyColorScheme is called so any in-flight async
+// chain started by a previous call becomes a no-op when it resolves.
+let _iconGeneration = 0;
+
 // Loads the source icon's pixel data. Not cached: a decoded 512×512 ImageData is
 // ~1 MB and color-scheme changes are rare; releasing it after use keeps idle
 // memory low. The asset is served from the SW cache, so re-reads are cheap.
@@ -537,11 +542,16 @@ function loadOrigIcon() {
 }
 
 function updateAppIcons(scheme) {
+  // Capture the generation at dispatch time; discard the result if a newer
+  // applyColorScheme call has already superseded this one.
+  const gen = _iconGeneration;
   // Defer to idle: favicon/apple-touch-icon updates have no visible effect
   // during reading, and the canvas pass blocks the main thread for a frame.
   const idle = window.requestIdleCallback ?? ((cb) => setTimeout(cb, 200));
   idle(() => {
+    if (_iconGeneration !== gen) return;
     loadOrigIcon().then((origData) => {
+      if (_iconGeneration !== gen) return;
       const [nr, ng, nb] = hexToRgb(scheme.iconBg);
       const canvas = document.createElement("canvas");
       canvas.width = origData.width;
@@ -587,6 +597,8 @@ const DEFAULT_FAVICON_HREF = "/favicon.ico";
 const DEFAULT_APPLE_ICON_HREF = "/assets/icons/icon-512-maskable.png";
 
 function applyColorScheme(schemeName) {
+  // Invalidate any in-flight updateAppIcons call from a previous scheme.
+  _iconGeneration++;
   const scheme = COLOR_SCHEMES.find(s => s.id === schemeName) || COLOR_SCHEMES[0];
   if (schemeName === "navy") {
     document.documentElement.removeAttribute("data-color-scheme");
