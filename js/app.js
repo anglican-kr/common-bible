@@ -2729,7 +2729,9 @@ function openSearchSheet(query) {
   $searchSheetInput.value = query || "";
   $searchSheetClear.hidden = !query;
   $searchFab.hidden = true;
-  requestAnimationFrame(() => $searchSheetInput.focus());
+  // Focus synchronously so iOS Safari opens the on-screen keyboard.
+  // requestAnimationFrame would defer past the user-gesture context.
+  $searchSheetInput.focus({ preventScroll: true });
   if (query) runSheetSearch(query, 1);
 }
 
