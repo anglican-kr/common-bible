@@ -1948,6 +1948,17 @@ body.verse-select-active .verse[data-vref]:hover {
   border-radius: 5px;
 }
 
+/* In a run of consecutive selected verses, flatten the corners that abut
+   another selected verse so the run reads as a single highlighted block. */
+.verse.verse-selected.verse-selected-join-prev {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+.verse.verse-selected.verse-selected-join-next {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
 /* ── Verse selection action bar ── */
 
 #verse-select-bar {
