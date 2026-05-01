@@ -517,10 +517,10 @@ function hexToRgb(hex) {
 // Luminance of the original icon background (#1a1a2e)
 const ICON_BG_LUM = (26 * 0.299 + 26 * 0.587 + 46 * 0.114) / 255; // ≈ 0.111
 
-let _origIconData = null;
-
+// Loads the source icon's pixel data. Not cached: a decoded 512×512 ImageData is
+// ~1 MB and color-scheme changes are rare; releasing it after use keeps idle
+// memory low. The asset is served from the SW cache, so re-reads are cheap.
 function loadOrigIcon() {
-  if (_origIconData) return Promise.resolve(_origIconData);
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => {
@@ -529,8 +529,7 @@ function loadOrigIcon() {
       canvas.height = img.naturalHeight;
       const ctx = canvas.getContext("2d");
       ctx.drawImage(img, 0, 0);
-      _origIconData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      resolve(_origIconData);
+      resolve(ctx.getImageData(0, 0, canvas.width, canvas.height));
     };
     img.onerror = reject;
     img.src = "/assets/icons/icon-512-maskable.png";
@@ -538,29 +537,33 @@ function loadOrigIcon() {
 }
 
 function updateAppIcons(scheme) {
-  loadOrigIcon().then((origData) => {
-    const [nr, ng, nb] = hexToRgb(scheme.iconBg);
-    const canvas = document.createElement("canvas");
-    canvas.width = origData.width;
-    canvas.height = origData.height;
-    const ctx = canvas.getContext("2d");
-    const imgData = new ImageData(new Uint8ClampedArray(origData.data), origData.width, origData.height);
-    const d = imgData.data;
-    for (let i = 0; i < d.length; i += 4) {
-      // Normalize luminance: 0 = original bg, 1 = white cross
-      const lum = (d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114) / 255;
-      const t = Math.max(0, Math.min(1, (lum - ICON_BG_LUM) / (1 - ICON_BG_LUM)));
-      d[i]     = Math.round(nr + (255 - nr) * t);
-      d[i + 1] = Math.round(ng + (255 - ng) * t);
-      d[i + 2] = Math.round(nb + (255 - nb) * t);
-    }
-    ctx.putImageData(imgData, 0, 0);
-    const dataUrl = canvas.toDataURL("image/png");
-    const faviconLink = document.querySelector("link[rel='icon']");
-    if (faviconLink) faviconLink.href = dataUrl;
-    const appleLink = document.querySelector("link[rel='apple-touch-icon']");
-    if (appleLink) appleLink.href = dataUrl;
-  }).catch(() => { /* non-critical */ });
+  // Defer to idle: favicon/apple-touch-icon updates have no visible effect
+  // during reading, and the canvas pass blocks the main thread for a frame.
+  const idle = window.requestIdleCallback ?? ((cb) => setTimeout(cb, 200));
+  idle(() => {
+    loadOrigIcon().then((origData) => {
+      const [nr, ng, nb] = hexToRgb(scheme.iconBg);
+      const canvas = document.createElement("canvas");
+      canvas.width = origData.width;
+      canvas.height = origData.height;
+      const ctx = canvas.getContext("2d");
+      const d = origData.data;
+      for (let i = 0; i < d.length; i += 4) {
+        // Normalize luminance: 0 = original bg, 1 = white cross
+        const lum = (d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114) / 255;
+        const t = Math.max(0, Math.min(1, (lum - ICON_BG_LUM) / (1 - ICON_BG_LUM)));
+        d[i]     = Math.round(nr + (255 - nr) * t);
+        d[i + 1] = Math.round(ng + (255 - ng) * t);
+        d[i + 2] = Math.round(nb + (255 - nb) * t);
+      }
+      ctx.putImageData(origData, 0, 0);
+      const dataUrl = canvas.toDataURL("image/png");
+      const faviconLink = document.querySelector("link[rel='icon']");
+      if (faviconLink) faviconLink.href = dataUrl;
+      const appleLink = document.querySelector("link[rel='apple-touch-icon']");
+      if (appleLink) appleLink.href = dataUrl;
+    }).catch(() => { /* non-critical */ });
+  });
 }
 
 // ── Color scheme ──
@@ -577,13 +580,31 @@ function saveColorScheme(scheme) {
   try { localStorage.setItem(COLOR_SCHEME_KEY, scheme); } catch (_) {}
 }
 
+// Default favicon/apple-touch-icon URLs as shipped in index.html.
+// Captured once so we can restore them when reverting to the navy scheme
+// without re-running the canvas recolor pipeline.
+const DEFAULT_FAVICON_HREF = "/favicon.ico";
+const DEFAULT_APPLE_ICON_HREF = "/assets/icons/icon-512-maskable.png";
+
 function applyColorScheme(schemeName) {
   const scheme = COLOR_SCHEMES.find(s => s.id === schemeName) || COLOR_SCHEMES[0];
   if (schemeName === "navy") {
     document.documentElement.removeAttribute("data-color-scheme");
-  } else {
-    document.documentElement.setAttribute("data-color-scheme", schemeName);
+    updateThemeMetaColor();
+    // Default scheme: shipped favicon/apple-touch-icon already match. Skipping
+    // the canvas recolor saves ~1 MB ImageData on every launch. If a previous
+    // session left a recolored data: URL on these <link>s, restore the originals.
+    const faviconLink = document.querySelector("link[rel='icon']");
+    if (faviconLink && faviconLink.href !== new URL(DEFAULT_FAVICON_HREF, location.href).href) {
+      faviconLink.href = DEFAULT_FAVICON_HREF;
+    }
+    const appleLink = document.querySelector("link[rel='apple-touch-icon']");
+    if (appleLink && appleLink.href !== new URL(DEFAULT_APPLE_ICON_HREF, location.href).href) {
+      appleLink.href = DEFAULT_APPLE_ICON_HREF;
+    }
+    return;
   }
+  document.documentElement.setAttribute("data-color-scheme", schemeName);
   updateThemeMetaColor();
   updateAppIcons(scheme);
 }
@@ -2228,10 +2249,18 @@ window.addEventListener("DOMContentLoaded", () => {
 
   // 1. Prioritize UI rendering
   route().finally(() => {
-    // 2. Load non-critical data after first paint
+    // 2. Load non-critical work after first paint. Each item targets a surface
+    //    the user cannot interact with until they explicitly open it (drawers,
+    //    search sheet) or that has no first-paint impact (version label,
+    //    compact-header scroll listener, install nudge, SW registration).
     idle(() => {
       loadVersion();
       initCompactHeader();
+      initSheetDrag();
+      initBookmarkSheetDrag();
+      initBookmarkDrawerResize();
+      registerServiceWorker();
+      maybeShowInstallNudge();
     });
   });
 });
@@ -2906,8 +2935,11 @@ $searchSheetClear.addEventListener("click", () => {
   $searchSheetInput.focus();
 });
 
-// Drag handle to resize sheet
-(function initSheetDrag() {
+// Drag-handle initializers — registered later in the deferred startup hook.
+// Each operates on a hidden surface (search sheet / bookmark drawer), so
+// nothing is interactive before the user opens that surface; deferring
+// keeps these listener attachments off the launch critical path.
+function initSheetDrag() {
   const handle = document.getElementById("search-sheet-handle");
   let startY = 0;
   let startH = 0;
@@ -2936,10 +2968,9 @@ $searchSheetClear.addEventListener("click", () => {
       $searchSheet.style.height = "";
     }
   }
-})();
+}
 
-// Drag handle to resize bookmark drawer
-(function initBookmarkSheetDrag() {
+function initBookmarkSheetDrag() {
   const handle = document.getElementById("bookmark-drawer-handle");
   const drawer = document.getElementById("bookmark-drawer");
   let startY = 0;
@@ -2969,10 +3000,9 @@ $searchSheetClear.addEventListener("click", () => {
       drawer.style.height = "";
     }
   }
-})();
+}
 
-// Drag handle to resize bookmark drawer width (desktop only)
-(function initBookmarkDrawerResize() {
+function initBookmarkDrawerResize() {
   const handle = document.getElementById("bookmark-drawer-resize");
   const drawer = document.getElementById("bookmark-drawer");
   let startX = 0;
@@ -2997,7 +3027,7 @@ $searchSheetClear.addEventListener("click", () => {
   function onPointerUp() {
     handle.removeEventListener("pointermove", onPointerMove);
   }
-})();
+}
 
 // ── Compact Header on Scroll ──
 // Deferred: not needed until after first render and first scroll.
@@ -4525,8 +4555,12 @@ document.addEventListener("keydown", (e) => {
 });
 
 // ── Service Worker Registration & Update ──
+// Invoked from the deferred startup hook (DOMContentLoaded → requestIdleCallback)
+// so SW lookup, update checks, and shell pre-caching never block first paint.
 
-if ("serviceWorker" in navigator) {
+function registerServiceWorker() {
+  if (!("serviceWorker" in navigator)) return;
+
   let refreshing = false;
   navigator.serviceWorker.addEventListener("controllerchange", () => {
     if (refreshing) return;
@@ -4570,5 +4604,3 @@ if ("serviceWorker" in navigator) {
     reg.addEventListener("updatefound", () => trackInstalling(reg));
   }).catch(() => {});
 }
-
-maybeShowInstallNudge();
