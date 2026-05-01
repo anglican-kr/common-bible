@@ -652,32 +652,46 @@ initSettings();
 
 // ── Launch Screen ──
 
+// Gate fade-out on font readiness so a cold-cache visit does not show
+// system-font content briefly between fade-out end and swap arrival.
+// Bounded by timeout to avoid stalling on slow networks.
+const FONT_READY_TIMEOUT_MS = 1500;
+const _fontReadyPromise = (() => {
+  if (!document.fonts || !document.fonts.ready) return Promise.resolve();
+  const ready = document.fonts.ready.catch(() => {});
+  const timeout = new Promise((resolve) => setTimeout(resolve, FONT_READY_TIMEOUT_MS));
+  return Promise.race([ready, timeout]);
+})();
+
 let _launchScreenDismissed = false;
 
 function dismissLaunchScreen() {
   if (_launchScreenDismissed) return;
   _launchScreenDismissed = true;
-  const el = document.getElementById("launch-screen");
-  if (!el) {
-    document.documentElement.classList.add("launch-done");
-    return;
-  }
-  
-  // Decouple from heavy rendering task for smoother start
-  requestAnimationFrame(() => {
-    el.classList.add("fade-out");
-    // Change background early to avoid flash but after animation has committed
-    setTimeout(() => {
-      document.documentElement.classList.add("launch-done");
-    }, 50);
-  });
 
-  const handler = (e) => {
-    if (e.target !== el || (e.animationName !== "launch-screen-out")) return;
-    el.removeEventListener("animationend", handler);
-    el.remove();
-  };
-  el.addEventListener("animationend", handler);
+  _fontReadyPromise.then(() => {
+    const el = document.getElementById("launch-screen");
+    if (!el) {
+      document.documentElement.classList.add("launch-done");
+      return;
+    }
+
+    // Decouple from heavy rendering task for smoother start
+    requestAnimationFrame(() => {
+      el.classList.add("fade-out");
+      // Change background early to avoid flash but after animation has committed
+      setTimeout(() => {
+        document.documentElement.classList.add("launch-done");
+      }, 50);
+    });
+
+    const handler = (e) => {
+      if (e.target !== el || (e.animationName !== "launch-screen-out")) return;
+      el.removeEventListener("animationend", handler);
+      el.remove();
+    };
+    el.addEventListener("animationend", handler);
+  });
 }
 
 // ── Helpers ──
