@@ -93,9 +93,13 @@ HTML 파싱이 `<body>` 태그까지 진행됐지만 `<div id="launch-screen">` 
 
 ### 5. 렌더 블로킹 리소스 비동기화
 
-- Google Fonts stylesheet: `media="print" onload="this.media='all'"` 패턴으로 비차단 로드(`3b8b6a2`)
+- Google Fonts stylesheet: `preload as="style"` + 일반 stylesheet 링크로 `@font-face` 규칙을 first paint 전에 확보(`d61f879`). `display=swap`을 사용해 폰트 다운로드 완료 즉시 본문에 적용. launch-screen 오버레이가 다운로드 구간을 가려 FOUT은 시각적으로 노출되지 않음.
 - `app.js`, `gtag-init.js`: `defer` 속성
 - `js/pre-fetch.js`: `<head>`에서 동기 로드하되 단 3줄 스크립트로 `books.json` 페칭을 앱 코드 로드와 병렬화(`7d1b204`)
+
+> **개정 (2026-05-01):** `display=optional`은 캐시 미적중 시 폰트 다운로드가 100ms를 초과하면 현재 세션 동안 시스템 폰트로 락인되어, 사용자가 앱을 종료·재실행해야만 지정 폰트가 보이는 회귀를 일으킨다(`3d5dfc3` → 본 개정으로 되돌림). launch-screen이 이미 폰트 다운로드 구간을 가리므로 `display=swap`으로도 FOUT이 노출되지 않으며, 캐시 무효화 직후에도 폰트가 도착 즉시 적용된다.
+>
+> **개정 후속 (2026-05-01):** 페이드아웃 윈도우(2.4s)는 일반 네트워크에서는 폰트 다운로드를 충분히 흡수하지만, 느린 LTE/3G 콜드 캐시에서 폰트 도착이 페이드아웃 종료 이후로 밀리면 본문이 완전히 노출된 상태에서 swap이 일어나 FOUT(레이아웃 시프트 포함)이 보일 수 있다. 이를 막기 위해 `dismissLaunchScreen()`을 `Promise.race([document.fonts.ready, timeout(1500ms)])` 결과에 게이팅한다(`js/app.js`). 캐시 적중 시 `document.fonts.ready`는 즉시 resolve되어 지연이 없고, 콜드 캐시에서는 폰트 도착까지 launch-screen이 본문을 가린 채 대기하다가 페이드아웃을 시작한다. 1.5s 타임아웃은 매우 느린 네트워크에서 무한 대기를 방지하는 안전망으로, 이 경우는 swap이 본문에 보이지만 기존 동작과 동일한 수준의 회귀로 한정된다.
 
 ### 6. 조기 해제 + 부드러운 전환
 
