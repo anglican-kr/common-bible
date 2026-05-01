@@ -2723,13 +2723,35 @@ function isMobile() {
   return window.matchMedia("(max-width: 768px)").matches;
 }
 
+// Lift the sheet above the on-screen keyboard. Default Android viewport
+// behavior (`resizes-visual`) leaves position:fixed elements anchored to the
+// layout viewport, so the bottom of the sheet would sit behind the keyboard.
+function adjustSheetForKeyboard() {
+  if (!window.visualViewport || $searchSheet.hidden) return;
+  const vv = window.visualViewport;
+  const keyboardOffset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+  if (keyboardOffset > 0) {
+    $searchSheet.style.bottom = `${keyboardOffset}px`;
+    $searchSheet.style.maxHeight = `${vv.height * 0.95}px`;
+  } else {
+    $searchSheet.style.bottom = "";
+    $searchSheet.style.maxHeight = "";
+  }
+}
+
 function openSearchSheet(query) {
   $searchScrim.hidden = false;
   $searchSheet.hidden = false;
   $searchSheetInput.value = query || "";
   $searchSheetClear.hidden = !query;
   $searchFab.hidden = true;
-  requestAnimationFrame(() => $searchSheetInput.focus());
+  // Focus synchronously so iOS Safari opens the on-screen keyboard.
+  // requestAnimationFrame would defer past the user-gesture context.
+  $searchSheetInput.focus({ preventScroll: true });
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener("resize", adjustSheetForKeyboard);
+    window.visualViewport.addEventListener("scroll", adjustSheetForKeyboard);
+  }
   if (query) runSheetSearch(query, 1);
 }
 
@@ -2737,8 +2759,14 @@ function closeSearchSheet() {
   $searchScrim.hidden = true;
   $searchSheet.hidden = true;
   $searchSheet.style.height = "";
+  $searchSheet.style.bottom = "";
+  $searchSheet.style.maxHeight = "";
   $searchFab.hidden = false;
   clearNode($searchSheetResults);
+  if (window.visualViewport) {
+    window.visualViewport.removeEventListener("resize", adjustSheetForKeyboard);
+    window.visualViewport.removeEventListener("scroll", adjustSheetForKeyboard);
+  }
 }
 
 let sheetDebounceTimer = null;
