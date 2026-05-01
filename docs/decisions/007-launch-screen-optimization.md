@@ -93,9 +93,11 @@ HTML 파싱이 `<body>` 태그까지 진행됐지만 `<div id="launch-screen">` 
 
 ### 5. 렌더 블로킹 리소스 비동기화
 
-- Google Fonts stylesheet: `media="print" onload="this.media='all'"` 패턴으로 비차단 로드(`3b8b6a2`)
+- Google Fonts stylesheet: `preload as="style"` + 일반 stylesheet 링크로 `@font-face` 규칙을 first paint 전에 확보(`d61f879`). `display=swap`을 사용해 폰트 다운로드 완료 즉시 본문에 적용. launch-screen 오버레이가 다운로드 구간을 가려 FOUT은 시각적으로 노출되지 않음.
 - `app.js`, `gtag-init.js`: `defer` 속성
 - `js/pre-fetch.js`: `<head>`에서 동기 로드하되 단 3줄 스크립트로 `books.json` 페칭을 앱 코드 로드와 병렬화(`7d1b204`)
+
+> **개정 (2026-05-01):** `display=optional`은 캐시 미적중 시 폰트 다운로드가 100ms를 초과하면 현재 세션 동안 시스템 폰트로 락인되어, 사용자가 앱을 종료·재실행해야만 지정 폰트가 보이는 회귀를 일으킨다(`3d5dfc3` → 본 개정으로 되돌림). launch-screen이 이미 폰트 다운로드 구간을 가리므로 `display=swap`으로도 FOUT이 노출되지 않으며, 캐시 무효화 직후에도 폰트가 도착 즉시 적용된다.
 
 ### 6. 조기 해제 + 부드러운 전환
 
