@@ -1250,30 +1250,7 @@ function setTitleWithChapterPicker(book, currentCh) {
     }
   });
 
-  const chevron = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  chevron.setAttribute("viewBox", "0 0 24 24");
-  chevron.setAttribute("aria-hidden", "true");
-  chevron.setAttribute("class", "title-back-icon");
-  const chevronPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
-  chevronPath.setAttribute("d", "M15.5 5 8.5 12l7 7");
-  chevronPath.setAttribute("stroke", "currentColor");
-  chevronPath.setAttribute("stroke-width", "2");
-  chevronPath.setAttribute("stroke-linecap", "round");
-  chevronPath.setAttribute("stroke-linejoin", "round");
-  chevronPath.setAttribute("fill", "none");
-  chevron.appendChild(chevronPath);
-
-  const backBtn = el(
-    "button",
-    { className: "title-back-btn", "aria-label": `${book.name_ko} 목록으로` },
-    chevron
-  );
-  backBtn.addEventListener("click", () => {
-    if (history.length > 1) history.back();
-    else navigate(`/${book.id}`);
-  });
-
-  $title.appendChild(backBtn);
+  $title.appendChild(buildBackBtn(`${book.name_ko} 목록으로`, `/${book.id}`));
   $title.appendChild(btn);
   $title.appendChild(popover);
   $title.appendChild(buildBookmarkHeaderBtn(book.id, currentCh));
@@ -1355,6 +1332,7 @@ function effectiveDivision(book) {
 
 function renderBookList(books) {
   setTitle("공동번역성서");
+  $title.appendChild(buildBookmarkHeaderBtn(null, null));
   setBreadcrumb([]);
   hideAudioBar();
   clearNode($app);
@@ -1445,6 +1423,8 @@ function renderResumeBanner(books) {
 
 function renderDivisionList(books, division) {
   setTitleWithDivisionPicker(division);
+  $title.insertBefore(buildBackBtn("목록으로", "/"), $title.firstChild);
+  $title.appendChild(buildBookmarkHeaderBtn(null, null));
   setBreadcrumb([{ label: "목록", href: "/" }]);
   hideAudioBar();
   clearNode($app);
@@ -1489,6 +1469,8 @@ function renderDivisionList(books, division) {
 
 function renderChapterList(book, books) {
   setTitle(book.name_ko);
+  $title.insertBefore(buildBackBtn(`${divisionLabels()[effectiveDivision(book)]}으로`, `/${effectiveDivision(book)}`), $title.firstChild);
+  $title.appendChild(buildBookmarkHeaderBtn(book.id, null));
   hideAudioBar();
   const effDiv = effectiveDivision(book);
   setBreadcrumb([
@@ -3524,6 +3506,28 @@ const $verseSelectCount = document.getElementById("verse-select-count");
 const $verseSelectBookmarkBtn = document.getElementById("verse-select-bookmark-btn");
 const $verseSelectCancelBtn = document.getElementById("verse-select-cancel-btn");
 
+// Build the chevron-left back button for page title headers
+function buildBackBtn(ariaLabel, fallback) {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("aria-hidden", "true");
+  svg.setAttribute("class", "title-back-icon");
+  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  path.setAttribute("d", "M15.5 5 8.5 12l7 7");
+  path.setAttribute("stroke", "currentColor");
+  path.setAttribute("stroke-width", "2");
+  path.setAttribute("stroke-linecap", "round");
+  path.setAttribute("stroke-linejoin", "round");
+  path.setAttribute("fill", "none");
+  svg.appendChild(path);
+  const btn = el("button", { className: "title-back-btn", "aria-label": ariaLabel }, svg);
+  btn.addEventListener("click", () => {
+    if (history.length > 1) history.back();
+    else navigate(fallback);
+  });
+  return btn;
+}
+
 // Build the bookmark icon SVG button for the chapter header
 function buildBookmarkHeaderBtn(bookId, chapter) {
   const btn = el("button", {
@@ -4423,7 +4427,7 @@ function updateVerseSelectBar() {
     const spec = refs.length
       ? selectedVersesToSpec(refs)
       : selectedVersesToSpec(Array.from(_selectedVerseRefs));
-    $verseSelectCount.textContent = `${spec}절 선택됨`;
+    $verseSelectCount.textContent = `${spec.replace(/,/g, ', ')}절 선택됨`;
   }
   $verseSelectBookmarkBtn.disabled = count === 0;
 }
