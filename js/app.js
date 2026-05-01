@@ -1681,6 +1681,22 @@ function renderChapter(data, book, opts) {
     isFirst = false;
   }
 
+  // Flatten inner corners between adjacent highlighted verses so a run from
+  // a search/bookmark deep link renders as a single block.
+  {
+    const verses = [...article.querySelectorAll(".verse[data-vref]")];
+    for (let i = 0; i < verses.length; i++) {
+      const v = verses[i];
+      if (!v.classList.contains("verse-highlight")) continue;
+      if (i > 0 && verses[i - 1].classList.contains("verse-highlight")) {
+        v.classList.add("verse-highlight-join-prev");
+      }
+      if (i < verses.length - 1 && verses[i + 1].classList.contains("verse-highlight")) {
+        v.classList.add("verse-highlight-join-next");
+      }
+    }
+  }
+
   // Track current chapter context for verse selection mode
   _currentBookId = book.id;
   _currentChapter = ch;

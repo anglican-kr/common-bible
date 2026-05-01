@@ -1029,6 +1029,17 @@ mark.search-highlight {
   padding: 0.1em 0.15em;
 }
 
+/* In a run of consecutive highlighted verses, flatten the corners that abut
+   another highlighted verse so the run reads as a single block. */
+.verse-highlight.verse-highlight-join-prev {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+.verse-highlight.verse-highlight-join-next {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
 [data-theme="dark"] .verse-highlight {
   background: rgba(196, 154, 108, 0.12) !important;
 }
