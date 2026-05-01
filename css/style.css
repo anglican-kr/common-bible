@@ -2199,7 +2199,7 @@ body.verse-select-active .verse[data-vref]:hover {
 #bookmark-drawer-toolbar {
   display: flex;
   gap: 0.25rem;
-  padding: 0.4rem 0.75rem;
+  padding: 0.5rem 0.75rem max(0.75rem, env(safe-area-inset-bottom, 0px));
   flex-shrink: 0;
   justify-content: flex-end;
   align-items: center;
@@ -2238,8 +2238,8 @@ body.verse-select-active .verse[data-vref]:hover {
 }
 
 .bm-toolbar-btn {
-  width: 2.2rem;
-  height: 2.2rem;
+  width: 2.4rem;
+  height: 2.4rem;
   padding: 0;
   display: flex;
   align-items: center;
