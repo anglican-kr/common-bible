@@ -1029,6 +1029,34 @@ mark.search-highlight {
   padding: 0.1em 0.15em;
 }
 
+/* In a run of consecutive highlighted verses, flatten the corners that abut
+   another highlighted verse so the run reads as a single block.
+   Inline verses (default) stack horizontally → flatten left/right edges.
+   Block verses (poetry) stack vertically   → flatten top/bottom edges. */
+.verse-highlight.verse-highlight-join-prev {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+.verse-highlight.verse-highlight-join-next {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+.verse.verse-poetry.verse-highlight.verse-highlight-join-prev {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+  border-bottom-left-radius: 5px;
+  border-bottom-right-radius: 5px;
+}
+.verse.verse-poetry.verse-highlight.verse-highlight-join-next {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  border-top-left-radius: 5px;
+  border-top-right-radius: 5px;
+}
+.verse.verse-poetry.verse-highlight.verse-highlight-join-prev.verse-highlight-join-next {
+  border-radius: 0;
+}
+
 [data-theme="dark"] .verse-highlight {
   background: rgba(196, 154, 108, 0.12) !important;
 }
@@ -1946,6 +1974,34 @@ body.verse-select-active .verse[data-vref]:hover {
 .verse.verse-selected {
   background: color-mix(in srgb, var(--accent) 20%, transparent) !important;
   border-radius: 5px;
+}
+
+/* In a run of consecutive selected verses, flatten the corners that abut
+   another selected verse so the run reads as a single highlighted block.
+   Inline verses (default) stack horizontally → flatten left/right edges.
+   Block verses (poetry) stack vertically   → flatten top/bottom edges. */
+.verse.verse-selected.verse-selected-join-prev {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+.verse.verse-selected.verse-selected-join-next {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+.verse.verse-poetry.verse-selected.verse-selected-join-prev {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+  border-bottom-left-radius: 5px;
+  border-bottom-right-radius: 5px;
+}
+.verse.verse-poetry.verse-selected.verse-selected-join-next {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  border-top-left-radius: 5px;
+  border-top-right-radius: 5px;
+}
+.verse.verse-poetry.verse-selected.verse-selected-join-prev.verse-selected-join-next {
+  border-radius: 0;
 }
 
 /* ── Verse selection action bar ── */

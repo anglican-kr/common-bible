@@ -1681,6 +1681,22 @@ function renderChapter(data, book, opts) {
     isFirst = false;
   }
 
+  // Flatten inner corners between adjacent highlighted verses so a run from
+  // a search/bookmark deep link renders as a single block.
+  {
+    const verses = [...article.querySelectorAll(".verse[data-vref]")];
+    for (let i = 0; i < verses.length; i++) {
+      const v = verses[i];
+      if (!v.classList.contains("verse-highlight")) continue;
+      if (i > 0 && verses[i - 1].classList.contains("verse-highlight")) {
+        v.classList.add("verse-highlight-join-prev");
+      }
+      if (i < verses.length - 1 && verses[i + 1].classList.contains("verse-highlight")) {
+        v.classList.add("verse-highlight-join-next");
+      }
+    }
+  }
+
   // Track current chapter context for verse selection mode
   _currentBookId = book.id;
   _currentChapter = ch;
@@ -1727,6 +1743,7 @@ function renderChapter(data, book, opts) {
         article.querySelectorAll(".verse[data-vref]").forEach(v => {
           v.classList.toggle("verse-selected", _selectedVerseRefs.has(v.getAttribute("data-vref")));
         });
+        updateVerseSelectionBoundaries(article);
         updateVerseSelectBar();
       }
     }, 300);
@@ -1762,6 +1779,7 @@ function renderChapter(data, book, opts) {
         }
         v.classList.toggle("verse-selected", _selectedVerseRefs.has(vref));
       });
+      updateVerseSelectionBoundaries(article);
       updateVerseSelectBar();
       return;
     }
@@ -1780,6 +1798,7 @@ function renderChapter(data, book, opts) {
           _verseSelectDrag.allVerses.forEach(v => {
             v.classList.toggle("verse-selected", _selectedVerseRefs.has(v.getAttribute("data-vref")));
           });
+          updateVerseSelectionBoundaries(article);
           updateVerseSelectBar();
         }
       }
@@ -4317,6 +4336,21 @@ function openImportModal(incoming) {
 
 // ── Verse selection mode ──
 
+// Flatten the inner corners between adjacent selected verses so a run of
+// consecutive selections renders as a single highlighted block.
+function updateVerseSelectionBoundaries(scope) {
+  const root = scope || document;
+  const verses = [...root.querySelectorAll(".verse[data-vref]")];
+  for (let i = 0; i < verses.length; i++) {
+    const v = verses[i];
+    const sel = v.classList.contains("verse-selected");
+    const prevSel = sel && i > 0 && verses[i - 1].classList.contains("verse-selected");
+    const nextSel = sel && i < verses.length - 1 && verses[i + 1].classList.contains("verse-selected");
+    v.classList.toggle("verse-selected-join-prev", prevSel);
+    v.classList.toggle("verse-selected-join-next", nextSel);
+  }
+}
+
 function enterVerseSelectMode(bookId, chapter) {
   _verseSelectMode = true;
   _selectedVerseRefs.clear();
@@ -4333,7 +4367,8 @@ function exitVerseSelectMode() {
   _selectedVerseRefs.clear();
   document.body.classList.remove("verse-select-active");
   $verseSelectBar.hidden = true;
-  document.querySelectorAll(".verse-selected").forEach(v => v.classList.remove("verse-selected"));
+  document.querySelectorAll(".verse-selected, .verse-selected-join-prev, .verse-selected-join-next")
+    .forEach(v => v.classList.remove("verse-selected", "verse-selected-join-prev", "verse-selected-join-next"));
 }
 
 function updateVerseSelectBar() {
