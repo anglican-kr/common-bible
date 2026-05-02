@@ -1870,6 +1870,13 @@ mark.search-highlight {
   animation: toast-in 0.3s ease-out;
 }
 
+#sw-update-release-link {
+  color: var(--text);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  white-space: nowrap;
+}
+
 #sw-update-btn {
   padding: 0.35rem 0.75rem;
   background: var(--accent);

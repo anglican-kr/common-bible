@@ -4584,12 +4584,20 @@ function registerServiceWorker() {
     window.location.reload();
   });
 
-  function showUpdateToast(waitingSW) {
+  async function showUpdateToast(waitingSW) {
     // Prevent duplicate toasts
     if (document.getElementById("sw-update-toast")) return;
+    const version = await loadVersion();
     const btn = el("button", { id: "sw-update-btn", "aria-label": "새 버전이 있습니다." }, "업데이트");
+    const versionLink = el("a", {
+      href: "https://github.com/anglican-kr/common-bible/releases",
+      target: "_blank",
+      rel: "noopener noreferrer",
+      id: "sw-update-release-link",
+    }, version || "최신 버전");
     const toast = el("div", { id: "sw-update-toast", role: "alert", "aria-label": "앱 업데이트 알림" },
-      el("span", { "aria-hidden": "true" }, "새 버전이 있습니다."),
+      el("span", {}, "새 버전이 있습니다: "),
+      versionLink,
       btn,
     );
     btn.addEventListener("click", () => {
