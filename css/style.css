@@ -2116,10 +2116,13 @@ body.verse-select-active #audio-bar {
   display: none;
 }
 
+<<<<<<< HEAD
 body.verse-select-active #audio-bar ~ #search-fab {
   bottom: max(1.5rem, var(--fab-lift-nav, 0px));
 }
 
+=======
+>>>>>>> fa785bd (style: 절 선택 모드에서 오디오 플레이어 숨기기)
 body.verse-select-active .verse[data-vref] {
   cursor: pointer;
   padding: 0.1em 0.15em;
