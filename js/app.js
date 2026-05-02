@@ -2773,10 +2773,14 @@ function adjustSheetForKeyboard() {
   const vv = window.visualViewport;
   const keyboardOffset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
   if (keyboardOffset > 0) {
+    // Fill the visible viewport so the page body cannot peek through
+    // the gap between the sheet and the on-screen keyboard.
     $searchSheet.style.bottom = `${keyboardOffset}px`;
-    $searchSheet.style.maxHeight = `${vv.height * 0.95}px`;
+    $searchSheet.style.height = `${vv.height}px`;
+    $searchSheet.style.maxHeight = `${vv.height}px`;
   } else {
     $searchSheet.style.bottom = "";
+    $searchSheet.style.height = "";
     $searchSheet.style.maxHeight = "";
   }
 }
