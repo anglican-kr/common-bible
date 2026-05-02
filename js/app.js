@@ -2989,6 +2989,9 @@ function adjustSheetForKeyboard() {
   if (!window.visualViewport || $searchSheet.hidden) return;
   const vv = window.visualViewport;
   const keyboardOffset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+  // Suppress the CSS height transition so viewport adjustments snap instantly
+  // rather than lagging 200ms behind rapid visualViewport resize/scroll events.
+  $searchSheet.style.transition = "none";
   if (keyboardOffset > 0) {
     // Fill the visible viewport so the page body cannot peek through
     // the gap between the sheet and the on-screen keyboard.
@@ -3021,6 +3024,7 @@ function openSearchSheet(query) {
 function closeSearchSheet() {
   $searchScrim.hidden = true;
   $searchSheet.hidden = true;
+  $searchSheet.style.transition = "";
   $searchSheet.style.height = "";
   $searchSheet.style.bottom = "";
   $searchSheet.style.maxHeight = "";
