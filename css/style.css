@@ -2042,6 +2042,10 @@ body.verse-select-active {
   user-select: none;
 }
 
+body.verse-select-active #audio-bar {
+  display: none;
+}
+
 body.verse-select-active .verse[data-vref] {
   cursor: pointer;
   padding: 0.1em 0.15em;
