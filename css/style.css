@@ -1977,6 +1977,13 @@ body.verse-select-active .verse[data-vref]:hover {
   border-radius: 5px;
 }
 
+/* Poetry verses use a 2rem left gutter for the verse-num (margin-left: -2rem).
+   The shorthand padding above would shrink that gutter and push the number
+   off-screen, so restore it here. */
+body.verse-select-active .verse.verse-poetry[data-vref] {
+  padding-left: 2rem;
+}
+
 .verse.verse-selected {
   background: color-mix(in srgb, var(--accent) 20%, transparent) !important;
   border-radius: 5px;
