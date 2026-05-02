@@ -224,6 +224,7 @@ body {
   border-radius: var(--radius);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
   padding: 0.5rem;
+  width: 280px;
   white-space: nowrap;
 }
 
@@ -250,6 +251,74 @@ body {
   margin-top: 0.5rem;
   padding-top: 0.5rem;
   border-top: 1px solid var(--border);
+}
+
+.settings-drive-info-btn {
+  background: none;
+  border: none;
+  padding: 0 0 0 0.3em;
+  cursor: pointer;
+  color: var(--accent);
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  line-height: 1;
+}
+.settings-drive-info-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 50%;
+}
+
+.drive-info-icon {
+  width: 0.9em;
+  height: 0.9em;
+}
+
+.settings-drive-info-row {
+  padding: 0.35rem 0 0.25rem 0.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  white-space: normal;
+}
+.settings-drive-info-row[hidden] { display: none; }
+
+.settings-drive-info-top {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.settings-drive-info-close {
+  margin-left: auto;
+  background: none;
+  border: none;
+  padding: 0 0.1em;
+  cursor: pointer;
+  color: var(--text);
+  opacity: 0.45;
+  font-size: 1rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.settings-drive-info-close:hover { opacity: 0.8; }
+
+.settings-drive-info-email {
+  font-size: 0.8rem;
+  color: var(--accent);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-drive-info-desc {
+  font-size: 0.78rem;
+  color: var(--text-muted, var(--text));
+  opacity: 0.7;
+  line-height: 1.55;
+  white-space: normal;
 }
 
 .settings-action-btn {

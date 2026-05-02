@@ -11,6 +11,7 @@ const SHELL_FILES = [
   "/index.html",
   "/privacy.html",
   "/js/app.js",
+  "/js/drive-sync.js",
   "/js/pre-fetch.js",
   "/js/gtag-init.js",
   "/js/search-worker.js",
@@ -76,7 +77,14 @@ function handleFontFile(event) {
 // Bible/search data updates are propagated by bumping CACHE_NAME on release,
 // which clears the old cache during activate().
 self.addEventListener("fetch", (event) => {
-  if (new URL(event.request.url).hostname === "fonts.gstatic.com") {
+  const { hostname } = new URL(event.request.url);
+
+  // Bypass cache for Google OAuth and Drive API — always network-only.
+  if (hostname.endsWith("googleapis.com") || hostname.endsWith("accounts.google.com")) {
+    return;
+  }
+
+  if (hostname === "fonts.gstatic.com") {
     handleFontFile(event);
     return;
   }

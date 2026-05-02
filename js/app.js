@@ -115,6 +115,7 @@ let _dragState = null; // { id, ghost, origLi, startY, origTop }
 function saveReadingPosition(bookId, chapter, verse = null) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ bookId, chapter, verse }));
+    if (window.driveSync) window.driveSync.scheduleUpload();
   } catch (_) {}
 }
 
@@ -179,6 +180,7 @@ function loadStartupBehavior() {
 
 function saveStartupBehavior(val) {
   localStorage.setItem(STARTUP_BEHAVIOR_KEY, val);
+  if (window.driveSync) window.driveSync.scheduleUpload();
 }
 
 // ── Font size ──
@@ -193,7 +195,7 @@ function loadFontSize() {
 }
 
 function saveFontSize(size) {
-  try { localStorage.setItem(FONT_SIZE_KEY, String(size)); } catch (_) {}
+  try { localStorage.setItem(FONT_SIZE_KEY, String(size)); if (window.driveSync) window.driveSync.scheduleUpload(); } catch (_) {}
 }
 
 function applyFontSize(size) {
@@ -208,10 +210,12 @@ async function clearAllCaches() {
     alert("오프라인 상태에서는 캐시를 비울 수 없습니다.\n인터넷에 연결된 후 다시 시도해 주세요.");
     return;
   }
-  if (!confirm("캐시를 비우면 오프라인 데이터가 삭제됩니다.\n저장된 북마크는 사라지지 않습니다.\n비울까요?")) return;
+  if (!confirm("캐시를 비우면 오프라인 데이터가 삭제됩니다.\n폰트·북마크는 유지됩니다.\n비울까요?")) return;
   try {
     const keys = await caches.keys();
-    await Promise.all(keys.map((k) => caches.delete(k)));
+    // Preserve font caches (fonts-v*) — immutable assets, expensive to re-download.
+    // SW activate() cleans up stale font caches when FONT_CACHE name changes.
+    await Promise.all(keys.filter((k) => !k.startsWith("fonts-")).map((k) => caches.delete(k)));
     const reg = await navigator.serviceWorker.getRegistration();
     if (reg) await reg.unregister();
     window.location.reload();
@@ -251,8 +255,20 @@ function initSettings() {
   const popover = el("div", { className: "settings-popover" });
   popover.hidden = true;
   popover.addEventListener("click", (e) => e.stopPropagation());
+  let activeInfoRow = null;
+  let activeInfoBtn = null;
+  popover.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && activeInfoRow && !activeInfoRow.hidden) {
+      e.stopPropagation();
+      activeInfoRow.hidden = true;
+      if (activeInfoBtn) activeInfoBtn.setAttribute("aria-expanded", "false");
+      activeInfoBtn?.focus();
+    }
+  });
 
   function rebuild() {
+    activeInfoRow = null;
+    activeInfoBtn = null;
     clearNode(popover);
 
     // ── Section 1: Book order (deuterocanon placement) ──
@@ -381,10 +397,11 @@ function initSettings() {
     section2.appendChild(colorRow);
     popover.appendChild(section2);
 
-    // ── Section 3: App lifecycle (install, cache) ──
+    // ── Section 3: App lifecycle (install, drive sync, cache) ──
     const showInstall = typeof install !== "undefined" && install.detectPlatform() !== "installed";
     const showCache = "caches" in window;
-    if (showInstall || showCache) {
+    const showDrive = !!window.driveSync;
+    if (showInstall || showCache || showDrive) {
       const section3 = el("section", { className: "settings-section" });
 
       if (showInstall) {
@@ -399,6 +416,80 @@ function initSettings() {
         });
         installRow.appendChild(installBtn);
         section3.appendChild(installRow);
+      }
+
+      if (showDrive) {
+        const driveRow = el("div", { className: "settings-row" });
+        const driveLabelSpan = el("span", { className: "settings-label" });
+        driveLabelSpan.appendChild(document.createTextNode("Google Drive 동기화"));
+        const driveEnabled = window.driveSync?.isEnabled();
+        const driveAuthed = window.driveSync?.isAuthenticated();
+        if (driveAuthed) {
+          const email = window.driveSync.getUserEmail();
+          const svgNs = "http://www.w3.org/2000/svg";
+          const infoBtn = el("button", {
+            className: "settings-drive-info-btn",
+            type: "button",
+            "aria-label": "연결된 계정 정보",
+            "aria-expanded": "false"
+          });
+          const infoSvg = document.createElementNS(svgNs, "svg");
+          infoSvg.setAttribute("viewBox", "0 0 24 24");
+          infoSvg.setAttribute("aria-hidden", "true");
+          infoSvg.setAttribute("class", "drive-info-icon");
+          const ic = document.createElementNS(svgNs, "circle");
+          ic.setAttribute("cx", "12"); ic.setAttribute("cy", "12"); ic.setAttribute("r", "10");
+          ic.setAttribute("fill", "none"); ic.setAttribute("stroke", "currentColor"); ic.setAttribute("stroke-width", "1.5");
+          const idot = document.createElementNS(svgNs, "circle");
+          idot.setAttribute("cx", "12"); idot.setAttribute("cy", "8.5"); idot.setAttribute("r", "0.85");
+          idot.setAttribute("fill", "currentColor");
+          const istem = document.createElementNS(svgNs, "line");
+          istem.setAttribute("x1", "12"); istem.setAttribute("y1", "11.5");
+          istem.setAttribute("x2", "12"); istem.setAttribute("y2", "16.5");
+          istem.setAttribute("stroke", "currentColor"); istem.setAttribute("stroke-width", "1.7"); istem.setAttribute("stroke-linecap", "round");
+          infoSvg.append(ic, idot, istem);
+          infoBtn.appendChild(infoSvg);
+          driveLabelSpan.appendChild(infoBtn);
+          driveRow.appendChild(driveLabelSpan);
+          const disconnectBtn = el("button", { className: "settings-action-btn", "aria-label": "Google Drive 연결 해제" }, "해제");
+          disconnectBtn.addEventListener("click", () => {
+            if (confirm("Google Drive 연결을 해제하시겠습니까?\n로컬 데이터는 유지됩니다.")) {
+              window.driveSync.signOut();
+            }
+          });
+          driveRow.appendChild(disconnectBtn);
+          section3.appendChild(driveRow);
+          const infoRow = el("div", { className: "settings-drive-info-row" });
+          infoRow.hidden = true;
+          const infoTop = el("div", { className: "settings-drive-info-top" });
+          infoTop.appendChild(el("div", { className: "settings-drive-info-email" }, `구글 ID: ${email ?? "연결됨"}`));
+          const closeBtn = el("button", { className: "settings-drive-info-close", type: "button", "aria-label": "닫기" }, "✕");
+          infoTop.appendChild(closeBtn);
+          infoRow.appendChild(infoTop);
+          infoRow.appendChild(el("div", { className: "settings-drive-info-desc" }, "이 앱은 구글 드라이브에 북마크 정보를 저장합니다. 여러 기기를 사용하는 경우, 북마크를 동기화할 수 있습니다."));
+          activeInfoRow = infoRow;
+          activeInfoBtn = infoBtn;
+          const hideInfoRow = () => {
+            infoRow.hidden = true;
+            infoBtn.setAttribute("aria-expanded", "false");
+          };
+          infoBtn.addEventListener("click", () => {
+            if (infoRow.hidden) {
+              infoRow.hidden = false;
+              infoBtn.setAttribute("aria-expanded", "true");
+            } else {
+              hideInfoRow();
+            }
+          });
+          closeBtn.addEventListener("click", hideInfoRow);
+          section3.appendChild(infoRow);
+        } else {
+          driveRow.appendChild(driveLabelSpan);
+          const connectBtn = el("button", { className: "settings-action-btn", "aria-label": "Google Drive 연결" }, driveEnabled ? "재연결" : "연결");
+          connectBtn.addEventListener("click", () => { window.driveSync?.signIn(); });
+          driveRow.appendChild(connectBtn);
+          section3.appendChild(driveRow);
+        }
       }
 
       if (showCache) {
@@ -506,6 +597,9 @@ function initSettings() {
   wrapper.appendChild(btn);
   document.body.appendChild(popover);
   $settingsAnchor.appendChild(wrapper);
+
+  // Allow drive-sync.js to trigger a UI refresh when auth state changes
+  window.rebuildDriveSyncSection = () => { if (!popover.hidden) rebuild(); };
 }
 
 // ── Icon recoloring ──
@@ -587,7 +681,7 @@ function loadColorScheme() {
 }
 
 function saveColorScheme(scheme) {
-  try { localStorage.setItem(COLOR_SCHEME_KEY, scheme); } catch (_) {}
+  try { localStorage.setItem(COLOR_SCHEME_KEY, scheme); if (window.driveSync) window.driveSync.scheduleUpload(); } catch (_) {}
 }
 
 // Default favicon/apple-touch-icon URLs as shipped in index.html.
@@ -632,7 +726,7 @@ function loadTheme() {
 }
 
 function saveTheme(theme) {
-  try { localStorage.setItem(THEME_KEY, theme); } catch (_) {}
+  try { localStorage.setItem(THEME_KEY, theme); if (window.driveSync) window.driveSync.scheduleUpload(); } catch (_) {}
 }
 
 let _systemThemeListener = null;
@@ -674,7 +768,7 @@ function loadBookOrder() {
 }
 
 function saveBookOrder(order) {
-  try { localStorage.setItem(BOOK_ORDER_KEY, order); } catch (_) {}
+  try { localStorage.setItem(BOOK_ORDER_KEY, order); if (window.driveSync) window.driveSync.scheduleUpload(); } catch (_) {}
 }
 
 // Apply saved settings on load
@@ -765,6 +859,7 @@ function loadBookmarks() {
 function saveBookmarks(store) {
   try {
     localStorage.setItem(BOOKMARK_KEY, JSON.stringify(store));
+    if (window.driveSync) window.driveSync.scheduleUpload();
   } catch (_) {}
 }
 
@@ -2255,6 +2350,7 @@ window.addEventListener("DOMContentLoaded", () => {
       initBookmarkDrawerResize();
       registerServiceWorker();
       maybeShowInstallNudge();
+      if (window.driveSync) window.driveSync.initDriveSync();
     });
   });
 });

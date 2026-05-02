@@ -13,6 +13,7 @@ config/secrets.yaml
 *.key
 *.pem
 *.p12
+*.apps.googleusercontent.com.json
 
 # 로그 파일
 logs/
