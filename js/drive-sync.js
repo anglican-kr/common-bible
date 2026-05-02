@@ -13,6 +13,7 @@ let _userEmail = null;
 let _tokenClient = null;
 let _uploadTimer = null;
 let _initRetryCount = 0;
+let _isRefreshing = false;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -42,8 +43,12 @@ async function _driveRequest(path, options = {}) {
   if (res.status === 401) {
     _accessToken = null;
     _updateSettingsUI();
-    // Attempt silent re-auth; _onTokenResponse will retry the pending sync on success.
-    if (localStorage.getItem(SYNC_ENABLED_KEY) === "1") _silentSignIn();
+    // Attempt silent re-auth; guard with _isRefreshing to prevent concurrent 401s
+    // from triggering multiple re-auth requests and racing _downloadAndMerge calls.
+    if (!_isRefreshing && localStorage.getItem(SYNC_ENABLED_KEY) === "1") {
+      _isRefreshing = true;
+      _silentSignIn();
+    }
     throw new Error("token expired");
   }
   return res;
@@ -101,7 +106,8 @@ async function _downloadAndMerge() {
 
   const res = await _driveRequest(`/files/${fileId}?alt=media`);
   if (!res.ok) return;
-  const remote = await res.json();
+  let remote;
+  try { remote = await res.json(); } catch { return; }
 
   const localUpdatedAt = Number(localStorage.getItem(SYNC_UPDATED_KEY) ?? 0);
   if (remote.updatedAt <= localUpdatedAt) {
@@ -151,6 +157,7 @@ function _showSnackbar(msg) {
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
 async function _onTokenResponse(resp) {
+  _isRefreshing = false;
   if (resp.error) {
     console.warn("[drive-sync] token error:", resp.error);
     // Only notify on explicit user action (consent prompt), not on silent re-auth attempts.
