@@ -2999,6 +2999,7 @@ function adjustSheetForKeyboard() {
     $searchSheet.style.height = `${vv.height}px`;
     $searchSheet.style.maxHeight = `${vv.height}px`;
   } else {
+    $searchSheet.style.transition = "";
     $searchSheet.style.bottom = "";
     $searchSheet.style.height = "";
     $searchSheet.style.maxHeight = "";
