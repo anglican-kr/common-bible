@@ -451,7 +451,7 @@ function initSettings() {
     aboutRow.appendChild(privacyLink);
     aboutRow.appendChild(el("br"));
     const versionLabel = appVersion ? `공동번역성서 ${appVersion}` : "공동번역성서";
-    const githubLink = el("a", { href: "https://github.com/anglican-kr/common-bible", target: "_blank", rel: "noopener noreferrer" });
+    const githubLink = el("a", { href: "https://github.com/anglican-kr/common-bible/releases", target: "_blank", rel: "noopener noreferrer" });
     const ns = "http://www.w3.org/2000/svg";
     const githubIcon = document.createElementNS(ns, "svg");
     githubIcon.setAttribute("viewBox", "0 0 16 16");
