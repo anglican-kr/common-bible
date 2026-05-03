@@ -80,7 +80,8 @@ self.addEventListener("fetch", (event) => {
   const { hostname } = new URL(event.request.url);
 
   // Bypass cache for Google OAuth and Drive API — always network-only.
-  if (hostname.endsWith("googleapis.com") || hostname.endsWith("accounts.google.com")) {
+  const DRIVE_HOSTNAMES = ["www.googleapis.com", "content.googleapis.com", "oauth2.googleapis.com", "accounts.google.com"];
+  if (DRIVE_HOSTNAMES.includes(hostname)) {
     return;
   }
 

@@ -18,7 +18,7 @@ let _isRefreshing = false;
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function _buildSyncPayload() {
-  const get = (k) => { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } };
+  const get = (k) => { const v = localStorage.getItem(k); try { return JSON.parse(v); } catch { return v; } };
   return {
     version: 1,
     updatedAt: Date.now(),
@@ -70,9 +70,10 @@ async function _upload() {
   const body = JSON.stringify(_buildSyncPayload());
   const fileId = await _findSyncFileId();
 
+  let ok = false;
   if (fileId) {
     // Update existing file
-    await fetch(`${DRIVE_UPLOAD_API}/files/${fileId}?uploadType=media`, {
+    const res = await fetch(`${DRIVE_UPLOAD_API}/files/${fileId}?uploadType=media`, {
       method: "PATCH",
       headers: {
         Authorization: `Bearer ${_accessToken}`,
@@ -80,19 +81,21 @@ async function _upload() {
       },
       body,
     });
+    ok = res.ok;
   } else {
     // Create new file in appDataFolder
     const meta = JSON.stringify({ name: "sync.json", parents: ["appDataFolder"] });
     const form = new FormData();
     form.append("metadata", new Blob([meta], { type: "application/json" }));
     form.append("file", new Blob([body], { type: "application/json" }));
-    await fetch(`${DRIVE_UPLOAD_API}/files?uploadType=multipart`, {
+    const res = await fetch(`${DRIVE_UPLOAD_API}/files?uploadType=multipart`, {
       method: "POST",
       headers: { Authorization: `Bearer ${_accessToken}` },
       body: form,
     });
+    ok = res.ok;
   }
-  localStorage.setItem(SYNC_UPDATED_KEY, String(Date.now()));
+  if (ok) localStorage.setItem(SYNC_UPDATED_KEY, String(Date.now()));
 }
 
 async function _downloadAndMerge() {
