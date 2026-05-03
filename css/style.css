@@ -2476,6 +2476,19 @@ body.verse-select-active .verse.verse-poetry[data-vref] {
   transition: background 0.1s;
 }
 
+.bm-row-content {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex: 1;
+  min-width: 0;
+}
+
+/* Mobile-only swipe-to-reveal panel; shown on viewports ≤768px (see ADR-010). */
+.bm-row-actions-mobile {
+  display: none;
+}
+
 .bm-folder-row:hover,
 .bm-bookmark-row:hover {
   background: color-mix(in srgb, var(--accent) 8%, transparent);
@@ -3192,6 +3205,90 @@ body.verse-select-active .verse.verse-poetry[data-vref] {
   color: var(--text-secondary);
 }
 
+/* ── Mobile: swipe-to-reveal bookmark actions (ADR-010, 2026-05-03) ──
+   On touch viewports, hover-revealed action buttons stick open after the first
+   tap (iOS Safari treats first tap as :hover), forcing a double-tap to reach
+   edit/delete. Replace with swipe-left or long-press to reveal a slide-out
+   action panel; single tap navigates as expected. */
+@media (max-width: 768px) {
+  .bm-folder-row .bm-item-actions,
+  .bm-bookmark-row .bm-item-actions {
+    display: none;
+  }
+
+  .bm-folder-row,
+  .bm-bookmark-row {
+    position: relative;
+    overflow: hidden;
+    padding: 0;
+  }
+
+  .bm-row-content {
+    padding: 0.3rem 0.75rem;
+    background: var(--bg);
+    transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    will-change: transform;
+    position: relative;
+    z-index: 1;
+  }
+
+  .bm-bookmark-row.bm-active {
+    background: transparent;
+    margin-right: 0;
+    border-radius: 0;
+  }
+
+  .bm-bookmark-row.bm-active .bm-row-content {
+    background: color-mix(in srgb, var(--accent) 12%, var(--bg));
+  }
+
+  .bm-folder-row:hover,
+  .bm-bookmark-row:hover {
+    background: transparent;
+  }
+
+  .bm-bookmark-row.bm-swiped .bm-row-content,
+  .bm-folder-row.bm-swiped .bm-row-content {
+    transform: translateX(-140px);
+  }
+
+  /* Disable the snap-back transition while the finger is dragging the row. */
+  .bm-bookmark-row.bm-swiping .bm-row-content,
+  .bm-folder-row.bm-swiping .bm-row-content {
+    transition: none;
+  }
+
+  .bm-row-actions-mobile {
+    display: flex;
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 140px;
+    z-index: 0;
+  }
+
+  .bm-mobile-action-btn {
+    flex: 1;
+    border: none;
+    font-family: inherit;
+    font-size: 0.85rem;
+    color: #fff;
+    cursor: pointer;
+    padding: 0;
+    min-height: 44px;
+    touch-action: manipulation;
+  }
+
+  .bm-mobile-edit-btn {
+    background: var(--accent);
+  }
+
+  .bm-mobile-delete-btn {
+    background: #c0392b;
+  }
+}
+
 /* ── Reduced motion ── */
 
 @media (prefers-reduced-motion: reduce) {
@@ -3201,5 +3298,8 @@ body.verse-select-active .verse.verse-poetry[data-vref] {
   #bookmark-drawer:not([hidden]):not(.drawer-closing),
   #bookmark-drawer.drawer-closing {
     animation: none;
+  }
+  .bm-row-content {
+    transition: none;
   }
 }

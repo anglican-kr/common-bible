@@ -1110,18 +1110,75 @@ function _updateDragIndicators(clientX, clientY) {
   }
 }
 
+// Mobile swipe-to-reveal + long-press: tracks the single revealed row so
+// opening a new one auto-closes the previous. See ADR-010 (2026-05-03).
+const SWIPE_REVEAL_PX = 140;
+const LONG_PRESS_MS = 500;
+let _swipedRow = null;
+
+function _isMobileViewport() {
+  return window.matchMedia("(max-width: 768px)").matches;
+}
+
+function closeSwipedRow(except) {
+  if (_swipedRow && _swipedRow !== except) {
+    _swipedRow.classList.remove("bm-swiped");
+    const prevContent = _swipedRow.querySelector(".bm-row-content");
+    if (prevContent) prevContent.style.transform = "";
+    _swipedRow = null;
+  }
+}
+
+function _openSwipedRow(row) {
+  closeSwipedRow(row);
+  row.classList.add("bm-swiped");
+  const content = row.querySelector(".bm-row-content");
+  if (content) content.style.transform = "";
+  _swipedRow = row;
+}
+
 function _setupDragHandle(li, row) {
   row.addEventListener("pointerdown", (e) => {
     if (e.pointerType === "mouse" && e.button !== 0) return;
     if (e.target.closest("button")) return;
+    // Buttons inside the mobile-only revealed actions live outside .bm-row-content
+    // but inside the row; the closest("button") check above already excludes them.
 
     const pointerId = e.pointerId;
     const startX = e.clientX;
     const startY = e.clientY;
     const origRect = li.getBoundingClientRect();
+    const isMobile = _isMobileViewport();
+    const swipeContent = row.querySelector(".bm-row-content");
+    const canSwipe = isMobile && !!swipeContent;
+    // null until the first significant move classifies the gesture.
+    // "drag" → reorder, "swipe" → reveal actions, "longpress" → reveal via hold
+    let mode = null;
     let dragStarted = false;
+    const startedSwiped = canSwipe && row.classList.contains("bm-swiped");
+    const baseOffset = startedSwiped ? -SWIPE_REVEAL_PX : 0;
+    let longPressTimer = null;
+
+    if (canSwipe && !startedSwiped) {
+      longPressTimer = setTimeout(() => {
+        if (mode !== null) return;
+        mode = "longpress";
+        _openSwipedRow(row);
+        if (navigator.vibrate) {
+          try { navigator.vibrate(10); } catch {}
+        }
+      }, LONG_PRESS_MS);
+    }
+
+    const clearLongPress = () => {
+      if (longPressTimer) {
+        clearTimeout(longPressTimer);
+        longPressTimer = null;
+      }
+    };
 
     const cleanupPointerHandlers = () => {
+      clearLongPress();
       document.removeEventListener("pointermove", onMove);
       document.removeEventListener("pointerup", finish);
       document.removeEventListener("pointercancel", cancel);
@@ -1132,8 +1189,37 @@ function _setupDragHandle(li, row) {
 
     function onMove(e) {
       if (e.pointerId !== pointerId) return;
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+
+      if (mode === null) {
+        if (Math.hypot(dx, dy) < 5) return;
+        clearLongPress();
+        // Horizontal-dominant gesture on mobile → swipe; otherwise → drag-to-reorder.
+        if (canSwipe && Math.abs(dx) > Math.abs(dy)) {
+          mode = "swipe";
+          row.classList.add("bm-swiping");
+          row.setPointerCapture(pointerId);
+        } else {
+          mode = "drag";
+        }
+      }
+
+      if (mode === "swipe") {
+        let offset = baseOffset + dx;
+        if (offset > 0) offset = 0;
+        if (offset < -SWIPE_REVEAL_PX * 1.2) offset = -SWIPE_REVEAL_PX * 1.2;
+        if (swipeContent) swipeContent.style.transform = `translateX(${offset}px)`;
+        return;
+      }
+
+      if (mode === "longpress") {
+        // After long-press reveal, ignore further movement until pointerup.
+        return;
+      }
+
+      // mode === "drag"
       if (!dragStarted) {
-        if (Math.hypot(e.clientX - startX, e.clientY - startY) < 5) return;
         dragStarted = true;
         const ghost = document.createElement("li");
         ghost.className = "bm-drag-ghost";
@@ -1142,7 +1228,7 @@ function _setupDragHandle(li, row) {
         const rowClone = (li.querySelector(".bm-folder-row, .bm-bookmark-row") || li.firstElementChild).cloneNode(true);
         ghost.appendChild(rowClone);
         document.body.appendChild(ghost);
-        row.setPointerCapture(e.pointerId);
+        row.setPointerCapture(pointerId);
         li.classList.add("bm-dragging");
         _dragState = { id: li.dataset.id, ghost, origLi: li, startY, origTop: origRect.top };
       }
@@ -1154,6 +1240,22 @@ function _setupDragHandle(li, row) {
     function finish(e) {
       if (e.pointerId !== pointerId) return;
       cleanupPointerHandlers();
+
+      if (mode === "swipe") {
+        row.classList.remove("bm-swiping");
+        const finalOffset = baseOffset + (e.clientX - startX);
+        if (finalOffset < -SWIPE_REVEAL_PX / 2) {
+          _openSwipedRow(row);
+        } else {
+          row.classList.remove("bm-swiped");
+          if (swipeContent) swipeContent.style.transform = "";
+          if (_swipedRow === row) _swipedRow = null;
+        }
+        return;
+      }
+
+      if (mode === "longpress") return;
+
       if (!_dragState) return;
       const ds = _dragState;
       _dragState = null;
@@ -1171,6 +1273,20 @@ function _setupDragHandle(li, row) {
     function cancel(e) {
       if (e.pointerId !== pointerId) return;
       cleanupPointerHandlers();
+
+      if (mode === "swipe") {
+        row.classList.remove("bm-swiping");
+        // Snap back to the pre-gesture state on cancel.
+        if (startedSwiped) {
+          _openSwipedRow(row);
+        } else {
+          row.classList.remove("bm-swiped");
+          if (swipeContent) swipeContent.style.transform = "";
+          if (_swipedRow === row) _swipedRow = null;
+        }
+        return;
+      }
+
       if (!_dragState) return;
       _dragState.ghost.remove();
       _dragState.origLi.classList.remove("bm-dragging");
@@ -3692,6 +3808,7 @@ function openBookmarkDrawer(bookId, chapter) {
 
 function closeBookmarkDrawer() {
   if ($bookmarkDrawer.hidden || $bookmarkDrawer.classList.contains("drawer-closing")) return;
+  closeSwipedRow(null);
   $bmOverflowPanel.hidden = true;
   $bmOverflowBtn.setAttribute("aria-expanded", "false");
   const closeSeq = ++_bookmarkDrawerCloseSeq;
@@ -3744,6 +3861,7 @@ function _buildBookmarkItem(bm, depth) {
   const isActive = _isActiveBookmark(bm);
   const row = el("div", { className: "bm-bookmark-row" + (isActive ? " bm-active" : "") });
   _setupDragHandle(li, row);
+  const content = el("div", { className: "bm-row-content" });
   const typeIcon = el("span", { className: "bm-bookmark-type-icon" });
   typeIcon.appendChild(_buildBookmarkTypeIcon(isActive));
   const link = el("a", { className: "bm-bookmark-link", href: _bookmarkHref(bm), draggable: "false" });
@@ -3753,26 +3871,59 @@ function _buildBookmarkItem(bm, depth) {
   }
   link.addEventListener("click", (e) => {
     e.preventDefault();
+    if (row.classList.contains("bm-swiped")) {
+      closeSwipedRow(null);
+      return;
+    }
     closeBookmarkDrawer();
     navigate(_bookmarkHref(bm));
   });
-  const actions = el("div", { className: "bm-item-actions" });
-  const editBtn = el("button", { className: "bm-action-btn bm-edit-btn", type: "button" }, "수정");
-  editBtn.addEventListener("click", () => openSaveModal("edit", { existingId: bm.id }));
-  const delBtn = el("button", { className: "bm-action-btn bm-delete-btn", type: "button" }, "삭제");
-  delBtn.addEventListener("click", () => {
+
+  const editAction = () => {
+    closeSwipedRow(null);
+    openSaveModal("edit", { existingId: bm.id });
+  };
+  const deleteAction = () => {
     if (!window.confirm(`"${bm.label}" 북마크를 삭제할까요?`)) return;
+    closeSwipedRow(null);
     const store = loadBookmarks();
     removeItemById(store, bm.id);
     saveBookmarks(store);
     renderBookmarkTree();
     refreshBookmarkHeaderBtn();
-  });
+  };
+
+  const actions = el("div", { className: "bm-item-actions" });
+  const editBtn = el("button", { className: "bm-action-btn bm-edit-btn", type: "button" }, "수정");
+  editBtn.addEventListener("click", editAction);
+  const delBtn = el("button", { className: "bm-action-btn bm-delete-btn", type: "button" }, "삭제");
+  delBtn.addEventListener("click", deleteAction);
   actions.appendChild(editBtn);
   actions.appendChild(delBtn);
-  row.appendChild(typeIcon);
-  row.appendChild(link);
-  row.appendChild(actions);
+
+  // Mobile swipe-to-reveal actions panel (hidden on desktop via CSS).
+  // Sits behind the sliding row content; revealed when row.bm-swiped translates left.
+  const mobileActions = el("div", { className: "bm-row-actions-mobile", "aria-hidden": "true" });
+  const mEditBtn = el("button", {
+    className: "bm-mobile-action-btn bm-mobile-edit-btn",
+    type: "button",
+    "aria-label": `${bm.label} 수정`,
+  }, "수정");
+  mEditBtn.addEventListener("click", editAction);
+  const mDelBtn = el("button", {
+    className: "bm-mobile-action-btn bm-mobile-delete-btn",
+    type: "button",
+    "aria-label": `${bm.label} 삭제`,
+  }, "삭제");
+  mDelBtn.addEventListener("click", deleteAction);
+  mobileActions.appendChild(mEditBtn);
+  mobileActions.appendChild(mDelBtn);
+
+  content.appendChild(typeIcon);
+  content.appendChild(link);
+  content.appendChild(actions);
+  row.appendChild(content);
+  row.appendChild(mobileActions);
   li.appendChild(row);
   return li;
 }
@@ -3983,18 +4134,23 @@ function _buildFolderItem(folder, depth) {
   if (depth > 0) li.setAttribute("aria-level", String(depth + 1));
   const row = el("div", { className: "bm-folder-row" });
   _setupDragHandle(li, row);
+  const content = el("div", { className: "bm-row-content" });
   const toggle = el("span", { className: "bm-folder-toggle", "aria-hidden": "true" });
   toggle.appendChild(_buildFolderToggleIcon(expanded));
   const name = el("span", { className: "bm-folder-name" }, folder.name);
   row.addEventListener("click", (e) => {
-    if (e.target.closest(".bm-item-actions")) return;
+    if (e.target.closest(".bm-item-actions, .bm-row-actions-mobile")) return;
+    if (row.classList.contains("bm-swiped")) {
+      closeSwipedRow(null);
+      return;
+    }
     const newExpanded = li.getAttribute("aria-expanded") !== "true";
     li.setAttribute("aria-expanded", String(newExpanded));
     toggle.replaceChildren(_buildFolderToggleIcon(newExpanded));
   });
-  const actions = el("div", { className: "bm-item-actions" });
-  const renameBtn = el("button", { className: "bm-action-btn", type: "button" }, "수정");
-  renameBtn.addEventListener("click", () => {
+
+  const renameAction = () => {
+    closeSwipedRow(null);
     const newName = window.prompt("폴더 이름:", folder.name);
     if (!newName || !newName.trim()) return;
     const store = loadBookmarks();
@@ -4002,24 +4158,49 @@ function _buildFolderItem(folder, depth) {
     if (found) found.item.name = newName.trim();
     saveBookmarks(store);
     renderBookmarkTree();
-  });
-  const delBtn = el("button", { className: "bm-action-btn bm-delete-btn", type: "button" }, "삭제");
-  delBtn.addEventListener("click", () => {
+  };
+  const deleteAction = () => {
     const childCount = folder.children ? folder.children.length : 0;
     const msg = childCount > 0
       ? `"${folder.name}" 폴더와 안의 항목 ${childCount}개를 모두 삭제할까요?`
       : `"${folder.name}" 폴더를 삭제할까요?`;
     if (!window.confirm(msg)) return;
+    closeSwipedRow(null);
     const store = loadBookmarks();
     removeItemById(store, folder.id);
     saveBookmarks(store);
     renderBookmarkTree();
-  });
+  };
+
+  const actions = el("div", { className: "bm-item-actions" });
+  const renameBtn = el("button", { className: "bm-action-btn", type: "button" }, "수정");
+  renameBtn.addEventListener("click", renameAction);
+  const delBtn = el("button", { className: "bm-action-btn bm-delete-btn", type: "button" }, "삭제");
+  delBtn.addEventListener("click", deleteAction);
   actions.appendChild(renameBtn);
   actions.appendChild(delBtn);
-  row.appendChild(toggle);
-  row.appendChild(name);
-  row.appendChild(actions);
+
+  const mobileActions = el("div", { className: "bm-row-actions-mobile", "aria-hidden": "true" });
+  const mRenameBtn = el("button", {
+    className: "bm-mobile-action-btn bm-mobile-edit-btn",
+    type: "button",
+    "aria-label": `${folder.name} 수정`,
+  }, "수정");
+  mRenameBtn.addEventListener("click", renameAction);
+  const mDelBtn = el("button", {
+    className: "bm-mobile-action-btn bm-mobile-delete-btn",
+    type: "button",
+    "aria-label": `${folder.name} 삭제`,
+  }, "삭제");
+  mDelBtn.addEventListener("click", deleteAction);
+  mobileActions.appendChild(mRenameBtn);
+  mobileActions.appendChild(mDelBtn);
+
+  content.appendChild(toggle);
+  content.appendChild(name);
+  content.appendChild(actions);
+  row.appendChild(content);
+  row.appendChild(mobileActions);
   li.appendChild(row);
   const children = el("ul", { role: "group", className: "bm-folder-children" });
   for (const child of (folder.children || [])) {
@@ -4033,6 +4214,8 @@ function _buildFolderItem(folder, depth) {
 
 function renderBookmarkTree() {
   _renderPathname = window.location.pathname;
+  // The previously swiped row may be replaced when we re-render; drop the stale reference.
+  _swipedRow = null;
   clearNode($bookmarkDrawerBody);
   const store = loadBookmarks();
   if (!store.length) {
@@ -4078,6 +4261,13 @@ function _toggleFolder(li) {
   li.setAttribute("aria-expanded", String(newExpanded));
   if (toggle) toggle.replaceChildren(_buildFolderToggleIcon(newExpanded));
 }
+
+// Tap on empty drawer area closes any revealed mobile-swipe actions.
+$bookmarkDrawerBody.addEventListener("pointerdown", (e) => {
+  if (!_swipedRow) return;
+  if (_swipedRow.contains(e.target)) return;
+  closeSwipedRow(null);
+});
 
 $bookmarkDrawerBody.addEventListener("keydown", (e) => {
   // Ignore keypresses originating from interactive controls inside the row (buttons, inputs)
