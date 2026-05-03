@@ -1116,10 +1116,6 @@ const SWIPE_REVEAL_PX = 140;
 const LONG_PRESS_MS = 500;
 let _swipedRow = null;
 
-function _isMobileViewport() {
-  return window.matchMedia("(max-width: 768px)").matches;
-}
-
 function closeSwipedRow(except) {
   if (_swipedRow && _swipedRow !== except) {
     _swipedRow.classList.remove("bm-swiped");
@@ -1148,9 +1144,9 @@ function _setupDragHandle(li, row) {
     const startX = e.clientX;
     const startY = e.clientY;
     const origRect = li.getBoundingClientRect();
-    const isMobile = _isMobileViewport();
+    const isMobileView = isMobile();
     const swipeContent = row.querySelector(".bm-row-content");
-    const canSwipe = isMobile && !!swipeContent;
+    const canSwipe = isMobileView && !!swipeContent;
     // null until the first significant move classifies the gesture.
     // "drag" → reorder, "swipe" → reveal actions, "longpress" → reveal via hold
     let mode = null;

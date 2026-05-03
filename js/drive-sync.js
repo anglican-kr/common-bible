@@ -175,8 +175,8 @@ async function _onTokenResponse(resp) {
     }
     return;
   }
+  if (localStorage.getItem(SYNC_ENABLED_KEY) !== "1") return;
   _accessToken = resp.access_token;
-  localStorage.setItem(SYNC_ENABLED_KEY, "1");
   try {
     const r = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
       headers: { Authorization: `Bearer ${_accessToken}` },
