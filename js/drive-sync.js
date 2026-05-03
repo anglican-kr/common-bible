@@ -36,23 +36,25 @@ function _buildSyncPayload() {
   };
 }
 
+function _handle401() {
+  _accessToken = null;
+  _updateSettingsUI();
+  // Attempt silent re-auth; guard with _isRefreshing to prevent concurrent 401s
+  // from triggering multiple re-auth requests and racing _downloadAndMerge calls.
+  if (!_isRefreshing && localStorage.getItem(SYNC_ENABLED_KEY) === "1") {
+    _isRefreshing = true;
+    _silentSignIn();
+  }
+  throw new Error("token expired");
+}
+
 async function _driveRequest(path, options = {}) {
   if (!_accessToken) throw new Error("not authenticated");
   const res = await fetch(`${DRIVE_API}${path}`, {
     ...options,
     headers: { Authorization: `Bearer ${_accessToken}`, ...options.headers },
   });
-  if (res.status === 401) {
-    _accessToken = null;
-    _updateSettingsUI();
-    // Attempt silent re-auth; guard with _isRefreshing to prevent concurrent 401s
-    // from triggering multiple re-auth requests and racing _downloadAndMerge calls.
-    if (!_isRefreshing && localStorage.getItem(SYNC_ENABLED_KEY) === "1") {
-      _isRefreshing = true;
-      _silentSignIn();
-    }
-    throw new Error("token expired");
-  }
+  if (res.status === 401) _handle401();
   return res;
 }
 
@@ -84,15 +86,7 @@ async function _upload() {
       },
       body,
     });
-    if (res.status === 401) {
-      _accessToken = null;
-      _updateSettingsUI();
-      if (!_isRefreshing && localStorage.getItem(SYNC_ENABLED_KEY) === "1") {
-        _isRefreshing = true;
-        _silentSignIn();
-      }
-      throw new Error("token expired");
-    }
+    if (res.status === 401) _handle401();
     ok = res.ok;
   } else {
     // Create new file in appDataFolder
@@ -105,15 +99,7 @@ async function _upload() {
       headers: { Authorization: `Bearer ${_accessToken}` },
       body: form,
     });
-    if (res.status === 401) {
-      _accessToken = null;
-      _updateSettingsUI();
-      if (!_isRefreshing && localStorage.getItem(SYNC_ENABLED_KEY) === "1") {
-        _isRefreshing = true;
-        _silentSignIn();
-      }
-      throw new Error("token expired");
-    }
+    if (res.status === 401) _handle401();
     ok = res.ok;
   }
   if (ok) localStorage.setItem(SYNC_UPDATED_KEY, String(payload.updatedAt));
