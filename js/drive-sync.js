@@ -84,6 +84,15 @@ async function _upload() {
       },
       body,
     });
+    if (res.status === 401) {
+      _accessToken = null;
+      _updateSettingsUI();
+      if (!_isRefreshing && localStorage.getItem(SYNC_ENABLED_KEY) === "1") {
+        _isRefreshing = true;
+        _silentSignIn();
+      }
+      throw new Error("token expired");
+    }
     ok = res.ok;
   } else {
     // Create new file in appDataFolder
@@ -96,6 +105,15 @@ async function _upload() {
       headers: { Authorization: `Bearer ${_accessToken}` },
       body: form,
     });
+    if (res.status === 401) {
+      _accessToken = null;
+      _updateSettingsUI();
+      if (!_isRefreshing && localStorage.getItem(SYNC_ENABLED_KEY) === "1") {
+        _isRefreshing = true;
+        _silentSignIn();
+      }
+      throw new Error("token expired");
+    }
     ok = res.ok;
   }
   if (ok) localStorage.setItem(SYNC_UPDATED_KEY, String(payload.updatedAt));
@@ -167,8 +185,12 @@ async function _onTokenResponse(resp) {
   _isRefreshing = false;
   if (resp.error) {
     console.warn("[drive-sync] token error:", resp.error);
-    // Only notify on explicit user action (consent prompt), not on silent re-auth attempts.
-    if (resp.error !== "user_cancel" && localStorage.getItem(SYNC_ENABLED_KEY) === "1") {
+    if (resp.error === "user_cancel") {
+      // User explicitly declined consent — reset sync state silently.
+      localStorage.setItem(SYNC_ENABLED_KEY, "0");
+      _updateSettingsUI();
+    } else if (localStorage.getItem(SYNC_ENABLED_KEY) === "1") {
+      // Non-cancel error on an enabled session — notify and disable.
       _showSnackbar("Google Drive 동기화 세션이 만료됐습니다. 설정에서 재연결해 주세요.");
       localStorage.setItem(SYNC_ENABLED_KEY, "0");
       _updateSettingsUI();
