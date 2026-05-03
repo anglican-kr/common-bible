@@ -224,6 +224,7 @@ function initDriveSync() {
 function signIn() {
   if (!_tokenClient) _initTokenClient();
   if (!_tokenClient) return;
+  localStorage.setItem(SYNC_ENABLED_KEY, "1");
   _tokenClient.requestAccessToken({ prompt: "consent" });
 }
 
