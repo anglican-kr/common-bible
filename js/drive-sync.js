@@ -251,7 +251,7 @@ function signOut() {
 function scheduleUpload() {
   if (!_accessToken) return;
   clearTimeout(_uploadTimer);
-  _uploadTimer = setTimeout(_upload, 300);
+  _uploadTimer = setTimeout(() => _upload().catch(() => {}), 300);
 }
 
 function isEnabled() {
