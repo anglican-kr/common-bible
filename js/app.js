@@ -452,11 +452,7 @@ function initSettings() {
           driveLabelSpan.appendChild(infoBtn);
           driveRow.appendChild(driveLabelSpan);
           const disconnectBtn = el("button", { className: "settings-action-btn", "aria-label": "Google Drive 연결 해제" }, "해제");
-          disconnectBtn.addEventListener("click", () => {
-            if (confirm("Google Drive 연결을 해제하시겠습니까?\n로컬 데이터는 유지됩니다.")) {
-              window.driveSync.signOut();
-            }
-          });
+          disconnectBtn.addEventListener("click", () => openDriveDisconnectModal());
           driveRow.appendChild(disconnectBtn);
           section3.appendChild(driveRow);
           const infoRow = el("div", { className: "settings-drive-info-row" });
@@ -852,13 +848,17 @@ function generateId() {
 function loadBookmarks() {
   try {
     const raw = localStorage.getItem(BOOKMARK_KEY);
-    return raw ? JSON.parse(raw) : [];
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return parsed; // v0 legacy — migrated on next save
+    if (parsed?._version === 1 && Array.isArray(parsed.items)) return parsed.items;
+    return [];
   } catch (_) { return []; }
 }
 
 function saveBookmarks(store) {
   try {
-    localStorage.setItem(BOOKMARK_KEY, JSON.stringify(store));
+    localStorage.setItem(BOOKMARK_KEY, JSON.stringify({ _version: 1, items: store }));
     if (window.driveSync) window.driveSync.scheduleUpload();
   } catch (_) {}
 }
@@ -3577,6 +3577,11 @@ const $bmSelectVersesBtn = document.getElementById("bm-select-verses-btn");
 const $bmAddFolderBtn = document.getElementById("bm-add-folder-btn");
 const $bmOverflowBtn = document.getElementById("bm-overflow-btn");
 const $bmOverflowPanel = document.getElementById("bm-overflow-panel");
+const $driveDisconnectScrim = document.getElementById("drive-disconnect-scrim");
+const $driveDisconnectModal = document.getElementById("drive-disconnect-modal");
+const $driveDisconnectDelete = document.getElementById("drive-disconnect-delete");
+const $driveDisconnectKeep = document.getElementById("drive-disconnect-keep");
+const $driveDisconnectCancel = document.getElementById("drive-disconnect-cancel");
 const $bmExportBtn = document.getElementById("bm-export-btn");
 const $bmImportBtn = document.getElementById("bm-import-btn");
 const $bmImportInput = document.getElementById("bm-import-input");
@@ -4131,6 +4136,37 @@ $bookmarkDrawerBody.addEventListener("keydown", (e) => {
       if (link) link.click();
     }
   }
+});
+
+// ── Drive disconnect modal ──
+
+let _driveDisconnectTrap = null;
+
+function openDriveDisconnectModal() {
+  $driveDisconnectScrim.hidden = false;
+  $driveDisconnectModal.hidden = false;
+  _driveDisconnectTrap = trapFocus($driveDisconnectModal);
+  requestAnimationFrame(() => $driveDisconnectKeep.focus());
+}
+
+function closeDriveDisconnectModal() {
+  $driveDisconnectScrim.hidden = true;
+  $driveDisconnectModal.hidden = true;
+  if (_driveDisconnectTrap) { _driveDisconnectTrap(); _driveDisconnectTrap = null; }
+}
+
+$driveDisconnectCancel.addEventListener("click", closeDriveDisconnectModal);
+$driveDisconnectScrim.addEventListener("click", closeDriveDisconnectModal);
+
+$driveDisconnectKeep.addEventListener("click", () => {
+  closeDriveDisconnectModal();
+  window.driveSync?.signOut();
+});
+
+$driveDisconnectDelete.addEventListener("click", async () => {
+  closeDriveDisconnectModal();
+  await window.driveSync?.deleteRemoteFile();
+  window.driveSync?.signOut();
 });
 
 // ── Save bookmark modal ──

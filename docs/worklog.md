@@ -1,5 +1,51 @@
 # 작업 일지
 
+## 2026-05-02
+
+### Phase 2b: Google Drive 자동 동기화 구현 (ADR-011)
+
+북마크·설정·마지막 읽기 위치를 Google Drive `appDataFolder`에 저장해 기기 간 자동 동기화를 구현했다.
+
+**drive-sync.js (신규)**
+- GIS Implicit Token Flow 기반 OAuth 인증 (Client Secret 불필요, SPA 표준)
+- `_accessToken` 메모리 전용 저장 — localStorage 미사용 (XSS 토큰 탈취 방지)
+- `_silentSignIn()`: 기존 동의 사용자는 팝업 없이 자동 재인증 (`prompt: ""`)
+- `_downloadAndMerge()`: 앱 시작 시 Drive ↔ 로컬 `updatedAt` 비교, 최신 기준 merge
+- `scheduleUpload()`: 북마크·설정 변경 시 300ms debounce 후 즉시 업로드
+- `_isRefreshing` 플래그: 동시 401 응답 시 중복 재인증 방지 (보안 수정 포함)
+- `res.json()` try-catch: 예상치 못한 응답(HTML 유지보수 페이지 등) 파싱 오류 방어 (보안 수정 포함)
+- scope: `drive.appdata email` (전체 Drive 미요청, 앱 전용 폴더 한정)
+- `initDriveSync` 최대 20회 재시도 — GIS 스크립트 로딩 지연 대비
+
+**앱 연동 (app.js)**
+- 설정 팝오버에 Drive 동기화 섹션 추가: 연결/해제 버튼, 연결된 계정 이메일 표시
+- 북마크·설정 변경 훅에 `driveSync.scheduleUpload()` 연결
+
+**인프라 (index.html, sw.js)**
+- CSP에 `accounts.google.com`, `googleapis.com` 출처 추가
+- GIS 클라이언트 스크립트 비동기 로드 (`<script async>`)
+- SW에서 Google API 요청 캐시 바이패스 (Network-only)
+- `CACHE_CLEAR_ON_UPDATE` 시 폰트 캐시 보존
+
+**보안 감사 및 수정**
+- 감사 범위: `feat/drive-sync` 브랜치 전체 변경 파일
+- Medium 2건 수정: `_isRefreshing` 플래그(동시 401 레이스 컨디션), `res.json()` try-catch(파싱 미보호)
+- Info 2건 수용: GIS SRI 미적용(CSP 도메인 제한으로 완화), 개발용 Client ID(공개 정보, 비밀 아님)
+- 감사 보고서: `docs/audit/2026-05-02-171111.md`
+
+### 수정 파일 요약
+
+| 파일 | 변경 유형 |
+|------|-----------|
+| `js/drive-sync.js` | 신규 — GIS OAuth + Drive API 동기화 모듈 (258줄) |
+| `js/app.js` | 수정 — 설정 팝오버 Drive 섹션, scheduleUpload 훅 |
+| `css/style.css` | 수정 — Drive 동기화 설정 UI 스타일 |
+| `index.html` | 수정 — CSP 출처 추가, GIS 스크립트 로드 |
+| `sw.js` | 수정 — googleapis.com 캐시 바이패스, 폰트 캐시 보존 |
+| `docs/audit/2026-05-02-171111.md` | 신규 — 보안 감사 보고서 |
+
+---
+
 ## 2026-04-30
 
 ### Phase 2a: 북마크 내보내기/가져오기 (ADR-011)

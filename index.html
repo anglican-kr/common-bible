@@ -191,6 +191,19 @@
     <ul id="bookmark-drawer-body" role="tree" aria-label="북마크 목록"></ul>
   </div>
 
+  <!-- ── Drive Disconnect Modal ── -->
+  <div id="drive-disconnect-scrim" aria-hidden="true" hidden></div>
+  <div id="drive-disconnect-modal" role="dialog" aria-modal="true" aria-labelledby="drive-disconnect-title" hidden>
+    <h2 id="drive-disconnect-title">Google Drive 연결 해제</h2>
+    <p id="drive-disconnect-body">Google Drive 동기화를 해제합니다.<br>로컬 데이터는 유지됩니다.</p>
+    <p id="drive-disconnect-file-question">Drive에 저장된 동기화 파일도 삭제할까요?</p>
+    <div id="drive-disconnect-actions">
+      <button id="drive-disconnect-delete" type="button">파일도 삭제</button>
+      <button id="drive-disconnect-keep" type="button">파일 유지</button>
+      <button id="drive-disconnect-cancel" type="button">취소</button>
+    </div>
+  </div>
+
   <!-- ── Save Bookmark Modal ── -->
   <div id="bm-save-scrim" aria-hidden="true" hidden></div>
   <div id="bm-save-modal" role="dialog" aria-modal="true" aria-labelledby="bm-save-title" hidden>

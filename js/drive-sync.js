@@ -19,10 +19,12 @@ let _isRefreshing = false;
 
 function _buildSyncPayload() {
   const get = (k) => { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } };
+  const rawBm = get("bible-bookmarks");
+  const bookmarkItems = Array.isArray(rawBm) ? rawBm : (rawBm?._version === 1 && Array.isArray(rawBm.items) ? rawBm.items : []);
   return {
     version: 1,
     updatedAt: Date.now(),
-    bookmarks: get("bible-bookmarks") ?? [],
+    bookmarks: bookmarkItems,
     settings: {
       fontSize: get("bible-font-size"),
       colorScheme: get("bible-color-scheme"),
@@ -132,8 +134,8 @@ function _validateRemote(data) {
 function _applyRemote(data) {
   if (!_validateRemote(data)) return;
   if (data.bookmarks !== undefined) {
-    localStorage.setItem("bible-bookmarks", JSON.stringify(data.bookmarks));
-    if (typeof window.loadBookmarks === "function" && typeof window.renderBookmarkTree === "function") {
+    localStorage.setItem("bible-bookmarks", JSON.stringify({ _version: 1, items: data.bookmarks }));
+    if (typeof window.renderBookmarkTree === "function") {
       window.renderBookmarkTree();
     }
   }
@@ -220,6 +222,16 @@ function signIn() {
   _tokenClient.requestAccessToken({ prompt: "consent" });
 }
 
+async function deleteRemoteFile() {
+  if (!_accessToken) return;
+  try {
+    const fileId = await _findSyncFileId();
+    if (fileId) {
+      await _driveRequest(`/files/${fileId}`, { method: "DELETE" });
+    }
+  } catch (_) {}
+}
+
 function signOut() {
   if (_accessToken) {
     google.accounts.oauth2.revoke(_accessToken);
@@ -255,4 +267,4 @@ function _updateSettingsUI() {
   }
 }
 
-window.driveSync = { initDriveSync, signIn, signOut, scheduleUpload, isEnabled, isAuthenticated, getUserEmail };
+window.driveSync = { initDriveSync, signIn, signOut, deleteRemoteFile, scheduleUpload, isEnabled, isAuthenticated, getUserEmail };
