@@ -6,6 +6,8 @@ const CACHE_NAME = "rev-39";
 // Never cleared on CACHE_NAME bump — font files are content-addressed and immutable.
 const FONT_CACHE = "fonts-v1";
 
+const DRIVE_HOSTNAMES = ["www.googleapis.com", "content.googleapis.com", "oauth2.googleapis.com", "accounts.google.com"];
+
 const SHELL_FILES = [
   "/",
   "/index.html",
@@ -80,7 +82,6 @@ self.addEventListener("fetch", (event) => {
   const { hostname } = new URL(event.request.url);
 
   // Bypass cache for Google OAuth and Drive API — always network-only.
-  const DRIVE_HOSTNAMES = ["www.googleapis.com", "content.googleapis.com", "oauth2.googleapis.com", "accounts.google.com"];
   if (DRIVE_HOSTNAMES.includes(hostname)) {
     return;
   }
