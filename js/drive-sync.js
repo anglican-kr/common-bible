@@ -67,7 +67,8 @@ async function _findSyncFileId() {
 
 async function _upload() {
   if (!_accessToken) return;
-  const body = JSON.stringify(_buildSyncPayload());
+  const payload = _buildSyncPayload();
+  const body = JSON.stringify(payload);
   const fileId = await _findSyncFileId();
 
   let ok = false;
@@ -95,7 +96,7 @@ async function _upload() {
     });
     ok = res.ok;
   }
-  if (ok) localStorage.setItem(SYNC_UPDATED_KEY, String(Date.now()));
+  if (ok) localStorage.setItem(SYNC_UPDATED_KEY, String(payload.updatedAt));
 }
 
 async function _downloadAndMerge() {
@@ -120,6 +121,7 @@ async function _downloadAndMerge() {
   }
 
   // Remote is newer — apply to local
+  if (!_validateRemote(remote)) return;
   _applyRemote(remote);
   localStorage.setItem(SYNC_UPDATED_KEY, String(remote.updatedAt));
   _showSnackbar("다른 기기에서 변경된 데이터를 불러왔습니다.");
