@@ -186,7 +186,7 @@ async function _onTokenResponse(resp) {
     _userEmail = null;
   }
   _updateSettingsUI();
-  _downloadAndMerge();
+  _downloadAndMerge().catch((err) => console.warn("[drive-sync] merge failed:", err));
 }
 
 function _initTokenClient() {
@@ -208,7 +208,7 @@ function _silentSignIn() {
 // ── Public API ────────────────────────────────────────────────────────────────
 
 function initDriveSync() {
-  if (!window.google) {
+  if (!window.google?.accounts?.oauth2) {
     // GIS not loaded yet — retry up to 20 times (10 s) then give up silently.
     if (_initRetryCount++ < 20) setTimeout(initDriveSync, 500);
     return;
