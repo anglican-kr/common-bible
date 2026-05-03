@@ -171,7 +171,7 @@ async function _onTokenResponse(resp) {
   _isRefreshing = false;
   if (resp.error) {
     console.warn("[drive-sync] token error:", resp.error);
-    if (resp.error === "user_cancel") {
+    if (resp.error === "access_denied") {
       // User explicitly declined consent — reset sync state silently.
       localStorage.setItem(SYNC_ENABLED_KEY, "0");
       _updateSettingsUI();
