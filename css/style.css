@@ -295,6 +295,20 @@ body {
   white-space: normal;
 }
 
+.settings-drive-diag-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-size: 0.75rem;
+  color: var(--text);
+  opacity: 0.45;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  align-self: flex-start;
+}
+.settings-drive-diag-btn:hover { opacity: 0.75; }
+
 /* ── Drive disconnect modal ── */
 
 #drive-disconnect-scrim {

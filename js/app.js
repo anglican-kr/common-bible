@@ -434,6 +434,21 @@ function initSettings() {
           infoTop.appendChild(closeBtn);
           infoRow.appendChild(infoTop);
           infoRow.appendChild(el("div", { className: "settings-drive-info-desc" }, "북마크·설정·읽기 위치를 Google Drive 앱 폴더에 저장해 기기 간 자동 동기화합니다."));
+          const diagBtn = el("button", { className: "settings-drive-diag-btn", type: "button" }, "동기화 진단 정보 복사");
+          diagBtn.addEventListener("click", async () => {
+            const ok = await window.syncDebugLog?.copyToClipboard();
+            if (ok) {
+              diagBtn.textContent = "복사됨 ✓";
+              setTimeout(() => { diagBtn.textContent = "동기화 진단 정보 복사"; }, 2000);
+            } else {
+              // Clipboard API unavailable — show text in a selectable textarea.
+              const ta = el("textarea", { readOnly: true, rows: "6", style: "width:100%;font-size:0.7rem;margin-top:0.4rem;resize:none;" });
+              ta.value = window.syncDebugLog?.dump() ?? "(로그 없음)";
+              infoRow.appendChild(ta);
+              ta.select();
+            }
+          });
+          infoRow.appendChild(diagBtn);
           section3.appendChild(infoRow);
           const toggleInfo = () => { const open = infoRow.hidden; infoRow.hidden = !open; infoBtn.setAttribute("aria-expanded", String(open)); };
           infoBtn.addEventListener("click", toggleInfo);
