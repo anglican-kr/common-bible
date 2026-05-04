@@ -79,7 +79,7 @@ class FakeDrive:
             # Multipart body — extract JSON part (second part after boundary)
             raw = req.post_data_buffer
             parts = raw.split(b"\r\n\r\n")
-            doc_part = parts[-1].rsplit(b"\r\n", 1)[0] if len(parts) > 1 else parts[-1]
+            doc_part = parts[-1].split(b"\r\n--")[0] if len(parts) > 1 else parts[-1]
             with self._lock:
                 try:
                     self._file = json.loads(doc_part)
