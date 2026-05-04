@@ -1,7 +1,7 @@
 # ADR-010: 즐겨찾기(북마크) 기능 설계
 
 - 일시: 2026-04-25
-- 개정: 2026-04-26 (UI 개선)
+- 개정: 2026-04-26 (UI 개선), 2026-05-03 (모바일 행 UX)
 - 상태: 승인됨
 
 ## 결정
@@ -225,3 +225,99 @@ WCAG 일관성 유지 (북마크 드로어와 동일 패턴).
 - ~~키보드 트리 탐색~~: WAI-ARIA Tree Pattern 키보드 스펙 구현
   (`↑↓` 포커스 이동, `→←` 폴더 열기/닫기·부모 이동, `Enter`/`Space` 활성화,
   `Home`/`End` 처음·끝. 버튼·링크에서는 트리 키 무시. roving tabindex 적용)
+
+
+## 개정 (2026-05-03): 모바일 북마크 행 UX
+
+### 맥락
+
+`.bm-item-actions`(수정/삭제 버튼)는 데스크톱에서 `:hover`/`:focus-within`으로
+노출되도록 설계되었다. iOS Safari가 첫 탭을 hover로 처리하기 때문에 모바일에서
+북마크 항목으로 이동하려면 **두 번 탭**이 필요한 문제가 발생했다.
+첫 탭은 액션 버튼을 노출만 시키고, 두 번째 탭에서야 링크로 이동.
+
+### 결정
+
+**모바일(`max-width: 768px`) 한정**으로 행 UX를 다음과 같이 변경:
+
+1. **단일 탭** = 즉시 이동 (또는 폴더 펼치기)
+2. **좌측 스와이프** = 행 콘텐츠 슬라이드 → 우측에 수정/삭제 액션 노출
+3. **롱프레스 (500ms)** = 동일 액션 노출 (Android 친화 + 발견성 보강)
+4. **수직 드래그** = 기존 reorder 동작 유지 (방향 우선 결정으로 분기)
+
+데스크톱은 변경 없음 (hover-reveal 그대로 유지).
+
+### 검토한 대안
+
+#### A. 케밥(⋯) 버튼 행마다 추가
+- 장점: 발견성 최고
+- 단점: 시각적 노이즈 큼, 모바일/데스크톱 패턴 분리 필요
+
+#### B. 스와이프-투-리빌만 (롱프레스 없음)
+- 장점: iOS 표준, 단순
+- 단점: Android는 보통 롱프레스 → 다중 선택 모드. 발견성 낮음
+
+#### C. 스와이프 + 롱프레스 (채택)
+- iOS·Android 양 플랫폼 사용자가 자기 OS 습관대로 발견·사용
+- 두 제스처가 같은 결과(액션 노출)를 만들어 모델이 단순
+
+### DOM 구조
+
+행 내부에 swipe wrapper 추가:
+
+```
+li.bm-bookmark
+  div.bm-bookmark-row              ← position: relative; overflow: hidden (모바일)
+    div.bm-row-content             ← translateX로 슬라이드, 기존 flex 레이아웃 보유
+      span.bm-bookmark-type-icon
+      a.bm-bookmark-link
+      div.bm-item-actions           ← 데스크톱 hover-reveal (모바일 display:none)
+    div.bm-row-actions-mobile      ← position: absolute; right: 0 (데스크톱 display:none)
+      button.bm-mobile-edit-btn
+      button.bm-mobile-delete-btn
+```
+
+폴더 행도 동일 구조 (`.bm-folder-row` > `.bm-row-content` + `.bm-row-actions-mobile`).
+
+### 제스처 분기 로직 (`_setupDragHandle`)
+
+기존 drag-to-reorder 핸들러를 확장하여 세 모드를 단일 핸들러로 처리:
+
+| 조건 | 모드 |
+|------|------|
+| 모바일 + 5px 미만 + 500ms 유지 | `longpress` → 액션 노출 |
+| 모바일 + `|Δx| > |Δy|` (5px 이상) | `swipe` → 실시간 transform |
+| 그 외 (데스크톱 또는 수직 우세) | `drag` → 기존 reorder |
+| 5px 미만에서 pointerup | 분류되지 않음 → 링크/토글 click 정상 처리 |
+
+스와이프 종료 임계값: `-SWIPE_REVEAL_PX / 2`(70px) 이상 좌측 이동 시 reveal 고정,
+미만이면 0으로 스냅 백.
+
+### 자동 닫기
+
+- 다른 행 스와이프/롱프레스 시 이전 행 close (`_swipedRow` 단일 추적)
+- 드로어 빈 영역 탭 시 close (`$bookmarkDrawerBody` pointerdown listener)
+- 드로어 닫힘, `renderBookmarkTree()` 재실행 시 close
+- 스와이프된 행의 link/folder 영역 탭 = 이동/펼치기 대신 close (iOS 메일과 동일)
+
+### 시각·접근성
+
+- 액션 버튼 최소 44×44 (WCAG AA 터치 타겟)
+- 수정 버튼: `var(--accent)`, 삭제 버튼: `#c0392b` (기존 `.bm-delete-btn:hover` 색상과 일관)
+- `prefers-reduced-motion`에서 transition 제거
+- 햅틱 피드백: 롱프레스 reveal 시 `navigator.vibrate(10)` (지원 시)
+- 모바일 액션 패널은 `aria-hidden="true"` (데스크톱 hover-reveal 액션이 SR-친화 경로)
+
+### 변경 파일
+
+- `js/app.js`:
+  - 신규: `closeSwipedRow()`, `_openSwipedRow()`, `_isMobileViewport()`,
+    상수 `SWIPE_REVEAL_PX = 140`, `LONG_PRESS_MS = 500`
+  - `_setupDragHandle()`: 3-mode 분기 (swipe/longpress/drag)
+  - `_buildBookmarkItem()`, `_buildFolderItem()`: `.bm-row-content` 래퍼 + `.bm-row-actions-mobile` 추가
+  - `closeBookmarkDrawer()`, `renderBookmarkTree()`: `closeSwipedRow(null)`/ref 초기화
+  - `$bookmarkDrawerBody` pointerdown: 빈 영역 탭 시 swipe close
+- `css/style.css`:
+  - 모바일 미디어 쿼리에서 `.bm-item-actions { display:none }`, swipe 슬라이드 스타일,
+    모바일 액션 버튼 스타일 추가
+  - `prefers-reduced-motion`에 `.bm-row-content { transition: none }` 추가
