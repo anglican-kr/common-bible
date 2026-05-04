@@ -154,7 +154,7 @@ function createSyncMachine({ onStateChange } = {}) {
         localStorage.setItem(SYNC_UPDATED_KEY, String(remoteUpdatedAt));
         _snackbar("다른 기기에서 변경된 데이터를 불러왔습니다.");
         L.log({ kind: "ACTION", event: "APPLIED_REMOTE", remoteUpdatedAt, localUpdatedAt });
-      } else if (remoteUpdatedAt < localUpdatedAt) {
+      } else {
         const payload = _buildPayload();
         const { ok, status } = await T.uploadSyncFile(_token, payload, { fileId });
         L.log({ kind: "NETWORK", event: "UPLOAD_UPDATE", ok, status });

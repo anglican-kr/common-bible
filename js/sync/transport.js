@@ -97,8 +97,8 @@ async function downloadSyncFile(token, fileId) {
     const { res, ok, etag } = await driveFetch(`/files/${fileId}?alt=media`, { token });
     if (!ok) return { doc: null, etag: null, status: res.status };
     let doc;
-    try { doc = await res.json(); } catch { return { doc: null, etag: null }; }
-    return { doc, etag };
+    try { doc = await res.json(); } catch { return { doc: null, etag: null, status: res.status }; }
+    return { doc, etag, status: res.status };
   } catch { return { doc: null, etag: null }; }
 }
 
