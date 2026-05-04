@@ -253,6 +253,8 @@ function createSyncMachine({ onStateChange } = {}) {
 
       case S.IDLE:
         if (event.type === "SYNC_REQUEST") {
+          clearTimeout(_backoffTimer);
+          _backoffTimer = null;
           _setState(S.SYNCING, event);
           _syncCycle();
         } else if (event.type === "DISABLE") {
@@ -266,6 +268,8 @@ function createSyncMachine({ onStateChange } = {}) {
 
       case S.SYNCING:
         if (event.type === "SYNC_DONE") {
+          clearTimeout(_backoffTimer);
+          _backoffTimer = null;
           _netFailCount = 0;
           _conflictCount = 0;
           _setState(S.IDLE, event);
