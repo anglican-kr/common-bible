@@ -39,17 +39,9 @@ const SILENT_FAIL_REASONS = new Set([
 // ── Factory ───────────────────────────────────────────────────────────────────
 
 function createSyncMachine({ onStateChange } = {}) {
-  // Storage keys — kept inside closure to avoid colliding with app.js globals.
-  const SYNC_ENABLED_KEY  = "bible-drive-sync";
-  const SYNC_UPDATED_KEY  = "bible-drive-sync-updated";
-  const SYNC_EMAIL_KEY    = "bible-drive-sync-email";
-  const BM_KEY            = "bible-bookmarks";
-  const FS_KEY            = "bible-font-size";
-  const CS_KEY            = "bible-color-scheme";
-  const TH_KEY            = "bible-theme";
-  const BO_KEY            = "bible-book-order";
-  const SU_KEY            = "bible-startup";
-  const LR_KEY            = "bible-last-read";
+  // Storage keys
+  const SYNC_ENABLED_KEY = "bible-drive-sync";
+  const SYNC_EMAIL_KEY   = "bible-drive-sync-email";
   const T = window.syncTransport;
   const L = window.syncDebugLog;
 
@@ -74,51 +66,22 @@ function createSyncMachine({ onStateChange } = {}) {
     if (typeof window._showSyncSnackbar === "function") window._showSyncSnackbar(msg);
   }
 
-  // ── v1 data operations ────────────────────────────────────────────────────
+  // ── v2 data operations (via syncStoreV2) ─────────────────────────────────────
 
-  function _buildPayload() {
-    const get = (k) => {
-      const v = localStorage.getItem(k);
-      try { return JSON.parse(v); } catch { return v; }
-    };
-    const rawBm = get(BM_KEY);
-    const bookmarks = Array.isArray(rawBm)
-      ? rawBm
-      : (rawBm?._version === 1 && Array.isArray(rawBm.items) ? rawBm.items : []);
-    return {
-      version: 1,
-      updatedAt: Date.now(),
-      bookmarks,
-      settings: {
-        fontSize:        get(FS_KEY),
-        colorScheme:     get(CS_KEY),
-        theme:           get(TH_KEY),
-        bookOrder:       get(BO_KEY),
-        startupBehavior: get(SU_KEY),
-      },
-      lastRead: get(LR_KEY),
-    };
-  }
+  const V2 = window.syncStoreV2;
+  const _deviceId = V2.getDeviceId();
 
-  function _validateRemote(data) {
-    return (
-      typeof data === "object" && data !== null &&
-      data.version === 1 &&
-      Array.isArray(data.bookmarks)
-    );
-  }
-
-  function _applyRemote(data) {
-    if (!_validateRemote(data)) return;
-    localStorage.setItem(BM_KEY, JSON.stringify(data.bookmarks));
+  function _applyMergedDoc(merged, hadRemoteChanges) {
+    V2.saveLocal(merged);
+    V2.applyToLegacyKeys(merged);
     if (typeof window.renderBookmarkTree === "function") window.renderBookmarkTree();
-    const s = data.settings ?? {};
-    if (s.fontSize        != null) { localStorage.setItem(FS_KEY, s.fontSize);        if (typeof window.applyFontSize    === "function") window.applyFontSize(s.fontSize); }
-    if (s.colorScheme     != null) { localStorage.setItem(CS_KEY, s.colorScheme);     if (typeof window.applyColorScheme === "function") window.applyColorScheme(s.colorScheme); }
-    if (s.theme           != null) { localStorage.setItem(TH_KEY, s.theme);           if (typeof window.applyTheme       === "function") window.applyTheme(s.theme); }
-    if (s.bookOrder       != null)   localStorage.setItem(BO_KEY, s.bookOrder);
-    if (s.startupBehavior != null)   localStorage.setItem(SU_KEY, s.startupBehavior);
-    if (data.lastRead     != null)   localStorage.setItem(LR_KEY, JSON.stringify(data.lastRead));
+    if (hadRemoteChanges) {
+      const s = merged.settings ?? {};
+      if (s.fontSize?.v        != null && typeof window.applyFontSize    === "function") window.applyFontSize(s.fontSize.v);
+      if (s.colorScheme?.v     != null && typeof window.applyColorScheme === "function") window.applyColorScheme(s.colorScheme.v);
+      if (s.theme?.v           != null && typeof window.applyTheme       === "function") window.applyTheme(s.theme.v);
+      _snackbar("다른 기기에서 변경된 데이터를 불러왔습니다.");
+    }
   }
 
   async function _syncCycle() {
@@ -129,13 +92,14 @@ function createSyncMachine({ onStateChange } = {}) {
       const fileId = await T.findSyncFileId(_token);
       L.log({ kind: "NETWORK", event: "FIND_FILE", fileId: L.mask("fileId", fileId) });
 
+      const local = V2.loadLocal();
+      const localMaxU = V2.maxU(local);
+
       if (!fileId) {
-        // No remote file — upload current local state.
-        const payload = _buildPayload();
+        const payload = V2.buildSyncPayload(_deviceId);
         const { ok, status } = await T.uploadSyncFile(_token, payload);
         L.log({ kind: "NETWORK", event: "UPLOAD_NEW", ok, status });
         if (status === 401) { dispatch({ type: "SYNC_FAIL", reason: "401" }); return; }
-        if (ok) localStorage.setItem(SYNC_UPDATED_KEY, String(payload.updatedAt));
         dispatch({ type: "SYNC_DONE" });
         return;
       }
@@ -145,22 +109,51 @@ function createSyncMachine({ onStateChange } = {}) {
       if (dlStatus === 401) { dispatch({ type: "SYNC_FAIL", reason: "401" }); return; }
       if (!remote) { dispatch({ type: "SYNC_DONE" }); return; }
 
-      const localUpdatedAt = Number(localStorage.getItem(SYNC_UPDATED_KEY) ?? 0) || 0;
-      const remoteUpdatedAt = Number(remote.updatedAt) || 0;
-
-      if (remoteUpdatedAt > localUpdatedAt) {
-        if (!_validateRemote(remote)) { dispatch({ type: "SYNC_DONE" }); return; }
-        _applyRemote(remote);
-        localStorage.setItem(SYNC_UPDATED_KEY, String(remoteUpdatedAt));
-        _snackbar("다른 기기에서 변경된 데이터를 불러왔습니다.");
-        L.log({ kind: "ACTION", event: "APPLIED_REMOTE", remoteUpdatedAt, localUpdatedAt });
-      } else if (remoteUpdatedAt < localUpdatedAt) {
-        const payload = _buildPayload();
+      // Remote v2: merge per-record. Remote v1 (legacy): treat as no remote data.
+      if (!V2.validateRemote(remote)) {
+        L.log({ kind: "ACTION", event: "REMOTE_SCHEMA_MISMATCH", schema: remote?.schemaVersion });
+        const payload = V2.buildSyncPayload(_deviceId);
         const { ok, status } = await T.uploadSyncFile(_token, payload, { fileId });
         L.log({ kind: "NETWORK", event: "UPLOAD_UPDATE", ok, status });
         if (status === 401) { dispatch({ type: "SYNC_FAIL", reason: "401" }); return; }
-        if (ok) localStorage.setItem(SYNC_UPDATED_KEY, String(payload.updatedAt));
+        dispatch({ type: "SYNC_DONE" });
+        return;
       }
+
+      const remoteMaxU = V2.maxU(remote);
+      const merged = V2.mergeDocs(local, remote, _deviceId);
+      const mergedMaxU = V2.maxU(merged);
+
+      // Per-record comparison: did any merged record come from remote?
+      const hadRemoteChanges = (
+        Object.keys(merged.settings ?? {}).some(k =>
+          (merged.settings[k]?._u ?? 0) > (local.settings?.[k]?._u ?? 0)
+        ) ||
+        (merged.lastRead?._u ?? 0) > (local.lastRead?._u ?? 0) ||
+        Object.keys(merged.bookmarks?.items ?? {}).some(id =>
+          (merged.bookmarks.items[id]?._u ?? 0) > (local.bookmarks?.items?.[id]?._u ?? 0)
+        ) ||
+        Object.keys(merged.bookmarks?.tombstones ?? {}).some(id =>
+          (merged.bookmarks.tombstones[id] ?? 0) > (local.bookmarks?.tombstones?.[id] ?? 0)
+        )
+      );
+
+      L.log({ kind: "ACTION", event: "MERGE", localMaxU, remoteMaxU, mergedMaxU, hadRemoteChanges });
+      _applyMergedDoc(merged, hadRemoteChanges);
+
+      // Upload if merged has newer data OR more records than remote
+      // (local-only records with _u < remoteMaxU are caught by count check).
+      const remoteRecordCount = Object.keys(remote.bookmarks?.items ?? {}).length
+                              + Object.keys(remote.bookmarks?.tombstones ?? {}).length;
+      const mergedRecordCount = Object.keys(merged.bookmarks?.items ?? {}).length
+                              + Object.keys(merged.bookmarks?.tombstones ?? {}).length;
+      if (mergedMaxU > remoteMaxU || mergedRecordCount > remoteRecordCount) {
+        const payload = V2.buildSyncPayload(_deviceId);
+        const { ok, status } = await T.uploadSyncFile(_token, payload, { fileId });
+        L.log({ kind: "NETWORK", event: "UPLOAD_UPDATE", ok, status });
+        if (status === 401) { dispatch({ type: "SYNC_FAIL", reason: "401" }); return; }
+      }
+
       dispatch({ type: "SYNC_DONE" });
     } catch (err) {
       L.log({ kind: "ERROR", event: "SYNC_EXCEPTION", reason: err.message });
