@@ -4252,7 +4252,7 @@ function renderBookmarkTree() {
   clearNode($bookmarkDrawerBody);
   const store = loadBookmarks();
   if (!store.length) {
-    $bookmarkDrawerBody.appendChild(el("li", { className: "bm-empty" }, "저장된 북마크가 없습니다."));
+    $bookmarkDrawerBody.appendChild(el("li", { className: "bm-empty", role: "presentation" }, "저장된 북마크가 없습니다."));
     return;
   }
   for (const item of store) {
