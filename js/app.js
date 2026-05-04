@@ -217,8 +217,10 @@ async function clearAllCaches() {
   try {
     const keys = await caches.keys();
     await Promise.all(keys.map((k) => caches.delete(k)));
-    const reg = await navigator.serviceWorker.getRegistration();
-    if (reg) await reg.unregister();
+    try {
+      const reg = await navigator.serviceWorker.getRegistration();
+      if (reg) await reg.unregister();
+    } catch (_) { /* SW unregister failed — continue to reload */ }
     window.location.reload();
   } catch (err) {
     console.error("Cache clear failed:", err);
