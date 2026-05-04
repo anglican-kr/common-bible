@@ -13,6 +13,7 @@ const _recent = [];
 const _errors = [];
 const RECENT_CAP = 200;
 const ERROR_CAP = 20;
+const _consoleEnabled = location.hostname === "localhost";
 
 // Deterministic session-stable fingerprint (djb2 hash) for tokens.
 // Same token always maps to the same 8-char hex — useful for spotting
@@ -69,6 +70,10 @@ function log(entry) {
   }
 
   const item = { ts, ...entry };
+  if (_consoleEnabled) {
+    console.debug("[sync]", entry.event ?? entry.kind, entry);
+  }
+
   if (_recent.length >= RECENT_CAP) _recent.shift();
   _recent.push(item);
 
