@@ -13,6 +13,7 @@ config/secrets.yaml
 *.key
 *.pem
 *.p12
+*client_secret*.json
 
 # 로그 파일
 logs/
