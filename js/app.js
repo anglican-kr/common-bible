@@ -114,7 +114,9 @@ let _dragState = null; // { id, ghost, origLi, startY, origTop }
 
 function saveReadingPosition(bookId, chapter, verse = null) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ bookId, chapter, verse }));
+    const val = { bookId, chapter, verse };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(val));
+    window.syncStoreV2?.saveLastRead(val);
     if (window.driveSync) window.driveSync.scheduleUpload();
   } catch (_) {}
 }
@@ -180,6 +182,7 @@ function loadStartupBehavior() {
 
 function saveStartupBehavior(val) {
   localStorage.setItem(STARTUP_BEHAVIOR_KEY, val);
+  window.syncStoreV2?.saveSetting("startupBehavior", val);
   if (window.driveSync) window.driveSync.scheduleUpload();
 }
 
@@ -195,7 +198,7 @@ function loadFontSize() {
 }
 
 function saveFontSize(size) {
-  try { localStorage.setItem(FONT_SIZE_KEY, String(size)); if (window.driveSync) window.driveSync.scheduleUpload(); } catch (_) {}
+  try { localStorage.setItem(FONT_SIZE_KEY, String(size)); window.syncStoreV2?.saveSetting("fontSize", size); if (window.driveSync) window.driveSync.scheduleUpload(); } catch (_) {}
 }
 
 function applyFontSize(size) {
@@ -655,7 +658,7 @@ function loadColorScheme() {
 }
 
 function saveColorScheme(scheme) {
-  try { localStorage.setItem(COLOR_SCHEME_KEY, scheme); if (window.driveSync) window.driveSync.scheduleUpload(); } catch (_) {}
+  try { localStorage.setItem(COLOR_SCHEME_KEY, scheme); window.syncStoreV2?.saveSetting("colorScheme", scheme); if (window.driveSync) window.driveSync.scheduleUpload(); } catch (_) {}
 }
 
 // Default favicon/apple-touch-icon URLs as shipped in index.html.
@@ -700,7 +703,7 @@ function loadTheme() {
 }
 
 function saveTheme(theme) {
-  try { localStorage.setItem(THEME_KEY, theme); if (window.driveSync) window.driveSync.scheduleUpload(); } catch (_) {}
+  try { localStorage.setItem(THEME_KEY, theme); window.syncStoreV2?.saveSetting("theme", theme); if (window.driveSync) window.driveSync.scheduleUpload(); } catch (_) {}
 }
 
 let _systemThemeListener = null;
@@ -742,10 +745,11 @@ function loadBookOrder() {
 }
 
 function saveBookOrder(order) {
-  try { localStorage.setItem(BOOK_ORDER_KEY, order); if (window.driveSync) window.driveSync.scheduleUpload(); } catch (_) {}
+  try { localStorage.setItem(BOOK_ORDER_KEY, order); window.syncStoreV2?.saveSetting("bookOrder", order); if (window.driveSync) window.driveSync.scheduleUpload(); } catch (_) {}
 }
 
 // Apply saved settings on load
+window.syncStoreV2?.migrateLegacyIfNeeded();
 applyFontSize(loadFontSize());
 applyTheme(loadTheme());
 applyColorScheme(loadColorScheme());
@@ -824,6 +828,7 @@ function generateId() {
 }
 
 function loadBookmarks() {
+  if (window.syncStoreV2) return window.syncStoreV2.loadBookmarks();
   try {
     const raw = localStorage.getItem(BOOKMARK_KEY);
     return raw ? JSON.parse(raw) : [];
@@ -833,6 +838,7 @@ function loadBookmarks() {
 function saveBookmarks(store) {
   try {
     localStorage.setItem(BOOKMARK_KEY, JSON.stringify(store));
+    window.syncStoreV2?.saveBookmarks(store);
     if (window.driveSync) window.driveSync.scheduleUpload();
   } catch (_) {}
 }

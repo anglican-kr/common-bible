@@ -98,8 +98,8 @@ async function downloadSyncFile(token, fileId) {
     if (!ok) return { doc: null, etag: null, status: res.status };
     let doc;
     try { doc = await res.json(); } catch { return { doc: null, etag: null }; }
-    return { doc, etag };
-  } catch { return { doc: null, etag: null }; }
+    return { doc, etag, status: res.status };
+  } catch { return { doc: null, etag: null, status: 0 }; }
 }
 
 // Returns { ok, status, etag }. Never throws.

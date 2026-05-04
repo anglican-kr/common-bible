@@ -1,6 +1,6 @@
 // Bump this version on every release. Activating a new CACHE_NAME clears all
 // prior caches (shell + data), ensuring bible/search updates reach clients.
-const CACHE_NAME = "rev-40";
+const CACHE_NAME = "rev-41";
 
 // Separate cache for Google Font files (fonts.gstatic.com).
 // Never cleared on CACHE_NAME bump — font files are content-addressed and immutable.
@@ -11,6 +11,11 @@ const SHELL_FILES = [
   "/index.html",
   "/privacy.html",
   "/js/app.js",
+  "/js/drive-sync.js",
+  "/js/sync/debug-log.js",
+  "/js/sync/transport.js",
+  "/js/sync/store-v2.js",
+  "/js/sync/state-machine.js",
   "/js/pre-fetch.js",
   "/js/gtag-init.js",
   "/js/search-worker.js",
