@@ -14,6 +14,8 @@ let _tokenClient = null;
 let _uploadTimer = null;
 let _initRetryCount = 0;
 let _isRefreshing = false;
+let _reAuthCount = 0;
+const _MAX_REAUTH = 3;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -41,8 +43,10 @@ function _handle401() {
   _updateSettingsUI();
   // Attempt silent re-auth; guard with _isRefreshing to prevent concurrent 401s
   // from triggering multiple re-auth requests and racing _downloadAndMerge calls.
-  if (!_isRefreshing && localStorage.getItem(SYNC_ENABLED_KEY) === "1") {
+  // _reAuthCount caps sequential retry loops at _MAX_REAUTH to prevent infinite loops.
+  if (!_isRefreshing && _reAuthCount < _MAX_REAUTH && localStorage.getItem(SYNC_ENABLED_KEY) === "1") {
     _isRefreshing = true;
+    _reAuthCount++;
     _silentSignIn();
   }
   throw new Error("token expired");
@@ -137,7 +141,12 @@ async function _downloadAndMerge() {
     return;
   }
 
-  // Remote is newer — apply to local
+  // Remote is newer — apply to local only if no local changes are pending upload
+  if (_uploadTimer !== null) {
+    // Pending local changes exist; cancel the stale remote apply and let the
+    // debounced upload proceed so we don't discard unsaved user data.
+    return;
+  }
   if (!_validateRemote(remote)) return;
   _applyRemote(remote);
   localStorage.setItem(SYNC_UPDATED_KEY, String(remoteUpdatedAt));
@@ -180,6 +189,7 @@ function _showSnackbar(msg) {
 
 async function _onTokenResponse(resp) {
   _isRefreshing = false;
+  _reAuthCount = 0; // successful token response resets the re-auth loop counter
   if (resp.error) {
     console.warn("[drive-sync] token error:", resp.error);
     if (resp.error === "access_denied" || resp.error === "popup_closed_by_user") {
@@ -273,7 +283,10 @@ function signOut() {
 function scheduleUpload() {
   if (!_accessToken) return;
   clearTimeout(_uploadTimer);
-  _uploadTimer = setTimeout(() => _upload().catch(() => {}), 300);
+  _uploadTimer = setTimeout(() => {
+    _uploadTimer = null;
+    _upload().catch(() => {});
+  }, 300);
 }
 
 function isEnabled() {
