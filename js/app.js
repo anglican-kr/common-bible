@@ -1159,7 +1159,12 @@ function _setupDragHandle(li, row) {
         return;
       }
 
-      if (mode === "longpress") return;
+      if (mode === "longpress") {
+        // Suppress the click that the browser fires after pointerup so it doesn't
+        // immediately re-close the just-revealed action row.
+        document.addEventListener("click", (ce) => { ce.stopPropagation(); ce.preventDefault(); }, { capture: true, once: true });
+        return;
+      }
 
       if (!_dragState) return;
       const ds = _dragState;
