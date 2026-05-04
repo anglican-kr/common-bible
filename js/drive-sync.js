@@ -39,6 +39,8 @@ function _pollGis() {
     _machine.onGisReady();
   } else if (_gisRetryCount++ < 20) {
     setTimeout(_pollGis, 500);
+  } else {
+    window.syncDebugLog?.log({ kind: "ERROR", event: "GIS_LOAD_TIMEOUT", attempts: _gisRetryCount });
   }
 }
 
@@ -59,7 +61,9 @@ function _clearUploadTimer() {
 
 // Called by app.js after DOMContentLoaded idle.
 function initDriveSync() {
-  if (localStorage.getItem("bible-drive-sync") === "1") {
+  const enabled = localStorage.getItem("bible-drive-sync") === "1";
+  window.syncDebugLog?.log({ kind: "ACTION", event: "INIT", enabled });
+  if (enabled) {
     _machine.enable();
     _startPollingGis();
   }
@@ -67,6 +71,7 @@ function initDriveSync() {
 
 // Called by settings popover "연결" button.
 function signIn() {
+  window.syncDebugLog?.log({ kind: "ACTION", event: "SIGN_IN", state: _machine.getState() });
   localStorage.setItem("bible-drive-sync", "1");
   if (_machine.getState() === "DISABLED" || _machine.getState() === "ERROR") {
     _machine.enable();
@@ -76,6 +81,7 @@ function signIn() {
 
 // Called by disconnect modal "파일 유지" path.
 function signOut() {
+  window.syncDebugLog?.log({ kind: "ACTION", event: "SIGN_OUT" });
   _clearUploadTimer();
   const token = _machine.getToken();
   if (token) window.syncTransport.revokeToken(token);
@@ -87,6 +93,7 @@ function signOut() {
 
 // Called by disconnect modal "삭제" path.
 async function deleteRemoteFile() {
+  window.syncDebugLog?.log({ kind: "ACTION", event: "DELETE_REMOTE_FILE" });
   await _machine.deleteRemoteFile();
 }
 

@@ -213,7 +213,10 @@ function createSyncMachine({ onStateChange } = {}) {
           T.fetchUserInfo(_token).then(({ email }) => {
             _email = email;
             localStorage.setItem(SYNC_EMAIL_KEY, email ?? "");
+            L.log({ kind: "ACTION", event: "EMAIL_FETCHED", email: L.mask("email", email) });
             if (email && typeof window.rebuildDriveSyncSection === "function") window.rebuildDriveSyncSection();
+          }).catch((err) => {
+            L.log({ kind: "ERROR", event: "EMAIL_FETCH_FAILED", reason: err.message });
           });
           // Trigger initial sync immediately after authentication.
           dispatch({ type: "SYNC_REQUEST" });
@@ -312,7 +315,11 @@ function createSyncMachine({ onStateChange } = {}) {
   async function deleteRemoteFile() {
     if (!_token) return;
     const fileId = await T.findSyncFileId(_token);
-    if (fileId) await T.deleteSyncFile(_token, fileId);
+    L.log({ kind: "NETWORK", event: "DELETE_FIND_FILE", fileId: L.mask("fileId", fileId) });
+    if (fileId) {
+      const { ok } = await T.deleteSyncFile(_token, fileId);
+      L.log({ kind: "NETWORK", event: "DELETE_FILE", ok });
+    }
   }
 
   return { enable, disable, onGisReady, requestSync, getState, getToken, getEmail, isEnabled, isAuthenticated, deleteRemoteFile, dispatch };
