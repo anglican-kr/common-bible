@@ -4150,7 +4150,7 @@ function _buildFolderCombobox(folderOptions, selectedFolderId) {
 }
 
 function _buildFolderItem(folder, depth) {
-  const expanded = _hasActiveDescendant(folder);
+  const expanded = _hasActiveDescendant(folder) || !!(folder.expanded);
   const li = el("li", {
     role: "treeitem",
     className: "bm-folder",
@@ -4174,6 +4174,10 @@ function _buildFolderItem(folder, depth) {
     const newExpanded = li.getAttribute("aria-expanded") !== "true";
     li.setAttribute("aria-expanded", String(newExpanded));
     toggle.replaceChildren(_buildFolderToggleIcon(newExpanded));
+    // Persist expanded state so it survives re-render
+    const store = loadBookmarks();
+    const found = _findItemInStore(store, folder.id);
+    if (found) { found.item.expanded = newExpanded; saveBookmarks(store); }
   });
 
   const renameAction = () => {
@@ -4442,7 +4446,13 @@ function _showSaveModal(mode, bookId, chapter, verseSpec, existing) {
   const saveBtn = el("button", { className: "bm-btn-primary", type: "button" }, existing ? "수정" : "저장");
   const cancelBtn = el("button", { className: "bm-btn-secondary", type: "button" }, "취소");
   saveBtn.addEventListener("click", () => {
-    const label = labelInput.value.trim() || defaultLabel;
+    const label = labelInput.value.trim();
+    if (!label) {
+      labelInput.setAttribute("aria-invalid", "true");
+      labelInput.focus();
+      return;
+    }
+    labelInput.removeAttribute("aria-invalid");
     const note = noteInput.value.trim();
     const folderId = folderCombo.getValue();
     commitSaveBookmark(existing ? existing.id : null, label, note, folderId, bookId, chapter, verseSpec);

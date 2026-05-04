@@ -51,8 +51,8 @@ def test_edit_bookmark_label(browser):
         ctx.close()
 
 
-def test_edit_bookmark_empty_label_falls_back_to_default(browser):
-    """레이블을 비우고 저장하면 기본 레이블(창세기 1장)로 저장된다."""
+def test_edit_bookmark_empty_label_rejected(browser):
+    """레이블을 비우고 저장하면 모달이 닫히지 않고 aria-invalid 피드백이 설정된다."""
     ctx = browser.new_context()
     ctx.add_init_script(CLEAR_APP_STORAGE)
     page = ctx.new_page()
@@ -62,14 +62,18 @@ def test_edit_bookmark_empty_label_falls_back_to_default(browser):
 
         page.fill("#bm-label-input", "")
         page.locator("#bm-save-modal .bm-btn-primary").click()
-        page.wait_for_selector("#bm-save-modal", state="hidden")
         page.wait_for_timeout(200)
 
+        # Modal stays open
+        assert not page.locator("#bm-save-modal").is_hidden(), \
+            "Modal should stay open when label is empty"
+        # Input marked invalid
+        assert page.get_attribute("#bm-label-input", "aria-invalid") == "true", \
+            "aria-invalid should be set on empty label input"
+        # Original bookmark unchanged
         store = _get_store(page)
         bm = next((b for b in store if b["id"] == "bm-a"), None)
-        assert bm is not None
-        # App falls back to defaultLabel ("창세기 1장") when input is empty
-        assert bm["label"], "Label should not be empty"
+        assert bm["label"] == "창세기 1장"
     finally:
         ctx.close()
 

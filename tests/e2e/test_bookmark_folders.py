@@ -93,9 +93,8 @@ def test_create_folder_empty_name_does_nothing(browser):
 def test_folder_toggle_expand_collapse(browser):
     """폴더 row 클릭 → aria-expanded 토글.
 
-    _buildFolderItem은 _hasActiveDescendant(현재 URL과 매칭되는 자식 여부)로
-    초기 expanded 상태를 결정한다. Gen 2 페이지에서 열어 Gen 1 자식이
-    비활성 상태가 되도록 한다.
+    expanded=false, 비활성 자식(_hasActiveDescendant=false)인 폴더는
+    접힌 상태로 렌더링된다. Gen 2에서 열어 Gen 1 자식이 비활성 상태가 되도록 한다.
     """
     ctx = browser.new_context()
     ctx.add_init_script(CLEAR_APP_STORAGE)
@@ -124,15 +123,49 @@ def test_folder_toggle_expand_collapse(browser):
 
 
 def test_expanded_folder_shows_children(browser):
-    """펼쳐진 폴더 안에 자식 북마크가 표시된다."""
+    """expanded=true로 저장된 폴더는 자식 북마크를 펼쳐서 표시한다."""
     ctx = browser.new_context()
     ctx.add_init_script(CLEAR_APP_STORAGE)
     page = ctx.new_page()
     try:
-        _open_drawer(page)
+        # Gen 2에서 열어 _hasActiveDescendant=false, expanded=true만으로 펼쳐짐 확인
+        page.goto(f"{BASE}/gen/2")
+        page.wait_for_selector("article.chapter-text .verse")
+        page.locator(".title-bookmark-btn").click()
+        page.wait_for_selector("#bookmark-drawer:not([hidden])")
         expanded = {**_FOLDER_1, "expanded": True}
         _set_store(page, [expanded])
         page.wait_for_selector("li.bm-bookmark[data-id='bm-a']")
+    finally:
+        ctx.close()
+
+
+def test_folder_expanded_state_persists(browser):
+    """사용자가 수동으로 펼친 폴더는 expanded=true가 저장되어 다음 렌더링에서도 유지된다."""
+    ctx = browser.new_context()
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    page = ctx.new_page()
+    try:
+        # Gen 2에서 열어 _hasActiveDescendant 영향 없음
+        page.goto(f"{BASE}/gen/2")
+        page.wait_for_selector("article.chapter-text .verse")
+        page.locator(".title-bookmark-btn").click()
+        page.wait_for_selector("#bookmark-drawer:not([hidden])")
+        _set_store(page, [_FOLDER_1])
+        page.wait_for_selector("li.bm-folder")
+
+        # 초기 접힘 상태 확인
+        assert page.locator("li.bm-folder[data-id='folder-1']").get_attribute("aria-expanded") == "false"
+
+        # 클릭으로 펼침
+        page.locator("li.bm-folder[data-id='folder-1'] .bm-folder-row").click()
+        page.wait_for_timeout(200)
+        assert page.locator("li.bm-folder[data-id='folder-1']").get_attribute("aria-expanded") == "true"
+
+        # 재렌더링 후에도 펼침 상태 유지 (expanded=true가 store에 저장되어야 함)
+        page.evaluate("() => renderBookmarkTree()")
+        page.wait_for_timeout(200)
+        assert page.locator("li.bm-folder[data-id='folder-1']").get_attribute("aria-expanded") == "true"
     finally:
         ctx.close()
 
