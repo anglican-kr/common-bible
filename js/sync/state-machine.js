@@ -133,9 +133,10 @@ function createSyncMachine({ onStateChange } = {}) {
       if (!V2.validateRemote(remote)) {
         L.log({ kind: "ACTION", event: "REMOTE_SCHEMA_MISMATCH", schema: remote?.schemaVersion });
         const payload = V2.buildSyncPayload(_deviceId);
-        const { ok, status } = await T.uploadSyncFile(_token, payload, { fileId });
+        const { ok, status } = await T.uploadSyncFile(_token, payload, { fileId, ifMatch: etag });
         L.log({ kind: "NETWORK", event: "UPLOAD_UPDATE", ok, status });
         if (status === 401) { dispatch({ type: "SYNC_FAIL", reason: "401" }); return; }
+        if (status === 412) { dispatch({ type: "SYNC_FAIL", reason: "412" }); return; }
         dispatch({ type: "SYNC_DONE" });
         return;
       }
@@ -179,7 +180,8 @@ function createSyncMachine({ onStateChange } = {}) {
       dispatch({ type: "SYNC_DONE" });
     } catch (err) {
       L.log({ kind: "ERROR", event: "SYNC_EXCEPTION", reason: err.message });
-      dispatch({ type: "SYNC_FAIL", reason: "network" });
+      const reason = err.message === "no_token" ? "no_token" : "exception";
+      dispatch({ type: "SYNC_FAIL", reason });
     } finally {
       _syncPending = false;
     }
@@ -296,6 +298,12 @@ function createSyncMachine({ onStateChange } = {}) {
               _snackbar("동기화 충돌이 반복됩니다. 잠시 후 다시 시도해 주세요.");
               _setState(S.IDLE, event);
             }
+          } else if (event.reason === "no_token" || event.reason === "exception") {
+            // Deterministic non-network failure — retrying won't help.
+            _token = null;
+            _snackbar("동기화 중 오류가 발생했습니다. 설정에서 재연결해 주세요.");
+            _setState(S.ERROR, event);
+            if (typeof window.rebuildDriveSyncSection === "function") window.rebuildDriveSyncSection();
           } else {
             // Network / 5xx — backoff retry, then OFFLINE after 5 failures.
             _netFailCount++;
