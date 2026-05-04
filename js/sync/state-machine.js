@@ -123,13 +123,31 @@ function createSyncMachine({ onStateChange } = {}) {
       const remoteMaxU = V2.maxU(remote);
       const merged = V2.mergeDocs(local, remote, _deviceId);
       const mergedMaxU = V2.maxU(merged);
-      const hadRemoteChanges = remoteMaxU > localMaxU;
 
-      L.log({ kind: "ACTION", event: "MERGE", localMaxU, remoteMaxU, mergedMaxU });
+      // Per-record comparison: did any merged record come from remote?
+      const hadRemoteChanges = (
+        Object.keys(merged.settings ?? {}).some(k =>
+          (merged.settings[k]?._u ?? 0) > (local.settings?.[k]?._u ?? 0)
+        ) ||
+        (merged.lastRead?._u ?? 0) > (local.lastRead?._u ?? 0) ||
+        Object.keys(merged.bookmarks?.items ?? {}).some(id =>
+          (merged.bookmarks.items[id]?._u ?? 0) > (local.bookmarks?.items?.[id]?._u ?? 0)
+        ) ||
+        Object.keys(merged.bookmarks?.tombstones ?? {}).some(id =>
+          (merged.bookmarks.tombstones[id] ?? 0) > (local.bookmarks?.tombstones?.[id] ?? 0)
+        )
+      );
+
+      L.log({ kind: "ACTION", event: "MERGE", localMaxU, remoteMaxU, mergedMaxU, hadRemoteChanges });
       _applyMergedDoc(merged, hadRemoteChanges);
 
-      // Upload if merged has data remote didn't have.
-      if (mergedMaxU > remoteMaxU) {
+      // Upload if merged has newer data OR more records than remote
+      // (local-only records with _u < remoteMaxU are caught by count check).
+      const remoteRecordCount = Object.keys(remote.bookmarks?.items ?? {}).length
+                              + Object.keys(remote.bookmarks?.tombstones ?? {}).length;
+      const mergedRecordCount = Object.keys(merged.bookmarks?.items ?? {}).length
+                              + Object.keys(merged.bookmarks?.tombstones ?? {}).length;
+      if (mergedMaxU > remoteMaxU || mergedRecordCount > remoteRecordCount) {
         const payload = V2.buildSyncPayload(_deviceId);
         const { ok, status } = await T.uploadSyncFile(_token, payload, { fileId });
         L.log({ kind: "NETWORK", event: "UPLOAD_UPDATE", ok, status });
