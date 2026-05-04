@@ -287,6 +287,18 @@ function validateRemote(data) {
 }
 
 // ── Apply remote doc to localStorage legacy keys ──────────────────────────────
+// Remove tombstones older than ageDays (default 30). Safe to call anytime;
+// only persists if there's anything to remove.
+function sweepTombstones(ageDays = 30) {
+  const cutoff = Date.now() - ageDays * 864e5;
+  const doc = loadLocal();
+  const before = Object.keys(doc.bookmarks.tombstones).length;
+  for (const [id, ts] of Object.entries(doc.bookmarks.tombstones)) {
+    if (ts < cutoff) delete doc.bookmarks.tombstones[id];
+  }
+  if (Object.keys(doc.bookmarks.tombstones).length < before) saveLocal(doc);
+}
+
 // Keeps existing app.js helpers (loadFontSize, loadTheme, etc.) working.
 
 function applyToLegacyKeys(doc) {
@@ -307,6 +319,7 @@ function applyToLegacyKeys(doc) {
 window.syncStoreV2 = {
   getDeviceId,
   loadLocal, saveLocal,
+  sweepTombstones,
   loadBookmarks, saveBookmarks,
   saveSetting, saveLastRead,
   migrateLegacyIfNeeded,

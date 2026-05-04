@@ -4,7 +4,8 @@
 - 개정: 2026-04-28 (Google Drive 동기화 기술 결정 확정)
 - 개정: 2026-04-30 (Phase 2a 구현 완료)
 - 개정: 2026-05-02 (Phase 2b 구현 완료, 보안 감사 완료)
-- 상태: 승인됨 (Phase 2a 완료, Phase 2b 완료)
+- 개정: 2026-05-04 (Phase 2c 구현 완료)
+- 상태: 승인됨 (Phase 2a 완료, Phase 2b 완료, Phase 2c 완료)
 
 ## 결정
 
@@ -269,13 +270,25 @@ connect-src: 현재 + https://oauth2.googleapis.com
 - XSS 시 토큰 탈취 불가 (메모리 전용)
 - 기존 localStorage 동작 유지 (동기화 비활성 사용자 영향 없음)
 
+## Phase 2c — 동기화 엔진 재설계 (구현 완료 2026-05-04)
+
+> **개정 (2026-05-04):** Phase 2b 이후 버그봇 연속 발견(PR #20 18건, PR #26 6건)의 근본 원인을 해소하기 위해 동기화 엔진을 전면 재설계.
+>
+> - **데이터 모델 v2** (`js/sync/store-v2.js`): 문서 단위 LWW → 항목 단위 per-record mtime(`_u`) + tombstone. flat-map 북마크 + `mergeDocs()`.
+> - **인증 FSM** (`js/sync/state-machine.js`): 6개 클로저 변수 → `_ctx = { netFails, conflictFails, reAuthFails, backoffTimer }` 명시적 컨텍스트. `_transition(nextState, ctxPatch)` 단일 진입점으로 "리셋 누락" 구조적 차단.
+> - **ETag 낙관적 동시성** (`js/sync/transport.js`): `If-Match` 헤더로 동시 업로드 충돌 감지. 412 수신 시 최대 3회 재머지 재시도.
+> - **Exponential backoff + OFFLINE**: 네트워크 오류 1s/2s/4s/8s/16s 재시도, 5회 초과 시 OFFLINE 상태. `online` 이벤트로 자동 복구.
+> - **디버그 로그** (`js/sync/debug-log.js`): 메모리 ring buffer(recent 200, errors 20), 마스킹, `localhost` 전용 `console.debug`. 설정 팝오버에 "진단 정보 복사" 버튼.
+> - **e2e 테스트** (`tests/e2e/test_drive_sync.py`): FakeDrive + GIS 스텁으로 5가지 시나리오 자동 검증.
+> - **tombstone GC** (`sweepTombstones(ageDays=30)`): 앱 시작 시 30일 이상 경과한 tombstone 자동 제거.
+
 ## 미결 사항
 
-- [x] Google Cloud Console 프로젝트 생성 및 Client ID 발급 (dev/prod 각각 발급, drive-sync.js에 hostname 분기)
-- [x] 개인정보처리방침 작성 (privacy.html 구현 완료)
-- [ ] Drive API 호출 실패(네트워크 오류) 시 재시도 전략 (exponential backoff 등)
-- [x] 동기화 충돌 결과 사용자 알림 UX ("다른 기기에서 변경된 데이터를 불러왔습니다" 스낵바 구현)
+- [x] Google Cloud Console 프로젝트 생성 및 Client ID 발급
+- [x] 개인정보처리방침 작성
+- [x] Drive API 호출 실패 재시도 전략 — exponential backoff (PR #26, Phase 2c)
+- [x] 동기화 충돌 결과 사용자 알림 UX
 - [ ] Google OAuth 앱 검수 통과 (2026-05-02 제출 완료, 심사 결과 대기 중)
-- [ ] 충돌 해소 전략 고도화 여부 결정 (현재: 문서 단위 last-write-wins → 향후: 항목 단위 병합)
-- [x] 내보내기/가져오기 JSON 스키마에 `_version: 1` 필드 추가 (Phase 2a 완료)
-- [x] `localStorage` 스키마에 `_version` 필드 추가 — `bible-bookmarks` 값을 `{ _version: 1, items: [...] }` 래퍼로 저장; `loadBookmarks()`가 bare array(v0)를 자동 마이그레이션, 다음 `saveBookmarks()` 호출 시 래퍼 형식으로 전환됨
+- [x] 항목 단위 병합 — per-record LWW + tombstone (Phase 2c, `js/sync/store-v2.js`)
+- [x] 내보내기/가져오기 JSON 스키마 `_version: 1` 추가
+- [x] tombstone GC (`sweepTombstones`, 30일 기준, 앱 시작 시 실행)
