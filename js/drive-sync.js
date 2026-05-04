@@ -252,6 +252,7 @@ async function deleteRemoteFile() {
 }
 
 function signOut() {
+  clearTimeout(_uploadTimer);
   if (_accessToken) {
     google.accounts.oauth2.revoke(_accessToken);
     _accessToken = null;

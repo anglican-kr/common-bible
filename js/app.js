@@ -452,7 +452,12 @@ function initSettings() {
           driveLabelSpan.appendChild(infoBtn);
           driveRow.appendChild(driveLabelSpan);
           const disconnectBtn = el("button", { className: "settings-action-btn", "aria-label": "Google Drive 연결 해제" }, "해제");
-          disconnectBtn.addEventListener("click", () => openDriveDisconnectModal());
+          disconnectBtn.addEventListener("click", () => {
+            popover.hidden = true;
+            btn.setAttribute("aria-expanded", "false");
+            if (cleanupTrap) { cleanupTrap(); cleanupTrap = null; }
+            openDriveDisconnectModal();
+          });
           driveRow.appendChild(disconnectBtn);
           section3.appendChild(driveRow);
           const infoRow = el("div", { className: "settings-drive-info-row" });
@@ -4357,6 +4362,9 @@ function closeDriveDisconnectModal() {
 
 $driveDisconnectCancel.addEventListener("click", closeDriveDisconnectModal);
 $driveDisconnectScrim.addEventListener("click", closeDriveDisconnectModal);
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !$driveDisconnectModal.hidden) closeDriveDisconnectModal();
+});
 
 $driveDisconnectKeep.addEventListener("click", () => {
   closeDriveDisconnectModal();
