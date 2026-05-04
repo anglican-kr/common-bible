@@ -120,8 +120,12 @@ async function _downloadAndMerge() {
   try { remote = await res.json(); } catch { return; }
 
   const localUpdatedAt = Number(localStorage.getItem(SYNC_UPDATED_KEY) ?? 0);
-  if (remote.updatedAt <= localUpdatedAt) {
-    // Local is newer or equal — push to Drive
+  if (remote.updatedAt === localUpdatedAt) {
+    // Already in sync — nothing to do
+    return;
+  }
+  if (remote.updatedAt < localUpdatedAt) {
+    // Local is newer — push to Drive
     await _upload();
     return;
   }
