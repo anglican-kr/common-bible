@@ -286,7 +286,7 @@ function validateRemote(data) {
   );
 }
 
-// ── Apply remote doc to localStorage legacy keys ──────────────────────────────
+// ── Tombstone GC ──────────────────────────────────────────────────────────────
 // Remove tombstones older than ageDays (default 30). Safe to call anytime;
 // only persists if there's anything to remove.
 function sweepTombstones(ageDays = 30) {
@@ -299,6 +299,7 @@ function sweepTombstones(ageDays = 30) {
   if (Object.keys(doc.bookmarks.tombstones).length < before) saveLocal(doc);
 }
 
+// ── Apply remote doc to localStorage legacy keys ──────────────────────────────
 // Keeps existing app.js helpers (loadFontSize, loadTheme, etc.) working.
 
 function applyToLegacyKeys(doc) {
