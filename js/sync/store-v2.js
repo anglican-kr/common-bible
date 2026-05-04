@@ -115,8 +115,8 @@ function saveLocal(doc) {
 
 // Stable content fingerprint for conflict detection (excludes positional fields).
 function _contentKey(node) {
-  const { id, type, name, vref, verseSpec, color } = node;
-  return JSON.stringify({ id, type, name, vref, verseSpec, color });
+  const { id, type, name, bookId, chapter, vref, verseSpec, color, label, note } = node;
+  return JSON.stringify({ id, type, name, bookId, chapter, vref, verseSpec, color, label, note });
 }
 
 // Save a bookmark tree into v2 flat-map, preserving _u for unchanged items
@@ -295,6 +295,13 @@ function applyToLegacyKeys(doc) {
     if (s?.v != null) localStorage.setItem(lsKey, typeof s.v === "string" ? s.v : JSON.stringify(s.v));
   }
   if (doc.lastRead?.v != null) localStorage.setItem(_LR_KEY, JSON.stringify(doc.lastRead.v));
+  const { items, tombstones } = doc.bookmarks ?? { items: {}, tombstones: {} };
+  const alive = {};
+  for (const [id, node] of Object.entries(items)) {
+    if (!(tombstones?.[id] > node._u)) alive[id] = node;
+  }
+  const tree = bookmarkTreeFromFlat(alive);
+  localStorage.setItem("bible-bookmarks", JSON.stringify(tree));
 }
 
 window.syncStoreV2 = {
