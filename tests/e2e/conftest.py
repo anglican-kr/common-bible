@@ -25,6 +25,7 @@ CLEAR_APP_STORAGE = """
     'bible-book-order', 'bible-startup',
     'bible-install-nudge', 'bible-install-nudge-state',
     'bible-drive-sync', 'bible-drive-sync-email', 'bible-drive-sync-updated',
+    'bible-bookmarks-v2', 'bible-sync-meta',
   ];
   for (const k of keys) try { localStorage.removeItem(k); } catch(_) {}
 })();
