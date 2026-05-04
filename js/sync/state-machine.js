@@ -126,7 +126,7 @@ function createSyncMachine({ onStateChange } = {}) {
       const { doc: remote, etag, status: dlStatus } = await T.downloadSyncFile(_token, fileId);
       L.log({ kind: "NETWORK", event: "DOWNLOAD", status: dlStatus, etag: L.mask("etag", etag) });
       if (dlStatus === 401) { dispatch({ type: "SYNC_FAIL", reason: "401" }); return; }
-      if (dlStatus >= 500) { dispatch({ type: "SYNC_FAIL", reason: `http_${dlStatus}` }); return; }
+      if (dlStatus === 0 || dlStatus >= 500) { dispatch({ type: "SYNC_FAIL", reason: `http_${dlStatus}` }); return; }
       if (!remote) { dispatch({ type: "SYNC_DONE" }); return; }
 
       // Remote v2: merge per-record. Remote v1 (legacy): treat as no remote data.
