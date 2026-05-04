@@ -110,7 +110,7 @@ function createSyncMachine({ onStateChange } = {}) {
 
   function _applyRemote(data) {
     if (!_validateRemote(data)) return;
-    localStorage.setItem(BM_KEY, JSON.stringify({ _version: 1, items: data.bookmarks }));
+    localStorage.setItem(BM_KEY, JSON.stringify(data.bookmarks));
     if (typeof window.renderBookmarkTree === "function") window.renderBookmarkTree();
     const s = data.settings ?? {};
     if (s.fontSize        != null) { localStorage.setItem(FS_KEY, s.fontSize);        if (typeof window.applyFontSize    === "function") window.applyFontSize(s.fontSize); }
@@ -205,24 +205,23 @@ function createSyncMachine({ onStateChange } = {}) {
       case S.AUTHENTICATING:
         if (event.type === "TOKEN_OK") {
           _reAuthCount = 0;
-          _token  = event.access_token;
-          _email  = event.email ?? null;
-          L.log({ kind: "ACTION", event: "TOKEN_STORED", token: L.mask("token", _token), email: L.mask("email", _email) });
-          localStorage.setItem(SYNC_EMAIL_KEY, _email ?? "");
+          _token = event.access_token;
+          L.log({ kind: "ACTION", event: "TOKEN_STORED", token: L.mask("token", _token) });
           _setState(S.IDLE, event);
           if (typeof window.rebuildDriveSyncSection === "function") window.rebuildDriveSyncSection();
+          // Fetch email asynchronously — GIS token callback doesn't include it.
+          T.fetchUserInfo(_token).then(({ email }) => {
+            _email = email;
+            localStorage.setItem(SYNC_EMAIL_KEY, email ?? "");
+            if (email && typeof window.rebuildDriveSyncSection === "function") window.rebuildDriveSyncSection();
+          });
           // Trigger initial sync immediately after authentication.
           dispatch({ type: "SYNC_REQUEST" });
         } else if (event.type === "TOKEN_FAIL") {
           L.log({ kind: "ERROR", event: "TOKEN_FAIL", reason: event.reason });
           if (SILENT_FAIL_REASONS.has(event.reason)) {
-            // User declined or popup closed — disable silently.
             _setState(S.DISABLED, event);
-          } else if (_reAuthCount >= 3) {
-            _snackbar("Google Drive 동기화 세션이 만료됐습니다. 설정에서 재연결해 주세요.");
-            _setState(S.ERROR, event);
           } else {
-            // Transient failure — stay in ERROR so user can retry manually.
             _snackbar("Google Drive 동기화 세션이 만료됐습니다. 설정에서 재연결해 주세요.");
             _setState(S.ERROR, event);
           }

@@ -40,7 +40,11 @@ function _pollGis() {
   } else if (_gisRetryCount++ < 20) {
     setTimeout(_pollGis, 500);
   }
-  // After 20 tries (~10s), GIS failed to load — stay in current state.
+}
+
+function _startPollingGis() {
+  _gisRetryCount = 0;
+  _pollGis();
 }
 
 // ── Upload debounce ────────────────────────────────────────────────────────────
@@ -57,7 +61,7 @@ function _clearUploadTimer() {
 function initDriveSync() {
   if (localStorage.getItem("bible-drive-sync") === "1") {
     _machine.enable();
-    _pollGis();
+    _startPollingGis();
   }
 }
 
@@ -67,8 +71,7 @@ function signIn() {
   if (_machine.getState() === "DISABLED" || _machine.getState() === "ERROR") {
     _machine.enable();
   }
-  // If still DISABLED after enable (e.g. GIS not loaded yet), poll.
-  if (_machine.getState() === "INITIALIZING") _pollGis();
+  if (_machine.getState() === "INITIALIZING") _startPollingGis();
 }
 
 // Called by disconnect modal "파일 유지" path.
