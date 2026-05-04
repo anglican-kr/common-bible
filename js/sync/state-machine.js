@@ -28,6 +28,7 @@ const S = Object.freeze({
   AUTHENTICATING: "AUTHENTICATING",
   IDLE:           "IDLE",
   SYNCING:        "SYNCING",
+  OFFLINE:        "OFFLINE",
   ERROR:          "ERROR",
 });
 
@@ -49,8 +50,12 @@ function createSyncMachine({ onStateChange } = {}) {
   let _token = null;
   let _email = null;
   let _tokenClient = null;
-  let _reAuthCount = 0;   // consecutive re-auth attempts since last TOKEN_OK
-  let _syncPending = false; // true when a sync cycle is in flight
+  let _reAuthCount = 0;
+  let _syncPending = false;
+  let _netFailCount = 0;    // consecutive network/5xx failures
+  let _conflictCount = 0;   // consecutive 412 conflicts
+  let _backoffTimer = null; // pending retry setTimeout
+  const MAX_NET_RETRIES = 5; // delays: 1s/2s/4s/8s/16s; OFFLINE after 6th failure
 
   // ── Internal helpers ───────────────────────────────────────────────────────
 
@@ -64,6 +69,19 @@ function createSyncMachine({ onStateChange } = {}) {
 
   function _snackbar(msg) {
     if (typeof window._showSyncSnackbar === "function") window._showSyncSnackbar(msg);
+  }
+
+  // Exponential backoff: 1s/2s/4s/8s/16s with ±250ms jitter.
+  function _scheduleRetry() {
+    const delays = [1000, 2000, 4000, 8000, 16000];
+    const base = delays[Math.min(_netFailCount - 1, delays.length - 1)];
+    const delay = base + Math.random() * 500 - 250;
+    clearTimeout(_backoffTimer);
+    L.log({ kind: "ACTION", event: "RETRY_SCHEDULED", attempt: _netFailCount, delayMs: Math.round(delay) });
+    _backoffTimer = setTimeout(() => {
+      _backoffTimer = null;
+      if (_state === S.IDLE) dispatch({ type: "SYNC_REQUEST" });
+    }, delay);
   }
 
   // ── v2 data operations (via syncStoreV2) ─────────────────────────────────────
@@ -100,6 +118,7 @@ function createSyncMachine({ onStateChange } = {}) {
         const { ok, status } = await T.uploadSyncFile(_token, payload);
         L.log({ kind: "NETWORK", event: "UPLOAD_NEW", ok, status });
         if (status === 401) { dispatch({ type: "SYNC_FAIL", reason: "401" }); return; }
+        if (!ok) { dispatch({ type: "SYNC_FAIL", reason: `http_${status}` }); return; }
         dispatch({ type: "SYNC_DONE" });
         return;
       }
@@ -107,15 +126,17 @@ function createSyncMachine({ onStateChange } = {}) {
       const { doc: remote, etag, status: dlStatus } = await T.downloadSyncFile(_token, fileId);
       L.log({ kind: "NETWORK", event: "DOWNLOAD", status: dlStatus, etag: L.mask("etag", etag) });
       if (dlStatus === 401) { dispatch({ type: "SYNC_FAIL", reason: "401" }); return; }
+      if (dlStatus === 0 || dlStatus >= 500) { dispatch({ type: "SYNC_FAIL", reason: `http_${dlStatus}` }); return; }
       if (!remote) { dispatch({ type: "SYNC_DONE" }); return; }
 
       // Remote v2: merge per-record. Remote v1 (legacy): treat as no remote data.
       if (!V2.validateRemote(remote)) {
         L.log({ kind: "ACTION", event: "REMOTE_SCHEMA_MISMATCH", schema: remote?.schemaVersion });
         const payload = V2.buildSyncPayload(_deviceId);
-        const { ok, status } = await T.uploadSyncFile(_token, payload, { fileId });
+        const { ok, status } = await T.uploadSyncFile(_token, payload, { fileId, ifMatch: etag });
         L.log({ kind: "NETWORK", event: "UPLOAD_UPDATE", ok, status });
         if (status === 401) { dispatch({ type: "SYNC_FAIL", reason: "401" }); return; }
+        if (status === 412) { dispatch({ type: "SYNC_FAIL", reason: "412" }); return; }
         dispatch({ type: "SYNC_DONE" });
         return;
       }
@@ -149,15 +170,18 @@ function createSyncMachine({ onStateChange } = {}) {
                               + Object.keys(merged.bookmarks?.tombstones ?? {}).length;
       if (mergedMaxU > remoteMaxU || mergedRecordCount > remoteRecordCount) {
         const payload = V2.buildSyncPayload(_deviceId);
-        const { ok, status } = await T.uploadSyncFile(_token, payload, { fileId });
+        const { ok, status } = await T.uploadSyncFile(_token, payload, { fileId, ifMatch: etag });
         L.log({ kind: "NETWORK", event: "UPLOAD_UPDATE", ok, status });
         if (status === 401) { dispatch({ type: "SYNC_FAIL", reason: "401" }); return; }
+        if (status === 412) { dispatch({ type: "SYNC_FAIL", reason: "412" }); return; }
+        if (!ok) { dispatch({ type: "SYNC_FAIL", reason: `http_${status}` }); return; }
       }
 
       dispatch({ type: "SYNC_DONE" });
     } catch (err) {
       L.log({ kind: "ERROR", event: "SYNC_EXCEPTION", reason: err.message });
-      dispatch({ type: "SYNC_FAIL", reason: err.message });
+      const reason = err.message === "no_token" ? "no_token" : "exception";
+      dispatch({ type: "SYNC_FAIL", reason });
     } finally {
       _syncPending = false;
     }
@@ -231,9 +255,13 @@ function createSyncMachine({ onStateChange } = {}) {
 
       case S.IDLE:
         if (event.type === "SYNC_REQUEST") {
+          clearTimeout(_backoffTimer);
+          _backoffTimer = null;
           _setState(S.SYNCING, event);
           _syncCycle();
         } else if (event.type === "DISABLE") {
+          clearTimeout(_backoffTimer);
+          _backoffTimer = null;
           _token = null;
           _setState(S.DISABLED, event);
           if (typeof window.rebuildDriveSyncSection === "function") window.rebuildDriveSyncSection();
@@ -242,6 +270,10 @@ function createSyncMachine({ onStateChange } = {}) {
 
       case S.SYNCING:
         if (event.type === "SYNC_DONE") {
+          clearTimeout(_backoffTimer);
+          _backoffTimer = null;
+          _netFailCount = 0;
+          _conflictCount = 0;
           _setState(S.IDLE, event);
         } else if (event.type === "SYNC_FAIL") {
           if (event.reason === "401" && _reAuthCount < 3) {
@@ -255,11 +287,50 @@ function createSyncMachine({ onStateChange } = {}) {
             _snackbar("Google Drive 동기화 세션이 만료됐습니다. 설정에서 재연결해 주세요.");
             _setState(S.ERROR, event);
             if (typeof window.rebuildDriveSyncSection === "function") window.rebuildDriveSyncSection();
+          } else if (event.reason === "412") {
+            // ETag mismatch — another device uploaded concurrently. Retry sync.
+            _conflictCount++;
+            if (_conflictCount <= 3) {
+              _setState(S.IDLE, event);
+              setTimeout(() => { if (_state === S.IDLE) dispatch({ type: "SYNC_REQUEST" }); }, 200);
+            } else {
+              _conflictCount = 0;
+              _snackbar("동기화 충돌이 반복됩니다. 잠시 후 다시 시도해 주세요.");
+              _setState(S.IDLE, event);
+            }
+          } else if (event.reason === "no_token" || event.reason === "exception") {
+            // Deterministic non-network failure — retrying won't help.
+            _token = null;
+            _snackbar("동기화 중 오류가 발생했습니다. 설정에서 재연결해 주세요.");
+            _setState(S.ERROR, event);
+            if (typeof window.rebuildDriveSyncSection === "function") window.rebuildDriveSyncSection();
           } else {
-            // Network / other error — return to IDLE silently (PR 3 adds backoff).
-            _setState(S.IDLE, event);
+            // Network / 5xx — backoff retry, then OFFLINE after 5 failures.
+            _netFailCount++;
+            if (_netFailCount > MAX_NET_RETRIES || !navigator.onLine) {
+              _setState(S.OFFLINE, event);
+              if (typeof window.rebuildDriveSyncSection === "function") window.rebuildDriveSyncSection();
+            } else {
+              _setState(S.IDLE, event);
+              _scheduleRetry();
+            }
           }
         } else if (event.type === "DISABLE") {
+          clearTimeout(_backoffTimer);
+          _token = null;
+          _setState(S.DISABLED, event);
+          if (typeof window.rebuildDriveSyncSection === "function") window.rebuildDriveSyncSection();
+        }
+        break;
+
+      case S.OFFLINE:
+        if (event.type === "NET_RECOVERED") {
+          _netFailCount = 0;
+          _conflictCount = 0;
+          _setState(S.AUTHENTICATING, event);
+          T.requestSilentToken(_tokenClient, localStorage.getItem(SYNC_EMAIL_KEY));
+        } else if (event.type === "DISABLE") {
+          clearTimeout(_backoffTimer);
           _token = null;
           _setState(S.DISABLED, event);
           if (typeof window.rebuildDriveSyncSection === "function") window.rebuildDriveSyncSection();
@@ -268,7 +339,6 @@ function createSyncMachine({ onStateChange } = {}) {
 
       case S.ERROR:
         if (event.type === "ENABLE") {
-          // User manually retries connection.
           _reAuthCount = 0;
           _setState(S.AUTHENTICATING, event);
           T.requestConsentToken(_tokenClient);

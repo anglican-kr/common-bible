@@ -22,6 +22,12 @@ const _machine = window.createSyncMachine({
   },
 });
 
+// ── Network recovery ──────────────────────────────────────────────────────────
+window.addEventListener("online", () => {
+  window.syncDebugLog?.log({ kind: "ACTION", event: "NET_RECOVERED" });
+  if (_machine.isEnabled()) _machine.dispatch({ type: "NET_RECOVERED" });
+});
+
 // ── Snackbar (UI notification, called by state machine) ────────────────────────
 window._showSyncSnackbar = function (msg) {
   const el = document.createElement("div");
