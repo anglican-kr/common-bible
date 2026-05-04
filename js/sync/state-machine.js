@@ -55,6 +55,7 @@ function createSyncMachine({ onStateChange } = {}) {
   let _netFailCount = 0;    // consecutive network/5xx failures
   let _conflictCount = 0;   // consecutive 412 conflicts
   let _backoffTimer = null; // pending retry setTimeout
+  const MAX_NET_RETRIES = 5; // delays: 1s/2s/4s/8s/16s; OFFLINE after 6th failure
 
   // ── Internal helpers ───────────────────────────────────────────────────────
 
@@ -255,6 +256,8 @@ function createSyncMachine({ onStateChange } = {}) {
           _setState(S.SYNCING, event);
           _syncCycle();
         } else if (event.type === "DISABLE") {
+          clearTimeout(_backoffTimer);
+          _backoffTimer = null;
           _token = null;
           _setState(S.DISABLED, event);
           if (typeof window.rebuildDriveSyncSection === "function") window.rebuildDriveSyncSection();
@@ -292,7 +295,7 @@ function createSyncMachine({ onStateChange } = {}) {
           } else {
             // Network / 5xx — backoff retry, then OFFLINE after 5 failures.
             _netFailCount++;
-            if (_netFailCount >= 5 || !navigator.onLine) {
+            if (_netFailCount > MAX_NET_RETRIES || !navigator.onLine) {
               _setState(S.OFFLINE, event);
               if (typeof window.rebuildDriveSyncSection === "function") window.rebuildDriveSyncSection();
             } else {
