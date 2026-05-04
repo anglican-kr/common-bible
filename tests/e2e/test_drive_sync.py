@@ -365,3 +365,81 @@ def test_v0_migration_syncs_correctly(browser, fake_drive):
         assert "Legacy BM" in drive_names, f"Legacy bookmark not on Drive: {drive_names}"
     finally:
         page.context.close()
+
+
+# ── v1.3.0: Drive 연결 해제 모달 ─────────────────────────────────────────────
+
+def test_drive_disconnect_keep_file(browser, fake_drive):
+    """'파일 유지' 경로: 동기화만 해제하고 Drive 파일은 보존된다."""
+    fake_drive.reset()
+    page = _make_page(browser, fake_drive)
+    try:
+        _load(page)
+        _enable_sync(page)
+        _add_bookmark(page, "Keep-me")
+        _sync_now(page)
+
+        page.evaluate("openDriveDisconnectModal()")
+        page.wait_for_selector("#drive-disconnect-modal:not([hidden])")
+        page.click("#drive-disconnect-keep")
+        page.wait_for_timeout(400)
+
+        assert page.evaluate("window.driveSync.getStatus()") == "DISABLED", \
+            "Sync should be DISABLED after disconnect"
+        with fake_drive._lock:
+            assert fake_drive._file is not None, "Drive file should be preserved"
+    finally:
+        page.context.close()
+
+
+def test_drive_disconnect_delete_file(browser, fake_drive):
+    """'파일도 삭제' 경로: 동기화 해제 후 Drive 파일도 삭제된다."""
+    fake_drive.reset()
+    page = _make_page(browser, fake_drive)
+    try:
+        _load(page)
+        _enable_sync(page)
+        _add_bookmark(page, "Delete-me")
+        _sync_now(page)
+
+        page.evaluate("openDriveDisconnectModal()")
+        page.wait_for_selector("#drive-disconnect-modal:not([hidden])")
+        page.click("#drive-disconnect-delete")
+        page.wait_for_timeout(800)  # deleteRemoteFile is async
+
+        assert page.evaluate("window.driveSync.getStatus()") == "DISABLED", \
+            "Sync should be DISABLED after disconnect"
+        with fake_drive._lock:
+            assert fake_drive._file is None, "Drive file should have been deleted"
+    finally:
+        page.context.close()
+
+
+# ── v1.3.0: 동기화 진단 정보 복사 ────────────────────────────────────────────
+
+def test_drive_diag_copy_shows_feedback(browser, fake_drive):
+    """진단 복사 버튼 클릭 시 '복사됨 ✓' 또는 fallback textarea가 표시된다."""
+    fake_drive.reset()
+    page = _make_page(browser, fake_drive)
+    try:
+        _load(page)
+        _enable_sync(page)
+
+        # Settings popover → Drive info row
+        page.locator("#settings-anchor .settings-btn").click()
+        page.wait_for_selector(".settings-popover", state="visible")
+        page.locator(".settings-drive-info-btn").click()
+        page.wait_for_timeout(200)
+
+        page.locator(".settings-drive-diag-btn").click()
+        page.wait_for_timeout(500)
+
+        diag_btn = page.locator(".settings-drive-diag-btn")
+        info_row = page.locator(".settings-drive-info-row")
+        has_feedback = (
+            diag_btn.text_content() == "복사됨 ✓"
+            or info_row.locator("textarea").count() > 0
+        )
+        assert has_feedback, "Expected '복사됨 ✓' text or fallback textarea after click"
+    finally:
+        page.context.close()

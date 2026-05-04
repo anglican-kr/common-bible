@@ -1,7 +1,7 @@
 """E2E: Phase 2a — 북마크 내보내기/가져오기."""
 
 import json
-from datetime import date
+from datetime import datetime, timezone
 
 import pytest
 
@@ -123,7 +123,7 @@ def test_export_triggers_download_with_correct_filename(browser):
 
     result = _intercept_export(page)
 
-    today = date.today().isoformat()
+    today = datetime.now(timezone.utc).date().isoformat()
     assert result["filename"] == f"bible-bookmarks-{today}.json"
 
     ctx.close()
