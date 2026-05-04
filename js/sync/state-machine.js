@@ -318,6 +318,7 @@ function createSyncMachine({ onStateChange } = {}) {
       case S.OFFLINE:
         if (event.type === "NET_RECOVERED") {
           _netFailCount = 0;
+          _conflictCount = 0;
           _setState(S.AUTHENTICATING, event);
           T.requestSilentToken(_tokenClient, localStorage.getItem(SYNC_EMAIL_KEY));
         } else if (event.type === "DISABLE") {
