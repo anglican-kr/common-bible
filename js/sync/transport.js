@@ -103,17 +103,20 @@ async function downloadSyncFile(token, fileId) {
 }
 
 // Returns { ok, status, etag }. Never throws.
-async function uploadSyncFile(token, body, { fileId } = {}) {
+// Pass ifMatch to send If-Match header; Drive returns 412 if ETag mismatches.
+async function uploadSyncFile(token, body, { fileId, ifMatch } = {}) {
   const bodyStr = JSON.stringify(body);
   try {
     let res, etag;
     if (fileId) {
+      const headers = {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      };
+      if (ifMatch) headers["If-Match"] = ifMatch;
       res = await fetch(`${DRIVE_UPLOAD_API}/files/${fileId}?uploadType=media`, {
         method: "PATCH",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
+        headers,
         body: bodyStr,
       });
       etag = res.headers.get("ETag");
