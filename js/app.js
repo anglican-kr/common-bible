@@ -115,6 +115,7 @@ let _dragState = null; // { id, ghost, origLi, startY, origTop }
 function saveReadingPosition(bookId, chapter, verse = null) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ bookId, chapter, verse }));
+    if (window.driveSync) window.driveSync.scheduleUpload();
   } catch (_) {}
 }
 
@@ -179,6 +180,7 @@ function loadStartupBehavior() {
 
 function saveStartupBehavior(val) {
   localStorage.setItem(STARTUP_BEHAVIOR_KEY, val);
+  if (window.driveSync) window.driveSync.scheduleUpload();
 }
 
 // ── Font size ──
@@ -193,7 +195,7 @@ function loadFontSize() {
 }
 
 function saveFontSize(size) {
-  try { localStorage.setItem(FONT_SIZE_KEY, String(size)); } catch (_) {}
+  try { localStorage.setItem(FONT_SIZE_KEY, String(size)); if (window.driveSync) window.driveSync.scheduleUpload(); } catch (_) {}
 }
 
 function applyFontSize(size) {
@@ -381,10 +383,11 @@ function initSettings() {
     section2.appendChild(colorRow);
     popover.appendChild(section2);
 
-    // ── Section 3: App lifecycle (install, cache) ──
+    // ── Section 3: App lifecycle (install, drive sync, cache) ──
     const showInstall = typeof install !== "undefined" && install.detectPlatform() !== "installed";
     const showCache = "caches" in window;
-    if (showInstall || showCache) {
+    const showDrive = !!window.driveSync;
+    if (showInstall || showCache || showDrive) {
       const section3 = el("section", { className: "settings-section" });
 
       if (showInstall) {
@@ -399,6 +402,68 @@ function initSettings() {
         });
         installRow.appendChild(installBtn);
         section3.appendChild(installRow);
+      }
+
+      if (showDrive) {
+        const driveRow = el("div", { className: "settings-row" });
+        const driveLabelSpan = el("span", { className: "settings-label" });
+        driveLabelSpan.appendChild(document.createTextNode("Google Drive 동기화"));
+        const driveAuthed = window.driveSync.isAuthenticated();
+        if (driveAuthed) {
+          const email = window.driveSync.getUserEmail();
+          const svgNs = "http://www.w3.org/2000/svg";
+          const infoBtn = el("button", { className: "settings-drive-info-btn", type: "button", "aria-label": "연결된 계정 정보", "aria-expanded": "false" });
+          const infoSvg = document.createElementNS(svgNs, "svg");
+          infoSvg.setAttribute("viewBox", "0 0 24 24"); infoSvg.setAttribute("aria-hidden", "true"); infoSvg.setAttribute("class", "drive-info-icon");
+          const ic = document.createElementNS(svgNs, "circle"); ic.setAttribute("cx", "12"); ic.setAttribute("cy", "12"); ic.setAttribute("r", "10"); ic.setAttribute("fill", "none"); ic.setAttribute("stroke", "currentColor"); ic.setAttribute("stroke-width", "1.5");
+          const idot = document.createElementNS(svgNs, "circle"); idot.setAttribute("cx", "12"); idot.setAttribute("cy", "8.5"); idot.setAttribute("r", "0.85"); idot.setAttribute("fill", "currentColor");
+          const istem = document.createElementNS(svgNs, "line"); istem.setAttribute("x1", "12"); istem.setAttribute("y1", "11.5"); istem.setAttribute("x2", "12"); istem.setAttribute("y2", "16.5"); istem.setAttribute("stroke", "currentColor"); istem.setAttribute("stroke-width", "1.7"); istem.setAttribute("stroke-linecap", "round");
+          infoSvg.append(ic, idot, istem);
+          infoBtn.appendChild(infoSvg);
+          driveLabelSpan.appendChild(infoBtn);
+          driveRow.appendChild(driveLabelSpan);
+          const disconnectBtn = el("button", { className: "settings-action-btn", "aria-label": "Google Drive 연결 해제" }, "해제");
+          disconnectBtn.addEventListener("click", () => { popover.hidden = true; btn.setAttribute("aria-expanded", "false"); if (cleanupTrap) { cleanupTrap(); cleanupTrap = null; } openDriveDisconnectModal(); });
+          driveRow.appendChild(disconnectBtn);
+          section3.appendChild(driveRow);
+          const infoRow = el("div", { className: "settings-drive-info-row" });
+          infoRow.hidden = true;
+          const infoTop = el("div", { className: "settings-drive-info-top" });
+          infoTop.appendChild(el("div", { className: "settings-drive-info-email" }, `구글 ID: ${email ?? "연결됨"}`));
+          const closeBtn = el("button", { className: "settings-drive-info-close", type: "button", "aria-label": "닫기" }, "✕");
+          infoTop.appendChild(closeBtn);
+          infoRow.appendChild(infoTop);
+          infoRow.appendChild(el("div", { className: "settings-drive-info-desc" }, "북마크·설정·읽기 위치를 Google Drive 앱 폴더에 저장해 기기 간 자동 동기화합니다."));
+          const diagBtn = el("button", { className: "settings-drive-diag-btn", type: "button" }, "동기화 진단 정보 복사");
+          diagBtn.addEventListener("click", async () => {
+            const ok = await window.syncDebugLog?.copyToClipboard();
+            if (ok) {
+              diagBtn.textContent = "복사됨 ✓";
+              setTimeout(() => { diagBtn.textContent = "동기화 진단 정보 복사"; }, 2000);
+            } else {
+              // Clipboard API unavailable — show text in a selectable textarea.
+              const ta = el("textarea", { readOnly: true, rows: "6", style: "width:100%;font-size:0.7rem;margin-top:0.4rem;resize:none;" });
+              ta.value = window.syncDebugLog?.dump() ?? "(로그 없음)";
+              infoRow.appendChild(ta);
+              ta.select();
+            }
+          });
+          infoRow.appendChild(diagBtn);
+          section3.appendChild(infoRow);
+          const toggleInfo = () => { const open = infoRow.hidden; infoRow.hidden = !open; infoBtn.setAttribute("aria-expanded", String(open)); };
+          infoBtn.addEventListener("click", toggleInfo);
+          closeBtn.addEventListener("click", () => { infoRow.hidden = true; infoBtn.setAttribute("aria-expanded", "false"); });
+        } else {
+          driveRow.appendChild(driveLabelSpan);
+          const connectBtn = el("button", { className: "settings-action-btn", "aria-label": "Google Drive 연결" }, "연결");
+          connectBtn.addEventListener("click", () => { popover.hidden = true; btn.setAttribute("aria-expanded", "false"); if (cleanupTrap) { cleanupTrap(); cleanupTrap = null; } window.driveSync.signIn(); });
+          driveRow.appendChild(connectBtn);
+          section3.appendChild(driveRow);
+          const statusText = window.driveSync.getStatus();
+          if (statusText === "ERROR") {
+            section3.appendChild(el("p", { style: "font-size:0.78rem;color:var(--accent);padding:0 0.25rem 0.25rem;margin:0;" }, "세션 만료. 재연결해 주세요."));
+          }
+        }
       }
 
       if (showCache) {
@@ -503,6 +568,9 @@ function initSettings() {
     }
   });
 
+  // Allow drive-sync.js to trigger a UI refresh when auth state changes.
+  window.rebuildDriveSyncSection = () => { if (!popover.hidden) rebuild(); };
+
   wrapper.appendChild(btn);
   document.body.appendChild(popover);
   $settingsAnchor.appendChild(wrapper);
@@ -587,7 +655,7 @@ function loadColorScheme() {
 }
 
 function saveColorScheme(scheme) {
-  try { localStorage.setItem(COLOR_SCHEME_KEY, scheme); } catch (_) {}
+  try { localStorage.setItem(COLOR_SCHEME_KEY, scheme); if (window.driveSync) window.driveSync.scheduleUpload(); } catch (_) {}
 }
 
 // Default favicon/apple-touch-icon URLs as shipped in index.html.
@@ -632,7 +700,7 @@ function loadTheme() {
 }
 
 function saveTheme(theme) {
-  try { localStorage.setItem(THEME_KEY, theme); } catch (_) {}
+  try { localStorage.setItem(THEME_KEY, theme); if (window.driveSync) window.driveSync.scheduleUpload(); } catch (_) {}
 }
 
 let _systemThemeListener = null;
@@ -674,7 +742,7 @@ function loadBookOrder() {
 }
 
 function saveBookOrder(order) {
-  try { localStorage.setItem(BOOK_ORDER_KEY, order); } catch (_) {}
+  try { localStorage.setItem(BOOK_ORDER_KEY, order); if (window.driveSync) window.driveSync.scheduleUpload(); } catch (_) {}
 }
 
 // Apply saved settings on load
@@ -765,6 +833,7 @@ function loadBookmarks() {
 function saveBookmarks(store) {
   try {
     localStorage.setItem(BOOKMARK_KEY, JSON.stringify(store));
+    if (window.driveSync) window.driveSync.scheduleUpload();
   } catch (_) {}
 }
 
@@ -2376,6 +2445,7 @@ window.addEventListener("DOMContentLoaded", () => {
       initBookmarkDrawerResize();
       registerServiceWorker();
       maybeShowInstallNudge();
+      if (window.driveSync) window.driveSync.initDriveSync();
     });
   });
 });
@@ -3614,6 +3684,43 @@ const $bmOverflowPanel = document.getElementById("bm-overflow-panel");
 const $bmExportBtn = document.getElementById("bm-export-btn");
 const $bmImportBtn = document.getElementById("bm-import-btn");
 const $bmImportInput = document.getElementById("bm-import-input");
+const $driveDisconnectScrim  = document.getElementById("drive-disconnect-scrim");
+const $driveDisconnectModal  = document.getElementById("drive-disconnect-modal");
+const $driveDisconnectDelete = document.getElementById("drive-disconnect-delete");
+const $driveDisconnectKeep   = document.getElementById("drive-disconnect-keep");
+const $driveDisconnectCancel = document.getElementById("drive-disconnect-cancel");
+
+let _driveDisconnectTrap = null;
+
+function openDriveDisconnectModal() {
+  $driveDisconnectScrim.hidden = false;
+  $driveDisconnectModal.hidden = false;
+  _driveDisconnectTrap = trapFocus($driveDisconnectModal);
+  requestAnimationFrame(() => $driveDisconnectKeep.focus());
+}
+
+function closeDriveDisconnectModal() {
+  $driveDisconnectScrim.hidden = true;
+  $driveDisconnectModal.hidden = true;
+  if (_driveDisconnectTrap) { _driveDisconnectTrap(); _driveDisconnectTrap = null; }
+}
+
+$driveDisconnectCancel.addEventListener("click", closeDriveDisconnectModal);
+$driveDisconnectScrim.addEventListener("click", closeDriveDisconnectModal);
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !$driveDisconnectModal.hidden) closeDriveDisconnectModal();
+});
+
+$driveDisconnectKeep.addEventListener("click", () => {
+  closeDriveDisconnectModal();
+  window.driveSync?.signOut();
+});
+
+$driveDisconnectDelete.addEventListener("click", async () => {
+  closeDriveDisconnectModal();
+  await window.driveSync?.deleteRemoteFile();
+  window.driveSync?.signOut();
+});
 const $bmImportScrim = document.getElementById("bm-import-scrim");
 const $bmImportModal = document.getElementById("bm-import-modal");
 const $bmImportBody = document.getElementById("bm-import-body");

@@ -224,7 +224,146 @@ body {
   border-radius: var(--radius);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
   padding: 0.5rem;
+  width: 280px;
   white-space: nowrap;
+}
+
+/* ── Drive sync settings UI ── */
+
+.settings-drive-info-btn {
+  background: none;
+  border: none;
+  padding: 0 0 0 0.3em;
+  cursor: pointer;
+  color: var(--accent);
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  line-height: 1;
+}
+.settings-drive-info-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 50%;
+}
+
+.drive-info-icon { width: 0.9em; height: 0.9em; }
+
+.settings-drive-info-row {
+  padding: 0.35rem 0 0.25rem 0.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  white-space: normal;
+}
+.settings-drive-info-row[hidden] { display: none; }
+
+.settings-drive-info-top {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.settings-drive-info-close {
+  margin-left: auto;
+  background: none;
+  border: none;
+  padding: 0 0.1em;
+  cursor: pointer;
+  color: var(--text);
+  opacity: 0.45;
+  font-size: 1rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.settings-drive-info-close:hover { opacity: 0.8; }
+
+.settings-drive-info-email {
+  font-size: 0.8rem;
+  color: var(--accent);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-drive-info-desc {
+  font-size: 0.78rem;
+  color: var(--text-muted, var(--text));
+  opacity: 0.7;
+  line-height: 1.55;
+  white-space: normal;
+}
+
+.settings-drive-diag-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-size: 0.75rem;
+  color: var(--text);
+  opacity: 0.45;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  align-self: flex-start;
+}
+.settings-drive-diag-btn:hover { opacity: 0.75; }
+
+/* ── Drive disconnect modal ── */
+
+#drive-disconnect-scrim {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 78;
+  background: rgba(0, 0, 0, 0.45);
+}
+#drive-disconnect-scrim:not([hidden]) { display: block; }
+
+#drive-disconnect-modal {
+  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  display: none;
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 79;
+  width: min(92vw, 360px);
+  background: var(--bg-card);
+  color: var(--text);
+  border-radius: 14px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+  padding: 1.25rem;
+}
+#drive-disconnect-modal:not([hidden]) { display: block; }
+
+#drive-disconnect-title { font-size: 1rem; font-weight: 700; margin: 0 0 0.6rem; }
+#drive-disconnect-body  { font-size: 0.88rem; margin: 0 0 0.75rem; color: var(--text-secondary); line-height: 1.5; }
+#drive-disconnect-file-question { font-size: 0.88rem; margin: 0 0 1rem; color: var(--text); line-height: 1.5; font-weight: 500; }
+
+#drive-disconnect-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: flex-end; }
+
+#drive-disconnect-delete, #drive-disconnect-cancel {
+  padding: 0.45rem 0.9rem;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-family: inherit;
+  font-size: 0.88rem;
+  cursor: pointer;
+  color: var(--text);
+}
+#drive-disconnect-cancel { color: var(--text-secondary); }
+
+#drive-disconnect-keep {
+  padding: 0.45rem 0.9rem;
+  background: var(--accent);
+  color: var(--bg);
+  border: none;
+  border-radius: var(--radius);
+  font-family: inherit;
+  font-size: 0.88rem;
+  cursor: pointer;
 }
 
 .settings-row {

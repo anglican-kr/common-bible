@@ -1,6 +1,6 @@
 // Bump this version on every release. Activating a new CACHE_NAME clears all
 // prior caches (shell + data), ensuring bible/search updates reach clients.
-const CACHE_NAME = "rev-39";
+const CACHE_NAME = "rev-40";
 
 // Separate cache for Google Font files (fonts.gstatic.com).
 // Never cleared on CACHE_NAME bump — font files are content-addressed and immutable.
@@ -75,11 +75,18 @@ function handleFontFile(event) {
 // overwrite the SW cache with stale bytes during background refresh.
 // Bible/search data updates are propagated by bumping CACHE_NAME on release,
 // which clears the old cache during activate().
+const DRIVE_HOSTNAMES = ["www.googleapis.com", "content.googleapis.com", "oauth2.googleapis.com", "accounts.google.com"];
+
 self.addEventListener("fetch", (event) => {
-  if (new URL(event.request.url).hostname === "fonts.gstatic.com") {
+  const { hostname } = new URL(event.request.url);
+
+  if (hostname === "fonts.gstatic.com") {
     handleFontFile(event);
     return;
   }
+
+  // Bypass cache for Google OAuth and Drive API — always network-only.
+  if (DRIVE_HOSTNAMES.includes(hostname)) return;
 
   // Serve app shell for all navigation requests (History API SPA routing).
   // Exception: standalone HTML pages (e.g. privacy.html) are served directly.
