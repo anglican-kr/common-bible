@@ -109,3 +109,65 @@ def test_verse_url(page, label, hash_, expected_ids, hash_re, expected_mark):
             ".map(m => m.textContent)"
         )
         assert expected_mark in marks, f"[{label}] mark {expected_mark!r} not found in {marks}"
+
+
+# ── 보강: 책 목록 / 장 이동 / 장 선택 팝오버 ─────────────────────────────────
+
+def test_book_list_click_then_chapter_loads(browser):
+    """홈 → 책 목록 창세기 클릭 → /gen(장 목록) → 1장 클릭 → 본문 로드."""
+    ctx = browser.new_context()
+    page = ctx.new_page()
+    try:
+        page.goto(BASE)
+        page.wait_for_selector(".book-list")
+
+        # Click Genesis → chapters list page
+        page.locator(".book-list a[href='/gen']").first.click()
+        page.wait_for_function("() => location.pathname === '/gen'", timeout=3_000)
+
+        # Chapters page has a link to gen/1
+        page.locator("a[href='/gen/1']").first.click()
+        page.wait_for_selector("article.chapter-text .verse", timeout=5_000)
+
+        current = page.evaluate("() => location.pathname")
+        assert current == "/gen/1", f"Expected /gen/1, got {current!r}"
+    finally:
+        ctx.close()
+
+
+def test_chapter_nav_next_btn_navigates(browser):
+    """현재 장(gen/1)에서 다음 장 버튼 클릭 → gen/2 로드."""
+    ctx = browser.new_context()
+    page = ctx.new_page()
+    try:
+        page.goto(f"{BASE}/gen/1")
+        page.wait_for_selector("article.chapter-text .verse")
+
+        next_link = page.locator(".chapter-nav a").last
+        next_link.click()
+        page.wait_for_selector("article.chapter-text .verse", timeout=5_000)
+
+        current = page.evaluate("() => location.pathname")
+        assert current == "/gen/2", f"Expected /gen/2, got {current!r}"
+    finally:
+        ctx.close()
+
+
+def test_chapter_picker_opens_and_navigates(browser):
+    """장 선택 버튼 클릭 → 팝오버 열림 → 5장 선택 → gen/5 로드."""
+    ctx = browser.new_context()
+    page = ctx.new_page()
+    try:
+        page.goto(f"{BASE}/gen/1")
+        page.wait_for_selector("article.chapter-text .verse")
+
+        page.locator(".title-picker-btn[aria-label='장 선택']").click()
+        page.wait_for_selector(".chapter-popover:not([hidden])", timeout=2_000)
+
+        page.locator(".chapter-popover .popover-item[href='/gen/5']").click()
+        page.wait_for_selector("article.chapter-text .verse", timeout=5_000)
+
+        current = page.evaluate("() => location.pathname")
+        assert current == "/gen/5", f"Expected /gen/5, got {current!r}"
+    finally:
+        ctx.close()

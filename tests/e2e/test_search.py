@@ -60,3 +60,51 @@ def test_search_url_refresh_navigates_and_dismisses_launch_screen(page):
 
     page.wait_for_selector("#launch-screen", state="detached", timeout=5000)
     page.wait_for_selector(".search-result-ref-card", timeout=8000)
+
+
+# ── 보강: 결과 클릭 네비게이션 ───────────────────────────────────────────────
+
+def test_search_result_click_navigates_to_chapter(page, base_url):
+    """검색 결과 항목 클릭 → 해당 책/장 URL로 SPA 이동."""
+    page.goto(base_url)
+    wait_app_ready(page)
+
+    page.fill("#search-input", "사랑")
+    page.press("#search-input", "Enter")
+    page.wait_for_selector(".search-result-item", timeout=8_000)
+
+    # Click the first non-ref-card result link
+    first_link = page.locator(".search-result-item:not(.ref-match-item) a").first
+    href = first_link.get_attribute("href") or ""
+    first_link.click()
+
+    page.wait_for_selector("article.chapter-text .verse", timeout=5_000)
+    current = page.evaluate("() => location.pathname")
+    # URL should have changed to a chapter path (e.g. /john/3)
+    assert current != "/" and current != "/search", \
+        f"Expected chapter URL, got {current!r}"
+
+
+def test_search_ref_card_click_navigates(page):
+    """구절 참조 카드 클릭 → 해당 장으로 이동."""
+    page.goto(SEARCH_URL)
+    page.wait_for_selector(".search-result-ref-card", timeout=8_000)
+
+    page.locator(".search-result-ref-card").first.click()
+    page.wait_for_selector("article.chapter-text .verse", timeout=5_000)
+
+    current = page.evaluate("() => location.pathname")
+    assert current.startswith("/gen/1"), f"Expected /gen/1, got {current!r}"
+
+
+def test_search_result_link_contains_hl_param(page, base_url):
+    """검색 결과 링크 href에 ?hl= 파라미터가 포함된다."""
+    page.goto(base_url)
+    wait_app_ready(page)
+
+    page.fill("#search-input", "사랑")
+    page.press("#search-input", "Enter")
+    page.wait_for_selector(".search-result-item:not(.ref-match-item)", timeout=8_000)
+
+    href = page.locator(".search-result-item:not(.ref-match-item) a").first.get_attribute("href") or ""
+    assert "hl=" in href, f"Expected ?hl= in href, got {href!r}"
