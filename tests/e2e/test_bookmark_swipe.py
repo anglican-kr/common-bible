@@ -82,7 +82,7 @@ def _swipe(page, idx=0, dx=-160):
 def _longpress(page, idx=0, ms=600):
     """idx번째 북마크 행을 ms ms 롱프레스한다."""
     page.evaluate(_LONGPRESS_DOWN_JS, idx)
-    page.wait_for_timeout(ms)
+    page.wait_for_timeout(ms + 100)  # 100ms buffer for system load variance
     page.evaluate(_LONGPRESS_UP_JS)
 
 
