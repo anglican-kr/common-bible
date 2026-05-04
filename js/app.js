@@ -750,6 +750,7 @@ function saveBookOrder(order) {
 
 // Apply saved settings on load
 window.syncStoreV2?.migrateLegacyIfNeeded();
+window.syncStoreV2?.sweepTombstones();
 applyFontSize(loadFontSize());
 applyTheme(loadTheme());
 applyColorScheme(loadColorScheme());
