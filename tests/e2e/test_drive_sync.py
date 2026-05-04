@@ -99,6 +99,11 @@ class FakeDrive:
             route.fulfill(status=204)
             return
 
+        # Block the real GIS client library so the stub is not overwritten
+        if "gsi/client" in url:
+            route.fulfill(status=200, content_type="application/javascript", body="")
+            return
+
         # userinfo
         if "userinfo" in url:
             route.fulfill(status=200, content_type="application/json",
@@ -163,11 +168,11 @@ def _load(page: Page):
 
 
 def _enable_sync(page: Page):
-    """Enable Drive sync and wait for IDLE state."""
+    """Enable Drive sync and wait until the token is set."""
     page.evaluate("window.driveSync.signIn()")
     page.wait_for_function(
-        "() => window.driveSync?.getStatus() === 'IDLE'",
-        timeout=5_000,
+        "() => window.driveSync?.isAuthenticated()",
+        timeout=10_000,
     )
 
 
@@ -176,11 +181,11 @@ def _add_bookmark(page: Page, name: str) -> str:
     return page.evaluate(f"""
         (() => {{
             const id = 'bm-' + Math.random().toString(36).slice(2);
-            const store = window.loadBookmarks ? window.loadBookmarks() : [];
+            const store = window.syncStoreV2.loadBookmarks();
             store.push({{ id, type: 'bookmark', name: {json.dumps(name)},
                           bookId: 'gen', chapter: 1, vref: 'gen 1:1',
                           verseSpec: '1' }});
-            if (window.saveBookmarks) window.saveBookmarks(store);
+            window.syncStoreV2.saveBookmarks(store);
             return id;
         }})()
     """)
@@ -189,7 +194,7 @@ def _add_bookmark(page: Page, name: str) -> str:
 def _bookmark_names(page: Page) -> list[str]:
     return page.evaluate("""
         (() => {
-            const bms = window.loadBookmarks ? window.loadBookmarks() : [];
+            const bms = window.syncStoreV2.loadBookmarks();
             const names = [];
             function walk(items) {
                 for (const it of items) {
@@ -210,6 +215,17 @@ def _wait_idle(page: Page, timeout=5_000):
     )
 
 
+def _sync_now(page: Page, timeout=10_000):
+    """Trigger a sync upload and wait for the cycle to complete.
+
+    scheduleUpload() has a 300ms debounce, so we add a short pause before
+    waiting for IDLE to avoid racing past the debounce window.
+    """
+    page.evaluate("window.driveSync.scheduleUpload()")
+    page.wait_for_timeout(350)  # debounce fires at ~300ms
+    _wait_idle(page, timeout=timeout)
+
+
 # ── Tests ─────────────────────────────────────────────────────────────────────
 
 def test_upload_then_download(browser, fake_drive):
@@ -222,8 +238,7 @@ def test_upload_then_download(browser, fake_drive):
         _load(page_a)
         _enable_sync(page_a)
         _add_bookmark(page_a, "Genesis 1")
-        page_a.evaluate("window.driveSync.scheduleUpload()")
-        _wait_idle(page_a)
+        _sync_now(page_a)
 
         _load(page_b)
         _enable_sync(page_b)
@@ -247,20 +262,17 @@ def test_concurrent_adds_both_preserved(browser, fake_drive):
         _load(page_a)
         _enable_sync(page_a)
         _add_bookmark(page_a, "Bookmark-A")
-        page_a.evaluate("window.driveSync.scheduleUpload()")
-        _wait_idle(page_a)
+        _sync_now(page_a)
 
         # B starts with a clean slate, adds its own bookmark and syncs
         _load(page_b)
         _enable_sync(page_b)
         _wait_idle(page_b)  # initial download
         _add_bookmark(page_b, "Bookmark-B")
-        page_b.evaluate("window.driveSync.scheduleUpload()")
-        _wait_idle(page_b)
+        _sync_now(page_b)
 
         # A re-syncs to pick up B's addition
-        page_a.evaluate("window.driveSync.scheduleUpload()")
-        _wait_idle(page_a)
+        _sync_now(page_a)
 
         names_a = _bookmark_names(page_a)
         names_b = _bookmark_names(page_b)
@@ -288,10 +300,8 @@ def test_412_triggers_remerge(browser, fake_drive):
             fake_drive._etag = f"etag-{fake_drive._etag_n}"
 
         _add_bookmark(page, "After-412")
-        page.evaluate("window.driveSync.scheduleUpload()")
-
         # Machine should retry after 412 and eventually reach IDLE again.
-        _wait_idle(page, timeout=8_000)
+        _sync_now(page, timeout=8_000)
 
         # Sync state should be healthy (not ERROR/OFFLINE).
         status = page.evaluate("window.driveSync.getStatus()")

@@ -82,13 +82,12 @@ _VALID_EXPORT = {
 
 def _set_bookmarks(page, store: list) -> None:
     page.evaluate(
-        f"() => localStorage.setItem('bible-bookmarks', JSON.stringify({json.dumps(store)}))"
+        f"() => window.syncStoreV2.saveBookmarks({json.dumps(store)})"
     )
 
 
 def _get_bookmarks(page) -> list:
-    raw = page.evaluate("() => localStorage.getItem('bible-bookmarks')")
-    return json.loads(raw) if raw else []
+    return page.evaluate("() => window.syncStoreV2.loadBookmarks()")
 
 
 def _open_bookmark_drawer(page) -> None:
