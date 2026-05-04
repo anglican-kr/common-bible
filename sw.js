@@ -1,6 +1,6 @@
 // Bump this version on every release. Activating a new CACHE_NAME clears all
 // prior caches (shell + data), ensuring bible/search updates reach clients.
-const CACHE_NAME = "rev-39";
+const CACHE_NAME = "rev-40";
 
 // Separate cache for Google Font files (fonts.gstatic.com).
 // Never cleared on CACHE_NAME bump — font files are content-addressed and immutable.

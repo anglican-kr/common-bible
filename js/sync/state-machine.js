@@ -36,21 +36,20 @@ const SILENT_FAIL_REASONS = new Set([
   "user_cancel", "access_denied", "popup_closed_by_user",
 ]);
 
-// ── Storage keys (v1 schema) ──────────────────────────────────────────────────
-const SYNC_ENABLED_KEY  = "bible-drive-sync";
-const SYNC_UPDATED_KEY  = "bible-drive-sync-updated";
-const SYNC_EMAIL_KEY    = "bible-drive-sync-email";
-const BOOKMARK_KEY      = "bible-bookmarks";
-const FONT_SIZE_KEY     = "bible-font-size";
-const COLOR_SCHEME_KEY  = "bible-color-scheme";
-const THEME_KEY         = "bible-theme";
-const BOOK_ORDER_KEY    = "bible-book-order";
-const STARTUP_KEY       = "bible-startup";
-const LAST_READ_KEY     = "bible-last-read";
-
 // ── Factory ───────────────────────────────────────────────────────────────────
 
 function createSyncMachine({ onStateChange } = {}) {
+  // Storage keys — kept inside closure to avoid colliding with app.js globals.
+  const SYNC_ENABLED_KEY  = "bible-drive-sync";
+  const SYNC_UPDATED_KEY  = "bible-drive-sync-updated";
+  const SYNC_EMAIL_KEY    = "bible-drive-sync-email";
+  const BM_KEY            = "bible-bookmarks";
+  const FS_KEY            = "bible-font-size";
+  const CS_KEY            = "bible-color-scheme";
+  const TH_KEY            = "bible-theme";
+  const BO_KEY            = "bible-book-order";
+  const SU_KEY            = "bible-startup";
+  const LR_KEY            = "bible-last-read";
   const T = window.syncTransport;
   const L = window.syncDebugLog;
 
@@ -82,7 +81,7 @@ function createSyncMachine({ onStateChange } = {}) {
       const v = localStorage.getItem(k);
       try { return JSON.parse(v); } catch { return v; }
     };
-    const rawBm = get(BOOKMARK_KEY);
+    const rawBm = get(BM_KEY);
     const bookmarks = Array.isArray(rawBm)
       ? rawBm
       : (rawBm?._version === 1 && Array.isArray(rawBm.items) ? rawBm.items : []);
@@ -91,13 +90,13 @@ function createSyncMachine({ onStateChange } = {}) {
       updatedAt: Date.now(),
       bookmarks,
       settings: {
-        fontSize:        get(FONT_SIZE_KEY),
-        colorScheme:     get(COLOR_SCHEME_KEY),
-        theme:           get(THEME_KEY),
-        bookOrder:       get(BOOK_ORDER_KEY),
-        startupBehavior: get(STARTUP_KEY),
+        fontSize:        get(FS_KEY),
+        colorScheme:     get(CS_KEY),
+        theme:           get(TH_KEY),
+        bookOrder:       get(BO_KEY),
+        startupBehavior: get(SU_KEY),
       },
-      lastRead: get(LAST_READ_KEY),
+      lastRead: get(LR_KEY),
     };
   }
 
@@ -111,15 +110,15 @@ function createSyncMachine({ onStateChange } = {}) {
 
   function _applyRemote(data) {
     if (!_validateRemote(data)) return;
-    localStorage.setItem(BOOKMARK_KEY, JSON.stringify({ _version: 1, items: data.bookmarks }));
+    localStorage.setItem(BM_KEY, JSON.stringify({ _version: 1, items: data.bookmarks }));
     if (typeof window.renderBookmarkTree === "function") window.renderBookmarkTree();
     const s = data.settings ?? {};
-    if (s.fontSize        != null) { localStorage.setItem(FONT_SIZE_KEY,    s.fontSize);        if (typeof window.applyFontSize    === "function") window.applyFontSize(s.fontSize); }
-    if (s.colorScheme     != null) { localStorage.setItem(COLOR_SCHEME_KEY,  s.colorScheme);     if (typeof window.applyColorScheme === "function") window.applyColorScheme(s.colorScheme); }
-    if (s.theme           != null) { localStorage.setItem(THEME_KEY,         s.theme);           if (typeof window.applyTheme       === "function") window.applyTheme(s.theme); }
-    if (s.bookOrder       != null)   localStorage.setItem(BOOK_ORDER_KEY,    s.bookOrder);
-    if (s.startupBehavior != null)   localStorage.setItem(STARTUP_KEY,       s.startupBehavior);
-    if (data.lastRead     != null)   localStorage.setItem(LAST_READ_KEY,     JSON.stringify(data.lastRead));
+    if (s.fontSize        != null) { localStorage.setItem(FS_KEY, s.fontSize);        if (typeof window.applyFontSize    === "function") window.applyFontSize(s.fontSize); }
+    if (s.colorScheme     != null) { localStorage.setItem(CS_KEY, s.colorScheme);     if (typeof window.applyColorScheme === "function") window.applyColorScheme(s.colorScheme); }
+    if (s.theme           != null) { localStorage.setItem(TH_KEY, s.theme);           if (typeof window.applyTheme       === "function") window.applyTheme(s.theme); }
+    if (s.bookOrder       != null)   localStorage.setItem(BO_KEY, s.bookOrder);
+    if (s.startupBehavior != null)   localStorage.setItem(SU_KEY, s.startupBehavior);
+    if (data.lastRead     != null)   localStorage.setItem(LR_KEY, JSON.stringify(data.lastRead));
   }
 
   async function _syncCycle() {
