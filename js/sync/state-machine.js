@@ -281,7 +281,13 @@ function createSyncMachine({ onStateChange } = {}) {
 
       case S.IDLE:
         if (event.type === "SYNC_REQUEST") {
-          _transition(S.SYNCING, {}, event); // timer cleared here
+          // Carry failure counts forward — they must accumulate across retry cycles.
+          // backoffTimer is NOT carried (cleared by _transition default).
+          _transition(S.SYNCING, {
+            netFails:     _ctx.netFails,
+            conflictFails: _ctx.conflictFails,
+            reAuthFails:  _ctx.reAuthFails,
+          }, event);
           _syncCycle();
         } else if (event.type === "DISABLE") {
           _token = null;
