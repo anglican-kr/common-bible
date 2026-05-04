@@ -92,6 +92,8 @@ async function deleteRemoteFile() {
 
 // Called by all save* functions in app.js after any local data change.
 function scheduleUpload() {
+  const state = _machine.getState();
+  window.syncDebugLog?.log({ kind: "ACTION", event: "LOCAL_CHANGE", syncState: state, willUpload: _machine.isAuthenticated() });
   if (!_machine.isAuthenticated()) return;
   _clearUploadTimer();
   _uploadTimer = setTimeout(() => {
