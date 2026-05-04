@@ -4373,6 +4373,7 @@ $driveDisconnectKeep.addEventListener("click", () => {
 
 $driveDisconnectDelete.addEventListener("click", async () => {
   closeDriveDisconnectModal();
+  localStorage.setItem("bible-drive-sync", "0");
   await window.driveSync?.deleteRemoteFile();
   window.driveSync?.signOut();
 });
