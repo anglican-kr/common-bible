@@ -4594,7 +4594,8 @@ function exportBookmarks() {
   const json = JSON.stringify(payload, null, 2);
   const blob = new Blob([json], { type: "application/json" });
   const url = URL.createObjectURL(blob);
-  const date = new Date().toISOString().slice(0, 10);
+  const _d = new Date();
+  const date = `${_d.getFullYear()}-${String(_d.getMonth() + 1).padStart(2, "0")}-${String(_d.getDate()).padStart(2, "0")}`;
   const a = document.createElement("a");
   a.href = url;
   a.download = `bible-bookmarks-${date}.json`;
