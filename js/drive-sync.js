@@ -63,7 +63,8 @@ async function _findSyncFileId() {
     "/files?spaces=appDataFolder&fields=files(id)&q=name='sync.json'"
   );
   if (!res.ok) return null;
-  const data = await res.json();
+  let data;
+  try { data = await res.json(); } catch { return null; }
   return data.files?.[0]?.id ?? null;
 }
 
