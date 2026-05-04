@@ -121,11 +121,17 @@ async function _downloadAndMerge() {
   try { remote = await res.json(); } catch { return; }
 
   const localUpdatedAt = Number(localStorage.getItem(SYNC_UPDATED_KEY) ?? 0);
-  if (Number(remote.updatedAt) === localUpdatedAt) {
+  const remoteUpdatedAt = Number(remote.updatedAt);
+  if (Number.isNaN(remoteUpdatedAt)) {
+    // Malformed remote timestamp — upload local state to fix
+    await _upload();
+    return;
+  }
+  if (remoteUpdatedAt === localUpdatedAt) {
     // Already in sync — nothing to do
     return;
   }
-  if (Number(remote.updatedAt) < localUpdatedAt) {
+  if (remoteUpdatedAt < localUpdatedAt) {
     // Local is newer — push to Drive
     await _upload();
     return;
@@ -134,7 +140,7 @@ async function _downloadAndMerge() {
   // Remote is newer — apply to local
   if (!_validateRemote(remote)) return;
   _applyRemote(remote);
-  localStorage.setItem(SYNC_UPDATED_KEY, String(remote.updatedAt));
+  localStorage.setItem(SYNC_UPDATED_KEY, String(remoteUpdatedAt));
   _showSnackbar("다른 기기에서 변경된 데이터를 불러왔습니다.");
 }
 
@@ -259,6 +265,7 @@ function signOut() {
   }
   _userEmail = null;
   localStorage.removeItem(SYNC_EMAIL_KEY);
+  localStorage.removeItem(SYNC_UPDATED_KEY);
   localStorage.setItem(SYNC_ENABLED_KEY, "0");
   _updateSettingsUI();
 }
