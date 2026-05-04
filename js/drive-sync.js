@@ -121,11 +121,11 @@ async function _downloadAndMerge() {
   try { remote = await res.json(); } catch { return; }
 
   const localUpdatedAt = Number(localStorage.getItem(SYNC_UPDATED_KEY) ?? 0);
-  if (remote.updatedAt === localUpdatedAt) {
+  if (Number(remote.updatedAt) === localUpdatedAt) {
     // Already in sync — nothing to do
     return;
   }
-  if (remote.updatedAt < localUpdatedAt) {
+  if (Number(remote.updatedAt) < localUpdatedAt) {
     // Local is newer — push to Drive
     await _upload();
     return;
@@ -176,8 +176,8 @@ async function _onTokenResponse(resp) {
   _isRefreshing = false;
   if (resp.error) {
     console.warn("[drive-sync] token error:", resp.error);
-    if (resp.error === "access_denied") {
-      // User explicitly declined consent — reset sync state silently.
+    if (resp.error === "access_denied" || resp.error === "popup_closed_by_user") {
+      // User cancelled or declined consent — reset sync state silently.
       localStorage.setItem(SYNC_ENABLED_KEY, "0");
       _updateSettingsUI();
     } else if (localStorage.getItem(SYNC_ENABLED_KEY) === "1") {
