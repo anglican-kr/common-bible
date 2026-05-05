@@ -1027,7 +1027,12 @@ body {
    left/right margins are inherited from the base rule (already 0.75rem); the
    bottom is applied via JS in adjustSheetForKeyboard (keyboardOffset + 12). */
 #search-sheet[data-state="compact"] {
-  height: 6.4rem;
+  /* Add the safe-area inset so it doesn't eat the chip row. With
+     box-sizing:border-box the base `padding-bottom: env(safe-area-inset-bottom)`
+     subtracts from the fixed height, and on devices with a home indicator the
+     value stays >0 even while the keyboard is up (it tracks the layout viewport,
+     not the visual one). */
+  height: calc(6.4rem + env(safe-area-inset-bottom));
   /* Omnidirectional shadow so the modal reads as a floating card. The base
      rule's negative-Y shadow only suits the bottom-attached expanded state. */
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.22);
