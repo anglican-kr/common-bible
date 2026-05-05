@@ -4114,9 +4114,11 @@ function _buildFolderCombobox(folderOptions, selectedFolderId) {
   const list = el("ul", { id: listId, className: "bm-folder-combobox-list", role: "listbox" });
   list.hidden = true;
 
+  let currentOptions = folderOptions;
+
   function labelForId(id) {
     if (id === "" || id == null) return "최상위";
-    const o = folderOptions.find(f => f.id === id);
+    const o = currentOptions.find(f => f.id === id);
     return o ? o.name : "최상위";
   }
 
@@ -4208,6 +4210,7 @@ function _buildFolderCombobox(folderOptions, selectedFolderId) {
   newFolderItem.appendChild(newFolderBtn);
 
   function rebuildOptions(options) {
+    currentOptions = options;
     list.replaceChildren();
     addOption("", "최상위", 0);
     for (const o of options) addOption(String(o.id), o.name, o.depth);
