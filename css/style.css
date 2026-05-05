@@ -757,12 +757,12 @@ body {
 
 /* Lift FAB above chapter-nav when it scrolls into view */
 #search-fab {
-  bottom: max(1.5rem, var(--fab-lift-nav, 0px));
+  bottom: max(calc(1.5rem + env(safe-area-inset-bottom)), var(--fab-lift-nav, 0px));
 }
 
 /* Lift FAB when audio bar is visible */
 #audio-bar:not([hidden]) ~ #search-fab {
-  bottom: max(5rem, calc(var(--fab-lift-nav, 0px) + 3.5rem));
+  bottom: max(calc(5rem + env(safe-area-inset-bottom)), calc(var(--fab-lift-nav, 0px) + 3.5rem));
 }
 
 /* ── Install guide modal ── */
@@ -2131,13 +2131,11 @@ body.verse-select-active #audio-bar {
   display: none;
 }
 
-<<<<<<< HEAD
 body.verse-select-active #audio-bar ~ #search-fab {
-  bottom: max(1.5rem, var(--fab-lift-nav, 0px));
+  bottom: max(calc(1.5rem + env(safe-area-inset-bottom)), var(--fab-lift-nav, 0px));
 }
 
-=======
->>>>>>> fa785bd (style: 절 선택 모드에서 오디오 플레이어 숨기기)
+
 body.verse-select-active .verse[data-vref] {
   cursor: pointer;
   padding: 0.1em 0.15em;
