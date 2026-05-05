@@ -3943,11 +3943,12 @@ function _buildBookmarkItem(bm, depth) {
   typeIcon.appendChild(_buildBookmarkTypeIcon(isActive));
   const link = el("a", { className: "bm-bookmark-link", href: _bookmarkHref(bm), draggable: "false" });
   link.appendChild(el("span", { className: "bm-bookmark-label" }, bm.label));
-  if (bm.verseSpec !== "all") {
-    const book = booksCache && booksCache.find(b => b.id === bm.bookId);
-    const bookName = book ? (book.short_name_ko || book.name_ko) : bm.bookId;
-    link.appendChild(el("span", { className: "bm-bookmark-ref" }, `${bookName} ${bm.chapter}:${bm.verseSpec}`));
-  }
+  const book = booksCache && booksCache.find(b => b.id === bm.bookId);
+  const bookName = book ? (book.short_name_ko || book.name_ko) : bm.bookId;
+  const refText = bm.verseSpec === "all"
+    ? `${bookName} ${bm.chapter}${chUnit(bm.bookId)}`
+    : `${bookName} ${bm.chapter}:${bm.verseSpec}`;
+  link.appendChild(el("span", { className: "bm-bookmark-ref" }, refText));
   link.addEventListener("click", (e) => {
     e.preventDefault();
     if (row.classList.contains("bm-swiped")) {
