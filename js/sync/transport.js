@@ -176,9 +176,12 @@ function consumeRedirectCallback() {
 
   if (hasError) return { ok: false, reason: params.get("error"), returnTo };
 
+  const token = params.get("access_token");
+  if (!token) return { ok: false, reason: "empty_token", returnTo };
+
   return {
     ok: true,
-    token: params.get("access_token"),
+    token,
     expiresIn: parseInt(params.get("expires_in") ?? "3600", 10),
     scope: params.get("scope"),
     returnTo,

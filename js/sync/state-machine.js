@@ -511,7 +511,7 @@ function createSyncMachine({ onStateChange } = {}) {
           if (_isUserActivelyReading()) {
             L.log({ kind: "ACTION", event: "REAUTH_DEFERRED", reason: "active_reading" });
             _snackbar("Google 동기화 재연결이 필요합니다. 설정 → 연결을 눌러 주세요.");
-            _transition(S.NEEDS_CONSENT, {}, event);
+            _transition(S.NEEDS_CONSENT, { reAuthFails: _ctx.reAuthFails + 1 }, event);
             _refreshUI();
           } else {
             // No prompt parameter — Google will silently re-issue the token
