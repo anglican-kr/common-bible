@@ -2888,6 +2888,34 @@ body.verse-select-active .verse.verse-poetry[data-vref] {
   background: color-mix(in srgb, var(--accent) 8%, transparent);
 }
 
+.bm-folder-combobox-new {
+  list-style: none;
+  margin-top: 0.25rem;
+  padding-top: 0.25rem;
+  border-top: 1px solid var(--border);
+}
+
+.bm-folder-combobox-new-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: 100%;
+  padding: 0.4rem 0.6rem;
+  font-family: inherit;
+  font-size: 0.9rem;
+  background: transparent;
+  border: 0;
+  color: var(--accent);
+  cursor: pointer;
+  text-align: left;
+}
+
+.bm-folder-combobox-new-btn:hover,
+.bm-folder-combobox-new-btn:focus {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  outline: none;
+}
+
 .bm-form-input:focus,
 .bm-form-textarea:focus,
 .bm-form-select:focus,
@@ -2945,6 +2973,67 @@ body.verse-select-active .verse.verse-poetry[data-vref] {
 
 .bm-btn-secondary:hover {
   background: var(--border);
+}
+
+/* ── New folder modal (stacks above save modal) ── */
+
+#bm-new-folder-scrim {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 76;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+#bm-new-folder-scrim:not([hidden]) {
+  display: block;
+}
+
+#bm-new-folder-modal {
+  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  display: none;
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 77;
+  width: min(92vw, 360px);
+  background: var(--bg-card);
+  color: var(--text);
+  border-radius: 14px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+  padding: 1.25rem 1.25rem 1rem;
+}
+
+#bm-new-folder-modal:not([hidden]) {
+  display: block;
+}
+
+#bm-new-folder-title {
+  margin: 0 2rem 0.85rem 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+#bm-new-folder-close {
+  position: absolute;
+  top: 0.25rem;
+  right: 0.25rem;
+  background: transparent;
+  border: 0;
+  color: var(--text-secondary);
+  font-size: 1.6rem;
+  line-height: 1;
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+#bm-new-folder-close:hover {
+  color: var(--text);
 }
 
 /* ── Merge confirmation modal ── */

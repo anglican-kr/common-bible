@@ -199,6 +199,21 @@
     <div id="bm-save-body"></div>
   </div>
 
+  <!-- ── New Folder Modal (stacks above save modal) ── -->
+  <div id="bm-new-folder-scrim" aria-hidden="true" hidden></div>
+  <div id="bm-new-folder-modal" role="dialog" aria-modal="true" aria-labelledby="bm-new-folder-title" hidden>
+    <button id="bm-new-folder-close" type="button" aria-label="닫기">&times;</button>
+    <h2 id="bm-new-folder-title">새 폴더</h2>
+    <div class="bm-form-field">
+      <label class="bm-form-label" for="bm-new-folder-input">폴더 이름</label>
+      <input id="bm-new-folder-input" class="bm-form-input" type="text" maxlength="50" placeholder="예: 대림1주일" />
+    </div>
+    <div class="bm-form-actions">
+      <button id="bm-new-folder-cancel" class="bm-btn-secondary" type="button">취소</button>
+      <button id="bm-new-folder-confirm" class="bm-btn-primary" type="button">만들기</button>
+    </div>
+  </div>
+
   <!-- ── Import Bookmarks Modal ── -->
   <div id="bm-import-scrim" aria-hidden="true" hidden></div>
   <div id="bm-import-modal" role="dialog" aria-modal="true" aria-labelledby="bm-import-title" hidden>
