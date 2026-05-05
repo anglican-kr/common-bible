@@ -75,12 +75,19 @@ function initDriveSync() {
   }
 }
 
-// Called by settings popover "연결" button.
+// Called by settings popover "연결" button. The click is a real user gesture,
+// so we can safely trigger the consent popup without iOS blocking it.
 function signIn() {
-  window.syncDebugLog?.log({ kind: "ACTION", event: "SIGN_IN", state: _machine.getState() });
+  const state = _machine.getState();
+  window.syncDebugLog?.log({ kind: "ACTION", event: "SIGN_IN", state });
   localStorage.setItem("bible-drive-sync", "1");
-  if (_machine.getState() === "DISABLED" || _machine.getState() === "ERROR") {
+  if (state === "DISABLED") {
     _machine.enable();
+  } else if (state === "NEEDS_CONSENT" || state === "ERROR" || state === "IDENTIFYING") {
+    // Silent identity already failed (or is parked). Take the user-gesture
+    // route: dispatch USER_CONSENT_REQUEST so the machine calls
+    // requestAccessToken({prompt:"consent"}) inside this click handler.
+    _machine.dispatch({ type: "USER_CONSENT_REQUEST" });
   }
   if (_machine.getState() === "INITIALIZING") _startPollingGis();
 }

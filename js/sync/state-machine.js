@@ -10,24 +10,40 @@
 // This inverts the bug pattern: "forget to reset" is impossible — you have to
 // actively opt in to preserving a value across a transition.
 //
-// States:  DISABLED | INITIALIZING | AUTHENTICATING | IDLE | SYNCING | OFFLINE | ERROR
-// Events:  ENABLE | DISABLE | GIS_READY | TOKEN_OK | TOKEN_FAIL | SYNC_REQUEST |
+// States:  DISABLED | INITIALIZING | IDENTIFYING | AUTHENTICATING | IDLE |
+//          SYNCING | OFFLINE | NEEDS_CONSENT | ERROR
+// Events:  ENABLE | DISABLE | GIS_READY | IDENTITY_OK | IDENTITY_FAIL |
+//          USER_CONSENT_REQUEST | TOKEN_OK | TOKEN_FAIL | SYNC_REQUEST |
 //          SYNC_DONE | SYNC_FAIL { reason } | NET_RECOVERED
 //
 // SYNC_FAIL reasons:
-//   "401"       — token expired  → re-auth
+//   "401"       — token expired  → re-identify (silent FedCM/One Tap)
 //   "412"       — ETag mismatch  → re-merge retry (max 3)
 //   "no_token"  — guard tripped  → ERROR (deterministic)
 //   "exception" — JS error       → ERROR (deterministic)
 //   other       — network/5xx    → backoff (max 5), then OFFLINE
+//
+// Authentication flow (avoids iOS Safari popup-blocker dialog):
+//   1. IDENTIFYING  — google.accounts.id.prompt() establishes identity via
+//                     FedCM (iOS 17+) or One Tap UI (older). No window.open(),
+//                     so iOS never shows the "팝업 윈도우를 열려고 시도" prompt.
+//   2. AUTHENTICATING — google.accounts.oauth2.requestAccessToken({prompt:"",
+//                       hint:email}) silently exchanges identity for a Drive
+//                       access token. Only invoked AFTER identity is known or
+//                       inside a user-gesture click handler.
+//   3. NEEDS_CONSENT — silent identity failed. Wait for user to click "연결"
+//                      (a real user gesture); only then call requestAccessToken
+//                      with prompt:"consent" so iOS allows the popup.
 
 const S = Object.freeze({
   DISABLED:       "DISABLED",
   INITIALIZING:   "INITIALIZING",
+  IDENTIFYING:    "IDENTIFYING",
   AUTHENTICATING: "AUTHENTICATING",
   IDLE:           "IDLE",
   SYNCING:        "SYNCING",
   OFFLINE:        "OFFLINE",
+  NEEDS_CONSENT:  "NEEDS_CONSENT",
   ERROR:          "ERROR",
 });
 
@@ -80,6 +96,33 @@ function createSyncMachine({ onStateChange } = {}) {
     const enabled = next !== S.DISABLED && next !== S.ERROR;
     localStorage.setItem(SYNC_ENABLED_KEY, enabled ? "1" : "0");
     if (onStateChange) onStateChange(next);
+  }
+
+  // ── Identity helpers ──────────────────────────────────────────────────────
+  // Always call promptIdentity *outside* of requestAccessToken to keep popup
+  // calls confined to user-gesture handlers (NEEDS_CONSENT path).
+
+  function _promptIdentity() {
+    T.promptIdentity((notification) => {
+      if (!notification) {
+        dispatch({ type: "IDENTITY_FAIL", reason: "no_notification" });
+        return;
+      }
+      const dismissed = typeof notification.isDismissedMoment === "function" && notification.isDismissedMoment();
+      const skipped   = typeof notification.isSkippedMoment   === "function" && notification.isSkippedMoment();
+      const notShown  = typeof notification.isNotDisplayed    === "function" && notification.isNotDisplayed();
+      if (dismissed || skipped || notShown) {
+        const reason = dismissed ? notification.getDismissedReason?.() :
+                       skipped   ? notification.getSkippedReason?.()   :
+                       notification.getNotDisplayedReason?.();
+        // "credential_returned" means auto-select succeeded; the credential
+        // callback fires separately and will dispatch IDENTITY_OK.
+        if (reason === "credential_returned") return;
+        dispatch({ type: "IDENTITY_FAIL", reason: reason ?? "unavailable" });
+      }
+      // Successful display ends with the credential callback firing
+      // separately, dispatching IDENTITY_OK.
+    });
   }
 
   // ── Side-effect helpers ───────────────────────────────────────────────────
@@ -234,9 +277,9 @@ function createSyncMachine({ onStateChange } = {}) {
 
       case S.DISABLED:
         if (event.type === "ENABLE") {
-          if (window.google?.accounts?.oauth2 && _tokenClient) {
-            _transition(S.AUTHENTICATING, {}, event);
-            _reqSilentToken();
+          if (window.google?.accounts?.id && window.google?.accounts?.oauth2 && _tokenClient) {
+            _transition(S.IDENTIFYING, {}, event);
+            _promptIdentity();
           } else {
             _transition(S.INITIALIZING, {}, event);
           }
@@ -250,10 +293,65 @@ function createSyncMachine({ onStateChange } = {}) {
             "https://www.googleapis.com/auth/drive.appdata email",
             (resp) => dispatch({ type: resp.error ? "TOKEN_FAIL" : "TOKEN_OK", ...resp, reason: resp.error })
           );
-          _transition(S.AUTHENTICATING, {}, event);
-          _reqSilentToken();
+          if (window.google?.accounts?.id) {
+            T.initIdentityClient(
+              window._syncClientId,
+              (resp) => {
+                if (resp?.credential) {
+                  const { email } = T.parseIdToken(resp.credential);
+                  dispatch({ type: "IDENTITY_OK", email, credential: resp.credential });
+                } else {
+                  dispatch({ type: "IDENTITY_FAIL", reason: "no_credential" });
+                }
+              }
+            );
+            _transition(S.IDENTIFYING, {}, event);
+            _promptIdentity();
+          } else {
+            _transition(S.AUTHENTICATING, {}, event);
+            _reqSilentToken();
+          }
         } else if (event.type === "DISABLE") {
           _transition(S.DISABLED, {}, event);
+        }
+        break;
+
+      case S.IDENTIFYING:
+        if (event.type === "IDENTITY_OK") {
+          if (event.email) {
+            localStorage.setItem(SYNC_EMAIL_KEY, event.email);
+            _email = event.email;
+          }
+          L.log({ kind: "ACTION", event: "IDENTITY_OK", email: L.mask("email", event.email) });
+          _transition(S.AUTHENTICATING, { reAuthFails: _ctx.reAuthFails }, event);
+          _reqSilentToken();
+        } else if (event.type === "IDENTITY_FAIL") {
+          L.log({ kind: "ACTION", event: "IDENTITY_FAIL", reason: event.reason });
+          // Silent identity unavailable (e.g. iOS 16↓ first run, ITP blocked
+          // session). Park in NEEDS_CONSENT and wait for a real user gesture
+          // — never auto-call requestAccessToken from here, that would trigger
+          // the iOS popup-blocker dialog.
+          _transition(S.NEEDS_CONSENT, {}, event);
+          _refreshUI();
+        } else if (event.type === "USER_CONSENT_REQUEST") {
+          // User clicked "연결"; the popup is now anchored to a user gesture.
+          T.cancelIdentityPrompt();
+          _transition(S.AUTHENTICATING, {}, event);
+          T.requestConsentToken(_tokenClient);
+        } else if (event.type === "DISABLE") {
+          T.cancelIdentityPrompt();
+          _transition(S.DISABLED, {}, event);
+          _refreshUI();
+        }
+        break;
+
+      case S.NEEDS_CONSENT:
+        if (event.type === "USER_CONSENT_REQUEST") {
+          _transition(S.AUTHENTICATING, {}, event);
+          T.requestConsentToken(_tokenClient);
+        } else if (event.type === "DISABLE") {
+          _transition(S.DISABLED, {}, event);
+          _refreshUI();
         }
         break;
 
@@ -310,8 +408,14 @@ function createSyncMachine({ onStateChange } = {}) {
 
       case S.OFFLINE:
         if (event.type === "NET_RECOVERED") {
-          _transition(S.AUTHENTICATING, {}, event); // all counts reset
-          _reqSilentToken();
+          // Re-establish identity silently before requesting a token.
+          if (window.google?.accounts?.id) {
+            _transition(S.IDENTIFYING, {}, event);
+            _promptIdentity();
+          } else {
+            _transition(S.AUTHENTICATING, {}, event);
+            _reqSilentToken();
+          }
         } else if (event.type === "DISABLE") {
           _token = null;
           _transition(S.DISABLED, {}, event);
@@ -320,7 +424,7 @@ function createSyncMachine({ onStateChange } = {}) {
         break;
 
       case S.ERROR:
-        if (event.type === "ENABLE") {
+        if (event.type === "ENABLE" || event.type === "USER_CONSENT_REQUEST") {
           _transition(S.AUTHENTICATING, {}, event);
           T.requestConsentToken(_tokenClient);
         } else if (event.type === "DISABLE") {
@@ -342,8 +446,16 @@ function createSyncMachine({ onStateChange } = {}) {
       _token = null;
       if (_ctx.reAuthFails < MAX_REAUTH) {
         L.log({ kind: "ACTION", event: "REAUTH", attempt: _ctx.reAuthFails + 1 });
-        _transition(S.AUTHENTICATING, { reAuthFails: _ctx.reAuthFails + 1 }, event);
-        _reqSilentToken();
+        // Re-identify silently first (FedCM/One Tap, no popup) so the follow-up
+        // requestAccessToken({prompt:""}) has a fresh email hint and is far
+        // more likely to succeed without falling back to a popup.
+        if (window.google?.accounts?.id) {
+          _transition(S.IDENTIFYING, { reAuthFails: _ctx.reAuthFails + 1 }, event);
+          _promptIdentity();
+        } else {
+          _transition(S.AUTHENTICATING, { reAuthFails: _ctx.reAuthFails + 1 }, event);
+          _reqSilentToken();
+        }
       } else {
         _snackbar("Google Drive 동기화 세션이 만료됐습니다. 설정에서 재연결해 주세요.");
         _transition(S.ERROR, {}, event);
