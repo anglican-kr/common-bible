@@ -115,6 +115,9 @@ function createSyncMachine({ onStateChange } = {}) {
         const reason = dismissed ? notification.getDismissedReason?.() :
                        skipped   ? notification.getSkippedReason?.()   :
                        notification.getNotDisplayedReason?.();
+        // "credential_returned" means auto-select succeeded; the credential
+        // callback fires separately and will dispatch IDENTITY_OK.
+        if (reason === "credential_returned") return;
         dispatch({ type: "IDENTITY_FAIL", reason: reason ?? "unavailable" });
       }
       // Successful display ends with the credential callback firing
