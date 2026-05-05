@@ -136,7 +136,7 @@ body {
 /* ── Header ── */
 #sticky-group {
   position: sticky;
-  top: 0;
+  top: env(safe-area-inset-top);
   z-index: 20;
 }
 
