@@ -293,19 +293,24 @@ function createSyncMachine({ onStateChange } = {}) {
             "https://www.googleapis.com/auth/drive.appdata email",
             (resp) => dispatch({ type: resp.error ? "TOKEN_FAIL" : "TOKEN_OK", ...resp, reason: resp.error })
           );
-          T.initIdentityClient(
-            window._syncClientId,
-            (resp) => {
-              if (resp?.credential) {
-                const { email } = T.parseIdToken(resp.credential);
-                dispatch({ type: "IDENTITY_OK", email, credential: resp.credential });
-              } else {
-                dispatch({ type: "IDENTITY_FAIL", reason: "no_credential" });
+          if (window.google?.accounts?.id) {
+            T.initIdentityClient(
+              window._syncClientId,
+              (resp) => {
+                if (resp?.credential) {
+                  const { email } = T.parseIdToken(resp.credential);
+                  dispatch({ type: "IDENTITY_OK", email, credential: resp.credential });
+                } else {
+                  dispatch({ type: "IDENTITY_FAIL", reason: "no_credential" });
+                }
               }
-            }
-          );
-          _transition(S.IDENTIFYING, {}, event);
-          _promptIdentity();
+            );
+            _transition(S.IDENTIFYING, {}, event);
+            _promptIdentity();
+          } else {
+            _transition(S.AUTHENTICATING, {}, event);
+            _reqSilentToken();
+          }
         } else if (event.type === "DISABLE") {
           _transition(S.DISABLED, {}, event);
         }
