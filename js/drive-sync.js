@@ -28,8 +28,11 @@ window._syncClientId = _CLIENT_ID;
   // Use returnTo from both success and validated-error responses so the user
   // lands back on the chapter they were reading even after a denied/expired
   // OAuth round-trip.
-  const returnTo = result.returnTo || "/";
-  history.replaceState(null, "", returnTo);
+  if (result.returnTo) {
+    history.replaceState(null, "", result.returnTo);
+  } else {
+    history.replaceState(null, "", location.pathname + location.search);
+  }
 
   if (result.ok) {
     window.__pendingRedirectToken = { access_token: result.token, expiresIn: result.expiresIn };

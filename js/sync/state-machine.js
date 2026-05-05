@@ -516,8 +516,7 @@ function createSyncMachine({ onStateChange } = {}) {
           } else {
             // No prompt parameter — Google will silently re-issue the token
             // when the existing session still has the granted scope.
-            _beginRedirect(undefined);
-            return;
+            if (_beginRedirect(undefined)) return;
           }
         } else if (window.google?.accounts?.id) {
           // Re-identify silently first (FedCM/One Tap, no popup) so the
