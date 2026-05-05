@@ -412,33 +412,49 @@ function initSettings() {
       if (showDrive) {
         const driveRow = el("div", { className: "settings-row" });
         const driveLabelSpan = el("span", { className: "settings-label" });
-        driveLabelSpan.appendChild(document.createTextNode("Google Drive 동기화"));
+        driveLabelSpan.appendChild(document.createTextNode("온라인 백업 & 동기화"));
         const driveAuthed = window.driveSync.isAuthenticated();
+
+        // i icon — visible regardless of auth state so users can read the
+        // description before connecting.
+        const svgNs = "http://www.w3.org/2000/svg";
+        const infoBtn = el("button", { className: "settings-drive-info-btn", type: "button", "aria-label": "동기화 안내", "aria-expanded": "false" });
+        const infoSvg = document.createElementNS(svgNs, "svg");
+        infoSvg.setAttribute("viewBox", "0 0 24 24"); infoSvg.setAttribute("aria-hidden", "true"); infoSvg.setAttribute("class", "drive-info-icon");
+        const ic = document.createElementNS(svgNs, "circle"); ic.setAttribute("cx", "12"); ic.setAttribute("cy", "12"); ic.setAttribute("r", "10"); ic.setAttribute("fill", "none"); ic.setAttribute("stroke", "currentColor"); ic.setAttribute("stroke-width", "1.5");
+        const idot = document.createElementNS(svgNs, "circle"); idot.setAttribute("cx", "12"); idot.setAttribute("cy", "8.5"); idot.setAttribute("r", "0.85"); idot.setAttribute("fill", "currentColor");
+        const istem = document.createElementNS(svgNs, "line"); istem.setAttribute("x1", "12"); istem.setAttribute("y1", "11.5"); istem.setAttribute("x2", "12"); istem.setAttribute("y2", "16.5"); istem.setAttribute("stroke", "currentColor"); istem.setAttribute("stroke-width", "1.7"); istem.setAttribute("stroke-linecap", "round");
+        infoSvg.append(ic, idot, istem);
+        infoBtn.appendChild(infoSvg);
+        driveLabelSpan.appendChild(infoBtn);
+        driveRow.appendChild(driveLabelSpan);
+
+        // Action button — 해제 when connected, 연결 when not.
         if (driveAuthed) {
-          const email = window.driveSync.getUserEmail();
-          const svgNs = "http://www.w3.org/2000/svg";
-          const infoBtn = el("button", { className: "settings-drive-info-btn", type: "button", "aria-label": "연결된 계정 정보", "aria-expanded": "false" });
-          const infoSvg = document.createElementNS(svgNs, "svg");
-          infoSvg.setAttribute("viewBox", "0 0 24 24"); infoSvg.setAttribute("aria-hidden", "true"); infoSvg.setAttribute("class", "drive-info-icon");
-          const ic = document.createElementNS(svgNs, "circle"); ic.setAttribute("cx", "12"); ic.setAttribute("cy", "12"); ic.setAttribute("r", "10"); ic.setAttribute("fill", "none"); ic.setAttribute("stroke", "currentColor"); ic.setAttribute("stroke-width", "1.5");
-          const idot = document.createElementNS(svgNs, "circle"); idot.setAttribute("cx", "12"); idot.setAttribute("cy", "8.5"); idot.setAttribute("r", "0.85"); idot.setAttribute("fill", "currentColor");
-          const istem = document.createElementNS(svgNs, "line"); istem.setAttribute("x1", "12"); istem.setAttribute("y1", "11.5"); istem.setAttribute("x2", "12"); istem.setAttribute("y2", "16.5"); istem.setAttribute("stroke", "currentColor"); istem.setAttribute("stroke-width", "1.7"); istem.setAttribute("stroke-linecap", "round");
-          infoSvg.append(ic, idot, istem);
-          infoBtn.appendChild(infoSvg);
-          driveLabelSpan.appendChild(infoBtn);
-          driveRow.appendChild(driveLabelSpan);
           const disconnectBtn = el("button", { className: "settings-action-btn", "aria-label": "Google Drive 연결 해제" }, "해제");
           disconnectBtn.addEventListener("click", () => { popover.hidden = true; btn.setAttribute("aria-expanded", "false"); if (cleanupTrap) { cleanupTrap(); cleanupTrap = null; } openDriveDisconnectModal(); });
           driveRow.appendChild(disconnectBtn);
-          section3.appendChild(driveRow);
-          const infoRow = el("div", { className: "settings-drive-info-row" });
-          infoRow.hidden = true;
-          const infoTop = el("div", { className: "settings-drive-info-top" });
-          infoTop.appendChild(el("div", { className: "settings-drive-info-email" }, `구글 ID: ${email ?? "연결됨"}`));
-          const closeBtn = el("button", { className: "settings-drive-info-close", type: "button", "aria-label": "닫기" }, "✕");
-          infoTop.appendChild(closeBtn);
-          infoRow.appendChild(infoTop);
-          infoRow.appendChild(el("div", { className: "settings-drive-info-desc" }, "북마크·설정·읽기 위치를 Google Drive 앱 폴더에 저장해 기기 간 자동 동기화합니다."));
+        } else {
+          const connectBtn = el("button", { className: "settings-action-btn", "aria-label": "Google Drive 연결" }, "연결");
+          connectBtn.addEventListener("click", () => { popover.hidden = true; btn.setAttribute("aria-expanded", "false"); if (cleanupTrap) { cleanupTrap(); cleanupTrap = null; } window.driveSync.signIn(); });
+          driveRow.appendChild(connectBtn);
+        }
+        section3.appendChild(driveRow);
+
+        // Info row — description always present; email line + diag button only
+        // when authenticated.
+        const infoRow = el("div", { className: "settings-drive-info-row" });
+        infoRow.hidden = true;
+        const infoTop = el("div", { className: "settings-drive-info-top" });
+        if (driveAuthed) {
+          const email = window.driveSync.getUserEmail();
+          infoTop.appendChild(el("div", { className: "settings-drive-info-email" }, `계정: ${email ?? "연결됨"}`));
+        }
+        const closeBtn = el("button", { className: "settings-drive-info-close", type: "button", "aria-label": "닫기" }, "✕");
+        infoTop.appendChild(closeBtn);
+        infoRow.appendChild(infoTop);
+        infoRow.appendChild(el("div", { className: "settings-drive-info-desc" }, "북마크·설정·읽기 위치를 Google Drive에 백업하고, 여러 기기를 이용하는 경우 자동으로 동기화합니다."));
+        if (driveAuthed) {
           const diagBtn = el("button", { className: "settings-drive-diag-btn", type: "button" }, "동기화 진단 정보 복사");
           diagBtn.addEventListener("click", async () => {
             const ok = await window.syncDebugLog?.copyToClipboard();
@@ -454,16 +470,16 @@ function initSettings() {
             }
           });
           infoRow.appendChild(diagBtn);
-          section3.appendChild(infoRow);
-          const toggleInfo = () => { const open = infoRow.hidden; infoRow.hidden = !open; infoBtn.setAttribute("aria-expanded", String(open)); };
-          infoBtn.addEventListener("click", toggleInfo);
-          closeBtn.addEventListener("click", () => { infoRow.hidden = true; infoBtn.setAttribute("aria-expanded", "false"); });
-        } else {
-          driveRow.appendChild(driveLabelSpan);
-          const connectBtn = el("button", { className: "settings-action-btn", "aria-label": "Google Drive 연결" }, "연결");
-          connectBtn.addEventListener("click", () => { popover.hidden = true; btn.setAttribute("aria-expanded", "false"); if (cleanupTrap) { cleanupTrap(); cleanupTrap = null; } window.driveSync.signIn(); });
-          driveRow.appendChild(connectBtn);
-          section3.appendChild(driveRow);
+        }
+        section3.appendChild(infoRow);
+
+        const toggleInfo = () => { const open = infoRow.hidden; infoRow.hidden = !open; infoBtn.setAttribute("aria-expanded", String(open)); };
+        infoBtn.addEventListener("click", toggleInfo);
+        // Return focus to the trigger so the destructive 초기화 button below
+        // doesn't grab focus by DOM order when the close button hides itself.
+        closeBtn.addEventListener("click", () => { infoRow.hidden = true; infoBtn.setAttribute("aria-expanded", "false"); infoBtn.focus(); });
+
+        if (!driveAuthed) {
           const statusText = window.driveSync.getStatus();
           if (statusText === "ERROR") {
             section3.appendChild(el("p", { style: "font-size:0.78rem;color:var(--accent);padding:0 0.25rem 0.25rem;margin:0;" }, "세션 만료. 재연결해 주세요."));

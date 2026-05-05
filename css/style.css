@@ -233,12 +233,16 @@ body {
 .settings-drive-info-btn {
   background: none;
   border: none;
-  padding: 0 0 0 0.3em;
+  margin-left: 0.3em;
+  padding: 0;
   cursor: pointer;
   color: var(--accent);
   display: inline-flex;
   align-items: center;
   vertical-align: middle;
+  /* Korean glyphs sit higher than Latin x-height middle; nudge the icon up
+     to align with the optical center of the surrounding label. */
+  transform: translateY(-0.08em);
   line-height: 1;
 }
 .settings-drive-info-btn:focus-visible {
@@ -247,7 +251,7 @@ body {
   border-radius: 50%;
 }
 
-.drive-info-icon { width: 0.9em; height: 0.9em; }
+.drive-info-icon { width: 1.1em; height: 1.1em; }
 
 .settings-drive-info-row {
   padding: 0.35rem 0 0.25rem 0.25rem;
