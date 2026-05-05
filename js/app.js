@@ -5170,23 +5170,39 @@ function registerServiceWorker() {
   }
 
   function trackInstalling(reg) {
+    if (!reg.installing) return;
     reg.installing.addEventListener("statechange", () => {
       if (reg.waiting) showUpdateToast(reg.waiting);
     });
   }
 
+  // Poll for a new SW at most once per hour, and only while the tab is visible
+  // and online — a phone in the user's pocket performs zero update traffic.
+  // visibilitychange/online also retrigger the check on tab return / reconnect,
+  // since interval timers are heavily throttled in hidden tabs.
+  const UPDATE_CHECK_INTERVAL_MS = 60 * 60 * 1000;
+  function schedulePeriodicUpdate(reg) {
+    let lastCheck = Date.now();
+    const tick = () => {
+      if (document.visibilityState !== "visible") return;
+      if (navigator.onLine === false) return;
+      const now = Date.now();
+      if (now - lastCheck < UPDATE_CHECK_INTERVAL_MS) return;
+      lastCheck = now;
+      reg.update().catch(() => {});
+    };
+    setInterval(tick, UPDATE_CHECK_INTERVAL_MS);
+    document.addEventListener("visibilitychange", tick);
+    window.addEventListener("online", tick);
+  }
+
   navigator.serviceWorker.register("/sw.js", { updateViaCache: "none" }).then((reg) => {
     // A waiting SW already exists (e.g. installed on a previous visit)
-    if (reg.waiting) {
-      showUpdateToast(reg.waiting);
-      return;
-    }
+    if (reg.waiting) showUpdateToast(reg.waiting);
     // A new SW is being installed right now
-    if (reg.installing) {
-      trackInstalling(reg);
-      return;
-    }
-    // Listen for future updates
+    else if (reg.installing) trackInstalling(reg);
+    // Listen for future updates — fired when reg.update() finds a new SW too
     reg.addEventListener("updatefound", () => trackInstalling(reg));
+    schedulePeriodicUpdate(reg);
   }).catch(() => {});
 }
