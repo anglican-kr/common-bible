@@ -17,6 +17,8 @@ const $searchSheet = document.getElementById("search-sheet");
 const $searchSheetInput = document.getElementById("search-sheet-input");
 const $searchSheetClear = document.getElementById("search-sheet-clear");
 const $searchSheetClose = document.getElementById("search-sheet-close");
+const $searchSheetChips = document.getElementById("search-sheet-chips");
+const $searchSheetNotice = document.getElementById("search-sheet-notice");
 const $searchSheetResults = document.getElementById("search-sheet-results");
 
 let booksCache = null;
@@ -2977,6 +2979,23 @@ $searchClear.addEventListener("click", () => {
   if (parsePath().view === "search") navigate("/");
 });
 
+// Mobile delegation: tapping the header search bar opens the compact sheet
+// instead of focusing the inline input. Desktop (>768px) keeps live search.
+// pointerdown.preventDefault stops the input from gaining focus first, which
+// would otherwise pop the keyboard once for the header input and again when
+// the sheet input takes focus.
+$searchInput.addEventListener("pointerdown", (e) => {
+  if (!isMobile()) return;
+  e.preventDefault();
+  openSearchSheet("");
+});
+// Fallback for keyboard/tab navigation focus.
+$searchInput.addEventListener("focus", () => {
+  if (!isMobile() || !$searchSheet.hidden) return;
+  $searchInput.blur();
+  openSearchSheet("");
+});
+
 // ── Search bottom sheet (Mobile FAB) ──
 
 function isMobile() {
@@ -2986,7 +3005,9 @@ function isMobile() {
 // Lift the sheet above the on-screen keyboard. Default Android viewport
 // behavior (`resizes-visual`) leaves position:fixed elements anchored to the
 // layout viewport, so the bottom of the sheet would sit behind the keyboard.
+let _suspendKeyboardAdjust = false;
 function adjustSheetForKeyboard() {
+  if (_suspendKeyboardAdjust) return;
   if (!window.visualViewport || $searchSheet.hidden) return;
   const vv = window.visualViewport;
   // For position:fixed elements anchored to the layout viewport, ignore
@@ -2998,9 +3019,19 @@ function adjustSheetForKeyboard() {
   // Suppress the CSS height transition so viewport adjustments snap instantly
   // rather than lagging 200ms behind rapid visualViewport resize/scroll events.
   $searchSheet.style.transition = "none";
+  // Compact: only the input bar + chips are visible. Don't override height —
+  // CSS keeps it at the compact value; just lift the sheet above the keyboard
+  // and add a small bottom margin so it visually floats above the keyboard.
+  if ($searchSheet.dataset.state === "compact") {
+    const COMPACT_BOTTOM_MARGIN_PX = 12; // matches CSS 0.75rem on left/right
+    $searchSheet.style.bottom = `${keyboardOffset + COMPACT_BOTTOM_MARGIN_PX}px`;
+    $searchSheet.style.height = "";
+    $searchSheet.style.maxHeight = "";
+    return;
+  }
   if (keyboardOffset > 0) {
-    // Fill the visible viewport so the page body cannot peek through
-    // the gap between the sheet and the on-screen keyboard.
+    // Expanded with keyboard up — fill the visible viewport so the page body
+    // cannot peek through the gap between the sheet and the on-screen keyboard.
     $searchSheet.style.bottom = `${keyboardOffset}px`;
     $searchSheet.style.height = `${vv.height}px`;
     $searchSheet.style.maxHeight = `${vv.height}px`;
@@ -3015,6 +3046,9 @@ function adjustSheetForKeyboard() {
 let _searchSheetAppliedScrollLock = false;
 
 function openSearchSheet(query) {
+  // Set state BEFORE unhiding so the first paint already reflects compact
+  // dimensions — otherwise the 55vh expanded layout flashes for one frame.
+  $searchSheet.dataset.state = query ? "expanded" : "compact";
   $searchScrim.hidden = false;
   $searchSheet.hidden = false;
   // Lock background scroll. Without this, iOS Safari's URL-bar collapse on
@@ -3033,10 +3067,13 @@ function openSearchSheet(query) {
   }
   $searchSheetInput.value = query || "";
   $searchSheetClear.hidden = !query;
+  $searchSheetNotice.hidden = true;
   $searchFab.hidden = true;
-  // Focus synchronously so iOS Safari opens the on-screen keyboard.
-  // requestAnimationFrame would defer past the user-gesture context.
-  $searchSheetInput.focus({ preventScroll: true });
+  // Compact entry focuses synchronously so iOS Safari opens the on-screen
+  // keyboard inside the user-gesture context (rAF would defer past it).
+  // Expanded entry (query-prefilled URL) skips focus — the user wants results,
+  // not the keyboard.
+  if (!query) $searchSheetInput.focus({ preventScroll: true });
   if (window.visualViewport) {
     window.visualViewport.addEventListener("resize", adjustSheetForKeyboard);
     window.visualViewport.addEventListener("scroll", adjustSheetForKeyboard);
@@ -3045,13 +3082,17 @@ function openSearchSheet(query) {
 }
 
 function closeSearchSheet() {
+  _suspendKeyboardAdjust = false;
   $searchScrim.hidden = true;
   $searchSheet.hidden = true;
+  $searchSheet.dataset.state = "";
   $searchSheet.style.transition = "";
   $searchSheet.style.height = "";
   $searchSheet.style.bottom = "";
   $searchSheet.style.maxHeight = "";
   $searchFab.hidden = false;
+  $searchSheetNotice.hidden = true;
+  $searchSheetNotice.textContent = "";
   clearNode($searchSheetResults);
   // Restore background scroll only if this sheet applied the lock.
   if (_searchSheetAppliedScrollLock) {
@@ -3069,8 +3110,6 @@ function closeSearchSheet() {
     window.visualViewport.removeEventListener("scroll", adjustSheetForKeyboard);
   }
 }
-
-let sheetDebounceTimer = null;
 
 function getSheetPageSize() {
   // Estimate how many results fit in the visible sheet area
@@ -3099,7 +3138,19 @@ function buildSheetPagination(query, page, totalPages) {
   return nav;
 }
 
+function renderSheetNotice(unmatchedScopes) {
+  if (!unmatchedScopes || !unmatchedScopes.length) {
+    $searchSheetNotice.hidden = true;
+    $searchSheetNotice.textContent = "";
+    return;
+  }
+  const list = unmatchedScopes.map((a) => `in:${a}`).join(", ");
+  $searchSheetNotice.textContent = `${list} — 알 수 없는 책 별칭입니다`;
+  $searchSheetNotice.hidden = false;
+}
+
 async function runSheetSearch(query, page, autoNavigate = false) {
+  renderSheetNotice(null);
   clearNode($searchSheetResults);
   if (!query) return;
 
@@ -3108,6 +3159,7 @@ async function runSheetSearch(query, page, autoNavigate = false) {
   const pageSize = getSheetPageSize();
 
   function onPartial(partial) {
+    renderSheetNotice(partial.unmatchedScopes);
     // Add click-to-close to each result link for sheet view
     const frag = document.createDocumentFragment();
     const tempDiv = el("div");
@@ -3126,6 +3178,8 @@ async function runSheetSearch(query, page, autoNavigate = false) {
     $searchSheetResults.appendChild(el("div", { className: "error" }, "검색에 실패했습니다."));
     return;
   }
+
+  renderSheetNotice(result.unmatchedScopes);
 
   // Verse reference — navigate only when explicitly confirmed (Enter key).
   if (result.refMatch) {
@@ -3159,32 +3213,96 @@ $searchFab.addEventListener("click", () => openSearchSheet(""));
 $searchScrim.addEventListener("click", closeSearchSheet);
 $searchSheetClose.addEventListener("click", closeSearchSheet);
 
-let sheetAutoNavTimer = null;
+// Chip row: pointerdown.preventDefault keeps the input focused — without it
+// the IME closes briefly and reopens, which flickers on Android.
+$searchSheetChips.addEventListener("pointerdown", (e) => {
+  if (e.target.closest(".search-chip")) e.preventDefault();
+});
+$searchSheetChips.addEventListener("click", (e) => {
+  const btn = e.target.closest(".search-chip");
+  if (!btn) return;
+  if (btn.dataset.chip === "in") insertSearchOperator("in:");
+});
+
+function insertSearchOperator(op) {
+  const cur = $searchSheetInput.value;
+  const needsSpace = cur.length > 0 && !cur.endsWith(" ");
+  const insertion = (needsSpace ? " " : "") + op;
+  $searchSheetInput.value = cur + insertion;
+  $searchSheetClear.hidden = !$searchSheetInput.value.trim();
+  // Cursor right after the colon so the user types the alias next.
+  const pos = $searchSheetInput.value.length;
+  $searchSheetInput.focus({ preventScroll: true });
+  $searchSheetInput.setSelectionRange(pos, pos);
+}
 
 $searchSheetInput.addEventListener("keydown", (e) => {
-  if (e.key === "Enter") {
-    e.preventDefault();
-    clearTimeout(sheetDebounceTimer);
-    clearTimeout(sheetAutoNavTimer);
-    const q = $searchSheetInput.value.trim();
-    if (q) runSheetSearch(q, 1, true);
-  }
+  if (e.key !== "Enter") return;
+  e.preventDefault();
+  const q = $searchSheetInput.value.trim();
+  if (!q) return;
+  // Dismiss IME first so the keyboard slide-down can run alongside the
+  // sheet's CSS height/bottom transition. We suspend adjustSheetForKeyboard
+  // briefly so visualViewport.resize during keyboard dismiss doesn't
+  // re-impose `transition: none` and snap the animation.
+  $searchSheetInput.blur();
+  _suspendKeyboardAdjust = true;
+  requestAnimationFrame(() => {
+    // Clear compact-mode inline overrides so CSS values (bottom: 0, height: 55vh)
+    // become the transition target.
+    $searchSheet.style.transition = "";
+    $searchSheet.style.bottom = "";
+    $searchSheet.style.height = "";
+    $searchSheet.style.maxHeight = "";
+    $searchSheet.dataset.state = "expanded";
+    runSheetSearch(q, 1, true);
+    // Resume keyboard-tracking after the height transition settles.
+    setTimeout(() => { _suspendKeyboardAdjust = false; }, 260);
+  });
 });
 
 $searchSheetInput.addEventListener("input", () => {
-  const q = $searchSheetInput.value.trim();
-  $searchSheetClear.hidden = !q;
-  clearTimeout(sheetDebounceTimer);
-  if (!q) { clearNode($searchSheetResults); return; }
-  sheetDebounceTimer = setTimeout(() => runSheetSearch(q, 1, false), 400);
+  $searchSheetClear.hidden = !$searchSheetInput.value.trim();
+});
+
+// Tapping the input while results are showing reverts to compact mode so the
+// keyboard reappears with breathing room and the previous results clear out.
+// We seed `bottom` with an estimated keyboard offset so height/bottom/left/
+// right all transition together in a single 220ms animation. After the
+// transition we issue a soft catch-up to the keyboard's real position —
+// transitioned (not snapped) so any estimate mismatch glides into place.
+// adjustSheetForKeyboard is suspended throughout so its `transition: none`
+// snap doesn't interrupt the choreography; tracking resumes afterwards.
+$searchSheetInput.addEventListener("focus", () => {
+  if ($searchSheet.dataset.state !== "expanded") return;
+  _suspendKeyboardAdjust = true;
+  $searchSheet.style.transition = "";
+  const COMPACT_BOTTOM_MARGIN_PX = 12;
+  // Typical mobile soft-keyboard heights: iPhone ~291–334, Android ~250–320.
+  // 280 is a reasonable midpoint; the catch-up below corrects any mismatch.
+  const ESTIMATED_KEYBOARD_PX = 280;
+  const vv = window.visualViewport;
+  const currentOffset = vv ? Math.max(0, window.innerHeight - vv.height) : 0;
+  const targetOffset = currentOffset > 0 ? currentOffset : ESTIMATED_KEYBOARD_PX;
+  $searchSheet.style.bottom = `${targetOffset + COMPACT_BOTTOM_MARGIN_PX}px`;
+  $searchSheet.dataset.state = "compact";
+  renderSheetNotice(null);
+  clearNode($searchSheetResults);
+  setTimeout(() => {
+    // Soft catch-up: read the real keyboard offset and let CSS transition
+    // glide the small correction. Don't call adjustSheetForKeyboard here —
+    // it would set `transition: none` and snap.
+    const vv2 = window.visualViewport;
+    const offset2 = vv2 ? Math.max(0, window.innerHeight - vv2.height) : 0;
+    $searchSheet.style.transition = "";
+    $searchSheet.style.bottom = `${offset2 + COMPACT_BOTTOM_MARGIN_PX}px`;
+    setTimeout(() => { _suspendKeyboardAdjust = false; }, 240);
+  }, 260);
 });
 
 $searchSheetClear.addEventListener("click", () => {
   $searchSheetInput.value = "";
   $searchSheetClear.hidden = true;
-  clearTimeout(sheetDebounceTimer);
-  clearTimeout(sheetAutoNavTimer);
-  clearNode($searchSheetResults);
   $searchSheetInput.focus();
 });
 

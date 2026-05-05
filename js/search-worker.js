@@ -81,6 +81,22 @@ function loadChunk(name, url) {
 // Verse reference pattern: "창세 1:3" or "창세 1:3-11"
 const REF_RE = /^([가-힣a-zA-Z0-9\s]+?)\s*(\d+)\s*:\s*(\d+)(?:\s*[-–]\s*(\d+))?\s*$/;
 
+// Operator: in:<book-alias>  (one or more, OR'd). Greedy on alias to allow
+// hangul/letters/digits without spaces. Only the substring up to whitespace.
+const IN_RE = /(?:^|\s)in:(\S+)/g;
+
+function parseQuery(raw) {
+  const restrictBooks = new Set();
+  const unmatched = [];
+  const stripped = raw.replace(IN_RE, (_, alias) => {
+    const id = meta.aliases[alias] || meta.aliases[alias.toLowerCase()];
+    if (id) restrictBooks.add(id);
+    else unmatched.push(alias);
+    return " ";
+  }).replace(/\s+/g, " ").trim();
+  return { keyword: stripped, restrictBooks, unmatched };
+}
+
 function tryVerseRef(query) {
   const m = query.match(REF_RE);
   if (!m) return null;
@@ -103,8 +119,9 @@ function tryVerseRef(query) {
   return { bookId, chapter, verse, verseEnd, bookNameKo: meta.books[bookId].ko };
 }
 
-function gatherResults(q, chunkNames) {
+function gatherResults(q, chunkNames, restrictBooks) {
   const qLower = q.toLowerCase();
+  const hasRestrict = restrictBooks && restrictBooks.size > 0;
   const allMatched = [];
   for (const name of chunkNames) {
     const chunk = loadedChunks[name];
@@ -112,6 +129,7 @@ function gatherResults(q, chunkNames) {
     const { books, bArr, cArr, vArr, tArr } = chunk;
     const n = tArr.length;
     for (let i = 0; i < n; i++) {
+      if (hasRestrict && !restrictBooks.has(books[bArr[i]])) continue;
       if (tArr[i].toLowerCase().includes(qLower)) {
         allMatched.push({
           b: books[bArr[i]],
@@ -184,6 +202,23 @@ onmessage = async (ev) => {
         return;
       }
 
+      const { keyword, restrictBooks, unmatched } = parseQuery(trimmed);
+
+      // Block search when any in: alias is unrecognized — the user gets the
+      // notice instead of misleading "all-books" results that ignore their filter.
+      if (unmatched.length > 0) {
+        post("results", { searchId, q: trimmed, refMatch: null,
+          results: [], total: 0, page, pageSize, unmatchedScopes: unmatched });
+        return;
+      }
+
+      // No keyword left after stripping in: tokens — nothing to search.
+      if (!keyword) {
+        post("results", { searchId, q: trimmed, refMatch: null,
+          results: [], total: 0, page, pageSize, unmatchedScopes: [] });
+        return;
+      }
+
       // Wait for first chunk (NT) if nothing is loaded yet
       const firstChunk = chunkConfig[0];
       if (!loadedChunks[firstChunk.name]) {
@@ -198,11 +233,12 @@ onmessage = async (ev) => {
 
       // Send partial results if some chunks are still loading
       if (pendingNames.length > 0) {
-        const partial = gatherResults(trimmed, loadedNames);
+        const partial = gatherResults(keyword, loadedNames, restrictBooks);
         const { results, total } = paginate(partial, page, pageSize);
         post("partial-results", {
           searchId, q: trimmed, results, total, page, pageSize,
           loadedChunks: loadedNames, pendingChunks: pendingNames,
+          unmatchedScopes: unmatched,
         });
 
         // Wait for remaining chunks
@@ -211,9 +247,10 @@ onmessage = async (ev) => {
       }
 
       // Full search across all chunks
-      const allMatched = gatherResults(trimmed, chunkConfig.map((c) => c.name));
+      const allMatched = gatherResults(keyword, chunkConfig.map((c) => c.name), restrictBooks);
       const { results, total } = paginate(allMatched, page, pageSize);
-      post("results", { searchId, q: trimmed, refMatch: null, results, total, page, pageSize });
+      post("results", { searchId, q: trimmed, refMatch: null, results, total, page, pageSize,
+        unmatchedScopes: unmatched });
 
     } catch (err) {
       post("error", { message: err.message });

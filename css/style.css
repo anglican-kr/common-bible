@@ -980,7 +980,13 @@ body {
   position: fixed;
   inset: 0;
   z-index: 40;
-  background: rgba(0, 0, 0, 0.35);
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  /* Block touch panning on the scrim — without this iOS Safari can rubber-band
+     the body even though body is position:fixed, especially while the compact
+     modal is small and most of the viewport is scrim. */
+  touch-action: none;
 }
 
 #search-scrim:not([hidden]) {
@@ -992,32 +998,51 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
   display: none;
   position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
+  /* Float on all four sides — the same 12px breathing room compact already
+     uses, so expanded reads as a card, not a flush bottom sheet. */
+  bottom: 0.75rem;
+  left: 0.75rem;
+  right: 0.75rem;
   z-index: 50;
   background: var(--bg);
   background-clip: padding-box;
-  border-radius: 16px 16px 0 0;
-  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.15);
+  /* All four corners rounded — both states float as cards with margins. */
+  border-radius: 16px;
+  /* Omnidirectional shadow suits the floating card on all four sides. */
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.18);
   flex-direction: column;
   height: 55vh;
   max-height: 80vh;
   padding-bottom: env(safe-area-inset-bottom);
-  transition: height 0.2s ease;
+  transition:
+    height 220ms cubic-bezier(0.4, 0, 0.2, 1),
+    bottom 220ms cubic-bezier(0.4, 0, 0.2, 1),
+    left 220ms cubic-bezier(0.4, 0, 0.2, 1),
+    right 220ms cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 220ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Sliver below the sheet so iOS's translucent form-accessory bar shows the
-   sheet's background instead of the dimmed page body bleeding through. */
-#search-sheet::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 100%;
-  height: 60px;
-  background: var(--bg);
-  pointer-events: none;
+/* Compact state: only input bar + chips visible, sized to sit above keyboard.
+   Fixed px so compact↔expanded `height` transition can interpolate.
+   left/right margins are inherited from the base rule (already 0.75rem); the
+   bottom is applied via JS in adjustSheetForKeyboard (keyboardOffset + 12). */
+#search-sheet[data-state="compact"] {
+  height: 6.4rem;
+  /* Omnidirectional shadow so the modal reads as a floating card. The base
+     rule's negative-Y shadow only suits the bottom-attached expanded state. */
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.22);
+}
+
+/* The handle normally provides top breathing room above the input bar; add
+   matching padding when it's hidden so the input doesn't kiss the sheet edge. */
+#search-sheet[data-state="compact"] #search-sheet-bar {
+  padding-top: 0.8rem;
+}
+
+#search-sheet[data-state="compact"] #search-sheet-handle,
+#search-sheet[data-state="compact"] #search-sheet-results,
+#search-sheet[data-state="compact"] #search-sheet-notice {
+  display: none;
 }
 
 #search-sheet:not([hidden]) {
@@ -1113,11 +1138,63 @@ body {
   color: var(--accent);
 }
 
+#search-sheet-chips {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0.4rem;
+  padding: 0 0.8rem 0.55rem;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+#search-sheet-chips::-webkit-scrollbar {
+  display: none;
+}
+
+.search-chip {
+  flex-shrink: 0;
+  font-family: inherit;
+  font-size: 0.82rem;
+  line-height: 1.2;
+  padding: 0.35rem 0.7rem;
+  background: var(--bg-card);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.search-chip:hover {
+  border-color: var(--accent);
+}
+
+.search-chip:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+#search-sheet-notice {
+  margin: 0 1rem 0.5rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.85rem;
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  color: var(--text);
+  border-left: 3px solid var(--accent);
+  border-radius: 4px;
+}
+
 #search-sheet-results {
   flex: 1;
   overflow-y: auto;
   padding: 0 1rem 1rem;
   -webkit-overflow-scrolling: touch;
+  /* Don't let inner scrolling chain to the body when the user reaches the
+     top/bottom of the result list. */
+  overscroll-behavior: contain;
 }
 
 /* ── Search Results ── */
