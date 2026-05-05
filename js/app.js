@@ -108,6 +108,8 @@ let _bookmarkDrawerTrap = null;
 let _bookmarkDrawerLastFocus = null;
 let _bmSaveModalTrap = null;
 let _bmMergeModalTrap = null;
+let _bmNewFolderTrap = null;
+let _bmNewFolderCallback = null;
 let _bookmarkDrawerCloseSeq = 0;
 let _bookmarkDrawerCloseTimer = null;
 let _dragState = null; // { id, ghost, origLi, startY, origTop }
@@ -3789,6 +3791,12 @@ const $bmSaveModal = document.getElementById("bm-save-modal");
 const $bmSaveClose = document.getElementById("bm-save-close");
 const $bmSaveTitle = document.getElementById("bm-save-title");
 const $bmSaveBody = document.getElementById("bm-save-body");
+const $bmNewFolderScrim = document.getElementById("bm-new-folder-scrim");
+const $bmNewFolderModal = document.getElementById("bm-new-folder-modal");
+const $bmNewFolderClose = document.getElementById("bm-new-folder-close");
+const $bmNewFolderInput = document.getElementById("bm-new-folder-input");
+const $bmNewFolderConfirm = document.getElementById("bm-new-folder-confirm");
+const $bmNewFolderCancel = document.getElementById("bm-new-folder-cancel");
 const $bmMergeScrim = document.getElementById("bm-merge-scrim");
 const $bmMergeModal = document.getElementById("bm-merge-modal");
 const $bmMergeBody = document.getElementById("bm-merge-body");
@@ -3943,9 +3951,12 @@ function _buildBookmarkItem(bm, depth) {
   typeIcon.appendChild(_buildBookmarkTypeIcon(isActive));
   const link = el("a", { className: "bm-bookmark-link", href: _bookmarkHref(bm), draggable: "false" });
   link.appendChild(el("span", { className: "bm-bookmark-label" }, bm.label));
-  if (bm.verseSpec !== "all") {
-    link.appendChild(el("span", { className: "bm-bookmark-ref" }, bm.verseSpec));
-  }
+  const book = booksCache && booksCache.find(b => b.id === bm.bookId);
+  const bookName = book ? (book.short_name_ko || book.name_ko) : bm.bookId;
+  const refText = bm.verseSpec === "all"
+    ? `${bookName} ${bm.chapter}${chUnit(bm.bookId)}`
+    : `${bookName} ${bm.chapter}:${bm.verseSpec}`;
+  link.appendChild(el("span", { className: "bm-bookmark-ref" }, refText));
   link.addEventListener("click", (e) => {
     e.preventDefault();
     if (row.classList.contains("bm-swiped")) {
@@ -4103,9 +4114,11 @@ function _buildFolderCombobox(folderOptions, selectedFolderId) {
   const list = el("ul", { id: listId, className: "bm-folder-combobox-list", role: "listbox" });
   list.hidden = true;
 
+  let currentOptions = folderOptions;
+
   function labelForId(id) {
     if (id === "" || id == null) return "최상위";
-    const o = folderOptions.find(f => f.id === id);
+    const o = currentOptions.find(f => f.id === id);
     return o ? o.name : "최상위";
   }
 
@@ -4176,8 +4189,35 @@ function _buildFolderCombobox(folderOptions, selectedFolderId) {
     list.appendChild(li);
   }
 
-  addOption("", "최상위", 0);
-  for (const o of folderOptions) addOption(String(o.id), o.name, o.depth);
+  // Persistent "+ 새 폴더" action at the bottom of the listbox.
+  // role="presentation" so screen readers don't read it as a folder option.
+  const newFolderItem = el("li", { role: "presentation", className: "bm-folder-combobox-new" });
+  const newFolderBtn = el("button", {
+    type: "button",
+    className: "bm-folder-combobox-new-btn",
+  }, "+ 새 폴더");
+  newFolderBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    closeList();
+    openNewFolderModal((newId) => {
+      const updated = collectFolderOptions(loadBookmarks());
+      rebuildOptions(updated);
+      hidden.value = String(newId);
+      updateButton();
+      updateOptionSelected();
+    });
+  });
+  newFolderItem.appendChild(newFolderBtn);
+
+  function rebuildOptions(options) {
+    currentOptions = options;
+    list.replaceChildren();
+    addOption("", "최상위", 0);
+    for (const o of options) addOption(String(o.id), o.name, o.depth);
+    list.appendChild(newFolderItem);
+  }
+
+  rebuildOptions(folderOptions);
   updateButton();
   updateOptionSelected();
 
@@ -4532,6 +4572,41 @@ function closeSaveModal() {
   if (_bmSaveModalTrap) { _bmSaveModalTrap(); _bmSaveModalTrap = null; }
 }
 
+function openNewFolderModal(onConfirm) {
+  $bmNewFolderInput.value = "";
+  $bmNewFolderInput.removeAttribute("aria-invalid");
+  _bmNewFolderCallback = onConfirm || null;
+  $bmNewFolderScrim.hidden = false;
+  $bmNewFolderModal.hidden = false;
+  _bmNewFolderTrap = trapFocus($bmNewFolderModal);
+  requestAnimationFrame(() => $bmNewFolderInput.focus());
+}
+
+function closeNewFolderModal() {
+  $bmNewFolderScrim.hidden = true;
+  $bmNewFolderModal.hidden = true;
+  _bmNewFolderCallback = null;
+  if (_bmNewFolderTrap) { _bmNewFolderTrap(); _bmNewFolderTrap = null; }
+}
+
+function _commitNewFolder() {
+  const name = $bmNewFolderInput.value.trim();
+  if (!name) {
+    $bmNewFolderInput.setAttribute("aria-invalid", "true");
+    $bmNewFolderInput.focus();
+    return;
+  }
+  $bmNewFolderInput.removeAttribute("aria-invalid");
+  const store = loadBookmarks();
+  const id = generateId();
+  store.push({ type: "folder", id, name, children: [], expanded: false });
+  saveBookmarks(store);
+  renderBookmarkTree();
+  const cb = _bmNewFolderCallback;
+  closeNewFolderModal();
+  if (cb) cb(id);
+}
+
 function commitSaveBookmark(existingId, label, note, folderId, bookId, chapter, verseSpec) {
   const store = loadBookmarks();
   if (existingId) {
@@ -4818,6 +4893,15 @@ $bookmarkScrim.addEventListener("click", closeBookmarkDrawer);
 
 $bmSaveClose.addEventListener("click", closeSaveModal);
 $bmSaveScrim.addEventListener("click", closeSaveModal);
+
+$bmNewFolderClose.addEventListener("click", closeNewFolderModal);
+$bmNewFolderScrim.addEventListener("click", closeNewFolderModal);
+$bmNewFolderCancel.addEventListener("click", closeNewFolderModal);
+$bmNewFolderConfirm.addEventListener("click", _commitNewFolder);
+$bmNewFolderInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { e.preventDefault(); _commitNewFolder(); }
+  else if (e.key === "Escape") { e.preventDefault(); closeNewFolderModal(); }
+});
 
 $bmSaveChapterBtn.addEventListener("click", () => {
   openSaveModal("chapter");
