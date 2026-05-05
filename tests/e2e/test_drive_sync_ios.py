@@ -370,6 +370,93 @@ def test_ios_active_reading_defers_401_redirect(browser, fake_drive, fake_oauth)
         page.context.close()
 
 
+def test_ios_state_mismatch_preserves_session_storage(browser, fake_drive, fake_oauth):
+    """A bogus callback with mismatched state must NOT consume the legitimate
+    sessionStorage state — otherwise an attacker-crafted error URL clobbers
+    an in-flight OAuth round-trip and the real callback fails with no_state.
+    """
+    fake_drive.reset()
+    page = _make_ios_page(browser, fake_drive, fake_oauth)
+    try:
+        _load(page)
+        # Plant a legitimate-looking saved state, simulating an in-flight
+        # OAuth round-trip that we never finished.
+        page.evaluate("""
+            sessionStorage.setItem('bible-drive-redirect-state', JSON.stringify({
+                nonce: 'real-nonce-xyz',
+                returnTo: '/',
+                ts: Date.now(),
+                flow: 'implicit-v1',
+            }));
+        """)
+
+        # Simulate an attacker-crafted error URL with a wrong state.
+        result = page.evaluate("""
+            (() => {
+                history.replaceState(null, '', '/#error=access_denied&state=ATTACKER');
+                return window.syncTransport.consumeRedirectCallback();
+            })()
+        """)
+        assert result == {"ok": False, "reason": "state_mismatch"}, \
+            f"Expected state_mismatch, got {result}"
+
+        # The legitimate state must still be intact for the real callback.
+        saved = page.evaluate(
+            "sessionStorage.getItem('bible-drive-redirect-state')"
+        )
+        assert saved is not None, "sessionStorage state was clobbered"
+        import json as _json
+        parsed = _json.loads(saved)
+        assert parsed["nonce"] == "real-nonce-xyz"
+    finally:
+        page.context.close()
+
+
+def test_ios_redirect_loop_hits_cap(browser, fake_drive, fake_oauth):
+    """Counter at MAX_REDIRECT_ATTEMPTS → next 401 in idle state must NOT
+    redirect; machine transitions to ERROR. Validates that the IIFE/
+    acceptRedirectToken no longer reset the counter and the loop is bounded.
+    """
+    fake_drive.reset()
+    page = _make_ios_page(browser, fake_drive, fake_oauth)
+    try:
+        _load(page)
+        page.evaluate("window.driveSync.signIn()")
+        page.wait_for_function(
+            "() => window.driveSync?.isAuthenticated() === true", timeout=15_000,
+        )
+        _wait_idle(page)
+
+        page.evaluate("""
+            (() => {
+                const id = 'bm-cap-1';
+                const list = window.syncStoreV2.loadBookmarks();
+                list.push({ id, type: 'bookmark', name: 'Cap-Test',
+                            bookId: 'gen', chapter: 1, vref: 'gen 1:1', verseSpec: '1' });
+                window.syncStoreV2.saveBookmarks(list);
+            })()
+        """)
+
+        # Counter at the cap — next _beginRedirect call must reject.
+        page.evaluate(
+            "localStorage.setItem('bible-drive-redirect-attempts', '3')"
+        )
+        page.evaluate("window.__driveSyncInteractionTs = () => 0")  # idle
+
+        oauth_calls_before = fake_oauth.calls
+        _force_401_on_drive(page)
+        page.evaluate("window.driveSync.scheduleUpload()")
+        page.wait_for_timeout(1500)
+
+        assert fake_oauth.calls == oauth_calls_before, \
+            "OAuth must NOT be called when counter is already at cap"
+        status = page.evaluate("window.driveSync.getStatus()")
+        assert status == "ERROR", \
+            f"Expected ERROR after cap exceeded, got {status}"
+    finally:
+        page.context.close()
+
+
 def test_ios_idle_401_triggers_auto_redirect(browser, fake_drive, fake_oauth):
     """401 while user is idle → automatic full-page redirect."""
     import time

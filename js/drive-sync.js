@@ -31,7 +31,9 @@ window._syncClientId = _CLIENT_ID;
   if (result.ok) {
     window.__pendingRedirectToken = { access_token: result.token, expiresIn: result.expiresIn };
     localStorage.setItem("bible-drive-sync", "1");
-    localStorage.setItem("bible-drive-redirect-attempts", "0");
+    // NOTE: do NOT reset bible-drive-redirect-attempts here. The counter only
+    // clears on a successful sync (SYNC_DONE in the state machine), so an
+    // OAuth-success-then-Drive-401 loop still hits MAX_REDIRECT_ATTEMPTS.
     window.syncDebugLog?.log({ kind: "ACTION", event: "REDIRECT_CALLBACK_OK" });
   } else {
     window.__pendingRedirectError = result.reason;

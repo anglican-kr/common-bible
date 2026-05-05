@@ -129,6 +129,12 @@ function beginRedirectAuth(clientId, scope, { prompt } = {}) {
 // Synchronous callback consumption — must run before routing reads location.
 // Returns null if no callback hash, { ok: false, reason } on validation
 // failure, or { ok: true, token, expiresIn, scope, returnTo } on success.
+//
+// Important: state nonce is verified BEFORE sessionStorage is consumed. A
+// crafted URL like `#error=access_denied&state=anything` (no real OAuth
+// initiation behind it) must not be able to clobber a legitimate in-flight
+// OAuth state. Google echoes the state in both success and error responses,
+// so requiring a match in both branches is correct per RFC 6749 §10.12.
 function consumeRedirectCallback() {
   const hash = location.hash;
   if (!hash || hash.length < 2) return null;
@@ -138,22 +144,32 @@ function consumeRedirectCallback() {
   if (!hasToken && !hasError) return null;
 
   const raw = sessionStorage.getItem(_REDIRECT_STATE_KEY);
-  sessionStorage.removeItem(_REDIRECT_STATE_KEY);
   if (!raw) return { ok: false, reason: "no_state" };
 
   let saved;
-  try { saved = JSON.parse(raw); } catch { return { ok: false, reason: "bad_state" }; }
+  try {
+    saved = JSON.parse(raw);
+  } catch {
+    // Corrupted state — safe to discard (nothing to preserve).
+    sessionStorage.removeItem(_REDIRECT_STATE_KEY);
+    return { ok: false, reason: "bad_state" };
+  }
+
+  // Validate nonce BEFORE consuming. Mismatch → leave sessionStorage intact
+  // so a real callback that arrives shortly after can still validate.
+  const returnedState = params.get("state");
+  if (!returnedState || returnedState !== saved.nonce) {
+    return { ok: false, reason: "state_mismatch" };
+  }
+
+  // State matched — this is our callback. Now consume to prevent replay.
+  sessionStorage.removeItem(_REDIRECT_STATE_KEY);
 
   if (Date.now() - saved.ts > _REDIRECT_STATE_MAX_AGE_MS) {
     return { ok: false, reason: "state_expired" };
   }
 
   if (hasError) return { ok: false, reason: params.get("error") };
-
-  const returnedState = params.get("state");
-  if (!returnedState || returnedState !== saved.nonce) {
-    return { ok: false, reason: "state_mismatch" };
-  }
 
   return {
     ok: true,

@@ -428,6 +428,12 @@ function createSyncMachine({ onStateChange } = {}) {
 
       case S.SYNCING:
         if (event.type === "SYNC_DONE") {
+          // A successful sync means the redirect→token→Drive cycle completed
+          // end-to-end; only here is it safe to clear the redirect-attempts
+          // counter. Resetting on token receipt alone (in acceptRedirectToken
+          // or the IIFE) would defeat the loop cap when a 401 fires
+          // immediately after every fresh token.
+          localStorage.setItem(REDIRECT_ATTEMPTS_KEY, "0");
           _transition(S.IDLE, {}, event); // all counts reset, timer cleared
         } else if (event.type === "SYNC_FAIL") {
           _handleSyncFail(event);
@@ -551,10 +557,12 @@ function createSyncMachine({ onStateChange } = {}) {
 
   // iOS redirect-flow entry: callback handler in drive-sync.js calls this
   // after consumeRedirectCallback validates the token. Bypasses GIS entirely.
+  // Does NOT reset the redirect-attempts counter — only a successful sync
+  // (SYNC_DONE) clears it, so a server-side scope revocation that issues a
+  // token but immediately 401s on Drive cannot bypass MAX_REDIRECT_ATTEMPTS.
   function acceptRedirectToken(access_token) {
     if (!access_token) return;
     L.log({ kind: "ACTION", event: "REDIRECT_TOKEN_ACCEPTED" });
-    localStorage.setItem(REDIRECT_ATTEMPTS_KEY, "0");
     _storeToken(access_token);
     _transition(S.IDLE, {}, { type: "REDIRECT_TOKEN" });
     _refreshUI();
