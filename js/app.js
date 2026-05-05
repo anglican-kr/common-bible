@@ -2971,7 +2971,12 @@ function isMobile() {
 function adjustSheetForKeyboard() {
   if (!window.visualViewport || $searchSheet.hidden) return;
   const vv = window.visualViewport;
-  const keyboardOffset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+  // For position:fixed elements anchored to the layout viewport, ignore
+  // vv.offsetTop — it represents in-page scroll within the visual viewport
+  // (e.g. pinch-zoom pan) and would incorrectly shift the sheet.
+  const keyboardOffset = Math.max(0, window.innerHeight - vv.height);
+  const prevOffset = parseFloat($searchSheet.style.bottom) || 0;
+  if (keyboardOffset > 0 && Math.abs(keyboardOffset - prevOffset) < 1) return;
   // Suppress the CSS height transition so viewport adjustments snap instantly
   // rather than lagging 200ms behind rapid visualViewport resize/scroll events.
   $searchSheet.style.transition = "none";
