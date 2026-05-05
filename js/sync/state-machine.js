@@ -455,7 +455,13 @@ function createSyncMachine({ onStateChange } = {}) {
       case S.OFFLINE:
         if (event.type === "NET_RECOVERED") {
           // Re-establish identity silently before requesting a token.
-          if (window.google?.accounts?.id) {
+          if (T.isIOS()) {
+            // GIS never loads on iOS — redirect flow requires a user gesture,
+            // so park in NEEDS_CONSENT to show the connect button rather than
+            // transitioning to AUTHENTICATING where no event can advance us.
+            _transition(S.NEEDS_CONSENT, {}, event);
+            _refreshUI();
+          } else if (window.google?.accounts?.id) {
             _transition(S.IDENTIFYING, {}, event);
             _promptIdentity();
           } else {
