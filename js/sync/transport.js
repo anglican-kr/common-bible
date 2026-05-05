@@ -165,18 +165,23 @@ function consumeRedirectCallback() {
   // State matched — this is our callback. Now consume to prevent replay.
   sessionStorage.removeItem(_REDIRECT_STATE_KEY);
 
+  // Error/expired branches still expose returnTo so the user lands back on
+  // the chapter they were reading — only state_mismatch / no_state /
+  // bad_state withhold it (state isn't trusted).
+  const returnTo = saved.returnTo || "/";
+
   if (Date.now() - saved.ts > _REDIRECT_STATE_MAX_AGE_MS) {
-    return { ok: false, reason: "state_expired" };
+    return { ok: false, reason: "state_expired", returnTo };
   }
 
-  if (hasError) return { ok: false, reason: params.get("error") };
+  if (hasError) return { ok: false, reason: params.get("error"), returnTo };
 
   return {
     ok: true,
     token: params.get("access_token"),
     expiresIn: parseInt(params.get("expires_in") ?? "3600", 10),
     scope: params.get("scope"),
-    returnTo: saved.returnTo || "/",
+    returnTo,
   };
 }
 

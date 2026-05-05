@@ -301,7 +301,15 @@ function createSyncMachine({ onStateChange } = {}) {
 
       case S.DISABLED:
         if (event.type === "ENABLE") {
-          if (window.google?.accounts?.id && window.google?.accounts?.oauth2 && _tokenClient) {
+          if (T.isIOS()) {
+            // iOS bypasses GIS entirely — without a pending redirect token to
+            // inject, the only path forward is the user clicking "연결",
+            // which signIn() turns into a fresh OAuth redirect. Park here so
+            // the settings UI shows the connect button instead of an
+            // INITIALIZING spinner that never resolves.
+            _transition(S.NEEDS_CONSENT, {}, event);
+            _refreshUI();
+          } else if (window.google?.accounts?.id && window.google?.accounts?.oauth2 && _tokenClient) {
             _transition(S.IDENTIFYING, {}, event);
             _promptIdentity();
           } else {

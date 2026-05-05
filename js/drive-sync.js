@@ -25,7 +25,10 @@ window._syncClientId = _CLIENT_ID;
   const result = T.consumeRedirectCallback();
   if (!result) return;
 
-  const returnTo = (result.ok && result.returnTo) ? result.returnTo : "/";
+  // Use returnTo from both success and validated-error responses so the user
+  // lands back on the chapter they were reading even after a denied/expired
+  // OAuth round-trip.
+  const returnTo = result.returnTo || "/";
   history.replaceState(null, "", returnTo);
 
   if (result.ok) {
@@ -104,6 +107,21 @@ function _clearUploadTimer() {
 
 // ── Public API ─────────────────────────────────────────────────────────────────
 
+function _redirectErrorMessage(reason) {
+  switch (reason) {
+    case "access_denied":
+      return "Google 인증이 취소되었습니다. 다시 시도하려면 \"연결\"을 눌러 주세요.";
+    case "state_expired":
+      return "인증 시간이 초과됐습니다. 다시 \"연결\"을 눌러 주세요.";
+    case "state_mismatch":
+    case "no_state":
+    case "bad_state":
+      return "보안 검증에 실패했습니다. 다시 \"연결\"을 눌러 주세요.";
+    default:
+      return "Google 인증에 실패했습니다. 잠시 후 다시 시도해 주세요.";
+  }
+}
+
 // Called by app.js after DOMContentLoaded idle.
 function initDriveSync() {
   const enabled = localStorage.getItem("bible-drive-sync") === "1";
@@ -118,6 +136,21 @@ function initDriveSync() {
     delete window.__pendingRedirectToken;
     _machine.acceptRedirectToken(access_token);
     return;
+  }
+
+  // iOS redirect-flow failed (denied, expired, etc). Surface the failure to
+  // the user instead of silently falling through to the GIS path, which
+  // never resolves on iOS.
+  if (window.__pendingRedirectError) {
+    const reason = window.__pendingRedirectError;
+    delete window.__pendingRedirectError;
+    if (window.syncTransport.isIOS()) {
+      window._showSyncSnackbar?.(_redirectErrorMessage(reason));
+    } else {
+      window.syncDebugLog?.log({ kind: "ERROR", event: "UNEXPECTED_REDIRECT_ERROR", reason });
+    }
+    // Fall through to enable() — on iOS the machine parks in NEEDS_CONSENT
+    // (see DISABLED + ENABLE handler) so settings shows a "연결" button.
   }
 
   _machine.enable();

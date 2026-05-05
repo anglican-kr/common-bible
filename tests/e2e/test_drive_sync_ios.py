@@ -370,6 +370,136 @@ def test_ios_active_reading_defers_401_redirect(browser, fake_drive, fake_oauth)
         page.context.close()
 
 
+def test_ios_callback_error_preserves_returnto(browser, fake_drive, fake_oauth):
+    """Error/expired callbacks must surface the saved returnTo so the user
+    lands back on the chapter they were reading."""
+    page = _make_ios_page(browser, fake_drive, fake_oauth)
+    try:
+        _load(page)
+        # Plant a saved state with a specific returnTo path.
+        page.evaluate("""
+            sessionStorage.setItem('bible-drive-redirect-state', JSON.stringify({
+                nonce: 'preserve-rt-nonce',
+                returnTo: '/gen/3',
+                ts: Date.now(),
+                flow: 'implicit-v1',
+            }));
+        """)
+        # Simulate Google denying consent — error response with matching state.
+        result = page.evaluate("""
+            (() => {
+                history.replaceState(null, '', '/#error=access_denied&state=preserve-rt-nonce');
+                return window.syncTransport.consumeRedirectCallback();
+            })()
+        """)
+        assert result == {
+            "ok": False, "reason": "access_denied", "returnTo": "/gen/3",
+        }, f"Error response missing returnTo: {result}"
+    finally:
+        page.context.close()
+
+
+def test_ios_redirect_error_shows_snackbar_and_parks(browser, fake_drive, fake_oauth):
+    """A failed iOS OAuth redirect (e.g., user denied consent) must show a
+    snackbar and park the machine in NEEDS_CONSENT so the settings UI
+    surfaces the "연결" button — not silently fall through to GIS polling.
+    """
+    page_ctx = browser.new_context(
+        user_agent=IPHONE_UA,
+        viewport={"width": 390, "height": 844},
+        is_mobile=True, has_touch=True,
+    )
+    # Plant sessionStorage state + enabled flag BEFORE the page loads, AND
+    # install a capturing accessor on window._showSyncSnackbar so we can
+    # verify the call even after the snackbar div is removed (3.5s timeout).
+    page_ctx.add_init_script("""
+        try {
+            // Plant the redirect-state only on the very first navigation; if
+            // the SW triggers a reload we don't want to re-stage the OAuth
+            // callback for the second page load.
+            if (!sessionStorage.getItem('__test_planted_v1')) {
+                sessionStorage.setItem('bible-drive-redirect-state', JSON.stringify({
+                    nonce: 'parked-nonce-1',
+                    returnTo: '/gen/3',
+                    ts: Date.now(),
+                    flow: 'implicit-v1',
+                }));
+                sessionStorage.setItem('__test_planted_v1', '1');
+            }
+            localStorage.setItem('bible-drive-sync', '1');
+            // Capture _showSyncSnackbar invocations across page reloads.
+            window.__capturedSnacks = JSON.parse(
+                sessionStorage.getItem('__test_snacks_arr') || '[]'
+            );
+            let _realSnack = null;
+            Object.defineProperty(window, '_showSyncSnackbar', {
+                get() {
+                    return (msg) => {
+                        window.__capturedSnacks.push(msg);
+                        try {
+                            sessionStorage.setItem(
+                                '__test_snacks_arr',
+                                JSON.stringify(window.__capturedSnacks)
+                            );
+                        } catch (_) {}
+                        if (_realSnack) _realSnack(msg);
+                    };
+                },
+                set(fn) { _realSnack = fn; },
+                configurable: true,
+            });
+        } catch (_) {}
+    """)
+    page = page_ctx.new_page()
+    page.route("**/*googleapis.com/**", fake_drive.handle)
+    page.route("**/accounts.google.com/gsi/**", fake_drive.handle)
+    page.route("**/accounts.google.com/o/oauth2/**", fake_oauth.handle)
+    try:
+        page.goto(f"{BASE_URL}/#error=access_denied&state=parked-nonce-1")
+        page.wait_for_function(
+            "() => window.driveSync && window.syncTransport", timeout=10_000,
+        )
+
+        # returnTo applied (Bug 4) — user lands at the chapter they were on.
+        path = page.evaluate("location.pathname")
+        assert path == "/gen/3", f"Expected /gen/3, got {path}"
+        assert page.evaluate("location.hash") == "", "hash should be cleared"
+
+        # Wait for initDriveSync (deferred via requestIdleCallback) to run and
+        # park the machine in NEEDS_CONSENT (Bug 3).
+        page.wait_for_function(
+            "() => window.driveSync.getStatus() === 'NEEDS_CONSENT'",
+            timeout=10_000,
+        )
+
+        # Snackbar invocation captured (Bug 3) — survives the 3.5s removal.
+        snacks = page.evaluate("window.__capturedSnacks") or []
+        assert any("인증" in s and "취소" in s for s in snacks), \
+            f"Expected error snackbar, got captured: {snacks}"
+    finally:
+        page_ctx.close()
+
+
+def test_ios_disabled_enable_parks_in_needs_consent(browser, fake_drive, fake_oauth):
+    """Cold-start iOS sync (no pending token) must NOT spin in INITIALIZING
+    waiting for GIS that never works on iOS. Machine should park in
+    NEEDS_CONSENT immediately so the user can click "연결" to redirect."""
+    page = _make_ios_page(browser, fake_drive, fake_oauth)
+    try:
+        # Pre-enable sync without any pending token (simulates a previously
+        # connected user opening the app fresh after losing the in-memory token).
+        page.add_init_script(
+            "localStorage.setItem('bible-drive-sync', '1');"
+        )
+        _load(page)
+        page.wait_for_function(
+            "() => window.driveSync.getStatus() === 'NEEDS_CONSENT'",
+            timeout=5000,
+        )
+    finally:
+        page.context.close()
+
+
 def test_ios_state_mismatch_preserves_session_storage(browser, fake_drive, fake_oauth):
     """A bogus callback with mismatched state must NOT consume the legitimate
     sessionStorage state — otherwise an attacker-crafted error URL clobbers
