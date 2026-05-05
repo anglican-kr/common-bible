@@ -126,27 +126,13 @@ window.google = {
   accounts: {
     id: {
       initialize: (cfg) => { window.__gisIdCallback = cfg.callback; },
-      prompt: (momentCallback) => {
-        // Allow tests to simulate FedCM unavailability (iOS 16↓ first run).
-        if (window.__gisForceIdentityFail) {
-          window.__gisForceIdentityFail = null;
-          if (momentCallback) momentCallback({
-            isNotDisplayed: () => true,
-            isSkippedMoment: () => false,
-            isDismissedMoment: () => false,
-            getNotDisplayedReason: () => "browser_not_supported",
-          });
-          return;
-        }
+      // Production calls prompt() without a callback (FedCM migration).
+      // Success path: fire the credential callback set in initialize().
+      prompt: () => {
         setTimeout(() => {
           if (window.__gisIdCallback) {
             window.__gisIdCallback({ credential: window.__mockCredential });
           }
-          if (momentCallback) momentCallback({
-            isNotDisplayed: () => false,
-            isSkippedMoment: () => false,
-            isDismissedMoment: () => false,
-          });
         }, 0);
       },
       cancel: () => {},

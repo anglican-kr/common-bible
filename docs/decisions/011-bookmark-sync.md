@@ -6,7 +6,8 @@
 - 개정: 2026-05-02 (Phase 2b 구현 완료, 보안 감사 완료)
 - 개정: 2026-05-04 (Phase 2c 구현 완료)
 - 개정: 2026-05-05 (Phase 2d — iOS FedCM/One Tap 적용)
-- 상태: 승인됨 (Phase 2a~2d 완료)
+- 개정: 2026-05-05 (Phase 2e — FedCM-mandatory deprecation 마이그레이션)
+- 상태: 승인됨 (Phase 2a~2e 완료)
 
 ## 결정
 
@@ -302,6 +303,30 @@ connect-src: 현재 + https://oauth2.googleapis.com
 | iOS 16↓ Safari (사전 동의 있음) | One Tap UI로 identity → silent token | 발생 안 함 |
 | iOS 16↓ Safari (사전 동의 없음) | identity 실패 → NEEDS_CONSENT, 사용자 "연결" 클릭 대기 | 발생 안 함 (사용자 제스처 안에서만 popup) |
 
+## Phase 2e — FedCM-mandatory deprecation 마이그레이션 (구현 완료 2026-05-05)
+
+> **개정 (2026-05-05):** 클린 환경에서 콘솔에 반복 출력되던 GSI deprecation 경고 (`Your client application uses one of the Google One Tap prompt UI status methods that may stop functioning when FedCM becomes mandatory`)와 `[GSI_LOGGER]: FedCM get() rejects with AbortError` 로그 제거. Phase 2d는 `prompt()` 콜백에서 `isNotDisplayed`/`isSkippedMoment`/`isDismissedMoment` 트리오로 prompt 결과를 분기했는데, FedCM 마이그레이션 가이드는 앞 두 메서드를 deprecated로 표시한다. 추가로 검증해보니 **`prompt()`에 콜백을 등록한다는 사실 자체**가 deprecation 경고의 트리거였다 (`isDismissedMoment`만 호출해도 경고 유지).
+>
+> 핵심 변경:
+> - **`prompt()` 콜백 제거** (`js/sync/transport.js`): `promptIdentity()`가 `google.accounts.id.prompt()`를 인자 없이 호출. 성공은 `initIdentityClient`의 credential 콜백에서 수신하고, 실패(dismiss/suppression)는 사용자가 명시적으로 "연결" 버튼을 다시 누를 때까지 대기.
+> - **wall-clock timeout 폴백 도입 후 폐기**: 처음엔 `IDENTITY_TIMEOUT_MS = 10000` 안전망을 추가했으나, 다계정 사용자가 FedCM 다이얼로그에서 결정하는 동안(>10s) `cancelIdentityPrompt()`가 발화돼 다이얼로그가 강제 종료되는 회귀가 발생. Google FedCM 가이드는 *앱이 FedCM UI 수명을 통제하지 말 것*을 권고하므로 timeout 자체를 제거하고 사용자 escape hatch(설정의 항시 노출되는 "연결" 버튼)에 의존하도록 변경.
+> - **deprecated notification 메서드 호출 0건**: `isNotDisplayed`/`isSkippedMoment`/`isDismissedMoment`/`getNotDisplayedReason`/`getSkippedReason`/`getDismissedReason`/`getMomentType` 모두 코드에서 제거.
+> - **테스트 스텁 정리** (`tests/e2e/test_drive_sync.py`): GIS_STUB의 `prompt`가 새 무인자 시그니처에 맞춰지고, dead-code였던 `__gisForceIdentityFail` 경로(deprecated 메서드를 시뮬레이션)를 삭제. 8개 e2e 시나리오 모두 정상 통과.
+
+### Phase 2e 후 동작 매트릭스
+
+| 시나리오 | 동작 |
+|---------|------|
+| FedCM 다이얼로그 표시 → 사용자 즉시 선택 | credential 콜백 → IDENTITY_OK → 정상 동기화 |
+| FedCM 다이얼로그 표시 → 사용자 천천히 선택 (>10s) | 다이얼로그 유지, credential 콜백 → 정상 동기화 (Phase 2d 회귀 해결) |
+| FedCM 다이얼로그 → 사용자 X로 닫음 | 무반응. 사용자가 설정 → "연결" 재클릭 시 OAuth consent 팝업으로 진행 |
+| FedCM 미표시 (ITP/세션 없음) | 무반응. 위와 동일 escape hatch |
+| auto re-authn 10분 rate limit (Google 정책) | 두 번째 새로고침에서 다이얼로그 표시. 첫 번째는 자동 |
+
+### 알려진 무해한 부산물
+
+- `https://accounts.google.com/gsi/status` 엔드포인트의 **403 Forbidden**: GIS 라이브러리 내부의 FedCM 사전 탐지 폴링. localhost가 OAuth 클라이언트의 정식 등록 origin이 아닌 환경에서 일관되게 발생. 인증 실제 동작과 무관하며 GIS가 graceful fallback 처리하므로 코드 변경 불요.
+
 ## 미결 사항
 
 - [x] Google Cloud Console 프로젝트 생성 및 Client ID 발급
@@ -310,6 +335,7 @@ connect-src: 현재 + https://oauth2.googleapis.com
 - [x] 동기화 충돌 결과 사용자 알림 UX
 - [ ] Google OAuth 앱 검수 통과 (2026-05-02 제출 완료, 심사 결과 대기 중)
 - [x] iOS Safari 팝업 차단 안내 제거 (Phase 2d, 2026-05-05) — FedCM/One Tap + 사용자 제스처 격리
+- [x] FedCM-mandatory deprecation 경고 제거 (Phase 2e, 2026-05-05) — `prompt()` 콜백 + timeout 폴백 폐기
 - [x] 항목 단위 병합 — per-record LWW + tombstone (Phase 2c, `js/sync/store-v2.js`)
 - [x] 내보내기/가져오기 JSON 스키마 `_version: 1` 추가
 - [x] tombstone GC (`sweepTombstones`, 30일 기준, 앱 시작 시 실행)

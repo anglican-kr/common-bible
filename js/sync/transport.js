@@ -61,18 +61,14 @@ function initIdentityClient(clientId, onIdToken) {
   return true;
 }
 
-// Trigger silent identity prompt. onMoment receives a notification object so
-// the caller can detect not-displayed / dismissed / skipped outcomes and fall
-// back to the explicit "연결" button flow when needed.
-function promptIdentity(onMoment) {
+// Trigger silent identity prompt. We deliberately do NOT pass a callback —
+// merely registering one makes GIS emit a FedCM-mandatory deprecation warning,
+// regardless of which notification methods we touch. Success arrives via the
+// credential callback set in initIdentityClient; failure (suppressed prompt,
+// silent dismissal) is detected by the wall-clock timer in the state machine.
+function promptIdentity() {
   if (!window.google?.accounts?.id) return;
-  try {
-    google.accounts.id.prompt((notification) => {
-      if (typeof onMoment === "function") onMoment(notification);
-    });
-  } catch (_) {
-    if (typeof onMoment === "function") onMoment(null);
-  }
+  try { google.accounts.id.prompt(); } catch (_) { /* never throws */ }
 }
 
 function cancelIdentityPrompt() {

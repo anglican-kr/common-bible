@@ -1,5 +1,45 @@
 # 작업 일지
 
+## 2026-05-05
+
+### Phase 2e: FedCM-mandatory deprecation 마이그레이션 (ADR-011)
+
+콘솔에 반복 출력되던 GSI deprecation 경고와 `[GSI_LOGGER]: FedCM get() rejects with AbortError` 로그를 제거했다. Phase 2d 코드가 `google.accounts.id.prompt()`에 콜백을 등록하고 `isNotDisplayed`/`isSkippedMoment`/`isDismissedMoment` 트리오로 prompt 결과를 분기했는데, FedCM 마이그레이션 가이드가 앞 두 메서드를 deprecated 처리한다. 검증 결과 **콜백 등록 자체**가 경고 트리거였다 — `isDismissedMoment`만 사용해도 경고가 사라지지 않음.
+
+**transport.js**
+- `promptIdentity()` 시그니처를 무인자로 변경 — `google.accounts.id.prompt()`만 호출.
+- 성공은 `initIdentityClient`에 등록한 credential 콜백에서 수신.
+- deprecated notification 메서드 호출 모두 제거.
+
+**state-machine.js (반복 시행)**
+1. 1차 시도: deprecated 메서드 호출만 제거하고 `IDENTITY_TIMEOUT_MS = 10000` wall-clock timer 도입 → 콘솔 경고 일부만 사라짐.
+2. 2차 시도: `prompt()` 콜백 자체 제거 → 경고 완전히 사라짐.
+3. 회귀 발견: 다계정 사용자가 FedCM 다이얼로그에서 10초 이상 결정하는 동안 timer가 발화해 `cancelIdentityPrompt()`로 다이얼로그 강제 종료. 사용자 escape hatch가 OAuth 팝업으로 강제 fallback되는 UX 회귀.
+4. 3차 시도: timeout 폴백 자체 제거 — Google FedCM 가이드가 *앱이 FedCM UI 수명을 통제하지 말 것*을 권고. 사용자가 명시적으로 "연결" 버튼을 누를 때까지 대기. 설정의 항시 노출되는 "연결" 버튼이 escape hatch 역할.
+
+**테스트**
+- `tests/e2e/test_drive_sync.py`의 `GIS_STUB` 정리: `prompt()`를 새 무인자 시그니처에 맞춤. dead-code였던 `__gisForceIdentityFail` 경로(deprecated 메서드 시뮬레이션) 삭제.
+- 8개 시나리오 모두 정상 통과 (업로드/다운로드, 동시 추가, 412 재시도, sign-out, v0 마이그레이션, 연결 해제 modal, 진단 정보 복사).
+
+**검증 결과**
+- 클린 환경 콘솔: GSI deprecation warning 0건, AbortError 0건, FedCM 관련 에러 0건 (auth flow 정상 14초 완주).
+- 다계정 환경: 사용자가 천천히 결정해도 FedCM 다이얼로그 강제 종료 없음.
+- Auto re-authn rate limit(10분에 1회)은 Google 측 보안 정책으로 코드 통제 불가능 — 두 번째 새로고침에서 다이얼로그가 다시 뜨는 라운드로빈 동작은 정상.
+
+**알려진 무해한 부산물**
+- `accounts.google.com/gsi/status` 엔드포인트의 **403 Forbidden**: GIS 라이브러리 내부 FedCM 사전 탐지 폴링. localhost가 OAuth 클라이언트의 정식 등록 origin이 아니라서 일관되게 발생. 인증 실제 동작과 무관.
+
+### 수정 파일 요약
+
+| 파일 | 변경 |
+|------|------|
+| `js/sync/transport.js` | `promptIdentity()` 무인자화, 콜백 인자 및 deprecated 노티피케이션 처리 제거 |
+| `js/sync/state-machine.js` | `IDENTITY_TIMEOUT_MS`/`_makeIdentityTimer`/`_ctx.identityTimer` 도입 후 폐기, `_promptIdentity` 단순화 |
+| `tests/e2e/test_drive_sync.py` | `GIS_STUB`의 `prompt`를 새 시그니처에 맞춤, `__gisForceIdentityFail` dead-code 제거 |
+| `docs/decisions/011-bookmark-sync.md` | Phase 2e 추가 |
+
+---
+
 ## 2026-05-02
 
 ### Phase 2b: Google Drive 자동 동기화 구현 (ADR-011)

@@ -102,27 +102,12 @@ function createSyncMachine({ onStateChange } = {}) {
   // Always call promptIdentity *outside* of requestAccessToken to keep popup
   // calls confined to user-gesture handlers (NEEDS_CONSENT path).
 
+  // No callback: success arrives via the credential callback registered in
+  // initIdentityClient. Dismissal/suppression is silent under modern FedCM —
+  // the user retries via the always-visible "연결" button in settings, which
+  // dispatches USER_CONSENT_REQUEST and falls through to the OAuth flow.
   function _promptIdentity() {
-    T.promptIdentity((notification) => {
-      if (!notification) {
-        dispatch({ type: "IDENTITY_FAIL", reason: "no_notification" });
-        return;
-      }
-      const dismissed = typeof notification.isDismissedMoment === "function" && notification.isDismissedMoment();
-      const skipped   = typeof notification.isSkippedMoment   === "function" && notification.isSkippedMoment();
-      const notShown  = typeof notification.isNotDisplayed    === "function" && notification.isNotDisplayed();
-      if (dismissed || skipped || notShown) {
-        const reason = dismissed ? notification.getDismissedReason?.() :
-                       skipped   ? notification.getSkippedReason?.()   :
-                       notification.getNotDisplayedReason?.();
-        // "credential_returned" means auto-select succeeded; the credential
-        // callback fires separately and will dispatch IDENTITY_OK.
-        if (reason === "credential_returned") return;
-        dispatch({ type: "IDENTITY_FAIL", reason: reason ?? "unavailable" });
-      }
-      // Successful display ends with the credential callback firing
-      // separately, dispatching IDENTITY_OK.
-    });
+    T.promptIdentity();
   }
 
   // ── Side-effect helpers ───────────────────────────────────────────────────
