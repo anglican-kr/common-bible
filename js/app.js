@@ -2994,6 +2994,8 @@ function adjustSheetForKeyboard() {
   }
 }
 
+let _searchSheetAppliedScrollLock = false;
+
 function openSearchSheet(query) {
   $searchScrim.hidden = false;
   $searchSheet.hidden = false;
@@ -3009,6 +3011,9 @@ function openSearchSheet(query) {
     document.body.style.top = `-${scrollY}px`;
     document.body.style.width = "100%";
     document.body.dataset.scrollY = scrollY;
+    _searchSheetAppliedScrollLock = true;
+  } else {
+    _searchSheetAppliedScrollLock = false;
   }
   $searchSheetInput.value = query || "";
   $searchSheetClear.hidden = !query;
@@ -3032,14 +3037,17 @@ function closeSearchSheet() {
   $searchSheet.style.maxHeight = "";
   $searchFab.hidden = false;
   clearNode($searchSheetResults);
-  // Restore background scroll.
-  const scrollY = parseInt(document.body.dataset.scrollY || "0", 10);
-  document.body.style.overflow = "";
-  document.body.style.position = "";
-  document.body.style.top = "";
-  document.body.style.width = "";
-  delete document.body.dataset.scrollY;
-  window.scrollTo(0, scrollY);
+  // Restore background scroll only if this sheet applied the lock.
+  if (_searchSheetAppliedScrollLock) {
+    const scrollY = parseInt(document.body.dataset.scrollY || "0", 10);
+    document.body.style.overflow = "";
+    document.body.style.position = "";
+    document.body.style.top = "";
+    document.body.style.width = "";
+    delete document.body.dataset.scrollY;
+    window.scrollTo(0, scrollY);
+    _searchSheetAppliedScrollLock = false;
+  }
   if (window.visualViewport) {
     window.visualViewport.removeEventListener("resize", adjustSheetForKeyboard);
     window.visualViewport.removeEventListener("scroll", adjustSheetForKeyboard);
