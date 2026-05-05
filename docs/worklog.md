@@ -2,6 +2,63 @@
 
 ## 2026-05-05
 
+### 검색 UI 재설계: 컴팩트 모달 → 결과 시트 + `in:` 연산자
+
+기존에는 검색 FAB를 누르는 즉시 55vh 바텀 시트가 열리고 입력 중에 라이브 검색이 실행돼 결과가 키보드 위 비좁은 공간에 떠올랐다. 키보드와 결과가 시각적으로 겹쳐 답답하다는 피드백을 반영해 진입을 두 단계로 분리하고, 책 범위 한정 연산자 `in:`을 도입했다.
+
+**상태 모델 (`#search-sheet[data-state]`)**
+
+- `compact`: 입력바 + 칩 행만 키보드 위에 떠 있음 (height 6.4rem 고정, 좌·우·아래 0.75rem 마진, 사방 그림자 카드 형태). 결과·핸들 숨김.
+- `expanded`: 55vh 시트 + 결과 표시. 키보드는 닫힌 상태. 좌·우·아래 0.75rem 마진을 가진 카드 형태로 통일 (전 사이드 둥근 모서리).
+- 트리거: FAB/헤더 검색바 → `compact`, Enter → `expanded`, `/search?q=...` 진입 시 곧장 `expanded`(focus 생략).
+- 추가 트리거: 결과를 보여주는 expanded 상태에서 입력창에 다시 포커스 → `compact` 복귀 (결과·notice 정리, 키보드 위로 떠오름). 키보드 추정 오프셋(280px)을 단일 단계 트랜지션 시작점으로 사용 후 260ms 후 실측값으로 부드럽게 보정.
+
+**Enter 전이 + 라이브 검색 제거**
+
+`$searchSheetInput.blur()` → `_suspendKeyboardAdjust = true` → `requestAnimationFrame`에서 인라인 스타일 클리어 후 `data-state="expanded"` + `runSheetSearch()`. visualViewport.resize가 transition을 끊지 못하도록 260ms 동안 `adjustSheetForKeyboard`를 일시 정지. CSS `transition: height 220ms, bottom 220ms`로 부드럽게 자라남. 라이브 검색(400ms debounce)은 모바일·데스크톱 모두 폐기 — `사랑 in:요한` 같은 다중 토큰 입력에서 중간 키 입력마다 의미 없는 부분 문자열 검색이 발화하는 문제. 기존 `sheetDebounceTimer`/`sheetAutoNavTimer`/`searchDebounceTimer`/`searchAutoNavTimer` 죽은 코드도 함께 제거.
+
+**`in:` 연산자**
+
+- `js/search-worker.js` `parseQuery(raw)`가 `IN_RE = /(?:^|\s)in:(\S+)/g`로 토큰 추출, `meta.aliases`로 책 ID 해석.
+- `gatherResults`에 `restrictBooks: Set<bookId>` 인자 추가. 비어있지 않으면 해당 책만 통과 (다중 = OR).
+- 매칭 실패한 별칭은 `unmatchedScopes` 페이로드로 메인 스레드에 전달 → `#search-sheet-notice`에 inline 안내. unmatched가 있으면 검색 자체를 차단해 사용자 의도와 어긋난 결과를 막음.
+
+**칩 UI**
+
+- `#search-sheet-chips` 툴바에 `+ in:` 칩 1개. 탭하면 입력창 끝에 ` in:` 삽입 + 커서를 `:` 뒤에 위치.
+- `pointerdown.preventDefault`로 input 포커스를 유지 — IME가 닫혔다 다시 뜨는 깜박임 방지.
+- `data-chip` 속성으로 향후 칩 추가 시 마크업만 늘리고 JS는 switch 분기.
+
+**모바일 헤더 검색바 위임**
+
+- `$searchInput`에 `pointerdown.preventDefault` + 폴백 focus 핸들러 추가 → `isMobile()` 분기에서 `openSearchSheet("")`로 위임.
+- 데스크톱(>768px)은 기존 `/search` 라우트 흐름 + 라이브 검색 그대로.
+
+**스크림 + 스크롤 잠금 강화**
+
+- `#search-scrim` 불투명도 0.35 → 0.45 + `backdrop-filter: blur(8px)`로 모달 분위기 강화.
+- `touch-action: none` 추가 → iOS rubber-band가 본문을 끌어당기지 못하도록 차단.
+- `#search-sheet-results`에 `overscroll-behavior: contain` → 결과 리스트 끝에서 body로 스크롤 체이닝 차단.
+- 기존 `body.position = fixed` + `_searchSheetAppliedScrollLock` 가드는 그대로 유지.
+
+**기타 정리**
+
+- iOS sliver `#search-sheet::after` 제거 — 시트가 사방 마진을 둔 카드로 떠 있게 되면서 form-accessory bar 영역을 따로 가릴 필요가 없어짐 (스크림이 직접 채움).
+
+**ADR-005 개정**
+
+`docs/decisions/005-search-indexing-strategy.md`에 "검색 연산자 `in:` 도입" 섹션 추가. 문법, 매칭 정책(OR/unmatched=block), 구현 위치(`parseQuery`/`gatherResults`/`unmatchedScopes`) 명시.
+
+**파일 변경**
+
+| 파일 | 변경 |
+|---|---|
+| `index.html` | `#search-sheet-chips`, `#search-sheet-notice` 행 신규 |
+| `css/style.css` | `#search-sheet[data-state]` 분기, `.search-chip` 스타일, transition 220ms |
+| `js/app.js` | `data-state` 토글, Enter 전이, `_suspendKeyboardAdjust`, 칩 핸들러, 헤더 위임 |
+| `js/search-worker.js` | `IN_RE`, `parseQuery`, `restrictBooks`, `unmatchedScopes` |
+| `docs/decisions/005-search-indexing-strategy.md` | `in:` 연산자 섹션 추가 |
+
 ### Phase 2e: FedCM-mandatory deprecation 마이그레이션 (ADR-011)
 
 콘솔에 반복 출력되던 GSI deprecation 경고와 `[GSI_LOGGER]: FedCM get() rejects with AbortError` 로그를 제거했다. Phase 2d 코드가 `google.accounts.id.prompt()`에 콜백을 등록하고 `isNotDisplayed`/`isSkippedMoment`/`isDismissedMoment` 트리오로 prompt 결과를 분기했는데, FedCM 마이그레이션 가이드가 앞 두 메서드를 deprecated 처리한다. 검증 결과 **콜백 등록 자체**가 경고 트리거였다 — `isDismissedMoment`만 사용해도 경고가 사라지지 않음.

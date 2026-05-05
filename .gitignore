@@ -114,3 +114,4 @@ data/audio/
 
 # direnv 설정 파일
 .direnv
+scripts/deploy.sh

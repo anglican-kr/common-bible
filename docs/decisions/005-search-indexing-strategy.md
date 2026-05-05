@@ -143,8 +143,42 @@ Worker 프로토콜에 `partial-results` 메시지 추가:
 - `search-meta.json`은 SHELL_FILES에 포함 (오프라인 즉시 사용)
 - 청크 파일들은 network-first 캐싱 (기존 `data/bible/*.json`과 동일 전략)
 
+## 개정: 검색 연산자 `in:` 도입 (2026-05-05)
+
+- 상태: 승인됨
+
+### 맥락
+
+검색 결과가 73권 전체에서 섞여 나오기 때문에 특정 책 안에서 키워드를 찾고 싶을 때 결과를 사람이 추가로 걸러야 했다. 또한 컴팩트 모달 진입 시 칩으로 연산자를 안내하면 별도 학습 없이 사용 가능.
+
+### 문법
+
+`키워드 in:<책-별칭>` 형식. `in:` 토큰은 쿼리 어디든 위치할 수 있고, 여러 개를 쓰면 책 합집합(OR)으로 처리한다. `in:`과 별칭 사이 공백은 무시된다 — `in: 요한`도 `in:요한`과 동일.
+
+```
+사랑 in:요한               → 요한 복음서에서 "사랑" 검색
+사랑 in: 요한              → 동일 (공백 허용)
+은혜 in:롬 in:갈           → 로마서 + 갈라티아서에서 "은혜" 검색
+in:요한                    → 키워드 없음 → 검색 차단 (안내 표시)
+사랑 in:없는책             → unmatched 별칭 → 검색 차단 + notice
+```
+
+별칭 매칭은 기존 `search-meta.aliases` 사전을 재사용한다. 매칭 실패한 토큰은 `unmatchedScopes` 페이로드로 메인 스레드에 전달되어 결과 영역 위 inline notice로 표시한다.
+
+### 구현
+
+- `js/search-worker.js`의 `parseQuery(raw)`가 `IN_RE = /(?:^|\s)in:\s*(\S+)/g`로 토큰을 추출 (콜론과 별칭 사이 공백 관용)
+- `gatherResults`에 `restrictBooks: Set<bookId>` 인자를 추가. 비어있지 않으면 해당 책만 통과
+- `unmatchedScopes`가 있으면 검색을 실행하지 않고 빈 결과 + 알림만 반환
+
+### UI
+
+- 컴팩트 모달 하단에 `+ in:` 칩(`#search-sheet-chips` 내 `.search-chip`). 탭하면 입력창 끝에 ` in:` 삽입, 커서를 `:` 뒤에 위치
+- `pointerdown.preventDefault`로 IME가 깜박이지 않도록 input 포커스 유지
+
 ## 참고
 
 - PRD §3.3 검색 기능
 - `src/search_indexer.py` — 인덱스 생성 스크립트 (4개 파일 출력)
-- `search-worker.js` — Web Worker 검색 엔진 (청크 로딩 + progressive search)
+- `search-worker.js` — Web Worker 검색 엔진 (청크 로딩 + progressive search + `in:` 연산자)
+- ADR-001 SPA 아키텍처 (검색 UI 진입 방식: 컴팩트 모달 → 결과 시트 트랜지션)
