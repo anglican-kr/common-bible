@@ -323,7 +323,7 @@ function createSyncMachine({ onStateChange } = {}) {
             _email = event.email;
           }
           L.log({ kind: "ACTION", event: "IDENTITY_OK", email: L.mask("email", event.email) });
-          _transition(S.AUTHENTICATING, {}, event);
+          _transition(S.AUTHENTICATING, { reAuthFails: _ctx.reAuthFails }, event);
           _reqSilentToken();
         } else if (event.type === "IDENTITY_FAIL") {
           L.log({ kind: "ACTION", event: "IDENTITY_FAIL", reason: event.reason });
