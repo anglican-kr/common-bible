@@ -3944,7 +3944,9 @@ function _buildBookmarkItem(bm, depth) {
   const link = el("a", { className: "bm-bookmark-link", href: _bookmarkHref(bm), draggable: "false" });
   link.appendChild(el("span", { className: "bm-bookmark-label" }, bm.label));
   if (bm.verseSpec !== "all") {
-    link.appendChild(el("span", { className: "bm-bookmark-ref" }, bm.verseSpec));
+    const book = booksCache && booksCache.find(b => b.id === bm.bookId);
+    const bookName = book ? (book.short_name_ko || book.name_ko) : bm.bookId;
+    link.appendChild(el("span", { className: "bm-bookmark-ref" }, `${bookName} ${bm.chapter}:${bm.verseSpec}`));
   }
   link.addEventListener("click", (e) => {
     e.preventDefault();
