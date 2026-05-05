@@ -2975,6 +2975,10 @@ function adjustSheetForKeyboard() {
   // vv.offsetTop — it represents in-page scroll within the visual viewport
   // (e.g. pinch-zoom pan) and would incorrectly shift the sheet.
   const keyboardOffset = Math.max(0, window.innerHeight - vv.height);
+  // iOS Safari momentarily reports innerHeight === vv.height during URL-bar
+  // collapse/expand. While the input is still focused (keyboard intended
+  // to be present), treat that as transient and keep the previous styles.
+  if (keyboardOffset === 0 && document.activeElement === $searchSheetInput) return;
   const prevOffset = parseFloat($searchSheet.style.bottom) || 0;
   if (keyboardOffset > 0 && Math.abs(keyboardOffset - prevOffset) < 1) return;
   // Suppress the CSS height transition so viewport adjustments snap instantly
@@ -2997,6 +3001,15 @@ function adjustSheetForKeyboard() {
 function openSearchSheet(query) {
   $searchScrim.hidden = false;
   $searchSheet.hidden = false;
+  // Lock background scroll. Without this, iOS Safari's URL-bar collapse on
+  // page scroll fires visualViewport resize/scroll while the sheet is open,
+  // causing the sheet's computed dimensions to thrash.
+  const scrollY = window.scrollY;
+  document.body.style.overflow = "hidden";
+  document.body.style.position = "fixed";
+  document.body.style.top = `-${scrollY}px`;
+  document.body.style.width = "100%";
+  document.body.dataset.scrollY = scrollY;
   $searchSheetInput.value = query || "";
   $searchSheetClear.hidden = !query;
   $searchFab.hidden = true;
@@ -3019,6 +3032,14 @@ function closeSearchSheet() {
   $searchSheet.style.maxHeight = "";
   $searchFab.hidden = false;
   clearNode($searchSheetResults);
+  // Restore background scroll.
+  const scrollY = parseInt(document.body.dataset.scrollY || "0", 10);
+  document.body.style.overflow = "";
+  document.body.style.position = "";
+  document.body.style.top = "";
+  document.body.style.width = "";
+  delete document.body.dataset.scrollY;
+  window.scrollTo(0, scrollY);
   if (window.visualViewport) {
     window.visualViewport.removeEventListener("resize", adjustSheetForKeyboard);
     window.visualViewport.removeEventListener("scroll", adjustSheetForKeyboard);
