@@ -82,8 +82,9 @@ function loadChunk(name, url) {
 const REF_RE = /^([가-힣a-zA-Z0-9\s]+?)\s*(\d+)\s*:\s*(\d+)(?:\s*[-–]\s*(\d+))?\s*$/;
 
 // Operator: in:<book-alias>  (one or more, OR'd). Greedy on alias to allow
-// hangul/letters/digits without spaces. Only the substring up to whitespace.
-const IN_RE = /(?:^|\s)in:(\S+)/g;
+// hangul/letters/digits without spaces. Whitespace between `in:` and the
+// alias is ignored (`사랑 in: 요한` works the same as `사랑 in:요한`).
+const IN_RE = /(?:^|\s)in:\s*(\S+)/g;
 
 function parseQuery(raw) {
   const restrictBooks = new Set();

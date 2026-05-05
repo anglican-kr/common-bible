@@ -5,9 +5,15 @@ Covers:
   - verse reference auto-navigates to chapter
   - worker init failure surfaces an error message
   - verse search URL on refresh auto-navigates (regression)
+  - in: operator restricts to a book / supports OR / tolerates whitespace
+  - mobile compact ↔ expanded sheet transitions
+  - mobile chip click inserts operator text
+  - mobile focus while expanded reverts to compact
 """
 
-from .conftest import wait_app_ready
+from .conftest import (
+    CLEAR_APP_STORAGE, IPHONE_UA, MOBILE_VIEWPORT, wait_app_ready,
+)
 
 BASE_URL = "http://localhost:8080"
 SEARCH_URL = f"{BASE_URL}/search?q=%EC%B0%BD%EC%84%B8%201%3A1"
@@ -108,3 +114,168 @@ def test_search_result_link_contains_hl_param(page, base_url):
 
     href = page.locator(".search-result-item:not(.ref-match-item) a").first.get_attribute("href") or ""
     assert "hl=" in href, f"Expected ?hl= in href, got {href!r}"
+
+
+# ── in: 연산자 ──────────────────────────────────────────────────────────────
+
+def _result_book_ids(page):
+    """결과 링크 href에서 book ID(/<id>/...)들을 뽑아낸다."""
+    return page.locator(".search-result-item:not(.ref-match-item) a").evaluate_all(
+        "links => links.map(a => (a.getAttribute('href') || '').split('/')[1])"
+    )
+
+
+def test_in_operator_restricts_to_single_book(page, base_url):
+    """`사랑 in:요한` → 결과의 book ID가 모두 `john`이어야 한다."""
+    page.goto(base_url)
+    wait_app_ready(page)
+
+    page.fill("#search-input", "사랑 in:요한")
+    page.press("#search-input", "Enter")
+    page.wait_for_selector(".search-result-item:not(.ref-match-item)", timeout=8_000)
+
+    book_ids = _result_book_ids(page)
+    assert book_ids, "expected at least one match"
+    assert all(b == "john" for b in book_ids), f"Expected only 'john', got: {set(book_ids)}"
+
+
+def test_in_operator_whitespace_tolerated(page, base_url):
+    """`사랑 in: 요한`(콜론 뒤 공백)도 동일하게 동작."""
+    page.goto(base_url)
+    wait_app_ready(page)
+
+    page.fill("#search-input", "사랑 in: 요한")
+    page.press("#search-input", "Enter")
+    page.wait_for_selector(".search-result-item:not(.ref-match-item)", timeout=8_000)
+
+    book_ids = _result_book_ids(page)
+    assert book_ids, "expected at least one match"
+    assert all(b == "john" for b in book_ids), f"Expected only 'john', got: {set(book_ids)}"
+
+
+def test_in_operator_multiple_aliases_or(page, base_url):
+    """`사랑 in:요한 in:마태` → john과 matt 결과가 모두 나오고, 그 외 책은 없다."""
+    page.goto(base_url)
+    wait_app_ready(page)
+
+    page.fill("#search-input", "사랑 in:요한 in:마태")
+    page.press("#search-input", "Enter")
+    page.wait_for_selector(".search-result-item:not(.ref-match-item)", timeout=8_000)
+
+    book_ids = set(_result_book_ids(page))
+    assert book_ids, "expected at least one match"
+    assert book_ids <= {"john", "matt"}, f"Expected subset of {{john, matt}}, got: {book_ids}"
+
+
+def test_in_operator_unmatched_alias_blocks_search(page, base_url):
+    """`사랑 in:없는책` → 결과 없음 (검색 차단)."""
+    page.goto(base_url)
+    wait_app_ready(page)
+
+    page.fill("#search-input", "사랑 in:없는책")
+    page.press("#search-input", "Enter")
+    # Either empty-state or zero result items.
+    page.wait_for_function(
+        "() => document.querySelectorAll('.search-result-item:not(.ref-match-item)').length === 0",
+        timeout=8_000,
+    )
+    assert page.locator(".search-result-item:not(.ref-match-item)").count() == 0
+
+
+# ── 모바일 컴팩트 ↔ 확장 시트 ─────────────────────────────────────────────────
+
+def _mobile_page(browser):
+    ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA)
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    return ctx, ctx.new_page()
+
+
+def test_mobile_fab_opens_compact_sheet(browser):
+    """FAB 탭 → 시트가 data-state='compact'로 열리고 결과 영역은 보이지 않는다."""
+    ctx, page = _mobile_page(browser)
+    try:
+        page.goto(BASE_URL)
+        page.wait_for_selector("#search-fab", timeout=5_000)
+        page.locator("#search-fab").click()
+
+        page.wait_for_selector("#search-sheet[data-state='compact']", timeout=3_000)
+        # Chips visible, results hidden via CSS in compact.
+        assert page.locator("#search-sheet-chips .search-chip").count() >= 1
+        results_visible = page.locator("#search-sheet-results").is_visible()
+        assert not results_visible, "results pane must be hidden in compact state"
+    finally:
+        ctx.close()
+
+
+def test_mobile_enter_transitions_to_expanded_with_results(browser):
+    """컴팩트 시트에서 Enter → 확장 상태로 전환 + 결과 표시."""
+    ctx, page = _mobile_page(browser)
+    try:
+        page.goto(BASE_URL)
+        page.wait_for_selector("#search-fab", timeout=5_000)
+        page.locator("#search-fab").click()
+        page.wait_for_selector("#search-sheet[data-state='compact']", timeout=3_000)
+
+        page.locator("#search-sheet-input").fill("사랑")
+        page.locator("#search-sheet-input").press("Enter")
+
+        page.wait_for_selector("#search-sheet[data-state='expanded']", timeout=3_000)
+        page.wait_for_selector(
+            "#search-sheet-results .search-result-item:not(.ref-match-item)",
+            timeout=8_000,
+        )
+        assert page.locator(
+            "#search-sheet-results .search-result-item:not(.ref-match-item)"
+        ).count() > 0
+    finally:
+        ctx.close()
+
+
+def test_mobile_in_chip_appends_operator_with_cursor(browser):
+    """`+ in:` 칩 탭 → 입력값 끝에 ` in:` 삽입, 커서가 끝에 위치, 입력 포커스 유지."""
+    ctx, page = _mobile_page(browser)
+    try:
+        page.goto(BASE_URL)
+        page.wait_for_selector("#search-fab", timeout=5_000)
+        page.locator("#search-fab").click()
+        page.wait_for_selector("#search-sheet[data-state='compact']", timeout=3_000)
+
+        page.locator("#search-sheet-input").fill("사랑")
+        page.locator(".search-chip[data-chip='in']").click()
+
+        # Value: "사랑 in:" — note the leading space because input wasn't empty.
+        value = page.locator("#search-sheet-input").input_value()
+        assert value == "사랑 in:", f"Expected '사랑 in:', got {value!r}"
+        # Cursor positioned at the end (after the colon).
+        sel_start = page.evaluate("() => document.getElementById('search-sheet-input').selectionStart")
+        assert sel_start == len(value), f"Expected cursor at {len(value)}, got {sel_start}"
+        # Focus retained on input.
+        active_id = page.evaluate("() => document.activeElement && document.activeElement.id")
+        assert active_id == "search-sheet-input", f"Focus lost; active = {active_id!r}"
+    finally:
+        ctx.close()
+
+
+def test_mobile_focus_in_expanded_reverts_to_compact(browser):
+    """결과 표시 중 입력창에 다시 포커스 → compact 복귀 + 결과/notice 정리."""
+    ctx, page = _mobile_page(browser)
+    try:
+        page.goto(BASE_URL)
+        page.wait_for_selector("#search-fab", timeout=5_000)
+        page.locator("#search-fab").click()
+        page.locator("#search-sheet-input").fill("사랑")
+        page.locator("#search-sheet-input").press("Enter")
+        page.wait_for_selector("#search-sheet[data-state='expanded']", timeout=3_000)
+        page.wait_for_selector(
+            "#search-sheet-results .search-result-item:not(.ref-match-item)",
+            timeout=8_000,
+        )
+
+        # Programmatically focus to bypass iOS pointer quirks; the JS focus
+        # handler is what we're testing.
+        page.evaluate("() => document.getElementById('search-sheet-input').focus()")
+        page.wait_for_selector("#search-sheet[data-state='compact']", timeout=2_000)
+        # Results cleared.
+        assert page.locator("#search-sheet-results .search-result-item").count() == 0
+    finally:
+        ctx.close()
