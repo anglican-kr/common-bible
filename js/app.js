@@ -421,7 +421,7 @@ function initSettings() {
         // i icon — visible regardless of auth state so users can read the
         // description before connecting.
         const svgNs = "http://www.w3.org/2000/svg";
-        const infoBtn = el("button", { className: "settings-drive-info-btn", type: "button", "aria-label": "동기화 안내", "aria-expanded": "false" });
+        const infoBtn = el("button", { className: "settings-drive-info-btn", type: "button", "aria-label": "백업 및 동기화 안내", "aria-expanded": "false" });
         const infoSvg = document.createElementNS(svgNs, "svg");
         infoSvg.setAttribute("viewBox", "0 0 24 24"); infoSvg.setAttribute("aria-hidden", "true"); infoSvg.setAttribute("class", "drive-info-icon");
         const ic = document.createElementNS(svgNs, "circle"); ic.setAttribute("cx", "12"); ic.setAttribute("cy", "12"); ic.setAttribute("r", "10"); ic.setAttribute("fill", "none"); ic.setAttribute("stroke", "currentColor"); ic.setAttribute("stroke-width", "1.5");
