@@ -676,12 +676,12 @@ body {
 /* ── Search Bar (Desktop inline) ── */
 #search-bar {
   position: relative;
-  width: 11rem;
+  width: 16rem;
   transition: width 0.2s ease;
 }
 
 #search-bar:focus-within {
-  width: 16rem;
+  width: 22rem;
 }
 
 #search-input {
