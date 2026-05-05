@@ -3012,8 +3012,6 @@ function openSearchSheet(query) {
     document.body.style.width = "100%";
     document.body.dataset.scrollY = scrollY;
     _searchSheetAppliedScrollLock = true;
-  } else {
-    _searchSheetAppliedScrollLock = false;
   }
   $searchSheetInput.value = query || "";
   $searchSheetClear.hidden = !query;
