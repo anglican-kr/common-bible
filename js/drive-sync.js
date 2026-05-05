@@ -16,6 +16,39 @@ const _CLIENT_ID = location.hostname === "localhost"
 // import system. The machine reads window._syncClientId on GIS_READY.
 window._syncClientId = _CLIENT_ID;
 
+// ── iOS redirect callback absorption ──────────────────────────────────────────
+// Must run before app.js routes — strips OAuth hash, validates state nonce, and
+// stashes the token for initDriveSync() to inject into the machine.
+(function _consumeRedirectIfPresent() {
+  const T = window.syncTransport;
+  if (!T?.consumeRedirectCallback) return;
+  const result = T.consumeRedirectCallback();
+  if (!result) return;
+
+  const returnTo = (result.ok && result.returnTo) ? result.returnTo : "/";
+  history.replaceState(null, "", returnTo);
+
+  if (result.ok) {
+    window.__pendingRedirectToken = { access_token: result.token, expiresIn: result.expiresIn };
+    localStorage.setItem("bible-drive-sync", "1");
+    localStorage.setItem("bible-drive-redirect-attempts", "0");
+    window.syncDebugLog?.log({ kind: "ACTION", event: "REDIRECT_CALLBACK_OK" });
+  } else {
+    window.__pendingRedirectError = result.reason;
+    window.syncDebugLog?.log({
+      kind: "ERROR", event: "REDIRECT_CALLBACK_FAIL", reason: result.reason,
+    });
+  }
+})();
+
+// ── User interaction timestamp (for state-machine "active reading" check) ─────
+let _lastInteractionTs = 0;
+const _markInteraction = () => { _lastInteractionTs = Date.now(); };
+["pointerdown", "keydown", "scroll", "touchstart"].forEach((ev) =>
+  window.addEventListener(ev, _markInteraction, { passive: true, capture: true })
+);
+window.__driveSyncInteractionTs = () => _lastInteractionTs;
+
 const _machine = window.createSyncMachine({
   onStateChange: (state) => {
     window.syncDebugLog?.log({ kind: "TRANSITION", event: "STATE_CHANGE", state });
@@ -29,10 +62,14 @@ window.addEventListener("online", () => {
 });
 
 // ── Snackbar (UI notification, called by state machine) ────────────────────────
+// Inverts page colors (bg=--text, fg=--bg) so contrast stays AA-grade across
+// every theme/color-scheme combination. The previous --popover-bg fallback was
+// a fixed dark grey that became unreadable on light themes where --text is
+// also dark.
 window._showSyncSnackbar = function (msg) {
   const el = document.createElement("div");
   el.textContent = msg;
-  el.style.cssText = "position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:var(--popover-bg,#323232);color:var(--text,#fff);border:1px solid var(--border,transparent);padding:12px 20px;border-radius:8px;font-size:14px;z-index:9999;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.25);";
+  el.style.cssText = "position:fixed;bottom:80px;left:50%;transform:translateX(-50%);max-width:calc(100vw - 32px);background:var(--text);color:var(--bg);padding:12px 20px;border-radius:8px;font-family:-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Noto Sans KR',sans-serif;font-size:14px;line-height:1.4;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,.3);text-align:center;";
   document.body.appendChild(el);
   setTimeout(() => el.remove(), 3500);
 };
@@ -69,18 +106,40 @@ function _clearUploadTimer() {
 function initDriveSync() {
   const enabled = localStorage.getItem("bible-drive-sync") === "1";
   window.syncDebugLog?.log({ kind: "ACTION", event: "INIT", enabled });
-  if (enabled) {
-    _machine.enable();
-    _startPollingGis();
+  if (!enabled) return;
+
+  // iOS redirect-flow: callback already validated; inject token directly.
+  // GIS may never load (or fail to initialize), so the machine must reach
+  // IDLE without waiting for it.
+  if (window.__pendingRedirectToken) {
+    const { access_token } = window.__pendingRedirectToken;
+    delete window.__pendingRedirectToken;
+    _machine.acceptRedirectToken(access_token);
+    return;
   }
+
+  _machine.enable();
+  _startPollingGis();
 }
 
-// Called by settings popover "연결" button. The click is a real user gesture,
-// so we can safely trigger the consent popup without iOS blocking it.
+// Called by settings popover "연결" button.
 function signIn() {
+  const T = window.syncTransport;
+  localStorage.setItem("bible-drive-sync", "1");
+
+  if (T.isIOS()) {
+    // Bypass GIS entirely — Safari does not support FedCM and PWA standalone
+    // mode blocks popups even from user gestures. Reset the attempt counter
+    // since this is an explicit user-initiated reconnect.
+    localStorage.setItem("bible-drive-redirect-attempts", "0");
+    window._showSyncSnackbar?.("Google 인증 페이지로 이동합니다. 인증 후 자동으로 돌아옵니다.");
+    window.syncDebugLog?.log({ kind: "ACTION", event: "SIGN_IN_IOS_REDIRECT" });
+    T.beginRedirectAuth(_CLIENT_ID, "https://www.googleapis.com/auth/drive.appdata email", { prompt: "consent" });
+    return;
+  }
+
   const state = _machine.getState();
   window.syncDebugLog?.log({ kind: "ACTION", event: "SIGN_IN", state });
-  localStorage.setItem("bible-drive-sync", "1");
   if (state === "DISABLED") {
     _machine.enable();
   } else if (state === "NEEDS_CONSENT" || state === "ERROR" || state === "IDENTIFYING") {

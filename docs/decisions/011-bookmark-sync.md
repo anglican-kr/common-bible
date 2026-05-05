@@ -7,7 +7,8 @@
 - 개정: 2026-05-04 (Phase 2c 구현 완료)
 - 개정: 2026-05-05 (Phase 2d — iOS FedCM/One Tap 적용)
 - 개정: 2026-05-05 (Phase 2e — FedCM-mandatory deprecation 마이그레이션)
-- 상태: 승인됨 (Phase 2a~2e 완료)
+- 개정: 2026-05-05 (Phase 2f — iOS OAuth 풀페이지 리디렉션)
+- 상태: 승인됨 (Phase 2a~2f 완료)
 
 ## 결정
 
@@ -327,6 +328,76 @@ connect-src: 현재 + https://oauth2.googleapis.com
 
 - `https://accounts.google.com/gsi/status` 엔드포인트의 **403 Forbidden**: GIS 라이브러리 내부의 FedCM 사전 탐지 폴링. localhost가 OAuth 클라이언트의 정식 등록 origin이 아닌 환경에서 일관되게 발생. 인증 실제 동작과 무관하며 GIS가 graceful fallback 처리하므로 코드 변경 불요.
 
+## Phase 2f — iOS OAuth 풀페이지 리디렉션 (구현 완료 2026-05-05)
+
+> **개정 (2026-05-05):** Phase 2d/2e 적용 후에도 iPhone(iOS 26.X)에서 "팝업 윈도우를 열려고 시도" 안내가 재발 보고됨. 추가 조사 결과 Phase 2d 전제가 두 가지 점에서 잘못됐음이 확인됨.
+>
+> 1. **Safari는 FedCM을 영구 미지원**. Apple은 passkey에 집중하기로 결정했고 WebKit standards-positions에서 FedCM을 부정적으로 평가. `use_fedcm_for_prompt: true`는 iOS Safari에서 no-op이며, ID Client는 Phase 2d에서 가정한 "iOS 17+은 FedCM"으로 결코 동작하지 않음.
+> 2. **GIS Token Client `requestAccessToken`은 popup-only**. Google 공식 token 모델 가이드: "Due to security concerns, only the popup UX is supported." 사용자 제스처 안에서 호출해도 iOS PWA standalone 모드에서는 popup 자체가 차단됨. iOS 26부터 홈 화면 추가 사이트가 기본 PWA 모드로 열리면서 영향 사용자 급증.
+>
+> 결론: GIS Token Client 경로로는 iOS 팝업 차단을 우회할 수 없음. iOS 한정으로 OAuth 2.0 Implicit Flow의 풀페이지 리디렉션을 수동 구현해야 함.
+
+### 핵심 변경
+
+- **iOS 감지 + 리디렉션 헬퍼** (`js/sync/transport.js`):
+  - `isIOS()` — UA 기반 (`iPhone|iPod|iPad` + iPadOS 13+ 데스크톱 모드 위장 처리: `MacIntel + maxTouchPoints>1`)
+  - `beginRedirectAuth(clientId, scope, {prompt})` — 32바이트 nonce + returnTo + ts를 `sessionStorage`에 저장 후 `location.href = "https://accounts.google.com/o/oauth2/v2/auth?..."`. `response_type=token`, `include_granted_scopes=true`, `login_hint`(저장된 email) 포함. `location.replace`는 사용 금지(뒤로가기로 앱 복귀 보존).
+  - `consumeRedirectCallback()` — 부팅 시 동기적으로 호출. hash 파싱 → sessionStorage state nonce 일치 검증 → 10분 만료 검사 → 토큰/expiresIn/returnTo 반환. CSRF 방어 핵심.
+
+- **상태 머신 분기** (`js/sync/state-machine.js`):
+  - `acceptRedirectToken(access_token)` 신규 — 부팅 단계에서 직접 IDLE로 진입 (GIS 의존 없음).
+  - 4개 진입점에 iOS 분기: `S.IDENTIFYING + USER_CONSENT_REQUEST`, `S.NEEDS_CONSENT + USER_CONSENT_REQUEST`, `S.ERROR + (ENABLE|USER_CONSENT_REQUEST)`, `_handleSyncFail` 401 분기.
+  - **하이브리드 401 처리**: `_isUserActivelyReading()` (visibility=visible + hasFocus=true + 5초 이내 인터랙션) 휴리스틱으로 사용자가 활발히 읽는 중이면 snackbar+`NEEDS_CONSENT` 보류, 유휴 상태면 자동 풀페이지 리디렉션.
+  - **무한 리디렉션 차단**: `_ctx.reAuthFails`는 페이지 전환 시 휘발되므로 `localStorage["bible-drive-redirect-attempts"]` 별도 카운터(상한 3회) 도입.
+
+- **부팅 흐름** (`js/drive-sync.js`):
+  - **top-level IIFE**가 라우팅보다 먼저 `consumeRedirectCallback()` 호출 → `history.replaceState`로 hash 즉시 정리(토큰 노출 시간 < 100ms) → `window.__pendingRedirectToken`에 stash.
+  - `initDriveSync()`가 pending 토큰을 흡수해 `_machine.acceptRedirectToken()` 호출.
+  - 글로벌 인터랙션 리스너(`pointerdown`/`keydown`/`scroll`/`touchstart`)로 `_lastInteractionTs` 갱신, `window.__driveSyncInteractionTs` 노출.
+  - `signIn()`이 iOS 환경에서 GIS 폴링 없이 즉시 `T.beginRedirectAuth(prompt:"consent")`. 안내 토스트 "Google 인증 페이지로 이동합니다. 인증 후 자동으로 돌아옵니다."
+
+### Phase 2f 후 동작 매트릭스
+
+| 환경 | 페이지 로드 동작 | "연결" 클릭 동작 | iOS 팝업 안내 |
+|------|----------------|-----------------|--------------|
+| Android Chrome | FedCM/세션 → silent token | popup consent | 해당 없음 |
+| 데스크톱 Chrome/Firefox | FedCM(지원 시) → silent token | popup consent | 해당 없음 |
+| iOS 17+ Safari (탭) | 풀페이지 리디렉션 | 풀페이지 리디렉션 | **발생 안 함** |
+| iOS PWA standalone | 풀페이지 리디렉션 | 풀페이지 리디렉션 | **발생 안 함** |
+| iOS 16↓ Safari | 풀페이지 리디렉션 | 풀페이지 리디렉션 | **발생 안 함** |
+
+Phase 2d/2e의 FedCM/One Tap 코드는 비-iOS 환경에서 그대로 활성화되며, iOS 분기는 `window.google.accounts.*` 호출을 모두 건너뜀.
+
+### OAuth Flow 재평가
+
+Phase 2b의 결정 표는 비-iOS 환경에 한해 유효함을 명시. iOS는 별도 경로:
+
+| 환경 | OAuth Flow | 이유 |
+|------|----------|-----|
+| Android, 데스크톱 (FedCM 가능) | Authorization Code via GIS (Phase 2b/2d) | popup 없는 무중단 인증 |
+| iOS Safari (모든 모드/버전) | **Implicit Flow + 풀페이지 리디렉션** (Phase 2f) | popup-only GIS Token Client 우회 |
+
+Implicit Flow 일반 단점에 대한 우리 환경 평가:
+- *Refresh token 부재* → `drive.appdata + email` scope 한정이라 무관 (1시간 만료 후 hybrid 자동 재인증)
+- *access_token이 hash 노출* → IIFE가 `replaceState`로 즉시 정리, 외부 노출 시간 < 100ms
+- *OAuth 2.1 deprecated* → Google이 2026-04 시점 명시적 지원 유지, scope 단위 검수에 영향 없음
+
+### 외부 의존 변경
+
+Google Cloud Console OAuth 2.0 Client(dev/prod 양쪽)의 **Authorized redirect URIs**에 다음 추가 필요:
+- dev: `http://localhost:8080/`
+- prod: `https://bible.anglican.kr/`
+- trailing slash 정확히 일치해야 함 (`https://bible.anglican.kr`는 다른 URI로 취급)
+
+Authorized JavaScript origins / scope 설정 변경 없음 → OAuth 검수 재제출 불요.
+
+### 알려진 트레이드오프
+
+- **첫 연결 UX**: iOS 사용자에게 앱이 닫혔다 다시 열린 듯한 깜박임 발생. 안내 토스트로 완화.
+- **state nonce 만료**: 10분 — 사용자가 OAuth 페이지에 30분 머물면 callback 검증 실패. snackbar로 안내.
+- **외부 핸드오프 엣지 케이스**: Universal Link 설정에 따라 OAuth가 외부 Safari로 핸드오프 가능. PWA sessionStorage 격리 → nonce 검증 실패 → "브라우저에서 다시 시도해 주세요" 안내.
+- **자동 리디렉션 cap**: localStorage 카운터 3회 초과 시 ERROR 강제 전이로 무한 루프 차단.
+
 ## 미결 사항
 
 - [x] Google Cloud Console 프로젝트 생성 및 Client ID 발급
@@ -334,7 +405,9 @@ connect-src: 현재 + https://oauth2.googleapis.com
 - [x] Drive API 호출 실패 재시도 전략 — exponential backoff (PR #26, Phase 2c)
 - [x] 동기화 충돌 결과 사용자 알림 UX
 - [ ] Google OAuth 앱 검수 통과 (2026-05-02 제출 완료, 심사 결과 대기 중)
+- [ ] **Google Cloud Console redirect URI 등록** (dev `http://localhost:8080/`, prod `https://bible.anglican.kr/`) — Phase 2f 배포 전 필수
 - [x] iOS Safari 팝업 차단 안내 제거 (Phase 2d, 2026-05-05) — FedCM/One Tap + 사용자 제스처 격리
+- [x] iOS Safari 팝업 차단 안내 완전 제거 (Phase 2f, 2026-05-05) — Implicit Flow 풀페이지 리디렉션 (Phase 2d 가정 오류 정정)
 - [x] FedCM-mandatory deprecation 경고 제거 (Phase 2e, 2026-05-05) — `prompt()` 콜백 + timeout 폴백 폐기
 - [x] 항목 단위 병합 — per-record LWW + tombstone (Phase 2c, `js/sync/store-v2.js`)
 - [x] 내보내기/가져오기 JSON 스키마 `_version: 1` 추가

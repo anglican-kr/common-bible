@@ -415,7 +415,7 @@ function initSettings() {
       if (showDrive) {
         const driveRow = el("div", { className: "settings-row" });
         const driveLabelSpan = el("span", { className: "settings-label" });
-        driveLabelSpan.appendChild(document.createTextNode("온라인 백업 & 동기화"));
+        driveLabelSpan.appendChild(document.createTextNode("백업 & 동기화 (실험)"));
         const driveAuthed = window.driveSync.isAuthenticated();
 
         // i icon — visible regardless of auth state so users can read the
@@ -456,7 +456,7 @@ function initSettings() {
         const closeBtn = el("button", { className: "settings-drive-info-close", type: "button", "aria-label": "닫기" }, "✕");
         infoTop.appendChild(closeBtn);
         infoRow.appendChild(infoTop);
-        infoRow.appendChild(el("div", { className: "settings-drive-info-desc" }, "북마크·설정·읽기 위치를 Google Drive에 백업하고, 여러 기기를 이용하는 경우 자동으로 동기화합니다."));
+        infoRow.appendChild(el("div", { className: "settings-drive-info-desc" }, "북마크·설정·읽기 위치를 Google Drive에 백업하고, 여러 기기를 이용하는 경우 자동으로 동기화합니다(이 기능은 아직 실험 단계입니다)."));
         if (driveAuthed) {
           const diagBtn = el("button", { className: "settings-drive-diag-btn", type: "button" }, "동기화 진단 정보 복사");
           diagBtn.addEventListener("click", async () => {
