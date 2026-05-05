@@ -322,7 +322,7 @@ function createSyncMachine({ onStateChange } = {}) {
         if (event.type === "GIS_READY") {
           _tokenClient = T.initTokenClient(
             window._syncClientId,
-            "https://www.googleapis.com/auth/drive.appdata email",
+            SCOPE,
             (resp) => dispatch({ type: resp.error ? "TOKEN_FAIL" : "TOKEN_OK", ...resp, reason: resp.error })
           );
           if (window.google?.accounts?.id) {
@@ -604,3 +604,4 @@ function createSyncMachine({ onStateChange } = {}) {
 }
 
 window.createSyncMachine = createSyncMachine;
+window._syncScope = SCOPE;

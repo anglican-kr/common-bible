@@ -154,7 +154,7 @@ function initDriveSync() {
   }
 
   _machine.enable();
-  _startPollingGis();
+  if (!window.syncTransport.isIOS()) _startPollingGis();
 }
 
 // Called by settings popover "연결" button.
@@ -169,7 +169,7 @@ function signIn() {
     localStorage.setItem("bible-drive-redirect-attempts", "0");
     window._showSyncSnackbar?.("Google 인증 페이지로 이동합니다. 인증 후 자동으로 돌아옵니다.");
     window.syncDebugLog?.log({ kind: "ACTION", event: "SIGN_IN_IOS_REDIRECT" });
-    T.beginRedirectAuth(_CLIENT_ID, "https://www.googleapis.com/auth/drive.appdata email", { prompt: "consent" });
+    T.beginRedirectAuth(_CLIENT_ID, window._syncScope, { prompt: "consent" });
     return;
   }
 
