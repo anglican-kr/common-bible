@@ -168,18 +168,32 @@ def test_in_operator_multiple_aliases_or(page, base_url):
 
 
 def test_in_operator_unmatched_alias_blocks_search(page, base_url):
-    """`사랑 in:없는책` → 결과 없음 (검색 차단)."""
+    """`사랑 in:없는책` → 결과 없음 + 안내 메시지 표시."""
     page.goto(base_url)
     wait_app_ready(page)
 
     page.fill("#search-input", "사랑 in:없는책")
     page.press("#search-input", "Enter")
-    # Either empty-state or zero result items.
-    page.wait_for_function(
-        "() => document.querySelectorAll('.search-result-item:not(.ref-match-item)').length === 0",
-        timeout=8_000,
-    )
+    page.wait_for_selector(".search-notice", timeout=8_000)
     assert page.locator(".search-result-item:not(.ref-match-item)").count() == 0
+    notice_text = page.locator(".search-notice").inner_text()
+    assert "in:없는책" in notice_text and "알 수 없는" in notice_text
+
+
+def test_search_result_hl_strips_in_operator(page, base_url):
+    """`사랑 in:요한` 결과 링크의 ?hl= 파라미터는 stripped 키워드("사랑")만 포함."""
+    page.goto(base_url)
+    wait_app_ready(page)
+
+    page.fill("#search-input", "사랑 in:요한")
+    page.press("#search-input", "Enter")
+    page.wait_for_selector(".search-result-item:not(.ref-match-item)", timeout=8_000)
+
+    href = page.locator(".search-result-item:not(.ref-match-item) a").first.get_attribute("href") or ""
+    # ?hl=사랑 (URL-encoded). Should NOT contain 'in:' or '요한'.
+    assert "hl=" in href
+    assert "in%3A" not in href and "%EC%9A%94%ED%95%9C" not in href, \
+        f"Expected stripped keyword in hl=, got {href!r}"
 
 
 # ── 모바일 컴팩트 ↔ 확장 시트 ─────────────────────────────────────────────────

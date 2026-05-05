@@ -18,7 +18,6 @@ const $searchSheetInput = document.getElementById("search-sheet-input");
 const $searchSheetClear = document.getElementById("search-sheet-clear");
 const $searchSheetClose = document.getElementById("search-sheet-close");
 const $searchSheetChips = document.getElementById("search-sheet-chips");
-const $searchSheetNotice = document.getElementById("search-sheet-notice");
 const $searchSheetResults = document.getElementById("search-sheet-results");
 
 let booksCache = null;
@@ -2819,9 +2818,23 @@ function renderSearchResultList(container, result, query, page, pageSize, pagina
 
   const hasRef = !!result.refMatch;
   const hasResults = result.results && result.results.length > 0;
+  // The worker strips `in:<alias>` tokens; use the resulting keyword for
+  // snippet highlighting and `?hl=` so users opening a result see their
+  // search term highlighted (the raw query would never match the verse text).
+  const highlightTerm = result.keyword || query;
+
+  // Unrecognized in:<alias> notice. Worker blocks search in this case
+  // (results = 0) so the notice replaces what would otherwise be a silent
+  // empty state.
+  if (result.unmatchedScopes && result.unmatchedScopes.length > 0) {
+    const aliasList = result.unmatchedScopes.map((a) => `in:${a}`).join(", ");
+    container.appendChild(el("p", { className: "search-notice" }, `${aliasList} — 알 수 없는 책 별칭입니다`));
+  }
 
   if (!hasRef && result.total === 0) {
-    container.appendChild(el("p", { className: "search-empty" }, `"${query}"에 대한 검색 결과가 없습니다.`));
+    if (!result.unmatchedScopes || result.unmatchedScopes.length === 0) {
+      container.appendChild(el("p", { className: "search-empty" }, `"${query}"에 대한 검색 결과가 없습니다.`));
+    }
     return;
   }
 
@@ -2861,9 +2874,9 @@ function renderSearchResultList(container, result, query, page, pageSize, pagina
 
     for (const r of result.results) {
       const li = el("li", { className: "search-result-item" });
-      const link = el("a", { href: `/${r.b}/${r.c}/${r.v}?hl=${encodeURIComponent(query)}` });
+      const link = el("a", { href: `/${r.b}/${r.c}/${r.v}?hl=${encodeURIComponent(highlightTerm)}` });
       link.appendChild(el("span", { className: "search-result-ref" }, `${r.bookNameKo} ${r.c}:${r.v}`));
-      link.appendChild(buildSnippet(r.t, query));
+      link.appendChild(buildSnippet(r.t, highlightTerm));
       li.appendChild(link);
       list.appendChild(li);
     }
@@ -2933,48 +2946,35 @@ async function renderSearchResults(query, page, autoNavigate = false) {
 
 // ── Search input event handlers (Desktop inline) ──
 
-let searchDebounceTimer = null;
-// True only when search was explicitly confirmed via Enter — allows verse ref auto-navigation.
-// Debounce path keeps this false so partial refs (e.g. "요한 3:1" while typing "요한 3:16")
-// are shown as a clickable card instead of immediately navigating.
+// Search is Enter-triggered only — live (debounced) search interfered with
+// multi-token queries like `사랑 in:요한`, where each intermediate keystroke
+// fired a useless substring search. searchAutoNavigate stays as a flag so
+// renderSearchResults can distinguish Enter-confirmed searches (auto-navigate
+// to verse references) from URL-triggered ones (show clickable card).
 let searchAutoNavigate = false;
 
 $searchInput.addEventListener("keydown", (e) => {
-  if (e.key === "Enter") {
-    e.preventDefault();
-    clearTimeout(searchDebounceTimer);
-    clearTimeout(searchAutoNavTimer);
-    const q = $searchInput.value.trim();
-    if (!q) return;
-    searchAutoNavigate = true;
-    const newPath = `/search?q=${encodeURIComponent(q)}`;
-    // If path is unchanged, popstate won't fire — call route() directly.
-    if (location.pathname + location.search === newPath) {
-      route();
-    } else {
-      navigate(newPath);
-    }
+  if (e.key !== "Enter") return;
+  e.preventDefault();
+  const q = $searchInput.value.trim();
+  if (!q) return;
+  searchAutoNavigate = true;
+  const newPath = `/search?q=${encodeURIComponent(q)}`;
+  // If path is unchanged, popstate won't fire — call route() directly.
+  if (location.pathname + location.search === newPath) {
+    route();
+  } else {
+    navigate(newPath);
   }
 });
 
-let searchAutoNavTimer = null;
-
 $searchInput.addEventListener("input", () => {
-  const q = $searchInput.value.trim();
-  $searchClear.hidden = !q;
-  clearTimeout(searchDebounceTimer);
-  if (!q) return;
-  searchDebounceTimer = setTimeout(() => {
-    searchAutoNavigate = false;
-    navigate(`/search?q=${encodeURIComponent(q)}`);
-  }, 400);
+  $searchClear.hidden = !$searchInput.value.trim();
 });
 
 $searchClear.addEventListener("click", () => {
   $searchInput.value = "";
   $searchClear.hidden = true;
-  clearTimeout(searchDebounceTimer);
-  clearTimeout(searchAutoNavTimer);
   $searchInput.focus();
   if (parsePath().view === "search") navigate("/");
 });
@@ -3067,7 +3067,6 @@ function openSearchSheet(query) {
   }
   $searchSheetInput.value = query || "";
   $searchSheetClear.hidden = !query;
-  $searchSheetNotice.hidden = true;
   $searchFab.hidden = true;
   // Compact entry focuses synchronously so iOS Safari opens the on-screen
   // keyboard inside the user-gesture context (rAF would defer past it).
@@ -3091,8 +3090,6 @@ function closeSearchSheet() {
   $searchSheet.style.bottom = "";
   $searchSheet.style.maxHeight = "";
   $searchFab.hidden = false;
-  $searchSheetNotice.hidden = true;
-  $searchSheetNotice.textContent = "";
   clearNode($searchSheetResults);
   // Restore background scroll only if this sheet applied the lock.
   if (_searchSheetAppliedScrollLock) {
@@ -3138,19 +3135,7 @@ function buildSheetPagination(query, page, totalPages) {
   return nav;
 }
 
-function renderSheetNotice(unmatchedScopes) {
-  if (!unmatchedScopes || !unmatchedScopes.length) {
-    $searchSheetNotice.hidden = true;
-    $searchSheetNotice.textContent = "";
-    return;
-  }
-  const list = unmatchedScopes.map((a) => `in:${a}`).join(", ");
-  $searchSheetNotice.textContent = `${list} — 알 수 없는 책 별칭입니다`;
-  $searchSheetNotice.hidden = false;
-}
-
 async function runSheetSearch(query, page, autoNavigate = false) {
-  renderSheetNotice(null);
   clearNode($searchSheetResults);
   if (!query) return;
 
@@ -3159,7 +3144,6 @@ async function runSheetSearch(query, page, autoNavigate = false) {
   const pageSize = getSheetPageSize();
 
   function onPartial(partial) {
-    renderSheetNotice(partial.unmatchedScopes);
     // Add click-to-close to each result link for sheet view
     const frag = document.createDocumentFragment();
     const tempDiv = el("div");
@@ -3178,8 +3162,6 @@ async function runSheetSearch(query, page, autoNavigate = false) {
     $searchSheetResults.appendChild(el("div", { className: "error" }, "검색에 실패했습니다."));
     return;
   }
-
-  renderSheetNotice(result.unmatchedScopes);
 
   // Verse reference — navigate only when explicitly confirmed (Enter key).
   if (result.refMatch) {
@@ -3286,7 +3268,6 @@ $searchSheetInput.addEventListener("focus", () => {
   const targetOffset = currentOffset > 0 ? currentOffset : ESTIMATED_KEYBOARD_PX;
   $searchSheet.style.bottom = `${targetOffset + COMPACT_BOTTOM_MARGIN_PX}px`;
   $searchSheet.dataset.state = "compact";
-  renderSheetNotice(null);
   clearNode($searchSheetResults);
   setTimeout(() => {
     // Soft catch-up: read the real keyboard offset and let CSS transition

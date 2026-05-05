@@ -15,7 +15,7 @@
 
 **Enter 전이 + 라이브 검색 제거**
 
-`$searchSheetInput.blur()` → `_suspendKeyboardAdjust = true` → `requestAnimationFrame`에서 인라인 스타일 클리어 후 `data-state="expanded"` + `runSheetSearch()`. visualViewport.resize가 transition을 끊지 못하도록 260ms 동안 `adjustSheetForKeyboard`를 일시 정지. CSS `transition: height 220ms, bottom 220ms`로 부드럽게 자라남. 라이브 검색(400ms debounce)은 폐기 — 기존 `sheetDebounceTimer`/`sheetAutoNavTimer`도 함께 제거.
+`$searchSheetInput.blur()` → `_suspendKeyboardAdjust = true` → `requestAnimationFrame`에서 인라인 스타일 클리어 후 `data-state="expanded"` + `runSheetSearch()`. visualViewport.resize가 transition을 끊지 못하도록 260ms 동안 `adjustSheetForKeyboard`를 일시 정지. CSS `transition: height 220ms, bottom 220ms`로 부드럽게 자라남. 라이브 검색(400ms debounce)은 모바일·데스크톱 모두 폐기 — `사랑 in:요한` 같은 다중 토큰 입력에서 중간 키 입력마다 의미 없는 부분 문자열 검색이 발화하는 문제. 기존 `sheetDebounceTimer`/`sheetAutoNavTimer`/`searchDebounceTimer`/`searchAutoNavTimer` 죽은 코드도 함께 제거.
 
 **`in:` 연산자**
 

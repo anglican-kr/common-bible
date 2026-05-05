@@ -237,7 +237,7 @@ onmessage = async (ev) => {
         const partial = gatherResults(keyword, loadedNames, restrictBooks);
         const { results, total } = paginate(partial, page, pageSize);
         post("partial-results", {
-          searchId, q: trimmed, results, total, page, pageSize,
+          searchId, q: trimmed, keyword, results, total, page, pageSize,
           loadedChunks: loadedNames, pendingChunks: pendingNames,
           unmatchedScopes: unmatched,
         });
@@ -250,8 +250,10 @@ onmessage = async (ev) => {
       // Full search across all chunks
       const allMatched = gatherResults(keyword, chunkConfig.map((c) => c.name), restrictBooks);
       const { results, total } = paginate(allMatched, page, pageSize);
-      post("results", { searchId, q: trimmed, refMatch: null, results, total, page, pageSize,
-        unmatchedScopes: unmatched });
+      // `keyword` is the query stripped of in:<alias> tokens — used by the UI
+      // for snippet highlighting and the ?hl= chapter-view param.
+      post("results", { searchId, q: trimmed, keyword, refMatch: null,
+        results, total, page, pageSize, unmatchedScopes: unmatched });
 
     } catch (err) {
       post("error", { message: err.message });

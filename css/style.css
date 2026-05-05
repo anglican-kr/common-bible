@@ -1040,8 +1040,7 @@ body {
 }
 
 #search-sheet[data-state="compact"] #search-sheet-handle,
-#search-sheet[data-state="compact"] #search-sheet-results,
-#search-sheet[data-state="compact"] #search-sheet-notice {
+#search-sheet[data-state="compact"] #search-sheet-results {
   display: none;
 }
 
@@ -1177,8 +1176,8 @@ body {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent);
 }
 
-#search-sheet-notice {
-  margin: 0 1rem 0.5rem;
+.search-notice {
+  margin: 0 0 0.6rem;
   padding: 0.5rem 0.75rem;
   font-size: 0.85rem;
   background: color-mix(in srgb, var(--accent) 8%, transparent);
