@@ -42,6 +42,61 @@ function revokeToken(token) {
   try { google.accounts.oauth2.revoke(token, () => {}); } catch (_) {}
 }
 
+// ── Identity client (FedCM / One Tap) ─────────────────────────────────────────
+// Establishes user identity *without* opening a popup. iOS 17+ uses FedCM
+// (browser-mediated, no popup); older platforms fall back to the Google One
+// Tap UI which is rendered inline on the page rather than via window.open().
+// Either way the iOS Safari popup-blocker prompt is never triggered.
+
+function initIdentityClient(clientId, onIdToken) {
+  if (!window.google?.accounts?.id) return false;
+  google.accounts.id.initialize({
+    client_id: clientId,
+    callback: (response) => onIdToken(response),
+    use_fedcm_for_prompt: true,
+    auto_select: true,
+    itp_support: true,
+    cancel_on_tap_outside: false,
+  });
+  return true;
+}
+
+// Trigger silent identity prompt. onMoment receives a notification object so
+// the caller can detect not-displayed / dismissed / skipped outcomes and fall
+// back to the explicit "연결" button flow when needed.
+function promptIdentity(onMoment) {
+  if (!window.google?.accounts?.id) return;
+  try {
+    google.accounts.id.prompt((notification) => {
+      if (typeof onMoment === "function") onMoment(notification);
+    });
+  } catch (_) {
+    if (typeof onMoment === "function") onMoment(null);
+  }
+}
+
+function cancelIdentityPrompt() {
+  if (!window.google?.accounts?.id) return;
+  try { google.accounts.id.cancel(); } catch (_) {}
+}
+
+// Decode the email claim from a Google ID token (JWT). Signature was already
+// verified by GIS; we only need the payload's `email` claim as a login hint.
+function parseIdToken(credential) {
+  if (!credential || typeof credential !== "string") return { email: null };
+  const parts = credential.split(".");
+  if (parts.length < 2) return { email: null };
+  try {
+    const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const padded = b64 + "===".slice((b64.length + 3) % 4);
+    const json = atob(padded);
+    const payload = JSON.parse(decodeURIComponent(
+      Array.from(json).map((c) => "%" + c.charCodeAt(0).toString(16).padStart(2, "0")).join("")
+    ));
+    return { email: payload.email ?? null };
+  } catch { return { email: null }; }
+}
+
 // ── User info ─────────────────────────────────────────────────────────────────
 
 // Returns { email } or { email: null } on failure.
@@ -150,6 +205,10 @@ window.syncTransport = {
   requestSilentToken,
   requestConsentToken,
   revokeToken,
+  initIdentityClient,
+  promptIdentity,
+  cancelIdentityPrompt,
+  parseIdToken,
   fetchUserInfo,
   driveFetch,
   findSyncFileId,

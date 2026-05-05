@@ -5,7 +5,8 @@
 - 개정: 2026-04-30 (Phase 2a 구현 완료)
 - 개정: 2026-05-02 (Phase 2b 구현 완료, 보안 감사 완료)
 - 개정: 2026-05-04 (Phase 2c 구현 완료)
-- 상태: 승인됨 (Phase 2a 완료, Phase 2b 완료, Phase 2c 완료)
+- 개정: 2026-05-05 (Phase 2d — iOS FedCM/One Tap 적용)
+- 상태: 승인됨 (Phase 2a~2d 완료)
 
 ## 결정
 
@@ -282,6 +283,25 @@ connect-src: 현재 + https://oauth2.googleapis.com
 > - **e2e 테스트** (`tests/e2e/test_drive_sync.py`): FakeDrive + GIS 스텁으로 5가지 시나리오 자동 검증.
 > - **tombstone GC** (`sweepTombstones(ageDays=30)`): 앱 시작 시 30일 이상 경과한 tombstone 자동 제거.
 
+## Phase 2d — iOS FedCM/One Tap 적용 (구현 완료 2026-05-05)
+
+> **개정 (2026-05-05):** iOS Safari에서 앱을 열 때마다 "이 사이트에서 팝업 윈도우를 열려고 시도 중입니다." 차단 안내가 뜨는 문제 해결. Phase 2b는 GIS Token Client 단일 경로로, 페이지 로드 시 자동 `requestAccessToken({prompt:""})` 호출이 사용자 제스처 밖에서 `window.open()`을 트리거해 iOS가 팝업으로 인식했다. ADR-011 원안의 "iOS 17+ FedCM, iOS 16↓ One Tap" 인증 분기를 실제로 구현해 정합화.
+>
+> - **Identity Client 추가** (`js/sync/transport.js`): `initIdentityClient`/`promptIdentity`/`parseIdToken` 함수 신규. `google.accounts.id.initialize({use_fedcm_for_prompt: true, auto_select: true, itp_support: true})` + `prompt()` 사용. iOS 17+은 FedCM (브라우저 mediated UI), iOS 16↓은 One Tap (인라인 UI)으로 자동 폴백 — 둘 다 `window.open()` 미사용이라 iOS 팝업 차단 안내가 발생하지 않음.
+> - **상태 머신 분리** (`js/sync/state-machine.js`): `AUTHENTICATING` 단일 상태를 `IDENTIFYING` → `AUTHENTICATING` 두 단계로 나눔. 페이지 로드 자동 흐름은 ID Client만 사용하므로 popup-blocker 다이얼로그가 발생하지 않음. `NEEDS_CONSENT` 상태 신설 — silent identity 실패 시 ERROR 대신 부드러운 상태에 머물고, 사용자가 "연결" 버튼을 클릭하면 그 사용자 제스처 안에서 `requestAccessToken({prompt:"consent"})`을 호출해 iOS가 팝업을 정상 허용.
+> - **이벤트 추가**: `IDENTITY_OK { email, credential }` / `IDENTITY_FAIL { reason }` / `USER_CONSENT_REQUEST`. 401 재인증도 IDENTIFYING 단계를 거쳐 silent FedCM 갱신을 먼저 시도.
+> - **email hint 자동 시드**: ID 토큰에서 추출한 email을 즉시 `bible-drive-sync-email`에 저장 → 후속 `requestAccessToken({prompt:"", hint:email})` 성공률 향상.
+> - **테스트 스텁 확장** (`tests/e2e/test_drive_sync.py`): GIS 스텁이 `accounts.id.initialize`/`prompt`도 시뮬레이션하도록 확장. `__gisForceIdentityFail` 토글로 FedCM 미지원 환경 회귀 시나리오 시뮬레이션 가능.
+
+### Phase 2d 동작 매트릭스
+
+| 환경 | 페이지 로드 시 동작 | iOS 팝업 차단 안내 |
+| --- | --- | --- |
+| Android Chrome | FedCM/세션 쿠키로 silent identity → silent token | 발생 안 함 |
+| iOS 17+ Safari | FedCM mediated UI로 silent identity → silent token | 발생 안 함 |
+| iOS 16↓ Safari (사전 동의 있음) | One Tap UI로 identity → silent token | 발생 안 함 |
+| iOS 16↓ Safari (사전 동의 없음) | identity 실패 → NEEDS_CONSENT, 사용자 "연결" 클릭 대기 | 발생 안 함 (사용자 제스처 안에서만 popup) |
+
 ## 미결 사항
 
 - [x] Google Cloud Console 프로젝트 생성 및 Client ID 발급
@@ -289,6 +309,7 @@ connect-src: 현재 + https://oauth2.googleapis.com
 - [x] Drive API 호출 실패 재시도 전략 — exponential backoff (PR #26, Phase 2c)
 - [x] 동기화 충돌 결과 사용자 알림 UX
 - [ ] Google OAuth 앱 검수 통과 (2026-05-02 제출 완료, 심사 결과 대기 중)
+- [x] iOS Safari 팝업 차단 안내 제거 (Phase 2d, 2026-05-05) — FedCM/One Tap + 사용자 제스처 격리
 - [x] 항목 단위 병합 — per-record LWW + tombstone (Phase 2c, `js/sync/store-v2.js`)
 - [x] 내보내기/가져오기 JSON 스키마 `_version: 1` 추가
 - [x] tombstone GC (`sweepTombstones`, 30일 기준, 앱 시작 시 실행)

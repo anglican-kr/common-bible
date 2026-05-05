@@ -117,9 +117,40 @@ class FakeDrive:
 
 GIS_STUB = """
 window.__gisCallbacks = {};
+// Mock JWT for test@example.com — header.payload.signature, payload decodes
+// to {"email":"test@example.com"}. Signature verification happens in GIS in
+// production, but the stub bypasses it.
+window.__mockCredential =
+  "eyJhbGciOiJSUzI1NiJ9.eyJlbWFpbCI6InRlc3RAZXhhbXBsZS5jb20ifQ.sig";
 window.google = {
   accounts: {
-    id: { initialize: () => {}, prompt: () => {} },
+    id: {
+      initialize: (cfg) => { window.__gisIdCallback = cfg.callback; },
+      prompt: (momentCallback) => {
+        // Allow tests to simulate FedCM unavailability (iOS 16↓ first run).
+        if (window.__gisForceIdentityFail) {
+          window.__gisForceIdentityFail = null;
+          if (momentCallback) momentCallback({
+            isNotDisplayed: () => true,
+            isSkippedMoment: () => false,
+            isDismissedMoment: () => false,
+            getNotDisplayedReason: () => "browser_not_supported",
+          });
+          return;
+        }
+        setTimeout(() => {
+          if (window.__gisIdCallback) {
+            window.__gisIdCallback({ credential: window.__mockCredential });
+          }
+          if (momentCallback) momentCallback({
+            isNotDisplayed: () => false,
+            isSkippedMoment: () => false,
+            isDismissedMoment: () => false,
+          });
+        }, 0);
+      },
+      cancel: () => {},
+    },
     oauth2: {
       initTokenClient: (cfg) => {
         window.__gisCallbacks[cfg.client_id] = cfg.callback;
