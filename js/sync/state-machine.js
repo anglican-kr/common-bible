@@ -1,3 +1,4 @@
+// @ts-check
 // ── Sync State Machine (statechart) ───────────────────────────────────────────
 // Explicit context object eliminates "hidden state" bugs:
 //   _ctx = { netFails, conflictFails, reAuthFails, backoffTimer }
@@ -39,6 +40,12 @@
 //       URL hash; drive-sync.js consumes the callback before routing and
 //       calls _machine.acceptRedirectToken() to land directly in IDLE.
 
+/** @typedef {import("../types").SyncState}      SyncState */
+/** @typedef {import("../types").SyncEvent}      SyncEvent */
+/** @typedef {import("../types").SyncMachineCtx} SyncMachineCtx */
+/** @typedef {import("../types").SyncMachine}    SyncMachine */
+
+/** @type {Readonly<Record<SyncState, SyncState>>} */
 const S = Object.freeze({
   DISABLED:       "DISABLED",
   INITIALIZING:   "INITIALIZING",
@@ -51,6 +58,7 @@ const S = Object.freeze({
   ERROR:          "ERROR",
 });
 
+/** @type {Set<string>} */
 const SILENT_FAIL_REASONS = new Set([
   "user_cancel", "access_denied", "popup_closed_by_user",
 ]);
@@ -65,6 +73,10 @@ const ACTIVE_READING_IDLE_MS = 5000;
 
 // ── Factory ───────────────────────────────────────────────────────────────────
 
+/**
+ * @param {{ onStateChange?: (state: SyncState) => void }} [opts]
+ * @returns {SyncMachine}
+ */
 function createSyncMachine({ onStateChange } = {}) {
   const SYNC_ENABLED_KEY = "bible-drive-sync";
   const SYNC_EMAIL_KEY   = "bible-drive-sync-email";
@@ -73,17 +85,23 @@ function createSyncMachine({ onStateChange } = {}) {
   const V2 = window.syncStoreV2;
   const _deviceId = V2.getDeviceId();
 
+  /** @type {SyncState} */
   let _state = S.DISABLED;
+  /** @type {string | null} */
   let _token = null;
+  /** @type {string | null} */
   let _email = null;
+  /** @type {import("../types").GsiTokenClient | null} */
   let _tokenClient = null;
   let _syncPending = false;
 
   // ── Context (all "hidden state" in one place) ─────────────────────────────
   // Mutated only by _transition().
 
+  /** @type {SyncMachineCtx} */
   let _ctx = _emptyCtx();
 
+  /** @returns {SyncMachineCtx} */
   function _emptyCtx() {
     return { netFails: 0, conflictFails: 0, reAuthFails: 0, backoffTimer: null };
   }
@@ -94,8 +112,13 @@ function createSyncMachine({ onStateChange } = {}) {
   // 3. Apply ctxPatch to selectively carry values forward.
   // 4. Persist enabled flag; fire onStateChange.
 
+  /**
+   * @param {SyncState} next
+   * @param {Partial<SyncMachineCtx>} [ctxPatch]
+   * @param {SyncEvent | { type: string }} [event]
+   */
   function _transition(next, ctxPatch = {}, event) {
-    clearTimeout(_ctx.backoffTimer);
+    if (_ctx.backoffTimer !== null) clearTimeout(_ctx.backoffTimer);
     _ctx = { ..._emptyCtx(), ...ctxPatch };
 
     if (next === _state) return;
@@ -124,14 +147,20 @@ function createSyncMachine({ onStateChange } = {}) {
     if (typeof window.rebuildDriveSyncSection === "function") window.rebuildDriveSyncSection();
   }
 
+  /** @param {string} msg */
   function _snackbar(msg) {
     if (typeof window._showSyncSnackbar === "function") window._showSyncSnackbar(msg);
   }
 
+  /** @returns {string | null} */
   function _emailHint() { return localStorage.getItem(SYNC_EMAIL_KEY); }
 
   // Backoff timer that fires a SYNC_REQUEST if still IDLE.
   // Stored in ctxPatch so _transition will clear it on next transition.
+  /**
+   * @param {number} failCount
+   * @returns {ReturnType<typeof setTimeout>}
+   */
   function _makeBackoffTimer(failCount) {
     const delays = [1000, 2000, 4000, 8000, 16000];
     const base   = delays[Math.min(failCount - 1, delays.length - 1)];
@@ -143,6 +172,7 @@ function createSyncMachine({ onStateChange } = {}) {
   }
 
   // Short timer for 412 re-sync (waits for _syncPending to clear).
+  /** @returns {ReturnType<typeof setTimeout>} */
   function _makeConflictTimer() {
     return setTimeout(() => {
       if (_state === S.IDLE) dispatch({ type: "SYNC_REQUEST" });
@@ -155,6 +185,7 @@ function createSyncMachine({ onStateChange } = {}) {
 
   // ── iOS redirect helpers ──────────────────────────────────────────────────
 
+  /** @returns {boolean} */
   function _isUserActivelyReading() {
     if (document.visibilityState !== "visible") return false;
     if (!document.hasFocus()) return false;
@@ -162,6 +193,7 @@ function createSyncMachine({ onStateChange } = {}) {
     return Date.now() - ts <= ACTIVE_READING_IDLE_MS;
   }
 
+  /** @returns {number} */
   function _redirectAttempts() {
     return parseInt(localStorage.getItem(REDIRECT_ATTEMPTS_KEY) ?? "0", 10) || 0;
   }
@@ -169,6 +201,10 @@ function createSyncMachine({ onStateChange } = {}) {
   // Trigger full-page redirect to OAuth endpoint. Returns true if the redirect
   // was initiated (caller should `return` immediately — the page is leaving),
   // false if blocked by the attempt cap.
+  /**
+   * @param {string | undefined} prompt
+   * @returns {boolean}
+   */
   function _beginRedirect(prompt) {
     const attempts = _redirectAttempts();
     if (attempts >= MAX_REDIRECT_ATTEMPTS) {
@@ -180,10 +216,13 @@ function createSyncMachine({ onStateChange } = {}) {
     }
     localStorage.setItem(REDIRECT_ATTEMPTS_KEY, String(attempts + 1));
     L.log({ kind: "ACTION", event: "REDIRECT_AUTH_BEGIN", attempt: attempts + 1, prompt: prompt ?? "" });
-    T.beginRedirectAuth(window._syncClientId, SCOPE, { prompt });
+    // _syncClientId is set by drive-sync.js IIFE before this module ever
+    // starts a redirect, so the bang assertion is safe in practice.
+    T.beginRedirectAuth(/** @type {string} */ (window._syncClientId), SCOPE, { prompt });
     return true;
   }
 
+  /** @param {string} token */
   function _storeToken(token) {
     _token = token;
     L.log({ kind: "ACTION", event: "TOKEN_STORED", token: L.mask("token", token) });
@@ -193,21 +232,28 @@ function createSyncMachine({ onStateChange } = {}) {
       L.log({ kind: "ACTION", event: "EMAIL_FETCHED", email: L.mask("email", email) });
       if (email) _refreshUI();
     }).catch((err) => {
-      L.log({ kind: "ERROR", event: "EMAIL_FETCH_FAILED", reason: err.message });
+      L.log({ kind: "ERROR", event: "EMAIL_FETCH_FAILED", reason: err instanceof Error ? err.message : String(err) });
     });
   }
 
   // ── v2 data operations ────────────────────────────────────────────────────
 
+  /**
+   * @param {import("../types").SyncDoc} merged
+   * @param {boolean} hadRemoteChanges
+   */
   function _applyMergedDoc(merged, hadRemoteChanges) {
     V2.saveLocal(merged);
     V2.applyToLegacyKeys(merged);
     if (typeof window.renderBookmarkTree === "function") window.renderBookmarkTree();
     if (hadRemoteChanges) {
-      const s = merged.settings ?? {};
-      if (s.fontSize?.v    != null && typeof window.applyFontSize    === "function") window.applyFontSize(s.fontSize.v);
-      if (s.colorScheme?.v != null && typeof window.applyColorScheme === "function") window.applyColorScheme(s.colorScheme.v);
-      if (s.theme?.v       != null && typeof window.applyTheme       === "function") window.applyTheme(s.theme.v);
+      // SyncSettings stores `MTimed<unknown>`; the apply* helpers expect
+      // narrowed primitive types. Cast at the boundary — runtime guarantees
+      // the value matches because saveSetting is the only writer.
+      const s = merged.settings;
+      if (s.fontSize?.v    != null && typeof window.applyFontSize    === "function") window.applyFontSize(/** @type {number | string} */ (s.fontSize.v));
+      if (s.colorScheme?.v != null && typeof window.applyColorScheme === "function") window.applyColorScheme(/** @type {string} */ (s.colorScheme.v));
+      if (s.theme?.v       != null && typeof window.applyTheme       === "function") window.applyTheme(/** @type {string} */ (s.theme.v));
       _snackbar("다른 기기에서 변경된 데이터를 불러왔습니다.");
     }
   }
@@ -238,7 +284,7 @@ function createSyncMachine({ onStateChange } = {}) {
       const { doc: remote, etag, status: dlStatus } = await T.downloadSyncFile(_token, fileId);
       L.log({ kind: "NETWORK", event: "DOWNLOAD", status: dlStatus, etag: L.mask("etag", etag) });
       if (dlStatus === 401)             { dispatch({ type: "SYNC_FAIL", reason: "401" });              return; }
-      if (dlStatus === 0 || dlStatus >= 500) { dispatch({ type: "SYNC_FAIL", reason: `http_${dlStatus}` }); return; }
+      if (dlStatus === 0 || (dlStatus !== undefined && dlStatus >= 500)) { dispatch({ type: "SYNC_FAIL", reason: `http_${dlStatus}` }); return; }
       if (!remote)                      { dispatch({ type: "SYNC_DONE" });                             return; }
 
       // ── Remote is legacy v1: upgrade Drive to v2 ──
@@ -258,7 +304,7 @@ function createSyncMachine({ onStateChange } = {}) {
       const mergedMaxU = V2.maxU(merged);
 
       const hadRemoteChanges = (
-        Object.keys(merged.settings ?? {}).some(k =>
+        /** @type {Array<import("../types").SettingKey>} */ (Object.keys(merged.settings)).some(k =>
           (merged.settings[k]?._u ?? 0) > (local.settings?.[k]?._u ?? 0)) ||
         (merged.lastRead?._u ?? 0) > (local.lastRead?._u ?? 0) ||
         Object.keys(merged.bookmarks?.items ?? {}).some(id =>
@@ -285,8 +331,9 @@ function createSyncMachine({ onStateChange } = {}) {
 
       dispatch({ type: "SYNC_DONE" });
     } catch (err) {
-      L.log({ kind: "ERROR", event: "SYNC_EXCEPTION", reason: err.message });
-      dispatch({ type: "SYNC_FAIL", reason: err.message === "no_token" ? "no_token" : "exception" });
+      const msg = err instanceof Error ? err.message : String(err);
+      L.log({ kind: "ERROR", event: "SYNC_EXCEPTION", reason: msg });
+      dispatch({ type: "SYNC_FAIL", reason: msg === "no_token" ? "no_token" : "exception" });
     } finally {
       _syncPending = false;
     }
@@ -294,6 +341,7 @@ function createSyncMachine({ onStateChange } = {}) {
 
   // ── dispatch ──────────────────────────────────────────────────────────────
 
+  /** @param {SyncEvent} event */
   function dispatch(event) {
     L.log({ kind: "ACTION", event: event.type, state: _state, ctx: { ..._ctx, backoffTimer: !!_ctx.backoffTimer } });
 
@@ -321,13 +369,24 @@ function createSyncMachine({ onStateChange } = {}) {
       case S.INITIALIZING:
         if (event.type === "GIS_READY") {
           _tokenClient = T.initTokenClient(
-            window._syncClientId,
+            /** @type {string} */ (window._syncClientId),
             SCOPE,
-            (resp) => dispatch({ type: resp.error ? "TOKEN_FAIL" : "TOKEN_OK", ...resp, reason: resp.error })
+            (resp) => {
+              if (resp.error) {
+                dispatch({ type: "TOKEN_FAIL", reason: resp.error });
+              } else if (resp.access_token) {
+                dispatch({
+                  type: "TOKEN_OK",
+                  access_token: resp.access_token,
+                  expires_in: resp.expires_in,
+                  scope: resp.scope,
+                });
+              }
+            }
           );
           if (window.google?.accounts?.id) {
             T.initIdentityClient(
-              window._syncClientId,
+              /** @type {string} */ (window._syncClientId),
               (resp) => {
                 if (resp?.credential) {
                   const { email } = T.parseIdToken(resp.credential);
@@ -403,7 +462,7 @@ function createSyncMachine({ onStateChange } = {}) {
           dispatch({ type: "SYNC_REQUEST" });
         } else if (event.type === "TOKEN_FAIL") {
           L.log({ kind: "ERROR", event: "TOKEN_FAIL", reason: event.reason });
-          if (SILENT_FAIL_REASONS.has(event.reason)) {
+          if (event.reason && SILENT_FAIL_REASONS.has(event.reason)) {
             _transition(S.DISABLED, {}, event);
           } else {
             _snackbar("Google Drive 동기화 세션이 만료됐습니다. 설정에서 재연결해 주세요.");
@@ -498,6 +557,7 @@ function createSyncMachine({ onStateChange } = {}) {
   // ── SYNC_FAIL handler (extracted for readability) ─────────────────────────
   // All branches use _transition() with explicit ctxPatch — no implicit resets.
 
+  /** @param {{ type: "SYNC_FAIL"; reason: string }} event */
   function _handleSyncFail(event) {
     const { reason } = event;
 
@@ -576,6 +636,7 @@ function createSyncMachine({ onStateChange } = {}) {
   // Does NOT reset the redirect-attempts counter — only a successful sync
   // (SYNC_DONE) clears it, so a server-side scope revocation that issues a
   // token but immediately 401s on Drive cannot bypass MAX_REDIRECT_ATTEMPTS.
+  /** @param {string} access_token */
   function acceptRedirectToken(access_token) {
     if (!access_token) return;
     L.log({ kind: "ACTION", event: "REDIRECT_TOKEN_ACCEPTED" });
