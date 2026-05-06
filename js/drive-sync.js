@@ -41,7 +41,7 @@ window._syncClientId = _CLIENT_ID;
     // A silent re-auth round-trip succeeded → Google can issue tokens
     // without user interaction → clear the Phase 2g silent-blocked flag if
     // it had been set by a prior failure.
-    if (result.silent) localStorage.removeItem("bible-drive-silent-blocked");
+    if (result.silent) localStorage.removeItem(/** @type {string} */ (window._syncSilentBlockedKey));
     // NOTE: do NOT reset bible-drive-redirect-attempts here. The counter only
     // clears on a successful sync (SYNC_DONE in the state machine), so an
     // OAuth-success-then-Drive-401 loop still hits MAX_REDIRECT_ATTEMPTS.
@@ -53,7 +53,7 @@ window._syncClientId = _CLIENT_ID;
     // Suppress the user-facing error toast: this is an expected outcome
     // of an automatic background attempt, not something the user should
     // be alerted to.
-    localStorage.setItem("bible-drive-silent-blocked", "1");
+    localStorage.setItem(/** @type {string} */ (window._syncSilentBlockedKey), "1");
     window.syncDebugLog?.log({
       kind: "ACTION", event: "SILENT_REAUTH_BLOCKED", reason: result.reason,
     });
@@ -170,11 +170,18 @@ function initDriveSync() {
     delete window.__pendingRedirectError;
     if (window.syncTransport.isIOS()) {
       window._showSyncSnackbar?.(_redirectErrorMessage(reason));
+      // Phase 2g guard: signIn() cleared silent-blocked before the explicit
+      // redirect, so a denied/expired callback would otherwise let the
+      // DISABLED+ENABLE iOS branch fire prompt=none — instantly destroying
+      // the snackbar and burning a redirect-attempts slot. Re-set the flag
+      // so enable() parks in NEEDS_CONSENT until the user clicks "연결"
+      // again (which clears it via signIn()).
+      localStorage.setItem(/** @type {string} */ (window._syncSilentBlockedKey), "1");
     } else {
       window.syncDebugLog?.log({ kind: "ERROR", event: "UNEXPECTED_REDIRECT_ERROR", reason });
     }
     // Fall through to enable() — on iOS the machine parks in NEEDS_CONSENT
-    // (see DISABLED + ENABLE handler) so settings shows a "연결" button.
+    // (silent-blocked set above) so settings shows a "연결" button.
   }
 
   _machine.enable();
@@ -225,7 +232,7 @@ function signOut() {
   if (token) window.syncTransport.revokeToken(token);
   localStorage.removeItem("bible-drive-sync-email");
   localStorage.removeItem("bible-drive-sync-updated");
-  localStorage.removeItem("bible-drive-silent-blocked");
+  localStorage.removeItem(/** @type {string} */ (window._syncSilentBlockedKey));
   localStorage.setItem("bible-drive-sync", "0");
   _machine.disable();
 }

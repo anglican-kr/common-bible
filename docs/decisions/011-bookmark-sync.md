@@ -484,6 +484,11 @@ ADR-013 (클라이언트 JS 유닛 테스트 전략) 참고. 위 6차 리뷰 정
 - **Google 측 세션 만료(ITP)**: Safari ITP가 Google 쿠키를 정리한 경우 silent가 실패 → silent-blocked=1 → 사용자가 "연결" 다시 눌러야 함. 첫 실패는 묵묵히 NEEDS_CONSENT, 이후 자동 시도 없음.
 - **외부 revoke 감지**: 사용자가 Google 계정 설정에서 권한을 끊으면 silent 시도가 실패하여 silent-blocked=1로 빠진다. 이는 의도된 동작 — 다음 사용자 제스처 시점에 명시적 consent로 복구.
 
+### Bugbot 1차 리뷰 정제 (PR #43)
+
+- **Consent 거부 후 자동 silent 재시도 차단**: `signIn()`은 명시적 재연결 진입에서 silent-blocked 플래그를 비우는데, Google에서 사용자가 consent를 거부하고 돌아오면 (`__pendingRedirectError`) `initDriveSync()`이 토스트만 띄우고 `_machine.enable()`을 호출 → DISABLED+ENABLE iOS 분기가 (email 있음 + silent-blocked 없음) prompt=none을 즉시 발사 → 토스트 파괴 + 무용한 round-trip. iOS 분기에서 `__pendingRedirectError` 처리 시 silent-blocked=1을 설정해 `enable()`이 NEEDS_CONSENT에 정착하도록 정정.
+- **silent-blocked 키 단일화**: `signIn()`은 `window._syncSilentBlockedKey` 상수를 사용했지만 IIFE 2곳과 `signOut()`은 리터럴 `"bible-drive-silent-blocked"`을 하드코딩 → Phase 2f에서 `REDIRECT_ATTEMPTS_KEY`로 잡았던 것과 동일한 패턴. 모두 상수 참조로 통일.
+
 ## 미결 사항
 
 - [x] Google Cloud Console 프로젝트 생성 및 Client ID 발급
