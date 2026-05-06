@@ -5146,10 +5146,33 @@ function registerServiceWorker() {
     window.location.reload();
   });
 
+  // Ask the waiting SW for the version it has cached, since loadVersion()
+  // returns the version of the currently running app (served by the active SW).
+  // Falls back to "" on timeout/error so the toast still renders.
+  function fetchWaitingVersion(waitingSW) {
+    return new Promise((resolve) => {
+      const channel = new MessageChannel();
+      let settled = false;
+      const finish = (v) => {
+        if (settled) return;
+        settled = true;
+        resolve(v || "");
+      };
+      channel.port1.onmessage = (e) => finish(e.data && e.data.version);
+      try {
+        waitingSW.postMessage({ type: "GET_VERSION" }, [channel.port2]);
+      } catch {
+        finish("");
+        return;
+      }
+      setTimeout(() => finish(""), 1500);
+    });
+  }
+
   async function showUpdateToast(waitingSW) {
     // Prevent duplicate toasts
     if (document.getElementById("sw-update-toast")) return;
-    const version = await loadVersion();
+    const version = await fetchWaitingVersion(waitingSW);
     const btn = el("button", { id: "sw-update-btn", "aria-label": "새 버전이 있습니다." }, "업데이트");
     const versionLink = el("a", {
       href: "https://github.com/anglican-kr/common-bible/releases",
