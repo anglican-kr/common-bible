@@ -76,6 +76,112 @@ function cancelIdentityPrompt() {
   try { google.accounts.id.cancel(); } catch (_) {}
 }
 
+// ── iOS redirect-based OAuth ──────────────────────────────────────────────────
+// Safari (any iOS version) does not support FedCM and blocks popup windows in
+// PWA standalone mode even from user gestures. GIS Token Client is popup-only
+// per Google docs ("only the popup UX is supported"), so iOS must bypass GIS
+// entirely and use OAuth 2.0 Implicit Flow via full-page navigation.
+
+const _REDIRECT_STATE_KEY = "bible-drive-redirect-state";
+const _REDIRECT_STATE_MAX_AGE_MS = 10 * 60 * 1000;
+
+function isIOS() {
+  const ua = navigator.userAgent;
+  if (/iPhone|iPod/.test(ua)) return true;
+  if (/iPad/.test(ua)) return true;
+  // iPadOS 13+ reports MacIntel UA but exposes touch.
+  if (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1) return true;
+  return false;
+}
+
+function _genNonce() {
+  const buf = new Uint8Array(32);
+  crypto.getRandomValues(buf);
+  return Array.from(buf, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+// Begin OAuth implicit-flow redirect. Page navigates away immediately, so this
+// returns void; never await it. Persists nonce + return URL in sessionStorage
+// for the callback handler to validate.
+function beginRedirectAuth(clientId, scope, { prompt } = {}) {
+  const nonce = _genNonce();
+  const returnTo = location.pathname + location.search;
+  sessionStorage.setItem(_REDIRECT_STATE_KEY, JSON.stringify({
+    nonce, returnTo, ts: Date.now(), flow: "implicit-v1",
+  }));
+
+  const params = new URLSearchParams({
+    response_type: "token",
+    client_id: clientId,
+    redirect_uri: location.origin + "/",
+    scope,
+    state: nonce,
+    include_granted_scopes: "true",
+  });
+  if (prompt) params.set("prompt", prompt);
+  const hint = localStorage.getItem("bible-drive-sync-email");
+  if (hint) params.set("login_hint", hint);
+
+  // Use href (not replace) so back-navigation can return to the app.
+  location.href = `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
+}
+
+// Synchronous callback consumption — must run before routing reads location.
+// Returns null if no callback hash, { ok: false, reason } on validation
+// failure, or { ok: true, token, expiresIn, scope, returnTo } on success.
+//
+// Important: state nonce is verified BEFORE sessionStorage is consumed. A
+// crafted URL like `#error=access_denied&state=anything` (no real OAuth
+// initiation behind it) must not be able to clobber a legitimate in-flight
+// OAuth state. Google echoes the state in both success and error responses,
+// so requiring a match in both branches is correct per RFC 6749 §10.12.
+function consumeRedirectCallback() {
+  const hash = location.hash;
+  if (!hash || hash.length < 2) return null;
+  const params = new URLSearchParams(hash.slice(1));
+  const hasToken = params.has("access_token");
+  const hasError = params.has("error");
+  if (!hasToken && !hasError) return null;
+
+  const raw = sessionStorage.getItem(_REDIRECT_STATE_KEY);
+  if (!raw) return { ok: false, reason: "no_state" };
+
+  let saved;
+  try {
+    saved = JSON.parse(raw);
+  } catch {
+    // Corrupted state — safe to discard (nothing to preserve).
+    sessionStorage.removeItem(_REDIRECT_STATE_KEY);
+    return { ok: false, reason: "bad_state" };
+  }
+
+  // Validate nonce BEFORE consuming. Mismatch → leave sessionStorage intact
+  // so a real callback that arrives shortly after can still validate.
+  const returnedState = params.get("state");
+  if (!returnedState || returnedState !== saved.nonce) {
+    return { ok: false, reason: "state_mismatch" };
+  }
+
+  // State matched — this is our callback. Now consume to prevent replay.
+  sessionStorage.removeItem(_REDIRECT_STATE_KEY);
+
+  // Error/expired branches still expose returnTo so the user lands back on
+  // the chapter they were reading — only state_mismatch / no_state /
+  // bad_state withhold it (state isn't trusted).
+  const returnTo = saved.returnTo || "/";
+
+  if (Date.now() - saved.ts > _REDIRECT_STATE_MAX_AGE_MS) {
+    return { ok: false, reason: "state_expired", returnTo };
+  }
+
+  if (hasError) return { ok: false, reason: params.get("error"), returnTo };
+
+  const token = params.get("access_token");
+  if (!token) return { ok: false, reason: "empty_token", returnTo };
+
+  return { ok: true, token, returnTo };
+}
+
 // Decode the email claim from a Google ID token (JWT). Signature was already
 // verified by GIS; we only need the payload's `email` claim as a login hint.
 function parseIdToken(credential) {
@@ -205,6 +311,9 @@ window.syncTransport = {
   promptIdentity,
   cancelIdentityPrompt,
   parseIdToken,
+  isIOS,
+  beginRedirectAuth,
+  consumeRedirectCallback,
   fetchUserInfo,
   driveFetch,
   findSyncFileId,

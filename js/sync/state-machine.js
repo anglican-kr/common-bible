@@ -23,17 +23,21 @@
 //   "exception" — JS error       → ERROR (deterministic)
 //   other       — network/5xx    → backoff (max 5), then OFFLINE
 //
-// Authentication flow (avoids iOS Safari popup-blocker dialog):
-//   1. IDENTIFYING  — google.accounts.id.prompt() establishes identity via
-//                     FedCM (iOS 17+) or One Tap UI (older). No window.open(),
-//                     so iOS never shows the "팝업 윈도우를 열려고 시도" prompt.
-//   2. AUTHENTICATING — google.accounts.oauth2.requestAccessToken({prompt:"",
-//                       hint:email}) silently exchanges identity for a Drive
-//                       access token. Only invoked AFTER identity is known or
-//                       inside a user-gesture click handler.
-//   3. NEEDS_CONSENT — silent identity failed. Wait for user to click "연결"
-//                      (a real user gesture); only then call requestAccessToken
-//                      with prompt:"consent" so iOS allows the popup.
+// Authentication flow:
+//   • Non-iOS (Android/desktop): GIS popup-based flow (Phase 2d/2e).
+//       1. IDENTIFYING  — google.accounts.id.prompt() (FedCM / One Tap) for
+//                         silent identity establishment. No window.open().
+//       2. AUTHENTICATING — google.accounts.oauth2.requestAccessToken silently
+//                           exchanges identity for a Drive access token.
+//       3. NEEDS_CONSENT — silent failure path; "연결" click triggers
+//                          requestAccessToken({prompt:"consent"}) inside the
+//                          user gesture.
+//   • iOS Safari (Phase 2f): full-page redirect flow via OAuth implicit.
+//       Safari does not support FedCM and PWA standalone mode blocks popups
+//       even from user gestures. transport.beginRedirectAuth() navigates to
+//       accounts.google.com and Google redirects back with the token in the
+//       URL hash; drive-sync.js consumes the callback before routing and
+//       calls _machine.acceptRedirectToken() to land directly in IDLE.
 
 const S = Object.freeze({
   DISABLED:       "DISABLED",
@@ -54,6 +58,10 @@ const SILENT_FAIL_REASONS = new Set([
 const MAX_REAUTH    = 3;
 const MAX_CONFLICTS = 3;
 const MAX_NET_RETRIES = 5; // 5 retries → delays 1s/2s/4s/8s/16s; OFFLINE on 6th failure
+const MAX_REDIRECT_ATTEMPTS = 3;
+const REDIRECT_ATTEMPTS_KEY = "bible-drive-redirect-attempts";
+const SCOPE = "https://www.googleapis.com/auth/drive.appdata email";
+const ACTIVE_READING_IDLE_MS = 5000;
 
 // ── Factory ───────────────────────────────────────────────────────────────────
 
@@ -143,6 +151,37 @@ function createSyncMachine({ onStateChange } = {}) {
 
   function _reqSilentToken() {
     T.requestSilentToken(_tokenClient, _emailHint());
+  }
+
+  // ── iOS redirect helpers ──────────────────────────────────────────────────
+
+  function _isUserActivelyReading() {
+    if (document.visibilityState !== "visible") return false;
+    if (!document.hasFocus()) return false;
+    const ts = window.__driveSyncInteractionTs?.() ?? 0;
+    return Date.now() - ts <= ACTIVE_READING_IDLE_MS;
+  }
+
+  function _redirectAttempts() {
+    return parseInt(localStorage.getItem(REDIRECT_ATTEMPTS_KEY) ?? "0", 10) || 0;
+  }
+
+  // Trigger full-page redirect to OAuth endpoint. Returns true if the redirect
+  // was initiated (caller should `return` immediately — the page is leaving),
+  // false if blocked by the attempt cap.
+  function _beginRedirect(prompt) {
+    const attempts = _redirectAttempts();
+    if (attempts >= MAX_REDIRECT_ATTEMPTS) {
+      L.log({ kind: "ERROR", event: "REDIRECT_CAP_EXCEEDED", attempts });
+      _snackbar("재연결을 여러 번 시도했지만 실패했습니다. 잠시 후 다시 시도해 주세요.");
+      _transition(S.ERROR, {}, { type: "REDIRECT_CAP" });
+      _refreshUI();
+      return false;
+    }
+    localStorage.setItem(REDIRECT_ATTEMPTS_KEY, String(attempts + 1));
+    L.log({ kind: "ACTION", event: "REDIRECT_AUTH_BEGIN", attempt: attempts + 1, prompt: prompt ?? "" });
+    T.beginRedirectAuth(window._syncClientId, SCOPE, { prompt });
+    return true;
   }
 
   function _storeToken(token) {
@@ -262,7 +301,15 @@ function createSyncMachine({ onStateChange } = {}) {
 
       case S.DISABLED:
         if (event.type === "ENABLE") {
-          if (window.google?.accounts?.id && window.google?.accounts?.oauth2 && _tokenClient) {
+          if (T.isIOS()) {
+            // iOS bypasses GIS entirely — without a pending redirect token to
+            // inject, the only path forward is the user clicking "연결",
+            // which signIn() turns into a fresh OAuth redirect. Park here so
+            // the settings UI shows the connect button instead of an
+            // INITIALIZING spinner that never resolves.
+            _transition(S.NEEDS_CONSENT, {}, event);
+            _refreshUI();
+          } else if (window.google?.accounts?.id && window.google?.accounts?.oauth2 && _tokenClient) {
             _transition(S.IDENTIFYING, {}, event);
             _promptIdentity();
           } else {
@@ -275,7 +322,7 @@ function createSyncMachine({ onStateChange } = {}) {
         if (event.type === "GIS_READY") {
           _tokenClient = T.initTokenClient(
             window._syncClientId,
-            "https://www.googleapis.com/auth/drive.appdata email",
+            SCOPE,
             (resp) => dispatch({ type: resp.error ? "TOKEN_FAIL" : "TOKEN_OK", ...resp, reason: resp.error })
           );
           if (window.google?.accounts?.id) {
@@ -319,10 +366,14 @@ function createSyncMachine({ onStateChange } = {}) {
           _transition(S.NEEDS_CONSENT, {}, event);
           _refreshUI();
         } else if (event.type === "USER_CONSENT_REQUEST") {
-          // User clicked "연결"; the popup is now anchored to a user gesture.
           T.cancelIdentityPrompt();
-          _transition(S.AUTHENTICATING, {}, event);
-          T.requestConsentToken(_tokenClient);
+          if (T.isIOS()) {
+            if (_beginRedirect("consent")) return;
+          } else {
+            // User gesture anchors the popup.
+            _transition(S.AUTHENTICATING, {}, event);
+            T.requestConsentToken(_tokenClient);
+          }
         } else if (event.type === "DISABLE") {
           T.cancelIdentityPrompt();
           _transition(S.DISABLED, {}, event);
@@ -332,8 +383,12 @@ function createSyncMachine({ onStateChange } = {}) {
 
       case S.NEEDS_CONSENT:
         if (event.type === "USER_CONSENT_REQUEST") {
-          _transition(S.AUTHENTICATING, {}, event);
-          T.requestConsentToken(_tokenClient);
+          if (T.isIOS()) {
+            if (_beginRedirect("consent")) return;
+          } else {
+            _transition(S.AUTHENTICATING, {}, event);
+            T.requestConsentToken(_tokenClient);
+          }
         } else if (event.type === "DISABLE") {
           _transition(S.DISABLED, {}, event);
           _refreshUI();
@@ -381,6 +436,12 @@ function createSyncMachine({ onStateChange } = {}) {
 
       case S.SYNCING:
         if (event.type === "SYNC_DONE") {
+          // A successful sync means the redirect→token→Drive cycle completed
+          // end-to-end; only here is it safe to clear the redirect-attempts
+          // counter. Resetting on token receipt alone (in acceptRedirectToken
+          // or the IIFE) would defeat the loop cap when a 401 fires
+          // immediately after every fresh token.
+          localStorage.setItem(REDIRECT_ATTEMPTS_KEY, "0");
           _transition(S.IDLE, {}, event); // all counts reset, timer cleared
         } else if (event.type === "SYNC_FAIL") {
           _handleSyncFail(event);
@@ -394,7 +455,13 @@ function createSyncMachine({ onStateChange } = {}) {
       case S.OFFLINE:
         if (event.type === "NET_RECOVERED") {
           // Re-establish identity silently before requesting a token.
-          if (window.google?.accounts?.id) {
+          if (T.isIOS()) {
+            // GIS never loads on iOS — redirect flow requires a user gesture,
+            // so park in NEEDS_CONSENT to show the connect button rather than
+            // transitioning to AUTHENTICATING where no event can advance us.
+            _transition(S.NEEDS_CONSENT, {}, event);
+            _refreshUI();
+          } else if (window.google?.accounts?.id) {
             _transition(S.IDENTIFYING, {}, event);
             _promptIdentity();
           } else {
@@ -410,8 +477,15 @@ function createSyncMachine({ onStateChange } = {}) {
 
       case S.ERROR:
         if (event.type === "ENABLE" || event.type === "USER_CONSENT_REQUEST") {
-          _transition(S.AUTHENTICATING, {}, event);
-          T.requestConsentToken(_tokenClient);
+          if (T.isIOS()) {
+            // ERROR-driven retry — clear stale attempt counter so user-initiated
+            // reconnect gets a fresh window of MAX_REDIRECT_ATTEMPTS chances.
+            localStorage.setItem(REDIRECT_ATTEMPTS_KEY, "0");
+            if (_beginRedirect("consent")) return;
+          } else {
+            _transition(S.AUTHENTICATING, {}, event);
+            T.requestConsentToken(_tokenClient);
+          }
         } else if (event.type === "DISABLE") {
           _token = null;
           _transition(S.DISABLED, {}, event);
@@ -431,10 +505,25 @@ function createSyncMachine({ onStateChange } = {}) {
       _token = null;
       if (_ctx.reAuthFails < MAX_REAUTH) {
         L.log({ kind: "ACTION", event: "REAUTH", attempt: _ctx.reAuthFails + 1 });
-        // Re-identify silently first (FedCM/One Tap, no popup) so the follow-up
-        // requestAccessToken({prompt:""}) has a fresh email hint and is far
-        // more likely to succeed without falling back to a popup.
-        if (window.google?.accounts?.id) {
+        if (T.isIOS()) {
+          // Hybrid policy: defer the disruptive full-page redirect when the
+          // user is actively reading; otherwise reauthorize transparently.
+          if (_isUserActivelyReading()) {
+            L.log({ kind: "ACTION", event: "REAUTH_DEFERRED", reason: "active_reading" });
+            _snackbar("Google 동기화 재연결이 필요합니다. 설정 → 연결을 눌러 주세요.");
+            _transition(S.NEEDS_CONSENT, { reAuthFails: _ctx.reAuthFails + 1 }, event);
+            _refreshUI();
+          } else {
+            // No prompt parameter — Google will silently re-issue the token
+            // when the existing session still has the granted scope.
+            // Do NOT pre-transition to NEEDS_CONSENT: if _beginRedirect hits the
+            // cap it already transitions to ERROR internally, causing a double
+            // state transition with a stale intermediate.
+            if (!_beginRedirect(undefined)) return;
+          }
+        } else if (window.google?.accounts?.id) {
+          // Re-identify silently first (FedCM/One Tap, no popup) so the
+          // follow-up requestAccessToken({prompt:""}) has a fresh email hint.
           _transition(S.IDENTIFYING, { reAuthFails: _ctx.reAuthFails + 1 }, event);
           _promptIdentity();
         } else {
@@ -482,6 +571,20 @@ function createSyncMachine({ onStateChange } = {}) {
   function onGisReady()  { if (_state === S.INITIALIZING) dispatch({ type: "GIS_READY" }); }
   function requestSync() { if (_state === S.IDLE) dispatch({ type: "SYNC_REQUEST" }); }
 
+  // iOS redirect-flow entry: callback handler in drive-sync.js calls this
+  // after consumeRedirectCallback validates the token. Bypasses GIS entirely.
+  // Does NOT reset the redirect-attempts counter — only a successful sync
+  // (SYNC_DONE) clears it, so a server-side scope revocation that issues a
+  // token but immediately 401s on Drive cannot bypass MAX_REDIRECT_ATTEMPTS.
+  function acceptRedirectToken(access_token) {
+    if (!access_token) return;
+    L.log({ kind: "ACTION", event: "REDIRECT_TOKEN_ACCEPTED" });
+    _storeToken(access_token);
+    _transition(S.IDLE, {}, { type: "REDIRECT_TOKEN" });
+    _refreshUI();
+    dispatch({ type: "SYNC_REQUEST" });
+  }
+
   function getState()        { return _state; }
   function getToken()        { return _token; }
   function getEmail()        { return _email ?? localStorage.getItem(SYNC_EMAIL_KEY); }
@@ -498,8 +601,10 @@ function createSyncMachine({ onStateChange } = {}) {
     }
   }
 
-  return { enable, disable, onGisReady, requestSync, dispatch,
+  return { enable, disable, onGisReady, requestSync, dispatch, acceptRedirectToken,
            getState, getToken, getEmail, isEnabled, isAuthenticated, deleteRemoteFile };
 }
 
 window.createSyncMachine = createSyncMachine;
+window._syncScope = SCOPE;
+window._syncRedirectAttemptsKey = REDIRECT_ATTEMPTS_KEY;
