@@ -65,8 +65,9 @@ iOS 한정 추가 동작:
 
 ### 알려진 한계
 
-- **iOS Safari 7일 ITP**: PWA를 7일 이상 미사용 시 storage(쿠키 + localStorage 포함) 정리 → 동기화 재연결 필요.
+- **iOS Safari 탭 사용 시 7일 ITP**: 홈 화면에 설치하지 않고 Safari 탭에서 직접 여는 경우, 7일 미사용 시 ITP가 storage(쿠키 + localStorage 포함)를 정리 → 동기화 재연결 필요. **홈 화면 설치 PWA(iOS 17+ HSWA)는 storage가 영속되어 ITP 적용 대상 아님** — ADR-011 §맥락 참고.
 - **iOS 모든 버전 Implicit Flow**: refresh token 미발급. 토큰은 1시간 만료 + 메모리 전용 → 매 cold start에 silent 재인증 round-trip 발생 (브리프 깜박임 < 1초).
+- **Google 자체 세션 만료**: Google OAuth 세션이 서버 측에서 약 2주 비활성 후 만료되면 silent 재인증이 실패 → "연결" 버튼 노출.
 - **iOS Chrome/Firefox 등 WebKit 래퍼 브라우저**: 설치 불가 + Drive 동기화 시 PWA-격리 컨텍스트 미보장.
 
 ## 프로젝트 구조

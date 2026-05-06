@@ -481,8 +481,8 @@ ADR-013 (클라이언트 JS 유닛 테스트 전략) 참고. 위 6차 리뷰 정
 ### 알려진 트레이드오프
 
 - **앱 오픈 깜박임**: 매 cold start마다 accounts.google.com으로의 짧은 round-trip 발생. 빠른 망에서 < 1초, 느린 모바일 망에서 1~3초. `prompt=none`은 UI를 표시하지 않으므로 도메인 플래시만 보임.
-- **Google 측 세션 만료(ITP)**: Safari ITP가 Google 쿠키를 정리한 경우 silent가 실패 → silent-blocked=1 → 사용자가 "연결" 다시 눌러야 함. 첫 실패는 묵묵히 NEEDS_CONSENT, 이후 자동 시도 없음.
-- **외부 revoke 감지**: 사용자가 Google 계정 설정에서 권한을 끊으면 silent 시도가 실패하여 silent-blocked=1로 빠진다. 이는 의도된 동작 — 다음 사용자 제스처 시점에 명시적 consent로 복구.
+- **Google 자체 세션 만료**: Google OAuth 세션은 서버 측에서 일정 기간(약 2주) 비활성 시 만료된다. 이 경우 silent 시도는 `login_required`를 반환 → silent-blocked=1로 떨어져 사용자가 "연결"을 다시 눌러야 한다. 첫 실패는 묵묵히 NEEDS_CONSENT, 이후 자동 시도 없음. (※ iOS Safari 탭 7일 ITP storage cap은 **홈 화면 PWA에는 적용되지 않으므로** 설치 사용자에겐 무관 — ADR-011 §맥락 참고.)
+- **외부 revoke 감지**: 사용자가 Google 계정 설정에서 권한을 끊으면 silent 시도는 `consent_required`를 반환 → silent-blocked=1. 이는 의도된 동작 — 다음 사용자 제스처 시점에 명시적 consent로 복구.
 
 ### Bugbot 1차 리뷰 정제 (PR #43)
 
