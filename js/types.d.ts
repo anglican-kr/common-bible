@@ -210,6 +210,37 @@ export type RedirectCallbackResult =
   | { ok: true; token: string; returnTo: string; silent: boolean }
   | { ok: false; reason: string; returnTo?: string; silent: boolean };
 
+// PKCE Authorization Code flow callback (Phase 2i). Same shape as
+// RedirectCallbackResult but the success branch carries `code` + `verifier`
+// for the follow-up POST to /token.
+export type RedirectCallbackResultPKCE =
+  | { ok: true; code: string; verifier: string; returnTo: string; silent: boolean }
+  | { ok: false; reason: string; returnTo?: string; silent: boolean };
+
+// /token endpoint responses for the two grant types we use.
+// Failure path is structured so callers can branch on `status` / `error`
+// without throwing.
+export type TokenExchangeResponse =
+  | {
+      ok: true;
+      access_token: string;
+      refresh_token: string;
+      expires_in: number;
+      scope: string;
+    }
+  | { ok: false; status: number; error: string };
+
+export type RefreshTokenResponse =
+  | {
+      ok: true;
+      access_token: string;
+      // null when Google did NOT rotate — caller must keep the existing
+      // refresh token in storage rather than overwriting it.
+      refresh_token: string | null;
+      expires_in: number;
+    }
+  | { ok: false; status: number; error: string };
+
 export interface SyncTransport {
   DRIVE_HOSTNAMES: readonly string[];
   initTokenClient: (
@@ -234,6 +265,23 @@ export interface SyncTransport {
     opts?: { prompt?: string },
   ) => void;
   consumeRedirectCallback: () => RedirectCallbackResult | null;
+  // PKCE Authorization Code Flow (Phase 2i)
+  generatePKCEPair: () => Promise<{ verifier: string; challenge: string }>;
+  beginRedirectAuthPKCE: (
+    clientId: string,
+    scope: string,
+    opts?: { prompt?: string },
+  ) => Promise<void>;
+  consumeRedirectCallbackPKCE: () => RedirectCallbackResultPKCE | null;
+  exchangeCodeForToken: (
+    code: string,
+    verifier: string,
+    clientId: string,
+  ) => Promise<TokenExchangeResponse>;
+  refreshAccessToken: (
+    refreshToken: string,
+    clientId: string,
+  ) => Promise<RefreshTokenResponse>;
   fetchUserInfo: (token: string) => Promise<{ email: string | null }>;
   driveFetch: (path: string, opts: DriveFetchOptions) => Promise<DriveFetchResult>;
   findSyncFileId: (token: string) => Promise<string | null>;
