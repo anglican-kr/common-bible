@@ -1,3 +1,4 @@
+// @ts-check
 // ── Drive Sync Facade ─────────────────────────────────────────────────────────
 // Thin coordinator: creates the state machine, manages the upload debounce
 // timer, registers the GIS-ready poll, and exposes window.driveSync.
@@ -101,15 +102,20 @@ function _startPollingGis() {
 }
 
 // ── Upload debounce ────────────────────────────────────────────────────────────
+/** @type {ReturnType<typeof setTimeout> | null} */
 let _uploadTimer = null;
 
 function _clearUploadTimer() {
-  clearTimeout(_uploadTimer);
+  if (_uploadTimer !== null) clearTimeout(_uploadTimer);
   _uploadTimer = null;
 }
 
 // ── Public API ─────────────────────────────────────────────────────────────────
 
+/**
+ * @param {string} reason
+ * @returns {string}
+ */
 function _redirectErrorMessage(reason) {
   switch (reason) {
     case "access_denied":
@@ -169,10 +175,13 @@ function signIn() {
     // Bypass GIS entirely — Safari does not support FedCM and PWA standalone
     // mode blocks popups even from user gestures. Reset the attempt counter
     // since this is an explicit user-initiated reconnect.
-    localStorage.setItem(window._syncRedirectAttemptsKey, "0");
+    // _syncRedirectAttemptsKey and _syncScope are set by state-machine.js at
+    // load time (top-level assignment), so they're defined whenever signIn()
+    // runs in response to a user click.
+    localStorage.setItem(/** @type {string} */ (window._syncRedirectAttemptsKey), "0");
     window._showSyncSnackbar?.("Google 인증 페이지로 이동합니다. 인증 후 자동으로 돌아옵니다.");
     window.syncDebugLog?.log({ kind: "ACTION", event: "SIGN_IN_IOS_REDIRECT" });
-    T.beginRedirectAuth(_CLIENT_ID, window._syncScope, { prompt: "consent" });
+    T.beginRedirectAuth(_CLIENT_ID, /** @type {string} */ (window._syncScope), { prompt: "consent" });
     return;
   }
 
