@@ -18,6 +18,8 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const STATE_MACHINE_PATH = path.resolve(__dirname, "../../js/sync/state-machine.js");
 const SOURCE = fs.readFileSync(STATE_MACHINE_PATH, "utf8");
+const REFRESH_STORE_PATH = path.resolve(__dirname, "../../js/sync/refresh-store.js");
+const REFRESH_STORE_SOURCE = fs.readFileSync(REFRESH_STORE_PATH, "utf8");
 
 // Constants mirrored from state-machine.js — kept here so tests can assert
 // against them without parsing the source. Only those actually used by
@@ -116,6 +118,136 @@ function fireAllPending(pending) {
   for (const fn of fns) {
     try { fn(); } catch (_) { /* surface via test assertions */ }
   }
+}
+
+// ── Minimal in-memory IndexedDB ──────────────────────────────────────────────
+// Just enough surface for refresh-store.js: open() + transaction(name).objectStore(name)
+// + get/put/delete returning IDBRequest-shaped objects. CryptoKey values are
+// stored by reference (no structured-clone) which is fine for unit tests.
+
+function makeFakeIndexedDB() {
+  /** Map<dbName, { version, stores: Map<storeName, Map<key, value>> }> */
+  const databases = new Map();
+
+  function _fireAsync(req, fn) {
+    Promise.resolve().then(() => {
+      try {
+        const result = fn();
+        req.result = result;
+        if (req.onsuccess) req.onsuccess({ target: req });
+      } catch (err) {
+        req.error = err;
+        if (req.onerror) req.onerror({ target: req });
+      }
+    });
+  }
+
+  function _makeStore(map) {
+    return {
+      get(key) {
+        const req = { result: undefined, error: null, onsuccess: null, onerror: null };
+        _fireAsync(req, () => map.get(key));
+        return req;
+      },
+      put(value, key) {
+        const req = { result: undefined, error: null, onsuccess: null, onerror: null };
+        _fireAsync(req, () => { map.set(key, value); return key; });
+        return req;
+      },
+      delete(key) {
+        const req = { result: undefined, error: null, onsuccess: null, onerror: null };
+        _fireAsync(req, () => { map.delete(key); return undefined; });
+        return req;
+      },
+    };
+  }
+
+  function _makeDb(record) {
+    return {
+      get objectStoreNames() {
+        return { contains: (n) => record.stores.has(n) };
+      },
+      createObjectStore(name) {
+        if (!record.stores.has(name)) record.stores.set(name, new Map());
+        return _makeStore(record.stores.get(name));
+      },
+      transaction(storeNames, _mode) {
+        const names = Array.isArray(storeNames) ? storeNames : [storeNames];
+        return {
+          objectStore(n) {
+            if (!names.includes(n)) throw new Error(`store ${n} not in transaction scope`);
+            const map = record.stores.get(n);
+            if (!map) throw new Error(`store ${n} not found`);
+            return _makeStore(map);
+          },
+        };
+      },
+      close() {},
+    };
+  }
+
+  const indexedDB = {
+    open(name, version) {
+      const req = {
+        result: null, error: null,
+        onsuccess: null, onupgradeneeded: null, onerror: null,
+      };
+      Promise.resolve().then(() => {
+        let record = databases.get(name);
+        const isUpgrade = !record || record.version < version;
+        if (!record) {
+          record = { version: 0, stores: new Map() };
+          databases.set(name, record);
+        }
+        const dbHandle = _makeDb(record);
+        req.result = dbHandle;
+        if (isUpgrade) {
+          const oldVersion = record.version;
+          record.version = version;
+          if (req.onupgradeneeded) req.onupgradeneeded({ oldVersion, newVersion: version, target: req });
+        }
+        if (req.onsuccess) req.onsuccess({ target: req });
+      });
+      return req;
+    },
+  };
+
+  return {
+    indexedDB,
+    /** Direct access to underlying maps for assertions / tampering. */
+    _peek: (dbName, storeName) => {
+      const rec = databases.get(dbName);
+      return rec ? rec.stores.get(storeName) : undefined;
+    },
+    _reset: () => databases.clear(),
+  };
+}
+
+// ── refresh-store loader ─────────────────────────────────────────────────────
+// Each call creates a fresh vm context with isolated fake IDB + Node's real
+// Web Crypto. Real crypto means the AES-GCM round-trip and `extractable: false`
+// behavior are exercised, not just stubbed.
+
+export function loadRefreshStore() {
+  const { indexedDB, _peek, _reset } = makeFakeIndexedDB();
+
+  const ctx = {
+    console, Promise, Object, Array, Map, Set, JSON, Error,
+    Uint8Array, ArrayBuffer, DataView,
+    TextEncoder, TextDecoder,
+    crypto: globalThis.crypto,
+    indexedDB,
+  };
+  vm.createContext(ctx);
+  ctx.window = ctx;
+  vm.runInContext(REFRESH_STORE_SOURCE, ctx, { filename: "refresh-store.js" });
+
+  return {
+    store: ctx.refreshStore,
+    ctx,
+    peek: _peek,
+    reset: _reset,
+  };
 }
 
 // ── Main loader ──────────────────────────────────────────────────────────────

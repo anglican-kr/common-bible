@@ -44,6 +44,7 @@ js/
     transport.js        ← GIS / Drive REST / iOS OAuth 리디렉션 (ADR-011)
     store-v2.js         ← per-record mtime + tombstone 머지 (Phase 2c)
     debug-log.js        ← ring buffer 진단 로그
+    refresh-store.js    ← OAuth refresh token 암호화 IDB 저장소 (Phase 2i)
 css/
   style.css             ← 메인 스타일
 assets/

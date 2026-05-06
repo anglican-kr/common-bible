@@ -246,6 +246,15 @@ export interface SyncTransport {
   deleteSyncFile: (token: string, fileId: string) => Promise<{ ok: boolean }>;
 }
 
+// ── Refresh Token Store (Phase 2i) ───────────────────────────────────────────
+// AES-GCM encrypted IndexedDB persistence for OAuth refresh tokens.
+
+export interface RefreshTokenStore {
+  saveRefreshToken: (plain: string) => Promise<void>;
+  loadRefreshToken: () => Promise<string | null>;
+  clearRefreshToken: () => Promise<void>;
+}
+
 // ── Store v2 ─────────────────────────────────────────────────────────────────
 
 export interface SyncStoreV2 {
@@ -346,6 +355,7 @@ declare global {
     syncTransport: SyncTransport;
     syncStoreV2: SyncStoreV2;
     syncDebugLog: SyncDebugLog;
+    refreshStore: RefreshTokenStore;
     createSyncMachine: (opts?: {
       onStateChange?: (state: SyncState) => void;
     }) => SyncMachine;
