@@ -1136,8 +1136,8 @@ function _isMobileViewport() {
 function closeSwipedRow(except) {
   if (_swipedRow && _swipedRow !== except) {
     _swipedRow.classList.remove("bm-swiped");
-    const prevContent = _swipedRow.querySelector(".bm-row-content");
-    if (prevContent) prevContent.style.transform = "";
+    const prevActions = _swipedRow.querySelector(".bm-row-actions-mobile");
+    if (prevActions) prevActions.style.transform = "";
     _swipedRow = null;
   }
 }
@@ -1145,8 +1145,8 @@ function closeSwipedRow(except) {
 function _openSwipedRow(row) {
   closeSwipedRow(row);
   row.classList.add("bm-swiped");
-  const content = row.querySelector(".bm-row-content");
-  if (content) content.style.transform = "";
+  const actions = row.querySelector(".bm-row-actions-mobile");
+  if (actions) actions.style.transform = "";
   _swipedRow = row;
 }
 
@@ -1162,8 +1162,8 @@ function _setupDragHandle(li, row) {
     const startY = e.clientY;
     const origRect = li.getBoundingClientRect();
     const isMobile = _isMobileViewport();
-    const swipeContent = row.querySelector(".bm-row-content");
-    const canSwipe = isMobile && !!swipeContent;
+    const swipeActions = row.querySelector(".bm-row-actions-mobile");
+    const canSwipe = isMobile && !!swipeActions;
     // null until the first significant move classifies the gesture.
     // "drag" → reorder, "swipe" → reveal actions, "longpress" → reveal via hold
     let mode = null;
@@ -1222,7 +1222,12 @@ function _setupDragHandle(li, row) {
         let offset = baseOffset + dx;
         if (offset > 0) offset = 0;
         if (offset < -SWIPE_REVEAL_PX * 1.2) offset = -SWIPE_REVEAL_PX * 1.2;
-        if (swipeContent) swipeContent.style.transform = `translateX(${offset}px)`;
+        // Slide the action panel in from the right; row content stays put.
+        // offset 0 → panel translateX(140) (off-screen); offset -140 → translateX(0) (open).
+        if (swipeActions) {
+          const panelTx = SWIPE_REVEAL_PX + offset;
+          swipeActions.style.transform = `translateX(${panelTx}px)`;
+        }
         return;
       }
 
@@ -1261,7 +1266,7 @@ function _setupDragHandle(li, row) {
           _openSwipedRow(row);
         } else {
           row.classList.remove("bm-swiped");
-          if (swipeContent) swipeContent.style.transform = "";
+          if (swipeActions) swipeActions.style.transform = "";
           if (_swipedRow === row) _swipedRow = null;
         }
         return;
@@ -1299,7 +1304,7 @@ function _setupDragHandle(li, row) {
           _openSwipedRow(row);
         } else {
           row.classList.remove("bm-swiped");
-          if (swipeContent) swipeContent.style.transform = "";
+          if (swipeActions) swipeActions.style.transform = "";
           if (_swipedRow === row) _swipedRow = null;
         }
         return;
@@ -4129,7 +4134,7 @@ function _buildBookmarkItem(bm, depth) {
   actions.appendChild(delBtn);
 
   // Mobile swipe-to-reveal actions panel (hidden on desktop via CSS).
-  // Sits behind the sliding row content; revealed when row.bm-swiped translates left.
+  // Slides in from the right and overlays the right edge of the row content.
   const mobileActions = el("div", { className: "bm-row-actions-mobile", "aria-hidden": "true" });
   const mEditBtn = el("button", {
     className: "bm-mobile-action-btn bm-mobile-edit-btn",
