@@ -68,6 +68,13 @@ const MAX_CONFLICTS = 3;
 const MAX_NET_RETRIES = 5; // 5 retries → delays 1s/2s/4s/8s/16s; OFFLINE on 6th failure
 const MAX_REDIRECT_ATTEMPTS = 3;
 const REDIRECT_ATTEMPTS_KEY = "bible-drive-redirect-attempts";
+// Set when an app-open silent re-auth (prompt=none) returns
+// interaction_required / login_required / consent_required. The next app
+// open must NOT auto-retry — Google has signaled that user interaction is
+// needed, so park in NEEDS_CONSENT instead. Cleared on signIn() (user
+// gesture) and on SYNC_DONE (defense in depth: a subsequent successful
+// sync proves the silent path can resume).
+const SILENT_BLOCKED_KEY = "bible-drive-silent-blocked";
 const SCOPE = "https://www.googleapis.com/auth/drive.appdata email";
 const ACTIVE_READING_IDLE_MS = 5000;
 
@@ -350,13 +357,22 @@ function createSyncMachine({ onStateChange } = {}) {
       case S.DISABLED:
         if (event.type === "ENABLE") {
           if (T.isIOS()) {
-            // iOS bypasses GIS entirely — without a pending redirect token to
-            // inject, the only path forward is the user clicking "연결",
-            // which signIn() turns into a fresh OAuth redirect. Park here so
-            // the settings UI shows the connect button instead of an
-            // INITIALIZING spinner that never resolves.
-            _transition(S.NEEDS_CONSENT, {}, event);
-            _refreshUI();
+            // iOS bypasses GIS entirely. Phase 2g: when the user has a prior
+            // successful connection (saved email) and silent re-auth hasn't
+            // been blocked by Google, attempt prompt=none redirect to resume
+            // sync transparently — the in-memory access token was lost on
+            // app close and Implicit Flow has no refresh token. On any
+            // failure path (no email, blocked, redirect cap), park in
+            // NEEDS_CONSENT so the settings UI shows the "연결" button.
+            const emailHint = _emailHint();
+            const silentBlocked = localStorage.getItem(SILENT_BLOCKED_KEY) === "1";
+            if (emailHint && !silentBlocked) {
+              if (_beginRedirect("none")) return;
+              // Cap reached: _beginRedirect already transitioned to ERROR.
+            } else {
+              _transition(S.NEEDS_CONSENT, {}, event);
+              _refreshUI();
+            }
           } else if (window.google?.accounts?.id && window.google?.accounts?.oauth2 && _tokenClient) {
             _transition(S.IDENTIFYING, {}, event);
             _promptIdentity();
@@ -507,6 +523,9 @@ function createSyncMachine({ onStateChange } = {}) {
           // or the IIFE) would defeat the loop cap when a 401 fires
           // immediately after every fresh token.
           localStorage.setItem(REDIRECT_ATTEMPTS_KEY, "0");
+          // Successful sync also proves the Google session can issue tokens
+          // silently — clear any stale Phase 2g silent-blocked flag.
+          localStorage.removeItem(SILENT_BLOCKED_KEY);
           _transition(S.IDLE, {}, event); // all counts reset, timer cleared
         } else if (event.type === "SYNC_FAIL") {
           _handleSyncFail(event);
@@ -675,3 +694,4 @@ function createSyncMachine({ onStateChange } = {}) {
 window.createSyncMachine = createSyncMachine;
 window._syncScope = SCOPE;
 window._syncRedirectAttemptsKey = REDIRECT_ATTEMPTS_KEY;
+window._syncSilentBlockedKey = SILENT_BLOCKED_KEY;

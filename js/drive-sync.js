@@ -38,10 +38,25 @@ window._syncClientId = _CLIENT_ID;
   if (result.ok) {
     window.__pendingRedirectToken = { access_token: result.token };
     localStorage.setItem("bible-drive-sync", "1");
+    // A silent re-auth round-trip succeeded → Google can issue tokens
+    // without user interaction → clear the Phase 2g silent-blocked flag if
+    // it had been set by a prior failure.
+    if (result.silent) localStorage.removeItem("bible-drive-silent-blocked");
     // NOTE: do NOT reset bible-drive-redirect-attempts here. The counter only
     // clears on a successful sync (SYNC_DONE in the state machine), so an
     // OAuth-success-then-Drive-401 loop still hits MAX_REDIRECT_ATTEMPTS.
-    window.syncDebugLog?.log({ kind: "ACTION", event: "REDIRECT_CALLBACK_OK" });
+    window.syncDebugLog?.log({ kind: "ACTION", event: "REDIRECT_CALLBACK_OK", silent: result.silent });
+  } else if (result.silent) {
+    // Phase 2g: a silent (prompt=none) redirect failed. Google's standard
+    // signal that the user must interactively re-consent — block further
+    // auto-attempts on subsequent app opens until the user clicks "연결".
+    // Suppress the user-facing error toast: this is an expected outcome
+    // of an automatic background attempt, not something the user should
+    // be alerted to.
+    localStorage.setItem("bible-drive-silent-blocked", "1");
+    window.syncDebugLog?.log({
+      kind: "ACTION", event: "SILENT_REAUTH_BLOCKED", reason: result.reason,
+    });
   } else {
     window.__pendingRedirectError = result.reason;
     window.syncDebugLog?.log({
@@ -175,10 +190,14 @@ function signIn() {
     // Bypass GIS entirely — Safari does not support FedCM and PWA standalone
     // mode blocks popups even from user gestures. Reset the attempt counter
     // since this is an explicit user-initiated reconnect.
-    // _syncRedirectAttemptsKey and _syncScope are set by state-machine.js at
-    // load time (top-level assignment), so they're defined whenever signIn()
-    // runs in response to a user click.
+    // _syncRedirectAttemptsKey, _syncSilentBlockedKey, and _syncScope are
+    // set by state-machine.js at load time (top-level assignment), so
+    // they're defined whenever signIn() runs in response to a user click.
     localStorage.setItem(/** @type {string} */ (window._syncRedirectAttemptsKey), "0");
+    // User gesture overrides the Phase 2g silent-blocked flag — the user
+    // has explicitly asked to re-authenticate, so clear any prior block
+    // so future app opens get a fresh silent re-auth window.
+    localStorage.removeItem(/** @type {string} */ (window._syncSilentBlockedKey));
     window._showSyncSnackbar?.("Google 인증 페이지로 이동합니다. 인증 후 자동으로 돌아옵니다.");
     window.syncDebugLog?.log({ kind: "ACTION", event: "SIGN_IN_IOS_REDIRECT" });
     T.beginRedirectAuth(_CLIENT_ID, /** @type {string} */ (window._syncScope), { prompt: "consent" });
@@ -206,6 +225,7 @@ function signOut() {
   if (token) window.syncTransport.revokeToken(token);
   localStorage.removeItem("bible-drive-sync-email");
   localStorage.removeItem("bible-drive-sync-updated");
+  localStorage.removeItem("bible-drive-silent-blocked");
   localStorage.setItem("bible-drive-sync", "0");
   _machine.disable();
 }
