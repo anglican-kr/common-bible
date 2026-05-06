@@ -1,5 +1,134 @@
 # 작업 일지
 
+## 2026-05-06
+
+### Phase 2f 머지 + Cursor Bugbot 6차 리뷰 정제 (ADR-011)
+
+전날(2026-05-05) 작성한 Phase 2f(iOS OAuth 풀페이지 리디렉션) 코드를 PR #37로 올린 뒤 Cursor Bugbot이 단계적으로 6차에 걸쳐 보안/안정성 결함을 지적해 모두 흡수한 후 머지. 새로운 결정 사항은 없으며 동작 계약을 명시화.
+
+**1차 — redirect counter 무한 루프 + state nonce CSRF**
+
+- localStorage `bible-drive-redirect-attempts` 카운터 키가 두 곳(`state-machine.js` `_handleSyncFail`, `drive-sync.js` `signIn`)에 하드코딩 → 한쪽 갱신 누락 시 카운트 무력화. 단일 상수로 통일.
+- `consumeRedirectCallback()` state nonce 검증을 강화. nonce 미일치 시 returnTo를 무시하고 ERROR 진입.
+
+**2차 — 에러 콜백 미처리 + returnTo 손실**
+
+- GIS Token Client 콜백이 `error`만 있고 `access_token`이 없는 응답에서 `_handleAuthFail` 미호출. 명시 분기 추가.
+- 풀페이지 리디렉션 시 `returnTo` sessionStorage 키가 callback 흡수 후에만 정리돼야 하는데 부팅 IIFE가 일찍 정리해 두 번째 새로고침에서 returnTo `/` 회귀.
+
+**3차 — untrusted 에러 returnTo "/" 이탈 + `_beginRedirect` 조건부 return**
+
+- OAuth callback의 `error_uri`가 `accounts.google.com` 도메인이 아닌 경우(피싱·중간자 의심) returnTo를 `/`로 강제 이탈시키지 않고 ERROR + 사용자 안내.
+- `_beginRedirect`이 cap 초과 시 ERROR 전이 후에도 후속 코드를 실행해 `_refreshUI` 이중 호출. `_transition` 직후 early return 추가.
+
+**4차 — `expiresIn` dead data + iOS 401 NEEDS_CONSENT 전환**
+
+- `acceptRedirectToken(token, expiresIn)` 시그니처에서 `expiresIn` 미사용 — 시그니처에서 제거.
+- iOS 환경 401 분기가 GIS-only 흐름을 가정해 `_isUserActivelyReading()` 휴리스틱 적용 전에 자동 리디렉션을 시도. NEEDS_CONSENT로 먼저 전환 후 사용자 활동 여부 평가.
+
+**5차 — cap 초과 시 NEEDS_CONSENT→ERROR 이중 전환 방지**
+
+- cap 초과 후 코드 흐름이 NEEDS_CONSENT 진입 후 다시 ERROR로 두 번 전이하며 `_refreshUI`가 두 번 호출되던 결함. `_transition` 단일 호출로 ERROR 직진.
+
+**6차 — `_refreshUI` 이중 호출 + transport 미사용 필드**
+
+- `_handleSyncFail` 401 핸들러가 `_transition(NEEDS_CONSENT)` 후 명시적으로 `_refreshUI()`를 또 호출 — `_transition`이 이미 트리거하므로 제거.
+- `transport.js` 모듈에 `_lastIdentityClient` 같은 미사용 캐시 필드 정리.
+
+**7차 — redirect attempts 키 중복 하드코딩 (별도 push)**
+
+- 1차에서 통일한 키가 한 곳에 다시 등장. 상수 export로 강제 단일화.
+
+**부수 변경**
+
+- 설정의 Drive 정보 버튼 `aria-label` 명시화 (5585f68).
+
+### SW 업데이트 토스트 버전 표시 fix (PR #38)
+
+증상: 새 버전이 배포돼 서비스 워커가 업데이트되면 토스트가 "버전 X.Y.Z로 업데이트하시겠습니까?"를 띄우는데, 표시되는 버전이 **현재 버전**이었음. 원인: `controllerchange` 이벤트 시점에 `version.json`을 새로 fetch하지 않고 캐시된 값을 사용. `js/app.js`의 토스트 핸들러가 `?bust=Date.now()` 쿼리로 `version.json`을 재요청하도록 수정.
+
+### TypeScript 점진 도입 (ADR-012)
+
+빌드 단계 추가 없이 `// @ts-check` + JSDoc + `tsconfig.json --noEmit` 조합으로 정적 검사 도입.
+
+**파운데이션** (`ebc069c`):
+- `tsconfig.json` (DOM lib) + `tsconfig.worker.json` (WebWorker lib) 분리
+- `js/types.d.ts` — 도메인 타입 단일 출처 (MTimed, BookmarkFlatRow, SyncDocV2, SyncEvent, GIS 응답 타입, window 싱글톤 augment)
+
+**파일별 적용**:
+- `js/sync/debug-log.js` (7def860)
+- `js/sync/transport.js` (73d0765)
+- `js/sync/store-v2.js` (babcb86)
+- `js/sync/state-machine.js` (7c0ab00)
+- `js/drive-sync.js` (72bca31)
+- `js/search-worker.js` (655b62b, 워커 전용 tsconfig)
+
+`js/app.js`는 다음 사이클로 보류.
+
+검증: `npx tsc -p tsconfig.json --noEmit` + `npx tsc -p tsconfig.worker.json --noEmit` 모두 0 error. 브라우저 동작 무변화.
+
+### GIS 토큰 콜백 빈 응답 stuck 방지 (PR #40, ADR-011)
+
+비-iOS 환경에서 GIS Token Client 콜백이 `error` 없이 `access_token`도 없는 빈 응답을 던지는 케이스 발견(쿠키 정책·세션 만료·third-party iframe 차단). 기존 코드는 `response.error`만 분기 처리해 `AUTHENTICATING` 상태에서 무한 대기.
+
+수정 (`js/sync/transport.js` + `js/sync/state-machine.js`): 콜백이 호출됐는데 두 필드 모두 없으면 `IDENTITY_FAIL { reason: "empty_response" }` 발화. 상태 머신은 NEEDS_CONSENT로 흡수해 사용자 escape hatch(설정의 "연결" 버튼)에 의존.
+
+### state-machine 유닛 테스트 + CI 워크플로우 (PR #42, ADR-013)
+
+`tests/unit/state-machine.test.js` + `tests/unit/harness.js` 신규. **Node 자체 테스트 러너 (`node --test`)** 위에서 `node:vm`으로 격리 컨텍스트를 만들고 브라우저 글로벌(`window`, `localStorage`, `navigator`, `document`, `setTimeout`)을 스텁. 테스트 의존성 0, Node 24 내장만 사용.
+
+검증 시나리오 30+:
+- ENABLE 분기: iOS → NEEDS_CONSENT (Phase 2f 회귀 방어)
+- Identity/Token 흐름, NEEDS_CONSENT escape hatch
+- SYNC_FAIL reasons: 401 / 412 / no_token / exception / 기타 (backoff)
+- NET_RECOVERED 분기, redirect attempts cap, GIS 빈 응답 흡수
+- `_transition` 기본 리셋 계약
+
+`.github/workflows/test.yml`에 `unit` job 추가 (`node --test tests/unit/state-machine.test.js`).
+
+### 1.4.3 릴리스 (ef93298)
+
+`scripts/release.py`로 `version.json` + `sw.js` `CACHE_NAME` 동시 bump.
+
+### Phase 2g — iOS 앱 재실행 시 silent 자동 리디렉션 (ADR-011, 3cb40ec)
+
+**증상**: iOS PWA에서 한 번 "연결" 성공한 뒤 앱을 종료하고 다시 열면 동기화가 해제된 것처럼 보임 (설정 화면에 "연결" 버튼 다시 노출). ADR-011 Phase 2f 동작 매트릭스의 "iOS PWA standalone | 페이지 로드 동작: 풀페이지 리디렉션" 항목과 실제 구현이 어긋나 있었음 — Phase 2f 코드는 hash callback이 없으면 무조건 NEEDS_CONSENT로 파킹.
+
+**원인**: Implicit Flow는 refresh token을 발급하지 않고, in-memory `_token`은 앱 종료와 함께 사라짐. Phase 2f는 401 발생 시점에만 hybrid 자동 재인증을 수행했고, 토큰 자체가 없는 cold start 경로는 사용자 제스처 대기로 떨어졌음.
+
+**수정**:
+- `state-machine.js` `DISABLED + ENABLE` iOS 분기에서 저장된 email이 있고 silent-blocked 플래그가 없으면 `_beginRedirect("none")` 자동 호출.
+- `transport.js` `beginRedirectAuth`가 sessionStorage state에 `silent` 필드 저장, `consumeRedirectCallback`이 모든 반환에 silent 포함.
+- `drive-sync.js` IIFE: silent 실패는 사용자-facing 토스트 없이 `bible-drive-silent-blocked=1`만 설정 (자동 background 시도의 정상적 실패 경로). `signIn`/`signOut`에서 플래그 정리, `SYNC_DONE` 시 defense-in-depth로 추가 정리.
+- `types.d.ts`: `RedirectCallbackResult.silent: boolean` 필수 필드, `Window._syncSilentBlockedKey?: string` 추가.
+
+**회귀 테스트** (`tests/unit/state-machine.test.js`): 케이스 3 갱신 + 3a~3e 신규 (총 20개 통과). cap 도달 / silent-blocked / 빈 email 경계 케이스 + SYNC_DONE 플래그 정리.
+
+**알려진 한계**: 매 cold start에 accounts.google.com round-trip 1회 (느린 망에서 ≤ 3초 깜박임), iOS Safari 7일 ITP 후 storage 정리 시 첫 연결 흐름으로 회귀, 외부 revoke 감지 시 silent-blocked=1로 자동 진정.
+
+### README 플랫폼별 동작 차이 섹션 (ade9f10)
+
+설치(`beforeinstallprompt` vs iOS Add to Home Screen)와 Drive 동기화(GIS+FedCM vs OAuth Implicit Flow + 풀페이지 리디렉션)의 플랫폼 분기를 표로 정리. iOS Safari ITP·refresh token 부재로 인한 cold start 깜박임 등 알려진 한계도 명시.
+
+### 수정 파일 요약
+
+| 파일 | 변경 |
+|---|---|
+| `docs/decisions/011-bookmark-sync.md` | Phase 2f 후속 정제 절 추가 (Bugbot 6차 + GIS 빈 응답) + Phase 2g 절 추가 |
+| `docs/decisions/012-typescript-incremental-adoption.md` | 신규 ADR |
+| `docs/decisions/013-client-js-unit-tests.md` | 신규 ADR |
+| `tsconfig.json`, `tsconfig.worker.json` | 신규 |
+| `js/types.d.ts` | 신규 도메인 타입 단일 출처 + Phase 2g `silent` 필드 |
+| `js/sync/*.js`, `js/drive-sync.js`, `js/search-worker.js` | `// @ts-check` + JSDoc 적용 |
+| `js/sync/state-machine.js`, `js/sync/transport.js`, `js/drive-sync.js` | Phase 2f 6차 정제 + 빈 응답 흡수 + Phase 2g silent 자동 리디렉션 |
+| `tests/unit/harness.js`, `tests/unit/state-machine.test.js` | 신규 + Phase 2g 회귀 케이스 5건 |
+| `.github/workflows/test.yml` | unit job 추가 |
+| `version.json`, `sw.js` | 1.4.3 |
+| `README.md` | 플랫폼별 동작 차이 섹션 추가 |
+| `CLAUDE.md` | 프로젝트 구조 + 현재 상태 갱신 (TS·유닛 테스트·Phase 2f/2g) |
+
+---
+
 ## 2026-05-05
 
 ### 검색 UI 재설계: 컴팩트 모달 → 결과 시트 + `in:` 연산자
