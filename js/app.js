@@ -5219,8 +5219,11 @@ function registerServiceWorker() {
     if (document.getElementById("sw-update-toast")) return;
     const version = await fetchWaitingVersion(waitingSW);
     const btn = el("button", { id: "sw-update-btn", "aria-label": "새 버전이 있습니다." }, "업데이트");
+    const releaseUrl = version
+      ? `https://github.com/anglican-kr/common-bible/releases/tag/${encodeURIComponent(version)}`
+      : "https://github.com/anglican-kr/common-bible/releases";
     const versionLink = el("a", {
-      href: "https://github.com/anglican-kr/common-bible/releases",
+      href: releaseUrl,
       target: "_blank",
       rel: "noopener noreferrer",
       id: "sw-update-release-link",
