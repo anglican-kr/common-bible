@@ -1,3 +1,4 @@
+// @ts-check
 // ── Sync Debug Log ────────────────────────────────────────────────────────────
 // In-memory ring buffers only — never persisted to storage.
 //
@@ -9,7 +10,12 @@
 // are merged into one entry with a repeat count, preventing high-frequency saves
 // (font-size drag, scroll lastRead) from filling the buffer before a failure.
 
+/** @typedef {import("../types").SyncLogEntry}     SyncLogEntry */
+/** @typedef {import("../types").SyncLogMaskField} SyncLogMaskField */
+
+/** @type {Array<SyncLogEntry & { ts: number; _count?: number; _lastTs?: number }>} */
 const _recent = [];
+/** @type {Array<SyncLogEntry & { ts: number; _count?: number; _lastTs?: number }>} */
 const _errors = [];
 const RECENT_CAP = 200;
 const ERROR_CAP = 20;
@@ -18,6 +24,10 @@ const _consoleEnabled = location.hostname === "localhost";
 // Deterministic session-stable fingerprint (djb2 hash) for tokens.
 // Same token always maps to the same 8-char hex — useful for spotting
 // "did the token change?" across entries without exposing the value.
+/**
+ * @param {string} str
+ * @returns {string}
+ */
 function _fingerprint(str) {
   let h = 5381;
   for (let i = 0; i < str.length; i++) h = (Math.imul(h, 33) ^ str.charCodeAt(i)) >>> 0;
@@ -26,8 +36,13 @@ function _fingerprint(str) {
 
 // ── Public: mask(field, value) ────────────────────────────────────────────────
 // Single entry point for all masking. Raw values must never reach log() directly.
+/**
+ * @param {SyncLogMaskField} field
+ * @param {unknown} value
+ * @returns {string | null | undefined}
+ */
 function mask(field, value) {
-  if (value == null) return value;
+  if (value == null) return /** @type {null | undefined} */ (value);
   const s = String(value);
   switch (field) {
     case "token":
@@ -51,6 +66,9 @@ function mask(field, value) {
 // ── Public: log(entry) ───────────────────────────────────────────────────────
 // entry = { kind: 'TRANSITION'|'ACTION'|'NETWORK'|'ERROR', ...fields }
 // All sensitive fields must be pre-masked by the caller via mask().
+/**
+ * @param {SyncLogEntry} entry
+ */
 function log(entry) {
   const ts = Date.now();
   const isLocalChange = entry.kind === "ACTION" && entry.event === "LOCAL_CHANGE";
@@ -84,6 +102,11 @@ function log(entry) {
 }
 
 // ── Internal: format one entry for dump ──────────────────────────────────────
+/**
+ * @param {SyncLogEntry & { ts: number; _count?: number; _lastTs?: number }} e
+ * @param {number} baseTs
+ * @returns {string}
+ */
 function _format(e, baseTs) {
   const elapsed = (((e.ts - baseTs) / 1000).toFixed(3)).padStart(7);
   const parts = [`[+${elapsed}s]`, e.event ?? e.kind];
@@ -93,11 +116,12 @@ function _format(e, baseTs) {
   if (e.status)     parts.push(`http:${e.status}`);
   if (e.changeKind) parts.push(`kind:${e.changeKind}`);
   if (e.changeId)   parts.push(`id:${e.changeId}`);
-  if (e._count)     parts.push(`(×${e._count} in ${e._lastTs - e.ts}ms)`);
+  if (e._count)     parts.push(`(×${e._count} in ${(e._lastTs ?? e.ts) - e.ts}ms)`);
   return parts.join(" ");
 }
 
 // ── Public: dump() ────────────────────────────────────────────────────────────
+/** @returns {string} */
 function dump() {
   const baseTs = _recent[0]?.ts ?? Date.now();
   const lines = [
@@ -115,6 +139,7 @@ function dump() {
 }
 
 // ── Public: copyToClipboard() ─────────────────────────────────────────────────
+/** @returns {Promise<boolean>} */
 async function copyToClipboard() {
   try {
     await navigator.clipboard.writeText(dump());
