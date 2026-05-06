@@ -207,8 +207,8 @@ export interface DriveUploadResult {
 }
 
 export type RedirectCallbackResult =
-  | { ok: true; token: string; returnTo: string }
-  | { ok: false; reason: string; returnTo?: string };
+  | { ok: true; token: string; returnTo: string; silent: boolean }
+  | { ok: false; reason: string; returnTo?: string; silent: boolean };
 
 export interface SyncTransport {
   DRIVE_HOSTNAMES: readonly string[];
@@ -355,6 +355,7 @@ declare global {
     _syncClientId?: string;
     _syncScope?: string;
     _syncRedirectAttemptsKey?: string;
+    _syncSilentBlockedKey?: string;
     __pendingRedirectToken?: { access_token: string };
     __pendingRedirectError?: string;
     __driveSyncInteractionTs?: () => number;

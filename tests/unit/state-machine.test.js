@@ -11,6 +11,8 @@ import assert from "node:assert/strict";
 import {
   loadMachine,
   REDIRECT_ATTEMPTS_KEY,
+  SILENT_BLOCKED_KEY,
+  SYNC_EMAIL_KEY,
   MAX_REDIRECT_ATTEMPTS,
 } from "./harness.js";
 
@@ -29,13 +31,107 @@ test("2. non-iOS + GIS 미준비 → INITIALIZING", () => {
   assert.equal(machine.getState(), "INITIALIZING");
 });
 
-test("3. iOS ENABLE → NEEDS_CONSENT (Phase 2f 회귀 방어)", () => {
-  // iOS는 GIS 자체를 거치지 않고 사용자 제스처(_연결_ 클릭)에서만
-  // OAuth 리디렉션이 시작돼야 한다. enable() 직후엔 redirect를 트리거하지 않고
-  // NEEDS_CONSENT에 정착해 설정 UI에 "연결" 버튼이 노출되도록 한다.
+test("3. iOS ENABLE + 저장된 email 없음 → NEEDS_CONSENT (첫 연결 흐름)", () => {
+  // 저장된 email이 없다는 건 OAuth가 한 번도 성공한 적 없다는 뜻 —
+  // 자동 silent 재인증을 시도할 근거가 없다. NEEDS_CONSENT에 정착해
+  // 사용자가 "연결" 버튼을 눌러 명시적 consent flow를 시작해야 한다.
   const { machine } = loadMachine({ isIOS: true });
   machine.enable();
   assert.equal(machine.getState(), "NEEDS_CONSENT");
+});
+
+test("3a. iOS ENABLE + 저장된 email 있음 → silent prompt=none 자동 리디렉션 (Phase 2g)", () => {
+  // ADR-011 Phase 2g: 이전에 성공적으로 연결한 사용자는 앱 재실행 시
+  // GIS 없이 자동으로 prompt=none 리디렉션을 시도해 토큰을 갱신한다.
+  // Implicit Flow는 refresh token이 없어 in-memory 토큰이 앱 종료와 함께
+  // 사라지므로, saved email이 있다는 사실이 silent 재인증의 진입 조건.
+  const beginCalls = [];
+  const { machine, localStorage } = loadMachine({
+    isIOS: true,
+    initialStorage: { [SYNC_EMAIL_KEY]: "user@example.com" },
+    overrideStubs: {
+      T: { beginRedirectAuth: (_clientId, _scope, opts) => { beginCalls.push(opts); } },
+    },
+  });
+  machine.enable();
+  assert.equal(beginCalls.length, 1, "리디렉션 1회 호출");
+  assert.equal(beginCalls[0]?.prompt, "none", "prompt=none (silent)");
+  assert.equal(localStorage.getItem(REDIRECT_ATTEMPTS_KEY), "1", "리디렉션 카운터 1 증가");
+  // 페이지가 떠나는 흐름이라 상태는 silent 시도 전 상태로 남아 있다 —
+  // 실제 브라우저에서는 callback이 새 컨텍스트에서 acceptRedirectToken으로 진입.
+});
+
+test("3b. iOS ENABLE + email + silent-blocked=1 → 재시도 없이 NEEDS_CONSENT (Phase 2g)", () => {
+  // 이전 silent 시도가 interaction_required로 실패한 경우, 다음 앱 오픈에
+  // 자동 재시도하면 의미 없는 깜박임만 반복된다. silent-blocked 플래그가
+  // 1이면 NEEDS_CONSENT로 직행해 사용자 제스처(연결 버튼 클릭)를 대기한다.
+  let beginCalls = 0;
+  const { machine } = loadMachine({
+    isIOS: true,
+    initialStorage: {
+      [SYNC_EMAIL_KEY]: "user@example.com",
+      [SILENT_BLOCKED_KEY]: "1",
+    },
+    overrideStubs: {
+      T: { beginRedirectAuth: () => { beginCalls++; } },
+    },
+  });
+  machine.enable();
+  assert.equal(beginCalls, 0, "silent-blocked=1이면 자동 리디렉션 차단");
+  assert.equal(machine.getState(), "NEEDS_CONSENT");
+});
+
+test("3c. iOS ENABLE + email + cap 도달 → ERROR (Phase 2g 무한 루프 차단)", () => {
+  // _beginRedirect 내부 cap 검사가 silent 자동 시도에도 동일하게 적용되는지 확인.
+  // cap에 도달한 상태에서 더 시도하면 ERROR로 빠지고 사용자가 "연결" 버튼을
+  // 눌러야만 카운터가 리셋된다 (signIn() 또는 ERROR + USER_CONSENT_REQUEST).
+  let beginCalls = 0;
+  const { machine } = loadMachine({
+    isIOS: true,
+    initialStorage: {
+      [SYNC_EMAIL_KEY]: "user@example.com",
+      [REDIRECT_ATTEMPTS_KEY]: String(MAX_REDIRECT_ATTEMPTS),
+    },
+    overrideStubs: {
+      T: { beginRedirectAuth: () => { beginCalls++; } },
+    },
+  });
+  machine.enable();
+  assert.equal(beginCalls, 0, "cap 초과 시 리디렉션 호출 차단");
+  assert.equal(machine.getState(), "ERROR");
+});
+
+test("3d. iOS ENABLE + email = '' (빈 문자열) → NEEDS_CONSENT (자동 시도 안 함)", () => {
+  // _storeToken이 fetchUserInfo 실패 시 빈 문자열을 저장하는 경계 케이스 —
+  // 진짜 email 없는 상태와 동일하게 처리해야 한다.
+  let beginCalls = 0;
+  const { machine } = loadMachine({
+    isIOS: true,
+    initialStorage: { [SYNC_EMAIL_KEY]: "" },
+    overrideStubs: {
+      T: { beginRedirectAuth: () => { beginCalls++; } },
+    },
+  });
+  machine.enable();
+  assert.equal(beginCalls, 0, "빈 문자열은 silent 시도 트리거 아님");
+  assert.equal(machine.getState(), "NEEDS_CONSENT");
+});
+
+test("3e. SYNC_DONE 시 silent-blocked 플래그도 함께 리셋 (Phase 2g defense in depth)", async () => {
+  const initial = {
+    [REDIRECT_ATTEMPTS_KEY]: "2",
+    [SILENT_BLOCKED_KEY]: "1",
+  };
+  const { machine, localStorage, drain } = loadMachine({
+    isIOS: true,
+    initialStorage: initial,
+    findFileId: null,
+    uploadResult: { ok: true, status: 200, etag: '"e1"' },
+  });
+  machine.acceptRedirectToken("test-token");
+  await drain(3);
+  assert.equal(localStorage.getItem(REDIRECT_ATTEMPTS_KEY), "0", "redirect-attempts 리셋");
+  assert.equal(localStorage.getItem(SILENT_BLOCKED_KEY), null, "silent-blocked 제거");
 });
 
 // ── Group 2: acceptRedirectToken (iOS redirect 흐름) ─────────────────────────

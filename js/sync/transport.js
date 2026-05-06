@@ -143,8 +143,13 @@ function _genNonce() {
 function beginRedirectAuth(clientId, scope, { prompt } = {}) {
   const nonce = _genNonce();
   const returnTo = location.pathname + location.search;
+  // `silent` lets the callback handler distinguish app-open silent re-auth
+  // (prompt=none) from explicit user-initiated consent flows. A silent
+  // failure is expected (Google session expired / consent revoked) and
+  // must not surface as a user-facing error toast.
   sessionStorage.setItem(_REDIRECT_STATE_KEY, JSON.stringify({
     nonce, returnTo, ts: Date.now(), flow: "implicit-v1",
+    silent: prompt === "none",
   }));
 
   const params = new URLSearchParams({
@@ -182,7 +187,9 @@ function consumeRedirectCallback() {
   if (!hasToken && !hasError) return null;
 
   const raw = sessionStorage.getItem(_REDIRECT_STATE_KEY);
-  if (!raw) return { ok: false, reason: "no_state" };
+  // No saved state → can't establish silent vs explicit. Treat as explicit
+  // so the error surfaces to the user (this is the conservative default).
+  if (!raw) return { ok: false, reason: "no_state", silent: false };
 
   let saved;
   try {
@@ -190,14 +197,16 @@ function consumeRedirectCallback() {
   } catch {
     // Corrupted state — safe to discard (nothing to preserve).
     sessionStorage.removeItem(_REDIRECT_STATE_KEY);
-    return { ok: false, reason: "bad_state" };
+    return { ok: false, reason: "bad_state", silent: false };
   }
+
+  const silent = saved.silent === true;
 
   // Validate nonce BEFORE consuming. Mismatch → leave sessionStorage intact
   // so a real callback that arrives shortly after can still validate.
   const returnedState = params.get("state");
   if (!returnedState || returnedState !== saved.nonce) {
-    return { ok: false, reason: "state_mismatch" };
+    return { ok: false, reason: "state_mismatch", silent };
   }
 
   // State matched — this is our callback. Now consume to prevent replay.
@@ -209,15 +218,15 @@ function consumeRedirectCallback() {
   const returnTo = saved.returnTo || "/";
 
   if (Date.now() - saved.ts > _REDIRECT_STATE_MAX_AGE_MS) {
-    return { ok: false, reason: "state_expired", returnTo };
+    return { ok: false, reason: "state_expired", returnTo, silent };
   }
 
-  if (hasError) return { ok: false, reason: params.get("error") ?? "unknown_error", returnTo };
+  if (hasError) return { ok: false, reason: params.get("error") ?? "unknown_error", returnTo, silent };
 
   const token = params.get("access_token");
-  if (!token) return { ok: false, reason: "empty_token", returnTo };
+  if (!token) return { ok: false, reason: "empty_token", returnTo, silent };
 
-  return { ok: true, token, returnTo };
+  return { ok: true, token, returnTo, silent };
 }
 
 // Decode the email claim from a Google ID token (JWT). Signature was already

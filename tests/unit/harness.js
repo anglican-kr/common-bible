@@ -23,6 +23,8 @@ const SOURCE = fs.readFileSync(STATE_MACHINE_PATH, "utf8");
 // against them without parsing the source. Only those actually used by
 // state-machine.test.js are exported.
 export const REDIRECT_ATTEMPTS_KEY = "bible-drive-redirect-attempts";
+export const SILENT_BLOCKED_KEY = "bible-drive-silent-blocked";
+export const SYNC_EMAIL_KEY = "bible-drive-sync-email";
 export const MAX_REDIRECT_ATTEMPTS = 3;
 
 // ── In-memory localStorage ───────────────────────────────────────────────────
