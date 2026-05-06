@@ -489,6 +489,48 @@ ADR-013 (클라이언트 JS 유닛 테스트 전략) 참고. 위 6차 리뷰 정
 - **Consent 거부 후 자동 silent 재시도 차단**: `signIn()`은 명시적 재연결 진입에서 silent-blocked 플래그를 비우는데, Google에서 사용자가 consent를 거부하고 돌아오면 (`__pendingRedirectError`) `initDriveSync()`이 토스트만 띄우고 `_machine.enable()`을 호출 → DISABLED+ENABLE iOS 분기가 (email 있음 + silent-blocked 없음) prompt=none을 즉시 발사 → 토스트 파괴 + 무용한 round-trip. iOS 분기에서 `__pendingRedirectError` 처리 시 silent-blocked=1을 설정해 `enable()`이 NEEDS_CONSENT에 정착하도록 정정.
 - **silent-blocked 키 단일화**: `signIn()`은 `window._syncSilentBlockedKey` 상수를 사용했지만 IIFE 2곳과 `signOut()`은 리터럴 `"bible-drive-silent-blocked"`을 하드코딩 → Phase 2f에서 `REDIRECT_ATTEMPTS_KEY`로 잡았던 것과 동일한 패턴. 모두 상수 참조로 통일.
 
+## Phase 2h — 데스크탑 FedCM 카드 회피 (구현 완료 2026-05-06)
+
+> **개정 (2026-05-06):** 데스크탑 Chrome 사용자 보고 — 앱을 열 때마다 우상단에 "Sign in with …" FedCM/One Tap 카드가 매번 떠서 거슬린다는 피드백. Phase 2d/2e에서 도입한 IDENTIFYING 단계가 매 cold start마다 `google.accounts.id.prompt()`를 호출해 발생하는 동작. 이 단계의 본래 목적은 후속 `requestAccessToken({hint})` 호출에 쓸 email hint를 얻는 것뿐이며, 그 정보는 첫 연결 시점에 이미 `localStorage[bible-drive-sync-email]`에 저장된다.
+
+### 핵심 변경
+
+- **`_enterAuthSilent` 헬퍼 도입** (`js/sync/state-machine.js`): IDENTIFYING을 건너뛰고 `silentAuthInFlight=true` 컨텍스트와 함께 AUTHENTICATING으로 직행. 저장된 email이 있으면 이 경로를 탄다.
+- **적용 분기 4곳**:
+  - `DISABLED + ENABLE` (non-iOS, `_tokenClient` 사전 init된 경우)
+  - `INITIALIZING + GIS_READY` (대부분의 cold start 경로)
+  - `OFFLINE + NET_RECOVERED` (네트워크 복구 시 재인증)
+  - `_handleSyncFail("401")` (토큰 만료 후 reauth)
+  - 각 분기는 `_emailHint()`이 비어있으면 (첫 사용자) 기존 IDENTIFYING + FedCM 경로를 유지.
+- **silent TOKEN_FAIL 정착 분기 신설**: `AUTHENTICATING + TOKEN_FAIL`에서 `_ctx.silentAuthInFlight=true`이면 NEEDS_CONSENT로 조용히 정착 (스낵바 없음). 이전 user-gesture 경로는 기존대로 ERROR + 스낵바 유지.
+- **컨텍스트 확장**: `SyncMachineCtx.silentAuthInFlight: boolean` 필드 추가. `_emptyCtx()`가 false로 초기화하므로 명시적으로 패치하지 않는 한 자동 리셋된다 (기존 ctx 설계와 일치).
+
+### Phase 2h 후 데스크탑 앱 오픈 매트릭스
+
+| 상태 | localStorage | 페이지 로드 동작 |
+|------|--------------|-----------------|
+| 첫 연결 | email 없음 | INITIALIZING → IDENTIFYING (FedCM 카드 표시) → AUTHENTICATING |
+| 재방문, Google 세션 유효 | email 저장됨 | INITIALIZING → AUTHENTICATING (silent) → IDLE — **FedCM 카드 없음** |
+| 재방문, 세션 만료/권한 회수 | email 저장됨 | INITIALIZING → AUTHENTICATING (silent) → TOKEN_FAIL → NEEDS_CONSENT (스낵바 없음) |
+| 사용자 "연결" 버튼 클릭 | NEEDS_CONSENT | USER_CONSENT_REQUEST → AUTHENTICATING (silentAuthInFlight=false) → 실패 시 ERROR + 스낵바 |
+
+### 회귀 테스트
+
+`tests/unit/state-machine.test.js`:
+- `9.` (갱신): non-iOS 401 + email hint → AUTHENTICATING (silent reauth, IDENTIFYING 미경유)
+- `9b.` (신규): non-iOS 401 + email hint 없음 → IDENTIFYING (FedCM 경로 유지)
+- `11.` (갱신): 401 reauth 시 REAUTH 로그 attempt=1 + AUTHENTICATING으로 직행
+- `16.` (신규): non-iOS GIS_READY + email hint → AUTHENTICATING, `promptIdentity` 미호출, `requestSilentToken` 1회 호출
+- `17.` (신규): non-iOS GIS_READY + email hint 없음 → IDENTIFYING + `promptIdentity` 호출 (기존 동작 유지)
+- `18.` (신규): silent AUTHENTICATING + TOKEN_FAIL → NEEDS_CONSENT, `_showSyncSnackbar` 미호출
+- `19.` (신규): user-gesture AUTHENTICATING + TOKEN_FAIL → ERROR + 스낵바 1회
+
+### 알려진 트레이드오프
+
+- **세션 만료 시 사용자가 "연결"을 다시 눌러야 함**: 이전 동작에서도 FedCM 카드를 무시하면 동일하게 "연결" 버튼을 눌러야 했으므로 실질적 사용자 경험은 동일. 차이는 "조용히 비활성화" vs "카드를 닫는 명시적 행동" — 우리는 전자가 덜 거슬린다고 판단.
+- **계정 전환은 disconnect/connect로만 가능**: email hint가 잠금 역할을 하므로 브라우저에 다른 Google 계정이 추가돼도 자동으로 그쪽으로 옮겨가지 않는다. 이는 의도된 동작 — 동기화 대상 계정은 첫 연결 시점에 결정되고 이후엔 사용자 명시 액션으로만 바뀐다.
+- **iOS는 영향 없음**: iOS는 Phase 2f부터 GIS를 우회하고 풀페이지 리디렉션을 쓰므로 이 변경의 적용 대상이 아니다.
+
 ## 미결 사항
 
 - [x] Google Cloud Console 프로젝트 생성 및 Client ID 발급

@@ -201,23 +201,36 @@ test("8. SYNC_DONE 시에만 redirect-attempts 카운터가 0으로 리셋됨", 
 
 // ── Group 4: SYNC_FAIL 401 / reAuthFails ─────────────────────────────────────
 
-test("9. non-iOS + GIS id available + 401 → IDENTIFYING, reAuthFails 1로 증가", async () => {
+test("9. non-iOS + GIS id available + 401 + email hint → AUTHENTICATING (silent reauth)", async () => {
+  // acceptRedirectToken → _storeToken → fetchUserInfo가 SYNC_EMAIL_KEY를
+  // 채우므로, 401 reauth 시점엔 항상 email hint가 존재한다. 이 경로는
+  // FedCM 카드 없이 silent token 요청으로 직행한다 (silentAuthInFlight=true).
   const { machine, drain } = loadMachine({
     isIOS: false,
     hasGoogleId: true,
     findFileId: "fid",
     downloadResult: { doc: null, etag: null, status: 401 },
   });
-  // 직접 IDLE 상태로 진입시키기 위해 acceptRedirectToken 사용 (iOS=false에서도 동작)
-  // — acceptRedirectToken은 iOS-only가 아닌 토큰 직접 주입 경로
   machine.acceptRedirectToken("token");
   await drain(3);
-  // 401 수신 → _handleSyncFail("401") → IDENTIFYING (hasGoogleId true 분기)
+  assert.equal(machine.getState(), "AUTHENTICATING");
+});
+
+test("9b. non-iOS + 401 + email hint 없음 → IDENTIFYING (FedCM 경로 유지)", async () => {
+  // fetchUserInfo가 email을 못 가져오는 경계 케이스 — IDENTIFYING으로
+  // 떨어져 FedCM이 hint를 제공해야 한다.
+  const { machine, drain } = loadMachine({
+    isIOS: false,
+    hasGoogleId: true,
+    findFileId: "fid",
+    downloadResult: { doc: null, etag: null, status: 401 },
+    overrideStubs: {
+      T: { fetchUserInfo: async () => ({ email: null }) },
+    },
+  });
+  machine.acceptRedirectToken("token");
+  await drain(3);
   assert.equal(machine.getState(), "IDENTIFYING");
-  // ctxAt: dispatch 시점의 ctx 스냅샷. _handleSyncFail은 reAuthFails+1 패치.
-  // dispatch SYNC_FAIL 직후 _transition이 호출되며 그 시점 _ctx는 reAuthFails: 0
-  // (이전 cycle에 저장된 값) — 실제 증가는 _transition 내부에서 이뤄짐.
-  // 직접 검증은 어려우므로 다음 cycle 진입을 의미하는 IDENTIFYING 상태만 확인.
 });
 
 test("10. iOS 401 + 활발히 읽는 중 → NEEDS_CONSENT (commit 682292d 회귀 방어)", async () => {
@@ -251,7 +264,8 @@ test("11. 401 SYNC_FAIL → REAUTH 로그 attempt=1 + ctx에 reAuthFails 증가 
   const reauth = logEntries.find((e) => e.event === "REAUTH");
   assert.ok(reauth, "REAUTH 로그 엔트리 존재");
   assert.equal(reauth.attempt, 1, "첫 401에서 attempt=1");
-  assert.equal(machine.getState(), "IDENTIFYING");
+  // email hint 보유 시 IDENTIFYING을 건너뛰고 AUTHENTICATING으로 직행 (silent)
+  assert.equal(machine.getState(), "AUTHENTICATING");
 });
 
 // ── Group 5: OFFLINE + NET_RECOVERED ─────────────────────────────────────────
@@ -323,6 +337,85 @@ test("14. iOS USER_CONSENT_REQUEST + attempts<MAX_REDIRECT_ATTEMPTS → beginRed
   machine.dispatch({ type: "USER_CONSENT_REQUEST" });
   assert.equal(beginCalls, 1, "리디렉션 호출 발생");
   assert.equal(localStorage.getItem(REDIRECT_ATTEMPTS_KEY), "3", "카운터 1 증가");
+});
+
+// ── Group 7: 데스크탑 silent-auth bypass (FedCM 카드 회피) ───────────────────
+
+test("16. non-iOS GIS_READY + email hint → IDENTIFYING 건너뛰고 AUTHENTICATING (silent)", () => {
+  // 저장된 email은 OAuth가 한 번 성공했음을 의미 → FedCM/One Tap 카드를
+  // 띄울 이유가 없다. silent token 요청으로 바로 진입한다.
+  let promptIdentityCalls = 0;
+  let silentTokenCalls = 0;
+  const { machine } = loadMachine({
+    isIOS: false,
+    hasGoogleId: true,
+    initialStorage: { [SYNC_EMAIL_KEY]: "user@example.com" },
+    overrideStubs: {
+      T: {
+        promptIdentity: () => { promptIdentityCalls++; },
+        requestSilentToken: () => { silentTokenCalls++; },
+      },
+    },
+  });
+  machine.enable();
+  machine.dispatch({ type: "GIS_READY" });
+  assert.equal(promptIdentityCalls, 0, "FedCM prompt 미호출");
+  assert.equal(silentTokenCalls, 1, "silent token 1회 호출");
+  assert.equal(machine.getState(), "AUTHENTICATING");
+});
+
+test("17. non-iOS GIS_READY + email hint 없음 → 기존 IDENTIFYING 경로 유지", () => {
+  // 첫 사용자는 email이 없으므로 FedCM/One Tap으로 식별을 받아야 한다.
+  let promptIdentityCalls = 0;
+  const { machine } = loadMachine({
+    isIOS: false,
+    hasGoogleId: true,
+    overrideStubs: {
+      T: { promptIdentity: () => { promptIdentityCalls++; } },
+    },
+  });
+  machine.enable();
+  machine.dispatch({ type: "GIS_READY" });
+  assert.equal(promptIdentityCalls, 1, "FedCM prompt 1회 호출");
+  assert.equal(machine.getState(), "IDENTIFYING");
+});
+
+test("18. silent AUTHENTICATING + TOKEN_FAIL → NEEDS_CONSENT (스낵바 없음)", () => {
+  // 백그라운드 silent 시도 실패는 사용자에게 알릴 일이 아니다 — 설정의
+  // "연결" 버튼이 NEEDS_CONSENT 상태에서 노출되므로 그쪽으로 정착한다.
+  let snackbarCalls = 0;
+  const { machine, ctx } = loadMachine({
+    isIOS: false,
+    hasGoogleId: true,
+    initialStorage: { [SYNC_EMAIL_KEY]: "user@example.com" },
+  });
+  ctx._showSyncSnackbar = () => { snackbarCalls++; };
+  machine.enable();
+  machine.dispatch({ type: "GIS_READY" });
+  assert.equal(machine.getState(), "AUTHENTICATING");
+  machine.dispatch({ type: "TOKEN_FAIL", reason: "interaction_required" });
+  assert.equal(machine.getState(), "NEEDS_CONSENT");
+  assert.equal(snackbarCalls, 0, "silent 실패 시 스낵바 미호출");
+});
+
+test("19. user-gesture AUTHENTICATING + TOKEN_FAIL → ERROR + 스낵바 (기존 동작)", () => {
+  // NEEDS_CONSENT에서 USER_CONSENT_REQUEST로 진입한 경우는 사용자가 명시적으로
+  // 요청한 경로이므로 실패 시 스낵바로 알리고 ERROR로 떨어진다.
+  let snackbarCalls = 0;
+  const { machine, ctx } = loadMachine({
+    isIOS: false,
+    hasGoogleId: true,
+  });
+  ctx._showSyncSnackbar = () => { snackbarCalls++; };
+  // IDENTIFYING → USER_CONSENT_REQUEST → AUTHENTICATING (silentAuthInFlight=false)
+  machine.enable();
+  machine.dispatch({ type: "GIS_READY" });
+  assert.equal(machine.getState(), "IDENTIFYING");
+  machine.dispatch({ type: "USER_CONSENT_REQUEST" });
+  assert.equal(machine.getState(), "AUTHENTICATING");
+  machine.dispatch({ type: "TOKEN_FAIL", reason: "server_error" });
+  assert.equal(machine.getState(), "ERROR");
+  assert.equal(snackbarCalls, 1, "user-gesture 실패는 스낵바로 알림");
 });
 
 test("15. iOS USER_CONSENT_REQUEST + attempts≥MAX → ERROR + beginRedirectAuth 미호출 (commit e6179d1 회귀 방어)", () => {

@@ -28,8 +28,15 @@
 //   • Non-iOS (Android/desktop): GIS popup-based flow (Phase 2d/2e).
 //       1. IDENTIFYING  — google.accounts.id.prompt() (FedCM / One Tap) for
 //                         silent identity establishment. No window.open().
+//                         SKIPPED when SYNC_EMAIL_KEY is set: the saved email
+//                         already provides the hint that IDENTIFYING produces,
+//                         so we go straight to AUTHENTICATING with
+//                         silentAuthInFlight=true. This eliminates the FedCM
+//                         card on every app open for returning users.
 //       2. AUTHENTICATING — google.accounts.oauth2.requestAccessToken silently
-//                           exchanges identity for a Drive access token.
+//                           exchanges identity for a Drive access token. When
+//                           silentAuthInFlight is set, TOKEN_FAIL parks in
+//                           NEEDS_CONSENT silently (no snackbar).
 //       3. NEEDS_CONSENT — silent failure path; "연결" click triggers
 //                          requestAccessToken({prompt:"consent"}) inside the
 //                          user gesture.
@@ -110,7 +117,7 @@ function createSyncMachine({ onStateChange } = {}) {
 
   /** @returns {SyncMachineCtx} */
   function _emptyCtx() {
-    return { netFails: 0, conflictFails: 0, reAuthFails: 0, backoffTimer: null };
+    return { netFails: 0, conflictFails: 0, reAuthFails: 0, backoffTimer: null, silentAuthInFlight: false };
   }
 
   // ── _transition: the ONLY place that changes state + context ─────────────
@@ -188,6 +195,20 @@ function createSyncMachine({ onStateChange } = {}) {
 
   function _reqSilentToken() {
     T.requestSilentToken(_tokenClient, _emailHint());
+  }
+
+  // Enter AUTHENTICATING via the silent-token path when we already know who the
+  // user is (saved email from a prior successful sign-in). Skipping the
+  // IDENTIFYING step avoids the FedCM/One Tap UI card on every app open —
+  // the email hint is the only thing IDENTIFYING was producing for the
+  // follow-up token request.
+  /**
+   * @param {SyncEvent | { type: string }} event
+   * @param {Partial<SyncMachineCtx>} [ctxPatch]
+   */
+  function _enterAuthSilent(event, ctxPatch = {}) {
+    _transition(S.AUTHENTICATING, { ...ctxPatch, silentAuthInFlight: true }, event);
+    _reqSilentToken();
   }
 
   // ── iOS redirect helpers ──────────────────────────────────────────────────
@@ -374,8 +395,15 @@ function createSyncMachine({ onStateChange } = {}) {
               _refreshUI();
             }
           } else if (window.google?.accounts?.id && window.google?.accounts?.oauth2 && _tokenClient) {
-            _transition(S.IDENTIFYING, {}, event);
-            _promptIdentity();
+            // Saved email = prior consent; skip FedCM/One Tap card and go
+            // straight to silent token request. Falls through to NEEDS_CONSENT
+            // on TOKEN_FAIL via the silentAuthInFlight ctx flag.
+            if (_emailHint()) {
+              _enterAuthSilent(event);
+            } else {
+              _transition(S.IDENTIFYING, {}, event);
+              _promptIdentity();
+            }
           } else {
             _transition(S.INITIALIZING, {}, event);
           }
@@ -418,11 +446,17 @@ function createSyncMachine({ onStateChange } = {}) {
                 }
               }
             );
-            _transition(S.IDENTIFYING, {}, event);
-            _promptIdentity();
+            // Saved email means OAuth has succeeded before — bypass the FedCM
+            // identity card and go straight to silent token request. Only
+            // first-time users with no email hint see the IDENTIFYING step.
+            if (_emailHint()) {
+              _enterAuthSilent(event);
+            } else {
+              _transition(S.IDENTIFYING, {}, event);
+              _promptIdentity();
+            }
           } else {
-            _transition(S.AUTHENTICATING, {}, event);
-            _reqSilentToken();
+            _enterAuthSilent(event);
           }
         } else if (event.type === "DISABLE") {
           _transition(S.DISABLED, {}, event);
@@ -483,8 +517,15 @@ function createSyncMachine({ onStateChange } = {}) {
           _refreshUI();
           dispatch({ type: "SYNC_REQUEST" });
         } else if (event.type === "TOKEN_FAIL") {
-          L.log({ kind: "ERROR", event: "TOKEN_FAIL", reason: event.reason });
-          if (event.reason && SILENT_FAIL_REASONS.has(event.reason)) {
+          L.log({ kind: "ERROR", event: "TOKEN_FAIL", reason: event.reason, silent: _ctx.silentAuthInFlight });
+          if (_ctx.silentAuthInFlight) {
+            // Background silent attempt at app open / NET_RECOVERED / 401 reauth.
+            // Failure here just means the Google session can't issue a token
+            // without user interaction — park silently in NEEDS_CONSENT so the
+            // settings UI shows the "연결" button. No snackbar: this is an
+            // automatic attempt, not something the user asked for.
+            _transition(S.NEEDS_CONSENT, {}, event);
+          } else if (event.reason && SILENT_FAIL_REASONS.has(event.reason)) {
             _transition(S.DISABLED, {}, event);
           } else {
             _snackbar("Google Drive 동기화 세션이 만료됐습니다. 설정에서 재연결해 주세요.");
@@ -546,11 +587,14 @@ function createSyncMachine({ onStateChange } = {}) {
             _transition(S.NEEDS_CONSENT, {}, event);
             _refreshUI();
           } else if (window.google?.accounts?.id) {
-            _transition(S.IDENTIFYING, {}, event);
-            _promptIdentity();
+            if (_emailHint()) {
+              _enterAuthSilent(event);
+            } else {
+              _transition(S.IDENTIFYING, {}, event);
+              _promptIdentity();
+            }
           } else {
-            _transition(S.AUTHENTICATING, {}, event);
-            _reqSilentToken();
+            _enterAuthSilent(event);
           }
         } else if (event.type === "DISABLE") {
           _token = null;
@@ -607,13 +651,17 @@ function createSyncMachine({ onStateChange } = {}) {
             if (!_beginRedirect(undefined)) return;
           }
         } else if (window.google?.accounts?.id) {
-          // Re-identify silently first (FedCM/One Tap, no popup) so the
-          // follow-up requestAccessToken({prompt:""}) has a fresh email hint.
-          _transition(S.IDENTIFYING, { reAuthFails: _ctx.reAuthFails + 1 }, event);
-          _promptIdentity();
+          // The email hint we already have is fresh enough — IDENTIFYING just
+          // adds a FedCM card without giving us anything we don't already know.
+          // First-time users with no email hint still need IDENTIFYING.
+          if (_emailHint()) {
+            _enterAuthSilent(event, { reAuthFails: _ctx.reAuthFails + 1 });
+          } else {
+            _transition(S.IDENTIFYING, { reAuthFails: _ctx.reAuthFails + 1 }, event);
+            _promptIdentity();
+          }
         } else {
-          _transition(S.AUTHENTICATING, { reAuthFails: _ctx.reAuthFails + 1 }, event);
-          _reqSilentToken();
+          _enterAuthSilent(event, { reAuthFails: _ctx.reAuthFails + 1 });
         }
       } else {
         _snackbar("Google Drive 동기화 세션이 만료됐습니다. 설정에서 재연결해 주세요.");

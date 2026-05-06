@@ -141,6 +141,10 @@ export interface SyncMachineCtx {
   conflictFails: number;
   reAuthFails: number;
   backoffTimer: ReturnType<typeof setTimeout> | null;
+  // True when AUTHENTICATING was entered via a background silent path
+  // (saved email hint, no user gesture). TOKEN_FAIL on this path parks
+  // in NEEDS_CONSENT silently instead of surfacing an error snackbar.
+  silentAuthInFlight: boolean;
 }
 
 export interface SyncMachine {
