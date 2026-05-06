@@ -489,6 +489,97 @@ ADR-013 (클라이언트 JS 유닛 테스트 전략) 참고. 위 6차 리뷰 정
 - **Consent 거부 후 자동 silent 재시도 차단**: `signIn()`은 명시적 재연결 진입에서 silent-blocked 플래그를 비우는데, Google에서 사용자가 consent를 거부하고 돌아오면 (`__pendingRedirectError`) `initDriveSync()`이 토스트만 띄우고 `_machine.enable()`을 호출 → DISABLED+ENABLE iOS 분기가 (email 있음 + silent-blocked 없음) prompt=none을 즉시 발사 → 토스트 파괴 + 무용한 round-trip. iOS 분기에서 `__pendingRedirectError` 처리 시 silent-blocked=1을 설정해 `enable()`이 NEEDS_CONSENT에 정착하도록 정정.
 - **silent-blocked 키 단일화**: `signIn()`은 `window._syncSilentBlockedKey` 상수를 사용했지만 IIFE 2곳과 `signOut()`은 리터럴 `"bible-drive-silent-blocked"`을 하드코딩 → Phase 2f에서 `REDIRECT_ATTEMPTS_KEY`로 잡았던 것과 동일한 패턴. 모두 상수 참조로 통일.
 
+## Phase 2h — PKCE + Refresh Token 마이그레이션 (진행 중 2026-05-06~)
+
+> **개정 (2026-05-07):** 본 ADR 상단 line 51 "OAuth Flow" 결정표에서 **Authorization Code + PKCE를 채택, Implicit Flow는 deprecated로 거부**라고 명시했음에도, Phase 2b 실제 구현은 GIS Token Client 기반 Implicit Flow로 진행되어 ADR-구현 정합성이 깨졌다. 이후 Phase 2c~2g가 그 어긋난 토대 위에서 iOS·desktop UX를 누적 보정해 왔으나, 데스크탑 cold start마다 GIS OAuth 팝업창이 뜨는 사용자 보고(2026-05-06)가 들어오면서 근본 원인이 Implicit Flow의 refresh token 부재임이 드러남. 본 Phase 2h는 ADR이 처음부터 지시했던 PKCE 흐름으로 회귀하면서 desktop·iOS 모두 단일 경로로 통일한다.
+
+### 동기
+
+- **데스크탑 사용자 보고 (2026-05-06)**: 매 앱 cold start마다 `requestAccessToken()`이 별도 OAuth 팝업창을 열어 UX 저해. Implicit Flow의 in-memory access token이 앱 종료와 함께 사라지는 구조적 한계.
+- **iOS 잔존 깜박임**: Phase 2g의 `prompt=none` 자동 리디렉션이 < 1초 페이지 깜박임을 발생시킴.
+- **공통 해결책**: Authorization Code + PKCE + refresh token 도입 → 모든 플랫폼에서 백그라운드 fetch 한 번으로 access token 갱신, 팝업·리디렉션·깜박임 없음.
+
+### 핵심 변경 (계획)
+
+1. **Refresh token 영속 저장**: AES-GCM 암호화 IndexedDB. 키는 `extractable: false`로 생성해 `subtle.exportKey()`로도 raw 바이트 추출 불가.
+2. **PKCE Authorization Code Flow**: GIS Token Client 사용 중단, 모든 플랫폼이 redirect-기반 단일 경로.
+3. **Refresh token rotation**: Google이 새 refresh_token을 surface하면 즉시 IDB 갱신. Sentinel detection 자동 작동.
+4. **GIS 의존 제거**: `<script src="accounts.google.com/gsi/client">` 제거, CSP `script-src`/`frame-src`에서 `accounts.google.com` 정리.
+
+### 보안 모델
+
+- **XSS 1차 방어**: 이미 적용된 strict CSP (index.html line 5). 같은 origin JS는 어차피 우리 decrypt API를 호출 가능 → IDB 암호화는 XSS 자체를 막지 못함.
+- **IDB 암호화의 역할**: 악성 브라우저 확장이나 기기 덤프 같은 **storage-level 도용** 방어. CSP가 1차, 암호화는 깊이 방어.
+- **scope 제한**: `drive.appdata`만 사용 → 도난 시에도 사용자 일반 Drive 파일에 접근 불가.
+- **revoke 경로**: `signOut`/`disable` 시 IDB clear + Google `/revoke` 엔드포인트 호출.
+
+### 단계별 진행
+
+| 단계 | 작업 | 상태 | PR |
+|---|---|---|---|
+| 1 | `js/sync/refresh-store.js` AES-GCM 암호화 IndexedDB 모듈 | ✅ 머지 (2026-05-06) | #52 |
+| 2 | `transport.js`에 PKCE 유틸 + `/token` 교환 함수 추가 (구 implicit과 공존) | 🟡 PR open | #53 |
+| 3 | `state-machine.js`에 silent refresh + redirect-PKCE 결합 | ⏳ 예정 | — |
+| 4 | GIS 제거 + 모든 흐름 PKCE로 일원화 (사용자 가시 변경) | ⏳ 예정 | — |
+| 5 | 정리 (silent-blocked 키 cleanup, pitfalls 문서) | ⏳ 예정 | — |
+
+단계 1~3은 신규 코드를 옆에 깔기만 하므로 사용자 영향 0. 단계 4 머지 시점에 모든 기존 사용자가 cold start 1회 NEEDS_CONSENT 통과 후 신규 흐름 진입 (sync 데이터 손실 없음 — 별도 store).
+
+### 단계 1 결과 (PR #52, 머지)
+
+- `js/sync/refresh-store.js` 신규: `saveRefreshToken` / `loadRefreshToken` / `clearRefreshToken`
+- AES-GCM 256-bit 키 `extractable: false` 보장. `crypto.subtle.exportKey` 거부 단위 테스트로 회귀 방어.
+- 12-byte IV 매 저장마다 새로 생성 (AES-GCM nonce 재사용 방지)
+- 복호화 실패 시 손상 레코드 자동 삭제 (재시도 루프 방지) + 자가 복구 가능
+- IndexedDB 미가용 환경 (Safari private 등)에서 조용히 `null` 반환 → 호출자가 NEEDS_CONSENT로 폴백
+- 단위 테스트 13건, RFC 7636 표준 준수 + 보안 모델 핵심(키 비추출성) 회귀 방어
+
+### 단계 2 결과 (PR #53)
+
+- `transport.js`에 PKCE 함수 5종 추가 (기존 implicit 함수는 그대로 유지):
+  - `generatePKCEPair()`: 32-byte 랜덤 → verifier(43자 base64url) + SHA-256 challenge
+  - `beginRedirectAuthPKCE()`: `response_type=code` + S256 challenge. 별도 sessionStorage 키 `bible-drive-redirect-state-pkce`로 구 implicit과 격리
+  - `consumeRedirectCallbackPKCE()`: query string 파싱, `flow="pkce-v1"` 검증. 다른 flow의 state면 `null` 반환 (callback 오라우팅 방어)
+  - `exchangeCodeForToken()`: POST `/token`, `grant_type=authorization_code`. 절대 throw 안 함
+  - `refreshAccessToken()`: POST `/token`, `grant_type=refresh_token`. **rotation** 시 새 token surface, 없으면 `null`로 반환 → 호출자가 기존 값 보존
+- 단위 테스트 23건. **RFC 7636 §4.2 부록 B 테스트 벡터 정합성 검증** 포함 (`dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk` → `E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM`).
+
+### Refresh Token 저장 전략 — 비추출 키 + AES-GCM
+
+검토한 대안:
+
+| 방식 | XSS 방어 | 외부 도용 방어 | 영구 보관 | 결정 |
+|---|---|---|---|---|
+| `localStorage` 평문 | ✗ | ✗ | ✓ | ❌ |
+| `sessionStorage` 평문 | ✗ | ✗ | ✗ | ❌ (cold start 무용) |
+| IndexedDB 평문 | ✗ | ✗ | ✓ | ❌ |
+| **IndexedDB + 비추출 키 AES-GCM** | ✗ | ✓ | ✓ | ✅ 채택 |
+| HttpOnly 쿠키 + BFF 서버 | ✓ | ✓ | ✓ | ❌ (ADR-001 제약: 백엔드 없는 SPA) |
+
+XSS는 strict CSP가 1차 방어이고, IDB 암호화는 깊이 방어층. BFF 도입은 ADR-001 (백엔드 없는 SPA) 제약을 깨므로 후순위.
+
+### 알려진 트레이드오프
+
+- **OAuth 검수 진행 중 → refresh token 7일 만료**: 앱이 "Testing" 상태인 동안엔 일주일에 한 번 사용자가 재연결해야 함. 검수 통과 후 `In production`으로 전환되면 무제한, 코드 변경 0.
+- **Safari private mode**: IndexedDB 사용이 제한되거나 거부 → 매번 redirect 폴백. 일반 사용 모드 영향 없음.
+- **마이그레이션 호환성**: 기존 사용자(`bible-drive-sync-email` 있음, IDB refresh token 없음)는 단계 4 머지 후 cold start 1회 NEEDS_CONSENT 통과 → 데이터 손실 없음 (sync 데이터는 별도 store).
+- **Token rotation 처리 강제**: Google 응답 spec이 가변적(rotation 있음/없음 모두 정상)이라 코드는 두 케이스 모두 처리. 단위 테스트가 양쪽 검증.
+- **CSP `connect-src`**: `oauth2.googleapis.com` 이미 포함 → 변경 없음.
+
+### 회귀 방어 — 유닛 테스트 (단계 1·2 시점)
+
+- `tests/unit/refresh-store.test.js` 13건: round-trip, 키 비추출성, IV 유일성·길이, decrypt 실패 자가 정리, 키 영속성, 경계 케이스
+- `tests/unit/transport-pkce.test.js` 23건: PKCE primitives, RFC 7636 부록 B 벡터, redirect 시작/콜백 흐름, `/token` 성공·실패·네트워크·rotation 매트릭스
+- 단계 3·4 머지 시 state-machine 테스트도 갱신 예정
+
+### 외부 의존 변경 (단계 4 배포 전 확인 필수)
+
+Google Cloud Console dev/prod OAuth 클라이언트의 Authorized redirect URIs에 등록 (Phase 2f에서 이미 등록됐을 가능성):
+- dev: `http://localhost:8080/`
+- prod: `https://bible.anglican.kr/`
+
+`response_type=code` + PKCE는 client secret 불요 → 신규 검수 재제출 불필요. Implicit Flow에서 PKCE로 전환되더라도 OAuth 검수 결과(`drive.appdata` scope 승인)는 그대로 유효.
+
 ## 미결 사항
 
 - [x] Google Cloud Console 프로젝트 생성 및 Client ID 발급
