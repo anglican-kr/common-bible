@@ -766,7 +766,7 @@ body {
 
 /* Lift FAB when audio bar is visible */
 #audio-bar:not([hidden]) ~ #search-fab {
-  bottom: max(calc(5rem + env(safe-area-inset-bottom)), calc(var(--fab-lift-nav, 0px) + 3.5rem));
+  bottom: max(calc(5rem + env(safe-area-inset-bottom)), var(--fab-lift-nav, 0px));
 }
 
 /* ── Install guide modal ── */
