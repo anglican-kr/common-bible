@@ -381,6 +381,12 @@ function createSyncMachine({ onStateChange } = {}) {
                   expires_in: resp.expires_in,
                   scope: resp.scope,
                 });
+              } else {
+                // GIS contract guarantees one of the two, but a malformed
+                // response (e.g. transport-level breakage, future SDK change)
+                // would otherwise leave AUTHENTICATING permanently stuck —
+                // there's no timeout-based recovery. Treat as token failure.
+                dispatch({ type: "TOKEN_FAIL", reason: "empty_response" });
               }
             }
           );
