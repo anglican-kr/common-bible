@@ -607,3 +607,4 @@ function createSyncMachine({ onStateChange } = {}) {
 
 window.createSyncMachine = createSyncMachine;
 window._syncScope = SCOPE;
+window._syncRedirectAttemptsKey = REDIRECT_ATTEMPTS_KEY;

@@ -169,7 +169,7 @@ function signIn() {
     // Bypass GIS entirely — Safari does not support FedCM and PWA standalone
     // mode blocks popups even from user gestures. Reset the attempt counter
     // since this is an explicit user-initiated reconnect.
-    localStorage.setItem("bible-drive-redirect-attempts", "0");
+    localStorage.setItem(window._syncRedirectAttemptsKey, "0");
     window._showSyncSnackbar?.("Google 인증 페이지로 이동합니다. 인증 후 자동으로 돌아옵니다.");
     window.syncDebugLog?.log({ kind: "ACTION", event: "SIGN_IN_IOS_REDIRECT" });
     T.beginRedirectAuth(_CLIENT_ID, window._syncScope, { prompt: "consent" });
