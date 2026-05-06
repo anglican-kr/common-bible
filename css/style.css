@@ -228,6 +228,13 @@ body {
   white-space: nowrap;
 }
 
+/* Container is programmatically focused on pointer-driven open so the first
+   button doesn't catch a stray :focus-visible ring (iOS Safari). */
+.settings-popover:focus,
+.settings-popover:focus-visible {
+  outline: none;
+}
+
 /* ── Drive sync settings UI ── */
 
 .settings-drive-info-btn {

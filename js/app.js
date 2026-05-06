@@ -42,7 +42,7 @@ function trapFocus(container) {
     if (!focusable.length) return;
     const first = focusable[0];
     const last = focusable[focusable.length - 1];
-    if (e.shiftKey && document.activeElement === first) {
+    if (e.shiftKey && (document.activeElement === first || document.activeElement === container)) {
       e.preventDefault();
       last.focus();
     } else if (!e.shiftKey && document.activeElement === last) {
@@ -258,7 +258,7 @@ function initSettings() {
   settingsSvg.appendChild(gearCircle);
   settingsSvg.appendChild(gearPath);
   btn.appendChild(settingsSvg);
-  const popover = el("div", { className: "settings-popover" });
+  const popover = el("div", { className: "settings-popover", tabindex: "-1" });
   popover.hidden = true;
   popover.addEventListener("click", (e) => e.stopPropagation());
 
@@ -557,8 +557,11 @@ function initSettings() {
     popover.appendChild(aboutRow);
 
     if (!popover.hidden) {
-      const firstFocusable = popover.querySelector("button:not([disabled]), a[href], input:not([disabled])");
-      if (firstFocusable) firstFocusable.focus();
+      // Move focus to the popover container so re-renders (e.g. drive sync
+      // state updates) don't leave focus on a removed node. Pointer-driven
+      // programmatic focus on a tabindex="-1" container does not match
+      // :focus-visible, so no ring is drawn; Tab still leads into buttons.
+      popover.focus();
     }
   }
 
@@ -570,15 +573,23 @@ function initSettings() {
 
   let cleanupTrap = null;
 
-  btn.addEventListener("click", () => {
+  btn.addEventListener("click", (e) => {
     const open = !popover.hidden;
     if (!open) { rebuild(); positionPopover(); }
     popover.hidden = open;
     btn.setAttribute("aria-expanded", String(!open));
     if (!open) {
       cleanupTrap = trapFocus(popover);
-      const first = popover.querySelector('button, a[href], input');
-      if (first) first.focus();
+      // event.detail === 0 means activation via keyboard (Enter/Space). Focus
+      // the first button so keyboard users land on an actionable target. For
+      // pointer activation, focus the popover container itself to avoid a
+      // stray :focus-visible ring on the first button (iOS Safari).
+      if (e.detail === 0) {
+        const first = popover.querySelector('button, a[href], input');
+        if (first) first.focus();
+      } else {
+        popover.focus();
+      }
     } else if (cleanupTrap) {
       cleanupTrap(); cleanupTrap = null;
     }
