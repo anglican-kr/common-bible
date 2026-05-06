@@ -229,6 +229,131 @@ function createSyncMachine({ onStateChange } = {}) {
     return true;
   }
 
+  // ── Phase 2h: PKCE refresh-token helpers ──────────────────────────────────
+  // _attemptSilentRefresh tries to mint a fresh access token from the
+  // IndexedDB-stored refresh token. Three outcomes:
+  //   - refresh success → store access token, optionally rotate refresh,
+  //     transition to IDLE, dispatch SYNC_REQUEST. Returns true.
+  //   - refresh 4xx (invalid_grant, etc.) → drop unrecoverable refresh token
+  //     from IDB, transition to NEEDS_CONSENT silently. Returns true.
+  //   - refresh 5xx / network → keep refresh token, transition to OFFLINE.
+  //     NET_RECOVERED will retry. Returns true.
+  //   - no refresh token in IDB → no transition; return false so caller
+  //     can fall back to legacy GIS / implicit flow.
+  // The "true means I took action" contract lets enable() and 401 handler
+  // skip their legacy paths cleanly.
+
+  /**
+   * @param {Partial<SyncMachineCtx>} [ctxPatch]
+   *   401 reauth 경로에서 호출 시 reAuthFails 카운터를 carry forward해야 함.
+   *   IDLE 전이 시에만 적용 (실패 경로는 reset이 자연스러움).
+   * @returns {Promise<boolean>}
+   */
+  async function _attemptSilentRefresh(ctxPatch = {}) {
+    if (!window.refreshStore) return false;
+    /** @type {string | null} */
+    let rt;
+    try {
+      rt = await window.refreshStore.loadRefreshToken();
+    } catch (err) {
+      L.log({ kind: "ERROR", event: "REFRESH_LOAD_FAIL", reason: err instanceof Error ? err.message : String(err) });
+      return false;
+    }
+    if (!rt) return false;
+
+    L.log({ kind: "ACTION", event: "SILENT_REFRESH_BEGIN" });
+    const resp = await T.refreshAccessToken(rt, /** @type {string} */ (window._syncClientId));
+
+    // Race guard (§6.2): if a competing path (legacy GIS via dispatch(ENABLE),
+    // or user-initiated reconnect) already settled us in IDLE/SYNCING/ERROR
+    // by the time the network round-trip completes, abandon our result. We
+    // intentionally allow override of all in-flight states (DISABLED,
+    // INITIALIZING, IDENTIFYING, AUTHENTICATING, OFFLINE, NEEDS_CONSENT) and
+    // SYNCING (the 401 reauth case where we WANT to push out of SYNCING).
+    if (_state === S.IDLE || _state === S.ERROR) {
+      L.log({ kind: "ACTION", event: "SILENT_REFRESH_RACE_LOST", finalState: _state });
+      return true;
+    }
+
+    if (resp.ok) {
+      _storeToken(resp.access_token);
+      // Rotation: Google may issue a new refresh token. Persist if present;
+      // null means "keep existing" — caller of save would overwrite, so guard.
+      if (resp.refresh_token) {
+        try {
+          await window.refreshStore.saveRefreshToken(resp.refresh_token);
+          L.log({ kind: "ACTION", event: "REFRESH_TOKEN_ROTATED" });
+        } catch (err) {
+          L.log({ kind: "ERROR", event: "ROTATION_SAVE_FAIL", reason: err instanceof Error ? err.message : String(err) });
+          // Continue: new access token is still good, old refresh is still
+          // valid in Google's grace period. Worst case: invalid_grant on next
+          // refresh → user re-consents.
+        }
+      }
+      L.log({ kind: "ACTION", event: "SILENT_REFRESH_OK" });
+      // ctxPatch carries reAuthFails forward when this is called from the
+      // 401 reauth path. Without it, a chronic 401 (Drive rejecting even
+      // fresh tokens) would loop forever — counter resets to 0 each cycle.
+      _transition(S.IDLE, ctxPatch, { type: "SILENT_REFRESH_OK" });
+      _refreshUI();
+      dispatch({ type: "SYNC_REQUEST" });
+      return true;
+    }
+
+    if (resp.status >= 400 && resp.status < 500) {
+      // invalid_grant or similar — refresh token is unusable. Drop it so
+      // we don't loop on subsequent app opens.
+      L.log({ kind: "ERROR", event: "SILENT_REFRESH_INVALID", status: resp.status, error: resp.error });
+      try { await window.refreshStore.clearRefreshToken(); } catch {}
+      _transition(S.NEEDS_CONSENT, {}, { type: "SILENT_REFRESH_INVALID" });
+      _refreshUI();
+      return true;
+    }
+
+    // Network / 5xx — keep refresh token, OFFLINE will be retried by NET_RECOVERED.
+    L.log({ kind: "ERROR", event: "SILENT_REFRESH_NET_FAIL", status: resp.status });
+    _transition(S.OFFLINE, {}, { type: "SILENT_REFRESH_NET_FAIL" });
+    _refreshUI();
+    return true;
+  }
+
+  // PKCE redirect-flow entry: drive-sync.js IIFE stashes {code, verifier}
+  // and initDriveSync calls this. Exchanges for access+refresh tokens, persists
+  // refresh to IDB, transitions to IDLE.
+  /**
+   * @param {string} code
+   * @param {string} verifier
+   */
+  async function acceptRedirectCode(code, verifier) {
+    if (!code || !verifier) return;
+    L.log({ kind: "ACTION", event: "REDIRECT_CODE_RECEIVED" });
+    const resp = await T.exchangeCodeForToken(
+      code, verifier, /** @type {string} */ (window._syncClientId),
+    );
+    if (!resp.ok) {
+      L.log({ kind: "ERROR", event: "CODE_EXCHANGE_FAIL", status: resp.status, error: resp.error });
+      _snackbar("인증 처리 중 오류가 발생했습니다. 설정에서 다시 연결해 주세요.");
+      _transition(S.NEEDS_CONSENT, {}, { type: "CODE_EXCHANGE_FAIL" });
+      _refreshUI();
+      return;
+    }
+    _storeToken(resp.access_token);
+    if (resp.refresh_token && window.refreshStore) {
+      try {
+        await window.refreshStore.saveRefreshToken(resp.refresh_token);
+      } catch (err) {
+        L.log({ kind: "ERROR", event: "REFRESH_TOKEN_SAVE_FAIL", reason: err instanceof Error ? err.message : String(err) });
+        // Don't abort: access token is still usable for the current session.
+        // Next cold start will re-prompt consent. Surface to user.
+        _snackbar("새 인증 정보 저장에 실패했습니다. 다음 앱 열기 시 재연결이 필요할 수 있습니다.");
+      }
+    }
+    L.log({ kind: "ACTION", event: "REDIRECT_CODE_ACCEPTED" });
+    _transition(S.IDLE, {}, { type: "REDIRECT_CODE_ACCEPTED" });
+    _refreshUI();
+    dispatch({ type: "SYNC_REQUEST" });
+  }
+
   /** @param {string} token */
   function _storeToken(token) {
     _token = token;
@@ -588,40 +713,73 @@ function createSyncMachine({ onStateChange } = {}) {
 
     if (reason === "401") {
       _token = null;
-      if (_ctx.reAuthFails < MAX_REAUTH) {
-        L.log({ kind: "ACTION", event: "REAUTH", attempt: _ctx.reAuthFails + 1 });
-        if (T.isIOS()) {
-          // Hybrid policy: defer the disruptive full-page redirect when the
-          // user is actively reading; otherwise reauthorize transparently.
-          if (_isUserActivelyReading()) {
-            L.log({ kind: "ACTION", event: "REAUTH_DEFERRED", reason: "active_reading" });
-            _snackbar("Google 동기화 재연결이 필요합니다. 설정 → 연결을 눌러 주세요.");
-            _transition(S.NEEDS_CONSENT, { reAuthFails: _ctx.reAuthFails + 1 }, event);
-            _refreshUI();
-          } else {
-            // No prompt parameter — Google will silently re-issue the token
-            // when the existing session still has the granted scope.
-            // Do NOT pre-transition to NEEDS_CONSENT: if _beginRedirect hits the
-            // cap it already transitions to ERROR internally, causing a double
-            // state transition with a stale intermediate.
-            if (!_beginRedirect(undefined)) return;
-          }
-        } else if (window.google?.accounts?.id) {
-          // Re-identify silently first (FedCM/One Tap, no popup) so the
-          // follow-up requestAccessToken({prompt:""}) has a fresh email hint.
-          _transition(S.IDENTIFYING, { reAuthFails: _ctx.reAuthFails + 1 }, event);
-          _promptIdentity();
-        } else {
-          _transition(S.AUTHENTICATING, { reAuthFails: _ctx.reAuthFails + 1 }, event);
-          _reqSilentToken();
-        }
-      } else {
+      // MAX_REAUTH cap upfront — defends against a chronic 401 (Drive
+      // rejecting even fresh tokens, e.g. revoked scope server-side). Without
+      // this gate, silent refresh would loop forever because successful IDLE
+      // transitions reset the legacy reauth counter.
+      if (_ctx.reAuthFails >= MAX_REAUTH) {
         _snackbar("Google Drive 동기화 세션이 만료됐습니다. 설정에서 재연결해 주세요.");
         _transition(S.ERROR, {}, event);
         _refreshUI();
+        return;
       }
+      L.log({ kind: "ACTION", event: "REAUTH", attempt: _ctx.reAuthFails + 1 });
+      // Phase 2h: silent refresh from IDB takes precedence over legacy GIS /
+      // implicit reauth. _attemptSilentRefresh handles its own state
+      // transitions (IDLE on success, NEEDS_CONSENT on invalid_grant, OFFLINE
+      // on net fail). Only fall through to legacy when no refresh token
+      // exists in IDB (returns false). The async kickoff is fire-and-forget.
+      _kickoff401Reauth(event, _ctx.reAuthFails + 1);
+      return;
+    }
+    _handleSyncFailNon401(event);
+  }
 
-    } else if (reason === "412") {
+  /**
+   * @param {{ type: "SYNC_FAIL"; reason: string }} event
+   * @param {number} nextReAuthFails
+   */
+  async function _kickoff401Reauth(event, nextReAuthFails) {
+    if (await _attemptSilentRefresh({ reAuthFails: nextReAuthFails })) return;
+    _legacyReauthAfter401(event);
+  }
+
+  /** @param {{ type: "SYNC_FAIL"; reason: string }} event */
+  function _legacyReauthAfter401(event) {
+    // Phase 2h: cap check + REAUTH log moved upfront to _handleSyncFail("401")
+    // so they fire even on the silent-refresh path. Reaching here means
+    // reAuthFails < MAX_REAUTH guaranteed.
+    if (T.isIOS()) {
+      // Hybrid policy: defer the disruptive full-page redirect when the
+      // user is actively reading; otherwise reauthorize transparently.
+      if (_isUserActivelyReading()) {
+        L.log({ kind: "ACTION", event: "REAUTH_DEFERRED", reason: "active_reading" });
+        _snackbar("Google 동기화 재연결이 필요합니다. 설정 → 연결을 눌러 주세요.");
+        _transition(S.NEEDS_CONSENT, { reAuthFails: _ctx.reAuthFails + 1 }, event);
+        _refreshUI();
+      } else {
+        // No prompt parameter — Google will silently re-issue the token
+        // when the existing session still has the granted scope.
+        // Do NOT pre-transition to NEEDS_CONSENT: if _beginRedirect hits the
+        // cap it already transitions to ERROR internally, causing a double
+        // state transition with a stale intermediate.
+        if (!_beginRedirect(undefined)) return;
+      }
+    } else if (window.google?.accounts?.id) {
+      // Re-identify silently first (FedCM/One Tap, no popup) so the
+      // follow-up requestAccessToken({prompt:""}) has a fresh email hint.
+      _transition(S.IDENTIFYING, { reAuthFails: _ctx.reAuthFails + 1 }, event);
+      _promptIdentity();
+    } else {
+      _transition(S.AUTHENTICATING, { reAuthFails: _ctx.reAuthFails + 1 }, event);
+      _reqSilentToken();
+    }
+  }
+
+  /** @param {{ type: "SYNC_FAIL"; reason: string }} event */
+  function _handleSyncFailNon401(event) {
+    const { reason } = event;
+    if (reason === "412") {
       if (_ctx.conflictFails < MAX_CONFLICTS) {
         const timer = _makeConflictTimer();
         _transition(S.IDLE, { conflictFails: _ctx.conflictFails + 1, backoffTimer: timer }, event);
@@ -629,13 +787,11 @@ function createSyncMachine({ onStateChange } = {}) {
         _snackbar("동기화 충돌이 반복됩니다. 잠시 후 다시 시도해 주세요.");
         _transition(S.IDLE, {}, event); // conflictFails reset
       }
-
     } else if (reason === "no_token" || reason === "exception") {
       _token = null;
       _snackbar("동기화 중 오류가 발생했습니다. 설정에서 재연결해 주세요.");
       _transition(S.ERROR, {}, event);
       _refreshUI();
-
     } else {
       // Network / 5xx — exponential backoff, then OFFLINE.
       const n = _ctx.netFails + 1;
@@ -651,7 +807,18 @@ function createSyncMachine({ onStateChange } = {}) {
 
   // ── Public API ────────────────────────────────────────────────────────────
 
-  function enable()      { dispatch({ type: "ENABLE" }); }
+  // Phase 2h: kick off silent refresh fire-and-forget alongside the legacy
+  // dispatch. enable() stays synchronous so existing tests / callers don't
+  // need to await. The two paths race; whoever finishes first wins, with
+  // race guards inside _attemptSilentRefresh that respect a settled state
+  // (IDLE / ERROR). Only the legacy path runs synchronously, so on cold
+  // start the user sees its outcome first; silent refresh's eventual result
+  // either upgrades us (IDLE) or is discarded if legacy already settled.
+  function enable() {
+    if (_state !== S.DISABLED) return;
+    void _attemptSilentRefresh();
+    dispatch({ type: "ENABLE" });
+  }
   function disable()     { dispatch({ type: "DISABLE" }); }
   function onGisReady()  { if (_state === S.INITIALIZING) dispatch({ type: "GIS_READY" }); }
   function requestSync() { if (_state === S.IDLE) dispatch({ type: "SYNC_REQUEST" }); }
@@ -687,7 +854,8 @@ function createSyncMachine({ onStateChange } = {}) {
     }
   }
 
-  return { enable, disable, onGisReady, requestSync, dispatch, acceptRedirectToken,
+  return { enable, disable, onGisReady, requestSync, dispatch,
+           acceptRedirectToken, acceptRedirectCode,
            getState, getToken, getEmail, isEnabled, isAuthenticated, deleteRemoteFile };
 }
 

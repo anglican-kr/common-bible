@@ -518,8 +518,8 @@ ADR-013 (클라이언트 JS 유닛 테스트 전략) 참고. 위 6차 리뷰 정
 | 단계 | 작업 | 상태 | PR |
 |---|---|---|---|
 | 1 | `js/sync/refresh-store.js` AES-GCM 암호화 IndexedDB 모듈 | ✅ 머지 (2026-05-06) | #52 |
-| 2 | `transport.js`에 PKCE 유틸 + `/token` 교환 함수 추가 (구 implicit과 공존) | 🟡 PR open | #53 |
-| 3 | `state-machine.js`에 silent refresh + redirect-PKCE 결합 | ⏳ 예정 | — |
+| 2 | `transport.js`에 PKCE 유틸 + `/token` 교환 함수 추가 (구 implicit과 공존) | ✅ 머지 (2026-05-07) | #53 |
+| 3 | `state-machine.js`에 silent refresh + redirect-PKCE 결합 | 🟡 PR open | #__ |
 | 4 | GIS 제거 + 모든 흐름 PKCE로 일원화 (사용자 가시 변경) | ⏳ 예정 | — |
 | 5 | 정리 (silent-blocked 키 cleanup, pitfalls 문서) | ⏳ 예정 | — |
 
@@ -543,6 +543,34 @@ ADR-013 (클라이언트 JS 유닛 테스트 전략) 참고. 위 6차 리뷰 정
   - `exchangeCodeForToken()`: POST `/token`, `grant_type=authorization_code`. 절대 throw 안 함
   - `refreshAccessToken()`: POST `/token`, `grant_type=refresh_token`. **rotation** 시 새 token surface, 없으면 `null`로 반환 → 호출자가 기존 값 보존
 - 단위 테스트 23건. **RFC 7636 §4.2 부록 B 테스트 벡터 정합성 검증** 포함 (`dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk` → `E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM`).
+
+### 단계 3 결과 (PR #__)
+
+`state-machine.js`와 `drive-sync.js`에 PKCE silent refresh 흐름 결합. 기존 GIS / Implicit 흐름은 그대로 살아있어 사용자 영향 0 — IDB에 refresh token이 없으면 기존 경로로 폴백.
+
+**state-machine.js**:
+- 신규 `_attemptSilentRefresh(ctxPatch?)`: IDB의 refresh token으로 access token 갱신. 4가지 결말 — 토큰 없음(false 반환, 폴백) / 성공(IDLE) / invalid_grant(IDB clear + NEEDS_CONSENT, 스낵바 없음) / 5xx·네트워크(OFFLINE)
+- 신규 `acceptRedirectCode(code, verifier)`: PKCE 콜백에서 받은 code를 access+refresh token 쌍으로 교환 → IDB 저장 → IDLE
+- `enable()`: 동기 dispatch 유지 + silent refresh fire-and-forget. race 가드(IDLE/ERROR이면 결과 폐기)로 legacy 경로와 충돌 방지
+- `_handleSyncFail("401")`: MAX_REAUTH cap 체크를 silent refresh 진입 전에 수행 (만성 401 무한 루프 방지). 401 reauth는 `reAuthFails` 카운터를 IDLE 전이 시 carry forward — successful sync로 SYNC_DONE 전까지 누적
+
+**drive-sync.js**:
+- IIFE에 PKCE 콜백 흡수 우선 분기 추가 — `bible-drive-redirect-state-pkce` 키 사용해 구 implicit과 절대 교차 처리되지 않음
+- `initDriveSync`에 `__pendingRedirectCode` 분기 추가, `_machine.acceptRedirectCode` 호출
+
+**테스트**:
+- `state-machine.test.js` Group 7/8/9 신규 13건 (silent refresh 7건, 401 → refresh 4건, acceptRedirectCode 3건)
+- 만성 401 루프 방지 회귀 (`23a`): refresh가 매번 성공해도 reAuthFails MAX_REAUTH로 ERROR
+- harness `loadMachine`이 `refreshStore` stub과 `T.refreshAccessToken`/`exchangeCodeForToken`/`consumeRedirectCallbackPKCE` 등 PKCE 함수 stub 노출
+- 합계 70/70 통과 (state-machine 33 + refresh-store 13 + transport-pkce 23 + 기타 1)
+
+### 단계 3 단계의 안전성
+
+이 PR은 어떤 사용자 시나리오에서도 동작 변화를 만들지 않음:
+- **기존 사용자** (IDB에 refresh token 없음): silent refresh가 즉시 false 반환 → 기존 GIS/Implicit 흐름 그대로 → INITIALIZING / IDENTIFYING / iOS redirect 흐름 진행
+- **신규 사용자** (단계 4 머지 전): signIn() 시 GIS Token Client 또는 iOS implicit으로 인증 → access token만 받음 → IDB는 빈 채 유지 → 다음 cold start도 기존 흐름
+
+단계 4 머지 시점에 `signIn()`이 PKCE redirect로 전환되면서 IDB가 채워지기 시작.
 
 ### Refresh Token 저장 전략 — 비추출 키 + AES-GCM
 
