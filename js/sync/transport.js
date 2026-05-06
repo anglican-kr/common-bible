@@ -1,12 +1,24 @@
+// @ts-check
 // ── Sync Transport ────────────────────────────────────────────────────────────
 // Pure functions: no global state, token passed as argument.
 // Each function returns structured results rather than throwing on HTTP errors,
 // so callers (state machine) can decide how to handle each status code.
 
+/** @typedef {import("../types").GsiTokenClient}         GsiTokenClient */
+/** @typedef {import("../types").GsiTokenResponse}       GsiTokenResponse */
+/** @typedef {import("../types").GsiCredentialResponse}  GsiCredentialResponse */
+/** @typedef {import("../types").DriveFetchOptions}      DriveFetchOptions */
+/** @typedef {import("../types").DriveFetchResult}       DriveFetchResult */
+/** @typedef {import("../types").DriveDownloadResult}    DriveDownloadResult */
+/** @typedef {import("../types").DriveUploadResult}      DriveUploadResult */
+/** @typedef {import("../types").RedirectCallbackResult} RedirectCallbackResult */
+/** @typedef {import("../types").SyncPayload}            SyncPayload */
+
 const DRIVE_API = "https://www.googleapis.com/drive/v3";
 const DRIVE_UPLOAD_API = "https://www.googleapis.com/upload/drive/v3";
 
 // Hostnames that must bypass the service worker cache (Drive + OAuth).
+/** @type {readonly string[]} */
 const DRIVE_HOSTNAMES = [
   "www.googleapis.com",
   "content.googleapis.com",
@@ -16,30 +28,43 @@ const DRIVE_HOSTNAMES = [
 
 // ── GIS wrappers ──────────────────────────────────────────────────────────────
 
+/**
+ * @param {string} clientId
+ * @param {string} scope
+ * @param {(resp: GsiTokenResponse) => void} onTokenResponse
+ * @returns {GsiTokenClient | null}
+ */
 function initTokenClient(clientId, scope, onTokenResponse) {
   if (!window.google?.accounts?.oauth2) return null;
-  return google.accounts.oauth2.initTokenClient({
+  return window.google.accounts.oauth2.initTokenClient({
     client_id: clientId,
     scope,
     callback: onTokenResponse,
   });
 }
 
+/**
+ * @param {GsiTokenClient | null} client
+ * @param {string | null} emailHint
+ */
 function requestSilentToken(client, emailHint) {
   if (!client) return;
+  /** @type {{ prompt: string; hint?: string }} */
   const opts = { prompt: "" };
   if (emailHint) opts.hint = emailHint;
   client.requestAccessToken(opts);
 }
 
+/** @param {GsiTokenClient | null} client */
 function requestConsentToken(client) {
   if (!client) return;
   client.requestAccessToken({ prompt: "consent" });
 }
 
+/** @param {string | null} token */
 function revokeToken(token) {
   if (!token || !window.google?.accounts?.oauth2) return;
-  try { google.accounts.oauth2.revoke(token, () => {}); } catch (_) {}
+  try { window.google.accounts.oauth2.revoke(token, () => {}); } catch (_) {}
 }
 
 // ── Identity client (FedCM / One Tap) ─────────────────────────────────────────
@@ -48,9 +73,14 @@ function revokeToken(token) {
 // Tap UI which is rendered inline on the page rather than via window.open().
 // Either way the iOS Safari popup-blocker prompt is never triggered.
 
+/**
+ * @param {string} clientId
+ * @param {(resp: GsiCredentialResponse) => void} onIdToken
+ * @returns {boolean}
+ */
 function initIdentityClient(clientId, onIdToken) {
   if (!window.google?.accounts?.id) return false;
-  google.accounts.id.initialize({
+  window.google.accounts.id.initialize({
     client_id: clientId,
     callback: (response) => onIdToken(response),
     use_fedcm_for_prompt: true,
@@ -68,12 +98,12 @@ function initIdentityClient(clientId, onIdToken) {
 // silent dismissal) is detected by the wall-clock timer in the state machine.
 function promptIdentity() {
   if (!window.google?.accounts?.id) return;
-  try { google.accounts.id.prompt(); } catch (_) { /* never throws */ }
+  try { window.google.accounts.id.prompt(); } catch (_) { /* never throws */ }
 }
 
 function cancelIdentityPrompt() {
   if (!window.google?.accounts?.id) return;
-  try { google.accounts.id.cancel(); } catch (_) {}
+  try { window.google.accounts.id.cancel(); } catch (_) {}
 }
 
 // ── iOS redirect-based OAuth ──────────────────────────────────────────────────
@@ -85,6 +115,7 @@ function cancelIdentityPrompt() {
 const _REDIRECT_STATE_KEY = "bible-drive-redirect-state";
 const _REDIRECT_STATE_MAX_AGE_MS = 10 * 60 * 1000;
 
+/** @returns {boolean} */
 function isIOS() {
   const ua = navigator.userAgent;
   if (/iPhone|iPod/.test(ua)) return true;
@@ -94,6 +125,7 @@ function isIOS() {
   return false;
 }
 
+/** @returns {string} */
 function _genNonce() {
   const buf = new Uint8Array(32);
   crypto.getRandomValues(buf);
@@ -103,6 +135,11 @@ function _genNonce() {
 // Begin OAuth implicit-flow redirect. Page navigates away immediately, so this
 // returns void; never await it. Persists nonce + return URL in sessionStorage
 // for the callback handler to validate.
+/**
+ * @param {string} clientId
+ * @param {string} scope
+ * @param {{ prompt?: string }} [opts]
+ */
 function beginRedirectAuth(clientId, scope, { prompt } = {}) {
   const nonce = _genNonce();
   const returnTo = location.pathname + location.search;
@@ -135,6 +172,7 @@ function beginRedirectAuth(clientId, scope, { prompt } = {}) {
 // initiation behind it) must not be able to clobber a legitimate in-flight
 // OAuth state. Google echoes the state in both success and error responses,
 // so requiring a match in both branches is correct per RFC 6749 §10.12.
+/** @returns {RedirectCallbackResult | null} */
 function consumeRedirectCallback() {
   const hash = location.hash;
   if (!hash || hash.length < 2) return null;
@@ -174,7 +212,7 @@ function consumeRedirectCallback() {
     return { ok: false, reason: "state_expired", returnTo };
   }
 
-  if (hasError) return { ok: false, reason: params.get("error"), returnTo };
+  if (hasError) return { ok: false, reason: params.get("error") ?? "unknown_error", returnTo };
 
   const token = params.get("access_token");
   if (!token) return { ok: false, reason: "empty_token", returnTo };
@@ -184,6 +222,10 @@ function consumeRedirectCallback() {
 
 // Decode the email claim from a Google ID token (JWT). Signature was already
 // verified by GIS; we only need the payload's `email` claim as a login hint.
+/**
+ * @param {string | null | undefined} credential
+ * @returns {{ email: string | null }}
+ */
 function parseIdToken(credential) {
   if (!credential || typeof credential !== "string") return { email: null };
   const parts = credential.split(".");
@@ -202,6 +244,10 @@ function parseIdToken(credential) {
 // ── User info ─────────────────────────────────────────────────────────────────
 
 // Returns { email } or { email: null } on failure.
+/**
+ * @param {string} token
+ * @returns {Promise<{ email: string | null }>}
+ */
 async function fetchUserInfo(token) {
   try {
     const r = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
@@ -217,14 +263,21 @@ async function fetchUserInfo(token) {
 
 // Returns { res, status, ok, etag } — never throws on HTTP errors, only on
 // network-level failures (no connection, timeout etc.).
-async function driveFetch(path, { token, method = "GET", body, headers = {}, ifMatch } = {}) {
+/**
+ * @param {string} path
+ * @param {DriveFetchOptions} opts
+ * @returns {Promise<DriveFetchResult>}
+ */
+async function driveFetch(path, { token, method = "GET", body, headers = {}, ifMatch } = /** @type {DriveFetchOptions} */ ({})) {
+  /** @type {Record<string, string>} */
   const fetchHeaders = {
     Authorization: `Bearer ${token}`,
     ...headers,
   };
   if (ifMatch) fetchHeaders["If-Match"] = ifMatch;
+  /** @type {RequestInit} */
   const opts = { method, headers: fetchHeaders };
-  if (body !== undefined) opts.body = body;
+  if (body !== undefined && body !== null) opts.body = body;
   const res = await fetch(`${DRIVE_API}${path}`, opts);
   return {
     res,
@@ -235,6 +288,10 @@ async function driveFetch(path, { token, method = "GET", body, headers = {}, ifM
 }
 
 // Returns the file ID of appDataFolder/sync.json, or null if not found.
+/**
+ * @param {string} token
+ * @returns {Promise<string | null>}
+ */
 async function findSyncFileId(token) {
   try {
     const { res, ok } = await driveFetch(
@@ -249,6 +306,11 @@ async function findSyncFileId(token) {
 }
 
 // Returns { doc, etag } or { doc: null, etag: null } on any failure.
+/**
+ * @param {string} token
+ * @param {string} fileId
+ * @returns {Promise<DriveDownloadResult>}
+ */
 async function downloadSyncFile(token, fileId) {
   try {
     const { res, ok, etag } = await driveFetch(`/files/${fileId}?alt=media`, { token });
@@ -261,11 +323,21 @@ async function downloadSyncFile(token, fileId) {
 
 // Returns { ok, status, etag }. Never throws.
 // Pass ifMatch to send If-Match header; Drive returns 412 if ETag mismatches.
+/**
+ * @param {string} token
+ * @param {SyncPayload} body
+ * @param {{ fileId?: string; ifMatch?: string | null }} [opts]
+ * @returns {Promise<DriveUploadResult>}
+ */
 async function uploadSyncFile(token, body, { fileId, ifMatch } = {}) {
   const bodyStr = JSON.stringify(body);
   try {
-    let res, etag;
+    /** @type {Response} */
+    let res;
+    /** @type {string | null} */
+    let etag;
     if (fileId) {
+      /** @type {Record<string, string>} */
       const headers = {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
@@ -294,6 +366,11 @@ async function uploadSyncFile(token, body, { fileId, ifMatch } = {}) {
 }
 
 // Delete the sync file. Returns { ok }.
+/**
+ * @param {string} token
+ * @param {string} fileId
+ * @returns {Promise<{ ok: boolean }>}
+ */
 async function deleteSyncFile(token, fileId) {
   try {
     const { ok } = await driveFetch(`/files/${fileId}`, { token, method: "DELETE" });
