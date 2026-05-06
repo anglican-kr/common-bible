@@ -1,3 +1,4 @@
+// @ts-check
 // ── Sync Store v2 ─────────────────────────────────────────────────────────────
 // Per-record mtime (_u) + tombstones + flat-map bookmark storage.
 // Provides: loadLocal, saveLocal, loadBookmarks, saveBookmarks, save*/lastRead,
@@ -7,9 +8,16 @@
 //   "bible-sync-meta"       { schemaVersion: 2, deviceId }
 //   "bible-bookmarks-v2"    { bookmarks: {items, tombstones}, settings, lastRead }
 
+/** @typedef {import("../types").SyncDoc}            SyncDoc */
+/** @typedef {import("../types").SyncFlatItem}       SyncFlatItem */
+/** @typedef {import("../types").BookmarkTreeNode}   BookmarkTreeNode */
+/** @typedef {import("../types").SettingKey}         SettingKey */
+/** @typedef {import("../types").LastReadValue}      LastReadValue */
+
 const _META_KEY  = "bible-sync-meta";
 const _STORE_KEY = "bible-bookmarks-v2";
 
+/** @type {Record<SettingKey, string>} */
 const _SETTING_LS_KEYS = {
   fontSize:        "bible-font-size",
   colorScheme:     "bible-color-scheme",
@@ -21,6 +29,7 @@ const _LR_KEY = "bible-last-read";
 
 // ── Device ID ─────────────────────────────────────────────────────────────────
 
+/** @returns {string} */
 function _uuid() {
   return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
     const r = Math.random() * 16 | 0;
@@ -28,31 +37,42 @@ function _uuid() {
   });
 }
 
+/** @returns {{ schemaVersion: 2; deviceId: string }} */
 function _getOrCreateMeta() {
   try {
     const m = JSON.parse(localStorage.getItem(_META_KEY) ?? "null");
     if (m?.schemaVersion === 2 && m.deviceId) return m;
   } catch {}
+  /** @type {{ schemaVersion: 2; deviceId: string }} */
   const meta = { schemaVersion: 2, deviceId: _uuid() };
   localStorage.setItem(_META_KEY, JSON.stringify(meta));
   return meta;
 }
 
+/** @returns {string} */
 function getDeviceId() { return _getOrCreateMeta().deviceId; }
 
 // ── Flat-map helpers ──────────────────────────────────────────────────────────
 
 // Recursively walk a bookmark tree and produce a flat {[id]: node} map.
 // Each node gets parentId and _order; _u is preserved if already set.
+/**
+ * @param {BookmarkTreeNode[]} nodes
+ * @param {string | null} parentId
+ * @param {{ [id: string]: SyncFlatItem }} out
+ * @param {number} now
+ * @returns {{ [id: string]: SyncFlatItem }}
+ */
 function _flattenTree(nodes, parentId, out, now) {
   nodes.forEach((node, idx) => {
-    const { children, ...rest } = node;
-    out[node.id] = {
+    // `children` and `_u` are stripped/overridden; everything else is spread as-is.
+    const { children, ...rest } = /** @type {BookmarkTreeNode & { _u?: number }} */ (node);
+    out[node.id] = /** @type {SyncFlatItem} */ ({
       ...rest,
       parentId: parentId ?? null,
       _order:   idx,
       _u:       rest._u ?? now,
-    };
+    });
     if (Array.isArray(children) && children.length) {
       _flattenTree(children, node.id, out, now);
     }
@@ -62,27 +82,38 @@ function _flattenTree(nodes, parentId, out, now) {
 
 // Reconstruct a bookmark tree from a flat map.
 // Tombstoned items must already be filtered out before calling.
+/**
+ * @param {{ [id: string]: SyncFlatItem }} items
+ * @returns {BookmarkTreeNode[]}
+ */
 function bookmarkTreeFromFlat(items) {
+  /** @type {{ [parentId: string]: SyncFlatItem[] }} */
   const byParent = {};
   for (const node of Object.values(items)) {
-    const p = node.parentId ?? null;
+    const p = node.parentId ?? "";
     (byParent[p] ??= []).push(node);
   }
+  /**
+   * @param {string} parentId
+   * @returns {BookmarkTreeNode[]}
+   */
   function build(parentId) {
     return (byParent[parentId] ?? [])
       .sort((a, b) => (a._order ?? 0) - (b._order ?? 0))
-      .map(({ parentId: _p, _order: _o, _u: _t, ...rest }) => {
+      .map((flat) => {
+        const { parentId: _p, _order: _o, _u: _t, ...rest } = flat;
         const kids = build(rest.id);
-        if (kids.length)                   return { ...rest, children: kids };
-        if (rest.type === "folder")        return { ...rest, children: [] };
-        return rest;
+        if (kids.length)             return /** @type {BookmarkTreeNode} */ ({ ...rest, children: kids });
+        if (rest.type === "folder")  return /** @type {BookmarkTreeNode} */ ({ ...rest, children: [] });
+        return /** @type {BookmarkTreeNode} */ (rest);
       });
   }
-  return build(null);
+  return build("");
 }
 
 // ── Empty document ────────────────────────────────────────────────────────────
 
+/** @returns {SyncDoc} */
 function _emptyDoc() {
   return {
     bookmarks: { items: {}, tombstones: {} },
@@ -99,6 +130,7 @@ function _emptyDoc() {
 
 // ── Load / Save ───────────────────────────────────────────────────────────────
 
+/** @returns {SyncDoc} */
 function loadLocal() {
   try {
     const raw = localStorage.getItem(_STORE_KEY);
@@ -107,6 +139,7 @@ function loadLocal() {
   return _emptyDoc();
 }
 
+/** @param {SyncDoc} doc */
 function saveLocal(doc) {
   try { localStorage.setItem(_STORE_KEY, JSON.stringify(doc)); } catch {}
 }
@@ -114,6 +147,10 @@ function saveLocal(doc) {
 // ── Bookmark CRUD (tree ↔ flat-map) ──────────────────────────────────────────
 
 // Stable content fingerprint for conflict detection (excludes positional fields).
+/**
+ * @param {SyncFlatItem} node
+ * @returns {string}
+ */
 function _contentKey(node) {
   const { id, type, name, bookId, chapter, vref, verseSpec, color, label, note } = node;
   return JSON.stringify({ id, type, name, bookId, chapter, vref, verseSpec, color, label, note });
@@ -121,12 +158,14 @@ function _contentKey(node) {
 
 // Save a bookmark tree into v2 flat-map, preserving _u for unchanged items
 // and adding tombstones for removed items.
+/** @param {BookmarkTreeNode[]} tree */
 function saveBookmarks(tree) {
   const now = Date.now();
   const doc = loadLocal();
   const oldItems = doc.bookmarks.items;
   const newFlat  = _flattenTree(tree, null, {}, now);
 
+  /** @type {{ [id: string]: SyncFlatItem }} */
   const nextItems = {};
   for (const [id, node] of Object.entries(newFlat)) {
     const old = oldItems[id];
@@ -148,9 +187,11 @@ function saveBookmarks(tree) {
 }
 
 // Load and reconstruct the bookmark tree, filtering out tombstoned items.
+/** @returns {BookmarkTreeNode[]} */
 function loadBookmarks() {
   const doc = loadLocal();
   const { items, tombstones } = doc.bookmarks;
+  /** @type {{ [id: string]: SyncFlatItem }} */
   const alive = {};
   for (const [id, node] of Object.entries(items)) {
     if (!(tombstones[id] > node._u)) alive[id] = node;
@@ -160,12 +201,19 @@ function loadBookmarks() {
 
 // ── Settings / lastRead ───────────────────────────────────────────────────────
 
+/**
+ * @param {SettingKey} key
+ * @param {unknown} value
+ */
 function saveSetting(key, value) {
   const doc = loadLocal();
-  doc.settings[key] = { v: value, _u: Date.now() };
+  // Settings store wraps every value in MTimed<T>; the per-key value type
+  // is intentionally permissive (number for fontSize, string for the rest).
+  doc.settings[key] = /** @type {SyncDoc["settings"][SettingKey]} */ ({ v: value, _u: Date.now() });
   saveLocal(doc);
 }
 
+/** @param {LastReadValue} value */
 function saveLastRead(value) {
   const doc = loadLocal();
   doc.lastRead = { v: value, _u: Date.now() };
@@ -197,7 +245,7 @@ function migrateLegacyIfNeeded() {
     const raw = localStorage.getItem(lsKey);
     if (raw !== null) {
       let v; try { v = JSON.parse(raw); } catch { v = raw; }
-      doc.settings[key] = { v, _u: 0 };
+      doc.settings[/** @type {SettingKey} */ (key)] = /** @type {SyncDoc["settings"][SettingKey]} */ ({ v, _u: 0 });
     }
   }
 
@@ -214,6 +262,10 @@ function migrateLegacyIfNeeded() {
 // ── Merge ─────────────────────────────────────────────────────────────────────
 
 // Returns the maximum _u across all records in a doc (for quick staleness check).
+/**
+ * @param {SyncDoc} doc
+ * @returns {number}
+ */
 function maxU(doc) {
   let m = 0;
   for (const n of Object.values(doc.bookmarks?.items    ?? {})) m = Math.max(m, n._u ?? 0);
@@ -224,6 +276,12 @@ function maxU(doc) {
 }
 
 // Per-record LWW merge. Conflict policy: higher _u wins; tie → deviceId sort.
+/**
+ * @param {SyncDoc} local
+ * @param {SyncDoc} remote
+ * @param {string} deviceId
+ * @returns {SyncDoc}
+ */
 function mergeDocs(local, remote, deviceId) {
   const merged = _emptyDoc();
   const remoteDeviceId = remote.deviceId ?? "";
@@ -251,15 +309,15 @@ function mergeDocs(local, remote, deviceId) {
       if (L._u !== R._u)         merged.bookmarks.items[id] = L._u > R._u ? L : R;
       else                       merged.bookmarks.items[id] = deviceId <= remoteDeviceId ? L : R;
     } else {
-      merged.bookmarks.items[id] = aliveL ? L : R;
+      merged.bookmarks.items[id] = /** @type {SyncFlatItem} */ (aliveL ? L : R);
     }
   }
 
-  // Settings: per-key LWW
-  for (const key of Object.keys(merged.settings)) {
+  // Settings: per-key LWW. Object.keys() is `string[]`, so cast to SettingKey.
+  for (const key of /** @type {SettingKey[]} */ (Object.keys(merged.settings))) {
     const lv = local.settings?.[key]  ?? { v: null, _u: 0 };
     const rv = remote.settings?.[key] ?? { v: null, _u: 0 };
-    merged.settings[key] = rv._u >= lv._u ? rv : lv;
+    merged.settings[key] = /** @type {SyncDoc["settings"][SettingKey]} */ (rv._u >= lv._u ? rv : lv);
   }
 
   // lastRead: LWW
@@ -272,23 +330,30 @@ function mergeDocs(local, remote, deviceId) {
 
 // ── Sync payload (for upload) ─────────────────────────────────────────────────
 
+/**
+ * @param {string} deviceId
+ * @returns {import("../types").SyncPayload}
+ */
 function buildSyncPayload(deviceId) {
   const doc = loadLocal();
-  return { schemaVersion: 2, deviceId, ...doc };
+  return { ...doc, schemaVersion: /** @type {2} */ (2), deviceId };
 }
 
 // Validate a remote doc is v2.
+/**
+ * @param {unknown} data
+ * @returns {boolean}
+ */
 function validateRemote(data) {
-  return (
-    typeof data === "object" && data !== null &&
-    data.schemaVersion === 2 &&
-    typeof data.bookmarks?.items === "object"
-  );
+  if (typeof data !== "object" || data === null) return false;
+  const d = /** @type {{ schemaVersion?: unknown; bookmarks?: { items?: unknown } }} */ (data);
+  return d.schemaVersion === 2 && typeof d.bookmarks?.items === "object";
 }
 
 // ── Tombstone GC ──────────────────────────────────────────────────────────────
 // Remove tombstones older than ageDays (default 30). Safe to call anytime;
 // only persists if there's anything to remove.
+/** @param {number} [ageDays] */
 function sweepTombstones(ageDays = 30) {
   const cutoff = Date.now() - ageDays * 864e5;
   const doc = loadLocal();
@@ -302,13 +367,15 @@ function sweepTombstones(ageDays = 30) {
 // ── Apply remote doc to localStorage legacy keys ──────────────────────────────
 // Keeps existing app.js helpers (loadFontSize, loadTheme, etc.) working.
 
+/** @param {SyncDoc} doc */
 function applyToLegacyKeys(doc) {
   for (const [key, lsKey] of Object.entries(_SETTING_LS_KEYS)) {
-    const s = doc.settings?.[key];
+    const s = doc.settings?.[/** @type {SettingKey} */ (key)];
     if (s?.v != null) localStorage.setItem(lsKey, typeof s.v === "string" ? s.v : JSON.stringify(s.v));
   }
   if (doc.lastRead?.v != null) localStorage.setItem(_LR_KEY, JSON.stringify(doc.lastRead.v));
   const { items, tombstones } = doc.bookmarks ?? { items: {}, tombstones: {} };
+  /** @type {{ [id: string]: SyncFlatItem }} */
   const alive = {};
   for (const [id, node] of Object.entries(items)) {
     if (!(tombstones?.[id] > node._u)) alive[id] = node;
