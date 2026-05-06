@@ -42,10 +42,26 @@ self.addEventListener("install", (event) => {
   );
 });
 
-// Allow the client to trigger skipWaiting via postMessage
+// Allow the client to trigger skipWaiting via postMessage,
+// or to query this SW's bundled version for the update toast.
+// GET_VERSION reads /version.json from THIS SW's own CACHE_NAME so the
+// reply reflects the version about to be installed, not the one currently
+// active in the page (the active SW serves a stale copy of version.json).
 self.addEventListener("message", (event) => {
   if (event.data && event.data.type === "SKIP_WAITING") {
     self.skipWaiting();
+    return;
+  }
+  if (event.data && event.data.type === "GET_VERSION") {
+    const port = event.ports && event.ports[0];
+    if (!port) return;
+    event.waitUntil(
+      caches.open(CACHE_NAME)
+        .then((cache) => cache.match("/version.json"))
+        .then((res) => (res ? res.json() : null))
+        .then((data) => port.postMessage({ version: (data && data.version) || "" }))
+        .catch(() => port.postMessage({ version: "" }))
+    );
   }
 });
 
