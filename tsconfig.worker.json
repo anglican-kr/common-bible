@@ -1,9 +1,10 @@
 {
+  "//": "Web Worker 전용 tsconfig — DOM Window 글로벌 대신 WebWorker 라이브 사용. 메인 tsconfig.json은 search-worker.js를 exclude로 분리해 처리한다.",
   "compilerOptions": {
     "target": "ES2022",
     "module": "ES2022",
     "moduleResolution": "node",
-    "lib": ["DOM", "DOM.Iterable", "ES2022"],
+    "lib": ["WebWorker", "ES2022"],
     "allowJs": true,
     "checkJs": false,
     "noEmit": true,
@@ -16,16 +17,6 @@
     "forceConsistentCasingInFileNames": true
   },
   "include": [
-    "js/**/*.js",
-    "js/types.d.ts"
-  ],
-  "exclude": [
-    "node_modules",
-    "data",
-    "tests",
-    "src",
-    "scripts",
-    "output",
     "js/search-worker.js"
   ]
 }
