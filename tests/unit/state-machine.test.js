@@ -184,6 +184,9 @@ test("12. iOS OFFLINE → NET_RECOVERED → NEEDS_CONSENT (commit 87b1896 회귀
   await drain(5);
   // navigator.onLine=false → 첫 5xx에서 즉시 OFFLINE
   assert.equal(machine.getState(), "OFFLINE");
+  // 사이클이 backoff retry 없이 단번에 OFFLINE으로 갔는지 확인 — onLine=false가
+  // MAX_NET_RETRIES 카운트를 무시하고 첫 실패에서 곧장 OFFLINE 분기를 타게 한다.
+  assert.equal(downloadFails, 1, "첫 다운로드 실패에서 즉시 OFFLINE으로 진입");
   // NET_RECOVERED 디스패치
   machine.dispatch({ type: "NET_RECOVERED" });
   assert.equal(machine.getState(), "NEEDS_CONSENT");

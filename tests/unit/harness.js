@@ -20,12 +20,10 @@ const STATE_MACHINE_PATH = path.resolve(__dirname, "../../js/sync/state-machine.
 const SOURCE = fs.readFileSync(STATE_MACHINE_PATH, "utf8");
 
 // Constants mirrored from state-machine.js — kept here so tests can assert
-// against them without parsing the source.
+// against them without parsing the source. Only those actually used by
+// state-machine.test.js are exported.
 export const REDIRECT_ATTEMPTS_KEY = "bible-drive-redirect-attempts";
-export const SYNC_ENABLED_KEY = "bible-drive-sync";
-export const SYNC_EMAIL_KEY = "bible-drive-sync-email";
 export const MAX_REDIRECT_ATTEMPTS = 3;
-export const MAX_REAUTH = 3;
 
 // ── In-memory localStorage ───────────────────────────────────────────────────
 
