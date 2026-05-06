@@ -179,13 +179,7 @@ function consumeRedirectCallback() {
   const token = params.get("access_token");
   if (!token) return { ok: false, reason: "empty_token", returnTo };
 
-  return {
-    ok: true,
-    token,
-    expiresIn: parseInt(params.get("expires_in") ?? "3600", 10),
-    scope: params.get("scope"),
-    returnTo,
-  };
+  return { ok: true, token, returnTo };
 }
 
 // Decode the email claim from a Google ID token (JWT). Signature was already

@@ -519,8 +519,7 @@ function createSyncMachine({ onStateChange } = {}) {
             // Do NOT pre-transition to NEEDS_CONSENT: if _beginRedirect hits the
             // cap it already transitions to ERROR internally, causing a double
             // state transition with a stale intermediate.
-            if (_beginRedirect(undefined)) return;
-            _refreshUI();
+            if (!_beginRedirect(undefined)) return;
           }
         } else if (window.google?.accounts?.id) {
           // Re-identify silently first (FedCM/One Tap, no popup) so the
