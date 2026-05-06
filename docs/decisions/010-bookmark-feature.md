@@ -321,3 +321,11 @@ li.bm-bookmark
   - 모바일 미디어 쿼리에서 `.bm-item-actions { display:none }`, swipe 슬라이드 스타일,
     모바일 액션 버튼 스타일 추가
   - `prefers-reduced-motion`에 `.bm-row-content { transition: none }` 추가
+
+> **개정 (2026-05-06):** 모바일 스와이프 시 행 텍스트가 좌측으로 밀려 사라지는 문제 수정.
+> 이제 `.bm-row-content`는 고정되어 있고, `.bm-row-actions-mobile` 패널이 우측에서
+> `translateX(100% → 0)`으로 슬라이드 인하여 행의 우측 부분을 **오버레이**한다 (z-index:1).
+> 텍스트가 길면 액션 버튼이 텍스트 위를 가리는 동작은 의도된 것이다.
+> 또한 `.bm-row-content`에 `min-height: 44px`를 적용해 폴더와 북마크 행 높이를 일치시키고
+> 터치 타겟을 WCAG 기준에 맞춤. `prefers-reduced-motion` 처리 대상도
+> `.bm-row-content` → `.bm-row-actions-mobile`로 이동.
