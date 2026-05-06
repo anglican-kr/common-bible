@@ -35,7 +35,7 @@ window._syncClientId = _CLIENT_ID;
   }
 
   if (result.ok) {
-    window.__pendingRedirectToken = { access_token: result.token, expiresIn: result.expiresIn };
+    window.__pendingRedirectToken = { access_token: result.token };
     localStorage.setItem("bible-drive-sync", "1");
     // NOTE: do NOT reset bible-drive-redirect-attempts here. The counter only
     // clears on a successful sync (SYNC_DONE in the state machine), so an
