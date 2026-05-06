@@ -2498,23 +2498,50 @@ function formatTime(sec) {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
-// Lift FAB above chapter-nav when it scrolls into view on mobile
+// Lift FAB above chapter-nav when it scrolls into view on mobile.
+// Anchors against the nav's real viewport position so the audio bar's
+// height doesn't matter — the FAB always sits centered in the gap
+// above chapter-nav.
 let _fabNavObserver = null;
+let _fabScrollHandler = null;
+let _fabRafPending = false;
+function _updateFabLift(nav) {
+  const fabH = $searchFab.offsetHeight;
+  const gapPx = parseFloat(getComputedStyle(nav).marginTop) || 0;
+  const navTop = nav.getBoundingClientRect().top;
+  const liftPx = window.innerHeight - navTop + (gapPx - fabH) / 2;
+  $searchFab.style.setProperty("--fab-lift-nav", `${Math.max(liftPx, 0)}px`);
+}
 function observeFabLift() {
   if (_fabNavObserver) { _fabNavObserver.disconnect(); _fabNavObserver = null; }
+  if (_fabScrollHandler) {
+    window.removeEventListener("scroll", _fabScrollHandler);
+    _fabScrollHandler = null;
+  }
   const nav = $app.querySelector(".chapter-nav");
   if (!nav) return;
+  const onScroll = () => {
+    if (_fabRafPending) return;
+    _fabRafPending = true;
+    requestAnimationFrame(() => {
+      _fabRafPending = false;
+      _updateFabLift(nav);
+    });
+  };
   _fabNavObserver = new IntersectionObserver((entries) => {
     const visible = entries[0].isIntersecting;
     if (visible) {
-      // Center the FAB vertically in the gap (margin-top: 4.5rem) above chapter-nav
-      const navH = nav.offsetHeight;
-      const fabH = $searchFab.offsetHeight;
-      const gapPx = parseFloat(getComputedStyle(nav).marginTop);
-      const liftPx = navH + (gapPx - fabH) / 2;
-      $searchFab.style.setProperty("--fab-lift-nav", `${Math.max(liftPx, navH + 4)}px`);
+      _updateFabLift(nav);
+      if (!_fabScrollHandler) {
+        _fabScrollHandler = onScroll;
+        window.addEventListener("scroll", onScroll, { passive: true });
+      }
     } else {
       $searchFab.style.removeProperty("--fab-lift-nav");
+      if (_fabScrollHandler) {
+        window.removeEventListener("scroll", _fabScrollHandler);
+        _fabScrollHandler = null;
+      }
     }
   }, { threshold: 0 });
   _fabNavObserver.observe(nav);
