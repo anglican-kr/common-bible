@@ -20,6 +20,8 @@ const STATE_MACHINE_PATH = path.resolve(__dirname, "../../js/sync/state-machine.
 const SOURCE = fs.readFileSync(STATE_MACHINE_PATH, "utf8");
 const REFRESH_STORE_PATH = path.resolve(__dirname, "../../js/sync/refresh-store.js");
 const REFRESH_STORE_SOURCE = fs.readFileSync(REFRESH_STORE_PATH, "utf8");
+const TRANSPORT_PATH = path.resolve(__dirname, "../../js/sync/transport.js");
+const TRANSPORT_SOURCE = fs.readFileSync(TRANSPORT_PATH, "utf8");
 
 // Constants mirrored from state-machine.js — kept here so tests can assert
 // against them without parsing the source. Only those actually used by
@@ -247,6 +249,93 @@ export function loadRefreshStore() {
     ctx,
     peek: _peek,
     reset: _reset,
+  };
+}
+
+// ── transport loader (for PKCE function tests) ───────────────────────────────
+// transport.js is normally loaded into drive-sync alongside GIS globals, but
+// the new PKCE functions only need: location/sessionStorage/localStorage stubs,
+// real Web Crypto, real fetch (overridable per-test), and Node base globals.
+// Loading without window.google works because GIS wrappers are referenced
+// lazily — they only crash if a test actively calls them.
+
+/**
+ * @param {object} [opts]
+ * @param {{pathname?: string, search?: string, hash?: string, origin?: string}} [opts.location]
+ * @param {Record<string, string>} [opts.sessionStorageInit]
+ * @param {Record<string, string>} [opts.localStorageInit]
+ * @param {(input: any, init?: any) => Promise<any>} [opts.fetch]
+ * @param {string} [opts.userAgent]
+ */
+export function loadTransport(opts = {}) {
+  const {
+    location: locInit = {},
+    sessionStorageInit = {},
+    localStorageInit = {},
+    fetch: fetchStub,
+    userAgent = "Mozilla/5.0 (X11; Linux x86_64) Chrome/120",
+  } = opts;
+
+  const sessionStorage = makeLocalStorage(sessionStorageInit);
+  const localStorage = makeLocalStorage(localStorageInit);
+
+  // Capturing location proxy: tests inspect what `location.href = ...`
+  // received without actually navigating.
+  const location = {
+    pathname: locInit.pathname ?? "/",
+    search: locInit.search ?? "",
+    hash: locInit.hash ?? "",
+    origin: locInit.origin ?? "http://localhost:8080",
+    _hrefAssignments: [],
+    /** @type {string} */
+    _href: "",
+  };
+  Object.defineProperty(location, "href", {
+    get() { return location._href; },
+    set(v) { location._href = v; location._hrefAssignments.push(v); },
+  });
+
+  // Wrap whichever fetch implementation we end up using so `fetchCalls`
+  // captures every request (test-provided stubs included).
+  const fetchCalls = [];
+  const innerFetch = fetchStub ?? (async () => ({
+    ok: true, status: 200,
+    headers: { get: () => null },
+    json: async () => ({}),
+    text: async () => "",
+  }));
+  const fetch = async (url, init) => {
+    fetchCalls.push({ url, init });
+    return innerFetch(url, init);
+  };
+
+  const ctx = {
+    console, Promise, Object, Array, Map, Set, JSON, Error,
+    Uint8Array, ArrayBuffer, DataView,
+    TextEncoder, TextDecoder,
+    URL, URLSearchParams,
+    btoa, atob,
+    Date, Math,
+    parseInt, parseFloat, String, Number, Boolean,
+    setTimeout, clearTimeout, setImmediate, clearImmediate,
+    crypto: globalThis.crypto,
+    location,
+    sessionStorage,
+    localStorage,
+    navigator: { userAgent, platform: "Linux x86_64", maxTouchPoints: 0 },
+    fetch: (url, init) => fetch(url, init),
+  };
+  vm.createContext(ctx);
+  ctx.window = ctx;
+  vm.runInContext(TRANSPORT_SOURCE, ctx, { filename: "transport.js" });
+
+  return {
+    transport: ctx.syncTransport,
+    ctx,
+    location,
+    sessionStorage,
+    localStorage,
+    fetchCalls,
   };
 }
 
