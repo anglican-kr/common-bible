@@ -516,7 +516,9 @@ function createSyncMachine({ onStateChange } = {}) {
           } else {
             // No prompt parameter — Google will silently re-issue the token
             // when the existing session still has the granted scope.
-            _transition(S.NEEDS_CONSENT, { reAuthFails: _ctx.reAuthFails + 1 }, event);
+            // Do NOT pre-transition to NEEDS_CONSENT: if _beginRedirect hits the
+            // cap it already transitions to ERROR internally, causing a double
+            // state transition with a stale intermediate.
             if (_beginRedirect(undefined)) return;
             _refreshUI();
           }
