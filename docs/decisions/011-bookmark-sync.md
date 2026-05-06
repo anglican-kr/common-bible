@@ -564,6 +564,14 @@ ADR-013 (클라이언트 JS 유닛 테스트 전략) 참고. 위 6차 리뷰 정
 - harness `loadMachine`이 `refreshStore` stub과 `T.refreshAccessToken`/`exchangeCodeForToken`/`consumeRedirectCallbackPKCE` 등 PKCE 함수 stub 노출
 - 합계 70/70 통과 (state-machine 33 + refresh-store 13 + transport-pkce 23 + 기타 1)
 
+### Bugbot 1차 리뷰 정제 (PR #54)
+
+**race 가드에 사용자 disconnect 감지 추가**: `_attemptSilentRefresh`의 race 가드가 `_state === IDLE/ERROR`만 체크 → 사용자가 silent refresh 진행 중 `signOut()`/`disable()`을 호출하면 결과가 무시되지 않고 DISABLED 상태를 IDLE로 끌어올림 (사용자 의도 무시). 동일 race 표면이 `acceptRedirectCode`에도 존재 — `state=DISABLED`에서 진입하므로 state로는 user-action을 구분 불가.
+
+수정: `localStorage["bible-drive-sync"] === "0"` 검사 추가. 이 플래그는 `_transition`이 DISABLED/ERROR 진입 시 `enabled = next !== DISABLED && next !== ERROR`로 설정하므로 "사용자/시스템이 sync를 명시적으로 중단했는가"를 가장 신뢰성 있게 신호함. `signOut()`은 추가로 dispatch 전에 직접 플래그를 0으로 세팅 → `disable()`이 DISABLED에서 no-op이어도 플래그 변경은 일어남.
+
+회귀 방어: tests `29.` (silent refresh 진행 중 disable), `30.` (acceptRedirectCode 진행 중 signOut) 신설.
+
 ### 단계 3 단계의 안전성
 
 이 PR은 어떤 사용자 시나리오에서도 동작 변화를 만들지 않음:

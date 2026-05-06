@@ -264,14 +264,20 @@ function createSyncMachine({ onStateChange } = {}) {
     L.log({ kind: "ACTION", event: "SILENT_REFRESH_BEGIN" });
     const resp = await T.refreshAccessToken(rt, /** @type {string} */ (window._syncClientId));
 
-    // Race guard (§6.2): if a competing path (legacy GIS via dispatch(ENABLE),
-    // or user-initiated reconnect) already settled us in IDLE/SYNCING/ERROR
-    // by the time the network round-trip completes, abandon our result. We
-    // intentionally allow override of all in-flight states (DISABLED,
-    // INITIALIZING, IDENTIFYING, AUTHENTICATING, OFFLINE, NEEDS_CONSENT) and
-    // SYNCING (the 401 reauth case where we WANT to push out of SYNCING).
-    if (_state === S.IDLE || _state === S.ERROR) {
+    // Race guards (§6.2 + Bugbot #54):
+    //   1. _state === IDLE → legacy GIS path already authenticated us. Don't
+    //      override (the existing access token is just as good).
+    //   2. SYNC_ENABLED_KEY === "0" → user called signOut()/disable() during
+    //      the async window, OR ERROR state was reached (cap exhaustion).
+    //      Either way the user has explicitly stopped sync — honoring our
+    //      success would silently resurrect it. _transition flips this flag
+    //      to "0" whenever the next state is DISABLED or ERROR.
+    if (_state === S.IDLE) {
       L.log({ kind: "ACTION", event: "SILENT_REFRESH_RACE_LOST", finalState: _state });
+      return true;
+    }
+    if (localStorage.getItem(SYNC_ENABLED_KEY) === "0") {
+      L.log({ kind: "ACTION", event: "SILENT_REFRESH_RACE_LOST", reason: "sync_disabled" });
       return true;
     }
 
@@ -330,6 +336,15 @@ function createSyncMachine({ onStateChange } = {}) {
     const resp = await T.exchangeCodeForToken(
       code, verifier, /** @type {string} */ (window._syncClientId),
     );
+    // Race guard (Bugbot #54): user may have called signOut() during the
+    // exchange round-trip. State-based check doesn't help here — we ENTER
+    // this function with _state === DISABLED (initDriveSync calls before
+    // any enable()), so an unchanged DISABLED is normal. Use the localStorage
+    // SYNC_ENABLED_KEY flag instead, which signOut() flips to "0".
+    if (localStorage.getItem(SYNC_ENABLED_KEY) === "0") {
+      L.log({ kind: "ACTION", event: "REDIRECT_CODE_RACE_LOST", reason: "sync_disabled" });
+      return;
+    }
     if (!resp.ok) {
       L.log({ kind: "ERROR", event: "CODE_EXCHANGE_FAIL", status: resp.status, error: resp.error });
       _snackbar("인증 처리 중 오류가 발생했습니다. 설정에서 다시 연결해 주세요.");
