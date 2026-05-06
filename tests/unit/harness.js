@@ -46,7 +46,10 @@ function makeLocalStorage(initial = {}) {
 
 // ── Stub factories ───────────────────────────────────────────────────────────
 
-function makeTransportStub({ isIOS = false, hasGoogleId = false, uploadResult, findFileId, downloadResult } = {}) {
+function makeTransportStub({
+  isIOS = false, hasGoogleId = false, uploadResult, findFileId, downloadResult,
+  refreshResult, exchangeResult,
+} = {}) {
   return {
     isIOS: () => isIOS,
     initTokenClient: () => ({ requestAccessToken: () => {} }),
@@ -64,7 +67,34 @@ function makeTransportStub({ isIOS = false, hasGoogleId = false, uploadResult, f
     uploadSyncFile: async () => (uploadResult ?? { ok: true, status: 200, etag: '"etag-1"' }),
     deleteSyncFile: async () => ({ ok: true }),
     consumeRedirectCallback: () => null,
+    // Phase 2h PKCE additions
+    consumeRedirectCallbackPKCE: () => null,
+    beginRedirectAuthPKCE: async () => {},
+    generatePKCEPair: async () => ({ verifier: "v".repeat(43), challenge: "c".repeat(43) }),
+    exchangeCodeForToken: async () => (exchangeResult ?? {
+      ok: true, access_token: "test-access", refresh_token: "test-refresh",
+      expires_in: 3600, scope: "drive.appdata email",
+    }),
+    refreshAccessToken: async () => (refreshResult ?? {
+      ok: true, access_token: "test-access-2", refresh_token: null, expires_in: 3600,
+    }),
     DRIVE_HOSTNAMES: [],
+  };
+}
+
+// In-memory refreshStore for state-machine tests. Mirrors the IDB-backed
+// real implementation's contract: load returns null if no token, save
+// overwrites, clear removes.
+function makeRefreshStoreStub({ initialToken = null } = {}) {
+  let token = initialToken;
+  const calls = { save: 0, load: 0, clear: 0 };
+  return {
+    saveRefreshToken: async (t) => { calls.save++; token = t; },
+    loadRefreshToken: async () => { calls.load++; return token; },
+    clearRefreshToken: async () => { calls.clear++; token = null; },
+    /** @returns {string | null} */
+    _peek: () => token,
+    _calls: calls,
   };
 }
 
@@ -348,6 +378,9 @@ export function loadMachine(opts = {}) {
     uploadResult,
     findFileId,
     downloadResult,
+    refreshResult,
+    exchangeResult,
+    initialRefreshToken = null,
     initialStorage = {},
     activeReading = false,
     overrideStubs = {},
@@ -356,9 +389,16 @@ export function loadMachine(opts = {}) {
   } = opts;
 
   const localStorage = makeLocalStorage(initialStorage);
-  const T = { ...makeTransportStub({ isIOS, hasGoogleId, uploadResult, findFileId, downloadResult }), ...overrideStubs.T };
+  const T = {
+    ...makeTransportStub({
+      isIOS, hasGoogleId, uploadResult, findFileId, downloadResult,
+      refreshResult, exchangeResult,
+    }),
+    ...overrideStubs.T,
+  };
   const V2 = { ...makeStoreV2Stub(), ...overrideStubs.V2 };
   const L = makeDebugLogStub();
+  const refreshStore = overrideStubs.refreshStore ?? makeRefreshStoreStub({ initialToken: initialRefreshToken });
 
   const fakePending = new Map();
   let fakeNextId = 1;
@@ -403,6 +443,7 @@ export function loadMachine(opts = {}) {
     syncTransport: T,
     syncStoreV2: V2,
     syncDebugLog: L,
+    refreshStore,
     _syncClientId: "test-client-id",
     __driveSyncInteractionTs: () => (activeReading ? Date.now() - 1000 : 0),
   };
@@ -431,9 +472,10 @@ export function loadMachine(opts = {}) {
   return {
     machine,
     ctx,
-    stubs: { T, V2, L },
+    stubs: { T, V2, L, refreshStore },
     logEntries: L.entries,
     localStorage,
+    refreshStore,
     ctxAt,
     drain,
     fireAllTimers: () => fireAllPending(fakePending),

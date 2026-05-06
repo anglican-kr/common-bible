@@ -17,11 +17,47 @@ const _CLIENT_ID = location.hostname === "localhost"
 // import system. The machine reads window._syncClientId on GIS_READY.
 window._syncClientId = _CLIENT_ID;
 
-// ── iOS redirect callback absorption ──────────────────────────────────────────
-// Must run before app.js routes — strips OAuth hash, validates state nonce, and
-// stashes the token for initDriveSync() to inject into the machine.
+// ── Redirect callback absorption ──────────────────────────────────────────────
+// Must run before app.js routes. Two flows can land here during the Phase 2h
+// migration window:
+//   1. PKCE Authorization Code (query string ?code=…&state=…) — new path
+//   2. Implicit Flow (fragment #access_token=…) — legacy iOS Phase 2f path
+//
+// Each consumer reads its own sessionStorage state key, so a callback for one
+// flow CAN'T accidentally be processed by the other. We try PKCE first; if it
+// returns null (no PKCE-flavored callback in URL or sessionStorage), fall
+// through to the legacy implicit handler. Stage 4 will remove the implicit
+// branch entirely.
 (function _consumeRedirectIfPresent() {
   const T = window.syncTransport;
+  const log = window.syncDebugLog;
+
+  // ── Phase 2h: PKCE callback first ──
+  if (T?.consumeRedirectCallbackPKCE) {
+    const pkce = T.consumeRedirectCallbackPKCE();
+    if (pkce) {
+      if (pkce.returnTo) {
+        history.replaceState(null, "", pkce.returnTo);
+      } else {
+        history.replaceState(null, "", location.pathname + location.search);
+      }
+      if (pkce.ok) {
+        window.__pendingRedirectCode = { code: pkce.code, verifier: pkce.verifier };
+        localStorage.setItem("bible-drive-sync", "1");
+        if (pkce.silent) localStorage.removeItem(/** @type {string} */ (window._syncSilentBlockedKey));
+        log?.log({ kind: "ACTION", event: "PKCE_CALLBACK_OK", silent: pkce.silent });
+      } else if (pkce.silent) {
+        localStorage.setItem(/** @type {string} */ (window._syncSilentBlockedKey), "1");
+        log?.log({ kind: "ACTION", event: "PKCE_SILENT_REAUTH_BLOCKED", reason: pkce.reason });
+      } else {
+        window.__pendingRedirectError = pkce.reason;
+        log?.log({ kind: "ERROR", event: "PKCE_CALLBACK_FAIL", reason: pkce.reason });
+      }
+      return; // PKCE handled — don't double-process via legacy
+    }
+  }
+
+  // ── Legacy: Implicit Flow callback (iOS Phase 2f) ──
   if (!T?.consumeRedirectCallback) return;
   const result = T.consumeRedirectCallback();
   if (!result) return;
@@ -152,7 +188,18 @@ function initDriveSync() {
   window.syncDebugLog?.log({ kind: "ACTION", event: "INIT", enabled });
   if (!enabled) return;
 
-  // iOS redirect-flow: callback already validated; inject token directly.
+  // Phase 2h PKCE callback: code+verifier just landed. Hand off to the state
+  // machine which exchanges them for access+refresh tokens and persists the
+  // refresh token to IndexedDB. Async — the machine handles its own state
+  // transitions, no further work needed here.
+  if (window.__pendingRedirectCode) {
+    const { code, verifier } = window.__pendingRedirectCode;
+    delete window.__pendingRedirectCode;
+    void _machine.acceptRedirectCode(code, verifier);
+    return;
+  }
+
+  // iOS Implicit-flow legacy: callback already validated; inject token directly.
   // GIS may never load (or fail to initialize), so the machine must reach
   // IDLE without waiting for it.
   if (window.__pendingRedirectToken) {

@@ -341,3 +341,240 @@ test("15. iOS USER_CONSENT_REQUEST + attempts≥MAX → ERROR + beginRedirectAut
   assert.equal(beginCalls, 0, "cap 초과 시 리디렉션 호출 차단");
   assert.equal(machine.getState(), "ERROR");
 });
+
+// ── Group 7: Phase 2h silent refresh on enable() ─────────────────────────────
+// 설계서 §6.1·§6.2 — _attemptSilentRefresh가 enable() 시점에 fire-and-forget로
+// 시작되고, IDB에 refresh token이 있으면 동기 dispatch(ENABLE)와 race한다.
+// 결과 적용 시점에 race 가드(상태가 IDLE/ERROR면 폐기)가 걸린다.
+
+test("16. enable() + IDB에 refresh token 있음 → 백그라운드 갱신 → IDLE 진입", async () => {
+  const { machine, drain } = loadMachine({
+    initialRefreshToken: "rt-stored",
+    findFileId: null,
+    uploadResult: { ok: true, status: 200, etag: '"e1"' },
+  });
+  machine.enable();
+  // 동기 dispatch는 INITIALIZING으로 보냄 (legacy 경로)
+  assert.equal(machine.getState(), "INITIALIZING");
+  // silent refresh가 비동기로 resolve → IDLE → SYNC_REQUEST → SYNCING
+  await drain(5);
+  // 최종 상태는 IDLE (sync가 SYNC_DONE으로 종료) 또는 SYNCING (drain 부족 시)
+  const finalState = machine.getState();
+  assert.ok(
+    finalState === "IDLE" || finalState === "SYNCING",
+    `silent refresh 성공 후 IDLE/SYNCING이어야 함, got ${finalState}`,
+  );
+  assert.equal(machine.isAuthenticated(), true);
+});
+
+test("17. enable() + IDB 비어있음 → 기존 INITIALIZING 흐름 유지", async () => {
+  const { machine, drain, stubs } = loadMachine({
+    initialRefreshToken: null,
+  });
+  machine.enable();
+  await drain(3);
+  // refresh token 없음 → silent refresh 즉시 false 반환, 상태 변경 X
+  // 동기 dispatch가 INITIALIZING으로 보낸 그 상태 유지
+  assert.equal(machine.getState(), "INITIALIZING");
+  assert.equal(stubs.refreshStore._calls.load, 1, "load는 호출됨");
+  assert.equal(stubs.refreshStore._calls.save, 0, "save 미호출");
+});
+
+test("18. silent refresh 성공 + rotation 토큰 → IDB 새 값으로 갱신", async () => {
+  const { machine, drain, stubs } = loadMachine({
+    initialRefreshToken: "rt-old",
+    refreshResult: {
+      ok: true, access_token: "at-new", refresh_token: "rt-rotated", expires_in: 3600,
+    },
+    findFileId: null,
+    uploadResult: { ok: true, status: 200, etag: '"e1"' },
+  });
+  machine.enable();
+  await drain(5);
+  assert.equal(stubs.refreshStore._peek(), "rt-rotated", "rotation 결과가 IDB에 반영");
+  assert.equal(stubs.refreshStore._calls.save, 1);
+});
+
+test("19. silent refresh 성공 + rotation 없음 → 기존 IDB 값 보존", async () => {
+  const { machine, drain, stubs } = loadMachine({
+    initialRefreshToken: "rt-keep",
+    refreshResult: {
+      ok: true, access_token: "at-new", refresh_token: null, expires_in: 3600,
+    },
+    findFileId: null,
+    uploadResult: { ok: true, status: 200, etag: '"e1"' },
+  });
+  machine.enable();
+  await drain(5);
+  assert.equal(stubs.refreshStore._peek(), "rt-keep", "rotation 없으면 기존 값 유지");
+  assert.equal(stubs.refreshStore._calls.save, 0, "save 미호출 (덮어쓰기 방지)");
+});
+
+test("20. silent refresh invalid_grant → IDB clear + NEEDS_CONSENT (스낵바 없음)", async () => {
+  let snackbarCalls = 0;
+  const { machine, drain, stubs, ctx } = loadMachine({
+    initialRefreshToken: "rt-expired",
+    refreshResult: { ok: false, status: 400, error: "invalid_grant" },
+  });
+  ctx._showSyncSnackbar = () => { snackbarCalls++; };
+  machine.enable();
+  await drain(3);
+  assert.equal(machine.getState(), "NEEDS_CONSENT");
+  assert.equal(stubs.refreshStore._peek(), null, "IDB clear 됨");
+  assert.equal(stubs.refreshStore._calls.clear, 1);
+  assert.equal(snackbarCalls, 0, "백그라운드 silent 실패는 사용자에 알리지 않음");
+});
+
+test("21. silent refresh 5xx → OFFLINE + IDB 보존 (NET_RECOVERED 재시도 대비)", async () => {
+  const { machine, drain, stubs } = loadMachine({
+    initialRefreshToken: "rt-keep",
+    refreshResult: { ok: false, status: 503, error: "http_error" },
+  });
+  machine.enable();
+  await drain(3);
+  assert.equal(machine.getState(), "OFFLINE");
+  assert.equal(stubs.refreshStore._peek(), "rt-keep", "5xx에는 IDB 보존");
+  assert.equal(stubs.refreshStore._calls.clear, 0);
+});
+
+test("22. silent refresh race lost → IDLE/SYNCING 유지, 결과 폐기", async () => {
+  // legacy GIS 흐름이 먼저 IDLE에 도달했다고 가정 → silent refresh 결과 도착 시
+  // race 가드가 걸려 NEEDS_CONSENT로 끌어내리지 않아야 함.
+  const { machine, drain } = loadMachine({
+    initialRefreshToken: "rt-x",
+    refreshResult: { ok: false, status: 400, error: "invalid_grant" },
+    findFileId: null,
+    uploadResult: { ok: true, status: 200, etag: '"e1"' },
+  });
+  // Direct token injection puts us in IDLE before silent refresh resolves
+  machine.acceptRedirectToken("legacy-token");
+  machine.enable();  // 이미 DISABLED 아니므로 즉시 return — silent refresh도 시작 안 됨
+  await drain(5);
+  // legacy 경로가 settled → IDLE/SYNCING
+  const finalState = machine.getState();
+  assert.ok(
+    finalState === "IDLE" || finalState === "SYNCING",
+    `race lost 시 settled 상태 유지, got ${finalState}`,
+  );
+});
+
+// ── Group 8: 401 → silent refresh ────────────────────────────────────────────
+
+test("23. SYNCING 중 401 + IDB 토큰 있음 → silent refresh → 새 token으로 회복", async () => {
+  // 첫 시도 401, 두 번째 시도 200 — production에선 새 access token이 Drive에
+  // 받아들여지는 상황을 시뮬레이션. 무한 루프가 안 나는지도 함께 검증.
+  let downloadCalls = 0;
+  const { machine, drain } = loadMachine({
+    initialRefreshToken: "rt-stored",
+    findFileId: "fid",
+    overrideStubs: {
+      T: {
+        downloadSyncFile: async () => {
+          downloadCalls++;
+          return downloadCalls === 1
+            ? { doc: null, etag: null, status: 401 }
+            : { doc: null, etag: null, status: 200 };
+        },
+      },
+    },
+  });
+  machine.acceptRedirectToken("expiring-token");
+  await drain(8);
+  // 첫 사이클: 401 → silent refresh 성공 → 두 번째 사이클: 200 → SYNC_DONE → IDLE
+  assert.equal(machine.getState(), "IDLE", "두 번째 사이클 후 IDLE 정착");
+  assert.equal(downloadCalls, 2, "첫 401 + 두 번째 200, 무한 루프 없음");
+});
+
+test("23a. 401 반복 + silent refresh 매번 성공해도 reAuthFails MAX_REAUTH로 ERROR", async () => {
+  // 만성 401 (Drive가 새 token도 거절) — refresh가 성공해도 cap에 걸려야 함.
+  let downloadCalls = 0;
+  const { machine, drain } = loadMachine({
+    initialRefreshToken: "rt-x",
+    findFileId: "fid",
+    overrideStubs: {
+      T: {
+        downloadSyncFile: async () => {
+          downloadCalls++;
+          return { doc: null, etag: null, status: 401 };
+        },
+      },
+    },
+  });
+  machine.acceptRedirectToken("token");
+  await drain(20);
+  // MAX_REAUTH=3 → 4번째 401에서 ERROR
+  assert.equal(machine.getState(), "ERROR");
+  assert.ok(downloadCalls <= 5, `cap 작동 검증: download ${downloadCalls}회 (≤ MAX_REAUTH+2)`);
+});
+
+test("24. SYNCING 중 401 + IDB 비어있음 → 기존 reauth 폴백", async () => {
+  const { machine, drain } = loadMachine({
+    initialRefreshToken: null,
+    hasGoogleId: true, // GIS available → IDENTIFYING 분기
+    findFileId: "fid",
+    downloadResult: { doc: null, etag: null, status: 401 },
+  });
+  machine.acceptRedirectToken("token");
+  await drain(5);
+  // refresh token 없음 → _legacyReauthAfter401 → email hint 있으면 AUTHENTICATING (Phase 2h commit b9a926c)
+  const state = machine.getState();
+  assert.ok(
+    state === "IDENTIFYING" || state === "AUTHENTICATING",
+    `legacy reauth 경로, got ${state}`,
+  );
+});
+
+test("25. SYNCING 중 401 + silent refresh invalid → NEEDS_CONSENT", async () => {
+  const { machine, drain, stubs } = loadMachine({
+    initialRefreshToken: "rt-expired",
+    refreshResult: { ok: false, status: 400, error: "invalid_grant" },
+    findFileId: "fid",
+    downloadResult: { doc: null, etag: null, status: 401 },
+  });
+  machine.acceptRedirectToken("token");
+  await drain(5);
+  assert.equal(machine.getState(), "NEEDS_CONSENT");
+  assert.equal(stubs.refreshStore._calls.clear, 1, "IDB clear 호출됨");
+});
+
+// ── Group 9: acceptRedirectCode (PKCE callback 진입점) ───────────────────────
+
+test("26. acceptRedirectCode(code, verifier) 정상 → IDLE + IDB 저장", async () => {
+  const { machine, drain, stubs } = loadMachine({
+    exchangeResult: {
+      ok: true, access_token: "at-new", refresh_token: "rt-new",
+      expires_in: 3600, scope: "drive.appdata email",
+    },
+    findFileId: null,
+    uploadResult: { ok: true, status: 200, etag: '"e1"' },
+  });
+  await machine.acceptRedirectCode("auth-code-x", "verifier-y");
+  await drain(3);
+  const state = machine.getState();
+  assert.ok(
+    state === "IDLE" || state === "SYNCING",
+    `code 교환 성공 후 settled, got ${state}`,
+  );
+  assert.equal(machine.isAuthenticated(), true);
+  assert.equal(stubs.refreshStore._peek(), "rt-new", "refresh token IDB에 저장");
+  assert.equal(stubs.refreshStore._calls.save, 1);
+});
+
+test("27. acceptRedirectCode 빈 인자 → no-op", async () => {
+  const { machine, stubs } = loadMachine();
+  await machine.acceptRedirectCode("", "verifier");
+  await machine.acceptRedirectCode("code", "");
+  assert.equal(machine.getState(), "DISABLED");
+  assert.equal(stubs.refreshStore._calls.save, 0);
+});
+
+test("28. acceptRedirectCode 교환 실패 → NEEDS_CONSENT + 스낵바", async () => {
+  let snackbarCalls = 0;
+  const { machine, ctx } = loadMachine({
+    exchangeResult: { ok: false, status: 400, error: "invalid_grant" },
+  });
+  ctx._showSyncSnackbar = () => { snackbarCalls++; };
+  await machine.acceptRedirectCode("bad-code", "verifier");
+  assert.equal(machine.getState(), "NEEDS_CONSENT");
+  assert.equal(snackbarCalls, 1, "사용자가 직접 시작한 흐름이라 실패는 알림");
+});

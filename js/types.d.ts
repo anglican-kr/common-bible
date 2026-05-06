@@ -150,6 +150,10 @@ export interface SyncMachine {
   requestSync: () => void;
   dispatch: (event: SyncEvent) => void;
   acceptRedirectToken: (access_token: string) => void;
+  // Phase 2h PKCE entry: drive-sync.js IIFE stashes {code, verifier} from
+  // a redirect callback; initDriveSync hands them off here. Exchanges for
+  // access+refresh tokens, persists refresh to IndexedDB, transitions to IDLE.
+  acceptRedirectCode: (code: string, verifier: string) => Promise<void>;
   getState: () => SyncState;
   getToken: () => string | null;
   getEmail: () => string | null;
@@ -415,6 +419,8 @@ declare global {
     _syncRedirectAttemptsKey?: string;
     _syncSilentBlockedKey?: string;
     __pendingRedirectToken?: { access_token: string };
+    // Phase 2h: PKCE callback stash (mutually exclusive with __pendingRedirectToken)
+    __pendingRedirectCode?: { code: string; verifier: string };
     __pendingRedirectError?: string;
     __driveSyncInteractionTs?: () => number;
 
