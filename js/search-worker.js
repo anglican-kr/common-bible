@@ -1,3 +1,4 @@
+// @ts-check
 "use strict";
 
 /*
@@ -17,46 +18,127 @@
  *     { type: "error", message }
  */
 
-let meta = null;          // { aliases, books }
+/**
+ * @typedef BookMeta
+ * @property {string} ko
+ *
+ * @typedef SearchMeta
+ * @property {{ [alias: string]: string }} aliases
+ * @property {{ [bookId: string]: BookMeta }} books
+ *
+ * @typedef LoadedChunk
+ * @property {string[]} books
+ * @property {Uint16Array} bArr
+ * @property {Uint16Array} cArr
+ * @property {Uint16Array} vArr
+ * @property {string[]} tArr
+ *
+ * @typedef RawChunkPayload
+ * @property {string[]} books
+ * @property {Array<[number, number]>} b
+ * @property {number[]} c
+ * @property {number[]} v
+ * @property {string[]} t
+ *
+ * @typedef ChunkConfig
+ * @property {string} name
+ * @property {string} url
+ *
+ * @typedef VerseRef
+ * @property {string} bookId
+ * @property {number} chapter
+ * @property {number} verse
+ * @property {number | null} verseEnd
+ * @property {string} bookNameKo
+ *
+ * @typedef ParsedQuery
+ * @property {string} keyword
+ * @property {Set<string>} restrictBooks
+ * @property {string[]} unmatched
+ *
+ * @typedef MatchedRow
+ * @property {string} b
+ * @property {number} c
+ * @property {number} v
+ * @property {string} t
+ *
+ * @typedef PaginatedResult
+ * @property {Array<MatchedRow & { bookNameKo: string }>} results
+ * @property {number} total
+ *
+ * @typedef InitMessage
+ * @property {"init"} type
+ * @property {string} metaUrl
+ * @property {ChunkConfig[]} chunks
+ *
+ * @typedef SearchMessage
+ * @property {"search"} type
+ * @property {string} q
+ * @property {number} page
+ * @property {number} pageSize
+ * @property {number} searchId
+ *
+ * @typedef {InitMessage | SearchMessage} IncomingMessage
+ */
+
+/** @type {SearchMeta | null} */
+let meta = null;
+/** @type {Promise<void> | null} */
 let metaPromise = null;
+/** @type {string | null} */
 let metaUrl = null;
 
-let loadedChunks = {};    // { name: { books, bArr, cArr, vArr, tArr } }
-let loadingPromises = {}; // { name: Promise }
-let chunkConfig = [];     // [{ name, url }, ...]
+/** @type {{ [name: string]: LoadedChunk }} */
+let loadedChunks = {};
+/** @type {{ [name: string]: Promise<void> }} */
+let loadingPromises = {};
+/** @type {ChunkConfig[]} */
+let chunkConfig = [];
 
 let currentSearchId = 0;
 
+/**
+ * @param {string} type
+ * @param {Record<string, unknown>} payload
+ */
 function post(type, payload) {
   postMessage(Object.assign({ type }, payload));
 }
 
 // ── Meta loading ──
 
+/** @returns {Promise<void>} */
 async function loadMeta() {
   if (meta) return;
   if (metaPromise) return metaPromise;
-  metaPromise = fetch(metaUrl)
+  // metaUrl is set by the "init" message before loadMeta() ever runs.
+  const url = /** @type {string} */ (metaUrl);
+  metaPromise = fetch(url)
     .then((r) => {
       if (!r.ok) throw new Error("meta 로드 실패: " + r.status);
       return r.json();
     })
-    .then((data) => { meta = data; });
+    .then((data) => { meta = /** @type {SearchMeta} */ (data); });
   return metaPromise;
 }
 
 // ── Chunk loading ──
 
+/**
+ * @param {string} name
+ * @param {string} url
+ * @returns {Promise<void>}
+ */
 function loadChunk(name, url) {
-  if (loadedChunks[name]) return Promise.resolve();
-  if (loadingPromises[name]) return loadingPromises[name];
+  if (name in loadedChunks) return Promise.resolve();
+  if (name in loadingPromises) return loadingPromises[name];
 
   loadingPromises[name] = fetch(url)
     .then((r) => {
       if (!r.ok) throw new Error(`${name} 청크 로드 실패: ${r.status}`);
       return r.json();
     })
-    .then((data) => {
+    .then((/** @type {RawChunkPayload} */ data) => {
       const n = data.t.length;
       // Expand RLE [[bookIdx, count], ...] into a flat Uint16Array
       const bArr = new Uint16Array(n);
@@ -86,11 +168,19 @@ const REF_RE = /^([가-힣a-zA-Z0-9\s]+?)\s*(\d+)\s*:\s*(\d+)(?:\s*[-–]\s*(\d+
 // alias is ignored (`사랑 in: 요한` works the same as `사랑 in:요한`).
 const IN_RE = /(?:^|\s)in:\s*(\S+)/g;
 
+/**
+ * @param {string} raw
+ * @returns {ParsedQuery}
+ */
 function parseQuery(raw) {
+  /** @type {Set<string>} */
   const restrictBooks = new Set();
+  /** @type {string[]} */
   const unmatched = [];
+  // parseQuery is only called after loadMeta() resolves, so meta is non-null.
+  const m = /** @type {SearchMeta} */ (meta);
   const stripped = raw.replace(IN_RE, (_, alias) => {
-    const id = meta.aliases[alias] || meta.aliases[alias.toLowerCase()];
+    const id = m.aliases[alias] || m.aliases[alias.toLowerCase()];
     if (id) restrictBooks.add(id);
     else unmatched.push(alias);
     return " ";
@@ -98,31 +188,44 @@ function parseQuery(raw) {
   return { keyword: stripped, restrictBooks, unmatched };
 }
 
+/**
+ * @param {string} query
+ * @returns {VerseRef | null}
+ */
 function tryVerseRef(query) {
-  const m = query.match(REF_RE);
-  if (!m) return null;
+  const match = query.match(REF_RE);
+  if (!match) return null;
 
-  const bookQuery = m[1].trim();
-  const chapter = parseInt(m[2], 10);
-  const verse = parseInt(m[3], 10);
-  const verseEnd = m[4] ? parseInt(m[4], 10) : null;
+  const bookQuery = match[1].trim();
+  const chapter = parseInt(match[2], 10);
+  const verse = parseInt(match[3], 10);
+  const verseEnd = match[4] ? parseInt(match[4], 10) : null;
+
+  const m = /** @type {SearchMeta} */ (meta);
 
   // Case-insensitive lookup for English ids (e.g. "Gen", "GEN" → "gen").
   // toLowerCase() is a no-op on Hangul, so Korean aliases remain unaffected.
-  let bookId = meta.aliases[bookQuery] || meta.aliases[bookQuery.toLowerCase()];
+  let bookId = m.aliases[bookQuery] || m.aliases[bookQuery.toLowerCase()];
   if (!bookId) {
-    for (const [id, info] of Object.entries(meta.books)) {
+    for (const [id, info] of Object.entries(m.books)) {
       if (info.ko === bookQuery) { bookId = id; break; }
     }
   }
-  if (!bookId || !meta.books[bookId]) return null;
+  if (!bookId || !m.books[bookId]) return null;
 
-  return { bookId, chapter, verse, verseEnd, bookNameKo: meta.books[bookId].ko };
+  return { bookId, chapter, verse, verseEnd, bookNameKo: m.books[bookId].ko };
 }
 
+/**
+ * @param {string} q
+ * @param {string[]} chunkNames
+ * @param {Set<string> | null | undefined} restrictBooks
+ * @returns {MatchedRow[]}
+ */
 function gatherResults(q, chunkNames, restrictBooks) {
   const qLower = q.toLowerCase();
-  const hasRestrict = restrictBooks && restrictBooks.size > 0;
+  const hasRestrict = !!(restrictBooks && restrictBooks.size > 0);
+  /** @type {MatchedRow[]} */
   const allMatched = [];
   for (const name of chunkNames) {
     const chunk = loadedChunks[name];
@@ -130,7 +233,7 @@ function gatherResults(q, chunkNames, restrictBooks) {
     const { books, bArr, cArr, vArr, tArr } = chunk;
     const n = tArr.length;
     for (let i = 0; i < n; i++) {
-      if (hasRestrict && !restrictBooks.has(books[bArr[i]])) continue;
+      if (hasRestrict && !(/** @type {Set<string>} */ (restrictBooks)).has(books[bArr[i]])) continue;
       if (tArr[i].toLowerCase().includes(qLower)) {
         allMatched.push({
           b: books[bArr[i]],
@@ -144,23 +247,30 @@ function gatherResults(q, chunkNames, restrictBooks) {
   return allMatched;
 }
 
+/**
+ * @param {MatchedRow[]} allMatched
+ * @param {number} page
+ * @param {number} pageSize
+ * @returns {PaginatedResult}
+ */
 function paginate(allMatched, page, pageSize) {
   const total = allMatched.length;
   const start = (page - 1) * pageSize;
   const end = Math.min(total, start + pageSize);
+  const m = /** @type {SearchMeta} */ (meta);
   const results = allMatched.slice(start, end).map((e) => ({
     b: e.b,
     c: e.c,
     v: e.v,
     t: e.t,
-    bookNameKo: meta.books[e.b].ko,
+    bookNameKo: m.books[e.b].ko,
   }));
   return { results, total };
 }
 
 // ── Message handler ──
 
-onmessage = async (ev) => {
+onmessage = /** @param {MessageEvent<IncomingMessage>} ev */ async (ev) => {
   const msg = ev.data;
 
   if (msg.type === "init") {
@@ -175,8 +285,8 @@ onmessage = async (ev) => {
       }
       post("ready", {});
     } catch (err) {
-      // Include searchId so the main thread can resolve the correct pending Promise.
-      post("error", { searchId, message: err.message });
+      // The init path has no searchId — drop it from the error payload.
+      post("error", { message: err instanceof Error ? err.message : String(err) });
     }
     return;
   }
@@ -256,7 +366,7 @@ onmessage = async (ev) => {
         results, total, page, pageSize, unmatchedScopes: unmatched });
 
     } catch (err) {
-      post("error", { message: err.message });
+      post("error", { message: err instanceof Error ? err.message : String(err) });
     }
     return;
   }
