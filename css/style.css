@@ -2230,8 +2230,8 @@ body.verse-select-active #audio-bar {
   display: none;
 }
 
-body.verse-select-active #audio-bar ~ #search-fab {
-  bottom: max(calc(1.5rem + env(safe-area-inset-bottom)), var(--fab-lift-nav, 0px));
+body.verse-select-active #search-fab {
+  display: none !important;
 }
 
 
