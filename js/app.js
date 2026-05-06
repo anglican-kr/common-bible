@@ -2518,6 +2518,7 @@ function observeFabLift() {
     window.removeEventListener("scroll", _fabScrollHandler);
     _fabScrollHandler = null;
   }
+  _fabRafPending = false;
   const nav = $app.querySelector(".chapter-nav");
   if (!nav) return;
   const onScroll = () => {
@@ -2525,6 +2526,7 @@ function observeFabLift() {
     _fabRafPending = true;
     requestAnimationFrame(() => {
       _fabRafPending = false;
+      if (!nav.isConnected) return;
       _updateFabLift(nav);
     });
   };
