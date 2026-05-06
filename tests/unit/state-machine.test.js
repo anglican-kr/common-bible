@@ -578,3 +578,55 @@ test("28. acceptRedirectCode 교환 실패 → NEEDS_CONSENT + 스낵바", async
   assert.equal(machine.getState(), "NEEDS_CONSENT");
   assert.equal(snackbarCalls, 1, "사용자가 직접 시작한 흐름이라 실패는 알림");
 });
+
+// ── Bugbot PR #54: DISABLED race 보강 ────────────────────────────────────────
+// 사용자가 disable()을 호출해 명시적으로 끊은 직후 silent refresh / code 교환이
+// 성공해도 IDLE로 끌어올리면 안 됨 — 사용자 의도 무시.
+
+test("29. silent refresh 진행 중 disable() 호출 → DISABLED 유지 (Bugbot #54)", async () => {
+  // refreshAccessToken을 즉시 resolve하지 않고 외부 제어 가능한 promise로 hold,
+  // 그 사이에 disable()을 호출해 race window를 인위적으로 만든다.
+  let resolveRefresh;
+  const refreshPromise = new Promise((r) => { resolveRefresh = r; });
+  const { machine, drain } = loadMachine({
+    initialRefreshToken: "rt-pending",
+    overrideStubs: {
+      T: { refreshAccessToken: () => refreshPromise },
+    },
+  });
+  machine.enable();
+  // enable()이 silent refresh를 fire-and-forget로 시작했지만 refreshPromise는 아직 pending
+  assert.equal(machine.getState(), "INITIALIZING", "enable()의 동기 dispatch는 INITIALIZING");
+  // 사용자가 disconnect 클릭
+  machine.disable();
+  assert.equal(machine.getState(), "DISABLED");
+  // 이제 refresh가 성공으로 resolve되더라도 race 가드가 DISABLED를 잡아야 함
+  resolveRefresh({ ok: true, access_token: "at-x", refresh_token: null, expires_in: 3600 });
+  await drain(3);
+  assert.equal(machine.getState(), "DISABLED", "DISABLED 유지 — silent 성공 결과 폐기");
+  assert.equal(machine.isAuthenticated(), false, "토큰 미보관");
+});
+
+test("30. acceptRedirectCode 진행 중 signOut() 호출 → DISABLED 유지 (Bugbot #54)", async () => {
+  // Production에선 signOut()이 localStorage["bible-drive-sync"]를 "0"으로 설정한 뒤
+  // _machine.disable()을 호출함. acceptRedirectCode는 state=DISABLED에서 시작하므로
+  // 가드는 _state가 아니라 localStorage flag로 사용자 의도를 판별한다.
+  let resolveExchange;
+  const exchangePromise = new Promise((r) => { resolveExchange = r; });
+  const { machine, drain, refreshStore, localStorage } = loadMachine({
+    initialStorage: { "bible-drive-sync": "1" }, // signIn() 직후 상태
+    overrideStubs: {
+      T: { exchangeCodeForToken: () => exchangePromise },
+    },
+  });
+  void machine.acceptRedirectCode("code-x", "verifier-y");
+  // signOut() 시뮬레이션: flag 0으로 설정 (production drive-sync.signOut 패턴)
+  localStorage.setItem("bible-drive-sync", "0");
+  resolveExchange({
+    ok: true, access_token: "at", refresh_token: "rt",
+    expires_in: 3600, scope: "drive.appdata",
+  });
+  await drain(3);
+  assert.equal(machine.getState(), "DISABLED", "DISABLED 유지 — code 교환 결과 폐기");
+  assert.equal(refreshStore._calls.save, 0, "IDB에 refresh token 저장 안 됨");
+});
