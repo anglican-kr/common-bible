@@ -63,6 +63,8 @@ iOS 한정 추가 동작:
 - **silent 자동 시도 차단**: `prompt=none`이 `interaction_required` 등으로 실패하면 `bible-drive-silent-blocked=1` 플래그 설정 → 다음 앱 오픈에 자동 재시도 안 함 (사용자 "연결" 클릭으로 해제).
 - **무한 리디렉션 cap**: localStorage 카운터(상한 3회) 초과 시 ERROR 강제 전이.
 
+> **진행 중 — Phase 2h (2026-05-06~)**: Authorization Code + PKCE + refresh token 흐름으로 마이그레이션 중. 단계 1~3 머지 완료(refresh token AES-GCM 암호화 IDB, PKCE 유틸·`/token` 교환, state-machine silent refresh 결합). 단계 3까지는 기존 GIS/Implicit 경로 옆에 새 코드를 깔기만 해 사용자 영향 0. 단계 4 머지 시점에 GIS 제거 + 모든 플랫폼 단일 PKCE redirect 경로로 일원화되며, 기존 사용자는 cold start 1회 NEEDS_CONSENT 통과 후 신규 흐름 진입(sync 데이터는 별도 store라 손실 없음). 살아있는 설계 문서: [`docs/design/pkce-migration.md`](docs/design/pkce-migration.md).
+
 ### 알려진 한계
 
 - **iOS Safari 탭 사용 시 7일 ITP**: 홈 화면에 설치하지 않고 Safari 탭에서 직접 여는 경우, 7일 미사용 시 ITP가 storage(쿠키 + localStorage 포함)를 정리 → 동기화 재연결 필요. **홈 화면 설치 PWA(iOS 17+ HSWA)는 storage가 영속되어 ITP 적용 대상 아님** — ADR-011 §맥락 참고.
@@ -91,6 +93,7 @@ js/
   gtag-init.js          ← Google Analytics 초기화
   types.d.ts            ← 동기화·검색 도메인 타입 단일 출처
   sync/                 ← 동기화 상태 머신·전송·저장 (ADR-011)
+                          state-machine·transport·store-v2·debug-log·refresh-store(Phase 2h)
 css/
   style.css             ← 메인 스타일
 assets/
@@ -128,13 +131,17 @@ tests/
   fixtures/
     verse_sequence.json ← 1328장 절 순서 스냅샷
   generate_fixtures.py  ← 픽스처 재생성 스크립트 (로컬 전용)
-  unit/                 ← 클라이언트 JS 유닛 테스트 (Node --test)
+  unit/                 ← 클라이언트 JS 유닛 테스트 (Node --test, ADR-013)
+                          state-machine·refresh-store·transport-pkce
   e2e/                  ← 브라우저 E2E 테스트 (로컬 전용)
 .github/
   workflows/
     test.yml            ← CI: 유닛 테스트 자동 실행
 docs/
-  decisions/            ← 아키텍처 결정 기록 (ADR-001~011)
+  decisions/            ← 아키텍처 결정 기록 (ADR-001~013)
+  design/               ← 살아있는 설계 문서 (pkce-migration 등)
+  audit/                ← 보안 감사 보고서
+  qa/                   ← e2e 회귀 테스트 결과 보고서
   prd.md                ← 제품 요구사항 문서
   worklog.md            ← 작업 일지
 ```
@@ -160,8 +167,8 @@ python src/search_indexer.py
 ## 테스트
 
 ```bash
-# 클라이언트 JS 유닛 테스트 (Node 22+ 내장, CI 자동 실행)
-node --test tests/unit/state-machine.test.js
+# 클라이언트 JS 유닛 테스트 (Node 24+, CI 자동 실행)
+node --test tests/unit/*.test.js
 
 # 데이터 파이프라인 검증 (원본 텍스트 불필요)
 pytest tests/test_completeness.py tests/test_ordering.py tests/test_snapshots.py -v
