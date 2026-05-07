@@ -771,18 +771,25 @@ Phase 2g 시점의 GIS/Implicit/silent-blocked 표·설명을 Phase 2h 단일 PK
 
 ---
 
-## 8. 외부 의존
+## 9. 외부 의존
 
-### 8.1 Google Cloud Console
+### 9.1 Google Cloud Console
 
 - dev/prod OAuth 클라이언트 두 개 모두 **Authorized redirect URIs** 등록 필요:
-  - dev: `http://localhost:8080/`
+  - dev: `https://dev.anglican.kr/`
   - prod: `https://bible.anglican.kr/`
   - trailing slash 정확히 일치
-- 클라이언트 type: "Web application"
-- **단계 4 배포 직전 검증 필수**
+- 클라이언트 type: "Web application" — 이 타입은 `/token` 요청에 `client_secret`을 강제 (RFC 7636 일탈). [§10 BFF 도입](#10-최종-상태-2026-05-08) 참조
+- **`http://localhost:8080`은 의도적으로 제외** — 사용자 PC 악성 프록시 공격 표면 차단 (Phase 2h 단계 6)
 
-### 8.2 검수 상태 영향
+### 9.2 nginx /oauth/token BFF (단계 6)
+
+- 두 vhost 모두 `location = /oauth/token` 블록 적용
+- `proxy_set_body "$request_body&client_secret=..."`로 server-side secret 주입 → `https://oauth2.googleapis.com/token`
+- secret은 `/etc/nginx/sites-available/{bible,dev}`에만 존재. 브라우저·git·CDN 어디에도 노출 없음
+- 예시 설정: `nginx/oauth-proxy.example.conf`. 자세한 결정은 [ADR-017](../decisions/017-oauth-bff-proxy.md)
+
+### 9.3 검수 상태 영향
 
 - 현재 OAuth 앱 "Testing" 상태 (2026-05-02 검수 신청, 심사 대기)
 - "Testing" 동안 refresh token 7일 만료
@@ -791,7 +798,46 @@ Phase 2g 시점의 GIS/Implicit/silent-blocked 표·설명을 Phase 2h 단일 PK
 
 ---
 
-## 9. 부록
+## 10. 최종 상태 (2026-05-08)
+
+Phase 2h 마이그레이션 종료. 5단계 + 1단계(인프라) 완료.
+
+### 10.1 완료 단계
+
+| 단계 | PR | 핵심 변경 |
+|-----|-----|----------|
+| 1 | #52 | `js/sync/refresh-store.js` AES-GCM 암호화 IDB |
+| 2 | #53 | `transport.js` PKCE 유틸 + `/token` 교환 함수 |
+| 3 | #54 | `state-machine.js` `_attemptSilentRefresh` + `acceptRedirectCode` (GIS·Implicit과 공존) |
+| 4 | #57 | GIS / Implicit / FedCM 의존 모두 제거. 상태 6개로 축소. PKCE 단일 경로 |
+| 5 | #61 | localStorage cleanup, `coding-pitfalls.md` §11~13, 보안 감사 (0건), README PKCE 단일 경로 |
+| 6 | #64 | dev 환경 분리 (`dev.anglican.kr`) + nginx BFF + visibility 자동 sync + 부수 UI 회귀 |
+
+### 10.2 시운전 결과 (2026-05-08, dev 환경)
+
+`dev.anglican.kr`에서 cold start silent refresh + Drive 동기화 1라운드 + 자동 머지·업로드 모두 정상. 진단 로그 0 errors. 멀티디바이스 시나리오에서 visibility-trigger sync로 다른 디바이스 변경분 자동 pull 확인.
+
+### 10.3 BFF detour의 발견 (단계 6 도중)
+
+원래 가정: "PKCE 사용 시 `client_secret` 불요 (RFC 7636)". 시운전에서 `400 invalid_request: "client_secret is missing."` 응답으로 가정 오류 확인. Google "Web application" 클라이언트 타입은 RFC를 따르지 않고 `/token`에 `client_secret`을 강제함 (다수 라이브러리 issue tracker에서 같은 문제 확인).
+
+대안 검토:
+- **A. SPA에 secret 임베드** — 거부 사유: GitHub secret scanner가 `GOCSPX-` 패턴 감지 시 Google이 secret 자동 무효화 → 운영 동기화 즉시 중단. git 이력 영구 잔존도 부담
+- **B. Desktop app 클라이언트 타입 전환** — 거부 사유: redirect URI가 `http://127.0.0.1:port` 형태만 허용, HTTPS 도메인 불가. SPA에 부적합
+- **C. nginx BFF 프록시** ✅ 채택 — same-origin `/oauth/token` 요청에 nginx가 secret 주입 후 Google로 forward. secret은 nginx 설정 파일에만 존재
+
+자세한 결정 기록: [ADR-017](../decisions/017-oauth-bff-proxy.md).
+
+### 10.4 ADR-011·CLAUDE.md·README 동기화
+
+- `docs/decisions/011-bookmark-sync.md`에 BFF 결정 개정 블록(2026-05-08) + 미결 사항 갱신
+- `CLAUDE.md` "현재 상태" Phase 2h 완료 표시 + 단계 6 추가
+- `README.md` Drive 동기화 표에 `/oauth/token` BFF + visibility-trigger 행 추가
+- `docs/architecture.md` §1·§4.3·§9 다이어그램 + 보안 모델 갱신, ADR 인덱스에 014~017 추가
+
+---
+
+## 11. 부록
 
 ### A. RFC 7636 PKCE 요약
 

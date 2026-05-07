@@ -51,11 +51,14 @@ data/source/*.md  (비공개 서브모듈, 73권 마크다운 소스)
 
 | 시나리오 | 동작 |
 |---------|-----|
-| 첫 연결 ("연결" 클릭) | `accounts.google.com`로 풀페이지 리디렉션 → consent → callback `?code=…` → `/token` POST → access + refresh token 수신 → IDLE |
-| 앱 재실행 (refresh token 보유) | IndexedDB의 AES-GCM 암호화 refresh token으로 백그라운드 `/token` POST → access token 갱신 → IDLE. UI 변화 없음, 팝업·리디렉션·깜박임 없음. |
+| 첫 연결 ("연결" 클릭) | `accounts.google.com`로 풀페이지 리디렉션 → consent → callback `?code=…` → same-origin `/oauth/token` POST → access + refresh token 수신 → IDLE |
+| 앱 재실행 (refresh token 보유) | IndexedDB의 AES-GCM 암호화 refresh token으로 백그라운드 `/oauth/token` POST → access token 갱신 → IDLE. UI 변화 없음, 팝업·리디렉션·깜박임 없음. |
 | 앱 재실행 (refresh token 없음) | NEEDS_CONSENT에 정착, 설정 화면에 "연결" 버튼 노출 |
+| 탭 활성화 | visibilitychange로 `requestSync()` 한 번 — 다른 디바이스의 변경분을 새로고침 없이 자동 pull (IDLE 상태일 때만) |
 | 401 (access token 만료) | refresh token으로 백그라운드 갱신 → 동기화 재개. refresh token도 invalid면 NEEDS_CONSENT로 폴백 |
 | `signOut()` | Google `/revoke` 호출 + IDB clear + email/state localStorage 정리 |
+
+**OAuth /token BFF**: `/oauth/token`은 nginx가 같은 origin에서 받은 요청에 `client_secret`을 server-side로 주입한 뒤 `oauth2.googleapis.com/token`으로 forward한다. Google "Web application" 클라이언트 타입의 RFC 7636 일탈(PKCE에서도 secret 강제) + GitHub secret scanner 자동 무효화 위험을 회피하기 위함이다 ([ADR-017](docs/decisions/017-oauth-bff-proxy.md), `nginx/oauth-proxy.example.conf`).
 
 운영 가드:
 - **무한 리디렉션 cap**: localStorage 카운터(상한 3회) 초과 시 ERROR 강제 전이. SYNC_DONE으로만 리셋.
@@ -121,8 +124,11 @@ src/
   generate_splash.py    ← iOS 스플래시 PNG 생성 (cairosvg + Pillow)
 scripts/
   build-deploy.sh       ← 배포 zip 생성
+  deploy.sh             ← dev/prod/promote 서브커맨드 (서버 업로드 + 심볼릭 링크 교체)
   release.py            ← version.json + sw.js 캐시 식별자 bump (shell/data/audio 독립)
   serve.py              ← SPA-aware 로컬 개발 서버
+nginx/
+  oauth-proxy.example.conf  ← OAuth /token BFF location 블록 (ADR-017)
 tests/
   test_completeness.py  ← Level 1 완전성 검증
   test_ordering.py      ← Level 2 절 순서 검증
@@ -196,6 +202,6 @@ npx tsc -p tsconfig.worker.json --noEmit
 ## 문서
 
 - [아키텍처 개요](docs/architecture.md) — 전체 구조 한눈에
-- [아키텍처 결정 기록](docs/decisions/) — ADR-001~013
+- [아키텍처 결정 기록](docs/decisions/) — ADR-001~017
 - [제품 요구사항](docs/prd.md)
 - [작업 일지](docs/worklog.md)

@@ -1,5 +1,136 @@
 # 작업 일지
 
+## 2026-05-08
+
+### Phase 2h 단계 6 — dev 환경 분리 + nginx BFF + visibility sync (PR #64)
+
+전날 단계 4·5(Implicit·GIS 제거 + 청소) 머지 후 dev 환경에서 시운전을 시작하면서 발견한 일들을 한 PR로 묶어 처리. 결과적으로 인프라(dev 도메인 + 배포 스크립트), 인증 모델(BFF), 상호작용(visibility sync), 부수 회귀(SW + 검색 UI)까지 한 사이클의 마무리 라운드.
+
+**1. dev.anglican.kr 환경 도입**
+
+서버에 두 vhost(`bible.anglican.kr` 운영, `dev.anglican.kr` 개발)를 분리. docroot는 각각 `/var/www/{bible,dev}` 심볼릭 링크가 가리키는 버전 디렉터리.
+
+코드: `js/drive-sync.js`·`js/sync/debug-log.js`의 호스트 체크 inversion. 기존 `localhost === hostname` → `hostname === "bible.anglican.kr"` (prod 호스트만 명시, 그 외 모두 dev로 fallback). 소스에서 `localhost` 문자열 자체가 사라짐.
+
+Cloud Console: dev OAuth 클라이언트의 Authorized JavaScript origins / redirect URIs에서 `http://localhost:8080`·`/`을 의도적으로 제거. 사용자 PC에 악성 프록시가 같은 포트로 바인딩해 PKCE 흐름을 가로챌 표면 차단.
+
+**2. `scripts/deploy.sh` dev/prod/promote 서브커맨드**
+
+기존 prod 단일 타겟을 분기. `bible-{version}-{shortsha}` 명명으로 같은 버전 반복 배포 시 덮어쓰기 방지. promote는 `ln -sfn $(readlink /var/www/dev) /var/www/bible` — dev에서 검증한 정확한 디렉터리를 prod 심볼릭 링크가 가리키게 됨 (재빌드 X). dirty working tree는 `-dirty` suffix.
+
+스크립트 자체는 SSH 호스트 별칭(`seoul`)만 갖고 실제 호스트·키는 `~/.ssh/seoul` + 1Password에 분리되어 있어 공개돼도 무해 → `.gitignore`에서 제거하고 저장소에 포함.
+
+**3. nginx BFF로 `client_secret` server-side 주입 (ADR-017)**
+
+dev 시운전 중 `/token` 요청이 `400 invalid_request: "client_secret is missing."`로 실패. 원인: Google "Web application" 클라이언트는 PKCE를 써도 `client_secret`을 강제 (RFC 7636 일탈, 다수 라이브러리 issue tracker 확인).
+
+대안:
+- A. SPA 임베드 — GitHub secret scanner 자동 무효화 위험 + git 이력 영구 잔존 + OAuth 2.1 위배. **거부**
+- B. Desktop app 클라이언트 타입 — redirect URI가 `http://127.0.0.1:port`만 허용, HTTPS 도메인 불가. **거부**
+- C. nginx BFF — same-origin `/oauth/token`에 nginx가 `proxy_set_body`로 secret 주입 후 forward. **채택**
+
+구현:
+- `js/sync/transport.js`: `_OAUTH_TOKEN_URL = "/oauth/token"` (was `https://oauth2.googleapis.com/token`). 요청 body에서 `client_secret` 제거
+- `nginx/oauth-proxy.example.conf` 신규 (저장소 포함, placeholder)
+- 두 vhost 모두 `location = /oauth/token` 블록 적용 + `nginx -t` + reload
+- 검증: `curl -X POST` 가짜 refresh token → `400 invalid_grant` (secret 주입 정상)
+- 회귀 방어: `transport-pkce.test.js`에서 URL 단언 `/oauth/token`, body에 `client_secret` 부재 명시 (`assert.doesNotMatch`)
+
+**4. 탭 활성화 시 자동 sync**
+
+기존 sync trigger 5종(cold start / 로컬 변경 / NET_RECOVERED / backoff / 412 충돌)에 visibility-trigger 추가. `app.js`의 기존 `visibilitychange` 리스너에 visible 분기 → `window.driveSync.requestSync()`. requestSync는 IDLE 상태일 때만 dispatch라 빠른 탭 토글 안전. ETag 304로 변경 없을 때 비용 거의 0.
+
+`js/drive-sync.js`의 `window.driveSync` 공개 API에 `requestSync` 추가, `js/types.d.ts` `DriveSyncFacade`에 시그니처.
+
+**5. 부수 회귀 수정**
+
+- `sw.js`: BFF `/oauth/token` POST 도입 후 SW가 cache-first 로직으로 처리하면서 `cache.put(POST)` TypeError. fetch 핸들러 최상단에 `method !== "GET"` 가드 추가 — Cache API 정의상 GET만 지원하므로 본질적 수정.
+- 검색 액션 버튼(`#search-clear`, `#search-history-toggle`) `[hidden]` 무력화: ID 셀렉터의 `display: flex`가 user-agent의 `[hidden] { display: none }`보다 specificity 높아 `el.hidden = true`가 시각적 효과 없이 덮어써짐. `dataset.clearHidden="true"` 트리거 규칙이 history toggle을 clear의 위치로 옮기면서 두 버튼이 정확히 같은 좌표에 스택, X만 보이고 ▾는 뒤에 가려져 "버튼 모양 이상" 외양. 명시적 `[hidden] { display: none }` 규칙 추가로 specificity 동률 이상으로 끌어올림. coding-pitfalls §14에 패턴 등록.
+- 모바일 검색 sheet의 ✕ 클릭이 모달 닫히는 회귀: `$searchSheetClear` 핸들러의 `input.focus()`가 `expanded → compact` 전환 리스너를 트리거 → 결과 영역 사라지고 작은 입력 바만 남아 사용자가 "닫혔다"고 인식. `_suppressFocusCompactTransition` flag로 programmatic focus는 전환 차단, 사용자 직접 탭만 전환.
+
+**6. 메모리·문서 동기화**
+
+- `feedback_security_first.md` 신규 — 보안 trade-off는 사용자가 묻기 전에 먼저 명시. 자기 안심성 표현·합리화 금지 (BFF 결정 도중 사용자 지적)
+- `feedback_translation_living_docs.md` 신규 — "살아있는 문서"(living document) 직역 회피. "현행 문서"·"지속적으로 갱신하는 문서" 등 사용
+- `project_deployment_topology.md` 신규 — bible·dev 동일 서버, 심볼릭 링크 전환 모델
+- `project_pkce_deferred.md` 삭제 (PKCE 마이그레이션 완료)
+
+**ADR / 설계 문서**
+
+- ADR-017 신규: nginx BFF로 `client_secret` 격리 — 위협 모델, 대안 평가, 운영 노트
+- ADR-011 §미결 사항 갱신: redirect URI 등록 ✅ + BFF 도입 ✅
+- `docs/design/pkce-migration.md` §10 최종 상태 (2026-05-08) 신규 — 5단계 + 단계 6 완료, BFF detour 회고
+- `docs/coding-pitfalls.md` §14 신규 — `display: flex`가 `[hidden]` 무력화 패턴
+
+**1.4.6 릴리스**
+
+`scripts/release.py patch`로 version.json + sw.js SHELL_CACHE 동시 bump. dev에서 시운전 후 (PR 머지 → 태그 → GitHub Release → `deploy.sh promote`) 사이클로 prod 승격 예정.
+
+### 수정 파일 요약
+
+| 파일 | 변경 |
+|---|---|
+| `js/drive-sync.js` | host 체크 inversion (prod만 명시) + `requestSync` 노출 + secret 임베드 시도 흔적 제거 |
+| `js/sync/debug-log.js` | host 체크 inversion |
+| `js/sync/transport.js` | `_OAUTH_TOKEN_URL = "/oauth/token"`, body에서 `client_secret` 제거 |
+| `js/sync/state-machine.js` | 호출부 인자 정리 |
+| `js/types.d.ts` | `DriveSyncFacade.requestSync` 추가 |
+| `js/app.js` | visibilitychange visible 분기 → `requestSync()`, sheet clear의 focus compact 전환 차단 flag |
+| `sw.js` | fetch 핸들러 최상단에 `method !== "GET"` 가드 |
+| `css/style.css` | 검색 버튼 위치 4px gap, `[hidden]` 명시 규칙 (data·sheet 양쪽) |
+| `tests/unit/transport-pkce.test.js` | URL 단언 + `client_secret` 부재 명시 |
+| `scripts/deploy.sh` | dev/prod/promote 서브커맨드 (저장소 신규) |
+| `nginx/oauth-proxy.example.conf` | 신규 — BFF location 블록 예시 |
+| `.gitignore` | `scripts/deploy.sh` 제거, `*_client_secret_*.json` 추가 |
+| `docs/decisions/017-oauth-bff-proxy.md` | 신규 ADR |
+| `docs/decisions/011-bookmark-sync.md` | BFF 개정 블록 + 미결 사항 갱신 |
+| `docs/design/pkce-migration.md` | §10 최종 상태 신규 |
+| `docs/coding-pitfalls.md` | §14 신규 |
+| `docs/architecture.md` | §1·§4.3·§9 다이어그램 + 보안 모델 + 배포 절차 갱신 |
+| `README.md` | Drive 동기화 표 + 프로젝트 구조 + ADR 인덱스 갱신 |
+| `CLAUDE.md` | 현재 상태 Phase 2h 완료 + 단계 6 + nginx/ 디렉터리 |
+| `version.json`, `sw.js` | 1.4.6 |
+
+---
+
+## 2026-05-07
+
+### Phase 2h 단계 4·5 — GIS / Implicit Flow / FedCM 의존 제거 (PR #57·#61)
+
+단계 3에서 PKCE를 GIS와 공존시킨 뒤, 이번 라운드에서 GIS·Implicit·FedCM 흔적을 모두 제거. 데스크탑·Android·iOS 동일 PKCE 단일 경로.
+
+**단계 4 — 코드 제거 (PR #57)**
+
+- `transport.js`: GIS wrapper 7종(`requestSilentAccessToken`, `prompt`, `revoke`, `disableAutoSelect`, `cancel`, `notifyParentClose`, `getProfile`), `beginRedirectAuth` (Implicit), `consumeRedirectCallback` (Implicit) 제거. PKCE 함수가 canonical 이름 인계 (`beginRedirectAuthPKCE` → `beginRedirectAuth`)
+- `state-machine.js`: 상태 6개로 축소 (`INITIALIZING`, `IDENTIFYING`, `AUTHENTICATING` 제거). `_promptIdentity`, `_reqSilentToken`, `_tokenClient`, GIS_READY/IDENTITY_OK/IDENTITY_FAIL 이벤트 제거. `enable()`은 silent refresh → IDLE / NEEDS_CONSENT (이전엔 GIS dispatch로 폴백)
+- `drive-sync.js`: `_pollGis`, `_startPollingGis`, `__pendingRedirectToken` 처리 제거. `signIn()`은 머신 dispatch 없이 `transport.beginRedirectAuth` 직접 호출
+- `index.html`: `<script src="https://accounts.google.com/gsi/client">` 제거, CSP의 `accounts.google.com` 제거
+- `types.d.ts`: GsiTokenClient, GsiTokenResponse 등 GIS 타입 제거
+- 테스트: `state-machine.test.js`에서 iOS-only 분기 / FedCM / silent-blocked 시나리오를 단일 경로로 통합. 케이스 수 30+ → 26 (PKCE 단일 경로의 race·콜백·refresh 회복 모두 회귀 방어 유지)
+
+**Bugbot PR #57 — IDB await 갭 race 가드 (commit `f090c83`)**
+
+`_attemptSilentRefresh`가 `await refreshAccessToken(...)` 직후 race 가드를 통과해도, 이후 `await refreshStore.saveRefreshToken(...)` (rotation) 또는 `await refreshStore.clearRefreshToken()` (invalid_grant) IDB await 동안 사용자가 `disable()`을 호출하면 후속 `_transition(IDLE/NEEDS_CONSENT)`이 다시 `SYNC_ENABLED_KEY = "1"`로 덮어씀. 단계 4 후 `enable()`이 동기적으로 DISABLED를 빠져나가지 않으므로 state-based 가드만으로 cold-start 경로 보호 불가. 매 await 직후 flag-based 가드 추가. `coding-pitfalls.md` §11 갱신.
+
+**단계 5 — 정리 (PR #61)**
+
+- `bible-drive-silent-blocked` localStorage one-shot cleanup IIFE (`drive-sync.js` 부팅 시 `removeItem` — 미사용 키 제거. 몇 릴리스 후 cleanup 코드 자체도 제거)
+- `coding-pitfalls.md` §11~13 신규: race 가드 단일 체크포인트 함정, OAuth callback URL 데이터 leak, sessionStorage 키 격리
+- `docs/audit/2026-05-07-pkce-refresh-token.md` 보안 감사: Critical/High/Medium 0건
+- README.md PKCE 단일 경로로 갱신 (Drive 동기화 표)
+
+### 단계 3 후속 — Bugbot PR #54 race·legacy reauth 가드 (3차)
+
+단계 3 머지 직후 Bugbot이 발견한 잔여 결함을 3회에 걸쳐 정정.
+
+- 1차 (`b3fd034`): 사용자 disconnect 감지 — `_attemptSilentRefresh`가 `_state` 가드만 가짐. `disable()` 후엔 `_state`가 정상 진행 중인 값이지만 `localStorage["bible-drive-sync"]`는 `"0"` → state 가드만 통과시켜 IDLE/NEEDS_CONSENT로 전이하면 사용자가 끊은 sync를 다시 살림. `localStorage.getItem(SYNC_ENABLED_KEY) === "0"` 검사 추가
+- 2차 (`605465d`): PKCE callback URL leak — Implicit Flow 시절 IIFE는 `bad_state`/`no_state`/`state_mismatch` fallback에서 `location.pathname + location.search`로 search 보존. PKCE callback은 query string (`?code=...`)이라 같은 fallback이 auth code를 URL bar에 leak. `location.pathname`만 남기고 search/hash 둘 다 폐기. SYNCING race 가드 조건부 — `fromReauth=true` (401 reauth 경로)일 때만 SYNCING에서도 override 허용
+- 3차 (`ae83cbd`): legacy reauth path가 `_machine.isAuthenticated()`만 체크하고 DISABLED race는 안 잡음 — 대칭적으로 가드 추가
+
+`coding-pitfalls.md` §11·§12·§13에 패턴 정착.
+
+---
+
 ## 2026-05-06
 
 ### Phase 2f 머지 + Cursor Bugbot 6차 리뷰 정제 (ADR-011)
