@@ -147,6 +147,12 @@ async function _putAudioAndEnforceCap(request, response) {
 }
 
 self.addEventListener("fetch", (event) => {
+  // Cache API only supports GET. Without this guard, same-origin POSTs (most
+  // notably the BFF endpoint /oauth/token) fall through to cache.put and throw
+  // "Request method 'POST' is unsupported" — harmless to the request itself
+  // but spams the console. Let non-GET pass through to the network untouched.
+  if (event.request.method !== "GET") return;
+
   const url = new URL(event.request.url);
   const { hostname, pathname } = url;
 
