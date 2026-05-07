@@ -26,6 +26,12 @@ const _CLIENT_ID = _IS_PROD_HOST
 
 // Make CLIENT_ID available to state-machine.js via window so we don't need an
 // import system. The machine reads window._syncClientId on every redirect.
+//
+// client_secret is NOT in the SPA — Google's "Web application" OAuth client
+// type requires it on /token requests (RFC 7636 deviation), so transport.js
+// posts to a same-origin nginx proxy (/oauth/token) that injects the secret
+// server-side before forwarding to oauth2.googleapis.com/token. See
+// docs/decisions/011-bookmark-sync.md.
 window._syncClientId = _CLIENT_ID;
 
 // One-shot cleanup of Phase 2g's `bible-drive-silent-blocked` key (Phase 2h

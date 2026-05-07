@@ -244,7 +244,7 @@ test("15. exchangeCodeForToken: 성공 시 access+refresh+expires 반환", async
     scope: "drive.appdata email",
   });
   assert.equal(fetchCalls.length, 1);
-  assert.equal(fetchCalls[0].url, "https://oauth2.googleapis.com/token");
+  assert.equal(fetchCalls[0].url, "/oauth/token");
   assert.equal(fetchCalls[0].init.method, "POST");
   assert.equal(fetchCalls[0].init.headers["Content-Type"], "application/x-www-form-urlencoded");
   // body는 URLSearchParams 인스턴스 — string으로 변환해서 검증
@@ -254,6 +254,8 @@ test("15. exchangeCodeForToken: 성공 시 access+refresh+expires 반환", async
   assert.match(body, /code_verifier=verifier-y/);
   assert.match(body, /client_id=client-z/);
   assert.match(body, /redirect_uri=http%3A%2F%2Flocalhost%3A8080%2F/);
+  // client_secret은 nginx 프록시가 server-side에서 주입 — body에 없어야 함
+  assert.doesNotMatch(body, /client_secret/);
 });
 
 test("16. exchangeCodeForToken: HTTP 400 + invalid_grant → 구조화된 실패", async () => {
@@ -312,6 +314,8 @@ test("19. refreshAccessToken: 정상 갱신 (rotation 없음) → refresh_token=
   assert.match(body, /grant_type=refresh_token/);
   assert.match(body, /refresh_token=rt-stored/);
   assert.match(body, /client_id=client-z/);
+  // client_secret은 nginx 프록시가 server-side에서 주입 — body에 없어야 함
+  assert.doesNotMatch(body, /client_secret/);
 });
 
 test("20. refreshAccessToken: rotation 있음 → 새 refresh_token 반환", async () => {
