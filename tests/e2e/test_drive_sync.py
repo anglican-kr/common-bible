@@ -7,7 +7,9 @@ Uses an in-memory fake Drive server (page.route) and a fake OAuth endpoint
 that:
   • intercepts navigation to `accounts.google.com/o/oauth2/v2/auth` and
     redirects back with `?code=...&state=...`,
-  • answers POSTs to `oauth2.googleapis.com/token` with access + refresh tokens.
+  • answers POSTs to the same-origin `/oauth/token` BFF (ADR-017) — in
+    production nginx forwards this to oauth2.googleapis.com/token after
+    injecting client_secret, but for tests we intercept directly.
 
 Two independent BrowserContext instances simulate two devices.
 
@@ -119,7 +121,7 @@ class FakeDrive:
 # ── Fake OAuth endpoint (PKCE) ────────────────────────────────────────────────
 
 class FakeOAuth:
-    """Intercepts `accounts.google.com/o/oauth2/v2/auth` and `oauth2.googleapis.com/token`.
+    """Intercepts `accounts.google.com/o/oauth2/v2/auth` and same-origin `/oauth/token`.
 
     Default behavior:
       • /auth: 302 to `redirect_uri?code=AUTH_CODE&state={state}`
@@ -211,7 +213,10 @@ def _make_page(browser, fake_drive, fake_oauth) -> Page:
     page.route("**/*googleapis.com/drive/**", fake_drive.handle)
     page.route("**/*googleapis.com/upload/**", fake_drive.handle)
     page.route("**/*googleapis.com/oauth2/v3/userinfo", fake_drive.handle)
-    page.route("**/oauth2.googleapis.com/token", fake_oauth.handle_token)
+    # SPA POSTs to same-origin /oauth/token (BFF, ADR-017). In production nginx
+    # forwards to oauth2.googleapis.com/token with server-side client_secret;
+    # in tests we intercept the same-origin request directly.
+    page.route("**/oauth/token", fake_oauth.handle_token)
     page.route("**/accounts.google.com/o/oauth2/**", fake_oauth.handle_auth)
     return page
 

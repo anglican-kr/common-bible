@@ -183,7 +183,8 @@ def _make_ios_page(browser, fake_drive, fake_oauth) -> Page:
     page.route("**/*googleapis.com/drive/**", fake_drive.handle)
     page.route("**/*googleapis.com/upload/**", fake_drive.handle)
     page.route("**/*googleapis.com/oauth2/v3/userinfo", fake_drive.handle)
-    page.route("**/oauth2.googleapis.com/token", fake_oauth.handle_token)
+    # SPA POSTs to same-origin /oauth/token (BFF, ADR-017). See test_drive_sync.py.
+    page.route("**/oauth/token", fake_oauth.handle_token)
     page.route("**/accounts.google.com/o/oauth2/**", fake_oauth.handle_auth)
     return page
 
