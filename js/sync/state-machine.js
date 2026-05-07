@@ -1,5 +1,8 @@
 // @ts-check
 // ── Sync State Machine (statechart) ───────────────────────────────────────────
+// Phase 2h 단계 4 이후 — PKCE Authorization Code + refresh token 단일 경로.
+// Implicit Flow / GIS Token Client / FedCM 의존은 모두 제거됐다.
+//
 // Explicit context object eliminates "hidden state" bugs:
 //   _ctx = { netFails, conflictFails, reAuthFails, backoffTimer }
 //
@@ -8,37 +11,27 @@
 // To carry a value forward, pass it explicitly in ctxPatch:
 //   _transition(S.IDLE, { netFails: _ctx.netFails + 1, backoffTimer: timer })
 //
-// This inverts the bug pattern: "forget to reset" is impossible — you have to
-// actively opt in to preserving a value across a transition.
-//
-// States:  DISABLED | INITIALIZING | IDENTIFYING | AUTHENTICATING | IDLE |
-//          SYNCING | OFFLINE | NEEDS_CONSENT | ERROR
-// Events:  ENABLE | DISABLE | GIS_READY | IDENTITY_OK | IDENTITY_FAIL |
-//          USER_CONSENT_REQUEST | TOKEN_OK | TOKEN_FAIL | SYNC_REQUEST |
+// States:  DISABLED | IDLE | SYNCING | OFFLINE | NEEDS_CONSENT | ERROR
+// Events:  ENABLE | DISABLE | USER_CONSENT_REQUEST | SYNC_REQUEST |
 //          SYNC_DONE | SYNC_FAIL { reason } | NET_RECOVERED
 //
 // SYNC_FAIL reasons:
-//   "401"       — token expired  → re-identify (silent FedCM/One Tap)
+//   "401"       — token expired  → silent refresh from IDB; if no refresh
+//                                  token, NEEDS_CONSENT
 //   "412"       — ETag mismatch  → re-merge retry (max 3)
 //   "no_token"  — guard tripped  → ERROR (deterministic)
 //   "exception" — JS error       → ERROR (deterministic)
 //   other       — network/5xx    → backoff (max 5), then OFFLINE
 //
-// Authentication flow:
-//   • Non-iOS (Android/desktop): GIS popup-based flow (Phase 2d/2e).
-//       1. IDENTIFYING  — google.accounts.id.prompt() (FedCM / One Tap) for
-//                         silent identity establishment. No window.open().
-//       2. AUTHENTICATING — google.accounts.oauth2.requestAccessToken silently
-//                           exchanges identity for a Drive access token.
-//       3. NEEDS_CONSENT — silent failure path; "연결" click triggers
-//                          requestAccessToken({prompt:"consent"}) inside the
-//                          user gesture.
-//   • iOS Safari (Phase 2f): full-page redirect flow via OAuth implicit.
-//       Safari does not support FedCM and PWA standalone mode blocks popups
-//       even from user gestures. transport.beginRedirectAuth() navigates to
-//       accounts.google.com and Google redirects back with the token in the
-//       URL hash; drive-sync.js consumes the callback before routing and
-//       calls _machine.acceptRedirectToken() to land directly in IDLE.
+// Authentication flow (uniform across desktop/Android/iOS):
+//   • Cold start with refresh token in IDB → silent refresh (background fetch
+//     to /token) → IDLE. No UI, no popup, no redirect.
+//   • Cold start without refresh token → NEEDS_CONSENT. Settings UI surfaces
+//     the "연결" button.
+//   • User clicks "연결" → USER_CONSENT_REQUEST → full-page redirect to
+//     accounts.google.com → callback ?code=…&state=… → acceptRedirectCode
+//     exchanges for access + refresh tokens, persists refresh to IDB → IDLE.
+//   • 401 mid-sync → silent refresh; if no refresh token, NEEDS_CONSENT.
 
 /** @typedef {import("../types").SyncState}      SyncState */
 /** @typedef {import("../types").SyncEvent}      SyncEvent */
@@ -47,36 +40,20 @@
 
 /** @type {Readonly<Record<SyncState, SyncState>>} */
 const S = Object.freeze({
-  DISABLED:       "DISABLED",
-  INITIALIZING:   "INITIALIZING",
-  IDENTIFYING:    "IDENTIFYING",
-  AUTHENTICATING: "AUTHENTICATING",
-  IDLE:           "IDLE",
-  SYNCING:        "SYNCING",
-  OFFLINE:        "OFFLINE",
-  NEEDS_CONSENT:  "NEEDS_CONSENT",
-  ERROR:          "ERROR",
+  DISABLED:      "DISABLED",
+  IDLE:          "IDLE",
+  SYNCING:       "SYNCING",
+  OFFLINE:       "OFFLINE",
+  NEEDS_CONSENT: "NEEDS_CONSENT",
+  ERROR:         "ERROR",
 });
-
-/** @type {Set<string>} */
-const SILENT_FAIL_REASONS = new Set([
-  "user_cancel", "access_denied", "popup_closed_by_user",
-]);
 
 const MAX_REAUTH    = 3;
 const MAX_CONFLICTS = 3;
 const MAX_NET_RETRIES = 5; // 5 retries → delays 1s/2s/4s/8s/16s; OFFLINE on 6th failure
 const MAX_REDIRECT_ATTEMPTS = 3;
 const REDIRECT_ATTEMPTS_KEY = "bible-drive-redirect-attempts";
-// Set when an app-open silent re-auth (prompt=none) returns
-// interaction_required / login_required / consent_required. The next app
-// open must NOT auto-retry — Google has signaled that user interaction is
-// needed, so park in NEEDS_CONSENT instead. Cleared on signIn() (user
-// gesture) and on SYNC_DONE (defense in depth: a subsequent successful
-// sync proves the silent path can resume).
-const SILENT_BLOCKED_KEY = "bible-drive-silent-blocked";
 const SCOPE = "https://www.googleapis.com/auth/drive.appdata email";
-const ACTIVE_READING_IDLE_MS = 5000;
 
 // ── Factory ───────────────────────────────────────────────────────────────────
 
@@ -98,8 +75,6 @@ function createSyncMachine({ onStateChange } = {}) {
   let _token = null;
   /** @type {string | null} */
   let _email = null;
-  /** @type {import("../types").GsiTokenClient | null} */
-  let _tokenClient = null;
   let _syncPending = false;
 
   // ── Context (all "hidden state" in one place) ─────────────────────────────
@@ -136,18 +111,6 @@ function createSyncMachine({ onStateChange } = {}) {
     if (onStateChange) onStateChange(next);
   }
 
-  // ── Identity helpers ──────────────────────────────────────────────────────
-  // Always call promptIdentity *outside* of requestAccessToken to keep popup
-  // calls confined to user-gesture handlers (NEEDS_CONSENT path).
-
-  // No callback: success arrives via the credential callback registered in
-  // initIdentityClient. Dismissal/suppression is silent under modern FedCM —
-  // the user retries via the always-visible "연결" button in settings, which
-  // dispatches USER_CONSENT_REQUEST and falls through to the OAuth flow.
-  function _promptIdentity() {
-    T.promptIdentity();
-  }
-
   // ── Side-effect helpers ───────────────────────────────────────────────────
 
   function _refreshUI() {
@@ -158,9 +121,6 @@ function createSyncMachine({ onStateChange } = {}) {
   function _snackbar(msg) {
     if (typeof window._showSyncSnackbar === "function") window._showSyncSnackbar(msg);
   }
-
-  /** @returns {string | null} */
-  function _emailHint() { return localStorage.getItem(SYNC_EMAIL_KEY); }
 
   // Backoff timer that fires a SYNC_REQUEST if still IDLE.
   // Stored in ctxPatch so _transition will clear it on next transition.
@@ -186,19 +146,7 @@ function createSyncMachine({ onStateChange } = {}) {
     }, 200);
   }
 
-  function _reqSilentToken() {
-    T.requestSilentToken(_tokenClient, _emailHint());
-  }
-
-  // ── iOS redirect helpers ──────────────────────────────────────────────────
-
-  /** @returns {boolean} */
-  function _isUserActivelyReading() {
-    if (document.visibilityState !== "visible") return false;
-    if (!document.hasFocus()) return false;
-    const ts = window.__driveSyncInteractionTs?.() ?? 0;
-    return Date.now() - ts <= ACTIVE_READING_IDLE_MS;
-  }
+  // ── PKCE redirect helpers ─────────────────────────────────────────────────
 
   /** @returns {number} */
   function _redirectAttempts() {
@@ -225,13 +173,13 @@ function createSyncMachine({ onStateChange } = {}) {
     L.log({ kind: "ACTION", event: "REDIRECT_AUTH_BEGIN", attempt: attempts + 1, prompt: prompt ?? "" });
     // _syncClientId is set by drive-sync.js IIFE before this module ever
     // starts a redirect, so the bang assertion is safe in practice.
-    T.beginRedirectAuth(/** @type {string} */ (window._syncClientId), SCOPE, { prompt });
+    void T.beginRedirectAuth(/** @type {string} */ (window._syncClientId), SCOPE, { prompt });
     return true;
   }
 
   // ── Phase 2h: PKCE refresh-token helpers ──────────────────────────────────
   // _attemptSilentRefresh tries to mint a fresh access token from the
-  // IndexedDB-stored refresh token. Three outcomes:
+  // IndexedDB-stored refresh token. Four outcomes:
   //   - refresh success → store access token, optionally rotate refresh,
   //     transition to IDLE, dispatch SYNC_REQUEST. Returns true.
   //   - refresh 4xx (invalid_grant, etc.) → drop unrecoverable refresh token
@@ -239,9 +187,9 @@ function createSyncMachine({ onStateChange } = {}) {
   //   - refresh 5xx / network → keep refresh token, transition to OFFLINE.
   //     NET_RECOVERED will retry. Returns true.
   //   - no refresh token in IDB → no transition; return false so caller
-  //     can fall back to legacy GIS / implicit flow.
+  //     can fall back to NEEDS_CONSENT (cold start with no prior consent).
   // The "true means I took action" contract lets enable() and 401 handler
-  // skip their legacy paths cleanly.
+  // skip their fallback paths cleanly.
 
   /**
    * @param {Partial<SyncMachineCtx>} [ctxPatch]
@@ -249,8 +197,7 @@ function createSyncMachine({ onStateChange } = {}) {
    *   IDLE 전이 시에만 적용 (실패 경로는 reset이 자연스러움).
    * @param {boolean} [fromReauth]
    *   true면 401 reauth 경로 — SYNCING 상태에서 호출됐고 그 상태를 빠져나오는
-   *   것이 우리 책임이므로 SYNCING race 가드를 우회. false (기본)면 cold start
-   *   경로 — SYNCING은 legacy GIS가 이미 settled한 상태이므로 폐기해야 함.
+   *   것이 우리 책임이므로 SYNCING race 가드를 우회.
    * @returns {Promise<boolean>}
    */
   async function _attemptSilentRefresh(ctxPatch = {}, fromReauth = false) {
@@ -269,23 +216,27 @@ function createSyncMachine({ onStateChange } = {}) {
     const resp = await T.refreshAccessToken(rt, /** @type {string} */ (window._syncClientId));
 
     // Race guards (§6.2 + Bugbot 1차·2차):
-    //   1. _state === IDLE → legacy GIS path already authenticated us. Don't
+    //   1. _state === IDLE → another path already authenticated us. Don't
     //      override (the existing access token is just as good).
-    //   2. _state === SYNCING && !fromReauth → cold start race: legacy got to
-    //      SYNCING faster, with an in-flight cycle. Don't disrupt it. The
+    //   2. _state === SYNCING && !fromReauth → cold start race: an in-flight
+    //      cycle is already running with a valid token. Don't disrupt it. The
     //      401 reauth path explicitly sets fromReauth=true because *we* need
     //      to push out of SYNCING (the failed cycle is what triggered us).
-    //   3. SYNC_ENABLED_KEY === "0" → user called signOut()/disable() during
-    //      the async window, OR ERROR state was reached (cap exhaustion).
-    //      Either way the user has explicitly stopped sync — honoring our
-    //      success would silently resurrect it. _transition flips this flag
-    //      to "0" whenever the next state is DISABLED or ERROR.
+    //   3. _state === ERROR → cap exhaustion. Honoring our success would
+    //      silently resurrect a flow the user has been told is broken.
+    //   4. SYNC_ENABLED_KEY === "0" → user called signOut()/disable() during
+    //      the async window. _transition flips this flag to "0" whenever the
+    //      next state is DISABLED or ERROR.
     if (_state === S.IDLE) {
       L.log({ kind: "ACTION", event: "SILENT_REFRESH_RACE_LOST", finalState: _state });
       return true;
     }
     if (_state === S.SYNCING && !fromReauth) {
       L.log({ kind: "ACTION", event: "SILENT_REFRESH_RACE_LOST", finalState: _state, reason: "in_flight_sync" });
+      return true;
+    }
+    if (_state === S.ERROR) {
+      L.log({ kind: "ACTION", event: "SILENT_REFRESH_RACE_LOST", finalState: _state, reason: "cap_exhausted" });
       return true;
     }
     if (localStorage.getItem(SYNC_ENABLED_KEY) === "0") {
@@ -504,147 +455,37 @@ function createSyncMachine({ onStateChange } = {}) {
   function dispatch(event) {
     L.log({ kind: "ACTION", event: event.type, state: _state, ctx: { ..._ctx, backoffTimer: !!_ctx.backoffTimer } });
 
+    // USER_CONSENT_REQUEST is a user-initiated retry — works from any state
+    // except IDLE/SYNCING (no need / don't interrupt). Single uniform path:
+    // full-page PKCE redirect to Google.
+    if (event.type === "USER_CONSENT_REQUEST") {
+      if (_state === S.IDLE || _state === S.SYNCING) return;
+      _beginRedirect("consent");
+      return;
+    }
+
     switch (_state) {
 
       case S.DISABLED:
         if (event.type === "ENABLE") {
-          if (T.isIOS()) {
-            // iOS bypasses GIS entirely. Phase 2g: when the user has a prior
-            // successful connection (saved email) and silent re-auth hasn't
-            // been blocked by Google, attempt prompt=none redirect to resume
-            // sync transparently — the in-memory access token was lost on
-            // app close and Implicit Flow has no refresh token. On any
-            // failure path (no email, blocked, redirect cap), park in
-            // NEEDS_CONSENT so the settings UI shows the "연결" button.
-            const emailHint = _emailHint();
-            const silentBlocked = localStorage.getItem(SILENT_BLOCKED_KEY) === "1";
-            if (emailHint && !silentBlocked) {
-              if (_beginRedirect("none")) return;
-              // Cap reached: _beginRedirect already transitioned to ERROR.
-            } else {
-              _transition(S.NEEDS_CONSENT, {}, event);
+          // Single uniform path across desktop/Android/iOS: fire silent refresh
+          // fire-and-forget. Three async outcomes:
+          //   • took action (true) → already transitioned to IDLE/NEEDS_CONSENT/OFFLINE
+          //   • no refresh token (false) → park in NEEDS_CONSENT here
+          // No GIS, no popup, no redirect on cold start.
+          void (async () => {
+            const took = await _attemptSilentRefresh();
+            if (!took && _state === S.DISABLED &&
+                localStorage.getItem(SYNC_ENABLED_KEY) !== "0") {
+              _transition(S.NEEDS_CONSENT, {}, { type: "ENABLE_NO_REFRESH_TOKEN" });
               _refreshUI();
             }
-          } else if (window.google?.accounts?.id && window.google?.accounts?.oauth2 && _tokenClient) {
-            _transition(S.IDENTIFYING, {}, event);
-            _promptIdentity();
-          } else {
-            _transition(S.INITIALIZING, {}, event);
-          }
-        }
-        break;
-
-      case S.INITIALIZING:
-        if (event.type === "GIS_READY") {
-          _tokenClient = T.initTokenClient(
-            /** @type {string} */ (window._syncClientId),
-            SCOPE,
-            (resp) => {
-              if (resp.error) {
-                dispatch({ type: "TOKEN_FAIL", reason: resp.error });
-              } else if (resp.access_token) {
-                dispatch({
-                  type: "TOKEN_OK",
-                  access_token: resp.access_token,
-                  expires_in: resp.expires_in,
-                  scope: resp.scope,
-                });
-              } else {
-                // GIS contract guarantees one of the two, but a malformed
-                // response (e.g. transport-level breakage, future SDK change)
-                // would otherwise leave AUTHENTICATING permanently stuck —
-                // there's no timeout-based recovery. Treat as token failure.
-                dispatch({ type: "TOKEN_FAIL", reason: "empty_response" });
-              }
-            }
-          );
-          if (window.google?.accounts?.id) {
-            T.initIdentityClient(
-              /** @type {string} */ (window._syncClientId),
-              (resp) => {
-                if (resp?.credential) {
-                  const { email } = T.parseIdToken(resp.credential);
-                  dispatch({ type: "IDENTITY_OK", email, credential: resp.credential });
-                } else {
-                  dispatch({ type: "IDENTITY_FAIL", reason: "no_credential" });
-                }
-              }
-            );
-            _transition(S.IDENTIFYING, {}, event);
-            _promptIdentity();
-          } else {
-            _transition(S.AUTHENTICATING, {}, event);
-            _reqSilentToken();
-          }
-        } else if (event.type === "DISABLE") {
-          _transition(S.DISABLED, {}, event);
-        }
-        break;
-
-      case S.IDENTIFYING:
-        if (event.type === "IDENTITY_OK") {
-          if (event.email) {
-            localStorage.setItem(SYNC_EMAIL_KEY, event.email);
-            _email = event.email;
-          }
-          L.log({ kind: "ACTION", event: "IDENTITY_OK", email: L.mask("email", event.email) });
-          _transition(S.AUTHENTICATING, { reAuthFails: _ctx.reAuthFails }, event);
-          _reqSilentToken();
-        } else if (event.type === "IDENTITY_FAIL") {
-          L.log({ kind: "ACTION", event: "IDENTITY_FAIL", reason: event.reason });
-          // Silent identity unavailable (e.g. iOS 16↓ first run, ITP blocked
-          // session). Park in NEEDS_CONSENT and wait for a real user gesture
-          // — never auto-call requestAccessToken from here, that would trigger
-          // the iOS popup-blocker dialog.
-          _transition(S.NEEDS_CONSENT, {}, event);
-          _refreshUI();
-        } else if (event.type === "USER_CONSENT_REQUEST") {
-          T.cancelIdentityPrompt();
-          if (T.isIOS()) {
-            if (_beginRedirect("consent")) return;
-          } else {
-            // User gesture anchors the popup.
-            _transition(S.AUTHENTICATING, {}, event);
-            T.requestConsentToken(_tokenClient);
-          }
-        } else if (event.type === "DISABLE") {
-          T.cancelIdentityPrompt();
-          _transition(S.DISABLED, {}, event);
-          _refreshUI();
+          })();
         }
         break;
 
       case S.NEEDS_CONSENT:
-        if (event.type === "USER_CONSENT_REQUEST") {
-          if (T.isIOS()) {
-            if (_beginRedirect("consent")) return;
-          } else {
-            _transition(S.AUTHENTICATING, {}, event);
-            T.requestConsentToken(_tokenClient);
-          }
-        } else if (event.type === "DISABLE") {
-          _transition(S.DISABLED, {}, event);
-          _refreshUI();
-        }
-        break;
-
-      case S.AUTHENTICATING:
-        if (event.type === "TOKEN_OK") {
-          _storeToken(event.access_token);
-          _transition(S.IDLE, {}, event);
-          _refreshUI();
-          dispatch({ type: "SYNC_REQUEST" });
-        } else if (event.type === "TOKEN_FAIL") {
-          L.log({ kind: "ERROR", event: "TOKEN_FAIL", reason: event.reason });
-          if (event.reason && SILENT_FAIL_REASONS.has(event.reason)) {
-            _transition(S.DISABLED, {}, event);
-          } else {
-            _snackbar("Google Drive 동기화 세션이 만료됐습니다. 설정에서 재연결해 주세요.");
-            _transition(S.ERROR, {}, event);
-          }
-          _refreshUI();
-        } else if (event.type === "DISABLE") {
-          _token = null;
+        if (event.type === "DISABLE") {
           _transition(S.DISABLED, {}, event);
           _refreshUI();
         }
@@ -669,15 +510,12 @@ function createSyncMachine({ onStateChange } = {}) {
 
       case S.SYNCING:
         if (event.type === "SYNC_DONE") {
-          // A successful sync means the redirect→token→Drive cycle completed
+          // A successful sync proves the auth + Drive cycle completed
           // end-to-end; only here is it safe to clear the redirect-attempts
-          // counter. Resetting on token receipt alone (in acceptRedirectToken
+          // counter. Resetting on token receipt alone (in acceptRedirectCode
           // or the IIFE) would defeat the loop cap when a 401 fires
           // immediately after every fresh token.
           localStorage.setItem(REDIRECT_ATTEMPTS_KEY, "0");
-          // Successful sync also proves the Google session can issue tokens
-          // silently — clear any stale Phase 2g silent-blocked flag.
-          localStorage.removeItem(SILENT_BLOCKED_KEY);
           _transition(S.IDLE, {}, event); // all counts reset, timer cleared
         } else if (event.type === "SYNC_FAIL") {
           _handleSyncFail(event);
@@ -690,20 +528,17 @@ function createSyncMachine({ onStateChange } = {}) {
 
       case S.OFFLINE:
         if (event.type === "NET_RECOVERED") {
-          // Re-establish identity silently before requesting a token.
-          if (T.isIOS()) {
-            // GIS never loads on iOS — redirect flow requires a user gesture,
-            // so park in NEEDS_CONSENT to show the connect button rather than
-            // transitioning to AUTHENTICATING where no event can advance us.
-            _transition(S.NEEDS_CONSENT, {}, event);
-            _refreshUI();
-          } else if (window.google?.accounts?.id) {
-            _transition(S.IDENTIFYING, {}, event);
-            _promptIdentity();
-          } else {
-            _transition(S.AUTHENTICATING, {}, event);
-            _reqSilentToken();
-          }
+          // Try silent refresh again. If no refresh token exists in IDB
+          // (shouldn't happen unless IDB was cleared while offline), fall
+          // back to NEEDS_CONSENT.
+          void (async () => {
+            const took = await _attemptSilentRefresh();
+            if (!took && _state === S.OFFLINE &&
+                localStorage.getItem(SYNC_ENABLED_KEY) !== "0") {
+              _transition(S.NEEDS_CONSENT, {}, { type: "NET_RECOVERED_NO_TOKEN" });
+              _refreshUI();
+            }
+          })();
         } else if (event.type === "DISABLE") {
           _token = null;
           _transition(S.DISABLED, {}, event);
@@ -712,16 +547,11 @@ function createSyncMachine({ onStateChange } = {}) {
         break;
 
       case S.ERROR:
-        if (event.type === "ENABLE" || event.type === "USER_CONSENT_REQUEST") {
-          if (T.isIOS()) {
-            // ERROR-driven retry — clear stale attempt counter so user-initiated
-            // reconnect gets a fresh window of MAX_REDIRECT_ATTEMPTS chances.
-            localStorage.setItem(REDIRECT_ATTEMPTS_KEY, "0");
-            if (_beginRedirect("consent")) return;
-          } else {
-            _transition(S.AUTHENTICATING, {}, event);
-            T.requestConsentToken(_tokenClient);
-          }
+        if (event.type === "ENABLE") {
+          // ERROR-driven retry — clear stale attempt counter so user-initiated
+          // reconnect gets a fresh window of MAX_REDIRECT_ATTEMPTS chances.
+          localStorage.setItem(REDIRECT_ATTEMPTS_KEY, "0");
+          _beginRedirect("consent");
         } else if (event.type === "DISABLE") {
           _token = null;
           _transition(S.DISABLED, {}, event);
@@ -751,11 +581,6 @@ function createSyncMachine({ onStateChange } = {}) {
         return;
       }
       L.log({ kind: "ACTION", event: "REAUTH", attempt: _ctx.reAuthFails + 1 });
-      // Phase 2h: silent refresh from IDB takes precedence over legacy GIS /
-      // implicit reauth. _attemptSilentRefresh handles its own state
-      // transitions (IDLE on success, NEEDS_CONSENT on invalid_grant, OFFLINE
-      // on net fail). Only fall through to legacy when no refresh token
-      // exists in IDB (returns false). The async kickoff is fire-and-forget.
       _kickoff401Reauth(event, _ctx.reAuthFails + 1);
       return;
     }
@@ -770,50 +595,16 @@ function createSyncMachine({ onStateChange } = {}) {
     // fromReauth=true allows _attemptSilentRefresh to override the SYNCING
     // state we entered with — that's the whole point of this path.
     if (await _attemptSilentRefresh({ reAuthFails: nextReAuthFails }, true)) return;
-    _legacyReauthAfter401(event);
-  }
-
-  /** @param {{ type: "SYNC_FAIL"; reason: string }} event */
-  function _legacyReauthAfter401(event) {
-    // Phase 2h: cap check + REAUTH log moved upfront to _handleSyncFail("401")
-    // so they fire even on the silent-refresh path. Reaching here means
-    // reAuthFails < MAX_REAUTH guaranteed.
-    // Race guard (Bugbot PR #54 3차): _kickoff401Reauth awaits IDB inside
-    // _attemptSilentRefresh; if there is no refresh token the silent path
-    // returns false WITHOUT touching state, so its own race guards never
-    // fire. If the user called disable()/signOut() during that async window
-    // we'd resurrect sync from DISABLED into IDENTIFYING/AUTHENTICATING/
-    // NEEDS_CONSENT here. Mirror the localStorage flag check used by the
-    // silent path.
+    // No refresh token in IDB. Race guard (Bugbot PR #54 3차): user may have
+    // called disable()/signOut() during the IDB load. Mirror the localStorage
+    // flag check used by the silent path.
     if (localStorage.getItem(SYNC_ENABLED_KEY) === "0") {
-      L.log({ kind: "ACTION", event: "LEGACY_REAUTH_RACE_LOST", reason: "sync_disabled" });
+      L.log({ kind: "ACTION", event: "REAUTH_RACE_LOST", reason: "sync_disabled" });
       return;
     }
-    if (T.isIOS()) {
-      // Hybrid policy: defer the disruptive full-page redirect when the
-      // user is actively reading; otherwise reauthorize transparently.
-      if (_isUserActivelyReading()) {
-        L.log({ kind: "ACTION", event: "REAUTH_DEFERRED", reason: "active_reading" });
-        _snackbar("Google 동기화 재연결이 필요합니다. 설정 → 연결을 눌러 주세요.");
-        _transition(S.NEEDS_CONSENT, { reAuthFails: _ctx.reAuthFails + 1 }, event);
-        _refreshUI();
-      } else {
-        // No prompt parameter — Google will silently re-issue the token
-        // when the existing session still has the granted scope.
-        // Do NOT pre-transition to NEEDS_CONSENT: if _beginRedirect hits the
-        // cap it already transitions to ERROR internally, causing a double
-        // state transition with a stale intermediate.
-        if (!_beginRedirect(undefined)) return;
-      }
-    } else if (window.google?.accounts?.id) {
-      // Re-identify silently first (FedCM/One Tap, no popup) so the
-      // follow-up requestAccessToken({prompt:""}) has a fresh email hint.
-      _transition(S.IDENTIFYING, { reAuthFails: _ctx.reAuthFails + 1 }, event);
-      _promptIdentity();
-    } else {
-      _transition(S.AUTHENTICATING, { reAuthFails: _ctx.reAuthFails + 1 }, event);
-      _reqSilentToken();
-    }
+    // Park in NEEDS_CONSENT — user must click "연결" to start a new PKCE round.
+    _transition(S.NEEDS_CONSENT, { reAuthFails: nextReAuthFails }, event);
+    _refreshUI();
   }
 
   /** @param {{ type: "SYNC_FAIL"; reason: string }} event */
@@ -847,36 +638,17 @@ function createSyncMachine({ onStateChange } = {}) {
 
   // ── Public API ────────────────────────────────────────────────────────────
 
-  // Phase 2h: kick off silent refresh fire-and-forget alongside the legacy
-  // dispatch. enable() stays synchronous so existing tests / callers don't
-  // need to await. The two paths race; whoever finishes first wins, with
-  // race guards inside _attemptSilentRefresh that respect a settled state
-  // (IDLE / ERROR). Only the legacy path runs synchronously, so on cold
-  // start the user sees its outcome first; silent refresh's eventual result
-  // either upgrades us (IDLE) or is discarded if legacy already settled.
-  function enable() {
-    if (_state !== S.DISABLED) return;
-    void _attemptSilentRefresh();
-    dispatch({ type: "ENABLE" });
+  function enable()      { dispatch({ type: "ENABLE" }); }
+  function disable() {
+    // Set the SYNC_ENABLED_KEY flag to "0" defensively before dispatching, so
+    // any in-flight async work (silent refresh, code exchange) sees the user
+    // intent through the flag-based race guards even when no transition fires
+    // (e.g. disable() while still DISABLED waiting for silent refresh to
+    // resolve — _transition would not flip the flag in that branch).
+    localStorage.setItem(SYNC_ENABLED_KEY, "0");
+    dispatch({ type: "DISABLE" });
   }
-  function disable()     { dispatch({ type: "DISABLE" }); }
-  function onGisReady()  { if (_state === S.INITIALIZING) dispatch({ type: "GIS_READY" }); }
   function requestSync() { if (_state === S.IDLE) dispatch({ type: "SYNC_REQUEST" }); }
-
-  // iOS redirect-flow entry: callback handler in drive-sync.js calls this
-  // after consumeRedirectCallback validates the token. Bypasses GIS entirely.
-  // Does NOT reset the redirect-attempts counter — only a successful sync
-  // (SYNC_DONE) clears it, so a server-side scope revocation that issues a
-  // token but immediately 401s on Drive cannot bypass MAX_REDIRECT_ATTEMPTS.
-  /** @param {string} access_token */
-  function acceptRedirectToken(access_token) {
-    if (!access_token) return;
-    L.log({ kind: "ACTION", event: "REDIRECT_TOKEN_ACCEPTED" });
-    _storeToken(access_token);
-    _transition(S.IDLE, {}, { type: "REDIRECT_TOKEN" });
-    _refreshUI();
-    dispatch({ type: "SYNC_REQUEST" });
-  }
 
   function getState()        { return _state; }
   function getToken()        { return _token; }
@@ -894,12 +666,11 @@ function createSyncMachine({ onStateChange } = {}) {
     }
   }
 
-  return { enable, disable, onGisReady, requestSync, dispatch,
-           acceptRedirectToken, acceptRedirectCode,
+  return { enable, disable, requestSync, dispatch,
+           acceptRedirectCode,
            getState, getToken, getEmail, isEnabled, isAuthenticated, deleteRemoteFile };
 }
 
 window.createSyncMachine = createSyncMachine;
 window._syncScope = SCOPE;
 window._syncRedirectAttemptsKey = REDIRECT_ATTEMPTS_KEY;
-window._syncSilentBlockedKey = SILENT_BLOCKED_KEY;

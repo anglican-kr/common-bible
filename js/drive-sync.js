@@ -1,119 +1,63 @@
 // @ts-check
 // ── Drive Sync Facade ─────────────────────────────────────────────────────────
 // Thin coordinator: creates the state machine, manages the upload debounce
-// timer, registers the GIS-ready poll, and exposes window.driveSync.
+// timer, absorbs PKCE redirect callbacks, exposes window.driveSync.
+//
+// Phase 2h 단계 4 이후 — GIS Token Client / Implicit Flow / FedCM 폴백은 모두
+// 제거됐다. 인증은 데스크탑·Android·iOS 동일하게 PKCE Authorization Code +
+// refresh token 단일 경로.
 //
 // Dependency load order (all defer, in order in index.html):
-//   1. js/sync/debug-log.js   → window.syncDebugLog
-//   2. js/sync/transport.js   → window.syncTransport
-//   3. js/sync/state-machine.js → window.createSyncMachine
-//   4. js/drive-sync.js (this file)
+//   1. js/sync/debug-log.js     → window.syncDebugLog
+//   2. js/sync/refresh-store.js → window.refreshStore
+//   3. js/sync/transport.js     → window.syncTransport
+//   4. js/sync/store-v2.js      → window.syncStoreV2
+//   5. js/sync/state-machine.js → window.createSyncMachine
+//   6. js/drive-sync.js (this file)
 
 const _CLIENT_ID = location.hostname === "localhost"
   ? "359209354241-esbmeba2ku58depo9fgg08v52crfthot.apps.googleusercontent.com"
   : "359209354241-do8kgvtcbnfvrge01f5hj29fee9cg195.apps.googleusercontent.com";
 
 // Make CLIENT_ID available to state-machine.js via window so we don't need an
-// import system. The machine reads window._syncClientId on GIS_READY.
+// import system. The machine reads window._syncClientId on every redirect.
 window._syncClientId = _CLIENT_ID;
 
-// ── Redirect callback absorption ──────────────────────────────────────────────
-// Must run before app.js routes. Two flows can land here during the Phase 2h
-// migration window:
-//   1. PKCE Authorization Code (query string ?code=…&state=…) — new path
-//   2. Implicit Flow (fragment #access_token=…) — legacy iOS Phase 2f path
+// ── PKCE redirect callback absorption ─────────────────────────────────────────
+// Must run before app.js routes. Handles the `?code=…&state=…` query string
+// that Google appends when redirecting back from accounts.google.com.
 //
-// Each consumer reads its own sessionStorage state key, so a callback for one
-// flow CAN'T accidentally be processed by the other. We try PKCE first; if it
-// returns null (no PKCE-flavored callback in URL or sessionStorage), fall
-// through to the legacy implicit handler. Stage 4 will remove the implicit
-// branch entirely.
+// The callback is single-use and arrives in the URL — we strip it via
+// history.replaceState before any router or downstream logger sees it,
+// then stash {code, verifier} on window for initDriveSync() to hand off to
+// the state machine.
 (function _consumeRedirectIfPresent() {
   const T = window.syncTransport;
   const log = window.syncDebugLog;
-
-  // ── Phase 2h: PKCE callback first ──
-  if (T?.consumeRedirectCallbackPKCE) {
-    const pkce = T.consumeRedirectCallbackPKCE();
-    if (pkce) {
-      if (pkce.returnTo) {
-        history.replaceState(null, "", pkce.returnTo);
-      } else {
-        // Bugbot #54-2: fallback runs when sessionStorage state is missing or
-        // untrusted (no_state / bad_state / state_mismatch). PKCE callbacks
-        // arrive in the QUERY STRING (?code=…&state=…), so preserving
-        // location.search would leave the auth code in the URL bar / history /
-        // logs. Drop the query entirely — we don't use search params for
-        // routing, and the OAuth code is the only thing that'd be there.
-        history.replaceState(null, "", location.pathname);
-      }
-      if (pkce.ok) {
-        window.__pendingRedirectCode = { code: pkce.code, verifier: pkce.verifier };
-        localStorage.setItem("bible-drive-sync", "1");
-        if (pkce.silent) localStorage.removeItem(/** @type {string} */ (window._syncSilentBlockedKey));
-        log?.log({ kind: "ACTION", event: "PKCE_CALLBACK_OK", silent: pkce.silent });
-      } else if (pkce.silent) {
-        localStorage.setItem(/** @type {string} */ (window._syncSilentBlockedKey), "1");
-        log?.log({ kind: "ACTION", event: "PKCE_SILENT_REAUTH_BLOCKED", reason: pkce.reason });
-      } else {
-        window.__pendingRedirectError = pkce.reason;
-        log?.log({ kind: "ERROR", event: "PKCE_CALLBACK_FAIL", reason: pkce.reason });
-      }
-      return; // PKCE handled — don't double-process via legacy
-    }
-  }
-
-  // ── Legacy: Implicit Flow callback (iOS Phase 2f) ──
   if (!T?.consumeRedirectCallback) return;
+
   const result = T.consumeRedirectCallback();
   if (!result) return;
 
-  // Use returnTo from both success and validated-error responses so the user
-  // lands back on the chapter they were reading even after a denied/expired
-  // OAuth round-trip.
-  if (result.returnTo) {
-    history.replaceState(null, "", result.returnTo);
+  // returnTo is set on success and on validated error responses (state nonce
+  // matched). When the result is no_state / bad_state / state_mismatch we
+  // can't trust the URL contents — drop the query entirely so the auth code
+  // (or attacker-crafted noise) does not linger in URL bar / history / logs.
+  if (result.ok || result.returnTo) {
+    history.replaceState(null, "", result.ok ? result.returnTo : (result.returnTo ?? location.pathname));
   } else {
-    history.replaceState(null, "", location.pathname + location.search);
+    history.replaceState(null, "", location.pathname);
   }
 
   if (result.ok) {
-    window.__pendingRedirectToken = { access_token: result.token };
+    window.__pendingRedirectCode = { code: result.code, verifier: result.verifier };
     localStorage.setItem("bible-drive-sync", "1");
-    // A silent re-auth round-trip succeeded → Google can issue tokens
-    // without user interaction → clear the Phase 2g silent-blocked flag if
-    // it had been set by a prior failure.
-    if (result.silent) localStorage.removeItem(/** @type {string} */ (window._syncSilentBlockedKey));
-    // NOTE: do NOT reset bible-drive-redirect-attempts here. The counter only
-    // clears on a successful sync (SYNC_DONE in the state machine), so an
-    // OAuth-success-then-Drive-401 loop still hits MAX_REDIRECT_ATTEMPTS.
-    window.syncDebugLog?.log({ kind: "ACTION", event: "REDIRECT_CALLBACK_OK", silent: result.silent });
-  } else if (result.silent) {
-    // Phase 2g: a silent (prompt=none) redirect failed. Google's standard
-    // signal that the user must interactively re-consent — block further
-    // auto-attempts on subsequent app opens until the user clicks "연결".
-    // Suppress the user-facing error toast: this is an expected outcome
-    // of an automatic background attempt, not something the user should
-    // be alerted to.
-    localStorage.setItem(/** @type {string} */ (window._syncSilentBlockedKey), "1");
-    window.syncDebugLog?.log({
-      kind: "ACTION", event: "SILENT_REAUTH_BLOCKED", reason: result.reason,
-    });
+    log?.log({ kind: "ACTION", event: "PKCE_CALLBACK_OK" });
   } else {
     window.__pendingRedirectError = result.reason;
-    window.syncDebugLog?.log({
-      kind: "ERROR", event: "REDIRECT_CALLBACK_FAIL", reason: result.reason,
-    });
+    log?.log({ kind: "ERROR", event: "PKCE_CALLBACK_FAIL", reason: result.reason });
   }
 })();
-
-// ── User interaction timestamp (for state-machine "active reading" check) ─────
-let _lastInteractionTs = 0;
-const _markInteraction = () => { _lastInteractionTs = Date.now(); };
-["pointerdown", "keydown", "scroll", "touchstart"].forEach((ev) =>
-  window.addEventListener(ev, _markInteraction, { passive: true, capture: true })
-);
-window.__driveSyncInteractionTs = () => _lastInteractionTs;
 
 const _machine = window.createSyncMachine({
   onStateChange: (state) => {
@@ -129,9 +73,7 @@ window.addEventListener("online", () => {
 
 // ── Snackbar (UI notification, called by state machine) ────────────────────────
 // Inverts page colors (bg=--text, fg=--bg) so contrast stays AA-grade across
-// every theme/color-scheme combination. The previous --popover-bg fallback was
-// a fixed dark grey that became unreadable on light themes where --text is
-// also dark.
+// every theme/color-scheme combination.
 window._showSyncSnackbar = function (msg) {
   const el = document.createElement("div");
   el.textContent = msg;
@@ -139,24 +81,6 @@ window._showSyncSnackbar = function (msg) {
   document.body.appendChild(el);
   setTimeout(() => el.remove(), 3500);
 };
-
-// ── GIS polling ────────────────────────────────────────────────────────────────
-let _gisRetryCount = 0;
-
-function _pollGis() {
-  if (window.google?.accounts?.oauth2) {
-    _machine.onGisReady();
-  } else if (_gisRetryCount++ < 20) {
-    setTimeout(_pollGis, 500);
-  } else {
-    window.syncDebugLog?.log({ kind: "ERROR", event: "GIS_LOAD_TIMEOUT", attempts: _gisRetryCount });
-  }
-}
-
-function _startPollingGis() {
-  _gisRetryCount = 0;
-  _pollGis();
-}
 
 // ── Upload debounce ────────────────────────────────────────────────────────────
 /** @type {ReturnType<typeof setTimeout> | null} */
@@ -192,12 +116,13 @@ function _redirectErrorMessage(reason) {
 function initDriveSync() {
   const enabled = localStorage.getItem("bible-drive-sync") === "1";
   window.syncDebugLog?.log({ kind: "ACTION", event: "INIT", enabled });
-  if (!enabled) return;
 
-  // Phase 2h PKCE callback: code+verifier just landed. Hand off to the state
-  // machine which exchanges them for access+refresh tokens and persists the
-  // refresh token to IndexedDB. Async — the machine handles its own state
-  // transitions, no further work needed here.
+  // PKCE callback: code+verifier just landed. Hand off to the state machine
+  // which exchanges them for access+refresh tokens and persists the refresh
+  // token to IndexedDB. Async — the machine handles its own state transitions,
+  // no further work needed here. Run BEFORE the early-return so a fresh signIn
+  // (which sets bible-drive-sync=1 in the IIFE) lands cleanly even if the
+  // user previously toggled sync off.
   if (window.__pendingRedirectCode) {
     const { code, verifier } = window.__pendingRedirectCode;
     delete window.__pendingRedirectCode;
@@ -205,76 +130,38 @@ function initDriveSync() {
     return;
   }
 
-  // iOS Implicit-flow legacy: callback already validated; inject token directly.
-  // GIS may never load (or fail to initialize), so the machine must reach
-  // IDLE without waiting for it.
-  if (window.__pendingRedirectToken) {
-    const { access_token } = window.__pendingRedirectToken;
-    delete window.__pendingRedirectToken;
-    _machine.acceptRedirectToken(access_token);
-    return;
-  }
+  if (!enabled) return;
 
-  // iOS redirect-flow failed (denied, expired, etc). Surface the failure to
-  // the user instead of silently falling through to the GIS path, which
-  // never resolves on iOS.
+  // PKCE redirect failed (denied, expired, etc). Surface the failure to
+  // the user; machine will park in NEEDS_CONSENT via enable() → silent
+  // refresh false → fallback transition.
   if (window.__pendingRedirectError) {
     const reason = window.__pendingRedirectError;
     delete window.__pendingRedirectError;
-    if (window.syncTransport.isIOS()) {
-      window._showSyncSnackbar?.(_redirectErrorMessage(reason));
-      // Phase 2g guard: signIn() cleared silent-blocked before the explicit
-      // redirect, so a denied/expired callback would otherwise let the
-      // DISABLED+ENABLE iOS branch fire prompt=none — instantly destroying
-      // the snackbar and burning a redirect-attempts slot. Re-set the flag
-      // so enable() parks in NEEDS_CONSENT until the user clicks "연결"
-      // again (which clears it via signIn()).
-      localStorage.setItem(/** @type {string} */ (window._syncSilentBlockedKey), "1");
-    } else {
-      window.syncDebugLog?.log({ kind: "ERROR", event: "UNEXPECTED_REDIRECT_ERROR", reason });
-    }
-    // Fall through to enable() — on iOS the machine parks in NEEDS_CONSENT
-    // (silent-blocked set above) so settings shows a "연결" button.
+    window._showSyncSnackbar?.(_redirectErrorMessage(reason));
   }
 
   _machine.enable();
-  if (!window.syncTransport.isIOS()) _startPollingGis();
 }
 
 // Called by settings popover "연결" button.
 function signIn() {
   const T = window.syncTransport;
   localStorage.setItem("bible-drive-sync", "1");
-
-  if (T.isIOS()) {
-    // Bypass GIS entirely — Safari does not support FedCM and PWA standalone
-    // mode blocks popups even from user gestures. Reset the attempt counter
-    // since this is an explicit user-initiated reconnect.
-    // _syncRedirectAttemptsKey, _syncSilentBlockedKey, and _syncScope are
-    // set by state-machine.js at load time (top-level assignment), so
-    // they're defined whenever signIn() runs in response to a user click.
-    localStorage.setItem(/** @type {string} */ (window._syncRedirectAttemptsKey), "0");
-    // User gesture overrides the Phase 2g silent-blocked flag — the user
-    // has explicitly asked to re-authenticate, so clear any prior block
-    // so future app opens get a fresh silent re-auth window.
-    localStorage.removeItem(/** @type {string} */ (window._syncSilentBlockedKey));
-    window._showSyncSnackbar?.("Google 인증 페이지로 이동합니다. 인증 후 자동으로 돌아옵니다.");
-    window.syncDebugLog?.log({ kind: "ACTION", event: "SIGN_IN_IOS_REDIRECT" });
-    T.beginRedirectAuth(_CLIENT_ID, /** @type {string} */ (window._syncScope), { prompt: "consent" });
-    return;
-  }
-
-  const state = _machine.getState();
-  window.syncDebugLog?.log({ kind: "ACTION", event: "SIGN_IN", state });
-  if (state === "DISABLED") {
-    _machine.enable();
-  } else if (state === "NEEDS_CONSENT" || state === "ERROR" || state === "IDENTIFYING") {
-    // Silent identity already failed (or is parked). Take the user-gesture
-    // route: dispatch USER_CONSENT_REQUEST so the machine calls
-    // requestAccessToken({prompt:"consent"}) inside this click handler.
-    _machine.dispatch({ type: "USER_CONSENT_REQUEST" });
-  }
-  if (_machine.getState() === "INITIALIZING") _startPollingGis();
+  // Reset attempt counter — this is an explicit user-initiated reconnect, so
+  // any prior loop-cap should not block it. The cap exists to defend against
+  // automatic re-redirect loops, not against user retries.
+  // _syncRedirectAttemptsKey and _syncScope are set by state-machine.js at
+  // load time (top-level assignment), so they're defined whenever signIn()
+  // runs in response to a user click.
+  localStorage.setItem(/** @type {string} */ (window._syncRedirectAttemptsKey), "0");
+  window._showSyncSnackbar?.("Google 인증 페이지로 이동합니다. 인증 후 자동으로 돌아옵니다.");
+  window.syncDebugLog?.log({ kind: "ACTION", event: "SIGN_IN_REDIRECT" });
+  // Direct redirect (full-page navigation). Do NOT route through the machine:
+  // when called from DISABLED with no refresh token, dispatching ENABLE would
+  // race with the silent-refresh path that ends in NEEDS_CONSENT, leaving
+  // a window where USER_CONSENT_REQUEST is dropped.
+  void T.beginRedirectAuth(_CLIENT_ID, /** @type {string} */ (window._syncScope), { prompt: "consent" });
 }
 
 // Called by disconnect modal "파일 유지" path.
@@ -283,9 +170,11 @@ function signOut() {
   _clearUploadTimer();
   const token = _machine.getToken();
   if (token) window.syncTransport.revokeToken(token);
+  // Clear refresh token from IDB so the next cold start lands in NEEDS_CONSENT
+  // rather than silently re-authenticating as the user that just signed out.
+  void window.refreshStore?.clearRefreshToken().catch(() => {});
   localStorage.removeItem("bible-drive-sync-email");
   localStorage.removeItem("bible-drive-sync-updated");
-  localStorage.removeItem(/** @type {string} */ (window._syncSilentBlockedKey));
   localStorage.setItem("bible-drive-sync", "0");
   _machine.disable();
 }

@@ -27,7 +27,7 @@ const TRANSPORT_SOURCE = fs.readFileSync(TRANSPORT_PATH, "utf8");
 // against them without parsing the source. Only those actually used by
 // state-machine.test.js are exported.
 export const REDIRECT_ATTEMPTS_KEY = "bible-drive-redirect-attempts";
-export const SILENT_BLOCKED_KEY = "bible-drive-silent-blocked";
+export const SYNC_ENABLED_KEY = "bible-drive-sync";
 export const SYNC_EMAIL_KEY = "bible-drive-sync-email";
 export const MAX_REDIRECT_ATTEMPTS = 3;
 
@@ -47,29 +47,14 @@ function makeLocalStorage(initial = {}) {
 // ── Stub factories ───────────────────────────────────────────────────────────
 
 function makeTransportStub({
-  isIOS = false, hasGoogleId = false, uploadResult, findFileId, downloadResult,
+  isIOS = false, uploadResult, findFileId, downloadResult,
   refreshResult, exchangeResult,
 } = {}) {
   return {
     isIOS: () => isIOS,
-    initTokenClient: () => ({ requestAccessToken: () => {} }),
-    requestSilentToken: () => {},
-    requestConsentToken: () => {},
     revokeToken: () => {},
-    initIdentityClient: () => hasGoogleId,
-    promptIdentity: () => {},
-    cancelIdentityPrompt: () => {},
-    parseIdToken: () => ({ email: "test@example.com" }),
-    beginRedirectAuth: () => {},
-    fetchUserInfo: async () => ({ email: "test@example.com" }),
-    findSyncFileId: async () => (findFileId !== undefined ? findFileId : null),
-    downloadSyncFile: async () => (downloadResult ?? { doc: null, etag: null, status: 200 }),
-    uploadSyncFile: async () => (uploadResult ?? { ok: true, status: 200, etag: '"etag-1"' }),
-    deleteSyncFile: async () => ({ ok: true }),
+    beginRedirectAuth: async () => {},
     consumeRedirectCallback: () => null,
-    // Phase 2h PKCE additions
-    consumeRedirectCallbackPKCE: () => null,
-    beginRedirectAuthPKCE: async () => {},
     generatePKCEPair: async () => ({ verifier: "v".repeat(43), challenge: "c".repeat(43) }),
     exchangeCodeForToken: async () => (exchangeResult ?? {
       ok: true, access_token: "test-access", refresh_token: "test-refresh",
@@ -78,6 +63,11 @@ function makeTransportStub({
     refreshAccessToken: async () => (refreshResult ?? {
       ok: true, access_token: "test-access-2", refresh_token: null, expires_in: 3600,
     }),
+    fetchUserInfo: async () => ({ email: "test@example.com" }),
+    findSyncFileId: async () => (findFileId !== undefined ? findFileId : null),
+    downloadSyncFile: async () => (downloadResult ?? { doc: null, etag: null, status: 200 }),
+    uploadSyncFile: async () => (uploadResult ?? { ok: true, status: 200, etag: '"etag-1"' }),
+    deleteSyncFile: async () => ({ ok: true }),
     DRIVE_HOSTNAMES: [],
   };
 }
@@ -374,7 +364,6 @@ export function loadTransport(opts = {}) {
 export function loadMachine(opts = {}) {
   const {
     isIOS = false,
-    hasGoogleId = false,
     uploadResult,
     findFileId,
     downloadResult,
@@ -382,7 +371,6 @@ export function loadMachine(opts = {}) {
     exchangeResult,
     initialRefreshToken = null,
     initialStorage = {},
-    activeReading = false,
     overrideStubs = {},
     useRealTimers = true,
     onlineFlag = true,
@@ -391,7 +379,7 @@ export function loadMachine(opts = {}) {
   const localStorage = makeLocalStorage(initialStorage);
   const T = {
     ...makeTransportStub({
-      isIOS, hasGoogleId, uploadResult, findFileId, downloadResult,
+      isIOS, uploadResult, findFileId, downloadResult,
       refreshResult, exchangeResult,
     }),
     ...overrideStubs.T,
@@ -435,17 +423,11 @@ export function loadMachine(opts = {}) {
     clearImmediate,
     localStorage,
     navigator: { onLine: onlineFlag },
-    document: {
-      visibilityState: "visible",
-      hasFocus: () => true,
-    },
-    google: hasGoogleId ? { accounts: { id: {}, oauth2: {} } } : undefined,
     syncTransport: T,
     syncStoreV2: V2,
     syncDebugLog: L,
     refreshStore,
     _syncClientId: "test-client-id",
-    __driveSyncInteractionTs: () => (activeReading ? Date.now() - 1000 : 0),
   };
 
   vm.createContext(ctx);

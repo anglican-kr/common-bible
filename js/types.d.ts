@@ -6,8 +6,11 @@
 // from any caller.
 //
 // Style: pragmatic over precise. Where a shape is genuinely fluid (legacy
-// localStorage values, GIS responses), we lean on broader unions rather
-// than exhaustive overloads.
+// localStorage values), we lean on broader unions rather than exhaustive
+// overloads.
+//
+// Phase 2h 단계 4 이후 — GIS/Implicit Flow 관련 타입 (GsiTokenClient,
+// GsiCredentialResponse, GoogleIdentityServices 등)은 모두 제거됐다.
 
 // ── MTimed wrapper (per-record mtime) ────────────────────────────────────────
 
@@ -106,12 +109,10 @@ export interface SyncPayload extends SyncDoc {
 }
 
 // ── State machine ────────────────────────────────────────────────────────────
+// Phase 2h 단계 4: GIS와 묶여있던 INITIALIZING/IDENTIFYING/AUTHENTICATING 제거.
 
 export type SyncState =
   | "DISABLED"
-  | "INITIALIZING"
-  | "IDENTIFYING"
-  | "AUTHENTICATING"
   | "IDLE"
   | "SYNCING"
   | "OFFLINE"
@@ -121,12 +122,7 @@ export type SyncState =
 export type SyncEvent =
   | { type: "ENABLE" }
   | { type: "DISABLE" }
-  | { type: "GIS_READY" }
-  | { type: "IDENTITY_OK"; email?: string | null; credential?: string }
-  | { type: "IDENTITY_FAIL"; reason?: string }
   | { type: "USER_CONSENT_REQUEST" }
-  | { type: "TOKEN_OK"; access_token: string; expires_in?: number; scope?: string }
-  | { type: "TOKEN_FAIL"; reason?: string }
   | { type: "SYNC_REQUEST" }
   | { type: "SYNC_DONE" }
   | { type: "SYNC_FAIL"; reason: string }
@@ -134,7 +130,14 @@ export type SyncEvent =
   // Internal "tag" events used only for transition logging — never dispatched
   // through the public API but still reach _transition's `event` parameter.
   | { type: "REDIRECT_CAP" }
-  | { type: "REDIRECT_TOKEN" };
+  | { type: "REDIRECT_CODE_RECEIVED" }
+  | { type: "REDIRECT_CODE_ACCEPTED" }
+  | { type: "CODE_EXCHANGE_FAIL" }
+  | { type: "SILENT_REFRESH_OK" }
+  | { type: "SILENT_REFRESH_INVALID" }
+  | { type: "SILENT_REFRESH_NET_FAIL" }
+  | { type: "ENABLE_NO_REFRESH_TOKEN" }
+  | { type: "NET_RECOVERED_NO_TOKEN" };
 
 export interface SyncMachineCtx {
   netFails: number;
@@ -146,13 +149,11 @@ export interface SyncMachineCtx {
 export interface SyncMachine {
   enable: () => void;
   disable: () => void;
-  onGisReady: () => void;
   requestSync: () => void;
   dispatch: (event: SyncEvent) => void;
-  acceptRedirectToken: (access_token: string) => void;
-  // Phase 2h PKCE entry: drive-sync.js IIFE stashes {code, verifier} from
-  // a redirect callback; initDriveSync hands them off here. Exchanges for
-  // access+refresh tokens, persists refresh to IndexedDB, transitions to IDLE.
+  // PKCE entry: drive-sync.js IIFE stashes {code, verifier} from a redirect
+  // callback; initDriveSync hands them off here. Exchanges for access+refresh
+  // tokens, persists refresh to IndexedDB, transitions to IDLE.
   acceptRedirectCode: (code: string, verifier: string) => Promise<void>;
   getState: () => SyncState;
   getToken: () => string | null;
@@ -162,26 +163,7 @@ export interface SyncMachine {
   deleteRemoteFile: () => Promise<void>;
 }
 
-// ── Transport (Drive REST + GIS wrappers) ────────────────────────────────────
-
-export interface GsiTokenResponse {
-  access_token?: string;
-  expires_in?: number;
-  scope?: string;
-  token_type?: string;
-  error?: string;
-  error_description?: string;
-}
-
-export interface GsiTokenClient {
-  requestAccessToken: (overrides?: { prompt?: string; hint?: string }) => void;
-}
-
-export interface GsiCredentialResponse {
-  credential?: string;
-  select_by?: string;
-  clientId?: string;
-}
+// ── Transport (Drive REST + PKCE OAuth) ──────────────────────────────────────
 
 export interface DriveFetchOptions {
   token: string;
@@ -210,16 +192,11 @@ export interface DriveUploadResult {
   etag: string | null;
 }
 
+// PKCE Authorization Code callback. Success branch carries the auth code and
+// PKCE verifier for the follow-up POST to /token.
 export type RedirectCallbackResult =
-  | { ok: true; token: string; returnTo: string; silent: boolean }
-  | { ok: false; reason: string; returnTo?: string; silent: boolean };
-
-// PKCE Authorization Code flow callback (Phase 2i). Same shape as
-// RedirectCallbackResult but the success branch carries `code` + `verifier`
-// for the follow-up POST to /token.
-export type RedirectCallbackResultPKCE =
-  | { ok: true; code: string; verifier: string; returnTo: string; silent: boolean }
-  | { ok: false; reason: string; returnTo?: string; silent: boolean };
+  | { ok: true; code: string; verifier: string; returnTo: string }
+  | { ok: false; reason: string; returnTo?: string };
 
 // /token endpoint responses for the two grant types we use.
 // Failure path is structured so callers can branch on `status` / `error`
@@ -247,36 +224,15 @@ export type RefreshTokenResponse =
 
 export interface SyncTransport {
   DRIVE_HOSTNAMES: readonly string[];
-  initTokenClient: (
-    clientId: string,
-    scope: string,
-    onTokenResponse: (resp: GsiTokenResponse) => void,
-  ) => GsiTokenClient | null;
-  requestSilentToken: (client: GsiTokenClient | null, emailHint: string | null) => void;
-  requestConsentToken: (client: GsiTokenClient | null) => void;
-  revokeToken: (token: string | null) => void;
-  initIdentityClient: (
-    clientId: string,
-    onIdToken: (resp: GsiCredentialResponse) => void,
-  ) => boolean;
-  promptIdentity: () => void;
-  cancelIdentityPrompt: () => void;
-  parseIdToken: (credential: string | null | undefined) => { email: string | null };
   isIOS: () => boolean;
+  // PKCE Authorization Code Flow
+  generatePKCEPair: () => Promise<{ verifier: string; challenge: string }>;
   beginRedirectAuth: (
     clientId: string,
     scope: string,
     opts?: { prompt?: string },
-  ) => void;
-  consumeRedirectCallback: () => RedirectCallbackResult | null;
-  // PKCE Authorization Code Flow (Phase 2i)
-  generatePKCEPair: () => Promise<{ verifier: string; challenge: string }>;
-  beginRedirectAuthPKCE: (
-    clientId: string,
-    scope: string,
-    opts?: { prompt?: string },
   ) => Promise<void>;
-  consumeRedirectCallbackPKCE: () => RedirectCallbackResultPKCE | null;
+  consumeRedirectCallback: () => RedirectCallbackResult | null;
   exchangeCodeForToken: (
     code: string,
     verifier: string,
@@ -286,6 +242,7 @@ export interface SyncTransport {
     refreshToken: string,
     clientId: string,
   ) => Promise<RefreshTokenResponse>;
+  revokeToken: (token: string | null) => void;
   fetchUserInfo: (token: string) => Promise<{ email: string | null }>;
   driveFetch: (path: string, opts: DriveFetchOptions) => Promise<DriveFetchResult>;
   findSyncFileId: (token: string) => Promise<string | null>;
@@ -298,7 +255,7 @@ export interface SyncTransport {
   deleteSyncFile: (token: string, fileId: string) => Promise<{ ok: boolean }>;
 }
 
-// ── Refresh Token Store (Phase 2i) ───────────────────────────────────────────
+// ── Refresh Token Store (Phase 2h 단계 1) ────────────────────────────────────
 // AES-GCM encrypted IndexedDB persistence for OAuth refresh tokens.
 
 export interface RefreshTokenStore {
@@ -364,41 +321,6 @@ export interface DriveSyncFacade {
   getStatus: () => SyncState;
 }
 
-// ── Google Identity Services (narrow ambient declaration) ────────────────────
-// We do not depend on @types/google.accounts; only the surface our code
-// actually touches is declared.
-
-export interface GsiIdInitializeConfig {
-  client_id: string;
-  callback: (response: GsiCredentialResponse) => void;
-  use_fedcm_for_prompt?: boolean;
-  auto_select?: boolean;
-  itp_support?: boolean;
-  cancel_on_tap_outside?: boolean;
-}
-
-export interface GsiOauth2InitTokenClientConfig {
-  client_id: string;
-  scope: string;
-  callback: (resp: GsiTokenResponse) => void;
-}
-
-export interface GoogleIdentityServices {
-  accounts: {
-    id: {
-      initialize: (config: GsiIdInitializeConfig) => void;
-      prompt: () => void;
-      cancel: () => void;
-    };
-    oauth2: {
-      initTokenClient: (
-        config: GsiOauth2InitTokenClientConfig,
-      ) => GsiTokenClient;
-      revoke: (token: string, callback: () => void) => void;
-    };
-  };
-}
-
 // ── Window augmentation ──────────────────────────────────────────────────────
 
 declare global {
@@ -413,16 +335,14 @@ declare global {
     }) => SyncMachine;
     driveSync: DriveSyncFacade;
 
-    // Cross-module globals set by drive-sync.js.
+    // Cross-module globals set by drive-sync.js / state-machine.js.
     _syncClientId?: string;
     _syncScope?: string;
     _syncRedirectAttemptsKey?: string;
-    _syncSilentBlockedKey?: string;
-    __pendingRedirectToken?: { access_token: string };
-    // Phase 2h: PKCE callback stash (mutually exclusive with __pendingRedirectToken)
+    // PKCE callback stash — populated by the IIFE in drive-sync.js, consumed
+    // by initDriveSync().
     __pendingRedirectCode?: { code: string; verifier: string };
     __pendingRedirectError?: string;
-    __driveSyncInteractionTs?: () => number;
 
     // UI side-effects defined in app.js. Optional because state-machine.js
     // guards each call with `typeof ... === "function"`.
@@ -432,9 +352,5 @@ declare global {
     applyFontSize?: (size: number | string) => void;
     applyColorScheme?: (scheme: string) => void;
     applyTheme?: (theme: string) => void;
-
-    // Google Identity Services library (loaded via <script> tag, may be
-    // unavailable on iOS or before script load completes).
-    google?: GoogleIdentityServices;
   }
 }

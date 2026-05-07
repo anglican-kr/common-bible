@@ -1,10 +1,15 @@
-"""iOS Drive sync e2e tests (Phase 2f — full-page redirect flow).
+"""iOS Drive sync e2e tests.
 
-Safari does not support FedCM and PWA standalone mode blocks popups even from
-user gestures. iOS therefore bypasses GIS Token Client entirely and uses OAuth
-implicit flow via window.location.href. These tests simulate Google's auth
-endpoint by intercepting the navigation and redirecting back to the app with
-the access_token and state nonce in the URL hash.
+Phase 2h 단계 4 이후 — 인증 흐름이 데스크탑/Android/iOS 동일하게 PKCE
+Authorization Code + refresh token로 통일됐다. iOS 전용으로 따로 검증할 만한
+지점은 다음 두 가지뿐:
+  1. iOS UA 감지가 여전히 동작 (다른 기능에서 분기를 위해 유지)
+  2. PKCE redirect round-trip이 iPhone Safari UA에서도 정상 동작
+  3. PKCE 콜백 보안 회귀 (state_mismatch 등)도 iOS UA에서 동일하게 동작
+
+기존 active-reading 401 defer / FedCM / silent-blocked / silent prompt=none
+재시도 / cap loop redirect 등의 시나리오는 모두 단계 4에서 흐름 자체가
+사라졌으므로 제거됐다 (refresh token이 모든 silent 갱신을 담당).
 
 Run with the dev server active:
     python3 scripts/serve.py 8080
@@ -96,39 +101,29 @@ class FakeDrive:
                           body=json.dumps({"email": "ios-user@example.com"}))
             return
 
-        # Block the real GIS client library from loading; iOS path doesn't use
-        # it, but drive-sync.js still emits the <script src> tag.
-        if "gsi/client" in url:
-            route.fulfill(status=200, content_type="application/javascript", body="")
-            return
-
         route.continue_()
 
 
-# ── OAuth endpoint simulator ──────────────────────────────────────────────────
+# ── PKCE OAuth endpoint simulator ─────────────────────────────────────────────
 
 class FakeOAuth:
-    """Intercepts navigation to accounts.google.com/o/oauth2/v2/auth.
-
-    Default behavior: redirect back to redirect_uri with a fresh access_token
-    and the supplied state. Configurable per-test via attributes:
-      • mode = "ok" | "error" | "tampered_state"
-      • error_code = e.g. "access_denied"
-    """
+    """Intercepts /auth (302 to ?code=…&state=…) and /token (returns tokens)."""
 
     def __init__(self):
         self.mode = "ok"
         self.error_code = "access_denied"
-        self.token_value = "mock-redirect-token"
-        self.calls = 0
+        self.code_value = "ios-mock-code"
+        self.calls_auth = 0
+        self.calls_token = 0
 
     def reset(self):
         self.mode = "ok"
         self.error_code = "access_denied"
-        self.calls = 0
+        self.calls_auth = 0
+        self.calls_token = 0
 
-    def handle(self, route: Route):
-        self.calls += 1
+    def handle_auth(self, route: Route):
+        self.calls_auth += 1
         url = route.request.url
         parsed = urllib.parse.urlparse(url)
         qs = urllib.parse.parse_qs(parsed.query)
@@ -136,20 +131,27 @@ class FakeOAuth:
         redirect_uri = qs.get("redirect_uri", [BASE_URL + "/"])[0]
 
         if self.mode == "error":
-            callback = f"{redirect_uri}#error={self.error_code}&state={state}"
+            callback = f"{redirect_uri}?error={self.error_code}&state={state}"
         elif self.mode == "tampered_state":
-            callback = (
-                f"{redirect_uri}#access_token={self.token_value}"
-                f"&state=TAMPERED&expires_in=3599&token_type=Bearer"
-            )
+            callback = f"{redirect_uri}?code={self.code_value}&state=TAMPERED"
         else:
-            callback = (
-                f"{redirect_uri}#access_token={self.token_value}"
-                f"&state={state}&expires_in=3599&token_type=Bearer"
-            )
+            callback = f"{redirect_uri}?code={self.code_value}&state={state}"
 
-        # 302 redirect — browser follows automatically.
         route.fulfill(status=302, headers={"Location": callback})
+
+    def handle_token(self, route: Route):
+        self.calls_token += 1
+        route.fulfill(
+            status=200,
+            content_type="application/json",
+            body=json.dumps({
+                "access_token": "ios-mock-access-token",
+                "refresh_token": "ios-mock-refresh-token",
+                "expires_in": 3600,
+                "scope": "https://www.googleapis.com/auth/drive.appdata email",
+                "token_type": "Bearer",
+            }),
+        )
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -178,9 +180,11 @@ def _make_ios_page(browser, fake_drive, fake_oauth) -> Page:
         has_touch=True,
     )
     page = ctx.new_page()
-    page.route("**/*googleapis.com/**", fake_drive.handle)
-    page.route("**/accounts.google.com/gsi/**", fake_drive.handle)
-    page.route("**/accounts.google.com/o/oauth2/**", fake_oauth.handle)
+    page.route("**/*googleapis.com/drive/**", fake_drive.handle)
+    page.route("**/*googleapis.com/upload/**", fake_drive.handle)
+    page.route("**/*googleapis.com/oauth2/v3/userinfo", fake_drive.handle)
+    page.route("**/oauth2.googleapis.com/token", fake_oauth.handle_token)
+    page.route("**/accounts.google.com/o/oauth2/**", fake_oauth.handle_auth)
     return page
 
 
@@ -212,28 +216,27 @@ def test_ios_detected_by_user_agent(browser, fake_drive, fake_oauth):
 
 
 def test_ios_signin_redirect_round_trip(browser, fake_drive, fake_oauth):
-    """signIn() → redirect to OAuth → callback with token → IDLE."""
+    """signIn() → /auth redirect → callback → /token exchange → IDLE."""
     fake_drive.reset()
     page = _make_ios_page(browser, fake_drive, fake_oauth)
     try:
         _load(page)
         page.evaluate("window.driveSync.signIn()")
-        # Page navigates to accounts.google.com → 302 → back to /#access_token=...
-        # Wait for the app to be reloaded after the redirect.
         page.wait_for_function(
             "() => window.driveSync?.isAuthenticated() === true", timeout=15_000,
         )
         _wait_idle(page)
 
-        assert fake_oauth.calls == 1, "OAuth endpoint should be called exactly once"
-        assert page.evaluate("location.hash") == "", "hash should be cleared"
+        assert fake_oauth.calls_auth == 1, "OAuth /auth should be called exactly once"
+        assert fake_oauth.calls_token >= 1, "OAuth /token should be called at least once"
+        assert "code=" not in page.evaluate("location.search"), "code stripped from URL"
         assert page.evaluate("window.driveSync.getStatus()") == "IDLE"
     finally:
         page.context.close()
 
 
 def test_ios_callback_state_mismatch_rejected(browser, fake_drive, fake_oauth):
-    """Tampered state in callback hash → token rejected, error logged."""
+    """Tampered state in callback → token rejected, no auth, NEEDS_CONSENT."""
     fake_drive.reset()
     fake_oauth.mode = "tampered_state"
     page = _make_ios_page(browser, fake_drive, fake_oauth)
@@ -242,17 +245,16 @@ def test_ios_callback_state_mismatch_rejected(browser, fake_drive, fake_oauth):
         page.evaluate("window.driveSync.signIn()")
         # Wait for the post-redirect load to settle.
         page.wait_for_function(
-            "() => location.hash === ''", timeout=15_000,
+            "() => location.search === ''", timeout=15_000,
         )
-        # Auth should NOT have succeeded.
         assert page.evaluate("window.driveSync.isAuthenticated()") is False
-        assert page.evaluate("window.__pendingRedirectError") == "state_mismatch"
+        assert page.evaluate("window.driveSync.getStatus()") == "NEEDS_CONSENT"
     finally:
         page.context.close()
 
 
 def test_ios_callback_error_param_rejected(browser, fake_drive, fake_oauth):
-    """error=access_denied in callback hash → token rejected, no auth."""
+    """error=access_denied in callback → token rejected, NEEDS_CONSENT."""
     fake_drive.reset()
     fake_oauth.mode = "error"
     fake_oauth.error_code = "access_denied"
@@ -261,33 +263,10 @@ def test_ios_callback_error_param_rejected(browser, fake_drive, fake_oauth):
         _load(page)
         page.evaluate("window.driveSync.signIn()")
         page.wait_for_function(
-            "() => location.hash === ''", timeout=15_000,
+            "() => location.search === ''", timeout=15_000,
         )
         assert page.evaluate("window.driveSync.isAuthenticated()") is False
-        assert page.evaluate("window.__pendingRedirectError") == "access_denied"
-    finally:
-        page.context.close()
-
-
-def test_ios_signin_clears_attempt_counter(browser, fake_drive, fake_oauth):
-    """signIn() resets the attempt counter so user-initiated reconnects always
-    have a full cap window. Successful round-trip leaves it at 0."""
-    fake_drive.reset()
-    page = _make_ios_page(browser, fake_drive, fake_oauth)
-    try:
-        _load(page)
-        # Pre-seed a high counter as if previous auto-redirects had failed.
-        page.evaluate(
-            "localStorage.setItem('bible-drive-redirect-attempts', '99')"
-        )
-        page.evaluate("window.driveSync.signIn()")
-        page.wait_for_function(
-            "() => window.driveSync?.isAuthenticated() === true", timeout=15_000,
-        )
-        # Successful callback should reset to 0.
-        assert page.evaluate(
-            "localStorage.getItem('bible-drive-redirect-attempts')"
-        ) == "0"
+        assert page.evaluate("window.driveSync.getStatus()") == "NEEDS_CONSENT"
     finally:
         page.context.close()
 
@@ -298,7 +277,6 @@ def test_ios_returnto_preserved_through_redirect(browser, fake_drive, fake_oauth
     page = _make_ios_page(browser, fake_drive, fake_oauth)
     try:
         _load(page)
-        # Navigate to a chapter route before initiating sign-in.
         page.evaluate("history.pushState(null, '', '/gen/1')")
         page.evaluate("window.driveSync.signIn()")
         page.wait_for_function(
@@ -306,196 +284,7 @@ def test_ios_returnto_preserved_through_redirect(browser, fake_drive, fake_oauth
         )
         path = page.evaluate("location.pathname")
         assert path == "/gen/1", f"Expected /gen/1 after callback, got {path}"
-        assert page.evaluate("location.hash") == ""
-    finally:
-        page.context.close()
-
-
-def _force_401_on_drive(page: Page):
-    """Make the next upload (PATCH /upload/.../files/sync-file-id) return 401.
-
-    findSyncFileId swallows 401s, so the only paths that surface a 401 to the
-    state machine are downloadSyncFile (GET /files/{id}?alt=media) and
-    uploadSyncFile (PATCH /upload/.../files/{id}?uploadType=media). We 401 the
-    PATCH upload since the test scenarios trigger scheduleUpload after IDLE.
-    """
-    page.route(
-        "**/www.googleapis.com/upload/drive/v3/files/**",
-        lambda route: route.fulfill(status=401),
-        times=1,
-    )
-
-
-def test_ios_active_reading_defers_401_redirect(browser, fake_drive, fake_oauth):
-    """401 while user is actively reading → snackbar, no auto-redirect."""
-    fake_drive.reset()
-    page = _make_ios_page(browser, fake_drive, fake_oauth)
-    try:
-        _load(page)
-        page.evaluate("window.driveSync.signIn()")
-        page.wait_for_function(
-            "() => window.driveSync?.isAuthenticated() === true", timeout=15_000,
-        )
-        _wait_idle(page)
-
-        # Stage a remote bookmark so the next sync needs to PATCH-upload.
-        page.evaluate("""
-            (() => {
-                const id = 'bm-active-1';
-                const list = window.syncStoreV2.loadBookmarks();
-                list.push({ id, type: 'bookmark', name: 'Active-Reading',
-                            bookId: 'gen', chapter: 1, vref: 'gen 1:1', verseSpec: '1' });
-                window.syncStoreV2.saveBookmarks(list);
-            })()
-        """)
-
-        # Simulate active reading: recent interaction timestamp + focus.
-        page.evaluate("window.__driveSyncInteractionTs = () => Date.now()")
-        page.evaluate(
-            "Object.defineProperty(document, 'hasFocus', "
-            "{ configurable: true, value: () => true })"
-        )
-
-        oauth_calls_before = fake_oauth.calls
-        _force_401_on_drive(page)
-        page.evaluate("window.driveSync.scheduleUpload()")
-        page.wait_for_timeout(1500)
-
-        assert fake_oauth.calls == oauth_calls_before, \
-            "OAuth endpoint must NOT be hit while user is actively reading"
-        status = page.evaluate("window.driveSync.getStatus()")
-        assert status == "NEEDS_CONSENT", \
-            f"Expected NEEDS_CONSENT after deferred 401, got {status}"
-    finally:
-        page.context.close()
-
-
-def test_ios_callback_error_preserves_returnto(browser, fake_drive, fake_oauth):
-    """Error/expired callbacks must surface the saved returnTo so the user
-    lands back on the chapter they were reading."""
-    page = _make_ios_page(browser, fake_drive, fake_oauth)
-    try:
-        _load(page)
-        # Plant a saved state with a specific returnTo path.
-        page.evaluate("""
-            sessionStorage.setItem('bible-drive-redirect-state', JSON.stringify({
-                nonce: 'preserve-rt-nonce',
-                returnTo: '/gen/3',
-                ts: Date.now(),
-                flow: 'implicit-v1',
-            }));
-        """)
-        # Simulate Google denying consent — error response with matching state.
-        result = page.evaluate("""
-            (() => {
-                history.replaceState(null, '', '/#error=access_denied&state=preserve-rt-nonce');
-                return window.syncTransport.consumeRedirectCallback();
-            })()
-        """)
-        assert result == {
-            "ok": False, "reason": "access_denied", "returnTo": "/gen/3",
-        }, f"Error response missing returnTo: {result}"
-    finally:
-        page.context.close()
-
-
-def test_ios_redirect_error_shows_snackbar_and_parks(browser, fake_drive, fake_oauth):
-    """A failed iOS OAuth redirect (e.g., user denied consent) must show a
-    snackbar and park the machine in NEEDS_CONSENT so the settings UI
-    surfaces the "연결" button — not silently fall through to GIS polling.
-    """
-    page_ctx = browser.new_context(
-        user_agent=IPHONE_UA,
-        viewport={"width": 390, "height": 844},
-        is_mobile=True, has_touch=True,
-    )
-    # Plant sessionStorage state + enabled flag BEFORE the page loads, AND
-    # install a capturing accessor on window._showSyncSnackbar so we can
-    # verify the call even after the snackbar div is removed (3.5s timeout).
-    page_ctx.add_init_script("""
-        try {
-            // Plant the redirect-state only on the very first navigation; if
-            // the SW triggers a reload we don't want to re-stage the OAuth
-            // callback for the second page load.
-            if (!sessionStorage.getItem('__test_planted_v1')) {
-                sessionStorage.setItem('bible-drive-redirect-state', JSON.stringify({
-                    nonce: 'parked-nonce-1',
-                    returnTo: '/gen/3',
-                    ts: Date.now(),
-                    flow: 'implicit-v1',
-                }));
-                sessionStorage.setItem('__test_planted_v1', '1');
-            }
-            localStorage.setItem('bible-drive-sync', '1');
-            // Capture _showSyncSnackbar invocations across page reloads.
-            window.__capturedSnacks = JSON.parse(
-                sessionStorage.getItem('__test_snacks_arr') || '[]'
-            );
-            let _realSnack = null;
-            Object.defineProperty(window, '_showSyncSnackbar', {
-                get() {
-                    return (msg) => {
-                        window.__capturedSnacks.push(msg);
-                        try {
-                            sessionStorage.setItem(
-                                '__test_snacks_arr',
-                                JSON.stringify(window.__capturedSnacks)
-                            );
-                        } catch (_) {}
-                        if (_realSnack) _realSnack(msg);
-                    };
-                },
-                set(fn) { _realSnack = fn; },
-                configurable: true,
-            });
-        } catch (_) {}
-    """)
-    page = page_ctx.new_page()
-    page.route("**/*googleapis.com/**", fake_drive.handle)
-    page.route("**/accounts.google.com/gsi/**", fake_drive.handle)
-    page.route("**/accounts.google.com/o/oauth2/**", fake_oauth.handle)
-    try:
-        page.goto(f"{BASE_URL}/#error=access_denied&state=parked-nonce-1")
-        page.wait_for_function(
-            "() => window.driveSync && window.syncTransport", timeout=10_000,
-        )
-
-        # returnTo applied (Bug 4) — user lands at the chapter they were on.
-        path = page.evaluate("location.pathname")
-        assert path == "/gen/3", f"Expected /gen/3, got {path}"
-        assert page.evaluate("location.hash") == "", "hash should be cleared"
-
-        # Wait for initDriveSync (deferred via requestIdleCallback) to run and
-        # park the machine in NEEDS_CONSENT (Bug 3).
-        page.wait_for_function(
-            "() => window.driveSync.getStatus() === 'NEEDS_CONSENT'",
-            timeout=10_000,
-        )
-
-        # Snackbar invocation captured (Bug 3) — survives the 3.5s removal.
-        snacks = page.evaluate("window.__capturedSnacks") or []
-        assert any("인증" in s and "취소" in s for s in snacks), \
-            f"Expected error snackbar, got captured: {snacks}"
-    finally:
-        page_ctx.close()
-
-
-def test_ios_disabled_enable_parks_in_needs_consent(browser, fake_drive, fake_oauth):
-    """Cold-start iOS sync (no pending token) must NOT spin in INITIALIZING
-    waiting for GIS that never works on iOS. Machine should park in
-    NEEDS_CONSENT immediately so the user can click "연결" to redirect."""
-    page = _make_ios_page(browser, fake_drive, fake_oauth)
-    try:
-        # Pre-enable sync without any pending token (simulates a previously
-        # connected user opening the app fresh after losing the in-memory token).
-        page.add_init_script(
-            "localStorage.setItem('bible-drive-sync', '1');"
-        )
-        _load(page)
-        page.wait_for_function(
-            "() => window.driveSync.getStatus() === 'NEEDS_CONSENT'",
-            timeout=5000,
-        )
+        assert page.evaluate("location.search") == ""
     finally:
         page.context.close()
 
@@ -509,21 +298,21 @@ def test_ios_state_mismatch_preserves_session_storage(browser, fake_drive, fake_
     page = _make_ios_page(browser, fake_drive, fake_oauth)
     try:
         _load(page)
-        # Plant a legitimate-looking saved state, simulating an in-flight
-        # OAuth round-trip that we never finished.
+        # Plant a legitimate-looking saved PKCE state.
         page.evaluate("""
-            sessionStorage.setItem('bible-drive-redirect-state', JSON.stringify({
+            sessionStorage.setItem('bible-drive-redirect-state-pkce', JSON.stringify({
                 nonce: 'real-nonce-xyz',
+                verifier: 'v'.repeat(43),
                 returnTo: '/',
                 ts: Date.now(),
-                flow: 'implicit-v1',
+                flow: 'pkce-v1',
             }));
         """)
 
         # Simulate an attacker-crafted error URL with a wrong state.
         result = page.evaluate("""
             (() => {
-                history.replaceState(null, '', '/#error=access_denied&state=ATTACKER');
+                history.replaceState(null, '', '/?error=access_denied&state=ATTACKER');
                 return window.syncTransport.consumeRedirectCallback();
             })()
         """)
@@ -532,103 +321,60 @@ def test_ios_state_mismatch_preserves_session_storage(browser, fake_drive, fake_
 
         # The legitimate state must still be intact for the real callback.
         saved = page.evaluate(
-            "sessionStorage.getItem('bible-drive-redirect-state')"
+            "sessionStorage.getItem('bible-drive-redirect-state-pkce')"
         )
         assert saved is not None, "sessionStorage state was clobbered"
-        import json as _json
-        parsed = _json.loads(saved)
+        parsed = json.loads(saved)
         assert parsed["nonce"] == "real-nonce-xyz"
     finally:
         page.context.close()
 
 
-def test_ios_redirect_loop_hits_cap(browser, fake_drive, fake_oauth):
-    """Counter at MAX_REDIRECT_ATTEMPTS → next 401 in idle state must NOT
-    redirect; machine transitions to ERROR. Validates that the IIFE/
-    acceptRedirectToken no longer reset the counter and the loop is bounded.
-    """
-    fake_drive.reset()
+def test_ios_callback_error_preserves_returnto(browser, fake_drive, fake_oauth):
+    """Error/expired callbacks must surface the saved returnTo so the user
+    lands back on the chapter they were reading."""
     page = _make_ios_page(browser, fake_drive, fake_oauth)
     try:
         _load(page)
-        page.evaluate("window.driveSync.signIn()")
-        page.wait_for_function(
-            "() => window.driveSync?.isAuthenticated() === true", timeout=15_000,
-        )
-        _wait_idle(page)
-
+        # Plant a saved state with a specific returnTo path.
         page.evaluate("""
+            sessionStorage.setItem('bible-drive-redirect-state-pkce', JSON.stringify({
+                nonce: 'preserve-rt-nonce',
+                verifier: 'v'.repeat(43),
+                returnTo: '/gen/3',
+                ts: Date.now(),
+                flow: 'pkce-v1',
+            }));
+        """)
+        # Simulate Google denying consent — error response with matching state.
+        result = page.evaluate("""
             (() => {
-                const id = 'bm-cap-1';
-                const list = window.syncStoreV2.loadBookmarks();
-                list.push({ id, type: 'bookmark', name: 'Cap-Test',
-                            bookId: 'gen', chapter: 1, vref: 'gen 1:1', verseSpec: '1' });
-                window.syncStoreV2.saveBookmarks(list);
+                history.replaceState(null, '', '/?error=access_denied&state=preserve-rt-nonce');
+                return window.syncTransport.consumeRedirectCallback();
             })()
         """)
-
-        # Counter at the cap — next _beginRedirect call must reject.
-        page.evaluate(
-            "localStorage.setItem('bible-drive-redirect-attempts', '3')"
-        )
-        page.evaluate("window.__driveSyncInteractionTs = () => 0")  # idle
-
-        oauth_calls_before = fake_oauth.calls
-        _force_401_on_drive(page)
-        page.evaluate("window.driveSync.scheduleUpload()")
-        page.wait_for_timeout(1500)
-
-        assert fake_oauth.calls == oauth_calls_before, \
-            "OAuth must NOT be called when counter is already at cap"
-        status = page.evaluate("window.driveSync.getStatus()")
-        assert status == "ERROR", \
-            f"Expected ERROR after cap exceeded, got {status}"
+        assert result == {
+            "ok": False, "reason": "access_denied", "returnTo": "/gen/3",
+        }, f"Error response missing returnTo: {result}"
     finally:
         page.context.close()
 
 
-def test_ios_idle_401_triggers_auto_redirect(browser, fake_drive, fake_oauth):
-    """401 while user is idle → automatic full-page redirect."""
-    import time
-
-    fake_drive.reset()
+def test_ios_disabled_enable_parks_in_needs_consent(browser, fake_drive, fake_oauth):
+    """Cold-start iOS sync (no refresh token in IDB) must park in NEEDS_CONSENT
+    immediately so the user can click "연결" to redirect."""
     page = _make_ios_page(browser, fake_drive, fake_oauth)
     try:
-        _load(page)
-        page.evaluate("window.driveSync.signIn()")
-        page.wait_for_function(
-            "() => window.driveSync?.isAuthenticated() === true", timeout=15_000,
+        # Pre-enable sync without any pending token (simulates a previously
+        # connected user opening the app fresh after losing the in-memory
+        # token AND with empty refresh-store IDB).
+        page.add_init_script(
+            "localStorage.setItem('bible-drive-sync', '1');"
         )
-        _wait_idle(page)
-
-        page.evaluate("""
-            (() => {
-                const id = 'bm-idle-1';
-                const list = window.syncStoreV2.loadBookmarks();
-                list.push({ id, type: 'bookmark', name: 'Idle-User',
-                            bookId: 'gen', chapter: 1, vref: 'gen 1:1', verseSpec: '1' });
-                window.syncStoreV2.saveBookmarks(list);
-            })()
-        """)
-
-        # Force "idle" — interaction timestamp far in the past.
-        page.evaluate("window.__driveSyncInteractionTs = () => 0")
-
-        oauth_calls_before = fake_oauth.calls
-        _force_401_on_drive(page)
-        page.evaluate("window.driveSync.scheduleUpload()")
-
-        # Poll for the secondary OAuth call (auto-redirect). Cannot rely on
-        # isAuthenticated since it stays true throughout (initial token until
-        # the 401 fires; token injected immediately on callback).
-        deadline = time.time() + 10.0
-        while time.time() < deadline:
-            if fake_oauth.calls > oauth_calls_before:
-                break
-            page.wait_for_timeout(200)
-        else:
-            assert False, "Idle 401 should have triggered an automatic redirect"
-
-        assert fake_oauth.calls > oauth_calls_before
+        _load(page)
+        page.wait_for_function(
+            "() => window.driveSync.getStatus() === 'NEEDS_CONSENT'",
+            timeout=5000,
+        )
     finally:
         page.context.close()
