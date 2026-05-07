@@ -264,6 +264,33 @@ export interface RefreshTokenStore {
   clearRefreshToken: () => Promise<void>;
 }
 
+// ── Audio cache LRU sidecar (ADR-016) ────────────────────────────────────────
+// IndexedDB-backed metadata for AUDIO_CACHE (sw.js). Cache API does not
+// expose access time, so we record byteSize/lastPlayedAt/addedAt here and
+// drive LRU eviction from both SW (hard cap on put) and page (soft cap on
+// visibilitychange).
+
+export interface AudioCacheEntry {
+  url: string;
+  byteSize: number;
+  addedAt: number;
+  // null = received but never played; sorted before any non-null entries
+  // when picking eviction candidates (ADR-016 §D).
+  lastPlayedAt: number | null;
+}
+
+export interface BibleAudioCache {
+  recordEntry: (url: string, byteSize: number) => Promise<void>;
+  touch: (url: string) => Promise<void>;
+  totalSize: () => Promise<number>;
+  pickEvictions: (targetCap: number) => Promise<{ urls: string[]; freedBytes: number }>;
+  removeEntries: (urls: string[]) => Promise<void>;
+  AUDIO_CACHE_NAME: string;
+  SOFT_CAP: number;
+  HARD_CAP: number;
+  _listAll: () => Promise<AudioCacheEntry[]>;
+}
+
 // ── Store v2 ─────────────────────────────────────────────────────────────────
 
 export interface SyncStoreV2 {
@@ -330,6 +357,7 @@ declare global {
     syncStoreV2: SyncStoreV2;
     syncDebugLog: SyncDebugLog;
     refreshStore: RefreshTokenStore;
+    bibleAudioCache: BibleAudioCache;
     createSyncMachine: (opts?: {
       onStateChange?: (state: SyncState) => void;
     }) => SyncMachine;

@@ -188,6 +188,51 @@ function clearAudioTime() {
   try { localStorage.removeItem(AUDIO_POS_KEY); } catch (_) {}
 }
 
+// ── Audio cache LRU helpers (ADR-016) ──
+// One-shot persisted-storage request: called on the first value moment
+// (audio play, bookmark save, etc.). navigator.storage.persist() may show a
+// browser prompt on Safari/Firefox; on Chrome it grants silently when the
+// site has high engagement. We swallow result errors — even if denied, the
+// LRU loop in audio-cache.js still functions, just without iOS 7-day evict
+// immunity.
+let _persistAttempted = false;
+function _maybeRequestPersist() {
+  if (_persistAttempted) return;
+  _persistAttempted = true;
+  if (!navigator.storage?.persist) return;
+  navigator.storage.persist()
+    .then((granted) => {
+      window.syncDebugLog?.log({ kind: "ACTION", event: "storage-persist", granted });
+    })
+    .catch(() => {});
+}
+
+// Soft-cap eviction. Page-driven (SW only enforces hard cap on put). Called
+// on visibilitychange→hidden so the work runs while the user is not actively
+// reading. SW already opens AUDIO_CACHE under the same name; we use the
+// constant exported by audio-cache.js to avoid drift.
+async function _enforceAudioSoftCap() {
+  const ac = window.bibleAudioCache;
+  if (!ac) return;
+  try {
+    const total = await ac.totalSize();
+    if (total <= ac.SOFT_CAP) return;
+    const { urls } = await ac.pickEvictions(ac.SOFT_CAP);
+    if (!urls.length) return;
+    const cache = await caches.open(ac.AUDIO_CACHE_NAME);
+    await Promise.all(urls.map((u) => cache.delete(u)));
+    await ac.removeEntries(urls);
+    window.syncDebugLog?.log({
+      kind: "ACTION", event: "audio-evict", reason: "soft",
+      count: urls.length, totalBefore: total,
+    });
+  } catch (_) { /* best-effort */ }
+}
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") _enforceAudioSoftCap();
+});
+
 // ── BEGIN SEARCH HISTORY HELPERS ──
 // Local-only (not Drive-synced — see ADR-014). Whitespace-normalized strings,
 // LRU-deduped, capped at SEARCH_HISTORY_MAX. The block between the BEGIN/END
@@ -931,6 +976,7 @@ function saveBookmarks(store) {
     localStorage.setItem(BOOKMARK_KEY, JSON.stringify(store));
     window.syncStoreV2?.saveBookmarks(store);
     if (window.driveSync) window.driveSync.scheduleUpload();
+    _maybeRequestPersist();
   } catch (_) {}
 }
 
@@ -2716,6 +2762,11 @@ function showAudioPlayer(bookId, chapter) {
   audio.addEventListener("play", () => {
     playBtn.setAttribute("aria-label", "일시정지");
     announce("재생");
+    // Touch LRU metadata + opportunistically request persisted storage on
+    // first play after install (value moment, ADR-016 §F).
+    const absUrl = new URL(src, location.href).href;
+    window.bibleAudioCache?.touch(absUrl).catch(() => {});
+    _maybeRequestPersist();
   }, { signal });
 
   audio.addEventListener("playing", () => {

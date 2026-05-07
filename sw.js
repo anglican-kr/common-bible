@@ -5,7 +5,14 @@
 // sources are re-encoded.
 const SHELL_CACHE = "shell-49";
 const DATA_CACHE = "data-1";
-const AUDIO_CACHE = "audio-1";
+const AUDIO_CACHE = "audio-1"; // must equal js/audio-cache.js AUDIO_CACHE_NAME
+
+// LRU metadata sidecar for AUDIO_CACHE. Loaded best-effort: if the import
+// fails (e.g. file missing in older deploy), audio caching still works,
+// just without LRU bookkeeping.
+try {
+  importScripts("/js/audio-cache.js");
+} catch (_) { /* fall through; bibleAudioCache stays undefined */ }
 
 // Separate cache for Google Font files (fonts.gstatic.com).
 // Never cleared on cache bumps — font files are content-addressed and immutable.
@@ -19,6 +26,7 @@ const SHELL_FILES = [
   "/privacy.html",
   "/js/app.js",
   "/js/drive-sync.js",
+  "/js/audio-cache.js",
   "/js/sync/debug-log.js",
   "/js/sync/transport.js",
   "/js/sync/store-v2.js",
@@ -118,6 +126,26 @@ function handleFontFile(event) {
 // Cache invalidation is handled by bumping the relevant cache name on release.
 const DRIVE_HOSTNAMES = ["www.googleapis.com", "content.googleapis.com", "oauth2.googleapis.com", "accounts.google.com"];
 
+// Audio path: store in AUDIO_CACHE, record sidecar metadata, enforce hard cap.
+// Runs inside event.waitUntil so the response is delivered immediately and the
+// bookkeeping completes in background. Errors are swallowed — caching is
+// best-effort and must never break playback. (See ADR-016.)
+async function _putAudioAndEnforceCap(request, response) {
+  const cache = await caches.open(AUDIO_CACHE);
+  await cache.put(request, response);
+  const ac = self.bibleAudioCache;
+  if (!ac) return;
+  const cl = response.headers.get("content-length");
+  const byteSize = cl ? Number(cl) : 0;
+  await ac.recordEntry(request.url, byteSize);
+  const total = await ac.totalSize();
+  if (total <= ac.HARD_CAP) return;
+  const { urls } = await ac.pickEvictions(ac.SOFT_CAP);
+  if (!urls.length) return;
+  await Promise.all(urls.map((u) => cache.delete(u)));
+  await ac.removeEntries(urls);
+}
+
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
   const { hostname, pathname } = url;
@@ -153,7 +181,11 @@ self.addEventListener("fetch", (event) => {
       return fetch(new Request(event.request, { cache: "reload" })).then((res) => {
         if (res.ok) {
           const clone = res.clone();
-          caches.open(targetCache).then((cache) => cache.put(event.request, clone));
+          if (targetCache === AUDIO_CACHE) {
+            event.waitUntil(_putAudioAndEnforceCap(event.request, clone).catch(() => {}));
+          } else {
+            caches.open(targetCache).then((cache) => cache.put(event.request, clone));
+          }
         }
         return res;
       });
