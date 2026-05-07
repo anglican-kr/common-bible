@@ -247,9 +247,13 @@ function createSyncMachine({ onStateChange } = {}) {
    * @param {Partial<SyncMachineCtx>} [ctxPatch]
    *   401 reauth 경로에서 호출 시 reAuthFails 카운터를 carry forward해야 함.
    *   IDLE 전이 시에만 적용 (실패 경로는 reset이 자연스러움).
+   * @param {boolean} [fromReauth]
+   *   true면 401 reauth 경로 — SYNCING 상태에서 호출됐고 그 상태를 빠져나오는
+   *   것이 우리 책임이므로 SYNCING race 가드를 우회. false (기본)면 cold start
+   *   경로 — SYNCING은 legacy GIS가 이미 settled한 상태이므로 폐기해야 함.
    * @returns {Promise<boolean>}
    */
-  async function _attemptSilentRefresh(ctxPatch = {}) {
+  async function _attemptSilentRefresh(ctxPatch = {}, fromReauth = false) {
     if (!window.refreshStore) return false;
     /** @type {string | null} */
     let rt;
@@ -264,16 +268,24 @@ function createSyncMachine({ onStateChange } = {}) {
     L.log({ kind: "ACTION", event: "SILENT_REFRESH_BEGIN" });
     const resp = await T.refreshAccessToken(rt, /** @type {string} */ (window._syncClientId));
 
-    // Race guards (§6.2 + Bugbot #54):
+    // Race guards (§6.2 + Bugbot 1차·2차):
     //   1. _state === IDLE → legacy GIS path already authenticated us. Don't
     //      override (the existing access token is just as good).
-    //   2. SYNC_ENABLED_KEY === "0" → user called signOut()/disable() during
+    //   2. _state === SYNCING && !fromReauth → cold start race: legacy got to
+    //      SYNCING faster, with an in-flight cycle. Don't disrupt it. The
+    //      401 reauth path explicitly sets fromReauth=true because *we* need
+    //      to push out of SYNCING (the failed cycle is what triggered us).
+    //   3. SYNC_ENABLED_KEY === "0" → user called signOut()/disable() during
     //      the async window, OR ERROR state was reached (cap exhaustion).
     //      Either way the user has explicitly stopped sync — honoring our
     //      success would silently resurrect it. _transition flips this flag
     //      to "0" whenever the next state is DISABLED or ERROR.
     if (_state === S.IDLE) {
       L.log({ kind: "ACTION", event: "SILENT_REFRESH_RACE_LOST", finalState: _state });
+      return true;
+    }
+    if (_state === S.SYNCING && !fromReauth) {
+      L.log({ kind: "ACTION", event: "SILENT_REFRESH_RACE_LOST", finalState: _state, reason: "in_flight_sync" });
       return true;
     }
     if (localStorage.getItem(SYNC_ENABLED_KEY) === "0") {
@@ -755,7 +767,9 @@ function createSyncMachine({ onStateChange } = {}) {
    * @param {number} nextReAuthFails
    */
   async function _kickoff401Reauth(event, nextReAuthFails) {
-    if (await _attemptSilentRefresh({ reAuthFails: nextReAuthFails })) return;
+    // fromReauth=true allows _attemptSilentRefresh to override the SYNCING
+    // state we entered with — that's the whole point of this path.
+    if (await _attemptSilentRefresh({ reAuthFails: nextReAuthFails }, true)) return;
     _legacyReauthAfter401(event);
   }
 

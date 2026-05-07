@@ -564,13 +564,21 @@ ADR-013 (클라이언트 JS 유닛 테스트 전략) 참고. 위 6차 리뷰 정
 - harness `loadMachine`이 `refreshStore` stub과 `T.refreshAccessToken`/`exchangeCodeForToken`/`consumeRedirectCallbackPKCE` 등 PKCE 함수 stub 노출
 - 합계 70/70 통과 (state-machine 33 + refresh-store 13 + transport-pkce 23 + 기타 1)
 
-### Bugbot 1차 리뷰 정제 (PR #54)
+### Bugbot 리뷰 정제 (PR #54)
 
-**race 가드에 사용자 disconnect 감지 추가**: `_attemptSilentRefresh`의 race 가드가 `_state === IDLE/ERROR`만 체크 → 사용자가 silent refresh 진행 중 `signOut()`/`disable()`을 호출하면 결과가 무시되지 않고 DISABLED 상태를 IDLE로 끌어올림 (사용자 의도 무시). 동일 race 표면이 `acceptRedirectCode`에도 존재 — `state=DISABLED`에서 진입하므로 state로는 user-action을 구분 불가.
+**1차 — 사용자 disconnect 감지**: `_attemptSilentRefresh`의 race 가드가 `_state === IDLE/ERROR`만 체크 → 사용자가 silent refresh 진행 중 `signOut()`/`disable()`을 호출하면 결과가 무시되지 않고 DISABLED 상태를 IDLE로 끌어올림 (사용자 의도 무시). 동일 race 표면이 `acceptRedirectCode`에도 존재 — `state=DISABLED`에서 진입하므로 state로는 user-action을 구분 불가.
 
-수정: `localStorage["bible-drive-sync"] === "0"` 검사 추가. 이 플래그는 `_transition`이 DISABLED/ERROR 진입 시 `enabled = next !== DISABLED && next !== ERROR`로 설정하므로 "사용자/시스템이 sync를 명시적으로 중단했는가"를 가장 신뢰성 있게 신호함. `signOut()`은 추가로 dispatch 전에 직접 플래그를 0으로 세팅 → `disable()`이 DISABLED에서 no-op이어도 플래그 변경은 일어남.
+수정: `localStorage["bible-drive-sync"] === "0"` 검사 추가. 이 플래그는 `_transition`이 DISABLED/ERROR 진입 시 `enabled = next !== DISABLED && next !== ERROR`로 설정하므로 "사용자/시스템이 sync를 명시적으로 중단했는가"를 가장 신뢰성 있게 신호함. 회귀 방어 tests `29.`, `30.`.
 
-회귀 방어: tests `29.` (silent refresh 진행 중 disable), `30.` (acceptRedirectCode 진행 중 signOut) 신설.
+**2차 — PKCE callback URL leak**: `bad_state` / `no_state` / `state_mismatch` fallback에서 `history.replaceState(null, "", location.pathname + location.search)`을 사용. PKCE callback은 query string에 `?code=…&state=…`로 도착하므로 search를 보존하면 auth code가 URL bar / 히스토리 / 로그에 남음. 구 implicit flow는 callback이 hash로 와서 search가 안전했는데 PKCE는 정반대.
+
+수정: fallback에서 `location.pathname`만 사용 (search 폐기). 우리 앱은 query 기반 라우팅을 안 쓰므로 이 경로에서 search는 100% OAuth 산출물.
+
+**2차 — SYNCING race 가드 (조건부 적용)**: Bugbot이 `_state === SYNCING`을 무조건 폐기 리스트에 추가하라고 제안했으나, 그대로 적용하면 401 reauth 경로가 깨짐 (`_kickoff401Reauth`가 SYNCING 상태에서 호출돼 SYNCING을 빠져나오는 게 책임인데 가드가 막으면 영원히 갇힘).
+
+분기 처리: `_attemptSilentRefresh(ctxPatch, fromReauth)` 두 번째 인자 `fromReauth: boolean` 도입. cold-start 경로(`enable()`)는 기본 `false` → SYNCING 폐기 (legacy GIS가 이미 settled). 401 reauth 경로(`_kickoff401Reauth`)는 `true` 명시 → SYNCING 우회 허용.
+
+회귀 방어 tests `31.` (cold-start race lost — legacy SYNCING 보존), `32.` (401 reauth — SYNCING override 허용 + 회복).
 
 ### 단계 3 단계의 안전성
 

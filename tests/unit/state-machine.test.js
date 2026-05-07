@@ -607,6 +607,63 @@ test("29. silent refresh 진행 중 disable() 호출 → DISABLED 유지 (Bugbot
   assert.equal(machine.isAuthenticated(), false, "토큰 미보관");
 });
 
+// ── Bugbot PR #54 (2차): SYNCING race 가드 ───────────────────────────────────
+
+test("31. cold-start 경로에서 silent refresh가 SYNCING에 도달한 legacy 결과를 덮어쓰지 않음", async () => {
+  // 시나리오: enable() → silent refresh fire (네트워크 round-trip) → 그 사이
+  // legacy GIS 경로가 빠르게 IDLE → SYNC_REQUEST → SYNCING까지 도달
+  //   → 진행 중인 cycle을 silent refresh 결과로 끊지 않아야 함.
+  let resolveRefresh;
+  const refreshPromise = new Promise((r) => { resolveRefresh = r; });
+  const { machine, drain } = loadMachine({
+    initialRefreshToken: "rt-pending",
+    overrideStubs: {
+      T: { refreshAccessToken: () => refreshPromise },
+    },
+  });
+  machine.enable(); // silent refresh fired (refreshPromise pending)
+  // Legacy 경로가 빨리 끝났다고 시뮬레이션 — token 직접 주입으로 IDLE → SYNCING
+  machine.acceptRedirectToken("legacy-token");
+  await drain(2);
+  // 이 시점 상태는 SYNCING (legacy cycle 진행 중) 또는 IDLE (cycle 끝남)
+  // refresh가 늦게 성공으로 resolve되더라도 SYNCING/IDLE 폐기로 처리해야 함
+  resolveRefresh({ ok: true, access_token: "at-from-refresh", refresh_token: null, expires_in: 3600 });
+  await drain(5);
+  const finalState = machine.getState();
+  assert.ok(
+    finalState === "IDLE" || finalState === "SYNCING",
+    `legacy 결과 유지, got ${finalState}`,
+  );
+  // legacy의 token이 보존돼야 — silent refresh의 access token으로 덮어쓰면 안 됨
+  assert.notEqual(machine.getToken(), "at-from-refresh", "silent refresh 결과 폐기됨");
+});
+
+test("32. 401 reauth 경로의 silent refresh는 SYNCING에서도 override 가능 (race 가드 우회)", async () => {
+  // 시나리오: SYNCING에서 401 도달 → _kickoff401Reauth → silent refresh
+  //   → SYNCING에서 SYNCING으로 다시 들어가는 흐름을 가드가 막으면 갇힘.
+  //   fromReauth=true 플래그로 가드 우회.
+  let downloadCalls = 0;
+  const { machine, drain } = loadMachine({
+    initialRefreshToken: "rt-stored",
+    findFileId: "fid",
+    overrideStubs: {
+      T: {
+        downloadSyncFile: async () => {
+          downloadCalls++;
+          return downloadCalls === 1
+            ? { doc: null, etag: null, status: 401 }
+            : { doc: null, etag: null, status: 200 };
+        },
+      },
+    },
+  });
+  machine.acceptRedirectToken("expiring-token");
+  await drain(8);
+  // 401 → silent refresh override SYNCING → IDLE → SYNC_REQUEST → SYNCING (새 cycle) → 200 → IDLE
+  assert.equal(machine.getState(), "IDLE", "fromReauth=true 덕분에 SYNCING 가드 우회, 회복 성공");
+  assert.equal(downloadCalls, 2, "두 번째 사이클에서 200, 무한 루프 없음");
+});
+
 test("30. acceptRedirectCode 진행 중 signOut() 호출 → DISABLED 유지 (Bugbot #54)", async () => {
   // Production에선 signOut()이 localStorage["bible-drive-sync"]를 "0"으로 설정한 뒤
   // _machine.disable()을 호출함. acceptRedirectCode는 state=DISABLED에서 시작하므로

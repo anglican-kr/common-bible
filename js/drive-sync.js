@@ -39,7 +39,13 @@ window._syncClientId = _CLIENT_ID;
       if (pkce.returnTo) {
         history.replaceState(null, "", pkce.returnTo);
       } else {
-        history.replaceState(null, "", location.pathname + location.search);
+        // Bugbot #54-2: fallback runs when sessionStorage state is missing or
+        // untrusted (no_state / bad_state / state_mismatch). PKCE callbacks
+        // arrive in the QUERY STRING (?code=…&state=…), so preserving
+        // location.search would leave the auth code in the URL bar / history /
+        // logs. Drop the query entirely — we don't use search params for
+        // routing, and the OAuth code is the only thing that'd be there.
+        history.replaceState(null, "", location.pathname);
       }
       if (pkce.ok) {
         window.__pendingRedirectCode = { code: pkce.code, verifier: pkce.verifier };
