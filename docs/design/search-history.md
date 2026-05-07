@@ -82,11 +82,14 @@ const INSTALL_NUDGE_KEY = "bible-install-nudge";
 
 ```js
 const SEARCH_HISTORY_KEY = "bible-search-history";
-const SEARCH_HISTORY_MAX = 10;
+const SEARCH_HISTORY_MAX = 30;       // 저장 한도 (LRU)
+const SEARCH_HISTORY_VISIBLE = 10;   // 패널 기본 표시 한도
 
 // localStorage["bible-search-history"] 값:
-JSON.stringify(["사랑 in:요한", "은혜", "빌라도", ...])  // 최대 10개, 인덱스 0이 최신
+JSON.stringify(["사랑 in:요한", "은혜", "빌라도", ...])  // 최대 30개, 인덱스 0이 최신
 ```
+
+저장과 표시를 분리한 이유: 성경 공부 패턴은 며칠~몇 주 주기로 같은 쿼리를 재방문하므로 30개 정도의 깊은 이력이 가치를 준다. 그러나 모바일 패널에서 30개를 처음부터 노출하면 시각 탐색 비용이 크다 — 패널은 기본 10개만 보여주고 나머지는 "더 보기"로 점진 펼친다.
 
 ### 3.2 정규화 규칙
 
@@ -122,6 +125,7 @@ function pushSearchHistory(q) {
 2. `push("은혜")` → `["은혜", "사랑"]`
 3. `push("진리")` → `["진리", "은혜", "사랑"]`
 4. `push("사랑")` → `["사랑", "진리", "은혜"]` (재방문 시 최신으로 이동)
+5. 30개를 채운 뒤 31번째 push → 가장 오래된 항목 1개 폐기, 새 항목 인덱스 0
 
 ### 3.4 방어적 로딩
 
@@ -131,7 +135,7 @@ function loadSearchHistory() {
     const raw = JSON.parse(localStorage.getItem(SEARCH_HISTORY_KEY));
     if (!Array.isArray(raw)) return [];
     return raw.filter((s) => typeof s === "string" && s.length > 0)
-              .slice(0, SEARCH_HISTORY_MAX);
+              .slice(0, SEARCH_HISTORY_MAX);   // 저장 한도 (30)
   } catch (_) {
     return [];
   }
@@ -218,7 +222,10 @@ localStorage.setItem(SEARCH_HISTORY_KEY, value);
       <span aria-hidden="true">×</span>
     </button>
   </div>
-  <!-- … 최대 10개 -->
+  <!-- … 기본 10개. 더 보기 토글 후 최대 30개 -->
+  <button class="search-history-more" tabindex="-1" data-show-more="true">
+    더 보기 (20개)
+  </button>  <!-- 저장 항목 > 10건일 때만, 펼치면 사라짐 -->
   <button class="search-history-clear" tabindex="-1" data-clear-all="true">
     모두 지우기
   </button>  <!-- 3건 이상일 때만 -->
@@ -231,11 +238,13 @@ localStorage.setItem(SEARCH_HISTORY_KEY, value);
 
 | 키 | 동작 |
 | --- | --- |
-| `↓` | 패널 닫혀 있으면 열고, 첫 항목 활성. 열려 있으면 다음 항목 |
-| `↑` | 이전 항목. 첫 항목에서 누르면 마지막으로 wrap |
+| `↓` | 패널 닫혀 있으면 열고, 첫 항목 활성. 열려 있으면 다음 항목. 마지막 가시 항목에서 누르면 자동 펼침(있다면) + 다음 항목으로 이동 |
+| `↑` | 이전 항목. 첫 항목에서 누르면 마지막 가시 항목으로 wrap |
 | `Enter` | 활성 항목 있으면 선택 + 검색 실행 / 활성 항목 없으면 기존 Enter 핸들러 (input 텍스트로 검색) |
 | `Esc` | 패널 닫힘, 입력창 포커스 유지 |
 | `Tab` | 패널은 `aria-activedescendant` 모델이라 Tab은 입력창 → 토글 → 클리어 → 다음 헤더 요소로 자연 이동 |
+
+"더 보기"·"모두 지우기" 버튼은 listbox 내부 활성 영역이 아니다(`tabindex="-1"`, role=button). 키보드 사용자는 화살표가 마지막 항목에 닿으면 자동 펼침으로 11번째 항목으로 이어진다 — "더 보기" 자체를 활성화할 필요가 없다. 마우스/터치 사용자만 명시적으로 탭한다.
 
 활성 표시는 `aria-activedescendant`(input 위) + `aria-selected="true"`(option 위) 동기화. 옵션 자체는 `tabindex="-1"`로 두어 input이 포커스를 잃지 않게 한다.
 
@@ -368,11 +377,34 @@ function createSearchHistoryController({
   onSelect,       // (q: string) => void  — 항목 선택 시 검색 실행
 }) {
   let activeIndex = -1;
+  let _expanded = false;  // 더 보기 펼침 상태. close() 시 false로 리셋
+
+  function visibleCount() {
+    return _expanded ? SEARCH_HISTORY_MAX : SEARCH_HISTORY_VISIBLE;
+  }
+
+  function moveActive(delta) {
+    const list = loadSearchHistory();
+    if (!list.length) return;
+    const limit = visibleCount();
+    const visible = Math.min(list.length, limit);
+    const next = activeIndex + delta;
+    // 마지막 가시 항목에서 ↓ → 자동 펼침 + 다음 항목으로
+    if (next >= visible && list.length > visible && !_expanded) {
+      _expanded = true;
+      render();
+      activeIndex = next;  // 펼친 직후 11번째
+      updateActive();
+      return;
+    }
+    activeIndex = (next + visible + (_expanded ? 0 : 0)) % visible;
+    updateActive();
+  }
 
   // open / close / render / refresh
-  // moveActive(delta) — ↑↓
   // pickQuery(q) — 항목 선택 시 input 채우고 onSelect
   // consumeEnter(e) — input의 Enter 핸들러가 활성 항목 있을 때 위임
+  // expandMore() — _expanded = true; render(); 활성 인덱스 유지
 
   return { open, close, isOpen, refresh, syncToggleVisibility, consumeEnter };
 }
@@ -496,7 +528,29 @@ $searchInput.addEventListener("keydown", (e) => {
    b. 외부 핸들러는 return (commitTopSearch는 onSelect 안에서 이미 호출됨)
 ```
 
-### 7.4 항목 삭제
+### 7.4 더 보기 (마우스/터치)
+
+```
+1. 사용자: ▾ 탭 → 패널 열림, 항목 10개 + "더 보기 (5개)" + "모두 지우기" 표시
+2. 사용자: "더 보기" 탭
+3. panel.click → expandMore()
+   a. _expanded = true
+   b. render() → 항목 15개 표시, "더 보기" 버튼 사라짐, "모두 지우기"는 유지
+4. 사용자: ESC → close() → _expanded = false (다음 open 시 다시 컴팩트)
+```
+
+### 7.5 더 보기 (키보드 자동 펼침)
+
+```
+1. 사용자: input ↓ 10번 → activeIndex = 9 (마지막 가시 항목)
+2. 사용자: ↓ 한 번 더
+3. moveActive(+1):
+   a. next = 10, visible = 10, list.length = 15 → 자동 펼침 분기
+   b. _expanded = true; render(); activeIndex = 10
+   c. 새로 표시된 11번째 항목이 활성
+```
+
+### 7.6 항목 삭제
 
 ```
 1. 사용자: "은혜" 옆 × 탭
@@ -506,7 +560,7 @@ $searchInput.addEventListener("keydown", (e) => {
 3. UI: "은혜" 사라짐, 나머지 유지
 ```
 
-### 7.5 외부 탭 → 닫힘
+### 7.7 외부 탭 → 닫힘
 
 ```
 1. 패널 열린 상태에서 사용자: 패널/토글/입력 외부 탭
@@ -522,8 +576,8 @@ $searchInput.addEventListener("keydown", (e) => {
 `js/app.js`의 `// ── BEGIN/END SEARCH HISTORY HELPERS ──` 블록을 vm으로 슬라이스해 격리 평가. 케이스 18개:
 
 - `normalizeSearchQuery`: 공백 정규화, null/undefined 방어
-- `loadSearchHistory`: malformed JSON → `[]`, 비배열 → `[]`, 비문자열 필터, 10건 cap
-- `pushSearchHistory`: 빈 쿼리 no-op, prepend, LRU dedupe, 정규화 dedupe, 10건 한도, 반환값
+- `loadSearchHistory`: malformed JSON → `[]`, 비배열 → `[]`, 비문자열 필터, 30건 cap
+- `pushSearchHistory`: 빈 쿼리 no-op, prepend, LRU dedupe, 정규화 dedupe, 30건 한도, 반환값
 - `removeSearchHistory`: 단일 제거, 정규화 매칭, 미존재 시 변화 없음
 - `clearSearchHistory`: 전체 비움
 - 영구성: 저장 후 fresh load 시 동일 순서
@@ -532,7 +586,9 @@ $searchInput.addEventListener("keydown", (e) => {
 
 - 입력 → Enter → 페이지 이동 → 뒤로가기 → ▾ 탭 → 첫 항목 = 직전 쿼리
 - ▾ 탭 → 첫 항목의 × 탭 → 그 항목만 사라짐
-- 11번째 검색 시 가장 오래된 항목 폐기
+- 31번째 검색 시 가장 오래된 항목 폐기
+- 11~30번째 항목은 "더 보기" 탭 후 노출
+- 키보드 ↓로 마지막 가시 항목에서 누르면 자동 펼침
 - 모바일 시트: 컴팩트 상태에서 ▾ 탭 시 시트 자동 확장
 
 ### 8.3 접근성 수동 확인
@@ -566,3 +622,4 @@ $searchInput.addEventListener("keydown", (e) => {
 ## 11. 변경 이력
 
 - 2026-05-07 — 초안 작성, ADR-014 제안과 동기화
+- 2026-05-07 — 저장 30 / 표시 10 + "더 보기" 점진 펼침 도입 (키보드 자동 펼침 포함)
