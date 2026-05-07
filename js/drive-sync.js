@@ -15,7 +15,8 @@
 //   5. js/sync/state-machine.js → window.createSyncMachine
 //   6. js/drive-sync.js (this file)
 
-const _CLIENT_ID = location.hostname === "localhost"
+const _IS_DEV_HOST = location.hostname === "localhost" || location.hostname === "dev.anglican.kr";
+const _CLIENT_ID = _IS_DEV_HOST
   ? "359209354241-esbmeba2ku58depo9fgg08v52crfthot.apps.googleusercontent.com"
   : "359209354241-do8kgvtcbnfvrge01f5hj29fee9cg195.apps.googleusercontent.com";
 
