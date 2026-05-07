@@ -230,7 +230,15 @@ async function _enforceAudioSoftCap() {
 }
 
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "hidden") _enforceAudioSoftCap();
+  if (document.visibilityState === "hidden") {
+    _enforceAudioSoftCap();
+  } else if (document.visibilityState === "visible") {
+    // Pull updates from Drive when the user returns to this tab so changes
+    // made on another device are reflected without a manual reload.
+    // requestSync only dispatches if the machine is IDLE, so rapid toggles
+    // can't overlap cycles, and ETag 304 makes a no-change check ~free.
+    window.driveSync?.requestSync?.();
+  }
 });
 
 // ── BEGIN SEARCH HISTORY HELPERS ──
@@ -3692,7 +3700,13 @@ $searchSheetInput.addEventListener("input", () => {
 // transitioned (not snapped) so any estimate mismatch glides into place.
 // adjustSheetForKeyboard is suspended throughout so its `transition: none`
 // snap doesn't interrupt the choreography; tracking resumes afterwards.
+// Set true around programmatic .focus() calls (e.g. after clear button) so
+// the focus-driven expanded→compact transition only fires for real user taps,
+// not for code that just refocuses the input as a courtesy.
+let _suppressFocusCompactTransition = false;
+
 $searchSheetInput.addEventListener("focus", () => {
+  if (_suppressFocusCompactTransition) return;
   if ($searchSheet.dataset.state !== "expanded") return;
   _suspendKeyboardAdjust = true;
   $searchSheet.style.transition = "";
@@ -3722,7 +3736,11 @@ $searchSheetClear.addEventListener("click", () => {
   $searchSheetInput.value = "";
   $searchSheetClear.hidden = true;
   $searchSheetInputWrap.dataset.clearHidden = "true";
+  // Refocus so the keyboard stays up, but do not collapse the sheet to compact
+  // — the user wants to keep seeing previous results while typing a refinement.
+  _suppressFocusCompactTransition = true;
   $searchSheetInput.focus();
+  _suppressFocusCompactTransition = false;
 });
 
 // Drag-handle initializers — registered later in the deferred startup hook.

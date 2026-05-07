@@ -3,7 +3,7 @@
 // caches are preserved across shell-only releases. Bump DATA_CACHE only when
 // bible JSON or search index format changes; bump AUDIO_CACHE only when mp3
 // sources are re-encoded.
-const SHELL_CACHE = "shell-49";
+const SHELL_CACHE = "shell-50";
 const DATA_CACHE = "data-1";
 const AUDIO_CACHE = "audio-1"; // must equal js/audio-cache.js AUDIO_CACHE_NAME
 
@@ -147,6 +147,12 @@ async function _putAudioAndEnforceCap(request, response) {
 }
 
 self.addEventListener("fetch", (event) => {
+  // Cache API only supports GET. Without this guard, same-origin POSTs (most
+  // notably the BFF endpoint /oauth/token) fall through to cache.put and throw
+  // "Request method 'POST' is unsupported" — harmless to the request itself
+  // but spams the console. Let non-GET pass through to the network untouched.
+  if (event.request.method !== "GET") return;
+
   const url = new URL(event.request.url);
   const { hostname, pathname } = url;
 

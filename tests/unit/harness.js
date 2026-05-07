@@ -273,11 +273,11 @@ export function loadRefreshStore() {
 }
 
 // ── transport loader (for PKCE function tests) ───────────────────────────────
-// transport.js is normally loaded into drive-sync alongside GIS globals, but
-// the new PKCE functions only need: location/sessionStorage/localStorage stubs,
-// real Web Crypto, real fetch (overridable per-test), and Node base globals.
-// Loading without window.google works because GIS wrappers are referenced
-// lazily — they only crash if a test actively calls them.
+// transport.js needs only: location/sessionStorage/localStorage stubs, real
+// Web Crypto, real fetch (overridable per-test), and Node base globals. No
+// window.google or other browser-only auth SDK is required — Phase 2h step 4
+// removed the GIS Token Client wrapper, so transport.js is pure PKCE +
+// fetch().
 
 /**
  * @param {object} [opts]

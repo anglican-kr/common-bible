@@ -19,7 +19,7 @@ const _recent = [];
 const _errors = [];
 const RECENT_CAP = 200;
 const ERROR_CAP = 20;
-const _consoleEnabled = location.hostname === "localhost";
+const _consoleEnabled = location.hostname !== "bible.anglican.kr";
 
 // Deterministic session-stable fingerprint (djb2 hash) for tokens.
 // Same token always maps to the same 8-char hex — useful for spotting

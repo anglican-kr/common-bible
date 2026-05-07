@@ -168,15 +168,16 @@ test("10. consumeRedirectCallback: nonce 불일치 → state_mismatch (state 보
   assert.equal(sessionStorage.getItem("bible-drive-redirect-state-pkce"), saved);
 });
 
-test("11. consumeRedirectCallback: 다른 flow의 state면 null (구 implicit과 분리)", () => {
-  const implicitState = JSON.stringify({
-    nonce: "n", returnTo: "/", ts: Date.now(), flow: "implicit-v1", silent: false,
+test("11. consumeRedirectCallback: 다른 flow 버전의 state면 null (forward-compat)", () => {
+  // 향후 새 flow 버전(예: pkce-v2)을 도입하더라도 v1 consumer가 그 state를
+  // 잘못 소비하지 않도록 차단. flow 필드 검사 자체의 회귀 방어.
+  const futureFlowState = JSON.stringify({
+    nonce: "n", returnTo: "/", ts: Date.now(), flow: "pkce-v2", silent: false,
   });
   const { transport } = loadTransport({
     location: { search: "?code=c&state=n" },
-    sessionStorageInit: { "bible-drive-redirect-state-pkce": implicitState },
+    sessionStorageInit: { "bible-drive-redirect-state-pkce": futureFlowState },
   });
-  // PKCE consumer가 implicit-v1 state를 만나면 null (자기 callback 아님)
   assert.equal(transport.consumeRedirectCallback(), null);
 });
 
@@ -243,7 +244,7 @@ test("15. exchangeCodeForToken: 성공 시 access+refresh+expires 반환", async
     scope: "drive.appdata email",
   });
   assert.equal(fetchCalls.length, 1);
-  assert.equal(fetchCalls[0].url, "https://oauth2.googleapis.com/token");
+  assert.equal(fetchCalls[0].url, "/oauth/token");
   assert.equal(fetchCalls[0].init.method, "POST");
   assert.equal(fetchCalls[0].init.headers["Content-Type"], "application/x-www-form-urlencoded");
   // body는 URLSearchParams 인스턴스 — string으로 변환해서 검증
@@ -253,6 +254,8 @@ test("15. exchangeCodeForToken: 성공 시 access+refresh+expires 반환", async
   assert.match(body, /code_verifier=verifier-y/);
   assert.match(body, /client_id=client-z/);
   assert.match(body, /redirect_uri=http%3A%2F%2Flocalhost%3A8080%2F/);
+  // client_secret은 nginx 프록시가 server-side에서 주입 — body에 없어야 함
+  assert.doesNotMatch(body, /client_secret/);
 });
 
 test("16. exchangeCodeForToken: HTTP 400 + invalid_grant → 구조화된 실패", async () => {
@@ -311,6 +314,8 @@ test("19. refreshAccessToken: 정상 갱신 (rotation 없음) → refresh_token=
   assert.match(body, /grant_type=refresh_token/);
   assert.match(body, /refresh_token=rt-stored/);
   assert.match(body, /client_id=client-z/);
+  // client_secret은 nginx 프록시가 server-side에서 주입 — body에 없어야 함
+  assert.doesNotMatch(body, /client_secret/);
 });
 
 test("20. refreshAccessToken: rotation 있음 → 새 refresh_token 반환", async () => {

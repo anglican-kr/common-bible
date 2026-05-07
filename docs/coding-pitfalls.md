@@ -247,6 +247,23 @@ OAuth callback이 query string(`?code=...`)으로 오느냐 fragment(`#access_to
 
 ---
 
+## 14. CSS `display` 속성이 `[hidden]` 무력화
+
+`<button hidden>` 같은 HTML5 `hidden` 속성은 user-agent 스타일시트에서 `[hidden] { display: none }`로 처리된다. 그런데 author CSS에서 ID 셀렉터로 `display: flex`(또는 block, grid 등)를 명시하면 specificity가 더 높아 `[hidden]` 규칙을 덮어쓴다 — JS에서 `el.hidden = true`로 설정해도 시각적으로 안 사라지는 회귀.
+
+**사례 (Phase 2h 단계 6):**
+
+- 검색 액션 버튼(`#search-clear`, `#search-history-toggle`)에 `display: flex`가 적용돼 있어, JS의 `$searchClear.hidden = true`가 무력화. 빈 입력 상태에서도 X 버튼이 계속 보였고, 동시에 `dataset.clearHidden="true"` 트리거 규칙이 history toggle을 clear의 위치로 옮겨 두 버튼이 정확히 같은 좌표에 스택. DOM 순서상 clear가 후순위라 사용자에겐 X만 보이고 ▾는 X 뒤에 가려져 "버튼 모양이 이상"한 외양.
+- 수정: `#search-clear[hidden], #search-history-toggle[hidden] { display: none; }` 명시 규칙 추가. specificity 동률 이상으로 끌어올려 `[hidden]` 의도 복구.
+
+**규칙:**
+
+- ID 또는 specificity 높은 셀렉터로 `display: ...`를 설정한 요소가 `hidden` 속성을 통해 가려질 수 있다면, **반드시 같은 셀렉터에 `[hidden] { display: none }` 규칙을 명시**한다.
+- 점검: `el.hidden = true` 후 DevTools에서 `getComputedStyle(el).display`를 확인해 `none`이 나오는지 검증.
+- 전역 회귀 방지가 필요하면 `:where([hidden]) { display: none !important; }` 같은 광역 규칙도 가능하지만 `!important`는 다른 의도된 override를 깨뜨릴 수 있어 피하는 게 좋음. 셀렉터별 `[hidden]` 보강이 더 안전.
+
+---
+
 ## 부록 A: 변수명 섀도잉
 
 DOM 쿼리 결과에 `el`, `node` 같은 짧은 이름을 쓰면 외부 스코프나 인접 코드의 동명 변수와 컨텍스트가 섞인다.

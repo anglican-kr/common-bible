@@ -15,12 +15,23 @@
 //   5. js/sync/state-machine.js → window.createSyncMachine
 //   6. js/drive-sync.js (this file)
 
-const _CLIENT_ID = location.hostname === "localhost"
-  ? "359209354241-esbmeba2ku58depo9fgg08v52crfthot.apps.googleusercontent.com"
-  : "359209354241-do8kgvtcbnfvrge01f5hj29fee9cg195.apps.googleusercontent.com";
+// Prod hostname is the only allowlisted production origin. Any other host
+// (dev domain, forks, locally served bundles) routes to the dev Client ID,
+// which Google's Cloud Console restricts to its registered dev origins —
+// requests from unrecognized hosts fail at Google's origin check, not here.
+const _IS_PROD_HOST = location.hostname === "bible.anglican.kr";
+const _CLIENT_ID = _IS_PROD_HOST
+  ? "359209354241-do8kgvtcbnfvrge01f5hj29fee9cg195.apps.googleusercontent.com"
+  : "359209354241-esbmeba2ku58depo9fgg08v52crfthot.apps.googleusercontent.com";
 
 // Make CLIENT_ID available to state-machine.js via window so we don't need an
 // import system. The machine reads window._syncClientId on every redirect.
+//
+// client_secret is NOT in the SPA — Google's "Web application" OAuth client
+// type requires it on /token requests (RFC 7636 deviation), so transport.js
+// posts to a same-origin nginx proxy (/oauth/token) that injects the secret
+// server-side before forwarding to oauth2.googleapis.com/token. See
+// docs/decisions/011-bookmark-sync.md.
 window._syncClientId = _CLIENT_ID;
 
 // One-shot cleanup of Phase 2g's `bible-drive-silent-blocked` key (Phase 2h
@@ -215,6 +226,7 @@ window.driveSync = {
   signOut,
   deleteRemoteFile,
   scheduleUpload,
+  requestSync: () => _machine.requestSync(),
   isEnabled,
   isAuthenticated,
   getUserEmail,

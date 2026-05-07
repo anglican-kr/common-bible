@@ -17,7 +17,11 @@
 const DRIVE_API = "https://www.googleapis.com/drive/v3";
 const DRIVE_UPLOAD_API = "https://www.googleapis.com/upload/drive/v3";
 const _OAUTH_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
-const _OAUTH_TOKEN_URL = "https://oauth2.googleapis.com/token";
+// Same-origin proxy. nginx (`location /oauth/token`) appends client_secret to
+// the request body and forwards to https://oauth2.googleapis.com/token. This
+// keeps client_secret out of the SPA bundle, git history, and GitHub's secret
+// scanner — only the server has it.
+const _OAUTH_TOKEN_URL = "/oauth/token";
 const _OAUTH_REVOKE_URL = "https://oauth2.googleapis.com/revoke";
 
 // Hostnames that must bypass the service worker cache (Drive + OAuth).
@@ -211,6 +215,12 @@ function consumeRedirectCallback() {
 /**
  * Exchange an authorization code for an access + refresh token pair. Called
  * once per sign-in (or re-consent). Never throws — returns a structured result.
+ *
+ * Google's "Web application" OAuth client requires client_secret on /token
+ * (RFC 7636 deviation). To keep the secret out of the SPA bundle and git
+ * history, this POSTs to a same-origin nginx proxy at /oauth/token, which
+ * injects client_secret server-side before forwarding to Google.
+ *
  * @param {string} code
  * @param {string} verifier
  * @param {string} clientId
@@ -258,6 +268,10 @@ async function exchangeCodeForToken(code, verifier, clientId) {
  * caller can persist the rotated value (failing to do so means the OLD token
  * stays valid for ~24h then breaks). If absent, the original refresh token
  * remains valid and the caller should NOT overwrite it.
+ *
+ * Posts to the same-origin /oauth/token proxy (see exchangeCodeForToken) which
+ * injects client_secret server-side.
+ *
  * @param {string} refreshToken
  * @param {string} clientId
  * @returns {Promise<import("../types").RefreshTokenResponse>}
