@@ -75,6 +75,8 @@ History API SPA 라우팅상 모든 navigation 요청(`/bible/gen/1` 등)은 캐
 
 `/data/audio/*.mp3`는 다시 별도 `AUDIO_CACHE`(예: `audio-1`)에 보관한다. 오디오는 사용자가 재생을 요청할 때만 다운로드되며, 텍스트 데이터와 다른 라이프사이클을 가지므로 분리해 인코딩 변경 시에만 독립적으로 bump한다.
 
+오디오는 73권 전체가 ~6.5 GB로 origin quota를 잠식할 수 있어, **300 MB hard cap + 마지막 재생 시점 기준 LRU**로 자체 정리한다. 자세한 내용은 ADR-016 참고.
+
 ### Google Fonts — `FONT_CACHE`
 
 `fonts.gstatic.com` 파일은 콘텐츠 주소 기반의 불변 URL이므로 별도 `FONT_CACHE`에 저장한다.
