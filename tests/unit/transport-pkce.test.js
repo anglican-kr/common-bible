@@ -168,15 +168,16 @@ test("10. consumeRedirectCallback: nonce 불일치 → state_mismatch (state 보
   assert.equal(sessionStorage.getItem("bible-drive-redirect-state-pkce"), saved);
 });
 
-test("11. consumeRedirectCallback: 다른 flow의 state면 null (구 implicit과 분리)", () => {
-  const implicitState = JSON.stringify({
-    nonce: "n", returnTo: "/", ts: Date.now(), flow: "implicit-v1", silent: false,
+test("11. consumeRedirectCallback: 다른 flow 버전의 state면 null (forward-compat)", () => {
+  // 향후 새 flow 버전(예: pkce-v2)을 도입하더라도 v1 consumer가 그 state를
+  // 잘못 소비하지 않도록 차단. flow 필드 검사 자체의 회귀 방어.
+  const futureFlowState = JSON.stringify({
+    nonce: "n", returnTo: "/", ts: Date.now(), flow: "pkce-v2", silent: false,
   });
   const { transport } = loadTransport({
     location: { search: "?code=c&state=n" },
-    sessionStorageInit: { "bible-drive-redirect-state-pkce": implicitState },
+    sessionStorageInit: { "bible-drive-redirect-state-pkce": futureFlowState },
   });
-  // PKCE consumer가 implicit-v1 state를 만나면 null (자기 callback 아님)
   assert.equal(transport.consumeRedirectCallback(), null);
 });
 

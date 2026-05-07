@@ -247,9 +247,9 @@ test("14. 401 반복 + silent refresh 매번 성공해도 reAuthFails MAX_REAUTH
   assert.ok(downloadCalls <= 5, `cap 작동 검증: download ${downloadCalls}회 (≤ MAX_REAUTH+2)`);
 });
 
-test("15. SYNCING 중 401 + IDB 비어있음 → NEEDS_CONSENT (legacy GIS 경로 없음)", async () => {
-  // Phase 2h 단계 4: refresh token이 없으면 fallback PKCE redirect도 자동으로
-  // 안 함 (페이지 이탈은 사용자 액션이므로 NEEDS_CONSENT에 정착).
+test("15. SYNCING 중 401 + IDB 비어있음 → NEEDS_CONSENT", async () => {
+  // refresh token이 없으면 fallback PKCE redirect도 자동으로 안 함
+  // (페이지 이탈은 사용자 액션이므로 NEEDS_CONSENT에 정착).
   // 401은 acceptRedirectCode에서 강제로 IDLE→SYNCING 진입한 후 시뮬레이션.
   const { machine, drain } = loadMachine({
     initialRefreshToken: null,
