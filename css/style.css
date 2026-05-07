@@ -756,6 +756,15 @@ body {
   padding: 0;
 }
 
+/* Explicit [hidden] rule — the ID selectors above set `display: flex` which
+   beats the user-agent's `[hidden] { display: none }` on specificity, so
+   without this the JS-driven .hidden flag has no visual effect and the two
+   buttons stack at the same position. */
+#search-clear[hidden],
+#search-history-toggle[hidden] {
+  display: none;
+}
+
 #search-clear { right: 0.25rem; }
 #search-history-toggle { right: 3.25rem; }
 #search-bar[data-clear-hidden="true"] #search-history-toggle { right: 0.25rem; }
@@ -1347,6 +1356,12 @@ body {
 #search-sheet-clear { right: 0.25rem; }
 #search-sheet-history-toggle { right: 3.25rem; }
 #search-sheet-input-wrap[data-clear-hidden="true"] #search-sheet-history-toggle { right: 0.25rem; }
+
+/* Same [hidden] override as the desktop variant — see comment above #search-clear[hidden]. */
+#search-sheet-clear[hidden],
+#search-sheet-history-toggle[hidden] {
+  display: none;
+}
 
 #search-sheet-clear:hover,
 #search-sheet-history-toggle:hover {
