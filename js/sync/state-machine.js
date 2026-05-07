@@ -778,6 +778,17 @@ function createSyncMachine({ onStateChange } = {}) {
     // Phase 2h: cap check + REAUTH log moved upfront to _handleSyncFail("401")
     // so they fire even on the silent-refresh path. Reaching here means
     // reAuthFails < MAX_REAUTH guaranteed.
+    // Race guard (Bugbot PR #54 3차): _kickoff401Reauth awaits IDB inside
+    // _attemptSilentRefresh; if there is no refresh token the silent path
+    // returns false WITHOUT touching state, so its own race guards never
+    // fire. If the user called disable()/signOut() during that async window
+    // we'd resurrect sync from DISABLED into IDENTIFYING/AUTHENTICATING/
+    // NEEDS_CONSENT here. Mirror the localStorage flag check used by the
+    // silent path.
+    if (localStorage.getItem(SYNC_ENABLED_KEY) === "0") {
+      L.log({ kind: "ACTION", event: "LEGACY_REAUTH_RACE_LOST", reason: "sync_disabled" });
+      return;
+    }
     if (T.isIOS()) {
       // Hybrid policy: defer the disruptive full-page redirect when the
       // user is actively reading; otherwise reauthorize transparently.
