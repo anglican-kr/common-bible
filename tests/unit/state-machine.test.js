@@ -495,6 +495,94 @@ test("25. silent refresh race lost (이미 IDLE) → 결과 폐기", async () =>
   );
 });
 
+// ── Bugbot PR #57: IDB await 갭의 SYNC_ENABLED_KEY 재확인 ───────────────────
+// race guard 통과 후 IDB rotation save / clear 동안 disable() 도착 시 후속
+// _transition이 IDLE/NEEDS_CONSENT로 전이하면서 SYNC_ENABLED_KEY를 "1"로
+// 덮어쓰는 회귀를 방어. 단계 4 후 enable()이 동기적으로 DISABLED를 빠져나가지
+// 않으므로 state-based race guard만으로는 cold-start 경로 보호 불가.
+
+test("26a. silent refresh 성공 + rotation IDB save 중 disable() → DISABLED 유지", async () => {
+  let resolveSave;
+  const savePromise = new Promise((r) => { resolveSave = r; });
+  const refreshStore = {
+    saveRefreshToken: () => savePromise, // hold
+    loadRefreshToken: async () => "rt-stored",
+    clearRefreshToken: async () => {},
+    _peek: () => "rt-stored",
+    _calls: { save: 0, load: 0, clear: 0 },
+  };
+  const { machine, drain, localStorage } = loadMachine({
+    refreshResult: {
+      ok: true, access_token: "at-new", refresh_token: "rt-rotated", expires_in: 3600,
+    },
+    overrideStubs: { refreshStore },
+  });
+  machine.enable();
+  // refreshAccessToken은 즉시 resolve (200 OK + rotation 토큰) → saveRefreshToken에서 hold
+  await drain(2);
+  // 사용자가 disconnect 클릭 — disable()이 SYNC_ENABLED_KEY를 "0"으로 설정
+  machine.disable();
+  assert.equal(machine.getState(), "DISABLED");
+  // 이제 IDB save resolve → 가드가 SYNC_ENABLED_KEY="0"을 잡아야 함
+  resolveSave();
+  await drain(3);
+  assert.equal(machine.getState(), "DISABLED", "IDB save 갭 race 가드: DISABLED 유지");
+  assert.equal(localStorage.getItem(SYNC_ENABLED_KEY), "0", "사용자 의도 보존");
+});
+
+test("26b. silent refresh invalid_grant + IDB clear 중 disable() → DISABLED 유지", async () => {
+  let resolveClear;
+  const clearPromise = new Promise((r) => { resolveClear = r; });
+  const refreshStore = {
+    saveRefreshToken: async () => {},
+    loadRefreshToken: async () => "rt-expired",
+    clearRefreshToken: () => clearPromise, // hold
+    _peek: () => "rt-expired",
+    _calls: { save: 0, load: 0, clear: 0 },
+  };
+  const { machine, drain, localStorage } = loadMachine({
+    refreshResult: { ok: false, status: 400, error: "invalid_grant" },
+    overrideStubs: { refreshStore },
+  });
+  machine.enable();
+  await drain(2);
+  machine.disable();
+  assert.equal(machine.getState(), "DISABLED");
+  resolveClear();
+  await drain(3);
+  assert.equal(machine.getState(), "DISABLED", "IDB clear 갭 race 가드: DISABLED 유지");
+  assert.equal(localStorage.getItem(SYNC_ENABLED_KEY), "0");
+});
+
+test("26c. acceptRedirectCode 성공 후 IDB save 중 disable() → DISABLED 유지", async () => {
+  let resolveSave;
+  const savePromise = new Promise((r) => { resolveSave = r; });
+  const refreshStore = {
+    saveRefreshToken: () => savePromise, // hold
+    loadRefreshToken: async () => null,
+    clearRefreshToken: async () => {},
+    _peek: () => null,
+    _calls: { save: 0, load: 0, clear: 0 },
+  };
+  const { machine, drain, localStorage } = loadMachine({
+    initialStorage: { [SYNC_ENABLED_KEY]: "1" },
+    exchangeResult: {
+      ok: true, access_token: "at", refresh_token: "rt-new",
+      expires_in: 3600, scope: "drive.appdata",
+    },
+    overrideStubs: { refreshStore },
+  });
+  void machine.acceptRedirectCode("c", "v");
+  // exchangeCodeForToken이 resolve된 다음 saveRefreshToken에서 hold
+  await drain(2);
+  machine.disable();
+  assert.equal(machine.getState(), "DISABLED");
+  resolveSave();
+  await drain(3);
+  assert.equal(machine.getState(), "DISABLED", "code exchange + IDB save 갭 race 가드");
+  assert.equal(localStorage.getItem(SYNC_ENABLED_KEY), "0");
+});
+
 test("26. 401 reauth 경로의 silent refresh는 SYNCING에서도 override (fromReauth=true)", async () => {
   // 시나리오: SYNCING에서 401 도달 → _kickoff401Reauth → silent refresh
   //   → SYNCING에서 SYNCING으로 다시 들어가는 흐름을 가드가 막으면 갇힘.
