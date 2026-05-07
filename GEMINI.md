@@ -52,7 +52,8 @@
 
 ### 5.2 릴리즈 및 배포
 1. 버전 업데이트 및 캐시 갱신: `python scripts/release.py patch` (또는 minor/major)
-   - 이 스크립트는 `version.json` 업데이트 및 `sw.js`의 `CACHE_NAME`을 자동 갱신함.
+   - 이 스크립트는 `version.json` 업데이트 및 `sw.js`의 `SHELL_CACHE`를 자동 갱신함.
+   - 본문/검색 데이터 포맷 변경 동반 시 `--bump-data`, 오디오 인코딩 변경 시 `--bump-audio` 플래그 추가.
 2. 배포 패키지 생성: `scripts/build-deploy.sh`
    - 루트 디렉토리에 `deploy-YYYYMMDD-HHMMSS.zip` 파일이 생성됨.
 
@@ -61,6 +62,6 @@
 - Playwright 기반 로딩 성능 검증: `python tests/verify_loading.py` (Chrome 필요)
 
 ## 6. 주의 사항
-- `sw.js`의 `CACHE_NAME`은 `release.py`에 의해 관리되므로 수동 수정을 지양함.
+- `sw.js`의 `SHELL_CACHE`/`DATA_CACHE`/`AUDIO_CACHE` 식별자는 `release.py`에 의해 관리되므로 수동 수정을 지양함.
 - `data/source/`는 비공개 서브모듈이므로 외부 유출에 주의함.
 - 외부 라이브러리 추가 전 반드시 `docs/decisions/`의 ADR을 확인하여 프로젝트 철학(No Framework, No Heavy Library)과 일치하는지 검토함.

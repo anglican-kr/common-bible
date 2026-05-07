@@ -81,7 +81,7 @@ src/
   convert_txt_to_md.py  ← .txt → .md 일괄 변환 (일회성, 완료됨)
 scripts/
   build-deploy.sh       ← 배포 zip 생성
-  release.py            ← version.json + sw.js CACHE_NAME 동시 bump
+  release.py            ← version.json + sw.js 캐시 식별자 bump (shell/data/audio 독립)
   serve.py              ← SPA-aware 로컬 개발 서버 (History API 경로 지원)
 tests/
   test_completeness.py  ← Level 1 완전성 검증 (ADR-004)

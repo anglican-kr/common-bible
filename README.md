@@ -121,7 +121,7 @@ src/
   generate_splash.py    ← iOS 스플래시 PNG 생성 (cairosvg + Pillow)
 scripts/
   build-deploy.sh       ← 배포 zip 생성
-  release.py            ← version.json + sw.js CACHE_NAME 동시 bump
+  release.py            ← version.json + sw.js 캐시 식별자 bump (shell/data/audio 독립)
   serve.py              ← SPA-aware 로컬 개발 서버
 tests/
   test_completeness.py  ← Level 1 완전성 검증
