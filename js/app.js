@@ -230,7 +230,15 @@ async function _enforceAudioSoftCap() {
 }
 
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "hidden") _enforceAudioSoftCap();
+  if (document.visibilityState === "hidden") {
+    _enforceAudioSoftCap();
+  } else if (document.visibilityState === "visible") {
+    // Pull updates from Drive when the user returns to this tab so changes
+    // made on another device are reflected without a manual reload.
+    // requestSync only dispatches if the machine is IDLE, so rapid toggles
+    // can't overlap cycles, and ETag 304 makes a no-change check ~free.
+    window.driveSync?.requestSync?.();
+  }
 });
 
 // ── BEGIN SEARCH HISTORY HELPERS ──

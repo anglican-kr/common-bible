@@ -342,6 +342,7 @@ export interface DriveSyncFacade {
   signOut: () => void;
   deleteRemoteFile: () => Promise<void>;
   scheduleUpload: () => void;
+  requestSync: () => void;
   isEnabled: () => boolean;
   isAuthenticated: () => boolean;
   getUserEmail: () => string | null;

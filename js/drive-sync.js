@@ -226,6 +226,7 @@ window.driveSync = {
   signOut,
   deleteRemoteFile,
   scheduleUpload,
+  requestSync: () => _machine.requestSync(),
   isEnabled,
   isAuthenticated,
   getUserEmail,
