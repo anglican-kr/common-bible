@@ -694,14 +694,28 @@ body {
 #search-input {
   width: 100%;
   font-family: inherit;
-  font-size: 0.78rem;
-  padding: 0.35rem 1.8rem 0.35rem 0.5rem;
+  font-size: 0.85rem;
+  /* Reserve space for 44px history toggle (right: 2.6rem) + 44px clear (right: 0.1rem). */
+  padding: 0.6rem 5.5rem 0.6rem 0.75rem;
   border: 1px solid var(--border);
-  border-radius: 1rem;
+  border-radius: 1.25rem;
   background: var(--bg-card);
   color: var(--text);
   outline: none;
   line-height: 1.3;
+  min-height: 44px;
+  box-sizing: border-box;
+}
+
+/* Trim padding when one or both action buttons are hidden so text doesn't
+   sit beneath empty space. JS keeps the dataset flags in sync with the
+   button .hidden state. */
+#search-bar[data-clear-hidden="true"] #search-input {
+  padding-right: 3rem;
+}
+
+#search-bar[data-clear-hidden="true"][data-history-hidden="true"] #search-input {
+  padding-right: 0.75rem;
 }
 
 #search-input::-webkit-search-cancel-button,
@@ -720,22 +734,174 @@ body {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 15%, transparent);
 }
 
-#search-clear {
+#search-clear,
+#search-history-toggle {
   position: absolute;
-  right: 0.25rem;
   top: 50%;
   transform: translateY(-50%);
-  font-size: 0.9rem;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  line-height: 1;
+  color: var(--text);
+  background: none;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  padding: 0;
+}
+
+#search-clear { right: 0.1rem; }
+#search-history-toggle { right: 2.6rem; }
+#search-bar[data-clear-hidden="true"] #search-history-toggle { right: 0.1rem; }
+
+#search-clear:hover,
+#search-history-toggle:hover {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+#search-clear:focus-visible,
+#search-history-toggle:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+#search-history-toggle[aria-expanded="true"] {
+  color: var(--accent);
+}
+
+/* ── Search history panel (shared with sheet variant) ── */
+#search-history,
+#search-sheet-history {
+  list-style: none;
+  margin: 0;
+  padding: 0.3rem 0;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 0.6rem;
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--text) 18%, transparent);
+  max-height: 60vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+#search-history {
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  left: 0;
+  right: 0;
+  z-index: 50;
+}
+
+#search-sheet-history {
+  margin: 0 0.8rem 0.5rem;
+}
+
+.search-history-item {
+  display: flex;
+  align-items: stretch;
+  min-height: 44px;
+}
+
+.search-history-item-select {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  padding: 0 0.85rem;
+  font: inherit;
+  font-size: 0.92rem;
+  color: var(--text);
+  background: none;
+  border: none;
+  border-radius: 0;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-height: 44px;
+}
+
+.search-history-item-select[aria-selected="true"],
+.search-history-item-select:hover {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.search-history-item-select:focus-visible {
+  outline: none;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 50%, transparent);
+}
+
+.search-history-item-remove {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
   line-height: 1;
   color: var(--text-secondary);
   background: none;
   border: none;
+  border-radius: 50%;
   cursor: pointer;
-  padding: 0.15em 0.25em;
+  padding: 0;
+  margin-right: 0.2rem;
 }
 
-#search-clear:hover {
+.search-history-item-remove:hover {
   color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.search-history-item-remove:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+.search-history-more,
+.search-history-clear {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 0.85rem;
+  font: inherit;
+  font-size: 0.85rem;
+  background: none;
+  border: none;
+  text-align: center;
+  cursor: pointer;
+}
+
+.search-history-more {
+  color: var(--accent);
+  border-top: 1px dashed var(--border);
+}
+
+.search-history-clear {
+  color: var(--text-secondary);
+  border-top: 1px solid var(--border);
+}
+
+.search-history-more:hover,
+.search-history-clear:hover {
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+}
+
+.search-history-more:hover { color: var(--accent); }
+.search-history-clear:hover { color: var(--accent); }
+
+.search-history-more:focus-visible,
+.search-history-clear:focus-visible {
+  outline: none;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
 }
 
 /* ── Search FAB (Mobile only) ── */
@@ -1056,6 +1222,13 @@ body {
   display: none;
 }
 
+/* Grow the compact sheet when the history panel opens so the list is visible
+   without forcing a state-machine round-trip into expanded mode. */
+#search-sheet[data-state="compact"]:has(#search-sheet-history:not([hidden])) {
+  height: auto;
+  max-height: min(70vh, 28rem);
+}
+
 #search-sheet:not([hidden]) {
   display: flex;
   animation: bm-drawer-in-up 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
@@ -1090,35 +1263,52 @@ body {
 
 #search-sheet-close {
   flex-shrink: 0;
-  width: 2rem;
-  height: 2rem;
+  width: 44px;
+  height: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: none;
   border: none;
   cursor: pointer;
-  color: var(--text-secondary);
-  border-radius: 4px;
+  color: var(--text);
+  border-radius: 50%;
   padding: 0;
-  transition: color 0.15s;
+  transition: color 0.15s, background 0.15s;
 }
 
 #search-sheet-close:hover {
-  color: var(--text);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+#search-sheet-close:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 40%, transparent);
 }
 
 #search-sheet-input {
   width: 100%;
   font-family: inherit;
   font-size: 0.95rem;
-  padding: 0.55rem 2.2rem 0.55rem 0.8rem;
+  /* Reserve 96px for history toggle (44) + clear (44) + 8px breathing room. */
+  padding: 0.7rem 6rem 0.7rem 0.85rem;
   border: 1px solid var(--border);
   border-radius: 0.6rem;
   background: var(--bg-card);
   color: var(--text);
   outline: none;
   line-height: 1.4;
+  min-height: 48px;
+  box-sizing: border-box;
+}
+
+#search-sheet-input-wrap[data-clear-hidden="true"] #search-sheet-input {
+  padding-right: 3.25rem;
+}
+
+#search-sheet-input-wrap[data-clear-hidden="true"][data-history-hidden="true"] #search-sheet-input {
+  padding-right: 0.85rem;
 }
 
 #search-sheet-input:focus {
@@ -1131,21 +1321,43 @@ body {
   opacity: 0.6;
 }
 
-#search-sheet-clear {
+#search-sheet-clear,
+#search-sheet-history-toggle {
   position: absolute;
-  right: 1.1rem;
   top: 50%;
-  transform: translateY(-65%);
-  font-size: 1.1rem;
+  transform: translateY(-50%);
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
   line-height: 1;
-  color: var(--text-secondary);
+  color: var(--text);
   background: none;
   border: none;
+  border-radius: 50%;
   cursor: pointer;
-  padding: 0.2em 0.3em;
+  padding: 0;
 }
 
-#search-sheet-clear:hover {
+#search-sheet-clear { right: 0.25rem; }
+#search-sheet-history-toggle { right: 3rem; }
+#search-sheet-input-wrap[data-clear-hidden="true"] #search-sheet-history-toggle { right: 0.25rem; }
+
+#search-sheet-clear:hover,
+#search-sheet-history-toggle:hover {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+#search-sheet-clear:focus-visible,
+#search-sheet-history-toggle:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+#search-sheet-history-toggle[aria-expanded="true"] {
   color: var(--accent);
 }
 

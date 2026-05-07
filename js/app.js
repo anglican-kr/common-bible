@@ -9,13 +9,19 @@ const $breadcrumb = document.getElementById("breadcrumb");
 const $announce = document.getElementById("a11y-announce");
 const $audioBar = document.getElementById("audio-bar");
 const $resumeBannerSlot = document.getElementById("resume-banner-slot");
+const $searchBar = document.getElementById("search-bar");
 const $searchInput = document.getElementById("search-input");
 const $searchClear = document.getElementById("search-clear");
+const $searchHistoryToggle = document.getElementById("search-history-toggle");
+const $searchHistoryPanel = document.getElementById("search-history");
 const $searchFab = document.getElementById("search-fab");
 const $searchScrim = document.getElementById("search-scrim");
 const $searchSheet = document.getElementById("search-sheet");
+const $searchSheetInputWrap = document.getElementById("search-sheet-input-wrap");
 const $searchSheetInput = document.getElementById("search-sheet-input");
 const $searchSheetClear = document.getElementById("search-sheet-clear");
+const $searchSheetHistoryToggle = document.getElementById("search-sheet-history-toggle");
+const $searchSheetHistoryPanel = document.getElementById("search-sheet-history");
 const $searchSheetClose = document.getElementById("search-sheet-close");
 const $searchSheetChips = document.getElementById("search-sheet-chips");
 const $searchSheetResults = document.getElementById("search-sheet-results");
@@ -84,6 +90,9 @@ const STARTUP_BEHAVIOR_KEY = "bible-startup"; // "resume" | "home"
 const AUDIO_POS_KEY = "bible-audio-pos";
 const BOOKMARK_KEY = "bible-bookmarks";
 const INSTALL_NUDGE_KEY = "bible-install-nudge";
+const SEARCH_HISTORY_KEY = "bible-search-history";
+const SEARCH_HISTORY_MAX = 30;       // storage cap (LRU)
+const SEARCH_HISTORY_VISIBLE = 10;   // visible by default; rest behind "더 보기"
 const FONT_SIZES = [16, 18, 20, 22, 24];
 
 const COLOR_SCHEMES = [
@@ -178,6 +187,55 @@ function loadAudioTime(bookId, chapter) {
 function clearAudioTime() {
   try { localStorage.removeItem(AUDIO_POS_KEY); } catch (_) {}
 }
+
+// ── BEGIN SEARCH HISTORY HELPERS ──
+// Local-only (not Drive-synced — see ADR-014). Whitespace-normalized strings,
+// LRU-deduped, capped at SEARCH_HISTORY_MAX. The block between the BEGIN/END
+// markers is sliced into tests/unit/search-history.test.js, so changes to the
+// LRU/normalization semantics need a corresponding test update.
+
+function normalizeSearchQuery(q) {
+  return String(q || "").trim().replace(/\s+/g, " ");
+}
+
+function loadSearchHistory() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(SEARCH_HISTORY_KEY));
+    if (!Array.isArray(raw)) return [];
+    return raw.filter((s) => typeof s === "string" && s.length > 0).slice(0, SEARCH_HISTORY_MAX);
+  } catch (_) {
+    return [];
+  }
+}
+
+function saveSearchHistory(list) {
+  try {
+    localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(list.slice(0, SEARCH_HISTORY_MAX)));
+  } catch (_) {}
+}
+
+function pushSearchHistory(q) {
+  const norm = normalizeSearchQuery(q);
+  if (!norm) return loadSearchHistory();
+  const list = loadSearchHistory().filter((s) => s !== norm);
+  list.unshift(norm);
+  const trimmed = list.slice(0, SEARCH_HISTORY_MAX);
+  saveSearchHistory(trimmed);
+  return trimmed;
+}
+
+function removeSearchHistory(q) {
+  const norm = normalizeSearchQuery(q);
+  const list = loadSearchHistory().filter((s) => s !== norm);
+  saveSearchHistory(list);
+  return list;
+}
+
+function clearSearchHistory() {
+  try { localStorage.removeItem(SEARCH_HISTORY_KEY); } catch (_) {}
+  return [];
+}
+// ── END SEARCH HISTORY HELPERS ──
 
 function loadStartupBehavior() {
   return localStorage.getItem(STARTUP_BEHAVIOR_KEY) || "resume";
@@ -2312,9 +2370,11 @@ async function route() {
     }
     $searchInput.value = parsed.query;
     $searchClear.hidden = !parsed.query;
+    $searchBar.dataset.clearHidden = String(!parsed.query);
   } else {
     $searchInput.value = "";
     $searchClear.hidden = true;
+    $searchBar.dataset.clearHidden = "true";
   }
 
   try {
@@ -2998,11 +3058,11 @@ async function renderSearchResults(query, page, autoNavigate = false) {
 // to verse references) from URL-triggered ones (show clickable card).
 let searchAutoNavigate = false;
 
-$searchInput.addEventListener("keydown", (e) => {
-  if (e.key !== "Enter") return;
-  e.preventDefault();
-  const q = $searchInput.value.trim();
+function commitTopSearch(rawQuery) {
+  const q = (rawQuery || "").trim();
   if (!q) return;
+  pushSearchHistory(q);
+  if (topSearchHistory) topSearchHistory.refresh();
   searchAutoNavigate = true;
   const newPath = `/search?q=${encodeURIComponent(q)}`;
   // If path is unchanged, popstate won't fire — call route() directly.
@@ -3011,15 +3071,26 @@ $searchInput.addEventListener("keydown", (e) => {
   } else {
     navigate(newPath);
   }
+}
+
+$searchInput.addEventListener("keydown", (e) => {
+  if (e.key !== "Enter") return;
+  // Defer to active history option if the panel is open with one selected.
+  if (topSearchHistory && topSearchHistory.consumeEnter(e)) return;
+  e.preventDefault();
+  commitTopSearch($searchInput.value);
 });
 
 $searchInput.addEventListener("input", () => {
-  $searchClear.hidden = !$searchInput.value.trim();
+  const has = !!$searchInput.value.trim();
+  $searchClear.hidden = !has;
+  $searchBar.dataset.clearHidden = String(!has);
 });
 
 $searchClear.addEventListener("click", () => {
   $searchInput.value = "";
   $searchClear.hidden = true;
+  $searchBar.dataset.clearHidden = "true";
   $searchInput.focus();
   if (parsePath().view === "search") navigate("/");
 });
@@ -3090,6 +3161,265 @@ function adjustSheetForKeyboard() {
 
 let _searchSheetAppliedScrollLock = false;
 
+// ── Search history panel controller ──
+// One instance per anchor (top header + sheet). Exposes `refresh()` for
+// callers that mutate history, `consumeEnter(e)` so the input's existing
+// Enter handler can defer to an active history option when the panel is
+// open with one selected, and `syncToggleVisibility()` so callers can
+// re-evaluate the ▾ button's hidden state after external changes.
+function createSearchHistoryController({ wrap, input, toggle, panel, clearBtn, onSelect, syncClearHidden }) {
+  let activeIndex = -1;
+  let _expanded = false;  // "더 보기" pressed in this session — reset on close
+
+  function visibleCount() {
+    return _expanded ? SEARCH_HISTORY_MAX : SEARCH_HISTORY_VISIBLE;
+  }
+
+  function syncToggleVisibility() {
+    const has = loadSearchHistory().length > 0;
+    toggle.hidden = !has;
+    wrap.dataset.historyHidden = String(!has);
+  }
+
+  function isOpen() { return !panel.hidden; }
+
+  function updateActive() {
+    const opts = panel.querySelectorAll(".search-history-item-select");
+    opts.forEach((o, i) => o.setAttribute("aria-selected", i === activeIndex ? "true" : "false"));
+    if (activeIndex < 0 || activeIndex >= opts.length) {
+      input.removeAttribute("aria-activedescendant");
+    } else {
+      input.setAttribute("aria-activedescendant", opts[activeIndex].id);
+      opts[activeIndex].scrollIntoView({ block: "nearest" });
+    }
+  }
+
+  function render() {
+    const list = loadSearchHistory();
+    const limit = visibleCount();
+    const visible = list.slice(0, limit);
+    const hidden = list.length - visible.length;
+    clearNode(panel);
+    visible.forEach((q, i) => {
+      const optId = `${panel.id}-opt-${i}`;
+      const row = el("div", { className: "search-history-item" });
+      const select = el("button", {
+        type: "button",
+        id: optId,
+        role: "option",
+        className: "search-history-item-select",
+        "aria-selected": "false",
+        tabindex: "-1",
+      }, q);
+      select.dataset.query = q;
+      const remove = el("button", {
+        type: "button",
+        className: "search-history-item-remove",
+        "aria-label": `최근 검색어 "${q}" 삭제`,
+        tabindex: "-1",
+      });
+      remove.dataset.removeQuery = q;
+      remove.appendChild(el("span", { "aria-hidden": "true" }, "×"));
+      row.appendChild(select);
+      row.appendChild(remove);
+      panel.appendChild(row);
+    });
+    if (hidden > 0) {
+      const more = el("button", {
+        type: "button",
+        className: "search-history-more",
+        tabindex: "-1",
+      }, `더 보기 (${hidden}개)`);
+      more.dataset.showMore = "true";
+      panel.appendChild(more);
+    }
+    if (list.length >= 3) {
+      const clearAll = el("button", {
+        type: "button",
+        className: "search-history-clear",
+        tabindex: "-1",
+      }, "모두 지우기");
+      clearAll.dataset.clearAll = "true";
+      panel.appendChild(clearAll);
+    }
+    if (activeIndex >= visible.length) activeIndex = visible.length - 1;
+    updateActive();
+  }
+
+  function open() {
+    if (!loadSearchHistory().length) return;
+    activeIndex = -1;
+    render();
+    panel.hidden = false;
+    toggle.setAttribute("aria-expanded", "true");
+    input.setAttribute("aria-expanded", "true");
+  }
+
+  function close({ restoreFocus } = {}) {
+    panel.hidden = true;
+    toggle.setAttribute("aria-expanded", "false");
+    input.setAttribute("aria-expanded", "false");
+    activeIndex = -1;
+    _expanded = false;
+    input.removeAttribute("aria-activedescendant");
+    if (restoreFocus) input.focus({ preventScroll: true });
+  }
+
+  function refresh() {
+    syncToggleVisibility();
+    if (isOpen()) {
+      if (!loadSearchHistory().length) close();
+      else render();
+    }
+  }
+
+  function expandMore() {
+    _expanded = true;
+    render();
+  }
+
+  function moveActive(delta) {
+    const list = loadSearchHistory();
+    if (!list.length) return;
+    const limit = visibleCount();
+    const visible = Math.min(list.length, limit);
+    if (activeIndex < 0) {
+      activeIndex = delta > 0 ? 0 : visible - 1;
+      updateActive();
+      return;
+    }
+    const next = activeIndex + delta;
+    // Auto-expand when ↓ would walk past the last visible item.
+    if (next >= visible && list.length > visible && !_expanded) {
+      expandMore();
+      activeIndex = next;
+      updateActive();
+      return;
+    }
+    activeIndex = (next + visible) % visible;
+    updateActive();
+  }
+
+  function pickQuery(q) {
+    input.value = q;
+    if (clearBtn) clearBtn.hidden = false;
+    syncClearHidden(false);
+    close();
+    onSelect(q);
+  }
+
+  toggle.addEventListener("pointerdown", (e) => {
+    // Keep input focused so the on-screen keyboard doesn't flicker.
+    e.preventDefault();
+  });
+  toggle.addEventListener("click", () => {
+    if (isOpen()) close({ restoreFocus: true });
+    else { open(); input.focus({ preventScroll: true }); }
+  });
+
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowDown") {
+      if (!isOpen()) {
+        if (!loadSearchHistory().length) return;
+        open();
+      }
+      e.preventDefault();
+      moveActive(1);
+    } else if (e.key === "ArrowUp") {
+      if (!isOpen()) return;
+      e.preventDefault();
+      moveActive(-1);
+    } else if (e.key === "Escape" && isOpen()) {
+      e.preventDefault();
+      e.stopPropagation();
+      close();
+    }
+  });
+
+  panel.addEventListener("pointerdown", (e) => {
+    // Don't let the input lose focus when tapping inside the panel.
+    e.preventDefault();
+  });
+  panel.addEventListener("click", (e) => {
+    const remove = e.target.closest(".search-history-item-remove");
+    if (remove) {
+      e.preventDefault();
+      e.stopPropagation();
+      removeSearchHistory(remove.dataset.removeQuery);
+      refresh();
+      return;
+    }
+    const more = e.target.closest(".search-history-more");
+    if (more) {
+      e.preventDefault();
+      e.stopPropagation();
+      expandMore();
+      return;
+    }
+    const clearAllBtn = e.target.closest(".search-history-clear");
+    if (clearAllBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      clearSearchHistory();
+      refresh();
+      input.focus({ preventScroll: true });
+      return;
+    }
+    const select = e.target.closest(".search-history-item-select");
+    if (select) {
+      e.preventDefault();
+      e.stopPropagation();
+      pickQuery(select.dataset.query);
+    }
+  });
+
+  document.addEventListener("pointerdown", (e) => {
+    if (!isOpen()) return;
+    if (panel.contains(e.target) || toggle.contains(e.target) || input.contains(e.target)) return;
+    close();
+  });
+
+  return {
+    open,
+    close,
+    isOpen,
+    refresh,
+    syncToggleVisibility,
+    consumeEnter(e) {
+      if (!isOpen() || activeIndex < 0) return false;
+      const opts = panel.querySelectorAll(".search-history-item-select");
+      const target = opts[activeIndex];
+      if (!target) return false;
+      e.preventDefault();
+      e.stopPropagation();
+      pickQuery(target.dataset.query);
+      return true;
+    },
+  };
+}
+
+const topSearchHistory = createSearchHistoryController({
+  wrap: $searchBar,
+  input: $searchInput,
+  toggle: $searchHistoryToggle,
+  panel: $searchHistoryPanel,
+  clearBtn: $searchClear,
+  syncClearHidden: (hidden) => { $searchBar.dataset.clearHidden = String(hidden); },
+  onSelect: (q) => commitTopSearch(q),
+});
+topSearchHistory.syncToggleVisibility();
+
+const sheetSearchHistory = createSearchHistoryController({
+  wrap: $searchSheetInputWrap,
+  input: $searchSheetInput,
+  toggle: $searchSheetHistoryToggle,
+  panel: $searchSheetHistoryPanel,
+  clearBtn: $searchSheetClear,
+  syncClearHidden: (hidden) => { $searchSheetInputWrap.dataset.clearHidden = String(hidden); },
+  onSelect: (q) => commitSheetSearch(q),
+});
+sheetSearchHistory.syncToggleVisibility();
+
 function openSearchSheet(query) {
   // Set state BEFORE unhiding so the first paint already reflects compact
   // dimensions — otherwise the 55vh expanded layout flashes for one frame.
@@ -3112,6 +3442,8 @@ function openSearchSheet(query) {
   }
   $searchSheetInput.value = query || "";
   $searchSheetClear.hidden = !query;
+  $searchSheetInputWrap.dataset.clearHidden = String(!query);
+  if (sheetSearchHistory) sheetSearchHistory.syncToggleVisibility();
   $searchFab.hidden = true;
   // Compact entry focuses synchronously so iOS Safari opens the on-screen
   // keyboard inside the user-gesture context (rAF would defer past it).
@@ -3127,6 +3459,7 @@ function openSearchSheet(query) {
 
 function closeSearchSheet() {
   _suspendKeyboardAdjust = false;
+  if (sheetSearchHistory) sheetSearchHistory.close();
   $searchScrim.hidden = true;
   $searchSheet.hidden = true;
   $searchSheet.dataset.state = "";
@@ -3256,18 +3589,20 @@ function insertSearchOperator(op) {
   const needsSpace = cur.length > 0 && !cur.endsWith(" ");
   const insertion = (needsSpace ? " " : "") + op;
   $searchSheetInput.value = cur + insertion;
-  $searchSheetClear.hidden = !$searchSheetInput.value.trim();
+  const has = !!$searchSheetInput.value.trim();
+  $searchSheetClear.hidden = !has;
+  $searchSheetInputWrap.dataset.clearHidden = String(!has);
   // Cursor right after the colon so the user types the alias next.
   const pos = $searchSheetInput.value.length;
   $searchSheetInput.focus({ preventScroll: true });
   $searchSheetInput.setSelectionRange(pos, pos);
 }
 
-$searchSheetInput.addEventListener("keydown", (e) => {
-  if (e.key !== "Enter") return;
-  e.preventDefault();
-  const q = $searchSheetInput.value.trim();
+function commitSheetSearch(rawQuery) {
+  const q = (rawQuery || "").trim();
   if (!q) return;
+  pushSearchHistory(q);
+  if (sheetSearchHistory) sheetSearchHistory.refresh();
   // Dismiss IME first so the keyboard slide-down can run alongside the
   // sheet's CSS height/bottom transition. We suspend adjustSheetForKeyboard
   // briefly so visualViewport.resize during keyboard dismiss doesn't
@@ -3275,21 +3610,27 @@ $searchSheetInput.addEventListener("keydown", (e) => {
   $searchSheetInput.blur();
   _suspendKeyboardAdjust = true;
   requestAnimationFrame(() => {
-    // Clear compact-mode inline overrides so CSS values (bottom: 0, height: 55vh)
-    // become the transition target.
     $searchSheet.style.transition = "";
     $searchSheet.style.bottom = "";
     $searchSheet.style.height = "";
     $searchSheet.style.maxHeight = "";
     $searchSheet.dataset.state = "expanded";
     runSheetSearch(q, 1, true);
-    // Resume keyboard-tracking after the height transition settles.
     setTimeout(() => { _suspendKeyboardAdjust = false; }, 260);
   });
+}
+
+$searchSheetInput.addEventListener("keydown", (e) => {
+  if (e.key !== "Enter") return;
+  if (sheetSearchHistory && sheetSearchHistory.consumeEnter(e)) return;
+  e.preventDefault();
+  commitSheetSearch($searchSheetInput.value);
 });
 
 $searchSheetInput.addEventListener("input", () => {
-  $searchSheetClear.hidden = !$searchSheetInput.value.trim();
+  const has = !!$searchSheetInput.value.trim();
+  $searchSheetClear.hidden = !has;
+  $searchSheetInputWrap.dataset.clearHidden = String(!has);
 });
 
 // Tapping the input while results are showing reverts to compact mode so the
@@ -3329,6 +3670,7 @@ $searchSheetInput.addEventListener("focus", () => {
 $searchSheetClear.addEventListener("click", () => {
   $searchSheetInput.value = "";
   $searchSheetClear.hidden = true;
+  $searchSheetInputWrap.dataset.clearHidden = "true";
   $searchSheetInput.focus();
 });
 
