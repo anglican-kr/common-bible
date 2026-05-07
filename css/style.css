@@ -695,8 +695,9 @@ body {
   width: 100%;
   font-family: inherit;
   font-size: 0.85rem;
-  /* Reserve space for 44px history toggle (right: 2.6rem) + 44px clear (right: 0.1rem). */
-  padding: 0.6rem 5.5rem 0.6rem 0.75rem;
+  /* Reserve 96px for history toggle (right: 3.25rem) + clear (right: 0.25rem)
+     with a 4px gap between them so circular hit areas don't visually merge. */
+  padding: 0.6rem 6rem 0.6rem 0.75rem;
   border: 1px solid var(--border);
   border-radius: 1.25rem;
   background: var(--bg-card);
@@ -710,8 +711,9 @@ body {
 /* Trim padding when one or both action buttons are hidden so text doesn't
    sit beneath empty space. JS keeps the dataset flags in sync with the
    button .hidden state. */
-#search-bar[data-clear-hidden="true"] #search-input {
-  padding-right: 3rem;
+#search-bar[data-clear-hidden="true"] #search-input,
+#search-bar[data-history-hidden="true"]:not([data-clear-hidden="true"]) #search-input {
+  padding-right: 3.25rem;
 }
 
 #search-bar[data-clear-hidden="true"][data-history-hidden="true"] #search-input {
@@ -754,9 +756,9 @@ body {
   padding: 0;
 }
 
-#search-clear { right: 0.1rem; }
-#search-history-toggle { right: 2.6rem; }
-#search-bar[data-clear-hidden="true"] #search-history-toggle { right: 0.1rem; }
+#search-clear { right: 0.25rem; }
+#search-history-toggle { right: 3.25rem; }
+#search-bar[data-clear-hidden="true"] #search-history-toggle { right: 0.25rem; }
 
 #search-clear:hover,
 #search-history-toggle:hover {
@@ -1303,8 +1305,9 @@ body {
   box-sizing: border-box;
 }
 
-#search-sheet-input-wrap[data-clear-hidden="true"] #search-sheet-input {
-  padding-right: 3.25rem;
+#search-sheet-input-wrap[data-clear-hidden="true"] #search-sheet-input,
+#search-sheet-input-wrap[data-history-hidden="true"]:not([data-clear-hidden="true"]) #search-sheet-input {
+  padding-right: 3.5rem;
 }
 
 #search-sheet-input-wrap[data-clear-hidden="true"][data-history-hidden="true"] #search-sheet-input {
@@ -1342,7 +1345,7 @@ body {
 }
 
 #search-sheet-clear { right: 0.25rem; }
-#search-sheet-history-toggle { right: 3rem; }
+#search-sheet-history-toggle { right: 3.25rem; }
 #search-sheet-input-wrap[data-clear-hidden="true"] #search-sheet-history-toggle { right: 0.25rem; }
 
 #search-sheet-clear:hover,
