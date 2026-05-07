@@ -107,6 +107,7 @@ tests/
   workflows/
     test.yml            ← CI: Node 24 + `node --test tests/unit/*.test.js` (ADR-013)
 docs/
+  architecture.md       ← 아키텍처 개요 (전체 구조 한눈에, ADR 인덱스 포함)
   decisions/            ← ADR (아키텍처 결정 기록, ADR-001~013)
   design/               ← 살아있는 설계 문서 (pkce-migration.md 등)
   audit/                ← 보안 감사 보고서
