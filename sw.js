@@ -1,10 +1,17 @@
-// Bump this version on every release. Activating a new CACHE_NAME clears all
-// prior caches (shell + data), ensuring bible/search updates reach clients.
-const CACHE_NAME = "rev-49";
+// Cache identifiers — bump independently via scripts/release.py.
+// Activating a new SHELL_CACHE clears only the prior shell cache; data/audio
+// caches are preserved across shell-only releases. Bump DATA_CACHE only when
+// bible JSON or search index format changes; bump AUDIO_CACHE only when mp3
+// sources are re-encoded.
+const SHELL_CACHE = "shell-49";
+const DATA_CACHE = "data-1";
+const AUDIO_CACHE = "audio-1";
 
 // Separate cache for Google Font files (fonts.gstatic.com).
-// Never cleared on CACHE_NAME bump — font files are content-addressed and immutable.
+// Never cleared on cache bumps — font files are content-addressed and immutable.
 const FONT_CACHE = "fonts-v1";
+
+const KNOWN_CACHES = new Set([SHELL_CACHE, DATA_CACHE, AUDIO_CACHE, FONT_CACHE]);
 
 const SHELL_FILES = [
   "/",
@@ -30,13 +37,27 @@ const SHELL_FILES = [
   "/assets/icons/icon-512-maskable.png",
 ];
 
+// Route /data/* paths to the appropriate cache.
+// Returns SHELL_CACHE for non-data paths and for shell-precached data files
+// (books.json, search-meta.json) that ship with the app shell.
+function cacheNameFor(pathname) {
+  if (pathname.startsWith("/data/audio/")) return AUDIO_CACHE;
+  if (pathname.startsWith("/data/bible/")) return DATA_CACHE;
+  if (pathname === "/data/search-ot.json" ||
+      pathname === "/data/search-nt.json" ||
+      pathname === "/data/search-dc.json") {
+    return DATA_CACHE;
+  }
+  return SHELL_CACHE;
+}
+
 // Cache app shell on install — do NOT skipWaiting() automatically.
 // The client will send a SKIP_WAITING message after user confirms the update.
 // Use { cache: "reload" } to bypass the HTTP cache; otherwise an immutable/max-age
 // response for a prior shell revision can poison the new SW's cache with stale content.
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) =>
+    caches.open(SHELL_CACHE).then((cache) =>
       cache.addAll(SHELL_FILES.map((url) => new Request(url, { cache: "reload" })))
     )
   );
@@ -44,7 +65,7 @@ self.addEventListener("install", (event) => {
 
 // Allow the client to trigger skipWaiting via postMessage,
 // or to query this SW's bundled version for the update toast.
-// GET_VERSION reads /version.json from THIS SW's own CACHE_NAME so the
+// GET_VERSION reads /version.json from THIS SW's own SHELL_CACHE so the
 // reply reflects the version about to be installed, not the one currently
 // active in the page (the active SW serves a stale copy of version.json).
 self.addEventListener("message", (event) => {
@@ -56,7 +77,7 @@ self.addEventListener("message", (event) => {
     const port = event.ports && event.ports[0];
     if (!port) return;
     event.waitUntil(
-      caches.open(CACHE_NAME)
+      caches.open(SHELL_CACHE)
         .then((cache) => cache.match("/version.json"))
         .then((res) => (res ? res.json() : null))
         .then((data) => port.postMessage({ version: (data && data.version) || "" }))
@@ -65,18 +86,18 @@ self.addEventListener("message", (event) => {
   }
 });
 
-// Remove old caches on activate (preserve FONT_CACHE across releases)
+// Remove caches that are not in the active set on activate.
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE_NAME && k !== FONT_CACHE).map((k) => caches.delete(k)))
+      Promise.all(keys.filter((k) => !KNOWN_CACHES.has(k)).map((k) => caches.delete(k)))
     )
   );
   self.clients.claim();
 });
 
 // Cache-first for Google Font files: immutable, content-addressed URLs.
-// Stored in FONT_CACHE which persists across CACHE_NAME bumps.
+// Stored in FONT_CACHE which persists across cache bumps.
 function handleFontFile(event) {
   event.respondWith(
     caches.open(FONT_CACHE).then((cache) =>
@@ -91,15 +112,15 @@ function handleFontFile(event) {
   );
 }
 
-// Stale-while-revalidate for everything else.
+// Cache-first for everything else, routed by pathname to shell/data/audio cache.
 // Revalidate via { cache: "reload" } so a long-lived HTTP cache entry does not
 // overwrite the SW cache with stale bytes during background refresh.
-// Bible/search data updates are propagated by bumping CACHE_NAME on release,
-// which clears the old cache during activate().
+// Cache invalidation is handled by bumping the relevant cache name on release.
 const DRIVE_HOSTNAMES = ["www.googleapis.com", "content.googleapis.com", "oauth2.googleapis.com", "accounts.google.com"];
 
 self.addEventListener("fetch", (event) => {
-  const { hostname } = new URL(event.request.url);
+  const url = new URL(event.request.url);
+  const { hostname, pathname } = url;
 
   if (hostname === "fonts.gstatic.com") {
     handleFontFile(event);
@@ -112,7 +133,6 @@ self.addEventListener("fetch", (event) => {
   // Serve app shell for all navigation requests (History API SPA routing).
   // Exception: standalone HTML pages (e.g. privacy.html) are served directly.
   if (event.request.mode === "navigate") {
-    const { pathname } = new URL(event.request.url);
     const standalonePages = ["/privacy.html"];
     if (standalonePages.includes(pathname)) {
       event.respondWith(
@@ -126,15 +146,14 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Cache-first: serve from cache if available, otherwise fetch and cache.
-  // Cache invalidation is handled by bumping CACHE_NAME on each release.
+  const targetCache = cacheNameFor(pathname);
   event.respondWith(
     caches.match(event.request).then((cached) => {
       if (cached) return cached;
       return fetch(new Request(event.request, { cache: "reload" })).then((res) => {
         if (res.ok) {
           const clone = res.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+          caches.open(targetCache).then((cache) => cache.put(event.request, clone));
         }
         return res;
       });
