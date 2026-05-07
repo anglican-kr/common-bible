@@ -23,6 +23,13 @@ const _CLIENT_ID = location.hostname === "localhost"
 // import system. The machine reads window._syncClientId on every redirect.
 window._syncClientId = _CLIENT_ID;
 
+// One-shot cleanup of Phase 2g's `bible-drive-silent-blocked` key (Phase 2h
+// 단계 5). The key is dead — no code reads or writes it after step 4 — but
+// existing user devices may still carry it. removeItem on a missing key is a
+// no-op, so this is safe to run unconditionally on every load. Can be deleted
+// after a few release cycles.
+localStorage.removeItem("bible-drive-silent-blocked");
+
 // ── PKCE redirect callback absorption ─────────────────────────────────────────
 // Must run before app.js routes. Handles the `?code=…&state=…` query string
 // that Google appends when redirecting back from accounts.google.com.

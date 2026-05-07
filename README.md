@@ -47,29 +47,28 @@ data/source/*.md  (비공개 서브모듈, 73권 마크다운 소스)
 
 ### Google Drive 동기화 (북마크·설정·읽기 위치)
 
-OAuth 흐름이 플랫폼별로 다르다. iOS Safari는 FedCM을 영구 미지원하고 PWA standalone 모드에서 사용자 제스처 안에서도 popup이 차단되어, GIS Token Client 우회가 필요하기 때문 ([ADR-011 Phase 2f](docs/decisions/011-bookmark-sync.md)).
+데스크탑·Android·iOS가 동일하게 OAuth 2.0 Authorization Code + PKCE + refresh token 단일 경로 ([ADR-011 Phase 2h](docs/decisions/011-bookmark-sync.md), [`docs/design/pkce-migration.md`](docs/design/pkce-migration.md)).
 
-| 플랫폼 | 첫 연결 흐름 | 앱 재실행 시 |
-|--------|------------|-------------|
-| Android Chrome | GIS Token Client popup + FedCM Identity Client → silent token | FedCM/세션 쿠키로 silent token 즉시 발급 |
-| Desktop Chrome / Edge / Firefox (FedCM 지원) | 동일 | 동일 |
-| Desktop Firefox (FedCM 미지원) | GIS popup consent → token | GIS Token Client로 silent token |
-| **iOS 16 이하 Safari** | OAuth 2.0 Implicit Flow + 풀페이지 리디렉션 | Phase 2g — 저장된 email이 있으면 `prompt=none` 자동 silent 리디렉션 |
-| **iOS 17/18 Safari (탭/PWA standalone)** | 동일 (풀페이지 리디렉션) | 동일 (PWA-격리 Google 세션 쿠키 사용) |
-| iOS 26+ PWA standalone | 동일 | 동일 |
+| 시나리오 | 동작 |
+|---------|-----|
+| 첫 연결 ("연결" 클릭) | `accounts.google.com`로 풀페이지 리디렉션 → consent → callback `?code=…` → `/token` POST → access + refresh token 수신 → IDLE |
+| 앱 재실행 (refresh token 보유) | IndexedDB의 AES-GCM 암호화 refresh token으로 백그라운드 `/token` POST → access token 갱신 → IDLE. UI 변화 없음, 팝업·리디렉션·깜박임 없음. |
+| 앱 재실행 (refresh token 없음) | NEEDS_CONSENT에 정착, 설정 화면에 "연결" 버튼 노출 |
+| 401 (access token 만료) | refresh token으로 백그라운드 갱신 → 동기화 재개. refresh token도 invalid면 NEEDS_CONSENT로 폴백 |
+| `signOut()` | Google `/revoke` 호출 + IDB clear + email/state localStorage 정리 |
 
-iOS 한정 추가 동작:
-- **재인증(401) 휴리스틱**: 사용자가 활발히 읽는 중이면(`visibilityState="visible"` + `hasFocus()` + 5초 이내 인터랙션) 풀페이지 리디렉션을 보류하고 snackbar 안내, 유휴 상태면 자동 리디렉션 ([ADR-011 Phase 2f](docs/decisions/011-bookmark-sync.md)).
-- **silent 자동 시도 차단**: `prompt=none`이 `interaction_required` 등으로 실패하면 `bible-drive-silent-blocked=1` 플래그 설정 → 다음 앱 오픈에 자동 재시도 안 함 (사용자 "연결" 클릭으로 해제).
-- **무한 리디렉션 cap**: localStorage 카운터(상한 3회) 초과 시 ERROR 강제 전이.
+운영 가드:
+- **무한 리디렉션 cap**: localStorage 카운터(상한 3회) 초과 시 ERROR 강제 전이. SYNC_DONE으로만 리셋.
+- **만성 401 cap (`MAX_REAUTH=3`)**: 새 access token도 Drive가 거절하면 4번째 401에서 ERROR + snackbar.
+- **race 가드**: state-based + `localStorage["bible-drive-sync"]` flag-based + 매 async await 직후 재검사 — 사용자가 silent refresh / code 교환 진행 중 disconnect 시 의도 보존.
 
-> **진행 중 — Phase 2h (2026-05-06~)**: Authorization Code + PKCE + refresh token 흐름으로 마이그레이션 중. 단계 1~3 머지 완료(refresh token AES-GCM 암호화 IDB, PKCE 유틸·`/token` 교환, state-machine silent refresh 결합). 단계 3까지는 기존 GIS/Implicit 경로 옆에 새 코드를 깔기만 해 사용자 영향 0. 단계 4 머지 시점에 GIS 제거 + 모든 플랫폼 단일 PKCE redirect 경로로 일원화되며, 기존 사용자는 cold start 1회 NEEDS_CONSENT 통과 후 신규 흐름 진입(sync 데이터는 별도 store라 손실 없음). 살아있는 설계 문서: [`docs/design/pkce-migration.md`](docs/design/pkce-migration.md).
+보안 모델 자세히: [`docs/audit/2026-05-07-pkce-refresh-token.md`](docs/audit/2026-05-07-pkce-refresh-token.md).
 
 ### 알려진 한계
 
-- **iOS Safari 탭 사용 시 7일 ITP**: 홈 화면에 설치하지 않고 Safari 탭에서 직접 여는 경우, 7일 미사용 시 ITP가 storage(쿠키 + localStorage 포함)를 정리 → 동기화 재연결 필요. **홈 화면 설치 PWA(iOS 17+ HSWA)는 storage가 영속되어 ITP 적용 대상 아님** — ADR-011 §맥락 참고.
-- **iOS 모든 버전 Implicit Flow**: refresh token 미발급. 토큰은 1시간 만료 + 메모리 전용 → 매 cold start에 silent 재인증 round-trip 발생 (브리프 깜박임 < 1초).
-- **Google 자체 세션 만료**: Google OAuth 세션이 서버 측에서 약 2주 비활성 후 만료되면 silent 재인증이 실패 → "연결" 버튼 노출.
+- **iOS Safari 탭 사용 시 7일 ITP**: 홈 화면에 설치하지 않고 Safari 탭에서 직접 여는 경우, 7일 미사용 시 ITP가 storage(쿠키 + localStorage + IndexedDB 포함)를 정리 → 동기화 재연결 필요. **홈 화면 설치 PWA(iOS 17+ HSWA)는 storage가 영속되어 ITP 적용 대상 아님** — ADR-011 §맥락 참고.
+- **OAuth 검수 진행 중 → refresh token 7일 만료**: Google OAuth 앱이 "Testing" 상태인 동안엔 refresh token TTL 7일. 검수 통과 후 영구 — 코드 변경 0.
+- **외부 권한 회수**: 사용자가 Google 계정 설정에서 권한을 끊으면 다음 silent refresh가 `invalid_grant`로 실패 → IDB clear + NEEDS_CONSENT 폴백.
 - **iOS Chrome/Firefox 등 WebKit 래퍼 브라우저**: 설치 불가 + Drive 동기화 시 PWA-격리 컨텍스트 미보장.
 
 ## 프로젝트 구조

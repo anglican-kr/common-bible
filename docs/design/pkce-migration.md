@@ -4,8 +4,9 @@
 > 시점 고정 결정 기록은 ADR-011 §Phase 2h 참조.
 
 - 작성: 2026-05-07
-- 상태: 단계 4 PR open (1·2·3 머지, 4 코드 완성·유닛 테스트 통과)
+- 상태: 단계 5 PR open — 단계 1·2·3·4 모두 머지 완료, 5는 정리 단계
 - 관련 ADR: ADR-001(SPA), ADR-011(북마크 동기화), ADR-012(TS), ADR-013(유닛 테스트)
+- 보안 감사: `docs/audit/2026-05-07-pkce-refresh-token.md`
 
 ---
 
@@ -699,7 +700,46 @@ iOS 401 reauth 시 사용자가 능동적으로 읽는 중이면 disruptive redi
 미룰 이유가 없다. IDB에 토큰이 없으면 NEEDS_CONSENT로 정착하므로 페이지 이탈도
 일어나지 않는다.
 
-### 7.2 단계 5 — 정리 (예정)
+### 7.2 단계 5 결과 (PR open)
+
+마이그레이션을 마무리하는 정리 단계. 코드 기능 변경 없음.
+
+#### 7.2.1 `bible-drive-silent-blocked` localStorage cleanup
+
+`js/drive-sync.js` 모듈 로드 시 `localStorage.removeItem("bible-drive-silent-blocked")` 한 줄 추가. 이유:
+
+- 단계 4에서 키를 read/write하는 코드는 모두 사라졌음 (`grep`으로 확인 — js/, tests/unit/ 어디에도 참조 없음).
+- 그러나 Phase 2g~3 시점 사용자 디바이스의 localStorage에 stale value가 남아있을 수 있음.
+- `removeItem`은 missing key에 대해 no-op이므로 안전. 매 cold start마다 실행해도 부담 0.
+- 몇 릴리스 후(≥6주, 대다수 활성 사용자가 한 번씩 앱을 연 시점) cleanup 호출 자체도 제거 가능.
+
+설계 §5.2 매트릭스의 "단계 4 후: 의미 없음 → 단계 5 정리" 항목 종결.
+
+#### 7.2.2 `docs/coding-pitfalls.md` 신규 섹션
+
+Phase 2h 진행 중 Bugbot이 발견한 4건의 race / leak / 마이그레이션 패턴을 추출해 살아있는 문서에 기록:
+
+- §11 비동기 race 가드 — 단일 체크포인트의 함정 (PR #54 1차, PR #57)
+- §12 콜백 URL 데이터 leak — flow별 transport 격차 (PR #54 2차)
+- §13 마이그레이션 시점의 sessionStorage / localStorage 키 격리 (단계 2~4 키 분리·인계 패턴)
+
+#### 7.2.3 `docs/audit/2026-05-07-pkce-refresh-token.md` 보안 감사
+
+이전 감사(`2026-05-02-171111.md`, `2026-05-04-drive-sync-security.md`)가 Implicit Flow 시점 기준이었으므로, PKCE + refresh token 도입 후의 위협 모델을 다시 정리. **Critical/High/Medium 0건**.
+
+핵심 변화:
+
+- 공급망 표면 소거 (GIS 스크립트 제거)
+- CSP 축소 (`accounts.google.com` 제거)
+- Refresh Token 도입의 트레이드오프 (메모리 전용 → 비추출 AES-GCM IDB)
+- 인증 경로 단일화 (플랫폼별 분기 코드 사라짐)
+- Race 가드 모델 정착 (state-based + flag-based + 매 await 후 재검사)
+
+모니터링 권고 4건: e2e 정기 실행, Cloud Console URI 검증, OAuth 검수 모니터링, silent-blocked cleanup 코드 제거 시점.
+
+#### 7.2.4 README.md 갱신
+
+Phase 2g 시점의 GIS/Implicit/silent-blocked 표·설명을 Phase 2h 단일 PKCE 경로 표로 교체. 알려진 한계 섹션도 PKCE 기준으로 갱신 (refresh token 7일 만료, 외부 권한 회수 동작 등).
 
 ## 8. 후속 단계 미리보기
 
