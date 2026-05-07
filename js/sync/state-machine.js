@@ -259,6 +259,13 @@ function createSyncMachine({ onStateChange } = {}) {
           // refresh → user re-consents.
         }
       }
+      // Re-check sync flag after the IDB rotation save — disable() may have
+      // arrived during that await window, and _transition(IDLE) would
+      // otherwise flip SYNC_ENABLED_KEY back to "1" and override user intent.
+      if (localStorage.getItem(SYNC_ENABLED_KEY) === "0") {
+        L.log({ kind: "ACTION", event: "SILENT_REFRESH_RACE_LOST", reason: "sync_disabled_post_save" });
+        return true;
+      }
       L.log({ kind: "ACTION", event: "SILENT_REFRESH_OK" });
       // ctxPatch carries reAuthFails forward when this is called from the
       // 401 reauth path. Without it, a chronic 401 (Drive rejecting even
@@ -274,6 +281,12 @@ function createSyncMachine({ onStateChange } = {}) {
       // we don't loop on subsequent app opens.
       L.log({ kind: "ERROR", event: "SILENT_REFRESH_INVALID", status: resp.status, error: resp.error });
       try { await window.refreshStore.clearRefreshToken(); } catch {}
+      // Re-check after the IDB clear — same rationale as the resp.ok branch.
+      // _transition(NEEDS_CONSENT) would flip SYNC_ENABLED_KEY back to "1".
+      if (localStorage.getItem(SYNC_ENABLED_KEY) === "0") {
+        L.log({ kind: "ACTION", event: "SILENT_REFRESH_RACE_LOST", reason: "sync_disabled_post_clear" });
+        return true;
+      }
       _transition(S.NEEDS_CONSENT, {}, { type: "SILENT_REFRESH_INVALID" });
       _refreshUI();
       return true;
@@ -325,6 +338,13 @@ function createSyncMachine({ onStateChange } = {}) {
         // Next cold start will re-prompt consent. Surface to user.
         _snackbar("새 인증 정보 저장에 실패했습니다. 다음 앱 열기 시 재연결이 필요할 수 있습니다.");
       }
+    }
+    // Re-check after the IDB save — disable() may have arrived during that
+    // await window. _transition(IDLE) would otherwise flip SYNC_ENABLED_KEY
+    // back to "1" and resurrect a session the user just terminated.
+    if (localStorage.getItem(SYNC_ENABLED_KEY) === "0") {
+      L.log({ kind: "ACTION", event: "REDIRECT_CODE_RACE_LOST", reason: "sync_disabled_post_save" });
+      return;
     }
     L.log({ kind: "ACTION", event: "REDIRECT_CODE_ACCEPTED" });
     _transition(S.IDLE, {}, { type: "REDIRECT_CODE_ACCEPTED" });
