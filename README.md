@@ -195,6 +195,7 @@ npx tsc -p tsconfig.worker.json --noEmit
 
 ## 문서
 
+- [아키텍처 개요](docs/architecture.md) — 전체 구조 한눈에
 - [아키텍처 결정 기록](docs/decisions/) — ADR-001~013
 - [제품 요구사항](docs/prd.md)
 - [작업 일지](docs/worklog.md)
