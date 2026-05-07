@@ -4,7 +4,7 @@
 > 시점 고정 결정 기록은 ADR-011 §Phase 2h 참조.
 
 - 작성: 2026-05-07
-- 상태: 단계 3 PR open (1·2 완료, 3 코드 완성·테스트 통과)
+- 상태: 단계 4 PR open (1·2·3 머지, 4 코드 완성·유닛 테스트 통과)
 - 관련 ADR: ADR-001(SPA), ADR-011(북마크 동기화), ADR-012(TS), ADR-013(유닛 테스트)
 
 ---
@@ -621,9 +621,89 @@ if (!T.isIOS()) _startPollingGis()
 
 ---
 
-## 7. 후속 단계 미리보기
+## 7. 단계 4 결과 (코드 완성 시점, PR open)
 
-### 7.1 단계 4 — GIS 제거 + 일원화
+### 7.0 머지 가능 조건
+
+- [x] `node --test tests/unit/*.test.js` 62/62 통과
+- [x] `npx tsc -p tsconfig.json --noEmit` 0 error (`--ignoreDeprecations 6.0` 옵션은
+  로컬 TypeScript 6.x 호환용으로만 필요, 실제 코드 의존 없음)
+- [x] `npx tsc -p tsconfig.worker.json --noEmit` 0 error
+- [ ] `pytest tests/e2e/test_drive_sync.py tests/e2e/test_drive_sync_ios.py -v` —
+  로컬 검증 필요 (CI 미실행, Playwright 환경)
+- [ ] Cloud Console redirect URI 등록 확인 (배포 직전)
+
+### 7.1 핵심 변경 정리
+
+ADR-011 §Phase 2h 단계 4 결과 섹션 참조. 이 문서에서는 설계 의도와 실제 구현이
+어긋난 지점만 추가로 기록한다.
+
+#### 7.1.1 `enable()` 동기 dispatch 폐기
+
+설계 §6.2는 "enable()은 동기 dispatch 유지하고 silent refresh를 fire-and-forget로
+시작 → 충돌 방지 위해 가드 플래그 사용"이라고 명시했고, 이는 단계 3까지의 흐름이었다.
+
+단계 4에서는 더 이상 동기 dispatch할 곳이 없다 (INITIALIZING → GIS poll 분기가
+사라졌으므로). 그래서 `enable()`은 silent refresh fire-and-forget만 하고,
+silent refresh가 false 반환(IDB 비어있음)하면 _state가 여전히 DISABLED일 때만
+NEEDS_CONSENT로 비동기 전이한다.
+
+설계가 우려한 race ("silent refresh가 토큰 있음 → IDLE 전이 / 그 사이 기존
+dispatch가 INITIALIZING → IDENTIFYING으로 전이 → 충돌")는 단계 4에서 자연
+소거됐다. legacy dispatch가 사라졌으므로 충돌 자체가 없다.
+
+부수 효과: 테스트가 `machine.enable()` 직후 동기적으로 NEEDS_CONSENT를 검사할 수
+없어졌다. 모든 테스트가 `await drain(N)` 패턴으로 silent refresh 결과를 기다린다.
+
+#### 7.1.2 `signIn()`은 머신 dispatch 안 거침
+
+설계 §6.2는 USER_CONSENT_REQUEST를 머신 dispatch로 보내 머신 안에서
+`_beginRedirect`을 호출하는 구조를 가정했다.
+
+단계 4 구현은 `signIn()`이 머신을 거치지 않고 `T.beginRedirectAuth`를 직접
+호출한다. 이유: DISABLED 상태에서 `signIn()`이 호출됐을 때 USER_CONSENT_REQUEST
+dispatch는 DISABLED 분기에서 무시된다 (signIn 도중 enable()을 같이 호출해도
+silent refresh fire-and-forget 후 DISABLED를 유지하는 race window 존재).
+
+대안으로 dispatch() top-level에서 USER_CONSENT_REQUEST를 가로채 _beginRedirect
+호출하는 패턴도 추가했다 — NEEDS_CONSENT/ERROR/OFFLINE 등에서 사용자가 다시
+연결을 시도할 때 동작한다.
+
+#### 7.1.3 sessionStorage 키 값 보존
+
+설계 §5.2는 "rename: `_REDIRECT_STATE_PKCE_KEY` → `_REDIRECT_STATE_KEY` (값 변경 —
+마이그레이션 시점 in-flight callback 보호)"라고 명시했다.
+
+실제 구현에서 변수명만 canonical로 인계하고 **값은 `"bible-drive-redirect-state-pkce"`
+그대로 유지**했다. 이유:
+- 단계 3까지 실 사용자가 진행 중이던 PKCE callback의 sessionStorage 키가
+  `bible-drive-redirect-state-pkce`였다. 단계 4 배포 후 그 callback이 떨어지면
+  새 코드도 같은 키를 읽어야 한다.
+- 구 Implicit `bible-drive-redirect-state` 키는 단계 4 코드에서 누구도 읽지 않으므로
+  자연 만료된다 (sessionStorage는 탭 닫으면 사라짐).
+
+#### 7.1.4 `silent` 필드 제거
+
+설계 §3.4.2는 sessionStorage state schema에 `silent: boolean`을 포함했다. 이는
+prompt=none silent re-auth용이었으나, 단계 4에서 prompt=none을 호출하는 코드 경로가
+모두 사라졌다 (refresh token이 모든 silent 갱신을 담당). 따라서 schema에서 제거.
+
+부수 효과: `RedirectCallbackResult`의 `silent` 필드도 제거됐다. 단계 1~3 코드와
+호환성이 깨지지만, 단계 4 PR이 원자 머지이므로 영향 없음.
+
+#### 7.1.5 active-reading defer 로직 제거
+
+iOS 401 reauth 시 사용자가 능동적으로 읽는 중이면 disruptive redirect를 미루는
+하이브리드 정책(`_isUserActivelyReading`, `__driveSyncInteractionTs`)은 단계 4에서
+완전히 무용해졌다 — refresh token 기반 silent 갱신은 UI를 방해하지 않으므로
+미룰 이유가 없다. IDB에 토큰이 없으면 NEEDS_CONSENT로 정착하므로 페이지 이탈도
+일어나지 않는다.
+
+### 7.2 단계 5 — 정리 (예정)
+
+## 8. 후속 단계 미리보기
+
+### 8.1 단계 4 — GIS 제거 + 일원화 (Historical: 위 §7 참조)
 
 **삭제**:
 

@@ -519,8 +519,8 @@ ADR-013 (클라이언트 JS 유닛 테스트 전략) 참고. 위 6차 리뷰 정
 |---|---|---|---|
 | 1 | `js/sync/refresh-store.js` AES-GCM 암호화 IndexedDB 모듈 | ✅ 머지 (2026-05-06) | #52 |
 | 2 | `transport.js`에 PKCE 유틸 + `/token` 교환 함수 추가 (구 implicit과 공존) | ✅ 머지 (2026-05-07) | #53 |
-| 3 | `state-machine.js`에 silent refresh + redirect-PKCE 결합 | 🟡 PR open | #__ |
-| 4 | GIS 제거 + 모든 흐름 PKCE로 일원화 (사용자 가시 변경) | ⏳ 예정 | — |
+| 3 | `state-machine.js`에 silent refresh + redirect-PKCE 결합 | ✅ 머지 (2026-05-07) | #54 |
+| 4 | GIS 제거 + 모든 흐름 PKCE로 일원화 (사용자 가시 변경) | 🟡 PR open (2026-05-07) | #__ |
 | 5 | 정리 (silent-blocked 키 cleanup, pitfalls 문서) | ⏳ 예정 | — |
 
 단계 1~3은 신규 코드를 옆에 깔기만 하므로 사용자 영향 0. 단계 4 머지 시점에 모든 기존 사용자가 cold start 1회 NEEDS_CONSENT 통과 후 신규 흐름 진입 (sync 데이터 손실 없음 — 별도 store).
@@ -587,6 +587,105 @@ ADR-013 (클라이언트 JS 유닛 테스트 전략) 참고. 위 6차 리뷰 정
 - **신규 사용자** (단계 4 머지 전): signIn() 시 GIS Token Client 또는 iOS implicit으로 인증 → access token만 받음 → IDB는 빈 채 유지 → 다음 cold start도 기존 흐름
 
 단계 4 머지 시점에 `signIn()`이 PKCE redirect로 전환되면서 IDB가 채워지기 시작.
+
+### 단계 4 결과 (PR #__)
+
+GIS Token Client / Implicit Flow 의존을 모두 제거하고 데스크탑·Android·iOS를
+PKCE Authorization Code + refresh token 단일 경로로 통일. ADR이 처음부터
+지시했던 흐름으로 회귀하는 마지막 가시 변경 단계.
+
+**전제**: 단계 4 머지 시점에 모든 기존 사용자가 cold start 1회 NEEDS_CONSENT
+통과 후 신규 흐름 진입. sync 데이터(북마크/설정/읽기 위치)는 별도 store에
+있으므로 손실 없음. Cloud Console redirect URI(`http://localhost:8080/`,
+`https://bible.anglican.kr/`)가 이미 등록돼 있어야 함 (단계 4 배포 전 필수).
+
+**state-machine.js**:
+- 상태 집합 축소: `INITIALIZING` / `IDENTIFYING` / `AUTHENTICATING` 제거 →
+  `DISABLED | IDLE | SYNCING | OFFLINE | NEEDS_CONSENT | ERROR`
+- 이벤트 집합 축소: `GIS_READY` / `IDENTITY_OK` / `IDENTITY_FAIL` /
+  `TOKEN_OK` / `TOKEN_FAIL` / `REDIRECT_TOKEN` 제거. 새 tag 이벤트
+  `SILENT_REFRESH_OK` / `SILENT_REFRESH_INVALID` / `SILENT_REFRESH_NET_FAIL` /
+  `REDIRECT_CODE_RECEIVED` / `REDIRECT_CODE_ACCEPTED` / `CODE_EXCHANGE_FAIL` /
+  `ENABLE_NO_REFRESH_TOKEN` / `NET_RECOVERED_NO_TOKEN` 추가 (전이 로깅용)
+- `enable()` 단순화: silent refresh fire-and-forget. IDB에 토큰 없으면
+  비동기 NEEDS_CONSENT 폴백. GIS 폴링·INITIALIZING 진입 분기 제거
+- `OFFLINE + NET_RECOVERED`: silent refresh 재시도. 토큰 없으면 NEEDS_CONSENT
+- `_handleSyncFail("401")` → `_kickoff401Reauth`: silent refresh가 false 반환
+  (IDB 토큰 없음)이면 NEEDS_CONSENT 직행 (legacy GIS/iOS 분기 제거)
+- `_isUserActivelyReading`/`ACTIVE_READING_IDLE_MS` 제거 — refresh token 기반
+  silent 갱신은 UI 방해 없음, 사용자 능동 reading 분기 자체가 무용해짐
+- `acceptRedirectToken` (Implicit Flow 진입점) 제거. `acceptRedirectCode`만 유지
+- `disable()`이 `localStorage["bible-drive-sync"] = "0"`을 _transition 외부에서도
+  defensively 설정 → 사용자가 silent refresh / code 교환 race window에서
+  disconnect 클릭한 경우에도 race 가드 동작 보장
+
+**transport.js**:
+- GIS wrapper 7종 (`initTokenClient` / `requestSilentToken` /
+  `requestConsentToken` / `initIdentityClient` / `promptIdentity` /
+  `cancelIdentityPrompt` / `parseIdToken`) 제거
+- Implicit Flow의 `beginRedirectAuth` / `consumeRedirectCallback` 제거
+- PKCE 함수 canonical 이름 인계: `beginRedirectAuthPKCE` →
+  `beginRedirectAuth`, `consumeRedirectCallbackPKCE` → `consumeRedirectCallback`,
+  `RedirectCallbackResultPKCE` → `RedirectCallbackResult`. `silent` 필드는
+  prompt=none 사용처가 사라져 함께 제거
+- sessionStorage 키 값은 의도적으로 `"bible-drive-redirect-state-pkce"` 유지 —
+  단계 4 배포 시점에 진행 중이던 PKCE callback이 떨어지지 않도록 격리. 구
+  Implicit 키 `"bible-drive-redirect-state"`는 더 이상 누구도 읽지 않음
+  (다음 cold start 시 자연 만료)
+- `revokeToken`을 GIS API 호출에서 `oauth2.googleapis.com/revoke` 직접 fetch로
+  재구현. signOut에서 access token revoke 경로 유지
+- `DRIVE_HOSTNAMES`에서 `accounts.google.com` 제거 (auth는 navigation,
+  fetch 대상 아님)
+
+**drive-sync.js**:
+- IIFE `_consumeRedirectIfPresent`: PKCE 단일 분기. Implicit fallback 제거
+- `_pollGis` / `_startPollingGis` / `_gisRetryCount` 제거
+- `__pendingRedirectToken` 처리 제거 (`__pendingRedirectCode`만 유지)
+- `signIn()` 일원화: iOS/non-iOS 분기 제거. 모든 플랫폼이
+  `T.beginRedirectAuth(_CLIENT_ID, scope, { prompt: "consent" })`로 직접 진입.
+  머신 dispatch 거치지 않는 이유: DISABLED에서 silent refresh fire 직후 race
+  window에 USER_CONSENT_REQUEST 디스패치가 무시될 수 있음
+- `signOut()`이 `window.refreshStore.clearRefreshToken()`도 호출 → 다음 cold
+  start에서 silently 재인증되지 않도록 보장
+- 사용자 활동 timestamp 추적(`__driveSyncInteractionTs`) 제거 (active reading
+  defer 로직과 함께 무용화)
+- iOS-only 에러 분기 제거 — `__pendingRedirectError` 처리는 모든 플랫폼 공통
+
+**index.html**:
+- `<script async src="https://accounts.google.com/gsi/client"></script>` 제거
+- CSP에서 `accounts.google.com`을 `script-src` / `style-src` / `frame-src` /
+  `connect-src`에서 모두 제거. `frame-src` 디렉티브 자체 삭제 (다른 frame
+  소스 없음)
+- 결과: GIS 공급망 의존 제로 — Google CDN 변조 위협 표면 제거
+
+**types.d.ts**:
+- 죽은 타입 제거: `GsiTokenResponse` / `GsiTokenClient` / `GsiCredentialResponse` /
+  `GsiIdInitializeConfig` / `GsiOauth2InitTokenClientConfig` /
+  `GoogleIdentityServices`
+- `RedirectCallbackResultPKCE` → `RedirectCallbackResult`로 인계
+  (`silent` 필드 제거)
+- `SyncState` / `SyncEvent` / `SyncMachine` / `SyncTransport` 모두 신규 코드
+  반영. `SyncMachine.acceptRedirectToken` / `onGisReady` 제거
+- `Window` 보강에서 `google` / `__pendingRedirectToken` 제거
+
+**테스트**:
+- `state-machine.test.js`: 33건 → 26건. INITIALIZING/IDENTIFYING/AUTHENTICATING
+  분기 테스트 모두 제거, GIS 시나리오를 PKCE redirect로 갱신.
+- `transport-pkce.test.js`: 함수명 rename 반영, `silent` 필드 검증 제거 (5번
+  테스트는 prompt 옵션 미지정 시 URL 파라미터 미포함을 검증하도록 갱신)
+- `harness.js`: GIS stub (`google` ctx, `hasGoogleId` 옵션, `initTokenClient`
+  등 노출) 모두 제거. PKCE stub 이름 canonical로 정렬
+- e2e: `test_drive_sync.py`의 `GIS_STUB`를 PKCE `FakeOAuth` (302 + /token POST)로
+  교체. `test_drive_sync_ios.py`의 active-reading defer / cap loop redirect /
+  silent-blocked / FedCM 시나리오 제거 (흐름 자체 사라짐). iOS-UA-감지·redirect
+  round-trip·콜백 보안 회귀(state_mismatch / error / returnTo)만 유지
+- 합계 62 unit pass + tsc 두 config 모두 0 error
+
+**Bugbot 단계 4 검토 결과**: (PR open 후 추가 예정)
+
+**롤백 전략**: 단계 4 PR은 원자 머지. 단계 4-only revert는 GIS 제거와 state
+machine GIS 가정이 동시에 사라졌으므로 부분 revert 불가. IDB에 저장된 refresh
+token은 무해 (구 코드는 IDB 안 봄). 회귀 발견 시 PR 전체 revert만 가능.
 
 ### Refresh Token 저장 전략 — 비추출 키 + AES-GCM
 
