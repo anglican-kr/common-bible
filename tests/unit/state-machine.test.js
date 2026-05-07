@@ -687,3 +687,38 @@ test("30. acceptRedirectCode 진행 중 signOut() 호출 → DISABLED 유지 (Bu
   assert.equal(machine.getState(), "DISABLED", "DISABLED 유지 — code 교환 결과 폐기");
   assert.equal(refreshStore._calls.save, 0, "IDB에 refresh token 저장 안 됨");
 });
+
+// ── Bugbot PR #54 (3차): legacy reauth race 가드 ─────────────────────────────
+
+test("33. 401 reauth 진행 중 disable() → DISABLED 유지 (legacy 폴백 차단)", async () => {
+  // 시나리오: SYNCING에서 401 발생 → _kickoff401Reauth가 _attemptSilentRefresh
+  // await 중 사용자가 disable() 호출 → IDB에 refresh token이 없어 silent 경로는
+  // 상태 변경 없이 false 반환 → _legacyReauthAfter401가 DISABLED를 IDENTIFYING/
+  // AUTHENTICATING/NEEDS_CONSENT로 잘못 전이시키면 안 됨.
+  let resolveLoad;
+  const loadPromise = new Promise((r) => { resolveLoad = r; });
+  const refreshStore = {
+    saveRefreshToken: async () => {},
+    loadRefreshToken: () => loadPromise, // 외부 제어 hold
+    clearRefreshToken: async () => {},
+    _peek: () => null,
+    _calls: { save: 0, load: 0, clear: 0 },
+  };
+  const { machine, drain } = loadMachine({
+    hasGoogleId: true, // GIS available — 가드 없을 시 IDENTIFYING으로 이탈
+    findFileId: "fid",
+    downloadResult: { doc: null, etag: null, status: 401 },
+    overrideStubs: { refreshStore },
+  });
+  machine.acceptRedirectToken("expiring-token");
+  await drain(3);
+  // 첫 sync cycle이 401로 _kickoff401Reauth 진입 → loadRefreshToken에서 hold
+  // 사용자 disconnect 클릭 시뮬레이션
+  machine.disable();
+  assert.equal(machine.getState(), "DISABLED", "disable() 즉시 DISABLED");
+  // 이제 IDB load가 null로 resolve → silent refresh false 반환 →
+  // _legacyReauthAfter401 호출. 가드가 SYNC_ENABLED_KEY="0"을 잡아야 함.
+  resolveLoad(null);
+  await drain(5);
+  assert.equal(machine.getState(), "DISABLED", "legacy reauth 가드: DISABLED 유지");
+});
