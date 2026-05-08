@@ -115,8 +115,7 @@ def test_save_after_drawer_close_uses_current_chapter_not_stale(browser):
     }]
     page.evaluate(f"() => window.syncStoreV2.saveBookmarks({json.dumps(seed)})")
 
-    # 2) Open drawer at gen/1, then close it. This used to leave
-    #    _bookmarkDrawerBook='gen', _bookmarkDrawerChapter=1 hanging.
+    # 2) Open drawer at gen/1, then close it.
     page.locator(".title-bookmark-btn").click()
     page.wait_for_selector("#bookmark-drawer:not([hidden])")
     page.locator("#bookmark-drawer-close").click()
