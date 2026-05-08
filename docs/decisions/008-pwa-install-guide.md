@@ -128,3 +128,17 @@ SHELL_FILES에는 추가하지 **않는다**. 안내 이미지는 최초 설치 
 - 실기기 스크린샷 확보 시 → SVG 플레이스홀더를 사진 기반 가이드로 교체
 - iOS 18+에서 `apple-app-site-association`/Smart App Banner 정책이 PWA까지 확장되면 → 별도 분기 추가
 - `navigator.userAgentData` 브라우저 보급률이 충분해지면 → UA 문자열 파싱 → UA-CH 전환
+
+> **개정 (2026-05-08): iOS 17+ 비Safari 브라우저 설치 지원**
+>
+> iOS 17부터 Chrome / Firefox / Edge / Opera 등의 공유 시트에 "홈 화면에 추가" 항목이 노출되며, 그렇게 추가된 아이콘은 standalone WebKit 컨테이너에서 실행된다. "iOS는 Safari에서만 설치 가능"이라는 기존 전제는 더 이상 사실이 아니다.
+>
+> 변경 사항:
+>
+> - 플랫폼 분기를 다음과 같이 세분화한다.
+>   - `ios-other` — iOS 17+ + 비Safari (CriOS/FxiOS/EdgiOS/OPiOS). 공유 메뉴 → "홈 화면에 추가" 텍스트 가이드 노출. **자동 nudge 대상에 포함**.
+>   - `ios-legacy` — iOS ≤16 + 비Safari. 기존 "Safari로 열어 주세요 + 주소 복사" 메시지 그대로 유지.
+> - iOS 메이저 버전 판정: `OS X_Y` 토큰 우선, iPad 마스킹(`MacIntel + maxTouchPoints>1`)은 `Version/X.Y` 폴백 또는 17 가정.
+> - `ios-other` 가이드는 스크린샷 대신 3단계 텍스트 + 감지된 브라우저명("Chrome / Firefox / Edge / Opera / 브라우저") 안내. 브라우저별 공유 버튼 위치가 달라 단일 스크린샷이 부정확하기 때문.
+>
+> 관련 코드: `js/app.js` `getIOSMajor()`, `detectPlatform()`, `buildInstallBody`의 `ios-other`·`ios-legacy` 분기. 테스트: `tests/e2e/test_install_guide.py`의 iOS 17 Chrome / iOS 16 Chrome 분기 케이스.

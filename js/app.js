@@ -4042,7 +4042,8 @@ function initCompactHeader() {
 // Platforms:
 //   "installed"    — already running as a standalone PWA, nothing to show
 //   "ios-safari"   — iPhone/iPad Safari; manual "Add to Home Screen" guide
-//   "ios-other"    — iOS Chrome/Firefox/etc (WebKit wrapper); prompt user to open in Safari
+//   "ios-other"    — iOS 17+ Chrome/Firefox/Edge/etc; share-menu "Add to Home Screen" guide
+//   "ios-legacy"   — iOS ≤16 non-Safari (Add-to-Home-Screen unsupported); prompt to open in Safari
 //   "android"      — Chromium-based Android; beforeinstallprompt available
 //   "desktop"      — Chromium-based desktop; beforeinstallprompt available
 //   "unsupported"  — Firefox/Safari desktop, etc; hide install entry
@@ -4062,16 +4063,37 @@ const install = (() => {
     );
   }
 
+  // Returns the iOS major version, or 0 if not iOS / version is unknown.
+  // Sources, in order of reliability:
+  //   1. "CPU iPhone OS X_Y" / "CPU OS X_Y" — present on iPhone and on iPad in
+  //      iPhone-mode UA. Reliable.
+  //   2. "Version/X.Y" — Safari's marketing version, which tracks iOS major.
+  //      Used as fallback for iPadOS desktop-class UA (masquerades as Mac).
+  //   3. iPad masquerading as Mac with no Version/ token (e.g. CriOS on iPad)
+  //      — assume modern (≥17), since older iPadOS Chrome did not mask UA.
+  function getIOSMajor() {
+    const ua = navigator.userAgent;
+    const osMatch = ua.match(/OS (\d+)_/);
+    if (osMatch) return parseInt(osMatch[1], 10);
+    const isIPadMask = navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1;
+    if (!isIPadMask) return 0;
+    const verMatch = ua.match(/Version\/(\d+)/);
+    if (verMatch) return parseInt(verMatch[1], 10);
+    return 17; // best-effort: modern iPadOS without Version/ token
+  }
+
   function detectPlatform() {
     if (isStandalone()) return "installed";
     const ua = navigator.userAgent;
     const isIOS = /iPad|iPhone|iPod/.test(ua) ||
       (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1); // iPadOS 13+
     if (isIOS) {
-      // On iOS all browsers use WebKit, but only Safari can install.
-      // Safari UA does not include CriOS/FxiOS/EdgiOS/OPiOS.
+      // All iOS browsers wrap WebKit. Safari UA omits the CriOS/FxiOS/etc tokens.
       const isSafari = !/CriOS|FxiOS|EdgiOS|OPiOS|GSA/.test(ua);
-      return isSafari ? "ios-safari" : "ios-other";
+      if (isSafari) return "ios-safari";
+      // iOS 17+ exposes "Add to Home Screen" inside Chrome/Firefox/Edge/Opera
+      // share sheets, and the resulting icon launches in standalone mode.
+      return getIOSMajor() >= 17 ? "ios-other" : "ios-legacy";
     }
     if (deferredPrompt) {
       // Android UA: "Android" token. Otherwise treat as desktop.
@@ -4277,8 +4299,29 @@ function buildInstallBody(platform) {
   }
 
   if (platform === "ios-other") {
+    const ua = navigator.userAgent;
+    const browserName =
+      /CriOS/.test(ua) ? "Chrome" :
+      /FxiOS/.test(ua) ? "Firefox" :
+      /EdgiOS/.test(ua) ? "Edge" :
+      /OPiOS/.test(ua) ? "Opera" :
+      "브라우저";
     $installModalBody.appendChild(el("p", {},
-      "iOS에서는 Safari에서만 홈 화면에 앱을 설치할 수 있습니다."));
+      `${browserName}에서 공유 메뉴를 열고 '홈 화면에 추가'를 선택하면 앱처럼 실행됩니다.`));
+    const list = el("ol", { className: "install-step-list" });
+    list.appendChild(el("li", {}, "주소창 또는 메뉴(···)에서 공유 버튼을 누릅니다."));
+    list.appendChild(el("li", {}, "공유 시트에서 '홈 화면에 추가'를 선택합니다."));
+    list.appendChild(el("li", {}, "오른쪽 위 '추가'를 누르면 홈 화면에 아이콘이 생깁니다."));
+    $installModalBody.appendChild(list);
+    $installModalBody.appendChild(el("p", { className: "install-note" },
+      "메뉴에 '홈 화면에 추가'가 없으면 브라우저를 최신 버전으로 업데이트한 뒤 다시 시도해 주세요."));
+    $installModalBody.appendChild(_buildNeverShowRow());
+    return;
+  }
+
+  if (platform === "ios-legacy") {
+    $installModalBody.appendChild(el("p", {},
+      "이 iOS 버전에서는 Safari에서만 홈 화면에 앱을 설치할 수 있습니다."));
     $installModalBody.appendChild(el("p", {},
       "이 페이지 주소를 복사해 Safari에서 열어 주세요."));
     $installModalBody.appendChild(el("p", { className: "install-bookmark-notice" },
@@ -4442,7 +4485,8 @@ function _saveNudgeState(state) {
 function maybeShowInstallNudge() {
   const platform = install.detectPlatform();
   // Only nudge platforms where installation is meaningful and possible
-  const nudgeable = platform === "ios-safari" || platform === "android";
+  const nudgeable =
+    platform === "ios-safari" || platform === "ios-other" || platform === "android";
   if (!nudgeable) return;
   if (_loadNudgeState().neverShow) return;
 

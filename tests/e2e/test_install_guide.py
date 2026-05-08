@@ -12,6 +12,10 @@ _IOS_CHROME_UA = (
     "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) "
     "AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/123.0.0.0 Mobile/15E148 Safari/604.1"
 )
+_IOS16_CHROME_UA = (
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) "
+    "AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/118.0.0.0 Mobile/15E148 Safari/604.1"
+)
 _ANDROID_UA = (
     "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
@@ -51,8 +55,14 @@ def _open_modal_body(browser, ua: str) -> str | None:
             [],
         ),
         (
-            "iOS Chrome prompts to open in Safari",
+            "iOS 17 Chrome shows share-menu Add-to-Home-Screen guide",
             _IOS_CHROME_UA,
+            ["Chrome", "홈 화면에 추가"],
+            ["··· 버튼", "Safari에서만", "주소 복사"],
+        ),
+        (
+            "iOS 16 Chrome prompts to open in Safari",
+            _IOS16_CHROME_UA,
             ["Safari", "주소 복사"],
             ["··· 버튼"],
         ),
