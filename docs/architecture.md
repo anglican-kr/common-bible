@@ -315,7 +315,9 @@ OAuth 측면 (가장 큰 공격 표면):
 
 브라우저 측면 (defense-in-depth 헤더):
 
-- **Server-level 보안 헤더 (nginx snippet)**: `X-Frame-Options: SAMEORIGIN`, `X-Content-Type-Options: nosniff`, `X-XSS-Protection: 1; mode=block`, `Referrer-Policy: no-referrer-when-downgrade`, `Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), accelerometer=(), gyroscope=()`, `Cross-Origin-Opener-Policy: same-origin`. 모든 응답(HTML5 라우팅 fallback 포함)에 일관 적용. 단일 출처 `/etc/nginx/snippets/security-headers.conf` (저장소 예시: `nginx/security-headers.example.conf`).
+- **Server-level 보안 헤더 (nginx snippet)**: `X-Frame-Options: SAMEORIGIN`, `X-Content-Type-Options: nosniff`, `X-XSS-Protection: 0`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), accelerometer=(), gyroscope=()`, `Cross-Origin-Opener-Policy: same-origin`. 모든 응답(HTML5 라우팅 fallback 포함)에 일관 적용. 단일 출처 `/etc/nginx/snippets/security-headers.conf` (저장소 예시: `nginx/security-headers.example.conf`).
+  - `X-XSS-Protection: 0`: 옛 브라우저 auditor가 자체 결함으로 cross-site leak을 유발하는 사례 때문에 OWASP/MDN 모두 `0` 또는 제거를 권장. 이미 inline `script-src 'self' + sha256` CSP가 modern equivalent.
+  - `Referrer-Policy: strict-origin-when-cross-origin`: 모던 브라우저 기본값을 명시. cross-origin에는 origin만 보내 path leak 차단.
 - **nginx add_header inheritance 함정 우회**: location-level `add_header`가 하나라도 있으면 server-level 헤더 inheritance가 통째로 끊기는 것이 known footgun. file-specific Cache-Control을 둔 location들도 같은 snippet을 다시 include해서 일관 적용 보장.
 
 마지막 보안 감사: [`docs/audit/2026-05-07-pkce-refresh-token.md`](audit/2026-05-07-pkce-refresh-token.md) — Critical/High/Medium 0건.
