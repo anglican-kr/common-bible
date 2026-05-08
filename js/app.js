@@ -262,6 +262,8 @@ document.addEventListener("visibilitychange", () => {
   let delta = 0;
   let active = false;
   let syncing = false;
+  /** @type {ReturnType<typeof setTimeout> | null} */
+  let resetCleanupTimer = null;
 
   // Inline styles always beat non-`!important` CSS, so the
   // `@media (prefers-reduced-motion: reduce)` block in style.css cannot
@@ -287,6 +289,10 @@ document.addEventListener("visibilitychange", () => {
     const ind = ensureIndicator();
     const dropped = Math.min(d, PULL_MAX_PX);
     const progress = Math.min(d / PULL_THRESHOLD_PX, 1);
+    // Force transition off during finger drag so motion tracks 1:1. Without
+    // this, a lingering ease curve from a previous resetVisual would make the
+    // indicator slide rather than follow the finger.
+    ind.style.transition = "none";
     ind.style.transform = `translateX(-50%) translateY(${dropped}px)`;
     ind.style.opacity = String(progress);
     const rot = progress * 270;
@@ -296,12 +302,20 @@ document.addEventListener("visibilitychange", () => {
 
   function resetVisual(animated) {
     const ind = ensureIndicator();
+    // Cancel any pending cleanup from a previous reset so a fast second pull
+    // doesn't have its `ptr-loading` class stripped (or its transition string
+    // overwritten) by a stale timer.
+    if (resetCleanupTimer !== null) {
+      clearTimeout(resetCleanupTimer);
+      resetCleanupTimer = null;
+    }
     const smooth = animated && !prefersReducedMotion();
     ind.style.transition = smooth ? "transform .25s ease, opacity .2s ease" : "none";
     ind.style.transform = "translateX(-50%) translateY(0)";
     ind.style.opacity = "0";
     if (smooth) {
-      setTimeout(() => {
+      resetCleanupTimer = setTimeout(() => {
+        resetCleanupTimer = null;
         ind.style.transition = "none";
         ind.classList.remove("ptr-loading");
       }, 260);
@@ -364,6 +378,12 @@ document.addEventListener("visibilitychange", () => {
   function trigger() {
     syncing = true;
     const ind = ensureIndicator();
+    // Cancel any pending resetVisual cleanup so it doesn't fire mid-spinner
+    // and strip the `ptr-loading` class we just added.
+    if (resetCleanupTimer !== null) {
+      clearTimeout(resetCleanupTimer);
+      resetCleanupTimer = null;
+    }
     ind.classList.add("ptr-loading");
     ind.style.transition = prefersReducedMotion() ? "none" : "transform .2s ease";
     ind.style.transform = `translateX(-50%) translateY(${PULL_THRESHOLD_PX}px)`;
