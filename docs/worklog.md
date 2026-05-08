@@ -2,6 +2,29 @@
 
 ## 2026-05-08
 
+### 2차 통합 보안 감사 + 오디오 캐시 hardening (PR #67)
+
+`project_security_headers_backlog.md` #4 (2차 보안 감사)를 진행. 1차 감사들이 명시적으로 다루지 않았던 영역(Python 데이터 파이프라인, 오디오 처리, 최근 JS 추가분, 의존성·빌드 파이프라인·정적 호스팅 노출면) 중심으로 sweep. Critical 0건, High 4건, Medium 9건, Low/Info 15건 발견.
+
+**감사 보고서**: `docs/audit/2026-05-08-second-comprehensive.md`.
+
+**즉시 처리 (이 PR):**
+
+- **H1** — `sw.js:139` `byteSize = cl ? Number(cl) : 0`. Content-Length 누락(chunked transfer / gzip / Range) 시 0 기록 → totalSize 합산에서 빠짐 → HARD_CAP 도달 신호 못 받음 → Cache API 무한 누적 → origin-단위 quota 초과 시 DATA_CACHE까지 evict. **수정**: `cache.put` 전에 `response.clone().blob().size` 폴백 (clone은 body 소비 전에 해야 함).
+- **H2** — `_putAudioAndEnforceCap`이 두 fetch에서 동시 진행되면 `pickEvictions` 결과가 방금 put된 url을 evict 대상에 포함시켜 재생 중 mp3 삭제. **수정**: 모듈 레벨 `_inflightAudioUrls` Set + 진입/finally cleanup + eviction 시 filter out.
+- **H3** — `cache.put` 성공 후 `recordEntry` 실패 또는 DevTools에서 한쪽만 비움 → IDB·Cache 영구 어긋남. **수정**: 새 `_reconcileAudioCache` 함수 + `activate` 핸들러에서 호출. (a) Cache에 있고 IDB에 없는 항목 → recordEntry로 채움 (byteSize는 blob.size로). (b) IDB에 있고 Cache에 없는 항목 → orphan removeEntries. 비용은 mismatch 수에 비례, healthy 상태에선 microsecond.
+- **H4** — 작업 트리에 평문 client_secret JSON 두 개 (dev·prod). git history는 clean (`git log --all -p -S 'GOCSPX'` 0 hits) + `.gitignore`로 잡힘 + 배포 zip 미포함. 디스크 삭제 처리. secret 자체는 nginx 설정과 Cloud Console에 살아있어 유실 없음.
+
+**테스트**: 기존 audio-cache 23 + state-machine 26 + transport-pkce 23 + search-history 13 = 85 케이스 모두 통과. sw.js 자체에 대한 유닛 테스트는 미작성 (vm 컨텍스트 + ServiceWorkerGlobalScope 스텁 부담) — 향후 별도 의제.
+
+**배포 영향**: 코드 변경은 sw.js 내부 동작(LRU 정확성·race 가드·reconcile)뿐, 사용자 가시 변화 없음. SW 자체 갱신은 브라우저가 `sw.js` 콘텐츠 변경을 감지해 자동 처리 → 다음 visit 시 새 SW activate + reconcile 1회 실행.
+
+**Medium·Low/Info는 백로그**: requirements.txt 의존성 핀 (M1), split_bible.py 엣지 케이스 (M2), `/oauth/token` rate limiting (M5), BFF body parameter pollution 가드 (M6), deploy zip 정리 (M7), release.py 자동 commit (M8), Permissions-Policy 추가 directive (L11) 등.
+
+**OAuth/PKCE/refresh token 회귀 없음.** BFF + 호스트 격리 + 보안 헤더 통합으로 보안 자세 강화 확인.
+
+**문서**: `docs/coding-pitfalls.md` §15 신규 — Cache API ↔ IDB sidecar 불일치 + Content-Length 의존 함정.
+
 ### README 재구성 — Drive 동기화를 top-level로 분리
 
 기존 `## 플랫폼별 동작 차이` 섹션 안에 Google Drive 동기화가 같이 묶여 있었는데, Phase 2h 단계 4에서 GIS / Implicit Flow / FedCM이 제거되며 동기화가 데스크탑·Android·iOS 동일 코드 경로로 통일됐다 — 더 이상 "플랫폼별 차이"의 사례가 아님. 섹션 분리:
