@@ -263,6 +263,13 @@ document.addEventListener("visibilitychange", () => {
   let active = false;
   let syncing = false;
 
+  // Inline styles always beat non-`!important` CSS, so the
+  // `@media (prefers-reduced-motion: reduce)` block in style.css cannot
+  // override `style.transition = "transform .25s ease, …"` we set below.
+  // Gate the transition strings here in JS to honor the user preference.
+  const _reducedMotionMQL = window.matchMedia("(prefers-reduced-motion: reduce)");
+  function prefersReducedMotion() { return _reducedMotionMQL.matches; }
+
   function ensureIndicator() {
     if (indicator) return indicator;
     indicator = document.createElement("div");
@@ -289,12 +296,13 @@ document.addEventListener("visibilitychange", () => {
 
   function resetVisual(animated) {
     const ind = ensureIndicator();
-    ind.style.transition = animated ? "transform .25s ease, opacity .2s ease" : "";
+    const smooth = animated && !prefersReducedMotion();
+    ind.style.transition = smooth ? "transform .25s ease, opacity .2s ease" : "none";
     ind.style.transform = "translateX(-50%) translateY(0)";
     ind.style.opacity = "0";
-    if (animated) {
+    if (smooth) {
       setTimeout(() => {
-        ind.style.transition = "";
+        ind.style.transition = "none";
         ind.classList.remove("ptr-loading");
       }, 260);
     } else {
@@ -357,7 +365,7 @@ document.addEventListener("visibilitychange", () => {
     syncing = true;
     const ind = ensureIndicator();
     ind.classList.add("ptr-loading");
-    ind.style.transition = "transform .2s ease";
+    ind.style.transition = prefersReducedMotion() ? "none" : "transform .2s ease";
     ind.style.transform = `translateX(-50%) translateY(${PULL_THRESHOLD_PX}px)`;
     ind.style.opacity = "1";
     const sync = window.driveSync;
