@@ -953,6 +953,51 @@ body {
   bottom: max(calc(5rem + env(safe-area-inset-bottom)), var(--fab-lift-nav, 0px));
 }
 
+/* ── Pull-to-refresh indicator (mobile) ── */
+#pull-refresh-indicator {
+  position: fixed;
+  top: env(safe-area-inset-top, 0);
+  left: 50%;
+  transform: translateX(-50%) translateY(0);
+  width: 2.4rem;
+  height: 2.4rem;
+  margin-top: 0.5rem;
+  border-radius: 50%;
+  background: var(--bg-card);
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 25;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
+  will-change: transform, opacity;
+}
+
+#pull-refresh-indicator .ptr-icon {
+  transition: transform 0.1s linear;
+}
+
+#pull-refresh-indicator.ptr-loading .ptr-icon {
+  animation: ptr-spin 0.9s linear infinite;
+  transform: none !important;
+}
+
+@keyframes ptr-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (min-width: 769px) {
+  #pull-refresh-indicator { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #pull-refresh-indicator,
+  #pull-refresh-indicator .ptr-icon { transition: none; }
+  #pull-refresh-indicator.ptr-loading .ptr-icon { animation: none; }
+}
+
 /* ── Install guide modal ── */
 #install-scrim {
   display: none;
