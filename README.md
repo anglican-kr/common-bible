@@ -32,7 +32,7 @@ data/source/*.md  (비공개 서브모듈, 73권 마크다운 소스)
 
 ## 플랫폼별 동작 차이
 
-웹 표준이 플랫폼마다 다르게 구현되어 있어 두 가지 영역에서 코드 분기가 발생한다 — 앱 설치, Google Drive 동기화. 다른 모든 기능(읽기·검색·북마크·오디오)은 플랫폼 무관하게 동일하게 동작한다.
+앱 설치는 웹 표준이 플랫폼마다 다르게 구현되어 있어 코드 분기가 필요하다. 다른 모든 기능(읽기·검색·북마크·오디오·동기화)은 플랫폼 무관하게 동일한 코드 경로로 동작한다.
 
 ### 앱 설치 (홈 화면 추가)
 
@@ -45,9 +45,14 @@ data/source/*.md  (비공개 서브모듈, 73권 마크다운 소스)
 
 자세한 안내 화면 설계는 [ADR-008](docs/decisions/008-pwa-install-guide.md), iOS 디바이스별 스플래시(13종 `apple-touch-startup-image`)는 [ADR-007](docs/decisions/007-launch-screen-optimization.md) 참고.
 
-### Google Drive 동기화 (북마크·설정·읽기 위치)
+### iOS 고유 제약
 
-데스크탑·Android·iOS가 동일하게 OAuth 2.0 Authorization Code + PKCE + refresh token 단일 경로 ([ADR-011 Phase 2h](docs/decisions/011-bookmark-sync.md), [`docs/design/pkce-migration.md`](docs/design/pkce-migration.md)).
+- **iOS Safari 탭 사용 시 7일 ITP**: 홈 화면에 설치하지 않고 Safari 탭에서 직접 여는 경우, 7일 미사용 시 ITP가 storage(쿠키 + localStorage + IndexedDB 포함)를 정리 → 모든 로컬 상태(북마크·설정·동기화 인증) 재구성 필요. **홈 화면 설치 PWA(iOS 17+ HSWA)는 storage가 영속되어 ITP 적용 대상 아님** — ADR-011 §맥락 참고.
+- **iOS Chrome / Firefox / Edge (WebKit 래퍼)**: 설치 불가 + Drive 동기화 시 PWA-격리 컨텍스트 미보장. "Safari에서 열기" 안내로 끝.
+
+## Google Drive 동기화 (북마크·설정·읽기 위치)
+
+데스크탑·Android·iOS가 모두 동일하게 OAuth 2.0 Authorization Code + PKCE + refresh token 단일 경로 ([ADR-011 Phase 2h](docs/decisions/011-bookmark-sync.md), [`docs/design/pkce-migration.md`](docs/design/pkce-migration.md)). Phase 2h 이전에 있던 GIS Token Client / Implicit Flow / FedCM 분기는 모두 제거됨.
 
 | 시나리오 | 동작 |
 |---------|-----|
@@ -65,14 +70,14 @@ data/source/*.md  (비공개 서브모듈, 73권 마크다운 소스)
 - **만성 401 cap (`MAX_REAUTH=3`)**: 새 access token도 Drive가 거절하면 4번째 401에서 ERROR + snackbar.
 - **race 가드**: state-based + `localStorage["bible-drive-sync"]` flag-based + 매 async await 직후 재검사 — 사용자가 silent refresh / code 교환 진행 중 disconnect 시 의도 보존.
 
-보안 모델 자세히: [`docs/audit/2026-05-07-pkce-refresh-token.md`](docs/audit/2026-05-07-pkce-refresh-token.md).
-
 ### 알려진 한계
 
-- **iOS Safari 탭 사용 시 7일 ITP**: 홈 화면에 설치하지 않고 Safari 탭에서 직접 여는 경우, 7일 미사용 시 ITP가 storage(쿠키 + localStorage + IndexedDB 포함)를 정리 → 동기화 재연결 필요. **홈 화면 설치 PWA(iOS 17+ HSWA)는 storage가 영속되어 ITP 적용 대상 아님** — ADR-011 §맥락 참고.
 - **OAuth 검수 진행 중 → refresh token 7일 만료**: Google OAuth 앱이 "Testing" 상태인 동안엔 refresh token TTL 7일. 검수 통과 후 영구 — 코드 변경 0.
 - **외부 권한 회수**: 사용자가 Google 계정 설정에서 권한을 끊으면 다음 silent refresh가 `invalid_grant`로 실패 → IDB clear + NEEDS_CONSENT 폴백.
-- **iOS Chrome/Firefox 등 WebKit 래퍼 브라우저**: 설치 불가 + Drive 동기화 시 PWA-격리 컨텍스트 미보장.
+
+iOS Safari ITP로 인한 storage 정리는 동기화 외 다른 로컬 상태에도 영향을 주므로 [iOS 고유 제약](#ios-고유-제약) 절에 둠.
+
+보안 모델 자세히: [`docs/audit/2026-05-07-pkce-refresh-token.md`](docs/audit/2026-05-07-pkce-refresh-token.md).
 
 ## 프로젝트 구조
 
