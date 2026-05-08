@@ -2941,6 +2941,9 @@ body.verse-select-active .verse.verse-poetry[data-vref] {
   align-items: center;
   padding: 0.3rem 0.75rem;
   gap: 0.4rem;
+  /* Match folder rows to bookmark rows (label 0.88rem + ref 0.72rem,
+     line-height 1.8, gap 0.1rem, padding 0.6rem). */
+  min-height: 3.58rem;
   transition: background 0.1s;
 }
 
@@ -3614,7 +3617,12 @@ body.verse-select-active .verse.verse-poetry[data-vref] {
 .bm-folder-row,
 .bm-bookmark-row {
   cursor: grab;
-  touch-action: none;
+  /* pan-y lets the drawer body scroll vertically while JS owns horizontal
+     swipe + long-press-to-drag. Once long-press fires we setPointerCapture,
+     which preempts any subsequent browser scroll for that pointer. */
+  touch-action: pan-y;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .bm-folder-row:active,
@@ -3627,7 +3635,11 @@ body.verse-select-active .verse.verse-poetry[data-vref] {
 .bm-bookmark-row button,
 .bm-bookmark-row a {
   cursor: pointer;
-  touch-action: auto;
+  touch-action: pan-y;
+  /* Suppress iOS Safari's native long-press link preview / link drag so the
+     app's long-press-to-drag gesture wins. */
+  -webkit-touch-callout: none;
+  -webkit-user-drag: none;
 }
 
 .bm-folder.bm-dragging > .bm-folder-row,
