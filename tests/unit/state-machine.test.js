@@ -921,3 +921,51 @@ test("37. _clearCache의 removeItem throw해도 disable() 정상 진행", async 
   machine.disable();
   assert.equal(machine.getState(), "DISABLED", "removeItem 실패해도 DISABLED 정착");
 });
+
+// ── Group 12: 세션 종료 시 캐시 무효화 (계정 전환 보호) ─────────────────────
+// 토큰 자체가 폐기되는 NEEDS_CONSENT 진입점에서 캐시도 함께 비운다. Drive
+// appDataFolder는 사용자별 격리되므로 데이터 누출은 없지만, 다른 계정으로
+// 재로그인 시 stale fileId로 인한 404 round trip 1회를 절약.
+
+test("38. silent refresh invalid_grant → 캐시도 함께 클리어", async () => {
+  const { machine, drain, localStorage, stubs } = loadMachine({
+    initialRefreshToken: "rt-expired",
+    refreshResult: { ok: false, status: 400, error: "invalid_grant" },
+    initialStorage: {
+      [CACHE_FILE_ID_KEY]: "fid-prev-user",
+      [CACHE_ETAG_KEY]: '"e-prev"',
+      [CACHE_SYNCED_U_KEY]: "5",
+    },
+  });
+  machine.enable();
+  await drain(3);
+  assert.equal(machine.getState(), "NEEDS_CONSENT");
+  assert.equal(stubs.refreshStore._calls.clear, 1, "refresh token IDB clear");
+  assert.equal(localStorage.getItem(CACHE_FILE_ID_KEY), null, "fileId 캐시 클리어");
+  assert.equal(localStorage.getItem(CACHE_ETAG_KEY), null, "etag 캐시 클리어");
+  assert.equal(localStorage.getItem(CACHE_SYNCED_U_KEY), null, "syncedMaxU 캐시 클리어");
+});
+
+test("39. 401 + IDB 비어있음 → NEEDS_CONSENT + 캐시 클리어", async () => {
+  // refresh token이 없는 상태에서 401 → _kickoff401Reauth는 silent refresh가
+  // false를 반환받고 NEEDS_CONSENT 폴백 경로로 진입한다.
+  const { machine, drain, localStorage } = loadMachine({
+    initialRefreshToken: null,
+    findFileId: "fid-prev",
+    initialStorage: {
+      [CACHE_FILE_ID_KEY]: "fid-prev",
+      [CACHE_ETAG_KEY]: '"e-prev"',
+      [CACHE_SYNCED_U_KEY]: "5",
+    },
+    downloadResult: { doc: null, etag: null, status: 401 },
+    exchangeResult: {
+      ok: true, access_token: "at-x", refresh_token: "",
+      expires_in: 3600, scope: "drive.appdata",
+    },
+  });
+  // PKCE callback으로 token 주입 → IDLE → SYNCING → 401 → reauth 폴백
+  await machine.acceptRedirectCode("c", "v");
+  await drain(8);
+  assert.equal(machine.getState(), "NEEDS_CONSENT");
+  assert.equal(localStorage.getItem(CACHE_FILE_ID_KEY), null, "401 reauth no-token 폴백에서 캐시 클리어");
+});

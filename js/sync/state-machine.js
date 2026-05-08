@@ -307,6 +307,11 @@ function createSyncMachine({ onStateChange } = {}) {
         L.log({ kind: "ACTION", event: "SILENT_REFRESH_RACE_LOST", reason: "sync_disabled_post_clear" });
         return true;
       }
+      // Session credentials are gone — drop the sync cache too so a re-auth
+      // as a different account doesn't waste a 404 round trip on the prior
+      // user's stale fileId/etag. Drive's appDataFolder isolation would
+      // self-heal, but pre-clearing is one fewer surprise round trip.
+      _clearCache();
       _transition(S.NEEDS_CONSENT, {}, { type: "SILENT_REFRESH_INVALID" });
       _refreshUI();
       return true;
@@ -775,6 +780,10 @@ function createSyncMachine({ onStateChange } = {}) {
       L.log({ kind: "ACTION", event: "REAUTH_RACE_LOST", reason: "sync_disabled" });
       return;
     }
+    // Same rationale as the invalid_grant branch above: token is gone, so
+    // pre-clear cache to avoid a stale-fileId 404 if the user re-auths as
+    // a different account.
+    _clearCache();
     // Park in NEEDS_CONSENT — user must click "연결" to start a new PKCE round.
     _transition(S.NEEDS_CONSENT, { reAuthFails: nextReAuthFails }, event);
     _refreshUI();
