@@ -55,6 +55,26 @@ const MAX_REDIRECT_ATTEMPTS = 3;
 const REDIRECT_ATTEMPTS_KEY = "bible-drive-redirect-attempts";
 const SCOPE = "https://www.googleapis.com/auth/drive.appdata email";
 
+// ── Sync cache (per-cycle round-trip elimination) ────────────────────────────
+// localStorage cache populated after every successful sync. Survives reloads
+// so the *next* cycle starts with a fileId, ETag, and the maxU snapshot from
+// the last sync. Three cooperating outcomes in _syncCycle:
+//   - cached fileId → skip files.list lookup unconditionally.
+//   - cached etag   → conditional GET with If-None-Match. 304 means remote
+//                     is byte-identical to last sync, so the JSON body is
+//                     never transferred or merged.
+//   - cached _u     → if localMaxU == cached _u, local is also unchanged.
+//                     304 + matching maxU = the entire cycle is a no-op
+//                     (visibilitychange / focus polling case). 304 + diverged
+//                     maxU = upload-only (skip merge — remote == cached state
+//                     == base of local edits, so local IS the merge result).
+//
+// Invalidated by 404/412 (file deleted or etag conflict), explicit disable()
+// (user disconnect), and deleteRemoteFile().
+const CACHE_FILE_ID_KEY  = "bible-drive-cache-file-id";
+const CACHE_ETAG_KEY     = "bible-drive-cache-etag";
+const CACHE_SYNCED_U_KEY = "bible-drive-cache-synced-u";
+
 // ── Factory ───────────────────────────────────────────────────────────────────
 
 /**
@@ -366,6 +386,43 @@ function createSyncMachine({ onStateChange } = {}) {
     });
   }
 
+  // ── Sync cache helpers ────────────────────────────────────────────────────
+  // See CACHE_*_KEY block at top of module for the rationale. Three keys
+  // instead of one JSON blob keeps the read path branch-free and lets a
+  // partial corruption (e.g. a missing etag) degrade gracefully — the slow
+  // path simply runs.
+
+  /** @returns {{ fileId: string | null; etag: string | null; syncedMaxU: number }} */
+  function _loadCache() {
+    const rawU = localStorage.getItem(CACHE_SYNCED_U_KEY);
+    const u = rawU !== null ? parseInt(rawU, 10) : NaN;
+    return {
+      fileId: localStorage.getItem(CACHE_FILE_ID_KEY),
+      etag:   localStorage.getItem(CACHE_ETAG_KEY),
+      syncedMaxU: Number.isFinite(u) ? u : -1,
+    };
+  }
+
+  /**
+   * @param {{ fileId?: string | null; etag?: string | null; syncedMaxU?: number }} patch
+   *   Only non-null fields are written. Null etag (e.g. server omitted ETag
+   *   header) leaves the cached value alone — better to keep a stale etag and
+   *   discover divergence on next cycle than to drop into the slow path.
+   */
+  function _saveCache({ fileId, etag, syncedMaxU } = {}) {
+    if (fileId)                      localStorage.setItem(CACHE_FILE_ID_KEY, fileId);
+    if (etag)                        localStorage.setItem(CACHE_ETAG_KEY, etag);
+    if (typeof syncedMaxU === "number" && Number.isFinite(syncedMaxU)) {
+      localStorage.setItem(CACHE_SYNCED_U_KEY, String(syncedMaxU));
+    }
+  }
+
+  function _clearCache() {
+    localStorage.removeItem(CACHE_FILE_ID_KEY);
+    localStorage.removeItem(CACHE_ETAG_KEY);
+    localStorage.removeItem(CACHE_SYNCED_U_KEY);
+  }
+
   // ── v2 data operations ────────────────────────────────────────────────────
 
   /**
@@ -394,13 +451,26 @@ function createSyncMachine({ onStateChange } = {}) {
     try {
       if (!_token) throw new Error("no_token");
 
-      const fileId = await T.findSyncFileId(_token);
-      L.log({ kind: "NETWORK", event: "FIND_FILE", fileId: L.mask("fileId", fileId) });
+      const local     = V2.loadLocal();
+      const localMaxU = V2.maxU(local);
+      const cache     = _loadCache();
 
-      const local      = V2.loadLocal();
-      const localMaxU  = V2.maxU(local);
+      // ── Resolve fileId: cache hit skips files.list (~500ms saved) ──
+      // The appDataFolder/sync.json file ID is stable for the lifetime of the
+      // file, so caching it after first discovery is safe. Stale cache (file
+      // deleted from another device) → 404 below → clear + retry next cycle.
+      let fileId = cache.fileId;
+      if (!fileId) {
+        fileId = await T.findSyncFileId(_token);
+        L.log({ kind: "NETWORK", event: "FIND_FILE", fileId: L.mask("fileId", fileId) });
+      } else {
+        L.log({ kind: "ACTION", event: "FIND_FILE_CACHED", fileId: L.mask("fileId", fileId) });
+      }
 
       // ── No remote file yet: upload local state ──
+      // No fileId to cache after a fresh upload — the multipart create
+      // response is parsed by uploadSyncFile but the new ID isn't surfaced.
+      // Next cycle will pay one findSyncFileId before the cache fills.
       if (!fileId) {
         const { ok, status } = await T.uploadSyncFile(_token, V2.buildSyncPayload(_deviceId));
         L.log({ kind: "NETWORK", event: "UPLOAD_NEW", ok, status });
@@ -410,20 +480,74 @@ function createSyncMachine({ onStateChange } = {}) {
         return;
       }
 
-      // ── Download remote ──
-      const { doc: remote, etag, status: dlStatus } = await T.downloadSyncFile(_token, fileId);
+      // ── Conditional download with cached etag (304 fast path) ──
+      // Only attach If-None-Match when the etag came from the same cached
+      // fileId. Mismatch means we just resolved a fresh fileId via
+      // findSyncFileId — cached etag belongs to a different file (or was
+      // never set), so a 304 here would be misleading.
+      const conditionalEtag = (fileId === cache.fileId) ? cache.etag : null;
+      const { doc: remote, etag, status: dlStatus } = await T.downloadSyncFile(
+        _token, fileId,
+        conditionalEtag ? { ifNoneMatch: conditionalEtag } : {},
+      );
       L.log({ kind: "NETWORK", event: "DOWNLOAD", status: dlStatus, etag: L.mask("etag", etag) });
+
       if (dlStatus === 401)             { dispatch({ type: "SYNC_FAIL", reason: "401" });              return; }
-      if (dlStatus === 0 || (dlStatus !== undefined && dlStatus >= 500)) { dispatch({ type: "SYNC_FAIL", reason: `http_${dlStatus}` }); return; }
+      if (dlStatus === 404) {
+        // File was deleted (likely via deleteRemoteFile on another device).
+        // Drop the cache so the next cycle re-discovers via files.list and
+        // creates a fresh sync.json.
+        _clearCache();
+        dispatch({ type: "SYNC_FAIL", reason: `http_${dlStatus}` });
+        return;
+      }
+      if (dlStatus === 0 || (dlStatus !== undefined && dlStatus >= 500)) {
+        dispatch({ type: "SYNC_FAIL", reason: `http_${dlStatus}` });
+        return;
+      }
+
+      // ── 304 Not Modified: remote == cached snapshot. Skip merge entirely. ──
+      // Two sub-cases by local divergence:
+      //   localMaxU == cache.syncedMaxU → nothing changed on either side,
+      //     full no-op (typical visibilitychange/focus poll case).
+      //   localMaxU >  cache.syncedMaxU → local edits since last sync but
+      //     remote untouched. Upload-only is correct: the cached state IS
+      //     remote IS the base our local edits sit on, so local already
+      //     equals merge(local, remote).
+      if (dlStatus === 304) {
+        if (localMaxU === cache.syncedMaxU) {
+          dispatch({ type: "SYNC_DONE" });
+          return;
+        }
+        const { ok, status, etag: newEtag } = await T.uploadSyncFile(
+          _token, V2.buildSyncPayload(_deviceId),
+          { fileId, ifMatch: cache.etag },
+        );
+        L.log({ kind: "NETWORK", event: "UPLOAD_UPDATE", ok, status });
+        if (status === 401) { dispatch({ type: "SYNC_FAIL", reason: "401" }); return; }
+        if (status === 412) {
+          // Lost race: another device wrote between our 304 and our PATCH.
+          // Drop cache so the retry takes the full download+merge path.
+          _clearCache();
+          dispatch({ type: "SYNC_FAIL", reason: "412" });
+          return;
+        }
+        if (!ok)            { dispatch({ type: "SYNC_FAIL", reason: `http_${status}` }); return; }
+        _saveCache({ fileId, etag: newEtag, syncedMaxU: localMaxU });
+        dispatch({ type: "SYNC_DONE" });
+        return;
+      }
+
       if (!remote)                      { dispatch({ type: "SYNC_DONE" });                             return; }
 
       // ── Remote is legacy v1: upgrade Drive to v2 ──
       if (!V2.validateRemote(remote)) {
         L.log({ kind: "ACTION", event: "REMOTE_SCHEMA_MISMATCH", schema: remote?.schemaVersion });
-        const { ok, status } = await T.uploadSyncFile(_token, V2.buildSyncPayload(_deviceId), { fileId, ifMatch: etag });
+        const { ok, status, etag: newEtag } = await T.uploadSyncFile(_token, V2.buildSyncPayload(_deviceId), { fileId, ifMatch: etag });
         L.log({ kind: "NETWORK", event: "UPLOAD_UPDATE", ok, status });
         if (status === 401)             { dispatch({ type: "SYNC_FAIL", reason: "401" });              return; }
-        if (status === 412)             { dispatch({ type: "SYNC_FAIL", reason: "412" });              return; }
+        if (status === 412)             { _clearCache(); dispatch({ type: "SYNC_FAIL", reason: "412" }); return; }
+        _saveCache({ fileId, etag: newEtag, syncedMaxU: localMaxU });
         dispatch({ type: "SYNC_DONE" });
         return;
       }
@@ -452,11 +576,16 @@ function createSyncMachine({ onStateChange } = {}) {
                         + Object.keys(merged.bookmarks?.tombstones ?? {}).length;
 
       if (mergedMaxU > remoteMaxU || mergedCount > remoteCount) {
-        const { ok, status } = await T.uploadSyncFile(_token, V2.buildSyncPayload(_deviceId), { fileId, ifMatch: etag });
+        const { ok, status, etag: newEtag } = await T.uploadSyncFile(_token, V2.buildSyncPayload(_deviceId), { fileId, ifMatch: etag });
         L.log({ kind: "NETWORK", event: "UPLOAD_UPDATE", ok, status });
         if (status === 401)             { dispatch({ type: "SYNC_FAIL", reason: "401" });              return; }
-        if (status === 412)             { dispatch({ type: "SYNC_FAIL", reason: "412" });              return; }
+        if (status === 412)             { _clearCache(); dispatch({ type: "SYNC_FAIL", reason: "412" }); return; }
         if (!ok)                        { dispatch({ type: "SYNC_FAIL", reason: `http_${status}` });   return; }
+        _saveCache({ fileId, etag: newEtag, syncedMaxU: mergedMaxU });
+      } else {
+        // No upload needed — local now matches remote post-merge. Cache the
+        // remote etag so the next cycle's conditional GET can hit 304.
+        _saveCache({ fileId, etag, syncedMaxU: mergedMaxU });
       }
 
       dispatch({ type: "SYNC_DONE" });
@@ -666,6 +795,10 @@ function createSyncMachine({ onStateChange } = {}) {
     // (e.g. disable() while still DISABLED waiting for silent refresh to
     // resolve — _transition would not flip the flag in that branch).
     localStorage.setItem(SYNC_ENABLED_KEY, "0");
+    // Drop the sync cache so a subsequent sign-in (potentially as a different
+    // Google account) doesn't reuse a fileId/etag that no longer belongs to
+    // the new identity.
+    _clearCache();
     dispatch({ type: "DISABLE" });
   }
   function requestSync() { if (_state === S.IDLE) dispatch({ type: "SYNC_REQUEST" }); }
@@ -684,6 +817,8 @@ function createSyncMachine({ onStateChange } = {}) {
       const { ok } = await T.deleteSyncFile(_token, fileId);
       L.log({ kind: "NETWORK", event: "DELETE_FILE", ok });
     }
+    // Cached fileId/etag now point to a deleted file — drop them.
+    _clearCache();
   }
 
   return { enable, disable, requestSync, dispatch,
