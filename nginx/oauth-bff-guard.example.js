@@ -29,14 +29,34 @@
 function guardAndForward(r) {
     const body = r.requestText || "";
 
-    // form-urlencoded 파라미터 키는 `&` 또는 body 시작 위치 다음에 옴.
-    // `=`로 끝나는 키 매칭으로 prefix 충돌(예: `my_client_secret_extra`) 회피.
-    if (/(?:^|&)client_secret=/i.test(body)) {
-        r.return(400, JSON.stringify({
-            error: "invalid_request",
-            error_description: "client_secret must not be sent by client"
-        }) + "\n");
-        return;
+    // application/x-www-form-urlencoded는 키도 percent-encoding/+ 인코딩을
+    // 허용하므로 raw 문자열 regex 매칭은 우회 가능 (예: `client%5Fsecret=fake`,
+    // `client+secret=fake`). Google의 form 파서는 디코드 후 매칭하므로
+    // `client%5Fsecret=fake&...&client_secret=<our>`처럼 RFC §3.2 위배 중복이
+    // 만들어진다. 각 파라미터 키를 명시적으로 디코드한 뒤 비교해 차단.
+    const params = body.split("&");
+    for (var i = 0; i < params.length; i++) {
+        var p = params[i];
+        if (!p) continue;
+        var eq = p.indexOf("=");
+        var rawKey = eq >= 0 ? p.substring(0, eq) : p;
+        var key;
+        try {
+            // form-urlencoded는 `+`를 공백으로 디코드하므로 먼저 치환,
+            // 그다음 percent-decode.
+            key = decodeURIComponent(rawKey.replace(/\+/g, "%20")).toLowerCase();
+        } catch (_) {
+            // 잘못된 percent-encoding은 nginx/Google이 어떻게 처리하든 보내고
+            // 거기서 거부받게 둠. 우리 가드 역할이 아님.
+            continue;
+        }
+        if (key === "client_secret") {
+            r.return(400, JSON.stringify({
+                error: "invalid_request",
+                error_description: "client_secret must not be sent by client"
+            }) + "\n");
+            return;
+        }
     }
 
     r.internalRedirect("@oauth_token_upstream");
