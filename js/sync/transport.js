@@ -388,19 +388,29 @@ async function findSyncFileId(token) {
   } catch { return null; }
 }
 
-// Returns { doc, etag } or { doc: null, etag: null } on any failure.
+// Returns { doc, etag, status } or { doc: null, etag: null, status } on any
+// failure. When `ifNoneMatch` is supplied, sends an `If-None-Match` header so
+// Drive returns 304 with no body if the resource is unchanged — the steady-
+// state fast path lets the state machine skip the merge-and-upload work.
 /**
  * @param {string} token
  * @param {string} fileId
+ * @param {{ ifNoneMatch?: string | null }} [opts]
  * @returns {Promise<DriveDownloadResult>}
  */
-async function downloadSyncFile(token, fileId) {
+async function downloadSyncFile(token, fileId, { ifNoneMatch } = {}) {
   try {
-    const { res, ok, etag } = await driveFetch(`/files/${fileId}?alt=media`, { token });
-    if (!ok) return { doc: null, etag: null, status: res.status };
+    /** @type {Record<string, string>} */
+    const headers = {};
+    if (ifNoneMatch) headers["If-None-Match"] = ifNoneMatch;
+    const { res, ok, etag, status } = await driveFetch(`/files/${fileId}?alt=media`, { token, headers });
+    // 304 Not Modified: ok is false (only 2xx is "ok"), no body to parse.
+    // Caller relies on the cached etag — we don't echo it back here.
+    if (status === 304) return { doc: null, etag: null, status: 304 };
+    if (!ok) return { doc: null, etag: null, status };
     let doc;
-    try { doc = await res.json(); } catch { return { doc: null, etag: null }; }
-    return { doc, etag, status: res.status };
+    try { doc = await res.json(); } catch { return { doc: null, etag: null, status }; }
+    return { doc, etag, status };
   } catch { return { doc: null, etag: null, status: 0 }; }
 }
 

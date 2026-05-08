@@ -246,7 +246,11 @@ export interface SyncTransport {
   fetchUserInfo: (token: string) => Promise<{ email: string | null }>;
   driveFetch: (path: string, opts: DriveFetchOptions) => Promise<DriveFetchResult>;
   findSyncFileId: (token: string) => Promise<string | null>;
-  downloadSyncFile: (token: string, fileId: string) => Promise<DriveDownloadResult>;
+  downloadSyncFile: (
+    token: string,
+    fileId: string,
+    opts?: { ifNoneMatch?: string | null },
+  ) => Promise<DriveDownloadResult>;
   uploadSyncFile: (
     token: string,
     body: SyncPayload,

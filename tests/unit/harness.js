@@ -30,6 +30,10 @@ export const REDIRECT_ATTEMPTS_KEY = "bible-drive-redirect-attempts";
 export const SYNC_ENABLED_KEY = "bible-drive-sync";
 export const SYNC_EMAIL_KEY = "bible-drive-sync-email";
 export const MAX_REDIRECT_ATTEMPTS = 3;
+// Sync cache keys (mirrored from state-machine.js).
+export const CACHE_FILE_ID_KEY  = "bible-drive-cache-file-id";
+export const CACHE_ETAG_KEY     = "bible-drive-cache-etag";
+export const CACHE_SYNCED_U_KEY = "bible-drive-cache-synced-u";
 
 // ── In-memory localStorage ───────────────────────────────────────────────────
 

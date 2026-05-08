@@ -17,6 +17,9 @@ import {
   REDIRECT_ATTEMPTS_KEY,
   SYNC_ENABLED_KEY,
   MAX_REDIRECT_ATTEMPTS,
+  CACHE_FILE_ID_KEY,
+  CACHE_ETAG_KEY,
+  CACHE_SYNCED_U_KEY,
 } from "./harness.js";
 
 // ── Group 1: 초기 상태 + ENABLE 분기 ─────────────────────────────────────────
@@ -605,4 +608,364 @@ test("26. 401 reauth 경로의 silent refresh는 SYNCING에서도 override (from
   await drain(10);
   assert.equal(machine.getState(), "IDLE", "fromReauth=true 덕분에 SYNCING 가드 우회, 회복 성공");
   assert.equal(downloadCalls, 2, "두 번째 사이클에서 200, 무한 루프 없음");
+});
+
+// ── Group 10: Sync 캐시 (fileId / etag / syncedMaxU 라운드트립 단축) ─────────
+// _syncCycle은 매 사이클 직렬로 3 round trip(findSyncFileId + download +
+// upload)을 발생시켰다. 캐시는 (a) 안정적인 fileId를 재사용해 files.list를
+// 생략, (b) If-None-Match로 304를 받아 다운로드 본문 전송을 차단, (c)
+// localMaxU == syncedMaxU 일 때 merge·upload 자체를 생략한다.
+
+test("27. 첫 sync 후 fileId·etag·syncedMaxU가 localStorage에 캐시됨", async () => {
+  const findFileCalls = [];
+  const remoteDoc = {
+    schemaVersion: 2,
+    bookmarks: { items: {}, tombstones: {} },
+    settings: {
+      fontSize: { v: null, _u: 0 }, colorScheme: { v: null, _u: 0 },
+      theme: { v: null, _u: 0 }, bookOrder: { v: null, _u: 0 },
+      startupBehavior: { v: null, _u: 0 },
+    },
+    lastRead: { v: null, _u: 0 },
+    deviceId: "remote",
+  };
+  const { machine, drain, localStorage } = loadMachine({
+    initialRefreshToken: "rt-x",
+    overrideStubs: {
+      T: {
+        findSyncFileId: async () => { findFileCalls.push(1); return "fid-1"; },
+        downloadSyncFile: async () => ({ doc: remoteDoc, etag: '"e1"', status: 200 }),
+      },
+    },
+  });
+  machine.enable();
+  await drain(8);
+  assert.equal(machine.getState(), "IDLE");
+  assert.equal(findFileCalls.length, 1, "첫 사이클은 findSyncFileId 1회");
+  assert.equal(localStorage.getItem(CACHE_FILE_ID_KEY), "fid-1", "fileId 캐시됨");
+  assert.equal(localStorage.getItem(CACHE_ETAG_KEY), '"e1"', "etag 캐시됨");
+  assert.equal(localStorage.getItem(CACHE_SYNCED_U_KEY), "0", "syncedMaxU 캐시됨");
+});
+
+test("28. 캐시 hit + 304 + 로컬 변화 없음 → upload·findSyncFileId 모두 생략", async () => {
+  const findCalls = [];
+  const downloadCalls = [];
+  const uploadCalls = [];
+  const { machine, drain } = loadMachine({
+    initialRefreshToken: "rt-x",
+    initialStorage: {
+      [CACHE_FILE_ID_KEY]: "fid-cached",
+      [CACHE_ETAG_KEY]: '"e-cached"',
+      [CACHE_SYNCED_U_KEY]: "0",
+    },
+    overrideStubs: {
+      T: {
+        findSyncFileId: async () => { findCalls.push(1); return "fid-cached"; },
+        downloadSyncFile: async (_t, _id, opts) => {
+          downloadCalls.push(opts ?? {});
+          return { doc: null, etag: null, status: 304 };
+        },
+        uploadSyncFile: async () => { uploadCalls.push(1); return { ok: true, status: 200, etag: '"new"' }; },
+      },
+    },
+  });
+  machine.enable();
+  await drain(8);
+  assert.equal(machine.getState(), "IDLE");
+  assert.equal(findCalls.length, 0, "캐시 hit이라 files.list 생략");
+  assert.equal(downloadCalls.length, 1, "조건부 GET 1회");
+  assert.equal(downloadCalls[0].ifNoneMatch, '"e-cached"', "캐시 etag로 If-None-Match");
+  assert.equal(uploadCalls.length, 0, "변화 없음 → upload 생략");
+});
+
+test("29. 캐시 hit + 304 + 로컬만 변경 → merge 건너뛰고 upload-only", async () => {
+  // V2.maxU stub만 1로 바꿔 localMaxU > syncedMaxU 시나리오를 만든다.
+  const uploadCalls = [];
+  const mergeCalls = [];
+  const { machine, drain, localStorage } = loadMachine({
+    initialRefreshToken: "rt-x",
+    initialStorage: {
+      [CACHE_FILE_ID_KEY]: "fid-cached",
+      [CACHE_ETAG_KEY]: '"e-cached"',
+      [CACHE_SYNCED_U_KEY]: "10",
+    },
+    overrideStubs: {
+      V2: {
+        maxU: () => 20, // local 변경됨
+        mergeDocs: (l) => { mergeCalls.push(1); return l; },
+      },
+      T: {
+        downloadSyncFile: async () => ({ doc: null, etag: null, status: 304 }),
+        uploadSyncFile: async (_t, _b, opts) => {
+          uploadCalls.push(opts);
+          return { ok: true, status: 200, etag: '"e-after-upload"' };
+        },
+      },
+    },
+  });
+  machine.enable();
+  await drain(8);
+  assert.equal(machine.getState(), "IDLE");
+  assert.equal(mergeCalls.length, 0, "remote 미변경이라 merge 호출 안 됨");
+  assert.equal(uploadCalls.length, 1, "upload 1회");
+  assert.equal(uploadCalls[0].fileId, "fid-cached", "캐시된 fileId 사용");
+  assert.equal(uploadCalls[0].ifMatch, '"e-cached"', "캐시 etag로 If-Match");
+  assert.equal(localStorage.getItem(CACHE_ETAG_KEY), '"e-after-upload"', "새 etag 캐시 반영");
+  assert.equal(localStorage.getItem(CACHE_SYNCED_U_KEY), "20", "syncedMaxU 갱신");
+});
+
+test("30. 캐시 hit + 다운로드 404 → 캐시 무효화 + SYNC_FAIL", async () => {
+  const { machine, drain, localStorage } = loadMachine({
+    initialRefreshToken: "rt-x",
+    initialStorage: {
+      [CACHE_FILE_ID_KEY]: "fid-stale",
+      [CACHE_ETAG_KEY]: '"e-stale"',
+      [CACHE_SYNCED_U_KEY]: "5",
+    },
+    overrideStubs: {
+      T: {
+        downloadSyncFile: async () => ({ doc: null, etag: null, status: 404 }),
+      },
+    },
+  });
+  machine.enable();
+  await drain(8);
+  assert.equal(localStorage.getItem(CACHE_FILE_ID_KEY), null, "fileId 캐시 클리어");
+  assert.equal(localStorage.getItem(CACHE_ETAG_KEY), null, "etag 캐시 클리어");
+  assert.equal(localStorage.getItem(CACHE_SYNCED_U_KEY), null, "syncedMaxU 캐시 클리어");
+});
+
+test("31. 캐시 hit + 304 + upload 412 → 캐시 무효화 (다음 사이클 재머지)", async () => {
+  const { machine, drain, localStorage } = loadMachine({
+    initialRefreshToken: "rt-x",
+    initialStorage: {
+      [CACHE_FILE_ID_KEY]: "fid-c",
+      [CACHE_ETAG_KEY]: '"e-c"',
+      [CACHE_SYNCED_U_KEY]: "1",
+    },
+    overrideStubs: {
+      V2: { maxU: () => 2 },
+      T: {
+        downloadSyncFile: async () => ({ doc: null, etag: null, status: 304 }),
+        uploadSyncFile: async () => ({ ok: false, status: 412, etag: null }),
+      },
+    },
+  });
+  machine.enable();
+  await drain(8);
+  assert.equal(localStorage.getItem(CACHE_FILE_ID_KEY), null, "412에 캐시 클리어");
+  assert.equal(localStorage.getItem(CACHE_ETAG_KEY), null);
+});
+
+test("32. disable() → 캐시 클리어 (다른 계정 로그인 보호)", () => {
+  const { machine, localStorage } = loadMachine({
+    initialRefreshToken: "rt-x",
+    initialStorage: {
+      [CACHE_FILE_ID_KEY]: "fid-c",
+      [CACHE_ETAG_KEY]: '"e-c"',
+      [CACHE_SYNCED_U_KEY]: "5",
+    },
+  });
+  machine.disable();
+  assert.equal(localStorage.getItem(CACHE_FILE_ID_KEY), null);
+  assert.equal(localStorage.getItem(CACHE_ETAG_KEY), null);
+  assert.equal(localStorage.getItem(CACHE_SYNCED_U_KEY), null);
+});
+
+test("33. 캐시 hit + 200 (원격 변경됨) → 일반 merge 경로 + 새 etag 캐시", async () => {
+  const remoteDoc = {
+    schemaVersion: 2,
+    bookmarks: { items: {}, tombstones: {} },
+    settings: {
+      fontSize: { v: null, _u: 0 }, colorScheme: { v: null, _u: 0 },
+      theme: { v: null, _u: 0 }, bookOrder: { v: null, _u: 0 },
+      startupBehavior: { v: null, _u: 0 },
+    },
+    lastRead: { v: null, _u: 0 },
+  };
+  const { machine, drain, localStorage } = loadMachine({
+    initialRefreshToken: "rt-x",
+    initialStorage: {
+      [CACHE_FILE_ID_KEY]: "fid-c",
+      [CACHE_ETAG_KEY]: '"e-old"',
+      [CACHE_SYNCED_U_KEY]: "0",
+    },
+    overrideStubs: {
+      T: {
+        // 200 returned because remote changed since cached etag
+        downloadSyncFile: async () => ({ doc: remoteDoc, etag: '"e-new"', status: 200 }),
+      },
+    },
+  });
+  machine.enable();
+  await drain(8);
+  assert.equal(machine.getState(), "IDLE");
+  assert.equal(localStorage.getItem(CACHE_ETAG_KEY), '"e-new"', "새 etag 캐시 반영");
+  assert.equal(localStorage.getItem(CACHE_FILE_ID_KEY), "fid-c", "fileId 유지");
+});
+
+test("34. 캐시 비어있을 때 downloadSyncFile에 ifNoneMatch 미전달", async () => {
+  const downloadCalls = [];
+  const { machine, drain } = loadMachine({
+    initialRefreshToken: "rt-x",
+    findFileId: "fid-1",
+    overrideStubs: {
+      T: {
+        downloadSyncFile: async (_t, _id, opts) => {
+          downloadCalls.push(opts);
+          return { doc: null, etag: '"e1"', status: 200 };
+        },
+      },
+    },
+  });
+  machine.enable();
+  await drain(8);
+  assert.equal(downloadCalls.length, 1);
+  assert.ok(
+    !downloadCalls[0]?.ifNoneMatch,
+    "캐시 미스 시 If-None-Match 헤더 안 보냄",
+  );
+});
+
+// ── Group 11: PWA 스토리지 제약조건 (quota / SecurityError) 회복 ─────────────
+// 캐시는 부수 최적화이므로 localStorage 작업 실패가 sync 자체를 망가뜨리면 안
+// 된다. _saveCache의 throw가 _syncCycle catch까지 전파되면 사용자가 ERROR
+// 상태로 떨어지는데, 이는 sync가 멀쩡한 상황에서 부적절하다.
+
+test("35. _saveCache의 setItem이 quota error throw해도 sync는 IDLE 정착", async () => {
+  // remote doc을 반환해 _syncCycle이 merge 후 _saveCache까지 도달하게 만든다.
+  const remoteDoc = {
+    schemaVersion: 2,
+    bookmarks: { items: {}, tombstones: {} },
+    settings: {
+      fontSize: { v: null, _u: 0 }, colorScheme: { v: null, _u: 0 },
+      theme: { v: null, _u: 0 }, bookOrder: { v: null, _u: 0 },
+      startupBehavior: { v: null, _u: 0 },
+    },
+    lastRead: { v: null, _u: 0 },
+  };
+  const { machine, drain, localStorage, logEntries } = loadMachine({
+    initialRefreshToken: "rt-x",
+    findFileId: "fid-1",
+    overrideStubs: {
+      T: {
+        downloadSyncFile: async () => ({ doc: remoteDoc, etag: '"e1"', status: 200 }),
+      },
+    },
+  });
+  // 캐시 키 setItem만 throw — SYNC_ENABLED_KEY 등 다른 키는 그대로 동작해야
+  // 상태 머신이 정상 진행한다.
+  const origSet = localStorage.setItem;
+  localStorage.setItem = (k, v) => {
+    if (k.startsWith("bible-drive-cache-")) {
+      throw new Error("QuotaExceededError");
+    }
+    return origSet(k, v);
+  };
+  machine.enable();
+  await drain(8);
+  assert.equal(machine.getState(), "IDLE", "캐시 쓰기 실패해도 IDLE 정착");
+  assert.equal(localStorage.getItem(CACHE_FILE_ID_KEY), null, "캐시 미저장");
+  const cacheFail = logEntries.find((e) => e.event === "CACHE_SAVE_FAIL");
+  assert.ok(cacheFail, "관찰 가능성을 위해 CACHE_SAVE_FAIL 로그 남김");
+});
+
+test("36. _loadCache의 getItem이 SecurityError throw → slow path graceful fallback", async () => {
+  // 캐시는 분명히 채워져 있지만 getItem이 throw하는 환경(예: Safari ITP 차단)
+  // → loadCache가 빈 캐시를 반환해야 하고 _syncCycle은 findSyncFileId로 폴백.
+  const findCalls = [];
+  const { machine, drain, localStorage } = loadMachine({
+    initialRefreshToken: "rt-x",
+    initialStorage: {
+      [CACHE_FILE_ID_KEY]: "fid-cached",
+      [CACHE_ETAG_KEY]: '"e-cached"',
+      [CACHE_SYNCED_U_KEY]: "0",
+    },
+    overrideStubs: {
+      T: {
+        findSyncFileId: async () => { findCalls.push(1); return null; },
+        uploadSyncFile: async () => ({ ok: true, status: 200, etag: '"e1"' }),
+      },
+    },
+  });
+  const origGet = localStorage.getItem;
+  localStorage.getItem = (k) => {
+    if (k.startsWith("bible-drive-cache-")) {
+      throw new Error("SecurityError");
+    }
+    return origGet(k);
+  };
+  machine.enable();
+  await drain(8);
+  assert.equal(machine.getState(), "IDLE", "loadCache throw → slow path → IDLE");
+  assert.equal(findCalls.length, 1, "캐시 무시하고 findSyncFileId 호출 (slow path)");
+});
+
+test("37. _clearCache의 removeItem throw해도 disable() 정상 진행", async () => {
+  const { machine, drain, localStorage } = loadMachine({
+    initialRefreshToken: "rt-x",
+    findFileId: null,
+    uploadResult: { ok: true, status: 200, etag: '"e1"' },
+  });
+  machine.enable();
+  await drain(5);
+  assert.equal(machine.getState(), "IDLE", "사전 조건: IDLE");
+  const origRemove = localStorage.removeItem;
+  localStorage.removeItem = (k) => {
+    if (k.startsWith("bible-drive-cache-")) {
+      throw new Error("storage disabled");
+    }
+    return origRemove(k);
+  };
+  // _clearCache가 throw를 흘리면 dispatch가 실행되지 않고 state도 안 바뀜.
+  machine.disable();
+  assert.equal(machine.getState(), "DISABLED", "removeItem 실패해도 DISABLED 정착");
+});
+
+// ── Group 12: 세션 종료 시 캐시 무효화 (계정 전환 보호) ─────────────────────
+// 토큰 자체가 폐기되는 NEEDS_CONSENT 진입점에서 캐시도 함께 비운다. Drive
+// appDataFolder는 사용자별 격리되므로 데이터 누출은 없지만, 다른 계정으로
+// 재로그인 시 stale fileId로 인한 404 round trip 1회를 절약.
+
+test("38. silent refresh invalid_grant → 캐시도 함께 클리어", async () => {
+  const { machine, drain, localStorage, stubs } = loadMachine({
+    initialRefreshToken: "rt-expired",
+    refreshResult: { ok: false, status: 400, error: "invalid_grant" },
+    initialStorage: {
+      [CACHE_FILE_ID_KEY]: "fid-prev-user",
+      [CACHE_ETAG_KEY]: '"e-prev"',
+      [CACHE_SYNCED_U_KEY]: "5",
+    },
+  });
+  machine.enable();
+  await drain(3);
+  assert.equal(machine.getState(), "NEEDS_CONSENT");
+  assert.equal(stubs.refreshStore._calls.clear, 1, "refresh token IDB clear");
+  assert.equal(localStorage.getItem(CACHE_FILE_ID_KEY), null, "fileId 캐시 클리어");
+  assert.equal(localStorage.getItem(CACHE_ETAG_KEY), null, "etag 캐시 클리어");
+  assert.equal(localStorage.getItem(CACHE_SYNCED_U_KEY), null, "syncedMaxU 캐시 클리어");
+});
+
+test("39. 401 + IDB 비어있음 → NEEDS_CONSENT + 캐시 클리어", async () => {
+  // refresh token이 없는 상태에서 401 → _kickoff401Reauth는 silent refresh가
+  // false를 반환받고 NEEDS_CONSENT 폴백 경로로 진입한다.
+  const { machine, drain, localStorage } = loadMachine({
+    initialRefreshToken: null,
+    findFileId: "fid-prev",
+    initialStorage: {
+      [CACHE_FILE_ID_KEY]: "fid-prev",
+      [CACHE_ETAG_KEY]: '"e-prev"',
+      [CACHE_SYNCED_U_KEY]: "5",
+    },
+    downloadResult: { doc: null, etag: null, status: 401 },
+    exchangeResult: {
+      ok: true, access_token: "at-x", refresh_token: "",
+      expires_in: 3600, scope: "drive.appdata",
+    },
+  });
+  // PKCE callback으로 token 주입 → IDLE → SYNCING → 401 → reauth 폴백
+  await machine.acceptRedirectCode("c", "v");
+  await drain(8);
+  assert.equal(machine.getState(), "NEEDS_CONSENT");
+  assert.equal(localStorage.getItem(CACHE_FILE_ID_KEY), null, "401 reauth no-token 폴백에서 캐시 클리어");
 });
