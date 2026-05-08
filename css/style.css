@@ -2516,7 +2516,7 @@ body.verse-select-active .verse[data-vref] {
   transition: background 0.1s;
 }
 
-body.verse-select-active .verse[data-vref]:hover {
+body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   background: color-mix(in srgb, var(--accent) 10%, transparent);
   border-radius: 5px;
 }
