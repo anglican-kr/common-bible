@@ -826,3 +826,98 @@ test("34. 캐시 비어있을 때 downloadSyncFile에 ifNoneMatch 미전달", as
     "캐시 미스 시 If-None-Match 헤더 안 보냄",
   );
 });
+
+// ── Group 11: PWA 스토리지 제약조건 (quota / SecurityError) 회복 ─────────────
+// 캐시는 부수 최적화이므로 localStorage 작업 실패가 sync 자체를 망가뜨리면 안
+// 된다. _saveCache의 throw가 _syncCycle catch까지 전파되면 사용자가 ERROR
+// 상태로 떨어지는데, 이는 sync가 멀쩡한 상황에서 부적절하다.
+
+test("35. _saveCache의 setItem이 quota error throw해도 sync는 IDLE 정착", async () => {
+  // remote doc을 반환해 _syncCycle이 merge 후 _saveCache까지 도달하게 만든다.
+  const remoteDoc = {
+    schemaVersion: 2,
+    bookmarks: { items: {}, tombstones: {} },
+    settings: {
+      fontSize: { v: null, _u: 0 }, colorScheme: { v: null, _u: 0 },
+      theme: { v: null, _u: 0 }, bookOrder: { v: null, _u: 0 },
+      startupBehavior: { v: null, _u: 0 },
+    },
+    lastRead: { v: null, _u: 0 },
+  };
+  const { machine, drain, localStorage, logEntries } = loadMachine({
+    initialRefreshToken: "rt-x",
+    findFileId: "fid-1",
+    overrideStubs: {
+      T: {
+        downloadSyncFile: async () => ({ doc: remoteDoc, etag: '"e1"', status: 200 }),
+      },
+    },
+  });
+  // 캐시 키 setItem만 throw — SYNC_ENABLED_KEY 등 다른 키는 그대로 동작해야
+  // 상태 머신이 정상 진행한다.
+  const origSet = localStorage.setItem;
+  localStorage.setItem = (k, v) => {
+    if (k.startsWith("bible-drive-cache-")) {
+      throw new Error("QuotaExceededError");
+    }
+    return origSet(k, v);
+  };
+  machine.enable();
+  await drain(8);
+  assert.equal(machine.getState(), "IDLE", "캐시 쓰기 실패해도 IDLE 정착");
+  assert.equal(localStorage.getItem(CACHE_FILE_ID_KEY), null, "캐시 미저장");
+  const cacheFail = logEntries.find((e) => e.event === "CACHE_SAVE_FAIL");
+  assert.ok(cacheFail, "관찰 가능성을 위해 CACHE_SAVE_FAIL 로그 남김");
+});
+
+test("36. _loadCache의 getItem이 SecurityError throw → slow path graceful fallback", async () => {
+  // 캐시는 분명히 채워져 있지만 getItem이 throw하는 환경(예: Safari ITP 차단)
+  // → loadCache가 빈 캐시를 반환해야 하고 _syncCycle은 findSyncFileId로 폴백.
+  const findCalls = [];
+  const { machine, drain, localStorage } = loadMachine({
+    initialRefreshToken: "rt-x",
+    initialStorage: {
+      [CACHE_FILE_ID_KEY]: "fid-cached",
+      [CACHE_ETAG_KEY]: '"e-cached"',
+      [CACHE_SYNCED_U_KEY]: "0",
+    },
+    overrideStubs: {
+      T: {
+        findSyncFileId: async () => { findCalls.push(1); return null; },
+        uploadSyncFile: async () => ({ ok: true, status: 200, etag: '"e1"' }),
+      },
+    },
+  });
+  const origGet = localStorage.getItem;
+  localStorage.getItem = (k) => {
+    if (k.startsWith("bible-drive-cache-")) {
+      throw new Error("SecurityError");
+    }
+    return origGet(k);
+  };
+  machine.enable();
+  await drain(8);
+  assert.equal(machine.getState(), "IDLE", "loadCache throw → slow path → IDLE");
+  assert.equal(findCalls.length, 1, "캐시 무시하고 findSyncFileId 호출 (slow path)");
+});
+
+test("37. _clearCache의 removeItem throw해도 disable() 정상 진행", async () => {
+  const { machine, drain, localStorage } = loadMachine({
+    initialRefreshToken: "rt-x",
+    findFileId: null,
+    uploadResult: { ok: true, status: 200, etag: '"e1"' },
+  });
+  machine.enable();
+  await drain(5);
+  assert.equal(machine.getState(), "IDLE", "사전 조건: IDLE");
+  const origRemove = localStorage.removeItem;
+  localStorage.removeItem = (k) => {
+    if (k.startsWith("bible-drive-cache-")) {
+      throw new Error("storage disabled");
+    }
+    return origRemove(k);
+  };
+  // _clearCache가 throw를 흘리면 dispatch가 실행되지 않고 state도 안 바뀜.
+  machine.disable();
+  assert.equal(machine.getState(), "DISABLED", "removeItem 실패해도 DISABLED 정착");
+});

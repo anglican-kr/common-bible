@@ -392,15 +392,27 @@ function createSyncMachine({ onStateChange } = {}) {
   // partial corruption (e.g. a missing etag) degrade gracefully — the slow
   // path simply runs.
 
+  // All three helpers swallow storage errors. The cache is a pure optimization;
+  // any failure (QuotaExceededError, SecurityError on disabled storage, ITP
+  // partitioning) MUST degrade to the slow path rather than propagate up to
+  // _syncCycle's catch block — a quota error during _saveCache would otherwise
+  // knock the user into the ERROR state when sync itself was healthy.
+
   /** @returns {{ fileId: string | null; etag: string | null; syncedMaxU: number }} */
   function _loadCache() {
-    const rawU = localStorage.getItem(CACHE_SYNCED_U_KEY);
-    const u = rawU !== null ? parseInt(rawU, 10) : NaN;
-    return {
-      fileId: localStorage.getItem(CACHE_FILE_ID_KEY),
-      etag:   localStorage.getItem(CACHE_ETAG_KEY),
-      syncedMaxU: Number.isFinite(u) ? u : -1,
-    };
+    try {
+      const rawU = localStorage.getItem(CACHE_SYNCED_U_KEY);
+      const u = rawU !== null ? parseInt(rawU, 10) : NaN;
+      return {
+        fileId: localStorage.getItem(CACHE_FILE_ID_KEY),
+        etag:   localStorage.getItem(CACHE_ETAG_KEY),
+        syncedMaxU: Number.isFinite(u) ? u : -1,
+      };
+    } catch {
+      // localStorage access threw (e.g. SecurityError when cookies disabled).
+      // Return empty cache — _syncCycle treats this as cache miss.
+      return { fileId: null, etag: null, syncedMaxU: -1 };
+    }
   }
 
   /**
@@ -410,17 +422,29 @@ function createSyncMachine({ onStateChange } = {}) {
    *   discover divergence on next cycle than to drop into the slow path.
    */
   function _saveCache({ fileId, etag, syncedMaxU } = {}) {
-    if (fileId)                      localStorage.setItem(CACHE_FILE_ID_KEY, fileId);
-    if (etag)                        localStorage.setItem(CACHE_ETAG_KEY, etag);
-    if (typeof syncedMaxU === "number" && Number.isFinite(syncedMaxU)) {
-      localStorage.setItem(CACHE_SYNCED_U_KEY, String(syncedMaxU));
+    try {
+      if (fileId)                      localStorage.setItem(CACHE_FILE_ID_KEY, fileId);
+      if (etag)                        localStorage.setItem(CACHE_ETAG_KEY, etag);
+      if (typeof syncedMaxU === "number" && Number.isFinite(syncedMaxU)) {
+        localStorage.setItem(CACHE_SYNCED_U_KEY, String(syncedMaxU));
+      }
+    } catch (err) {
+      // Most likely QuotaExceededError. Cache write failure is non-fatal — the
+      // next cycle just takes the slow path and retries the write. Log so the
+      // pattern is visible if it becomes chronic.
+      L.log({ kind: "ERROR", event: "CACHE_SAVE_FAIL", reason: err instanceof Error ? err.message : String(err) });
     }
   }
 
   function _clearCache() {
-    localStorage.removeItem(CACHE_FILE_ID_KEY);
-    localStorage.removeItem(CACHE_ETAG_KEY);
-    localStorage.removeItem(CACHE_SYNCED_U_KEY);
+    try {
+      localStorage.removeItem(CACHE_FILE_ID_KEY);
+      localStorage.removeItem(CACHE_ETAG_KEY);
+      localStorage.removeItem(CACHE_SYNCED_U_KEY);
+    } catch {
+      // Same rationale as _saveCache — silent. Stale cache that can't be
+      // cleared still safely degrades: 404/412 paths re-clear next cycle.
+    }
   }
 
   // ── v2 data operations ────────────────────────────────────────────────────
