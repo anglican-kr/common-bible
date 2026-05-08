@@ -1444,26 +1444,43 @@ function _setupDragHandle(li, row) {
     const startX = e.clientX;
     const startY = e.clientY;
     const origRect = li.getBoundingClientRect();
-    const isMobile = _isMobileViewport();
+    const isTouch = e.pointerType !== "mouse";
     const swipeActions = row.querySelector(".bm-row-actions-mobile");
-    const canSwipe = isMobile && !!swipeActions;
+    const canSwipe = _isMobileViewport() && isTouch && !!swipeActions;
     // null until the first significant move classifies the gesture.
-    // "drag" → reorder, "swipe" → reveal actions, "longpress" → reveal via hold
+    // "drag" → reorder, "swipe" → reveal actions, "abort" → cede to browser scroll
     let mode = null;
     let dragStarted = false;
     const startedSwiped = canSwipe && row.classList.contains("bm-swiped");
     const baseOffset = startedSwiped ? -SWIPE_REVEAL_PX : 0;
     let longPressTimer = null;
 
-    if (canSwipe && !startedSwiped) {
+    // Touch devices: long-press without movement enters drag-to-reorder mode
+    // (haptic feedback acts as the visual cue). Action panel reveal is
+    // horizontal-swipe only. Mouse users start dragging immediately on move.
+    if (isTouch && !startedSwiped) {
       longPressTimer = setTimeout(() => {
         if (mode !== null) return;
-        mode = "longpress";
-        _openSwipedRow(row);
+        mode = "drag";
+        _beginDrag();
         if (navigator.vibrate) {
           try { navigator.vibrate(10); } catch {}
         }
       }, LONG_PRESS_MS);
+    }
+
+    function _beginDrag() {
+      dragStarted = true;
+      const ghost = document.createElement("li");
+      ghost.className = "bm-drag-ghost";
+      ghost.style.width = origRect.width + "px";
+      ghost.style.left = origRect.left + "px";
+      const rowClone = (li.querySelector(".bm-folder-row, .bm-bookmark-row") || li.firstElementChild).cloneNode(true);
+      ghost.appendChild(rowClone);
+      document.body.appendChild(ghost);
+      try { row.setPointerCapture(pointerId); } catch {}
+      li.classList.add("bm-dragging");
+      _dragState = { id: li.dataset.id, ghost, origLi: li, startY, origTop: origRect.top };
     }
 
     const clearLongPress = () => {
@@ -1491,13 +1508,21 @@ function _setupDragHandle(li, row) {
       if (mode === null) {
         if (Math.hypot(dx, dy) < 5) return;
         clearLongPress();
-        // Horizontal-dominant gesture on mobile → swipe; otherwise → drag-to-reorder.
         if (canSwipe && Math.abs(dx) > Math.abs(dy)) {
+          // Horizontal-dominant gesture on touch → swipe-reveal action panel.
           mode = "swipe";
           row.classList.add("bm-swiping");
           row.setPointerCapture(pointerId);
+        } else if (isTouch) {
+          // Touch + vertical movement before long-press fired → user is
+          // scrolling the drawer body, not dragging. Cede to the browser.
+          mode = "abort";
+          cleanupPointerHandlers();
+          return;
         } else {
+          // Mouse user → immediate drag-to-reorder on any movement.
           mode = "drag";
+          _beginDrag();
         }
       }
 
@@ -1514,25 +1539,7 @@ function _setupDragHandle(li, row) {
         return;
       }
 
-      if (mode === "longpress") {
-        // After long-press reveal, ignore further movement until pointerup.
-        return;
-      }
-
       // mode === "drag"
-      if (!dragStarted) {
-        dragStarted = true;
-        const ghost = document.createElement("li");
-        ghost.className = "bm-drag-ghost";
-        ghost.style.width = origRect.width + "px";
-        ghost.style.left = origRect.left + "px";
-        const rowClone = (li.querySelector(".bm-folder-row, .bm-bookmark-row") || li.firstElementChild).cloneNode(true);
-        ghost.appendChild(rowClone);
-        document.body.appendChild(ghost);
-        row.setPointerCapture(pointerId);
-        li.classList.add("bm-dragging");
-        _dragState = { id: li.dataset.id, ghost, origLi: li, startY, origTop: origRect.top };
-      }
       if (!_dragState) return;
       _dragState.ghost.style.top = (_dragState.origTop + (e.clientY - _dragState.startY)) + "px";
       _updateDragIndicators(e.clientX, e.clientY);
@@ -1555,11 +1562,11 @@ function _setupDragHandle(li, row) {
         return;
       }
 
-      if (mode === "longpress") {
-        // Suppress the click that the browser fires after pointerup so it doesn't
-        // immediately re-close the just-revealed action row.
+      if (dragStarted) {
+        // Suppress the synthetic click that follows pointerup so the bookmark
+        // link doesn't navigate / the folder doesn't toggle when the user
+        // releases a drag.
         document.addEventListener("click", (ce) => { ce.stopPropagation(); ce.preventDefault(); }, { capture: true, once: true });
-        return;
       }
 
       if (!_dragState) return;

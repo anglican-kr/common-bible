@@ -119,21 +119,28 @@ def test_swipe_other_row_closes_previous(browser):
         ctx.close()
 
 
-def test_longpress_reveals_mobile_actions(browser):
-    """500ms 이상 롱프레스하면 스와이프와 동일하게 액션 패널이 열린다."""
+def test_longpress_starts_drag(browser):
+    """500ms 이상 롱프레스하면 드래그-재정렬 모드가 시작된다 (액션 패널이 아님)."""
     ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA)
     ctx.add_init_script(CLEAR_APP_STORAGE)
     page = ctx.new_page()
     try:
         _open_drawer(page, [_BM_A])
-        _longpress(page, idx=0, ms=600)
-        page.wait_for_selector(_SWIPED_SEL, timeout=2_000)
+        page.evaluate(_LONGPRESS_DOWN_JS, 0)
+        page.wait_for_timeout(600)
+        # bm-dragging class on the li indicates drag mode entered.
+        page.wait_for_selector("li.bm-bookmark.bm-dragging", timeout=2_000)
+        # Drag ghost element should exist on body.
+        assert page.locator(".bm-drag-ghost").count() > 0
+        # Action panel must NOT be revealed by long-press anymore.
+        assert page.locator(_SWIPED_SEL).count() == 0
+        page.evaluate(_LONGPRESS_UP_JS)
     finally:
         ctx.close()
 
 
-def test_short_press_does_not_reveal_actions(browser):
-    """짧은 press(<500ms)는 롱프레스를 트리거하지 않는다."""
+def test_short_press_does_not_start_drag(browser):
+    """짧은 press(<500ms)는 드래그를 시작하지 않고 액션 패널도 열리지 않는다."""
     ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA)
     ctx.add_init_script(CLEAR_APP_STORAGE)
     page = ctx.new_page()
@@ -142,6 +149,7 @@ def test_short_press_does_not_reveal_actions(browser):
         _longpress(page, idx=0, ms=200)
         page.wait_for_timeout(200)
         assert page.locator(_SWIPED_SEL).count() == 0
+        assert page.locator("li.bm-bookmark.bm-dragging").count() == 0
     finally:
         ctx.close()
 
