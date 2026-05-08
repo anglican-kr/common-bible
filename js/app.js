@@ -112,8 +112,6 @@ let _selectedVerseRefs = new Set();
 let _verseSelectDrag = null; // { startIdx, allVerses, isAdding, moved }
 let _currentBookId = null;
 let _currentChapter = null;
-let _bookmarkDrawerBook = null;
-let _bookmarkDrawerChapter = null;
 let _bookmarkDrawerTrap = null;
 let _bookmarkDrawerLastFocus = null;
 let _bmSaveModalTrap = null;
@@ -4596,8 +4594,6 @@ function openBookmarkDrawer(bookId, chapter) {
     _bookmarkDrawerCloseTimer = null;
   }
   $bookmarkDrawer.classList.remove("drawer-closing");
-  _bookmarkDrawerBook = bookId;
-  _bookmarkDrawerChapter = chapter;
   _bookmarkDrawerLastFocus = document.activeElement;
   $bookmarkScrim.hidden = false;
   $bookmarkDrawer.hidden = false;
@@ -5178,9 +5174,8 @@ $bookmarkDrawerBody.addEventListener("keydown", (e) => {
 // ── Save bookmark modal ──
 
 function openSaveModal(mode, opts = {}) {
-  // Drawer may not be open when entering via long-press; fall back to current context.
-  const bookId = _bookmarkDrawerBook || _currentBookId;
-  const chapter = _bookmarkDrawerChapter || _currentChapter;
+  const bookId = _currentBookId;
+  const chapter = _currentChapter;
   let verseSpec = "all";
   let existingId = opts.existingId || null;
   let existing = null;
@@ -5369,9 +5364,9 @@ function commitSaveBookmark(existingId, label, note, folderId, bookId, chapter, 
 function openMergeDialog(candidates, incomingSpec, mode, fallbackContext = null) {
   clearNode($bmMergeBody);
   const resolvedBookId =
-    (fallbackContext && fallbackContext.bookId) || _bookmarkDrawerBook || _currentBookId;
+    (fallbackContext && fallbackContext.bookId) || _currentBookId;
   const resolvedChapter =
-    (fallbackContext && fallbackContext.chapter) || _bookmarkDrawerChapter || _currentChapter;
+    (fallbackContext && fallbackContext.chapter) || _currentChapter;
 
   let target = candidates[0];
 
@@ -5635,7 +5630,7 @@ $bmSaveChapterBtn.addEventListener("click", () => {
 
 $bmSelectVersesBtn.addEventListener("click", () => {
   closeBookmarkDrawer();
-  enterVerseSelectMode(_bookmarkDrawerBook, _bookmarkDrawerChapter);
+  enterVerseSelectMode(_currentBookId, _currentChapter);
 });
 
 $bmAddFolderBtn.addEventListener("click", () => {

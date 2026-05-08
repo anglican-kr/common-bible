@@ -2,6 +2,8 @@
 
 import json
 
+from .conftest import CLEAR_APP_STORAGE
+
 BASE = "http://localhost:8080"
 
 
@@ -92,5 +94,81 @@ def test_bm_empty_msg_disappears_after_save(browser):
     # Empty state gone, bookmark item visible
     assert page.locator("li.bm-empty").count() == 0
     assert page.locator("li.bm-bookmark").count() == 1
+
+    ctx.close()
+
+
+def test_save_after_drawer_close_uses_current_chapter_not_stale(browser):
+    """Regression: opening the drawer at gen/1 then closing it must not poison
+    a later save flow for a different chapter (john/3) into asking to merge
+    with the gen/1 bookmark."""
+    ctx = browser.new_context()
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    page = ctx.new_page()
+
+    # 1) Seed an existing Genesis 1 bookmark in the v2 store.
+    _open_chapter_and_wait(page, "gen/1")
+    seed = [{
+        "type": "bookmark", "id": "bm-seed-gen1",
+        "bookId": "gen", "chapter": 1,
+        "label": "창세 1장 (시드)", "verseSpec": "all",
+    }]
+    page.evaluate(f"() => window.syncStoreV2.saveBookmarks({json.dumps(seed)})")
+
+    # 2) Open drawer at gen/1, then close it.
+    page.locator(".title-bookmark-btn").click()
+    page.wait_for_selector("#bookmark-drawer:not([hidden])")
+    page.locator("#bookmark-drawer-close").click()
+    page.wait_for_selector("#bookmark-drawer", state="hidden")
+
+    # 3) Navigate to a different chapter where no bookmark exists yet.
+    _open_chapter_and_wait(page, "john/3")
+
+    # 4) Enter verse-select for john/3 and pick verse 1, then tap save.
+    page.evaluate("() => enterVerseSelectMode('john', 3)")
+    page.wait_for_selector("#verse-select-bar:not([hidden])")
+    page.click("#v1")
+    assert not page.locator("#verse-select-bookmark-btn").is_disabled()
+    page.click("#verse-select-bookmark-btn")
+
+    # 5) The save modal must open directly. The merge dialog must NOT appear,
+    #    because there is no existing john/3 bookmark.
+    page.wait_for_selector("#bm-save-modal:not([hidden])", timeout=2_000)
+    assert page.locator("#bm-merge-modal").is_hidden(), \
+        "merge dialog should not appear for a chapter with no existing bookmark"
+
+    # The pre-filled label should reference John 3:1, not Genesis 1.
+    label = page.locator("#bm-label-input").input_value()
+    assert "3:1" in label or "3장" in label, \
+        f"label should reference john 3, got: {label!r}"
+
+    ctx.close()
+
+
+def test_select_verses_button_preserves_chapter_after_drawer_close(browser):
+    """Regression: drawer's '절 선택' button closes the drawer and enters
+    verse-select mode. The drawer-close path now nulls _bookmarkDrawer{Book,Chapter},
+    so the click handler must capture coords *before* closing."""
+    ctx = browser.new_context()
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    page = ctx.new_page()
+
+    _open_chapter_and_wait(page, "gen/1")
+    page.locator(".title-bookmark-btn").click()
+    page.wait_for_selector("#bookmark-drawer:not([hidden])")
+
+    page.locator("#bm-select-verses-btn").click()
+
+    # Drawer closes, verse-select bar appears, and the bar must reflect gen/1
+    # — i.e. _currentBookId/_currentChapter are not clobbered to null.
+    page.wait_for_selector("#bookmark-drawer", state="hidden")
+    page.wait_for_selector("#verse-select-bar:not([hidden])")
+
+    state = page.evaluate(
+        "() => ({ book: _currentBookId, chapter: _currentChapter, mode: _verseSelectMode })"
+    )
+    assert state["mode"] is True, "verse-select mode should be active"
+    assert state["book"] == "gen" and state["chapter"] == 1, \
+        f"current chapter must remain gen/1, got: {state!r}"
 
     ctx.close()
