@@ -1473,6 +1473,10 @@ function _setupDragHandle(li, row) {
       ghost.className = "bm-drag-ghost";
       ghost.style.width = origRect.width + "px";
       ghost.style.left = origRect.left + "px";
+      // Pin to the source row's position so long-press entry (where no
+      // pointermove has fired yet) doesn't flash the ghost at the document's
+      // default position before the user starts moving.
+      ghost.style.top = origRect.top + "px";
       const rowClone = (li.querySelector(".bm-folder-row, .bm-bookmark-row") || li.firstElementChild).cloneNode(true);
       ghost.appendChild(rowClone);
       document.body.appendChild(ghost);
