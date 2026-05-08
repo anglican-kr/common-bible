@@ -313,6 +313,11 @@ OAuth 측면 (가장 큰 공격 표면):
 - **Refresh token**: webcrypto AES-GCM 암호화 + 비추출 키(`extractable: false`). 평문은 한 번도 IDB에 닿지 않는다.
 - **디버그 로그 마스킹**: `sync/debug-log.js`의 `mask()`가 토큰·이메일·fileId를 머리·꼬리만 남기고 `…`로 가린다.
 
+브라우저 측면 (defense-in-depth 헤더):
+
+- **Server-level 보안 헤더 (nginx snippet)**: `X-Frame-Options: SAMEORIGIN`, `X-Content-Type-Options: nosniff`, `X-XSS-Protection: 1; mode=block`, `Referrer-Policy: no-referrer-when-downgrade`, `Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), accelerometer=(), gyroscope=()`, `Cross-Origin-Opener-Policy: same-origin`. 모든 응답(HTML5 라우팅 fallback 포함)에 일관 적용. 단일 출처 `/etc/nginx/snippets/security-headers.conf` (저장소 예시: `nginx/security-headers.example.conf`).
+- **nginx add_header inheritance 함정 우회**: location-level `add_header`가 하나라도 있으면 server-level 헤더 inheritance가 통째로 끊기는 것이 known footgun. file-specific Cache-Control을 둔 location들도 같은 snippet을 다시 include해서 일관 적용 보장.
+
 마지막 보안 감사: [`docs/audit/2026-05-07-pkce-refresh-token.md`](audit/2026-05-07-pkce-refresh-token.md) — Critical/High/Medium 0건.
 
 ## 10. 알려진 한계와 의도적 비결정
