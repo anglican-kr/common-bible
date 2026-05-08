@@ -98,13 +98,20 @@ self.addEventListener("message", (event) => {
 // the AUDIO_CACHE sidecar (IDB metadata) with Cache API contents so stale
 // state from prior incomplete writes or DevTools-cleared storage doesn't
 // drift the LRU bookkeeping.
+//
+// clients.claim() is awaited INSIDE waitUntil after reconcile, not outside.
+// If we claimed early, fetch events from claimed clients could arrive while
+// reconcile is mid-flight: a concurrent _putAudioAndEnforceCap recordEntry()
+// could add an IDB row whose URL was orphan in reconcile's snapshot — step
+// (b)'s removeEntries would then delete the freshly added row, recreating
+// the drift we are trying to fix (Bugbot PR #67).
 self.addEventListener("activate", (event) => {
   event.waitUntil((async () => {
     const keys = await caches.keys();
     await Promise.all(keys.filter((k) => !KNOWN_CACHES.has(k)).map((k) => caches.delete(k)));
     await _reconcileAudioCache().catch(() => { /* best-effort */ });
+    await self.clients.claim();
   })());
-  self.clients.claim();
 });
 
 // Cache-first for Google Font files: immutable, content-addressed URLs.
