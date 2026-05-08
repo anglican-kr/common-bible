@@ -94,14 +94,24 @@ self.addEventListener("message", (event) => {
   }
 });
 
-// Remove caches that are not in the active set on activate.
+// Remove caches that are not in the active set on activate, then reconcile
+// the AUDIO_CACHE sidecar (IDB metadata) with Cache API contents so stale
+// state from prior incomplete writes or DevTools-cleared storage doesn't
+// drift the LRU bookkeeping.
+//
+// clients.claim() is awaited INSIDE waitUntil after reconcile, not outside.
+// If we claimed early, fetch events from claimed clients could arrive while
+// reconcile is mid-flight: a concurrent _putAudioAndEnforceCap recordEntry()
+// could add an IDB row whose URL was orphan in reconcile's snapshot — step
+// (b)'s removeEntries would then delete the freshly added row, recreating
+// the drift we are trying to fix (Bugbot PR #67).
 self.addEventListener("activate", (event) => {
-  event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => !KNOWN_CACHES.has(k)).map((k) => caches.delete(k)))
-    )
-  );
-  self.clients.claim();
+  event.waitUntil((async () => {
+    const keys = await caches.keys();
+    await Promise.all(keys.filter((k) => !KNOWN_CACHES.has(k)).map((k) => caches.delete(k)));
+    await _reconcileAudioCache().catch(() => { /* best-effort */ });
+    await self.clients.claim();
+  })());
 });
 
 // Cache-first for Google Font files: immutable, content-addressed URLs.
@@ -126,24 +136,91 @@ function handleFontFile(event) {
 // Cache invalidation is handled by bumping the relevant cache name on release.
 const DRIVE_HOSTNAMES = ["www.googleapis.com", "content.googleapis.com", "oauth2.googleapis.com", "accounts.google.com"];
 
+// URLs currently being put + cap-enforced. Two concurrent fetches without this
+// guard could pick overlapping eviction sets and delete each other's just-put
+// mp3 before playback starts. Eviction filters this set out.
+const _inflightAudioUrls = new Set();
+
 // Audio path: store in AUDIO_CACHE, record sidecar metadata, enforce hard cap.
 // Runs inside event.waitUntil so the response is delivered immediately and the
 // bookkeeping completes in background. Errors are swallowed — caching is
 // best-effort and must never break playback. (See ADR-016.)
 async function _putAudioAndEnforceCap(request, response) {
-  const cache = await caches.open(AUDIO_CACHE);
-  await cache.put(request, response);
+  _inflightAudioUrls.add(request.url);
+  try {
+    const ac = self.bibleAudioCache;
+
+    // Compute byteSize BEFORE cache.put consumes the response body. Prefer
+    // Content-Length (cheap, no body read), fall back to clone().blob().size
+    // when missing/invalid (chunked transfer / gzip / Range / proxy stripped
+    // it). Without this fallback the LRU sidecar records 0 bytes and the
+    // entry escapes cap accounting forever — quota exhaustion follow.
+    let byteSize = 0;
+    if (ac) {
+      const cl = response.headers.get("content-length");
+      byteSize = cl ? Number(cl) : 0;
+      if (!Number.isFinite(byteSize) || byteSize <= 0) {
+        try {
+          const blob = await response.clone().blob();
+          byteSize = blob.size;
+        } catch { byteSize = 0; }
+      }
+    }
+
+    const cache = await caches.open(AUDIO_CACHE);
+    await cache.put(request, response);
+
+    if (!ac) return;
+    await ac.recordEntry(request.url, byteSize);
+    const total = await ac.totalSize();
+    if (total <= ac.HARD_CAP) return;
+    const { urls } = await ac.pickEvictions(ac.SOFT_CAP);
+    // Filter out URLs currently being put — these are mid-fetch, deleting
+    // them would race the put and break playback. They'll be re-evaluated
+    // after their own _putAudioAndEnforceCap call returns.
+    const evictable = urls.filter((u) => !_inflightAudioUrls.has(u));
+    if (!evictable.length) return;
+    await Promise.all(evictable.map((u) => cache.delete(u)));
+    await ac.removeEntries(evictable);
+  } finally {
+    _inflightAudioUrls.delete(request.url);
+  }
+}
+
+// Reconcile AUDIO_CACHE sidecar (IDB metadata) with Cache API contents.
+// Called on SW activate. Two drift scenarios this fixes:
+//   (a) cache.put succeeded but recordEntry failed in a prior session
+//       → mp3 in Cache, no IDB row → escapes LRU forever. Recover by
+//          recording the entry with byteSize from the cached blob.
+//   (b) DevTools or browser settings cleared one side → IDB rows for mp3s
+//       no longer in Cache → repeated fetches think the file is cached.
+//       Remove orphan IDB rows.
+// Cost is bounded by number of mismatches, not full cache size — typical
+// healthy state finishes in microseconds.
+async function _reconcileAudioCache() {
   const ac = self.bibleAudioCache;
   if (!ac) return;
-  const cl = response.headers.get("content-length");
-  const byteSize = cl ? Number(cl) : 0;
-  await ac.recordEntry(request.url, byteSize);
-  const total = await ac.totalSize();
-  if (total <= ac.HARD_CAP) return;
-  const { urls } = await ac.pickEvictions(ac.SOFT_CAP);
-  if (!urls.length) return;
-  await Promise.all(urls.map((u) => cache.delete(u)));
-  await ac.removeEntries(urls);
+  let cache;
+  try { cache = await caches.open(AUDIO_CACHE); } catch { return; }
+  const requests = await cache.keys();
+  const cacheUrls = new Set(requests.map((r) => r.url));
+  const idbEntries = await ac._listAll();
+  const idbUrls = new Set(idbEntries.map((e) => e.url));
+
+  // (a) Cache entries without IDB metadata → record them.
+  for (const req of requests) {
+    if (idbUrls.has(req.url)) continue;
+    try {
+      const res = await cache.match(req);
+      if (!res) continue;
+      const blob = await res.clone().blob();
+      await ac.recordEntry(req.url, blob.size);
+    } catch { /* skip individual failures, keep reconciling */ }
+  }
+
+  // (b) IDB rows without Cache entries → remove the orphans.
+  const orphans = idbEntries.filter((e) => !cacheUrls.has(e.url)).map((e) => e.url);
+  if (orphans.length) await ac.removeEntries(orphans);
 }
 
 self.addEventListener("fetch", (event) => {
