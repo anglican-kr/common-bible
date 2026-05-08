@@ -2871,15 +2871,10 @@ function showAudioPlayer(bookId, chapter) {
   currentAudio = audio;
 
   const savedTime = loadAudioTime(bookId, chapter);
-  let srcLoaded = false;
-  if (savedTime) {
-    // Eagerly load metadata to restore seek position before first play
-    srcLoaded = true;
-    audio.preload = "metadata";
-    audio.src = src;
-  } else {
-    audio.preload = "none";
-  }
+  // Always preload metadata so total duration is visible before first play.
+  // ADR-016 excludes preload accesses from LRU, so this does not pollute cache signals.
+  audio.preload = "metadata";
+  audio.src = src;
 
   // Build player UI
   const container = el("div", { className: "audio-player" });
@@ -2931,15 +2926,7 @@ function showAudioPlayer(bookId, chapter) {
   container.appendChild(progressWrap);
   container.appendChild(speedBtn);
 
-  // Play/pause toggle — load src lazily on first click (srcLoaded declared above)
   playBtn.addEventListener("click", () => {
-    if (!srcLoaded) {
-      srcLoaded = true;
-      playIcon.className = "audio-icon-loading";
-      audio.src = src;
-      audio.play().catch(() => {});
-      return;
-    }
     if (audio.paused) {
       audio.play();
     } else {
@@ -2980,7 +2967,7 @@ function showAudioPlayer(bookId, chapter) {
       updateProgressFill();
       timeDisplay.textContent = `${formatTime(savedTime)} / ${formatTime(audio.duration)}`;
     } else {
-      timeDisplay.textContent = formatTime(audio.duration);
+      timeDisplay.textContent = `${formatTime(0)} / ${formatTime(audio.duration)}`;
     }
   }, { signal });
 
