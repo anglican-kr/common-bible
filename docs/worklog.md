@@ -15,7 +15,7 @@
 - **H3** — `cache.put` 성공 후 `recordEntry` 실패 또는 DevTools에서 한쪽만 비움 → IDB·Cache 영구 어긋남. **수정**: 새 `_reconcileAudioCache` 함수 + `activate` 핸들러에서 호출. (a) Cache에 있고 IDB에 없는 항목 → recordEntry로 채움 (byteSize는 blob.size로). (b) IDB에 있고 Cache에 없는 항목 → orphan removeEntries. 비용은 mismatch 수에 비례, healthy 상태에선 microsecond.
 - **H4** — 작업 트리에 평문 client_secret JSON 두 개 (dev·prod). git history는 clean (`git log --all -p -S 'GOCSPX'` 0 hits) + `.gitignore`로 잡힘 + 배포 zip 미포함. 디스크 삭제 처리. secret 자체는 nginx 설정과 Cloud Console에 살아있어 유실 없음.
 
-**테스트**: 기존 audio-cache 23 + state-machine 26 + transport-pkce 23 + search-history 13 = 85 케이스 모두 통과. sw.js 자체에 대한 유닛 테스트는 미작성 (vm 컨텍스트 + ServiceWorkerGlobalScope 스텁 부담) — 향후 별도 의제.
+**테스트**: 기존 유닛 테스트 98 케이스 모두 통과 (audio-cache 14 + refresh-store 13 + search-history 19 + state-machine 29 + transport-pkce 23). sw.js 자체에 대한 유닛 테스트는 미작성 (vm 컨텍스트 + ServiceWorkerGlobalScope 스텁 부담) — 향후 별도 의제.
 
 **배포 영향**: 코드 변경은 sw.js 내부 동작(LRU 정확성·race 가드·reconcile)뿐, 사용자 가시 변화 없음. SW 자체 갱신은 브라우저가 `sw.js` 콘텐츠 변경을 감지해 자동 처리 → 다음 visit 시 새 SW activate + reconcile 1회 실행.
 
