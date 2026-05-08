@@ -2,6 +2,17 @@
 
 ## 2026-05-08
 
+### README 재구성 — Drive 동기화를 top-level로 분리
+
+기존 `## 플랫폼별 동작 차이` 섹션 안에 Google Drive 동기화가 같이 묶여 있었는데, Phase 2h 단계 4에서 GIS / Implicit Flow / FedCM이 제거되며 동기화가 데스크탑·Android·iOS 동일 코드 경로로 통일됐다 — 더 이상 "플랫폼별 차이"의 사례가 아님. 섹션 분리:
+
+- `## 플랫폼별 동작 차이` (좁아짐): 앱 설치(여전히 플랫폼별로 다름) + iOS 고유 제약(7일 ITP, WebKit 래퍼)만
+- `## Google Drive 동기화` (top-level 신규): 시나리오 표 + BFF + 운영 가드 + sync-specific 알려진 한계 (OAuth 검수, 외부 권한 회수)
+
+ITP는 동기화에만 영향이 아니라 모든 로컬 상태(북마크·설정 포함)에 영향이므로 의도적으로 iOS 고유 제약 쪽에 둠. Drive 동기화 절은 그쪽으로 cross-link만 둠.
+
+코드 변경 0, 문서만.
+
 ### Phase 2h 단계 6 — dev 환경 분리 + nginx BFF + visibility sync (PR #64)
 
 전날 단계 4·5(Implicit·GIS 제거 + 청소) 머지 후 dev 환경에서 시운전을 시작하면서 발견한 일들을 한 PR로 묶어 처리. 결과적으로 인프라(dev 도메인 + 배포 스크립트), 인증 모델(BFF), 상호작용(visibility sync), 부수 회귀(SW + 검색 UI)까지 한 사이클의 마무리 라운드.
