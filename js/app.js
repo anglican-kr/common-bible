@@ -5638,8 +5638,11 @@ $bmSaveChapterBtn.addEventListener("click", () => {
 });
 
 $bmSelectVersesBtn.addEventListener("click", () => {
+  // Capture coords before close — closeBookmarkDrawer nulls the drawer state.
+  const bookId = _bookmarkDrawerBook;
+  const chapter = _bookmarkDrawerChapter;
   closeBookmarkDrawer();
-  enterVerseSelectMode(_bookmarkDrawerBook, _bookmarkDrawerChapter);
+  enterVerseSelectMode(bookId, chapter);
 });
 
 $bmAddFolderBtn.addEventListener("click", () => {
