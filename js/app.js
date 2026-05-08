@@ -241,6 +241,177 @@ document.addEventListener("visibilitychange", () => {
   }
 });
 
+// ── Pull-to-refresh (mobile, page-level) ─────────────────────────────────────
+// Drag-down gesture at the top of the page triggers Drive bookmark sync, the
+// same operation visibilitychange→visible runs. The touchmove listener is
+// non-passive (we preventDefault to suppress the rubber-band overscroll), so
+// it is attached only for the duration of an active pull to keep the global
+// scrolling fast path passive everywhere else.
+(function setupPullToRefresh() {
+  const PULL_THRESHOLD_PX  = 70;   // distance past which release triggers sync
+  const PULL_MAX_PX        = 110;  // visual cap on indicator drop
+  const PULL_RESISTANCE    = 0.5;  // 1px finger movement → 0.5px indicator drop
+  const SYNC_FEEDBACK_MS   = 900;  // how long the spinner stays after trigger
+  // Modal/sheet roots whose internal scroll must not be hijacked by PTR. We
+  // walk e.target to see if the touch landed inside one of these.
+  const MODAL_SELECTORS = "#bookmark-drawer, #search-sheet, #install-modal, #bm-save-modal, #bm-new-folder-modal, #bm-import-modal, #bm-merge-modal, #drive-disconnect-modal, .settings-popover, .chapter-popover, .bc-division-popover, .title-division-popover";
+
+  /** @type {HTMLElement | null} */
+  let indicator = null;
+  let startY = 0;
+  let delta = 0;
+  let active = false;
+  let syncing = false;
+  /** @type {ReturnType<typeof setTimeout> | null} */
+  let resetCleanupTimer = null;
+
+  // Inline styles always beat non-`!important` CSS, so the
+  // `@media (prefers-reduced-motion: reduce)` block in style.css cannot
+  // override `style.transition = "transform .25s ease, …"` we set below.
+  // Gate the transition strings here in JS to honor the user preference.
+  const _reducedMotionMQL = window.matchMedia("(prefers-reduced-motion: reduce)");
+  function prefersReducedMotion() { return _reducedMotionMQL.matches; }
+
+  function ensureIndicator() {
+    if (indicator) return indicator;
+    indicator = document.createElement("div");
+    indicator.id = "pull-refresh-indicator";
+    indicator.setAttribute("aria-hidden", "true");
+    indicator.innerHTML =
+      '<svg class="ptr-icon" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+      '<path d="M21 12a9 9 0 1 1-3.3-7"/><polyline points="21 4 21 12 13 12"/>' +
+      '</svg>';
+    document.body.appendChild(indicator);
+    return indicator;
+  }
+
+  function setVisual(d) {
+    const ind = ensureIndicator();
+    const dropped = Math.min(d, PULL_MAX_PX);
+    const progress = Math.min(d / PULL_THRESHOLD_PX, 1);
+    // Force transition off during finger drag so motion tracks 1:1. Without
+    // this, a lingering ease curve from a previous resetVisual would make the
+    // indicator slide rather than follow the finger.
+    ind.style.transition = "none";
+    ind.style.transform = `translateX(-50%) translateY(${dropped}px)`;
+    ind.style.opacity = String(progress);
+    const rot = progress * 270;
+    const icon = ind.querySelector(".ptr-icon");
+    if (icon) /** @type {SVGElement} */ (icon).style.transform = `rotate(${rot}deg)`;
+  }
+
+  function resetVisual(animated) {
+    const ind = ensureIndicator();
+    // Cancel any pending cleanup from a previous reset so a fast second pull
+    // doesn't have its `ptr-loading` class stripped (or its transition string
+    // overwritten) by a stale timer.
+    if (resetCleanupTimer !== null) {
+      clearTimeout(resetCleanupTimer);
+      resetCleanupTimer = null;
+    }
+    const smooth = animated && !prefersReducedMotion();
+    ind.style.transition = smooth ? "transform .25s ease, opacity .2s ease" : "none";
+    ind.style.transform = "translateX(-50%) translateY(0)";
+    ind.style.opacity = "0";
+    if (smooth) {
+      resetCleanupTimer = setTimeout(() => {
+        resetCleanupTimer = null;
+        ind.style.transition = "none";
+        ind.classList.remove("ptr-loading");
+      }, 260);
+    } else {
+      ind.classList.remove("ptr-loading");
+    }
+  }
+
+  function eligibleAt(target) {
+    if (syncing) return false;
+    if (!window.matchMedia("(max-width: 768px)").matches) return false;
+    if (window.scrollY > 0) return false;
+    if (target instanceof Element && target.closest(MODAL_SELECTORS)) return false;
+    return true;
+  }
+
+  function onMove(e) {
+    if (!active || e.touches.length !== 1) return;
+    const raw = e.touches[0].clientY - startY;
+    if (raw <= 0) {
+      // User reversed direction — let normal scroll resume.
+      active = false;
+      delta = 0;
+      detachMoveEnd();
+      resetVisual(true);
+      return;
+    }
+    delta = raw * PULL_RESISTANCE;
+    setVisual(delta);
+    if (e.cancelable) e.preventDefault();
+  }
+
+  function onEnd() {
+    if (!active) return;
+    const triggered = delta >= PULL_THRESHOLD_PX;
+    active = false;
+    detachMoveEnd();
+    if (triggered) trigger(); else resetVisual(true);
+  }
+
+  function onCancel() {
+    if (!active) return;
+    active = false;
+    detachMoveEnd();
+    resetVisual(true);
+  }
+
+  function attachMoveEnd() {
+    document.addEventListener("touchmove", onMove, { passive: false });
+    document.addEventListener("touchend", onEnd, { passive: true });
+    document.addEventListener("touchcancel", onCancel, { passive: true });
+  }
+
+  function detachMoveEnd() {
+    document.removeEventListener("touchmove", onMove, /** @type {any} */ ({ passive: false }));
+    document.removeEventListener("touchend", onEnd);
+    document.removeEventListener("touchcancel", onCancel);
+  }
+
+  function trigger() {
+    syncing = true;
+    const ind = ensureIndicator();
+    // Cancel any pending resetVisual cleanup so it doesn't fire mid-spinner
+    // and strip the `ptr-loading` class we just added.
+    if (resetCleanupTimer !== null) {
+      clearTimeout(resetCleanupTimer);
+      resetCleanupTimer = null;
+    }
+    ind.classList.add("ptr-loading");
+    ind.style.transition = prefersReducedMotion() ? "none" : "transform .2s ease";
+    ind.style.transform = `translateX(-50%) translateY(${PULL_THRESHOLD_PX}px)`;
+    ind.style.opacity = "1";
+    const sync = window.driveSync;
+    if (sync?.isAuthenticated?.()) {
+      sync.requestSync();
+    } else if (sync?.isEnabled?.()) {
+      window._showSyncSnackbar?.("Google Drive 재연결이 필요합니다.");
+    } else {
+      window._showSyncSnackbar?.("Google Drive 동기화가 꺼져 있습니다.");
+    }
+    setTimeout(() => {
+      syncing = false;
+      resetVisual(true);
+    }, SYNC_FEEDBACK_MS);
+  }
+
+  document.addEventListener("touchstart", (e) => {
+    if (e.touches.length !== 1) return;
+    if (!eligibleAt(e.target)) return;
+    active = true;
+    delta = 0;
+    startY = e.touches[0].clientY;
+    attachMoveEnd();
+  }, { passive: true });
+})();
+
 // ── BEGIN SEARCH HISTORY HELPERS ──
 // Local-only (not Drive-synced — see ADR-014). Whitespace-normalized strings,
 // LRU-deduped, capped at SEARCH_HISTORY_MAX. The block between the BEGIN/END
