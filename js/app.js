@@ -4619,6 +4619,10 @@ function openBookmarkDrawer(bookId, chapter) {
 
 function closeBookmarkDrawer() {
   if ($bookmarkDrawer.hidden || $bookmarkDrawer.classList.contains("drawer-closing")) return;
+  // Clear stale chapter coords so a later save flow (e.g. verse-select bar after
+  // navigating elsewhere) doesn't fall back to the drawer's last-opened location.
+  _bookmarkDrawerBook = null;
+  _bookmarkDrawerChapter = null;
   closeSwipedRow(null);
   $bmOverflowPanel.hidden = true;
   $bmOverflowBtn.setAttribute("aria-expanded", "false");
