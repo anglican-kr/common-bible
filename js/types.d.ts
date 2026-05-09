@@ -566,7 +566,6 @@ export interface AppSettings {
   applyTheme: (theme: string) => void;
   applyColorScheme: (schemeName: string) => void;
   dismissLaunchScreen: () => void;
-  updateThemeMetaColor: () => void;
 }
 
 // ── Window augmentation ──────────────────────────────────────────────────────

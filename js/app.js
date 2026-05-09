@@ -53,7 +53,7 @@ const {
 // screen live in js/app/settings-ui.js (ADR-018 Phase 3).
 const {
   initSettings, applyFontSize, applyTheme, applyColorScheme,
-  dismissLaunchScreen, updateThemeMetaColor,
+  dismissLaunchScreen,
 } = window.appSettings;
 // Re-expose on window so the sync layer (state-machine.js) can apply Drive
 // settings updates via its `typeof window.applyXxx === "function"` guards.

@@ -599,6 +599,5 @@ window.appSettings = (() => {
     applyTheme,
     applyColorScheme,
     dismissLaunchScreen,
-    updateThemeMetaColor,
   };
 })();
