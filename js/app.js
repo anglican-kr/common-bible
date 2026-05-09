@@ -61,6 +61,23 @@ window.applyFontSize = applyFontSize;
 window.applyTheme = applyTheme;
 window.applyColorScheme = applyColorScheme;
 
+// Window facade for cross-module bare global calls (settings-ui.js + future
+// search.js / bookmark.js). Before ADR-019's ESM bulk conversion these were
+// resolved via classic-script shared global scope; ESM module scope makes
+// each `function X()` module-private, so callers in another module would
+// hit `globalThis.X` and fail. Each name below is hoisted within this
+// module and re-exposed for ESM bare-global resolution.
+// Migrates out as each owner ships in a later phase (ADR-018):
+//   announce               → Phase 8 (with $announce anchor)
+//   parsePath, route       → Phase 7 (views-routing.js)
+//   openDriveDisconnectModal → Phase 6 (bookmark.js) or stays in app-main
+//   clearAllCaches         → Phase 8 (app-main)
+window.announce = announce;
+window.parsePath = parsePath;
+window.route = route;
+window.openDriveDisconnectModal = openDriveDisconnectModal;
+window.clearAllCaches = clearAllCaches;
+
 const $app = _$("app");
 const $title = _$("page-title");
 const $breadcrumb = _$("breadcrumb");
