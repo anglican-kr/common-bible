@@ -43,7 +43,7 @@ const $announce = _$("a11y-announce");
 const $audioBar = _$("audio-bar");
 const $resumeBannerSlot = _$("resume-banner-slot");
 const $searchBar = _$("search-bar");
-const $searchInput = _$("search-input");
+const $searchInput = /** @type {HTMLInputElement} */ (_$("search-input"));
 const $searchClear = _$("search-clear");
 const $searchHistoryToggle = _$("search-history-toggle");
 const $searchHistoryPanel = _$("search-history");
@@ -169,7 +169,7 @@ let _dragState = null; // { id, ghost, origLi, startY, origTop }
 
 /**
  * @param {string} bookId
- * @param {number} chapter
+ * @param {number | "prologue"} chapter
  * @param {number | null} [verse]
  */
 function saveReadingPosition(bookId, chapter, verse = null) {
@@ -2712,7 +2712,7 @@ function parsePath() {
     return {
       view: "search",
       query: query.get("q") || "",
-      page: parseInt(query.get("page"), 10) || 1,
+      page: parseInt(query.get("page") ?? "", 10) || 1,
     };
   }
 
@@ -2770,12 +2770,15 @@ function parsePath() {
   };
 }
 
+/** @param {string} path */
 function navigate(path) {
   history.pushState(null, "", path);
   route();
 }
 
-function updatePageMeta({ title, description } = {}) {
+/** @param {{ title?: string, description?: string }} [opts] */
+function updatePageMeta(opts = {}) {
+  const { title, description } = opts;
   const fullTitle = title ? `${title} — 공동번역성서` : "공동번역성서";
   document.title = fullTitle;
   document.querySelector('meta[name="description"]')?.setAttribute("content", description ?? "대한성공회 공동번역성서. 구약·신약 73권 전문을 오프라인에서도 읽을 수 있는 웹 앱.");
@@ -2814,7 +2817,7 @@ async function route() {
       dismissLaunchScreen();
       return;
     }
-    $searchInput.value = parsed.query;
+    $searchInput.value = parsed.query ?? "";
     $searchClear.hidden = !parsed.query;
     $searchBar.dataset.clearHidden = String(!parsed.query);
   } else {
@@ -2904,6 +2907,7 @@ async function route() {
     dismissLaunchScreen();
 
     if (view === "prologue") {
+      if (!bookId) return;
       const data = await loadPrologue(bookId);
       renderPrologue(data, book);
       saveReadingPosition(bookId, "prologue");
@@ -2916,6 +2920,7 @@ async function route() {
     }
 
     if (view === "chapter") {
+      if (!bookId || typeof chapter !== "number") return;
       if (chapter < 1 || chapter > book.chapter_count) {
         renderError("해당 장을 찾을 수 없습니다.");
         return;
@@ -2955,7 +2960,9 @@ async function route() {
 }
 
 document.addEventListener("click", (e) => {
-  const a = e.target.closest("a[href]");
+  const t = e.target;
+  if (!(t instanceof Element)) return;
+  const a = /** @type {HTMLAnchorElement | null} */ (t.closest("a[href]"));
   if (!a) return;
   if (e.defaultPrevented) return;
   if (a.href.startsWith("blob:")) return;
@@ -3002,6 +3009,7 @@ window.addEventListener("DOMContentLoaded", () => {
 
 // ── Audio Player ──
 
+/** @param {number} sec @returns {string} */
 function formatTime(sec) {
   if (!isFinite(sec)) return "0:00";
   const m = Math.floor(sec / 60);
@@ -3016,6 +3024,7 @@ function formatTime(sec) {
 let _fabNavObserver = null;
 let _fabScrollHandler = null;
 let _fabRafPending = false;
+/** @param {HTMLElement} nav */
 function _updateFabLift(nav) {
   const fabH = $searchFab.offsetHeight;
   const gapPx = parseFloat(getComputedStyle(nav).marginTop) || 0;
@@ -3030,7 +3039,7 @@ function observeFabLift() {
     _fabScrollHandler = null;
   }
   _fabRafPending = false;
-  const nav = $app.querySelector(".chapter-nav");
+  const nav = /** @type {HTMLElement | null} */ ($app.querySelector(".chapter-nav"));
   if (!nav) return;
   const onScroll = () => {
     if (_fabRafPending) return;
@@ -3072,6 +3081,7 @@ function hideAudioBar() {
   clearNode($audioBar);
 }
 
+/** @param {string} bookId @param {number} chapter */
 function showAudioPlayer(bookId, chapter) {
   _teardownAudio();
   _audioController = new AbortController();
@@ -3107,7 +3117,8 @@ function showAudioPlayer(bookId, chapter) {
   progress.setAttribute("aria-label", "재생 위치");
 
   function updateProgressFill() {
-    const pct = progress.max > 0 ? (Number(progress.value) / Number(progress.max)) * 100 : 0;
+    const max = Number(progress.max);
+    const pct = max > 0 ? (Number(progress.value) / max) * 100 : 0;
     progress.style.setProperty("--fill", `${pct}%`);
   }
   updateProgressFill();
