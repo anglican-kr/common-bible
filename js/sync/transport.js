@@ -487,3 +487,7 @@ window.syncTransport = {
   uploadSyncFile,
   deleteSyncFile,
 };
+
+// ESM module marker (ADR-019). No runtime effect; signals TypeScript that
+// this file is module-scoped, isolating function/typedef names.
+export {};

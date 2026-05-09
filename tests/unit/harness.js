@@ -16,12 +16,24 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// Sync files are ES modules in production (ADR-019, browser loads them via
+// `<script type="module">`). The vm-based test harness uses `runInContext`,
+// which only accepts classic scripts — `export {}` would throw SyntaxError.
+// Strip the trailing ESM marker before evaluating; the rest of the file is
+// classic-script-compatible.
+const ESM_MARKER_RE = /^\s*\/\/[^\n]*\n\s*\/\/[^\n]*\n\s*export\s*\{\s*\}\s*;?\s*$/m;
+function stripEsmMarker(src) {
+  return src.replace(/\n\s*\/\/[^\n]*\n\s*\/\/[^\n]*\n\s*export\s*\{\s*\}\s*;?\s*$/, "")
+            .replace(/\n\s*export\s*\{\s*\}\s*;?\s*$/, "");
+}
+
 const STATE_MACHINE_PATH = path.resolve(__dirname, "../../js/sync/state-machine.js");
-const SOURCE = fs.readFileSync(STATE_MACHINE_PATH, "utf8");
+const SOURCE = stripEsmMarker(fs.readFileSync(STATE_MACHINE_PATH, "utf8"));
 const REFRESH_STORE_PATH = path.resolve(__dirname, "../../js/sync/refresh-store.js");
-const REFRESH_STORE_SOURCE = fs.readFileSync(REFRESH_STORE_PATH, "utf8");
+const REFRESH_STORE_SOURCE = stripEsmMarker(fs.readFileSync(REFRESH_STORE_PATH, "utf8"));
 const TRANSPORT_PATH = path.resolve(__dirname, "../../js/sync/transport.js");
-const TRANSPORT_SOURCE = fs.readFileSync(TRANSPORT_PATH, "utf8");
+const TRANSPORT_SOURCE = stripEsmMarker(fs.readFileSync(TRANSPORT_PATH, "utf8"));
 
 // Constants mirrored from state-machine.js — kept here so tests can assert
 // against them without parsing the source. Only those actually used by

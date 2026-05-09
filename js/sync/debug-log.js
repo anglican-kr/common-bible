@@ -148,3 +148,7 @@ async function copyToClipboard() {
 }
 
 window.syncDebugLog = { log, mask, dump, copyToClipboard };
+
+// ESM module marker (ADR-019). No runtime effect; signals TypeScript that
+// this file is module-scoped, isolating function/typedef names.
+export {};
