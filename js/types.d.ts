@@ -556,6 +556,19 @@ export interface AppStorage {
   _maybeRequestPersist: () => void;
 }
 
+// ── App settings-ui facade (js/app/settings-ui.js) ──────────────────────────
+// Phase 3 of the app.js modularization (ADR-018). Settings popover, icon
+// recoloring, theme/color/font apply, launch screen.
+
+export interface AppSettings {
+  initSettings: () => void;
+  applyFontSize: (size: number | string) => void;
+  applyTheme: (theme: string) => void;
+  applyColorScheme: (schemeName: string) => void;
+  dismissLaunchScreen: () => void;
+  updateThemeMetaColor: () => void;
+}
+
 // ── Window augmentation ──────────────────────────────────────────────────────
 
 declare global {
@@ -587,6 +600,17 @@ declare global {
     // App-layer module facades (ADR-018, see docs/design/app-modularization.md).
     appHelpers: AppHelpers;
     appStorage: AppStorage;
+    appSettings: AppSettings;
+
+    // App version label (loaded from /version.json by app.js loadVersion()).
+    // Settings popover reads this for the version footer; will move to a
+    // dedicated module owner alongside data-fetching in Phase 7.
+    appVersion?: string | null;
+
+    // Install carousel object (Phase 4 owner). Currently defined by app.js
+    // as a global `const install`; settings-ui reads `window.install` to
+    // avoid a `declare const install` redeclare conflict at the global scope.
+    install?: { detectPlatform: () => string };
 
     // UI side-effects defined in app.js. Optional because state-machine.js
     // guards each call with `typeof ... === "function"`.
@@ -597,4 +621,23 @@ declare global {
     applyColorScheme?: (scheme: string) => void;
     applyTheme?: (theme: string) => void;
   }
+
+  // App-layer functions still owned by app.js as of Phase 3 (ADR-018). The
+  // `settings-ui.js` module needs to call into them; they migrate out of
+  // this global declaration as their owners ship in later phases:
+  //   announce               → moves with $announce anchor (Phase 8 owner)
+  //   openInstallModal       → install.js (Phase 4)
+  //   openDriveDisconnectModal → bookmark.js (Phase 6) or stays
+  //   clearAllCaches         → settings-ui? or app-main (Phase 8)
+  //   parsePath, route       → views-routing.js (Phase 7)
+  //   `install` carousel     → install.js (Phase 4); accessed via window.install
+  function announce(msg: string): void;
+  function openInstallModal(): void;
+  function openDriveDisconnectModal(): void;
+  function clearAllCaches(): Promise<void>;
+  // parsePath returns a view-discriminated union with extra view-specific
+  // fields (page, resume, highlightQuery, etc.). Typed as `any` here until
+  // views-routing.js (Phase 7) ships a precise discriminated-union type.
+  function parsePath(): any;
+  function route(): Promise<void>;
 }
