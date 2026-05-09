@@ -39,8 +39,8 @@ ADR-012 1라운드(PR-1~7, 2026-05-09 머지)에서 `js/app.js`에 JSDoc + null/
 | 방식 | 빌드 변화 | 진입 비용 | 채택 |
 | --- | --- | --- | --- |
 | 단일 거대 PR (`// @ts-check` + ~262 implicit any 일괄 정리) | 없음 | 매우 큼, 리뷰 어려움 | ❌ |
-| **Multi-script + `defer` 모듈 분할** | 없음 | 단계별 분할 가능 | ✅ |
-| ESM (`<script type="module">`) | 없음 | 동기 초기화 보장 부족, 모듈 헤드 anchor 캡처 + side-effect 의존 패턴과 충돌 | ❌ — `gtag-init.js` 같은 외부 스크립트와 정합 부담 |
+| Multi-script + `defer` 모듈 분할 | 없음 | 단계별 분할 가능 | ⚠️ — Phase 1~3까지 사용. 이후 ADR-019에서 ESM으로 전환 |
+| **ESM (`<script type="module">`)** | 없음 | module scope로 typedef/함수 격리, 빌드 단계 0 유지 | ✅ — Phase 4부터. ADR-019 참조 |
 | `.ts` + tsc 빌드 | 큼 | ADR-001 SPA 단순성 위배 | ❌ |
 | 그대로 유지 (`// @ts-check` 영구화 보류) | 없음 | 0 | ❌ — 1라운드 산출물의 검증 흐름이 임시 인프라(`tsconfig.app.json`)에 영구 의존하게 됨 |
 
@@ -63,16 +63,13 @@ window.appHelpers = (() => {
 
 호출 측은 `window.appHelpers._$()` 또는 IIFE 직후 `const { _$ } = window.appHelpers;`로 받음.
 
-### module-vs-script 예외 (Phase 2부터)
+### module-vs-script 예외 → ESM 일괄 전환 (ADR-019, 2026-05-09)
 
-원칙은 `<script defer>` + 글로벌 `window.X` 패턴(위)이지만, 모듈이 정의하는 `function`/`@typedef` 이름이 다른 1차 적용 파일(특히 `js/sync/store-v2.js`)의 글로벌 정의와 충돌하면 그 모듈만 ES module로 옵트인한다. 옵트인 방법:
+> **갱신**: Phase 1~3 동안 *충돌 시 그 모듈만 ESM 옵트인* 정책으로 운영했으나, Phase 2(storage.js)/Phase 3 사용자 review 결과 **모든 모듈을 ESM으로 일괄 전환**하기로 변경. 이유는 ADR-019 본문 + ADR-001 (2026-05-09) 개정 블록 참조.
 
-1. 파일 끝에 `export {};` 한 줄 추가 (런타임 동작 무변동, TypeScript는 그 파일을 module로 인식 → 함수/typedef가 module scope)
-2. `index.html`에서 그 파일을 `<script type="module" src="..."></script>`로 로드 (`type="module"` 은 자동 deferred + 등장 순서 실행 보장)
+Phase 4부터 본 ADR의 모듈 패턴은 ESM (`<script type="module">` + `export {};` + 필요시 `import/export`)이다. `window.X` facade(예: `window.driveSync`, `window.appHelpers`)는 1차 sync 레이어 회귀 방지를 위해 유지하되, 새 cross-module 호출은 `import`/`export`로 작성 권장.
 
-Phase 2(`storage.js`) 시점에 `saveBookmarks`/`loadBookmarks` 이름이 `js/sync/store-v2.js`와 글로벌 충돌해 두 파일 모두 옵트인. 다른 sync 파일은 store-v2 함수를 `window.syncStoreV2.X` facade로만 호출하므로 caller 변경 불필요. ADR-001 SPA 단순성은 여전히 유효 (빌드 단계 0, import/export 의무 없음, `window.X` 글로벌 노출 그대로).
-
-향후 단계도 충돌 발생 시 모듈 단위로 같은 옵트인 적용. 모든 모듈을 일괄 ESM 전환하는 광범위 변경은 의도하지 않음.
+Phase 1~3 머지된 PR(#88·#89·#90)은 multi-script 패턴이지만, 후속 일괄 전환 PR에서 일관되게 ESM으로 갱신.
 
 ### 공유 상태 (Phase 6)
 
@@ -98,8 +95,8 @@ Phase 2(`storage.js`) 시점에 `saveBookmarks`/`loadBookmarks` 이름이 `js/sy
 ## 채택 이유 요약
 
 - **분할 단위로 implicit any 정리** — 단일 거대 PR 회피 (~262건을 8개 PR로 분산)
-- **ADR-001 SPA 단순성 유지** — 빌드 단계 0
-- **sync 레이어와 일관 패턴** — IIFE + `window.appXxx`로 노출, `defer`로 순서 보장
+- **빌드 단계 0 유지** — 브라우저가 원본 `.js` 그대로 로드 (ADR-019 채택 후에도 동일)
+- **sync 레이어와 일관 패턴** — Phase 1~3은 IIFE + `window.appXxx`로 노출. Phase 4부터는 ESM module + `window.X` facade 유지(ADR-019)
 - **미래 monorepo split 기반** — 앱 저장소 자기 완결성을 위해 내부 모듈 경계 명확화 선행 필요
 - **부수 효과**: 셸 캐시 입자 개선(한 모듈 변경 시 그 파일만 재다운), 인지적 부담 감소, 단위 테스트 도입 기회 (설계 문서 §10 참조)
 
@@ -111,7 +108,8 @@ Phase 2(`storage.js`) 시점에 `saveBookmarks`/`loadBookmarks` 이름이 `js/sy
 
 ## 관련 ADR
 
-- ADR-001: SPA 아키텍처 — 빌드 단계 회피의 출발점
+- ADR-001: SPA 아키텍처 — 빌드 단계 회피의 출발점. 2026-05-09 개정으로 namespace 패턴은 ESM으로 진화
 - ADR-012: TypeScript 점진 도입 — 1라운드 완료 + 본 ADR이 2라운드 시작점
 - ADR-013: 클라이언트 JS 유닛 테스트 전략 — 분할 후 unit test 추가 기회 (storage / verse spec / search worker wire-up 등 순수 로직 영역)
 - ADR-016: 오디오 캐시 LRU — `views-routing.js`의 audio player 영역 분할 시 audio cache 의존성 정합 유지
+- **ADR-019**: ESM 모듈 시스템 채택 — Phase 4부터 모든 모듈을 ESM으로 (본 ADR §"module-vs-script 예외 → ESM 일괄 전환"의 근거)

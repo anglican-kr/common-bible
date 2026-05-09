@@ -121,7 +121,11 @@ ADR-012 2차 적용의 **2라운드**. 1라운드에서는 `js/app.js`에 JSDoc 
 | **ESM (`<script type="module">`)** | 없음      | 모듈 로드 순서가 import에 의해 결정 | entry script만 | import/export        | 의존 그래프 명확            |
 | `.ts` + tsc 빌드                   | 큼        | —                                   | —              | —                    | ❌ ADR-001 위배             |
 
-### 4.2 채택 — **Multi-script + `defer`** (모듈별 ESM 옵트인 예외)
+### 4.2 채택 (2026-05-09 갱신) — **ESM 일괄 채택** (Phase 4부터)
+
+> Phase 1~3은 multi-script + `defer` + `window.X` 패턴으로 진행됐다. Phase 2 시점에 `storage.js`/`store-v2.js`가 ESM 옵트인했고, 사용자 review에서 ADR-001 단순성 가치를 절대화하지 않기로 합의 → **Phase 4부터 ESM 일괄 채택**. 자세한 결정 사유는 **ADR-019** + ADR-001 (2026-05-09) 개정 블록 참조.
+
+원래 채택했던 Multi-script + `defer` 사유 (Phase 1~3 적용):
 
 이유:
 
@@ -382,3 +386,5 @@ CLAUDE.md `tests/e2e/` 절차를 따라 사용자 수동 실행:
 | 2026-05-09 | Phase 2 작성 완료 | `js/app/storage.js` 추출 (28개 함수 + 3개 상수: `FONT_SIZES`, `DEFAULT_FONT_SIZE`, `COLOR_SCHEMES`, `SEARCH_HISTORY_MAX`). Reading position / Audio time / Search history / Settings / Bookmarks / Install nudge / `_maybeRequestPersist` 통합. `js/sync/store-v2.js`의 `saveBookmarks`/`loadBookmarks`와 글로벌 함수 이름 충돌 → storage.js + store-v2.js 둘 다 ES module 옵트인 (`export {};` + `<script type="module">`). 다른 sync 파일은 `window.syncStoreV2` facade만 사용해 caller 변경 0. `tests/unit/search-history.test.js` `APP_PATH` 갱신. app.js 6,053 → 5,835줄 (-218). main + worker tsc 0 error, 유닛 111건 통과 |
 | 2026-05-09 | Phase 2 머지 (#89) | CI Unit tests + Cursor Bugbot 모두 green, main 통합 (rebase) |
 | 2026-05-09 | Phase 3 작성 완료 | `js/app/settings-ui.js` 추출 (~570줄): Settings popover (`initSettings`), Icon recoloring (`hexToRgb`/`loadOrigIcon`/`updateAppIcons` + `_iconGeneration`/`ICON_BG_LUM`), Color scheme apply (`applyColorScheme` + `DEFAULT_FAVICON_HREF`/`DEFAULT_APPLE_ICON_HREF`), Theme apply (`applyTheme`/`updateThemeMetaColor` + `_systemThemeListener`/`_darkMQ`), Launch screen (`dismissLaunchScreen` + `_launchScreenDismissed`/`_fontReadyPromise`/`FONT_READY_TIMEOUT_MS`), `applyFontSize`. multi-script + defer (충돌 없음, ESM 옵트인 불필요). `types.d.ts`에 `AppSettings` 인터페이스 + 임시 글로벌 declare(announce/openInstall*/openDriveDisconnect*/clearAllCaches/parsePath/route) + Window에 `install`/`appVersion` 추가. app.js의 `const install = ...` → `window.install = install` 노출, `loadVersion`에서 `window.appVersion = appVersion` 미러. app.js 5,835 → 5,273줄 (-562). main + worker tsc 0 error, 유닛 111건 통과 |
+| 2026-05-09 | Phase 3 머지 (#90) | Bugbot fix 2건(`window.applyXxx` 노출 누락 — High + `updateThemeMetaColor` dead code — Low) 적용 후 모든 체크 green, main 통합 (rebase). app.js 5,286줄 |
+| 2026-05-09 | 모듈 시스템 결정 변경 | 사용자 review에서 ADR-001 단순성 가치를 절대화하지 않기로 합의. 옵션 B(ESM 일괄 전환, 빌드 단계 0 유지) 채택. **ADR-019** 신설(`docs/decisions/019-esm-module-system.md`), ADR-001에 개정(2026-05-09) 블록 추가, ADR-018의 §"module-vs-script 예외" → ESM 일괄로 갱신. 본 문서 §4.2 갱신. 다음 PR(별도 docs PR + 후속 ESM 일괄 전환 PR)에서 적용. Phase 4부터 ESM 패턴으로 진행 |
