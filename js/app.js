@@ -4273,7 +4273,7 @@ const install = (() => {
     return (
       window.matchMedia("(display-mode: standalone)").matches ||
       window.matchMedia("(display-mode: fullscreen)").matches ||
-      window.navigator.standalone === true
+      /** @type {any} */ (window.navigator).standalone === true
     );
   }
 
@@ -4344,10 +4344,10 @@ const install = (() => {
 
 // ── Install guide modal ──
 
-const $installScrim = document.getElementById("install-scrim");
-const $installModal = document.getElementById("install-modal");
-const $installModalBody = document.getElementById("install-modal-body");
-const $installModalClose = document.getElementById("install-modal-close");
+const $installScrim = _$("install-scrim");
+const $installModal = _$("install-modal");
+const $installModalBody = _$("install-modal-body");
+const $installModalClose = _$("install-modal-close");
 
 let installModalTrap = null;
 let installModalLastFocus = null;
@@ -4457,13 +4457,14 @@ function buildInstallBody(platform) {
 
     // Auto-advance every 3 s; skip if user prefers reduced motion
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    /** @type {ReturnType<typeof setInterval> | null} */
     let timer = reducedMotion ? null : setInterval(() => goToStep((currentStep + 1) % steps.length), 3000);
     function resetTimer() {
       if (reducedMotion) return;
-      clearInterval(timer);
+      if (timer !== null) clearInterval(timer);
       timer = setInterval(() => goToStep((currentStep + 1) % steps.length), 3000);
     }
-    $installModal.addEventListener("install:cleanup", () => clearInterval(timer), { once: true });
+    $installModal.addEventListener("install:cleanup", () => { if (timer !== null) clearInterval(timer); }, { once: true });
 
     // Pointer-based swipe (touch + mouse)
     let pointerStartX = 0;
@@ -4604,14 +4605,14 @@ function openInstallModal() {
   document.body.style.position = "fixed";
   document.body.style.top = `-${scrollY}px`;
   document.body.style.width = "100%";
-  document.body.dataset.scrollY = scrollY;
+  document.body.dataset.scrollY = String(scrollY);
   installModalTrap = trapFocus($installModal);
   requestAnimationFrame(() => $installModalClose.focus());
 }
 
 function closeInstallModal() {
   if ($installModal.hidden) return;
-  const neverShowCb = document.getElementById("install-never-show");
+  const neverShowCb = /** @type {HTMLInputElement | null} */ (document.getElementById("install-never-show"));
   if (neverShowCb && neverShowCb.checked) {
     const state = _loadNudgeState();
     state.neverShow = true;
@@ -4681,23 +4682,23 @@ function maybeShowInstallNudge() {
 
 // ── Bookmark UI ──
 
-const $bookmarkScrim = document.getElementById("bookmark-scrim");
-const $bookmarkDrawer = document.getElementById("bookmark-drawer");
-const $bookmarkDrawerClose = document.getElementById("bookmark-drawer-close");
-const $bookmarkDrawerBody = document.getElementById("bookmark-drawer-body");
-const $bmSaveChapterBtn = document.getElementById("bm-save-chapter-btn");
-const $bmSelectVersesBtn = document.getElementById("bm-select-verses-btn");
-const $bmAddFolderBtn = document.getElementById("bm-add-folder-btn");
-const $bmOverflowBtn = document.getElementById("bm-overflow-btn");
-const $bmOverflowPanel = document.getElementById("bm-overflow-panel");
-const $bmExportBtn = document.getElementById("bm-export-btn");
-const $bmImportBtn = document.getElementById("bm-import-btn");
-const $bmImportInput = document.getElementById("bm-import-input");
-const $driveDisconnectScrim  = document.getElementById("drive-disconnect-scrim");
-const $driveDisconnectModal  = document.getElementById("drive-disconnect-modal");
-const $driveDisconnectDelete = document.getElementById("drive-disconnect-delete");
-const $driveDisconnectKeep   = document.getElementById("drive-disconnect-keep");
-const $driveDisconnectCancel = document.getElementById("drive-disconnect-cancel");
+const $bookmarkScrim = _$("bookmark-scrim");
+const $bookmarkDrawer = _$("bookmark-drawer");
+const $bookmarkDrawerClose = _$("bookmark-drawer-close");
+const $bookmarkDrawerBody = _$("bookmark-drawer-body");
+const $bmSaveChapterBtn = /** @type {HTMLButtonElement} */ (_$("bm-save-chapter-btn"));
+const $bmSelectVersesBtn = /** @type {HTMLButtonElement} */ (_$("bm-select-verses-btn"));
+const $bmAddFolderBtn = _$("bm-add-folder-btn");
+const $bmOverflowBtn = _$("bm-overflow-btn");
+const $bmOverflowPanel = _$("bm-overflow-panel");
+const $bmExportBtn = _$("bm-export-btn");
+const $bmImportBtn = _$("bm-import-btn");
+const $bmImportInput = /** @type {HTMLInputElement} */ (_$("bm-import-input"));
+const $driveDisconnectScrim = _$("drive-disconnect-scrim");
+const $driveDisconnectModal = _$("drive-disconnect-modal");
+const $driveDisconnectDelete = _$("drive-disconnect-delete");
+const $driveDisconnectKeep = _$("drive-disconnect-keep");
+const $driveDisconnectCancel = _$("drive-disconnect-cancel");
 
 let _driveDisconnectTrap = null;
 
@@ -4730,33 +4731,33 @@ $driveDisconnectDelete.addEventListener("click", async () => {
   await window.driveSync?.deleteRemoteFile();
   window.driveSync?.signOut();
 });
-const $bmImportScrim = document.getElementById("bm-import-scrim");
-const $bmImportModal = document.getElementById("bm-import-modal");
-const $bmImportBody = document.getElementById("bm-import-body");
-const $bmImportMerge = document.getElementById("bm-import-merge");
-const $bmImportOverwrite = document.getElementById("bm-import-overwrite");
-const $bmImportCancel = document.getElementById("bm-import-cancel");
-const $bmSaveScrim = document.getElementById("bm-save-scrim");
-const $bmSaveModal = document.getElementById("bm-save-modal");
-const $bmSaveClose = document.getElementById("bm-save-close");
-const $bmSaveTitle = document.getElementById("bm-save-title");
-const $bmSaveBody = document.getElementById("bm-save-body");
-const $bmNewFolderScrim = document.getElementById("bm-new-folder-scrim");
-const $bmNewFolderModal = document.getElementById("bm-new-folder-modal");
-const $bmNewFolderClose = document.getElementById("bm-new-folder-close");
-const $bmNewFolderInput = document.getElementById("bm-new-folder-input");
-const $bmNewFolderConfirm = document.getElementById("bm-new-folder-confirm");
-const $bmNewFolderCancel = document.getElementById("bm-new-folder-cancel");
-const $bmMergeScrim = document.getElementById("bm-merge-scrim");
-const $bmMergeModal = document.getElementById("bm-merge-modal");
-const $bmMergeBody = document.getElementById("bm-merge-body");
-const $bmMergeYes = document.getElementById("bm-merge-yes");
-const $bmMergeNo = document.getElementById("bm-merge-no");
-const $bmMergeCancel = document.getElementById("bm-merge-cancel");
-const $verseSelectBar = document.getElementById("verse-select-bar");
-const $verseSelectCount = document.getElementById("verse-select-count");
-const $verseSelectBookmarkBtn = document.getElementById("verse-select-bookmark-btn");
-const $verseSelectCancelBtn = document.getElementById("verse-select-cancel-btn");
+const $bmImportScrim = _$("bm-import-scrim");
+const $bmImportModal = _$("bm-import-modal");
+const $bmImportBody = _$("bm-import-body");
+const $bmImportMerge = _$("bm-import-merge");
+const $bmImportOverwrite = _$("bm-import-overwrite");
+const $bmImportCancel = _$("bm-import-cancel");
+const $bmSaveScrim = _$("bm-save-scrim");
+const $bmSaveModal = _$("bm-save-modal");
+const $bmSaveClose = _$("bm-save-close");
+const $bmSaveTitle = _$("bm-save-title");
+const $bmSaveBody = _$("bm-save-body");
+const $bmNewFolderScrim = _$("bm-new-folder-scrim");
+const $bmNewFolderModal = _$("bm-new-folder-modal");
+const $bmNewFolderClose = _$("bm-new-folder-close");
+const $bmNewFolderInput = /** @type {HTMLInputElement} */ (_$("bm-new-folder-input"));
+const $bmNewFolderConfirm = _$("bm-new-folder-confirm");
+const $bmNewFolderCancel = _$("bm-new-folder-cancel");
+const $bmMergeScrim = _$("bm-merge-scrim");
+const $bmMergeModal = _$("bm-merge-modal");
+const $bmMergeBody = _$("bm-merge-body");
+const $bmMergeYes = _$("bm-merge-yes");
+const $bmMergeNo = _$("bm-merge-no");
+const $bmMergeCancel = _$("bm-merge-cancel");
+const $verseSelectBar = _$("verse-select-bar");
+const $verseSelectCount = _$("verse-select-count");
+const $verseSelectBookmarkBtn = _$("verse-select-bookmark-btn");
+const $verseSelectCancelBtn = _$("verse-select-cancel-btn");
 
 // Build the chevron-left back button for page title headers
 function buildBackBtn(ariaLabel, fallback) {
@@ -4834,7 +4835,7 @@ function openBookmarkDrawer(bookId, chapter) {
   document.body.style.position = "fixed";
   document.body.style.top = `-${scrollY}px`;
   document.body.style.width = "100%";
-  document.body.dataset.scrollY = scrollY;
+  document.body.dataset.scrollY = String(scrollY);
   _bookmarkDrawerTrap = trapFocus($bookmarkDrawer);
   requestAnimationFrame(() => $bookmarkDrawerClose.focus());
 }
@@ -4966,7 +4967,8 @@ function _buildBookmarkItem(bm, depth) {
 
 /**
  * Material Icons "folder" (24dp) — same contour as the filled symbol, stroked only (hollow).
- * @param {{ size?: number }} [opts]
+ * @param {boolean} [active]
+ * @param {number} [size]
  */
 function _buildBookmarkTypeIcon(active = false, size = 20) {
   const ns = "http://www.w3.org/2000/svg";
@@ -5175,7 +5177,7 @@ function _buildFolderCombobox(folderOptions, selectedFolderId) {
     else closeList();
   });
 
-  wrap._bmClose = closeList;
+  /** @type {HTMLElement & { _bmClose?: () => void }} */ (wrap)._bmClose = closeList;
   wrap.appendChild(hidden);
   wrap.appendChild(btn);
   wrap.appendChild(list);
@@ -5204,7 +5206,8 @@ function _buildFolderItem(folder, depth) {
   toggle.appendChild(_buildFolderToggleIcon(expanded));
   const name = el("span", { className: "bm-folder-name" }, folder.name);
   row.addEventListener("click", (e) => {
-    if (e.target.closest(".bm-item-actions, .bm-row-actions-mobile")) return;
+    const t = e.target;
+    if (t instanceof Element && t.closest(".bm-item-actions, .bm-row-actions-mobile")) return;
     if (row.classList.contains("bm-swiped")) {
       closeSwipedRow(null);
       return;
@@ -5215,7 +5218,7 @@ function _buildFolderItem(folder, depth) {
     // Persist expanded state so it survives re-render
     const store = loadBookmarks();
     const found = _findItemInStore(store, folder.id);
-    if (found) { found.item.expanded = newExpanded; saveBookmarks(store); }
+    if (found && found.item.type === "folder") { found.item.expanded = newExpanded; saveBookmarks(store); }
   });
 
   const renameAction = () => {
@@ -5339,9 +5342,11 @@ $bookmarkDrawerBody.addEventListener("pointerdown", (e) => {
 });
 
 $bookmarkDrawerBody.addEventListener("keydown", (e) => {
+  const t = e.target;
+  if (!(t instanceof Element)) return;
   // Ignore keypresses originating from interactive controls inside the row (buttons, inputs)
-  if (e.target.closest(".bm-item-actions, .bm-bookmark-link")) return;
-  const item = e.target.closest("[role=treeitem]");
+  if (t.closest(".bm-item-actions, .bm-bookmark-link")) return;
+  const item = /** @type {HTMLElement | null} */ (t.closest("[role=treeitem]"));
   if (!item || !$bookmarkDrawerBody.contains(item)) return;
 
   const items = _getVisibleTreeItems();
@@ -5391,7 +5396,7 @@ $bookmarkDrawerBody.addEventListener("keydown", (e) => {
       _focusTreeItem(item);
     } else {
       // Activate bookmark: follow its link
-      const link = item.querySelector(".bm-bookmark-link");
+      const link = /** @type {HTMLElement | null} */ (item.querySelector(".bm-bookmark-link"));
       if (link) link.click();
     }
   }
@@ -5416,7 +5421,7 @@ function openSaveModal(mode, opts = {}) {
     const refs = collapseFullVerseRefs(Array.from(_selectedVerseRefs), article);
     verseSpec = refs.length ? selectedVersesToSpec(refs) : "all";
   } else if (existing) {
-    verseSpec = existing.verseSpec;
+    verseSpec = existing.verseSpec ?? "all";
   }
 
   // Merge check (skip for edit mode)
@@ -5433,7 +5438,7 @@ function openSaveModal(mode, opts = {}) {
 }
 
 function _showSaveModal(mode, bookId, chapter, verseSpec, existing) {
-  const prevCombo = document.getElementById("bm-folder-combobox");
+  const prevCombo = /** @type {HTMLElement & { _bmClose?: () => void } | null} */ (document.getElementById("bm-folder-combobox"));
   if (prevCombo && prevCombo._bmClose) prevCombo._bmClose();
 
   const store = loadBookmarks();
@@ -5512,7 +5517,7 @@ function _showSaveModal(mode, bookId, chapter, verseSpec, existing) {
 }
 
 function closeSaveModal() {
-  const c = document.getElementById("bm-folder-combobox");
+  const c = /** @type {HTMLElement & { _bmClose?: () => void } | null} */ (document.getElementById("bm-folder-combobox"));
   if (c && c._bmClose) c._bmClose();
   $bmSaveScrim.hidden = true;
   $bmSaveModal.hidden = true;
@@ -5567,6 +5572,7 @@ function commitSaveBookmark(existingId, label, note, folderId, bookId, chapter, 
       insertItem(store, folderId, updatedItem);
     }
   } else {
+    /** @type {BookmarkTreeBookmark} */
     const bm = {
       type: "bookmark",
       id: generateId(),
@@ -5587,6 +5593,12 @@ function commitSaveBookmark(existingId, label, note, folderId, bookId, chapter, 
 
 // ── Merge dialog ──
 
+/**
+ * @param {BookmarkTreeBookmark[]} candidates
+ * @param {string} incomingSpec
+ * @param {string} mode
+ * @param {{ bookId?: string | null, chapter?: number | null } | null} [fallbackContext]
+ */
 function openMergeDialog(candidates, incomingSpec, mode, fallbackContext = null) {
   clearNode($bmMergeBody);
   const resolvedBookId =
@@ -5634,15 +5646,16 @@ function openMergeDialog(candidates, incomingSpec, mode, fallbackContext = null)
   }
 
   $bmMergeYes.onclick = () => {
-    const merged = mergeVerseSpecs(target.verseSpec, incomingSpec);
+    const merged = mergeVerseSpecs(target.verseSpec ?? "all", incomingSpec);
     const store = loadBookmarks();
     const found = _findItemInStore(store, target.id);
-    if (found) {
+    if (found && found.item.type === "bookmark") {
       found.item.verseSpec = merged;
       // Sync label to reflect the merged verse spec
-      const book = booksCache && booksCache.find(b => b.id === target.bookId);
-      const bookName = book ? (book.short_name_ko || book.name_ko) : target.bookId;
-      const unit = chUnit(target.bookId);
+      const targetBookId = target.bookId ?? "";
+      const book = booksCache && booksCache.find((b) => b.id === targetBookId);
+      const bookName = book ? (book.short_name_ko || book.name_ko) : targetBookId;
+      const unit = chUnit(targetBookId);
       found.item.label = merged === "all"
         ? `${bookName} ${target.chapter}${unit}`
         : `${bookName} ${target.chapter}:${merged}`;
