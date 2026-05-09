@@ -10,6 +10,18 @@
 /** @typedef {import("./types").ThemeMode} ThemeMode */
 /** @typedef {import("./types").BookOrderKind} BookOrderKind */
 /** @typedef {import("./types").ColorSchemeEntry} ColorSchemeEntry */
+/** @typedef {import("./types").BookEntry} BookEntry */
+/** @typedef {import("./types").BooksData} BooksData */
+/** @typedef {import("./types").BibleChapter} BibleChapter */
+/** @typedef {import("./types").BiblePrologue} BiblePrologue */
+/** @typedef {import("./types").BibleVerse} BibleVerse */
+// `BookmarkTreeNode` is already declared as a file-global typedef in
+// js/sync/store-v2.js (type aliases don't merge, so re-typedef'ing here
+// would trip TS2300). We reuse that global alias directly. The sub-types
+// `BookmarkTreeBookmark` / `BookmarkTreeFolder` are app.js-only — store-v2
+// only needs the union form.
+/** @typedef {import("./types").BookmarkTreeBookmark} BookmarkTreeBookmark */
+/** @typedef {import("./types").BookmarkTreeFolder} BookmarkTreeFolder */
 
 const DATA_DIR = "/data";
 // Psalms use "편" instead of "장" as the chapter unit
@@ -1280,8 +1292,14 @@ function saveBookmarks(store) {
 // ── Verse spec utilities ──
 
 // "1-5,10-15,3a,3b" → [{start:1,end:5},{start:10,end:15},{start:3,end:3,part:"a"},...]
+/**
+ * @param {string} spec
+ * @returns {Array<{start: number, end: number, part?: string}>}
+ */
 function parseVerseSpec(spec) {
   if (!spec || spec === "all") return [];
+  /** @type {Array<{start: number, end: number, part?: string}>} */
+  const init = [];
   return spec.split(",").reduce((acc, seg) => {
     const trimmed = seg.trim();
     const alphaMatch = trimmed.match(/^(\d+)([a-z])$/);
@@ -1297,11 +1315,16 @@ function parseVerseSpec(spec) {
       if (s > 0) acc.push({ start: Math.min(s, e), end: Math.max(s, e) });
     }
     return acc;
-  }, []);
+  }, init);
 }
 
 // If all rendered spans of a multi-part verse are selected, collapse "3a,3b" → "3".
 // Single-part verses ("3" with no alpha suffix) are unchanged.
+/**
+ * @param {string[]} refs
+ * @param {Element | null | undefined} article
+ * @returns {string[]}
+ */
 function collapseFullVerseRefs(refs, article) {
   if (!article) return refs;
   const selected = new Set(refs);
@@ -1316,10 +1339,10 @@ function collapseFullVerseRefs(refs, article) {
   for (const [n, verseRefs] of Object.entries(byVerse)) {
     // All spans rendered for this verse number
     const allSpanRefs = [...article.querySelectorAll(".verse[data-vref]")]
-      .map(s => s.getAttribute("data-vref"))
-      .filter(r => parseInt(r, 10) === Number(n));
-    const hasAlpha = allSpanRefs.some(r => /[a-z]$/.test(r));
-    const allSelected = allSpanRefs.length > 0 && allSpanRefs.every(r => selected.has(r));
+      .map((s) => s.getAttribute("data-vref") ?? "")
+      .filter((r) => r && parseInt(r, 10) === Number(n));
+    const hasAlpha = allSpanRefs.some((r) => /[a-z]$/.test(r));
+    const allSelected = allSpanRefs.length > 0 && allSpanRefs.every((r) => selected.has(r));
     if (hasAlpha && allSelected) {
       result.push(`${n}`);
     } else {
@@ -1330,6 +1353,7 @@ function collapseFullVerseRefs(refs, article) {
 }
 
 // Compare verse refs: "3" < "3a" < "3b" < "4"
+/** @param {string} a @param {string} b */
 function _compareRefs(a, b) {
   const na = parseInt(a, 10), nb = parseInt(b, 10);
   if (na !== nb) return na - nb;
@@ -1340,6 +1364,7 @@ function _compareRefs(a, b) {
 
 // Array of data-vref strings (e.g. ["3a","3b","5","6","7"]) → "3a,3b,5-7"
 // Consecutive integer-only refs are compressed into ranges; alpha refs kept individually.
+/** @param {string[]} refs @returns {string} */
 function selectedVersesToSpec(refs) {
   if (!refs.length) return "all";
   const unique = [...new Set(refs)].sort(_compareRefs);
@@ -1370,6 +1395,7 @@ function selectedVersesToSpec(refs) {
 }
 
 // Union of two verse spec strings
+/** @param {string} specA @param {string} specB @returns {string} */
 function mergeVerseSpecs(specA, specB) {
   if (specA === "all" || specB === "all") return "all";
   const intRefs = new Set();
@@ -1390,6 +1416,11 @@ function mergeVerseSpecs(specA, specB) {
 
 // ── Bookmark query helpers ──
 
+/**
+ * @param {BookmarkTreeNode[]} store
+ * @param {(item: BookmarkTreeNode, parent: BookmarkTreeNode[]) => unknown} fn
+ * @returns {boolean}
+ */
 function _walkBookmarks(store, fn) {
   for (const item of store) {
     if (fn(item, store) === false) return false;
@@ -1400,7 +1431,13 @@ function _walkBookmarks(store, fn) {
   return true;
 }
 
+/**
+ * @param {string} bookId
+ * @param {number} chapter
+ * @returns {BookmarkTreeBookmark[]}
+ */
 function findExistingChapterBookmarks(bookId, chapter) {
+  /** @type {BookmarkTreeBookmark[]} */
   const results = [];
   _walkBookmarks(loadBookmarks(), (item) => {
     if (item.type === "bookmark" && item.bookId === bookId && item.chapter === chapter) {
@@ -1410,11 +1447,17 @@ function findExistingChapterBookmarks(bookId, chapter) {
   return results;
 }
 
+/**
+ * @param {BookmarkTreeNode[]} store
+ * @param {string} id
+ * @returns {{ item: BookmarkTreeNode, parent: BookmarkTreeNode[], index: number } | null}
+ */
 function _findItemInStore(store, id) {
   for (let i = 0; i < store.length; i++) {
-    if (store[i].id === id) return { item: store[i], parent: store, index: i };
-    if (store[i].type === "folder") {
-      const found = _findItemInStore(store[i].children, id);
+    const it = store[i];
+    if (it.id === id) return { item: it, parent: store, index: i };
+    if (it.type === "folder") {
+      const found = _findItemInStore(it.children, id);
       if (found) return found;
     }
   }
@@ -1422,6 +1465,12 @@ function _findItemInStore(store, id) {
 }
 
 // Returns the parent folder's id (null = root), or undefined if not found.
+/**
+ * @param {BookmarkTreeNode[]} store
+ * @param {string} id
+ * @param {string | null} [parentId]
+ * @returns {string | null | undefined}
+ */
 function _findParentFolderId(store, id, parentId = null) {
   for (const item of store) {
     if (item.id === id) return parentId;
@@ -1433,11 +1482,17 @@ function _findParentFolderId(store, id, parentId = null) {
   return undefined;
 }
 
+/** @param {BookmarkTreeNode[]} store @param {string} id */
 function removeItemById(store, id) {
   const found = _findItemInStore(store, id);
   if (found) found.parent.splice(found.index, 1);
 }
 
+/**
+ * @param {BookmarkTreeNode[]} store
+ * @param {string | null | undefined} folderId
+ * @param {BookmarkTreeNode} item
+ */
 function insertItem(store, folderId, item) {
   if (!folderId) {
     store.push(item);
@@ -1451,6 +1506,12 @@ function insertItem(store, folderId, item) {
   }
 }
 
+/**
+ * @param {BookmarkTreeNode[]} store
+ * @param {number} [depth]
+ * @param {Array<{ id: string, name: string, depth: number }>} [options]
+ * @returns {Array<{ id: string, name: string, depth: number }>}
+ */
 function collectFolderOptions(store, depth = 0, options = []) {
   for (const item of store) {
     if (item.type === "folder") {
@@ -1487,7 +1548,7 @@ function moveBookmarkItem(draggedId, targetId, position) {
 
   if (position === "into") {
     const tf = _findItemInStore(store, targetId);
-    if (tf) tf.item.children.unshift(draggedItem);
+    if (tf && tf.item.type === "folder") tf.item.children.unshift(draggedItem);
     else store.push(draggedItem);
   } else {
     const tf = _findItemInStore(store, targetId);
@@ -1508,10 +1569,14 @@ function _clearDragIndicators() {
     .forEach(n => n.classList.remove("drag-over-before", "drag-over-after", "drag-over-into"));
 }
 
+/**
+ * @param {number} clientX
+ * @param {number} clientY
+ */
 function _updateDragIndicators(clientX, clientY) {
   _clearDragIndicators();
   const hitEl = document.elementFromPoint(clientX, clientY);
-  const target = hitEl?.closest("[data-id]");
+  const target = /** @type {HTMLElement | null} */ (hitEl?.closest("[data-id]"));
   if (!target || target.dataset.id === _dragState?.id) return;
   const rowEl = target.querySelector(".bm-folder-row, .bm-bookmark-row");
   const r = (rowEl || target).getBoundingClientRect();
@@ -1696,11 +1761,12 @@ function _setupDragHandle(li, row) {
       _dragState = null;
       ds.ghost.remove();
       ds.origLi.classList.remove("bm-dragging");
-      const overItem = document.querySelector(".drag-over-before, .drag-over-after, .drag-over-into");
+      const overItem = /** @type {HTMLElement | null} */ (document.querySelector(".drag-over-before, .drag-over-after, .drag-over-into"));
       if (overItem) {
         const pos = overItem.classList.contains("drag-over-into") ? "into"
           : overItem.classList.contains("drag-over-before") ? "before" : "after";
-        moveBookmarkItem(ds.id, overItem.dataset.id, pos);
+        const targetId = overItem.dataset.id;
+        if (targetId) moveBookmarkItem(ds.id, targetId, pos);
       }
       _clearDragIndicators();
     }
@@ -1737,10 +1803,11 @@ function _setupDragHandle(li, row) {
 
 // ── Data fetching ──
 
+/** @returns {Promise<BooksData>} */
 async function loadBooks() {
   if (booksCache) return booksCache;
   // Use pre-fetched promise if available
-  const promise = window.booksPromise || fetch(`${DATA_DIR}/books.json`).then(res => {
+  const promise = window.booksPromise || fetch(`${DATA_DIR}/books.json`).then((res) => {
     if (!res.ok) throw new Error("Failed to load books.json");
     return res.json();
   });
@@ -1748,6 +1815,7 @@ async function loadBooks() {
   return booksCache;
 }
 
+/** @returns {Promise<string>} */
 async function loadVersion() {
   if (appVersion) return appVersion;
   try {
@@ -1760,12 +1828,18 @@ async function loadVersion() {
   return appVersion;
 }
 
+/**
+ * @param {string} bookId
+ * @param {number} chapter
+ * @returns {Promise<BibleChapter>}
+ */
 async function loadChapter(bookId, chapter) {
   const res = await fetch(`${DATA_DIR}/bible/${bookId}-${chapter}.json`);
   if (!res.ok) throw new Error(`Failed to load ${bookId}-${chapter}.json`);
   return res.json();
 }
 
+/** @param {string} bookId @returns {Promise<BiblePrologue>} */
 async function loadPrologue(bookId) {
   const res = await fetch(`${DATA_DIR}/bible/${bookId}-prologue.json`);
   if (!res.ok) throw new Error(`Failed to load ${bookId}-prologue.json`);
@@ -1803,6 +1877,7 @@ function setTitleWithDivisionPicker(activeDivision) {
     popover.appendChild(el("li", null, el("a", { className: cls, href: `/${div}` }, labels[div])));
   }
 
+  /** @type {(() => void) | null} */
   let cleanupTrap = null;
 
   btn.addEventListener("click", () => {
@@ -1811,7 +1886,7 @@ function setTitleWithDivisionPicker(activeDivision) {
     btn.setAttribute("aria-expanded", String(!open));
     if (!open) {
       cleanupTrap = trapFocus(popover);
-      const first = popover.querySelector('a[href]');
+      const first = /** @type {HTMLElement | null} */ (popover.querySelector('a[href]'));
       if (first) first.focus();
     } else if (cleanupTrap) {
       cleanupTrap(); cleanupTrap = null;
@@ -1819,7 +1894,8 @@ function setTitleWithDivisionPicker(activeDivision) {
   });
 
   document.addEventListener("click", (e) => {
-    if (!popover.hidden && !$title.contains(e.target)) {
+    const t = e.target;
+    if (!popover.hidden && t instanceof Node && !$title.contains(t)) {
       popover.hidden = true;
       btn.setAttribute("aria-expanded", "false");
       if (cleanupTrap) { cleanupTrap(); cleanupTrap = null; }
@@ -1827,7 +1903,8 @@ function setTitleWithDivisionPicker(activeDivision) {
   });
 
   popover.addEventListener("click", (e) => {
-    if (e.target.tagName === "A") {
+    const t = e.target;
+    if (t instanceof Element && t.tagName === "A") {
       popover.hidden = true;
       btn.setAttribute("aria-expanded", "false");
       if (cleanupTrap) { cleanupTrap(); cleanupTrap = null; }
@@ -1838,6 +1915,10 @@ function setTitleWithDivisionPicker(activeDivision) {
   $title.appendChild(popover);
 }
 
+/**
+ * @param {BookEntry} book
+ * @param {number} currentCh
+ */
 function setTitleWithChapterPicker(book, currentCh) {
   clearNode($title);
   const unit = chUnit(book.id);
@@ -1865,6 +1946,7 @@ function setTitleWithChapterPicker(book, currentCh) {
   }
   popover.appendChild(grid);
 
+  /** @type {(() => void) | null} */
   let cleanupTrap = null;
 
   btn.addEventListener("click", () => {
@@ -1873,7 +1955,7 @@ function setTitleWithChapterPicker(book, currentCh) {
     btn.setAttribute("aria-expanded", String(!open));
     if (!open) {
       cleanupTrap = trapFocus(popover);
-      const first = popover.querySelector('a[href]');
+      const first = /** @type {HTMLElement | null} */ (popover.querySelector('a[href]'));
       if (first) first.focus();
     } else if (cleanupTrap) {
       cleanupTrap(); cleanupTrap = null;
@@ -1881,7 +1963,8 @@ function setTitleWithChapterPicker(book, currentCh) {
   });
 
   document.addEventListener("click", (e) => {
-    if (!popover.hidden && !$title.contains(e.target)) {
+    const t = e.target;
+    if (!popover.hidden && t instanceof Node && !$title.contains(t)) {
       popover.hidden = true;
       btn.setAttribute("aria-expanded", "false");
       if (cleanupTrap) { cleanupTrap(); cleanupTrap = null; }
@@ -1889,7 +1972,8 @@ function setTitleWithChapterPicker(book, currentCh) {
   });
 
   popover.addEventListener("click", (e) => {
-    if (e.target.tagName === "A") {
+    const t = e.target;
+    if (t instanceof Element && t.tagName === "A") {
       popover.hidden = true;
       btn.setAttribute("aria-expanded", "false");
       if (cleanupTrap) { cleanupTrap(); cleanupTrap = null; }
@@ -2365,7 +2449,9 @@ function renderChapter(data, book, opts) {
   // Announce verse number on click/tap for screen reader users,
   // or toggle verse selection when in select mode.
   article.addEventListener("click", (e) => {
-    const vs = e.target.closest(".verse[data-vref]");
+    const t = e.target;
+    if (!(t instanceof Element)) return;
+    const vs = t.closest(".verse[data-vref]");
     if (!vs) return;
     if (_verseSelectMode) {
       e.stopPropagation(); // selection is handled by pointer events
@@ -2376,22 +2462,25 @@ function renderChapter(data, book, opts) {
 
   // Long-press (300ms) to enter verse selection mode.
   // pointermove only cancels after >10px of movement to tolerate natural finger drift.
+  /** @type {ReturnType<typeof setTimeout> | null} */
   let _longPressTimer = null;
   let _longPressStartX = 0;
   let _longPressStartY = 0;
   article.addEventListener("pointerdown", (e) => {
+    const t = e.target;
+    if (!(t instanceof Element)) return;
     if (_verseSelectMode) {
-      const vs = e.target.closest(".verse[data-vref]");
+      const vs = t.closest(".verse[data-vref]");
       if (!vs) return;
       e.preventDefault(); // prevent text selection during drag
-      const allVerses = [...article.querySelectorAll(".verse[data-vref]")];
-      const startIdx = allVerses.indexOf(vs);
-      const isAdding = !_selectedVerseRefs.has(vs.getAttribute("data-vref"));
+      const allVerses = /** @type {HTMLElement[]} */ ([...article.querySelectorAll(".verse[data-vref]")]);
+      const startIdx = allVerses.indexOf(/** @type {HTMLElement} */ (vs));
+      const isAdding = !_selectedVerseRefs.has(vs.getAttribute("data-vref") ?? "");
       _verseSelectDrag = { startIdx, allVerses, isAdding, moved: false, snapshot: new Set(_selectedVerseRefs) };
       article.setPointerCapture(e.pointerId);
       return;
     }
-    const vs = e.target.closest(".verse[data-vref]");
+    const vs = t.closest(".verse[data-vref]");
     if (!vs) return;
     _longPressStartX = e.clientX;
     _longPressStartY = e.clientY;
@@ -2492,7 +2581,7 @@ function renderChapter(data, book, opts) {
         lastVerse = v;
       }
     }
-    if (!firstVerse) return;
+    if (!firstVerse || !lastVerse) return;
 
     const expanded = document.createRange();
     expanded.setStartBefore(firstVerse);
@@ -2509,17 +2598,19 @@ function renderChapter(data, book, opts) {
     work.querySelectorAll(".stanza-break, .paragraph-break, .pilcrow").forEach((n) => { n.textContent = "\n\n"; });
     work.querySelectorAll(".hemistich-break").forEach((n) => { n.textContent = "\n"; });
 
+    /** @type {number | null} */
     let firstNum = null;
+    /** @type {number | null} */
     let lastNum = null;
     for (const vs of work.querySelectorAll(".verse[data-vref]")) {
-      const n = parseInt(vs.getAttribute("data-vref"), 10);
+      const n = parseInt(vs.getAttribute("data-vref") ?? "", 10);
       if (!Number.isFinite(n)) continue;
       if (firstNum === null) firstNum = n;
       lastNum = n;
     }
     if (firstNum === null) return;
 
-    const plainText = work.textContent
+    const plainText = (work.textContent ?? "")
       .replace(/\u2060/g, "")
       .replace(/[ \t]+\n/g, "\n")
       .replace(/\n{3,}/g, "\n\n")
@@ -2529,6 +2620,7 @@ function renderChapter(data, book, opts) {
       ? `${book.name_ko} ${ch}:${firstNum}`
       : `${book.name_ko} ${ch}:${firstNum}-${lastNum}`;
 
+    if (!e.clipboardData) return;
     e.clipboardData.setData("text/plain", `${plainText}\n\n— ${ref} (공동번역성서)`);
     e.preventDefault();
   });

@@ -362,9 +362,11 @@ export interface DriveSyncFacade {
 // shape uses `verseSpec?: string`) — here `verse` is a single integer
 // populated by the scroll-tracking heuristic. Both shapes are intentional:
 // app.js consumes the local form, the sync layer carries the synced form.
+// `chapter` may be the literal string "prologue" for books that have one
+// (e.g. Sirach prologue) — see ADR-002.
 export interface ReadingPosition {
   bookId: string;
-  chapter: number;
+  chapter: number | "prologue";
   verse: number | null;
 }
 
@@ -420,6 +422,55 @@ export interface ColorSchemeEntry {
   iconBg: string;
 }
 
+// `data/books.json` parse shape. 73 entries; `division` partitions OT/NT/DC,
+// while `OT_SUBCATEGORY` (app.js) further subdivides OT into pentateuch /
+// history / wisdom / prophets. `has_prologue` is true only for sir.
+export interface BookEntry {
+  id: string;
+  name_ko: string;
+  short_name_ko: string;
+  name_en: string;
+  division: "old_testament" | "new_testament" | "deuterocanon";
+  chapter_count: number;
+  has_prologue: boolean;
+}
+
+export type BooksData = ReadonlyArray<BookEntry>;
+
+// `data/bible/{book_id}-{chapter}.json` parse shape. `verses` is the rendered
+// unit; segments hold prose/poetry mix and inter-verse stanza/paragraph cues.
+export interface BibleVerseSegment {
+  type: "prose" | "poetry";
+  text: string;
+  paragraph_break?: boolean;
+}
+
+export interface BibleVerse {
+  number: number;
+  part?: string;
+  range_end?: number;
+  alt_ref?: number | null;
+  chapter_ref?: string;
+  stanza_break?: boolean;
+  text?: string;
+  segments?: BibleVerseSegment[];
+}
+
+export interface BibleChapter {
+  book_id: string;
+  book_name_ko: string;
+  book_name_en: string;
+  chapter: number;
+  has_dual_numbering?: boolean;
+  verses: BibleVerse[];
+}
+
+export interface BiblePrologue {
+  book_id: string;
+  book_name_ko: string;
+  paragraphs: string[];
+}
+
 // ── Window augmentation ──────────────────────────────────────────────────────
 
 declare global {
@@ -443,6 +494,10 @@ declare global {
     // by initDriveSync().
     __pendingRedirectCode?: { code: string; verifier: string };
     __pendingRedirectError?: string;
+
+    // Pre-fetched data/books.json promise (js/pre-fetch.js). app.js's
+    // loadBooks() awaits this when present rather than re-issuing the fetch.
+    booksPromise?: Promise<BooksData>;
 
     // UI side-effects defined in app.js. Optional because state-machine.js
     // guards each call with `typeof ... === "function"`.

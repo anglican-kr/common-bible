@@ -2,12 +2,18 @@
 // // @ts-check + JSDoc in stages (see docs/design/app-typescript-migration.md).
 // Removed in PR-7 when `// @ts-check` is added to the head of app.js and the
 // main tsconfig.json picks it up via its existing `js/**/*.js` include.
+//
+// `include` matches the main tsconfig because js/sync/store-v2.js declares a
+// file-global `BookmarkTreeNode` @typedef that app.js participates in. With
+// app.js alone in `include`, that alias is invisible and TS reports it as
+// missing across PR-3+ signatures. `noImplicitAny: false` keeps progress
+// gated on null/domain checks only — flipped to `true` in PR-7.
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "checkJs": true,
     "noImplicitAny": false
   },
-  "include": ["js/app.js", "js/types.d.ts"],
+  "include": ["js/**/*.js", "js/types.d.ts"],
   "exclude": ["js/search-worker.js"]
 }

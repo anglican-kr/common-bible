@@ -109,8 +109,8 @@ ADR-012의 1차 적용 범위(`js/sync/*`, `js/drive-sync.js`, `js/search-worker
 | PR   | 영역                                                                                                         | 라인 범위   | 상태                  | 머지 PR |
 | ---- | ------------------------------------------------------------------------------------------------------------ | ----------- | --------------------- | ------- |
 | PR-1 | 헤드 + 접근성 + 읽기위치 + 오디오 LRU + PTR + 검색 히스토리 + 폰트 + 캐시                                    | L1-L513     | 머지 완료             | [#81](https://github.com/anglican-kr/common-bible/pull/81) |
-| PR-2 | 설정 팝오버 + 아이콘 + 컬러 스킴 + 테마 + 책 순서 + 런치 스크린 + 헬퍼 + 북마크 스토리지                     | L595-L1273 (PR-1 머지 후 라인) | 작성 완료 (커밋 대기) | —       |
-| PR-3 | 절 스펙 + 북마크 쿼리 + 드래그앤드롭 + 데이터 페칭 + 렌더링 헬퍼 + Views                                     | L1160-L2489 | 대기                  | —       |
+| PR-2 | 설정 팝오버 + 아이콘 + 컬러 스킴 + 테마 + 책 순서 + 런치 스크린 + 헬퍼 + 북마크 스토리지                     | L595-L1273 | 머지 완료             | [#82](https://github.com/anglican-kr/common-bible/pull/82) |
+| PR-3 | 절 스펙 + 북마크 쿼리 + 드래그앤드롭 + 데이터 페칭 + 렌더링 헬퍼 + Views                                     | L1280-L2630 (PR-2 머지 후 라인) | 작성 완료 (커밋 대기) | —       |
 | PR-4 | 라우팅 + 오디오 플레이어                                                                                     | L2490-L3021 | 대기                  | —       |
 | PR-5 | 검색 + 검색 시트 + 검색 히스토리 패널                                                                        | L3022-L4006 | 대기                  | —       |
 | PR-6 | 컴팩트 헤더 + PWA 감지 + 설치 안내 + 북마크 UI + 트리 렌더링 + 저장/병합 모달                                | L4007-L5438 | 대기                  | —       |
@@ -219,3 +219,5 @@ CLAUDE.md `tests/e2e/` 절차를 따라 사용자가 수동 실행:
 | 2026-05-09 | PR-1 작성 완료 | `tsconfig.app.json` 신설, `js/types.d.ts`에 5종(`ReadingPosition`, `AudioPosition`, `SearchHistoryList`, `VerseSelectDrag`, `DragState`) 추가, `js/app.js` L1-L513 JSDoc 보강. baseline 428 → 잔여 282 (PR-1 영역 0). main `tsconfig.json`/`tsconfig.worker.json` 0 error 회귀 없음, 유닛 테스트 111건 통과 |
 | 2026-05-09 | PR-1 머지 (#81) | CI Unit tests + Cursor Bugbot 모두 green, main 통합 |
 | 2026-05-09 | PR-2 작성 완료 | `js/types.d.ts`에 4종(`ColorSchemeId`, `ThemeMode`, `BookOrderKind`, `ColorSchemeEntry`) 추가, `js/app.js` L595-L1273 JSDoc 보강. baseline 282 → 잔여 294. PR-2 영역 0 에러. **`el()` generic narrow의 부작용으로 PR-3+ 영역(L1515-L2686)에 잠재 결함 22건 신규 노출** — 후속 PR에서 흡수 (이전엔 implicit any에 묻혀있던 strictNullChecks 위반). main + worker tsc 0 error, 유닛 111건 통과 |
+| 2026-05-09 | PR-2 머지 (#82) | CI Unit tests + Cursor Bugbot 모두 green, main 통합 |
+| 2026-05-09 | PR-3 작성 완료 | `js/types.d.ts`에 5종(`BookEntry`, `BooksData`, `BibleChapter`, `BibleVerse`, `BiblePrologue`) 추가 + `window.booksPromise` 선언 + `ReadingPosition.chapter` `number \| "prologue"` narrow. `js/app.js` L1280-L2630 JSDoc 보강 — Drag/drop dataset narrow, popover handler `e.target` instance 가드, Views의 `closest`/`textContent`/`clipboardData` narrow. PR-2가 노출한 PR-3 영역 22건 모두 해소. baseline 294 → 잔여 280 (PR-3 영역 0). `BookmarkTreeNode` 글로벌 typedef는 store-v2.js가 이미 정의하고 있어 alias 머지가 막힘 — `tsconfig.app.json` include를 `js/**/*.js`로 확장해 store-v2의 글로벌 alias를 app.js에서 참조하도록 통일 (이름 변경 없이). main + worker tsc 0 error, 유닛 111건 통과 |
