@@ -102,3 +102,17 @@ ADR-001은 "프레임워크 없는 Vanilla JS"를 선언하고 있고 ADR-005·0
 - ADR-001: SPA 아키텍처 — 빌드 단계 회피의 출발점
 - ADR-011: 북마크 동기화 — 도메인 타입의 주요 소비자
 - ADR-013: 클라이언트 JS 유닛 테스트 전략 — 같은 사이클에 도입
+
+---
+
+> **개정 (2026-05-09): `js/app.js` 2차 적용 1라운드 완료**
+>
+> 1차 적용에서 보류했던 `js/app.js`(~5,800줄)에 7단계 분할 PR(#81~#87)로 JSDoc + null/도메인 타입 가드를 도입. 살아있는 설계 문서: `docs/design/app-typescript-migration.md`.
+>
+> **추가된 도메인 타입 (`js/types.d.ts`)**: `ReadingPosition`, `AudioPosition`, `SearchHistoryList`, `VerseSelectDrag`, `DragState`, `ColorSchemeId`, `ThemeMode`, `BookOrderKind`, `ColorSchemeEntry`, `BookEntry`, `BooksData`, `BibleVerseSegment`, `BibleVerse`, `BibleChapter`, `BiblePrologue`, `Window.booksPromise`. `ReadingPosition.chapter`는 `number | "prologue"` union으로 narrow.
+>
+> **운영 패턴**: `_$` 헬퍼(L20)로 모든 모듈-수준 anchor를 `getElementById` 결과로 통일(HTMLElement non-null cast). input/button/file input은 사용 측에서 더 narrow한 cast(`HTMLInputElement`, `HTMLButtonElement`).
+>
+> **임시 인프라**: `tsconfig.app.json`(`checkJs: true`, `noImplicitAny: false`)을 두어 단계별 검증. `js/app.js` 헤드의 `// @ts-check` 영구 활성화와 `tsconfig.app.json` 삭제는 **`js/app.js` 파일 분할(modularization) 리팩터링과 결합한 별도 의제로 보류** — 5,800줄 단일 파일에 `noImplicitAny: true`를 일거에 적용하면 ~262 implicit any가 발생하는데, 이를 모듈 단위로 옵트인해 정리하는 게 자연스럽기 때문.
+>
+> **다음 라운드 트리거**: `js/app.js` 분할 리팩터링 의제 시작 시점. 본 ADR 본문의 검토한 대안 표에 "`.ts` 파일 + tsc 빌드 산출물 배포: ❌ ADR-001 SPA 단순성 훼손" 결정은 그대로 유효.

@@ -4,7 +4,7 @@
 > 시점 고정 결정 기록은 ADR-012 본문 + 머지 시 추가될 `> **개정 (날짜):**` 블록 참조.
 
 - 작성: 2026-05-09
-- 상태: PR-1 진행 중
+- 상태: **1라운드 종료** (PR-1~7 머지 완료). `// @ts-check` 영구 활성화 + `tsconfig.app.json` 삭제는 **app.js 파일 분할 리팩터링과 결합한 별도 의제**로 보류
 - 관련 ADR: ADR-001(SPA), ADR-012(TS 점진 도입), ADR-013(유닛 테스트)
 
 ---
@@ -113,8 +113,8 @@ ADR-012의 1차 적용 범위(`js/sync/*`, `js/drive-sync.js`, `js/search-worker
 | PR-3 | 절 스펙 + 북마크 쿼리 + 드래그앤드롭 + 데이터 페칭 + 렌더링 헬퍼 + Views                                     | L1280-L2630 | 머지 완료             | [#83](https://github.com/anglican-kr/common-bible/pull/83) |
 | PR-4 | 라우팅 + 오디오 플레이어                                                                                     | L2702-L3233 | 머지 완료             | [#84](https://github.com/anglican-kr/common-bible/pull/84) |
 | PR-5 | 검색 + 검색 시트 + 검색 히스토리 패널                                                                        | L3245-L4229 | 머지 완료             | [#85](https://github.com/anglican-kr/common-bible/pull/85) |
-| PR-6 | 컴팩트 헤더 + PWA 감지 + 설치 안내 + 북마크 UI + 트리 렌더링 + 저장/병합 모달                                | L4235-L5666 (PR-5 머지 후 라인) | 작성 완료 (커밋 대기) | —       |
-| PR-7 | 내보내기/가져오기 + 절 선택 + 드로어 + SW 등록 + 최종 통합 (`// @ts-check` 영구화, `tsconfig.app.json` 삭제) | L5439-L5854 | 대기                  | —       |
+| PR-6 | 컴팩트 헤더 + PWA 감지 + 설치 안내 + 북마크 UI + 트리 렌더링 + 저장/병합 모달                                | L4235-L5666 | 머지 완료             | [#86](https://github.com/anglican-kr/common-bible/pull/86) |
+| PR-7 | 내보내기/가져오기 + 절 선택 + 드로어 + SW 등록 + 모듈 상태 narrow ([§9](#9-pr-7-마무리-방식-변경) 참조)        | L5670-L6082 (PR-6 머지 후 라인) | 작성 완료 (커밋 대기) | —       |
 
 ---
 
@@ -205,9 +205,27 @@ CLAUDE.md `tests/e2e/` 절차를 따라 사용자가 수동 실행:
 
 ## 7. ADR 갱신 정책
 
-- PR-7 머지 시 ADR-012에 `> **개정 (날짜):**` 블록 추가 — 2차 적용 완료, 적용 범위에 `js/app.js` 명시.
-- 본 설계 문서는 PR-7 머지 후 "마이그레이션 완료" 상태로 표기. 이후에도 도메인 타입 갱신 이력 추적용으로 유지.
-- 메모리 `project_inflight_work.md` "추후 점진 확장 후보"에서 `js/app.js` 항목 제거.
+- PR-7 머지 시 ADR-012에 `> **개정 (2026-05-09):**` 블록 추가 — 2차 적용 1라운드 완료, `js/app.js` JSDoc + null·도메인 타입 가드 도입. `// @ts-check` 영구 활성화는 분할 리팩터링 결합 의제로 보류 표기.
+- 본 설계 문서는 PR-7 머지 후 "1라운드 종료" 상태로 표기. 후속 라운드(파일 분할 + ts-check 영구화)는 별도 의제로 시작 시 본 문서에 §10 등으로 이어쓰기.
+- 메모리 `project_inflight_work.md` "추후 점진 확장 후보"에서 `js/app.js` 항목을 "1라운드 완료, 2라운드(분할 + ts-check)는 별도 의제"로 갱신.
+
+---
+
+## 9. PR-7 마무리 방식 변경
+
+### 9.1 변경 사유
+
+PR-7 시작 시 main `tsconfig.json` 검사 환경에서 `// @ts-check`를 `js/app.js`에 추가했더니 **312개 implicit any 에러**가 발생. 함수 매개변수 ~150개 + 모듈 상태 ~30개 + index access ~17개를 단일 PR에서 정리하려면 거대한 변경량이 필요한데, 이는 ADR-001의 SPA 단순성과 무관한 코드 형태 갱신이라 PR 단위로 추적·리뷰가 어려움. 그리고 5,800줄 단일 파일에 strict 타입을 입히는 작업은 **파일 분할(modularization)과 함께 진행하는 게 자연스럽다** — 각 모듈에 `// @ts-check`를 옵트인하면서 그 모듈의 타입을 정확히 정리할 수 있음.
+
+### 9.2 PR-7 실제 산출물
+
+- 잔여 11 fix (PR-7 영역 L5670-L6082): 모듈 헤드 button/input/file input narrow, `e.target instanceof Element` 가드, FileReader result 타입 narrow, `_$` 헬퍼로 `bookmark-drawer-toolbar` 통일
+- **모듈 상태 변수 일괄 narrow** — `let booksCache = null;` 같은 모든 모듈 수준 `let` 변수에 `/** @type {Foo | null} */` 부착 (~30개). PR-2의 `el()` generic 사례처럼 narrow 부작용으로 노출되는 잠재 결함이 있어, 발생한 strict null 위반(loadBooks 반환, audio save timer null guard, getAttribute ?? "" 패턴 ~10곳)은 같은 PR에서 정리
+- `tsconfig.app.json`은 **유지** (`noImplicitAny: false` 그대로). `js/app.js` 헤드의 `// @ts-check`는 추가하지 않음
+
+### 9.3 보류된 작업 (별도 의제)
+
+`js/app.js` 파일 분할 리팩터링 + 각 모듈의 `// @ts-check` 영구 활성화 + `tsconfig.app.json` 최종 삭제. 시작 시점에 본 문서 §10으로 이어쓰기.
 
 ---
 
@@ -228,3 +246,6 @@ CLAUDE.md `tests/e2e/` 절차를 따라 사용자가 수동 실행:
 | 2026-05-09 | PR-5 머지 (#85) | CI Unit tests + Cursor Bugbot 모두 green, main 통합 (rebase) |
 | 2026-05-09 | PR-6 시작 | `feat/app-jsdoc-pr6` 브랜치 분기. 영역: 컴팩트 헤더 + PWA 감지 + 설치 안내 모달 + 설치 nudge + 북마크 UI + 트리 렌더링 + 저장/병합 모달 (L4235-L5666, ~1,432줄, PR-3 다음으로 큼) |
 | 2026-05-09 | PR-6 작성 완료 | **모든 모듈-수준 anchor를 PR-1의 `_$` 헬퍼로 일괄 통일** (sed 단일 치환으로 48개 변환) — baseline 223 → 잔여 47 (-176!). PR-1~5에서 점진 변환했던 anchor 외에 PR-6/7 영역의 anchor도 모두 정합. 잔여 fix: button (`$bmSaveChapterBtn`/`$bmSelectVersesBtn` `HTMLButtonElement`) + input (`$bmImportInput`/`$bmNewFolderInput` `HTMLInputElement`) + checkbox (`#install-never-show` `HTMLInputElement`) narrow, `navigator.standalone` `any` cast, install carousel `timer` `ReturnType<typeof setInterval>` narrow + `clearInterval` 가드, `dataset.scrollY = String(scrollY)`, JSDoc 매개변수 이름 정정 (`_buildBookmarkTypeIcon`), modal expando `_bmClose` `HTMLElement & { _bmClose? }` cast 4곳, `e.target instanceof Element` 가드 3곳, `BookmarkTreeNode` 타입 narrow (folder vs bookmark) 3곳, `BookmarkTreeBookmark` 객체 리터럴 cast (`commitSaveBookmark`), `openMergeDialog` JSDoc, `target.bookId/verseSpec` nullish 처리, `link.click()` `HTMLElement` cast. baseline 223 → 잔여 11 (PR-6 영역 0). main + worker tsc 0 error, 유닛 111건 통과 |
+| 2026-05-09 | PR-6 머지 (#86) | CI Unit tests + Cursor Bugbot 모두 green, main 통합 (rebase) |
+| 2026-05-09 | PR-7 시작 | `feat/app-jsdoc-pr7` 브랜치 분기. 영역: 내보내기/가져오기 + 절 선택 + 드로어 + SW 등록 (L5670-L6082, ~412줄) — 마지막 PR |
+| 2026-05-09 | PR-7 마무리 | **마이그레이션 1라운드 종료**. PR-7 영역 잔여 11 fix(button/input narrow, FileReader result narrow, `_$` 통일) + 모듈 상태 변수 ~30개 일괄 narrow(`booksCache: BooksData \| null`, `_audioSaveTimer: ReturnType<typeof setTimeout> \| null` 등) + narrow 부작용 정리(`loadBooks`/`loadVersion` 반환 흐름, `_audioSaveTimer` null guard, `getAttribute(...) ?? ""` 패턴 ~10곳, `_bookmarkDrawerLastFocus` `HTMLElement` narrow). `// @ts-check` 영구 활성화 + `tsconfig.app.json` 삭제는 **app.js 파일 분할 리팩터링과 결합한 별도 의제로 보류** ([§9](#9-pr-7-마무리-방식-변경)). 검증: tsconfig.app.json 잔여 3 (gtag-init.js 외부), main tsc 0, worker tsc 0, 유닛 111건 통과 |

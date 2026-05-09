@@ -1,13 +1,19 @@
-// Temporary tsconfig used only while js/app.js is being migrated to
-// // @ts-check + JSDoc in stages (see docs/design/app-typescript-migration.md).
-// Removed in PR-7 when `// @ts-check` is added to the head of app.js and the
-// main tsconfig.json picks it up via its existing `js/**/*.js` include.
+// Temporary tsconfig used while js/app.js is migrated to // @ts-check
+// + JSDoc in stages (see docs/design/app-typescript-migration.md).
 //
-// `include` matches the main tsconfig because js/sync/store-v2.js declares a
-// file-global `BookmarkTreeNode` @typedef that app.js participates in. With
-// app.js alone in `include`, that alias is invisible and TS reports it as
-// missing across PR-3+ signatures. `noImplicitAny: false` keeps progress
-// gated on null/domain checks only — flipped to `true` in PR-7.
+// As of PR-7 (2026-05-09): the app-typescript-migration's first round
+// completed (PR-1~7). This file is **kept** rather than deleted because
+// the planned PR-7 step "add `// @ts-check` to app.js head + delete this
+// file" is deferred to a follow-up agenda combined with **app.js file
+// split (modularization)**. With the current 6,000-line single file, the
+// remaining ~262 implicit any sites would have to be fixed in a single
+// commit; splitting into modules first lets each module land its own
+// `// @ts-check` cleanly.
+//
+// `include` matches the main tsconfig because js/sync/store-v2.js declares
+// a file-global `BookmarkTreeNode` @typedef that app.js participates in.
+// `noImplicitAny: false` keeps validation gated on null/domain checks only;
+// strictNullChecks remains true.
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
