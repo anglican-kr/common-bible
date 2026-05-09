@@ -90,6 +90,11 @@ window.hideAudioBar = hideAudioBar;
 window.renderError = renderError;
 window.openDriveDisconnectModal = openDriveDisconnectModal;
 window.clearAllCaches = clearAllCaches;
+// Phase 6a: bookmark.js's drag handler calls window.renderBookmarkTree()
+// after a successful move so the drawer re-renders. The function still
+// lives in this file (Phase 6b owner), so we expose it here. Migrates out
+// when renderBookmarkTree itself moves into bookmark.js in Phase 6b.
+window.renderBookmarkTree = renderBookmarkTree;
 
 const $app = _$("app");
 const $title = _$("page-title");

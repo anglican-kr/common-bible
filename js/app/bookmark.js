@@ -21,6 +21,11 @@
 const { loadBookmarks, saveBookmarks } = window.appStorage;
 
 // ── Verse spec utilities ──
+// ── BEGIN VERSE_SPEC ──
+// Exercised by tests/unit/bookmark.test.js. The 5 functions below operate
+// on plain strings and arrays, with `collapseFullVerseRefs` taking the
+// chapter article element as a parameter so the test loader provides a
+// minimal DOM stub.
 
 // "1-5,10-15,3a,3b" → [{start:1,end:5},{start:10,end:15},{start:3,end:3,part:"a"},...]
 /**
@@ -149,7 +154,12 @@ function mergeVerseSpecs(specA, specB) {
   }
   return selectedVersesToSpec(refs);
 }
+// ── END VERSE_SPEC ──
 
+// ── BEGIN BOOKMARK_QUERY ──
+// Exercised by tests/unit/bookmark.test.js. Pure tree operations on the
+// in-memory bookmark store; only `findExistingChapterBookmarks` calls out
+// to `loadBookmarks` (provided as a stub by the test loader prelude).
 // ── Bookmark query helpers ──
 
 /**
@@ -257,7 +267,13 @@ function collectFolderOptions(store, depth = 0, options = []) {
   }
   return options;
 }
+// ── END BOOKMARK_QUERY ──
 
+// ── BEGIN DRAG_CORE ──
+// Exercised by tests/unit/bookmark.test.js. The test loader concatenates
+// this block AFTER the BOOKMARK_QUERY block (since `moveBookmarkItem` calls
+// `_findItemInStore` from there) and provides `loadBookmarks` /
+// `saveBookmarks` / `window.renderBookmarkTree` stubs in the prelude.
 // ── Drag & drop helpers ──
 
 /** @param {BookmarkTreeFolder} folder @param {string} id */
@@ -304,6 +320,7 @@ function moveBookmarkItem(draggedId, targetId, position) {
   saveBookmarks(store);
   if (typeof window.renderBookmarkTree === "function") window.renderBookmarkTree();
 }
+// ── END DRAG_CORE ──
 
 function _clearDragIndicators() {
   document.querySelectorAll(".drag-over-before, .drag-over-after, .drag-over-into")
@@ -329,6 +346,15 @@ function _updateDragIndicators(clientX, clientY) {
     target.classList.add(rel < r.height / 2 ? "drag-over-before" : "drag-over-after");
   }
 }
+
+// ── BEGIN SWIPED_ROW ──
+// Exercised by tests/unit/bookmark.test.js. Owns `_swipedRow` (the single
+// row currently in mobile swipe-to-reveal state) and the four mutators that
+// app.js's Phase 6b territory drives: closeSwipedRow / _openSwipedRow are
+// internal callees, while resetSwipedRow / closeSwipedRowIfOutside are the
+// cross-module accessors that bookmark UI handlers call. `_dragState` and
+// the constants are co-located (ADR-010 mobile pattern) but are not part
+// of the swipe state surface.
 
 // Mobile swipe-to-reveal + long-press: tracks the single revealed row so
 // opening a new one auto-closes the previous. See ADR-010 (2026-05-03).
@@ -361,6 +387,25 @@ function _openSwipedRow(row) {
   if (actions) actions.style.transform = "";
   _swipedRow = row;
 }
+
+// ── Module-private state accessors (for Phase 6b callers in app.js) ──
+
+// Called by app.js's renderBookmarkTree when the tree re-renders — the
+// previously-swiped row may no longer exist after re-render, so reset.
+function resetSwipedRow() {
+  _swipedRow = null;
+}
+
+// Called by app.js's drawer pointerdown handler: closes the swiped row if
+// the tap landed outside it. Encapsulates the "is something swiped + did
+// the user tap outside" check so app.js doesn't reach into module state.
+/** @param {EventTarget | null} target */
+function closeSwipedRowIfOutside(target) {
+  if (!_swipedRow) return;
+  if (target instanceof Node && _swipedRow.contains(target)) return;
+  closeSwipedRow(null);
+}
+// ── END SWIPED_ROW ──
 
 /** @param {HTMLElement} li @param {HTMLElement} row */
 function _setupDragHandle(li, row) {
@@ -553,24 +598,6 @@ function _setupDragHandle(li, row) {
     document.addEventListener("pointerup", finish);
     document.addEventListener("pointercancel", cancel);
   });
-}
-
-// ── Module-private state accessors (for Phase 6b callers in app.js) ──
-
-// Called by app.js's renderBookmarkTree when the tree re-renders — the
-// previously-swiped row may no longer exist after re-render, so reset.
-function resetSwipedRow() {
-  _swipedRow = null;
-}
-
-// Called by app.js's drawer pointerdown handler: closes the swiped row if
-// the tap landed outside it. Encapsulates the "is something swiped + did
-// the user tap outside" check so app.js doesn't reach into module state.
-/** @param {EventTarget | null} target */
-function closeSwipedRowIfOutside(target) {
-  if (!_swipedRow) return;
-  if (target instanceof Node && _swipedRow.contains(target)) return;
-  closeSwipedRow(null);
 }
 
 // ── Window facade ──
