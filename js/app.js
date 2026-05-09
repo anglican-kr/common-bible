@@ -1,30 +1,47 @@
 "use strict";
 
+// App-level domain types live in js/types.d.ts. See ADR-012.
+/** @typedef {import("./types").ReadingPosition} ReadingPosition */
+/** @typedef {import("./types").AudioPosition} AudioPosition */
+/** @typedef {import("./types").SearchHistoryList} SearchHistoryList */
+/** @typedef {import("./types").VerseSelectDrag} VerseSelectDrag */
+/** @typedef {import("./types").DragState} DragState */
+
 const DATA_DIR = "/data";
 // Psalms use "편" instead of "장" as the chapter unit
+/** @param {string} bookId */
 function chUnit(bookId) { return bookId === "ps" ? "편" : "장"; }
-const $app = document.getElementById("app");
-const $title = document.getElementById("page-title");
-const $breadcrumb = document.getElementById("breadcrumb");
-const $announce = document.getElementById("a11y-announce");
-const $audioBar = document.getElementById("audio-bar");
-const $resumeBannerSlot = document.getElementById("resume-banner-slot");
-const $searchBar = document.getElementById("search-bar");
-const $searchInput = document.getElementById("search-input");
-const $searchClear = document.getElementById("search-clear");
-const $searchHistoryToggle = document.getElementById("search-history-toggle");
-const $searchHistoryPanel = document.getElementById("search-history");
-const $searchFab = document.getElementById("search-fab");
-const $searchScrim = document.getElementById("search-scrim");
-const $searchSheet = document.getElementById("search-sheet");
-const $searchSheetInputWrap = document.getElementById("search-sheet-input-wrap");
-const $searchSheetInput = document.getElementById("search-sheet-input");
-const $searchSheetClear = document.getElementById("search-sheet-clear");
-const $searchSheetHistoryToggle = document.getElementById("search-sheet-history-toggle");
-const $searchSheetHistoryPanel = document.getElementById("search-sheet-history");
-const $searchSheetClose = document.getElementById("search-sheet-close");
-const $searchSheetChips = document.getElementById("search-sheet-chips");
-const $searchSheetResults = document.getElementById("search-sheet-results");
+
+// All anchors below correspond to required ids in index.html and are present
+// at module load. `_$` casts the result so downstream code can use
+// HTMLElement methods without per-call null checks. Anchors that are
+// `<input>` elements get narrowed at the call sites that read .value /
+// .files (PR-2 onward as those code paths are visited).
+/** @param {string} id @returns {HTMLElement} */
+function _$(id) { return /** @type {HTMLElement} */ (document.getElementById(id)); }
+
+const $app = _$("app");
+const $title = _$("page-title");
+const $breadcrumb = _$("breadcrumb");
+const $announce = _$("a11y-announce");
+const $audioBar = _$("audio-bar");
+const $resumeBannerSlot = _$("resume-banner-slot");
+const $searchBar = _$("search-bar");
+const $searchInput = _$("search-input");
+const $searchClear = _$("search-clear");
+const $searchHistoryToggle = _$("search-history-toggle");
+const $searchHistoryPanel = _$("search-history");
+const $searchFab = _$("search-fab");
+const $searchScrim = _$("search-scrim");
+const $searchSheet = _$("search-sheet");
+const $searchSheetInputWrap = _$("search-sheet-input-wrap");
+const $searchSheetInput = _$("search-sheet-input");
+const $searchSheetClear = _$("search-sheet-clear");
+const $searchSheetHistoryToggle = _$("search-sheet-history-toggle");
+const $searchSheetHistoryPanel = _$("search-sheet-history");
+const $searchSheetClose = _$("search-sheet-close");
+const $searchSheetChips = _$("search-sheet-chips");
+const $searchSheetResults = _$("search-sheet-results");
 
 let booksCache = null;
 let appVersion = null;
@@ -34,6 +51,7 @@ let _audioSaveTimer = null;
 
 // ── Accessibility ──
 
+/** @param {string} msg */
 function announce(msg) {
   $announce.textContent = "";
   requestAnimationFrame(() => { $announce.textContent = msg; });
@@ -41,10 +59,17 @@ function announce(msg) {
 
 // Focus trap: keeps Tab cycling within a container while it is open.
 // Returns a cleanup function to remove the listener.
+/**
+ * @param {HTMLElement} container
+ * @returns {() => void}
+ */
 function trapFocus(container) {
+  /** @param {KeyboardEvent} e */
   function handler(e) {
     if (e.key !== "Tab") return;
-    const focusable = container.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])');
+    const focusable = /** @type {NodeListOf<HTMLElement>} */ (
+      container.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])')
+    );
     if (!focusable.length) return;
     const first = focusable[0];
     const last = focusable[focusable.length - 1];
@@ -67,13 +92,16 @@ document.addEventListener("keydown", (e) => {
       closeSearchSheet();
       return;
     }
-    document.querySelectorAll(".chapter-popover:not([hidden]), .bc-division-popover:not([hidden]), .settings-popover:not([hidden]), .title-division-popover:not([hidden])")
-      .forEach((p) => { p.hidden = true; });
-    document.querySelectorAll("[aria-expanded='true']")
-      .forEach((b) => { b.setAttribute("aria-expanded", "false"); b.focus(); });
+    /** @type {NodeListOf<HTMLElement>} */ (
+      document.querySelectorAll(".chapter-popover:not([hidden]), .bc-division-popover:not([hidden]), .settings-popover:not([hidden]), .title-division-popover:not([hidden])")
+    ).forEach((p) => { p.hidden = true; });
+    /** @type {NodeListOf<HTMLElement>} */ (
+      document.querySelectorAll("[aria-expanded='true']")
+    ).forEach((b) => { b.setAttribute("aria-expanded", "false"); b.focus(); });
   }
   // Space to toggle audio playback (when not in an input/button)
-  if (e.key === " " && currentAudio && !["INPUT", "BUTTON", "TEXTAREA", "SELECT"].includes(e.target.tagName)) {
+  const target = e.target;
+  if (e.key === " " && currentAudio && target instanceof Element && !["INPUT", "BUTTON", "TEXTAREA", "SELECT"].includes(target.tagName)) {
     e.preventDefault();
     if (currentAudio.paused) currentAudio.play(); else currentAudio.pause();
   }
@@ -122,25 +150,39 @@ let _bookmarkDrawerCloseSeq = 0;
 let _bookmarkDrawerCloseTimer = null;
 let _dragState = null; // { id, ghost, origLi, startY, origTop }
 
+/**
+ * @param {string} bookId
+ * @param {number} chapter
+ * @param {number | null} [verse]
+ */
 function saveReadingPosition(bookId, chapter, verse = null) {
   try {
     const val = { bookId, chapter, verse };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(val));
-    window.syncStoreV2?.saveLastRead(val);
+    // Local form (verse: number|null) intentionally diverges from the synced
+    // LastReadValue (verseSpec?: string). Excess properties on a variable
+    // are not checked at the call site, so this is safe.
+    window.syncStoreV2?.saveLastRead(/** @type {import("./types").LastReadValue} */ (val));
     if (window.driveSync) window.driveSync.scheduleUpload();
   } catch (_) {}
 }
 
+/**
+ * @param {string} bookId
+ * @param {number} chapter
+ */
 function startScrollTracking(bookId, chapter) {
   if (_scrollTrackCleanup) _scrollTrackCleanup();
+  /** @type {ReturnType<typeof setTimeout> | null} */
   let timer = null;
   const handler = () => {
-    clearTimeout(timer);
+    if (timer !== null) clearTimeout(timer);
     timer = setTimeout(() => {
       const verses = document.querySelectorAll(".verse[data-vref]");
+      /** @type {number | null} */
       let currentVerse = null;
       for (const v of verses) {
-        const n = parseInt(v.getAttribute("data-vref"), 10);
+        const n = parseInt(v.getAttribute("data-vref") ?? "", 10);
         if (!Number.isFinite(n)) continue;
         const top = v.getBoundingClientRect().top;
         if (top <= 80) {
@@ -154,29 +196,46 @@ function startScrollTracking(bookId, chapter) {
   };
   window.addEventListener("scroll", handler, { passive: true });
   _scrollTrackCleanup = () => {
-    clearTimeout(timer);
+    if (timer !== null) clearTimeout(timer);
     window.removeEventListener("scroll", handler);
     _scrollTrackCleanup = null;
   };
 }
 
+/** @returns {ReadingPosition | null} */
 function loadReadingPosition() {
   try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY));
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    // Shape relies on saveReadingPosition writers; not validated at runtime.
+    return /** @type {ReadingPosition} */ (JSON.parse(raw));
   } catch (_) {
     return null;
   }
 }
 
+/**
+ * @param {string} bookId
+ * @param {number} chapter
+ * @param {number} time
+ */
 function saveAudioTime(bookId, chapter, time) {
   try {
     localStorage.setItem(AUDIO_POS_KEY, JSON.stringify({ bookId, chapter, time }));
   } catch (_) {}
 }
 
+/**
+ * @param {string} bookId
+ * @param {number} chapter
+ * @returns {number | null}
+ */
 function loadAudioTime(bookId, chapter) {
   try {
-    const pos = JSON.parse(localStorage.getItem(AUDIO_POS_KEY));
+    const raw = localStorage.getItem(AUDIO_POS_KEY);
+    if (!raw) return null;
+    /** @type {AudioPosition} */
+    const pos = JSON.parse(raw);
     if (pos && pos.bookId === bookId && pos.chapter === chapter && pos.time > 0) return pos.time;
   } catch (_) {}
   return null;
@@ -416,13 +475,17 @@ document.addEventListener("visibilitychange", () => {
 // markers is sliced into tests/unit/search-history.test.js, so changes to the
 // LRU/normalization semantics need a corresponding test update.
 
+/** @param {unknown} q @returns {string} */
 function normalizeSearchQuery(q) {
   return String(q || "").trim().replace(/\s+/g, " ");
 }
 
+/** @returns {SearchHistoryList} */
 function loadSearchHistory() {
   try {
-    const raw = JSON.parse(localStorage.getItem(SEARCH_HISTORY_KEY));
+    const rawStr = localStorage.getItem(SEARCH_HISTORY_KEY);
+    if (!rawStr) return [];
+    const raw = JSON.parse(rawStr);
     if (!Array.isArray(raw)) return [];
     return raw.filter((s) => typeof s === "string" && s.length > 0).slice(0, SEARCH_HISTORY_MAX);
   } catch (_) {
@@ -430,12 +493,14 @@ function loadSearchHistory() {
   }
 }
 
+/** @param {SearchHistoryList} list */
 function saveSearchHistory(list) {
   try {
     localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(list.slice(0, SEARCH_HISTORY_MAX)));
   } catch (_) {}
 }
 
+/** @param {string} q @returns {SearchHistoryList} */
 function pushSearchHistory(q) {
   const norm = normalizeSearchQuery(q);
   if (!norm) return loadSearchHistory();
@@ -446,6 +511,7 @@ function pushSearchHistory(q) {
   return trimmed;
 }
 
+/** @param {string} q @returns {SearchHistoryList} */
 function removeSearchHistory(q) {
   const norm = normalizeSearchQuery(q);
   const list = loadSearchHistory().filter((s) => s !== norm);
@@ -453,16 +519,19 @@ function removeSearchHistory(q) {
   return list;
 }
 
+/** @returns {SearchHistoryList} */
 function clearSearchHistory() {
   try { localStorage.removeItem(SEARCH_HISTORY_KEY); } catch (_) {}
   return [];
 }
 // ── END SEARCH HISTORY HELPERS ──
 
+/** @returns {string} */
 function loadStartupBehavior() {
   return localStorage.getItem(STARTUP_BEHAVIOR_KEY) || "resume";
 }
 
+/** @param {string} val */
 function saveStartupBehavior(val) {
   localStorage.setItem(STARTUP_BEHAVIOR_KEY, val);
   window.syncStoreV2?.saveSetting("startupBehavior", val);
@@ -471,25 +540,29 @@ function saveStartupBehavior(val) {
 
 // ── Font size ──
 
+/** @returns {number} */
 function loadFontSize() {
   try {
-    const v = parseInt(localStorage.getItem(FONT_SIZE_KEY), 10);
+    const v = parseInt(localStorage.getItem(FONT_SIZE_KEY) ?? "", 10);
     return FONT_SIZES.includes(v) ? v : DEFAULT_FONT_SIZE;
   } catch (_) {
     return DEFAULT_FONT_SIZE;
   }
 }
 
+/** @param {number} size */
 function saveFontSize(size) {
   try { localStorage.setItem(FONT_SIZE_KEY, String(size)); window.syncStoreV2?.saveSetting("fontSize", size); if (window.driveSync) window.driveSync.scheduleUpload(); } catch (_) {}
 }
 
+/** @param {number | string} size */
 function applyFontSize(size) {
   document.documentElement.style.fontSize = `${size}px`;
 }
 
 // ── Cache management ──
 
+/** @returns {Promise<void>} */
 async function clearAllCaches() {
   if (!("caches" in window)) return;
   if (!navigator.onLine) {
