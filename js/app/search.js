@@ -49,6 +49,10 @@ const $searchSheetResults = _$("search-sheet-results");
 
 // ── Search core ──
 
+// ── BEGIN WORKER WIRE-UP ──
+// Exercised by tests/unit/search.test.js. Self-contained: only depends on
+// the standard `Worker` constructor + the module-private state declared
+// here. Test loader extracts this block and runs it with a Worker stub.
 /** @type {Worker | null} */
 let searchWorker = null;
 /** @type {((res: any) => void) | null} */
@@ -106,7 +110,13 @@ function doSearch(query, page, pageSize, onPartial) {
     worker.postMessage({ type: "search", q: query, page, pageSize, searchId: activeSearchId });
   });
 }
+// ── END WORKER WIRE-UP ──
 
+// ── BEGIN PURE HELPERS ──
+// Exercised by tests/unit/search.test.js. Each function takes its DOM
+// target via parameters and creates new nodes via `el` / createTextNode /
+// createDocumentFragment — no reliance on the module-level $X anchors.
+// Test loader extracts this block with a minimal Element stub + el shim.
 // Text highlight helper: splits text on query matches and wraps in <mark>
 /**
  * @param {Node} target
@@ -193,6 +203,7 @@ function buildSearchPagination(query, currentPage, totalPages) {
 
   return nav;
 }
+// ── END PURE HELPERS ──
 
 // Render search result list into a container node (used by both page and sheet views)
 /**
@@ -406,9 +417,11 @@ $searchInput.addEventListener("focus", () => {
 
 // ── Search bottom sheet (Mobile FAB) ──
 
+// ── BEGIN IS_MOBILE ──
 function isMobile() {
   return window.matchMedia("(max-width: 768px)").matches;
 }
+// ── END IS_MOBILE ──
 
 // Lift the sheet above the on-screen keyboard. Default Android viewport
 // behavior (`resizes-visual`) leaves position:fixed elements anchored to the
@@ -1031,16 +1044,21 @@ function initSheetDrag() {
   }
 }
 
+// ── BEGIN AUTO_NAVIGATE ──
 // Read-and-reset helper for app.js's route() handler. `searchAutoNavigate`
 // is set in commitTopSearch before the URL change; route() then consumes
 // it to decide whether a verse-reference match should auto-navigate. The
 // flag is search-internal state, so app.js drives the consume via this
 // helper instead of touching the variable directly.
+//
+// Exercised by tests/unit/search.test.js with a prelude that declares
+// `let searchAutoNavigate;` and a tiny setter for arrange-stage flips.
 function consumeSearchAutoNavigate() {
   const v = searchAutoNavigate;
   searchAutoNavigate = false;
   return v;
 }
+// ── END AUTO_NAVIGATE ──
 
 // Window facade for legacy app.js callers (route handler invokes
 // renderSearchResults / openSearchSheet / isMobile / consumeSearchAutoNavigate,
