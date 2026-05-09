@@ -20,7 +20,7 @@
 - `index.html` — 두 입력창 (상단 헤더 + 모바일 시트) 마크업
 - `css/style.css` — 보조 버튼 hit area, 히스토리 패널 스타일, 시트 `:has()` 확장 룰
 - `js/app.js` — 저장 헬퍼 5개, 컨트롤러 팩토리, Enter/입력/클리어 핸들러 갱신
-- `tests/unit/search-history.test.js` — vm 슬라이스 하네스 + 회귀 케이스
+- `tests/unit/storage.test.js` — vm 슬라이스 하네스 + 회귀 케이스 (ADR-013 2026-05-09 명명 컨벤션 적용 후. 그 전엔 `search-history.test.js`)
 
 ### 1.3 비대상
 
@@ -571,7 +571,7 @@ $searchInput.addEventListener("keydown", (e) => {
 
 ## 8. 회귀 테스트
 
-### 8.1 유닛 (`tests/unit/search-history.test.js`)
+### 8.1 유닛 (`tests/unit/storage.test.js`)
 
 `js/app.js`의 `// ── BEGIN/END SEARCH HISTORY HELPERS ──` 블록을 vm으로 슬라이스해 격리 평가. 케이스 18개:
 

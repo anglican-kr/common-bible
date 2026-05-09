@@ -852,7 +852,7 @@ verifier  = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
 challenge = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM"
 ```
 
-이 벡터는 `transport-pkce.test.js` test #3에서 회귀 방어.
+이 벡터는 `transport.test.js` test #3에서 회귀 방어.
 
 ### B. AES-GCM 사용 규약
 

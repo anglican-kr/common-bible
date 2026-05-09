@@ -133,7 +133,7 @@ location = /oauth/token {
 
 ### 회귀 방어
 
-- `tests/unit/transport-pkce.test.js`: URL 단언을 `/oauth/token`로, body의 `client_secret` 부재를 `assert.doesNotMatch(body, /client_secret/)`로 명시 검증.
+- `tests/unit/transport.test.js`(당시 `transport-pkce.test.js`): URL 단언을 `/oauth/token`로, body의 `client_secret` 부재를 `assert.doesNotMatch(body, /client_secret/)`로 명시 검증.
 - 동작 검증: `curl -X POST https://{host}/oauth/token -d "grant_type=refresh_token&refresh_token=invalid&client_id=..."` → `400 invalid_grant` 응답이 와야 정상. `client_secret_missing`이 뜨면 nginx 적용 누락.
 
 ## 향후 고려

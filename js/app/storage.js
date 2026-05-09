@@ -117,7 +117,7 @@ window.appStorage = (() => {
   // ── BEGIN SEARCH HISTORY HELPERS ──
   // Local-only (not Drive-synced — see ADR-014). Whitespace-normalized strings,
   // LRU-deduped, capped at SEARCH_HISTORY_MAX. The block between the BEGIN/END
-  // markers is sliced into tests/unit/search-history.test.js, so changes to the
+  // markers is sliced into tests/unit/storage.test.js, so changes to the
   // LRU/normalization semantics need a corresponding test update.
 
   /** @param {unknown} q @returns {string} */

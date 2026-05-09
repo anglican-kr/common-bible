@@ -4,9 +4,9 @@
 // search.js is heavily DOM- and Worker-bound at module top level
 // (createSearchHistoryController calls + sheet event listeners), so loading
 // the whole file in vm requires extensive Element/anchor stubs. We instead
-// extract testable blocks via BEGIN/END markers (mirrors the
-// search-history.test.js pattern for js/app/storage.js) and run them in
-// vm contexts with the minimal stubs each block needs.
+// extract testable blocks via BEGIN/END markers (mirrors storage.test.js's
+// slice approach for js/app/storage.js) and run them in vm contexts with
+// the minimal stubs each block needs.
 //
 // Coverage:
 //   - WORKER block (ensureSearchWorker/doSearch + state) — Worker stub
