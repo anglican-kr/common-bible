@@ -19,10 +19,7 @@
 /** @typedef {import("../types").BooksData} BooksData */
 
 const { _$, el, clearNode, chUnit, setInert, trapFocus } = window.appHelpers;
-const {
-  loadBookmarks, saveBookmarks, generateId,
-  loadAudioTime, clearAudioTime, clearReadingPosition,
-} = window.appStorage;
+const { loadBookmarks, saveBookmarks, generateId } = window.appStorage;
 const { readingContext } = window;
 
 // ── Verse spec utilities ──
