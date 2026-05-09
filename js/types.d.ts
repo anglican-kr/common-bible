@@ -484,6 +484,7 @@ export interface AppHelpers {
     ...children: Array<Node | string | null | undefined>
   ) => HTMLElementTagNameMap[K];
   clearNode: (node: Node) => void;
+  setInert: (on: boolean, selectors: string) => void;
   trapFocus: (container: HTMLElement) => () => void;
 }
 
@@ -568,6 +569,29 @@ export interface AppSettings {
   dismissLaunchScreen: () => void;
 }
 
+// ── App install facade (js/app/install.js) ──────────────────────────────────
+// Phase 4 of the app.js modularization (ADR-018). PWA install detection,
+// install guide modal, and install nudge auto-show.
+
+export interface InstallSubscriptionState {
+  platform: string;
+  canPrompt: boolean;
+}
+
+export interface InstallObject {
+  isStandalone: () => boolean;
+  detectPlatform: () => string;
+  subscribe: (fn: (state: InstallSubscriptionState) => void) => () => void;
+  triggerPrompt: () => Promise<{ outcome: string }>;
+}
+
+export interface AppInstall {
+  install: InstallObject;
+  openInstallModal: () => void;
+  closeInstallModal: () => void;
+  maybeShowInstallNudge: () => void;
+}
+
 // ── Window augmentation ──────────────────────────────────────────────────────
 
 declare global {
@@ -600,16 +624,20 @@ declare global {
     appHelpers: AppHelpers;
     appStorage: AppStorage;
     appSettings: AppSettings;
+    appInstall: AppInstall;
 
     // App version label (loaded from /version.json by app.js loadVersion()).
     // Settings popover reads this for the version footer; will move to a
     // dedicated module owner alongside data-fetching in Phase 7.
     appVersion?: string | null;
 
-    // Install carousel object (Phase 4 owner). Currently defined by app.js
-    // as a global `const install`; settings-ui reads `window.install` to
-    // avoid a `declare const install` redeclare conflict at the global scope.
-    install?: { detectPlatform: () => string };
+    // Install carousel object (Phase 4 owner: js/app/install.js). The module
+    // assigns `window.install = install` at load time so settings-ui can read
+    // `window.install.detectPlatform()` without a `declare const install`
+    // redeclare conflict at the global scope.
+    install?: InstallObject;
+    openInstallModal?: () => void;
+    maybeShowInstallNudge?: () => void;
 
     // UI side-effects defined in app.js. Optional because state-machine.js
     // guards each call with `typeof ... === "function"`.
@@ -621,17 +649,19 @@ declare global {
     applyTheme?: (theme: string) => void;
   }
 
-  // App-layer functions still owned by app.js as of Phase 3 (ADR-018). The
-  // `settings-ui.js` module needs to call into them; they migrate out of
-  // this global declaration as their owners ship in later phases:
+  // App-layer functions still owned by app.js as of Phase 4 (ADR-018). Each
+  // declared global is assigned via `window.X = X` by its owning module at
+  // module-load time, so callers can use bare `openInstallModal()` etc. Migration
+  // out of this global declaration as their owners ship in later phases:
   //   announce               → moves with $announce anchor (Phase 8 owner)
-  //   openInstallModal       → install.js (Phase 4)
+  //   openInstallModal       → install.js (Phase 4) — DONE
+  //   maybeShowInstallNudge  → install.js (Phase 4) — DONE
   //   openDriveDisconnectModal → bookmark.js (Phase 6) or stays
   //   clearAllCaches         → settings-ui? or app-main (Phase 8)
   //   parsePath, route       → views-routing.js (Phase 7)
-  //   `install` carousel     → install.js (Phase 4); accessed via window.install
   function announce(msg: string): void;
   function openInstallModal(): void;
+  function maybeShowInstallNudge(): void;
   function openDriveDisconnectModal(): void;
   function clearAllCaches(): Promise<void>;
   // parsePath returns a view-discriminated union with extra view-specific
