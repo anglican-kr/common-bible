@@ -54,6 +54,11 @@ const {
   initSettings, applyFontSize, applyTheme, applyColorScheme,
   dismissLaunchScreen,
 } = window.appSettings;
+
+// Cross-module reading-view state (current book/chapter + verse selection)
+// owned by js/app/reading-context.js (ADR-018 Phase 6a). Local reference for
+// terse access — `readingContext.bookId = "gen"` mutates the shared object.
+const { readingContext } = window;
 // Re-expose on window so the sync layer (state-machine.js) can apply Drive
 // settings updates via its `typeof window.applyXxx === "function"` guards.
 // `const` destructure does not auto-register on window — must be explicit.
@@ -156,15 +161,10 @@ let _scrollTrackCleanup = null;
 let _isInitialLoad = true;
 
 // ── Bookmark state ──
-let _verseSelectMode = false;
-/** @type {Set<string>} */
-let _selectedVerseRefs = new Set();
-/** @type {(VerseSelectDrag & { snapshot?: Set<string> }) | null} */
-let _verseSelectDrag = null; // { startIdx, allVerses, isAdding, moved }
-/** @type {string | null} */
-let _currentBookId = null;
-/** @type {number | null} */
-let _currentChapter = null;
+// Verse-selection state + current book/chapter were extracted to
+// js/app/reading-context.js (ADR-018 Phase 6a) — see destructured
+// `readingContext` at the top of this file. Only bookmark-UI-specific
+// state remains here pending Phase 6b extraction to bookmark.js.
 /** @type {(() => void) | null} */
 let _bookmarkDrawerTrap = null;
 /** @type {HTMLElement | null} */
@@ -180,8 +180,8 @@ let _bmNewFolderCallback = null;
 let _bookmarkDrawerCloseSeq = 0;
 /** @type {ReturnType<typeof setTimeout> | null} */
 let _bookmarkDrawerCloseTimer = null;
-/** @type {DragState | null} */
-let _dragState = null; // { id, ghost, origLi, startY, origTop }
+// `_dragState` was extracted to js/app/bookmark.js (ADR-018 Phase 6a) along
+// with the drag & drop pointer handling that owns it.
 
 // `saveReadingPosition` was extracted to js/app/storage.js (ADR-018 Phase 2).
 
@@ -495,522 +495,11 @@ initSettings();
 // `el`, `clearNode`, `_$`, `chUnit`, `trapFocus` were extracted to
 // js/app/helpers.js (ADR-018 Phase 1). Imported via destructure at module head.
 
-// ── Bookmark storage helpers ──
-// `generateId`, `loadBookmarks`, `saveBookmarks` were extracted to
-// js/app/storage.js (ADR-018 Phase 2). saveBookmarks calls
-// _maybeRequestPersist internally now.
-
-// ── Verse spec utilities ──
-
-// "1-5,10-15,3a,3b" → [{start:1,end:5},{start:10,end:15},{start:3,end:3,part:"a"},...]
-/**
- * @param {string} spec
- * @returns {Array<{start: number, end: number, part?: string}>}
- */
-function parseVerseSpec(spec) {
-  if (!spec || spec === "all") return [];
-  /** @type {Array<{start: number, end: number, part?: string}>} */
-  const init = [];
-  return spec.split(",").reduce((acc, seg) => {
-    const trimmed = seg.trim();
-    const alphaMatch = trimmed.match(/^(\d+)([a-z])$/);
-    if (alphaMatch) {
-      const n = parseInt(alphaMatch[1], 10);
-      if (n > 0) acc.push({ start: n, end: n, part: alphaMatch[2] });
-      return acc;
-    }
-    const m = trimmed.match(/^(\d+)(?:-(\d+))?$/);
-    if (m) {
-      const s = parseInt(m[1], 10);
-      const e = m[2] ? parseInt(m[2], 10) : s;
-      if (s > 0) acc.push({ start: Math.min(s, e), end: Math.max(s, e) });
-    }
-    return acc;
-  }, init);
-}
-
-// If all rendered spans of a multi-part verse are selected, collapse "3a,3b" → "3".
-// Single-part verses ("3" with no alpha suffix) are unchanged.
-/**
- * @param {string[]} refs
- * @param {Element | null | undefined} article
- * @returns {string[]}
- */
-function collapseFullVerseRefs(refs, article) {
-  if (!article) return refs;
-  const selected = new Set(refs);
-  // Group by integer verse number
-  const byVerse = {};
-  for (const ref of refs) {
-    const n = parseInt(ref, 10);
-    if (!byVerse[n]) byVerse[n] = [];
-    byVerse[n].push(ref);
-  }
-  const result = [];
-  for (const [n, verseRefs] of Object.entries(byVerse)) {
-    // All spans rendered for this verse number
-    const allSpanRefs = [...article.querySelectorAll(".verse[data-vref]")]
-      .map((s) => s.getAttribute("data-vref") ?? "")
-      .filter((r) => r && parseInt(r, 10) === Number(n));
-    const hasAlpha = allSpanRefs.some((r) => /[a-z]$/.test(r));
-    const allSelected = allSpanRefs.length > 0 && allSpanRefs.every((r) => selected.has(r));
-    if (hasAlpha && allSelected) {
-      result.push(`${n}`);
-    } else {
-      result.push(...verseRefs);
-    }
-  }
-  return result;
-}
-
-// Compare verse refs: "3" < "3a" < "3b" < "4"
-/** @param {string} a @param {string} b */
-function _compareRefs(a, b) {
-  const na = parseInt(a, 10), nb = parseInt(b, 10);
-  if (na !== nb) return na - nb;
-  const pa = a.match(/[a-z]$/)?.[0] || "";
-  const pb = b.match(/[a-z]$/)?.[0] || "";
-  return pa.localeCompare(pb);
-}
-
-// Array of data-vref strings (e.g. ["3a","3b","5","6","7"]) → "3a,3b,5-7"
-// Consecutive integer-only refs are compressed into ranges; alpha refs kept individually.
-/** @param {string[]} refs @returns {string} */
-function selectedVersesToSpec(refs) {
-  if (!refs.length) return "all";
-  const unique = [...new Set(refs)].sort(_compareRefs);
-  const result = [];
-  let intRun = [];
-
-  function flushRun() {
-    if (!intRun.length) return;
-    let s = intRun[0], e = intRun[0];
-    for (let i = 1; i < intRun.length; i++) {
-      if (intRun[i] === e + 1) { e = intRun[i]; }
-      else { result.push(s === e ? `${s}` : `${s}-${e}`); s = e = intRun[i]; }
-    }
-    result.push(s === e ? `${s}` : `${s}-${e}`);
-    intRun = [];
-  }
-
-  for (const ref of unique) {
-    if (/^\d+$/.test(ref)) {
-      intRun.push(parseInt(ref, 10));
-    } else {
-      flushRun();
-      result.push(ref);
-    }
-  }
-  flushRun();
-  return result.join(",");
-}
-
-// Union of two verse spec strings
-/** @param {string} specA @param {string} specB @returns {string} */
-function mergeVerseSpecs(specA, specB) {
-  if (specA === "all" || specB === "all") return "all";
-  const intRefs = new Set();
-  const partRefs = new Set();
-  for (const seg of [...parseVerseSpec(specA), ...parseVerseSpec(specB)]) {
-    if (seg.part) {
-      partRefs.add(`${seg.start}${seg.part}`);
-    } else {
-      for (let n = seg.start; n <= seg.end; n++) intRefs.add(n);
-    }
-  }
-  const refs = [...intRefs].map(String);
-  for (const pr of partRefs) {
-    if (!intRefs.has(parseInt(pr, 10))) refs.push(pr);
-  }
-  return selectedVersesToSpec(refs);
-}
-
-// ── Bookmark query helpers ──
-
-/**
- * @param {BookmarkTreeNode[]} store
- * @param {(item: BookmarkTreeNode, parent: BookmarkTreeNode[]) => unknown} fn
- * @returns {boolean}
- */
-function _walkBookmarks(store, fn) {
-  for (const item of store) {
-    if (fn(item, store) === false) return false;
-    if (item.type === "folder") {
-      if (_walkBookmarks(item.children, fn) === false) return false;
-    }
-  }
-  return true;
-}
-
-/**
- * @param {string} bookId
- * @param {number} chapter
- * @returns {BookmarkTreeBookmark[]}
- */
-function findExistingChapterBookmarks(bookId, chapter) {
-  /** @type {BookmarkTreeBookmark[]} */
-  const results = [];
-  _walkBookmarks(loadBookmarks(), (item) => {
-    if (item.type === "bookmark" && item.bookId === bookId && item.chapter === chapter) {
-      results.push(item);
-    }
-  });
-  return results;
-}
-
-/**
- * @param {BookmarkTreeNode[]} store
- * @param {string} id
- * @returns {{ item: BookmarkTreeNode, parent: BookmarkTreeNode[], index: number } | null}
- */
-function _findItemInStore(store, id) {
-  for (let i = 0; i < store.length; i++) {
-    const it = store[i];
-    if (it.id === id) return { item: it, parent: store, index: i };
-    if (it.type === "folder") {
-      const found = _findItemInStore(it.children, id);
-      if (found) return found;
-    }
-  }
-  return null;
-}
-
-// Returns the parent folder's id (null = root), or undefined if not found.
-/**
- * @param {BookmarkTreeNode[]} store
- * @param {string} id
- * @param {string | null} [parentId]
- * @returns {string | null | undefined}
- */
-function _findParentFolderId(store, id, parentId = null) {
-  for (const item of store) {
-    if (item.id === id) return parentId;
-    if (item.type === "folder") {
-      const r = _findParentFolderId(item.children, id, item.id);
-      if (r !== undefined) return r;
-    }
-  }
-  return undefined;
-}
-
-/** @param {BookmarkTreeNode[]} store @param {string} id */
-function removeItemById(store, id) {
-  const found = _findItemInStore(store, id);
-  if (found) found.parent.splice(found.index, 1);
-}
-
-/**
- * @param {BookmarkTreeNode[]} store
- * @param {string | null | undefined} folderId
- * @param {BookmarkTreeNode} item
- */
-function insertItem(store, folderId, item) {
-  if (!folderId) {
-    store.push(item);
-    return;
-  }
-  const found = _findItemInStore(store, folderId);
-  if (found && found.item.type === "folder") {
-    found.item.children.push(item);
-  } else {
-    store.push(item);
-  }
-}
-
-/**
- * @param {BookmarkTreeNode[]} store
- * @param {number} [depth]
- * @param {Array<{ id: string, name: string, depth: number }>} [options]
- * @returns {Array<{ id: string, name: string, depth: number }>}
- */
-function collectFolderOptions(store, depth = 0, options = []) {
-  for (const item of store) {
-    if (item.type === "folder") {
-      options.push({ id: item.id, name: item.name, depth });
-      collectFolderOptions(item.children, depth + 1, options);
-    }
-  }
-  return options;
-}
-
-// ── Drag & drop helpers ──
-
-function _isDescendant(folder, id) {
-  return (folder.children || []).some(c =>
-    c.id === id || (c.type === "folder" && _isDescendant(c, id)));
-}
-
-function moveBookmarkItem(draggedId, targetId, position) {
-  if (draggedId === targetId) return;
-  const store = loadBookmarks();
-  const df = _findItemInStore(store, draggedId);
-  if (!df) return;
-  const draggedItem = df.item;
-
-  // "into" only valid for folders; validate no circular drop
-  if (position === "into") {
-    const t = _findItemInStore(store, targetId);
-    if (!t || t.item.type !== "folder") position = "after";
-    else if (draggedItem.type === "folder" && _isDescendant(draggedItem, targetId)) return;
-  } else if (draggedItem.type === "folder" && _isDescendant(draggedItem, targetId)) {
-    return;
-  }
-  df.parent.splice(df.index, 1); // remove from current location
-
-  if (position === "into") {
-    const tf = _findItemInStore(store, targetId);
-    if (tf && tf.item.type === "folder") tf.item.children.unshift(draggedItem);
-    else store.push(draggedItem);
-  } else {
-    const tf = _findItemInStore(store, targetId);
-    if (!tf) {
-      store.push(draggedItem);
-    } else {
-      tf.parent.splice(position === "before" ? tf.index : tf.index + 1, 0, draggedItem);
-    }
-  }
-
-  saveBookmarks(store);
-  renderBookmarkTree();
-}
-
-
-function _clearDragIndicators() {
-  document.querySelectorAll(".drag-over-before, .drag-over-after, .drag-over-into")
-    .forEach(n => n.classList.remove("drag-over-before", "drag-over-after", "drag-over-into"));
-}
-
-/**
- * @param {number} clientX
- * @param {number} clientY
- */
-function _updateDragIndicators(clientX, clientY) {
-  _clearDragIndicators();
-  const hitEl = document.elementFromPoint(clientX, clientY);
-  const target = /** @type {HTMLElement | null} */ (hitEl?.closest("[data-id]"));
-  if (!target || target.dataset.id === _dragState?.id) return;
-  const rowEl = target.querySelector(".bm-folder-row, .bm-bookmark-row");
-  const r = (rowEl || target).getBoundingClientRect();
-  const isFolder = target.classList.contains("bm-folder");
-  const rel = clientY - r.top;
-  if (isFolder && rel > r.height * 0.3 && rel < r.height * 0.7) {
-    target.classList.add("drag-over-into");
-  } else {
-    target.classList.add(rel < r.height / 2 ? "drag-over-before" : "drag-over-after");
-  }
-}
-
-// Mobile swipe-to-reveal + long-press: tracks the single revealed row so
-// opening a new one auto-closes the previous. See ADR-010 (2026-05-03).
-const SWIPE_REVEAL_PX = 140;
-const LONG_PRESS_MS = 500;
-let _swipedRow = null;
-
-function _isMobileViewport() {
-  return window.matchMedia("(max-width: 768px)").matches;
-}
-
-function closeSwipedRow(except) {
-  if (_swipedRow && _swipedRow !== except) {
-    _swipedRow.classList.remove("bm-swiped");
-    const prevActions = _swipedRow.querySelector(".bm-row-actions-mobile");
-    if (prevActions) prevActions.style.transform = "";
-    _swipedRow = null;
-  }
-}
-
-function _openSwipedRow(row) {
-  closeSwipedRow(row);
-  row.classList.add("bm-swiped");
-  const actions = row.querySelector(".bm-row-actions-mobile");
-  if (actions) actions.style.transform = "";
-  _swipedRow = row;
-}
-
-function _setupDragHandle(li, row) {
-  row.addEventListener("pointerdown", (e) => {
-    if (e.pointerType === "mouse" && e.button !== 0) return;
-    if (e.target.closest("button")) return;
-    // Buttons inside the mobile-only revealed actions live outside .bm-row-content
-    // but inside the row; the closest("button") check above already excludes them.
-
-    const pointerId = e.pointerId;
-    const startX = e.clientX;
-    const startY = e.clientY;
-    const origRect = li.getBoundingClientRect();
-    const isTouch = e.pointerType !== "mouse";
-    const swipeActions = row.querySelector(".bm-row-actions-mobile");
-    const canSwipe = _isMobileViewport() && isTouch && !!swipeActions;
-    // null until the first significant move classifies the gesture.
-    // "drag" → reorder, "swipe" → reveal actions, "abort" → cede to browser scroll
-    let mode = null;
-    let dragStarted = false;
-    const startedSwiped = canSwipe && row.classList.contains("bm-swiped");
-    const baseOffset = startedSwiped ? -SWIPE_REVEAL_PX : 0;
-    let longPressTimer = null;
-
-    // Touch devices: long-press without movement enters drag-to-reorder mode
-    // (haptic feedback acts as the visual cue). Action panel reveal is
-    // horizontal-swipe only. Mouse users start dragging immediately on move.
-    if (isTouch && !startedSwiped) {
-      longPressTimer = setTimeout(() => {
-        if (mode !== null) return;
-        mode = "drag";
-        _beginDrag();
-        if (navigator.vibrate) {
-          try { navigator.vibrate(10); } catch {}
-        }
-      }, LONG_PRESS_MS);
-    }
-
-    function _beginDrag() {
-      dragStarted = true;
-      const ghost = document.createElement("li");
-      ghost.className = "bm-drag-ghost";
-      ghost.style.width = origRect.width + "px";
-      ghost.style.left = origRect.left + "px";
-      // Pin to the source row's position so long-press entry (where no
-      // pointermove has fired yet) doesn't flash the ghost at the document's
-      // default position before the user starts moving.
-      ghost.style.top = origRect.top + "px";
-      const rowClone = (li.querySelector(".bm-folder-row, .bm-bookmark-row") || li.firstElementChild).cloneNode(true);
-      ghost.appendChild(rowClone);
-      document.body.appendChild(ghost);
-      try { row.setPointerCapture(pointerId); } catch {}
-      li.classList.add("bm-dragging");
-      _dragState = { id: li.dataset.id, ghost, origLi: li, startY, origTop: origRect.top };
-    }
-
-    const clearLongPress = () => {
-      if (longPressTimer) {
-        clearTimeout(longPressTimer);
-        longPressTimer = null;
-      }
-    };
-
-    const cleanupPointerHandlers = () => {
-      clearLongPress();
-      document.removeEventListener("pointermove", onMove);
-      document.removeEventListener("pointerup", finish);
-      document.removeEventListener("pointercancel", cancel);
-      if (row.hasPointerCapture(pointerId)) {
-        try { row.releasePointerCapture(pointerId); } catch {}
-      }
-    };
-
-    function onMove(e) {
-      if (e.pointerId !== pointerId) return;
-      const dx = e.clientX - startX;
-      const dy = e.clientY - startY;
-
-      if (mode === null) {
-        if (Math.hypot(dx, dy) < 5) return;
-        clearLongPress();
-        if (canSwipe && Math.abs(dx) > Math.abs(dy)) {
-          // Horizontal-dominant gesture on touch → swipe-reveal action panel.
-          mode = "swipe";
-          row.classList.add("bm-swiping");
-          row.setPointerCapture(pointerId);
-        } else if (isTouch) {
-          // Touch + vertical movement before long-press fired → user is
-          // scrolling the drawer body, not dragging. Cede to the browser.
-          mode = "abort";
-          cleanupPointerHandlers();
-          return;
-        } else {
-          // Mouse user → immediate drag-to-reorder on any movement.
-          mode = "drag";
-          _beginDrag();
-        }
-      }
-
-      if (mode === "swipe") {
-        let offset = baseOffset + dx;
-        if (offset > 0) offset = 0;
-        if (offset < -SWIPE_REVEAL_PX * 1.2) offset = -SWIPE_REVEAL_PX * 1.2;
-        // Slide the action panel in from the right; row content stays put.
-        // offset 0 → panel translateX(140) (off-screen); offset -140 → translateX(0) (open).
-        if (swipeActions) {
-          const panelTx = SWIPE_REVEAL_PX + offset;
-          swipeActions.style.transform = `translateX(${panelTx}px)`;
-        }
-        return;
-      }
-
-      // mode === "drag"
-      if (!_dragState) return;
-      _dragState.ghost.style.top = (_dragState.origTop + (e.clientY - _dragState.startY)) + "px";
-      _updateDragIndicators(e.clientX, e.clientY);
-    }
-
-    function finish(e) {
-      if (e.pointerId !== pointerId) return;
-      cleanupPointerHandlers();
-
-      if (mode === "swipe") {
-        row.classList.remove("bm-swiping");
-        const finalOffset = baseOffset + (e.clientX - startX);
-        if (finalOffset < -SWIPE_REVEAL_PX / 2) {
-          _openSwipedRow(row);
-        } else {
-          row.classList.remove("bm-swiped");
-          if (swipeActions) swipeActions.style.transform = "";
-          if (_swipedRow === row) _swipedRow = null;
-        }
-        return;
-      }
-
-      if (dragStarted) {
-        // Suppress the synthetic click that follows pointerup so the bookmark
-        // link doesn't navigate / the folder doesn't toggle when the user
-        // releases a drag.
-        document.addEventListener("click", (ce) => { ce.stopPropagation(); ce.preventDefault(); }, { capture: true, once: true });
-      }
-
-      if (!_dragState) return;
-      const ds = _dragState;
-      _dragState = null;
-      ds.ghost.remove();
-      ds.origLi.classList.remove("bm-dragging");
-      const overItem = /** @type {HTMLElement | null} */ (document.querySelector(".drag-over-before, .drag-over-after, .drag-over-into"));
-      if (overItem) {
-        const pos = overItem.classList.contains("drag-over-into") ? "into"
-          : overItem.classList.contains("drag-over-before") ? "before" : "after";
-        const targetId = overItem.dataset.id;
-        if (targetId) moveBookmarkItem(ds.id, targetId, pos);
-      }
-      _clearDragIndicators();
-    }
-
-    function cancel(e) {
-      if (e.pointerId !== pointerId) return;
-      cleanupPointerHandlers();
-
-      if (mode === "swipe") {
-        row.classList.remove("bm-swiping");
-        // Snap back to the pre-gesture state on cancel.
-        if (startedSwiped) {
-          _openSwipedRow(row);
-        } else {
-          row.classList.remove("bm-swiped");
-          if (swipeActions) swipeActions.style.transform = "";
-          if (_swipedRow === row) _swipedRow = null;
-        }
-        return;
-      }
-
-      if (!_dragState) return;
-      _dragState.ghost.remove();
-      _dragState.origLi.classList.remove("bm-dragging");
-      _clearDragIndicators();
-      _dragState = null;
-    }
-
-    document.addEventListener("pointermove", onMove);
-    document.addEventListener("pointerup", finish);
-    document.addEventListener("pointercancel", cancel);
-  });
-}
+// Verse spec utilities + bookmark query helpers + drag & drop pointer
+// handling were extracted to js/app/bookmark.js (ADR-018 Phase 6a). The
+// module assigns its functions to `window.X` for legacy bare-global
+// callers (Phase 6b territory: bookmark UI / tree / modals / drawer
+// handlers — those move out in Phase 6b).
 
 // ── Data fetching ──
 
@@ -1654,8 +1143,8 @@ function renderChapter(data, book, opts) {
   }
 
   // Track current chapter context for verse selection mode
-  _currentBookId = book.id;
-  _currentChapter = ch;
+  readingContext.bookId = book.id;
+  readingContext.chapter = ch;
 
   // Announce verse number on click/tap for screen reader users,
   // or toggle verse selection when in select mode.
@@ -1664,7 +1153,7 @@ function renderChapter(data, book, opts) {
     if (!(t instanceof Element)) return;
     const vs = t.closest(".verse[data-vref]");
     if (!vs) return;
-    if (_verseSelectMode) {
+    if (readingContext.verseSelectMode) {
       e.stopPropagation(); // selection is handled by pointer events
       return;
     }
@@ -1680,14 +1169,14 @@ function renderChapter(data, book, opts) {
   article.addEventListener("pointerdown", (e) => {
     const t = e.target;
     if (!(t instanceof Element)) return;
-    if (_verseSelectMode) {
+    if (readingContext.verseSelectMode) {
       const vs = t.closest(".verse[data-vref]");
       if (!vs) return;
       e.preventDefault(); // prevent text selection during drag
       const allVerses = /** @type {HTMLElement[]} */ ([...article.querySelectorAll(".verse[data-vref]")]);
       const startIdx = allVerses.indexOf(/** @type {HTMLElement} */ (vs));
-      const isAdding = !_selectedVerseRefs.has(vs.getAttribute("data-vref") ?? "");
-      _verseSelectDrag = { startIdx, allVerses, isAdding, moved: false, snapshot: new Set(_selectedVerseRefs) };
+      const isAdding = !readingContext.selectedVerses.has(vs.getAttribute("data-vref") ?? "");
+      readingContext.verseSelectDrag = { startIdx, allVerses, isAdding, moved: false, snapshot: new Set(readingContext.selectedVerses) };
       article.setPointerCapture(e.pointerId);
       return;
     }
@@ -1700,9 +1189,9 @@ function renderChapter(data, book, opts) {
       enterVerseSelectMode(book.id, ch);
       const vref = vs.getAttribute("data-vref");
       if (vref) {
-        _selectedVerseRefs.add(vref);
+        readingContext.selectedVerses.add(vref);
         article.querySelectorAll(".verse[data-vref]").forEach((v) => {
-          v.classList.toggle("verse-selected", _selectedVerseRefs.has(v.getAttribute("data-vref") ?? ""));
+          v.classList.toggle("verse-selected", readingContext.selectedVerses.has(v.getAttribute("data-vref") ?? ""));
         });
         updateVerseSelectionBoundaries(article);
         updateVerseSelectBar();
@@ -1721,24 +1210,24 @@ function renderChapter(data, book, opts) {
   };
 
   article.addEventListener("pointermove", (e) => {
-    if (_verseSelectDrag) {
+    if (readingContext.verseSelectDrag) {
       const target = document.elementFromPoint(e.clientX, e.clientY);
       const vs = /** @type {HTMLElement | null} */ (target && target.closest(".verse[data-vref]"));
       if (!vs) return;
-      const { startIdx, allVerses, isAdding, snapshot } = _verseSelectDrag;
+      const { startIdx, allVerses, isAdding, snapshot } = readingContext.verseSelectDrag;
       const currentIdx = allVerses.indexOf(vs);
       if (currentIdx === -1) return;
-      if (!_verseSelectDrag.moved && currentIdx === startIdx) return;
-      _verseSelectDrag.moved = true;
+      if (!readingContext.verseSelectDrag.moved && currentIdx === startIdx) return;
+      readingContext.verseSelectDrag.moved = true;
       const [lo, hi] = startIdx <= currentIdx ? [startIdx, currentIdx] : [currentIdx, startIdx];
-      _selectedVerseRefs = new Set(snapshot);
+      readingContext.selectedVerses = new Set(snapshot);
       allVerses.forEach((v, i) => {
         const vref = v.getAttribute("data-vref") ?? "";
         if (i >= lo && i <= hi) {
-          if (isAdding) _selectedVerseRefs.add(vref);
-          else _selectedVerseRefs.delete(vref);
+          if (isAdding) readingContext.selectedVerses.add(vref);
+          else readingContext.selectedVerses.delete(vref);
         }
-        v.classList.toggle("verse-selected", _selectedVerseRefs.has(vref));
+        v.classList.toggle("verse-selected", readingContext.selectedVerses.has(vref));
       });
       updateVerseSelectionBoundaries(article);
       updateVerseSelectBar();
@@ -1748,29 +1237,29 @@ function renderChapter(data, book, opts) {
   });
 
   article.addEventListener("pointerup", (e) => {
-    if (_verseSelectDrag) {
-      if (!_verseSelectDrag.moved) {
+    if (readingContext.verseSelectDrag) {
+      if (!readingContext.verseSelectDrag.moved) {
         // Simple tap: toggle start verse
-        const vs = _verseSelectDrag.allVerses[_verseSelectDrag.startIdx];
+        const vs = readingContext.verseSelectDrag.allVerses[readingContext.verseSelectDrag.startIdx];
         if (vs) {
           const vref = vs.getAttribute("data-vref") ?? "";
-          if (_verseSelectDrag.isAdding) _selectedVerseRefs.add(vref);
-          else _selectedVerseRefs.delete(vref);
-          _verseSelectDrag.allVerses.forEach((v) => {
-            v.classList.toggle("verse-selected", _selectedVerseRefs.has(v.getAttribute("data-vref") ?? ""));
+          if (readingContext.verseSelectDrag.isAdding) readingContext.selectedVerses.add(vref);
+          else readingContext.selectedVerses.delete(vref);
+          readingContext.verseSelectDrag.allVerses.forEach((v) => {
+            v.classList.toggle("verse-selected", readingContext.selectedVerses.has(v.getAttribute("data-vref") ?? ""));
           });
           updateVerseSelectionBoundaries(article);
           updateVerseSelectBar();
         }
       }
-      _verseSelectDrag = null;
+      readingContext.verseSelectDrag = null;
       return;
     }
     cancelLongPress(e);
   });
 
   article.addEventListener("pointercancel", (e) => {
-    if (_verseSelectDrag) { _verseSelectDrag = null; return; }
+    if (readingContext.verseSelectDrag) { readingContext.verseSelectDrag = null; return; }
     cancelLongPress(e);
   });
 
@@ -2016,7 +1505,7 @@ async function route() {
   _isInitialLoad = false;
   if (_scrollTrackCleanup) _scrollTrackCleanup();
   clearNode($resumeBannerSlot);
-  if (_verseSelectMode) exitVerseSelectMode();
+  if (readingContext.verseSelectMode) exitVerseSelectMode();
   const parsed = parsePath();
   const { view, bookId, chapter, division } = parsed;
 
@@ -2676,10 +2165,10 @@ function buildBookmarkHeaderBtn(bookId, chapter) {
 
 function refreshBookmarkHeaderBtn() {
   const btn = document.querySelector(".title-bookmark-btn");
-  if (!btn || !_currentBookId || !_currentChapter) return;
+  if (!btn || !readingContext.bookId || !readingContext.chapter) return;
   btn.classList.toggle(
     "has-bookmark",
-    findExistingChapterBookmarks(_currentBookId, _currentChapter).length > 0
+    findExistingChapterBookmarks(readingContext.bookId, readingContext.chapter).length > 0
   );
 }
 
@@ -3155,8 +2644,9 @@ function _buildFolderItem(folder, depth) {
 
 function renderBookmarkTree() {
   _renderPathname = window.location.pathname;
-  // The previously swiped row may be replaced when we re-render; drop the stale reference.
-  _swipedRow = null;
+  // The previously swiped row may be replaced when we re-render; drop the
+  // stale reference held by js/app/bookmark.js.
+  resetSwipedRow();
   clearNode($bookmarkDrawerBody);
   const store = loadBookmarks();
   if (!store.length) {
@@ -3204,10 +2694,11 @@ function _toggleFolder(li) {
 }
 
 // Tap on empty drawer area closes any revealed mobile-swipe actions.
+// `closeSwipedRowIfOutside` is a bookmark.js (Phase 6a) accessor — it
+// encapsulates the "is something swiped + did the tap land outside" check
+// so app.js doesn't reach into the module's private `_swipedRow` state.
 $bookmarkDrawerBody.addEventListener("pointerdown", (e) => {
-  if (!_swipedRow) return;
-  if (_swipedRow.contains(e.target)) return;
-  closeSwipedRow(null);
+  closeSwipedRowIfOutside(e.target);
 });
 
 $bookmarkDrawerBody.addEventListener("keydown", (e) => {
@@ -3274,8 +2765,8 @@ $bookmarkDrawerBody.addEventListener("keydown", (e) => {
 // ── Save bookmark modal ──
 
 function openSaveModal(mode, opts = {}) {
-  const bookId = _currentBookId;
-  const chapter = _currentChapter;
+  const bookId = readingContext.bookId;
+  const chapter = readingContext.chapter;
   let verseSpec = "all";
   let existingId = opts.existingId || null;
   let existing = null;
@@ -3287,7 +2778,7 @@ function openSaveModal(mode, opts = {}) {
 
   if (mode === "verses") {
     const article = document.querySelector("article.chapter-text");
-    const refs = collapseFullVerseRefs(Array.from(_selectedVerseRefs), article);
+    const refs = collapseFullVerseRefs(Array.from(readingContext.selectedVerses), article);
     verseSpec = refs.length ? selectedVersesToSpec(refs) : "all";
   } else if (existing) {
     verseSpec = existing.verseSpec ?? "all";
@@ -3471,9 +2962,9 @@ function commitSaveBookmark(existingId, label, note, folderId, bookId, chapter, 
 function openMergeDialog(candidates, incomingSpec, mode, fallbackContext = null) {
   clearNode($bmMergeBody);
   const resolvedBookId =
-    (fallbackContext && fallbackContext.bookId) || _currentBookId;
+    (fallbackContext && fallbackContext.bookId) || readingContext.bookId;
   const resolvedChapter =
-    (fallbackContext && fallbackContext.chapter) || _currentChapter;
+    (fallbackContext && fallbackContext.chapter) || readingContext.chapter;
 
   let target = candidates[0];
 
@@ -3681,10 +3172,10 @@ function updateVerseSelectionBoundaries(scope) {
 }
 
 function enterVerseSelectMode(bookId, chapter) {
-  _verseSelectMode = true;
-  _selectedVerseRefs.clear();
-  _currentBookId = bookId;
-  _currentChapter = chapter;
+  readingContext.verseSelectMode = true;
+  readingContext.selectedVerses.clear();
+  readingContext.bookId = bookId;
+  readingContext.chapter = chapter;
   document.body.classList.add("verse-select-active");
   $verseSelectBar.hidden = false;
   updateVerseSelectBar();
@@ -3692,8 +3183,8 @@ function enterVerseSelectMode(bookId, chapter) {
 }
 
 function exitVerseSelectMode() {
-  _verseSelectMode = false;
-  _selectedVerseRefs.clear();
+  readingContext.verseSelectMode = false;
+  readingContext.selectedVerses.clear();
   document.body.classList.remove("verse-select-active");
   $verseSelectBar.hidden = true;
   document.querySelectorAll(".verse-selected, .verse-selected-join-prev, .verse-selected-join-next")
@@ -3701,15 +3192,15 @@ function exitVerseSelectMode() {
 }
 
 function updateVerseSelectBar() {
-  const count = _selectedVerseRefs.size;
+  const count = readingContext.selectedVerses.size;
   if (count === 0) {
     $verseSelectCount.textContent = "절을 눌러 선택하세요.";
   } else {
     const articleEl = document.querySelector("article.chapter-text");
-    const refs = collapseFullVerseRefs(Array.from(_selectedVerseRefs), articleEl);
+    const refs = collapseFullVerseRefs(Array.from(readingContext.selectedVerses), articleEl);
     const spec = refs.length
       ? selectedVersesToSpec(refs)
-      : selectedVersesToSpec(Array.from(_selectedVerseRefs));
+      : selectedVersesToSpec(Array.from(readingContext.selectedVerses));
     $verseSelectCount.textContent = `${spec.replace(/,/g, ', ')}절 선택됨`;
   }
   $verseSelectBookmarkBtn.disabled = count === 0;
@@ -3738,7 +3229,7 @@ $bmSaveChapterBtn.addEventListener("click", () => {
 
 $bmSelectVersesBtn.addEventListener("click", () => {
   closeBookmarkDrawer();
-  enterVerseSelectMode(_currentBookId, _currentChapter);
+  enterVerseSelectMode(readingContext.bookId, readingContext.chapter);
 });
 
 $bmAddFolderBtn.addEventListener("click", () => {
@@ -3859,7 +3350,7 @@ document.addEventListener("keydown", (e) => {
     }
     if (!$bmSaveModal.hidden) { closeSaveModal(); return; }
     if (!$bookmarkDrawer.hidden) { closeBookmarkDrawer(); return; }
-    if (_verseSelectMode) { exitVerseSelectMode(); return; }
+    if (readingContext.verseSelectMode) { exitVerseSelectMode(); return; }
   }
 });
 
