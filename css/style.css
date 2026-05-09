@@ -954,6 +954,32 @@ body {
 }
 
 /* ── Pull-to-refresh indicator (mobile) ── */
+#pull-refresh-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 24;
+  pointer-events: none;
+  background: rgba(0, 0, 0, 0.04);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+[data-theme="dark"] #pull-refresh-scrim {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+#pull-refresh-scrim.ptr-scrim-visible {
+  opacity: 1;
+}
+
+@media (min-width: 769px) {
+  #pull-refresh-scrim { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #pull-refresh-scrim { transition: none; }
+}
+
 #pull-refresh-indicator {
   position: fixed;
   top: env(safe-area-inset-top, 0);

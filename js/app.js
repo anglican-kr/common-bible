@@ -256,6 +256,8 @@ document.addEventListener("visibilitychange", () => {
 
   /** @type {HTMLElement | null} */
   let indicator = null;
+  /** @type {HTMLElement | null} */
+  let scrim = null;
   let startY = 0;
   let delta = 0;
   let active = false;
@@ -272,12 +274,16 @@ document.addEventListener("visibilitychange", () => {
 
   function ensureIndicator() {
     if (indicator) return indicator;
+    scrim = document.createElement("div");
+    scrim.id = "pull-refresh-scrim";
+    scrim.setAttribute("aria-hidden", "true");
+    document.body.appendChild(scrim);
     indicator = document.createElement("div");
     indicator.id = "pull-refresh-indicator";
     indicator.setAttribute("aria-hidden", "true");
     indicator.innerHTML =
-      '<svg class="ptr-icon" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-      '<path d="M21 12a9 9 0 1 1-3.3-7"/><polyline points="21 4 21 12 13 12"/>' +
+      '<svg class="ptr-icon" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true">' +
+      '<path d="M21 12a9 9 0 1 1-2.64-6.36"/>' +
       '</svg>';
     document.body.appendChild(indicator);
     return indicator;
@@ -311,6 +317,7 @@ document.addEventListener("visibilitychange", () => {
     ind.style.transition = smooth ? "transform .25s ease, opacity .2s ease" : "none";
     ind.style.transform = "translateX(-50%) translateY(0)";
     ind.style.opacity = "0";
+    if (scrim) scrim.classList.remove("ptr-scrim-visible");
     if (smooth) {
       resetCleanupTimer = setTimeout(() => {
         resetCleanupTimer = null;
@@ -383,6 +390,7 @@ document.addEventListener("visibilitychange", () => {
       resetCleanupTimer = null;
     }
     ind.classList.add("ptr-loading");
+    if (scrim) scrim.classList.add("ptr-scrim-visible");
     ind.style.transition = prefersReducedMotion() ? "none" : "transform .2s ease";
     ind.style.transform = `translateX(-50%) translateY(${PULL_THRESHOLD_PX}px)`;
     ind.style.opacity = "1";
