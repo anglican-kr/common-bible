@@ -21,8 +21,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // `<script type="module">`). The vm-based test harness uses `runInContext`,
 // which only accepts classic scripts — `export {}` would throw SyntaxError.
 // Strip the trailing ESM marker before evaluating; the rest of the file is
-// classic-script-compatible.
-const ESM_MARKER_RE = /^\s*\/\/[^\n]*\n\s*\/\/[^\n]*\n\s*export\s*\{\s*\}\s*;?\s*$/m;
+// classic-script-compatible. First regex matches the standard 2-comment
+// preamble + `export {};`, second is a fallback for the bare marker.
 function stripEsmMarker(src) {
   return src.replace(/\n\s*\/\/[^\n]*\n\s*\/\/[^\n]*\n\s*export\s*\{\s*\}\s*;?\s*$/, "")
             .replace(/\n\s*export\s*\{\s*\}\s*;?\s*$/, "");
