@@ -55,6 +55,12 @@ const {
   initSettings, applyFontSize, applyTheme, applyColorScheme,
   dismissLaunchScreen, updateThemeMetaColor,
 } = window.appSettings;
+// Re-expose on window so the sync layer (state-machine.js) can apply Drive
+// settings updates via its `typeof window.applyXxx === "function"` guards.
+// `const` destructure does not auto-register on window — must be explicit.
+window.applyFontSize = applyFontSize;
+window.applyTheme = applyTheme;
+window.applyColorScheme = applyColorScheme;
 
 const $app = _$("app");
 const $title = _$("page-title");
