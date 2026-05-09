@@ -471,6 +471,22 @@ export interface BiblePrologue {
   paragraphs: string[];
 }
 
+// ── App helpers facade (js/app/helpers.js) ──────────────────────────────────
+// Phase 1 of the app.js modularization (ADR-018). Common DOM helpers shared
+// by all app/* modules.
+
+export interface AppHelpers {
+  _$: (id: string) => HTMLElement;
+  chUnit: (bookId: string) => string;
+  el: <K extends keyof HTMLElementTagNameMap>(
+    tag: K,
+    attrs?: Record<string, any> | null,
+    ...children: Array<Node | string | null | undefined>
+  ) => HTMLElementTagNameMap[K];
+  clearNode: (node: Node) => void;
+  trapFocus: (container: HTMLElement) => () => void;
+}
+
 // ── Window augmentation ──────────────────────────────────────────────────────
 
 declare global {
@@ -498,6 +514,9 @@ declare global {
     // Pre-fetched data/books.json promise (js/pre-fetch.js). app.js's
     // loadBooks() awaits this when present rather than re-issuing the fetch.
     booksPromise?: Promise<BooksData>;
+
+    // App-layer module facades (ADR-018, see docs/design/app-modularization.md).
+    appHelpers: AppHelpers;
 
     // UI side-effects defined in app.js. Optional because state-machine.js
     // guards each call with `typeof ... === "function"`.

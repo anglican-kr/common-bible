@@ -24,17 +24,11 @@
 /** @typedef {import("./types").BookmarkTreeFolder} BookmarkTreeFolder */
 
 const DATA_DIR = "/data";
-// Psalms use "편" instead of "장" as the chapter unit
-/** @param {string} bookId */
-function chUnit(bookId) { return bookId === "ps" ? "편" : "장"; }
 
-// All anchors below correspond to required ids in index.html and are present
-// at module load. `_$` casts the result so downstream code can use
-// HTMLElement methods without per-call null checks. Anchors that are
-// `<input>` elements get narrowed at the call sites that read .value /
-// .files (PR-2 onward as those code paths are visited).
-/** @param {string} id @returns {HTMLElement} */
-function _$(id) { return /** @type {HTMLElement} */ (document.getElementById(id)); }
+// Common DOM helpers live in js/app/helpers.js (ADR-018 Phase 1). `defer`
+// load order in index.html guarantees window.appHelpers is populated by
+// the time this script runs.
+const { _$, chUnit, el, clearNode, trapFocus } = window.appHelpers;
 
 const $app = _$("app");
 const $title = _$("page-title");
@@ -78,33 +72,7 @@ function announce(msg) {
   requestAnimationFrame(() => { $announce.textContent = msg; });
 }
 
-// Focus trap: keeps Tab cycling within a container while it is open.
-// Returns a cleanup function to remove the listener.
-/**
- * @param {HTMLElement} container
- * @returns {() => void}
- */
-function trapFocus(container) {
-  /** @param {KeyboardEvent} e */
-  function handler(e) {
-    if (e.key !== "Tab") return;
-    const focusable = /** @type {NodeListOf<HTMLElement>} */ (
-      container.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])')
-    );
-    if (!focusable.length) return;
-    const first = focusable[0];
-    const last = focusable[focusable.length - 1];
-    if (e.shiftKey && (document.activeElement === first || document.activeElement === container)) {
-      e.preventDefault();
-      last.focus();
-    } else if (!e.shiftKey && document.activeElement === last) {
-      e.preventDefault();
-      first.focus();
-    }
-  }
-  container.addEventListener("keydown", handler);
-  return () => container.removeEventListener("keydown", handler);
-}
+// `trapFocus` was extracted to js/app/helpers.js (ADR-018 Phase 1).
 
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
@@ -1246,38 +1214,8 @@ function dismissLaunchScreen() {
 }
 
 // ── Helpers ──
-
-/**
- * Generic narrow: `el("button", ...)` returns HTMLButtonElement, `el("input", ...)`
- * returns HTMLInputElement, etc. — so call sites can read .value/.disabled/.files
- * without per-call casts. `attrs` accepts mixed values (booleans for readOnly,
- * strings for aria-*, numbers for rows) since the DOM coerces in setAttribute.
- * @template {keyof HTMLElementTagNameMap} K
- * @param {K} tag
- * @param {Record<string, any> | null} [attrs]
- * @param {...(Node | string | null | undefined)} children
- * @returns {HTMLElementTagNameMap[K]}
- */
-function el(tag, attrs, ...children) {
-  const node = document.createElement(tag);
-  if (attrs) {
-    for (const [k, v] of Object.entries(attrs)) {
-      if (k === "className") node.className = v;
-      else if (k === "textContent") node.textContent = v;
-      else node.setAttribute(k, v);
-    }
-  }
-  for (const child of children) {
-    if (typeof child === "string") node.appendChild(document.createTextNode(child));
-    else if (child) node.appendChild(child);
-  }
-  return node;
-}
-
-/** @param {Node} node */
-function clearNode(node) {
-  while (node.firstChild) node.removeChild(node.firstChild);
-}
+// `el`, `clearNode`, `_$`, `chUnit`, `trapFocus` were extracted to
+// js/app/helpers.js (ADR-018 Phase 1). Imported via destructure at module head.
 
 // ── Bookmark storage helpers ──
 
