@@ -75,6 +75,21 @@ window.appStorage.saveReadingPosition(...);
 
 `const` 바인딩은 ESM module에서 자동으로 `window`에 등록되지 않으므로, sync layer가 `typeof window.applyFontSize === "function"` 같은 가드로 호출하는 함수는 명시적으로 `window.X = X;` 라인을 넣는다 (현재 Phase 3 PR #90에서 이미 적용된 패턴).
 
+### 예외 (script 모드 유지)
+
+다음 두 파일은 ESM 옵트인하지 않는다 — 외부 제약 때문:
+
+| 파일 | 사유 |
+| --- | --- |
+| `js/audio-cache.js` | `sw.js`가 `importScripts("/js/audio-cache.js")`로도 로드. `importScripts`는 classic script만 허용하며 `export {};`가 있으면 `SyntaxError`로 실패. 메인 페이지에서는 `<script defer>`로 로드해 동작이 일관되게 유지됨 |
+| `js/pre-fetch.js` | `<head>`에 `<script src="...">`(non-defer)로 즉시 실행되어 `data/books.json` 다운로드를 가능한 한 일찍 시작. `type="module"`은 자동 deferred라 fetch 시작이 늦어지는 회귀 |
+
+이 두 파일은 `export {};` 추가 안 함 + `<script>` 또는 `<script defer>` 그대로.
+
+### 테스트 하네스 호환
+
+`tests/unit/harness.js`는 sync 파일들(`state-machine.js`/`refresh-store.js`/`transport.js`)을 `vm.runInContext`로 로드해 unit test를 돌린다. 이는 classic script 평가라 `export {};`가 `SyntaxError`. 해결: 하네스가 source를 `readFileSync`한 직후 ESM marker만 제거하는 한 줄 정규식 (`stripEsmMarker`). production runtime에는 영향 없는 test-only adaptation.
+
 ## 검증
 
 - 단계별 PR마다: `tsc -p tsconfig.app.json/json/worker.json --noEmit` 모두 0 error

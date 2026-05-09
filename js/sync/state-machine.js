@@ -862,3 +862,7 @@ function createSyncMachine({ onStateChange } = {}) {
 window.createSyncMachine = createSyncMachine;
 window._syncScope = SCOPE;
 window._syncRedirectAttemptsKey = REDIRECT_ATTEMPTS_KEY;
+
+// ESM module marker (ADR-019). No runtime effect; signals TypeScript that
+// this file is module-scoped, isolating function/typedef names.
+export {};

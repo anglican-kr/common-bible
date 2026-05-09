@@ -272,21 +272,22 @@
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-CWVVPW11TE"></script>
   <!-- Drive sync modules (load order matters: debug-log → refresh-store → transport → state-machine → facade) -->
-  <script defer src="/js/sync/debug-log.js"></script>
-  <script defer src="/js/sync/refresh-store.js"></script>
-  <script defer src="/js/sync/transport.js"></script>
+  <script type="module" src="/js/sync/debug-log.js"></script>
+  <script type="module" src="/js/sync/refresh-store.js"></script>
+  <script type="module" src="/js/sync/transport.js"></script>
   <!-- store-v2 is ESM-opted-in (ADR-018) so its `saveBookmarks`/`loadBookmarks`
        names don't collide with js/app/storage.js at the global TS scope. -->
   <script type="module" src="/js/sync/store-v2.js"></script>
-  <script defer src="/js/sync/state-machine.js"></script>
-  <script defer src="/js/drive-sync.js"></script>
+  <script type="module" src="/js/sync/state-machine.js"></script>
+  <script type="module" src="/js/drive-sync.js"></script>
+  <!-- audio-cache.js is loaded both here and via sw.js's importScripts(),
+       which only accepts classic scripts. Kept as <script defer> for that
+       compatibility (ADR-019 §"예외"). -->
   <script defer src="/js/audio-cache.js"></script>
-  <script defer src="/js/gtag-init.js"></script>
-  <script defer src="/js/app/helpers.js"></script>
-  <!-- storage.js is an ES module (see ADR-018). `type="module"` is implicitly
-       deferred and runs after defer scripts in document order. -->
+  <script type="module" src="/js/gtag-init.js"></script>
+  <script type="module" src="/js/app/helpers.js"></script>
   <script type="module" src="/js/app/storage.js"></script>
-  <script defer src="/js/app/settings-ui.js"></script>
-  <script defer src="/js/app.js"></script>
+  <script type="module" src="/js/app/settings-ui.js"></script>
+  <script type="module" src="/js/app.js"></script>
 </body>
 </html>

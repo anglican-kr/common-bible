@@ -186,3 +186,7 @@ async function clearRefreshToken() {
 }
 
 window.refreshStore = { saveRefreshToken, loadRefreshToken, clearRefreshToken };
+
+// ESM module marker (ADR-019). No runtime effect; signals TypeScript that
+// this file is module-scoped, isolating function/typedef names.
+export {};
