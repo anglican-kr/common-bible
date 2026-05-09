@@ -6,6 +6,10 @@
 /** @typedef {import("./types").SearchHistoryList} SearchHistoryList */
 /** @typedef {import("./types").VerseSelectDrag} VerseSelectDrag */
 /** @typedef {import("./types").DragState} DragState */
+/** @typedef {import("./types").ColorSchemeId} ColorSchemeId */
+/** @typedef {import("./types").ThemeMode} ThemeMode */
+/** @typedef {import("./types").BookOrderKind} BookOrderKind */
+/** @typedef {import("./types").ColorSchemeEntry} ColorSchemeEntry */
 
 const DATA_DIR = "/data";
 // Psalms use "편" instead of "장" as the chapter unit
@@ -123,6 +127,7 @@ const SEARCH_HISTORY_MAX = 30;       // storage cap (LRU)
 const SEARCH_HISTORY_VISIBLE = 10;   // visible by default; rest behind "더 보기"
 const FONT_SIZES = [16, 18, 20, 22, 24];
 
+/** @type {ReadonlyArray<ColorSchemeEntry>} */
 const COLOR_SCHEMES = [
   { id: "navy",       name: "네이비",   swatch: "#1e3a5f", iconBg: "#1a1a2e" },
   { id: "terracotta", name: "버건디",   swatch: "#6b3a2a", iconBg: "#6b3a2a" },
@@ -594,7 +599,7 @@ async function clearAllCaches() {
 
 // ── Settings popover ──
 
-const $settingsAnchor = document.getElementById("settings-anchor");
+const $settingsAnchor = _$("settings-anchor");
 
 function initSettings() {
   clearNode($settingsAnchor);
@@ -932,6 +937,7 @@ function initSettings() {
     popover.style.right = `${window.innerWidth - rect.right}px`;
   }
 
+  /** @type {(() => void) | null} */
   let cleanupTrap = null;
 
   btn.addEventListener("click", (e) => {
@@ -946,7 +952,7 @@ function initSettings() {
       // pointer activation, focus the popover container itself to avoid a
       // stray :focus-visible ring on the first button (iOS Safari).
       if (e.detail === 0) {
-        const first = popover.querySelector('button, a[href], input');
+        const first = /** @type {HTMLElement | null} */ (popover.querySelector('button, a[href], input'));
         if (first) first.focus();
       } else {
         popover.focus();
@@ -957,7 +963,8 @@ function initSettings() {
   });
 
   document.addEventListener("click", (e) => {
-    if (!popover.hidden && !wrapper.contains(e.target) && !popover.contains(e.target)) {
+    const t = e.target;
+    if (!popover.hidden && t instanceof Node && !wrapper.contains(t) && !popover.contains(t)) {
       popover.hidden = true;
       btn.setAttribute("aria-expanded", "false");
       if (cleanupTrap) { cleanupTrap(); cleanupTrap = null; }
@@ -974,6 +981,7 @@ function initSettings() {
 
 // ── Icon recoloring ──
 
+/** @param {string} hex @returns {[number, number, number]} */
 function hexToRgb(hex) {
   return [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)];
 }
@@ -989,6 +997,7 @@ let _iconGeneration = 0;
 // Loads the source icon's pixel data. Not cached: a decoded 512×512 ImageData is
 // ~1 MB and color-scheme changes are rare; releasing it after use keeps idle
 // memory low. The asset is served from the SW cache, so re-reads are cheap.
+/** @returns {Promise<ImageData>} */
 function loadOrigIcon() {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -997,6 +1006,7 @@ function loadOrigIcon() {
       canvas.width = img.naturalWidth;
       canvas.height = img.naturalHeight;
       const ctx = canvas.getContext("2d");
+      if (!ctx) { reject(new Error("Canvas 2D context unavailable")); return; }
       ctx.drawImage(img, 0, 0);
       resolve(ctx.getImageData(0, 0, canvas.width, canvas.height));
     };
@@ -1005,6 +1015,7 @@ function loadOrigIcon() {
   });
 }
 
+/** @param {ColorSchemeEntry} scheme */
 function updateAppIcons(scheme) {
   // Capture the generation at dispatch time; discard the result if a newer
   // applyColorScheme call has already superseded this one.
@@ -1021,6 +1032,7 @@ function updateAppIcons(scheme) {
       canvas.width = origData.width;
       canvas.height = origData.height;
       const ctx = canvas.getContext("2d");
+      if (!ctx) return;
       const d = origData.data;
       for (let i = 0; i < d.length; i += 4) {
         // Normalize luminance: 0 = original bg, 1 = white cross
@@ -1032,9 +1044,9 @@ function updateAppIcons(scheme) {
       }
       ctx.putImageData(origData, 0, 0);
       const dataUrl = canvas.toDataURL("image/png");
-      const faviconLink = document.querySelector("link[rel='icon']");
+      const faviconLink = /** @type {HTMLLinkElement | null} */ (document.querySelector("link[rel='icon']"));
       if (faviconLink) faviconLink.href = dataUrl;
-      const appleLink = document.querySelector("link[rel='apple-touch-icon']");
+      const appleLink = /** @type {HTMLLinkElement | null} */ (document.querySelector("link[rel='apple-touch-icon']"));
       if (appleLink) appleLink.href = dataUrl;
     }).catch(() => { /* non-critical */ });
   });
@@ -1042,14 +1054,17 @@ function updateAppIcons(scheme) {
 
 // ── Color scheme ──
 
+/** @returns {ColorSchemeId} */
 function loadColorScheme() {
   try {
     const v = localStorage.getItem(COLOR_SCHEME_KEY);
-    if (COLOR_SCHEMES.some(s => s.id === v)) return v;
+    const found = COLOR_SCHEMES.find((s) => s.id === v);
+    if (found) return found.id;
   } catch (_) {}
   return "navy";
 }
 
+/** @param {ColorSchemeId} scheme */
 function saveColorScheme(scheme) {
   try { localStorage.setItem(COLOR_SCHEME_KEY, scheme); window.syncStoreV2?.saveSetting("colorScheme", scheme); if (window.driveSync) window.driveSync.scheduleUpload(); } catch (_) {}
 }
@@ -1060,21 +1075,22 @@ function saveColorScheme(scheme) {
 const DEFAULT_FAVICON_HREF = "/favicon.ico";
 const DEFAULT_APPLE_ICON_HREF = "/assets/icons/icon-512-maskable.png";
 
+/** @param {string} schemeName */
 function applyColorScheme(schemeName) {
   // Invalidate any in-flight updateAppIcons call from a previous scheme.
   _iconGeneration++;
-  const scheme = COLOR_SCHEMES.find(s => s.id === schemeName) || COLOR_SCHEMES[0];
+  const scheme = COLOR_SCHEMES.find((s) => s.id === schemeName) || COLOR_SCHEMES[0];
   if (schemeName === "navy") {
     document.documentElement.removeAttribute("data-color-scheme");
     updateThemeMetaColor();
     // Default scheme: shipped favicon/apple-touch-icon already match. Skipping
     // the canvas recolor saves ~1 MB ImageData on every launch. If a previous
     // session left a recolored data: URL on these <link>s, restore the originals.
-    const faviconLink = document.querySelector("link[rel='icon']");
+    const faviconLink = /** @type {HTMLLinkElement | null} */ (document.querySelector("link[rel='icon']"));
     if (faviconLink && faviconLink.href !== new URL(DEFAULT_FAVICON_HREF, location.href).href) {
       faviconLink.href = DEFAULT_FAVICON_HREF;
     }
-    const appleLink = document.querySelector("link[rel='apple-touch-icon']");
+    const appleLink = /** @type {HTMLLinkElement | null} */ (document.querySelector("link[rel='apple-touch-icon']"));
     if (appleLink && appleLink.href !== new URL(DEFAULT_APPLE_ICON_HREF, location.href).href) {
       appleLink.href = DEFAULT_APPLE_ICON_HREF;
     }
@@ -1087,6 +1103,7 @@ function applyColorScheme(schemeName) {
 
 // ── Theme ──
 
+/** @returns {ThemeMode} */
 function loadTheme() {
   try {
     const saved = localStorage.getItem(THEME_KEY);
@@ -1095,10 +1112,12 @@ function loadTheme() {
   return "system";
 }
 
+/** @param {string} theme */
 function saveTheme(theme) {
   try { localStorage.setItem(THEME_KEY, theme); window.syncStoreV2?.saveSetting("theme", theme); if (window.driveSync) window.driveSync.scheduleUpload(); } catch (_) {}
 }
 
+/** @type {((e: MediaQueryListEvent) => void) | null} */
 let _systemThemeListener = null;
 const _darkMQ = window.matchMedia("(prefers-color-scheme: dark)");
 
@@ -1110,6 +1129,7 @@ function updateThemeMetaColor() {
   });
 }
 
+/** @param {string} theme */
 function applyTheme(theme) {
   if (_systemThemeListener) {
     _darkMQ.removeEventListener("change", _systemThemeListener);
@@ -1129,6 +1149,7 @@ function applyTheme(theme) {
 
 // ── Book order ──
 
+/** @returns {BookOrderKind} */
 function loadBookOrder() {
   try {
     const v = localStorage.getItem(BOOK_ORDER_KEY);
@@ -1137,6 +1158,7 @@ function loadBookOrder() {
   return "canonical";
 }
 
+/** @param {string} order */
 function saveBookOrder(order) {
   try { localStorage.setItem(BOOK_ORDER_KEY, order); window.syncStoreV2?.saveSetting("bookOrder", order); if (window.driveSync) window.driveSync.scheduleUpload(); } catch (_) {}
 }
@@ -1195,6 +1217,17 @@ function dismissLaunchScreen() {
 
 // ── Helpers ──
 
+/**
+ * Generic narrow: `el("button", ...)` returns HTMLButtonElement, `el("input", ...)`
+ * returns HTMLInputElement, etc. — so call sites can read .value/.disabled/.files
+ * without per-call casts. `attrs` accepts mixed values (booleans for readOnly,
+ * strings for aria-*, numbers for rows) since the DOM coerces in setAttribute.
+ * @template {keyof HTMLElementTagNameMap} K
+ * @param {K} tag
+ * @param {Record<string, any> | null} [attrs]
+ * @param {...(Node | string | null | undefined)} children
+ * @returns {HTMLElementTagNameMap[K]}
+ */
 function el(tag, attrs, ...children) {
   const node = document.createElement(tag);
   if (attrs) {
@@ -1211,16 +1244,21 @@ function el(tag, attrs, ...children) {
   return node;
 }
 
+/** @param {Node} node */
 function clearNode(node) {
   while (node.firstChild) node.removeChild(node.firstChild);
 }
 
 // ── Bookmark storage helpers ──
 
+/** @returns {string} */
 function generateId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2);
 }
 
+/**
+ * @returns {import("./types").BookmarkTreeNode[]}
+ */
 function loadBookmarks() {
   if (window.syncStoreV2) return window.syncStoreV2.loadBookmarks();
   try {
@@ -1229,6 +1267,7 @@ function loadBookmarks() {
   } catch (_) { return []; }
 }
 
+/** @param {import("./types").BookmarkTreeNode[]} store */
 function saveBookmarks(store) {
   try {
     localStorage.setItem(BOOKMARK_KEY, JSON.stringify(store));

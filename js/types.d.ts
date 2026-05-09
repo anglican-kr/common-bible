@@ -397,6 +397,29 @@ export interface DragState {
   origTop: number;
 }
 
+// `COLOR_SCHEME_KEY`. Drives both data-color-scheme attribute and recolored
+// favicon/apple-touch-icon. The COLOR_SCHEMES array's `id` field is the
+// authoritative source — keep these in sync if a scheme is added/removed.
+export type ColorSchemeId = "navy" | "terracotta" | "green" | "purple";
+
+// `THEME_KEY`. "system" defers to prefers-color-scheme; light/dark are
+// explicit overrides.
+export type ThemeMode = "dark" | "light" | "system";
+
+// `BOOK_ORDER_KEY`. Whether deuterocanonical books are shown in their own
+// (canonical/Korean Anglican Communion) division or interleaved with the OT
+// (vulgate/Catholic ordering).
+export type BookOrderKind = "canonical" | "vulgate";
+
+// One entry of the COLOR_SCHEMES module-level array (app.js). `iconBg` drives
+// the runtime canvas recolor of the favicon/apple-touch-icon.
+export interface ColorSchemeEntry {
+  id: ColorSchemeId;
+  name: string;
+  swatch: string;
+  iconBg: string;
+}
+
 // ── Window augmentation ──────────────────────────────────────────────────────
 
 declare global {
