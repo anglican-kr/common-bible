@@ -1,5 +1,11 @@
-// ── transport.js PKCE function unit tests ───────────────────────────────────
-// Run with: node --test tests/unit/transport-pkce.test.js
+// ── Unit tests for js/sync/transport.js ─────────────────────────────────────
+// Run with: node --test tests/unit/transport.test.js
+//
+// Currently exercises the PKCE primitives + `/token` endpoint helpers.
+// Drive REST helpers (findSyncFileId / downloadSyncFile / uploadSyncFile /
+// deleteSyncFile) are not yet covered; future cases will land here under
+// additional `// ── <영역> ──` sections (per ADR-013 2026-05-09 naming
+// convention: one test file per source module).
 //
 // Loads transport.js into a vm context with location/sessionStorage/fetch
 // stubs and Node's real Web Crypto. The RFC 7636 §4.2 verifier→challenge

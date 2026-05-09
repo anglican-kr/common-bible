@@ -446,7 +446,7 @@ document.addEventListener("visibilitychange", () => {
 })();
 
 // Search history helpers were extracted to js/app/storage.js
-// (ADR-018 Phase 2). The BEGIN/END markers + tests/unit/search-history.test.js
+// (ADR-018 Phase 2). The BEGIN/END markers + tests/unit/storage.test.js
 // follow the new location.
 
 // `loadStartupBehavior`, `saveStartupBehavior`, `loadFontSize`, `saveFontSize`

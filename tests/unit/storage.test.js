@@ -1,11 +1,16 @@
-// ── search history helpers unit tests ───────────────────────────────────────
-// Run with: node --test tests/unit/search-history.test.js
+// ── Unit tests for js/app/storage.js ────────────────────────────────────────
+// Run with: node --test tests/unit/storage.test.js
 //
-// The helpers live inline in js/app.js between BEGIN/END markers because the
-// surrounding code is heavily DOM-bound. We extract just the marked block and
-// evaluate it in a vm context with a stubbed localStorage. Returned arrays
-// are rehydrated through JSON so deepStrictEqual doesn't trip over cross-
-// realm Array prototypes.
+// Currently exercises the search-history helpers only (BEGIN/END markers in
+// js/app/storage.js). Other storage.js helpers — settings load/save, reading
+// position, bookmarks — are not yet covered; future tests will land in this
+// same file under additional `// ── <영역> ──` sections (per ADR-013
+// 2026-05-09 naming convention: one test file per source module).
+//
+// Slice loader: extracts just the marked block and evaluates it in a vm
+// context with a stubbed localStorage. Returned arrays are rehydrated
+// through JSON so deepStrictEqual doesn't trip over cross-realm Array
+// prototypes.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";

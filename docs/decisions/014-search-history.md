@@ -130,7 +130,7 @@ Apple HIG는 44 × 44 pt, Material은 48 × 48 dp, WCAG 2.5.5 AAA는 44 × 44 CS
 | `js/app.js` | 헬퍼 5개(`normalizeSearchQuery`/`load`/`push`/`remove`/`clearSearchHistory`), 컨트롤러 팩토리 1개, Enter/입력/클리어 핸들러 갱신, `commitTopSearch`/`commitSheetSearch` 진입점 분리 |
 | `index.html` | 두 입력창에 ▾ 토글 + listbox 패널 마크업, 입력창 ARIA 속성 갱신 |
 | `css/style.css` | 입력창 `min-height ≥ 44px`, 보조 버튼 `44×44`, 히스토리 패널 스타일, `:has()` 시트 확장 룰 |
-| `tests/unit/search-history.test.js` | 정규화·LRU·dedupe·한도·영구 저장 회귀 (vm 슬라이스 하네스) |
+| `tests/unit/storage.test.js` | 정규화·LRU·dedupe·한도·영구 저장 회귀 (vm 슬라이스 하네스). 본 ADR 시점엔 `search-history.test.js` 이름이었으나 ADR-013 2026-05-09 명명 컨벤션으로 `storage.test.js`로 통합 |
 | `docs/design/search-history.md` | 살아있는 설계 문서 (별도) |
 
 ## 참고
