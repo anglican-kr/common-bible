@@ -47,7 +47,7 @@ js/
     install.js          ← PWA 설치 감지 + 안내 모달 + nudge (Phase 4)
     search.js           ← 검색 워커 wire-up + 결과 렌더 + 이력 패널 + sheet (Phase 5)
     reading-context.js  ← 현재 읽고 있는 책/장 + 절 선택 모드 공유 상태 (Phase 6a)
-    bookmark.js         ← 북마크 헬퍼 — verse spec + 트리 query + 드래그 (Phase 6a, UI는 6b 예정)
+    bookmark.js         ← 북마크 모듈 — verse spec / 트리 query / 드래그&드롭 / 드로어 / 트리 렌더 / 모달 / 셀렉션 모드 (Phase 6a + 6b)
   sync/
     state-machine.js    ← 동기화 상태 머신 (PKCE 단일 경로, Phase 2h)
     transport.js        ← PKCE primitives + Drive REST + nginx /oauth/token 호출 (ADR-011·017)

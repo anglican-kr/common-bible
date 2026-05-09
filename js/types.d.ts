@@ -704,6 +704,12 @@ declare global {
     appBookmark: AppBookmark;
     readingContext: ReadingContext;
 
+    // Phase 6b: bookmark UI module reads books metadata via this getter
+    // since `booksCache` lives in app.js (Phase 7 owner) but bookmark
+    // tree rendering needs short_name_ko labels. Migrates out alongside
+    // `loadBooks` in Phase 7. Always set by app.js at module-load time.
+    getBooksCache: () => BooksData | null;
+
     // App version label (loaded from /version.json by app.js loadVersion()).
     // Settings popover reads this for the version footer; will move to a
     // dedicated module owner alongside data-fetching in Phase 7.
@@ -783,6 +789,18 @@ declare global {
   function _setupDragHandle(li: HTMLElement, row: HTMLElement): void;
   function resetSwipedRow(): void;
   function closeSwipedRowIfOutside(target: EventTarget | null): void;
+  // Phase 6b — bookmark UI surface. Module-load assigns these to globalThis
+  // so app.js's Phase 7 territory (Views / Routing / chapter rendering /
+  // initBookmarkSheetDrag) can call them as bare globals.
+  function buildBackBtn(ariaLabel: string, fallback: string): HTMLButtonElement;
+  function buildBookmarkHeaderBtn(bookId: string | null, chapter: number | null): HTMLButtonElement;
+  function openBookmarkDrawer(bookId: string | null, chapter: number | null): void;
+  function closeBookmarkDrawer(): void;
+  function renderBookmarkTree(): void;
+  function enterVerseSelectMode(bookId: string, chapter: number): void;
+  function exitVerseSelectMode(): void;
+  function updateVerseSelectionBoundaries(article: Element | null): void;
+  function updateVerseSelectBar(): void;
   function openSearchSheet(query?: string): void;
   function closeSearchSheet(): void;
   function renderSearchResults(query: string, page: number, autoNavigate?: boolean): Promise<void>;
