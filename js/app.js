@@ -59,10 +59,15 @@ const $searchSheetClose = _$("search-sheet-close");
 const $searchSheetChips = _$("search-sheet-chips");
 const $searchSheetResults = _$("search-sheet-results");
 
+/** @type {BooksData | null} */
 let booksCache = null;
+/** @type {string | null} */
 let appVersion = null;
+/** @type {HTMLAudioElement | null} */
 let currentAudio = null;
+/** @type {AbortController | null} */
 let _audioController = null;
+/** @type {ReturnType<typeof setTimeout> | null} */
 let _audioSaveTimer = null;
 
 // ── Accessibility ──
@@ -148,23 +153,36 @@ const COLOR_SCHEMES = [
 ];
 const DEFAULT_FONT_SIZE = 18;
 
+/** @type {(() => void) | null} */
 let _scrollTrackCleanup = null;
 let _isInitialLoad = true;
 
 // ── Bookmark state ──
 let _verseSelectMode = false;
+/** @type {Set<string>} */
 let _selectedVerseRefs = new Set();
+/** @type {(VerseSelectDrag & { snapshot?: Set<string> }) | null} */
 let _verseSelectDrag = null; // { startIdx, allVerses, isAdding, moved }
+/** @type {string | null} */
 let _currentBookId = null;
+/** @type {number | null} */
 let _currentChapter = null;
+/** @type {(() => void) | null} */
 let _bookmarkDrawerTrap = null;
+/** @type {HTMLElement | null} */
 let _bookmarkDrawerLastFocus = null;
+/** @type {(() => void) | null} */
 let _bmSaveModalTrap = null;
+/** @type {(() => void) | null} */
 let _bmMergeModalTrap = null;
+/** @type {(() => void) | null} */
 let _bmNewFolderTrap = null;
+/** @type {((id: string) => void) | null} */
 let _bmNewFolderCallback = null;
 let _bookmarkDrawerCloseSeq = 0;
+/** @type {ReturnType<typeof setTimeout> | null} */
 let _bookmarkDrawerCloseTimer = null;
+/** @type {DragState | null} */
 let _dragState = null; // { id, ghost, origLi, startY, origTop }
 
 /**
@@ -1811,8 +1829,9 @@ async function loadBooks() {
     if (!res.ok) throw new Error("Failed to load books.json");
     return res.json();
   });
-  booksCache = await promise;
-  return booksCache;
+  const data = await promise;
+  booksCache = data;
+  return data;
 }
 
 /** @returns {Promise<string>} */
@@ -1825,7 +1844,7 @@ async function loadVersion() {
   } catch {
     appVersion = "";
   }
-  return appVersion;
+  return appVersion ?? "";
 }
 
 /**
@@ -2490,8 +2509,8 @@ function renderChapter(data, book, opts) {
       const vref = vs.getAttribute("data-vref");
       if (vref) {
         _selectedVerseRefs.add(vref);
-        article.querySelectorAll(".verse[data-vref]").forEach(v => {
-          v.classList.toggle("verse-selected", _selectedVerseRefs.has(v.getAttribute("data-vref")));
+        article.querySelectorAll(".verse[data-vref]").forEach((v) => {
+          v.classList.toggle("verse-selected", _selectedVerseRefs.has(v.getAttribute("data-vref") ?? ""));
         });
         updateVerseSelectionBoundaries(article);
         updateVerseSelectBar();
@@ -2512,7 +2531,7 @@ function renderChapter(data, book, opts) {
   article.addEventListener("pointermove", (e) => {
     if (_verseSelectDrag) {
       const target = document.elementFromPoint(e.clientX, e.clientY);
-      const vs = target && target.closest(".verse[data-vref]");
+      const vs = /** @type {HTMLElement | null} */ (target && target.closest(".verse[data-vref]"));
       if (!vs) return;
       const { startIdx, allVerses, isAdding, snapshot } = _verseSelectDrag;
       const currentIdx = allVerses.indexOf(vs);
@@ -2522,7 +2541,7 @@ function renderChapter(data, book, opts) {
       const [lo, hi] = startIdx <= currentIdx ? [startIdx, currentIdx] : [currentIdx, startIdx];
       _selectedVerseRefs = new Set(snapshot);
       allVerses.forEach((v, i) => {
-        const vref = v.getAttribute("data-vref");
+        const vref = v.getAttribute("data-vref") ?? "";
         if (i >= lo && i <= hi) {
           if (isAdding) _selectedVerseRefs.add(vref);
           else _selectedVerseRefs.delete(vref);
@@ -2542,11 +2561,11 @@ function renderChapter(data, book, opts) {
         // Simple tap: toggle start verse
         const vs = _verseSelectDrag.allVerses[_verseSelectDrag.startIdx];
         if (vs) {
-          const vref = vs.getAttribute("data-vref");
+          const vref = vs.getAttribute("data-vref") ?? "";
           if (_verseSelectDrag.isAdding) _selectedVerseRefs.add(vref);
           else _selectedVerseRefs.delete(vref);
-          _verseSelectDrag.allVerses.forEach(v => {
-            v.classList.toggle("verse-selected", _selectedVerseRefs.has(v.getAttribute("data-vref")));
+          _verseSelectDrag.allVerses.forEach((v) => {
+            v.classList.toggle("verse-selected", _selectedVerseRefs.has(v.getAttribute("data-vref") ?? ""));
           });
           updateVerseSelectionBoundaries(article);
           updateVerseSelectBar();
@@ -3071,7 +3090,7 @@ function observeFabLift() {
 
 function _teardownAudio() {
   if (_audioController) { _audioController.abort(); _audioController = null; }
-  clearTimeout(_audioSaveTimer); _audioSaveTimer = null;
+  if (_audioSaveTimer !== null) { clearTimeout(_audioSaveTimer); _audioSaveTimer = null; }
   if (currentAudio) { currentAudio.pause(); currentAudio = null; }
 }
 
@@ -3200,7 +3219,7 @@ function showAudioPlayer(bookId, chapter) {
     }
     updateProgressFill();
     timeDisplay.textContent = `${formatTime(audio.currentTime)} / ${formatTime(audio.duration)}`;
-    clearTimeout(_audioSaveTimer);
+    if (_audioSaveTimer !== null) clearTimeout(_audioSaveTimer);
     _audioSaveTimer = setTimeout(() => {
       if (audio.currentTime > 0 && !audio.ended) saveAudioTime(bookId, chapter, Math.floor(audio.currentTime));
     }, 1000);
@@ -4688,7 +4707,7 @@ const $bookmarkDrawerClose = _$("bookmark-drawer-close");
 const $bookmarkDrawerBody = _$("bookmark-drawer-body");
 const $bmSaveChapterBtn = /** @type {HTMLButtonElement} */ (_$("bm-save-chapter-btn"));
 const $bmSelectVersesBtn = /** @type {HTMLButtonElement} */ (_$("bm-select-verses-btn"));
-const $bmAddFolderBtn = _$("bm-add-folder-btn");
+const $bmAddFolderBtn = /** @type {HTMLButtonElement} */ (_$("bm-add-folder-btn"));
 const $bmOverflowBtn = _$("bm-overflow-btn");
 const $bmOverflowPanel = _$("bm-overflow-panel");
 const $bmExportBtn = _$("bm-export-btn");
@@ -4756,7 +4775,7 @@ const $bmMergeNo = _$("bm-merge-no");
 const $bmMergeCancel = _$("bm-merge-cancel");
 const $verseSelectBar = _$("verse-select-bar");
 const $verseSelectCount = _$("verse-select-count");
-const $verseSelectBookmarkBtn = _$("verse-select-bookmark-btn");
+const $verseSelectBookmarkBtn = /** @type {HTMLButtonElement} */ (_$("verse-select-bookmark-btn"));
 const $verseSelectCancelBtn = _$("verse-select-cancel-btn");
 
 // Build the chevron-left back button for page title headers
@@ -4821,7 +4840,7 @@ function openBookmarkDrawer(bookId, chapter) {
     _bookmarkDrawerCloseTimer = null;
   }
   $bookmarkDrawer.classList.remove("drawer-closing");
-  _bookmarkDrawerLastFocus = document.activeElement;
+  _bookmarkDrawerLastFocus = /** @type {HTMLElement | null} */ (document.activeElement);
   $bookmarkScrim.hidden = false;
   $bookmarkDrawer.hidden = false;
   // Update toolbar visibility based on whether we're in a chapter
@@ -5873,7 +5892,7 @@ $bmSelectVersesBtn.addEventListener("click", () => {
 });
 
 $bmAddFolderBtn.addEventListener("click", () => {
-  const toolbar = document.getElementById("bookmark-drawer-toolbar");
+  const toolbar = _$("bookmark-drawer-toolbar");
   if (toolbar.querySelector(".bm-new-folder-form")) return; // already open
   $bmAddFolderBtn.disabled = true;
 
@@ -5932,13 +5951,14 @@ $bmImportBtn.addEventListener("click", () => {
 });
 
 $bmImportInput.addEventListener("change", () => {
-  const file = $bmImportInput.files[0];
+  const file = $bmImportInput.files?.[0];
   if (!file) return;
   const reader = new FileReader();
   reader.onload = (e) => {
     let data;
     try {
-      data = JSON.parse(e.target.result);
+      const result = /** @type {FileReader} */ (e.target).result;
+      data = JSON.parse(typeof result === "string" ? result : "");
     } catch (_) {
       announce("파일을 읽을 수 없습니다. 올바른 JSON 파일인지 확인해 주세요.");
       $bmImportInput.value = "";
