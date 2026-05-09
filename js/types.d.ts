@@ -388,6 +388,13 @@ export interface VerseSelectDrag {
   allVerses: HTMLElement[];
   isAdding: boolean;
   moved: boolean;
+  /**
+   * Snapshot of `readingContext.selectedVerses` taken at pointerdown so that
+   * a subsequent pointerup with no drag movement can revert (deselect what
+   * was tentatively highlighted during the in-flight drag). Optional because
+   * older drag-init paths set this lazily.
+   */
+  snapshot?: Set<string>;
 }
 
 // Active during a bookmark-list reorder drag (module-state `_dragState`).
@@ -569,6 +576,60 @@ export interface AppSettings {
   dismissLaunchScreen: () => void;
 }
 
+// ── Reading context (js/app/reading-context.js) ─────────────────────────────
+// Phase 6a of the app.js modularization (ADR-018 §5.1 Option A). Cross-
+// module transient state for the chapter view.
+
+export interface ReadingContext {
+  bookId: string | null;
+  chapter: number | null;
+  verseSelectMode: boolean;
+  selectedVerses: Set<string>;
+  verseSelectDrag: VerseSelectDrag | null;
+}
+
+// ── App bookmark facade (js/app/bookmark.js) ────────────────────────────────
+// Phase 6a of the app.js modularization (ADR-018). Verse spec utilities,
+// bookmark store query helpers, drag & drop pointer handling. UI rendering
+// (tree, drawer, modals) joins this module in Phase 6b.
+
+export interface AppBookmark {
+  parseVerseSpec: (spec: string) => Array<{ start: number; end: number; part?: string }>;
+  collapseFullVerseRefs: (refs: string[], article: Element | null | undefined) => string[];
+  selectedVersesToSpec: (refs: string[]) => string;
+  mergeVerseSpecs: (specA: string, specB: string) => string;
+  findExistingChapterBookmarks: (bookId: string, chapter: number) => BookmarkTreeBookmark[];
+  _walkBookmarks: (
+    store: BookmarkTreeNode[],
+    fn: (item: BookmarkTreeNode, parent: BookmarkTreeNode[]) => unknown,
+  ) => boolean;
+  _findItemInStore: (
+    store: BookmarkTreeNode[],
+    id: string,
+  ) => { item: BookmarkTreeNode; parent: BookmarkTreeNode[]; index: number } | null;
+  _findParentFolderId: (
+    store: BookmarkTreeNode[],
+    id: string,
+    parentId?: string | null,
+  ) => string | null | undefined;
+  removeItemById: (store: BookmarkTreeNode[], id: string) => void;
+  insertItem: (
+    store: BookmarkTreeNode[],
+    folderId: string | null | undefined,
+    item: BookmarkTreeNode,
+  ) => void;
+  collectFolderOptions: (
+    store: BookmarkTreeNode[],
+    depth?: number,
+    options?: Array<{ id: string; name: string; depth: number }>,
+  ) => Array<{ id: string; name: string; depth: number }>;
+  moveBookmarkItem: (draggedId: string, targetId: string, position: "before" | "after" | "into") => void;
+  closeSwipedRow: (except: HTMLElement | null) => void;
+  _setupDragHandle: (li: HTMLElement, row: HTMLElement) => void;
+  resetSwipedRow: () => void;
+  closeSwipedRowIfOutside: (target: EventTarget | null) => void;
+}
+
 // ── App search facade (js/app/search.js) ────────────────────────────────────
 // Phase 5 of the app.js modularization (ADR-018). Search worker wire-up,
 // desktop top-bar input, mobile bottom sheet, history panel, drag init.
@@ -640,6 +701,8 @@ declare global {
     appSettings: AppSettings;
     appInstall: AppInstall;
     appSearch: AppSearch;
+    appBookmark: AppBookmark;
+    readingContext: ReadingContext;
 
     // App version label (loaded from /version.json by app.js loadVersion()).
     // Settings popover reads this for the version footer; will move to a
@@ -682,6 +745,44 @@ declare global {
   function announce(msg: string): void;
   function openInstallModal(): void;
   function maybeShowInstallNudge(): void;
+  // Bookmark utility helpers (Phase 6a — js/app/bookmark.js). Module-load
+  // assigns these to globalThis so app.js's Phase 6b territory (UI / tree
+  // / modals / drawer handlers) can call them as bare globals until those
+  // callers move into bookmark.js in Phase 6b.
+  function parseVerseSpec(spec: string): Array<{ start: number; end: number; part?: string }>;
+  function collapseFullVerseRefs(refs: string[], article: Element | null | undefined): string[];
+  function selectedVersesToSpec(refs: string[]): string;
+  function mergeVerseSpecs(specA: string, specB: string): string;
+  function findExistingChapterBookmarks(bookId: string, chapter: number): BookmarkTreeBookmark[];
+  function _walkBookmarks(
+    store: BookmarkTreeNode[],
+    fn: (item: BookmarkTreeNode, parent: BookmarkTreeNode[]) => unknown,
+  ): boolean;
+  function _findItemInStore(
+    store: BookmarkTreeNode[],
+    id: string,
+  ): { item: BookmarkTreeNode; parent: BookmarkTreeNode[]; index: number } | null;
+  function _findParentFolderId(
+    store: BookmarkTreeNode[],
+    id: string,
+    parentId?: string | null,
+  ): string | null | undefined;
+  function removeItemById(store: BookmarkTreeNode[], id: string): void;
+  function insertItem(
+    store: BookmarkTreeNode[],
+    folderId: string | null | undefined,
+    item: BookmarkTreeNode,
+  ): void;
+  function collectFolderOptions(
+    store: BookmarkTreeNode[],
+    depth?: number,
+    options?: Array<{ id: string; name: string; depth: number }>,
+  ): Array<{ id: string; name: string; depth: number }>;
+  function moveBookmarkItem(draggedId: string, targetId: string, position: "before" | "after" | "into"): void;
+  function closeSwipedRow(except: HTMLElement | null): void;
+  function _setupDragHandle(li: HTMLElement, row: HTMLElement): void;
+  function resetSwipedRow(): void;
+  function closeSwipedRowIfOutside(target: EventTarget | null): void;
   function openSearchSheet(query?: string): void;
   function closeSearchSheet(): void;
   function renderSearchResults(query: string, page: number, autoNavigate?: boolean): Promise<void>;
