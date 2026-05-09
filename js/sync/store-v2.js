@@ -395,3 +395,11 @@ window.syncStoreV2 = {
   buildSyncPayload, validateRemote,
   bookmarkTreeFromFlat, applyToLegacyKeys,
 };
+
+// Marker so TypeScript treats this file as an ES module (function/typedef
+// scope = module scope). Required because js/app/storage.js (ADR-018 Phase 2)
+// also defines top-level `saveBookmarks`/`loadBookmarks`, which would
+// otherwise collide at the global script scope. Other sync files reach
+// these functions only through the `window.syncStoreV2` facade above, so
+// no caller change is needed. See ADR-018 §"채택 방식 — module-vs-script 예외".
+export {};

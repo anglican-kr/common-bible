@@ -487,6 +487,75 @@ export interface AppHelpers {
   trapFocus: (container: HTMLElement) => () => void;
 }
 
+// ── App storage facade (js/app/storage.js) ──────────────────────────────────
+// Phase 2 of the app.js modularization (ADR-018). All localStorage-backed
+// load/save helpers. Each save also notifies the sync layer (window.syncStoreV2
+// + window.driveSync) when applicable.
+
+// `INSTALL_NUDGE_KEY` shape — install.js `maybeShowInstallNudge` controls when
+// the Add-to-Home prompt re-appears. Stored as JSON in localStorage.
+export interface InstallNudgeState {
+  visits: number;
+  nextShow: number;
+  neverShow: boolean;
+}
+
+export interface AppStorage {
+  // UI-shared constants (also used by settings popover in Phase 3 and search
+  // history panel controller in Phase 5).
+  readonly FONT_SIZES: ReadonlyArray<number>;
+  readonly DEFAULT_FONT_SIZE: number;
+  readonly COLOR_SCHEMES: ReadonlyArray<ColorSchemeEntry>;
+  readonly SEARCH_HISTORY_MAX: number;
+
+  // Reading position
+  saveReadingPosition: (
+    bookId: string,
+    chapter: number | "prologue",
+    verse?: number | null,
+  ) => void;
+  loadReadingPosition: () => ReadingPosition | null;
+  clearReadingPosition: () => void;
+
+  // Audio time
+  saveAudioTime: (bookId: string, chapter: number, time: number) => void;
+  loadAudioTime: (bookId: string, chapter: number) => number | null;
+  clearAudioTime: () => void;
+
+  // Search history
+  normalizeSearchQuery: (q: unknown) => string;
+  loadSearchHistory: () => SearchHistoryList;
+  saveSearchHistory: (list: SearchHistoryList) => void;
+  pushSearchHistory: (q: string) => SearchHistoryList;
+  removeSearchHistory: (q: string) => SearchHistoryList;
+  clearSearchHistory: () => SearchHistoryList;
+
+  // Settings
+  loadStartupBehavior: () => string;
+  saveStartupBehavior: (val: string) => void;
+  loadFontSize: () => number;
+  saveFontSize: (size: number) => void;
+  loadColorScheme: () => ColorSchemeId;
+  saveColorScheme: (scheme: ColorSchemeId) => void;
+  loadTheme: () => ThemeMode;
+  saveTheme: (theme: string) => void;
+  loadBookOrder: () => BookOrderKind;
+  saveBookOrder: (order: string) => void;
+
+  // Bookmarks
+  generateId: () => string;
+  loadBookmarks: () => BookmarkTreeNode[];
+  saveBookmarks: (store: BookmarkTreeNode[]) => void;
+
+  // Install nudge state
+  _loadNudgeState: () => InstallNudgeState;
+  _saveNudgeState: (state: InstallNudgeState) => void;
+
+  // Persisted-storage one-shot request — also called from audio play (Phase 7
+  // owner). State `_persistAttempted` is encapsulated in the module.
+  _maybeRequestPersist: () => void;
+}
+
 // ── Window augmentation ──────────────────────────────────────────────────────
 
 declare global {
@@ -517,6 +586,7 @@ declare global {
 
     // App-layer module facades (ADR-018, see docs/design/app-modularization.md).
     appHelpers: AppHelpers;
+    appStorage: AppStorage;
 
     // UI side-effects defined in app.js. Optional because state-machine.js
     // guards each call with `typeof ... === "function"`.

@@ -51,18 +51,28 @@ ADR-012 1라운드(PR-1~7, 2026-05-09 머지)에서 `js/app.js`에 JSDoc + null/
 각 모듈은 IIFE로 감싸 한 객체에 export. 1차 적용된 sync 레이어(`window.driveSync`, `window.syncTransport` 등)와 동일.
 
 ```js
-// js/app/storage.js
+// js/app/helpers.js (Phase 1)
 "use strict";
 // @ts-check
-window.appStorage = (() => {
-  /** @returns {ReadingPosition | null} */
-  function loadReadingPosition() { /* ... */ }
+window.appHelpers = (() => {
+  function _$(id) { /* ... */ }
   // ...
-  return { loadReadingPosition, saveReadingPosition, /* ... */ };
+  return { _$, chUnit, el, clearNode, trapFocus };
 })();
 ```
 
-호출 측은 `window.appStorage.loadReadingPosition()` 또는 IIFE 직후 `const { loadReadingPosition } = window.appStorage;`로 받음.
+호출 측은 `window.appHelpers._$()` 또는 IIFE 직후 `const { _$ } = window.appHelpers;`로 받음.
+
+### module-vs-script 예외 (Phase 2부터)
+
+원칙은 `<script defer>` + 글로벌 `window.X` 패턴(위)이지만, 모듈이 정의하는 `function`/`@typedef` 이름이 다른 1차 적용 파일(특히 `js/sync/store-v2.js`)의 글로벌 정의와 충돌하면 그 모듈만 ES module로 옵트인한다. 옵트인 방법:
+
+1. 파일 끝에 `export {};` 한 줄 추가 (런타임 동작 무변동, TypeScript는 그 파일을 module로 인식 → 함수/typedef가 module scope)
+2. `index.html`에서 그 파일을 `<script type="module" src="..."></script>`로 로드 (`type="module"` 은 자동 deferred + 등장 순서 실행 보장)
+
+Phase 2(`storage.js`) 시점에 `saveBookmarks`/`loadBookmarks` 이름이 `js/sync/store-v2.js`와 글로벌 충돌해 두 파일 모두 옵트인. 다른 sync 파일은 store-v2 함수를 `window.syncStoreV2.X` facade로만 호출하므로 caller 변경 불필요. ADR-001 SPA 단순성은 여전히 유효 (빌드 단계 0, import/export 의무 없음, `window.X` 글로벌 노출 그대로).
+
+향후 단계도 충돌 발생 시 모듈 단위로 같은 옵트인 적용. 모든 모듈을 일괄 ESM 전환하는 광범위 변경은 의도하지 않음.
 
 ### 공유 상태 (Phase 6)
 

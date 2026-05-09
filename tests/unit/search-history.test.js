@@ -15,7 +15,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const APP_PATH = path.resolve(__dirname, "../../js/app.js");
+const APP_PATH = path.resolve(__dirname, "../../js/app/storage.js");
 const APP_SOURCE = fs.readFileSync(APP_PATH, "utf8");
 
 const BEGIN = "// ── BEGIN SEARCH HISTORY HELPERS ──";

@@ -121,7 +121,7 @@ ADR-012 2차 적용의 **2라운드**. 1라운드에서는 `js/app.js`에 JSDoc 
 | **ESM (`<script type="module">`)** | 없음      | 모듈 로드 순서가 import에 의해 결정 | entry script만 | import/export        | 의존 그래프 명확            |
 | `.ts` + tsc 빌드                   | 큼        | —                                   | —              | —                    | ❌ ADR-001 위배             |
 
-### 4.2 권장 — **Multi-script + `defer`**
+### 4.2 채택 — **Multi-script + `defer`** (모듈별 ESM 옵트인 예외)
 
 이유:
 
@@ -378,3 +378,5 @@ CLAUDE.md `tests/e2e/` 절차를 따라 사용자 수동 실행:
 | ---------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 2026-05-09 | 설계 초안 작성 | Explore agent로 41 섹션 cross-reference 매트릭스 + 모듈 상태 공유 분석 + 자연 분할 후보 도출. 본 문서 §1-§9 작성                                                                                                                                                                                                                       |
 | 2026-05-09 | 결정 확정      | 사용자 review 완료 (Phase 6 Option A 명시 + ADR-018 작성 명시 + 즉시 시작 + 데이터는 앱의 서브모듈로 future split 예정). 미언급 항목은 권장 채택. §9 결정 사항으로 갱신, §10 성능 부수 효과 + §11 미래 저장소 분할 컨텍스트 추가, §12 진행 일지로 번호 이동. ADR-018(`docs/decisions/018-app-modularization.md`) 신설 |
+| 2026-05-09 | Phase 1 머지 (#88) | `js/app/helpers.js` 추출 (5개 헬퍼: `_$`, `chUnit`, `el`, `clearNode`, `trapFocus`). IIFE + `window.appHelpers`. types.d.ts에 `AppHelpers` 인터페이스. app.js 6,082 → 6,053줄 |
+| 2026-05-09 | Phase 2 작성 완료 | `js/app/storage.js` 추출 (28개 함수 + 3개 상수: `FONT_SIZES`, `DEFAULT_FONT_SIZE`, `COLOR_SCHEMES`, `SEARCH_HISTORY_MAX`). Reading position / Audio time / Search history / Settings / Bookmarks / Install nudge / `_maybeRequestPersist` 통합. `js/sync/store-v2.js`의 `saveBookmarks`/`loadBookmarks`와 글로벌 함수 이름 충돌 → storage.js + store-v2.js 둘 다 ES module 옵트인 (`export {};` + `<script type="module">`). 다른 sync 파일은 `window.syncStoreV2` facade만 사용해 caller 변경 0. `tests/unit/search-history.test.js` `APP_PATH` 갱신. app.js 6,053 → 5,835줄 (-218). main + worker tsc 0 error, 유닛 111건 통과 |

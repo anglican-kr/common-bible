@@ -15,11 +15,12 @@
 /** @typedef {import("./types").BibleChapter} BibleChapter */
 /** @typedef {import("./types").BiblePrologue} BiblePrologue */
 /** @typedef {import("./types").BibleVerse} BibleVerse */
-// `BookmarkTreeNode` is already declared as a file-global typedef in
-// js/sync/store-v2.js (type aliases don't merge, so re-typedef'ing here
-// would trip TS2300). We reuse that global alias directly. The sub-types
-// `BookmarkTreeBookmark` / `BookmarkTreeFolder` are app.js-only — store-v2
-// only needs the union form.
+// `BookmarkTreeNode` was previously deferred to the global typedef declared
+// in js/sync/store-v2.js, but ADR-018 Phase 2 opted store-v2.js into an ES
+// module (so its `saveBookmarks`/`loadBookmarks` no longer collide with
+// js/app/storage.js). That moved the alias into module scope, so app.js now
+// declares its own typedef.
+/** @typedef {import("./types").BookmarkTreeNode} BookmarkTreeNode */
 /** @typedef {import("./types").BookmarkTreeBookmark} BookmarkTreeBookmark */
 /** @typedef {import("./types").BookmarkTreeFolder} BookmarkTreeFolder */
 
@@ -29,6 +30,24 @@ const DATA_DIR = "/data";
 // load order in index.html guarantees window.appHelpers is populated by
 // the time this script runs.
 const { _$, chUnit, el, clearNode, trapFocus } = window.appHelpers;
+
+// localStorage helpers + UI-shared constants live in js/app/storage.js
+// (ADR-018 Phase 2). All save fns also notify window.syncStoreV2 + driveSync.
+const {
+  FONT_SIZES, DEFAULT_FONT_SIZE, COLOR_SCHEMES, SEARCH_HISTORY_MAX,
+  saveReadingPosition, loadReadingPosition, clearReadingPosition,
+  saveAudioTime, loadAudioTime, clearAudioTime,
+  normalizeSearchQuery, loadSearchHistory, saveSearchHistory,
+  pushSearchHistory, removeSearchHistory, clearSearchHistory,
+  loadStartupBehavior, saveStartupBehavior,
+  loadFontSize, saveFontSize,
+  loadColorScheme, saveColorScheme,
+  loadTheme, saveTheme,
+  loadBookOrder, saveBookOrder,
+  generateId, loadBookmarks, saveBookmarks,
+  _loadNudgeState, _saveNudgeState,
+  _maybeRequestPersist,
+} = window.appStorage;
 
 const $app = _$("app");
 const $title = _$("page-title");
@@ -97,29 +116,11 @@ document.addEventListener("keydown", (e) => {
 });
 
 // ── Reading position persistence ──
-
-const STORAGE_KEY = "bible-last-read";
-const FONT_SIZE_KEY = "bible-font-size";
-const THEME_KEY = "bible-theme";
-const BOOK_ORDER_KEY = "bible-book-order";
-const COLOR_SCHEME_KEY = "bible-color-scheme";
-const STARTUP_BEHAVIOR_KEY = "bible-startup"; // "resume" | "home"
-const AUDIO_POS_KEY = "bible-audio-pos";
-const BOOKMARK_KEY = "bible-bookmarks";
-const INSTALL_NUDGE_KEY = "bible-install-nudge";
-const SEARCH_HISTORY_KEY = "bible-search-history";
-const SEARCH_HISTORY_MAX = 30;       // storage cap (LRU)
-const SEARCH_HISTORY_VISIBLE = 10;   // visible by default; rest behind "더 보기"
-const FONT_SIZES = [16, 18, 20, 22, 24];
-
-/** @type {ReadonlyArray<ColorSchemeEntry>} */
-const COLOR_SCHEMES = [
-  { id: "navy",       name: "네이비",   swatch: "#1e3a5f", iconBg: "#1a1a2e" },
-  { id: "terracotta", name: "버건디",   swatch: "#6b3a2a", iconBg: "#6b3a2a" },
-  { id: "green",      name: "초록",     swatch: "#1a6b50", iconBg: "#1a6b50" },
-  { id: "purple",     name: "보라",     swatch: "#5a2d82", iconBg: "#5a2d82" },
-];
-const DEFAULT_FONT_SIZE = 18;
+// Storage key constants + load/save helpers were extracted to
+// js/app/storage.js (ADR-018 Phase 2). `SEARCH_HISTORY_VISIBLE` is the only
+// search-history constant that stays here — it is consumed only by the
+// search history panel controller (Phase 5 owner).
+const SEARCH_HISTORY_VISIBLE = 10; // visible by default; rest behind "더 보기"
 
 /** @type {(() => void) | null} */
 let _scrollTrackCleanup = null;
@@ -153,22 +154,7 @@ let _bookmarkDrawerCloseTimer = null;
 /** @type {DragState | null} */
 let _dragState = null; // { id, ghost, origLi, startY, origTop }
 
-/**
- * @param {string} bookId
- * @param {number | "prologue"} chapter
- * @param {number | null} [verse]
- */
-function saveReadingPosition(bookId, chapter, verse = null) {
-  try {
-    const val = { bookId, chapter, verse };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(val));
-    // Local form (verse: number|null) intentionally diverges from the synced
-    // LastReadValue (verseSpec?: string). Excess properties on a variable
-    // are not checked at the call site, so this is safe.
-    window.syncStoreV2?.saveLastRead(/** @type {import("./types").LastReadValue} */ (val));
-    if (window.driveSync) window.driveSync.scheduleUpload();
-  } catch (_) {}
-}
+// `saveReadingPosition` was extracted to js/app/storage.js (ADR-018 Phase 2).
 
 /**
  * @param {string} bookId
@@ -205,48 +191,8 @@ function startScrollTracking(bookId, chapter) {
   };
 }
 
-/** @returns {ReadingPosition | null} */
-function loadReadingPosition() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    // Shape relies on saveReadingPosition writers; not validated at runtime.
-    return /** @type {ReadingPosition} */ (JSON.parse(raw));
-  } catch (_) {
-    return null;
-  }
-}
-
-/**
- * @param {string} bookId
- * @param {number} chapter
- * @param {number} time
- */
-function saveAudioTime(bookId, chapter, time) {
-  try {
-    localStorage.setItem(AUDIO_POS_KEY, JSON.stringify({ bookId, chapter, time }));
-  } catch (_) {}
-}
-
-/**
- * @param {string} bookId
- * @param {number} chapter
- * @returns {number | null}
- */
-function loadAudioTime(bookId, chapter) {
-  try {
-    const raw = localStorage.getItem(AUDIO_POS_KEY);
-    if (!raw) return null;
-    /** @type {AudioPosition} */
-    const pos = JSON.parse(raw);
-    if (pos && pos.bookId === bookId && pos.chapter === chapter && pos.time > 0) return pos.time;
-  } catch (_) {}
-  return null;
-}
-
-function clearAudioTime() {
-  try { localStorage.removeItem(AUDIO_POS_KEY); } catch (_) {}
-}
+// `loadReadingPosition`, `saveAudioTime`, `loadAudioTime`, `clearAudioTime`
+// were extracted to js/app/storage.js (ADR-018 Phase 2).
 
 // ── Audio cache LRU helpers (ADR-016) ──
 // One-shot persisted-storage request: called on the first value moment
@@ -255,17 +201,7 @@ function clearAudioTime() {
 // site has high engagement. We swallow result errors — even if denied, the
 // LRU loop in audio-cache.js still functions, just without iOS 7-day evict
 // immunity.
-let _persistAttempted = false;
-function _maybeRequestPersist() {
-  if (_persistAttempted) return;
-  _persistAttempted = true;
-  if (!navigator.storage?.persist) return;
-  navigator.storage.persist()
-    .then((granted) => {
-      window.syncDebugLog?.log({ kind: "ACTION", event: "storage-persist", granted });
-    })
-    .catch(() => {});
-}
+// `_maybeRequestPersist` was extracted to js/app/storage.js (ADR-018 Phase 2).
 
 // Soft-cap eviction. Page-driven (SW only enforces hard cap on put). Called
 // on visibilitychange→hidden so the work runs while the user is not actively
@@ -480,91 +416,14 @@ document.addEventListener("visibilitychange", () => {
   }, { passive: true });
 })();
 
-// ── BEGIN SEARCH HISTORY HELPERS ──
-// Local-only (not Drive-synced — see ADR-014). Whitespace-normalized strings,
-// LRU-deduped, capped at SEARCH_HISTORY_MAX. The block between the BEGIN/END
-// markers is sliced into tests/unit/search-history.test.js, so changes to the
-// LRU/normalization semantics need a corresponding test update.
+// Search history helpers were extracted to js/app/storage.js
+// (ADR-018 Phase 2). The BEGIN/END markers + tests/unit/search-history.test.js
+// follow the new location.
 
-/** @param {unknown} q @returns {string} */
-function normalizeSearchQuery(q) {
-  return String(q || "").trim().replace(/\s+/g, " ");
-}
-
-/** @returns {SearchHistoryList} */
-function loadSearchHistory() {
-  try {
-    const rawStr = localStorage.getItem(SEARCH_HISTORY_KEY);
-    if (!rawStr) return [];
-    const raw = JSON.parse(rawStr);
-    if (!Array.isArray(raw)) return [];
-    return raw.filter((s) => typeof s === "string" && s.length > 0).slice(0, SEARCH_HISTORY_MAX);
-  } catch (_) {
-    return [];
-  }
-}
-
-/** @param {SearchHistoryList} list */
-function saveSearchHistory(list) {
-  try {
-    localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(list.slice(0, SEARCH_HISTORY_MAX)));
-  } catch (_) {}
-}
-
-/** @param {string} q @returns {SearchHistoryList} */
-function pushSearchHistory(q) {
-  const norm = normalizeSearchQuery(q);
-  if (!norm) return loadSearchHistory();
-  const list = loadSearchHistory().filter((s) => s !== norm);
-  list.unshift(norm);
-  const trimmed = list.slice(0, SEARCH_HISTORY_MAX);
-  saveSearchHistory(trimmed);
-  return trimmed;
-}
-
-/** @param {string} q @returns {SearchHistoryList} */
-function removeSearchHistory(q) {
-  const norm = normalizeSearchQuery(q);
-  const list = loadSearchHistory().filter((s) => s !== norm);
-  saveSearchHistory(list);
-  return list;
-}
-
-/** @returns {SearchHistoryList} */
-function clearSearchHistory() {
-  try { localStorage.removeItem(SEARCH_HISTORY_KEY); } catch (_) {}
-  return [];
-}
-// ── END SEARCH HISTORY HELPERS ──
-
-/** @returns {string} */
-function loadStartupBehavior() {
-  return localStorage.getItem(STARTUP_BEHAVIOR_KEY) || "resume";
-}
-
-/** @param {string} val */
-function saveStartupBehavior(val) {
-  localStorage.setItem(STARTUP_BEHAVIOR_KEY, val);
-  window.syncStoreV2?.saveSetting("startupBehavior", val);
-  if (window.driveSync) window.driveSync.scheduleUpload();
-}
+// `loadStartupBehavior`, `saveStartupBehavior`, `loadFontSize`, `saveFontSize`
+// were extracted to js/app/storage.js (ADR-018 Phase 2).
 
 // ── Font size ──
-
-/** @returns {number} */
-function loadFontSize() {
-  try {
-    const v = parseInt(localStorage.getItem(FONT_SIZE_KEY) ?? "", 10);
-    return FONT_SIZES.includes(v) ? v : DEFAULT_FONT_SIZE;
-  } catch (_) {
-    return DEFAULT_FONT_SIZE;
-  }
-}
-
-/** @param {number} size */
-function saveFontSize(size) {
-  try { localStorage.setItem(FONT_SIZE_KEY, String(size)); window.syncStoreV2?.saveSetting("fontSize", size); if (window.driveSync) window.driveSync.scheduleUpload(); } catch (_) {}
-}
 
 /** @param {number | string} size */
 function applyFontSize(size) {
@@ -1051,21 +910,7 @@ function updateAppIcons(scheme) {
 }
 
 // ── Color scheme ──
-
-/** @returns {ColorSchemeId} */
-function loadColorScheme() {
-  try {
-    const v = localStorage.getItem(COLOR_SCHEME_KEY);
-    const found = COLOR_SCHEMES.find((s) => s.id === v);
-    if (found) return found.id;
-  } catch (_) {}
-  return "navy";
-}
-
-/** @param {ColorSchemeId} scheme */
-function saveColorScheme(scheme) {
-  try { localStorage.setItem(COLOR_SCHEME_KEY, scheme); window.syncStoreV2?.saveSetting("colorScheme", scheme); if (window.driveSync) window.driveSync.scheduleUpload(); } catch (_) {}
-}
+// `loadColorScheme`/`saveColorScheme` were extracted to js/app/storage.js.
 
 // Default favicon/apple-touch-icon URLs as shipped in index.html.
 // Captured once so we can restore them when reverting to the navy scheme
@@ -1100,20 +945,7 @@ function applyColorScheme(schemeName) {
 }
 
 // ── Theme ──
-
-/** @returns {ThemeMode} */
-function loadTheme() {
-  try {
-    const saved = localStorage.getItem(THEME_KEY);
-    if (saved === "dark" || saved === "light" || saved === "system") return saved;
-  } catch (_) {}
-  return "system";
-}
-
-/** @param {string} theme */
-function saveTheme(theme) {
-  try { localStorage.setItem(THEME_KEY, theme); window.syncStoreV2?.saveSetting("theme", theme); if (window.driveSync) window.driveSync.scheduleUpload(); } catch (_) {}
-}
+// `loadTheme`/`saveTheme` were extracted to js/app/storage.js.
 
 /** @type {((e: MediaQueryListEvent) => void) | null} */
 let _systemThemeListener = null;
@@ -1146,20 +978,7 @@ function applyTheme(theme) {
 }
 
 // ── Book order ──
-
-/** @returns {BookOrderKind} */
-function loadBookOrder() {
-  try {
-    const v = localStorage.getItem(BOOK_ORDER_KEY);
-    if (v === "canonical" || v === "vulgate") return v;
-  } catch (_) {}
-  return "canonical";
-}
-
-/** @param {string} order */
-function saveBookOrder(order) {
-  try { localStorage.setItem(BOOK_ORDER_KEY, order); window.syncStoreV2?.saveSetting("bookOrder", order); if (window.driveSync) window.driveSync.scheduleUpload(); } catch (_) {}
-}
+// `loadBookOrder`/`saveBookOrder` were extracted to js/app/storage.js.
 
 // Apply saved settings on load
 window.syncStoreV2?.migrateLegacyIfNeeded();
@@ -1218,32 +1037,9 @@ function dismissLaunchScreen() {
 // js/app/helpers.js (ADR-018 Phase 1). Imported via destructure at module head.
 
 // ── Bookmark storage helpers ──
-
-/** @returns {string} */
-function generateId() {
-  return Date.now().toString(36) + Math.random().toString(36).slice(2);
-}
-
-/**
- * @returns {import("./types").BookmarkTreeNode[]}
- */
-function loadBookmarks() {
-  if (window.syncStoreV2) return window.syncStoreV2.loadBookmarks();
-  try {
-    const raw = localStorage.getItem(BOOKMARK_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch (_) { return []; }
-}
-
-/** @param {import("./types").BookmarkTreeNode[]} store */
-function saveBookmarks(store) {
-  try {
-    localStorage.setItem(BOOKMARK_KEY, JSON.stringify(store));
-    window.syncStoreV2?.saveBookmarks(store);
-    if (window.driveSync) window.driveSync.scheduleUpload();
-    _maybeRequestPersist();
-  } catch (_) {}
-}
+// `generateId`, `loadBookmarks`, `saveBookmarks` were extracted to
+// js/app/storage.js (ADR-018 Phase 2). saveBookmarks calls
+// _maybeRequestPersist internally now.
 
 // ── Verse spec utilities ──
 
@@ -2072,11 +1868,7 @@ function renderBookList(books) {
   }
 }
 
-function clearReadingPosition() {
-  try {
-    localStorage.removeItem(STORAGE_KEY);
-  } catch (_) {}
-}
+// `clearReadingPosition` was extracted to js/app/storage.js (ADR-018 Phase 2).
 
 function renderResumeBanner(books) {
   const pos = loadReadingPosition();
@@ -4599,18 +4391,9 @@ document.addEventListener("keydown", (e) => {
 });
 
 // ── Install nudge (auto-show) ──
-
-function _loadNudgeState() {
-  try {
-    const raw = localStorage.getItem(INSTALL_NUDGE_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch (_) {}
-  return { visits: 0, nextShow: 1, neverShow: false };
-}
-
-function _saveNudgeState(state) {
-  try { localStorage.setItem(INSTALL_NUDGE_KEY, JSON.stringify(state)); } catch (_) {}
-}
+// `_loadNudgeState`/`_saveNudgeState` were extracted to js/app/storage.js
+// (ADR-018 Phase 2). `maybeShowInstallNudge` will move to js/app/install.js
+// in Phase 4.
 
 function maybeShowInstallNudge() {
   const platform = install.detectPlatform();
