@@ -35,6 +35,7 @@ ADR-012의 1차 적용 범위(`js/sync/*`, `js/drive-sync.js`, `js/search-worker
 ### 2.1 ADR-012 1차 적용 현황 (Phase 2h 종료 시점)
 
 `// @ts-check` + JSDoc 적용 완료:
+
 - `js/sync/state-machine.js`, `transport.js`, `store-v2.js`, `debug-log.js`, `refresh-store.js`
 - `js/drive-sync.js`
 - `js/search-worker.js` (`tsconfig.worker.json`, `lib: WebWorker`)
@@ -43,49 +44,49 @@ ADR-012의 1차 적용 범위(`js/sync/*`, `js/drive-sync.js`, `js/search-worker
 
 ### 2.2 app.js 섹션 지도 (5,854줄, 41개 섹션)
 
-| 라인 | 섹션 | 줄 수 |
-|---|---|---|
-| L1-L34 | 모듈 헤드 (DOM anchor + 모듈 상태) | 34 |
-| L35-L81 | Accessibility | 47 |
-| L82-L108 | Reading position persistence | 27 |
-| L109-L188 | Bookmark state | 80 |
-| L189-L241 | Audio cache LRU helpers (ADR-016) | 53 |
-| L242-L412 | Pull-to-refresh | 171 |
-| L413-L471 | Search history helpers | 59 |
-| L472-L490 | Font size | 19 |
-| L491-L513 | Cache management | 23 |
-| L514-L893 | Settings popover | 380 |
-| L894-L961 | Icon recoloring | 68 |
-| L962-L1006 | Color scheme | 45 |
-| L1007-L1048 | Theme | 42 |
-| L1049-L1070 | Book order | 22 |
-| L1071-L1114 | Launch Screen | 44 |
-| L1115-L1136 | Helpers | 22 |
-| L1137-L1159 | Bookmark storage helpers | 23 |
-| L1160-L1270 | Verse spec utilities | 111 |
-| L1271-L1343 | Bookmark query helpers | 73 |
-| L1344-L1617 | Drag & drop helpers | 274 |
-| L1618-L1654 | Data fetching | 37 |
-| L1655-L1856 | Rendering helpers | 202 |
-| L1857-L2489 | Views | 633 |
-| L2490-L2790 | Routing | 301 |
-| L2791-L3021 | Audio Player | 231 |
-| L3022-L3277 | Search | 256 |
-| L3278-L3340 | Search input handlers | 63 |
-| L3341-L3389 | Search bottom sheet | 49 |
-| L3390-L4006 | Search history panel controller | 617 |
-| L4007-L4026 | Compact Header on Scroll | 20 |
-| L4027-L4116 | PWA install detection | 90 |
-| L4117-L4414 | Install guide modal | 298 |
-| L4415-L4453 | Install nudge auto-show | 39 |
-| L4454-L4655 | Bookmark UI | 202 |
-| L4656-L5171 | Bookmark tree rendering | 516 |
-| L5172-L5359 | Save bookmark modal | 188 |
-| L5360-L5438 | Merge dialog | 79 |
-| L5439-L5555 | Export/Import bookmarks | 117 |
-| L5556-L5607 | Verse selection mode | 52 |
-| L5608-L5754 | Drawer toolbar | 147 |
-| L5755-L5854 | Service Worker registration | 100 |
+| 라인        | 섹션                               | 줄 수 |
+| ----------- | ---------------------------------- | ----- |
+| L1-L34      | 모듈 헤드 (DOM anchor + 모듈 상태) | 34    |
+| L35-L81     | Accessibility                      | 47    |
+| L82-L108    | Reading position persistence       | 27    |
+| L109-L188   | Bookmark state                     | 80    |
+| L189-L241   | Audio cache LRU helpers (ADR-016)  | 53    |
+| L242-L412   | Pull-to-refresh                    | 171   |
+| L413-L471   | Search history helpers             | 59    |
+| L472-L490   | Font size                          | 19    |
+| L491-L513   | Cache management                   | 23    |
+| L514-L893   | Settings popover                   | 380   |
+| L894-L961   | Icon recoloring                    | 68    |
+| L962-L1006  | Color scheme                       | 45    |
+| L1007-L1048 | Theme                              | 42    |
+| L1049-L1070 | Book order                         | 22    |
+| L1071-L1114 | Launch Screen                      | 44    |
+| L1115-L1136 | Helpers                            | 22    |
+| L1137-L1159 | Bookmark storage helpers           | 23    |
+| L1160-L1270 | Verse spec utilities               | 111   |
+| L1271-L1343 | Bookmark query helpers             | 73    |
+| L1344-L1617 | Drag & drop helpers                | 274   |
+| L1618-L1654 | Data fetching                      | 37    |
+| L1655-L1856 | Rendering helpers                  | 202   |
+| L1857-L2489 | Views                              | 633   |
+| L2490-L2790 | Routing                            | 301   |
+| L2791-L3021 | Audio Player                       | 231   |
+| L3022-L3277 | Search                             | 256   |
+| L3278-L3340 | Search input handlers              | 63    |
+| L3341-L3389 | Search bottom sheet                | 49    |
+| L3390-L4006 | Search history panel controller    | 617   |
+| L4007-L4026 | Compact Header on Scroll           | 20    |
+| L4027-L4116 | PWA install detection              | 90    |
+| L4117-L4414 | Install guide modal                | 298   |
+| L4415-L4453 | Install nudge auto-show            | 39    |
+| L4454-L4655 | Bookmark UI                        | 202   |
+| L4656-L5171 | Bookmark tree rendering            | 516   |
+| L5172-L5359 | Save bookmark modal                | 188   |
+| L5360-L5438 | Merge dialog                       | 79    |
+| L5439-L5555 | Export/Import bookmarks            | 117   |
+| L5556-L5607 | Verse selection mode               | 52    |
+| L5608-L5754 | Drawer toolbar                     | 147   |
+| L5755-L5854 | Service Worker registration        | 100   |
 
 ### 2.3 핫스팟 분포
 
@@ -105,15 +106,15 @@ ADR-012의 1차 적용 범위(`js/sync/*`, `js/drive-sync.js`, `js/search-worker
 
 ### 진행 매트릭스
 
-| PR | 영역 | 라인 범위 | 상태 | 머지 PR |
-|---|---|---|---|---|
-| PR-1 | 헤드 + 접근성 + 읽기위치 + 오디오 LRU + PTR + 검색 히스토리 + 폰트 + 캐시 | L1-L513 | 작성 완료 (커밋 대기) | — |
-| PR-2 | 설정 팝오버 + 아이콘 + 컬러 스킴 + 테마 + 책 순서 + 런치 스크린 + 헬퍼 + 북마크 스토리지 | L514-L1159 | 대기 | — |
-| PR-3 | 절 스펙 + 북마크 쿼리 + 드래그앤드롭 + 데이터 페칭 + 렌더링 헬퍼 + Views | L1160-L2489 | 대기 | — |
-| PR-4 | 라우팅 + 오디오 플레이어 | L2490-L3021 | 대기 | — |
-| PR-5 | 검색 + 검색 시트 + 검색 히스토리 패널 | L3022-L4006 | 대기 | — |
-| PR-6 | 컴팩트 헤더 + PWA 감지 + 설치 안내 + 북마크 UI + 트리 렌더링 + 저장/병합 모달 | L4007-L5438 | 대기 | — |
-| PR-7 | 내보내기/가져오기 + 절 선택 + 드로어 + SW 등록 + 최종 통합 (`// @ts-check` 영구화, `tsconfig.app.json` 삭제) | L5439-L5854 | 대기 | — |
+| PR   | 영역                                                                                                         | 라인 범위   | 상태                  | 머지 PR |
+| ---- | ------------------------------------------------------------------------------------------------------------ | ----------- | --------------------- | ------- |
+| PR-1 | 헤드 + 접근성 + 읽기위치 + 오디오 LRU + PTR + 검색 히스토리 + 폰트 + 캐시                                    | L1-L513     | 머지 완료             | [#81](https://github.com/anglican-kr/common-bible/pull/81) |
+| PR-2 | 설정 팝오버 + 아이콘 + 컬러 스킴 + 테마 + 책 순서 + 런치 스크린 + 헬퍼 + 북마크 스토리지                     | L595-L1273 (PR-1 머지 후 라인) | 작성 완료 (커밋 대기) | —       |
+| PR-3 | 절 스펙 + 북마크 쿼리 + 드래그앤드롭 + 데이터 페칭 + 렌더링 헬퍼 + Views                                     | L1160-L2489 | 대기                  | —       |
+| PR-4 | 라우팅 + 오디오 플레이어                                                                                     | L2490-L3021 | 대기                  | —       |
+| PR-5 | 검색 + 검색 시트 + 검색 히스토리 패널                                                                        | L3022-L4006 | 대기                  | —       |
+| PR-6 | 컴팩트 헤더 + PWA 감지 + 설치 안내 + 북마크 UI + 트리 렌더링 + 저장/병합 모달                                | L4007-L5438 | 대기                  | —       |
+| PR-7 | 내보내기/가져오기 + 절 선택 + 드로어 + SW 등록 + 최종 통합 (`// @ts-check` 영구화, `tsconfig.app.json` 삭제) | L5439-L5854 | 대기                  | —       |
 
 ---
 
@@ -126,10 +127,10 @@ ADR-012의 1차 적용 범위(`js/sync/*`, `js/drive-sync.js`, `js/search-worker
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "checkJs": true,
-    "noImplicitAny": false   // PR-7에서 true로 전환 후 파일 자체 삭제
+    "noImplicitAny": false, // PR-7에서 true로 전환 후 파일 자체 삭제
   },
   "include": ["js/app.js", "js/types.d.ts"],
-  "exclude": ["js/search-worker.js"]
+  "exclude": ["js/search-worker.js"],
 }
 ```
 
@@ -212,7 +213,9 @@ CLAUDE.md `tests/e2e/` 절차를 따라 사용자가 수동 실행:
 
 ## 8. 진행 일지
 
-| 일자 | 단계 | 내용 |
-|---|---|---|
-| 2026-05-09 | PR-1 시작 | 본 설계 문서 초안 작성, `feat/app-jsdoc-pr1` 브랜치 분기 |
+| 일자       | 단계           | 내용                                                                                                                                                                                                                                                                                                        |
+| ---------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-05-09 | PR-1 시작      | 본 설계 문서 초안 작성, `feat/app-jsdoc-pr1` 브랜치 분기                                                                                                                                                                                                                                                    |
 | 2026-05-09 | PR-1 작성 완료 | `tsconfig.app.json` 신설, `js/types.d.ts`에 5종(`ReadingPosition`, `AudioPosition`, `SearchHistoryList`, `VerseSelectDrag`, `DragState`) 추가, `js/app.js` L1-L513 JSDoc 보강. baseline 428 → 잔여 282 (PR-1 영역 0). main `tsconfig.json`/`tsconfig.worker.json` 0 error 회귀 없음, 유닛 테스트 111건 통과 |
+| 2026-05-09 | PR-1 머지 (#81) | CI Unit tests + Cursor Bugbot 모두 green, main 통합 |
+| 2026-05-09 | PR-2 작성 완료 | `js/types.d.ts`에 4종(`ColorSchemeId`, `ThemeMode`, `BookOrderKind`, `ColorSchemeEntry`) 추가, `js/app.js` L595-L1273 JSDoc 보강. baseline 282 → 잔여 294. PR-2 영역 0 에러. **`el()` generic narrow의 부작용으로 PR-3+ 영역(L1515-L2686)에 잠재 결함 22건 신규 노출** — 후속 PR에서 흡수 (이전엔 implicit any에 묻혀있던 strictNullChecks 위반). main + worker tsc 0 error, 유닛 111건 통과 |
