@@ -65,6 +65,26 @@ window.appHelpers = (() => {
   }
 
   /**
+   * Toggle background `inert` + `aria-hidden` for elements outside the
+   * currently active modal/drawer. Selectors should match the elements
+   * that need to be excluded from focus and screen reader output.
+   * @param {boolean} on
+   * @param {string} selectors
+   */
+  function setInert(on, selectors) {
+    document.querySelectorAll(selectors).forEach((n) => {
+      const node = /** @type {HTMLElement} */ (n);
+      if (on) {
+        node.inert = true;
+        node.setAttribute("aria-hidden", "true");
+      } else {
+        node.inert = false;
+        node.removeAttribute("aria-hidden");
+      }
+    });
+  }
+
+  /**
    * Focus trap: keeps Tab cycling within a container while it is open.
    * Returns a cleanup function to remove the listener.
    * @param {HTMLElement} container
@@ -92,7 +112,7 @@ window.appHelpers = (() => {
     return () => container.removeEventListener("keydown", handler);
   }
 
-  return { _$, chUnit, el, clearNode, trapFocus };
+  return { _$, chUnit, el, clearNode, setInert, trapFocus };
 })();
 
 // ESM module marker (ADR-019). No runtime effect; signals TypeScript that
