@@ -51,7 +51,7 @@ const $searchFab = _$("search-fab");
 const $searchScrim = _$("search-scrim");
 const $searchSheet = _$("search-sheet");
 const $searchSheetInputWrap = _$("search-sheet-input-wrap");
-const $searchSheetInput = _$("search-sheet-input");
+const $searchSheetInput = /** @type {HTMLInputElement} */ (_$("search-sheet-input"));
 const $searchSheetClear = _$("search-sheet-clear");
 const $searchSheetHistoryToggle = _$("search-sheet-history-toggle");
 const $searchSheetHistoryPanel = _$("search-sheet-history");
@@ -3452,7 +3452,7 @@ async function renderSearchResults(query, page, autoNavigate = false) {
   $app.appendChild(el("div", { className: "loading", "aria-live": "polite" }, "검색 중…"));
 
   // Estimate page size from available viewport height
-  const headerH = document.getElementById("app-header").offsetHeight || 80;
+  const headerH = document.getElementById("app-header")?.offsetHeight || 80;
   const availH = window.innerHeight - headerH - 40;
   const itemH = 80;
   const pageSize = Math.max(5, Math.floor(availH / itemH));
@@ -3704,7 +3704,9 @@ function createSearchHistoryController({ wrap, input, toggle, panel, clearBtn, o
     input.setAttribute("aria-expanded", "true");
   }
 
-  function close({ restoreFocus } = {}) {
+  /** @param {{ restoreFocus?: boolean }} [opts] */
+  function close(opts = {}) {
+    const { restoreFocus } = opts;
     panel.hidden = true;
     toggle.setAttribute("aria-expanded", "false");
     input.setAttribute("aria-expanded", "false");
@@ -3886,7 +3888,7 @@ function openSearchSheet(query) {
     document.body.style.position = "fixed";
     document.body.style.top = `-${scrollY}px`;
     document.body.style.width = "100%";
-    document.body.dataset.scrollY = scrollY;
+    document.body.dataset.scrollY = String(scrollY);
     _searchSheetAppliedScrollLock = true;
   }
   $searchSheetInput.value = query || "";
@@ -4025,10 +4027,13 @@ $searchSheetClose.addEventListener("click", closeSearchSheet);
 // Chip row: pointerdown.preventDefault keeps the input focused — without it
 // the IME closes briefly and reopens, which flickers on Android.
 $searchSheetChips.addEventListener("pointerdown", (e) => {
-  if (e.target.closest(".search-chip")) e.preventDefault();
+  const t = e.target;
+  if (t instanceof Element && t.closest(".search-chip")) e.preventDefault();
 });
 $searchSheetChips.addEventListener("click", (e) => {
-  const btn = e.target.closest(".search-chip");
+  const t = e.target;
+  if (!(t instanceof Element)) return;
+  const btn = /** @type {HTMLElement | null} */ (t.closest(".search-chip"));
   if (!btn) return;
   if (btn.dataset.chip === "in") insertSearchOperator("in:");
 });
@@ -4138,7 +4143,7 @@ $searchSheetClear.addEventListener("click", () => {
 // nothing is interactive before the user opens that surface; deferring
 // keeps these listener attachments off the launch critical path.
 function initSheetDrag() {
-  const handle = document.getElementById("search-sheet-handle");
+  const handle = _$("search-sheet-handle");
   let startY = 0;
   let startH = 0;
 
@@ -4169,8 +4174,8 @@ function initSheetDrag() {
 }
 
 function initBookmarkSheetDrag() {
-  const handle = document.getElementById("bookmark-drawer-handle");
-  const drawer = document.getElementById("bookmark-drawer");
+  const handle = _$("bookmark-drawer-handle");
+  const drawer = _$("bookmark-drawer");
   let startY = 0;
   let startH = 0;
 
@@ -4201,8 +4206,8 @@ function initBookmarkSheetDrag() {
 }
 
 function initBookmarkDrawerResize() {
-  const handle = document.getElementById("bookmark-drawer-resize");
-  const drawer = document.getElementById("bookmark-drawer");
+  const handle = _$("bookmark-drawer-resize");
+  const drawer = _$("bookmark-drawer");
   let startX = 0;
   let startW = 0;
 
@@ -4231,7 +4236,7 @@ function initBookmarkDrawerResize() {
 // Deferred: not needed until after first render and first scroll.
 
 function initCompactHeader() {
-  const header = document.getElementById("app-header");
+  const header = _$("app-header");
   const THRESHOLD_ON = 60;   // collapse breadcrumb when scrolling down past this
   const THRESHOLD_OFF = 10;  // restore breadcrumb only when near the very top
   let isCompact = false;
