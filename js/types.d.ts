@@ -569,6 +569,20 @@ export interface AppSettings {
   dismissLaunchScreen: () => void;
 }
 
+// ── App search facade (js/app/search.js) ────────────────────────────────────
+// Phase 5 of the app.js modularization (ADR-018). Search worker wire-up,
+// desktop top-bar input, mobile bottom sheet, history panel, drag init.
+
+export interface AppSearch {
+  openSearchSheet: (query?: string) => void;
+  closeSearchSheet: () => void;
+  renderSearchResults: (query: string, page: number, autoNavigate?: boolean) => Promise<void>;
+  initSheetDrag: () => void;
+  isMobile: () => boolean;
+  appendTextWithHighlight: (target: Node, text: string, query: string) => void;
+  consumeSearchAutoNavigate: () => boolean;
+}
+
 // ── App install facade (js/app/install.js) ──────────────────────────────────
 // Phase 4 of the app.js modularization (ADR-018). PWA install detection,
 // install guide modal, and install nudge auto-show.
@@ -625,6 +639,7 @@ declare global {
     appStorage: AppStorage;
     appSettings: AppSettings;
     appInstall: AppInstall;
+    appSearch: AppSearch;
 
     // App version label (loaded from /version.json by app.js loadVersion()).
     // Settings popover reads this for the version footer; will move to a
@@ -649,19 +664,31 @@ declare global {
     applyTheme?: (theme: string) => void;
   }
 
-  // App-layer functions still owned by app.js as of Phase 4 (ADR-018). Each
+  // App-layer functions still owned by app.js as of Phase 5 (ADR-018). Each
   // declared global is assigned via `window.X = X` by its owning module at
   // module-load time, so callers can use bare `openInstallModal()` etc. Migration
   // out of this global declaration as their owners ship in later phases:
   //   announce               → moves with $announce anchor (Phase 8 owner)
   //   openInstallModal       → install.js (Phase 4) — DONE
   //   maybeShowInstallNudge  → install.js (Phase 4) — DONE
+  //   openSearchSheet, closeSearchSheet, renderSearchResults, initSheetDrag
+  //                          → search.js (Phase 5) — DONE
   //   openDriveDisconnectModal → bookmark.js (Phase 6) or stays
   //   clearAllCaches         → settings-ui? or app-main (Phase 8)
-  //   parsePath, route       → views-routing.js (Phase 7)
+  //   parsePath, route, navigate → views-routing.js (Phase 7)
+  //   setTitle, setBreadcrumb    → views-routing.js (Phase 7)
+  //   hideAudioBar               → audio player section (Phase 7)
+  //   renderError                → views-routing.js (Phase 7)
   function announce(msg: string): void;
   function openInstallModal(): void;
   function maybeShowInstallNudge(): void;
+  function openSearchSheet(query?: string): void;
+  function closeSearchSheet(): void;
+  function renderSearchResults(query: string, page: number, autoNavigate?: boolean): Promise<void>;
+  function initSheetDrag(): void;
+  function isMobile(): boolean;
+  function appendTextWithHighlight(target: Node, text: string, query: string): void;
+  function consumeSearchAutoNavigate(): boolean;
   function openDriveDisconnectModal(): void;
   function clearAllCaches(): Promise<void>;
   // parsePath returns a view-discriminated union with extra view-specific
@@ -669,4 +696,9 @@ declare global {
   // views-routing.js (Phase 7) ships a precise discriminated-union type.
   function parsePath(): any;
   function route(): Promise<void>;
+  function navigate(path: string): void;
+  function setTitle(text: string): void;
+  function setBreadcrumb(crumbs: Array<{ label: string; href?: string; divisionPicker?: boolean; activeDivision?: string }>): void;
+  function hideAudioBar(): void;
+  function renderError(msg: string): void;
 }
