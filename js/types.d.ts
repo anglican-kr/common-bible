@@ -353,6 +353,50 @@ export interface DriveSyncFacade {
   getStatus: () => SyncState;
 }
 
+// ── App-level (app.js) domain types ─────────────────────────────────────────
+// Shapes consumed by js/app.js. Local-only (not all are part of the Drive
+// sync wire format) — see `LastReadValue` for the synced equivalent of
+// `ReadingPosition`.
+
+// `STORAGE_KEY = "bible-last-read"`. Distinct from `LastReadValue` (synced
+// shape uses `verseSpec?: string`) — here `verse` is a single integer
+// populated by the scroll-tracking heuristic. Both shapes are intentional:
+// app.js consumes the local form, the sync layer carries the synced form.
+export interface ReadingPosition {
+  bookId: string;
+  chapter: number;
+  verse: number | null;
+}
+
+// `AUDIO_POS_KEY`. Resume-from-time-offset for the chapter audio player.
+export interface AudioPosition {
+  bookId: string;
+  chapter: number;
+  time: number;
+}
+
+// `SEARCH_HISTORY_KEY`. Whitespace-normalized strings, LRU-deduped, capped
+// at SEARCH_HISTORY_MAX. Local-only (see ADR-014).
+export type SearchHistoryList = string[];
+
+// Active during a touch/pointer drag over verse rows in select mode
+// (module-state `_verseSelectDrag`).
+export interface VerseSelectDrag {
+  startIdx: number;
+  allVerses: HTMLElement[];
+  isAdding: boolean;
+  moved: boolean;
+}
+
+// Active during a bookmark-list reorder drag (module-state `_dragState`).
+export interface DragState {
+  id: string;
+  ghost: HTMLElement;
+  origLi: HTMLElement;
+  startY: number;
+  origTop: number;
+}
+
 // ── Window augmentation ──────────────────────────────────────────────────────
 
 declare global {

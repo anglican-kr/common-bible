@@ -1,0 +1,13 @@
+// Temporary tsconfig used only while js/app.js is being migrated to
+// // @ts-check + JSDoc in stages (see docs/design/app-typescript-migration.md).
+// Removed in PR-7 when `// @ts-check` is added to the head of app.js and the
+// main tsconfig.json picks it up via its existing `js/**/*.js` include.
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "checkJs": true,
+    "noImplicitAny": false
+  },
+  "include": ["js/app.js", "js/types.d.ts"],
+  "exclude": ["js/search-worker.js"]
+}
