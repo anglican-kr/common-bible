@@ -707,10 +707,6 @@ declare global {
 
     // Phase 7a constants (also declared as bare globals above for app.js's
     // Phase 7b territory). Window assignment is what views-routing.js does.
-    DIVISION_LABELS: Record<string, string>;
-    OT_SUBCATEGORY: Record<string, string>;
-    OT_SUBCATEGORY_ORDER: string[];
-    OT_SUBCATEGORY_LABELS: Record<string, string>;
 
     // Phase 6b: bookmark UI module reads books metadata via this getter
     // since `booksCache` lives in views-routing.js (Phase 7a). Always set
@@ -821,11 +817,9 @@ declare global {
   function divisionOrder(): string[];
   function effectiveDivision(book: BookEntry): string;
   function initCompactHeader(): void;
-  // Phase 7a constants exposed for Phase 7b territory in app.js. Read-only.
-  const DIVISION_LABELS: Record<string, string>;
-  const OT_SUBCATEGORY: Record<string, string>;
-  const OT_SUBCATEGORY_ORDER: string[];
-  const OT_SUBCATEGORY_LABELS: Record<string, string>;
+  // (Phase 7a's temporary DIVISION_LABELS / OT_SUBCATEGORY{,_ORDER,_LABELS}
+  // global declares were removed in Phase 7b — all callers now live inside
+  // views-routing.js so the bare-global hop is unnecessary.)
   // Google Analytics gtag wrapper (gtag-init.js) — module-load assigns
   // `window.gtag = gtag`. Declared as bare global so views-routing.js's
   // trackPageView can `typeof gtag === "function"` guard + call directly.
