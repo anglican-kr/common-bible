@@ -23,6 +23,12 @@ const { _loadNudgeState, _saveNudgeState } = window.appStorage;
 // beforeinstallprompt is captured and stored so the install modal can call prompt()
 // on user gesture. The `appinstalled` event and display-mode change both flip state.
 
+// ── BEGIN INSTALL_STATE ──
+// Exercised by tests/unit/install.test.js. Platform detection state machine
+// + beforeinstallprompt / appinstalled / display-mode listeners. Does NOT
+// touch DOM beyond window.matchMedia + navigator. The IIFE returns the
+// public install API; the IIFE-internal `deferredPrompt` and `listeners`
+// are observable only via subscribe()/triggerPrompt()/notify().
 /** @type {InstallObject} */
 const install = (() => {
   /** @type {any} */
@@ -103,6 +109,7 @@ const install = (() => {
 
   return { isStandalone, detectPlatform, subscribe, triggerPrompt };
 })();
+// ── END INSTALL_STATE ──
 
 // ── Install guide modal ──
 
@@ -395,7 +402,10 @@ document.addEventListener("keydown", (e) => {
 });
 
 // ── Install nudge (auto-show) ──
-
+// ── BEGIN NUDGE ──
+// Exercised by tests/unit/install.test.js. Decides whether to auto-open
+// the install modal based on platform + visit counter + neverShow flag.
+// Counters are persisted via window.appStorage's _loadNudgeState/_saveNudgeState.
 function maybeShowInstallNudge() {
   const platform = install.detectPlatform();
   // Only nudge platforms where installation is meaningful and possible
@@ -420,6 +430,7 @@ function maybeShowInstallNudge() {
     openInstallModal();
   }, 1500);
 }
+// ── END NUDGE ──
 
 // Window facade for legacy callers (settings-ui reads `window.install`,
 // app.js bootstrap calls bare `maybeShowInstallNudge()` / `openInstallModal`).
