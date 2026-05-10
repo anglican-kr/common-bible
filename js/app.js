@@ -93,7 +93,6 @@ window.clearAllCaches = clearAllCaches;
 
 const $app = _$("app");
 const $title = _$("page-title");
-const $breadcrumb = _$("breadcrumb");
 const $announce = _$("a11y-announce");
 const $audioBar = _$("audio-bar");
 const $resumeBannerSlot = _$("resume-banner-slot");
