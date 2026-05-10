@@ -297,6 +297,11 @@ function setTitle(text) {
 }
 // ── END TITLE ──
 
+// ── BEGIN POPOVER ──
+// Exercised by tests/unit/views-routing.test.js. setTitleWithDivisionPicker
+// + setTitleWithChapterPicker render a button that toggles a popover (focus
+// trap inside, click-outside-to-close, click-on-link-to-close). The two
+// share the same open/close contract.
 function setTitleWithDivisionPicker(activeDivision) {
   clearNode($title);
   const labels = divisionLabels();
@@ -427,6 +432,7 @@ function setTitleWithChapterPicker(book, currentCh) {
   $title.appendChild(popover);
   $title.appendChild(buildBookmarkHeaderBtn(book.id, currentCh));
 }
+// ── END POPOVER ──
 
 // ── BEGIN BREADCRUMB ──
 // Exercised by tests/unit/views-routing.test.js. setBreadcrumb walks the
@@ -512,6 +518,11 @@ function effectiveDivision(book) {
 // ── Compact Header on Scroll ──
 // Deferred: not needed until after first render and first scroll.
 
+// ── BEGIN COMPACT_HEADER ──
+// Exercised by tests/unit/views-routing.test.js. Hysteretic toggle:
+// scrolling past 60px adds .compact to #app-header; only when returning
+// near the top (<10px) do we remove it. Listener is passive — no
+// preventDefault — so it cannot block scrolling.
 function initCompactHeader() {
   const header = _$("app-header");
   const THRESHOLD_ON = 60;   // collapse breadcrumb when scrolling down past this
@@ -528,6 +539,7 @@ function initCompactHeader() {
     }
   }, { passive: true });
 }
+// ── END COMPACT_HEADER ──
 
 
 // ── Phase 7b additions ──
