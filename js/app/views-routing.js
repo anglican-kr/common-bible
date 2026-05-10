@@ -215,13 +215,6 @@ let appVersion = null;
   }, { passive: true });
 })();
 
-// Search history helpers were extracted to js/app/storage.js
-// (ADR-018 Phase 2). The BEGIN/END markers + tests/unit/storage.test.js
-// follow the new location.
-
-// `loadStartupBehavior`, `saveStartupBehavior`, `loadFontSize`, `saveFontSize`
-// were extracted to js/app/storage.js (ADR-018 Phase 2).
-
 // ── Data fetching ──
 // ── BEGIN DATA_FETCHING ──
 // Exercised by tests/unit/views-routing.test.js. The 4 functions are
