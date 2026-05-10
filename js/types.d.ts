@@ -713,10 +713,21 @@ declare global {
     OT_SUBCATEGORY_LABELS: Record<string, string>;
 
     // Phase 6b: bookmark UI module reads books metadata via this getter
-    // since `booksCache` lives in app.js (Phase 7 owner) but bookmark
-    // tree rendering needs short_name_ko labels. Migrates out alongside
-    // `loadBooks` in Phase 7. Always set by app.js at module-load time.
+    // since `booksCache` lives in views-routing.js (Phase 7a). Always set
+    // by views-routing.js at module-load time.
     getBooksCache: () => BooksData | null;
+    // Phase 7b: Audio Player state lives in views-routing.js; app.js's
+    // Accessibility keydown handler reads currentAudio via this getter
+    // for the spacebar play/pause toggle. Optional because views-routing
+    // only sets it after module load.
+    getCurrentAudio?: () => HTMLAudioElement | null;
+    // Google Analytics gtag.js wrapper — set by gtag-init.js (window.gtag).
+    // Module-load assignment because each ESM module has its own gtag scope.
+    gtag?: (...args: any[]) => void;
+    dataLayer?: any[];
+    // App version mirror — set by views-routing.js's loadVersion(). Read by
+    // settings-ui.js's version footer.
+    appVersion?: string | null;
 
     // App version label (loaded from /version.json by app.js loadVersion()).
     // Settings popover reads this for the version footer; will move to a
@@ -820,6 +831,11 @@ declare global {
   const OT_SUBCATEGORY: Record<string, string>;
   const OT_SUBCATEGORY_ORDER: string[];
   const OT_SUBCATEGORY_LABELS: Record<string, string>;
+  // Google Analytics gtag wrapper (gtag-init.js) — module-load assigns
+  // `window.gtag = gtag`. Declared as bare global so views-routing.js's
+  // trackPageView can `typeof gtag === "function"` guard + call directly.
+  function gtag(...args: any[]): void;
+  const dataLayer: any[];
   function buildBackBtn(ariaLabel: string, fallback: string): HTMLButtonElement;
   function buildBookmarkHeaderBtn(bookId: string | null, chapter: number | null): HTMLButtonElement;
   function openBookmarkDrawer(bookId: string | null, chapter: number | null): void;

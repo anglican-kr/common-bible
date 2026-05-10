@@ -33,7 +33,7 @@ requirements.txt        ← Python 의존성
 tsconfig.json           ← 메인 tsconfig (DOM lib, ADR-012)
 tsconfig.worker.json    ← 워커 전용 tsconfig (WebWorker lib, ADR-012)
 js/
-  app.js                ← 라우팅, 렌더링, UI 부트스트랩 (ADR-018 Phase 6 진행 중 — 잔여 영역은 Phase 7/8)
+  app.js                ← 부트스트랩 + 접근성 keydown + Audio cache LRU + Service Worker 등록 (ADR-018 Phase 7b까지 완료, Phase 8 잔류 ~460줄)
   drive-sync.js         ← Google Drive 동기화 모듈 (PKCE 단일 경로, ADR-011 Phase 2h)
   search-worker.js      ← Web Worker 기반 전역 검색 엔진 (ADR-005)
   audio-cache.js        ← 오디오 LRU IDB sidecar (ADR-016)
@@ -48,7 +48,7 @@ js/
     search.js           ← 검색 워커 wire-up + 결과 렌더 + 이력 패널 + sheet (Phase 5)
     reading-context.js  ← 현재 읽고 있는 책/장 + 절 선택 모드 공유 상태 (Phase 6a)
     bookmark.js         ← 북마크 모듈 — verse spec / 트리 query / 드래그&드롭 / 드로어 / 트리 렌더 / 모달 / 셀렉션 모드 (Phase 6a + 6b)
-    views-routing.js    ← 데이터 패칭 + 렌더 헬퍼 + Pull-to-refresh + Compact Header (Phase 7a, Views/Routing/Audio는 7b 예정)
+    views-routing.js    ← 데이터 패칭 / 렌더 헬퍼 / Pull-to-refresh / Compact Header / Views / Routing / Audio Player (Phase 7a + 7b)
   sync/
     state-machine.js    ← 동기화 상태 머신 (PKCE 단일 경로, Phase 2h)
     transport.js        ← PKCE primitives + Drive REST + nginx /oauth/token 호출 (ADR-011·017)
