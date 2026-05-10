@@ -702,7 +702,15 @@ declare global {
     appInstall: AppInstall;
     appSearch: AppSearch;
     appBookmark: AppBookmark;
+    appViewsRouting: { [key: string]: any }; // Phase 7a aggregate (full type Phase 7b)
     readingContext: ReadingContext;
+
+    // Phase 7a constants (also declared as bare globals above for app.js's
+    // Phase 7b territory). Window assignment is what views-routing.js does.
+    DIVISION_LABELS: Record<string, string>;
+    OT_SUBCATEGORY: Record<string, string>;
+    OT_SUBCATEGORY_ORDER: string[];
+    OT_SUBCATEGORY_LABELS: Record<string, string>;
 
     // Phase 6b: bookmark UI module reads books metadata via this getter
     // since `booksCache` lives in app.js (Phase 7 owner) but bookmark
@@ -792,6 +800,26 @@ declare global {
   // Phase 6b — bookmark UI surface. Module-load assigns these to globalThis
   // so app.js's Phase 7 territory (Views / Routing / chapter rendering /
   // initBookmarkSheetDrag) can call them as bare globals.
+  // Phase 7a — views-routing.js: data fetching + rendering helpers +
+  // initCompactHeader. Module-load assigns these to globalThis so app.js's
+  // Phase 7b territory (Views/Routing/Audio Player) can call them as bare
+  // globals.
+  function loadBooks(): Promise<BooksData>;
+  function loadVersion(): Promise<string>;
+  function loadChapter(bookId: string, chapter: number): Promise<BibleChapter>;
+  function loadPrologue(bookId: string): Promise<BiblePrologue>;
+  function setTitleWithDivisionPicker(activeDivision: string): void;
+  function setTitleWithChapterPicker(book: BookEntry, currentCh: number): void;
+  function buildDivisionBreadcrumb(label: string, activeDivision: string): HTMLElement;
+  function divisionLabels(): Record<string, string>;
+  function divisionOrder(): string[];
+  function effectiveDivision(book: BookEntry): string;
+  function initCompactHeader(): void;
+  // Phase 7a constants exposed for Phase 7b territory in app.js. Read-only.
+  const DIVISION_LABELS: Record<string, string>;
+  const OT_SUBCATEGORY: Record<string, string>;
+  const OT_SUBCATEGORY_ORDER: string[];
+  const OT_SUBCATEGORY_LABELS: Record<string, string>;
   function buildBackBtn(ariaLabel: string, fallback: string): HTMLButtonElement;
   function buildBookmarkHeaderBtn(bookId: string | null, chapter: number | null): HTMLButtonElement;
   function openBookmarkDrawer(bookId: string | null, chapter: number | null): void;
