@@ -1,8 +1,12 @@
 name: Tests
 
+# Trigger philosophy: avoid running the same workflow twice when a feature
+# branch has an open PR. `push` is restricted to `main` (post-merge sanity),
+# while every PR run goes through `pull_request`. Branches without a PR
+# don't run CI here — open the PR to get coverage.
 on:
   push:
-    branches: ["**"]
+    branches: [main]
   pull_request:
     branches: ["**"]
 
