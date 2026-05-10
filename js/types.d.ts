@@ -725,13 +725,8 @@ declare global {
     // Module-load assignment because each ESM module has its own gtag scope.
     gtag?: (...args: any[]) => void;
     dataLayer?: any[];
-    // App version mirror — set by views-routing.js's loadVersion(). Read by
-    // settings-ui.js's version footer.
-    appVersion?: string | null;
-
-    // App version label (loaded from /version.json by app.js loadVersion()).
-    // Settings popover reads this for the version footer; will move to a
-    // dedicated module owner alongside data-fetching in Phase 7.
+    // App version mirror — set by views-routing.js's loadVersion() (Phase 7a
+    // owner). Read by settings-ui.js's version footer.
     appVersion?: string | null;
 
     // Install carousel object (Phase 4 owner: js/app/install.js). The module
