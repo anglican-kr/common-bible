@@ -1,16 +1,23 @@
 # QA 보고서
 
-`docs/qa/`는 e2e 테스트 실행 결과와 신규 시나리오 추가 내역을 기록하는 공간입니다. 회귀 발견 시 이력을 추적하고, 향후 작업자가 "현재 어디까지 검증되었는가"를 한눈에 파악할 수 있도록 합니다.
+`docs/qa/`는 자동 테스트(e2e + 유닛) 실행 결과와 신규 시나리오 추가 내역을 기록하는 공간입니다. 회귀 발견 시 이력을 추적하고, 향후 작업자(개발자가 아니어도)가 "현재 어디까지 자동 검증되는가"를 한눈에 파악할 수 있도록 합니다.
 
 ## 파일명 컨벤션
 
 ```
-YYYY-MM-DD-e2e-{topic}.md
+YYYY-MM-DD-e2e-{topic}.md      # 브라우저 통합 테스트 (Playwright)
+YYYY-MM-DD-unit-{topic}.md     # 유닛 테스트 (node --test, ADR-013)
 ```
 
-- `topic`은 Phase 또는 도메인 이름 (예: `infrastructure`, `1.3.0-features`, `bookmark-domain`, `settings`, `audio`, `search-nav`, `a11y`, `regression-baseline`)
+- `topic`은 Phase 또는 도메인 이름 (예: `infrastructure`, `1.3.0-features`, `bookmark-domain`, `settings`, `audio`, `search-nav`, `a11y`, `regression-baseline`, `storage`, `helpers`)
 - 동일 토픽을 다시 검증할 경우 새 날짜로 새 파일을 생성 (덮어쓰지 않음)
 - `docs/audit/`와 같은 컨벤션을 따름
+
+## 톤
+
+- 비기술 독자(성공회 신자·일반 사용자)도 이해할 수 있는 일상 언어 우선. `feedback_release_notes` 메모리 톤과 같은 기준.
+- 기술 식별자(파일·함수·옵션 이름)는 부록 섹션으로 분리하거나 최소화.
+- 사용자가 체감하는 동작("앱이 멈추지 않는지", "다시 열어도 같은 위치인지") 중심.
 
 ## 보고서 템플릿
 
