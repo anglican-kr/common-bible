@@ -1744,6 +1744,7 @@ const appViewsRouting = {
   setTitle, setBreadcrumb, setTitleWithDivisionPicker, setTitleWithChapterPicker,
   buildDivisionBreadcrumb, divisionLabels, divisionOrder, effectiveDivision,
   initCompactHeader,
+  parsePath, route, navigate, hideAudioBar, renderError,
 };
 window.appViewsRouting = appViewsRouting;
 
@@ -1761,6 +1762,17 @@ window.divisionOrder = divisionOrder;
 window.effectiveDivision = effectiveDivision;
 window.initCompactHeader = initCompactHeader;
 window.getBooksCache = () => booksCache;
+
+// Phase 7b ownership: routing + rendering helpers that earlier phases
+// (settings-ui / search / bookmark / app.js bootstrap) call as bare
+// globals. Without these assignments their bare calls would resolve to
+// undefined on globalThis at runtime even though TS sees the global
+// declares in types.d.ts (the exact ESM ReferenceError trap).
+window.parsePath = parsePath;
+window.route = route;
+window.navigate = navigate;
+window.hideAudioBar = hideAudioBar;
+window.renderError = renderError;
 
 // Audio Player module state read accessor — app.js's Accessibility keydown
 // handler (Phase 8 territory) reads `currentAudio` for the spacebar

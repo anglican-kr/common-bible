@@ -81,14 +81,12 @@ window.applyColorScheme = applyColorScheme;
 //   openDriveDisconnectModal   → Phase 6 (bookmark.js) or stays in app-main
 //   clearAllCaches             → Phase 8 (app-main)
 window.announce = announce;
-window.parsePath = parsePath;
-window.route = route;
-window.navigate = navigate;
-// `setTitle` / `setBreadcrumb` / `getBooksCache` moved to views-routing.js
-// (ADR-018 Phase 7a) along with the rendering helpers + data fetching.
-window.hideAudioBar = hideAudioBar;
-window.renderError = renderError;
-// `openDriveDisconnectModal` was extracted to bookmark.js (ADR-018 Phase 6b).
+// Routing + rendering facade entries (parsePath / route / navigate /
+// hideAudioBar / renderError + setTitle / setBreadcrumb / getBooksCache)
+// moved to views-routing.js (ADR-018 Phase 7) alongside their owning
+// functions — keeping the assignments here would `ReferenceError` at
+// module-load time since the bare names are no longer in scope.
+// `openDriveDisconnectModal` was extracted to bookmark.js (Phase 6b).
 window.clearAllCaches = clearAllCaches;
 
 const $app = _$("app");
