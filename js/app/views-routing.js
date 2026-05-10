@@ -1780,12 +1780,9 @@ window.renderError = renderError;
 // dedicated app-main module.
 window.getCurrentAudio = () => currentAudio;
 
-// Constants exposed for app.js's Phase 7b territory (Views/Routing) — bare
-// global reads. Migrates out when those callers move into this module in 7b.
-window.DIVISION_LABELS = DIVISION_LABELS;
-window.OT_SUBCATEGORY = OT_SUBCATEGORY;
-window.OT_SUBCATEGORY_ORDER = OT_SUBCATEGORY_ORDER;
-window.OT_SUBCATEGORY_LABELS = OT_SUBCATEGORY_LABELS;
+// (Phase 7a's temporary window.DIVISION_LABELS / OT_SUBCATEGORY{,_ORDER,_LABELS}
+// scaffolding was removed in Phase 7b — all callers (parsePath / route /
+// renderBookList / renderDivisionList) now live in this module.)
 
 export {
   loadBooks, loadVersion, loadChapter, loadPrologue,
