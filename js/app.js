@@ -1,64 +1,27 @@
 "use strict";
+// @ts-check
+// ADR-012 2차 적용 2라운드 종료 시점에 영구 활성화. Phase 8(2026-05-10)에
+// app.js가 ~280줄의 부트스트랩으로 축소된 후 추가됨. tsconfig.app.json은
+// 동시에 삭제됐고, 이제 메인 tsconfig.json(checkJs: false + 모듈별 opt-in)
+// 한 곳에서만 검증한다.
 
-// App-level domain types live in js/types.d.ts. See ADR-012.
-/** @typedef {import("./types").ReadingPosition} ReadingPosition */
-/** @typedef {import("./types").AudioPosition} AudioPosition */
-/** @typedef {import("./types").SearchHistoryList} SearchHistoryList */
-/** @typedef {import("./types").VerseSelectDrag} VerseSelectDrag */
-/** @typedef {import("./types").DragState} DragState */
-/** @typedef {import("./types").ColorSchemeId} ColorSchemeId */
-/** @typedef {import("./types").ThemeMode} ThemeMode */
-/** @typedef {import("./types").BookOrderKind} BookOrderKind */
-/** @typedef {import("./types").ColorSchemeEntry} ColorSchemeEntry */
-/** @typedef {import("./types").BookEntry} BookEntry */
-/** @typedef {import("./types").BooksData} BooksData */
-/** @typedef {import("./types").BibleChapter} BibleChapter */
-/** @typedef {import("./types").BiblePrologue} BiblePrologue */
-/** @typedef {import("./types").BibleVerse} BibleVerse */
-// `BookmarkTreeNode` was previously deferred to the global typedef declared
-// in js/sync/store-v2.js, but ADR-018 Phase 2 opted store-v2.js into an ES
-// module (so its `saveBookmarks`/`loadBookmarks` no longer collide with
-// js/app/storage.js). That moved the alias into module scope, so app.js now
-// declares its own typedef.
-/** @typedef {import("./types").BookmarkTreeNode} BookmarkTreeNode */
-/** @typedef {import("./types").BookmarkTreeBookmark} BookmarkTreeBookmark */
-/** @typedef {import("./types").BookmarkTreeFolder} BookmarkTreeFolder */
+// ── app-main ──
+// app.js is the residual app-bootstrap module after the ADR-018 modular
+// split (Phases 1–8). It owns: the document-level Accessibility keydown
+// handler (Escape + spacebar audio toggle), `clearAllCaches`, the
+// visibilitychange handler (audio cache soft-cap eviction + Drive sync
+// trigger on tab return), `registerServiceWorker`, and the
+// DOMContentLoaded bootstrap that kicks off route() and the deferred
+// init chain. Everything else lives in js/app/*.js or js/sync/*.js.
 
-const DATA_DIR = "/data";
-
-// Common DOM helpers live in js/app/helpers.js (ADR-018 Phase 1). `defer`
-// load order in index.html guarantees window.appHelpers is populated by
-// the time this script runs.
-const { _$, chUnit, el, clearNode, setInert, trapFocus } = window.appHelpers;
-
-// localStorage helpers + UI-shared constants live in js/app/storage.js
-// (ADR-018 Phase 2). All save fns also notify window.syncStoreV2 + driveSync.
+const { _$, el } = window.appHelpers;
 const {
-  FONT_SIZES, DEFAULT_FONT_SIZE, COLOR_SCHEMES, SEARCH_HISTORY_MAX,
-  saveReadingPosition, loadReadingPosition, clearReadingPosition,
-  saveAudioTime, loadAudioTime, clearAudioTime,
-  normalizeSearchQuery, loadSearchHistory, saveSearchHistory,
-  pushSearchHistory, removeSearchHistory, clearSearchHistory,
-  loadStartupBehavior, saveStartupBehavior,
-  loadFontSize, saveFontSize,
-  loadColorScheme, saveColorScheme,
-  loadTheme, saveTheme,
-  loadBookOrder, saveBookOrder,
-  generateId, loadBookmarks, saveBookmarks,
-  _maybeRequestPersist,
+  loadFontSize, loadTheme, loadColorScheme,
 } = window.appStorage;
-
-// Settings popover + icon recoloring + theme/color/font apply + launch
-// screen live in js/app/settings-ui.js (ADR-018 Phase 3).
 const {
   initSettings, applyFontSize, applyTheme, applyColorScheme,
-  dismissLaunchScreen,
 } = window.appSettings;
 
-// Cross-module reading-view state (current book/chapter + verse selection)
-// owned by js/app/reading-context.js (ADR-018 Phase 6a). Local reference for
-// terse access — `readingContext.bookId = "gen"` mutates the shared object.
-const { readingContext } = window;
 // Re-expose on window so the sync layer (state-machine.js) can apply Drive
 // settings updates via its `typeof window.applyXxx === "function"` guards.
 // `const` destructure does not auto-register on window — must be explicit.
@@ -66,40 +29,16 @@ window.applyFontSize = applyFontSize;
 window.applyTheme = applyTheme;
 window.applyColorScheme = applyColorScheme;
 
-// Window facade for cross-module bare global calls (settings-ui.js,
-// search.js, future bookmark.js). Before ADR-019's ESM bulk conversion
-// these were resolved via classic-script shared global scope; ESM module
-// scope makes each `function X()` module-private, so callers in another
-// module would hit `globalThis.X` and fail. Each name below is hoisted
-// within this module and re-exposed for ESM bare-global resolution.
-// Migrates out as each owner ships in a later phase (ADR-018):
-//   announce               → Phase 8 (with $announce anchor)
-//   parsePath, route, navigate → Phase 7 (views-routing.js)
-//   setTitle, setBreadcrumb    → Phase 7 (rendering helpers)
-//   hideAudioBar               → Phase 7 (audio player)
-//   renderError                → Phase 7 (rendering helpers)
-//   openDriveDisconnectModal   → Phase 6 (bookmark.js) or stays in app-main
-//   clearAllCaches             → Phase 8 (app-main)
+// Cross-module bare-global facade for what app.js itself owns. Other
+// modules (settings-ui, bookmark) call `announce(...)` and
+// `clearAllCaches()` as bare globals; the assignments here promote the
+// module-scoped functions to globalThis.
 window.announce = announce;
-// Routing + rendering facade entries (parsePath / route / navigate /
-// hideAudioBar / renderError + setTitle / setBreadcrumb / getBooksCache)
-// moved to views-routing.js (ADR-018 Phase 7) alongside their owning
-// functions — keeping the assignments here would `ReferenceError` at
-// module-load time since the bare names are no longer in scope.
-// `openDriveDisconnectModal` was extracted to bookmark.js (Phase 6b).
 window.clearAllCaches = clearAllCaches;
 
-// Anchors retained here — still referenced by app.js's `announce()`
-// ($announce) and Escape keydown handler ($searchSheet). All other
-// $X anchors moved to their owning modules in earlier phases (helpers /
-// storage / settings-ui / install / search / bookmark / views-routing).
+// DOM anchors used directly by this module's handlers.
 const $announce = _$("a11y-announce");
 const $searchSheet = _$("search-sheet");
-
-// `booksCache` / `appVersion` / `currentAudio` / `_audioController` /
-// `_audioSaveTimer` were extracted to js/app/views-routing.js
-// (ADR-018 Phase 7a/7b). `_scrollTrackCleanup` / `_isInitialLoad` /
-// `startScrollTracking` moved with them.
 
 // ── Accessibility ──
 
@@ -136,26 +75,7 @@ document.addEventListener("keydown", (e) => {
   }
 });
 
-// ── Reading position persistence ──
-// Storage key constants + load/save helpers were extracted to
-// js/app/storage.js (ADR-018 Phase 2). `SEARCH_HISTORY_VISIBLE` moved to
-// js/app/search.js (Phase 5) — search history panel controller is the only
-// consumer.
-
-// Reading position helpers (`saveReadingPosition` / `loadReadingPosition` /
-// `saveAudioTime` / `loadAudioTime` / `clearAudioTime`) live in
-// js/app/storage.js (ADR-018 Phase 2). `startScrollTracking` and the
-// `_scrollTrackCleanup` / `_isInitialLoad` state moved to
-// js/app/views-routing.js with the rest of Routing (ADR-018 Phase 7b).
-
 // ── Audio cache LRU helpers (ADR-016) ──
-// One-shot persisted-storage request: called on the first value moment
-// (audio play, bookmark save, etc.). navigator.storage.persist() may show a
-// browser prompt on Safari/Firefox; on Chrome it grants silently when the
-// site has high engagement. We swallow result errors — even if denied, the
-// LRU loop in audio-cache.js still functions, just without iOS 7-day evict
-// immunity.
-// `_maybeRequestPersist` was extracted to js/app/storage.js (ADR-018 Phase 2).
 
 // Soft-cap eviction. Page-driven (SW only enforces hard cap on put). Called
 // on visibilitychange→hidden so the work runs while the user is not actively
@@ -191,9 +111,6 @@ document.addEventListener("visibilitychange", () => {
   }
 });
 
-// ── Font size ──
-// `applyFontSize` was extracted to js/app/settings-ui.js (ADR-018 Phase 3).
-
 // ── Cache management ──
 
 /** @returns {Promise<void>} */
@@ -218,9 +135,6 @@ async function clearAllCaches() {
   }
 }
 
-// ── Book order ──
-// `loadBookOrder`/`saveBookOrder` were extracted to js/app/storage.js.
-
 // Apply saved settings on load
 window.syncStoreV2?.migrateLegacyIfNeeded();
 window.syncStoreV2?.sweepTombstones();
@@ -230,92 +144,6 @@ applyColorScheme(loadColorScheme());
 initSettings();
 
 
-// ── Helpers ──
-// `el`, `clearNode`, `_$`, `chUnit`, `trapFocus` were extracted to
-// js/app/helpers.js (ADR-018 Phase 1). Imported via destructure at module head.
-
-// Verse spec utilities + bookmark query helpers + drag & drop pointer
-// handling were extracted to js/app/bookmark.js (ADR-018 Phase 6a). The
-// module assigns its functions to `window.X` for legacy bare-global
-// callers (Phase 6b territory: bookmark UI / tree / modals / drawer
-// handlers — those move out in Phase 6b).
-
-
-
-// Search engine + history panel + bottom sheet + drag init live in
-// js/app/search.js (ADR-018 Phase 5). The module assigns
-// `window.openSearchSheet` / `window.closeSearchSheet` /
-// `window.renderSearchResults` / `window.initSheetDrag` for legacy callers
-// (route handler, Escape keydown, bootstrap).
-
-function initBookmarkSheetDrag() {
-  const handle = _$("bookmark-drawer-handle");
-  const drawer = _$("bookmark-drawer");
-  let startY = 0;
-  let startH = 0;
-
-  function onMove(clientY) {
-    const delta = startY - clientY;
-    const newH = Math.min(Math.max(startH + delta, window.innerHeight * 0.3), window.innerHeight * 0.92);
-    drawer.style.height = `${newH}px`;
-  }
-
-  handle.addEventListener("pointerdown", (e) => {
-    if (window.innerWidth >= 769) return; // desktop uses fixed-size side panel
-    e.preventDefault();
-    startY = e.clientY;
-    startH = drawer.offsetHeight;
-    handle.setPointerCapture(e.pointerId);
-    handle.addEventListener("pointermove", onPointerMove);
-    handle.addEventListener("pointerup", onPointerUp, { once: true });
-  });
-
-  function onPointerMove(e) { onMove(e.clientY); }
-  function onPointerUp() {
-    handle.removeEventListener("pointermove", onPointerMove);
-    if (drawer.offsetHeight < window.innerHeight * 0.2) {
-      closeBookmarkDrawer();
-      drawer.style.height = "";
-    }
-  }
-}
-
-function initBookmarkDrawerResize() {
-  const handle = _$("bookmark-drawer-resize");
-  const drawer = _$("bookmark-drawer");
-  let startX = 0;
-  let startW = 0;
-
-  handle.addEventListener("pointerdown", (e) => {
-    if (window.innerWidth < 769) return;
-    e.preventDefault();
-    startX = e.clientX;
-    startW = drawer.offsetWidth;
-    handle.setPointerCapture(e.pointerId);
-    handle.addEventListener("pointermove", onPointerMove);
-    handle.addEventListener("pointerup", onPointerUp, { once: true });
-  });
-
-  function onPointerMove(e) {
-    const delta = startX - e.clientX; // drag left = wider
-    const newW = Math.min(Math.max(startW + delta, 240), window.innerWidth * 0.85);
-    drawer.style.width = `${newW}px`;
-  }
-
-  function onPointerUp() {
-    handle.removeEventListener("pointermove", onPointerMove);
-  }
-}
-
-
-// PWA install detection + Install guide modal + Install nudge auto-show
-// live in js/app/install.js (ADR-018 Phase 4). Loaded as ESM in index.html;
-// the module assigns `window.install` / `window.openInstallModal` /
-// `window.maybeShowInstallNudge` for legacy callers (settings popover +
-// app.js bootstrap).
-//
-// Background-inert helper shared with the bookmark drawer/sheet UI. Moves
-// alongside bookmark UI when Phase 6 ships.
 // ── Service Worker Registration & Update ──
 // Invoked from the deferred startup hook (DOMContentLoaded → requestIdleCallback)
 // so SW lookup, update checks, and shell pre-caching never block first paint.
@@ -418,11 +246,11 @@ function registerServiceWorker() {
 }
 
 // ── Bootstrap ──
-// route() / loadVersion() / initCompactHeader() / maybeShowInstallNudge() —
-// all bare-global resolves via window facade set by views-routing.js /
-// install.js. initSheetDrag (search.js), initBookmarkSheetDrag /
-// initBookmarkDrawerResize (still in app.js, Phase 8 cleanup), and
-// registerServiceWorker (this file) are module-local hoisted functions.
+// All deferred init calls below resolve via the window facade set by their
+// owning module: route / loadVersion / initCompactHeader (views-routing.js),
+// initSheetDrag (search.js), initBookmarkSheetDrag / initBookmarkDrawerResize
+// (bookmark.js), maybeShowInstallNudge (install.js). registerServiceWorker
+// is module-local to this file.
 window.addEventListener("DOMContentLoaded", () => {
   const idle = window.requestIdleCallback ?? ((cb) => setTimeout(cb, 200));
 

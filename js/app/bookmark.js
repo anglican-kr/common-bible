@@ -1952,6 +1952,75 @@ document.addEventListener("keydown", (e) => {
   }
 });
 
+// ── Drawer drag/resize handle init (called from app.js bootstrap) ──
+// Operate on the bookmark drawer handle/resize affordances. They were
+// historically in app.js's Audio Player section as hand-crafted geometry
+// utilities; Phase 7b moved them next to the bookmark module they actually
+// belong to. App.js's DOMContentLoaded bootstrap calls them via the
+// `window.initBookmarkSheetDrag` / `window.initBookmarkDrawerResize`
+// facade entries below.
+
+function initBookmarkSheetDrag() {
+  const handle = _$("bookmark-drawer-handle");
+  const drawer = _$("bookmark-drawer");
+  let startY = 0;
+  let startH = 0;
+
+  function onMove(clientY) {
+    const delta = startY - clientY;
+    const newH = Math.min(Math.max(startH + delta, window.innerHeight * 0.3), window.innerHeight * 0.92);
+    drawer.style.height = `${newH}px`;
+  }
+
+  handle.addEventListener("pointerdown", (e) => {
+    if (window.innerWidth >= 769) return; // desktop uses fixed-size side panel
+    e.preventDefault();
+    startY = e.clientY;
+    startH = drawer.offsetHeight;
+    handle.setPointerCapture(e.pointerId);
+    handle.addEventListener("pointermove", onPointerMove);
+    handle.addEventListener("pointerup", onPointerUp, { once: true });
+  });
+
+  /** @param {PointerEvent} e */
+  function onPointerMove(e) { onMove(e.clientY); }
+  function onPointerUp() {
+    handle.removeEventListener("pointermove", onPointerMove);
+    if (drawer.offsetHeight < window.innerHeight * 0.2) {
+      closeBookmarkDrawer();
+      drawer.style.height = "";
+    }
+  }
+}
+
+function initBookmarkDrawerResize() {
+  const handle = _$("bookmark-drawer-resize");
+  const drawer = _$("bookmark-drawer");
+  let startX = 0;
+  let startW = 0;
+
+  handle.addEventListener("pointerdown", (e) => {
+    if (window.innerWidth < 769) return;
+    e.preventDefault();
+    startX = e.clientX;
+    startW = drawer.offsetWidth;
+    handle.setPointerCapture(e.pointerId);
+    handle.addEventListener("pointermove", onPointerMove);
+    handle.addEventListener("pointerup", onPointerUp, { once: true });
+  });
+
+  /** @param {PointerEvent} e */
+  function onPointerMove(e) {
+    const delta = startX - e.clientX; // drag left = wider
+    const newW = Math.min(Math.max(startW + delta, 240), window.innerWidth * 0.85);
+    drawer.style.width = `${newW}px`;
+  }
+
+  function onPointerUp() {
+    handle.removeEventListener("pointermove", onPointerMove);
+  }
+}
+
 // ── Window facade ──
 // Both an `appBookmark` aggregate (for new ESM-style import-or-window
 // access) and per-name globals (so existing bare `parseVerseSpec(...)` /
@@ -1974,6 +2043,8 @@ const appBookmark = {
   enterVerseSelectMode, exitVerseSelectMode,
   updateVerseSelectionBoundaries, updateVerseSelectBar,
   openDriveDisconnectModal,
+  // Phase 8 drawer geometry init
+  initBookmarkSheetDrag, initBookmarkDrawerResize,
 };
 window.appBookmark = appBookmark;
 
@@ -2006,6 +2077,9 @@ window.exitVerseSelectMode = exitVerseSelectMode;
 window.updateVerseSelectionBoundaries = updateVerseSelectionBoundaries;
 window.updateVerseSelectBar = updateVerseSelectBar;
 window.openDriveDisconnectModal = openDriveDisconnectModal;
+// Phase 8: drawer drag/resize handle init — called from app.js bootstrap.
+window.initBookmarkSheetDrag = initBookmarkSheetDrag;
+window.initBookmarkDrawerResize = initBookmarkDrawerResize;
 
 export {
   parseVerseSpec, collapseFullVerseRefs, selectedVersesToSpec, mergeVerseSpecs,
@@ -2020,4 +2094,5 @@ export {
   enterVerseSelectMode, exitVerseSelectMode,
   updateVerseSelectionBoundaries, updateVerseSelectBar,
   openDriveDisconnectModal,
+  initBookmarkSheetDrag, initBookmarkDrawerResize,
 };

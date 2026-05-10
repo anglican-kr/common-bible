@@ -628,6 +628,8 @@ export interface AppBookmark {
   _setupDragHandle: (li: HTMLElement, row: HTMLElement) => void;
   resetSwipedRow: () => void;
   closeSwipedRowIfOutside: (target: EventTarget | null) => void;
+  initBookmarkSheetDrag: () => void;
+  initBookmarkDrawerResize: () => void;
 }
 
 // ── App search facade (js/app/search.js) ────────────────────────────────────
@@ -834,6 +836,8 @@ declare global {
   function exitVerseSelectMode(): void;
   function updateVerseSelectionBoundaries(article: Element | null): void;
   function updateVerseSelectBar(): void;
+  function initBookmarkSheetDrag(): void;
+  function initBookmarkDrawerResize(): void;
   function openSearchSheet(query?: string): void;
   function closeSearchSheet(): void;
   function renderSearchResults(query: string, page: number, autoNavigate?: boolean): Promise<void>;

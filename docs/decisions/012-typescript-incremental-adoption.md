@@ -116,3 +116,14 @@ ADR-001은 "프레임워크 없는 Vanilla JS"를 선언하고 있고 ADR-005·0
 > **임시 인프라**: `tsconfig.app.json`(`checkJs: true`, `noImplicitAny: false`)을 두어 단계별 검증. `js/app.js` 헤드의 `// @ts-check` 영구 활성화와 `tsconfig.app.json` 삭제는 **`js/app.js` 파일 분할(modularization) 리팩터링과 결합한 별도 의제로 보류** — 5,800줄 단일 파일에 `noImplicitAny: true`를 일거에 적용하면 ~262 implicit any가 발생하는데, 이를 모듈 단위로 옵트인해 정리하는 게 자연스럽기 때문.
 >
 > **다음 라운드 트리거**: `js/app.js` 분할 리팩터링 의제 시작 시점. 본 ADR 본문의 검토한 대안 표에 "`.ts` 파일 + tsc 빌드 산출물 배포: ❌ ADR-001 SPA 단순성 훼손" 결정은 그대로 유효.
+
+> **개정 (2026-05-10): 2차 적용 2라운드 완료**
+>
+> ADR-018 모듈 분할(Phase 1~8)을 끝내며 `js/app.js`에 `// @ts-check`를 영구 활성화하고 임시 `tsconfig.app.json`을 삭제했다. 이제 메인 `tsconfig.json` 한 곳에서 검증한다(checkJs: false + 모듈별 `// @ts-check` opt-in).
+>
+> **적용 파일**(전체 ESM, 각 파일 헤드에 `// @ts-check`):
+>
+> - sync 레이어(1차): `js/sync/state-machine.js`, `refresh-store.js`, `transport.js`, `store-v2.js`, `debug-log.js`, `js/drive-sync.js`, `js/search-worker.js`
+> - app 레이어(2차): `js/app.js`(부트스트랩 ~283줄), `js/app/helpers.js`, `storage.js`, `settings-ui.js`, `install.js`, `search.js`, `reading-context.js`, `bookmark.js`, `views-routing.js`
+>
+> **검증**: `npx tsc -p tsconfig.json --noEmit` 0 error, `tsconfig.worker.json --noEmit` 0 error. `node --test tests/unit/*.test.js` 245 케이스 통과.
