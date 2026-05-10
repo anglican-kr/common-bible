@@ -89,24 +89,17 @@ window.announce = announce;
 // `openDriveDisconnectModal` was extracted to bookmark.js (Phase 6b).
 window.clearAllCaches = clearAllCaches;
 
-const $app = _$("app");
-const $title = _$("page-title");
+// Anchors retained here — still referenced by app.js's `announce()`
+// ($announce) and Escape keydown handler ($searchSheet). All other
+// $X anchors moved to their owning modules in earlier phases (helpers /
+// storage / settings-ui / install / search / bookmark / views-routing).
 const $announce = _$("a11y-announce");
-const $audioBar = _$("audio-bar");
-const $resumeBannerSlot = _$("resume-banner-slot");
-// Search-related anchors retained here — still referenced by app.js's
-// Escape keydown handler ($searchSheet), route() handler ($searchBar /
-// $searchInput / $searchClear), and audio bar lift ($searchFab). The
-// remaining 11 search-only anchors live inside js/app/search.js (Phase 5).
-const $searchBar = _$("search-bar");
-const $searchInput = /** @type {HTMLInputElement} */ (_$("search-input"));
-const $searchClear = _$("search-clear");
-const $searchFab = _$("search-fab");
 const $searchSheet = _$("search-sheet");
 
-// `booksCache` and `appVersion` were extracted to js/app/views-routing.js
-// (ADR-018 Phase 7a) along with `loadBooks` / `loadVersion`.
-/** @type {HTMLAudioElement | null} */
+// `booksCache` / `appVersion` / `currentAudio` / `_audioController` /
+// `_audioSaveTimer` were extracted to js/app/views-routing.js
+// (ADR-018 Phase 7a/7b). `_scrollTrackCleanup` / `_isInitialLoad` /
+// `startScrollTracking` moved with them.
 
 // ── Accessibility ──
 

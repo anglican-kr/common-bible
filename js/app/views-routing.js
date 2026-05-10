@@ -18,12 +18,12 @@
 /** @typedef {import("../types").BibleChapter} BibleChapter */
 /** @typedef {import("../types").BiblePrologue} BiblePrologue */
 
-const { _$, el, clearNode, chUnit, setInert, trapFocus } = window.appHelpers;
+const { _$, el, clearNode, chUnit, trapFocus } = window.appHelpers;
 const {
   loadBookOrder, loadStartupBehavior,
   loadReadingPosition, saveReadingPosition, clearReadingPosition,
   loadAudioTime, saveAudioTime, clearAudioTime,
-  loadBookmarks, _maybeRequestPersist,
+  _maybeRequestPersist,
 } = window.appStorage;
 const { dismissLaunchScreen } = window.appSettings;
 const { readingContext } = window;
