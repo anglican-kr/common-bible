@@ -10,7 +10,9 @@
 - 개정: 2026-05-05 (Phase 2f — iOS OAuth 풀페이지 리디렉션)
 - 개정: 2026-05-06 (Phase 2f 머지 — Cursor Bugbot 6차 리뷰 정제 + GIS 토큰 빈 응답 stuck fix)
 - 개정: 2026-05-06 (Phase 2g — iOS 앱 재실행 시 silent prompt=none 자동 리디렉션)
-- 상태: 승인됨 (Phase 2a~2g 완료)
+- 개정: 2026-05-08 (Phase 2h 완료 — PKCE + refresh token 마이그레이션, desktop·Android·iOS 단일 경로 통일)
+- 개정: 2026-05-08 (Phase 2i 완료 — sync 사이클 캐시, 라운드트립 단축)
+- 상태: 승인됨 (Phase 2a~2i 완료, PKCE 단일 경로 운영 중. 미결: Google OAuth 검수)
 
 ## 결정
 
@@ -489,7 +491,7 @@ ADR-013 (클라이언트 JS 유닛 테스트 전략) 참고. 위 6차 리뷰 정
 - **Consent 거부 후 자동 silent 재시도 차단**: `signIn()`은 명시적 재연결 진입에서 silent-blocked 플래그를 비우는데, Google에서 사용자가 consent를 거부하고 돌아오면 (`__pendingRedirectError`) `initDriveSync()`이 토스트만 띄우고 `_machine.enable()`을 호출 → DISABLED+ENABLE iOS 분기가 (email 있음 + silent-blocked 없음) prompt=none을 즉시 발사 → 토스트 파괴 + 무용한 round-trip. iOS 분기에서 `__pendingRedirectError` 처리 시 silent-blocked=1을 설정해 `enable()`이 NEEDS_CONSENT에 정착하도록 정정.
 - **silent-blocked 키 단일화**: `signIn()`은 `window._syncSilentBlockedKey` 상수를 사용했지만 IIFE 2곳과 `signOut()`은 리터럴 `"bible-drive-silent-blocked"`을 하드코딩 → Phase 2f에서 `REDIRECT_ATTEMPTS_KEY`로 잡았던 것과 동일한 패턴. 모두 상수 참조로 통일.
 
-## Phase 2h — PKCE + Refresh Token 마이그레이션 (진행 중 2026-05-06~)
+## Phase 2h — PKCE + Refresh Token 마이그레이션 (완료 2026-05-06~08)
 
 > **개정 (2026-05-07):** 본 ADR 상단 line 51 "OAuth Flow" 결정표에서 **Authorization Code + PKCE를 채택, Implicit Flow는 deprecated로 거부**라고 명시했음에도, Phase 2b 실제 구현은 GIS Token Client 기반 Implicit Flow로 진행되어 ADR-구현 정합성이 깨졌다. 이후 Phase 2c~2g가 그 어긋난 토대 위에서 iOS·desktop UX를 누적 보정해 왔으나, 데스크탑 cold start마다 GIS OAuth 팝업창이 뜨는 사용자 보고(2026-05-06)가 들어오면서 근본 원인이 Implicit Flow의 refresh token 부재임이 드러남. 본 Phase 2h는 ADR이 처음부터 지시했던 PKCE 흐름으로 회귀하면서 desktop·iOS 모두 단일 경로로 통일한다.
 
