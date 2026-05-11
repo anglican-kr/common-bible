@@ -275,21 +275,37 @@ DB: "bible-drive-sync" (v1)
     ts: 1715000000000,           // 만료 검사 (10분)
     flow: "pkce-v1",             // 콜백 라우팅 디스크리미네이터
     silent: false,               // prompt=none 여부
-    historyLengthAtRedirect: 3,  // 콜백 후 history.go(-delta) 정리에 사용 (2026-05-11)
+  })
+
+"bible-drive-back-nav-context":      // 2026-05-11 추가 — 백 버튼 점프용
+  JSON.stringify({
+    historyLengthAtRedirect: 3,      // 리다이렉트 직전 history.length 스냅샷
+    ts: 1715000000000,               // 10분 만료
   })
 ```
 
-> **2026-05-11 추가 — 백 버튼 히스토리 정리**
+> **2026-05-11 추가 — 콜백 후 뒤로 가기 처리**
 >
 > 콜백 후 단순 back을 누르면 `accounts.google.com`의 로그인 화면으로 되돌아가는
-> UX 문제를 해소하기 위해, `beginRedirectAuth`가 리다이렉트 직전의
-> `history.length`를 스냅샷으로 저장한다. 콜백 시점에 `consumeRedirectCallback`은
-> 현재 `history.length`와의 차이(`historyDelta`)를 결과에 포함시키고,
-> `acceptRedirectCode`는 토큰 교환 + IDB 저장이 완료된 뒤 `history.go(-delta)`로
-> Google이 추가한 항목들을 한 번에 건너뛴다. delta가 비정상(2 미만 / 10 초과)인
-> 경우(클릭 시 forward stack이 있던 가장자리 케이스 등)는 정리를 생략한다.
-> 구버전 sessionStorage 페이로드(snapshot 필드 없음)는 `historyDelta=null`로 표기해
-> 동일하게 skip 처리한다.
+> UX 문제를 해소하기 위한 2단 방어:
+>
+> 1. **back-nav guard**: 토큰 교환 성공 직후 state-machine이 현재 URL과 같은
+>    URL의 guard 항목을 `pushState`로 한 장 올려둔다 (가짜 카드 한 장). 사용자가
+>    뒤로 가기를 누르면 guard 항목이 빠지면서 그 아래의 returnTo 항목에서
+>    `popstate`가 발생 → 핸들러가 가로챈다.
+> 2. **history.length 스냅샷 기반 점프**: 위 핸들러는 `beginRedirectAuth`가
+>    리다이렉트 직전 별도 키(`bible-drive-back-nav-context`)에 저장해 둔
+>    `history.length`를 읽어, 현재 길이와의 차이로 "Google이 추가한 항목 수"를
+>    계산한다. 그 값이 2~10 범위에 들고 스냅샷이 2 이상이면 (= 클릭 시 사용자가
+>    첫 화면이 아니었으면) `history.go(-delta)`를 호출해 Google 항목들과 연결
+>    버튼이 있던 페이지 자체를 모두 건너뛰고 **클릭 직전에 보고 있던 페이지**에
+>    한 번에 착지한다.
+>
+> snapshot/delta가 비정상 범위에 들면 (Safari `history.length` 캡, 클릭 시
+> forward stack 잔존, 첫 화면에서 클릭한 경우 등) 안전 폴백으로 같은 자리에
+> 다시 guard 항목을 `pushState` 해 둔다 — 적어도 Google 화면으로 떨어지지는
+> 않는다. guard는 성공/폴백과 관계없이 60초 후 자동 해제되어, 사용자가 나중에
+> 정상적으로 뒤로 가기를 사용할 때 영구적인 가로채기가 남지 않는다.
 
 #### 3.4.3 localStorage (기존 키 유지)
 

@@ -87,16 +87,19 @@ test("4. beginRedirectAuth: location.href에 올바른 OAuth URL 설정", async 
   assert.match(url.searchParams.get("code_challenge") ?? "", /^[A-Za-z0-9_-]+$/);
   assert.match(url.searchParams.get("state") ?? "", /^[a-f0-9]{64}$/, "32바이트 hex nonce");
 
-  // sessionStorage에 verifier+nonce+returnTo+flow+historyLengthAtRedirect 저장
+  // sessionStorage에 verifier+nonce+returnTo+flow 저장
   const saved = JSON.parse(sessionStorage.getItem("bible-drive-redirect-state-pkce"));
   assert.equal(saved.flow, "pkce-v1");
   assert.equal(saved.returnTo, "/gen/3");
   assert.equal(typeof saved.verifier, "string");
   assert.equal(saved.verifier.length, 43);
   assert.equal(saved.nonce, url.searchParams.get("state"));
-  // history.length snapshot lets the callback compute how many entries the
-  // Google flow injected → state machine scrubs them via history.go(-delta).
-  assert.equal(saved.historyLengthAtRedirect, 1);
+
+  // 별도 키에 history.length snapshot 저장 — 콜백 단발 소비와 분리해서
+  // state-machine의 back-nav guard가 점프 거리를 계산하는 데 사용.
+  const backNav = JSON.parse(sessionStorage.getItem("bible-drive-back-nav-context"));
+  assert.equal(backNav.historyLengthAtRedirect, 1);
+  assert.equal(typeof backNav.ts, "number");
 });
 
 test("5. beginRedirectAuth: prompt 옵션이 없으면 URL에 prompt 파라미터 미포함", async () => {
@@ -156,7 +159,6 @@ test("9. consumeRedirectCallback: 정상 callback → {ok:true, code, verifier}"
     code: "auth-code-xyz",
     verifier: saved.verifier,
     returnTo: saved.returnTo || "/",
-    historyDelta: 0,
   });
   // single-use: state should be cleared
   assert.equal(ss2.getItem("bible-drive-redirect-state-pkce"), null);
@@ -232,35 +234,39 @@ test("14. consumeRedirectCallback: state 없음 → no_state", () => {
   assert.equal(result.reason, "no_state");
 });
 
-test("14b. consumeRedirectCallback: historyDelta = 현재 length - 저장된 snapshot", () => {
-  // Google 흐름이 항목 3개를 추가한 상황 시뮬레이션: snapshot=1, current=4 → delta=3.
-  const saved = JSON.stringify({
-    nonce: "n", verifier: "v".repeat(43), returnTo: "/gen/1",
-    ts: Date.now(), flow: "pkce-v1", historyLengthAtRedirect: 1,
-  });
-  const { transport, history } = loadTransport({
-    location: { search: "?code=auth-c&state=n" },
-    sessionStorageInit: { "bible-drive-redirect-state-pkce": saved },
-  });
-  history.length = 4;
-  const result = transport.consumeRedirectCallback();
-  assert.equal(result.ok, true);
-  assert.equal(result.historyDelta, 3);
+test("14b. beginRedirectAuth: 별도 키에 back-nav snapshot도 함께 저장", async () => {
+  // history.length를 일부러 다르게 두고 snapshot에 그대로 반영되는지 확인.
+  // state-machine의 back-nav guard가 점프 거리를 계산할 때 이 값을 쓴다.
+  const { transport, history, sessionStorage } = loadTransport();
+  history.length = 5;
+  await transport.beginRedirectAuth("c", "s");
+  const backNav = JSON.parse(sessionStorage.getItem("bible-drive-back-nav-context"));
+  assert.equal(backNav.historyLengthAtRedirect, 5);
+  assert.equal(typeof backNav.ts, "number");
 });
 
-test("14c. consumeRedirectCallback: 구버전 state(snapshot 없음)는 historyDelta = null", () => {
-  // 배포 직후 in-flight 콜백 호환성: 새 필드 없는 payload는 cleanup skip 신호.
-  const saved = JSON.stringify({
-    nonce: "n", verifier: "v".repeat(43), returnTo: "/",
-    ts: Date.now(), flow: "pkce-v1",
+test("14c. beginRedirectAuth: back-nav snapshot은 redirect-state 소비와 무관하게 유지", async () => {
+  // consumeRedirectCallback이 redirect-state-pkce 키를 소비해도 back-nav 키는
+  // 그대로 살아남아야 한다 (state-machine이 콜백 한참 뒤에 읽기 때문).
+  const { transport, sessionStorage } = loadTransport();
+  await transport.beginRedirectAuth("c", "s");
+  const saved = JSON.parse(sessionStorage.getItem("bible-drive-redirect-state-pkce"));
+
+  const { transport: t2, sessionStorage: ss2 } = loadTransport({
+    location: { search: `?code=x&state=${saved.nonce}` },
+    sessionStorageInit: {
+      "bible-drive-redirect-state-pkce": JSON.stringify(saved),
+      "bible-drive-back-nav-context": JSON.stringify({
+        historyLengthAtRedirect: 3,
+        ts: Date.now(),
+      }),
+    },
   });
-  const { transport } = loadTransport({
-    location: { search: "?code=c&state=n" },
-    sessionStorageInit: { "bible-drive-redirect-state-pkce": saved },
-  });
-  const result = transport.consumeRedirectCallback();
-  assert.equal(result.ok, true);
-  assert.equal(result.historyDelta, null);
+  t2.consumeRedirectCallback();
+  // redirect-state는 소비됐어도 back-nav 컨텍스트는 살아있음.
+  assert.equal(ss2.getItem("bible-drive-redirect-state-pkce"), null);
+  const backNav = JSON.parse(ss2.getItem("bible-drive-back-nav-context"));
+  assert.equal(backNav.historyLengthAtRedirect, 3);
 });
 
 // ── exchangeCodeForToken ─────────────────────────────────────────────────────

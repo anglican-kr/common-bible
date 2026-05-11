@@ -2,27 +2,28 @@
 
 ## 2026-05-11
 
-### OAuth 콜백 후 뒤로 가기 시 Google 로그인 화면 복귀 방지
+### OAuth 콜백 후 뒤로 가기로 동기화 직전 페이지에 착지
 
-증상: Google 계정 연결 직후 브라우저 뒤로 가기를 누르면 `accounts.google.com`의 로그인 화면으로 이동. 콜백 핸들러가 `?code=...` URL만 `history.replaceState`로 지웠을 뿐, 그 직전에 쌓인 Google 측 히스토리 항목들은 그대로 남아있어 한 번의 뒤로 가기로 노출되던 상태.
+증상: Google 계정 연결 직후 브라우저 뒤로 가기를 누르면 `accounts.google.com`의 로그인 화면으로 이동. 콜백 핸들러가 `?code=...` URL만 `history.replaceState`로 지웠을 뿐, 그 직전에 쌓인 Google 측 히스토리 항목들은 그대로 남아 한 번의 뒤로 가기로 노출되던 상태. 크로스 오리진 히스토리 항목은 JS로 가로채거나 제거할 수 없다는 게 핵심 제약.
 
-크로스 오리진(google.com) 히스토리 항목은 JS로 가로챌 수 없고 `replaceState`로도 제거가 불가능. 해결책으로 `history.go(-delta)` 한 번에 Google이 추가한 항목들을 통째로 건너뛰는 방식 채택. delta 계산은 다음과 같다:
+**1차 시도(history.go-only)**: 토큰 교환 직후 `history.go(-delta)`로 Google 항목을 통째로 건너뛰는 방식. 실제 dev 배포(1.4.9)에서 검증 시 여전히 Google 화면으로 복귀하는 케이스가 관측됨 — Safari의 `history.length` 캡, 클릭 시 forward stack 잔존, 콜백 처리와 사용자의 뒤로 가기 클릭 간 타이밍 등 변수가 많아 신뢰 부족. 1.4.9 릴리스는 되돌리고 `fix/oauth-back-nav` 브랜치에서 재설계.
 
-1. `beginRedirectAuth`: 리다이렉트 직전 `history.length`를 sessionStorage 상태(`bible-drive-redirect-state-pkce`)의 `historyLengthAtRedirect` 필드로 함께 저장.
-2. `consumeRedirectCallback`: 콜백 시점에 `현재 history.length - 저장값`을 `historyDelta`로 결과에 포함.
-3. `acceptRedirectCode`: 토큰 교환 + IDB 저장 + IDLE 전이 + SYNC_REQUEST 디스패치를 모두 마친 뒤, `delta`가 2~10 범위면 `window.history.go(-delta)` 호출. 범위 밖이면 정리를 건너뛴다 — 클릭 시 forward stack이 있던 가장자리 케이스이거나 비정상 페이로드일 가능성이 높아, 예기치 못한 페이지로 떨어뜨리느니 기존 동작 유지가 안전.
+**채택안 (2단 방어)**:
 
-배포 직후 새 코드와 옛 sessionStorage 페이로드가 공존하는 짧은 시간에는 `historyDelta=null`로 표시되어 동일하게 정리를 건너뛰므로 호환성 깨짐 없음. 본 변경이 영향 주는 곳:
+1. **back-nav guard** — 토큰 교환 성공 직후 state-machine이 현재 URL과 같은 URL의 guard 항목을 `pushState`로 한 장 올려둔다. 시각적 변화는 없고, 첫 뒤로 가기를 가로채기 위한 동일-오리진 hook이 생긴다. 60초 후 자동 해제(잊혀진 guard가 영구적으로 뒤로 가기를 가로채는 일 방지).
+2. **첫 popstate 시 점프** — 사용자가 뒤로 가기를 누르면 guard에서 빠지면서 `popstate` 발생. 핸들러는 `beginRedirectAuth`가 별도 키(`bible-drive-back-nav-context`)에 저장해 둔 클릭 시점 `history.length`를 읽고 `현재 - snapshot = delta`(Google이 추가한 항목 수)를 계산해 `history.go(-delta)`로 한 번에 점프. 결과적으로 Google 항목들과 연결 버튼이 있던 페이지 자체를 모두 건너뛰어 **클릭 직전 사용자가 보고 있던 페이지**에 착지.
+3. **안전 폴백** — snapshot이 1(첫 화면에서 클릭)이거나 delta가 2~10 범위를 벗어나면(Safari `history.length` 캡, 클릭 시 forward stack 잔존 등), 같은 자리에 guard를 다시 `pushState`. 결과: 뒤로 가기가 "흡수"만 되어 사용자가 같은 페이지에 머무름. Google 화면으로 절대 떨어지지 않음.
 
-- `js/sync/transport.js` — snapshot 저장 + delta 계산
-- `js/drive-sync.js` — IIFE → `window.__pendingRedirectHistoryDelta` 스태시 → `initDriveSync`가 `acceptRedirectCode`로 전달
-- `js/sync/state-machine.js` — 성공 경로 끝에서 `history.go(-delta)` 호출
-- `js/types.d.ts` — `RedirectCallbackResult.historyDelta`, `Window.__pendingRedirectHistoryDelta`, `SyncMachine.acceptRedirectCode` 시그니처 갱신
-- `docs/design/pkce-migration.md` §3.4.2 — sessionStorage 스키마에 새 필드 + 인라인 메모
+본 변경이 영향 주는 곳:
 
-**테스트**: 유닛 테스트 +2 케이스(transport.test.js 14b/14c — delta 계산 + null 폴백). 전체 유닛 473 → 475, 모두 통과. 기존 4번 테스트는 snapshot 필드 단언 추가.
+- `js/sync/transport.js` — `beginRedirectAuth`가 `bible-drive-back-nav-context` 키에 클릭 시점 snapshot 저장. 콜백 결과 시그니처는 원복(historyDelta 제거).
+- `js/sync/state-machine.js` — `acceptRedirectCode` 성공 경로 끝에서 `_installOAuthBackGuard` 호출. guard 설치 + popstate 핸들러 + 60초 타임아웃 + snapshot-기반 점프 로직.
+- `js/drive-sync.js`, `js/types.d.ts` — `acceptRedirectCode` 시그니처 (code, verifier) 원복.
+- `docs/design/pkce-migration.md` §3.4.2 — sessionStorage 스키마에 `bible-drive-back-nav-context` 키 추가 + 인라인 설명 갱신.
 
-**한계**: forward stack이 있는 상태에서 클릭하면 snapshot이 truncate 이후 길이보다 커서 delta가 음수~0으로 떨어지는데, 가드에 막혀 정리만 건너뛰는 형태. 흔한 경우는 아니지만 완전 무결한 해법은 popup 기반 OAuth로의 회귀가 필요하며 이는 PKCE 마이그레이션(ADR-017)의 의도에 어긋나 채택하지 않음.
+**테스트**: 유닛 +2 케이스(transport.test.js 14b/14c — back-nav 키 저장 + 콜백 소비 후에도 별도 키 유지). 전체 473 → 475, 모두 통과. 기존 4번 테스트는 redirect-state 스키마(snapshot 제거) + back-nav 별도 키 단언으로 갱신.
+
+**한계**: 폴백 케이스(snapshot=1, 또는 forward stack 잔존)에서는 뒤로 가기가 "흡수"만 되어 직전 페이지 점프가 불가능. 완전 무결한 점프는 클릭 시점에 페이지 URL을 명시적으로 별도 저장하는 방식이 필요하나, 현재의 SPA 라우팅 상태와 직접 결합되어야 해서 다음 의제로 미룸.
 
 ### 1.4.8 릴리스 — 예레미야 본문 수정 반영 (131df04)
 

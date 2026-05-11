@@ -328,19 +328,17 @@ function createSyncMachine({ onStateChange } = {}) {
   // and initDriveSync calls this. Exchanges for access+refresh tokens, persists
   // refresh to IDB, transitions to IDLE.
   //
-  // `historyDelta` is the number of session-history entries the Google round
-  // trip injected (auth screen + any consent/sign-in pages + final 302 to our
-  // redirect_uri). On the success path, after IDB persistence completes, we
-  // call history.go(-historyDelta) so a single back-press from the app skips
-  // past Google's sign-in. Skipped when the delta is null (cross-version state
-  // payload) or outside a sane range — better to leave history untouched than
-  // strand the user on an unexpected page.
+  // After the token exchange succeeds we install a popstate-based back guard
+  // (see _installOAuthBackGuard below) so a back-press from the app doesn't
+  // land the user on Google's sign-in screen. We tried history.go(-delta)
+  // earlier — fragile in practice because history.length is capped on Safari
+  // and varies when the click had a non-empty forward stack. The guard sits
+  // above whatever Google added to history and absorbs back-presses for 60s.
   /**
    * @param {string} code
    * @param {string} verifier
-   * @param {number | null} [historyDelta]
    */
-  async function acceptRedirectCode(code, verifier, historyDelta = null) {
+  async function acceptRedirectCode(code, verifier) {
     if (!code || !verifier) return;
     L.log({ kind: "ACTION", event: "REDIRECT_CODE_RECEIVED" });
     const resp = await T.exchangeCodeForToken(
@@ -385,20 +383,103 @@ function createSyncMachine({ onStateChange } = {}) {
     _refreshUI();
     dispatch({ type: "SYNC_REQUEST" });
 
-    // Scrub Google's OAuth screen from session history so back-navigation
-    // returns the user to the page where they clicked "연결", not to the sign-in
-    // form. Range guard: delta < 2 means the snapshot was unreliable (forward
-    // stack at click time truncated history.length below expectation); delta > 10
-    // means an implausibly deep Google flow or a stale/replayed payload — in
-    // either case, leaving history untouched is safer than risking an unexpected
-    // landing page. The traversal crosses cross-document entries (Google's
-    // origin), which most browsers handle via a single jump to the destination
-    // without loading intermediates; the refresh token is already in IDB, so
-    // any cold-start re-init resumes silently.
-    if (typeof historyDelta === "number" && historyDelta >= 2 && historyDelta <= 10) {
-      L.log({ kind: "ACTION", event: "HISTORY_SCRUB", delta: historyDelta });
-      window.history.go(-historyDelta);
-    }
+    // Install a back-navigation guard so a back-press from the app doesn't
+    // surface Google's sign-in screen. See _installOAuthBackGuard for the
+    // popstate-based mechanism + 60s auto-disable.
+    _installOAuthBackGuard();
+  }
+
+  // Back-navigation guard installed after a successful OAuth callback.
+  //
+  // Goal: a single back-press from the post-OAuth page should land the user
+  // on the page they were viewing BEFORE they clicked "연결" — not on Google's
+  // sign-in screen, and not on a "stuck at current page" no-op.
+  //
+  // Mechanism:
+  //   1. Push a same-origin guard entry on top of the post-OAuth page. The
+  //      guard's URL equals the current URL so there is no visible flicker.
+  //   2. On the first popstate that leaves the guard (user pressed back), read
+  //      the history.length snapshot transport.js captured at click time. The
+  //      difference (now − snapshot) is the number of entries Google's flow
+  //      added; history.go(-delta) from the post-guard position lands exactly
+  //      on the entry the user was viewing before the connect button click.
+  //   3. If the snapshot is missing, unreliable, or out of a sane range
+  //      (Safari history.length cap, non-empty forward stack at click time),
+  //      fall back to re-pushing the guard so back-press is at worst absorbed
+  //      — never escalates to a Google screen.
+  //   4. Auto-disable after 60s so a forgotten guard cannot hijack normal
+  //      back-navigation forever.
+  function _installOAuthBackGuard() {
+    if (typeof window === "undefined" || !window.history) return;
+    const guardUrl = window.location.href;
+
+    let active = true;
+    const release = () => {
+      if (!active) return;
+      active = false;
+      window.removeEventListener("popstate", onPop);
+      L.log({ kind: "ACTION", event: "OAUTH_BACK_GUARD_RELEASED" });
+    };
+
+    /** @param {PopStateEvent} e */
+    const onPop = (e) => {
+      if (!active) return;
+      // Popstate that lands us back ON the guard (e.g., forward navigation
+      // returning to it). No action needed; let the user proceed.
+      const state = /** @type {{ __oauthGuard?: boolean } | null} */ (e.state);
+      if (state?.__oauthGuard) return;
+
+      // User pressed back, leaving the guard. Try the precise jump first.
+      const ctx = _readBackNavContext();
+      if (ctx && ctx.historyLengthAtRedirect >= 2) {
+        const delta = window.history.length - ctx.historyLengthAtRedirect;
+        // Sanity range: at least 2 (the bare redirect + callback), no more
+        // than 10 (defensive cap against pathological Google flows or stale
+        // payloads). Within this band we trust the snapshot enough to jump.
+        if (delta >= 2 && delta <= 10) {
+          _clearBackNavContext();
+          L.log({ kind: "ACTION", event: "OAUTH_BACK_GUARD_JUMP", delta });
+          release();
+          window.history.go(-delta);
+          return;
+        }
+      }
+
+      // Snapshot missing or out of range — re-push the guard so the user is
+      // not delivered to Google's sign-in screen by the next back-press.
+      try {
+        window.history.pushState({ __oauthGuard: true }, "", guardUrl);
+        L.log({ kind: "ACTION", event: "OAUTH_BACK_GUARD_RE_PUSH" });
+      } catch (_) { /* best effort */ }
+    };
+
+    try {
+      window.history.pushState({ __oauthGuard: true }, "", guardUrl);
+    } catch (_) { return; }
+    window.addEventListener("popstate", onPop);
+    L.log({ kind: "ACTION", event: "OAUTH_BACK_GUARD_INSTALLED" });
+    setTimeout(release, 60_000);
+  }
+
+  // Read back-nav snapshot stashed by transport.beginRedirectAuth. Defensive
+  // parsing — a malformed payload (manual tampering, version skew) yields null
+  // and the caller falls back to the trap-absorb behavior.
+  /** @returns {{ historyLengthAtRedirect: number; ts: number } | null} */
+  function _readBackNavContext() {
+    try {
+      const raw = sessionStorage.getItem("bible-drive-back-nav-context");
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (typeof parsed?.historyLengthAtRedirect !== "number") return null;
+      if (typeof parsed?.ts !== "number") return null;
+      // Stale snapshots (>10min) likely belong to an orphaned attempt — ignore.
+      if (Date.now() - parsed.ts > 10 * 60 * 1000) return null;
+      return parsed;
+    } catch (_) { return null; }
+  }
+
+  function _clearBackNavContext() {
+    try { sessionStorage.removeItem("bible-drive-back-nav-context"); } catch (_) {}
   }
 
   /** @param {string} token */

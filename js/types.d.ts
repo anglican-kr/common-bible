@@ -153,14 +153,8 @@ export interface SyncMachine {
   dispatch: (event: SyncEvent) => void;
   // PKCE entry: drive-sync.js IIFE stashes {code, verifier} from a redirect
   // callback; initDriveSync hands them off here. Exchanges for access+refresh
-  // tokens, persists refresh to IndexedDB, transitions to IDLE. `historyDelta`
-  // is the entry count Google's flow injected — after successful exchange the
-  // machine calls history.go(-delta) so back-press skips Google's sign-in.
-  acceptRedirectCode: (
-    code: string,
-    verifier: string,
-    historyDelta?: number | null,
-  ) => Promise<void>;
+  // tokens, persists refresh to IndexedDB, transitions to IDLE.
+  acceptRedirectCode: (code: string, verifier: string) => Promise<void>;
   getState: () => SyncState;
   getToken: () => string | null;
   getEmail: () => string | null;
@@ -199,13 +193,9 @@ export interface DriveUploadResult {
 }
 
 // PKCE Authorization Code callback. Success branch carries the auth code and
-// PKCE verifier for the follow-up POST to /token. `historyDelta` is the number
-// of session-history entries the Google flow injected between begin and
-// callback — the state machine passes it to history.go(-delta) so back-press
-// skips past Google's sign-in screen. Null when the snapshot field is missing
-// from a cross-version sessionStorage payload.
+// PKCE verifier for the follow-up POST to /token.
 export type RedirectCallbackResult =
-  | { ok: true; code: string; verifier: string; returnTo: string; historyDelta: number | null }
+  | { ok: true; code: string; verifier: string; returnTo: string }
   | { ok: false; reason: string; returnTo?: string };
 
 // /token endpoint responses for the two grant types we use.
@@ -702,10 +692,6 @@ declare global {
     // by initDriveSync().
     __pendingRedirectCode?: { code: string; verifier: string };
     __pendingRedirectError?: string;
-    // Entries the Google flow injected — handed to acceptRedirectCode so it
-    // can history.go(-delta) after the token exchange. Null when the field
-    // is missing from a cross-version sessionStorage payload.
-    __pendingRedirectHistoryDelta?: number | null;
 
     // Pre-fetched data/books.json promise (js/pre-fetch.js). app.js's
     // loadBooks() awaits this when present rather than re-issuing the fetch.

@@ -70,6 +70,14 @@ function isIOS() {
 const _REDIRECT_STATE_KEY = "bible-drive-redirect-state-pkce";
 const _REDIRECT_STATE_MAX_AGE_MS = 10 * 60 * 1000;
 
+// Snapshot of session-history length taken right before the page navigates to
+// Google. The state machine reads this after a successful callback to compute
+// how many history entries the Google round trip added, so a single back-press
+// from the app can jump directly to the page the user was on BEFORE clicking
+// "연결". Held in its own key so consumeRedirectCallback's single-use cleanup
+// of the OAuth state doesn't accidentally remove it.
+const _BACK_NAV_KEY = "bible-drive-back-nav-context";
+
 /** @returns {string} */
 function _genNonce() {
   const buf = new Uint8Array(32);
@@ -124,13 +132,15 @@ async function beginRedirectAuth(clientId, scope, { prompt } = {}) {
   const { verifier, challenge } = await generatePKCEPair();
   const nonce = _genNonce();
   const returnTo = location.pathname + location.search;
-  // Snapshot history.length so the callback can compute how many entries the
-  // Google flow injected (sign-in / consent / final 302). The state machine
-  // calls history.go(-delta) after a successful exchange so a single back-press
-  // from the app doesn't surface Google's sign-in screen.
   sessionStorage.setItem(_REDIRECT_STATE_KEY, JSON.stringify({
     nonce, verifier, returnTo, ts: Date.now(), flow: "pkce-v1",
+  }));
+  // Capture history.length BEFORE the redirect so the post-callback back-nav
+  // guard can compute "Google flow entry count" and jump past them in one
+  // history.go() rather than absorbing back-presses indefinitely.
+  sessionStorage.setItem(_BACK_NAV_KEY, JSON.stringify({
     historyLengthAtRedirect: history.length,
+    ts: Date.now(),
   }));
 
   const params = new URLSearchParams({
@@ -202,15 +212,6 @@ function consumeRedirectCallback() {
   sessionStorage.removeItem(_REDIRECT_STATE_KEY);
   const returnTo = saved.returnTo || "/";
 
-  // Number of history entries the Google round trip added: auth screen, any
-  // consent/sign-in pages, and the final 302 to our redirect_uri. Caller uses
-  // this to scrub Google's entries from session history. Null when the saved
-  // state predates the snapshot field (cross-version callback in flight during
-  // a deploy) — caller skips cleanup in that case.
-  const savedLen = typeof saved.historyLengthAtRedirect === "number"
-    ? saved.historyLengthAtRedirect : null;
-  const historyDelta = savedLen !== null ? history.length - savedLen : null;
-
   if (Date.now() - saved.ts > _REDIRECT_STATE_MAX_AGE_MS) {
     return { ok: false, reason: "state_expired", returnTo };
   }
@@ -223,7 +224,7 @@ function consumeRedirectCallback() {
     return { ok: false, reason: "missing_verifier", returnTo };
   }
 
-  return { ok: true, code, verifier: saved.verifier, returnTo, historyDelta };
+  return { ok: true, code, verifier: saved.verifier, returnTo };
 }
 
 /**
