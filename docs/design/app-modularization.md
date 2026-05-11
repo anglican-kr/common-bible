@@ -4,8 +4,9 @@
 > 시점 고정 결정 기록은 ADR-018 + 본 문서의 진행 일지 참조.
 
 - 작성: 2026-05-09
-- 상태: **결정 확정** — Phase 1 진행 예정
-- 관련 ADR: ADR-001(SPA), ADR-012(TS 점진 도입, 2차 1라운드 완료), ADR-013(유닛 테스트), ADR-016(오디오 캐시), ADR-018(본 의제)
+- 종료: 2026-05-10 (Phase 1~8 머지 완료)
+- 상태: **완료** — `js/app.js` 6,082 → 283줄 (95% 감소), 9개 도메인 모듈 분할 + ESM 일괄 전환(ADR-019) + ADR-012 2차 라운드 종료
+- 관련 ADR: ADR-001(SPA), ADR-012(TS 점진 도입, 1·2차 완료), ADR-013(유닛 테스트), ADR-016(오디오 캐시), ADR-018(본 의제), ADR-019(ESM)
 - 1라운드 문서: `docs/design/app-typescript-migration.md`
 
 ---
@@ -405,3 +406,4 @@ CLAUDE.md `tests/e2e/` 절차를 따라 사용자 수동 실행:
 | 2026-05-10 | Phase 7b 작성 완료 | Views + Routing + Audio Player 전체를 views-routing.js에 합류(540 → 1,783줄, +1,243). Phase 7a 시점에 임시 노출했던 4개 const facade는 같은 모듈 안 caller로 흡수돼 자연 해소(잔존 노출). 추가 이전: Audio Player 상태 3개(`currentAudio`/`_audioController`/`_audioSaveTimer`), Routing 상태 2개(`_scrollTrackCleanup`/`_isInitialLoad`), `startScrollTracking`(Reading position section에 잔류했던 routing-internal 함수). popstate listener도 동행. **DOMContentLoaded 부트스트랩은 app.js 잔류**(app-main 책임): `route`/`loadVersion`/`initCompactHeader`/`maybeShowInstallNudge`는 window facade로 호출, `initSheetDrag`(search.js)·`initBookmarkSheetDrag`/`initBookmarkDrawerResize`(app.js Phase 8 잔류)·`registerServiceWorker`(app.js)는 module-local. `currentAudio` 접근을 위한 `window.getCurrentAudio` 게터 신설(app.js 접근성 spacebar handler용). gtag-init.js의 `function gtag()` module-scoped 잔재 회귀 정리: `window.gtag = gtag` 노출 + dataLayer ?? 가드. types.d.ts에 `Window.getCurrentAudio`/`gtag`/`dataLayer`/`appVersion` + 글로벌 `function gtag` + `const dataLayer` 추가. CLAUDE.md 트리에 app.js 역할 갱신(부트스트랩 + 접근성 + Audio cache LRU + SW 등록 잔류 ~460줄). SHELL_CACHE shell-61 → shell-62. app.js 1,650 → 464줄 (−1,186). 누적 6,082 → 464줄 (−5,618, **92% 감소**). main + worker tsc 0 error, **app.config 0 error**(gtag/dataLayer 잔재 동시 해소!), 유닛 245 통과 |
 | 2026-05-10 | Phase 7b 머지 (#103) | Bugbot 3차(stale facade 5건 + 중복 appVersion + 미사용 import + stale anchor + 4개 const stale facade) 모두 fix 적용 후 main 통합. app.js 464줄 |
 | 2026-05-10 | Phase 8 작성 완료 — **모듈 분할 종료** | 잔류 정리: app.js의 `initBookmarkSheetDrag`/`initBookmarkDrawerResize` → bookmark.js (drawer geometry init은 bookmark 모듈 책임) + bookmark.js facade에 `appBookmark.initBookmarkSheetDrag`/`initBookmarkDrawerResize` 추가, types.d.ts AppBookmark + 글로벌 declare 갱신. app.js 헤드 슬림화: 미사용 typedef 14개 + 미사용 destructure(storage 25개 중 22개, helpers 6개 중 4개) 제거, 마이그레이션 경위 코멘트 정리, dead 섹션 마커(`Reading position` / `Font size` / `Book order` / `Helpers`) 정리. **`// @ts-check` 영구 활성화** + `tsconfig.app.json` 삭제. ADR-012 2차 라운드 종료 마킹 + ADR-018 본 의제 종료. CLAUDE.md "현재 상태" 섹션의 모듈 분할 항목 갱신, `project_inflight_work.md` 메모리 종료. SHELL_CACHE shell-62 → shell-63. app.js 464 → 283줄 (−181). 누적 6,082 → 283줄 (**95% 감소**). main + worker tsc 0 error, 유닛 245 통과 |
+| 2026-05-10 | Phase 8 머지 — **의제 종료** | Phase 1~8 8 PR이 모두 main 통합. 최종 결과: `js/app.js` 283줄(부트스트랩 + 접근성 keydown + Audio cache LRU 소프트캡 + SW 등록만 잔류), `js/app/` 9개 도메인 모듈(helpers·storage·settings-ui·install·search·reading-context·bookmark·views-routing 8개 + 잔류 app.js), ESM 일괄 채택, ADR-012 2차 라운드 종료, 유닛 테스트 baseline 111 → 245 케이스. 후속 의제는 `project_inflight_work.md` / `project_unit_test_expansion.md` 메모리 참조 |

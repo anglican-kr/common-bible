@@ -4,9 +4,10 @@
 > 시점 고정 결정 기록은 ADR-011 §Phase 2h 참조.
 
 - 작성: 2026-05-07
-- 상태: 단계 5 PR open — 단계 1·2·3·4 모두 머지 완료, 5는 정리 단계
-- 관련 ADR: ADR-001(SPA), ADR-011(북마크 동기화), ADR-012(TS), ADR-013(유닛 테스트)
-- 보안 감사: `docs/audit/2026-05-07-pkce-refresh-token.md`
+- 종료: 2026-05-08 (Phase 2h 단계 1~6 머지 완료)
+- 상태: **완료** — PKCE + refresh token 단일 경로 운영 중. 데스크톱·Android·iOS 모두 같은 흐름. 단계 6에서 dev/prod 환경 분리 + nginx BFF(ADR-017) + 탭 활성화 자동 sync까지 동행. 후속 Phase 2i(sync 사이클 캐시, 2026-05-08)도 종료
+- 관련 ADR: ADR-001(SPA), ADR-011(북마크 동기화, Phase 2h·2i 완료), ADR-012(TS), ADR-013(유닛 테스트), ADR-017(nginx BFF)
+- 보안 감사: `docs/audit/2026-05-07-pkce-refresh-token.md` — Critical/High/Medium 0건. `docs/audit/2026-05-08-second-comprehensive.md`(2차) — Critical 0, High 4 즉시 fix(PR #67)
 
 ---
 
