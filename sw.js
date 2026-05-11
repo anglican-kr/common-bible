@@ -3,8 +3,8 @@
 // caches are preserved across shell-only releases. Bump DATA_CACHE only when
 // bible JSON or search index format changes; bump AUDIO_CACHE only when mp3
 // sources are re-encoded.
-const SHELL_CACHE = "shell-63";
-const DATA_CACHE = "data-2";
+const SHELL_CACHE = "shell-64";
+const DATA_CACHE = "data-3";
 const AUDIO_CACHE = "audio-1"; // must equal js/audio-cache.js AUDIO_CACHE_NAME
 
 // LRU metadata sidecar for AUDIO_CACHE. Loaded best-effort: if the import
