@@ -247,30 +247,76 @@ test("detectPlatform: iPad iPadOS desktop UA + maxTouchPoints>1 → 'ios-safari'
   assert.equal(h.install.detectPlatform(), "ios-safari");
 });
 
-test("detectPlatform: iOS Chrome (CriOS) → 'ios-other'", () => {
+test("detectPlatform: iOS 17 Chrome (CriOS) → 'ios-other'", () => {
   const h = loadInstallState({
     userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) CriOS/120.0",
   });
   assert.equal(h.install.detectPlatform(), "ios-other");
 });
 
-test("detectPlatform: iOS Firefox (FxiOS) → 'ios-other'", () => {
+test("detectPlatform: iOS 17 Firefox (FxiOS) → 'ios-other'", () => {
   const h = loadInstallState({
     userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) FxiOS/120.0",
   });
   assert.equal(h.install.detectPlatform(), "ios-other");
 });
 
-test("detectPlatform: iOS Edge (EdgiOS) → 'ios-other'", () => {
+test("detectPlatform: iOS 17 Edge (EdgiOS) → 'ios-other'", () => {
   const h = loadInstallState({
     userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0) EdgiOS/120.0",
   });
   assert.equal(h.install.detectPlatform(), "ios-other");
 });
 
-test("detectPlatform: iOS Google App (GSA) → 'ios-other'", () => {
+test("detectPlatform: iOS 17 Google App (GSA) → 'ios-other'", () => {
   const h = loadInstallState({
     userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0) GSA/200.0",
+  });
+  assert.equal(h.install.detectPlatform(), "ios-other");
+});
+
+test("detectPlatform: iOS 16 Chrome (CriOS) → 'ios-legacy'", () => {
+  const h = loadInstallState({
+    userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) CriOS/118.0",
+  });
+  assert.equal(h.install.detectPlatform(), "ios-legacy");
+});
+
+test("detectPlatform: iOS 15 Firefox (FxiOS) → 'ios-legacy'", () => {
+  const h = loadInstallState({
+    userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 15_7 like Mac OS X) FxiOS/115.0",
+  });
+  assert.equal(h.install.detectPlatform(), "ios-legacy");
+});
+
+test("detectPlatform: iPadOS desktop-class UA + CriOS + Version/17 → 'ios-other'", () => {
+  // iPad in desktop-class UA mode masquerades as Mac; getIOSMajor falls back
+  // to the Version/X.Y token to recover the OS version.
+  const h = loadInstallState({
+    userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/17.0 CriOS/120.0 Safari/604.1",
+    platform: "MacIntel",
+    maxTouchPoints: 5,
+  });
+  assert.equal(h.install.detectPlatform(), "ios-other");
+});
+
+test("detectPlatform: iPadOS desktop-class UA + CriOS + Version/16 → 'ios-legacy'", () => {
+  const h = loadInstallState({
+    userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/16.6 CriOS/118.0 Safari/604.1",
+    platform: "MacIntel",
+    maxTouchPoints: 5,
+  });
+  assert.equal(h.install.detectPlatform(), "ios-legacy");
+});
+
+test("detectPlatform: iPadOS desktop-class UA + CriOS without Version/ → assumes ≥17 → 'ios-other'", () => {
+  // Some Chrome iOS builds on iPad omit the Version/ token altogether.
+  // Best-effort fallback: assume modern (17+) since older iPadOS Chrome
+  // did not mask UA as desktop.
+  const h = loadInstallState({
+    userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 CriOS/120.0 Safari/604.1",
+    platform: "MacIntel",
+    maxTouchPoints: 5,
   });
   assert.equal(h.install.detectPlatform(), "ios-other");
 });
@@ -531,13 +577,29 @@ test("nudge: installed platform → no-op", () => {
   assert.equal(h.getState().visits, 0);
 });
 
-test("nudge: ios-other platform → no-op", () => {
+test("nudge: ios-other (iOS 17+ non-Safari) → opens modal same as ios-safari", () => {
+  // iOS 17+ Chrome/Firefox/Edge support share-menu "Add to Home Screen",
+  // so the nudge should fire just like on Safari.
   const h = loadNudge({
     platformReturn: "ios-other",
     initialState: { visits: 0, nextShow: 1, neverShow: false },
   });
   h.maybeShowInstallNudge();
+  h.fireTimers();
+  assert.equal(h.openCalls.length, 1);
+});
+
+test("nudge: ios-legacy (iOS ≤16 non-Safari) → no-op", () => {
+  // Older iOS non-Safari browsers can't install to home screen — nudging is
+  // pointless. The modal still shows "open in Safari" if the user explicitly
+  // opens it from settings.
+  const h = loadNudge({
+    platformReturn: "ios-legacy",
+    initialState: { visits: 0, nextShow: 1, neverShow: false },
+  });
+  h.maybeShowInstallNudge();
   assert.equal(h.getState().visits, 0);
+  assert.equal(h.timers.length, 0);
 });
 
 test("nudge: neverShow=true → returns early (visits NOT incremented)", () => {
