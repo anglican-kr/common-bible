@@ -87,13 +87,16 @@ test("4. beginRedirectAuth: location.href에 올바른 OAuth URL 설정", async 
   assert.match(url.searchParams.get("code_challenge") ?? "", /^[A-Za-z0-9_-]+$/);
   assert.match(url.searchParams.get("state") ?? "", /^[a-f0-9]{64}$/, "32바이트 hex nonce");
 
-  // sessionStorage에 verifier+nonce+returnTo+flow 저장
+  // sessionStorage에 verifier+nonce+returnTo+flow+historyLengthAtRedirect 저장
   const saved = JSON.parse(sessionStorage.getItem("bible-drive-redirect-state-pkce"));
   assert.equal(saved.flow, "pkce-v1");
   assert.equal(saved.returnTo, "/gen/3");
   assert.equal(typeof saved.verifier, "string");
   assert.equal(saved.verifier.length, 43);
   assert.equal(saved.nonce, url.searchParams.get("state"));
+  // history.length snapshot lets the callback compute how many entries the
+  // Google flow injected → state machine scrubs them via history.go(-delta).
+  assert.equal(saved.historyLengthAtRedirect, 1);
 });
 
 test("5. beginRedirectAuth: prompt 옵션이 없으면 URL에 prompt 파라미터 미포함", async () => {
@@ -153,6 +156,7 @@ test("9. consumeRedirectCallback: 정상 callback → {ok:true, code, verifier}"
     code: "auth-code-xyz",
     verifier: saved.verifier,
     returnTo: saved.returnTo || "/",
+    historyDelta: 0,
   });
   // single-use: state should be cleared
   assert.equal(ss2.getItem("bible-drive-redirect-state-pkce"), null);
@@ -226,6 +230,37 @@ test("14. consumeRedirectCallback: state 없음 → no_state", () => {
   const result = transport.consumeRedirectCallback();
   assert.equal(result.ok, false);
   assert.equal(result.reason, "no_state");
+});
+
+test("14b. consumeRedirectCallback: historyDelta = 현재 length - 저장된 snapshot", () => {
+  // Google 흐름이 항목 3개를 추가한 상황 시뮬레이션: snapshot=1, current=4 → delta=3.
+  const saved = JSON.stringify({
+    nonce: "n", verifier: "v".repeat(43), returnTo: "/gen/1",
+    ts: Date.now(), flow: "pkce-v1", historyLengthAtRedirect: 1,
+  });
+  const { transport, history } = loadTransport({
+    location: { search: "?code=auth-c&state=n" },
+    sessionStorageInit: { "bible-drive-redirect-state-pkce": saved },
+  });
+  history.length = 4;
+  const result = transport.consumeRedirectCallback();
+  assert.equal(result.ok, true);
+  assert.equal(result.historyDelta, 3);
+});
+
+test("14c. consumeRedirectCallback: 구버전 state(snapshot 없음)는 historyDelta = null", () => {
+  // 배포 직후 in-flight 콜백 호환성: 새 필드 없는 payload는 cleanup skip 신호.
+  const saved = JSON.stringify({
+    nonce: "n", verifier: "v".repeat(43), returnTo: "/",
+    ts: Date.now(), flow: "pkce-v1",
+  });
+  const { transport } = loadTransport({
+    location: { search: "?code=c&state=n" },
+    sessionStorageInit: { "bible-drive-redirect-state-pkce": saved },
+  });
+  const result = transport.consumeRedirectCallback();
+  assert.equal(result.ok, true);
+  assert.equal(result.historyDelta, null);
 });
 
 // ── exchangeCodeForToken ─────────────────────────────────────────────────────

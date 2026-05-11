@@ -69,8 +69,9 @@ localStorage.removeItem("bible-drive-silent-blocked");
 
   if (result.ok) {
     window.__pendingRedirectCode = { code: result.code, verifier: result.verifier };
+    window.__pendingRedirectHistoryDelta = result.historyDelta;
     localStorage.setItem("bible-drive-sync", "1");
-    log?.log({ kind: "ACTION", event: "PKCE_CALLBACK_OK" });
+    log?.log({ kind: "ACTION", event: "PKCE_CALLBACK_OK", historyDelta: result.historyDelta });
   } else {
     window.__pendingRedirectError = result.reason;
     log?.log({ kind: "ERROR", event: "PKCE_CALLBACK_FAIL", reason: result.reason });
@@ -143,8 +144,10 @@ function initDriveSync() {
   // user previously toggled sync off.
   if (window.__pendingRedirectCode) {
     const { code, verifier } = window.__pendingRedirectCode;
+    const historyDelta = window.__pendingRedirectHistoryDelta ?? null;
     delete window.__pendingRedirectCode;
-    void _machine.acceptRedirectCode(code, verifier);
+    delete window.__pendingRedirectHistoryDelta;
+    void _machine.acceptRedirectCode(code, verifier, historyDelta);
     return;
   }
 

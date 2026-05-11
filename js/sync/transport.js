@@ -124,8 +124,13 @@ async function beginRedirectAuth(clientId, scope, { prompt } = {}) {
   const { verifier, challenge } = await generatePKCEPair();
   const nonce = _genNonce();
   const returnTo = location.pathname + location.search;
+  // Snapshot history.length so the callback can compute how many entries the
+  // Google flow injected (sign-in / consent / final 302). The state machine
+  // calls history.go(-delta) after a successful exchange so a single back-press
+  // from the app doesn't surface Google's sign-in screen.
   sessionStorage.setItem(_REDIRECT_STATE_KEY, JSON.stringify({
     nonce, verifier, returnTo, ts: Date.now(), flow: "pkce-v1",
+    historyLengthAtRedirect: history.length,
   }));
 
   const params = new URLSearchParams({
@@ -197,6 +202,15 @@ function consumeRedirectCallback() {
   sessionStorage.removeItem(_REDIRECT_STATE_KEY);
   const returnTo = saved.returnTo || "/";
 
+  // Number of history entries the Google round trip added: auth screen, any
+  // consent/sign-in pages, and the final 302 to our redirect_uri. Caller uses
+  // this to scrub Google's entries from session history. Null when the saved
+  // state predates the snapshot field (cross-version callback in flight during
+  // a deploy) — caller skips cleanup in that case.
+  const savedLen = typeof saved.historyLengthAtRedirect === "number"
+    ? saved.historyLengthAtRedirect : null;
+  const historyDelta = savedLen !== null ? history.length - savedLen : null;
+
   if (Date.now() - saved.ts > _REDIRECT_STATE_MAX_AGE_MS) {
     return { ok: false, reason: "state_expired", returnTo };
   }
@@ -209,7 +223,7 @@ function consumeRedirectCallback() {
     return { ok: false, reason: "missing_verifier", returnTo };
   }
 
-  return { ok: true, code, verifier: saved.verifier, returnTo };
+  return { ok: true, code, verifier: saved.verifier, returnTo, historyDelta };
 }
 
 /**

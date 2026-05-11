@@ -1,5 +1,102 @@
 # 작업 일지
 
+## 2026-05-11
+
+### OAuth 콜백 후 뒤로 가기 시 Google 로그인 화면 복귀 방지
+
+증상: Google 계정 연결 직후 브라우저 뒤로 가기를 누르면 `accounts.google.com`의 로그인 화면으로 이동. 콜백 핸들러가 `?code=...` URL만 `history.replaceState`로 지웠을 뿐, 그 직전에 쌓인 Google 측 히스토리 항목들은 그대로 남아있어 한 번의 뒤로 가기로 노출되던 상태.
+
+크로스 오리진(google.com) 히스토리 항목은 JS로 가로챌 수 없고 `replaceState`로도 제거가 불가능. 해결책으로 `history.go(-delta)` 한 번에 Google이 추가한 항목들을 통째로 건너뛰는 방식 채택. delta 계산은 다음과 같다:
+
+1. `beginRedirectAuth`: 리다이렉트 직전 `history.length`를 sessionStorage 상태(`bible-drive-redirect-state-pkce`)의 `historyLengthAtRedirect` 필드로 함께 저장.
+2. `consumeRedirectCallback`: 콜백 시점에 `현재 history.length - 저장값`을 `historyDelta`로 결과에 포함.
+3. `acceptRedirectCode`: 토큰 교환 + IDB 저장 + IDLE 전이 + SYNC_REQUEST 디스패치를 모두 마친 뒤, `delta`가 2~10 범위면 `window.history.go(-delta)` 호출. 범위 밖이면 정리를 건너뛴다 — 클릭 시 forward stack이 있던 가장자리 케이스이거나 비정상 페이로드일 가능성이 높아, 예기치 못한 페이지로 떨어뜨리느니 기존 동작 유지가 안전.
+
+배포 직후 새 코드와 옛 sessionStorage 페이로드가 공존하는 짧은 시간에는 `historyDelta=null`로 표시되어 동일하게 정리를 건너뛰므로 호환성 깨짐 없음. 본 변경이 영향 주는 곳:
+
+- `js/sync/transport.js` — snapshot 저장 + delta 계산
+- `js/drive-sync.js` — IIFE → `window.__pendingRedirectHistoryDelta` 스태시 → `initDriveSync`가 `acceptRedirectCode`로 전달
+- `js/sync/state-machine.js` — 성공 경로 끝에서 `history.go(-delta)` 호출
+- `js/types.d.ts` — `RedirectCallbackResult.historyDelta`, `Window.__pendingRedirectHistoryDelta`, `SyncMachine.acceptRedirectCode` 시그니처 갱신
+- `docs/design/pkce-migration.md` §3.4.2 — sessionStorage 스키마에 새 필드 + 인라인 메모
+
+**테스트**: 유닛 테스트 +2 케이스(transport.test.js 14b/14c — delta 계산 + null 폴백). 전체 유닛 473 → 475, 모두 통과. 기존 4번 테스트는 snapshot 필드 단언 추가.
+
+**한계**: forward stack이 있는 상태에서 클릭하면 snapshot이 truncate 이후 길이보다 커서 delta가 음수~0으로 떨어지는데, 가드에 막혀 정리만 건너뛰는 형태. 흔한 경우는 아니지만 완전 무결한 해법은 popup 기반 OAuth로의 회귀가 필요하며 이는 PKCE 마이그레이션(ADR-017)의 의도에 어긋나 채택하지 않음.
+
+### 1.4.8 릴리스 — 예레미야 본문 수정 반영 (131df04)
+
+`data/source/` 서브모듈에서 예레미야 본문 정정안이 머지됨에 따라 파이프라인을 다시 돌려 `data/bible/jer-*.json` + 검색 인덱스 재생성, version + SW CACHE_NAME bump.
+
+### 유닛 테스트 대량 확장 (78 → 473 케이스) + QA 폴더 컨벤션 정착
+
+ADR-018 모듈 분할이 끝난 직후 app 레이어로 유닛 테스트를 확장하는 후속 의제를 진행. sync 레이어 한정이었던 커버리지를 다음 영역으로 넓혔다:
+
+- `storage.js` 비-search-history 영역
+- `helpers.js`
+- `install.js` (INSTALL_STATE + NUDGE)
+- `views-routing.js` (POPOVER + COMPACT_HEADER)
+- `bookmark.js` (HREF / ACTIVE / IMPORT_EXPORT, 추가 70건)
+- `search.js` (HISTORY_CONTROLLER, 36건 기존 + 추가)
+
+각 작업마다 `docs/qa/YYYY-MM-DD-unit-{topic}.md` 비기술 독자용 보고서를 함께 작성하는 컨벤션을 정착(`docs/qa/README.md`에 톤·구조 명시). CI 워크플로우에서 같은 테스트가 두 번 실행되던 문제도 정리.
+
+ADR-013 한차례 jsdom dual-track 허용으로 개정했다가, 실효 비용 검토 후 도입 보류 + 미커버 영역은 e2e가 책임으로 재정정. CLAUDE.md '현재 상태' 섹션 유닛 테스트 케이스 수 두 차례 갱신(78 → 309 → 473).
+
+### 문서 대정비
+
+- **CLAUDE.md 2차 압축** — '현재 상태' 섹션 50+줄을 12줄로 축약, 모듈별 라인 수 같은 빠르게 stale 되는 디테일은 architecture.md로 위임.
+- **architecture.md 현행화** — §4 모듈 지도 + 부록 B를 ADR-018·019 완료 상태 기준으로 다시 작성. 로드 방식·파일 수·운문 포맷 설명 정확도 수정, 비기술 독자 가독성 다듬기.
+- **ADR 8개 + 살아있는 설계 문서 4개 status 라인 현행화** — Phase 진행 표현(예: "단계 4 진행 중" → "단계 4 완료")을 실제 상태와 정렬.
+
+## 2026-05-10
+
+### app.js 모듈 분할 완주 — Phase 6~8 (ADR-018, PR #97·#100·#101·#103)
+
+전날 시작된 Phase 1~5(helpers/storage/settings-ui/install/search 추출)에 이어 나머지를 마무리:
+
+- **Phase 6a** — `reading-context.js` 신설 + `bookmark.js` 추출 시작
+- **Phase 6b** — 북마크 UI 전체(드로어·시트·모달 4종) 추출
+- **Phase 7a** — `views-routing.js` 신설 + 유닛 28건
+- **Phase 7b** — Views + Routing + Audio Player 합쳐 추출
+- **Phase 8** — 마지막 잔재 facade(`window._xxx`) 정리 + `// @ts-check` 영구 활성화
+
+최종: `js/app.js` 6,082 → 283줄, 9개 도메인 모듈, ESM. Bugbot 리뷰 4라운드에서 데드 변수·미사용 destructure·stale facade·stale anchor·미사용 import 등 약 10여 건 정리.
+
+`bookmark.js` 유닛 테스트도 70건 추가. CLAUDE.md '현재 상태'에 ADR-018 완료 줄 추가, `docs/design/app-modularization.md` 상태 갱신.
+
+## 2026-05-09
+
+### app.js JSDoc 도입 + ESM 전환 + 모듈 분할 Phase 1~5 (ADR-012 2차·ADR-018·ADR-019)
+
+큰 줄기로 묶이는 하루치 작업:
+
+1. **JSDoc 7-PR 시리즈**(PR-1 ~ PR-7) — app.js 6,000+줄 전반에 `@param`/`@returns` 타입 주석 점진 추가. 처음에는 `// @ts-check` 영구 활성화도 함께 시도했지만 분할 의제가 더 시급하다고 판단해 1라운드 종료 후 분할 의제로 이관.
+2. **ESM 일괄 전환(ADR-019 신설)** — 모든 클라이언트 JS를 `<script type="module">`로 통일. 전환 직후 cross-module bare global 호출이 끊기는 회귀가 발견되어 즉시 폴백 fix.
+3. **app.js 모듈 분할 Phase 1~5(ADR-018)** — `helpers.js` → `storage.js` → `settings-ui.js` → `install.js` → `search.js` 순으로 추출. 각 Phase에서 추출된 함수의 호출자가 더 이상 `window.xxx`로 도달하지 않도록 import 경로 정리.
+4. **search.js 유닛 테스트 36건 추가** + CI job 이름 `Unit tests (sync layer)` → `Unit tests`. ADR-013에 "한 모듈 = 한 테스트 파일" 명명 컨벤션 도입.
+
+### nginx BFF 보강 + Bugbot fix (PR #77)
+
+`nginx/oauth-proxy.example.conf`에 다음 추가:
+
+- Permissions-Policy 추가 directive (보안 헤더 백로그 #6 일부 처리)
+- `/oauth/token` 경로 rate limiting (`limit_req_zone`)
+- njs `bff_inject_client_secret`이 body 안에 `client_secret`이 이미 있으면 거절(SPA가 우회 시도하지 못하게)
+
+Bugbot이 percent-encoded 키(`client%5Fsecret`)로 검증을 우회할 수 있다고 지적 → percent-decoded 형태도 함께 차단.
+
+### 1.4.7 릴리스 + 모바일 UX 다듬기
+
+- **핀치 줌 비활성화** — `viewport` meta에 `user-scalable=no`. 한 손 읽기 중 의도치 않은 줌으로 행 폭이 깨지던 문제 해소(접근성 trade-off 검토: 시스템 폰트 사이즈 조절은 그대로 동작하므로 시각 보조 사용자에게 영향 없음 확인).
+- **pull-to-refresh 스피너 디자인** — 기존 일반 원형 스피너를 iOS 3/4 호 스타일로 교체, 동기화 진행 중에는 화면 스크림(어두운 오버레이)으로 입력 차단.
+- **'실험' 라벨 제거** — 백업 & 동기화 설정에서 베타 표시 제거(Phase 2h·2i 안정화 단계 도달).
+- version.json + sw.js CACHE_NAME bump.
+
+### 이사야 본문 갱신 → OT 검색 인덱스 재생성 + DATA_CACHE bump
+
+`data/source/` 서브모듈에서 이사야 정정안 머지 → `python src/parser.py` + `search_indexer.py` 재실행해 `data/bible/isa-*.json` + `data/search-ot.json` 갱신. SW의 `DATA_CACHE` v1 → v2로 bump해 기존 캐시 무효화.
+
 ## 2026-05-08
 
 ### 2차 통합 보안 감사 + 오디오 캐시 hardening (PR #67)
@@ -174,6 +271,26 @@ dev 시운전 중 `/token` 요청이 `400 invalid_request: "client_secret is mis
 | `README.md` | Drive 동기화 표 + 프로젝트 구조 + ADR 인덱스 갱신 |
 | `CLAUDE.md` | 현재 상태 Phase 2h 완료 + 단계 6 + nginx/ 디렉터리 |
 | `version.json`, `sw.js` | 1.4.6 |
+
+### 동기화 사이클 캐시 (Phase 2i, PR #73)
+
+같은 세션 안에서 반복되는 Drive `files.list`(파일 ID 조회) + `files/{id}` 메타(etag) 다운로드를 매 동기화마다 하지 않도록, 상태 머신에 fileId·etag·lastSyncedAt 메모리 캐시를 도입. localStorage `bible-drive-sync-{cache,etag,updated}` 3-key로 분리 저장 — 한쪽 파편 손상돼도 다른 키가 그래스풀하게 폴백. signOut / NEEDS_CONSENT 진입 시 `_clearCache()`로 비워 다음 계정으로의 잔재 방지.
+
+순수 round-trip 단축 최적화로 사용자 가시 변화 없음 — sync 트리거 후 인식 가능한 지연이 줄어드는 정도. 회귀 가드는 state-machine 유닛 테스트가 cache 일관성 단언을 포함.
+
+### 북마크 UX 회귀 fix 모음 (#70 / #71 / #72)
+
+- **#70**: 북마크 시트 행 높이가 일부 항목에서 어긋나고 모바일 드래그-재정렬이 끊기던 문제. 행 컴포넌트의 패딩/높이 일관화 + 터치 이벤트 핸들러 정리.
+- **#71**: 북마크 드로어가 닫혔다가 다시 열릴 때 stale 좌표를 들고 있어, 같은 폴더에 드롭한 게 머지 권유로 잘못 인식되던 문제. 드로어 열기 시점에 좌표 재측정.
+- **#72**: 롱프레스 드래그 진입 직후 고스트 요소의 top이 0으로 튀던 문제. 진입 시점의 pointer Y를 초기값으로 고정.
+
+### 오디오 플레이어 총 재생시간 미리 표시
+
+기존에는 사용자가 재생 버튼을 누른 뒤에야 메타데이터가 로드되어 길이가 채워졌다. 트랙이 보이는 순간(시트 마운트) preload 메타데이터를 살짝 끌어와 길이를 미리 표시 — 사용자가 듣기 전에도 분량을 가늠할 수 있게.
+
+### 선택된 마지막 절 hover 라운드 회귀 fix
+
+여러 절을 드래그 선택한 뒤 마지막 절에 hover하면 라운드 처리가 빠지던 회귀. CSS `:hover` 셀렉터 우선순위가 선택 상태 클래스에 가려져 발생. 명시도 정렬로 해소.
 
 ---
 

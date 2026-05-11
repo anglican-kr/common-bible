@@ -327,11 +327,20 @@ function createSyncMachine({ onStateChange } = {}) {
   // PKCE redirect-flow entry: drive-sync.js IIFE stashes {code, verifier}
   // and initDriveSync calls this. Exchanges for access+refresh tokens, persists
   // refresh to IDB, transitions to IDLE.
+  //
+  // `historyDelta` is the number of session-history entries the Google round
+  // trip injected (auth screen + any consent/sign-in pages + final 302 to our
+  // redirect_uri). On the success path, after IDB persistence completes, we
+  // call history.go(-historyDelta) so a single back-press from the app skips
+  // past Google's sign-in. Skipped when the delta is null (cross-version state
+  // payload) or outside a sane range — better to leave history untouched than
+  // strand the user on an unexpected page.
   /**
    * @param {string} code
    * @param {string} verifier
+   * @param {number | null} [historyDelta]
    */
-  async function acceptRedirectCode(code, verifier) {
+  async function acceptRedirectCode(code, verifier, historyDelta = null) {
     if (!code || !verifier) return;
     L.log({ kind: "ACTION", event: "REDIRECT_CODE_RECEIVED" });
     const resp = await T.exchangeCodeForToken(
@@ -375,6 +384,21 @@ function createSyncMachine({ onStateChange } = {}) {
     _transition(S.IDLE, {}, { type: "REDIRECT_CODE_ACCEPTED" });
     _refreshUI();
     dispatch({ type: "SYNC_REQUEST" });
+
+    // Scrub Google's OAuth screen from session history so back-navigation
+    // returns the user to the page where they clicked "연결", not to the sign-in
+    // form. Range guard: delta < 2 means the snapshot was unreliable (forward
+    // stack at click time truncated history.length below expectation); delta > 10
+    // means an implausibly deep Google flow or a stale/replayed payload — in
+    // either case, leaving history untouched is safer than risking an unexpected
+    // landing page. The traversal crosses cross-document entries (Google's
+    // origin), which most browsers handle via a single jump to the destination
+    // without loading intermediates; the refresh token is already in IDB, so
+    // any cold-start re-init resumes silently.
+    if (typeof historyDelta === "number" && historyDelta >= 2 && historyDelta <= 10) {
+      L.log({ kind: "ACTION", event: "HISTORY_SCRUB", delta: historyDelta });
+      window.history.go(-historyDelta);
+    }
   }
 
   /** @param {string} token */

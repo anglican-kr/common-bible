@@ -345,6 +345,17 @@ export function loadTransport(opts = {}) {
     return innerFetch(url, init);
   };
 
+  // Minimal history stub. transport.js reads `history.length` when persisting
+  // PKCE state and `history.go(-N)` is exercised through state-machine paths,
+  // not transport directly — capturing calls here is enough for the few unit
+  // tests that touch it.
+  const history = {
+    length: 1,
+    _goCalls: /** @type {number[]} */ ([]),
+    /** @param {number} n */
+    go(n) { history._goCalls.push(n); },
+  };
+
   const ctx = {
     console, Promise, Object, Array, Map, Set, JSON, Error,
     Uint8Array, ArrayBuffer, DataView,
@@ -356,6 +367,7 @@ export function loadTransport(opts = {}) {
     setTimeout, clearTimeout, setImmediate, clearImmediate,
     crypto: globalThis.crypto,
     location,
+    history,
     sessionStorage,
     localStorage,
     navigator: { userAgent, platform: "Linux x86_64", maxTouchPoints: 0 },
@@ -369,6 +381,7 @@ export function loadTransport(opts = {}) {
     transport: ctx.syncTransport,
     ctx,
     location,
+    history,
     sessionStorage,
     localStorage,
     fetchCalls,

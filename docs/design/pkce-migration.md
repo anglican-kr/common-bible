@@ -275,8 +275,21 @@ DB: "bible-drive-sync" (v1)
     ts: 1715000000000,           // 만료 검사 (10분)
     flow: "pkce-v1",             // 콜백 라우팅 디스크리미네이터
     silent: false,               // prompt=none 여부
+    historyLengthAtRedirect: 3,  // 콜백 후 history.go(-delta) 정리에 사용 (2026-05-11)
   })
 ```
+
+> **2026-05-11 추가 — 백 버튼 히스토리 정리**
+>
+> 콜백 후 단순 back을 누르면 `accounts.google.com`의 로그인 화면으로 되돌아가는
+> UX 문제를 해소하기 위해, `beginRedirectAuth`가 리다이렉트 직전의
+> `history.length`를 스냅샷으로 저장한다. 콜백 시점에 `consumeRedirectCallback`은
+> 현재 `history.length`와의 차이(`historyDelta`)를 결과에 포함시키고,
+> `acceptRedirectCode`는 토큰 교환 + IDB 저장이 완료된 뒤 `history.go(-delta)`로
+> Google이 추가한 항목들을 한 번에 건너뛴다. delta가 비정상(2 미만 / 10 초과)인
+> 경우(클릭 시 forward stack이 있던 가장자리 케이스 등)는 정리를 생략한다.
+> 구버전 sessionStorage 페이로드(snapshot 필드 없음)는 `historyDelta=null`로 표기해
+> 동일하게 skip 처리한다.
 
 #### 3.4.3 localStorage (기존 키 유지)
 
