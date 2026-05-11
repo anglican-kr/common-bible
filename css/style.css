@@ -2653,6 +2653,27 @@ body.verse-select-active .verse.verse-poetry[data-vref] {
   cursor: default;
 }
 
+#verse-select-copy-btn {
+  padding: 0.45rem 0.9rem;
+  background: none;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  font-family: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+  color: var(--accent);
+  transition: background 0.15s, opacity 0.15s;
+}
+
+#verse-select-copy-btn:hover {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+#verse-select-copy-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
 #verse-select-cancel-btn {
   padding: 0.45rem 0.8rem;
   background: none;
