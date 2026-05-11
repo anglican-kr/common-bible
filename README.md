@@ -37,6 +37,71 @@ git clone --recurse-submodules git@github.com:anglican-kr/common-bible.git
 git submodule update --init --recursive
 ```
 
+## git 서브모듈 운영
+
+본 저장소는 두 단계 nested 서브모듈을 가진다 (앱 → data → audio). 일상 작업에서 자주 만나는 명령어 모음.
+
+### data 변경 반영 (마크다운·파이프라인·빌드 산출물)
+
+```bash
+# 1. common-bible-data 저장소에서 작업 후 push
+cd data
+# ... 마크다운 수정 → 파이프라인 재실행 → 산출물 ...
+git commit -am "data: ..."
+git push
+
+# 2. 앱 저장소에서 서브모듈 포인터 bump
+cd ..
+git submodule update --remote data
+git commit -am "data: 서브모듈 포인터 bump"
+git push
+```
+
+### audio 변경 반영 (이중 hop)
+
+audio는 data 안의 nested 서브모듈이라 audio → data → 앱 두 단계로 포인터를 올려야 한다.
+
+```bash
+# 1. common-bible-audio에 새 mp3 push (LFS)
+cd data/audio
+# ... mp3 추가/교체 ...
+git commit -am "..."
+git push
+
+# 2. data 저장소에서 audio 서브모듈 포인터 bump
+cd ..
+git submodule update --remote audio
+git commit -am "chore: audio 서브모듈 포인터 bump"
+git push
+
+# 3. 앱 저장소에서 data 서브모듈 포인터 bump
+cd ..
+git submodule update --remote data
+git commit -am "data: 서브모듈 포인터 bump (audio 갱신)"
+git push
+```
+
+### 브랜치 switch 시 서브모듈 충돌 해소
+
+분할(ADR-020) 이전 브랜치(`data/`가 일반 디렉토리에 트래킹 파일들)와 이후 브랜치(`data/`가 서브모듈) 사이에 switch 시 `untracked working tree files would be overwritten` 에러가 난다 — working tree의 같은 경로가 서브모듈 안 파일과 부모 트래킹 파일에 동시 매핑되기 때문.
+
+```bash
+# 권장: 옛 브랜치를 분할 후로 fast-forward (working tree 안 건드림)
+git fetch origin
+git update-ref refs/heads/<branch> origin/<branch>
+git switch <branch>
+
+# 대안: 서브모듈 통째 비우고 switch (audio 6.3 GB 재 pull 비용)
+git submodule deinit -f data
+rm -rf data
+git switch <branch>
+git submodule update --init --recursive
+```
+
+### 작업 디렉토리 구분
+
+`cd data` 시 git 컨텍스트가 data 서브모듈로 바뀐다 — 앱 저장소 commit과 헷갈리지 않도록 작업 후 `git status`로 어느 저장소에서 작업 중인지 확인. 부모(앱 저장소)에서는 서브모듈 포인터(SHA) 외에 서브모듈 내부 파일을 직접 `git add`할 수 없다.
+
 ## 기술 스택
 
 - Frontend: HTML, CSS, Vanilla JavaScript (프레임워크 없음)
