@@ -109,6 +109,13 @@ function _clearUploadTimer() {
   _uploadTimer = null;
 }
 
+// Throttle window for non-user-initiated polls (visibilitychange). A poll
+// within this window of the last finished cycle is dropped — there's no
+// remote change worth a fresh 1+s round-trip. User actions (pull-to-refresh,
+// scheduleUpload after a local edit) bypass this and call requestSync()
+// directly.
+const POLL_THROTTLE_MS = 15_000;
+
 // ── Public API ─────────────────────────────────────────────────────────────────
 
 /**
@@ -227,6 +234,7 @@ window.driveSync = {
   deleteRemoteFile,
   scheduleUpload,
   requestSync: () => _machine.requestSync(),
+  pollSync: () => _machine.requestSync({ throttleMs: POLL_THROTTLE_MS }),
   isEnabled,
   isAuthenticated,
   getUserEmail,

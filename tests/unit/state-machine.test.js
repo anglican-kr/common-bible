@@ -946,6 +946,116 @@ test("38. silent refresh invalid_grant → 캐시도 함께 클리어", async ()
   assert.equal(localStorage.getItem(CACHE_SYNCED_U_KEY), null, "syncedMaxU 캐시 클리어");
 });
 
+// ── Group 13: requestSync 폴 throttle ────────────────────────────────────────
+// visibilitychange 트리거 폴이 1.1s 다운로드 round-trip을 4번 연속 쓰는 패턴이
+// 디버그 로그에서 관찰됐다(+103/+105/+108/+110s). throttleMs 옵션으로 마지막
+// 사이클 종료 후 N ms 이내 폴은 silent drop. 사용자 액션(scheduleUpload 후
+// 업로드, pull-to-refresh)은 throttle 미지정 → 항상 진행.
+
+test("40. requestSync({throttleMs}) — 첫 호출은 _lastSyncEndAt=0이라 throttle 미적용", async () => {
+  const downloadCalls = [];
+  const { machine, drain } = loadMachine({
+    initialRefreshToken: "rt-x",
+    initialStorage: {
+      [CACHE_FILE_ID_KEY]: "fid-cached",
+      [CACHE_ETAG_KEY]: '"e-cached"',
+      [CACHE_SYNCED_U_KEY]: "0",
+    },
+    overrideStubs: {
+      T: {
+        downloadSyncFile: async () => { downloadCalls.push(1); return { doc: null, etag: null, status: 304 }; },
+      },
+    },
+  });
+  machine.enable();
+  await drain(8);
+  // 1차 사이클 완료. 직후의 throttled 요청은 _lastSyncEndAt이 방금 채워졌으므로
+  // throttle window 안 → drop.
+  machine.requestSync({ throttleMs: 30_000 });
+  await drain(2);
+  assert.equal(downloadCalls.length, 1, "throttle window 안의 두 번째 폴은 drop");
+});
+
+test("41. requestSync({throttleMs}) — 마지막 사이클 종료 후 throttle window 안이면 drop", async () => {
+  const downloadCalls = [];
+  const log = [];
+  const { machine, drain, stubs } = loadMachine({
+    initialRefreshToken: "rt-x",
+    initialStorage: {
+      [CACHE_FILE_ID_KEY]: "fid-cached",
+      [CACHE_ETAG_KEY]: '"e-cached"',
+      [CACHE_SYNCED_U_KEY]: "0",
+    },
+    overrideStubs: {
+      T: {
+        downloadSyncFile: async () => { downloadCalls.push(1); return { doc: null, etag: null, status: 304 }; },
+      },
+    },
+  });
+  stubs.L.log = (e) => log.push(e);
+  machine.enable();
+  await drain(8);
+  // 첫 사이클 끝 → 즉시 두 번째 폴 시도 (window 안)
+  machine.requestSync({ throttleMs: 30_000 });
+  machine.requestSync({ throttleMs: 30_000 });
+  machine.requestSync({ throttleMs: 30_000 });
+  await drain(2);
+  assert.equal(downloadCalls.length, 1, "초기 사이클 1회만, 후속 폴 3건 모두 drop");
+  const throttled = log.filter((e) => e.event === "SYNC_THROTTLED");
+  assert.equal(throttled.length, 3, "drop된 폴 3건 모두 SYNC_THROTTLED 로그");
+});
+
+test("42. requestSync() (throttle 미지정) — 사용자 액션은 window 안에서도 항상 진행", async () => {
+  const downloadCalls = [];
+  const { machine, drain } = loadMachine({
+    initialRefreshToken: "rt-x",
+    initialStorage: {
+      [CACHE_FILE_ID_KEY]: "fid-cached",
+      [CACHE_ETAG_KEY]: '"e-cached"',
+      [CACHE_SYNCED_U_KEY]: "0",
+    },
+    overrideStubs: {
+      T: {
+        downloadSyncFile: async () => { downloadCalls.push(1); return { doc: null, etag: null, status: 304 }; },
+      },
+    },
+  });
+  machine.enable();
+  await drain(8);
+  // 첫 사이클 끝 직후 → pull-to-refresh 모사 (throttleMs 없음)
+  machine.requestSync();
+  await drain(8);
+  assert.equal(downloadCalls.length, 2, "사용자 액션은 throttle 영향 없이 진행");
+});
+
+test("43. requestSync({throttleMs}) — SYNCING 중 폴은 throttle 분기 전에 IDLE 가드로 drop", async () => {
+  // throttle 로직에 도달하기 전에 _state !== IDLE 가드에서 끊긴다.
+  // SYNC_THROTTLED 로그가 찍히지 않는 것으로 분기 순서를 확인.
+  const log = [];
+  let resolveDownload;
+  const dlPromise = new Promise((r) => { resolveDownload = r; });
+  const { machine, drain, stubs } = loadMachine({
+    initialRefreshToken: "rt-x",
+    initialStorage: {
+      [CACHE_FILE_ID_KEY]: "fid-cached",
+      [CACHE_ETAG_KEY]: '"e-cached"',
+      [CACHE_SYNCED_U_KEY]: "0",
+    },
+    overrideStubs: {
+      T: { downloadSyncFile: () => dlPromise },
+    },
+  });
+  stubs.L.log = (e) => log.push(e);
+  machine.enable();
+  await drain(3);
+  assert.equal(machine.getState(), "SYNCING", "다운로드 hold 중 SYNCING");
+  machine.requestSync({ throttleMs: 30_000 });
+  const throttled = log.filter((e) => e.event === "SYNC_THROTTLED");
+  assert.equal(throttled.length, 0, "SYNCING 중 폴은 IDLE 가드에서 drop, throttle 진입 없음");
+  resolveDownload({ doc: null, etag: null, status: 304 });
+  await drain(5);
+});
+
 test("39. 401 + IDB 비어있음 → NEEDS_CONSENT + 캐시 클리어", async () => {
   // refresh token이 없는 상태에서 401 → _kickoff401Reauth는 silent refresh가
   // false를 반환받고 NEEDS_CONSENT 폴백 경로로 진입한다.

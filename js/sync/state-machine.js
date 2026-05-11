@@ -96,6 +96,11 @@ function createSyncMachine({ onStateChange } = {}) {
   /** @type {string | null} */
   let _email = null;
   let _syncPending = false;
+  // Timestamp (ms) when the last _syncCycle finished. Read by requestSync()
+  // to throttle "poll" callers (visibilitychange) that would otherwise pay a
+  // full 1+s round-trip even when nothing has changed. 0 means no cycle has
+  // completed yet, so the first request always proceeds.
+  let _lastSyncEndAt = 0;
 
   // ── Context (all "hidden state" in one place) ─────────────────────────────
   // Mutated only by _transition().
@@ -729,6 +734,7 @@ function createSyncMachine({ onStateChange } = {}) {
       dispatch({ type: "SYNC_FAIL", reason: msg === "no_token" ? "no_token" : "exception" });
     } finally {
       _syncPending = false;
+      _lastSyncEndAt = Date.now();
     }
   }
 
@@ -939,7 +945,25 @@ function createSyncMachine({ onStateChange } = {}) {
     _clearCache();
     dispatch({ type: "DISABLE" });
   }
-  function requestSync() { if (_state === S.IDLE) dispatch({ type: "SYNC_REQUEST" }); }
+  // Public sync entry point. Internal callers (silent refresh, timers,
+  // acceptRedirectCode) dispatch SYNC_REQUEST directly — only requests that
+  // arrive from the UI/app layer go through here. Pass `throttleMs` to skip
+  // when a cycle finished within that window; used by visibilitychange polls
+  // where firing four 1+s round-trips in 10 seconds (observed in logs) buys
+  // no value over a single recent cycle.
+  /** @param {{ throttleMs?: number }} [opts] */
+  function requestSync(opts) {
+    if (_state !== S.IDLE) return;
+    const throttleMs = opts?.throttleMs;
+    if (typeof throttleMs === "number" && throttleMs > 0 && _lastSyncEndAt > 0) {
+      const elapsed = Date.now() - _lastSyncEndAt;
+      if (elapsed < throttleMs) {
+        L.log({ kind: "ACTION", event: "SYNC_THROTTLED", elapsedMs: elapsed, throttleMs });
+        return;
+      }
+    }
+    dispatch({ type: "SYNC_REQUEST" });
+  }
 
   function getState()        { return _state; }
   function getToken()        { return _token; }
