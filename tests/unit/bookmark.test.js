@@ -18,6 +18,12 @@
 //     resolves) — _isDescendant / moveBookmarkItem.
 //   - SWIPED_ROW block — closeSwipedRow / _openSwipedRow / resetSwipedRow
 //     / closeSwipedRowIfOutside, with a minimal Element stub.
+//   - BOOKMARK_HREF block — _bookmarkHref (pure URL builder).
+//   - BOOKMARK_ACTIVE block — _renderPathname state + _isActiveBookmark
+//     + _hasActiveDescendant. Tests pass the pathname explicitly via the
+//     optional parameter rather than driving the renderer.
+//   - IMPORT_EXPORT block — _validateImportData / _mergeBookmarkStores /
+//     _countBookmarks (pure helpers, no DOM).
 
 import test from "node:test";
 import assert from "node:assert";
@@ -836,4 +842,412 @@ test('closeSwipedRowIfOutside: non-Node target → guard rejects, close fires', 
   h._openSwipedRow(row);
   h.closeSwipedRowIfOutside(/** @type {any} */ ({ not: "a node" }));
   assert.equal(h.peekSwipedRow(), null);
+});
+
+// ── BOOKMARK_HREF loader ─────────────────────────────────────────────────────
+
+function loadBookmarkHref() {
+  const ctx = { Object, Array, String, console, Error };
+  vm.createContext(ctx);
+  vm.runInContext(extractBlock("BOOKMARK_HREF"), ctx, { filename: "bookmark-href.js" });
+  return { _bookmarkHref: ctx._bookmarkHref };
+}
+
+// ── BOOKMARK_ACTIVE loader ───────────────────────────────────────────────────
+// ACTIVE block calls `_bookmarkHref`, so the loader concatenates the HREF
+// block first to satisfy that dependency in the same vm context.
+
+function loadBookmarkActive() {
+  const ctx = { Object, Array, String, console, Error };
+  vm.createContext(ctx);
+  vm.runInContext(extractBlock("BOOKMARK_HREF") + "\n" + extractBlock("BOOKMARK_ACTIVE"), ctx, {
+    filename: "bookmark-active.js",
+  });
+  return {
+    _isActiveBookmark: ctx._isActiveBookmark,
+    _hasActiveDescendant: ctx._hasActiveDescendant,
+  };
+}
+
+// ── IMPORT_EXPORT loader ────────────────────────────────────────────────────
+
+function loadImportExport() {
+  const ctx = { Object, Array, Set, String, JSON, console, Error };
+  vm.createContext(ctx);
+  vm.runInContext(extractBlock("IMPORT_EXPORT"), ctx, { filename: "bookmark-import-export.js" });
+  return {
+    _validateImportData: ctx._validateImportData,
+    _mergeBookmarkStores: ctx._mergeBookmarkStores,
+    _countBookmarks: ctx._countBookmarks,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BOOKMARK_HREF tests
+// ─────────────────────────────────────────────────────────────────────────────
+
+test("_bookmarkHref: verseSpec='all' → /:bookId/:chapter (no verse segment)", () => {
+  const h = loadBookmarkHref();
+  assert.equal(h._bookmarkHref({ bookId: "gen", chapter: 1, verseSpec: "all" }), "/gen/1");
+  assert.equal(h._bookmarkHref({ bookId: "ps", chapter: 23, verseSpec: "all" }), "/ps/23");
+});
+
+test("_bookmarkHref: explicit verseSpec appends /:verseSpec", () => {
+  const h = loadBookmarkHref();
+  assert.equal(h._bookmarkHref({ bookId: "gen", chapter: 1, verseSpec: "1-3" }), "/gen/1/1-3");
+  assert.equal(h._bookmarkHref({ bookId: "matt", chapter: 5, verseSpec: "3" }), "/matt/5/3");
+});
+
+test("_bookmarkHref: comma-list verseSpec preserved verbatim", () => {
+  const h = loadBookmarkHref();
+  assert.equal(h._bookmarkHref({ bookId: "rom", chapter: 8, verseSpec: "1,3-5,9" }), "/rom/8/1,3-5,9");
+});
+
+test("_bookmarkHref: chapter zero (theoretical) → /:bookId/0", () => {
+  const h = loadBookmarkHref();
+  // Sanity: pathname builder uses template literal, no minimum-chapter guard.
+  assert.equal(h._bookmarkHref({ bookId: "x", chapter: 0, verseSpec: "all" }), "/x/0");
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BOOKMARK_ACTIVE tests
+// ─────────────────────────────────────────────────────────────────────────────
+
+test("_isActiveBookmark: pathname matches whole-chapter href → true", () => {
+  const h = loadBookmarkActive();
+  const bm = { bookId: "gen", chapter: 1, verseSpec: "all" };
+  assert.equal(h._isActiveBookmark(bm, "/gen/1"), true);
+});
+
+test("_isActiveBookmark: pathname matches verse-range href → true", () => {
+  const h = loadBookmarkActive();
+  const bm = { bookId: "matt", chapter: 5, verseSpec: "3-12" };
+  assert.equal(h._isActiveBookmark(bm, "/matt/5/3-12"), true);
+});
+
+test("_isActiveBookmark: pathname mismatch → false", () => {
+  const h = loadBookmarkActive();
+  const bm = { bookId: "gen", chapter: 1, verseSpec: "all" };
+  assert.equal(h._isActiveBookmark(bm, "/gen/2"), false);
+  assert.equal(h._isActiveBookmark(bm, "/exo/1"), false);
+});
+
+test("_isActiveBookmark: whole-chapter bm does NOT match verse-range pathname", () => {
+  const h = loadBookmarkActive();
+  const bm = { bookId: "gen", chapter: 1, verseSpec: "all" };
+  assert.equal(h._isActiveBookmark(bm, "/gen/1/3"), false);
+});
+
+test("_isActiveBookmark: default pathname (no second arg) → never matches (empty string)", () => {
+  const h = loadBookmarkActive();
+  const bm = { bookId: "gen", chapter: 1, verseSpec: "all" };
+  // Module-scope `_renderPathname` starts as "" until renderBookmarkTree sets it
+  assert.equal(h._isActiveBookmark(bm), false);
+});
+
+test("_hasActiveDescendant: empty folder.children → false", () => {
+  const h = loadBookmarkActive();
+  assert.equal(h._hasActiveDescendant({ children: [] }, "/gen/1"), false);
+});
+
+test("_hasActiveDescendant: missing folder.children → false (no throw)", () => {
+  const h = loadBookmarkActive();
+  assert.equal(h._hasActiveDescendant({}, "/gen/1"), false);
+});
+
+test("_hasActiveDescendant: direct bookmark child matches → true", () => {
+  const h = loadBookmarkActive();
+  const folder = {
+    children: [
+      { type: "bookmark", bookId: "gen", chapter: 1, verseSpec: "all" },
+      { type: "bookmark", bookId: "exo", chapter: 2, verseSpec: "all" },
+    ],
+  };
+  assert.equal(h._hasActiveDescendant(folder, "/exo/2"), true);
+});
+
+test("_hasActiveDescendant: nested folder containing match → true", () => {
+  const h = loadBookmarkActive();
+  const folder = {
+    children: [
+      { type: "bookmark", bookId: "gen", chapter: 1, verseSpec: "all" },
+      {
+        type: "folder",
+        children: [
+          { type: "bookmark", bookId: "deu", chapter: 6, verseSpec: "4-5" },
+        ],
+      },
+    ],
+  };
+  assert.equal(h._hasActiveDescendant(folder, "/deu/6/4-5"), true);
+});
+
+test("_hasActiveDescendant: deep nesting (3 levels) finds the match", () => {
+  const h = loadBookmarkActive();
+  const folder = {
+    children: [
+      {
+        type: "folder",
+        children: [
+          {
+            type: "folder",
+            children: [
+              { type: "bookmark", bookId: "rev", chapter: 22, verseSpec: "all" },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+  assert.equal(h._hasActiveDescendant(folder, "/rev/22"), true);
+});
+
+test("_hasActiveDescendant: no descendant matches → false", () => {
+  const h = loadBookmarkActive();
+  const folder = {
+    children: [
+      { type: "bookmark", bookId: "gen", chapter: 1, verseSpec: "all" },
+      {
+        type: "folder",
+        children: [
+          { type: "bookmark", bookId: "exo", chapter: 2, verseSpec: "all" },
+        ],
+      },
+    ],
+  };
+  assert.equal(h._hasActiveDescendant(folder, "/rev/22"), false);
+});
+
+test("_hasActiveDescendant: folder with empty nested folder still returns false", () => {
+  const h = loadBookmarkActive();
+  const folder = {
+    children: [
+      { type: "folder", children: [] },
+      { type: "folder", children: [{ type: "folder", children: [] }] },
+    ],
+  };
+  assert.equal(h._hasActiveDescendant(folder, "/gen/1"), false);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// IMPORT_EXPORT tests
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── _validateImportData ─────────────────────────────────────────────────────
+
+test("_validateImportData: null/undefined → false", () => {
+  const h = loadImportExport();
+  assert.equal(h._validateImportData(null), false);
+  assert.equal(h._validateImportData(undefined), false);
+});
+
+test("_validateImportData: non-object primitives → false", () => {
+  const h = loadImportExport();
+  assert.equal(h._validateImportData("string"), false);
+  assert.equal(h._validateImportData(123), false);
+  assert.equal(h._validateImportData(true), false);
+});
+
+test("_validateImportData: object without bookmarks array → false", () => {
+  const h = loadImportExport();
+  assert.equal(h._validateImportData({}), false);
+  assert.equal(h._validateImportData({ bookmarks: "not array" }), false);
+  assert.equal(h._validateImportData({ bookmarks: { items: [] } }), false);
+  assert.equal(h._validateImportData({ bookmarks: null }), false);
+});
+
+test("_validateImportData: object with bookmarks array → true (even if empty)", () => {
+  const h = loadImportExport();
+  assert.equal(h._validateImportData({ bookmarks: [] }), true);
+  assert.equal(h._validateImportData({ bookmarks: [{}] }), true);
+  assert.equal(h._validateImportData({ _version: 1, exportedAt: 0, bookmarks: [] }), true);
+});
+
+// ── _mergeBookmarkStores ────────────────────────────────────────────────────
+
+test("_mergeBookmarkStores: empty existing + non-empty incoming → all incoming", () => {
+  const h = loadImportExport();
+  const incoming = [
+    { type: "bookmark", id: "a", bookId: "gen", chapter: 1 },
+    { type: "bookmark", id: "b", bookId: "exo", chapter: 2 },
+  ];
+  const merged = h._mergeBookmarkStores([], incoming);
+  assert.equal(merged.length, 2);
+  assert.equal(merged[0].id, "a");
+  assert.equal(merged[1].id, "b");
+});
+
+test("_mergeBookmarkStores: non-empty existing + empty incoming → existing unchanged", () => {
+  const h = loadImportExport();
+  const existing = [{ type: "bookmark", id: "a" }];
+  const merged = h._mergeBookmarkStores(existing, []);
+  assert.equal(merged.length, 1);
+  assert.equal(merged[0].id, "a");
+});
+
+test("_mergeBookmarkStores: duplicate id → existing wins (incoming dropped)", () => {
+  const h = loadImportExport();
+  const existing = [{ type: "bookmark", id: "a", label: "from-existing" }];
+  const incoming = [{ type: "bookmark", id: "a", label: "from-incoming" }];
+  const merged = h._mergeBookmarkStores(existing, incoming);
+  assert.equal(merged.length, 1);
+  assert.equal(merged[0].label, "from-existing");
+});
+
+test("_mergeBookmarkStores: distinct ids merge as union", () => {
+  const h = loadImportExport();
+  const existing = [{ type: "bookmark", id: "a" }];
+  const incoming = [{ type: "bookmark", id: "b" }];
+  const merged = h._mergeBookmarkStores(existing, incoming);
+  assert.equal(merged.length, 2);
+  assert.deepEqual(merged.map((m) => m.id), ["a", "b"]);
+});
+
+test("_mergeBookmarkStores: folder with new id keeps its children (filtered by id)", () => {
+  const h = loadImportExport();
+  const existing = [{ type: "bookmark", id: "child-1" }];  // id duplicates incoming child
+  const incoming = [
+    {
+      type: "folder",
+      id: "new-folder",
+      children: [
+        { type: "bookmark", id: "child-1" },  // duplicate
+        { type: "bookmark", id: "child-2" },  // unique
+      ],
+    },
+  ];
+  const merged = h._mergeBookmarkStores(existing, incoming);
+  // existing 1 + new folder appended
+  assert.equal(merged.length, 2);
+  const folder = merged[1];
+  assert.equal(folder.type, "folder");
+  assert.equal(folder.id, "new-folder");
+  // child-1 (duplicate of existing) filtered out
+  assert.equal(folder.children.length, 1);
+  assert.equal(folder.children[0].id, "child-2");
+});
+
+test("_mergeBookmarkStores: duplicate folder id → entire folder dropped (children too)", () => {
+  const h = loadImportExport();
+  const existing = [{ type: "folder", id: "fld-1", children: [] }];
+  const incoming = [
+    {
+      type: "folder",
+      id: "fld-1",  // duplicate
+      children: [{ type: "bookmark", id: "would-be-new" }],
+    },
+  ];
+  const merged = h._mergeBookmarkStores(existing, incoming);
+  assert.equal(merged.length, 1);
+  assert.equal(merged[0].id, "fld-1");
+  // Incoming folder's children are NOT merged in — the whole folder is skipped.
+  assert.equal(merged[0].children.length, 0);
+});
+
+test("_mergeBookmarkStores: deeply nested folder filters at each level", () => {
+  const h = loadImportExport();
+  const existing = [
+    { type: "bookmark", id: "deep-child" },
+  ];
+  const incoming = [
+    {
+      type: "folder",
+      id: "outer",
+      children: [
+        {
+          type: "folder",
+          id: "inner",
+          children: [
+            { type: "bookmark", id: "deep-child" },  // dup
+            { type: "bookmark", id: "kept" },         // unique
+          ],
+        },
+      ],
+    },
+  ];
+  const merged = h._mergeBookmarkStores(existing, incoming);
+  const inner = merged[1].children[0];
+  assert.equal(inner.children.length, 1);
+  assert.equal(inner.children[0].id, "kept");
+});
+
+test("_mergeBookmarkStores: folder without children property handles gracefully", () => {
+  const h = loadImportExport();
+  const incoming = [{ type: "folder", id: "f1" }];  // no children
+  const merged = h._mergeBookmarkStores([], incoming);
+  assert.equal(merged.length, 1);
+  assert.deepEqual(merged[0].children, []);
+});
+
+// ── _countBookmarks ─────────────────────────────────────────────────────────
+
+test("_countBookmarks: empty array → 0", () => {
+  const h = loadImportExport();
+  assert.equal(h._countBookmarks([]), 0);
+});
+
+test("_countBookmarks: flat list of bookmarks → length", () => {
+  const h = loadImportExport();
+  const items = [
+    { type: "bookmark", id: "a" },
+    { type: "bookmark", id: "b" },
+    { type: "bookmark", id: "c" },
+  ];
+  assert.equal(h._countBookmarks(items), 3);
+});
+
+test("_countBookmarks: folders themselves do NOT contribute", () => {
+  const h = loadImportExport();
+  const items = [{ type: "folder", id: "f", children: [] }];
+  assert.equal(h._countBookmarks(items), 0);
+});
+
+test("_countBookmarks: folder with bookmark children sums their count", () => {
+  const h = loadImportExport();
+  const items = [
+    { type: "bookmark", id: "a" },
+    {
+      type: "folder",
+      id: "f",
+      children: [
+        { type: "bookmark", id: "f-1" },
+        { type: "bookmark", id: "f-2" },
+      ],
+    },
+  ];
+  assert.equal(h._countBookmarks(items), 3);
+});
+
+test("_countBookmarks: deeply nested counts at every level", () => {
+  const h = loadImportExport();
+  const items = [
+    {
+      type: "folder",
+      children: [
+        { type: "bookmark", id: "b1" },
+        {
+          type: "folder",
+          children: [
+            { type: "bookmark", id: "b2" },
+            { type: "bookmark", id: "b3" },
+            {
+              type: "folder",
+              children: [{ type: "bookmark", id: "b4" }],
+            },
+          ],
+        },
+      ],
+    },
+  ];
+  assert.equal(h._countBookmarks(items), 4);
+});
+
+test("_countBookmarks: folder with non-array children is skipped (no throw)", () => {
+  const h = loadImportExport();
+  const items = [
+    { type: "folder", id: "f" /* no children property */ },
+    { type: "folder", id: "f2", children: null },
+    { type: "bookmark", id: "b" },
+  ];
+  assert.equal(h._countBookmarks(items), 1);
 });

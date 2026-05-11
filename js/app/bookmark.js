@@ -840,10 +840,14 @@ function closeBookmarkDrawer() {
 
 // ── Bookmark tree rendering ──
 
+// ── BEGIN BOOKMARK_HREF ──
+// Exercised by tests/unit/bookmark.test.js. Pure URL builder — verseSpec="all"
+// drops the verse segment so the link points at the whole chapter.
 function _bookmarkHref(bm) {
   if (bm.verseSpec === "all") return `/${bm.bookId}/${bm.chapter}`;
   return `/${bm.bookId}/${bm.chapter}/${bm.verseSpec}`;
 }
+// ── END BOOKMARK_HREF ──
 
 function _buildBookmarkItem(bm, depth) {
   const li = el("li", { role: "treeitem", className: "bm-bookmark", "data-id": bm.id, tabIndex: "-1" });
@@ -945,19 +949,27 @@ function _buildBookmarkTypeIcon(active = false, size = 20) {
   return svg;
 }
 
+// ── BEGIN BOOKMARK_ACTIVE ──
+// Exercised by tests/unit/bookmark.test.js. Tracks the pathname rendered by
+// the bookmark tree so each bookmark/folder can self-highlight when the URL
+// matches it. The `pathname` parameter defaults to the module-scoped tracker
+// (set by renderBookmarkTree() from window.location.pathname) and exists as
+// an explicit parameter so tests can call without needing to drive the full
+// renderer.
 let _renderPathname = "";
 
-function _isActiveBookmark(bm) {
-  return _renderPathname === _bookmarkHref(bm);
+function _isActiveBookmark(bm, pathname = _renderPathname) {
+  return pathname === _bookmarkHref(bm);
 }
 
-function _hasActiveDescendant(folder) {
+function _hasActiveDescendant(folder, pathname = _renderPathname) {
   for (const child of (folder.children || [])) {
-    if (child.type === "bookmark" && _isActiveBookmark(child)) return true;
-    if (child.type === "folder" && _hasActiveDescendant(child)) return true;
+    if (child.type === "bookmark" && _isActiveBookmark(child, pathname)) return true;
+    if (child.type === "folder" && _hasActiveDescendant(child, pathname)) return true;
   }
   return false;
 }
+// ── END BOOKMARK_ACTIVE ──
 
 function _buildMaterialFolderIcon({ size = 18 } = {}) {
   const ns = "http://www.w3.org/2000/svg";
@@ -1659,6 +1671,10 @@ function exportBookmarks() {
   announce("북마크를 내보냈습니다.");
 }
 
+// ── BEGIN IMPORT_EXPORT ──
+// Exercised by tests/unit/bookmark.test.js. Pure helpers for the import
+// pipeline: validation (structural), merge (id-deduped union with existing
+// taking precedence), and recursive count.
 function _validateImportData(data) {
   if (!data || typeof data !== "object") return false;
   if (!Array.isArray(data.bookmarks)) return false;
@@ -1710,6 +1726,7 @@ function _countBookmarks(items) {
   }
   return count;
 }
+// ── END IMPORT_EXPORT ──
 
 function openImportModal(incoming) {
   const bmCount = _countBookmarks(incoming.bookmarks);
