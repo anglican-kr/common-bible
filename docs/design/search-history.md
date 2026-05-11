@@ -4,8 +4,9 @@
 > 시점 고정 결정 기록은 ADR-014.
 
 - 작성: 2026-05-07
-- 상태: 설계 단계 (구현 전)
-- 관련 ADR: ADR-001(SPA), ADR-005(검색 인덱싱), ADR-014(검색 히스토리 + 터치 타깃)
+- 상태: **완료** — `js/app/search.js`의 `createSearchHistoryController` 운영 중. 저장 한도 30개·기본 표시 10개·"더 보기" 점진 펼침·키보드 자동 펼침 모두 적용
+- 유닛 테스트: 검색 이력 33 케이스(PR #106, `tests/unit/storage.test.js`의 search-history 영역) + HISTORY_CONTROLLER 33 케이스(PR #113, `tests/unit/search.test.js`)
+- 관련 ADR: ADR-001(SPA), ADR-005(검색 인덱싱), ADR-014(검색 히스토리 + 터치 타깃 — '제안됨' → '승인·적용 완료'로 갱신됨)
 
 ---
 
@@ -623,3 +624,5 @@ $searchInput.addEventListener("keydown", (e) => {
 
 - 2026-05-07 — 초안 작성, ADR-014 제안과 동기화
 - 2026-05-07 — 저장 30 / 표시 10 + "더 보기" 점진 펼침 도입 (키보드 자동 펼침 포함)
+- 2026-05-09 — ADR-018 Phase 5(`js/app/search.js` 추출) 동행으로 `createSearchHistoryController` 팩토리화. `topSearchHistory` + `sheetSearchHistory` 두 인스턴스가 같은 컨트롤러 공유
+- 2026-05-11 — 유닛 테스트 추가: 검색 이력 영역 33 케이스(`tests/unit/storage.test.js`, PR #106) + HISTORY_CONTROLLER 33 케이스(`tests/unit/search.test.js`, PR #113). ADR-014 status를 '제안됨' → '승인·적용 완료'로 갱신(PR #117)
