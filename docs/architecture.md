@@ -100,7 +100,7 @@ src/search_indexer.py     ← 절 단위 인덱스를 구약/신약/외경으로
 
 - **물리적 장 순서**: 시락 머리말, 다니엘 추가본 등 본래 장 번호가 어그러지는 부분은 "원전이 있는 그대로의 물리 순서"를 따른다 ([ADR-003](decisions/003-physical-chapter-ordering.md)).
 - **검색 인덱스 분할 (구약/신약/외경)**: 5.8 MB 단일 파일을 3개로 쪼개 첫 검색 응답 속도를 우선 ([ADR-005](decisions/005-search-indexing-strategy.md)). 워커가 청크 단위로 로드하면서 partial-results를 흘려 보낸다.
-- **운문 본문 포맷**: `_` (이탤릭), 연/장 구분은 `segments` 시퀀스로 표현 ([ADR-006](decisions/006-poetry-source-format.md)).
+- **운문 본문 포맷**: 마크다운 블록인용(`>`)으로 표기. 절 내 산문/운문 구분은 `segments` 배열(`type: "prose"|"poetry"`), 스탠자 구분은 절 간 `stanza_break: true` 또는 절 내 텍스트의 `\n\n`, 단락 구분은 segment 레벨 `paragraph_break: true`. 자세히 [ADR-006](decisions/006-poetry-source-format.md).
 
 자세한 실행 명령은 [README §데이터 파이프라인 실행](../README.md#데이터-파이프라인-실행).
 
