@@ -14,6 +14,9 @@
 //     buildSearchPagination) — minimal Element + el shim
 //   - IS_MOBILE block — window.matchMedia stub
 //   - AUTO_NAVIGATE block (consumeSearchAutoNavigate) — pure state
+//   - HISTORY_CONTROLLER block (createSearchHistoryController) — extended
+//     StubElement with querySelectorAll/contains/closest/focus/dispatch and
+//     stubs for loadSearchHistory/removeSearchHistory/clearSearchHistory.
 
 import test from "node:test";
 import assert from "node:assert";
@@ -118,6 +121,58 @@ function makeDom() {
         .join("");
     }
     get firstChild() { return this.children[0] || null; }
+    /** Reflected to/from the `id` attribute. */
+    get id() { return this.attributes.id || ""; }
+    set id(v) { this.attributes.id = String(v); }
+    /** HISTORY_CONTROLLER tests: ancestor walk for outside-click detection. */
+    contains(node) {
+      let n = node;
+      while (n) {
+        if (n === this) return true;
+        n = n.parentNode;
+      }
+      return false;
+    }
+    /** Selector matcher for `.class` only (sufficient for history panel). */
+    _matchesSelector(selector) {
+      if (selector.startsWith(".")) {
+        const cls = selector.slice(1);
+        return (this.attributes.class || "").split(/\s+/).includes(cls);
+      }
+      return false;
+    }
+    /** HISTORY_CONTROLLER: walk up ancestors finding the first match. */
+    closest(selector) {
+      let node = this;
+      while (node) {
+        if (node._matchesSelector && node._matchesSelector(selector)) return node;
+        node = node.parentNode;
+      }
+      return null;
+    }
+    /** HISTORY_CONTROLLER: descend collecting all matches. */
+    querySelectorAll(selector) {
+      /** @type {Array<any>} */
+      const out = [];
+      const walk = (n) => {
+        if (!n.children) return;
+        for (const child of n.children) {
+          if (child._matchesSelector && child._matchesSelector(selector)) out.push(child);
+          if (child.children) walk(child);
+        }
+      };
+      walk(this);
+      return out;
+    }
+    /** HISTORY_CONTROLLER: no-op recorders so production calls don't throw. */
+    focus(_opts) { this._focusCalls = (this._focusCalls || 0) + 1; }
+    scrollIntoView(_opts) { this._scrollCalls = (this._scrollCalls || 0) + 1; }
+    /** Test-only: synchronously fire all listeners for a given event type. */
+    _dispatch(type, evt) {
+      const list = this.eventListeners[type];
+      if (!list) return;
+      for (const fn of [...list]) fn(evt);
+    }
   }
 
   class StubFragment {
@@ -668,4 +723,442 @@ test("doSearch: results with mismatched searchId are ignored", async () => {
   w._emit({ type: "results", searchId: 1, total: 7, results: [] });
   const r = await p;
   assert.strictEqual(r.total, 7);
+});
+
+// ── HISTORY_CONTROLLER loader ────────────────────────────────────────────────
+// Loads the createSearchHistoryController IIFE block in a vm context. The
+// loader owns the history backing store (so removeSearchHistory /
+// clearSearchHistory mutate test-visible state) and provides DOM stubs
+// for the elements the controller wires events to.
+
+function loadHistoryController(initialHistory = []) {
+  const dom = makeDom();
+  let history = [...initialHistory];
+  /** @type {Map<string, Set<Function>>} */
+  const docListeners = new Map();
+
+  const documentStub = {
+    ...dom.document,
+    addEventListener: (type, fn) => {
+      if (!docListeners.has(type)) docListeners.set(type, new Set());
+      docListeners.get(type).add(fn);
+    },
+    removeEventListener: (type, fn) => docListeners.get(type)?.delete(fn),
+  };
+
+  const ctx = {
+    Object, Array, Set, Map, Math, String, Number, Boolean, JSON, console, Error,
+    document: documentStub,
+    SEARCH_HISTORY_MAX: 30,
+    SEARCH_HISTORY_VISIBLE: 10,
+    loadSearchHistory: () => [...history],
+    removeSearchHistory: (q) => { history = history.filter((x) => x !== q); return [...history]; },
+    clearSearchHistory: () => { history = []; return []; },
+    el: undefined,  // populated via EL_SHIM below
+    clearNode: undefined,  // populated via EL_SHIM below
+  };
+  vm.createContext(ctx);
+  const CLEAR_NODE_SHIM = `
+    function clearNode(node) { node.children = []; }
+  `;
+  vm.runInContext(EL_SHIM + CLEAR_NODE_SHIM + extractBlock("HISTORY_CONTROLLER"), ctx, {
+    filename: "search-history-controller.js",
+  });
+
+  // Build the standard input/toggle/panel/wrap/clearBtn quartet.
+  // Panel mirrors index.html's <div id="search-history" hidden> initial
+  // state — the controller assumes panel.hidden === true before open() runs.
+  function makeFixture() {
+    const wrap = new dom.StubElement("div");
+    const input = new dom.StubElement("input");
+    const toggle = new dom.StubElement("button");
+    const panel = new dom.StubElement("div");
+    panel.id = "search-history";
+    panel.hidden = true;
+    const clearBtn = new dom.StubElement("button");
+    clearBtn.hidden = true;
+    return { wrap, input, toggle, panel, clearBtn };
+  }
+
+  function create(overrides = {}) {
+    const fx = { ...makeFixture(), ...overrides };
+    const onSelectCalls = [];
+    const syncClearCalls = [];
+    const controller = ctx.createSearchHistoryController({
+      wrap: fx.wrap,
+      input: fx.input,
+      toggle: fx.toggle,
+      panel: fx.panel,
+      clearBtn: fx.clearBtn,
+      onSelect: (q) => onSelectCalls.push(q),
+      syncClearHidden: (hidden) => syncClearCalls.push(hidden),
+    });
+    return { ...fx, controller, onSelectCalls, syncClearCalls };
+  }
+
+  return {
+    create,
+    setHistory: (h) => { history = [...h]; },
+    getHistory: () => [...history],
+    fireDocumentPointerdown: (evt) => {
+      const set = docListeners.get("pointerdown");
+      if (set) for (const fn of [...set]) fn(evt);
+    },
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HISTORY_CONTROLLER tests
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── Lifecycle ───────────────────────────────────────────────────────────────
+
+test("history controller: empty history → open() is a no-op", () => {
+  const h = loadHistoryController([]);
+  const c = h.create();
+  c.controller.open();
+  // Panel stays hidden (open returned early) and aria-expanded never set.
+  assert.equal(c.panel.hidden, true);
+  assert.equal(c.toggle.getAttribute("aria-expanded"), null);
+});
+
+test("history controller: open() with history sets hidden=false + aria-expanded=true", () => {
+  const h = loadHistoryController(["사랑", "은혜"]);
+  const c = h.create();
+  c.controller.open();
+  assert.equal(c.panel.hidden, false);
+  assert.equal(c.toggle.getAttribute("aria-expanded"), "true");
+  assert.equal(c.input.getAttribute("aria-expanded"), "true");
+});
+
+test("history controller: open() renders one row per history entry", () => {
+  const h = loadHistoryController(["a", "b", "c"]);
+  const c = h.create();
+  c.controller.open();
+  // Each row has a select + remove button
+  assert.equal(c.panel.children.length, 4);  // 3 rows + 1 "모두 지우기" (>=3 items)
+  const selectBtns = c.panel.querySelectorAll(".search-history-item-select");
+  assert.equal(selectBtns.length, 3);
+});
+
+test("history controller: close() hides panel + resets aria + activedescendant", () => {
+  const h = loadHistoryController(["a"]);
+  const c = h.create();
+  c.controller.open();
+  c.input.setAttribute("aria-activedescendant", "some-id");
+  c.controller.close();
+  assert.equal(c.panel.hidden, true);
+  assert.equal(c.toggle.getAttribute("aria-expanded"), "false");
+  assert.equal(c.input.getAttribute("aria-expanded"), "false");
+  assert.equal(c.input.getAttribute("aria-activedescendant"), null);
+});
+
+test("history controller: close({restoreFocus:true}) calls input.focus", () => {
+  const h = loadHistoryController(["a"]);
+  const c = h.create();
+  c.controller.open();
+  c.input._focusCalls = 0;
+  c.controller.close({ restoreFocus: true });
+  assert.equal(c.input._focusCalls, 1);
+});
+
+test("history controller: syncToggleVisibility — empty history hides toggle", () => {
+  const h = loadHistoryController([]);
+  const c = h.create();
+  c.controller.syncToggleVisibility();
+  assert.equal(c.toggle.hidden, true);
+  assert.equal(c.wrap.dataset.historyHidden, "true");
+});
+
+test("history controller: syncToggleVisibility — non-empty shows toggle", () => {
+  const h = loadHistoryController(["a"]);
+  const c = h.create();
+  c.controller.syncToggleVisibility();
+  assert.equal(c.toggle.hidden, false);
+  assert.equal(c.wrap.dataset.historyHidden, "false");
+});
+
+// ── Rendering ───────────────────────────────────────────────────────────────
+
+test("history controller: caps visible items at SEARCH_HISTORY_VISIBLE (10)", () => {
+  const big = Array.from({ length: 25 }, (_, i) => `q${i}`);
+  const h = loadHistoryController(big);
+  const c = h.create();
+  c.controller.open();
+  const selectBtns = c.panel.querySelectorAll(".search-history-item-select");
+  assert.equal(selectBtns.length, 10);
+});
+
+test("history controller: '더 보기' button appears when hidden > 0", () => {
+  const big = Array.from({ length: 15 }, (_, i) => `q${i}`);
+  const h = loadHistoryController(big);
+  const c = h.create();
+  c.controller.open();
+  const more = c.panel.querySelectorAll(".search-history-more");
+  assert.equal(more.length, 1);
+  assert.match(more[0].textContent, /5개/);
+});
+
+test("history controller: '더 보기' missing when all items already visible", () => {
+  const h = loadHistoryController(["a", "b"]);
+  const c = h.create();
+  c.controller.open();
+  assert.equal(c.panel.querySelectorAll(".search-history-more").length, 0);
+});
+
+test("history controller: '모두 지우기' appears when history.length >= 3", () => {
+  const h = loadHistoryController(["a", "b", "c"]);
+  const c = h.create();
+  c.controller.open();
+  assert.equal(c.panel.querySelectorAll(".search-history-clear").length, 1);
+});
+
+test("history controller: '모두 지우기' missing with only 2 items", () => {
+  const h = loadHistoryController(["a", "b"]);
+  const c = h.create();
+  c.controller.open();
+  assert.equal(c.panel.querySelectorAll(".search-history-clear").length, 0);
+});
+
+// ── Toggle button ───────────────────────────────────────────────────────────
+
+test("history controller: toggle click opens panel when closed", () => {
+  const h = loadHistoryController(["a"]);
+  const c = h.create();
+  c.toggle._dispatch("click", {});
+  assert.equal(c.panel.hidden, false);
+});
+
+test("history controller: toggle click closes + focuses input when open", () => {
+  const h = loadHistoryController(["a"]);
+  const c = h.create();
+  c.controller.open();
+  c.input._focusCalls = 0;
+  c.toggle._dispatch("click", {});
+  assert.equal(c.panel.hidden, true);
+  assert.equal(c.input._focusCalls, 1);
+});
+
+// ── Keyboard navigation (input keydown) ──────────────────────────────────────
+
+function keyEvent(key) {
+  return {
+    key,
+    _prevented: false,
+    _stopped: false,
+    preventDefault() { this._prevented = true; },
+    stopPropagation() { this._stopped = true; },
+  };
+}
+
+test("history controller: ArrowDown with empty history does not open", () => {
+  const h = loadHistoryController([]);
+  const c = h.create();
+  const e = keyEvent("ArrowDown");
+  c.input._dispatch("keydown", e);
+  assert.equal(c.panel.hidden, true);
+  assert.equal(e._prevented, false);
+});
+
+test("history controller: ArrowDown when closed (with history) opens + activates first", () => {
+  const h = loadHistoryController(["a", "b"]);
+  const c = h.create();
+  const e = keyEvent("ArrowDown");
+  c.input._dispatch("keydown", e);
+  assert.equal(c.panel.hidden, false);
+  assert.equal(e._prevented, true);
+  // First option is aria-selected=true
+  const opts = c.panel.querySelectorAll(".search-history-item-select");
+  assert.equal(opts[0].getAttribute("aria-selected"), "true");
+});
+
+test("history controller: ArrowDown when open moves activeIndex forward", () => {
+  const h = loadHistoryController(["a", "b", "c"]);
+  const c = h.create();
+  c.controller.open();
+  c.input._dispatch("keydown", keyEvent("ArrowDown"));
+  c.input._dispatch("keydown", keyEvent("ArrowDown"));
+  const opts = c.panel.querySelectorAll(".search-history-item-select");
+  assert.equal(opts[1].getAttribute("aria-selected"), "true");
+});
+
+test("history controller: ArrowUp when closed → no-op", () => {
+  const h = loadHistoryController(["a"]);
+  const c = h.create();
+  const e = keyEvent("ArrowUp");
+  c.input._dispatch("keydown", e);
+  assert.equal(e._prevented, false);
+});
+
+test("history controller: ArrowUp from first wraps to last", () => {
+  const h = loadHistoryController(["a", "b", "c"]);
+  const c = h.create();
+  c.controller.open();
+  c.input._dispatch("keydown", keyEvent("ArrowDown"));  // active = 0
+  c.input._dispatch("keydown", keyEvent("ArrowUp"));    // wraps to last (2)
+  const opts = c.panel.querySelectorAll(".search-history-item-select");
+  assert.equal(opts[2].getAttribute("aria-selected"), "true");
+});
+
+test("history controller: Escape when open closes panel", () => {
+  const h = loadHistoryController(["a"]);
+  const c = h.create();
+  c.controller.open();
+  const e = keyEvent("Escape");
+  c.input._dispatch("keydown", e);
+  assert.equal(c.panel.hidden, true);
+  assert.equal(e._prevented, true);
+  assert.equal(e._stopped, true);
+});
+
+test("history controller: ArrowDown past visible auto-expands", () => {
+  const big = Array.from({ length: 12 }, (_, i) => `q${i}`);
+  const h = loadHistoryController(big);
+  const c = h.create();
+  c.controller.open();
+  // Move active forward 10 times to reach the visible boundary, then 1 more.
+  for (let i = 0; i < 11; i++) c.input._dispatch("keydown", keyEvent("ArrowDown"));
+  // Panel should now show more than 10 (expanded — up to MAX 30 or list length)
+  const opts = c.panel.querySelectorAll(".search-history-item-select");
+  assert.equal(opts.length, 12);
+});
+
+// ── Panel clicks ────────────────────────────────────────────────────────────
+
+test("history controller: click select button → input.value, onSelect, close", () => {
+  const h = loadHistoryController(["사랑"]);
+  const c = h.create();
+  c.controller.open();
+  const select = c.panel.querySelectorAll(".search-history-item-select")[0];
+  c.panel._dispatch("click", {
+    target: select,
+    preventDefault() {}, stopPropagation() {},
+  });
+  assert.equal(c.input.value, "사랑");
+  assert.deepEqual(c.onSelectCalls, ["사랑"]);
+  assert.equal(c.panel.hidden, true);
+  assert.equal(c.clearBtn.hidden, false);
+  assert.deepEqual(c.syncClearCalls, [false]);
+});
+
+test("history controller: click remove → removeSearchHistory + refresh", () => {
+  const h = loadHistoryController(["a", "b"]);
+  const c = h.create();
+  c.controller.open();
+  const remove = c.panel.querySelectorAll(".search-history-item-remove")[0];
+  c.panel._dispatch("click", {
+    target: remove,
+    preventDefault() {}, stopPropagation() {},
+  });
+  assert.deepEqual(h.getHistory(), ["b"]);
+  // After refresh, only one row remains
+  const selects = c.panel.querySelectorAll(".search-history-item-select");
+  assert.equal(selects.length, 1);
+});
+
+test("history controller: removing last item closes panel (refresh detects empty)", () => {
+  const h = loadHistoryController(["only"]);
+  const c = h.create();
+  c.controller.open();
+  const remove = c.panel.querySelectorAll(".search-history-item-remove")[0];
+  c.panel._dispatch("click", {
+    target: remove,
+    preventDefault() {}, stopPropagation() {},
+  });
+  assert.equal(c.panel.hidden, true);
+});
+
+test("history controller: click '더 보기' expands visible count", () => {
+  const big = Array.from({ length: 15 }, (_, i) => `q${i}`);
+  const h = loadHistoryController(big);
+  const c = h.create();
+  c.controller.open();
+  const more = c.panel.querySelectorAll(".search-history-more")[0];
+  c.panel._dispatch("click", {
+    target: more,
+    preventDefault() {}, stopPropagation() {},
+  });
+  const opts = c.panel.querySelectorAll(".search-history-item-select");
+  assert.equal(opts.length, 15);
+});
+
+test("history controller: click '모두 지우기' clears history + refreshes", () => {
+  const h = loadHistoryController(["a", "b", "c"]);
+  const c = h.create();
+  c.controller.open();
+  const clearAll = c.panel.querySelectorAll(".search-history-clear")[0];
+  c.panel._dispatch("click", {
+    target: clearAll,
+    preventDefault() {}, stopPropagation() {},
+  });
+  assert.deepEqual(h.getHistory(), []);
+});
+
+// ── Outside-click & refresh ─────────────────────────────────────────────────
+
+test("history controller: document pointerdown outside closes panel", () => {
+  const h = loadHistoryController(["a"]);
+  const c = h.create();
+  c.controller.open();
+  const outside = new (Object.getPrototypeOf(c.input).constructor)("div");
+  h.fireDocumentPointerdown({ target: outside });
+  assert.equal(c.panel.hidden, true);
+});
+
+test("history controller: document pointerdown inside panel keeps it open", () => {
+  const h = loadHistoryController(["a"]);
+  const c = h.create();
+  c.controller.open();
+  // A child node inside the panel
+  const select = c.panel.querySelectorAll(".search-history-item-select")[0];
+  h.fireDocumentPointerdown({ target: select });
+  assert.equal(c.panel.hidden, false);
+});
+
+test("history controller: document pointerdown inside toggle keeps panel open", () => {
+  const h = loadHistoryController(["a"]);
+  const c = h.create();
+  c.controller.open();
+  h.fireDocumentPointerdown({ target: c.toggle });
+  assert.equal(c.panel.hidden, false);
+});
+
+test("history controller: refresh after external history change re-renders", () => {
+  const h = loadHistoryController(["a", "b"]);
+  const c = h.create();
+  c.controller.open();
+  assert.equal(c.panel.querySelectorAll(".search-history-item-select").length, 2);
+  // External mutation (e.g., another input cleared one)
+  h.setHistory(["a"]);
+  c.controller.refresh();
+  assert.equal(c.panel.querySelectorAll(".search-history-item-select").length, 1);
+});
+
+// ── consumeEnter ────────────────────────────────────────────────────────────
+
+test("history controller: consumeEnter returns false when closed", () => {
+  const h = loadHistoryController(["a"]);
+  const c = h.create();
+  const e = keyEvent("Enter");
+  assert.equal(c.controller.consumeEnter(e), false);
+});
+
+test("history controller: consumeEnter returns false when open but no active", () => {
+  const h = loadHistoryController(["a"]);
+  const c = h.create();
+  c.controller.open();
+  const e = keyEvent("Enter");
+  assert.equal(c.controller.consumeEnter(e), false);
+});
+
+test("history controller: consumeEnter with active picks query + returns true", () => {
+  const h = loadHistoryController(["사랑", "은혜"]);
+  const c = h.create();
+  c.controller.open();
+  c.input._dispatch("keydown", keyEvent("ArrowDown"));  // active = 0
+  const e = keyEvent("Enter");
+  const result = c.controller.consumeEnter(e);
+  assert.equal(result, true);
+  assert.equal(c.input.value, "사랑");
+  assert.deepEqual(c.onSelectCalls, ["사랑"]);
 });

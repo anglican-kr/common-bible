@@ -472,6 +472,13 @@ let _searchSheetAppliedScrollLock = false;
 // Enter handler can defer to an active history option when the panel is
 // open with one selected, and `syncToggleVisibility()` so callers can
 // re-evaluate the ▾ button's hidden state after external changes.
+// ── BEGIN HISTORY_CONTROLLER ──
+// Exercised by tests/unit/search.test.js. Self-contained controller factory
+// that wires DOM elements (toggle/panel/input/wrap/clearBtn) to the history
+// state stored via window.appStorage's loadSearchHistory / removeSearchHistory
+// / clearSearchHistory. Returns an object with open/close/refresh/isOpen/
+// syncToggleVisibility/consumeEnter. Test loader provides a richer DOM
+// stub (querySelectorAll/contains/closest/focus) than the rest of search.js.
 function createSearchHistoryController({ wrap, input, toggle, panel, clearBtn, onSelect, syncClearHidden }) {
   let activeIndex = -1;
   let _expanded = false;  // "더 보기" pressed in this session — reset on close
@@ -704,6 +711,7 @@ function createSearchHistoryController({ wrap, input, toggle, panel, clearBtn, o
     },
   };
 }
+// ── END HISTORY_CONTROLLER ──
 
 const topSearchHistory = createSearchHistoryController({
   wrap: $searchBar,
