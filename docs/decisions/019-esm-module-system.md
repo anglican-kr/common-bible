@@ -1,7 +1,8 @@
 # ADR-019: ESM 모듈 시스템 채택
 
 - 일시: 2026-05-09
-- 상태: 승인됨 (다음 PR에서 일괄 전환, 이후 Phase 4부터 ESM 패턴으로 진행)
+- 개정: 2026-05-10 (일괄 전환 완료 — sync 5개 + drive-sync + gtag-init + app 9개 + app.js 모두 `<script type="module">`. `audio-cache.js`·`pre-fetch.js`는 §"예외"대로 classic 유지)
+- 상태: 승인됨 — 일괄 전환 완료 (2026-05-09~10)
 - 관련 ADR: ADR-001(SPA), ADR-012(TS), ADR-018(app.js 모듈 분할)
 
 ## 결정

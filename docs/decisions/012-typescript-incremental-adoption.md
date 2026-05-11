@@ -1,7 +1,8 @@
 # ADR-012: TypeScript 점진 도입 (JSDoc + `// @ts-check`)
 
 - 일시: 2026-05-06
-- 상태: 승인됨 (1차 sync 레이어 + search worker 적용 완료)
+- 개정: 2026-05-10 (2차 적용 완료 — `js/app.js` + `js/app/*.js` 9개 모듈 + `js/audio-cache.js` + `js/drive-sync.js` 모두 `// @ts-check` 영구 활성화, ADR-018 모듈 분할과 동행. 임시 `tsconfig.app.json` 삭제, 메인 `tsconfig.json` 단일 검증)
+- 상태: 승인됨 (1차 + 2차 적용 완료 — 모든 클라이언트 JS `// @ts-check` 영구 활성화)
 
 ## 결정
 

@@ -1,7 +1,7 @@
 # ADR-015: 클라이언트 스토리지 전략
 
 - 일시: 2026-05-07
-- 상태: 제안됨
+- 상태: 승인됨 — 모든 키 운영 중 (`js/app/storage.js` + `js/sync/refresh-store.js` + `js/audio-cache.js` 시점 적용)
 - 관련 ADR: ADR-010(북마크), ADR-011(북마크 동기화 / Phase 2h PKCE), ADR-014(검색 히스토리)
 
 ## 결정
