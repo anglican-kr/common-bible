@@ -8,36 +8,43 @@
 
 브라우저가 정적 JSON 파일을 직접 읽어 렌더링하는 **프레임워크 없는 단일 페이지 앱(SPA) + 서비스 워커 오프라인 캐시**. 빌드 단계는 Python 스크립트로 마크다운 원본을 장별 JSON으로 전처리하는 일회성 작업뿐이고, 런타임에는 서버가 없다 — 정적 호스팅에 그대로 배포된다.
 
-`bible.anglican.kr` (운영) + `dev.anglican.kr` (개발) 두 도메인이 동일한 웹 서버에서 가상 호스트로 서빙된다. 각 도메인의 docroot는 `/var/www/{bible,dev}` 심볼릭 링크가 가리키는 디렉터리(`bible-{version}-{shortsha}`)이고, 배포·롤백은 심볼릭 링크 교체 한 줄로 끝난다 (`scripts/deploy.sh` 참조).
+저장소는 4개로 분리되어 있다 (ADR-020): 본 앱 저장소(공개) + `common-bible-data`(비공개, 마크다운·파이프라인·빌드 출력) + `common-bible-audio`(비공개 LFS, mp3) + `common-bible-server`(비공개, nginx·배포 스크립트). 앱이 data를 서브모듈로 마운트하고 data가 audio를 nested 서브모듈로 마운트하므로 docroot 기준 URL은 `/data/...`로 그대로 유지된다.
+
+`bible.anglican.kr` (운영) + `dev.anglican.kr` (개발) 두 도메인이 동일한 웹 서버에서 가상 호스트로 서빙된다. 각 도메인의 docroot는 `/var/www/{bible,dev}` 심볼릭 링크가 가리키는 디렉터리(`bible-{version}-{shortsha}`)이고, 배포·롤백은 심볼릭 링크 교체 한 줄로 끝난다 (`common-bible-server/scripts/deploy.sh` 참조).
 
 Google Drive 동기화·OAuth는 외부 의존이지만 단 한 군데 — `/oauth/token` POST는 nginx가 `client_secret`을 server-side로 주입한 뒤 `oauth2.googleapis.com/token`으로 forward하는 BFF 패턴 — 만 서버 단 매개를 쓰고, 나머지는 클라이언트가 직접 Google 엔드포인트와 통신한다 ([ADR-017](decisions/017-oauth-bff-proxy.md)).
 
 ```
-                  ┌────────────────────────────────────────────┐
-                  │  빌드 (수동, 원본 텍스트 보유 환경에서만)     │
-                  │                                            │
-                  │   data/source/*.md  (비공개 서브모듈)        │
-                  │            │                               │
-                  │   src/parser.py → src/split_bible.py        │
-                  │            │                               │
-                  │   src/search_indexer.py                     │
-                  │            ▼                               │
-                  │   data/bible/*.json + data/search-*.json    │
-                  └────────────────┬───────────────────────────┘
-                                   │ git push
-                                   ▼
-                  ┌────────────────────────────────────────────┐
-                  │  nginx (단일 호스트, 두 vhost)                │
-                  │                                            │
-                  │   bible.anglican.kr  → /var/www/bible →     │
-                  │   dev.anglican.kr    → /var/www/dev   →     │
-                  │     (각 심볼릭 링크가 bible-{ver}-{sha}/ 가리킴)│
-                  │                                            │
-                  │   location = /oauth/token  (BFF, ADR-017)   │
-                  │     │ inject client_secret                  │
-                  │     ▼                                       │
-                  │     oauth2.googleapis.com/token             │
-                  └────────────────┬───────────────────────────┘
+        ┌──────────────────────────────────────────────────────────┐
+        │  common-bible-data  (비공개)                             │
+        │   source/*.md  →  src/parser.py → src/split_bible.py      │
+        │                →  src/search_indexer.py                    │
+        │                →  bible/*.json + search-*.json + books.json│
+        │   audio/  (nested 서브모듈 → common-bible-audio, LFS mp3)  │
+        └──────────────────────────────────┬───────────────────────┘
+                                           │ git submodule pointer
+                                           ▼
+        ┌──────────────────────────────────────────────────────────┐
+        │  common-bible  (공개, 본 저장소)                          │
+        │   index.html · sw.js · js/ · css/ · assets/                │
+        │   data/  ← common-bible-data 마운트                        │
+        └──────────────────────────────────┬───────────────────────┘
+                                           │ build-deploy.sh + ssh
+                                           ▼
+        ┌──────────────────────────────────────────────────────────┐
+        │  common-bible-server  (비공개)                            │
+        │   nginx/  (BFF·보안 헤더)                                 │
+        │   scripts/deploy.sh  → seoul:/var/www/bible-{ver}-{sha}/   │
+        │                                                          │
+        │   bible.anglican.kr → /var/www/bible →                    │
+        │   dev.anglican.kr   → /var/www/dev   →                    │
+        │     (각 심볼릭 링크가 bible-{ver}-{sha}/ 가리킴)            │
+        │                                                          │
+        │   location = /oauth/token  (BFF, ADR-017)                 │
+        │     │ inject client_secret                                │
+        │     ▼                                                    │
+        │     oauth2.googleapis.com/token                           │
+        └──────────────────────────────────┬───────────────────────┘
                                    │ HTTPS
                                    ▼
                   ┌────────────────────────────────────────────┐
@@ -66,7 +73,7 @@ Google Drive 동기화·OAuth는 외부 의존이지만 단 한 군데 — `/oau
 
 ## 2. 아키텍처를 결정한 4가지 제약
 
-1. **저작권** — 원본 텍스트는 비공개 서브모듈(`data/source/`)이므로 빌드 산출물(`data/bible/*.json`)은 gitignore되어 있다. 파이프라인은 권한 있는 사용자만 실행한다.
+1. **저작권** — 원본 텍스트는 비공개 저장소(`common-bible-data`, ADR-020)의 `source/` 하위 마크다운으로 관리된다. 본 앱 저장소가 그 저장소를 `data/`에 서브모듈로 마운트하므로 docroot URL은 그대로 `/data/...`. 빌드 산출물(`bible/*.json`·`search-*.json`)도 data 저장소에 commit되므로 앱은 서브모듈 포인터로 잠금만 한다. 파이프라인 실행은 권한 있는 사용자만 가능 (data 저장소 접근권 필요).
 2. **비상업·비영리** — 백엔드를 운영할 인력·예산이 없다. 모든 상태는 클라이언트 또는 사용자의 Google Drive(appdata)에 산다.
 3. **오프라인 우선** — 교회·예배 환경의 불안정한 네트워크를 가정. PWA + Service Worker로 첫 방문 후 모든 본문이 로컬에 캐시된다.
 4. **장기 유지보수성** — 1인 개발이 가능해야 한다. 프레임워크/번들러 부재, 의존성 최소, 테스트 자동화 — 이 셋이 핵심 가드다.
@@ -77,24 +84,28 @@ Google Drive 동기화·OAuth는 외부 의존이지만 단 한 군데 — `/oau
 
 원본 마크다운(73권)을 1328장의 장별 JSON과 3개의 검색 인덱스로 변환한다. 빌드는 의도적으로 **일회성 스크립트의 합성**이고, 어떤 빌드 시스템(make/just/poetry)에도 묶지 않는다 — 각 스크립트가 같은 입력에 같은 출력을 주므로 의존 그래프가 단순하다.
 
+파이프라인은 `common-bible-data` 저장소 내부에서 실행되며, 작업 디렉토리는 그 저장소 루트(앱 저장소 기준 `data/`):
+
 ```
-data/source/{book_id}.md
+source/{book_id}.md
         │
         ▼
 src/parser.py             ← 마크다운을 segments(텍스트·연·운문·헤딩) 시퀀스로 파싱
         │  output/parsed_bible.json (전체 73권 단일 파일)
         ▼
 src/split_bible.py        ← 장별로 분리, 시락 머리말 별도 추출
-        │  data/bible/{book_id}-{chapter}.json   (1328개)
-        │  data/bible/sir-prologue.json          (ADR-002)
-        │  data/books.json                       (메타데이터)
+        │  bible/{book_id}-{chapter}.json   (1328개)
+        │  bible/sir-prologue.json          (ADR-002)
+        │  books.json                       (메타데이터)
         ▼
 src/search_indexer.py     ← 절 단위 인덱스를 구약/신약/외경으로 분할
-           data/search-meta.json   (~9 KB, 책 별칭)
-           data/search-ot.json     (~3.8 MB)
-           data/search-nt.json     (~1.3 MB)
-           data/search-dc.json     (~700 KB)
+           search-meta.json   (~9 KB, 책 별칭)
+           search-ot.json     (~3.8 MB)
+           search-nt.json     (~1.3 MB)
+           search-dc.json     (~700 KB)
 ```
+
+(앱 docroot에서는 동일 산출물이 `data/bible/...`·`data/search-*.json` 위치로 보인다 — 서브모듈 마운트에 따른 prefix.)
 
 설계 포인트:
 

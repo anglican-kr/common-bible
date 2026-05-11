@@ -1,6 +1,7 @@
 # ADR-004: 데이터 파이프라인 테스트 전략
 
 - 일시: 2026-03-26
+- 개정: 2026-05-11 (ADR-020 분할에 따라 Level 1-3 검증 테스트가 `common-bible-data` 저장소로 이전. 그 저장소의 `.github/workflows/validate.yml`이 push마다 자동 실행. 앱 저장소 CI는 JS 유닛만 담당.)
 - 상태: 승인됨
 
 ## 결정

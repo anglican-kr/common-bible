@@ -5,30 +5,44 @@
 
 배포 URL: https://bible.anglican.kr
 
-> 실제 공동번역성서 개정판의 저작권은 대한성서공회에 있으며, 이 프로젝트는 비상업적 용도로만 사용됩니다. 성경 원본 텍스트는 비공개 서브모듈로 관리되며, 접근 권한이 있는 사용자만 이용할 수 있습니다.
+> 실제 공동번역성서 개정판의 저작권은 대한성서공회에 있으며, 이 프로젝트는 비상업적 용도로만 사용됩니다. 성경 원본 텍스트·음원은 비공개 서브모듈로 관리되며, 접근 권한이 있는 사용자만 이용할 수 있습니다.
 
 ## 아키텍처
 
 Python 스크립트로 마크다운 소스를 JSON으로 전처리하고, 브라우저가 JSON을 직접 읽어 렌더링하는 SPA 방식.
 
 ```
-data/source/*.md  (비공개 서브모듈, 73권 마크다운 소스)
-  → (parser.py) → output/parsed_bible.json
-  → (split_bible.py) → data/bible/{book_id}-{chapter}.json (1328개)
-                      → data/bible/sir-prologue.json
-                      → data/books.json
-  → (search_indexer.py) → data/search-meta.json (별칭·책 메타데이터)
-                         → data/search-ot.json   (구약)
-                         → data/search-nt.json   (신약)
-                         → data/search-dc.json   (외경)
+source/*.md  (data 저장소 안, 73권 마크다운)
+  → parser.py → output/parsed_bible.json
+  → split_bible.py → bible/{book_id}-{chapter}.json (1328) + books.json
+  → search_indexer.py → search-{meta,ot,nt,dc}.json
+```
+
+본문 데이터·Python 파이프라인은 `common-bible-data` 비공개 저장소(`data/` 서브모듈), 오디오는 `common-bible-audio` LFS 저장소(`data/audio/` nested 서브모듈).
+
+## 저장소 토폴로지 (ADR-020)
+
+| 저장소 | 가시성 | 역할 |
+|---|---|---|
+| `anglican-kr/common-bible` (본 저장소) | 공개 | PWA 프론트엔드 · sw.js · JS 유닛/e2e · 릴리스 스크립트 |
+| `anglican-kr/common-bible-data` | 비공개 | 마크다운 원본 + Python 파이프라인 + 빌드 출력 + 데이터 검증 테스트 |
+| `anglican-kr/common-bible-audio` | 비공개 (LFS) | 장별 mp3 |
+| `anglican-kr/common-bible-server` | 비공개 | nginx 설정(BFF·보안 헤더) + 배포 스크립트 |
+
+clone 시 nested 서브모듈까지 함께:
+
+```bash
+git clone --recurse-submodules git@github.com:anglican-kr/common-bible.git
+# 또는
+git submodule update --init --recursive
 ```
 
 ## 기술 스택
 
 - Frontend: HTML, CSS, Vanilla JavaScript (프레임워크 없음)
-- Data: JSON (장별 분리, OSIS 소문자 book_id)
+- Data: JSON (장별 분리, OSIS 소문자 book_id) — data 서브모듈에서 제공
+- Audio: mp3 (Git LFS) — audio nested 서브모듈에서 제공
 - Offline: Service Worker
-- Data preprocessing: Python (일회성 스크립트)
 
 ## 플랫폼별 동작 차이
 
@@ -63,17 +77,17 @@ data/source/*.md  (비공개 서브모듈, 73권 마크다운 소스)
 | 401 (access token 만료) | refresh token으로 백그라운드 갱신 → 동기화 재개. refresh token도 invalid면 NEEDS_CONSENT로 폴백 |
 | `signOut()` | Google `/revoke` 호출 + IDB clear + email/state localStorage 정리 |
 
-**OAuth /token BFF**: `/oauth/token`은 nginx가 같은 origin에서 받은 요청에 `client_secret`을 server-side로 주입한 뒤 `oauth2.googleapis.com/token`으로 forward한다. Google "Web application" 클라이언트 타입의 RFC 7636 일탈(PKCE에서도 secret 강제) + GitHub secret scanner 자동 무효화 위험을 회피하기 위함이다 ([ADR-017](docs/decisions/017-oauth-bff-proxy.md), `nginx/oauth-proxy.example.conf`).
+**OAuth /token BFF**: `/oauth/token`은 nginx가 같은 origin에서 받은 요청에 `client_secret`을 server-side로 주입한 뒤 `oauth2.googleapis.com/token`으로 forward한다. Google "Web application" 클라이언트 타입의 RFC 7636 일탈(PKCE에서도 secret 강제) + GitHub secret scanner 자동 무효화 위험을 회피하기 위함이다 ([ADR-017](docs/decisions/017-oauth-bff-proxy.md), `common-bible-server/nginx/oauth-proxy.example.conf`).
 
 운영 가드:
 - **무한 리디렉션 cap**: localStorage 카운터(상한 3회) 초과 시 ERROR 강제 전이. SYNC_DONE으로만 리셋.
 - **만성 401 cap (`MAX_REAUTH=3`)**: 새 access token도 Drive가 거절하면 4번째 401에서 ERROR + snackbar.
-- **race 가드**: state-based + `localStorage["bible-drive-sync"]` flag-based + 매 async await 직후 재검사 — 사용자가 silent refresh / code 교환 진행 중 disconnect 시 의도 보존.
+- **race 가드**: state-based + `localStorage["bible-drive-sync"]` flag-based + 매 async await 직후 재검사 — 사용자가 조용한 refresh / code 교환 진행 중 disconnect 시 의도 보존.
 
 ### 알려진 한계
 
 - **OAuth 검수 진행 중 → refresh token 7일 만료**: Google OAuth 앱이 "Testing" 상태인 동안엔 refresh token TTL 7일. 검수 통과 후 영구 — 코드 변경 0.
-- **외부 권한 회수**: 사용자가 Google 계정 설정에서 권한을 끊으면 다음 silent refresh가 `invalid_grant`로 실패 → IDB clear + NEEDS_CONSENT 폴백.
+- **외부 권한 회수**: 사용자가 Google 계정 설정에서 권한을 끊으면 다음 조용한 refresh가 `invalid_grant`로 실패 → IDB clear + NEEDS_CONSENT 폴백.
 
 iOS Safari ITP로 인한 storage 정리는 동기화 외 다른 로컬 상태에도 영향을 주므로 [iOS 고유 제약](#ios-고유-제약) 절에 둠.
 
@@ -89,7 +103,6 @@ manifest.webmanifest    ← PWA 매니페스트
 favicon.ico             ← 파비콘 (루트 필수)
 robots.txt / sitemap.xml
 version.json            ← 앱 버전 (release.py로 관리)
-requirements.txt        ← Python 의존성
 tsconfig.json           ← TypeScript 설정 (--noEmit, JSDoc 검사용)
 tsconfig.worker.json    ← Web Worker 전용 tsconfig
 js/
@@ -99,80 +112,62 @@ js/
   pre-fetch.js          ← books.json 선패치 (초기 로딩 성능)
   gtag-init.js          ← Google Analytics 초기화
   types.d.ts            ← 동기화·검색 도메인 타입 단일 출처
+  app/                  ← 9개 도메인 모듈 (ADR-018)
   sync/                 ← 동기화 상태 머신·전송·저장 (ADR-011)
-                          state-machine·transport·store-v2·debug-log·refresh-store(Phase 2h)
+                          state-machine·transport·store-v2·debug-log·refresh-store
 css/
   style.css             ← 메인 스타일
 assets/
   icons/
-    icon-192.png        ← PWA 홈 화면 아이콘
-    icon-512.png        ← PWA 홈 화면 아이콘 (고해상도)
-    icon-512-maskable.png ← PWA maskable 아이콘
+    icon-192.png · icon-512.png · icon-512-maskable.png
     skh-cross.svg       ← 성공회 십자가 SVG (스플래시 생성용 소스)
   install-guide/        ← iOS 설치 안내 스크린샷 (webp, 3단계)
   splash/               ← iOS apple-touch-startup-image (13 디바이스)
-data/
-  books.json            ← 73권 목록 (메타데이터, has_prologue 플래그 포함)
-  book_mappings.json    ← 책 ID·이름·별칭·구분 매핑
-  search-meta.json      ← 검색용 별칭·책 메타데이터 (~9 KB)
-  search-ot.json        ← 구약 절 검색 인덱스 (~3.8 MB)
-  search-nt.json        ← 신약 절 검색 인덱스 (~1.3 MB)
-  search-dc.json        ← 외경 절 검색 인덱스 (~700 KB)
-  bible/                ← 장별 성경 JSON (gitignore, 파서 출력물)
-  audio/
-    {book_slug}-{chapter}.mp3
-  source/               ← 비공개 서브모듈 (73권 마크다운 원본)
-src/
-  parser.py             ← .md 소스 → parsed_bible.json (segments 기반)
-  split_bible.py        ← parsed_bible.json → 장별 JSON 분리
-  search_indexer.py     ← 검색 인덱스 생성 (구약/신약/외경 분리)
-  generate_splash.py    ← iOS 스플래시 PNG 생성 (cairosvg + Pillow)
+data/                   ← 서브모듈: common-bible-data
+  source/               ← 73권 마크다운 원본
+  src/                  ← parser·split_bible·search_indexer
+  tests/                ← Level 1-3 데이터 검증 (ADR-004)
+  bible/                ← 빌드 산출: 장별 JSON
+  audio/                ← nested 서브모듈: common-bible-audio (mp3, LFS)
+  books.json · book_mappings.json
+  search-{meta,ot,nt,dc}.json
 scripts/
-  build-deploy.sh       ← 배포 zip 생성
-  deploy.sh             ← dev/prod/promote 서브커맨드 (서버 업로드 + 심볼릭 링크 교체)
   release.py            ← version.json + sw.js 캐시 식별자 bump (shell/data/audio 독립)
   serve.py              ← SPA-aware 로컬 개발 서버
-nginx/
-  oauth-proxy.example.conf  ← OAuth /token BFF location 블록 (ADR-017)
+  generate_splash.py    ← iOS 스플래시 PNG 생성 (cairosvg + Pillow)
 tests/
-  test_completeness.py  ← Level 1 완전성 검증
-  test_ordering.py      ← Level 2 절 순서 검증
-  test_snapshots.py     ← Level 3 특수 케이스 스냅샷
-  fixtures/
-    verse_sequence.json ← 1328장 절 순서 스냅샷
-  generate_fixtures.py  ← 픽스처 재생성 스크립트 (로컬 전용)
   unit/                 ← 클라이언트 JS 유닛 테스트 (Node --test, ADR-013)
-                          state-machine·refresh-store·transport-pkce
   e2e/                  ← 브라우저 E2E 테스트 (로컬 전용)
 .github/
   workflows/
-    test.yml            ← CI: 유닛 테스트 자동 실행
+    test.yml            ← CI: JS 유닛 자동 실행
 docs/
-  decisions/            ← 아키텍처 결정 기록 (ADR-001~013)
-  design/               ← 살아있는 설계 문서 (pkce-migration 등)
+  decisions/            ← 아키텍처 결정 기록 (ADR-001~020)
+  design/               ← 설계 변천 문서 (pkce-migration·app-modularization 등)
   audit/                ← 보안 감사 보고서
   qa/                   ← e2e 회귀 테스트 결과 보고서
   prd.md                ← 제품 요구사항 문서
   worklog.md            ← 작업 일지
 ```
 
+배포 설정(nginx·deploy.sh)은 `common-bible-server` 저장소로 분리(ADR-020).
+
 ## 데이터 파이프라인 실행
 
-`data/source/` 서브모듈 접근 권한이 있는 환경에서만 실행:
+`common-bible-data` 서브모듈 접근 권한이 있는 환경에서만 실행:
 
 ```bash
-# 서브모듈 초기화 (최초 1회)
-git submodule update --init
+# 서브모듈 초기화 (최초 1회, recursive로 audio까지)
+git submodule update --init --recursive
 
-# 1. 마크다운 소스 파싱
-python src/parser.py data/source/ --save-json output/parsed_bible.json
-
-# 2. 장별 JSON 분리
+# data 디렉토리(서브모듈 루트)에서:
+cd data
+python src/parser.py source/ --save-json output/parsed_bible.json
 python src/split_bible.py
-
-# 3. 검색 인덱스 생성
 python src/search_indexer.py
 ```
+
+자세한 빌드·검증 절차는 `data/README.md` 참조.
 
 ## 테스트
 
@@ -180,8 +175,8 @@ python src/search_indexer.py
 # 클라이언트 JS 유닛 테스트 (Node 24+, CI 자동 실행)
 node --test tests/unit/*.test.js
 
-# 데이터 파이프라인 검증 (원본 텍스트 불필요)
-pytest tests/test_completeness.py tests/test_ordering.py tests/test_snapshots.py -v
+# 데이터 파이프라인 검증 (data 서브모듈 내부)
+cd data && pytest tests/
 
 # E2E 테스트 (로컬, SPA-aware 서버 실행 필요)
 python3 scripts/serve.py 8080
@@ -207,6 +202,6 @@ npx tsc -p tsconfig.worker.json --noEmit
 ## 문서
 
 - [아키텍처 개요](docs/architecture.md) — 전체 구조 한눈에
-- [아키텍처 결정 기록](docs/decisions/) — ADR-001~017
+- [아키텍처 결정 기록](docs/decisions/) — ADR-001~020
 - [제품 요구사항](docs/prd.md)
 - [작업 일지](docs/worklog.md)
