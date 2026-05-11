@@ -116,8 +116,10 @@ function _format(e, baseTs) {
   if (e.status)     parts.push(`http:${e.status}`);
   // Pre-masked by caller via mask("etag", value). Surfacing it in the dump
   // lets us diagnose why conditional GET (If-None-Match) never resolves to
-  // 304 — null here = ETag header missing in download response.
-  if (e.etag)       parts.push(`etag:${e.etag}`);
+  // 304 — `etag:null` here = ETag header missing in download response, which
+  // is the case we most want to see, so check for `undefined` (field absent
+  // on log entries that don't carry etag) rather than truthy.
+  if (e.etag !== undefined) parts.push(`etag:${e.etag ?? "null"}`);
   if (e.elapsedMs != null) parts.push(`elapsed:${e.elapsedMs}ms`);
   if (e.throttleMs != null) parts.push(`throttle:${e.throttleMs}ms`);
   if (e.changeKind) parts.push(`kind:${e.changeKind}`);
