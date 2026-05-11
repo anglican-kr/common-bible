@@ -35,7 +35,7 @@
 
 ### 3.1 콘텐츠 관리
 
-- **원본 텍스트**: 제공된 원시 텍스트 파일(`common-bible-kr.txt`)에서 공동번역성서 전체(구약, 외경, 신약)를 파싱하여 표시해야 합니다.
+- **원본 텍스트**: 비공개 마크다운 원본(`common-bible-data` 서브모듈의 `source/*.md`)에서 공동번역성서 전체(구약, 외경, 신약)를 파싱하여 표시해야 합니다.
 - **구조**: 
   - 콘텐츠는 성서(Testament) -> 책(Book) -> 장(Chapter) -> 절(Verse)의 계층 구조로 구성되어야 합니다.
   - 집회서는 다른 책과 다르게 1장 앞에 "머리말"이 있습니다. 머리말은 절 번호가 없다는 점도 고려해야 합니다.
@@ -109,40 +109,59 @@
 ### 5.1 기술 스택
 
 - **아키텍처**: 프론트엔드 중심 SPA (→ [ADR-001](decisions/001-spa-architecture.md))
-- **데이터 전처리**: Python 3.12+ (파싱, JSON 분리). 런타임에는 관여하지 않음.
-- **프론트엔드**: Vanilla HTML5, CSS3, JavaScript (ES6+). 단일 `index.html`에서 해시 라우팅으로 JSON 데이터를 읽어 렌더링.
-- **검색 엔진**: Web Worker에서 실행되는 클라이언트 측 역색인(JSON Inverted Index).
+- **저장소 토폴로지**: 4분할 — 앱(공개) + `common-bible-data`(비공개) + `common-bible-audio`(비공개 LFS) + `common-bible-server`(비공개) (→ [ADR-020](decisions/020-monorepo-split.md))
+- **데이터 전처리**: Python 3.12+ (파싱, JSON 분리). `common-bible-data` 저장소 내부에서 실행. 런타임에는 관여하지 않음.
+- **프론트엔드**: Vanilla HTML5, CSS3, JavaScript (ES6+). 단일 `index.html`에서 해시 라우팅으로 JSON 데이터를 읽어 렌더링. ESM 일괄 채택(ADR-019).
+- **검색 엔진**: Web Worker에서 실행되는 클라이언트 측 역색인 — 구약/신약/외경 청크 분할 (ADR-005).
 
 ### 5.2 데이터 흐름 및 프로젝트 구조
 
-1. **수집 (Ingest)**: `parser.py`가 `data/source/*.md`(73권 마크다운 소스)를 읽고 segments(산문/운문) 단위로 파싱 → `output/parsed_bible.json`.
-2. **분리 (Split)**: `split_bible.py`가 `parsed_bible.json`을 장별 JSON 파일과 `books.json`(메타데이터)으로 분리.
-3. **인덱싱 (Index)**: `search_indexer.py`가 장별 JSON에서 `data/search-index.json` 생성 (빌드 시 실행, .gitignore).
-4. **렌더링 (Runtime)**: 브라우저에서 `app.js`가 JSON을 fetch하여 DOM으로 렌더링. 빌드 시 HTML 생성 없음.
+데이터 파이프라인은 `common-bible-data` 저장소 내부에서 실행되며, 앱 저장소는 그 출력을 서브모듈 포인터로 잠금:
+
+1. **수집 (Ingest)**: `src/parser.py`가 `source/*.md`(73권 마크다운)를 읽고 segments(산문/운문) 단위로 파싱 → `output/parsed_bible.json`.
+2. **분리 (Split)**: `src/split_bible.py`가 `parsed_bible.json`을 장별 JSON과 `books.json`(메타데이터)으로 분리.
+3. **인덱싱 (Index)**: `src/search_indexer.py`가 장별 JSON에서 `search-{meta,ot,nt,dc}.json` 4개 청크 생성.
+4. **렌더링 (Runtime)**: 브라우저에서 앱이 JSON을 fetch하여 DOM으로 렌더링. 빌드 시 HTML 생성 없음.
 
 ```text
-common-bible/
-├── index.html                  # SPA 진입점 (단일 HTML)
-├── app.js                      # 라우팅, 렌더링, 검색 UI, 오디오 플레이어
-├── style.css                   # 스타일
-├── sw.js                       # 서비스 워커 (오프라인)
-├── search-worker.js            # 검색 Web Worker (→ ADR-005)
-├── manifest.webmanifest        # PWA 매니페스트
-├── favicon.ico                 # 파비콘
-├── data/
-│   ├── books.json              # 73권 목록 (메타데이터)
-│   ├── book_mappings.json      # 책 ID·이름·별칭·구분 매핑
-│   ├── search-index.json       # 검색 인덱스 (빌드 생성, .gitignore)
-│   ├── source/                 # 73권 마크다운 소스 (서브모듈)
-│   ├── bible/                  # 장별 성경 JSON ({book_id}-{chapter}.json)
-│   └── audio/                  # 장별 오디오 MP3
-├── src/                        # 데이터 전처리 스크립트
-│   ├── parser.py               # .md 소스 → parsed_bible.json (segments 기반)
-│   ├── split_bible.py          # parsed_bible.json → 장별 JSON 분리
-│   ├── search_indexer.py       # 장별 JSON → 검색 인덱스 생성
-│   └── convert_txt_to_md.py    # .txt → .md 일괄 변환 (일회성, 완료됨)
-└── tests/
-    └── test_completeness.py    # Level 1 완전성 검증 (→ ADR-004)
+common-bible/                       # 앱 저장소 (공개)
+├── index.html                      # SPA 진입점
+├── sw.js                           # 서비스 워커
+├── manifest.webmanifest
+├── favicon.ico · robots.txt · sitemap.xml · version.json
+├── js/
+│   ├── app.js · drive-sync.js · search-worker.js · pre-fetch.js · types.d.ts
+│   ├── app/                        # 9개 도메인 모듈 (ADR-018)
+│   └── sync/                       # 5개 동기화 레이어 (ADR-011)
+├── css/style.css
+├── assets/                         # icons · splash · install-guide
+├── data/                           # 서브모듈: common-bible-data
+│   ├── source/                     # 73권 마크다운
+│   ├── src/                        # parser · split_bible · search_indexer
+│   ├── tests/                      # Level 1-3 데이터 검증 (ADR-004)
+│   ├── bible/                      # 장별 성경 JSON (1328 + sir-prologue)
+│   ├── audio/                      # nested 서브모듈: common-bible-audio (mp3, LFS)
+│   ├── books.json · book_mappings.json
+│   └── search-{meta,ot,nt,dc}.json # 검색 인덱스 4 청크
+├── scripts/
+│   ├── release.py                  # version.json + sw.js 캐시 ID bump
+│   ├── serve.py                    # SPA-aware 로컬 서버
+│   └── generate_splash.py          # iOS 스플래시 PNG 생성
+├── tests/
+│   ├── unit/                       # JS 유닛 (Node --test, ADR-013, CI 자동)
+│   └── e2e/                        # Playwright (로컬 전용)
+└── docs/
+    ├── decisions/                  # ADR-001~020
+    ├── design/                     # 설계 변천 문서
+    ├── audit/ · qa/
+    └── prd.md · architecture.md · worklog.md
+
+common-bible-server/                # 서버 저장소 (비공개)
+├── nginx/                          # BFF·보안 헤더 (ADR-017)
+└── scripts/
+    ├── deploy.sh                   # dev/prod/promote/rollback + 자동 검증 4종
+    ├── build-deploy.sh             # manifest 기반 zip 빌드
+    └── deploy-manifest.txt
 ```
 
 ### 5.3 접근성 구현 세부사항
@@ -177,13 +196,26 @@ common-bible/
 - [x] 복사 시 절 번호 제외 + 인용 출처 자동 추가.
 - [x] 사용자 설정 (폰트 크기 조절, 다크모드).
 
-### 3단계: 전역 검색 및 고도화 — 🔧 진행 중
+### 3단계: 전역 검색 및 고도화 — ✅ 완료
 
 - [x] 전체 텍스트 검색을 위한 단일 인덱스 생성 (`search_indexer.py`).
 - [x] Web Worker 기반 전역 검색 로직 및 UI 구현 (지연 로딩, 페이지네이션).
 - [x] 검색 결과 본문 내 하이라이트 기능 추가.
 - [x] 절 참조 내비게이션 ("창세 1:3" 입력 → 해당 절로 이동).
-- [ ] PWA 아이콘 생성 (icon-192.png, icon-512.png).
-- [ ] 정적 파일 배포 설정 및 보안(HTTPS, XSS 방지 등) 검토.
-- [ ] 성능 최적화 및 오류 로깅 체계 구축.
+- [x] PWA 아이콘 생성 (`assets/icons/icon-192.png` · `icon-512.png` · `icon-512-maskable.png`).
+- [x] 정적 파일 배포 설정(`common-bible-server/scripts/deploy.sh`) 및 보안(HTTPS·CSP·보안 헤더 6종·OAuth BFF — ADR-017) 적용.
+- [x] 성능 최적화(pre-fetch·SW 셸/데이터/오디오 캐시 분리·검색 청크 분할·이미지 maskable) 적용 완료.
+
+### 4단계: 북마크 + Drive 동기화 — ✅ 완료 (ADR-010·011)
+
+- [x] 북마크 데이터 모델 + 트리 UI + 드래그&드롭 (ADR-010).
+- [x] Google Drive `appdata` 영역 OAuth 동기화 — PKCE 단일 경로 + refresh token (ADR-011).
+- [x] OAuth `/token` BFF 프록시 — `client_secret` 서버 격리 (ADR-017).
+
+### 5단계: 인프라 정리 — ✅ 완료
+
+- [x] TypeScript `// @ts-check` + JSDoc 전 모듈 영구 활성화 (ADR-012).
+- [x] `app.js` 6,082 → 283줄, 9개 도메인 모듈 분할 (ADR-018) + ESM 일괄 채택 (ADR-019).
+- [x] 클라이언트 JS 유닛 테스트 485 케이스 (ADR-013).
+- [x] 모노레포 4분할(앱·data·audio·server) — ADR-020.
 
