@@ -405,11 +405,11 @@ OAuth 측면 (가장 큰 공격 표면):
 | ADR                                                     | 결정                                                       |
 | ------------------------------------------------------- | ---------------------------------------------------------- |
 | [001](decisions/001-spa-architecture.md)                | Vanilla JS SPA + Python 일회성 전처리                      |
-| [002](decisions/002-sirach-prologue-handling.md)        | 시락 머리말은 별도 JSON으로 추출                           |
-| [003](decisions/003-physical-chapter-ordering.md)       | 원전의 물리적 장 순서를 따름                               |
+| [002](decisions/002-sirach-prologue-handling.md)        | 시락 머리말은 별도 JSON으로 추출 *(common-bible-data로 이전, ADR-020)* |
+| [003](decisions/003-physical-chapter-ordering.md)       | 원전의 물리적 장 순서를 따름 *(common-bible-data로 이전, ADR-020)* |
 | [004](decisions/004-data-pipeline-test-strategy.md)     | Level 1-3 데이터 검증 전략                                 |
 | [005](decisions/005-search-indexing-strategy.md)        | 검색 인덱스 구약/신약/외경 청크 분할                       |
-| [006](decisions/006-poetry-source-format.md)            | 운문 본문 segments 표현                                    |
+| [006](decisions/006-poetry-source-format.md)            | 운문 본문 segments 표현 *(common-bible-data로 이전, ADR-020)* |
 | [007](decisions/007-launch-screen-optimization.md)      | iOS 13종 디바이스 스플래시                                 |
 | [008](decisions/008-pwa-install-guide.md)               | 플랫폼별 설치 안내 모달                                    |
 | [009](decisions/009-history-api-routing.md)             | History API SPA 라우팅                                     |
@@ -423,6 +423,7 @@ OAuth 측면 (가장 큰 공격 표면):
 | [017](decisions/017-oauth-bff-proxy.md)                 | nginx BFF로 `client_secret` 격리                           |
 | [018](decisions/018-app-modularization.md)              | `js/app.js` 6,082 → 283줄, 9개 도메인 모듈 분할            |
 | [019](decisions/019-esm-module-system.md)               | ESM 일괄 채택 (`<script type="module">`), 빌드 단계 0 유지 |
+| [020](decisions/020-monorepo-split.md)                  | 모노레포 4분할 (app·data·audio·server)                     |
 
 ## 부록 B. 자주 보게 되는 파일 빠른 참조
 
