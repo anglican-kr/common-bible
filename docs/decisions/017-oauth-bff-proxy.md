@@ -1,7 +1,8 @@
 # ADR-017: OAuth `/token` 요청을 nginx BFF 프록시로 격리
 
 **상태**: 채택됨 (2026-05-08)
-**관련**: [ADR-001](001-spa-architecture.md), [ADR-011](011-bookmark-sync.md), [`docs/design/pkce-migration.md`](../design/pkce-migration.md)
+**개정**: 2026-05-11 (ADR-020 분할에 따라 nginx 설정 파일들(`oauth-proxy.example.conf`·`oauth-bff-shared.example.conf`·`oauth-bff-guard.example.js`·`security-headers.example.conf`)은 `common-bible-server/nginx/`로 이전. BFF 패턴 자체는 그대로 유지.)
+**관련**: [ADR-001](001-spa-architecture.md), [ADR-011](011-bookmark-sync.md), [ADR-020](020-monorepo-split.md), [`docs/design/pkce-migration.md`](../design/pkce-migration.md)
 
 ## 맥락
 

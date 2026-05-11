@@ -13,6 +13,7 @@
 - 개정: 2026-05-08 (Phase 2h 완료 — PKCE + refresh token 마이그레이션, desktop·Android·iOS 단일 경로 통일)
 - 개정: 2026-05-08 (Phase 2i 완료 — sync 사이클 캐시, 라운드트립 단축)
 - 개정: 2026-05-11 (Phase 2j — visibilitychange 폴 throttle + ETag 관측성 보강)
+- 개정: 2026-05-11 (ADR-020 분할에 따라 BFF nginx 설정은 `common-bible-server/nginx/oauth-proxy.example.conf`로 이전. 클라이언트 측 동기화 흐름·refresh token 보관 위치는 변경 없음.)
 - 상태: 승인됨 (Phase 2a~2i 완료, PKCE 단일 경로 운영 중. 미결: Google OAuth 검수)
 
 ## 결정

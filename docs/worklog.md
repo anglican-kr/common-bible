@@ -2,6 +2,31 @@
 
 ## 2026-05-11
 
+### 모노레포 4분할 마이그레이션 (ADR-020)
+
+기존 단일 `common-bible` 저장소를 4개로 분리:
+
+| 저장소 | 역할 | 비고 |
+|---|---|---|
+| `anglican-kr/common-bible` (본 저장소) | PWA 프론트엔드 | 공개 유지 |
+| `anglican-kr/common-bible-data` | 마크다운 원본·Python 파이프라인·빌드 출력·데이터 검증 테스트 | 비공개, 기존 `common-bible-text` 이름 변경 |
+| `anglican-kr/common-bible-audio` | 장별 mp3 ~6.7 GB | 비공개, GitHub LFS (anglican-kr 조직 Team 요금제로 250 GB/월 한도 확보) |
+| `anglican-kr/common-bible-server` | nginx 설정 + 배포 스크립트 | 비공개 |
+
+서브모듈 토폴로지: 앱이 `data/`에 `common-bible-data` 직접 마운트, `common-bible-data` 안의 `audio/`에 `common-bible-audio` **nested** 마운트. clone 시 `--recurse-submodules`. 앱 측 URL `/data/...`는 마운트 위치로 그대로 보존되어 sw.js·audio-cache.js·index.html 어디도 변경 없음. Python 파이프라인의 `path` 상수만 `data/` prefix 제거(작업 디렉토리가 data 저장소 루트로 바뀜).
+
+분리 동기 세 가지가 겹쳤다: ① 본문 저작권(원본 마크다운은 비공개여야 하는데 앱은 공개), ② 자산 크기(6.7 GB 오디오를 일반 git에 둘 수 없음), ③ 운영 secret(ADR-017 BFF의 `client_secret`을 서버 설정 저장소에 격리). Phase 2~4 로드맵(기도서·교회력·성무일과) 추가 전에 경계를 정립.
+
+마이그레이션 단계:
+
+1. **server** — 새 저장소에 `nginx/`·`scripts/deploy.sh`·`build-deploy.sh` 이전. 빈 초기 커밋. `deploy.sh`의 `APP_ROOT` 일반화는 후속.
+2. **audio** — 새 저장소에 LFS 초기화 + `.gitattributes` + mp3 1314개 push. 25 MB/s, 6.7 GB push 4분.
+3. **data** — 기존 `common-bible-text`를 `common-bible-data`로 GitHub UI에서 rename, redirect 자동. 73개 마크다운을 `source/` 하위로 단일 `git mv` (history 보존). 모노레포에서 `src/`·`tests/`·`book_mappings.json`·빌드 산출물(`bible/`·`books.json`·`search-*.json`) 이전. Python `path` 상수 갱신. `data` 저장소에 audio nested 서브모듈 추가. `convert_txt_to_md.py`·`common-bible-kr.txt`는 더 이상 필요 없어 제거.
+4. **앱 정리** — 기존 `data/source` 서브모듈 deinit + `data/` 트래킹 파일 7개(`books.json`·`book_mappings.json`·`search-*.json` 4개·`source` 포인터) 제거. `data` 디렉토리 비우고 `common-bible-data`를 서브모듈로 마운트. `git submodule update --init --recursive`로 audio nested까지. `src/`(generate_splash.py만 `scripts/`로 mv)·`tests/test_*.py`·`tests/fixtures/`·`scripts/deploy.sh`·`build-deploy.sh` 제거.
+5. **문서** — `CLAUDE.md`·`GEMINI.md`·`README.md`·`docs/architecture.md` §1-3 갱신(4분할 토폴로지·서브모듈 도식). ADR-001·004·011·017에 「개정 2026-05-11」 블록. ADR-020 신규.
+
+CI 워크플로우는 두 곳: 앱 저장소(`test.yml`)는 JS 유닛 자동 실행 그대로, `common-bible-data`(`validate.yml`)는 push 시 Level 1-3 데이터 검증 자동 실행. e2e와 빌드는 로컬 또는 수동.
+
 ### OAuth 콜백 후 뒤로 가기로 동기화 직전 페이지에 착지
 
 증상: Google 계정 연결 직후 브라우저 뒤로 가기를 누르면 `accounts.google.com`의 로그인 화면으로 이동. 콜백 핸들러가 `?code=...` URL만 `history.replaceState`로 지웠을 뿐, 그 직전에 쌓인 Google 측 히스토리 항목들은 그대로 남아 한 번의 뒤로 가기로 노출되던 상태. 크로스 오리진 히스토리 항목은 JS로 가로채거나 제거할 수 없다는 게 핵심 제약.

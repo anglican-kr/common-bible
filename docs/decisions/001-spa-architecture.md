@@ -1,6 +1,7 @@
 # ADR-001: SPA 아키텍처 선택
 
 - 일시: 2026-03-25
+- 개정: 2026-05-11 (ADR-020에 따라 저장소 토폴로지를 4분할: 앱 공개 + data·audio·server 비공개. 마크다운 원본·Python 파이프라인은 `common-bible-data` 저장소, 오디오는 `common-bible-audio` LFS 저장소(nested), nginx·배포는 `common-bible-server`. 앱 측 URL `/data/...`는 서브모듈 마운트로 보존되므로 SPA·정적 호스팅·프레임워크 없음 같은 본 ADR의 결론은 그대로 유효.)
 - 상태: 승인됨
 
 ## 결정
