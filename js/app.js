@@ -104,10 +104,13 @@ document.addEventListener("visibilitychange", () => {
     _enforceAudioSoftCap();
   } else if (document.visibilityState === "visible") {
     // Pull updates from Drive when the user returns to this tab so changes
-    // made on another device are reflected without a manual reload.
-    // requestSync only dispatches if the machine is IDLE, so rapid toggles
-    // can't overlap cycles, and ETag 304 makes a no-change check ~free.
-    window.driveSync?.requestSync?.();
+    // made on another device are reflected without a manual reload. pollSync
+    // applies a throttle (POLL_THROTTLE_MS) so rapid tab switches don't fan
+    // out into back-to-back full sync cycles — the 304 fast path isn't
+    // currently free in practice (each GET is a 1+s round-trip with status
+    // 200, see sync debug log analysis), so swallowing redundant polls is the
+    // cheaper option until ETag conditional-GET observability lands.
+    window.driveSync?.pollSync?.();
   }
 });
 

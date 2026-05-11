@@ -149,7 +149,9 @@ export interface SyncMachineCtx {
 export interface SyncMachine {
   enable: () => void;
   disable: () => void;
-  requestSync: () => void;
+  // opts.throttleMs: skip if a cycle finished within this many ms. Used by
+  // poll-style callers (visibilitychange) to avoid back-to-back round-trips.
+  requestSync: (opts?: { throttleMs?: number }) => void;
   dispatch: (event: SyncEvent) => void;
   // PKCE entry: drive-sync.js IIFE stashes {code, verifier} from a redirect
   // callback; initDriveSync hands them off here. Exchanges for access+refresh
@@ -347,6 +349,9 @@ export interface DriveSyncFacade {
   deleteRemoteFile: () => Promise<void>;
   scheduleUpload: () => void;
   requestSync: () => void;
+  // Throttled requestSync for visibilitychange-style polling: drops the
+  // request if a cycle finished within the last POLL_THROTTLE_MS.
+  pollSync: () => void;
   isEnabled: () => boolean;
   isAuthenticated: () => boolean;
   getUserEmail: () => string | null;

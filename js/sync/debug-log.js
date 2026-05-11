@@ -114,6 +114,12 @@ function _format(e, baseTs) {
   if (e.state)      parts.push(`state:${e.state}`);
   if (e.reason)     parts.push(`reason:${e.reason}`);
   if (e.status)     parts.push(`http:${e.status}`);
+  // Pre-masked by caller via mask("etag", value). Surfacing it in the dump
+  // lets us diagnose why conditional GET (If-None-Match) never resolves to
+  // 304 — null here = ETag header missing in download response.
+  if (e.etag)       parts.push(`etag:${e.etag}`);
+  if (e.elapsedMs != null) parts.push(`elapsed:${e.elapsedMs}ms`);
+  if (e.throttleMs != null) parts.push(`throttle:${e.throttleMs}ms`);
   if (e.changeKind) parts.push(`kind:${e.changeKind}`);
   if (e.changeId)   parts.push(`id:${e.changeId}`);
   if (e._count)     parts.push(`(×${e._count} in ${(e._lastTs ?? e.ts) - e.ts}ms)`);
