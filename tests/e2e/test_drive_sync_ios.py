@@ -248,8 +248,12 @@ def test_ios_callback_state_mismatch_rejected(browser, fake_drive, fake_oauth):
         page.wait_for_function(
             "() => location.search === ''", timeout=15_000,
         )
+        # ENABLE → _attemptSilentRefresh is async; poll for NEEDS_CONSENT.
+        page.wait_for_function(
+            "() => window.driveSync.getStatus() === 'NEEDS_CONSENT'",
+            timeout=5_000,
+        )
         assert page.evaluate("window.driveSync.isAuthenticated()") is False
-        assert page.evaluate("window.driveSync.getStatus()") == "NEEDS_CONSENT"
     finally:
         page.context.close()
 
@@ -266,8 +270,11 @@ def test_ios_callback_error_param_rejected(browser, fake_drive, fake_oauth):
         page.wait_for_function(
             "() => location.search === ''", timeout=15_000,
         )
+        page.wait_for_function(
+            "() => window.driveSync.getStatus() === 'NEEDS_CONSENT'",
+            timeout=5_000,
+        )
         assert page.evaluate("window.driveSync.isAuthenticated()") is False
-        assert page.evaluate("window.driveSync.getStatus()") == "NEEDS_CONSENT"
     finally:
         page.context.close()
 

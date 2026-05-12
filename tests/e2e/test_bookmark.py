@@ -160,12 +160,14 @@ def test_select_verses_button_preserves_chapter_after_drawer_close(browser):
     page.locator("#bm-select-verses-btn").click()
 
     # Drawer closes, verse-select bar appears, and the bar must reflect gen/1
-    # — i.e. _currentBookId/_currentChapter are not clobbered to null.
+    # — i.e. readingContext.{bookId,chapter} are not clobbered to null.
     page.wait_for_selector("#bookmark-drawer", state="hidden")
     page.wait_for_selector("#verse-select-bar:not([hidden])")
 
     state = page.evaluate(
-        "() => ({ book: _currentBookId, chapter: _currentChapter, mode: _verseSelectMode })"
+        "() => ({ book: window.readingContext.bookId,"
+        "         chapter: window.readingContext.chapter,"
+        "         mode: window.readingContext.verseSelectMode })"
     )
     assert state["mode"] is True, "verse-select mode should be active"
     assert state["book"] == "gen" and state["chapter"] == 1, \

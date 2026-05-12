@@ -120,9 +120,7 @@ def test_a11y_bm_save_modal(browser):
         page.wait_for_selector("article.chapter-text .verse")
         page.locator(".title-bookmark-btn").click()
         page.wait_for_selector("#bookmark-drawer:not([hidden])")
-        page.locator("#bm-add-folder-btn").click()
-        # Open save modal via long-press path
-        page.evaluate("""() => openSaveModal('chapter')""")
+        page.locator("#bm-save-chapter-btn").click()
         page.wait_for_selector("#bm-save-modal:not([hidden])")
         v = _violations(page, context="#bm-save-modal")
         assert not v, f"Save modal: {len(v)} violation(s):\n{_fmt(v)}"

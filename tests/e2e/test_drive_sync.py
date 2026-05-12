@@ -526,11 +526,15 @@ def test_pkce_callback_state_mismatch_rejected(browser, fake_drive, fake_oauth):
             "() => location.search === '' || location.search === undefined",
             timeout=15_000,
         )
+        # initDriveSync → _machine.enable() fires _attemptSilentRefresh
+        # asynchronously; it returns false (no refresh token) and the machine
+        # parks in NEEDS_CONSENT. Poll for that terminal state rather than
+        # sampling immediately, which races with the async transition.
+        page.wait_for_function(
+            "() => window.driveSync.getStatus() === 'NEEDS_CONSENT'",
+            timeout=5_000,
+        )
         assert page.evaluate("window.driveSync.isAuthenticated()") is False
-        # __pendingRedirectError captured the reason before initDriveSync ran.
-        # By the time we check, initDriveSync has already consumed it; assert
-        # via the machine state instead.
-        assert page.evaluate("window.driveSync.getStatus()") == "NEEDS_CONSENT"
     finally:
         page.context.close()
 
@@ -547,8 +551,11 @@ def test_pkce_callback_error_param_rejected(browser, fake_drive, fake_oauth):
             "() => location.search === '' || location.search === undefined",
             timeout=15_000,
         )
+        page.wait_for_function(
+            "() => window.driveSync.getStatus() === 'NEEDS_CONSENT'",
+            timeout=5_000,
+        )
         assert page.evaluate("window.driveSync.isAuthenticated()") is False
-        assert page.evaluate("window.driveSync.getStatus()") == "NEEDS_CONSENT"
     finally:
         page.context.close()
 

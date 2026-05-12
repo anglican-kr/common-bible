@@ -284,6 +284,16 @@ def test_mobile_focus_in_expanded_reverts_to_compact(browser):
             "#search-sheet-results .search-result-item:not(.ref-match-item)",
             timeout=8_000,
         )
+        # runSheetSearch is async — onPartial then the post-await clearNode +
+        # renderSearchResultList run after the first .search-result-item match.
+        # Wait for the loading placeholder to disappear AND the a11y announce
+        # to fire so the focus handler's clearNode isn't immediately
+        # overwritten by a trailing render.
+        page.wait_for_selector("#search-sheet-results .loading", state="detached", timeout=3_000)
+        page.wait_for_function(
+            "() => /검색 결과/.test(document.getElementById('a11y-announce')?.textContent || '')",
+            timeout=3_000,
+        )
 
         # Programmatically focus to bypass iOS pointer quirks; the JS focus
         # handler is what we're testing.
