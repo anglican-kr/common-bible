@@ -133,6 +133,20 @@ const install = (() => {
 })();
 // ── END INSTALL_STATE ──
 
+// Tag the document so CSS can distinguish a real browser tab from a
+// standalone PWA. CSS @media (display-mode: browser) is unreliable on Safari,
+// which reports browser mode even in installed standalone (mdn/browser-compat-data
+// #18807) — the same WebKit quirk isStandalone() compensates for above.
+// Re-synced on display-mode change to cover the desktop "install while open"
+// flow where the same document transitions from tab to standalone window.
+function syncDisplayMode() {
+  document.documentElement.dataset.displayMode = install.isStandalone() ? "standalone" : "browser";
+}
+syncDisplayMode();
+try {
+  window.matchMedia("(display-mode: standalone)").addEventListener("change", syncDisplayMode);
+} catch {}
+
 // ── Install guide modal ──
 
 const $installScrim = _$("install-scrim");
