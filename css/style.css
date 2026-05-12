@@ -2110,11 +2110,12 @@ mark.search-highlight {
 /* iOS Chrome reports env(safe-area-inset-bottom) as the home-indicator height
    even when its persistent bottom toolbar already covers that area, producing
    an empty gap below the audio bar. In browser mode the browser chrome owns
-   the bottom safe area, so we skip the inset. Standalone PWA still needs it. */
-@media (display-mode: browser) {
-  #audio-bar {
-    padding-bottom: 0.75rem;
-  }
+   the bottom safe area, so we skip the inset. Standalone PWA still needs it.
+   Keyed off [data-display-mode] (set by install.js) rather than CSS
+   @media (display-mode: browser) because Safari reports browser mode even in
+   standalone PWA (WebKit bug — see install.js isStandalone() fallback). */
+[data-display-mode="browser"] #audio-bar {
+  padding-bottom: 0.75rem;
 }
 
 #audio-bar::before {

@@ -133,6 +133,12 @@ const install = (() => {
 })();
 // ── END INSTALL_STATE ──
 
+// Tag the document so CSS can distinguish a real browser tab from a
+// standalone PWA. CSS @media (display-mode: browser) is unreliable on Safari,
+// which reports browser mode even in installed standalone (mdn/browser-compat-data
+// #18807) — the same WebKit quirk isStandalone() compensates for above.
+document.documentElement.dataset.displayMode = install.isStandalone() ? "standalone" : "browser";
+
 // ── Install guide modal ──
 
 const $installScrim = _$("install-scrim");
