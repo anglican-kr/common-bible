@@ -25,13 +25,30 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          submodules: recursive
-          token: ${{ secrets.GITHUB_TOKEN }}
+          # self-checkout 은 기본 GITHUB_TOKEN 사용 — workflow 의 permissions:
+          # contents:write 와 결합해 push 까지 처리. data·audio 서브모듈은 private
+          # 이라 GITHUB_TOKEN 으로 클론 불가 → 아래 별도 step 에서 PAT 로 처리.
+          submodules: false
           fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+
+      - name: data + audio 서브모듈을 PAT 로 별도 클론
+        env:
+          SUBMODULE_PAT: ${{ secrets.SUBMODULE_AND_DISPATCH_PAT }}
+          # audio mp3 본 바이너리는 필요 없음 — release.py 는 서브모듈 포인터만
+          # 다루고, manifest 는 data 저장소 CI 가 이미 갱신해놓은 상태.
+          GIT_LFS_SKIP_SMUDGE: "1"
+        run: |
+          git config --global \
+            url."https://x-access-token:${SUBMODULE_PAT}@github.com/anglican-kr/common-bible-data".insteadOf \
+            "git@github.com:anglican-kr/common-bible-data"
+          git config --global \
+            url."https://x-access-token:${SUBMODULE_PAT}@github.com/anglican-kr/common-bible-audio".insteadOf \
+            "git@github.com:anglican-kr/common-bible-audio"
+          git submodule update --init --recursive
 
       - name: 데이터 서브모듈 포인터 최신화
         run: git submodule update --remote data
