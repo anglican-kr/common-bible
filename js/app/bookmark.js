@@ -158,6 +158,40 @@ function mergeVerseSpecs(specA, specB) {
 }
 // ── END VERSE_SPEC ──
 
+// ── BEGIN VERSE_SERIALIZE ──
+// Exercised by tests/unit/bookmark.test.js. Pure DOM transform: clone the
+// range bounded by [firstNode, lastNode] (inclusive), strip aria-hidden
+// verse-number glyphs, expand stanza/paragraph/pilcrow markers to blank lines
+// and hemistich markers to single line breaks, then normalize whitespace.
+//
+// Shared by the article-level system-copy handler (views-routing.js, fires on
+// Cmd/Ctrl+C of a drag-selection) and the verse-select bar's 복사 button
+// (copySelectedVerses below). Keeping a single source ensures both paths emit
+// identical citation-ready text.
+
+/**
+ * @param {Node} firstNode
+ * @param {Node} lastNode
+ * @returns {string}
+ */
+function serializeVerseRange(firstNode, lastNode) {
+  const range = document.createRange();
+  range.setStartBefore(firstNode);
+  range.setEndAfter(lastNode);
+  const work = document.createElement("div");
+  work.appendChild(range.cloneContents());
+  work.querySelectorAll(".verse-num").forEach((n) => n.remove());
+  work.querySelectorAll(".stanza-break, .paragraph-break, .pilcrow")
+    .forEach((n) => { n.textContent = "\n\n"; });
+  work.querySelectorAll(".hemistich-break").forEach((n) => { n.textContent = "\n"; });
+  return (work.textContent ?? "")
+    .replace(/\u2060/g, "")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+// ── END VERSE_SERIALIZE ──
+
 // ── BEGIN BOOKMARK_QUERY ──
 // Exercised by tests/unit/bookmark.test.js. Pure tree operations on the
 // in-memory bookmark store; only `findExistingChapterBookmarks` calls out
@@ -1851,21 +1885,7 @@ async function copySelectedVerses() {
   }
   if (!groups.length) return;
 
-  const textParts = groups.map(([first, last]) => {
-    const range = document.createRange();
-    range.setStartBefore(first);
-    range.setEndAfter(last);
-    const work = document.createElement("div");
-    work.appendChild(range.cloneContents());
-    work.querySelectorAll(".verse-num").forEach((n) => n.remove());
-    work.querySelectorAll(".stanza-break, .paragraph-break, .pilcrow").forEach((n) => { n.textContent = "\n\n"; });
-    work.querySelectorAll(".hemistich-break").forEach((n) => { n.textContent = "\n"; });
-    return (work.textContent ?? "")
-      .replace(/\u2060/g, "")
-      .replace(/[ \t]+\n/g, "\n")
-      .replace(/\n{3,}/g, "\n\n")
-      .trim();
-  });
+  const textParts = groups.map(([first, last]) => serializeVerseRange(first, last));
 
   const refs = collapseFullVerseRefs(Array.from(readingContext.selectedVerses), article);
   const spec = refs.length
@@ -2113,6 +2133,7 @@ function initBookmarkDrawerResize() {
 const appBookmark = {
   // Phase 6a helpers
   parseVerseSpec, collapseFullVerseRefs, selectedVersesToSpec, mergeVerseSpecs,
+  serializeVerseRange,
   findExistingChapterBookmarks,
   _walkBookmarks, _findItemInStore, _findParentFolderId,
   removeItemById, insertItem, collectFolderOptions,
@@ -2135,6 +2156,7 @@ window.parseVerseSpec = parseVerseSpec;
 window.collapseFullVerseRefs = collapseFullVerseRefs;
 window.selectedVersesToSpec = selectedVersesToSpec;
 window.mergeVerseSpecs = mergeVerseSpecs;
+window.serializeVerseRange = serializeVerseRange;
 window.findExistingChapterBookmarks = findExistingChapterBookmarks;
 window._walkBookmarks = _walkBookmarks;
 window._findItemInStore = _findItemInStore;
@@ -2165,6 +2187,7 @@ window.initBookmarkDrawerResize = initBookmarkDrawerResize;
 
 export {
   parseVerseSpec, collapseFullVerseRefs, selectedVersesToSpec, mergeVerseSpecs,
+  serializeVerseRange,
   findExistingChapterBookmarks,
   _walkBookmarks, _findItemInStore, _findParentFolderId,
   removeItemById, insertItem, collectFolderOptions,

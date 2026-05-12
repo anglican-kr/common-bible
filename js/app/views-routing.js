@@ -760,6 +760,41 @@ function formatVerseLabel(v) {
   return label;
 }
 
+// ── BEGIN VERSE_SELECTION ──
+// Exercised by tests/unit/views-routing.test.js. DOM-pure: reads classList +
+// data-vref from a passed article node, no global state, no event bindings.
+
+// Pure-poetry multi-part verses (e.g. Psalms, Proverbs, Wisdom books) are
+// treated as a single selection unit: tapping one line selects/deselects the
+// whole verse. Prose-only or mixed (poetry+prose) multi-part verses, plus
+// single-span verses, keep per-line control.
+//
+// Returns the array of data-vref values that should be toggled together with
+// `vref`. For pure-poetry multi-part verses this is every part of the verse
+// number; otherwise just [vref].
+/**
+ * @param {ParentNode | null | undefined} article
+ * @param {string} vref
+ * @returns {string[]}
+ */
+function _verseSelectionUnit(article, vref) {
+  if (!article) return [vref];
+  const m = vref.match(/^(\d+)/);
+  const num = m ? m[1] : vref;
+  /** @type {Element[]} */
+  const parts = [];
+  for (const v of article.querySelectorAll(".verse[data-vref]")) {
+    const r = v.getAttribute("data-vref") ?? "";
+    const rm = r.match(/^(\d+)/);
+    if ((rm ? rm[1] : r) === num) parts.push(v);
+  }
+  if (parts.length > 1 && parts.every((p) => p.classList.contains("verse-poetry"))) {
+    return parts.map((p) => p.getAttribute("data-vref") ?? "");
+  }
+  return [vref];
+}
+// ── END VERSE_SELECTION ──
+
 function renderChapter(data, book, opts) {
   const ch = data.chapter;
   const hlQuery = opts && opts.highlightQuery;
@@ -991,6 +1026,7 @@ function renderChapter(data, book, opts) {
   let _longPressTimer = null;
   let _longPressStartX = 0;
   let _longPressStartY = 0;
+
   article.addEventListener("pointerdown", (e) => {
     const t = e.target;
     if (!(t instanceof Element)) return;
@@ -1000,7 +1036,8 @@ function renderChapter(data, book, opts) {
       e.preventDefault(); // prevent text selection during drag
       const allVerses = /** @type {HTMLElement[]} */ ([...article.querySelectorAll(".verse[data-vref]")]);
       const startIdx = allVerses.indexOf(/** @type {HTMLElement} */ (vs));
-      const isAdding = !readingContext.selectedVerses.has(vs.getAttribute("data-vref") ?? "");
+      const startUnit = _verseSelectionUnit(article, vs.getAttribute("data-vref") ?? "");
+      const isAdding = !startUnit.some((r) => readingContext.selectedVerses.has(r));
       readingContext.verseSelectDrag = { startIdx, allVerses, isAdding, moved: false, snapshot: new Set(readingContext.selectedVerses) };
       article.setPointerCapture(e.pointerId);
       return;
@@ -1014,7 +1051,9 @@ function renderChapter(data, book, opts) {
       enterVerseSelectMode(book.id, ch);
       const vref = vs.getAttribute("data-vref");
       if (vref) {
-        readingContext.selectedVerses.add(vref);
+        for (const r of _verseSelectionUnit(article, vref)) {
+          readingContext.selectedVerses.add(r);
+        }
         article.querySelectorAll(".verse[data-vref]").forEach((v) => {
           v.classList.toggle("verse-selected", readingContext.selectedVerses.has(v.getAttribute("data-vref") ?? ""));
         });
@@ -1046,12 +1085,27 @@ function renderChapter(data, book, opts) {
       readingContext.verseSelectDrag.moved = true;
       const [lo, hi] = startIdx <= currentIdx ? [startIdx, currentIdx] : [currentIdx, startIdx];
       readingContext.selectedVerses = new Set(snapshot);
-      allVerses.forEach((v, i) => {
+      for (let i = lo; i <= hi; i++) {
+        const vref = allVerses[i].getAttribute("data-vref") ?? "";
+        if (isAdding) readingContext.selectedVerses.add(vref);
+        else readingContext.selectedVerses.delete(vref);
+      }
+      // Pure-poetry verses are atomic: if any part falls in [lo, hi], extend
+      // the toggle to all parts of that verse number.
+      const seenNums = new Set();
+      for (let i = lo; i <= hi; i++) {
+        const vref = allVerses[i].getAttribute("data-vref") ?? "";
+        const m = vref.match(/^(\d+)/);
+        const num = m ? m[1] : vref;
+        if (seenNums.has(num)) continue;
+        seenNums.add(num);
+        const unit = _verseSelectionUnit(article, vref);
+        if (unit.length === 1) continue;
+        if (isAdding) unit.forEach((r) => readingContext.selectedVerses.add(r));
+        else unit.forEach((r) => readingContext.selectedVerses.delete(r));
+      }
+      allVerses.forEach((v) => {
         const vref = v.getAttribute("data-vref") ?? "";
-        if (i >= lo && i <= hi) {
-          if (isAdding) readingContext.selectedVerses.add(vref);
-          else readingContext.selectedVerses.delete(vref);
-        }
         v.classList.toggle("verse-selected", readingContext.selectedVerses.has(vref));
       });
       updateVerseSelectionBoundaries(article);
@@ -1064,12 +1118,17 @@ function renderChapter(data, book, opts) {
   article.addEventListener("pointerup", (e) => {
     if (readingContext.verseSelectDrag) {
       if (!readingContext.verseSelectDrag.moved) {
-        // Simple tap: toggle start verse
+        // Simple tap: toggle the verse's selection unit (whole verse for pure
+        // poetry, single line otherwise).
         const vs = readingContext.verseSelectDrag.allVerses[readingContext.verseSelectDrag.startIdx];
         if (vs) {
           const vref = vs.getAttribute("data-vref") ?? "";
-          if (readingContext.verseSelectDrag.isAdding) readingContext.selectedVerses.add(vref);
-          else readingContext.selectedVerses.delete(vref);
+          const unit = _verseSelectionUnit(article, vref);
+          if (readingContext.verseSelectDrag.isAdding) {
+            unit.forEach((r) => readingContext.selectedVerses.add(r));
+          } else {
+            unit.forEach((r) => readingContext.selectedVerses.delete(r));
+          }
           readingContext.verseSelectDrag.allVerses.forEach((v) => {
             v.classList.toggle("verse-selected", readingContext.selectedVerses.has(v.getAttribute("data-vref") ?? ""));
           });
@@ -1090,7 +1149,8 @@ function renderChapter(data, book, opts) {
 
   // Copy handler: serialize the selection ourselves so that stanza breaks
   // become blank lines and the appended reference uses plain verse numbers
-  // (no line-part letters like "1a").
+  // (no line-part letters like "1a"). Shared serializer lives in bookmark.js
+  // (VERSE_SERIALIZE block) so this path and the 복사 button emit identical text.
   article.addEventListener("copy", (e) => {
     const sel = window.getSelection();
     if (!sel || sel.isCollapsed) return;
@@ -1108,39 +1168,11 @@ function renderChapter(data, book, opts) {
     }
     if (!firstVerse || !lastVerse) return;
 
-    const expanded = document.createRange();
-    expanded.setStartBefore(firstVerse);
-    expanded.setEndAfter(lastVerse);
+    const firstNum = parseInt(firstVerse.getAttribute("data-vref") ?? "", 10);
+    const lastNum = parseInt(lastVerse.getAttribute("data-vref") ?? "", 10);
+    if (!Number.isFinite(firstNum) || !Number.isFinite(lastNum)) return;
 
-    const work = document.createElement("div");
-    work.appendChild(expanded.cloneContents());
-
-    // Drop aria-hidden verse-number glyphs (rendered via ::before).
-    work.querySelectorAll(".verse-num").forEach((n) => n.remove());
-    // Stanza and paragraph boundaries become blank lines; pilcrow markers also
-    // emit a blank line (redundant \n\n adjacent to a paragraph-break collapses
-    // via the \n{3,} rule below). Hemistich breaks stay as a single line break.
-    work.querySelectorAll(".stanza-break, .paragraph-break, .pilcrow").forEach((n) => { n.textContent = "\n\n"; });
-    work.querySelectorAll(".hemistich-break").forEach((n) => { n.textContent = "\n"; });
-
-    /** @type {number | null} */
-    let firstNum = null;
-    /** @type {number | null} */
-    let lastNum = null;
-    for (const vs of work.querySelectorAll(".verse[data-vref]")) {
-      const n = parseInt(vs.getAttribute("data-vref") ?? "", 10);
-      if (!Number.isFinite(n)) continue;
-      if (firstNum === null) firstNum = n;
-      lastNum = n;
-    }
-    if (firstNum === null) return;
-
-    const plainText = (work.textContent ?? "")
-      .replace(/\u2060/g, "")
-      .replace(/[ \t]+\n/g, "\n")
-      .replace(/\n{3,}/g, "\n\n")
-      .trim();
-
+    const plainText = window.serializeVerseRange(firstVerse, lastVerse);
     const ref = firstNum === lastNum
       ? `${book.name_ko} ${ch}:${firstNum}`
       : `${book.name_ko} ${ch}:${firstNum}-${lastNum}`;
@@ -1757,6 +1789,7 @@ const appViewsRouting = {
   buildDivisionBreadcrumb, divisionLabels, divisionOrder, effectiveDivision,
   initCompactHeader,
   parsePath, route, navigate, hideAudioBar, renderError,
+  _verseSelectionUnit,
 };
 window.appViewsRouting = appViewsRouting;
 
@@ -1801,4 +1834,5 @@ export {
   setTitle, setBreadcrumb, setTitleWithDivisionPicker, setTitleWithChapterPicker,
   buildDivisionBreadcrumb, divisionLabels, divisionOrder, effectiveDivision,
   initCompactHeader,
+  _verseSelectionUnit,
 };

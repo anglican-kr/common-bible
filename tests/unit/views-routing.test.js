@@ -232,6 +232,31 @@ function loadBreadcrumb() {
   };
 }
 
+// ── VERSE_SELECTION loader ───────────────────────────────────────────────────
+// DOM-pure helper that reads classList + data-vref off a passed article node.
+// Mini article stub returns the supplied verse spans for querySelectorAll
+// (".verse[data-vref]"); per-span classList.contains is a one-class check.
+
+function loadVerseSelection() {
+  const ctx = { Object, Array, String, Number, Boolean, console, Error };
+  vm.createContext(ctx);
+  vm.runInContext(extractBlock("VERSE_SELECTION"), ctx, {
+    filename: "views-routing-verse-selection.js",
+  });
+  return { ctx, verseSelectionUnit: ctx._verseSelectionUnit };
+}
+
+/** @param {Array<[string, boolean]>} verses [vref, isPoetry] tuples */
+function makeArticleStub(verses) {
+  const elements = verses.map(([vref, isPoetry]) => ({
+    getAttribute: (k) => (k === "data-vref" ? vref : null),
+    classList: { contains: (cls) => isPoetry && cls === "verse-poetry" },
+  }));
+  return {
+    querySelectorAll: (sel) => (sel === ".verse[data-vref]" ? elements : []),
+  };
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Tests
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1003,4 +1028,49 @@ test("initCompactHeader: repeated transitions toggle correctly", () => {
     h.fireScroll(0);
     assert.equal(h.$header.classList.contains("compact"), false);
   }
+});
+
+// ── VERSE_SELECTION ──────────────────────────────────────────────────────────
+
+test("_verseSelectionUnit: single-span verse → [vref] only", () => {
+  const h = loadVerseSelection();
+  const article = makeArticleStub([["3", false]]);
+  assert.deepEqual(h.verseSelectionUnit(article, "3"), ["3"]);
+});
+
+test("_verseSelectionUnit: pure-poetry multi-part → all parts (any entry vref)", () => {
+  const h = loadVerseSelection();
+  const article = makeArticleStub([["3a", true], ["3b", true], ["3c", true]]);
+  assert.deepEqual(h.verseSelectionUnit(article, "3a"), ["3a", "3b", "3c"]);
+  assert.deepEqual(h.verseSelectionUnit(article, "3b"), ["3a", "3b", "3c"]);
+  assert.deepEqual(h.verseSelectionUnit(article, "3c"), ["3a", "3b", "3c"]);
+});
+
+test("_verseSelectionUnit: pure-prose multi-part → just [vref]", () => {
+  const h = loadVerseSelection();
+  const article = makeArticleStub([["3a", false], ["3b", false]]);
+  assert.deepEqual(h.verseSelectionUnit(article, "3a"), ["3a"]);
+  assert.deepEqual(h.verseSelectionUnit(article, "3b"), ["3b"]);
+});
+
+test("_verseSelectionUnit: mixed poetry+prose multi-part → just [vref]", () => {
+  const h = loadVerseSelection();
+  const article = makeArticleStub([["3a", true], ["3b", false]]);
+  assert.deepEqual(h.verseSelectionUnit(article, "3a"), ["3a"]);
+  assert.deepEqual(h.verseSelectionUnit(article, "3b"), ["3b"]);
+});
+
+test("_verseSelectionUnit: groups by integer prefix, not contamination across neighboring verses", () => {
+  const h = loadVerseSelection();
+  const article = makeArticleStub([
+    ["3a", true], ["3b", true], ["3c", true],
+    ["4a", true], ["4b", true],
+  ]);
+  assert.deepEqual(h.verseSelectionUnit(article, "3a"), ["3a", "3b", "3c"]);
+  assert.deepEqual(h.verseSelectionUnit(article, "4a"), ["4a", "4b"]);
+});
+
+test("_verseSelectionUnit: null article → defensive [vref]", () => {
+  const h = loadVerseSelection();
+  assert.deepEqual(h.verseSelectionUnit(null, "3a"), ["3a"]);
 });
