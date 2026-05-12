@@ -2573,10 +2573,10 @@ body.verse-select-active #search-fab {
 }
 
 
-/* No inline padding/margin in select mode. Even a 0.15em horizontal padding
-   offset by an equal negative margin still produced ~1px shifts on iOS
-   Safari due to subpixel rounding of em-based metrics on inline boxes that
-   contain a `vertical-align: super` <sup>. The visual "breathing room"
+/* No inline padding/margin in select mode. A 0.15em horizontal padding
+   offset by an equal negative margin produced ~1px shifts on iOS Safari
+   because of subpixel rounding of em-based metrics on inline boxes that
+   contain a `vertical-align: super` <sup>. The visible "breathing room"
    around the highlight is drawn via box-shadow on .verse-selected below —
    shadows paint outside the line-box without affecting reflow. */
 body.verse-select-active .verse[data-vref] {
@@ -2589,13 +2589,20 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   border-radius: 5px;
 }
 
+/* Use an opaque color (the 20% accent pre-mixed with --bg) rather than a
+   semi-transparent overlay. A box-shadow offset of the same shape paints a
+   copy of the box behind itself; with a semi-transparent base, the area
+   where shadow and box overlap composites to ~36% accent instead of 20%,
+   leaving a visible darker column between adjacent selected verses. Pre-
+   mixing with --bg makes "shadow alone", "box alone", and "shadow + box"
+   all render the same color. */
 .verse.verse-selected {
-  --selected-bg: color-mix(in srgb, var(--accent) 20%, transparent);
+  --selected-bg: color-mix(in srgb, var(--accent) 20%, var(--bg));
   background: var(--selected-bg) !important;
   border-radius: 5px;
 }
 
-/* Extend the highlight 0.15em on each side without changing inline layout.
+/* Extend the highlight 0.15em on each side without affecting inline layout.
    Block (poetry) verses span the full content width already, so they don't
    need horizontal extension. */
 .verse.verse-selected:not(.verse-poetry) {
@@ -2605,8 +2612,9 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 }
 
 /* In a run of consecutive selected inline verses, suppress the box-shadow
-   on the inner edges so the semi-transparent shadows don't overlap and
-   double the color at the boundary. */
+   on the inner edges. The shadow color is opaque, so this is not strictly
+   needed to avoid darker bands, but it stops the shadow from poking past
+   the run's interior boundary into the following / preceding verse. */
 .verse.verse-selected.verse-selected-join-prev:not(.verse-poetry) {
   box-shadow: 0.15em 0 0 var(--selected-bg);
 }
