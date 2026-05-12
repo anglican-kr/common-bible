@@ -2,4 +2,4 @@
 // importScripts'd by sw.js to derive SHELL_CACHE from the app's semantic
 // version. Bumping APP_VERSION here changes sw.js's byte-diff (via the
 // imported script), which is what triggers Service Worker update detection.
-self.APP_VERSION = "1.4.12";
+self.APP_VERSION = "1.4.13";
