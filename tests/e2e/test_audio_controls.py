@@ -49,10 +49,27 @@ _AUDIO_MOCK = """
 """
 
 
+_SUPPRESS_AUDIO_ERROR = """
+(() => {
+    // Block the 'error' listener that views-routing.js binds in showAudioPlayer:
+    //   audio.addEventListener('error', () => { _teardownAudio(); showAudioUnavailable(); });
+    // Without this, the empty / 404 audio body fires 'error' during page setup,
+    // tears down the audio bar UI, and interaction tests (speed/play/seek/...)
+    // hit timeouts waiting for the now-gone .audio-* controls.
+    const origAdd = HTMLAudioElement.prototype.addEventListener;
+    HTMLAudioElement.prototype.addEventListener = function(type, listener, opts) {
+        if (type === 'error') return;
+        return origAdd.call(this, type, listener, opts);
+    };
+})();
+"""
+
+
 def _open(browser):
     ctx = browser.new_context()
     ctx.add_init_script(CLEAR_APP_STORAGE)
     ctx.add_init_script(_AUDIO_MOCK)
+    ctx.add_init_script(_SUPPRESS_AUDIO_ERROR)
     page = ctx.new_page()
     # Block audio file requests so the player initialises without network
     page.route("**/data/audio/**", lambda r: r.fulfill(status=200, body=b"", content_type="audio/mpeg"))
@@ -121,20 +138,20 @@ def test_pause_btn_click_triggers_pause(browser):
 
 # ── seek ──────────────────────────────────────────────────────────────────────
 
+
 def test_seek_via_progress_input(browser):
     """progress input 값 변경 → 'input' 이벤트 → audio.currentTime 업데이트."""
     ctx, page = _open(browser)
     try:
-        # Expose audio element; set max so seek has valid range
         page.evaluate("""() => {
             const audio = window.__testAudio;
             if (!audio) return;
             Object.defineProperty(audio, 'duration', { get: () => 300, configurable: true });
         }""")
 
+        page.wait_for_selector(".audio-progress")
         page.evaluate("""() => {
             const progress = document.querySelector('.audio-progress');
-            if (!progress) return;
             progress.max = '300';
             progress.value = '60';
             progress.dispatchEvent(new Event('input', { bubbles: true }));

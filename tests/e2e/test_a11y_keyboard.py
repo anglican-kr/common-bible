@@ -60,7 +60,7 @@ def test_escape_closes_bm_save_modal(browser):
         page.wait_for_selector("article.chapter-text .verse")
         page.locator(".title-bookmark-btn").click()
         page.wait_for_selector("#bookmark-drawer:not([hidden])")
-        page.evaluate("() => openSaveModal('chapter')")
+        page.locator("#bm-save-chapter-btn").click()
         page.wait_for_selector("#bm-save-modal:not([hidden])")
 
         page.keyboard.press("Escape")
@@ -91,7 +91,7 @@ def test_focus_trap_in_bm_save_modal(browser):
         page.wait_for_selector("article.chapter-text .verse")
         page.locator(".title-bookmark-btn").click()
         page.wait_for_selector("#bookmark-drawer:not([hidden])")
-        page.evaluate("() => openSaveModal('chapter')")
+        page.locator("#bm-save-chapter-btn").click()
         page.wait_for_selector("#bm-save-modal:not([hidden])")
 
         # Tab through all focusable elements inside modal

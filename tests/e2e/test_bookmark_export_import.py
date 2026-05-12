@@ -13,50 +13,44 @@ BASE = "http://localhost:8080"
 # 다운로드를 트리거한다.  headless Chromium에서는 blob URL 다운로드 이벤트가
 # 신뢰할 수 없으므로, Blob 생성자와 anchor 클릭을 동기로 가로채
 # JSON 문자열을 직접 캡처한다.
-_INTERCEPT_EXPORT_JS = """() => {
+#
+# ADR-018 모듈 분할 이후 exportBookmarks 는 전역 함수가 아니라
+# #bm-export-btn 클릭 핸들러로만 노출된다. 인터셉트 훅은 그대로 두고
+# 트리거만 버튼 클릭으로 바꿔 동일한 효과를 얻는다.
+_INSTALL_EXPORT_INTERCEPT_JS = """() => {
+    window.__bmExportCaptured = { filename: null, data: null };
     const OrigBlob = window.Blob;
     const origAppend = document.body.appendChild.bind(document.body);
     const origRevoke = URL.revokeObjectURL.bind(URL);
 
-    let capturedJson = null;
-    let capturedFilename = null;
-
-    // Blob 생성자 가로채기 — application/json 페이로드만 캡처
     window.Blob = function(parts, options) {
         if (options && options.type === 'application/json' && parts.length === 1) {
-            capturedJson = parts[0];
+            window.__bmExportCaptured.data = JSON.parse(parts[0]);
         }
         return new OrigBlob(parts, options);
     };
 
-    // <a download> 클릭 억제 및 파일명 캡처
     document.body.appendChild = (node) => {
         if (node && node.tagName === 'A' && node.download) {
-            capturedFilename = node.download;
+            window.__bmExportCaptured.filename = node.download;
             node.click = () => {};
         }
         return origAppend(node);
     };
 
-    // blob URL 조기 해제 방지
     URL.revokeObjectURL = () => {};
-
-    exportBookmarks();
-
-    window.Blob = OrigBlob;
-    document.body.appendChild = origAppend;
-    URL.revokeObjectURL = origRevoke;
-
-    return {
-        filename: capturedFilename,
-        data: capturedJson ? JSON.parse(capturedJson) : null
-    };
 }"""
 
 
 def _intercept_export(page) -> dict:
-    """exportBookmarks() 를 호출하고 파일명·JSON 페이로드를 가로채 반환한다."""
-    return page.evaluate(_INTERCEPT_EXPORT_JS)
+    """#bm-export-btn 을 클릭해 exportBookmarks 핸들러를 트리거하고,
+    Blob 생성자와 anchor.appendChild 를 가로채 JSON 페이로드/파일명을 반환한다.
+    내보내기 버튼은 오버플로 패널 안에 숨겨져 있으므로 먼저 ⋯ 버튼을 연다."""
+    page.evaluate(_INSTALL_EXPORT_INTERCEPT_JS)
+    page.locator("#bm-overflow-btn").click()
+    page.wait_for_selector("#bm-overflow-panel:not([hidden])")
+    page.locator("#bm-export-btn").click()
+    return page.evaluate("() => window.__bmExportCaptured")
 
 
 # ── 테스트용 픽스처 데이터 ──────────────────────────────────────────────────
