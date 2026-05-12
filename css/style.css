@@ -1857,6 +1857,19 @@ mark.search-highlight {
   display: inline;
 }
 
+/* Suppress iOS/Android native long-press text-selection + callout menu on
+   touch devices. The 300ms JS long-press handler enters verse-select mode
+   instead; explicit copy goes through the verse-select bar's 복사 button.
+   Desktop keeps native text selection so the article-level copy handler
+   (Ctrl/Cmd+C of dragged text) still fires with the appended citation. */
+@media (hover: none) and (pointer: coarse) {
+  .chapter-text .verse {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+}
+
 .verse.verse-poetry {
   display: block;
   padding-left: 2rem;
