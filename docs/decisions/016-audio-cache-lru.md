@@ -163,3 +163,5 @@ const AUDIO_CACHE_HARD_CAP = 360 * 1024 * 1024; // 360 MB
 - ADR-013 클라이언트 JS 유닛 테스트 (vm 하네스 패턴)
 - W3C Storage API: `navigator.storage.persist()` / `estimate()`
 - WebKit "Storage Quota Limits" (iOS 7일 evict)
+
+> **개정 (2026-05-13, ADR-021):** AUDIO_CACHE 이름이 `"audio-1"` → `"audio"`로 고정. mp3 콘텐츠 변경은 더 이상 캐시 이름 bump으로 처리하지 않고, `audio-manifest.json`(데이터 저장소 CI가 생성)과 `js/manifest-sync.js`의 직전 스냅샷 diff로 항목 단위 lazy 무효화. LRU sidecar(`{url, byteSize, addedAt, lastPlayedAt}`) 스키마는 그대로. 단 manifest-sync가 stale 항목을 cache에서 제거할 때 해당 row를 `ac.removeEntries(urls)`로 함께 정리한다 — 그러지 않으면 totalSize 누계가 어긋남.

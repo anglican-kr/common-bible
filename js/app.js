@@ -275,6 +275,12 @@ window.addEventListener("DOMContentLoaded", () => {
       initBookmarkSheetDrag();
       initBookmarkDrawerResize();
       registerServiceWorker();
+      // Manifest-driven lazy cache invalidation (ADR-021). Runs after SW
+      // registration so cache.open targets the freshly named caches; safe
+      // when SW is still installing — diff is a no-op without entries.
+      if (window.manifestSync) {
+        window.manifestSync.syncManifests().catch(() => { /* best-effort */ });
+      }
       maybeShowInstallNudge();
       if (window.driveSync) window.driveSync.initDriveSync();
     });

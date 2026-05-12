@@ -74,6 +74,13 @@ nginx 설정을 앱 저장소 안에 그대로 두고 `.example.conf` 패턴을 
 - 오디오 변경: 인코딩(ADR-016) → audio 저장소 push → 앱 서브모듈 포인터 bump + `scripts/release.py --bump-audio` → 배포. 마찬가지 수동 두 단계.
 - nginx·secret 변경: server 저장소만 push → 서버에서 자체 checkout.
 
+> **개정 (2026-05-13, ADR-021):** 위 "수동 두 단계" 흐름이 자동화된다.
+>
+> - **데이터 변경**: `common-bible-data/.github/workflows/build.yml`이 main 의 `source/**` 변경을 감지해 파이프라인 + 매니페스트 생성 + `[skip ci]` 자동 commit·push. 사람은 .md만 편집해 PR을 열면 됨.
+> - **오디오 변경**: audio 저장소 push → data 저장소 audio 서브모듈 포인터 bump → data CI 가 `audio-manifest.json` 자동 갱신. `--bump-audio` 플래그는 제거됨 — 캐시 식별자 rev 개념 자체가 사라지고 콘텐츠 해시 매니페스트로 대체.
+> - **앱 서브모듈 포인터 bump**: Phase 3 webhook (`gh api` repository_dispatch) 도입 후 data 저장소 push 시 앱 저장소 CI 가 자동 처리.
+> - **release.py**: `--bump-data`·`--bump-audio` 제거, `version.json` + `sw-version.js` 한 묶음으로 좁힘. 자동 commit 포함.
+
 ## 후속
 
 마이그레이션 실행 계획(Phase A-D)은 `/home/joshua/.claude/plans/giggly-wibbling-lampson.md`에 단계별로 정리되어 있다. 분할 완료 시점에 본 ADR에 「개정」 블록으로 결과 요약을 추가한다.

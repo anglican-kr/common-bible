@@ -30,8 +30,10 @@
   const DB_VERSION = 1;
   const STORE = "entries";
 
-  // Mirror sw.js — bump together when re-encoding mp3 files invalidates the cache.
-  const AUDIO_CACHE_NAME = "audio-1";
+  // Mirror sw.js. Name is fixed since ADR-021 — per-file invalidation is
+  // driven by audio-manifest.json hash diffs in js/manifest-sync.js, so
+  // there is no rev to bump.
+  const AUDIO_CACHE_NAME = "audio";
   const SOFT_CAP = 300 * 1024 * 1024; // 300 MB
   const HARD_CAP = 360 * 1024 * 1024; // 360 MB
 

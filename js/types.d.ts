@@ -297,6 +297,24 @@ export interface BibleAudioCache {
   _listAll: () => Promise<AudioCacheEntry[]>;
 }
 
+// ── Content-hash manifest sync (js/manifest-sync.js, ADR-021) ───────────────
+
+export interface ManifestEntries {
+  [path: string]: string;
+}
+
+export interface ContentManifest {
+  format: number;
+  generated_at: string;
+  entries: ManifestEntries;
+}
+
+export interface ManifestSync {
+  syncManifests: () => Promise<void>;
+  _staleKeys: (current: ContentManifest, previous: ContentManifest | null) => Set<string>;
+  _urlToManifestKey: (requestUrl: string) => string | null;
+}
+
 // ── Store v2 ─────────────────────────────────────────────────────────────────
 
 export interface SyncStoreV2 {
@@ -684,6 +702,7 @@ declare global {
     syncDebugLog: SyncDebugLog;
     refreshStore: RefreshTokenStore;
     bibleAudioCache: BibleAudioCache;
+    manifestSync: ManifestSync;
     createSyncMachine: (opts?: {
       onStateChange?: (state: SyncState) => void;
     }) => SyncMachine;

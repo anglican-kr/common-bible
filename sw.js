@@ -1,11 +1,14 @@
-// Cache identifiers — bump independently via scripts/release.py.
-// Activating a new SHELL_CACHE clears only the prior shell cache; data/audio
-// caches are preserved across shell-only releases. Bump DATA_CACHE only when
-// bible JSON or search index format changes; bump AUDIO_CACHE only when mp3
-// sources are re-encoded.
-const SHELL_CACHE = "shell-68";
-const DATA_CACHE = "data-3";
-const AUDIO_CACHE = "audio-1"; // must equal js/audio-cache.js AUDIO_CACHE_NAME
+// SHELL_CACHE name is derived from /sw-version.js (release.py rewrites it
+// per release). Bumping APP_VERSION changes this importScripts target's
+// byte-diff, which is how the SW update algorithm detects new releases.
+// DATA_CACHE / AUDIO_CACHE / FONT_CACHE names are fixed: content-hash
+// manifests (bible-manifest.json, audio-manifest.json) drive per-entry
+// invalidation through js/manifest-sync.js — see ADR-021.
+importScripts("/sw-version.js");
+const SHELL_CACHE = "shell-" + self.APP_VERSION;
+const DATA_CACHE = "data";
+const AUDIO_CACHE = "audio"; // must equal js/audio-cache.js AUDIO_CACHE_NAME
+const FONT_CACHE = "fonts";
 
 // LRU metadata sidecar for AUDIO_CACHE. Loaded best-effort: if the import
 // fails (e.g. file missing in older deploy), audio caching still works,
@@ -13,10 +16,6 @@ const AUDIO_CACHE = "audio-1"; // must equal js/audio-cache.js AUDIO_CACHE_NAME
 try {
   importScripts("/js/audio-cache.js");
 } catch (_) { /* fall through; bibleAudioCache stays undefined */ }
-
-// Separate cache for Google Font files (fonts.gstatic.com).
-// Never cleared on cache bumps — font files are content-addressed and immutable.
-const FONT_CACHE = "fonts-v1";
 
 const KNOWN_CACHES = new Set([SHELL_CACHE, DATA_CACHE, AUDIO_CACHE, FONT_CACHE]);
 
@@ -35,6 +34,7 @@ const SHELL_FILES = [
   "/js/app/views-routing.js",
   "/js/drive-sync.js",
   "/js/audio-cache.js",
+  "/js/manifest-sync.js",
   "/js/sync/debug-log.js",
   "/js/sync/transport.js",
   "/js/sync/store-v2.js",
@@ -44,8 +44,11 @@ const SHELL_FILES = [
   "/js/search-worker.js",
   "/css/style.css",
   "/version.json",
+  "/sw-version.js",
   "/data/books.json",
   "/data/search-meta.json",
+  "/data/bible-manifest.json",
+  "/data/audio-manifest.json",
   "/manifest.webmanifest",
   "/favicon.ico",
   "/assets/icons/icon-192.png",
@@ -55,7 +58,7 @@ const SHELL_FILES = [
 
 // Route /data/* paths to the appropriate cache.
 // Returns SHELL_CACHE for non-data paths and for shell-precached data files
-// (books.json, search-meta.json) that ship with the app shell.
+// (books.json, search-meta.json, *-manifest.json) that ship with the app shell.
 function cacheNameFor(pathname) {
   if (pathname.startsWith("/data/audio/")) return AUDIO_CACHE;
   if (pathname.startsWith("/data/bible/")) return DATA_CACHE;
@@ -65,6 +68,32 @@ function cacheNameFor(pathname) {
     return DATA_CACHE;
   }
   return SHELL_CACHE;
+}
+
+const MANIFEST_PATHS = new Set([
+  "/data/bible-manifest.json",
+  "/data/audio-manifest.json",
+]);
+
+// Network-first for content-hash manifests. The manifest must reflect what
+// the server currently advertises so js/manifest-sync.js can detect drift
+// and invalidate stale Cache API entries. Fall back to the precached copy
+// in SHELL_CACHE when offline so the app still boots.
+function handleManifest(event, pathname) {
+  event.respondWith((async () => {
+    try {
+      const res = await fetch(new Request(event.request, { cache: "no-cache" }));
+      if (res.ok) {
+        const cache = await caches.open(SHELL_CACHE);
+        cache.put(event.request, res.clone());
+      }
+      return res;
+    } catch {
+      const cached = await caches.match(pathname);
+      if (cached) return cached;
+      return new Response("", { status: 504, statusText: "Manifest unreachable" });
+    }
+  })());
 }
 
 // Cache app shell on install — do NOT skipWaiting() automatically.
@@ -141,7 +170,8 @@ function handleFontFile(event) {
 // Cache-first for everything else, routed by pathname to shell/data/audio cache.
 // Revalidate via { cache: "reload" } so a long-lived HTTP cache entry does not
 // overwrite the SW cache with stale bytes during background refresh.
-// Cache invalidation is handled by bumping the relevant cache name on release.
+// Cache invalidation (data/audio) is driven by js/manifest-sync.js comparing
+// content-hash manifests on each app boot — see ADR-021.
 const DRIVE_HOSTNAMES = ["www.googleapis.com", "content.googleapis.com", "oauth2.googleapis.com", "accounts.google.com"];
 
 // URLs currently being put + cap-enforced. Two concurrent fetches without this
@@ -248,6 +278,11 @@ self.addEventListener("fetch", (event) => {
 
   // Bypass cache for Google OAuth and Drive API — always network-only.
   if (DRIVE_HOSTNAMES.includes(hostname)) return;
+
+  if (MANIFEST_PATHS.has(pathname)) {
+    handleManifest(event, pathname);
+    return;
+  }
 
   // Serve app shell for all navigation requests (History API SPA routing).
   // Exception: standalone HTML pages (e.g. privacy.html) are served directly.

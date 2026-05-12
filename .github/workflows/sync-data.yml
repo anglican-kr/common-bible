@@ -1,0 +1,46 @@
+name: Sync data submodule and release
+
+# data 저장소의 build.yml 이 산출물을 main에 푸시한 직후 호출하는
+# workflow_dispatch 를 받아, data 서브모듈 포인터를 최신 main 으로
+# 업데이트하고 release.py patch 로 셸 버전을 bump + 자동 commit + push.
+# 사람 손이 들어가지 않는다.
+#
+# repository_dispatch 대신 workflow_dispatch 를 쓰는 이유: PAT 권한 최소화.
+# repository_dispatch 는 Contents:Write 가 필요한데 common-bible 이 공개
+# 저장소라 PAT 누출 시 공개 push 위험. workflow_dispatch 는 Actions:Write
+# 만으로 충분하며 트리거 대상이 이 워크플로우 하나로 한정된다.
+#
+# main push 자체는 production 이 아님 (ADR-020: server 저장소의 deploy.sh
+# 가 별도 promote 단계). 따라서 자동 push 도 안전.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 데이터 서브모듈 포인터 최신화
+        run: git submodule update --remote data
+
+      - name: 릴리스 (version.json + sw-version.js + 자동 commit)
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          python scripts/release.py patch
+
+      - name: push
+        run: git push

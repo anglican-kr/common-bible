@@ -87,6 +87,8 @@ limit_req zone=oauth burst=20 nodelay;
 ### M8. `release.py`가 git commit/tag 자동화 없음
 `version.json`·`sw.js` 둘 다 디스크에 쓰지만 git 작업 수동. 한쪽만 bump 후 수동 커밋 누락 시 SW가 기존 캐시 재사용 → stale shell. mitigation 없음. 권장: 스크립트 끝에 `git add` + 사용자 확인 후 commit, 또는 hook으로 검증.
 
+> **해소 (2026-05-13, ADR-021):** `release.py` 재작성 시 `git add version.json sw-version.js data` + 자동 commit(`chore: X.Y.Z 릴리스`) 포함. 한쪽만 변경된 채 누락되는 시나리오 차단. push는 사람이 직접 (실수 방지).
+
 ### M9. (생략 — H4와 합쳐 처리됨)
 
 ## Low/Info 발견

@@ -292,9 +292,9 @@ test("removeEntries handles empty/null input without throwing", async () => {
   assert.equal(all.length, 1);
 });
 
-test("public constants match ADR-016", async () => {
+test("public constants match ADR-016 (cache name fixed per ADR-021)", async () => {
   const { ac } = load();
-  assert.equal(ac.AUDIO_CACHE_NAME, "audio-1");
+  assert.equal(ac.AUDIO_CACHE_NAME, "audio");
   assert.equal(ac.SOFT_CAP, 300 * 1024 * 1024);
   assert.equal(ac.HARD_CAP, 360 * 1024 * 1024);
   assert.ok(ac.SOFT_CAP < ac.HARD_CAP, "soft < hard");

@@ -1,31 +1,39 @@
 #!/usr/bin/env python3
 """
-Release helper: bumps version.json and sw.js cache identifiers.
+Release helper: bumps version.json and sw-version.js together.
 
-sw.js maintains three independent cache names:
-    SHELL_CACHE = "shell-N"   -- app shell, bumped on every release
-    DATA_CACHE  = "data-N"    -- bible/search JSON, bumped only when format changes
-    AUDIO_CACHE = "audio-N"   -- mp3 files, bumped only when sources are re-encoded
+Both files carry the same semver. sw-version.js is importScripts'd by sw.js
+to derive SHELL_CACHE = "shell-<version>" — bumping it changes the SW's
+byte-diff, which is how the SW update algorithm detects a new release.
+
+DATA_CACHE and AUDIO_CACHE no longer have rev identifiers; per-file
+invalidation is driven by content-hash manifests in the data submodule
+(bible-manifest.json, audio-manifest.json) and applied by
+js/manifest-sync.js on the client. See ADR-021.
 
 Usage:
-    python scripts/release.py patch                        # 1.0.13 -> 1.0.14, shell bump
-    python scripts/release.py minor                        # 1.0.13 -> 1.1.0, shell bump
-    python scripts/release.py major                        # 1.0.13 -> 2.0.0, shell bump
-    python scripts/release.py 1.2.0                        # set explicit version, shell bump
-    python scripts/release.py patch --bump-data            # also bump DATA_CACHE
-    python scripts/release.py patch --bump-audio           # also bump AUDIO_CACHE
-    python scripts/release.py patch --bump-data --bump-audio
-    python scripts/release.py --bump-data                  # data bump only, no version change
-    python scripts/release.py --bump-audio                 # audio bump only, no version change
+    python scripts/release.py patch        # 1.4.12 -> 1.4.13
+    python scripts/release.py minor        # 1.4.12 -> 1.5.0
+    python scripts/release.py major        # 1.4.12 -> 2.0.0
+    python scripts/release.py 1.2.0        # set explicit version
+
+The script stages version.json, sw-version.js, and the data submodule
+pointer, then commits with the conventional message. It does not push —
+that step stays manual.
 """
 
 import argparse
 import json
 import re
+import subprocess
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).parent.parent
+VERSION_PATH = ROOT / "version.json"
+SW_VERSION_PATH = ROOT / "sw-version.js"
+
+SW_VERSION_RE = re.compile(r'(self\.APP_VERSION\s*=\s*")[^"]*(";)')
 
 
 def bump_semver(version: str, part: str) -> str:
@@ -39,70 +47,59 @@ def bump_semver(version: str, part: str) -> str:
     raise ValueError(f"Unknown bump part: {part}")
 
 
-def bump_cache_rev(sw_text: str, const_name: str, prefix: str) -> tuple[str, int]:
-    """Increment the numeric rev in `const <const_name> = "<prefix>-N"`."""
-    pattern = rf'const {const_name} = "{re.escape(prefix)}-(\d+)"'
-    match = re.search(pattern, sw_text)
-    if not match:
-        raise ValueError(f"{const_name} pattern not found in sw.js")
-    old_rev = int(match.group(1))
-    new_rev = old_rev + 1
-    new_text = sw_text.replace(
-        f'const {const_name} = "{prefix}-{old_rev}"',
-        f'const {const_name} = "{prefix}-{new_rev}"',
-    )
-    return new_text, new_rev
+def write_sw_version(text: str, new_version: str) -> str:
+    if not SW_VERSION_RE.search(text):
+        raise ValueError("self.APP_VERSION assignment not found in sw-version.js")
+    return SW_VERSION_RE.sub(rf'\g<1>{new_version}\g<2>', text)
 
 
-def main():
+def stage_and_commit(new_version: str) -> None:
+    paths = ["version.json", "sw-version.js", "data"]
+    subprocess.run(["git", "add", *paths], cwd=ROOT, check=True)
+    # Only the actually-modified files end up in the commit; `git add data`
+    # is harmless when the submodule pointer is unchanged.
+    has_changes = subprocess.run(
+        ["git", "diff", "--cached", "--quiet"], cwd=ROOT
+    ).returncode != 0
+    if not has_changes:
+        print("no staged changes after add — aborting commit", file=sys.stderr)
+        sys.exit(1)
+    message = f"chore: {new_version} 릴리스"
+    subprocess.run(["git", "commit", "-m", message], cwd=ROOT, check=True)
+
+
+def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Bump version.json and sw.js cache identifiers.",
+        description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=__doc__,
     )
     parser.add_argument(
         "version",
-        nargs="?",
-        help="major | minor | patch | X.Y.Z (omit to skip version + shell bump)",
+        help="major | minor | patch | X.Y.Z",
     )
-    parser.add_argument("--bump-data", action="store_true", help="bump DATA_CACHE rev")
-    parser.add_argument("--bump-audio", action="store_true", help="bump AUDIO_CACHE rev")
     args = parser.parse_args()
 
-    if not args.version and not args.bump_data and not args.bump_audio:
-        parser.print_help()
-        sys.exit(1)
+    current = json.loads(VERSION_PATH.read_text())["version"]
+    if args.version in ("major", "minor", "patch"):
+        new_version = bump_semver(current, args.version)
+    elif re.match(r"^\d+\.\d+\.\d+$", args.version):
+        new_version = args.version
+    else:
+        print("Error: version must be major/minor/patch or a semver like 1.2.3",
+              file=sys.stderr)
+        return 1
 
-    version_path = ROOT / "version.json"
-    sw_path = ROOT / "sw.js"
-    sw_text = sw_path.read_text()
+    VERSION_PATH.write_text(json.dumps({"version": new_version}) + "\n")
+    sw_text = SW_VERSION_PATH.read_text()
+    SW_VERSION_PATH.write_text(write_sw_version(sw_text, new_version))
 
-    # Version + shell bump
-    if args.version:
-        current = json.loads(version_path.read_text())["version"]
-        if args.version in ("major", "minor", "patch"):
-            new_version = bump_semver(current, args.version)
-        elif re.match(r"^\d+\.\d+\.\d+$", args.version):
-            new_version = args.version
-        else:
-            print("Error: version must be major/minor/patch or a semver string like 1.2.3")
-            sys.exit(1)
+    print(f"version.json   : {current} -> {new_version}")
+    print(f"sw-version.js  : APP_VERSION -> {new_version}")
 
-        version_path.write_text(json.dumps({"version": new_version}) + "\n")
-        sw_text, new_shell_rev = bump_cache_rev(sw_text, "SHELL_CACHE", "shell")
-        print(f"version.json : {current} -> {new_version}")
-        print(f"sw.js        : SHELL_CACHE bumped to shell-{new_shell_rev}")
-
-    if args.bump_data:
-        sw_text, new_data_rev = bump_cache_rev(sw_text, "DATA_CACHE", "data")
-        print(f"sw.js        : DATA_CACHE bumped to data-{new_data_rev}")
-
-    if args.bump_audio:
-        sw_text, new_audio_rev = bump_cache_rev(sw_text, "AUDIO_CACHE", "audio")
-        print(f"sw.js        : AUDIO_CACHE bumped to audio-{new_audio_rev}")
-
-    sw_path.write_text(sw_text)
+    stage_and_commit(new_version)
+    print(f"committed: chore: {new_version} 릴리스")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
