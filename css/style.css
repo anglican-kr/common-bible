@@ -2573,16 +2573,14 @@ body.verse-select-active #search-fab {
 }
 
 
-/* Negative horizontal margin offsets the padding so adjacent inline text
-   keeps the same position — the highlight extends visually, but the line
-   does not reflow when entering verse-select mode. Vertical padding is 0
-   because on inline elements it extends the painted background past the
-   line-box and overlaps neighboring lines on iOS Safari with Korean fonts
-   (ascent + descent already fill the full line-height). */
+/* No inline padding/margin in select mode. Even a 0.15em horizontal padding
+   offset by an equal negative margin still produced ~1px shifts on iOS
+   Safari due to subpixel rounding of em-based metrics on inline boxes that
+   contain a `vertical-align: super` <sup>. The visual "breathing room"
+   around the highlight is drawn via box-shadow on .verse-selected below —
+   shadows paint outside the line-box without affecting reflow. */
 body.verse-select-active .verse[data-vref] {
   cursor: pointer;
-  padding: 0 0.15em;
-  margin: 0 -0.15em;
   transition: background 0.1s;
 }
 
@@ -2591,18 +2589,32 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   border-radius: 5px;
 }
 
-/* Poetry verses use a 2rem left gutter for the verse-num (margin-left: -2rem).
-   The shorthand padding above would shrink that gutter and push the number
-   off-screen, so restore it here. Cancel the left negative margin so the
-   gutter math is unaffected. */
-body.verse-select-active .verse.verse-poetry[data-vref] {
-  padding-left: 2rem;
-  margin-left: 0;
+.verse.verse-selected {
+  --selected-bg: color-mix(in srgb, var(--accent) 20%, transparent);
+  background: var(--selected-bg) !important;
+  border-radius: 5px;
 }
 
-.verse.verse-selected {
-  background: color-mix(in srgb, var(--accent) 20%, transparent) !important;
-  border-radius: 5px;
+/* Extend the highlight 0.15em on each side without changing inline layout.
+   Block (poetry) verses span the full content width already, so they don't
+   need horizontal extension. */
+.verse.verse-selected:not(.verse-poetry) {
+  box-shadow:
+    0.15em 0 0 var(--selected-bg),
+    -0.15em 0 0 var(--selected-bg);
+}
+
+/* In a run of consecutive selected inline verses, suppress the box-shadow
+   on the inner edges so the semi-transparent shadows don't overlap and
+   double the color at the boundary. */
+.verse.verse-selected.verse-selected-join-prev:not(.verse-poetry) {
+  box-shadow: 0.15em 0 0 var(--selected-bg);
+}
+.verse.verse-selected.verse-selected-join-next:not(.verse-poetry) {
+  box-shadow: -0.15em 0 0 var(--selected-bg);
+}
+.verse.verse-selected.verse-selected-join-prev.verse-selected-join-next:not(.verse-poetry) {
+  box-shadow: none;
 }
 
 /* In a run of consecutive selected verses, flatten the corners that abut
