@@ -1829,7 +1829,7 @@ function enterVerseSelectMode(bookId, chapter) {
   document.body.classList.add("verse-select-active");
   $verseSelectBar.hidden = false;
   updateVerseSelectBar();
-  announce("절 선택 모드. 절을 탭해서 선택하세요.");
+  announce("절 선택 모드. 절을 눌러서 선택하세요.");
 }
 
 function exitVerseSelectMode() {
@@ -1844,7 +1844,7 @@ function exitVerseSelectMode() {
 function updateVerseSelectBar() {
   const count = readingContext.selectedVerses.size;
   if (count === 0) {
-    $verseSelectCount.textContent = "절을 눌러 선택하세요.";
+    $verseSelectCount.textContent = "구절을 눌러서 선택";
   } else {
     const articleEl = document.querySelector("article.chapter-text");
     const refs = collapseFullVerseRefs(Array.from(readingContext.selectedVerses), articleEl);
