@@ -1899,9 +1899,11 @@ async function copySelectedVerses() {
   try {
     await navigator.clipboard.writeText(fullText);
     announce("복사했습니다.");
+    window._showSyncSnackbar?.("복사했습니다.");
     exitVerseSelectMode();
   } catch {
-    announce("복사에 실패했습니다.");
+    announce("복사하지 못했습니다.");
+    window._showSyncSnackbar?.("복사하지 못했습니다.");
   }
 }
 

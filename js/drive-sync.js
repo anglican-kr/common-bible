@@ -89,13 +89,13 @@ window.addEventListener("online", () => {
   if (_machine.isEnabled()) _machine.dispatch({ type: "NET_RECOVERED" });
 });
 
-// ── Snackbar (UI notification, called by state machine) ────────────────────────
-// Inverts page colors (bg=--text, fg=--bg) so contrast stays AA-grade across
-// every theme/color-scheme combination.
+// ── Snackbar (UI notification, called by state machine and other modules) ─────
+// Uses --bg-card surface so the toast harmonizes with the page background
+// across themes; --border and a soft shadow keep it readable on cream/white.
 window._showSyncSnackbar = function (msg) {
   const el = document.createElement("div");
   el.textContent = msg;
-  el.style.cssText = "position:fixed;bottom:80px;left:50%;transform:translateX(-50%);max-width:calc(100vw - 32px);background:var(--text);color:var(--bg);padding:12px 20px;border-radius:8px;font-family:-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Noto Sans KR',sans-serif;font-size:14px;line-height:1.4;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,.3);text-align:center;";
+  el.style.cssText = "position:fixed;bottom:calc(env(safe-area-inset-bottom, 0px) + 80px);left:50%;transform:translateX(-50%);max-width:calc(100vw - 32px);background:var(--bg-card);color:var(--text);border:1px solid var(--border);padding:12px 20px;border-radius:8px;font-family:-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Noto Sans KR',sans-serif;font-size:14px;line-height:1.4;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,.15);text-align:center;";
   document.body.appendChild(el);
   setTimeout(() => el.remove(), 3500);
 };
