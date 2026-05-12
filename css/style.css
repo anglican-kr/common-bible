@@ -1589,7 +1589,10 @@ mark.search-highlight {
 .verse-highlight {
   background: rgba(107, 58, 42, 0.08) !important;
   border-radius: 5px;
-  padding: 0.1em 0.15em;
+  /* Inline padding only — vertical padding on inline elements extends the
+     painted background past the line-box and overlaps neighboring lines on
+     iOS Safari (Korean fonts fill the full line-height). */
+  padding: 0 0.15em;
 }
 
 /* In a run of consecutive highlighted verses, flatten the corners that abut
@@ -2572,10 +2575,13 @@ body.verse-select-active #search-fab {
 
 /* Negative horizontal margin offsets the padding so adjacent inline text
    keeps the same position — the highlight extends visually, but the line
-   does not reflow when entering verse-select mode. */
+   does not reflow when entering verse-select mode. Vertical padding is 0
+   because on inline elements it extends the painted background past the
+   line-box and overlaps neighboring lines on iOS Safari with Korean fonts
+   (ascent + descent already fill the full line-height). */
 body.verse-select-active .verse[data-vref] {
   cursor: pointer;
-  padding: 0.1em 0.15em;
+  padding: 0 0.15em;
   margin: 0 -0.15em;
   transition: background 0.1s;
 }
