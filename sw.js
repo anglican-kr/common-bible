@@ -3,7 +3,7 @@
 // caches are preserved across shell-only releases. Bump DATA_CACHE only when
 // bible JSON or search index format changes; bump AUDIO_CACHE only when mp3
 // sources are re-encoded.
-const SHELL_CACHE = "shell-65";
+const SHELL_CACHE = "shell-66";
 const DATA_CACHE = "data-3";
 const AUDIO_CACHE = "audio-1"; // must equal js/audio-cache.js AUDIO_CACHE_NAME
 
