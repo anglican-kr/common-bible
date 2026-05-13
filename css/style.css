@@ -155,7 +155,7 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
   background: var(--bg);
   border-bottom: none;
-  padding: 0.6rem 1rem;
+  padding: 0.6rem 1rem 0;
   max-width: var(--max-width);
   margin: 0 auto;
 }
