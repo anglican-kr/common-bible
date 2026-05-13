@@ -939,9 +939,8 @@ body {
   bottom: max(calc(1.5rem + env(safe-area-inset-bottom)), var(--fab-lift-nav, 0px));
 }
 
-/* Lift FAB when the sticky audio player is visible. The unavailable-state bar
-   sits inline at the end of content (position: static) and must not lift the FAB. */
-#audio-bar:not([hidden]):not(.unavailable) ~ #search-fab {
+/* Lift FAB when audio bar is visible */
+#audio-bar:not([hidden]) ~ #search-fab {
   bottom: max(calc(5rem + env(safe-area-inset-bottom)), var(--fab-lift-nav, 0px));
 }
 
@@ -2127,12 +2126,6 @@ mark.search-highlight {
   display: none;
 }
 
-/* "Audio file is being prepared" placeholder sits inline at the end of
-   content rather than sticking to the viewport bottom. */
-#audio-bar.unavailable {
-  position: static;
-}
-
 .audio-player {
   display: flex;
   align-items: center;
@@ -2292,15 +2285,17 @@ mark.search-highlight {
   border-color: var(--text-secondary);
 }
 
-/* Unavailable message */
+/* Unavailable message — sized to match .audio-player so the sticky bar
+   keeps the same footprint whether audio is available or not. */
 .audio-unavailable {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 0.4em;
+  min-height: 2.4rem;
+  margin: 0;
   font-size: 0.75rem;
   color: var(--text-secondary);
-  padding: 0.15rem 0;
 }
 
 .audio-unavailable-icon {

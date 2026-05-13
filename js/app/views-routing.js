@@ -1613,7 +1613,6 @@ function _teardownAudio() {
 function hideAudioBar() {
   _teardownAudio();
   $audioBar.hidden = true;
-  $audioBar.classList.remove("unavailable");
   clearNode($audioBar);
 }
 
@@ -1764,7 +1763,6 @@ function showAudioPlayer(bookId, chapter) {
   }, { signal });
 
   $audioBar.appendChild(container);
-  $audioBar.classList.remove("unavailable");
   $audioBar.hidden = false;
 }
 
@@ -1774,7 +1772,6 @@ function showAudioUnavailable() {
   msg.appendChild(el("span", { className: "audio-unavailable-icon", "aria-hidden": "true" }));
   msg.appendChild(document.createTextNode(" 오디오 파일을 준비 중입니다."));
   $audioBar.appendChild(msg);
-  $audioBar.classList.add("unavailable");
   $audioBar.hidden = false;
 }
 // ── Window facade ──
