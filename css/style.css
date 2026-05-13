@@ -2294,15 +2294,17 @@ mark.search-highlight {
   border-color: var(--text-secondary);
 }
 
-/* Unavailable message */
+/* Unavailable message — sized to match .audio-player so the sticky bar
+   keeps the same footprint whether audio is available or not. */
 .audio-unavailable {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 0.4em;
+  min-height: 2.4rem;
+  margin: 0;
   font-size: 0.75rem;
   color: var(--text-secondary);
-  padding: 0.15rem 0;
 }
 
 .audio-unavailable-icon {
