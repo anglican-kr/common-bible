@@ -136,26 +136,17 @@ body {
 /* ── Header ── */
 #sticky-group {
   position: sticky;
-  top: env(safe-area-inset-top);
+  top: 0;
   z-index: 20;
-}
-
-#sticky-group::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 100%;
-  height: 2rem;
-  background: linear-gradient(to bottom, var(--bg), transparent);
-  pointer-events: none;
 }
 
 #app-header {
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
-  background: var(--bg);
+  background: color-mix(in srgb, var(--bg) 72%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border-bottom: none;
-  padding: 0.6rem 1rem;
+  padding: calc(0.6rem + env(safe-area-inset-top)) 1rem 0.6rem;
   max-width: var(--max-width);
   margin: 0 auto;
 }
@@ -1667,7 +1658,7 @@ mark.search-highlight {
 /* ── Resume Banner ── */
 #resume-banner-slot {
   position: relative;
-  z-index: 10; /* above #app-header::before gradient (z-index: 9) */
+  z-index: 10;
   max-width: var(--max-width);
   margin: 0 auto;
   padding: 0 1rem;
