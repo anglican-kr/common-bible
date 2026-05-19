@@ -14,7 +14,8 @@
 - 개정: 2026-05-08 (Phase 2i 완료 — sync 사이클 캐시, 라운드트립 단축)
 - 개정: 2026-05-11 (Phase 2j — visibilitychange 폴 throttle + ETag 관측성 보강)
 - 개정: 2026-05-11 (ADR-020 분할에 따라 BFF nginx 설정은 `common-bible-server/nginx/oauth-proxy.example.conf`로 이전. 클라이언트 측 동기화 흐름·refresh token 보관 위치는 변경 없음.)
-- 상태: 승인됨 (Phase 2a~2i 완료, PKCE 단일 경로 운영 중. 미결: Google OAuth 검수)
+- 개정: 2026-05-19 (Google OAuth 앱 검수 통과 — `In production` 전환, refresh token TTL 영구, 코드 변경 없음)
+- 상태: 승인됨 (Phase 2a~2j 완료, PKCE 단일 경로 운영 중. Google OAuth 검수 통과 2026-05-19)
 
 ## 결정
 
@@ -897,7 +898,7 @@ Phase 2i 도입 후 실측 디버그 로그(`docs/audit/2026-05-11-sync-perf.md`
 - [x] 개인정보처리방침 작성
 - [x] Drive API 호출 실패 재시도 전략 — exponential backoff (PR #26, Phase 2c)
 - [x] 동기화 충돌 결과 사용자 알림 UX
-- [ ] Google OAuth 앱 검수 통과 (2026-05-02 제출 완료, 심사 결과 대기 중) — 통과 시 refresh token TTL 7일 → 영구, 코드 변경 0
+- [x] Google OAuth 앱 검수 통과 (2026-05-19) — refresh token TTL 영구, 코드 변경 0
 - [x] **Google Cloud Console redirect URI 등록** (Phase 2h 단계 6, 2026-05-08): dev `https://dev.anglican.kr/`, prod `https://bible.anglican.kr/`. `http://localhost:8080`은 의도적으로 제거 (사용자 PC 악성 프록시 공격 표면 차단)
 - [x] **OAuth `/token` BFF 도입** (Phase 2h 단계 6, 2026-05-08): nginx `location = /oauth/token`이 `client_secret` server-side 주입. SPA 임베드 회피 — ADR-017 참조
 - [x] iOS Safari 팝업 차단 안내 제거 (Phase 2d, 2026-05-05) — FedCM/One Tap + 사용자 제스처 격리
