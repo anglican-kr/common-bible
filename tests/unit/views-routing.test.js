@@ -1,7 +1,7 @@
 // ── Unit tests for js/app/views-routing.js ──────────────────────────────────
 // Run with: node --test tests/unit/views-routing.test.js
 //
-// Same vm + BEGIN/END marker slice approach as bookmark.test.js. Six marker
+// Same vm + BEGIN/END marker slice approach as bookmark.test.js. Eight marker
 // pairs cover the testable surface; Pull-to-refresh / startScrollTracking /
 // Audio Player remain out of scope — those need touch gestures or
 // `getBoundingClientRect` and are deferred until jsdom adoption (ADR-013
@@ -21,6 +21,10 @@
 //     classList + hidden + querySelector + contains.
 //   - COMPACT_HEADER block — initCompactHeader. Hysteretic 60px / 10px
 //     scroll-based class toggle. Window scroll listener stub.
+//   - VERSE_SELECTION block — _verseSelectionUnit. Pure-poetry multi-part
+//     grouping vs per-line selection control.
+//   - VERSE_NUMBER block — formatVerseNumber. Verse-number display string:
+//     plain / dual [N_M] / LXX-only [_N] / cross-ref / range / part.
 
 import test from "node:test";
 import assert from "node:assert";
@@ -255,6 +259,18 @@ function makeArticleStub(verses) {
   return {
     querySelectorAll: (sel) => (sel === ".verse[data-vref]" ? elements : []),
   };
+}
+
+// ── VERSE_NUMBER loader ──────────────────────────────────────────────────────
+// Pure verse-number formatting. No DOM, no globals.
+
+function loadVerseNumber() {
+  const ctx = { Object, Array, String, Number, Boolean, console, Error };
+  vm.createContext(ctx);
+  vm.runInContext(extractBlock("VERSE_NUMBER"), ctx, {
+    filename: "views-routing-verse-number.js",
+  });
+  return { formatVerseNumber: ctx.formatVerseNumber };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1073,4 +1089,36 @@ test("_verseSelectionUnit: groups by integer prefix, not contamination across ne
 test("_verseSelectionUnit: null article → defensive [vref]", () => {
   const h = loadVerseSelection();
   assert.deepEqual(h.verseSelectionUnit(null, "3a"), ["3a"]);
+});
+
+// ── VERSE_NUMBER ─────────────────────────────────────────────────────────────
+
+test("formatVerseNumber: plain verse → bare number", () => {
+  const { formatVerseNumber } = loadVerseNumber();
+  assert.equal(formatVerseNumber({ number: 24 }), "24");
+});
+
+test("formatVerseNumber: dual manuscript numbering [N_M] → N(M)", () => {
+  const { formatVerseNumber } = loadVerseNumber();
+  assert.equal(formatVerseNumber({ number: 24, alt_ref: 91 }), "24(91)");
+});
+
+test("formatVerseNumber: LXX-only verse [_N] → (N) in parens", () => {
+  const { formatVerseNumber } = loadVerseNumber();
+  assert.equal(formatVerseNumber({ number: 24, lxx_only: true }), "(24)");
+});
+
+test("formatVerseNumber: cross-chapter ref → chapter:number prefix", () => {
+  const { formatVerseNumber } = loadVerseNumber();
+  assert.equal(formatVerseNumber({ number: 6, chapter_ref: 41 }), "41:6");
+});
+
+test("formatVerseNumber: verse range → start-end", () => {
+  const { formatVerseNumber } = loadVerseNumber();
+  assert.equal(formatVerseNumber({ number: 17, range_end: 18 }), "17-18");
+});
+
+test("formatVerseNumber: split-verse part → number + part letter", () => {
+  const { formatVerseNumber } = loadVerseNumber();
+  assert.equal(formatVerseNumber({ number: 2, part: "a" }), "2a");
 });

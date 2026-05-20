@@ -753,12 +753,29 @@ function renderChapterList(book, books) {
   $app.appendChild(grid);
 }
 
+// ── BEGIN VERSE_NUMBER ──
+// Exercised by tests/unit/views-routing.test.js. Pure: derives the displayed
+// verse label/number from a verse object — no DOM, no global state.
+
 function formatVerseLabel(v) {
   let label = String(v.number);
   if (v.part) label += v.part;
   if (v.range_end) label += `-${v.range_end}`;
   return label;
 }
+
+// Display string for the verse-number marker (rendered via CSS ::before).
+// LXX-only verses ([_N]) show the LXX number in parens; dual-numbered verses
+// ([N_M]) append the LXX number in parens; cross-chapter refs prefix the
+// original chapter number.
+function formatVerseNumber(v) {
+  const label = formatVerseLabel(v);
+  if (v.lxx_only) return `(${label})`;
+  let dataV = v.chapter_ref ? `${v.chapter_ref}:${label}` : label;
+  if (v.alt_ref != null) dataV += `(${v.alt_ref})`;
+  return dataV;
+}
+// ── END VERSE_NUMBER ──
 
 // ── BEGIN VERSE_SELECTION ──
 // Exercised by tests/unit/views-routing.test.js. DOM-pure: reads classList +
@@ -902,14 +919,7 @@ function renderChapter(data, book, opts) {
     const vn = v.number;
 
     // Verse number (rendered via CSS ::before to exclude from clipboard)
-    let dataV;
-    if (v.lxx_only) {
-      // Septuagint-only verse: no Hebrew number, show the LXX number in parens.
-      dataV = `(${verseLabel})`;
-    } else {
-      dataV = v.chapter_ref ? `${v.chapter_ref}:${verseLabel}` : verseLabel;
-      if (v.alt_ref != null) dataV += `(${v.alt_ref})`;
-    }
+    const dataV = formatVerseNumber(v);
 
     function appendSegText(target, raw) {
       const hasPilcrow = raw.startsWith("¶");
