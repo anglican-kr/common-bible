@@ -863,6 +863,12 @@ function renderChapter(data, book, opts) {
     );
   }
 
+  if (data.has_lxx_only) {
+    $app.appendChild(
+      el("p", { className: "dual-numbering-note" }, "※ 괄호 안에만 번호가 있는 절은 히브리어 본문에 없고 70인역 사본(그리스어)에만 있습니다.")
+    );
+  }
+
   const article = el("article", { className: "chapter-text", lang: "ko" });
   let isFirst = true;
   let prevVerseEndType = null;
@@ -888,13 +894,22 @@ function renderChapter(data, book, opts) {
     let verseId = `v${v.number}`;
     if (v.part) verseId += v.part;
     if (v.alt_ref != null) verseId += `_${v.alt_ref}`;
+    // LXX-only verses can share a number with a Hebrew verse in the same
+    // chapter (e.g. Daniel 3); suffix keeps the DOM id unique.
+    if (v.lxx_only) verseId += "_lxx";
     const baseClasses = v.chapter_ref ? "verse verse-cross-ref" : "verse";
 
     const vn = v.number;
 
     // Verse number (rendered via CSS ::before to exclude from clipboard)
-    let dataV = v.chapter_ref ? `${v.chapter_ref}:${verseLabel}` : verseLabel;
-    if (v.alt_ref != null) dataV += `(${v.alt_ref})`;
+    let dataV;
+    if (v.lxx_only) {
+      // Septuagint-only verse: no Hebrew number, show the LXX number in parens.
+      dataV = `(${verseLabel})`;
+    } else {
+      dataV = v.chapter_ref ? `${v.chapter_ref}:${verseLabel}` : verseLabel;
+      if (v.alt_ref != null) dataV += `(${v.alt_ref})`;
+    }
 
     function appendSegText(target, raw) {
       const hasPilcrow = raw.startsWith("¶");

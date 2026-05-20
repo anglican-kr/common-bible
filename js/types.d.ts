@@ -480,6 +480,7 @@ export interface BibleVerse {
   part?: string;
   range_end?: number;
   alt_ref?: number | null;
+  lxx_only?: boolean;
   chapter_ref?: string;
   stanza_break?: boolean;
   text?: string;
@@ -492,6 +493,7 @@ export interface BibleChapter {
   book_name_en: string;
   chapter: number;
   has_dual_numbering?: boolean;
+  has_lxx_only?: boolean;
   verses: BibleVerse[];
 }
 
