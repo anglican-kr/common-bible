@@ -880,12 +880,6 @@ function renderChapter(data, book, opts) {
     );
   }
 
-  if (data.has_lxx_only) {
-    $app.appendChild(
-      el("p", { className: "dual-numbering-note" }, "※ 괄호 안에만 번호가 있는 절은 히브리어 본문에 없고 70인역 사본(그리스어)에만 있습니다.")
-    );
-  }
-
   const article = el("article", { className: "chapter-text", lang: "ko" });
   let isFirst = true;
   let prevVerseEndType = null;

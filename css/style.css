@@ -1938,13 +1938,12 @@ mark.search-highlight {
 }
 
 .dual-numbering-note {
+  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
   font-size: 0.78rem;
   color: var(--text-secondary);
   margin-bottom: 0.8rem;
-  padding: 0.4rem 0.6rem;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+  padding: 0.4rem 0;
+  background: var(--bg);
 }
 
 /* Cross-chapter reference */
