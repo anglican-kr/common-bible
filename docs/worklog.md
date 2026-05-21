@@ -1,5 +1,24 @@
 # 작업 일지
 
+## 2026-05-21
+
+### 릴리스 노트 changelog 헬퍼
+
+`gh release --generate-notes`의 "What's Changed"는 머지된 PR만 나열한다. 이 저장소는 대부분 main에 직접 커밋해서(`1.4.14` 릴리스 노트의 "What's Changed"는 PR 한 개뿐) 자동 섹션이 실제 작업 대부분을 놓쳤고, data 서브모듈(`common-bible-data`)의 변경은 아예 잡히지 않았다.
+
+`scripts/changelog.py` 신규 — 두 릴리스 태그 사이의 완전한 변경 목록을 git 히스토리에서 직접 만든다.
+
+- **앱** — `git log <from>..<to>`의 모든 커밋(PR·직접 푸시 무관). `chore: X.Y.Z 릴리스` 릴리스 범프 커밋만 제외.
+- **본문 데이터** — `<from>`·`<to>` 태그가 기록한 data 서브모듈 포인터 SHA를 꺼내, 그 범위를 `gh api .../compare`로 조회. `[skip ci]` 자동 빌드 커밋 제외. `common-bible-data`가 비공개라 커밋은 링크 없이 평문으로만 싣는다.
+
+순수 로직(remote URL slug 파싱, 노이즈 필터, compare 응답 파싱, 마크다운 렌더)은 `scripts/test_changelog.py`로 단위 테스트(27 케이스). git/gh 경계는 `python scripts/changelog.py <from> <to>` 수동 실행으로 확인.
+
+릴리스 노트 절차: GitHub 릴리스 본문 = 손으로 쓴 「이번 릴리스에서 달라진 점」(비기술 독자용 일상 언어) + `changelog.py` 출력(`## 변경 사항` 섹션). `--generate-notes`는 더 이상 쓰지 않는다.
+
+### 칠십인역 안내 문단 정리
+
+`views-routing.js`에서 `has_lxx_only` 장 상단 설명 배너를 제거했다. `lxx_only` 절 자체의 렌더링(번호 괄호 표기, DOM id `_lxx` 접미사)은 그대로다. 사본 이중 번호 안내 문단(`.dual-numbering-note`)은 산세리프 글꼴로 바꾸고 테두리를 없앴으며, 배경색과 좌우 정렬을 본문에 맞췄다.
+
 ## 2026-05-20
 
 ### 칠십인역 단독 절 표기 `[_N]` 추가
