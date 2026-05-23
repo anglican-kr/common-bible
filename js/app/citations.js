@@ -138,6 +138,8 @@ window.appCitations = (() => {
   let _sheetReturnFocus = null;
   /** @type {(() => void) | null} */
   let _sheetTrapCleanup = null;
+  /** @type {{ src: string, parallels: ReadonlyArray<string> | null, tradition: string | null, expanded: boolean } | null} */
+  let _sheetState = null;
 
   /**
    * Lazily build short_name_ko → book_id map from books.json.
@@ -229,13 +231,18 @@ window.appCitations = (() => {
    * @param {string} bookNameKo
    * @param {number} chapter
    * @param {ReadonlyArray<BibleVerse>} verses
+   * @param {Set<number> | null} [highlightedNumbers] verse numbers to mark as
+   *   the originally-cited slice (used in expanded full-chapter view).
    */
-  function _renderVerses(container, bookNameKo, chapter, verses) {
+  function _renderVerses(container, bookNameKo, chapter, verses, highlightedNumbers) {
     container.appendChild(el("div", { className: "cite-sheet-chapter-label" },
       `${bookNameKo} ${chapter}장`));
     const article = el("article", { className: "cite-sheet-verses", lang: "ko" });
     for (const v of verses) {
-      const p = el("p", { className: "cite-sheet-verse" });
+      const isCited = highlightedNumbers && highlightedNumbers.has(v.number);
+      const p = el("p", {
+        className: isCited ? "cite-sheet-verse cite-sheet-verse--highlighted" : "cite-sheet-verse",
+      });
       p.appendChild(el("sup", { className: "cite-sheet-verse-num" }, String(v.number)));
       p.appendChild(document.createTextNode(" "));
       const segs = v.segments || [{ type: "prose", text: v.text || "" }];
@@ -257,8 +264,9 @@ window.appCitations = (() => {
    * @param {HTMLElement} container
    * @param {string} src
    * @param {string | null} tradition  null when not the primary reference
+   * @param {boolean} expanded  true → render full chapters, mark cited verses
    */
-  async function _renderRef(container, src, tradition) {
+  async function _renderRef(container, src, tradition, expanded) {
     const parsed = _parseCiteSrc(src);
     if (!parsed) {
       container.appendChild(el("p", { className: "cite-sheet-error" },
@@ -291,13 +299,56 @@ window.appCitations = (() => {
           if (!r.ok) throw new Error("HTTP " + r.status);
           return r.json();
         });
-        const slice = _selectVerses(data.verses, parsed.parts, ch);
-        _renderVerses(container, data.book_name_ko, ch, slice);
+        if (expanded) {
+          // Show full chapter; highlight verses that were originally cited.
+          const cited = new Set(_selectVerses(data.verses, parsed.parts, ch).map((v) => v.number));
+          _renderVerses(container, data.book_name_ko, ch, data.verses, cited);
+        } else {
+          const slice = _selectVerses(data.verses, parsed.parts, ch);
+          _renderVerses(container, data.book_name_ko, ch, slice, null);
+        }
       } catch (_) {
         container.appendChild(el("p", { className: "cite-sheet-error" },
           `${parsed.abbr} ${ch}장을 불러오지 못했습니다.`));
       }
     }
+  }
+
+  /**
+   * Re-render the sheet body using the current `_sheetState`. Used after
+   * the user toggles expanded mode.
+   */
+  async function _renderSheetBody() {
+    const bodyEl = /** @type {HTMLElement | null} */ (document.getElementById("cite-sheet-body"));
+    if (!bodyEl || !_sheetState) return;
+    clearNode(bodyEl);
+    bodyEl.appendChild(el("p", { className: "cite-sheet-loading" }, "불러오는 중…"));
+    try {
+      clearNode(bodyEl);
+      const { src, parallels, tradition, expanded } = _sheetState;
+      const refs = [src, ...(parallels || [])];
+      for (let i = 0; i < refs.length; i++) {
+        if (i > 0) bodyEl.appendChild(el("hr", { className: "cite-sheet-divider" }));
+        await _renderRef(bodyEl, refs[i], i === 0 ? tradition : null, expanded);
+      }
+      if (!expanded) bodyEl.appendChild(_buildExpandButton());
+    } catch (_) {
+      clearNode(bodyEl);
+      bodyEl.appendChild(el("p", { className: "cite-sheet-error" }, "불러오는 데 실패했습니다."));
+    }
+  }
+
+  function _buildExpandButton() {
+    const btn = el("button", {
+      type: "button",
+      className: "cite-sheet-expand-btn",
+    }, "이 장 전체 보기");
+    btn.addEventListener("click", async () => {
+      if (!_sheetState) return;
+      _sheetState.expanded = true;
+      await _renderSheetBody();
+    });
+    return btn;
   }
 
   /**
@@ -310,15 +361,14 @@ window.appCitations = (() => {
    * @param {HTMLElement | null} returnFocusEl
    */
   async function openCiteSheet(src, parallels, tradition, returnFocusEl) {
-    const sheet  = /** @type {HTMLElement} */ (document.getElementById("cite-sheet"));
-    const titleEl = /** @type {HTMLElement} */ (document.getElementById("cite-sheet-title"));
-    const bodyEl = /** @type {HTMLElement} */ (document.getElementById("cite-sheet-body"));
+    const sheet  = /** @type {HTMLElement | null} */ (document.getElementById("cite-sheet"));
+    const titleEl = /** @type {HTMLElement | null} */ (document.getElementById("cite-sheet-title"));
+    const bodyEl = /** @type {HTMLElement | null} */ (document.getElementById("cite-sheet-body"));
     if (!sheet || !titleEl || !bodyEl) return;
 
     _sheetReturnFocus = returnFocusEl;
+    _sheetState = { src, parallels: parallels || null, tradition: tradition || null, expanded: false };
     titleEl.textContent = chipText(src, parallels, tradition).slice(1, -1);
-    clearNode(bodyEl);
-    bodyEl.appendChild(el("p", { className: "cite-sheet-loading" }, "불러오는 중…"));
     sheet.hidden = false;
     document.documentElement.classList.add("cite-sheet-open");
 
@@ -326,17 +376,7 @@ window.appCitations = (() => {
     if (closeBtn) closeBtn.focus();
     _sheetTrapCleanup = trapFocus(sheet);
 
-    try {
-      clearNode(bodyEl);
-      const refs = [src, ...(parallels || [])];
-      for (let i = 0; i < refs.length; i++) {
-        if (i > 0) bodyEl.appendChild(el("hr", { className: "cite-sheet-divider" }));
-        await _renderRef(bodyEl, refs[i], i === 0 ? tradition : null);
-      }
-    } catch (_) {
-      clearNode(bodyEl);
-      bodyEl.appendChild(el("p", { className: "cite-sheet-error" }, "불러오는 데 실패했습니다."));
-    }
+    await _renderSheetBody();
   }
 
   function closeCiteSheet() {
@@ -349,6 +389,7 @@ window.appCitations = (() => {
       _sheetReturnFocus.focus();
     }
     _sheetReturnFocus = null;
+    _sheetState = null;
   }
 
   /** Wire up close button, ESC key, and `.cite-chip` click delegation. */
