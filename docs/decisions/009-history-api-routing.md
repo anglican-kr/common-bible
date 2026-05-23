@@ -107,3 +107,29 @@ location / {
 > 후속: GSC URL 검사로 핵심 URL 5~10개 수동 시드, 재크롤 추이 관찰.
 > SPA shell 본문 렌더링 문제(`/gen/1` 등 모든 라우트가 동일 HTML 반환)는
 > prerender/SSG 도입 여부와 함께 별도 결정 사항으로 남김.
+
+> **개정 (2026-05-23, 2차):** lastmod 정밀도 — 일괄 → 장 단위
+>
+> 1차 개정의 "모든 URL에 동일 lastmod" 방식은 본문 한 장만 손봐도 1,404개 모두가
+> 갱신된 것처럼 신호가 나가는 한계가 있었다. Google이 신호 일관성을 통해
+> 신뢰도를 학습한다는 점을 고려해 진짜 콘텐츠 변경이 있는 페이지만 lastmod이
+> 갱신되도록 정밀화했다.
+>
+> 출처 매핑:
+> - `/{book}/{chapter}` → `data/bible/{book}-{chapter}.json` 의 git 마지막 커밋
+> - `/{book}/prologue` → `data/bible/{book}-prologue.json` 의 git 마지막 커밋
+> - `/{book}` → 그 책 산하 장들의 lastmod 중 max
+> - `/privacy.html` → 앱 저장소의 `privacy.html` 마지막 커밋
+> - `/` → 전체 sitemap에서 가장 최신 lastmod
+>
+> 전제: 데이터 빌드 파이프라인이 deterministic이어야 한다(같은 source → 같은
+> 출력). `common-bible-data` 의 최근 빌드 commit 패턴 확인 결과, source 변경분에
+> 해당하는 `bible/*.json` 만 진짜 commit 으로 추적됨. 가정 성립.
+>
+> 효율: 데이터 서브모듈의 `git log --name-only --diff-filter=ACMR --
+> bible/` 한 번 호출로 전체 history를 파싱해 파일별 최신 commit 시각을
+> 매핑. 1,328개 파일 × 1 subprocess 가 아니라 1 subprocess 로 끝남.
+>
+> 효과: 1,404개 URL 이 N개의 distinct lastmod 그룹으로 자연 분류됨.
+> 변경 없는 페이지의 lastmod 는 안정적으로 유지돼 Google 의 크롤 예산이
+> 진짜 바뀐 페이지에 집중된다.
