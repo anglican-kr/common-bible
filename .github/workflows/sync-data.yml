@@ -53,11 +53,19 @@ jobs:
       - name: 데이터 서브모듈 포인터 최신화
         run: git submodule update --remote data
 
-      - name: 릴리스 (version.json + sw-version.js + 자동 commit)
+      - name: sitemap.xml 재생성
+        run: python scripts/build_sitemap.py
+
+      - name: 서브모듈 포인터 + sitemap commit
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          python scripts/release.py patch
+          git add data sitemap.xml
+          if git diff --cached --quiet; then
+            echo "no changes to commit"
+            exit 0
+          fi
+          git commit -m 'data: 서브모듈 포인터 + sitemap 갱신'
 
       - name: push
         run: git push

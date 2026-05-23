@@ -63,12 +63,11 @@ data/source/*.md (73권, common-bible-data 서브모듈)
 
 빌드·검증 절차 상세는 `common-bible-data/README.md` 참조.
 
-마크다운 수정 흐름 (ADR-021 이후):
+마크다운 수정 흐름 (ADR-021 이후, 2026-05-23 개정):
 1. `common-bible-data` 저장소에서 `source/*.md` 편집 → PR → main 머지
-2. main의 `build.yml` CI 가 자동으로 파이프라인 + 매니페스트 생성 + `[skip ci]` 커밋백 (사람이 로컬 파이프라인 돌릴 필요 없음)
-3. 본 저장소에서 `git submodule update --remote data` → `python scripts/release.py patch` → push
-   (Phase 3 webhook 도입 후에는 이 단계도 앱 저장소 CI 가 자동 처리)
-4. `common-bible-server` 저장소의 `deploy.sh dev` → dev 검증 → `deploy.sh promote`
+2. main의 `build.yml` CI 가 자동으로 파이프라인 + 매니페스트 생성 + `[skip ci]` 커밋백
+3. 앱 저장소의 `sync-data.yml` webhook 이 자동으로 서브모듈 포인터 + `sitemap.xml` 갱신 commit·push (버전 bump 없음)
+4. 사용자가 적절한 시점에 직접 `python scripts/release.py patch` → push + tag + GitHub Release → `deploy.sh dev` → `deploy.sh promote`
 
 ## 테스트
 

@@ -11,8 +11,10 @@ invalidation is driven by content-hash manifests in the data submodule
 (bible-manifest.json, audio-manifest.json) and applied by
 js/manifest-sync.js on the client. See ADR-021.
 
-sitemap.xml is regenerated on every release so its <lastmod> tracks the
-data submodule's latest commit — a fresh signal nudges Google to recrawl.
+sitemap.xml is intentionally NOT touched here. The webhook workflow
+(.github/workflows/sync-data.yml) regenerates and commits it on every
+data sync — bumping the user-facing version for a sitemap-only change
+would push a meaningless SW update toast (sitemap is not in SHELL_CACHE).
 
 Usage:
     python scripts/release.py patch        # 1.4.12 -> 1.4.13
@@ -20,9 +22,8 @@ Usage:
     python scripts/release.py major        # 1.4.12 -> 2.0.0
     python scripts/release.py 1.2.0        # set explicit version
 
-The script stages version.json, sw-version.js, sitemap.xml, and the data
-submodule pointer, then commits with the conventional message. It does
-not push — that step stays manual.
+The script stages version.json and sw-version.js, then commits with the
+conventional message. It does not push — that step stays manual.
 """
 
 import argparse
@@ -31,8 +32,6 @@ import re
 import subprocess
 import sys
 from pathlib import Path
-
-import build_sitemap
 
 ROOT = Path(__file__).parent.parent
 VERSION_PATH = ROOT / "version.json"
@@ -59,7 +58,7 @@ def write_sw_version(text: str, new_version: str) -> str:
 
 
 def stage_and_commit(new_version: str) -> None:
-    paths = ["version.json", "sw-version.js", "sitemap.xml", "data"]
+    paths = ["version.json", "sw-version.js"]
     subprocess.run(["git", "add", *paths], cwd=ROOT, check=True)
     # Only the actually-modified files end up in the commit; `git add data`
     # is harmless when the submodule pointer is unchanged.
@@ -100,8 +99,6 @@ def main() -> int:
 
     print(f"version.json   : {current} -> {new_version}")
     print(f"sw-version.js  : APP_VERSION -> {new_version}")
-
-    build_sitemap.main()
 
     stage_and_commit(new_version)
     print(f"committed: chore: {new_version} 릴리스")

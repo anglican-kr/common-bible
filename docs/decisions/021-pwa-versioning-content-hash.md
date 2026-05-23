@@ -117,3 +117,27 @@ DATA_CACHE / AUDIO_CACHE는 이제 rev 없는 고정 이름 (`"data"`, `"audio"`
 - 단위 (`scripts/test_release.py`, 10 케이스): semver bump, sw-version.js 텍스트 치환.
 - 회귀: `node --test tests/unit/*.test.js` 505 케이스 통과. `npx tsc -p tsconfig.json --noEmit` 0 error.
 - E2E (Phase 4): dev 배포 후 DevTools Application → Cache Storage 항목 변화 확인, Service Workers → Update → 새 SHELL_CACHE 활성화 확인.
+
+> **개정 (2026-05-23):** 릴리스 발행권을 사람에게 분리, sitemap을 release 흐름에서 분리
+>
+> Phase 3 webhook 자동화의 "data push → 자동 release.py patch → 자동 version bump"
+> 흐름은 데이터가 자주 갱신될수록 사용자에게 의미 없는 SW update 토스트를
+> 누적시켰다. sitemap.xml 빌드 로직만 손볼 때도 release.py 가 stage 했기에
+> 같은 이유로 version 이 bump 되는 부작용이 있었다.
+>
+> 두 가지를 분리한다:
+>
+> 1. **릴리스 발행권은 사람에게.** `.github/workflows/sync-data.yml` 은
+>    `release.py patch` 호출을 제거하고, 서브모듈 포인터 갱신 + sitemap.xml
+>    재생성 + 단일 commit + push 만 수행한다. version 은 건드리지 않는다.
+>    사용자가 적절한 시점에 직접 `python scripts/release.py` 를 호출해
+>    버전을 bump 한다 (어떤 patch / minor / major 인지 사람 판단).
+>
+> 2. **sitemap 은 release 와 분리.** `release.py` 의 paths 에서 sitemap.xml
+>    을 제거. sitemap 은 SHELL_CACHE 에 들어가지 않아 사용자 클라이언트가
+>    fetch 하지 않으며, 변경이 SW update 를 정당화하지 않는다. webhook 이
+>    매 데이터 동기화 시 build_sitemap.py 를 호출해 자동 갱신·commit·push.
+>
+> 결과: 데이터 변경마다 main 에는 commit 이 쌓이지만 (사용자 SW 무관),
+> 사용자가 release 를 cut 할 때까지 prod 의 사용자 향 동작은 그대로다.
+> Google 봇은 변경 직후 갱신된 sitemap 을 즉시 볼 수 있다 (release 와 무관).
