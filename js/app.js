@@ -147,6 +147,7 @@ applyTheme(loadTheme());
 applyColorScheme(loadColorScheme());
 applyCiteShow(loadCiteShow());
 initSettings();
+window.appCitations?.initCiteSheet();
 
 
 // ── Service Worker Registration & Update ──

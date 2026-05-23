@@ -21,8 +21,10 @@ window.appCitations = (() => {
   /** @typedef {import("../types").BibleVerseSegment} BibleVerseSegment */
   /** @typedef {import("../types").BibleVerse} BibleVerse */
   /** @typedef {import("../types").BibleVerseNote} BibleVerseNote */
+  /** @typedef {import("../types").BibleChapter} BibleChapter */
+  /** @typedef {import("../types").BooksData} BooksData */
 
-  const { el } = window.appHelpers;
+  const { el, clearNode, trapFocus } = window.appHelpers;
 
   /**
    * For each `(verseIndex, segmentIndex)` whose segment has a `cite`, decide
@@ -128,11 +130,266 @@ window.appCitations = (() => {
     return wrap;
   }
 
+  // ── ADR-022 cite sheet (bottom sheet, modal) ──────────────────────────
+
+  /** @type {Map<string, string> | null} */
+  let _booksByShort = null;
+  /** @type {HTMLElement | null} */
+  let _sheetReturnFocus = null;
+  /** @type {(() => void) | null} */
+  let _sheetTrapCleanup = null;
+
+  /**
+   * Lazily build short_name_ko → book_id map from books.json.
+   * Uses window.booksPromise (pre-fetched at boot) when available.
+   *
+   * @returns {Promise<Map<string, string>>}
+   */
+  async function _ensureBooksByShort() {
+    if (_booksByShort) return _booksByShort;
+    /** @type {BooksData} */
+    const books = await (window.booksPromise || fetch("/data/books.json").then((r) => r.json()));
+    const map = new Map();
+    for (const b of books) {
+      if (b.short_name_ko) map.set(b.short_name_ko, b.id);
+    }
+    _booksByShort = map;
+    return map;
+  }
+
+  /**
+   * Parse a cite src string into structured parts.
+   * Returns null when format is invalid (caller renders error message).
+   *
+   * @param {string} src
+   * @returns {{ abbr: string, parts: Array<{ startCh: number, startV: number, endCh: number | null, endV: number | null }> } | null}
+   */
+  function _parseCiteSrc(src) {
+    const top = src.match(/^([^\s]+)\s+(\d+):(.+)$/);
+    if (!top) return null;
+    const abbr = top[1];
+    const startCh = parseInt(top[2], 10);
+    const spec = top[3];
+    const parts = [];
+    for (const raw of spec.split(",")) {
+      const token = raw.trim();
+      const m = token.match(/^(\d+)(?:-(?:(\d+):)?(\d+))?$/);
+      if (!m) return null;
+      parts.push({
+        startCh,
+        startV: parseInt(m[1], 10),
+        endCh: m[2] ? parseInt(m[2], 10) : null,
+        endV:  m[3] ? parseInt(m[3], 10) : null,
+      });
+    }
+    return { abbr, parts };
+  }
+
+  /**
+   * Decide which verses of a fetched chapter belong to the slice for any of
+   * the cite parts (a part may span the current chapter as start/middle/end).
+   *
+   * @param {ReadonlyArray<BibleVerse>} allVerses
+   * @param {Array<{ startCh: number, startV: number, endCh: number | null, endV: number | null }>} parts
+   * @param {number} currentCh
+   */
+  function _selectVerses(allVerses, parts, currentCh) {
+    const wanted = new Set();
+    for (const p of parts) {
+      const endCh = p.endCh ?? p.startCh;
+      if (p.endV === null) {
+        if (currentCh === p.startCh) wanted.add(p.startV);
+        continue;
+      }
+      if (p.endCh === null) {
+        if (currentCh === p.startCh) {
+          for (let v = p.startV; v <= p.endV; v++) wanted.add(v);
+        }
+        continue;
+      }
+      // Cross-chapter range
+      if (currentCh === p.startCh) {
+        for (const v of allVerses) {
+          if (v.number >= p.startV) wanted.add(v.number);
+        }
+      } else if (currentCh > p.startCh && currentCh < endCh) {
+        for (const v of allVerses) wanted.add(v.number);
+      } else if (currentCh === endCh) {
+        for (let v = 1; v <= p.endV; v++) wanted.add(v);
+      }
+    }
+    return allVerses.filter((v) => wanted.has(v.number));
+  }
+
+  /**
+   * Render a set of verses in the sheet — minimal style without cite/note
+   * chips (ADR-022 §6 — sheet body keeps "토글 off" effective).
+   *
+   * @param {HTMLElement} container
+   * @param {string} bookNameKo
+   * @param {number} chapter
+   * @param {ReadonlyArray<BibleVerse>} verses
+   */
+  function _renderVerses(container, bookNameKo, chapter, verses) {
+    container.appendChild(el("div", { className: "cite-sheet-chapter-label" },
+      `${bookNameKo} ${chapter}장`));
+    const article = el("article", { className: "cite-sheet-verses", lang: "ko" });
+    for (const v of verses) {
+      const p = el("p", { className: "cite-sheet-verse" });
+      p.appendChild(el("sup", { className: "cite-sheet-verse-num" }, String(v.number)));
+      p.appendChild(document.createTextNode(" "));
+      const segs = v.segments || [{ type: "prose", text: v.text || "" }];
+      const flat = segs.map((s) => s.text).join("\n");
+      // Preserve line breaks via simple <br> insertion (poetry hemistichs).
+      const lines = flat.split("\n");
+      lines.forEach((line, idx) => {
+        if (idx > 0) p.appendChild(el("br"));
+        p.appendChild(document.createTextNode(line));
+      });
+      article.appendChild(p);
+    }
+    container.appendChild(article);
+  }
+
+  /**
+   * Fetch + render one cite reference (primary or parallel) in the sheet body.
+   *
+   * @param {HTMLElement} container
+   * @param {string} src
+   * @param {string | null} tradition  null when not the primary reference
+   */
+  async function _renderRef(container, src, tradition) {
+    const parsed = _parseCiteSrc(src);
+    if (!parsed) {
+      container.appendChild(el("p", { className: "cite-sheet-error" },
+        `잘못된 인용 형식: ${src}`));
+      return;
+    }
+    const booksByShort = await _ensureBooksByShort();
+    const bookId = booksByShort.get(parsed.abbr);
+    if (!bookId) {
+      container.appendChild(el("p", { className: "cite-sheet-error" },
+        `알 수 없는 책 약어: ${parsed.abbr}`));
+      return;
+    }
+    const refTitle = src + (tradition ? ` · ${tradition}` : "");
+    container.appendChild(el("h3", { className: "cite-sheet-ref-title" }, refTitle));
+
+    const chapters = new Set();
+    for (const p of parsed.parts) {
+      chapters.add(p.startCh);
+      if (p.endCh) chapters.add(p.endCh);
+    }
+    const sortedChapters = [...chapters].sort((a, b) => a - b);
+
+    for (let ci = 0; ci < sortedChapters.length; ci++) {
+      const ch = sortedChapters[ci];
+      if (ci > 0) container.appendChild(el("hr", { className: "cite-sheet-chapter-divider" }));
+      try {
+        /** @type {BibleChapter} */
+        const data = await fetch(`/data/bible/${bookId}-${ch}.json`).then((r) => {
+          if (!r.ok) throw new Error("HTTP " + r.status);
+          return r.json();
+        });
+        const slice = _selectVerses(data.verses, parsed.parts, ch);
+        _renderVerses(container, data.book_name_ko, ch, slice);
+      } catch (_) {
+        container.appendChild(el("p", { className: "cite-sheet-error" },
+          `${parsed.abbr} ${ch}장을 불러오지 못했습니다.`));
+      }
+    }
+  }
+
+  /**
+   * Open the cite sheet showing the cited passage(s). Primary src first, then
+   * each parallel divided by a horizontal rule (ADR-022 §6).
+   *
+   * @param {string} src
+   * @param {ReadonlyArray<string> | null} parallels
+   * @param {string | null} tradition
+   * @param {HTMLElement | null} returnFocusEl
+   */
+  async function openCiteSheet(src, parallels, tradition, returnFocusEl) {
+    const sheet  = /** @type {HTMLElement} */ (document.getElementById("cite-sheet"));
+    const titleEl = /** @type {HTMLElement} */ (document.getElementById("cite-sheet-title"));
+    const bodyEl = /** @type {HTMLElement} */ (document.getElementById("cite-sheet-body"));
+    if (!sheet || !titleEl || !bodyEl) return;
+
+    _sheetReturnFocus = returnFocusEl;
+    titleEl.textContent = chipText(src, parallels, tradition).slice(1, -1);
+    clearNode(bodyEl);
+    bodyEl.appendChild(el("p", { className: "cite-sheet-loading" }, "불러오는 중…"));
+    sheet.hidden = false;
+    document.documentElement.classList.add("cite-sheet-open");
+
+    const closeBtn = /** @type {HTMLElement | null} */ (document.getElementById("cite-sheet-close"));
+    if (closeBtn) closeBtn.focus();
+    _sheetTrapCleanup = trapFocus(sheet);
+
+    try {
+      clearNode(bodyEl);
+      const refs = [src, ...(parallels || [])];
+      for (let i = 0; i < refs.length; i++) {
+        if (i > 0) bodyEl.appendChild(el("hr", { className: "cite-sheet-divider" }));
+        await _renderRef(bodyEl, refs[i], i === 0 ? tradition : null);
+      }
+    } catch (_) {
+      clearNode(bodyEl);
+      bodyEl.appendChild(el("p", { className: "cite-sheet-error" }, "불러오는 데 실패했습니다."));
+    }
+  }
+
+  function closeCiteSheet() {
+    const sheet = /** @type {HTMLElement | null} */ (document.getElementById("cite-sheet"));
+    if (!sheet) return;
+    sheet.hidden = true;
+    document.documentElement.classList.remove("cite-sheet-open");
+    if (_sheetTrapCleanup) { _sheetTrapCleanup(); _sheetTrapCleanup = null; }
+    if (_sheetReturnFocus && typeof _sheetReturnFocus.focus === "function") {
+      _sheetReturnFocus.focus();
+    }
+    _sheetReturnFocus = null;
+  }
+
+  /** Wire up close button, ESC key, and `.cite-chip` click delegation. */
+  function initCiteSheet() {
+    document.getElementById("cite-sheet-close")?.addEventListener("click", closeCiteSheet);
+
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        const sheet = document.getElementById("cite-sheet");
+        if (sheet && !sheet.hidden) {
+          e.stopPropagation();
+          closeCiteSheet();
+        }
+      }
+    });
+
+    // Delegated click: any .cite-chip anywhere in the main reading article.
+    document.body.addEventListener("click", (e) => {
+      const target = e.target;
+      if (!(target instanceof HTMLElement)) return;
+      const chip = target.closest(".cite-chip");
+      if (!(chip instanceof HTMLElement)) return;
+      const src = chip.getAttribute("data-cite-src");
+      if (!src) return;
+      const parallelsRaw = chip.getAttribute("data-cite-parallels") || "";
+      const parallels = parallelsRaw
+        ? parallelsRaw.split(";").map((p) => p.trim()).filter(Boolean)
+        : null;
+      const tradition = chip.getAttribute("data-cite-tradition") || null;
+      openCiteSheet(src, parallels, tradition, chip);
+    });
+  }
+
   return {
     _computeCiteShowPositions,
     chipText,
     buildCiteChip,
     buildNoteElement,
+    openCiteSheet,
+    closeCiteSheet,
+    initCiteSheet,
   };
 })();
 

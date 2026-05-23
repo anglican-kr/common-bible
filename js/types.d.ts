@@ -619,6 +619,14 @@ export interface AppCitations {
     segmentType: "prose" | "poetry",
   ) => HTMLElement;
   buildNoteElement: (note: BibleVerseNote) => HTMLElement;
+  openCiteSheet: (
+    src: string,
+    parallels: ReadonlyArray<string> | null,
+    tradition: string | null,
+    returnFocusEl: HTMLElement | null,
+  ) => Promise<void>;
+  closeCiteSheet: () => void;
+  initCiteSheet: () => void;
 }
 
 // ── App settings-ui facade (js/app/settings-ui.js) ──────────────────────────
