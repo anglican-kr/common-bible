@@ -24,6 +24,7 @@ window.appSettings = (() => {
     loadColorScheme, saveColorScheme,
     loadTheme, saveTheme,
     loadBookOrder, saveBookOrder,
+    loadCiteShow, saveCiteShow,
   } = window.appStorage;
 
   const $settingsAnchor = _$("settings-anchor");
@@ -170,6 +171,12 @@ window.appSettings = (() => {
     }
   }
 
+  // ── Cite/note visibility (ADR-022) ──
+  /** @param {boolean} on */
+  function applyCiteShow(on) {
+    document.body.classList.toggle("cites-shown", !!on);
+  }
+
   // ── Launch screen ──
   // Gate fade-out on font readiness so a cold-cache visit does not show
   // system-font content briefly between fade-out end and swap arrival.
@@ -287,7 +294,34 @@ window.appSettings = (() => {
         startupGroup.appendChild(startupBtn);
       }
       startupRow.appendChild(startupGroup);
+
+      // Cite/note visibility (ADR-022)
+      const citeRow = el("div", { className: "settings-row" });
+      citeRow.appendChild(el("span", { className: "settings-label" }, "인용 본문·주석 표시"));
+      const citeCurrent = loadCiteShow();
+      const citeGroup = el("div", { className: "btn-group", role: "group", "aria-label": "인용 본문·주석 표시 선택" });
+      for (const { val, label, announceLabel } of [
+        { val: true,  label: "표시", announceLabel: "인용 본문·주석 표시" },
+        { val: false, label: "숨김", announceLabel: "인용 본문·주석 숨김" },
+      ]) {
+        const citeBtn = el("button", {
+          className: "toolbar-btn",
+          "aria-pressed": String(citeCurrent === val),
+        }, label);
+        citeBtn.addEventListener("click", () => {
+          saveCiteShow(val);
+          applyCiteShow(val);
+          citeGroup.querySelectorAll(".toolbar-btn").forEach((b) =>
+            b.setAttribute("aria-pressed", String(b === citeBtn))
+          );
+          announce(announceLabel);
+        });
+        citeGroup.appendChild(citeBtn);
+      }
+      citeRow.appendChild(citeGroup);
+
       section1.appendChild(startupRow);
+      section1.appendChild(citeRow);
       section1.appendChild(orderRow);
       popover.appendChild(section1);
 
@@ -598,6 +632,7 @@ window.appSettings = (() => {
     applyFontSize,
     applyTheme,
     applyColorScheme,
+    applyCiteShow,
     dismissLaunchScreen,
   };
 })();

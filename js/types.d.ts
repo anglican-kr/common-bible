@@ -72,7 +72,8 @@ export type SettingKey =
   | "colorScheme"
   | "theme"
   | "bookOrder"
-  | "startupBehavior";
+  | "startupBehavior"
+  | "citeShow";
 
 // Per-setting value type. All settings store one MTimed wrapper; the inner
 // value type is intentionally `unknown` so that store-v2 can index by a
@@ -598,6 +599,7 @@ export interface AppSettings {
   applyFontSize: (size: number | string) => void;
   applyTheme: (theme: string) => void;
   applyColorScheme: (schemeName: string) => void;
+  applyCiteShow: (on: boolean) => void;
   dismissLaunchScreen: () => void;
 }
 
@@ -769,6 +771,7 @@ declare global {
     applyFontSize?: (size: number | string) => void;
     applyColorScheme?: (scheme: string) => void;
     applyTheme?: (theme: string) => void;
+    applyCiteShow?: (on: boolean) => void;
   }
 
   // App-layer functions still owned by app.js as of Phase 5 (ADR-018). Each

@@ -16,10 +16,10 @@
 
 const { _$, el } = window.appHelpers;
 const {
-  loadFontSize, loadTheme, loadColorScheme,
+  loadFontSize, loadTheme, loadColorScheme, loadCiteShow,
 } = window.appStorage;
 const {
-  initSettings, applyFontSize, applyTheme, applyColorScheme,
+  initSettings, applyFontSize, applyTheme, applyColorScheme, applyCiteShow,
 } = window.appSettings;
 
 // Re-expose on window so the sync layer (state-machine.js) can apply Drive
@@ -28,6 +28,7 @@ const {
 window.applyFontSize = applyFontSize;
 window.applyTheme = applyTheme;
 window.applyColorScheme = applyColorScheme;
+window.applyCiteShow = applyCiteShow;
 
 // Cross-module bare-global facade for what app.js itself owns. Other
 // modules (settings-ui, bookmark) call `announce(...)` and
@@ -144,6 +145,7 @@ window.syncStoreV2?.sweepTombstones();
 applyFontSize(loadFontSize());
 applyTheme(loadTheme());
 applyColorScheme(loadColorScheme());
+applyCiteShow(loadCiteShow());
 initSettings();
 
 

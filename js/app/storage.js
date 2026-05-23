@@ -29,6 +29,7 @@ window.appStorage = (() => {
   const BOOK_ORDER_KEY = "bible-book-order";
   const COLOR_SCHEME_KEY = "bible-color-scheme";
   const STARTUP_BEHAVIOR_KEY = "bible-startup"; // "resume" | "home"
+  const CITE_SHOW_KEY = "bible-cite-show"; // "1" = show, "0" = hide (default "1")
   const AUDIO_POS_KEY = "bible-audio-pos";
   const BOOKMARK_KEY = "bible-bookmarks";
   const INSTALL_NUDGE_KEY = "bible-install-nudge";
@@ -185,6 +186,24 @@ window.appStorage = (() => {
     if (window.driveSync) window.driveSync.scheduleUpload();
   }
 
+  // ── Cite/note visibility (ADR-022) ──
+
+  /** @returns {boolean} */
+  function loadCiteShow() {
+    const v = localStorage.getItem(CITE_SHOW_KEY);
+    if (v === null) return true;  // default ON (ADR-022 §6)
+    return v === "1";
+  }
+
+  /** @param {boolean} on */
+  function saveCiteShow(on) {
+    try {
+      localStorage.setItem(CITE_SHOW_KEY, on ? "1" : "0");
+      window.syncStoreV2?.saveSetting("citeShow", on);
+      if (window.driveSync) window.driveSync.scheduleUpload();
+    } catch (_) {}
+  }
+
   // ── Font size ──
 
   /** @returns {number} */
@@ -334,6 +353,7 @@ window.appStorage = (() => {
     normalizeSearchQuery, loadSearchHistory, saveSearchHistory,
     pushSearchHistory, removeSearchHistory, clearSearchHistory,
     loadStartupBehavior, saveStartupBehavior,
+    loadCiteShow, saveCiteShow,
     loadFontSize, saveFontSize,
     loadColorScheme, saveColorScheme,
     loadTheme, saveTheme,
