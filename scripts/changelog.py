@@ -12,8 +12,13 @@ from git history instead:
   - 본문 데이터  commits in the common-bible-data submodule between the pointer
               recorded at <from> and the one at <to>, minus CI build commits.
 
+Each entry carries the committer's GitHub login (`@user`). GitHub renders bare
+`@mentions` in release body text as user links automatically, so no explicit
+markdown links are emitted. Commits whose author email cannot be mapped to a
+GitHub account are listed without a login.
+
 common-bible-data is a private repo, so its commits are listed as plain text
-(no links — they would 404 for the public).
+(no compare-URL links — they would 404 for the public).
 
 Usage:
     python scripts/changelog.py <from-ref> [<to-ref>]
@@ -24,7 +29,7 @@ Usage:
 Pass the new tag as <to-ref> when cutting a release so the Full Changelog
 link resolves publicly. Prints a markdown section to stdout for inclusion in
 the GitHub release body. Requires `gh` authenticated with read access to
-common-bible-data.
+common-bible-data (and to common-bible for the app compare).
 """
 
 import json
@@ -63,37 +68,49 @@ def is_data_noise(subject: str) -> bool:
     return SKIP_CI_MARKER in subject
 
 
-def subjects_from_log(text: str) -> list[str]:
-    """Split `git log --format=%s` output into non-empty subject lines."""
-    return [line for line in text.splitlines() if line.strip()]
+def entries_from_compare(payload: dict) -> list[tuple[str, str]]:
+    """(subject, login) per commit in a GitHub compare API response.
 
-
-def filter_subjects(subjects: list[str], is_noise) -> list[str]:
-    return [s for s in subjects if not is_noise(s)]
-
-
-def subjects_from_compare(payload: dict) -> list[str]:
-    """First line of each commit message in a GitHub compare API response."""
-    out = []
+    `login` is empty when GitHub can't map the commit author to a user
+    (unmatched email, deleted account, …).
+    """
+    out: list[tuple[str, str]] = []
     for entry in payload.get("commits", []):
         message = entry.get("commit", {}).get("message", "")
         subject = message.splitlines()[0] if message else ""
-        if subject:
-            out.append(subject)
+        if not subject:
+            continue
+        author = entry.get("author") or {}
+        login = author.get("login", "") if isinstance(author, dict) else ""
+        out.append((subject, login))
     return out
 
 
-def format_section(heading: str, items: list[str]) -> str:
-    return "\n".join([heading, *(f"- {s}" for s in items)])
+def filter_entries(
+    entries: list[tuple[str, str]], is_noise
+) -> list[tuple[str, str]]:
+    return [(s, l) for s, l in entries if not is_noise(s)]
 
 
-def render(app_items: list[str], data_items: list[str], compare_url: str) -> str:
+def format_entry(subject: str, login: str) -> str:
+    return f"- {subject} (@{login})" if login else f"- {subject}"
+
+
+def format_section(heading: str, entries: list[tuple[str, str]]) -> str:
+    return "\n".join([heading, *(format_entry(s, l) for s, l in entries)])
+
+
+def render(
+    app_entries: list[tuple[str, str]],
+    data_entries: list[tuple[str, str]],
+    compare_url: str,
+) -> str:
     blocks = ["## 변경 사항"]
-    if app_items:
-        blocks.append(format_section("### 앱", app_items))
-    if data_items:
-        blocks.append(format_section("### 본문 데이터", data_items))
-    if not app_items and not data_items:
+    if app_entries:
+        blocks.append(format_section("### 앱", app_entries))
+    if data_entries:
+        blocks.append(format_section("### 본문 데이터", data_entries))
+    if not app_entries and not data_entries:
         blocks.append("이 릴리스에는 기록된 변경 사항이 없습니다.")
     blocks.append(f"**Full Changelog**: {compare_url}")
     return "\n\n".join(blocks) + "\n"
@@ -117,19 +134,30 @@ def submodule_sha(ref: str, path: str = "data") -> str:
     return fields[2]
 
 
-def app_subjects(from_ref: str, to_ref: str) -> list[str]:
-    log = git("log", "--no-merges", "--format=%s", f"{from_ref}..{to_ref}")
-    return filter_subjects(subjects_from_log(log), is_app_noise)
-
-
-def data_subjects(from_sha: str, to_sha: str, slug: str) -> list[str]:
-    if from_sha == to_sha:
-        return []
+def compare_payload(slug: str, from_ref: str, to_ref: str) -> dict:
     raw = subprocess.run(
-        ["gh", "api", f"repos/{slug}/compare/{from_sha}...{to_sha}"],
+        ["gh", "api", f"repos/{slug}/compare/{from_ref}...{to_ref}"],
         check=True, capture_output=True, text=True,
     ).stdout
-    return filter_subjects(subjects_from_compare(json.loads(raw)), is_data_noise)
+    return json.loads(raw)
+
+
+def app_entries(slug: str, from_ref: str, to_ref: str) -> list[tuple[str, str]]:
+    return filter_entries(
+        entries_from_compare(compare_payload(slug, from_ref, to_ref)),
+        is_app_noise,
+    )
+
+
+def data_entries(
+    from_sha: str, to_sha: str, slug: str
+) -> list[tuple[str, str]]:
+    if from_sha == to_sha:
+        return []
+    return filter_entries(
+        entries_from_compare(compare_payload(slug, from_sha, to_sha)),
+        is_data_noise,
+    )
 
 
 def main(argv: list[str]) -> int:
@@ -144,8 +172,8 @@ def main(argv: list[str]) -> int:
         git("config", "-f", str(GITMODULES), "submodule.data.url")
     )
 
-    app_items = app_subjects(from_ref, to_ref)
-    data_items = data_subjects(
+    app_items = app_entries(app_slug, from_ref, to_ref)
+    data_items = data_entries(
         submodule_sha(from_ref), submodule_sha(to_ref), data_slug
     )
 
