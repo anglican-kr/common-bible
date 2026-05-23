@@ -58,6 +58,16 @@ class NoiseFilterTest(unittest.TestCase):
     def test_chore_non_release_is_not_app_noise(self):
         self.assertFalse(changelog.is_app_noise("chore: 의존성 정리"))
 
+    def test_webhook_sync_commit_is_app_noise(self):
+        self.assertTrue(
+            changelog.is_app_noise("data: 서브모듈 포인터 + sitemap 갱신")
+        )
+
+    def test_hand_authored_data_commit_is_not_app_noise(self):
+        """Manual data: commits with any other message must pass through."""
+        self.assertFalse(changelog.is_app_noise("data: 서브모듈 fd9c818 bump"))
+        self.assertFalse(changelog.is_app_noise("data: 운문 리포맷 반영"))
+
     def test_skip_ci_is_data_noise(self):
         self.assertTrue(changelog.is_data_noise("build: 파이프라인 자동 빌드 [skip ci]"))
 

@@ -43,6 +43,7 @@ GITMODULES = ROOT / ".gitmodules"
 
 # Commit-subject patterns dropped as noise.
 RELEASE_COMMIT_RE = re.compile(r"^chore: \d+\.\d+\.\d+ 릴리스")
+SYNC_COMMIT_RE = re.compile(r"^data: 서브모듈 포인터 \+ sitemap 갱신$")
 SKIP_CI_MARKER = "[skip ci]"
 
 SLUG_RE = re.compile(r"[:/]([^/:]+)/([^/]+?)(?:\.git)?$")
@@ -59,8 +60,15 @@ def slug_from_url(url: str) -> str:
 
 
 def is_app_noise(subject: str) -> bool:
-    """True for app commits that should not appear in a changelog."""
-    return bool(RELEASE_COMMIT_RE.match(subject))
+    """True for app commits that should not appear in a changelog.
+
+    Filters: release-bump commits and webhook-synthesized data-sync commits.
+    Hand-authored `data:` commits (e.g. manual submodule bump messages) pass
+    through — only the exact webhook signature matches.
+    """
+    return bool(
+        RELEASE_COMMIT_RE.match(subject) or SYNC_COMMIT_RE.match(subject)
+    )
 
 
 def is_data_noise(subject: str) -> bool:
