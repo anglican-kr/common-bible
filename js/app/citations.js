@@ -141,6 +141,11 @@ window.appCitations = (() => {
   /** @type {{ src: string, parallels: ReadonlyArray<string> | null, tradition: string | null, expanded: boolean } | null} */
   let _sheetState = null;
 
+  const COACHMARK_KEY = "bible-cite-coachmark-seen";
+  const COACHMARK_AUTO_DISMISS_MS = 12000;
+  /** @type {number | null} */
+  let _coachmarkTimer = null;
+
   /**
    * Lazily build short_name_ko → book_id map from books.json.
    * Uses window.booksPromise (pre-fetched at boot) when available.
@@ -419,8 +424,54 @@ window.appCitations = (() => {
         ? parallelsRaw.split(";").map((p) => p.trim()).filter(Boolean)
         : null;
       const tradition = chip.getAttribute("data-cite-tradition") || null;
+      // First chip interaction = user knows what chips do → no more coachmark.
+      _markCoachmarkSeen();
       openCiteSheet(src, parallels, tradition, chip);
     });
+  }
+
+  // ── First-use coachmark ────────────────────────────────────────────────
+
+  function _markCoachmarkSeen() {
+    try { localStorage.setItem(COACHMARK_KEY, "1"); } catch (_) {}
+    const existing = document.getElementById("cite-coachmark");
+    if (existing) existing.remove();
+    if (_coachmarkTimer !== null) {
+      clearTimeout(_coachmarkTimer);
+      _coachmarkTimer = null;
+    }
+  }
+
+  /**
+   * Show a one-time floating banner pointing out the cite chips.
+   * No-op if: coachmark already seen, cites toggle is OFF, no chip in DOM,
+   * banner is already showing.
+   */
+  function maybeShowCoachmark() {
+    try {
+      if (localStorage.getItem(COACHMARK_KEY) === "1") return;
+    } catch (_) { /* localStorage unavailable → skip silently */ return; }
+    if (!document.body.classList.contains("cites-shown")) return;
+    if (!document.querySelector(".cite-chip")) return;
+    if (document.getElementById("cite-coachmark")) return;
+
+    const banner = el("div", {
+      id: "cite-coachmark",
+      role: "status",
+      "aria-live": "polite",
+    });
+    banner.appendChild(el("span", { className: "cite-coachmark-text" },
+      "회색 인용 출처 버튼을 누르면 인용 본문이 시트로 열려요."));
+    const closeBtn = el("button", {
+      type: "button",
+      className: "cite-coachmark-close",
+      "aria-label": "안내 닫기",
+    }, "×");
+    closeBtn.addEventListener("click", _markCoachmarkSeen);
+    banner.appendChild(closeBtn);
+    document.body.appendChild(banner);
+
+    _coachmarkTimer = /** @type {any} */ (setTimeout(_markCoachmarkSeen, COACHMARK_AUTO_DISMISS_MS));
   }
 
   return {
@@ -431,6 +482,7 @@ window.appCitations = (() => {
     openCiteSheet,
     closeCiteSheet,
     initCiteSheet,
+    maybeShowCoachmark,
   };
 })();
 

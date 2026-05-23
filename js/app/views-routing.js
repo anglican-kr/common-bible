@@ -1228,6 +1228,9 @@ function renderChapter(data, book, opts) {
   $app.appendChild(buildChapterNav(book, ch));
   showAudioPlayer(book.id, ch);
   observeFabLift();
+  // ADR-022: one-time hint pointing out the cite chips (no-op after first show
+  // or chip click, and when toggle is OFF or chapter has no chips).
+  window.appCitations?.maybeShowCoachmark();
 
   // Scroll to highlighted verse, resumed position, or top
   const scrollVerse = hlVerse || (opts && opts.resumeVerse) || null;

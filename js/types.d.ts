@@ -627,6 +627,7 @@ export interface AppCitations {
   ) => Promise<void>;
   closeCiteSheet: () => void;
   initCiteSheet: () => void;
+  maybeShowCoachmark: () => void;
 }
 
 // ── App settings-ui facade (js/app/settings-ui.js) ──────────────────────────
