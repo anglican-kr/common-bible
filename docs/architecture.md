@@ -433,6 +433,8 @@ OAuth 측면 (가장 큰 공격 표면):
 | [018](decisions/018-app-modularization.md)              | `js/app.js` 6,082 → 283줄, 9개 도메인 모듈 분할            |
 | [019](decisions/019-esm-module-system.md)               | ESM 일괄 채택 (`<script type="module">`), 빌드 단계 0 유지 |
 | [020](decisions/020-monorepo-split.md)                  | 모노레포 4분할 (app·data·audio·server)                     |
+| [021](decisions/021-pwa-versioning-content-hash.md)     | SHELL_CACHE = version.json 파생, DATA/AUDIO 콘텐츠 해시 매니페스트 |
+| [022](decisions/022-citations-and-annotations.md)       | 본문 인용(`<cite>`) + 주석(footnote) 표현과 단일 토글 렌더  |
 
 ## 부록 B. 자주 보게 되는 파일 빠른 참조
 
