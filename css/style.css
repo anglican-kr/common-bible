@@ -1946,6 +1946,62 @@ mark.search-highlight {
   background: var(--bg);
 }
 
+/* ── ADR-022 cite chip + verse note ───────────────────────────────────────
+ * Hidden by default; revealed when <body> has class .cites-shown
+ * (controlled by settings "인용 본문·주석 표시" toggle, default ON).
+ */
+.cite-chip,
+.verse-note {
+  display: none;
+}
+
+body.cites-shown .cite-chip {
+  display: inline;
+  margin-left: 0.35em;
+  padding: 0 0.4em;
+  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  font-size: 0.78em;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  line-height: 1.3;
+  vertical-align: baseline;
+}
+
+body.cites-shown .cite-chip:hover,
+body.cites-shown .cite-chip:focus-visible {
+  background: var(--border);
+  color: var(--text);
+  outline: none;
+}
+
+/* Poetry-segment chip renders on its own line below the verse (ADR-022 §6 운문 예외). */
+body.cites-shown .cite-chip--poetry {
+  display: block;
+  margin-left: 0;
+  margin-top: 0.2em;
+  padding-left: 1em;
+  text-align: left;
+}
+
+body.cites-shown .verse-note {
+  display: block;
+  margin-top: 0.35em;
+  margin-bottom: 0.35em;
+  padding-left: 1em;
+  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  font-size: 0.85em;
+  color: var(--text-secondary);
+  line-height: 1.55;
+}
+
+body.cites-shown .verse-note-anchor {
+  font-weight: 500;
+  color: var(--text);
+}
+
 /* Cross-chapter reference */
 .verse-cross-ref {
   padding: 0 0.1em;

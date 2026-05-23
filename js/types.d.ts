@@ -474,6 +474,17 @@ export interface BibleVerseSegment {
   type: "prose" | "poetry";
   text: string;
   paragraph_break?: boolean;
+  // ADR-022 — citation metadata, omitted when absent.
+  cite?: string;
+  parallels?: string[];
+  tradition?: string;
+}
+
+export interface BibleVerseNote {
+  id: string;
+  anchor: string;
+  body: string;
+  anchor_occurrence?: number;
 }
 
 export interface BibleVerse {
@@ -486,6 +497,7 @@ export interface BibleVerse {
   stanza_break?: boolean;
   text?: string;
   segments?: BibleVerseSegment[];
+  notes?: BibleVerseNote[];
 }
 
 export interface BibleChapter {
@@ -588,6 +600,25 @@ export interface AppStorage {
   // Persisted-storage one-shot request — also called from audio play (Phase 7
   // owner). State `_persistAttempted` is encapsulated in the module.
   _maybeRequestPersist: () => void;
+}
+
+// ── App citations facade (js/app/citations.js) ─────────────────────────────
+// ADR-022 cite chip + verse note rendering helpers.
+
+export interface AppCitations {
+  _computeCiteShowPositions: (verses: ReadonlyArray<BibleVerse>) => Set<string>;
+  chipText: (
+    src: string,
+    parallels: ReadonlyArray<string> | null | undefined,
+    tradition: string | null | undefined,
+  ) => string;
+  buildCiteChip: (
+    src: string,
+    parallels: ReadonlyArray<string> | null | undefined,
+    tradition: string | null | undefined,
+    segmentType: "prose" | "poetry",
+  ) => HTMLElement;
+  buildNoteElement: (note: BibleVerseNote) => HTMLElement;
 }
 
 // ── App settings-ui facade (js/app/settings-ui.js) ──────────────────────────
@@ -732,6 +763,7 @@ declare global {
     appInstall: AppInstall;
     appSearch: AppSearch;
     appBookmark: AppBookmark;
+    appCitations: AppCitations;
     appViewsRouting: { [key: string]: any }; // Phase 7a aggregate (full type Phase 7b)
     readingContext: ReadingContext;
 

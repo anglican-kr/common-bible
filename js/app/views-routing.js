@@ -884,7 +884,14 @@ function renderChapter(data, book, opts) {
   let isFirst = true;
   let prevVerseEndType = null;
 
-  for (const v of data.verses) {
+  // ADR-022: precompute which (verse, segment) cite chips actually render
+  // (dedup of consecutive same-cite groups; only LAST in group renders).
+  const _citeShowAt = window.appCitations
+    ? window.appCitations._computeCiteShowPositions(data.verses)
+    : new Set();
+
+  for (let vIdx = 0; vIdx < data.verses.length; vIdx++) {
+    const v = data.verses[vIdx];
     const segs = v.segments || [{ type: "prose", text: v.text || "" }];
 
     // Inter-verse break
@@ -932,7 +939,8 @@ function renderChapter(data, book, opts) {
     let isFirstLine = true;
     let prevSegType = null;
 
-    for (const seg of segs) {
+    for (let segIdx = 0; segIdx < segs.length; segIdx++) {
+      const seg = segs[segIdx];
       const isPoetry = seg.type === "poetry";
       const isSegChange = prevSegType !== null && prevSegType !== seg.type;
       const lines = seg.text.split("\n");
@@ -998,7 +1006,22 @@ function renderChapter(data, book, opts) {
         article.appendChild(span);
         isFirstLine = false;
       }
+      // ADR-022: append cite chip after this segment if it carries one and
+      // dedup decided this position should render (not suppressed).
+      if (seg.cite && window.appCitations && _citeShowAt.has(`${vIdx}:${segIdx}`)) {
+        article.appendChild(window.appCitations.buildCiteChip(
+          seg.cite, seg.parallels || null, seg.tradition || null, seg.type,
+        ));
+      }
+
       prevSegType = seg.type;
+    }
+
+    // ADR-022: append verse-level notes after all segments.
+    if (v.notes && v.notes.length && window.appCitations) {
+      for (const note of v.notes) {
+        article.appendChild(window.appCitations.buildNoteElement(note));
+      }
     }
 
     prevVerseEndType = segs[segs.length - 1]?.type;
