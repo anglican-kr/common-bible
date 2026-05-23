@@ -85,3 +85,25 @@ location / {
 - 검색 결과 스니펫에 "창세기 1장 — 공동번역성서" 등 구체적 타이틀 노출
 - PWA 오프라인 동작 유지 (서비스 워커 navigation fallback)
 - 기존 해시 URL 공유 링크·북마크 자동 호환
+
+> **개정 (2026-05-23):** sitemap 신호 보강 + 빌드 스크립트화
+>
+> Google Search Console 점검 결과, 사이트맵은 "성공"으로 파싱되지만 1,404개 URL 중
+> 한 개도 색인 큐에 들어가지 않은 상태였다. 옛 URL 형식(`/genesis-N.html`, 4개)만
+> 옛 크롤 기록으로 남아 "크롤링됨 - 색인 안 됨"으로 분류돼 있었다.
+>
+> 원인은 sitemap 각 `<url>` 항목에 `<lastmod>`가 없어 Google이 재크롤 우선순위를
+> 매기지 못한 것. 수동 작성된 sitemap.xml을 스크립트로 대체했다.
+>
+> - `scripts/build_sitemap.py` 신설 — `data/books.json` + 데이터 서브모듈의
+>   마지막 커밋 시각을 출처로 sitemap.xml 생성. 모든 URL에 동일한 `<lastmod>`
+>   부여(데이터 서브모듈 commit time). 데이터가 갱신될 때마다 sitemap 전체가
+>   새 신호를 받게 됨
+> - `scripts/release.py` 통합 — 매 릴리스마다 build_sitemap 호출 +
+>   stage_and_commit 대상에 `sitemap.xml` 포함
+> - URL 카운트 정정: ADR 본문 "1,403개 URL" → 실제 1,404개
+>   (root + privacy.html + 73 book-index + 1,328 chapter + 집회서 prologue)
+>
+> 후속: GSC URL 검사로 핵심 URL 5~10개 수동 시드, 재크롤 추이 관찰.
+> SPA shell 본문 렌더링 문제(`/gen/1` 등 모든 라우트가 동일 HTML 반환)는
+> prerender/SSG 도입 여부와 함께 별도 결정 사항으로 남김.
