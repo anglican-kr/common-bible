@@ -141,3 +141,16 @@ DATA_CACHE / AUDIO_CACHE는 이제 rev 없는 고정 이름 (`"data"`, `"audio"`
 > 결과: 데이터 변경마다 main 에는 commit 이 쌓이지만 (사용자 SW 무관),
 > 사용자가 release 를 cut 할 때까지 prod 의 사용자 향 동작은 그대로다.
 > Google 봇은 변경 직후 갱신된 sitemap 을 즉시 볼 수 있다 (release 와 무관).
+
+> **개정 (2026-05-23, data#1):** build 자가 commit 에서 `[skip ci]` 제거
+>
+> §1 의 build.yml 자가 commit 메시지에 박혀 있던 `[skip ci]` 토큰이
+> validate.yml 도 함께 차단해, source-only push 로 절 구조가 바뀐 경우
+> validate 가 옛 artifacts 에 대해 fail 하고 build 후엔 재실행이 안 되는
+> race condition 이 있었다 (fe254de `fix: 아모스서 절 번호 수정` 시 노출).
+>
+> build commit 의 `[skip ci]` 를 제거한다. build.yml 자체는 paths 필터가
+> 산출물 경로를 제외해 자가 재트리거되지 않으므로 무한 루프는 발생하지 않고,
+> validate.yml (paths 필터 없음) 만 자가 commit 에서 재발화해 빌드된
+> artifacts 에 대해 정합성을 다시 검증한다. 결과적으로 main 의 마지막
+> validate 가 항상 실제 산출물 상태를 반영하게 된다.
