@@ -448,38 +448,123 @@ window.appCitations = (() => {
   }
 
   /**
-   * Render a set of verses in the sheet — minimal style without cite/note
-   * chips (ADR-022 §6 — sheet body keeps "토글 off" effective).
+   * Render a set of verses in the sheet using the SAME structure as the
+   * main reading view (`.verse` / `.verse-poetry` / break spans / sup
+   * `.verse-num`). The sheet's article carries `.chapter-text` so it
+   * inherits the body serif font + line-height + poetry indents from the
+   * shared verse stylesheet — visual parity with the main view.
+   *
+   * Per ADR-022 §6 the sheet body deliberately skips cite chips and note
+   * anchors (those are part of the main view only). This is a simpler
+   * mirror of views-routing.js's render loop minus those features.
    *
    * @param {HTMLElement} container
    * @param {string} bookNameKo
    * @param {number} chapter
    * @param {ReadonlyArray<BibleVerse>} verses
    * @param {Set<number> | null} [highlightedNumbers] verse numbers to mark as
-   *   the originally-cited slice (used in expanded full-chapter view).
+   *   the originally-cited slice (full-chapter expanded view).
    */
   function _renderVerses(container, bookNameKo, chapter, verses, highlightedNumbers) {
     container.appendChild(el("div", { className: "cite-sheet-chapter-label" },
       `${bookNameKo} ${chapter}장`));
-    const article = el("article", { className: "cite-sheet-verses", lang: "ko" });
+    const article = el("article", { className: "chapter-text cite-sheet-article", lang: "ko" });
+    let isFirst = true;
+    let prevVerseEndType = null;
+
     for (const v of verses) {
-      const isCited = highlightedNumbers && highlightedNumbers.has(v.number);
-      const p = el("p", {
-        className: isCited ? "cite-sheet-verse cite-sheet-verse--highlighted" : "cite-sheet-verse",
-      });
-      p.appendChild(el("sup", { className: "cite-sheet-verse-num" }, String(v.number)));
-      p.appendChild(document.createTextNode(" "));
       const segs = v.segments || [{ type: "prose", text: v.text || "" }];
-      const flat = segs.map((s) => s.text).join("\n");
-      // Preserve line breaks via simple <br> insertion (poetry hemistichs).
-      const lines = flat.split("\n");
-      lines.forEach((line, idx) => {
-        if (idx > 0) p.appendChild(el("br"));
-        p.appendChild(document.createTextNode(line));
-      });
-      article.appendChild(p);
+      const startsWithPoetry = segs[0]?.type === "poetry";
+      const isCited = !!(highlightedNumbers && highlightedNumbers.has(v.number));
+
+      // Inter-verse break (mirror views-routing.js logic).
+      if (!isFirst) {
+        if (v.stanza_break) {
+          article.appendChild(el("span", { className: "stanza-break", role: "presentation" }));
+        } else if (startsWithPoetry && prevVerseEndType === "poetry") {
+          article.appendChild(el("span", { className: "hemistich-break", role: "presentation" }));
+        } else if (startsWithPoetry || segs[0]?.paragraph_break) {
+          article.appendChild(el("span", { className: "paragraph-break", role: "presentation" }));
+        }
+      }
+
+      let isFirstLine = true;
+      let prevSegType = null;
+
+      for (let segIdx = 0; segIdx < segs.length; segIdx++) {
+        const seg = segs[segIdx];
+        const isPoetry = seg.type === "poetry";
+        const isSegChange = prevSegType !== null && prevSegType !== seg.type;
+        const lines = seg.text.split("\n");
+
+        for (let li = 0; li < lines.length; li++) {
+          const line = lines[li];
+          if (line === "") {
+            article.appendChild(el("span", { className: "stanza-break", role: "presentation" }));
+            continue;
+          }
+
+          if (!isFirstLine) {
+            let breakClass = null;
+            if ((seg.paragraph_break || isSegChange) && li === 0) {
+              breakClass = "paragraph-break";
+            } else if (isPoetry) {
+              breakClass = "hemistich-break";
+            }
+            if (breakClass) {
+              article.appendChild(el("span", { className: breakClass, role: "presentation" }));
+            }
+          }
+
+          let classes = "verse";
+          if (isPoetry) classes += " verse-poetry";
+          if (isCited)  classes += " verse-highlight";
+
+          const span = el("span", { className: classes });
+          if (isFirstLine) {
+            span.appendChild(el("sup", {
+              className: "verse-num",
+              "aria-hidden": "true",
+              "data-v": String(v.number),
+            }));
+            span.appendChild(document.createTextNode("⁠"));
+          }
+
+          // Hanging punctuation for poetry quote lines (parity with main render).
+          if (isPoetry && (line[0] === '"' || line[0] === "'")) {
+            const hqCls = line[0] === '"'
+              ? "hanging-quote" : "hanging-quote hanging-quote--single";
+            span.appendChild(el("span", { className: hqCls }, line[0]));
+            _appendLineText(span, line.slice(1));
+          } else {
+            _appendLineText(span, line);
+          }
+          article.appendChild(span);
+          isFirstLine = false;
+        }
+        prevSegType = seg.type;
+      }
+
+      prevVerseEndType = segs[segs.length - 1]?.type;
+      isFirst = false;
     }
+
     container.appendChild(article);
+  }
+
+  /**
+   * Append line text to `span`, splitting out a leading pilcrow (¶) as the
+   * same `<span class="pilcrow">` the main render uses. Trailing space keeps
+   * inter-verse spacing.
+   */
+  function _appendLineText(span, raw) {
+    if (raw.startsWith("¶")) {
+      span.appendChild(el("span", { className: "pilcrow", "aria-hidden": "true" }, "¶"));
+      const rest = raw.replace(/^¶\s*/, "");
+      span.appendChild(document.createTextNode(rest + " "));
+    } else {
+      span.appendChild(document.createTextNode(raw + " "));
+    }
   }
 
   /**
