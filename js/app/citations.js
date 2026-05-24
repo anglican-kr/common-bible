@@ -391,18 +391,21 @@ window.appCitations = (() => {
     const top = src.match(/^([^\s]+)\s+(\d+):(.+)$/);
     if (!top) return null;
     const abbr = top[1];
-    const startCh = parseInt(top[2], 10);
+    const defaultCh = parseInt(top[2], 10);
     const spec = top[3];
     const parts = [];
+    // Each comma-separated part: optional "<chap>:" prefix (multi-chapter
+    // commas), then verse, then optional "-<chap>:<v>" or "-<v>" range.
+    const partRe = /^(?:(\d+):)?(\d+)(?:-(?:(\d+):)?(\d+))?$/;
     for (const raw of spec.split(",")) {
       const token = raw.trim();
-      const m = token.match(/^(\d+)(?:-(?:(\d+):)?(\d+))?$/);
+      const m = token.match(partRe);
       if (!m) return null;
       parts.push({
-        startCh,
-        startV: parseInt(m[1], 10),
-        endCh: m[2] ? parseInt(m[2], 10) : null,
-        endV:  m[3] ? parseInt(m[3], 10) : null,
+        startCh: m[1] ? parseInt(m[1], 10) : defaultCh,
+        startV: parseInt(m[2], 10),
+        endCh:  m[3] ? parseInt(m[3], 10) : null,
+        endV:   m[4] ? parseInt(m[4], 10) : null,
       });
     }
     return { abbr, parts };
