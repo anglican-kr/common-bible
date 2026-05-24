@@ -124,6 +124,11 @@ window.appCitations = (() => {
    * @param {HTMLElement} article  the `.chapter-text` article element
    * @param {ReadonlyArray<BibleVerse>} verses
    */
+  // Variant-style marker used when a note has no text anchor (typical case:
+  // "이 구절에 어떤 사본은 다음을 추가" — author wraps whitespace or empty
+  // in <note>...</note>). Rendered as a small ※ button at the verse end.
+  const VARIANT_MARKER = "※";
+
   function wrapNoteAnchorsInArticle(article, verses) {
     for (const v of verses) {
       if (!v.notes || !v.notes.length) continue;
@@ -137,9 +142,37 @@ window.appCitations = (() => {
       if (!spans.length) continue;
       for (const note of v.notes) {
         const occurrence = note.anchor_occurrence || 1;
-        _wrapAnchor(spans, note.anchor, occurrence, note.body);
+        const trimmed = (note.anchor || "").trim();
+        if (!trimmed) {
+          // No text anchor — append a ※ marker at the last span's end so the
+          // reader sees a clickable cue at the verse's end position.
+          _appendVariantMarker(spans, note.body);
+        } else {
+          _wrapAnchor(spans, note.anchor, occurrence, note.body);
+        }
       }
     }
+  }
+
+  /**
+   * Append a clickable variant-marker (※) at the end of the verse's last
+   * span. Used for notes whose anchor is whitespace/empty (e.g. textual
+   * variants — "이 절에 어떤 사본은 다음을 추가").
+   *
+   * @param {ReadonlyArray<Element>} spans
+   * @param {string} noteBody
+   */
+  function _appendVariantMarker(spans, noteBody) {
+    const lastSpan = spans[spans.length - 1];
+    if (!lastSpan) return;
+    const btn = el("button", {
+      type: "button",
+      className: "note-anchor note-anchor--variant",
+      "data-note-anchor": VARIANT_MARKER,
+      "data-note-body": noteBody,
+      "aria-label": "본문 변형 주석 보기",
+    }, VARIANT_MARKER);
+    lastSpan.appendChild(btn);
   }
 
   /**
@@ -197,6 +230,10 @@ window.appCitations = (() => {
 
   /** @type {HTMLElement | null} */
   let _currentNoteAnchor = null;
+  /** @type {(() => void) | null} */
+  let _tooltipReposListener = null;
+  // Truncate anchor label in tooltip if it exceeds this many characters.
+  const TOOLTIP_ANCHOR_MAX = 18;
 
   function _ensureNoteTooltip() {
     let tt = /** @type {HTMLElement | null} */ (document.getElementById("note-tooltip"));
@@ -246,7 +283,11 @@ window.appCitations = (() => {
 
   /**
    * Open the note tooltip anchored to `anchorEl`. Renders the note body and
-   * positions itself. Closed by ESC or outside-click (wired by initCiteSheet).
+   * positions itself. Followers the anchor on scroll/resize until closed by
+   * ESC or outside-click (wired by initCiteSheet).
+   *
+   * Long anchor labels are truncated with an ellipsis so the tooltip header
+   * stays readable.
    *
    * @param {HTMLElement} anchorEl
    * @param {string} anchor
@@ -255,16 +296,37 @@ window.appCitations = (() => {
   function openNoteTooltip(anchorEl, anchor, body) {
     const tt = _ensureNoteTooltip();
     clearNode(tt);
-    tt.appendChild(el("strong", { className: "note-tooltip-anchor" }, anchor));
+    const labelText = anchor.length > TOOLTIP_ANCHOR_MAX
+      ? anchor.slice(0, TOOLTIP_ANCHOR_MAX - 1) + "…"
+      : anchor;
+    tt.appendChild(el("strong", { className: "note-tooltip-anchor" }, labelText));
     tt.appendChild(document.createTextNode(" — " + body));
     tt.hidden = false;
     _positionNoteTooltip(tt, anchorEl);
     _currentNoteAnchor = anchorEl;
+
+    // Follow anchor on scroll/resize so the tooltip stays glued to its anchor.
+    if (_tooltipReposListener) {
+      window.removeEventListener("scroll", _tooltipReposListener, true);
+      window.removeEventListener("resize", _tooltipReposListener);
+    }
+    _tooltipReposListener = () => {
+      if (_currentNoteAnchor && !tt.hidden) {
+        _positionNoteTooltip(tt, _currentNoteAnchor);
+      }
+    };
+    window.addEventListener("scroll", _tooltipReposListener, true);
+    window.addEventListener("resize", _tooltipReposListener);
   }
 
   function closeNoteTooltip() {
     const tt = /** @type {HTMLElement | null} */ (document.getElementById("note-tooltip"));
     if (tt) tt.hidden = true;
+    if (_tooltipReposListener) {
+      window.removeEventListener("scroll", _tooltipReposListener, true);
+      window.removeEventListener("resize", _tooltipReposListener);
+      _tooltipReposListener = null;
+    }
     if (_currentNoteAnchor && typeof _currentNoteAnchor.focus === "function") {
       _currentNoteAnchor.focus();
     }

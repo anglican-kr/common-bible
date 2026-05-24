@@ -2018,6 +2018,34 @@ body.cites-shown .note-anchor:focus-visible {
   outline: none;
 }
 
+/* Variant marker (※) — synthetic; used when the note has no text anchor
+   (textual variants like "어떤 사본에는 다음 절이 추가됨"). Unlike a regular
+   note-anchor it is NOT part of the original body, so it must hide when the
+   toggle is OFF (otherwise the reader sees a character the author never wrote). */
+.note-anchor--variant {
+  display: none;
+  margin: 0 0 0 0.2em;
+  padding: 0;
+  font-family: inherit;
+  font-size: 0.85em;
+  background: transparent;
+  border: none;
+  vertical-align: 0.05em;
+  text-decoration: none;
+}
+
+body.cites-shown .note-anchor--variant {
+  display: inline;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+body.cites-shown .note-anchor--variant:hover,
+body.cites-shown .note-anchor--variant:focus-visible {
+  text-decoration: underline;
+  outline: none;
+}
+
 /* Note tooltip: small floating popover anchored near the clicked note word.
    Position/visibility driven by JS (citations.js _positionNoteTooltip). */
 #note-tooltip {
