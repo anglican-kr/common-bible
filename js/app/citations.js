@@ -156,8 +156,9 @@ window.appCitations = (() => {
 
   /**
    * Append a clickable variant-marker (※) at the end of the verse's last
-   * span. Used for notes whose anchor is whitespace/empty (e.g. textual
-   * variants — "이 절에 어떤 사본은 다음을 추가").
+   * span. Rendered as a superscript glued to the preceding text — strip any
+   * trailing whitespace before the marker, then re-add one trailing space
+   * after so inter-verse spacing stays intact.
    *
    * @param {ReadonlyArray<Element>} spans
    * @param {string} noteBody
@@ -165,6 +166,15 @@ window.appCitations = (() => {
   function _appendVariantMarker(spans, noteBody) {
     const lastSpan = spans[spans.length - 1];
     if (!lastSpan) return;
+    // Strip trailing whitespace from the span's last text node so the
+    // superscript marker glues directly to the previous character.
+    for (let i = lastSpan.childNodes.length - 1; i >= 0; i--) {
+      const n = lastSpan.childNodes[i];
+      if (n.nodeType === 3 /* Node.TEXT_NODE */) {
+        n.nodeValue = (n.nodeValue || "").replace(/\s+$/, "");
+        break;
+      }
+    }
     const btn = el("button", {
       type: "button",
       className: "note-anchor note-anchor--variant",
@@ -173,6 +183,9 @@ window.appCitations = (() => {
       "aria-label": "본문 변형 주석 보기",
     }, VARIANT_MARKER);
     lastSpan.appendChild(btn);
+    // Re-add a single trailing space so the next verse still has visible
+    // word separation in inline flow.
+    lastSpan.appendChild(document.createTextNode(" "));
   }
 
   /**
