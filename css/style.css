@@ -1958,8 +1958,10 @@ mark.search-highlight {
 
 body.cites-shown .cite-chip {
   display: inline;
-  margin-left: 0.35em;
-  padding: 0 0.4em;
+  /* No left-margin — the trailing space appended by appendSegText already
+     provides a natural gap. Small padding keeps hover background readable. */
+  margin: 0;
+  padding: 0 0.2em;
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
   font-size: 0.78em;
   color: var(--text-secondary);
