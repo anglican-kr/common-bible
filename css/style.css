@@ -2635,6 +2635,11 @@ html.cite-sheet-open {
   .chapter-nav {
     margin-top: 4.5rem;
   }
+
+  /* Reserve space below the last book list so the FAB doesn't overlap buttons */
+  .division:last-child {
+    padding-bottom: calc(3.2rem + 2.5rem + env(safe-area-inset-bottom));
+  }
 }
 
 /* Desktop: hide FAB and bottom sheet */
