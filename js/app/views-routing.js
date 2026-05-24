@@ -922,13 +922,18 @@ function renderChapter(data, book, opts) {
     // Verse number (rendered via CSS ::before to exclude from clipboard)
     const dataV = formatVerseNumber(v);
 
-    function appendSegText(target, raw) {
+    function appendSegText(target, raw, opts) {
       const hasPilcrow = raw.startsWith("¶");
       if (hasPilcrow) {
         target.appendChild(el("span", { className: "pilcrow", "aria-hidden": "true" }, "¶"));
       }
       const textContent = hasPilcrow ? raw.replace(/^¶\s*/, "") : raw;
-      appendTextWithHighlight(target, textContent + " ", hlQuery);
+      // Trailing space normally separates this span from the next inline
+      // sibling (verse continuation). When a cite chip will be appended right
+      // after this segment, the chip's own padding provides the gap — skip
+      // the trailing space to avoid a double-gap (ADR-022 §6 dev-server tweak).
+      const suffix = opts && opts.noTrailingSpace ? "" : " ";
+      appendTextWithHighlight(target, textContent + suffix, hlQuery);
     }
 
     // Count total lines across all segments to determine if multi-part
@@ -1003,14 +1008,20 @@ function renderChapter(data, book, opts) {
         }
 
         span.setAttribute("data-vref", vref);
+        // Suppress trailing space on the last line of a prose cite segment
+        // — the chip that follows immediately provides its own padding gap.
+        const segWillShowChip = !!(seg.cite && _citeShowAt.has(`${vIdx}:${segIdx}`));
+        const isLastSegLine = li === lines.length - 1;
+        const segTextOpts = (!isPoetry && segWillShowChip && isLastSegLine)
+          ? { noTrailingSpace: true } : undefined;
         // Hanging punctuation: pull leading quote outside the indent.
         // Single quote is narrower, so it uses a smaller offset (see .hanging-quote--single).
         if (isPoetry && (line[0] === '"' || line[0] === "'")) {
           const cls = line[0] === '"' ? "hanging-quote" : "hanging-quote hanging-quote--single";
           span.appendChild(el("span", { className: cls }, line[0]));
-          appendSegText(span, line.slice(1));
+          appendSegText(span, line.slice(1), segTextOpts);
         } else {
-          appendSegText(span, line);
+          appendSegText(span, line, segTextOpts);
         }
         article.appendChild(span);
         isFirstLine = false;
