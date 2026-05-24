@@ -954,14 +954,23 @@ function renderChapter(data, book, opts) {
           continue;
         }
 
-        // Break before non-first lines
+        // Break before non-first lines:
+        // - explicit paragraph break (¶ or segment-type change) → paragraph-break
+        // - poetry continuation → hemistich-break
+        // - prose continuation (e.g. ADR-022 cite-split prose) → no break, text flows inline
         if (!isFirstLine) {
-          const breakClass = ((seg.paragraph_break || isSegChange) && li === 0) ? "paragraph-break"
-            : isPoetry ? "hemistich-break" : "paragraph-break";
-          article.appendChild(el("span", {
-            className: breakClass,
-            role: "presentation"
-          }));
+          let breakClass = null;
+          if ((seg.paragraph_break || isSegChange) && li === 0) {
+            breakClass = "paragraph-break";
+          } else if (isPoetry) {
+            breakClass = "hemistich-break";
+          }
+          if (breakClass) {
+            article.appendChild(el("span", {
+              className: breakClass,
+              role: "presentation"
+            }));
+          }
         }
 
         // Compute vref before classes so per-span highlight can use it.
