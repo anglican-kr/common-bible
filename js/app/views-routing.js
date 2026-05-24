@@ -1017,15 +1017,17 @@ function renderChapter(data, book, opts) {
       prevSegType = seg.type;
     }
 
-    // ADR-022: append verse-level notes after all segments.
-    if (v.notes && v.notes.length && window.appCitations) {
-      for (const note of v.notes) {
-        article.appendChild(window.appCitations.buildNoteElement(note));
-      }
-    }
-
     prevVerseEndType = segs[segs.length - 1]?.type;
     isFirst = false;
+  }
+
+  // ADR-022: replace each note anchor in body with a wrapped span + sup ref,
+  // then append a single chapter-end notes section (printed-Bible footnote
+  // style). No-op when no notes in chapter.
+  if (window.appCitations) {
+    window.appCitations.wrapNoteAnchorsInArticle(article, data.verses);
+    const notesSection = window.appCitations.buildChapterNotesSection(data.verses);
+    if (notesSection) article.appendChild(notesSection);
   }
 
   // Flatten inner corners between adjacent highlighted verses so a run from

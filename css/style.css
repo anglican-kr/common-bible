@@ -1946,12 +1946,13 @@ mark.search-highlight {
   background: var(--bg);
 }
 
-/* ── ADR-022 cite chip + verse note ───────────────────────────────────────
+/* ── ADR-022 cite chip + note anchor + chapter-end notes ───────────────────
  * Hidden by default; revealed when <body> has class .cites-shown
  * (controlled by settings "인용 본문·주석 표시" toggle, default ON).
  */
 .cite-chip,
-.verse-note {
+.chapter-notes,
+.note-ref {
   display: none;
 }
 
@@ -1977,27 +1978,77 @@ body.cites-shown .cite-chip:focus-visible {
   outline: none;
 }
 
-/* Poetry-segment chip renders on its own line below the verse (ADR-022 §6 운문 예외). */
+/* Poetry-segment chip renders on its own line below the verse (ADR-022 §6 운문 예외).
+   Indent matches `.verse.verse-poetry` (2rem padding-left) so the chip aligns with
+   the poetry body text rather than the verse-number gutter. */
 body.cites-shown .cite-chip--poetry {
   display: block;
   margin-left: 0;
   margin-top: 0.2em;
-  padding-left: 1em;
+  padding-left: 2rem;
   text-align: left;
 }
 
-body.cites-shown .verse-note {
-  display: block;
-  margin-top: 0.35em;
-  margin-bottom: 0.35em;
-  padding-left: 1em;
-  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
-  font-size: 0.85em;
-  color: var(--text-secondary);
-  line-height: 1.55;
+/* Note anchor: dotted underline on the anchored word + small superscript
+   reference. The .note-anchor wrapper stays in document flow when toggle is
+   off (no underline, no sup) so the body text reads identically. */
+body.cites-shown .note-anchor {
+  text-decoration: underline dotted var(--text-secondary);
+  text-underline-offset: 0.2em;
+  text-decoration-thickness: 1px;
 }
 
-body.cites-shown .verse-note-anchor {
+body.cites-shown .note-ref {
+  display: inline;
+  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  font-size: 0.6em;
+  font-weight: 500;
+  vertical-align: 0.45em;
+  color: var(--accent);
+  margin-left: 0.1em;
+}
+
+/* Chapter-end notes section: "주석" heading + numbered list. */
+body.cites-shown .chapter-notes {
+  display: block;
+  margin-top: 2rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+}
+
+body.cites-shown .chapter-notes-title {
+  margin: 0 0 0.6rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+body.cites-shown .chapter-notes-list {
+  list-style: none;
+  padding-left: 0;
+  margin: 0;
+  font-size: 0.85em;
+  color: var(--text-secondary);
+  line-height: 1.65;
+}
+
+body.cites-shown .chapter-note {
+  margin-bottom: 0.4em;
+  padding-left: 2em;
+  text-indent: -2em;
+}
+
+body.cites-shown .chapter-note-num {
+  display: inline-block;
+  width: 1.6em;
+  font-weight: 500;
+  color: var(--accent);
+  text-align: right;
+  margin-right: 0.4em;
+}
+
+body.cites-shown .chapter-note-anchor {
   font-weight: 500;
   color: var(--text);
 }

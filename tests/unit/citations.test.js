@@ -235,30 +235,75 @@ test("buildCiteChip: aria-label includes display text", () => {
   assert.match(node.attrs["aria-label"], /\(이사 53:5\).*본문 보기/);
 });
 
-// ── buildNoteElement ─────────────────────────────────────────────────────────
+// ── buildChapterNotesSection ─────────────────────────────────────────────────
 
-test("buildNoteElement: returns div with verse-note class + role=note", () => {
+test("buildChapterNotesSection: null when chapter has no notes", () => {
   const c = loadCitations();
-  const node = c.buildNoteElement({
-    id: "3",
-    anchor: "갈릴래아",
-    body: "갈릴래아는 당시 로마의 직할령이 아닌…",
-  });
-  assert.equal(node.tag, "div");
-  assert.equal(node.attrs.className, "verse-note");
-  assert.equal(node.attrs.role, "note");
+  const result = c.buildChapterNotesSection([
+    { number: 1, segments: [{ type: "prose", text: "abc" }] },
+    { number: 2, segments: [{ type: "prose", text: "def" }] },
+  ]);
+  assert.equal(result, null);
 });
 
-test("buildNoteElement: contains anchor span and body text", () => {
+test("buildChapterNotesSection: returns section with title + numbered list", () => {
   const c = loadCitations();
-  const node = c.buildNoteElement({
-    id: "3",
-    anchor: "갈릴래아",
-    body: "헤로데 안티파스의 통치 구역",
-  });
-  const anchorChild = node.children.find((ch) => ch?.className === "verse-note-anchor");
-  assert.ok(anchorChild, "anchor span exists");
-  assert.equal(anchorChild.textContent, "갈릴래아");
-  const text = node.children.map((ch) => ch?.text || "").join("");
-  assert.match(text, /— 헤로데/);
+  const section = c.buildChapterNotesSection([
+    {
+      number: 1,
+      segments: [{ type: "prose", text: "다윗" }],
+      notes: [{ id: "1", anchor: "다윗", body: "이스라엘 두 번째 왕" }],
+    },
+    {
+      number: 5,
+      segments: [{ type: "prose", text: "갈릴래아" }],
+      notes: [{ id: "2", anchor: "갈릴래아", body: "헤로데 안티파스 통치 구역" }],
+    },
+  ]);
+  assert.ok(section);
+  assert.equal(section.tag, "section");
+  assert.equal(section.attrs.className, "chapter-notes");
+  assert.equal(section.attrs["aria-label"], "주석");
+  const heading = section.children.find((ch) => ch?.tag === "h2");
+  assert.equal(heading.textContent, "주석");
+  const list = section.children.find((ch) => ch?.tag === "ol");
+  assert.equal(list.children.length, 2);
+});
+
+test("buildChapterNotesSection: each li carries id, num, anchor span, body", () => {
+  const c = loadCitations();
+  const section = c.buildChapterNotesSection([
+    {
+      number: 1,
+      notes: [{ id: "1", anchor: "다윗", body: "이스라엘 두 번째 왕" }],
+    },
+  ]);
+  const list = section.children.find((ch) => ch?.tag === "ol");
+  const li = list.children[0];
+  assert.equal(li.tag, "li");
+  assert.equal(li.attrs.id, "note-1");
+  const num = li.children.find((ch) => ch?.className === "chapter-note-num");
+  assert.equal(num.textContent, "1");
+  const anchor = li.children.find((ch) => ch?.className === "chapter-note-anchor");
+  assert.equal(anchor.textContent, "다윗");
+  const text = li.children.map((ch) => ch?.text || "").join("");
+  assert.match(text, /— 이스라엘 두 번째 왕/);
+});
+
+test("buildChapterNotesSection: gathers multiple notes per verse and across verses", () => {
+  const c = loadCitations();
+  const section = c.buildChapterNotesSection([
+    {
+      number: 3,
+      notes: [
+        { id: "1", anchor: "a", body: "x" },
+        { id: "2", anchor: "b", body: "y" },
+      ],
+    },
+    { number: 5, notes: [{ id: "3", anchor: "c", body: "z" }] },
+  ]);
+  const list = section.children.find((ch) => ch?.tag === "ol");
+  assert.equal(list.children.length, 3);
+  const ids = list.children.map((li) => li.attrs.id);
+  assert.deepEqual(ids, ["note-1", "note-2", "note-3"]);
 });

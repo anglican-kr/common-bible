@@ -116,18 +116,109 @@ window.appCitations = (() => {
   }
 
   /**
-   * Build a verse-attached note paragraph: "anchor — body".
-   * Block-level; placed after the verse text. Visible only when body has
-   * the `cites-shown` class.
+   * Walk an already-rendered chapter article and wrap each note's anchor
+   * occurrence with a small superscript reference marker — printed-Bible
+   * footnote style. Notes themselves are gathered at chapter end by
+   * `buildChapterNotesSection`.
    *
-   * @param {BibleVerseNote} note
-   * @returns {HTMLElement}
+   * @param {HTMLElement} article  the `.chapter-text` article element
+   * @param {ReadonlyArray<BibleVerse>} verses
    */
-  function buildNoteElement(note) {
-    const wrap = el("div", { className: "verse-note", role: "note" });
-    wrap.appendChild(el("span", { className: "verse-note-anchor" }, note.anchor));
-    wrap.appendChild(document.createTextNode(" — " + note.body));
-    return wrap;
+  function wrapNoteAnchorsInArticle(article, verses) {
+    for (const v of verses) {
+      if (!v.notes || !v.notes.length) continue;
+      const vrefRoot = `${v.number}`;
+      const spans = Array.from(article.querySelectorAll(".verse[data-vref]"))
+        .filter((sp) => {
+          const ref = sp.getAttribute("data-vref") || "";
+          const m = /^\d+/.exec(ref);
+          return m ? m[0] === vrefRoot : false;
+        });
+      if (!spans.length) continue;
+      for (const note of v.notes) {
+        const occurrence = note.anchor_occurrence || 1;
+        _wrapAnchor(spans, note.anchor, occurrence, note.id);
+      }
+    }
+  }
+
+  /**
+   * Internal: search `spans` text nodes in order for the Nth occurrence of
+   * `anchorWord` and wrap it. No-op when occurrence not found.
+   *
+   * @param {ReadonlyArray<Element>} spans
+   * @param {string} anchorWord
+   * @param {number} occurrence  1-indexed
+   * @param {string} noteId
+   */
+  function _wrapAnchor(spans, anchorWord, occurrence, noteId) {
+    if (!anchorWord) return;
+    let count = 0;
+    for (const span of spans) {
+      /** @type {Text[]} */
+      const textNodes = [];
+      const walker = document.createTreeWalker(span, NodeFilter.SHOW_TEXT);
+      let n = walker.nextNode();
+      while (n) {
+        textNodes.push(/** @type {Text} */ (n));
+        n = walker.nextNode();
+      }
+      for (const tn of textNodes) {
+        const text = tn.nodeValue || "";
+        let idx = text.indexOf(anchorWord);
+        while (idx !== -1) {
+          count++;
+          if (count === occurrence) {
+            const parent = tn.parentNode;
+            if (!parent) return;
+            const before = text.slice(0, idx);
+            const after  = text.slice(idx + anchorWord.length);
+            const wrapper = el("span", { className: "note-anchor" });
+            wrapper.appendChild(document.createTextNode(anchorWord));
+            wrapper.appendChild(el("sup", { className: "note-ref", "aria-hidden": "true" }, noteId));
+            if (before) parent.insertBefore(document.createTextNode(before), tn);
+            parent.insertBefore(wrapper, tn);
+            if (after) parent.insertBefore(document.createTextNode(after), tn);
+            parent.removeChild(tn);
+            return;
+          }
+          idx = text.indexOf(anchorWord, idx + anchorWord.length);
+        }
+      }
+    }
+  }
+
+  /**
+   * Build a chapter-level notes section gathering every verse's notes in
+   * verse order. Mirrors printed-Bible footnote layout: small "주석" heading
+   * + numbered list at chapter end. Returns null when no notes.
+   *
+   * @param {ReadonlyArray<BibleVerse>} verses
+   * @returns {HTMLElement | null}
+   */
+  function buildChapterNotesSection(verses) {
+    /** @type {Array<{ id: string, anchor: string, body: string }>} */
+    const items = [];
+    for (const v of verses) {
+      if (!v.notes || !v.notes.length) continue;
+      for (const note of v.notes) {
+        items.push({ id: note.id, anchor: note.anchor, body: note.body });
+      }
+    }
+    if (!items.length) return null;
+    const section = el("section", { className: "chapter-notes", "aria-label": "주석" });
+    section.appendChild(el("h2", { className: "chapter-notes-title" }, "주석"));
+    const list = el("ol", { className: "chapter-notes-list" });
+    for (const it of items) {
+      const li = el("li", { className: "chapter-note", id: `note-${it.id}` });
+      li.appendChild(el("span", { className: "chapter-note-num" }, it.id));
+      li.appendChild(document.createTextNode(" "));
+      li.appendChild(el("span", { className: "chapter-note-anchor" }, it.anchor));
+      li.appendChild(document.createTextNode(" — " + it.body));
+      list.appendChild(li);
+    }
+    section.appendChild(list);
+    return section;
   }
 
   // ── ADR-022 cite sheet (bottom sheet, modal) ──────────────────────────
@@ -478,7 +569,8 @@ window.appCitations = (() => {
     _computeCiteShowPositions,
     chipText,
     buildCiteChip,
-    buildNoteElement,
+    wrapNoteAnchorsInArticle,
+    buildChapterNotesSection,
     openCiteSheet,
     closeCiteSheet,
     initCiteSheet,

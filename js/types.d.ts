@@ -618,7 +618,13 @@ export interface AppCitations {
     tradition: string | null | undefined,
     segmentType: "prose" | "poetry",
   ) => HTMLElement;
-  buildNoteElement: (note: BibleVerseNote) => HTMLElement;
+  wrapNoteAnchorsInArticle: (
+    article: HTMLElement,
+    verses: ReadonlyArray<BibleVerse>,
+  ) => void;
+  buildChapterNotesSection: (
+    verses: ReadonlyArray<BibleVerse>,
+  ) => HTMLElement | null;
   openCiteSheet: (
     src: string,
     parallels: ReadonlyArray<string> | null,
