@@ -622,9 +622,12 @@ export interface AppCitations {
     article: HTMLElement,
     verses: ReadonlyArray<BibleVerse>,
   ) => void;
-  buildChapterNotesSection: (
-    verses: ReadonlyArray<BibleVerse>,
-  ) => HTMLElement | null;
+  openNoteTooltip: (
+    anchorEl: HTMLElement,
+    anchor: string,
+    body: string,
+  ) => void;
+  closeNoteTooltip: () => void;
   openCiteSheet: (
     src: string,
     parallels: ReadonlyArray<string> | null,

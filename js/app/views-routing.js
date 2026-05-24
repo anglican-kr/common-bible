@@ -1041,13 +1041,10 @@ function renderChapter(data, book, opts) {
     isFirst = false;
   }
 
-  // ADR-022: replace each note anchor in body with a wrapped span + sup ref,
-  // then append a single chapter-end notes section (printed-Bible footnote
-  // style). No-op when no notes in chapter.
+  // ADR-022: wrap each note anchor in a clickable button — tooltip on click
+  // shows the note body (no chapter-end section; ADR §6 개정 2026-05-24).
   if (window.appCitations) {
     window.appCitations.wrapNoteAnchorsInArticle(article, data.verses);
-    const notesSection = window.appCitations.buildChapterNotesSection(data.verses);
-    if (notesSection) article.appendChild(notesSection);
   }
 
   // Flatten inner corners between adjacent highlighted verses so a run from

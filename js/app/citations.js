@@ -117,9 +117,9 @@ window.appCitations = (() => {
 
   /**
    * Walk an already-rendered chapter article and wrap each note's anchor
-   * occurrence with a small superscript reference marker — printed-Bible
-   * footnote style. Notes themselves are gathered at chapter end by
-   * `buildChapterNotesSection`.
+   * occurrence with a clickable button. The note body is stashed in a data
+   * attribute so the delegated click handler can show it in a tooltip
+   * (ADR-022 §6 — anchor click → 툴팁).
    *
    * @param {HTMLElement} article  the `.chapter-text` article element
    * @param {ReadonlyArray<BibleVerse>} verses
@@ -137,21 +137,22 @@ window.appCitations = (() => {
       if (!spans.length) continue;
       for (const note of v.notes) {
         const occurrence = note.anchor_occurrence || 1;
-        _wrapAnchor(spans, note.anchor, occurrence, note.id);
+        _wrapAnchor(spans, note.anchor, occurrence, note.body);
       }
     }
   }
 
   /**
    * Internal: search `spans` text nodes in order for the Nth occurrence of
-   * `anchorWord` and wrap it. No-op when occurrence not found.
+   * `anchorWord` and wrap it in a clickable button carrying the note body.
+   * No-op when occurrence not found.
    *
    * @param {ReadonlyArray<Element>} spans
    * @param {string} anchorWord
    * @param {number} occurrence  1-indexed
-   * @param {string} noteId
+   * @param {string} noteBody
    */
-  function _wrapAnchor(spans, anchorWord, occurrence, noteId) {
+  function _wrapAnchor(spans, anchorWord, occurrence, noteBody) {
     if (!anchorWord) return;
     let count = 0;
     for (const span of spans) {
@@ -173,11 +174,15 @@ window.appCitations = (() => {
             if (!parent) return;
             const before = text.slice(0, idx);
             const after  = text.slice(idx + anchorWord.length);
-            const wrapper = el("span", { className: "note-anchor" });
-            wrapper.appendChild(document.createTextNode(anchorWord));
-            wrapper.appendChild(el("sup", { className: "note-ref", "aria-hidden": "true" }, noteId));
+            const btn = el("button", {
+              type: "button",
+              className: "note-anchor",
+              "data-note-anchor": anchorWord,
+              "data-note-body": noteBody,
+              "aria-label": `${anchorWord} 주석 보기`,
+            }, anchorWord);
             if (before) parent.insertBefore(document.createTextNode(before), tn);
-            parent.insertBefore(wrapper, tn);
+            parent.insertBefore(btn, tn);
             if (after) parent.insertBefore(document.createTextNode(after), tn);
             parent.removeChild(tn);
             return;
@@ -188,37 +193,82 @@ window.appCitations = (() => {
     }
   }
 
+  // ── Note tooltip (anchored popover) ────────────────────────────────────
+
+  /** @type {HTMLElement | null} */
+  let _currentNoteAnchor = null;
+
+  function _ensureNoteTooltip() {
+    let tt = /** @type {HTMLElement | null} */ (document.getElementById("note-tooltip"));
+    if (tt) return tt;
+    tt = el("div", {
+      id: "note-tooltip",
+      role: "tooltip",
+    });
+    tt.hidden = true;
+    document.body.appendChild(tt);
+    return tt;
+  }
+
   /**
-   * Build a chapter-level notes section gathering every verse's notes in
-   * verse order. Mirrors printed-Bible footnote layout: small "주석" heading
-   * + numbered list at chapter end. Returns null when no notes.
+   * Position the tooltip just above the anchor element; if not enough room
+   * above, flip below. Clamp horizontally to viewport edges.
    *
-   * @param {ReadonlyArray<BibleVerse>} verses
-   * @returns {HTMLElement | null}
+   * @param {HTMLElement} tt
+   * @param {HTMLElement} anchorEl
    */
-  function buildChapterNotesSection(verses) {
-    /** @type {Array<{ id: string, anchor: string, body: string }>} */
-    const items = [];
-    for (const v of verses) {
-      if (!v.notes || !v.notes.length) continue;
-      for (const note of v.notes) {
-        items.push({ id: note.id, anchor: note.anchor, body: note.body });
-      }
+  function _positionNoteTooltip(tt, anchorEl) {
+    tt.style.position = "fixed";
+    tt.style.left = "0px";
+    tt.style.top  = "0px";
+    tt.style.maxWidth = "min(90vw, 22rem)";
+    const ttRect = tt.getBoundingClientRect();
+    const aRect  = anchorEl.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const GAP = 8;
+    let top = aRect.top - ttRect.height - GAP;
+    let placedAbove = true;
+    if (top < GAP) {
+      top = aRect.bottom + GAP;
+      placedAbove = false;
     }
-    if (!items.length) return null;
-    const section = el("section", { className: "chapter-notes", "aria-label": "주석" });
-    section.appendChild(el("h2", { className: "chapter-notes-title" }, "주석"));
-    const list = el("ol", { className: "chapter-notes-list" });
-    for (const it of items) {
-      const li = el("li", { className: "chapter-note", id: `note-${it.id}` });
-      li.appendChild(el("span", { className: "chapter-note-num" }, it.id));
-      li.appendChild(document.createTextNode(" "));
-      li.appendChild(el("span", { className: "chapter-note-anchor" }, it.anchor));
-      li.appendChild(document.createTextNode(" — " + it.body));
-      list.appendChild(li);
+    // If even below overflows, clamp to viewport bottom.
+    if (top + ttRect.height + GAP > vh) {
+      top = Math.max(GAP, vh - ttRect.height - GAP);
     }
-    section.appendChild(list);
-    return section;
+    let left = aRect.left + aRect.width / 2 - ttRect.width / 2;
+    left = Math.max(GAP, Math.min(left, vw - ttRect.width - GAP));
+    tt.style.top  = `${top}px`;
+    tt.style.left = `${left}px`;
+    tt.setAttribute("data-placement", placedAbove ? "above" : "below");
+  }
+
+  /**
+   * Open the note tooltip anchored to `anchorEl`. Renders the note body and
+   * positions itself. Closed by ESC or outside-click (wired by initCiteSheet).
+   *
+   * @param {HTMLElement} anchorEl
+   * @param {string} anchor
+   * @param {string} body
+   */
+  function openNoteTooltip(anchorEl, anchor, body) {
+    const tt = _ensureNoteTooltip();
+    clearNode(tt);
+    tt.appendChild(el("strong", { className: "note-tooltip-anchor" }, anchor));
+    tt.appendChild(document.createTextNode(" — " + body));
+    tt.hidden = false;
+    _positionNoteTooltip(tt, anchorEl);
+    _currentNoteAnchor = anchorEl;
+  }
+
+  function closeNoteTooltip() {
+    const tt = /** @type {HTMLElement | null} */ (document.getElementById("note-tooltip"));
+    if (tt) tt.hidden = true;
+    if (_currentNoteAnchor && typeof _currentNoteAnchor.focus === "function") {
+      _currentNoteAnchor.focus();
+    }
+    _currentNoteAnchor = null;
   }
 
   // ── ADR-022 cite sheet (bottom sheet, modal) ──────────────────────────
@@ -498,26 +548,50 @@ window.appCitations = (() => {
         if (sheet && !sheet.hidden) {
           e.stopPropagation();
           closeCiteSheet();
+          return;
+        }
+        const tt = document.getElementById("note-tooltip");
+        if (tt && !tt.hidden) {
+          e.stopPropagation();
+          closeNoteTooltip();
         }
       }
     });
 
-    // Delegated click: any .cite-chip anywhere in the main reading article.
+    // Delegated click: cite chips → sheet, note anchors → tooltip, outside → close.
     document.body.addEventListener("click", (e) => {
       const target = e.target;
       if (!(target instanceof HTMLElement)) return;
+
+      // Cite chip
       const chip = target.closest(".cite-chip");
-      if (!(chip instanceof HTMLElement)) return;
-      const src = chip.getAttribute("data-cite-src");
-      if (!src) return;
-      const parallelsRaw = chip.getAttribute("data-cite-parallels") || "";
-      const parallels = parallelsRaw
-        ? parallelsRaw.split(";").map((p) => p.trim()).filter(Boolean)
-        : null;
-      const tradition = chip.getAttribute("data-cite-tradition") || null;
-      // First chip interaction = user knows what chips do → no more coachmark.
-      _markCoachmarkSeen();
-      openCiteSheet(src, parallels, tradition, chip);
+      if (chip instanceof HTMLElement) {
+        const src = chip.getAttribute("data-cite-src");
+        if (!src) return;
+        const parallelsRaw = chip.getAttribute("data-cite-parallels") || "";
+        const parallels = parallelsRaw
+          ? parallelsRaw.split(";").map((p) => p.trim()).filter(Boolean)
+          : null;
+        const tradition = chip.getAttribute("data-cite-tradition") || null;
+        _markCoachmarkSeen();
+        openCiteSheet(src, parallels, tradition, chip);
+        return;
+      }
+
+      // Note anchor
+      const noteBtn = target.closest(".note-anchor");
+      if (noteBtn instanceof HTMLElement) {
+        const anchor = noteBtn.getAttribute("data-note-anchor") || noteBtn.textContent || "";
+        const body   = noteBtn.getAttribute("data-note-body")   || "";
+        openNoteTooltip(noteBtn, anchor, body);
+        return;
+      }
+
+      // Click outside any open tooltip → close it.
+      const tt = document.getElementById("note-tooltip");
+      if (tt && !tt.hidden && !tt.contains(target)) {
+        closeNoteTooltip();
+      }
     });
   }
 
@@ -570,9 +644,10 @@ window.appCitations = (() => {
     chipText,
     buildCiteChip,
     wrapNoteAnchorsInArticle,
-    buildChapterNotesSection,
     openCiteSheet,
     closeCiteSheet,
+    openNoteTooltip,
+    closeNoteTooltip,
     initCiteSheet,
     maybeShowCoachmark,
   };
