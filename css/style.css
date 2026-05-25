@@ -2095,6 +2095,8 @@ body.cites-shown .note-anchor--variant:focus-visible {
   bottom: 0.75rem;
   left: 0.75rem;
   right: 0.75rem;
+  margin-inline: auto;
+  max-width: var(--max-width);
   z-index: 60;
   background: var(--bg);
   border-radius: 16px;
