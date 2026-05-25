@@ -220,8 +220,13 @@ window.appCitations = (() => {
             if (!parent) return;
             const before = text.slice(0, idx);
             const after  = text.slice(idx + anchorWord.length);
-            const btn = el("button", {
-              type: "button",
+            // <span role="button"> instead of <button>: the browser forces
+            // <button> to display:inline-block + text-align:center, which
+            // makes a long anchor (e.g. a full sentence) sit on its own line
+            // and centered. A span flows inline like surrounding text.
+            const btn = el("span", {
+              role: "button",
+              tabindex: "0",
               className: "note-anchor",
               "data-note-anchor": anchorWord,
               "data-note-body": noteBody,
@@ -717,6 +722,18 @@ window.appCitations = (() => {
         if (tt && !tt.hidden) {
           e.stopPropagation();
           closeNoteTooltip();
+        }
+        return;
+      }
+      // Enter / Space activates a focused note anchor (span role=button needs
+      // manual key handling; a native <button> would do this for us).
+      if (e.key === "Enter" || e.key === " ") {
+        const target = e.target;
+        if (target instanceof HTMLElement && target.classList.contains("note-anchor")) {
+          e.preventDefault();
+          const anchor = target.getAttribute("data-note-anchor") || target.textContent || "";
+          const body   = target.getAttribute("data-note-body")   || "";
+          openNoteTooltip(target, anchor, body);
         }
       }
     });

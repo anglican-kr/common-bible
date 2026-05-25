@@ -2002,6 +2002,7 @@ body.cites-shown .cite-chip--poetry {
   margin: 0;
   font: inherit;
   color: inherit;
+  text-align: inherit;
   cursor: text;  /* off-state: looks like plain text */
 }
 
@@ -2040,11 +2041,13 @@ body.cites-shown .note-anchor--variant {
   display: inline;
   color: var(--accent);
   cursor: pointer;
+  /* The ※ marker is already visually distinct (superscript + accent color);
+     suppress the dotted underline inherited from `.note-anchor`. */
+  text-decoration: none;
 }
 
 body.cites-shown .note-anchor--variant:hover,
 body.cites-shown .note-anchor--variant:focus-visible {
-  text-decoration: underline;
   outline: none;
 }
 
