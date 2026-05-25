@@ -3016,12 +3016,14 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   bottom: 0;
   left: 0;
   right: 0;
+  margin-inline: auto;
+  max-width: var(--max-width);
   z-index: 35;
   background: color-mix(in srgb, var(--bg) 50%, transparent);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border-top: none;
-  padding: 0.65rem 1rem max(0.75rem, env(safe-area-inset-bottom));
+  padding: 0.65rem 1.25rem max(0.75rem, env(safe-area-inset-bottom));
   align-items: center;
   gap: 0.75rem;
 }
