@@ -932,7 +932,12 @@ function renderChapter(data, book, opts) {
       // sibling (verse continuation). When a cite chip will be appended right
       // after this segment, the chip's own padding provides the gap — skip
       // the trailing space to avoid a double-gap (ADR-022 §6 dev-server tweak).
-      const suffix = opts && opts.noTrailingSpace ? "" : " ";
+      // Also skip when the segment is punctuation-only (e.g. a stray opening
+      // quote split off when a cite begins mid-quote like `'<cite>…</cite>'`):
+      // appending a space would force `' 그는…` instead of the intended
+      // `'그는…`. Punctuation glues to the next segment in Korean prose.
+      const isPunctOnly = /^[\s'"“”‘’«»‹›()…,.;:!?¶·]+$/.test(textContent);
+      const suffix = (opts && opts.noTrailingSpace) || isPunctOnly ? "" : " ";
       appendTextWithHighlight(target, textContent + suffix, hlQuery);
     }
 
