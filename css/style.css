@@ -1263,18 +1263,26 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
   display: none;
   position: fixed;
-  /* Float on all four sides — the same 12px breathing room compact already
-     uses, so expanded reads as a card, not a flush bottom sheet. */
-  bottom: 0.75rem;
-  left: 0.75rem;
-  right: 0.75rem;
+  /* Default (expanded, keyboard dismissed) = flush to viewport bottom edge,
+     same iOS-native pattern as #cite-sheet. The display's rounded corners
+     mask the sheet's bottom corners naturally; the compact-state rule below
+     restores floating margins for the keyboard-up state where a floating
+     card pairs better with the keyboard. */
+  bottom: 0;
+  left: 0;
+  right: 0;
+  /* Match #cite-sheet's desktop cap so the two bottom sheets render at the
+     same width on wide screens — otherwise expanded results stretch the
+     full viewport while cite content caps at 720px, an awkward mismatch. */
+  margin-inline: auto;
+  max-width: var(--max-width);
   z-index: 50;
   background: var(--bg);
   background-clip: padding-box;
-  /* All four corners rounded — both states float as cards with margins. */
-  border-radius: 16px;
-  /* Omnidirectional shadow suits the floating card on all four sides. */
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.18);
+  /* Only top corners rounded in expanded — display curve masks the bottom. */
+  border-radius: 16px 16px 0 0;
+  /* Upward-cast shadow for the bottom-attached expanded state. */
+  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.18);
   flex-direction: column;
   height: 55vh;
   max-height: 80vh;
@@ -1284,23 +1292,29 @@ body {
     bottom 220ms cubic-bezier(0.4, 0, 0.2, 1),
     left 220ms cubic-bezier(0.4, 0, 0.2, 1),
     right 220ms cubic-bezier(0.4, 0, 0.2, 1),
+    border-radius 220ms cubic-bezier(0.4, 0, 0.2, 1),
     box-shadow 220ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* Compact state: only input bar + chips visible, sized to sit above keyboard.
-   Fixed px so compact↔expanded `height` transition can interpolate.
-   left/right margins are inherited from the base rule (already 0.75rem); the
-   bottom is applied via JS in adjustSheetForKeyboard (keyboardOffset + 12). */
+   Restores the floating-card geometry — 12px breathing room on all sides,
+   fully rounded corners, omnidirectional shadow — because a card hovering
+   above the keyboard reads more naturally than an edge-to-edge sheet pinned
+   to its top. The bottom is overridden via JS in adjustSheetForKeyboard
+   (keyboardOffset + 12) when the keyboard is up. */
 #search-sheet[data-state="compact"] {
+  bottom: 0.75rem;
+  left: 0.75rem;
+  right: 0.75rem;
+  border-radius: 16px;
+  /* Omnidirectional shadow so the modal reads as a floating card. */
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.22);
   /* Add the safe-area inset so it doesn't eat the chip row. With
      box-sizing:border-box the base `padding-bottom: env(safe-area-inset-bottom)`
      subtracts from the fixed height, and on devices with a home indicator the
      value stays >0 even while the keyboard is up (it tracks the layout viewport,
      not the visual one). */
   height: calc(6.4rem + env(safe-area-inset-bottom));
-  /* Omnidirectional shadow so the modal reads as a floating card. The base
-     rule's negative-Y shadow only suits the bottom-attached expanded state. */
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.22);
 }
 
 /* The handle normally provides top breathing room above the input bar; add
