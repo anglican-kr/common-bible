@@ -2154,7 +2154,8 @@ body.cites-shown .note-anchor--variant:focus-visible {
   white-space: nowrap;
 }
 
-#cite-sheet-close {
+#cite-sheet-close,
+#cite-sheet-back {
   font-size: 1.4rem;
   line-height: 1;
   width: 2rem;
@@ -2166,8 +2167,14 @@ body.cites-shown .note-anchor--variant:focus-visible {
   border-radius: 6px;
 }
 
+#cite-sheet-back {
+  font-size: 1.8rem;
+}
+
 #cite-sheet-close:hover,
-#cite-sheet-close:focus-visible {
+#cite-sheet-close:focus-visible,
+#cite-sheet-back:hover,
+#cite-sheet-back:focus-visible {
   background: var(--border);
   color: var(--text);
   outline: none;
@@ -2180,12 +2187,45 @@ body.cites-shown .note-anchor--variant:focus-visible {
   color: var(--text);
 }
 
-.cite-sheet-ref-title {
+/* Ref header: flex row with title (truncating) + "더 보기" text button.
+   min-width:0 on the title lets text-overflow:ellipsis kick in instead of
+   overflowing and pushing the button out of view. */
+.cite-sheet-ref-header {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
   margin: 0 0 0.5rem;
+}
+
+.cite-sheet-ref-title {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
   font-size: 0.85rem;
   font-weight: 600;
   color: var(--accent);
+}
+
+.cite-sheet-ref-expand {
+  flex-shrink: 0;
+  padding: 0.15rem 0.3rem;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  font-size: 0.82rem;
+  color: var(--accent);
+  border-radius: 4px;
+}
+
+.cite-sheet-ref-expand:hover,
+.cite-sheet-ref-expand:focus-visible {
+  background: var(--border);
+  outline: none;
 }
 
 /* Sheet body article: inherits body serif font + .chapter-text styles
@@ -2213,27 +2253,6 @@ body.cites-shown .note-anchor--variant:focus-visible {
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
   color: var(--text-secondary);
   font-size: 0.85rem;
-}
-
-.cite-sheet-expand-btn {
-  display: block;
-  width: 100%;
-  margin: 1.2rem 0 0.4rem;
-  padding: 0.7rem 1rem;
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  cursor: pointer;
-  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
-  font-size: 0.88rem;
-  color: var(--accent);
-  text-align: center;
-}
-
-.cite-sheet-expand-btn:hover,
-.cite-sheet-expand-btn:focus-visible {
-  background: var(--border);
-  outline: none;
 }
 
 /* ── First-use coachmark for cite chips ─────────────────────────────────── */
