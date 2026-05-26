@@ -2212,10 +2212,6 @@ body.cites-shown .note-anchor--variant:focus-visible {
   opacity: 0.4;
 }
 
-#cite-sheet-back:focus-visible {
-  outline: none;
-}
-
 #cite-sheet-body {
   flex: 1;
   overflow-y: auto;
