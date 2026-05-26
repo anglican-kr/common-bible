@@ -2092,15 +2092,22 @@ body.cites-shown .note-anchor--variant:focus-visible {
    main reading view (ADR-022 §6 — "본 앱 본문 렌더와 동일 양식 재사용"). */
 #cite-sheet {
   position: fixed;
-  bottom: 0.75rem;
-  left: 0.75rem;
-  right: 0.75rem;
+  /* Flush to the viewport bottom edge so devices with rounded display corners
+     (iPhone X+ ~39–62pt, recent Pixels ~26dp) mask the sheet's bottom corners
+     naturally — instead of a small bottom margin that lets the display curve
+     clip a visible rounded corner. Content stays above the home indicator via
+     padding-bottom: env(safe-area-inset-bottom). iOS native sheet pattern. */
+  bottom: 0;
+  left: 0;
+  right: 0;
   margin-inline: auto;
   max-width: var(--max-width);
   z-index: 60;
   background: var(--bg);
-  border-radius: 16px;
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.22);
+  /* Only the top corners are rounded; the bottom is hidden by the display
+     curve on mobile or by the viewport edge on desktop. */
+  border-radius: 16px 16px 0 0;
+  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.18);
   display: flex;
   flex-direction: column;
   height: 65vh;
