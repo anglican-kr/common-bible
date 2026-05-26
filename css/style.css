@@ -2188,13 +2188,6 @@ body.cites-shown .note-anchor--variant:focus-visible {
   color: var(--accent);
 }
 
-.cite-sheet-chapter-label {
-  margin: 0.6rem 0 0.3rem;
-  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
-  font-size: 0.78rem;
-  color: var(--text-secondary);
-}
-
 /* Sheet body article: inherits body serif font + .chapter-text styles
    (line-height, poetry indent, verse-num) so cited passages match main view.
    Slight margin trim because the sheet is more compact than the main page. */
