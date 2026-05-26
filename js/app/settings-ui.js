@@ -321,8 +321,8 @@ window.appSettings = (() => {
       citeRow.appendChild(citeGroup);
 
       section1.appendChild(startupRow);
-      section1.appendChild(citeRow);
       section1.appendChild(orderRow);
+      section1.appendChild(citeRow);
       popover.appendChild(section1);
 
       // ── Section 2: Typography & appearance ──
