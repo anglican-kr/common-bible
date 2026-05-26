@@ -704,10 +704,33 @@ window.appCitations = (() => {
   }
 
   /**
+   * Decide what happens on drag-release given the current sheet height and
+   * the viewport innerHeight. Pure function so the threshold relationships
+   * stay testable — Cursor Bugbot caught a real regression where the close
+   * threshold (20vh) was unreachable because the move clamp held at 30vh;
+   * keeping this as a pure helper guards that invariant.
+   *
+   * Threshold semantics:
+   *   - h < 20vh  → close
+   *   - 20vh <= h < 30vh → snap back to the 30vh rest min
+   *   - h >= 30vh → stay where released
+   *
+   * @param {number} h    final sheet height in px (post-drag)
+   * @param {number} vh   viewport innerHeight in px
+   * @returns {"close" | "snap-min" | "stay"}
+   */
+  function _dragReleaseAction(h, vh) {
+    if (h < vh * 0.20) return "close";
+    if (h < vh * 0.30) return "snap-min";
+    return "stay";
+  }
+
+  /**
    * Drag-resize the sheet by its top handle. Mirrors the search-sheet /
    * bookmark-drawer pattern (pointerdown → setPointerCapture → pointermove
-   * adjusts inline height → pointerup releases). Clamped to 30vh~90vh;
-   * dragging below 20vh snaps the sheet closed.
+   * adjusts inline height → pointerup releases). Move clamp is loose (0 to
+   * 90vh) so the user can drag visually below the rest min; release decides
+   * close vs snap-back vs stay via `_dragReleaseAction`.
    */
   function _initSheetDrag() {
     const handle = document.getElementById("cite-sheet-handle");
@@ -718,11 +741,6 @@ window.appCitations = (() => {
     /** @param {number} clientY */
     function onMove(clientY) {
       const delta = startY - clientY;
-      // Lower bound is 0 (not 30vh) so the user can drag the sheet visually
-      // below its resting min — that drag is the affordance for the snap-
-      // close gesture. onPointerUp then decides: <20vh → close, 20vh~30vh →
-      // snap back to the resting min, ≥30vh → stay where released. With a
-      // hard 30vh clamp here the 20vh close threshold would be unreachable.
       const newH = Math.min(
         Math.max(startH + delta, 0),
         window.innerHeight * 0.90,
@@ -733,10 +751,10 @@ window.appCitations = (() => {
     function onPointerMove(e) { onMove(e.clientY); }
     function onPointerUp() {
       handle.removeEventListener("pointermove", onPointerMove);
-      const h = sheet.offsetHeight;
-      if (h < window.innerHeight * 0.20) {
+      const action = _dragReleaseAction(sheet.offsetHeight, window.innerHeight);
+      if (action === "close") {
         closeCiteSheet();
-      } else if (h < window.innerHeight * 0.30) {
+      } else if (action === "snap-min") {
         sheet.style.height = `${window.innerHeight * 0.30}px`;
       }
     }
@@ -926,6 +944,7 @@ window.appCitations = (() => {
 
   return {
     _computeCiteShowPositions,
+    _dragReleaseAction,
     chipText,
     buildCiteChip,
     wrapNoteAnchorsInArticle,
