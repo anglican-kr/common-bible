@@ -80,8 +80,8 @@ window.appCitations = (() => {
    * @returns {string}
    */
   function chipText(src, parallels, tradition) {
-    const parts = [src];
-    if (tradition) parts.push(tradition);
+    const primary = (tradition ? `${tradition} ` : "") + src;
+    const parts = [primary];
     if (parallels && parallels.length) parts.push(...parallels);
     return `(${parts.join(" · ")})`;
   }
