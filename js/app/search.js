@@ -973,13 +973,7 @@ $searchSheetInput.addEventListener("input", () => {
 // transitioned (not snapped) so any estimate mismatch glides into place.
 // adjustSheetForKeyboard is suspended throughout so its `transition: none`
 // snap doesn't interrupt the choreography; tracking resumes afterwards.
-// Set true around programmatic .focus() calls (e.g. after clear button) so
-// the focus-driven expanded→compact transition only fires for real user taps,
-// not for code that just refocuses the input as a courtesy.
-let _suppressFocusCompactTransition = false;
-
 $searchSheetInput.addEventListener("focus", () => {
-  if (_suppressFocusCompactTransition) return;
   if ($searchSheet.dataset.state !== "expanded") return;
   _suspendKeyboardAdjust = true;
   $searchSheet.style.transition = "";
@@ -1009,11 +1003,10 @@ $searchSheetClear.addEventListener("click", () => {
   $searchSheetInput.value = "";
   $searchSheetClear.hidden = true;
   $searchSheetInputWrap.dataset.clearHidden = "true";
-  // Refocus so the keyboard stays up, but do not collapse the sheet to compact
-  // — the user wants to keep seeing previous results while typing a refinement.
-  _suppressFocusCompactTransition = true;
+  // Refocus the input; the focus handler then collapses the sheet to compact
+  // so the user sees a clean input + keyboard instead of stale results sitting
+  // awkwardly under an empty field.
   $searchSheetInput.focus();
-  _suppressFocusCompactTransition = false;
 });
 
 // Drag-handle initializer — registered later in app.js's deferred startup
