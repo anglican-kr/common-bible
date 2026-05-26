@@ -112,7 +112,35 @@ window.appHelpers = (() => {
     return () => container.removeEventListener("keydown", handler);
   }
 
-  return { _$, chUnit, el, clearNode, setInert, trapFocus };
+  /**
+   * Decide what should happen when a drag-resizable bottom sheet finishes
+   * a drag (pointerup). Pure function so the threshold semantics stay
+   * unit-testable independently of the DOM/pointer plumbing — Cursor Bugbot
+   * caught a regression where the move handler clamped at 30vh while
+   * onPointerUp checked close at 20vh, making snap-close unreachable. This
+   * helper pins the relationship between the three thresholds so the bug
+   * class can't reappear in any sheet.
+   *
+   * Threshold semantics (using viewport-height ratios):
+   *   - h < 20vh  → close
+   *   - 20vh ≤ h < 30vh → snap-min (animate back to the 30vh rest min)
+   *   - h ≥ 30vh → stay where released
+   *
+   * Callers' onMove handlers MUST allow the visual height to drop below the
+   * 30vh rest min (clamp at 0, not 30vh) — otherwise the close branch is
+   * structurally unreachable.
+   *
+   * @param {number} h    final sheet height in px (post-drag)
+   * @param {number} vh   viewport innerHeight in px
+   * @returns {"close" | "snap-min" | "stay"}
+   */
+  function dragReleaseAction(h, vh) {
+    if (h < vh * 0.20) return "close";
+    if (h < vh * 0.30) return "snap-min";
+    return "stay";
+  }
+
+  return { _$, chUnit, el, clearNode, setInert, trapFocus, dragReleaseAction };
 })();
 
 // ESM module marker (ADR-019). No runtime effect; signals TypeScript that

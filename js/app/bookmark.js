@@ -18,7 +18,7 @@
 /** @typedef {import("../types").DragState} DragState */
 /** @typedef {import("../types").BooksData} BooksData */
 
-const { _$, el, clearNode, chUnit, setInert, trapFocus } = window.appHelpers;
+const { _$, el, clearNode, chUnit, setInert, trapFocus, dragReleaseAction } = window.appHelpers;
 const { loadBookmarks, saveBookmarks, generateId } = window.appStorage;
 const { readingContext } = window;
 
@@ -2072,7 +2072,11 @@ function initBookmarkSheetDrag() {
 
   function onMove(clientY) {
     const delta = startY - clientY;
-    const newH = Math.min(Math.max(startH + delta, window.innerHeight * 0.3), window.innerHeight * 0.92);
+    // Lower bound is 0 (not 30vh) so the user can drag the drawer visually
+    // below its rest min — that's the affordance for the snap-close gesture.
+    // A hard 30vh clamp here would make dragReleaseAction's close branch
+    // unreachable (Cursor Bugbot caught this exact regression in cite-sheet).
+    const newH = Math.min(Math.max(startH + delta, 0), window.innerHeight * 0.92);
     drawer.style.height = `${newH}px`;
   }
 
@@ -2090,9 +2094,12 @@ function initBookmarkSheetDrag() {
   function onPointerMove(e) { onMove(e.clientY); }
   function onPointerUp() {
     handle.removeEventListener("pointermove", onPointerMove);
-    if (drawer.offsetHeight < window.innerHeight * 0.2) {
+    const action = dragReleaseAction(drawer.offsetHeight, window.innerHeight);
+    if (action === "close") {
       closeBookmarkDrawer();
       drawer.style.height = "";
+    } else if (action === "snap-min") {
+      drawer.style.height = `${window.innerHeight * 0.3}px`;
     }
   }
 }

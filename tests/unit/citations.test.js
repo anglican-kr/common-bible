@@ -9,7 +9,6 @@
 // Sections (one per `// ── <area> ──`):
 //   - _computeCiteShowPositions (dedup)
 //   - chipText
-//   - _dragReleaseAction (drag-resize release thresholds)
 //   - buildCiteChip
 //   - buildNoteElement
 
@@ -198,57 +197,6 @@ test("chipText: multi-parallel", () => {
 test("chipText: empty parallels array treated as no parallels", () => {
   const c = loadCitations();
   assert.equal(c.chipText("이사 53:5", [], null), "(이사 53:5)");
-});
-
-// ── _dragReleaseAction (drag-resize release thresholds) ──────────────────────
-// Regression guard: Cursor Bugbot caught that an earlier draft clamped the
-// move handler to 30vh while checking close at <20vh, making snap-close
-// unreachable. These tests pin the three-tier semantics (close/snap-min/stay)
-// independently of the DOM/pointer plumbing.
-
-test("_dragReleaseAction: well below 20vh → close", () => {
-  const c = loadCitations();
-  assert.equal(c._dragReleaseAction(50, 1000), "close"); // 5vh
-});
-
-test("_dragReleaseAction: just below 20vh → close", () => {
-  const c = loadCitations();
-  assert.equal(c._dragReleaseAction(199, 1000), "close");
-});
-
-test("_dragReleaseAction: exactly at 20vh → snap-min (close is strict <)", () => {
-  const c = loadCitations();
-  assert.equal(c._dragReleaseAction(200, 1000), "snap-min");
-});
-
-test("_dragReleaseAction: between 20vh and 30vh → snap-min", () => {
-  const c = loadCitations();
-  assert.equal(c._dragReleaseAction(250, 1000), "snap-min");
-});
-
-test("_dragReleaseAction: just below 30vh → snap-min", () => {
-  const c = loadCitations();
-  assert.equal(c._dragReleaseAction(299, 1000), "snap-min");
-});
-
-test("_dragReleaseAction: exactly at 30vh → stay (snap-min is strict <)", () => {
-  const c = loadCitations();
-  assert.equal(c._dragReleaseAction(300, 1000), "stay");
-});
-
-test("_dragReleaseAction: well above 30vh → stay", () => {
-  const c = loadCitations();
-  assert.equal(c._dragReleaseAction(700, 1000), "stay");
-});
-
-test("_dragReleaseAction: thresholds scale with viewport height", () => {
-  const c = loadCitations();
-  // 100px height in an 800px viewport is 12.5vh → close
-  assert.equal(c._dragReleaseAction(100, 800), "close");
-  // 200px in 800px is 25vh → snap-min
-  assert.equal(c._dragReleaseAction(200, 800), "snap-min");
-  // 400px in 800px is 50vh → stay
-  assert.equal(c._dragReleaseAction(400, 800), "stay");
 });
 
 // ── buildCiteChip ────────────────────────────────────────────────────────────

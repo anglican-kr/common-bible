@@ -12,7 +12,7 @@
 
 /** @typedef {import("../types").SearchHistoryList} SearchHistoryList */
 
-const { _$, el, clearNode, chUnit } = window.appHelpers;
+const { _$, el, clearNode, chUnit, dragReleaseAction } = window.appHelpers;
 const {
   SEARCH_HISTORY_MAX,
   loadSearchHistory, pushSearchHistory, removeSearchHistory, clearSearchHistory,
@@ -1027,7 +1027,11 @@ function initSheetDrag() {
   /** @param {number} clientY */
   function onMove(clientY) {
     const delta = startY - clientY;
-    const newH = Math.min(Math.max(startH + delta, window.innerHeight * 0.3), window.innerHeight * 0.9);
+    // Lower bound is 0 (not 30vh) so the user can drag the sheet visually
+    // below its rest min — that's the affordance for the snap-close gesture.
+    // A hard 30vh clamp here would make dragReleaseAction's close branch
+    // unreachable (Cursor Bugbot caught this exact regression in cite-sheet).
+    const newH = Math.min(Math.max(startH + delta, 0), window.innerHeight * 0.9);
     $searchSheet.style.height = `${newH}px`;
   }
 
@@ -1044,10 +1048,12 @@ function initSheetDrag() {
   function onPointerMove(e) { onMove(e.clientY); }
   function onPointerUp() {
     handle.removeEventListener("pointermove", onPointerMove);
-    // Snap close if dragged very low
-    if ($searchSheet.offsetHeight < window.innerHeight * 0.2) {
+    const action = dragReleaseAction($searchSheet.offsetHeight, window.innerHeight);
+    if (action === "close") {
       closeSearchSheet();
       $searchSheet.style.height = "";
+    } else if (action === "snap-min") {
+      $searchSheet.style.height = `${window.innerHeight * 0.3}px`;
     }
   }
 }
