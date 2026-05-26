@@ -2119,11 +2119,16 @@ body.cites-shown .note-anchor--variant:focus-visible {
   display: none;
 }
 
+/* Larger vertical padding gives a comfortable touch target (~24px tall)
+   around the visible 4px bar; touch-action:none keeps the gesture from
+   scrolling the page during a drag-resize. */
 #cite-sheet-handle {
   display: flex;
   justify-content: center;
-  padding: 0.5rem 0 0;
-  pointer-events: none;
+  align-items: center;
+  padding: 0.6rem 0;
+  cursor: ns-resize;
+  touch-action: none;
 }
 
 #cite-sheet-handle span {
@@ -2131,6 +2136,7 @@ body.cites-shown .note-anchor--variant:focus-visible {
   height: 4px;
   border-radius: 2px;
   background: var(--border);
+  pointer-events: none;
 }
 
 #cite-sheet-header {
