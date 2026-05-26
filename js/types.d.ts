@@ -531,6 +531,7 @@ export interface AppHelpers {
   clearNode: (node: Node) => void;
   setInert: (on: boolean, selectors: string) => void;
   trapFocus: (container: HTMLElement) => () => void;
+  dragReleaseAction: (h: number, vh: number) => "close" | "snap-min" | "stay";
 }
 
 // ── App storage facade (js/app/storage.js) ──────────────────────────────────
@@ -607,7 +608,6 @@ export interface AppStorage {
 
 export interface AppCitations {
   _computeCiteShowPositions: (verses: ReadonlyArray<BibleVerse>) => Set<string>;
-  _dragReleaseAction: (h: number, vh: number) => "close" | "snap-min" | "stay";
   chipText: (
     src: string,
     parallels: ReadonlyArray<string> | null | undefined,

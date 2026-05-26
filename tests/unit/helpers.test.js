@@ -14,6 +14,7 @@
 //   - clearNode (firstChild loop)
 //   - setInert (inert + aria-hidden toggle on selector matches)
 //   - trapFocus (Tab / Shift-Tab cycling within a container)
+//   - dragReleaseAction (bottom-sheet drag-resize release thresholds)
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -563,4 +564,57 @@ test("trapFocus: includes elements with explicit tabindex (not -1)", () => {
   // div has tabindex=0 — first focusable; btn was last → wraps to div
   assert.equal(e._prevented, true);
   assert.equal(h.dom.getActive(), div);
+});
+
+// ── dragReleaseAction ───────────────────────────────────────────────────────
+// Three-tier release semantics for any drag-resizable bottom sheet.
+// Regression guard: Cursor Bugbot caught that an earlier cite-sheet draft
+// clamped the move handler at 30vh while checking close at <20vh, making
+// snap-close unreachable. Pinning this as a pure helper means the same
+// bug class can't reappear in search-sheet, bookmark-drawer, or any future
+// sheet that reuses this decision.
+
+test("dragReleaseAction: well below 20vh → close", () => {
+  const h = loadHelpers();
+  assert.equal(h.helpers.dragReleaseAction(50, 1000), "close"); // 5vh
+});
+
+test("dragReleaseAction: just below 20vh → close", () => {
+  const h = loadHelpers();
+  assert.equal(h.helpers.dragReleaseAction(199, 1000), "close");
+});
+
+test("dragReleaseAction: exactly at 20vh → snap-min (close is strict <)", () => {
+  const h = loadHelpers();
+  assert.equal(h.helpers.dragReleaseAction(200, 1000), "snap-min");
+});
+
+test("dragReleaseAction: between 20vh and 30vh → snap-min", () => {
+  const h = loadHelpers();
+  assert.equal(h.helpers.dragReleaseAction(250, 1000), "snap-min");
+});
+
+test("dragReleaseAction: just below 30vh → snap-min", () => {
+  const h = loadHelpers();
+  assert.equal(h.helpers.dragReleaseAction(299, 1000), "snap-min");
+});
+
+test("dragReleaseAction: exactly at 30vh → stay (snap-min is strict <)", () => {
+  const h = loadHelpers();
+  assert.equal(h.helpers.dragReleaseAction(300, 1000), "stay");
+});
+
+test("dragReleaseAction: well above 30vh → stay", () => {
+  const h = loadHelpers();
+  assert.equal(h.helpers.dragReleaseAction(700, 1000), "stay");
+});
+
+test("dragReleaseAction: thresholds scale with viewport height", () => {
+  const h = loadHelpers();
+  // 100px in an 800px viewport is 12.5vh → close
+  assert.equal(h.helpers.dragReleaseAction(100, 800), "close");
+  // 200px in 800px is 25vh → snap-min
+  assert.equal(h.helpers.dragReleaseAction(200, 800), "snap-min");
+  // 400px in 800px is 50vh → stay
+  assert.equal(h.helpers.dragReleaseAction(400, 800), "stay");
 });
