@@ -786,6 +786,11 @@ window.appCitations = (() => {
     _sheetReturnFocus = returnFocusEl;
     _sheetState = { src, parallels: parallels || null, tradition: tradition || null, expandedRefIndex: null };
     titleEl.textContent = "인용된 구절";
+    // Reset any drag-resize from a previous open. The body stays interactive
+    // while the sheet is open (only a focus trap, no scrim) so cite chips
+    // visible in the unobscured portion can re-trigger openCiteSheet without
+    // a closeCiteSheet in between — the previous inline height would leak in.
+    sheet.style.height = "";
     sheet.hidden = false;
     document.documentElement.classList.add("cite-sheet-open");
     _updateSheetHeader();
