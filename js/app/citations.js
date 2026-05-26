@@ -359,7 +359,7 @@ window.appCitations = (() => {
   let _sheetReturnFocus = null;
   /** @type {(() => void) | null} */
   let _sheetTrapCleanup = null;
-  /** @type {{ src: string, parallels: ReadonlyArray<string> | null, tradition: string | null, expanded: boolean } | null} */
+  /** @type {{ src: string, parallels: ReadonlyArray<string> | null, tradition: string | null, expandedRefIndex: number | null } | null} */
   let _sheetState = null;
 
   const COACHMARK_KEY = "bible-cite-coachmark-seen";
@@ -575,8 +575,10 @@ window.appCitations = (() => {
    * @param {string} src
    * @param {string | null} tradition  null when not the primary reference
    * @param {boolean} expanded  true → render full chapters, mark cited verses
+   * @param {(() => void) | null} onExpand  click handler for the per-ref
+   *   "더 보기" button. Pass null in expanded mode (button is hidden).
    */
-  async function _renderRef(container, src, tradition, expanded) {
+  async function _renderRef(container, src, tradition, expanded, onExpand) {
     const parsed = _parseCiteSrc(src);
     if (!parsed) {
       container.appendChild(el("p", { className: "cite-sheet-error" },
@@ -591,7 +593,17 @@ window.appCitations = (() => {
       return;
     }
     const refTitle = (tradition ? `${tradition} ` : "") + src;
-    container.appendChild(el("h3", { className: "cite-sheet-ref-title" }, refTitle));
+    const headerEl = el("div", { className: "cite-sheet-ref-header" });
+    headerEl.appendChild(el("h3", { className: "cite-sheet-ref-title" }, refTitle));
+    if (onExpand) {
+      const expandBtn = el("button", {
+        type: "button",
+        className: "cite-sheet-ref-expand",
+      }, "› 더 보기");
+      expandBtn.addEventListener("click", onExpand);
+      headerEl.appendChild(expandBtn);
+    }
+    container.appendChild(headerEl);
 
     const chapters = new Set();
     for (const p of parsed.parts) {
@@ -625,8 +637,13 @@ window.appCitations = (() => {
   }
 
   /**
-   * Re-render the sheet body using the current `_sheetState`. Used after
-   * the user toggles expanded mode.
+   * Re-render the sheet body using the current `_sheetState`.
+   *
+   * When `expandedRefIndex === null` (default), all refs are rendered in
+   * compact slice mode with a "› 더 보기" button beside each header.
+   * When set to an index, only that ref is rendered with full chapters and
+   * the first cited verse is scrolled into the middle of the body so the
+   * user lands on the passage with its surrounding context already visible.
    */
   async function _renderSheetBody() {
     const bodyEl = /** @type {HTMLElement | null} */ (document.getElementById("cite-sheet-body"));
@@ -635,30 +652,55 @@ window.appCitations = (() => {
     bodyEl.appendChild(el("p", { className: "cite-sheet-loading" }, "불러오는 중…"));
     try {
       clearNode(bodyEl);
-      const { src, parallels, tradition, expanded } = _sheetState;
+      const { src, parallels, tradition, expandedRefIndex } = _sheetState;
       const refs = [src, ...(parallels || [])];
-      for (let i = 0; i < refs.length; i++) {
-        if (i > 0) bodyEl.appendChild(el("hr", { className: "cite-sheet-divider" }));
-        await _renderRef(bodyEl, refs[i], i === 0 ? tradition : null, expanded);
+      if (expandedRefIndex !== null) {
+        const idx = expandedRefIndex;
+        const refSrc = refs[idx];
+        const refTradition = idx === 0 ? tradition : null;
+        await _renderRef(bodyEl, refSrc, refTradition, true, null);
+        _scrollFirstHighlightIntoView(bodyEl);
+      } else {
+        for (let i = 0; i < refs.length; i++) {
+          if (i > 0) bodyEl.appendChild(el("hr", { className: "cite-sheet-divider" }));
+          const idx = i;
+          await _renderRef(bodyEl, refs[i], i === 0 ? tradition : null, false, () => {
+            if (!_sheetState) return;
+            _sheetState.expandedRefIndex = idx;
+            _updateSheetHeader();
+            void _renderSheetBody();
+          });
+        }
       }
-      if (!expanded) bodyEl.appendChild(_buildExpandButton());
     } catch (_) {
       clearNode(bodyEl);
       bodyEl.appendChild(el("p", { className: "cite-sheet-error" }, "불러오는 데 실패했습니다."));
     }
   }
 
-  function _buildExpandButton() {
-    const btn = el("button", {
-      type: "button",
-      className: "cite-sheet-expand-btn",
-    }, "이 장 전체 보기");
-    btn.addEventListener("click", async () => {
-      if (!_sheetState) return;
-      _sheetState.expanded = true;
-      await _renderSheetBody();
-    });
-    return btn;
+  /**
+   * Center the first cited verse in the sheet body so at least one verse
+   * before and after is visible as context (request: "인용된 절을 중심으로
+   * 1절, +1절에 포커스"). The body itself is the scroll container; the
+   * sheet shell does not scroll.
+   *
+   * @param {HTMLElement} bodyEl
+   */
+  function _scrollFirstHighlightIntoView(bodyEl) {
+    const first = bodyEl.querySelector(".verse-highlight");
+    if (first && typeof first.scrollIntoView === "function") {
+      first.scrollIntoView({ block: "center", behavior: "auto" });
+    }
+  }
+
+  /**
+   * Toggle the header back-button visibility based on whether the sheet is
+   * currently showing an expanded ref view.
+   */
+  function _updateSheetHeader() {
+    const backBtn = /** @type {HTMLElement | null} */ (document.getElementById("cite-sheet-back"));
+    if (!backBtn) return;
+    backBtn.hidden = !(_sheetState && _sheetState.expandedRefIndex !== null);
   }
 
   /**
@@ -677,10 +719,11 @@ window.appCitations = (() => {
     if (!sheet || !titleEl || !bodyEl) return;
 
     _sheetReturnFocus = returnFocusEl;
-    _sheetState = { src, parallels: parallels || null, tradition: tradition || null, expanded: false };
+    _sheetState = { src, parallels: parallels || null, tradition: tradition || null, expandedRefIndex: null };
     titleEl.textContent = "인용된 구절";
     sheet.hidden = false;
     document.documentElement.classList.add("cite-sheet-open");
+    _updateSheetHeader();
 
     const closeBtn = /** @type {HTMLElement | null} */ (document.getElementById("cite-sheet-close"));
     if (closeBtn) closeBtn.focus();
@@ -702,15 +745,30 @@ window.appCitations = (() => {
     _sheetState = null;
   }
 
-  /** Wire up close button, ESC key, and `.cite-chip` click delegation. */
+  /** Wire up close button, back button, ESC key, and `.cite-chip` click delegation. */
   function initCiteSheet() {
     document.getElementById("cite-sheet-close")?.addEventListener("click", closeCiteSheet);
+    document.getElementById("cite-sheet-back")?.addEventListener("click", () => {
+      if (!_sheetState || _sheetState.expandedRefIndex === null) return;
+      _sheetState.expandedRefIndex = null;
+      _updateSheetHeader();
+      void _renderSheetBody();
+    });
 
     document.addEventListener("keydown", (e) => {
       if (e.key === "Escape") {
         const sheet = document.getElementById("cite-sheet");
         if (sheet && !sheet.hidden) {
           e.stopPropagation();
+          // In expanded ref view, Esc steps back to the compact list first
+          // before closing — mirrors the visual nav stack the back button
+          // exposes.
+          if (_sheetState && _sheetState.expandedRefIndex !== null) {
+            _sheetState.expandedRefIndex = null;
+            _updateSheetHeader();
+            void _renderSheetBody();
+            return;
+          }
           closeCiteSheet();
           return;
         }
