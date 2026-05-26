@@ -464,15 +464,11 @@ window.appCitations = (() => {
    * mirror of views-routing.js's render loop minus those features.
    *
    * @param {HTMLElement} container
-   * @param {string} bookNameKo
-   * @param {number} chapter
    * @param {ReadonlyArray<BibleVerse>} verses
    * @param {Set<number> | null} [highlightedNumbers] verse numbers to mark as
    *   the originally-cited slice (full-chapter expanded view).
    */
-  function _renderVerses(container, bookNameKo, chapter, verses, highlightedNumbers) {
-    container.appendChild(el("div", { className: "cite-sheet-chapter-label" },
-      `${bookNameKo} ${chapter}장`));
+  function _renderVerses(container, verses, highlightedNumbers) {
     const article = el("article", { className: "chapter-text cite-sheet-article", lang: "ko" });
     let isFirst = true;
     let prevVerseEndType = null;
@@ -594,7 +590,7 @@ window.appCitations = (() => {
         `알 수 없는 책 약어: ${parsed.abbr}`));
       return;
     }
-    const refTitle = src + (tradition ? ` · ${tradition}` : "");
+    const refTitle = (tradition ? `${tradition} ` : "") + src;
     container.appendChild(el("h3", { className: "cite-sheet-ref-title" }, refTitle));
 
     const chapters = new Set();
@@ -616,10 +612,10 @@ window.appCitations = (() => {
         if (expanded) {
           // Show full chapter; highlight verses that were originally cited.
           const cited = new Set(_selectVerses(data.verses, parsed.parts, ch).map((v) => v.number));
-          _renderVerses(container, data.book_name_ko, ch, data.verses, cited);
+          _renderVerses(container, data.verses, cited);
         } else {
           const slice = _selectVerses(data.verses, parsed.parts, ch);
-          _renderVerses(container, data.book_name_ko, ch, slice, null);
+          _renderVerses(container, slice, null);
         }
       } catch (_) {
         container.appendChild(el("p", { className: "cite-sheet-error" },
@@ -682,7 +678,7 @@ window.appCitations = (() => {
 
     _sheetReturnFocus = returnFocusEl;
     _sheetState = { src, parallels: parallels || null, tradition: tradition || null, expanded: false };
-    titleEl.textContent = chipText(src, parallels, tradition).slice(1, -1);
+    titleEl.textContent = "인용된 구절";
     sheet.hidden = false;
     document.documentElement.classList.add("cite-sheet-open");
 
