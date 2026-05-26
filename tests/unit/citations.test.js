@@ -165,9 +165,9 @@ test("chipText: src only", () => {
   assert.equal(c.chipText("이사 53:5", null, null), "(이사 53:5)");
 });
 
-test("chipText: src + tradition", () => {
+test("chipText: src + tradition — tradition prefixed without separator", () => {
   const c = loadCitations();
-  assert.equal(c.chipText("이사 40:3", null, "칠십인역"), "(이사 40:3 · 칠십인역)");
+  assert.equal(c.chipText("이사 40:3", null, "칠십인역"), "(칠십인역 이사 40:3)");
 });
 
 test("chipText: src + parallels", () => {
@@ -178,11 +178,11 @@ test("chipText: src + parallels", () => {
   );
 });
 
-test("chipText: src + tradition + parallels — tradition before parallels", () => {
+test("chipText: src + tradition + parallels — tradition fused to primary, separator only between refs", () => {
   const c = loadCitations();
   assert.equal(
     c.chipText("이사 40:3", ["마르 1:3"], "칠십인역"),
-    "(이사 40:3 · 칠십인역 · 마르 1:3)",
+    "(칠십인역 이사 40:3 · 마르 1:3)",
   );
 });
 
@@ -218,7 +218,7 @@ test("buildCiteChip: poetry → cite-chip--poetry block class", () => {
   const node = c.buildCiteChip("이사 7:14", null, "칠십인역", "poetry");
   assert.equal(node.attrs.className, "cite-chip cite-chip--poetry");
   assert.equal(node.attrs["data-cite-tradition"], "칠십인역");
-  assert.equal(node.textContent, "(이사 7:14 · 칠십인역)");
+  assert.equal(node.textContent, "(칠십인역 이사 7:14)");
 });
 
 test("buildCiteChip: parallels stored as semicolon-joined data attr", () => {
