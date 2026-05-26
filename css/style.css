@@ -2233,6 +2233,13 @@ body.cites-shown .note-anchor--variant:focus-visible {
   opacity: 0.4;
 }
 
+/* Explicit [hidden] rule — the ID selector above sets `display: flex` which
+   beats the user-agent's `[hidden] { display: none }` on specificity, so
+   _updateSheetHeader()'s `backBtn.hidden = …` would otherwise have no effect. */
+#cite-sheet-back[hidden] {
+  display: none;
+}
+
 #cite-sheet-body {
   flex: 1;
   overflow-y: auto;
