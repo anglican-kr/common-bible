@@ -2174,8 +2174,7 @@ body.cites-shown .note-anchor--variant:focus-visible {
   white-space: nowrap;
 }
 
-#cite-sheet-close,
-#cite-sheet-back {
+#cite-sheet-close {
   font-size: 1.4rem;
   line-height: 1;
   width: 2rem;
@@ -2187,16 +2186,33 @@ body.cites-shown .note-anchor--variant:focus-visible {
   border-radius: 6px;
 }
 
-#cite-sheet-back {
-  font-size: 1.8rem;
-}
-
 #cite-sheet-close:hover,
-#cite-sheet-close:focus-visible,
-#cite-sheet-back:hover,
-#cite-sheet-back:focus-visible {
+#cite-sheet-close:focus-visible {
   background: var(--border);
   color: var(--text);
+  outline: none;
+}
+
+/* Sheet back button mirrors `.title-back-btn` in the main app header. */
+#cite-sheet-back {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.2rem;
+  height: 2.2rem;
+  padding: 0;
+  color: var(--accent);
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+#cite-sheet-back:active {
+  opacity: 0.4;
+}
+
+#cite-sheet-back:focus-visible {
   outline: none;
 }
 
