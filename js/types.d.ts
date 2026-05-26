@@ -607,6 +607,7 @@ export interface AppStorage {
 
 export interface AppCitations {
   _computeCiteShowPositions: (verses: ReadonlyArray<BibleVerse>) => Set<string>;
+  _dragReleaseAction: (h: number, vh: number) => "close" | "snap-min" | "stay";
   chipText: (
     src: string,
     parallels: ReadonlyArray<string> | null | undefined,
