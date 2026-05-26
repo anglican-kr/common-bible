@@ -704,6 +704,45 @@ window.appCitations = (() => {
   }
 
   /**
+   * Drag-resize the sheet by its top handle. Mirrors the search-sheet /
+   * bookmark-drawer pattern (pointerdown → setPointerCapture → pointermove
+   * adjusts inline height → pointerup releases). Clamped to 30vh~90vh;
+   * dragging below 20vh snaps the sheet closed.
+   */
+  function _initSheetDrag() {
+    const handle = document.getElementById("cite-sheet-handle");
+    const sheet = /** @type {HTMLElement | null} */ (document.getElementById("cite-sheet"));
+    if (!handle || !sheet) return;
+    let startY = 0;
+    let startH = 0;
+    /** @param {number} clientY */
+    function onMove(clientY) {
+      const delta = startY - clientY;
+      const newH = Math.min(
+        Math.max(startH + delta, window.innerHeight * 0.30),
+        window.innerHeight * 0.90,
+      );
+      sheet.style.height = `${newH}px`;
+    }
+    /** @param {PointerEvent} e */
+    function onPointerMove(e) { onMove(e.clientY); }
+    function onPointerUp() {
+      handle.removeEventListener("pointermove", onPointerMove);
+      if (sheet.offsetHeight < window.innerHeight * 0.20) {
+        closeCiteSheet();
+      }
+    }
+    handle.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      startY = e.clientY;
+      startH = sheet.offsetHeight;
+      handle.setPointerCapture(e.pointerId);
+      handle.addEventListener("pointermove", onPointerMove);
+      handle.addEventListener("pointerup", onPointerUp, { once: true });
+    });
+  }
+
+  /**
    * Open the cite sheet showing the cited passage(s). Primary src first, then
    * each parallel divided by a horizontal rule (ADR-022 §6).
    *
@@ -736,6 +775,9 @@ window.appCitations = (() => {
     const sheet = /** @type {HTMLElement | null} */ (document.getElementById("cite-sheet"));
     if (!sheet) return;
     sheet.hidden = true;
+    // Reset any drag-resize so the next open starts from the CSS default
+    // (65vh) rather than the user's previous resize.
+    sheet.style.height = "";
     document.documentElement.classList.remove("cite-sheet-open");
     if (_sheetTrapCleanup) { _sheetTrapCleanup(); _sheetTrapCleanup = null; }
     if (_sheetReturnFocus && typeof _sheetReturnFocus.focus === "function") {
@@ -745,7 +787,7 @@ window.appCitations = (() => {
     _sheetState = null;
   }
 
-  /** Wire up close button, back button, ESC key, and `.cite-chip` click delegation. */
+  /** Wire up close button, back button, drag handle, ESC key, and `.cite-chip` click delegation. */
   function initCiteSheet() {
     document.getElementById("cite-sheet-close")?.addEventListener("click", closeCiteSheet);
     document.getElementById("cite-sheet-back")?.addEventListener("click", () => {
@@ -754,6 +796,7 @@ window.appCitations = (() => {
       _updateSheetHeader();
       void _renderSheetBody();
     });
+    _initSheetDrag();
 
     document.addEventListener("keydown", (e) => {
       if (e.key === "Escape") {
