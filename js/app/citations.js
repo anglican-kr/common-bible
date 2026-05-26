@@ -718,8 +718,13 @@ window.appCitations = (() => {
     /** @param {number} clientY */
     function onMove(clientY) {
       const delta = startY - clientY;
+      // Lower bound is 0 (not 30vh) so the user can drag the sheet visually
+      // below its resting min — that drag is the affordance for the snap-
+      // close gesture. onPointerUp then decides: <20vh → close, 20vh~30vh →
+      // snap back to the resting min, ≥30vh → stay where released. With a
+      // hard 30vh clamp here the 20vh close threshold would be unreachable.
       const newH = Math.min(
-        Math.max(startH + delta, window.innerHeight * 0.30),
+        Math.max(startH + delta, 0),
         window.innerHeight * 0.90,
       );
       sheet.style.height = `${newH}px`;
@@ -728,8 +733,11 @@ window.appCitations = (() => {
     function onPointerMove(e) { onMove(e.clientY); }
     function onPointerUp() {
       handle.removeEventListener("pointermove", onPointerMove);
-      if (sheet.offsetHeight < window.innerHeight * 0.20) {
+      const h = sheet.offsetHeight;
+      if (h < window.innerHeight * 0.20) {
         closeCiteSheet();
+      } else if (h < window.innerHeight * 0.30) {
+        sheet.style.height = `${window.innerHeight * 0.30}px`;
       }
     }
     handle.addEventListener("pointerdown", (e) => {
