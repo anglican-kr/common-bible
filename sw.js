@@ -98,14 +98,29 @@ function handleManifest(event, pathname) {
 
 // Cache app shell on install — do NOT skipWaiting() automatically.
 // The client will send a SKIP_WAITING message after user confirms the update.
-// Use { cache: "reload" } to bypass the HTTP cache; otherwise an immutable/max-age
-// response for a prior shell revision can poison the new SW's cache with stale content.
+//
+// Cache-busting strategy: fetch each shell URL with `?v=<APP_VERSION>` appended
+// and `{ cache: "reload" }`, then store the response under the ORIGINAL request
+// (no query) so the runtime fetch handler — which sees page requests without the
+// query — still finds it. `cache: "reload"` only bypasses the browser HTTP cache;
+// any CDN/origin layer that serves a stale 200 for the unversioned URL would
+// otherwise poison SHELL_CACHE with the previous release's bytes, leaving
+// version.json fresh (different bytes per release) but JS/CSS stale (same URL,
+// same etag, cached). The unique query forces every layer to revalidate.
 self.addEventListener("install", (event) => {
-  event.waitUntil(
-    caches.open(SHELL_CACHE).then((cache) =>
-      cache.addAll(SHELL_FILES.map((url) => new Request(url, { cache: "reload" })))
-    )
-  );
+  event.waitUntil((async () => {
+    const cache = await caches.open(SHELL_CACHE);
+    // Fetch every shell file first (mirrors cache.addAll's atomicity: if any
+    // fetch fails, the whole install fails before any cache.put runs, leaving
+    // SHELL_CACHE in its prior state instead of half-updated).
+    const pairs = await Promise.all(SHELL_FILES.map(async (url) => {
+      const bust = url + (url.includes("?") ? "&" : "?") + "v=" + encodeURIComponent(self.APP_VERSION);
+      const res = await fetch(bust, { cache: "reload" });
+      if (!res.ok) throw new Error("Precache fetch failed: " + bust + " → " + res.status);
+      return /** @type {[string, Response]} */ ([url, res]);
+    }));
+    await Promise.all(pairs.map(([url, res]) => cache.put(new Request(url), res)));
+  })());
 });
 
 // Allow the client to trigger skipWaiting via postMessage,
