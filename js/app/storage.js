@@ -30,6 +30,7 @@ window.appStorage = (() => {
   const COLOR_SCHEME_KEY = "bible-color-scheme";
   const STARTUP_BEHAVIOR_KEY = "bible-startup"; // "resume" | "home"
   const CITE_SHOW_KEY = "bible-cite-show"; // "1"/"0" (saveCiteShow) or "true"/"false" (sync applyToLegacyKeys); default ON when unset
+  const AUDIO_SHOW_KEY = "bible-audio-show"; // "1"/"0" or "true"/"false" via sync; default ON when unset
   const AUDIO_POS_KEY = "bible-audio-pos";
   const BOOKMARK_KEY = "bible-bookmarks";
   const INSTALL_NUDGE_KEY = "bible-install-nudge";
@@ -209,6 +210,26 @@ window.appStorage = (() => {
     } catch (_) {}
   }
 
+  // ── Audio player visibility ──
+
+  /** @returns {boolean} */
+  function loadAudioShow() {
+    const v = localStorage.getItem(AUDIO_SHOW_KEY);
+    if (v === null) return true;  // default ON
+    // Mirrors loadCiteShow's tolerance for the JSON-serialized "true"/"false"
+    // shape that sync's applyToLegacyKeys writes back.
+    return v === "1" || v === "true";
+  }
+
+  /** @param {boolean} on */
+  function saveAudioShow(on) {
+    try {
+      localStorage.setItem(AUDIO_SHOW_KEY, on ? "1" : "0");
+      window.syncStoreV2?.saveSetting("audioShow", on);
+      if (window.driveSync) window.driveSync.scheduleUpload();
+    } catch (_) {}
+  }
+
   // ── Font size ──
 
   /** @returns {number} */
@@ -359,6 +380,7 @@ window.appStorage = (() => {
     pushSearchHistory, removeSearchHistory, clearSearchHistory,
     loadStartupBehavior, saveStartupBehavior,
     loadCiteShow, saveCiteShow,
+    loadAudioShow, saveAudioShow,
     loadFontSize, saveFontSize,
     loadColorScheme, saveColorScheme,
     loadTheme, saveTheme,

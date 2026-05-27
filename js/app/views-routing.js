@@ -23,6 +23,7 @@ const {
   loadBookOrder, loadStartupBehavior,
   loadReadingPosition, saveReadingPosition, clearReadingPosition,
   loadAudioTime, saveAudioTime, clearAudioTime,
+  loadAudioShow,
   _maybeRequestPersist,
 } = window.appStorage;
 const { dismissLaunchScreen } = window.appSettings;
@@ -1967,6 +1968,7 @@ function hideAudioBar() {
 
 /** @param {string} bookId @param {number} chapter */
 function showAudioPlayer(bookId, chapter) {
+  if (!loadAudioShow()) { hideAudioBar(); return; }
   _teardownAudio();
   _audioController = new AbortController();
   const { signal } = _audioController;
@@ -2123,6 +2125,18 @@ function showAudioUnavailable() {
   $audioBar.appendChild(msg);
   $audioBar.hidden = false;
 }
+
+// Live-toggle the audio player from the settings popover. Off: tear it down
+// so the FAB's audio-bar CSS sibling rule drops it back to the lower default
+// position. On: rebuild for the chapter currently in view (no-op on non-chapter
+// routes — next chapter navigation will pick the toggle up via showAudioPlayer).
+/** @param {boolean} on */
+function applyAudioShow(on) {
+  if (!on) { hideAudioBar(); return; }
+  const parsed = parsePath();
+  if (parsed.view === "chapter") showAudioPlayer(parsed.bookId, parsed.chapter);
+  else if (parsed.view === "prologue") showAudioPlayer(parsed.bookId, 0);
+}
 // ── Window facade ──
 // Both an `appViewsRouting` aggregate and per-name globals so app.js's
 // Phase 7b territory (Views/Routing/Audio Player) can call setTitle / loadBooks
@@ -2135,7 +2149,7 @@ const appViewsRouting = {
   setTitle, setBreadcrumb, setTitleWithDivisionPicker, setTitleWithChapterPicker,
   buildDivisionBreadcrumb, divisionLabels, divisionOrder, effectiveDivision,
   initCompactHeader,
-  parsePath, route, navigate, hideAudioBar, renderError,
+  parsePath, route, navigate, hideAudioBar, applyAudioShow, renderError,
   _verseSelectionUnit,
 };
 window.appViewsRouting = appViewsRouting;
@@ -2164,6 +2178,7 @@ window.parsePath = parsePath;
 window.route = route;
 window.navigate = navigate;
 window.hideAudioBar = hideAudioBar;
+window.applyAudioShow = applyAudioShow;
 window.renderError = renderError;
 
 // Audio Player module state read accessor — app.js's Accessibility keydown

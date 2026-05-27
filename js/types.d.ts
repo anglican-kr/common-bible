@@ -73,7 +73,8 @@ export type SettingKey =
   | "theme"
   | "bookOrder"
   | "startupBehavior"
-  | "citeShow";
+  | "citeShow"
+  | "audioShow";
 
 // Per-setting value type. All settings store one MTimed wrapper; the inner
 // value type is intentionally `unknown` so that store-v2 can index by a
@@ -823,6 +824,7 @@ declare global {
     applyColorScheme?: (scheme: string) => void;
     applyTheme?: (theme: string) => void;
     applyCiteShow?: (on: boolean) => void;
+    applyAudioShow?: (on: boolean) => void;
     // Manual SW update check — set by app.js inside registerServiceWorker()
     // so it can capture the registration and reuse showUpdateToast(). Returns
     // a status object the caller can surface as transient feedback.
