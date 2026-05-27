@@ -289,11 +289,28 @@ async function loadPrologue(bookId) {
 // ── BEGIN TITLE ──
 // Exercised by tests/unit/views-routing.test.js with a tiny $title stub
 // + el / clearNode / announce shims provided by the loader prelude.
-function setTitle(text) {
+/**
+ * @param {string} text  full (canonical) title text
+ * @param {string} [mobileText]  shortened variant to swap to when the full
+ *   text would overflow `#page-title` (back/bookmark buttons reserve space
+ *   on either side). Omit to render plain text only.
+ */
+function setTitle(text, mobileText) {
   clearNode($title);
-  $title.appendChild(document.createTextNode(text));
   document.title = text === "공동번역성서" ? text : `${text} — 공동번역성서`;
   announce(text);
+  if (mobileText && mobileText !== text) {
+    // Canonical name stays the accessible name; both visible spans are
+    // aria-hidden so AT speaks aria-label regardless of which is shown.
+    $title.setAttribute("aria-label", text);
+    $title.appendChild(el("span", { className: "title-text-full", "aria-hidden": "true" }, text));
+    $title.appendChild(el("span", { className: "title-text-mobile", "aria-hidden": "true" }, mobileText));
+    applyTitleCompactness();
+  } else {
+    $title.removeAttribute("aria-label");
+    $title.classList.remove("compact");
+    $title.appendChild(document.createTextNode(text));
+  }
 }
 // ── END TITLE ──
 
@@ -368,15 +385,25 @@ function setTitleWithDivisionPicker(activeDivision) {
  */
 function setTitleWithChapterPicker(book, currentCh) {
   clearNode($title);
+  $title.removeAttribute("aria-label");
+  $title.classList.remove("compact");
   const unit = chUnit(book.id);
-  document.title = `${book.name_ko} ${currentCh}${unit} — 공동번역성서`;
-  announce(`${book.name_ko} ${currentCh}${unit}`);
+  const fullText = `${book.name_ko} ${currentCh}${unit}`;
+  const mobileBookName = NT_MOBILE_NAME[book.id];
+  const mobileText = mobileBookName ? `${mobileBookName} ${currentCh}${unit}` : null;
+  document.title = `${fullText} — 공동번역성서`;
+  announce(fullText);
 
   const btn = el(
     "button",
-    { className: "title-picker-btn", "aria-label": `${unit} 선택`, "aria-expanded": "false" },
-    `${book.name_ko} ${currentCh}${unit}`
+    { className: "title-picker-btn", "aria-label": `${unit} 선택`, "aria-expanded": "false" }
   );
+  if (mobileText) {
+    btn.appendChild(el("span", { className: "title-text-full", "aria-hidden": "true" }, fullText));
+    btn.appendChild(el("span", { className: "title-text-mobile", "aria-hidden": "true" }, mobileText));
+  } else {
+    btn.appendChild(document.createTextNode(fullText));
+  }
 
   const popover = el("div", { className: "chapter-popover", role: "listbox", "aria-label": `${unit} 선택` });
   popover.hidden = true;
@@ -431,6 +458,10 @@ function setTitleWithChapterPicker(book, currentCh) {
   $title.appendChild(btn);
   $title.appendChild(popover);
   $title.appendChild(buildBookmarkHeaderBtn(book.id, currentCh));
+  if (mobileText) {
+    $title.setAttribute("aria-label", fullText);
+    applyTitleCompactness();
+  }
 }
 // ── END POPOVER ──
 
@@ -514,6 +545,182 @@ function effectiveDivision(book) {
   return book.division;
 }
 // ── END DIVISION ──
+
+// ── BEGIN BOOK_LIST_LINK ──
+// Book-list buttons (/, /old_testament, /new_testament, /deuterocanon) show
+// `name_ko` by default. NT names are long enough that buttons can wrap to two
+// lines, especially on narrow viewports or with enlarged text. For NT books we
+// also emit a shortened name and let CSS swap to it on touch devices, or JS
+// swap to it (.compact class) when the full name would wrap inside the button.
+// 복음서 4권 + 사도행전은 사양상 명칭 변경 없음.
+const NT_MOBILE_NAME = {
+  rom:    "로마서",
+  "1cor": "Ⅰ고린토",
+  "2cor": "Ⅱ고린토",
+  gal:    "갈라디아",
+  eph:    "에페소",
+  phil:   "필립비",
+  col:    "골로사이",
+  "1thess": "Ⅰ데살로니카",
+  "2thess": "Ⅱ데살로니카",
+  "1tim": "Ⅰ디모테오",
+  "2tim": "Ⅱ디모테오",
+  titus:  "디도서",
+  phlm:   "필레몬서",
+  heb:    "히브리서",
+  jas:    "야고보서",
+  "1pet": "Ⅰ베드로",
+  "2pet": "Ⅱ베드로",
+  "1john": "요한Ⅰ서",
+  "2john": "요한Ⅱ서",
+  "3john": "요한Ⅲ서",
+  jude:   "유다서",
+  rev:    "요한묵시록",
+};
+
+// Returns the `<li>` for a book-list entry. When a NT mobile-shortened name
+// exists, emits two spans (.book-name-full / .book-name-mobile) and sets the
+// anchor's aria-label to the canonical name so screen readers always speak
+// the formal title regardless of which span is visually shown.
+function buildBookListItem(b) {
+  const mobile = NT_MOBILE_NAME[b.id];
+  if (!mobile) {
+    return el("li", null, el("a", { href: `/${b.id}` }, b.name_ko));
+  }
+  const a = el("a", { href: `/${b.id}`, "aria-label": b.name_ko });
+  a.appendChild(el("span", { className: "book-name-full" }, b.name_ko));
+  a.appendChild(el("span", { className: "book-name-mobile" }, mobile));
+  return el("li", null, a);
+}
+
+// Compactness fallback: on devices where the touch-device media query does
+// not apply (desktop/laptop), the full NT name may still wrap when the user
+// enlarges text (browser zoom, OS-level scaling, or the app's font-size
+// setting). For each book-list anchor with a mobile-shortened span, measure
+// the single-line natural width of `.book-name-full`; if it exceeds the
+// anchor's available inner width, add the `.compact` class so CSS swaps to
+// the shortened name. Re-runs on container resize via ResizeObserver, which
+// also fires when root font-size changes (since item heights reflow).
+/** @type {ResizeObserver | null} */
+let _bookListResizeObs = null;
+/** @type {Map<Element, ReturnType<typeof setTimeout>>} */
+const _bookListDebounce = new Map();
+
+function _getBookListResizeObserver() {
+  if (_bookListResizeObs) return _bookListResizeObs;
+  _bookListResizeObs = new ResizeObserver((entries) => {
+    for (const entry of entries) {
+      const ul = entry.target;
+      const prev = _bookListDebounce.get(ul);
+      if (prev) clearTimeout(prev);
+      _bookListDebounce.set(ul, setTimeout(() => {
+        _bookListDebounce.delete(ul);
+        if (ul.isConnected) applyBookListCompactness(/** @type {HTMLElement} */ (ul));
+      }, 50));
+    }
+  });
+  return _bookListResizeObs;
+}
+
+/** @param {HTMLElement} ul */
+function applyBookListCompactness(ul) {
+  const anchors = /** @type {NodeListOf<HTMLAnchorElement>} */ (
+    ul.querySelectorAll("a")
+  );
+  for (const a of anchors) {
+    const full = /** @type {HTMLElement | null} */ (a.querySelector(".book-name-full"));
+    const mobile = a.querySelector(".book-name-mobile");
+    if (!full || !mobile) continue;
+
+    // Reset to measure the natural (non-compact) state.
+    a.classList.remove("compact");
+
+    const prevWs = full.style.whiteSpace;
+    const prevDisplay = full.style.display;
+    full.style.whiteSpace = "nowrap";
+    full.style.display = "inline-block";
+    const naturalWidth = full.offsetWidth;
+    full.style.whiteSpace = prevWs;
+    full.style.display = prevDisplay;
+
+    const cs = getComputedStyle(a);
+    const padL = parseFloat(cs.paddingLeft) || 0;
+    const padR = parseFloat(cs.paddingRight) || 0;
+    const availableWidth = a.clientWidth - padL - padR;
+
+    if (naturalWidth > availableWidth + 0.5) {
+      a.classList.add("compact");
+    }
+  }
+}
+
+/** @param {ParentNode} root */
+function observeBookListsIn(root) {
+  const lists = root.querySelectorAll(".book-list");
+  const obs = _getBookListResizeObserver();
+  for (const ul of lists) {
+    applyBookListCompactness(/** @type {HTMLElement} */ (ul));
+    obs.observe(ul);
+  }
+}
+
+// Same idea as book-list compactness, but for the page-title header.
+// `setTitle` / `setTitleWithChapterPicker` emit .title-text-full and
+// .title-text-mobile spans when an NT mobile-shortened variant exists; this
+// function measures whether the full text would overflow the room remaining
+// in #page-title once the absolute-positioned back and bookmark buttons
+// (~2.2rem each + breathing) are reserved. ResizeObserver on $title keeps
+// the choice fresh across viewport resizes and root font-size changes.
+/** @type {ResizeObserver | null} */
+let _titleResizeObs = null;
+
+function applyTitleCompactness() {
+  // Lazy ResizeObserver setup on first call: keeps the title decision fresh
+  // across viewport resize and root font-size changes without coupling to
+  // the bootstrap path. (Tests load this module via vm with no $title — the
+  // function early-returns there and the observer is never created.)
+  if (!_titleResizeObs && typeof ResizeObserver !== "undefined" && $title) {
+    /** @type {ReturnType<typeof setTimeout> | null} */
+    let timer = null;
+    _titleResizeObs = new ResizeObserver(() => {
+      if (timer !== null) clearTimeout(timer);
+      timer = setTimeout(() => { timer = null; applyTitleCompactness(); }, 50);
+    });
+    _titleResizeObs.observe($title);
+  }
+
+  const full = /** @type {HTMLElement | null} */ ($title.querySelector(".title-text-full"));
+  const mobile = $title.querySelector(".title-text-mobile");
+  if (!full || !mobile) {
+    $title.classList.remove("compact");
+    return;
+  }
+  const container = full.parentElement;
+  if (!container) return;
+
+  // Reset so measurement reflects the non-compact (full) layout.
+  $title.classList.remove("compact");
+
+  const prevWs = full.style.whiteSpace;
+  const prevDisplay = full.style.display;
+  full.style.whiteSpace = "nowrap";
+  full.style.display = "inline-block";
+  const naturalWidth = full.offsetWidth;
+  full.style.whiteSpace = prevWs;
+  full.style.display = prevDisplay;
+
+  const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+  // 2.2rem back + 2.2rem bookmark + 0.8rem breathing on either side.
+  const reserved = 5.2 * rem;
+  // Picker button has a ~0.4em chevron after the label — allow for it.
+  const chevronAllowance = container.classList.contains("title-picker-btn") ? 0.8 * rem : 0;
+  const availableWidth = $title.clientWidth - reserved;
+
+  if (naturalWidth + chevronAllowance > availableWidth + 0.5) {
+    $title.classList.add("compact");
+  }
+}
+// ── END BOOK_LIST_LINK ──
 
 // ── Compact Header on Scroll ──
 // Deferred: not needed until after first render and first scroll.
@@ -628,7 +835,7 @@ function renderBookList(books) {
         section.appendChild(el("h3", { className: "ot-subcategory-title" }, OT_SUBCATEGORY_LABELS[sub]));
         const ul = el("ul", { className: "book-list", role: "list" });
         for (const b of subList) {
-          ul.appendChild(el("li", null, el("a", { href: `/${b.id}` }, b.name_ko)));
+          ul.appendChild(buildBookListItem(b));
         }
         section.appendChild(ul);
         details.appendChild(section);
@@ -636,12 +843,13 @@ function renderBookList(books) {
     } else {
       const ul = el("ul", { className: "book-list", role: "list" });
       for (const b of list) {
-        ul.appendChild(el("li", null, el("a", { href: `/${b.id}` }, b.name_ko)));
+        ul.appendChild(buildBookListItem(b));
       }
       details.appendChild(ul);
     }
     $app.appendChild(details);
   }
+  observeBookListsIn($app);
 }
 
 // `clearReadingPosition` was extracted to js/app/storage.js (ADR-018 Phase 2).
@@ -707,7 +915,7 @@ function renderDivisionList(books, division) {
       section.appendChild(el("h3", { className: "ot-subcategory-title" }, OT_SUBCATEGORY_LABELS[sub]));
       const ul = el("ul", { className: "book-list", role: "list" });
       for (const b of subList) {
-        ul.appendChild(el("li", null, el("a", { href: `/${b.id}` }, b.name_ko)));
+        ul.appendChild(buildBookListItem(b));
       }
       section.appendChild(ul);
       details.appendChild(section);
@@ -715,15 +923,16 @@ function renderDivisionList(books, division) {
   } else {
     const ul = el("ul", { className: "book-list", role: "list" });
     for (const b of list) {
-      ul.appendChild(el("li", null, el("a", { href: `/${b.id}` }, b.name_ko)));
+      ul.appendChild(buildBookListItem(b));
     }
     details.appendChild(ul);
   }
   $app.appendChild(details);
+  observeBookListsIn($app);
 }
 
 function renderChapterList(book, books) {
-  setTitle(book.name_ko);
+  setTitle(book.name_ko, NT_MOBILE_NAME[book.id]);
   $title.insertBefore(buildBackBtn(`${divisionLabels()[effectiveDivision(book)]}으로`, `/${effectiveDivision(book)}`), $title.firstChild);
   $title.appendChild(buildBookmarkHeaderBtn(book.id, null));
   hideAudioBar();
@@ -1270,7 +1479,8 @@ function renderChapter(data, book, opts) {
 }
 
 function renderPrologue(data, book) {
-  setTitle(`${book.name_ko} 머리말`);
+  const mobileBookName = NT_MOBILE_NAME[book.id];
+  setTitle(`${book.name_ko} 머리말`, mobileBookName ? `${mobileBookName} 머리말` : undefined);
   const effDiv = effectiveDivision(book);
   setBreadcrumb([
     { label: "목록", href: "/" },

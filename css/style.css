@@ -553,6 +553,14 @@ body {
   margin: 0.3rem 0 0.2rem;
 }
 
+/* Title swap: NT chapter/prologue headers emit .title-text-full and
+   .title-text-mobile spans. JS adds .compact to #page-title when the full
+   title would overflow the room remaining between the absolute-positioned
+   back and bookmark buttons. */
+.title-text-mobile { display: none; }
+#page-title.compact .title-text-full { display: none; }
+#page-title.compact .title-text-mobile { display: inline; }
+
 /* ── Chapter Title Back Button ── */
 .title-back-btn {
   position: absolute;
@@ -1818,6 +1826,19 @@ mark.search-highlight {
   background: var(--accent);
   color: #fff;
   border-color: var(--accent);
+}
+
+/* Book-name swap: NT books with long `name_ko` also render a shortened
+   .book-name-mobile span. Default state shows .book-name-full; we swap to
+   .book-name-mobile on touch devices (phones/tablets) and on any device
+   when JS measurement marks the anchor .compact because the full name
+   would wrap inside the button (e.g. desktop with enlarged text). */
+.book-name-mobile { display: none; }
+.book-list a.compact > .book-name-full { display: none; }
+.book-list a.compact > .book-name-mobile { display: inline; }
+@media (hover: none) and (pointer: coarse) {
+  .book-list a > .book-name-full { display: none; }
+  .book-list a > .book-name-mobile { display: inline; }
 }
 
 /* ── Chapter Grid ── */

@@ -1,5 +1,26 @@
 # 작업 일지
 
+## 2026-05-27
+
+### 신약 책 이름 자동 줄임 표시
+
+신약 책 이름은 길어서(예: "고린토인들에게 보낸 첫째 편지") 좁은 화면이나 큰 글자에서 책 목록 버튼·장 보기 헤더가 2줄로 부풀어 보이는 문제를 자동으로 해결한다. 사용자가 제시한 22개 신약 책의 줄임 명칭을 `js/app/views-routing.js`의 `NT_MOBILE_NAME` 매핑으로 도입하고, 두 경로에서 동일한 swap 메커니즘을 쓴다 — 정식 명칭과 줄임 명칭을 두 span으로 함께 렌더하고 CSS/JS가 둘 중 하나를 보여준다. 복음서 4권과 사도행전은 이미 짧아 매핑 없음.
+
+**책 목록 버튼** (`/`, `/old_testament`, `/new_testament`, `/deuterocanon`)
+
+- 터치 기기(아이폰·안드로이드폰·아이패드 등): `@media (hover:none) and (pointer:coarse)` 미디어 쿼리로 항상 줄임 명칭
+- 비-터치 기기: `ResizeObserver` 기반 측정 — 정식 명칭이 버튼 폭을 넘으면 `.compact` 클래스가 붙어 줄임 명칭으로 swap. 글자 크기 변경(브라우저 줌, OS 설정, 앱 내 글자 크기)도 자동 재측정
+
+**장 보기 헤더** (`#page-title`)
+
+- `setTitle`에 `mobileText` 옵션 인자 추가. `setTitleWithChapterPicker`는 NT 매핑을 내부에서 조합("Ⅰ고린토 5장" 등)
+- 측정: 정식 명칭이 `#page-title.clientWidth - 5.2rem`(좌우 뒤로가기·북마크 버튼 + 여유) 안에 들어가는지 확인. 넘치면 `.compact` 추가
+- 피커 버튼의 `::after` chevron 0.8rem 여유분 반영. ResizeObserver는 lazy-init으로 단위 테스트와 분리
+
+접근성: 화면에 줄임 명칭이 보여도 `aria-label`은 항상 정식 명칭(또는 "장 선택" 같은 기존 의미)을 유지해 스크린리더는 동작이 바뀌지 않음.
+
+검증: JS 유닛 537 케이스 통과(POPOVER 테스트 로더에 `NT_MOBILE_NAME`·`applyTitleCompactness` 스텁 추가, TITLE 로더의 `StubElement`에 `removeAttribute`·최소 `classList` 보강). e2e `tests/e2e/test_book_name_swap.py` 7 케이스 신규 통과 — 터치 폰/태블릿, 데스크탑 큰 글자, 장 헤더 swap, 복음서 무swap 모두 확인. 보고서는 `docs/qa/2026-05-27-book-name-shortening.md`.
+
 ## 2026-05-21
 
 ### 릴리스 노트 changelog 헬퍼

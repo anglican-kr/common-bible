@@ -145,11 +145,23 @@ function makeDom() {
     }
     appendChild(c) { this.children.push(c); return c; }
     setAttribute(k, v) { this.attributes[k] = String(v); }
+    removeAttribute(k) { delete this.attributes[k]; }
     getAttribute(k) {
       return Object.prototype.hasOwnProperty.call(this.attributes, k) ? this.attributes[k] : null;
     }
     set className(v) { this.attributes.class = String(v); }
     get className() { return this.attributes.class || ""; }
+    get classList() {
+      // Minimal classList shim: setTitle calls .remove("compact"); the simple
+      // StubElement doesn't track classes structurally, so remove is a no-op.
+      // The popover loader's RichElement has its own (fuller) implementation.
+      return this._classList || (this._classList = {
+        add: () => {},
+        remove: () => {},
+        contains: () => false,
+        toggle: () => false,
+      });
+    }
     set textContent(v) {
       this.children = [];
       this._textOverride = String(v);
@@ -724,6 +736,13 @@ function loadPopover() {
     buildBookmarkHeaderBtn: (_bookId, _chapter) => {
       return new dom.RichElement("button");
     },
+    // setTitleWithChapterPicker reads from this map to emit the mobile-shortened
+    // span; tests don't care about the swap mechanics, so an empty map means
+    // every book takes the plain-text branch.
+    NT_MOBILE_NAME: {},
+    // applyTitleCompactness measures rendered geometry; in this DOM stub
+    // there's no real layout, so it's a no-op for popover tests.
+    applyTitleCompactness: () => {},
   };
   vm.createContext(ctx);
   vm.runInContext(EL_SHIM + extractBlock("POPOVER"), ctx, {
