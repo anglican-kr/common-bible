@@ -434,7 +434,10 @@ body {
   padding: 0 0.8em;
   cursor: pointer;
   height: 28px;
-  min-width: 3.5em;
+  /* 세 버튼(앱 설치·백업&동기화·업데이트)의 너비 일치.
+     업데이트 행은 동적 텍스트(지금 확인·확인 중…·최신 버전·업데이트 발견·오류)
+     중 "업데이트 발견"(7자)이 최장 — 그 폭이 fit 되는 값으로 고정. */
+  min-width: 8em;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2511,7 +2514,8 @@ html.cite-sheet-open {
   border-radius: 4px;
   padding: 0 0.8em;
   height: 28px;
-  min-width: 3.5em;
+  /* settings-action-btn 과 동일 너비 (8em) — 같은 행 위치의 액션 버튼끼리 정렬. */
+  min-width: 8em;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
