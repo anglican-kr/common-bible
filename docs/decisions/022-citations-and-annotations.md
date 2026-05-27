@@ -4,7 +4,7 @@
 - 상태: 승인됨 — **Phase 1·Phase 2 완료** (2026-05-25 1.5.x 릴리스 라인). Phase 3(주해 저작)은 콘텐츠 작업으로 장기 진행
 - 관련 ADR: ADR-006(운문 segments 포맷, data 저장소), ADR-009(History API 라우팅), ADR-018(`js/app/views-routing.js` 본문 렌더 위치), ADR-020(저장소 4분할 — 본 결정은 app·data 두 저장소를 모두 손댐)
 
-> **현재 상태 (2026-05-27 기준).** Phase 1 데이터 파이프라인 — `common-bible-data/src/parser.py` 가 `<cite>` segment 와 `[^id]` 주석을 추출해 절 JSON 의 `segments`·`notes` 필드에 보존. Phase 2 앱 UI — `js/app/citations.js` (~940줄) 가 인용 칩 dedup 렌더, 인용 본문 바텀 시트 (`이 장 전체 보기` 확장 + 인용 절 강조, 드래그 핸들로 리사이즈·닫기, 다중 ref / parallels / 다중 장 지원), 주석 ※ 위첨자 + 클릭 툴팁(인쇄 시 하단 footnote), 첫 진입 코치마크를 모두 담당. 설정에서 칩·주석 각각 토글 (`bible-cite-show` / `bible-note-show` localStorage, 기본 ON). GitHub 이슈 #134/#135/#136 으로 Phase 1/2/3 진행 추적. 유닛 테스트는 `tests/unit/citations.test.js` 20 케이스 + 보고서 `docs/qa/2026-05-23-unit-citations.md`. Phase 3 는 사목·신학 자문으로 NT 전 본문에 `<cite>` + 주석을 수기로 다는 콘텐츠 작업이라 별도 일정.
+> **현재 상태 (2026-05-27 기준).** Phase 1 데이터 파이프라인 — `common-bible-data/src/parser.py` 가 `<cite>` segment 와 `[^id]` 주석을 추출해 절 JSON 의 `segments`·`notes` 필드에 보존. Phase 2 앱 UI — `js/app/citations.js` (~940줄) 가 인용 칩을 중복되지 않게 렌더, 인용 본문 바텀 시트 (`이 장 전체 보기` 확장 + 인용 절 강조, 드래그 핸들로 리사이즈·닫기, 다중 ref / parallels / 다중 장 지원), 주석 ※ 위첨자 + 클릭 툴팁(인쇄 시 하단 footnote), 첫 진입 코치마크를 모두 담당. 설정에서 칩·주석 각각 토글 (`bible-cite-show` / `bible-note-show` localStorage, 기본 ON). GitHub 이슈 #134/#135/#136 으로 Phase 1/2/3 진행 추적. 유닛 테스트는 `tests/unit/citations.test.js` 20 케이스 + 보고서 `docs/qa/2026-05-23-unit-citations.md`. Phase 3 는 사목·신학 자문으로 NT 전 본문에 `<cite>` + 주석을 수기로 다는 콘텐츠 작업이라 별도 일정.
 
 ## 맥락
 
@@ -186,7 +186,7 @@ verse 객체에 옵션 필드:
 
 ### 6. UI 렌더 정책 (Phase 2)
 
-- 단일 토글 **"인용 본문·주석 표시"** 로 인용·주석을 함께 제어. localStorage 키 `bible-cite-show` (기본값 `"1"` = 표시).
+- 단일 토글 **"인용 본문·주석"** 로 인용·주석을 함께 제어. localStorage 키 `bible-cite-show` (기본값 `"1"` = 표시).
 - **기본값 ON** (Phase 2 확정, 초기 ADR 의 "off 기본" 결정 뒤집음). 사유: 콘텐츠 저작 노력의 발견율 + 칩 클릭이 페이지 이동 아닌 바텀 시트라 비침습적. 사용자가 의도적으로 끌 수 있음.
 - 토글 off → 본문에 어떤 시각적 marker 도 없음. WCAG 2.1 AA + 읽기 몰입 (절 번호 aria-hidden 결정과 같은 결).
 - 토글 on (기본):

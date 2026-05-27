@@ -297,9 +297,9 @@ window.appSettings = (() => {
 
       // Cite/note visibility (ADR-022)
       const citeRow = el("div", { className: "settings-row" });
-      citeRow.appendChild(el("span", { className: "settings-label" }, "인용 본문·주석 표시"));
+      citeRow.appendChild(el("span", { className: "settings-label" }, "인용 본문·주석"));
       const citeCurrent = loadCiteShow();
-      const citeGroup = el("div", { className: "btn-group", role: "group", "aria-label": "인용 본문·주석 표시 선택" });
+      const citeGroup = el("div", { className: "btn-group", role: "group", "aria-label": "인용 본문·주석 선택" });
       for (const { val, label, announceLabel } of [
         { val: true,  label: "표시", announceLabel: "인용 본문·주석 표시" },
         { val: false, label: "숨김", announceLabel: "인용 본문·주석 숨김" },

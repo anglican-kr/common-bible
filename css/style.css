@@ -2018,7 +2018,7 @@ mark.search-highlight {
 
 /* ── ADR-022 cite chip + note anchor (tooltip on click) ───────────────────
  * Hidden by default; revealed when <body> has class .cites-shown
- * (controlled by settings "인용 본문·주석 표시" toggle, default ON).
+ * (controlled by settings "인용 본문·주석" toggle, default ON).
  * Note tooltip itself stays hidden (`hidden` attribute) regardless of toggle —
  * it only appears on anchor click.
  */
