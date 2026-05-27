@@ -453,20 +453,26 @@ window.appCitations = (() => {
   }
 
   /**
-   * ADR-003 cross-chapter relocation fallback. When a cite names (ch, v)
-   * but ch's own chapter file has no such v, the verse may live in a
+   * ADR-003 cross-chapter relocation lookup. When a cite names (ch, v) but
+   * ch's own chapter file has no such v, the verse physically lives in a
    * neighboring chapter file marked with `chapter_ref === ch` (e.g.
-   * 호세 13:14 physically sits inside hos-14.json between 14:5 and 14:6).
-   * Scan the book outward from `ch` (±1, ±2, …) until every wanted verse
-   * is found or the book is exhausted. ADR-003 lists six such relocations;
-   * most are adjacent but 1역대 9:33 lives 3 chapters away in 1chr-6.
+   * 호세 13:14 sits inside hos-14.json between 14:5 and 14:6 because that
+   * is where the printed text places it). Scan outward (±1, ±2, …) until
+   * a home chapter is found. ADR-003 lists six such relocations; most are
+   * adjacent but 1역대 9:33 lives 3 chapters away in 1chr-6.
+   *
+   * Returns both the matching verses *and* the physical chapter data so
+   * the caller can render the printed reading position when the user
+   * expands the cite sheet — ADR-003's whole point is to preserve that
+   * physical order, so we honour it here rather than re-sorting into the
+   * scholarly chapter.
    *
    * @param {string} bookId
    * @param {number} ch academic chapter as named by cite src
    * @param {Array<{ startCh: number, startV: number, endCh: number | null, endV: number | null }>} parts
-   * @returns {Promise<Array<BibleVerse>>}
+   * @returns {Promise<{ verses: Array<BibleVerse>, fromChapter: number, chapterData: BibleChapter } | null>}
    */
-  async function _findRelocatedVerses(bookId, ch, parts) {
+  async function _findRelocated(bookId, ch, parts) {
     const wanted = new Set();
     for (const p of parts) {
       const partEndCh = p.endCh ?? p.startCh;
@@ -477,16 +483,14 @@ window.appCitations = (() => {
         for (let v = p.startV; v <= p.endV; v++) wanted.add(v);
       }
     }
-    if (wanted.size === 0) return [];
+    if (wanted.size === 0) return null;
 
     /** @type {BooksData} */
     const books = await (window.booksPromise || fetch("/data/books.json").then((r) => r.json()));
     const book = books.find((b) => b.id === bookId);
     const chapterCount = book?.chapter_count ?? 0;
-    if (chapterCount === 0) return [];
+    if (chapterCount === 0) return null;
 
-    const found = [];
-    const seen = new Set();
     const maxDelta = Math.max(ch - 1, chapterCount - ch);
     for (let d = 1; d <= maxDelta; d++) {
       for (const other of [ch + d, ch - d]) {
@@ -499,37 +503,15 @@ window.appCitations = (() => {
         } catch (_) {
           continue;
         }
-        for (const v of data.verses || []) {
-          if (v.chapter_ref === ch && wanted.has(v.number) && !seen.has(v.number)) {
-            found.push(v);
-            seen.add(v.number);
-          }
+        const verses = (data.verses || []).filter(
+          (v) => v.chapter_ref === ch && wanted.has(v.number),
+        );
+        if (verses.length > 0) {
+          return { verses, fromChapter: other, chapterData: data };
         }
-        if (seen.size === wanted.size) return found;
       }
     }
-    return found;
-  }
-
-  /**
-   * Slot relocated verses into the home chapter's verse list right before
-   * the first home verse with a larger `number` (appended if none larger).
-   * Preserves the home file's original order — ADR-003 physical ordering
-   * is sometimes non-monotonic (e.g. 아모 6:11, 6:9) so a global re-sort
-   * would distort the printed reading order.
-   *
-   * @param {ReadonlyArray<BibleVerse>} home
-   * @param {ReadonlyArray<BibleVerse>} extra
-   * @returns {Array<BibleVerse>}
-   */
-  function _mergeRelocatedVerses(home, extra) {
-    const result = [...home];
-    for (const r of extra) {
-      let idx = result.findIndex((v) => v.number > r.number);
-      if (idx < 0) idx = result.length;
-      result.splice(idx, 0, r);
-    }
-    return result;
+    return null;
   }
 
   /**
@@ -703,22 +685,24 @@ window.appCitations = (() => {
         });
         const slice = _selectVerses(data.verses, parsed.parts, ch);
         // ADR-022 §2 + ADR-003: when the chapter file lacks the cited
-        // verse, look in neighboring chapter files for a chapter_ref ===
-        // ch verse (cross-chapter relocation). 호세 13:14, 잠언 6:22,
-        // 이사 41:6, 1역대 9:33, 욥 26:5, 욥 26 → 27 are the six known
-        // cases.
+        // verse, the verse physically lives in a neighboring chapter file
+        // with chapter_ref === ch (호세 13:14, 잠언 6:22, 이사 41:6,
+        // 1역대 9:33, 욥 26:5, 욥 26 → 27 are the six known cases).
+        // Expanded view shows the *physical* home chapter so the reader
+        // sees the printed reading position ADR-003 preserves.
         const relocated = slice.length === 0
-          ? await _findRelocatedVerses(bookId, ch, parsed.parts)
-          : [];
+          ? await _findRelocated(bookId, ch, parsed.parts)
+          : null;
         if (expanded) {
-          const fullVerses = relocated.length > 0
-            ? _mergeRelocatedVerses(data.verses, relocated)
-            : data.verses;
-          const citedSource = slice.length > 0 ? slice : relocated;
-          const cited = new Set(citedSource.map((v) => v.number));
-          _renderVerses(container, fullVerses, cited);
+          if (relocated) {
+            const cited = new Set(relocated.verses.map((v) => v.number));
+            _renderVerses(container, relocated.chapterData.verses, cited);
+          } else {
+            const cited = new Set(slice.map((v) => v.number));
+            _renderVerses(container, data.verses, cited);
+          }
         } else {
-          _renderVerses(container, slice.length > 0 ? slice : relocated, null);
+          _renderVerses(container, slice.length > 0 ? slice : (relocated?.verses ?? []), null);
         }
       } catch (_) {
         container.appendChild(el("p", { className: "cite-sheet-error" },
@@ -1018,7 +1002,6 @@ window.appCitations = (() => {
 
   return {
     _computeCiteShowPositions,
-    _mergeRelocatedVerses,
     chipText,
     buildCiteChip,
     wrapNoteAnchorsInArticle,
