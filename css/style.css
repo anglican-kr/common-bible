@@ -233,6 +233,16 @@ body {
      the 0.5rem horizontal padding (≈ 17.85rem content). */
   width: 19rem;
   max-width: calc(100vw - 1rem);
+  /* When content (Drive info expanded, small viewport, large font) exceeds
+     vertical space, the popover scrolls instead of being clipped. Scrollbar
+     is hidden visually but scrolling still works via touch/wheel/keyboard. */
+  max-height: calc(100vh - 5rem);
+  overflow-y: auto;
+  scrollbar-width: none; /* Firefox */
+}
+
+.settings-popover::-webkit-scrollbar {
+  display: none; /* WebKit (Safari, Chrome) */
 }
 
 /* Container is programmatically focused on pointer-driven open so the first
