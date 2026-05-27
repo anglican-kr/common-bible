@@ -475,6 +475,46 @@ test("saveStartupBehavior: writes value and notifies sync + drive", () => {
   assert.equal(h.driveSync._calls.scheduleUpload, 1);
 });
 
+// ── cite/note visibility (ADR-022) ───────────────────────────────────────────
+
+test("loadCiteShow: defaults to true when unset", () => {
+  const h = loadStorage();
+  assert.equal(h.appStorage.loadCiteShow(), true);
+});
+
+test("loadCiteShow: reads '1' as true and '0' as false (save format)", () => {
+  const hOn  = loadStorage({ localStorageInit: { "bible-cite-show": "1" } });
+  const hOff = loadStorage({ localStorageInit: { "bible-cite-show": "0" } });
+  assert.equal(hOn.appStorage.loadCiteShow(), true);
+  assert.equal(hOff.appStorage.loadCiteShow(), false);
+});
+
+// Sync's applyToLegacyKeys writes JSON.stringify(boolean), producing
+// "true"/"false". Without this tolerance, citeShow appears to reset on the
+// next cold start whenever Drive sync has run.
+test("loadCiteShow: reads 'true'/'false' written by sync applyToLegacyKeys", () => {
+  const hOn  = loadStorage({ localStorageInit: { "bible-cite-show": "true" } });
+  const hOff = loadStorage({ localStorageInit: { "bible-cite-show": "false" } });
+  assert.equal(hOn.appStorage.loadCiteShow(), true);
+  assert.equal(hOff.appStorage.loadCiteShow(), false);
+});
+
+test("saveCiteShow: writes '1'/'0' and notifies sync + drive", () => {
+  const h = loadStorage();
+  h.appStorage.saveCiteShow(false);
+  assert.equal(h.localStorage._raw["bible-cite-show"], "0");
+  h.appStorage.saveCiteShow(true);
+  assert.equal(h.localStorage._raw["bible-cite-show"], "1");
+  assert.deepEqual(h.syncStoreV2._calls.saveSetting,
+    [{ key: "citeShow", val: false }, { key: "citeShow", val: true }]);
+  assert.equal(h.driveSync._calls.scheduleUpload, 2);
+});
+
+test("saveCiteShow: swallows localStorage errors", () => {
+  const h = loadStorage({ localStorageThrowOn: "all" });
+  assert.doesNotThrow(() => h.appStorage.saveCiteShow(false));
+});
+
 // ── font size ────────────────────────────────────────────────────────────────
 
 test("loadFontSize: defaults to DEFAULT_FONT_SIZE (18) when unset", () => {
