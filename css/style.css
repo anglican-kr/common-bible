@@ -227,8 +227,11 @@ body {
   /* rem-based so the popover scales with the user's font-size choice;
      capped to the viewport so it never overflows on the right at large
      fonts. White-space wrapping is opt-in per child (buttons set nowrap
-     individually) so labels and rows can wrap when content doesn't fit. */
-  width: 17.5rem;
+     individually) so labels and rows can wrap when content doesn't fit.
+     Width sized so the longest label (인용 본문·주석, ~5.5em at 0.92rem
+     ≈ 5.1rem) + 0.75rem gap + 11rem btn-group fit on one row inside
+     the 0.5rem horizontal padding (≈ 17.85rem content). */
+  width: 19rem;
   max-width: calc(100vw - 1rem);
 }
 
