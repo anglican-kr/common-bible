@@ -235,6 +235,46 @@ test("buildCiteChip: aria-label includes display text", () => {
   assert.match(node.attrs["aria-label"], /\(이사 53:5\).*본문 보기/);
 });
 
+// ── _mergeRelocatedVerses (ADR-003 cross-chapter slot-in) ───────────────────
+
+// Cross-realm caveat: arrays returned by vm-loaded code use the vm's
+// Array prototype, so assert.deepEqual on them fails reference-equality.
+// Compare length + per-index values instead.
+
+test("_mergeRelocatedVerses: empty extras → home unchanged", () => {
+  const c = loadCitations();
+  const home = [{ number: 1 }, { number: 2 }, { number: 3 }];
+  const out = c._mergeRelocatedVerses(home, []);
+  assert.equal(out.length, 3);
+  assert.equal(out[0].number, 1);
+  assert.equal(out[1].number, 2);
+  assert.equal(out[2].number, 3);
+});
+
+test("_mergeRelocatedVerses: relocated verse slots in before first larger number", () => {
+  const c = loadCitations();
+  // hos-13.json shape: verses 1..13, 15. hos-14 holds 14 with chapter_ref=13.
+  const home = [{ number: 13, t: "h13" }, { number: 15, t: "h15" }];
+  const extra = [{ number: 14, chapter_ref: 13, t: "h14r" }];
+  const out = c._mergeRelocatedVerses(home, extra);
+  assert.equal(out.length, 3);
+  assert.equal(out[0].number, 13);
+  assert.equal(out[1].number, 14);
+  assert.equal(out[1].t, "h14r");
+  assert.equal(out[2].number, 15);
+});
+
+test("_mergeRelocatedVerses: appends when no home verse is larger", () => {
+  const c = loadCitations();
+  const home = [{ number: 1 }, { number: 2 }];
+  const extra = [{ number: 5, chapter_ref: 0 }];
+  const out = c._mergeRelocatedVerses(home, extra);
+  assert.equal(out.length, 3);
+  assert.equal(out[0].number, 1);
+  assert.equal(out[1].number, 2);
+  assert.equal(out[2].number, 5);
+});
+
 // ── Notes: anchor wrapping + tooltip ─────────────────────────────────────────
 // wrapNoteAnchorsInArticle and tooltip open/close are DOM-positioning logic
 // (TreeWalker, getBoundingClientRect, viewport math) — covered by e2e rather

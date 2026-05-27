@@ -453,6 +453,86 @@ window.appCitations = (() => {
   }
 
   /**
+   * ADR-003 cross-chapter relocation fallback. When a cite names (ch, v)
+   * but ch's own chapter file has no such v, the verse may live in a
+   * neighboring chapter file marked with `chapter_ref === ch` (e.g.
+   * 호세 13:14 physically sits inside hos-14.json between 14:5 and 14:6).
+   * Scan the book outward from `ch` (±1, ±2, …) until every wanted verse
+   * is found or the book is exhausted. ADR-003 lists six such relocations;
+   * most are adjacent but 1역대 9:33 lives 3 chapters away in 1chr-6.
+   *
+   * @param {string} bookId
+   * @param {number} ch academic chapter as named by cite src
+   * @param {Array<{ startCh: number, startV: number, endCh: number | null, endV: number | null }>} parts
+   * @returns {Promise<Array<BibleVerse>>}
+   */
+  async function _findRelocatedVerses(bookId, ch, parts) {
+    const wanted = new Set();
+    for (const p of parts) {
+      const partEndCh = p.endCh ?? p.startCh;
+      if (p.startCh !== ch && partEndCh !== ch) continue;
+      if (p.endV === null) {
+        wanted.add(p.startV);
+      } else if (p.startCh === partEndCh) {
+        for (let v = p.startV; v <= p.endV; v++) wanted.add(v);
+      }
+    }
+    if (wanted.size === 0) return [];
+
+    /** @type {BooksData} */
+    const books = await (window.booksPromise || fetch("/data/books.json").then((r) => r.json()));
+    const book = books.find((b) => b.id === bookId);
+    const chapterCount = book?.chapter_count ?? 0;
+    if (chapterCount === 0) return [];
+
+    const found = [];
+    const seen = new Set();
+    const maxDelta = Math.max(ch - 1, chapterCount - ch);
+    for (let d = 1; d <= maxDelta; d++) {
+      for (const other of [ch + d, ch - d]) {
+        if (other < 1 || other > chapterCount) continue;
+        let data;
+        try {
+          const r = await fetch(`/data/bible/${bookId}-${other}.json`);
+          if (!r.ok) continue;
+          data = await r.json();
+        } catch (_) {
+          continue;
+        }
+        for (const v of data.verses || []) {
+          if (v.chapter_ref === ch && wanted.has(v.number) && !seen.has(v.number)) {
+            found.push(v);
+            seen.add(v.number);
+          }
+        }
+        if (seen.size === wanted.size) return found;
+      }
+    }
+    return found;
+  }
+
+  /**
+   * Slot relocated verses into the home chapter's verse list right before
+   * the first home verse with a larger `number` (appended if none larger).
+   * Preserves the home file's original order — ADR-003 physical ordering
+   * is sometimes non-monotonic (e.g. 아모 6:11, 6:9) so a global re-sort
+   * would distort the printed reading order.
+   *
+   * @param {ReadonlyArray<BibleVerse>} home
+   * @param {ReadonlyArray<BibleVerse>} extra
+   * @returns {Array<BibleVerse>}
+   */
+  function _mergeRelocatedVerses(home, extra) {
+    const result = [...home];
+    for (const r of extra) {
+      let idx = result.findIndex((v) => v.number > r.number);
+      if (idx < 0) idx = result.length;
+      result.splice(idx, 0, r);
+    }
+    return result;
+  }
+
+  /**
    * Render a set of verses in the sheet using the SAME structure as the
    * main reading view (`.verse` / `.verse-poetry` / break spans / sup
    * `.verse-num`). The sheet's article carries `.chapter-text` so it
@@ -621,13 +701,24 @@ window.appCitations = (() => {
           if (!r.ok) throw new Error("HTTP " + r.status);
           return r.json();
         });
+        const slice = _selectVerses(data.verses, parsed.parts, ch);
+        // ADR-022 §2 + ADR-003: when the chapter file lacks the cited
+        // verse, look in neighboring chapter files for a chapter_ref ===
+        // ch verse (cross-chapter relocation). 호세 13:14, 잠언 6:22,
+        // 이사 41:6, 1역대 9:33, 욥 26:5, 욥 26 → 27 are the six known
+        // cases.
+        const relocated = slice.length === 0
+          ? await _findRelocatedVerses(bookId, ch, parsed.parts)
+          : [];
         if (expanded) {
-          // Show full chapter; highlight verses that were originally cited.
-          const cited = new Set(_selectVerses(data.verses, parsed.parts, ch).map((v) => v.number));
-          _renderVerses(container, data.verses, cited);
+          const fullVerses = relocated.length > 0
+            ? _mergeRelocatedVerses(data.verses, relocated)
+            : data.verses;
+          const citedSource = slice.length > 0 ? slice : relocated;
+          const cited = new Set(citedSource.map((v) => v.number));
+          _renderVerses(container, fullVerses, cited);
         } else {
-          const slice = _selectVerses(data.verses, parsed.parts, ch);
-          _renderVerses(container, slice, null);
+          _renderVerses(container, slice.length > 0 ? slice : relocated, null);
         }
       } catch (_) {
         container.appendChild(el("p", { className: "cite-sheet-error" },
@@ -927,6 +1018,7 @@ window.appCitations = (() => {
 
   return {
     _computeCiteShowPositions,
+    _mergeRelocatedVerses,
     chipText,
     buildCiteChip,
     wrapNoteAnchorsInArticle,
