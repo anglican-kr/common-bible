@@ -224,8 +224,12 @@ body {
   border-radius: var(--radius);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
   padding: 0.5rem;
-  width: 280px;
-  white-space: nowrap;
+  /* rem-based so the popover scales with the user's font-size choice;
+     capped to the viewport so it never overflows on the right at large
+     fonts. White-space wrapping is opt-in per child (buttons set nowrap
+     individually) so labels and rows can wrap when content doesn't fit. */
+  width: 17.5rem;
+  max-width: calc(100vw - 1rem);
 }
 
 /* Container is programmatically focused on pointer-driven open so the first
@@ -382,6 +386,10 @@ body {
   align-items: center;
   gap: 0.75rem;
   padding: 0.25rem 0;
+  /* Wrap when the label + control group exceeds row width (e.g. large
+     font-size). The control group keeps margin-left: auto so it stays
+     right-aligned on its own line after wrapping. */
+  flex-wrap: wrap;
 }
 
 /* Right-align the control group so every row shares a clean right edge. */
@@ -418,6 +426,7 @@ body {
   align-items: center;
   justify-content: center;
   line-height: 1;
+  white-space: nowrap;
 }
 .settings-action-btn:hover {
   background: var(--accent);
@@ -430,6 +439,8 @@ body {
 
 .btn-group {
   display: flex;
+  /* Keep the segmented group intact when the row wraps. */
+  flex-shrink: 0;
 }
 
 .btn-group .toolbar-btn {
@@ -464,6 +475,7 @@ body {
   align-items: center;
   justify-content: center;
   line-height: 1;
+  white-space: nowrap;
   transition: background 0.15s;
 }
 
@@ -2470,6 +2482,7 @@ html.cite-sheet-open {
   justify-content: center;
   gap: 0.3em;
   line-height: 1;
+  white-space: nowrap;
   transition: background 0.15s, color 0.15s;
 }
 
