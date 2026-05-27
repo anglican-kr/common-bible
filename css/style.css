@@ -1731,6 +1731,15 @@ mark.search-highlight {
   opacity: 0.85;
 }
 
+/* Resume-banner name swap — same swap pattern as book-list / page-title. */
+.resume-text-mobile { display: none; }
+.resume-banner.compact .resume-text-full { display: none; }
+.resume-banner.compact .resume-text-mobile { display: inline; }
+@media (hover: none) and (pointer: coarse) {
+  .resume-banner .resume-text-full { display: none; }
+  .resume-banner .resume-text-mobile { display: inline; }
+}
+
 .resume-banner-close {
   display: flex;
   align-items: center;

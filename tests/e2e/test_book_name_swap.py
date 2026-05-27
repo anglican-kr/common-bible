@@ -1,6 +1,6 @@
 """E2E: book-name swap (full / mobile-shortened) across viewports.
 
-Covers two mechanisms:
+Covers three mechanisms:
   - Book-list buttons (/, /old_testament, /new_testament, /deuterocanon):
     NT books emit `.book-name-full` + `.book-name-mobile` spans. Touch
     devices always show mobile via media query; non-touch devices add
@@ -9,6 +9,10 @@ Covers two mechanisms:
     spans inside `#page-title`. JS adds `.compact` to `#page-title` when
     the full text would overflow the room remaining between the absolute-
     positioned back/bookmark buttons.
+  - Resume-reading banner (`.resume-banner`): when the saved reading
+    position is in an NT book, the banner emits `.resume-text-full` and
+    `.resume-text-mobile` spans and swaps via touch media query or
+    measurement (`.compact` on `.resume-banner`).
 
 Server prerequisite: `python3 scripts/serve.py 8080`.
 """
@@ -82,9 +86,9 @@ def test_book_list_touch_phone_shows_mobile_names(browser):
 
     # NT-shortened books show the mobile span via the touch media query.
     assert _book_list_link_state(page, "rom")["visible"] == "로마서"
-    assert _book_list_link_state(page, "1cor")["visible"] == "Ⅰ고린토"
-    assert _book_list_link_state(page, "2thess")["visible"] == "Ⅱ데살로니카"
-    assert _book_list_link_state(page, "1john")["visible"] == "요한Ⅰ서"
+    assert _book_list_link_state(page, "1cor")["visible"] == "1고린토"
+    assert _book_list_link_state(page, "2thess")["visible"] == "2데살로니카"
+    assert _book_list_link_state(page, "1john")["visible"] == "요한1서"
     assert _book_list_link_state(page, "rev")["visible"] == "요한묵시록"
 
     # Gospels + Acts keep the canonical name (no mobile override).
@@ -113,7 +117,7 @@ def test_book_list_touch_tablet_shows_mobile_names(browser):
     page.wait_for_selector(".book-list a")
 
     assert _book_list_link_state(page, "rom")["visible"] == "로마서"
-    assert _book_list_link_state(page, "2thess")["visible"] == "Ⅱ데살로니카"
+    assert _book_list_link_state(page, "2thess")["visible"] == "2데살로니카"
 
     ctx.close()
 
@@ -153,8 +157,8 @@ def test_chapter_header_iphone_uses_compact_title(browser):
 
     state = _title_state(page)
     assert state["hasMobile"] is True
-    assert state["compact"] is True, "iPhone should not fit full Ⅰ고린토 title"
-    assert state["visible"] == "Ⅰ고린토 5장"
+    assert state["compact"] is True, "iPhone should not fit full 1고린토 title"
+    assert state["visible"] == "1고린토 5장"
     # aria-label preserves the canonical (formal) name for screen readers.
     assert state["ariaLabel"] == "고린토인들에게 보낸 첫째 편지 5장"
 
@@ -188,7 +192,7 @@ def test_chapter_header_desktop_huge_text_triggers_compact(browser):
 
     state = _title_state(page)
     assert state["compact"] is True
-    assert state["visible"] == "Ⅰ고린토 5장"
+    assert state["visible"] == "1고린토 5장"
 
     ctx.close()
 

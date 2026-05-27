@@ -13,7 +13,7 @@
 
 **장 보기 헤더** (`#page-title`)
 
-- `setTitle`에 `mobileText` 옵션 인자 추가. `setTitleWithChapterPicker`는 NT 매핑을 내부에서 조합("Ⅰ고린토 5장" 등)
+- `setTitle`에 `mobileText` 옵션 인자 추가. `setTitleWithChapterPicker`는 NT 매핑을 내부에서 조합("1고린토 5장" 등)
 - 측정: 정식 명칭이 `#page-title.clientWidth - 5.2rem`(좌우 뒤로가기·북마크 버튼 + 여유) 안에 들어가는지 확인. 넘치면 `.compact` 추가
 - 피커 버튼의 `::after` chevron 0.8rem 여유분 반영. ResizeObserver는 lazy-init으로 단위 테스트와 분리
 

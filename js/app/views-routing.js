@@ -555,25 +555,25 @@ function effectiveDivision(book) {
 // 복음서 4권 + 사도행전은 사양상 명칭 변경 없음.
 const NT_MOBILE_NAME = {
   rom:    "로마서",
-  "1cor": "Ⅰ고린토",
-  "2cor": "Ⅱ고린토",
+  "1cor": "1고린토",
+  "2cor": "2고린토",
   gal:    "갈라디아",
   eph:    "에페소",
   phil:   "필립비",
   col:    "골로사이",
-  "1thess": "Ⅰ데살로니카",
-  "2thess": "Ⅱ데살로니카",
-  "1tim": "Ⅰ디모테오",
-  "2tim": "Ⅱ디모테오",
+  "1thess": "1데살로니카",
+  "2thess": "2데살로니카",
+  "1tim": "1디모테오",
+  "2tim": "2디모테오",
   titus:  "디도서",
   phlm:   "필레몬서",
   heb:    "히브리서",
   jas:    "야고보서",
-  "1pet": "Ⅰ베드로",
-  "2pet": "Ⅱ베드로",
-  "1john": "요한Ⅰ서",
-  "2john": "요한Ⅱ서",
-  "3john": "요한Ⅲ서",
+  "1pet": "1베드로",
+  "2pet": "2베드로",
+  "1john": "요한1서",
+  "2john": "요한2서",
+  "3john": "요한3서",
   jude:   "유다서",
   rev:    "요한묵시록",
 };
@@ -861,12 +861,21 @@ function renderResumeBanner(books) {
   if (!lastBook) return;
   const isPrologue = pos.chapter === "prologue";
   const href = `/${pos.bookId}/${pos.chapter}?resume=1`;
-  const label = isPrologue
-    ? `이어읽기: ${lastBook.name_ko} 머리말`
-    : `이어읽기: ${lastBook.name_ko} ${pos.chapter}${chUnit(lastBook.id)}`;
+  const suffix = isPrologue ? "머리말" : `${pos.chapter}${chUnit(lastBook.id)}`;
+  const fullLabel = `이어읽기: ${lastBook.name_ko} ${suffix}`;
+  const mobileBookName = NT_MOBILE_NAME[lastBook.id];
+  const mobileLabel = mobileBookName ? `이어읽기: ${mobileBookName} ${suffix}` : null;
 
   const wrapper = el("div", { className: "resume-banner" });
-  wrapper.appendChild(el("a", { className: "resume-banner-link", href }, label));
+  const link = el("a", { className: "resume-banner-link", href });
+  if (mobileLabel) {
+    link.setAttribute("aria-label", fullLabel);
+    link.appendChild(el("span", { className: "resume-text-full", "aria-hidden": "true" }, fullLabel));
+    link.appendChild(el("span", { className: "resume-text-mobile", "aria-hidden": "true" }, mobileLabel));
+  } else {
+    link.textContent = fullLabel;
+  }
+  wrapper.appendChild(link);
 
   const closeBtn = el("button", {
     className: "resume-banner-close",
@@ -882,6 +891,67 @@ function renderResumeBanner(books) {
 
   clearNode($resumeBannerSlot);
   $resumeBannerSlot.appendChild(wrapper);
+  if (mobileLabel) {
+    applyResumeBannerCompactness(wrapper);
+    _observeResumeBanner(wrapper);
+  }
+}
+
+// Resume banner compactness — same measurement idea as book-list / title.
+// Banner is a flex row: .resume-banner-link (flex:1) + .resume-banner-close
+// (2.2rem). When the full text natural width exceeds the link's available
+// inner width, swap to the mobile-shortened label.
+/** @type {ResizeObserver | null} */
+let _resumeBannerObs = null;
+
+/** @param {HTMLElement} wrapper */
+function applyResumeBannerCompactness(wrapper) {
+  const link = /** @type {HTMLElement | null} */ (wrapper.querySelector(".resume-banner-link"));
+  const full = /** @type {HTMLElement | null} */ (wrapper.querySelector(".resume-text-full"));
+  const mobile = wrapper.querySelector(".resume-text-mobile");
+  if (!link || !full || !mobile) {
+    wrapper.classList.remove("compact");
+    return;
+  }
+  wrapper.classList.remove("compact");
+
+  const prevWs = full.style.whiteSpace;
+  const prevDisplay = full.style.display;
+  full.style.whiteSpace = "nowrap";
+  full.style.display = "inline-block";
+  const naturalWidth = full.offsetWidth;
+  full.style.whiteSpace = prevWs;
+  full.style.display = prevDisplay;
+
+  const cs = getComputedStyle(link);
+  const padL = parseFloat(cs.paddingLeft) || 0;
+  const padR = parseFloat(cs.paddingRight) || 0;
+  const availableWidth = link.clientWidth - padL - padR;
+
+  if (naturalWidth > availableWidth + 0.5) {
+    wrapper.classList.add("compact");
+  }
+}
+
+/** @param {HTMLElement} wrapper */
+function _observeResumeBanner(wrapper) {
+  if (typeof ResizeObserver === "undefined") return;
+  if (!_resumeBannerObs) {
+    /** @type {Map<Element, ReturnType<typeof setTimeout>>} */
+    const debounce = new Map();
+    _resumeBannerObs = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const target = entry.target;
+        const prev = debounce.get(target);
+        if (prev) clearTimeout(prev);
+        debounce.set(target, setTimeout(() => {
+          debounce.delete(target);
+          if (target.isConnected) applyResumeBannerCompactness(/** @type {HTMLElement} */ (target));
+        }, 50));
+      }
+    });
+  }
+  _resumeBannerObs.observe(wrapper);
 }
 
 function renderDivisionList(books, division) {
