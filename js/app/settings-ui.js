@@ -25,6 +25,7 @@ window.appSettings = (() => {
     loadTheme, saveTheme,
     loadBookOrder, saveBookOrder,
     loadCiteShow, saveCiteShow,
+    loadAudioShow, saveAudioShow,
   } = window.appStorage;
 
   const $settingsAnchor = _$("settings-anchor");
@@ -320,9 +321,37 @@ window.appSettings = (() => {
       }
       citeRow.appendChild(citeGroup);
 
+      // Audiobook visibility — when off, audio bar is hidden and the FAB
+      // falls back to its lower default position (CSS sibling rule keys off
+      // #audio-bar[hidden]).
+      const audioRow = el("div", { className: "settings-row" });
+      audioRow.appendChild(el("span", { className: "settings-label" }, "오디오북"));
+      const audioCurrent = loadAudioShow();
+      const audioGroup = el("div", { className: "btn-group", role: "group", "aria-label": "오디오북 선택" });
+      for (const { val, label, announceLabel } of [
+        { val: true,  label: "켜기", announceLabel: "오디오북 켜기" },
+        { val: false, label: "끄기", announceLabel: "오디오북 끄기" },
+      ]) {
+        const audioBtn = el("button", {
+          className: "toolbar-btn",
+          "aria-pressed": String(audioCurrent === val),
+        }, label);
+        audioBtn.addEventListener("click", () => {
+          saveAudioShow(val);
+          if (typeof window.applyAudioShow === "function") window.applyAudioShow(val);
+          audioGroup.querySelectorAll(".toolbar-btn").forEach((b) =>
+            b.setAttribute("aria-pressed", String(b === audioBtn))
+          );
+          announce(announceLabel);
+        });
+        audioGroup.appendChild(audioBtn);
+      }
+      audioRow.appendChild(audioGroup);
+
       section1.appendChild(startupRow);
       section1.appendChild(orderRow);
       section1.appendChild(citeRow);
+      section1.appendChild(audioRow);
       popover.appendChild(section1);
 
       // ── Section 2: Typography & appearance ──

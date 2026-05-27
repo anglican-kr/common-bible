@@ -581,6 +581,7 @@ function createSyncMachine({ onStateChange } = {}) {
       if (s.colorScheme?.v != null && typeof window.applyColorScheme === "function") window.applyColorScheme(/** @type {string} */ (s.colorScheme.v));
       if (s.theme?.v       != null && typeof window.applyTheme       === "function") window.applyTheme(/** @type {string} */ (s.theme.v));
       if (s.citeShow?.v    != null && typeof window.applyCiteShow    === "function") window.applyCiteShow(/** @type {boolean} */ (s.citeShow.v));
+      if (s.audioShow?.v   != null && typeof window.applyAudioShow   === "function") window.applyAudioShow(/** @type {boolean} */ (s.audioShow.v));
       _snackbar("다른 기기에서 변경된 데이터를 불러왔습니다.");
     }
   }

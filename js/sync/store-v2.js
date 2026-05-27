@@ -25,6 +25,7 @@ const _SETTING_LS_KEYS = {
   bookOrder:       "bible-book-order",
   startupBehavior: "bible-startup",
   citeShow:        "bible-cite-show",
+  audioShow:       "bible-audio-show",
 };
 const _LR_KEY = "bible-last-read";
 
@@ -125,6 +126,7 @@ function _emptyDoc() {
       bookOrder:       { v: null, _u: 0 },
       startupBehavior: { v: null, _u: 0 },
       citeShow:        { v: null, _u: 0 },
+      audioShow:       { v: null, _u: 0 },
     },
     lastRead: { v: null, _u: 0 },
   };

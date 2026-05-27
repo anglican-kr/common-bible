@@ -515,6 +515,44 @@ test("saveCiteShow: swallows localStorage errors", () => {
   assert.doesNotThrow(() => h.appStorage.saveCiteShow(false));
 });
 
+// ── audio player visibility ──────────────────────────────────────────────────
+
+test("loadAudioShow: defaults to true when unset", () => {
+  const h = loadStorage();
+  assert.equal(h.appStorage.loadAudioShow(), true);
+});
+
+test("loadAudioShow: reads '1' as true and '0' as false (save format)", () => {
+  const hOn  = loadStorage({ localStorageInit: { "bible-audio-show": "1" } });
+  const hOff = loadStorage({ localStorageInit: { "bible-audio-show": "0" } });
+  assert.equal(hOn.appStorage.loadAudioShow(), true);
+  assert.equal(hOff.appStorage.loadAudioShow(), false);
+});
+
+// Mirrors loadCiteShow tolerance for sync's JSON-serialized "true"/"false".
+test("loadAudioShow: reads 'true'/'false' written by sync applyToLegacyKeys", () => {
+  const hOn  = loadStorage({ localStorageInit: { "bible-audio-show": "true" } });
+  const hOff = loadStorage({ localStorageInit: { "bible-audio-show": "false" } });
+  assert.equal(hOn.appStorage.loadAudioShow(), true);
+  assert.equal(hOff.appStorage.loadAudioShow(), false);
+});
+
+test("saveAudioShow: writes '1'/'0' and notifies sync + drive", () => {
+  const h = loadStorage();
+  h.appStorage.saveAudioShow(false);
+  assert.equal(h.localStorage._raw["bible-audio-show"], "0");
+  h.appStorage.saveAudioShow(true);
+  assert.equal(h.localStorage._raw["bible-audio-show"], "1");
+  assert.deepEqual(h.syncStoreV2._calls.saveSetting,
+    [{ key: "audioShow", val: false }, { key: "audioShow", val: true }]);
+  assert.equal(h.driveSync._calls.scheduleUpload, 2);
+});
+
+test("saveAudioShow: swallows localStorage errors", () => {
+  const h = loadStorage({ localStorageThrowOn: "all" });
+  assert.doesNotThrow(() => h.appStorage.saveAudioShow(false));
+});
+
 // ── font size ────────────────────────────────────────────────────────────────
 
 test("loadFontSize: defaults to DEFAULT_FONT_SIZE (18) when unset", () => {
