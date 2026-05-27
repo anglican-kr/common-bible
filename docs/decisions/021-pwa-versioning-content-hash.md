@@ -154,3 +154,34 @@ DATA_CACHE / AUDIO_CACHE는 이제 rev 없는 고정 이름 (`"data"`, `"audio"`
 > validate.yml (paths 필터 없음) 만 자가 commit 에서 재발화해 빌드된
 > artifacts 에 대해 정합성을 다시 검증한다. 결과적으로 main 의 마지막
 > validate 가 항상 실제 산출물 상태를 반영하게 된다.
+
+> **개정 (2026-05-27, 1.5.5):** SW 셸 프리캐시 캐시버스터 + nginx 응답 헤더 정책
+>
+> 1.5.4 릴리스 후 일부 사용자에게서 SHELL_CACHE 이름은 `shell-1.5.4` 인데
+> 그 안의 `js/app/settings-ui.js` 본문이 1.5.3 코드인 stale 사고가 발생.
+> 같은 SHELL_CACHE 의 다른 파일(`version.json` 같이 매 릴리스 바이트가
+> 변하는 파일) 만 fresh 였다 — 안정 URL 의 JS/CSS 가 CDN/엣지/origin
+> 어딘가에서 옛 etag·옛 max-age 로 cache hit 응답을 돌려준 패턴으로
+> 해석됨. §3 의 SHELL_CACHE 파생 자체는 정상 동작했고 (이름은 올바르게
+> bump 됨), 채워 넣은 콘텐츠가 stale 이었던 것.
+>
+> 두 층으로 닫는다:
+>
+> 1. **앱 측 (1.5.5, PR #147 머지):** `sw.js` install 핸들러가 각 셸
+>    URL 을 `?v=<APP_VERSION>` 으로 fetch 해 중간 캐시 키를 강제로 새로
+>    만들고, `cache.put` 은 쿼리 없는 원본 Request 로 저장 (페이지 런타임
+>    요청 매칭 보존). 원자성 유지를 위해 모든 fetch 를 먼저 await 한 뒤
+>    한꺼번에 put — `cache.addAll` 의 all-or-nothing 시맨틱 보존. 중간
+>    fetch 실패 시 SHELL_CACHE 는 이전 상태 그대로.
+>
+> 2. **서버 측 (`common-bible-server/nginx/cache-policy.example.conf`):**
+>    셸 단일 파일(`sw.js`, `sw-version.js`, `version.json`,
+>    `manifest.webmanifest`, `bible-manifest.json`, `audio-manifest.json`,
+>    `index.html`, `privacy.html`)·JS/CSS 디렉토리·데이터 JSON 전부
+>    `Cache-Control: no-cache, must-revalidate`. ETag 일치 시 304 라
+>    대역폭 부담 무시 가능, SW 가 캐시 hit 으로 서빙해 사용자 latency
+>    영향도 없음. 오디오 mp3 는 매니페스트 hash 가 evict 트리거이므로
+>    `public, max-age=3600`, 아이콘·스플래시는 `max-age=86400`.
+>
+> 회복 경로: 1.5.4 stale 에 갇힌 사용자는 1.5.5 SW install·activate
+> 시점에 자동 회복. 즉시 회복은 설정 → "캐시 초기화".
