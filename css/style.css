@@ -447,6 +447,20 @@ body {
   border-radius: 0;
 }
 
+/* Settings popover: every .btn-group bar (외경 / 시작 화면 / 인용·주석 /
+   글자 크기 / 테마) shares the same total width so the right edge of the
+   popover stays visually aligned across rows. Buttons inside divide the
+   shared width equally regardless of their text length. */
+.settings-popover .settings-row > .btn-group {
+  width: 11rem;
+  flex-shrink: 0;
+}
+
+.settings-popover .settings-row > .btn-group .toolbar-btn {
+  flex: 1;
+  min-width: 0;
+}
+
 .btn-group .toolbar-btn + .toolbar-btn {
   border-left: none;
 }
