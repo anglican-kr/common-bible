@@ -823,6 +823,10 @@ declare global {
     applyColorScheme?: (scheme: string) => void;
     applyTheme?: (theme: string) => void;
     applyCiteShow?: (on: boolean) => void;
+    // Manual SW update check — set by app.js inside registerServiceWorker()
+    // so it can capture the registration and reuse showUpdateToast(). Returns
+    // a status object the caller can surface as transient feedback.
+    checkForUpdates?: () => Promise<{ ok: boolean; status?: string; reason?: string }>;
   }
 
   // App-layer functions still owned by app.js as of Phase 5 (ADR-018). Each

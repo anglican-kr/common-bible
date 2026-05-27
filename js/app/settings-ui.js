@@ -409,7 +409,8 @@ window.appSettings = (() => {
       const showInstall = !!window.install && window.install.detectPlatform() !== "installed";
       const showCache = "caches" in window;
       const showDrive = !!window.driveSync;
-      if (showInstall || showCache || showDrive) {
+      const showUpdateCheck = "serviceWorker" in navigator;
+      if (showInstall || showCache || showDrive || showUpdateCheck) {
         const section3 = el("section", { className: "settings-section" });
 
         if (showInstall) {
@@ -502,6 +503,50 @@ window.appSettings = (() => {
               section3.appendChild(el("p", { style: "font-size:0.78rem;color:var(--accent);padding:0 0.25rem 0.25rem;margin:0;" }, "세션 만료. 재연결해 주세요."));
             }
           }
+        }
+
+        if (showUpdateCheck) {
+          // Manual SW update check (sits between 백업 & 동기화 and 캐시).
+          // Reuses the existing showUpdateToast flow via window.checkForUpdates;
+          // the button itself just renders transient status text.
+          const updateRow = el("div", { className: "settings-row" });
+          updateRow.appendChild(el("span", { className: "settings-label" }, "업데이트"));
+          const updateBtn = el("button", {
+            className: "settings-action-btn",
+            type: "button",
+            "aria-label": "업데이트 지금 확인",
+          }, "지금 확인");
+          let updateBusy = false;
+          updateBtn.addEventListener("click", async () => {
+            if (updateBusy) return;
+            updateBusy = true;
+            updateBtn.disabled = true;
+            const restore = () => {
+              setTimeout(() => {
+                updateBusy = false;
+                updateBtn.disabled = false;
+                updateBtn.textContent = "지금 확인";
+              }, 2500);
+            };
+            updateBtn.textContent = "확인 중…";
+            try {
+              const result = await (window.checkForUpdates?.() ?? Promise.resolve({ ok: false, reason: "not-ready" }));
+              if (!result.ok) {
+                updateBtn.textContent = "오류";
+              } else if (result.status === "up-to-date") {
+                updateBtn.textContent = "최신 버전";
+              } else {
+                // "waiting" or "installing" — toast is (or will be) on screen.
+                updateBtn.textContent = "업데이트 발견";
+              }
+            } catch (_) {
+              updateBtn.textContent = "오류";
+            } finally {
+              restore();
+            }
+          });
+          updateRow.appendChild(updateBtn);
+          section3.appendChild(updateRow);
         }
 
         if (showCache) {

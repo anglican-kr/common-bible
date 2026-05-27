@@ -248,6 +248,30 @@ function registerServiceWorker() {
     // Listen for future updates — fired when reg.update() finds a new SW too
     reg.addEventListener("updatefound", () => trackInstalling(reg));
     schedulePeriodicUpdate(reg);
+
+    // Manual check trigger — settings panel's "업데이트 지금 확인" button calls
+    // this. Returns a small status object so the caller can render transient
+    // feedback ("최신 버전" / "업데이트 발견" / "오류"). The actual update
+    // banner is the same toast the automatic flow uses.
+    /** @returns {Promise<{ok: boolean, status?: string, reason?: string}>} */
+    window.checkForUpdates = async () => {
+      try {
+        if (reg.waiting) {
+          showUpdateToast(reg.waiting);
+          return { ok: true, status: "waiting" };
+        }
+        if (reg.installing) return { ok: true, status: "installing" };
+        await reg.update();
+        if (reg.waiting) {
+          showUpdateToast(reg.waiting);
+          return { ok: true, status: "waiting" };
+        }
+        if (reg.installing) return { ok: true, status: "installing" };
+        return { ok: true, status: "up-to-date" };
+      } catch (_) {
+        return { ok: false, reason: "error" };
+      }
+    };
   }).catch(() => {});
 }
 
