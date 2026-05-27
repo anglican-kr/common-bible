@@ -216,6 +216,22 @@ common-bible-server/                # 서버 저장소 (비공개)
 
 - [x] TypeScript `// @ts-check` + JSDoc 전 모듈 영구 활성화 (ADR-012).
 - [x] `app.js` 6,082 → 283줄, 9개 도메인 모듈 분할 (ADR-018) + ESM 일괄 채택 (ADR-019).
-- [x] 클라이언트 JS 유닛 테스트 485 케이스 (ADR-013).
+- [x] 클라이언트 JS 유닛 테스트 537 케이스 (ADR-013).
 - [x] 모노레포 4분할(앱·data·audio·server) — ADR-020.
+- [x] PWA 버전·캐시 무효화 재설계 (콘텐츠 해시 매니페스트 항목별 lazy 무효화) — ADR-021.
+
+### 6단계: 본문 인용·주석 — ✅ Phase 1·2 완료 (ADR-022)
+
+- [x] 데이터 파이프라인: `<cite src="…">…</cite>` segment 추출, `[^id]` 주석 추출 (`common-bible-data/src/parser.py`).
+- [x] 인용 칩: dedup 렌더, 운문 인용은 별도 줄, 옅은 회색 톤.
+- [x] 인용 본문 바텀 시트: 칩 클릭 → 출처 본문, "이 장 전체 보기" 확장 + 인용 절 강조, 드래그 핸들로 리사이즈·닫기, 다중 ref / parallels / 다중 장 (`53:5,7-9`) 지원.
+- [x] 주석: ※ 위첨자 anchor + 클릭 시 본문 옆 툴팁, 인쇄 시 하단 footnote 양식.
+- [x] 토글: 설정에서 칩·주석 각각 켜기/끄기 (`bible-cite-show` / `bible-note-show`).
+- [x] 첫 진입 코치마크.
+- [x] 유닛 테스트 20 케이스(`tests/unit/citations.test.js`) + QA 보고서.
+- [ ] Phase 3 (장기): NT 전 본문에 `<cite>` + 주석을 사목·신학 자문 협업으로 수기 저작 — 콘텐츠 작업.
+
+### 7단계: 모바일 가독성 폴리시 — ✅ 완료
+
+- [x] 신약 책 이름 자동 짧게 표시 (책 목록·장 헤더): 터치 기기 미디어 쿼리 + 비-터치 ResizeObserver 측정. 글자 크기 변경 자동 재측정. 정식 명칭은 `aria-label` 로 항상 스크린리더에 노출 (2026-05-27, `docs/qa/2026-05-27-book-name-shortening.md`).
 
