@@ -71,6 +71,10 @@ class NoiseFilterTest(unittest.TestCase):
     def test_skip_ci_is_data_noise(self):
         self.assertTrue(changelog.is_data_noise("build: 파이프라인 자동 빌드 [skip ci]"))
 
+    def test_auto_build_is_data_noise_without_skip_ci(self):
+        """build.yml 자동 커밋이 [skip ci] 없이도 노이즈로 인식돼야 한다."""
+        self.assertTrue(changelog.is_data_noise("build: 파이프라인 자동 빌드"))
+
     def test_data_commit_is_not_data_noise(self):
         self.assertFalse(changelog.is_data_noise("data: 예레미야 2-17장 리포맷"))
 

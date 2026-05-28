@@ -45,6 +45,9 @@ GITMODULES = ROOT / ".gitmodules"
 RELEASE_COMMIT_RE = re.compile(r"^chore: \d+\.\d+\.\d+ 릴리스")
 SYNC_COMMIT_RE = re.compile(r"^data: 서브모듈 포인터 \+ sitemap 갱신$")
 SKIP_CI_MARKER = "[skip ci]"
+# common-bible-data 의 build.yml 이 파이프라인 산출물을 자동 커밋백할 때 쓰는
+# 고정 subject. 사용자가 손으로 쓴 commit 이 아니므로 changelog 에서 제외.
+DATA_AUTO_BUILD_RE = re.compile(r"^build: 파이프라인 자동 빌드")
 
 SLUG_RE = re.compile(r"[:/]([^/:]+)/([^/]+?)(?:\.git)?$")
 
@@ -73,7 +76,7 @@ def is_app_noise(subject: str) -> bool:
 
 def is_data_noise(subject: str) -> bool:
     """True for data-repo commits that should not appear in a changelog."""
-    return SKIP_CI_MARKER in subject
+    return SKIP_CI_MARKER in subject or bool(DATA_AUTO_BUILD_RE.match(subject))
 
 
 def entries_from_compare(payload: dict) -> list[tuple[str, str]]:
