@@ -2205,6 +2205,26 @@ body.cites-shown .note-anchor--variant:focus-visible {
   display: none;
 }
 
+/* Desktop: right-side panel (mirrors bookmark-drawer pattern). Slides over the
+   right edge of the viewport; centered main content stays readable on the
+   left. Resize handle on the left edge lets the user widen the panel. */
+@media (min-width: 769px) {
+  #cite-sheet {
+    top: 2.5vh;
+    right: 0;
+    bottom: auto;
+    left: auto;
+    margin-inline: 0;
+    width: min(440px, 90vw);
+    max-width: none;
+    height: 95vh;
+    max-height: none;
+    border-radius: 16px 0 0 16px;
+    box-shadow: -4px 0 24px rgba(0, 0, 0, 0.15);
+    padding-bottom: 0;
+  }
+}
+
 /* Larger vertical padding gives a comfortable touch target (~24px tall)
    around the visible 4px bar; touch-action:none keeps the gesture from
    scrolling the page during a drag-resize. */
@@ -2215,6 +2235,47 @@ body.cites-shown .note-anchor--variant:focus-visible {
   padding: 0.6rem 0;
   cursor: ns-resize;
   touch-action: none;
+}
+
+/* Hide drag handle on desktop — width-resize replaces height-resize there. */
+@media (min-width: 769px) {
+  #cite-sheet-handle {
+    display: none;
+  }
+}
+
+/* Left-edge resize handle (desktop only) mirrors #bookmark-drawer-resize. */
+#cite-sheet-resize {
+  display: none;
+}
+
+@media (min-width: 769px) {
+  #cite-sheet-resize {
+    display: flex;
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: calc(0.22rem + 0.5rem * 2);
+    cursor: ew-resize;
+    align-items: center;
+    justify-content: center;
+    touch-action: none;
+    z-index: 1;
+  }
+
+  #cite-sheet-resize::after {
+    content: '';
+    width: 0.22rem;
+    height: 2.2rem;
+    background: var(--border);
+    border-radius: 2px;
+    transition: background 0.15s;
+  }
+
+  #cite-sheet-resize:hover::after {
+    background: var(--accent);
+  }
 }
 
 #cite-sheet-handle span {

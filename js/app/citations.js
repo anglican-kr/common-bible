@@ -812,9 +812,41 @@ window.appCitations = (() => {
       }
     }
     handle.addEventListener("pointerdown", (e) => {
+      if (window.innerWidth >= 769) return; // desktop uses fixed-size side panel
       e.preventDefault();
       startY = e.clientY;
       startH = sheet.offsetHeight;
+      handle.setPointerCapture(e.pointerId);
+      handle.addEventListener("pointermove", onPointerMove);
+      handle.addEventListener("pointerup", onPointerUp, { once: true });
+    });
+  }
+
+  /**
+   * Desktop-only: drag the left edge to resize the side panel width.
+   * Mirrors `initBookmarkDrawerResize` in bookmark.js — drag left widens, drag
+   * right narrows. Clamp [240, 85vw] matches that handler.
+   */
+  function _initSheetResize() {
+    const handle = document.getElementById("cite-sheet-resize");
+    const sheet = /** @type {HTMLElement | null} */ (document.getElementById("cite-sheet"));
+    if (!handle || !sheet) return;
+    let startX = 0;
+    let startW = 0;
+    /** @param {PointerEvent} e */
+    function onPointerMove(e) {
+      const delta = startX - e.clientX; // drag left = wider
+      const newW = Math.min(Math.max(startW + delta, 240), window.innerWidth * 0.85);
+      sheet.style.width = `${newW}px`;
+    }
+    function onPointerUp() {
+      handle.removeEventListener("pointermove", onPointerMove);
+    }
+    handle.addEventListener("pointerdown", (e) => {
+      if (window.innerWidth < 769) return;
+      e.preventDefault();
+      startX = e.clientX;
+      startW = sheet.offsetWidth;
       handle.setPointerCapture(e.pointerId);
       handle.addEventListener("pointermove", onPointerMove);
       handle.addEventListener("pointerup", onPointerUp, { once: true });
@@ -842,8 +874,9 @@ window.appCitations = (() => {
     // Reset any drag-resize from a previous open. The body stays interactive
     // while the sheet is open (only a focus trap, no scrim) so cite chips
     // visible in the unobscured portion can re-trigger openCiteSheet without
-    // a closeCiteSheet in between — the previous inline height would leak in.
+    // a closeCiteSheet in between — the previous inline height/width would leak in.
     sheet.style.height = "";
+    sheet.style.width = "";
     sheet.hidden = false;
     document.documentElement.classList.add("cite-sheet-open");
     _updateSheetHeader();
@@ -860,8 +893,9 @@ window.appCitations = (() => {
     if (!sheet) return;
     sheet.hidden = true;
     // Reset any drag-resize so the next open starts from the CSS default
-    // (65vh) rather than the user's previous resize.
+    // (mobile: 65vh height; desktop: min(440px, 90vw) width).
     sheet.style.height = "";
+    sheet.style.width = "";
     document.documentElement.classList.remove("cite-sheet-open");
     if (_sheetTrapCleanup) { _sheetTrapCleanup(); _sheetTrapCleanup = null; }
     if (_sheetReturnFocus && typeof _sheetReturnFocus.focus === "function") {
@@ -881,6 +915,7 @@ window.appCitations = (() => {
       void _renderSheetBody();
     });
     _initSheetDrag();
+    _initSheetResize();
 
     document.addEventListener("keydown", (e) => {
       if (e.key === "Escape") {
