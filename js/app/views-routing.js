@@ -1604,6 +1604,12 @@ async function route() {
   if (_scrollTrackCleanup) _scrollTrackCleanup();
   clearNode($resumeBannerSlot);
   if (readingContext.verseSelectMode) exitVerseSelectMode();
+  // The citation sheet is anchored to a specific citation context, so a route
+  // change (link nav or back/forward — both land here) should dismiss it.
+  // Tapping another cite chip re-opens it without routing, so the intended
+  // non-modal "tap chips in the visible page" behavior is preserved.
+  const citeSheet = document.getElementById("cite-sheet");
+  if (citeSheet && !citeSheet.hidden) window.appCitations?.closeCiteSheet();
   const parsed = parsePath();
   const { view, bookId, chapter, division } = parsed;
 
