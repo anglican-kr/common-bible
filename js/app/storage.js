@@ -42,7 +42,7 @@ window.appStorage = (() => {
   const DEFAULT_FONT_SIZE = 18;
   /** @type {ReadonlyArray<ColorSchemeEntry>} */
   const COLOR_SCHEMES = [
-    { id: "navy",   name: "네이비", swatch: "#1a1a2e", iconBg: "#1a1a2e" },
+    { id: "navy",   name: "네이비", swatch: "#22244a", iconBg: "#1a1a2e" },
     { id: "red",    name: "빨강",   swatch: "#a01828", iconBg: "#a01828" },
     { id: "green",  name: "초록",   swatch: "#1a6b50", iconBg: "#1a6b50" },
     { id: "purple", name: "보라",   swatch: "#5a2d82", iconBg: "#5a2d82" },

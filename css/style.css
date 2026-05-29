@@ -2742,6 +2742,13 @@ html.cite-sheet-open {
   outline-color: var(--text);
 }
 
+/* Dark mode: navy swatch sits very close to the popover bg (#22244a on
+   #1f1f36). A faint ring keeps every swatch's silhouette readable without
+   altering the swatch colour itself. */
+[data-theme="dark"] .color-swatch {
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
 .cache-clear-btn {
   font-family: inherit;
   font-size: 0.8rem;

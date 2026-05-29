@@ -117,6 +117,11 @@ window.appSettings = (() => {
 
   /** @param {string} schemeName */
   function applyColorScheme(schemeName) {
+    // Defensive migration: Drive sync restore (state-machine.js) calls this
+    // directly with whatever value the remote device sent, bypassing
+    // loadColorScheme's migration. Mirror the rename here so any caller is
+    // covered.
+    if (schemeName === "terracotta") schemeName = "red";
     // Invalidate any in-flight updateAppIcons call from a previous scheme.
     _iconGeneration++;
     const scheme = COLOR_SCHEMES.find((s) => s.id === schemeName) || COLOR_SCHEMES[0];
