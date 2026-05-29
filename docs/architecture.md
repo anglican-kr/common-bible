@@ -459,6 +459,8 @@ OAuth 측면 (가장 큰 공격 표면):
 | [021](decisions/021-pwa-versioning-content-hash.md)     | SHELL_CACHE = version.json 파생, DATA/AUDIO 콘텐츠 해시 매니페스트 |
 | [022](decisions/022-citations-and-annotations.md)       | 본문 인용(`<cite>`) + 주석(footnote) 표현과 단일 토글 렌더  |
 | [023](decisions/023-settings-toggle-switches.md)        | 설정 상위 4개 옵션 → OS별 네이티브 토글 스위치             |
+| [024](decisions/024-book-list-tabs-and-header-nav.md)   | 성서 목록 탭 통합 + 읽기 헤더 내비 재설계                  |
+| [025](decisions/025-header-scroll-elevation.md)         | 읽기 헤더 스크롤 elevation 그림자                          |
 
 ## 부록 B. 자주 보게 되는 파일 빠른 참조
 

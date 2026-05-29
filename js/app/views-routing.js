@@ -711,6 +711,23 @@ function initCompactHeader() {
 }
 // ── END COMPACT_HEADER ──
 
+// ── BEGIN SCROLL_ELEVATION ──
+// ADR-025: toggle `.scrolled` on #sticky-group based on whether the
+// zero-height #scroll-sentinel at the top of <body> is in the viewport.
+// IntersectionObserver fires only on visibility flips (cheaper than a
+// scroll listener + throttle) and route() resets to scroll-top, which
+// naturally puts the sentinel back in view → `.scrolled` clears on its own.
+function initScrollElevation() {
+  const sentinel = document.getElementById("scroll-sentinel");
+  const stickyGroup = _$("sticky-group");
+  if (!sentinel || typeof IntersectionObserver === "undefined") return;
+  const obs = new IntersectionObserver(([entry]) => {
+    stickyGroup.classList.toggle("scrolled", !entry.isIntersecting);
+  });
+  obs.observe(sentinel);
+}
+// ── END SCROLL_ELEVATION ──
+
 
 // ── Phase 7b additions ──
 // Views (renderBookList / renderChapter / renderPrologue / etc.),
@@ -2044,7 +2061,7 @@ const appViewsRouting = {
   loadBooks, loadVersion, loadChapter, loadPrologue,
   setTitle, setTitleWithChapterPicker,
   buildDivisionTabs, divisionLabels, divisionOrder, effectiveDivision,
-  initCompactHeader,
+  initCompactHeader, initScrollElevation,
   parsePath, route, navigate, hideAudioBar, applyAudioShow, renderError,
   _verseSelectionUnit,
 };
@@ -2061,6 +2078,7 @@ window.divisionLabels = divisionLabels;
 window.divisionOrder = divisionOrder;
 window.effectiveDivision = effectiveDivision;
 window.initCompactHeader = initCompactHeader;
+window.initScrollElevation = initScrollElevation;
 window.getBooksCache = () => booksCache;
 
 // Phase 7b ownership: routing + rendering helpers that earlier phases
@@ -2089,6 +2107,6 @@ export {
   loadBooks, loadVersion, loadChapter, loadPrologue,
   setTitle, setTitleWithChapterPicker,
   buildDivisionTabs, divisionLabels, divisionOrder, effectiveDivision,
-  initCompactHeader,
+  initCompactHeader, initScrollElevation,
   _verseSelectionUnit,
 };

@@ -298,6 +298,7 @@ window.addEventListener("DOMContentLoaded", () => {
     idle(() => {
       loadVersion();
       initCompactHeader();
+      initScrollElevation();
       initSheetDrag();
       initBookmarkSheetDrag();
       initBookmarkDrawerResize();
