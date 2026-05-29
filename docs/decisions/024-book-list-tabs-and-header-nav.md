@@ -27,7 +27,7 @@
 
 `/` 와 세 구분 라우트가 모두 이 함수 하나로 렌더된다. 차이는 활성 탭뿐이다.
 
-- 탭 = 구분. 탭 집합은 **제2경전(book-order) 설정**을 따른다(`divisionOrder()`).
+- 탭 = 구분. 탭 집합은 **외경(book-order) 설정**을 따른다(`divisionOrder()`).
   - canonical: `구약 | 외경 | 신약` (3탭)
   - vulgate: `구약 | 신약` (2탭, 외경은 구약 탭에 편입 — `effectiveDivision()`)
 - 탭은 구분 라우트(`/old_testament` 등)로 가는 `<a>` 다. 따라서 딥링크·SEO 색인

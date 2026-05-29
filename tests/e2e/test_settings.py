@@ -59,14 +59,14 @@ def test_startup_resume(browser):
 # ── 책 순서 ──────────────────────────────────────────────────────────────────
 
 def test_book_order_vulgate(browser):
-    """제2경전 토글 ON → bible-book-order = 'vulgate', 캡션 '구약에 포함'."""
+    """외경 토글 ON → bible-book-order = 'vulgate', 캡션 '구약에 포함'."""
     ctx = browser.new_context()
     ctx.add_init_script(CLEAR_APP_STORAGE)
     page = ctx.new_page()
     try:
         _open(page)
         pop = open_settings(page)
-        sw = pop.get_by_role("switch", name="제2경전")
+        sw = pop.get_by_role("switch", name="외경")
         # 기본값은 canonical(OFF); 켜면 vulgate.
         assert sw.is_checked() is False
         sw.click()
@@ -79,14 +79,14 @@ def test_book_order_vulgate(browser):
 
 
 def test_book_order_canonical(browser):
-    """제2경전 토글 ON 후 OFF → bible-book-order = 'canonical', 캡션 '별도 섹션에 표시'."""
+    """외경 토글 ON 후 OFF → bible-book-order = 'canonical', 캡션 '별도 섹션에 표시'."""
     ctx = browser.new_context()
     ctx.add_init_script(CLEAR_APP_STORAGE)
     page = ctx.new_page()
     try:
         _open(page)
         pop = open_settings(page)
-        sw = pop.get_by_role("switch", name="제2경전")
+        sw = pop.get_by_role("switch", name="외경")
         sw.click()  # → vulgate
         sw.click()  # → canonical
         page.wait_for_timeout(100)

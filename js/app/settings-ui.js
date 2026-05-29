@@ -366,7 +366,7 @@ window.appSettings = (() => {
       // Deuterocanon placement: ON = mixed into the OT (vulgate order),
       // OFF = separate section (canonical). Caption reflects the active state.
       const orderRow = makeToggleRow({
-        labelText: "제2경전",
+        labelText: "외경",
         checked: loadBookOrder() === "vulgate",
         getCaption: (on) => (on ? "구약에 포함" : "별도 섹션에 표시"),
         onToggle: (on) => {
