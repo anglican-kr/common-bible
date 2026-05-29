@@ -784,7 +784,7 @@ test("setTitleWithChapterPicker: appends home btn + picker btn + popover + bookm
 
 test("setTitleWithChapterPicker: psalms uses '편' unit", () => {
   const h = loadPopover();
-  const book = { id: "ps", name_ko: "시편", chapter_count: 150, has_prologue: false };
+  const book = { id: "ps", name_ko: "시편", chapter_count: 150, has_prologue: false, division: "old_testament" };
   h.setTitleWithChapterPicker(book, 23);
   const btn = h.$title.children[1];
   assert.equal(btn.textContent, "시편 23편");
@@ -793,7 +793,7 @@ test("setTitleWithChapterPicker: psalms uses '편' unit", () => {
 
 test("setTitleWithChapterPicker: non-psalms uses '장' unit", () => {
   const h = loadPopover();
-  const book = { id: "gen", name_ko: "창세기", chapter_count: 50, has_prologue: false };
+  const book = { id: "gen", name_ko: "창세기", chapter_count: 50, has_prologue: false, division: "old_testament" };
   h.setTitleWithChapterPicker(book, 1);
   const btn = h.$title.children[1];
   assert.equal(btn.textContent, "창세기 1장");
@@ -801,7 +801,7 @@ test("setTitleWithChapterPicker: non-psalms uses '장' unit", () => {
 
 test("setTitleWithChapterPicker: popover grid has chapter_count items", () => {
   const h = loadPopover();
-  const book = { id: "gen", name_ko: "창세기", chapter_count: 5, has_prologue: false };
+  const book = { id: "gen", name_ko: "창세기", chapter_count: 5, has_prologue: false, division: "old_testament" };
   h.setTitleWithChapterPicker(book, 2);
   const popover = h.$title.children[2];
   const grid = popover.children[0];
@@ -815,7 +815,7 @@ test("setTitleWithChapterPicker: popover grid has chapter_count items", () => {
 
 test("setTitleWithChapterPicker: marks current chapter with 'current' class", () => {
   const h = loadPopover();
-  const book = { id: "gen", name_ko: "창세기", chapter_count: 3, has_prologue: false };
+  const book = { id: "gen", name_ko: "창세기", chapter_count: 3, has_prologue: false, division: "old_testament" };
   h.setTitleWithChapterPicker(book, 2);
   const grid = h.$title.children[2].children[0];
   assert.equal(grid.children[0].className, "popover-item");
@@ -825,7 +825,7 @@ test("setTitleWithChapterPicker: marks current chapter with 'current' class", ()
 
 test("setTitleWithChapterPicker: prepends '머리말' link when has_prologue", () => {
   const h = loadPopover();
-  const book = { id: "sir", name_ko: "집회서", chapter_count: 51, has_prologue: true };
+  const book = { id: "sir", name_ko: "집회서", chapter_count: 51, has_prologue: true, division: "deuterocanon" };
   h.setTitleWithChapterPicker(book, 1);
   const grid = h.$title.children[2].children[0];
   // prologue link first, then 51 chapter links = 52 total
@@ -837,7 +837,7 @@ test("setTitleWithChapterPicker: prepends '머리말' link when has_prologue", (
 
 test("setTitleWithChapterPicker: btn click opens popover + traps focus", () => {
   const h = loadPopover();
-  const book = { id: "gen", name_ko: "창세기", chapter_count: 5, has_prologue: false };
+  const book = { id: "gen", name_ko: "창세기", chapter_count: 5, has_prologue: false, division: "old_testament" };
   h.setTitleWithChapterPicker(book, 1);
   const btn = h.$title.children[1];
   const popover = h.$title.children[2];
@@ -849,7 +849,7 @@ test("setTitleWithChapterPicker: btn click opens popover + traps focus", () => {
 
 test("setTitleWithChapterPicker: clicking a grid <a> closes popover", () => {
   const h = loadPopover();
-  const book = { id: "gen", name_ko: "창세기", chapter_count: 3, has_prologue: false };
+  const book = { id: "gen", name_ko: "창세기", chapter_count: 3, has_prologue: false, division: "old_testament" };
   h.setTitleWithChapterPicker(book, 1);
   const btn = h.$title.children[1];
   const popover = h.$title.children[2];
