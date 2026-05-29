@@ -256,7 +256,11 @@ window.appStorage = (() => {
   /** @returns {ColorSchemeId} */
   function loadColorScheme() {
     try {
-      const v = localStorage.getItem(COLOR_SCHEME_KEY);
+      let v = localStorage.getItem(COLOR_SCHEME_KEY);
+      // Renamed/replaced 2026-05-29: burgundy scheme was retired in favour of
+      // a true liturgical red. Pre-migration users (localStorage or Drive
+      // restore) read as red so their warm-dark preference isn't reset to navy.
+      if (v === "terracotta") v = "red";
       const found = COLOR_SCHEMES.find((s) => s.id === v);
       if (found) return found.id;
     } catch (_) {}

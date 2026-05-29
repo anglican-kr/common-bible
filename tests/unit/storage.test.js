@@ -613,6 +613,11 @@ test("loadColorScheme: falls back to 'navy' for unknown id", () => {
   assert.equal(h.appStorage.loadColorScheme(), "navy");
 });
 
+test("loadColorScheme: migrates legacy 'terracotta' to 'red'", () => {
+  const h = loadStorage({ localStorageInit: { "bible-color-scheme": "terracotta" } });
+  assert.equal(h.appStorage.loadColorScheme(), "red");
+});
+
 test("saveColorScheme: writes value and notifies sync + drive", () => {
   const h = loadStorage();
   h.appStorage.saveColorScheme("green");

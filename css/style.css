@@ -69,7 +69,6 @@
      always uses --accent so it tracks the chosen colour scheme. iOS uses the
      grey track; Material 3 uses the outline/surface-variant trio. */
   --switch-off-track: #d6d2cc;
-  --switch-m3-off-track: #e7e0ec;
   --switch-m3-outline: #79747e;
   --switch-m3-off-thumb: #79747e;
   --switch-desktop-off-track: #cdcdd5;
@@ -90,7 +89,6 @@
 
   /* Lighter than --bg-card so the OFF track never disappears into the panel. */
   --switch-off-track: #50506a;
-  --switch-m3-off-track: #3a3a55;
   --switch-m3-outline: #938f99;
   --switch-m3-off-thumb: #cfcad6;
   --switch-desktop-off-track: #45455a;
