@@ -843,7 +843,7 @@ declare global {
   //   openDriveDisconnectModal → bookmark.js (Phase 6) or stays
   //   clearAllCaches         → settings-ui? or app-main (Phase 8)
   //   parsePath, route, navigate → views-routing.js (Phase 7)
-  //   setTitle, setBreadcrumb    → views-routing.js (Phase 7)
+  //   setTitle                   → views-routing.js (Phase 7)
   //   hideAudioBar               → audio player section (Phase 7)
   //   renderError                → views-routing.js (Phase 7)
   function announce(msg: string): void;
@@ -898,9 +898,8 @@ declare global {
   function loadVersion(): Promise<string>;
   function loadChapter(bookId: string, chapter: number): Promise<BibleChapter>;
   function loadPrologue(bookId: string): Promise<BiblePrologue>;
-  function setTitleWithDivisionPicker(activeDivision: string): void;
   function setTitleWithChapterPicker(book: BookEntry, currentCh: number): void;
-  function buildDivisionBreadcrumb(label: string, activeDivision: string): HTMLElement;
+  function buildDivisionTabs(activeDivision: string): HTMLElement;
   function divisionLabels(): Record<string, string>;
   function divisionOrder(): string[];
   function effectiveDivision(book: BookEntry): string;
@@ -914,6 +913,8 @@ declare global {
   function gtag(...args: any[]): void;
   const dataLayer: any[];
   function buildBackBtn(ariaLabel: string, fallback: string): HTMLButtonElement;
+  function buildHomeBtn(target: string, ariaLabel: string): HTMLButtonElement;
+  function buildSettingsTrigger(): HTMLButtonElement;
   function buildBookmarkHeaderBtn(bookId: string | null, chapter: number | null): HTMLButtonElement;
   function openBookmarkDrawer(bookId: string | null, chapter: number | null): void;
   function closeBookmarkDrawer(): void;
@@ -940,7 +941,6 @@ declare global {
   function route(): Promise<void>;
   function navigate(path: string): void;
   function setTitle(text: string): void;
-  function setBreadcrumb(crumbs: Array<{ label: string; href?: string; divisionPicker?: boolean; activeDivision?: string }>): void;
   function hideAudioBar(): void;
   function renderError(msg: string): void;
 }

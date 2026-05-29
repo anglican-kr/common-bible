@@ -11,14 +11,13 @@
 //   - DATA_FETCHING block — loadBooks / loadVersion / loadChapter /
 //     loadPrologue. fetch + window stubs.
 //   - TITLE block — setTitle. $title + clearNode + el + announce stubs.
-//   - BREADCRUMB block — setBreadcrumb + buildDivisionBreadcrumb.
-//     $breadcrumb + el stubs.
 //   - DIVISION block — divisionLabels / divisionOrder / effectiveDivision +
 //     constants. loadBookOrder stub.
-//   - POPOVER block — setTitleWithDivisionPicker / setTitleWithChapterPicker.
-//     Open/close contract + focus trap + click-outside-to-close +
-//     click-on-link-to-close. Richer DOM stub with addEventListener +
-//     classList + hidden + querySelector + contains.
+//   - DIVISION_TABS block — buildDivisionTabs. Tab anchors per book-order
+//     setting + active-tab marking. el + divisionLabels/divisionOrder stubs.
+//   - POPOVER block — setTitleWithChapterPicker. Open/close contract + focus
+//     trap + click-outside-to-close + click-on-link-to-close. Richer DOM stub
+//     with addEventListener + classList + hidden + querySelector + contains.
 //   - COMPACT_HEADER block — initCompactHeader. Hysteretic 60px / 10px
 //     scroll-based class toggle. Window scroll listener stub.
 //   - VERSE_SELECTION block — _verseSelectionUnit. Pure-poetry multi-part
@@ -125,7 +124,7 @@ function loadDivision(initialBookOrder = "canonical") {
 
 // ── Minimal DOM stub (shared by TITLE + BREADCRUMB) ──────────────────────────
 // Same shape as search.test.js / bookmark.test.js Element stubs but pared to
-// what setTitle / setBreadcrumb / buildDivisionBreadcrumb actually use.
+// what setTitle / setTitleWithChapterPicker actually use.
 
 function makeDom() {
   class StubText {
@@ -227,24 +226,28 @@ function loadTitle() {
   };
 }
 
-// ── BREADCRUMB loader ────────────────────────────────────────────────────────
+// ── DIVISION_TABS loader ─────────────────────────────────────────────────────
 
-function loadBreadcrumb() {
-  const { document, StubElement } = makeDom();
-  const $breadcrumb = new StubElement("nav");
-  $breadcrumb.id = "breadcrumb";
+function loadDivisionTabs(order = ["old_testament", "deuterocanon", "new_testament"]) {
+  const { document } = makeDom();
+  const labels = {
+    old_testament: "구약",
+    deuterocanon: "외경",
+    new_testament: "신약",
+  };
   const ctx = {
     Object, Array, String, Number, Boolean, JSON, console, Error,
-    document, $breadcrumb,
+    document,
+    divisionLabels: () => labels,
+    divisionOrder: () => order,
   };
   vm.createContext(ctx);
-  vm.runInContext(EL_SHIM + extractBlock("BREADCRUMB"), ctx, {
-    filename: "views-routing-breadcrumb.js",
+  vm.runInContext(EL_SHIM + extractBlock("DIVISION_TABS"), ctx, {
+    filename: "views-routing-division-tabs.js",
   });
   return {
-    ctx, $breadcrumb,
-    setBreadcrumb: ctx.setBreadcrumb,
-    buildDivisionBreadcrumb: ctx.buildDivisionBreadcrumb,
+    ctx,
+    buildDivisionTabs: ctx.buildDivisionTabs,
   };
 }
 
@@ -475,68 +478,39 @@ test("setTitle: clears prior $title content before appending", () => {
   assert.equal(h.$title.children[0].data, "두 번째 호출");
 });
 
-// ── BREADCRUMB ───────────────────────────────────────────────────────────────
+// ── DIVISION_TABS ────────────────────────────────────────────────────────────
 
-test("setBreadcrumb: empty crumbs → empty $breadcrumb", () => {
-  const h = loadBreadcrumb();
-  h.setBreadcrumb([]);
-  assert.equal(h.$breadcrumb.children.length, 0);
+test("buildDivisionTabs: canonical → 3 tab anchors in order with labels", () => {
+  const h = loadDivisionTabs();
+  const nav = h.buildDivisionTabs("old_testament");
+  assert.equal(nav.tagName, "NAV");
+  assert.equal(nav.className, "division-tabs");
+  assert.equal(nav.getAttribute("aria-label"), "구분");
+  assert.equal(nav.children.length, 3);
+  assert.deepEqual(nav.children.map((a) => a.textContent), ["구약", "외경", "신약"]);
+  assert.deepEqual(
+    nav.children.map((a) => a.getAttribute("href")),
+    ["/old_testament", "/deuterocanon", "/new_testament"]
+  );
+  for (const a of nav.children) assert.equal(a.tagName, "A");
 });
 
-test("setBreadcrumb: single crumb with href → one <a>", () => {
-  const h = loadBreadcrumb();
-  h.setBreadcrumb([{ label: "목록", href: "/" }]);
-  assert.equal(h.$breadcrumb.children.length, 1);
-  const a = h.$breadcrumb.children[0];
-  assert.equal(a.tagName, "A");
-  assert.equal(a.getAttribute("href"), "/");
-  assert.equal(a.textContent, "목록");
+test("buildDivisionTabs: vulgate → 2 tabs, 외경 dropped", () => {
+  const h = loadDivisionTabs(["old_testament", "new_testament"]);
+  const nav = h.buildDivisionTabs("old_testament");
+  assert.equal(nav.children.length, 2);
+  assert.deepEqual(nav.children.map((a) => a.textContent), ["구약", "신약"]);
 });
 
-test("setBreadcrumb: single crumb without href → <span>", () => {
-  const h = loadBreadcrumb();
-  h.setBreadcrumb([{ label: "현재" }]);
-  assert.equal(h.$breadcrumb.children.length, 1);
-  const span = h.$breadcrumb.children[0];
-  assert.equal(span.tagName, "SPAN");
-  assert.equal(span.textContent, "현재");
-});
-
-test("setBreadcrumb: multiple crumbs interleaved with separator spans", () => {
-  const h = loadBreadcrumb();
-  h.setBreadcrumb([
-    { label: "목록", href: "/" },
-    { label: "구약", href: "/old_testament" },
-    { label: "창세기" },
-  ]);
-  // 3 crumbs + 2 separators = 5 children
-  assert.equal(h.$breadcrumb.children.length, 5);
-  assert.equal(h.$breadcrumb.children[0].tagName, "A");
-  assert.equal(h.$breadcrumb.children[1].tagName, "SPAN");
-  assert.equal(h.$breadcrumb.children[1].className, "sep");
-  assert.equal(h.$breadcrumb.children[1].getAttribute("aria-hidden"), "true");
-  assert.equal(h.$breadcrumb.children[2].tagName, "A");
-  assert.equal(h.$breadcrumb.children[3].tagName, "SPAN");
-  assert.equal(h.$breadcrumb.children[3].className, "sep");
-  assert.equal(h.$breadcrumb.children[4].tagName, "SPAN");
-});
-
-test("setBreadcrumb: divisionPicker crumb → buildDivisionBreadcrumb output", () => {
-  const h = loadBreadcrumb();
-  h.setBreadcrumb([{ label: "구약", divisionPicker: true, activeDivision: "old_testament" }]);
-  assert.equal(h.$breadcrumb.children.length, 1);
-  const a = h.$breadcrumb.children[0];
-  assert.equal(a.tagName, "A");
-  assert.equal(a.getAttribute("href"), "/old_testament");
-  assert.equal(a.textContent, "구약");
-});
-
-test("buildDivisionBreadcrumb: returns <a href='/${activeDivision}'>label</a>", () => {
-  const h = loadBreadcrumb();
-  const a = h.buildDivisionBreadcrumb("신약", "new_testament");
-  assert.equal(a.tagName, "A");
-  assert.equal(a.getAttribute("href"), "/new_testament");
-  assert.equal(a.textContent, "신약");
+test("buildDivisionTabs: marks the active tab with class + aria-current", () => {
+  const h = loadDivisionTabs();
+  const nav = h.buildDivisionTabs("new_testament");
+  const [ot, dc, nt] = nav.children;
+  assert.equal(ot.className, "division-tab");
+  assert.equal(dc.className, "division-tab");
+  assert.equal(nt.className, "division-tab active");
+  assert.equal(nt.getAttribute("aria-current"), "page");
+  assert.equal(ot.getAttribute("aria-current"), null);
 });
 
 // ── Richer DOM stub for POPOVER + COMPACT_HEADER ─────────────────────────────
@@ -727,12 +701,13 @@ function loadPopover() {
       const cleanup = () => { trapFocusCleanups.push(container); };
       return cleanup;
     },
-    buildBackBtn: (label, href) => {
+    buildHomeBtn: (target, label) => {
       const a = new dom.RichElement("a");
-      a.setAttribute("href", href);
+      a.setAttribute("href", target);
       a.textContent = label;
       return a;
     },
+    effectiveDivision: (b) => b.division,
     buildBookmarkHeaderBtn: (_bookId, _chapter) => {
       return new dom.RichElement("button");
     },
@@ -751,7 +726,6 @@ function loadPopover() {
   return {
     ctx, dom, $title,
     announceCalls, trapFocusCalls, trapFocusCleanups,
-    setTitleWithDivisionPicker: ctx.setTitleWithDivisionPicker,
     setTitleWithChapterPicker: ctx.setTitleWithChapterPicker,
   };
 }
@@ -795,125 +769,14 @@ function loadCompactHeader() {
 
 // ── POPOVER tests ────────────────────────────────────────────────────────────
 
-test("setTitleWithDivisionPicker: appends btn + popover to $title", () => {
+test("setTitleWithChapterPicker: appends home btn + picker btn + popover + bookmark btn", () => {
   const h = loadPopover();
-  h.setTitleWithDivisionPicker("old_testament");
-  assert.equal(h.$title.children.length, 2);
-  const [btn, popover] = h.$title.children;
-  assert.equal(btn.tagName, "BUTTON");
-  assert.equal(popover.tagName, "UL");
-});
-
-test("setTitleWithDivisionPicker: btn label = active division label", () => {
-  const h = loadPopover();
-  h.setTitleWithDivisionPicker("new_testament");
-  const btn = h.$title.children[0];
-  assert.equal(btn.textContent, "신약");
-});
-
-test("setTitleWithDivisionPicker: starts with popover hidden + aria-expanded=false", () => {
-  const h = loadPopover();
-  h.setTitleWithDivisionPicker("old_testament");
-  const [btn, popover] = h.$title.children;
-  assert.equal(popover.hidden, true);
-  assert.equal(btn.getAttribute("aria-expanded"), "false");
-});
-
-test("setTitleWithDivisionPicker: popover lists all divisions in order", () => {
-  const h = loadPopover();
-  h.setTitleWithDivisionPicker("old_testament");
-  const popover = h.$title.children[1];
-  // popover > li > a structure
-  assert.equal(popover.children.length, 3, "3 divisions in canonical order");
-  const labels = popover.children.map((li) => li.children[0].textContent);
-  assert.deepEqual(labels, ["구약", "외경", "신약"]);
-});
-
-test("setTitleWithDivisionPicker: marks active division with 'active' class", () => {
-  const h = loadPopover();
-  h.setTitleWithDivisionPicker("deuterocanon");
-  const popover = h.$title.children[1];
-  const anchors = popover.children.map((li) => li.children[0]);
-  const classes = anchors.map((a) => a.className);
-  assert.equal(classes[0], "bc-division-item");
-  assert.equal(classes[1], "bc-division-item active");
-  assert.equal(classes[2], "bc-division-item");
-});
-
-test("setTitleWithDivisionPicker: calls announce + sets document.title", () => {
-  const h = loadPopover();
-  h.setTitleWithDivisionPicker("old_testament");
-  assert.deepEqual(h.announceCalls, ["구약"]);
-  assert.equal(h.dom.document.title, "구약 — 공동번역성서");
-});
-
-test("setTitleWithDivisionPicker: btn click opens popover + traps focus + focuses first link", () => {
-  const h = loadPopover();
-  h.setTitleWithDivisionPicker("old_testament");
-  const [btn, popover] = h.$title.children;
-  btn._dispatch("click", {});
-  assert.equal(popover.hidden, false);
-  assert.equal(btn.getAttribute("aria-expanded"), "true");
-  assert.equal(h.trapFocusCalls.length, 1);
-  assert.equal(h.trapFocusCalls[0], popover);
-  // First <a> focused
-  const firstLink = popover.children[0].children[0];
-  assert.equal(h.dom.getActive(), firstLink);
-});
-
-test("setTitleWithDivisionPicker: btn click again closes popover + cleans up trap", () => {
-  const h = loadPopover();
-  h.setTitleWithDivisionPicker("old_testament");
-  const [btn, popover] = h.$title.children;
-  btn._dispatch("click", {});  // open
-  btn._dispatch("click", {});  // close
-  assert.equal(popover.hidden, true);
-  assert.equal(btn.getAttribute("aria-expanded"), "false");
-  assert.equal(h.trapFocusCleanups.length, 1);
-});
-
-test("setTitleWithDivisionPicker: document click outside $title closes popover", () => {
-  const h = loadPopover();
-  h.setTitleWithDivisionPicker("old_testament");
-  const [btn, popover] = h.$title.children;
-  btn._dispatch("click", {});  // open
-  // outside element
-  const outside = new h.dom.RichElement("div");
-  h.dom.document._dispatch("click", { target: outside });
-  assert.equal(popover.hidden, true);
-  assert.equal(btn.getAttribute("aria-expanded"), "false");
-  assert.equal(h.trapFocusCleanups.length, 1);
-});
-
-test("setTitleWithDivisionPicker: document click inside $title does NOT close popover", () => {
-  const h = loadPopover();
-  h.setTitleWithDivisionPicker("old_testament");
-  const [btn, popover] = h.$title.children;
-  btn._dispatch("click", {});  // open
-  // click on btn itself (which is inside $title)
-  h.dom.document._dispatch("click", { target: btn });
-  assert.equal(popover.hidden, false, "popover stays open");
-});
-
-test("setTitleWithDivisionPicker: clicking a popover <a> closes the popover", () => {
-  const h = loadPopover();
-  h.setTitleWithDivisionPicker("old_testament");
-  const [btn, popover] = h.$title.children;
-  btn._dispatch("click", {});  // open
-  const link = popover.children[0].children[0];
-  popover._dispatch("click", { target: link });
-  assert.equal(popover.hidden, true);
-  assert.equal(btn.getAttribute("aria-expanded"), "false");
-  assert.equal(h.trapFocusCleanups.length, 1);
-});
-
-test("setTitleWithChapterPicker: appends back btn + picker btn + popover + bookmark btn", () => {
-  const h = loadPopover();
-  const book = { id: "gen", name_ko: "창세기", chapter_count: 50, has_prologue: false };
+  const book = { id: "gen", name_ko: "창세기", chapter_count: 50, has_prologue: false, division: "old_testament" };
   h.setTitleWithChapterPicker(book, 3);
-  // children: backBtn, btn, popover, bookmarkBtn — 4 entries
+  // children: homeBtn, btn, popover, bookmarkBtn — 4 entries
   assert.equal(h.$title.children.length, 4);
-  assert.equal(h.$title.children[0].tagName, "A");      // back btn (stub returns <a>)
+  assert.equal(h.$title.children[0].tagName, "A");      // home btn (stub returns <a>)
+  assert.equal(h.$title.children[0].getAttribute("href"), "/old_testament"); // → book's division tab
   assert.equal(h.$title.children[1].tagName, "BUTTON"); // picker btn
   assert.equal(h.$title.children[2].tagName, "DIV");    // popover (chapter)
   assert.equal(h.$title.children[3].tagName, "BUTTON"); // bookmark btn

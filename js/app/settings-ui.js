@@ -312,26 +312,34 @@ window.appSettings = (() => {
     document.documentElement.classList.remove("os-ios", "os-android");
     document.documentElement.classList.add(os === "ios" ? "os-ios" : "os-android");
 
+    // Build a fresh gear-icon trigger button. The same popover is shared by
+    // every trigger (desktop top-row + per-view mobile title-row button), so
+    // we can mint as many of these as needed.
+    function makeGearBtn() {
+      const b = el("button", { className: "settings-btn", type: "button", "aria-label": "설정", "aria-expanded": "false" });
+      const settingsSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      settingsSvg.setAttribute("width", "18");
+      settingsSvg.setAttribute("height", "18");
+      settingsSvg.setAttribute("viewBox", "0 0 24 24");
+      settingsSvg.setAttribute("fill", "none");
+      settingsSvg.setAttribute("stroke", "currentColor");
+      settingsSvg.setAttribute("stroke-width", "2");
+      settingsSvg.setAttribute("stroke-linecap", "round");
+      settingsSvg.setAttribute("stroke-linejoin", "round");
+      const gearCircle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      gearCircle.setAttribute("cx", "12");
+      gearCircle.setAttribute("cy", "12");
+      gearCircle.setAttribute("r", "3");
+      const gearPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      gearPath.setAttribute("d", "M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z");
+      settingsSvg.appendChild(gearCircle);
+      settingsSvg.appendChild(gearPath);
+      b.appendChild(settingsSvg);
+      return b;
+    }
+
     const wrapper = el("div", { className: "settings-wrapper" });
-    const btn = el("button", { className: "settings-btn", "aria-label": "설정", "aria-expanded": "false" });
-    const settingsSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-    settingsSvg.setAttribute("width", "18");
-    settingsSvg.setAttribute("height", "18");
-    settingsSvg.setAttribute("viewBox", "0 0 24 24");
-    settingsSvg.setAttribute("fill", "none");
-    settingsSvg.setAttribute("stroke", "currentColor");
-    settingsSvg.setAttribute("stroke-width", "2");
-    settingsSvg.setAttribute("stroke-linecap", "round");
-    settingsSvg.setAttribute("stroke-linejoin", "round");
-    const gearCircle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-    gearCircle.setAttribute("cx", "12");
-    gearCircle.setAttribute("cy", "12");
-    gearCircle.setAttribute("r", "3");
-    const gearPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    gearPath.setAttribute("d", "M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z");
-    settingsSvg.appendChild(gearCircle);
-    settingsSvg.appendChild(gearPath);
-    btn.appendChild(settingsSvg);
+    const btn = makeGearBtn();
     const popover = el("div", { className: "settings-popover", tabindex: "-1" });
     popover.hidden = true;
     popover.addEventListener("click", (e) => e.stopPropagation());
@@ -701,8 +709,14 @@ window.appSettings = (() => {
       }
     }
 
+    // The trigger that last opened the popover — drives positioning so the
+    // popover anchors under whichever button (desktop top-row or mobile
+    // title-row) was actually clicked.
+    /** @type {HTMLElement} */
+    let activeAnchor = btn;
+
     function positionPopover() {
-      const rect = btn.getBoundingClientRect();
+      const rect = activeAnchor.getBoundingClientRect();
       popover.style.top = `${rect.bottom + 4}px`;
       popover.style.right = `${window.innerWidth - rect.right}px`;
     }
@@ -710,39 +724,61 @@ window.appSettings = (() => {
     /** @type {(() => void) | null} */
     let cleanupTrap = null;
 
-    btn.addEventListener("click", (e) => {
-      const open = !popover.hidden;
-      if (!open) { rebuild(); positionPopover(); }
-      popover.hidden = open;
-      btn.setAttribute("aria-expanded", String(!open));
-      if (!open) {
-        cleanupTrap = trapFocus(popover);
-        // event.detail === 0 means activation via keyboard (Enter/Space). Focus
-        // the first button so keyboard users land on an actionable target. For
-        // pointer activation, focus the popover container itself to avoid a
-        // stray :focus-visible ring on the first button (iOS Safari).
-        if (e.detail === 0) {
-          const first = /** @type {HTMLElement | null} */ (popover.querySelector('button, a[href], input'));
-          if (first) first.focus();
+    function closeSettings() {
+      popover.hidden = true;
+      document.querySelectorAll(".settings-btn").forEach((b) => b.setAttribute("aria-expanded", "false"));
+      if (cleanupTrap) { cleanupTrap(); cleanupTrap = null; }
+    }
+
+    // Wire a gear button to the shared popover. Reused for the desktop button
+    // and every per-view mobile title-row button.
+    /** @param {HTMLElement} triggerBtn */
+    function wireTrigger(triggerBtn) {
+      triggerBtn.addEventListener("click", (e) => {
+        if (popover.hidden) {
+          activeAnchor = triggerBtn;
+          rebuild();
+          positionPopover();
+          popover.hidden = false;
+          triggerBtn.setAttribute("aria-expanded", "true");
+          cleanupTrap = trapFocus(popover);
+          // event.detail === 0 means activation via keyboard (Enter/Space).
+          // Focus the first control so keyboard users land on a target. For
+          // pointer activation, focus the popover container itself to avoid a
+          // stray :focus-visible ring on the first button (iOS Safari).
+          if (/** @type {MouseEvent} */ (e).detail === 0) {
+            const first = /** @type {HTMLElement | null} */ (popover.querySelector('button, a[href], input'));
+            if (first) first.focus();
+          } else {
+            popover.focus();
+          }
         } else {
-          popover.focus();
+          closeSettings();
         }
-      } else if (cleanupTrap) {
-        cleanupTrap(); cleanupTrap = null;
-      }
-    });
+      });
+    }
+    wireTrigger(btn);
 
     document.addEventListener("click", (e) => {
       const t = e.target;
-      if (!popover.hidden && t instanceof Node && !wrapper.contains(t) && !popover.contains(t)) {
-        popover.hidden = true;
-        btn.setAttribute("aria-expanded", "false");
-        if (cleanupTrap) { cleanupTrap(); cleanupTrap = null; }
+      if (!popover.hidden && t instanceof Node && !popover.contains(t) &&
+          !(t instanceof Element && t.closest(".settings-btn"))) {
+        closeSettings();
       }
     });
 
     // Allow drive-sync.js to trigger a UI refresh when auth state changes.
     window.rebuildDriveSyncSection = () => { if (!popover.hidden) rebuild(); };
+
+    // Per-view mobile trigger: the title row is re-rendered on every route, so
+    // views-routing.js mints a fresh one (CSS hides it on desktop, where the
+    // top-row button is used instead). Shares this popover + open/close logic.
+    window.buildSettingsTrigger = () => {
+      const b = makeGearBtn();
+      b.classList.add("title-settings-btn");
+      wireTrigger(b);
+      return b;
+    };
 
     wrapper.appendChild(btn);
     document.body.appendChild(popover);

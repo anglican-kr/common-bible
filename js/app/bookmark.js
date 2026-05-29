@@ -772,6 +772,28 @@ function buildBackBtn(ariaLabel, fallback) {
   return btn;
 }
 
+// Build the home button for reading-view headers. Unlike buildBackBtn this
+// always navigates to a fixed destination (the book list / division tab),
+// never history.back() — the breadcrumb is gone, so this is the canonical way
+// back up to the book list from a chapter / prologue / chapter-list view.
+function buildHomeBtn(target, ariaLabel) {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("aria-hidden", "true");
+  svg.setAttribute("class", "title-back-icon");
+  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  path.setAttribute("d", "M3 11.5 12 4l9 7.5M5.5 9.8V19a1 1 0 0 0 1 1h11a1 1 0 0 0 1-1V9.8");
+  path.setAttribute("stroke", "currentColor");
+  path.setAttribute("stroke-width", "2");
+  path.setAttribute("stroke-linecap", "round");
+  path.setAttribute("stroke-linejoin", "round");
+  path.setAttribute("fill", "none");
+  svg.appendChild(path);
+  const btn = el("button", { className: "title-back-btn title-home-btn", "aria-label": ariaLabel }, svg);
+  btn.addEventListener("click", () => navigate(target));
+  return btn;
+}
+
 // Build the bookmark icon SVG button for the chapter header
 function buildBookmarkHeaderBtn(bookId, chapter) {
   const btn = el("button", {
@@ -2181,6 +2203,7 @@ window.closeSwipedRowIfOutside = closeSwipedRowIfOutside;
 
 // Phase 6b per-name globals
 window.buildBackBtn = buildBackBtn;
+window.buildHomeBtn = buildHomeBtn;
 window.buildBookmarkHeaderBtn = buildBookmarkHeaderBtn;
 window.openBookmarkDrawer = openBookmarkDrawer;
 window.closeBookmarkDrawer = closeBookmarkDrawer;
