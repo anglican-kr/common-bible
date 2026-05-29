@@ -75,6 +75,10 @@
       --accent: #8ab4d8;
       --border: #3a3a55;
     }
+    /* Splash bg stays at the icon colour (#1a1a2e) so launch matches the
+       icon / manifest splash / iOS apple-touch-startup-image. Dark --bg is
+       intentionally lifted to #1f1f36 for reading comfort, producing a tiny
+       (~2 L*) step at launch→app handoff that is acceptable. */
     html { background: #1a1a2e; }
     html.launch-done { background: var(--bg); }
     body { margin: 0; background: inherit; color: var(--text); line-height: 1.8; font-family: "Noto Serif KR", "Batang", serif; }
