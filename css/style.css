@@ -3196,7 +3196,7 @@ html.cite-sheet-open {
 
 .title-bookmark-btn {
   position: absolute;
-  right: 0;
+  right: 2.4rem;
   top: 50%;
   transform: translateY(-50%);
   width: 2.2rem;
@@ -3221,10 +3221,11 @@ html.cite-sheet-open {
    Desktop: the gear lives in the top row (#settings-anchor) next to the search
    bar and collapses with that row on scroll. Mobile: the top row is hidden, so
    each view mints a per-render gear into the always-visible title row (sits
-   just left of the bookmark button). Exactly one is shown per breakpoint. */
+   at the far right, with the bookmark button just left of it). Exactly one is
+   shown per breakpoint. */
 .title-settings-btn {
   position: absolute;
-  right: 2.4rem;
+  right: 0;
   top: 50%;
   transform: translateY(-50%);
   width: 2.2rem;
