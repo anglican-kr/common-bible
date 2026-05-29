@@ -353,8 +353,10 @@ function setTitleWithChapterPicker(book, currentCh) {
     );
   }
   for (let i = 1; i <= book.chapter_count; i++) {
-    const cls = i === currentCh ? "popover-item current" : "popover-item";
-    grid.appendChild(el("a", { className: cls, href: `/${book.id}/${i}` }, String(i)));
+    const isCurrent = i === currentCh;
+    const item = el("a", { className: isCurrent ? "popover-item current" : "popover-item", href: `/${book.id}/${i}` }, String(i));
+    if (isCurrent) item.setAttribute("aria-current", "true");
+    grid.appendChild(item);
   }
   popover.appendChild(grid);
 
@@ -367,8 +369,17 @@ function setTitleWithChapterPicker(book, currentCh) {
     btn.setAttribute("aria-expanded", String(!open));
     if (!open) {
       cleanupTrap = trapFocus(popover);
-      const first = /** @type {HTMLElement | null} */ (popover.querySelector('a[href]'));
-      if (first) first.focus();
+      // Land on the currently-open chapter (falling back to the first link, e.g.
+      // when arriving from the prologue). preventScroll keeps the browser from
+      // jumping the element to the viewport edge; we then center it within the
+      // popover's own scroll box — popover is position:absolute, so children's
+      // offsetTop is relative to it and the page never moves.
+      const current = /** @type {HTMLElement | null} */ (popover.querySelector(".popover-item.current"));
+      const target = current || /** @type {HTMLElement | null} */ (popover.querySelector('a[href]'));
+      if (target) target.focus({ preventScroll: true });
+      if (current) {
+        popover.scrollTop = current.offsetTop - (popover.clientHeight - current.offsetHeight) / 2;
+      }
     } else if (cleanupTrap) {
       cleanupTrap(); cleanupTrap = null;
     }
@@ -376,7 +387,13 @@ function setTitleWithChapterPicker(book, currentCh) {
 
   document.addEventListener("click", (e) => {
     const t = e.target;
-    if (!popover.hidden && t instanceof Node && !$title.contains(t)) {
+    // Close on any click outside the title row, OR on the settings gear — the
+    // mobile settings trigger lives *inside* $title, so without the second
+    // clause the chapter popover would stay open behind the settings popover
+    // (two popovers visible at once).
+    const outsideTitle = t instanceof Node && !$title.contains(t);
+    const onSettingsBtn = t instanceof Element && !!t.closest(".title-settings-btn");
+    if (!popover.hidden && (outsideTitle || onSettingsBtn)) {
       popover.hidden = true;
       btn.setAttribute("aria-expanded", "false");
       if (cleanupTrap) { cleanupTrap(); cleanupTrap = null; }
