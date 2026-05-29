@@ -234,8 +234,10 @@ window.appSettings = (() => {
     const isIOS = /iPad|iPhone|iPod/.test(ua) ||
       (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
     if (isIOS) return "ios";
-    const isDesktop = navigator.maxTouchPoints === 0 &&
-      typeof window.matchMedia === "function" &&
+    // A (pointer: fine) match alone is enough — touch-screen Windows laptops
+    // report maxTouchPoints > 0 but still have a precise mouse pointer, so
+    // gating on maxTouchPoints === 0 would mis-classify them as Android.
+    const isDesktop = typeof window.matchMedia === "function" &&
       window.matchMedia("(pointer: fine)").matches;
     return isDesktop ? "desktop" : "android";
   }
