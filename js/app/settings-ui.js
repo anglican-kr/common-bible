@@ -223,17 +223,21 @@ window.appSettings = (() => {
   }
 
   // ── OS detection (toggle look) ──
-  // Drives the iOS (UISwitch) vs Material 3 toggle styling. Kept independent
-  // of install.js's detectPlatform(), which returns "installed" when running
-  // standalone — here we always want the native OS look regardless of install
-  // state. iPadOS 13+ masquerades as desktop Safari, so fall back to the
-  // touch-points heuristic.
-  /** @returns {"ios" | "android"} */
+  // Drives the iOS (UISwitch) vs Material 3 vs desktop toggle styling. Kept
+  // independent of install.js's detectPlatform(), which returns "installed"
+  // when running standalone — here we always want the native OS look
+  // regardless of install state. iPadOS 13+ masquerades as desktop Safari, so
+  // fall back to the touch-points heuristic.
+  /** @returns {"ios" | "android" | "desktop"} */
   function detectOS() {
     const ua = navigator.userAgent;
     const isIOS = /iPad|iPhone|iPod/.test(ua) ||
       (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-    return isIOS ? "ios" : "android";
+    if (isIOS) return "ios";
+    const isDesktop = navigator.maxTouchPoints === 0 &&
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(pointer: fine)").matches;
+    return isDesktop ? "desktop" : "android";
   }
 
   // ── Toggle switch component ──
@@ -309,8 +313,8 @@ window.appSettings = (() => {
 
     // Tag the document with the OS look so toggle styling can branch in CSS.
     const os = detectOS();
-    document.documentElement.classList.remove("os-ios", "os-android");
-    document.documentElement.classList.add(os === "ios" ? "os-ios" : "os-android");
+    document.documentElement.classList.remove("os-ios", "os-android", "os-desktop");
+    document.documentElement.classList.add(`os-${os}`);
 
     // Build a fresh gear-icon trigger button. The same popover is shared by
     // every trigger (desktop top-row + per-view mobile title-row button), so
