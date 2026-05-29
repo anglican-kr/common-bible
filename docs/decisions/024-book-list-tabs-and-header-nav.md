@@ -87,3 +87,41 @@ CSS 미디어 쿼리로 둘 중 하나만 노출(`.title-settings-btn` ↔ `#set
 - 유닛 테스트: `BREADCRUMB` 블록 → `DIVISION_TABS` 블록으로 교체,
   `setTitleWithDivisionPicker` 테스트 제거, 장 picker 홈 버튼 검증으로 갱신.
 - 데이터·서비스워커·라우트 경로 자체는 불변 — 기존 구분 URL 그대로.
+
+## 개정 (2026-05-29) — 탭 sticky 고정 · 슬라이드 인디케이터 · 구약 평면화
+
+승인 당일 후속 UI 다듬기. 결정 §1·§4의 일부를 다음으로 대체한다.
+
+> **탭 위치 — sticky 고정 (§1 보완).** 구분 탭을 `#app` 본문에서 떼어
+> `#sticky-group` 안(이어읽기 배너 슬롯 아래)의 **새 슬롯
+> `#division-tabs-slot`** 으로 옮겼다. 헤더·배너와 한 sticky 블록이 되어 스크롤
+> 시 헤더 아래에 고정되고, 배너가 있으면 그 아래에 핀된다. `renderBookList` 가
+> 슬롯에 탭을 심고, `route()` 가 매 내비게이션마다 `#division-tabs-slot` ·
+> `#resume-banner-slot` 을 비운다. sticky 블록의 슬롯 좌우 패딩으로 본문이
+> 비치지 않도록 `#sticky-group { background: var(--bg) }` 추가.
+
+> **활성 탭 표시 — 슬라이드 인디케이터 (§1 의 "accent 배경" 대체).** 활성 탭을
+> accent 배경으로 칠하는 대신, **테마색 아웃라인 박스**(`.division-tab-indicator`,
+> 한 탭 폭, `border: 2px solid var(--accent)` + 옅은 틴트)를 깔고 `translateX`
+> 로 탭 사이를 슬라이드시킨다(`transition: transform`). `buildDivisionTabs` 가
+> 직전 활성 탭 인덱스(`_prevDivisionIdx`)를 기억해 **이전 탭 → 새 탭**으로
+> 애니메이션한다(double rAF, `prefers-reduced-motion` 존중). 인디케이터의 시작
+> 위치·`--tab-count` 는 **CSSOM(`.style`)** 으로 설정한다 — 앱 CSP `style-src` 에
+> `'unsafe-inline'` 이 없어 `style` 속성은 차단되지만 프로그래밍 방식 `.style` 은
+> 허용되기 때문. (인디케이터는 `nav` 의 첫 자식이므로 `DIVISION_TABS` 유닛
+> 테스트는 앵커만 필터해 검증.)
+
+> **구약 소분류 제거 (§1 의 "구약 탭은 기존 소분류 유지" 대체).** 구약을
+> 오경·역사서·시서와 지혜서·예언서로 묶던 `OT_SUBCATEGORY{,_ORDER,_LABELS}` 와
+> `.ot-subcategory{,-title}` CSS 를 제거하고, 세 탭 모두 동일한 단일
+> `.book-list` 그리드로 평면 렌더한다 — 탭 간 레이아웃 일관성을 위해.
+
+> **북마크 버튼 데스크탑 위치 (§4 보완).** 데스크탑에선 설정 기어가 상단 행에
+> 있어 제목 행 기어(`.title-settings-btn`)가 숨겨지므로, 북마크 버튼
+> (`.title-bookmark-btn`)을 `@media (min-width: 769px)` 에서 `right: 0`(맨 오른쪽)
+> 으로 보낸다. 모바일은 `right: 2.4rem`(설정 버튼 왼쪽) 유지.
+
+> **모바일 헤더 고정 — 오버스크롤 (§1 sticky 보완).** iOS Safari 는 페이지
+> 끝에서 고무줄 오버스크롤 시 문서 전체를 translate 해 `position: sticky` 헤더가
+> 함께 끌려 움직인다. `html, body { overscroll-behavior-y: none }` 로 바운스를
+> 제거해 헤더를 앱셸처럼 고정한다(데스크탑 무영향).
