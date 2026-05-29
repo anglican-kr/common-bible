@@ -59,7 +59,7 @@ document.addEventListener("keydown", (e) => {
       return;
     }
     /** @type {NodeListOf<HTMLElement>} */ (
-      document.querySelectorAll(".chapter-popover:not([hidden]), .bc-division-popover:not([hidden]), .settings-popover:not([hidden]), .title-division-popover:not([hidden])")
+      document.querySelectorAll(".chapter-popover:not([hidden]), .settings-popover:not([hidden])")
     ).forEach((p) => { p.hidden = true; });
     /** @type {NodeListOf<HTMLElement>} */ (
       document.querySelectorAll("[aria-expanded='true']")

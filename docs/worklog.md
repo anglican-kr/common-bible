@@ -1,5 +1,19 @@
 # 작업 일지
 
+## 2026-05-29
+
+### 성서 목록 탭 통합 + 읽기 헤더 내비게이션 재설계 (ADR-024)
+
+흩어져 있던 네 화면(첫 페이지 · 구약 · 외경 · 신약)을 **탭 스위처 한 페이지**로 통합했다. `/` 와 세 구분 라우트가 모두 `renderBookList(books, activeDivision)` 하나로 렌더되며, 차이는 활성 탭뿐이다. 탭 집합은 설정의 제2경전 옵션을 반영한다 — canonical 이면 `구약 | 외경 | 신약` 3탭, vulgate 면 `구약 | 신약` 2탭(외경은 구약 탭 편입). 탭은 구분 라우트로 가는 `<a>` 라 딥링크·SEO 색인·`sitemap.xml` 이 그대로 유효하다. 탭 스트립은 `flex:1` 로 가로 폭을 꽉 채운다.
+
+읽기 화면(장 · 머리말 · 장 목록) 헤더 좌측 버튼을 *뒤로가기* 대신 **홈 버튼**(`buildHomeBtn`)으로 교체 — 항상 그 책이 속한 구분 탭으로 이동한다. 상단 브레드크럼은 제거했다.
+
+설정(⚙) 버튼은 반응형으로 배치한다. 데스크탑은 기존대로 상단 검색줄(스크롤 시 접힘 유지), 모바일은 항상 보이는 제목 헤더로 옮겨 읽는 중에도 접근 가능하게 했다. 단일 팝오버를 여러 트리거가 공유하고, 모바일 트리거는 매 뷰가 `buildSettingsTrigger()` 로 심는다.
+
+`renderDivisionList` · `setTitleWithDivisionPicker` · `setBreadcrumb` / `buildDivisionBreadcrumb` 제거. 유닛 테스트는 `BREADCRUMB` 블록을 `buildDivisionTabs` 검증 `DIVISION_TABS` 블록으로 교체(533 케이스 통과). 상세는 ADR-024.
+
+**변경 파일**: `js/app/views-routing.js` · `js/app/bookmark.js` · `js/app/settings-ui.js` · `js/app/search.js` · `js/app.js` · `index.html` · `css/style.css` · `js/types.d.ts` · `tests/unit/views-routing.test.js`
+
 ## 2026-05-27
 
 ### 신약 책 이름 자동 짧게 표시

@@ -4,9 +4,8 @@
 // Phase 7a of the app.js modularization (ADR-018). Owns:
 //  - Data fetching (loadBooks / loadVersion / loadChapter / loadPrologue)
 //    + module-level caches (booksCache, appVersion) that feed everything else.
-//  - Rendering helpers (setTitle / setBreadcrumb / division pickers /
-//    breadcrumb builder) + division constants and book-order resolution
-//    (canonical vs vulgate ordering).
+//  - Rendering helpers (setTitle / chapter picker / division tabs) + division
+//    constants and book-order resolution (canonical vs vulgate ordering).
 //  - Pull-to-refresh gesture (page-level mobile, ADR-010 follow-up).
 //  - Compact Header on Scroll (collapses breadcrumb past 60px scroll).
 //
@@ -32,7 +31,6 @@ const { readingContext } = window;
 // DOM anchors. Redeclared locally so views-routing.js is self-contained.
 const $app = _$("app");
 const $title = _$("page-title");
-const $breadcrumb = _$("breadcrumb");
 const $audioBar = _$("audio-bar");
 const $resumeBannerSlot = _$("resume-banner-slot");
 const $searchInput = /** @type {HTMLInputElement} */ (_$("search-input"));
@@ -64,7 +62,7 @@ let appVersion = null;
   const SYNC_FEEDBACK_MS   = 900;  // how long the spinner stays after trigger
   // Modal/sheet roots whose internal scroll must not be hijacked by PTR. We
   // walk e.target to see if the touch landed inside one of these.
-  const MODAL_SELECTORS = "#bookmark-drawer, #search-sheet, #install-modal, #bm-save-modal, #bm-new-folder-modal, #bm-import-modal, #bm-merge-modal, #drive-disconnect-modal, .settings-popover, .chapter-popover, .bc-division-popover, .title-division-popover";
+  const MODAL_SELECTORS = "#bookmark-drawer, #search-sheet, #install-modal, #bm-save-modal, #bm-new-folder-modal, #bm-import-modal, #bm-merge-modal, #drive-disconnect-modal, .settings-popover, .chapter-popover";
 
   /** @type {HTMLElement | null} */
   let indicator = null;
@@ -316,70 +314,9 @@ function setTitle(text, mobileText) {
 // ── END TITLE ──
 
 // ── BEGIN POPOVER ──
-// Exercised by tests/unit/views-routing.test.js. setTitleWithDivisionPicker
-// + setTitleWithChapterPicker render a button that toggles a popover (focus
-// trap inside, click-outside-to-close, click-on-link-to-close). The two
-// share the same open/close contract.
-function setTitleWithDivisionPicker(activeDivision) {
-  clearNode($title);
-  const labels = divisionLabels();
-  const order = divisionOrder();
-  const label = labels[activeDivision];
-  document.title = `${label} — 공동번역성서`;
-  announce(label);
-
-  const btn = el(
-    "button",
-    { className: "title-picker-btn", "aria-label": "구분 선택", "aria-expanded": "false" },
-    label
-  );
-
-  const popover = el("ul", { className: "bc-division-popover title-division-popover", role: "listbox", "aria-label": "구분 선택" });
-  popover.hidden = true;
-
-  for (const div of order) {
-    const cls = div === activeDivision ? "bc-division-item active" : "bc-division-item";
-    popover.appendChild(el("li", null, el("a", { className: cls, href: `/${div}` }, labels[div])));
-  }
-
-  /** @type {(() => void) | null} */
-  let cleanupTrap = null;
-
-  btn.addEventListener("click", () => {
-    const open = !popover.hidden;
-    popover.hidden = open;
-    btn.setAttribute("aria-expanded", String(!open));
-    if (!open) {
-      cleanupTrap = trapFocus(popover);
-      const first = /** @type {HTMLElement | null} */ (popover.querySelector('a[href]'));
-      if (first) first.focus();
-    } else if (cleanupTrap) {
-      cleanupTrap(); cleanupTrap = null;
-    }
-  });
-
-  document.addEventListener("click", (e) => {
-    const t = e.target;
-    if (!popover.hidden && t instanceof Node && !$title.contains(t)) {
-      popover.hidden = true;
-      btn.setAttribute("aria-expanded", "false");
-      if (cleanupTrap) { cleanupTrap(); cleanupTrap = null; }
-    }
-  });
-
-  popover.addEventListener("click", (e) => {
-    const t = e.target;
-    if (t instanceof Element && t.tagName === "A") {
-      popover.hidden = true;
-      btn.setAttribute("aria-expanded", "false");
-      if (cleanupTrap) { cleanupTrap(); cleanupTrap = null; }
-    }
-  });
-
-  $title.appendChild(btn);
-  $title.appendChild(popover);
-}
-
+// Exercised by tests/unit/views-routing.test.js. setTitleWithChapterPicker
+// renders a button that toggles a popover (focus trap inside,
+// click-outside-to-close, click-on-link-to-close).
 /**
  * @param {BookEntry} book
  * @param {number} currentCh
@@ -455,7 +392,7 @@ function setTitleWithChapterPicker(book, currentCh) {
     }
   });
 
-  $title.appendChild(buildBackBtn(`${book.name_ko} 목록으로`, `/${book.id}`));
+  $title.appendChild(buildHomeBtn(`/${effectiveDivision(book)}`, "성서 목록으로"));
   $title.appendChild(btn);
   $title.appendChild(popover);
   $title.appendChild(buildBookmarkHeaderBtn(book.id, currentCh));
@@ -465,32 +402,6 @@ function setTitleWithChapterPicker(book, currentCh) {
   }
 }
 // ── END POPOVER ──
-
-// ── BEGIN BREADCRUMB ──
-// Exercised by tests/unit/views-routing.test.js. setBreadcrumb walks the
-// crumbs array and emits one <a>/<span> per entry (with " › " separators);
-// buildDivisionBreadcrumb is a small <a href="/${div}"> builder.
-function setBreadcrumb(crumbs) {
-  clearNode($breadcrumb);
-  crumbs.forEach((c, i) => {
-    if (i > 0) {
-      const sep = el("span", { className: "sep", "aria-hidden": "true" }, "›");
-      $breadcrumb.appendChild(sep);
-    }
-    if (c.href) {
-      $breadcrumb.appendChild(el("a", { href: c.href }, c.label));
-    } else if (c.divisionPicker) {
-      $breadcrumb.appendChild(buildDivisionBreadcrumb(c.label, c.activeDivision));
-    } else {
-      $breadcrumb.appendChild(el("span", null, c.label));
-    }
-  });
-}
-
-function buildDivisionBreadcrumb(label, activeDivision) {
-  return el("a", { href: `/${activeDivision}` }, label);
-}
-// ── END BREADCRUMB ──
 
 // ── BEGIN DIVISION ──
 // Exercised by tests/unit/views-routing.test.js. Pure: loadBookOrder() is
@@ -546,6 +457,26 @@ function effectiveDivision(book) {
   return book.division;
 }
 // ── END DIVISION ──
+
+// ── BEGIN DIVISION_TABS ──
+// Exercised by tests/unit/views-routing.test.js. The book-list page is a
+// single tabbed view (구약 / 외경 / 신약); the tab set follows the active
+// book-order setting (vulgate drops the 외경 tab). Tabs are anchors to the
+// per-division routes (/old_testament etc.) so deep links, the back button,
+// and SEO indexing (ADR-009) keep working. CSS flexes them to fill the row.
+function buildDivisionTabs(activeDivision) {
+  const labels = divisionLabels();
+  const order = divisionOrder();
+  const nav = el("nav", { className: "division-tabs", "aria-label": "구분" });
+  for (const div of order) {
+    const isActive = div === activeDivision;
+    const a = el("a", { className: isActive ? "division-tab active" : "division-tab", href: `/${div}` }, labels[div]);
+    if (isActive) a.setAttribute("aria-current", "page");
+    nav.appendChild(a);
+  }
+  return nav;
+}
+// ── END DIVISION_TABS ──
 
 // ── BEGIN BOOK_LIST_LINK ──
 // Book-list buttons (/, /old_testament, /new_testament, /deuterocanon) show
@@ -751,7 +682,7 @@ function initCompactHeader() {
 
 
 // ── Phase 7b additions ──
-// Views (renderBookList / renderDivisionList / renderChapter / etc.),
+// Views (renderBookList / renderChapter / renderPrologue / etc.),
 // Routing (parsePath / route / navigate + popstate listener),
 // Audio Player. State vars + startScrollTracking from former app.js
 // Reading position section also live here since they are Routing-internal.
@@ -797,59 +728,58 @@ function startScrollTracking(bookId, chapter) {
 
 // ── Views ──
 
-function renderBookList(books) {
+// The unified book-list page. The first page (/) and the per-division routes
+// (/old_testament · /deuterocanon · /new_testament) all render here, differing
+// only by which tab is active — replacing the former separate landing +
+// division pages. `activeDivision` falls back to the first tab when missing or
+// invalid (e.g. /deuterocanon while in vulgate mode, which the router also
+// redirects to /old_testament).
+function renderBookList(books, activeDivision) {
+  const labels = divisionLabels();
+  const order = divisionOrder();
+  const active = order.includes(activeDivision) ? activeDivision : order[0];
+
   setTitle("공동번역성서");
   $title.appendChild(buildBookmarkHeaderBtn(null, null));
-  setBreadcrumb([]);
+  $title.appendChild(buildSettingsTrigger());
   hideAudioBar();
   clearNode($app);
 
   renderResumeBanner(books);
 
-  const labels = divisionLabels();
-  const order = divisionOrder();
+  $app.appendChild(buildDivisionTabs(active));
 
-  const grouped = {};
-  for (const b of books) {
-    const key = effectiveDivision(b);
-    (grouped[key] ??= []).push(b);
-  }
+  const panel = el("div", { className: "division-panel", role: "region", "aria-label": labels[active] });
+  const list = books.filter((b) => effectiveDivision(b) === active);
 
-  for (const div of order) {
-    const list = grouped[div];
-    if (!list) continue;
-
-    const details = el("details", { className: "division", open: "" });
-    details.appendChild(el("summary", { className: "division-title" }, labels[div]));
-
-    if (div === "old_testament") {
-      // Group OT books into subcategories
-      const subGrouped = {};
-      for (const b of list) {
-        const sub = OT_SUBCATEGORY[b.id] ?? "other";
-        (subGrouped[sub] ??= []).push(b);
-      }
-      for (const sub of OT_SUBCATEGORY_ORDER) {
-        const subList = subGrouped[sub];
-        if (!subList) continue;
-        const section = el("div", { className: "ot-subcategory" });
-        section.appendChild(el("h3", { className: "ot-subcategory-title" }, OT_SUBCATEGORY_LABELS[sub]));
-        const ul = el("ul", { className: "book-list", role: "list" });
-        for (const b of subList) {
-          ul.appendChild(buildBookListItem(b));
-        }
-        section.appendChild(ul);
-        details.appendChild(section);
-      }
-    } else {
+  if (active === "old_testament") {
+    // Group OT books into subcategories (also covers deuterocanon books in
+    // vulgate mode, which fold into the OT tab).
+    const subGrouped = {};
+    for (const b of list) {
+      const sub = OT_SUBCATEGORY[b.id] ?? "other";
+      (subGrouped[sub] ??= []).push(b);
+    }
+    for (const sub of OT_SUBCATEGORY_ORDER) {
+      const subList = subGrouped[sub];
+      if (!subList) continue;
+      const section = el("div", { className: "ot-subcategory" });
+      section.appendChild(el("h3", { className: "ot-subcategory-title" }, OT_SUBCATEGORY_LABELS[sub]));
       const ul = el("ul", { className: "book-list", role: "list" });
-      for (const b of list) {
+      for (const b of subList) {
         ul.appendChild(buildBookListItem(b));
       }
-      details.appendChild(ul);
+      section.appendChild(ul);
+      panel.appendChild(section);
     }
-    $app.appendChild(details);
+  } else {
+    const ul = el("ul", { className: "book-list", role: "list" });
+    for (const b of list) {
+      ul.appendChild(buildBookListItem(b));
+    }
+    panel.appendChild(ul);
   }
+  $app.appendChild(panel);
   observeBookListsIn($app);
 }
 
@@ -955,63 +885,12 @@ function _observeResumeBanner(wrapper) {
   _resumeBannerObs.observe(wrapper);
 }
 
-function renderDivisionList(books, division) {
-  setTitleWithDivisionPicker(division);
-  $title.insertBefore(buildBackBtn("목록으로", "/"), $title.firstChild);
-  $title.appendChild(buildBookmarkHeaderBtn(null, null));
-  setBreadcrumb([{ label: "목록", href: "/" }]);
-  hideAudioBar();
-  clearNode($app);
-
-  renderResumeBanner(books);
-
-  // In vulgate mode, old_testament division includes deuterocanon books (in file order)
-  const list = (loadBookOrder() === "vulgate" && division === "old_testament")
-    ? books.filter((b) => b.division !== "new_testament")
-    : books.filter((b) => b.division === division);
-
-  const details = el("details", { className: "division", open: "" });
-  details.appendChild(el("summary", { className: "division-title" }, divisionLabels()[division]));
-
-  if (division === "old_testament") {
-    const subGrouped = {};
-    for (const b of list) {
-      const sub = OT_SUBCATEGORY[b.id] ?? "other";
-      (subGrouped[sub] ??= []).push(b);
-    }
-    for (const sub of OT_SUBCATEGORY_ORDER) {
-      const subList = subGrouped[sub];
-      if (!subList) continue;
-      const section = el("div", { className: "ot-subcategory" });
-      section.appendChild(el("h3", { className: "ot-subcategory-title" }, OT_SUBCATEGORY_LABELS[sub]));
-      const ul = el("ul", { className: "book-list", role: "list" });
-      for (const b of subList) {
-        ul.appendChild(buildBookListItem(b));
-      }
-      section.appendChild(ul);
-      details.appendChild(section);
-    }
-  } else {
-    const ul = el("ul", { className: "book-list", role: "list" });
-    for (const b of list) {
-      ul.appendChild(buildBookListItem(b));
-    }
-    details.appendChild(ul);
-  }
-  $app.appendChild(details);
-  observeBookListsIn($app);
-}
-
 function renderChapterList(book, books) {
   setTitle(book.name_ko, NT_MOBILE_NAME[book.id]);
-  $title.insertBefore(buildBackBtn(`${divisionLabels()[effectiveDivision(book)]}으로`, `/${effectiveDivision(book)}`), $title.firstChild);
+  $title.insertBefore(buildHomeBtn(`/${effectiveDivision(book)}`, "성서 목록으로"), $title.firstChild);
   $title.appendChild(buildBookmarkHeaderBtn(book.id, null));
+  $title.appendChild(buildSettingsTrigger());
   hideAudioBar();
-  const effDiv = effectiveDivision(book);
-  setBreadcrumb([
-    { label: "목록", href: "/" },
-    { divisionPicker: true, label: divisionLabels()[effDiv], activeDivision: effDiv },
-  ]);
   clearNode($app);
 
   renderResumeBanner(books);
@@ -1147,11 +1026,9 @@ function renderChapter(data, book, opts) {
   }
 
   setTitleWithChapterPicker(book, ch);
-  const effDiv = effectiveDivision(book);
-  setBreadcrumb([
-    { label: "목록", href: "/" },
-    { divisionPicker: true, label: divisionLabels()[effDiv], activeDivision: effDiv },
-  ]);
+  // setTitleWithChapterPicker already prepends the home button; add the mobile
+  // settings trigger alongside the bookmark button it appended.
+  $title.appendChild(buildSettingsTrigger());
   clearNode($app);
 
   if (data.has_dual_numbering) {
@@ -1552,11 +1429,8 @@ function renderChapter(data, book, opts) {
 function renderPrologue(data, book) {
   const mobileBookName = NT_MOBILE_NAME[book.id];
   setTitle(`${book.name_ko} 머리말`, mobileBookName ? `${mobileBookName} 머리말` : undefined);
-  const effDiv = effectiveDivision(book);
-  setBreadcrumb([
-    { label: "목록", href: "/" },
-    { divisionPicker: true, label: divisionLabels()[effDiv], activeDivision: effDiv },
-  ]);
+  $title.insertBefore(buildHomeBtn(`/${effectiveDivision(book)}`, "성서 목록으로"), $title.firstChild);
+  $title.appendChild(buildSettingsTrigger());
   clearNode($app);
 
   const article = el("article", { className: "prologue-text", lang: "ko" });
@@ -1747,7 +1621,7 @@ async function route() {
         });
       } else {
         const books = await loadBooks();
-        renderBookList(books);
+        renderBookList(books, divisionOrder()[0]);
         dismissLaunchScreen();
         updatePageMeta();
       }
@@ -1766,20 +1640,20 @@ async function route() {
         }
       }
       dismissLaunchScreen(); // Start fade-out immediately
-      renderBookList(books);
+      renderBookList(books, divisionOrder()[0]);
       updatePageMeta();
       trackPageView();
       return;
     }
 
     if (view === "division") {
-      // In vulgate mode, deuterocanon has no separate page — redirect to old_testament
+      // In vulgate mode, deuterocanon has no separate tab — redirect to old_testament
       if (division === "deuterocanon" && loadBookOrder() === "vulgate") {
         navigate("/old_testament");
         return;
       }
       dismissLaunchScreen(); // Start fade-out immediately
-      renderDivisionList(books, division);
+      renderBookList(books, division);
       const divLabel = DIVISION_LABELS[division ?? ""] ?? division;
       updatePageMeta({
         title: divLabel,
@@ -2146,8 +2020,8 @@ function applyAudioShow(on) {
 
 const appViewsRouting = {
   loadBooks, loadVersion, loadChapter, loadPrologue,
-  setTitle, setBreadcrumb, setTitleWithDivisionPicker, setTitleWithChapterPicker,
-  buildDivisionBreadcrumb, divisionLabels, divisionOrder, effectiveDivision,
+  setTitle, setTitleWithChapterPicker,
+  buildDivisionTabs, divisionLabels, divisionOrder, effectiveDivision,
   initCompactHeader,
   parsePath, route, navigate, hideAudioBar, applyAudioShow, renderError,
   _verseSelectionUnit,
@@ -2159,10 +2033,7 @@ window.loadVersion = loadVersion;
 window.loadChapter = loadChapter;
 window.loadPrologue = loadPrologue;
 window.setTitle = setTitle;
-window.setBreadcrumb = setBreadcrumb;
-window.setTitleWithDivisionPicker = setTitleWithDivisionPicker;
 window.setTitleWithChapterPicker = setTitleWithChapterPicker;
-window.buildDivisionBreadcrumb = buildDivisionBreadcrumb;
 window.divisionLabels = divisionLabels;
 window.divisionOrder = divisionOrder;
 window.effectiveDivision = effectiveDivision;
@@ -2189,12 +2060,12 @@ window.getCurrentAudio = () => currentAudio;
 
 // (Phase 7a's temporary window.DIVISION_LABELS / OT_SUBCATEGORY{,_ORDER,_LABELS}
 // scaffolding was removed in Phase 7b — all callers (parsePath / route /
-// renderBookList / renderDivisionList) now live in this module.)
+// renderBookList) now live in this module.)
 
 export {
   loadBooks, loadVersion, loadChapter, loadPrologue,
-  setTitle, setBreadcrumb, setTitleWithDivisionPicker, setTitleWithChapterPicker,
-  buildDivisionBreadcrumb, divisionLabels, divisionOrder, effectiveDivision,
+  setTitle, setTitleWithChapterPicker,
+  buildDivisionTabs, divisionLabels, divisionOrder, effectiveDivision,
   initCompactHeader,
   _verseSelectionUnit,
 };

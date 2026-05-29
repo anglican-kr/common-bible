@@ -185,7 +185,7 @@ body {
 
 #breadcrumb-row {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   align-items: center;
   gap: 0.5rem;
   max-height: 4rem;
@@ -662,66 +662,6 @@ body {
   .switch-thumb {
     transition: none;
   }
-}
-
-#breadcrumb {
-  font-size: 0.78rem;
-  color: var(--text-secondary);
-  min-height: 1.2em;
-}
-
-#breadcrumb a {
-  color: var(--accent);
-  text-decoration: none;
-}
-
-#breadcrumb a:hover {
-  text-decoration: underline;
-}
-
-#breadcrumb .sep {
-  margin: 0 0.3em;
-  color: var(--border);
-}
-
-/* ── Breadcrumb Division Picker ── */
-.bc-division-popover {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  z-index: 25;
-  list-style: none;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
-  padding: 0.3rem 0;
-  margin-top: 0.3rem;
-  min-width: 6rem;
-  white-space: nowrap;
-}
-
-.bc-division-item {
-  display: block;
-  padding: 0.35rem 0.8rem;
-  font-size: 0.82rem;
-  color: var(--text);
-  text-decoration: none;
-}
-
-.bc-division-item:hover {
-  background: var(--accent);
-  color: #fff;
-}
-
-.bc-division-item.active {
-  color: var(--accent);
-  font-weight: 700;
-}
-
-.title-division-popover {
-  left: 50%;
-  transform: translateX(-50%);
 }
 
 #page-title {
@@ -1928,48 +1868,50 @@ mark.search-highlight {
 }
 
 /* ── Book List ── */
-.division {
+/* Single tabbed page (구약 / 외경 / 신약). The tab strip fills the row width:
+   each tab flexes equally so the three (or two, in vulgate mode) segments span
+   the full content width. Anchors to per-division routes (deep-linkable). */
+.division-tabs {
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
-  margin-bottom: 1.8rem;
+  display: flex;
+  margin: 0.2rem 0 1.4rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--bg-card);
 }
 
-.division-title {
-  font-size: 0.85rem;
-  font-weight: 700;
+.division-tab {
+  flex: 1 1 0;
+  min-width: 0;
+  text-align: center;
+  padding: 0.6rem 0.4rem;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-decoration: none;
+  white-space: nowrap;
+  border-right: 1px solid var(--border);
+  transition: background 0.15s, color 0.15s;
+}
+
+.division-tab:last-child {
+  border-right: none;
+}
+
+.division-tab:hover,
+.division-tab:focus-visible {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
   color: var(--accent);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  padding-bottom: 0.4rem;
-  border-bottom: none;
-  background-image: linear-gradient(to right, transparent, var(--accent) 15%, var(--accent) 85%, transparent);
-  background-repeat: no-repeat;
-  background-position: bottom;
-  background-size: 100% 1px;
-  margin-bottom: 0.6rem;
-  cursor: pointer;
-  list-style: none;
 }
 
-.division-title::-webkit-details-marker {
-  display: none;
+.division-tab.active {
+  background: var(--accent);
+  color: #fff;
 }
 
-.division-title::after {
-  content: "";
-  display: inline-block;
-  width: 0.45em;
-  height: 0.45em;
-  border-right: 2px solid var(--accent);
-  border-bottom: 2px solid var(--accent);
-  transform: rotate(45deg);
-  margin-left: 0.5em;
-  vertical-align: 0.1em;
-  transition: transform 0.2s;
-}
-
-.division[open] > .division-title::after {
-  transform: rotate(-135deg);
-  vertical-align: -0.1em;
+.division-panel {
+  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
 }
 
 .ot-subcategory {
@@ -3040,9 +2982,15 @@ html.cite-sheet-open {
     margin-top: 4.5rem;
   }
 
-  /* Reserve space below the last book list so the FAB doesn't overlap buttons */
-  .division:last-child {
+  /* Reserve space below the book list so the FAB doesn't overlap buttons */
+  .division-panel {
     padding-bottom: calc(3.2rem + 2.5rem + env(safe-area-inset-bottom));
+  }
+
+  /* The top row holds only the (hidden) search bar + settings on mobile;
+     settings moves into the title row, so the whole row collapses away. */
+  #breadcrumb-row {
+    display: none;
   }
 }
 
@@ -3242,6 +3190,33 @@ html.cite-sheet-open {
 .title-bookmark-btn:hover,
 .title-bookmark-btn.has-bookmark {
   color: var(--accent);
+}
+
+/* ── Settings button placement (responsive) ──
+   Desktop: the gear lives in the top row (#settings-anchor) next to the search
+   bar and collapses with that row on scroll. Mobile: the top row is hidden, so
+   each view mints a per-render gear into the always-visible title row (sits
+   just left of the bookmark button). Exactly one is shown per breakpoint. */
+.title-settings-btn {
+  position: absolute;
+  right: 2.4rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 2.2rem;
+  height: 2.2rem;
+  padding: 0;
+}
+
+@media (min-width: 769px) {
+  .title-settings-btn {
+    display: none;
+  }
+}
+
+@media (max-width: 768px) {
+  #settings-anchor {
+    display: none;
+  }
 }
 
 

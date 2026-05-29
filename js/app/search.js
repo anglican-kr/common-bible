@@ -297,7 +297,8 @@ function renderSearchResultList(container, result, query, page, pageSize, pagina
  */
 async function renderSearchResults(query, page, autoNavigate = false) {
   window.setTitle(`"${query}" 검색`);
-  window.setBreadcrumb([{ label: "목록", href: "/" }]);
+  const $title = _$("page-title");
+  $title.insertBefore(window.buildHomeBtn("/", "성서 목록으로"), $title.firstChild);
   window.hideAudioBar();
   clearNode($app);
 
