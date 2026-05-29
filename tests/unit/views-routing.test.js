@@ -141,6 +141,14 @@ function makeDom() {
       this.children = [];
       this.attributes = {};
       this._textOverride = null;
+      // Minimal CSSOM shim: production code sets custom properties / transform
+      // via .style (CSP blocks style *attributes*, so .style is the only path).
+      this.style = {
+        _props: {},
+        setProperty(k, v) { this._props[k] = String(v); },
+        getPropertyValue(k) { return this._props[k] || ""; },
+        removeProperty(k) { delete this._props[k]; },
+      };
     }
     appendChild(c) { this.children.push(c); return c; }
     setAttribute(k, v) { this.attributes[k] = String(v); }
@@ -486,26 +494,30 @@ test("buildDivisionTabs: canonical → 3 tab anchors in order with labels", () =
   assert.equal(nav.tagName, "NAV");
   assert.equal(nav.className, "division-tabs");
   assert.equal(nav.getAttribute("aria-label"), "구분");
-  assert.equal(nav.children.length, 3);
-  assert.deepEqual(nav.children.map((a) => a.textContent), ["구약", "외경", "신약"]);
+  // First child is the sliding indicator; the rest are the tab anchors.
+  const [indicator, ...tabs] = nav.children;
+  assert.equal(indicator.className, "division-tab-indicator");
+  assert.equal(tabs.length, 3);
+  assert.deepEqual(tabs.map((a) => a.textContent), ["구약", "외경", "신약"]);
   assert.deepEqual(
-    nav.children.map((a) => a.getAttribute("href")),
+    tabs.map((a) => a.getAttribute("href")),
     ["/old_testament", "/deuterocanon", "/new_testament"]
   );
-  for (const a of nav.children) assert.equal(a.tagName, "A");
+  for (const a of tabs) assert.equal(a.tagName, "A");
 });
 
 test("buildDivisionTabs: vulgate → 2 tabs, 외경 dropped", () => {
   const h = loadDivisionTabs(["old_testament", "new_testament"]);
   const nav = h.buildDivisionTabs("old_testament");
-  assert.equal(nav.children.length, 2);
-  assert.deepEqual(nav.children.map((a) => a.textContent), ["구약", "신약"]);
+  const tabs = nav.children.filter((c) => c.tagName === "A");
+  assert.equal(tabs.length, 2);
+  assert.deepEqual(tabs.map((a) => a.textContent), ["구약", "신약"]);
 });
 
 test("buildDivisionTabs: marks the active tab with class + aria-current", () => {
   const h = loadDivisionTabs();
   const nav = h.buildDivisionTabs("new_testament");
-  const [ot, dc, nt] = nav.children;
+  const [ot, dc, nt] = nav.children.filter((c) => c.tagName === "A");
   assert.equal(ot.className, "division-tab");
   assert.equal(dc.className, "division-tab");
   assert.equal(nt.className, "division-tab active");

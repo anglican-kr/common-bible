@@ -33,6 +33,7 @@ const $app = _$("app");
 const $title = _$("page-title");
 const $audioBar = _$("audio-bar");
 const $resumeBannerSlot = _$("resume-banner-slot");
+const $divisionTabsSlot = _$("division-tabs-slot");
 const $searchInput = /** @type {HTMLInputElement} */ (_$("search-input"));
 const $searchClear = _$("search-clear");
 const $searchBar = _$("search-bar");
@@ -431,28 +432,6 @@ const DIVISION_LABELS = {
 
 const DIVISION_ORDER = ["old_testament", "deuterocanon", "new_testament"];
 
-// Old Testament subcategories (also covers deuterocanon books for vulgate mode)
-const OT_SUBCATEGORY = {
-  gen: "pentateuch", exod: "pentateuch", lev: "pentateuch", num: "pentateuch", deut: "pentateuch",
-  josh: "history", judg: "history", ruth: "history",
-  "1sam": "history", "2sam": "history", "1kgs": "history", "2kgs": "history",
-  "1chr": "history", "2chr": "history", ezra: "history", neh: "history",
-  tob: "history", jdt: "history", esth: "history", "1macc": "history", "2macc": "history",
-  job: "wisdom", ps: "wisdom", prov: "wisdom", eccl: "wisdom", song: "wisdom",
-  wis: "wisdom", sir: "wisdom",
-  isa: "prophets", jer: "prophets", lam: "prophets", bar: "prophets",
-  ezek: "prophets", dan: "prophets", hos: "prophets", joel: "prophets", amos: "prophets",
-  obad: "prophets", jonah: "prophets", mic: "prophets", nah: "prophets", hab: "prophets",
-  zeph: "prophets", hag: "prophets", zech: "prophets", mal: "prophets",
-};
-const OT_SUBCATEGORY_ORDER = ["pentateuch", "history", "wisdom", "prophets"];
-const OT_SUBCATEGORY_LABELS = {
-  pentateuch: "오경",
-  history: "역사서",
-  wisdom: "시서와 지혜서",
-  prophets: "예언서",
-};
-
 const VULGATE_DIVISION_LABELS = {
   old_testament: "구약",
   new_testament: "신약",
@@ -481,16 +460,51 @@ function effectiveDivision(book) {
 // book-order setting (vulgate drops the 외경 tab). Tabs are anchors to the
 // per-division routes (/old_testament etc.) so deep links, the back button,
 // and SEO indexing (ADR-009) keep working. CSS flexes them to fill the row.
+// Active-tab index of the most recent render, so the sliding indicator can
+// animate from the previously selected tab to the new one across re-renders
+// (each tab click is a full route change that rebuilds the nav).
+let _prevDivisionIdx = null;
+
 function buildDivisionTabs(activeDivision) {
   const labels = divisionLabels();
   const order = divisionOrder();
+  const activeIdx = Math.max(0, order.indexOf(activeDivision));
+  // Slide from the previous selection when one exists and differs; otherwise
+  // render the indicator already under the active tab (no animation).
+  const startIdx = _prevDivisionIdx != null && _prevDivisionIdx !== activeIdx && _prevDivisionIdx < order.length
+    ? _prevDivisionIdx
+    : activeIdx;
   const nav = el("nav", { className: "division-tabs", "aria-label": "구분" });
+  // Style is applied via the CSSOM (.style), not a `style` attribute: the app's
+  // CSP has no 'unsafe-inline' for style-src, so style attributes are blocked —
+  // but programmatic .style assignments are always allowed.
+  nav.style.setProperty("--tab-count", String(order.length));
+  // The sliding accent-outlined box that marks the active tab. The transform is
+  // set directly (not via a custom property) so `transition: transform` has a
+  // proper before/after value to interpolate.
+  const indicator = el("div", { className: "division-tab-indicator", "aria-hidden": "true" });
+  indicator.style.transform = `translateX(${startIdx * 100}%)`;
+  nav.appendChild(indicator);
   for (const div of order) {
     const isActive = div === activeDivision;
     const a = el("a", { className: isActive ? "division-tab active" : "division-tab", href: `/${div}` }, labels[div]);
     if (isActive) a.setAttribute("aria-current", "page");
     nav.appendChild(a);
   }
+  // Browser-only: slide from the previously-active tab (startIdx, set inline
+  // above) to the new one. Double rAF so the indicator is painted at startIdx in
+  // the first frame, then moved in the next — giving `transition: transform` a
+  // committed before/after pair to interpolate (a single frame can coalesce both
+  // into one paint and skip the animation). Guarded so the unit-test vm harness
+  // (no requestAnimationFrame) is unaffected.
+  if (startIdx !== activeIdx && typeof requestAnimationFrame === "function") {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        indicator.style.transform = `translateX(${activeIdx * 100}%)`;
+      });
+    });
+  }
+  _prevDivisionIdx = activeIdx;
   return nav;
 }
 // ── END DIVISION_TABS ──
@@ -764,38 +778,22 @@ function renderBookList(books, activeDivision) {
 
   renderResumeBanner(books);
 
-  $app.appendChild(buildDivisionTabs(active));
+  // Tabs live in the sticky group (after the resume banner) so they stay pinned
+  // below the header — and below the banner whenever one is shown. route()
+  // clears this slot on every navigation.
+  clearNode($divisionTabsSlot);
+  $divisionTabsSlot.appendChild(buildDivisionTabs(active));
 
   const panel = el("div", { className: "division-panel", role: "region", "aria-label": labels[active] });
   const list = books.filter((b) => effectiveDivision(b) === active);
 
-  if (active === "old_testament") {
-    // Group OT books into subcategories (also covers deuterocanon books in
-    // vulgate mode, which fold into the OT tab).
-    const subGrouped = {};
-    for (const b of list) {
-      const sub = OT_SUBCATEGORY[b.id] ?? "other";
-      (subGrouped[sub] ??= []).push(b);
-    }
-    for (const sub of OT_SUBCATEGORY_ORDER) {
-      const subList = subGrouped[sub];
-      if (!subList) continue;
-      const section = el("div", { className: "ot-subcategory" });
-      section.appendChild(el("h3", { className: "ot-subcategory-title" }, OT_SUBCATEGORY_LABELS[sub]));
-      const ul = el("ul", { className: "book-list", role: "list" });
-      for (const b of subList) {
-        ul.appendChild(buildBookListItem(b));
-      }
-      section.appendChild(ul);
-      panel.appendChild(section);
-    }
-  } else {
-    const ul = el("ul", { className: "book-list", role: "list" });
-    for (const b of list) {
-      ul.appendChild(buildBookListItem(b));
-    }
-    panel.appendChild(ul);
+  // Flat list for every division — OT is no longer split into 오경/역사서/etc.
+  // subcategories, so all three tabs share one consistent layout.
+  const ul = el("ul", { className: "book-list", role: "list" });
+  for (const b of list) {
+    ul.appendChild(buildBookListItem(b));
   }
+  panel.appendChild(ul);
   $app.appendChild(panel);
   observeBookListsIn($app);
 }
@@ -1603,6 +1601,7 @@ async function route() {
   _isInitialLoad = false;
   if (_scrollTrackCleanup) _scrollTrackCleanup();
   clearNode($resumeBannerSlot);
+  clearNode($divisionTabsSlot);
   if (readingContext.verseSelectMode) exitVerseSelectMode();
   // The citation sheet is anchored to a specific citation context, so a route
   // change (link nav or back/forward — both land here) should dismiss it.

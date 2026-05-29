@@ -454,9 +454,8 @@ export interface ColorSchemeEntry {
   iconBg: string;
 }
 
-// `data/books.json` parse shape. 73 entries; `division` partitions OT/NT/DC,
-// while `OT_SUBCATEGORY` (app.js) further subdivides OT into pentateuch /
-// history / wisdom / prophets. `has_prologue` is true only for sir.
+// `data/books.json` parse shape. 73 entries; `division` partitions OT/NT/DC.
+// `has_prologue` is true only for sir.
 export interface BookEntry {
   id: string;
   name_ko: string;
