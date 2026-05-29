@@ -609,10 +609,23 @@ function makeRichDom() {
       }
       return false;
     }
+    closest(selector) {
+      const classes = String(selector).trim().replace(/^\./, "").split(".");
+      let n = this;
+      while (n) {
+        if (n._classNames && classes.every((c) => n._classNames.has(c))) return n;
+        n = n.parentNode;
+      }
+      return null;
+    }
     querySelectorAll(selector) {
       const sel = String(selector).trim();
       const matches = (el) => {
         if (sel === "a[href]") return el.tagName === "A" && Object.prototype.hasOwnProperty.call(el.attributes, "href");
+        // Class selector(s), e.g. ".popover-item.current" — element must carry all.
+        if (sel.startsWith(".")) {
+          return sel.slice(1).split(".").every((c) => el._classNames?.has(c));
+        }
         return false;
       };
       const out = [];
@@ -847,6 +860,18 @@ test("setTitleWithChapterPicker: btn click opens popover + traps focus", () => {
   assert.equal(h.trapFocusCalls.length, 1);
 });
 
+test("setTitleWithChapterPicker: opening focuses + marks the current chapter", () => {
+  const h = loadPopover();
+  const book = { id: "ps", name_ko: "시편", chapter_count: 150, has_prologue: false, division: "old_testament" };
+  h.setTitleWithChapterPicker(book, 100);
+  const btn = h.$title.children[1];
+  btn._dispatch("click", {});
+  const active = h.dom.getActive();
+  assert.equal(active.className, "popover-item current");
+  assert.equal(active.textContent, "100");
+  assert.equal(active.getAttribute("aria-current"), "true");
+});
+
 test("setTitleWithChapterPicker: clicking a grid <a> closes popover", () => {
   const h = loadPopover();
   const book = { id: "gen", name_ko: "창세기", chapter_count: 3, has_prologue: false, division: "old_testament" };
@@ -858,6 +883,24 @@ test("setTitleWithChapterPicker: clicking a grid <a> closes popover", () => {
   popover._dispatch("click", { target: link });
   assert.equal(popover.hidden, true);
   assert.equal(h.trapFocusCleanups.length, 1);
+});
+
+test("setTitleWithChapterPicker: clicking the mobile settings gear closes the chapter popover", () => {
+  const h = loadPopover();
+  const book = { id: "gen", name_ko: "창세기", chapter_count: 5, has_prologue: false, division: "old_testament" };
+  h.setTitleWithChapterPicker(book, 1);
+  const btn = h.$title.children[1];
+  const popover = h.$title.children[2];
+  btn._dispatch("click", {});  // open chapter popover
+  assert.equal(popover.hidden, false);
+  // The mobile settings gear lives *inside* $title (appended per-view); a tap on
+  // it must still close the chapter popover so the two never overlap.
+  const gear = new h.dom.RichElement("button");
+  gear.className = "title-settings-btn";
+  h.$title.appendChild(gear);
+  h.dom.document._dispatch("click", { target: gear });
+  assert.equal(popover.hidden, true);
+  assert.equal(btn.getAttribute("aria-expanded"), "false");
 });
 
 // ── COMPACT_HEADER tests ─────────────────────────────────────────────────────
