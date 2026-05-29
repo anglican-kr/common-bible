@@ -99,17 +99,17 @@
 
 /* ── Color schemes ── */
 
-[data-color-scheme="terracotta"] {
-  --accent: #6b3a2a;
-  --accent-light: #8b5e3c;
-  --verse-num: #9b8579;
-  --paragraph-mark: #b08968;
+[data-color-scheme="red"] {
+  --accent: #a01828;
+  --accent-light: #c43850;
+  --verse-num: #a87078;
+  --paragraph-mark: #985868;
 }
-[data-color-scheme="terracotta"][data-theme="dark"] {
-  --accent: #c49a6c;
-  --accent-light: #d4b08c;
-  --verse-num: #c49a6c;
-  --paragraph-mark: #b08968;
+[data-color-scheme="red"][data-theme="dark"] {
+  --accent: #e08090;
+  --accent-light: #eba4b2;
+  --verse-num: #e08090;
+  --paragraph-mark: #d07080;
 }
 
 [data-color-scheme="green"] {

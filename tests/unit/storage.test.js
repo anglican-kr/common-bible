@@ -604,8 +604,8 @@ test("loadColorScheme: defaults to 'navy' when unset", () => {
 });
 
 test("loadColorScheme: returns saved scheme when valid", () => {
-  const h = loadStorage({ localStorageInit: { "bible-color-scheme": "terracotta" } });
-  assert.equal(h.appStorage.loadColorScheme(), "terracotta");
+  const h = loadStorage({ localStorageInit: { "bible-color-scheme": "red" } });
+  assert.equal(h.appStorage.loadColorScheme(), "red");
 });
 
 test("loadColorScheme: falls back to 'navy' for unknown id", () => {
@@ -625,7 +625,7 @@ test("saveColorScheme: writes value and notifies sync + drive", () => {
 test("COLOR_SCHEMES exposes the 4 known schemes", () => {
   const h = loadStorage();
   const ids = rehydrate(h.appStorage.COLOR_SCHEMES).map((/** @type {{id: string}} */ s) => s.id);
-  assert.deepEqual(ids.sort(), ["green", "navy", "purple", "terracotta"]);
+  assert.deepEqual(ids.sort(), ["green", "navy", "purple", "red"]);
 });
 
 // ── theme ────────────────────────────────────────────────────────────────────

@@ -168,7 +168,7 @@ PR 진행에 따라 추가되는 도메인 타입을 한곳에서 추적. 실제
 ### 5.2 PR-2 이후 (참고용 — 실제 구조는 그 PR에서 확정)
 
 - `InstallNudgeState` — `{ visits: number; nextShow: number; neverShow: boolean }` (PR-6에서 사용. 단일 출처 보장 위해 PR-1 또는 PR-2에서 선제 정의 가능)
-- `ColorSchemeId` — string literal union (`"navy" | "terracotta" | "green" | "purple"`)
+- `ColorSchemeId` — string literal union (`"navy" | "red" | "green" | "purple"`)
 - `ThemeMode` — string literal union (실제 값 확인 후 확정)
 - `StartupBehavior` — `"resume" | "home"` (이미 `SettingKey`에 있음 — 값 union을 별도로 노출)
 - `BookOrder` — string literal union (실제 값 확인 후 확정)

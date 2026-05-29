@@ -42,10 +42,10 @@ window.appStorage = (() => {
   const DEFAULT_FONT_SIZE = 18;
   /** @type {ReadonlyArray<ColorSchemeEntry>} */
   const COLOR_SCHEMES = [
-    { id: "navy",       name: "네이비",   swatch: "#1a1a2e", iconBg: "#1a1a2e" },
-    { id: "terracotta", name: "버건디",   swatch: "#6b3a2a", iconBg: "#6b3a2a" },
-    { id: "green",      name: "초록",     swatch: "#1a6b50", iconBg: "#1a6b50" },
-    { id: "purple",     name: "보라",     swatch: "#5a2d82", iconBg: "#5a2d82" },
+    { id: "navy",   name: "네이비", swatch: "#1a1a2e", iconBg: "#1a1a2e" },
+    { id: "red",    name: "빨강",   swatch: "#a01828", iconBg: "#a01828" },
+    { id: "green",  name: "초록",   swatch: "#1a6b50", iconBg: "#1a6b50" },
+    { id: "purple", name: "보라",   swatch: "#5a2d82", iconBg: "#5a2d82" },
   ];
 
   // ── Reading position ──
