@@ -91,8 +91,14 @@ window.appCitations = (() => {
    *   - "poetry" → block-style chip on its own line (ADR-022 §6 운문 예외)
    *   - "prose"  → inline chip following the segment text
    *
-   * The chip is a `<button>` for keyboard accessibility. Data attributes
-   * carry src/tradition/parallels for the C3 click delegation.
+   * Rendered as `<span role="button">` rather than a native `<button>`: the
+   * browser forces `<button>` to display:inline-block, so a long chip label
+   * (tradition + src + several parallels) can never break across lines — it
+   * wraps as one atomic box and drops wholesale to the next line. A span flows
+   * inline like the surrounding text, so a long label wraps mid-label at the
+   * ` · ` separators. Keyboard activation (Enter/Space) is wired manually in
+   * `initCiteSheet` since a span gets none for free. Data attributes carry
+   * src/tradition/parallels for the click delegation.
    *
    * @param {string} src
    * @param {ReadonlyArray<string> | null | undefined} parallels
@@ -105,14 +111,15 @@ window.appCitations = (() => {
     const cls = segmentType === "poetry" ? "cite-chip cite-chip--poetry" : "cite-chip";
     /** @type {Record<string, string>} */
     const attrs = {
-      type: "button",
+      role: "button",
+      tabindex: "0",
       className: cls,
       "data-cite-src": src,
       "aria-label": `인용 출처 ${label} — 본문 보기`,
     };
     if (tradition) attrs["data-cite-tradition"] = tradition;
     if (parallels && parallels.length) attrs["data-cite-parallels"] = parallels.join(";");
-    return el("button", attrs, label);
+    return el("span", attrs, label);
   }
 
   /**
@@ -941,11 +948,24 @@ window.appCitations = (() => {
         }
         return;
       }
-      // Enter / Space activates a focused note anchor (span role=button needs
-      // manual key handling; a native <button> would do this for us).
+      // Enter / Space activates a focused cite chip or note anchor (both are
+      // span role=button and need manual key handling; a native <button> would
+      // do this for us).
       if (e.key === "Enter" || e.key === " ") {
         const target = e.target;
-        if (target instanceof HTMLElement && target.classList.contains("note-anchor")) {
+        if (!(target instanceof HTMLElement)) return;
+        if (target.classList.contains("cite-chip")) {
+          e.preventDefault();
+          const src = target.getAttribute("data-cite-src");
+          if (!src) return;
+          const parallelsRaw = target.getAttribute("data-cite-parallels") || "";
+          const parallels = parallelsRaw
+            ? parallelsRaw.split(";").map((p) => p.trim()).filter(Boolean)
+            : null;
+          const tradition = target.getAttribute("data-cite-tradition") || null;
+          _markCoachmarkSeen();
+          openCiteSheet(src, parallels, tradition, target);
+        } else if (target.classList.contains("note-anchor")) {
           e.preventDefault();
           const anchor = target.getAttribute("data-note-anchor") || target.textContent || "";
           const body   = target.getAttribute("data-note-body")   || "";

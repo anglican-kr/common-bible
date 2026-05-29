@@ -204,8 +204,9 @@ test("chipText: empty parallels array treated as no parallels", () => {
 test("buildCiteChip: prose → inline class only", () => {
   const c = loadCitations();
   const node = c.buildCiteChip("이사 53:5", null, null, "prose");
-  assert.equal(node.tag, "button");
-  assert.equal(node.attrs.type, "button");
+  assert.equal(node.tag, "span");
+  assert.equal(node.attrs.role, "button");
+  assert.equal(node.attrs.tabindex, "0");
   assert.equal(node.attrs.className, "cite-chip");
   assert.equal(node.attrs["data-cite-src"], "이사 53:5");
   assert.equal(node.attrs["data-cite-tradition"], undefined);

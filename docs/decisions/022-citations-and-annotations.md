@@ -6,6 +6,8 @@
 
 > **현재 상태 (2026-05-27 기준).** Phase 1 데이터 파이프라인 — `common-bible-data/src/parser.py` 가 `<cite>` segment 와 `[^id]` 주석을 추출해 절 JSON 의 `segments`·`notes` 필드에 보존. Phase 2 앱 UI — `js/app/citations.js` (~940줄) 가 인용 칩을 중복되지 않게 렌더, 인용 본문 바텀 시트 (`이 장 전체 보기` 확장 + 인용 절 강조, 드래그 핸들로 리사이즈·닫기, 다중 ref / parallels / 다중 장 지원), 주석 ※ 위첨자 + 클릭 툴팁(인쇄 시 하단 footnote), 첫 진입 코치마크를 모두 담당. 설정에서 칩·주석 각각 토글 (`bible-cite-show` / `bible-note-show` localStorage, 기본 ON). GitHub 이슈 #134/#135/#136 으로 Phase 1/2/3 진행 추적. 유닛 테스트는 `tests/unit/citations.test.js` 20 케이스 + 보고서 `docs/qa/2026-05-23-unit-citations.md`. Phase 3 는 사목·신학 자문으로 NT 전 본문에 `<cite>` + 주석을 수기로 다는 콘텐츠 작업이라 별도 일정.
 
+> **개정 (2026-05-29): 인용 칩 줄바꿈.** 인용 칩을 native `<button>` 대신 `<span role="button" tabindex="0">` 로 렌더한다. 브라우저가 `<button>` 을 `display:inline-block` 으로 강제해 칩 라벨(tradition + src + parallels 다수)이 길어지면 행 중간에서 줄바꿈되지 못하고 한 덩어리로 다음 줄에 떨어지는 문제가 있었다. span 은 주변 본문처럼 인라인으로 흘러 긴 라벨이 `·` 구분자 지점에서 자연스럽게 줄바꿈된다. 이미 주석 anchor(`_wrapAnchor`)가 같은 사유로 span 을 쓰던 선례를 따른 것. span 은 Enter/Space 기본 활성화가 없으므로 `initCiteSheet` 의 keydown 핸들러에서 칩 활성화를 수기로 처리한다.
+
 ## 맥락
 
 공동번역성서 본문에는 두 종류의 보조 정보가 자연스럽게 따라온다.
