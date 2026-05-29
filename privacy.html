@@ -11,6 +11,10 @@
       try {
         var theme = localStorage.getItem('bible-theme') || 'system';
         var scheme = localStorage.getItem('bible-color-scheme') || 'navy';
+        // Mirror loadColorScheme's burgundy→red migration so this standalone
+        // page (which reads localStorage directly, bypassing storage.js) still
+        // applies the right --accent for pre-migration users.
+        if (scheme === 'terracotta') scheme = 'red';
         var isDark = theme === 'dark' ||
           (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
         document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
