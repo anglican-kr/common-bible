@@ -148,7 +148,7 @@ window.appSettings = (() => {
 
   function updateThemeMetaColor() {
     const isDark = document.documentElement.getAttribute("data-theme") === "dark";
-    const color = isDark ? "#1a1a2e" : "#faf8f5";
+    const color = isDark ? "#1f1f36" : "#faf8f5";
     document.querySelectorAll('meta[name="theme-color"]').forEach((meta) => {
       meta.setAttribute("content", color);
     });
