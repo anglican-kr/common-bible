@@ -51,6 +51,8 @@
 
 그림자를 추가하면 3중 신호가 되어 시각 잡음. **hairline 을 제거하고 fade gradient 와 그림자 두 가지만** 유지한다. fade gradient 와 그림자는 둘 다 부드러운 vertical falloff 라 자연 결합. ADR-024 가 책 목록 페이지(division-tabs 슬롯 있을 때) hairline 을 조건부 숨김 처리한 의도와도 정합 — 사실상 모든 페이지에서 hairline 을 제거하는 일반화.
 
+> **개정 (2026-05-30):** dev 검증 결과 hairline 제거 후 그림자만으로는 scroll-top 정적 상태의 헤더 경계 인지가 약했다. hairline 을 복구하고 역할을 분리한다 — **hairline = always-on 경계**, **fade + shadow = 스크롤 elevation 신호**. 3중 신호라도 hairline 은 정적·미세하고 shadow 는 동적이라 시각 잡음으로 인지되지 않는다. 책 목록 페이지의 조건부 숨김(`#sticky-group:has(#division-tabs-slot:not(:empty))`)은 ADR-024 그대로 유지.
+
 ### 4. frosted glass 미적용 — iOS 26 / PWA 함정 회피
 
 본 결정은 헤더에 `backdrop-filter` 를 일체 적용하지 않는다. 결과적으로 다음 제약을 **모두 회피**한다:
