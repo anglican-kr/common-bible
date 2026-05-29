@@ -156,6 +156,15 @@ body {
 }
 
 /* ── Header ── */
+/* Scroll-position sentinel for the IntersectionObserver that toggles
+   #sticky-group.scrolled. A zero-height marker that lives at the very top of
+   <body>: when it leaves the viewport, the page has scrolled and the header
+   earns its elevation shadow (ADR-025). */
+#scroll-sentinel {
+  height: 0;
+  pointer-events: none;
+}
+
 #sticky-group {
   position: sticky;
   top: env(safe-area-inset-top);
@@ -163,6 +172,20 @@ body {
   /* Opaque so the resume banner / division tabs slots don't let scrolling
      content show through their side padding while pinned. */
   background: var(--bg);
+  /* ADR-025: micro elevation shadow when scrolled, fading in over 0.18s.
+     scroll-top state has no shadow (flat). The transition target is set on
+     the base rule so toggling `.scrolled` animates in both directions. */
+  transition: box-shadow 0.18s ease;
+}
+
+#sticky-group.scrolled {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+}
+
+[data-theme="dark"] #sticky-group.scrolled {
+  /* Dark mode needs a heavier alpha for an equivalent elevation cue —
+     light shadows wash out against the dark background. */
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
 }
 
 #sticky-group::after {
@@ -180,23 +203,15 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
   background: var(--bg);
   border-bottom: none;
-  padding: 0.6rem 1rem 0;
+  padding: 0.6rem 1rem;
   max-width: var(--max-width);
   margin: 0 auto;
 }
 
-#app-header::after {
-  content: "";
-  display: block;
-  height: 1px;
-  margin-top: 0.6rem;
-  background: linear-gradient(to right, transparent, var(--border) 20%, var(--border) 80%, transparent);
-}
-
-/* On the book-list page (the only view with division tabs) the title sits
-   directly above the tab strip, so the header divider line is redundant. */
-#sticky-group:has(#division-tabs-slot:not(:empty)) #app-header::after {
-  display: none;
+@media (prefers-reduced-motion: reduce) {
+  #sticky-group {
+    transition: none;
+  }
 }
 
 

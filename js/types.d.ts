@@ -903,6 +903,7 @@ declare global {
   function divisionOrder(): string[];
   function effectiveDivision(book: BookEntry): string;
   function initCompactHeader(): void;
+  function initScrollElevation(): void;
   // (Phase 7a's temporary DIVISION_LABELS / OT_SUBCATEGORY{,_ORDER,_LABELS}
   // global declares were removed in Phase 7b — all callers now live inside
   // views-routing.js so the bare-global hop is unnecessary.)
