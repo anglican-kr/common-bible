@@ -203,9 +203,27 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
   background: var(--bg);
   border-bottom: none;
-  padding: 0.6rem 1rem;
+  padding: 0.6rem 1rem 0;
   max-width: var(--max-width);
   margin: 0 auto;
+}
+
+/* ADR-025 개정 (2026-05-30): hairline 복구.
+   원안은 hairline + fade + shadow 가 3중 신호라 시각 잡음이라고 봤으나,
+   실측에서 그림자만으로는 scroll-top 정적 상태의 헤더 경계가 약하게 느껴졌다.
+   hairline 을 always-on 경계로 유지하고, fade + shadow 는 스크롤 elevation
+   신호로 역할 분리. 책 목록 페이지(division tabs 슬롯)에서는 ADR-024 그대로
+   조건부 숨김. */
+#app-header::after {
+  content: "";
+  display: block;
+  height: 1px;
+  margin-top: 0.6rem;
+  background: linear-gradient(to right, transparent, var(--border) 20%, var(--border) 80%, transparent);
+}
+
+#sticky-group:has(#division-tabs-slot:not(:empty)) #app-header::after {
+  display: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
