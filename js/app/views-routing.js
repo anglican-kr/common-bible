@@ -2034,6 +2034,7 @@ window.loadChapter = loadChapter;
 window.loadPrologue = loadPrologue;
 window.setTitle = setTitle;
 window.setTitleWithChapterPicker = setTitleWithChapterPicker;
+window.buildDivisionTabs = buildDivisionTabs;
 window.divisionLabels = divisionLabels;
 window.divisionOrder = divisionOrder;
 window.effectiveDivision = effectiveDivision;
