@@ -56,11 +56,11 @@
   --bg-card: #ffffff;
   --text: #1a1a2e;
   --text-secondary: #555;
-  --accent: #1e3a5f;
-  --accent-light: #2d5480;
+  --accent: #22244a;
+  --accent-light: #353766;
   --border: #e0dcd6;
-  --verse-num: #6b8aaa;
-  --paragraph-mark: #5a7a9a;
+  --verse-num: #5a5a78;
+  --paragraph-mark: #4a4a65;
   --shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
   --radius: 8px;
   --max-width: 720px;
@@ -69,13 +69,14 @@
      always uses --accent so it tracks the chosen colour scheme. iOS uses the
      grey track; Material 3 uses the outline/surface-variant trio. */
   --switch-off-track: #d6d2cc;
-  --switch-m3-off-track: #e7e0ec;
   --switch-m3-outline: #79747e;
   --switch-m3-off-thumb: #79747e;
+  --switch-desktop-off-track: #cdcdd5;
+  --switch-desktop-outline: #b5b5be;
 }
 
 [data-theme="dark"] {
-  --bg: #1a1a2e;
+  --bg: #1f1f36;
   --bg-card: #252540;
   --text: #e0dcd6;
   --text-secondary: #a0a0a0;
@@ -88,24 +89,25 @@
 
   /* Lighter than --bg-card so the OFF track never disappears into the panel. */
   --switch-off-track: #50506a;
-  --switch-m3-off-track: #3a3a55;
   --switch-m3-outline: #938f99;
   --switch-m3-off-thumb: #cfcad6;
+  --switch-desktop-off-track: #45455a;
+  --switch-desktop-outline: #5e5e72;
 }
 
 /* ── Color schemes ── */
 
-[data-color-scheme="terracotta"] {
-  --accent: #6b3a2a;
-  --accent-light: #8b5e3c;
-  --verse-num: #9b8579;
-  --paragraph-mark: #b08968;
+[data-color-scheme="red"] {
+  --accent: #a01828;
+  --accent-light: #c43850;
+  --verse-num: #a87078;
+  --paragraph-mark: #985868;
 }
-[data-color-scheme="terracotta"][data-theme="dark"] {
-  --accent: #c49a6c;
-  --accent-light: #d4b08c;
-  --verse-num: #c49a6c;
-  --paragraph-mark: #b08968;
+[data-color-scheme="red"][data-theme="dark"] {
+  --accent: #e08090;
+  --accent-light: #eba4b2;
+  --verse-num: #e08090;
+  --paragraph-mark: #d07080;
 }
 
 [data-color-scheme="green"] {
@@ -248,7 +250,7 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
   position: fixed;
   z-index: 25;
-  background: var(--bg-card);
+  background: var(--bg);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
@@ -646,35 +648,69 @@ body {
   transform: translateX(20px);
 }
 
-/* Android — Material 3 Switch look: 52×32 outlined track, small (16px) thumb
-   when OFF growing to a larger (24px) filled thumb when ON. */
+/* Android — Material 3 Expressive (Android 16 QPR1, 2025-09): 1.5px outline,
+   22px circular thumb in both states, spring-like cubic-bezier so the slide
+   gives a small overshoot. Track stays pill — shape morphing in M3E applies
+   to tiles/chips, not Switch. */
 .os-android .switch { width: 52px; height: 32px; }
 .os-android .switch-track {
   border-radius: 16px;
-  background: var(--switch-m3-off-track);
-  border: 2px solid var(--switch-m3-outline);
+  background: var(--switch-desktop-off-track);
+  border: 1.5px solid var(--switch-m3-outline);
 }
 .os-android .switch-thumb {
   top: 50%;
   left: 0;
-  width: 16px;
-  height: 16px;
-  transform: translate(6px, -50%);
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  transform: translate(4px, -50%);
   background: var(--switch-m3-off-thumb);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18), 0 1px 1px rgba(0, 0, 0, 0.1);
+  transition:
+    transform 0.32s cubic-bezier(0.34, 1.45, 0.55, 1),
+    background 0.2s ease;
 }
 .os-android .switch-input:checked + .switch-track {
   border-color: var(--accent);
 }
 .os-android .switch-input:checked + .switch-track .switch-thumb {
-  width: 24px;
-  height: 24px;
-  transform: translate(22px, -50%);
+  transform: translate(26px, -50%);
+  background: #fff;
+}
+
+/* Desktop — clean toggle: thin outline, equal-size thumb in both states,
+   subtle shadow for tactile lift. OFF keeps the M3 grey thumb so the toggle
+   still reads as "switch" rather than "indicator dot". */
+.os-desktop .switch { width: 52px; height: 32px; }
+.os-desktop .switch-track {
+  border-radius: 16px;
+  background: var(--switch-desktop-off-track);
+  border: 1px solid var(--switch-desktop-outline);
+}
+.os-desktop .switch-thumb {
+  top: 50%;
+  left: 0;
+  width: 20px;
+  height: 20px;
+  transform: translate(5px, -50%);
+  background: var(--switch-m3-off-thumb);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18), 0 1px 1px rgba(0, 0, 0, 0.1);
+}
+.os-desktop .switch-input:checked + .switch-track {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.os-desktop .switch-input:checked + .switch-track .switch-thumb {
+  transform: translate(26px, -50%);
   background: #fff;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .switch-track,
-  .switch-thumb {
+  .switch-thumb,
+  .os-android .switch-thumb,
+  .os-desktop .switch-thumb {
     transition: none;
   }
 }
@@ -2704,6 +2740,13 @@ html.cite-sheet-open {
 
 .color-swatch[aria-pressed="true"] {
   outline-color: var(--text);
+}
+
+/* Dark mode: navy swatch sits very close to the popover bg (#22244a on
+   #1f1f36). A faint ring keeps every swatch's silhouette readable without
+   altering the swatch colour itself. */
+[data-theme="dark"] .color-swatch {
+  border-color: rgba(255, 255, 255, 0.14);
 }
 
 .cache-clear-btn {

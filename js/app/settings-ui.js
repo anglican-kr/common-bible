@@ -117,6 +117,11 @@ window.appSettings = (() => {
 
   /** @param {string} schemeName */
   function applyColorScheme(schemeName) {
+    // Defensive migration: Drive sync restore (state-machine.js) calls this
+    // directly with whatever value the remote device sent, bypassing
+    // loadColorScheme's migration. Mirror the rename here so any caller is
+    // covered.
+    if (schemeName === "terracotta") schemeName = "red";
     // Invalidate any in-flight updateAppIcons call from a previous scheme.
     _iconGeneration++;
     const scheme = COLOR_SCHEMES.find((s) => s.id === schemeName) || COLOR_SCHEMES[0];
@@ -148,7 +153,7 @@ window.appSettings = (() => {
 
   function updateThemeMetaColor() {
     const isDark = document.documentElement.getAttribute("data-theme") === "dark";
-    const color = isDark ? "#1a1a2e" : "#faf8f5";
+    const color = isDark ? "#1f1f36" : "#faf8f5";
     document.querySelectorAll('meta[name="theme-color"]').forEach((meta) => {
       meta.setAttribute("content", color);
     });
@@ -223,17 +228,23 @@ window.appSettings = (() => {
   }
 
   // ── OS detection (toggle look) ──
-  // Drives the iOS (UISwitch) vs Material 3 toggle styling. Kept independent
-  // of install.js's detectPlatform(), which returns "installed" when running
-  // standalone — here we always want the native OS look regardless of install
-  // state. iPadOS 13+ masquerades as desktop Safari, so fall back to the
-  // touch-points heuristic.
-  /** @returns {"ios" | "android"} */
+  // Drives the iOS (UISwitch) vs Material 3 vs desktop toggle styling. Kept
+  // independent of install.js's detectPlatform(), which returns "installed"
+  // when running standalone — here we always want the native OS look
+  // regardless of install state. iPadOS 13+ masquerades as desktop Safari, so
+  // fall back to the touch-points heuristic.
+  /** @returns {"ios" | "android" | "desktop"} */
   function detectOS() {
     const ua = navigator.userAgent;
     const isIOS = /iPad|iPhone|iPod/.test(ua) ||
       (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-    return isIOS ? "ios" : "android";
+    if (isIOS) return "ios";
+    // A (pointer: fine) match alone is enough — touch-screen Windows laptops
+    // report maxTouchPoints > 0 but still have a precise mouse pointer, so
+    // gating on maxTouchPoints === 0 would mis-classify them as Android.
+    const isDesktop = typeof window.matchMedia === "function" &&
+      window.matchMedia("(pointer: fine)").matches;
+    return isDesktop ? "desktop" : "android";
   }
 
   // ── Toggle switch component ──
@@ -309,8 +320,8 @@ window.appSettings = (() => {
 
     // Tag the document with the OS look so toggle styling can branch in CSS.
     const os = detectOS();
-    document.documentElement.classList.remove("os-ios", "os-android");
-    document.documentElement.classList.add(os === "ios" ? "os-ios" : "os-android");
+    document.documentElement.classList.remove("os-ios", "os-android", "os-desktop");
+    document.documentElement.classList.add(`os-${os}`);
 
     // Build a fresh gear-icon trigger button. The same popover is shared by
     // every trigger (desktop top-row + per-view mobile title-row button), so

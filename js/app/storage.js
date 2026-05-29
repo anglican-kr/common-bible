@@ -42,10 +42,10 @@ window.appStorage = (() => {
   const DEFAULT_FONT_SIZE = 18;
   /** @type {ReadonlyArray<ColorSchemeEntry>} */
   const COLOR_SCHEMES = [
-    { id: "navy",       name: "네이비",   swatch: "#1e3a5f", iconBg: "#1a1a2e" },
-    { id: "terracotta", name: "버건디",   swatch: "#6b3a2a", iconBg: "#6b3a2a" },
-    { id: "green",      name: "초록",     swatch: "#1a6b50", iconBg: "#1a6b50" },
-    { id: "purple",     name: "보라",     swatch: "#5a2d82", iconBg: "#5a2d82" },
+    { id: "navy",   name: "네이비", swatch: "#22244a", iconBg: "#1a1a2e" },
+    { id: "red",    name: "빨강",   swatch: "#a01828", iconBg: "#a01828" },
+    { id: "green",  name: "초록",   swatch: "#1a6b50", iconBg: "#1a6b50" },
+    { id: "purple", name: "보라",   swatch: "#5a2d82", iconBg: "#5a2d82" },
   ];
 
   // ── Reading position ──
@@ -256,7 +256,11 @@ window.appStorage = (() => {
   /** @returns {ColorSchemeId} */
   function loadColorScheme() {
     try {
-      const v = localStorage.getItem(COLOR_SCHEME_KEY);
+      let v = localStorage.getItem(COLOR_SCHEME_KEY);
+      // Renamed/replaced 2026-05-29: burgundy scheme was retired in favour of
+      // a true liturgical red. Pre-migration users (localStorage or Drive
+      // restore) read as red so their warm-dark preference isn't reset to navy.
+      if (v === "terracotta") v = "red";
       const found = COLOR_SCHEMES.find((s) => s.id === v);
       if (found) return found.id;
     } catch (_) {}

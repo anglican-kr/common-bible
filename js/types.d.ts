@@ -434,7 +434,7 @@ export interface DragState {
 // `COLOR_SCHEME_KEY`. Drives both data-color-scheme attribute and recolored
 // favicon/apple-touch-icon. The COLOR_SCHEMES array's `id` field is the
 // authoritative source — keep these in sync if a scheme is added/removed.
-export type ColorSchemeId = "navy" | "terracotta" | "green" | "purple";
+export type ColorSchemeId = "navy" | "red" | "green" | "purple";
 
 // `THEME_KEY`. "system" defers to prefers-color-scheme; light/dark are
 // explicit overrides.
