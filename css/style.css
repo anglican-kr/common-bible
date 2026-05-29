@@ -191,6 +191,12 @@ body {
   background: linear-gradient(to right, transparent, var(--border) 20%, var(--border) 80%, transparent);
 }
 
+/* On the book-list page (the only view with division tabs) the title sits
+   directly above the tab strip, so the header divider line is redundant. */
+#sticky-group:has(#division-tabs-slot:not(:empty)) #app-header::after {
+  display: none;
+}
+
 
 #breadcrumb-row {
   display: flex;
@@ -1924,7 +1930,8 @@ mark.search-highlight {
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
   position: relative; /* positioning context for the sliding indicator */
   display: flex;
-  margin: 0.1rem 0 0;
+  /* Breathing room below the (now line-less) header. */
+  margin: 0.5rem 0 0;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg-card);
