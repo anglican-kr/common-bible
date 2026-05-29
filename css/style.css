@@ -64,6 +64,14 @@
   --shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
   --radius: 8px;
   --max-width: 720px;
+
+  /* Toggle switch (settings panel). OFF-state colours only — the ON state
+     always uses --accent so it tracks the chosen colour scheme. iOS uses the
+     grey track; Material 3 uses the outline/surface-variant trio. */
+  --switch-off-track: #d6d2cc;
+  --switch-m3-off-track: #e7e0ec;
+  --switch-m3-outline: #79747e;
+  --switch-m3-off-thumb: #79747e;
 }
 
 [data-theme="dark"] {
@@ -77,6 +85,12 @@
   --verse-num: #8ab4d8;
   --paragraph-mark: #6a94b8;
   --shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+
+  /* Lighter than --bg-card so the OFF track never disappears into the panel. */
+  --switch-off-track: #50506a;
+  --switch-m3-off-track: #3a3a55;
+  --switch-m3-outline: #938f99;
+  --switch-m3-off-thumb: #cfcad6;
 }
 
 /* ── Color schemes ── */
@@ -524,6 +538,130 @@ body {
 .toolbar-btn:disabled {
   opacity: 0.35;
   cursor: default;
+}
+
+/* ── Settings toggle switch (top 4 options) ── */
+
+/* The whole row is the tap target: the <label> wraps both the text block and
+   the switch. align-items:flex-start keeps the switch pinned to the top-right
+   when the label wraps to two lines at large font sizes. */
+.settings-toggle-label {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+  cursor: pointer;
+}
+
+.settings-toggle-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+/* Dynamic caption (제2경전): always present so toggling never shifts layout.
+   Fixed to one line height; both phrases fit on a single line. */
+.settings-toggle-caption {
+  font-size: 0.75rem;
+  line-height: 1.3;
+  min-height: 1.3em;
+  color: var(--text-secondary);
+}
+
+/* Switch shell. Width/height set per-OS below; the input is an invisible
+   overlay that keeps native focus/checked semantics while the track + thumb
+   provide the visuals. */
+.switch {
+  position: relative;
+  display: inline-block;
+  flex-shrink: 0;
+  /* Nudge down so a single-line label optically centres against the switch. */
+  margin-top: 0.05rem;
+}
+
+.switch-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+  z-index: 1;
+}
+
+.switch-track {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--switch-off-track);
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.switch-thumb {
+  position: absolute;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 0.2s ease, width 0.2s ease, height 0.2s ease, background 0.2s ease;
+}
+
+.switch-input:checked + .switch-track {
+  background: var(--accent);
+}
+
+.switch-input:focus-visible + .switch-track {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* iOS — UISwitch look: 51×31 pill, 27px white thumb, 20px travel. */
+.os-ios .switch { width: 51px; height: 31px; }
+.os-ios .switch-track { border-radius: 31px; }
+.os-ios .switch-thumb {
+  top: 2px;
+  left: 2px;
+  width: 27px;
+  height: 27px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25), 0 2px 4px rgba(0, 0, 0, 0.18);
+}
+.os-ios .switch-input:checked + .switch-track .switch-thumb {
+  transform: translateX(20px);
+}
+
+/* Android — Material 3 Switch look: 52×32 outlined track, small (16px) thumb
+   when OFF growing to a larger (24px) filled thumb when ON. */
+.os-android .switch { width: 52px; height: 32px; }
+.os-android .switch-track {
+  border-radius: 16px;
+  background: var(--switch-m3-off-track);
+  border: 2px solid var(--switch-m3-outline);
+}
+.os-android .switch-thumb {
+  top: 50%;
+  left: 0;
+  width: 16px;
+  height: 16px;
+  transform: translate(6px, -50%);
+  background: var(--switch-m3-off-thumb);
+}
+.os-android .switch-input:checked + .switch-track {
+  border-color: var(--accent);
+}
+.os-android .switch-input:checked + .switch-track .switch-thumb {
+  width: 24px;
+  height: 24px;
+  transform: translate(22px, -50%);
+  background: #fff;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .switch-track,
+  .switch-thumb {
+    transition: none;
+  }
 }
 
 #breadcrumb {

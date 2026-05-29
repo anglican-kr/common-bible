@@ -222,9 +222,95 @@ window.appSettings = (() => {
     });
   }
 
+  // ── OS detection (toggle look) ──
+  // Drives the iOS (UISwitch) vs Material 3 toggle styling. Kept independent
+  // of install.js's detectPlatform(), which returns "installed" when running
+  // standalone — here we always want the native OS look regardless of install
+  // state. iPadOS 13+ masquerades as desktop Safari, so fall back to the
+  // touch-points heuristic.
+  /** @returns {"ios" | "android"} */
+  function detectOS() {
+    const ua = navigator.userAgent;
+    const isIOS = /iPad|iPhone|iPod/.test(ua) ||
+      (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    return isIOS ? "ios" : "android";
+  }
+
+  // ── Toggle switch component ──
+  // Monotonic id source for caption ↔ aria-describedby wiring; survives
+  // rebuild() since each rebuild discards the previous nodes.
+  let _toggleIdSeq = 0;
+
+  /**
+   * Build a settings row: text label (+ optional dynamic caption) on the left,
+   * an OS-styled toggle switch on the right. The entire row is the tap target —
+   * the <label> wraps both text and switch, so a click anywhere toggles it. The
+   * input carries role="switch"; an explicit aria-label keeps the accessible
+   * name to the bare label (the caption is linked via aria-describedby instead).
+   * @param {Object} opts
+   * @param {string} opts.labelText
+   * @param {boolean} opts.checked
+   * @param {(on: boolean) => void} opts.onToggle
+   * @param {(on: boolean) => string} [opts.getCaption] — when given, a caption is rendered and updated on toggle
+   * @returns {HTMLDivElement}
+   */
+  function makeToggleRow({ labelText, checked, onToggle, getCaption }) {
+    const row = el("div", { className: "settings-row settings-toggle-row" });
+    const label = el("label", { className: "settings-toggle-label" });
+
+    const textWrap = el("div", { className: "settings-toggle-text" });
+    textWrap.appendChild(el("span", { className: "settings-label" }, labelText));
+
+    /** @type {string | null} */
+    let captionId = null;
+    /** @type {HTMLElement | null} */
+    let captionEl = null;
+    if (getCaption) {
+      captionId = `settings-toggle-cap-${++_toggleIdSeq}`;
+      captionEl = el("span", { className: "settings-toggle-caption", id: captionId }, getCaption(checked));
+      textWrap.appendChild(captionEl);
+    }
+    label.appendChild(textWrap);
+
+    const sw = el("span", { className: "switch" });
+    /** @type {Record<string, string>} */
+    const inputAttrs = { type: "checkbox", role: "switch", className: "switch-input", "aria-label": labelText };
+    if (captionId) inputAttrs["aria-describedby"] = captionId;
+    const input = el("input", inputAttrs);
+    input.checked = !!checked;
+    const track = el("span", { className: "switch-track", "aria-hidden": "true" });
+    track.appendChild(el("span", { className: "switch-thumb" }));
+    sw.appendChild(input);
+    sw.appendChild(track);
+    label.appendChild(sw);
+    row.appendChild(label);
+
+    input.addEventListener("change", () => {
+      const on = input.checked;
+      if (captionEl && getCaption) captionEl.textContent = getCaption(on);
+      onToggle(on);
+    });
+    // role="switch" should toggle on Enter as well as Space (native checkbox
+    // only handles Space). Mirror the Space behaviour for Enter.
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        input.checked = !input.checked;
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+    });
+
+    return row;
+  }
+
   // ── Settings popover ──
   function initSettings() {
     clearNode($settingsAnchor);
+
+    // Tag the document with the OS look so toggle styling can branch in CSS.
+    const os = detectOS();
+    document.documentElement.classList.remove("os-ios", "os-android");
+    document.documentElement.classList.add(os === "ios" ? "os-ios" : "os-android");
 
     const wrapper = el("div", { className: "settings-wrapper" });
     const btn = el("button", { className: "settings-btn", "aria-label": "설정", "aria-expanded": "false" });
@@ -253,100 +339,59 @@ window.appSettings = (() => {
     function rebuild() {
       clearNode(popover);
 
-      // ── Section 1: Book order (deuterocanon placement) ──
+      // ── Section 1: Reading-experience toggles ──
+      // Four boolean settings rendered as OS-native toggle switches (see
+      // makeToggleRow). Toggling updates state in place — no popover rebuild —
+      // so focus stays on the switch and the segmented re-render is avoided.
       const section1 = el("section", { className: "settings-section" });
-      const orderRow = el("div", { className: "settings-row" });
-      orderRow.appendChild(el("span", { className: "settings-label" }, "외경"));
-      const currentOrder = loadBookOrder();
-      const orderGroup = el("div", { className: "btn-group", role: "group", "aria-label": "외경 배치 선택" });
-      for (const [value, label, announceLabel] of [
-        ["canonical", "분리", "외경 분리"],
-        ["vulgate", "구약에 포함", "구약에 외경 포함"],
-      ]) {
-        const orderBtn = el("button", { className: "toolbar-btn", "aria-pressed": String(currentOrder === value) }, label);
-        orderBtn.addEventListener("click", () => {
-          saveBookOrder(value);
+
+      // Startup behavior: ON = resume last reading position, OFF = home.
+      const startupRow = makeToggleRow({
+        labelText: "읽던 페이지에서 시작",
+        checked: loadStartupBehavior() === "resume",
+        onToggle: (on) => {
+          saveStartupBehavior(on ? "resume" : "home");
+          announce(on ? "마지막 읽던 페이지로 시작" : "첫 페이지로 시작");
+        },
+      });
+
+      // Deuterocanon placement: ON = mixed into the OT (vulgate order),
+      // OFF = separate section (canonical). Caption reflects the active state.
+      const orderRow = makeToggleRow({
+        labelText: "제2경전",
+        checked: loadBookOrder() === "vulgate",
+        getCaption: (on) => (on ? "구약에 포함" : "별도 섹션에 표시"),
+        onToggle: (on) => {
+          saveBookOrder(on ? "vulgate" : "canonical");
           const { view } = parsePath();
           if (view !== "chapter" && view !== "prologue") route();
-          rebuild();
-          announce(announceLabel);
-        });
-        orderGroup.appendChild(orderBtn);
-      }
-      orderRow.appendChild(orderGroup);
+          announce(on ? "구약에 외경 포함" : "외경 분리");
+        },
+      });
 
-      // Startup behavior
-      const startupRow = el("div", { className: "settings-row" });
-      startupRow.appendChild(el("span", { className: "settings-label" }, "시작 화면"));
-      const startupCurrent = loadStartupBehavior();
-      const startupGroup = el("div", { className: "btn-group", role: "group", "aria-label": "앱 시작 화면 선택" });
-      for (const { val, label } of [{ val: "resume", label: "읽던 곳" }, { val: "home", label: "첫 페이지" }]) {
-        const startupBtn = el("button", {
-          className: "toolbar-btn",
-          "aria-pressed": String(startupCurrent === val),
-        }, label);
-        startupBtn.addEventListener("click", () => {
-          saveStartupBehavior(val);
-          startupGroup.querySelectorAll(".toolbar-btn").forEach((b) =>
-            b.setAttribute("aria-pressed", String(b === startupBtn))
-          );
-          announce(`시작 화면: ${label}`);
-        });
-        startupGroup.appendChild(startupBtn);
-      }
-      startupRow.appendChild(startupGroup);
-
-      // Cite/note visibility (ADR-022)
-      const citeRow = el("div", { className: "settings-row" });
-      citeRow.appendChild(el("span", { className: "settings-label" }, "인용 본문·주석"));
-      const citeCurrent = loadCiteShow();
-      const citeGroup = el("div", { className: "btn-group", role: "group", "aria-label": "인용 본문·주석 선택" });
-      for (const { val, label, announceLabel } of [
-        { val: true,  label: "표시", announceLabel: "인용 본문·주석 표시" },
-        { val: false, label: "숨김", announceLabel: "인용 본문·주석 숨김" },
-      ]) {
-        const citeBtn = el("button", {
-          className: "toolbar-btn",
-          "aria-pressed": String(citeCurrent === val),
-        }, label);
-        citeBtn.addEventListener("click", () => {
-          saveCiteShow(val);
-          applyCiteShow(val);
-          citeGroup.querySelectorAll(".toolbar-btn").forEach((b) =>
-            b.setAttribute("aria-pressed", String(b === citeBtn))
-          );
-          announce(announceLabel);
-        });
-        citeGroup.appendChild(citeBtn);
-      }
-      citeRow.appendChild(citeGroup);
+      // Cite/note visibility (ADR-022): ON = show inline citations & notes.
+      const citeRow = makeToggleRow({
+        labelText: "인용·주석 표시",
+        checked: loadCiteShow(),
+        onToggle: (on) => {
+          saveCiteShow(on);
+          applyCiteShow(on);
+          announce(on ? "인용 본문·주석 표시" : "인용 본문·주석 숨김");
+        },
+      });
 
       // Audiobook visibility — when off, audio bar is hidden and the FAB
       // falls back to its lower default position (CSS sibling rule keys off
       // #audio-bar[hidden]).
-      const audioRow = el("div", { className: "settings-row" });
-      audioRow.appendChild(el("span", { className: "settings-label" }, "오디오북"));
-      const audioCurrent = loadAudioShow();
-      const audioGroup = el("div", { className: "btn-group", role: "group", "aria-label": "오디오북 선택" });
-      for (const { val, label, announceLabel } of [
-        { val: true,  label: "켜기", announceLabel: "오디오북 켜기" },
-        { val: false, label: "끄기", announceLabel: "오디오북 끄기" },
-      ]) {
-        const audioBtn = el("button", {
-          className: "toolbar-btn",
-          "aria-pressed": String(audioCurrent === val),
-        }, label);
-        audioBtn.addEventListener("click", () => {
-          saveAudioShow(val);
-          if (typeof window.applyAudioShow === "function") window.applyAudioShow(val);
-          audioGroup.querySelectorAll(".toolbar-btn").forEach((b) =>
-            b.setAttribute("aria-pressed", String(b === audioBtn))
-          );
-          announce(announceLabel);
-        });
-        audioGroup.appendChild(audioBtn);
-      }
-      audioRow.appendChild(audioGroup);
+      const audioRow = makeToggleRow({
+        labelText: "오디오북",
+        checked: loadAudioShow(),
+        onToggle: (on) => {
+          saveAudioShow(on);
+          if (typeof window.applyAudioShow === "function") window.applyAudioShow(on);
+          announce(on ? "오디오북 켜기" : "오디오북 끄기");
+        },
+      });
 
       section1.appendChild(startupRow);
       section1.appendChild(orderRow);

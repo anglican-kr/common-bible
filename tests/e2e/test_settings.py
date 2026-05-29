@@ -20,33 +20,38 @@ def _html_attr(page, attr):
 # ── 시작 화면 ─────────────────────────────────────────────────────────────────
 
 def test_startup_home(browser):
-    """'첫 페이지' 클릭 → bible-startup = 'home', aria-pressed 업데이트."""
+    """토글 OFF → bible-startup = 'home', 스위치 미체크."""
     ctx = browser.new_context()
     ctx.add_init_script(CLEAR_APP_STORAGE)
     page = ctx.new_page()
     try:
         _open(page)
         pop = open_settings(page)
-        pop.get_by_role("button", name="첫 페이지").click()
+        sw = pop.get_by_role("switch", name="읽던 페이지에서 시작")
+        # 기본값은 resume(ON); 끄면 home.
+        assert sw.is_checked() is True
+        sw.click()
         page.wait_for_timeout(100)
         assert _ls(page, "bible-startup") == "home"
-        assert pop.get_by_role("button", name="첫 페이지").get_attribute("aria-pressed") == "true"
-        assert pop.get_by_role("button", name="읽던 곳").get_attribute("aria-pressed") == "false"
+        assert sw.is_checked() is False
     finally:
         ctx.close()
 
 
 def test_startup_resume(browser):
-    """'읽던 곳' 클릭 → bible-startup = 'resume'."""
+    """토글 OFF 후 다시 ON → bible-startup = 'resume'."""
     ctx = browser.new_context()
     ctx.add_init_script(CLEAR_APP_STORAGE)
     page = ctx.new_page()
     try:
         _open(page)
         pop = open_settings(page)
-        pop.get_by_role("button", name="읽던 곳").click()
+        sw = pop.get_by_role("switch", name="읽던 페이지에서 시작")
+        sw.click()  # → home
+        sw.click()  # → resume
         page.wait_for_timeout(100)
         assert _ls(page, "bible-startup") == "resume"
+        assert sw.is_checked() is True
     finally:
         ctx.close()
 
@@ -54,34 +59,40 @@ def test_startup_resume(browser):
 # ── 책 순서 ──────────────────────────────────────────────────────────────────
 
 def test_book_order_vulgate(browser):
-    """'구약에 포함' 클릭 → bible-book-order = 'vulgate'."""
+    """제2경전 토글 ON → bible-book-order = 'vulgate', 캡션 '구약에 포함'."""
     ctx = browser.new_context()
     ctx.add_init_script(CLEAR_APP_STORAGE)
     page = ctx.new_page()
     try:
         _open(page)
         pop = open_settings(page)
-        pop.get_by_role("button", name="구약에 포함").click()
+        sw = pop.get_by_role("switch", name="제2경전")
+        # 기본값은 canonical(OFF); 켜면 vulgate.
+        assert sw.is_checked() is False
+        sw.click()
         page.wait_for_timeout(100)
         assert _ls(page, "bible-book-order") == "vulgate"
-        assert pop.get_by_role("button", name="구약에 포함").get_attribute("aria-pressed") == "true"
+        assert sw.is_checked() is True
+        assert pop.locator(".settings-toggle-caption").first.inner_text() == "구약에 포함"
     finally:
         ctx.close()
 
 
 def test_book_order_canonical(browser):
-    """'분리' 클릭 → bible-book-order = 'canonical'."""
+    """제2경전 토글 ON 후 OFF → bible-book-order = 'canonical', 캡션 '별도 섹션에 표시'."""
     ctx = browser.new_context()
     ctx.add_init_script(CLEAR_APP_STORAGE)
     page = ctx.new_page()
     try:
         _open(page)
         pop = open_settings(page)
-        # Set vulgate first, then switch back
-        pop.get_by_role("button", name="구약에 포함").click()
-        pop.get_by_role("button", name="분리").click()
+        sw = pop.get_by_role("switch", name="제2경전")
+        sw.click()  # → vulgate
+        sw.click()  # → canonical
         page.wait_for_timeout(100)
         assert _ls(page, "bible-book-order") == "canonical"
+        assert sw.is_checked() is False
+        assert pop.locator(".settings-toggle-caption").first.inner_text() == "별도 섹션에 표시"
     finally:
         ctx.close()
 
