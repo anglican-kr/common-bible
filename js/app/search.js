@@ -299,6 +299,10 @@ async function renderSearchResults(query, page, autoNavigate = false) {
   window.setTitle(`"${query}" 검색`);
   const $title = _$("page-title");
   $title.insertBefore(window.buildHomeBtn("/", "성서 목록으로"), $title.firstChild);
+  // Like every other main-header view, plant the mobile settings trigger so the
+  // gear stays reachable if the window is resized down to the mobile breakpoint
+  // while on this page (where #breadcrumb-row + #settings-anchor are hidden).
+  $title.appendChild(window.buildSettingsTrigger());
   window.hideAudioBar();
   clearNode($app);
 
