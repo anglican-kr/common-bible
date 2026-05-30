@@ -515,8 +515,13 @@ function buildDivisionTabs(activeDivision) {
 // lines, especially on narrow viewports or with enlarged text. For NT books we
 // also emit a shortened name and let CSS swap to it on touch devices, or JS
 // swap to it (.compact class) when the full name would wrap inside the button.
-// 복음서 4권 + 사도행전은 사양상 명칭 변경 없음.
+// 복음서 4권은 "~의 복음서" 접미사를 떼어 표시(마태오/마르코/루가/요한). 사도행전은
+// 명칭 변경 없음.
 const NT_MOBILE_NAME = {
+  matt:   "마태오",
+  mark:   "마르코",
+  luke:   "루가",
+  john:   "요한",
   rom:    "로마서",
   "1cor": "1고린토",
   "2cor": "2고린토",
