@@ -698,15 +698,24 @@ function measureTitleCompactness() {
   // to right: 2.4rem, so the right side reserves ~4.6rem, not 2.2rem. The old
   // fixed 5.2rem matched only the desktop layout, leaving mobile titles to
   // collide with the bookmark/gear.
+  //
+  // Use getBoundingClientRect, not getComputedStyle left/right: for an
+  // abs-positioned element the browser resolves *both* insets to used pixels
+  // even when only one was authored, so a left-anchored button would report a
+  // right inset of ~full width and bogusly inflate the opposite side. Geometry
+  // sidesteps that — classify each button by whichever container edge it sits
+  // closer to, then take only that side's inward intrusion.
+  const titleRect = $title.getBoundingClientRect();
   let leftReserve = 0;
   let rightReserve = 0;
   for (const b of $title.querySelectorAll(".title-back-btn, .title-bookmark-btn, .title-settings-btn")) {
-    const cs = getComputedStyle(b);
-    const w = /** @type {HTMLElement} */ (b).offsetWidth;
-    const left = parseFloat(cs.left);
-    const right = parseFloat(cs.right);
-    if (Number.isFinite(left)) leftReserve = Math.max(leftReserve, left + w);
-    if (Number.isFinite(right)) rightReserve = Math.max(rightReserve, right + w);
+    const r = b.getBoundingClientRect();
+    if (r.width === 0) continue; // hidden at this breakpoint (e.g. desktop gear)
+    if (r.left - titleRect.left <= titleRect.right - r.right) {
+      leftReserve = Math.max(leftReserve, r.right - titleRect.left);
+    } else {
+      rightReserve = Math.max(rightReserve, titleRect.right - r.left);
+    }
   }
   const breathing = 0.8 * rem;
   const sideReserve = Math.max(leftReserve, rightReserve) + breathing;
