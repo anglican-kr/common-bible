@@ -827,7 +827,8 @@ body {
   left: 50%;
   transform: translateX(-50%);
   z-index: 20;
-  background: var(--bg-card);
+  /* 장 목록 화면과 동일한 figure/ground: 카드(--bg-card)가 격자 배경(--bg) 위에서 도드라지도록 */
+  background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 12px;
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
@@ -839,70 +840,69 @@ body {
   min-width: 15rem;
 }
 
+/* 장 목록 화면(.chapter-grid)과 동일한 카드 격자 언어를 공유 — 셀 크기만 팝오버 폭에 맞춤 */
 .popover-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(2.6rem, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(2.8rem, 1fr));
   gap: 0.4rem;
 }
 
-/* 머리말: 숫자 격자 위에 전체 폭 라벨 행으로 분리 — 점선 사각형 대신 알약형 버튼 */
-.popover-prologue {
-  grid-column: 1 / -1;
-  /* .popover-item 의 aspect-ratio:1 을 해제 — 전체 폭 행이 정사각형이 되지 않도록 */
-  aspect-ratio: auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.35em;
-  padding: 0.5rem;
-  margin-bottom: 0.15rem;
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 8%, transparent);
-  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
-  border-radius: 8px;
-  text-decoration: none;
-  transition: background 0.12s;
-}
-
-.popover-prologue:hover,
-.popover-prologue:focus-visible {
-  background: color-mix(in srgb, var(--accent) 16%, transparent);
-}
-
+/* .chapter-grid a 와 동일한 카드: 흰 배경 + 테두리 + 공용 radius */
 .popover-item {
   display: flex;
   align-items: center;
   justify-content: center;
   aspect-ratio: 1;
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   font-variant-numeric: tabular-nums;
   text-decoration: none;
   color: var(--text);
-  background: var(--bg);
-  border-radius: 8px;
-  transition: background 0.12s, color 0.12s;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  transition: background 0.15s;
 }
 
-/* hover/focus는 옅은 accent 틴트 — 현재 장(꽉 찬 accent)과 시각적으로 구분 */
+/* hover/focus: .chapter-grid a 와 동일한 꽉 찬 accent */
 .popover-item:hover,
 .popover-item:focus-visible {
-  background: color-mix(in srgb, var(--accent) 14%, transparent);
-  color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
 }
 
-/* 현재 보고 있는 장: 꽉 찬 accent + 링으로 "여기 있음"을 명확히 */
+/* 현재 보고 있는 장: 꽉 찬 accent + 링으로 "여기 있음"을 명확히 (팝오버 고유의 위치 표시) */
 .popover-item.current {
   background: var(--accent);
   color: #fff;
+  border-color: var(--accent);
   font-weight: 700;
-  box-shadow: 0 0 0 2px var(--bg-card), 0 0 0 4px color-mix(in srgb, var(--accent) 55%, transparent);
+  /* 링 안쪽 간격색은 팝오버 배경(--bg)과 맞춰 "띄운 링"처럼 보이게 함 */
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px color-mix(in srgb, var(--accent) 55%, transparent);
 }
 
 .popover-item.current:hover,
 .popover-item.current:focus-visible {
   background: var(--accent);
+  color: #fff;
+}
+
+/* 머리말: 숫자 격자 위에 전체 폭 라벨 행 — .chapter-grid 의 .prologue-link 와 동일 톤.
+   .popover-item 보다 뒤에 선언해 color/aspect-ratio override 가 확실히 적용되도록 함. */
+.popover-prologue {
+  grid-column: 1 / -1;
+  /* .popover-item 의 aspect-ratio:1 을 해제 — 전체 폭 행이 정사각형이 되지 않도록 */
+  aspect-ratio: auto;
+  gap: 0.35em;
+  padding: 0.5rem;
+  margin-bottom: 0.15rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.popover-prologue:hover,
+.popover-prologue:focus-visible {
   color: #fff;
 }
 
