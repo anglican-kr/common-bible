@@ -188,6 +188,14 @@ body {
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
 }
 
+/* Book-list page: the tab strip already provides a strong visual base for
+   the sticky group, and the scrolled elevation shadow read as visual noise
+   against the tabs. Opt out of the shadow when division tabs are mounted. */
+#sticky-group:has(#division-tabs-slot:not(:empty)).scrolled,
+[data-theme="dark"] #sticky-group:has(#division-tabs-slot:not(:empty)).scrolled {
+  box-shadow: none;
+}
+
 #app-header {
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
   background: var(--bg);
@@ -213,6 +221,13 @@ body {
 
 #sticky-group:has(#division-tabs-slot:not(:empty)) #app-header::after {
   display: none;
+}
+
+/* Book-list page only: give the header row breathing room before the banner /
+   tab strip. Other screens leave padding-bottom at 0 so the hairline sits
+   tight against the title. */
+#sticky-group:has(#division-tabs-slot:not(:empty)) #app-header {
+  padding-bottom: 0.5rem;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -749,10 +764,17 @@ body {
 /* Title swap: NT chapter/prologue headers emit .title-text-full and
    .title-text-mobile spans. JS adds .compact to #page-title when the full
    title would overflow the room remaining between the absolute-positioned
-   back and bookmark buttons. */
+   back and bookmark buttons. On touch devices we also force the mobile
+   variant unconditionally (mirrors `.book-list` below) — measurement alone
+   often left the full "○○의 복음서 N장" form intact on phones because it
+   technically fit, which felt verbose in the tight header. */
 .title-text-mobile { display: none; }
 #page-title.compact .title-text-full { display: none; }
 #page-title.compact .title-text-mobile { display: inline; }
+@media (hover: none) and (pointer: coarse) {
+  #page-title .title-text-full { display: none; }
+  #page-title .title-text-mobile { display: inline; }
+}
 
 /* ── Chapter Title Back Button ── */
 .title-back-btn {
@@ -1925,7 +1947,7 @@ mark.search-highlight {
   display: flex;
   align-items: center;
   /* Gap to the division tabs below; only present when the banner is shown. */
-  margin-bottom: 0.6rem;
+  margin-bottom: 0.8rem;
   background: var(--accent);
   border-radius: var(--radius);
   overflow: hidden;
@@ -1996,7 +2018,7 @@ mark.search-highlight {
   position: relative; /* positioning context for the sliding indicator */
   display: flex;
   /* Breathing room below the (now line-less) header. */
-  margin: 0.5rem 0 0;
+  margin: 0.8rem 0 0;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg-card);
@@ -3333,14 +3355,13 @@ html.cite-sheet-open {
   background: none;
   border: none;
   cursor: pointer;
-  color: var(--text-secondary);
-  transition: color 0.15s;
+  color: var(--accent);
+  transition: opacity 0.15s;
   padding: 0;
 }
 
-.title-bookmark-btn:hover,
-.title-bookmark-btn.has-bookmark {
-  color: var(--accent);
+.title-bookmark-btn:hover {
+  opacity: 0.7;
 }
 
 /* Desktop: the settings gear lives in the top row (#settings-anchor), not the
