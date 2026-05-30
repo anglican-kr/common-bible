@@ -1,23 +1,30 @@
-name: Sync data submodule and release
+name: Sync data submodule
 
-# data 저장소의 build.yml 이 산출물을 main에 푸시한 직후 호출하는
+# data 저장소의 build.yml 이 산출물을 main 에 푸시한 직후 호출하는
 # workflow_dispatch 를 받아, data 서브모듈 포인터를 최신 main 으로
-# 업데이트하고 release.py patch 로 셸 버전을 bump + 자동 commit + push.
-# 사람 손이 들어가지 않는다.
+# 업데이트하고 sitemap 을 재생성한다.
 #
-# repository_dispatch 대신 workflow_dispatch 를 쓰는 이유: PAT 권한 최소화.
-# repository_dispatch 는 Contents:Write 가 필요한데 common-bible 이 공개
-# 저장소라 PAT 누출 시 공개 push 위험. workflow_dispatch 는 Actions:Write
-# 만으로 충분하며 트리거 대상이 이 워크플로우 하나로 한정된다.
+# 브랜치 보호(2026-05-29 적용) 때문에 main 직접 push 가 거부된다.
+# 따라서 sync/data-<run_id> 토픽 브랜치로 push 한 뒤 PR 을 만들고,
+# Unit tests CI 통과 시 자동 squash 머지하도록 한다 (auto-merge).
+#
+# PAT 두 개 분리:
+#   - SUBMODULE_AND_DISPATCH_PAT — common-bible-data·audio Contents:Read +
+#     common-bible Actions:Write (workflow_dispatch 트리거). 누출 시 영향
+#     범위를 좁히기 위해 PR 관련 권한은 부여하지 않는다.
+#   - SYNC_DATA_PR_PAT — common-bible 의 Contents:Write + Pull requests:Write.
+#     PR 생성·auto-merge 활성화 전용. GITHUB_TOKEN 으로 만든 PR 은
+#     pull_request 트리거를 발화하지 않아 Unit tests 가 실행되지 않으므로
+#     PAT 가 필수.
 #
 # main push 자체는 production 이 아님 (ADR-020: server 저장소의 deploy.sh
-# 가 별도 promote 단계). 따라서 자동 push 도 안전.
+# 가 별도 promote 단계). 따라서 자동 PR 머지도 안전.
 
 on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   sync:
@@ -25,9 +32,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          # self-checkout 은 기본 GITHUB_TOKEN 사용 — workflow 의 permissions:
-          # contents:write 와 결합해 push 까지 처리. data·audio 서브모듈은 private
-          # 이라 GITHUB_TOKEN 으로 클론 불가 → 아래 별도 step 에서 PAT 로 처리.
+          # PR 흐름용 PAT 로 체크아웃 — 이후 토픽 브랜치 push 가 pull_request
+          # 트리거를 발화시켜 Unit tests CI 가 PR 에서 실행되도록 한다.
+          token: ${{ secrets.SYNC_DATA_PR_PAT }}
           submodules: false
           fetch-depth: 0
 
@@ -38,8 +45,8 @@ jobs:
       - name: data + audio 서브모듈을 PAT 로 별도 클론
         env:
           SUBMODULE_PAT: ${{ secrets.SUBMODULE_AND_DISPATCH_PAT }}
-          # audio mp3 본 바이너리는 필요 없음 — release.py 는 서브모듈 포인터만
-          # 다루고, manifest 는 data 저장소 CI 가 이미 갱신해놓은 상태.
+          # audio mp3 바이너리는 필요 없음 — release.py 가 더 이상 호출되지
+          # 않고 sitemap 생성에도 LFS 본 바이트가 필요 없음.
           GIT_LFS_SKIP_SMUDGE: "1"
         run: |
           git config --global \
@@ -56,16 +63,39 @@ jobs:
       - name: sitemap.xml 재생성
         run: python scripts/build_sitemap.py
 
-      - name: 서브모듈 포인터 + sitemap commit
+      - name: 변경 여부 확인
+        id: check
+        run: |
+          if git diff --quiet data sitemap.xml; then
+            echo "변경 없음 — 워크플로 종료"
+            echo "changed=false" >> $GITHUB_OUTPUT
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: 토픽 브랜치 생성 + commit + push
+        if: steps.check.outputs.changed == 'true'
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          BRANCH="sync/data-${{ github.run_id }}"
+          git checkout -b "$BRANCH"
           git add data sitemap.xml
-          if git diff --cached --quiet; then
-            echo "no changes to commit"
-            exit 0
-          fi
           git commit -m 'data: 서브모듈 포인터 + sitemap 갱신'
+          git push -u origin "$BRANCH"
+          echo "BRANCH=$BRANCH" >> $GITHUB_ENV
 
-      - name: push
-        run: git push
+      - name: PR 생성 + auto-merge 활성화
+        if: steps.check.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.SYNC_DATA_PR_PAT }}
+        run: |
+          gh pr create \
+            --base main \
+            --head "$BRANCH" \
+            --title 'data: 서브모듈 포인터 + sitemap 갱신' \
+            --body 'data 저장소 build.yml 산출물 commit 직후 자동 생성된 PR. Unit tests 통과 시 자동 squash 머지.'
+          # --delete-branch 는 클라이언트 측 작업이라 --auto 의 서버 비동기 머지
+          # 시점에는 동작하지 않는다. 브랜치 정리는 repo 설정
+          # delete_branch_on_merge 가 처리한다.
+          gh pr merge "$BRANCH" --auto --squash

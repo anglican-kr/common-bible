@@ -185,3 +185,29 @@ DATA_CACHE / AUDIO_CACHE는 이제 rev 없는 고정 이름 (`"data"`, `"audio"`
 >
 > 회복 경로: 1.5.4 stale 에 갇힌 사용자는 1.5.5 SW install·activate
 > 시점에 자동 회복. 즉시 회복은 설정 → "캐시 초기화".
+
+> **개정 (2026-05-30):** sync-data.yml 을 PR 흐름으로 전환
+>
+> 2026-05-29 main 브랜치 보호 적용 후 sync-data.yml 의 직접 push 가
+> `Required status check "Unit tests" is expected` 로 거부되면서 webhook
+> 자동화가 깨졌다 (5월 30일 두 차례 sync 실패로 노출). 브랜치 보호는 유지하고
+> 자동화를 PR 흐름에 맞게 조정한다.
+>
+> 변경:
+>
+> 1. **sync/data-<run_id> 토픽 브랜치 + PR + auto-merge.** sync-data.yml 이
+>    main 직접 push 대신 토픽 브랜치로 push 한 뒤 `gh pr create` 로 PR 을
+>    만들고 `gh pr merge --auto --squash --delete-branch` 로 auto-merge 활성화.
+>    Unit tests 통과 시 자동 squash 머지 + 브랜치 삭제. 사람 손 여전히 안 들어감.
+>
+> 2. **PAT 분리.** 기존 `SUBMODULE_AND_DISPATCH_PAT` 은 권한 최소화 의도를
+>    유지하기 위해 그대로 두고, common-bible 의 Contents:Write +
+>    Pull requests:Write 만 가진 신규 `SYNC_DATA_PR_PAT` 을 추가. 토픽 브랜치
+>    push 와 PR 생성에 사용. `GITHUB_TOKEN` 으로 만든 PR 은 pull_request
+>    이벤트를 트리거하지 않아 Unit tests 가 발화하지 않으므로 PAT 가 필수.
+>
+> 3. **repo 설정 `allow_auto_merge: true`.** `gh pr merge --auto` 동작 조건.
+>
+> 4. **워크플로 이름 정리.** `Sync data submodule and release` →
+>    `Sync data submodule`. 2026-05-23 개정에서 release.py 호출이 이미
+>    제거되어 "and release" 가 실태와 어긋나 있었다.
