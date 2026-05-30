@@ -136,7 +136,8 @@ CSS 미디어 쿼리로 둘 중 하나만 노출(`.title-settings-btn` ↔ `#set
 > rgba(0,0,0,.08)` elevation 그림자로 트랙 위에 떠 있는 입체감을 준다(iOS 세그먼트
 > 컨트롤 톤). 다크 테마는 그림자가 묻히므로 칩 배경을 트랙보다 살짝 밝게
 > (`color-mix(... #fff 8%)`) + 그림자 알파를 키운다. 활성·hover 탭 텍스트 색도
-> `var(--accent)` → `var(--text)`(헤더 제목과 동일한 주 텍스트색)로 중립화하고
-> 비활성 탭은 `var(--text-secondary)` 유지 — 떠 있는 칩이 선택을 표시하므로 글자
-> 색은 테마색을 쓰지 않는다. 슬라이드 transform·`_prevDivisionIdx` 애니메이션
+> `var(--accent)` → 색조 없는 중립 회색(라이트 `#222222` / 다크 `#e6e6e6`)으로
+> 바꾼다 — 떠 있는 칩이 선택을 표시하므로 글자색은 테마색을 쓰지 않으며,
+> 남색 기가 도는 `var(--text)` 대신 hueless grey 를 직접 지정한다. 비활성 탭은
+> `var(--text-secondary)` 유지. 슬라이드 transform·`_prevDivisionIdx` 애니메이션
 > 로직은 불변.
