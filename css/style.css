@@ -2053,11 +2053,13 @@ mark.search-highlight {
 
 .division-tab:hover,
 .division-tab:focus-visible {
-  color: var(--accent);
+  color: var(--text);
 }
 
+/* Active tab uses the primary text colour (same as the header title) rather than
+   the theme accent — the raised chip already signals selection. */
 .division-tab.active {
-  color: var(--accent);
+  color: var(--text);
 }
 
 .division-panel {
