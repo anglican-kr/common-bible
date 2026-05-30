@@ -785,6 +785,14 @@ declare global {
     appCitations: AppCitations;
     appViewsRouting: { [key: string]: any }; // Phase 7a aggregate (full type Phase 7b)
     readingContext: ReadingContext;
+    // Mobile bottom navigation (ADR-026 Stage 0). init() wires tab clicks +
+    // scroll auto-hide; onRoute(path) is called by the router after every
+    // navigation to refresh the active tab and per-tab last-location memory.
+    appBottomNav?: {
+      init: () => void;
+      onRoute: (path: string) => void;
+      routeToTab: (path: string) => "read" | "search" | "bookmarks" | "notes";
+    };
 
     // Phase 7a constants (also declared as bare globals above for app.js's
     // Phase 7b territory). Window assignment is what views-routing.js does.

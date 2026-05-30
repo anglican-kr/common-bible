@@ -64,6 +64,8 @@
   --shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
   --radius: 8px;
   --max-width: 720px;
+  /* Mobile bottom navigation bar height (visible strip, excl. safe-area). ADR-026 */
+  --bottom-nav-height: 3.5rem;
 
   /* Toggle switch (settings panel). OFF-state colours only — the ON state
      always uses --accent so it tracks the chosen colour scheme. iOS uses the
@@ -2909,6 +2911,93 @@ html.cite-sheet-open {
   display: none;
 }
 
+/* ── Bottom Navigation (mobile only, ADR-026) ── */
+/* Desktop: hidden. The mobile media query below turns it on and stacks the
+   audio bar above it as a slim mini-player (ADR-026 §2.1). */
+#bottom-nav {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  #bottom-nav {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 15; /* above content + audio bar (10); below sheets/scrims (24+) */
+    display: flex;
+    background: var(--bg); /* solid — frosted glass stays on the floating audio bar only */
+    border-top: 1px solid var(--border);
+    box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.06); /* bottom-edge elevation (ADR-025 counterpart) */
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    transition: transform 0.22s ease;
+  }
+
+  [data-theme="dark"] #bottom-nav {
+    box-shadow: 0 -2px 14px rgba(0, 0, 0, 0.3);
+  }
+
+  /* Auto-hide while reading + scrolling down; revealed on scroll-up / route
+     change (ADR-026 §2.1, js/app/bottom-nav.js). */
+  #bottom-nav.nav-hidden {
+    transform: translateY(100%);
+  }
+
+  .bnav-item {
+    flex: 1 1 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.15rem;
+    min-height: var(--bottom-nav-height);
+    padding: 0.35rem 0;
+    border: none;
+    background: none;
+    color: var(--text-secondary);
+    font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+    font-size: 0.7rem;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .bnav-item .bnav-icon {
+    width: 24px;
+    height: 24px;
+  }
+
+  .bnav-item[aria-current="page"] {
+    color: var(--accent);
+  }
+
+  .bnav-item:active {
+    background: color-mix(in srgb, var(--text) 6%, transparent);
+  }
+
+  /* Reserve space so reading content clears the fixed nav. */
+  #app {
+    padding-bottom: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom) + 1rem);
+  }
+
+  /* Audio bar = slim mini-player pinned directly above the nav. The nav owns
+     the safe-area inset, so the audio bar drops its own bottom inset. */
+  #audio-bar {
+    bottom: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom));
+    padding-bottom: 0.75rem;
+  }
+
+  /* Stage 0 notes placeholder. */
+  .notes-placeholder {
+    text-align: center;
+    color: var(--text-secondary);
+    padding: 3rem 1rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #bottom-nav { transition: none; }
+}
+
 .audio-player {
   display: flex;
   align-items: center;
@@ -3118,24 +3207,17 @@ html.cite-sheet-open {
 
 /* ── Responsive ── */
 
-/* Mobile: hide inline search, show FAB */
+/* Mobile: hide inline search (the 검색 tab in #bottom-nav is the entry now). */
 @media (max-width: 768px) {
   #search-bar {
     display: none;
   }
 
-  #search-fab {
-    display: flex;
-  }
-
-  /* Extra top margin so FAB (3.2rem) fits in the gap above chapter-nav */
+  /* FAB retired on mobile (ADR-026) — base `#search-fab { display:none }`
+     applies; the chapter-nav no longer needs the FAB gap above it, and the
+     book list's bottom clearance is handled by `#app`'s bottom padding. */
   .chapter-nav {
-    margin-top: 4.5rem;
-  }
-
-  /* Reserve space below the book list so the FAB doesn't overlap buttons */
-  .division-panel {
-    padding-bottom: calc(3.2rem + 2.5rem + env(safe-area-inset-bottom));
+    margin-top: 2rem;
   }
 
   /* The top row holds only the (hidden) search bar + settings on mobile;
