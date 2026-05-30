@@ -652,6 +652,20 @@ function applyTitleCompactness() {
     _titleResizeObs.observe($title);
   }
 
+  // Defer the actual measurement to the next frame. Several render paths append
+  // the settings gear *after* calling setTitle/setTitleWithChapterPicker, and on
+  // mobile that gear is part of the right-side reservation — measuring before
+  // it lands would undercount the reserved space. rAF also lets layout and web
+  // fonts settle so offsetWidth reflects the final rendered title.
+  if (typeof requestAnimationFrame === "function") {
+    requestAnimationFrame(measureTitleCompactness);
+  } else {
+    measureTitleCompactness();
+  }
+}
+
+function measureTitleCompactness() {
+  if (!$title) return;
   const full = /** @type {HTMLElement | null} */ ($title.querySelector(".title-text-full"));
   const mobile = $title.querySelector(".title-text-mobile");
   if (!full || !mobile) {
@@ -673,11 +687,32 @@ function applyTitleCompactness() {
   full.style.display = prevDisplay;
 
   const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
-  // 2.2rem back + 2.2rem bookmark + 0.8rem breathing on either side.
-  const reserved = 5.2 * rem;
+  // The title text is centered (text-align: center) while the home / bookmark /
+  // settings buttons are absolute-positioned at the edges. A centered string
+  // overruns whichever side reaches furthest inward, symmetrically — so the room
+  // for the text is clientWidth − 2 × (largest side reservation). Measure the
+  // real buttons from the live DOM rather than hardcoding, because the layout
+  // differs by breakpoint: on desktop the bookmark sits flush right (right: 0)
+  // and the settings gear lives in the top row (absent here); on mobile the
+  // settings gear is minted into this row at right: 0 and the bookmark is inset
+  // to right: 2.4rem, so the right side reserves ~4.6rem, not 2.2rem. The old
+  // fixed 5.2rem matched only the desktop layout, leaving mobile titles to
+  // collide with the bookmark/gear.
+  let leftReserve = 0;
+  let rightReserve = 0;
+  for (const b of $title.querySelectorAll(".title-back-btn, .title-bookmark-btn, .title-settings-btn")) {
+    const cs = getComputedStyle(b);
+    const w = /** @type {HTMLElement} */ (b).offsetWidth;
+    const left = parseFloat(cs.left);
+    const right = parseFloat(cs.right);
+    if (Number.isFinite(left)) leftReserve = Math.max(leftReserve, left + w);
+    if (Number.isFinite(right)) rightReserve = Math.max(rightReserve, right + w);
+  }
+  const breathing = 0.8 * rem;
+  const sideReserve = Math.max(leftReserve, rightReserve) + breathing;
   // Picker button has a ~0.4em chevron after the label — allow for it.
   const chevronAllowance = container.classList.contains("title-picker-btn") ? 0.8 * rem : 0;
-  const availableWidth = $title.clientWidth - reserved;
+  const availableWidth = $title.clientWidth - 2 * sideReserve;
 
   if (naturalWidth + chevronAllowance > availableWidth + 0.5) {
     $title.classList.add("compact");
