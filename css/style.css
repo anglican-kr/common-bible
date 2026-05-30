@@ -188,6 +188,14 @@ body {
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
 }
 
+/* Book-list page: the tab strip already provides a strong visual base for
+   the sticky group, and the scrolled elevation shadow read as visual noise
+   against the tabs. Opt out of the shadow when division tabs are mounted. */
+#sticky-group:has(#division-tabs-slot:not(:empty)).scrolled,
+[data-theme="dark"] #sticky-group:has(#division-tabs-slot:not(:empty)).scrolled {
+  box-shadow: none;
+}
+
 #app-header {
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
   background: var(--bg);
@@ -213,6 +221,13 @@ body {
 
 #sticky-group:has(#division-tabs-slot:not(:empty)) #app-header::after {
   display: none;
+}
+
+/* Book-list page only: give the header row breathing room before the banner /
+   tab strip. Other screens leave padding-bottom at 0 so the hairline sits
+   tight against the title. */
+#sticky-group:has(#division-tabs-slot:not(:empty)) #app-header {
+  padding-bottom: 0.5rem;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1932,7 +1947,7 @@ mark.search-highlight {
   display: flex;
   align-items: center;
   /* Gap to the division tabs below; only present when the banner is shown. */
-  margin-bottom: 0.6rem;
+  margin-bottom: 0.8rem;
   background: var(--accent);
   border-radius: var(--radius);
   overflow: hidden;
@@ -2003,7 +2018,7 @@ mark.search-highlight {
   position: relative; /* positioning context for the sliding indicator */
   display: flex;
   /* Breathing room below the (now line-less) header. */
-  margin: 0.5rem 0 0;
+  margin: 0.8rem 0 0;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg-card);
