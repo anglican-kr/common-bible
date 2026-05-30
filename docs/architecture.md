@@ -461,6 +461,7 @@ OAuth 측면 (가장 큰 공격 표면):
 | [023](decisions/023-settings-toggle-switches.md)        | 설정 상위 4개 옵션 → OS별 네이티브 토글 스위치             |
 | [024](decisions/024-book-list-tabs-and-header-nav.md)   | 성서 목록 탭 통합 + 읽기 헤더 내비 재설계                  |
 | [025](decisions/025-header-scroll-elevation.md)         | 읽기 헤더 스크롤 elevation 그림자                          |
+| [026](decisions/026-menu-routing-and-notes.md)         | 메뉴 기반 라우팅 전환 + 노트(Drive 우선) + 하단 내비       |
 
 ## 부록 B. 자주 보게 되는 파일 빠른 참조
 
