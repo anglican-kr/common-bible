@@ -2938,8 +2938,9 @@ html.cite-sheet-open {
   }
 
   /* Auto-hide while reading + scrolling down; revealed on scroll-up / route
-     change (ADR-026 §2.1, js/app/bottom-nav.js). */
-  #bottom-nav.nav-hidden {
+     change (ADR-026 §2.1, js/app/bottom-nav.js). The state lives on <body> so
+     the stacked audio bar can drop in sync (it precedes the nav in the DOM). */
+  body.bottom-nav-hidden #bottom-nav {
     transform: translateY(100%);
   }
 
@@ -2980,10 +2981,19 @@ html.cite-sheet-open {
   }
 
   /* Audio bar = slim mini-player pinned directly above the nav. The nav owns
-     the safe-area inset, so the audio bar drops its own bottom inset. */
+     the safe-area inset, so the audio bar drops its own bottom inset. The
+     bottom transition keeps it in step with the nav's slide on auto-hide. */
   #audio-bar {
     bottom: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom));
     padding-bottom: 0.75rem;
+    transition: bottom 0.22s ease;
+  }
+
+  /* When the nav auto-hides, the audio bar drops to the viewport bottom and
+     reclaims the safe-area inset the nav used to own (no floating gap). */
+  body.bottom-nav-hidden #audio-bar {
+    bottom: 0;
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
   }
 
   /* Stage 0 notes placeholder. */
@@ -2996,6 +3006,7 @@ html.cite-sheet-open {
 
 @media (prefers-reduced-motion: reduce) {
   #bottom-nav { transition: none; }
+  #audio-bar { transition: none; }
 }
 
 .audio-player {

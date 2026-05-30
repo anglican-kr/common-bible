@@ -51,7 +51,7 @@ function syncActive() {
   });
 }
 
-function showNav() { $nav.classList.remove("nav-hidden"); }
+function showNav() { document.body.classList.remove("bottom-nav-hidden"); }
 
 /**
  * Called by the router after every navigation (views-routing.js route()).
@@ -102,7 +102,10 @@ function _onScroll() {
     _raf = false;
     const y = window.scrollY;
     if (routeToTab(location.pathname) !== "read") { showNav(); _lastY = y; return; }
-    if (y > _lastY && y > 80) $nav.classList.add("nav-hidden");
+    // The state lives on <body> so CSS can move the nav *and* the stacked
+    // audio bar together (the audio bar precedes the nav in the DOM, so a
+    // sibling selector can't reach it).
+    if (y > _lastY && y > 80) document.body.classList.add("bottom-nav-hidden");
     else if (y < _lastY - 4) showNav();
     _lastY = y;
   });
