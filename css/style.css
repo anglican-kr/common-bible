@@ -749,10 +749,17 @@ body {
 /* Title swap: NT chapter/prologue headers emit .title-text-full and
    .title-text-mobile spans. JS adds .compact to #page-title when the full
    title would overflow the room remaining between the absolute-positioned
-   back and bookmark buttons. */
+   back and bookmark buttons. On touch devices we also force the mobile
+   variant unconditionally (mirrors `.book-list` below) — measurement alone
+   often left the full "○○의 복음서 N장" form intact on phones because it
+   technically fit, which felt verbose in the tight header. */
 .title-text-mobile { display: none; }
 #page-title.compact .title-text-full { display: none; }
 #page-title.compact .title-text-mobile { display: inline; }
+@media (hover: none) and (pointer: coarse) {
+  #page-title .title-text-full { display: none; }
+  #page-title .title-text-mobile { display: inline; }
+}
 
 /* ── Chapter Title Back Button ── */
 .title-back-btn {
