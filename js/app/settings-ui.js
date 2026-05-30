@@ -329,8 +329,8 @@ window.appSettings = (() => {
     function makeGearBtn() {
       const b = el("button", { className: "settings-btn", type: "button", "aria-label": "설정", "aria-expanded": "false" });
       const settingsSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-      settingsSvg.setAttribute("width", "18");
-      settingsSvg.setAttribute("height", "18");
+      settingsSvg.setAttribute("width", "21");
+      settingsSvg.setAttribute("height", "21");
       settingsSvg.setAttribute("viewBox", "0 0 24 24");
       settingsSvg.setAttribute("fill", "none");
       settingsSvg.setAttribute("stroke", "currentColor");
