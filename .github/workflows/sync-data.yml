@@ -94,5 +94,8 @@ jobs:
             --base main \
             --head "$BRANCH" \
             --title 'data: 서브모듈 포인터 + sitemap 갱신' \
-            --body 'data 저장소 build.yml 산출물 commit 직후 자동 생성된 PR. Unit tests 통과 시 자동 squash 머지 + 브랜치 삭제.'
-          gh pr merge "$BRANCH" --auto --squash --delete-branch
+            --body 'data 저장소 build.yml 산출물 commit 직후 자동 생성된 PR. Unit tests 통과 시 자동 squash 머지.'
+          # --delete-branch 는 클라이언트 측 작업이라 --auto 의 서버 비동기 머지
+          # 시점에는 동작하지 않는다. 브랜치 정리는 repo 설정
+          # delete_branch_on_merge 가 처리한다.
+          gh pr merge "$BRANCH" --auto --squash
