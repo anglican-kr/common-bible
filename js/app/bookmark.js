@@ -794,6 +794,13 @@ function buildHomeBtn(target, ariaLabel) {
   return btn;
 }
 
+// Material Symbols "bookmarks" — outlined for the empty state, filled for the
+// has-bookmark state. The icon now uses var(--accent) in both states (matches
+// the other header icons); the outline ↔ fill swap is the only "this chapter
+// is bookmarked" visual cue.
+const BOOKMARK_ICON_OUTLINE = "M160-80v-560q0-33 23.5-56.5T240-720h320q33 0 56.5 23.5T640-640v560L400-200 160-80Zm80-121 160-86 160 86v-439H240v439Zm480-39v-560H280v-80h440q33 0 56.5 23.5T800-800v560h-80ZM240-640h320-320Z";
+const BOOKMARK_ICON_FILLED = "M160-80v-560q0-33 23.5-56.5T240-720h320q33 0 56.5 23.5T640-640v560L400-200 160-80Zm560-160v-560H280v-80h440q33 0 56.5 23.5T800-800v560h-80Z";
+
 // Build the bookmark icon SVG button for the chapter header
 function buildBookmarkHeaderBtn(bookId, chapter) {
   const btn = el("button", {
@@ -801,7 +808,8 @@ function buildBookmarkHeaderBtn(bookId, chapter) {
     "aria-label": "북마크",
     type: "button",
   });
-  if (findExistingChapterBookmarks(bookId, chapter).length > 0) {
+  const hasBookmark = findExistingChapterBookmarks(bookId, chapter).length > 0;
+  if (hasBookmark) {
     btn.classList.add("has-bookmark");
   }
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -810,7 +818,7 @@ function buildBookmarkHeaderBtn(bookId, chapter) {
   svg.setAttribute("fill", "currentColor");
   svg.setAttribute("aria-hidden", "true");
   const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-  path.setAttribute("d", "M160-80v-560q0-33 23.5-56.5T240-720h320q33 0 56.5 23.5T640-640v560L400-200 160-80Zm80-121 160-86 160 86v-439H240v439Zm480-39v-560H280v-80h440q33 0 56.5 23.5T800-800v560h-80ZM240-640h320-320Z");
+  path.setAttribute("d", hasBookmark ? BOOKMARK_ICON_FILLED : BOOKMARK_ICON_OUTLINE);
   svg.appendChild(path);
   btn.appendChild(svg);
   btn.addEventListener("click", () => openBookmarkDrawer(bookId, chapter));
@@ -820,10 +828,10 @@ function buildBookmarkHeaderBtn(bookId, chapter) {
 function refreshBookmarkHeaderBtn() {
   const btn = document.querySelector(".title-bookmark-btn");
   if (!btn || !readingContext.bookId || !readingContext.chapter) return;
-  btn.classList.toggle(
-    "has-bookmark",
-    findExistingChapterBookmarks(readingContext.bookId, readingContext.chapter).length > 0
-  );
+  const hasBookmark = findExistingChapterBookmarks(readingContext.bookId, readingContext.chapter).length > 0;
+  btn.classList.toggle("has-bookmark", hasBookmark);
+  const path = btn.querySelector("svg path");
+  if (path) path.setAttribute("d", hasBookmark ? BOOKMARK_ICON_FILLED : BOOKMARK_ICON_OUTLINE);
 }
 
 function openBookmarkDrawer(bookId, chapter) {
