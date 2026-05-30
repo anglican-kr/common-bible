@@ -805,8 +805,7 @@ function buildBookmarkHeaderBtn(bookId, chapter) {
     btn.classList.add("has-bookmark");
   }
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  svg.setAttribute("width", "25");
-  svg.setAttribute("height", "25");
+  // Size comes from CSS (.title-bookmark-btn svg) in rem — see style.css header-icon rule.
   svg.setAttribute("viewBox", "0 -960 960 960");
   svg.setAttribute("fill", "currentColor");
   svg.setAttribute("aria-hidden", "true");

@@ -777,7 +777,14 @@ body {
   opacity: 0.4;
 }
 
-.title-back-icon {
+/* All header-row icons (home/back, bookmark, settings gear) are sized here in
+   rem so they scale together with the user's font-size setting (applyFontSize
+   sets the root font-size). Sizing lives in CSS only — the SVGs must NOT carry
+   width/height attributes in JS, or they'd lock to px and drift from the text
+   scale, leaving the three icons mismatched at large font sizes. */
+.title-back-icon,
+.title-bookmark-btn svg,
+.settings-btn svg {
   width: 1.45rem;
   height: 1.45rem;
 }
