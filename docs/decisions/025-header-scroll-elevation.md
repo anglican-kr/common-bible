@@ -26,10 +26,12 @@
 
 그림자 값:
 
-- 라이트: `box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04)`
+- 라이트: `box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12)`
 - 다크: `box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25)`
 
 다크에서 알파가 큰 이유: 어두운 배경 위에서는 옅은 그림자가 거의 보이지 않으므로 같은 정도의 elevation 신호를 위해 보강이 필요하다.
+
+> **개정 (2026-05-30):** 라이트 알파 `0.04` → `0.12`. 실측에서 `0.04` 는 흰 배경 위에서 사실상 보이지 않아 elevation 신호로 기능하지 못했다. 다크와 동등한 인지 강도를 위해 보강한다.
 
 `transition: box-shadow 0.18s ease` 정도로 부드럽게 페이드 인. `prefers-reduced-motion: reduce` 분기에서는 transition 제거하고 즉시 토글.
 
@@ -52,6 +54,8 @@
 그림자를 추가하면 3중 신호가 되어 시각 잡음. **hairline 을 제거하고 fade gradient 와 그림자 두 가지만** 유지한다. fade gradient 와 그림자는 둘 다 부드러운 vertical falloff 라 자연 결합. ADR-024 가 책 목록 페이지(division-tabs 슬롯 있을 때) hairline 을 조건부 숨김 처리한 의도와도 정합 — 사실상 모든 페이지에서 hairline 을 제거하는 일반화.
 
 > **개정 (2026-05-30):** dev 검증 결과 hairline 제거 후 그림자만으로는 scroll-top 정적 상태의 헤더 경계 인지가 약했다. hairline 을 복구하고 역할을 분리한다 — **hairline = always-on 경계**, **fade + shadow = 스크롤 elevation 신호**. 3중 신호라도 hairline 은 정적·미세하고 shadow 는 동적이라 시각 잡음으로 인지되지 않는다. 책 목록 페이지의 조건부 숨김(`#sticky-group:has(#division-tabs-slot:not(:empty))`)은 ADR-024 그대로 유지.
+
+> **개정 (2026-05-30):** `#sticky-group::after` fade gradient 제거. 이 0.25rem 솔리드 `var(--bg)` 페이드는 `top: 100%` 에 위치해 그림자가 떨어지는 영역을 덮어, 헤더와 그림자 사이에 빈 여백이 있는 것처럼 보이게 만들었다(불투명한 첫 구간이 그림자 상단을 가림). fade 를 제거해 그림자가 헤더 하단 경계에서 바로 시작하도록 한다. 경계 신호는 **hairline(always-on) + shadow(스크롤 elevation)** 두 가지로 정리.
 
 ### 4. frosted glass 미적용 — iOS 26 / PWA 함정 회피
 
