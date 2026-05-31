@@ -245,3 +245,25 @@ Note {
 
 이로써 §8 "영향" 의 `transport.js(notes.json 파일 ops)" 는 per-note + 인덱스로, 유닛 테스트의
 "노트 스토어 머지" 는 `notes-store.test.js`(hash/title/planSync/충돌)로 구체화된다.
+
+## 개정 (2026-05-31) — 노트 캘린더 월/주 + 백업 + 북마크 삽입 (Stage 1b)
+
+§4.3(캘린더)·§4.6(백업)·§4.5(북마크 삽입)을 구현하며 다음을 확정한다.
+
+> **노트 화면 뷰 = 목록 / 월 / 주 3분할 (§4.3 "목록 ↔ 캘린더 토글" 확장).** 캘린더를
+> 월·주 두 형태로 나눈다. 선호는 `localStorage["bible-notes-view"]` 로 저장(동기화 대상
+> 아님 — 기기별 보기 취향). 월 뷰는 순수 JS 6×7 그리드(일요일 시작)·노트 있는 날 점/개수
+> 마커·오늘 강조·셀 탭 시 그날 노트 목록 + '이 날짜로 새 노트'. 주 뷰는 7일 행에 노트 제목을
+> 인라인 표시 + 날짜별 '+'. 둘 다 `date` 기준 버킷(`bucketByDay`)·이전/다음/오늘 네비.
+> 캘린더에서 만든 새 노트는 `createNote({ date })` 로 그 날짜가 미리 설정된다. 순수 날짜
+> 로직은 `CAL_GRID` 마커로 유닛 테스트.
+
+> **백업 (§4.6 구현).** 노트 화면 ⋯ 메뉴에 JSON 내보내기/가져오기 + 전체 마크다운
+> 내보내기. import 는 `notesStore.importNotes(list, mode)` — `merge` 는 항상 새 id 로 추가
+> (충돌·무단 덮어쓰기 없음), `overwrite` 는 현재 노트를 tombstone 후 추가. 파일 저장은
+> Blob + `URL.createObjectURL` 다운로드(무의존).
+
+> **북마크 삽입 (§4.5 구현).** 에디터 도구모음 📑 → 저장된 구절 북마크 시트 → 선택 시
+> `loadChapter` 로 그 장을 받아 `extractVersesText(verseSpec)` 로 본문을 뽑아 인용블록 +
+> 출처 링크(`[책 장:절](/book/ch/spec)`)를 커서에 삽입(스냅샷 — 번역 고정). 북마크는
+> `appStorage.loadBookmarks` + `appBookmark._walkBookmarks` 로 수집.
