@@ -1,7 +1,7 @@
 # ADR-027: Source markup DSL 위치 잡기 + `<parallel>` element 도입
 
 - 일시: 2026-05-31
-- 상태: 승인됨 — 구현 대기
+- 상태: 승인됨 — **구현 완료** (2026-05-31, 1.5.x 트랙). 시각은 footnote anchor 패턴 (UI 렌더 §2 개정 2026-05-31 — 초기 배너 안 dev 검증 후 전환). 콘텐츠 단계 — 실제 source/*.md 에 `<parallel>` 마커를 다는 작업 — 은 콘텐츠 자문과 묶여 별도 진행
 - 관련 ADR: ADR-006(운문 segments 포맷), ADR-018(`js/app/views-routing.js` 본문 렌더 위치), ADR-022(인용·주석 + per-parallel tradition), ADR-020(저장소 4분할 — 본 결정도 app·data 두 저장소를 모두 손댐)
 
 > **현재 상태.** 본 ADR 두 결정을 한 묶음으로 다룬다 — (1) `source/*.md` 마크업의 위치 잡기를 markdown + 자체 도메인 DSL 의 혼합으로 명문화, (2) 그 DSL 에 `<parallel>` element 신설. 구현은 후속 단계 — parser.py 의 block 마커 인식 + JSON 스키마 확장 + `js/app/parallels.js`(가칭) 의 단락 배너 렌더 + 데이터 검증 테스트 + 유닛 테스트. Phase 별 일정은 별도 이슈로 분리.
