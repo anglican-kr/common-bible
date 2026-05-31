@@ -354,6 +354,45 @@ test("initParallels: clicking ref link inside tooltip opens cite-sheet for that 
   assert.equal(ttCloses.length, 1);
 });
 
+test("initParallels: cite-chip-like outside click does NOT clear _activeAnchor (Bugbot regression 2026-06-01)", () => {
+  // Scenario: user opens parallel tooltip, then clicks a cite chip elsewhere
+  // (chip opens its own sheet but does NOT close the parallel tooltip). A
+  // subsequent ref-link click in the still-open tooltip must still get the
+  // source anchor as returnFocusEl — previous outside-click clearing logic
+  // had a bug that nulled _activeAnchor here, reintroducing the focus bug.
+  const sheetCalls = [];
+  const { api, HTMLElement, fireBodyClick } = loadParallels({
+    openCiteSheet: (src, parallels, tradition, returnFocusEl) =>
+      sheetCalls.push({ returnFocusEl }),
+    closeNoteTooltip: () => {},
+    openNoteTooltip: () => {},
+  });
+  api.initParallels();
+  const anchor = api.buildParallelAnchor({
+    src: [{ ref: "1역대 11:1-9" }], range: "5:1-10",
+  });
+  Object.setPrototypeOf(anchor, HTMLElement.prototype);
+  // 1. Open parallel tooltip from anchor
+  fireBodyClick(anchor);
+  // 2. Cite chip click — body click handler runs but should leave _activeAnchor alone
+  const chip = {
+    tag: "span", attrs: { className: "cite-chip" },
+    classList: { contains: (c) => c === "cite-chip" },
+    closest: (sel) => null,  // not a parallel anchor or ref-link or tooltip child
+  };
+  Object.setPrototypeOf(chip, HTMLElement.prototype);
+  fireBodyClick(chip);
+  // 3. Ref link in still-open tooltip — returnFocusEl must STILL be the anchor
+  const body = api.buildTooltipBody({
+    src: [{ ref: "1역대 11:1-9" }], range: "5:1-10",
+  });
+  const link = body[0];
+  Object.setPrototypeOf(link, HTMLElement.prototype);
+  fireBodyClick(link);
+  assert.equal(sheetCalls.length, 1);
+  assert.equal(sheetCalls[0].returnFocusEl, anchor, "anchor must survive cite-chip click");
+});
+
 test("initParallels: ref link click without prior anchor open falls back to link as returnFocusEl", () => {
   // Defensive path — should not happen in normal flow but the code degrades
   // gracefully so a stray link click does not lose focus entirely.

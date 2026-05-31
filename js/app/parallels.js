@@ -239,6 +239,16 @@ window.appParallels = (() => {
     _activeAnchor = null;
   }
 
+  // `_activeAnchor` is only consumed by `_activateRefLink`, which can only
+  // fire when a `.parallel-tooltip-ref` is clicked — and ref-links only
+  // exist while a parallel tooltip is visible. Each `_openTooltipForAnchor`
+  // overwrites with the freshly-opened anchor, and `_activateRefLink` clears
+  // after use. Between tooltip-close (ESC / outside click) and the NEXT
+  // tooltip open, `_activeAnchor` may go stale, but the consumer cannot fire
+  // in that window (no visible ref-link to click). So no proactive clearing
+  // is needed — and indeed an aggressive outside-click clear has been shown
+  // to misfire on cite-chip clicks that don't actually close the tooltip,
+  // reintroducing the focus bug (Bugbot 2026-06-01).
   function initParallels() {
     document.body.addEventListener("click", (e) => {
       const target = e.target;
@@ -253,25 +263,10 @@ window.appParallels = (() => {
       const anchor = target.closest(".parallel-anchor");
       if (anchor instanceof HTMLElement) {
         _openTooltipForAnchor(anchor);
-        return;
-      }
-
-      // Click that misses anchor + ref-link likely closes the tooltip via
-      // citations.js's outside-click logic — drop the tracked anchor so a
-      // later ref-link activation (without re-opening a tooltip) doesn't
-      // stale-restore focus to a now-irrelevant anchor.
-      if (_activeAnchor && !target.closest("#note-tooltip")) {
-        _activeAnchor = null;
       }
     });
 
     document.addEventListener("keydown", (e) => {
-      // ESC closes the tooltip via citations.js — clear the active anchor so
-      // it doesn't linger past tooltip lifetime.
-      if (e.key === "Escape") {
-        _activeAnchor = null;
-        return;
-      }
       if (e.key !== "Enter" && e.key !== " ") return;
       const target = e.target;
       if (!(target instanceof HTMLElement)) return;
