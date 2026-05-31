@@ -1146,6 +1146,16 @@ function renderChapter(data, book, opts) {
       }
     }
 
+    // ADR-027: section-level parallel-passage banner — render before the verse
+    // whose number matches a parallel's range start. Visibility tied to the
+    // same `body.cites-shown` class as cite chips (no separate toggle).
+    if (window.appParallels && data.parallels && data.parallels.length) {
+      const matched = window.appParallels.findParallelStartingAt(data.parallels, v.number);
+      if (matched) {
+        article.appendChild(window.appParallels.buildParallelBanner(matched));
+      }
+    }
+
     const verseLabel = formatVerseLabel(v);
     let verseId = `v${v.number}`;
     if (v.part) verseId += v.part;

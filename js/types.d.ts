@@ -507,6 +507,15 @@ export interface BibleVerse {
   notes?: BibleVerseNote[];
 }
 
+// ADR-027 §2: a chapter-level parallel-passage marker. `range` is a verse-spec
+// string (same grammar as `<cite src>`'s verse part: "<ch>", "<ch>:<v>-<v>",
+// "<ch>:<v>-<ch>:<v>"). `src` carries one or more parallel sources with optional
+// per-source `tradition` labels (CiteParallelRef shape).
+export interface ChapterParallel {
+  src: CiteParallelRef[];
+  range: string;
+}
+
 export interface BibleChapter {
   book_id: string;
   book_name_ko: string;
@@ -515,6 +524,7 @@ export interface BibleChapter {
   has_dual_numbering?: boolean;
   has_lxx_only?: boolean;
   verses: BibleVerse[];
+  parallels?: ChapterParallel[];  // ADR-027: section-level parallel-passage markers
 }
 
 export interface BiblePrologue {
@@ -645,6 +655,26 @@ export interface AppCitations {
   closeCiteSheet: () => void;
   initCiteSheet: () => void;
   maybeShowCoachmark: () => void;
+}
+
+// ── App parallels facade (js/app/parallels.js) ─────────────────────────────
+// ADR-027 chapter-level parallel-passage banner. Inserted by views-routing
+// immediately before the first verse of each `ChapterParallel.range`.
+
+export interface AppParallels {
+  parseRange: (range: string) => {
+    startCh: number;
+    startV: number;
+    endCh: number;
+    endV: number | null;  // null = entire chapter shorthand (e.g. "13")
+  } | null;
+  bannerText: (parallel: ChapterParallel) => string;
+  buildParallelBanner: (parallel: ChapterParallel) => HTMLElement;
+  findParallelStartingAt: (
+    parallels: ReadonlyArray<ChapterParallel> | null | undefined,
+    verseNumber: number,
+  ) => ChapterParallel | null;
+  initParallels: () => void;
 }
 
 // ── App settings-ui facade (js/app/settings-ui.js) ──────────────────────────
@@ -790,6 +820,7 @@ declare global {
     appSearch: AppSearch;
     appBookmark: AppBookmark;
     appCitations: AppCitations;
+    appParallels: AppParallels;
     appViewsRouting: { [key: string]: any }; // Phase 7a aggregate (full type Phase 7b)
     readingContext: ReadingContext;
 

@@ -148,6 +148,7 @@ applyColorScheme(loadColorScheme());
 applyCiteShow(loadCiteShow());
 initSettings();
 window.appCitations?.initCiteSheet();
+window.appParallels?.initParallels();
 
 
 // ── Service Worker Registration & Update ──
