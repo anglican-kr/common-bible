@@ -1691,6 +1691,9 @@ async function route() {
   // non-modal "tap chips in the visible page" behavior is preserved.
   const citeSheet = document.getElementById("cite-sheet");
   if (citeSheet && !citeSheet.hidden) window.appCitations?.closeCiteSheet();
+  // Flush + unsubscribe an open notes editor/list when navigating anywhere
+  // (the notes module only self-cleans on re-entry, ADR-026). Idempotent.
+  window.appNotes?.teardown?.();
   const parsed = parsePath();
   const { view, bookId, chapter, division } = parsed;
 
@@ -1737,9 +1740,15 @@ async function route() {
       return;
     }
 
-    // Notes (ADR-026). Stage 0 placeholder — list/calendar + editor in Stage 1.
+    // Notes (ADR-026). /notes list + /notes/:id editor (js/app/notes.js).
     if (view === "notes") {
-      renderNotesPlaceholder();
+      const noteId = /** @type {any} */ (parsed).noteId;
+      if (window.appNotes) {
+        if (noteId) window.appNotes.renderNoteEditor(noteId);
+        else window.appNotes.renderNotesList();
+      } else {
+        renderNotesPlaceholder(); // fallback if the UI module failed to load
+      }
       dismissLaunchScreen();
       updatePageMeta({ title: "노트", description: "내 노트" });
       trackPageView();

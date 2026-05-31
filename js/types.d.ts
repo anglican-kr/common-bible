@@ -145,7 +145,7 @@ export interface NotesStore {
   updateNote: (id: string, patch: Partial<Pick<Note, "title" | "body" | "date" | "refs">>) => void;
   deleteNote: (id: string) => void;
   // Editor lifecycle: register the live buffer so hidden/pagehide can flush it.
-  beginEditing: (id: string, getBuffer: () => { title: string; body: string }) => void;
+  beginEditing: (id: string, getBuffer: () => { title: string; body: string; date: number }) => void;
   endEditing: () => void;
   // Drive sync (called by the state machine after a successful bookmark cycle).
   syncWithToken: (token: string) => Promise<void>;
@@ -870,6 +870,25 @@ declare global {
     };
     // Notes storage + Drive-primary sync (ADR-026, js/sync/notes-store.js).
     notesStore?: NotesStore;
+    // Notes UI — /notes list + /notes/:id editor (ADR-026, js/app/notes.js).
+    appNotes?: {
+      renderNotesList: () => void;
+      renderNoteEditor: (id: string) => void;
+      createAndOpen: (init?: Partial<Note>) => void;
+      teardown: () => void;
+    };
+    // Markdown engine for notes (ADR-026, js/app/markdown.js).
+    appMarkdown?: {
+      escapeHtml: (s: string) => string;
+      safeUrl: (url: string) => { href: string; external: boolean } | null;
+      renderInline: (text: string) => string;
+      renderMarkdown: (src: string) => string;
+      plainText: (src: string) => string;
+      wrapSelection: (t: { value: string; start: number; end: number }, marker: string) => { value: string; start: number; end: number };
+      toggleLinePrefix: (t: { value: string; start: number; end: number }, prefix: string) => { value: string; start: number; end: number };
+      toggleListItem: (t: { value: string; start: number; end: number }, kind: "bullet" | "task") => { value: string; start: number; end: number };
+      insertLink: (t: { value: string; start: number; end: number }) => { value: string; start: number; end: number };
+    };
 
     // Phase 7a constants (also declared as bare globals above for app.js's
     // Phase 7b territory). Window assignment is what views-routing.js does.
