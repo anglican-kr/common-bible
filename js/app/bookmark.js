@@ -161,8 +161,9 @@ function mergeVerseSpecs(specA, specB) {
 // ── BEGIN VERSE_SERIALIZE ──
 // Exercised by tests/unit/bookmark.test.js. Pure DOM transform: clone the
 // range bounded by [firstNode, lastNode] (inclusive), strip aria-hidden
-// verse-number glyphs, expand stanza/paragraph/pilcrow markers to blank lines
-// and hemistich markers to single line breaks, then normalize whitespace.
+// verse-number glyphs, drop citation chips and ※ variant-note markers,
+// expand stanza/paragraph/pilcrow markers to blank lines and hemistich
+// markers to single line breaks, then normalize whitespace.
 //
 // Shared by the article-level system-copy handler (views-routing.js, fires on
 // Cmd/Ctrl+C of a drag-selection) and the verse-select bar's 복사 button
@@ -181,6 +182,10 @@ function serializeVerseRange(firstNode, lastNode) {
   const work = document.createElement("div");
   work.appendChild(range.cloneContents());
   work.querySelectorAll(".verse-num").forEach((n) => n.remove());
+  // Drop citation chips and the appended ※ variant-note markers entirely —
+  // they are reading aids, not scripture text. Text-anchored `.note-anchor`
+  // wraps real verse words, so it stays (its textContent flows through).
+  work.querySelectorAll(".cite-chip, .note-anchor--variant").forEach((n) => n.remove());
   work.querySelectorAll(".stanza-break, .paragraph-break, .pilcrow")
     .forEach((n) => { n.textContent = "\n\n"; });
   work.querySelectorAll(".hemistich-break").forEach((n) => { n.textContent = "\n"; });
