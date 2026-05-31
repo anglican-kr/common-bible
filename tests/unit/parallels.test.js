@@ -252,6 +252,27 @@ test("findParallelsStartingAt: multiple parallels sharing a start verse (range �
   assert.equal(matches.length, 2);
 });
 
+test("findParallelsStartingAt: currentChapter filters out range with mismatched chapter prefix", () => {
+  // Defense in depth — parser cross-check normally prevents this, but if a
+  // parallel for chapter 12 somehow lands in chapter 11's data, the ※ must
+  // not render on chapter 11's verse 1.
+  const { api } = loadParallels();
+  const parallels = [
+    { src: [{ ref: "X 1:1" }], range: "11:1-9" },
+    { src: [{ ref: "Y 1:1" }], range: "12:1-9" },  // wrong chapter
+  ];
+  const matches = api.findParallelsStartingAt(parallels, 1, 11);
+  assert.equal(matches.length, 1);
+  assert.equal(matches[0].range, "11:1-9");
+});
+
+test("findParallelsStartingAt: currentChapter undefined → no chapter filter (legacy behaviour)", () => {
+  const { api } = loadParallels();
+  const parallels = [{ src: [{ ref: "X 1:1" }], range: "12:1-9" }];
+  // Without currentChapter argument, all start-verse matches pass.
+  assert.equal(api.findParallelsStartingAt(parallels, 1).length, 1);
+});
+
 // ── initParallels: anchor click → tooltip ──────────────────────────────────
 
 test("initParallels: click on ※ anchor opens tooltip with range + body parts", () => {
@@ -298,13 +319,23 @@ test("initParallels: keydown Enter on anchor also opens tooltip", () => {
 test("initParallels: clicking ref link inside tooltip opens cite-sheet for that ref", () => {
   const sheetCalls = [];
   const ttCloses = [];
-  const { api, HTMLElement, fireBodyClick } = loadParallels({
+  const { api, HTMLElement, fireBodyClick, fireBodyClickWithReturn } = loadParallels({
     openCiteSheet: (src, parallels, tradition, returnFocusEl) =>
       sheetCalls.push({ src, parallels, tradition, returnFocusEl }),
     closeNoteTooltip: () => ttCloses.push(true),
+    openNoteTooltip: () => {},
   });
   api.initParallels();
-  // The tooltip body returns the ref link node; stand-alone fire its click.
+  // First open the tooltip from the ※ anchor (this stores _activeAnchor),
+  // then fire the ref-link click — returnFocusEl should be the anchor, not
+  // the link, so focus restore lands on a visible in-document element after
+  // the cite-sheet closes.
+  const anchor = api.buildParallelAnchor({
+    src: [{ ref: "1역대 11:1-9" }],
+    range: "5:1-10",
+  });
+  Object.setPrototypeOf(anchor, HTMLElement.prototype);
+  fireBodyClick(anchor);
   const body = api.buildTooltipBody({
     src: [{ ref: "1역대 11:1-9" }],
     range: "5:1-10",
@@ -316,9 +347,32 @@ test("initParallels: clicking ref link inside tooltip opens cite-sheet for that 
   assert.equal(sheetCalls[0].src, "1역대 11:1-9");
   assert.equal(sheetCalls[0].parallels, null);
   assert.equal(sheetCalls[0].tradition, null);
-  assert.equal(sheetCalls[0].returnFocusEl, link);
+  // Bugbot fix (PR #172 review): returnFocusEl is the source ※ anchor, not
+  // the tooltip ref link (which is inside the about-to-close tooltip).
+  assert.equal(sheetCalls[0].returnFocusEl, anchor);
   // Tooltip closes after the sheet opens (no double-floating UI).
   assert.equal(ttCloses.length, 1);
+});
+
+test("initParallels: ref link click without prior anchor open falls back to link as returnFocusEl", () => {
+  // Defensive path — should not happen in normal flow but the code degrades
+  // gracefully so a stray link click does not lose focus entirely.
+  const sheetCalls = [];
+  const { api, HTMLElement, fireBodyClick } = loadParallels({
+    openCiteSheet: (src, parallels, tradition, returnFocusEl) =>
+      sheetCalls.push({ returnFocusEl }),
+    closeNoteTooltip: () => {},
+  });
+  api.initParallels();
+  const body = api.buildTooltipBody({
+    src: [{ ref: "1역대 11:1-9" }],
+    range: "5:1-10",
+  });
+  const link = body[0];
+  Object.setPrototypeOf(link, HTMLElement.prototype);
+  fireBodyClick(link);
+  assert.equal(sheetCalls.length, 1);
+  assert.equal(sheetCalls[0].returnFocusEl, link);
 });
 
 test("initParallels: ref link with tradition forwards tradition to openCiteSheet", () => {

@@ -148,24 +148,42 @@ window.appParallels = (() => {
   }
 
   /**
-   * Find every parallel whose range starts at the given verse number. Plural
+   * Find every parallel whose range starts at the given (chapter, verse). Plural
    * because ADR-027 §2 (개정 2026-05-31) allows range 중첩 — two markers may
    * legitimately share a start verse (e.g. the outer "5:11-25" and the inner
    * "5:11-20" both start at v11). Each match renders its own ※ anchor.
    *
+   * `currentChapter` (optional but recommended) guards against rendering a ※
+   * on a verse number that happens to match a parallel whose range belongs to
+   * a different chapter — parser cross-check normally prevents this but defense
+   * in depth keeps stray data from polluting the UI.
+   *
    * @param {ReadonlyArray<ChapterParallel> | null | undefined} parallels
    * @param {number} verseNumber
+   * @param {number} [currentChapter]
    * @returns {Array<ChapterParallel>}
    */
-  function findParallelsStartingAt(parallels, verseNumber) {
+  function findParallelsStartingAt(parallels, verseNumber, currentChapter) {
     if (!parallels || !parallels.length) return [];
     const out = [];
     for (const p of parallels) {
       const r = parseRange(p.range);
-      if (r && r.startV === verseNumber) out.push(p);
+      if (!r) continue;
+      if (r.startV !== verseNumber) continue;
+      if (currentChapter !== undefined && r.startCh !== currentChapter) continue;
+      out.push(p);
     }
     return out;
   }
+
+  // Track the ※ anchor whose tooltip is currently open. When the user clicks a
+  // ref link inside that tooltip, focus must restore to the anchor (which
+  // stays in the verse and remains focusable) rather than to the link itself
+  // (which lives inside the about-to-close tooltip — closeCiteSheet then can't
+  // restore focus to a visible control). Cleared in closeNoteTooltip-equivalent
+  // paths by the next openCiteSheet call sequencing.
+  /** @type {HTMLElement | null} */
+  let _activeAnchor = null;
 
   /**
    * Open the tooltip for a parallel anchor: title = range, body = clickable
@@ -182,6 +200,7 @@ window.appParallels = (() => {
     const cites = window.appCitations;
     if (!cites || typeof cites.openNoteTooltip !== "function") return;
     const parallel = { src: refs, range };
+    _activeAnchor = anchorEl;
     cites.openNoteTooltip(anchorEl, range, buildTooltipBody(parallel));
   }
 
@@ -194,6 +213,32 @@ window.appParallels = (() => {
    * Body-level delegation lets us handle the anchor and tooltip-link in one
    * place without per-render listeners.
    */
+  /**
+   * Forward a ref-link activation to the cite-sheet, then close the tooltip.
+   * `returnFocusEl` is the ※ anchor that opened the tooltip (tracked in
+   * `_activeAnchor`) rather than the link itself, so when the cite-sheet
+   * closes focus restores to a visible, in-document control. Falls back to
+   * the link only when the active anchor is unavailable (defensive — should
+   * not happen in normal flow since the link only exists inside an open tooltip).
+   *
+   * @param {HTMLElement} refLink
+   */
+  function _activateRefLink(refLink) {
+    const ref = refLink.getAttribute("data-parallel-ref");
+    if (!ref) return;
+    const tradition = refLink.getAttribute("data-parallel-ref-tradition") || null;
+    const cites = window.appCitations;
+    if (!cites) return;
+    const returnFocus = _activeAnchor || refLink;
+    if (typeof cites.openCiteSheet === "function") {
+      void cites.openCiteSheet(ref, null, tradition, returnFocus);
+    }
+    if (typeof cites.closeNoteTooltip === "function") {
+      cites.closeNoteTooltip();
+    }
+    _activeAnchor = null;
+  }
+
   function initParallels() {
     document.body.addEventListener("click", (e) => {
       const target = e.target;
@@ -201,26 +246,32 @@ window.appParallels = (() => {
 
       const refLink = target.closest(".parallel-tooltip-ref");
       if (refLink instanceof HTMLElement) {
-        const ref = refLink.getAttribute("data-parallel-ref");
-        if (!ref) return;
-        const tradition = refLink.getAttribute("data-parallel-ref-tradition") || null;
-        const cites = window.appCitations;
-        if (cites && typeof cites.openCiteSheet === "function") {
-          void cites.openCiteSheet(ref, null, tradition, refLink);
-        }
-        if (cites && typeof cites.closeNoteTooltip === "function") {
-          cites.closeNoteTooltip();
-        }
+        _activateRefLink(refLink);
         return;
       }
 
       const anchor = target.closest(".parallel-anchor");
       if (anchor instanceof HTMLElement) {
         _openTooltipForAnchor(anchor);
+        return;
+      }
+
+      // Click that misses anchor + ref-link likely closes the tooltip via
+      // citations.js's outside-click logic — drop the tracked anchor so a
+      // later ref-link activation (without re-opening a tooltip) doesn't
+      // stale-restore focus to a now-irrelevant anchor.
+      if (_activeAnchor && !target.closest("#note-tooltip")) {
+        _activeAnchor = null;
       }
     });
 
     document.addEventListener("keydown", (e) => {
+      // ESC closes the tooltip via citations.js — clear the active anchor so
+      // it doesn't linger past tooltip lifetime.
+      if (e.key === "Escape") {
+        _activeAnchor = null;
+        return;
+      }
       if (e.key !== "Enter" && e.key !== " ") return;
       const target = e.target;
       if (!(target instanceof HTMLElement)) return;
@@ -229,16 +280,7 @@ window.appParallels = (() => {
         _openTooltipForAnchor(target);
       } else if (target.classList.contains("parallel-tooltip-ref")) {
         e.preventDefault();
-        const ref = target.getAttribute("data-parallel-ref");
-        if (!ref) return;
-        const tradition = target.getAttribute("data-parallel-ref-tradition") || null;
-        const cites = window.appCitations;
-        if (cites && typeof cites.openCiteSheet === "function") {
-          void cites.openCiteSheet(ref, null, tradition, target);
-        }
-        if (cites && typeof cites.closeNoteTooltip === "function") {
-          cites.closeNoteTooltip();
-        }
+        _activateRefLink(target);
       }
     });
   }
