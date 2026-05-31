@@ -747,6 +747,7 @@ const $bmMergeCancel = _$("bm-merge-cancel");
 const $verseSelectBar = _$("verse-select-bar");
 const $verseSelectCount = _$("verse-select-count");
 const $verseSelectBookmarkBtn = /** @type {HTMLButtonElement} */ (_$("verse-select-bookmark-btn"));
+const $verseSelectNoteBtn = /** @type {HTMLButtonElement} */ (_$("verse-select-note-btn"));
 const $verseSelectCopyBtn = /** @type {HTMLButtonElement} */ (_$("verse-select-copy-btn"));
 const $verseSelectCancelBtn = _$("verse-select-cancel-btn");
 
@@ -1875,6 +1876,7 @@ function updateVerseSelectBar() {
     $verseSelectCount.textContent = `${spec.replace(/,/g, ', ')}절 선택됨`;
   }
   $verseSelectBookmarkBtn.disabled = count === 0;
+  $verseSelectNoteBtn.disabled = count === 0;
   $verseSelectCopyBtn.disabled = count === 0;
 }
 
@@ -1926,6 +1928,51 @@ async function copySelectedVerses() {
     announce("복사하지 못했습니다.");
     window._showSyncSnackbar?.("복사하지 못했습니다.");
   }
+}
+
+// Start a new note from the selected verses (ADR-026 §4.5). The passage text
+// is inserted as a markdown blockquote (snapshot — the translation is fixed)
+// with a source link back to the chapter, then the editor opens.
+function noteFromSelectedVerses() {
+  const article = document.querySelector("article.chapter-text");
+  if (!article || readingContext.selectedVerses.size === 0) return;
+  if (!window.appNotes) { announce("노트를 열 수 없습니다."); return; }
+
+  const children = [...article.children];
+  /** @type {Array<[Element, Element]>} */
+  const groups = [];
+  /** @type {[Element, Element] | null} */
+  let current = null;
+  for (const child of children) {
+    if (!child.classList.contains("verse")) continue;
+    if (child.classList.contains("verse-selected")) {
+      if (!current) { current = [child, child]; groups.push(current); }
+      else current[1] = child;
+    } else current = null;
+  }
+  if (!groups.length) return;
+
+  const textParts = groups.map(([first, last]) => serializeVerseRange(first, last));
+  const refs = collapseFullVerseRefs(Array.from(readingContext.selectedVerses), article);
+  const spec = refs.length
+    ? selectedVersesToSpec(refs)
+    : selectedVersesToSpec(Array.from(readingContext.selectedVerses));
+  const book = (window.getBooksCache() ?? []).find((b) => b.id === readingContext.bookId);
+  const bookName = book ? book.name_ko : readingContext.bookId;
+  const chapter = readingContext.chapter;
+
+  // Each text part → a blockquote; groups separated by a blank quote line.
+  const quoteBlock = textParts
+    .map((t) => t.split("\n").map((l) => (l ? `> ${l}` : ">")).join("\n"))
+    .join("\n>\n");
+  const path = `/${readingContext.bookId}/${chapter}/${spec}`;
+  const body = `${quoteBlock}\n\n[${bookName} ${chapter}:${spec}](${path})\n\n`;
+
+  exitVerseSelectMode();
+  window.appNotes.createAndOpen({
+    body,
+    refs: [{ bookId: /** @type {string} */ (readingContext.bookId), chapter: /** @type {number} */ (chapter), verseSpec: spec }],
+  });
 }
 
 // ── Drawer toolbar event handlers ──
@@ -1999,6 +2046,7 @@ $bmAddFolderBtn.addEventListener("click", () => {
 
 $verseSelectCancelBtn.addEventListener("click", exitVerseSelectMode);
 $verseSelectBookmarkBtn.addEventListener("click", () => openSaveModal("verses"));
+$verseSelectNoteBtn.addEventListener("click", noteFromSelectedVerses);
 $verseSelectCopyBtn.addEventListener("click", copySelectedVerses);
 
 $bmOverflowBtn.addEventListener("click", () => {
