@@ -406,10 +406,12 @@ async function findFileId(token, name) {
 
 // List all appDataFolder files (id + name). Used by the notes layer (ADR-026)
 // to reconcile per-note `note-<id>.json` files + the `notes-index.json`.
-// Returns [] on any failure.
+// Returns `[]` for a genuinely empty folder but `null` on any failure, so the
+// caller can distinguish "no files" from "couldn't list" — treating a transient
+// listing error as empty would plan mass uploads against still-present remotes.
 /**
  * @param {string} token
- * @returns {Promise<Array<{ id: string; name: string }>>}
+ * @returns {Promise<Array<{ id: string; name: string }> | null>}
  */
 async function listFiles(token) {
   try {
@@ -417,11 +419,11 @@ async function listFiles(token) {
       "/files?spaces=appDataFolder&fields=files(id,name)&pageSize=1000",
       { token }
     );
-    if (!ok) return [];
+    if (!ok) return null;
     let data;
-    try { data = await res.json(); } catch { return []; }
+    try { data = await res.json(); } catch { return null; }
     return Array.isArray(data.files) ? data.files : [];
-  } catch { return []; }
+  } catch { return null; }
 }
 
 // Returns { doc, etag, status } or nulls on failure. Generic over any JSON

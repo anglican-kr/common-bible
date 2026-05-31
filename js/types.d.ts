@@ -323,7 +323,7 @@ export interface SyncTransport {
   deleteSyncFile: (token: string, fileId: string) => Promise<{ ok: boolean }>;
   // Generic file ops (ADR-026 notes layer: notes-index.json + note-<id>.json).
   findFileId: (token: string, name: string) => Promise<string | null>;
-  listFiles: (token: string) => Promise<Array<{ id: string; name: string }>>;
+  listFiles: (token: string) => Promise<Array<{ id: string; name: string }> | null>;
   downloadFile: (
     token: string,
     fileId: string,
