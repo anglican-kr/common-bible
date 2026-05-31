@@ -148,19 +148,23 @@ window.appParallels = (() => {
   }
 
   /**
-   * Find the parallel (if any) whose range starts at the given verse number.
+   * Find every parallel whose range starts at the given verse number. Plural
+   * because ADR-027 §2 (개정 2026-05-31) allows range 중첩 — two markers may
+   * legitimately share a start verse (e.g. the outer "5:11-25" and the inner
+   * "5:11-20" both start at v11). Each match renders its own ※ anchor.
    *
    * @param {ReadonlyArray<ChapterParallel> | null | undefined} parallels
    * @param {number} verseNumber
-   * @returns {ChapterParallel | null}
+   * @returns {Array<ChapterParallel>}
    */
-  function findParallelStartingAt(parallels, verseNumber) {
-    if (!parallels || !parallels.length) return null;
+  function findParallelsStartingAt(parallels, verseNumber) {
+    if (!parallels || !parallels.length) return [];
+    const out = [];
     for (const p of parallels) {
       const r = parseRange(p.range);
-      if (r && r.startV === verseNumber) return p;
+      if (r && r.startV === verseNumber) out.push(p);
     }
-    return null;
+    return out;
   }
 
   /**
@@ -243,7 +247,7 @@ window.appParallels = (() => {
     parseRange,
     buildTooltipBody,
     buildParallelAnchor,
-    findParallelStartingAt,
+    findParallelsStartingAt,
     initParallels,
   };
 })();

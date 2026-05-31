@@ -670,10 +670,10 @@ export interface AppParallels {
   } | null;
   buildTooltipBody: (parallel: ChapterParallel) => Array<string | HTMLElement>;
   buildParallelAnchor: (parallel: ChapterParallel) => HTMLElement;
-  findParallelStartingAt: (
+  findParallelsStartingAt: (
     parallels: ReadonlyArray<ChapterParallel> | null | undefined,
     verseNumber: number,
-  ) => ChapterParallel | null;
+  ) => Array<ChapterParallel>;
   initParallels: () => void;
 }
 

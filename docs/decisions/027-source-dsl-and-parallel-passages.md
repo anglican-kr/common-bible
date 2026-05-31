@@ -1,7 +1,7 @@
 # ADR-027: Source markup DSL 위치 잡기 + `<parallel>` element 도입
 
 - 일시: 2026-05-31
-- 상태: 승인됨 — **구현 완료** (2026-05-31, 1.5.x 트랙). 시각은 footnote anchor 패턴 (UI 렌더 §2 개정 2026-05-31 — 초기 배너 안 dev 검증 후 전환). 콘텐츠 단계 — 실제 source/*.md 에 `<parallel>` 마커를 다는 작업 — 은 콘텐츠 자문과 묶여 별도 진행
+- 상태: 승인됨 — **구현 완료** (2026-05-31, 1.5.x 트랙). 시각은 footnote anchor 패턴 (UI 렌더 §2 개정 2026-05-31 — 초기 배너 안 dev 검증 후 전환). range 중첩 허용 (§2 검증 규칙 개정 2026-05-31 — 사무엘하 5장의 큰 단락 + sub-단락 별개 출처 케이스 발견 후). 콘텐츠 단계 — 실제 source/*.md 에 `<parallel>` 마커를 다는 작업 — 은 콘텐츠 자문과 묶여 별도 진행
 - 관련 ADR: ADR-006(운문 segments 포맷), ADR-018(`js/app/views-routing.js` 본문 렌더 위치), ADR-022(인용·주석 + per-parallel tradition), ADR-020(저장소 4분할 — 본 결정도 app·data 두 저장소를 모두 손댐)
 
 > **현재 상태.** 본 ADR 두 결정을 한 묶음으로 다룬다 — (1) `source/*.md` 마크업의 위치 잡기를 markdown + 자체 도메인 DSL 의 혼합으로 명문화, (2) 그 DSL 에 `<parallel>` element 신설. 구현은 후속 단계 — parser.py 의 block 마커 인식 + JSON 스키마 확장 + `js/app/parallels.js`(가칭) 의 단락 배너 렌더 + 데이터 검증 테스트 + 유닛 테스트. Phase 별 일정은 별도 이슈로 분리.
@@ -116,8 +116,8 @@ ADR-022 의 `<cite>` 모델은 NT-OT 짧은 인용에는 잘 맞지만 OT 역사
 - `range` 의 시작 절은 마커 직후 등장하는 첫 `[N]` 과 일치해야 함 (cross-check). 어긋나면 parser ValueError.
 - `range` 끝 절은 같은 장 안에 실재해야 함 (chapter_count 검증).
 - `src` 의 각 항목은 `<cite src>` 와 동일하게 책 약어·장·절 범위 실재 검증.
-- 단락 안에 다시 `<parallel>` 를 두는 nesting 은 금지 (첫 단계만).
-- 한 절이 두 `<parallel>` 단락에 동시 속하는 overlap 은 금지 (validator 가 적발).
+- `<parallel>` 는 self-closing block 마커라 물리적 nesting 은 정의상 불가.
+- **range 중첩 (한 range 가 다른 range 의 부분집합) 은 허용** (2026-05-31 개정) — 큰 단락 + 그 안의 더 구체적 sub-단락이 서로 다른 출처와 병행하는 케이스가 실제 콘텐츠에 흔함. 예: 2사무 5:11-25 가 1역대 14:1-16 과 병행이면서, 그중 5:14-16 만 1역대 3:5-8 과도 별도 병행. 두 marker 가 같은 절에서 시작하는 경우엔 ※ anchor 가 그 절 직전에 둘 다 나란히 렌더됨 (각자 독립 tooltip).
 
 #### JSON 스키마
 

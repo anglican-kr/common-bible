@@ -1146,16 +1146,16 @@ function renderChapter(data, book, opts) {
       }
     }
 
-    // ADR-027 (개정): section-level parallel-passage anchor — render a ※
-    // marker right before the verse whose number matches a parallel's range
-    // start. Click opens a footnote-style tooltip with the parallel range +
-    // clickable source reference (which then opens the cite-sheet).
-    // Visibility tied to the same `body.cites-shown` class as cite chips
-    // (no separate toggle).
+    // ADR-027 (개정 2026-05-31): section-level parallel-passage anchor(s) —
+    // render a ※ marker right before the verse whose number matches a
+    // parallel's range start. Plural — range 중첩 허용 (§2 검증 규칙 개정)
+    // 이라 한 절에서 여러 marker 가 시작할 수 있고, 각자 자기 anchor 가
+    // 나란히 렌더됨 (각 tooltip 독립). 클릭 시 footnote-style tooltip 이
+    // 열리고 본문 안 sourceLink 가 cite-sheet 로 위임. 토글은 `body.cites-shown`.
     if (window.appParallels && data.parallels && data.parallels.length) {
-      const matched = window.appParallels.findParallelStartingAt(data.parallels, v.number);
-      if (matched) {
-        article.appendChild(window.appParallels.buildParallelAnchor(matched));
+      const matched = window.appParallels.findParallelsStartingAt(data.parallels, v.number);
+      for (const p of matched) {
+        article.appendChild(window.appParallels.buildParallelAnchor(p));
       }
     }
 

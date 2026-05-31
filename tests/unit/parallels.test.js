@@ -208,36 +208,48 @@ test("buildParallelAnchor: per-source tradition round-trips via `[전통]` notat
   );
 });
 
-// ── findParallelStartingAt ──────────────────────────────────────────────────
+// ── findParallelsStartingAt ─────────────────────────────────────────────────
 
-test("findParallelStartingAt: matches verse number == range start", () => {
+test("findParallelsStartingAt: matches verse number == range start", () => {
   const { api } = loadParallels();
   const parallels = [
     { src: [{ ref: "2사무 5:1-10" }], range: "11:1-9" },
     { src: [{ ref: "2사무 23:8-39" }], range: "11:10-47" },
   ];
-  jsonEqual(api.findParallelStartingAt(parallels, 1), parallels[0]);
-  jsonEqual(api.findParallelStartingAt(parallels, 10), parallels[1]);
+  jsonEqual(api.findParallelsStartingAt(parallels, 1), [parallels[0]]);
+  jsonEqual(api.findParallelsStartingAt(parallels, 10), [parallels[1]]);
 });
 
-test("findParallelStartingAt: no match → null", () => {
+test("findParallelsStartingAt: no match → empty array", () => {
   const { api } = loadParallels();
   const parallels = [{ src: [{ ref: "2사무 5:1-10" }], range: "11:1-9" }];
-  assert.equal(api.findParallelStartingAt(parallels, 5), null);
+  jsonEqual(api.findParallelsStartingAt(parallels, 5), []);
 });
 
-test("findParallelStartingAt: null/empty parallels → null", () => {
+test("findParallelsStartingAt: null/empty parallels → empty array", () => {
   const { api } = loadParallels();
-  assert.equal(api.findParallelStartingAt(null, 1), null);
-  assert.equal(api.findParallelStartingAt(undefined, 1), null);
-  assert.equal(api.findParallelStartingAt([], 1), null);
+  jsonEqual(api.findParallelsStartingAt(null, 1), []);
+  jsonEqual(api.findParallelsStartingAt(undefined, 1), []);
+  jsonEqual(api.findParallelsStartingAt([], 1), []);
 });
 
-test("findParallelStartingAt: whole-chapter shorthand range='13' matches verse 1", () => {
+test("findParallelsStartingAt: whole-chapter shorthand range='13' matches verse 1", () => {
   const { api } = loadParallels();
   const parallels = [{ src: [{ ref: "2사무 6" }], range: "13" }];
-  jsonEqual(api.findParallelStartingAt(parallels, 1), parallels[0]);
-  assert.equal(api.findParallelStartingAt(parallels, 2), null);
+  jsonEqual(api.findParallelsStartingAt(parallels, 1), [parallels[0]]);
+  jsonEqual(api.findParallelsStartingAt(parallels, 2), []);
+});
+
+test("findParallelsStartingAt: multiple parallels sharing a start verse (range 중첩 허용)", () => {
+  // ADR-027 §2 검증 규칙 개정 2026-05-31: 큰 단락 + sub-단락이 같은 절에서
+  // 시작할 수 있고, 각 marker 가 자기 anchor 를 갖는다.
+  const { api } = loadParallels();
+  const parallels = [
+    { src: [{ ref: "1역대 14:1-16" }], range: "5:11-25" },
+    { src: [{ ref: "1역대 3:5-8, 14:4-7" }], range: "5:11-13" },
+  ];
+  const matches = api.findParallelsStartingAt(parallels, 11);
+  assert.equal(matches.length, 2);
 });
 
 // ── initParallels: anchor click → tooltip ──────────────────────────────────
