@@ -30,12 +30,18 @@ let _unsub = null;
 let _editorId = null;
 /** @type {ReturnType<typeof setTimeout> | null} */
 let _saveTimer = null;
+/** Open bookmark-insert picker nodes ({scrim, sheet}), so teardown can remove them. */
+let _picker = /** @type {{ close: () => void } | null} */ (null);
+/** Day-detail drill-down: the dayKey currently shown, or null on the main list/calendar. */
+let _openDayKey = /** @type {number | null} */ (null);
 function _cleanup() {
   // Cancel the debounced autosave before flushing so a stale timer can't fire
   // later (after the note is reopened) and overwrite newer edits.
   if (_saveTimer) { clearTimeout(_saveTimer); _saveTimer = null; }
   if (_unsub) { _unsub(); _unsub = null; }
   if (_editorId) { store()?.endEditing(); _editorId = null; }
+  if (_picker) { _picker.close(); _picker = null; }
+  _openDayKey = null;
 }
 
 // Current path with any trailing slash stripped — routing treats `/notes` and
@@ -143,7 +149,13 @@ function renderNotesList() {
   // Subscribe *before* the gate early-return so the screen re-renders when the
   // IDB load finishes (init's notify), a sync lands, or a post–sign-in sync
   // flips the connection — otherwise the gate could stick until manual renav.
-  if (s) _unsub = s.onChange(() => { if (_onListPath()) renderNotesList(); });
+  // If the user has drilled into a day view, refresh *that* rather than
+  // bouncing them back to the calendar.
+  if (s) _unsub = s.onChange(() => {
+    if (!_onListPath()) return;
+    if (_openDayKey != null) openDay(_openDayKey, s.listNotes());
+    else renderNotesList();
+  });
   const notes = s ? s.listNotes() : [];
 
   // Drive gate: only when there's nothing to show *and* never connected. If
@@ -363,13 +375,14 @@ function renderWeekView(notes) {
 // Day detail sheet (month-cell tap): that day's notes + "new note on this date".
 /** @param {number} k dayKey @param {Array<Note>} notes */
 function openDay(k, notes) {
+  _openDayKey = k; // so store-driven refreshes keep us in the day view (not the calendar)
   const d = new Date(k);
   const dayNotes = notes.filter((n) => dayKey(n.date) === k);
   clearNode($app);
   setHeader();
   const head = el("div", { className: "notes-head" });
   const back = el("button", { type: "button", className: "notes-new-btn" }, "‹ 달력");
-  back.addEventListener("click", () => renderNotesList());
+  back.addEventListener("click", () => { _openDayKey = null; renderNotesList(); });
   head.appendChild(back);
   $app.appendChild(head);
   $app.appendChild(el("h2", { className: "cal-day-title" }, `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일`));
@@ -463,7 +476,7 @@ function renderNoteEditor(id) {
   const editPane = el("div", { className: "note-edit-pane" });
   const textarea = /** @type {HTMLTextAreaElement} */ (el("textarea", { className: "note-body", placeholder: "마크다운으로 작성…", spellcheck: "false" }));
   textarea.value = note.body;
-  const toolbar = buildToolbar(textarea, () => scheduleSave());
+  const toolbar = buildToolbar(id, textarea, () => scheduleSave());
   editPane.append(textarea, toolbar);
 
   const previewPane = el("div", { className: "note-preview-pane", hidden: true });
@@ -525,10 +538,10 @@ function renderNoteEditor(id) {
 /**
  * Build the formatting toolbar. Each button applies a pure transform from
  * appMarkdown to the textarea, preserving the selection, then triggers save.
- * @param {HTMLTextAreaElement} ta
+ * @param {string} editorId @param {HTMLTextAreaElement} ta
  * @param {() => void} onChange
  */
-function buildToolbar(ta, onChange) {
+function buildToolbar(editorId, ta, onChange) {
   const md = window.appMarkdown;
   const bar = el("div", { className: "note-toolbar", role: "toolbar", "aria-label": "서식" });
   /** @param {(t:{value:string;start:number;end:number}) => {value:string;start:number;end:number}} fn */
@@ -554,7 +567,7 @@ function buildToolbar(ta, onChange) {
       btn("❝", "인용", () => apply((t) => md.toggleLinePrefix(t, "> "))),
       btn("☑", "체크박스", () => apply((t) => md.toggleListItem(t, "task"))),
       btn("🔗", "링크", () => apply((t) => md.insertLink(t))),
-      btn("📑", "북마크 삽입", () => openBookmarkPicker(ta, onChange)),
+      btn("📑", "북마크 삽입", () => openBookmarkPicker(editorId, ta, onChange)),
     );
   }
   return bar;
@@ -585,12 +598,14 @@ function collectVerseBookmarks() {
   return out;
 }
 
-/** @param {HTMLTextAreaElement} ta @param {() => void} onChange */
-function openBookmarkPicker(ta, onChange) {
+/** @param {string} editorId @param {HTMLTextAreaElement} ta @param {() => void} onChange */
+function openBookmarkPicker(editorId, ta, onChange) {
   const bookmarks = collectVerseBookmarks();
   const scrim = el("div", { className: "note-bm-scrim" });
   const sheet = el("div", { className: "note-bm-sheet", role: "dialog", "aria-modal": "true", "aria-label": "북마크 삽입" });
-  const close = () => { scrim.remove(); sheet.remove(); };
+  const close = () => { scrim.remove(); sheet.remove(); if (_picker && _picker.close === close) _picker = null; };
+  // Register so route teardown (appNotes.teardown) can dismiss a left-open sheet.
+  _picker = { close };
   scrim.addEventListener("click", close);
   sheet.appendChild(el("h2", { className: "note-bm-title" }, "북마크 삽입"));
   if (!bookmarks.length) {
@@ -607,7 +622,14 @@ function openBookmarkPicker(ta, onChange) {
       const b = el("button", { type: "button", className: "note-bm-item" }, label);
       b.addEventListener("click", async () => {
         close();
-        await insertBookmarkPassage(ta, bm);
+        const passage = await loadBookmarkPassage(bm);
+        // The chapter fetch is async — bail if the user left/reopened the note
+        // meanwhile, so we never write into a detached editor (stale overwrite).
+        if (!passage || _editorId !== editorId || !ta.isConnected) {
+          if (passage === null) window.announce?.("구절을 불러오지 못했습니다.");
+          return;
+        }
+        insertAtCursor(ta, passage);
         onChange();
       });
       li.appendChild(b);
@@ -622,11 +644,13 @@ function openBookmarkPicker(ta, onChange) {
 }
 
 /**
- * Load the chapter, extract the bookmarked verses' text, and insert a quote +
- * source link at the caret. @param {HTMLTextAreaElement} ta
+ * Load the chapter and build the markdown snippet (blockquote + source link)
+ * for a bookmarked passage. Returns null on failure. The caller inserts it only
+ * after re-checking that the editor is still live (avoids stale overwrites).
  * @param {import("../types").BookmarkTreeBookmark} bm
+ * @returns {Promise<string | null>}
  */
-async function insertBookmarkPassage(ta, bm) {
+async function loadBookmarkPassage(bm) {
   try {
     const data = await window.loadChapter(/** @type {string} */ (bm.bookId), /** @type {number} */ (bm.chapter));
     const text = extractVersesText(data, bm.verseSpec);
@@ -637,9 +661,9 @@ async function insertBookmarkPassage(ta, bm) {
     const quote = text.split("\n").map((l) => (l ? `> ${l}` : ">")).join("\n");
     const path = `/${bm.bookId}/${bm.chapter}${spec ? `/${spec}` : ""}`;
     const cite = `${name} ${bm.chapter}${spec ? `:${spec}` : ""}`;
-    insertAtCursor(ta, `${quote}\n\n[${cite}](${path})\n\n`);
+    return `${quote}\n\n[${cite}](${path})\n\n`;
   } catch {
-    window.announce?.("구절을 불러오지 못했습니다.");
+    return null;
   }
 }
 
