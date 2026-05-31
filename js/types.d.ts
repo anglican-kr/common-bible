@@ -886,6 +886,7 @@ declare global {
       plainText: (src: string) => string;
       wrapSelection: (t: { value: string; start: number; end: number }, marker: string) => { value: string; start: number; end: number };
       toggleLinePrefix: (t: { value: string; start: number; end: number }, prefix: string) => { value: string; start: number; end: number };
+      toggleListItem: (t: { value: string; start: number; end: number }, kind: "bullet" | "task") => { value: string; start: number; end: number };
       insertLink: (t: { value: string; start: number; end: number }) => { value: string; start: number; end: number };
     };
 

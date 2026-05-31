@@ -220,11 +220,42 @@ function insertLink(t) {
   const caret = start + label.length + 3; // inside ()
   return { value: v, start: caret, end: caret };
 }
+
+// Strip any leading list marker (bullet / numbered / task) so list toggles
+// don't collide — e.g. the bullet prefix `- ` is a substring of the task form
+// `- [ ] `, which a plain prefix toggle would mangle into `[ ] item`.
+const _LIST_MARKER = /^\s*(?:[-*+]\s+\[[ xX]\]\s+|[-*+]\s+|\d+\.\s+)/;
+
+/**
+ * Toggle a list-item kind on every selected line. Recognizes the existing list
+ * form, so switching kinds replaces the marker cleanly and toggling the same
+ * kind removes it.
+ * @param {TextSel} t @param {"bullet" | "task"} kind
+ * @returns {TextSel}
+ */
+function toggleListItem(t, kind) {
+  const { value, start, end } = t;
+  const lineStart = value.lastIndexOf("\n", start - 1) + 1;
+  let lineEnd = value.indexOf("\n", end);
+  if (lineEnd === -1) lineEnd = value.length;
+  const lines = value.slice(lineStart, lineEnd).split("\n");
+  const taskRe = /^\s*[-*+]\s+\[[ xX]\]\s+/;
+  const bulletRe = /^\s*[-*+]\s+/;
+  const isKind = (/** @type {string} */ l) =>
+    kind === "task" ? taskRe.test(l) : (bulletRe.test(l) && !taskRe.test(l));
+  const marker = kind === "task" ? "- [ ] " : "- ";
+  const allKind = lines.every(isKind);
+  const next = lines
+    .map((l) => { const stripped = l.replace(_LIST_MARKER, ""); return allKind ? stripped : marker + stripped; })
+    .join("\n");
+  const v = value.slice(0, lineStart) + next + value.slice(lineEnd);
+  return { value: v, start: lineStart, end: lineStart + next.length };
+}
 // ── END MD_TOOLBAR ──
 
 window.appMarkdown = {
   escapeHtml, safeUrl, renderInline, renderMarkdown, plainText,
-  wrapSelection, toggleLinePrefix, insertLink,
+  wrapSelection, toggleLinePrefix, toggleListItem, insertLink,
 };
 
 // ESM module marker (ADR-019). No runtime effect.

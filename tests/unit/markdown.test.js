@@ -119,6 +119,23 @@ test("toggleLinePrefix — applies across every selected line", () => {
   assert.equal(r.value, "- a\n- b");
 });
 
+test("toggleListItem — bullet/task switch cleanly, no checkbox mangling", () => {
+  const { toggleListItem } = load("MD_TOOLBAR");
+  // plain → bullet → plain
+  let r = toggleListItem({ value: "item", start: 0, end: 0 }, "bullet");
+  assert.equal(r.value, "- item");
+  r = toggleListItem({ value: "- item", start: 0, end: 0 }, "bullet");
+  assert.equal(r.value, "item");
+  // plain → task; toggling bullet on a task line converts (no "[ ] item")
+  r = toggleListItem({ value: "todo", start: 0, end: 0 }, "task");
+  assert.equal(r.value, "- [ ] todo");
+  r = toggleListItem({ value: "- [ ] todo", start: 0, end: 0 }, "bullet");
+  assert.equal(r.value, "- todo");
+  // task toggle on a checkbox line removes it cleanly
+  r = toggleListItem({ value: "- [x] done", start: 0, end: 0 }, "task");
+  assert.equal(r.value, "done");
+});
+
 test("insertLink — selection becomes label, caret in url parens", () => {
   const { insertLink } = load("MD_TOOLBAR");
   const r = insertLink({ value: "사랑", start: 0, end: 2 });

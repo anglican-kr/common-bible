@@ -23,12 +23,17 @@ function navigate(p) { window.appViewsRouting?.navigate?.(p); }
 /** Drive sync enabled (connected at least once)? Notes require it. */
 function connected() { return window.driveSync?.isEnabled?.() === true; }
 
-// Per-view teardown: unsubscribe store listener + flush/close any open editor.
+// Per-view teardown: cancel pending autosave + unsubscribe + flush/close editor.
 /** @type {(() => void) | null} */
 let _unsub = null;
 /** @type {string | null} */
 let _editorId = null;
+/** @type {ReturnType<typeof setTimeout> | null} */
+let _saveTimer = null;
 function _cleanup() {
+  // Cancel the debounced autosave before flushing so a stale timer can't fire
+  // later (after the note is reopened) and overwrite newer edits.
+  if (_saveTimer) { clearTimeout(_saveTimer); _saveTimer = null; }
   if (_unsub) { _unsub(); _unsub = null; }
   if (_editorId) { store()?.endEditing(); _editorId = null; }
 }
@@ -166,13 +171,15 @@ function renderNoteEditor(id) {
   $app.appendChild(wrap);
 
   // ── Autosave (debounced) — updateNote only bumps on real content change ──
-  let _t = /** @type {ReturnType<typeof setTimeout> | null} */ (null);
+  // _saveTimer is module-scoped so _cleanup can cancel it on route change: a
+  // stale timer firing after this note is reopened would write the old detached
+  // textarea values and roll back newer edits.
   function scheduleSave() {
-    if (_t) clearTimeout(_t);
-    _t = setTimeout(saveNow, SAVE_DEBOUNCE_MS);
+    if (_saveTimer) clearTimeout(_saveTimer);
+    _saveTimer = setTimeout(saveNow, SAVE_DEBOUNCE_MS);
   }
   function saveNow() {
-    if (_t) { clearTimeout(_t); _t = null; }
+    if (_saveTimer) { clearTimeout(_saveTimer); _saveTimer = null; }
     s.updateNote(id, { title: titleInput.value, body: textarea.value, date: isoToTs(dateInput.value) });
   }
   textarea.addEventListener("input", scheduleSave);
@@ -242,9 +249,9 @@ function buildToolbar(ta, onChange) {
       btn("B", "굵게", () => apply((t) => md.wrapSelection(t, "**"))),
       btn("I", "기울임", () => apply((t) => md.wrapSelection(t, "*"))),
       btn("H", "제목", () => apply((t) => md.toggleLinePrefix(t, "## "))),
-      btn("≣", "목록", () => apply((t) => md.toggleLinePrefix(t, "- "))),
+      btn("≣", "목록", () => apply((t) => md.toggleListItem(t, "bullet"))),
       btn("❝", "인용", () => apply((t) => md.toggleLinePrefix(t, "> "))),
-      btn("☑", "체크박스", () => apply((t) => md.toggleLinePrefix(t, "- [ ] "))),
+      btn("☑", "체크박스", () => apply((t) => md.toggleListItem(t, "task"))),
       btn("🔗", "링크", () => apply((t) => md.insertLink(t))),
     );
   }
