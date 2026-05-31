@@ -5113,3 +5113,135 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 @media (min-width: 769px) {
   .note-mode { margin: 0; }
 }
+
+/* ── Notes: view toggle + overflow (ADR-026 Stage 1b) ── */
+.notes-view-toggle {
+  display: inline-flex; border: 1px solid var(--border);
+  border-radius: 999px; overflow: hidden;
+}
+.notes-view-btn {
+  font-family: inherit; font-size: 0.8rem; padding: 0.3rem 0.7rem;
+  background: none; border: none; color: var(--text-secondary); cursor: pointer;
+}
+.notes-view-btn.active { background: var(--accent); color: var(--bg); }
+
+.notes-overflow { position: relative; margin-left: auto; }
+.notes-overflow-btn {
+  font-size: 1.2rem; line-height: 1; min-width: 2.2rem; min-height: 2.2rem;
+  background: none; border: none; color: var(--text-secondary); cursor: pointer;
+  border-radius: var(--radius);
+}
+.notes-overflow-menu {
+  position: absolute; right: 0; top: 100%; z-index: 20;
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius); box-shadow: var(--shadow);
+  min-width: 12rem; padding: 0.3rem; display: flex; flex-direction: column;
+}
+.notes-overflow-menu[hidden] { display: none; }
+.notes-overflow-item {
+  font-family: inherit; font-size: 0.9rem; text-align: left;
+  padding: 0.55rem 0.7rem; background: none; border: none;
+  color: var(--text); cursor: pointer; border-radius: 6px;
+}
+.notes-overflow-item:hover { background: color-mix(in srgb, var(--text) 6%, transparent); }
+
+/* ── Calendar nav (shared month/week) ── */
+.cal-nav {
+  display: flex; align-items: center; gap: 0.5rem;
+  margin: 0.5rem 0 1rem;
+}
+.cal-nav-btn {
+  font-size: 1.3rem; line-height: 1; min-width: 2.2rem; min-height: 2.2rem;
+  background: none; border: 1px solid var(--border); border-radius: var(--radius);
+  color: var(--text); cursor: pointer;
+}
+.cal-title { font-weight: 700; min-width: 7rem; text-align: center; }
+.cal-today-btn {
+  margin-left: auto; font-family: inherit; font-size: 0.85rem;
+  padding: 0.35rem 0.8rem; background: none;
+  border: 1px solid var(--border); border-radius: 999px;
+  color: var(--text-secondary); cursor: pointer;
+}
+
+/* ── Month grid ── */
+.cal-grid {
+  display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px;
+}
+.cal-weekday {
+  text-align: center; font-size: 0.75rem; color: var(--text-secondary);
+  padding: 0.3rem 0;
+}
+.cal-cell {
+  position: relative; aspect-ratio: 1 / 1;
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+  gap: 0.15rem; padding: 0.35rem 0.2rem;
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: 6px; color: var(--text); cursor: pointer;
+  font-family: inherit;
+}
+.cal-cell.cal-out { color: var(--text-secondary); opacity: 0.5; }
+.cal-cell.cal-today { border-color: var(--accent); border-width: 2px; }
+.cal-date { font-size: 0.85rem; }
+.cal-dot {
+  min-width: 1.1rem; height: 1.1rem; line-height: 1.1rem;
+  font-size: 0.65rem; text-align: center;
+  background: var(--accent); color: var(--bg); border-radius: 999px;
+}
+
+/* ── Week list ── */
+.cal-week { display: flex; flex-direction: column; gap: 2px; }
+.cal-week-row {
+  display: flex; align-items: flex-start; gap: 0.6rem;
+  padding: 0.5rem 0.4rem; border-bottom: 1px solid var(--border);
+}
+.cal-week-row.cal-today { background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.cal-week-day {
+  flex: 0 0 3rem; font-size: 0.85rem; color: var(--text-secondary); padding-top: 0.2rem;
+}
+.cal-week-items { flex: 1 1 auto; display: flex; flex-direction: column; gap: 0.25rem; }
+.cal-week-note {
+  text-align: left; font-family: inherit; font-size: 0.9rem;
+  padding: 0.35rem 0.5rem; background: var(--bg-card);
+  border: 1px solid var(--border); border-radius: 6px; color: var(--text); cursor: pointer;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.cal-week-add {
+  flex: 0 0 auto; font-size: 1.1rem; line-height: 1;
+  min-width: 2rem; min-height: 2rem; background: none;
+  border: 1px dashed var(--border); border-radius: 6px;
+  color: var(--text-secondary); cursor: pointer;
+}
+
+/* ── Day detail ── */
+.cal-day-title { margin: 0.5rem 0 1rem; }
+.cal-day-add { margin-top: 1rem; }
+
+/* ── Notes: bookmark insert picker (ADR-026 §4.5) ── */
+.note-bm-scrim {
+  position: fixed; inset: 0; z-index: 40;
+  background: rgba(0, 0, 0, 0.4);
+}
+.note-bm-sheet {
+  position: fixed; left: 50%; bottom: 0; transform: translateX(-50%);
+  z-index: 41; width: 100%; max-width: var(--max-width);
+  max-height: 70vh; overflow-y: auto;
+  background: var(--bg-card);
+  border-radius: var(--radius) var(--radius) 0 0;
+  padding: 1.2rem 1.2rem max(1.2rem, env(safe-area-inset-bottom));
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.25);
+}
+.note-bm-title { margin: 0 0 1rem; font-size: 1.1rem; }
+.note-bm-list { list-style: none; margin: 0 0 1rem; padding: 0; }
+.note-bm-item {
+  width: 100%; text-align: left; font-family: inherit; font-size: 0.95rem;
+  padding: 0.7rem 0.6rem; background: none; border: none;
+  border-bottom: 1px solid var(--border); color: var(--text); cursor: pointer;
+}
+.note-bm-item:hover { background: color-mix(in srgb, var(--text) 5%, transparent); }
+
+@media (min-width: 769px) {
+  .note-bm-sheet {
+    bottom: auto; top: 50%; transform: translate(-50%, -50%);
+    border-radius: var(--radius); max-width: 420px;
+  }
+}
