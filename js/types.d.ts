@@ -870,6 +870,17 @@ declare global {
     };
     // Notes storage + Drive-primary sync (ADR-026, js/sync/notes-store.js).
     notesStore?: NotesStore;
+    // Markdown engine for notes (ADR-026, js/app/markdown.js).
+    appMarkdown?: {
+      escapeHtml: (s: string) => string;
+      safeUrl: (url: string) => { href: string; external: boolean } | null;
+      renderInline: (text: string) => string;
+      renderMarkdown: (src: string) => string;
+      plainText: (src: string) => string;
+      wrapSelection: (t: { value: string; start: number; end: number }, marker: string) => { value: string; start: number; end: number };
+      toggleLinePrefix: (t: { value: string; start: number; end: number }, prefix: string) => { value: string; start: number; end: number };
+      insertLink: (t: { value: string; start: number; end: number }) => { value: string; start: number; end: number };
+    };
 
     // Phase 7a constants (also declared as bare globals above for app.js's
     // Phase 7b territory). Window assignment is what views-routing.js does.
