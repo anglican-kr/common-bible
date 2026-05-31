@@ -93,6 +93,66 @@ export interface LastReadValue {
 
 // ── Sync document (canonical shape, both local and remote) ───────────────────
 
+// ── Notes (ADR-026) ──────────────────────────────────────────────────────────
+// Drive-primary, per-note files + a lightweight index. Change detection uses a
+// content hash (equality) + updatedAt (LWW ordering).
+
+export interface NoteRef {
+  bookId: string;
+  chapter: number;
+  verseSpec?: string;
+}
+
+export interface Note {
+  id: string;
+  type: "note";
+  title: string;
+  body: string;           // markdown source
+  date: number;           // day the note is *about* (editable; default = createdAt). Calendar key.
+  refs?: NoteRef[];
+  createdAt: number;
+  updatedAt: number;      // modification time — bumped only on real content change
+}
+
+// Lightweight per-note metadata kept in notes-index.json (no body).
+export interface NoteIndexEntry {
+  title: string;
+  date: number;
+  createdAt: number;
+  updatedAt: number;
+  hash: string;           // content hash (title+body+date+refs)
+}
+
+// Drive notes-index.json shape.
+export interface NotesIndex {
+  schemaVersion: 1;
+  deviceId: string;
+  notes: { [id: string]: NoteIndexEntry };
+  tombstones: { [id: string]: number };
+}
+
+export type NotesSyncStatus =
+  | "synced" | "pending" | "syncing" | "offline" | "conflict" | "error";
+
+// Public facade (window.notesStore). Owns the IDB cache, note lifecycle /
+// durability, and the Drive notes sync that rides the FSM cycle (B′).
+export interface NotesStore {
+  init: () => Promise<void>;
+  isReady: () => boolean;
+  listNotes: () => Note[];                         // date desc
+  getNote: (id: string) => Note | null;
+  createNote: (init?: Partial<Note>) => Note;      // persisted; returns the note
+  updateNote: (id: string, patch: Partial<Pick<Note, "title" | "body" | "date" | "refs">>) => void;
+  deleteNote: (id: string) => void;
+  // Editor lifecycle: register the live buffer so hidden/pagehide can flush it.
+  beginEditing: (id: string, getBuffer: () => { title: string; body: string }) => void;
+  endEditing: () => void;
+  // Drive sync (called by the state machine after a successful bookmark cycle).
+  syncWithToken: (token: string) => Promise<void>;
+  getStatus: () => NotesSyncStatus;
+  onChange: (cb: () => void) => () => void;         // subscribe; returns unsubscribe
+}
+
 export interface SyncDoc {
   bookmarks: {
     items: { [id: string]: SyncFlatItem };
@@ -261,6 +321,21 @@ export interface SyncTransport {
     opts?: { fileId?: string; ifMatch?: string | null },
   ) => Promise<DriveUploadResult>;
   deleteSyncFile: (token: string, fileId: string) => Promise<{ ok: boolean }>;
+  // Generic file ops (ADR-026 notes layer: notes-index.json + note-<id>.json).
+  findFileId: (token: string, name: string) => Promise<string | null>;
+  listFiles: (token: string) => Promise<Array<{ id: string; name: string }> | null>;
+  downloadFile: (
+    token: string,
+    fileId: string,
+    opts?: { ifNoneMatch?: string | null },
+  ) => Promise<{ doc: any; etag: string | null; status?: number }>;
+  uploadFile: (
+    token: string,
+    name: string,
+    body: unknown,
+    opts?: { fileId?: string; ifMatch?: string | null },
+  ) => Promise<DriveUploadResult>;
+  deleteFile: (token: string, fileId: string) => Promise<{ ok: boolean }>;
 }
 
 // ── Refresh Token Store (Phase 2h 단계 1) ────────────────────────────────────
@@ -793,6 +868,8 @@ declare global {
       onRoute: (path: string) => void;
       routeToTab: (path: string) => "read" | "search" | "bookmarks" | "notes";
     };
+    // Notes storage + Drive-primary sync (ADR-026, js/sync/notes-store.js).
+    notesStore?: NotesStore;
 
     // Phase 7a constants (also declared as bare globals above for app.js's
     // Phase 7b territory). Window assignment is what views-routing.js does.

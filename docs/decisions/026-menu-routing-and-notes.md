@@ -203,3 +203,45 @@ Note {
 - 관련 ADR 개정: 024(모바일 헤더에서 검색·북마크 빠짐), 025(elevation 영향), 010·011(북마크
   화면화), 020·011(notes.json 추가), 005(연합 검색).
 - 데이터·서비스워커·기존 라우트 경로는 불변.
+
+## 개정 (2026-05-31) — 노트 저장: 단일 notes.json → per-note 파일 + 인덱스, updatedAt+hash, 내구성 (Stage 1a-①)
+
+§4.1 의 "별도 Drive 파일 `notes.json`" 을 다음으로 대체한다. 노트는 장문이라 콘텐츠
+해시·바이트·행 단위 묶음이 맞지 않고, **수정 시각**과 **노트 단위 분리**가 더 중요하다.
+
+> **Drive 저장 = per-note 파일 + 가벼운 인덱스 (§4.1 의 단일 notes.json 대체).**
+> appDataFolder 에 인덱스 1개 + 노트별 파일 N개로 둔다.
+> - `notes-index.json` — `{ schemaVersion:1, deviceId, notes:{ <id>: {title,date,createdAt,updatedAt,hash} }, tombstones:{ <id>: ts } }`. 본문 없음(작음). 목록·캘린더 렌더와 변경 감지는 인덱스만으로.
+> - `note-<id>.json` — 노트 1개 전체. 노트 1개 편집 시 그 파일 + 작은 인덱스만 업로드(다른 본문 불변).
+
+> **변경 감지 = `updatedAt`(편집 시각) + 콘텐츠 `hash` 조합.** 크기/바이트 대조는 쓰지
+> 않는다. `updatedAt` 은 **내용이 실제로 바뀔 때만** 갱신(열람·무변경 자동저장은 갱신 안
+> 함). `hash`(정규화된 title+body+date+refs, 가벼운 동기 cyrb53)는 **동일성/변경 판정**,
+> `updatedAt` 은 진짜 충돌 시 **LWW 순서**. 노트별 `syncedHash`/`syncedUpdatedAt` 워터마크로
+> 더티 판정. 둘 다 변경됐어도 hash 가 같으면 충돌 아님(수렴); 다르면 LWW 승자 + 패자를
+> "제목 (사본)" 으로 새 id 복제(글 유실 방지). 순수 `planSync`/`pickConflictWinner` 로
+> 유닛 테스트(`tests/unit/notes-store.test.js`).
+
+> **해시 비용 최소화 — 자동저장에서 분리.** 자동저장은 IDB 저장 + dirty 표시만(해시 X).
+> 해시는 **동기화 시점에 더티 노트에 1회**만. → 해시 횟수 = 동기화 빈도(키 입력과 무관).
+
+> **로컬 = 폐기 가능 IDB 캐시(`common-bible-notes`).** 스토어 `notes`/`tombstones`/`synced`/
+> `meta`. iOS 가 캐시를 축출해도 Drive 인덱스+파일에서 복원(무손실).
+
+> **내구성 4겹 (앱/브라우저 종료·OS 메모리 회수 대비).** ①짧은 디바운스+blur → IDB,
+> ②`visibilitychange→hidden`·`pagehide` 시 활성 에디터 버퍼 즉시 flush(iOS 에선
+> `beforeunload` 불신), ③같은 핸들러에서 **동기 localStorage 드래프트** 1건(IDB 비동기 쓰기
+> 완료 전 종료 대비 보증), ④재실행 시 드래프트가 더 최신이면 복원. **생명주기/드래프트/복원은
+> `notes-store` 가 소유**하고, 에디터는 `beginEditing(id, getBuffer)`/`endEditing()` 로 버퍼
+> 게터만 등록한다(lifecycle 이벤트는 안 다룸).
+
+> **동기화 연동 = B′ 하이브리드.** 노트는 자체 재시도 루프를 두지 않고 **북마크 FSM 사이클에
+> 올라탄다**: `state-machine.js` 가 sync.json 사이클 성공(SYNC_DONE) 직후 `window.notesStore?.
+> syncWithToken(_token)` 훅 한 줄로 노트 왕복(인덱스 대조 + 바뀐 노트 파일만)을 fire-and-forget
+> 호출. 무거운 인증·온라인·재시도 상태는 FSM 한 곳, notes-store 는 UI 용 가벼운 status
+> (`synced/pending/syncing/offline/conflict/error`, 단일 `_setStatus`)만 소유. `transport.js`
+> 의 파일 ops 는 파일명 파라미터화(`findFileId`/`listFiles`/`downloadFile`/`uploadFile`/
+> `deleteFile`)하고 기존 `*SyncFile` 은 wrapper 로 유지.
+
+이로써 §8 "영향" 의 `transport.js(notes.json 파일 ops)" 는 per-note + 인덱스로, 유닛 테스트의
+"노트 스토어 머지" 는 `notes-store.test.js`(hash/title/planSync/충돌)로 구체화된다.

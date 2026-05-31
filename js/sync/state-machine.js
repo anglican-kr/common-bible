@@ -808,6 +808,11 @@ function createSyncMachine({ onStateChange } = {}) {
           // immediately after every fresh token.
           localStorage.setItem(REDIRECT_ATTEMPTS_KEY, "0");
           _transition(S.IDLE, {}, event); // all counts reset, timer cleared
+          // ADR-026 (B′): notes sync rides the bookmark cycle. A successful
+          // cycle proves the token is valid and we're online, so fire the
+          // notes round-trip (per-note files + index). Fire-and-forget — a
+          // notes failure must never fail or block this FSM.
+          if (_token) window.notesStore?.syncWithToken?.(_token);
         } else if (event.type === "SYNC_FAIL") {
           _handleSyncFail(event);
         } else if (event.type === "DISABLE") {

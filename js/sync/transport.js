@@ -385,15 +385,16 @@ async function driveFetch(path, { token, method = "GET", body, headers = {}, ifM
   };
 }
 
-// Returns the file ID of appDataFolder/sync.json, or null if not found.
+// Returns the file ID of an appDataFolder file by name, or null if not found.
 /**
  * @param {string} token
+ * @param {string} name
  * @returns {Promise<string | null>}
  */
-async function findSyncFileId(token) {
+async function findFileId(token, name) {
   try {
     const { res, ok } = await driveFetch(
-      "/files?spaces=appDataFolder&fields=files(id)&q=name='sync.json'",
+      `/files?spaces=appDataFolder&fields=files(id)&q=name='${encodeURIComponent(name)}'`,
       { token }
     );
     if (!ok) return null;
@@ -403,24 +404,49 @@ async function findSyncFileId(token) {
   } catch { return null; }
 }
 
-// Returns { doc, etag, status } or { doc: null, etag: null, status } on any
-// failure. When `ifNoneMatch` is supplied, sends an `If-None-Match` header so
-// Drive returns 304 with no body if the resource is unchanged — the steady-
-// state fast path lets the state machine skip the merge-and-upload work.
+// List all appDataFolder files (id + name). Used by the notes layer (ADR-026)
+// to reconcile per-note `note-<id>.json` files + the `notes-index.json`.
+// Returns `[]` for a genuinely empty folder but `null` on any failure, so the
+// caller can distinguish "no files" from "couldn't list" — treating a transient
+// listing error as empty would plan mass uploads against still-present remotes.
+/**
+ * @param {string} token
+ * @returns {Promise<Array<{ id: string; name: string }> | null>}
+ */
+async function listFiles(token) {
+  try {
+    /** @type {Array<{ id: string; name: string }>} */
+    const all = [];
+    let pageToken = "";
+    do {
+      const url = "/files?spaces=appDataFolder&fields=nextPageToken,files(id,name)&pageSize=1000"
+        + (pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : "");
+      const { res, ok } = await driveFetch(url, { token });
+      if (!ok) return null;
+      let data;
+      try { data = await res.json(); } catch { return null; }
+      if (Array.isArray(data.files)) all.push(...data.files);
+      pageToken = data.nextPageToken || "";
+    } while (pageToken);
+    return all;
+  } catch { return null; }
+}
+
+// Returns { doc, etag, status } or nulls on failure. Generic over any JSON
+// file (sync.json, notes-index.json, note-<id>.json). When `ifNoneMatch` is
+// supplied, sends If-None-Match so Drive returns 304 with no body if unchanged.
 /**
  * @param {string} token
  * @param {string} fileId
  * @param {{ ifNoneMatch?: string | null }} [opts]
  * @returns {Promise<DriveDownloadResult>}
  */
-async function downloadSyncFile(token, fileId, { ifNoneMatch } = {}) {
+async function downloadFile(token, fileId, { ifNoneMatch } = {}) {
   try {
     /** @type {Record<string, string>} */
     const headers = {};
     if (ifNoneMatch) headers["If-None-Match"] = ifNoneMatch;
     const { res, ok, etag, status } = await driveFetch(`/files/${fileId}?alt=media`, { token, headers });
-    // 304 Not Modified: ok is false (only 2xx is "ok"), no body to parse.
-    // Caller relies on the cached etag — we don't echo it back here.
     if (status === 304) return { doc: null, etag: null, status: 304 };
     if (!ok) return { doc: null, etag: null, status };
     let doc;
@@ -429,15 +455,16 @@ async function downloadSyncFile(token, fileId, { ifNoneMatch } = {}) {
   } catch { return { doc: null, etag: null, status: 0 }; }
 }
 
-// Returns { ok, status, etag }. Never throws.
-// Pass ifMatch to send If-Match header; Drive returns 412 if ETag mismatches.
+// Generic upload. Create (multipart w/ name) when no fileId, else PATCH media.
+// `name` is only used on the create path. Returns { ok, status, etag }.
 /**
  * @param {string} token
- * @param {SyncPayload} body
+ * @param {string} name
+ * @param {unknown} body
  * @param {{ fileId?: string; ifMatch?: string | null }} [opts]
  * @returns {Promise<DriveUploadResult>}
  */
-async function uploadSyncFile(token, body, { fileId, ifMatch } = {}) {
+async function uploadFile(token, name, body, { fileId, ifMatch } = {}) {
   const bodyStr = JSON.stringify(body);
   try {
     /** @type {Response} */
@@ -458,7 +485,7 @@ async function uploadSyncFile(token, body, { fileId, ifMatch } = {}) {
       });
       etag = res.headers.get("ETag");
     } else {
-      const meta = JSON.stringify({ name: "sync.json", parents: ["appDataFolder"] });
+      const meta = JSON.stringify({ name, parents: ["appDataFolder"] });
       const form = new FormData();
       form.append("metadata", new Blob([meta], { type: "application/json" }));
       form.append("file", new Blob([bodyStr], { type: "application/json" }));
@@ -473,18 +500,44 @@ async function uploadSyncFile(token, body, { fileId, ifMatch } = {}) {
   } catch { return { ok: false, status: 0, etag: null }; }
 }
 
-// Delete the sync file. Returns { ok }.
+// Delete a Drive file by ID. Returns { ok }.
 /**
  * @param {string} token
  * @param {string} fileId
  * @returns {Promise<{ ok: boolean }>}
  */
-async function deleteSyncFile(token, fileId) {
+async function deleteFile(token, fileId) {
   try {
     const { ok } = await driveFetch(`/files/${fileId}`, { token, method: "DELETE" });
     return { ok };
   } catch { return { ok: false }; }
 }
+
+// ── sync.json wrappers (bookmarks/settings, ADR-011) ──
+// Thin name-bound wrappers over the generic file ops so the state machine and
+// transport.test.js keep their stable surface.
+
+/** @param {string} token @returns {Promise<string | null>} */
+function findSyncFileId(token) { return findFileId(token, "sync.json"); }
+
+/**
+ * @param {string} token
+ * @param {string} fileId
+ * @param {{ ifNoneMatch?: string | null }} [opts]
+ * @returns {Promise<DriveDownloadResult>}
+ */
+function downloadSyncFile(token, fileId, opts) { return downloadFile(token, fileId, opts); }
+
+/**
+ * @param {string} token
+ * @param {SyncPayload} body
+ * @param {{ fileId?: string; ifMatch?: string | null }} [opts]
+ * @returns {Promise<DriveUploadResult>}
+ */
+function uploadSyncFile(token, body, opts) { return uploadFile(token, "sync.json", body, opts); }
+
+/** @param {string} token @param {string} fileId @returns {Promise<{ ok: boolean }>} */
+function deleteSyncFile(token, fileId) { return deleteFile(token, fileId); }
 
 window.syncTransport = {
   DRIVE_HOSTNAMES,
@@ -501,6 +554,12 @@ window.syncTransport = {
   downloadSyncFile,
   uploadSyncFile,
   deleteSyncFile,
+  // Generic file ops (ADR-026 notes layer).
+  findFileId,
+  listFiles,
+  downloadFile,
+  uploadFile,
+  deleteFile,
 };
 
 // ESM module marker (ADR-019). No runtime effect; signals TypeScript that
