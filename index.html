@@ -142,6 +142,25 @@
     </div>
   </noscript>
   <div id="audio-bar" role="region" aria-label="오디오 플레이어" hidden></div>
+  <!-- ── Bottom Navigation (mobile only, ADR-026) ── -->
+  <nav id="bottom-nav" aria-label="주요 메뉴">
+    <button type="button" class="bnav-item" data-tab="read" aria-label="읽기">
+      <svg class="bnav-icon" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M21 5c-1.11-.35-2.33-.5-3.5-.5-1.95 0-4.05.4-5.5 1.5-1.45-1.1-3.55-1.5-5.5-1.5S2.45 4.9 1 6v14.65c0 .25.25.5.5.5.1 0 .15-.05.25-.05C3.1 20.45 5.05 20 6.5 20c1.95 0 4.05.4 5.5 1.5 1.35-.85 3.8-1.5 5.5-1.5 1.65 0 3.35.3 4.75 1.05.1.05.15.05.25.05.25 0 .5-.25.5-.5V6c-.6-.45-1.25-.75-2-1zm0 13.5c-1.1-.35-2.3-.5-3.5-.5-1.7 0-4.15.65-5.5 1.5V8c1.35-.85 3.8-1.5 5.5-1.5 1.2 0 2.4.15 3.5.5v11.5z"/></svg>
+      <span class="bnav-label">읽기</span>
+    </button>
+    <button type="button" class="bnav-item" data-tab="search" aria-label="검색">
+      <svg class="bnav-icon" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+      <span class="bnav-label">검색</span>
+    </button>
+    <button type="button" class="bnav-item" data-tab="bookmarks" aria-label="북마크">
+      <svg class="bnav-icon" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17 3H7c-1.1 0-1.99.9-1.99 2L5 21l7-3 7 3V5c0-1.1-.9-2-2-2zm0 15l-5-2.18L7 18V5h10v13z"/></svg>
+      <span class="bnav-label">북마크</span>
+    </button>
+    <button type="button" class="bnav-item" data-tab="notes" aria-label="노트">
+      <svg class="bnav-icon" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 10h11v2H3v-2zm0-2h11V6H3v2zm0 8h7v-2H3v2zm12.84-4.13.71-.71c.39-.39 1.02-.39 1.41 0l.71.71c.39.39.39 1.02 0 1.41l-.71.71-2.12-2.12zm-.71.71-5.13 5.13V21h2.12l5.13-5.13-2.12-2.12z"/></svg>
+      <span class="bnav-label">노트</span>
+    </button>
+  </nav>
   <button id="search-fab" type="button" aria-label="검색">
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
   </button>
@@ -312,6 +331,7 @@
   </aside>
   <script type="module" src="/js/app/citations.js"></script>
   <script type="module" src="/js/app/views-routing.js"></script>
+  <script type="module" src="/js/app/bottom-nav.js"></script>
   <script type="module" src="/js/app.js"></script>
 </body>
 </html>
