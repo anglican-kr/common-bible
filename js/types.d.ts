@@ -144,6 +144,9 @@ export interface NotesStore {
   createNote: (init?: Partial<Note>) => Note;      // persisted; returns the note
   updateNote: (id: string, patch: Partial<Pick<Note, "title" | "body" | "date" | "refs">>) => void;
   deleteNote: (id: string) => void;
+  // Backup import (ADR-026 §4.6): "merge" adds under fresh ids, "overwrite"
+  // tombstones current notes first. Returns count imported.
+  importNotes: (incoming: Array<Partial<Note>>, mode: "merge" | "overwrite") => number;
   // Editor lifecycle: register the live buffer so hidden/pagehide can flush it.
   beginEditing: (id: string, getBuffer: () => { title: string; body: string; date: number }) => void;
   endEditing: () => void;
