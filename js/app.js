@@ -142,6 +142,8 @@ async function clearAllCaches() {
 // Apply saved settings on load
 window.syncStoreV2?.migrateLegacyIfNeeded();
 window.syncStoreV2?.sweepTombstones();
+// Load the notes IDB cache into memory + restore any durability draft (ADR-026).
+window.notesStore?.init();
 applyFontSize(loadFontSize());
 applyTheme(loadTheme());
 applyColorScheme(loadColorScheme());
