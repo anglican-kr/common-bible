@@ -86,9 +86,17 @@ function goTab(tab) {
     case "search":
       window.appSearch?.openSearchSheet?.(""); // interim — see header note
       break;
-    case "bookmarks":
-      window.appBookmark?.openBookmarkDrawer?.(); // interim — see header note
+    case "bookmarks": {
+      // Interim (Stage 0): legacy bookmark drawer. → /bookmarks route in Stage 3.
+      // openBookmarkDrawer(bookId, chapter) guards undefined (chapter-only
+      // controls just disable), so a context-free call is safe. When the user
+      // taps 북마크 while reading a chapter, pass that context so "save this
+      // chapter" / "select verses" stay enabled.
+      const p = window.appViewsRouting?.parsePath?.();
+      if (p && p.view === "chapter") window.appBookmark?.openBookmarkDrawer?.(p.bookId, p.chapter);
+      else window.appBookmark?.openBookmarkDrawer?.();
       break;
+    }
   }
 }
 
