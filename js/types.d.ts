@@ -870,6 +870,12 @@ declare global {
     };
     // Notes storage + Drive-primary sync (ADR-026, js/sync/notes-store.js).
     notesStore?: NotesStore;
+    // Notes UI — /notes list + /notes/:id editor (ADR-026, js/app/notes.js).
+    appNotes?: {
+      renderNotesList: () => void;
+      renderNoteEditor: (id: string) => void;
+      createAndOpen: (init?: Partial<Note>) => void;
+    };
     // Markdown engine for notes (ADR-026, js/app/markdown.js).
     appMarkdown?: {
       escapeHtml: (s: string) => string;

@@ -1737,9 +1737,15 @@ async function route() {
       return;
     }
 
-    // Notes (ADR-026). Stage 0 placeholder — list/calendar + editor in Stage 1.
+    // Notes (ADR-026). /notes list + /notes/:id editor (js/app/notes.js).
     if (view === "notes") {
-      renderNotesPlaceholder();
+      const noteId = /** @type {any} */ (parsed).noteId;
+      if (window.appNotes) {
+        if (noteId) window.appNotes.renderNoteEditor(noteId);
+        else window.appNotes.renderNotesList();
+      } else {
+        renderNotesPlaceholder(); // fallback if the UI module failed to load
+      }
       dismissLaunchScreen();
       updatePageMeta({ title: "노트", description: "내 노트" });
       trackPageView();
