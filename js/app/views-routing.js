@@ -1153,7 +1153,11 @@ function renderChapter(data, book, opts) {
     // 나란히 렌더됨 (각 tooltip 독립). 클릭 시 footnote-style tooltip 이
     // 열리고 본문 안 sourceLink 가 cite-sheet 로 위임. 토글은 `body.cites-shown`.
     if (window.appParallels && data.parallels && data.parallels.length) {
-      const matched = window.appParallels.findParallelsStartingAt(data.parallels, v.number);
+      // Pass chapter so a range whose chapter prefix belongs elsewhere (rare —
+      // parser cross-check normally catches it) cannot stray-render here.
+      const matched = window.appParallels.findParallelsStartingAt(
+        data.parallels, v.number, data.chapter,
+      );
       for (const p of matched) {
         article.appendChild(window.appParallels.buildParallelAnchor(p));
       }

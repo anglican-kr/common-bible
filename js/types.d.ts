@@ -673,6 +673,7 @@ export interface AppParallels {
   findParallelsStartingAt: (
     parallels: ReadonlyArray<ChapterParallel> | null | undefined,
     verseNumber: number,
+    currentChapter?: number,
   ) => Array<ChapterParallel>;
   initParallels: () => void;
 }
