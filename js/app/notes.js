@@ -38,6 +38,11 @@ function _cleanup() {
   if (_editorId) { store()?.endEditing(); _editorId = null; }
 }
 
+// Current path with any trailing slash stripped — routing treats `/notes` and
+// `/notes/` as the same view, so onChange refresh checks must too.
+function _path() { return location.pathname.replace(/\/+$/, "") || "/"; }
+function _onListPath() { return _path() === "/notes"; }
+
 /** @param {number} pad @returns {string} */
 function _2(pad) { return String(pad).padStart(2, "0"); }
 /** @param {number} ts @returns {string} ISO yyyy-mm-dd (local) */
@@ -70,7 +75,7 @@ function renderNotesList() {
   // Subscribe *before* the gate early-return so the screen re-renders when the
   // IDB load finishes (init's notify), a sync lands, or a post–sign-in sync
   // flips the connection — otherwise the gate could stick until manual renav.
-  if (s) _unsub = s.onChange(() => { if (location.pathname === "/notes") renderNotesList(); });
+  if (s) _unsub = s.onChange(() => { if (_onListPath()) renderNotesList(); });
   const notes = s ? s.listNotes() : [];
 
   // Drive gate: only when there's nothing to show *and* never connected. If
@@ -150,7 +155,7 @@ function renderNoteEditor(id) {
       setHeader();
       clearNode($app);
       $app.appendChild(el("div", { className: "notes-empty" }, el("p", {}, "불러오는 중…")));
-      _unsub = s.onChange(() => { if (location.pathname === `/notes/${id}`) renderNoteEditor(id); });
+      _unsub = s.onChange(() => { if (_path() === `/notes/${id}`) renderNoteEditor(id); });
       return;
     }
     navigate("/notes");
