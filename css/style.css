@@ -2324,40 +2324,62 @@ body.cites-shown .cite-chip--poetry {
   text-align: left;
 }
 
-/* ── ADR-027 parallel-passage banner ──────────────────────────────────────
- * Block-level chip rendered above the first verse of a parallel section.
- * Visibility tied to body.cites-shown (same toggle as cite chips — they're
- * the same UI category "인용·참조"). Clicking opens the existing cite-sheet
- * via appParallels' delegated handler.
+/* ── ADR-027 parallel-passage anchor (footnote pattern) ──────────────────
+ * A ※ marker rendered before the first verse of each parallel section.
+ * Visually mirrors `.note-anchor--variant` (same glyph, same superscript
+ * treatment) so readers see one consistent "this verse has supplementary
+ * info" cue. Clicking opens a tooltip (via citations.openNoteTooltip) whose
+ * body shows `range — sourceLink 참조`; the source link inside the tooltip
+ * (`.parallel-tooltip-ref`) opens the cite-sheet.
  *
- * Visual: small, accent-tinted, left band so it reads as a section header
- * without competing with verse body weight.
+ * Visibility is tied to body.cites-shown — same toggle as cite chips and
+ * notes (single "인용 본문·주석" setting governs all three).
  */
-.parallel-banner {
+.parallel-anchor {
   display: none;
 }
 
-body.cites-shown .parallel-banner {
-  display: block;
-  margin: 0.6em 0 0.4em;
-  padding: 0.25em 0.6em 0.25em 0.7em;
-  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
-  font-size: 0.82em;
-  line-height: 1.4;
-  color: var(--text-secondary);
-  background: color-mix(in srgb, var(--accent) 7%, transparent);
-  border-left: 3px solid color-mix(in srgb, var(--accent) 45%, transparent);
-  border-radius: 2px;
+body.cites-shown .parallel-anchor {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  font-family: inherit;
+  font-size: 0.65em;
+  line-height: 0;
+  vertical-align: super;
+  background: transparent;
+  border: none;
+  color: var(--accent);
   cursor: pointer;
-  /* Banner is its own block — never inherits the verse number ::before
-     pseudo-element that .verse uses. */
+  text-decoration: none;
 }
 
-body.cites-shown .parallel-banner:hover,
-body.cites-shown .parallel-banner:focus-visible {
-  color: var(--text);
-  background: color-mix(in srgb, var(--accent) 14%, transparent);
-  border-left-color: var(--accent);
+body.cites-shown .parallel-anchor:hover,
+body.cites-shown .parallel-anchor:focus-visible {
+  color: var(--accent-light);
+  outline: none;
+}
+
+/* Clickable source reference inside the parallel tooltip body. Styled as a
+   subtle inline link so it stands apart from the surrounding tooltip text
+   (e.g. "5:1-10 — [1역대 11:1-9] 참조" — the bracket portion is the link). */
+.parallel-tooltip-ref {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--accent);
+  background: transparent;
+  border: none;
+  text-decoration: underline dotted;
+  text-underline-offset: 0.2em;
+  text-decoration-thickness: 1px;
+  cursor: pointer;
+}
+
+.parallel-tooltip-ref:hover,
+.parallel-tooltip-ref:focus-visible {
+  text-decoration-style: solid;
   outline: none;
 }
 

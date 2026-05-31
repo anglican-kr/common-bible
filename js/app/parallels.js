@@ -1,23 +1,29 @@
 "use strict";
 // @ts-check
 
-// ADR-027 chapter-level parallel-passage banner.
+// ADR-027 chapter-level parallel-passage marker — footnote-anchor rendering.
 //
 // A `<parallel src="2사무 5:1-10" range="11:1-9"/>` marker in source markdown
 // becomes a `ChapterParallel` entry in `chapter.parallels` (data pipeline,
-// ADR-027 Phase 1). This module renders a small banner immediately before the
-// first verse of each parallel's `range`. Clicking the banner opens the
-// existing cite-sheet (`appCitations.openCiteSheet`) so the parallel passage(s)
-// load in the same sheet UI that cite chips use — one infrastructure, two
-// entry points.
+// ADR-027 Phase 1). This module renders a small `※` anchor at the start of
+// the first verse of each parallel's `range`. Clicking the anchor opens a
+// note-style tooltip whose body shows the parallel range + clickable source
+// reference(s); clicking a reference opens the existing cite-sheet
+// (`appCitations.openCiteSheet`) to load the parallel passage(s).
+//
+// ADR-027 §2 개정 (post dev-review, 2026-05-31): the initial banner design
+// was replaced with this footnote-anchor pattern after dev review showed
+// banners weren't communicating per-paragraph parallels well in chapters
+// with multiple parallel sections. The footnote pattern reuses the existing
+// `※` variant-marker convention readers already understand from notes.
 //
 // Visibility is governed by the same `bible-cite-show` localStorage toggle as
-// cite chips (`body.cites-shown`) — banners hide when the user turns off the
+// cite chips (`body.cites-shown`) — anchors hide when the user turns off the
 // "인용 본문·주석" setting. No separate toggle.
 //
 // Cross-module dependencies:
 //   - window.appHelpers: el (DOM builder)
-//   - window.appCitations: openCiteSheet (delegated click target)
+//   - window.appCitations: openNoteTooltip, closeNoteTooltip, openCiteSheet
 
 window.appParallels = (() => {
   /** @typedef {import("../types").ChapterParallel} ChapterParallel */
@@ -26,16 +32,14 @@ window.appParallels = (() => {
   const { el } = window.appHelpers;
 
   // ADR-027 §2 range grammar — same shape as cite src verse-spec.
-  // Captures: (start_ch, start_v?, end_ch?, end_v?).
-  // - "11"          → startCh=11, startV=1, endCh=11, endV=null (whole chapter)
-  // - "11:1"        → startCh=11, startV=1, endCh=11, endV=1
-  // - "11:1-9"      → startCh=11, startV=1, endCh=11, endV=9
-  // - "11:1-12:5"   → startCh=11, startV=1, endCh=12, endV=5
   const _RANGE_RE = /^(\d+)(?::(\d+)(?:-(?:(\d+):)?(\d+))?)?$/;
+
+  // The parallel-marker glyph. Intentionally identical to note-anchor--variant
+  // so readers see one consistent "this verse carries supplementary info" cue.
+  const PARALLEL_GLYPH = "※";
 
   /**
    * Parse a `range` attribute value into structured chapter/verse bounds.
-   * Returns null when the string is malformed (caller skips banner).
    *
    * @param {string} range
    * @returns {{ startCh: number, startV: number, endCh: number, endV: number | null } | null}
@@ -51,44 +55,62 @@ window.appParallels = (() => {
   }
 
   /**
-   * Compose banner label "병행: src1 · src2 …".
-   * Each src's tradition (if present) prefixes its ref — mirrors the cite-chip
-   * label format from ADR-022 §2 per-parallel tradition (`(칠십인역 시편 16:8)`).
+   * Compose tooltip body parts: ["1역대 11:1-9", " 참조"] for single-src;
+   * link element(s) interspersed for multi-src. Each ref becomes a clickable
+   * `<button class="parallel-tooltip-ref">` carrying the ref + tradition in
+   * data-* attrs. The terminating " 참조" word ties the references to the
+   * "see also" wording the user requested.
    *
    * @param {ChapterParallel} parallel
-   * @returns {string}
+   * @returns {Array<string | HTMLElement>}
    */
-  function bannerText(parallel) {
-    const parts = (parallel.src || []).map((r) =>
-      (r.tradition ? `${r.tradition} ` : "") + r.ref,
-    );
-    return parts.length ? `병행: ${parts.join(" · ")}` : "병행";
+  function buildTooltipBody(parallel) {
+    /** @type {Array<string | HTMLElement>} */
+    const parts = [];
+    const srcs = parallel.src || [];
+    for (let i = 0; i < srcs.length; i++) {
+      if (i > 0) parts.push(" · ");
+      parts.push(_buildRefLink(srcs[i]));
+    }
+    if (srcs.length) parts.push(" 참조");
+    return parts;
   }
 
   /**
-   * Build the banner DOM element for one parallel marker.
+   * @param {CiteParallelRef} ref
+   * @returns {HTMLElement}
+   */
+  function _buildRefLink(ref) {
+    const label = (ref.tradition ? `${ref.tradition} ` : "") + ref.ref;
+    return el("button", {
+      type: "button",
+      className: "parallel-tooltip-ref",
+      "data-parallel-ref": ref.ref,
+      ...(ref.tradition ? { "data-parallel-ref-tradition": ref.tradition } : {}),
+      "aria-label": `${label} 본문 보기`,
+    }, label);
+  }
+
+  /**
+   * Build the start-of-section anchor element for one parallel marker.
    *
-   * Rendered as `<aside class="parallel-banner" role="button" tabindex="0">`
-   * with the structured payload stashed on `data-*` attrs so the delegated
-   * click listener (initParallels) can rehydrate without re-parsing chapter
-   * data. ARIA: `<aside>` implicitly maps to `role="complementary"`, but
-   * because the banner is clickable we override with `role="button"`.
+   * `<button class="parallel-anchor">※</button>` with structured payload on
+   * data-* attrs so the click handler can rebuild the tooltip body without
+   * re-walking chapter data.
    *
    * @param {ChapterParallel} parallel
    * @returns {HTMLElement}
    */
-  function buildParallelBanner(parallel) {
-    const label = bannerText(parallel);
+  function buildParallelAnchor(parallel) {
     /** @type {Record<string, string>} */
     const attrs = {
-      role: "button",
-      tabindex: "0",
-      className: "parallel-banner",
+      type: "button",
+      className: "parallel-anchor",
       "data-parallel-range": parallel.range,
       "data-parallel-src": _serializeSrc(parallel.src || []),
-      "aria-label": `${label} — 본문 보기`,
+      "aria-label": `${parallel.range} 병행 본문 안내`,
     };
-    return el("aside", attrs, label);
+    return el("button", attrs, PARALLEL_GLYPH);
   }
 
   /**
@@ -104,9 +126,9 @@ window.appParallels = (() => {
       .join(";");
   }
 
-  // Round-trip inverse of `_serializeSrc`. Lives next to citations.js's
-  // `_parseParallelsAttr` (same regex shape) but kept local so the two modules
-  // stay independent.
+  // Round-trip inverse of `_serializeSrc`. Same shape as the regex used by
+  // citations.js's `_parseParallelsAttr` — kept local so the two modules stay
+  // independent.
   const _PARALLEL_TRADITION_RE = /^(.+?)\s*\[([^\[\]]+)\]\s*$/;
 
   /**
@@ -127,8 +149,6 @@ window.appParallels = (() => {
 
   /**
    * Find the parallel (if any) whose range starts at the given verse number.
-   * Returns null when no parallel begins there. The renderer calls this for
-   * each verse and inserts a banner before the verse on a non-null result.
    *
    * @param {ReadonlyArray<ChapterParallel> | null | undefined} parallels
    * @param {number} verseNumber
@@ -144,51 +164,85 @@ window.appParallels = (() => {
   }
 
   /**
-   * Wire the delegated click + keyboard handlers. Clicking a banner opens
-   * the existing cite-sheet via `appCitations.openCiteSheet` — banner's
-   * `src` entries become the sheet's primary + parallels (no `tradition`
-   * argument at the sheet level since per-source tradition rides on each
-   * src entry, matching the ADR-022 §2 개정 model).
+   * Open the tooltip for a parallel anchor: title = range, body = clickable
+   * reference link(s). Reuses citations.openNoteTooltip's positioning logic
+   * (same DOM `#note-tooltip` element, same scroll-follow). The body's link
+   * elements get a delegated click handler (initParallels) that opens the
+   * cite-sheet for the chosen reference.
    *
-   * The first src entry becomes the sheet's primary `src`; subsequent
-   * entries become the sheet's `parallels` list. When there is only one
-   * src, the sheet shows that one passage with no parallels divider.
+   * @param {HTMLElement} anchorEl
+   */
+  function _openTooltipForAnchor(anchorEl) {
+    const range = anchorEl.getAttribute("data-parallel-range") || "";
+    const refs = _parseSrcAttr(anchorEl.getAttribute("data-parallel-src"));
+    const cites = window.appCitations;
+    if (!cites || typeof cites.openNoteTooltip !== "function") return;
+    const parallel = { src: refs, range };
+    cites.openNoteTooltip(anchorEl, range, buildTooltipBody(parallel));
+  }
+
+  /**
+   * Wire the delegated click + keyboard handlers. Two delegations:
+   *   1. `.parallel-anchor` (the ※ marker) → open tooltip
+   *   2. `.parallel-tooltip-ref` (link inside tooltip body) → openCiteSheet
+   *      for that ref, then close the tooltip
+   *
+   * Body-level delegation lets us handle the anchor and tooltip-link in one
+   * place without per-render listeners.
    */
   function initParallels() {
-    const open = (banner) => {
-      if (!(banner instanceof HTMLElement)) return;
-      const srcRaw = banner.getAttribute("data-parallel-src") || "";
-      const refs = _parseSrcAttr(srcRaw);
-      if (!refs.length) return;
-      const [primary, ...rest] = refs;
-      const sheet = window.appCitations;
-      if (!sheet || typeof sheet.openCiteSheet !== "function") return;
-      const primaryTradition = primary.tradition || null;
-      const parallelEntries = rest.length ? rest : null;
-      void sheet.openCiteSheet(primary.ref, parallelEntries, primaryTradition, banner);
-    };
-
     document.body.addEventListener("click", (e) => {
       const target = e.target;
       if (!(target instanceof HTMLElement)) return;
-      const banner = target.closest(".parallel-banner");
-      if (banner instanceof HTMLElement) open(banner);
+
+      const refLink = target.closest(".parallel-tooltip-ref");
+      if (refLink instanceof HTMLElement) {
+        const ref = refLink.getAttribute("data-parallel-ref");
+        if (!ref) return;
+        const tradition = refLink.getAttribute("data-parallel-ref-tradition") || null;
+        const cites = window.appCitations;
+        if (cites && typeof cites.openCiteSheet === "function") {
+          void cites.openCiteSheet(ref, null, tradition, refLink);
+        }
+        if (cites && typeof cites.closeNoteTooltip === "function") {
+          cites.closeNoteTooltip();
+        }
+        return;
+      }
+
+      const anchor = target.closest(".parallel-anchor");
+      if (anchor instanceof HTMLElement) {
+        _openTooltipForAnchor(anchor);
+      }
     });
 
     document.addEventListener("keydown", (e) => {
       if (e.key !== "Enter" && e.key !== " ") return;
       const target = e.target;
       if (!(target instanceof HTMLElement)) return;
-      if (!target.classList.contains("parallel-banner")) return;
-      e.preventDefault();
-      open(target);
+      if (target.classList.contains("parallel-anchor")) {
+        e.preventDefault();
+        _openTooltipForAnchor(target);
+      } else if (target.classList.contains("parallel-tooltip-ref")) {
+        e.preventDefault();
+        const ref = target.getAttribute("data-parallel-ref");
+        if (!ref) return;
+        const tradition = target.getAttribute("data-parallel-ref-tradition") || null;
+        const cites = window.appCitations;
+        if (cites && typeof cites.openCiteSheet === "function") {
+          void cites.openCiteSheet(ref, null, tradition, target);
+        }
+        if (cites && typeof cites.closeNoteTooltip === "function") {
+          cites.closeNoteTooltip();
+        }
+      }
     });
   }
 
   return {
     parseRange,
-    bannerText,
-    buildParallelBanner,
+    buildTooltipBody,
+    buildParallelAnchor,
     findParallelStartingAt,
     initParallels,
   };

@@ -1,17 +1,19 @@
 // ── Unit tests for js/app/parallels.js ─────────────────────────────────────
 // Run with: node --test tests/unit/parallels.test.js
 //
-// Loads parallels.js in a vm context with stubbed window.appHelpers (`el`) and
-// a minimal `document`. Click delegation + cite-sheet handoff are exercised
-// via a stub `appCitations.openCiteSheet` (assert it gets called with the
-// right (src, parallels, tradition, returnFocusEl) tuple).
+// Loads parallels.js in a vm context with stubbed window.appHelpers (`el`),
+// document, and appCitations (openNoteTooltip / openCiteSheet / closeNoteTooltip).
+// The full tooltip rendering (positioning, scroll-follow) lives in citations.js
+// and is covered by its own tests + e2e; here we focus on parallels.js's own
+// surface: range parsing, anchor/tooltip-body builders, lookup, and the
+// click-delegation handoff to citations.
 //
 // Sections (one per `// ── <area> ──`):
 //   - parseRange
-//   - bannerText
-//   - buildParallelBanner
+//   - buildTooltipBody
+//   - buildParallelAnchor
 //   - findParallelStartingAt
-//   - initParallels (click delegation → openCiteSheet handoff)
+//   - initParallels (anchor click → tooltip, link click → cite-sheet, key handlers)
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -20,18 +22,16 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-// vm contexts have separate Object prototypes, so plain `deepStrictEqual` on
-// objects produced inside the loaded module fails even when shapes match.
-// JSON round-trip flattens the prototype mismatch — fine here since all values
-// under test are JSON-serializable.
-function jsonEqual(actual, expected, message) {
-  assert.equal(JSON.stringify(actual), JSON.stringify(expected), message);
-}
-
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const APP_PATH = path.resolve(__dirname, "../../js/app/parallels.js");
 const APP_SOURCE = fs.readFileSync(APP_PATH, "utf8")
   .replace(/\nexport\s*\{\s*\}\s*;?\s*$/, "");
+
+// vm contexts have separate Object prototypes — strict deepEqual fails on
+// otherwise-equivalent objects. JSON round-trip flattens that mismatch.
+function jsonEqual(actual, expected, message) {
+  assert.equal(JSON.stringify(actual), JSON.stringify(expected), message);
+}
 
 // ── Minimal DOM element stub ────────────────────────────────────────────────
 
@@ -49,7 +49,6 @@ function makeStubEl() {
       getAttribute(name) { return this.attrs[name] ?? null; },
       appendChild(c) { this.children.push(c); return c; },
       closest(sel) {
-        // For tests we just check className membership against ".cls" selector.
         if (sel.startsWith(".") && this.classList.contains(sel.slice(1))) return this;
         return null;
       },
@@ -66,19 +65,24 @@ function makeStubEl() {
   };
 }
 
-function loadParallels({ openCiteSheet } = {}) {
-  // Capture event listeners so tests can fire them.
+function loadParallels({ openCiteSheet, openNoteTooltip, closeNoteTooltip } = {}) {
   const bodyClickListeners = [];
   const keydownListeners = [];
   const ctx = {
     console, JSON, Date, Math, Object, Array, Set, Map, Promise, Error,
     String, Number, Boolean, parseInt, parseFloat, RegExp,
-    HTMLElement: function HTMLElement() {},  // instanceof check support
+    HTMLElement: function HTMLElement() {},
   };
   vm.createContext(ctx);
   ctx.window = ctx;
   ctx.appHelpers = { el: makeStubEl() };
-  ctx.appCitations = openCiteSheet ? { openCiteSheet } : null;
+  ctx.appCitations = (openCiteSheet || openNoteTooltip || closeNoteTooltip)
+    ? {
+        openCiteSheet: openCiteSheet || (() => {}),
+        openNoteTooltip: openNoteTooltip || (() => {}),
+        closeNoteTooltip: closeNoteTooltip || (() => {}),
+      }
+    : null;
   ctx.document = {
     addEventListener: (type, fn) => {
       if (type === "keydown") keydownListeners.push(fn);
@@ -127,69 +131,76 @@ test("parseRange: malformed → null", () => {
   assert.equal(api.parseRange("11:1-"), null);
 });
 
-// ── bannerText ──────────────────────────────────────────────────────────────
+// ── buildTooltipBody ────────────────────────────────────────────────────────
 
-test("bannerText: single src no tradition", () => {
+test("buildTooltipBody: single src → [linkButton, ' 참조']", () => {
   const { api } = loadParallels();
-  assert.equal(
-    api.bannerText({ src: [{ ref: "2사무 5:1-10" }], range: "11:1-9" }),
-    "병행: 2사무 5:1-10",
-  );
-});
-
-test("bannerText: multi src joined with ·", () => {
-  const { api } = loadParallels();
-  assert.equal(
-    api.bannerText({
-      src: [{ ref: "2사무 5:1-10" }, { ref: "2사무 23:8-39" }],
-      range: "11:1-9",
-    }),
-    "병행: 2사무 5:1-10 · 2사무 23:8-39",
-  );
-});
-
-test("bannerText: per-source tradition prefixes that ref", () => {
-  const { api } = loadParallels();
-  assert.equal(
-    api.bannerText({
-      src: [{ ref: "시편 16:8", tradition: "칠십인역" }, { ref: "사도 2:25" }],
-      range: "1:1",
-    }),
-    "병행: 칠십인역 시편 16:8 · 사도 2:25",
-  );
-});
-
-test("bannerText: empty src → label only", () => {
-  const { api } = loadParallels();
-  assert.equal(api.bannerText({ src: [], range: "11" }), "병행");
-});
-
-// ── buildParallelBanner ─────────────────────────────────────────────────────
-
-test("buildParallelBanner: aside + role=button + data-* attrs", () => {
-  const { api } = loadParallels();
-  const node = api.buildParallelBanner({
-    src: [{ ref: "2사무 5:1-10" }],
-    range: "11:1-9",
+  const body = api.buildTooltipBody({
+    src: [{ ref: "1역대 11:1-9" }],
+    range: "5:1-10",
   });
-  assert.equal(node.tag, "aside");
-  assert.equal(node.attrs.role, "button");
-  assert.equal(node.attrs.tabindex, "0");
-  assert.equal(node.attrs.className, "parallel-banner");
-  assert.equal(node.attrs["data-parallel-range"], "11:1-9");
-  assert.equal(node.attrs["data-parallel-src"], "2사무 5:1-10");
-  assert.equal(node.textContent, "병행: 2사무 5:1-10");
-  assert.match(node.attrs["aria-label"], /병행: 2사무 5:1-10.*본문 보기/);
+  assert.equal(body.length, 2);
+  assert.equal(body[0].tag, "button");
+  assert.equal(body[0].attrs.className, "parallel-tooltip-ref");
+  assert.equal(body[0].attrs["data-parallel-ref"], "1역대 11:1-9");
+  assert.equal(body[0].textContent, "1역대 11:1-9");
+  assert.equal(body[1], " 참조");
 });
 
-test("buildParallelBanner: per-source tradition serialized as `[전통]` (round-trips source)", () => {
-  // Data attr re-uses the same `[전통]` inline notation as source markdown
-  // and cite-chip data attrs, so the click handler can rehydrate without
-  // a parallel encoding scheme.
+test("buildTooltipBody: multi src → links joined with ' · ' then ' 참조'", () => {
   const { api } = loadParallels();
-  const node = api.buildParallelBanner({
+  const body = api.buildTooltipBody({
+    src: [{ ref: "1역대 11:1-9" }, { ref: "1역대 14:1-16" }],
+    range: "5:1-25",
+  });
+  // [link1, " · ", link2, " 참조"]
+  assert.equal(body.length, 4);
+  assert.equal(body[0].textContent, "1역대 11:1-9");
+  assert.equal(body[1], " · ");
+  assert.equal(body[2].textContent, "1역대 14:1-16");
+  assert.equal(body[3], " 참조");
+});
+
+test("buildTooltipBody: per-source tradition prefixes the link label", () => {
+  const { api } = loadParallels();
+  const body = api.buildTooltipBody({
+    src: [{ ref: "시편 16:8", tradition: "칠십인역" }],
+    range: "2:25",
+  });
+  assert.equal(body[0].textContent, "칠십인역 시편 16:8");
+  assert.equal(body[0].attrs["data-parallel-ref"], "시편 16:8");
+  assert.equal(body[0].attrs["data-parallel-ref-tradition"], "칠십인역");
+});
+
+test("buildTooltipBody: empty src → empty array (no ' 참조' suffix)", () => {
+  const { api } = loadParallels();
+  jsonEqual(api.buildTooltipBody({ src: [], range: "11" }), []);
+});
+
+// ── buildParallelAnchor ─────────────────────────────────────────────────────
+
+test("buildParallelAnchor: button with ※ glyph + data attrs", () => {
+  const { api } = loadParallels();
+  const node = api.buildParallelAnchor({
+    src: [{ ref: "1역대 11:1-9" }],
+    range: "5:1-10",
+  });
+  assert.equal(node.tag, "button");
+  assert.equal(node.attrs.type, "button");
+  assert.equal(node.attrs.className, "parallel-anchor");
+  assert.equal(node.attrs["data-parallel-range"], "5:1-10");
+  assert.equal(node.attrs["data-parallel-src"], "1역대 11:1-9");
+  assert.equal(node.textContent, "※");
+  assert.match(node.attrs["aria-label"], /5:1-10.*병행 본문 안내/);
+});
+
+test("buildParallelAnchor: per-source tradition round-trips via `[전통]` notation", () => {
+  // Data attr re-uses the source markdown notation so the click handler can
+  // rehydrate without a parallel encoding scheme.
+  const { api } = loadParallels();
+  const node = api.buildParallelAnchor({
     src: [{ ref: "시편 16:8", tradition: "칠십인역" }, { ref: "사도 2:25" }],
-    range: "11:1-9",
+    range: "2:25",
   });
   assert.equal(
     node.attrs["data-parallel-src"],
@@ -229,98 +240,126 @@ test("findParallelStartingAt: whole-chapter shorthand range='13' matches verse 1
   assert.equal(api.findParallelStartingAt(parallels, 2), null);
 });
 
-// ── initParallels (click → cite-sheet handoff) ──────────────────────────────
+// ── initParallels: anchor click → tooltip ──────────────────────────────────
 
-test("initParallels: click on banner calls openCiteSheet with first src as primary", () => {
-  const calls = [];
+test("initParallels: click on ※ anchor opens tooltip with range + body parts", () => {
+  const ttCalls = [];
   const { api, HTMLElement, fireBodyClick } = loadParallels({
-    openCiteSheet: (src, parallels, tradition, returnFocusEl) => {
-      calls.push({ src, parallels, tradition, returnFocusEl });
-    },
+    openNoteTooltip: (anchorEl, anchor, body) => ttCalls.push({ anchorEl, anchor, body }),
   });
   api.initParallels();
-  // Build a banner node and dress it up to satisfy the HTMLElement instanceof check.
-  const banner = api.buildParallelBanner({
-    src: [{ ref: "2사무 5:1-10" }],
-    range: "11:1-9",
+  const anchor = api.buildParallelAnchor({
+    src: [{ ref: "1역대 11:1-9" }],
+    range: "5:1-10",
   });
-  Object.setPrototypeOf(banner, HTMLElement.prototype);
-  fireBodyClick(banner);
-  assert.equal(calls.length, 1);
-  assert.equal(calls[0].src, "2사무 5:1-10");
-  assert.equal(calls[0].parallels, null);
-  assert.equal(calls[0].tradition, null);
-  assert.equal(calls[0].returnFocusEl, banner);
+  Object.setPrototypeOf(anchor, HTMLElement.prototype);
+  fireBodyClick(anchor);
+  assert.equal(ttCalls.length, 1);
+  assert.equal(ttCalls[0].anchorEl, anchor);
+  assert.equal(ttCalls[0].anchor, "5:1-10");
+  // Body should contain a button (the ref link) and the " 참조" suffix.
+  assert.equal(ttCalls[0].body.length, 2);
+  assert.equal(ttCalls[0].body[0].tag, "button");
+  assert.equal(ttCalls[0].body[0].attrs["data-parallel-ref"], "1역대 11:1-9");
+  assert.equal(ttCalls[0].body[1], " 참조");
 });
 
-test("initParallels: multi-src → first becomes primary, rest become sheet parallels", () => {
-  const calls = [];
-  const { api, HTMLElement, fireBodyClick } = loadParallels({
-    openCiteSheet: (src, parallels, tradition) => calls.push({ src, parallels, tradition }),
-  });
-  api.initParallels();
-  const banner = api.buildParallelBanner({
-    src: [
-      { ref: "2사무 5:1-10" },
-      { ref: "시편 16:8", tradition: "칠십인역" },
-    ],
-    range: "11:1-9",
-  });
-  Object.setPrototypeOf(banner, HTMLElement.prototype);
-  fireBodyClick(banner);
-  assert.equal(calls.length, 1);
-  assert.equal(calls[0].src, "2사무 5:1-10");
-  // JSON round-trip — vm contexts have separate Object prototypes so
-  // deepStrictEqual fails on otherwise-equivalent objects.
-  assert.equal(
-    JSON.stringify(calls[0].parallels),
-    JSON.stringify([{ ref: "시편 16:8", tradition: "칠십인역" }]),
-  );
-  assert.equal(calls[0].tradition, null);  // primary has no tradition
-});
-
-test("initParallels: primary tradition is forwarded as the sheet's tradition arg", () => {
-  const calls = [];
-  const { api, HTMLElement, fireBodyClick } = loadParallels({
-    openCiteSheet: (src, parallels, tradition) => calls.push({ src, parallels, tradition }),
-  });
-  api.initParallels();
-  const banner = api.buildParallelBanner({
-    src: [{ ref: "이사 40:3", tradition: "칠십인역" }],
-    range: "11:1-9",
-  });
-  Object.setPrototypeOf(banner, HTMLElement.prototype);
-  fireBodyClick(banner);
-  assert.equal(calls[0].src, "이사 40:3");
-  assert.equal(calls[0].tradition, "칠십인역");
-});
-
-test("initParallels: keydown Enter on banner also triggers openCiteSheet", () => {
-  const calls = [];
+test("initParallels: keydown Enter on anchor also opens tooltip", () => {
+  const ttCalls = [];
   const { api, HTMLElement, fireKeydown } = loadParallels({
-    openCiteSheet: (src) => calls.push(src),
+    openNoteTooltip: (anchorEl) => ttCalls.push(anchorEl),
   });
   api.initParallels();
-  const banner = api.buildParallelBanner({
-    src: [{ ref: "2사무 5:1-10" }],
-    range: "11:1-9",
+  const anchor = api.buildParallelAnchor({
+    src: [{ ref: "1역대 11:1-9" }],
+    range: "5:1-10",
   });
-  Object.setPrototypeOf(banner, HTMLElement.prototype);
+  Object.setPrototypeOf(anchor, HTMLElement.prototype);
   let prevented = false;
-  fireKeydown({ key: "Enter", target: banner, preventDefault: () => { prevented = true; } });
-  assert.equal(calls.length, 1);
+  fireKeydown({ key: "Enter", target: anchor, preventDefault: () => { prevented = true; } });
+  assert.equal(ttCalls.length, 1);
   assert.equal(prevented, true);
 });
 
-test("initParallels: non-banner click does NOT call openCiteSheet", () => {
-  const calls = [];
+// ── initParallels: tooltip link click → cite-sheet ─────────────────────────
+
+test("initParallels: clicking ref link inside tooltip opens cite-sheet for that ref", () => {
+  const sheetCalls = [];
+  const ttCloses = [];
   const { api, HTMLElement, fireBodyClick } = loadParallels({
-    openCiteSheet: () => calls.push("called"),
+    openCiteSheet: (src, parallels, tradition, returnFocusEl) =>
+      sheetCalls.push({ src, parallels, tradition, returnFocusEl }),
+    closeNoteTooltip: () => ttCloses.push(true),
   });
   api.initParallels();
-  // Plain element that isn't a banner
-  const other = { tag: "div", attrs: { className: "verse" }, classList: { contains: () => false }, closest: () => null };
+  // The tooltip body returns the ref link node; stand-alone fire its click.
+  const body = api.buildTooltipBody({
+    src: [{ ref: "1역대 11:1-9" }],
+    range: "5:1-10",
+  });
+  const link = body[0];
+  Object.setPrototypeOf(link, HTMLElement.prototype);
+  fireBodyClick(link);
+  assert.equal(sheetCalls.length, 1);
+  assert.equal(sheetCalls[0].src, "1역대 11:1-9");
+  assert.equal(sheetCalls[0].parallels, null);
+  assert.equal(sheetCalls[0].tradition, null);
+  assert.equal(sheetCalls[0].returnFocusEl, link);
+  // Tooltip closes after the sheet opens (no double-floating UI).
+  assert.equal(ttCloses.length, 1);
+});
+
+test("initParallels: ref link with tradition forwards tradition to openCiteSheet", () => {
+  const sheetCalls = [];
+  const { api, HTMLElement, fireBodyClick } = loadParallels({
+    openCiteSheet: (src, parallels, tradition) =>
+      sheetCalls.push({ src, parallels, tradition }),
+    closeNoteTooltip: () => {},
+  });
+  api.initParallels();
+  const body = api.buildTooltipBody({
+    src: [{ ref: "시편 16:8", tradition: "칠십인역" }],
+    range: "2:25",
+  });
+  const link = body[0];
+  Object.setPrototypeOf(link, HTMLElement.prototype);
+  fireBodyClick(link);
+  assert.equal(sheetCalls[0].src, "시편 16:8");
+  assert.equal(sheetCalls[0].tradition, "칠십인역");
+});
+
+test("initParallels: keydown Enter on ref link opens cite-sheet", () => {
+  const sheetCalls = [];
+  const { api, HTMLElement, fireKeydown } = loadParallels({
+    openCiteSheet: (src) => sheetCalls.push(src),
+    closeNoteTooltip: () => {},
+  });
+  api.initParallels();
+  const body = api.buildTooltipBody({
+    src: [{ ref: "1역대 11:1-9" }],
+    range: "5:1-10",
+  });
+  const link = body[0];
+  Object.setPrototypeOf(link, HTMLElement.prototype);
+  fireKeydown({ key: "Enter", target: link, preventDefault: () => {} });
+  assert.equal(sheetCalls.length, 1);
+});
+
+test("initParallels: click on unrelated element triggers neither tooltip nor sheet", () => {
+  const ttCalls = [];
+  const sheetCalls = [];
+  const { api, HTMLElement, fireBodyClick } = loadParallels({
+    openCiteSheet: () => sheetCalls.push("sheet"),
+    openNoteTooltip: () => ttCalls.push("tt"),
+    closeNoteTooltip: () => {},
+  });
+  api.initParallels();
+  const other = {
+    tag: "div", attrs: { className: "verse" },
+    classList: { contains: () => false }, closest: () => null,
+  };
   Object.setPrototypeOf(other, HTMLElement.prototype);
   fireBodyClick(other);
-  assert.equal(calls.length, 0);
+  assert.equal(ttCalls.length, 0);
+  assert.equal(sheetCalls.length, 0);
 });

@@ -643,7 +643,7 @@ export interface AppCitations {
   openNoteTooltip: (
     anchorEl: HTMLElement,
     anchor: string,
-    body: string,
+    body: string | ReadonlyArray<string | HTMLElement>,
   ) => void;
   closeNoteTooltip: () => void;
   openCiteSheet: (
@@ -668,8 +668,8 @@ export interface AppParallels {
     endCh: number;
     endV: number | null;  // null = entire chapter shorthand (e.g. "13")
   } | null;
-  bannerText: (parallel: ChapterParallel) => string;
-  buildParallelBanner: (parallel: ChapterParallel) => HTMLElement;
+  buildTooltipBody: (parallel: ChapterParallel) => Array<string | HTMLElement>;
+  buildParallelAnchor: (parallel: ChapterParallel) => HTMLElement;
   findParallelStartingAt: (
     parallels: ReadonlyArray<ChapterParallel> | null | undefined,
     verseNumber: number,

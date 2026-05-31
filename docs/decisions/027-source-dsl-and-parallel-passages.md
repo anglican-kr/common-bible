@@ -149,13 +149,15 @@ ADR-022 의 `<cite>` 모델은 NT-OT 짧은 인용에는 잘 맞지만 OT 역사
 
 #### UI 렌더
 
-- 렌더 위치: `range` 시작 절의 직전 (그 절보다 위, 직전 절보다 아래) 에 **작은 배너** 삽입.
-- 배너 내용: `병행: 2사무 5:1-10` (다중 출처면 `· ` 로 join, tradition 라벨은 src 앞 prefix — `(칠십인역 시편 16:8 · 사도 2:25)` 와 같은 패턴).
-- 시각 양식: 절 본문보다 작은 글자 (~0.85em), accent-tinted 옅은 배경 또는 좌측 띠, 인용 칩과 시각적으로 구분.
-- 클릭: 기존 cite-sheet 인프라 재사용 — sheet 가 열리고 병행 src 본문 표시. 다중 src 면 시트에 모두 노출 (cite 의 다중 ref 패턴 그대로).
-- 토글: 인용 칩과 같은 `bible-cite-show` localStorage 토글로 함께 제어. 별도 설정 항목 추가 없음 — 같은 "인용·참조 UI" 범주.
-- 데스크탑/모바일: 같은 배너. 모바일에선 좌우 패딩만 줄임. 절 본문 위에 inline-block 으로 한 줄 차지.
-- 접근성: 배너는 `<aside class="parallel-banner" role="button" tabindex="0">`. ARIA 가 자동으로 "complementary" 매핑.
+> **개정 (2026-05-31, dev 검토):** 초기 디자인은 `<aside class="parallel-banner">` 단락 헤더 배너였으나, dev 검증 후 (a) 한 장에 여러 병행이 있을 때 어느 절들이 그 병행 단락인지 시각 구분이 약하고 (b) 배너 자체가 본문 사이에 끼어들어 reading flow 를 끊는다는 판단으로 **footnote anchor 패턴** 으로 전환. 변형 주석(`<note></note>[^id]`)이 이미 사용하는 `※` 글리프를 그대로 재사용 — 사용자가 학습할 기호가 늘지 않는다.
+
+- **Anchor**: `range` 시작 절의 직전에 작은 `※` 글리프 (`.parallel-anchor`, superscript) 삽입. 변형 주석(`.note-anchor--variant`) 과 같은 글리프이라 의도된 시각 통일 — "이 자리에 보조 정보가 있다" 시그널을 한 종류로 통합.
+- **Tooltip**: anchor 클릭 → `note-tooltip` 재사용. 헤더는 `range` (예: `5:1-10`), 본문은 `<sourceLink> 참조` 형태 (예: `1역대 11:1-9 참조`). 다중 src 는 `<link1> · <link2> 참조` 로 join. tradition 라벨은 link 텍스트 prefix (`(칠십인역 시편 16:8)`).
+- **본문 내 source link 클릭**: 그 ref 의 cite-sheet 가 열리고 tooltip 은 닫힘 (이중 floating UI 회피). 다중 src 인 경우 사용자가 보고 싶은 ref 를 골라 시트에 띄움 — 한 anchor 에서 여러 병행 본문을 비교할 수 있음.
+- **시각 범위 구분자 미사용**: 초기 검토에선 range 안 절들에 좌측 띠를 도입하는 안이 있었으나, anchor 가 시작 위치를 표시하고 tooltip 텍스트 (`5:1-10`) 가 끝 위치를 명시하므로 추가 시각 marker 가 잉여라 판단해 생략.
+- **토글**: 인용 칩·주석과 같은 `bible-cite-show` localStorage 토글로 함께 제어. 별도 설정 항목 추가 없음.
+- **데스크탑/모바일 공통**: anchor 는 inline superscript 이라 어느 화면 크기에서도 같은 양식. tooltip 은 기존 note-tooltip 의 anchor-follow 위치 로직 그대로 (위쪽 우선, 자리 부족 시 아래로 뒤집힘).
+- **접근성**: anchor 는 `<button class="parallel-anchor">` (네이티브 button — Enter/Space 활성화 자동). `aria-label`: `"5:1-10 병행 본문 안내"`. tooltip 본문 link 도 `<button class="parallel-tooltip-ref">` + `aria-label`: `"<ref> 본문 보기"`.
 
 #### `<cite>` 와의 관계
 

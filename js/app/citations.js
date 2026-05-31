@@ -368,9 +368,14 @@ window.appCitations = (() => {
    * Long anchor labels are truncated with an ellipsis so the tooltip header
    * stays readable.
    *
+   * `body` may be a plain string OR an array of strings/DOM nodes so callers
+   * (e.g. parallels.js) can inject inline link elements into the tooltip.
+   * Plain string bodies prepend " — "; array bodies start with " — " then
+   * append each item verbatim (no further punctuation).
+   *
    * @param {HTMLElement} anchorEl
    * @param {string} anchor
-   * @param {string} body
+   * @param {string | ReadonlyArray<string | HTMLElement>} body
    */
   function openNoteTooltip(anchorEl, anchor, body) {
     const tt = _ensureNoteTooltip();
@@ -379,7 +384,15 @@ window.appCitations = (() => {
       ? anchor.slice(0, TOOLTIP_ANCHOR_MAX - 1) + "…"
       : anchor;
     tt.appendChild(el("strong", { className: "note-tooltip-anchor" }, labelText));
-    tt.appendChild(document.createTextNode(" — " + body));
+    if (typeof body === "string") {
+      tt.appendChild(document.createTextNode(" — " + body));
+    } else {
+      tt.appendChild(document.createTextNode(" — "));
+      for (const part of body) {
+        if (typeof part === "string") tt.appendChild(document.createTextNode(part));
+        else if (part) tt.appendChild(part);
+      }
+    }
     tt.hidden = false;
     _positionNoteTooltip(tt, anchorEl);
     _currentNoteAnchor = anchorEl;

@@ -1146,13 +1146,16 @@ function renderChapter(data, book, opts) {
       }
     }
 
-    // ADR-027: section-level parallel-passage banner — render before the verse
-    // whose number matches a parallel's range start. Visibility tied to the
-    // same `body.cites-shown` class as cite chips (no separate toggle).
+    // ADR-027 (개정): section-level parallel-passage anchor — render a ※
+    // marker right before the verse whose number matches a parallel's range
+    // start. Click opens a footnote-style tooltip with the parallel range +
+    // clickable source reference (which then opens the cite-sheet).
+    // Visibility tied to the same `body.cites-shown` class as cite chips
+    // (no separate toggle).
     if (window.appParallels && data.parallels && data.parallels.length) {
       const matched = window.appParallels.findParallelStartingAt(data.parallels, v.number);
       if (matched) {
-        article.appendChild(window.appParallels.buildParallelBanner(matched));
+        article.appendChild(window.appParallels.buildParallelAnchor(matched));
       }
     }
 
