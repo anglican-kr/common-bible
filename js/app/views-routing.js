@@ -1578,6 +1578,17 @@ function renderError(msg) {
   $app.appendChild(el("div", { className: "error", role: "alert" }, msg));
 }
 
+// Stage 0 placeholder for the Notes tab (ADR-026). The list/calendar + editor
+// replace this in Stage 1.
+function renderNotesPlaceholder() {
+  setTitle("노트");
+  clearNode($app);
+  const wrap = el("div", { className: "notes-placeholder" });
+  wrap.appendChild(el("h2", {}, "노트"));
+  wrap.appendChild(el("p", {}, "노트 기능을 준비하고 있습니다."));
+  $app.appendChild(wrap);
+}
+
 // ── Routing ──
 
 function parsePath() {
@@ -1594,6 +1605,11 @@ function parsePath() {
       page: parseInt(query.get("page") ?? "", 10) || 1,
     };
   }
+
+  // Notes routes (ADR-026): /notes (list) and /notes/:id (editor). Stage 0
+  // renders a placeholder; the list/editor land in Stage 1.
+  if (pathname === "notes") return { view: "notes" };
+  if (pathname.startsWith("notes/")) return { view: "notes", noteId: pathname.slice(6) };
 
   const parts = pathname.split("/");
   if (parts.length === 1) {
@@ -1695,6 +1711,10 @@ async function route() {
   const parsed = parsePath();
   const { view, bookId, chapter, division } = parsed;
 
+  // Keep the mobile bottom nav's active tab + per-tab memory in sync with the
+  // route being entered (ADR-026 Stage 0). No-op when the nav isn't present.
+  window.appBottomNav?.onRoute(location.pathname + location.search);
+
   // Sync search input with current route
   if (view === "search") {
     if (isMobile()) {
@@ -1730,6 +1750,15 @@ async function route() {
         dismissLaunchScreen();
         updatePageMeta();
       }
+      trackPageView();
+      return;
+    }
+
+    // Notes (ADR-026). Stage 0 placeholder — list/calendar + editor in Stage 1.
+    if (view === "notes") {
+      renderNotesPlaceholder();
+      dismissLaunchScreen();
+      updatePageMeta({ title: "노트", description: "내 노트" });
       trackPageView();
       return;
     }
