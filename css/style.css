@@ -2324,6 +2324,65 @@ body.cites-shown .cite-chip--poetry {
   text-align: left;
 }
 
+/* ── ADR-027 parallel-passage anchor (footnote pattern) ──────────────────
+ * A ※ marker rendered before the first verse of each parallel section.
+ * Visually mirrors `.note-anchor--variant` (same glyph, same superscript
+ * treatment) so readers see one consistent "this verse has supplementary
+ * info" cue. Clicking opens a tooltip (via citations.openNoteTooltip) whose
+ * body shows `range — sourceLink 참조`; the source link inside the tooltip
+ * (`.parallel-tooltip-ref`) opens the cite-sheet.
+ *
+ * Visibility is tied to body.cites-shown — same toggle as cite chips and
+ * notes (single "인용 본문·주석" setting governs all three).
+ */
+.parallel-anchor {
+  display: none;
+}
+
+body.cites-shown .parallel-anchor {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  font-family: inherit;
+  font-size: 0.65em;
+  line-height: 0;
+  vertical-align: super;
+  background: transparent;
+  border: none;
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+body.cites-shown .parallel-anchor:hover,
+body.cites-shown .parallel-anchor:focus-visible {
+  color: var(--accent-light);
+  outline: none;
+}
+
+/* Clickable source reference inside the parallel tooltip body. Styled as a
+   subtle inline link so it stands apart from the surrounding tooltip text
+   (e.g. "5:1-10 — [1역대 11:1-9] 참조" — the bracket portion is the link). */
+.parallel-tooltip-ref {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--accent);
+  background: transparent;
+  border: none;
+  text-decoration: underline dotted;
+  text-underline-offset: 0.2em;
+  text-decoration-thickness: 1px;
+  cursor: pointer;
+}
+
+.parallel-tooltip-ref:hover,
+.parallel-tooltip-ref:focus-visible {
+  text-decoration-style: solid;
+  outline: none;
+}
+
 /* Note anchor: a button that wraps the anchored word. When toggle is OFF,
    it stays as plain inline text (no underline, no button affordance) so the
    body reads identically. When ON, dotted underline + clickable. */
