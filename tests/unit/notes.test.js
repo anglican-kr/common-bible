@@ -82,3 +82,47 @@ test("addMonths / addDays — calendar arithmetic", () => {
   // addDays crosses month boundaries
   assert.equal(addDays(new Date(2026, 4, 30).getTime(), 7), new Date(2026, 5, 6).getTime());
 });
+
+// ── EXTRACT_VERSES (bookmark insert passage text) ──
+
+function loadExtract(parseVerseSpec) {
+  const ctx = { Array, window: { parseVerseSpec } };
+  vm.createContext(ctx);
+  vm.runInContext(extractBlock("EXTRACT_VERSES"), ctx, { filename: "notes-extract.js" });
+  return ctx.extractVersesText;
+}
+
+const CHAPTER = {
+  verses: [
+    { number: 1, text: "한 처음에" },
+    { number: 2, text: "땅은 아직" },
+    { number: 3, segments: [{ text: "빛이" }, { text: "있어라" }] },
+    { number: 3, part: "b", text: "셋째 부분" },
+    { number: 10, text: "열번째" },
+  ],
+};
+
+test("extractVersesText — 'all' joins every verse, segments concatenated", () => {
+  const extract = loadExtract(() => []);
+  const out = extract(CHAPTER, "all");
+  assert.ok(out.includes("한 처음에"));
+  assert.ok(out.includes("빛이 있어라")); // segments joined by space
+  assert.ok(out.includes("열번째"));
+});
+
+test("extractVersesText — range + single spec filters verses", () => {
+  // stub parseVerseSpec to mirror the real shape
+  const extract = loadExtract((spec) =>
+    spec === "1-2,10" ? [{ start: 1, end: 2 }, { start: 10, end: 10 }] : []);
+  const out = extract(CHAPTER, "1-2,10");
+  assert.ok(out.includes("한 처음에"));
+  assert.ok(out.includes("땅은 아직"));
+  assert.ok(out.includes("열번째"));
+  assert.ok(!out.includes("빛이"));
+});
+
+test("extractVersesText — part-letter spec matches the lettered verse", () => {
+  const extract = loadExtract(() => [{ start: 3, end: 3, part: "b" }]);
+  const out = extract(CHAPTER, "3b");
+  assert.equal(out, "셋째 부분");
+});

@@ -554,10 +554,113 @@ function buildToolbar(ta, onChange) {
       btn("❝", "인용", () => apply((t) => md.toggleLinePrefix(t, "> "))),
       btn("☑", "체크박스", () => apply((t) => md.toggleListItem(t, "task"))),
       btn("🔗", "링크", () => apply((t) => md.insertLink(t))),
+      btn("📑", "북마크 삽입", () => openBookmarkPicker(ta, onChange)),
     );
   }
   return bar;
 }
+
+// Insert `text` at the textarea's caret, replacing any selection, and keep the
+// caret after the insertion. @param {HTMLTextAreaElement} ta @param {string} text
+function insertAtCursor(ta, text) {
+  const { selectionStart: a, selectionEnd: b, value } = ta;
+  ta.value = value.slice(0, a) + text + value.slice(b);
+  const caret = a + text.length;
+  ta.setSelectionRange(caret, caret);
+  ta.focus();
+}
+
+// ── Bookmark insert picker (ADR-026 §4.5) ──
+// Lists saved verse bookmarks; on pick, loads the chapter, extracts the passage
+// text (snapshot — the translation is fixed), and inserts a markdown blockquote
+// + a source link at the caret.
+
+/** Collect saved bookmarks that point at a verse range. @returns {Array<import("../types").BookmarkTreeBookmark>} */
+function collectVerseBookmarks() {
+  const out = [];
+  const store = window.appStorage?.loadBookmarks?.();
+  window.appBookmark?._walkBookmarks?.(store ?? [], (item) => {
+    if (item.type === "bookmark" && item.bookId && item.chapter) out.push(item);
+  });
+  return out;
+}
+
+/** @param {HTMLTextAreaElement} ta @param {() => void} onChange */
+function openBookmarkPicker(ta, onChange) {
+  const bookmarks = collectVerseBookmarks();
+  const scrim = el("div", { className: "note-bm-scrim" });
+  const sheet = el("div", { className: "note-bm-sheet", role: "dialog", "aria-modal": "true", "aria-label": "북마크 삽입" });
+  const close = () => { scrim.remove(); sheet.remove(); };
+  scrim.addEventListener("click", close);
+  sheet.appendChild(el("h2", { className: "note-bm-title" }, "북마크 삽입"));
+  if (!bookmarks.length) {
+    sheet.appendChild(el("p", { className: "notes-empty-hint" }, "저장된 구절 북마크가 없습니다."));
+  } else {
+    const list = el("ul", { className: "note-bm-list" });
+    const books = window.getBooksCache?.() ?? [];
+    for (const bm of bookmarks) {
+      const book = books.find((b) => b.id === bm.bookId);
+      const name = book ? book.name_ko : bm.bookId;
+      const spec = bm.verseSpec && bm.verseSpec !== "all" ? `:${bm.verseSpec}` : "";
+      const label = bm.label || `${name} ${bm.chapter}${spec}`;
+      const li = el("li", {});
+      const b = el("button", { type: "button", className: "note-bm-item" }, label);
+      b.addEventListener("click", async () => {
+        close();
+        await insertBookmarkPassage(ta, bm);
+        onChange();
+      });
+      li.appendChild(b);
+      list.appendChild(li);
+    }
+    sheet.appendChild(list);
+  }
+  const cancel = el("button", { type: "button", className: "bm-btn-secondary" }, "닫기");
+  cancel.addEventListener("click", close);
+  sheet.appendChild(cancel);
+  document.body.append(scrim, sheet);
+}
+
+/**
+ * Load the chapter, extract the bookmarked verses' text, and insert a quote +
+ * source link at the caret. @param {HTMLTextAreaElement} ta
+ * @param {import("../types").BookmarkTreeBookmark} bm
+ */
+async function insertBookmarkPassage(ta, bm) {
+  try {
+    const data = await window.loadChapter(/** @type {string} */ (bm.bookId), /** @type {number} */ (bm.chapter));
+    const text = extractVersesText(data, bm.verseSpec);
+    const books = window.getBooksCache?.() ?? [];
+    const book = books.find((b) => b.id === bm.bookId);
+    const name = book ? book.name_ko : bm.bookId;
+    const spec = bm.verseSpec && bm.verseSpec !== "all" ? bm.verseSpec : "";
+    const quote = text.split("\n").map((l) => (l ? `> ${l}` : ">")).join("\n");
+    const path = `/${bm.bookId}/${bm.chapter}${spec ? `/${spec}` : ""}`;
+    const cite = `${name} ${bm.chapter}${spec ? `:${spec}` : ""}`;
+    insertAtCursor(ta, `${quote}\n\n[${cite}](${path})\n\n`);
+  } catch {
+    window.announce?.("구절을 불러오지 못했습니다.");
+  }
+}
+
+// ── BEGIN EXTRACT_VERSES ──
+/**
+ * Extract plain verse text from chapter JSON for a verseSpec ("all" or a spec
+ * like "1-5,10"). @param {import("../types").BibleChapter} data
+ * @param {string|undefined} verseSpec @returns {string}
+ */
+function extractVersesText(data, verseSpec) {
+  const verses = data.verses ?? [];
+  /** @param {import("../types").BibleVerse} v */
+  const vText = (v) => v.text ?? (v.segments ?? []).map((s) => s.text).join(" ");
+  if (!verseSpec || verseSpec === "all") return verses.map(vText).join("\n").trim();
+  const segs = window.parseVerseSpec?.(verseSpec) ?? [];
+  /** @param {import("../types").BibleVerse} v */
+  const inSpec = (v) => segs.some((/** @type {{start:number,end:number,part?:string}} */ r) =>
+    r.part ? (v.number === r.start && v.part === r.part) : (v.number >= r.start && v.number <= r.end));
+  return verses.filter(inSpec).map(vText).join("\n").trim();
+}
+// ── END EXTRACT_VERSES ──
 
 window.appNotes = { renderNotesList, renderNoteEditor, createAndOpen, teardown: _cleanup };
 

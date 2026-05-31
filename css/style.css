@@ -5045,3 +5045,33 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 /* ── Day detail ── */
 .cal-day-title { margin: 0.5rem 0 1rem; }
 .cal-day-add { margin-top: 1rem; }
+
+/* ── Notes: bookmark insert picker (ADR-026 §4.5) ── */
+.note-bm-scrim {
+  position: fixed; inset: 0; z-index: 40;
+  background: rgba(0, 0, 0, 0.4);
+}
+.note-bm-sheet {
+  position: fixed; left: 50%; bottom: 0; transform: translateX(-50%);
+  z-index: 41; width: 100%; max-width: var(--max-width);
+  max-height: 70vh; overflow-y: auto;
+  background: var(--bg-card);
+  border-radius: var(--radius) var(--radius) 0 0;
+  padding: 1.2rem 1.2rem max(1.2rem, env(safe-area-inset-bottom));
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.25);
+}
+.note-bm-title { margin: 0 0 1rem; font-size: 1.1rem; }
+.note-bm-list { list-style: none; margin: 0 0 1rem; padding: 0; }
+.note-bm-item {
+  width: 100%; text-align: left; font-family: inherit; font-size: 0.95rem;
+  padding: 0.7rem 0.6rem; background: none; border: none;
+  border-bottom: 1px solid var(--border); color: var(--text); cursor: pointer;
+}
+.note-bm-item:hover { background: color-mix(in srgb, var(--text) 5%, transparent); }
+
+@media (min-width: 769px) {
+  .note-bm-sheet {
+    bottom: auto; top: 50%; transform: translate(-50%, -50%);
+    border-radius: var(--radius); max-width: 420px;
+  }
+}
