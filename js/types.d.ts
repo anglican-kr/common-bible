@@ -875,6 +875,7 @@ declare global {
       renderNotesList: () => void;
       renderNoteEditor: (id: string) => void;
       createAndOpen: (init?: Partial<Note>) => void;
+      teardown: () => void;
     };
     // Markdown engine for notes (ADR-026, js/app/markdown.js).
     appMarkdown?: {

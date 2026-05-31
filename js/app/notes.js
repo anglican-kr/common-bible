@@ -251,7 +251,7 @@ function buildToolbar(ta, onChange) {
   return bar;
 }
 
-window.appNotes = { renderNotesList, renderNoteEditor, createAndOpen };
+window.appNotes = { renderNotesList, renderNoteEditor, createAndOpen, teardown: _cleanup };
 
 // ESM module marker (ADR-019). No runtime effect.
 export {};
