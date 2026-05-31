@@ -79,6 +79,75 @@ def test_cross_verse_selection_expands_to_full_verses(page):
     assert "¶" not in text
 
 
+# ── Citation chips / note markers excluded from copy (ADR-022) ───────────────
+
+# Synthetic markers injected into v16/v17 so the assertion does not depend on
+# which chapters happen to ship hand-authored citations/notes yet. Mirrors the
+# real DOM: `.cite-chip` sits between verse spans, `.note-anchor--variant` (※)
+# is appended inside a verse span, and a text-anchored `.note-anchor` wraps a
+# real word that must survive the copy.
+_INJECT_MARKERS = """
+  const v16 = document.getElementById('v16');
+  const v17 = document.getElementById('v17');
+  // Wrap a real substring of v16 in a text-anchored note (word must stay).
+  const tw = document.createTreeWalker(v16, NodeFilter.SHOW_TEXT);
+  const tn = tw.nextNode();
+  const wordLen = Math.min(2, tn.length);
+  const noteWord = tn.nodeValue.slice(0, wordLen);
+  const wrap = document.createElement('span');
+  wrap.className = 'note-anchor';
+  wrap.setAttribute('role', 'button');
+  wrap.textContent = noteWord;
+  const rest = document.createTextNode(tn.nodeValue.slice(wordLen));
+  tn.parentNode.insertBefore(wrap, tn);
+  tn.parentNode.insertBefore(rest, tn);
+  tn.parentNode.removeChild(tn);
+  // Append a ※ variant marker inside v16.
+  const variant = document.createElement('button');
+  variant.type = 'button';
+  variant.className = 'note-anchor note-anchor--variant';
+  variant.textContent = '\\u203b';
+  v16.appendChild(variant);
+  // Insert a citation chip between v16 and v17.
+  const chip = document.createElement('span');
+  chip.className = 'cite-chip';
+  chip.setAttribute('role', 'button');
+  chip.textContent = '(\\uc778\\uc6a9 \\ucd9c\\ucc98 1:1)';
+  v16.parentNode.insertBefore(chip, v17);
+  // Select across v16-v17 so both verses (and the chip between them) are in range.
+  const w1 = document.createTreeWalker(v16, NodeFilter.SHOW_TEXT);
+  const t16 = w1.nextNode();
+  const w2 = document.createTreeWalker(v17, NodeFilter.SHOW_TEXT);
+  const t17 = w2.nextNode();
+  const r = document.createRange();
+  r.setStart(t16, 0);
+  r.setEnd(t17, Math.min(5, t17.length));
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(r);
+"""
+
+
+def test_copy_excludes_citation_chip_and_note_marker(page):
+    """Copying verses must not leak the citation chip text or the ※ variant
+    note marker, while text-anchored note words stay part of the verse."""
+    context = page.context
+    context.grant_permissions(["clipboard-read", "clipboard-write"])
+
+    page.goto(f"{BASE}/#/john/3")
+    page.wait_for_selector("article.chapter-text .verse")
+    page.wait_for_timeout(150)
+
+    text = _copy_text(page, _INJECT_MARKERS)
+    # Verse text survives.
+    assert "하느님" in text and "사랑" in text, f"verse text missing: {text!r}"
+    # Citation chip text is gone.
+    assert "인용 출처" not in text, f"citation chip leaked into copy: {text!r}"
+    assert "(" not in text.split("—")[0], f"chip parens leaked into body: {text!r}"
+    # ※ variant note marker is gone.
+    assert "※" not in text, f"note marker leaked into copy: {text!r}"
+
+
 # ── Verse-select bar 복사 button ─────────────────────────────────────────────
 
 def test_verse_select_copy_button_emits_text_with_citation(page):

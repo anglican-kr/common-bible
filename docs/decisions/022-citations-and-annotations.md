@@ -211,6 +211,8 @@ verse 객체에 옵션 필드:
     > **개정 (2026-05-24, dev 검토):** 초기 디자인은 anchor 에 윗첨자 ref 번호 + 장 끝 "주석" 섹션 (인쇄 학술 footnote 양식) 이었으나, dev 검증 시 본문 끝까지 스크롤하고 다시 돌아오는 흐름이 디지털에서 부자연스럽다는 판단으로 툴팁 양식으로 전환. 윗첨자 번호 + 하단 섹션 둘 다 제거.
 - 첫 진입 코치마크 1회 — 인용 칩을 가리키며 "회색 인용 버튼을 누르면 인용 원문이 시트로 열립니다" 안내 (토글 기본 ON 이라 칩 자체가 발견 매개).
 
+> **개정 (2026-05-31): 복사 시 칩·주석 마커 제외.** 절 복사(시스템 Cmd/Ctrl+C 드래그 선택 + 절 선택바 `복사` 버튼)는 인용 칩과 ※ 변형 주석 마커를 본문에서 제외한다. 두 경로가 공유하는 직렬화기 `serializeVerseRange`(`js/app/bookmark.js`, VERSE_SERIALIZE 블록)가 클론된 range 에서 `.cite-chip` 과 `.note-anchor--variant` 를 제거한다 — 이들은 읽기 보조 UI 일 뿐 성서 본문이 아니다. 반면 어절을 감싸는 텍스트 앵커 주석(`.note-anchor`, 비변형)은 실제 본문 단어를 감싸므로 그 textContent 는 그대로 남긴다. e2e 회귀: `tests/e2e/test_copy.py::test_copy_excludes_citation_chip_and_note_marker`.
+
 절 단위 앵커 네비게이션(`/isa/53#v5`) 이 라우터에 없으면 Phase 2 에 함께 추가. 범위 인용은 시작 절 스크롤 + 끝 절까지 일시 하이라이트.
 
 ### 7. 데이터 검증 테스트 (Phase 1)
