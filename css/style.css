@@ -4903,6 +4903,9 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   background: var(--bg-card); padding: 0.3rem 0.5rem; align-self: flex-start;
 }
 .note-edit-pane { display: flex; flex-direction: column; }
+/* `display:flex` would otherwise beat the UA `[hidden]` rule, leaving the edit
+   pane visible in 미리보기 mode. */
+.note-edit-pane[hidden] { display: none; }
 .note-body {
   font-family: inherit; font-size: 1rem; line-height: 1.7;
   width: 100%; min-height: 40vh; resize: vertical; box-sizing: border-box;

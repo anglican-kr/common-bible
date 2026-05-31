@@ -1936,7 +1936,9 @@ async function copySelectedVerses() {
 function noteFromSelectedVerses() {
   const article = document.querySelector("article.chapter-text");
   if (!article || readingContext.selectedVerses.size === 0) return;
-  if (!window.appNotes) { announce("노트를 열 수 없습니다."); return; }
+  // Guard the store too, not just the UI module — we exit verse-select mode
+  // below, so a missing store must be caught *before* clearing the selection.
+  if (!window.appNotes || !window.notesStore) { announce("노트를 사용할 수 없습니다."); return; }
 
   const children = [...article.children];
   /** @type {Array<[Element, Element]>} */

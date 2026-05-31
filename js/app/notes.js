@@ -122,7 +122,7 @@ function buildGate() {
 /** @param {Partial<Note>} [init] */
 function createAndOpen(init) {
   const s = store();
-  if (!s) return;
+  if (!s) { window.announce?.("노트를 사용할 수 없습니다."); return; }
   const note = s.createNote(init);
   navigate(`/notes/${note.id}`);
 }
