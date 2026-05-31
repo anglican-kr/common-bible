@@ -67,6 +67,10 @@ function renderNotesList() {
   setHeader();
   clearNode($app);
   const s = store();
+  // Subscribe *before* the gate early-return so the screen re-renders when the
+  // IDB load finishes (init's notify), a sync lands, or a post–sign-in sync
+  // flips the connection — otherwise the gate could stick until manual renav.
+  if (s) _unsub = s.onChange(() => { if (location.pathname === "/notes") renderNotesList(); });
   const notes = s ? s.listNotes() : [];
 
   // Drive gate: only when there's nothing to show *and* never connected. If
@@ -94,9 +98,6 @@ function renderNotesList() {
     for (const n of notes) list.appendChild(buildNoteRow(n));
     $app.appendChild(list);
   }
-
-  // Live refresh on store changes (sync status, remote merges) while on /notes.
-  if (s) _unsub = s.onChange(() => { if (location.pathname === "/notes") renderNotesList(); });
 }
 
 /** @param {Note} n */
