@@ -468,6 +468,13 @@ export interface BookEntry {
 
 export type BooksData = ReadonlyArray<BookEntry>;
 
+// ADR-022 §2 — one entry inside a cite's `parallels`. `tradition` is a
+// display-only label (e.g. "칠십인역") and is omitted when no label applies.
+export interface CiteParallelRef {
+  ref: string;
+  tradition?: string;
+}
+
 // `data/bible/{book_id}-{chapter}.json` parse shape. `verses` is the rendered
 // unit; segments hold prose/poetry mix and inter-verse stanza/paragraph cues.
 export interface BibleVerseSegment {
@@ -476,7 +483,7 @@ export interface BibleVerseSegment {
   paragraph_break?: boolean;
   // ADR-022 — citation metadata, omitted when absent.
   cite?: string;
-  parallels?: string[];
+  parallels?: CiteParallelRef[];
   tradition?: string;
 }
 
@@ -500,6 +507,15 @@ export interface BibleVerse {
   notes?: BibleVerseNote[];
 }
 
+// ADR-027 §2: a chapter-level parallel-passage marker. `range` is a verse-spec
+// string (same grammar as `<cite src>`'s verse part: "<ch>", "<ch>:<v>-<v>",
+// "<ch>:<v>-<ch>:<v>"). `src` carries one or more parallel sources with optional
+// per-source `tradition` labels (CiteParallelRef shape).
+export interface ChapterParallel {
+  src: CiteParallelRef[];
+  range: string;
+}
+
 export interface BibleChapter {
   book_id: string;
   book_name_ko: string;
@@ -508,6 +524,7 @@ export interface BibleChapter {
   has_dual_numbering?: boolean;
   has_lxx_only?: boolean;
   verses: BibleVerse[];
+  parallels?: ChapterParallel[];  // ADR-027: section-level parallel-passage markers
 }
 
 export interface BiblePrologue {
@@ -610,12 +627,12 @@ export interface AppCitations {
   _computeCiteShowPositions: (verses: ReadonlyArray<BibleVerse>) => Set<string>;
   chipText: (
     src: string,
-    parallels: ReadonlyArray<string> | null | undefined,
+    parallels: ReadonlyArray<CiteParallelRef> | null | undefined,
     tradition: string | null | undefined,
   ) => string;
   buildCiteChip: (
     src: string,
-    parallels: ReadonlyArray<string> | null | undefined,
+    parallels: ReadonlyArray<CiteParallelRef> | null | undefined,
     tradition: string | null | undefined,
     segmentType: "prose" | "poetry",
   ) => HTMLElement;
@@ -626,18 +643,38 @@ export interface AppCitations {
   openNoteTooltip: (
     anchorEl: HTMLElement,
     anchor: string,
-    body: string,
+    body: string | ReadonlyArray<string | HTMLElement>,
   ) => void;
   closeNoteTooltip: () => void;
   openCiteSheet: (
     src: string,
-    parallels: ReadonlyArray<string> | null,
+    parallels: ReadonlyArray<CiteParallelRef> | null,
     tradition: string | null,
     returnFocusEl: HTMLElement | null,
   ) => Promise<void>;
   closeCiteSheet: () => void;
   initCiteSheet: () => void;
   maybeShowCoachmark: () => void;
+}
+
+// ── App parallels facade (js/app/parallels.js) ─────────────────────────────
+// ADR-027 chapter-level parallel-passage banner. Inserted by views-routing
+// immediately before the first verse of each `ChapterParallel.range`.
+
+export interface AppParallels {
+  parseRange: (range: string) => {
+    startCh: number;
+    startV: number;
+    endCh: number;
+    endV: number | null;  // null = entire chapter shorthand (e.g. "13")
+  } | null;
+  buildTooltipBody: (parallel: ChapterParallel) => Array<string | HTMLElement>;
+  buildParallelAnchor: (parallel: ChapterParallel) => HTMLElement;
+  findParallelsStartingAt: (
+    parallels: ReadonlyArray<ChapterParallel> | null | undefined,
+    verseNumber: number,
+  ) => Array<ChapterParallel>;
+  initParallels: () => void;
 }
 
 // ── App settings-ui facade (js/app/settings-ui.js) ──────────────────────────
@@ -783,6 +820,7 @@ declare global {
     appSearch: AppSearch;
     appBookmark: AppBookmark;
     appCitations: AppCitations;
+    appParallels: AppParallels;
     appViewsRouting: { [key: string]: any }; // Phase 7a aggregate (full type Phase 7b)
     readingContext: ReadingContext;
 

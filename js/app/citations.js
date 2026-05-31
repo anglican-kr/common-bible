@@ -23,6 +23,47 @@ window.appCitations = (() => {
   /** @typedef {import("../types").BibleVerseNote} BibleVerseNote */
   /** @typedef {import("../types").BibleChapter} BibleChapter */
   /** @typedef {import("../types").BooksData} BooksData */
+  /** @typedef {import("../types").CiteParallelRef} CiteParallelRef */
+
+  // ADR-022 §2: a parallel entry's inline `[전통]` suffix. Same regex shape
+  // as parser.py's _PARALLEL_TRADITION_RE — round-trips data-cite-parallels
+  // through the source markdown's own notation.
+  const _PARALLEL_TRADITION_RE = /^(.+?)\s*\[([^\[\]]+)\]\s*$/;
+
+  /**
+   * Round-trip parse a `data-cite-parallels` attribute back into structured refs.
+   * Format mirrors the source markdown: `"ref [전통]; ref2; ref3 [vulgata]"`.
+   *
+   * @param {string | null} raw
+   * @returns {Array<CiteParallelRef> | null}
+   */
+  function _parseParallelsAttr(raw) {
+    if (!raw) return null;
+    const out = [];
+    for (const part of raw.split(";")) {
+      const s = part.trim();
+      if (!s) continue;
+      const m = _PARALLEL_TRADITION_RE.exec(s);
+      if (m) {
+        out.push({ ref: m[1].trim(), tradition: m[2].trim() });
+      } else {
+        out.push({ ref: s });
+      }
+    }
+    return out.length ? out : null;
+  }
+
+  /**
+   * Inverse of `_parseParallelsAttr` — serialize back to the `[전통]` shape.
+   *
+   * @param {ReadonlyArray<CiteParallelRef>} parallels
+   * @returns {string}
+   */
+  function _serializeParallelsAttr(parallels) {
+    return parallels
+      .map((p) => (p.tradition ? `${p.ref} [${p.tradition}]` : p.ref))
+      .join(";");
+  }
 
   const { el, clearNode, trapFocus, dragReleaseAction } = window.appHelpers;
 
@@ -48,8 +89,12 @@ window.appCitations = (() => {
             vi, si,
             src: s.cite,
             tr: s.tradition || null,
-            // Stringify parallels list for cheap equality comparison.
-            par: s.parallels ? s.parallels.join("|") : "",
+            // ADR-022 §6 dedup: each parallel's (ref, tradition) tuple is part
+            // of the equality key — a parallel that shifts from MT-default to
+            // [칠십인역] should break the dedup group even if `ref` is identical.
+            par: s.parallels
+              ? s.parallels.map((p) => `${p.tradition || ""}~${p.ref}`).join("|")
+              : "",
             vNum: v.number,
           });
         }
@@ -71,18 +116,23 @@ window.appCitations = (() => {
   }
 
   /**
-   * Compose the chip text "(src · tradition · parallel1 · parallel2 …)".
-   * tradition (if present) follows src; parallels follow tradition.
+   * Compose the chip text "(src · parallel1 · parallel2 …)".
+   * Each ref (primary or parallel) is prefixed with its own tradition label
+   * when present, e.g. `(칠십인역 이사 40:3 · 신명 5:17 · 칠십인역 시편 16:8)`.
    *
    * @param {string} src
-   * @param {ReadonlyArray<string> | null | undefined} parallels
+   * @param {ReadonlyArray<CiteParallelRef> | null | undefined} parallels
    * @param {string | null | undefined} tradition
    * @returns {string}
    */
   function chipText(src, parallels, tradition) {
     const primary = (tradition ? `${tradition} ` : "") + src;
     const parts = [primary];
-    if (parallels && parallels.length) parts.push(...parallels);
+    if (parallels && parallels.length) {
+      for (const p of parallels) {
+        parts.push((p.tradition ? `${p.tradition} ` : "") + p.ref);
+      }
+    }
     return `(${parts.join(" · ")})`;
   }
 
@@ -101,7 +151,7 @@ window.appCitations = (() => {
    * src/tradition/parallels for the click delegation.
    *
    * @param {string} src
-   * @param {ReadonlyArray<string> | null | undefined} parallels
+   * @param {ReadonlyArray<CiteParallelRef> | null | undefined} parallels
    * @param {string | null | undefined} tradition
    * @param {"prose" | "poetry"} segmentType
    * @returns {HTMLElement}
@@ -118,7 +168,11 @@ window.appCitations = (() => {
       "aria-label": `인용 출처 ${label} — 본문 보기`,
     };
     if (tradition) attrs["data-cite-tradition"] = tradition;
-    if (parallels && parallels.length) attrs["data-cite-parallels"] = parallels.join(";");
+    if (parallels && parallels.length) {
+      // Serialize per-parallel tradition using the same `[전통]` inline
+      // notation as source markdown so `_parseParallelsAttr` can round-trip.
+      attrs["data-cite-parallels"] = _serializeParallelsAttr(parallels);
+    }
     return el("span", attrs, label);
   }
 
@@ -314,9 +368,14 @@ window.appCitations = (() => {
    * Long anchor labels are truncated with an ellipsis so the tooltip header
    * stays readable.
    *
+   * `body` may be a plain string OR an array of strings/DOM nodes so callers
+   * (e.g. parallels.js) can inject inline link elements into the tooltip.
+   * Plain string bodies prepend " — "; array bodies start with " — " then
+   * append each item verbatim (no further punctuation).
+   *
    * @param {HTMLElement} anchorEl
    * @param {string} anchor
-   * @param {string} body
+   * @param {string | ReadonlyArray<string | HTMLElement>} body
    */
   function openNoteTooltip(anchorEl, anchor, body) {
     const tt = _ensureNoteTooltip();
@@ -325,7 +384,15 @@ window.appCitations = (() => {
       ? anchor.slice(0, TOOLTIP_ANCHOR_MAX - 1) + "…"
       : anchor;
     tt.appendChild(el("strong", { className: "note-tooltip-anchor" }, labelText));
-    tt.appendChild(document.createTextNode(" — " + body));
+    if (typeof body === "string") {
+      tt.appendChild(document.createTextNode(" — " + body));
+    } else {
+      tt.appendChild(document.createTextNode(" — "));
+      for (const part of body) {
+        if (typeof part === "string") tt.appendChild(document.createTextNode(part));
+        else if (part) tt.appendChild(part);
+      }
+    }
     tt.hidden = false;
     _positionNoteTooltip(tt, anchorEl);
     _currentNoteAnchor = anchorEl;
@@ -366,7 +433,7 @@ window.appCitations = (() => {
   let _sheetReturnFocus = null;
   /** @type {(() => void) | null} */
   let _sheetTrapCleanup = null;
-  /** @type {{ src: string, parallels: ReadonlyArray<string> | null, tradition: string | null, expandedRefIndex: number | null } | null} */
+  /** @type {{ src: string, parallels: ReadonlyArray<CiteParallelRef> | null, tradition: string | null, expandedRefIndex: number | null } | null} */
   let _sheetState = null;
 
   const COACHMARK_KEY = "bible-cite-coachmark-seen";
@@ -735,18 +802,24 @@ window.appCitations = (() => {
     try {
       clearNode(bodyEl);
       const { src, parallels, tradition, expandedRefIndex } = _sheetState;
-      const refs = [src, ...(parallels || [])];
+      // Flatten primary + parallels into a single {ref, tradition} sequence
+      // so per-entry tradition (ADR-022 §2 개정) flows through one code path.
+      /** @type {Array<{ref: string, tradition: string | null}>} */
+      const refs = [
+        { ref: src, tradition: tradition || null },
+        ...((parallels || []).map((p) => ({ ref: p.ref, tradition: p.tradition || null }))),
+      ];
       if (expandedRefIndex !== null) {
         const idx = expandedRefIndex;
-        const refSrc = refs[idx];
-        const refTradition = idx === 0 ? tradition : null;
-        await _renderRef(bodyEl, refSrc, refTradition, true, null);
+        const r = refs[idx];
+        await _renderRef(bodyEl, r.ref, r.tradition, true, null);
         _scrollFirstHighlightIntoView(bodyEl);
       } else {
         for (let i = 0; i < refs.length; i++) {
           if (i > 0) bodyEl.appendChild(el("hr", { className: "cite-sheet-divider" }));
           const idx = i;
-          await _renderRef(bodyEl, refs[i], i === 0 ? tradition : null, false, () => {
+          const r = refs[i];
+          await _renderRef(bodyEl, r.ref, r.tradition, false, () => {
             if (!_sheetState) return;
             _sheetState.expandedRefIndex = idx;
             _updateSheetHeader();
@@ -865,7 +938,7 @@ window.appCitations = (() => {
    * each parallel divided by a horizontal rule (ADR-022 §6).
    *
    * @param {string} src
-   * @param {ReadonlyArray<string> | null} parallels
+   * @param {ReadonlyArray<CiteParallelRef> | null} parallels
    * @param {string | null} tradition
    * @param {HTMLElement | null} returnFocusEl
    */
@@ -958,10 +1031,7 @@ window.appCitations = (() => {
           e.preventDefault();
           const src = target.getAttribute("data-cite-src");
           if (!src) return;
-          const parallelsRaw = target.getAttribute("data-cite-parallels") || "";
-          const parallels = parallelsRaw
-            ? parallelsRaw.split(";").map((p) => p.trim()).filter(Boolean)
-            : null;
+          const parallels = _parseParallelsAttr(target.getAttribute("data-cite-parallels"));
           const tradition = target.getAttribute("data-cite-tradition") || null;
           _markCoachmarkSeen();
           openCiteSheet(src, parallels, tradition, target);
@@ -984,10 +1054,7 @@ window.appCitations = (() => {
       if (chip instanceof HTMLElement) {
         const src = chip.getAttribute("data-cite-src");
         if (!src) return;
-        const parallelsRaw = chip.getAttribute("data-cite-parallels") || "";
-        const parallels = parallelsRaw
-          ? parallelsRaw.split(";").map((p) => p.trim()).filter(Boolean)
-          : null;
+        const parallels = _parseParallelsAttr(chip.getAttribute("data-cite-parallels"));
         const tradition = chip.getAttribute("data-cite-tradition") || null;
         _markCoachmarkSeen();
         openCiteSheet(src, parallels, tradition, chip);
