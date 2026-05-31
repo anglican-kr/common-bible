@@ -468,6 +468,13 @@ export interface BookEntry {
 
 export type BooksData = ReadonlyArray<BookEntry>;
 
+// ADR-022 §2 — one entry inside a cite's `parallels`. `tradition` is a
+// display-only label (e.g. "칠십인역") and is omitted when no label applies.
+export interface CiteParallelRef {
+  ref: string;
+  tradition?: string;
+}
+
 // `data/bible/{book_id}-{chapter}.json` parse shape. `verses` is the rendered
 // unit; segments hold prose/poetry mix and inter-verse stanza/paragraph cues.
 export interface BibleVerseSegment {
@@ -476,7 +483,7 @@ export interface BibleVerseSegment {
   paragraph_break?: boolean;
   // ADR-022 — citation metadata, omitted when absent.
   cite?: string;
-  parallels?: string[];
+  parallels?: CiteParallelRef[];
   tradition?: string;
 }
 
@@ -610,12 +617,12 @@ export interface AppCitations {
   _computeCiteShowPositions: (verses: ReadonlyArray<BibleVerse>) => Set<string>;
   chipText: (
     src: string,
-    parallels: ReadonlyArray<string> | null | undefined,
+    parallels: ReadonlyArray<CiteParallelRef> | null | undefined,
     tradition: string | null | undefined,
   ) => string;
   buildCiteChip: (
     src: string,
-    parallels: ReadonlyArray<string> | null | undefined,
+    parallels: ReadonlyArray<CiteParallelRef> | null | undefined,
     tradition: string | null | undefined,
     segmentType: "prose" | "poetry",
   ) => HTMLElement;
@@ -631,7 +638,7 @@ export interface AppCitations {
   closeNoteTooltip: () => void;
   openCiteSheet: (
     src: string,
-    parallels: ReadonlyArray<string> | null,
+    parallels: ReadonlyArray<CiteParallelRef> | null,
     tradition: string | null,
     returnFocusEl: HTMLElement | null,
   ) => Promise<void>;

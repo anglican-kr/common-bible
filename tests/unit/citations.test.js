@@ -123,8 +123,22 @@ test("_computeCiteShowPositions: different tradition breaks group", () => {
 test("_computeCiteShowPositions: different parallels breaks group", () => {
   const c = loadCitations();
   const r = c._computeCiteShowPositions([
-    { number: 1, segments: [{ type: "prose", text: "a", cite: "출애 20:13", parallels: ["신명 5:17"] }] },
+    { number: 1, segments: [{ type: "prose", text: "a", cite: "출애 20:13", parallels: [{ ref: "신명 5:17" }] }] },
     { number: 2, segments: [{ type: "prose", text: "b", cite: "출애 20:13" }] },
+  ]);
+  assert.deepEqual([...r].sort(), ["0:0", "1:0"]);
+});
+
+test("_computeCiteShowPositions: same parallel ref but different per-parallel tradition breaks group", () => {
+  // ADR-022 §2 개정: each parallel's (ref, tradition) is part of the dedup
+  // key — a label flip from MT-default to [칠십인역] must NOT merge into the
+  // preceding chip group, even when the bare ref matches.
+  const c = loadCitations();
+  const r = c._computeCiteShowPositions([
+    { number: 1, segments: [{ type: "prose", text: "a", cite: "시편 16:8",
+        parallels: [{ ref: "사도 2:25" }] }] },
+    { number: 2, segments: [{ type: "prose", text: "b", cite: "시편 16:8",
+        parallels: [{ ref: "사도 2:25", tradition: "칠십인역" }] }] },
   ]);
   assert.deepEqual([...r].sort(), ["0:0", "1:0"]);
 });
@@ -173,7 +187,7 @@ test("chipText: src + tradition — tradition prefixed without separator", () =>
 test("chipText: src + parallels", () => {
   const c = loadCitations();
   assert.equal(
-    c.chipText("출애 20:13", ["신명 5:17"], null),
+    c.chipText("출애 20:13", [{ ref: "신명 5:17" }], null),
     "(출애 20:13 · 신명 5:17)",
   );
 });
@@ -181,7 +195,7 @@ test("chipText: src + parallels", () => {
 test("chipText: src + tradition + parallels — tradition fused to primary, separator only between refs", () => {
   const c = loadCitations();
   assert.equal(
-    c.chipText("이사 40:3", ["마르 1:3"], "칠십인역"),
+    c.chipText("이사 40:3", [{ ref: "마르 1:3" }], "칠십인역"),
     "(칠십인역 이사 40:3 · 마르 1:3)",
   );
 });
@@ -189,8 +203,31 @@ test("chipText: src + tradition + parallels — tradition fused to primary, sepa
 test("chipText: multi-parallel", () => {
   const c = loadCitations();
   assert.equal(
-    c.chipText("출애 20:13", ["신명 5:17", "마르 12:29"], null),
+    c.chipText("출애 20:13", [{ ref: "신명 5:17" }, { ref: "마르 12:29" }], null),
     "(출애 20:13 · 신명 5:17 · 마르 12:29)",
+  );
+});
+
+test("chipText: per-parallel tradition — only that parallel gets the prefix", () => {
+  // ADR-022 §2 개정: src stays MT-default, a single parallel labelled
+  // [칠십인역]. The src label has no prefix; only the parallel does.
+  const c = loadCitations();
+  assert.equal(
+    c.chipText("시편 16:8", [
+      { ref: "사도 2:25", tradition: "칠십인역" },
+    ], null),
+    "(시편 16:8 · 칠십인역 사도 2:25)",
+  );
+});
+
+test("chipText: src tradition + mixed-tradition parallels", () => {
+  const c = loadCitations();
+  assert.equal(
+    c.chipText("이사 40:3", [
+      { ref: "신명 5:17" },                       // no label
+      { ref: "시편 16:8", tradition: "칠십인역" }, // labelled
+    ], "칠십인역"),
+    "(칠십인역 이사 40:3 · 신명 5:17 · 칠십인역 시편 16:8)",
   );
 });
 
@@ -225,9 +262,28 @@ test("buildCiteChip: poetry → cite-chip--poetry block class", () => {
 test("buildCiteChip: parallels stored as semicolon-joined data attr", () => {
   const c = loadCitations();
   const node = c.buildCiteChip(
-    "출애 20:13", ["신명 5:17", "마르 12:29"], null, "prose",
+    "출애 20:13", [{ ref: "신명 5:17" }, { ref: "마르 12:29" }], null, "prose",
   );
   assert.equal(node.attrs["data-cite-parallels"], "신명 5:17;마르 12:29");
+});
+
+test("buildCiteChip: per-parallel tradition serialized as `[전통]` inline (round-trips source markdown)", () => {
+  // ADR-022 §2 개정: the data attr re-uses the markdown notation so the
+  // click delegation can round-trip without a parallel out-of-band schema.
+  const c = loadCitations();
+  const node = c.buildCiteChip(
+    "시편 16:8",
+    [
+      { ref: "신명 5:17" },
+      { ref: "시편 16:8", tradition: "칠십인역" },
+    ],
+    null,
+    "prose",
+  );
+  assert.equal(
+    node.attrs["data-cite-parallels"],
+    "신명 5:17;시편 16:8 [칠십인역]",
+  );
 });
 
 test("buildCiteChip: aria-label includes display text", () => {
