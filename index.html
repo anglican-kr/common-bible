@@ -303,6 +303,9 @@
   <!-- store-v2 is ESM-opted-in (ADR-018) so its `saveBookmarks`/`loadBookmarks`
        names don't collide with js/app/storage.js at the global TS scope. -->
   <script type="module" src="/js/sync/store-v2.js"></script>
+  <!-- notes-store (ADR-026): Drive-primary notes. Loads after store-v2/transport
+       (used at runtime) and before state-machine (its cycle calls notesStore). -->
+  <script type="module" src="/js/sync/notes-store.js"></script>
   <script type="module" src="/js/sync/state-machine.js"></script>
   <script type="module" src="/js/drive-sync.js"></script>
   <!-- audio-cache.js is loaded both here and via sw.js's importScripts(),

@@ -41,6 +41,7 @@ const SHELL_FILES = [
   "/js/sync/refresh-store.js",
   "/js/sync/transport.js",
   "/js/sync/store-v2.js",
+  "/js/sync/notes-store.js",
   "/js/sync/state-machine.js",
   "/js/pre-fetch.js",
   "/js/gtag-init.js",
