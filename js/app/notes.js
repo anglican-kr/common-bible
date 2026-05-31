@@ -183,7 +183,7 @@ function renderNoteEditor(id) {
 
   // Durability: register the live buffer so notes-store can flush on
   // hidden/pagehide. endEditing() (in _cleanup) flushes on route away.
-  s.beginEditing(id, () => ({ title: titleInput.value, body: textarea.value }));
+  s.beginEditing(id, () => ({ title: titleInput.value, body: textarea.value, date: isoToTs(dateInput.value) }));
   _editorId = id;
 
   // ── Mode toggle ──

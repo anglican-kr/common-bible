@@ -145,7 +145,7 @@ export interface NotesStore {
   updateNote: (id: string, patch: Partial<Pick<Note, "title" | "body" | "date" | "refs">>) => void;
   deleteNote: (id: string) => void;
   // Editor lifecycle: register the live buffer so hidden/pagehide can flush it.
-  beginEditing: (id: string, getBuffer: () => { title: string; body: string }) => void;
+  beginEditing: (id: string, getBuffer: () => { title: string; body: string; date: number }) => void;
   endEditing: () => void;
   // Drive sync (called by the state machine after a successful bookmark cycle).
   syncWithToken: (token: string) => Promise<void>;
