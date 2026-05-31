@@ -415,14 +415,20 @@ async function findFileId(token, name) {
  */
 async function listFiles(token) {
   try {
-    const { res, ok } = await driveFetch(
-      "/files?spaces=appDataFolder&fields=files(id,name)&pageSize=1000",
-      { token }
-    );
-    if (!ok) return null;
-    let data;
-    try { data = await res.json(); } catch { return null; }
-    return Array.isArray(data.files) ? data.files : [];
+    /** @type {Array<{ id: string; name: string }>} */
+    const all = [];
+    let pageToken = "";
+    do {
+      const url = "/files?spaces=appDataFolder&fields=nextPageToken,files(id,name)&pageSize=1000"
+        + (pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : "");
+      const { res, ok } = await driveFetch(url, { token });
+      if (!ok) return null;
+      let data;
+      try { data = await res.json(); } catch { return null; }
+      if (Array.isArray(data.files)) all.push(...data.files);
+      pageToken = data.nextPageToken || "";
+    } while (pageToken);
+    return all;
   } catch { return null; }
 }
 
