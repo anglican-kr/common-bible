@@ -139,8 +139,23 @@ function createAndOpen(init) {
 function renderNoteEditor(id) {
   _cleanup();
   const s = store();
-  const note = s?.getNote(id);
-  if (!s || !note) { navigate("/notes"); return; }
+  if (!s) { navigate("/notes"); return; }
+  const note = s.getNote(id);
+  if (!note) {
+    // Cold load: the note may exist in IndexedDB but init() hasn't populated
+    // memory yet. Wait for the store rather than bouncing to the list, then
+    // re-render once init's notify (or a sync) lands. Only redirect when the
+    // store is ready and the note is genuinely gone.
+    if (!s.isReady()) {
+      setHeader();
+      clearNode($app);
+      $app.appendChild(el("div", { className: "notes-empty" }, el("p", {}, "불러오는 중…")));
+      _unsub = s.onChange(() => { if (location.pathname === `/notes/${id}`) renderNoteEditor(id); });
+      return;
+    }
+    navigate("/notes");
+    return;
+  }
   setHeader();
   clearNode($app);
 
