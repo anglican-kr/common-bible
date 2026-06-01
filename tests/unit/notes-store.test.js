@@ -180,17 +180,22 @@ test("_notify — re-subscribing listener does not loop (snapshot dispatch)", ()
   vm.createContext(ctx);
   vm.runInContext(extractBlock("NOTIFY"), ctx, { filename: "notes-notify.js" });
 
-  // A listener that re-subscribes a fresh listener on each call — the exact
-  // pattern renderNotesList uses. A live-Set iterator would visit the newly
-  // added listener and loop forever (UI freeze). With a snapshot it runs once.
+  // Mirror renderNotesList exactly: each listener, when called, unsubscribes
+  // itself and subscribes a *fresh* listener that does the same. A live-Set
+  // iterator would keep visiting each newly added listener → unbounded chain
+  // (the UI freeze). A snapshot dispatch calls only the one present at start.
+  // The throw guard means the buggy (live-iteration) code FAILS this test.
   let calls = 0;
-  const self = () => {
-    calls++;
-    if (calls > 1000) throw new Error("infinite notify loop");
-    listeners.delete(self);
-    listeners.add(() => {}); // fresh listener added during dispatch
+  const make = () => {
+    const fn = () => {
+      calls++;
+      if (calls > 1000) throw new Error("infinite notify loop (live Set iteration)");
+      listeners.delete(fn);
+      listeners.add(make());
+    };
+    return fn;
   };
-  listeners.add(self);
+  listeners.add(make());
   ctx._notify();
   assert.equal(calls, 1);
 });
