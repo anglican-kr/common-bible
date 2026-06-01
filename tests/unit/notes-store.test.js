@@ -171,3 +171,26 @@ test("pickConflictWinner — LWW on updatedAt, deviceId breaks ties", () => {
   assert.equal(pickConflictWinner(7, 7, "devA", "devB"), "local");  // devA <= devB
   assert.equal(pickConflictWinner(7, 7, "devZ", "devB"), "remote"); // devZ > devB
 });
+
+// ── NOTIFY (listener dispatch must snapshot — regression for the freeze) ──
+
+test("_notify — re-subscribing listener does not loop (snapshot dispatch)", () => {
+  const listeners = new Set();
+  const ctx = { _listeners: listeners, Array };
+  vm.createContext(ctx);
+  vm.runInContext(extractBlock("NOTIFY"), ctx, { filename: "notes-notify.js" });
+
+  // A listener that re-subscribes a fresh listener on each call — the exact
+  // pattern renderNotesList uses. A live-Set iterator would visit the newly
+  // added listener and loop forever (UI freeze). With a snapshot it runs once.
+  let calls = 0;
+  const self = () => {
+    calls++;
+    if (calls > 1000) throw new Error("infinite notify loop");
+    listeners.delete(self);
+    listeners.add(() => {}); // fresh listener added during dispatch
+  };
+  listeners.add(self);
+  ctx._notify();
+  assert.equal(calls, 1);
+});
