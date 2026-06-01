@@ -80,6 +80,12 @@
   --sp-6: 2rem;      /* 32px */
   --sp-7: 3rem;      /* 48px */
 
+  /* Font families — UI is sans, only the bible text (and cited passages) is
+     serif. Components use var(--font-sans); body defaults to sans so any
+     element that forgot to set a family no longer leaks serif (ADR-027). */
+  --font-sans: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  --font-serif: "Noto Serif KR", "Batang", serif;
+
   /* Typography — base 1rem, ratio ~1.12. */
   --fs-xs: 0.75rem;
   --fs-sm: 0.875rem; /* dominant body-secondary size (absorbs 0.85/0.88/0.9) */
@@ -101,6 +107,7 @@
   --shadow-1: 0 1px 3px rgba(0, 0, 0, 0.08);
   --shadow-2: 0 4px 16px rgba(0, 0, 0, 0.12);
   --shadow-3: 0 12px 32px rgba(0, 0, 0, 0.25);   /* overlays / sheets */
+  --shadow-up: 0 -4px 20px rgba(0, 0, 0, 0.18);   /* bottom-anchored sheets (cue reads above the edge) */
   --focus-ring: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent);
 
   /* Surface layering + state colours — fill the gaps that made screens look
@@ -140,6 +147,7 @@
   --shadow-1: 0 1px 3px rgba(0, 0, 0, 0.3);
   --shadow-2: 0 4px 20px rgba(0, 0, 0, 0.25);
   --shadow-3: 0 12px 32px rgba(0, 0, 0, 0.45);
+  --shadow-up: 0 -4px 24px rgba(0, 0, 0, 0.4);
   --bg-subtle: #2c2c48;     /* between --bg and --bg-card */
   --text-muted: #7e7e92;
   --hover-overlay: rgba(255, 255, 255, 0.05);
@@ -205,7 +213,9 @@ html {
 }
 
 body {
-  font-family: "Noto Serif KR", "Batang", serif;
+  /* UI default is sans; only bible-text selectors opt into serif below. This
+     flip means any element that omits font-family no longer leaks serif. */
+  font-family: var(--font-sans);
   background: var(--bg);
   color: var(--text);
   line-height: 1.8;
@@ -247,7 +257,7 @@ body {
 }
 
 #app-header {
-  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  font-family: var(--font-sans);
   background: var(--bg);
   border-bottom: none;
   padding: 0.6rem 1rem 0;
@@ -327,7 +337,7 @@ body {
 }
 
 .settings-popover {
-  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  font-family: var(--font-sans);
   position: fixed;
   z-index: 25;
   background: var(--bg);
@@ -460,7 +470,7 @@ body {
 #drive-disconnect-scrim:not([hidden]) { display: block; }
 
 #drive-disconnect-modal {
-  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  font-family: var(--font-sans);
   display: none;
   position: fixed;
   top: 50%;
@@ -1327,7 +1337,7 @@ body {
   display: block;
 }
 #install-modal {
-  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  font-family: var(--font-sans);
   display: none;
   position: fixed;
   top: 50%;
@@ -1551,7 +1561,7 @@ body {
 }
 
 #search-sheet {
-  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  font-family: var(--font-sans);
   display: none;
   position: fixed;
   /* Default (expanded, keyboard dismissed) = flush to viewport bottom edge,
@@ -1873,7 +1883,7 @@ body {
 
 .search-result-text {
   display: block;
-  font-family: "Noto Serif KR", serif;
+  font-family: var(--font-serif);
   font-size: 0.85rem;
   line-height: 1.6;
   color: var(--text-secondary);
@@ -1979,7 +1989,7 @@ mark.search-highlight {
 }
 
 .resume-banner {
-  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  font-family: var(--font-sans);
   display: flex;
   align-items: center;
   /* Gap to the division tabs below; only present when the banner is shown. */
@@ -2050,7 +2060,7 @@ mark.search-highlight {
 }
 
 .division-tabs {
-  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  font-family: var(--font-sans);
   position: relative; /* positioning context for the sliding indicator */
   display: flex;
   /* Breathing room below the (now line-less) header. */
@@ -2128,7 +2138,7 @@ mark.search-highlight {
 }
 
 .division-panel {
-  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  font-family: var(--font-sans);
 }
 
 .book-list {
@@ -2177,7 +2187,7 @@ mark.search-highlight {
 
 /* ── Chapter Grid ── */
 .chapter-grid {
-  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  font-family: var(--font-sans);
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(3.2rem, 1fr));
   gap: 0.4rem;
@@ -2221,6 +2231,7 @@ mark.search-highlight {
 
 /* ── Chapter View (verses) ── */
 .chapter-text {
+  font-family: var(--font-serif);   /* bible text — the one serif surface */
   font-size: 1rem;
   line-height: 2;
 }
@@ -2265,7 +2276,7 @@ mark.search-highlight {
 }
 
 .verse-num {
-  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  font-family: var(--font-sans);
   font-size: 0.7rem;
   font-weight: 400;
   color: var(--verse-num);
@@ -2293,7 +2304,7 @@ mark.search-highlight {
 }
 
 .pilcrow {
-  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  font-family: var(--font-sans);
   color: var(--paragraph-mark);
   margin-right: 0.2em;
   user-select: none;
@@ -2307,7 +2318,7 @@ mark.search-highlight {
 }
 
 .dual-numbering-note {
-  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  font-family: var(--font-sans);
   font-size: 0.78rem;
   color: var(--text-secondary);
   margin-bottom: 0.8rem;
@@ -2331,7 +2342,7 @@ body.cites-shown .cite-chip {
      provides a natural gap. Small padding keeps hover background readable. */
   margin: 0;
   padding: 0 0.2em;
-  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  font-family: var(--font-sans);
   font-size: 0.78em;
   color: var(--text-secondary);
   background: transparent;
@@ -2434,7 +2445,7 @@ body.cites-shown .note-anchor--variant:focus-visible {
   border: 1px solid var(--border);
   border-radius: 8px;
   box-shadow: 0 4px 18px rgba(0, 0, 0, 0.18);
-  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  font-family: var(--font-sans);
   font-size: 0.88rem;
   line-height: 1.55;
   animation: note-tooltip-fade-in 160ms ease-out;
@@ -2575,7 +2586,7 @@ body.cites-shown .note-anchor--variant:focus-visible {
   gap: 0.5rem;
   padding: 0.6rem 1rem;
   border-bottom: 1px solid var(--border);
-  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  font-family: var(--font-sans);
 }
 
 #cite-sheet-title {
@@ -2659,7 +2670,7 @@ body.cites-shown .note-anchor--variant:focus-visible {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  font-family: var(--font-sans);
   font-size: 0.85rem;
   font-weight: 600;
   color: var(--accent);
@@ -2671,7 +2682,7 @@ body.cites-shown .note-anchor--variant:focus-visible {
   background: transparent;
   border: none;
   cursor: pointer;
-  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  font-family: var(--font-sans);
   font-size: 0.82rem;
   color: var(--accent);
   border-radius: 4px;
@@ -2687,6 +2698,7 @@ body.cites-shown .note-anchor--variant:focus-visible {
    (line-height, poetry indent, verse-num) so cited passages match main view.
    Slight margin trim because the sheet is more compact than the main page. */
 .cite-sheet-article {
+  font-family: var(--font-serif);   /* cited passages match the main reading view */
   margin: 0;
 }
 
@@ -2705,7 +2717,7 @@ body.cites-shown .note-anchor--variant:focus-visible {
 .cite-sheet-error,
 .cite-sheet-loading {
   margin: 0.5rem 0;
-  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  font-family: var(--font-sans);
   color: var(--text-secondary);
   font-size: 0.85rem;
 }
@@ -2728,7 +2740,7 @@ body.cites-shown .note-anchor--variant:focus-visible {
   border: 1px solid var(--border);
   border-radius: 10px;
   box-shadow: 0 4px 18px rgba(0, 0, 0, 0.16);
-  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  font-family: var(--font-sans);
   font-size: 0.85rem;
   line-height: 1.5;
   animation: cite-coachmark-fade-in 220ms ease-out;
@@ -2782,6 +2794,7 @@ html.cite-sheet-open {
 
 /* ── Prologue ── */
 .prologue-text {
+  font-family: var(--font-serif);   /* book prologue is bible text */
   font-size: 0.95rem;
   line-height: 2;
 }
@@ -2793,7 +2806,7 @@ html.cite-sheet-open {
 
 /* ── Chapter Navigation ── */
 .chapter-nav {
-  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  font-family: var(--font-sans);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -2929,7 +2942,7 @@ html.cite-sheet-open {
 
 /* ── Audio Bar ── */
 #audio-bar {
-  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  font-family: var(--font-sans);
   position: sticky;
   bottom: 0;
   z-index: 10;
@@ -3012,7 +3025,7 @@ html.cite-sheet-open {
     border: none;
     background: none;
     color: var(--text-secondary);
-    font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+    font-family: var(--font-sans);
     font-size: 0.7rem;
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
@@ -3252,7 +3265,7 @@ html.cite-sheet-open {
 
 /* ── Loading / Error ── */
 .loading {
-  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  font-family: var(--font-sans);
   text-align: center;
   padding: 3rem 1rem;
   color: var(--text-secondary);
@@ -3370,7 +3383,7 @@ html.cite-sheet-open {
 /* ── SW Update Toast ── */
 
 #sw-update-toast {
-  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  font-family: var(--font-sans);
   position: fixed;
   bottom: calc(env(safe-area-inset-bottom, 0px) + 1rem);
   left: 50%;
@@ -3427,7 +3440,7 @@ html.cite-sheet-open {
 }
 
 .search-result-ref-card {
-  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  font-family: var(--font-sans);
   display: flex !important;
   flex-direction: column;
   padding: 1rem !important;
@@ -3628,7 +3641,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 /* ── Verse selection action bar ── */
 
 #verse-select-bar {
-  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  font-family: var(--font-sans);
   display: none;
   position: fixed;
   bottom: 0;
@@ -3742,7 +3755,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 
 /* ── Bookmark drawer (mobile: bottom sheet) ── */
 #bookmark-drawer {
-  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  font-family: var(--font-sans);
   display: none;
   position: fixed;
   bottom: 0;
@@ -4190,7 +4203,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 }
 
 #bm-save-modal {
-  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  font-family: var(--font-sans);
   display: none;
   position: fixed;
   top: 50%;
@@ -4450,7 +4463,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 }
 
 #bm-new-folder-modal {
-  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  font-family: var(--font-sans);
   display: none;
   position: fixed;
   top: 50%;
@@ -4511,7 +4524,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 }
 
 #bm-merge-modal {
-  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  font-family: var(--font-sans);
   display: none;
   position: fixed;
   top: 50%;
@@ -4629,7 +4642,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 }
 
 #bm-import-modal {
-  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  font-family: var(--font-sans);
   display: none;
   position: fixed;
   top: 50%;
@@ -4746,7 +4759,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   list-style: none;
   padding: 0;
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  font-family: var(--font-sans);
 }
 
 .bm-folder.drag-over-before > .bm-folder-row,
@@ -4874,11 +4887,12 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 .notes-head {
   display: flex;
   align-items: center;
-  gap: var(--sp-3);
+  gap: var(--sp-2);
   margin-bottom: var(--sp-4);
+  flex-wrap: wrap;
 }
 .notes-new-btn {
-  font-family: inherit;
+  font-family: var(--font-sans);
   font-size: var(--fs-sm);
   font-weight: 700;
   padding: var(--sp-2) var(--sp-4);
@@ -4887,6 +4901,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   background: var(--accent);
   color: var(--bg);
   cursor: pointer;
+  white-space: nowrap;   /* never break "+ 새 노트" across lines */
 }
 .note-status {
   font-size: var(--fs-xs);
@@ -5056,7 +5071,11 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 
 /* ── Month grid ── */
 .cal-grid {
-  display: grid; grid-template-columns: repeat(7, 1fr); gap: var(--sp-0);
+  display: grid;
+  /* minmax(0,1fr): without the 0 floor, 1fr's implicit min-content keeps cells
+     from shrinking below their content and the last column overflows the page. */
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: var(--sp-0);
 }
 .cal-weekday {
   text-align: center; font-size: var(--fs-xs); color: var(--text-muted);
@@ -5121,7 +5140,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   background: var(--bg-card);
   border-radius: var(--r-lg) var(--r-lg) 0 0;
   padding: var(--sp-5) var(--sp-5) max(var(--sp-5), env(safe-area-inset-bottom));
-  box-shadow: var(--shadow-3);
+  box-shadow: var(--shadow-up);
 }
 .note-bm-title { margin: 0 0 var(--sp-4); font-size: var(--fs-md); }
 .note-bm-list { list-style: none; margin: 0 0 var(--sp-4); padding: 0; }
@@ -5136,5 +5155,6 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   .note-bm-sheet {
     bottom: auto; top: 50%; transform: translate(-50%, -50%);
     border-radius: var(--r-lg); max-width: 420px;
+    box-shadow: var(--shadow-3); /* centered modal on desktop — downward shadow reads correctly */
   }
 }
