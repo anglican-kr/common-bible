@@ -114,8 +114,12 @@
      flat (everything was --bg / --bg-card / --accent). */
   --bg-subtle: #f1ede8;   /* between --bg and --bg-card: section fills, hover rows */
   --text-muted: #888;     /* tertiary text, weaker than --text-secondary */
-  --hover-overlay: rgba(0, 0, 0, 0.04);   /* neutral hover wash on light surfaces */
+  --hover-overlay: rgba(0, 0, 0, 0.04);   /* wash for normally-transparent elements (rows, ghost btns) */
   --press-overlay: rgba(0, 0, 0, 0.08);
+  /* Solid hover/press fills for card-backed elements — tint --bg-card rather
+     than replace it with a translucent wash (which hollows the card). */
+  --bg-card-hover: color-mix(in srgb, var(--bg-card) 94%, var(--text));
+  --bg-card-press: color-mix(in srgb, var(--bg-card) 88%, var(--text));
 
   /* Mobile bottom navigation bar height (visible strip, excl. safe-area). ADR-026 */
   --bottom-nav-height: 3.5rem;
@@ -4996,8 +5000,8 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   border: 1px solid var(--border); border-radius: var(--r-md);
   background: var(--bg-card); color: var(--text); cursor: pointer;
 }
-.note-tool:hover { background: var(--hover-overlay); }
-.note-tool:active { background: var(--press-overlay); }
+.note-tool:hover { background: var(--bg-card-hover); }
+.note-tool:active { background: var(--bg-card-press); }
 
 /* Rendered preview */
 .note-preview-pane { line-height: var(--lh-loose); }
@@ -5089,7 +5093,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   border-radius: var(--r-sm); color: var(--text); cursor: pointer;
   font-family: inherit;
 }
-.cal-cell:hover { background: var(--hover-overlay); }
+.cal-cell:hover { background: var(--bg-card-hover); }
 .cal-cell.cal-out { color: var(--text-muted); opacity: 0.5; }
 .cal-cell.cal-today { border-color: var(--accent); border-width: 2px; }
 .cal-date { font-size: var(--fs-sm); }
@@ -5116,7 +5120,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   border: 1px solid var(--border); border-radius: var(--r-sm); color: var(--text); cursor: pointer;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.cal-week-note:hover { background: var(--hover-overlay); }
+.cal-week-note:hover { background: var(--bg-card-hover); }
 .cal-week-add {
   flex: 0 0 auto; font-size: var(--fs-md); line-height: 1;
   min-width: 2rem; min-height: 2rem; background: none;
