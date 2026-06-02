@@ -2720,8 +2720,9 @@ body.cites-shown .note-anchor--variant:focus-visible {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 2.2rem;
-  height: 2.2rem;
+  /* HIG 최소 탭 영역 44px — .title-back-btn 와 동일하게 2.45rem (≈44px @ 18px root) */
+  width: 2.45rem;
+  height: 2.45rem;
   padding: 0;
   color: var(--accent);
   background: none;
