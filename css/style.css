@@ -130,7 +130,9 @@
   --duration-fast: 0.18s;
   --duration-base: 0.25s;
   --duration-slow: 0.4s;
-  --ease-out: cubic-bezier(0.25, 0.1, 0.25, 1);
+  /* ease-out (감속) — 빠르게 시작해 천천히 멈춤. 진입/이동 UI 용. CSS 키워드
+     `ease`(=cubic-bezier(.25,.1,.25,1), 양끝 느림)와 혼동 주의. */
+  --ease-out: cubic-bezier(0, 0, 0.58, 1);
 
   /* ── Adaptive navigation (예약 토큰 — 값만 정의. 모바일 하단 탭바 / 데스크탑
      사이드바는 후속 PR 이 사용. ADR-028 §적응형 내비) ── */
