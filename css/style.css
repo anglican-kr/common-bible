@@ -15,7 +15,7 @@
   color: var(--bg);
   padding: 0.5rem 1rem;
   z-index: 100;
-  font-size: 0.9rem;
+  font-size: var(--font-base);
   text-decoration: none;
   border-radius: 0 0 var(--radius) 0;
 }
@@ -222,7 +222,7 @@ body {
   font-family: "Noto Serif KR", "Batang", serif;
   background: var(--bg);
   color: var(--text);
-  line-height: 1.8;
+  line-height: var(--leading-relaxed);
   min-height: 100dvh;
   overscroll-behavior-y: none;
 }
@@ -436,14 +436,14 @@ body {
   cursor: pointer;
   color: var(--text);
   opacity: 0.45;
-  font-size: 1rem;
+  font-size: var(--font-md);
   line-height: 1;
   flex-shrink: 0;
 }
 .settings-drive-info-close:hover { opacity: 0.8; }
 
 .settings-drive-info-email {
-  font-size: 0.8rem;
+  font-size: var(--font-xs);
   color: var(--accent);
   font-weight: 500;
   overflow: hidden;
@@ -452,10 +452,10 @@ body {
 }
 
 .settings-drive-info-desc {
-  font-size: 0.78rem;
+  font-size: var(--font-xs);
   color: var(--text-muted, var(--text));
   opacity: 0.7;
-  line-height: 1.55;
+  line-height: var(--leading-normal);
   white-space: normal;
 }
 
@@ -464,7 +464,7 @@ body {
   border: none;
   padding: 0;
   cursor: pointer;
-  font-size: 0.75rem;
+  font-size: var(--font-xs);
   color: var(--text);
   opacity: 0.45;
   text-decoration: underline;
@@ -501,9 +501,9 @@ body {
 }
 #drive-disconnect-modal:not([hidden]) { display: block; }
 
-#drive-disconnect-title { font-size: 1rem; font-weight: 700; margin: 0 0 0.6rem; }
-#drive-disconnect-body  { font-size: 0.88rem; margin: 0 0 0.75rem; color: var(--text-secondary); line-height: 1.5; }
-#drive-disconnect-file-question { font-size: 0.88rem; margin: 0 0 1rem; color: var(--text); line-height: 1.5; font-weight: 500; }
+#drive-disconnect-title { font-size: var(--font-md); font-weight: 700; margin: 0 0 0.6rem; }
+#drive-disconnect-body  { font-size: var(--font-sm); margin: 0 0 0.75rem; color: var(--text-secondary); line-height: var(--leading-snug); }
+#drive-disconnect-file-question { font-size: var(--font-sm); margin: 0 0 1rem; color: var(--text); line-height: var(--leading-snug); font-weight: 500; }
 
 #drive-disconnect-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: flex-end; }
 
@@ -513,7 +513,7 @@ body {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   font-family: inherit;
-  font-size: 0.88rem;
+  font-size: var(--font-sm);
   cursor: pointer;
   color: var(--text);
 }
@@ -526,7 +526,7 @@ body {
   border: none;
   border-radius: var(--radius);
   font-family: inherit;
-  font-size: 0.88rem;
+  font-size: var(--font-sm);
   cursor: pointer;
 }
 
@@ -547,7 +547,7 @@ body {
 }
 
 .settings-label {
-  font-size: 0.92rem;
+  font-size: var(--font-base);
   color: var(--text);
   min-width: 5em;
 }
@@ -561,7 +561,7 @@ body {
 
 .settings-action-btn {
   font-family: inherit;
-  font-size: 0.8rem;
+  font-size: var(--font-xs);
   font-weight: 500;
   color: var(--accent);
   background: none;
@@ -627,7 +627,7 @@ body {
 
 .toolbar-btn {
   font-family: inherit;
-  font-size: 0.8rem;
+  font-size: var(--font-xs);
   font-weight: 400;
   color: var(--text-secondary);
   background: var(--bg-card);
@@ -686,8 +686,8 @@ body {
 /* Dynamic caption (외경): always present so toggling never shifts layout.
    Fixed to one line height; both phrases fit on a single line. */
 .settings-toggle-caption {
-  font-size: 0.75rem;
-  line-height: 1.3;
+  font-size: var(--font-xs);
+  line-height: var(--leading-tight);
   min-height: 1.3em;
   color: var(--text-secondary);
 }
@@ -821,9 +821,9 @@ body {
 }
 
 #page-title {
-  font-size: 1.15rem;
+  font-size: var(--font-lg);
   font-weight: 700;
-  line-height: 1.4;
+  line-height: var(--leading-snug);
   text-align: center;
   position: relative;
   margin: 0.3rem 0 0.2rem;
@@ -952,7 +952,7 @@ body {
   align-items: center;
   justify-content: center;
   aspect-ratio: 1;
-  font-size: 0.9rem;
+  font-size: var(--font-base);
   font-variant-numeric: tabular-nums;
   text-decoration: none;
   color: var(--text);
@@ -995,7 +995,7 @@ body {
   gap: 0.35em;
   padding: 0.5rem;
   margin-bottom: 0.15rem;
-  font-size: 0.85rem;
+  font-size: var(--font-sm);
   font-weight: 600;
   color: var(--accent);
 }
@@ -1019,7 +1019,7 @@ body {
 #search-input {
   width: 100%;
   font-family: inherit;
-  font-size: 0.85rem;
+  font-size: var(--font-sm);
   /* Reserve 96px for history toggle (right: 3.25rem) + clear (right: 0.25rem)
      with a 4px gap between them so circular hit areas don't visually merge. */
   padding: 0.6rem 6rem 0.6rem 0.75rem;
@@ -1028,7 +1028,7 @@ body {
   background: var(--bg-card);
   color: var(--text);
   outline: none;
-  line-height: 1.3;
+  line-height: var(--leading-tight);
   min-height: 44px;
   box-sizing: border-box;
 }
@@ -1071,7 +1071,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.1rem;
+  font-size: var(--font-lg);
   line-height: 1;
   color: var(--text);
   background: none;
@@ -1150,7 +1150,7 @@ body {
   align-items: center;
   padding: 0 0.85rem;
   font: inherit;
-  font-size: 0.92rem;
+  font-size: var(--font-base);
   color: var(--text);
   background: none;
   border: none;
@@ -1181,7 +1181,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.2rem;
+  font-size: var(--font-lg);
   line-height: 1;
   color: var(--text-secondary);
   background: none;
@@ -1209,7 +1209,7 @@ body {
   min-height: 44px;
   padding: 0 0.85rem;
   font: inherit;
-  font-size: 0.85rem;
+  font-size: var(--font-sm);
   background: none;
   border: none;
   text-align: center;
@@ -1382,7 +1382,7 @@ body {
 }
 #install-modal-title {
   margin: 0 0 0.75rem;
-  font-size: 1.1rem;
+  font-size: var(--font-lg);
   font-weight: 700;
 }
 #install-modal-close {
@@ -1392,7 +1392,7 @@ body {
   background: transparent;
   border: 0;
   color: var(--text-secondary);
-  font-size: 1.6rem;
+  font-size: var(--font-2xl);
   line-height: 1;
   min-width: 44px;
   min-height: 44px;
@@ -1402,9 +1402,9 @@ body {
   cursor: pointer;
 }
 #install-modal-close:hover { color: var(--text); }
-#install-modal-body p { margin: 0.5rem 0; line-height: 1.6; }
+#install-modal-body p { margin: 0.5rem 0; line-height: var(--leading-normal); }
 #install-modal-body ol { padding-left: 1.3rem; margin: 0.5rem 0; }
-#install-modal-body ol li { margin: 0.35rem 0; line-height: 1.6; }
+#install-modal-body ol li { margin: 0.35rem 0; line-height: var(--leading-normal); }
 #install-modal-body .install-figure {
   margin: 0.75rem 0;
   text-align: center;
@@ -1415,7 +1415,7 @@ body {
   border: 1px solid var(--border);
 }
 #install-modal-body .install-figure figcaption {
-  font-size: 0.85rem;
+  font-size: var(--font-sm);
   color: var(--text-secondary);
   margin-top: 0.3rem;
 }
@@ -1474,8 +1474,8 @@ body {
 .install-step-caption {
   text-align: center;
   padding: 0.4rem 1.25rem 0.25rem;
-  font-size: 0.9rem;
-  line-height: 1.55;
+  font-size: var(--font-base);
+  line-height: var(--leading-normal);
   min-height: 2.8em;
   color: var(--text);
 }
@@ -1483,8 +1483,8 @@ body {
   margin: 0.75rem 1.25rem 0;
   padding: 0.55rem 0.75rem;
   border-radius: 6px;
-  font-size: 0.82rem;
-  line-height: 1.55;
+  font-size: var(--font-sm);
+  line-height: var(--leading-normal);
   color: var(--text-muted, #666);
   background: var(--surface-alt, #f5f5f5);
 }
@@ -1502,7 +1502,7 @@ body {
   color: var(--bg);
   border: 0;
   border-radius: 8px;
-  font-size: 0.95rem;
+  font-size: var(--font-base);
   cursor: pointer;
 }
 /* Dark mode: --accent #8ab4d8 is light → use dark text for AA contrast. */
@@ -1519,15 +1519,15 @@ body {
   cursor: not-allowed;
 }
 #install-modal-body .install-note {
-  font-size: 0.85rem;
+  font-size: var(--font-sm);
   color: var(--text-secondary);
   margin-top: 0.75rem;
 }
 #install-modal-body .install-step-list {
   margin: 0.75rem 0 0;
   padding-left: 1.4rem;
-  font-size: 0.92rem;
-  line-height: 1.55;
+  font-size: var(--font-base);
+  line-height: var(--leading-normal);
   color: var(--text);
 }
 #install-modal-body .install-step-list li {
@@ -1549,7 +1549,7 @@ body {
   cursor: pointer;
 }
 .install-never-show-row label {
-  font-size: 0.85rem;
+  font-size: var(--font-sm);
   color: var(--text-secondary);
   cursor: pointer;
   user-select: none;
@@ -1721,7 +1721,7 @@ body {
 #search-sheet-input {
   width: 100%;
   font-family: inherit;
-  font-size: 0.95rem;
+  font-size: var(--font-base);
   /* Reserve 96px for history toggle (44) + clear (44) + 8px breathing room. */
   padding: 0.7rem 6rem 0.7rem 0.85rem;
   border: 1px solid var(--border);
@@ -1729,7 +1729,7 @@ body {
   background: var(--bg-card);
   color: var(--text);
   outline: none;
-  line-height: 1.4;
+  line-height: var(--leading-snug);
   min-height: 48px;
   box-sizing: border-box;
 }
@@ -1763,7 +1763,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.2rem;
+  font-size: var(--font-lg);
   line-height: 1;
   color: var(--text);
   background: none;
@@ -1816,8 +1816,8 @@ body {
 .search-chip {
   flex-shrink: 0;
   font-family: inherit;
-  font-size: 0.82rem;
-  line-height: 1.2;
+  font-size: var(--font-sm);
+  line-height: var(--leading-tight);
   padding: 0.35rem 0.7rem;
   background: var(--bg-card);
   color: var(--text);
@@ -1841,7 +1841,7 @@ body {
 .search-notice {
   margin: 0 0 0.6rem;
   padding: 0.5rem 0.75rem;
-  font-size: 0.85rem;
+  font-size: var(--font-sm);
   background: color-mix(in srgb, var(--accent) 8%, transparent);
   color: var(--text);
   border-left: 3px solid var(--accent);
@@ -1860,7 +1860,7 @@ body {
 
 /* ── Search Results ── */
 .search-count {
-  font-size: 0.78rem;
+  font-size: var(--font-xs);
   color: var(--text-secondary);
   margin-bottom: 0.8rem;
 }
@@ -1870,7 +1870,7 @@ body {
   text-align: center;
   padding: 2rem 1rem;
   color: var(--text-secondary);
-  font-size: 0.9rem;
+  font-size: var(--font-base);
 }
 
 .search-results {
@@ -1899,7 +1899,7 @@ body {
 
 .search-result-ref {
   display: block;
-  font-size: 0.75rem;
+  font-size: var(--font-xs);
   font-weight: 700;
   color: var(--accent);
   margin-bottom: 0.15rem;
@@ -1908,8 +1908,8 @@ body {
 .search-result-text {
   display: block;
   font-family: "Noto Serif KR", serif;
-  font-size: 0.85rem;
-  line-height: 1.6;
+  font-size: var(--font-sm);
+  line-height: var(--leading-normal);
   color: var(--text-secondary);
 }
 
@@ -1978,7 +1978,7 @@ mark.search-highlight {
 .search-pagination a {
   color: var(--accent);
   text-decoration: none;
-  font-size: 0.88rem;
+  font-size: var(--font-sm);
   padding: 0.4rem 0.8rem;
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -1992,7 +1992,7 @@ mark.search-highlight {
 }
 
 .search-page-info {
-  font-size: 0.78rem;
+  font-size: var(--font-xs);
   color: var(--text-secondary);
 }
 
@@ -2033,7 +2033,7 @@ mark.search-highlight {
   padding: 0.7rem 1rem;
   color: var(--text);
   text-decoration: none;
-  font-size: 0.9rem;
+  font-size: var(--font-base);
   text-align: center;
 }
 
@@ -2059,7 +2059,7 @@ mark.search-highlight {
   border-left: 1px solid var(--border);
   background: transparent;
   color: var(--text-secondary);
-  font-size: 1.1rem;
+  font-size: var(--font-lg);
   cursor: pointer;
   padding: 0.7rem 0;
   flex-shrink: 0;
@@ -2138,7 +2138,7 @@ mark.search-highlight {
   min-width: 0;
   text-align: center;
   padding: 0.6rem 0.4rem;
-  font-size: 0.92rem;
+  font-size: var(--font-base);
   font-weight: 600;
   color: var(--text-secondary);
   text-decoration: none;
@@ -2196,7 +2196,7 @@ mark.search-highlight {
   border-radius: var(--radius);
   text-decoration: none;
   color: var(--text);
-  font-size: 0.88rem;
+  font-size: var(--font-sm);
   transition: background 0.15s;
 }
 
@@ -2239,7 +2239,7 @@ mark.search-highlight {
   border-radius: var(--radius);
   text-decoration: none;
   color: var(--text);
-  font-size: 0.9rem;
+  font-size: var(--font-base);
   transition: background 0.15s;
 }
 
@@ -2254,7 +2254,7 @@ mark.search-highlight {
   grid-column: 1 / -1;
   aspect-ratio: auto !important;
   padding: 0.5rem;
-  font-size: 0.85rem;
+  font-size: var(--font-sm);
   color: var(--accent) !important;
   border-style: solid !important;
 }
@@ -2266,8 +2266,8 @@ mark.search-highlight {
 
 /* ── Chapter View (verses) ── */
 .chapter-text {
-  font-size: 1rem;
-  line-height: 2;
+  font-size: var(--font-md);
+  line-height: var(--leading-loose);
 }
 
 .verse {
@@ -2311,7 +2311,7 @@ mark.search-highlight {
 
 .verse-num {
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
-  font-size: 0.7rem;
+  font-size: var(--font-2xs);
   font-weight: 400;
   color: var(--theme);
   vertical-align: super;
@@ -2346,14 +2346,14 @@ mark.search-highlight {
 
 /* Dual numbering (alt_ref) */
 .alt-ref {
-  font-size: 0.6rem;
+  font-size: var(--font-2xs);
   color: var(--accent-light);
   margin-left: 0.1em;
 }
 
 .dual-numbering-note {
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
-  font-size: 0.78rem;
+  font-size: var(--font-xs);
   color: var(--text-secondary);
   margin-bottom: 0.8rem;
   padding: 0.4rem 0;
@@ -2383,7 +2383,7 @@ body.cites-shown .cite-chip {
   border: none;
   border-radius: 3px;
   cursor: pointer;
-  line-height: 1.3;
+  line-height: var(--leading-tight);
   vertical-align: baseline;
 }
 
@@ -2539,8 +2539,8 @@ body.cites-shown .note-anchor--variant:focus-visible {
   border-radius: 8px;
   box-shadow: 0 4px 18px rgba(0, 0, 0, 0.18);
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
-  font-size: 0.88rem;
-  line-height: 1.55;
+  font-size: var(--font-sm);
+  line-height: var(--leading-normal);
   animation: note-tooltip-fade-in 160ms ease-out;
 }
 
@@ -2684,7 +2684,7 @@ body.cites-shown .note-anchor--variant:focus-visible {
 
 #cite-sheet-title {
   margin: 0;
-  font-size: 0.95rem;
+  font-size: var(--font-base);
   font-weight: 600;
   color: var(--text);
   flex: 1;
@@ -2695,7 +2695,7 @@ body.cites-shown .note-anchor--variant:focus-visible {
 }
 
 #cite-sheet-close {
-  font-size: 1.4rem;
+  font-size: var(--font-xl);
   line-height: 1;
   width: 2rem;
   height: 2rem;
@@ -2765,7 +2765,7 @@ body.cites-shown .note-anchor--variant:focus-visible {
   text-overflow: ellipsis;
   white-space: nowrap;
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
-  font-size: 0.85rem;
+  font-size: var(--font-sm);
   font-weight: 600;
   color: var(--accent);
 }
@@ -2777,7 +2777,7 @@ body.cites-shown .note-anchor--variant:focus-visible {
   border: none;
   cursor: pointer;
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
-  font-size: 0.82rem;
+  font-size: var(--font-sm);
   color: var(--accent);
   border-radius: 4px;
 }
@@ -2812,7 +2812,7 @@ body.cites-shown .note-anchor--variant:focus-visible {
   margin: 0.5rem 0;
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
   color: var(--text-secondary);
-  font-size: 0.85rem;
+  font-size: var(--font-sm);
 }
 
 /* ── First-use coachmark for cite chips ─────────────────────────────────── */
@@ -2834,8 +2834,8 @@ body.cites-shown .note-anchor--variant:focus-visible {
   border-radius: 10px;
   box-shadow: 0 4px 18px rgba(0, 0, 0, 0.16);
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
-  font-size: 0.85rem;
-  line-height: 1.5;
+  font-size: var(--font-sm);
+  line-height: var(--leading-snug);
   animation: cite-coachmark-fade-in 220ms ease-out;
 }
 
@@ -2854,7 +2854,7 @@ body.cites-shown .note-anchor--variant:focus-visible {
   width: 1.8rem;
   height: 1.8rem;
   padding: 0;
-  font-size: 1.3rem;
+  font-size: var(--font-xl);
   line-height: 1;
   background: transparent;
   border: none;
@@ -2887,8 +2887,8 @@ html.cite-sheet-open {
 
 /* ── Prologue ── */
 .prologue-text {
-  font-size: 0.95rem;
-  line-height: 2;
+  font-size: var(--font-base);
+  line-height: var(--leading-loose);
 }
 
 .prologue-text p {
@@ -2909,7 +2909,7 @@ html.cite-sheet-open {
 .chapter-nav a {
   color: var(--accent);
   text-decoration: none;
-  font-size: 0.88rem;
+  font-size: var(--font-sm);
   padding: 0.4rem 0.8rem;
   border: none;
   border-radius: var(--radius);
@@ -2962,7 +2962,7 @@ html.cite-sheet-open {
 
 .cache-clear-btn {
   font-family: inherit;
-  font-size: 0.8rem;
+  font-size: var(--font-xs);
   font-weight: 500;
   color: #c0392b;
   background: none;
@@ -3009,10 +3009,10 @@ html.cite-sheet-open {
   border-top: 1px solid var(--border);
   margin-top: 0.5rem;
   padding-top: 0.5rem;
-  font-size: 0.65rem;
+  font-size: var(--font-2xs);
   color: var(--text-secondary);
   white-space: normal;
-  line-height: 1.4;
+  line-height: var(--leading-snug);
   text-align: center;
   font-family: sans-serif;
 }
@@ -3206,7 +3206,7 @@ html.cite-sheet-open {
 }
 
 .audio-time {
-  font-size: 0.68rem;
+  font-size: var(--font-2xs);
   color: var(--text-secondary);
   min-width: 6.5em;
   text-align: right;
@@ -3223,7 +3223,7 @@ html.cite-sheet-open {
   border-radius: 0.3rem;
   background: transparent;
   color: var(--theme);
-  font-size: 0.72rem;
+  font-size: var(--font-2xs);
   font-variant-numeric: tabular-nums;
   cursor: pointer;
   transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
@@ -3242,7 +3242,7 @@ html.cite-sheet-open {
   gap: 0.4em;
   min-height: 2.4rem;
   margin: 0;
-  font-size: 0.75rem;
+  font-size: var(--font-xs);
   color: var(--text-secondary);
 }
 
@@ -3266,14 +3266,14 @@ html.cite-sheet-open {
   text-align: center;
   padding: 3rem 1rem;
   color: var(--text-secondary);
-  font-size: 0.9rem;
+  font-size: var(--font-base);
 }
 
 .error {
   text-align: center;
   padding: 3rem 1rem;
   color: #a33;
-  font-size: 0.9rem;
+  font-size: var(--font-base);
 }
 
 /* ── Focus ── */
@@ -3333,7 +3333,7 @@ html.cite-sheet-open {
   }
 
   .book-list a {
-    font-size: 0.82rem;
+    font-size: var(--font-sm);
     padding: 0.4rem 0.4rem;
   }
 
@@ -3405,7 +3405,7 @@ html.cite-sheet-open {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  font-size: 0.9rem;
+  font-size: var(--font-base);
   animation: toast-in 0.3s ease-out;
 }
 
@@ -3426,7 +3426,7 @@ html.cite-sheet-open {
   color: var(--bg);
   border: none;
   border-radius: var(--radius);
-  font-size: 0.85rem;
+  font-size: var(--font-sm);
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
@@ -3467,7 +3467,7 @@ html.cite-sheet-open {
 }
 
 .search-result-ref-label {
-  font-size: 0.7rem;
+  font-size: var(--font-2xs);
   font-weight: 700;
   text-transform: uppercase;
   color: var(--accent);
@@ -3475,7 +3475,7 @@ html.cite-sheet-open {
 }
 
 .search-result-ref-title {
-  font-size: 1.1rem;
+  font-size: var(--font-lg);
   font-weight: 700;
   color: var(--text);
 }
@@ -3679,7 +3679,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 
 #verse-select-count {
   flex: 1;
-  font-size: 0.88rem;
+  font-size: var(--font-sm);
   color: var(--text-secondary);
 }
 
@@ -3690,7 +3690,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   border: none;
   border-radius: var(--radius);
   font-family: inherit;
-  font-size: 0.9rem;
+  font-size: var(--font-base);
   cursor: pointer;
   transition: opacity 0.15s;
 }
@@ -3706,7 +3706,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   border: 1px solid var(--accent);
   border-radius: var(--radius);
   font-family: inherit;
-  font-size: 0.9rem;
+  font-size: var(--font-base);
   cursor: pointer;
   color: var(--accent);
   transition: background 0.15s, opacity 0.15s;
@@ -3727,7 +3727,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   font-family: inherit;
-  font-size: 0.9rem;
+  font-size: var(--font-base);
   cursor: pointer;
   color: var(--text-secondary);
   transition: background 0.15s;
@@ -3898,7 +3898,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 }
 
 #bookmark-drawer-title {
-  font-size: 0.88rem;
+  font-size: var(--font-sm);
   font-weight: 600;
   color: var(--text-secondary);
   margin: 0;
@@ -3911,7 +3911,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   border: none;
   cursor: pointer;
   color: var(--text-secondary);
-  font-size: 1.3rem;
+  font-size: var(--font-xl);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -4005,7 +4005,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   flex: 1;
   min-width: 0;
   font-family: inherit;
-  font-size: 0.82rem;
+  font-size: var(--font-sm);
   padding: 0.28rem 0.5rem;
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -4096,7 +4096,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 
 .bm-folder-name {
   flex: 1;
-  font-size: 0.88rem;
+  font-size: var(--font-sm);
   color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -4134,14 +4134,14 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 }
 
 .bm-bookmark-label {
-  font-size: 0.88rem;
+  font-size: var(--font-sm);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .bm-bookmark-ref {
-  font-size: 0.72rem;
+  font-size: var(--font-2xs);
   color: var(--text-secondary);
 }
 
@@ -4162,7 +4162,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 
 .bm-action-btn {
   font-family: inherit;
-  font-size: 0.7rem;
+  font-size: var(--font-2xs);
   padding: 0.18rem 0.4rem;
   background: none;
   border: 1px solid var(--border);
@@ -4189,7 +4189,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   padding: 2.5rem 1rem;
   text-align: center;
   color: var(--text-secondary);
-  font-size: 0.88rem;
+  font-size: var(--font-sm);
 }
 
 /* ── Save bookmark modal ── */
@@ -4229,7 +4229,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 
 #bm-save-title {
   margin: 0 2rem 0.85rem 0;
-  font-size: 1.05rem;
+  font-size: var(--font-md);
   font-weight: 700;
 }
 
@@ -4240,7 +4240,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   background: transparent;
   border: 0;
   color: var(--text-secondary);
-  font-size: 1.6rem;
+  font-size: var(--font-2xl);
   line-height: 1;
   min-width: 44px;
   min-height: 44px;
@@ -4260,7 +4260,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 
 .bm-form-label {
   display: block;
-  font-size: 0.8rem;
+  font-size: var(--font-xs);
   color: var(--text-secondary);
   margin-bottom: 0.3rem;
 }
@@ -4270,7 +4270,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 .bm-form-select {
   width: 100%;
   font-family: inherit;
-  font-size: 0.9rem;
+  font-size: var(--font-base);
   padding: 0.5rem 0.7rem;
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -4292,7 +4292,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   gap: 0.4rem;
   width: 100%;
   font-family: inherit;
-  font-size: 0.9rem;
+  font-size: var(--font-base);
   padding: 0.45rem 0.6rem;
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -4326,7 +4326,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 
 .bm-folder-combobox-chevron {
   flex-shrink: 0;
-  font-size: 0.75rem;
+  font-size: var(--font-xs);
   color: var(--text-secondary);
   margin-left: auto;
   padding-left: 0.25rem;
@@ -4355,7 +4355,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   align-items: center;
   gap: 0.4rem;
   padding: 0.4rem 0.6rem;
-  font-size: 0.9rem;
+  font-size: var(--font-base);
   color: var(--text);
   cursor: pointer;
 }
@@ -4379,7 +4379,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   width: 100%;
   padding: 0.4rem 0.6rem;
   font-family: inherit;
-  font-size: 0.9rem;
+  font-size: var(--font-base);
   background: transparent;
   border: 0;
   color: var(--accent);
@@ -4427,7 +4427,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   border: none;
   border-radius: var(--radius);
   font-family: inherit;
-  font-size: 0.9rem;
+  font-size: var(--font-base);
   cursor: pointer;
   transition: opacity 0.15s;
 }
@@ -4442,7 +4442,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   font-family: inherit;
-  font-size: 0.9rem;
+  font-size: var(--font-base);
   cursor: pointer;
   color: var(--text-secondary);
   transition: background 0.15s;
@@ -4488,7 +4488,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 
 #bm-new-folder-title {
   margin: 0 2rem 0.85rem 0;
-  font-size: 1.05rem;
+  font-size: var(--font-md);
   font-weight: 700;
 }
 
@@ -4499,7 +4499,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   background: transparent;
   border: 0;
   color: var(--text-secondary);
-  font-size: 1.6rem;
+  font-size: var(--font-2xl);
   line-height: 1;
   min-width: 44px;
   min-height: 44px;
@@ -4548,16 +4548,16 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 }
 
 #bm-merge-title {
-  font-size: 1rem;
+  font-size: var(--font-md);
   font-weight: 700;
   margin: 0 0 0.6rem;
 }
 
 #bm-merge-body {
-  font-size: 0.88rem;
+  font-size: var(--font-sm);
   margin: 0 0 1rem;
   color: var(--text-secondary);
-  line-height: 1.5;
+  line-height: var(--leading-snug);
 }
 
 .bm-merge-desc {
@@ -4578,7 +4578,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   padding: 0.35rem 0.5rem;
   border-radius: var(--radius);
   cursor: pointer;
-  font-size: 0.88rem;
+  font-size: var(--font-sm);
   color: var(--text);
 }
 
@@ -4605,7 +4605,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   border: none;
   border-radius: var(--radius);
   font-family: inherit;
-  font-size: 0.88rem;
+  font-size: var(--font-sm);
   cursor: pointer;
 }
 
@@ -4615,7 +4615,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   font-family: inherit;
-  font-size: 0.88rem;
+  font-size: var(--font-sm);
   cursor: pointer;
   color: var(--text);
 }
@@ -4626,7 +4626,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   font-family: inherit;
-  font-size: 0.88rem;
+  font-size: var(--font-sm);
   cursor: pointer;
   color: var(--text-secondary);
 }
@@ -4666,16 +4666,16 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 }
 
 #bm-import-title {
-  font-size: 1rem;
+  font-size: var(--font-md);
   font-weight: 700;
   margin: 0 0 0.6rem;
 }
 
 #bm-import-body {
-  font-size: 0.88rem;
+  font-size: var(--font-sm);
   margin: 0 0 1rem;
   color: var(--text-secondary);
-  line-height: 1.5;
+  line-height: var(--leading-snug);
 }
 
 #bm-import-actions {
@@ -4691,7 +4691,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   color: var(--bg);
   border: none;
   border-radius: var(--radius);
-  font-size: 0.88rem;
+  font-size: var(--font-sm);
   font-weight: 600;
   cursor: pointer;
 }
@@ -4706,7 +4706,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   background: none;
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  font-size: 0.88rem;
+  font-size: var(--font-sm);
   color: var(--text);
   cursor: pointer;
 }
@@ -4855,7 +4855,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
     flex: 1;
     border: none;
     font-family: inherit;
-    font-size: 0.85rem;
+    font-size: var(--font-sm);
     color: #fff;
     cursor: pointer;
     padding: 0;
