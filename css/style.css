@@ -1428,7 +1428,9 @@ body {
 
 /* ── Install guide screenshot slider ── */
 .install-slider-wrap {
-  margin: var(--space-3) -1.25rem 0;
+  /* 좌우 음수 마진은 #install-modal 의 가로 패딩(var(--space-6))을 정확히 상쇄해
+     슬라이더를 모달 가장자리까지 bleed 시킨다 — 같은 토큰에 결합(스냅 후 불일치 방지). */
+  margin: var(--space-3) calc(-1 * var(--space-6)) 0;
   overflow: hidden;
   border-top: 1px solid var(--border);
 }
@@ -2295,7 +2297,10 @@ mark.search-highlight {
 
 .verse.verse-poetry {
   display: block;
-  padding-left: var(--space-8);
+  /* 8pt 그리드가 아니라 .verse-num 의 hanging gutter(width:2rem · margin-left:-2rem)에
+     결합된 값 — 절 번호와 본문이 같은 거터를 공유하고 큰 폰트에서 rem 으로 함께 스케일하도록
+     의도적으로 2rem 유지(토큰 스냅 제외). */
+  padding-left: 2rem;
 }
 
 .verse.verse-poetry .verse-num {
@@ -2407,7 +2412,8 @@ body.cites-shown .cite-chip--poetry {
   display: block;
   margin-left: 0;
   margin-top: 0.2em;
-  padding-left: var(--space-8);
+  /* .verse.verse-poetry 와 동일하게 2rem (거터 결합값, 토큰 스냅 제외). */
+  padding-left: 2rem;
   text-align: left;
 }
 
