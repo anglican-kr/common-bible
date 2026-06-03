@@ -1150,6 +1150,8 @@ function consumeSearchAutoNavigate() {
 // initSheetDrag).
 window.openSearchSheet = openSearchSheet;
 window.closeSearchSheet = closeSearchSheet;
+// ADR-030: 탭 바 하단 모핑 입력이 검색을 커밋할 때 재사용.
+window.commitTopSearch = commitTopSearch;
 window.renderSearchResults = renderSearchResults;
 window.renderSearchView = renderSearchView;
 window.initSheetDrag = initSheetDrag;

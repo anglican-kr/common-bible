@@ -3242,8 +3242,77 @@ html.cite-sheet-open {
 [data-theme="dark"] #tab-search.active {
   background: color-mix(in srgb, var(--accent) 18%, color-mix(in srgb, var(--bg-card) 80%, transparent));
 }
-/* 모핑 입력창은 P2 에서 — 현재는 hidden. */
 #tab-search-input[hidden] { display: none; }
+
+/* ── ADR-030 P2: 검색 모핑 ────────────────────────────────────────────────
+   검색 원형 버튼 → 입력 pill 확장 + 비-홈 탭 접기(홈만 남음). tabbar.js 가
+   #tab-dock.searching 토글. 양방향 트랜지션 — 모션 생략은 reduced-motion 에서. */
+.tab-item {
+  max-width: 6rem; /* 접힘 애니메이션을 위해 명시적 시작값(콘텐츠 ~3rem) */
+  transition: max-width var(--duration-base) var(--ease-standard),
+              opacity var(--duration-fast) var(--ease-standard);
+}
+#tab-bar { transition: gap var(--duration-base) var(--ease-standard); }
+#tab-search-dock {
+  transition: flex-grow var(--duration-base) var(--ease-standard);
+}
+#tab-search {
+  transition: transform var(--duration-fast) ease,
+              width var(--duration-base) var(--ease-standard),
+              background var(--duration-fast) var(--ease-standard);
+}
+
+#tab-dock.searching #tab-bar { gap: 0; }
+#tab-dock.searching .tab-item:not([data-tab="home"]) {
+  max-width: 0;
+  min-width: 0;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+/* 검색 dock → 남은 폭을 채우는 입력 pill (floating glass 스타일을 dock 으로 이동). */
+#tab-dock.searching #tab-search-dock {
+  flex: 1 1 auto;
+  height: calc(var(--touch-target) + var(--space-2) * 2); /* 60px — 탭 pill 과 동일 */
+  padding: 0 var(--space-3);
+  gap: var(--space-2);
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--bg) 70%, transparent);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  backdrop-filter: blur(16px) saturate(180%);
+  border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
+  box-shadow: var(--shadow-2);
+}
+[data-theme="dark"] #tab-dock.searching #tab-search-dock {
+  background: color-mix(in srgb, var(--bg-card) 80%, transparent);
+}
+/* 검색 버튼 → 입력 pill 의 왼쪽 아이콘(자체 표면 제거). */
+#tab-dock.searching #tab-search {
+  width: auto;
+  height: auto;
+  flex: 0 0 auto;
+  background: none;
+  border: none;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+/* 하단 검색 입력. */
+#tab-dock.searching #tab-search-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  border: none;
+  background: none;
+  outline: none;
+  font: inherit;
+  font-size: var(--font-md);
+  color: var(--text);
+}
+#tab-dock.searching #tab-search-input::placeholder { color: var(--text-secondary); }
+
+/* 모핑 중 /search 전체뷰의 상단 입력은 숨김 — 하단 입력이 단일 검색 필드. */
+body.tabbar-searching #search-inpage-bar { display: none; }
 
 /* 투명도 감소 / backdrop-filter 미지원 → 불투명 표면 폴백. */
 @media (prefers-reduced-transparency: reduce) {
@@ -3261,7 +3330,11 @@ html.cite-sheet-open {
 @media (prefers-reduced-motion: reduce) {
   .tab-icon-wrap { transition: none; }
   .tab-item:active .tab-icon-wrap { transform: none; }
-  #tab-search { transition: none; }
+  /* 모핑 트랜지션도 생략 — 상태 즉시 스왑. */
+  .tab-item,
+  #tab-bar,
+  #tab-search,
+  #tab-search-dock { transition: none; }
   #tab-search:active { transform: none; }
 }
 

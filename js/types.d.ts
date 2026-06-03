@@ -802,6 +802,11 @@ declare global {
     }) => SyncMachine;
     driveSync: DriveSyncFacade;
 
+    // ADR-030 P2: 탭 바 검색 모핑 — search.js 가 commitTopSearch 노출, tabbar.js 가
+    // exitTabSearch 노출(views-routing 의 syncTabBarActive 가 라우트 변경 시 호출).
+    commitTopSearch?: (rawQuery: string) => void;
+    exitTabSearch?: () => void;
+
     // Cross-module globals set by drive-sync.js / state-machine.js.
     _syncClientId?: string;
     _syncScope?: string;

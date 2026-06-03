@@ -64,12 +64,9 @@ function syncTabBarActive() {
     if (on) $tabSearch.setAttribute("aria-current", "page");
     else $tabSearch.removeAttribute("aria-current");
   }
-}
-
-// ADR-030 P1: 검색 버튼은 별도 <button> 이라 전역 <a> 인터셉터가 처리하지 않는다.
-// P1 에서는 단순 /search 라우트 진입(P2 에서 입력창 모핑으로 교체).
-if ($tabSearch) {
-  $tabSearch.addEventListener("click", () => navigate("/search"));
+  // ADR-030 P2: 검색 외 라우트로 가면(홈 탭 등) 검색 모핑을 복구. tabbar.js 가
+  // 노출하는 exitTabSearch — 검색 진입 시엔 active==='search' 라 호출 안 됨.
+  if (active !== "search") window.exitTabSearch?.();
 }
 
 // Mirrors app.js's DATA_DIR — Phase 7b's audio player still uses the same
