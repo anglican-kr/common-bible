@@ -51,7 +51,15 @@
   display: none;
 }
 
+/* ─────────────────────────────────────────────────────────────────────────
+   Design tokens — 단일 권위 출처는 루트의 `DESIGN.md`. 새 UI 는 아래 토큰을
+   참조하고, 하드코딩 값을 두지 않는다. 토큰 사다리(간격·타이포·반경·elevation·
+   컨트롤·모션·내비)는 Apple HIG 를 chrome UI 에 맞춘 것 (본문 serif 는 의도적
+   유지 — ADR-028). 색상은 :root / [data-theme="dark"] / [data-color-scheme]
+   3중 구조로 분리.
+   ───────────────────────────────────────────────────────────────────────── */
 :root {
+  /* ── Color ── */
   --bg: #faf8f5;
   --bg-card: #ffffff;
   --text: #2a2520;
@@ -61,8 +69,79 @@
   --border: #e0dcd6;
   --verse-num: #5a5a78;
   --paragraph-mark: #4a4a65;
-  --shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+
+  /* ── Radius (HIG 곡률 사다리 — 기존 사용 값에 매핑, --radius 는 하위호환 유지) ── */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
   --radius: 8px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --radius-modal: 14px;
+  --radius-xl: 16px;
+  --radius-pill: 999px;
+
+  /* ── Elevation (HIG 절제된 그림자 — 라이트. 다크는 [data-theme="dark"] 에서
+     alpha 상향). 값 자체는 기존 암묵 단계(0.08→0.12→0.18→0.25)를 명문화한 것. ── */
+  --shadow-1: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow: var(--shadow-1); /* alias of --shadow-1 (하위호환). 다크에서도
+     --shadow-1 만 오버라이드하면 이 별칭이 자동 추종한다 — 같은 <html> 에 두
+     선택자가 매칭되므로 var() 가 우세 캐스케이드 값을 집는다. */
+  --shadow-2: 0 4px 12px rgba(0, 0, 0, 0.12);
+  --shadow-3: 0 4px 16px rgba(0, 0, 0, 0.12);   /* 헤더 스크롤 elevation (ADR-025) */
+  --shadow-sheet: 0 -4px 24px rgba(0, 0, 0, 0.18); /* 바텀 시트 (위로 뜨는 그림자) */
+  --shadow-4: 0 12px 32px rgba(0, 0, 0, 0.25);  /* 모달 */
+
+  /* ── Spacing (8pt 그리드, px 절대값 — 폰트 크기 설정과 독립된 레이아웃 단위) ── */
+  --space-0_5: 2px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  /* ── Typography scale (rem 유지 — 폰트 크기 설정이 전체를 함께 스케일) ── */
+  --font-2xs: 0.7rem;
+  --font-xs: 0.78rem;
+  --font-sm: 0.85rem;
+  --font-base: 0.92rem;
+  --font-md: 1rem;
+  --font-lg: 1.15rem;
+  --font-xl: 1.4rem;
+  --font-2xl: 1.6rem;
+
+  /* line-height */
+  --leading-tight: 1.3;
+  --leading-snug: 1.5;
+  --leading-normal: 1.6;
+  --leading-relaxed: 1.8; /* 성경 본문 기본 */
+  --leading-loose: 2;     /* 운문 */
+
+  /* ── Control sizing (HIG) ── */
+  --touch-target: 44px;   /* 최소 탭 영역 (HIG) */
+  --control-h: 36px;
+  --control-h-sm: 28px;
+  --icon-btn: 40px;
+
+  /* ── Motion ── */
+  --duration-fast: 0.18s;
+  --duration-base: 0.25s;
+  --duration-slow: 0.4s;
+  /* ease-out (감속) — 빠르게 시작해 천천히 멈춤. 진입/이동 UI 용. CSS 키워드
+     `ease`(=cubic-bezier(.25,.1,.25,1), 양끝 느림)와 혼동 주의. */
+  --ease-out: cubic-bezier(0, 0, 0.58, 1);
+
+  /* ── Adaptive navigation (예약 토큰 — 값만 정의. 모바일 하단 탭바 / 데스크탑
+     사이드바는 후속 PR 이 사용. ADR-028 §적응형 내비) ── */
+  --tabbar-h: 49px;       /* HIG UITabBar 표준 높이 */
+  --tabbar-icon: 24px;
+  --sidebar-w: 260px;
+  --nav-z: 30;            /* sticky 헤더(20) 보다 위 */
+
+  /* ── Layout ── */
   --max-width: 720px;
 
   /* Toggle switch (settings panel). OFF-state colours only — the ON state
@@ -85,7 +164,15 @@
   --border: #3a3a55;
   --verse-num: #8ab4d8;
   --paragraph-mark: #6a94b8;
-  --shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+
+  /* Elevation — 다크 배경에서는 옅은 그림자가 묻히므로 alpha 상향 (기존 패턴).
+     --shadow 별칭은 :root 에서 var(--shadow-1) 로 정의돼 있어 여기선 --shadow-1
+     만 오버라이드하면 자동 추종한다. */
+  --shadow-1: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-2: 0 4px 12px rgba(0, 0, 0, 0.35);
+  --shadow-3: 0 4px 20px rgba(0, 0, 0, 0.25); /* 헤더 스크롤 elevation (ADR-025) */
+  --shadow-sheet: 0 -4px 24px rgba(0, 0, 0, 0.4);
+  --shadow-4: 0 12px 32px rgba(0, 0, 0, 0.5);
 
   /* Lighter than --bg-card so the OFF track never disappears into the panel. */
   --switch-off-track: #50506a;
@@ -179,13 +266,9 @@ body {
 }
 
 #sticky-group.scrolled {
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
-}
-
-[data-theme="dark"] #sticky-group.scrolled {
-  /* Dark mode needs a heavier alpha for an equivalent elevation cue —
-     light shadows wash out against the dark background. */
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+  /* --shadow-3 = 헤더 스크롤 elevation 토큰. 다크는 [data-theme="dark"] 에서
+     자동으로 무거운 alpha 로 치환되므로 별도 다크 규칙 불필요. */
+  box-shadow: var(--shadow-3);
 }
 
 /* Book-list page: the tab strip already provides a strong visual base for
@@ -427,8 +510,8 @@ body {
   width: min(92vw, 360px);
   background: var(--bg-card);
   color: var(--text);
-  border-radius: 14px;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+  border-radius: var(--radius-modal);
+  box-shadow: var(--shadow-4);
   padding: 1.25rem;
 }
 #drive-disconnect-modal:not([hidden]) { display: block; }
@@ -785,8 +868,10 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 2.2rem;
-  height: 2.2rem;
+  /* HIG 최소 탭 영역 44px — 2.45rem 은 기본 폰트(18px)에서 ≈44px 로
+     --touch-target 을 충족하면서, 큰 폰트에서는 rem 으로 함께 커진다. */
+  width: 2.45rem;
+  height: 2.45rem;
   padding: 0;
   color: var(--accent);
   background: none;
@@ -859,7 +944,7 @@ body {
   /* 장 목록 화면과 동일한 figure/ground: 카드(--bg-card)가 격자 배경(--bg) 위에서 도드라지도록 */
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
   padding: 0.55rem;
   margin-top: 0.45rem;
@@ -1303,8 +1388,8 @@ body {
   overflow-y: auto;
   background: var(--bg-card);
   color: var(--text);
-  border-radius: 14px;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+  border-radius: var(--radius-modal);
+  box-shadow: var(--shadow-4);
   padding: 1.25rem 1.25rem 1rem;
 }
 #install-modal:not([hidden]) {
@@ -2498,8 +2583,8 @@ body.cites-shown .note-anchor--variant:focus-visible {
   background: var(--bg);
   /* Only the top corners are rounded; the bottom is hidden by the display
      curve on mobile or by the viewport edge on desktop. */
-  border-radius: 16px 16px 0 0;
-  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.18);
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  box-shadow: var(--shadow-sheet);
   display: flex;
   flex-direction: column;
   height: 65vh;
@@ -2637,8 +2722,9 @@ body.cites-shown .note-anchor--variant:focus-visible {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 2.2rem;
-  height: 2.2rem;
+  /* HIG 최소 탭 영역 44px — .title-back-btn 와 동일하게 2.45rem (≈44px @ 18px root) */
+  width: 2.45rem;
+  height: 2.45rem;
   padding: 0;
   color: var(--accent);
   background: none;
@@ -3001,6 +3087,9 @@ html.cite-sheet-open {
   flex-shrink: 0;
   width: 2.4rem;
   height: 2.4rem;
+  /* HIG 최소 탭 영역 — rem 시각 크기는 유지하되 44px 아래로는 내려가지 않게 floor */
+  min-width: var(--touch-target);
+  min-height: var(--touch-target);
   border-radius: 50%;
   border: none;
   background: var(--accent);
@@ -3406,8 +3495,9 @@ html.cite-sheet-open {
   right: 2.4rem;
   top: 50%;
   transform: translateY(-50%);
-  width: 2.2rem;
-  height: 2.2rem;
+  /* HIG 최소 탭 영역 44px (2.45rem ≈ 44px @ 18px root) — .title-back-btn 와 동일 */
+  width: 2.45rem;
+  height: 2.45rem;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -4132,8 +4222,8 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   overflow: visible;
   background: var(--bg-card);
   color: var(--text);
-  border-radius: 14px;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+  border-radius: var(--radius-modal);
+  box-shadow: var(--shadow-4);
   padding: 1.25rem 1.25rem 1rem;
 }
 
@@ -4391,8 +4481,8 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   width: min(92vw, 360px);
   background: var(--bg-card);
   color: var(--text);
-  border-radius: 14px;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+  border-radius: var(--radius-modal);
+  box-shadow: var(--shadow-4);
   padding: 1.25rem 1.25rem 1rem;
 }
 
@@ -4452,8 +4542,8 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   width: min(92vw, 360px);
   background: var(--bg-card);
   color: var(--text);
-  border-radius: 14px;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+  border-radius: var(--radius-modal);
+  box-shadow: var(--shadow-4);
   padding: 1.25rem;
 }
 
@@ -4570,8 +4660,8 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   width: min(92vw, 360px);
   background: var(--bg-card);
   color: var(--text);
-  border-radius: 14px;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+  border-radius: var(--radius-modal);
+  box-shadow: var(--shadow-4);
   padding: 1.25rem;
 }
 
