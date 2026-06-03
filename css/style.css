@@ -358,7 +358,7 @@ body {
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  box-shadow: var(--shadow-2);
   padding: var(--space-2);
   /* rem-based so the popover scales with the user's font-size choice;
      capped to the viewport so it never overflows on the right at large
@@ -1607,7 +1607,7 @@ body {
   /* Only top corners rounded in expanded — display curve masks the bottom. */
   border-radius: var(--radius-xl) var(--radius-xl) 0 0;
   /* Upward-cast shadow for the bottom-attached expanded state. */
-  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.18);
+  box-shadow: var(--shadow-sheet);
   flex-direction: column;
   height: 55vh;
   max-height: 80vh;
