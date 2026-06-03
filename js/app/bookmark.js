@@ -1466,14 +1466,19 @@ function buildBmViewActions() {
     document.addEventListener("click", onDocClick, true);
     document.addEventListener("keydown", onKeydown, true);
   }
+  // SPA navigation can remove the header (and this menu's DOM) while the menu
+  // is open, without calling closeMenu — leaving these document listeners
+  // attached. Both handlers self-clean if the trigger is detached.
   /** @param {MouseEvent} e */
   function onDocClick(e) {
+    if (!moreBtn.isConnected) { closeMenu(); return; }
     const t = /** @type {Node} */ (e.target);
     if (wrap.contains(t)) return;
     closeMenu();
   }
   /** @param {KeyboardEvent} e */
   function onKeydown(e) {
+    if (!moreBtn.isConnected) { closeMenu(); return; }
     if (e.key === "Escape") {
       e.preventDefault();
       closeMenu();
