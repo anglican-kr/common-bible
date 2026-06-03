@@ -158,14 +158,15 @@ function loadDragCore() {
     window: windowStub,
   };
   vm.createContext(ctx);
-  // Phase 6b made moveBookmarkItem call renderBookmarkTree() directly (same
-  // module after the UI extraction). The DRAG_CORE marker block doesn't
-  // include renderBookmarkTree itself, so the test prelude provides a stub
-  // that just bumps the observable counter.
+  // moveBookmarkItem calls _rerenderActiveBookmarkTree() (ADR-029: re-renders
+  // whichever bookmark surface is mounted — drawer or /bookmarks full view).
+  // The DRAG_CORE marker block doesn't include that dispatcher (nor the older
+  // renderBookmarkTree), so the prelude stubs both to bump the observable counter.
   const prelude = `
     function loadBookmarks() { return _store; }
     function saveBookmarks(s) { _saveCalls.push(JSON.parse(JSON.stringify(s))); _store = s; }
     function renderBookmarkTree() { _renderCalls.count += 1; }
+    function _rerenderActiveBookmarkTree() { _renderCalls.count += 1; }
   `;
   ctx._renderCalls = renderCalls;
   ctx._store = currentStore;
