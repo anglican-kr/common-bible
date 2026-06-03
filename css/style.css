@@ -3262,7 +3262,15 @@ html.cite-sheet-open {
               background var(--duration-fast) var(--ease-standard);
 }
 
-#tab-dock.searching #tab-bar { gap: 0; }
+/* 홈만 남기고 접기 + #tab-bar 를 60px 원형으로(검색 원형과 동일 형태). */
+#tab-dock.searching #tab-bar {
+  gap: 0;
+  flex: 0 0 auto;
+  width: calc(var(--touch-target) + var(--space-2) * 2); /* 60px */
+  border-radius: var(--radius-pill);
+  corner-shape: superellipse(2); /* 원 */
+  justify-content: center;
+}
 #tab-dock.searching .tab-item:not([data-tab="home"]) {
   max-width: 0;
   min-width: 0;
@@ -3270,9 +3278,14 @@ html.cite-sheet-open {
   overflow: hidden;
   pointer-events: none;
 }
-/* 검색 dock → 남은 폭을 채우는 입력 pill (floating glass 스타일을 dock 으로 이동). */
+/* 원 안에 홈 아이콘 중앙 정렬 — 활성 pill 폭(3rem) 강제 해제. */
+#tab-dock.searching .tab-item[data-tab="home"] { min-width: 0; }
+#tab-dock.searching .tab-item[data-tab="home"] .tab-icon-wrap { width: auto; }
+/* 검색 dock → 남은 폭을 채우는 입력 pill (floating glass 스타일을 dock 으로 이동).
+   flex-basis 0 으로 콘텐츠(placeholder) 길이와 무관하게 — 우측 넘침 방지. */
 #tab-dock.searching #tab-search-dock {
-  flex: 1 1 auto;
+  flex: 1 1 0;
+  min-width: 0;
   height: calc(var(--touch-target) + var(--space-2) * 2); /* 60px — 탭 pill 과 동일 */
   padding: 0 var(--space-3);
   gap: var(--space-2);
@@ -3297,15 +3310,15 @@ html.cite-sheet-open {
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
 }
-/* 하단 검색 입력. */
+/* 하단 검색 입력 — Sans(본문 Serif 상속 회피), 콘텐츠 무관 축소(flex-basis 0). */
 #tab-dock.searching #tab-search-input {
-  flex: 1 1 auto;
+  flex: 1 1 0;
   min-width: 0;
   height: 100%;
   border: none;
   background: none;
   outline: none;
-  font: inherit;
+  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
   font-size: var(--font-md);
   color: var(--text);
 }
