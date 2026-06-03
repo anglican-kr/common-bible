@@ -134,6 +134,27 @@
     <div id="division-tabs-slot"></div>
   </div>
   <main id="app" aria-label="성경 본문"></main>
+  <!-- Adaptive nav (ADR-029): mobile bottom tab bar. iOS-idiom stroke icons,
+       Liquid Glass surface. Desktop (≥769px) hides this until the sidebar phase.
+       노트 탭은 후속 — 5번째 슬롯은 flex 균등 분배로 자동 수용. -->
+  <nav id="tab-bar" aria-label="주 내비게이션">
+    <a class="tab-item" href="/" data-tab="home">
+      <span class="tab-icon-wrap"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.6 11.4 12 4.4l8.4 7"/><path d="M5.6 9.9V19a1 1 0 0 0 1 1h3.3v-5.4h4.2V20h3.3a1 1 0 0 0 1-1V9.9"/></svg></span>
+      <span class="tab-label">홈</span>
+    </a>
+    <a class="tab-item" href="/search" data-tab="search">
+      <span class="tab-icon-wrap"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="6.4"/><path d="m20 20-3.7-3.7"/></svg></span>
+      <span class="tab-label">검색</span>
+    </a>
+    <a class="tab-item" href="/bookmarks" data-tab="bookmarks">
+      <span class="tab-icon-wrap"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.5 4.5h9a1 1 0 0 1 1 1V20l-5.5-3.7L6.5 20V5.5a1 1 0 0 1 1-1z"/></svg></span>
+      <span class="tab-label">북마크</span>
+    </a>
+    <a class="tab-item" href="/settings" data-tab="settings">
+      <span class="tab-icon-wrap"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 13a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V20a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1.08-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H4a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1.08 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H10a1.65 1.65 0 0 0 1-1.51V4a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V10a1.65 1.65 0 0 0 1.51 1H20a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>
+      <span class="tab-label">설정</span>
+    </a>
+  </nav>
   <noscript>
     <div class="noscript-fallback">
       <h2>공동번역성서</h2>

@@ -3050,6 +3050,107 @@ html.cite-sheet-open {
   margin-bottom: 1px;
 }
 
+/* ── Tab bar (ADR-029) — 모바일 하단 내비, iOS Liquid Glass ────────────────
+   플로팅 캡슐. frosted glass 는 ::before(absolute) 레이어에 — Safari 26 이 하단
+   fixed 요소를 home-indicator 틴팅에 샘플링하므로 fixed 부모는 투명하게 둔다.
+   데스크탑(≥769px)은 사이드바 단계 전까지 숨김. 5번째(노트) 탭은 flex 로 자동 수용. */
+#tab-bar {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(var(--space-2) + env(safe-area-inset-bottom));
+  z-index: var(--nav-z);
+  display: flex;
+  align-items: stretch;
+  height: var(--tabbar-h);
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  box-shadow: var(--shadow-2);
+  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+}
+
+#tab-bar::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  /* iOS 26.1 'Tinted' 방향 — 가독성 위해 약간 더 불투명. */
+  background: color-mix(in srgb, var(--bg) 70%, transparent);
+  /* -webkit- 는 리터럴 값만(Safari 가 var() 미지원). */
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  backdrop-filter: blur(16px) saturate(180%);
+  border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4); /* 상단 specular 하이라이트 */
+}
+[data-theme="dark"] #tab-bar::before {
+  background: color-mix(in srgb, var(--bg-card) 80%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.tab-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 3.9rem;
+  min-width: var(--icon-btn-touch); /* HIG ≥44px 탭 영역 */
+  text-decoration: none;
+  color: var(--text-secondary);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.tab-icon-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 1.6rem;
+  border-radius: var(--radius-pill);
+  transition: background var(--duration-fast) ease, color var(--duration-fast) ease;
+}
+.tab-icon { width: var(--tabbar-icon); height: var(--tabbar-icon); }
+
+.tab-label {
+  font-size: var(--font-2xs);
+  font-weight: 500;
+  line-height: 1;
+}
+
+/* 활성 탭 — 아이콘 뒤 캡슐 pill + accent(chrome 중립색; 테마색 4곳 한정 결정 준수). */
+.tab-item.active,
+.tab-item[aria-current="page"] {
+  color: var(--accent);
+}
+.tab-item.active .tab-icon-wrap,
+.tab-item[aria-current="page"] .tab-icon-wrap {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+.tab-item:active .tab-icon-wrap { transform: scale(0.92); }
+
+/* 투명도 감소 / backdrop-filter 미지원 → 불투명 표면 폴백. */
+@media (prefers-reduced-transparency: reduce) {
+  #tab-bar::before {
+    background: var(--bg-card);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  #tab-bar::before { background: var(--bg-card); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tab-icon-wrap { transition: none; }
+  .tab-item:active .tab-icon-wrap { transform: none; }
+}
+
+/* 데스크탑: 사이드바 단계 전까지 탭바 숨김. */
+@media (min-width: 769px) {
+  #tab-bar { display: none; }
+}
+
 /* ── Audio Bar ── */
 #audio-bar {
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
