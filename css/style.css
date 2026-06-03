@@ -2017,7 +2017,7 @@ mark.search-highlight {
   display: flex;
   align-items: center;
   /* Gap to the division tabs below; only present when the banner is shown. */
-  margin-bottom: 0.8rem;
+  margin-bottom: var(--space-4);
   /* Surface card matching the division-tab strip/chip directly below — raised
      via border + elevation rather than a solid accent fill. */
   background: var(--bg-card);
@@ -2090,8 +2090,8 @@ mark.search-highlight {
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
   position: relative; /* positioning context for the sliding indicator */
   display: flex;
-  /* Breathing room below the (now line-less) header. */
-  margin: 0.8rem 0 0;
+  /* Breathing room below the (now line-less) header — 8pt 그리드(16px). */
+  margin: var(--space-4) 0 0;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg-card);
@@ -2169,10 +2169,11 @@ mark.search-highlight {
 }
 
 /* Book-list view only: match the gap below the pinned division tabs to the
-   resume-banner ↔ tabs gap (0.8rem). #app's default 2rem padding-top is meant
-   for the reading view, so we scope this to views that render .division-panel. */
+   resume-banner ↔ tabs gap. All three use --space-4 (16px, 8pt 그리드 — DESIGN.md §4).
+   #app's default 2rem padding-top is for the reading view, so we scope this to
+   views that render .division-panel. */
 #app:has(.division-panel) {
-  padding-top: 0.8rem;
+  padding-top: var(--space-4);
 }
 
 .book-list {
