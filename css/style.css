@@ -12,7 +12,7 @@
   top: -100%;
   left: 0;
   background: var(--accent);
-  color: #fff;
+  color: var(--bg);
   padding: 0.5rem 1rem;
   z-index: 100;
   font-size: 0.9rem;
@@ -647,13 +647,13 @@ body {
 
 .toolbar-btn:hover:not(:disabled) {
   background: var(--accent);
-  color: #fff;
+  color: var(--bg);
   border-color: var(--accent);
 }
 
 .toolbar-btn[aria-pressed="true"] {
   background: var(--accent);
-  color: #fff;
+  color: var(--bg);
   border-color: var(--accent);
 }
 
@@ -966,14 +966,14 @@ body {
 .popover-item:hover,
 .popover-item:focus-visible {
   background: var(--accent);
-  color: #fff;
+  color: var(--bg);
   border-color: var(--accent);
 }
 
 /* 현재 보고 있는 장: 꽉 찬 accent + 링으로 "여기 있음"을 명확히 (팝오버 고유의 위치 표시) */
 .popover-item.current {
   background: var(--accent);
-  color: #fff;
+  color: var(--bg);
   border-color: var(--accent);
   font-weight: 700;
   /* 링 안쪽 간격색은 팝오버 배경(--bg)과 맞춰 "띄운 링"처럼 보이게 함 */
@@ -983,7 +983,7 @@ body {
 .popover-item.current:hover,
 .popover-item.current:focus-visible {
   background: var(--accent);
-  color: #fff;
+  color: var(--bg);
 }
 
 /* 머리말: 숫자 격자 위에 전체 폭 라벨 행 — .chapter-grid 의 .prologue-link 와 동일 톤.
@@ -1002,7 +1002,7 @@ body {
 
 .popover-prologue:hover,
 .popover-prologue:focus-visible {
-  color: #fff;
+  color: var(--bg);
 }
 
 /* ── Search Bar (Desktop inline) ── */
@@ -1498,8 +1498,8 @@ body {
   min-height: 44px;
   padding: 0.55rem 1.1rem;
   background: var(--accent);
-  /* Light mode: --accent #1e3a5f is dark → white text = ~12:1. */
-  color: #fff;
+  /* --accent 는 고정 차콜 → var(--bg)(라이트 크림 / 다크 네이비)로 대비 확보. */
+  color: var(--bg);
   border: 0;
   border-radius: 8px;
   font-size: 0.95rem;
@@ -1987,7 +1987,7 @@ mark.search-highlight {
 
 .search-pagination a:hover {
   background: var(--accent);
-  color: #fff;
+  color: var(--bg);
   border-color: var(--accent);
 }
 
@@ -2028,7 +2028,7 @@ mark.search-highlight {
 .resume-banner-link {
   flex: 1;
   padding: 0.7rem 1rem;
-  color: #fff;
+  color: var(--bg);
   text-decoration: none;
   font-size: 0.9rem;
   text-align: center;
@@ -2055,7 +2055,7 @@ mark.search-highlight {
   border: none;
   border-left: 1px solid rgba(255, 255, 255, 0.3);
   background: transparent;
-  color: #fff;
+  color: var(--bg);
   font-size: 1.1rem;
   cursor: pointer;
   padding: 0.7rem 0;
@@ -2192,7 +2192,7 @@ mark.search-highlight {
 .book-list a:hover,
 .book-list a:focus-visible {
   background: var(--accent);
-  color: #fff;
+  color: var(--bg);
   border-color: var(--accent);
 }
 
@@ -2235,7 +2235,7 @@ mark.search-highlight {
 .chapter-grid a:hover,
 .chapter-grid a:focus-visible {
   background: var(--accent);
-  color: #fff;
+  color: var(--bg);
   border-color: var(--accent);
 }
 
@@ -2250,7 +2250,7 @@ mark.search-highlight {
 
 .prologue-link:hover,
 .prologue-link:focus-visible {
-  color: #fff !important;
+  color: var(--bg) !important;
 }
 
 /* ── Chapter View (verses) ── */
@@ -2907,7 +2907,7 @@ html.cite-sheet-open {
 
 .chapter-nav a:hover {
   background: var(--accent);
-  color: #fff;
+  color: var(--bg);
 }
 
 .chapter-nav .placeholder {
@@ -3412,7 +3412,7 @@ html.cite-sheet-open {
 #sw-update-btn {
   padding: 0.35rem 0.75rem;
   background: var(--accent);
-  color: #fff;
+  color: var(--bg);
   border: none;
   border-radius: var(--radius);
   font-size: 0.85rem;
@@ -3452,7 +3452,7 @@ html.cite-sheet-open {
 
 .search-result-ref-card:hover .search-result-ref-label,
 .search-result-ref-card:hover .search-result-ref-title {
-  color: #fff !important;
+  color: var(--bg) !important;
 }
 
 .search-result-ref-label {
@@ -4854,6 +4854,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 
   .bm-mobile-edit-btn {
     background: var(--accent);
+    color: var(--bg);
   }
 
   .bm-mobile-delete-btn {
