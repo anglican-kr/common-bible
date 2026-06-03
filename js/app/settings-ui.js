@@ -783,6 +783,8 @@ window.appSettings = (() => {
       document.querySelectorAll(".settings-btn").forEach((b) => b.setAttribute("aria-expanded", "false"));
       if (cleanupTrap) { cleanupTrap(); cleanupTrap = null; }
     }
+    // Exposed so route() can dismiss the popover on navigation (ADR-029).
+    window.closeSettings = closeSettings;
 
     // Wire a gear button to the shared popover. Reused for the desktop button
     // and every per-view mobile title-row button.

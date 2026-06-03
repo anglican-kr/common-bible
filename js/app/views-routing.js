@@ -1722,6 +1722,11 @@ async function route() {
   if (bmDrawer && !bmDrawer.hidden) window.closeBookmarkDrawer?.();
   const searchSheet = document.getElementById("search-sheet");
   if (searchSheet && !searchSheet.hidden) window.closeSearchSheet?.();
+  // Desktop settings popover: close on nav too (it has a focus trap). Closing
+  // here also makes the /settings desktop fallback's gear.click() always OPEN
+  // (never toggle-closed) since the popover is already dismissed by this point.
+  const settingsPopover = document.querySelector(".settings-popover");
+  if (settingsPopover && !(/** @type {HTMLElement} */ (settingsPopover)).hidden) window.closeSettings?.();
   const parsed = parsePath();
   const { view, bookId, chapter, division } = parsed;
 

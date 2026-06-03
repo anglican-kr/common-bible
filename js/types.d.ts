@@ -859,6 +859,7 @@ declare global {
     // guards each call with `typeof ... === "function"`.
     rebuildDriveSyncSection?: () => void;
     _showSyncSnackbar?: (msg: string) => void;
+    closeSettings?: () => void;
     renderBookmarkTree?: () => void;
     rerenderActiveBookmarkTree?: () => void;
     // Mobile tab-bar full-screen views (ADR-029 / P2). Always assigned at
