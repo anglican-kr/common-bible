@@ -64,11 +64,13 @@
   --bg-card: #ffffff;
   --text: #2a2520;
   --text-secondary: #5a554d;
-  --accent: #22244a;
-  --accent-light: #353766;
+  /* chrome 강조(버튼·링크·활성·포커스) — 고정 중립 차콜. 스킴을 따르지 않는다 (ADR-028 개정). */
+  --accent: #3a3a42;
+  --accent-light: #56565f;
   --border: #e0dcd6;
-  --verse-num: #5a5a78;
-  --paragraph-mark: #4a4a65;
+  /* 테마색 — 스킴(네이비·빨강·초록·보라)을 추종하는 유일한 강조색. 절 번호·단락 기호·
+     FAB·오디오 플레이어 4곳에만 적용한다 (ADR-028 개정 2026-06-03). 진한 채도 통일. */
+  --theme: #22244a;
 
   /* ── Radius (HIG 곡률 사다리 — 기존 사용 값에 매핑, --radius 는 하위호환 유지) ── */
   --radius-xs: 4px;
@@ -159,11 +161,10 @@
   --bg-card: #252540;
   --text: #e0dcd6;
   --text-secondary: #a0a0a0;
-  --accent: #8ab4d8;
-  --accent-light: #a8cce8;
+  --accent: #b8b8c2;
+  --accent-light: #cecdd7;
   --border: #3a3a55;
-  --verse-num: #8ab4d8;
-  --paragraph-mark: #6a94b8;
+  --theme: #8ab4d8;
 
   /* Elevation — 다크 배경에서는 옅은 그림자가 묻히므로 alpha 상향 (기존 패턴).
      --shadow 별칭은 :root 에서 var(--shadow-1) 로 정의돼 있어 여기선 --shadow-1
@@ -184,43 +185,27 @@
 
 /* ── Color schemes ── */
 
+/* 스킴은 --theme 만 교체한다. --accent(chrome)·--accent-light 는 건드리지 않아
+   버튼·토글·포커스 등은 모든 스킴에서 동일한 중립 차콜을 유지한다 (ADR-028 개정). */
 [data-color-scheme="red"] {
-  --accent: #a01828;
-  --accent-light: #c43850;
-  --verse-num: #a87078;
-  --paragraph-mark: #985868;
+  --theme: #a01828;
 }
 [data-color-scheme="red"][data-theme="dark"] {
-  --accent: #e08090;
-  --accent-light: #eba4b2;
-  --verse-num: #e08090;
-  --paragraph-mark: #d07080;
+  --theme: #e08090;
 }
 
 [data-color-scheme="green"] {
-  --accent: #1a6b50;
-  --accent-light: #2a8b6a;
-  --verse-num: #5a9b80;
-  --paragraph-mark: #4a8b70;
+  --theme: #1a6b50;
 }
 [data-color-scheme="green"][data-theme="dark"] {
-  --accent: #5ab896;
-  --accent-light: #7acea8;
-  --verse-num: #5ab896;
-  --paragraph-mark: #4aa886;
+  --theme: #5ab896;
 }
 
 [data-color-scheme="purple"] {
-  --accent: #5a2d82;
-  --accent-light: #7a4da2;
-  --verse-num: #8a6ab0;
-  --paragraph-mark: #7a5aa0;
+  --theme: #5a2d82;
 }
 [data-color-scheme="purple"][data-theme="dark"] {
-  --accent: #c09ad8;
-  --accent-light: #d4b8e8;
-  --verse-num: #c09ad8;
-  --paragraph-mark: #b08ac8;
+  --theme: #c09ad8;
 }
 
 html {
@@ -1265,7 +1250,7 @@ body {
   height: 3.2rem;
   border-radius: 50%;
   border: none;
-  background: var(--accent);
+  background: var(--theme);
   color: var(--bg);
   cursor: pointer;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.18), 0 8px 20px rgba(0, 0, 0, 0.3);
@@ -2317,7 +2302,7 @@ mark.search-highlight {
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
   font-size: 0.7rem;
   font-weight: 400;
-  color: var(--verse-num);
+  color: var(--theme);
   vertical-align: super;
   margin-right: 0.15em;
   user-select: none;
@@ -2343,7 +2328,7 @@ mark.search-highlight {
 
 .pilcrow {
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
-  color: var(--paragraph-mark);
+  color: var(--theme);
   margin-right: 0.2em;
   user-select: none;
 }
@@ -3092,7 +3077,7 @@ html.cite-sheet-open {
   min-height: var(--touch-target);
   border-radius: 50%;
   border: none;
-  background: var(--accent);
+  background: var(--theme);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -3167,7 +3152,7 @@ html.cite-sheet-open {
   -webkit-appearance: none;
   appearance: none;
   height: 3px;
-  background: linear-gradient(to right, var(--accent) var(--fill), var(--border) var(--fill));
+  background: linear-gradient(to right, var(--theme) var(--fill), var(--border) var(--fill));
   border-radius: 1.5px;
   outline: none;
   cursor: pointer;
@@ -3183,23 +3168,23 @@ html.cite-sheet-open {
   width: 14px;
   height: 14px;
   border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent);
+  background: var(--theme);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--theme) 20%, transparent);
   cursor: pointer;
   transition: box-shadow 0.15s ease;
 }
 
 .audio-progress:hover::-webkit-slider-thumb {
-  box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 25%, transparent);
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--theme) 25%, transparent);
 }
 
 .audio-progress::-moz-range-thumb {
   width: 14px;
   height: 14px;
   border-radius: 50%;
-  background: var(--accent);
+  background: var(--theme);
   border: none;
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--theme) 20%, transparent);
   cursor: pointer;
 }
 
@@ -3223,10 +3208,10 @@ html.cite-sheet-open {
   width: 3rem;
   text-align: center;
   padding: 0.15rem 0;
-  border: 1px solid var(--accent);
+  border: 1px solid var(--theme);
   border-radius: 0.3rem;
   background: transparent;
-  color: var(--accent);
+  color: var(--theme);
   font-size: 0.72rem;
   font-variant-numeric: tabular-nums;
   cursor: pointer;
@@ -3234,7 +3219,7 @@ html.cite-sheet-open {
 }
 
 .audio-speed-btn:hover {
-  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  background: color-mix(in srgb, var(--theme) 10%, transparent);
 }
 
 /* Unavailable message — sized to match .audio-player so the sticky bar
