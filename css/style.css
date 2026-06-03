@@ -3094,19 +3094,37 @@ html.cite-sheet-open {
   margin-bottom: 1px;
 }
 
-/* ── Tab bar (ADR-029) — 모바일 하단 내비, iOS Liquid Glass ────────────────
-   플로팅 캡슐. frosted glass 는 ::before(absolute) 레이어에 — Safari 26 이 하단
-   fixed 요소를 home-indicator 틴팅에 샘플링하므로 fixed 부모는 투명하게 둔다.
-   데스크탑(≥769px)은 사이드바 단계 전까지 숨김. 5번째(노트) 탭은 flex 로 자동 수용. */
-#tab-bar {
+/* ── Tab bar (ADR-029, ADR-030) — 모바일 하단 내비, iOS Liquid Glass ────────
+   플로팅 캡슐. ADR-030: fixed 요소는 #tab-dock(투명) 하나뿐이라 Safari 26 home-indicator
+   틴팅 샘플링 문제 없음 → frosted glass 는 #tab-bar·#tab-search 요소에 직접(::before 우회 불필요).
+   데스크탑(≥769px)은 사이드바 단계 전까지 숨김. */
+/* ADR-030: 탭 pill + 검색 원형을 한 플로팅 dock 으로 — 좌측 정렬, 근접 배치.
+   gap 으로 둘 사이 간격만 두고 화면 우측 여백은 비운다(짧은 3탭 pill 기준). */
+#tab-dock {
   position: fixed;
-  left: var(--space-4);
-  right: var(--space-4);
+  left: 0;
+  right: 0;
   bottom: calc(var(--space-1) + env(safe-area-inset-bottom) * 0.75);
   z-index: var(--nav-z);
   display: flex;
+  align-items: center;
+  /* ADR-030: 탭바=왼쪽 끝, 검색 버튼=오른쪽 끝. padding 0 space-4 + left/right 0 으로
+     오디오 바(margin:0 space-4)와 좌우 가장자리 정렬. */
+  justify-content: space-between;
+  padding: 0 var(--space-4);
+  /* 순수 레이아웃 레이어 — 어떤 표면도 없음(완전 투명). */
+  background: none;
+  border: none;
+  box-shadow: none;
+}
+#tab-dock::before,
+#tab-dock::after { content: none; }
+#tab-bar {
+  /* dock 의 flex 자식 — 콘텐츠 폭 좌측 pill. 위치는 #tab-dock 이 책임. */
+  display: flex;
   align-items: stretch;
-  /* 고정 높이 대신 상하 패딩 — 큰 아이콘 위아래 여유 확보(높이는 내용에 맞춰 ~63px). */
+  gap: var(--space-6); /* 아이콘 사이 넓은 여백 — 탭바를 길게 늘여 검색 버튼과의 간격 축소 */
+  /* 상하 패딩 space-2 + 아이콘랩(touch-target 44px) = 60px → 오디오 바와 동일 높이. */
   padding: var(--space-2) var(--space-2);
   /* 둥근 사각 — iPhone 코너는 squircle(연속 곡률)이나 corner-shape 는 Chromium
      전용(Safari 미폴백)이라 squircle 을 점진 향상으로 얹고, border-radius(원호)는
@@ -3114,61 +3132,53 @@ html.cite-sheet-open {
      env() 미존재). corner-shape 미지원 브라우저는 자동으로 원호. */
   border-radius: 26px;
   corner-shape: squircle;
-  background: transparent;
+  /* ADR-030: frosted glass 를 ::before 레이어가 아니라 #tab-bar 요소에 직접.
+     #tab-dock(fixed)이 Safari home-indicator 샘플링 대상이라 투명하게 두므로, 자식인
+     #tab-bar 는 직접 glass 를 줘도 틴팅 문제 없음(ADR-029 의 ::before 우회 불필요).
+     iOS 26.1 'Tinted' 방향 — 가독성 위해 약간 더 불투명. -webkit- 는 리터럴만. */
+  background: color-mix(in srgb, var(--bg) 70%, transparent);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  backdrop-filter: blur(16px) saturate(180%);
+  /* 오디오 바와 동일한 floating 스타일 — 1px 테두리 + shadow-2(테두리가 가장자리를
+     잡아줘 같은 그림자도 또렷하게 떠 보임). */
+  border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
   box-shadow: var(--shadow-2);
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
 }
-
-#tab-bar::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  border-radius: inherit;
-  corner-shape: squircle; /* corner-shape 는 상속 안 됨 — glass 레이어에도 명시 */
-  /* iOS 26.1 'Tinted' 방향 — 가독성 위해 약간 더 불투명. */
-  background: color-mix(in srgb, var(--bg) 70%, transparent);
-  /* -webkit- 는 리터럴 값만(Safari 가 var() 미지원). */
-  -webkit-backdrop-filter: blur(16px) saturate(180%);
-  backdrop-filter: blur(16px) saturate(180%);
-  border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4); /* 상단 specular 하이라이트 */
-}
-[data-theme="dark"] #tab-bar::before {
+[data-theme="dark"] #tab-bar {
   background: color-mix(in srgb, var(--bg-card) 80%, transparent);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
+/* ADR-030: 아이콘 전용(라벨 제거) — flex:1 stretch 대신 콘텐츠 폭 탭. 각 탭은
+   ≥44px 터치 영역 유지. 노트 탭은 <button> 이라 기본 버튼 외형 리셋. */
 .tab-item {
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
-  flex: 1;
   min-width: var(--icon-btn-touch); /* HIG ≥44px 탭 영역 */
+  padding: 0;
+  background: none;
+  border: none;
+  font: inherit;
   text-decoration: none;
   color: var(--text-secondary);
+  cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
+/* 노트 목업 — 비활성 placeholder. */
+.tab-item[aria-disabled="true"] { cursor: default; }
 
 .tab-icon-wrap {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 2.9rem;
-  height: 1.8rem;
+  width: 3rem;
+  height: var(--touch-target); /* 44px — 오디오 재생 버튼과 동일, 탭바 높이 60px 결정 */
   border-radius: var(--radius-pill);
   transition: background var(--duration-fast) ease, color var(--duration-fast) ease;
 }
-/* 헤더 아이콘(≈24px)보다 크게 — 탭바 존재감. rem 으로 Dynamic Type 추종. */
-.tab-icon { width: 1.6rem; height: 1.6rem; }
-
-.tab-label {
-  font-size: var(--font-2xs);
-  font-weight: 500;
-  line-height: 1;
-}
+/* 큰 바 높이에 맞춘 큰 아이콘 — 존재감. rem 으로 Dynamic Type 추종. */
+.tab-icon { width: 1.9rem; height: 1.9rem; }
 
 /* 활성 탭 — 아이콘 뒤 캡슐 pill + accent(chrome 중립색; 테마색 4곳 한정 결정 준수). */
 .tab-item.active,
@@ -3181,25 +3191,83 @@ html.cite-sheet-open {
 }
 .tab-item:active .tab-icon-wrap { transform: scale(0.92); }
 
+/* ── 분리된 검색 원형 버튼 (ADR-030) ──────────────────────────────────────────
+   탭 바와 같은 하단 높이의 우측 플로팅 원형. 탭 바와 동일 glass 레시피(::before).
+   지름 = touch-target(44px) + 상하 패딩(space-2 ×2) = 60px → 탭 바·오디오 바 높이와 일치.
+   P2 에서 입력창으로 모핑(width 확장). */
+#tab-search-dock {
+  /* dock 의 flex 자식 — 위치는 #tab-dock 이 책임. P2 에서 입력창 확장 컨테이너.
+     순수 레이아웃 래퍼 — 어떤 시각효과도 없음(완전 투명). */
+  display: flex;
+  align-items: center;
+  background: none;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+}
+#tab-search-dock::before,
+#tab-search-dock::after { content: none; }
+#tab-search {
+  position: relative;
+  /* 지름 = 아이콘랩(touch-target 44px) + 상하 패딩(space-2 ×2) = 60px → 탭 pill·오디오 바 높이와 일치. */
+  width: calc(var(--touch-target) + var(--space-2) * 2);
+  height: calc(var(--touch-target) + var(--space-2) * 2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border-radius: var(--radius-pill);
+  corner-shape: superellipse(2); /* 원 — 폴백은 원형 border-radius */
+  /* ADR-030: 탭 pill 과 동일 — frosted glass 를 요소에 직접(::before 레이어 제거). */
+  background: color-mix(in srgb, var(--bg) 70%, transparent);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  backdrop-filter: blur(16px) saturate(180%);
+  color: var(--accent);
+  /* 오디오 바·탭 pill 과 동일한 floating 스타일 — 1px 테두리 + shadow-2. */
+  border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
+  box-shadow: var(--shadow-2);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform var(--duration-fast) ease;
+}
+[data-theme="dark"] #tab-search {
+  background: color-mix(in srgb, var(--bg-card) 80%, transparent);
+}
+.tab-search-icon { width: 1.9rem; height: 1.9rem; }
+#tab-search:active { transform: scale(0.92); } /* press feedback */
+/* 현재 라우트가 /search 일 때 — 탭 pill 활성과 동색 accent 틴트. */
+#tab-search.active {
+  background: color-mix(in srgb, var(--accent) 14%, color-mix(in srgb, var(--bg) 70%, transparent));
+}
+[data-theme="dark"] #tab-search.active {
+  background: color-mix(in srgb, var(--accent) 18%, color-mix(in srgb, var(--bg-card) 80%, transparent));
+}
+/* 모핑 입력창은 P2 에서 — 현재는 hidden. */
+#tab-search-input[hidden] { display: none; }
+
 /* 투명도 감소 / backdrop-filter 미지원 → 불투명 표면 폴백. */
 @media (prefers-reduced-transparency: reduce) {
-  #tab-bar::before {
+  #tab-bar,
+  #tab-search {
     background: var(--bg-card);
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
   }
 }
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  #tab-bar::before { background: var(--bg-card); }
+  #tab-bar,
+  #tab-search { background: var(--bg-card); }
 }
 @media (prefers-reduced-motion: reduce) {
   .tab-icon-wrap { transition: none; }
   .tab-item:active .tab-icon-wrap { transform: none; }
+  #tab-search { transition: none; }
+  #tab-search:active { transform: none; }
 }
 
-/* 데스크탑: 사이드바 단계 전까지 탭바 숨김. */
+/* 데스크탑: 사이드바 단계 전까지 탭 dock(탭바+검색) 숨김. */
 @media (min-width: 769px) {
-  #tab-bar { display: none; }
+  #tab-dock { display: none; }
 }
 
 /* 모바일: 설정 기어·홈(성서 목록으로) 버튼은 탭 바로 이전 — 헤더에서 숨김
@@ -3241,8 +3309,8 @@ html.cite-sheet-open {
   body:not(.verse-select-active) #app:has(~ #audio-bar:not([hidden])) {
     padding-bottom: calc(var(--tabbar-reserve) + 3.5rem);
   }
-  /* 절 선택 모드: 전용 하단 바가 차지하므로 탭 바 숨김. */
-  body.verse-select-active #tab-bar { display: none; }
+  /* 절 선택 모드: 전용 하단 바가 차지하므로 탭 dock 숨김. */
+  body.verse-select-active #tab-dock { display: none; }
 }
 
 /* ── Audio Bar ── */

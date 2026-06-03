@@ -38,11 +38,13 @@ const $searchInput = /** @type {HTMLInputElement} */ (_$("search-input"));
 const $searchClear = _$("search-clear");
 const $searchBar = _$("search-bar");
 const $tabBar = _$("tab-bar");
+const $tabSearch = _$("tab-search");
 
-// ── Tab bar active state (ADR-029) ──
+// ── Tab bar active state (ADR-029, ADR-030) ──
 // The global <a> click interceptor (further below) already SPA-navigates the
 // tab links; this only reflects the current route in the bar's active highlight.
 // Reading routes (/, /<division>, /<book>/<chapter>, …) all map to the home tab.
+// ADR-030: 검색은 탭에서 분리된 #tab-search 버튼 — seg==="search" 일 때 별도로 활성.
 function syncTabBarActive() {
   if (!$tabBar) return;
   const seg = location.pathname.replace(/^\//, "").split("/")[0];
@@ -56,6 +58,18 @@ function syncTabBarActive() {
     if (on) a.setAttribute("aria-current", "page");
     else a.removeAttribute("aria-current");
   }
+  if ($tabSearch) {
+    const on = active === "search";
+    $tabSearch.classList.toggle("active", on);
+    if (on) $tabSearch.setAttribute("aria-current", "page");
+    else $tabSearch.removeAttribute("aria-current");
+  }
+}
+
+// ADR-030 P1: 검색 버튼은 별도 <button> 이라 전역 <a> 인터셉터가 처리하지 않는다.
+// P1 에서는 단순 /search 라우트 진입(P2 에서 입력창 모핑으로 교체).
+if ($tabSearch) {
+  $tabSearch.addEventListener("click", () => navigate("/search"));
 }
 
 // Mirrors app.js's DATA_DIR — Phase 7b's audio player still uses the same
