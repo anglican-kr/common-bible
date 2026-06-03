@@ -2357,7 +2357,9 @@ mark.search-highlight {
 
 /* Dual numbering (alt_ref) */
 .alt-ref {
-  font-size: var(--font-2xs);
+  /* 의도적으로 --font 스케일 floor(--font-2xs 0.7rem) 아래 — 자신이 주석하는
+     주 절 번호(.verse-num = --font-2xs)보다 작게 두어 종속 관계를 표현(스냅 예외). */
+  font-size: 0.6rem;
   color: var(--accent-light);
   margin-left: 0.1em;
 }
