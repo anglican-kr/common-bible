@@ -1715,6 +1715,13 @@ async function route() {
   // non-modal "tap chips in the visible page" behavior is preserved.
   const citeSheet = document.getElementById("cite-sheet");
   if (citeSheet && !citeSheet.hidden) window.appCitations?.closeCiteSheet();
+  // Overlays that lock body scroll (position:fixed / overflow:hidden) must be
+  // dismissed on any nav — incl. tab-bar switches — or they (and the scroll
+  // lock) persist over the new view, blocking it (ADR-029).
+  const bmDrawer = document.getElementById("bookmark-drawer");
+  if (bmDrawer && !bmDrawer.hidden) window.closeBookmarkDrawer?.();
+  const searchSheet = document.getElementById("search-sheet");
+  if (searchSheet && !searchSheet.hidden) window.closeSearchSheet?.();
   const parsed = parsePath();
   const { view, bookId, chapter, division } = parsed;
 
