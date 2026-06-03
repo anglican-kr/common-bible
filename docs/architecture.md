@@ -463,6 +463,7 @@ OAuth 측면 (가장 큰 공격 표면):
 | [025](decisions/025-header-scroll-elevation.md)         | 읽기 헤더 스크롤 elevation 그림자                          |
 | [027](decisions/027-source-dsl-and-parallel-passages.md)| source markup DSL 위치 잡기 + 단락 단위 `<parallel>` element 도입 |
 | [028](decisions/028-design-system.md)                   | 디자인 시스템 — 토큰 사다리(간격·타이포·반경·elevation·컨트롤·모션) + HIG 정렬 (권위 문서 `DESIGN.md`) |
+| [029](decisions/029-mobile-tab-bar.md)                  | 적응형 내비 Phase 1 — 모바일 하단 탭 바(홈·검색·북마크·설정 4탭, 전체화면 라우트 뷰, iOS 2026 Liquid Glass) |
 
 ## 부록 B. 자주 보게 되는 파일 빠른 참조
 

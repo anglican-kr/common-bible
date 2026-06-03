@@ -1,5 +1,7 @@
 """E2E: core app features — resume banner, mobile search FAB/sheet."""
 
+import pytest
+
 BASE = "http://localhost:8080"
 _IPHONE_UA = (
     "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) "
@@ -28,6 +30,7 @@ def test_resume_banner_appears_after_last_read_set(browser):
     ctx.close()
 
 
+@pytest.mark.skip(reason="ADR-029: search FAB removed; mobile search is now a full-screen /search tab view. Sheet-based test pending rewrite.")
 def test_mobile_search_fab_opens_bottom_sheet(browser):
     """On mobile, tapping the search FAB opens the search bottom sheet."""
     ctx = browser.new_context(
