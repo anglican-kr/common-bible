@@ -35,7 +35,6 @@ const $searchInput = /** @type {HTMLInputElement} */ (_$("search-input"));
 const $searchClear = _$("search-clear");
 const $searchHistoryToggle = _$("search-history-toggle");
 const $searchHistoryPanel = _$("search-history");
-const $searchFab = _$("search-fab");
 const $searchScrim = _$("search-scrim");
 const $searchSheet = _$("search-sheet");
 const $searchSheetInputWrap = _$("search-sheet-input-wrap");
@@ -841,7 +840,6 @@ function openSearchSheet(query) {
   $searchSheetClear.hidden = !query;
   $searchSheetInputWrap.dataset.clearHidden = String(!query);
   if (sheetSearchHistory) sheetSearchHistory.syncToggleVisibility();
-  $searchFab.hidden = true;
   // Compact entry focuses synchronously so iOS Safari opens the on-screen
   // keyboard inside the user-gesture context (rAF would defer past it).
   // Expanded entry (query-prefilled URL) skips focus — the user wants results,
@@ -864,7 +862,6 @@ function closeSearchSheet() {
   $searchSheet.style.height = "";
   $searchSheet.style.bottom = "";
   $searchSheet.style.maxHeight = "";
-  $searchFab.hidden = false;
   clearNode($searchSheetResults);
   // Restore background scroll only if this sheet applied the lock.
   if (_searchSheetAppliedScrollLock) {
@@ -975,8 +972,6 @@ async function runSheetSearch(query, page, autoNavigate = false) {
 
   window.announce(`"${query}" 검색 결과 ${result.total}건`);
 }
-
-$searchFab.addEventListener("click", () => openSearchSheet(""));
 
 $searchScrim.addEventListener("click", closeSearchSheet);
 $searchSheetClose.addEventListener("click", closeSearchSheet);

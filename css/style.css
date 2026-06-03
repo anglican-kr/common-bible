@@ -1322,44 +1322,6 @@ body {
   background: color-mix(in srgb, var(--accent) 10%, transparent);
 }
 
-/* ── Search FAB (Mobile only) ── */
-#search-fab {
-  display: none;
-  position: fixed;
-  right: 1.2rem;
-  z-index: 30;
-  width: 3.2rem;
-  height: 3.2rem;
-  border-radius: 50%;
-  border: none;
-  background: var(--theme);
-  color: var(--bg);
-  cursor: pointer;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.18), 0 8px 20px rgba(0, 0, 0, 0.3);
-  align-items: center;
-  justify-content: center;
-  transition: transform var(--duration-fast) ease, box-shadow var(--duration-fast) ease, bottom var(--duration-base) ease;
-}
-
-#search-fab:hover {
-  transform: scale(1.08);
-  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.22), 0 12px 28px rgba(0, 0, 0, 0.35);
-}
-
-#search-fab:active {
-  transform: scale(0.95);
-}
-
-/* Lift FAB above chapter-nav when it scrolls into view */
-#search-fab {
-  bottom: max(calc(1.5rem + env(safe-area-inset-bottom)), var(--fab-lift-nav, 0px));
-}
-
-/* Lift FAB when audio bar is visible */
-#audio-bar:not([hidden]) ~ #search-fab {
-  bottom: max(calc(5rem + env(safe-area-inset-bottom)), var(--fab-lift-nav, 0px));
-}
-
 /* ── Pull-to-refresh indicator (mobile) ── */
 #pull-refresh-scrim {
   position: fixed;
@@ -3486,22 +3448,16 @@ html.cite-sheet-open {
 
 /* ── Responsive ── */
 
-/* Mobile: hide inline search, show FAB */
+/* Mobile: hide inline search (replaced by the bottom tab bar's 검색 tab) */
 @media (max-width: 768px) {
   #search-bar {
     display: none;
   }
 
-  #search-fab {
-    display: flex;
-  }
-
-  /* Extra top margin so FAB (3.2rem) fits in the gap above chapter-nav */
   .chapter-nav {
     margin-top: 4.5rem;
   }
 
-  /* Reserve space below the book list so the FAB doesn't overlap buttons */
   .division-panel {
     padding-bottom: calc(3.2rem + 2.5rem + env(safe-area-inset-bottom));
   }
@@ -3513,12 +3469,8 @@ html.cite-sheet-open {
   }
 }
 
-/* Desktop: hide FAB and bottom sheet */
+/* Desktop: hide bottom sheet */
 @media (min-width: 769px) {
-  #search-fab {
-    display: none !important;
-  }
-
   #search-scrim,
   #search-sheet {
     display: none !important;
@@ -3758,11 +3710,6 @@ body.verse-select-active {
 body.verse-select-active #audio-bar {
   display: none;
 }
-
-body.verse-select-active #search-fab {
-  display: none !important;
-}
-
 
 /* No inline padding/margin in select mode. A 0.15em horizontal padding
    offset by an equal negative margin produced ~1px shifts on iOS Safari

@@ -37,7 +37,6 @@ const $divisionTabsSlot = _$("division-tabs-slot");
 const $searchInput = /** @type {HTMLInputElement} */ (_$("search-input"));
 const $searchClear = _$("search-clear");
 const $searchBar = _$("search-bar");
-const $searchFab = _$("search-fab");
 
 // Mirrors app.js's DATA_DIR — Phase 7b's audio player still uses the same
 // constant in app.js until that section moves here as well.
@@ -1506,7 +1505,6 @@ function renderChapter(data, book, opts) {
   $app.appendChild(article);
   $app.appendChild(buildChapterNav(book, ch));
   showAudioPlayer(book.id, ch);
-  observeFabLift();
   // ADR-022: one-time hint pointing out the cite chips (no-op after first show
   // or chip click, and when toggle is OFF or chapter has no chips).
   window.appCitations?.maybeShowCoachmark();
@@ -1543,7 +1541,6 @@ function renderPrologue(data, book) {
   nav.appendChild(el("a", { href: `/${book.id}/1` }, `1${chUnit(book.id)} →`));
   $app.appendChild(nav);
   showAudioPlayer(book.id, 0);
-  observeFabLift();
   window.scrollTo(0, 0);
 }
 
@@ -1930,58 +1927,6 @@ function formatTime(sec) {
   const m = Math.floor(sec / 60);
   const s = Math.floor(sec % 60);
   return `${m}:${s.toString().padStart(2, "0")}`;
-}
-
-// Lift FAB above chapter-nav when it scrolls into view on mobile.
-// Anchors against the nav's real viewport position so the audio bar's
-// height doesn't matter — the FAB always sits centered in the gap
-// above chapter-nav.
-let _fabNavObserver = null;
-let _fabScrollHandler = null;
-let _fabRafPending = false;
-/** @param {HTMLElement} nav */
-function _updateFabLift(nav) {
-  const fabH = $searchFab.offsetHeight;
-  const gapPx = parseFloat(getComputedStyle(nav).marginTop) || 0;
-  const navTop = nav.getBoundingClientRect().top;
-  const liftPx = window.innerHeight - navTop + (gapPx - fabH) / 2;
-  $searchFab.style.setProperty("--fab-lift-nav", `${Math.max(liftPx, 0)}px`);
-}
-function observeFabLift() {
-  if (_fabNavObserver) { _fabNavObserver.disconnect(); _fabNavObserver = null; }
-  if (_fabScrollHandler) {
-    window.removeEventListener("scroll", _fabScrollHandler);
-    _fabScrollHandler = null;
-  }
-  _fabRafPending = false;
-  const nav = /** @type {HTMLElement | null} */ ($app.querySelector(".chapter-nav"));
-  if (!nav) return;
-  const onScroll = () => {
-    if (_fabRafPending) return;
-    _fabRafPending = true;
-    requestAnimationFrame(() => {
-      _fabRafPending = false;
-      if (!nav.isConnected) return;
-      _updateFabLift(nav);
-    });
-  };
-  _fabNavObserver = new IntersectionObserver((entries) => {
-    const visible = entries[0].isIntersecting;
-    if (visible) {
-      _updateFabLift(nav);
-      if (!_fabScrollHandler) {
-        _fabScrollHandler = onScroll;
-        window.addEventListener("scroll", onScroll, { passive: true });
-      }
-    } else {
-      $searchFab.style.removeProperty("--fab-lift-nav");
-      if (_fabScrollHandler) {
-        window.removeEventListener("scroll", _fabScrollHandler);
-        _fabScrollHandler = null;
-      }
-    }
-  }, { threshold: 0 });
-  _fabNavObserver.observe(nav);
 }
 
 function _teardownAudio() {

@@ -160,7 +160,7 @@ let installModalTrap = null;
 let installModalLastFocus = null;
 
 // Elements that become inert (background) while the install modal is open.
-const INSTALL_INERT_SELECTORS = "#sticky-group, main#app, #audio-bar, #search-fab, #search-sheet, #search-scrim, #launch-screen, #bookmark-scrim, #bookmark-drawer, #verse-select-bar";
+const INSTALL_INERT_SELECTORS = "#sticky-group, main#app, #audio-bar, #search-sheet, #search-scrim, #launch-screen, #bookmark-scrim, #bookmark-drawer, #verse-select-bar";
 
 /** @param {boolean} on */
 function setBackgroundInert(on) { setInert(on, INSTALL_INERT_SELECTORS); }
