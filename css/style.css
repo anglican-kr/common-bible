@@ -3058,7 +3058,7 @@ html.cite-sheet-open {
   position: fixed;
   left: var(--space-4);
   right: var(--space-4);
-  bottom: calc(var(--space-1) + env(safe-area-inset-bottom));
+  bottom: calc(var(--space-1) + env(safe-area-inset-bottom) * 0.75);
   z-index: var(--nav-z);
   display: flex;
   align-items: stretch;
