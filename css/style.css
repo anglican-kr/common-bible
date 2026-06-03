@@ -3062,9 +3062,12 @@ html.cite-sheet-open {
   z-index: var(--nav-z);
   display: flex;
   align-items: stretch;
-  height: var(--tabbar-h);
-  padding: 0 var(--space-2);
-  border-radius: var(--radius-pill);
+  /* 고정 높이 대신 상하 패딩 — 큰 아이콘 위아래 여유 확보(높이는 내용에 맞춰 ~63px). */
+  padding: var(--space-2) var(--space-2);
+  /* 풀 캡슐 대신 둥근 사각 — iPhone 17 화면 코너(≈55px, 여백 16px 감안 동심원
+     ≈39px)는 바 높이상 풀 pill(~31px)로 클램프되므로, 화면 squircle 과 조화되는
+     고정 반경으로 둔다(기기 코너 반경 env() 는 미존재). */
+  border-radius: 26px;
   background: transparent;
   box-shadow: var(--shadow-2);
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
