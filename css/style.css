@@ -3056,9 +3056,9 @@ html.cite-sheet-open {
    데스크탑(≥769px)은 사이드바 단계 전까지 숨김. 5번째(노트) 탭은 flex 로 자동 수용. */
 #tab-bar {
   position: fixed;
-  left: 50%;
-  transform: translateX(-50%);
-  bottom: calc(var(--space-2) + env(safe-area-inset-bottom));
+  left: var(--space-4);
+  right: var(--space-4);
+  bottom: calc(var(--space-1) + env(safe-area-inset-bottom));
   z-index: var(--nav-z);
   display: flex;
   align-items: stretch;
@@ -3095,7 +3095,7 @@ html.cite-sheet-open {
   align-items: center;
   justify-content: center;
   gap: 2px;
-  width: 3.9rem;
+  flex: 1;
   min-width: var(--icon-btn-touch); /* HIG ≥44px 탭 영역 */
   text-decoration: none;
   color: var(--text-secondary);
