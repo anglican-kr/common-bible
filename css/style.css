@@ -3216,7 +3216,9 @@ html.cite-sheet-open {
   body #audio-bar:not([hidden]) {
     bottom: calc(4.2rem + env(safe-area-inset-bottom) * 0.75);
     margin: 0 var(--space-4);
-    padding-bottom: var(--space-2);
+    /* 플로팅 바라 좌우 패딩을 줄여(22.5→16px) 진행바에 공간 확보. 하단은
+       홈 인디케이터 위로 떠 있어 safe-area 불필요 → 8px. */
+    padding: var(--space-2) var(--space-4);
     /* 탭 바와 동일한 플로팅 둥근 바. corner-shape 는 Chromium 전용(Safari 는
        border-radius 폴백). 글래스(50%+blur)는 기존 유지, 테두리·그림자만 추가. */
     border-radius: 26px;
@@ -3226,6 +3228,8 @@ html.cite-sheet-open {
   }
   /* 둥근 모서리에서 튀어나오는 상단 hairline 은 플로팅 바에선 제거. */
   body #audio-bar:not([hidden])::before { display: none; }
+  /* 좁은 플로팅 바: 요소 간격을 조여 진행바 비중을 키운다(균형). */
+  body #audio-bar:not([hidden]) .audio-player { gap: var(--space-2); }
   /* 오디오 표시 중엔 오디오 바 높이만큼 하단 여유를 더 준다. */
   #app:has(~ #audio-bar:not([hidden])) {
     padding-bottom: calc(var(--tabbar-reserve) + 3.5rem);
