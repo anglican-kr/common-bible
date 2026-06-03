@@ -134,8 +134,8 @@
      `ease`(=cubic-bezier(.25,.1,.25,1), 양끝 느림)와 혼동 주의. */
   --ease-out: cubic-bezier(0, 0, 0.58, 1);
 
-  /* ── Adaptive navigation (예약 토큰 — 값만 정의. 모바일 하단 탭바 / 데스크탑
-     사이드바는 후속 PR 이 사용. ADR-028 §적응형 내비) ── */
+  /* ── Adaptive navigation (ADR-028 §적응형 내비) — 모바일 하단 탭바가 사용 중
+     (ADR-026 #bottom-nav). 데스크탑 사이드바는 후속 PR. ── */
   --tabbar-h: 49px;       /* HIG UITabBar 표준 높이 */
   --tabbar-icon: 24px;
   --sidebar-w: 260px;
@@ -143,8 +143,6 @@
 
   /* ── Layout ── */
   --max-width: 720px;
-  /* Mobile bottom navigation bar height (visible strip, excl. safe-area). ADR-026 */
-  --bottom-nav-height: 3.5rem;
 
   /* Toggle switch (settings panel). OFF-state colours only — the ON state
      always uses --accent so it tracks the chosen colour scheme. iOS uses the
@@ -3091,13 +3089,13 @@ html.cite-sheet-open {
     left: 0;
     right: 0;
     bottom: 0;
-    z-index: 15; /* above content + audio bar (10); below sheets/scrims (24+) */
+    z-index: var(--nav-z); /* ADR-028 §적응형 내비 (헤더 20 위). 시트/스크림은 별도 스택 조정 */
     display: flex;
     background: var(--bg); /* solid — frosted glass stays on the floating audio bar only */
     border-top: 1px solid var(--border);
     box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.06); /* bottom-edge elevation (ADR-025 counterpart) */
     padding-bottom: env(safe-area-inset-bottom, 0px);
-    transition: transform 0.22s ease;
+    transition: transform var(--duration-base) var(--ease-out);
   }
 
   [data-theme="dark"] #bottom-nav {
@@ -3117,21 +3115,21 @@ html.cite-sheet-open {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 0.15rem;
-    min-height: var(--bottom-nav-height);
-    padding: 0.35rem 0;
+    gap: var(--space-0_5);
+    min-height: var(--tabbar-h);
+    padding: var(--space-2) 0;
     border: none;
     background: none;
     color: var(--text-secondary);
     font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
-    font-size: 0.7rem;
+    font-size: var(--font-2xs);
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
   }
 
   .bnav-item .bnav-icon {
-    width: 24px;
-    height: 24px;
+    width: var(--tabbar-icon);
+    height: var(--tabbar-icon);
   }
 
   .bnav-item[aria-current="page"] {
@@ -3144,30 +3142,30 @@ html.cite-sheet-open {
 
   /* Reserve space so reading content clears the fixed nav. */
   #app {
-    padding-bottom: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom) + 1rem);
+    padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + var(--space-4));
   }
 
   /* Audio bar = slim mini-player pinned directly above the nav. The nav owns
      the safe-area inset, so the audio bar drops its own bottom inset. The
      bottom transition keeps it in step with the nav's slide on auto-hide. */
   #audio-bar {
-    bottom: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom));
-    padding-bottom: 0.75rem;
-    transition: bottom 0.22s ease;
+    bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom));
+    padding-bottom: var(--space-3);
+    transition: bottom var(--duration-base) var(--ease-out);
   }
 
   /* When the nav auto-hides, the audio bar drops to the viewport bottom and
      reclaims the safe-area inset the nav used to own (no floating gap). */
   body.bottom-nav-hidden #audio-bar {
     bottom: 0;
-    padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+    padding-bottom: max(var(--space-3), env(safe-area-inset-bottom));
   }
 
   /* Stage 0 notes placeholder. */
   .notes-placeholder {
     text-align: center;
     color: var(--text-secondary);
-    padding: 3rem 1rem;
+    padding: var(--space-12) var(--space-4);
   }
 }
 
@@ -3398,7 +3396,7 @@ html.cite-sheet-open {
      applies; the chapter-nav no longer needs the FAB gap above it, and the
      book list's bottom clearance is handled by `#app`'s bottom padding. */
   .chapter-nav {
-    margin-top: 2rem;
+    margin-top: var(--space-8);
   }
 
   /* The top row holds only the (hidden) search bar + settings on mobile;
@@ -4988,13 +4986,13 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 .notes-head {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 1rem;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
 }
 .notes-new-btn {
   font-family: inherit;
-  font-size: 0.95rem;
-  padding: 0.5rem 1rem;
+  font-size: var(--font-base);
+  padding: var(--space-2) var(--space-4);
   border: none;
   border-radius: var(--radius);
   background: var(--accent);
@@ -5002,10 +5000,10 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   cursor: pointer;
 }
 .note-status {
-  font-size: 0.78rem;
+  font-size: var(--font-xs);
   color: var(--text-secondary);
-  padding: 0.2rem 0.55rem;
-  border-radius: 999px;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-pill);
   border: 1px solid var(--border);
 }
 .note-status-pending, .note-status-syncing { color: var(--accent); }
@@ -5013,100 +5011,100 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 [data-theme="dark"] .note-status-conflict, [data-theme="dark"] .note-status-error { color: #e88; border-color: #e88; }
 
 .notes-banner {
-  font-size: 0.85rem;
+  font-size: var(--font-sm);
   color: var(--text-secondary);
   background: color-mix(in srgb, var(--accent) 8%, transparent);
   border-radius: var(--radius);
-  padding: 0.6rem 0.8rem;
-  margin-bottom: 1rem;
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-4);
 }
-.notes-empty { text-align: center; color: var(--text-secondary); padding: 3rem 1rem; }
-.notes-empty-hint { font-size: 0.85rem; }
+.notes-empty { text-align: center; color: var(--text-secondary); padding: var(--space-12) var(--space-4); }
+.notes-empty-hint { font-size: var(--font-sm); }
 
 .notes-list { list-style: none; margin: 0; padding: 0; }
 .note-row {
-  padding: 0.85rem 0.4rem;
+  padding: var(--space-4) var(--space-2);
   border-bottom: 1px solid var(--border);
   cursor: pointer;
 }
 .note-row:hover { background: color-mix(in srgb, var(--text) 4%, transparent); }
-.note-row-title { font-weight: 700; margin-bottom: 0.2rem; }
+.note-row-title { font-weight: 700; margin-bottom: var(--space-1); }
 .note-row-snippet {
-  font-size: 0.88rem; color: var(--text-secondary);
+  font-size: var(--font-sm); color: var(--text-secondary);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.note-row-date { font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem; }
+.note-row-date { font-size: var(--font-xs); color: var(--text-secondary); margin-top: var(--space-1); }
 
-.notes-gate { text-align: center; padding: 3rem 1.5rem; color: var(--text-secondary); }
+.notes-gate { text-align: center; padding: var(--space-12) var(--space-6); color: var(--text-secondary); }
 .notes-gate h2 { color: var(--text); }
 .notes-gate-btn {
-  font-family: inherit; font-size: 0.95rem; margin-top: 1rem;
-  padding: 0.6rem 1.2rem; border: none; border-radius: var(--radius);
+  font-family: inherit; font-size: var(--font-base); margin-top: var(--space-4);
+  padding: var(--space-3) var(--space-5); border: none; border-radius: var(--radius);
   background: var(--accent); color: var(--bg); cursor: pointer;
 }
 
 /* ── Editor ── */
-.note-editor { display: flex; flex-direction: column; gap: 0.6rem; }
-.note-editor-bar { display: flex; align-items: center; gap: 0.5rem; }
+.note-editor { display: flex; flex-direction: column; gap: var(--space-3); }
+.note-editor-bar { display: flex; align-items: center; gap: var(--space-2); }
 .note-back, .note-del {
-  font-family: inherit; font-size: 0.9rem; background: none; border: none;
-  color: var(--text-secondary); cursor: pointer; padding: 0.4rem 0.2rem;
+  font-family: inherit; font-size: var(--font-base); background: none; border: none;
+  color: var(--text-secondary); cursor: pointer; padding: var(--space-2) var(--space-1);
 }
 .note-del { margin-left: auto; }
 .note-mode {
   display: inline-flex; border: 1px solid var(--border);
-  border-radius: 999px; overflow: hidden; margin: 0 auto;
+  border-radius: var(--radius-pill); overflow: hidden; margin: 0 auto;
 }
 .note-mode-btn {
-  font-family: inherit; font-size: 0.85rem; padding: 0.35rem 0.9rem;
+  font-family: inherit; font-size: var(--font-sm); padding: var(--space-2) var(--space-4);
   background: none; border: none; color: var(--text-secondary); cursor: pointer;
 }
 .note-mode-btn.active { background: var(--accent); color: var(--bg); }
 .note-title {
-  font-family: inherit; font-size: 1.25rem; font-weight: 700;
+  font-family: inherit; font-size: var(--font-lg); font-weight: 700;
   border: none; border-bottom: 1px solid var(--border);
-  background: none; color: var(--text); padding: 0.4rem 0.2rem;
+  background: none; color: var(--text); padding: var(--space-2) var(--space-1);
 }
 .note-date {
-  font-family: inherit; font-size: 0.85rem; color: var(--text-secondary);
+  font-family: inherit; font-size: var(--font-sm); color: var(--text-secondary);
   border: 1px solid var(--border); border-radius: var(--radius);
-  background: var(--bg-card); padding: 0.3rem 0.5rem; align-self: flex-start;
+  background: var(--bg-card); padding: var(--space-1) var(--space-2); align-self: flex-start;
 }
 .note-edit-pane { display: flex; flex-direction: column; }
 /* `display:flex` would otherwise beat the UA `[hidden]` rule, leaving the edit
    pane visible in 미리보기 mode. */
 .note-edit-pane[hidden] { display: none; }
 .note-body {
-  font-family: inherit; font-size: 1rem; line-height: 1.7;
+  font-family: inherit; font-size: var(--font-md); line-height: var(--leading-relaxed);
   width: 100%; min-height: 40vh; resize: vertical; box-sizing: border-box;
   border: 1px solid var(--border); border-radius: var(--radius);
-  background: var(--bg-card); color: var(--text); padding: 0.8rem;
+  background: var(--bg-card); color: var(--text); padding: var(--space-4);
 }
 .note-toolbar {
   position: sticky; bottom: 0; z-index: 5;
-  display: flex; gap: 0.25rem; flex-wrap: wrap;
-  padding: 0.4rem 0; background: var(--bg);
+  display: flex; gap: var(--space-1); flex-wrap: wrap;
+  padding: var(--space-2) 0; background: var(--bg);
 }
 .note-tool {
-  font-family: inherit; font-size: 1rem; min-width: 2.4rem; min-height: 2.4rem;
+  font-family: inherit; font-size: var(--font-md); min-width: var(--touch-target); min-height: var(--touch-target);
   border: 1px solid var(--border); border-radius: var(--radius);
   background: var(--bg-card); color: var(--text); cursor: pointer;
 }
 .note-tool:active { background: color-mix(in srgb, var(--text) 8%, transparent); }
 
 /* Rendered preview */
-.note-preview-pane { line-height: 1.8; }
-.note-preview-pane h1, .note-preview-pane h2, .note-preview-pane h3 { line-height: 1.3; }
+.note-preview-pane { line-height: var(--leading-relaxed); }
+.note-preview-pane h1, .note-preview-pane h2, .note-preview-pane h3 { line-height: var(--leading-tight); }
 .note-preview-pane blockquote {
-  border-left: 3px solid var(--border); margin: 0.6rem 0;
-  padding: 0.2rem 0 0.2rem 0.9rem; color: var(--text-secondary);
+  border-left: 3px solid var(--border); margin: var(--space-3) 0;
+  padding: var(--space-1) 0 var(--space-1) var(--space-4); color: var(--text-secondary);
 }
 .note-preview-pane code {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.9em;
   background: color-mix(in srgb, var(--text) 8%, transparent);
-  padding: 0.1em 0.3em; border-radius: 4px;
+  padding: 0.1em 0.3em; border-radius: var(--radius-xs);
 }
-.note-preview-pane hr { border: none; border-top: 1px solid var(--border); margin: 1rem 0; }
+.note-preview-pane hr { border: none; border-top: 1px solid var(--border); margin: var(--space-4) 0; }
 .note-preview-pane li.md-task { list-style: none; margin-left: -1.2rem; }
 .note-preview-pane a { color: var(--accent); }
 
@@ -5117,124 +5115,124 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 /* ── Notes: view toggle + overflow (ADR-026 Stage 1b) ── */
 .notes-view-toggle {
   display: inline-flex; border: 1px solid var(--border);
-  border-radius: 999px; overflow: hidden;
+  border-radius: var(--radius-pill); overflow: hidden;
 }
 .notes-view-btn {
-  font-family: inherit; font-size: 0.8rem; padding: 0.3rem 0.7rem;
+  font-family: inherit; font-size: var(--font-xs); padding: var(--space-1) var(--space-3);
   background: none; border: none; color: var(--text-secondary); cursor: pointer;
 }
 .notes-view-btn.active { background: var(--accent); color: var(--bg); }
 
 .notes-overflow { position: relative; margin-left: auto; }
 .notes-overflow-btn {
-  font-size: 1.2rem; line-height: 1; min-width: 2.2rem; min-height: 2.2rem;
+  font-size: var(--font-lg); line-height: 1; min-width: var(--icon-btn); min-height: var(--icon-btn);
   background: none; border: none; color: var(--text-secondary); cursor: pointer;
   border-radius: var(--radius);
 }
 .notes-overflow-menu {
   position: absolute; right: 0; top: 100%; z-index: 20;
   background: var(--bg-card); border: 1px solid var(--border);
-  border-radius: var(--radius); box-shadow: var(--shadow);
-  min-width: 12rem; padding: 0.3rem; display: flex; flex-direction: column;
+  border-radius: var(--radius); box-shadow: var(--shadow-2);
+  min-width: 12rem; padding: var(--space-1); display: flex; flex-direction: column;
 }
 .notes-overflow-menu[hidden] { display: none; }
 .notes-overflow-item {
-  font-family: inherit; font-size: 0.9rem; text-align: left;
-  padding: 0.55rem 0.7rem; background: none; border: none;
-  color: var(--text); cursor: pointer; border-radius: 6px;
+  font-family: inherit; font-size: var(--font-base); text-align: left;
+  padding: var(--space-2) var(--space-3); background: none; border: none;
+  color: var(--text); cursor: pointer; border-radius: var(--radius-sm);
 }
 .notes-overflow-item:hover { background: color-mix(in srgb, var(--text) 6%, transparent); }
 
 /* ── Calendar nav (shared month/week) ── */
 .cal-nav {
-  display: flex; align-items: center; gap: 0.5rem;
-  margin: 0.5rem 0 1rem;
+  display: flex; align-items: center; gap: var(--space-2);
+  margin: var(--space-2) 0 var(--space-4);
 }
 .cal-nav-btn {
-  font-size: 1.3rem; line-height: 1; min-width: 2.2rem; min-height: 2.2rem;
+  font-size: var(--font-xl); line-height: 1; min-width: var(--icon-btn); min-height: var(--icon-btn);
   background: none; border: 1px solid var(--border); border-radius: var(--radius);
   color: var(--text); cursor: pointer;
 }
 .cal-title { font-weight: 700; min-width: 7rem; text-align: center; }
 .cal-today-btn {
-  margin-left: auto; font-family: inherit; font-size: 0.85rem;
-  padding: 0.35rem 0.8rem; background: none;
-  border: 1px solid var(--border); border-radius: 999px;
+  margin-left: auto; font-family: inherit; font-size: var(--font-sm);
+  padding: var(--space-2) var(--space-4); background: none;
+  border: 1px solid var(--border); border-radius: var(--radius-pill);
   color: var(--text-secondary); cursor: pointer;
 }
 
 /* ── Month grid ── */
 .cal-grid {
-  display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px;
+  display: grid; grid-template-columns: repeat(7, 1fr); gap: var(--space-0_5);
 }
 .cal-weekday {
-  text-align: center; font-size: 0.75rem; color: var(--text-secondary);
-  padding: 0.3rem 0;
+  text-align: center; font-size: var(--font-xs); color: var(--text-secondary);
+  padding: var(--space-1) 0;
 }
 .cal-cell {
   position: relative; aspect-ratio: 1 / 1;
   display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
-  gap: 0.15rem; padding: 0.35rem 0.2rem;
+  gap: var(--space-0_5); padding: var(--space-2) var(--space-1);
   background: var(--bg-card); border: 1px solid var(--border);
-  border-radius: 6px; color: var(--text); cursor: pointer;
+  border-radius: var(--radius-sm); color: var(--text); cursor: pointer;
   font-family: inherit;
 }
 .cal-cell.cal-out { color: var(--text-secondary); opacity: 0.5; }
 .cal-cell.cal-today { border-color: var(--accent); border-width: 2px; }
-.cal-date { font-size: 0.85rem; }
+.cal-date { font-size: var(--font-sm); }
 .cal-dot {
   min-width: 1.1rem; height: 1.1rem; line-height: 1.1rem;
-  font-size: 0.65rem; text-align: center;
-  background: var(--accent); color: var(--bg); border-radius: 999px;
+  font-size: var(--font-2xs); text-align: center;
+  background: var(--accent); color: var(--bg); border-radius: var(--radius-pill);
 }
 
 /* ── Week list ── */
-.cal-week { display: flex; flex-direction: column; gap: 2px; }
+.cal-week { display: flex; flex-direction: column; gap: var(--space-0_5); }
 .cal-week-row {
-  display: flex; align-items: flex-start; gap: 0.6rem;
-  padding: 0.5rem 0.4rem; border-bottom: 1px solid var(--border);
+  display: flex; align-items: flex-start; gap: var(--space-3);
+  padding: var(--space-2) var(--space-2); border-bottom: 1px solid var(--border);
 }
 .cal-week-row.cal-today { background: color-mix(in srgb, var(--accent) 8%, transparent); }
 .cal-week-day {
-  flex: 0 0 3rem; font-size: 0.85rem; color: var(--text-secondary); padding-top: 0.2rem;
+  flex: 0 0 3rem; font-size: var(--font-sm); color: var(--text-secondary); padding-top: var(--space-1);
 }
-.cal-week-items { flex: 1 1 auto; display: flex; flex-direction: column; gap: 0.25rem; }
+.cal-week-items { flex: 1 1 auto; display: flex; flex-direction: column; gap: var(--space-1); }
 .cal-week-note {
-  text-align: left; font-family: inherit; font-size: 0.9rem;
-  padding: 0.35rem 0.5rem; background: var(--bg-card);
-  border: 1px solid var(--border); border-radius: 6px; color: var(--text); cursor: pointer;
+  text-align: left; font-family: inherit; font-size: var(--font-base);
+  padding: var(--space-2) var(--space-2); background: var(--bg-card);
+  border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); cursor: pointer;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .cal-week-add {
-  flex: 0 0 auto; font-size: 1.1rem; line-height: 1;
-  min-width: 2rem; min-height: 2rem; background: none;
-  border: 1px dashed var(--border); border-radius: 6px;
+  flex: 0 0 auto; font-size: var(--font-lg); line-height: 1;
+  min-width: var(--control-h); min-height: var(--control-h); background: none;
+  border: 1px dashed var(--border); border-radius: var(--radius-sm);
   color: var(--text-secondary); cursor: pointer;
 }
 
 /* ── Day detail ── */
-.cal-day-title { margin: 0.5rem 0 1rem; }
-.cal-day-add { margin-top: 1rem; }
+.cal-day-title { margin: var(--space-2) 0 var(--space-4); }
+.cal-day-add { margin-top: var(--space-4); }
 
 /* ── Notes: bookmark insert picker (ADR-026 §4.5) ── */
 .note-bm-scrim {
   position: fixed; inset: 0; z-index: 40;
-  background: rgba(0, 0, 0, 0.4);
+  background: rgba(0, 0, 0, 0.45);
 }
 .note-bm-sheet {
   position: fixed; left: 50%; bottom: 0; transform: translateX(-50%);
   z-index: 41; width: 100%; max-width: var(--max-width);
   max-height: 70vh; overflow-y: auto;
   background: var(--bg-card);
-  border-radius: var(--radius) var(--radius) 0 0;
-  padding: 1.2rem 1.2rem max(1.2rem, env(safe-area-inset-bottom));
-  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.25);
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  padding: var(--space-5) var(--space-5) max(var(--space-5), env(safe-area-inset-bottom));
+  box-shadow: var(--shadow-sheet);
 }
-.note-bm-title { margin: 0 0 1rem; font-size: 1.1rem; }
-.note-bm-list { list-style: none; margin: 0 0 1rem; padding: 0; }
+.note-bm-title { margin: 0 0 var(--space-4); font-size: var(--font-lg); }
+.note-bm-list { list-style: none; margin: 0 0 var(--space-4); padding: 0; }
 .note-bm-item {
-  width: 100%; text-align: left; font-family: inherit; font-size: 0.95rem;
-  padding: 0.7rem 0.6rem; background: none; border: none;
+  width: 100%; text-align: left; font-family: inherit; font-size: var(--font-base);
+  padding: var(--space-3) var(--space-3); background: none; border: none;
   border-bottom: 1px solid var(--border); color: var(--text); cursor: pointer;
 }
 .note-bm-item:hover { background: color-mix(in srgb, var(--text) 5%, transparent); }
@@ -5242,6 +5240,6 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 @media (min-width: 769px) {
   .note-bm-sheet {
     bottom: auto; top: 50%; transform: translate(-50%, -50%);
-    border-radius: var(--radius); max-width: 420px;
+    border-radius: var(--radius-modal); max-width: 420px;
   }
 }
