@@ -3707,6 +3707,86 @@ html.cite-sheet-open {
   }
 }
 
+/* ── Bookmark tab-view title actions (ADR-029) ──
+   The full-screen 북마크 tab view replaces the per-view home/settings buttons
+   with two global management actions on the right of the title row: "+" (새 폴더)
+   and "⋯" (더 보기, dropdown → 내보내기/가져오기). .title-action-btn mirrors the
+   other header icon buttons (44px touch target via --icon-btn-touch). */
+.title-actions {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.title-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--icon-btn-touch);
+  height: var(--icon-btn-touch);
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  color: var(--accent);
+  transition: opacity var(--duration-fast);
+}
+
+.title-action-btn svg {
+  width: 1.45rem;
+  height: 1.45rem;
+}
+
+.title-action-btn:active {
+  opacity: 0.4;
+}
+
+/* Dropdown anchored below the ⋯ button (relative to .title-actions cluster). */
+.title-action-menu {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  right: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  min-width: 9rem;
+  padding: var(--space-1);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-2);
+}
+
+.title-action-menu[hidden] {
+  display: none;
+}
+
+.title-action-menu-item {
+  display: block;
+  width: 100%;
+  text-align: right;
+  padding: var(--space-2) var(--space-3);
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: var(--font-base);
+  font-weight: 400;
+  line-height: var(--leading-snug);
+  color: var(--text);
+  cursor: pointer;
+  transition: background var(--duration-fast);
+}
+
+.title-action-menu-item:hover {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
 
 /* ── Verse selection mode ── */
 

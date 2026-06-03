@@ -1382,10 +1382,11 @@ function renderBookmarksView() {
   const $app = _$("app");
   const $title = _$("page-title");
   window.setTitle("북마크");
-  // Match every other main-header view: home button + mobile settings trigger
-  // so navigation/settings stay reachable from this full-screen view.
-  $title.insertBefore(window.buildHomeBtn("/", "성서 목록으로"), $title.firstChild);
-  $title.appendChild(window.buildSettingsTrigger());
+  // Navigation is the tab bar's job now (ADR-029), so this full-screen view no
+  // longer mints a home/settings header button. Instead the title row carries
+  // two global management actions on the right: "+" (new folder) and "⋯" (more).
+  // Reading-context actions (이 장 저장 / 절 선택) belong only to the drawer.
+  $title.appendChild(buildBmViewActions());
   window.hideAudioBar();
   clearNode($app);
 
@@ -1394,6 +1395,110 @@ function renderBookmarksView() {
   panel.appendChild(tree);
   $app.appendChild(panel);
   renderBookmarkTree(tree);
+}
+
+// Build the right-aligned action cluster for the bookmark tab view's title row:
+// a "+" (새 폴더) button and a "⋯" (더 보기) button with a dismissible menu
+// (내보내기 / 가져오기). Returns a wrapper node appended into #page-title.
+// Header-icon styling matches buildSettingsTrigger/buildBookmarkHeaderBtn via
+// the .title-action-btn class (44px touch target from --icon-btn-touch).
+function buildBmViewActions() {
+  const wrap = el("div", { className: "title-actions" });
+
+  // ── "+" 새 폴더 ──
+  const addSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  addSvg.setAttribute("viewBox", "0 0 24 24");
+  addSvg.setAttribute("fill", "none");
+  addSvg.setAttribute("aria-hidden", "true");
+  const addPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  addPath.setAttribute("d", "M12 5v14M5 12h14");
+  addPath.setAttribute("stroke", "currentColor");
+  addPath.setAttribute("stroke-width", "1.8");
+  addPath.setAttribute("stroke-linecap", "round");
+  addSvg.appendChild(addPath);
+  const addBtn = el("button", {
+    className: "title-action-btn",
+    type: "button",
+    "aria-label": "새 폴더",
+  }, addSvg);
+  addBtn.addEventListener("click", () => {
+    openNewFolderModal((_newId) => { _rerenderActiveBookmarkTree(); });
+  });
+
+  // ── "⋯" 더 보기 + menu ──
+  const moreSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  moreSvg.setAttribute("viewBox", "0 0 24 24");
+  moreSvg.setAttribute("fill", "currentColor");
+  moreSvg.setAttribute("aria-hidden", "true");
+  for (const cx of [6, 12, 18]) {
+    const dot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+    dot.setAttribute("cx", String(cx));
+    dot.setAttribute("cy", "12");
+    dot.setAttribute("r", "1.6");
+    moreSvg.appendChild(dot);
+  }
+  const moreBtn = el("button", {
+    className: "title-action-btn",
+    type: "button",
+    "aria-label": "더 보기",
+    "aria-haspopup": "menu",
+    "aria-expanded": "false",
+  }, moreSvg);
+
+  const menu = el("div", { className: "title-action-menu", role: "menu", "aria-label": "더 보기", hidden: "" });
+  const exportItem = el("button", { className: "title-action-menu-item", type: "button", role: "menuitem" }, "내보내기");
+  const importItem = el("button", { className: "title-action-menu-item", type: "button", role: "menuitem" }, "가져오기");
+  menu.appendChild(exportItem);
+  menu.appendChild(importItem);
+
+  function closeMenu() {
+    if (menu.hidden) return;
+    menu.hidden = true;
+    moreBtn.setAttribute("aria-expanded", "false");
+    document.removeEventListener("click", onDocClick, true);
+    document.removeEventListener("keydown", onKeydown, true);
+  }
+  function openMenu() {
+    if (!menu.hidden) return;
+    menu.hidden = false;
+    moreBtn.setAttribute("aria-expanded", "true");
+    // Capture phase so an outside click closes before it acts elsewhere.
+    document.addEventListener("click", onDocClick, true);
+    document.addEventListener("keydown", onKeydown, true);
+  }
+  /** @param {MouseEvent} e */
+  function onDocClick(e) {
+    const t = /** @type {Node} */ (e.target);
+    if (wrap.contains(t)) return;
+    closeMenu();
+  }
+  /** @param {KeyboardEvent} e */
+  function onKeydown(e) {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      closeMenu();
+      moreBtn.focus();
+    }
+  }
+
+  moreBtn.addEventListener("click", () => {
+    if (menu.hidden) openMenu();
+    else closeMenu();
+  });
+  exportItem.addEventListener("click", () => {
+    closeMenu();
+    exportBookmarks();
+  });
+  importItem.addEventListener("click", () => {
+    closeMenu();
+    $bmImportInput.value = "";
+    $bmImportInput.click();
+  });
+
+  wrap.appendChild(addBtn);
+  wrap.appendChild(moreBtn);
+  wrap.appendChild(menu);
+  return wrap;
 }
 
 // Returns all currently visible treeitems in DOM order (skips children of collapsed folders)
