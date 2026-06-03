@@ -3106,12 +3106,13 @@ html.cite-sheet-open {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 2.5rem;
-  height: 1.6rem;
+  width: 2.9rem;
+  height: 1.8rem;
   border-radius: var(--radius-pill);
   transition: background var(--duration-fast) ease, color var(--duration-fast) ease;
 }
-.tab-icon { width: var(--tabbar-icon); height: var(--tabbar-icon); }
+/* 헤더 아이콘(≈24px)보다 크게 — 탭바 존재감. rem 으로 Dynamic Type 추종. */
+.tab-icon { width: 1.6rem; height: 1.6rem; }
 
 .tab-label {
   font-size: var(--font-2xs);
