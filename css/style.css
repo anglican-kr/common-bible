@@ -3211,8 +3211,9 @@ html.cite-sheet-open {
 
 /* 탭 바 하단 공존 (ADR-029 P4). 데스크탑은 탭바가 없어 적용 안 함. */
 @media (max-width: 768px) {
-  /* 모든 뷰의 하단 콘텐츠가 탭 바에 가리지 않게 자리 확보. */
-  #app { padding-bottom: var(--tabbar-reserve); }
+  /* 탭 바가 보이는 뷰에서만 하단 콘텐츠 자리 확보. 절 선택 모드는 탭 바를 숨기고
+     전용 하단 바가 차지하므로 reserve 를 적용하지 않는다(빈 띠 방지). */
+  body:not(.verse-select-active) #app { padding-bottom: var(--tabbar-reserve); }
   /* 오디오 미니플레이어는 탭 바 위에 스택(iOS Music 식, 잠정 — dev 확인 후 조정).
      body 접두 + :not([hidden]) 로 base #audio-bar{bottom:0}·browser-mode 규칙보다
      특이도 우선(소스 순서 무관하게 이김). */
@@ -3234,8 +3235,8 @@ html.cite-sheet-open {
   /* 좁은 플로팅 바: 가장자리(12px)와 동일하게 요소 간격도 12px 로 통일. */
   body #audio-bar:not([hidden]) .audio-player { gap: var(--space-3); }
   body #audio-bar:not([hidden]) .audio-progress-wrap { gap: var(--space-3); }
-  /* 오디오 표시 중엔 오디오 바 높이만큼 하단 여유를 더 준다. */
-  #app:has(~ #audio-bar:not([hidden])) {
+  /* 오디오 표시 중엔 오디오 바 높이만큼 하단 여유를 더 준다(절 선택 모드 제외). */
+  body:not(.verse-select-active) #app:has(~ #audio-bar:not([hidden])) {
     padding-bottom: calc(var(--tabbar-reserve) + 3.5rem);
   }
   /* 절 선택 모드: 전용 하단 바가 차지하므로 탭 바 숨김. */
