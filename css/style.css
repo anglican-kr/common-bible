@@ -2168,6 +2168,13 @@ mark.search-highlight {
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
 }
 
+/* Book-list view only: match the gap below the pinned division tabs to the
+   resume-banner ↔ tabs gap (0.8rem). #app's default 2rem padding-top is meant
+   for the reading view, so we scope this to views that render .division-panel. */
+#app:has(.division-panel) {
+  padding-top: 0.8rem;
+}
+
 .book-list {
   list-style: none;
   display: grid;
