@@ -37,6 +37,26 @@ const $divisionTabsSlot = _$("division-tabs-slot");
 const $searchInput = /** @type {HTMLInputElement} */ (_$("search-input"));
 const $searchClear = _$("search-clear");
 const $searchBar = _$("search-bar");
+const $tabBar = _$("tab-bar");
+
+// ── Tab bar active state (ADR-029) ──
+// The global <a> click interceptor (further below) already SPA-navigates the
+// tab links; this only reflects the current route in the bar's active highlight.
+// Reading routes (/, /<division>, /<book>/<chapter>, …) all map to the home tab.
+function syncTabBarActive() {
+  if (!$tabBar) return;
+  const seg = location.pathname.replace(/^\//, "").split("/")[0];
+  const active = seg === "search" ? "search"
+    : seg === "bookmarks" ? "bookmarks"
+    : seg === "settings" ? "settings"
+    : "home";
+  for (const a of $tabBar.querySelectorAll(".tab-item")) {
+    const on = a.getAttribute("data-tab") === active;
+    a.classList.toggle("active", on);
+    if (on) a.setAttribute("aria-current", "page");
+    else a.removeAttribute("aria-current");
+  }
+}
 
 // Mirrors app.js's DATA_DIR — Phase 7b's audio player still uses the same
 // constant in app.js until that section moves here as well.
@@ -1684,6 +1704,7 @@ function trackPageView() {
 async function route() {
   const isInitialLoad = _isInitialLoad;
   _isInitialLoad = false;
+  syncTabBarActive();
   if (_scrollTrackCleanup) _scrollTrackCleanup();
   clearNode($resumeBannerSlot);
   clearNode($divisionTabsSlot);

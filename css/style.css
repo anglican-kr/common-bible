@@ -3196,6 +3196,12 @@ html.cite-sheet-open {
   #tab-bar { display: none; }
 }
 
+/* 모바일: 설정 기어는 설정 탭으로 이전 — 헤더에서 숨김(데스크탑 유지).
+   읽기 화면 뒤로(buildHomeBtn)·챕터 북마크 추가 버튼은 보존. */
+@media (max-width: 768px) {
+  .title-settings-btn { display: none; }
+}
+
 /* ── Audio Bar ── */
 #audio-bar {
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
