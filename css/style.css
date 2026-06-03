@@ -2697,8 +2697,12 @@ body.cites-shown .note-anchor--variant:focus-visible {
 #cite-sheet-close {
   font-size: var(--font-xl);
   line-height: 1;
-  width: 2rem;
-  height: 2rem;
+  /* Match #cite-sheet-back's 2.45rem so the always-visible close button fixes
+     the header height — the back button toggling in/out no longer changes it.
+     Also meets the HIG 44px touch target. */
+  width: 2.45rem;
+  height: 2.45rem;
+  flex-shrink: 0;
   border: none;
   background: transparent;
   cursor: pointer;
