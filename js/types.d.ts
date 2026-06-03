@@ -860,6 +860,7 @@ declare global {
     rebuildDriveSyncSection?: () => void;
     _showSyncSnackbar?: (msg: string) => void;
     renderBookmarkTree?: () => void;
+    rerenderActiveBookmarkTree?: () => void;
     // Mobile tab-bar full-screen views (ADR-029 / P2). Always assigned at
     // module load; route() in views-routing.js calls them on the mobile branch.
     renderBookmarksView: () => void;

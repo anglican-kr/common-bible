@@ -571,7 +571,9 @@ function createSyncMachine({ onStateChange } = {}) {
   function _applyMergedDoc(merged, hadRemoteChanges) {
     V2.saveLocal(merged);
     V2.applyToLegacyKeys(merged);
-    if (typeof window.renderBookmarkTree === "function") window.renderBookmarkTree();
+    // Refresh the visible bookmark surface (drawer or /bookmarks full view).
+    if (typeof window.rerenderActiveBookmarkTree === "function") window.rerenderActiveBookmarkTree();
+    else if (typeof window.renderBookmarkTree === "function") window.renderBookmarkTree();
     if (hadRemoteChanges) {
       // SyncSettings stores `MTimed<unknown>`; the apply* helpers expect
       // narrowed primitive types. Cast at the boundary — runtime guarantees

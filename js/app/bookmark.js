@@ -361,7 +361,7 @@ function moveBookmarkItem(draggedId, targetId, position) {
   saveBookmarks(store);
   // renderBookmarkTree lives in the Phase 6b block below — same module
   // after the Phase 6b extraction, so we call directly.
-  renderBookmarkTree();
+  _rerenderActiveBookmarkTree();
 }
 // ── END DRAG_CORE ──
 
@@ -853,7 +853,7 @@ function openBookmarkDrawer(bookId, chapter) {
   const inChapter = bookId && chapter;
   $bmSaveChapterBtn.disabled = !inChapter;
   $bmSelectVersesBtn.disabled = !inChapter;
-  renderBookmarkTree();
+  _rerenderActiveBookmarkTree();
   setBookmarkBackgroundInert(true);
   const scrollY = window.scrollY;
   document.body.style.overflow = "hidden";
@@ -1864,7 +1864,7 @@ function openMergeDialog(candidates, incomingSpec, mode, fallbackContext = null)
         : `${bookName} ${target.chapter}:${merged}`;
     }
     saveBookmarks(store);
-    renderBookmarkTree();
+    _rerenderActiveBookmarkTree();
     refreshBookmarkHeaderBtn();
 
     if (mode === "verses") exitVerseSelectMode();
@@ -1987,14 +1987,14 @@ function openImportModal(incoming) {
     const existing = loadBookmarks();
     const merged = _mergeBookmarkStores(existing, incoming.bookmarks);
     saveBookmarks(merged);
-    renderBookmarkTree();
+    _rerenderActiveBookmarkTree();
     announce("북마크를 병합했습니다.");
     cleanup();
   };
 
   $bmImportOverwrite.onclick = () => {
     saveBookmarks(incoming.bookmarks);
-    renderBookmarkTree();
+    _rerenderActiveBookmarkTree();
     announce("북마크를 덮어썼습니다.");
     cleanup();
   };
@@ -2156,7 +2156,7 @@ $bmAddFolderBtn.addEventListener("click", () => {
     const store = loadBookmarks();
     store.push({ type: "folder", id: generateId(), name, children: [], expanded: false });
     saveBookmarks(store);
-    renderBookmarkTree();
+    _rerenderActiveBookmarkTree();
     cleanup();
   }
 
@@ -2384,6 +2384,9 @@ window.buildBookmarkHeaderBtn = buildBookmarkHeaderBtn;
 window.openBookmarkDrawer = openBookmarkDrawer;
 window.closeBookmarkDrawer = closeBookmarkDrawer;
 window.renderBookmarkTree = renderBookmarkTree;
+// Re-render whichever bookmark surface is mounted (drawer OR /bookmarks full
+// view). Sync layer + mutation flows use this so the visible tree refreshes.
+window.rerenderActiveBookmarkTree = _rerenderActiveBookmarkTree;
 window.renderBookmarksView = renderBookmarksView;
 window.enterVerseSelectMode = enterVerseSelectMode;
 window.exitVerseSelectMode = exitVerseSelectMode;
