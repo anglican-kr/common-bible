@@ -955,7 +955,7 @@ function _buildBookmarkItem(bm, depth) {
     const store = loadBookmarks();
     removeItemById(store, bm.id);
     saveBookmarks(store);
-    renderBookmarkTree();
+    _rerenderActiveBookmarkTree();
     refreshBookmarkHeaderBtn();
   };
 
@@ -1266,7 +1266,7 @@ function _buildFolderItem(folder, depth) {
     const found = _findItemInStore(store, folder.id);
     if (found) found.item.name = newName.trim();
     saveBookmarks(store);
-    renderBookmarkTree();
+    _rerenderActiveBookmarkTree();
   };
   const deleteAction = () => {
     const childCount = folder.children ? folder.children.length : 0;
@@ -1278,7 +1278,7 @@ function _buildFolderItem(folder, depth) {
     const store = loadBookmarks();
     removeItemById(store, folder.id);
     saveBookmarks(store);
-    renderBookmarkTree();
+    _rerenderActiveBookmarkTree();
   };
 
   const actions = el("div", { className: "bm-item-actions" });
@@ -1321,25 +1321,79 @@ function _buildFolderItem(folder, depth) {
   return li;
 }
 
-function renderBookmarkTree() {
+/**
+ * Render the bookmark tree into a target `<ul role="tree">`. Defaults to the
+ * drawer body so the existing drawer keeps calling this with no arguments. The
+ * mobile full-screen view (renderBookmarksView) passes its own in-page `<ul>`.
+ * Roving-tabindex + keyboard arrow navigation are wired only on the drawer body
+ * (the listeners below are bound to `$bookmarkDrawerBody`); the full view relies
+ * on each bookmark's own `<a>` for keyboard reachability.
+ * @param {HTMLElement} [target]
+ */
+function renderBookmarkTree(target = $bookmarkDrawerBody) {
   _renderPathname = window.location.pathname;
   // The previously swiped row may be replaced when we re-render; drop the
   // stale reference held by js/app/bookmark.js.
   resetSwipedRow();
-  clearNode($bookmarkDrawerBody);
+  clearNode(target);
   const store = loadBookmarks();
   if (!store.length) {
-    $bookmarkDrawerBody.appendChild(el("li", { className: "bm-empty", role: "presentation" }, "저장된 북마크가 없습니다."));
+    target.appendChild(el("li", { className: "bm-empty", role: "presentation" }, "저장된 북마크가 없습니다."));
     return;
   }
   for (const item of store) {
-    $bookmarkDrawerBody.appendChild(item.type === "folder"
+    target.appendChild(item.type === "folder"
       ? _buildFolderItem(item, 0)
       : _buildBookmarkItem(item, 0));
   }
-  // Set roving tabindex: first treeitem is reachable, rest are -1
-  const items = _getVisibleTreeItems();
-  items.forEach((item, i) => item.setAttribute("tabIndex", i === 0 ? "0" : "-1"));
+  // Roving tabindex only applies to the drawer body, where the arrow-key
+  // handlers below live. In the full view, leave the default treeitem tabindex.
+  if (target === $bookmarkDrawerBody) {
+    const items = _getVisibleTreeItems();
+    items.forEach((item, i) => item.setAttribute("tabIndex", i === 0 ? "0" : "-1"));
+  }
+}
+
+/**
+ * Re-render whichever bookmark tree is currently on screen. When the mobile
+ * full-screen view is mounted (#bookmarks-view-tree exists in #app), re-render
+ * that; otherwise fall back to the drawer body. Item-level mutation handlers
+ * (delete / rename) call this so the visible surface updates regardless of
+ * which one the user is looking at.
+ */
+function _rerenderActiveBookmarkTree() {
+  const fullViewTree = document.getElementById("bookmarks-view-tree");
+  renderBookmarkTree(
+    fullViewTree && document.getElementById("app")?.contains(fullViewTree)
+      ? /** @type {HTMLElement} */ (fullViewTree)
+      : undefined,
+  );
+}
+
+/**
+ * Full-screen bookmark list view for the mobile tab bar (ADR-029 / P2).
+ * Renders into `#app`: a page title + the bookmark tree (same item builders as
+ * the drawer), WITHOUT the drawer's reading-context toolbar (save current
+ * chapter / select verses) — that affordance stays in the drawer, reached from
+ * the reading header. Bookmark links navigate normally (closeBookmarkDrawer is
+ * a no-op while the drawer is hidden).
+ */
+function renderBookmarksView() {
+  const $app = _$("app");
+  const $title = _$("page-title");
+  window.setTitle("북마크");
+  // Match every other main-header view: home button + mobile settings trigger
+  // so navigation/settings stay reachable from this full-screen view.
+  $title.insertBefore(window.buildHomeBtn("/", "성서 목록으로"), $title.firstChild);
+  $title.appendChild(window.buildSettingsTrigger());
+  window.hideAudioBar();
+  clearNode($app);
+
+  const panel = el("div", { className: "bookmarks-view", role: "region", "aria-label": "북마크 목록" });
+  const tree = el("ul", { id: "bookmarks-view-tree", role: "tree", className: "bm-tree", "aria-label": "북마크 목록" });
+  panel.appendChild(tree);
+  $app.appendChild(panel);
+  renderBookmarkTree(tree);
 }
 
 // Returns all currently visible treeitems in DOM order (skips children of collapsed folders)
@@ -1592,7 +1646,7 @@ function _commitNewFolder() {
   const id = generateId();
   store.push({ type: "folder", id, name, children: [], expanded: false });
   saveBookmarks(store);
-  renderBookmarkTree();
+  _rerenderActiveBookmarkTree();
   const cb = _bmNewFolderCallback;
   closeNewFolderModal();
   if (cb) cb(id);
@@ -1625,7 +1679,7 @@ function commitSaveBookmark(existingId, label, note, folderId, bookId, chapter, 
     insertItem(store, folderId, bm);
   }
   saveBookmarks(store);
-  renderBookmarkTree();
+  _rerenderActiveBookmarkTree();
   refreshBookmarkHeaderBtn();
   announce(existingId ? "북마크를 수정했습니다." : "북마크를 저장했습니다.");
 }
@@ -2185,7 +2239,7 @@ const appBookmark = {
   // Phase 6b UI
   buildBackBtn, buildBookmarkHeaderBtn,
   openBookmarkDrawer, closeBookmarkDrawer,
-  renderBookmarkTree, refreshBookmarkHeaderBtn,
+  renderBookmarkTree, renderBookmarksView, refreshBookmarkHeaderBtn,
   enterVerseSelectMode, exitVerseSelectMode,
   updateVerseSelectionBoundaries, updateVerseSelectBar,
   openDriveDisconnectModal,
@@ -2220,6 +2274,7 @@ window.buildBookmarkHeaderBtn = buildBookmarkHeaderBtn;
 window.openBookmarkDrawer = openBookmarkDrawer;
 window.closeBookmarkDrawer = closeBookmarkDrawer;
 window.renderBookmarkTree = renderBookmarkTree;
+window.renderBookmarksView = renderBookmarksView;
 window.enterVerseSelectMode = enterVerseSelectMode;
 window.exitVerseSelectMode = exitVerseSelectMode;
 window.updateVerseSelectionBoundaries = updateVerseSelectionBoundaries;
@@ -2239,7 +2294,7 @@ export {
   resetSwipedRow, closeSwipedRowIfOutside,
   buildBackBtn, buildBookmarkHeaderBtn,
   openBookmarkDrawer, closeBookmarkDrawer,
-  renderBookmarkTree, refreshBookmarkHeaderBtn,
+  renderBookmarkTree, renderBookmarksView, refreshBookmarkHeaderBtn,
   enterVerseSelectMode, exitVerseSelectMode,
   updateVerseSelectionBoundaries, updateVerseSelectBar,
   openDriveDisconnectModal,

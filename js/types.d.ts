@@ -684,6 +684,7 @@ export interface AppParallels {
 
 export interface AppSettings {
   initSettings: () => void;
+  renderSettingsView: () => void;
   applyFontSize: (size: number | string) => void;
   applyTheme: (theme: string) => void;
   applyColorScheme: (schemeName: string) => void;
@@ -755,6 +756,7 @@ export interface AppSearch {
   openSearchSheet: (query?: string) => void;
   closeSearchSheet: () => void;
   renderSearchResults: (query: string, page: number, autoNavigate?: boolean) => Promise<void>;
+  renderSearchView: () => void;
   initSheetDrag: () => void;
   isMobile: () => boolean;
   appendTextWithHighlight: (target: Node, text: string, query: string) => void;
@@ -858,6 +860,11 @@ declare global {
     rebuildDriveSyncSection?: () => void;
     _showSyncSnackbar?: (msg: string) => void;
     renderBookmarkTree?: () => void;
+    // Mobile tab-bar full-screen views (ADR-029 / P2). Always assigned at
+    // module load; route() in views-routing.js calls them on the mobile branch.
+    renderBookmarksView: () => void;
+    renderSettingsView: () => void;
+    renderSearchView: () => void;
     applyFontSize?: (size: number | string) => void;
     applyColorScheme?: (scheme: string) => void;
     applyTheme?: (theme: string) => void;
@@ -957,7 +964,8 @@ declare global {
   function buildBookmarkHeaderBtn(bookId: string | null, chapter: number | null): HTMLButtonElement;
   function openBookmarkDrawer(bookId: string | null, chapter: number | null): void;
   function closeBookmarkDrawer(): void;
-  function renderBookmarkTree(): void;
+  function renderBookmarkTree(target?: HTMLElement): void;
+  function renderBookmarksView(): void;
   function enterVerseSelectMode(bookId: string, chapter: number): void;
   function exitVerseSelectMode(): void;
   function updateVerseSelectionBoundaries(article: Element | null): void;
@@ -967,6 +975,7 @@ declare global {
   function openSearchSheet(query?: string): void;
   function closeSearchSheet(): void;
   function renderSearchResults(query: string, page: number, autoNavigate?: boolean): Promise<void>;
+  function renderSearchView(): void;
   function initSheetDrag(): void;
   function isMobile(): boolean;
   function appendTextWithHighlight(target: Node, text: string, query: string): void;

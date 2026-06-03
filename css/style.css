@@ -394,6 +394,80 @@ body {
   outline: none;
 }
 
+/* ── Mobile tab-bar full-screen views (ADR-029 / P2) ──
+   Bookmarks · Settings · Search rendered as in-page views in #app on mobile.
+   Sans-serif (matching the settings popover) and constrained to a readable
+   measure, centered like the book list. */
+.bookmarks-view,
+.settings-view,
+.search-view {
+  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: var(--space-3) var(--space-4) var(--space-8);
+}
+
+/* Bookmark tree reuses .bm-* item styles from the drawer; just lay out the
+   list container in-page. */
+.bookmarks-view .bm-tree {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.bookmarks-view .bm-empty {
+  color: var(--text-secondary);
+  padding: var(--space-6) var(--space-2);
+  text-align: center;
+}
+
+/* In-page search input (mirrors the header #search-bar, used in #app). */
+#search-inpage-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  padding: 0 var(--space-3);
+  height: var(--touch-target, 44px);
+  margin-bottom: var(--space-4);
+}
+
+#search-inpage-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: none;
+  font-family: inherit;
+  font-size: var(--font-base);
+  color: var(--text);
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+/* Hide the native search clear/decoration so only our button shows. */
+#search-inpage-input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+#search-inpage-clear {
+  flex-shrink: 0;
+  border: none;
+  background: none;
+  color: var(--text-secondary);
+  font-size: var(--font-lg);
+  line-height: 1;
+  cursor: pointer;
+  width: var(--icon-btn-touch, 32px);
+  height: var(--icon-btn-touch, 32px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 /* ── Drive sync settings UI ── */
 
 .settings-drive-info-btn {
@@ -609,12 +683,14 @@ body {
    글자 크기 / 테마) shares the same total width so the right edge of the
    popover stays visually aligned across rows. Buttons inside divide the
    shared width equally regardless of their text length. */
-.settings-popover .settings-row > .btn-group {
+.settings-popover .settings-row > .btn-group,
+.settings-view .settings-row > .btn-group {
   width: 11rem;
   flex-shrink: 0;
 }
 
-.settings-popover .settings-row > .btn-group .toolbar-btn {
+.settings-popover .settings-row > .btn-group .toolbar-btn,
+.settings-view .settings-row > .btn-group .toolbar-btn {
   flex: 1;
   min-width: 0;
 }

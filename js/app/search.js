@@ -290,6 +290,68 @@ function renderSearchResultList(container, result, query, page, pageSize, pagina
   }
 }
 
+// ── In-page search input (mobile full-screen view, ADR-029 / P2) ──
+// The mobile tab bar routes /search to a full-screen in-page view instead of
+// the bottom sheet. This builds a minimal search input bar (mirroring the
+// header #search-bar markup) wired to commit via the URL (/search?q=...), so it
+// reuses the same routing + history path as the desktop top bar. Returns the
+// wrapper element; `autofocus` opens the keyboard when entering with no query.
+/**
+ * @param {string} query
+ * @param {boolean} [autofocus]
+ * @returns {HTMLElement}
+ */
+function buildInPageSearchInput(query, autofocus = false) {
+  const wrap = el("div", { id: "search-inpage-bar", role: "search" });
+  const input = /** @type {HTMLInputElement} */ (el("input", {
+    id: "search-inpage-input",
+    type: "search",
+    inputmode: "search",
+    enterkeyhint: "search",
+    autocorrect: "off",
+    autocapitalize: "off",
+    spellcheck: "false",
+    placeholder: "검색 (예: 사랑, 사랑 in:요한, 창세 1:3)",
+    "aria-label": "성경 검색",
+    autocomplete: "off",
+  }));
+  input.value = query || "";
+  const clear = el("button", { id: "search-inpage-clear", type: "button", "aria-label": "검색어 지우기" }, "×");
+  clear.hidden = !query;
+
+  input.addEventListener("input", () => { clear.hidden = !input.value.trim(); });
+  input.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    commitTopSearch(input.value);
+  });
+  clear.addEventListener("click", () => {
+    input.value = "";
+    clear.hidden = true;
+    input.focus();
+    if (window.parsePath().view === "search") window.navigate("/search");
+  });
+
+  wrap.appendChild(input);
+  wrap.appendChild(clear);
+  if (autofocus) requestAnimationFrame(() => input.focus());
+  return wrap;
+}
+
+// Empty-query mobile /search: render just the in-page input (focused) so the
+// user can type. Shares the main-header chrome with renderSearchResults.
+function renderSearchView() {
+  window.setTitle("검색");
+  const $title = _$("page-title");
+  $title.insertBefore(window.buildHomeBtn("/", "성서 목록으로"), $title.firstChild);
+  $title.appendChild(window.buildSettingsTrigger());
+  window.hideAudioBar();
+  clearNode($app);
+  const view = el("div", { className: "search-view" });
+  view.appendChild(buildInPageSearchInput("", true));
+  $app.appendChild(view);
+}
+
 /**
  * @param {string} query
  * @param {number} page
@@ -306,7 +368,21 @@ async function renderSearchResults(query, page, autoNavigate = false) {
   window.hideAudioBar();
   clearNode($app);
 
-  $app.appendChild(el("div", { className: "loading", "aria-live": "polite" }, "검색 중…"));
+  // Mobile full-screen view: keep an in-page search input pinned above the
+  // results so the query stays editable (desktop uses the header bar instead).
+  // Results render into their own container so re-rendering them never wipes
+  // the input. On desktop the results render straight into #app as before.
+  let resultsTarget = $app;
+  if (isMobile()) {
+    const view = el("div", { className: "search-view" });
+    view.appendChild(buildInPageSearchInput(query, false));
+    const resultsBox = el("div", { className: "search-view-results" });
+    view.appendChild(resultsBox);
+    $app.appendChild(view);
+    resultsTarget = resultsBox;
+  }
+
+  resultsTarget.appendChild(el("div", { className: "loading", "aria-live": "polite" }, "검색 중…"));
 
   // Estimate page size from available viewport height
   const headerH = document.getElementById("app-header")?.offsetHeight || 80;
@@ -316,7 +392,7 @@ async function renderSearchResults(query, page, autoNavigate = false) {
 
   /** @param {any} partial */
   function onPartial(partial) {
-    renderSearchResultList($app, partial, query, page, pageSize, buildSearchPagination);
+    renderSearchResultList(resultsTarget, partial, query, page, pageSize, buildSearchPagination);
     window.announce(`"${query}" 검색 중… 현재 ${partial.total}건`);
   }
 
@@ -343,13 +419,13 @@ async function renderSearchResults(query, page, autoNavigate = false) {
       window.route();
     } else {
       // Show the refMatch as a clickable result, and ensure UI is visible
-      renderSearchResultList($app, result, query, page, pageSize, buildSearchPagination);
+      renderSearchResultList(resultsTarget, result, query, page, pageSize, buildSearchPagination);
       dismissLaunchScreen();
     }
     return;
   }
 
-  renderSearchResultList($app, result, query, page, pageSize, buildSearchPagination);
+  renderSearchResultList(resultsTarget, result, query, page, pageSize, buildSearchPagination);
   dismissLaunchScreen();
 
   window.announce(`"${query}" 검색 결과 ${result.total}건`);
@@ -1080,16 +1156,17 @@ function consumeSearchAutoNavigate() {
 window.openSearchSheet = openSearchSheet;
 window.closeSearchSheet = closeSearchSheet;
 window.renderSearchResults = renderSearchResults;
+window.renderSearchView = renderSearchView;
 window.initSheetDrag = initSheetDrag;
 window.isMobile = isMobile;
 window.appendTextWithHighlight = appendTextWithHighlight;
 window.consumeSearchAutoNavigate = consumeSearchAutoNavigate;
 window.appSearch = {
-  openSearchSheet, closeSearchSheet, renderSearchResults, initSheetDrag,
+  openSearchSheet, closeSearchSheet, renderSearchResults, renderSearchView, initSheetDrag,
   isMobile, appendTextWithHighlight, consumeSearchAutoNavigate,
 };
 
 export {
-  openSearchSheet, closeSearchSheet, renderSearchResults, initSheetDrag,
+  openSearchSheet, closeSearchSheet, renderSearchResults, renderSearchView, initSheetDrag,
   isMobile, appendTextWithHighlight, consumeSearchAutoNavigate,
 };

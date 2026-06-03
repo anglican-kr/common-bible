@@ -1595,6 +1595,11 @@ function parsePath() {
     };
   }
 
+  // Tab-bar destinations (ADR-029 / P2). On mobile these render full-screen
+  // views; on desktop route() falls back to the existing overlays.
+  if (pathname === "bookmarks") return { view: "bookmarks" };
+  if (pathname === "settings") return { view: "settings" };
+
   const parts = pathname.split("/");
   if (parts.length === 1) {
     if (DIVISION_LABELS[parts[0]]) return { view: "division", division: parts[0] };
@@ -1695,14 +1700,9 @@ async function route() {
   const parsed = parsePath();
   const { view, bookId, chapter, division } = parsed;
 
-  // Sync search input with current route
-  if (view === "search") {
-    if (isMobile()) {
-      // On mobile, redirect search route to overlay
-      openSearchSheet(parsed.query);
-      dismissLaunchScreen();
-      return;
-    }
+  // Sync the desktop header search input with the current route. On mobile the
+  // header bar is hidden and /search renders its own in-page input, so skip it.
+  if (view === "search" && !isMobile()) {
     $searchInput.value = parsed.query ?? "";
     $searchClear.hidden = !parsed.query;
     $searchBar.dataset.clearHidden = String(!parsed.query);
@@ -1724,12 +1724,63 @@ async function route() {
           title: `"${parsed.query}" 검색`,
           description: `공동번역성서에서 "${parsed.query}" 검색 결과`,
         });
+      } else if (isMobile()) {
+        // Empty-query /search on mobile: full-screen in-page search input (the
+        // bottom sheet is retired on the tab-bar path).
+        renderSearchView();
+        dismissLaunchScreen();
+        updatePageMeta({ title: "검색", description: "공동번역성서 검색" });
       } else {
         const books = await loadBooks();
         renderBookList(books, divisionOrder()[0]);
         dismissLaunchScreen();
         updatePageMeta();
       }
+      trackPageView();
+      return;
+    }
+
+    // Tab-bar destinations (ADR-029 / P2). On mobile, render full-screen views
+    // into #app. On desktop (no tab bar yet — these routes are mobile-driven)
+    // fall back to the least-surprising behavior: open the existing overlay
+    // over the book list so a deep-link / resize-down never dead-ends.
+    if (view === "bookmarks") {
+      if (isMobile()) {
+        window.renderBookmarksView();
+        dismissLaunchScreen();
+        updatePageMeta({ title: "북마크", description: "공동번역성서 북마크 목록" });
+        trackPageView();
+        return;
+      }
+      // Desktop fallback: show the book list, then open the bookmark drawer
+      // (the established desktop affordance) over it.
+      const books = await loadBooks();
+      renderBookList(books, divisionOrder()[0]);
+      dismissLaunchScreen();
+      updatePageMeta({ title: "북마크", description: "공동번역성서 북마크 목록" });
+      openBookmarkDrawer(null, null);
+      trackPageView();
+      return;
+    }
+
+    if (view === "settings") {
+      if (isMobile()) {
+        window.renderSettingsView();
+        dismissLaunchScreen();
+        updatePageMeta({ title: "설정", description: "공동번역성서 설정" });
+        trackPageView();
+        return;
+      }
+      // Desktop fallback: settings is a popover anchored to the header gear, not
+      // a routable page. Show the book list and click the desktop trigger to
+      // open the popover so a deep-link / resize-down still lands somewhere.
+      const books = await loadBooks();
+      renderBookList(books, divisionOrder()[0]);
+      dismissLaunchScreen();
+      updatePageMeta({ title: "설정", description: "공동번역성서 설정" });
+      /** @type {HTMLElement | null} */
+      const gear = document.querySelector("#settings-anchor .settings-btn");
+      if (gear) gear.click();
       trackPageView();
       return;
     }
