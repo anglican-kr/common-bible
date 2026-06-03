@@ -470,6 +470,9 @@ body {
   align-items: center;
   justify-content: center;
 }
+/* ID 선택자 display 가 UA [hidden] 을 이기므로 명시적 hidden 규칙 필요
+   (JS 가 빈 쿼리일 때 hidden 토글). */
+#search-inpage-clear[hidden] { display: none; }
 
 /* ── Drive sync settings UI ── */
 
@@ -3495,9 +3498,6 @@ html.cite-sheet-open {
     display: none;
   }
 
-  .chapter-nav {
-    margin-top: 4.5rem;
-  }
 
   /* The top row holds only the (hidden) search bar + settings on mobile;
      settings moves into the title row, so the whole row collapses away. */
