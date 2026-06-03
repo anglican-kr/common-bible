@@ -314,6 +314,401 @@ window.appSettings = (() => {
     return row;
   }
 
+  // ── Settings section builder (shared) ──
+  // Builds the settings sections (reading toggles, typography/appearance, app
+  // lifecycle, about) into a target container. Reused by BOTH the desktop
+  // popover (initSettings → rebuild) and the mobile full-screen view
+  // (renderSettingsView), so section construction stays identical (ADR-029 / P2).
+  //
+  // The container is cleared first. `rerender` is called for in-place re-renders
+  // (font size / theme / color changes rebuild the whole surface so disabled
+  // states and pressed indicators update). `dismiss` is called by action buttons
+  // (install guide / drive connect-disconnect) just before they open a modal or
+  // start an OAuth flow, so the host surface (popover) can close itself — for
+  // the full-screen view it is a no-op.
+  /**
+   * @param {HTMLElement} target
+   * @param {{ rerender: () => void, dismiss: () => void }} cbs
+   */
+  function buildSettingsSections(target, { rerender, dismiss }) {
+    clearNode(target);
+
+    // ── Section 1: Reading-experience toggles ──
+    // Four boolean settings rendered as OS-native toggle switches (see
+    // makeToggleRow). Toggling updates state in place — no rebuild —
+    // so focus stays on the switch and the segmented re-render is avoided.
+    const section1 = el("section", { className: "settings-section" });
+
+    // Startup behavior: ON = resume last reading position, OFF = home.
+    const startupRow = makeToggleRow({
+      labelText: "읽던 페이지에서 시작",
+      checked: loadStartupBehavior() === "resume",
+      onToggle: (on) => {
+        saveStartupBehavior(on ? "resume" : "home");
+        announce(on ? "마지막 읽던 페이지로 시작" : "첫 페이지로 시작");
+      },
+    });
+
+    // Deuterocanon placement: ON = mixed into the OT (vulgate order),
+    // OFF = separate section (canonical). Caption reflects the active state.
+    const orderRow = makeToggleRow({
+      labelText: "외경",
+      checked: loadBookOrder() === "vulgate",
+      getCaption: (on) => (on ? "구약에 포함" : "별도 섹션에 표시"),
+      onToggle: (on) => {
+        saveBookOrder(on ? "vulgate" : "canonical");
+        const { view } = parsePath();
+        if (view !== "chapter" && view !== "prologue") route();
+        announce(on ? "구약에 외경 포함" : "외경 분리");
+      },
+    });
+
+    // Cite/note visibility (ADR-022): ON = show inline citations & notes.
+    const citeRow = makeToggleRow({
+      labelText: "인용·주석 표시",
+      checked: loadCiteShow(),
+      onToggle: (on) => {
+        saveCiteShow(on);
+        applyCiteShow(on);
+        announce(on ? "인용 본문·주석 표시" : "인용 본문·주석 숨김");
+      },
+    });
+
+    // Audiobook visibility — when off, audio bar is hidden and the FAB
+    // falls back to its lower default position (CSS sibling rule keys off
+    // #audio-bar[hidden]).
+    const audioRow = makeToggleRow({
+      labelText: "오디오북",
+      checked: loadAudioShow(),
+      onToggle: (on) => {
+        saveAudioShow(on);
+        if (typeof window.applyAudioShow === "function") window.applyAudioShow(on);
+        announce(on ? "오디오북 켜기" : "오디오북 끄기");
+      },
+    });
+
+    section1.appendChild(startupRow);
+    section1.appendChild(orderRow);
+    section1.appendChild(citeRow);
+    section1.appendChild(audioRow);
+    target.appendChild(section1);
+
+    // ── Section 2: Typography & appearance ──
+    const section2 = el("section", { className: "settings-section" });
+
+    // Font size
+    const sizeRow = el("div", { className: "settings-row" });
+    sizeRow.appendChild(el("span", { className: "settings-label" }, "글자 크기"));
+    const size = loadFontSize();
+    const idx = FONT_SIZES.indexOf(size);
+
+    const btnMinus = el("button", { className: "toolbar-btn", "aria-label": "글자 작게" }, "A-");
+    const btnReset = el("button", { className: "toolbar-btn", "aria-label": "글자 크기 초기화" }, "A");
+    const btnPlus = el("button", { className: "toolbar-btn", "aria-label": "글자 크게" }, "A+");
+    if (idx <= 0) btnMinus.disabled = true;
+    if (idx >= FONT_SIZES.length - 1) btnPlus.disabled = true;
+    if (size === DEFAULT_FONT_SIZE) btnReset.disabled = true;
+
+    btnMinus.addEventListener("click", () => {
+      const cur = FONT_SIZES.indexOf(loadFontSize());
+      if (cur > 0) { const ns = FONT_SIZES[cur - 1]; saveFontSize(ns); applyFontSize(ns); rerender(); announce(`글자 크기 ${ns}px`); }
+    });
+    btnReset.addEventListener("click", () => {
+      saveFontSize(DEFAULT_FONT_SIZE);
+      applyFontSize(DEFAULT_FONT_SIZE);
+      rerender();
+      announce("글자 크기 초기화");
+    });
+    btnPlus.addEventListener("click", () => {
+      const cur = FONT_SIZES.indexOf(loadFontSize());
+      if (cur < FONT_SIZES.length - 1) { const ns = FONT_SIZES[cur + 1]; saveFontSize(ns); applyFontSize(ns); rerender(); announce(`글자 크기 ${ns}px`); }
+    });
+
+    const sizeGroup = el("div", { className: "btn-group" });
+    sizeGroup.appendChild(btnMinus);
+    sizeGroup.appendChild(btnReset);
+    sizeGroup.appendChild(btnPlus);
+    sizeRow.appendChild(sizeGroup);
+    section2.appendChild(sizeRow);
+
+    // Theme
+    const themeRow = el("div", { className: "settings-row" });
+    themeRow.appendChild(el("span", { className: "settings-label" }, "테마"));
+    const current = loadTheme();
+    const themeGroup = el("div", { className: "btn-group" });
+    for (const [value, label] of [["light", "라이트"], ["system", "시스템"], ["dark", "다크"]]) {
+      const tbtn = el("button", { className: "toolbar-btn", "aria-pressed": String(current === value) }, label);
+      tbtn.addEventListener("click", () => {
+        saveTheme(value);
+        applyTheme(value);
+        rerender();
+        announce(label + " 테마");
+      });
+      themeGroup.appendChild(tbtn);
+    }
+    themeRow.appendChild(themeGroup);
+    section2.appendChild(themeRow);
+
+    // Color scheme
+    const colorRow = el("div", { className: "settings-row" });
+    colorRow.appendChild(el("span", { className: "settings-label" }, "색상"));
+    const currentScheme = loadColorScheme();
+    const swatches = el("div", { className: "color-swatches", role: "group", "aria-label": "색상 테마 선택" });
+    for (const scheme of COLOR_SCHEMES) {
+      const swatchBtn = el("button", {
+        className: "color-swatch",
+        "aria-label": scheme.name,
+        "aria-pressed": String(currentScheme === scheme.id),
+      });
+      swatchBtn.style.setProperty("--swatch-color", scheme.swatch);
+      swatchBtn.addEventListener("click", () => {
+        saveColorScheme(scheme.id);
+        applyColorScheme(scheme.id);
+        rerender();
+        announce(scheme.name + " 색상");
+      });
+      swatches.appendChild(swatchBtn);
+    }
+    colorRow.appendChild(swatches);
+    section2.appendChild(colorRow);
+    target.appendChild(section2);
+
+    // ── Section 3: App lifecycle (install, drive sync, cache) ──
+    const showInstall = !!window.install && window.install.detectPlatform() !== "installed";
+    const showCache = "caches" in window;
+    const showDrive = !!window.driveSync;
+    const showUpdateCheck = "serviceWorker" in navigator;
+    if (showInstall || showCache || showDrive || showUpdateCheck) {
+      const section3 = el("section", { className: "settings-section" });
+
+      if (showInstall) {
+        const installRow = el("div", { className: "settings-row" });
+        installRow.appendChild(el("span", { className: "settings-label" }, "앱 설치"));
+        const installBtn = el("button", { className: "settings-action-btn", "aria-label": "앱으로 설치 안내 열기" }, "안내");
+        installBtn.addEventListener("click", () => {
+          dismiss();
+          openInstallModal();
+        });
+        installRow.appendChild(installBtn);
+        section3.appendChild(installRow);
+      }
+
+      if (showDrive) {
+        const driveRow = el("div", { className: "settings-row" });
+        const driveLabelSpan = el("span", { className: "settings-label" });
+        driveLabelSpan.appendChild(document.createTextNode("백업 & 동기화"));
+        const driveAuthed = window.driveSync.isAuthenticated();
+
+        // i icon — visible regardless of auth state so users can read the
+        // description before connecting.
+        const svgNs = "http://www.w3.org/2000/svg";
+        const infoBtn = el("button", { className: "settings-drive-info-btn", type: "button", "aria-label": "백업 및 동기화 안내", "aria-expanded": "false" });
+        const infoSvg = document.createElementNS(svgNs, "svg");
+        infoSvg.setAttribute("viewBox", "0 0 24 24"); infoSvg.setAttribute("aria-hidden", "true"); infoSvg.setAttribute("class", "drive-info-icon");
+        const ic = document.createElementNS(svgNs, "circle"); ic.setAttribute("cx", "12"); ic.setAttribute("cy", "12"); ic.setAttribute("r", "10"); ic.setAttribute("fill", "none"); ic.setAttribute("stroke", "currentColor"); ic.setAttribute("stroke-width", "1.5");
+        const idot = document.createElementNS(svgNs, "circle"); idot.setAttribute("cx", "12"); idot.setAttribute("cy", "8.5"); idot.setAttribute("r", "0.85"); idot.setAttribute("fill", "currentColor");
+        const istem = document.createElementNS(svgNs, "line"); istem.setAttribute("x1", "12"); istem.setAttribute("y1", "11.5"); istem.setAttribute("x2", "12"); istem.setAttribute("y2", "16.5"); istem.setAttribute("stroke", "currentColor"); istem.setAttribute("stroke-width", "1.7"); istem.setAttribute("stroke-linecap", "round");
+        infoSvg.append(ic, idot, istem);
+        infoBtn.appendChild(infoSvg);
+        driveLabelSpan.appendChild(infoBtn);
+        driveRow.appendChild(driveLabelSpan);
+
+        // Action button — 해제 when connected, 연결 when not.
+        if (driveAuthed) {
+          const disconnectBtn = el("button", { className: "settings-action-btn", "aria-label": "Google Drive 연결 해제" }, "해제");
+          disconnectBtn.addEventListener("click", () => { dismiss(); openDriveDisconnectModal(); });
+          driveRow.appendChild(disconnectBtn);
+        } else {
+          const connectBtn = el("button", { className: "settings-action-btn", "aria-label": "Google Drive 연결" }, "연결");
+          connectBtn.addEventListener("click", () => { dismiss(); window.driveSync.signIn(); });
+          driveRow.appendChild(connectBtn);
+        }
+        section3.appendChild(driveRow);
+
+        // Info row — description always present; email line + diag button only
+        // when authenticated.
+        const infoRow = el("div", { className: "settings-drive-info-row" });
+        infoRow.hidden = true;
+        const infoTop = el("div", { className: "settings-drive-info-top" });
+        if (driveAuthed) {
+          const email = window.driveSync.getUserEmail();
+          infoTop.appendChild(el("div", { className: "settings-drive-info-email" }, `계정: ${email ?? "연결됨"}`));
+        }
+        const closeBtn = el("button", { className: "settings-drive-info-close", type: "button", "aria-label": "닫기" }, "✕");
+        infoTop.appendChild(closeBtn);
+        infoRow.appendChild(infoTop);
+        infoRow.appendChild(el("div", { className: "settings-drive-info-desc" }, "북마크·설정·읽기 위치를 Google Drive에 백업하고, 여러 기기를 이용하는 경우 자동으로 동기화합니다."));
+        if (driveAuthed) {
+          const diagBtn = el("button", { className: "settings-drive-diag-btn", type: "button" }, "동기화 진단 정보 복사");
+          diagBtn.addEventListener("click", async () => {
+            const ok = await window.syncDebugLog?.copyToClipboard();
+            if (ok) {
+              diagBtn.textContent = "복사됨 ✓";
+              setTimeout(() => { diagBtn.textContent = "동기화 진단 정보 복사"; }, 2000);
+            } else {
+              // Clipboard API unavailable — show text in a selectable textarea.
+              const ta = el("textarea", { readOnly: true, rows: "6", style: "width:100%;font-size:0.7rem;margin-top:0.4rem;resize:none;" });
+              ta.value = window.syncDebugLog?.dump() ?? "(로그 없음)";
+              infoRow.appendChild(ta);
+              ta.select();
+            }
+          });
+          infoRow.appendChild(diagBtn);
+        }
+        section3.appendChild(infoRow);
+
+        const toggleInfo = () => { const open = infoRow.hidden; infoRow.hidden = !open; infoBtn.setAttribute("aria-expanded", String(open)); };
+        infoBtn.addEventListener("click", toggleInfo);
+        // Return focus to the trigger so the destructive 초기화 button below
+        // doesn't grab focus by DOM order when the close button hides itself.
+        closeBtn.addEventListener("click", () => { infoRow.hidden = true; infoBtn.setAttribute("aria-expanded", "false"); infoBtn.focus(); });
+
+        if (!driveAuthed) {
+          const statusText = window.driveSync.getStatus();
+          if (statusText === "ERROR") {
+            section3.appendChild(el("p", { style: "font-size:0.78rem;color:var(--accent);padding:0 0.25rem 0.25rem;margin:0;" }, "세션 만료. 재연결해 주세요."));
+          }
+        }
+      }
+
+      if (showUpdateCheck) {
+        // Manual SW update check (sits between 백업 & 동기화 and 캐시).
+        // Reuses the existing showUpdateToast flow via window.checkForUpdates;
+        // the button itself just renders transient status text.
+        const updateRow = el("div", { className: "settings-row" });
+        updateRow.appendChild(el("span", { className: "settings-label" }, "업데이트"));
+        const updateBtn = el("button", {
+          className: "settings-action-btn",
+          type: "button",
+          "aria-label": "업데이트 지금 확인",
+        }, "지금 확인");
+        let updateBusy = false;
+        updateBtn.addEventListener("click", async () => {
+          if (updateBusy) return;
+          updateBusy = true;
+          updateBtn.disabled = true;
+          const restore = () => {
+            setTimeout(() => {
+              updateBusy = false;
+              updateBtn.disabled = false;
+              updateBtn.textContent = "지금 확인";
+            }, 2500);
+          };
+          updateBtn.textContent = "확인 중…";
+          try {
+            const result = await (window.checkForUpdates?.() ?? Promise.resolve({ ok: false, reason: "not-ready" }));
+            if (!result.ok) {
+              updateBtn.textContent = "오류";
+            } else if (result.status === "up-to-date") {
+              updateBtn.textContent = "최신 버전";
+            } else {
+              // "waiting" or "installing" — toast is (or will be) on screen.
+              updateBtn.textContent = "업데이트 발견";
+            }
+          } catch (_) {
+            updateBtn.textContent = "오류";
+          } finally {
+            restore();
+          }
+        });
+        updateRow.appendChild(updateBtn);
+        section3.appendChild(updateRow);
+      }
+
+      if (showCache) {
+        const cacheRow = el("div", { className: "settings-row" });
+        cacheRow.appendChild(el("span", { className: "settings-label" }, "캐시"));
+        const clearBtn = el("button", { className: "cache-clear-btn", "aria-label": "캐시 비우기" });
+        const ns = "http://www.w3.org/2000/svg";
+        const warnIcon = document.createElementNS(ns, "svg");
+        warnIcon.setAttribute("viewBox", "0 0 20 20");
+        warnIcon.setAttribute("aria-hidden", "true");
+        warnIcon.setAttribute("class", "warn-icon");
+        const tri = document.createElementNS(ns, "path");
+        tri.setAttribute("d", "M10 2 L18.66 17 H1.34 Z");
+        tri.setAttribute("fill", "none");
+        tri.setAttribute("stroke", "currentColor");
+        tri.setAttribute("stroke-width", "1.5");
+        tri.setAttribute("stroke-linejoin", "round");
+        const stem = document.createElementNS(ns, "line");
+        stem.setAttribute("x1", "10"); stem.setAttribute("y1", "8");
+        stem.setAttribute("x2", "10"); stem.setAttribute("y2", "12.5");
+        stem.setAttribute("stroke", "currentColor");
+        stem.setAttribute("stroke-width", "1.5");
+        stem.setAttribute("stroke-linecap", "round");
+        const dot = document.createElementNS(ns, "circle");
+        dot.setAttribute("cx", "10"); dot.setAttribute("cy", "14.5"); dot.setAttribute("r", "0.8");
+        dot.setAttribute("fill", "currentColor");
+        warnIcon.append(tri, stem, dot);
+        clearBtn.appendChild(warnIcon);
+        clearBtn.appendChild(document.createTextNode("초기화"));
+        clearBtn.addEventListener("click", () => clearAllCaches());
+        cacheRow.appendChild(clearBtn);
+        section3.appendChild(cacheRow);
+      }
+
+      target.appendChild(section3);
+    }
+
+    // About
+    const aboutRow = el("div", { className: "settings-about" });
+    aboutRow.appendChild(document.createTextNode("공동번역성서 개정판 © 대한성서공회"));
+    aboutRow.appendChild(el("br"));
+    aboutRow.appendChild(document.createTextNode("서비스 © 대한성공회"));
+    aboutRow.appendChild(el("br"));
+    const privacyLink = el("a", {
+      href: "/privacy.html",
+      target: "_blank",
+      rel: "noopener noreferrer",
+      className: "settings-privacy-link",
+    }, "개인정보처리방침");
+    aboutRow.appendChild(privacyLink);
+    aboutRow.appendChild(el("br"));
+    const versionLabel = window.appVersion ? `공동번역성서 ${window.appVersion}` : "공동번역성서";
+    const releaseHref = window.appVersion
+      ? `https://github.com/anglican-kr/common-bible/releases/tag/${encodeURIComponent(window.appVersion)}`
+      : "https://github.com/anglican-kr/common-bible/releases";
+    const githubLink = el("a", { href: releaseHref, target: "_blank", rel: "noopener noreferrer" });
+    const ns = "http://www.w3.org/2000/svg";
+    const githubIcon = document.createElementNS(ns, "svg");
+    githubIcon.setAttribute("viewBox", "0 0 16 16");
+    githubIcon.setAttribute("width", "12");
+    githubIcon.setAttribute("height", "12");
+    githubIcon.setAttribute("aria-hidden", "true");
+    githubIcon.setAttribute("class", "github-icon");
+    const githubPath = document.createElementNS(ns, "path");
+    githubPath.setAttribute("d", "M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z");
+    githubIcon.appendChild(githubPath);
+    githubLink.appendChild(githubIcon);
+    githubLink.appendChild(document.createTextNode(" " + versionLabel));
+    aboutRow.appendChild(githubLink);
+    target.appendChild(aboutRow);
+  }
+
+  // ── Mobile full-screen settings view (ADR-029 / P2) ──
+  // Renders the same settings sections into #app for the mobile tab bar. Reuses
+  // buildSettingsSections so desktop popover and this view stay identical. The
+  // desktop popover is unaffected (it has its own host + open/close lifecycle).
+  function renderSettingsView() {
+    const $app = _$("app");
+    const $title = _$("page-title");
+    // Tag the document with the OS look so toggle styling can branch in CSS,
+    // matching initSettings (which only runs once at boot).
+    const os = detectOS();
+    document.documentElement.classList.remove("os-ios", "os-android", "os-desktop");
+    document.documentElement.classList.add(`os-${os}`);
+
+    window.setTitle("설정");
+    $title.insertBefore(window.buildHomeBtn("/", "성서 목록으로"), $title.firstChild);
+    window.hideAudioBar();
+    clearNode($app);
+
+    const panel = el("div", { className: "settings-view", role: "region", "aria-label": "설정" });
+    $app.appendChild(panel);
+    const rerender = () => buildSettingsSections(panel, { rerender, dismiss: () => {} });
+    rerender();
+  }
+
   // ── Settings popover ──
   function initSettings() {
     clearNode($settingsAnchor);
@@ -354,362 +749,11 @@ window.appSettings = (() => {
     popover.hidden = true;
     popover.addEventListener("click", (e) => e.stopPropagation());
 
+    // Thin wrapper around the shared section builder (buildSettingsSections).
+    // Re-render keeps focus on the popover container; action buttons dismiss
+    // the popover via closeSettings before opening modals / OAuth.
     function rebuild() {
-      clearNode(popover);
-
-      // ── Section 1: Reading-experience toggles ──
-      // Four boolean settings rendered as OS-native toggle switches (see
-      // makeToggleRow). Toggling updates state in place — no popover rebuild —
-      // so focus stays on the switch and the segmented re-render is avoided.
-      const section1 = el("section", { className: "settings-section" });
-
-      // Startup behavior: ON = resume last reading position, OFF = home.
-      const startupRow = makeToggleRow({
-        labelText: "읽던 페이지에서 시작",
-        checked: loadStartupBehavior() === "resume",
-        onToggle: (on) => {
-          saveStartupBehavior(on ? "resume" : "home");
-          announce(on ? "마지막 읽던 페이지로 시작" : "첫 페이지로 시작");
-        },
-      });
-
-      // Deuterocanon placement: ON = mixed into the OT (vulgate order),
-      // OFF = separate section (canonical). Caption reflects the active state.
-      const orderRow = makeToggleRow({
-        labelText: "외경",
-        checked: loadBookOrder() === "vulgate",
-        getCaption: (on) => (on ? "구약에 포함" : "별도 섹션에 표시"),
-        onToggle: (on) => {
-          saveBookOrder(on ? "vulgate" : "canonical");
-          const { view } = parsePath();
-          if (view !== "chapter" && view !== "prologue") route();
-          announce(on ? "구약에 외경 포함" : "외경 분리");
-        },
-      });
-
-      // Cite/note visibility (ADR-022): ON = show inline citations & notes.
-      const citeRow = makeToggleRow({
-        labelText: "인용·주석 표시",
-        checked: loadCiteShow(),
-        onToggle: (on) => {
-          saveCiteShow(on);
-          applyCiteShow(on);
-          announce(on ? "인용 본문·주석 표시" : "인용 본문·주석 숨김");
-        },
-      });
-
-      // Audiobook visibility — when off, audio bar is hidden and the FAB
-      // falls back to its lower default position (CSS sibling rule keys off
-      // #audio-bar[hidden]).
-      const audioRow = makeToggleRow({
-        labelText: "오디오북",
-        checked: loadAudioShow(),
-        onToggle: (on) => {
-          saveAudioShow(on);
-          if (typeof window.applyAudioShow === "function") window.applyAudioShow(on);
-          announce(on ? "오디오북 켜기" : "오디오북 끄기");
-        },
-      });
-
-      section1.appendChild(startupRow);
-      section1.appendChild(orderRow);
-      section1.appendChild(citeRow);
-      section1.appendChild(audioRow);
-      popover.appendChild(section1);
-
-      // ── Section 2: Typography & appearance ──
-      const section2 = el("section", { className: "settings-section" });
-
-      // Font size
-      const sizeRow = el("div", { className: "settings-row" });
-      sizeRow.appendChild(el("span", { className: "settings-label" }, "글자 크기"));
-      const size = loadFontSize();
-      const idx = FONT_SIZES.indexOf(size);
-
-      const btnMinus = el("button", { className: "toolbar-btn", "aria-label": "글자 작게" }, "A-");
-      const btnReset = el("button", { className: "toolbar-btn", "aria-label": "글자 크기 초기화" }, "A");
-      const btnPlus = el("button", { className: "toolbar-btn", "aria-label": "글자 크게" }, "A+");
-      if (idx <= 0) btnMinus.disabled = true;
-      if (idx >= FONT_SIZES.length - 1) btnPlus.disabled = true;
-      if (size === DEFAULT_FONT_SIZE) btnReset.disabled = true;
-
-      btnMinus.addEventListener("click", () => {
-        const cur = FONT_SIZES.indexOf(loadFontSize());
-        if (cur > 0) { const ns = FONT_SIZES[cur - 1]; saveFontSize(ns); applyFontSize(ns); rebuild(); announce(`글자 크기 ${ns}px`); }
-      });
-      btnReset.addEventListener("click", () => {
-        saveFontSize(DEFAULT_FONT_SIZE);
-        applyFontSize(DEFAULT_FONT_SIZE);
-        rebuild();
-        announce("글자 크기 초기화");
-      });
-      btnPlus.addEventListener("click", () => {
-        const cur = FONT_SIZES.indexOf(loadFontSize());
-        if (cur < FONT_SIZES.length - 1) { const ns = FONT_SIZES[cur + 1]; saveFontSize(ns); applyFontSize(ns); rebuild(); announce(`글자 크기 ${ns}px`); }
-      });
-
-      const sizeGroup = el("div", { className: "btn-group" });
-      sizeGroup.appendChild(btnMinus);
-      sizeGroup.appendChild(btnReset);
-      sizeGroup.appendChild(btnPlus);
-      sizeRow.appendChild(sizeGroup);
-      section2.appendChild(sizeRow);
-
-      // Theme
-      const themeRow = el("div", { className: "settings-row" });
-      themeRow.appendChild(el("span", { className: "settings-label" }, "테마"));
-      const current = loadTheme();
-      const themeGroup = el("div", { className: "btn-group" });
-      for (const [value, label] of [["light", "라이트"], ["system", "시스템"], ["dark", "다크"]]) {
-        const tbtn = el("button", { className: "toolbar-btn", "aria-pressed": String(current === value) }, label);
-        tbtn.addEventListener("click", () => {
-          saveTheme(value);
-          applyTheme(value);
-          rebuild();
-          announce(label + " 테마");
-        });
-        themeGroup.appendChild(tbtn);
-      }
-      themeRow.appendChild(themeGroup);
-      section2.appendChild(themeRow);
-
-      // Color scheme
-      const colorRow = el("div", { className: "settings-row" });
-      colorRow.appendChild(el("span", { className: "settings-label" }, "색상"));
-      const currentScheme = loadColorScheme();
-      const swatches = el("div", { className: "color-swatches", role: "group", "aria-label": "색상 테마 선택" });
-      for (const scheme of COLOR_SCHEMES) {
-        const swatchBtn = el("button", {
-          className: "color-swatch",
-          "aria-label": scheme.name,
-          "aria-pressed": String(currentScheme === scheme.id),
-        });
-        swatchBtn.style.setProperty("--swatch-color", scheme.swatch);
-        swatchBtn.addEventListener("click", () => {
-          saveColorScheme(scheme.id);
-          applyColorScheme(scheme.id);
-          rebuild();
-          announce(scheme.name + " 색상");
-        });
-        swatches.appendChild(swatchBtn);
-      }
-      colorRow.appendChild(swatches);
-      section2.appendChild(colorRow);
-      popover.appendChild(section2);
-
-      // ── Section 3: App lifecycle (install, drive sync, cache) ──
-      const showInstall = !!window.install && window.install.detectPlatform() !== "installed";
-      const showCache = "caches" in window;
-      const showDrive = !!window.driveSync;
-      const showUpdateCheck = "serviceWorker" in navigator;
-      if (showInstall || showCache || showDrive || showUpdateCheck) {
-        const section3 = el("section", { className: "settings-section" });
-
-        if (showInstall) {
-          const installRow = el("div", { className: "settings-row" });
-          installRow.appendChild(el("span", { className: "settings-label" }, "앱 설치"));
-          const installBtn = el("button", { className: "settings-action-btn", "aria-label": "앱으로 설치 안내 열기" }, "안내");
-          installBtn.addEventListener("click", () => {
-            popover.hidden = true;
-            btn.setAttribute("aria-expanded", "false");
-            if (cleanupTrap) { cleanupTrap(); cleanupTrap = null; }
-            openInstallModal();
-          });
-          installRow.appendChild(installBtn);
-          section3.appendChild(installRow);
-        }
-
-        if (showDrive) {
-          const driveRow = el("div", { className: "settings-row" });
-          const driveLabelSpan = el("span", { className: "settings-label" });
-          driveLabelSpan.appendChild(document.createTextNode("백업 & 동기화"));
-          const driveAuthed = window.driveSync.isAuthenticated();
-
-          // i icon — visible regardless of auth state so users can read the
-          // description before connecting.
-          const svgNs = "http://www.w3.org/2000/svg";
-          const infoBtn = el("button", { className: "settings-drive-info-btn", type: "button", "aria-label": "백업 및 동기화 안내", "aria-expanded": "false" });
-          const infoSvg = document.createElementNS(svgNs, "svg");
-          infoSvg.setAttribute("viewBox", "0 0 24 24"); infoSvg.setAttribute("aria-hidden", "true"); infoSvg.setAttribute("class", "drive-info-icon");
-          const ic = document.createElementNS(svgNs, "circle"); ic.setAttribute("cx", "12"); ic.setAttribute("cy", "12"); ic.setAttribute("r", "10"); ic.setAttribute("fill", "none"); ic.setAttribute("stroke", "currentColor"); ic.setAttribute("stroke-width", "1.5");
-          const idot = document.createElementNS(svgNs, "circle"); idot.setAttribute("cx", "12"); idot.setAttribute("cy", "8.5"); idot.setAttribute("r", "0.85"); idot.setAttribute("fill", "currentColor");
-          const istem = document.createElementNS(svgNs, "line"); istem.setAttribute("x1", "12"); istem.setAttribute("y1", "11.5"); istem.setAttribute("x2", "12"); istem.setAttribute("y2", "16.5"); istem.setAttribute("stroke", "currentColor"); istem.setAttribute("stroke-width", "1.7"); istem.setAttribute("stroke-linecap", "round");
-          infoSvg.append(ic, idot, istem);
-          infoBtn.appendChild(infoSvg);
-          driveLabelSpan.appendChild(infoBtn);
-          driveRow.appendChild(driveLabelSpan);
-
-          // Action button — 해제 when connected, 연결 when not.
-          if (driveAuthed) {
-            const disconnectBtn = el("button", { className: "settings-action-btn", "aria-label": "Google Drive 연결 해제" }, "해제");
-            disconnectBtn.addEventListener("click", () => { popover.hidden = true; btn.setAttribute("aria-expanded", "false"); if (cleanupTrap) { cleanupTrap(); cleanupTrap = null; } openDriveDisconnectModal(); });
-            driveRow.appendChild(disconnectBtn);
-          } else {
-            const connectBtn = el("button", { className: "settings-action-btn", "aria-label": "Google Drive 연결" }, "연결");
-            connectBtn.addEventListener("click", () => { popover.hidden = true; btn.setAttribute("aria-expanded", "false"); if (cleanupTrap) { cleanupTrap(); cleanupTrap = null; } window.driveSync.signIn(); });
-            driveRow.appendChild(connectBtn);
-          }
-          section3.appendChild(driveRow);
-
-          // Info row — description always present; email line + diag button only
-          // when authenticated.
-          const infoRow = el("div", { className: "settings-drive-info-row" });
-          infoRow.hidden = true;
-          const infoTop = el("div", { className: "settings-drive-info-top" });
-          if (driveAuthed) {
-            const email = window.driveSync.getUserEmail();
-            infoTop.appendChild(el("div", { className: "settings-drive-info-email" }, `계정: ${email ?? "연결됨"}`));
-          }
-          const closeBtn = el("button", { className: "settings-drive-info-close", type: "button", "aria-label": "닫기" }, "✕");
-          infoTop.appendChild(closeBtn);
-          infoRow.appendChild(infoTop);
-          infoRow.appendChild(el("div", { className: "settings-drive-info-desc" }, "북마크·설정·읽기 위치를 Google Drive에 백업하고, 여러 기기를 이용하는 경우 자동으로 동기화합니다."));
-          if (driveAuthed) {
-            const diagBtn = el("button", { className: "settings-drive-diag-btn", type: "button" }, "동기화 진단 정보 복사");
-            diagBtn.addEventListener("click", async () => {
-              const ok = await window.syncDebugLog?.copyToClipboard();
-              if (ok) {
-                diagBtn.textContent = "복사됨 ✓";
-                setTimeout(() => { diagBtn.textContent = "동기화 진단 정보 복사"; }, 2000);
-              } else {
-                // Clipboard API unavailable — show text in a selectable textarea.
-                const ta = el("textarea", { readOnly: true, rows: "6", style: "width:100%;font-size:0.7rem;margin-top:0.4rem;resize:none;" });
-                ta.value = window.syncDebugLog?.dump() ?? "(로그 없음)";
-                infoRow.appendChild(ta);
-                ta.select();
-              }
-            });
-            infoRow.appendChild(diagBtn);
-          }
-          section3.appendChild(infoRow);
-
-          const toggleInfo = () => { const open = infoRow.hidden; infoRow.hidden = !open; infoBtn.setAttribute("aria-expanded", String(open)); };
-          infoBtn.addEventListener("click", toggleInfo);
-          // Return focus to the trigger so the destructive 초기화 button below
-          // doesn't grab focus by DOM order when the close button hides itself.
-          closeBtn.addEventListener("click", () => { infoRow.hidden = true; infoBtn.setAttribute("aria-expanded", "false"); infoBtn.focus(); });
-
-          if (!driveAuthed) {
-            const statusText = window.driveSync.getStatus();
-            if (statusText === "ERROR") {
-              section3.appendChild(el("p", { style: "font-size:0.78rem;color:var(--accent);padding:0 0.25rem 0.25rem;margin:0;" }, "세션 만료. 재연결해 주세요."));
-            }
-          }
-        }
-
-        if (showUpdateCheck) {
-          // Manual SW update check (sits between 백업 & 동기화 and 캐시).
-          // Reuses the existing showUpdateToast flow via window.checkForUpdates;
-          // the button itself just renders transient status text.
-          const updateRow = el("div", { className: "settings-row" });
-          updateRow.appendChild(el("span", { className: "settings-label" }, "업데이트"));
-          const updateBtn = el("button", {
-            className: "settings-action-btn",
-            type: "button",
-            "aria-label": "업데이트 지금 확인",
-          }, "지금 확인");
-          let updateBusy = false;
-          updateBtn.addEventListener("click", async () => {
-            if (updateBusy) return;
-            updateBusy = true;
-            updateBtn.disabled = true;
-            const restore = () => {
-              setTimeout(() => {
-                updateBusy = false;
-                updateBtn.disabled = false;
-                updateBtn.textContent = "지금 확인";
-              }, 2500);
-            };
-            updateBtn.textContent = "확인 중…";
-            try {
-              const result = await (window.checkForUpdates?.() ?? Promise.resolve({ ok: false, reason: "not-ready" }));
-              if (!result.ok) {
-                updateBtn.textContent = "오류";
-              } else if (result.status === "up-to-date") {
-                updateBtn.textContent = "최신 버전";
-              } else {
-                // "waiting" or "installing" — toast is (or will be) on screen.
-                updateBtn.textContent = "업데이트 발견";
-              }
-            } catch (_) {
-              updateBtn.textContent = "오류";
-            } finally {
-              restore();
-            }
-          });
-          updateRow.appendChild(updateBtn);
-          section3.appendChild(updateRow);
-        }
-
-        if (showCache) {
-          const cacheRow = el("div", { className: "settings-row" });
-          cacheRow.appendChild(el("span", { className: "settings-label" }, "캐시"));
-          const clearBtn = el("button", { className: "cache-clear-btn", "aria-label": "캐시 비우기" });
-          const ns = "http://www.w3.org/2000/svg";
-          const warnIcon = document.createElementNS(ns, "svg");
-          warnIcon.setAttribute("viewBox", "0 0 20 20");
-          warnIcon.setAttribute("aria-hidden", "true");
-          warnIcon.setAttribute("class", "warn-icon");
-          const tri = document.createElementNS(ns, "path");
-          tri.setAttribute("d", "M10 2 L18.66 17 H1.34 Z");
-          tri.setAttribute("fill", "none");
-          tri.setAttribute("stroke", "currentColor");
-          tri.setAttribute("stroke-width", "1.5");
-          tri.setAttribute("stroke-linejoin", "round");
-          const stem = document.createElementNS(ns, "line");
-          stem.setAttribute("x1", "10"); stem.setAttribute("y1", "8");
-          stem.setAttribute("x2", "10"); stem.setAttribute("y2", "12.5");
-          stem.setAttribute("stroke", "currentColor");
-          stem.setAttribute("stroke-width", "1.5");
-          stem.setAttribute("stroke-linecap", "round");
-          const dot = document.createElementNS(ns, "circle");
-          dot.setAttribute("cx", "10"); dot.setAttribute("cy", "14.5"); dot.setAttribute("r", "0.8");
-          dot.setAttribute("fill", "currentColor");
-          warnIcon.append(tri, stem, dot);
-          clearBtn.appendChild(warnIcon);
-          clearBtn.appendChild(document.createTextNode("초기화"));
-          clearBtn.addEventListener("click", () => clearAllCaches());
-          cacheRow.appendChild(clearBtn);
-          section3.appendChild(cacheRow);
-        }
-
-        popover.appendChild(section3);
-      }
-
-      // About
-      const aboutRow = el("div", { className: "settings-about" });
-      aboutRow.appendChild(document.createTextNode("공동번역성서 개정판 © 대한성서공회"));
-      aboutRow.appendChild(el("br"));
-      aboutRow.appendChild(document.createTextNode("서비스 © 대한성공회"));
-      aboutRow.appendChild(el("br"));
-      const privacyLink = el("a", {
-        href: "/privacy.html",
-        target: "_blank",
-        rel: "noopener noreferrer",
-        className: "settings-privacy-link",
-      }, "개인정보처리방침");
-      aboutRow.appendChild(privacyLink);
-      aboutRow.appendChild(el("br"));
-      const versionLabel = window.appVersion ? `공동번역성서 ${window.appVersion}` : "공동번역성서";
-      const releaseHref = window.appVersion
-        ? `https://github.com/anglican-kr/common-bible/releases/tag/${encodeURIComponent(window.appVersion)}`
-        : "https://github.com/anglican-kr/common-bible/releases";
-      const githubLink = el("a", { href: releaseHref, target: "_blank", rel: "noopener noreferrer" });
-      const ns = "http://www.w3.org/2000/svg";
-      const githubIcon = document.createElementNS(ns, "svg");
-      githubIcon.setAttribute("viewBox", "0 0 16 16");
-      githubIcon.setAttribute("width", "12");
-      githubIcon.setAttribute("height", "12");
-      githubIcon.setAttribute("aria-hidden", "true");
-      githubIcon.setAttribute("class", "github-icon");
-      const githubPath = document.createElementNS(ns, "path");
-      githubPath.setAttribute("d", "M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z");
-      githubIcon.appendChild(githubPath);
-      githubLink.appendChild(githubIcon);
-      githubLink.appendChild(document.createTextNode(" " + versionLabel));
-      aboutRow.appendChild(githubLink);
-      popover.appendChild(aboutRow);
-
+      buildSettingsSections(popover, { rerender: rebuild, dismiss: closeSettings });
       if (!popover.hidden) {
         // Move focus to the popover container so re-renders (e.g. drive sync
         // state updates) don't leave focus on a removed node. Pointer-driven
@@ -739,6 +783,8 @@ window.appSettings = (() => {
       document.querySelectorAll(".settings-btn").forEach((b) => b.setAttribute("aria-expanded", "false"));
       if (cleanupTrap) { cleanupTrap(); cleanupTrap = null; }
     }
+    // Exposed so route() can dismiss the popover on navigation (ADR-029).
+    window.closeSettings = closeSettings;
 
     // Wire a gear button to the shared popover. Reused for the desktop button
     // and every per-view mobile title-row button.
@@ -795,8 +841,14 @@ window.appSettings = (() => {
     $settingsAnchor.appendChild(wrapper);
   }
 
+  // Per-name global for the mobile tab bar full-screen view (ADR-029 / P2),
+  // mirroring renderBookmarksView so views-routing.js can call it as a bare
+  // global from route().
+  window.renderSettingsView = renderSettingsView;
+
   return {
     initSettings,
+    renderSettingsView,
     applyFontSize,
     applyTheme,
     applyColorScheme,

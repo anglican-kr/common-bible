@@ -148,6 +148,9 @@
   --tabbar-icon: 24px;
   --sidebar-w: 260px;
   --nav-z: 30;            /* sticky 헤더(20) 보다 위 */
+  /* 모바일 탭 바가 하단에서 차지하는 공간(콘텐츠 패딩·오디오 스택 기준, ADR-029 P4).
+     바 높이(~3.5rem) + 하단 오프셋 + 여유. safe-area 는 바와 동일 비율(0.75). */
+  --tabbar-reserve: calc(4.5rem + env(safe-area-inset-bottom) * 0.75);
 
   /* ── Layout ── */
   --max-width: 720px;
@@ -394,6 +397,83 @@ body {
   outline: none;
 }
 
+/* ── Mobile tab-bar full-screen views (ADR-029 / P2) ──
+   Bookmarks · Settings · Search rendered as in-page views in #app on mobile.
+   Sans-serif (matching the settings popover) and constrained to a readable
+   measure, centered like the book list. */
+.bookmarks-view,
+.settings-view,
+.search-view {
+  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: var(--space-3) var(--space-4) var(--space-8);
+}
+
+/* Bookmark tree reuses .bm-* item styles from the drawer; just lay out the
+   list container in-page. */
+.bookmarks-view .bm-tree {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.bookmarks-view .bm-empty {
+  color: var(--text-secondary);
+  padding: var(--space-6) var(--space-2);
+  text-align: center;
+}
+
+/* In-page search input (mirrors the header #search-bar, used in #app). */
+#search-inpage-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  padding: 0 var(--space-3);
+  height: var(--touch-target, 44px);
+  margin-bottom: var(--space-4);
+}
+
+#search-inpage-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: none;
+  font-family: inherit;
+  font-size: var(--font-base);
+  color: var(--text);
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+/* Hide the native search clear/decoration so only our button shows. */
+#search-inpage-input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+#search-inpage-clear {
+  flex-shrink: 0;
+  border: none;
+  background: none;
+  color: var(--text-secondary);
+  font-size: var(--font-lg);
+  line-height: 1;
+  cursor: pointer;
+  width: var(--icon-btn-touch, 32px);
+  height: var(--icon-btn-touch, 32px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+/* ID 선택자 display 가 UA [hidden] 을 이기므로 명시적 hidden 규칙 필요
+   (JS 가 빈 쿼리일 때 hidden 토글). */
+#search-inpage-clear[hidden] { display: none; }
+
 /* ── Drive sync settings UI ── */
 
 .settings-drive-info-btn {
@@ -609,12 +689,14 @@ body {
    글자 크기 / 테마) shares the same total width so the right edge of the
    popover stays visually aligned across rows. Buttons inside divide the
    shared width equally regardless of their text length. */
-.settings-popover .settings-row > .btn-group {
+.settings-popover .settings-row > .btn-group,
+.settings-view .settings-row > .btn-group {
   width: 11rem;
   flex-shrink: 0;
 }
 
-.settings-popover .settings-row > .btn-group .toolbar-btn {
+.settings-popover .settings-row > .btn-group .toolbar-btn,
+.settings-view .settings-row > .btn-group .toolbar-btn {
   flex: 1;
   min-width: 0;
 }
@@ -1244,44 +1326,6 @@ body {
 .search-history-clear:focus-visible {
   outline: none;
   background: color-mix(in srgb, var(--accent) 10%, transparent);
-}
-
-/* ── Search FAB (Mobile only) ── */
-#search-fab {
-  display: none;
-  position: fixed;
-  right: 1.2rem;
-  z-index: 30;
-  width: 3.2rem;
-  height: 3.2rem;
-  border-radius: 50%;
-  border: none;
-  background: var(--theme);
-  color: var(--bg);
-  cursor: pointer;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.18), 0 8px 20px rgba(0, 0, 0, 0.3);
-  align-items: center;
-  justify-content: center;
-  transition: transform var(--duration-fast) ease, box-shadow var(--duration-fast) ease, bottom var(--duration-base) ease;
-}
-
-#search-fab:hover {
-  transform: scale(1.08);
-  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.22), 0 12px 28px rgba(0, 0, 0, 0.35);
-}
-
-#search-fab:active {
-  transform: scale(0.95);
-}
-
-/* Lift FAB above chapter-nav when it scrolls into view */
-#search-fab {
-  bottom: max(calc(1.5rem + env(safe-area-inset-bottom)), var(--fab-lift-nav, 0px));
-}
-
-/* Lift FAB when audio bar is visible */
-#audio-bar:not([hidden]) ~ #search-fab {
-  bottom: max(calc(5rem + env(safe-area-inset-bottom)), var(--fab-lift-nav, 0px));
 }
 
 /* ── Pull-to-refresh indicator (mobile) ── */
@@ -3050,6 +3094,157 @@ html.cite-sheet-open {
   margin-bottom: 1px;
 }
 
+/* ── Tab bar (ADR-029) — 모바일 하단 내비, iOS Liquid Glass ────────────────
+   플로팅 캡슐. frosted glass 는 ::before(absolute) 레이어에 — Safari 26 이 하단
+   fixed 요소를 home-indicator 틴팅에 샘플링하므로 fixed 부모는 투명하게 둔다.
+   데스크탑(≥769px)은 사이드바 단계 전까지 숨김. 5번째(노트) 탭은 flex 로 자동 수용. */
+#tab-bar {
+  position: fixed;
+  left: var(--space-4);
+  right: var(--space-4);
+  bottom: calc(var(--space-1) + env(safe-area-inset-bottom) * 0.75);
+  z-index: var(--nav-z);
+  display: flex;
+  align-items: stretch;
+  /* 고정 높이 대신 상하 패딩 — 큰 아이콘 위아래 여유 확보(높이는 내용에 맞춰 ~63px). */
+  padding: var(--space-2) var(--space-2);
+  /* 둥근 사각 — iPhone 코너는 squircle(연속 곡률)이나 corner-shape 는 Chromium
+     전용(Safari 미폴백)이라 squircle 을 점진 향상으로 얹고, border-radius(원호)는
+     Safari/전체 폴백으로 둔다. 26px 는 화면 squircle 과 조화되는 값(기기 코너 반경
+     env() 미존재). corner-shape 미지원 브라우저는 자동으로 원호. */
+  border-radius: 26px;
+  corner-shape: squircle;
+  background: transparent;
+  box-shadow: var(--shadow-2);
+  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+}
+
+#tab-bar::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  corner-shape: squircle; /* corner-shape 는 상속 안 됨 — glass 레이어에도 명시 */
+  /* iOS 26.1 'Tinted' 방향 — 가독성 위해 약간 더 불투명. */
+  background: color-mix(in srgb, var(--bg) 70%, transparent);
+  /* -webkit- 는 리터럴 값만(Safari 가 var() 미지원). */
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  backdrop-filter: blur(16px) saturate(180%);
+  border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4); /* 상단 specular 하이라이트 */
+}
+[data-theme="dark"] #tab-bar::before {
+  background: color-mix(in srgb, var(--bg-card) 80%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.tab-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  flex: 1;
+  min-width: var(--icon-btn-touch); /* HIG ≥44px 탭 영역 */
+  text-decoration: none;
+  color: var(--text-secondary);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.tab-icon-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.9rem;
+  height: 1.8rem;
+  border-radius: var(--radius-pill);
+  transition: background var(--duration-fast) ease, color var(--duration-fast) ease;
+}
+/* 헤더 아이콘(≈24px)보다 크게 — 탭바 존재감. rem 으로 Dynamic Type 추종. */
+.tab-icon { width: 1.6rem; height: 1.6rem; }
+
+.tab-label {
+  font-size: var(--font-2xs);
+  font-weight: 500;
+  line-height: 1;
+}
+
+/* 활성 탭 — 아이콘 뒤 캡슐 pill + accent(chrome 중립색; 테마색 4곳 한정 결정 준수). */
+.tab-item.active,
+.tab-item[aria-current="page"] {
+  color: var(--accent);
+}
+.tab-item.active .tab-icon-wrap,
+.tab-item[aria-current="page"] .tab-icon-wrap {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+.tab-item:active .tab-icon-wrap { transform: scale(0.92); }
+
+/* 투명도 감소 / backdrop-filter 미지원 → 불투명 표면 폴백. */
+@media (prefers-reduced-transparency: reduce) {
+  #tab-bar::before {
+    background: var(--bg-card);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  #tab-bar::before { background: var(--bg-card); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tab-icon-wrap { transition: none; }
+  .tab-item:active .tab-icon-wrap { transform: none; }
+}
+
+/* 데스크탑: 사이드바 단계 전까지 탭바 숨김. */
+@media (min-width: 769px) {
+  #tab-bar { display: none; }
+}
+
+/* 모바일: 설정 기어·홈(성서 목록으로) 버튼은 탭 바로 이전 — 헤더에서 숨김
+   (데스크탑은 탭바가 없어 유지). 챕터 북마크 추가 버튼은 보존. */
+@media (max-width: 768px) {
+  .title-settings-btn,
+  .title-home-btn { display: none; }
+}
+
+/* 탭 바 하단 공존 (ADR-029 P4). 데스크탑은 탭바가 없어 적용 안 함. */
+@media (max-width: 768px) {
+  /* 탭 바가 보이는 뷰에서만 하단 콘텐츠 자리 확보. 절 선택 모드는 탭 바를 숨기고
+     전용 하단 바가 차지하므로 reserve 를 적용하지 않는다(빈 띠 방지). */
+  body:not(.verse-select-active) #app { padding-bottom: var(--tabbar-reserve); }
+  /* 오디오 미니플레이어는 탭 바 위에 스택(iOS Music 식, 잠정 — dev 확인 후 조정).
+     body 접두 + :not([hidden]) 로 base #audio-bar{bottom:0}·browser-mode 규칙보다
+     특이도 우선(소스 순서 무관하게 이김). */
+  body #audio-bar:not([hidden]) {
+    /* 탭 바 footprint(--tabbar-reserve) 위에 안착 — 같은 토큰을 써 탭 바와
+       겹치지 않게(매직넘버 불일치 방지). */
+    bottom: var(--tabbar-reserve);
+    margin: 0 var(--space-4);
+    /* 플로팅 바: 가장자리·요소 간격을 12px 로 통일(여백 일정). 하단은 홈
+       인디케이터 위로 떠 있어 safe-area 불필요 → 8px. */
+    padding: var(--space-2) var(--space-3);
+    /* 탭 바와 동일한 플로팅 둥근 바. corner-shape 는 Chromium 전용(Safari 는
+       border-radius 폴백). 글래스(50%+blur)는 기존 유지, 테두리·그림자만 추가. */
+    border-radius: 26px;
+    corner-shape: squircle;
+    border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
+    box-shadow: var(--shadow-2);
+  }
+  /* 둥근 모서리에서 튀어나오는 상단 hairline 은 플로팅 바에선 제거. */
+  body #audio-bar:not([hidden])::before { display: none; }
+  /* 좁은 플로팅 바: 가장자리(12px)와 동일하게 요소 간격도 12px 로 통일. */
+  body #audio-bar:not([hidden]) .audio-player { gap: var(--space-3); }
+  body #audio-bar:not([hidden]) .audio-progress-wrap { gap: var(--space-3); }
+  /* 오디오 표시 중엔 오디오 바 높이만큼 하단 여유를 더 준다(절 선택 모드 제외). */
+  body:not(.verse-select-active) #app:has(~ #audio-bar:not([hidden])) {
+    padding-bottom: calc(var(--tabbar-reserve) + 3.5rem);
+  }
+  /* 절 선택 모드: 전용 하단 바가 차지하므로 탭 바 숨김. */
+  body.verse-select-active #tab-bar { display: none; }
+}
+
 /* ── Audio Bar ── */
 #audio-bar {
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
@@ -3099,11 +3294,9 @@ html.cite-sheet-open {
 /* Play/pause button — CSS icons, no unicode glyphs */
 .audio-play-btn {
   flex-shrink: 0;
-  width: 2.4rem;
-  height: 2.4rem;
-  /* HIG 최소 탭 영역 — rem 시각 크기는 유지하되 44px 아래로는 내려가지 않게 floor */
-  min-width: var(--touch-target);
-  min-height: var(--touch-target);
+  /* HIG 최소 탭 영역(44px)에 고정 — 폰트 크기로 더 커지지 않게 px 고정. */
+  width: var(--touch-target);
+  height: var(--touch-target);
   border-radius: 50%;
   border: none;
   background: var(--theme);
@@ -3226,7 +3419,7 @@ html.cite-sheet-open {
 .audio-time {
   font-size: var(--font-2xs);
   color: var(--text-secondary);
-  min-width: 6.5em;
+  min-width: 5.5em;
   text-align: right;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.02em;
@@ -3302,25 +3495,12 @@ html.cite-sheet-open {
 
 /* ── Responsive ── */
 
-/* Mobile: hide inline search, show FAB */
+/* Mobile: hide inline search (replaced by the bottom tab bar's 검색 tab) */
 @media (max-width: 768px) {
   #search-bar {
     display: none;
   }
 
-  #search-fab {
-    display: flex;
-  }
-
-  /* Extra top margin so FAB (3.2rem) fits in the gap above chapter-nav */
-  .chapter-nav {
-    margin-top: 4.5rem;
-  }
-
-  /* Reserve space below the book list so the FAB doesn't overlap buttons */
-  .division-panel {
-    padding-bottom: calc(3.2rem + 2.5rem + env(safe-area-inset-bottom));
-  }
 
   /* The top row holds only the (hidden) search bar + settings on mobile;
      settings moves into the title row, so the whole row collapses away. */
@@ -3329,12 +3509,8 @@ html.cite-sheet-open {
   }
 }
 
-/* Desktop: hide FAB and bottom sheet */
+/* Desktop: hide bottom sheet */
 @media (min-width: 769px) {
-  #search-fab {
-    display: none !important;
-  }
-
   #search-scrim,
   #search-sheet {
     display: none !important;
@@ -3564,6 +3740,86 @@ html.cite-sheet-open {
   }
 }
 
+/* ── Bookmark tab-view title actions (ADR-029) ──
+   The full-screen 북마크 tab view replaces the per-view home/settings buttons
+   with two global management actions on the right of the title row: "+" (새 폴더)
+   and "⋯" (더 보기, dropdown → 내보내기/가져오기). .title-action-btn mirrors the
+   other header icon buttons (44px touch target via --icon-btn-touch). */
+.title-actions {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.title-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--icon-btn-touch);
+  height: var(--icon-btn-touch);
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  color: var(--accent);
+  transition: opacity var(--duration-fast);
+}
+
+.title-action-btn svg {
+  width: 1.45rem;
+  height: 1.45rem;
+}
+
+.title-action-btn:active {
+  opacity: 0.4;
+}
+
+/* Dropdown anchored below the ⋯ button (relative to .title-actions cluster). */
+.title-action-menu {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  right: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  min-width: 9rem;
+  padding: var(--space-1);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-2);
+}
+
+.title-action-menu[hidden] {
+  display: none;
+}
+
+.title-action-menu-item {
+  display: block;
+  width: 100%;
+  text-align: right;
+  padding: var(--space-2) var(--space-3);
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: var(--font-base);
+  font-weight: 400;
+  line-height: var(--leading-snug);
+  color: var(--text);
+  cursor: pointer;
+  transition: background var(--duration-fast);
+}
+
+.title-action-menu-item:hover {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
 
 /* ── Verse selection mode ── */
 
@@ -3574,11 +3830,6 @@ body.verse-select-active {
 body.verse-select-active #audio-bar {
   display: none;
 }
-
-body.verse-select-active #search-fab {
-  display: none !important;
-}
-
 
 /* No inline padding/margin in select mode. A 0.15em horizontal padding
    offset by an equal negative margin produced ~1px shifts on iOS Safari

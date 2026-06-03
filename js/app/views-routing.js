@@ -37,7 +37,26 @@ const $divisionTabsSlot = _$("division-tabs-slot");
 const $searchInput = /** @type {HTMLInputElement} */ (_$("search-input"));
 const $searchClear = _$("search-clear");
 const $searchBar = _$("search-bar");
-const $searchFab = _$("search-fab");
+const $tabBar = _$("tab-bar");
+
+// ── Tab bar active state (ADR-029) ──
+// The global <a> click interceptor (further below) already SPA-navigates the
+// tab links; this only reflects the current route in the bar's active highlight.
+// Reading routes (/, /<division>, /<book>/<chapter>, …) all map to the home tab.
+function syncTabBarActive() {
+  if (!$tabBar) return;
+  const seg = location.pathname.replace(/^\//, "").split("/")[0];
+  const active = seg === "search" ? "search"
+    : seg === "bookmarks" ? "bookmarks"
+    : seg === "settings" ? "settings"
+    : "home";
+  for (const a of $tabBar.querySelectorAll(".tab-item")) {
+    const on = a.getAttribute("data-tab") === active;
+    a.classList.toggle("active", on);
+    if (on) a.setAttribute("aria-current", "page");
+    else a.removeAttribute("aria-current");
+  }
+}
 
 // Mirrors app.js's DATA_DIR — Phase 7b's audio player still uses the same
 // constant in app.js until that section moves here as well.
@@ -1506,7 +1525,6 @@ function renderChapter(data, book, opts) {
   $app.appendChild(article);
   $app.appendChild(buildChapterNav(book, ch));
   showAudioPlayer(book.id, ch);
-  observeFabLift();
   // ADR-022: one-time hint pointing out the cite chips (no-op after first show
   // or chip click, and when toggle is OFF or chapter has no chips).
   window.appCitations?.maybeShowCoachmark();
@@ -1543,7 +1561,6 @@ function renderPrologue(data, book) {
   nav.appendChild(el("a", { href: `/${book.id}/1` }, `1${chUnit(book.id)} →`));
   $app.appendChild(nav);
   showAudioPlayer(book.id, 0);
-  observeFabLift();
   window.scrollTo(0, 0);
 }
 
@@ -1594,6 +1611,11 @@ function parsePath() {
       page: parseInt(query.get("page") ?? "", 10) || 1,
     };
   }
+
+  // Tab-bar destinations (ADR-029 / P2). On mobile these render full-screen
+  // views; on desktop route() falls back to the existing overlays.
+  if (pathname === "bookmarks") return { view: "bookmarks" };
+  if (pathname === "settings") return { view: "settings" };
 
   const parts = pathname.split("/");
   if (parts.length === 1) {
@@ -1682,6 +1704,7 @@ function trackPageView() {
 async function route() {
   const isInitialLoad = _isInitialLoad;
   _isInitialLoad = false;
+  syncTabBarActive();
   if (_scrollTrackCleanup) _scrollTrackCleanup();
   clearNode($resumeBannerSlot);
   clearNode($divisionTabsSlot);
@@ -1692,17 +1715,24 @@ async function route() {
   // non-modal "tap chips in the visible page" behavior is preserved.
   const citeSheet = document.getElementById("cite-sheet");
   if (citeSheet && !citeSheet.hidden) window.appCitations?.closeCiteSheet();
+  // Overlays that lock body scroll (position:fixed / overflow:hidden) must be
+  // dismissed on any nav — incl. tab-bar switches — or they (and the scroll
+  // lock) persist over the new view, blocking it (ADR-029).
+  const bmDrawer = document.getElementById("bookmark-drawer");
+  if (bmDrawer && !bmDrawer.hidden) window.closeBookmarkDrawer?.();
+  const searchSheet = document.getElementById("search-sheet");
+  if (searchSheet && !searchSheet.hidden) window.closeSearchSheet?.();
+  // Desktop settings popover: close on nav too (it has a focus trap). Closing
+  // here also makes the /settings desktop fallback's gear.click() always OPEN
+  // (never toggle-closed) since the popover is already dismissed by this point.
+  const settingsPopover = document.querySelector(".settings-popover");
+  if (settingsPopover && !(/** @type {HTMLElement} */ (settingsPopover)).hidden) window.closeSettings?.();
   const parsed = parsePath();
   const { view, bookId, chapter, division } = parsed;
 
-  // Sync search input with current route
-  if (view === "search") {
-    if (isMobile()) {
-      // On mobile, redirect search route to overlay
-      openSearchSheet(parsed.query);
-      dismissLaunchScreen();
-      return;
-    }
+  // Sync the desktop header search input with the current route. On mobile the
+  // header bar is hidden and /search renders its own in-page input, so skip it.
+  if (view === "search" && !isMobile()) {
     $searchInput.value = parsed.query ?? "";
     $searchClear.hidden = !parsed.query;
     $searchBar.dataset.clearHidden = String(!parsed.query);
@@ -1724,12 +1754,63 @@ async function route() {
           title: `"${parsed.query}" 검색`,
           description: `공동번역성서에서 "${parsed.query}" 검색 결과`,
         });
+      } else if (isMobile()) {
+        // Empty-query /search on mobile: full-screen in-page search input (the
+        // bottom sheet is retired on the tab-bar path).
+        renderSearchView();
+        dismissLaunchScreen();
+        updatePageMeta({ title: "검색", description: "공동번역성서 검색" });
       } else {
         const books = await loadBooks();
         renderBookList(books, divisionOrder()[0]);
         dismissLaunchScreen();
         updatePageMeta();
       }
+      trackPageView();
+      return;
+    }
+
+    // Tab-bar destinations (ADR-029 / P2). On mobile, render full-screen views
+    // into #app. On desktop (no tab bar yet — these routes are mobile-driven)
+    // fall back to the least-surprising behavior: open the existing overlay
+    // over the book list so a deep-link / resize-down never dead-ends.
+    if (view === "bookmarks") {
+      if (isMobile()) {
+        window.renderBookmarksView();
+        dismissLaunchScreen();
+        updatePageMeta({ title: "북마크", description: "공동번역성서 북마크 목록" });
+        trackPageView();
+        return;
+      }
+      // Desktop fallback: show the book list, then open the bookmark drawer
+      // (the established desktop affordance) over it.
+      const books = await loadBooks();
+      renderBookList(books, divisionOrder()[0]);
+      dismissLaunchScreen();
+      updatePageMeta({ title: "북마크", description: "공동번역성서 북마크 목록" });
+      openBookmarkDrawer(null, null);
+      trackPageView();
+      return;
+    }
+
+    if (view === "settings") {
+      if (isMobile()) {
+        window.renderSettingsView();
+        dismissLaunchScreen();
+        updatePageMeta({ title: "설정", description: "공동번역성서 설정" });
+        trackPageView();
+        return;
+      }
+      // Desktop fallback: settings is a popover anchored to the header gear, not
+      // a routable page. Show the book list and click the desktop trigger to
+      // open the popover so a deep-link / resize-down still lands somewhere.
+      const books = await loadBooks();
+      renderBookList(books, divisionOrder()[0]);
+      dismissLaunchScreen();
+      updatePageMeta({ title: "설정", description: "공동번역성서 설정" });
+      /** @type {HTMLElement | null} */
+      const gear = document.querySelector("#settings-anchor .settings-btn");
+      if (gear) gear.click();
       trackPageView();
       return;
     }
@@ -1879,58 +1960,6 @@ function formatTime(sec) {
   const m = Math.floor(sec / 60);
   const s = Math.floor(sec % 60);
   return `${m}:${s.toString().padStart(2, "0")}`;
-}
-
-// Lift FAB above chapter-nav when it scrolls into view on mobile.
-// Anchors against the nav's real viewport position so the audio bar's
-// height doesn't matter — the FAB always sits centered in the gap
-// above chapter-nav.
-let _fabNavObserver = null;
-let _fabScrollHandler = null;
-let _fabRafPending = false;
-/** @param {HTMLElement} nav */
-function _updateFabLift(nav) {
-  const fabH = $searchFab.offsetHeight;
-  const gapPx = parseFloat(getComputedStyle(nav).marginTop) || 0;
-  const navTop = nav.getBoundingClientRect().top;
-  const liftPx = window.innerHeight - navTop + (gapPx - fabH) / 2;
-  $searchFab.style.setProperty("--fab-lift-nav", `${Math.max(liftPx, 0)}px`);
-}
-function observeFabLift() {
-  if (_fabNavObserver) { _fabNavObserver.disconnect(); _fabNavObserver = null; }
-  if (_fabScrollHandler) {
-    window.removeEventListener("scroll", _fabScrollHandler);
-    _fabScrollHandler = null;
-  }
-  _fabRafPending = false;
-  const nav = /** @type {HTMLElement | null} */ ($app.querySelector(".chapter-nav"));
-  if (!nav) return;
-  const onScroll = () => {
-    if (_fabRafPending) return;
-    _fabRafPending = true;
-    requestAnimationFrame(() => {
-      _fabRafPending = false;
-      if (!nav.isConnected) return;
-      _updateFabLift(nav);
-    });
-  };
-  _fabNavObserver = new IntersectionObserver((entries) => {
-    const visible = entries[0].isIntersecting;
-    if (visible) {
-      _updateFabLift(nav);
-      if (!_fabScrollHandler) {
-        _fabScrollHandler = onScroll;
-        window.addEventListener("scroll", onScroll, { passive: true });
-      }
-    } else {
-      $searchFab.style.removeProperty("--fab-lift-nav");
-      if (_fabScrollHandler) {
-        window.removeEventListener("scroll", _fabScrollHandler);
-        _fabScrollHandler = null;
-      }
-    }
-  }, { threshold: 0 });
-  _fabNavObserver.observe(nav);
 }
 
 function _teardownAudio() {

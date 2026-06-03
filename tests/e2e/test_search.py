@@ -11,6 +11,8 @@ Covers:
   - mobile focus while expanded reverts to compact
 """
 
+import pytest
+
 from .conftest import (
     CLEAR_APP_STORAGE, IPHONE_UA, MOBILE_VIEWPORT, wait_app_ready,
 )
@@ -204,6 +206,7 @@ def _mobile_page(browser):
     return ctx, ctx.new_page()
 
 
+@pytest.mark.skip(reason="ADR-029: search FAB removed; mobile search is now a full-screen /search tab view. Sheet-based test pending rewrite.")
 def test_mobile_fab_opens_compact_sheet(browser):
     """FAB 탭 → 시트가 data-state='compact'로 열리고 결과 영역은 보이지 않는다."""
     ctx, page = _mobile_page(browser)
@@ -221,6 +224,7 @@ def test_mobile_fab_opens_compact_sheet(browser):
         ctx.close()
 
 
+@pytest.mark.skip(reason="ADR-029: search FAB removed; mobile search is now a full-screen /search tab view. Sheet-based test pending rewrite.")
 def test_mobile_enter_transitions_to_expanded_with_results(browser):
     """컴팩트 시트에서 Enter → 확장 상태로 전환 + 결과 표시."""
     ctx, page = _mobile_page(browser)
@@ -245,6 +249,7 @@ def test_mobile_enter_transitions_to_expanded_with_results(browser):
         ctx.close()
 
 
+@pytest.mark.skip(reason="ADR-029: search FAB removed; mobile search is now a full-screen /search tab view. Sheet-based test pending rewrite.")
 def test_mobile_in_chip_appends_operator_with_cursor(browser):
     """`+ in:` 칩 탭 → 입력값 끝에 ` in:` 삽입, 커서가 끝에 위치, 입력 포커스 유지."""
     ctx, page = _mobile_page(browser)
@@ -270,6 +275,7 @@ def test_mobile_in_chip_appends_operator_with_cursor(browser):
         ctx.close()
 
 
+@pytest.mark.skip(reason="ADR-029: search FAB removed; mobile search is now a full-screen /search tab view. Sheet-based test pending rewrite.")
 def test_mobile_focus_in_expanded_reverts_to_compact(browser):
     """결과 표시 중 입력창에 다시 포커스 → compact 복귀 + 결과/notice 정리."""
     ctx, page = _mobile_page(browser)

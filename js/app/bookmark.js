@@ -361,7 +361,7 @@ function moveBookmarkItem(draggedId, targetId, position) {
   saveBookmarks(store);
   // renderBookmarkTree lives in the Phase 6b block below — same module
   // after the Phase 6b extraction, so we call directly.
-  renderBookmarkTree();
+  _rerenderActiveBookmarkTree();
 }
 // ── END DRAG_CORE ──
 
@@ -671,7 +671,7 @@ let _bookmarkDrawerCloseSeq = 0;
 let _bookmarkDrawerCloseTimer = null;
 // `_dragState` was extracted to js/app/bookmark.js (ADR-018 Phase 6a) along
 // with the drag & drop pointer handling that owns it.
-const BOOKMARK_INERT_SELECTORS = "#sticky-group, main#app, #audio-bar, #search-fab, #search-sheet, #search-scrim, #launch-screen, #install-scrim, #install-modal, #verse-select-bar";
+const BOOKMARK_INERT_SELECTORS = "#sticky-group, main#app, #audio-bar, #search-sheet, #search-scrim, #launch-screen, #install-scrim, #install-modal, #verse-select-bar";
 /** @param {boolean} on */
 function setBookmarkBackgroundInert(on) { setInert(on, BOOKMARK_INERT_SELECTORS); }
 
@@ -853,7 +853,7 @@ function openBookmarkDrawer(bookId, chapter) {
   const inChapter = bookId && chapter;
   $bmSaveChapterBtn.disabled = !inChapter;
   $bmSelectVersesBtn.disabled = !inChapter;
-  renderBookmarkTree();
+  _rerenderActiveBookmarkTree();
   setBookmarkBackgroundInert(true);
   const scrollY = window.scrollY;
   document.body.style.overflow = "hidden";
@@ -955,7 +955,7 @@ function _buildBookmarkItem(bm, depth) {
     const store = loadBookmarks();
     removeItemById(store, bm.id);
     saveBookmarks(store);
-    renderBookmarkTree();
+    _rerenderActiveBookmarkTree();
     refreshBookmarkHeaderBtn();
   };
 
@@ -1266,7 +1266,7 @@ function _buildFolderItem(folder, depth) {
     const found = _findItemInStore(store, folder.id);
     if (found) found.item.name = newName.trim();
     saveBookmarks(store);
-    renderBookmarkTree();
+    _rerenderActiveBookmarkTree();
   };
   const deleteAction = () => {
     const childCount = folder.children ? folder.children.length : 0;
@@ -1278,7 +1278,7 @@ function _buildFolderItem(folder, depth) {
     const store = loadBookmarks();
     removeItemById(store, folder.id);
     saveBookmarks(store);
-    renderBookmarkTree();
+    _rerenderActiveBookmarkTree();
   };
 
   const actions = el("div", { className: "bm-item-actions" });
@@ -1321,25 +1321,189 @@ function _buildFolderItem(folder, depth) {
   return li;
 }
 
-function renderBookmarkTree() {
+/**
+ * Render the bookmark tree into a target `<ul role="tree">`. Defaults to the
+ * drawer body so the existing drawer keeps calling this with no arguments. The
+ * mobile full-screen view (renderBookmarksView) passes its own in-page `<ul>`.
+ * Roving-tabindex + keyboard arrow navigation are wired only on the drawer body
+ * (the listeners below are bound to `$bookmarkDrawerBody`); the full view relies
+ * on each bookmark's own `<a>` for keyboard reachability.
+ * @param {HTMLElement} [target]
+ */
+function renderBookmarkTree(target = $bookmarkDrawerBody) {
   _renderPathname = window.location.pathname;
   // The previously swiped row may be replaced when we re-render; drop the
   // stale reference held by js/app/bookmark.js.
   resetSwipedRow();
-  clearNode($bookmarkDrawerBody);
+  clearNode(target);
   const store = loadBookmarks();
   if (!store.length) {
-    $bookmarkDrawerBody.appendChild(el("li", { className: "bm-empty", role: "presentation" }, "저장된 북마크가 없습니다."));
+    target.appendChild(el("li", { className: "bm-empty", role: "presentation" }, "저장된 북마크가 없습니다."));
     return;
   }
   for (const item of store) {
-    $bookmarkDrawerBody.appendChild(item.type === "folder"
+    target.appendChild(item.type === "folder"
       ? _buildFolderItem(item, 0)
       : _buildBookmarkItem(item, 0));
   }
-  // Set roving tabindex: first treeitem is reachable, rest are -1
-  const items = _getVisibleTreeItems();
-  items.forEach((item, i) => item.setAttribute("tabIndex", i === 0 ? "0" : "-1"));
+  // Roving tabindex only applies to the drawer body, where the arrow-key
+  // handlers below live. In the full view, leave the default treeitem tabindex.
+  if (target === $bookmarkDrawerBody) {
+    const items = _getVisibleTreeItems();
+    items.forEach((item, i) => item.setAttribute("tabIndex", i === 0 ? "0" : "-1"));
+  }
+}
+
+/**
+ * Re-render whichever bookmark tree is currently on screen. When the mobile
+ * full-screen view is mounted (#bookmarks-view-tree exists in #app), re-render
+ * that; otherwise fall back to the drawer body. Item-level mutation handlers
+ * (delete / rename) call this so the visible surface updates regardless of
+ * which one the user is looking at.
+ */
+function _rerenderActiveBookmarkTree() {
+  const fullViewTree = document.getElementById("bookmarks-view-tree");
+  renderBookmarkTree(
+    fullViewTree && document.getElementById("app")?.contains(fullViewTree)
+      ? /** @type {HTMLElement} */ (fullViewTree)
+      : undefined,
+  );
+}
+
+/**
+ * Full-screen bookmark list view for the mobile tab bar (ADR-029 / P2).
+ * Renders into `#app`: a page title + the bookmark tree (same item builders as
+ * the drawer), WITHOUT the drawer's reading-context toolbar (save current
+ * chapter / select verses) — that affordance stays in the drawer, reached from
+ * the reading header. Bookmark links navigate normally (closeBookmarkDrawer is
+ * a no-op while the drawer is hidden).
+ */
+function renderBookmarksView() {
+  const $app = _$("app");
+  const $title = _$("page-title");
+  window.setTitle("북마크");
+  // Navigation is the tab bar's job now (ADR-029), so this full-screen view no
+  // longer mints a home/settings header button. Instead the title row carries
+  // two global management actions on the right: "+" (new folder) and "⋯" (more).
+  // Reading-context actions (이 장 저장 / 절 선택) belong only to the drawer.
+  $title.appendChild(buildBmViewActions());
+  window.hideAudioBar();
+  clearNode($app);
+
+  const panel = el("div", { className: "bookmarks-view", role: "region", "aria-label": "북마크 목록" });
+  const tree = el("ul", { id: "bookmarks-view-tree", role: "tree", className: "bm-tree", "aria-label": "북마크 목록" });
+  panel.appendChild(tree);
+  $app.appendChild(panel);
+  renderBookmarkTree(tree);
+}
+
+// Build the right-aligned action cluster for the bookmark tab view's title row:
+// a "+" (새 폴더) button and a "⋯" (더 보기) button with a dismissible menu
+// (내보내기 / 가져오기). Returns a wrapper node appended into #page-title.
+// Header-icon styling matches buildSettingsTrigger/buildBookmarkHeaderBtn via
+// the .title-action-btn class (44px touch target from --icon-btn-touch).
+function buildBmViewActions() {
+  const wrap = el("div", { className: "title-actions" });
+
+  // ── "+" 새 폴더 ──
+  const addSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  addSvg.setAttribute("viewBox", "0 0 24 24");
+  addSvg.setAttribute("fill", "none");
+  addSvg.setAttribute("aria-hidden", "true");
+  const addPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  addPath.setAttribute("d", "M12 5v14M5 12h14");
+  addPath.setAttribute("stroke", "currentColor");
+  addPath.setAttribute("stroke-width", "1.8");
+  addPath.setAttribute("stroke-linecap", "round");
+  addSvg.appendChild(addPath);
+  const addBtn = el("button", {
+    className: "title-action-btn",
+    type: "button",
+    "aria-label": "새 폴더",
+  }, addSvg);
+  addBtn.addEventListener("click", () => {
+    openNewFolderModal((_newId) => { _rerenderActiveBookmarkTree(); });
+  });
+
+  // ── "⋯" 더 보기 + menu ──
+  const moreSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  moreSvg.setAttribute("viewBox", "0 0 24 24");
+  moreSvg.setAttribute("fill", "currentColor");
+  moreSvg.setAttribute("aria-hidden", "true");
+  for (const cx of [6, 12, 18]) {
+    const dot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+    dot.setAttribute("cx", String(cx));
+    dot.setAttribute("cy", "12");
+    dot.setAttribute("r", "1.6");
+    moreSvg.appendChild(dot);
+  }
+  const moreBtn = el("button", {
+    className: "title-action-btn",
+    type: "button",
+    "aria-label": "더 보기",
+    "aria-haspopup": "menu",
+    "aria-expanded": "false",
+  }, moreSvg);
+
+  const menu = el("div", { className: "title-action-menu", role: "menu", "aria-label": "더 보기", hidden: "" });
+  const exportItem = el("button", { className: "title-action-menu-item", type: "button", role: "menuitem" }, "내보내기");
+  const importItem = el("button", { className: "title-action-menu-item", type: "button", role: "menuitem" }, "가져오기");
+  menu.appendChild(exportItem);
+  menu.appendChild(importItem);
+
+  function closeMenu() {
+    if (menu.hidden) return;
+    menu.hidden = true;
+    moreBtn.setAttribute("aria-expanded", "false");
+    document.removeEventListener("click", onDocClick, true);
+    document.removeEventListener("keydown", onKeydown, true);
+  }
+  function openMenu() {
+    if (!menu.hidden) return;
+    menu.hidden = false;
+    moreBtn.setAttribute("aria-expanded", "true");
+    // Capture phase so an outside click closes before it acts elsewhere.
+    document.addEventListener("click", onDocClick, true);
+    document.addEventListener("keydown", onKeydown, true);
+  }
+  // SPA navigation can remove the header (and this menu's DOM) while the menu
+  // is open, without calling closeMenu — leaving these document listeners
+  // attached. Both handlers self-clean if the trigger is detached.
+  /** @param {MouseEvent} e */
+  function onDocClick(e) {
+    if (!moreBtn.isConnected) { closeMenu(); return; }
+    const t = /** @type {Node} */ (e.target);
+    if (wrap.contains(t)) return;
+    closeMenu();
+  }
+  /** @param {KeyboardEvent} e */
+  function onKeydown(e) {
+    if (!moreBtn.isConnected) { closeMenu(); return; }
+    if (e.key === "Escape") {
+      e.preventDefault();
+      closeMenu();
+      moreBtn.focus();
+    }
+  }
+
+  moreBtn.addEventListener("click", () => {
+    if (menu.hidden) openMenu();
+    else closeMenu();
+  });
+  exportItem.addEventListener("click", () => {
+    closeMenu();
+    exportBookmarks();
+  });
+  importItem.addEventListener("click", () => {
+    closeMenu();
+    $bmImportInput.value = "";
+    $bmImportInput.click();
+  });
+
+  wrap.appendChild(addBtn);
+  wrap.appendChild(moreBtn);
+  wrap.appendChild(menu);
+  return wrap;
 }
 
 // Returns all currently visible treeitems in DOM order (skips children of collapsed folders)
@@ -1592,7 +1756,7 @@ function _commitNewFolder() {
   const id = generateId();
   store.push({ type: "folder", id, name, children: [], expanded: false });
   saveBookmarks(store);
-  renderBookmarkTree();
+  _rerenderActiveBookmarkTree();
   const cb = _bmNewFolderCallback;
   closeNewFolderModal();
   if (cb) cb(id);
@@ -1625,7 +1789,7 @@ function commitSaveBookmark(existingId, label, note, folderId, bookId, chapter, 
     insertItem(store, folderId, bm);
   }
   saveBookmarks(store);
-  renderBookmarkTree();
+  _rerenderActiveBookmarkTree();
   refreshBookmarkHeaderBtn();
   announce(existingId ? "북마크를 수정했습니다." : "북마크를 저장했습니다.");
 }
@@ -1700,7 +1864,7 @@ function openMergeDialog(candidates, incomingSpec, mode, fallbackContext = null)
         : `${bookName} ${target.chapter}:${merged}`;
     }
     saveBookmarks(store);
-    renderBookmarkTree();
+    _rerenderActiveBookmarkTree();
     refreshBookmarkHeaderBtn();
 
     if (mode === "verses") exitVerseSelectMode();
@@ -1823,14 +1987,14 @@ function openImportModal(incoming) {
     const existing = loadBookmarks();
     const merged = _mergeBookmarkStores(existing, incoming.bookmarks);
     saveBookmarks(merged);
-    renderBookmarkTree();
+    _rerenderActiveBookmarkTree();
     announce("북마크를 병합했습니다.");
     cleanup();
   };
 
   $bmImportOverwrite.onclick = () => {
     saveBookmarks(incoming.bookmarks);
-    renderBookmarkTree();
+    _rerenderActiveBookmarkTree();
     announce("북마크를 덮어썼습니다.");
     cleanup();
   };
@@ -1992,7 +2156,7 @@ $bmAddFolderBtn.addEventListener("click", () => {
     const store = loadBookmarks();
     store.push({ type: "folder", id: generateId(), name, children: [], expanded: false });
     saveBookmarks(store);
-    renderBookmarkTree();
+    _rerenderActiveBookmarkTree();
     cleanup();
   }
 
@@ -2185,7 +2349,7 @@ const appBookmark = {
   // Phase 6b UI
   buildBackBtn, buildBookmarkHeaderBtn,
   openBookmarkDrawer, closeBookmarkDrawer,
-  renderBookmarkTree, refreshBookmarkHeaderBtn,
+  renderBookmarkTree, renderBookmarksView, refreshBookmarkHeaderBtn,
   enterVerseSelectMode, exitVerseSelectMode,
   updateVerseSelectionBoundaries, updateVerseSelectBar,
   openDriveDisconnectModal,
@@ -2220,6 +2384,10 @@ window.buildBookmarkHeaderBtn = buildBookmarkHeaderBtn;
 window.openBookmarkDrawer = openBookmarkDrawer;
 window.closeBookmarkDrawer = closeBookmarkDrawer;
 window.renderBookmarkTree = renderBookmarkTree;
+// Re-render whichever bookmark surface is mounted (drawer OR /bookmarks full
+// view). Sync layer + mutation flows use this so the visible tree refreshes.
+window.rerenderActiveBookmarkTree = _rerenderActiveBookmarkTree;
+window.renderBookmarksView = renderBookmarksView;
 window.enterVerseSelectMode = enterVerseSelectMode;
 window.exitVerseSelectMode = exitVerseSelectMode;
 window.updateVerseSelectionBoundaries = updateVerseSelectionBoundaries;
@@ -2239,7 +2407,7 @@ export {
   resetSwipedRow, closeSwipedRowIfOutside,
   buildBackBtn, buildBookmarkHeaderBtn,
   openBookmarkDrawer, closeBookmarkDrawer,
-  renderBookmarkTree, refreshBookmarkHeaderBtn,
+  renderBookmarkTree, renderBookmarksView, refreshBookmarkHeaderBtn,
   enterVerseSelectMode, exitVerseSelectMode,
   updateVerseSelectionBoundaries, updateVerseSelectBar,
   openDriveDisconnectModal,
