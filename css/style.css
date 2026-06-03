@@ -2,7 +2,7 @@
 .noscript-fallback {
   max-width: 40rem;
   margin: 2rem auto;
-  padding: 0 1rem;
+  padding: 0 var(--space-4);
   font-family: sans-serif;
 }
 
@@ -13,9 +13,9 @@
   left: 0;
   background: var(--accent);
   color: var(--bg);
-  padding: 0.5rem 1rem;
+  padding: var(--space-2) var(--space-4);
   z-index: 100;
-  font-size: 0.9rem;
+  font-size: var(--font-base);
   text-decoration: none;
   border-radius: 0 0 var(--radius) 0;
 }
@@ -127,14 +127,20 @@
   --control-h: 36px;
   --control-h-sm: 28px;
   --icon-btn: 40px;
+  /* 헤더 아이콘 버튼 박스 — 기본 폰트(18px)에서 ≈44px 로 HIG 탭 영역을 충족하고
+     큰 폰트에서는 rem 으로 함께 커진다(§8). 고정 px --touch-target 과 달리 rem
+     스케일. .title-back-btn·.title-bookmark-btn·#cite-sheet-back·#cite-sheet-close 공유. */
+  --icon-btn-touch: 2.45rem;
 
   /* ── Motion ── */
-  --duration-fast: 0.18s;
+  --duration-instant: 0.1s;
+  --duration-fast: 0.15s;
   --duration-base: 0.25s;
   --duration-slow: 0.4s;
   /* ease-out (감속) — 빠르게 시작해 천천히 멈춤. 진입/이동 UI 용. CSS 키워드
      `ease`(=cubic-bezier(.25,.1,.25,1), 양끝 느림)와 혼동 주의. */
   --ease-out: cubic-bezier(0, 0, 0.58, 1);
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
 
   /* ── Adaptive navigation (예약 토큰 — 값만 정의. 모바일 하단 탭바 / 데스크탑
      사이드바는 후속 PR 이 사용. ADR-028 §적응형 내비) ── */
@@ -222,7 +228,7 @@ body {
   font-family: "Noto Serif KR", "Batang", serif;
   background: var(--bg);
   color: var(--text);
-  line-height: 1.8;
+  line-height: var(--leading-relaxed);
   min-height: 100dvh;
   overscroll-behavior-y: none;
 }
@@ -244,10 +250,10 @@ body {
   /* Opaque so the resume banner / division tabs slots don't let scrolling
      content show through their side padding while pinned. */
   background: var(--bg);
-  /* ADR-025: micro elevation shadow when scrolled, fading in over 0.18s.
+  /* ADR-025: micro elevation shadow when scrolled, fading in over var(--duration-fast).
      scroll-top state has no shadow (flat). The transition target is set on
      the base rule so toggling `.scrolled` animates in both directions. */
-  transition: box-shadow 0.18s ease;
+  transition: box-shadow var(--duration-fast) ease;
 }
 
 #sticky-group.scrolled {
@@ -268,7 +274,7 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
   background: var(--bg);
   border-bottom: none;
-  padding: 0.6rem 1rem 0;
+  padding: var(--space-3) var(--space-4) 0;
   max-width: var(--max-width);
   margin: 0 auto;
 }
@@ -283,7 +289,7 @@ body {
   content: "";
   display: block;
   height: 1px;
-  margin-top: 0.6rem;
+  margin-top: var(--space-3);
   background: linear-gradient(to right, transparent, var(--border) 20%, var(--border) 80%, transparent);
 }
 
@@ -295,7 +301,7 @@ body {
    tab strip. Other screens leave padding-bottom at 0 so the hairline sits
    tight against the title. */
 #sticky-group:has(#division-tabs-slot:not(:empty)) #app-header {
-  padding-bottom: 0.5rem;
+  padding-bottom: var(--space-2);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -309,11 +315,11 @@ body {
   display: flex;
   justify-content: flex-end;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--space-2);
   max-height: 4rem;
   opacity: 1;
   overflow: visible;
-  transition: max-height 0.25s ease, opacity 0.2s ease;
+  transition: max-height var(--duration-base) ease, opacity var(--duration-base) ease;
 }
 
 #app-header.compact #breadcrumb-row {
@@ -326,7 +332,7 @@ body {
 #header-actions {
   display: flex;
   align-items: center;
-  gap: 0.3rem;
+  gap: var(--space-1);
   flex-shrink: 0;
 }
 
@@ -358,8 +364,8 @@ body {
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
-  padding: 0.5rem;
+  box-shadow: var(--shadow-2);
+  padding: var(--space-2);
   /* rem-based so the popover scales with the user's font-size choice;
      capped to the viewport so it never overflows on the right at large
      fonts. White-space wrapping is opt-in per child (buttons set nowrap
@@ -414,10 +420,10 @@ body {
 .drive-info-icon { width: 1.1em; height: 1.1em; }
 
 .settings-drive-info-row {
-  padding: 0.35rem 0 0.25rem 0.25rem;
+  padding: var(--space-2) 0 var(--space-1) var(--space-1);
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: var(--space-2);
   white-space: normal;
 }
 .settings-drive-info-row[hidden] { display: none; }
@@ -425,7 +431,7 @@ body {
 .settings-drive-info-top {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: var(--space-2);
 }
 
 .settings-drive-info-close {
@@ -436,14 +442,14 @@ body {
   cursor: pointer;
   color: var(--text);
   opacity: 0.45;
-  font-size: 1rem;
+  font-size: var(--font-md);
   line-height: 1;
   flex-shrink: 0;
 }
 .settings-drive-info-close:hover { opacity: 0.8; }
 
 .settings-drive-info-email {
-  font-size: 0.8rem;
+  font-size: var(--font-xs);
   color: var(--accent);
   font-weight: 500;
   overflow: hidden;
@@ -452,10 +458,10 @@ body {
 }
 
 .settings-drive-info-desc {
-  font-size: 0.78rem;
+  font-size: var(--font-xs);
   color: var(--text-muted, var(--text));
   opacity: 0.7;
-  line-height: 1.55;
+  line-height: var(--leading-normal);
   white-space: normal;
 }
 
@@ -464,7 +470,7 @@ body {
   border: none;
   padding: 0;
   cursor: pointer;
-  font-size: 0.75rem;
+  font-size: var(--font-xs);
   color: var(--text);
   opacity: 0.45;
   text-decoration: underline;
@@ -497,44 +503,44 @@ body {
   color: var(--text);
   border-radius: var(--radius-modal);
   box-shadow: var(--shadow-4);
-  padding: 1.25rem;
+  padding: var(--space-6);
 }
 #drive-disconnect-modal:not([hidden]) { display: block; }
 
-#drive-disconnect-title { font-size: 1rem; font-weight: 700; margin: 0 0 0.6rem; }
-#drive-disconnect-body  { font-size: 0.88rem; margin: 0 0 0.75rem; color: var(--text-secondary); line-height: 1.5; }
-#drive-disconnect-file-question { font-size: 0.88rem; margin: 0 0 1rem; color: var(--text); line-height: 1.5; font-weight: 500; }
+#drive-disconnect-title { font-size: var(--font-md); font-weight: 700; margin: 0 0 var(--space-3); }
+#drive-disconnect-body  { font-size: var(--font-sm); margin: 0 0 var(--space-3); color: var(--text-secondary); line-height: var(--leading-snug); }
+#drive-disconnect-file-question { font-size: var(--font-sm); margin: 0 0 var(--space-4); color: var(--text); line-height: var(--leading-snug); font-weight: 500; }
 
-#drive-disconnect-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: flex-end; }
+#drive-disconnect-actions { display: flex; gap: var(--space-2); flex-wrap: wrap; justify-content: flex-end; }
 
 #drive-disconnect-delete, #drive-disconnect-cancel {
-  padding: 0.45rem 0.9rem;
+  padding: var(--space-2) var(--space-4);
   background: none;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   font-family: inherit;
-  font-size: 0.88rem;
+  font-size: var(--font-sm);
   cursor: pointer;
   color: var(--text);
 }
 #drive-disconnect-cancel { color: var(--text-secondary); }
 
 #drive-disconnect-keep {
-  padding: 0.45rem 0.9rem;
+  padding: var(--space-2) var(--space-4);
   background: var(--accent);
   color: var(--bg);
   border: none;
   border-radius: var(--radius);
   font-family: inherit;
-  font-size: 0.88rem;
+  font-size: var(--font-sm);
   cursor: pointer;
 }
 
 .settings-row {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.25rem 0;
+  gap: var(--space-3);
+  padding: var(--space-1) 0;
   /* Wrap when the label + control group exceeds row width (e.g. large
      font-size). The control group keeps margin-left: auto so it stays
      right-aligned on its own line after wrapping. */
@@ -547,26 +553,26 @@ body {
 }
 
 .settings-label {
-  font-size: 0.92rem;
+  font-size: var(--font-base);
   color: var(--text);
   min-width: 5em;
 }
 
 /* Section grouping: a divider sits between consecutive sections. */
 .settings-section + .settings-section {
-  margin-top: 0.5rem;
-  padding-top: 0.5rem;
+  margin-top: var(--space-2);
+  padding-top: var(--space-2);
   border-top: 1px solid var(--border);
 }
 
 .settings-action-btn {
   font-family: inherit;
-  font-size: 0.8rem;
+  font-size: var(--font-xs);
   font-weight: 500;
   color: var(--accent);
   background: none;
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   padding: 0 0.8em;
   cursor: pointer;
   height: 28px;
@@ -618,21 +624,21 @@ body {
 }
 
 .btn-group .toolbar-btn:first-child {
-  border-radius: 4px 0 0 4px;
+  border-radius: var(--radius-xs) 0 0 var(--radius-xs);
 }
 
 .btn-group .toolbar-btn:last-child {
-  border-radius: 0 4px 4px 0;
+  border-radius: 0 var(--radius-xs) var(--radius-xs) 0;
 }
 
 .toolbar-btn {
   font-family: inherit;
-  font-size: 0.8rem;
+  font-size: var(--font-xs);
   font-weight: 400;
   color: var(--text-secondary);
   background: var(--bg-card);
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   padding: 0 0.7em;
   height: 28px;
   min-width: 2.4em;
@@ -642,7 +648,7 @@ body {
   justify-content: center;
   line-height: 1;
   white-space: nowrap;
-  transition: background 0.15s;
+  transition: background var(--duration-fast);
 }
 
 .toolbar-btn:hover:not(:disabled) {
@@ -671,7 +677,7 @@ body {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 0.75rem;
+  gap: var(--space-3);
   width: 100%;
   cursor: pointer;
 }
@@ -679,15 +685,15 @@ body {
 .settings-toggle-text {
   display: flex;
   flex-direction: column;
-  gap: 0.1rem;
+  gap: var(--space-0_5);
   min-width: 0;
 }
 
 /* Dynamic caption (외경): always present so toggling never shifts layout.
    Fixed to one line height; both phrases fit on a single line. */
 .settings-toggle-caption {
-  font-size: 0.75rem;
-  line-height: 1.3;
+  font-size: var(--font-xs);
+  line-height: var(--leading-tight);
   min-height: 1.3em;
   color: var(--text-secondary);
 }
@@ -718,16 +724,16 @@ body {
   display: block;
   width: 100%;
   height: 100%;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--switch-off-track);
-  transition: background 0.2s ease, border-color 0.2s ease;
+  transition: background var(--duration-base) ease, border-color var(--duration-base) ease;
 }
 
 .switch-thumb {
   position: absolute;
   background: #fff;
   border-radius: 50%;
-  transition: transform 0.2s ease, width 0.2s ease, height 0.2s ease, background 0.2s ease;
+  transition: transform var(--duration-base) ease, width var(--duration-base) ease, height var(--duration-base) ease, background var(--duration-base) ease;
 }
 
 .switch-input:checked + .switch-track {
@@ -741,7 +747,7 @@ body {
 
 /* iOS — UISwitch look: 51×31 pill, 27px white thumb, 20px travel. */
 .os-ios .switch { width: 51px; height: 31px; }
-.os-ios .switch-track { border-radius: 31px; }
+.os-ios .switch-track { border-radius: var(--radius-pill); }
 .os-ios .switch-thumb {
   top: 2px;
   left: 2px;
@@ -759,7 +765,7 @@ body {
    to tiles/chips, not Switch. */
 .os-android .switch { width: 52px; height: 32px; }
 .os-android .switch-track {
-  border-radius: 16px;
+  border-radius: var(--radius-xl);
   background: var(--switch-desktop-off-track);
   border: 1.5px solid var(--switch-m3-outline);
 }
@@ -773,8 +779,8 @@ body {
   background: var(--switch-m3-off-thumb);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18), 0 1px 1px rgba(0, 0, 0, 0.1);
   transition:
-    transform 0.32s cubic-bezier(0.34, 1.45, 0.55, 1),
-    background 0.2s ease;
+    transform var(--duration-base) cubic-bezier(0.34, 1.45, 0.55, 1),
+    background var(--duration-base) ease;
 }
 .os-android .switch-input:checked + .switch-track {
   border-color: var(--accent);
@@ -789,7 +795,7 @@ body {
    still reads as "switch" rather than "indicator dot". */
 .os-desktop .switch { width: 52px; height: 32px; }
 .os-desktop .switch-track {
-  border-radius: 16px;
+  border-radius: var(--radius-xl);
   background: var(--switch-desktop-off-track);
   border: 1px solid var(--switch-desktop-outline);
 }
@@ -821,12 +827,12 @@ body {
 }
 
 #page-title {
-  font-size: 1.15rem;
+  font-size: var(--font-lg);
   font-weight: 700;
-  line-height: 1.4;
+  line-height: var(--leading-snug);
   text-align: center;
   position: relative;
-  margin: 0.3rem 0 0.2rem;
+  margin: var(--space-1) 0 var(--space-1);
 }
 
 /* Title swap: NT chapter/prologue headers emit .title-text-full and
@@ -855,14 +861,14 @@ body {
   justify-content: center;
   /* HIG 최소 탭 영역 44px — 2.45rem 은 기본 폰트(18px)에서 ≈44px 로
      --touch-target 을 충족하면서, 큰 폰트에서는 rem 으로 함께 커진다. */
-  width: 2.45rem;
-  height: 2.45rem;
+  width: var(--icon-btn-touch);
+  height: var(--icon-btn-touch);
   padding: 0;
   color: var(--accent);
   background: none;
   border: none;
   cursor: pointer;
-  transition: opacity 0.15s;
+  transition: opacity var(--duration-fast);
 }
 
 .title-back-btn:active {
@@ -904,7 +910,7 @@ body {
   transform: rotate(45deg);
   margin-left: 0.4em;
   vertical-align: 0.15em;
-  transition: transform 0.15s;
+  transition: transform var(--duration-fast);
 }
 
 .title-picker-btn[aria-expanded="true"]::after {
@@ -931,8 +937,8 @@ body {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
-  padding: 0.55rem;
-  margin-top: 0.45rem;
+  padding: var(--space-2);
+  margin-top: var(--space-2);
   max-height: 60vh;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -943,7 +949,7 @@ body {
 .popover-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(2.8rem, 1fr));
-  gap: 0.4rem;
+  gap: var(--space-2);
 }
 
 /* .chapter-grid a 와 동일한 카드: 흰 배경 + 테두리 + 공용 radius */
@@ -952,14 +958,14 @@ body {
   align-items: center;
   justify-content: center;
   aspect-ratio: 1;
-  font-size: 0.9rem;
+  font-size: var(--font-base);
   font-variant-numeric: tabular-nums;
   text-decoration: none;
   color: var(--text);
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  transition: background 0.15s;
+  transition: background var(--duration-fast);
 }
 
 /* hover/focus: .chapter-grid a 와 동일한 꽉 찬 accent */
@@ -993,9 +999,9 @@ body {
   /* .popover-item 의 aspect-ratio:1 을 해제 — 전체 폭 행이 정사각형이 되지 않도록 */
   aspect-ratio: auto;
   gap: 0.35em;
-  padding: 0.5rem;
-  margin-bottom: 0.15rem;
-  font-size: 0.85rem;
+  padding: var(--space-2);
+  margin-bottom: var(--space-0_5);
+  font-size: var(--font-sm);
   font-weight: 600;
   color: var(--accent);
 }
@@ -1009,7 +1015,7 @@ body {
 #search-bar {
   position: relative;
   width: 16rem;
-  transition: width 0.2s ease;
+  transition: width var(--duration-base) ease;
 }
 
 #search-bar:focus-within {
@@ -1019,16 +1025,16 @@ body {
 #search-input {
   width: 100%;
   font-family: inherit;
-  font-size: 0.85rem;
+  font-size: var(--font-sm);
   /* Reserve 96px for history toggle (right: 3.25rem) + clear (right: 0.25rem)
      with a 4px gap between them so circular hit areas don't visually merge. */
-  padding: 0.6rem 6rem 0.6rem 0.75rem;
+  padding: var(--space-3) 6rem var(--space-3) var(--space-3);
   border: 1px solid var(--border);
-  border-radius: 1.25rem;
+  border-radius: var(--radius-pill);
   background: var(--bg-card);
   color: var(--text);
   outline: none;
-  line-height: 1.3;
+  line-height: var(--leading-tight);
   min-height: 44px;
   box-sizing: border-box;
 }
@@ -1042,7 +1048,7 @@ body {
 }
 
 #search-bar[data-clear-hidden="true"][data-history-hidden="true"] #search-input {
-  padding-right: 0.75rem;
+  padding-right: var(--space-3);
 }
 
 #search-input::-webkit-search-cancel-button,
@@ -1071,7 +1077,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.1rem;
+  font-size: var(--font-lg);
   line-height: 1;
   color: var(--text);
   background: none;
@@ -1115,10 +1121,10 @@ body {
 #search-sheet-history {
   list-style: none;
   margin: 0;
-  padding: 0.3rem 0;
+  padding: var(--space-1) 0;
   background: var(--bg-card);
   border: 1px solid var(--border);
-  border-radius: 0.6rem;
+  border-radius: var(--radius-md);
   box-shadow: 0 8px 24px color-mix(in srgb, var(--text) 18%, transparent);
   max-height: 60vh;
   overflow-y: auto;
@@ -1135,7 +1141,7 @@ body {
 }
 
 #search-sheet-history {
-  margin: 0 0.8rem 0.5rem;
+  margin: 0 var(--space-4) var(--space-2);
 }
 
 .search-history-item {
@@ -1148,9 +1154,9 @@ body {
   flex: 1;
   display: flex;
   align-items: center;
-  padding: 0 0.85rem;
+  padding: 0 var(--space-4);
   font: inherit;
-  font-size: 0.92rem;
+  font-size: var(--font-base);
   color: var(--text);
   background: none;
   border: none;
@@ -1181,7 +1187,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.2rem;
+  font-size: var(--font-lg);
   line-height: 1;
   color: var(--text-secondary);
   background: none;
@@ -1189,7 +1195,7 @@ body {
   border-radius: 50%;
   cursor: pointer;
   padding: 0;
-  margin-right: 0.2rem;
+  margin-right: var(--space-1);
 }
 
 .search-history-item-remove:hover {
@@ -1207,9 +1213,9 @@ body {
   display: block;
   width: 100%;
   min-height: 44px;
-  padding: 0 0.85rem;
+  padding: 0 var(--space-4);
   font: inherit;
-  font-size: 0.85rem;
+  font-size: var(--font-sm);
   background: none;
   border: none;
   text-align: center;
@@ -1256,7 +1262,7 @@ body {
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.18), 0 8px 20px rgba(0, 0, 0, 0.3);
   align-items: center;
   justify-content: center;
-  transition: transform 0.15s ease, box-shadow 0.15s ease, bottom 0.25s ease;
+  transition: transform var(--duration-fast) ease, box-shadow var(--duration-fast) ease, bottom var(--duration-base) ease;
 }
 
 #search-fab:hover {
@@ -1286,7 +1292,7 @@ body {
   pointer-events: none;
   background: rgba(0, 0, 0, 0.04);
   opacity: 0;
-  transition: opacity 0.2s ease;
+  transition: opacity var(--duration-base) ease;
 }
 
 [data-theme="dark"] #pull-refresh-scrim {
@@ -1312,7 +1318,7 @@ body {
   transform: translateX(-50%) translateY(0);
   width: 2.4rem;
   height: 2.4rem;
-  margin-top: 0.5rem;
+  margin-top: var(--space-2);
   border-radius: 50%;
   background: var(--bg-card);
   color: var(--accent);
@@ -1327,7 +1333,7 @@ body {
 }
 
 #pull-refresh-indicator .ptr-icon {
-  transition: transform 0.1s linear;
+  transition: transform var(--duration-instant) linear;
 }
 
 #pull-refresh-indicator.ptr-loading .ptr-icon {
@@ -1375,14 +1381,14 @@ body {
   color: var(--text);
   border-radius: var(--radius-modal);
   box-shadow: var(--shadow-4);
-  padding: 1.25rem 1.25rem 1rem;
+  padding: var(--space-6) var(--space-6) var(--space-4);
 }
 #install-modal:not([hidden]) {
   display: block;
 }
 #install-modal-title {
-  margin: 0 0 0.75rem;
-  font-size: 1.1rem;
+  margin: 0 0 var(--space-3);
+  font-size: var(--font-lg);
   font-weight: 700;
 }
 #install-modal-close {
@@ -1392,7 +1398,7 @@ body {
   background: transparent;
   border: 0;
   color: var(--text-secondary);
-  font-size: 1.6rem;
+  font-size: var(--font-2xl);
   line-height: 1;
   min-width: 44px;
   min-height: 44px;
@@ -1402,33 +1408,35 @@ body {
   cursor: pointer;
 }
 #install-modal-close:hover { color: var(--text); }
-#install-modal-body p { margin: 0.5rem 0; line-height: 1.6; }
-#install-modal-body ol { padding-left: 1.3rem; margin: 0.5rem 0; }
-#install-modal-body ol li { margin: 0.35rem 0; line-height: 1.6; }
+#install-modal-body p { margin: var(--space-2) 0; line-height: var(--leading-normal); }
+#install-modal-body ol { padding-left: var(--space-6); margin: var(--space-2) 0; }
+#install-modal-body ol li { margin: var(--space-2) 0; line-height: var(--leading-normal); }
 #install-modal-body .install-figure {
-  margin: 0.75rem 0;
+  margin: var(--space-3) 0;
   text-align: center;
 }
 #install-modal-body .install-figure img {
   max-width: 100%;
-  border-radius: 8px;
+  border-radius: var(--radius);
   border: 1px solid var(--border);
 }
 #install-modal-body .install-figure figcaption {
-  font-size: 0.85rem;
+  font-size: var(--font-sm);
   color: var(--text-secondary);
-  margin-top: 0.3rem;
+  margin-top: var(--space-1);
 }
 
 /* ── Install guide screenshot slider ── */
 .install-slider-wrap {
-  margin: 0.75rem -1.25rem 0;
+  /* 좌우 음수 마진은 #install-modal 의 가로 패딩(var(--space-6))을 정확히 상쇄해
+     슬라이더를 모달 가장자리까지 bleed 시킨다 — 같은 토큰에 결합(스냅 후 불일치 방지). */
+  margin: var(--space-3) calc(-1 * var(--space-6)) 0;
   overflow: hidden;
   border-top: 1px solid var(--border);
 }
 .install-slider-track {
   display: flex;
-  transition: transform 0.32s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  transition: transform var(--duration-base) cubic-bezier(0.25, 0.46, 0.45, 0.94);
   will-change: transform;
   touch-action: pan-y;
   cursor: grab;
@@ -1454,7 +1462,7 @@ body {
   justify-content: center;
   align-items: center;
   gap: 8px;
-  padding: 0.65rem 1.25rem 0;
+  padding: var(--space-3) var(--space-6) 0;
 }
 .install-dot {
   width: 7px;
@@ -1464,7 +1472,7 @@ body {
   border: 0;
   padding: 0;
   cursor: pointer;
-  transition: background 0.2s, transform 0.2s;
+  transition: background var(--duration-base), transform var(--duration-base);
   flex-shrink: 0;
 }
 .install-dot.active {
@@ -1473,18 +1481,18 @@ body {
 }
 .install-step-caption {
   text-align: center;
-  padding: 0.4rem 1.25rem 0.25rem;
-  font-size: 0.9rem;
-  line-height: 1.55;
+  padding: var(--space-2) var(--space-6) var(--space-1);
+  font-size: var(--font-base);
+  line-height: var(--leading-normal);
   min-height: 2.8em;
   color: var(--text);
 }
 .install-bookmark-notice {
-  margin: 0.75rem 1.25rem 0;
-  padding: 0.55rem 0.75rem;
-  border-radius: 6px;
-  font-size: 0.82rem;
-  line-height: 1.55;
+  margin: var(--space-3) var(--space-6) 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-sm);
+  line-height: var(--leading-normal);
   color: var(--text-muted, #666);
   background: var(--surface-alt, #f5f5f5);
 }
@@ -1494,15 +1502,15 @@ body {
 }
 #install-modal-body .install-cta {
   display: inline-block;
-  margin-top: 0.75rem;
+  margin-top: var(--space-3);
   min-height: 44px;
-  padding: 0.55rem 1.1rem;
+  padding: var(--space-2) var(--space-5);
   background: var(--accent);
   /* --accent 는 고정 차콜 → var(--bg)(라이트 크림 / 다크 네이비)로 대비 확보. */
   color: var(--bg);
   border: 0;
-  border-radius: 8px;
-  font-size: 0.95rem;
+  border-radius: var(--radius);
+  font-size: var(--font-base);
   cursor: pointer;
 }
 /* Dark mode: --accent #8ab4d8 is light → use dark text for AA contrast. */
@@ -1519,26 +1527,26 @@ body {
   cursor: not-allowed;
 }
 #install-modal-body .install-note {
-  font-size: 0.85rem;
+  font-size: var(--font-sm);
   color: var(--text-secondary);
-  margin-top: 0.75rem;
+  margin-top: var(--space-3);
 }
 #install-modal-body .install-step-list {
-  margin: 0.75rem 0 0;
-  padding-left: 1.4rem;
-  font-size: 0.92rem;
-  line-height: 1.55;
+  margin: var(--space-3) 0 0;
+  padding-left: var(--space-6);
+  font-size: var(--font-base);
+  line-height: var(--leading-normal);
   color: var(--text);
 }
 #install-modal-body .install-step-list li {
-  margin-bottom: 0.4rem;
+  margin-bottom: var(--space-2);
 }
 .install-never-show-row {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  margin-top: 1.1rem;
-  padding-top: 0.85rem;
+  gap: var(--space-2);
+  margin-top: var(--space-5);
+  padding-top: var(--space-4);
   border-top: 1px solid var(--border);
 }
 .install-never-show-row input[type="checkbox"] {
@@ -1549,17 +1557,17 @@ body {
   cursor: pointer;
 }
 .install-never-show-row label {
-  font-size: 0.85rem;
+  font-size: var(--font-sm);
   color: var(--text-secondary);
   cursor: pointer;
   user-select: none;
 }
 #install-modal-body kbd {
   display: inline-block;
-  padding: 0.05rem 0.35rem;
+  padding: 0.05rem var(--space-2);
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   font-size: 0.85em;
   font-family: inherit;
 }
@@ -1581,7 +1589,7 @@ body {
 
 #search-scrim:not([hidden]) {
   display: block;
-  animation: bm-scrim-in 0.25s ease both;
+  animation: bm-scrim-in var(--duration-base) ease both;
 }
 
 #search-sheet {
@@ -1605,20 +1613,20 @@ body {
   background: var(--bg);
   background-clip: padding-box;
   /* Only top corners rounded in expanded — display curve masks the bottom. */
-  border-radius: 16px 16px 0 0;
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
   /* Upward-cast shadow for the bottom-attached expanded state. */
-  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.18);
+  box-shadow: var(--shadow-sheet);
   flex-direction: column;
   height: 55vh;
   max-height: 80vh;
   padding-bottom: env(safe-area-inset-bottom);
   transition:
-    height 220ms cubic-bezier(0.4, 0, 0.2, 1),
-    bottom 220ms cubic-bezier(0.4, 0, 0.2, 1),
-    left 220ms cubic-bezier(0.4, 0, 0.2, 1),
-    right 220ms cubic-bezier(0.4, 0, 0.2, 1),
-    border-radius 220ms cubic-bezier(0.4, 0, 0.2, 1),
-    box-shadow 220ms cubic-bezier(0.4, 0, 0.2, 1);
+    height 220ms var(--ease-standard),
+    bottom 220ms var(--ease-standard),
+    left 220ms var(--ease-standard),
+    right 220ms var(--ease-standard),
+    border-radius 220ms var(--ease-standard),
+    box-shadow 220ms var(--ease-standard);
 }
 
 /* Compact state: only input bar + chips visible, sized to sit above keyboard.
@@ -1631,7 +1639,7 @@ body {
   bottom: 0.75rem;
   left: 0.75rem;
   right: 0.75rem;
-  border-radius: 16px;
+  border-radius: var(--radius-xl);
   /* Omnidirectional shadow so the modal reads as a floating card. */
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.22);
   /* Add the safe-area inset so it doesn't eat the chip row. With
@@ -1645,7 +1653,7 @@ body {
 /* The handle normally provides top breathing room above the input bar; add
    matching padding when it's hidden so the input doesn't kiss the sheet edge. */
 #search-sheet[data-state="compact"] #search-sheet-bar {
-  padding-top: 0.8rem;
+  padding-top: var(--space-4);
 }
 
 #search-sheet[data-state="compact"] #search-sheet-handle,
@@ -1662,13 +1670,13 @@ body {
 
 #search-sheet:not([hidden]) {
   display: flex;
-  animation: bm-drawer-in-up 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+  animation: bm-drawer-in-up var(--duration-base) cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
 }
 
 #search-sheet-handle {
   display: flex;
   justify-content: center;
-  padding: 0.5rem 0 0.3rem;
+  padding: var(--space-2) 0 var(--space-1);
   cursor: grab;
   touch-action: none;
 }
@@ -1683,8 +1691,8 @@ body {
 #search-sheet-bar {
   display: flex;
   align-items: center;
-  gap: 0.3rem;
-  padding: 0 0.5rem 0.6rem 0.8rem;
+  gap: var(--space-1);
+  padding: 0 var(--space-2) var(--space-3) var(--space-4);
 }
 
 #search-sheet-input-wrap {
@@ -1705,7 +1713,7 @@ body {
   color: var(--text);
   border-radius: 50%;
   padding: 0;
-  transition: color 0.15s, background 0.15s;
+  transition: color var(--duration-fast), background var(--duration-fast);
 }
 
 #search-sheet-close:hover {
@@ -1721,15 +1729,15 @@ body {
 #search-sheet-input {
   width: 100%;
   font-family: inherit;
-  font-size: 0.95rem;
+  font-size: var(--font-base);
   /* Reserve 96px for history toggle (44) + clear (44) + 8px breathing room. */
-  padding: 0.7rem 6rem 0.7rem 0.85rem;
+  padding: var(--space-3) 6rem var(--space-3) var(--space-4);
   border: 1px solid var(--border);
-  border-radius: 0.6rem;
+  border-radius: var(--radius-md);
   background: var(--bg-card);
   color: var(--text);
   outline: none;
-  line-height: 1.4;
+  line-height: var(--leading-snug);
   min-height: 48px;
   box-sizing: border-box;
 }
@@ -1740,7 +1748,7 @@ body {
 }
 
 #search-sheet-input-wrap[data-clear-hidden="true"][data-history-hidden="true"] #search-sheet-input {
-  padding-right: 0.85rem;
+  padding-right: var(--space-4);
 }
 
 #search-sheet-input:focus {
@@ -1763,7 +1771,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.2rem;
+  font-size: var(--font-lg);
   line-height: 1;
   color: var(--text);
   background: none;
@@ -1802,8 +1810,8 @@ body {
 #search-sheet-chips {
   display: flex;
   flex-wrap: nowrap;
-  gap: 0.4rem;
-  padding: 0 0.8rem 0.55rem;
+  gap: var(--space-2);
+  padding: 0 var(--space-4) var(--space-2);
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
@@ -1816,16 +1824,16 @@ body {
 .search-chip {
   flex-shrink: 0;
   font-family: inherit;
-  font-size: 0.82rem;
-  line-height: 1.2;
-  padding: 0.35rem 0.7rem;
+  font-size: var(--font-sm);
+  line-height: var(--leading-tight);
+  padding: var(--space-2) var(--space-3);
   background: var(--bg-card);
   color: var(--text);
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   cursor: pointer;
   white-space: nowrap;
-  transition: background 0.15s, border-color 0.15s;
+  transition: background var(--duration-fast), border-color var(--duration-fast);
 }
 
 .search-chip:hover {
@@ -1839,19 +1847,19 @@ body {
 }
 
 .search-notice {
-  margin: 0 0 0.6rem;
-  padding: 0.5rem 0.75rem;
-  font-size: 0.85rem;
+  margin: 0 0 var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--font-sm);
   background: color-mix(in srgb, var(--accent) 8%, transparent);
   color: var(--text);
   border-left: 3px solid var(--accent);
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
 }
 
 #search-sheet-results {
   flex: 1;
   overflow-y: auto;
-  padding: 0 1rem 1rem;
+  padding: 0 var(--space-4) var(--space-4);
   -webkit-overflow-scrolling: touch;
   /* Don't let inner scrolling chain to the body when the user reaches the
      top/bottom of the result list. */
@@ -1860,17 +1868,17 @@ body {
 
 /* ── Search Results ── */
 .search-count {
-  font-size: 0.78rem;
+  font-size: var(--font-xs);
   color: var(--text-secondary);
-  margin-bottom: 0.8rem;
+  margin-bottom: var(--space-4);
 }
 
 
 .search-empty {
   text-align: center;
-  padding: 2rem 1rem;
+  padding: var(--space-8) var(--space-4);
   color: var(--text-secondary);
-  font-size: 0.9rem;
+  font-size: var(--font-base);
 }
 
 .search-results {
@@ -1887,10 +1895,10 @@ body {
 
 .search-result-item a {
   display: block;
-  padding: 0.6rem 0;
+  padding: var(--space-3) 0;
   text-decoration: none;
   color: var(--text);
-  transition: background 0.1s;
+  transition: background var(--duration-instant);
 }
 
 .search-result-item a:hover {
@@ -1899,17 +1907,17 @@ body {
 
 .search-result-ref {
   display: block;
-  font-size: 0.75rem;
+  font-size: var(--font-xs);
   font-weight: 700;
   color: var(--accent);
-  margin-bottom: 0.15rem;
+  margin-bottom: var(--space-0_5);
 }
 
 .search-result-text {
   display: block;
   font-family: "Noto Serif KR", serif;
-  font-size: 0.85rem;
-  line-height: 1.6;
+  font-size: var(--font-sm);
+  line-height: var(--leading-normal);
   color: var(--text-secondary);
 }
 
@@ -1927,7 +1935,7 @@ mark.search-highlight {
 
 .verse-highlight {
   background: rgba(107, 58, 42, 0.08) !important;
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   /* Inline padding only — vertical padding on inline elements extends the
      painted background past the line-box and overlaps neighboring lines on
      iOS Safari (Korean fonts fill the full line-height). */
@@ -1971,18 +1979,18 @@ mark.search-highlight {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-top: 1.5rem;
-  padding-top: 1rem;
+  margin-top: var(--space-6);
+  padding-top: var(--space-4);
 }
 
 .search-pagination a {
   color: var(--accent);
   text-decoration: none;
-  font-size: 0.88rem;
-  padding: 0.4rem 0.8rem;
+  font-size: var(--font-sm);
+  padding: var(--space-2) var(--space-4);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  transition: background 0.15s;
+  transition: background var(--duration-fast);
 }
 
 .search-pagination a:hover {
@@ -1992,7 +2000,7 @@ mark.search-highlight {
 }
 
 .search-page-info {
-  font-size: 0.78rem;
+  font-size: var(--font-xs);
   color: var(--text-secondary);
 }
 
@@ -2000,7 +2008,7 @@ mark.search-highlight {
 #app {
   max-width: var(--max-width);
   margin: 0 auto;
-  padding: 2rem 1rem 1rem;
+  padding: var(--space-8) var(--space-4) var(--space-4);
 }
 
 /* ── Resume Banner ── */
@@ -2009,7 +2017,7 @@ mark.search-highlight {
   z-index: 10; /* above #app-header::before gradient (z-index: 9) */
   max-width: var(--max-width);
   margin: 0 auto;
-  padding: 0 1rem;
+  padding: 0 var(--space-4);
 }
 
 .resume-banner {
@@ -2024,16 +2032,16 @@ mark.search-highlight {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   overflow: hidden;
-  transition: opacity 0.15s;
+  transition: opacity var(--duration-fast);
   box-shadow: var(--shadow-2);
 }
 
 .resume-banner-link {
   flex: 1;
-  padding: 0.7rem 1rem;
+  padding: var(--space-3) var(--space-4);
   color: var(--text);
   text-decoration: none;
-  font-size: 0.9rem;
+  font-size: var(--font-base);
   text-align: center;
 }
 
@@ -2059,9 +2067,9 @@ mark.search-highlight {
   border-left: 1px solid var(--border);
   background: transparent;
   color: var(--text-secondary);
-  font-size: 1.1rem;
+  font-size: var(--font-lg);
   cursor: pointer;
-  padding: 0.7rem 0;
+  padding: var(--space-3) 0;
   flex-shrink: 0;
 }
 
@@ -2079,7 +2087,7 @@ mark.search-highlight {
 #division-tabs-slot {
   max-width: var(--max-width);
   margin: 0 auto;
-  padding: 0 1rem;
+  padding: 0 var(--space-4);
 }
 
 #division-tabs-slot:empty {
@@ -2115,7 +2123,7 @@ mark.search-highlight {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.08);
   box-sizing: border-box;
   pointer-events: none;
-  transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: transform var(--duration-base) var(--ease-standard);
 }
 
 /* Dark theme: nudge the chip a touch lighter than the track so it still reads as
@@ -2137,13 +2145,13 @@ mark.search-highlight {
   flex: 1 1 0;
   min-width: 0;
   text-align: center;
-  padding: 0.6rem 0.4rem;
-  font-size: 0.92rem;
+  padding: var(--space-3) var(--space-2);
+  font-size: var(--font-base);
   font-weight: 600;
   color: var(--text-secondary);
   text-decoration: none;
   white-space: nowrap;
-  transition: color 0.15s;
+  transition: color var(--duration-fast);
 }
 
 .division-tab:hover,
@@ -2180,7 +2188,7 @@ mark.search-highlight {
   list-style: none;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(8rem, 1fr));
-  gap: 0.4rem;
+  gap: var(--space-2);
 }
 
 .book-list a {
@@ -2189,15 +2197,15 @@ mark.search-highlight {
   justify-content: center;
   text-align: center;
   height: 100%;
-  padding: 0.5rem 0.7rem;
+  padding: var(--space-2) var(--space-3);
   word-break: keep-all;
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   text-decoration: none;
   color: var(--text);
-  font-size: 0.88rem;
-  transition: background 0.15s;
+  font-size: var(--font-sm);
+  transition: background var(--duration-fast);
 }
 
 .book-list a:hover,
@@ -2225,8 +2233,8 @@ mark.search-highlight {
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(3.2rem, 1fr));
-  gap: 0.4rem;
-  margin-top: 0.8rem;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
 }
 
 .chapter-grid a {
@@ -2239,8 +2247,8 @@ mark.search-highlight {
   border-radius: var(--radius);
   text-decoration: none;
   color: var(--text);
-  font-size: 0.9rem;
-  transition: background 0.15s;
+  font-size: var(--font-base);
+  transition: background var(--duration-fast);
 }
 
 .chapter-grid a:hover,
@@ -2253,8 +2261,8 @@ mark.search-highlight {
 .prologue-link {
   grid-column: 1 / -1;
   aspect-ratio: auto !important;
-  padding: 0.5rem;
-  font-size: 0.85rem;
+  padding: var(--space-2);
+  font-size: var(--font-sm);
   color: var(--accent) !important;
   border-style: solid !important;
 }
@@ -2266,8 +2274,8 @@ mark.search-highlight {
 
 /* ── Chapter View (verses) ── */
 .chapter-text {
-  font-size: 1rem;
-  line-height: 2;
+  font-size: var(--font-md);
+  line-height: var(--leading-loose);
 }
 
 .verse {
@@ -2289,6 +2297,9 @@ mark.search-highlight {
 
 .verse.verse-poetry {
   display: block;
+  /* 8pt 그리드가 아니라 .verse-num 의 hanging gutter(width:2rem · margin-left:-2rem)에
+     결합된 값 — 절 번호와 본문이 같은 거터를 공유하고 큰 폰트에서 rem 으로 함께 스케일하도록
+     의도적으로 2rem 유지(토큰 스냅 제외). */
   padding-left: 2rem;
 }
 
@@ -2311,7 +2322,7 @@ mark.search-highlight {
 
 .verse-num {
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
-  font-size: 0.7rem;
+  font-size: var(--font-2xs);
   font-weight: 400;
   color: var(--theme);
   vertical-align: super;
@@ -2346,6 +2357,8 @@ mark.search-highlight {
 
 /* Dual numbering (alt_ref) */
 .alt-ref {
+  /* 의도적으로 --font 스케일 floor(--font-2xs 0.7rem) 아래 — 자신이 주석하는
+     주 절 번호(.verse-num = --font-2xs)보다 작게 두어 종속 관계를 표현(스냅 예외). */
   font-size: 0.6rem;
   color: var(--accent-light);
   margin-left: 0.1em;
@@ -2353,10 +2366,10 @@ mark.search-highlight {
 
 .dual-numbering-note {
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
-  font-size: 0.78rem;
+  font-size: var(--font-xs);
   color: var(--text-secondary);
-  margin-bottom: 0.8rem;
-  padding: 0.4rem 0;
+  margin-bottom: var(--space-4);
+  padding: var(--space-2) 0;
   background: var(--bg);
 }
 
@@ -2383,7 +2396,7 @@ body.cites-shown .cite-chip {
   border: none;
   border-radius: 3px;
   cursor: pointer;
-  line-height: 1.3;
+  line-height: var(--leading-tight);
   vertical-align: baseline;
 }
 
@@ -2401,6 +2414,7 @@ body.cites-shown .cite-chip--poetry {
   display: block;
   margin-left: 0;
   margin-top: 0.2em;
+  /* .verse.verse-poetry 와 동일하게 2rem (거터 결합값, 토큰 스냅 제외). */
   padding-left: 2rem;
   text-align: left;
 }
@@ -2532,15 +2546,15 @@ body.cites-shown .note-anchor--variant:focus-visible {
 #note-tooltip {
   position: fixed;
   z-index: 15;
-  padding: 0.6rem 0.8rem;
+  padding: var(--space-3) var(--space-4);
   background: var(--bg-card);
   color: var(--text);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius);
   box-shadow: 0 4px 18px rgba(0, 0, 0, 0.18);
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
-  font-size: 0.88rem;
-  line-height: 1.55;
+  font-size: var(--font-sm);
+  line-height: var(--leading-normal);
   animation: note-tooltip-fade-in 160ms ease-out;
 }
 
@@ -2606,7 +2620,7 @@ body.cites-shown .note-anchor--variant:focus-visible {
     max-width: none;
     height: 95vh;
     max-height: none;
-    border-radius: 16px 0 0 16px;
+    border-radius: var(--radius-xl) 0 0 var(--radius-xl);
     box-shadow: -4px 0 24px rgba(0, 0, 0, 0.15);
     padding-bottom: 0;
   }
@@ -2619,7 +2633,7 @@ body.cites-shown .note-anchor--variant:focus-visible {
   display: flex;
   justify-content: center;
   align-items: center;
-  padding: 0.6rem 0;
+  padding: var(--space-3) 0;
   cursor: ns-resize;
   touch-action: none;
 }
@@ -2657,7 +2671,7 @@ body.cites-shown .note-anchor--variant:focus-visible {
     height: 2.2rem;
     background: var(--border);
     border-radius: 2px;
-    transition: background 0.15s;
+    transition: background var(--duration-fast);
   }
 
   #cite-sheet-resize:hover::after {
@@ -2676,15 +2690,15 @@ body.cites-shown .note-anchor--variant:focus-visible {
 #cite-sheet-header {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.6rem 1rem;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
   border-bottom: 1px solid var(--border);
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
 }
 
 #cite-sheet-title {
   margin: 0;
-  font-size: 0.95rem;
+  font-size: var(--font-base);
   font-weight: 600;
   color: var(--text);
   flex: 1;
@@ -2695,15 +2709,19 @@ body.cites-shown .note-anchor--variant:focus-visible {
 }
 
 #cite-sheet-close {
-  font-size: 1.4rem;
+  font-size: var(--font-xl);
   line-height: 1;
-  width: 2rem;
-  height: 2rem;
+  /* Match #cite-sheet-back's 2.45rem so the always-visible close button fixes
+     the header height — the back button toggling in/out no longer changes it.
+     Also meets the HIG 44px touch target. */
+  width: var(--icon-btn-touch);
+  height: var(--icon-btn-touch);
+  flex-shrink: 0;
   border: none;
   background: transparent;
   cursor: pointer;
   color: var(--text-secondary);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
 }
 
 #cite-sheet-close:hover,
@@ -2719,14 +2737,14 @@ body.cites-shown .note-anchor--variant:focus-visible {
   align-items: center;
   justify-content: center;
   /* HIG 최소 탭 영역 44px — .title-back-btn 와 동일하게 2.45rem (≈44px @ 18px root) */
-  width: 2.45rem;
-  height: 2.45rem;
+  width: var(--icon-btn-touch);
+  height: var(--icon-btn-touch);
   padding: 0;
   color: var(--accent);
   background: none;
   border: none;
   cursor: pointer;
-  transition: opacity 0.15s;
+  transition: opacity var(--duration-fast);
 }
 
 #cite-sheet-back:active {
@@ -2743,7 +2761,7 @@ body.cites-shown .note-anchor--variant:focus-visible {
 #cite-sheet-body {
   flex: 1;
   overflow-y: auto;
-  padding: 1rem;
+  padding: var(--space-4);
   color: var(--text);
 }
 
@@ -2753,8 +2771,8 @@ body.cites-shown .note-anchor--variant:focus-visible {
 .cite-sheet-ref-header {
   display: flex;
   align-items: baseline;
-  gap: 0.6rem;
-  margin: 0 0 0.5rem;
+  gap: var(--space-3);
+  margin: 0 0 var(--space-2);
 }
 
 .cite-sheet-ref-title {
@@ -2765,21 +2783,21 @@ body.cites-shown .note-anchor--variant:focus-visible {
   text-overflow: ellipsis;
   white-space: nowrap;
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
-  font-size: 0.85rem;
+  font-size: var(--font-sm);
   font-weight: 600;
   color: var(--accent);
 }
 
 .cite-sheet-ref-expand {
   flex-shrink: 0;
-  padding: 0.15rem 0.3rem;
+  padding: var(--space-0_5) var(--space-1);
   background: transparent;
   border: none;
   cursor: pointer;
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
-  font-size: 0.82rem;
+  font-size: var(--font-sm);
   color: var(--accent);
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
 }
 
 .cite-sheet-ref-expand:hover,
@@ -2798,21 +2816,21 @@ body.cites-shown .note-anchor--variant:focus-visible {
 .cite-sheet-divider {
   border: none;
   border-top: 2px solid var(--border);
-  margin: 1rem 0;
+  margin: var(--space-4) 0;
 }
 
 .cite-sheet-chapter-divider {
   border: none;
   border-top: 1px dashed var(--border);
-  margin: 0.6rem 0;
+  margin: var(--space-3) 0;
 }
 
 .cite-sheet-error,
 .cite-sheet-loading {
-  margin: 0.5rem 0;
+  margin: var(--space-2) 0;
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
   color: var(--text-secondary);
-  font-size: 0.85rem;
+  font-size: var(--font-sm);
 }
 
 /* ── First-use coachmark for cite chips ─────────────────────────────────── */
@@ -2825,17 +2843,17 @@ body.cites-shown .note-anchor--variant:focus-visible {
   z-index: 70;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--space-2);
   max-width: min(96vw, 34rem);
-  padding: 0.65rem 0.4rem 0.65rem 0.85rem;
+  padding: var(--space-3) var(--space-2) var(--space-3) var(--space-4);
   background: var(--bg-card);
   color: var(--text);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   box-shadow: 0 4px 18px rgba(0, 0, 0, 0.16);
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
-  font-size: 0.85rem;
-  line-height: 1.5;
+  font-size: var(--font-sm);
+  line-height: var(--leading-snug);
   animation: cite-coachmark-fade-in 220ms ease-out;
 }
 
@@ -2854,13 +2872,13 @@ body.cites-shown .note-anchor--variant:focus-visible {
   width: 1.8rem;
   height: 1.8rem;
   padding: 0;
-  font-size: 1.3rem;
+  font-size: var(--font-xl);
   line-height: 1;
   background: transparent;
   border: none;
   color: var(--text-secondary);
   cursor: pointer;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
 }
 
 .cite-coachmark-close:hover,
@@ -2887,8 +2905,8 @@ html.cite-sheet-open {
 
 /* ── Prologue ── */
 .prologue-text {
-  font-size: 0.95rem;
-  line-height: 2;
+  font-size: var(--font-base);
+  line-height: var(--leading-loose);
 }
 
 .prologue-text p {
@@ -2902,18 +2920,18 @@ html.cite-sheet-open {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-top: 2rem;
-  padding-top: 1rem;
+  margin-top: var(--space-8);
+  padding-top: var(--space-4);
 }
 
 .chapter-nav a {
   color: var(--accent);
   text-decoration: none;
-  font-size: 0.88rem;
-  padding: 0.4rem 0.8rem;
+  font-size: var(--font-sm);
+  padding: var(--space-2) var(--space-4);
   border: none;
   border-radius: var(--radius);
-  transition: background 0.15s;
+  transition: background var(--duration-fast);
 }
 
 .chapter-nav a:hover {
@@ -2928,7 +2946,7 @@ html.cite-sheet-open {
 /* ── Settings about row ── */
 .color-swatches {
   display: flex;
-  gap: 0.4rem;
+  gap: var(--space-2);
   align-items: center;
 }
 
@@ -2941,7 +2959,7 @@ html.cite-sheet-open {
   outline: 2px solid transparent;
   outline-offset: 1px;
   cursor: pointer;
-  transition: transform 0.1s, outline-color 0.15s;
+  transition: transform var(--duration-instant), outline-color var(--duration-fast);
   padding: 0;
 }
 
@@ -2962,12 +2980,12 @@ html.cite-sheet-open {
 
 .cache-clear-btn {
   font-family: inherit;
-  font-size: 0.8rem;
+  font-size: var(--font-xs);
   font-weight: 500;
   color: #c0392b;
   background: none;
   border: 1px solid #e6a9a4;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   padding: 0 0.8em;
   height: 28px;
   /* settings-action-btn 과 동일 너비 (8em) — 같은 행 위치의 액션 버튼끼리 정렬. */
@@ -2979,7 +2997,7 @@ html.cite-sheet-open {
   gap: 0.3em;
   line-height: 1;
   white-space: nowrap;
-  transition: background 0.15s, color 0.15s;
+  transition: background var(--duration-fast), color var(--duration-fast);
 }
 
 .warn-icon {
@@ -3007,12 +3025,12 @@ html.cite-sheet-open {
 
 .settings-about {
   border-top: 1px solid var(--border);
-  margin-top: 0.5rem;
-  padding-top: 0.5rem;
-  font-size: 0.65rem;
+  margin-top: var(--space-2);
+  padding-top: var(--space-2);
+  font-size: var(--font-2xs);
   color: var(--text-secondary);
   white-space: normal;
-  line-height: 1.4;
+  line-height: var(--leading-snug);
   text-align: center;
   font-family: sans-serif;
 }
@@ -3055,7 +3073,7 @@ html.cite-sheet-open {
    @media (display-mode: browser) because Safari reports browser mode even in
    standalone PWA (WebKit bug — see install.js isStandalone() fallback). */
 [data-display-mode="browser"] #audio-bar {
-  padding-bottom: 0.75rem;
+  padding-bottom: var(--space-3);
 }
 
 #audio-bar::before {
@@ -3075,7 +3093,7 @@ html.cite-sheet-open {
 .audio-player {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--space-3);
 }
 
 /* Play/pause button — CSS icons, no unicode glyphs */
@@ -3094,7 +3112,7 @@ html.cite-sheet-open {
   align-items: center;
   justify-content: center;
   padding: 0;
-  transition: transform 0.1s ease, box-shadow 0.15s ease;
+  transition: transform var(--duration-instant) ease, box-shadow var(--duration-fast) ease;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
 }
 
@@ -3115,7 +3133,7 @@ html.cite-sheet-open {
   border-style: solid;
   border-width: 0.4rem 0 0.4rem 0.7rem;
   border-color: transparent transparent transparent var(--bg);
-  margin-left: 0.15rem;
+  margin-left: var(--space-0_5);
 }
 
 /* Pause bars */
@@ -3154,7 +3172,7 @@ html.cite-sheet-open {
   flex: 1;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--space-2);
 }
 
 .audio-progress {
@@ -3167,7 +3185,7 @@ html.cite-sheet-open {
   border-radius: 1.5px;
   outline: none;
   cursor: pointer;
-  transition: height 0.15s ease;
+  transition: height var(--duration-fast) ease;
 }
 
 .audio-progress:hover {
@@ -3182,7 +3200,7 @@ html.cite-sheet-open {
   background: var(--theme);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--theme) 20%, transparent);
   cursor: pointer;
-  transition: box-shadow 0.15s ease;
+  transition: box-shadow var(--duration-fast) ease;
 }
 
 .audio-progress:hover::-webkit-slider-thumb {
@@ -3206,7 +3224,7 @@ html.cite-sheet-open {
 }
 
 .audio-time {
-  font-size: 0.68rem;
+  font-size: var(--font-2xs);
   color: var(--text-secondary);
   min-width: 6.5em;
   text-align: right;
@@ -3218,15 +3236,15 @@ html.cite-sheet-open {
   flex-shrink: 0;
   width: 3rem;
   text-align: center;
-  padding: 0.15rem 0;
+  padding: var(--space-0_5) 0;
   border: 1px solid var(--theme);
-  border-radius: 0.3rem;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--theme);
-  font-size: 0.72rem;
+  font-size: var(--font-2xs);
   font-variant-numeric: tabular-nums;
   cursor: pointer;
-  transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
+  transition: color var(--duration-fast) ease, border-color var(--duration-fast) ease, background-color var(--duration-fast) ease;
 }
 
 .audio-speed-btn:hover {
@@ -3242,7 +3260,7 @@ html.cite-sheet-open {
   gap: 0.4em;
   min-height: 2.4rem;
   margin: 0;
-  font-size: 0.75rem;
+  font-size: var(--font-xs);
   color: var(--text-secondary);
 }
 
@@ -3264,16 +3282,16 @@ html.cite-sheet-open {
 .loading {
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
   text-align: center;
-  padding: 3rem 1rem;
+  padding: 3rem var(--space-4);
   color: var(--text-secondary);
-  font-size: 0.9rem;
+  font-size: var(--font-base);
 }
 
 .error {
   text-align: center;
-  padding: 3rem 1rem;
+  padding: 3rem var(--space-4);
   color: #a33;
-  font-size: 0.9rem;
+  font-size: var(--font-base);
 }
 
 /* ── Focus ── */
@@ -3333,8 +3351,8 @@ html.cite-sheet-open {
   }
 
   .book-list a {
-    font-size: 0.82rem;
-    padding: 0.4rem 0.4rem;
+    font-size: var(--font-sm);
+    padding: var(--space-2) var(--space-2);
   }
 
   .chapter-grid {
@@ -3363,11 +3381,11 @@ html.cite-sheet-open {
 }
 
 #launch-screen.fade-out {
-  animation: launch-screen-out 2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  animation: launch-screen-out 2s var(--ease-standard) forwards;
 }
 
 #launch-screen.fade-out svg {
-  animation: launch-screen-out 2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  animation: launch-screen-out 2s var(--ease-standard) forwards;
 }
 
 @keyframes launch-screen-out {
@@ -3397,16 +3415,16 @@ html.cite-sheet-open {
   flex-wrap: wrap;
   justify-content: center;
   align-items: center;
-  gap: 0.5rem 0.75rem;
-  padding: 0.75rem 1rem;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-3) var(--space-4);
   max-width: calc(100vw - 2rem);
   background: var(--bg-card);
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  font-size: 0.9rem;
-  animation: toast-in 0.3s ease-out;
+  font-size: var(--font-base);
+  animation: toast-in var(--duration-base) ease-out;
 }
 
 #sw-update-toast > span {
@@ -3421,12 +3439,12 @@ html.cite-sheet-open {
 }
 
 #sw-update-btn {
-  padding: 0.35rem 0.75rem;
+  padding: var(--space-2) var(--space-3);
   background: var(--accent);
   color: var(--bg);
   border: none;
   border-radius: var(--radius);
-  font-size: 0.85rem;
+  font-size: var(--font-sm);
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
@@ -3439,7 +3457,7 @@ html.cite-sheet-open {
 
 /* ── Search Reference Match Card ── */
 .ref-match-item {
-  margin-bottom: 1rem;
+  margin-bottom: var(--space-4);
   border-bottom: 2px solid var(--border) !important;
 }
 
@@ -3447,12 +3465,12 @@ html.cite-sheet-open {
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
   display: flex !important;
   flex-direction: column;
-  padding: 1rem !important;
+  padding: var(--space-4) !important;
   background: var(--bg-card);
   border: 1px solid var(--accent);
   border-radius: var(--radius);
   text-decoration: none;
-  transition: transform 0.15s ease, box-shadow 0.15s ease !important;
+  transition: transform var(--duration-fast) ease, box-shadow var(--duration-fast) ease !important;
 }
 
 .search-result-ref-card:hover {
@@ -3467,15 +3485,15 @@ html.cite-sheet-open {
 }
 
 .search-result-ref-label {
-  font-size: 0.7rem;
+  font-size: var(--font-2xs);
   font-weight: 700;
   text-transform: uppercase;
   color: var(--accent);
-  margin-bottom: 0.25rem;
+  margin-bottom: var(--space-1);
 }
 
 .search-result-ref-title {
-  font-size: 1.1rem;
+  font-size: var(--font-lg);
   font-weight: 700;
   color: var(--text);
 }
@@ -3492,8 +3510,8 @@ html.cite-sheet-open {
   top: 50%;
   transform: translateY(-50%);
   /* HIG 최소 탭 영역 44px (2.45rem ≈ 44px @ 18px root) — .title-back-btn 와 동일 */
-  width: 2.45rem;
-  height: 2.45rem;
+  width: var(--icon-btn-touch);
+  height: var(--icon-btn-touch);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3501,7 +3519,7 @@ html.cite-sheet-open {
   border: none;
   cursor: pointer;
   color: var(--accent);
-  transition: opacity 0.15s;
+  transition: opacity var(--duration-fast);
   padding: 0;
 }
 
@@ -3570,12 +3588,12 @@ body.verse-select-active #search-fab {
    shadows paint outside the line-box without affecting reflow. */
 body.verse-select-active .verse[data-vref] {
   cursor: pointer;
-  transition: background 0.1s;
+  transition: background var(--duration-instant);
 }
 
 body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   background: color-mix(in srgb, var(--accent) 10%, transparent);
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
 }
 
 /* Use an opaque color (the 20% accent pre-mixed with --bg) rather than a
@@ -3588,7 +3606,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 .verse.verse-selected {
   --selected-bg: color-mix(in srgb, var(--accent) 20%, var(--bg));
   background: var(--selected-bg) !important;
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
 }
 
 /* Extend the highlight 0.15em on each side without affecting inline layout.
@@ -3660,7 +3678,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   border-top: none;
   padding: 0.65rem 1.25rem max(0.75rem, env(safe-area-inset-bottom));
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--space-3);
 }
 
 #verse-select-bar::before {
@@ -3679,20 +3697,20 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 
 #verse-select-count {
   flex: 1;
-  font-size: 0.88rem;
+  font-size: var(--font-sm);
   color: var(--text-secondary);
 }
 
 #verse-select-bookmark-btn {
-  padding: 0.45rem 1.1rem;
+  padding: var(--space-2) var(--space-5);
   background: var(--accent);
   color: var(--bg);
   border: none;
   border-radius: var(--radius);
   font-family: inherit;
-  font-size: 0.9rem;
+  font-size: var(--font-base);
   cursor: pointer;
-  transition: opacity 0.15s;
+  transition: opacity var(--duration-fast);
 }
 
 #verse-select-bookmark-btn:disabled {
@@ -3701,15 +3719,15 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 }
 
 #verse-select-copy-btn {
-  padding: 0.45rem 0.9rem;
+  padding: var(--space-2) var(--space-4);
   background: none;
   border: 1px solid var(--accent);
   border-radius: var(--radius);
   font-family: inherit;
-  font-size: 0.9rem;
+  font-size: var(--font-base);
   cursor: pointer;
   color: var(--accent);
-  transition: background 0.15s, opacity 0.15s;
+  transition: background var(--duration-fast), opacity var(--duration-fast);
 }
 
 #verse-select-copy-btn:hover {
@@ -3722,15 +3740,15 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 }
 
 #verse-select-cancel-btn {
-  padding: 0.45rem 0.8rem;
+  padding: var(--space-2) var(--space-4);
   background: none;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   font-family: inherit;
-  font-size: 0.9rem;
+  font-size: var(--font-base);
   cursor: pointer;
   color: var(--text-secondary);
-  transition: background 0.15s;
+  transition: background var(--duration-fast);
 }
 
 #verse-select-cancel-btn:hover {
@@ -3749,7 +3767,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 
 #bookmark-scrim:not([hidden]) {
   display: block;
-  animation: bm-scrim-in 0.25s ease both;
+  animation: bm-scrim-in var(--duration-base) ease both;
 }
 
 @keyframes bm-scrim-in {
@@ -3769,7 +3787,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   max-height: 85vh;
   z-index: 71;
   background: var(--bg);
-  border-radius: 16px 16px 0 0;
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
   box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.15);
   flex-direction: column;
   overflow: hidden;
@@ -3777,12 +3795,12 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 
 #bookmark-drawer:not([hidden]):not(.drawer-closing) {
   display: flex;
-  animation: bm-drawer-in-up 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+  animation: bm-drawer-in-up var(--duration-base) cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
 }
 
 #bookmark-drawer.drawer-closing {
   display: flex;
-  animation: bm-drawer-out-down 0.22s ease-in both;
+  animation: bm-drawer-out-down var(--duration-base) ease-in both;
   pointer-events: none;
 }
 
@@ -3806,7 +3824,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
     width: min(360px, 90vw);
     height: 95vh;
     max-height: none;
-    border-radius: 16px 0 0 16px;
+    border-radius: var(--radius-xl) 0 0 var(--radius-xl);
     box-shadow: -4px 0 24px rgba(0, 0, 0, 0.15);
   }
 
@@ -3829,14 +3847,14 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   }
 
   #bookmark-drawer-header {
-    padding-top: 0.9rem;
+    padding-top: var(--space-4);
   }
 }
 
 #bookmark-drawer-handle {
   display: flex;
   justify-content: center;
-  padding: 0.5rem 0 0.3rem;
+  padding: var(--space-2) 0 var(--space-1);
   cursor: grab;
   touch-action: none;
   flex-shrink: 0;
@@ -3881,7 +3899,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
     height: 2.2rem;
     background: var(--border);
     border-radius: 2px;
-    transition: background 0.15s;
+    transition: background var(--duration-fast);
   }
 
   #bookmark-drawer-resize:hover::after {
@@ -3893,12 +3911,12 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.3rem 0.75rem 0.3rem 1rem;
+  padding: var(--space-1) var(--space-3) var(--space-1) var(--space-4);
   flex-shrink: 0;
 }
 
 #bookmark-drawer-title {
-  font-size: 0.88rem;
+  font-size: var(--font-sm);
   font-weight: 600;
   color: var(--text-secondary);
   margin: 0;
@@ -3911,12 +3929,12 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   border: none;
   cursor: pointer;
   color: var(--text-secondary);
-  font-size: 1.3rem;
+  font-size: var(--font-xl);
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 4px;
-  transition: color 0.15s;
+  border-radius: var(--radius-xs);
+  transition: color var(--duration-fast);
   padding: 0;
 }
 
@@ -3926,7 +3944,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 
 #bookmark-drawer-toolbar {
   display: flex;
-  gap: 0.25rem;
+  gap: var(--space-1);
   padding: 0.5rem 0.75rem max(0.75rem, env(safe-area-inset-bottom, 0px));
   flex-shrink: 0;
   justify-content: flex-end;
@@ -3946,10 +3964,10 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 
 #bm-overflow-panel:not([hidden]) {
   display: flex;
-  gap: 0.25rem;
+  gap: var(--space-1);
   align-items: center;
-  padding-left: 0.4rem;
-  margin-left: 0.15rem;
+  padding-left: var(--space-2);
+  margin-left: var(--space-0_5);
   border-left: 1px solid var(--border);
 }
 
@@ -3977,7 +3995,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   border-radius: var(--radius);
   cursor: pointer;
   color: var(--text-secondary);
-  transition: color 0.15s, background 0.15s;
+  transition: color var(--duration-fast), background var(--duration-fast);
 }
 
 .bm-toolbar-btn:hover {
@@ -3995,18 +4013,18 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 
 .bm-new-folder-form {
   display: flex;
-  gap: 0.4rem;
+  gap: var(--space-2);
   align-items: center;
   width: 100%;
-  padding: 0.3rem 0;
+  padding: var(--space-1) 0;
 }
 
 .bm-new-folder-input {
   flex: 1;
   min-width: 0;
   font-family: inherit;
-  font-size: 0.82rem;
-  padding: 0.28rem 0.5rem;
+  font-size: var(--font-sm);
+  padding: 0.28rem var(--space-2);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg);
@@ -4027,7 +4045,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   flex: 1;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  padding: 0.4rem 0;
+  padding: var(--space-2) 0;
   margin: 0;
   list-style: none;
 }
@@ -4043,18 +4061,18 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 .bm-bookmark-row {
   display: flex;
   align-items: center;
-  padding: 0.3rem 0.75rem;
-  gap: 0.4rem;
+  padding: var(--space-1) var(--space-3);
+  gap: var(--space-2);
   /* Match folder rows to bookmark rows (label 0.88rem + ref 0.72rem,
      line-height 1.8, gap 0.1rem, padding 0.6rem). */
   min-height: 3.58rem;
-  transition: background 0.1s;
+  transition: background var(--duration-instant);
 }
 
 .bm-row-content {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: var(--space-2);
   flex: 1;
   min-width: 0;
 }
@@ -4072,7 +4090,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 .bm-bookmark-row.bm-active {
   background: color-mix(in srgb, var(--accent) 12%, transparent);
   border-radius: var(--radius);
-  margin-right: 0.5rem;
+  margin-right: var(--space-2);
 }
 
 .bm-bookmark-row.bm-active .bm-bookmark-type-icon {
@@ -4096,7 +4114,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 
 .bm-folder-name {
   flex: 1;
-  font-size: 0.88rem;
+  font-size: var(--font-sm);
   color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -4104,7 +4122,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 }
 
 .bm-folder-children {
-  padding-left: 1.8rem;
+  padding-left: var(--space-8);
   margin: 0;
   list-style: none;
 }
@@ -4120,7 +4138,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   color: var(--text);
   display: flex;
   flex-direction: column;
-  gap: 0.1rem;
+  gap: var(--space-0_5);
   min-width: 0;
 }
 
@@ -4134,22 +4152,22 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 }
 
 .bm-bookmark-label {
-  font-size: 0.88rem;
+  font-size: var(--font-sm);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .bm-bookmark-ref {
-  font-size: 0.72rem;
+  font-size: var(--font-2xs);
   color: var(--text-secondary);
 }
 
 .bm-item-actions {
   display: flex;
-  gap: 0.2rem;
+  gap: var(--space-1);
   opacity: 0;
-  transition: opacity 0.15s;
+  transition: opacity var(--duration-fast);
   flex-shrink: 0;
 }
 
@@ -4162,14 +4180,14 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 
 .bm-action-btn {
   font-family: inherit;
-  font-size: 0.7rem;
-  padding: 0.18rem 0.4rem;
+  font-size: var(--font-2xs);
+  padding: 0.18rem var(--space-2);
   background: none;
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   cursor: pointer;
   color: var(--text-secondary);
-  transition: background 0.1s, color 0.1s;
+  transition: background var(--duration-instant), color var(--duration-instant);
   white-space: nowrap;
 }
 
@@ -4186,10 +4204,10 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 }
 
 .bm-empty {
-  padding: 2.5rem 1rem;
+  padding: var(--space-12) var(--space-4);
   text-align: center;
   color: var(--text-secondary);
-  font-size: 0.88rem;
+  font-size: var(--font-sm);
 }
 
 /* ── Save bookmark modal ── */
@@ -4220,7 +4238,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   color: var(--text);
   border-radius: var(--radius-modal);
   box-shadow: var(--shadow-4);
-  padding: 1.25rem 1.25rem 1rem;
+  padding: var(--space-6) var(--space-6) var(--space-4);
 }
 
 #bm-save-modal:not([hidden]) {
@@ -4228,8 +4246,8 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 }
 
 #bm-save-title {
-  margin: 0 2rem 0.85rem 0;
-  font-size: 1.05rem;
+  margin: 0 var(--space-8) var(--space-4) 0;
+  font-size: var(--font-md);
   font-weight: 700;
 }
 
@@ -4240,7 +4258,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   background: transparent;
   border: 0;
   color: var(--text-secondary);
-  font-size: 1.6rem;
+  font-size: var(--font-2xl);
   line-height: 1;
   min-width: 44px;
   min-height: 44px;
@@ -4255,14 +4273,14 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 }
 
 .bm-form-field {
-  margin-bottom: 0.85rem;
+  margin-bottom: var(--space-4);
 }
 
 .bm-form-label {
   display: block;
-  font-size: 0.8rem;
+  font-size: var(--font-xs);
   color: var(--text-secondary);
-  margin-bottom: 0.3rem;
+  margin-bottom: var(--space-1);
 }
 
 .bm-form-input,
@@ -4270,8 +4288,8 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 .bm-form-select {
   width: 100%;
   font-family: inherit;
-  font-size: 0.9rem;
-  padding: 0.5rem 0.7rem;
+  font-size: var(--font-base);
+  padding: var(--space-2) var(--space-3);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg);
@@ -4289,11 +4307,11 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 .bm-folder-combobox-btn {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: var(--space-2);
   width: 100%;
   font-family: inherit;
-  font-size: 0.9rem;
-  padding: 0.45rem 0.6rem;
+  font-size: var(--font-base);
+  padding: var(--space-2) var(--space-3);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg);
@@ -4326,10 +4344,10 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 
 .bm-folder-combobox-chevron {
   flex-shrink: 0;
-  font-size: 0.75rem;
+  font-size: var(--font-xs);
   color: var(--text-secondary);
   margin-left: auto;
-  padding-left: 0.25rem;
+  padding-left: var(--space-1);
 }
 
 .bm-folder-combobox-list {
@@ -4338,8 +4356,8 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   left: 0;
   right: 0;
   top: 100%;
-  margin: 0.2rem 0 0 0;
-  padding: 0.25rem 0;
+  margin: var(--space-1) 0 0 0;
+  padding: var(--space-1) 0;
   list-style: none;
   max-height: 12rem;
   overflow-y: auto;
@@ -4353,9 +4371,9 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 .bm-folder-combobox-option {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  padding: 0.4rem 0.6rem;
-  font-size: 0.9rem;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--font-base);
   color: var(--text);
   cursor: pointer;
 }
@@ -4367,19 +4385,19 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 
 .bm-folder-combobox-new {
   list-style: none;
-  margin-top: 0.25rem;
-  padding-top: 0.25rem;
+  margin-top: var(--space-1);
+  padding-top: var(--space-1);
   border-top: 1px solid var(--border);
 }
 
 .bm-folder-combobox-new-btn {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: var(--space-2);
   width: 100%;
-  padding: 0.4rem 0.6rem;
+  padding: var(--space-2) var(--space-3);
   font-family: inherit;
-  font-size: 0.9rem;
+  font-size: var(--font-base);
   background: transparent;
   border: 0;
   color: var(--accent);
@@ -4415,21 +4433,21 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 
 .bm-form-actions {
   display: flex;
-  gap: 0.5rem;
+  gap: var(--space-2);
   justify-content: flex-end;
-  margin-top: 1rem;
+  margin-top: var(--space-4);
 }
 
 .bm-btn-primary {
-  padding: 0.5rem 1.1rem;
+  padding: var(--space-2) var(--space-5);
   background: var(--accent);
   color: var(--bg);
   border: none;
   border-radius: var(--radius);
   font-family: inherit;
-  font-size: 0.9rem;
+  font-size: var(--font-base);
   cursor: pointer;
-  transition: opacity 0.15s;
+  transition: opacity var(--duration-fast);
 }
 
 .bm-btn-primary:hover {
@@ -4437,15 +4455,15 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 }
 
 .bm-btn-secondary {
-  padding: 0.5rem 1.1rem;
+  padding: var(--space-2) var(--space-5);
   background: none;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   font-family: inherit;
-  font-size: 0.9rem;
+  font-size: var(--font-base);
   cursor: pointer;
   color: var(--text-secondary);
-  transition: background 0.15s;
+  transition: background var(--duration-fast);
 }
 
 .bm-btn-secondary:hover {
@@ -4479,7 +4497,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   color: var(--text);
   border-radius: var(--radius-modal);
   box-shadow: var(--shadow-4);
-  padding: 1.25rem 1.25rem 1rem;
+  padding: var(--space-6) var(--space-6) var(--space-4);
 }
 
 #bm-new-folder-modal:not([hidden]) {
@@ -4487,8 +4505,8 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 }
 
 #bm-new-folder-title {
-  margin: 0 2rem 0.85rem 0;
-  font-size: 1.05rem;
+  margin: 0 var(--space-8) var(--space-4) 0;
+  font-size: var(--font-md);
   font-weight: 700;
 }
 
@@ -4499,7 +4517,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   background: transparent;
   border: 0;
   color: var(--text-secondary);
-  font-size: 1.6rem;
+  font-size: var(--font-2xl);
   line-height: 1;
   min-width: 44px;
   min-height: 44px;
@@ -4540,7 +4558,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   color: var(--text);
   border-radius: var(--radius-modal);
   box-shadow: var(--shadow-4);
-  padding: 1.25rem;
+  padding: var(--space-6);
 }
 
 #bm-merge-modal:not([hidden]) {
@@ -4548,37 +4566,37 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 }
 
 #bm-merge-title {
-  font-size: 1rem;
+  font-size: var(--font-md);
   font-weight: 700;
-  margin: 0 0 0.6rem;
+  margin: 0 0 var(--space-3);
 }
 
 #bm-merge-body {
-  font-size: 0.88rem;
-  margin: 0 0 1rem;
+  font-size: var(--font-sm);
+  margin: 0 0 var(--space-4);
   color: var(--text-secondary);
-  line-height: 1.5;
+  line-height: var(--leading-snug);
 }
 
 .bm-merge-desc {
-  margin: 0 0 0.75rem;
+  margin: 0 0 var(--space-3);
 }
 
 .bm-merge-radio-group {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
-  margin-bottom: 0.25rem;
+  gap: var(--space-2);
+  margin-bottom: var(--space-1);
 }
 
 .bm-merge-radio {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.35rem 0.5rem;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-2);
   border-radius: var(--radius);
   cursor: pointer;
-  font-size: 0.88rem;
+  font-size: var(--font-sm);
   color: var(--text);
 }
 
@@ -4593,40 +4611,40 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 
 #bm-merge-actions {
   display: flex;
-  gap: 0.5rem;
+  gap: var(--space-2);
   flex-wrap: wrap;
   justify-content: flex-end;
 }
 
 #bm-merge-yes {
-  padding: 0.45rem 0.9rem;
+  padding: var(--space-2) var(--space-4);
   background: var(--accent);
   color: var(--bg);
   border: none;
   border-radius: var(--radius);
   font-family: inherit;
-  font-size: 0.88rem;
+  font-size: var(--font-sm);
   cursor: pointer;
 }
 
 #bm-merge-no {
-  padding: 0.45rem 0.9rem;
+  padding: var(--space-2) var(--space-4);
   background: none;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   font-family: inherit;
-  font-size: 0.88rem;
+  font-size: var(--font-sm);
   cursor: pointer;
   color: var(--text);
 }
 
 #bm-merge-cancel {
-  padding: 0.45rem 0.9rem;
+  padding: var(--space-2) var(--space-4);
   background: none;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   font-family: inherit;
-  font-size: 0.88rem;
+  font-size: var(--font-sm);
   cursor: pointer;
   color: var(--text-secondary);
 }
@@ -4658,7 +4676,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   color: var(--text);
   border-radius: var(--radius-modal);
   box-shadow: var(--shadow-4);
-  padding: 1.25rem;
+  padding: var(--space-6);
 }
 
 #bm-import-modal:not([hidden]) {
@@ -4666,32 +4684,32 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 }
 
 #bm-import-title {
-  font-size: 1rem;
+  font-size: var(--font-md);
   font-weight: 700;
-  margin: 0 0 0.6rem;
+  margin: 0 0 var(--space-3);
 }
 
 #bm-import-body {
-  font-size: 0.88rem;
-  margin: 0 0 1rem;
+  font-size: var(--font-sm);
+  margin: 0 0 var(--space-4);
   color: var(--text-secondary);
-  line-height: 1.5;
+  line-height: var(--leading-snug);
 }
 
 #bm-import-actions {
   display: flex;
-  gap: 0.5rem;
+  gap: var(--space-2);
   flex-wrap: wrap;
   justify-content: flex-end;
 }
 
 #bm-import-merge {
-  padding: 0.45rem 0.9rem;
+  padding: var(--space-2) var(--space-4);
   background: var(--accent);
   color: var(--bg);
   border: none;
   border-radius: var(--radius);
-  font-size: 0.88rem;
+  font-size: var(--font-sm);
   font-weight: 600;
   cursor: pointer;
 }
@@ -4702,11 +4720,11 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 
 #bm-import-overwrite,
 #bm-import-cancel {
-  padding: 0.45rem 0.9rem;
+  padding: var(--space-2) var(--space-4);
   background: none;
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  font-size: 0.88rem;
+  font-size: var(--font-sm);
   color: var(--text);
   cursor: pointer;
 }
@@ -4802,7 +4820,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   }
 
   .bm-row-content {
-    padding: 0.3rem 0.75rem;
+    padding: var(--space-1) var(--space-3);
     background: var(--bg);
     position: relative;
     z-index: 0;
@@ -4836,7 +4854,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
     width: 140px;
     z-index: 1;
     transform: translateX(100%);
-    transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    transition: transform var(--duration-base) cubic-bezier(0.25, 0.46, 0.45, 0.94);
     will-change: transform;
   }
 
@@ -4855,7 +4873,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
     flex: 1;
     border: none;
     font-family: inherit;
-    font-size: 0.85rem;
+    font-size: var(--font-sm);
     color: #fff;
     cursor: pointer;
     padding: 0;
