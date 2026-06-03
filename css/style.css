@@ -127,6 +127,10 @@
   --control-h: 36px;
   --control-h-sm: 28px;
   --icon-btn: 40px;
+  /* 헤더 아이콘 버튼 박스 — 기본 폰트(18px)에서 ≈44px 로 HIG 탭 영역을 충족하고
+     큰 폰트에서는 rem 으로 함께 커진다(§8). 고정 px --touch-target 과 달리 rem
+     스케일. .title-back-btn·.title-bookmark-btn·#cite-sheet-back·#cite-sheet-close 공유. */
+  --icon-btn-touch: 2.45rem;
 
   /* ── Motion ── */
   --duration-fast: 0.18s;
@@ -855,8 +859,8 @@ body {
   justify-content: center;
   /* HIG 최소 탭 영역 44px — 2.45rem 은 기본 폰트(18px)에서 ≈44px 로
      --touch-target 을 충족하면서, 큰 폰트에서는 rem 으로 함께 커진다. */
-  width: 2.45rem;
-  height: 2.45rem;
+  width: var(--icon-btn-touch);
+  height: var(--icon-btn-touch);
   padding: 0;
   color: var(--accent);
   background: none;
@@ -2700,8 +2704,8 @@ body.cites-shown .note-anchor--variant:focus-visible {
   /* Match #cite-sheet-back's 2.45rem so the always-visible close button fixes
      the header height — the back button toggling in/out no longer changes it.
      Also meets the HIG 44px touch target. */
-  width: 2.45rem;
-  height: 2.45rem;
+  width: var(--icon-btn-touch);
+  height: var(--icon-btn-touch);
   flex-shrink: 0;
   border: none;
   background: transparent;
@@ -2723,8 +2727,8 @@ body.cites-shown .note-anchor--variant:focus-visible {
   align-items: center;
   justify-content: center;
   /* HIG 최소 탭 영역 44px — .title-back-btn 와 동일하게 2.45rem (≈44px @ 18px root) */
-  width: 2.45rem;
-  height: 2.45rem;
+  width: var(--icon-btn-touch);
+  height: var(--icon-btn-touch);
   padding: 0;
   color: var(--accent);
   background: none;
@@ -3496,8 +3500,8 @@ html.cite-sheet-open {
   top: 50%;
   transform: translateY(-50%);
   /* HIG 최소 탭 영역 44px (2.45rem ≈ 44px @ 18px root) — .title-back-btn 와 동일 */
-  width: 2.45rem;
-  height: 2.45rem;
+  width: var(--icon-btn-touch);
+  height: var(--icon-btn-touch);
   display: flex;
   align-items: center;
   justify-content: center;
