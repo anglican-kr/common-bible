@@ -79,9 +79,13 @@ function openSearch() {
   // /search 전체뷰로 진입(이미 검색 중이면 생략). route() → syncTabBarActive 가
   // active==='search' 를 보고 exitSearch 를 호출하지 않는다.
   if (W.parsePath?.().view !== "search") W.navigate("/search");
-  // 기존 /search?q=… 위에서 모핑을 열면 in-page bar(쿼리 보유)가 숨겨지므로 현재
-  // 쿼리를 dock 입력으로 복사 — 안 그러면 결과는 남고 보이는 필드만 빈다.
-  $searchInput.value = new URLSearchParams(location.search).get("q") || "";
+  // 모핑을 열면 in-page bar 가 숨겨지므로 그 입력값을 dock 입력으로 옮긴다. in-page
+  // 입력은 URL ?q= 로 초기화되고 사용자가 미제출(Enter 안 누름)로 고친 draft 까지
+  // 담으므로 우선 사용 — 없으면 URL ?q= 로 폴백(draft 가 사라지지 않게).
+  const $inpage = document.getElementById("search-inpage-input");
+  $searchInput.value = $inpage instanceof HTMLInputElement
+    ? $inpage.value
+    : (new URLSearchParams(location.search).get("q") || "");
   syncClearBtn();
   requestAnimationFrame(() => $searchInput?.focus());
   attachKeyboardTracking();
