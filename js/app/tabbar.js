@@ -72,6 +72,10 @@ function openSearch() {
   // /search 전체뷰로 진입(이미 검색 중이면 생략). route() → syncTabBarActive 가
   // active==='search' 를 보고 exitSearch 를 호출하지 않는다.
   if (W.parsePath?.().view !== "search") W.navigate("/search");
+  // 기존 /search?q=… 위에서 모핑을 열면 in-page bar(쿼리 보유)가 숨겨지므로 현재
+  // 쿼리를 dock 입력으로 복사 — 안 그러면 결과는 남고 보이는 필드만 빈다.
+  const q = new URLSearchParams(location.search).get("q");
+  if (q) $searchInput.value = q;
   syncClearBtn();
   requestAnimationFrame(() => $searchInput?.focus());
   attachKeyboardTracking();
@@ -96,13 +100,20 @@ function exitSearch() {
   detachKeyboardTracking();
 }
 
+// 검색 모드 전체 닫기 → 홈으로 복귀(route() 가 exitSearch 호출). 포커스가 body 로
+// 흘러가지 않게 다시 펼쳐진 검색 버튼으로 되돌린다(키보드 접근성).
+function closeSearchToHome() {
+  W.navigate("/");
+  $searchBtn?.focus();
+}
+
 // 검색 원형 버튼 → 모핑 진입(P1 의 단순 navigate 대체).
 $searchBtn?.addEventListener("click", (e) => {
   e.preventDefault();
   openSearch();
 });
 
-// 하단 입력: Enter → 기존 검색 커밋(verse ref auto-nav 포함), Esc → 복구+홈.
+// 하단 입력: Enter → 기존 검색 커밋(verse ref auto-nav 포함).
 $searchInput?.addEventListener("keydown", (e) => {
   if (e.key === "Enter") {
     e.preventDefault();
@@ -110,14 +121,24 @@ $searchInput?.addEventListener("keydown", (e) => {
     // 검색 실행 → "이전 모드로 롤백": 키보드를 내려 dock 을 키보드 위 모핑(stage 2)에서
     // 접지(grounded) 상태로 복귀. 검색 세션·닫기(X)는 유지(결과 화면, screenshot 2).
     $searchInput.blur();
-  } else if (e.key === "Escape") {
-    e.preventDefault();
-    // 홈으로 복귀 → route() 가 exitSearch 를 호출(입력 hidden). 포커스가 body 로
-    // 흘러가지 않게 다시 펼쳐진 검색 버튼으로 되돌린다(키보드 접근성).
-    W.navigate("/");
-    $searchBtn?.focus();
   }
 });
+
+// Esc 는 검색 중이면 항상 모드 전체를 닫는다 — 포커스가 dock 입력 밖(결과 링크·
+// body 등)에 있어도 동작하도록 document capture 단계에서 처리. capture +
+// stopPropagation 으로 app.js 의 전역 Esc 핸들러(aria-expanded 만 리셋하고 모핑은
+// 남기던 것)보다 먼저 가로채 일관되게 롤백한다.
+document.addEventListener(
+  "keydown",
+  (e) => {
+    if (e.key === "Escape" && searching) {
+      e.preventDefault();
+      e.stopPropagation();
+      closeSearchToHome();
+    }
+  },
+  true
+);
 
 // 입력 변화 → ⊗ 지우기 버튼 표시 토글.
 $searchInput?.addEventListener("input", syncClearBtn);
@@ -135,7 +156,7 @@ $searchClear?.addEventListener("click", () => {
 // 검색 닫기(X) — 검색 세션 전체 롤백 → 기본 탭 바. navigate 가 route →
 // syncTabBarActive → exitTabSearch 를 태운다.
 $searchClose?.addEventListener("click", () => {
-  W.navigate("/");
+  closeSearchToHome();
 });
 
 // views-routing 의 syncTabBarActive 가 라우트 변경 시 호출(검색 외 라우트면 복구).
