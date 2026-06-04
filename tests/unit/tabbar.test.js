@@ -11,7 +11,9 @@
 // Coverage:
 //   - keyboardOverlap: 키보드 높이 = max(0, innerHeight − visualViewport.height)
 //   - setKeyboardState: body.tabbar-keyboard 토글 + 닫기(X) aria 게이팅
-//   - liftForKeyboard: 키보드 up 일 때만 --kb-overlap 설정 + X 노출, 1px 임계
+//     (실제 호출은 입력 focus/blur — DOM 이벤트 와이어링이라 e2e 책임)
+//   - liftForKeyboard: 키보드 up 일 때만 --kb-overlap 설정(위치 보정), 1px 임계.
+//     X 노출/홈 숨김은 분리(setKeyboardState) — 높이 감지 실패와 무관하게.
 
 import test from "node:test";
 import assert from "node:assert";
@@ -128,32 +130,29 @@ test("setKeyboardState(false): 클래스 제거 + X 버튼 a11y 제외", () => {
 
 // ── liftForKeyboard ──────────────────────────────────────────────────────────
 
-test("liftForKeyboard: 키보드 up → --kb-overlap = 키보드 높이 + X 노출", () => {
-  const { ctx, body, $dock, $searchClose } = makeCtx({ innerHeight: 800, vvHeight: 500 });
+test("liftForKeyboard: 키보드 up → --kb-overlap = 키보드 높이(위치 보정)", () => {
+  const { ctx, body, $dock } = makeCtx({ innerHeight: 800, vvHeight: 500 });
   ctx.liftForKeyboard();
 
   // 실제 레이아웃 bottom 으로 올리는 값(transform 아님 → iOS 팬 방지).
   assert.equal($dock.style.getPropertyValue("--kb-overlap"), "300px");
-  assert.equal(body.classList.contains("tabbar-keyboard"), true);
-  assert.equal($searchClose.getAttribute("aria-hidden"), null);
+  // X 노출(body.tabbar-keyboard)은 liftForKeyboard 가 건드리지 않는다 — focus/blur 책임.
+  assert.equal(body.classList.contains("tabbar-keyboard"), false);
 });
 
-test("liftForKeyboard: 키보드 down → --kb-overlap 0 + X 숨김", () => {
-  const { ctx, body, $dock, $searchClose } = makeCtx({ innerHeight: 800, vvHeight: 800 });
+test("liftForKeyboard: 키보드 down → --kb-overlap 0", () => {
+  const { ctx, $dock } = makeCtx({ innerHeight: 800, vvHeight: 800 });
   ctx.liftForKeyboard();
 
   assert.equal($dock.style.getPropertyValue("--kb-overlap"), "0px");
-  assert.equal(body.classList.contains("tabbar-keyboard"), false);
-  assert.equal($searchClose.getAttribute("aria-hidden"), "true");
 });
 
 test("liftForKeyboard: 1px 이하 차이는 키보드 없음으로 처리(반올림 오차)", () => {
-  const { ctx, body, $dock } = makeCtx({ innerHeight: 800, vvHeight: 799 });
+  const { ctx, $dock } = makeCtx({ innerHeight: 800, vvHeight: 799 });
   ctx.liftForKeyboard();
 
   // overlap === 1 은 up 아님(> 1 임계).
   assert.equal($dock.style.getPropertyValue("--kb-overlap"), "0px");
-  assert.equal(body.classList.contains("tabbar-keyboard"), false);
 });
 
 test("liftForKeyboard: visualViewport 없으면 no-op(데스크탑/구형)", () => {

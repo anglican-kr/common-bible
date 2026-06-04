@@ -32,12 +32,20 @@ function syncClearBtn() {
 // 키보드 높이(키보드가 가린 px) = 레이아웃 뷰포트 − 비주얼 뷰포트 높이. search.js
 // 의 시트 보정과 동일하게 vv.offsetTop 은 의도적으로 무시 — offsetTop 은 핀치줌
 // 팬 등 in-page 스크롤 양이라 position:fixed 요소(레이아웃 뷰포트 기준)를 잘못 민다.
+/**
+ * @param {number} innerHeight
+ * @param {number} vvHeight
+ * @returns {number}
+ */
 function keyboardOverlap(innerHeight, vvHeight) {
   return Math.max(0, innerHeight - vvHeight);
 }
 
-// 키보드가 떠 있는 동안에만 닫기(X) 버튼을 노출 + body 상태 클래스 토글.
-// X 는 홈 버튼과 동작이 겹치므로(둘 다 탭바 복구→홈) 키보드가 없을 땐 숨긴다.
+// 키보드 표시 중(=입력 포커스)에만 닫기(X) 버튼 노출 + 홈 숨김 → body 상태 클래스.
+// 입력 focus/blur 가 호출한다 — iOS 의 innerHeight/visualViewport 높이 감지는
+// 불안정해서, X 노출을 그 감지에 묶으면 키보드가 떠도 X 가 안 뜨는 일이 생긴다.
+// 포커스 기준이 모바일 키보드 등장의 신뢰성 높은 프록시.
+/** @param {boolean} up */
 function setKeyboardState(up) {
   document.body.classList.toggle("tabbar-keyboard", up);
   if (!$searchClose) return;
@@ -62,8 +70,9 @@ function liftForKeyboard() {
   // 사각형을 그대로 두므로 iOS 가 포커스 입력이 키보드에 가려졌다고 보고 페이지
   // 전체를 위로 팬(헤더·빈 상태가 화면 밖으로 밀림)한다. 입력의 실제 사각형을
   // 키보드 위로 올리면 iOS 가 팬할 이유가 없어져 sticky 헤더·본문이 제자리에 남는다.
+  // X 노출·홈 숨김(setKeyboardState)은 여기서 다루지 않는다 — 높이 감지가 빗나가도
+  // X 가 뜨도록 입력 focus/blur 에 분리해 묶었다(아래). 여기선 위치 보정만.
   $dock.style.setProperty("--kb-overlap", up ? `${overlap}px` : "0px");
-  setKeyboardState(up);
 }
 // ── END KEYBOARD ──
 function attachKeyboardTracking() {
@@ -185,6 +194,12 @@ W.closeTabSearch = () => {
 
 // 입력 변화 → ⊗ 지우기 버튼 표시 토글.
 $searchInput?.addEventListener("input", syncClearBtn);
+
+// X(키보드 내리기) 노출 + 홈 숨김은 입력 focus(=키보드 등장)/blur 기준 — iOS 의
+// 높이 감지(innerHeight−visualViewport) 불안정과 무관하게 확실히 토글. dock 들어올림
+// (--kb-overlap)만 visualViewport(liftForKeyboard)가 담당.
+$searchInput?.addEventListener("focus", () => setKeyboardState(true));
+$searchInput?.addEventListener("blur", () => setKeyboardState(false));
 
 // ⊗ 지우기 — 검색어만 비우고 입력 유지(포커스·키보드 유지). 결과 화면이면 빈
 // 검색 뷰로 되돌려 기본 안내(빈 상태)를 보인다.

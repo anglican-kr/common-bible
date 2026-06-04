@@ -3134,6 +3134,10 @@ body.tabbar-keyboard #tab-dock.searching #tab-search-close {
 [data-theme="dark"] body.tabbar-keyboard #tab-dock.searching #tab-search-close {
   background: color-mix(in srgb, var(--bg-card) 80%, transparent);
 }
+/* 키보드 표시 중: 홈 버튼 숨기고 검색 입력 pill 이 홈 자리(왼쪽 끝)까지 확장.
+   #tab-bar 가 flow 에서 빠지면 flex:1 인 #tab-search-dock 가 그 폭을 흡수한다.
+   키보드가 내려가면(결과 화면) 홈 복귀 — 검색 종료 진입점 유지. */
+body.tabbar-keyboard #tab-dock.searching #tab-bar { display: none; }
 
 /* 모핑 중 /search 전체뷰의 상단 입력은 숨김 — 하단 입력이 단일 검색 필드. */
 body.tabbar-searching #search-inpage-bar { display: none; }
