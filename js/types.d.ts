@@ -807,6 +807,7 @@ declare global {
     commitTopSearch?: (rawQuery: string) => void;
     exitTabSearch?: () => void;
     syncTabSearchQuery?: () => void;
+    closeTabSearch?: () => boolean;
 
     // Cross-module globals set by drive-sync.js / state-machine.js.
     _syncClientId?: string;

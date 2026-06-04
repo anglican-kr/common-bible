@@ -130,26 +130,14 @@ $searchInput?.addEventListener("keydown", (e) => {
   }
 });
 
-// Esc 는 검색 중이면 모드 전체를 닫는다 — 포커스가 dock 입력 밖(결과 링크·body 등)에
-// 있어도 동작하도록 document capture 단계에서 처리(app.js 전역 Esc 보다 먼저).
-// 단, 위에 떠 있는 오버레이(설정·챕터 팝오버·검색 시트)가 있으면 양보 — 그쪽을
-// 먼저 닫도록 app.js 전역 핸들러로 흘려보낸다(Esc 는 최상단 레이어부터).
-function overlayOpen() {
-  return !!document.querySelector(
-    ".settings-popover:not([hidden]), .chapter-popover:not([hidden]), #search-sheet:not([hidden])"
-  );
-}
-document.addEventListener(
-  "keydown",
-  (e) => {
-    if (e.key === "Escape" && searching && !overlayOpen()) {
-      e.preventDefault();
-      e.stopPropagation();
-      closeSearchToHome();
-    }
-  },
-  true
-);
+// Esc 처리는 app.js 전역 핸들러가 우선순위(검색 시트 > 팝오버 > 탭 검색)대로 호출.
+// 검색 중이면 닫고 true, 아니면 false 를 돌려 app.js 가 다음 레이어로 넘어가게 한다.
+// (capture+stopPropagation 으로 가로채던 방식은 레이어링·aria 충돌을 일으켜 폐기.)
+W.closeTabSearch = () => {
+  if (!searching) return false;
+  closeSearchToHome();
+  return true;
+};
 
 // 입력 변화 → ⊗ 지우기 버튼 표시 토글.
 $searchInput?.addEventListener("input", syncClearBtn);

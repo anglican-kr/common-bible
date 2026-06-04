@@ -53,16 +53,30 @@ function announce(msg) {
 
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
-    // Close search overlay if open
+    // Escape closes the topmost layer first: search sheet → open popovers →
+    // tab-bar search morph (ADR-030). Each layer returns so a single Escape
+    // never collapses two layers at once.
     if ($searchSheet && !$searchSheet.hidden) {
       closeSearchSheet();
       return;
     }
-    /** @type {NodeListOf<HTMLElement>} */ (
+    // #tab-search is excluded from the blanket aria-expanded reset — its morph
+    // (expanded) state is owned by tab-search logic, so closing a popover while
+    // search stays open must not flip it to aria-expanded="false" (ADR-030).
+    const popovers = /** @type {NodeListOf<HTMLElement>} */ (
       document.querySelectorAll(".chapter-popover:not([hidden]), .settings-popover:not([hidden])")
-    ).forEach((p) => { p.hidden = true; });
+    );
+    if (popovers.length) {
+      popovers.forEach((p) => { p.hidden = true; });
+      /** @type {NodeListOf<HTMLElement>} */ (
+        document.querySelectorAll("[aria-expanded='true']:not(#tab-search)")
+      ).forEach((b) => { b.setAttribute("aria-expanded", "false"); b.focus(); });
+      return;
+    }
+    // No higher overlay — close the tab-bar search morph if active.
+    if (window.closeTabSearch?.()) return;
     /** @type {NodeListOf<HTMLElement>} */ (
-      document.querySelectorAll("[aria-expanded='true']")
+      document.querySelectorAll("[aria-expanded='true']:not(#tab-search)")
     ).forEach((b) => { b.setAttribute("aria-expanded", "false"); b.focus(); });
   }
   // Space to toggle audio playback (when not in an input/button). Audio
