@@ -233,7 +233,9 @@ function renderSearchResultList(container, result, query, page, pageSize, pagina
 
   if (!hasRef && result.total === 0) {
     if (!result.unmatchedScopes || result.unmatchedScopes.length === 0) {
-      container.appendChild(el("p", { className: "search-empty" }, `"${query}"에 대한 검색 결과가 없습니다.`));
+      container.appendChild(
+        buildSearchEmptyState("검색 결과 없음", `"${query}"에 대한 결과가 없습니다.`)
+      );
     }
     return;
   }
@@ -337,8 +339,26 @@ function buildInPageSearchInput(query, autofocus = false) {
   return wrap;
 }
 
-// Empty-query mobile /search: render just the in-page input (focused) so the
-// user can type. Shares the main-header chrome with renderSearchResults.
+// Apple-Music-style centered empty state (ADR-030 P3): large magnifier glyph +
+// title + subtitle. Used for the empty-query /search view and zero-result lists.
+/**
+ * @param {string} title
+ * @param {string} subtitle
+ * @returns {HTMLElement}
+ */
+function buildSearchEmptyState(title, subtitle) {
+  const box = el("div", { className: "search-empty-state" });
+  const icon = el("div", { className: "search-empty-icon", "aria-hidden": "true" });
+  icon.innerHTML =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="6.4"/><path d="m20 20-3.7-3.7"/></svg>';
+  box.appendChild(icon);
+  box.appendChild(el("p", { className: "search-empty-title" }, title));
+  box.appendChild(el("p", { className: "search-empty-subtitle" }, subtitle));
+  return box;
+}
+
+// Empty-query mobile /search: render the in-page input plus an Apple-Music-style
+// empty-state prompt. Shares the main-header chrome with renderSearchResults.
 function renderSearchView() {
   window.setTitle("검색");
   const $title = _$("page-title");
@@ -347,7 +367,13 @@ function renderSearchView() {
   window.hideAudioBar();
   clearNode($app);
   const view = el("div", { className: "search-view" });
-  view.appendChild(buildInPageSearchInput("", true));
+  // During the tab-bar morph the bottom dock input owns focus; don't let the
+  // (hidden) in-page input grab it back via autofocus.
+  const morphing = document.body.classList.contains("tabbar-searching");
+  view.appendChild(buildInPageSearchInput("", !morphing));
+  view.appendChild(
+    buildSearchEmptyState("성경 검색", "찾을 단어나 구절을 검색해 보세요.")
+  );
   $app.appendChild(view);
 }
 

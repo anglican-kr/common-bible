@@ -14,11 +14,18 @@ const $searchBtn = document.getElementById("tab-search");
 const $searchInput = /** @type {HTMLInputElement | null} */ (
   document.getElementById("tab-search-input")
 );
+const $searchClear = document.getElementById("tab-search-clear");
+const $searchClose = document.getElementById("tab-search-close");
 
 /** @type {Window & typeof globalThis & Record<string, any>} */
 const W = /** @type {any} */ (window);
 
 let searching = false;
+
+// 입력 pill 안 검색어 지우기(⊗)는 텍스트가 있을 때만.
+function syncClearBtn() {
+  if ($searchClear) $searchClear.hidden = !$searchInput?.value.trim();
+}
 
 // ── visualViewport: 키보드가 가리지 않게 dock 을 키보드 높이만큼 위로 ──
 function liftForKeyboard() {
@@ -58,10 +65,14 @@ function openSearch() {
   $dock.classList.add("searching");
   document.body.classList.add("tabbar-searching");
   $searchBtn?.setAttribute("aria-expanded", "true");
+  // 닫기(X) 버튼은 검색 중에만 접근 가능(idle 엔 collapsed → a11y 트리 제외).
+  $searchClose?.removeAttribute("aria-hidden");
+  $searchClose?.removeAttribute("tabindex");
   $searchInput.hidden = false;
   // /search 전체뷰로 진입(이미 검색 중이면 생략). route() → syncTabBarActive 가
   // active==='search' 를 보고 exitSearch 를 호출하지 않는다.
   if (W.parsePath?.().view !== "search") W.navigate("/search");
+  syncClearBtn();
   requestAnimationFrame(() => $searchInput?.focus());
   attachKeyboardTracking();
 }
@@ -74,11 +85,14 @@ function exitSearch() {
   $dock.classList.remove("searching");
   document.body.classList.remove("tabbar-searching");
   $searchBtn?.setAttribute("aria-expanded", "false");
+  $searchClose?.setAttribute("aria-hidden", "true");
+  $searchClose?.setAttribute("tabindex", "-1");
   if ($searchInput) {
     $searchInput.value = "";
     $searchInput.blur();
     $searchInput.hidden = true;
   }
+  syncClearBtn();
   detachKeyboardTracking();
 }
 
@@ -93,6 +107,9 @@ $searchInput?.addEventListener("keydown", (e) => {
   if (e.key === "Enter") {
     e.preventDefault();
     W.commitTopSearch?.($searchInput.value);
+    // 검색 실행 → "이전 모드로 롤백": 키보드를 내려 dock 을 키보드 위 모핑(stage 2)에서
+    // 접지(grounded) 상태로 복귀. 검색 세션·닫기(X)는 유지(결과 화면, screenshot 2).
+    $searchInput.blur();
   } else if (e.key === "Escape") {
     e.preventDefault();
     // 홈으로 복귀 → route() 가 exitSearch 를 호출(입력 hidden). 포커스가 body 로
@@ -100,6 +117,25 @@ $searchInput?.addEventListener("keydown", (e) => {
     W.navigate("/");
     $searchBtn?.focus();
   }
+});
+
+// 입력 변화 → ⊗ 지우기 버튼 표시 토글.
+$searchInput?.addEventListener("input", syncClearBtn);
+
+// ⊗ 지우기 — 검색어만 비우고 입력 유지(포커스·키보드 유지). 결과 화면이면 빈
+// 검색 뷰로 되돌려 기본 안내(빈 상태)를 보인다.
+$searchClear?.addEventListener("click", () => {
+  if (!$searchInput) return;
+  $searchInput.value = "";
+  syncClearBtn();
+  if (W.parsePath?.().view === "search") W.navigate("/search");
+  $searchInput.focus();
+});
+
+// 검색 닫기(X) — 검색 세션 전체 롤백 → 기본 탭 바. navigate 가 route →
+// syncTabBarActive → exitTabSearch 를 태운다.
+$searchClose?.addEventListener("click", () => {
+  W.navigate("/");
 });
 
 // views-routing 의 syncTabBarActive 가 라우트 변경 시 호출(검색 외 라우트면 복구).

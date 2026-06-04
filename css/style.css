@@ -1925,6 +1925,36 @@ body {
   font-size: var(--font-base);
 }
 
+/* ADR-030 P3: Apple-Music-식 중앙 빈 상태(돋보기 + 제목 + 부제). 빈 검색어 뷰와
+   결과 0건 양쪽에서 사용. */
+.search-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: var(--space-2);
+  padding: var(--space-10) var(--space-6);
+}
+.search-empty-icon {
+  color: var(--text-secondary);
+  margin-bottom: var(--space-2);
+}
+.search-empty-icon svg { width: 3.5rem; height: 3.5rem; opacity: 0.5; }
+.search-empty-title {
+  margin: 0;
+  font-size: var(--font-xl);
+  font-weight: 700;
+  color: var(--text);
+}
+.search-empty-subtitle {
+  margin: 0;
+  max-width: 16rem;
+  font-size: var(--font-base);
+  line-height: var(--leading-snug);
+  color: var(--text-secondary);
+}
+
 .search-results {
   list-style: none;
 }
@@ -3108,12 +3138,10 @@ html.cite-sheet-open {
   z-index: var(--nav-z);
   display: flex;
   align-items: center;
-  /* ADR-030: 탭바=왼쪽 끝, 검색 버튼=오른쪽 끝. padding 0 space-4 + left/right 0 으로
-     오디오 바(margin:0 space-4)와 좌우 가장자리 정렬. */
-  justify-content: space-between;
-  /* gap: 모핑 시 입력 pill(flex:1)이 홈 원형까지 확장될 때 둘이 맞붙지 않게 최소 간격
-     확보(비-검색 상태는 space-between 이 우선이라 영향 없음). */
-  gap: var(--space-2);
+  /* ADR-030: 탭바=왼쪽 끝, 검색 그룹=오른쪽 끝. 검색 그룹(#tab-search-dock)의
+     margin-left:auto 가 우측으로 밀어붙인다(닫기 X 버튼이 collapsed 0폭으로 끼어
+     있어도 space-between 처럼 가운데로 흩어지지 않음). padding 0 space-4 + left/right 0
+     으로 오디오 바(margin:0 space-4)와 좌우 가장자리 정렬. */
   padding: 0 var(--space-4);
   /* 순수 레이아웃 레이어 — 어떤 표면도 없음(완전 투명). */
   background: none;
@@ -3203,6 +3231,9 @@ html.cite-sheet-open {
      순수 레이아웃 래퍼 — 어떤 시각효과도 없음(완전 투명). */
   display: flex;
   align-items: center;
+  /* 검색 그룹을 우측 끝으로(닫기 X 가 collapsed 0폭으로 뒤에 붙어 있어도 가운데로
+     흩어지지 않게). 모핑 시엔 margin-left:0 으로 풀어 flex:1 확장에 양보. */
+  margin-left: auto;
   background: none;
   border: none;
   box-shadow: none;
@@ -3265,6 +3296,9 @@ html.cite-sheet-open {
               background var(--duration-fast) var(--ease-standard);
 }
 
+/* 모핑 중: 홈 원형·입력 pill·닫기 X 를 균등 간격으로(idle 엔 gap 없이 margin-auto
+   우측 정렬). */
+#tab-dock.searching { gap: var(--space-2); }
 /* 홈만 남기고 접기 + #tab-bar 를 60px 원형으로(검색 원형과 동일 형태). */
 #tab-dock.searching #tab-bar {
   gap: 0;
@@ -3289,6 +3323,7 @@ html.cite-sheet-open {
 #tab-dock.searching #tab-search-dock {
   flex: 1 1 0;
   min-width: 0;
+  margin-left: 0; /* idle 의 margin-left:auto 해제 — flex:1 확장에 양보 */
   height: calc(var(--touch-target) + var(--space-2) * 2); /* 60px — 탭 pill 과 동일 */
   padding: 0 var(--space-3);
   gap: var(--space-2);
@@ -3327,6 +3362,72 @@ html.cite-sheet-open {
 }
 #tab-dock.searching #tab-search-input::placeholder { color: var(--text-secondary); }
 
+/* ── ADR-030 P3: 입력 pill 안 검색어 지우기(⊗) ──────────────────────────────
+   Apple Music 식 — 텍스트 있을 때만(JS 가 [hidden] 토글) pill 우측에 표시. */
+#tab-search-clear[hidden] { display: none; }
+/* :not([hidden]) — 같은 영역 [hidden] 규칙보다 특이도가 높아 텍스트 없을 때도
+   보이는 버그를 막는다(JS 가 입력값으로 hidden 토글). */
+#tab-dock.searching #tab-search-clear:not([hidden]) {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+#tab-dock.searching #tab-search-clear svg { width: 1.4rem; height: 1.4rem; }
+#tab-dock.searching #tab-search-clear:active { transform: scale(0.9); }
+
+/* ── ADR-030 P3: 검색 닫기(X) 버튼 — 입력 pill 오른쪽 원형 ───────────────────
+   "키보드가 나타나면 한 번 더 모핑": 검색 진입 시 width 0→60px 로 모핑 인. 검색
+   세션 동안 유지(결과 화면 포함, screenshot 2), 닫으면(X) 전체 롤백. idle 상태는
+   접힘(width/opacity 0)이라 레이아웃·시각 비표시(collapse 탭과 동일 패턴). */
+#tab-search-close {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 0;
+  height: calc(var(--touch-target) + var(--space-2) * 2); /* 60px — 다른 원형과 동일 */
+  padding: 0;
+  border: none;
+  background: none;
+  box-shadow: none;
+  border-radius: var(--radius-pill);
+  corner-shape: superellipse(2); /* 원 */
+  color: var(--text-secondary);
+  cursor: pointer;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: width var(--duration-base) var(--ease-standard),
+              opacity var(--duration-fast) var(--ease-standard),
+              transform var(--duration-fast) ease;
+}
+#tab-search-close svg { width: 1.6rem; height: 1.6rem; }
+#tab-search-close:active { transform: scale(0.92); }
+#tab-dock.searching #tab-search-close {
+  width: calc(var(--touch-target) + var(--space-2) * 2); /* 60px 원형 */
+  opacity: 1;
+  pointer-events: auto;
+  /* 홈·검색 원형과 동일한 floating glass. */
+  background: color-mix(in srgb, var(--bg) 70%, transparent);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  backdrop-filter: blur(16px) saturate(180%);
+  border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
+  box-shadow: var(--shadow-2);
+}
+[data-theme="dark"] #tab-dock.searching #tab-search-close {
+  background: color-mix(in srgb, var(--bg-card) 80%, transparent);
+}
+
 /* 모핑 중 /search 전체뷰의 상단 입력은 숨김 — 하단 입력이 단일 검색 필드. */
 body.tabbar-searching #search-inpage-bar { display: none; }
 
@@ -3335,7 +3436,8 @@ body.tabbar-searching #search-inpage-bar { display: none; }
 @media (prefers-reduced-transparency: reduce) {
   #tab-bar,
   #tab-search,
-  #tab-dock.searching #tab-search-dock {
+  #tab-dock.searching #tab-search-dock,
+  #tab-dock.searching #tab-search-close {
     background: var(--bg-card);
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
@@ -3344,7 +3446,8 @@ body.tabbar-searching #search-inpage-bar { display: none; }
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   #tab-bar,
   #tab-search,
-  #tab-dock.searching #tab-search-dock { background: var(--bg-card); }
+  #tab-dock.searching #tab-search-dock,
+  #tab-dock.searching #tab-search-close { background: var(--bg-card); }
 }
 @media (prefers-reduced-motion: reduce) {
   .tab-icon-wrap { transition: none; }
@@ -3353,8 +3456,10 @@ body.tabbar-searching #search-inpage-bar { display: none; }
   .tab-item,
   #tab-bar,
   #tab-search,
-  #tab-search-dock { transition: none; }
+  #tab-search-dock,
+  #tab-search-close { transition: none; }
   #tab-search:active { transform: none; }
+  #tab-search-close:active { transform: none; }
 }
 
 /* 데스크탑: 사이드바 단계 전까지 탭 dock(탭바+검색) 숨김. */
