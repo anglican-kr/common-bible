@@ -245,6 +245,10 @@ function scrollPageTop() {
 }
 $searchInput?.addEventListener("focus", () => {
   setKeyboardState(true);
+  // 맨 위로 스크롤은 **빈 검색(쿼리 없음 = 빈 상태 화면)** 일 때만 — iOS 키보드 pan 으로
+  // 빈 상태 문구가 밀리는 것 상쇄용. 결과가 있는(쿼리 입력된) 상태에서 입력을 다시 탭해
+  // 편집할 땐 스크롤 위치를 보존한다(Bugbot: 결과 둘러보다 재포커스 시 맨 위 점프 방지).
+  if ($searchInput.value.trim()) return;
   scrollPageTop();
   requestAnimationFrame(scrollPageTop);
   setTimeout(scrollPageTop, 300);
