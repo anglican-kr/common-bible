@@ -95,7 +95,10 @@ $searchInput?.addEventListener("keydown", (e) => {
     W.commitTopSearch?.($searchInput.value);
   } else if (e.key === "Escape") {
     e.preventDefault();
+    // 홈으로 복귀 → route() 가 exitSearch 를 호출(입력 hidden). 포커스가 body 로
+    // 흘러가지 않게 다시 펼쳐진 검색 버튼으로 되돌린다(키보드 접근성).
     W.navigate("/");
+    $searchBtn?.focus();
   }
 });
 

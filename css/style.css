@@ -3111,6 +3111,9 @@ html.cite-sheet-open {
   /* ADR-030: 탭바=왼쪽 끝, 검색 버튼=오른쪽 끝. padding 0 space-4 + left/right 0 으로
      오디오 바(margin:0 space-4)와 좌우 가장자리 정렬. */
   justify-content: space-between;
+  /* gap: 모핑 시 입력 pill(flex:1)이 홈 원형까지 확장될 때 둘이 맞붙지 않게 최소 간격
+     확보(비-검색 상태는 space-between 이 우선이라 영향 없음). */
+  gap: var(--space-2);
   padding: 0 var(--space-4);
   /* 순수 레이아웃 레이어 — 어떤 표면도 없음(완전 투명). */
   background: none;
@@ -3327,10 +3330,12 @@ html.cite-sheet-open {
 /* 모핑 중 /search 전체뷰의 상단 입력은 숨김 — 하단 입력이 단일 검색 필드. */
 body.tabbar-searching #search-inpage-bar { display: none; }
 
-/* 투명도 감소 / backdrop-filter 미지원 → 불투명 표면 폴백. */
+/* 투명도 감소 / backdrop-filter 미지원 → 불투명 표면 폴백. 모핑 입력 pill
+   (#tab-dock.searching #tab-search-dock)도 글래스 표면을 쓰므로 함께 폴백. */
 @media (prefers-reduced-transparency: reduce) {
   #tab-bar,
-  #tab-search {
+  #tab-search,
+  #tab-dock.searching #tab-search-dock {
     background: var(--bg-card);
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
@@ -3338,7 +3343,8 @@ body.tabbar-searching #search-inpage-bar { display: none; }
 }
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   #tab-bar,
-  #tab-search { background: var(--bg-card); }
+  #tab-search,
+  #tab-dock.searching #tab-search-dock { background: var(--bg-card); }
 }
 @media (prefers-reduced-motion: reduce) {
   .tab-icon-wrap { transition: none; }
