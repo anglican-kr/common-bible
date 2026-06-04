@@ -2834,7 +2834,10 @@ html.cite-sheet-open {
   position: fixed;
   left: 0;
   right: 0;
-  bottom: calc(var(--space-1) + env(safe-area-inset-bottom) * 0.75);
+  /* --kb-overlap 은 키보드가 떠 있을 때 tabbar.js 가 키보드 높이로 설정한다.
+     transform 이 아니라 실제 bottom 으로 올려야 입력의 레이아웃 사각형이 키보드
+     위로 가서 iOS 가 페이지를 팬하지 않는다(헤더·빈 상태가 제자리 유지). */
+  bottom: calc(var(--space-1) + env(safe-area-inset-bottom) * 0.75 + var(--kb-overlap, 0px));
   z-index: var(--nav-z);
   display: flex;
   align-items: center;
@@ -3088,9 +3091,10 @@ html.cite-sheet-open {
 #tab-dock.searching #tab-search-clear:active { transform: scale(0.9); }
 
 /* ── ADR-030 P3: 검색 닫기(X) 버튼 — 입력 pill 오른쪽 원형 ───────────────────
-   "키보드가 나타나면 한 번 더 모핑": 검색 진입 시 width 0→60px 로 모핑 인. 검색
-   세션 동안 유지(결과 화면 포함, screenshot 2), 닫으면(X) 전체 롤백. idle 상태는
-   접힘(width/opacity 0)이라 레이아웃·시각 비표시(collapse 탭과 동일 패턴). */
+   "키보드가 나타나면 한 번 더 모핑": 키보드가 떠 있는 동안에만 width 0→60px 로
+   모핑 인(body.tabbar-keyboard). 키보드가 내려간 결과 화면에선 홈 버튼과 동작이
+   겹치므로(둘 다 탭바 복구→홈) 숨긴다. idle/no-keyboard 상태는 접힘(width/opacity 0)
+   이라 레이아웃·시각 비표시(collapse 탭과 동일 패턴). 닫으면(X) 전체 롤백. */
 #tab-search-close {
   flex: 0 0 auto;
   display: flex;
@@ -3116,7 +3120,7 @@ html.cite-sheet-open {
 }
 #tab-search-close svg { width: 1.6rem; height: 1.6rem; }
 #tab-search-close:active { transform: scale(0.92); }
-#tab-dock.searching #tab-search-close {
+body.tabbar-keyboard #tab-dock.searching #tab-search-close {
   width: calc(var(--touch-target) + var(--space-2) * 2); /* 60px 원형 */
   opacity: 1;
   pointer-events: auto;
@@ -3127,7 +3131,7 @@ html.cite-sheet-open {
   border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
   box-shadow: var(--shadow-2);
 }
-[data-theme="dark"] #tab-dock.searching #tab-search-close {
+[data-theme="dark"] body.tabbar-keyboard #tab-dock.searching #tab-search-close {
   background: color-mix(in srgb, var(--bg-card) 80%, transparent);
 }
 

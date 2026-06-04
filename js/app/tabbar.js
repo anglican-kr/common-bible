@@ -27,16 +27,45 @@ function syncClearBtn() {
   if ($searchClear) $searchClear.hidden = !$searchInput?.value.trim();
 }
 
+// ── BEGIN KEYBOARD ── (tests/unit/tabbar.test.js 가 이 블록을 슬라이스해 검증)
+
+// 키보드 높이(키보드가 가린 px) = 레이아웃 뷰포트 − 비주얼 뷰포트 높이. search.js
+// 의 시트 보정과 동일하게 vv.offsetTop 은 의도적으로 무시 — offsetTop 은 핀치줌
+// 팬 등 in-page 스크롤 양이라 position:fixed 요소(레이아웃 뷰포트 기준)를 잘못 민다.
+function keyboardOverlap(innerHeight, vvHeight) {
+  return Math.max(0, innerHeight - vvHeight);
+}
+
+// 키보드가 떠 있는 동안에만 닫기(X) 버튼을 노출 + body 상태 클래스 토글.
+// X 는 홈 버튼과 동작이 겹치므로(둘 다 탭바 복구→홈) 키보드가 없을 땐 숨긴다.
+function setKeyboardState(up) {
+  document.body.classList.toggle("tabbar-keyboard", up);
+  if (!$searchClose) return;
+  // 키보드 없을 땐 a11y 트리에서도 제외(시각적으로도 collapse).
+  if (up) {
+    $searchClose.removeAttribute("aria-hidden");
+    $searchClose.removeAttribute("tabindex");
+  } else {
+    $searchClose.setAttribute("aria-hidden", "true");
+    $searchClose.setAttribute("tabindex", "-1");
+  }
+}
+
 // ── visualViewport: 키보드가 가리지 않게 dock 을 키보드 높이만큼 위로 ──
 function liftForKeyboard() {
   const vv = window.visualViewport;
   if (!vv || !$dock) return;
-  // 키보드 높이 = 레이아웃 뷰포트 − 비주얼 뷰포트 높이. search.js 의 시트 보정과
-  // 동일하게 vv.offsetTop 은 의도적으로 무시 — offsetTop 은 핀치줌 팬 등 in-page
-  // 스크롤 양이라 position:fixed 요소(레이아웃 뷰포트 기준)를 잘못 밀 수 있다.
-  const overlap = Math.max(0, window.innerHeight - vv.height);
-  $dock.style.transform = overlap > 1 ? `translateY(${-overlap}px)` : "";
+  const overlap = keyboardOverlap(window.innerHeight, vv.height);
+  // 1px 미만은 반올림 오차 — 키보드 없음으로 본다.
+  const up = overlap > 1;
+  // transform 대신 실제 레이아웃 위치(bottom)로 올린다. transform 은 레이아웃
+  // 사각형을 그대로 두므로 iOS 가 포커스 입력이 키보드에 가려졌다고 보고 페이지
+  // 전체를 위로 팬(헤더·빈 상태가 화면 밖으로 밀림)한다. 입력의 실제 사각형을
+  // 키보드 위로 올리면 iOS 가 팬할 이유가 없어져 sticky 헤더·본문이 제자리에 남는다.
+  $dock.style.setProperty("--kb-overlap", up ? `${overlap}px` : "0px");
+  setKeyboardState(up);
 }
+// ── END KEYBOARD ──
 function attachKeyboardTracking() {
   const vv = window.visualViewport;
   if (!vv) return;
@@ -50,7 +79,8 @@ function detachKeyboardTracking() {
     vv.removeEventListener("resize", liftForKeyboard);
     vv.removeEventListener("scroll", liftForKeyboard);
   }
-  if ($dock) $dock.style.transform = "";
+  if ($dock) $dock.style.setProperty("--kb-overlap", "0px");
+  setKeyboardState(false);
 }
 
 // dock 입력을 현재 URL 의 ?q= 로 맞춘다(in-page bar 가 숨겨져 dock 입력이 단일
@@ -72,9 +102,8 @@ function openSearch() {
   $dock.classList.add("searching");
   document.body.classList.add("tabbar-searching");
   $searchBtn?.setAttribute("aria-expanded", "true");
-  // 닫기(X) 버튼은 검색 중에만 접근 가능(idle 엔 collapsed → a11y 트리 제외).
-  $searchClose?.removeAttribute("aria-hidden");
-  $searchClose?.removeAttribute("tabindex");
+  // 닫기(X) 버튼 노출은 키보드 등장에 묶는다(setKeyboardState). 키보드가 없는
+  // 동안엔 홈 버튼과 동작이 겹쳐 중복이므로 숨겨 둔다.
   $searchInput.hidden = false;
   // /search 전체뷰로 진입(이미 검색 중이면 생략). route() → syncTabBarActive 가
   // active==='search' 를 보고 exitSearch 를 호출하지 않는다.
