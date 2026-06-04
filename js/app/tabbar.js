@@ -31,11 +31,10 @@ function syncClearBtn() {
 function liftForKeyboard() {
   const vv = window.visualViewport;
   if (!vv || !$dock) return;
-  // 레이아웃 뷰포트와 비주얼 뷰포트(키보드로 줄어든) 하단 차이 = 키보드 높이.
-  const overlap = Math.max(
-    0,
-    document.documentElement.clientHeight - (vv.height + vv.offsetTop)
-  );
+  // 키보드 높이 = 레이아웃 뷰포트 − 비주얼 뷰포트 높이. search.js 의 시트 보정과
+  // 동일하게 vv.offsetTop 은 의도적으로 무시 — offsetTop 은 핀치줌 팬 등 in-page
+  // 스크롤 양이라 position:fixed 요소(레이아웃 뷰포트 기준)를 잘못 밀 수 있다.
+  const overlap = Math.max(0, window.innerHeight - vv.height);
   $dock.style.transform = overlap > 1 ? `translateY(${-overlap}px)` : "";
 }
 function attachKeyboardTracking() {
@@ -131,14 +130,19 @@ $searchInput?.addEventListener("keydown", (e) => {
   }
 });
 
-// Esc 는 검색 중이면 항상 모드 전체를 닫는다 — 포커스가 dock 입력 밖(결과 링크·
-// body 등)에 있어도 동작하도록 document capture 단계에서 처리. capture +
-// stopPropagation 으로 app.js 의 전역 Esc 핸들러(aria-expanded 만 리셋하고 모핑은
-// 남기던 것)보다 먼저 가로채 일관되게 롤백한다.
+// Esc 는 검색 중이면 모드 전체를 닫는다 — 포커스가 dock 입력 밖(결과 링크·body 등)에
+// 있어도 동작하도록 document capture 단계에서 처리(app.js 전역 Esc 보다 먼저).
+// 단, 위에 떠 있는 오버레이(설정·챕터 팝오버·검색 시트)가 있으면 양보 — 그쪽을
+// 먼저 닫도록 app.js 전역 핸들러로 흘려보낸다(Esc 는 최상단 레이어부터).
+function overlayOpen() {
+  return !!document.querySelector(
+    ".settings-popover:not([hidden]), .chapter-popover:not([hidden]), #search-sheet:not([hidden])"
+  );
+}
 document.addEventListener(
   "keydown",
   (e) => {
-    if (e.key === "Escape" && searching) {
+    if (e.key === "Escape" && searching && !overlayOpen()) {
       e.preventDefault();
       e.stopPropagation();
       closeSearchToHome();
