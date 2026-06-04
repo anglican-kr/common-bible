@@ -671,7 +671,7 @@ let _bookmarkDrawerCloseSeq = 0;
 let _bookmarkDrawerCloseTimer = null;
 // `_dragState` was extracted to js/app/bookmark.js (ADR-018 Phase 6a) along
 // with the drag & drop pointer handling that owns it.
-const BOOKMARK_INERT_SELECTORS = "#sticky-group, main#app, #audio-bar, #search-sheet, #search-scrim, #launch-screen, #install-scrim, #install-modal, #verse-select-bar";
+const BOOKMARK_INERT_SELECTORS = "#sticky-group, main#app, #audio-bar, #launch-screen, #install-scrim, #install-modal, #verse-select-bar";
 /** @param {boolean} on */
 function setBookmarkBackgroundInert(on) { setInert(on, BOOKMARK_INERT_SELECTORS); }
 

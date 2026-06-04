@@ -162,7 +162,16 @@
       <svg class="tab-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="6.4"/><path d="m20 20-3.7-3.7"/></svg>
     </button>
     <input id="tab-search-input" type="search" inputmode="search" enterkeyhint="search" autocorrect="off" autocapitalize="off" spellcheck="false" autocomplete="off" placeholder="검색 (예: 사랑, 사랑 in:요한, 창세 1:3)" aria-label="성경 검색" hidden>
+    <!-- ADR-030 P3: 입력 pill 안의 검색어 지우기(⊗) — 텍스트 있을 때만 표시. -->
+    <button id="tab-search-clear" type="button" aria-label="검색어 지우기" hidden>
+      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm3.5 12.1-1.4 1.4L12 13.4l-2.1 2.1-1.4-1.4L10.6 12 8.5 9.9l1.4-1.4L12 10.6l2.1-2.1 1.4 1.4L13.4 12l2.1 2.1z"/></svg>
+    </button>
   </div>
+  <!-- ADR-030 P3: 검색 세션 종료(닫기) 버튼 — 입력 pill 오른쪽 원형(키보드 등장과 함께
+       모핑 인). 탭하면 검색 모드 전체 롤백 → 기본 탭 바. -->
+  <button id="tab-search-close" type="button" aria-label="검색 닫기" aria-hidden="true" tabindex="-1">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6 18 18M18 6 6 18"/></svg>
+  </button>
   </div><!-- /#tab-dock -->
   <noscript>
     <div class="noscript-fallback">
@@ -177,27 +186,6 @@
     <button id="install-modal-close" type="button" aria-label="닫기">&times;</button>
     <h2 id="install-modal-title">앱으로 설치</h2>
     <div id="install-modal-body"></div>
-  </div>
-  <div id="search-scrim" aria-hidden="true" hidden></div>
-  <div id="search-sheet" role="dialog" aria-label="검색" hidden>
-    <div id="search-sheet-handle" aria-hidden="true"><span></span></div>
-    <div id="search-sheet-bar">
-      <div id="search-sheet-input-wrap">
-        <input id="search-sheet-input" type="search" inputmode="search" enterkeyhint="search" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="검색 (예: 사랑, 사랑 in:요한, 창세 1:3)" aria-label="성경 검색" autocomplete="off" role="combobox" aria-autocomplete="list" aria-controls="search-sheet-history" aria-expanded="false">
-        <button id="search-sheet-history-toggle" type="button" aria-label="최근 검색어 열기" aria-haspopup="listbox" aria-expanded="false" aria-controls="search-sheet-history" hidden>
-          <svg width="16" height="16" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true"><path d="M2 4l4 4 4-4z"/></svg>
-        </button>
-        <button id="search-sheet-clear" type="button" aria-label="검색어 지우기" hidden>&times;</button>
-      </div>
-      <button id="search-sheet-close" type="button" aria-label="닫기">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
-      </button>
-    </div>
-    <div id="search-sheet-history" role="listbox" aria-label="최근 검색어" hidden></div>
-    <div id="search-sheet-chips" role="toolbar" aria-label="검색 옵션">
-      <button type="button" class="search-chip" data-chip="in" aria-label="책 안에서 검색 연산자 추가"><span aria-hidden="true">+</span> in:</button>
-    </div>
-    <div id="search-sheet-results"></div>
   </div>
   <!-- ── Bookmark Drawer ── -->
   <div id="bookmark-scrim" aria-hidden="true" hidden></div>

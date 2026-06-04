@@ -1,18 +1,19 @@
 "use strict";
 // @ts-check
 
-// Search engine wire-up + UI controllers (desktop top-bar + mobile bottom
-// sheet + history panel + drag handle init). Owns the Worker lifetime
-// (`searchWorker`), all `$search*` DOM anchors, and the search-internal
-// module state (`searchAutoNavigate`, sheet keyboard adjustments).
+// Search engine wire-up + UI controllers (desktop top-bar + mobile full-screen
+// /search view + history panel). Owns the Worker lifetime (`searchWorker`), all
+// `$search*` DOM anchors, and the search-internal module state
+// (`searchAutoNavigate`). The mobile bottom sheet was removed with the search
+// FAB (ADR-030) — mobile search is the tab-bar morph → /search route.
 //
 // Phase 5 of the app.js modularization (ADR-018). ESM-pattern (ADR-019):
 // named exports + window facade for legacy app.js callers (route handler at
-// `/search?q=`, Escape keydown, bootstrap `initSheetDrag()`).
+// `/search?q=`).
 
 /** @typedef {import("../types").SearchHistoryList} SearchHistoryList */
 
-const { _$, el, clearNode, chUnit, dragReleaseAction } = window.appHelpers;
+const { _$, el, clearNode, chUnit } = window.appHelpers;
 const {
   SEARCH_HISTORY_MAX,
   loadSearchHistory, pushSearchHistory, removeSearchHistory, clearSearchHistory,
@@ -35,16 +36,6 @@ const $searchInput = /** @type {HTMLInputElement} */ (_$("search-input"));
 const $searchClear = _$("search-clear");
 const $searchHistoryToggle = _$("search-history-toggle");
 const $searchHistoryPanel = _$("search-history");
-const $searchScrim = _$("search-scrim");
-const $searchSheet = _$("search-sheet");
-const $searchSheetInputWrap = _$("search-sheet-input-wrap");
-const $searchSheetInput = /** @type {HTMLInputElement} */ (_$("search-sheet-input"));
-const $searchSheetClear = _$("search-sheet-clear");
-const $searchSheetHistoryToggle = _$("search-sheet-history-toggle");
-const $searchSheetHistoryPanel = _$("search-sheet-history");
-const $searchSheetClose = _$("search-sheet-close");
-const $searchSheetChips = _$("search-sheet-chips");
-const $searchSheetResults = _$("search-sheet-results");
 
 // ── Search core ──
 
@@ -58,7 +49,7 @@ let searchWorker = null;
 let pendingSearchCb = null;
 let activeSearchId = 0;
 // Called when partial results arrive before all chunks are loaded.
-// Overwritten by renderSearchResults / runSheetSearch for each search.
+// Overwritten by renderSearchResults for each search.
 /** @type {((partial: any) => void) | null} */
 let partialResultsCb = null;
 
@@ -233,7 +224,9 @@ function renderSearchResultList(container, result, query, page, pageSize, pagina
 
   if (!hasRef && result.total === 0) {
     if (!result.unmatchedScopes || result.unmatchedScopes.length === 0) {
-      container.appendChild(el("p", { className: "search-empty" }, `"${query}"에 대한 검색 결과가 없습니다.`));
+      container.appendChild(
+        buildSearchEmptyState("검색 결과 없음", `"${query}"에 대한 결과가 없습니다.`)
+      );
     }
     return;
   }
@@ -337,8 +330,26 @@ function buildInPageSearchInput(query, autofocus = false) {
   return wrap;
 }
 
-// Empty-query mobile /search: render just the in-page input (focused) so the
-// user can type. Shares the main-header chrome with renderSearchResults.
+// Apple-Music-style centered empty state (ADR-030 P3): large magnifier glyph +
+// title + subtitle. Used for the empty-query /search view and zero-result lists.
+/**
+ * @param {string} title
+ * @param {string} subtitle
+ * @returns {HTMLElement}
+ */
+function buildSearchEmptyState(title, subtitle) {
+  const box = el("div", { className: "search-empty-state" });
+  const icon = el("div", { className: "search-empty-icon", "aria-hidden": "true" });
+  icon.innerHTML =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="6.4"/><path d="m20 20-3.7-3.7"/></svg>';
+  box.appendChild(icon);
+  box.appendChild(el("p", { className: "search-empty-title" }, title));
+  box.appendChild(el("p", { className: "search-empty-subtitle" }, subtitle));
+  return box;
+}
+
+// Empty-query mobile /search: render the in-page input plus an Apple-Music-style
+// empty-state prompt. Shares the main-header chrome with renderSearchResults.
 function renderSearchView() {
   window.setTitle("검색");
   const $title = _$("page-title");
@@ -347,7 +358,13 @@ function renderSearchView() {
   window.hideAudioBar();
   clearNode($app);
   const view = el("div", { className: "search-view" });
-  view.appendChild(buildInPageSearchInput("", true));
+  // During the tab-bar morph the bottom dock input owns focus; don't let the
+  // (hidden) in-page input grab it back via autofocus.
+  const morphing = document.body.classList.contains("tabbar-searching");
+  view.appendChild(buildInPageSearchInput("", !morphing));
+  view.appendChild(
+    buildSearchEmptyState("성경 검색", "찾을 단어나 구절을 검색해 보세요.")
+  );
   $app.appendChild(view);
 }
 
@@ -478,73 +495,11 @@ $searchClear.addEventListener("click", () => {
   if (window.parsePath().view === "search") window.navigate("/");
 });
 
-// Mobile delegation: tapping the header search bar opens the compact sheet
-// instead of focusing the inline input. Desktop (>768px) keeps live search.
-// pointerdown.preventDefault stops the input from gaining focus first, which
-// would otherwise pop the keyboard once for the header input and again when
-// the sheet input takes focus.
-$searchInput.addEventListener("pointerdown", (e) => {
-  if (!isMobile()) return;
-  e.preventDefault();
-  openSearchSheet("");
-});
-// Fallback for keyboard/tab navigation focus.
-$searchInput.addEventListener("focus", () => {
-  if (!isMobile() || !$searchSheet.hidden) return;
-  $searchInput.blur();
-  openSearchSheet("");
-});
-
-// ── Search bottom sheet (Mobile FAB) ──
-
 // ── BEGIN IS_MOBILE ──
 function isMobile() {
   return window.matchMedia("(max-width: 768px)").matches;
 }
 // ── END IS_MOBILE ──
-
-// Lift the sheet above the on-screen keyboard. Default Android viewport
-// behavior (`resizes-visual`) leaves position:fixed elements anchored to the
-// layout viewport, so the bottom of the sheet would sit behind the keyboard.
-let _suspendKeyboardAdjust = false;
-function adjustSheetForKeyboard() {
-  if (_suspendKeyboardAdjust) return;
-  if (!window.visualViewport || $searchSheet.hidden) return;
-  const vv = window.visualViewport;
-  // For position:fixed elements anchored to the layout viewport, ignore
-  // vv.offsetTop — it represents in-page scroll within the visual viewport
-  // (e.g. pinch-zoom pan) and would incorrectly shift the sheet.
-  const keyboardOffset = Math.max(0, window.innerHeight - vv.height);
-  const prevOffset = parseFloat($searchSheet.style.bottom) || 0;
-  if (keyboardOffset > 0 && Math.abs(keyboardOffset - prevOffset) < 1) return;
-  // Suppress the CSS height transition so viewport adjustments snap instantly
-  // rather than lagging 200ms behind rapid visualViewport resize/scroll events.
-  $searchSheet.style.transition = "none";
-  // Compact: only the input bar + chips are visible. Don't override height —
-  // CSS keeps it at the compact value; just lift the sheet above the keyboard
-  // and add a small bottom margin so it visually floats above the keyboard.
-  if ($searchSheet.dataset.state === "compact") {
-    const COMPACT_BOTTOM_MARGIN_PX = 12; // matches CSS 0.75rem on left/right
-    $searchSheet.style.bottom = `${keyboardOffset + COMPACT_BOTTOM_MARGIN_PX}px`;
-    $searchSheet.style.height = "";
-    $searchSheet.style.maxHeight = "";
-    return;
-  }
-  if (keyboardOffset > 0) {
-    // Expanded with keyboard up — fill the visible viewport so the page body
-    // cannot peek through the gap between the sheet and the on-screen keyboard.
-    $searchSheet.style.bottom = `${keyboardOffset}px`;
-    $searchSheet.style.height = `${vv.height}px`;
-    $searchSheet.style.maxHeight = `${vv.height}px`;
-  } else {
-    $searchSheet.style.transition = "";
-    $searchSheet.style.bottom = "";
-    $searchSheet.style.height = "";
-    $searchSheet.style.maxHeight = "";
-  }
-}
-
-let _searchSheetAppliedScrollLock = false;
 
 // ── Search history panel controller ──
 // One instance per anchor (top header + sheet). Exposes `refresh()` for
@@ -804,328 +759,6 @@ const topSearchHistory = createSearchHistoryController({
 });
 topSearchHistory.syncToggleVisibility();
 
-const sheetSearchHistory = createSearchHistoryController({
-  wrap: $searchSheetInputWrap,
-  input: $searchSheetInput,
-  toggle: $searchSheetHistoryToggle,
-  panel: $searchSheetHistoryPanel,
-  clearBtn: $searchSheetClear,
-  syncClearHidden: (hidden) => { $searchSheetInputWrap.dataset.clearHidden = String(hidden); },
-  onSelect: (q) => commitSheetSearch(q),
-});
-sheetSearchHistory.syncToggleVisibility();
-
-/** @param {string} [query] */
-function openSearchSheet(query) {
-  // Set state BEFORE unhiding so the first paint already reflects compact
-  // dimensions — otherwise the 55vh expanded layout flashes for one frame.
-  $searchSheet.dataset.state = query ? "expanded" : "compact";
-  $searchScrim.hidden = false;
-  $searchSheet.hidden = false;
-  // Lock background scroll. Without this, iOS Safari's URL-bar collapse on
-  // page scroll fires visualViewport resize/scroll while the sheet is open,
-  // causing the sheet's computed dimensions to thrash.
-  // Guard: if the lock is already active (e.g. re-entered via popstate),
-  // window.scrollY would be 0 and overwrite the real saved position.
-  if (document.body.style.position !== "fixed") {
-    const scrollY = window.scrollY;
-    document.body.style.overflow = "hidden";
-    document.body.style.position = "fixed";
-    document.body.style.top = `-${scrollY}px`;
-    document.body.style.width = "100%";
-    document.body.dataset.scrollY = String(scrollY);
-    _searchSheetAppliedScrollLock = true;
-  }
-  $searchSheetInput.value = query || "";
-  $searchSheetClear.hidden = !query;
-  $searchSheetInputWrap.dataset.clearHidden = String(!query);
-  if (sheetSearchHistory) sheetSearchHistory.syncToggleVisibility();
-  // Compact entry focuses synchronously so iOS Safari opens the on-screen
-  // keyboard inside the user-gesture context (rAF would defer past it).
-  // Expanded entry (query-prefilled URL) skips focus — the user wants results,
-  // not the keyboard.
-  if (!query) $searchSheetInput.focus({ preventScroll: true });
-  if (window.visualViewport) {
-    window.visualViewport.addEventListener("resize", adjustSheetForKeyboard);
-    window.visualViewport.addEventListener("scroll", adjustSheetForKeyboard);
-  }
-  if (query) runSheetSearch(query, 1);
-}
-
-function closeSearchSheet() {
-  _suspendKeyboardAdjust = false;
-  if (sheetSearchHistory) sheetSearchHistory.close();
-  $searchScrim.hidden = true;
-  $searchSheet.hidden = true;
-  $searchSheet.dataset.state = "";
-  $searchSheet.style.transition = "";
-  $searchSheet.style.height = "";
-  $searchSheet.style.bottom = "";
-  $searchSheet.style.maxHeight = "";
-  clearNode($searchSheetResults);
-  // Restore background scroll only if this sheet applied the lock.
-  if (_searchSheetAppliedScrollLock) {
-    const scrollY = parseInt(document.body.dataset.scrollY || "0", 10);
-    document.body.style.overflow = "";
-    document.body.style.position = "";
-    document.body.style.top = "";
-    document.body.style.width = "";
-    delete document.body.dataset.scrollY;
-    window.scrollTo(0, scrollY);
-    _searchSheetAppliedScrollLock = false;
-  }
-  if (window.visualViewport) {
-    window.visualViewport.removeEventListener("resize", adjustSheetForKeyboard);
-    window.visualViewport.removeEventListener("scroll", adjustSheetForKeyboard);
-  }
-}
-
-function getSheetPageSize() {
-  // Estimate how many results fit in the visible sheet area
-  const resultsH = $searchSheetResults.clientHeight || (window.innerHeight * 0.55 - 90);
-  const itemH = 80; // approx height per result item
-  return Math.max(5, Math.floor(resultsH / itemH));
-}
-
-/**
- * @param {string} query
- * @param {number} page
- * @param {number} totalPages
- */
-function buildSheetPagination(query, page, totalPages) {
-  const nav = el("nav", { className: "search-pagination", "aria-label": "검색 결과 페이지" });
-  if (page > 1) {
-    const prev = el("a", { href: "#", "aria-label": "이전 페이지" }, "← 이전");
-    prev.addEventListener("click", (e) => { e.preventDefault(); runSheetSearch(query, page - 1); $searchSheetResults.scrollTop = 0; });
-    nav.appendChild(prev);
-  } else {
-    nav.appendChild(el("span", { className: "placeholder" }));
-  }
-  nav.appendChild(el("span", { className: "search-page-info" }, `${page} / ${totalPages}`));
-  if (page < totalPages) {
-    const next = el("a", { href: "#", "aria-label": "다음 페이지" }, "다음 →");
-    next.addEventListener("click", (e) => { e.preventDefault(); runSheetSearch(query, page + 1); $searchSheetResults.scrollTop = 0; });
-    nav.appendChild(next);
-  } else {
-    nav.appendChild(el("span", { className: "placeholder" }));
-  }
-  return nav;
-}
-
-/**
- * @param {string} query
- * @param {number} page
- * @param {boolean} [autoNavigate]
- */
-async function runSheetSearch(query, page, autoNavigate = false) {
-  clearNode($searchSheetResults);
-  if (!query) return;
-
-  $searchSheetResults.appendChild(el("div", { className: "loading" }, "검색 중…"));
-
-  const pageSize = getSheetPageSize();
-
-  /** @param {any} partial */
-  function onPartial(partial) {
-    // Add click-to-close to each result link for sheet view
-    const frag = document.createDocumentFragment();
-    const tempDiv = el("div");
-    renderSearchResultList(tempDiv, partial, query, page, pageSize, null);
-    // Attach closeSearchSheet to all links
-    tempDiv.querySelectorAll("a[href]").forEach((a) => a.addEventListener("click", () => closeSearchSheet()));
-    while (tempDiv.firstChild) frag.appendChild(tempDiv.firstChild);
-    clearNode($searchSheetResults);
-    $searchSheetResults.appendChild(frag);
-  }
-
-  const result = await doSearch(query, page, pageSize, onPartial);
-  clearNode($searchSheetResults);
-
-  if (!result) {
-    $searchSheetResults.appendChild(el("div", { className: "error" }, "검색에 실패했습니다."));
-    return;
-  }
-
-  // Verse reference — navigate only when explicitly confirmed (Enter key).
-  if (result.refMatch) {
-    const ref = result.refMatch;
-    let path = `/${ref.bookId}/${ref.chapter}`;
-    if (ref.verse) {
-      path += `/${ref.verse}`;
-      if (ref.verseEnd) path += `-${ref.verseEnd}`;
-    }
-    if (autoNavigate) {
-      closeSearchSheet();
-      window.navigate(path);
-    } else {
-      // Show the refMatch as a clickable result in the sheet
-      renderSearchResultList($searchSheetResults, result, query, page, pageSize, null);
-      // Attach closeSearchSheet to the reference link
-      $searchSheetResults.querySelectorAll("a[href^='/']").forEach((a) => a.addEventListener("click", () => closeSearchSheet()));
-    }
-    return;
-  }
-
-  renderSearchResultList($searchSheetResults, result, query, page, pageSize, buildSheetPagination);
-  // Attach closeSearchSheet to all result links
-  $searchSheetResults.querySelectorAll("a[href^='/']").forEach((a) => a.addEventListener("click", () => closeSearchSheet()));
-
-  window.announce(`"${query}" 검색 결과 ${result.total}건`);
-}
-
-$searchScrim.addEventListener("click", closeSearchSheet);
-$searchSheetClose.addEventListener("click", closeSearchSheet);
-
-// Chip row: pointerdown.preventDefault keeps the input focused — without it
-// the IME closes briefly and reopens, which flickers on Android.
-$searchSheetChips.addEventListener("pointerdown", (e) => {
-  const t = e.target;
-  if (t instanceof Element && t.closest(".search-chip")) e.preventDefault();
-});
-$searchSheetChips.addEventListener("click", (e) => {
-  const t = e.target;
-  if (!(t instanceof Element)) return;
-  const btn = /** @type {HTMLElement | null} */ (t.closest(".search-chip"));
-  if (!btn) return;
-  if (btn.dataset.chip === "in") insertSearchOperator("in:");
-});
-
-/** @param {string} op */
-function insertSearchOperator(op) {
-  const cur = $searchSheetInput.value;
-  const needsSpace = cur.length > 0 && !cur.endsWith(" ");
-  const insertion = (needsSpace ? " " : "") + op;
-  $searchSheetInput.value = cur + insertion;
-  const has = !!$searchSheetInput.value.trim();
-  $searchSheetClear.hidden = !has;
-  $searchSheetInputWrap.dataset.clearHidden = String(!has);
-  // Cursor right after the colon so the user types the alias next.
-  const pos = $searchSheetInput.value.length;
-  $searchSheetInput.focus({ preventScroll: true });
-  $searchSheetInput.setSelectionRange(pos, pos);
-}
-
-/** @param {string} rawQuery */
-function commitSheetSearch(rawQuery) {
-  const q = (rawQuery || "").trim();
-  if (!q) return;
-  pushSearchHistory(q);
-  if (sheetSearchHistory) sheetSearchHistory.refresh();
-  // Dismiss IME first so the keyboard slide-down can run alongside the
-  // sheet's CSS height/bottom transition. We suspend adjustSheetForKeyboard
-  // briefly so visualViewport.resize during keyboard dismiss doesn't
-  // re-impose `transition: none` and snap the animation.
-  $searchSheetInput.blur();
-  _suspendKeyboardAdjust = true;
-  requestAnimationFrame(() => {
-    $searchSheet.style.transition = "";
-    $searchSheet.style.bottom = "";
-    $searchSheet.style.height = "";
-    $searchSheet.style.maxHeight = "";
-    $searchSheet.dataset.state = "expanded";
-    runSheetSearch(q, 1, true);
-    setTimeout(() => { _suspendKeyboardAdjust = false; }, 260);
-  });
-}
-
-$searchSheetInput.addEventListener("keydown", (e) => {
-  if (e.key !== "Enter") return;
-  if (sheetSearchHistory && sheetSearchHistory.consumeEnter(e)) return;
-  e.preventDefault();
-  commitSheetSearch($searchSheetInput.value);
-});
-
-$searchSheetInput.addEventListener("input", () => {
-  const has = !!$searchSheetInput.value.trim();
-  $searchSheetClear.hidden = !has;
-  $searchSheetInputWrap.dataset.clearHidden = String(!has);
-});
-
-// Tapping the input while results are showing reverts to compact mode so the
-// keyboard reappears with breathing room and the previous results clear out.
-// We seed `bottom` with an estimated keyboard offset so height/bottom/left/
-// right all transition together in a single 220ms animation. After the
-// transition we issue a soft catch-up to the keyboard's real position —
-// transitioned (not snapped) so any estimate mismatch glides into place.
-// adjustSheetForKeyboard is suspended throughout so its `transition: none`
-// snap doesn't interrupt the choreography; tracking resumes afterwards.
-$searchSheetInput.addEventListener("focus", () => {
-  if ($searchSheet.dataset.state !== "expanded") return;
-  _suspendKeyboardAdjust = true;
-  $searchSheet.style.transition = "";
-  const COMPACT_BOTTOM_MARGIN_PX = 12;
-  // Typical mobile soft-keyboard heights: iPhone ~291–334, Android ~250–320.
-  // 280 is a reasonable midpoint; the catch-up below corrects any mismatch.
-  const ESTIMATED_KEYBOARD_PX = 280;
-  const vv = window.visualViewport;
-  const currentOffset = vv ? Math.max(0, window.innerHeight - vv.height) : 0;
-  const targetOffset = currentOffset > 0 ? currentOffset : ESTIMATED_KEYBOARD_PX;
-  $searchSheet.style.bottom = `${targetOffset + COMPACT_BOTTOM_MARGIN_PX}px`;
-  $searchSheet.dataset.state = "compact";
-  clearNode($searchSheetResults);
-  setTimeout(() => {
-    // Soft catch-up: read the real keyboard offset and let CSS transition
-    // glide the small correction. Don't call adjustSheetForKeyboard here —
-    // it would set `transition: none` and snap.
-    const vv2 = window.visualViewport;
-    const offset2 = vv2 ? Math.max(0, window.innerHeight - vv2.height) : 0;
-    $searchSheet.style.transition = "";
-    $searchSheet.style.bottom = `${offset2 + COMPACT_BOTTOM_MARGIN_PX}px`;
-    setTimeout(() => { _suspendKeyboardAdjust = false; }, 240);
-  }, 260);
-});
-
-$searchSheetClear.addEventListener("click", () => {
-  $searchSheetInput.value = "";
-  $searchSheetClear.hidden = true;
-  $searchSheetInputWrap.dataset.clearHidden = "true";
-  // Refocus the input; the focus handler then collapses the sheet to compact
-  // so the user sees a clean input + keyboard instead of stale results sitting
-  // awkwardly under an empty field.
-  $searchSheetInput.focus();
-});
-
-// Drag-handle initializer — registered later in app.js's deferred startup
-// hook. Operates on the (initially hidden) search sheet, so deferring keeps
-// the listener attachment off the launch critical path.
-function initSheetDrag() {
-  const handle = _$("search-sheet-handle");
-  let startY = 0;
-  let startH = 0;
-
-  /** @param {number} clientY */
-  function onMove(clientY) {
-    const delta = startY - clientY;
-    // Lower bound is 0 (not 30vh) so the user can drag the sheet visually
-    // below its rest min — that's the affordance for the snap-close gesture.
-    // A hard 30vh clamp here would make dragReleaseAction's close branch
-    // unreachable (Cursor Bugbot caught this exact regression in cite-sheet).
-    const newH = Math.min(Math.max(startH + delta, 0), window.innerHeight * 0.9);
-    $searchSheet.style.height = `${newH}px`;
-  }
-
-  handle.addEventListener("pointerdown", (e) => {
-    e.preventDefault();
-    startY = e.clientY;
-    startH = $searchSheet.offsetHeight;
-    handle.setPointerCapture(e.pointerId);
-    handle.addEventListener("pointermove", onPointerMove);
-    handle.addEventListener("pointerup", onPointerUp, { once: true });
-  });
-
-  /** @param {PointerEvent} e */
-  function onPointerMove(e) { onMove(e.clientY); }
-  function onPointerUp() {
-    handle.removeEventListener("pointermove", onPointerMove);
-    const action = dragReleaseAction($searchSheet.offsetHeight, window.innerHeight);
-    if (action === "close") {
-      closeSearchSheet();
-      $searchSheet.style.height = "";
-    } else if (action === "snap-min") {
-      $searchSheet.style.height = `${window.innerHeight * 0.3}px`;
-    }
-  }
-}
 
 // ── BEGIN AUTO_NAVIGATE ──
 // Read-and-reset helper for app.js's route() handler. `searchAutoNavigate`
@@ -1144,26 +777,21 @@ function consumeSearchAutoNavigate() {
 // ── END AUTO_NAVIGATE ──
 
 // Window facade for legacy app.js callers (route handler invokes
-// renderSearchResults / openSearchSheet / isMobile / consumeSearchAutoNavigate,
-// chapter renderer reuses appendTextWithHighlight for ?hl= snippet
-// highlighting, Escape keydown calls closeSearchSheet, bootstrap calls
-// initSheetDrag).
-window.openSearchSheet = openSearchSheet;
-window.closeSearchSheet = closeSearchSheet;
+// renderSearchResults / renderSearchView / isMobile / consumeSearchAutoNavigate,
+// chapter renderer reuses appendTextWithHighlight for ?hl= snippet highlighting).
 // ADR-030: 탭 바 하단 모핑 입력이 검색을 커밋할 때 재사용.
 window.commitTopSearch = commitTopSearch;
 window.renderSearchResults = renderSearchResults;
 window.renderSearchView = renderSearchView;
-window.initSheetDrag = initSheetDrag;
 window.isMobile = isMobile;
 window.appendTextWithHighlight = appendTextWithHighlight;
 window.consumeSearchAutoNavigate = consumeSearchAutoNavigate;
 window.appSearch = {
-  openSearchSheet, closeSearchSheet, renderSearchResults, renderSearchView, initSheetDrag,
+  renderSearchResults, renderSearchView,
   isMobile, appendTextWithHighlight, consumeSearchAutoNavigate,
 };
 
 export {
-  openSearchSheet, closeSearchSheet, renderSearchResults, renderSearchView, initSheetDrag,
+  renderSearchResults, renderSearchView,
   isMobile, appendTextWithHighlight, consumeSearchAutoNavigate,
 };

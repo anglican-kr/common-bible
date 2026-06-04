@@ -859,8 +859,8 @@ window.appCitations = (() => {
   }
 
   /**
-   * Drag-resize the sheet by its top handle. Mirrors the search-sheet /
-   * bookmark-drawer pattern (pointerdown → setPointerCapture → pointermove
+   * Drag-resize the sheet by its top handle. Mirrors the bookmark-drawer
+   * pattern (pointerdown → setPointerCapture → pointermove
    * adjusts inline height → pointerup releases). Move clamp is loose (0 to
    * 90vh) so the user can drag visually below the rest min; release decides
    * close vs snap-back vs stay via `appHelpers.dragReleaseAction`.

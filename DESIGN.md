@@ -205,12 +205,12 @@ HIG 의 절제된 깊이 표현. 라이트 기준 값이며, **다크에서는 `
 | 아이콘 버튼 | `.title-back-btn`·`.title-bookmark-btn`·`.settings-btn` | 투명·`--accent`·**≥44px 탭 영역** | ADR-024 |
 | 구분 탭 | `.division-tab`·`.division-tab-indicator` | 슬라이드 인디케이터(트랙 동색 칩 + elevation) | ADR-024 |
 | 챕터 팝오버 | `.chapter-popover`·`.popover-grid`·`.popover-item` | `--radius-lg`·격자 카드 | ADR-024 |
-| 바텀 시트 | `.search-sheet`·`.cite-sheet`·`.bm-drawer` | `--radius-xl` 상단·`--shadow-sheet`·그래버 핸들·safe-area | ADR-022 |
+| 바텀 시트 | `.cite-sheet`·`.bm-drawer` | `--radius-xl` 상단·`--shadow-sheet`·그래버 핸들·safe-area | ADR-022 |
 | 모달 | install/disconnect/bookmark 다이얼로그 | 중앙 정렬·`--radius-modal`·`--shadow-4`·scrim `rgba(0,0,0,.45)` | ADR-008 |
 | 툴팁(주석) | `.note-tooltip`·`.note-anchor`(※) | 클릭 트리거·footnote 패턴 | ADR-022·027 |
 | 인용 칩 | `.cite-chip` | 옅은 회색 칩·클릭 시 인용 시트 | ADR-022 |
 | 토글 스위치 | `.settings` 토글 | iOS/Material/desktop 변형·ON=`--accent` | ADR-023 |
-| 검색 | `#search-bar`(데스크탑)·`#search-fab`+`#search-sheet`(모바일) | 반응형 전환 | ADR-005 |
+| 검색 | `#search-bar`(데스크탑)·탭 바 모핑→`/search` 전체화면(모바일) | 반응형 전환 | ADR-005·029·030 |
 | 북마크 | `.bm-*` 트리·모달·스와이프 | 드로어(모바일 시트/데스크탑 패널) | ADR-011 |
 | 절 선택 바 | `.verse-select-bar` | 스티키 하단 바·복사/북마크 | — |
 | 오디오 바 | `.audio-player`·`.audio-play-btn` | 스티키 플레이어·≥44px play | — |

@@ -66,7 +66,9 @@ function syncTabBarActive() {
   }
   // ADR-030 P2: 검색 외 라우트로 가면(홈 탭 등) 검색 모핑을 복구. tabbar.js 가
   // 노출하는 exitTabSearch — 검색 진입 시엔 active==='search' 라 호출 안 됨.
+  // 검색 라우트면(뒤로/앞으로로 ?q= 가 바뀌어도) dock 입력을 URL 에 동기화.
   if (active !== "search") window.exitTabSearch?.();
+  else window.syncTabSearchQuery?.();
 }
 
 // Mirrors app.js's DATA_DIR — Phase 7b's audio player still uses the same
@@ -93,7 +95,7 @@ let appVersion = null;
   const SYNC_FEEDBACK_MS   = 900;  // how long the spinner stays after trigger
   // Modal/sheet roots whose internal scroll must not be hijacked by PTR. We
   // walk e.target to see if the touch landed inside one of these.
-  const MODAL_SELECTORS = "#bookmark-drawer, #search-sheet, #install-modal, #bm-save-modal, #bm-new-folder-modal, #bm-import-modal, #bm-merge-modal, #drive-disconnect-modal, .settings-popover, .chapter-popover";
+  const MODAL_SELECTORS = "#bookmark-drawer, #install-modal, #bm-save-modal, #bm-new-folder-modal, #bm-import-modal, #bm-merge-modal, #drive-disconnect-modal, .settings-popover, .chapter-popover";
 
   /** @type {HTMLElement | null} */
   let indicator = null;
@@ -1731,8 +1733,6 @@ async function route() {
   // lock) persist over the new view, blocking it (ADR-029).
   const bmDrawer = document.getElementById("bookmark-drawer");
   if (bmDrawer && !bmDrawer.hidden) window.closeBookmarkDrawer?.();
-  const searchSheet = document.getElementById("search-sheet");
-  if (searchSheet && !searchSheet.hidden) window.closeSearchSheet?.();
   // Desktop settings popover: close on nav too (it has a focus trap). Closing
   // here also makes the /settings desktop fallback's gear.click() always OPEN
   // (never toggle-closed) since the popover is already dismissed by this point.
@@ -1958,7 +1958,7 @@ document.addEventListener("click", (e) => {
 
 // popstate stays here (route is module-local). The DOMContentLoaded
 // bootstrap handler stayed in app.js (Phase 8 territory) — it kicks off
-// route() and the deferred init chain (initCompactHeader / initSheetDrag /
+// route() and the deferred init chain (initCompactHeader /
 // initBookmarkSheetDrag / registerServiceWorker / maybeShowInstallNudge /
 // driveSync.initDriveSync), several of which still live in app.js.
 window.addEventListener("popstate", route);

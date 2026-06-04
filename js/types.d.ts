@@ -750,14 +750,11 @@ export interface AppBookmark {
 
 // ── App search facade (js/app/search.js) ────────────────────────────────────
 // Phase 5 of the app.js modularization (ADR-018). Search worker wire-up,
-// desktop top-bar input, mobile bottom sheet, history panel, drag init.
+// desktop top-bar input, mobile full-screen /search view, history panel.
 
 export interface AppSearch {
-  openSearchSheet: (query?: string) => void;
-  closeSearchSheet: () => void;
   renderSearchResults: (query: string, page: number, autoNavigate?: boolean) => Promise<void>;
   renderSearchView: () => void;
-  initSheetDrag: () => void;
   isMobile: () => boolean;
   appendTextWithHighlight: (target: Node, text: string, query: string) => void;
   consumeSearchAutoNavigate: () => boolean;
@@ -806,6 +803,8 @@ declare global {
     // exitTabSearch 노출(views-routing 의 syncTabBarActive 가 라우트 변경 시 호출).
     commitTopSearch?: (rawQuery: string) => void;
     exitTabSearch?: () => void;
+    syncTabSearchQuery?: () => void;
+    closeTabSearch?: () => boolean;
 
     // Cross-module globals set by drive-sync.js / state-machine.js.
     _syncClientId?: string;
@@ -890,8 +889,7 @@ declare global {
   //   announce               → moves with $announce anchor (Phase 8 owner)
   //   openInstallModal       → install.js (Phase 4) — DONE
   //   maybeShowInstallNudge  → install.js (Phase 4) — DONE
-  //   openSearchSheet, closeSearchSheet, renderSearchResults, initSheetDrag
-  //                          → search.js (Phase 5) — DONE
+  //   renderSearchResults, renderSearchView → search.js (Phase 5) — DONE
   //   openDriveDisconnectModal → bookmark.js (Phase 6) or stays
   //   clearAllCaches         → settings-ui? or app-main (Phase 8)
   //   parsePath, route, navigate → views-routing.js (Phase 7)
@@ -979,11 +977,8 @@ declare global {
   function updateVerseSelectBar(): void;
   function initBookmarkSheetDrag(): void;
   function initBookmarkDrawerResize(): void;
-  function openSearchSheet(query?: string): void;
-  function closeSearchSheet(): void;
   function renderSearchResults(query: string, page: number, autoNavigate?: boolean): Promise<void>;
   function renderSearchView(): void;
-  function initSheetDrag(): void;
   function isMobile(): boolean;
   function appendTextWithHighlight(target: Node, text: string, query: string): void;
   function consumeSearchAutoNavigate(): boolean;
