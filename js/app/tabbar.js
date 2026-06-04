@@ -315,7 +315,16 @@ function onScroll() {
   });
 }
 window.addEventListener("scroll", onScroll, { passive: true });
-// 홈 탭 등 라우트 변경 시 복구 — 새 뷰는 최상단에서 시작(syncTabBarActive 가 호출).
-W.resetTabCollapse = () => { lastScrollY = 0; applyCollapsed(false); };
+// 라우트 변경 시 호출(syncTabBarActive). 무조건 0 으로 리셋하면 뒤로가기의 스크롤
+// 복원(중간 위치)에서 lastScrollY 가 어긋나 방향을 오판하거나 읽던 중 펼쳐진 채 남는다.
+// → rAF 로 브라우저 스크롤 복원 뒤 실제 scrollY 기준으로 재동기화(방향 오판 방지) +
+// 복원 위치가 임계 초과면 그대로 축소 유지. 새 뷰(최상단)면 자연히 펼침.
+W.resetTabCollapse = () => {
+  requestAnimationFrame(() => {
+    const y = window.scrollY || 0;
+    lastScrollY = y;
+    applyCollapsed(collapseEnabled() && y > SCROLL_COLLAPSE_AT);
+  });
+};
 
 export {};
