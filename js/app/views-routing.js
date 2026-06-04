@@ -69,6 +69,8 @@ function syncTabBarActive() {
   // 검색 라우트면(뒤로/앞으로로 ?q= 가 바뀌어도) dock 입력을 URL 에 동기화.
   if (active !== "search") window.exitTabSearch?.();
   else window.syncTabSearchQuery?.();
+  // ADR-030 P3: 라우트 변경 시 스크롤 축소 복구(새 뷰는 최상단에서 시작).
+  window.resetTabCollapse?.();
 }
 
 // Mirrors app.js's DATA_DIR — Phase 7b's audio player still uses the same

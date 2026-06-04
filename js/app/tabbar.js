@@ -21,6 +21,7 @@ const $searchClose = document.getElementById("tab-search-close");
 const W = /** @type {any} */ (window);
 
 let searching = false;
+let collapsed = false; // ADR-030 P3: 스크롤 축소(탭 바 홈 원형) 상태
 
 // 입력 pill 안 검색어 지우기(⊗)는 텍스트가 있을 때만.
 function syncClearBtn() {
@@ -75,6 +76,24 @@ function liftForKeyboard() {
   $dock.style.setProperty("--kb-overlap", up ? `${overlap}px` : "0px");
 }
 // ── END KEYBOARD ──
+
+// ── BEGIN SCROLL ── (tests/unit/tabbar.test.js 가 슬라이스해 검증)
+// 스크롤 축소: 아래로 스크롤하면 탭 바를 홈 원형으로 접고, 맨 위로 올라오면 복구한다.
+// 읽는 중간에 위로 스크롤해도 유지(깜빡임 방지) — 최상단(또는 홈 탭)에서만 복구.
+const SCROLL_COLLAPSE_AT = 64; // 이만큼 아래로 내려가야 접힘(헤더 높이 근처)
+const SCROLL_TOP_EPS = 4; // 최상단 판정 여유
+/**
+ * @param {number} y 현재 scrollY
+ * @param {number} lastY 직전 scrollY
+ * @param {boolean} collapsed 현재 접힘 여부
+ * @returns {boolean} 다음 접힘 여부
+ */
+function nextScrollCollapsed(y, lastY, collapsed) {
+  if (y <= SCROLL_TOP_EPS) return false; // 최상단 → 복구
+  if (y > lastY && y > SCROLL_COLLAPSE_AT) return true; // 아래로 + 임계 초과 → 접힘
+  return collapsed; // 그 외(중간에서 위로 등) 유지
+}
+// ── END SCROLL ──
 function attachKeyboardTracking() {
   const vv = window.visualViewport;
   if (!vv) return;
@@ -111,6 +130,9 @@ function openSearch() {
   }
   searching = true;
   $dock.classList.add("searching");
+  // 검색 모핑은 스크롤 축소보다 우선 — collapsed 해제(둘 다 홈 원형이라 충돌 방지).
+  collapsed = false;
+  $dock.classList.remove("collapsed");
   document.body.classList.add("tabbar-searching");
   $searchBtn?.setAttribute("aria-expanded", "true");
   // 닫기(X) 버튼 노출은 키보드 등장에 묶는다(setKeyboardState). 키보드가 없는
@@ -245,5 +267,28 @@ W.exitTabSearch = exitSearch;
 // 검색 라우트가 바뀌면(뒤로/앞으로 등) dock 입력을 URL 쿼리에 동기화 — 모핑 중일
 // 때만(searching) 의미. route() 의 syncTabBarActive 가 매 라우트마다 호출.
 W.syncTabSearchQuery = () => { if (searching) syncInputFromUrl(); };
+
+// ── 스크롤 축소 적용 ──
+/** @param {boolean} v */
+function applyCollapsed(v) {
+  const next = searching ? false : v; // 검색 모핑 중엔 축소 안 함
+  if (next === collapsed) return;
+  collapsed = next;
+  $dock?.classList.toggle("collapsed", collapsed);
+}
+let lastScrollY = 0;
+let scrollRAF = 0;
+function onScroll() {
+  if (scrollRAF) return;
+  scrollRAF = requestAnimationFrame(() => {
+    scrollRAF = 0;
+    const y = window.scrollY || 0;
+    applyCollapsed(nextScrollCollapsed(y, lastScrollY, collapsed));
+    lastScrollY = y;
+  });
+}
+window.addEventListener("scroll", onScroll, { passive: true });
+// 홈 탭 등 라우트 변경 시 복구 — 새 뷰는 최상단에서 시작(syncTabBarActive 가 호출).
+W.resetTabCollapse = () => { lastScrollY = 0; applyCollapsed(false); };
 
 export {};

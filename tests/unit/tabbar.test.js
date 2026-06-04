@@ -161,3 +161,36 @@ test("liftForKeyboard: visualViewport 없으면 no-op(데스크탑/구형)", () 
   // 아무 속성도 설정하지 않음.
   assert.equal($dock.style.getPropertyValue("--kb-overlap"), "");
 });
+
+// ── nextScrollCollapsed (SCROLL 블록) ─────────────────────────────────────────
+// 순수 함수 — 자유 변수 없이 vm 에서 단독 실행.
+
+const SCROLL_BLOCK = extractBlock("SCROLL");
+function scrollCtx() {
+  const ctx = {};
+  vm.createContext(ctx);
+  vm.runInContext(SCROLL_BLOCK, ctx);
+  return ctx;
+}
+
+test("nextScrollCollapsed: 최상단(y<=4)은 항상 복구(false)", () => {
+  const { nextScrollCollapsed } = scrollCtx();
+  assert.equal(nextScrollCollapsed(0, 500, true), false);
+  assert.equal(nextScrollCollapsed(4, 500, true), false);
+});
+
+test("nextScrollCollapsed: 아래로 + 임계(64) 초과 → 접힘(true)", () => {
+  const { nextScrollCollapsed } = scrollCtx();
+  assert.equal(nextScrollCollapsed(200, 100, false), true);
+});
+
+test("nextScrollCollapsed: 아래로지만 임계 이하 → 유지", () => {
+  const { nextScrollCollapsed } = scrollCtx();
+  assert.equal(nextScrollCollapsed(50, 10, false), false); // 아직 64 이하
+});
+
+test("nextScrollCollapsed: 중간에서 위로 스크롤 → 유지(깜빡임 방지)", () => {
+  const { nextScrollCollapsed } = scrollCtx();
+  // 접힌 상태에서 위로(y<lastY) 올라가도 최상단 아니면 그대로 접힘 유지.
+  assert.equal(nextScrollCollapsed(300, 500, true), true);
+});

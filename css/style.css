@@ -3003,8 +3003,10 @@ html.cite-sheet-open {
 /* 모핑 중: 홈 원형·입력 pill·닫기 X 를 균등 간격으로(idle 엔 gap 없이 margin-auto
    우측 정렬). */
 #tab-dock.searching { gap: var(--space-2); }
-/* 홈만 남기고 접기 + #tab-bar 를 60px 원형으로(검색 원형과 동일 형태). */
-#tab-dock.searching #tab-bar {
+/* 홈만 남기고 접기 + #tab-bar 를 60px 원형으로(검색 원형과 동일 형태).
+   검색 모핑(.searching)과 스크롤 축소(.collapsed)가 이 홈 원형·탭 접힘을 공유. */
+#tab-dock.searching #tab-bar,
+#tab-dock.collapsed #tab-bar {
   gap: 0;
   flex: 0 0 auto;
   width: calc(var(--touch-target) + var(--space-2) * 2); /* 60px */
@@ -3012,7 +3014,8 @@ html.cite-sheet-open {
   corner-shape: superellipse(2); /* 원 */
   justify-content: center;
 }
-#tab-dock.searching .tab-item:not([data-tab="home"]) {
+#tab-dock.searching .tab-item:not([data-tab="home"]),
+#tab-dock.collapsed .tab-item:not([data-tab="home"]) {
   max-width: 0;
   min-width: 0;
   opacity: 0;
@@ -3020,8 +3023,10 @@ html.cite-sheet-open {
   pointer-events: none;
 }
 /* 원 안에 홈 아이콘 중앙 정렬 — 활성 pill 폭(3rem) 강제 해제. */
-#tab-dock.searching .tab-item[data-tab="home"] { min-width: 0; }
-#tab-dock.searching .tab-item[data-tab="home"] .tab-icon-wrap { width: auto; }
+#tab-dock.searching .tab-item[data-tab="home"],
+#tab-dock.collapsed .tab-item[data-tab="home"] { min-width: 0; }
+#tab-dock.searching .tab-item[data-tab="home"] .tab-icon-wrap,
+#tab-dock.collapsed .tab-item[data-tab="home"] .tab-icon-wrap { width: auto; }
 /* 검색 dock → 남은 폭을 채우는 입력 pill (floating glass 스타일을 dock 으로 이동).
    flex-basis 0 으로 콘텐츠(placeholder) 길이와 무관하게 — 우측 넘침 방지. */
 #tab-dock.searching #tab-search-dock {
