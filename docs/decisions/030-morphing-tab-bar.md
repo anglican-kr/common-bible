@@ -54,7 +54,9 @@ ADR-029 는 Safari 26 home-indicator 틴팅 회피를 위해 glass 를 `::before
 
 ### 5. 스크롤 축소 + 오디오 미니 모핑 (구현 완료)
 
-본문을 아래로 스크롤하면(읽기 진행):
+**적용 조건(게이트):** 스크롤 축소는 (1) **오디오 북 설정(`loadAudioShow()`)이 켜져 있고** (2) **읽기 화면(`view==="chapter"`·`"prologue"`)** 일 때만. 책 목록(`books`·`division`)·장 선택(`chapters`)·검색·북마크·설정 화면에선 아래로 스크롤해도 탭 바를 그대로 유지(축소·미니 오디오는 오디오 북 활성 + 본문 읽기 맥락 전용).
+
+본문을 아래로 스크롤하면(읽기 진행, 위 게이트 충족 시):
 - `#tab-dock.collapsed`: 비-홈 탭 접고 `#tab-bar`를 60px 홈 원형으로(검색 모핑과 홈 원형·탭 접힘 CSS 공유). 검색 원형은 우측 유지 → 홈·검색이 양 끝.
 - 오디오 표시 중이면(`body.tabbar-collapsed`) 플로팅 `#audio-bar`가 `position:fixed`로 **홈·검색 원형 사이 dock 행에 축소·이동**(60px, 재생 버튼 + 진행바만 — `.audio-time`·`.audio-speed-btn` 숨김). 좌우 = `space-4 + 60px + space-2`.
 - **복구**: 최상단(scrollY≈0) 자동 복구 + 라우트 변경 시 복구. 중간 구간에서 위로 스크롤은 유지(깜빡임 방지). 검색 모핑 중엔 축소 안 함.

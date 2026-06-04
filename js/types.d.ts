@@ -585,6 +585,9 @@ export interface AppStorage {
   saveAudioTime: (bookId: string, chapter: number, time: number) => void;
   loadAudioTime: (bookId: string, chapter: number) => number | null;
   clearAudioTime: () => void;
+  // Audio book on/off (오디오 북 설정)
+  loadAudioShow: () => boolean;
+  saveAudioShow: (v: boolean) => void;
 
   // Search history
   normalizeSearchQuery: (q: unknown) => string;

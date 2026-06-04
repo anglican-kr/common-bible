@@ -291,6 +291,13 @@ function applyCollapsed(v) {
   // body 클래스 — 오디오 바(별도 요소)가 축소 시 dock 행으로 들어오는 CSS 트리거.
   document.body.classList.toggle("tabbar-collapsed", collapsed);
 }
+// 스크롤 축소는 (1) 오디오 북 설정이 켜져 있고(미니 오디오 전제) (2) 읽기 화면
+// (본문 chapter·프롤로그)일 때만. 책 목록·장 선택·검색·북마크·설정 화면에선 축소 안 함.
+function collapseEnabled() {
+  if (!W.appStorage?.loadAudioShow?.()) return false;
+  const view = W.parsePath?.().view;
+  return view === "chapter" || view === "prologue";
+}
 let lastScrollY = 0;
 let scrollRAF = 0;
 function onScroll() {
@@ -298,7 +305,8 @@ function onScroll() {
   scrollRAF = requestAnimationFrame(() => {
     scrollRAF = 0;
     const y = window.scrollY || 0;
-    applyCollapsed(nextScrollCollapsed(y, lastScrollY, collapsed));
+    // 축소 비대상 화면이면 항상 펼친 상태 유지.
+    applyCollapsed(collapseEnabled() && nextScrollCollapsed(y, lastScrollY, collapsed));
     lastScrollY = y;
   });
 }

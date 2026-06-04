@@ -132,6 +132,31 @@ def test_home_tab_returns_to_root(mobile_context):
     )
 
 
+def test_book_list_does_not_collapse_on_scroll(mobile_context):
+    """책 목록(books)에선 아래로 스크롤해도 탭바 유지(읽기 화면 전용 게이트)."""
+    page = mobile_context.new_page()
+    page.goto(BASE_URL)
+    wait_app_ready(page)
+    page.evaluate("window.scrollTo(0, 800)")
+    page.wait_for_timeout(400)
+    assert "collapsed" not in (
+        page.locator("#tab-dock").get_attribute("class") or ""
+    ), "book list must not collapse the tab bar on scroll"
+
+
+def test_no_collapse_when_audio_book_off(mobile_context):
+    """오디오 북 설정 OFF 면 읽기 화면에서도 스크롤 축소 안 함."""
+    page = mobile_context.new_page()
+    page.add_init_script("localStorage.setItem('bible-audio-show', '0')")
+    page.goto(f"{BASE_URL}/gen/1")
+    page.wait_for_selector("article.chapter-text .verse", timeout=8_000)
+    page.evaluate("window.scrollTo(0, 600)")
+    page.wait_for_timeout(400)
+    assert "collapsed" not in (
+        page.locator("#tab-dock").get_attribute("class") or ""
+    ), "audio-book OFF must disable scroll collapse"
+
+
 def test_reading_route_keeps_home_tab_active(mobile_context):
     """읽기 라우트(/gen/1)에서도 home 탭이 active 상태."""
     page = mobile_context.new_page()
