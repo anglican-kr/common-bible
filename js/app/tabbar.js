@@ -104,7 +104,9 @@ function syncInputFromUrl() {
 function openSearch() {
   if (!$dock || !$searchInput) return;
   if (searching) {
-    $searchInput.focus();
+    // preventScroll: iOS 가 포커스 입력을 키보드 위로 보이려 페이지를 pan(빈 화면 문구가
+    // 위로 밀림)하는 걸 막는다. dock 은 --kb-overlap 으로 별도로 키보드 위에 올라간다.
+    $searchInput.focus({ preventScroll: true });
     return;
   }
   searching = true;
@@ -125,7 +127,7 @@ function openSearch() {
     ? $inpage.value
     : (new URLSearchParams(location.search).get("q") || "");
   syncClearBtn();
-  requestAnimationFrame(() => $searchInput?.focus());
+  requestAnimationFrame(() => $searchInput?.focus({ preventScroll: true }));
   attachKeyboardTracking();
 }
 
@@ -198,7 +200,20 @@ $searchInput?.addEventListener("input", syncClearBtn);
 // X(키보드 내리기) 노출 + 홈 숨김은 입력 focus(=키보드 등장)/blur 기준 — iOS 의
 // 높이 감지(innerHeight−visualViewport) 불안정과 무관하게 확실히 토글. dock 들어올림
 // (--kb-overlap)만 visualViewport(liftForKeyboard)가 담당.
-$searchInput?.addEventListener("focus", () => setKeyboardState(true));
+//
+// iOS 는 포커스된 입력을 키보드 위로 보이려고 페이지를 위로 밀어 올린다(빈 화면 문구·
+// 결과가 위로 사라짐). preventScroll 로는 못 막혀서, 포커스 시 명시적으로 맨 위로
+// 스크롤한다. pan 은 키보드 애니메이션 뒤에 일어나므로 즉시 + 다음 프레임 + 지연으로
+// 여러 번 맨 위로 고정한다(dock 은 --kb-overlap 으로 키보드 위에 별도로 올라간다).
+function scrollPageTop() {
+  window.scrollTo(0, 0);
+}
+$searchInput?.addEventListener("focus", () => {
+  setKeyboardState(true);
+  scrollPageTop();
+  requestAnimationFrame(scrollPageTop);
+  setTimeout(scrollPageTop, 300);
+});
 $searchInput?.addEventListener("blur", () => setKeyboardState(false));
 
 // ⊗ 지우기 — 검색어만 비우고 입력 유지(포커스·키보드 유지). 결과 화면이면 빈
@@ -208,7 +223,7 @@ $searchClear?.addEventListener("click", () => {
   $searchInput.value = "";
   syncClearBtn();
   if (W.parsePath?.().view === "search") W.navigate("/search");
-  $searchInput.focus();
+  $searchInput.focus({ preventScroll: true });
 });
 
 // 닫기(X) — 키보드가 떠 있을 때만 보이며(setKeyboardState), 키보드만 내린다.
