@@ -133,6 +133,7 @@ function openSearch() {
   // 검색 모핑은 스크롤 축소보다 우선 — collapsed 해제(둘 다 홈 원형이라 충돌 방지).
   collapsed = false;
   $dock.classList.remove("collapsed");
+  document.body.classList.remove("tabbar-collapsed");
   document.body.classList.add("tabbar-searching");
   $searchBtn?.setAttribute("aria-expanded", "true");
   // 닫기(X) 버튼 노출은 키보드 등장에 묶는다(setKeyboardState). 키보드가 없는
@@ -275,6 +276,8 @@ function applyCollapsed(v) {
   if (next === collapsed) return;
   collapsed = next;
   $dock?.classList.toggle("collapsed", collapsed);
+  // body 클래스 — 오디오 바(별도 요소)가 축소 시 dock 행으로 들어오는 CSS 트리거.
+  document.body.classList.toggle("tabbar-collapsed", collapsed);
 }
 let lastScrollY = 0;
 let scrollRAF = 0;

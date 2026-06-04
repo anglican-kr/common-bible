@@ -3224,6 +3224,30 @@ body.tabbar-searching #search-inpage-bar { display: none; }
   body:not(.verse-select-active) #app:has(~ #audio-bar:not([hidden])) {
     padding-bottom: calc(var(--tabbar-reserve) + 3.5rem);
   }
+
+  /* ── ADR-030 P3b: 스크롤 축소 + 오디오 표시 중 → 오디오 바를 홈·검색 원형 사이
+     dock 행으로 축소·이동(재생 버튼 + 진행바만, 시간·속도 숨김). position:fixed 로
+     dock 행에 정확히 배치 — 좌우 = space-4 + 홈/검색 원형 60px + space-2 간격. */
+  body.tabbar-collapsed #audio-bar:not([hidden]) {
+    position: fixed;
+    bottom: calc(var(--space-1) + env(safe-area-inset-bottom) * 0.75);
+    left: calc(var(--space-4) + var(--touch-target) + var(--space-2) * 3);
+    right: calc(var(--space-4) + var(--touch-target) + var(--space-2) * 3);
+    margin: 0;
+    height: calc(var(--touch-target) + var(--space-2) * 2); /* 60px — 원형들과 동일 */
+    padding: 0 var(--space-3);
+    display: flex;
+    align-items: center;
+    z-index: var(--nav-z);
+  }
+  body.tabbar-collapsed #audio-bar:not([hidden]) .audio-time,
+  body.tabbar-collapsed #audio-bar:not([hidden]) .audio-speed-btn { display: none; }
+  body.tabbar-collapsed #audio-bar:not([hidden]) .audio-player { width: 100%; gap: var(--space-2); }
+  /* 축소 시 오디오는 dock 행에 들어오므로 #app 추가 하단 여유 불필요(탭 바 footprint 만). */
+  body.tabbar-collapsed:not(.verse-select-active) #app:has(~ #audio-bar:not([hidden])) {
+    padding-bottom: var(--tabbar-reserve);
+  }
+
   /* 절 선택 모드: 전용 하단 바가 차지하므로 탭 dock 숨김. */
   body.verse-select-active #tab-dock { display: none; }
 }
