@@ -2857,12 +2857,13 @@ html.cite-sheet-open {
   gap: var(--space-6); /* 아이콘 사이 넓은 여백 — 탭바를 길게 늘여 검색 버튼과의 간격 축소 */
   /* 상하 패딩 space-2 + 아이콘랩(touch-target 44px) = 60px → 오디오 바와 동일 높이. */
   padding: var(--space-2) var(--space-2);
-  /* 둥근 사각 — iPhone 코너는 squircle(연속 곡률)이나 corner-shape 는 Chromium
-     전용(Safari 미폴백)이라 squircle 을 점진 향상으로 얹고, border-radius(원호)는
-     Safari/전체 폴백으로 둔다. 26px 는 화면 squircle 과 조화되는 값(기기 코너 반경
-     env() 미존재). corner-shape 미지원 브라우저는 자동으로 원호. */
-  border-radius: 26px;
-  corner-shape: squircle;
+  /* 좌우 끝을 완전한 반원 캡으로 — stadium(pill) 형태. 모핑으로 홈만 남아 폭이
+     60px 로 줄면(아래 #tab-dock.searching #tab-bar) 이 pill 캡이 그대로 정원이
+     되어, 검색 원형 버튼·모핑 원과 형태 언어가 이어진다(둥근 사각 26px 의 모서리
+     불일치 해소). corner-shape: superellipse(2) 는 정원호 — 검색 원형(#tab-search)·
+     모핑 원과 통일하며, 미지원 브라우저는 border-radius 원호로 폴백. */
+  border-radius: var(--radius-pill);
+  corner-shape: superellipse(2);
   /* ADR-030: frosted glass 를 ::before 레이어가 아니라 #tab-bar 요소에 직접.
      #tab-dock(fixed)이 Safari home-indicator 샘플링 대상이라 투명하게 두므로, 자식인
      #tab-bar 는 직접 glass 를 줘도 틴팅 문제 없음(ADR-029 의 ::before 우회 불필요).
