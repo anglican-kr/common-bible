@@ -225,25 +225,28 @@ HIG 의 절제된 깊이 표현. 라이트 기준 값이며, **다크에서는 `
 
 ## 7. 적응형 내비게이션
 
-> **상태: 모바일 하단 탭 바 구현 완료([ADR-029](docs/decisions/029-mobile-tab-bar.md), 2026-06-03).
-> 데스크탑 사이드바·`노트`(새 기능)는 후속.** 모바일은 홈·검색·북마크·설정 **4탭**(노트 슬롯
-> 예약)이 **전체화면 라우트 뷰**로 동작하고 iOS 2026 Liquid Glass 외형(플로팅 캡슐·frosted
-> glass·squircle·상시 표시)을 따른다. 활성색은 `--accent`(chrome 중립). 스크롤 축소는
-> 미채택(iOS 27 이 상시 풀 탭바로 회귀). 데스크탑 사이드바는 콘텐츠 폭(720)+사이드바(260)
-> 공존에 ≥~1024px 신설이 필요해 별도 단계. 아래 스펙은 원안이며 실구현 차이는 ADR-029 가 권위.
+> **상태: 모바일 모핑 탭 바 구현 완료([ADR-029](docs/decisions/029-mobile-tab-bar.md) +
+> [ADR-030](docs/decisions/030-morphing-tab-bar.md), 2026-06-04). 데스크탑 사이드바·`노트`(새 기능)는 후속.**
+> ADR-030(Apple Music 벤치마크)이 ADR-029 를 개정: **탭 라벨 제거(아이콘 전용)**, 검색을 탭에서 분리한
+> **우측 원형 버튼 → 입력 pill 모핑**, frosted glass 를 `::before`가 아닌 요소에 직접, **스크롤 축소 채택**
+> (아래로 스크롤 시 홈 원형으로 접고 오디오 재생 중이면 오디오 미니가 홈·검색 사이로 이동, 최상단·홈탭에
+> 복구). 활성색 `--accent`(chrome 중립). 데스크탑 사이드바는 콘텐츠 폭(720)+사이드바(260) 공존에
+> ≥~1024px 신설이 필요해 별도 단계. 아래 스펙은 원안이며 실구현 차이는 ADR-029·030 이 권위.
 
 HIG 의 적응형 내비 패턴을 따른다 — **좁은 화면은 하단 탭 바(UITabBar), 넓은 화면은
 사이드바.**
 
-### 모바일 (≤768px) — 하단 탭 바
+### 모바일 (≤768px) — 모핑 탭 바 (ADR-030)
 
-- **구현은 4탭**, 좌→우: **홈 · 검색 · 북마크 · 설정** (`노트`는 후속 슬롯 예약 — flex 균등 분배로 자동 수용).
-- 높이 `--tabbar-h` (49px, HIG 표준) + `padding-bottom: env(safe-area-inset-bottom)`
-  로 홈 인디케이터 회피.
-- 아이콘 `--tabbar-icon` (24px) + 라벨. 활성 탭은 `--accent`(아이콘+라벨), 비활성은
-  `--text-secondary`. 각 탭은 ≥`--touch-target`(44px) 탭 영역.
-- `z-index: --nav-z` (30) — 스티키 헤더(20) 위.
-- `prefers-reduced-motion` 시 탭 전환 애니메이션 생략.
+- **탭 pill 3개**(홈·북마크·노트목업·설정 — 노트는 비활성 placeholder) + **분리된 검색 원형 버튼**(우측).
+  `#tab-dock`(투명 flex)이 둘을 묶어 좌·우 끝 정렬(오디오 바와 좌우 가장자리 일치).
+- **아이콘 전용**(라벨 제거, `aria-label`). 탭바·검색·오디오 셋 다 60px 높이 + 동일 floating glass
+  (반투명 배경 + `backdrop-filter` + 1px 테두리 + `--shadow-2`). 활성 탭/검색은 `--accent` 틴트.
+- 각 요소 ≥`--touch-target`(44px). `z-index: --nav-z`(30) — 스티키 헤더(20) 위. 하단은
+  `calc(--space-1 + env(safe-area-inset-bottom)*0.75)`.
+- **모핑**: 검색 원형→입력 pill(비-홈 탭 접힘) / 아래로 스크롤→홈 원형 축소(+오디오 미니). 키보드는
+  `visualViewport`로 dock 을 올리고 focus/blur 로 X·홈 숨김 토글. CSS 트랜지션(`--duration-base`/
+  `--ease-standard`), `prefers-reduced-motion` 시 생략.
 
 ### 데스크탑 (≥769px) — 사이드바
 

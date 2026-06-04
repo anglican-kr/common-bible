@@ -1,10 +1,10 @@
 # ADR-030: 모핑 탭 바 — 아이콘 전용 + 분리 검색 원형 + 검색/스크롤 모핑
 
 - 일시: 2026-06-04
-- 상태: 승인됨 — 구현 진행 중. 검색 모핑(P1·P2) 완료·dev 배포, 스크롤 축소 + 오디오 미니 모핑(P3)·문서/테스트/머지(P4) 대기.
+- 상태: 승인됨 — 구현 완료(모바일, dev 배포). P1(구조)·P2(검색 모핑)·P3(스크롤 축소 + 오디오 미니) 완료, main 머지 대기. 데스크탑 사이드바·모션 미세 다듬기(오디오 sticky→fixed 스냅)는 후속.
 - 관련 ADR: **ADR-029(개정 대상)** — 모바일 하단 탭 바 1단계, ADR-028(디자인 시스템 §7 적응형 내비), ADR-025(헤더 elevation·frosted glass 규칙), ADR-005(검색)
 - 권위 문서: 루트 [`DESIGN.md`](../../DESIGN.md) §7
-- 관련 PR: 이 작업 브랜치 + #184(검색 모핑 완성·옛 시트 제거)·#185(모서리 통일)
+- 관련 PR: 이 작업 브랜치 + #184(검색 모핑 완성·옛 시트 제거)·#185(모서리 통일)·#186·#187(키보드 X)
 
 ## 맥락
 
@@ -52,34 +52,37 @@ ADR-029 는 Safari 26 home-indicator 틴팅 회피를 위해 glass 를 `::before
 
 검색이 탭바 모핑 단일 경로가 되면서 **모바일 검색 바텀 시트(`openSearchSheet`/`closeSearchSheet`/`#search-sheet`·드래그)를 전면 제거**(search.js 대폭 감소). 데스크탑 인라인 검색 바 + `/search` 결과 경로는 유지. 검색 FAB 는 ADR-029 에서 이미 제거.
 
-### 5. 스크롤 축소 + 오디오 미니 모핑 — **대기(P3)**
+### 5. 스크롤 축소 + 오디오 미니 모핑 (구현 완료)
 
-본문을 아래로 읽어 내려갈 때:
-- 탭 바를 홈 원형으로 접고(검색 모핑과 동일 collapsed 형태) — 홈 탭으로만 복구(스크롤 되돌림 자동 복구 없음).
-- 오디오 재생 중이면 플로팅 `#audio-bar`가 **축소되어 홈·검색 사이 dock 행으로 이동**(재생/일시정지 + 진행바만). `#tab-dock` flex 컨테이너가 이 삽입의 토대.
+본문을 아래로 스크롤하면(읽기 진행):
+- `#tab-dock.collapsed`: 비-홈 탭 접고 `#tab-bar`를 60px 홈 원형으로(검색 모핑과 홈 원형·탭 접힘 CSS 공유). 검색 원형은 우측 유지 → 홈·검색이 양 끝.
+- 오디오 표시 중이면(`body.tabbar-collapsed`) 플로팅 `#audio-bar`가 `position:fixed`로 **홈·검색 원형 사이 dock 행에 축소·이동**(60px, 재생 버튼 + 진행바만 — `.audio-time`·`.audio-speed-btn` 숨김). 좌우 = `space-4 + 60px + space-2`.
+- **복구**: 최상단(scrollY≈0) 자동 복구 + 라우트 변경 시 복구. 중간 구간에서 위로 스크롤은 유지(깜빡임 방지). 검색 모핑 중엔 축소 안 함.
+- **축소 상태에서 홈 탭 = 홈 이동이 아니라 "펼치기"** — 탭바 복원 + 오디오 미니를 원래 floating 위치로 되돌리고 읽던 위치 유지(전역 `<a>` 네비를 `preventDefault`로 차단). 펼친 뒤 다시 아래로 스크롤하면 재축소.
 
-스크롤 방향 감지는 `initScrollElevation`(IntersectionObserver) 패턴을 참고하되 throttle scroll 리스너로. (미구현 — 후속.)
+스크롤 감지는 throttle(rAF) scroll 리스너 + `nextScrollCollapsed` 순수 함수(임계 64px, 최상단 4px). 오디오 `sticky→fixed` 위치 전환이라 현재 모션은 스냅(부드러운 전환은 후속 다듬기).
 
 ### 6. 복구·키보드 입력 — 결정한 갈림길
 
-- **축소 상태 복구 = 홈 탭으로만**(스크롤 되돌림 자동 복구 미채택). Apple Music 은 스크롤 업 자동 복구지만, 본 앱은 명시적 홈 탭으로 일원화.
-- **검색 입력 = 하단 입력창 직접 검색 + visualViewport 키보드 위 띄움**(대안: 모핑은 연출만 하고 입력은 `/search` 상단으로 핸드오프 — 미채택. iOS Safari visualViewport 처리 리스크는 dev 실측으로 수용).
+- **축소 상태 복구 = 최상단 자동 복구 + 홈 탭(펼치기)**. (초안 "홈 탭으로만"에서 dev 검증 후 개정 — 최상단 도달 시 자동 복구가 자연스럽고, 홈 탭은 홈 이동이 아니라 펼치기로 일원화.) iOS Safari 식 "위로 스크롤 즉시 복구"는 끝에서 깜빡일 수 있어, **최상단에서만** 자동 복구 + 중간 위로 스크롤은 유지로 절충.
+- **검색 입력 = 하단 입력창 직접 검색 + visualViewport 키보드 위 띄움**(대안: 모핑은 연출만 하고 입력은 `/search` 상단으로 핸드오프 — 미채택). iOS 가 포커스 입력을 키보드 위로 올리려 페이지를 미는 문제는 **focus 시 `scrollTo(0,0)` + `preventScroll`**로 상쇄, **X(키보드 내리기) 노출·홈 숨김은 입력 focus/blur**에 묶어(visualViewport 높이 감지 불안정 회피) 안정화.
 
 ## 검토한 대안
 
 - **검색을 4탭 중 하나로 유지(ADR-029 원안)** — Apple Music idiom(분리 원형 + 모핑)과 어긋나고, 입력 확장 모션을 줄 자리가 없음. → 분리 원형 채택.
 - **glass 를 `::before` 유지** — ADR-030 구조에선 fixed 부모가 `#tab-dock`(투명)뿐이라 불필요한 레이어. → 요소 직접 적용으로 단순화.
 - **검색 입력을 상단 핸드오프** — 키보드 가림은 안전하나 Apple Music 충실도/모핑 일관성 저하. → 하단 입력 + visualViewport 채택.
-- **스크롤 업 자동 복구** — 구현 복잡(방향 히스테리시스) + 의도치 않은 복구. → 홈 탭 단일 복구.
+- **스크롤 업 즉시 자동 복구(전 구간 방향 감지)** — 끝에서 깜빡일 수 있어 미채택. **최상단 도달 시에만** 자동 복구 + 중간 위로 스크롤 유지로 절충.
 
 ## 구현 메모
 
-- 신규 모듈 `js/app/tabbar.js`(`// @ts-check` + JSDoc, ESM). `window.exitTabSearch` 노출; search.js 가 `window.commitTopSearch` 노출.
-- CSS 는 `css/style.css` 탭 바 블록 + `#tab-dock.searching` 모핑 규칙. 모션 토큰 `--duration-base`/`--ease-standard`, reduced-motion 분기.
-- 테스트: 라우팅·DOM-heavy 내비는 e2e 책임(ADR-013). 옛 검색 시트 e2e 는 제거. 유닛 566 통과·tsc 0(P2 시점).
+- 신규 모듈 `js/app/tabbar.js`(`// @ts-check` + JSDoc, ESM). `window.exitTabSearch`·`syncTabSearchQuery`·`resetTabCollapse` 노출; search.js 가 `window.commitTopSearch` 노출. SW 프리캐시(`sw.js` SHELL_FILES)에 tabbar/citations/parallels 추가.
+- CSS 는 `css/style.css` 탭 바 블록 + `#tab-dock.searching`/`.collapsed` 모핑 규칙(홈 원형·탭 접힘 공유). 모션 토큰 `--duration-base`/`--ease-standard`, reduced-motion 분기.
+- 키보드(`KEYBOARD` 블록: `keyboardOverlap`/`setKeyboardState`/`liftForKeyboard`)·스크롤 축소(`SCROLL` 블록: `nextScrollCollapsed`)는 순수 함수로 슬라이스해 유닛 검증(`tests/unit/tabbar.test.js` 12 케이스). 전체 유닛 578·tsc 0.
+- 라우팅·DOM-heavy 내비/모핑은 e2e 책임(ADR-013). 옛 검색 시트 e2e 는 제거.
+- **dev/로컬 테스트 편의**: dev·localhost 에선 SW 가 shell(JS/CSS/HTML)을 network-first 로 서빙(version 고정 → SHELL_CACHE 불변으로 인한 stale 회피). PWA·오프라인은 유지, 프로덕션은 cache-first 그대로.
 
 ## 후속
 
-- P3: 스크롤 축소 + 오디오 미니 모핑(§5).
-- P4: 본 ADR 상태 갱신 + DESIGN.md §7 + `docs/architecture.md` 인덱스 + CLAUDE.md "현재 상태" + e2e(test_tabbar) + main 머지.
+- 오디오 미니 모핑 모션 다듬기(`sticky→fixed` 위치 전환 스냅 → 부드러운 전환).
 - 데스크탑 사이드바(≥~1024px)는 ADR-029 §6 후속 유지.
