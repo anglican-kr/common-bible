@@ -38,11 +38,13 @@ const $searchInput = /** @type {HTMLInputElement} */ (_$("search-input"));
 const $searchClear = _$("search-clear");
 const $searchBar = _$("search-bar");
 const $tabBar = _$("tab-bar");
+const $tabSearch = _$("tab-search");
 
-// ── Tab bar active state (ADR-029) ──
+// ── Tab bar active state (ADR-029, ADR-030) ──
 // The global <a> click interceptor (further below) already SPA-navigates the
 // tab links; this only reflects the current route in the bar's active highlight.
 // Reading routes (/, /<division>, /<book>/<chapter>, …) all map to the home tab.
+// ADR-030: 검색은 탭에서 분리된 #tab-search 버튼 — seg==="search" 일 때 별도로 활성.
 function syncTabBarActive() {
   if (!$tabBar) return;
   const seg = location.pathname.replace(/^\//, "").split("/")[0];
@@ -56,6 +58,19 @@ function syncTabBarActive() {
     if (on) a.setAttribute("aria-current", "page");
     else a.removeAttribute("aria-current");
   }
+  if ($tabSearch) {
+    const on = active === "search";
+    $tabSearch.classList.toggle("active", on);
+    if (on) $tabSearch.setAttribute("aria-current", "page");
+    else $tabSearch.removeAttribute("aria-current");
+  }
+  // ADR-030 P2: 검색 외 라우트로 가면(홈 탭 등) 검색 모핑을 복구. tabbar.js 가
+  // 노출하는 exitTabSearch — 검색 진입 시엔 active==='search' 라 호출 안 됨.
+  // 검색 라우트면(뒤로/앞으로로 ?q= 가 바뀌어도) dock 입력을 URL 에 동기화.
+  if (active !== "search") window.exitTabSearch?.();
+  else window.syncTabSearchQuery?.();
+  // ADR-030 P3: 라우트 변경 시 스크롤 축소 복구(새 뷰는 최상단에서 시작).
+  window.resetTabCollapse?.();
 }
 
 // Mirrors app.js's DATA_DIR — Phase 7b's audio player still uses the same
@@ -82,7 +97,7 @@ let appVersion = null;
   const SYNC_FEEDBACK_MS   = 900;  // how long the spinner stays after trigger
   // Modal/sheet roots whose internal scroll must not be hijacked by PTR. We
   // walk e.target to see if the touch landed inside one of these.
-  const MODAL_SELECTORS = "#bookmark-drawer, #search-sheet, #install-modal, #bm-save-modal, #bm-new-folder-modal, #bm-import-modal, #bm-merge-modal, #drive-disconnect-modal, .settings-popover, .chapter-popover";
+  const MODAL_SELECTORS = "#bookmark-drawer, #install-modal, #bm-save-modal, #bm-new-folder-modal, #bm-import-modal, #bm-merge-modal, #drive-disconnect-modal, .settings-popover, .chapter-popover";
 
   /** @type {HTMLElement | null} */
   let indicator = null;
@@ -1720,8 +1735,6 @@ async function route() {
   // lock) persist over the new view, blocking it (ADR-029).
   const bmDrawer = document.getElementById("bookmark-drawer");
   if (bmDrawer && !bmDrawer.hidden) window.closeBookmarkDrawer?.();
-  const searchSheet = document.getElementById("search-sheet");
-  if (searchSheet && !searchSheet.hidden) window.closeSearchSheet?.();
   // Desktop settings popover: close on nav too (it has a focus trap). Closing
   // here also makes the /settings desktop fallback's gear.click() always OPEN
   // (never toggle-closed) since the popover is already dismissed by this point.
@@ -1947,7 +1960,7 @@ document.addEventListener("click", (e) => {
 
 // popstate stays here (route is module-local). The DOMContentLoaded
 // bootstrap handler stayed in app.js (Phase 8 territory) — it kicks off
-// route() and the deferred init chain (initCompactHeader / initSheetDrag /
+// route() and the deferred init chain (initCompactHeader /
 // initBookmarkSheetDrag / registerServiceWorker / maybeShowInstallNudge /
 // driveSync.initDriveSync), several of which still live in app.js.
 window.addEventListener("popstate", route);

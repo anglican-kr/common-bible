@@ -10,6 +10,15 @@ const DATA_CACHE = "data";
 const AUDIO_CACHE = "audio"; // must equal js/audio-cache.js AUDIO_CACHE_NAME
 const FONT_CACHE = "fonts";
 
+// dev/로컬: version.json 이 고정이라 SHELL_CACHE 가 무효화되지 않아 cache-first 가
+// 옛 JS/CSS/HTML 을 계속 서빙한다(테스트 곤란). 이 호스트들에선 shell 파일을
+// network-first 로 — SW·PWA·오프라인은 그대로 두되 온라인이면 항상 최신을 받고,
+// 캐시는 오프라인 폴백으로만 쓴다. 프로덕션(bible.anglican.kr)은 cache-first 유지.
+const IS_DEV =
+  self.location.hostname === "dev.anglican.kr" ||
+  self.location.hostname === "localhost" ||
+  self.location.hostname === "127.0.0.1";
+
 // LRU metadata sidecar for AUDIO_CACHE. Loaded best-effort: if the import
 // fails (e.g. file missing in older deploy), audio caching still works,
 // just without LRU bookkeeping.
@@ -31,7 +40,10 @@ const SHELL_FILES = [
   "/js/app/search.js",
   "/js/app/reading-context.js",
   "/js/app/bookmark.js",
+  "/js/app/citations.js",
+  "/js/app/parallels.js",
   "/js/app/views-routing.js",
+  "/js/app/tabbar.js",
   "/js/drive-sync.js",
   "/js/audio-cache.js",
   "/js/manifest-sync.js",
@@ -303,19 +315,37 @@ self.addEventListener("fetch", (event) => {
   // Exception: standalone HTML pages (e.g. privacy.html) are served directly.
   if (event.request.mode === "navigate") {
     const standalonePages = ["/privacy.html"];
-    if (standalonePages.includes(pathname)) {
-      event.respondWith(
-        caches.match(pathname).then((cached) => cached || fetch(pathname))
-      );
-      return;
-    }
+    const shellPath = standalonePages.includes(pathname) ? pathname : "/index.html";
+    // dev: network-first(최신 shell), 실패 시 캐시 폴백. prod: cache-first.
     event.respondWith(
-      caches.match("/index.html").then((cached) => cached || fetch("/index.html"))
+      IS_DEV
+        ? fetch(shellPath).then((res) => {
+            if (res.ok) {
+              const clone = res.clone();
+              caches.open(SHELL_CACHE).then((cache) => cache.put(shellPath, clone));
+            }
+            return res;
+          }).catch(() => caches.match(shellPath))
+        : caches.match(shellPath).then((cached) => cached || fetch(shellPath))
     );
     return;
   }
 
   const targetCache = cacheNameFor(pathname);
+  // dev + shell 파일(JS/CSS/HTML 등 SHELL_CACHE 대상)은 network-first 로 항상 최신.
+  // 데이터·오디오는 그대로(매니페스트 무효화/대용량 재다운로드 회피).
+  if (IS_DEV && targetCache === SHELL_CACHE) {
+    event.respondWith(
+      fetch(new Request(event.request, { cache: "reload" })).then((res) => {
+        if (res.ok) {
+          const clone = res.clone();
+          caches.open(SHELL_CACHE).then((cache) => cache.put(event.request, clone));
+        }
+        return res;
+      }).catch(() => caches.match(event.request))
+    );
+    return;
+  }
   event.respondWith(
     caches.match(event.request).then((cached) => {
       if (cached) return cached;

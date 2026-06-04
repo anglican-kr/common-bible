@@ -118,7 +118,7 @@
       <div id="breadcrumb-row">
         <div id="header-actions">
           <div id="search-bar">
-            <input id="search-input" type="search" placeholder="검색 (예: 사랑, 사랑 in:요한, 창세 1:3)" aria-label="성경 검색" autocomplete="off" role="combobox" aria-autocomplete="list" aria-controls="search-history" aria-expanded="false">
+            <input id="search-input" type="search" placeholder="예: 사랑, 사랑 in:요한, 창세 1:3" aria-label="검색" autocomplete="off" role="combobox" aria-autocomplete="list" aria-controls="search-history" aria-expanded="false">
             <button id="search-history-toggle" type="button" aria-label="최근 검색어 열기" aria-haspopup="listbox" aria-expanded="false" aria-controls="search-history" hidden>
               <svg width="14" height="14" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true"><path d="M2 4l4 4 4-4z"/></svg>
             </button>
@@ -136,25 +136,44 @@
   <main id="app" aria-label="성경 본문"></main>
   <!-- Adaptive nav (ADR-029): mobile bottom tab bar. iOS-idiom stroke icons,
        Liquid Glass surface. Desktop (≥769px) hides this until the sidebar phase.
-       노트 탭은 후속 — 5번째 슬롯은 flex 균등 분배로 자동 수용. -->
+       ADR-030: 라벨 없는 아이콘 전용 + 검색 분리(아래 #tab-search-dock). 노트 탭은 후속. -->
+  <!-- ADR-030: 탭 pill + 검색 원형을 한 플로팅 dock 으로 묶어 좌측 정렬·근접 배치
+       (P2 검색 모핑 시 이 flex 컨테이너 안에서 width 보간). -->
+  <div id="tab-dock">
   <nav id="tab-bar" aria-label="주 내비게이션">
-    <a class="tab-item" href="/" data-tab="home">
+    <a class="tab-item" href="/" data-tab="home" aria-label="홈">
       <span class="tab-icon-wrap"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.6 11.4 12 4.4l8.4 7"/><path d="M5.6 9.9V19a1 1 0 0 0 1 1h3.3v-5.4h4.2V20h3.3a1 1 0 0 0 1-1V9.9"/></svg></span>
-      <span class="tab-label">홈</span>
     </a>
-    <a class="tab-item" href="/search" data-tab="search">
-      <span class="tab-icon-wrap"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="6.4"/><path d="m20 20-3.7-3.7"/></svg></span>
-      <span class="tab-label">검색</span>
-    </a>
-    <a class="tab-item" href="/bookmarks" data-tab="bookmarks">
+    <a class="tab-item" href="/bookmarks" data-tab="bookmarks" aria-label="북마크">
       <span class="tab-icon-wrap"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.5 4.5h9a1 1 0 0 1 1 1V20l-5.5-3.7L6.5 20V5.5a1 1 0 0 1 1-1z"/></svg></span>
-      <span class="tab-label">북마크</span>
     </a>
-    <a class="tab-item" href="/settings" data-tab="settings">
+    <!-- ADR-030: 노트 탭 목업(후속 기능 — 현재 비활성 placeholder, 라우트 없음). -->
+    <button type="button" class="tab-item" data-tab="notes" aria-label="노트 (준비 중)" aria-disabled="true">
+      <span class="tab-icon-wrap"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4.5h10a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1v-13a1 1 0 0 1 1-1z"/><path d="M9 9h6"/><path d="M9 12.5h6"/><path d="M9 16h4"/></svg></span>
+    </button>
+    <a class="tab-item" href="/settings" data-tab="settings" aria-label="설정">
       <span class="tab-icon-wrap"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>
-      <span class="tab-label">설정</span>
     </a>
   </nav>
+  <!-- ADR-030: 분리된 검색 원형 버튼(Apple Music 벤치마크) — P2 에서 입력창으로 모핑.
+       입력은 P2 까지 hidden. 탭 바와 별도 플로팅 요소(우측 하단). -->
+  <div id="tab-search-dock">
+    <button id="tab-search" type="button" aria-label="검색" aria-expanded="false">
+      <svg class="tab-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="6.4"/><path d="m20 20-3.7-3.7"/></svg>
+    </button>
+    <input id="tab-search-input" type="search" inputmode="search" enterkeyhint="search" autocorrect="off" autocapitalize="off" spellcheck="false" autocomplete="off" placeholder="검색 (예: 사랑, 사랑 in:요한, 창세 1:3)" aria-label="검색" hidden>
+    <!-- ADR-030 P3: 입력 pill 안의 검색어 지우기(⊗) — 텍스트 있을 때만 표시. -->
+    <button id="tab-search-clear" type="button" aria-label="검색어 지우기" hidden>
+      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm3.5 12.1-1.4 1.4L12 13.4l-2.1 2.1-1.4-1.4L10.6 12 8.5 9.9l1.4-1.4L12 10.6l2.1-2.1 1.4 1.4L13.4 12l2.1 2.1z"/></svg>
+    </button>
+  </div>
+  <!-- ADR-030 P3: 키보드 내리기 버튼 — 입력 pill 오른쪽 원형(키보드 등장과 함께 모핑 인,
+       키보드 표시 중에만 노출). 탭하면 키보드만 내리고 검색 세션은 유지(grounded dock).
+       아이콘은 X 모양(검색 종료는 홈 버튼). -->
+  <button id="tab-search-close" type="button" aria-label="키보드 내리기" aria-hidden="true" tabindex="-1">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6 18 18M18 6 6 18"/></svg>
+  </button>
+  </div><!-- /#tab-dock -->
   <noscript>
     <div class="noscript-fallback">
       <h2>공동번역성서</h2>
@@ -168,27 +187,6 @@
     <button id="install-modal-close" type="button" aria-label="닫기">&times;</button>
     <h2 id="install-modal-title">앱으로 설치</h2>
     <div id="install-modal-body"></div>
-  </div>
-  <div id="search-scrim" aria-hidden="true" hidden></div>
-  <div id="search-sheet" role="dialog" aria-label="검색" hidden>
-    <div id="search-sheet-handle" aria-hidden="true"><span></span></div>
-    <div id="search-sheet-bar">
-      <div id="search-sheet-input-wrap">
-        <input id="search-sheet-input" type="search" inputmode="search" enterkeyhint="search" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="검색 (예: 사랑, 사랑 in:요한, 창세 1:3)" aria-label="성경 검색" autocomplete="off" role="combobox" aria-autocomplete="list" aria-controls="search-sheet-history" aria-expanded="false">
-        <button id="search-sheet-history-toggle" type="button" aria-label="최근 검색어 열기" aria-haspopup="listbox" aria-expanded="false" aria-controls="search-sheet-history" hidden>
-          <svg width="16" height="16" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true"><path d="M2 4l4 4 4-4z"/></svg>
-        </button>
-        <button id="search-sheet-clear" type="button" aria-label="검색어 지우기" hidden>&times;</button>
-      </div>
-      <button id="search-sheet-close" type="button" aria-label="닫기">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
-      </button>
-    </div>
-    <div id="search-sheet-history" role="listbox" aria-label="최근 검색어" hidden></div>
-    <div id="search-sheet-chips" role="toolbar" aria-label="검색 옵션">
-      <button type="button" class="search-chip" data-chip="in" aria-label="책 안에서 검색 연산자 추가"><span aria-hidden="true">+</span> in:</button>
-    </div>
-    <div id="search-sheet-results"></div>
   </div>
   <!-- ── Bookmark Drawer ── -->
   <div id="bookmark-scrim" aria-hidden="true" hidden></div>
@@ -331,6 +329,7 @@
   <script type="module" src="/js/app/citations.js"></script>
   <script type="module" src="/js/app/parallels.js"></script>
   <script type="module" src="/js/app/views-routing.js"></script>
+  <script type="module" src="/js/app/tabbar.js"></script>
   <script type="module" src="/js/app.js"></script>
 </body>
 </html>

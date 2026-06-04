@@ -1133,8 +1133,7 @@ body {
   padding-right: var(--space-3);
 }
 
-#search-input::-webkit-search-cancel-button,
-#search-sheet-input::-webkit-search-cancel-button {
+#search-input::-webkit-search-cancel-button {
   -webkit-appearance: none;
   appearance: none;
 }
@@ -1198,9 +1197,8 @@ body {
   color: var(--accent);
 }
 
-/* ── Search history panel (shared with sheet variant) ── */
-#search-history,
-#search-sheet-history {
+/* ── Search history panel ── */
+#search-history {
   list-style: none;
   margin: 0;
   padding: var(--space-1) 0;
@@ -1220,10 +1218,6 @@ body {
   left: 0;
   right: 0;
   z-index: 50;
-}
-
-#search-sheet-history {
-  margin: 0 var(--space-4) var(--space-2);
 }
 
 .search-history-item {
@@ -1616,300 +1610,6 @@ body {
   font-family: inherit;
 }
 
-/* ── Search Bottom Sheet (Mobile only) ── */
-#search-scrim {
-  display: none;
-  position: fixed;
-  inset: 0;
-  z-index: 40;
-  background: rgba(0, 0, 0, 0.45);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  /* Block touch panning on the scrim — without this iOS Safari can rubber-band
-     the body even though body is position:fixed, especially while the compact
-     modal is small and most of the viewport is scrim. */
-  touch-action: none;
-}
-
-#search-scrim:not([hidden]) {
-  display: block;
-  animation: bm-scrim-in var(--duration-base) ease both;
-}
-
-#search-sheet {
-  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
-  display: none;
-  position: fixed;
-  /* Default (expanded, keyboard dismissed) = flush to viewport bottom edge,
-     same iOS-native pattern as #cite-sheet. The display's rounded corners
-     mask the sheet's bottom corners naturally; the compact-state rule below
-     restores floating margins for the keyboard-up state where a floating
-     card pairs better with the keyboard. */
-  bottom: 0;
-  left: 0;
-  right: 0;
-  /* Match #cite-sheet's desktop cap so the two bottom sheets render at the
-     same width on wide screens — otherwise expanded results stretch the
-     full viewport while cite content caps at 720px, an awkward mismatch. */
-  margin-inline: auto;
-  max-width: var(--max-width);
-  z-index: 50;
-  background: var(--bg);
-  background-clip: padding-box;
-  /* Only top corners rounded in expanded — display curve masks the bottom. */
-  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
-  /* Upward-cast shadow for the bottom-attached expanded state. */
-  box-shadow: var(--shadow-sheet);
-  flex-direction: column;
-  height: 55vh;
-  max-height: 80vh;
-  padding-bottom: env(safe-area-inset-bottom);
-  transition:
-    height 220ms var(--ease-standard),
-    bottom 220ms var(--ease-standard),
-    left 220ms var(--ease-standard),
-    right 220ms var(--ease-standard),
-    border-radius 220ms var(--ease-standard),
-    box-shadow 220ms var(--ease-standard);
-}
-
-/* Compact state: only input bar + chips visible, sized to sit above keyboard.
-   Restores the floating-card geometry — 12px breathing room on all sides,
-   fully rounded corners, omnidirectional shadow — because a card hovering
-   above the keyboard reads more naturally than an edge-to-edge sheet pinned
-   to its top. The bottom is overridden via JS in adjustSheetForKeyboard
-   (keyboardOffset + 12) when the keyboard is up. */
-#search-sheet[data-state="compact"] {
-  bottom: 0.75rem;
-  left: 0.75rem;
-  right: 0.75rem;
-  border-radius: var(--radius-xl);
-  /* Omnidirectional shadow so the modal reads as a floating card. */
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.22);
-  /* Add the safe-area inset so it doesn't eat the chip row. With
-     box-sizing:border-box the base `padding-bottom: env(safe-area-inset-bottom)`
-     subtracts from the fixed height, and on devices with a home indicator the
-     value stays >0 even while the keyboard is up (it tracks the layout viewport,
-     not the visual one). */
-  height: calc(6.4rem + env(safe-area-inset-bottom));
-}
-
-/* The handle normally provides top breathing room above the input bar; add
-   matching padding when it's hidden so the input doesn't kiss the sheet edge. */
-#search-sheet[data-state="compact"] #search-sheet-bar {
-  padding-top: var(--space-4);
-}
-
-#search-sheet[data-state="compact"] #search-sheet-handle,
-#search-sheet[data-state="compact"] #search-sheet-results {
-  display: none;
-}
-
-/* Grow the compact sheet when the history panel opens so the list is visible
-   without forcing a state-machine round-trip into expanded mode. */
-#search-sheet[data-state="compact"]:has(#search-sheet-history:not([hidden])) {
-  height: auto;
-  max-height: min(70vh, 28rem);
-}
-
-#search-sheet:not([hidden]) {
-  display: flex;
-  animation: bm-drawer-in-up var(--duration-base) cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
-}
-
-#search-sheet-handle {
-  display: flex;
-  justify-content: center;
-  padding: var(--space-2) 0 var(--space-1);
-  cursor: grab;
-  touch-action: none;
-}
-
-#search-sheet-handle span {
-  width: 2.2rem;
-  height: 0.22rem;
-  background: var(--border);
-  border-radius: 2px;
-}
-
-#search-sheet-bar {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-  padding: 0 var(--space-2) var(--space-3) var(--space-4);
-}
-
-#search-sheet-input-wrap {
-  position: relative;
-  flex: 1;
-}
-
-#search-sheet-close {
-  flex-shrink: 0;
-  width: 44px;
-  height: 44px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: var(--text);
-  border-radius: 50%;
-  padding: 0;
-  transition: color var(--duration-fast), background var(--duration-fast);
-}
-
-#search-sheet-close:hover {
-  color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 8%, transparent);
-}
-
-#search-sheet-close:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 40%, transparent);
-}
-
-#search-sheet-input {
-  width: 100%;
-  font-family: inherit;
-  font-size: var(--font-base);
-  /* Reserve 96px for history toggle (44) + clear (44) + 8px breathing room. */
-  padding: var(--space-3) 6rem var(--space-3) var(--space-4);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--bg-card);
-  color: var(--text);
-  outline: none;
-  line-height: var(--leading-snug);
-  min-height: 48px;
-  box-sizing: border-box;
-}
-
-#search-sheet-input-wrap[data-clear-hidden="true"] #search-sheet-input,
-#search-sheet-input-wrap[data-history-hidden="true"]:not([data-clear-hidden="true"]) #search-sheet-input {
-  padding-right: 3.5rem;
-}
-
-#search-sheet-input-wrap[data-clear-hidden="true"][data-history-hidden="true"] #search-sheet-input {
-  padding-right: var(--space-4);
-}
-
-#search-sheet-input:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 15%, transparent);
-}
-
-#search-sheet-input::placeholder {
-  color: var(--text-secondary);
-  opacity: 0.6;
-}
-
-#search-sheet-clear,
-#search-sheet-history-toggle {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 44px;
-  height: 44px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: var(--font-lg);
-  line-height: 1;
-  color: var(--text);
-  background: none;
-  border: none;
-  border-radius: 50%;
-  cursor: pointer;
-  padding: 0;
-}
-
-#search-sheet-clear { right: 0.25rem; }
-#search-sheet-history-toggle { right: 3.25rem; }
-#search-sheet-input-wrap[data-clear-hidden="true"] #search-sheet-history-toggle { right: 0.25rem; }
-
-/* Same [hidden] override as the desktop variant — see comment above #search-clear[hidden]. */
-#search-sheet-clear[hidden],
-#search-sheet-history-toggle[hidden] {
-  display: none;
-}
-
-#search-sheet-clear:hover,
-#search-sheet-history-toggle:hover {
-  color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 8%, transparent);
-}
-
-#search-sheet-clear:focus-visible,
-#search-sheet-history-toggle:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 40%, transparent);
-}
-
-#search-sheet-history-toggle[aria-expanded="true"] {
-  color: var(--accent);
-}
-
-#search-sheet-chips {
-  display: flex;
-  flex-wrap: nowrap;
-  gap: var(--space-2);
-  padding: 0 var(--space-4) var(--space-2);
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
-}
-
-#search-sheet-chips::-webkit-scrollbar {
-  display: none;
-}
-
-.search-chip {
-  flex-shrink: 0;
-  font-family: inherit;
-  font-size: var(--font-sm);
-  line-height: var(--leading-tight);
-  padding: var(--space-2) var(--space-3);
-  background: var(--bg-card);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-pill);
-  cursor: pointer;
-  white-space: nowrap;
-  transition: background var(--duration-fast), border-color var(--duration-fast);
-}
-
-.search-chip:hover {
-  border-color: var(--accent);
-}
-
-.search-chip:focus-visible {
-  outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent);
-}
-
-.search-notice {
-  margin: 0 0 var(--space-3);
-  padding: var(--space-2) var(--space-3);
-  font-size: var(--font-sm);
-  background: color-mix(in srgb, var(--accent) 8%, transparent);
-  color: var(--text);
-  border-left: 3px solid var(--accent);
-  border-radius: var(--radius-xs);
-}
-
-#search-sheet-results {
-  flex: 1;
-  overflow-y: auto;
-  padding: 0 var(--space-4) var(--space-4);
-  -webkit-overflow-scrolling: touch;
-  /* Don't let inner scrolling chain to the body when the user reaches the
-     top/bottom of the result list. */
-  overscroll-behavior: contain;
-}
-
 /* ── Search Results ── */
 .search-count {
   font-size: var(--font-xs);
@@ -1923,6 +1623,36 @@ body {
   padding: var(--space-8) var(--space-4);
   color: var(--text-secondary);
   font-size: var(--font-base);
+}
+
+/* ADR-030 P3: Apple-Music-식 중앙 빈 상태(돋보기 + 제목 + 부제). 빈 검색어 뷰와
+   결과 0건 양쪽에서 사용. */
+.search-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: var(--space-2);
+  padding: var(--space-10) var(--space-6);
+}
+.search-empty-icon {
+  color: var(--text-secondary);
+  margin-bottom: var(--space-2);
+}
+.search-empty-icon svg { width: 3.5rem; height: 3.5rem; opacity: 0.5; }
+.search-empty-title {
+  margin: 0;
+  font-size: var(--font-xl);
+  font-weight: 700;
+  color: var(--text);
+}
+.search-empty-subtitle {
+  margin: 0;
+  max-width: 16rem;
+  font-size: var(--font-base);
+  line-height: var(--leading-snug);
+  color: var(--text-secondary);
 }
 
 .search-results {
@@ -3094,81 +2824,96 @@ html.cite-sheet-open {
   margin-bottom: 1px;
 }
 
-/* ── Tab bar (ADR-029) — 모바일 하단 내비, iOS Liquid Glass ────────────────
-   플로팅 캡슐. frosted glass 는 ::before(absolute) 레이어에 — Safari 26 이 하단
-   fixed 요소를 home-indicator 틴팅에 샘플링하므로 fixed 부모는 투명하게 둔다.
-   데스크탑(≥769px)은 사이드바 단계 전까지 숨김. 5번째(노트) 탭은 flex 로 자동 수용. */
-#tab-bar {
+/* ── Tab bar (ADR-029, ADR-030) — 모바일 하단 내비, iOS Liquid Glass ────────
+   플로팅 캡슐. ADR-030: fixed 요소는 #tab-dock(투명) 하나뿐이라 Safari 26 home-indicator
+   틴팅 샘플링 문제 없음 → frosted glass 는 #tab-bar·#tab-search 요소에 직접(::before 우회 불필요).
+   데스크탑(≥769px)은 사이드바 단계 전까지 숨김. */
+/* ADR-030: 탭 pill + 검색 원형을 한 플로팅 dock 으로 — 좌측 정렬, 근접 배치.
+   gap 으로 둘 사이 간격만 두고 화면 우측 여백은 비운다(짧은 3탭 pill 기준). */
+#tab-dock {
   position: fixed;
-  left: var(--space-4);
-  right: var(--space-4);
-  bottom: calc(var(--space-1) + env(safe-area-inset-bottom) * 0.75);
+  left: 0;
+  right: 0;
+  /* --kb-overlap 은 키보드가 떠 있을 때 tabbar.js 가 키보드 높이로 설정한다.
+     transform 이 아니라 실제 bottom 으로 올려야 입력의 레이아웃 사각형이 키보드
+     위로 가서 iOS 가 페이지를 팬하지 않는다(헤더·빈 상태가 제자리 유지). */
+  bottom: calc(var(--space-1) + env(safe-area-inset-bottom) * 0.75 + var(--kb-overlap, 0px));
   z-index: var(--nav-z);
   display: flex;
+  align-items: center;
+  /* ADR-030: 탭바=왼쪽 끝, 검색 그룹=오른쪽 끝. 검색 그룹(#tab-search-dock)의
+     margin-left:auto 가 우측으로 밀어붙인다(닫기 X 버튼이 collapsed 0폭으로 끼어
+     있어도 space-between 처럼 가운데로 흩어지지 않음). padding 0 space-4 + left/right 0
+     으로 오디오 바(margin:0 space-4)와 좌우 가장자리 정렬. */
+  padding: 0 var(--space-4);
+  /* 순수 레이아웃 레이어 — 어떤 표면도 없음(완전 투명). */
+  background: none;
+  border: none;
+  box-shadow: none;
+}
+#tab-dock::before,
+#tab-dock::after { content: none; }
+#tab-bar {
+  /* dock 의 flex 자식 — 콘텐츠 폭 좌측 pill. 위치는 #tab-dock 이 책임. */
+  display: flex;
   align-items: stretch;
-  /* 고정 높이 대신 상하 패딩 — 큰 아이콘 위아래 여유 확보(높이는 내용에 맞춰 ~63px). */
+  gap: var(--space-6); /* 아이콘 사이 넓은 여백 — 탭바를 길게 늘여 검색 버튼과의 간격 축소 */
+  /* 상하 패딩 space-2 + 아이콘랩(touch-target 44px) = 60px → 오디오 바와 동일 높이. */
   padding: var(--space-2) var(--space-2);
-  /* 둥근 사각 — iPhone 코너는 squircle(연속 곡률)이나 corner-shape 는 Chromium
-     전용(Safari 미폴백)이라 squircle 을 점진 향상으로 얹고, border-radius(원호)는
-     Safari/전체 폴백으로 둔다. 26px 는 화면 squircle 과 조화되는 값(기기 코너 반경
-     env() 미존재). corner-shape 미지원 브라우저는 자동으로 원호. */
-  border-radius: 26px;
-  corner-shape: squircle;
-  background: transparent;
+  /* 좌우 끝을 완전한 반원 캡으로 — stadium(pill) 형태. 모핑으로 홈만 남아 폭이
+     60px 로 줄면(아래 #tab-dock.searching #tab-bar) 이 pill 캡이 그대로 정원이
+     되어, 검색 원형 버튼·모핑 원과 형태 언어가 이어진다(둥근 사각 26px 의 모서리
+     불일치 해소). corner-shape: superellipse(2) 는 정원호 — 검색 원형(#tab-search)·
+     모핑 원과 통일하며, 미지원 브라우저는 border-radius 원호로 폴백. */
+  border-radius: var(--radius-pill);
+  corner-shape: superellipse(2);
+  /* ADR-030: frosted glass 를 ::before 레이어가 아니라 #tab-bar 요소에 직접.
+     #tab-dock(fixed)이 Safari home-indicator 샘플링 대상이라 투명하게 두므로, 자식인
+     #tab-bar 는 직접 glass 를 줘도 틴팅 문제 없음(ADR-029 의 ::before 우회 불필요).
+     iOS 26.1 'Tinted' 방향 — 가독성 위해 약간 더 불투명. -webkit- 는 리터럴만. */
+  background: color-mix(in srgb, var(--bg) 70%, transparent);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  backdrop-filter: blur(16px) saturate(180%);
+  /* 오디오 바와 동일한 floating 스타일 — 1px 테두리 + shadow-2(테두리가 가장자리를
+     잡아줘 같은 그림자도 또렷하게 떠 보임). */
+  border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
   box-shadow: var(--shadow-2);
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
 }
-
-#tab-bar::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  border-radius: inherit;
-  corner-shape: squircle; /* corner-shape 는 상속 안 됨 — glass 레이어에도 명시 */
-  /* iOS 26.1 'Tinted' 방향 — 가독성 위해 약간 더 불투명. */
-  background: color-mix(in srgb, var(--bg) 70%, transparent);
-  /* -webkit- 는 리터럴 값만(Safari 가 var() 미지원). */
-  -webkit-backdrop-filter: blur(16px) saturate(180%);
-  backdrop-filter: blur(16px) saturate(180%);
-  border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4); /* 상단 specular 하이라이트 */
-}
-[data-theme="dark"] #tab-bar::before {
+[data-theme="dark"] #tab-bar {
   background: color-mix(in srgb, var(--bg-card) 80%, transparent);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
+/* ADR-030: 아이콘 전용(라벨 제거) — flex:1 stretch 대신 콘텐츠 폭 탭. 각 탭은
+   ≥44px 터치 영역 유지. 노트 탭은 <button> 이라 기본 버튼 외형 리셋. */
 .tab-item {
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
-  flex: 1;
   min-width: var(--icon-btn-touch); /* HIG ≥44px 탭 영역 */
+  padding: 0;
+  background: none;
+  border: none;
+  font: inherit;
   text-decoration: none;
   color: var(--text-secondary);
+  cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
+/* 노트 목업 — 비활성 placeholder. */
+.tab-item[aria-disabled="true"] { cursor: default; }
 
 .tab-icon-wrap {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 2.9rem;
-  height: 1.8rem;
+  width: 3rem;
+  height: var(--touch-target); /* 44px — 오디오 재생 버튼과 동일, 탭바 높이 60px 결정 */
   border-radius: var(--radius-pill);
   transition: background var(--duration-fast) ease, color var(--duration-fast) ease;
 }
-/* 헤더 아이콘(≈24px)보다 크게 — 탭바 존재감. rem 으로 Dynamic Type 추종. */
-.tab-icon { width: 1.6rem; height: 1.6rem; }
-
-.tab-label {
-  font-size: var(--font-2xs);
-  font-weight: 500;
-  line-height: 1;
-}
+/* 큰 바 높이에 맞춘 큰 아이콘 — 존재감. rem 으로 Dynamic Type 추종. */
+.tab-icon { width: 1.9rem; height: 1.9rem; }
 
 /* 활성 탭 — 아이콘 뒤 캡슐 pill + accent(chrome 중립색; 테마색 4곳 한정 결정 준수). */
 .tab-item.active,
@@ -3181,25 +2926,262 @@ html.cite-sheet-open {
 }
 .tab-item:active .tab-icon-wrap { transform: scale(0.92); }
 
-/* 투명도 감소 / backdrop-filter 미지원 → 불투명 표면 폴백. */
+/* ── 분리된 검색 원형 버튼 (ADR-030) ──────────────────────────────────────────
+   탭 바와 같은 하단 높이의 우측 플로팅 원형. 탭 바와 동일 glass 레시피(::before).
+   지름 = touch-target(44px) + 상하 패딩(space-2 ×2) = 60px → 탭 바·오디오 바 높이와 일치.
+   P2 에서 입력창으로 모핑(width 확장). */
+#tab-search-dock {
+  /* dock 의 flex 자식 — 위치는 #tab-dock 이 책임. P2 에서 입력창 확장 컨테이너.
+     순수 레이아웃 래퍼 — 어떤 시각효과도 없음(완전 투명). */
+  display: flex;
+  align-items: center;
+  /* 검색 그룹을 우측 끝으로(닫기 X 가 collapsed 0폭으로 뒤에 붙어 있어도 가운데로
+     흩어지지 않게). 모핑 시엔 margin-left:0 으로 풀어 flex:1 확장에 양보. */
+  margin-left: auto;
+  background: none;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+}
+#tab-search-dock::before,
+#tab-search-dock::after { content: none; }
+#tab-search {
+  position: relative;
+  /* 지름 = 아이콘랩(touch-target 44px) + 상하 패딩(space-2 ×2) = 60px → 탭 pill·오디오 바 높이와 일치. */
+  width: calc(var(--touch-target) + var(--space-2) * 2);
+  height: calc(var(--touch-target) + var(--space-2) * 2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border-radius: var(--radius-pill);
+  corner-shape: superellipse(2); /* 원 — 폴백은 원형 border-radius */
+  /* ADR-030: 탭 pill 과 동일 — frosted glass 를 요소에 직접(::before 레이어 제거). */
+  background: color-mix(in srgb, var(--bg) 70%, transparent);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  backdrop-filter: blur(16px) saturate(180%);
+  color: var(--accent);
+  /* 오디오 바·탭 pill 과 동일한 floating 스타일 — 1px 테두리 + shadow-2. */
+  border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
+  box-shadow: var(--shadow-2);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform var(--duration-fast) ease;
+}
+[data-theme="dark"] #tab-search {
+  background: color-mix(in srgb, var(--bg-card) 80%, transparent);
+}
+.tab-search-icon { width: 1.9rem; height: 1.9rem; }
+#tab-search:active { transform: scale(0.92); } /* press feedback */
+/* 현재 라우트가 /search 일 때 — 탭 pill 활성과 동색 accent 틴트. */
+#tab-search.active {
+  background: color-mix(in srgb, var(--accent) 14%, color-mix(in srgb, var(--bg) 70%, transparent));
+}
+[data-theme="dark"] #tab-search.active {
+  background: color-mix(in srgb, var(--accent) 18%, color-mix(in srgb, var(--bg-card) 80%, transparent));
+}
+#tab-search-input[hidden] { display: none; }
+
+/* ── ADR-030 P2: 검색 모핑 ────────────────────────────────────────────────
+   검색 원형 버튼 → 입력 pill 확장 + 비-홈 탭 접기(홈만 남음). tabbar.js 가
+   #tab-dock.searching 토글. 양방향 트랜지션 — 모션 생략은 reduced-motion 에서. */
+.tab-item {
+  max-width: 6rem; /* 접힘 애니메이션을 위해 명시적 시작값(콘텐츠 ~3rem) */
+  transition: max-width var(--duration-base) var(--ease-standard),
+              opacity var(--duration-fast) var(--ease-standard);
+}
+#tab-bar { transition: gap var(--duration-base) var(--ease-standard); }
+#tab-search-dock {
+  transition: flex-grow var(--duration-base) var(--ease-standard);
+}
+#tab-search {
+  transition: transform var(--duration-fast) ease,
+              width var(--duration-base) var(--ease-standard),
+              background var(--duration-fast) var(--ease-standard);
+}
+
+/* 모핑 중: 홈 원형·입력 pill·닫기 X 를 균등 간격으로(idle 엔 gap 없이 margin-auto
+   우측 정렬). */
+#tab-dock.searching { gap: var(--space-2); }
+/* 홈만 남기고 접기 + #tab-bar 를 60px 원형으로(검색 원형과 동일 형태).
+   검색 모핑(.searching)과 스크롤 축소(.collapsed)가 이 홈 원형·탭 접힘을 공유. */
+#tab-dock.searching #tab-bar,
+#tab-dock.collapsed #tab-bar {
+  gap: 0;
+  flex: 0 0 auto;
+  width: calc(var(--touch-target) + var(--space-2) * 2); /* 60px */
+  border-radius: var(--radius-pill);
+  corner-shape: superellipse(2); /* 원 */
+  justify-content: center;
+}
+#tab-dock.searching .tab-item:not([data-tab="home"]),
+#tab-dock.collapsed .tab-item:not([data-tab="home"]) {
+  max-width: 0;
+  min-width: 0;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+/* 원 안에 홈 아이콘 중앙 정렬 — 활성 pill 폭(3rem) 강제 해제. */
+#tab-dock.searching .tab-item[data-tab="home"],
+#tab-dock.collapsed .tab-item[data-tab="home"] { min-width: 0; }
+#tab-dock.searching .tab-item[data-tab="home"] .tab-icon-wrap,
+#tab-dock.collapsed .tab-item[data-tab="home"] .tab-icon-wrap { width: auto; }
+/* 검색 dock → 남은 폭을 채우는 입력 pill (floating glass 스타일을 dock 으로 이동).
+   flex-basis 0 으로 콘텐츠(placeholder) 길이와 무관하게 — 우측 넘침 방지. */
+#tab-dock.searching #tab-search-dock {
+  flex: 1 1 0;
+  min-width: 0;
+  margin-left: 0; /* idle 의 margin-left:auto 해제 — flex:1 확장에 양보 */
+  height: calc(var(--touch-target) + var(--space-2) * 2); /* 60px — 탭 pill 과 동일 */
+  padding: 0 var(--space-3);
+  gap: var(--space-2);
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--bg) 70%, transparent);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  backdrop-filter: blur(16px) saturate(180%);
+  border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
+  box-shadow: var(--shadow-2);
+}
+[data-theme="dark"] #tab-dock.searching #tab-search-dock {
+  background: color-mix(in srgb, var(--bg-card) 80%, transparent);
+}
+/* 검색 버튼 → 입력 pill 의 왼쪽 아이콘(자체 표면 제거). */
+#tab-dock.searching #tab-search {
+  width: auto;
+  height: auto;
+  flex: 0 0 auto;
+  background: none;
+  border: none;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+/* 하단 검색 입력 — Sans(본문 Serif 상속 회피), 콘텐츠 무관 축소(flex-basis 0). */
+#tab-dock.searching #tab-search-input {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 100%;
+  border: none;
+  background: none;
+  outline: none;
+  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  font-size: var(--font-md);
+  color: var(--text);
+}
+#tab-dock.searching #tab-search-input::placeholder { color: var(--text-secondary); }
+
+/* ── ADR-030 P3: 입력 pill 안 검색어 지우기(⊗) ──────────────────────────────
+   Apple Music 식 — 텍스트 있을 때만(JS 가 [hidden] 토글) pill 우측에 표시. */
+#tab-search-clear[hidden] { display: none; }
+/* :not([hidden]) — 같은 영역 [hidden] 규칙보다 특이도가 높아 텍스트 없을 때도
+   보이는 버그를 막는다(JS 가 입력값으로 hidden 토글). */
+#tab-dock.searching #tab-search-clear:not([hidden]) {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* ⊗ 아이콘 자체는 작게(svg 1.4rem) 보이되 탭 영역은 HIG ≥44px(--touch-target)
+     확보 — 표면이 없어 커진 영역은 보이지 않고 누르기만 쉬워진다. */
+  width: var(--touch-target);
+  height: var(--touch-target);
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+#tab-dock.searching #tab-search-clear svg { width: 1.4rem; height: 1.4rem; }
+#tab-dock.searching #tab-search-clear:active { transform: scale(0.9); }
+
+/* ── ADR-030 P3: 키보드 내리기 버튼 — 입력 pill 오른쪽 원형 ───────────────────
+   "키보드가 나타나면 한 번 더 모핑": 키보드가 떠 있는 동안에만 width 0→60px 로
+   모핑 인(body.tabbar-keyboard). 탭하면 키보드만 내리고(blur) 검색 세션·입력값·
+   결과는 유지(grounded dock). 키보드가 내려간 결과 화면에선 접힘(width/opacity 0)
+   이라 레이아웃·시각 비표시(collapse 탭과 동일 패턴) — 검색 종료는 홈 버튼 담당. */
+#tab-search-close {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 0;
+  height: calc(var(--touch-target) + var(--space-2) * 2); /* 60px — 다른 원형과 동일 */
+  padding: 0;
+  border: none;
+  background: none;
+  box-shadow: none;
+  border-radius: var(--radius-pill);
+  corner-shape: superellipse(2); /* 원 */
+  color: var(--text-secondary);
+  cursor: pointer;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: width var(--duration-base) var(--ease-standard),
+              opacity var(--duration-fast) var(--ease-standard),
+              transform var(--duration-fast) ease;
+}
+#tab-search-close svg { width: 1.6rem; height: 1.6rem; }
+#tab-search-close:active { transform: scale(0.92); }
+body.tabbar-keyboard #tab-dock.searching #tab-search-close {
+  width: calc(var(--touch-target) + var(--space-2) * 2); /* 60px 원형 */
+  opacity: 1;
+  pointer-events: auto;
+  /* 홈·검색 원형과 동일한 floating glass. */
+  background: color-mix(in srgb, var(--bg) 70%, transparent);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  backdrop-filter: blur(16px) saturate(180%);
+  border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
+  box-shadow: var(--shadow-2);
+}
+[data-theme="dark"] body.tabbar-keyboard #tab-dock.searching #tab-search-close {
+  background: color-mix(in srgb, var(--bg-card) 80%, transparent);
+}
+/* 키보드 표시 중: 홈 버튼 숨기고 검색 입력 pill 이 홈 자리(왼쪽 끝)까지 확장.
+   #tab-bar 가 flow 에서 빠지면 flex:1 인 #tab-search-dock 가 그 폭을 흡수한다.
+   키보드가 내려가면(결과 화면) 홈 복귀 — 검색 종료 진입점 유지. */
+body.tabbar-keyboard #tab-dock.searching #tab-bar { display: none; }
+
+/* 모핑 중 /search 전체뷰의 상단 입력은 숨김 — 하단 입력이 단일 검색 필드. */
+body.tabbar-searching #search-inpage-bar { display: none; }
+
+/* 투명도 감소 / backdrop-filter 미지원 → 불투명 표면 폴백. 모핑 입력 pill
+   (#tab-dock.searching #tab-search-dock)도 글래스 표면을 쓰므로 함께 폴백. */
 @media (prefers-reduced-transparency: reduce) {
-  #tab-bar::before {
+  #tab-bar,
+  #tab-search,
+  #tab-dock.searching #tab-search-dock,
+  #tab-dock.searching #tab-search-close {
     background: var(--bg-card);
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
   }
 }
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  #tab-bar::before { background: var(--bg-card); }
+  #tab-bar,
+  #tab-search,
+  #tab-dock.searching #tab-search-dock,
+  #tab-dock.searching #tab-search-close { background: var(--bg-card); }
 }
 @media (prefers-reduced-motion: reduce) {
   .tab-icon-wrap { transition: none; }
   .tab-item:active .tab-icon-wrap { transform: none; }
+  /* 모핑 트랜지션도 생략 — 상태 즉시 스왑. */
+  .tab-item,
+  #tab-bar,
+  #tab-search,
+  #tab-search-dock,
+  #tab-search-close,
+  #audio-bar { transition: none; }
+  #tab-search:active { transform: none; }
+  #tab-search-close:active { transform: none; }
 }
 
-/* 데스크탑: 사이드바 단계 전까지 탭바 숨김. */
+/* 데스크탑: 사이드바 단계 전까지 탭 dock(탭바+검색) 숨김. */
 @media (min-width: 769px) {
-  #tab-bar { display: none; }
+  #tab-dock { display: none; }
 }
 
 /* 모바일: 설정 기어·홈(성서 목록으로) 버튼은 탭 바로 이전 — 헤더에서 숨김
@@ -3218,19 +3200,31 @@ html.cite-sheet-open {
      body 접두 + :not([hidden]) 로 base #audio-bar{bottom:0}·browser-mode 규칙보다
      특이도 우선(소스 순서 무관하게 이김). */
   body #audio-bar:not([hidden]) {
+    /* ADR-030 P4: floating↔미니(축소) 전환을 부드럽게 — 미니(.tabbar-collapsed)도
+       position:fixed 라, floating 도 fixed 로 통일하면 left/right/bottom/padding 이
+       보간돼 dock 행으로 슬라이드·축소된다(sticky 였으면 타입 전환이라 스냅). */
+    position: fixed;
+    left: var(--space-4);
+    right: var(--space-4);
     /* 탭 바 footprint(--tabbar-reserve) 위에 안착 — 같은 토큰을 써 탭 바와
        겹치지 않게(매직넘버 불일치 방지). */
     bottom: var(--tabbar-reserve);
-    margin: 0 var(--space-4);
+    margin: 0;
     /* 플로팅 바: 가장자리·요소 간격을 12px 로 통일(여백 일정). 하단은 홈
        인디케이터 위로 떠 있어 safe-area 불필요 → 8px. */
     padding: var(--space-2) var(--space-3);
-    /* 탭 바와 동일한 플로팅 둥근 바. corner-shape 는 Chromium 전용(Safari 는
-       border-radius 폴백). 글래스(50%+blur)는 기존 유지, 테두리·그림자만 추가. */
-    border-radius: 26px;
-    corner-shape: squircle;
+    /* 탭 바와 동일한 플로팅 둥근 바 — 좌우 끝을 반원 캡(stadium)으로 통일.
+       corner-shape: superellipse(2) 는 정원호(탭 바 pill·검색 원형과 통일),
+       미지원 브라우저는 border-radius 원호로 폴백. 글래스(50%+blur)는 기존 유지,
+       테두리·그림자만 추가. */
+    border-radius: var(--radius-pill);
+    corner-shape: superellipse(2);
     border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
     box-shadow: var(--shadow-2);
+    transition: left var(--duration-base) var(--ease-standard),
+                right var(--duration-base) var(--ease-standard),
+                bottom var(--duration-base) var(--ease-standard),
+                padding var(--duration-base) var(--ease-standard);
   }
   /* 둥근 모서리에서 튀어나오는 상단 hairline 은 플로팅 바에선 제거. */
   body #audio-bar:not([hidden])::before { display: none; }
@@ -3241,8 +3235,32 @@ html.cite-sheet-open {
   body:not(.verse-select-active) #app:has(~ #audio-bar:not([hidden])) {
     padding-bottom: calc(var(--tabbar-reserve) + 3.5rem);
   }
-  /* 절 선택 모드: 전용 하단 바가 차지하므로 탭 바 숨김. */
-  body.verse-select-active #tab-bar { display: none; }
+
+  /* ── ADR-030 P3b: 스크롤 축소 + 오디오 표시 중 → 오디오 바를 홈·검색 원형 사이
+     dock 행으로 축소·이동(재생 버튼 + 진행바만, 시간·속도 숨김). position:fixed 로
+     dock 행에 정확히 배치 — 좌우 = space-4 + 홈/검색 원형 60px + space-2 간격. */
+  body.tabbar-collapsed #audio-bar:not([hidden]) {
+    position: fixed;
+    bottom: calc(var(--space-1) + env(safe-area-inset-bottom) * 0.75);
+    left: calc(var(--space-4) + var(--touch-target) + var(--space-2) * 3);
+    right: calc(var(--space-4) + var(--touch-target) + var(--space-2) * 3);
+    margin: 0;
+    height: calc(var(--touch-target) + var(--space-2) * 2); /* 60px — 원형들과 동일 */
+    padding: 0 var(--space-3);
+    display: flex;
+    align-items: center;
+    z-index: var(--nav-z);
+  }
+  body.tabbar-collapsed #audio-bar:not([hidden]) .audio-time,
+  body.tabbar-collapsed #audio-bar:not([hidden]) .audio-speed-btn { display: none; }
+  body.tabbar-collapsed #audio-bar:not([hidden]) .audio-player { width: 100%; gap: var(--space-2); }
+  /* 축소 시 오디오는 dock 행에 들어오므로 #app 추가 하단 여유 불필요(탭 바 footprint 만). */
+  body.tabbar-collapsed:not(.verse-select-active) #app:has(~ #audio-bar:not([hidden])) {
+    padding-bottom: var(--tabbar-reserve);
+  }
+
+  /* 절 선택 모드: 전용 하단 바가 차지하므로 탭 dock 숨김. */
+  body.verse-select-active #tab-dock { display: none; }
 }
 
 /* ── Audio Bar ── */
@@ -3506,14 +3524,6 @@ html.cite-sheet-open {
      settings moves into the title row, so the whole row collapses away. */
   #breadcrumb-row {
     display: none;
-  }
-}
-
-/* Desktop: hide bottom sheet */
-@media (min-width: 769px) {
-  #search-scrim,
-  #search-sheet {
-    display: none !important;
   }
 }
 

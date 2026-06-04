@@ -173,7 +173,7 @@ localStorage.setItem(SEARCH_HISTORY_KEY, value);
 ```html
 <div id="search-bar">
   <input id="search-input" type="search" placeholder="검색 (...)"
-         aria-label="성경 검색"
+         aria-label="검색"
          aria-autocomplete="list"
          aria-controls="search-history"
          aria-expanded="false">
