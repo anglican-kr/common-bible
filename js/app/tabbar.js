@@ -110,6 +110,13 @@ function exitSearch() {
   detachKeyboardTracking();
 }
 
+// 뷰포트가 데스크탑(≥769px)으로 넘어가면 dock 이 CSS 로 숨겨지므로, 모핑 상태
+// (searching·body.tabbar-searching·키보드 추적)를 정리해 in-page 검색바가 다시
+// 드러나게 한다. 안 그러면 /search 가 보이는 검색 필드 없이 stale 로 남는다.
+window.matchMedia("(min-width: 769px)").addEventListener("change", (e) => {
+  if (e.matches && searching) exitSearch();
+});
+
 // 검색 모드 전체 닫기 → 홈으로 복귀(route() 가 exitSearch 호출). 포커스가 body 로
 // 흘러가지 않게 다시 펼쳐진 검색 버튼으로 되돌린다(키보드 접근성).
 function closeSearchToHome() {
