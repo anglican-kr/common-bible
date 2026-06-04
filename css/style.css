@@ -3090,11 +3090,11 @@ html.cite-sheet-open {
 #tab-dock.searching #tab-search-clear svg { width: 1.4rem; height: 1.4rem; }
 #tab-dock.searching #tab-search-clear:active { transform: scale(0.9); }
 
-/* ── ADR-030 P3: 검색 닫기(X) 버튼 — 입력 pill 오른쪽 원형 ───────────────────
+/* ── ADR-030 P3: 키보드 내리기 버튼 — 입력 pill 오른쪽 원형 ───────────────────
    "키보드가 나타나면 한 번 더 모핑": 키보드가 떠 있는 동안에만 width 0→60px 로
-   모핑 인(body.tabbar-keyboard). 키보드가 내려간 결과 화면에선 홈 버튼과 동작이
-   겹치므로(둘 다 탭바 복구→홈) 숨긴다. idle/no-keyboard 상태는 접힘(width/opacity 0)
-   이라 레이아웃·시각 비표시(collapse 탭과 동일 패턴). 닫으면(X) 전체 롤백. */
+   모핑 인(body.tabbar-keyboard). 탭하면 키보드만 내리고(blur) 검색 세션·입력값·
+   결과는 유지(grounded dock). 키보드가 내려간 결과 화면에선 접힘(width/opacity 0)
+   이라 레이아웃·시각 비표시(collapse 탭과 동일 패턴) — 검색 종료는 홈 버튼 담당. */
 #tab-search-close {
   flex: 0 0 auto;
   display: flex;
