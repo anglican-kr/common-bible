@@ -304,7 +304,7 @@ function buildInPageSearchInput(query, autofocus = false) {
     autocapitalize: "off",
     spellcheck: "false",
     placeholder: "검색 (예: 사랑, 사랑 in:요한, 창세 1:3)",
-    "aria-label": "성경 검색",
+    "aria-label": "검색",
     autocomplete: "off",
   }));
   input.value = query || "";
@@ -363,7 +363,7 @@ function renderSearchView() {
   const morphing = document.body.classList.contains("tabbar-searching");
   view.appendChild(buildInPageSearchInput("", !morphing));
   view.appendChild(
-    buildSearchEmptyState("성경 검색", "찾을 단어나 구절을 검색해 보세요.")
+    buildSearchEmptyState("검색", "예: 사랑, 사랑 in:요한, 창세 1:3")
   );
   $app.appendChild(view);
 }
