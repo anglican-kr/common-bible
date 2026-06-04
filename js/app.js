@@ -39,7 +39,6 @@ window.clearAllCaches = clearAllCaches;
 
 // DOM anchors used directly by this module's handlers.
 const $announce = _$("a11y-announce");
-const $searchSheet = _$("search-sheet");
 
 // ── Accessibility ──
 
@@ -53,13 +52,9 @@ function announce(msg) {
 
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
-    // Escape closes the topmost layer first: search sheet → open popovers →
-    // tab-bar search morph (ADR-030). Each layer returns so a single Escape
-    // never collapses two layers at once.
-    if ($searchSheet && !$searchSheet.hidden) {
-      closeSearchSheet();
-      return;
-    }
+    // Escape closes the topmost layer first: open popovers → tab-bar search
+    // morph (ADR-030). Each layer returns so a single Escape never collapses
+    // two layers at once.
     // #tab-search is excluded from the blanket aria-expanded reset — its morph
     // (expanded) state is owned by tab-search logic, so closing a popover while
     // search stays open must not flip it to aria-expanded="false" (ADR-030).
@@ -293,9 +288,9 @@ function registerServiceWorker() {
 // ── Bootstrap ──
 // All deferred init calls below resolve via the window facade set by their
 // owning module: route / loadVersion / initCompactHeader (views-routing.js),
-// initSheetDrag (search.js), initBookmarkSheetDrag / initBookmarkDrawerResize
-// (bookmark.js), maybeShowInstallNudge (install.js). registerServiceWorker
-// is module-local to this file.
+// initBookmarkSheetDrag / initBookmarkDrawerResize (bookmark.js),
+// maybeShowInstallNudge (install.js). registerServiceWorker is module-local
+// to this file.
 window.addEventListener("DOMContentLoaded", () => {
   const idle = window.requestIdleCallback ?? ((cb) => setTimeout(cb, 200));
 
@@ -307,14 +302,13 @@ window.addEventListener("DOMContentLoaded", () => {
   // 1. Prioritize UI rendering
   route().finally(() => {
     // 2. Load non-critical work after first paint. Each item targets a surface
-    //    the user cannot interact with until they explicitly open it (drawers,
-    //    search sheet) or that has no first-paint impact (version label,
-    //    compact-header scroll listener, install nudge, SW registration).
+    //    the user cannot interact with until they explicitly open it (drawers)
+    //    or that has no first-paint impact (version label, compact-header
+    //    scroll listener, install nudge, SW registration).
     idle(() => {
       loadVersion();
       initCompactHeader();
       initScrollElevation();
-      initSheetDrag();
       initBookmarkSheetDrag();
       initBookmarkDrawerResize();
       registerServiceWorker();
