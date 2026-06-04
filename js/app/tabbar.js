@@ -54,6 +54,14 @@ function detachKeyboardTracking() {
   if ($dock) $dock.style.transform = "";
 }
 
+// dock 입력을 현재 URL 의 ?q= 로 맞춘다(in-page bar 가 숨겨져 dock 입력이 단일
+// 필드이므로). 사용자가 입력 중(포커스)일 땐 덮어쓰지 않는다.
+function syncInputFromUrl() {
+  if (!$searchInput || document.activeElement === $searchInput) return;
+  $searchInput.value = new URLSearchParams(location.search).get("q") || "";
+  syncClearBtn();
+}
+
 // ── 진입/복구 ──
 function openSearch() {
   if (!$dock || !$searchInput) return;
@@ -74,8 +82,7 @@ function openSearch() {
   if (W.parsePath?.().view !== "search") W.navigate("/search");
   // 기존 /search?q=… 위에서 모핑을 열면 in-page bar(쿼리 보유)가 숨겨지므로 현재
   // 쿼리를 dock 입력으로 복사 — 안 그러면 결과는 남고 보이는 필드만 빈다.
-  const q = new URLSearchParams(location.search).get("q");
-  if (q) $searchInput.value = q;
+  $searchInput.value = new URLSearchParams(location.search).get("q") || "";
   syncClearBtn();
   requestAnimationFrame(() => $searchInput?.focus());
   attachKeyboardTracking();
@@ -161,5 +168,8 @@ $searchClose?.addEventListener("click", () => {
 
 // views-routing 의 syncTabBarActive 가 라우트 변경 시 호출(검색 외 라우트면 복구).
 W.exitTabSearch = exitSearch;
+// 검색 라우트가 바뀌면(뒤로/앞으로 등) dock 입력을 URL 쿼리에 동기화 — 모핑 중일
+// 때만(searching) 의미. route() 의 syncTabBarActive 가 매 라우트마다 호출.
+W.syncTabSearchQuery = () => { if (searching) syncInputFromUrl(); };
 
 export {};

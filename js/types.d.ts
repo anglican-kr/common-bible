@@ -806,6 +806,7 @@ declare global {
     // exitTabSearch 노출(views-routing 의 syncTabBarActive 가 라우트 변경 시 호출).
     commitTopSearch?: (rawQuery: string) => void;
     exitTabSearch?: () => void;
+    syncTabSearchQuery?: () => void;
 
     // Cross-module globals set by drive-sync.js / state-machine.js.
     _syncClientId?: string;

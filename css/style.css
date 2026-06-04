@@ -3372,8 +3372,10 @@ html.cite-sheet-open {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 1.6rem;
-  height: 1.6rem;
+  /* ⊗ 아이콘 자체는 작게(svg 1.4rem) 보이되 탭 영역은 HIG ≥44px(--touch-target)
+     확보 — 표면이 없어 커진 영역은 보이지 않고 누르기만 쉬워진다. */
+  width: var(--touch-target);
+  height: var(--touch-target);
   padding: 0;
   border: none;
   background: none;
