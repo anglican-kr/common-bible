@@ -16,6 +16,7 @@ const $searchInput = /** @type {HTMLInputElement | null} */ (
 );
 const $searchClear = document.getElementById("tab-search-clear");
 const $searchClose = document.getElementById("tab-search-close");
+const $home = document.querySelector('#tab-bar [data-tab="home"]');
 
 /** @type {Window & typeof globalThis & Record<string, any>} */
 const W = /** @type {any} */ (window);
@@ -194,6 +195,17 @@ function closeSearchToHome() {
 $searchBtn?.addEventListener("click", (e) => {
   e.preventDefault();
   openSearch();
+});
+
+// ADR-030 P4: 스크롤 축소 상태에서 홈 탭 = 홈 이동이 아니라 "펼치기" — 탭바 복원 +
+// 오디오 미니를 원래 floating 위치로 되돌린다(읽던 위치 유지). preventDefault 로
+// 전역 <a> 인터셉터(defaultPrevented 면 네비 안 함)를 막는다. 펼친 뒤 다시 아래로
+// 스크롤하면 정상적으로 재축소. 축소 상태가 아니면 평소대로 홈으로 이동.
+$home?.addEventListener("click", (e) => {
+  if (collapsed) {
+    e.preventDefault();
+    applyCollapsed(false);
+  }
 });
 
 // 하단 입력: Enter → 기존 검색 커밋(verse ref auto-nav 포함).
