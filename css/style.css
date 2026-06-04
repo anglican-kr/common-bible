@@ -2853,6 +2853,9 @@ html.cite-sheet-open {
 }
 #tab-dock::before,
 #tab-dock::after { content: none; }
+/* 탭 dock 뒤 콘텐츠 데코레이션 scrim — 기본 숨김(데스크탑·base). 모바일에서만 노출.
+   하단으로 스크롤되는 본문이 플로팅 캡슐 양옆·아래로 노출되는 것을 페이드로 가린다. */
+#tabbar-scrim { display: none; }
 #tab-bar {
   /* dock 의 flex 자식 — 콘텐츠 폭 좌측 pill. 위치는 #tab-dock 이 책임. */
   display: flex;
@@ -3193,6 +3196,60 @@ body.tabbar-searching #search-inpage-bar { display: none; }
 
 /* 탭 바 하단 공존 (ADR-029 P4). 데스크탑은 탭바가 없어 적용 안 함. */
 @media (max-width: 768px) {
+  /* ── 탭 dock 뒤 콘텐츠 데코레이션 scrim ──
+     플로팅 캡슐(#tab-bar·#tab-search·미니 오디오)은 투명 dock 위에 떠 있어, 그 양옆
+     틈과 아래 sliver 로 스크롤되는 본문이 그대로 비친다. dock 바로 아래(z 는 dock 미만)
+     에 화면 폭 전체 페이드 레이어를 깔아, 본문이 캡슐에 닿기 전에 배경색으로 사라지게 한다.
+     - height = --tabbar-reserve → 윗변이 캡슐 윗변(≈64px) 살짝 위에 옴.
+     - 그래디언트: 하단 40% 는 솔리드 --bg(캡슐 양옆·아래 텍스트 확실히 가림),
+       40%→100% 페이드(캡슐 상단을 부드럽게 통과, 그 위 본문은 또렷하게 유지).
+     - ::before = 얇은 backdrop blur 를 페이드 구간에만(mask 로 상단 fade-out) 얹어
+       '유리 밑으로 사라지는' 질감 보강. blur 미지원 브라우저는 그래디언트만으로 동작. */
+  #tabbar-scrim {
+    /* --scrim-solid = 솔리드 --bg 를 유지할 높이(화면 바닥 기준). 캡슐 윗변(≈--tabbar-reserve)
+       까지는 완전 불투명으로 양옆 틈·아래 sliver 의 텍스트를 확실히 가린다.
+       --scrim-runway = 그 위로 둘 페이드 구간 — 본문이 캡슐에 '닿기 전에' 배경색으로
+       사라지는 활주로. 이 값이 0 이면 캡슐 바로 위에서 텍스트가 또렷하다 끊겨 부자연스럽다. */
+    --scrim-solid: var(--tabbar-reserve);
+    --scrim-runway: 3rem;
+    display: block;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: calc(var(--scrim-solid) + var(--scrim-runway));
+    /* dock(--nav-z) 바로 아래, 스크롤 콘텐츠 위. */
+    z-index: calc(var(--nav-z) - 1);
+    pointer-events: none;
+    /* 절대 길이 stop — 솔리드 경계를 캡슐 윗변(--scrim-solid)에 정확히 고정하고
+       그 위 runway 에서만 투명으로 페이드(% 로 하면 height 변동 시 경계가 흔들린다). */
+    background: linear-gradient(to top,
+      var(--bg) 0,
+      var(--bg) var(--scrim-solid),
+      transparent calc(var(--scrim-solid) + var(--scrim-runway)));
+    /* dock 이 숨는 상태와 동기화. */
+    transition: opacity var(--duration-base) var(--ease-standard);
+  }
+  #tabbar-scrim::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+    /* 얇은 blur 를 페이드 구간(캡슐 위 runway)의 반투명 본문에 얹어 '유리 밑으로
+       사라지는' 질감 보강. 솔리드 구간(하단)은 bg 가 덮어 무해, 최상단은 fade-out 으로
+       또렷한 본문이 흐려지지 않게 한다. blur 미지원 브라우저는 그래디언트만으로 동작. */
+    -webkit-mask-image: linear-gradient(to top, #000 0%, #000 80%, transparent 100%);
+    mask-image: linear-gradient(to top, #000 0%, #000 80%, transparent 100%);
+  }
+  /* 오디오 바가 떠 있으면(축소 아님) 캡슐 영역이 오디오 바 높이만큼 위로 늘어난다 —
+     솔리드 경계도 그만큼 올려 오디오 바 뒤까지 일관되게 가린다. */
+  body:has(#audio-bar:not([hidden])):not(.tabbar-collapsed) #tabbar-scrim {
+    --scrim-solid: calc(var(--tabbar-reserve) + 3.5rem);
+  }
+  /* 절 선택 모드: 탭 dock 이 숨으므로 scrim 도 숨김. */
+  body.verse-select-active #tabbar-scrim { display: none; }
+
   /* 탭 바가 보이는 뷰에서만 하단 콘텐츠 자리 확보. 절 선택 모드는 탭 바를 숨기고
      전용 하단 바가 차지하므로 reserve 를 적용하지 않는다(빈 띠 방지). */
   body:not(.verse-select-active) #app { padding-bottom: var(--tabbar-reserve); }

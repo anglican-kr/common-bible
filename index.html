@@ -137,6 +137,10 @@
   <!-- Adaptive nav (ADR-029): mobile bottom tab bar. iOS-idiom stroke icons,
        Liquid Glass surface. Desktop (≥769px) hides this until the sidebar phase.
        ADR-030: 라벨 없는 아이콘 전용 + 검색 분리(아래 #tab-search-dock). 노트 탭은 후속. -->
+  <!-- 탭 dock 뒤 콘텐츠 데코레이션 scrim — 하단으로 스크롤되는 본문이 플로팅 캡슐
+       양옆·아래로 그대로 노출되는 것을 페이드 그래디언트(+ 얇은 blur)로 가린다.
+       순수 장식 → aria-hidden. 위치/표시 상태는 CSS(@media ≤768px)가 책임. -->
+  <div id="tabbar-scrim" aria-hidden="true"></div>
   <!-- ADR-030: 탭 pill + 검색 원형을 한 플로팅 dock 으로 묶어 좌측 정렬·근접 배치
        (P2 검색 모핑 시 이 flex 컨테이너 안에서 width 보간). -->
   <div id="tab-dock">

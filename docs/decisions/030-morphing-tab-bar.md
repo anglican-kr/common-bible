@@ -33,6 +33,11 @@ ADR-029 는 Safari 26 home-indicator 틴팅 회피를 위해 glass 를 `::before
 
 > **참고:** 입력 placeholder·텍스트는 본문 Serif 상속을 피해 **Sans**(시스템 + Noto Sans KR). placeholder 문구는 인-페이지 검색 입력과 통일("검색 (예: 사랑, 사랑 in:요한, 창세 1:3)").
 
+> **개정 (2026-06-04): 탭 dock 뒤 콘텐츠 데코레이션 scrim.** floating 캡슐(`#tab-bar`·`#tab-search`·미니 오디오)은 투명 `#tab-dock` 위에 떠 있어 캡슐 **양옆 틈·아래 sliver**로 스크롤되는 본문이 그대로 노출돼 지저분했다. dock 바로 아래(z = `--nav-z` − 1, 스크롤 콘텐츠 위)에 화면 폭 전체 **페이드 그래디언트 scrim**(`#tabbar-scrim`, 순수 장식 `aria-hidden`)을 깔아 본문이 캡슐에 **닿기 전에** 배경색으로 사라지게 한다.
+> - 기하: `--scrim-solid`(=`--tabbar-reserve` ≈ 캡슐 윗변)까지는 솔리드 `--bg`로 캡슐 영역·옆틈·아래를 확실히 가리고, 그 위 `--scrim-runway`(3rem) 구간에서만 투명으로 페이드(절대 길이 stop — 솔리드 경계를 캡슐 윗변에 고정해 height 변동에 안 흔들림). runway 가 0 이면 캡슐 바로 위에서 텍스트가 또렷하다 끊겨 부자연스럽다.
+> - 얇은 `backdrop-filter: blur(8px)`를 `::before`에 얹고 mask 로 최상단 fade-out — 페이드 구간의 반투명 본문에 '유리 밑으로 사라지는' 질감만 보강(솔리드 구간은 bg 가 덮어 무해, 또렷한 본문은 안 흐려짐). blur 미지원 브라우저는 그래디언트만으로 동작.
+> - 오디오 바 표시 중(축소 아님)이면 `body:has(#audio-bar:not([hidden])):not(.tabbar-collapsed)` 로 `--scrim-solid` 을 오디오 바 높이(3.5rem)만큼 올려 오디오 바 뒤까지 일관 처리. 절 선택 모드는 dock 이 숨으므로 scrim 도 숨김. `--bg` 토큰 추종이라 다크/라이트 자동 대응. 모바일(≤768px) 전용. dev 스크린샷 검증 완료(라이트·다크).
+
 ### 3. 검색 모핑 (신규) — `js/app/tabbar.js`
 
 검색 원형 탭 → `#tab-dock.searching` 토글:
