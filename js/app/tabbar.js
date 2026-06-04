@@ -202,7 +202,12 @@ $searchClear?.addEventListener("click", () => {
 // X 를 접고 body.tabbar-keyboard 를 푼다. 다시 입력을 탭하면 키보드·X 가 복귀.
 // 검색 종료(→홈)는 홈 버튼 담당(X 와 역할 분리).
 $searchClose?.addEventListener("click", () => {
+  // 키보드·스크린리더 사용자는 X 자체에 포커스가 있다. 키보드가 내려가면 X 가
+  // 곧 a11y 트리에서 제외(aria-hidden·tabindex -1)되므로, 포커스가 숨은 컨트롤에
+  // 갇히지 않게 검색 버튼으로 옮긴다(closeSearchToHome 과 동일한 복귀 타깃 —
+  // grounded dock 에서도 보이는 컨트롤). 입력에 주면 키보드가 다시 떠 제외.
   $searchInput?.blur();
+  $searchBtn?.focus();
 });
 
 // views-routing 의 syncTabBarActive 가 라우트 변경 시 호출(검색 외 라우트면 복구).
