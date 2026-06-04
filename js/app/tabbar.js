@@ -167,8 +167,9 @@ $searchInput?.addEventListener("keydown", (e) => {
   if (e.key === "Enter") {
     e.preventDefault();
     W.commitTopSearch?.($searchInput.value);
-    // 검색 실행 → "이전 모드로 롤백": 키보드를 내려 dock 을 키보드 위 모핑(stage 2)에서
-    // 접지(grounded) 상태로 복귀. 검색 세션·닫기(X)는 유지(결과 화면, screenshot 2).
+    // 검색 실행 → 키보드를 내려 dock 을 키보드 위 모핑(stage 2)에서 접지(grounded)
+    // 상태로 복귀. 검색 세션은 유지(결과 화면). 키보드가 내려가므로 닫기(X)는 접힌다
+    // (X 는 키보드 표시 중에만 노출 — 결과 화면에선 홈 버튼으로 종료).
     $searchInput.blur();
   }
 });
@@ -195,10 +196,18 @@ $searchClear?.addEventListener("click", () => {
   $searchInput.focus();
 });
 
-// 검색 닫기(X) — 검색 세션 전체 롤백 → 기본 탭 바. navigate 가 route →
-// syncTabBarActive → exitTabSearch 를 태운다.
+// 닫기(X) — 키보드가 떠 있을 때만 보이며(setKeyboardState), 키보드만 내린다.
+// 검색 세션·입력값·결과는 유지(grounded dock) → 결과를 스크롤해 둘러볼 수 있다.
+// blur 로 키보드가 내려가면 visualViewport resize → setKeyboardState(false) 가
+// X 를 접고 body.tabbar-keyboard 를 푼다. 다시 입력을 탭하면 키보드·X 가 복귀.
+// 검색 종료(→홈)는 홈 버튼 담당(X 와 역할 분리).
 $searchClose?.addEventListener("click", () => {
-  closeSearchToHome();
+  // 키보드·스크린리더 사용자는 X 자체에 포커스가 있다. 키보드가 내려가면 X 가
+  // 곧 a11y 트리에서 제외(aria-hidden·tabindex -1)되므로, 포커스가 숨은 컨트롤에
+  // 갇히지 않게 검색 버튼으로 옮긴다(closeSearchToHome 과 동일한 복귀 타깃 —
+  // grounded dock 에서도 보이는 컨트롤). 입력에 주면 키보드가 다시 떠 제외.
+  $searchInput?.blur();
+  $searchBtn?.focus();
 });
 
 // views-routing 의 syncTabBarActive 가 라우트 변경 시 호출(검색 외 라우트면 복구).
