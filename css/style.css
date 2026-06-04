@@ -3173,7 +3173,8 @@ body.tabbar-searching #search-inpage-bar { display: none; }
   #tab-bar,
   #tab-search,
   #tab-search-dock,
-  #tab-search-close { transition: none; }
+  #tab-search-close,
+  #audio-bar { transition: none; }
   #tab-search:active { transform: none; }
   #tab-search-close:active { transform: none; }
 }
@@ -3199,10 +3200,16 @@ body.tabbar-searching #search-inpage-bar { display: none; }
      body 접두 + :not([hidden]) 로 base #audio-bar{bottom:0}·browser-mode 규칙보다
      특이도 우선(소스 순서 무관하게 이김). */
   body #audio-bar:not([hidden]) {
+    /* ADR-030 P4: floating↔미니(축소) 전환을 부드럽게 — 미니(.tabbar-collapsed)도
+       position:fixed 라, floating 도 fixed 로 통일하면 left/right/bottom/padding 이
+       보간돼 dock 행으로 슬라이드·축소된다(sticky 였으면 타입 전환이라 스냅). */
+    position: fixed;
+    left: var(--space-4);
+    right: var(--space-4);
     /* 탭 바 footprint(--tabbar-reserve) 위에 안착 — 같은 토큰을 써 탭 바와
        겹치지 않게(매직넘버 불일치 방지). */
     bottom: var(--tabbar-reserve);
-    margin: 0 var(--space-4);
+    margin: 0;
     /* 플로팅 바: 가장자리·요소 간격을 12px 로 통일(여백 일정). 하단은 홈
        인디케이터 위로 떠 있어 safe-area 불필요 → 8px. */
     padding: var(--space-2) var(--space-3);
@@ -3214,6 +3221,10 @@ body.tabbar-searching #search-inpage-bar { display: none; }
     corner-shape: superellipse(2);
     border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
     box-shadow: var(--shadow-2);
+    transition: left var(--duration-base) var(--ease-standard),
+                right var(--duration-base) var(--ease-standard),
+                bottom var(--duration-base) var(--ease-standard),
+                padding var(--duration-base) var(--ease-standard);
   }
   /* 둥근 모서리에서 튀어나오는 상단 hairline 은 플로팅 바에선 제거. */
   body #audio-bar:not([hidden])::before { display: none; }
