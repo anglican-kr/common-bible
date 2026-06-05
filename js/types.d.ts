@@ -811,6 +811,19 @@ declare global {
     syncTabSearchQuery?: () => void;
     closeTabSearch?: () => boolean;
 
+    // ADR-031: 탭 히스토리(탭별 위치 복원). tab-history.js 가 노출 — route() 가
+    // onRouteStart/onRouteEnd 로 스크롤을 저장·복원하고, tabbar.js 가 lastPath/tabOf
+    // 로 홈·검색 탭 재진입 시 마지막 경로를 복원한다.
+    tabHistory?: {
+      tabOf: (path: string) => "home" | "search" | "bookmarks" | "settings";
+      fullPath: () => string;
+      onRouteStart: () => void;
+      onRouteEnd: () => void;
+      lastPath: (tab: "home" | "search" | "bookmarks" | "settings") => string;
+      _scrollMemory: Map<string, number>;
+      _lastPathForTab: Record<"home" | "search" | "bookmarks" | "settings", string>;
+    };
+
     // Cross-module globals set by drive-sync.js / state-machine.js.
     _syncClientId?: string;
     _syncScope?: string;
