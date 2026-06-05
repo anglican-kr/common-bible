@@ -3218,14 +3218,16 @@ body.tabbar-searching #search-inpage-bar { display: none; }
        더 위 지점**에서 투명에 도달한다. 즉 pill 전체를 페이드가 지나고 윗변 위로 pill
        높이의 ¼ 만큼 더 올라가 투명에 닿는다 → pill 상단·바로 위 본문이 답답하지 않게
        숨 쉴 여백을 확보한다(이전엔 윗변 25% 아래에서 끊겨 빡빡했다).
-       --scrim-solid = pill 아래 모서리(바닥~pill 밑변)까지만 솔리드 --bg.
+       --scrim-pill-bottom = pill 밑변(바닥~캡슐 아래 모서리) 위치. fade-top 의 기하 기준점.
+       --scrim-solid = 솔리드 --bg 띠 높이(불투명도용, fade-top 기준과 분리). 0 = 띠 없음.
        --scrim-fade-top = pill 밑변 + pill 높이의 125% → pill 윗변 위 ¼ 지점에서 투명.
        pill 밑변·높이는 dock 의 실제 기하와 동일 식.
        (pill 높이 = --touch-target 44 + --space-2 ×2 = 60px, 밑변 = --space-1 + safe×0.75)
        솔리드 띠 제거(0) — 바닥부터 바로 페이드가 시작돼 완전 불투명 구간이 없다.
        본문이 캡슐 아래·바닥까지 옅게 비친다. */
+    --scrim-pill-bottom: calc(var(--space-1) + env(safe-area-inset-bottom) * 0.75);
     --scrim-solid: 0px;
-    --scrim-fade-top: calc(var(--scrim-solid) + 1.25 * (var(--touch-target) + var(--space-2) * 2));
+    --scrim-fade-top: calc(var(--scrim-pill-bottom) + 1.25 * (var(--touch-target) + var(--space-2) * 2));
     display: block;
     position: fixed;
     left: 0;
