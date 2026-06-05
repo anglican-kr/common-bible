@@ -3258,12 +3258,10 @@ body.tabbar-searching #search-inpage-bar { display: none; }
     -webkit-mask-image: linear-gradient(to top, #000 0%, #000 80%, transparent 100%);
     mask-image: linear-gradient(to top, #000 0%, #000 80%, transparent 100%);
   }
-  /* 오디오 바가 떠 있으면(축소 아님) 본문이 처음 만나는 건 오디오 바 → 같은 125% 규칙을
-     오디오 바에 적용(밑변 = --tabbar-reserve, 높이 ≈ 3.5rem). 오디오 바 윗변 위 ¼ 지점에서
-     투명에 도달해 답답함을 던다. 솔리드는 그대로 바닥만. */
-  body:has(#audio-bar:not([hidden])):not(.tabbar-collapsed) #tabbar-scrim {
-    --scrim-fade-top: calc(var(--tabbar-reserve) + 1.25 * 3.5rem);
-  }
+  /* 페이드 기준은 오디오 유무와 무관하게 **항상 탭 바 캡슐 윗변**으로 통일한다(위 base
+     규칙 그대로). 오디오 바는 탭 바 위에 스택되므로 그 위로 본문이 옅게 비칠 수 있으나,
+     scrim 기준을 오디오 바로 올리면 오디오 유무에 따라 페이드 높이가 출렁여 일관성이
+     떨어진다 → 의도적으로 탭 바 기준 고정(오디오 바 위 노출 감수). */
   /* 절 선택 모드: 탭 dock 이 숨으므로 scrim 도 숨김. */
   body.verse-select-active #tabbar-scrim { display: none; }
   /* OS 투명도 감소 — 탭 chrome 과 동일하게 scrim 의 라이브 blur 도 끈다(그래디언트는 유지). */
