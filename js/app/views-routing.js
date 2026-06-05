@@ -874,7 +874,6 @@ function renderBookList(books, activeDivision) {
   const active = order.includes(activeDivision) ? activeDivision : order[0];
 
   setTitle("공동번역성서");
-  $title.appendChild(buildBookmarkHeaderBtn(null, null));
   $title.appendChild(buildSettingsTrigger());
   hideAudioBar();
   clearNode($app);
