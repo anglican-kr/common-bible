@@ -68,3 +68,19 @@ def test_long_press_save_updates_header_bookmark_icon(browser):
     assert raw, "bookmark should be saved to localStorage after long-press save"
 
     ctx.close()
+
+
+def test_mobile_reading_header_bookmark_opens_save_modal(browser):
+    """모바일 읽기 헤더 북마크 버튼 = '이 장 저장' 모달(드로어 아님) — ADR-030 후속."""
+    ctx = browser.new_context(viewport={"width": 390, "height": 844}, has_touch=True)
+    ctx.add_init_script("localStorage.removeItem('bible-bookmarks');")
+    page = ctx.new_page()
+    try:
+        page.goto(f"{BASE}/gen/1")
+        page.wait_for_selector("article.chapter-text .verse")
+        page.locator(".title-bookmark-btn").click()
+        page.wait_for_selector("#bm-save-modal:not([hidden])")
+        assert page.locator("#bookmark-drawer").get_attribute("hidden") is not None, \
+            "drawer must stay closed on mobile reading header (modal instead)"
+    finally:
+        ctx.close()

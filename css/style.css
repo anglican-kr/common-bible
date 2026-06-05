@@ -3771,7 +3771,9 @@ body.tabbar-searching #search-inpage-bar { display: none; }
 
 .title-bookmark-btn {
   position: absolute;
-  right: 2.4rem;
+  /* 우측 끝 정렬 — 모바일 설정 기어가 탭 바로 이전(ADR-029)돼 title 행 우측이 비었고,
+     데스크탑 기어는 상단 행에 있어, 양쪽 모두 북마크가 far-right slot 을 차지(ADR-030 후속). */
+  right: 0;
   top: 50%;
   transform: translateY(-50%);
   /* HIG 최소 탭 영역 44px (2.45rem ≈ 44px @ 18px root) — .title-back-btn 와 동일 */
@@ -3790,15 +3792,6 @@ body.tabbar-searching #search-inpage-bar { display: none; }
 
 .title-bookmark-btn:hover {
   opacity: 0.7;
-}
-
-/* Desktop: the settings gear lives in the top row (#settings-anchor), not the
-   title row, so the bookmark takes the far-right slot instead of sitting inset
-   by the (hidden) per-view gear's width. Mobile keeps right: 2.4rem. */
-@media (min-width: 769px) {
-  .title-bookmark-btn {
-    right: 0;
-  }
 }
 
 /* ── Settings button placement (responsive) ──

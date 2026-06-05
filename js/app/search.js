@@ -303,7 +303,7 @@ function buildInPageSearchInput(query, autofocus = false) {
     autocorrect: "off",
     autocapitalize: "off",
     spellcheck: "false",
-    placeholder: "검색 (예: 사랑, 사랑 in:요한, 창세 1:3)",
+    placeholder: "예: 사랑, 사랑 in:요한, 창세 1:3",
     "aria-label": "검색",
     autocomplete: "off",
   }));
