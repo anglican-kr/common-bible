@@ -104,6 +104,20 @@ window.tabHistory = (() => {
     return lastPathForTab[tab];
   }
 
+  /**
+   * 경로를 해당 탭의 마지막 경로로 즉시 기록한다. 보통은 onRouteEnd 가 처리하지만,
+   * onRouteEnd 가 `_routeSeq` 가드로 스킵되는 경우 — 검색 verse-ref 자동 이동
+   * (renderSearchResults 가 replaceState 로 챕터로 빠지며 route 재진입) — 에는 바깥
+   * route 의 onRouteEnd 가 건너뛰어 `/search?q=…` 가 기록되지 않는다. 그 분기에서
+   * renderSearchResults 호출 전에 미리 호출해 search 탭이 마지막 검색을 기억하게 한다.
+   * (복원 시 openSearch→navigate 는 Enter 가 아니라 autoNavigate=false 라, refMatch 도
+   * 자동 이동 없이 클릭 카드로 렌더 — 바운스 없음.)
+   * @param {string} path
+   */
+  function recordPath(path) {
+    lastPathForTab[tabOf(path)] = path;
+  }
+
   return {
     tabOf,
     fullPath,
@@ -111,6 +125,7 @@ window.tabHistory = (() => {
     onRouteEnd,
     requestRestore,
     lastPath,
+    recordPath,
     // 테스트/디버그용 노출(런타임 의존 금지).
     _scrollMemory: scrollMemory,
     _lastPathForTab: lastPathForTab,

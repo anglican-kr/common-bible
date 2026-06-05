@@ -1765,6 +1765,12 @@ async function route() {
     if (view === "search") {
       if (parsed.query) {
         const autoNav = consumeSearchAutoNavigate();
+        // ADR-031: search 탭의 마지막 경로를 미리 기록한다. verse-ref 검색이면
+        // renderSearchResults 가 챕터로 auto-nav(replaceState+route 재진입)하며 바깥
+        // onRouteEnd 가 _routeSeq 가드로 스킵돼, 안 하면 lastPathForTab.search 가
+        // 이전 검색에 머문다. 복원 시엔 autoNavigate=false 라 refMatch 가 클릭 카드로
+        // 떠 바운스 없이 마지막 검색이 그대로 복원된다.
+        window.tabHistory?.recordPath(location.pathname + location.search);
         await renderSearchResults(parsed.query, parsed.page, autoNav);
         // If renderSearchResults auto-navigated to a chapter, the inner route() call
         // already handles meta and analytics for that view — don't overwrite.

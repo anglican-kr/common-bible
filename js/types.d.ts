@@ -821,6 +821,7 @@ declare global {
       onRouteEnd: () => void;
       requestRestore: () => void;
       lastPath: (tab: "home" | "search" | "bookmarks" | "settings") => string;
+      recordPath: (path: string) => void;
       _scrollMemory: Map<string, number>;
       _lastPathForTab: Record<"home" | "search" | "bookmarks" | "settings", string>;
     };
