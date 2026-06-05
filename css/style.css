@@ -2874,7 +2874,7 @@ html.cite-sheet-open {
      #tab-dock(fixed)이 Safari home-indicator 샘플링 대상이라 투명하게 두므로, 자식인
      #tab-bar 는 직접 glass 를 줘도 틴팅 문제 없음(ADR-029 의 ::before 우회 불필요).
      iOS 26.1 'Tinted' 방향 — 가독성 위해 약간 더 불투명. -webkit- 는 리터럴만. */
-  background: color-mix(in srgb, var(--bg) 70%, transparent);
+  background: color-mix(in srgb, var(--bg) 62%, transparent);
   -webkit-backdrop-filter: blur(16px) saturate(180%);
   backdrop-filter: blur(16px) saturate(180%);
   /* 오디오 바와 동일한 floating 스타일 — 1px 테두리 + shadow-2(테두리가 가장자리를
@@ -2884,7 +2884,7 @@ html.cite-sheet-open {
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
 }
 [data-theme="dark"] #tab-bar {
-  background: color-mix(in srgb, var(--bg-card) 80%, transparent);
+  background: color-mix(in srgb, var(--bg-card) 72%, transparent);
 }
 
 /* ADR-030: 아이콘 전용(라벨 제거) — flex:1 stretch 대신 콘텐츠 폭 탭. 각 탭은
@@ -2960,7 +2960,7 @@ html.cite-sheet-open {
   border-radius: var(--radius-pill);
   corner-shape: superellipse(2); /* 원 — 폴백은 원형 border-radius */
   /* ADR-030: 탭 pill 과 동일 — frosted glass 를 요소에 직접(::before 레이어 제거). */
-  background: color-mix(in srgb, var(--bg) 70%, transparent);
+  background: color-mix(in srgb, var(--bg) 62%, transparent);
   -webkit-backdrop-filter: blur(16px) saturate(180%);
   backdrop-filter: blur(16px) saturate(180%);
   color: var(--accent);
@@ -2972,16 +2972,16 @@ html.cite-sheet-open {
   transition: transform var(--duration-fast) ease;
 }
 [data-theme="dark"] #tab-search {
-  background: color-mix(in srgb, var(--bg-card) 80%, transparent);
+  background: color-mix(in srgb, var(--bg-card) 72%, transparent);
 }
 .tab-search-icon { width: 1.9rem; height: 1.9rem; }
 #tab-search:active { transform: scale(0.92); } /* press feedback */
 /* 현재 라우트가 /search 일 때 — 탭 pill 활성과 동색 accent 틴트. */
 #tab-search.active {
-  background: color-mix(in srgb, var(--accent) 14%, color-mix(in srgb, var(--bg) 70%, transparent));
+  background: color-mix(in srgb, var(--accent) 14%, color-mix(in srgb, var(--bg) 62%, transparent));
 }
 [data-theme="dark"] #tab-search.active {
-  background: color-mix(in srgb, var(--accent) 18%, color-mix(in srgb, var(--bg-card) 80%, transparent));
+  background: color-mix(in srgb, var(--accent) 18%, color-mix(in srgb, var(--bg-card) 72%, transparent));
 }
 #tab-search-input[hidden] { display: none; }
 
@@ -3040,14 +3040,14 @@ html.cite-sheet-open {
   padding: 0 var(--space-3);
   gap: var(--space-2);
   border-radius: var(--radius-pill);
-  background: color-mix(in srgb, var(--bg) 70%, transparent);
+  background: color-mix(in srgb, var(--bg) 62%, transparent);
   -webkit-backdrop-filter: blur(16px) saturate(180%);
   backdrop-filter: blur(16px) saturate(180%);
   border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
   box-shadow: var(--shadow-2);
 }
 [data-theme="dark"] #tab-dock.searching #tab-search-dock {
-  background: color-mix(in srgb, var(--bg-card) 80%, transparent);
+  background: color-mix(in srgb, var(--bg-card) 72%, transparent);
 }
 /* 검색 버튼 → 입력 pill 의 왼쪽 아이콘(자체 표면 제거). */
 #tab-dock.searching #tab-search {
@@ -3133,14 +3133,14 @@ body.tabbar-keyboard #tab-dock.searching #tab-search-close {
   opacity: 1;
   pointer-events: auto;
   /* 홈·검색 원형과 동일한 floating glass. */
-  background: color-mix(in srgb, var(--bg) 70%, transparent);
+  background: color-mix(in srgb, var(--bg) 62%, transparent);
   -webkit-backdrop-filter: blur(16px) saturate(180%);
   backdrop-filter: blur(16px) saturate(180%);
   border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
   box-shadow: var(--shadow-2);
 }
 [data-theme="dark"] body.tabbar-keyboard #tab-dock.searching #tab-search-close {
-  background: color-mix(in srgb, var(--bg-card) 80%, transparent);
+  background: color-mix(in srgb, var(--bg-card) 72%, transparent);
 }
 /* 키보드 표시 중: 홈 버튼 숨기고 검색 입력 pill 이 홈 자리(왼쪽 끝)까지 확장.
    #tab-bar 가 flow 에서 빠지면 flex:1 인 #tab-search-dock 가 그 폭을 흡수한다.
@@ -3218,8 +3218,11 @@ body.tabbar-searching #search-inpage-bar { display: none; }
     right: 0;
     bottom: 0;
     height: calc(var(--scrim-solid) + var(--scrim-runway));
-    /* dock(--nav-z) 바로 아래, 스크롤 콘텐츠 위. */
-    z-index: calc(var(--nav-z) - 1);
+    /* 스크롤 콘텐츠 위 · 하단 chrome(오디오 바 z:10 → tab-dock z:--nav-z 30) 아래.
+       chrome 보다 위면 scrim 솔리드/blur 가 그 위에 그려져 컨트롤을 가린다(특히
+       오디오 표시 시 --scrim-solid 가 오디오 바 영역까지 올라옴). 쌓임 순서:
+       content < #tabbar-scrim(9) < #audio-bar(10) < #tab-dock(30). */
+    z-index: 9;
     pointer-events: none;
     /* 절대 길이 stop — 솔리드 경계를 캡슐 윗변(--scrim-solid)에 정확히 고정하고
        그 위 runway 에서만 투명으로 페이드(% 로 하면 height 변동 시 경계가 흔들린다). */
