@@ -34,7 +34,7 @@ SPA 전환은 기존 전역 `<a>` 클릭 인터셉터(`views-routing.js`)가 처
 
 - 플로팅 캡슐: `position:fixed`, 좌우 `--space-4`(16px) 전폭, 하단 `calc(--space-1 + safe-area*0.75)`(홈 인디케이터 위 여백 축소). 둥근 사각 `border-radius:26px` + `corner-shape:squircle`.
 - **frosted glass 는 `::before`(absolute) 레이어에**, fixed 부모는 투명 — Safari 26 이 하단 fixed 요소를 home-indicator 틴팅에 샘플링하는 것을 회피. `-webkit-backdrop-filter` 는 리터럴 값(Safari 가 var() 미지원). 가독성 위해 약간 더 불투명(iOS 26.1 'Tinted' 방향).
-- 아이콘은 **iOS/SF Symbols idiom** stroke SVG 직접 제작(Material 아님). 활성 탭 = 아이콘 색만 `--theme`(스킴 추종, 배경 인디케이터 없음 — ADR-030 후속³ 2026-06-05; 초기엔 아이콘 뒤 캡슐 pill + `--accent` 였으나 ADR-030 에서 인디케이터를 제거하고 활성 표시를 아이콘 테마색으로 단순화).
+- 아이콘은 **iOS/SF Symbols idiom** stroke SVG 직접 제작(Material 아님). 활성 탭 = 아이콘 색 `--theme` + **56px 정원 인디케이터**(테마색 14% 틴트, 스킴 추종 — ADR-030 후속⁴ 2026-06-05; 초기 `--accent` 캡슐 pill → 후속³ 인디케이터 제거(아이콘색만) → 후속⁴ 56px 정원 인디케이터를 테마색 틴트로 복원).
 - 폴백: `prefers-reduced-transparency`/`@supports not (backdrop-filter)` → 불투명 표면. `prefers-reduced-motion` → pill 애니메이션 생략.
 
 ### 4. 헤더 정리 + FAB 제거(모바일)

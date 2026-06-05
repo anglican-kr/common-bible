@@ -2931,10 +2931,11 @@ html.cite-sheet-open {
   display: flex;
   align-items: center;
   justify-content: center;
-  /* 활성 인디케이터 = 슬롯을 꽉 채우는 정원(가로세로 1:1). 슬롯 폭(=바 높이)에서
-     aspect-ratio 로 높이를 파생해, 슬롯이 축소돼도 항상 정원을 유지한다(이전 height:100%
-     + aspect-ratio 조합은 flex 콘텐츠 사이징과 얽혀 가로로 찌그러진 타원이 됐다). */
-  width: 100%;
+  /* 활성 인디케이터 = 정원(가로세로 1:1), 지름 56px — 바 높이(60px)에서 상하 2px 인셋.
+     슬롯(60px) 안에 중앙 정렬되어 양 끝 탭은 캡 안쪽에 2px 여백으로 안착. 좁은 화면에선
+     슬롯이 축소될 때 max-width:100% 로 슬롯을 넘지 않게(정원 유지). */
+  width: calc(var(--touch-target) + var(--space-2) * 2 - var(--space-1));
+  max-width: 100%;
   aspect-ratio: 1 / 1;
   border-radius: var(--radius-pill);
   transition: background var(--duration-fast) ease, color var(--duration-fast) ease;
@@ -2942,11 +2943,15 @@ html.cite-sheet-open {
 /* 커진 인디케이터 안에서 숨 쉬도록 아이콘은 약간 축소. rem 으로 Dynamic Type 추종. */
 .tab-icon { width: 1.7rem; height: 1.7rem; }
 
-/* 활성 탭 — 인디케이터(배경 pill) 없이 아이콘만 테마색으로(내비 시그니처). --theme 는
+/* 활성 탭 — 아이콘은 테마색 + 그 뒤 56px 정원 인디케이터(테마색 14% 틴트). --theme 는
    색상 스킴을 추종한다(ADR-028 테마 범위를 내비 활성 표시로 확장, ADR-030 개정). */
 .tab-item.active,
 .tab-item[aria-current="page"] {
   color: var(--theme);
+}
+.tab-item.active .tab-icon-wrap,
+.tab-item[aria-current="page"] .tab-icon-wrap {
+  background: color-mix(in srgb, var(--theme) 14%, transparent);
 }
 .tab-item:active .tab-icon-wrap { transform: scale(0.92); }
 
@@ -2997,10 +3002,14 @@ html.cite-sheet-open {
 }
 .tab-search-icon { width: 1.7rem; height: 1.7rem; } /* 탭 아이콘과 동일 크기로 통일 */
 #tab-search:active { transform: scale(0.92); } /* press feedback */
-/* 현재 라우트가 /search 일 때 — 활성 탭과 동일하게 배경 틴트 없이 아이콘만 테마색
-   (내비 활성 언어 통일). 글래스 배경은 idle 그대로 유지. */
+/* 현재 라우트가 /search 일 때 — 활성 탭 인디케이터와 동일 언어: 아이콘 테마색 +
+   테마색 14% 틴트(원형 버튼 자체가 인디케이터 역할이라 글래스 위에 덧입힌다). */
 #tab-search.active {
   color: var(--theme);
+  background: color-mix(in srgb, var(--theme) 14%, color-mix(in srgb, var(--bg) 62%, transparent));
+}
+[data-theme="dark"] #tab-search.active {
+  background: color-mix(in srgb, var(--theme) 18%, color-mix(in srgb, var(--bg-card) 72%, transparent));
 }
 #tab-search-input[hidden] { display: none; }
 
@@ -3057,6 +3066,9 @@ html.cite-sheet-open {
    (route 가 .active 를 못 따라오는 모핑 중간 프레임에도 보장.) */
 #tab-dock.searching .tab-item[data-tab="home"],
 #tab-dock.collapsed .tab-item[data-tab="home"] { color: var(--theme); }
+/* 단, 탭 바 자체가 60px 원형 캡슐이 되므로 안쪽 56px 인디케이터는 제거(이중 원 회피). */
+#tab-dock.searching .tab-item[data-tab="home"] .tab-icon-wrap,
+#tab-dock.collapsed .tab-item[data-tab="home"] .tab-icon-wrap { background: none; }
 /* 검색 dock → 남은 폭을 채우는 입력 pill (floating glass 스타일을 dock 으로 이동).
    flex-basis 0 으로 콘텐츠(placeholder) 길이와 무관하게 — 우측 넘침 방지. */
 #tab-dock.searching #tab-search-dock {
