@@ -2847,9 +2847,11 @@ html.cite-sheet-open {
      있어도 space-between 처럼 가운데로 흩어지지 않음). padding 0 space-4 + left/right 0
      으로 오디오 바(margin:0 space-4)와 좌우 가장자리 정렬. */
   padding: 0 var(--space-4);
-  /* 탭 바(flex:1)와 검색 원형 사이 간격 — 오디오 바↔탭 바 수직 간격(8px)과 동일.
-     모핑(.searching)도 같은 값이라 idle↔검색 전환에서 간격이 튀지 않는다. */
-  gap: var(--space-2);
+  /* idle 엔 dock gap 을 두지 않는다 — 마지막 자식 #tab-search-close(키보드 전용,
+     idle width:0)와 #tab-search-dock 사이에 gap 이 끼면 검색 원형이 8px 왼쪽으로
+     밀려 우측 여백이 홈 좌측 여백과 어긋난다(home↔audio↔search 간격도 불균등).
+     탭 바↔검색 간격은 #tab-bar margin-right 로 주고, 검색 모핑 중 입력↔닫기 간격은
+     아래 #tab-dock.searching{gap} 이 담당. */
   /* 순수 레이아웃 레이어 — 어떤 표면도 없음(완전 투명). */
   background: none;
   border: none;
@@ -2861,18 +2863,22 @@ html.cite-sheet-open {
    하단으로 스크롤되는 본문이 플로팅 캡슐 양옆·아래로 노출되는 것을 페이드로 가린다. */
 #tabbar-scrim { display: none; }
 #tab-bar {
-  /* dock 의 flex 자식 — flex:1 로 늘어나 검색 원형 바로 앞까지 채운다(dock gap space-2
-     만 남겨, 오디오 바↔탭 바 수직 간격과 동일한 8px 로 통일). 위치는 #tab-dock 이 책임. */
+  /* dock 의 flex 자식 — flex:1 로 늘어나 검색 원형 바로 앞까지 채운다(margin-right
+     space-2 만 남겨, 오디오 바↔탭 바 수직 간격과 동일한 8px 로 통일). 위치는 #tab-dock 책임. */
   display: flex;
   flex: 1;
   align-items: stretch;
-  /* 아이콘 분배는 .tab-item flex:1(균등 컬럼)이 담당. 넓은 화면에서 컬럼이 max-width
-     상한에 닿으면 space-between 이 남는 폭에 고르게 펼친다(좁은 폰에선 무효). */
+  /* 양 끝 탭(콘텐츠 폭 = 인디케이터 폭)을 pill 캡 안쪽에 밀어넣고 중간 두 탭을 균등
+     분배 — 끝 인디케이터가 캡 정원과 동심으로 겹친다(초승달 sliver 제거). */
   justify-content: space-between;
   /* 높이 60px 명시(오디오 바·검색 원형과 동일). 상하 패딩 0 — 인디케이터가 바 안쪽
      높이를 그대로 채우도록(아래 .tab-icon-wrap height:100%). */
   height: calc(var(--touch-target) + var(--space-2) * 2);
   padding: 0;
+  /* 검색 원형과의 8px 간격(오디오↔탭 바 수직 간격과 동일). dock gap 대신 여기서 줘서
+     마지막 자식(idle width:0 닫기 버튼) 앞에 gap 이 끼는 부작용을 피한다 — 그래야
+     검색 원형이 우측 가장자리에 flush 로 붙어 홈 좌측 여백과 대칭이 된다. */
+  margin-right: var(--space-2);
   /* 좌우 끝을 완전한 반원 캡으로 — stadium(pill) 형태. 모핑으로 홈만 남아 폭이
      60px 로 줄면(아래 #tab-dock.searching #tab-bar) 이 pill 캡이 그대로 정원이
      되어, 검색 원형 버튼·모핑 원과 형태 언어가 이어진다(둥근 사각 26px 의 모서리
@@ -2901,7 +2907,11 @@ html.cite-sheet-open {
    ≥44px 터치 영역 유지. 노트 탭은 <button> 이라 기본 버튼 외형 리셋. */
 .tab-item {
   display: flex;
-  flex: 1; /* 균등 컬럼 — 넓어진 pill 폭을 4탭이 고르게 나눠 가짐 */
+  /* flex:1(균등 컬럼)이 아니라 인디케이터(=바 높이) 폭의 콘텐츠 탭 — 그래야 #tab-bar
+     의 space-between 이 양 끝 탭을 pill 캡 안으로 정확히 밀어넣어, 끝 인디케이터가
+     캡 정원과 겹쳐(초승달 sliver 제거) 보인다. 좁은 화면에선 flex-shrink 로 줄되
+     .tab-icon-wrap max-width:100% 가 이웃 침범을 막는다. */
+  flex: 0 1 auto;
   align-items: center;
   justify-content: center;
   min-width: var(--icon-btn-touch); /* HIG ≥44px 탭 영역 */
@@ -3027,6 +3037,10 @@ html.cite-sheet-open {
 #tab-dock.searching #tab-bar,
 #tab-dock.collapsed #tab-bar {
   gap: 0;
+  /* 모핑 중 홈 원형↔입력 간격은 #tab-dock.searching{gap} 이 담당 — 여기선 base 의
+     margin-right 를 풀어 16px(margin+gap) 이중 간격을 막는다. collapsed 는 auto-margin
+     이 흡수하므로 무관. */
+  margin-right: 0;
   flex: 0 0 auto;
   width: calc(var(--touch-target) + var(--space-2) * 2); /* 60px */
   border-radius: var(--radius-pill);
