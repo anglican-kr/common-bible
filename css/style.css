@@ -68,8 +68,9 @@
   --accent: #3a3a42;
   --accent-light: #56565f;
   --border: #e0dcd6;
-  /* 테마색 — 스킴(네이비·빨강·초록·보라)을 추종하는 유일한 강조색. 절 번호·단락 기호·
-     FAB·오디오 플레이어 4곳에만 적용한다 (ADR-028 개정 2026-06-03). 진한 채도 통일. */
+  /* 테마색 — 스킴(네이비·빨강·초록·보라)을 추종하는 유일한 강조색. 절 번호·단락 기호
+     2곳에만 적용한다 (ADR-028 개정 2026-06-03; FAB 는 ADR-030 에서 제거, 오디오
+     플레이어는 2026-06-05 중립화로 제외). 진한 채도 통일. */
   --theme: #22244a;
 
   /* ── Radius (HIG 곡률 사다리 — 기존 사용 값에 매핑, --radius 는 하위호환 유지) ── */
@@ -3396,7 +3397,7 @@ body.tabbar-searching #search-inpage-bar { display: none; }
   height: var(--touch-target);
   border-radius: 50%;
   border: none;
-  background: var(--theme);
+  background: var(--accent);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -3471,7 +3472,7 @@ body.tabbar-searching #search-inpage-bar { display: none; }
   -webkit-appearance: none;
   appearance: none;
   height: 3px;
-  background: linear-gradient(to right, var(--theme) var(--fill), var(--border) var(--fill));
+  background: linear-gradient(to right, var(--accent) var(--fill), var(--border) var(--fill));
   border-radius: 1.5px;
   outline: none;
   cursor: pointer;
@@ -3487,23 +3488,23 @@ body.tabbar-searching #search-inpage-bar { display: none; }
   width: 14px;
   height: 14px;
   border-radius: 50%;
-  background: var(--theme);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--theme) 20%, transparent);
+  background: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent);
   cursor: pointer;
   transition: box-shadow var(--duration-fast) ease;
 }
 
 .audio-progress:hover::-webkit-slider-thumb {
-  box-shadow: 0 0 0 5px color-mix(in srgb, var(--theme) 25%, transparent);
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 25%, transparent);
 }
 
 .audio-progress::-moz-range-thumb {
   width: 14px;
   height: 14px;
   border-radius: 50%;
-  background: var(--theme);
+  background: var(--accent);
   border: none;
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--theme) 20%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent);
   cursor: pointer;
 }
 
@@ -3527,10 +3528,10 @@ body.tabbar-searching #search-inpage-bar { display: none; }
   width: 3rem;
   text-align: center;
   padding: var(--space-0_5) 0;
-  border: 1px solid var(--theme);
+  border: 1px solid var(--accent);
   border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--theme);
+  color: var(--accent);
   font-size: var(--font-2xs);
   font-variant-numeric: tabular-nums;
   cursor: pointer;
@@ -3538,7 +3539,7 @@ body.tabbar-searching #search-inpage-bar { display: none; }
 }
 
 .audio-speed-btn:hover {
-  background: color-mix(in srgb, var(--theme) 10%, transparent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
 }
 
 /* Unavailable message — sized to match .audio-player so the sticky bar
