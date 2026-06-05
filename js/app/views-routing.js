@@ -1972,7 +1972,12 @@ document.addEventListener("click", (e) => {
 // route() and the deferred init chain (initCompactHeader /
 // initBookmarkSheetDrag / registerServiceWorker / maybeShowInstallNudge /
 // driveSync.initDriveSync), several of which still live in app.js.
-window.addEventListener("popstate", route);
+// ADR-031: 뒤로/앞으로(POP)는 떠날 때의 스크롤로 복원(scrollRestoration=manual 이라
+// 브라우저가 안 하므로 직접). 일반 링크 이동(PUSH)은 요청하지 않아 복원하지 않는다.
+window.addEventListener("popstate", () => {
+  window.tabHistory?.requestRestore();
+  route();
+});
 
 // ── Audio Player ──
 

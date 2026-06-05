@@ -7,10 +7,14 @@
 //
 // 동작 두 축:
 //  1. scrollMemory: 전체 경로(pathname+search) → scrollY. route() 가 떠나는 경로의
-//     스크롤을 onRouteStart 에서 저장하고, 새 경로 렌더 직후 onRouteEnd 에서 복원.
+//     스크롤을 onRouteStart 에서 저장하고, **복원이 요청된 경우에만** onRouteEnd 에서
+//     복원한다. 복원 요청은 (a) 뒤로/앞으로(popstate) (b) 탭 전환(홈·검색·북마크·설정
+//     으로 다른 탭에서 진입) 두 경우뿐 — 즉 브라우저 표준의 POP 의미론. 일반 링크
+//     이동(PUSH: 다음 장·절 딥링크·resume 등)은 복원하지 않아 뷰가 정한 스크롤
+//     (최상단/하이라이트 scrollIntoView)을 덮어쓰지 않는다.
 //  2. lastPathForTab: 각 탭이 마지막으로 본 경로. 홈(읽기 스택)·검색(?q=)은 하위
 //     경로가 가변이라 핵심. 북마크·설정은 단일 라우트라 정적 href 로 충분하지만,
-//     스크롤 복원은 scrollMemory 가 경로 키로 자동 처리한다. 홈 탭 버튼은 정적
+//     스크롤 복원은 scrollMemory 가 경로 키로 처리한다. 홈 탭 버튼은 정적
 //     href="/" 라, tabbar.js 가 다른 탭에서 홈으로 올 때 클릭을 가로채 lastPath("home")
 //     으로 보낸다(이미 홈이면 기존대로 루트="/" pop-to-root).
 //
@@ -51,6 +55,16 @@ window.tabHistory = (() => {
   // 가장 최근 완료된 라우트 경로(= 지금 화면). onRouteStart 가 이 경로의 스크롤을
   // 저장하므로, 떠나기 직전 위치를 정확히 잡는다.
   let currentPath = location.pathname + location.search;
+  // 다음 onRouteEnd 에서 스크롤을 복원할지(POP/탭 전환만 true). requestRestore() 가
+  // popstate 핸들러와 탭 전환 직전에 세우고, onRouteEnd 가 소비한다(1회성).
+  let restoreNext = false;
+
+  // 다음 라우트에서 저장된 스크롤을 복원하도록 요청. 뒤로/앞으로(popstate)와 탭 전환
+  // (다른 탭→홈·검색·북마크·설정)에서만 호출 — 일반 링크 이동(PUSH)은 호출하지 않아
+  // 뷰의 스크롤(최상단/하이라이트)을 보존한다.
+  function requestRestore() {
+    restoreNext = true;
+  }
 
   function fullPath() {
     return location.pathname + location.search;
@@ -63,11 +77,16 @@ window.tabHistory = (() => {
   }
 
   // route() 가 새 경로 렌더를 마친 직후 호출(중복/리다이렉트는 route 의 시퀀스 가드가
-  // 거른다) — 새 경로를 해당 탭의 마지막 경로로 기록하고, 기억된 스크롤이 있으면 복원.
+  // 거른다) — 새 경로를 해당 탭의 마지막 경로로 기록하고, **복원이 요청된 경우에만**
+  // 기억된 스크롤을 복원한다. 일반 링크 이동(PUSH)에선 복원하지 않아 뷰가 정한
+  // 스크롤(renderChapter 의 최상단/하이라이트·resume scrollIntoView)을 보존한다.
   function onRouteEnd() {
     const path = fullPath();
     currentPath = path;
     lastPathForTab[tabOf(path)] = path;
+    const doRestore = restoreNext;
+    restoreNext = false; // 1회성 소비
+    if (!doRestore) return;
     const y = scrollMemory.get(path);
     if (y == null) return; // 기억 없음 → 뷰가 정한 스크롤(보통 최상단) 유지
     window.scrollTo(0, y);
@@ -90,6 +109,7 @@ window.tabHistory = (() => {
     fullPath,
     onRouteStart,
     onRouteEnd,
+    requestRestore,
     lastPath,
     // 테스트/디버그용 노출(런타임 의존 금지).
     _scrollMemory: scrollMemory,

@@ -146,6 +146,7 @@ function openSearch() {
   // active==='search' 를 보고 exitSearch 를 호출하지 않는다. ADR-031: 마지막 검색
   // 경로(/search?q=…)로 복원해 이전 검색어·결과를 그대로 다시 보여준다(없으면 /search).
   if (W.parsePath?.().view !== "search") {
+    W.tabHistory?.requestRestore(); // 탭 전환 → 마지막 검색 결과 스크롤 복원
     W.navigate(W.tabHistory?.lastPath("search") || "/search");
   }
   // 모핑을 열면 in-page bar 가 숨겨지므로 그 입력값을 dock 입력으로 옮긴다. in-page
@@ -220,10 +221,25 @@ $home?.addEventListener("click", (e) => {
     const dest = th.lastPath("home");
     if (dest && dest !== "/") {
       e.preventDefault();
+      th.requestRestore(); // 탭 전환(POP 의미론) → 읽던 스크롤 복원
       W.navigate(dest);
     }
   }
 });
+
+// ADR-031: 북마크·설정 탭은 정적 href 로 충분하지만(단일 라우트), 다른 탭에서 전환해
+// 들어올 땐 스크롤 복원을 요청한다. 같은 탭 재탭(=pop-to-root)이면 요청하지 않아 최상단.
+// preventDefault 안 함 — 전역 <a> 인터셉터가 href 로 navigate, requestRestore 는 플래그만.
+function restoreOnTabSwitch(/** @type {"bookmarks"|"settings"} */ targetTab) {
+  const th = W.tabHistory;
+  if (th && th.tabOf(th.fullPath()) !== targetTab) th.requestRestore();
+}
+document
+  .querySelector('#tab-bar [data-tab="bookmarks"]')
+  ?.addEventListener("click", () => restoreOnTabSwitch("bookmarks"));
+document
+  .querySelector('#tab-bar [data-tab="settings"]')
+  ?.addEventListener("click", () => restoreOnTabSwitch("settings"));
 
 // 하단 입력: Enter → 기존 검색 커밋(verse ref auto-nav 포함).
 $searchInput?.addEventListener("keydown", (e) => {
