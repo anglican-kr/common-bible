@@ -186,6 +186,11 @@ ARIA tree widget(`role="tree"`, `role="treeitem"`, `role="group"`).
 아이콘: Material Icons `bookmarks` SVG. 장 북마크 여부 표시 제거
 (`.has-bookmark` 클래스 및 관련 CSS 삭제).
 
+> **개정 (2026-06-05):** 헤더 북마크 아이콘은 **책 읽기 화면(장·머리말)
+> 헤더에서만** 노출한다. 성서 목록 화면(`renderBookList`) 헤더에서는 제거 —
+> 장 맥락이 없어 '이 장 저장'이 의미가 없고, 북마크 전체 관리는 하단 탭 바의
+> 북마크 탭(ADR-029)이 담당하므로 목록 헤더의 북마크 진입점은 중복이었다.
+
 **검색 드로어** (`#search-sheet`): 개정 2026-04-26 — 닫기 버튼(`#search-sheet-close`) 추가.
 WCAG 일관성 유지 (북마크 드로어와 동일 패턴).
 
