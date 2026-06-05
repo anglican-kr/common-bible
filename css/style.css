@@ -3240,10 +3240,13 @@ body.tabbar-searching #search-inpage-bar { display: none; }
        content < #tabbar-scrim(9) < #audio-bar(10) < #tab-dock(30). */
     z-index: 9;
     pointer-events: none;
-    /* 절대 길이 stop — 솔리드 경계·투명 도달점을 캡슐 기하에 고정(% 면 height 변동 시 흔들림). */
+    /* 절대 길이 stop — 솔리드 경계·투명 도달점을 캡슐 기하에 고정(% 면 height 변동 시 흔들림).
+       --scrim-bg = 그라디언트 최대 불투명도(바닥 색). 100% --bg 면 바닥이 완전 불투명한데,
+       70% 로 낮춰 바닥에서도 본문이 옅게 비치게 해 전체 그라디언트를 약하게 한다. */
+    --scrim-bg: color-mix(in srgb, var(--bg) 70%, transparent);
     background: linear-gradient(to top,
-      var(--bg) 0,
-      var(--bg) var(--scrim-solid),
+      var(--scrim-bg) 0,
+      var(--scrim-bg) var(--scrim-solid),
       transparent var(--scrim-fade-top));
     /* dock 이 숨는 상태와 동기화. */
     transition: opacity var(--duration-base) var(--ease-standard);
