@@ -4003,11 +4003,6 @@ body.tabbar-searching #search-inpage-bar { display: none; }
   transition: background var(--duration-instant);
 }
 
-/* Hairline separators between rows (the iOS grouped-menu look). */
-.title-action-menu-item + .title-action-menu-item {
-  box-shadow: inset 0 1px 0 var(--border);
-}
-
 .title-action-menu-label {
   flex: 1;
   min-width: 0;
