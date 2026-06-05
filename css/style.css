@@ -3252,8 +3252,8 @@ body.tabbar-searching #search-inpage-bar { display: none; }
     content: "";
     position: absolute;
     inset: 0;
-    -webkit-backdrop-filter: blur(4px);
-    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(2px);
+    backdrop-filter: blur(2px);
     /* 얇은 blur 를 페이드 구간의 옅어진 본문에 얹어 '유리 밑으로 사라지는' 질감 보강.
        최상단은 fade-out 으로 또렷한 본문이 흐려지지 않게 한다. blur 미지원·투명도 감소
        환경에선 그래디언트만으로 동작(아래 prefers-reduced-transparency 분기). */
