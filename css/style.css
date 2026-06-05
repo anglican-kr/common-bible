@@ -3214,15 +3214,20 @@ body.tabbar-searching #search-inpage-bar { display: none; }
      본문이 부드럽게 비쳐 liquid-glass 깊이감을 준다(선명한 노출은 없음). 솔리드는 캡슐
      아래·바닥 모서리(--scrim-solid)에만, 페이드는 --scrim-fade-top 에서 완전 투명. */
   #tabbar-scrim {
-    /* 기준은 **캡슐(pill) 자체** — pill 윗변보다 한참 위에서 투명에 도달하면 pill 위에
-       빈 마진이 생겨 탭 바 주변이 휑해 보인다. → 페이드는 pill 바닥 윤곽선 기준 **75%
-       높이 지점**에서 투명에 도달하고, 그 위 본문은 그대로 둔다(마진 없음).
-       --scrim-solid = pill 아래 모서리(바닥~pill 밑변)까지만 솔리드 --bg.
-       --scrim-fade-top = pill 밑변 + pill 높이의 75% → pill 하단 ¾ 를 페이드가 지나고
-       상단 ¼ 부터 본문이 또렷이 비친다. pill 밑변·높이는 dock 의 실제 기하와 동일 식.
-       (pill 높이 = --touch-target 44 + --space-2 ×2 = 60px, 밑변 = --space-1 + safe×0.75) */
-    --scrim-solid: calc(var(--space-1) + env(safe-area-inset-bottom) * 0.75);
-    --scrim-fade-top: calc(var(--scrim-solid) + 0.75 * (var(--touch-target) + var(--space-2) * 2));
+    /* 기준은 **캡슐(pill) 자체** — 페이드는 pill **윗변(위쪽 윤곽선) 기준 25% 높이만큼
+       더 위 지점**에서 투명에 도달한다. 즉 pill 전체를 페이드가 지나고 윗변 위로 pill
+       높이의 ¼ 만큼 더 올라가 투명에 닿는다 → pill 상단·바로 위 본문이 답답하지 않게
+       숨 쉴 여백을 확보한다(이전엔 윗변 25% 아래에서 끊겨 빡빡했다).
+       --scrim-pill-bottom = pill 밑변(바닥~캡슐 아래 모서리) 위치. fade-top 의 기하 기준점.
+       --scrim-solid = 솔리드 --bg 띠 높이(불투명도용, fade-top 기준과 분리). 0 = 띠 없음.
+       --scrim-fade-top = pill 밑변 + pill 높이의 125% → pill 윗변 위 ¼ 지점에서 투명.
+       pill 밑변·높이는 dock 의 실제 기하와 동일 식.
+       (pill 높이 = --touch-target 44 + --space-2 ×2 = 60px, 밑변 = --space-1 + safe×0.75)
+       솔리드 띠 제거(0) — 바닥부터 바로 페이드가 시작돼 완전 불투명 구간이 없다.
+       본문이 캡슐 아래·바닥까지 옅게 비친다. */
+    --scrim-pill-bottom: calc(var(--space-1) + env(safe-area-inset-bottom) * 0.75);
+    --scrim-solid: 0px;
+    --scrim-fade-top: calc(var(--scrim-pill-bottom) + 1.25 * (var(--touch-target) + var(--space-2) * 2));
     display: block;
     position: fixed;
     left: 0;
@@ -3237,10 +3242,13 @@ body.tabbar-searching #search-inpage-bar { display: none; }
        content < #tabbar-scrim(9) < #audio-bar(10) < #tab-dock(30). */
     z-index: 9;
     pointer-events: none;
-    /* 절대 길이 stop — 솔리드 경계·투명 도달점을 캡슐 기하에 고정(% 면 height 변동 시 흔들림). */
+    /* 절대 길이 stop — 솔리드 경계·투명 도달점을 캡슐 기하에 고정(% 면 height 변동 시 흔들림).
+       --scrim-bg = 그라디언트 최대 불투명도(바닥 색). 100% --bg 면 바닥이 완전 불투명한데,
+       80% 로 낮춰 바닥에서도 본문이 옅게 비치게 해 전체 그라디언트를 약하게 한다. */
+    --scrim-bg: color-mix(in srgb, var(--bg) 80%, transparent);
     background: linear-gradient(to top,
-      var(--bg) 0,
-      var(--bg) var(--scrim-solid),
+      var(--scrim-bg) 0,
+      var(--scrim-bg) var(--scrim-solid),
       transparent var(--scrim-fade-top));
     /* dock 이 숨는 상태와 동기화. */
     transition: opacity var(--duration-base) var(--ease-standard);
@@ -3249,20 +3257,18 @@ body.tabbar-searching #search-inpage-bar { display: none; }
     content: "";
     position: absolute;
     inset: 0;
-    -webkit-backdrop-filter: blur(8px);
-    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(2px);
+    backdrop-filter: blur(2px);
     /* 얇은 blur 를 페이드 구간의 옅어진 본문에 얹어 '유리 밑으로 사라지는' 질감 보강.
        최상단은 fade-out 으로 또렷한 본문이 흐려지지 않게 한다. blur 미지원·투명도 감소
        환경에선 그래디언트만으로 동작(아래 prefers-reduced-transparency 분기). */
     -webkit-mask-image: linear-gradient(to top, #000 0%, #000 80%, transparent 100%);
     mask-image: linear-gradient(to top, #000 0%, #000 80%, transparent 100%);
   }
-  /* 오디오 바가 떠 있으면(축소 아님) 본문이 처음 만나는 건 오디오 바 → 같은 75% 규칙을
-     오디오 바에 적용(밑변 = --tabbar-reserve, 높이 ≈ 3.5rem). 마진 없이 오디오 바 상단 ¼
-     부터 본문이 비친다. 솔리드는 그대로 바닥만. */
-  body:has(#audio-bar:not([hidden])):not(.tabbar-collapsed) #tabbar-scrim {
-    --scrim-fade-top: calc(var(--tabbar-reserve) + 0.75 * 3.5rem);
-  }
+  /* 페이드 기준은 오디오 유무와 무관하게 **항상 탭 바 캡슐 윗변**으로 통일한다(위 base
+     규칙 그대로). 오디오 바는 탭 바 위에 스택되므로 그 위로 본문이 옅게 비칠 수 있으나,
+     scrim 기준을 오디오 바로 올리면 오디오 유무에 따라 페이드 높이가 출렁여 일관성이
+     떨어진다 → 의도적으로 탭 바 기준 고정(오디오 바 위 노출 감수). */
   /* 절 선택 모드: 탭 dock 이 숨으므로 scrim 도 숨김. */
   body.verse-select-active #tabbar-scrim { display: none; }
   /* OS 투명도 감소 — 탭 chrome 과 동일하게 scrim 의 라이브 blur 도 끈다(그래디언트는 유지). */
