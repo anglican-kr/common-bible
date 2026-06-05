@@ -3222,9 +3222,9 @@ body.tabbar-searching #search-inpage-bar { display: none; }
        --scrim-fade-top = pill 밑변 + pill 높이의 125% → pill 윗변 위 ¼ 지점에서 투명.
        pill 밑변·높이는 dock 의 실제 기하와 동일 식.
        (pill 높이 = --touch-target 44 + --space-2 ×2 = 60px, 밑변 = --space-1 + safe×0.75)
-       솔리드 띠는 캡슐 밑변까지의 ¼만 채워 얇게 유지 — 나머지는 페이드가 되어
-       캡슐 아래까지 본문이 옅게 비친다(완전 불투명 띠 최소화). */
-    --scrim-solid: calc((var(--space-1) + env(safe-area-inset-bottom) * 0.75) * 0.25);
+       솔리드 띠 제거(0) — 바닥부터 바로 페이드가 시작돼 완전 불투명 구간이 없다.
+       본문이 캡슐 아래·바닥까지 옅게 비친다. */
+    --scrim-solid: 0px;
     --scrim-fade-top: calc(var(--scrim-solid) + 1.25 * (var(--touch-target) + var(--space-2) * 2));
     display: block;
     position: fixed;
