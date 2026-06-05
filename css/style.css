@@ -2853,6 +2853,9 @@ html.cite-sheet-open {
 }
 #tab-dock::before,
 #tab-dock::after { content: none; }
+/* 탭 dock 뒤 콘텐츠 데코레이션 scrim — 기본 숨김(데스크탑·base). 모바일에서만 노출.
+   하단으로 스크롤되는 본문이 플로팅 캡슐 양옆·아래로 노출되는 것을 페이드로 가린다. */
+#tabbar-scrim { display: none; }
 #tab-bar {
   /* dock 의 flex 자식 — 콘텐츠 폭 좌측 pill. 위치는 #tab-dock 이 책임. */
   display: flex;
@@ -2871,7 +2874,7 @@ html.cite-sheet-open {
      #tab-dock(fixed)이 Safari home-indicator 샘플링 대상이라 투명하게 두므로, 자식인
      #tab-bar 는 직접 glass 를 줘도 틴팅 문제 없음(ADR-029 의 ::before 우회 불필요).
      iOS 26.1 'Tinted' 방향 — 가독성 위해 약간 더 불투명. -webkit- 는 리터럴만. */
-  background: color-mix(in srgb, var(--bg) 70%, transparent);
+  background: color-mix(in srgb, var(--bg) 62%, transparent);
   -webkit-backdrop-filter: blur(16px) saturate(180%);
   backdrop-filter: blur(16px) saturate(180%);
   /* 오디오 바와 동일한 floating 스타일 — 1px 테두리 + shadow-2(테두리가 가장자리를
@@ -2881,7 +2884,7 @@ html.cite-sheet-open {
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
 }
 [data-theme="dark"] #tab-bar {
-  background: color-mix(in srgb, var(--bg-card) 80%, transparent);
+  background: color-mix(in srgb, var(--bg-card) 72%, transparent);
 }
 
 /* ADR-030: 아이콘 전용(라벨 제거) — flex:1 stretch 대신 콘텐츠 폭 탭. 각 탭은
@@ -2959,7 +2962,7 @@ html.cite-sheet-open {
   border-radius: var(--radius-pill);
   corner-shape: superellipse(2); /* 원 — 폴백은 원형 border-radius */
   /* ADR-030: 탭 pill 과 동일 — frosted glass 를 요소에 직접(::before 레이어 제거). */
-  background: color-mix(in srgb, var(--bg) 70%, transparent);
+  background: color-mix(in srgb, var(--bg) 62%, transparent);
   -webkit-backdrop-filter: blur(16px) saturate(180%);
   backdrop-filter: blur(16px) saturate(180%);
   color: var(--accent);
@@ -2971,16 +2974,16 @@ html.cite-sheet-open {
   transition: transform var(--duration-fast) ease;
 }
 [data-theme="dark"] #tab-search {
-  background: color-mix(in srgb, var(--bg-card) 80%, transparent);
+  background: color-mix(in srgb, var(--bg-card) 72%, transparent);
 }
 .tab-search-icon { width: 1.9rem; height: 1.9rem; }
 #tab-search:active { transform: scale(0.92); } /* press feedback */
 /* 현재 라우트가 /search 일 때 — 탭 pill 활성과 동색 accent 틴트. */
 #tab-search.active {
-  background: color-mix(in srgb, var(--accent) 14%, color-mix(in srgb, var(--bg) 70%, transparent));
+  background: color-mix(in srgb, var(--accent) 14%, color-mix(in srgb, var(--bg) 62%, transparent));
 }
 [data-theme="dark"] #tab-search.active {
-  background: color-mix(in srgb, var(--accent) 18%, color-mix(in srgb, var(--bg-card) 80%, transparent));
+  background: color-mix(in srgb, var(--accent) 18%, color-mix(in srgb, var(--bg-card) 72%, transparent));
 }
 #tab-search-input[hidden] { display: none; }
 
@@ -3045,14 +3048,14 @@ html.cite-sheet-open {
   padding: 0 var(--space-3);
   gap: var(--space-2);
   border-radius: var(--radius-pill);
-  background: color-mix(in srgb, var(--bg) 70%, transparent);
+  background: color-mix(in srgb, var(--bg) 62%, transparent);
   -webkit-backdrop-filter: blur(16px) saturate(180%);
   backdrop-filter: blur(16px) saturate(180%);
   border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
   box-shadow: var(--shadow-2);
 }
 [data-theme="dark"] #tab-dock.searching #tab-search-dock {
-  background: color-mix(in srgb, var(--bg-card) 80%, transparent);
+  background: color-mix(in srgb, var(--bg-card) 72%, transparent);
 }
 /* 검색 버튼 → 입력 pill 의 왼쪽 아이콘(자체 표면 제거). */
 #tab-dock.searching #tab-search {
@@ -3138,14 +3141,14 @@ body.tabbar-keyboard #tab-dock.searching #tab-search-close {
   opacity: 1;
   pointer-events: auto;
   /* 홈·검색 원형과 동일한 floating glass. */
-  background: color-mix(in srgb, var(--bg) 70%, transparent);
+  background: color-mix(in srgb, var(--bg) 62%, transparent);
   -webkit-backdrop-filter: blur(16px) saturate(180%);
   backdrop-filter: blur(16px) saturate(180%);
   border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
   box-shadow: var(--shadow-2);
 }
 [data-theme="dark"] body.tabbar-keyboard #tab-dock.searching #tab-search-close {
-  background: color-mix(in srgb, var(--bg-card) 80%, transparent);
+  background: color-mix(in srgb, var(--bg-card) 72%, transparent);
 }
 /* 키보드 표시 중: 홈 버튼 숨기고 검색 입력 pill 이 홈 자리(왼쪽 끝)까지 확장.
    #tab-bar 가 flow 에서 빠지면 flex:1 인 #tab-search-dock 가 그 폭을 흡수한다.
@@ -3201,6 +3204,74 @@ body.tabbar-searching #search-inpage-bar { display: none; }
 
 /* 탭 바 하단 공존 (ADR-029 P4). 데스크탑은 탭바가 없어 적용 안 함. */
 @media (max-width: 768px) {
+  /* ── 탭 dock 뒤 콘텐츠 데코레이션 scrim ──
+     플로팅 캡슐(#tab-bar·#tab-search·미니 오디오)은 투명 dock 위에 떠 있어, 그 양옆
+     틈과 아래 sliver 로 스크롤되는 본문이 그대로 비친다. dock 바로 아래(z 는 dock 미만)
+     에 화면 폭 전체 페이드 레이어를 깔아, 본문을 점진적으로 배경색으로 녹인다.
+     의도(ADR-030 개정 2026-06-05): 캡슐을 **솔리드로 가리지 않고** 캡슐 영역을 페이드
+     구간이 통과하게 둔다 → 더 투명해진 글래스(70→62%) 너머로 '이미 옅게 사라지는 중인'
+     본문이 부드럽게 비쳐 liquid-glass 깊이감을 준다(선명한 노출은 없음). 솔리드는 캡슐
+     아래·바닥 모서리(--scrim-solid)에만, 페이드는 --scrim-fade-top 에서 완전 투명. */
+  #tabbar-scrim {
+    /* 기준은 **캡슐(pill) 자체** — pill 윗변보다 한참 위에서 투명에 도달하면 pill 위에
+       빈 마진이 생겨 탭 바 주변이 휑해 보인다. → 페이드는 pill 바닥 윤곽선 기준 **75%
+       높이 지점**에서 투명에 도달하고, 그 위 본문은 그대로 둔다(마진 없음).
+       --scrim-solid = pill 아래 모서리(바닥~pill 밑변)까지만 솔리드 --bg.
+       --scrim-fade-top = pill 밑변 + pill 높이의 75% → pill 하단 ¾ 를 페이드가 지나고
+       상단 ¼ 부터 본문이 또렷이 비친다. pill 밑변·높이는 dock 의 실제 기하와 동일 식.
+       (pill 높이 = --touch-target 44 + --space-2 ×2 = 60px, 밑변 = --space-1 + safe×0.75) */
+    --scrim-solid: calc(var(--space-1) + env(safe-area-inset-bottom) * 0.75);
+    --scrim-fade-top: calc(var(--scrim-solid) + 0.75 * (var(--touch-target) + var(--space-2) * 2));
+    display: block;
+    position: fixed;
+    left: 0;
+    right: 0;
+    /* 검색 키보드가 dock 을 --kb-overlap(visualViewport)만큼 위로 올리면 scrim 도 함께
+       올라가 캡슐 뒤를 계속 받친다(안 그러면 올라간 캡슐 옆으로 본문이 다시 노출).
+       --kb-overlap 은 tabbar.js 가 :root 에 설정 → dock·scrim 이 함께 상속. */
+    bottom: var(--kb-overlap, 0px);
+    height: var(--scrim-fade-top);
+    /* 스크롤 콘텐츠 위 · 하단 chrome(오디오 바 z:10 → tab-dock z:--nav-z 30) 아래.
+       chrome 보다 위면 scrim 솔리드/blur 가 그 위에 그려져 컨트롤을 가린다. 쌓임 순서:
+       content < #tabbar-scrim(9) < #audio-bar(10) < #tab-dock(30). */
+    z-index: 9;
+    pointer-events: none;
+    /* 절대 길이 stop — 솔리드 경계·투명 도달점을 캡슐 기하에 고정(% 면 height 변동 시 흔들림). */
+    background: linear-gradient(to top,
+      var(--bg) 0,
+      var(--bg) var(--scrim-solid),
+      transparent var(--scrim-fade-top));
+    /* dock 이 숨는 상태와 동기화. */
+    transition: opacity var(--duration-base) var(--ease-standard);
+  }
+  #tabbar-scrim::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+    /* 얇은 blur 를 페이드 구간의 옅어진 본문에 얹어 '유리 밑으로 사라지는' 질감 보강.
+       최상단은 fade-out 으로 또렷한 본문이 흐려지지 않게 한다. blur 미지원·투명도 감소
+       환경에선 그래디언트만으로 동작(아래 prefers-reduced-transparency 분기). */
+    -webkit-mask-image: linear-gradient(to top, #000 0%, #000 80%, transparent 100%);
+    mask-image: linear-gradient(to top, #000 0%, #000 80%, transparent 100%);
+  }
+  /* 오디오 바가 떠 있으면(축소 아님) 본문이 처음 만나는 건 오디오 바 → 같은 75% 규칙을
+     오디오 바에 적용(밑변 = --tabbar-reserve, 높이 ≈ 3.5rem). 마진 없이 오디오 바 상단 ¼
+     부터 본문이 비친다. 솔리드는 그대로 바닥만. */
+  body:has(#audio-bar:not([hidden])):not(.tabbar-collapsed) #tabbar-scrim {
+    --scrim-fade-top: calc(var(--tabbar-reserve) + 0.75 * 3.5rem);
+  }
+  /* 절 선택 모드: 탭 dock 이 숨으므로 scrim 도 숨김. */
+  body.verse-select-active #tabbar-scrim { display: none; }
+  /* OS 투명도 감소 — 탭 chrome 과 동일하게 scrim 의 라이브 blur 도 끈다(그래디언트는 유지). */
+  @media (prefers-reduced-transparency: reduce) {
+    #tabbar-scrim::before {
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
+    }
+  }
+
   /* 탭 바가 보이는 뷰에서만 하단 콘텐츠 자리 확보. 절 선택 모드는 탭 바를 숨기고
      전용 하단 바가 차지하므로 reserve 를 적용하지 않는다(빈 띠 방지). */
   body:not(.verse-select-active) #app { padding-bottom: var(--tabbar-reserve); }

@@ -77,16 +77,18 @@ function makeEl() {
 // document.body, $searchClose, $dock, window. Returns the context plus handles.
 function makeCtx({ innerHeight = 800, vvHeight = 800, hasVV = true } = {}) {
   const body = { classList: makeClassList() };
+  // --kb-overlap 은 :root(documentElement)에 설정 → dock·#tabbar-scrim 이 함께 상속.
+  const documentElement = makeEl();
   const $searchClose = makeEl();
   const $dock = makeEl();
   const window = {
     innerHeight,
     visualViewport: hasVV ? { height: vvHeight } : null,
   };
-  const ctx = { document: { body }, $searchClose, $dock, window };
+  const ctx = { document: { body, documentElement }, $searchClose, $dock, window };
   vm.createContext(ctx);
   vm.runInContext(KEYBOARD_BLOCK, ctx);
-  return { ctx, body, $searchClose, $dock, window };
+  return { ctx, body, documentElement, $searchClose, $dock, window };
 }
 
 // ── keyboardOverlap ──────────────────────────────────────────────────────────
@@ -131,35 +133,35 @@ test("setKeyboardState(false): 클래스 제거 + X 버튼 a11y 제외", () => {
 // ── liftForKeyboard ──────────────────────────────────────────────────────────
 
 test("liftForKeyboard: 키보드 up → --kb-overlap = 키보드 높이(위치 보정)", () => {
-  const { ctx, body, $dock } = makeCtx({ innerHeight: 800, vvHeight: 500 });
+  const { ctx, body, documentElement } = makeCtx({ innerHeight: 800, vvHeight: 500 });
   ctx.liftForKeyboard();
 
-  // 실제 레이아웃 bottom 으로 올리는 값(transform 아님 → iOS 팬 방지).
-  assert.equal($dock.style.getPropertyValue("--kb-overlap"), "300px");
+  // 실제 레이아웃 bottom 으로 올리는 값(transform 아님 → iOS 팬 방지). :root 에 설정.
+  assert.equal(documentElement.style.getPropertyValue("--kb-overlap"), "300px");
   // X 노출(body.tabbar-keyboard)은 liftForKeyboard 가 건드리지 않는다 — focus/blur 책임.
   assert.equal(body.classList.contains("tabbar-keyboard"), false);
 });
 
 test("liftForKeyboard: 키보드 down → --kb-overlap 0", () => {
-  const { ctx, $dock } = makeCtx({ innerHeight: 800, vvHeight: 800 });
+  const { ctx, documentElement } = makeCtx({ innerHeight: 800, vvHeight: 800 });
   ctx.liftForKeyboard();
 
-  assert.equal($dock.style.getPropertyValue("--kb-overlap"), "0px");
+  assert.equal(documentElement.style.getPropertyValue("--kb-overlap"), "0px");
 });
 
 test("liftForKeyboard: 1px 이하 차이는 키보드 없음으로 처리(반올림 오차)", () => {
-  const { ctx, $dock } = makeCtx({ innerHeight: 800, vvHeight: 799 });
+  const { ctx, documentElement } = makeCtx({ innerHeight: 800, vvHeight: 799 });
   ctx.liftForKeyboard();
 
   // overlap === 1 은 up 아님(> 1 임계).
-  assert.equal($dock.style.getPropertyValue("--kb-overlap"), "0px");
+  assert.equal(documentElement.style.getPropertyValue("--kb-overlap"), "0px");
 });
 
 test("liftForKeyboard: visualViewport 없으면 no-op(데스크탑/구형)", () => {
-  const { ctx, $dock } = makeCtx({ hasVV: false });
+  const { ctx, documentElement } = makeCtx({ hasVV: false });
   ctx.liftForKeyboard();
   // 아무 속성도 설정하지 않음.
-  assert.equal($dock.style.getPropertyValue("--kb-overlap"), "");
+  assert.equal(documentElement.style.getPropertyValue("--kb-overlap"), "");
 });
 
 // ── nextScrollCollapsed (SCROLL 블록) ─────────────────────────────────────────
