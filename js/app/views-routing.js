@@ -826,6 +826,9 @@ let _audioController = null;
 let _audioSaveTimer = null;
 let _scrollTrackCleanup = null;
 let _isInitialLoad = true;
+// ADR-031: route() 호출마다 증가. 리다이렉트(books→resume 등)로 route 가 재진입하면
+// 바깥 호출의 finally(onRouteEnd 스크롤 복원)가 이미 낡았음을 알도록 시퀀스로 가드한다.
+let _routeSeq = 0;
 function startScrollTracking(bookId, chapter) {
   if (_scrollTrackCleanup) _scrollTrackCleanup();
   /** @type {ReturnType<typeof setTimeout> | null} */
@@ -1719,6 +1722,9 @@ function trackPageView() {
 async function route() {
   const isInitialLoad = _isInitialLoad;
   _isInitialLoad = false;
+  // ADR-031: 떠나는 경로의 스크롤을 기억(DOM 변경 전) + 재진입 가드 시퀀스 발급.
+  const routeSeq = ++_routeSeq;
+  window.tabHistory?.onRouteStart();
   syncTabBarActive();
   if (_scrollTrackCleanup) _scrollTrackCleanup();
   clearNode($resumeBannerSlot);
@@ -1759,6 +1765,12 @@ async function route() {
     if (view === "search") {
       if (parsed.query) {
         const autoNav = consumeSearchAutoNavigate();
+        // ADR-031: search 탭의 마지막 경로를 미리 기록한다. verse-ref 검색이면
+        // renderSearchResults 가 챕터로 auto-nav(replaceState+route 재진입)하며 바깥
+        // onRouteEnd 가 _routeSeq 가드로 스킵돼, 안 하면 lastPathForTab.search 가
+        // 이전 검색에 머문다. 복원 시엔 autoNavigate=false 라 refMatch 가 클릭 카드로
+        // 떠 바운스 없이 마지막 검색이 그대로 복원된다.
+        window.tabHistory?.recordPath(location.pathname + location.search);
         await renderSearchResults(parsed.query, parsed.page, autoNav);
         // If renderSearchResults auto-navigated to a chapter, the inner route() call
         // already handles meta and analytics for that view — don't overwrite.
@@ -1935,6 +1947,9 @@ async function route() {
     console.error(err);
   } finally {
     dismissLaunchScreen(); // safety fallback (already a no-op if called above)
+    // ADR-031: 이 호출이 여전히 최신 라우트일 때만 새 경로 기록 + 스크롤 복원.
+    // 내부 navigate()(리다이렉트)가 _routeSeq 를 올렸으면 낡은 바깥 호출이라 건너뛴다.
+    if (routeSeq === _routeSeq) window.tabHistory?.onRouteEnd();
   }
 }
 
@@ -1963,7 +1978,12 @@ document.addEventListener("click", (e) => {
 // route() and the deferred init chain (initCompactHeader /
 // initBookmarkSheetDrag / registerServiceWorker / maybeShowInstallNudge /
 // driveSync.initDriveSync), several of which still live in app.js.
-window.addEventListener("popstate", route);
+// ADR-031: 뒤로/앞으로(POP)는 떠날 때의 스크롤로 복원(scrollRestoration=manual 이라
+// 브라우저가 안 하므로 직접). 일반 링크 이동(PUSH)은 요청하지 않아 복원하지 않는다.
+window.addEventListener("popstate", () => {
+  window.tabHistory?.requestRestore();
+  route();
+});
 
 // ── Audio Player ──
 

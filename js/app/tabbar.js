@@ -143,8 +143,12 @@ function openSearch() {
   // 동안엔 홈 버튼과 동작이 겹쳐 중복이므로 숨겨 둔다.
   $searchInput.hidden = false;
   // /search 전체뷰로 진입(이미 검색 중이면 생략). route() → syncTabBarActive 가
-  // active==='search' 를 보고 exitSearch 를 호출하지 않는다.
-  if (W.parsePath?.().view !== "search") W.navigate("/search");
+  // active==='search' 를 보고 exitSearch 를 호출하지 않는다. ADR-031: 마지막 검색
+  // 경로(/search?q=…)로 복원해 이전 검색어·결과를 그대로 다시 보여준다(없으면 /search).
+  if (W.parsePath?.().view !== "search") {
+    W.tabHistory?.requestRestore(); // 탭 전환 → 마지막 검색 결과 스크롤 복원
+    W.navigate(W.tabHistory?.lastPath("search") || "/search");
+  }
   // 모핑을 열면 in-page bar 가 숨겨지므로 그 입력값을 dock 입력으로 옮긴다. in-page
   // 입력은 URL ?q= 로 초기화되고 사용자가 미제출(Enter 안 누름)로 고친 draft 까지
   // 담으므로 우선 사용 — 없으면 URL ?q= 로 폴백(draft 가 사라지지 않게).
@@ -207,8 +211,35 @@ $home?.addEventListener("click", (e) => {
   if (collapsed) {
     e.preventDefault();
     applyCollapsed(false);
+    return;
+  }
+  // ADR-031: 다른 탭(북마크·설정·검색)에서 홈으로 올 땐 마지막 읽던 위치로 복원.
+  // 이미 홈 스택에 있으면 기존대로 정적 href="/"(성서 목록)로 — iOS pop-to-root.
+  // 복원 대상이 루트뿐이면(아직 읽은 적 없음) 가로채지 않고 기본 href 진행.
+  const th = W.tabHistory;
+  if (th && th.tabOf(th.fullPath()) !== "home") {
+    const dest = th.lastPath("home");
+    if (dest && dest !== "/") {
+      e.preventDefault();
+      th.requestRestore(); // 탭 전환(POP 의미론) → 읽던 스크롤 복원
+      W.navigate(dest);
+    }
   }
 });
+
+// ADR-031: 북마크·설정 탭은 정적 href 로 충분하지만(단일 라우트), 다른 탭에서 전환해
+// 들어올 땐 스크롤 복원을 요청한다. 같은 탭 재탭(=pop-to-root)이면 요청하지 않아 최상단.
+// preventDefault 안 함 — 전역 <a> 인터셉터가 href 로 navigate, requestRestore 는 플래그만.
+function restoreOnTabSwitch(/** @type {"bookmarks"|"settings"} */ targetTab) {
+  const th = W.tabHistory;
+  if (th && th.tabOf(th.fullPath()) !== targetTab) th.requestRestore();
+}
+document
+  .querySelector('#tab-bar [data-tab="bookmarks"]')
+  ?.addEventListener("click", () => restoreOnTabSwitch("bookmarks"));
+document
+  .querySelector('#tab-bar [data-tab="settings"]')
+  ?.addEventListener("click", () => restoreOnTabSwitch("settings"));
 
 // 하단 입력: Enter → 기존 검색 커밋(verse ref auto-nav 포함).
 $searchInput?.addEventListener("keydown", (e) => {
