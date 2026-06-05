@@ -33,10 +33,12 @@ ADR-029 는 Safari 26 home-indicator 틴팅 회피를 위해 glass 를 `::before
 
 > **참고:** 입력 placeholder·텍스트는 본문 Serif 상속을 피해 **Sans**(시스템 + Noto Sans KR). placeholder 문구는 인-페이지 검색 입력과 통일("검색 (예: 사랑, 사랑 in:요한, 창세 1:3)").
 
-> **개정 (2026-06-04): 탭 dock 뒤 콘텐츠 데코레이션 scrim.** floating 캡슐(`#tab-bar`·`#tab-search`·미니 오디오)은 투명 `#tab-dock` 위에 떠 있어 캡슐 **양옆 틈·아래 sliver**로 스크롤되는 본문이 그대로 노출돼 지저분했다. dock 바로 아래(z = `--nav-z` − 1, 스크롤 콘텐츠 위)에 화면 폭 전체 **페이드 그래디언트 scrim**(`#tabbar-scrim`, 순수 장식 `aria-hidden`)을 깔아 본문이 캡슐에 **닿기 전에** 배경색으로 사라지게 한다.
-> - 기하: `--scrim-solid`(=`--tabbar-reserve` ≈ 캡슐 윗변)까지는 솔리드 `--bg`로 캡슐 영역·옆틈·아래를 확실히 가리고, 그 위 `--scrim-runway`(3rem) 구간에서만 투명으로 페이드(절대 길이 stop — 솔리드 경계를 캡슐 윗변에 고정해 height 변동에 안 흔들림). runway 가 0 이면 캡슐 바로 위에서 텍스트가 또렷하다 끊겨 부자연스럽다.
-> - 얇은 `backdrop-filter: blur(8px)`를 `::before`에 얹고 mask 로 최상단 fade-out — 페이드 구간의 반투명 본문에 '유리 밑으로 사라지는' 질감만 보강(솔리드 구간은 bg 가 덮어 무해, 또렷한 본문은 안 흐려짐). blur 미지원 브라우저는 그래디언트만으로 동작.
-> - 오디오 바 표시 중(축소 아님)이면 `body:has(#audio-bar:not([hidden])):not(.tabbar-collapsed)` 로 `--scrim-solid` 을 오디오 바 높이(3.5rem)만큼 올려 오디오 바 뒤까지 일관 처리. 절 선택 모드는 dock 이 숨으므로 scrim 도 숨김. `--bg` 토큰 추종이라 다크/라이트 자동 대응. 모바일(≤768px) 전용. dev 스크린샷 검증 완료(라이트·다크).
+> **개정 (2026-06-04, 2026-06-05 재개정): 탭 dock 뒤 콘텐츠 데코레이션 scrim.** floating 캡슐(`#tab-bar`·`#tab-search`·미니 오디오)은 투명 `#tab-dock` 위에 떠 있어 캡슐 **양옆 틈·아래 sliver**로 스크롤되는 본문이 그대로 노출돼 지저분했다. dock 바로 아래에 화면 폭 전체 **페이드 그래디언트 scrim**(`#tabbar-scrim`, 순수 장식 `aria-hidden`)을 깔아 본문을 배경색으로 녹인다.
+> - **글래스-through 모델 (06-05 재개정).** 초안은 `--scrim-solid`(=캡슐 윗변)까지 솔리드 `--bg`로 캡슐을 **완전히 가렸으나**, 그러면 캡슐 뒤가 솔리드 `--bg`가 돼 탭 바·검색의 글래스 투명도(70→62% / 80→72%)가 (특히 라이트에서) 무의미해졌다. → 솔리드는 **캡슐 아래·바닥 모서리(`--scrim-solid` 1.25rem)에만**, 페이드는 `--scrim-fade-top`(=`--tabbar-reserve` + 3rem, 캡슐 윗변보다 충분히 위)에서 완전 투명. 캡슐 영역(≈4–66px)이 솔리드↔투명 페이드를 지나므로, 더 투명해진 글래스 너머로 **'이미 옅게 사라지는 중인' 본문이 부드럽게 비쳐** liquid-glass 깊이감을 준다(선명한 노출은 없음). 절대 길이 stop 으로 경계를 캡슐 기하에 고정.
+> - 얇은 `backdrop-filter: blur(8px)`를 `::before`에 얹고 mask 로 최상단 fade-out — 페이드 구간의 옅은 본문에 '유리 밑' 질감 보강. **`prefers-reduced-transparency: reduce` 에선 탭 chrome 과 동일하게 blur 끔**(그래디언트는 유지). blur/`backdrop-filter` 미지원 브라우저는 그래디언트만으로 동작.
+> - **z-index 9** — 하단 chrome(오디오 바 z:10 → `#tab-dock` z:`--nav-z` 30) **아래**, 스크롤 콘텐츠 위. chrome 보다 위면 scrim 솔리드/blur 가 컨트롤을 덮어 가린다(특히 오디오 표시 시 페이드 영역이 오디오 바까지 올라옴). 쌓임: content < `#tabbar-scrim`(9) < `#audio-bar`(10) < `#tab-dock`(30).
+> - **키보드 추종** — 검색 키보드가 `--kb-overlap`(visualViewport)로 dock 을 올리면 scrim 도 `bottom: var(--kb-overlap)`로 함께 올라가 올라간 캡슐 뒤를 계속 받친다(안 그러면 올라간 캡슐 옆으로 본문 재노출). 이를 위해 `tabbar.js` 가 `--kb-overlap` 을 `#tab-dock` 인라인이 아니라 **`:root`(documentElement)** 에 설정 → dock·scrim 이 함께 상속.
+> - 오디오 바 표시 중(축소 아님)이면 `body:has(#audio-bar:not([hidden])):not(.tabbar-collapsed)` 로 `--scrim-fade-top` 을 오디오 바 높이(3.5rem)만큼 더 올려 오디오 바 위 본문까지 녹인다. 절 선택 모드는 dock 이 숨으므로 scrim 도 숨김. `--bg` 토큰 추종이라 다크/라이트 자동 대응. 모바일(≤768px) 전용. dev 스크린샷 검증(라이트·다크 × 오디오 유무).
 
 ### 3. 검색 모핑 (신규) — `js/app/tabbar.js`
 

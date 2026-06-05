@@ -74,7 +74,9 @@ function liftForKeyboard() {
   // 키보드 위로 올리면 iOS 가 팬할 이유가 없어져 sticky 헤더·본문이 제자리에 남는다.
   // X 노출·홈 숨김(setKeyboardState)은 여기서 다루지 않는다 — 높이 감지가 빗나가도
   // X 가 뜨도록 입력 focus/blur 에 분리해 묶었다(아래). 여기선 위치 보정만.
-  $dock.style.setProperty("--kb-overlap", up ? `${overlap}px` : "0px");
+  // --kb-overlap 은 :root 에 둬서 dock 과 #tabbar-scrim 이 함께 상속(scrim 도 키보드
+  // 위로 올라가 캡슐 뒤를 계속 받친다 — sibling 이라 dock 인라인 값은 못 읽음).
+  document.documentElement.style.setProperty("--kb-overlap", up ? `${overlap}px` : "0px");
 }
 // ── END KEYBOARD ──
 
@@ -108,7 +110,7 @@ function detachKeyboardTracking() {
     vv.removeEventListener("resize", liftForKeyboard);
     vv.removeEventListener("scroll", liftForKeyboard);
   }
-  if ($dock) $dock.style.setProperty("--kb-overlap", "0px");
+  document.documentElement.style.setProperty("--kb-overlap", "0px");
   setKeyboardState(false);
 }
 

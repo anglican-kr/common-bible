@@ -3199,37 +3199,37 @@ body.tabbar-searching #search-inpage-bar { display: none; }
   /* ── 탭 dock 뒤 콘텐츠 데코레이션 scrim ──
      플로팅 캡슐(#tab-bar·#tab-search·미니 오디오)은 투명 dock 위에 떠 있어, 그 양옆
      틈과 아래 sliver 로 스크롤되는 본문이 그대로 비친다. dock 바로 아래(z 는 dock 미만)
-     에 화면 폭 전체 페이드 레이어를 깔아, 본문이 캡슐에 닿기 전에 배경색으로 사라지게 한다.
-     - height = --tabbar-reserve → 윗변이 캡슐 윗변(≈64px) 살짝 위에 옴.
-     - 그래디언트: 하단 40% 는 솔리드 --bg(캡슐 양옆·아래 텍스트 확실히 가림),
-       40%→100% 페이드(캡슐 상단을 부드럽게 통과, 그 위 본문은 또렷하게 유지).
-     - ::before = 얇은 backdrop blur 를 페이드 구간에만(mask 로 상단 fade-out) 얹어
-       '유리 밑으로 사라지는' 질감 보강. blur 미지원 브라우저는 그래디언트만으로 동작. */
+     에 화면 폭 전체 페이드 레이어를 깔아, 본문을 점진적으로 배경색으로 녹인다.
+     의도(ADR-030 개정 2026-06-05): 캡슐을 **솔리드로 가리지 않고** 캡슐 영역을 페이드
+     구간이 통과하게 둔다 → 더 투명해진 글래스(70→62%) 너머로 '이미 옅게 사라지는 중인'
+     본문이 부드럽게 비쳐 liquid-glass 깊이감을 준다(선명한 노출은 없음). 솔리드는 캡슐
+     아래·바닥 모서리(--scrim-solid)에만, 페이드는 --scrim-fade-top 에서 완전 투명. */
   #tabbar-scrim {
-    /* --scrim-solid = 솔리드 --bg 를 유지할 높이(화면 바닥 기준). 캡슐 윗변(≈--tabbar-reserve)
-       까지는 완전 불투명으로 양옆 틈·아래 sliver 의 텍스트를 확실히 가린다.
-       --scrim-runway = 그 위로 둘 페이드 구간 — 본문이 캡슐에 '닿기 전에' 배경색으로
-       사라지는 활주로. 이 값이 0 이면 캡슐 바로 위에서 텍스트가 또렷하다 끊겨 부자연스럽다. */
-    --scrim-solid: var(--tabbar-reserve);
-    --scrim-runway: 3rem;
+    /* --scrim-solid = 바닥에서 완전 불투명을 유지할 높이(캡슐 아래·바닥 모서리만 — 작게).
+       --scrim-fade-top = 페이드가 완전 투명에 도달하는 높이(캡슐 윗변 + runway). 캡슐
+       영역(≈4–66px)은 이 솔리드↔투명 사이 페이드를 지나므로, 글래스 너머로 옅어진 본문이
+       비친다. fade-top 이 캡슐 윗변보다 충분히 높아야 캡슐 위 본문이 깔끔히 사라진다. */
+    --scrim-solid: 1.25rem;
+    --scrim-fade-top: calc(var(--tabbar-reserve) + 3rem);
     display: block;
     position: fixed;
     left: 0;
     right: 0;
-    bottom: 0;
-    height: calc(var(--scrim-solid) + var(--scrim-runway));
+    /* 검색 키보드가 dock 을 --kb-overlap(visualViewport)만큼 위로 올리면 scrim 도 함께
+       올라가 캡슐 뒤를 계속 받친다(안 그러면 올라간 캡슐 옆으로 본문이 다시 노출).
+       --kb-overlap 은 tabbar.js 가 :root 에 설정 → dock·scrim 이 함께 상속. */
+    bottom: var(--kb-overlap, 0px);
+    height: var(--scrim-fade-top);
     /* 스크롤 콘텐츠 위 · 하단 chrome(오디오 바 z:10 → tab-dock z:--nav-z 30) 아래.
-       chrome 보다 위면 scrim 솔리드/blur 가 그 위에 그려져 컨트롤을 가린다(특히
-       오디오 표시 시 --scrim-solid 가 오디오 바 영역까지 올라옴). 쌓임 순서:
+       chrome 보다 위면 scrim 솔리드/blur 가 그 위에 그려져 컨트롤을 가린다. 쌓임 순서:
        content < #tabbar-scrim(9) < #audio-bar(10) < #tab-dock(30). */
     z-index: 9;
     pointer-events: none;
-    /* 절대 길이 stop — 솔리드 경계를 캡슐 윗변(--scrim-solid)에 정확히 고정하고
-       그 위 runway 에서만 투명으로 페이드(% 로 하면 height 변동 시 경계가 흔들린다). */
+    /* 절대 길이 stop — 솔리드 경계·투명 도달점을 캡슐 기하에 고정(% 면 height 변동 시 흔들림). */
     background: linear-gradient(to top,
       var(--bg) 0,
       var(--bg) var(--scrim-solid),
-      transparent calc(var(--scrim-solid) + var(--scrim-runway)));
+      transparent var(--scrim-fade-top));
     /* dock 이 숨는 상태와 동기화. */
     transition: opacity var(--duration-base) var(--ease-standard);
   }
@@ -3239,19 +3239,26 @@ body.tabbar-searching #search-inpage-bar { display: none; }
     inset: 0;
     -webkit-backdrop-filter: blur(8px);
     backdrop-filter: blur(8px);
-    /* 얇은 blur 를 페이드 구간(캡슐 위 runway)의 반투명 본문에 얹어 '유리 밑으로
-       사라지는' 질감 보강. 솔리드 구간(하단)은 bg 가 덮어 무해, 최상단은 fade-out 으로
-       또렷한 본문이 흐려지지 않게 한다. blur 미지원 브라우저는 그래디언트만으로 동작. */
+    /* 얇은 blur 를 페이드 구간의 옅어진 본문에 얹어 '유리 밑으로 사라지는' 질감 보강.
+       최상단은 fade-out 으로 또렷한 본문이 흐려지지 않게 한다. blur 미지원·투명도 감소
+       환경에선 그래디언트만으로 동작(아래 prefers-reduced-transparency 분기). */
     -webkit-mask-image: linear-gradient(to top, #000 0%, #000 80%, transparent 100%);
     mask-image: linear-gradient(to top, #000 0%, #000 80%, transparent 100%);
   }
-  /* 오디오 바가 떠 있으면(축소 아님) 캡슐 영역이 오디오 바 높이만큼 위로 늘어난다 —
-     솔리드 경계도 그만큼 올려 오디오 바 뒤까지 일관되게 가린다. */
+  /* 오디오 바가 떠 있으면(축소 아님) 플로팅 영역이 오디오 바 높이만큼 위로 늘어난다 —
+     페이드 도달점도 그만큼 올려 오디오 바 위 본문까지 녹인다(솔리드는 그대로 바닥만). */
   body:has(#audio-bar:not([hidden])):not(.tabbar-collapsed) #tabbar-scrim {
-    --scrim-solid: calc(var(--tabbar-reserve) + 3.5rem);
+    --scrim-fade-top: calc(var(--tabbar-reserve) + 3.5rem + 3rem);
   }
   /* 절 선택 모드: 탭 dock 이 숨으므로 scrim 도 숨김. */
   body.verse-select-active #tabbar-scrim { display: none; }
+  /* OS 투명도 감소 — 탭 chrome 과 동일하게 scrim 의 라이브 blur 도 끈다(그래디언트는 유지). */
+  @media (prefers-reduced-transparency: reduce) {
+    #tabbar-scrim::before {
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
+    }
+  }
 
   /* 탭 바가 보이는 뷰에서만 하단 콘텐츠 자리 확보. 절 선택 모드는 탭 바를 숨기고
      전용 하단 바가 차지하므로 reserve 를 적용하지 않는다(빈 띠 방지). */
