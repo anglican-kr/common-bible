@@ -3214,15 +3214,16 @@ body.tabbar-searching #search-inpage-bar { display: none; }
      본문이 부드럽게 비쳐 liquid-glass 깊이감을 준다(선명한 노출은 없음). 솔리드는 캡슐
      아래·바닥 모서리(--scrim-solid)에만, 페이드는 --scrim-fade-top 에서 완전 투명. */
   #tabbar-scrim {
-    /* 기준은 **캡슐(pill) 자체** — pill 윗변보다 한참 위에서 투명에 도달하면 pill 위에
-       빈 마진이 생겨 탭 바 주변이 휑해 보인다. → 페이드는 pill 바닥 윤곽선 기준 **75%
-       높이 지점**에서 투명에 도달하고, 그 위 본문은 그대로 둔다(마진 없음).
+    /* 기준은 **캡슐(pill) 자체** — 페이드는 pill **윗변(위쪽 윤곽선) 기준 25% 높이만큼
+       더 위 지점**에서 투명에 도달한다. 즉 pill 전체를 페이드가 지나고 윗변 위로 pill
+       높이의 ¼ 만큼 더 올라가 투명에 닿는다 → pill 상단·바로 위 본문이 답답하지 않게
+       숨 쉴 여백을 확보한다(이전엔 윗변 25% 아래에서 끊겨 빡빡했다).
        --scrim-solid = pill 아래 모서리(바닥~pill 밑변)까지만 솔리드 --bg.
-       --scrim-fade-top = pill 밑변 + pill 높이의 75% → pill 하단 ¾ 를 페이드가 지나고
-       상단 ¼ 부터 본문이 또렷이 비친다. pill 밑변·높이는 dock 의 실제 기하와 동일 식.
+       --scrim-fade-top = pill 밑변 + pill 높이의 125% → pill 윗변 위 ¼ 지점에서 투명.
+       pill 밑변·높이는 dock 의 실제 기하와 동일 식.
        (pill 높이 = --touch-target 44 + --space-2 ×2 = 60px, 밑변 = --space-1 + safe×0.75) */
     --scrim-solid: calc(var(--space-1) + env(safe-area-inset-bottom) * 0.75);
-    --scrim-fade-top: calc(var(--scrim-solid) + 0.75 * (var(--touch-target) + var(--space-2) * 2));
+    --scrim-fade-top: calc(var(--scrim-solid) + 1.25 * (var(--touch-target) + var(--space-2) * 2));
     display: block;
     position: fixed;
     left: 0;
@@ -3257,11 +3258,11 @@ body.tabbar-searching #search-inpage-bar { display: none; }
     -webkit-mask-image: linear-gradient(to top, #000 0%, #000 80%, transparent 100%);
     mask-image: linear-gradient(to top, #000 0%, #000 80%, transparent 100%);
   }
-  /* 오디오 바가 떠 있으면(축소 아님) 본문이 처음 만나는 건 오디오 바 → 같은 75% 규칙을
-     오디오 바에 적용(밑변 = --tabbar-reserve, 높이 ≈ 3.5rem). 마진 없이 오디오 바 상단 ¼
-     부터 본문이 비친다. 솔리드는 그대로 바닥만. */
+  /* 오디오 바가 떠 있으면(축소 아님) 본문이 처음 만나는 건 오디오 바 → 같은 125% 규칙을
+     오디오 바에 적용(밑변 = --tabbar-reserve, 높이 ≈ 3.5rem). 오디오 바 윗변 위 ¼ 지점에서
+     투명에 도달해 답답함을 던다. 솔리드는 그대로 바닥만. */
   body:has(#audio-bar:not([hidden])):not(.tabbar-collapsed) #tabbar-scrim {
-    --scrim-fade-top: calc(var(--tabbar-reserve) + 0.75 * 3.5rem);
+    --scrim-fade-top: calc(var(--tabbar-reserve) + 1.25 * 3.5rem);
   }
   /* 절 선택 모드: 탭 dock 이 숨으므로 scrim 도 숨김. */
   body.verse-select-active #tabbar-scrim { display: none; }
