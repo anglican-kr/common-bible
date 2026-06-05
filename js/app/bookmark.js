@@ -826,7 +826,12 @@ function buildBookmarkHeaderBtn(bookId, chapter) {
   path.setAttribute("d", hasBookmark ? BOOKMARK_ICON_FILLED : BOOKMARK_ICON_OUTLINE);
   svg.appendChild(path);
   btn.appendChild(svg);
-  btn.addEventListener("click", () => openBookmarkDrawer(bookId, chapter));
+  // 모바일 읽기 화면(장 맥락 있음)에선 헤더 북마크 = '이 장 저장' 모달로 바로 진입.
+  // 그 외(데스크탑 전체, 또는 책 목록·장 선택처럼 장 맥락 없음)는 기존 드로어.
+  btn.addEventListener("click", () => {
+    if (_isMobileViewport() && bookId && chapter != null) openSaveModal("chapter");
+    else openBookmarkDrawer(bookId, chapter);
+  });
   return btn;
 }
 
