@@ -2907,7 +2907,9 @@ html.cite-sheet-open {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 3rem;
+  /* 정사각(44×44) + pill 반경 = 정원 인디케이터. 활성 탭 배경이 stadium 이 아닌
+     원형으로 보이도록 width 를 height 와 동일하게(ADR-030 개정). */
+  width: var(--touch-target);
   height: var(--touch-target); /* 44px — 오디오 재생 버튼과 동일, 탭바 높이 60px 결정 */
   border-radius: var(--radius-pill);
   transition: background var(--duration-fast) ease, color var(--duration-fast) ease;
@@ -3027,6 +3029,12 @@ html.cite-sheet-open {
 #tab-dock.collapsed .tab-item[data-tab="home"] { min-width: 0; }
 #tab-dock.searching .tab-item[data-tab="home"] .tab-icon-wrap,
 #tab-dock.collapsed .tab-item[data-tab="home"] .tab-icon-wrap { width: auto; }
+/* 모핑 시 탭 바 자체가 원형 캡슐이 되므로, 안쪽 활성 인디케이터(이중 원)는 제거하고
+   홈 아이콘은 테마색으로 강조(ADR-030 개정). */
+#tab-dock.searching .tab-item[data-tab="home"],
+#tab-dock.collapsed .tab-item[data-tab="home"] { color: var(--theme); }
+#tab-dock.searching .tab-item[data-tab="home"] .tab-icon-wrap,
+#tab-dock.collapsed .tab-item[data-tab="home"] .tab-icon-wrap { background: none; }
 /* 검색 dock → 남은 폭을 채우는 입력 pill (floating glass 스타일을 dock 으로 이동).
    flex-basis 0 으로 콘텐츠(placeholder) 길이와 무관하게 — 우측 넘침 방지. */
 #tab-dock.searching #tab-search-dock {
