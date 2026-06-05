@@ -465,6 +465,7 @@ OAuth 측면 (가장 큰 공격 표면):
 | [028](decisions/028-design-system.md)                   | 디자인 시스템 — 토큰 사다리(간격·타이포·반경·elevation·컨트롤·모션) + HIG 정렬 (권위 문서 `DESIGN.md`) |
 | [029](decisions/029-mobile-tab-bar.md)                  | 적응형 내비 Phase 1 — 모바일 하단 탭 바(홈·검색·북마크·설정 4탭, 전체화면 라우트 뷰, iOS 2026 Liquid Glass) |
 | [030](decisions/030-morphing-tab-bar.md)                | 모핑 탭 바 — 라벨 없는 아이콘 + 분리 검색 원형 → 입력 모핑(ADR-029 개정), 옛 검색 시트 제거, 스크롤 축소+오디오 미니(후속) |
+| [031](decisions/031-tab-history-restore.md)             | 탭 히스토리 — 탭별 마지막 라우트+스크롤 복원(홈=읽던 위치, 검색=마지막 검색), `scrollRestoration:"manual"` + route() 시퀀스 가드 |
 
 ## 부록 B. 자주 보게 되는 파일 빠른 참조
 
