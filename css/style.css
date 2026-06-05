@@ -68,8 +68,9 @@
   --accent: #3a3a42;
   --accent-light: #56565f;
   --border: #e0dcd6;
-  /* 테마색 — 스킴(네이비·빨강·초록·보라)을 추종하는 유일한 강조색. 절 번호·단락 기호·
-     FAB·오디오 플레이어 4곳에만 적용한다 (ADR-028 개정 2026-06-03). 진한 채도 통일. */
+  /* 테마색 — 스킴(네이비·빨강·초록·보라)을 추종하는 유일한 강조색. 절 번호·단락 기호
+     2곳에만 적용한다 (ADR-028 개정 2026-06-03; FAB 는 ADR-030 에서 제거, 오디오
+     플레이어는 2026-06-05 중립화로 제외). 진한 채도 통일. */
   --theme: #22244a;
 
   /* ── Radius (HIG 곡률 사다리 — 기존 사용 값에 매핑, --radius 는 하위호환 유지) ── */
@@ -3527,10 +3528,10 @@ body.tabbar-searching #search-inpage-bar { display: none; }
   width: 3rem;
   text-align: center;
   padding: var(--space-0_5) 0;
-  border: 1px solid var(--theme);
+  border: 1px solid var(--accent);
   border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--theme);
+  color: var(--accent);
   font-size: var(--font-2xs);
   font-variant-numeric: tabular-nums;
   cursor: pointer;
@@ -3538,7 +3539,7 @@ body.tabbar-searching #search-inpage-bar { display: none; }
 }
 
 .audio-speed-btn:hover {
-  background: color-mix(in srgb, var(--theme) 10%, transparent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
 }
 
 /* Unavailable message — sized to match .audio-player so the sticky bar
