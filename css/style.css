@@ -2868,11 +2868,10 @@ html.cite-sheet-open {
   display: flex;
   flex: 1;
   align-items: stretch;
-  /* 양 끝 탭(콘텐츠 폭 = 인디케이터 폭)을 pill 캡 안쪽에 밀어넣고 중간 두 탭을 균등
-     분배 — 끝 인디케이터가 캡 정원과 동심으로 겹친다(초승달 sliver 제거). */
+  /* 양 끝 정사각 슬롯을 pill 캡 안쪽에 밀어넣고 중간 두 슬롯을 균등 분배 — 끝
+     인디케이터(정원)가 캡과 동심으로 겹친다(초승달 sliver 제거). */
   justify-content: space-between;
-  /* 높이 60px 명시(오디오 바·검색 원형과 동일). 상하 패딩 0 — 인디케이터가 바 안쪽
-     높이를 그대로 채우도록(아래 .tab-icon-wrap height:100%). */
+  /* 높이 60px 명시 = 캡 지름·검색 원형·각 탭 슬롯과 동일(정사각 슬롯 한 변). 상하 패딩 0. */
   height: calc(var(--touch-target) + var(--space-2) * 2);
   padding: 0;
   /* 검색 원형과의 8px 간격(오디오↔탭 바 수직 간격과 동일). dock gap 대신 여기서 줘서
@@ -2907,14 +2906,15 @@ html.cite-sheet-open {
    ≥44px 터치 영역 유지. 노트 탭은 <button> 이라 기본 버튼 외형 리셋. */
 .tab-item {
   display: flex;
-  /* flex:1(균등 컬럼)이 아니라 인디케이터(=바 높이) 폭의 콘텐츠 탭 — 그래야 #tab-bar
-     의 space-between 이 양 끝 탭을 pill 캡 안으로 정확히 밀어넣어, 끝 인디케이터가
-     캡 정원과 겹쳐(초승달 sliver 제거) 보인다. 좁은 화면에선 flex-shrink 로 줄되
-     .tab-icon-wrap max-width:100% 가 이웃 침범을 막는다. */
+  /* 정사각 슬롯 = 바 높이(= 캡 지름·검색 버튼 지름과 동일). 인디케이터가 이 슬롯을
+     꽉 채워 정원이 되고, space-between 이 양 끝 슬롯을 캡에 정렬한다. flex:0 1 auto 라
+     늘지 않고(슬롯 고정) 좁은 화면에서만 축소 — 아래 wrap width:100%+aspect-ratio 라
+     줄어도 항상 정원을 유지. */
   flex: 0 1 auto;
+  width: calc(var(--touch-target) + var(--space-2) * 2);
+  min-width: 0;
   align-items: center;
   justify-content: center;
-  min-width: var(--icon-btn-touch); /* HIG ≥44px 탭 영역 */
   padding: 0;
   background: none;
   border: none;
@@ -2931,13 +2931,11 @@ html.cite-sheet-open {
   display: flex;
   align-items: center;
   justify-content: center;
-  /* 인디케이터(활성 배경)를 바 높이만큼 키운다 — tab-item 이 stretch 로 바 안쪽 높이를
-     받고, wrap 이 그 100%를 차지(aspect-ratio 1 로 정원). 아이콘이 비좁지 않게 여백 확보
-     (ADR-030 개정: 44px 고정 → 바 높이 채움). */
-  height: 100%;
+  /* 활성 인디케이터 = 슬롯을 꽉 채우는 정원(가로세로 1:1). 슬롯 폭(=바 높이)에서
+     aspect-ratio 로 높이를 파생해, 슬롯이 축소돼도 항상 정원을 유지한다(이전 height:100%
+     + aspect-ratio 조합은 flex 콘텐츠 사이징과 얽혀 가로로 찌그러진 타원이 됐다). */
+  width: 100%;
   aspect-ratio: 1 / 1;
-  /* 컬럼보다 좁은 화면에선 정원 대신 컬럼 폭까지만(이웃 침범 방지). */
-  max-width: 100%;
   border-radius: var(--radius-pill);
   transition: background var(--duration-fast) ease, color var(--duration-fast) ease;
 }
