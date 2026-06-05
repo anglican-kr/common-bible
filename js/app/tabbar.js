@@ -327,6 +327,11 @@ function applyCollapsed(v) {
   $dock?.classList.toggle("collapsed", collapsed);
   // body 클래스 — 오디오 바(별도 요소)가 축소 시 dock 행으로 들어오는 CSS 트리거.
   document.body.classList.toggle("tabbar-collapsed", collapsed);
+  // 축소 진입·해제로 .tab-item 폭이 바뀌면 슬라이딩 인디케이터 위치가 달라진다.
+  // 라우트 변경이 없어 syncTabBarActive 가 안 불리고, reduced-motion 에선 max-width
+  // transitionend 도 안 떠(트랜지션 없음) 인디케이터가 stale 위치에 남는다 → 명시적
+  // 재배치(축소 중엔 CSS 가 인디케이터를 숨기므로 해제 프레임의 재배치가 실효).
+  W.syncTabIndicator?.();
 }
 // 스크롤 축소는 (1) 오디오 북 설정이 켜져 있고(미니 오디오 전제) (2) 읽기 화면
 // (본문 chapter·프롤로그)일 때만. 책 목록·장 선택·검색·북마크·설정 화면에선 축소 안 함.
