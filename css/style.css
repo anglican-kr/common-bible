@@ -3205,12 +3205,15 @@ body.tabbar-searching #search-inpage-bar { display: none; }
      본문이 부드럽게 비쳐 liquid-glass 깊이감을 준다(선명한 노출은 없음). 솔리드는 캡슐
      아래·바닥 모서리(--scrim-solid)에만, 페이드는 --scrim-fade-top 에서 완전 투명. */
   #tabbar-scrim {
-    /* --scrim-solid = 바닥에서 완전 불투명을 유지할 높이(캡슐 아래·바닥 모서리만 — 작게).
-       --scrim-fade-top = 페이드가 완전 투명에 도달하는 높이(캡슐 윗변 + runway). 캡슐
-       영역(≈4–66px)은 이 솔리드↔투명 사이 페이드를 지나므로, 글래스 너머로 옅어진 본문이
-       비친다. fade-top 이 캡슐 윗변보다 충분히 높아야 캡슐 위 본문이 깔끔히 사라진다. */
-    --scrim-solid: 1.25rem;
-    --scrim-fade-top: calc(var(--tabbar-reserve) + 3rem);
+    /* 기준은 **캡슐(pill) 자체** — pill 윗변보다 한참 위에서 투명에 도달하면 pill 위에
+       빈 마진이 생겨 탭 바 주변이 휑해 보인다. → 페이드는 pill 바닥 윤곽선 기준 **75%
+       높이 지점**에서 투명에 도달하고, 그 위 본문은 그대로 둔다(마진 없음).
+       --scrim-solid = pill 아래 모서리(바닥~pill 밑변)까지만 솔리드 --bg.
+       --scrim-fade-top = pill 밑변 + pill 높이의 75% → pill 하단 ¾ 를 페이드가 지나고
+       상단 ¼ 부터 본문이 또렷이 비친다. pill 밑변·높이는 dock 의 실제 기하와 동일 식.
+       (pill 높이 = --touch-target 44 + --space-2 ×2 = 60px, 밑변 = --space-1 + safe×0.75) */
+    --scrim-solid: calc(var(--space-1) + env(safe-area-inset-bottom) * 0.75);
+    --scrim-fade-top: calc(var(--scrim-solid) + 0.75 * (var(--touch-target) + var(--space-2) * 2));
     display: block;
     position: fixed;
     left: 0;
@@ -3245,10 +3248,11 @@ body.tabbar-searching #search-inpage-bar { display: none; }
     -webkit-mask-image: linear-gradient(to top, #000 0%, #000 80%, transparent 100%);
     mask-image: linear-gradient(to top, #000 0%, #000 80%, transparent 100%);
   }
-  /* 오디오 바가 떠 있으면(축소 아님) 플로팅 영역이 오디오 바 높이만큼 위로 늘어난다 —
-     페이드 도달점도 그만큼 올려 오디오 바 위 본문까지 녹인다(솔리드는 그대로 바닥만). */
+  /* 오디오 바가 떠 있으면(축소 아님) 본문이 처음 만나는 건 오디오 바 → 같은 75% 규칙을
+     오디오 바에 적용(밑변 = --tabbar-reserve, 높이 ≈ 3.5rem). 마진 없이 오디오 바 상단 ¼
+     부터 본문이 비친다. 솔리드는 그대로 바닥만. */
   body:has(#audio-bar:not([hidden])):not(.tabbar-collapsed) #tabbar-scrim {
-    --scrim-fade-top: calc(var(--tabbar-reserve) + 3.5rem + 3rem);
+    --scrim-fade-top: calc(var(--tabbar-reserve) + 0.75 * 3.5rem);
   }
   /* 절 선택 모드: 탭 dock 이 숨으므로 scrim 도 숨김. */
   body.verse-select-active #tabbar-scrim { display: none; }
