@@ -1064,7 +1064,6 @@ body {
   background: var(--accent);
   color: var(--bg);
   border-color: var(--accent);
-  font-weight: 700;
   /* 링 안쪽 간격색은 팝오버 배경(--bg)과 맞춰 "띄운 링"처럼 보이게 함 */
   box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px color-mix(in srgb, var(--accent) 55%, transparent);
 }
