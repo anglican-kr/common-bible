@@ -133,6 +133,18 @@ if (typeof window !== "undefined" && window.addEventListener) {
     _tabIndicTimer = setTimeout(reposition, 120);
   });
   window.addEventListener("orientationchange", reposition);
+  // 모핑(검색/축소) 복귀 시 .tab-item max-width 가 ~0.25s 동안 애니메이트되므로,
+  // syncTabBarActive 의 즉시 rAF 측정은 중간값(좁은 폭)을 읽어 인디케이터가 어긋난다.
+  // → max-width transitionend 에서 활성 탭 실측으로 재배치(같은 탭이라 스냅). 한 번의
+  // 모핑이 여러 탭의 transitionend 를 내지만 모두 같은 활성 탭 스냅이라 무해(저비용).
+  if ($tabBar) {
+    $tabBar.addEventListener("transitionend", (e) => {
+      if (e.propertyName !== "max-width") return;
+      const t = e.target;
+      if (!(t instanceof HTMLElement) || !t.classList.contains("tab-item")) return;
+      reposition();
+    });
+  }
   // tabbar.js 가 스크롤 축소 해제 후 재배치를 요청할 수 있도록 노출(필요 시).
   window.syncTabIndicator = reposition;
 }
