@@ -810,6 +810,8 @@ declare global {
     resetTabCollapse?: () => void;
     syncTabSearchQuery?: () => void;
     closeTabSearch?: () => boolean;
+    // ADR-030 후속⁵: 슬라이딩 인디케이터 재배치(스크롤 축소 해제·외부 트리거용).
+    syncTabIndicator?: () => void;
 
     // ADR-031: 탭 히스토리(탭별 위치 복원). tab-history.js 가 노출 — route() 가
     // onRouteStart/onRouteEnd 로 스크롤을 저장·복원하고, tabbar.js 가 lastPath/tabOf

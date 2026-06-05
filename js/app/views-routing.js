@@ -71,6 +71,70 @@ function syncTabBarActive() {
   else window.syncTabSearchQuery?.();
   // ADR-030 P3: 라우트 변경 시 스크롤 축소 복구(새 뷰는 최상단에서 시작).
   window.resetTabCollapse?.();
+  // ADR-030 후속⁵: 공유 슬라이딩 인디케이터를 활성 탭으로 이동(없으면 숨김).
+  _curTabActive = active;
+  positionTabIndicator(active);
+}
+
+// ── ADR-030 후속⁵: 슬라이딩 인디케이터 ──
+// division-tab 슬라이드(buildDivisionTabs)와 동일 패턴 — 단일 absolute 요소를 활성
+// 탭의 실측 위치(offsetLeft/Width; space-between 60px 슬롯이라 비선형)로 translateX.
+// 탭 사이 이동일 때만 슬라이드(CSS transition), 처음 표시/리사이즈/감속선호는 스냅.
+// 모핑(.searching)·축소(.collapsed) 중 숨김은 CSS(특이도)가 담당.
+let _prevTabIndic = null;   // 인디케이터가 현재 떠 있는 탭(없으면 null) — 슬라이드 판정
+let _curTabActive = "home"; // 리사이즈 재배치용 현재 활성 탭
+const _tabIndicMQL = typeof window !== "undefined" && window.matchMedia
+  ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
+
+/** @param {string} active */
+function positionTabIndicator(active) {
+  if (!$tabBar) return;
+  const ind = $tabBar.querySelector(".tab-indicator");
+  if (!(ind instanceof HTMLElement)) return;
+  const activeEl = active && active !== "search"
+    ? $tabBar.querySelector(`.tab-item[data-tab="${active}"]:not([aria-disabled="true"])`)
+    : null;
+  if (!(activeEl instanceof HTMLElement)) {
+    ind.classList.remove("is-shown");
+    _prevTabIndic = null; // 다음 표시는 스냅(검색 등에서 돌아올 때 stale 위치서 미끄러짐 방지)
+    return;
+  }
+  const apply = () => {
+    const left = activeEl.offsetLeft + (activeEl.offsetWidth - ind.offsetWidth) / 2;
+    const slide = _prevTabIndic !== null && _prevTabIndic !== active && !(_tabIndicMQL && _tabIndicMQL.matches);
+    if (slide) {
+      ind.style.transform = `translate(${left}px, -50%)`;
+    } else {
+      // 스냅: transition 잠시 끄고 위치 → reflow 커밋 → 복원(미끄러짐 없이 fade-in).
+      const prev = ind.style.transition;
+      ind.style.transition = "none";
+      ind.style.transform = `translate(${left}px, -50%)`;
+      void ind.offsetWidth;
+      ind.style.transition = prev;
+    }
+    ind.classList.add("is-shown");
+    _prevTabIndic = active;
+  };
+  if (typeof requestAnimationFrame === "function") requestAnimationFrame(apply);
+  else apply();
+}
+
+// space-between 슬롯 위치는 폭 의존 → 리사이즈/회전 시 재배치(스냅, 디바운스).
+// 라우트 변경이 아니므로 syncTabBarActive 가 안 불린다.
+if (typeof window !== "undefined" && window.addEventListener) {
+  /** @type {ReturnType<typeof setTimeout> | null} */
+  let _tabIndicTimer = null;
+  const reposition = () => {
+    _prevTabIndic = _curTabActive; // 같은 탭 → 슬라이드 없이 스냅
+    positionTabIndicator(_curTabActive);
+  };
+  window.addEventListener("resize", () => {
+    if (_tabIndicTimer) clearTimeout(_tabIndicTimer);
+    _tabIndicTimer = setTimeout(reposition, 120);
+  });
+  window.addEventListener("orientationchange", reposition);
+  // tabbar.js 가 스크롤 축소 해제 후 재배치를 요청할 수 있도록 노출(필요 시).
+  window.syncTabIndicator = reposition;
 }
 
 // Mirrors app.js's DATA_DIR — Phase 7b's audio player still uses the same
