@@ -2847,6 +2847,9 @@ html.cite-sheet-open {
      있어도 space-between 처럼 가운데로 흩어지지 않음). padding 0 space-4 + left/right 0
      으로 오디오 바(margin:0 space-4)와 좌우 가장자리 정렬. */
   padding: 0 var(--space-4);
+  /* 탭 바(flex:1)와 검색 원형 사이 간격 — 오디오 바↔탭 바 수직 간격(8px)과 동일.
+     모핑(.searching)도 같은 값이라 idle↔검색 전환에서 간격이 튀지 않는다. */
+  gap: var(--space-2);
   /* 순수 레이아웃 레이어 — 어떤 표면도 없음(완전 투명). */
   background: none;
   border: none;
@@ -2858,12 +2861,18 @@ html.cite-sheet-open {
    하단으로 스크롤되는 본문이 플로팅 캡슐 양옆·아래로 노출되는 것을 페이드로 가린다. */
 #tabbar-scrim { display: none; }
 #tab-bar {
-  /* dock 의 flex 자식 — 콘텐츠 폭 좌측 pill. 위치는 #tab-dock 이 책임. */
+  /* dock 의 flex 자식 — flex:1 로 늘어나 검색 원형 바로 앞까지 채운다(dock gap space-2
+     만 남겨, 오디오 바↔탭 바 수직 간격과 동일한 8px 로 통일). 위치는 #tab-dock 이 책임. */
   display: flex;
+  flex: 1;
   align-items: stretch;
-  gap: var(--space-6); /* 아이콘 사이 넓은 여백 — 탭바를 길게 늘여 검색 버튼과의 간격 축소 */
-  /* 상하 패딩 space-2 + 아이콘랩(touch-target 44px) = 60px → 오디오 바와 동일 높이. */
-  padding: var(--space-2) var(--space-2);
+  /* 아이콘 분배는 .tab-item flex:1(균등 컬럼)이 담당. 넓은 화면에서 컬럼이 max-width
+     상한에 닿으면 space-between 이 남는 폭에 고르게 펼친다(좁은 폰에선 무효). */
+  justify-content: space-between;
+  /* 높이 60px 명시(오디오 바·검색 원형과 동일). 상하 패딩 0 — 인디케이터가 바 안쪽
+     높이를 그대로 채우도록(아래 .tab-icon-wrap height:100%). */
+  height: calc(var(--touch-target) + var(--space-2) * 2);
+  padding: 0;
   /* 좌우 끝을 완전한 반원 캡으로 — stadium(pill) 형태. 모핑으로 홈만 남아 폭이
      60px 로 줄면(아래 #tab-dock.searching #tab-bar) 이 pill 캡이 그대로 정원이
      되어, 검색 원형 버튼·모핑 원과 형태 언어가 이어진다(둥근 사각 26px 의 모서리
@@ -2892,6 +2901,7 @@ html.cite-sheet-open {
    ≥44px 터치 영역 유지. 노트 탭은 <button> 이라 기본 버튼 외형 리셋. */
 .tab-item {
   display: flex;
+  flex: 1; /* 균등 컬럼 — 넓어진 pill 폭을 4탭이 고르게 나눠 가짐 */
   align-items: center;
   justify-content: center;
   min-width: var(--icon-btn-touch); /* HIG ≥44px 탭 영역 */
@@ -2911,15 +2921,18 @@ html.cite-sheet-open {
   display: flex;
   align-items: center;
   justify-content: center;
-  /* 정사각(44×44) + pill 반경 = 정원 인디케이터. 활성 탭 배경이 stadium 이 아닌
-     원형으로 보이도록 width 를 height 와 동일하게(ADR-030 개정). */
-  width: var(--touch-target);
-  height: var(--touch-target); /* 44px — 오디오 재생 버튼과 동일, 탭바 높이 60px 결정 */
+  /* 인디케이터(활성 배경)를 바 높이만큼 키운다 — tab-item 이 stretch 로 바 안쪽 높이를
+     받고, wrap 이 그 100%를 차지(aspect-ratio 1 로 정원). 아이콘이 비좁지 않게 여백 확보
+     (ADR-030 개정: 44px 고정 → 바 높이 채움). */
+  height: 100%;
+  aspect-ratio: 1 / 1;
+  /* 컬럼보다 좁은 화면에선 정원 대신 컬럼 폭까지만(이웃 침범 방지). */
+  max-width: 100%;
   border-radius: var(--radius-pill);
   transition: background var(--duration-fast) ease, color var(--duration-fast) ease;
 }
-/* 큰 바 높이에 맞춘 큰 아이콘 — 존재감. rem 으로 Dynamic Type 추종. */
-.tab-icon { width: 1.9rem; height: 1.9rem; }
+/* 커진 인디케이터 안에서 숨 쉬도록 아이콘은 약간 축소. rem 으로 Dynamic Type 추종. */
+.tab-icon { width: 1.7rem; height: 1.7rem; }
 
 /* 활성 탭 — 아이콘 뒤 캡슐 pill + accent(chrome 중립색; 테마색 4곳 한정 결정 준수). */
 .tab-item.active,
@@ -2977,7 +2990,7 @@ html.cite-sheet-open {
 [data-theme="dark"] #tab-search {
   background: color-mix(in srgb, var(--bg-card) 72%, transparent);
 }
-.tab-search-icon { width: 1.9rem; height: 1.9rem; }
+.tab-search-icon { width: 1.7rem; height: 1.7rem; } /* 탭 아이콘과 동일 크기로 통일 */
 #tab-search:active { transform: scale(0.92); } /* press feedback */
 /* 현재 라우트가 /search 일 때 — 탭 pill 활성과 동색 accent 틴트. */
 #tab-search.active {
