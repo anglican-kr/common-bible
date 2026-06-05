@@ -3946,45 +3946,96 @@ body.tabbar-searching #search-inpage-bar { display: none; }
   opacity: 0.4;
 }
 
-/* Dropdown anchored below the ⋯ button (relative to .title-actions cluster). */
+/* Dropdown anchored below the ⋯ button (relative to .title-actions cluster).
+   iOS-26-style popup menu (HIG): large continuous-corner curvature (squircle),
+   full-bleed rows separated by hairlines, a soft elevation shadow, and the
+   shared liquid-glass sheen/inset texture (ADR-030 후속⁵). overflow:hidden clips
+   row hover/press highlights to the rounded corners. */
 .title-action-menu {
   position: absolute;
-  top: calc(100% + var(--space-1));
+  top: calc(100% + var(--space-2));
   right: 0;
   z-index: 30;
   display: flex;
   flex-direction: column;
-  min-width: 9rem;
-  padding: var(--space-1);
-  background: var(--bg-card);
+  min-width: 13rem;
+  max-width: calc(100vw - var(--space-4));
+  padding: 0;
+  overflow: hidden;
+  background: var(--glass-sheen), var(--bg-card);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-2);
+  border-radius: var(--radius-xl); /* 16px — iOS 26 큰 곡률 */
+  corner-shape: superellipse(2);   /* squircle (폴백: 둥근 모서리) */
+  box-shadow: var(--shadow-4), var(--glass-inset);
+  transform-origin: top right;
+  animation: title-action-menu-in var(--duration-fast) var(--ease-standard);
+}
+
+@keyframes title-action-menu-in {
+  from { opacity: 0; transform: scale(0.94); }
+  to   { opacity: 1; transform: scale(1); }
 }
 
 .title-action-menu[hidden] {
   display: none;
 }
 
+/* Full-bleed row: leading label, trailing glyph (Apple Music menu pattern).
+   min-height honours the HIG 44px touch target. */
 .title-action-menu-item {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
   width: 100%;
-  text-align: right;
-  padding: var(--space-2) var(--space-3);
+  min-height: var(--touch-target);
+  padding: var(--space-2) var(--space-4);
+  text-align: left;
   background: none;
   border: none;
-  border-radius: var(--radius-sm);
+  border-radius: 0;
   font-family: inherit;
-  font-size: var(--font-base);
+  font-size: var(--font-md);
   font-weight: 400;
   line-height: var(--leading-snug);
   color: var(--text);
   cursor: pointer;
-  transition: background var(--duration-fast);
+  transition: background var(--duration-instant);
 }
 
-.title-action-menu-item:hover {
+/* Hairline separators between rows (the iOS grouped-menu look). */
+.title-action-menu-item + .title-action-menu-item {
+  box-shadow: inset 0 1px 0 var(--border);
+}
+
+.title-action-menu-label {
+  flex: 1;
+  min-width: 0;
+}
+
+.title-action-menu-item svg {
+  flex-shrink: 0;
+  width: 1.3rem;
+  height: 1.3rem;
+  color: var(--text-secondary);
+}
+
+.title-action-menu-item:hover,
+.title-action-menu-item:focus-visible {
   background: color-mix(in srgb, var(--accent) 8%, transparent);
+  outline: none;
+}
+
+.title-action-menu-item:active {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .title-action-menu { background: var(--bg-card); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .title-action-menu { animation: none; }
 }
 
 
@@ -4479,18 +4530,18 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 .bm-bookmark-row {
   display: flex;
   align-items: center;
-  padding: var(--space-1) var(--space-3);
-  gap: var(--space-2);
-  /* Match folder rows to bookmark rows (label 0.88rem + ref 0.72rem,
-     line-height 1.8, gap 0.1rem, padding 0.6rem). */
-  min-height: 3.58rem;
+  padding: var(--space-3) var(--space-4);
+  gap: var(--space-3);
+  /* Roomier rows for easier scanning/tapping — comfortably above the HIG 44px
+     minimum (label --font-md + ref --font-xs, stacked, plus generous padding). */
+  min-height: 4rem;
   transition: background var(--duration-instant);
 }
 
 .bm-row-content {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-3);
   flex: 1;
   min-width: 0;
 }
@@ -4521,8 +4572,8 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 }
 
 .bm-folder-toggle {
-  width: 1.4rem;
-  height: 1.4rem;
+  width: 1.6rem;
+  height: 1.6rem;
   flex-shrink: 0;
   color: var(--accent);
   display: flex;
@@ -4532,7 +4583,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 
 .bm-folder-name {
   flex: 1;
-  font-size: var(--font-sm);
+  font-size: var(--font-md);
   color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -4556,7 +4607,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   color: var(--text);
   display: flex;
   flex-direction: column;
-  gap: var(--space-0_5);
+  gap: var(--space-1);
   min-width: 0;
 }
 
@@ -4565,19 +4616,19 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   color: var(--accent);
   display: inline-flex;
   align-items: center;
-  width: 1.4rem;
+  width: 1.6rem;
   justify-content: center;
 }
 
 .bm-bookmark-label {
-  font-size: var(--font-sm);
+  font-size: var(--font-md);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .bm-bookmark-ref {
-  font-size: var(--font-2xs);
+  font-size: var(--font-xs);
   color: var(--text-secondary);
 }
 
@@ -5238,11 +5289,11 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   }
 
   .bm-row-content {
-    padding: var(--space-1) var(--space-3);
+    padding: var(--space-3) var(--space-4);
     background: var(--bg);
     position: relative;
     z-index: 0;
-    min-height: 44px;
+    min-height: 3.5rem;
     box-sizing: border-box;
   }
 

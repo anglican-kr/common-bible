@@ -23,7 +23,8 @@
 
 - **홈** → `/`·`/<division>` 책 목록(기존 `renderBookList`).
 - **검색** → 모바일 `/search` 전체화면(인페이지 입력 + `renderSearchResults`). 시트는 모바일 탭 경로에서 은퇴(헤더 입력 포커스 경로로는 잔존).
-- **북마크** → 신규 `/bookmarks` 전체화면(`renderBookmarksView`). `renderBookmarkTree(target)` 인자화로 드로어 트리 빌더를 #app 에 재사용. **읽기-문맥 액션(이 장 저장·절 선택)은 가져오지 않음** — 읽기 화면(드로어)에 남긴다. 전역 관리(새 폴더·내보내기·가져오기)만 탭 뷰 헤더 우상단에 배치("+" · "⋯").
+- **북마크** → 신규 `/bookmarks` 전체화면(`renderBookmarksView`). `renderBookmarkTree(target)` 인자화로 드로어 트리 빌더를 #app 에 재사용. **읽기-문맥 액션(이 장 저장·절 선택)은 가져오지 않음** — 읽기 화면(드로어)에 남긴다. 전역 관리(새 폴더·내보내기·가져오기)만 탭 뷰 헤더 우상단에 배치.
+  > **개정 (2026-06-05):** 헤더 어포던스를 Apple Music 패턴으로 단일화 — 별도 "+" 버튼을 없애고 **"⋯"(더 보기) 한 개**로 통일, 전역 관리 3종(새 폴더·내보내기·가져오기)을 모두 그 팝업 메뉴 안에 넣었다(`buildBmViewActions`). 메뉴는 **iOS 26 풍 큰 곡률**(`--radius-xl` 16px + `corner-shape: superellipse(2)` squircle)·full-bleed 행·행 사이 hairline·행마다 **선행 라벨 + 후행 SF 스타일 글리프**(folder.badge.plus / square.and.arrow.up·down)·리퀴드 글라스 sheen/inset 질감(ADR-030 후속⁵ 공유)·`--shadow-4` elevation·`reduced-transparency`/`reduced-motion` 폴백을 갖춘 HIG 메뉴. 각 행 `min-height: --touch-target`(44px). 함께 **북마크 목록 행 여백 확대**(데스크탑 `padding --space-3/--space-4`·`min-height 4rem`, 모바일 콘텐츠 `min-height 3.5rem`, 라벨 `--font-sm→--font-md`·참조 `--font-2xs→--font-xs`·아이콘 1.4→1.6rem)로 스캔·탭 여유 확보.
 - **설정** → 신규 `/settings` 전체화면(`renderSettingsView`). `buildSettingsSections(target,{rerender,dismiss})` 추출로 팝오버(데스크탑)·전체뷰(모바일)가 동일 섹션 공유.
 
 데스크탑 딥링크 폴백: `/bookmarks`·`/settings` 는 책 목록 + 기존 드로어/팝오버.

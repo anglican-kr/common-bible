@@ -1402,33 +1402,34 @@ function renderBookmarksView() {
   renderBookmarkTree(tree);
 }
 
-// Build the right-aligned action cluster for the bookmark tab view's title row:
-// a "+" (새 폴더) button and a "⋯" (더 보기) button with a dismissible menu
-// (내보내기 / 가져오기). Returns a wrapper node appended into #page-title.
-// Header-icon styling matches buildSettingsTrigger/buildBookmarkHeaderBtn via
-// the .title-action-btn class (44px touch target from --icon-btn-touch).
+// Build an inline-SVG glyph for a menu item from one or more stroked paths.
+// Matches the hairline weight of the other header icons (~1.7 stroke).
+/** @param {string[]} paths @returns {SVGSVGElement} */
+function _bmMenuIcon(paths) {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("fill", "none");
+  svg.setAttribute("aria-hidden", "true");
+  for (const d of paths) {
+    const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    p.setAttribute("d", d);
+    p.setAttribute("stroke", "currentColor");
+    p.setAttribute("stroke-width", "1.7");
+    p.setAttribute("stroke-linecap", "round");
+    p.setAttribute("stroke-linejoin", "round");
+    svg.appendChild(p);
+  }
+  return svg;
+}
+
+// Build the right-aligned action cluster for the bookmark tab view's title row.
+// Following Apple Music's pattern, the only header affordance is a single "⋯"
+// (더 보기) button; every global management action lives inside its dismissible
+// popup menu (새 폴더 / 내보내기 / 가져오기). Each menu row carries an SF-style
+// glyph on the trailing edge (HIG). Returns a wrapper appended into #page-title.
+// .title-action-btn mirrors the other header icon buttons (44px touch target).
 function buildBmViewActions() {
   const wrap = el("div", { className: "title-actions" });
-
-  // ── "+" 새 폴더 ──
-  const addSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  addSvg.setAttribute("viewBox", "0 0 24 24");
-  addSvg.setAttribute("fill", "none");
-  addSvg.setAttribute("aria-hidden", "true");
-  const addPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
-  addPath.setAttribute("d", "M12 5v14M5 12h14");
-  addPath.setAttribute("stroke", "currentColor");
-  addPath.setAttribute("stroke-width", "1.8");
-  addPath.setAttribute("stroke-linecap", "round");
-  addSvg.appendChild(addPath);
-  const addBtn = el("button", {
-    className: "title-action-btn",
-    type: "button",
-    "aria-label": "새 폴더",
-  }, addSvg);
-  addBtn.addEventListener("click", () => {
-    openNewFolderModal((_newId) => { _rerenderActiveBookmarkTree(); });
-  });
 
   // ── "⋯" 더 보기 + menu ──
   const moreSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -1451,10 +1452,6 @@ function buildBmViewActions() {
   }, moreSvg);
 
   const menu = el("div", { className: "title-action-menu", role: "menu", "aria-label": "더 보기", hidden: "" });
-  const exportItem = el("button", { className: "title-action-menu-item", type: "button", role: "menuitem" }, "내보내기");
-  const importItem = el("button", { className: "title-action-menu-item", type: "button", role: "menuitem" }, "가져오기");
-  menu.appendChild(exportItem);
-  menu.appendChild(importItem);
 
   function closeMenu() {
     if (menu.hidden) return;
@@ -1495,17 +1492,48 @@ function buildBmViewActions() {
     if (menu.hidden) openMenu();
     else closeMenu();
   });
-  exportItem.addEventListener("click", () => {
-    closeMenu();
+
+  // Build a menu row: trailing SF-style glyph + leading label (label left,
+  // icon right per the Apple Music menu). Closes the menu before acting.
+  /** @param {string} label @param {string[]} iconPaths @param {() => void} onActivate */
+  function addMenuItem(label, iconPaths, onActivate) {
+    const item = el("button", { className: "title-action-menu-item", type: "button", role: "menuitem" });
+    item.appendChild(el("span", { className: "title-action-menu-label" }, label));
+    item.appendChild(_bmMenuIcon(iconPaths));
+    item.addEventListener("click", () => {
+      closeMenu();
+      onActivate();
+    });
+    menu.appendChild(item);
+    return item;
+  }
+
+  // 새 폴더 — folder.badge.plus
+  addMenuItem("새 폴더", [
+    "M3 7.5a2 2 0 0 1 2-2h3.6l1.8 2H19a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7.5Z",
+    "M12 11.5v4",
+    "M10 13.5h4",
+  ], () => {
+    openNewFolderModal((_newId) => { _rerenderActiveBookmarkTree(); });
+  });
+  // 내보내기 — square.and.arrow.up
+  addMenuItem("내보내기", [
+    "M12 15V4",
+    "M8.5 7.5 12 4l3.5 3.5",
+    "M5 13v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5",
+  ], () => {
     exportBookmarks();
   });
-  importItem.addEventListener("click", () => {
-    closeMenu();
+  // 가져오기 — square.and.arrow.down
+  addMenuItem("가져오기", [
+    "M12 4v11",
+    "M8.5 11.5 12 15l3.5-3.5",
+    "M5 13v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5",
+  ], () => {
     $bmImportInput.value = "";
     $bmImportInput.click();
   });
 
-  wrap.appendChild(addBtn);
   wrap.appendChild(moreBtn);
   wrap.appendChild(menu);
   return wrap;
