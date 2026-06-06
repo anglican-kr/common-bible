@@ -771,17 +771,12 @@ function _setupDragHandle(li, row) {
 let _bookmarkDrawerTrap = null;
 /** @type {HTMLElement | null} */
 let _bookmarkDrawerLastFocus = null;
-/** @type {(() => void) | null} */
-let _bmSaveModalTrap = null;
-/** @type {(() => void) | null} */
-let _bmMergeModalTrap = null;
-/** @type {(() => void) | null} */
-let _bmChapterDeleteTrap = null;
-/** @type {HTMLElement | null} */
-let _bmChapterDeleteLastFocus = null;
-// _bmConfirm* / _bmNewFolderTrap lifecycle state now lives inside their
-// overlay controllers (ADR-032). _bmNewFolderCallback is the only remaining
-// per-flow state (the create-folder continuation).
+// Save / merge / chapter-delete / confirm / new-folder / import / drive-disconnect
+// modal lifecycle (focus-trap + last-focus) now lives inside their overlay
+// controllers (ADR-032). _bmNewFolderCallback is the only remaining per-flow
+// state (the create-folder continuation). The drawer keeps its own trap/last-
+// focus for now — its animated, scroll-locking dismiss is deferred to the sheet
+// factory stage.
 /** @type {((id: string) => void) | null} */
 let _bmNewFolderCallback = null;
 let _bookmarkDrawerCloseSeq = 0;
@@ -813,26 +808,20 @@ const $driveDisconnectDelete = _$("drive-disconnect-delete");
 const $driveDisconnectKeep = _$("drive-disconnect-keep");
 const $driveDisconnectCancel = _$("drive-disconnect-cancel");
 
-let _driveDisconnectTrap = null;
+// Standalone modal (settings flow), not part of the stacked bookmark Escape
+// group — so it owns Escape directly via closeOnEsc (ADR-032).
+const driveDisconnectOverlay = createOverlay({
+  panel: $driveDisconnectModal,
+  scrim: $driveDisconnectScrim,
+  closeOnEsc: true,
+  initialFocus: () => $driveDisconnectKeep,
+});
 
-function openDriveDisconnectModal() {
-  $driveDisconnectScrim.hidden = false;
-  $driveDisconnectModal.hidden = false;
-  _driveDisconnectTrap = trapFocus($driveDisconnectModal);
-  requestAnimationFrame(() => $driveDisconnectKeep.focus());
-}
-
-function closeDriveDisconnectModal() {
-  $driveDisconnectScrim.hidden = true;
-  $driveDisconnectModal.hidden = true;
-  if (_driveDisconnectTrap) { _driveDisconnectTrap(); _driveDisconnectTrap = null; }
-}
+function openDriveDisconnectModal() { driveDisconnectOverlay.open(); }
+function closeDriveDisconnectModal() { driveDisconnectOverlay.close(); }
 
 $driveDisconnectCancel.addEventListener("click", closeDriveDisconnectModal);
 $driveDisconnectScrim.addEventListener("click", closeDriveDisconnectModal);
-document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && !$driveDisconnectModal.hidden) closeDriveDisconnectModal();
-});
 
 $driveDisconnectKeep.addEventListener("click", () => {
   closeDriveDisconnectModal();
@@ -2105,19 +2094,23 @@ function _showSaveModal(mode, bookId, chapter, verseSpec, existing) {
   $bmSaveBody.appendChild(folderField);
   $bmSaveBody.appendChild(actions);
 
-  $bmSaveScrim.hidden = false;
-  $bmSaveModal.hidden = false;
-  _bmSaveModalTrap = trapFocus($bmSaveModal);
-  requestAnimationFrame(() => labelInput.focus());
+  saveOverlay.open();
 }
 
-function closeSaveModal() {
-  const c = /** @type {HTMLElement & { _bmClose?: () => void } | null} */ (document.getElementById("bm-folder-combobox"));
-  if (c && c._bmClose) c._bmClose();
-  $bmSaveScrim.hidden = true;
-  $bmSaveModal.hidden = true;
-  if (_bmSaveModalTrap) { _bmSaveModalTrap(); _bmSaveModalTrap = null; }
-}
+// closeOnEsc stays off: the save modal participates in the stacked Escape
+// router below. Initial focus = the first input (label). onClose also dismisses
+// the folder combobox dropdown (ADR-032).
+const saveOverlay = createOverlay({
+  panel: $bmSaveModal,
+  scrim: $bmSaveScrim,
+  initialFocus: () => $bmSaveModal.querySelector("input"),
+  onClose: () => {
+    const c = /** @type {HTMLElement & { _bmClose?: () => void } | null} */ (document.getElementById("bm-folder-combobox"));
+    if (c && c._bmClose) c._bmClose();
+  },
+});
+
+function closeSaveModal() { saveOverlay.close(); }
 
 // Overlay lifecycle (scrim/hidden/focus-trap/focus-restore) is owned by the
 // shared controller (ADR-032). closeOnEsc stays off: Escape for this modal is
@@ -2199,6 +2192,19 @@ function commitSaveBookmark(existingId, label, note, folderId, bookId, chapter, 
  * @param {string} mode
  * @param {{ bookId?: string | null, chapter?: number | null } | null} [fallbackContext]
  */
+// closeOnEsc off: in the stacked Escape router. onClose clears the per-open
+// onclick handlers (ADR-032).
+const mergeOverlay = createOverlay({
+  panel: $bmMergeModal,
+  scrim: $bmMergeScrim,
+  initialFocus: () => $bmMergeYes,
+  onClose: () => {
+    $bmMergeYes.onclick = null;
+    $bmMergeNo.onclick = null;
+    $bmMergeCancel.onclick = null;
+  },
+});
+
 function openMergeDialog(candidates, incomingSpec, mode, fallbackContext = null) {
   clearNode($bmMergeBody);
   const resolvedBookId =
@@ -2231,19 +2237,8 @@ function openMergeDialog(candidates, incomingSpec, mode, fallbackContext = null)
     $bmMergeBody.appendChild(radioGroup);
   }
 
-  $bmMergeScrim.hidden = false;
-  $bmMergeModal.hidden = false;
-  _bmMergeModalTrap = trapFocus($bmMergeModal);
-  requestAnimationFrame(() => $bmMergeYes.focus());
-
-  function cleanup() {
-    $bmMergeScrim.hidden = true;
-    $bmMergeModal.hidden = true;
-    if (_bmMergeModalTrap) { _bmMergeModalTrap(); _bmMergeModalTrap = null; }
-    $bmMergeYes.onclick = null;
-    $bmMergeNo.onclick = null;
-    $bmMergeCancel.onclick = null;
-  }
+  mergeOverlay.open();
+  const cleanup = () => mergeOverlay.close();
 
   $bmMergeYes.onclick = () => {
     const merged = mergeVerseSpecs(target.verseSpec ?? "all", incomingSpec);
@@ -2320,6 +2315,19 @@ function closeConfirmModal() {
 /**
  * @param {BookmarkTreeBookmark[]} candidates
  */
+// closeOnEsc off: in the stacked Escape router. onClose clears per-open
+// handlers; returnFocus restores the pre-open focus (ADR-032).
+const chapterDeleteOverlay = createOverlay({
+  panel: $bmChapterDeleteModal,
+  scrim: $bmChapterDeleteScrim,
+  initialFocus: () => $bmChapterDeleteCancel,
+  onClose: () => {
+    $bmChapterDeleteConfirm.onclick = null;
+    $bmChapterDeleteCancel.onclick = null;
+    $bmChapterDeleteAll.onchange = null;
+  },
+});
+
 function openChapterDeleteModal(candidates) {
   if (!candidates.length) return;
   /** @type {Set<string>} */
@@ -2370,11 +2378,7 @@ function openChapterDeleteModal(candidates) {
   };
 
   syncChrome();
-  _bmChapterDeleteLastFocus = /** @type {HTMLElement | null} */ (document.activeElement);
-  $bmChapterDeleteScrim.hidden = false;
-  $bmChapterDeleteModal.hidden = false;
-  _bmChapterDeleteTrap = trapFocus($bmChapterDeleteModal);
-  requestAnimationFrame(() => $bmChapterDeleteCancel.focus());
+  chapterDeleteOverlay.open();
 
   $bmChapterDeleteConfirm.onclick = () => {
     if (!selected.size) return;
@@ -2395,19 +2399,7 @@ function openChapterDeleteModal(candidates) {
   $bmChapterDeleteCancel.onclick = closeChapterDeleteModal;
 }
 
-function closeChapterDeleteModal() {
-  if ($bmChapterDeleteModal.hidden) return;
-  $bmChapterDeleteScrim.hidden = true;
-  $bmChapterDeleteModal.hidden = true;
-  $bmChapterDeleteConfirm.onclick = null;
-  $bmChapterDeleteCancel.onclick = null;
-  $bmChapterDeleteAll.onchange = null;
-  if (_bmChapterDeleteTrap) { _bmChapterDeleteTrap(); _bmChapterDeleteTrap = null; }
-  if (_bmChapterDeleteLastFocus && _bmChapterDeleteLastFocus.focus) {
-    try { _bmChapterDeleteLastFocus.focus(); } catch {}
-  }
-  _bmChapterDeleteLastFocus = null;
-}
+function closeChapterDeleteModal() { chapterDeleteOverlay.close(); }
 
 // ── Export / Import bookmarks (Phase 2a) ──
 
@@ -2475,8 +2467,6 @@ function _mergeBookmarkStores(existing, incoming) {
   return [...existing, ...filterNew(incoming)];
 }
 
-let _bmImportModalTrap = null;
-
 function _countBookmarks(items) {
   let count = 0;
   for (const item of items) {
@@ -2490,6 +2480,20 @@ function _countBookmarks(items) {
 }
 // ── END IMPORT_EXPORT ──
 
+// closeOnEsc off: in the stacked Escape router. onClose clears per-open
+// handlers and resets the file input (ADR-032).
+const importOverlay = createOverlay({
+  panel: $bmImportModal,
+  scrim: $bmImportScrim,
+  initialFocus: () => $bmImportMerge,
+  onClose: () => {
+    $bmImportMerge.onclick = null;
+    $bmImportOverwrite.onclick = null;
+    $bmImportCancel.onclick = null;
+    $bmImportInput.value = "";
+  },
+});
+
 function openImportModal(incoming) {
   const bmCount = _countBookmarks(incoming.bookmarks);
   clearNode($bmImportBody);
@@ -2497,20 +2501,8 @@ function openImportModal(incoming) {
     el("p", {}, `북마크 ${bmCount}개를 현재 목록에 병합하거나 덮어쓸 수 있습니다.`)
   );
 
-  $bmImportScrim.hidden = false;
-  $bmImportModal.hidden = false;
-  _bmImportModalTrap = trapFocus($bmImportModal);
-  requestAnimationFrame(() => $bmImportMerge.focus());
-
-  function cleanup() {
-    $bmImportScrim.hidden = true;
-    $bmImportModal.hidden = true;
-    if (_bmImportModalTrap) { _bmImportModalTrap(); _bmImportModalTrap = null; }
-    $bmImportMerge.onclick = null;
-    $bmImportOverwrite.onclick = null;
-    $bmImportCancel.onclick = null;
-    $bmImportInput.value = "";
-  }
+  importOverlay.open();
+  const cleanup = () => importOverlay.close();
 
   $bmImportMerge.onclick = () => {
     const existing = loadBookmarks();
@@ -2751,41 +2743,14 @@ $bmImportInput.addEventListener("change", () => {
   reader.readAsText(file);
 });
 
-$bmImportScrim.addEventListener("click", () => {
-  if (!$bmImportModal.hidden) {
-    $bmImportScrim.hidden = true;
-    $bmImportModal.hidden = true;
-    if (_bmImportModalTrap) { _bmImportModalTrap(); _bmImportModalTrap = null; }
-    $bmImportMerge.onclick = null;
-    $bmImportOverwrite.onclick = null;
-    $bmImportCancel.onclick = null;
-    $bmImportInput.value = "";
-  }
-});
+$bmImportScrim.addEventListener("click", () => importOverlay.close());
 
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
     if (!$bmConfirmModal.hidden) { closeConfirmModal(); return; }
     if (!$bmChapterDeleteModal.hidden) { closeChapterDeleteModal(); return; }
-    if (!$bmImportModal.hidden) {
-      $bmImportScrim.hidden = true;
-      $bmImportModal.hidden = true;
-      if (_bmImportModalTrap) { _bmImportModalTrap(); _bmImportModalTrap = null; }
-      $bmImportMerge.onclick = null;
-      $bmImportOverwrite.onclick = null;
-      $bmImportCancel.onclick = null;
-      $bmImportInput.value = "";
-      return;
-    }
-    if (!$bmMergeModal.hidden) {
-      $bmMergeScrim.hidden = true;
-      $bmMergeModal.hidden = true;
-      if (_bmMergeModalTrap) { _bmMergeModalTrap(); _bmMergeModalTrap = null; }
-      $bmMergeYes.onclick = null;
-      $bmMergeNo.onclick = null;
-      $bmMergeCancel.onclick = null;
-      return;
-    }
+    if (!$bmImportModal.hidden) { importOverlay.close(); return; }
+    if (!$bmMergeModal.hidden) { mergeOverlay.close(); return; }
     if (!$bmSaveModal.hidden) { closeSaveModal(); return; }
     if (!$bookmarkDrawer.hidden) { closeBookmarkDrawer(); return; }
     if (readingContext.verseSelectMode) { exitVerseSelectMode(); return; }
