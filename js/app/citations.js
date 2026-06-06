@@ -436,6 +436,9 @@ window.appCitations = (() => {
   let _citeSheetOverlay = null;
   /** @type {ReturnType<typeof setTimeout> | null} */
   let _citeSheetCloseTimer = null;
+  // Monotonic render token: a slow fetch from an older cite-sheet context must
+  // not append into the body after the user opened another citation.
+  let _sheetRenderSeq = 0;
   /** @type {{ src: string, parallels: ReadonlyArray<CiteParallelRef> | null, tradition: string | null, expandedRefIndex: number | null } | null} */
   let _sheetState = null;
 
@@ -798,12 +801,13 @@ window.appCitations = (() => {
    * user lands on the passage with its surrounding context already visible.
    */
   async function _renderSheetBody() {
+    const renderSeq = ++_sheetRenderSeq;
     const bodyEl = /** @type {HTMLElement | null} */ (document.getElementById("cite-sheet-body"));
     if (!bodyEl || !_sheetState) return;
     clearNode(bodyEl);
     bodyEl.appendChild(el("p", { className: "cite-sheet-loading" }, "불러오는 중…"));
     try {
-      clearNode(bodyEl);
+      const renderTarget = document.createElement("div");
       const { src, parallels, tradition, expandedRefIndex } = _sheetState;
       // Flatten primary + parallels into a single {ref, tradition} sequence
       // so per-entry tradition (ADR-022 §2 개정) flows through one code path.
@@ -815,22 +819,29 @@ window.appCitations = (() => {
       if (expandedRefIndex !== null) {
         const idx = expandedRefIndex;
         const r = refs[idx];
-        await _renderRef(bodyEl, r.ref, r.tradition, true, null);
+        await _renderRef(renderTarget, r.ref, r.tradition, true, null);
+        if (renderSeq !== _sheetRenderSeq) return;
+        clearNode(bodyEl);
+        while (renderTarget.firstChild) bodyEl.appendChild(renderTarget.firstChild);
         _scrollFirstHighlightIntoView(bodyEl);
       } else {
         for (let i = 0; i < refs.length; i++) {
-          if (i > 0) bodyEl.appendChild(el("hr", { className: "cite-sheet-divider" }));
+          if (i > 0) renderTarget.appendChild(el("hr", { className: "cite-sheet-divider" }));
           const idx = i;
           const r = refs[i];
-          await _renderRef(bodyEl, r.ref, r.tradition, false, () => {
+          await _renderRef(renderTarget, r.ref, r.tradition, false, () => {
             if (!_sheetState) return;
             _sheetState.expandedRefIndex = idx;
             _updateSheetHeader();
             void _renderSheetBody();
           });
+          if (renderSeq !== _sheetRenderSeq) return;
         }
+        clearNode(bodyEl);
+        while (renderTarget.firstChild) bodyEl.appendChild(renderTarget.firstChild);
       }
     } catch (_) {
+      if (renderSeq !== _sheetRenderSeq) return;
       clearNode(bodyEl);
       bodyEl.appendChild(el("p", { className: "cite-sheet-error" }, "불러오는 데 실패했습니다."));
     }
@@ -938,7 +949,7 @@ window.appCitations = (() => {
           if (_citeSheetCloseTimer) { clearTimeout(_citeSheetCloseTimer); _citeSheetCloseTimer = null; }
           sheet.classList.remove("cite-sheet-closing"); // cancel any in-flight close anim
         },
-        onClose: () => { _sheetState = null; },
+        onClose: () => { _sheetState = null; _sheetRenderSeq++; },
         closeTransition: (panel, finalizeHide) => {
           panel.classList.add("cite-sheet-closing");
           const done = () => {

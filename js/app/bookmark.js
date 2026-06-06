@@ -2102,8 +2102,8 @@ const saveOverlay = createOverlay({
 function closeSaveModal() { saveOverlay.close(); }
 
 // Overlay lifecycle (scrim/hidden/focus-trap/focus-restore) is owned by the
-// shared controller (ADR-032). closeOnEsc stays off: Escape for this modal is
-// handled by the input keydown below, consistent with pre-migration behavior.
+// shared controller (ADR-032). closeOnEsc stays off: Escape participates in the
+// stacked bookmark router below, so every focused control closes only this modal.
 const newFolderOverlay = createOverlay({
   panel: $bmNewFolderModal,
   scrim: $bmNewFolderScrim,
@@ -2194,6 +2194,8 @@ const mergeOverlay = createOverlay({
   },
 });
 
+function closeMergeModal() { mergeOverlay.close(); }
+
 function openMergeDialog(candidates, incomingSpec, mode, fallbackContext = null) {
   clearNode($bmMergeBody);
   const resolvedBookId =
@@ -2227,7 +2229,7 @@ function openMergeDialog(candidates, incomingSpec, mode, fallbackContext = null)
   }
 
   mergeOverlay.open();
-  const cleanup = () => mergeOverlay.close();
+  const cleanup = closeMergeModal;
 
   $bmMergeYes.onclick = () => {
     const merged = mergeVerseSpecs(target.verseSpec ?? "all", incomingSpec);
@@ -2483,6 +2485,8 @@ const importOverlay = createOverlay({
   },
 });
 
+function closeImportModal() { importOverlay.close(); }
+
 function openImportModal(incoming) {
   const bmCount = _countBookmarks(incoming.bookmarks);
   clearNode($bmImportBody);
@@ -2491,7 +2495,7 @@ function openImportModal(incoming) {
   );
 
   importOverlay.open();
-  const cleanup = () => importOverlay.close();
+  const cleanup = closeImportModal;
 
   $bmImportMerge.onclick = () => {
     const existing = loadBookmarks();
@@ -2634,10 +2638,6 @@ $bmNewFolderCancel.addEventListener("click", closeNewFolderModal);
 $bmNewFolderConfirm.addEventListener("click", _commitNewFolder);
 $bmNewFolderInput.addEventListener("keydown", (e) => {
   if (e.key === "Enter") { e.preventDefault(); _commitNewFolder(); }
-  // stopPropagation so Escape closes only this modal — it's not in the document
-  // Escape router's stack, so otherwise the event falls through and also closes
-  // the save modal / drawer underneath (ADR-032).
-  else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); closeNewFolderModal(); }
 });
 
 $bmSaveChapterBtn.addEventListener("click", () => {
@@ -2738,14 +2738,15 @@ $bmImportInput.addEventListener("change", () => {
   reader.readAsText(file);
 });
 
-$bmImportScrim.addEventListener("click", () => importOverlay.close());
+$bmImportScrim.addEventListener("click", closeImportModal);
 
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
+    if (!$bmNewFolderModal.hidden) { e.preventDefault(); e.stopPropagation(); closeNewFolderModal(); return; }
     if (!$bmConfirmModal.hidden) { closeConfirmModal(); return; }
     if (!$bmChapterDeleteModal.hidden) { closeChapterDeleteModal(); return; }
-    if (!$bmImportModal.hidden) { importOverlay.close(); return; }
-    if (!$bmMergeModal.hidden) { mergeOverlay.close(); return; }
+    if (!$bmImportModal.hidden) { closeImportModal(); return; }
+    if (!$bmMergeModal.hidden) { closeMergeModal(); return; }
     if (!$bmSaveModal.hidden) { closeSaveModal(); return; }
     if (!$bookmarkDrawer.hidden) { closeBookmarkDrawer(); return; }
     if (readingContext.verseSelectMode) { exitVerseSelectMode(); return; }
@@ -2832,6 +2833,10 @@ window.buildHomeBtn = buildHomeBtn;
 window.buildBookmarkHeaderBtn = buildBookmarkHeaderBtn;
 window.openBookmarkDrawer = openBookmarkDrawer;
 window.closeBookmarkDrawer = closeBookmarkDrawer;
+window.closeSaveModal = closeSaveModal;
+window.closeNewFolderModal = closeNewFolderModal;
+window.closeMergeModal = closeMergeModal;
+window.closeImportModal = closeImportModal;
 // Exposed so route() can dismiss the destructive-confirm overlay on any nav
 // (e.g. OS back gesture mid-confirm) — its scrim would otherwise persist over
 // the rebuilt view. Safe to call when already hidden (self-guards).
@@ -2848,6 +2853,7 @@ window.exitVerseSelectMode = exitVerseSelectMode;
 window.updateVerseSelectionBoundaries = updateVerseSelectionBoundaries;
 window.updateVerseSelectBar = updateVerseSelectBar;
 window.openDriveDisconnectModal = openDriveDisconnectModal;
+window.closeDriveDisconnectModal = closeDriveDisconnectModal;
 // Phase 8: drawer drag/resize handle init — called from app.js bootstrap.
 window.initBookmarkSheetDrag = initBookmarkSheetDrag;
 window.initBookmarkDrawerResize = initBookmarkDrawerResize;

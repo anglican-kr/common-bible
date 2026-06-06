@@ -491,6 +491,7 @@ function maybeShowInstallNudge() {
 // `const` destructure does not auto-register on window — must be explicit.
 window.install = install;
 window.openInstallModal = openInstallModal;
+window.closeInstallModal = closeInstallModal;
 window.maybeShowInstallNudge = maybeShowInstallNudge;
 window.appInstall = { install, openInstallModal, closeInstallModal, maybeShowInstallNudge };
 

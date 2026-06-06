@@ -938,6 +938,7 @@ declare global {
     // redeclare conflict at the global scope.
     install?: InstallObject;
     openInstallModal?: () => void;
+    closeInstallModal?: () => void;
     maybeShowInstallNudge?: () => void;
 
     // UI side-effects defined in app.js. Optional because state-machine.js
@@ -946,6 +947,14 @@ declare global {
     _showSyncSnackbar?: (msg: string) => void;
     closeSettings?: () => void;
     closeChapterPopover?: () => void;
+    closeBookmarkDrawer?: () => void;
+    closeSaveModal?: () => void;
+    closeNewFolderModal?: () => void;
+    closeMergeModal?: () => void;
+    closeImportModal?: () => void;
+    closeConfirmModal?: () => void;
+    closeChapterDeleteModal?: () => void;
+    closeDriveDisconnectModal?: () => void;
     renderBookmarkTree?: () => void;
     rerenderActiveBookmarkTree?: () => void;
     // Mobile tab-bar full-screen views (ADR-029 / P2). Always assigned at
@@ -1051,6 +1060,12 @@ declare global {
   function buildBookmarkHeaderBtn(bookId: string | null, chapter: number | null): HTMLButtonElement;
   function openBookmarkDrawer(bookId: string | null, chapter: number | null): void;
   function closeBookmarkDrawer(): void;
+  function closeSaveModal(): void;
+  function closeNewFolderModal(): void;
+  function closeMergeModal(): void;
+  function closeImportModal(): void;
+  function closeConfirmModal(): void;
+  function closeChapterDeleteModal(): void;
   function renderBookmarkTree(target?: HTMLElement): void;
   function renderBookmarksView(): void;
   function enterVerseSelectMode(bookId: string, chapter: number): void;
@@ -1065,6 +1080,7 @@ declare global {
   function appendTextWithHighlight(target: Node, text: string, query: string): void;
   function consumeSearchAutoNavigate(): boolean;
   function openDriveDisconnectModal(): void;
+  function closeDriveDisconnectModal(): void;
   function clearAllCaches(): Promise<void>;
   // parsePath returns a view-discriminated union with extra view-specific
   // fields (page, resume, highlightQuery, etc.). Typed as `any` here until

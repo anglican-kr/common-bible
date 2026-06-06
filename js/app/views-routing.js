@@ -1798,23 +1798,26 @@ async function route() {
   clearNode($resumeBannerSlot);
   clearNode($divisionTabsSlot);
   if (readingContext.verseSelectMode) exitVerseSelectMode();
+  // Route changes should dismiss overlays through their controllers, not by
+  // flipping `hidden`, so scrims, focus traps, body scroll locks and focus
+  // restoration all unwind consistently (ADR-032).
+  /** @param {string} id @param {() => void} close */
+  const closeIfOpen = (id, close) => {
+    const node = /** @type {HTMLElement | null} */ (document.getElementById(id));
+    if (node && !node.hidden) close();
+  };
   // The citation sheet is anchored to a specific citation context, so a route
   // change (link nav or back/forward — both land here) should dismiss it.
-  // Tapping another cite chip re-opens it without routing, so the intended
-  // non-modal "tap chips in the visible page" behavior is preserved.
-  const citeSheet = document.getElementById("cite-sheet");
-  if (citeSheet && !citeSheet.hidden) window.appCitations?.closeCiteSheet();
-  // Overlays that lock body scroll (position:fixed / overflow:hidden) must be
-  // dismissed on any nav — incl. tab-bar switches — or they (and the scroll
-  // lock) persist over the new view, blocking it (ADR-029).
-  const bmDrawer = document.getElementById("bookmark-drawer");
-  if (bmDrawer && !bmDrawer.hidden) window.closeBookmarkDrawer?.();
-  // Destructive-confirm modal: dismiss on nav so its scrim doesn't linger over
-  // the rebuilt view (e.g. OS back gesture while confirming). Self-guards.
-  const bmConfirm = document.getElementById("bm-confirm-modal");
-  if (bmConfirm && !bmConfirm.hidden) window.closeConfirmModal?.();
-  const bmChapterDelete = document.getElementById("bm-chapter-delete-modal");
-  if (bmChapterDelete && !bmChapterDelete.hidden) window.closeChapterDeleteModal?.();
+  closeIfOpen("cite-sheet", () => window.appCitations?.closeCiteSheet());
+  closeIfOpen("install-modal", () => window.closeInstallModal?.());
+  closeIfOpen("drive-disconnect-modal", () => window.closeDriveDisconnectModal?.());
+  closeIfOpen("bookmark-drawer", () => window.closeBookmarkDrawer?.());
+  closeIfOpen("bm-new-folder-modal", () => window.closeNewFolderModal?.());
+  closeIfOpen("bm-confirm-modal", () => window.closeConfirmModal?.());
+  closeIfOpen("bm-chapter-delete-modal", () => window.closeChapterDeleteModal?.());
+  closeIfOpen("bm-import-modal", () => window.closeImportModal?.());
+  closeIfOpen("bm-merge-modal", () => window.closeMergeModal?.());
+  closeIfOpen("bm-save-modal", () => window.closeSaveModal?.());
   // Desktop settings popover: close on nav too (it has a focus trap). Closing
   // here also makes the /settings desktop fallback's gear.click() always OPEN
   // (never toggle-closed) since the popover is already dismissed by this point.
