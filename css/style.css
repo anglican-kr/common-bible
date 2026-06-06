@@ -4040,6 +4040,22 @@ body.tabbar-searching #search-inpage-bar { display: none; }
   font-weight: 500;
 }
 
+/* Destructive 삭제 row: label + glyph read in the danger accent (the only
+   action here that removes data). Disabled while the list is empty. */
+.title-action-menu-item--danger,
+.title-action-menu-item--danger svg {
+  color: var(--danger-text);
+}
+
+.title-action-menu-item--danger:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.title-action-menu-item--danger:disabled:hover {
+  background: none;
+}
+
 @media (prefers-reduced-transparency: reduce) {
   .title-action-menu { background: var(--bg-card); }
 }
@@ -5402,6 +5418,179 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 }
 
 #bm-chapter-delete-confirm:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Bulk delete picker (⋯ 메뉴 → 삭제) ──
+   Mirrors the chapter-delete modal, plus a leading type glyph and depth indent
+   so folders read above their (indented) children. Sits below the shared
+   destructive confirm (z 76/77) so "삭제 (N)" can stack that alert on top. */
+#bm-bulk-delete-scrim {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 74;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+#bm-bulk-delete-scrim:not([hidden]) {
+  display: block;
+}
+
+#bm-bulk-delete-modal {
+  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  display: none;
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 75;
+  width: min(92vw, 380px);
+  max-height: 80vh;
+  background: var(--bg-card);
+  color: var(--text);
+  border-radius: var(--radius-modal);
+  box-shadow: var(--shadow-4);
+  padding: var(--space-6);
+}
+
+#bm-bulk-delete-modal:not([hidden]) {
+  display: flex;
+  flex-direction: column;
+}
+
+#bm-bulk-delete-title {
+  font-size: var(--font-md);
+  font-weight: 700;
+  margin: 0 0 var(--space-2);
+}
+
+#bm-bulk-delete-desc {
+  font-size: var(--font-sm);
+  margin: 0 0 var(--space-3);
+  color: var(--text-secondary);
+  line-height: var(--leading-snug);
+}
+
+#bm-bulk-delete-all-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-2);
+  margin-bottom: var(--space-1);
+  border-bottom: 1px solid var(--border);
+  font-size: var(--font-sm);
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+}
+
+#bm-bulk-delete-list {
+  list-style: none;
+  margin: 0 0 var(--space-4);
+  padding: 0;
+  overflow-y: auto;
+  flex: 1 1 auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.bm-bulk-delete-item {
+  margin: 0;
+}
+
+.bm-bulk-delete-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-2);
+  padding-left: calc(var(--space-2) + var(--bm-bulk-indent, 0px));
+  min-height: var(--touch-target);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.bm-bulk-delete-label:hover {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+/* Both the "전체 선택" toggle and each row checkbox share the destructive
+   accent so a ticked box reads as "marked for deletion" (matches chapter-delete). */
+#bm-bulk-delete-all,
+.bm-bulk-delete-label input[type="checkbox"] {
+  accent-color: var(--danger);
+  flex-shrink: 0;
+  width: 1.1rem;
+  height: 1.1rem;
+}
+
+/* A row covered by a ticked ancestor folder is checked + disabled; dim it so the
+   cascade reads as "goes with the folder" rather than independently togglable. */
+.bm-bulk-delete-label input[type="checkbox"]:disabled {
+  opacity: 0.55;
+}
+.bm-bulk-delete-label:has(input:disabled) {
+  cursor: default;
+}
+
+.bm-bulk-delete-icon {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+}
+
+.bm-bulk-delete-icon svg {
+  width: 1.15rem;
+  height: 1.15rem;
+}
+
+.bm-bulk-delete-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--font-sm);
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#bm-bulk-delete-actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+#bm-bulk-delete-cancel {
+  padding: var(--space-2) var(--space-4);
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-family: inherit;
+  font-size: var(--font-sm);
+  cursor: pointer;
+  color: var(--text);
+}
+
+#bm-bulk-delete-confirm {
+  padding: var(--space-2) var(--space-4);
+  background: var(--danger);
+  color: #fff;
+  border: 1px solid var(--danger);
+  border-radius: var(--radius);
+  font-family: inherit;
+  font-size: var(--font-sm);
+  cursor: pointer;
+}
+
+#bm-bulk-delete-confirm:hover:not(:disabled) {
+  background: var(--danger-strong);
+  border-color: var(--danger-strong);
+}
+
+#bm-bulk-delete-confirm:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }

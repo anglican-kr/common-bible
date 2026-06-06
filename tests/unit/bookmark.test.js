@@ -140,6 +140,8 @@ function loadBookmarkQuery(initialStore = []) {
     removeItemById: ctx.removeItemById,
     insertItem: ctx.insertItem,
     collectFolderOptions: ctx.collectFolderOptions,
+    _flattenBookmarkTree: ctx._flattenBookmarkTree,
+    _descendantIds: ctx._descendantIds,
   };
 }
 
@@ -718,6 +720,66 @@ test('collectFolderOptions: bookmarks-only store → empty array', () => {
     { type: "bookmark", id: "b", bookId: "gen", chapter: 2, verseSpec: "all" },
   ];
   assert.deepEqual(h.collectFolderOptions(onlyBookmarks), []);
+});
+
+// ── _flattenBookmarkTree ─────────────────────────────────────────────────────
+
+test('_flattenBookmarkTree: pre-order (folder before children) with depth + parentId', () => {
+  const h = loadBookmarkQuery();
+  const flat = h._flattenBookmarkTree(sampleStore());
+  // Every node appears once.
+  assert.equal(flat.length, 6);
+  assert.deepEqual(flat.map((e) => e.id), [
+    "bm-root1", "fld-old", "bm-ot1", "fld-pent", "bm-pent1", "bm-root2",
+  ]);
+  // Depth tracks nesting; parentId points at the enclosing folder (null at root).
+  const byId = Object.fromEntries(flat.map((e) => [e.id, e]));
+  assert.equal(byId["bm-root1"].depth, 0);
+  assert.equal(byId["bm-root1"].parentId, null);
+  assert.equal(byId["bm-ot1"].depth, 1);
+  assert.equal(byId["bm-ot1"].parentId, "fld-old");
+  assert.equal(byId["bm-pent1"].depth, 2);
+  assert.equal(byId["bm-pent1"].parentId, "fld-pent");
+});
+
+test('_flattenBookmarkTree: carries label/name + type', () => {
+  const h = loadBookmarkQuery();
+  const flat = h._flattenBookmarkTree([
+    { type: "folder", id: "f", name: "내 폴더", children: [
+      { type: "bookmark", id: "b", label: "창세 1장", bookId: "gen", chapter: 1, verseSpec: "all" },
+    ] },
+  ]);
+  assert.equal(flat[0].type, "folder");
+  assert.equal(flat[0].label, "내 폴더");
+  assert.equal(flat[1].type, "bookmark");
+  assert.equal(flat[1].label, "창세 1장");
+});
+
+test('_flattenBookmarkTree: empty / nullish store → empty array', () => {
+  const h = loadBookmarkQuery();
+  assert.deepEqual(h._flattenBookmarkTree([]), []);
+  assert.deepEqual(h._flattenBookmarkTree(null), []);
+});
+
+// ── _descendantIds ───────────────────────────────────────────────────────────
+
+test('_descendantIds: every nested id under a folder (excludes the folder)', () => {
+  const h = loadBookmarkQuery();
+  const store = sampleStore();
+  const fldOld = h._findItemInStore(store, "fld-old").item;
+  assert.deepEqual(h._descendantIds(fldOld).sort(), ["bm-ot1", "bm-pent1", "fld-pent"].sort());
+});
+
+test('_descendantIds: bookmark node → empty', () => {
+  const h = loadBookmarkQuery();
+  const store = sampleStore();
+  const bm = h._findItemInStore(store, "bm-root1").item;
+  assert.deepEqual(h._descendantIds(bm), []);
+});
+
+test('_descendantIds: empty folder → empty', () => {
+  const h = loadBookmarkQuery();
+  assert.deepEqual(h._descendantIds({ type: "folder", id: "f", name: "x", children: [] }), []);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
