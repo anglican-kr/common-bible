@@ -3960,6 +3960,9 @@ body.tabbar-searching #search-inpage-bar { display: none; }
   z-index: 30;
   display: flex;
   flex-direction: column;
+  /* Width of the leading checkmark / icon slot, shared so action and sort rows
+     line up against one column. */
+  --menu-lead: 1.4rem;
   min-width: 13rem;
   max-width: calc(100vw - var(--space-4));
   padding: 0;
@@ -4040,15 +4043,21 @@ body.tabbar-searching #search-inpage-bar { display: none; }
   background: var(--border);
 }
 
-/* Leading slots — same width for the action icon and the sort checkmark so
-   every label lines up at one indent. */
+/* Leading slots — same width for the action icon and the sort checkmark. */
 .title-action-menu-icon,
 .title-action-menu-check {
-  width: 1.4rem;
+  width: var(--menu-lead);
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+}
+
+/* Per Apple HIG (Files menu), the checkmark owns the far-left column and the
+   action icons start one column in — aligned with the sort group's labels.
+   Indent the action rows by exactly that checkmark column (slot + gap). */
+.title-action-menu-item--action {
+  padding-left: calc(var(--space-4) + var(--menu-lead) + var(--space-3));
 }
 
 .title-action-menu-check svg {
