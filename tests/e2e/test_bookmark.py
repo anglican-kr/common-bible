@@ -75,8 +75,8 @@ def test_save_chapter_bookmark_appears(browser):
 def test_bm_empty_msg_disappears_after_save(browser):
     """빈 드로어의 '저장된 북마크가 없습니다' 메시지는 북마크 추가 후 사라진다.
 
-    role='presentation'을 추가한 li.bm-empty가 시각적·기능적으로
-    올바르게 동작하는지 확인한다.
+    role='presentation'을 단 공용 빈 상태(li.empty-state, ADR-032)가
+    시각적·기능적으로 올바르게 동작하는지 확인한다.
     """
     from .conftest import CLEAR_APP_STORAGE
     ctx = browser.new_context()
@@ -89,7 +89,7 @@ def test_bm_empty_msg_disappears_after_save(browser):
 
     # Empty state visible
     assert "저장된 북마크가 없습니다" in page.inner_text("#bookmark-drawer-body")
-    assert page.locator("li.bm-empty").count() == 1
+    assert page.locator("li.empty-state").count() == 1
     assert page.locator("li.bm-bookmark").count() == 0
 
     # Save a bookmark
@@ -100,7 +100,7 @@ def test_bm_empty_msg_disappears_after_save(browser):
     page.wait_for_selector("li.bm-bookmark")
 
     # Empty state gone, bookmark item visible
-    assert page.locator("li.bm-empty").count() == 0
+    assert page.locator("li.empty-state").count() == 0
     assert page.locator("li.bm-bookmark").count() == 1
 
     ctx.close()

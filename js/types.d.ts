@@ -553,6 +553,13 @@ export interface AppHelpers {
   setInert: (on: boolean, selectors: string) => void;
   trapFocus: (container: HTMLElement) => () => void;
   dragReleaseAction: (h: number, vh: number) => "close" | "snap-min" | "stay";
+  emptyState: (opts: {
+    icon: Node | null;
+    title: string;
+    subtitle: string;
+    tag?: keyof HTMLElementTagNameMap;
+    role?: string;
+  }) => HTMLElement;
 }
 
 // ── Overlay/dialog lifecycle controller (js/app/overlay.js, ADR-032) ─────────

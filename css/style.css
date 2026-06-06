@@ -458,12 +458,6 @@ body {
   padding: 0;
 }
 
-.bookmarks-view .bm-empty {
-  color: var(--text-secondary);
-  padding: var(--space-6) var(--space-2);
-  text-align: center;
-}
-
 /* In-page search input (mirrors the header #search-bar, used in #app). */
 #search-inpage-bar {
   display: flex;
@@ -1655,16 +1649,13 @@ body {
 }
 
 
-.search-empty {
-  text-align: center;
-  padding: var(--space-8) var(--space-4);
-  color: var(--text-secondary);
-  font-size: var(--font-base);
-}
-
-/* ADR-030 P3: Apple-Music-식 중앙 빈 상태(돋보기 + 제목 + 부제). 빈 검색어 뷰와
-   결과 0건 양쪽에서 사용. */
-.search-empty-state {
+/* Empty state — one centered placeholder (icon + title + subtitle) shared by
+   search (no query / 0 results) and the bookmark list (0 saved). Apple-Music
+   style hero (ADR-030 P3), unified by ADR-032 / DESIGN.md §6 상태 컴포넌트. The
+   builder is js/app/helpers.js `emptyState`; the icon slot normalizes any
+   glyph's size + opacity, so contexts share the format while keeping their own
+   symbol. */
+.empty-state {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1672,21 +1663,23 @@ body {
   text-align: center;
   gap: var(--space-2);
   padding: var(--space-10) var(--space-6);
-}
-.search-empty-icon {
   color: var(--text-secondary);
+}
+.empty-state-icon {
+  color: var(--text-secondary);
+  opacity: 0.5;
   margin-bottom: var(--space-2);
 }
-.search-empty-icon svg { width: 3.5rem; height: 3.5rem; opacity: 0.5; }
-.search-empty-title {
+.empty-state-icon svg { width: 3.5rem; height: 3.5rem; }
+.empty-state-title {
   margin: 0;
   font-size: var(--font-xl);
   font-weight: 700;
   color: var(--text);
 }
-.search-empty-subtitle {
+.empty-state-subtitle {
   margin: 0;
-  max-width: 16rem;
+  max-width: 24rem;
   font-size: var(--font-base);
   line-height: var(--leading-snug);
   color: var(--text-secondary);
@@ -4732,38 +4725,8 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   color: #fff;
 }
 
-.bm-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-12) var(--space-6);
-  text-align: center;
-  color: var(--text-secondary);
-  font-size: var(--font-sm);
-}
-
-.bm-empty-icon {
-  width: 3rem;
-  height: 3rem;
-  color: var(--border);
-  margin-bottom: var(--space-1);
-}
-
-.bm-empty-title {
-  margin: 0;
-  font-size: var(--font-md);
-  font-weight: 600;
-  color: var(--text);
-}
-
-.bm-empty-desc {
-  margin: 0;
-  max-width: 22rem;
-  font-size: var(--font-sm);
-  line-height: var(--leading-normal);
-  color: var(--text-secondary);
-}
+/* Bookmark list empty state uses the shared `.empty-state` component
+   (ADR-032; see the .empty-state rules above). */
 
 /* ── Save bookmark modal ── */
 

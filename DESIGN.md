@@ -285,9 +285,13 @@ HIG 의 절제된 깊이 표현. 라이트 기준 값이며, **다크에서는 `
 - **로딩** — `.loading`(전역)·`.cite-sheet-loading`(인용 시트). 산세리프 + 중앙 정렬 +
   `--text-secondary` 단문. 캐시 히트가 대부분이라 스피너보다 짧은 텍스트가 기본이며, 오디오
   버퍼링만 `.audio-icon-loading` 스피너를 쓴다. (전역 스켈레톤 로더는 미도입 — §12)
-- **빈 상태** — 결과 0건·항목 0개. 검색은 `.search-empty-state`(돋보기 아이콘 + 제목
-  `--font-xl` + 부제, Apple Music 식), 북마크는 `.bm-empty`(아이콘 + 제목 + 추가 방법
-  안내, ADR-029). 단순 안내문은 `.search-empty`·`.bm-empty` 한 줄로 충분.
+- **빈 상태** — 결과 0건·항목 0개. **단일 `.empty-state` 컴포넌트**(아이콘 + 제목
+  `--font-xl`/700 + 부제 `--font-base`, Apple Music 식 히어로)로 통일 — 검색(빈 검색어·
+  0건)과 북마크 목록(0개)이 같은 형식을 공유한다(ADR-032). 빌더는 `appHelpers.emptyState`
+  ({ icon, title, subtitle, tag, role }); 아이콘 슬롯(`.empty-state-icon`, 3.5rem·50%)이
+  글리프 종류와 무관하게 크기·투명도를 통일하므로 맥락별 기호(책갈피·돋보기)는 유지하되
+  보이는 형식은 동일하다. 북마크 목록은 `tag:"li"`+`role:"presentation"`으로 `<ul>` 안에
+  마운트.
 - **에러** — `.error`(전역)·`.cite-sheet-error`. 텍스트 색은 `--danger-text`(표면 위 빨강,
   다크 적응 — §2). 파괴가 아닌 **실패 신호**이므로 채움(`--danger`)이 아니라 글자색만 쓴다.
 - **업데이트 토스트** — `#sw-update-toast`. 새 SW 가 `waiting` 상태가 되면 하단에 뜨는

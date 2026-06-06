@@ -18,7 +18,7 @@
 /** @typedef {import("../types").DragState} DragState */
 /** @typedef {import("../types").BooksData} BooksData */
 
-const { _$, el, clearNode, chUnit } = window.appHelpers;
+const { _$, el, clearNode, chUnit, emptyState } = window.appHelpers;
 const { createOverlay, attachSheetDrag, attachSheetResize } = window.appOverlay;
 const { loadBookmarks, saveBookmarks, generateId } = window.appStorage;
 const { readingContext } = window;
@@ -1597,18 +1597,20 @@ function _buildFolderItem(folder, depth) {
 // "none yet" line it explains how bookmarks are created, so the screen is
 // actionable rather than a dead end. The icon matches the header add affordance.
 function _buildEmptyState() {
-  const li = el("li", { className: "bm-empty", role: "presentation" });
   const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   icon.setAttribute("viewBox", "0 -960 960 960");
   icon.setAttribute("fill", "currentColor");
   icon.setAttribute("aria-hidden", "true");
-  icon.setAttribute("class", "bm-empty-icon");
   _setBookmarkBtnIcon(/** @type {SVGElement} */ (icon), false);
-  li.appendChild(icon);
-  li.appendChild(el("p", { className: "bm-empty-title" }, "저장된 북마크가 없습니다"));
-  li.appendChild(el("p", { className: "bm-empty-desc" },
-    "읽는 화면 오른쪽 위의 북마크 버튼을 눌러 지금 보는 장을 저장하세요. 절을 선택하면 원하는 구절만 북마크할 수도 있습니다."));
-  return li;
+  // Shared empty-state component (ADR-032 / DESIGN.md §6). Mounted as a
+  // presentational <li> since the list is a <ul>.
+  return emptyState({
+    tag: "li",
+    role: "presentation",
+    icon,
+    title: "저장된 북마크가 없습니다",
+    subtitle: "읽는 화면 오른쪽 위의 북마크 버튼을 눌러 지금 보는 장을 저장하세요. 절을 선택하면 원하는 구절만 북마크할 수도 있습니다.",
+  });
 }
 
 function renderBookmarkTree(target = $bookmarkDrawerBody) {
