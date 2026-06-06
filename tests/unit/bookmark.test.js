@@ -457,6 +457,23 @@ test('_walkBookmarks: returning false short-circuits remaining traversal', () =>
   assert.deepEqual(visited, ["bm-root1", "fld-old", "bm-ot1"]);
 });
 
+test('_walkBookmarks: folder with missing/null children does not throw', () => {
+  const h = loadBookmarkQuery();
+  const visited = [];
+  const store = [
+    { type: "folder", id: "f-nochildren" /* no children */ },
+    { type: "folder", id: "f-null", children: null },
+    { type: "bookmark", id: "bm" },
+  ];
+  assert.doesNotThrow(() => h._walkBookmarks(store, (item) => { visited.push(item.id); }));
+  assert.deepEqual(visited, ["f-nochildren", "f-null", "bm"]);
+});
+
+test('_walkBookmarks: null root → no-op (no throw)', () => {
+  const h = loadBookmarkQuery();
+  assert.doesNotThrow(() => h._walkBookmarks(null, () => {}));
+});
+
 // ── findExistingChapterBookmarks ─────────────────────────────────────────────
 
 test('findExistingChapterBookmarks: 0 matches when no bookmark in chapter', () => {

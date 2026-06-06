@@ -209,7 +209,9 @@ function serializeVerseRange(firstNode, lastNode) {
  * @returns {boolean}
  */
 function _walkBookmarks(store, fn) {
-  for (const item of store) {
+  // Guard against folders with missing/null `children` (and a null root) so the
+  // walk — and any caller mid-mutation (e.g. cascade delete) — can't throw.
+  for (const item of store || []) {
     if (fn(item, store) === false) return false;
     if (item.type === "folder") {
       if (_walkBookmarks(item.children, fn) === false) return false;
