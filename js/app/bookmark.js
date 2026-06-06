@@ -2764,6 +2764,10 @@ window.buildHomeBtn = buildHomeBtn;
 window.buildBookmarkHeaderBtn = buildBookmarkHeaderBtn;
 window.openBookmarkDrawer = openBookmarkDrawer;
 window.closeBookmarkDrawer = closeBookmarkDrawer;
+// Exposed so route() can dismiss the destructive-confirm overlay on any nav
+// (e.g. OS back gesture mid-confirm) — its scrim would otherwise persist over
+// the rebuilt view. Safe to call when already hidden (self-guards).
+window.closeConfirmModal = closeConfirmModal;
 window.renderBookmarkTree = renderBookmarkTree;
 // Re-render whichever bookmark surface is mounted (drawer OR /bookmarks full
 // view). Sync layer + mutation flows use this so the visible tree refreshes.
