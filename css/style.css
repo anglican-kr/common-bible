@@ -72,6 +72,11 @@
      2곳에만 적용한다 (ADR-028 개정 2026-06-03; FAB 는 ADR-030 에서 제거, 오디오
      플레이어는 2026-06-05 중립화로 제외). 진한 채도 통일. */
   --theme: #22244a;
+  /* 파괴적 액션(삭제·캐시 비우기) 전용 색 — 스킴·테마·라이트/다크와 무관하게 고정.
+     실선 채움 버튼(흰 글자)·체크박스 accent·강조 텍스트가 공유한다. --danger-strong 은
+     hover/pressed 한 단계 진한 값. 흰 글자 대비 AA 충족 (ADR-028 개정 2026-06-06). */
+  --danger: #c0392b;
+  --danger-strong: #a93226;
 
   /* ── Radius (HIG 곡률 사다리 — 기존 사용 값에 매핑, --radius 는 하위호환 유지) ── */
   --radius-xs: 4px;
@@ -2788,7 +2793,7 @@ html.cite-sheet-open {
   font-family: inherit;
   font-size: var(--font-xs);
   font-weight: 500;
-  color: #c0392b;
+  color: var(--danger);
   background: none;
   border: 1px solid #e6a9a4;
   border-radius: var(--radius-xs);
@@ -2813,9 +2818,9 @@ html.cite-sheet-open {
 }
 
 .cache-clear-btn:hover {
-  background: #c0392b;
+  background: var(--danger);
   color: #fff;
-  border-color: #c0392b;
+  border-color: var(--danger);
 }
 
 [data-theme="dark"] .cache-clear-btn {
@@ -4776,8 +4781,8 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 }
 
 .bm-delete-btn:hover {
-  background: #c0392b;
-  border-color: #c0392b;
+  background: var(--danger);
+  border-color: var(--danger);
   color: #fff;
 }
 
@@ -5320,9 +5325,9 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 
 #bm-confirm-ok {
   padding: var(--space-2) var(--space-4);
-  background: #c0392b;
+  background: var(--danger);
   color: #fff;
-  border: 1px solid #c0392b;
+  border: 1px solid var(--danger);
   border-radius: var(--radius);
   font-family: inherit;
   font-size: var(--font-sm);
@@ -5330,8 +5335,166 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 }
 
 #bm-confirm-ok:hover {
-  background: #a93226;
-  border-color: #a93226;
+  background: var(--danger-strong);
+  border-color: var(--danger-strong);
+}
+
+/* ── Chapter bookmark delete picker ── */
+
+#bm-chapter-delete-scrim {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 78;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+#bm-chapter-delete-scrim:not([hidden]) {
+  display: block;
+}
+
+#bm-chapter-delete-modal {
+  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  display: none;
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 79;
+  width: min(92vw, 380px);
+  max-height: 80vh;
+  background: var(--bg-card);
+  color: var(--text);
+  border-radius: var(--radius-modal);
+  box-shadow: var(--shadow-4);
+  padding: var(--space-6);
+}
+
+#bm-chapter-delete-modal:not([hidden]) {
+  display: flex;
+  flex-direction: column;
+}
+
+#bm-chapter-delete-title {
+  font-size: var(--font-md);
+  font-weight: 700;
+  margin: 0 0 var(--space-2);
+}
+
+#bm-chapter-delete-desc {
+  font-size: var(--font-sm);
+  margin: 0 0 var(--space-3);
+  color: var(--text-secondary);
+  line-height: var(--leading-snug);
+}
+
+#bm-chapter-delete-all-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-2);
+  margin-bottom: var(--space-1);
+  border-bottom: 1px solid var(--border);
+  font-size: var(--font-sm);
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+}
+
+#bm-chapter-delete-list {
+  list-style: none;
+  margin: 0 0 var(--space-4);
+  padding: 0;
+  overflow-y: auto;
+  flex: 1 1 auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.bm-chapter-delete-item {
+  margin: 0;
+}
+
+.bm-chapter-delete-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-2);
+  min-height: var(--touch-target);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.bm-chapter-delete-label:hover {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+/* Both the "전체 선택" toggle and each row checkbox share the destructive
+   accent so a ticked box reads consistently as "marked for deletion" — the
+   select-all otherwise fell back to the OS blue. */
+#bm-chapter-delete-all,
+.bm-chapter-delete-label input[type="checkbox"] {
+  accent-color: var(--danger);
+  flex-shrink: 0;
+  width: 1.1rem;
+  height: 1.1rem;
+}
+
+.bm-chapter-delete-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.bm-chapter-delete-item-label {
+  font-size: var(--font-sm);
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bm-chapter-delete-item-ref {
+  font-size: var(--font-xs);
+  color: var(--text-secondary);
+}
+
+#bm-chapter-delete-actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+#bm-chapter-delete-cancel {
+  padding: var(--space-2) var(--space-4);
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-family: inherit;
+  font-size: var(--font-sm);
+  cursor: pointer;
+  color: var(--text);
+}
+
+#bm-chapter-delete-confirm {
+  padding: var(--space-2) var(--space-4);
+  background: var(--danger);
+  color: #fff;
+  border: 1px solid var(--danger);
+  border-radius: var(--radius);
+  font-family: inherit;
+  font-size: var(--font-sm);
+  cursor: pointer;
+}
+
+#bm-chapter-delete-confirm:hover:not(:disabled) {
+  background: var(--danger-strong);
+  border-color: var(--danger-strong);
+}
+
+#bm-chapter-delete-confirm:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* ── Import bookmarks modal ── */
@@ -5580,7 +5743,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   }
 
   .bm-swipe-delete {
-    background: #c0392b;
+    background: var(--danger);
     justify-content: flex-start;
   }
 

@@ -133,7 +133,8 @@ function loadBookmarkQuery(initialStore = []) {
     setStore: (s) => { storeForLoad = s; },
     _walkBookmarks: ctx._walkBookmarks,
     findExistingChapterBookmarks: ctx.findExistingChapterBookmarks,
-    _chapterDeleteMessage: ctx._chapterDeleteMessage,
+    _selectAllState: ctx._selectAllState,
+    _deleteBtnLabel: ctx._deleteBtnLabel,
     _findItemInStore: ctx._findItemInStore,
     _findParentFolderId: ctx._findParentFolderId,
     removeItemById: ctx.removeItemById,
@@ -552,22 +553,41 @@ test('findExistingChapterBookmarks: empty store → empty array', () => {
   assert.equal(h.findExistingChapterBookmarks("gen", 1).length, 0);
 });
 
-// ── _chapterDeleteMessage ────────────────────────────────────────────────────
+// ── _selectAllState ──────────────────────────────────────────────────────────
+// Tri-state for the chapter-delete picker's "전체 선택" checkbox.
 
-test('_chapterDeleteMessage: single bookmark names it', () => {
+test('_selectAllState: nothing ticked → none', () => {
   const h = loadBookmarkQuery();
-  const msg = h._chapterDeleteMessage([{ label: "창세기 1장" }]);
-  assert.equal(msg, '"창세기 1장" 북마크를 삭제할까요?');
+  assert.equal(h._selectAllState(0, 3), "none");
 });
 
-test('_chapterDeleteMessage: multiple bookmarks use the count', () => {
+test('_selectAllState: some ticked → some (indeterminate)', () => {
   const h = loadBookmarkQuery();
-  const msg = h._chapterDeleteMessage([
-    { label: "창세기 1장" },
-    { label: "창세기 1:1-3" },
-    { label: "창세기 1:26" },
-  ]);
-  assert.equal(msg, "이 장에 저장된 북마크 3개를 모두 삭제할까요?");
+  assert.equal(h._selectAllState(1, 3), "some");
+  assert.equal(h._selectAllState(2, 3), "some");
+});
+
+test('_selectAllState: every row ticked → all', () => {
+  const h = loadBookmarkQuery();
+  assert.equal(h._selectAllState(3, 3), "all");
+});
+
+test('_selectAllState: empty list → none (never indeterminate)', () => {
+  const h = loadBookmarkQuery();
+  assert.equal(h._selectAllState(0, 0), "none");
+});
+
+// ── _deleteBtnLabel ──────────────────────────────────────────────────────────
+
+test('_deleteBtnLabel: no selection → bare 삭제', () => {
+  const h = loadBookmarkQuery();
+  assert.equal(h._deleteBtnLabel(0), "삭제");
+});
+
+test('_deleteBtnLabel: selection count appended', () => {
+  const h = loadBookmarkQuery();
+  assert.equal(h._deleteBtnLabel(1), "삭제 (1)");
+  assert.equal(h._deleteBtnLabel(3), "삭제 (3)");
 });
 
 // ── _findItemInStore ─────────────────────────────────────────────────────────

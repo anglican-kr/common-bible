@@ -173,7 +173,7 @@ let appVersion = null;
   const SYNC_FEEDBACK_MS   = 900;  // how long the spinner stays after trigger
   // Modal/sheet roots whose internal scroll must not be hijacked by PTR. We
   // walk e.target to see if the touch landed inside one of these.
-  const MODAL_SELECTORS = "#bookmark-drawer, #install-modal, #bm-save-modal, #bm-new-folder-modal, #bm-import-modal, #bm-merge-modal, #drive-disconnect-modal, .settings-popover, .chapter-popover";
+  const MODAL_SELECTORS = "#bookmark-drawer, #install-modal, #bm-save-modal, #bm-new-folder-modal, #bm-import-modal, #bm-merge-modal, #bm-confirm-modal, #bm-chapter-delete-modal, #drive-disconnect-modal, .settings-popover, .chapter-popover";
 
   /** @type {HTMLElement | null} */
   let indicator = null;
@@ -1820,6 +1820,8 @@ async function route() {
   // the rebuilt view (e.g. OS back gesture while confirming). Self-guards.
   const bmConfirm = document.getElementById("bm-confirm-modal");
   if (bmConfirm && !bmConfirm.hidden) window.closeConfirmModal?.();
+  const bmChapterDelete = document.getElementById("bm-chapter-delete-modal");
+  if (bmChapterDelete && !bmChapterDelete.hidden) window.closeChapterDeleteModal?.();
   // Desktop settings popover: close on nav too (it has a focus trap). Closing
   // here also makes the /settings desktop fallback's gear.click() always OPEN
   // (never toggle-closed) since the popover is already dismissed by this point.
