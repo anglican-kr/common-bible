@@ -2634,7 +2634,10 @@ $bmNewFolderCancel.addEventListener("click", closeNewFolderModal);
 $bmNewFolderConfirm.addEventListener("click", _commitNewFolder);
 $bmNewFolderInput.addEventListener("keydown", (e) => {
   if (e.key === "Enter") { e.preventDefault(); _commitNewFolder(); }
-  else if (e.key === "Escape") { e.preventDefault(); closeNewFolderModal(); }
+  // stopPropagation so Escape closes only this modal — it's not in the document
+  // Escape router's stack, so otherwise the event falls through and also closes
+  // the save modal / drawer underneath (ADR-032).
+  else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); closeNewFolderModal(); }
 });
 
 $bmSaveChapterBtn.addEventListener("click", () => {
@@ -2679,7 +2682,10 @@ $bmAddFolderBtn.addEventListener("click", () => {
   cancelBtn.addEventListener("click", cleanup);
   input.addEventListener("keydown", (e) => {
     if (e.key === "Enter") { e.preventDefault(); commit(); }
-    if (e.key === "Escape") cleanup();
+    // Consume Escape here so it cancels only this inline form — without
+    // stopPropagation it bubbles to the document Escape router, whose drawer
+    // fallback would also close the drawer underneath (ADR-032).
+    if (e.key === "Escape") { e.stopPropagation(); cleanup(); }
   });
 
   form.appendChild(input);
