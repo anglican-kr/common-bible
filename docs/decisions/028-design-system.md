@@ -139,6 +139,26 @@ HIG의 8pt 그리드를 따르되 **레이아웃(간격)과 콘텐츠(폰트)를
 > 부수 버그 픽스: 인용 시트 헤더 높이가 back 버튼 토글로 변하던 문제를 닫기 버튼을
 > `--icon-btn-touch` 로 통일해 해소(HIG 44px 터치타깃도 충족). DESIGN.md §3·4·5·8·9 갱신.
 
+### 8. DESIGN.md 문서 sweep — PWA 실행 컨텍스트·상태·theme-color (개정 2026-06-06)
+
+코드에 이미 구현돼 있으나 권위 문서(`DESIGN.md`)에 빠져 있던 영역을 토큰 sweep 과 함께
+문서화해 SSOT 와 코드의 괴리를 메웠다(신규 결정 아님 — **기존 구현의 명문화**).
+
+- **§2 danger 표면 변형 토큰** — `--danger-text`/`--danger-border`(다크 적응)를 표·규약에
+  반영(직전 커밋의 토큰을 문서화).
+- **§2 상태바 색상(theme-color)** — `index.html` 의 `media` 분기 meta 2개(첫 페인트
+  기본값) + `settings-ui.js` `updateThemeMetaColor()` 가 양쪽을 같은 값으로 덮어써 명시
+  토글을 반영하는 설계를 명문화. **theme-color 는 `--bg` 추종, 스킴 무관**(chrome 중립).
+- **§6 상태 컴포넌트** — 로딩(`.loading`)·에러(`.error`, `--danger-text`)·빈 상태
+  (`.search-empty-state`·`.bm-empty`)·업데이트 토스트(`#sw-update-toast`)를 카탈로그에 추가.
+- **신규 §12 PWA 실행 컨텍스트** — 실행 모드(browser/standalone/iOS, `install.js` 권위)·
+  네트워크/오프라인·SW 업데이트 흐름(ADR-021)·**의도적 미도입 칸**(전역 스켈레톤 로더·
+  명시적 오프라인 표시)을 기록.
+- §11 HIG 표에 PWA 상태바 동기화·적응형 실행 모드 2행 추가.
+
+코드 변경 없음(문서·ADR만). 참조한 토큰·클래스·ID·함수명은 `css/style.css`·`js/` 와 대조
+검증 완료.
+
 ## 적응형 내비게이션 (모바일 구현 완료 — ADR-029)
 
 > **갱신 (2026-06-03):** 아래 "구현 대기"였던 모바일 하단 탭 바를 [ADR-029](029-mobile-tab-bar.md)
