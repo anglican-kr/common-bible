@@ -132,6 +132,7 @@ function loadBookmarkQuery(initialStore = []) {
     setStore: (s) => { storeForLoad = s; },
     _walkBookmarks: ctx._walkBookmarks,
     findExistingChapterBookmarks: ctx.findExistingChapterBookmarks,
+    _chapterDeleteMessage: ctx._chapterDeleteMessage,
     _findItemInStore: ctx._findItemInStore,
     _findParentFolderId: ctx._findParentFolderId,
     removeItemById: ctx.removeItemById,
@@ -505,6 +506,24 @@ test('findExistingChapterBookmarks: empty store → empty array', () => {
   const h = loadBookmarkQuery();
   h.setStore([]);
   assert.equal(h.findExistingChapterBookmarks("gen", 1).length, 0);
+});
+
+// ── _chapterDeleteMessage ────────────────────────────────────────────────────
+
+test('_chapterDeleteMessage: single bookmark names it', () => {
+  const h = loadBookmarkQuery();
+  const msg = h._chapterDeleteMessage([{ label: "창세기 1장" }]);
+  assert.equal(msg, '"창세기 1장" 북마크를 삭제할까요?');
+});
+
+test('_chapterDeleteMessage: multiple bookmarks use the count', () => {
+  const h = loadBookmarkQuery();
+  const msg = h._chapterDeleteMessage([
+    { label: "창세기 1장" },
+    { label: "창세기 1:1-3" },
+    { label: "창세기 1:26" },
+  ]);
+  assert.equal(msg, "이 장에 저장된 북마크 3개를 모두 삭제할까요?");
 });
 
 // ── _findItemInStore ─────────────────────────────────────────────────────────

@@ -5211,6 +5211,87 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   color: var(--text-secondary);
 }
 
+/* ── Destructive confirm modal ── */
+
+#bm-confirm-scrim {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 76;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+#bm-confirm-scrim:not([hidden]) {
+  display: block;
+}
+
+#bm-confirm-modal {
+  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  display: none;
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 77;
+  width: min(92vw, 360px);
+  background: var(--bg-card);
+  color: var(--text);
+  border-radius: var(--radius-modal);
+  box-shadow: var(--shadow-4);
+  padding: var(--space-6);
+}
+
+#bm-confirm-modal:not([hidden]) {
+  display: block;
+}
+
+#bm-confirm-title {
+  font-size: var(--font-md);
+  font-weight: 700;
+  margin: 0 0 var(--space-3);
+}
+
+#bm-confirm-body {
+  font-size: var(--font-sm);
+  margin: 0 0 var(--space-4);
+  color: var(--text-secondary);
+  line-height: var(--leading-snug);
+}
+
+#bm-confirm-actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+#bm-confirm-cancel {
+  padding: var(--space-2) var(--space-4);
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-family: inherit;
+  font-size: var(--font-sm);
+  cursor: pointer;
+  color: var(--text);
+}
+
+#bm-confirm-ok {
+  padding: var(--space-2) var(--space-4);
+  background: #c0392b;
+  color: #fff;
+  border: 1px solid #c0392b;
+  border-radius: var(--radius);
+  font-family: inherit;
+  font-size: var(--font-sm);
+  cursor: pointer;
+}
+
+#bm-confirm-ok:hover {
+  background: #a93226;
+  border-color: #a93226;
+}
+
 /* ── Import bookmarks modal ── */
 
 #bm-import-scrim {
