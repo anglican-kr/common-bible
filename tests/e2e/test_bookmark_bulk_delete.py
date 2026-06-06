@@ -7,9 +7,17 @@
 - 목록이 비어 있으면 메뉴의 삭제 항목은 비활성된다
 """
 import json
-from .conftest import CLEAR_APP_STORAGE
+from .conftest import CLEAR_APP_STORAGE, MOBILE_VIEWPORT, IPHONE_UA
 
 BASE = "http://localhost:8080"
+
+# The full /bookmarks view (renderBookmarksView → #bookmarks-view-tree) is mobile
+# only, so these tests need a mobile viewport. On the iPhone UA the install nudge
+# auto-opens after ~1.5s and its scrim intercepts taps; pin neverShow to stop it.
+_PIN_NUDGE = (
+    "localStorage.setItem('bible-install-nudge',"
+    " JSON.stringify({visits: 0, nextShow: 9999, neverShow: true}));"
+)
 
 _BM_ROOT = {"type": "bookmark", "id": "bm-root", "bookId": "gen", "chapter": 1,
             "label": "창세기 1장", "verseSpec": "all"}
@@ -26,7 +34,7 @@ def _open_bookmarks_view(page):
 
 def _set_store(page, store):
     page.evaluate(f"() => window.syncStoreV2.saveBookmarks({json.dumps(store)})")
-    page.evaluate("() => _rerenderActiveBookmarkTree()")
+    page.evaluate("() => window.rerenderActiveBookmarkTree()")
 
 
 def _get_store(page):
@@ -34,7 +42,9 @@ def _get_store(page):
 
 
 def _open_delete_modal(page):
-    page.locator(".title-action-btn").click()
+    # The title row now carries two .title-action-btn buttons (🛈 안내 + ⋯ 더 보기),
+    # so target the ⋯ button by its aria-label rather than the shared class.
+    page.locator(".title-action-btn[aria-label='더 보기']").click()
     page.wait_for_selector(".title-action-menu:not([hidden])")
     page.locator(".title-action-menu-item--danger").click()
     page.wait_for_selector("#bm-bulk-delete-modal:not([hidden])")
@@ -42,8 +52,9 @@ def _open_delete_modal(page):
 
 def test_delete_single_bookmark_via_picker(browser):
     """체크박스로 북마크 하나를 골라 삭제 → 확인 → 목록에서 사라진다."""
-    ctx = browser.new_context()
+    ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA)
     ctx.add_init_script(CLEAR_APP_STORAGE)
+    ctx.add_init_script(_PIN_NUDGE)
     page = ctx.new_page()
     try:
         _open_bookmarks_view(page)
@@ -71,8 +82,9 @@ def test_delete_single_bookmark_via_picker(browser):
 
 def test_folder_selection_cascades_and_deletes_subtree(browser):
     """폴더를 선택하면 안의 북마크도 체크·비활성되고, 삭제 시 함께 사라진다."""
-    ctx = browser.new_context()
+    ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA)
     ctx.add_init_script(CLEAR_APP_STORAGE)
+    ctx.add_init_script(_PIN_NUDGE)
     page = ctx.new_page()
     try:
         _open_bookmarks_view(page)
@@ -104,8 +116,9 @@ def test_folder_selection_cascades_and_deletes_subtree(browser):
 
 def test_select_all_marks_every_row(browser):
     """'전체 선택' 이 모든 행을 체크하고 삭제하면 목록이 빈다."""
-    ctx = browser.new_context()
+    ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA)
     ctx.add_init_script(CLEAR_APP_STORAGE)
+    ctx.add_init_script(_PIN_NUDGE)
     page = ctx.new_page()
     try:
         _open_bookmarks_view(page)
@@ -126,8 +139,9 @@ def test_select_all_marks_every_row(browser):
 
 def test_cancel_confirm_keeps_everything(browser):
     """확인 알림에서 취소하면 아무것도 지워지지 않는다."""
-    ctx = browser.new_context()
+    ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA)
     ctx.add_init_script(CLEAR_APP_STORAGE)
+    ctx.add_init_script(_PIN_NUDGE)
     page = ctx.new_page()
     try:
         _open_bookmarks_view(page)
@@ -147,13 +161,14 @@ def test_cancel_confirm_keeps_everything(browser):
 
 def test_delete_item_disabled_when_empty(browser):
     """목록이 비어 있으면 ⋯ 메뉴의 삭제 항목이 비활성된다."""
-    ctx = browser.new_context()
+    ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA)
     ctx.add_init_script(CLEAR_APP_STORAGE)
+    ctx.add_init_script(_PIN_NUDGE)
     page = ctx.new_page()
     try:
         _open_bookmarks_view(page)
         _set_store(page, [])
-        page.locator(".title-action-btn").click()
+        page.locator(".title-action-btn[aria-label='더 보기']").click()
         page.wait_for_selector(".title-action-menu:not([hidden])")
         assert page.locator(".title-action-menu-item--danger").is_disabled()
     finally:
