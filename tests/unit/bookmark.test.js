@@ -89,6 +89,7 @@ function loadVerseSpec() {
   return {
     parseVerseSpec: ctx.parseVerseSpec,
     collapseFullVerseRefs: ctx.collapseFullVerseRefs,
+    collapseSegmentedVerses: ctx.collapseSegmentedVerses,
     _compareRefs: ctx._compareRefs,
     selectedVersesToSpec: ctx.selectedVersesToSpec,
     mergeVerseSpecs: ctx.mergeVerseSpecs,
@@ -430,6 +431,49 @@ test('collapseFullVerseRefs: single-part verse (no alpha) unchanged', () => {
   // Article reports "3" with no alpha — `hasAlpha` is false, skip collapse
   const article = makeStubArticle(["3"]);
   assert.deepEqual(h.collapseFullVerseRefs(["3"], article), ["3"]);
+});
+
+// ── collapseSegmentedVerses (bookmark-only whole-verse promotion) ─────────────
+
+test('collapseSegmentedVerses: null article → returns refs unchanged', () => {
+  const h = loadVerseSpec();
+  const refs = ["3a", "3b"];
+  assert.deepEqual(h.collapseSegmentedVerses(refs, null), refs);
+});
+
+test('collapseSegmentedVerses: partial selection of multi-part verse → promoted to whole verse', () => {
+  const h = loadVerseSpec();
+  // Article shows verse 23 split into 23a/23b/23c; user selected only 23a + 23c
+  const article = makeStubArticle(["23a", "23b", "23c"]);
+  assert.deepEqual(h.collapseSegmentedVerses(["23a", "23c"], article), ["23"]);
+});
+
+test('collapseSegmentedVerses: single part of multi-part verse → still whole verse', () => {
+  const h = loadVerseSpec();
+  const article = makeStubArticle(["23a", "23b", "23c"]);
+  assert.deepEqual(h.collapseSegmentedVerses(["23b"], article), ["23"]);
+});
+
+test('collapseSegmentedVerses: all parts selected → whole verse (parity with full-collapse)', () => {
+  const h = loadVerseSpec();
+  const article = makeStubArticle(["3a", "3b"]);
+  assert.deepEqual(h.collapseSegmentedVerses(["3a", "3b"], article), ["3"]);
+});
+
+test('collapseSegmentedVerses: single-part verse (no alpha) unchanged', () => {
+  const h = loadVerseSpec();
+  const article = makeStubArticle(["5"]);
+  assert.deepEqual(h.collapseSegmentedVerses(["5"], article), ["5"]);
+});
+
+test('collapseSegmentedVerses: mixes multi-part and single-part verses, dedups, first-seen order', () => {
+  const h = loadVerseSpec();
+  // 23 is split (a/b/c), 24 is single; select 23a + 23c + 24 → "23" once + "24"
+  const article = makeStubArticle(["23a", "23b", "23c", "24"]);
+  assert.deepEqual(
+    h.collapseSegmentedVerses(["23a", "23c", "24"], article),
+    ["23", "24"],
+  );
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

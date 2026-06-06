@@ -91,6 +91,45 @@ function collapseFullVerseRefs(refs, article) {
   return result;
 }
 
+// Bookmark-only (ADR-010): a prose verse split into a/b/c line-spans by an
+// inline citation is conceptually one verse, so bookmarks ignore the sub-verse
+// segmentation — selecting *any* span of a multi-part verse stores the whole
+// verse number, even on a partial selection. (The selection bar label and the
+// copy serializer keep per-span granularity; only the saved bookmark collapses.)
+// Single-part verses pass through unchanged.
+/**
+ * @param {string[]} refs
+ * @param {Element | null | undefined} article
+ * @returns {string[]}
+ */
+function collapseSegmentedVerses(refs, article) {
+  if (!article) return refs;
+  // Group by integer verse number, preserving first-seen order.
+  /** @type {Record<string, string[]>} */
+  const byVerse = {};
+  /** @type {string[]} */
+  const order = [];
+  for (const ref of refs) {
+    const n = parseInt(ref, 10);
+    if (!byVerse[n]) { byVerse[n] = []; order.push(`${n}`); }
+    byVerse[n].push(ref);
+  }
+  const result = [];
+  for (const n of order) {
+    // All spans rendered for this verse number
+    const allSpanRefs = [...article.querySelectorAll(".verse[data-vref]")]
+      .map((s) => s.getAttribute("data-vref") ?? "")
+      .filter((r) => r && parseInt(r, 10) === Number(n));
+    const hasAlpha = allSpanRefs.some((r) => /[a-z]$/.test(r));
+    if (hasAlpha) {
+      result.push(`${n}`);
+    } else {
+      result.push(...byVerse[n]);
+    }
+  }
+  return result;
+}
+
 // Compare verse refs: "3" < "3a" < "3b" < "4"
 /** @param {string} a @param {string} b */
 function _compareRefs(a, b) {
@@ -1945,7 +1984,9 @@ function openSaveModal(mode, opts = {}) {
 
   if (mode === "verses") {
     const article = document.querySelector("article.chapter-text");
-    const refs = collapseFullVerseRefs(Array.from(readingContext.selectedVerses), article);
+    // Bookmarks treat a cite-split prose verse as one whole verse, so a partial
+    // span selection (e.g. 23a but not 23b/23c) is promoted to 23.
+    const refs = collapseSegmentedVerses(Array.from(readingContext.selectedVerses), article);
     verseSpec = refs.length ? selectedVersesToSpec(refs) : "all";
   } else if (existing) {
     verseSpec = existing.verseSpec ?? "all";
@@ -2731,7 +2772,7 @@ function initBookmarkDrawerResize() {
 
 const appBookmark = {
   // Phase 6a helpers
-  parseVerseSpec, collapseFullVerseRefs, selectedVersesToSpec, mergeVerseSpecs,
+  parseVerseSpec, collapseFullVerseRefs, collapseSegmentedVerses, selectedVersesToSpec, mergeVerseSpecs,
   serializeVerseRange,
   findExistingChapterBookmarks,
   _walkBookmarks, _findItemInStore, _findParentFolderId,
