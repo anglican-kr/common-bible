@@ -125,3 +125,12 @@ ADR-029 는 Safari 26 home-indicator 틴팅 회피를 위해 glass 를 `::before
 
 - 오디오 미니 모핑 모션 다듬기(`sticky→fixed` 위치 전환 스냅 → 부드러운 전환).
 - 데스크탑 사이드바(≥~1024px)는 ADR-029 §6 후속 유지.
+
+## 적용 확장
+
+- **절 선택 액션 바 형식 통일 (2026-06-06).** 절 선택 모드의 하단 바(`#verse-select-bar`)를
+  본 ADR 의 탭 dock 형식(floating glass 캡슐 + 아이콘 전용)으로 개편 — 투명 flex dock =
+  `[아이콘 글래스 pill] + [취소 글래스 원형]`, 카운트는 캡슐 위 부유 칩. 글래스 레시피
+  (`--glass-sheen`/`--bg 50%`/`blur(12px)`/`--shadow-2`/`--glass-inset`/`--radius-pill` +
+  `superellipse(2)`)와 60px 치수를 그대로 공유. 북마크·복사 + 노트 슬롯(placeholder).
+  결정·구현 상세는 **ADR-010 §절 선택 바 개정 (2026-06-06)**.
