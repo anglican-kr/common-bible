@@ -1699,18 +1699,21 @@ function buildBmViewActions() {
   ], () => {
     openNewFolderModal((_newId) => { _rerenderActiveBookmarkTree(); });
   });
-  // 내보내기 — square.and.arrow.up
+  // 내보내기 — square.and.arrow.up. Arrow + tray are a true vertical mirror of
+  // 가져오기, and both arrowheads stop one unit above the tray (y12 vs tray y13)
+  // so neither fuses with it — the head fusing into the tray is what made the
+  // down arrow read as smaller (optical illusion, not actual size).
   addMenuItem("내보내기", [
-    "M12 15V4",
+    "M12 12V4",
     "M8.5 7.5 12 4l3.5 3.5",
     "M5 13v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5",
   ], () => {
     exportBookmarks();
   });
-  // 가져오기 — square.and.arrow.down
+  // 가져오기 — square.and.arrow.down (mirror of 내보내기 above)
   addMenuItem("가져오기", [
-    "M12 4v11",
-    "M8.5 11.5 12 15l3.5-3.5",
+    "M12 4v8",
+    "M8.5 8.5 12 12l3.5-3.5",
     "M5 13v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5",
   ], () => {
     $bmImportInput.value = "";
