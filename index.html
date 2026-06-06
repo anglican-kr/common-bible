@@ -303,6 +303,25 @@
     </div>
   </div>
 
+  <!-- ── Bookmark Bulk Delete Selection Modal (⋯ 메뉴 → 삭제) ──
+       북마크 목록 전체를 트리 순서대로(폴더 → 자식) 체크박스 목록으로 펼쳐, 삭제할
+       대상을 골라 한 번에 지운다. 폴더를 선택하면 안의 항목이 cascade 로 함께 표시·
+       삭제된다. "삭제 (N)" 를 누르면 bm-confirm 알림으로 최종 확인을 받는다. -->
+  <div id="bm-bulk-delete-scrim" aria-hidden="true" hidden></div>
+  <div id="bm-bulk-delete-modal" role="dialog" aria-modal="true" aria-labelledby="bm-bulk-delete-title" aria-describedby="bm-bulk-delete-desc" hidden>
+    <h2 id="bm-bulk-delete-title">북마크 삭제</h2>
+    <p id="bm-bulk-delete-desc">삭제할 북마크나 폴더를 선택하세요. 폴더를 선택하면 안의 항목도 함께 삭제됩니다.</p>
+    <label id="bm-bulk-delete-all-row">
+      <input type="checkbox" id="bm-bulk-delete-all" />
+      <span>전체 선택</span>
+    </label>
+    <ul id="bm-bulk-delete-list" role="group" aria-label="북마크 목록"></ul>
+    <div id="bm-bulk-delete-actions">
+      <button id="bm-bulk-delete-cancel" type="button">취소</button>
+      <button id="bm-bulk-delete-confirm" type="button" disabled>삭제</button>
+    </div>
+  </div>
+
   <!-- ── Drive Disconnect Modal ── -->
   <div id="drive-disconnect-scrim" aria-hidden="true" hidden></div>
   <div id="drive-disconnect-modal" role="dialog" aria-modal="true" aria-labelledby="drive-disconnect-title" hidden>

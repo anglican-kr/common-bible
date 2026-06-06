@@ -378,6 +378,50 @@ function collectFolderOptions(store, depth = 0, options = []) {
   }
   return options;
 }
+
+// Bulk-delete picker (⋯ 메뉴 → 삭제). These two pure helpers drive the
+// multi-select delete modal so its row layout and folder cascade stay testable
+// without a DOM.
+
+/**
+ * Flatten the bookmark tree into a depth-tagged, pre-order list (folder before
+ * its children) for the bulk-delete picker. Each entry carries the display
+ * label, node type, nesting depth, and parent folder id (null at root) so the
+ * picker can indent rows and walk the ancestor chain when cascading a folder
+ * tick across its subtree.
+ * @param {BookmarkTreeNode[]} store
+ * @param {number} [depth]
+ * @param {string | null} [parentId]
+ * @param {Array<{ id: string, type: string, label: string, depth: number, parentId: string | null }>} [out]
+ * @returns {Array<{ id: string, type: string, label: string, depth: number, parentId: string | null }>}
+ */
+function _flattenBookmarkTree(store, depth = 0, parentId = null, out = []) {
+  for (const item of store || []) {
+    const label = item.type === "folder" ? item.name : item.label;
+    out.push({ id: item.id, type: item.type, label: label ?? "", depth, parentId });
+    if (item.type === "folder") _flattenBookmarkTree(item.children, depth + 1, item.id, out);
+  }
+  return out;
+}
+
+/**
+ * Ids of every descendant under a node (folders + bookmarks), excluding the
+ * node itself; empty for a bookmark. Lets the bulk-delete picker forget the
+ * per-device viewed timestamps of a folder's nested bookmarks before the folder
+ * is spliced out.
+ * @param {BookmarkTreeNode} node
+ * @param {string[]} [out]
+ * @returns {string[]}
+ */
+function _descendantIds(node, out = []) {
+  if (node && node.type === "folder") {
+    for (const child of node.children || []) {
+      out.push(child.id);
+      _descendantIds(child, out);
+    }
+  }
+  return out;
+}
 // ── END BOOKMARK_QUERY ──
 
 // ── BEGIN DRAG_CORE ──
@@ -860,6 +904,12 @@ const $bmChapterDeleteAll = /** @type {HTMLInputElement} */ (_$("bm-chapter-dele
 const $bmChapterDeleteList = _$("bm-chapter-delete-list");
 const $bmChapterDeleteConfirm = /** @type {HTMLButtonElement} */ (_$("bm-chapter-delete-confirm"));
 const $bmChapterDeleteCancel = _$("bm-chapter-delete-cancel");
+const $bmBulkDeleteScrim = _$("bm-bulk-delete-scrim");
+const $bmBulkDeleteModal = _$("bm-bulk-delete-modal");
+const $bmBulkDeleteAll = /** @type {HTMLInputElement} */ (_$("bm-bulk-delete-all"));
+const $bmBulkDeleteList = _$("bm-bulk-delete-list");
+const $bmBulkDeleteConfirm = /** @type {HTMLButtonElement} */ (_$("bm-bulk-delete-confirm"));
+const $bmBulkDeleteCancel = _$("bm-bulk-delete-cancel");
 const $verseSelectBar = _$("verse-select-bar");
 const $verseSelectCount = _$("verse-select-count");
 const $verseSelectBookmarkBtn = /** @type {HTMLButtonElement} */ (_$("verse-select-bookmark-btn"));
@@ -1740,6 +1790,9 @@ function buildBmViewActions() {
     for (const { item, mode } of sortItems) item.setAttribute("aria-checked", String(mode === cur));
   }
 
+  // Assigned once the 삭제 item is built; refreshes its enabled state per open.
+  let refreshDeleteEnabled = () => {};
+
   function closeMenu() {
     if (menu.hidden) return;
     menu.hidden = true;
@@ -1750,6 +1803,7 @@ function buildBmViewActions() {
   function openMenu() {
     if (!menu.hidden) return;
     syncSortChecks();
+    refreshDeleteEnabled();
     menu.hidden = false;
     moreBtn.setAttribute("aria-expanded", "true");
     // Capture phase so an outside click closes before it acts elsewhere.
@@ -1862,10 +1916,40 @@ function buildBmViewActions() {
     $bmImportInput.value = "";
     $bmImportInput.click();
   });
+  // 삭제 — trash. Opens the multi-select delete picker (checkboxes + confirm).
+  // Lives in its own group below a divider and reads in the destructive accent,
+  // since it's the only action here that removes data. Disabled while the list
+  // is empty (synced on each open).
+  const deleteGroup = el("div", { className: "title-action-menu-group", role: "group" });
+  const deleteItem = el("button", {
+    className: "title-action-menu-item title-action-menu-item--action title-action-menu-item--danger",
+    type: "button",
+    role: "menuitem",
+  });
+  const delGlyph = el("span", { className: "title-action-menu-icon", "aria-hidden": "true" });
+  delGlyph.appendChild(_bmMenuIcon([
+    "M5 7h14",
+    "M9 7V5.6A1.6 1.6 0 0 1 10.6 4h2.8A1.6 1.6 0 0 1 15 5.6V7",
+    "M7.5 7l.7 11.2A1.8 1.8 0 0 0 10 20h4a1.8 1.8 0 0 0 1.8-1.8L16.5 7",
+    "M10.5 10.5v6M13.5 10.5v6",
+  ]));
+  deleteItem.appendChild(delGlyph);
+  deleteItem.appendChild(el("span", { className: "title-action-menu-label" }, "삭제"));
+  deleteItem.addEventListener("click", () => {
+    closeMenu();
+    openBulkDeleteModal();
+  });
+  deleteGroup.appendChild(deleteItem);
+
+  // Reflect emptiness whenever the menu opens (the DOM outlives re-renders).
+  refreshDeleteEnabled = () => { deleteItem.disabled = loadBookmarks().length === 0; };
 
   // Action group on top, then a single hairline divider, then the 정렬 group
-  // (Apple Music keeps one group divider; per-item lines were dropped).
+  // (Apple Music keeps one group divider; per-item lines were dropped). The
+  // destructive 삭제 action sits in its own group beneath a second divider.
   menu.appendChild(actionGroup);
+  menu.appendChild(el("div", { className: "title-action-menu-sep", role: "separator" }));
+  menu.appendChild(deleteGroup);
   menu.appendChild(el("div", { className: "title-action-menu-sep", role: "separator" }));
   menu.appendChild(sortGroup);
 
@@ -2392,6 +2476,159 @@ function openChapterDeleteModal(candidates) {
 
 function closeChapterDeleteModal() { chapterDeleteOverlay.close(); }
 
+// ── Bulk delete picker (⋯ 메뉴 → 삭제) ──
+// Multi-select delete over the whole bookmark list: the tree is flattened into
+// a checkbox list (folder before its children, indented by depth), the reader
+// ticks targets, and "삭제 (N)" hands off to the shared destructive confirm.
+// Ticking a folder cascades — its descendant rows show checked + disabled (they
+// go with the folder), so N counts every node that will actually be removed.
+// closeOnEsc off: in the stacked Escape router (confirm > bulk-delete > …).
+const bulkDeleteOverlay = createOverlay({
+  panel: $bmBulkDeleteModal,
+  scrim: $bmBulkDeleteScrim,
+  initialFocus: () => $bmBulkDeleteCancel,
+  onClose: () => {
+    $bmBulkDeleteConfirm.onclick = null;
+    $bmBulkDeleteCancel.onclick = null;
+    $bmBulkDeleteAll.onchange = null;
+  },
+});
+
+function openBulkDeleteModal() {
+  const store = loadBookmarks();
+  const flat = _flattenBookmarkTree(store);
+  if (!flat.length) return;
+
+  // Explicit ticks only; rows under an explicitly-ticked folder are derived as
+  // "covered" so they never need to live in the set themselves.
+  /** @type {Set<string>} */
+  const selected = new Set();
+  const parentOf = new Map(flat.map((e) => [e.id, e.parentId]));
+  /** @type {Map<string, HTMLInputElement>} */
+  const checkById = new Map();
+
+  // True when any ancestor folder is explicitly ticked (so this row is deleted
+  // as part of that folder and can't be toggled on its own).
+  /** @param {string} id */
+  const ancestorSelected = (id) => {
+    let p = parentOf.get(id);
+    while (p != null) {
+      if (selected.has(p)) return true;
+      p = parentOf.get(p);
+    }
+    return false;
+  };
+  // Top-most explicit selections (drop any nested under another selection) —
+  // the actual set of ids handed to removeItemById (folders splice their whole
+  // subtree, so deleting the descendants too would be redundant).
+  const effectiveTargets = () => [...selected].filter((id) => !ancestorSelected(id));
+  // A row is "marked for deletion" when it's explicitly ticked or covered by a
+  // ticked ancestor. The count of such rows == the number of nodes removed.
+  const markedCount = () => flat.filter((e) => selected.has(e.id) || ancestorSelected(e.id)).length;
+
+  const syncChrome = () => {
+    for (const { id } of flat) {
+      const check = checkById.get(id);
+      if (!check) continue;
+      const covered = ancestorSelected(id);
+      check.checked = covered || selected.has(id);
+      check.disabled = covered;
+    }
+    const count = markedCount();
+    const state = _selectAllState(count, flat.length);
+    $bmBulkDeleteAll.checked = state === "all";
+    $bmBulkDeleteAll.indeterminate = state === "some";
+    $bmBulkDeleteConfirm.textContent = _deleteBtnLabel(count);
+    $bmBulkDeleteConfirm.disabled = count === 0;
+  };
+
+  clearNode($bmBulkDeleteList);
+  flat.forEach((entry, i) => {
+    const id = `bm-bulk-del-${i}`;
+    const li = el("li", { className: "bm-bulk-delete-item" });
+    const labelEl = el("label", { className: "bm-bulk-delete-label", for: id });
+    if (entry.depth > 0) labelEl.style.setProperty("--bm-bulk-indent", `calc(var(--space-5) * ${entry.depth})`);
+    const input = /** @type {HTMLInputElement} */ (el("input", { type: "checkbox", id }));
+    checkById.set(entry.id, input);
+    input.addEventListener("change", () => {
+      // Disabled (covered) rows can't reach here; guard anyway.
+      if (input.disabled) return;
+      if (input.checked) {
+        // Subsume any descendants already ticked — the folder now owns them.
+        if (entry.type === "folder") {
+          const found = _findItemInStore(store, entry.id);
+          if (found) for (const childId of _descendantIds(found.item)) selected.delete(childId);
+        }
+        selected.add(entry.id);
+      } else {
+        selected.delete(entry.id);
+      }
+      syncChrome();
+    });
+    const icon = el("span", { className: "bm-bulk-delete-icon", "aria-hidden": "true" });
+    icon.appendChild(entry.type === "folder"
+      ? _buildFolderToggleIcon(false, 18)
+      : _buildBookmarkTypeIcon(false, 18));
+    const text = el("span", { className: "bm-bulk-delete-text" }, entry.label);
+    labelEl.appendChild(input);
+    labelEl.appendChild(icon);
+    labelEl.appendChild(text);
+    li.appendChild(labelEl);
+    $bmBulkDeleteList.appendChild(li);
+  });
+
+  $bmBulkDeleteAll.onchange = () => {
+    selected.clear();
+    // Ticking all = select every root node (covers the whole tree); the per-row
+    // sync then marks descendants via the cascade.
+    if ($bmBulkDeleteAll.checked) {
+      for (const e of flat) if (e.parentId == null) selected.add(e.id);
+    }
+    syncChrome();
+  };
+
+  syncChrome();
+  bulkDeleteOverlay.open();
+
+  $bmBulkDeleteConfirm.onclick = () => {
+    const targets = effectiveTargets();
+    const removed = markedCount();
+    if (!targets.length) return;
+    openConfirmModal({
+      title: "북마크 삭제",
+      message: removed === 1
+        ? "선택한 항목을 삭제할까요?"
+        : `선택한 항목 ${removed}개를 삭제할까요?`,
+      confirmLabel: "삭제",
+      onConfirm: () => {
+        const live = loadBookmarks();
+        for (const id of targets) {
+          const found = _findItemInStore(live, id);
+          if (!found) continue;
+          // Cascade: forget per-device viewed timestamps for the node and (for a
+          // folder) every nested bookmark, mirroring single/folder delete.
+          if (found.item.type === "folder") {
+            _walkBookmarks(found.item.children, (it) => {
+              if (it.type === "bookmark") _forgetViewed(it.id);
+            });
+          } else {
+            _forgetViewed(id);
+          }
+          removeItemById(live, id);
+        }
+        saveBookmarks(live);
+        _rerenderActiveBookmarkTree();
+        refreshBookmarkHeaderBtn();
+        announce(removed === 1 ? "1개 항목을 삭제했습니다." : `${removed}개 항목을 삭제했습니다.`);
+        closeBulkDeleteModal();
+      },
+    });
+  };
+  $bmBulkDeleteCancel.onclick = closeBulkDeleteModal;
+}
+
+function closeBulkDeleteModal() { bulkDeleteOverlay.close(); }
+
 // ── Export / Import bookmarks (Phase 2a) ──
 
 function exportBookmarks() {
@@ -2632,6 +2869,8 @@ $bmConfirmScrim.addEventListener("click", closeConfirmModal);
 
 $bmChapterDeleteScrim.addEventListener("click", closeChapterDeleteModal);
 
+$bmBulkDeleteScrim.addEventListener("click", closeBulkDeleteModal);
+
 $bmNewFolderClose.addEventListener("click", closeNewFolderModal);
 $bmNewFolderScrim.addEventListener("click", closeNewFolderModal);
 $bmNewFolderCancel.addEventListener("click", closeNewFolderModal);
@@ -2745,6 +2984,7 @@ document.addEventListener("keydown", (e) => {
     if (!$bmNewFolderModal.hidden) { e.preventDefault(); e.stopPropagation(); closeNewFolderModal(); return; }
     if (!$bmConfirmModal.hidden) { closeConfirmModal(); return; }
     if (!$bmChapterDeleteModal.hidden) { closeChapterDeleteModal(); return; }
+    if (!$bmBulkDeleteModal.hidden) { closeBulkDeleteModal(); return; }
     if (!$bmImportModal.hidden) { closeImportModal(); return; }
     if (!$bmMergeModal.hidden) { closeMergeModal(); return; }
     if (!$bmSaveModal.hidden) { closeSaveModal(); return; }
@@ -2843,6 +3083,8 @@ window.closeImportModal = closeImportModal;
 window.closeConfirmModal = closeConfirmModal;
 // Same rationale for the chapter-delete picker (header bookmark toggle-off).
 window.closeChapterDeleteModal = closeChapterDeleteModal;
+// Same rationale for the bulk-delete picker (⋯ menu "삭제" entry).
+window.closeBulkDeleteModal = closeBulkDeleteModal;
 window.renderBookmarkTree = renderBookmarkTree;
 // Re-render whichever bookmark surface is mounted (drawer OR /bookmarks full
 // view). Sync layer + mutation flows use this so the visible tree refreshes.
