@@ -1876,6 +1876,9 @@ async function route() {
     // over the book list so a deep-link / resize-down never dead-ends.
     if (view === "bookmarks") {
       if (isMobile()) {
+        // Ensure the books cache is populated so bookmark refs resolve to the
+        // Korean short name (창세) instead of falling back to the raw id (gen).
+        await loadBooks();
         window.renderBookmarksView();
         dismissLaunchScreen();
         updatePageMeta({ title: "북마크", description: "공동번역성서 북마크 목록" });

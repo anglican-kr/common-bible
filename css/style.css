@@ -1809,6 +1809,14 @@ mark.search-highlight {
   padding: var(--space-8) var(--space-4) var(--space-4);
 }
 
+/* The bookmark tab view manages its own horizontal insets (rows full-bleed so a
+   swipe action's color reaches the screen edge; content text inset only by its
+   own padding). Drop #app's horizontal padding for it so it isn't double-inset. */
+#app:has(.bookmarks-view) {
+  padding-left: 0;
+  padding-right: 0;
+}
+
 /* ── Resume Banner ── */
 #resume-banner-slot {
   position: relative;
