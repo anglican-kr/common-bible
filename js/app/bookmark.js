@@ -439,8 +439,10 @@ function closeSwipedRow(except) {
 /** @param {HTMLElement} row @param {"edit" | "delete"} dir */
 function _openSwipedRow(row, dir) {
   closeSwipedRow(row);
-  const content = /** @type {HTMLElement | null} */ (row.querySelector(".bm-row-content"));
-  if (content) content.style.transform = "";
+  // Reset THIS row too: closeSwipedRow skips it when it's already the tracked
+  // row, so re-snapping to the opposite edge would otherwise leave the prior
+  // bm-swiped-edit/delete class stacked alongside the new one.
+  _resetRowSwipe(row);
   row.classList.add("bm-swiped", dir === "delete" ? "bm-swiped-delete" : "bm-swiped-edit");
   _swipedRow = row;
 }

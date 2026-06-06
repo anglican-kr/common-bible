@@ -807,6 +807,20 @@ test('_openSwipedRow: marks new row (with direction) + clears prior swiped row',
   assert.ok(rowB.classList.contains("bm-swiped-delete"));
 });
 
+test('_openSwipedRow: re-snapping the same row to the opposite edge drops the stale direction', () => {
+  const h = loadSwipedRow();
+  const row = new h.Element();
+  row.setContentChild(new h.ContentEl());
+  h._openSwipedRow(row, "edit");
+  assert.ok(row.classList.contains("bm-swiped-edit"));
+  // Snap the SAME (already-tracked) row the other way — only the new direction
+  // class should remain, not both.
+  h._openSwipedRow(row, "delete");
+  assert.ok(row.classList.contains("bm-swiped-delete"));
+  assert.equal(row.classList.contains("bm-swiped-edit"), false);
+  assert.equal(h.peekSwipedRow(), row);
+});
+
 // ── resetSwipedRow ───────────────────────────────────────────────────────────
 
 test('resetSwipedRow: clears _swipedRow without DOM mutation', () => {
