@@ -350,3 +350,12 @@ li.bm-bookmark
 > (확인 다이얼로그·핸들러 재사용). 텍스트 오버레이 가림 이슈는 콘텐츠가 함께 미끄러지므로 자연 해소.
 > `prefers-reduced-motion`은 `.bm-row-content { transition: none }`. 순수 상태 로직은 유닛
 > (`SWIPED_ROW` 블록), 제스처·full-swipe는 e2e.
+>
+> **시각 다듬기 (2026-06-06 후속):** 액션을 **full-bleed**(좌우 0)로 깔고 방향 클래스
+> (`bm-swiping-delete/edit` 드래그 중, `bm-swiped-delete/edit` 고정)로 해당 방향만 `opacity:1` 노출 —
+> 평상시(닫힘) 액션이 안 보이고, 노출 시 **컬러가 화면 가장자리 끝까지** 채워진다(양방향). **콘텐츠 카드**에만
+> `border-radius`(스와이프/열림 시)를 줘 카드 모서리만 둥글고 액션은 가장자리 직각으로 닿는다. 라벨은
+> `--swipe-reveal` 폭 고정 span 을 가장자리에 핀(`flex-start`/`flex-end`)해 **full-swipe 로 액션이 넓어져도
+> 글자가 중앙으로 밀리지 않는다**. 행 높이: 본문 1.8 leading 상속으로 2줄 북마크가 1줄 폴더보다 커서 짧은
+> 폴더 뒤 액션이 비치던 문제 → `.bm-row-content` 에 `line-height: --leading-snug` + 공유 `min-height` +
+> `align-self: stretch` 로 폴더·북마크 **동일 높이** + 콘텐츠가 행을 꽉 채워 피킹 제거.

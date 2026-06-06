@@ -593,9 +593,9 @@ function _setupDragHandle(li, row) {
         // Slide the content; the edge-anchored action beneath is exposed.
         // offset < 0 → content slides left → 수정 (right). offset > 0 → 삭제 (left).
         if (contentEl) contentEl.style.transform = `translateX(${offset}px)`;
-        // Arm the action a full swipe would fire (it fills the row behind).
-        row.classList.toggle("bm-swipe-armed-edit", offset <= -commitPx);
-        row.classList.toggle("bm-swipe-armed-delete", offset >= commitPx);
+        // Show the action for the current direction (full-bleed behind content).
+        row.classList.toggle("bm-swiping-delete", offset > 0);
+        row.classList.toggle("bm-swiping-edit", offset < 0);
         return;
       }
 
@@ -611,7 +611,7 @@ function _setupDragHandle(li, row) {
       cleanupPointerHandlers();
 
       if (mode === "swipe") {
-        row.classList.remove("bm-swiping", "bm-swipe-armed-edit", "bm-swipe-armed-delete");
+        row.classList.remove("bm-swiping", "bm-swiping-delete", "bm-swiping-edit");
         if (contentEl) contentEl.style.transform = "";
         const finalOffset = baseOffset + (e.clientX - startX);
         if (finalOffset <= -commitPx) {
@@ -661,7 +661,7 @@ function _setupDragHandle(li, row) {
       cleanupPointerHandlers();
 
       if (mode === "swipe") {
-        row.classList.remove("bm-swiping", "bm-swipe-armed-edit", "bm-swipe-armed-delete");
+        row.classList.remove("bm-swiping", "bm-swiping-delete", "bm-swiping-edit");
         if (contentEl) contentEl.style.transform = "";
         // Snap back to the pre-gesture state on cancel.
         if (startedDir) {
@@ -1092,13 +1092,13 @@ function _buildSwipeActions(label, editAction, deleteAction) {
     className: "bm-swipe-action bm-swipe-delete",
     type: "button",
     "aria-label": `${label} 삭제`,
-  }, "삭제");
+  }, el("span", { className: "bm-swipe-label" }, "삭제"));
   del.addEventListener("click", deleteAction);
   const edit = el("button", {
     className: "bm-swipe-action bm-swipe-edit",
     type: "button",
     "aria-label": `${label} 수정`,
-  }, "수정");
+  }, el("span", { className: "bm-swipe-label" }, "수정"));
   edit.addEventListener("click", editAction);
   return { del, edit };
 }

@@ -5377,8 +5377,15 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
     padding: var(--space-3) var(--space-4);
     background: var(--bg);
     position: relative;
-    z-index: 1; /* slider sits above the edge-anchored actions, hiding them when closed */
-    min-height: 3.5rem;
+    z-index: 1; /* slider sits above the full-bleed actions, hiding them when closed */
+    /* Compact, list-appropriate leading (vs the body's relaxed 1.8 scripture
+       leading) so the 2-line bookmark stays within the shared row height. */
+    line-height: var(--leading-snug);
+    /* Shared floor so folder (1 line) and bookmark (2 lines) rows are the SAME
+       height; align-self:stretch then makes the content fill the row so the
+       action behind it never peeks above/below. */
+    min-height: 4.4rem;
+    align-self: stretch;
     box-sizing: border-box;
     transition: transform var(--duration-base) cubic-bezier(0.25, 0.46, 0.45, 0.94);
     will-change: transform;
@@ -5399,35 +5406,59 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
     background: transparent;
   }
 
-  /* Edge-anchored swipe actions behind the sliding content (ADR-010 개정):
-     삭제 on the left (revealed by swiping right), 수정 on the right (swiping left). */
+  /* Both actions are full-bleed behind the sliding content (ADR-010 개정):
+     삭제 (revealed by swiping right), 수정 (swiping left). Full-bleed so the
+     content card's rounded leading corner reveals the action color (not a bg
+     notch) and the color reaches the screen edge/corner sharply. Only the action
+     for the current swipe direction is shown. */
   .bm-swipe-action {
     display: flex;
     align-items: center;
-    justify-content: center;
     position: absolute;
     top: 0;
     bottom: 0;
+    left: 0;
+    right: 0;
     z-index: 0;
-    min-width: var(--swipe-reveal);
-    padding: 0 var(--space-4);
+    padding: 0;
     border: none;
-    font-family: inherit;
-    font-size: var(--font-sm);
     color: #fff;
     cursor: pointer;
+    opacity: 0;
     touch-action: manipulation;
   }
 
+  /* Label sits in a fixed reveal-width zone pinned to the action's edge, so it
+     keeps its position when a full swipe widens the exposed area (no drift). */
+  .bm-swipe-label {
+    width: var(--swipe-reveal);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: var(--font-sm);
+  }
+
   .bm-swipe-delete {
-    left: 0;
     background: #c0392b;
+    justify-content: flex-start;
   }
 
   .bm-swipe-edit {
-    right: 0;
     background: var(--accent);
     color: var(--bg);
+    justify-content: flex-end;
+  }
+
+  /* Show only the action matching the current swipe direction. */
+  .bm-bookmark-row.bm-swiping-delete .bm-swipe-delete,
+  .bm-bookmark-row.bm-swiped-delete .bm-swipe-delete,
+  .bm-folder-row.bm-swiping-delete .bm-swipe-delete,
+  .bm-folder-row.bm-swiped-delete .bm-swipe-delete,
+  .bm-bookmark-row.bm-swiping-edit .bm-swipe-edit,
+  .bm-bookmark-row.bm-swiped-edit .bm-swipe-edit,
+  .bm-folder-row.bm-swiping-edit .bm-swipe-edit,
+  .bm-folder-row.bm-swiped-edit .bm-swipe-edit {
+    opacity: 1;
   }
 
   /* Snap-open states: slide the content to expose one edge's action. */
@@ -5441,24 +5472,14 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
     transform: translateX(var(--swipe-reveal));
   }
 
-  /* Round the row corners while swiping/open. The row stays full-bleed (no
-     margin) so the revealed action color reaches the screen edge on both sides;
-     overflow:hidden clips the content + action to the radius, giving the action
-     rounded outer corners right at the edge. */
-  .bm-bookmark-row.bm-swiping,
-  .bm-bookmark-row.bm-swiped,
-  .bm-folder-row.bm-swiping,
-  .bm-folder-row.bm-swiped {
+  /* Round the content card while swiping/open (the bookmark itself, not the row).
+     The row stays full-bleed (no margin) so the action color reaches the edge;
+     the card's rounded leading corner sits over the full-bleed action. */
+  .bm-bookmark-row.bm-swiping .bm-row-content,
+  .bm-bookmark-row.bm-swiped .bm-row-content,
+  .bm-folder-row.bm-swiping .bm-row-content,
+  .bm-folder-row.bm-swiped .bm-row-content {
     border-radius: var(--radius-lg);
-  }
-
-  /* Full-swipe arm: the target action fills the row behind the content. */
-  .bm-swipe-armed-edit .bm-swipe-edit {
-    left: 0;
-  }
-
-  .bm-swipe-armed-delete .bm-swipe-delete {
-    right: 0;
   }
 
   /* Disable the snap transition while the finger drives the slide. */
