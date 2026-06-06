@@ -4074,12 +4074,11 @@ body.tabbar-searching #search-inpage-bar { display: none; }
   justify-content: center;
 }
 
-/* Per Apple HIG (Files menu), the checkmark owns the far-left column and the
-   action icons start one column in — aligned with the sort group's labels.
-   Indent the action rows by exactly that checkmark column (slot + gap). */
-.title-action-menu-item--action {
-  padding-left: calc(var(--space-4) + var(--menu-lead) + var(--space-3));
-}
+/* Deliberate HIG deviation: Apple's Files menu reserves the far-left column for
+   the checkmark and starts action icons one column in. We instead place the
+   action icon in that same far-left column as the sort checkmark, so both groups
+   share one icon column (and one label column) for a single consistent rhythm.
+   The action row therefore keeps the base padding-left — no extra indent. */
 
 .title-action-menu-check svg {
   width: 1.15rem;
