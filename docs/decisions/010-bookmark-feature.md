@@ -372,3 +372,11 @@ li.bm-bookmark
 > 글자가 중앙으로 밀리지 않는다**. 행 높이: 본문 1.8 leading 상속으로 2줄 북마크가 1줄 폴더보다 커서 짧은
 > 폴더 뒤 액션이 비치던 문제 → `.bm-row-content` 에 `line-height: --leading-snug` + 공유 `min-height` +
 > `align-self: stretch` 로 폴더·북마크 **동일 높이** + 콘텐츠가 행을 꽉 채워 피킹 제거.
+>
+> **중첩 행 full-bleed (2026-06-06 후속²):** 폴더 안 북마크는 `.bm-folder-children`
+> `padding-left`(들여쓰기) 때문에 행이 안쪽으로 밀려 스와이프 액션 컬러가 화면 끝에
+> 닿지 못하고 여백이 생겼다. 모바일에서 **들여쓰기를 UL 패딩 → 콘텐츠 패딩으로 이전** —
+> `.bm-folder-children { padding-left: 0 }`(행 full-bleed) + `.bm-row-content`
+> `padding-left: calc(var(--space-4) + var(--bm-indent))`, 깊이별 `--bm-indent`(= `--space-8 × depth`)
+> 를 아이템 빌더가 콘텐츠에 인라인 설정. 본문 위치는 동일(루트 16px, depth1 48px…)하되 행은
+> 가장자리까지 차 액션 컬러가 화면 끝에 닿는다. 데스크탑은 스와이프가 없어 기존 UL 패딩 유지.
