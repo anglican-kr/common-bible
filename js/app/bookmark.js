@@ -805,6 +805,31 @@ function buildHomeBtn(target, ariaLabel) {
 // is bookmarked" visual cue.
 const BOOKMARK_ICON_OUTLINE = "M160-80v-560q0-33 23.5-56.5T240-720h320q33 0 56.5 23.5T640-640v560L400-200 160-80Zm80-121 160-86 160 86v-439H240v439Zm480-39v-560H280v-80h440q33 0 56.5 23.5T800-800v560h-80ZM240-640h320-320Z";
 const BOOKMARK_ICON_FILLED = "M160-80v-560q0-33 23.5-56.5T240-720h320q33 0 56.5 23.5T640-640v560L400-200 160-80Zm560-160v-560H280v-80h440q33 0 56.5 23.5T800-800v560h-80Z";
+// "+" glyph centred in the front bookmark's hollow — composited as a second
+// <path> for the not-yet-bookmarked ("add this chapter") state. Same
+// 0 -960 960 960 coordinate system as the bookmark paths above.
+const BOOKMARK_ICON_ADD_PLUS = "M372-555h56v57h57v56h-57v57h-56v-57h-57v-56h57v-57Z";
+
+// Paint the header bookmark button's glyph for the current state. Bookmarked =
+// filled (unchanged cue). Not bookmarked = outline + "+" badge so the affordance
+// reads as "add this chapter". Rebuilds children because the add state needs two
+// paths; both buildBookmarkHeaderBtn and refreshBookmarkHeaderBtn route through
+// here so the build and the live toggle stay in sync.
+/** @param {SVGElement} svg @param {boolean} hasBookmark */
+function _setBookmarkBtnIcon(svg, hasBookmark) {
+  while (svg.firstChild) svg.removeChild(svg.firstChild);
+  const mk = (d) => {
+    const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    p.setAttribute("d", d);
+    return p;
+  };
+  if (hasBookmark) {
+    svg.appendChild(mk(BOOKMARK_ICON_FILLED));
+  } else {
+    svg.appendChild(mk(BOOKMARK_ICON_OUTLINE));
+    svg.appendChild(mk(BOOKMARK_ICON_ADD_PLUS));
+  }
+}
 
 // Build the bookmark icon SVG button for the chapter header
 function buildBookmarkHeaderBtn(bookId, chapter) {
@@ -822,9 +847,7 @@ function buildBookmarkHeaderBtn(bookId, chapter) {
   svg.setAttribute("viewBox", "0 -960 960 960");
   svg.setAttribute("fill", "currentColor");
   svg.setAttribute("aria-hidden", "true");
-  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-  path.setAttribute("d", hasBookmark ? BOOKMARK_ICON_FILLED : BOOKMARK_ICON_OUTLINE);
-  svg.appendChild(path);
+  _setBookmarkBtnIcon(svg, hasBookmark);
   btn.appendChild(svg);
   // 모바일 읽기 화면(장 맥락 있음)에선 헤더 북마크 = '이 장 저장' 모달로 바로 진입.
   // 그 외(데스크탑 전체, 또는 책 목록·장 선택처럼 장 맥락 없음)는 기존 드로어.
@@ -840,8 +863,8 @@ function refreshBookmarkHeaderBtn() {
   if (!btn || !readingContext.bookId || !readingContext.chapter) return;
   const hasBookmark = findExistingChapterBookmarks(readingContext.bookId, readingContext.chapter).length > 0;
   btn.classList.toggle("has-bookmark", hasBookmark);
-  const path = btn.querySelector("svg path");
-  if (path) path.setAttribute("d", hasBookmark ? BOOKMARK_ICON_FILLED : BOOKMARK_ICON_OUTLINE);
+  const svg = btn.querySelector("svg");
+  if (svg) _setBookmarkBtnIcon(svg, hasBookmark);
 }
 
 function openBookmarkDrawer(bookId, chapter) {
@@ -1432,6 +1455,24 @@ function _buildFolderItem(folder, depth) {
  * on each bookmark's own `<a>` for keyboard reachability.
  * @param {HTMLElement} [target]
  */
+// Empty-state placeholder for the bookmark list (drawer + full view). Beyond the
+// "none yet" line it explains how bookmarks are created, so the screen is
+// actionable rather than a dead end. The icon matches the header add affordance.
+function _buildEmptyState() {
+  const li = el("li", { className: "bm-empty", role: "presentation" });
+  const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  icon.setAttribute("viewBox", "0 -960 960 960");
+  icon.setAttribute("fill", "currentColor");
+  icon.setAttribute("aria-hidden", "true");
+  icon.setAttribute("class", "bm-empty-icon");
+  _setBookmarkBtnIcon(/** @type {SVGElement} */ (icon), false);
+  li.appendChild(icon);
+  li.appendChild(el("p", { className: "bm-empty-title" }, "저장된 북마크가 없습니다"));
+  li.appendChild(el("p", { className: "bm-empty-desc" },
+    "읽는 화면 오른쪽 위의 북마크 버튼을 눌러 지금 보는 장을 저장하세요. 절을 선택하면 원하는 구절만 북마크할 수도 있습니다."));
+  return li;
+}
+
 function renderBookmarkTree(target = $bookmarkDrawerBody) {
   _renderPathname = window.location.pathname;
   // The previously swiped row may be replaced when we re-render; drop the
@@ -1440,7 +1481,7 @@ function renderBookmarkTree(target = $bookmarkDrawerBody) {
   clearNode(target);
   const store = loadBookmarks();
   if (!store.length) {
-    target.appendChild(el("li", { className: "bm-empty", role: "presentation" }, "저장된 북마크가 없습니다."));
+    target.appendChild(_buildEmptyState());
     return;
   }
   for (const item of sortBookmarkNodes(store)) {
