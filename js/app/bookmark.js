@@ -923,12 +923,107 @@ function _bookmarkHref(bm) {
 }
 // ── END BOOKMARK_HREF ──
 
+// ── BEGIN BOOKMARK_SORT ──
+// Bookmark list ordering. The chosen sort is a per-device preference kept in
+// localStorage and deliberately NOT synced to Drive — ADR-011 sync covers the
+// bookmark objects, not this view setting. "manual" preserves the stored
+// (drag-reordered) order; the other modes cluster folders first, then
+// bookmarks, each group sorted by the chosen key. Sorting is display-only — it
+// returns a shallow copy and never rewrites the store.
+const _BM_SORT_KEY = "bible-bookmark-sort";
+/** @type {readonly string[]} */
+const _BM_SORT_MODES = ["manual", "title", "created", "modified", "viewed"];
+
+/** @returns {string} */
+function getBookmarkSort() {
+  try {
+    const v = localStorage.getItem(_BM_SORT_KEY);
+    return v && _BM_SORT_MODES.includes(v) ? v : "manual";
+  } catch { return "manual"; }
+}
+/** @param {string} mode */
+function setBookmarkSort(mode) {
+  if (!_BM_SORT_MODES.includes(mode)) return;
+  try { localStorage.setItem(_BM_SORT_KEY, mode); } catch { /* private mode */ }
+}
+
+// Per-device "last viewed" timestamps, keyed by bookmark id. Kept in
+// localStorage only: tracking this on the synced object would rewrite (and
+// re-sync) a bookmark every time it is merely opened, and would drag the
+// "수정한 날짜" key along with it.
+const _BM_VIEWED_KEY = "bible-bookmark-viewed";
+/** @returns {Record<string, number>} */
+function _loadViewedMap() {
+  try {
+    const raw = localStorage.getItem(_BM_VIEWED_KEY);
+    const m = raw ? JSON.parse(raw) : null;
+    return (m && typeof m === "object") ? m : {};
+  } catch { return {}; }
+}
+/** @param {string} id */
+function markBookmarkViewed(id) {
+  if (!id) return;
+  try {
+    const m = _loadViewedMap();
+    m[id] = Date.now();
+    localStorage.setItem(_BM_VIEWED_KEY, JSON.stringify(m));
+  } catch { /* private mode */ }
+}
+/** @param {string} id */
+function _forgetViewed(id) {
+  try {
+    const m = _loadViewedMap();
+    if (m[id] != null) { delete m[id]; localStorage.setItem(_BM_VIEWED_KEY, JSON.stringify(m)); }
+  } catch { /* private mode */ }
+}
+
+/** @param {BookmarkTreeNode} n @returns {string} */
+function _nodeTitle(n) {
+  return (n.type === "folder" ? n.name : n.label) || "";
+}
+
+// Build a comparator for a sort mode. Date modes sort newest-first; "title"
+// uses Korean locale collation. The viewed map is read once per sort rather
+// than once per comparison.
+/** @param {string} mode @returns {(a: BookmarkTreeNode, b: BookmarkTreeNode) => number} */
+function _bookmarkComparator(mode) {
+  if (mode === "title") {
+    return (a, b) => _nodeTitle(a).localeCompare(_nodeTitle(b), "ko");
+  }
+  const viewed = mode === "viewed" ? _loadViewedMap() : null;
+  /** @param {BookmarkTreeNode} n @returns {number} */
+  const keyOf = (n) => {
+    if (mode === "created")  return n.createdAt || 0;
+    if (mode === "modified") return n.updatedAt || n.createdAt || 0;
+    if (mode === "viewed")   return (viewed && viewed[n.id]) || n.createdAt || 0;
+    return 0;
+  };
+  return (a, b) => keyOf(b) - keyOf(a);
+}
+
+// Display-ordered shallow copy of `nodes` for the active sort mode. "manual"
+// keeps the exact stored order (including any folder/bookmark interleaving from
+// drag); other modes put folders before bookmarks, each sorted by the key.
+/** @param {BookmarkTreeNode[]} nodes @returns {BookmarkTreeNode[]} */
+function sortBookmarkNodes(nodes) {
+  const list = Array.isArray(nodes) ? nodes : [];
+  const mode = getBookmarkSort();
+  if (mode === "manual") return list.slice();
+  const cmp = _bookmarkComparator(mode);
+  const folders = list.filter(n => n.type === "folder").sort(cmp);
+  const marks   = list.filter(n => n.type !== "folder").sort(cmp);
+  return [...folders, ...marks];
+}
+// ── END BOOKMARK_SORT ──
+
 function _buildBookmarkItem(bm, depth) {
   const li = el("li", { role: "treeitem", className: "bm-bookmark", "data-id": bm.id, tabIndex: "-1" });
   if (depth > 0) li.setAttribute("aria-level", String(depth + 1));
   const isActive = _isActiveBookmark(bm);
   const row = el("div", { className: "bm-bookmark-row" + (isActive ? " bm-active" : "") });
-  _setupDragHandle(li, row);
+  // Drag-to-reorder only makes sense under manual order; an active auto-sort
+  // would re-sort the drop away, so leave the handle off then.
+  if (getBookmarkSort() === "manual") _setupDragHandle(li, row);
   const content = el("div", { className: "bm-row-content" });
   const typeIcon = el("span", { className: "bm-bookmark-type-icon" });
   typeIcon.appendChild(_buildBookmarkTypeIcon(isActive));
@@ -946,6 +1041,7 @@ function _buildBookmarkItem(bm, depth) {
       closeSwipedRow(null);
       return;
     }
+    markBookmarkViewed(bm.id);
     closeBookmarkDrawer();
     navigate(_bookmarkHref(bm));
   });
@@ -957,6 +1053,7 @@ function _buildBookmarkItem(bm, depth) {
   const deleteAction = () => {
     if (!window.confirm(`"${bm.label}" 북마크를 삭제할까요?`)) return;
     closeSwipedRow(null);
+    _forgetViewed(bm.id);
     const store = loadBookmarks();
     removeItemById(store, bm.id);
     saveBookmarks(store);
@@ -1242,7 +1339,7 @@ function _buildFolderItem(folder, depth) {
   });
   if (depth > 0) li.setAttribute("aria-level", String(depth + 1));
   const row = el("div", { className: "bm-folder-row" });
-  _setupDragHandle(li, row);
+  if (getBookmarkSort() === "manual") _setupDragHandle(li, row);
   const content = el("div", { className: "bm-row-content" });
   const toggle = el("span", { className: "bm-folder-toggle", "aria-hidden": "true" });
   toggle.appendChild(_buildFolderToggleIcon(expanded));
@@ -1269,7 +1366,7 @@ function _buildFolderItem(folder, depth) {
     if (!newName || !newName.trim()) return;
     const store = loadBookmarks();
     const found = _findItemInStore(store, folder.id);
-    if (found) found.item.name = newName.trim();
+    if (found) { found.item.name = newName.trim(); found.item.updatedAt = Date.now(); }
     saveBookmarks(store);
     _rerenderActiveBookmarkTree();
   };
@@ -1317,7 +1414,7 @@ function _buildFolderItem(folder, depth) {
   row.appendChild(mobileActions);
   li.appendChild(row);
   const children = el("ul", { role: "group", className: "bm-folder-children" });
-  for (const child of (folder.children || [])) {
+  for (const child of sortBookmarkNodes(folder.children || [])) {
     children.appendChild(child.type === "folder"
       ? _buildFolderItem(child, depth + 1)
       : _buildBookmarkItem(child, depth + 1));
@@ -1346,7 +1443,7 @@ function renderBookmarkTree(target = $bookmarkDrawerBody) {
     target.appendChild(el("li", { className: "bm-empty", role: "presentation" }, "저장된 북마크가 없습니다."));
     return;
   }
-  for (const item of store) {
+  for (const item of sortBookmarkNodes(store)) {
     target.appendChild(item.type === "folder"
       ? _buildFolderItem(item, 0)
       : _buildBookmarkItem(item, 0));
@@ -1452,6 +1549,15 @@ function buildBmViewActions() {
   }, moreSvg);
 
   const menu = el("div", { className: "title-action-menu", role: "menu", "aria-label": "더 보기", hidden: "" });
+  /** @type {{ item: HTMLElement, mode: string }[]} */
+  const sortItems = [];
+
+  // The menu DOM outlives a tree re-render (only the tree is rebuilt when sort
+  // changes), so refresh the radio checks from the live preference on each open.
+  function syncSortChecks() {
+    const cur = getBookmarkSort();
+    for (const { item, mode } of sortItems) item.setAttribute("aria-checked", String(mode === cur));
+  }
 
   function closeMenu() {
     if (menu.hidden) return;
@@ -1462,6 +1568,7 @@ function buildBmViewActions() {
   }
   function openMenu() {
     if (!menu.hidden) return;
+    syncSortChecks();
     menu.hidden = false;
     moreBtn.setAttribute("aria-expanded", "true");
     // Capture phase so an outside click closes before it acts elsewhere.
@@ -1493,8 +1600,48 @@ function buildBmViewActions() {
     else closeMenu();
   });
 
-  // Build a menu row: trailing SF-style glyph + leading label (label left,
-  // icon right per the Apple Music menu). Closes the menu before acting.
+  // ── 정렬 group (menuitemradio, 현재 선택에 체크) ──
+  // Per-device sort preference (localStorage), so selecting one re-renders the
+  // tree in place. Leading checkmark slot mirrors Apple Music's sort group.
+  const sortGroup = el("div", { className: "title-action-menu-group", role: "group", "aria-label": "정렬" });
+  /** @param {string} label @param {string} mode */
+  function addSortItem(label, mode) {
+    const item = el("button", {
+      className: "title-action-menu-item title-action-menu-item--sort",
+      type: "button",
+      role: "menuitemradio",
+      "aria-checked": String(getBookmarkSort() === mode),
+    });
+    // The check glyph is always present; CSS reveals it only on the active row
+    // (aria-checked), so syncSortChecks just flips the attribute.
+    const check = el("span", { className: "title-action-menu-check", "aria-hidden": "true" });
+    check.appendChild(_bmMenuIcon(["M5 12.5 10 17.5 19 7"]));
+    item.appendChild(check);
+    item.appendChild(el("span", { className: "title-action-menu-label" }, label));
+    item.addEventListener("click", () => {
+      setBookmarkSort(mode);
+      closeMenu();
+      _rerenderActiveBookmarkTree();
+    });
+    sortGroup.appendChild(item);
+    sortItems.push({ item, mode });
+    return item;
+  }
+  addSortItem("직접 정렬", "manual");
+  addSortItem("제목", "title");
+  addSortItem("추가된 날짜", "created");
+  addSortItem("최근에 본 날짜", "viewed");
+  addSortItem("수정한 날짜", "modified");
+  menu.appendChild(sortGroup);
+
+  // Single group divider between 정렬 and the action group (Apple Music keeps
+  // this one hairline; per-item lines were dropped).
+  menu.appendChild(el("div", { className: "title-action-menu-sep", role: "separator" }));
+
+  // ── 액션 group ──
+  const actionGroup = el("div", { className: "title-action-menu-group", role: "group" });
+  // Build a menu row: leading label + trailing SF-style glyph (label left, icon
+  // right per the Apple Music menu). Closes the menu before acting.
   /** @param {string} label @param {string[]} iconPaths @param {() => void} onActivate */
   function addMenuItem(label, iconPaths, onActivate) {
     const item = el("button", { className: "title-action-menu-item", type: "button", role: "menuitem" });
@@ -1504,7 +1651,7 @@ function buildBmViewActions() {
       closeMenu();
       onActivate();
     });
-    menu.appendChild(item);
+    actionGroup.appendChild(item);
     return item;
   }
 
@@ -1533,6 +1680,7 @@ function buildBmViewActions() {
     $bmImportInput.value = "";
     $bmImportInput.click();
   });
+  menu.appendChild(actionGroup);
 
   wrap.appendChild(moreBtn);
   wrap.appendChild(menu);
@@ -1787,7 +1935,7 @@ function _commitNewFolder() {
   $bmNewFolderInput.removeAttribute("aria-invalid");
   const store = loadBookmarks();
   const id = generateId();
-  store.push({ type: "folder", id, name, children: [], expanded: false });
+  store.push({ type: "folder", id, name, children: [], expanded: false, createdAt: Date.now() });
   saveBookmarks(store);
   _rerenderActiveBookmarkTree();
   const cb = _bmNewFolderCallback;
@@ -1803,6 +1951,7 @@ function commitSaveBookmark(existingId, label, note, folderId, bookId, chapter, 
       found.item.label = label;
       found.item.note = note;
       found.item.verseSpec = verseSpec;
+      found.item.updatedAt = Date.now();
       const updatedItem = found.item;
       removeItemById(store, existingId);
       insertItem(store, folderId, updatedItem);
@@ -2187,7 +2336,7 @@ $bmAddFolderBtn.addEventListener("click", () => {
     const name = input.value.trim();
     if (!name) { cleanup(); return; }
     const store = loadBookmarks();
-    store.push({ type: "folder", id: generateId(), name, children: [], expanded: false });
+    store.push({ type: "folder", id: generateId(), name, children: [], expanded: false, createdAt: Date.now() });
     saveBookmarks(store);
     _rerenderActiveBookmarkTree();
     cleanup();

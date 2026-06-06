@@ -1252,3 +1252,153 @@ test("_countBookmarks: folder with non-array children is skipped (no throw)", ()
   ];
   assert.equal(h._countBookmarks(items), 1);
 });
+
+// ── BOOKMARK_SORT loader ─────────────────────────────────────────────────────
+// The sort helpers read/write localStorage for the per-device preference and
+// the last-viewed map. A Map-backed fake lets each test seed and inspect state.
+
+function makeFakeLocalStorage(seed = {}) {
+  const m = new Map(Object.entries(seed));
+  return {
+    getItem(k) { return m.has(k) ? m.get(k) : null; },
+    setItem(k, v) { m.set(k, String(v)); },
+    removeItem(k) { m.delete(k); },
+    _dump() { return Object.fromEntries(m); },
+  };
+}
+
+function loadBookmarkSort(seed = {}) {
+  const localStorage = makeFakeLocalStorage(seed);
+  const ctx = {
+    Object, Array, Set, String, Math, Number, JSON, console, Error, Date,
+    localStorage,
+  };
+  vm.createContext(ctx);
+  vm.runInContext(extractBlock("BOOKMARK_SORT"), ctx, { filename: "bookmark-sort.js" });
+  return {
+    getBookmarkSort: ctx.getBookmarkSort,
+    setBookmarkSort: ctx.setBookmarkSort,
+    markBookmarkViewed: ctx.markBookmarkViewed,
+    _forgetViewed: ctx._forgetViewed,
+    sortBookmarkNodes: ctx.sortBookmarkNodes,
+    _ls: localStorage,
+  };
+}
+
+const idsOf = (nodes) => nodes.map((n) => n.id);
+
+// ── sort preference (localStorage, per-device) ──
+
+test("getBookmarkSort: defaults to 'manual' when unset", () => {
+  const h = loadBookmarkSort();
+  assert.equal(h.getBookmarkSort(), "manual");
+});
+
+test("getBookmarkSort: returns a stored valid mode", () => {
+  const h = loadBookmarkSort({ "bible-bookmark-sort": "title" });
+  assert.equal(h.getBookmarkSort(), "title");
+});
+
+test("getBookmarkSort: ignores an unknown stored value → 'manual'", () => {
+  const h = loadBookmarkSort({ "bible-bookmark-sort": "bogus" });
+  assert.equal(h.getBookmarkSort(), "manual");
+});
+
+test("setBookmarkSort: persists a valid mode", () => {
+  const h = loadBookmarkSort();
+  h.setBookmarkSort("created");
+  assert.equal(h.getBookmarkSort(), "created");
+});
+
+test("setBookmarkSort: rejects an invalid mode (no write)", () => {
+  const h = loadBookmarkSort({ "bible-bookmark-sort": "title" });
+  h.setBookmarkSort("nope");
+  assert.equal(h.getBookmarkSort(), "title");
+});
+
+// ── last-viewed map (localStorage, per-device) ──
+
+test("markBookmarkViewed: records a timestamp under the bookmark id", () => {
+  const h = loadBookmarkSort();
+  h.markBookmarkViewed("bm-1");
+  const map = JSON.parse(h._ls.getItem("bible-bookmark-viewed"));
+  assert.ok(map["bm-1"] > 0);
+});
+
+test("markBookmarkViewed: ignores empty id", () => {
+  const h = loadBookmarkSort();
+  h.markBookmarkViewed("");
+  assert.equal(h._ls.getItem("bible-bookmark-viewed"), null);
+});
+
+test("_forgetViewed: removes a single id, leaves others", () => {
+  const h = loadBookmarkSort({ "bible-bookmark-viewed": JSON.stringify({ a: 10, b: 20 }) });
+  h._forgetViewed("a");
+  const map = JSON.parse(h._ls.getItem("bible-bookmark-viewed"));
+  assert.deepEqual(map, { b: 20 });
+});
+
+// ── sortBookmarkNodes ──
+
+test("sortBookmarkNodes: 'manual' preserves stored order (shallow copy)", () => {
+  const h = loadBookmarkSort({ "bible-bookmark-sort": "manual" });
+  const nodes = [
+    { type: "bookmark", id: "b", label: "Z" },
+    { type: "folder", id: "f", name: "A" },
+    { type: "bookmark", id: "a", label: "A" },
+  ];
+  const out = h.sortBookmarkNodes(nodes);
+  assert.deepEqual(idsOf(out), ["b", "f", "a"]);
+  assert.notStrictEqual(out, nodes); // copy, not the same array
+});
+
+test("sortBookmarkNodes: 'title' sorts folders-first, then by label A→Z", () => {
+  const h = loadBookmarkSort({ "bible-bookmark-sort": "title" });
+  const nodes = [
+    { type: "bookmark", id: "b-c", label: "다" },
+    { type: "folder", id: "f-b", name: "나" },
+    { type: "bookmark", id: "b-a", label: "가" },
+    { type: "folder", id: "f-a", name: "가" },
+  ];
+  // folders (가, 나) before bookmarks (가, 다), each alphabetical
+  assert.deepEqual(idsOf(h.sortBookmarkNodes(nodes)), ["f-a", "f-b", "b-a", "b-c"]);
+});
+
+test("sortBookmarkNodes: 'created' sorts newest-first", () => {
+  const h = loadBookmarkSort({ "bible-bookmark-sort": "created" });
+  const nodes = [
+    { type: "bookmark", id: "old", createdAt: 100 },
+    { type: "bookmark", id: "new", createdAt: 300 },
+    { type: "bookmark", id: "mid", createdAt: 200 },
+  ];
+  assert.deepEqual(idsOf(h.sortBookmarkNodes(nodes)), ["new", "mid", "old"]);
+});
+
+test("sortBookmarkNodes: 'modified' falls back to createdAt when updatedAt missing", () => {
+  const h = loadBookmarkSort({ "bible-bookmark-sort": "modified" });
+  const nodes = [
+    { type: "bookmark", id: "edited", createdAt: 100, updatedAt: 500 },
+    { type: "bookmark", id: "fresh",  createdAt: 400 },
+  ];
+  // edited's updatedAt(500) beats fresh's createdAt(400)
+  assert.deepEqual(idsOf(h.sortBookmarkNodes(nodes)), ["edited", "fresh"]);
+});
+
+test("sortBookmarkNodes: 'viewed' uses the local viewed map, newest-first", () => {
+  const h = loadBookmarkSort({
+    "bible-bookmark-sort": "viewed",
+    "bible-bookmark-viewed": JSON.stringify({ a: 10, c: 30 }),
+  });
+  const nodes = [
+    { type: "bookmark", id: "a", createdAt: 999 },
+    { type: "bookmark", id: "b", createdAt: 5 },   // never viewed → falls back to createdAt(5)
+    { type: "bookmark", id: "c", createdAt: 1 },
+  ];
+  // viewed: c(30), a(10), then b(createdAt 5)
+  assert.deepEqual(idsOf(h.sortBookmarkNodes(nodes)), ["c", "a", "b"]);
+});
+
+test("sortBookmarkNodes: non-array input → empty array", () => {
+  const h = loadBookmarkSort({ "bible-bookmark-sort": "title" });
+  assert.deepEqual(h.sortBookmarkNodes(undefined), []);
+});

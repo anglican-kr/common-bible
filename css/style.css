@@ -4025,6 +4025,50 @@ body.tabbar-searching #search-inpage-bar { display: none; }
   background: color-mix(in srgb, var(--accent) 14%, transparent);
 }
 
+/* Groups are layout-transparent so the menu's flex column still lays out the
+   rows directly; the wrappers carry only menu semantics (role="group"). */
+.title-action-menu-group {
+  display: contents;
+}
+
+/* Single hairline between the 정렬 and action groups (full-bleed). */
+.title-action-menu-sep {
+  height: 1px;
+  margin: 0;
+  background: var(--border);
+}
+
+/* 정렬 rows: leading checkmark slot + label (Apple Music sort group), so the
+   trailing glyph alignment of the action rows is replaced by a leading cue. */
+.title-action-menu-item--sort {
+  justify-content: flex-start;
+  gap: var(--space-2);
+}
+
+.title-action-menu-check {
+  width: 1.4rem;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.title-action-menu-check svg {
+  width: 1.15rem;
+  height: 1.15rem;
+  color: var(--accent);
+}
+
+/* Reserve the check column always; reveal the glyph only on the active row. */
+.title-action-menu-item--sort:not([aria-checked="true"]) .title-action-menu-check svg {
+  visibility: hidden;
+}
+
+.title-action-menu-item--sort[aria-checked="true"] {
+  color: var(--accent);
+  font-weight: 500;
+}
+
 @media (prefers-reduced-transparency: reduce) {
   .title-action-menu { background: var(--bg-card); }
 }

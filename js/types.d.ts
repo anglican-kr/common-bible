@@ -32,6 +32,7 @@ export interface BookmarkTreeBookmark {
   note?: string;
   name?: string;
   createdAt?: number;
+  updatedAt?: number;
   children?: BookmarkTreeNode[];
 }
 
@@ -40,6 +41,8 @@ export interface BookmarkTreeFolder {
   type: "folder";
   name: string;
   expanded?: boolean;
+  createdAt?: number;
+  updatedAt?: number;
   children: BookmarkTreeNode[];
 }
 
@@ -59,6 +62,7 @@ export interface SyncFlatItem {
   label?: string;
   note?: string;
   createdAt?: number;
+  updatedAt?: number;
   expanded?: boolean;
   parentId: string | null;
   _order: number;
