@@ -65,8 +65,8 @@ window.appCitations = (() => {
       .join(";");
   }
 
-  const { el, clearNode, dragReleaseAction } = window.appHelpers;
-  const { createOverlay } = window.appOverlay;
+  const { el, clearNode } = window.appHelpers;
+  const { createOverlay, attachSheetDrag, attachSheetResize } = window.appOverlay;
 
   /**
    * For each `(verseIndex, segmentIndex)` whose segment has a `cite`, decide
@@ -859,79 +859,22 @@ window.appCitations = (() => {
     backBtn.hidden = !(_sheetState && _sheetState.expandedRefIndex !== null);
   }
 
-  /**
-   * Drag-resize the sheet by its top handle. Mirrors the bookmark-drawer
-   * pattern (pointerdown → setPointerCapture → pointermove
-   * adjusts inline height → pointerup releases). Move clamp is loose (0 to
-   * 90vh) so the user can drag visually below the rest min; release decides
-   * close vs snap-back vs stay via `appHelpers.dragReleaseAction`.
-   */
+  // Drag (mobile, top handle) + width-resize (desktop, left edge) share the
+  // overlay factory with the bookmark drawer (ADR-032 §2). The factory owns the
+  // pointer batching + dragReleaseAction wiring; we just supply the handle,
+  // sheet, and the close callback.
   function _initSheetDrag() {
     const handle = document.getElementById("cite-sheet-handle");
     const sheet = /** @type {HTMLElement | null} */ (document.getElementById("cite-sheet"));
     if (!handle || !sheet) return;
-    let startY = 0;
-    let startH = 0;
-    /** @param {number} clientY */
-    function onMove(clientY) {
-      const delta = startY - clientY;
-      const newH = Math.min(
-        Math.max(startH + delta, 0),
-        window.innerHeight * 0.90,
-      );
-      sheet.style.height = `${newH}px`;
-    }
-    /** @param {PointerEvent} e */
-    function onPointerMove(e) { onMove(e.clientY); }
-    function onPointerUp() {
-      handle.removeEventListener("pointermove", onPointerMove);
-      const action = dragReleaseAction(sheet.offsetHeight, window.innerHeight);
-      if (action === "close") {
-        closeCiteSheet();
-      } else if (action === "snap-min") {
-        sheet.style.height = `${window.innerHeight * 0.30}px`;
-      }
-    }
-    handle.addEventListener("pointerdown", (e) => {
-      if (window.innerWidth >= 769) return; // desktop uses fixed-size side panel
-      e.preventDefault();
-      startY = e.clientY;
-      startH = sheet.offsetHeight;
-      handle.setPointerCapture(e.pointerId);
-      handle.addEventListener("pointermove", onPointerMove);
-      handle.addEventListener("pointerup", onPointerUp, { once: true });
-    });
+    attachSheetDrag(handle, sheet, { onClose: closeCiteSheet });
   }
 
-  /**
-   * Desktop-only: drag the left edge to resize the side panel width.
-   * Mirrors `initBookmarkDrawerResize` in bookmark.js — drag left widens, drag
-   * right narrows. Clamp [240, 85vw] matches that handler.
-   */
   function _initSheetResize() {
     const handle = document.getElementById("cite-sheet-resize");
     const sheet = /** @type {HTMLElement | null} */ (document.getElementById("cite-sheet"));
     if (!handle || !sheet) return;
-    let startX = 0;
-    let startW = 0;
-    /** @param {PointerEvent} e */
-    function onPointerMove(e) {
-      const delta = startX - e.clientX; // drag left = wider
-      const newW = Math.min(Math.max(startW + delta, 240), window.innerWidth * 0.85);
-      sheet.style.width = `${newW}px`;
-    }
-    function onPointerUp() {
-      handle.removeEventListener("pointermove", onPointerMove);
-    }
-    handle.addEventListener("pointerdown", (e) => {
-      if (window.innerWidth < 769) return;
-      e.preventDefault();
-      startX = e.clientX;
-      startW = sheet.offsetWidth;
-      handle.setPointerCapture(e.pointerId);
-      handle.addEventListener("pointermove", onPointerMove);
-      handle.addEventListener("pointerup", onPointerUp, { once: true });
-    });
+    attachSheetResize(handle, sheet);
   }
 
   /**

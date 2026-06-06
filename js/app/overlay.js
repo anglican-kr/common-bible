@@ -18,7 +18,7 @@
 // dialog *and* whatever sits beneath it.
 
 window.appOverlay = (() => {
-  const { setInert, trapFocus } = window.appHelpers;
+  const { setInert, trapFocus, dragReleaseAction } = window.appHelpers;
 
   /**
    * @typedef {Object} OverlayOptions
@@ -176,7 +176,89 @@ window.appOverlay = (() => {
     };
   }
 
-  return { createOverlay };
+  // ── Bottom-sheet drag plumbing (ADR-032 §2) ─────────────────────────────────
+  // Shared pointer batching for drag-resizable bottom sheets, factored out of
+  // the bookmark drawer + cite sheet (which previously hand-rolled identical
+  // pointerdown→capture→move→up handlers, sharing only the pure
+  // `dragReleaseAction`). The lifecycle (open/close, scrim, focus) is the
+  // overlay's / caller's concern; this only wires the drag gesture.
+
+  /**
+   * Drag the sheet's top handle to resize, and release to close / snap-min /
+   * stay (mobile only; desktop ≥769px uses a fixed side panel and is a no-op).
+   * The move clamp's lower bound is 0 (NOT the rest min) so the user can drag
+   * visually below the rest height — that's the affordance the snap-close
+   * gesture needs, and a hard rest-min clamp would make `dragReleaseAction`'s
+   * close branch unreachable (Bugbot caught exactly that regression).
+   *
+   * @param {HTMLElement} handle
+   * @param {HTMLElement} sheet
+   * @param {{ onClose: () => void, maxRatio?: number }} opts
+   *   onClose runs when the release gesture decides "close"; the caller owns the
+   *   actual dismiss (and any inline-height reset). maxRatio caps the dragged
+   *   height as a fraction of viewport height (default 0.9).
+   */
+  function attachSheetDrag(handle, sheet, { onClose, maxRatio = 0.9 }) {
+    let startY = 0;
+    let startH = 0;
+    /** @param {number} clientY */
+    function onMove(clientY) {
+      const delta = startY - clientY;
+      const newH = Math.min(Math.max(startH + delta, 0), window.innerHeight * maxRatio);
+      sheet.style.height = `${newH}px`;
+    }
+    /** @param {PointerEvent} e */
+    function onPointerMove(e) { onMove(e.clientY); }
+    function onPointerUp() {
+      handle.removeEventListener("pointermove", onPointerMove);
+      const action = dragReleaseAction(sheet.offsetHeight, window.innerHeight);
+      if (action === "close") onClose();
+      else if (action === "snap-min") sheet.style.height = `${window.innerHeight * 0.3}px`;
+    }
+    handle.addEventListener("pointerdown", (e) => {
+      if (window.innerWidth >= 769) return; // desktop: fixed-size side panel
+      e.preventDefault();
+      startY = e.clientY;
+      startH = sheet.offsetHeight;
+      handle.setPointerCapture(e.pointerId);
+      handle.addEventListener("pointermove", onPointerMove);
+      handle.addEventListener("pointerup", onPointerUp, { once: true });
+    });
+  }
+
+  /**
+   * Desktop-only (≥769px): drag a left-edge handle to resize the side panel's
+   * width. Drag left widens; clamp to [minWidth, maxRatio·viewport-width].
+   * Mobile (<769px) is a no-op (the sheet is a bottom drawer there).
+   *
+   * @param {HTMLElement} handle
+   * @param {HTMLElement} sheet
+   * @param {{ minWidth?: number, maxRatio?: number }} [opts]
+   */
+  function attachSheetResize(handle, sheet, { minWidth = 240, maxRatio = 0.85 } = {}) {
+    let startX = 0;
+    let startW = 0;
+    /** @param {PointerEvent} e */
+    function onPointerMove(e) {
+      const delta = startX - e.clientX; // drag left = wider
+      const newW = Math.min(Math.max(startW + delta, minWidth), window.innerWidth * maxRatio);
+      sheet.style.width = `${newW}px`;
+    }
+    function onPointerUp() {
+      handle.removeEventListener("pointermove", onPointerMove);
+    }
+    handle.addEventListener("pointerdown", (e) => {
+      if (window.innerWidth < 769) return; // mobile: bottom sheet, no width resize
+      e.preventDefault();
+      startX = e.clientX;
+      startW = sheet.offsetWidth;
+      handle.setPointerCapture(e.pointerId);
+      handle.addEventListener("pointermove", onPointerMove);
+      handle.addEventListener("pointerup", onPointerUp, { once: true });
+    });
+  }
+
+  return { createOverlay, attachSheetDrag, attachSheetResize };
 })();
 
 // ESM module marker (ADR-019). No runtime effect; signals TypeScript that

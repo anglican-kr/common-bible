@@ -18,8 +18,8 @@
 /** @typedef {import("../types").DragState} DragState */
 /** @typedef {import("../types").BooksData} BooksData */
 
-const { _$, el, clearNode, chUnit, setInert, trapFocus, dragReleaseAction } = window.appHelpers;
-const { createOverlay } = window.appOverlay;
+const { _$, el, clearNode, chUnit, setInert, trapFocus } = window.appHelpers;
+const { createOverlay, attachSheetDrag, attachSheetResize } = window.appOverlay;
 const { loadBookmarks, saveBookmarks, generateId } = window.appStorage;
 const { readingContext } = window;
 
@@ -2765,72 +2765,20 @@ document.addEventListener("keydown", (e) => {
 // `window.initBookmarkSheetDrag` / `window.initBookmarkDrawerResize`
 // facade entries below.
 
+// Drag (mobile) + width-resize (desktop) plumbing is shared with the cite sheet
+// via the overlay factory (ADR-032 §2). The drawer's animated dismiss stays in
+// closeBookmarkDrawer; onClose also clears the dragged inline height so the
+// close animation starts from the CSS default. maxRatio 0.92 is the drawer's
+// (slightly taller than the cite sheet's default 0.9).
 function initBookmarkSheetDrag() {
-  const handle = _$("bookmark-drawer-handle");
-  const drawer = _$("bookmark-drawer");
-  let startY = 0;
-  let startH = 0;
-
-  function onMove(clientY) {
-    const delta = startY - clientY;
-    // Lower bound is 0 (not 30vh) so the user can drag the drawer visually
-    // below its rest min — that's the affordance for the snap-close gesture.
-    // A hard 30vh clamp here would make dragReleaseAction's close branch
-    // unreachable (Cursor Bugbot caught this exact regression in cite-sheet).
-    const newH = Math.min(Math.max(startH + delta, 0), window.innerHeight * 0.92);
-    drawer.style.height = `${newH}px`;
-  }
-
-  handle.addEventListener("pointerdown", (e) => {
-    if (window.innerWidth >= 769) return; // desktop uses fixed-size side panel
-    e.preventDefault();
-    startY = e.clientY;
-    startH = drawer.offsetHeight;
-    handle.setPointerCapture(e.pointerId);
-    handle.addEventListener("pointermove", onPointerMove);
-    handle.addEventListener("pointerup", onPointerUp, { once: true });
+  attachSheetDrag(_$("bookmark-drawer-handle"), _$("bookmark-drawer"), {
+    onClose: () => { closeBookmarkDrawer(); _$("bookmark-drawer").style.height = ""; },
+    maxRatio: 0.92,
   });
-
-  /** @param {PointerEvent} e */
-  function onPointerMove(e) { onMove(e.clientY); }
-  function onPointerUp() {
-    handle.removeEventListener("pointermove", onPointerMove);
-    const action = dragReleaseAction(drawer.offsetHeight, window.innerHeight);
-    if (action === "close") {
-      closeBookmarkDrawer();
-      drawer.style.height = "";
-    } else if (action === "snap-min") {
-      drawer.style.height = `${window.innerHeight * 0.3}px`;
-    }
-  }
 }
 
 function initBookmarkDrawerResize() {
-  const handle = _$("bookmark-drawer-resize");
-  const drawer = _$("bookmark-drawer");
-  let startX = 0;
-  let startW = 0;
-
-  handle.addEventListener("pointerdown", (e) => {
-    if (window.innerWidth < 769) return;
-    e.preventDefault();
-    startX = e.clientX;
-    startW = drawer.offsetWidth;
-    handle.setPointerCapture(e.pointerId);
-    handle.addEventListener("pointermove", onPointerMove);
-    handle.addEventListener("pointerup", onPointerUp, { once: true });
-  });
-
-  /** @param {PointerEvent} e */
-  function onPointerMove(e) {
-    const delta = startX - e.clientX; // drag left = wider
-    const newW = Math.min(Math.max(startW + delta, 240), window.innerWidth * 0.85);
-    drawer.style.width = `${newW}px`;
-  }
-
-  function onPointerUp() {
-    handle.removeEventListener("pointermove", onPointerMove);
-  }
+  attachSheetResize(_$("bookmark-drawer-resize"), _$("bookmark-drawer"));
 }
 
 // ── Window facade ──

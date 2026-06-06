@@ -584,6 +584,19 @@ export interface OverlayController {
 
 export interface AppOverlay {
   createOverlay: (opts: OverlayOptions) => OverlayController;
+  // Bottom-sheet drag plumbing (ADR-032 §2), shared by the bookmark drawer +
+  // cite sheet. Lifecycle stays with the overlay/caller; these only wire the
+  // drag gesture onto a handle element.
+  attachSheetDrag: (
+    handle: HTMLElement,
+    sheet: HTMLElement,
+    opts: { onClose: () => void; maxRatio?: number },
+  ) => void;
+  attachSheetResize: (
+    handle: HTMLElement,
+    sheet: HTMLElement,
+    opts?: { minWidth?: number; maxRatio?: number },
+  ) => void;
 }
 
 // ── App storage facade (js/app/storage.js) ──────────────────────────────────

@@ -59,7 +59,27 @@ function makeEnv() {
       this._children = /** @type {StubEl[]} */ ([]);
       this._parent = /** @type {StubEl|null} */ (null);
       this.focusCount = 0;
+      // Sheet-drag surface: style holds inline height/width strings; offset*
+      // reflect the rendered size (parsed from style, falling back to _base*).
+      this.style = /** @type {Record<string,string>} */ ({});
+      this._baseH = 0;
+      this._baseW = 0;
+      this._listeners = /** @type {Map<string, Set<Function>>} */ (new Map());
       registry.push(this);
+    }
+    get offsetHeight() { const h = parseFloat(this.style.height); return Number.isNaN(h) ? this._baseH : h; }
+    get offsetWidth() { const w = parseFloat(this.style.width); return Number.isNaN(w) ? this._baseW : w; }
+    setPointerCapture() { /* no-op in stub */ }
+    addEventListener(type, fn) {
+      if (!this._listeners.has(type)) this._listeners.set(type, new Set());
+      this._listeners.get(type).add(fn);
+    }
+    removeEventListener(type, fn) { this._listeners.get(type)?.delete(fn); }
+    /** Test-only: fire registered listeners with a fake event. */
+    _dispatch(type, evt) {
+      const set = this._listeners.get(type);
+      if (!set) return;
+      for (const fn of [...set]) fn(evt);
     }
     focus() { activeElement = this; this.focusCount++; }
     appendChild(c) { this._children.push(c); if (c) c._parent = this; return c; }
@@ -124,13 +144,19 @@ function makeEnv() {
   };
 
   const ctx = {
-    console, JSON, Object, Array, Set, Map, Error, String, Number, Boolean,
+    console, JSON, Object, Array, Set, Map, Error, String, Number, Boolean, Math,
     document,
     Node, Element, HTMLElement,
+    // Default mobile viewport (drag is mobile-only; resize is desktop-only).
+    innerWidth: 400,
+    innerHeight: 800,
     requestAnimationFrame: (cb) => { rafCbs.push(cb); return rafCbs.length; },
     appHelpers: {
       setInert: (on, sel) => { inertCalls.push([on, sel]); },
       trapFocus: (container) => { trapCalls.push(container); return () => { trapCleanupCount++; }; },
+      // Real threshold logic (mirrors js/app/helpers.js) so the drag-release
+      // decision is exercised end-to-end.
+      dragReleaseAction: (h, vh) => (h < vh * 0.20 ? "close" : h < vh * 0.30 ? "snap-min" : "stay"),
     },
   };
   vm.createContext(ctx);
@@ -139,12 +165,16 @@ function makeEnv() {
 
   return {
     createOverlay: ctx.appOverlay.createOverlay,
+    attachSheetDrag: ctx.appOverlay.attachSheetDrag,
+    attachSheetResize: ctx.appOverlay.attachSheetResize,
     document,
     StubEl,
     setActive: (el) => { activeElement = el; },
     getActive: () => activeElement,
     /** Run + clear all queued requestAnimationFrame callbacks. */
     flushRaf: () => { rafCbs.splice(0).forEach((cb) => cb()); },
+    /** Override the stub viewport (drag is mobile-only, resize desktop-only). */
+    setViewport: (w, h) => { ctx.innerWidth = w; ctx.innerHeight = h; },
     trapCalls,
     inertCalls,
     getTrapCleanupCount: () => trapCleanupCount,
@@ -346,4 +376,113 @@ test("open(arg): explicit return-focus argument overrides the default capture", 
   ov.open(explicit);
   ov.close();
   assert.equal(env.getActive(), explicit);
+});
+
+// ── attachSheetDrag (bottom-sheet drag-to-dismiss) ───────────────────────────
+
+/**
+ * Drive one drag gesture: pointerdown at startClientY (sheet at restH), move to
+ * endClientY, release. Returns the sheet so the caller can assert height/close.
+ */
+function dragGesture(env, { restH = 500, startClientY, endClientY, onClose, maxRatio }) {
+  const handle = new env.StubEl();
+  const sheet = new env.StubEl();
+  sheet._baseH = restH;
+  env.attachSheetDrag(handle, sheet, maxRatio === undefined ? { onClose } : { onClose, maxRatio });
+  handle._dispatch("pointerdown", { clientY: startClientY, pointerId: 1, preventDefault() {} });
+  handle._dispatch("pointermove", { clientY: endClientY });
+  handle._dispatch("pointerup", {});
+  return { handle, sheet };
+}
+
+test("attachSheetDrag: release below the close threshold fires onClose", () => {
+  const env = makeEnv(); // vh 800 → close < 160px
+  let closed = 0;
+  // restH 500, drag down 450px → 50px (< 160) → close.
+  dragGesture(env, { restH: 500, startClientY: 300, endClientY: 750, onClose: () => { closed++; } });
+  assert.equal(closed, 1);
+});
+
+test("attachSheetDrag: release in the snap range snaps to 30vh, no close", () => {
+  const env = makeEnv(); // vh 800 → snap-min band [160, 240)
+  let closed = 0;
+  // restH 500, drag down 300px → 200px (in [160,240)) → snap-min.
+  const { sheet } = dragGesture(env, { restH: 500, startClientY: 300, endClientY: 600, onClose: () => { closed++; } });
+  assert.equal(closed, 0);
+  assert.equal(sheet.style.height, "240px"); // 0.3 · 800
+});
+
+test("attachSheetDrag: release tall stays where dropped, no close", () => {
+  const env = makeEnv();
+  let closed = 0;
+  // restH 500, drag down 100px → 400px (≥ 240) → stay.
+  const { sheet } = dragGesture(env, { restH: 500, startClientY: 300, endClientY: 400, onClose: () => { closed++; } });
+  assert.equal(closed, 0);
+  assert.equal(sheet.style.height, "400px");
+});
+
+test("attachSheetDrag: height is clamped to maxRatio·vh while dragging up", () => {
+  const env = makeEnv(); // vh 800, default maxRatio 0.9 → cap 720
+  // restH 500, drag up 700px → would be 1200, clamped to 720.
+  const { sheet } = dragGesture(env, { restH: 500, startClientY: 700, endClientY: 0, onClose: () => {} });
+  assert.equal(sheet.style.height, "720px");
+});
+
+test("attachSheetDrag: custom maxRatio caps the dragged height", () => {
+  const env = makeEnv(); // vh 800, maxRatio 0.5 → cap 400
+  const { sheet } = dragGesture(env, { restH: 300, startClientY: 700, endClientY: 0, onClose: () => {}, maxRatio: 0.5 });
+  assert.equal(sheet.style.height, "400px");
+});
+
+test("attachSheetDrag: desktop (≥769px) pointerdown is a no-op", () => {
+  const env = makeEnv();
+  env.setViewport(1000, 800); // desktop
+  let closed = 0;
+  const handle = new env.StubEl();
+  const sheet = new env.StubEl();
+  sheet._baseH = 500;
+  env.attachSheetDrag(handle, sheet, { onClose: () => { closed++; } });
+  handle._dispatch("pointerdown", { clientY: 300, pointerId: 1, preventDefault() {} });
+  handle._dispatch("pointermove", { clientY: 750 }); // no listener registered
+  handle._dispatch("pointerup", {});
+  assert.equal(closed, 0);
+  assert.equal(sheet.style.height, undefined); // never touched
+});
+
+// ── attachSheetResize (desktop side-panel width) ─────────────────────────────
+
+test("attachSheetResize: desktop drag-left widens within clamp", () => {
+  const env = makeEnv();
+  env.setViewport(1200, 800); // desktop → cap 0.85·1200 = 1020
+  const handle = new env.StubEl();
+  const sheet = new env.StubEl();
+  sheet._baseW = 400;
+  env.attachSheetResize(handle, sheet);
+  handle._dispatch("pointerdown", { clientX: 900, pointerId: 1, preventDefault() {} });
+  handle._dispatch("pointermove", { clientX: 700 }); // drag left 200 → 600
+  assert.equal(sheet.style.width, "600px");
+});
+
+test("attachSheetResize: width is clamped to the [minWidth, maxRatio·vw] band", () => {
+  const env = makeEnv();
+  env.setViewport(1000, 800); // cap 850, floor 240
+  const handle = new env.StubEl();
+  const sheet = new env.StubEl();
+  sheet._baseW = 300;
+  env.attachSheetResize(handle, sheet);
+  handle._dispatch("pointerdown", { clientX: 500, pointerId: 1, preventDefault() {} });
+  handle._dispatch("pointermove", { clientX: 1200 }); // drag right far → below floor → 240
+  assert.equal(sheet.style.width, "240px");
+});
+
+test("attachSheetResize: mobile (<769px) pointerdown is a no-op", () => {
+  const env = makeEnv();
+  env.setViewport(400, 800); // mobile
+  const handle = new env.StubEl();
+  const sheet = new env.StubEl();
+  sheet._baseW = 400;
+  env.attachSheetResize(handle, sheet);
+  handle._dispatch("pointerdown", { clientX: 300, pointerId: 1, preventDefault() {} });
+  handle._dispatch("pointermove", { clientX: 100 });
+  assert.equal(sheet.style.width, undefined);
 });
