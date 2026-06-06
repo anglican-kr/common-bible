@@ -72,11 +72,15 @@
      2곳에만 적용한다 (ADR-028 개정 2026-06-03; FAB 는 ADR-030 에서 제거, 오디오
      플레이어는 2026-06-05 중립화로 제외). 진한 채도 통일. */
   --theme: #22244a;
-  /* 파괴적 액션(삭제·캐시 비우기) 전용 색 — 스킴·테마·라이트/다크와 무관하게 고정.
-     실선 채움 버튼(흰 글자)·체크박스 accent·강조 텍스트가 공유한다. --danger-strong 은
-     hover/pressed 한 단계 진한 값. 흰 글자 대비 AA 충족 (ADR-028 개정 2026-06-06). */
+  /* 파괴적 액션(삭제·캐시 비우기) 색. 두 갈래 — (1) 채움: --danger 위에 흰 글자.
+     흰 글자 대비를 위해 라이트/다크 모두 짙은 빨강 고정. --danger-strong 은 hover.
+     (2) 표면 위 텍스트·아웃라인: --danger-text/-border. 짙은 빨강 텍스트는 어두운
+     배경에서 대비가 모자라므로 다크에서 밝은 빨강으로 적응한다(아래 [data-theme]).
+     (ADR-028 개정 2026-06-06; 표면 변형 06-06 후속). */
   --danger: #c0392b;
   --danger-strong: #a93226;
+  --danger-text: #c0392b;
+  --danger-border: #e6a9a4;
 
   /* ── Radius (HIG 곡률 사다리 — 기존 사용 값에 매핑, --radius 는 하위호환 유지) ── */
   --radius-xs: 4px;
@@ -189,6 +193,10 @@
   --accent-light: #cecdd7;
   --border: #3a3a55;
   --theme: #8ab4d8;
+  /* 채움(--danger/-strong)은 흰 글자 대비 위해 다크에서도 짙은 빨강 유지(미오버라이드).
+     표면 위 텍스트·아웃라인만 밝은 빨강으로 적응해 어두운 배경에서 가독성 확보. */
+  --danger-text: #ee8888;
+  --danger-border: #884444;
 
   /* Elevation — 다크 배경에서는 옅은 그림자가 묻히므로 alpha 상향 (기존 패턴).
      --shadow 별칭은 :root 에서 var(--shadow-1) 로 정의돼 있어 여기선 --shadow-1
@@ -569,7 +577,7 @@ body {
 
 .settings-drive-info-desc {
   font-size: var(--font-xs);
-  color: var(--text-muted, var(--text));
+  color: var(--text);
   opacity: 0.7;
   line-height: var(--leading-normal);
   white-space: normal;
@@ -1560,12 +1568,10 @@ body {
   border-radius: var(--radius-sm);
   font-size: var(--font-sm);
   line-height: var(--leading-normal);
-  color: var(--text-muted, #666);
-  background: var(--surface-alt, #f5f5f5);
-}
-[data-theme="dark"] .install-bookmark-notice {
-  color: var(--text-muted, #aaa);
-  background: var(--surface-alt, #2a2a2a);
+  /* Recessed info panel — real tokens replace the never-defined --text-muted/
+     --surface-alt phantoms. Both auto-adapt, so no per-theme override needed. */
+  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--text) 5%, var(--bg-card));
 }
 #install-modal-body .install-cta {
   display: inline-block;
@@ -2793,9 +2799,9 @@ html.cite-sheet-open {
   font-family: inherit;
   font-size: var(--font-xs);
   font-weight: 500;
-  color: var(--danger);
+  color: var(--danger-text);
   background: none;
-  border: 1px solid #e6a9a4;
+  border: 1px solid var(--danger-border);
   border-radius: var(--radius-xs);
   padding: 0 0.8em;
   height: 28px;
@@ -2822,17 +2828,9 @@ html.cite-sheet-open {
   color: #fff;
   border-color: var(--danger);
 }
-
-[data-theme="dark"] .cache-clear-btn {
-  color: #e88;
-  border-color: #844;
-}
-
-[data-theme="dark"] .cache-clear-btn:hover {
-  background: #a33;
-  color: #fff;
-  border-color: #a33;
-}
+/* Dark resting text/border come from the adaptive --danger-text/-border tokens;
+   the hover fill (--danger, white text) is identical in both themes — so the
+   former per-theme overrides are gone. */
 
 .settings-about {
   border-top: 1px solid var(--border);
@@ -3689,7 +3687,7 @@ body.tabbar-searching #search-inpage-bar { display: none; }
 .error {
   text-align: center;
   padding: 3rem var(--space-4);
-  color: #a33;
+  color: var(--danger-text);
   font-size: var(--font-base);
 }
 
