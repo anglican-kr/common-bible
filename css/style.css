@@ -4036,10 +4036,12 @@ body.tabbar-searching #search-inpage-bar { display: none; }
   display: contents;
 }
 
-/* Single hairline between the 정렬 and action groups (full-bleed). */
+/* Single hairline between the action and 정렬 groups. Vertical margin gives it
+   breathing room from the rows; horizontal margin insets it so the ends don't
+   touch the popover box edges. */
 .title-action-menu-sep {
   height: 1px;
-  margin: 0;
+  margin: var(--space-2) var(--space-4);
   background: var(--border);
 }
 
