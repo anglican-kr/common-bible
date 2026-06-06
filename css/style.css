@@ -424,6 +424,13 @@ body {
   padding: var(--space-3) var(--space-4) var(--space-8);
 }
 
+/* The bookmark rows already carry their own horizontal inset (--space-4), so the
+   shared view padding doubles it and the list sits too far from the edges. Drop
+   the view's horizontal padding here for a single, standard list inset. */
+.bookmarks-view {
+  padding-inline: 0;
+}
+
 /* Bookmark tree reuses .bm-* item styles from the drawer; just lay out the
    list container in-page. */
 .bookmarks-view .bm-tree {
