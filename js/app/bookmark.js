@@ -593,6 +593,10 @@ function _setupDragHandle(li, row) {
     const isTouch = e.pointerType !== "mouse";
     const contentEl = /** @type {HTMLElement | null} */ (row.querySelector(".bm-row-content"));
     const canSwipe = _isMobileViewport() && isTouch && !!contentEl;
+    // Pointer started on the reorder handle (≡, manual mode only): treat it as a
+    // dedicated grab — start the drag immediately on move (no long-press, no
+    // swipe classification), the way iOS's reorder control behaves.
+    const onHandle = e.target instanceof Element && !!e.target.closest(".bm-drag-handle");
     // Drag-to-reorder only makes sense under 직접 정렬 (manual); an active
     // auto-sort would re-sort the drop away. Evaluated per gesture so a sort
     // change takes effect immediately. Swipe-to-reveal is always available.
@@ -603,13 +607,14 @@ function _setupDragHandle(li, row) {
     let mode = null;
     let dragStarted = false;
     // Direction the row is already open in, so a re-grab continues from the
-    // revealed offset. "edit" = 수정 (right), "delete" = 삭제 (left).
+    // revealed offset. "edit" = 수정 (left edge, content slid right), "delete" =
+    // 삭제 (right edge, content slid left).
     /** @type {"edit" | "delete" | null} */
     const startedDir = row.classList.contains("bm-swiped-edit") ? "edit"
       : row.classList.contains("bm-swiped-delete") ? "delete" : null;
     const startedSwiped = !!startedDir;
-    const baseOffset = startedDir === "edit" ? -SWIPE_REVEAL_PX
-      : startedDir === "delete" ? SWIPE_REVEAL_PX : 0;
+    const baseOffset = startedDir === "edit" ? SWIPE_REVEAL_PX
+      : startedDir === "delete" ? -SWIPE_REVEAL_PX : 0;
     const rowWidth = origRect.width;
     // Full-swipe threshold: past this on release, the action executes.
     const commitPx = Math.max(rowWidth * 0.45, SWIPE_REVEAL_PX + 40);
@@ -676,7 +681,12 @@ function _setupDragHandle(li, row) {
       if (mode === null) {
         if (Math.hypot(dx, dy) < 5) return;
         clearLongPress();
-        if (canSwipe && Math.abs(dx) > Math.abs(dy)) {
+        if (onHandle && canDrag) {
+          // Dedicated reorder handle → start dragging right away (touch + mouse),
+          // bypassing long-press and swipe classification.
+          mode = "drag";
+          _beginDrag();
+        } else if (canSwipe && Math.abs(dx) > Math.abs(dy)) {
           // Horizontal-dominant gesture on touch → swipe-reveal action panel.
           mode = "swipe";
           row.classList.add("bm-swiping");
@@ -704,12 +714,13 @@ function _setupDragHandle(li, row) {
         // Clamp within the row; either direction is allowed (bidirectional).
         if (offset > rowWidth) offset = rowWidth;
         if (offset < -rowWidth) offset = -rowWidth;
-        // Slide the content; the edge-anchored action beneath is exposed.
-        // offset < 0 → content slides left → 수정 (right). offset > 0 → 삭제 (left).
+        // Slide the content; the edge-anchored action beneath is exposed. iOS
+        // convention: swipe left (offset < 0) → content slides left → expose the
+        // RIGHT (trailing) edge → 삭제. Swipe right (offset > 0) → 수정 (left).
         if (contentEl) contentEl.style.transform = `translateX(${offset}px)`;
         // Show the action for the current direction (full-bleed behind content).
-        row.classList.toggle("bm-swiping-delete", offset > 0);
-        row.classList.toggle("bm-swiping-edit", offset < 0);
+        row.classList.toggle("bm-swiping-delete", offset < 0);
+        row.classList.toggle("bm-swiping-edit", offset > 0);
         return;
       }
 
@@ -729,17 +740,17 @@ function _setupDragHandle(li, row) {
         if (contentEl) contentEl.style.transform = "";
         const finalOffset = baseOffset + (e.clientX - startX);
         if (finalOffset <= -commitPx) {
-          // Full swipe left → 수정 (trigger the revealed button's handler).
-          closeSwipedRow(null);
-          /** @type {HTMLElement | null} */ (row.querySelector(".bm-swipe-edit"))?.click();
-        } else if (finalOffset >= commitPx) {
-          // Full swipe right → 삭제.
+          // Full swipe left → 삭제 (trigger the revealed button's handler).
           closeSwipedRow(null);
           /** @type {HTMLElement | null} */ (row.querySelector(".bm-swipe-delete"))?.click();
+        } else if (finalOffset >= commitPx) {
+          // Full swipe right → 수정.
+          closeSwipedRow(null);
+          /** @type {HTMLElement | null} */ (row.querySelector(".bm-swipe-edit"))?.click();
         } else if (finalOffset <= -SWIPE_REVEAL_PX / 2) {
-          _openSwipedRow(row, "edit");
-        } else if (finalOffset >= SWIPE_REVEAL_PX / 2) {
           _openSwipedRow(row, "delete");
+        } else if (finalOffset >= SWIPE_REVEAL_PX / 2) {
+          _openSwipedRow(row, "edit");
         } else {
           _resetRowSwipe(row);
           if (_swipedRow === row) _swipedRow = null;
@@ -1226,6 +1237,30 @@ function _buildSwipeActions(label, editAction, deleteAction) {
   return { del, edit };
 }
 
+// Reorder grab handle (≡) shown at a row's trailing edge ONLY in 직접 정렬
+// (manual) mode — renderBookmarkTree toggles `bm-sortable` on the tree and CSS
+// reveals it. Three stacked lines = iOS's reorder control; it both affords drag
+// and signals "you're in the reorderable mode". aria-hidden: a pointer-only
+// affordance (no keyboard reorder yet), and the row already names itself.
+function _buildDragHandle() {
+  const ns = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(ns, "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("fill", "none");
+  svg.setAttribute("stroke", "currentColor");
+  svg.setAttribute("stroke-width", "2");
+  svg.setAttribute("stroke-linecap", "round");
+  for (const y of [8, 12, 16]) {
+    const line = document.createElementNS(ns, "line");
+    line.setAttribute("x1", "5");
+    line.setAttribute("x2", "19");
+    line.setAttribute("y1", String(y));
+    line.setAttribute("y2", String(y));
+    svg.appendChild(line);
+  }
+  return el("span", { className: "bm-drag-handle", "aria-hidden": "true" }, svg);
+}
+
 function _buildBookmarkItem(bm, depth) {
   const li = el("li", { role: "treeitem", className: "bm-bookmark", "data-id": bm.id, tabIndex: "-1" });
   if (depth > 0) li.setAttribute("aria-level", String(depth + 1));
@@ -1295,6 +1330,7 @@ function _buildBookmarkItem(bm, depth) {
   content.appendChild(typeIcon);
   content.appendChild(link);
   content.appendChild(actions);
+  content.appendChild(_buildDragHandle());
   row.appendChild(del);
   row.appendChild(edit);
   row.appendChild(content);
@@ -1620,6 +1656,7 @@ function _buildFolderItem(folder, depth) {
   content.appendChild(toggle);
   content.appendChild(name);
   content.appendChild(actions);
+  content.appendChild(_buildDragHandle());
   row.appendChild(del);
   row.appendChild(edit);
   row.appendChild(content);
@@ -1651,7 +1688,7 @@ function _buildFolderItem(folder, depth) {
 // title row (shown when bookmarks already exist, so returning users who forgot
 // the flow still have a reminder).
 const BOOKMARK_ADD_HELP =
-  "읽는 화면 오른쪽 위의 북마크 버튼을 눌러 지금 보는 장을 저장하세요. 절을 선택하면 원하는 구절만 북마크할 수도 있습니다.";
+  "성서를 읽다가 오른쪽 위의 북마크 버튼을 누르면 이곳에 북마크가 기록됩니다. 읽던 구절을 누른 후, 여러 절을 선택해 북마크할 수도 있습니다.";
 
 // Empty-state placeholder for the bookmark list (drawer + full view). Beyond the
 // "none yet" line it explains how bookmarks are created, so the screen is
@@ -1679,6 +1716,9 @@ function renderBookmarkTree(target = $bookmarkDrawerBody) {
   // stale reference held by js/app/bookmark.js.
   resetSwipedRow();
   clearNode(target);
+  // Reveal per-row reorder handles (≡) only under 직접 정렬 (manual), where a
+  // drag actually reorders; auto-sorts would re-sort the drop away, so no handle.
+  target.classList.toggle("bm-sortable", getBookmarkSort() === "manual");
   const store = loadBookmarks();
   if (!store.length) {
     target.appendChild(_buildEmptyState());

@@ -431,3 +431,25 @@ li.bm-bookmark
 > `padding-left: calc(var(--space-4) + var(--bm-indent))`, 깊이별 `--bm-indent`(= `--space-8 × depth`)
 > 를 아이템 빌더가 콘텐츠에 인라인 설정. 본문 위치는 동일(루트 16px, depth1 48px…)하되 행은
 > 가장자리까지 차 액션 컬러가 화면 끝에 닿는다. 데스크탑은 스와이프가 없어 기존 UL 패딩 유지.
+
+> **개정 (2026-06-07): 스와이프 방향을 iOS 관례로 교체 + 탭 hit-test 버그 수정.**
+> 위 2026-06-06 모델은 **왼쪽=수정 / 오른쪽=삭제**였는데, 이는 iOS 관례(Mail·메시지·메모의
+> "왼쪽으로 밀어 삭제")와 정반대였다. 파괴적 액션을 **trailing(오른쪽 가장자리, 왼쪽 스와이프)**,
+> 비파괴(수정)를 **leading(왼쪽 가장자리, 오른쪽 스와이프)**로 교체:
+> - **왼쪽으로 스와이프** → 우측 가장자리 **삭제**(`.bm-swipe-delete`, 빨강).
+> - **오른쪽으로 스와이프** → 좌측 가장자리 **수정**(`.bm-swipe-edit`).
+>
+> JS(`onMove` 토글·`finish` full/partial·re-grab `baseOffset`)와 CSS(엣지 앵커 `justify`,
+> 스냅 `translateX` 부호)를 일괄 swap. **버그 수정:** 두 액션이 `position:absolute; inset:0`로
+> 겹쳐 깔려, DOM 상 뒤에 추가된 수정 버튼이 위에 올라가 **삭제가 노출돼도 탭이 수정으로 가던**
+> 문제를 `pointer-events`로 차단 — 기본 `none`, 노출된 방향만 `auto`(full-swipe 의 프로그램적
+> `.click()`은 무관). e2e `test_bookmark_swipe.py` 를 새 방향 + 노출 스트립 좌표 클릭(실 hit-test)으로 갱신.
+
+> **개정 (2026-06-07): 재정렬 ≡ 핸들 (직접 정렬 모드 한정, ADR-029 연계).**
+> 롱프레스-드래그는 상시 어포던스가 없어 "재정렬 가능"이 안 보였다(HIG의 두 패턴 중 발견성이
+> 낮은 쪽). iOS 편집모드의 재정렬 컨트롤(≡)을 본떠 각 행 trailing 에 ≡ 핸들(`_buildDragHandle`,
+> 가로줄 3개)을 추가하되, **정렬이 `manual`(직접 정렬)일 때만 노출** — `renderBookmarkTree` 가
+> 트리에 `bm-sortable` 토글, CSS `.bm-drag-handle { display:none } .bm-sortable .bm-drag-handle { … }`.
+> 자동 정렬에선 드롭이 재정렬돼 무의미하므로 핸들도 숨김 → 핸들이 "재정렬 가능 + 현재 직접정렬
+> 모드"를 함께 신호. 핸들에서 시작한 포인터는 **롱프레스/스와이프 분류를 건너뛰고 즉시 드래그**
+> (`onHandle` 분기, 터치·마우스 공통) — iOS 핸들처럼. `aria-hidden`(포인터 전용, 키보드 재정렬 미지원).

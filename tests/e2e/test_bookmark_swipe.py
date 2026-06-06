@@ -20,6 +20,13 @@ _BM_A = {"type": "bookmark", "id": "bm-a", "bookId": "gen", "chapter": 1,
 _BM_B = {"type": "bookmark", "id": "bm-b", "bookId": "john", "chapter": 3,
           "label": "요한 3장", "verseSpec": "all"}
 
+# iPhone UA auto-opens the install nudge ~1.5s in; its scrim then intercepts taps
+# in the longer (click-through) tests. Pin neverShow so it never fires.
+_PIN_NUDGE = (
+    "localStorage.setItem('bible-install-nudge',"
+    " JSON.stringify({visits: 0, nextShow: 9999, neverShow: true}));"
+)
+
 _SWIPE_JS = """(args) => {
     const rows = document.querySelectorAll('li.bm-bookmark .bm-bookmark-row');
     const row = rows[args.idx] || rows[0];
@@ -92,16 +99,33 @@ def _longpress(page, idx=0, ms=600):
 
 # ── Tests ─────────────────────────────────────────────────────────────────────
 
-def test_swipe_reveals_mobile_actions(browser):
-    """모바일에서 북마크 행을 왼쪽으로 스와이프하면 수정 액션이 노출된다.
+def test_swipe_left_reveals_delete(browser):
+    """모바일에서 행을 왼쪽으로 스와이프하면 삭제 액션이 노출된다 (iOS 관례).
 
-    양방향 스와이프(ADR-010 개정): 왼쪽 = 수정(우측 가장자리), 오른쪽 = 삭제."""
+    양방향 스와이프(ADR-010 개정): 왼쪽(trailing) = 삭제(우측 가장자리·빨강),
+    오른쪽(leading) = 수정(좌측 가장자리)."""
     ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA)
     ctx.add_init_script(CLEAR_APP_STORAGE)
+    ctx.add_init_script(_PIN_NUDGE)
     page = ctx.new_page()
     try:
         _open_drawer(page, [_BM_A])
         _swipe(page, idx=0, dx=-160)
+        page.wait_for_selector(".bm-bookmark-row.bm-swiped-delete", timeout=2_000)
+        assert page.locator(".bm-swipe-delete").count() > 0
+    finally:
+        ctx.close()
+
+
+def test_swipe_right_reveals_edit(browser):
+    """오른쪽으로 스와이프하면 수정 액션이 노출된다 (leading edge)."""
+    ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA)
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    ctx.add_init_script(_PIN_NUDGE)
+    page = ctx.new_page()
+    try:
+        _open_drawer(page, [_BM_A])
+        _swipe(page, idx=0, dx=160)
         page.wait_for_selector(".bm-bookmark-row.bm-swiped-edit", timeout=2_000)
         assert page.locator(".bm-swipe-edit").count() > 0
     finally:
@@ -112,6 +136,7 @@ def test_swipe_other_row_closes_previous(browser):
     """두 번째 행을 스와이프하면 첫 번째 행의 액션이 자동으로 닫힌다."""
     ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA)
     ctx.add_init_script(CLEAR_APP_STORAGE)
+    ctx.add_init_script(_PIN_NUDGE)
     page = ctx.new_page()
     try:
         _open_drawer(page, [_BM_A, _BM_B])
@@ -128,6 +153,7 @@ def test_longpress_starts_drag(browser):
     """500ms 이상 롱프레스하면 드래그-재정렬 모드가 시작된다 (액션 패널이 아님)."""
     ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA)
     ctx.add_init_script(CLEAR_APP_STORAGE)
+    ctx.add_init_script(_PIN_NUDGE)
     page = ctx.new_page()
     try:
         _open_drawer(page, [_BM_A])
@@ -148,6 +174,7 @@ def test_short_press_does_not_start_drag(browser):
     """짧은 press(<500ms)는 드래그를 시작하지 않고 액션 패널도 열리지 않는다."""
     ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA)
     ctx.add_init_script(CLEAR_APP_STORAGE)
+    ctx.add_init_script(_PIN_NUDGE)
     page = ctx.new_page()
     try:
         _open_drawer(page, [_BM_A])
@@ -163,6 +190,7 @@ def test_swipe_no_effect_on_desktop(browser):
     """데스크톱 viewport(>768px)에서는 canSwipe=false이므로 스와이프가 동작하지 않는다."""
     ctx = browser.new_context(viewport={"width": 1280, "height": 800})
     ctx.add_init_script(CLEAR_APP_STORAGE)
+    ctx.add_init_script(_PIN_NUDGE)
     page = ctx.new_page()
     try:
         _open_drawer(page, [_BM_A])
@@ -174,18 +202,28 @@ def test_swipe_no_effect_on_desktop(browser):
 
 
 def test_delete_via_swipe(browser):
-    """오른쪽으로 스와이프 → 삭제 버튼 클릭 → 확인 모달 승인 → 북마크 제거.
+    """왼쪽으로 스와이프 → 삭제 버튼 클릭 → 확인 모달 승인 → 북마크 제거.
 
-    삭제는 오른쪽 스와이프로 노출(좌측 가장자리). 액션은 full-bleed 라 콘텐츠가
-    가리지 않는 노출 영역(라벨)을 클릭한다."""
+    삭제는 왼쪽 스와이프로 노출(우측 가장자리, iOS 관례). 노출된 삭제 라벨을
+    클릭하면 (겹친 수정 버튼이 가로채지 않고) 삭제가 실행돼야 한다 — pointer-events
+    수정 회귀."""
     ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA)
     ctx.add_init_script(CLEAR_APP_STORAGE)
+    ctx.add_init_script(_PIN_NUDGE)
     page = ctx.new_page()
     try:
         _open_drawer(page, [_BM_A])
-        _swipe(page, idx=0, dx=160)
+        page.wait_for_timeout(300)  # let the drawer settle before measuring/swiping
+        _swipe(page, idx=0, dx=-160)
         page.wait_for_selector(".bm-bookmark-row.bm-swiped-delete", timeout=2_000)
-        page.locator(".bm-swipe-delete .bm-swipe-label").first.click()
+        page.wait_for_timeout(350)  # let the snap-open transition finish sliding
+        # Click the exposed 삭제 strip by coordinate (right edge), exercising real
+        # hit-testing: with the old bug the overlapping 수정 button would catch it.
+        box = page.evaluate(
+            "() => { const r = document.querySelector('.bm-bookmark-row.bm-swiped-delete')"
+            ".getBoundingClientRect(); return {x: r.x, y: r.y, w: r.width, h: r.height}; }"
+        )
+        page.mouse.click(box["x"] + box["w"] - 26, box["y"] + box["h"] / 2)
         page.wait_for_selector("#bm-confirm-modal:not([hidden])", timeout=2_000)
         page.locator("#bm-confirm-ok").click()
         page.wait_for_timeout(400)

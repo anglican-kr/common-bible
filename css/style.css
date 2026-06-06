@@ -4768,6 +4768,38 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   opacity: 1;
 }
 
+/* Reorder handle (≡): hidden by default, revealed only when the tree is in
+   manual-sort mode (.bm-sortable on the list). Neutral, trailing grab affordance
+   shared by the drawer and the full /bookmarks view. */
+.bm-drag-handle {
+  display: none;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  /* Full 44px tap target — in manual mode this is the primary reorder control,
+     so the hit box must meet the design system's --touch-target; the ≡ glyph
+     below stays small and centered within it. */
+  min-width: var(--touch-target);
+  min-height: var(--touch-target);
+  color: var(--text-secondary);
+  cursor: grab;
+  /* Own the gesture so a drag from the handle reorders instead of scrolling. */
+  touch-action: none;
+}
+
+.bm-sortable .bm-drag-handle {
+  display: inline-flex;
+}
+
+.bm-drag-handle:active {
+  cursor: grabbing;
+}
+
+.bm-drag-handle svg {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
 .bm-action-btn {
   font-family: inherit;
   font-size: var(--font-2xs);
@@ -5887,6 +5919,11 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
     color: #fff;
     cursor: pointer;
     opacity: 0;
+    /* Both actions are full-width overlays stacked on each other; without this
+       the topmost (later in DOM) intercepts taps even over the *other* action's
+       visible label. Only the revealed action (below) re-enables pointer events
+       — full-swipe still fires via a programmatic .click(), unaffected. */
+    pointer-events: none;
     touch-action: manipulation;
   }
 
@@ -5900,15 +5937,17 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
     font-size: var(--font-sm);
   }
 
+  /* iOS convention: 삭제(destructive) on the trailing (right) edge, revealed by
+     swiping left; 수정 on the leading (left) edge, revealed by swiping right. */
   .bm-swipe-delete {
     background: var(--danger);
-    justify-content: flex-start;
+    justify-content: flex-end;
   }
 
   .bm-swipe-edit {
     background: var(--accent);
     color: var(--bg);
-    justify-content: flex-end;
+    justify-content: flex-start;
   }
 
   /* Show only the action matching the current swipe direction. */
@@ -5921,16 +5960,18 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   .bm-folder-row.bm-swiping-edit .bm-swipe-edit,
   .bm-folder-row.bm-swiped-edit .bm-swipe-edit {
     opacity: 1;
+    pointer-events: auto;
   }
 
-  /* Snap-open states: slide the content to expose one edge's action. */
-  .bm-bookmark-row.bm-swiped-edit .bm-row-content,
-  .bm-folder-row.bm-swiped-edit .bm-row-content {
+  /* Snap-open states: slide the content to expose one edge's action. 삭제 lives on
+     the right (slide content left); 수정 on the left (slide content right). */
+  .bm-bookmark-row.bm-swiped-delete .bm-row-content,
+  .bm-folder-row.bm-swiped-delete .bm-row-content {
     transform: translateX(calc(-1 * var(--swipe-reveal)));
   }
 
-  .bm-bookmark-row.bm-swiped-delete .bm-row-content,
-  .bm-folder-row.bm-swiped-delete .bm-row-content {
+  .bm-bookmark-row.bm-swiped-edit .bm-row-content,
+  .bm-folder-row.bm-swiped-edit .bm-row-content {
     transform: translateX(var(--swipe-reveal));
   }
 

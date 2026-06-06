@@ -62,8 +62,8 @@ def test_info_button_left_of_more_and_opens_popover(mobile_context):
     info.click()
     page.wait_for_selector(f"{_POPOVER}:not([hidden])")
     assert info.get_attribute("aria-expanded") == "true"
-    # Shares the empty-state copy.
-    assert "북마크 버튼을 눌러" in page.locator(_POPOVER).inner_text()
+    # Shares the empty-state copy (BOOKMARK_ADD_HELP).
+    assert "북마크 버튼을 누르면" in page.locator(_POPOVER).inner_text()
 
 
 def test_popover_drops_below_trigger(mobile_context):
