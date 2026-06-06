@@ -593,6 +593,10 @@ function _setupDragHandle(li, row) {
     const isTouch = e.pointerType !== "mouse";
     const contentEl = /** @type {HTMLElement | null} */ (row.querySelector(".bm-row-content"));
     const canSwipe = _isMobileViewport() && isTouch && !!contentEl;
+    // Pointer started on the reorder handle (≡, manual mode only): treat it as a
+    // dedicated grab — start the drag immediately on move (no long-press, no
+    // swipe classification), the way iOS's reorder control behaves.
+    const onHandle = e.target instanceof Element && !!e.target.closest(".bm-drag-handle");
     // Drag-to-reorder only makes sense under 직접 정렬 (manual); an active
     // auto-sort would re-sort the drop away. Evaluated per gesture so a sort
     // change takes effect immediately. Swipe-to-reveal is always available.
@@ -677,7 +681,12 @@ function _setupDragHandle(li, row) {
       if (mode === null) {
         if (Math.hypot(dx, dy) < 5) return;
         clearLongPress();
-        if (canSwipe && Math.abs(dx) > Math.abs(dy)) {
+        if (onHandle && canDrag) {
+          // Dedicated reorder handle → start dragging right away (touch + mouse),
+          // bypassing long-press and swipe classification.
+          mode = "drag";
+          _beginDrag();
+        } else if (canSwipe && Math.abs(dx) > Math.abs(dy)) {
           // Horizontal-dominant gesture on touch → swipe-reveal action panel.
           mode = "swipe";
           row.classList.add("bm-swiping");
@@ -1228,6 +1237,30 @@ function _buildSwipeActions(label, editAction, deleteAction) {
   return { del, edit };
 }
 
+// Reorder grab handle (≡) shown at a row's trailing edge ONLY in 직접 정렬
+// (manual) mode — renderBookmarkTree toggles `bm-sortable` on the tree and CSS
+// reveals it. Three stacked lines = iOS's reorder control; it both affords drag
+// and signals "you're in the reorderable mode". aria-hidden: a pointer-only
+// affordance (no keyboard reorder yet), and the row already names itself.
+function _buildDragHandle() {
+  const ns = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(ns, "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("fill", "none");
+  svg.setAttribute("stroke", "currentColor");
+  svg.setAttribute("stroke-width", "2");
+  svg.setAttribute("stroke-linecap", "round");
+  for (const y of [8, 12, 16]) {
+    const line = document.createElementNS(ns, "line");
+    line.setAttribute("x1", "5");
+    line.setAttribute("x2", "19");
+    line.setAttribute("y1", String(y));
+    line.setAttribute("y2", String(y));
+    svg.appendChild(line);
+  }
+  return el("span", { className: "bm-drag-handle", "aria-hidden": "true" }, svg);
+}
+
 function _buildBookmarkItem(bm, depth) {
   const li = el("li", { role: "treeitem", className: "bm-bookmark", "data-id": bm.id, tabIndex: "-1" });
   if (depth > 0) li.setAttribute("aria-level", String(depth + 1));
@@ -1297,6 +1330,7 @@ function _buildBookmarkItem(bm, depth) {
   content.appendChild(typeIcon);
   content.appendChild(link);
   content.appendChild(actions);
+  content.appendChild(_buildDragHandle());
   row.appendChild(del);
   row.appendChild(edit);
   row.appendChild(content);
@@ -1622,6 +1656,7 @@ function _buildFolderItem(folder, depth) {
   content.appendChild(toggle);
   content.appendChild(name);
   content.appendChild(actions);
+  content.appendChild(_buildDragHandle());
   row.appendChild(del);
   row.appendChild(edit);
   row.appendChild(content);
@@ -1681,6 +1716,9 @@ function renderBookmarkTree(target = $bookmarkDrawerBody) {
   // stale reference held by js/app/bookmark.js.
   resetSwipedRow();
   clearNode(target);
+  // Reveal per-row reorder handles (≡) only under 직접 정렬 (manual), where a
+  // drag actually reorders; auto-sorts would re-sort the drop away, so no handle.
+  target.classList.toggle("bm-sortable", getBookmarkSort() === "manual");
   const store = loadBookmarks();
   if (!store.length) {
     target.appendChild(_buildEmptyState());
