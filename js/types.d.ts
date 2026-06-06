@@ -922,6 +922,7 @@ declare global {
     rebuildDriveSyncSection?: () => void;
     _showSyncSnackbar?: (msg: string) => void;
     closeSettings?: () => void;
+    closeChapterPopover?: () => void;
     renderBookmarkTree?: () => void;
     rerenderActiveBookmarkTree?: () => void;
     // Mobile tab-bar full-screen views (ADR-029 / P2). Always assigned at

@@ -17,7 +17,8 @@
 /** @typedef {import("../types").BibleChapter} BibleChapter */
 /** @typedef {import("../types").BiblePrologue} BiblePrologue */
 
-const { _$, el, clearNode, chUnit, trapFocus } = window.appHelpers;
+const { _$, el, clearNode, chUnit } = window.appHelpers;
+const { createOverlay } = window.appOverlay;
 const {
   loadBookOrder, loadStartupBehavior,
   loadReadingPosition, saveReadingPosition, clearReadingPosition,
@@ -471,15 +472,21 @@ function setTitleWithChapterPicker(book, currentCh) {
   }
   popover.appendChild(grid);
 
-  /** @type {(() => void) | null} */
-  let cleanupTrap = null;
-
-  btn.addEventListener("click", () => {
-    const open = !popover.hidden;
-    popover.hidden = open;
-    btn.setAttribute("aria-expanded", String(!open));
-    if (!open) {
-      cleanupTrap = trapFocus(popover);
+  // Overlay lifecycle (hidden toggle, focus-trap, outside-click, focus restore)
+  // is owned by the shared controller (ADR-032). closeOnEsc stays off: app.js's
+  // central Escape coordinator routes Escape via window.closeChapterPopover.
+  // aria-expanded is set on the specific btn in onOpen/onClose (per-instance, so
+  // a document-wide ariaExpanded selector isn't needed). outsideIgnore is the
+  // toggle btn itself; clicking the settings gear (outside the popover, not the
+  // toggle) closes the picker — the controller's "outside panel" rule subsumes
+  // the old explicit settings-gear clause.
+  const chapterOverlay = createOverlay({
+    panel: popover,
+    closeOnOutside: true,
+    outsideIgnore: ".title-picker-btn",
+    returnFocus: true,
+    onOpen: () => {
+      btn.setAttribute("aria-expanded", "true");
       // Land on the currently-open chapter (falling back to the first link, e.g.
       // when arriving from the prologue). preventScroll keeps the browser from
       // jumping the element to the viewport edge; we then center it within the
@@ -491,33 +498,19 @@ function setTitleWithChapterPicker(book, currentCh) {
       if (current) {
         popover.scrollTop = current.offsetTop - (popover.clientHeight - current.offsetHeight) / 2;
       }
-    } else if (cleanupTrap) {
-      cleanupTrap(); cleanupTrap = null;
-    }
+    },
+    onClose: () => { btn.setAttribute("aria-expanded", "false"); },
   });
+  // Exposed for app.js's Escape coordinator + route() nav dismissal (ADR-032).
+  window.closeChapterPopover = () => chapterOverlay.close();
 
-  document.addEventListener("click", (e) => {
-    const t = e.target;
-    // Close on any click outside the title row, OR on the settings gear — the
-    // mobile settings trigger lives *inside* $title, so without the second
-    // clause the chapter popover would stay open behind the settings popover
-    // (two popovers visible at once).
-    const outsideTitle = t instanceof Node && !$title.contains(t);
-    const onSettingsBtn = t instanceof Element && !!t.closest(".title-settings-btn");
-    if (!popover.hidden && (outsideTitle || onSettingsBtn)) {
-      popover.hidden = true;
-      btn.setAttribute("aria-expanded", "false");
-      if (cleanupTrap) { cleanupTrap(); cleanupTrap = null; }
-    }
+  btn.addEventListener("click", () => {
+    if (chapterOverlay.isOpen) chapterOverlay.close(); else chapterOverlay.open();
   });
 
   popover.addEventListener("click", (e) => {
     const t = e.target;
-    if (t instanceof Element && t.tagName === "A") {
-      popover.hidden = true;
-      btn.setAttribute("aria-expanded", "false");
-      if (cleanupTrap) { cleanupTrap(); cleanupTrap = null; }
-    }
+    if (t instanceof Element && t.tagName === "A") chapterOverlay.close();
   });
 
   $title.appendChild(buildHomeBtn(`/${effectiveDivision(book)}`, "성서 목록으로"));
@@ -1827,6 +1820,10 @@ async function route() {
   // (never toggle-closed) since the popover is already dismissed by this point.
   const settingsPopover = document.querySelector(".settings-popover");
   if (settingsPopover && !(/** @type {HTMLElement} */ (settingsPopover)).hidden) window.closeSettings?.();
+  // Chapter picker has a focus trap + outside-click listener; dismiss on nav so
+  // a stale controller from the previous render doesn't linger (ADR-032).
+  const chapterPopover = document.querySelector(".chapter-popover");
+  if (chapterPopover && !(/** @type {HTMLElement} */ (chapterPopover)).hidden) window.closeChapterPopover?.();
   const parsed = parsePath();
   const { view, bookId, chapter, division } = parsed;
 
