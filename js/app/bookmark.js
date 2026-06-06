@@ -18,7 +18,7 @@
 /** @typedef {import("../types").DragState} DragState */
 /** @typedef {import("../types").BooksData} BooksData */
 
-const { _$, el, clearNode, chUnit, setInert, trapFocus } = window.appHelpers;
+const { _$, el, clearNode, chUnit } = window.appHelpers;
 const { createOverlay, attachSheetDrag, attachSheetResize } = window.appOverlay;
 const { loadBookmarks, saveBookmarks, generateId } = window.appStorage;
 const { readingContext } = window;
@@ -767,26 +767,18 @@ function _setupDragHandle(li, row) {
 // js/app/reading-context.js (ADR-018 Phase 6a) — see destructured
 // `readingContext` at the top of this file. Only bookmark-UI-specific
 // state remains here pending Phase 6b extraction to bookmark.js.
-/** @type {(() => void) | null} */
-let _bookmarkDrawerTrap = null;
-/** @type {HTMLElement | null} */
-let _bookmarkDrawerLastFocus = null;
-// Save / merge / chapter-delete / confirm / new-folder / import / drive-disconnect
-// modal lifecycle (focus-trap + last-focus) now lives inside their overlay
-// controllers (ADR-032). _bmNewFolderCallback is the only remaining per-flow
-// state (the create-folder continuation). The drawer keeps its own trap/last-
-// focus for now — its animated, scroll-locking dismiss is deferred to the sheet
-// factory stage.
+// All overlay lifecycle (focus-trap, last-focus, background inert, scrim) now
+// lives inside the overlay controllers (ADR-032) — modals, drawer, etc. The
+// drawer's only remaining per-flow state is the animated-dismiss fallback timer
+// (its closeTransition; cleared on reopen). _bmNewFolderCallback is the
+// create-folder continuation.
 /** @type {((id: string) => void) | null} */
 let _bmNewFolderCallback = null;
-let _bookmarkDrawerCloseSeq = 0;
 /** @type {ReturnType<typeof setTimeout> | null} */
 let _bookmarkDrawerCloseTimer = null;
 // `_dragState` was extracted to js/app/bookmark.js (ADR-018 Phase 6a) along
 // with the drag & drop pointer handling that owns it.
 const BOOKMARK_INERT_SELECTORS = "#sticky-group, main#app, #audio-bar, #launch-screen, #install-scrim, #install-modal, #verse-select-bar";
-/** @param {boolean} on */
-function setBookmarkBackgroundInert(on) { setInert(on, BOOKMARK_INERT_SELECTORS); }
 
 // ── Bookmark UI ──
 
@@ -996,73 +988,68 @@ function refreshBookmarkHeaderBtn() {
   if (svg) _setBookmarkBtnIcon(svg, hasBookmark);
 }
 
+// The drawer's overlay lifecycle now runs through the shared controller
+// (ADR-032). Its one bespoke trait — an animated slide-out dismiss — is carried
+// by closeTransition: the logical close (scrim, inert, trap, focus restore)
+// happens immediately while `drawer-closing` plays, then finalizeHide hides the
+// panel on animationend (350ms fallback). The controller's seq guard cancels a
+// pending hide if the drawer is reopened mid-animation; we still clear the
+// fallback timer + the drawer-closing class on (re)open so the in-animation
+// can take over and a stale timer never resets a freshly dragged height.
+// closeOnEsc stays off — bookmark.js's stacked Escape router closes the drawer
+// (lowest priority). Background scroll-lock (iOS position:fixed) is drawer-
+// specific, handled via onOpen/onClose like the install modal.
+const drawerOverlay = createOverlay({
+  panel: $bookmarkDrawer,
+  scrim: $bookmarkScrim,
+  inertSelectors: BOOKMARK_INERT_SELECTORS,
+  initialFocus: () => $bookmarkDrawerClose,
+  onOpen: () => {
+    if (_bookmarkDrawerCloseTimer) { clearTimeout(_bookmarkDrawerCloseTimer); _bookmarkDrawerCloseTimer = null; }
+    $bookmarkDrawer.classList.remove("drawer-closing"); // cancel any in-flight close anim
+    const scrollY = window.scrollY;
+    document.body.style.overflow = "hidden";
+    document.body.style.position = "fixed";
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = "100%";
+    document.body.dataset.scrollY = String(scrollY);
+  },
+  onClose: () => {
+    closeSwipedRow(null);
+    $bmOverflowPanel.hidden = true;
+    $bmOverflowBtn.setAttribute("aria-expanded", "false");
+    const scrollY = parseInt(document.body.dataset.scrollY || "0", 10);
+    document.body.style.overflow = "";
+    document.body.style.position = "";
+    document.body.style.top = "";
+    document.body.style.width = "";
+    window.scrollTo(0, scrollY);
+  },
+  closeTransition: (panel, finalizeHide) => {
+    panel.classList.add("drawer-closing");
+    const done = () => {
+      if (_bookmarkDrawerCloseTimer) { clearTimeout(_bookmarkDrawerCloseTimer); _bookmarkDrawerCloseTimer = null; }
+      finalizeHide(); // no-op if reopened in the meantime (seq guard)
+      panel.classList.remove("drawer-closing");
+      panel.style.height = "";
+      panel.style.width = "";
+    };
+    panel.addEventListener("animationend", done, { once: true });
+    _bookmarkDrawerCloseTimer = setTimeout(done, 350); // fallback
+  },
+});
+
 function openBookmarkDrawer(bookId, chapter) {
-  _bookmarkDrawerCloseSeq += 1;
-  if (_bookmarkDrawerCloseTimer) {
-    clearTimeout(_bookmarkDrawerCloseTimer);
-    _bookmarkDrawerCloseTimer = null;
-  }
-  $bookmarkDrawer.classList.remove("drawer-closing");
-  _bookmarkDrawerLastFocus = /** @type {HTMLElement | null} */ (document.activeElement);
-  $bookmarkScrim.hidden = false;
-  $bookmarkDrawer.hidden = false;
-  // Update toolbar visibility based on whether we're in a chapter
+  // Update toolbar visibility based on whether we're in a chapter, and render
+  // the tree before the controller reveals the drawer.
   const inChapter = bookId && chapter;
   $bmSaveChapterBtn.disabled = !inChapter;
   $bmSelectVersesBtn.disabled = !inChapter;
   _rerenderActiveBookmarkTree();
-  setBookmarkBackgroundInert(true);
-  const scrollY = window.scrollY;
-  document.body.style.overflow = "hidden";
-  document.body.style.position = "fixed";
-  document.body.style.top = `-${scrollY}px`;
-  document.body.style.width = "100%";
-  document.body.dataset.scrollY = String(scrollY);
-  _bookmarkDrawerTrap = trapFocus($bookmarkDrawer);
-  requestAnimationFrame(() => $bookmarkDrawerClose.focus());
+  drawerOverlay.open();
 }
 
-function closeBookmarkDrawer() {
-  if ($bookmarkDrawer.hidden || $bookmarkDrawer.classList.contains("drawer-closing")) return;
-  closeSwipedRow(null);
-  $bmOverflowPanel.hidden = true;
-  $bmOverflowBtn.setAttribute("aria-expanded", "false");
-  const closeSeq = ++_bookmarkDrawerCloseSeq;
-  $bookmarkScrim.hidden = true;
-  $bookmarkDrawer.classList.add("drawer-closing");
-
-  // Restore body scroll and focus immediately so the page feels responsive
-  setBookmarkBackgroundInert(false);
-  const scrollY = parseInt(document.body.dataset.scrollY || "0", 10);
-  document.body.style.overflow = "";
-  document.body.style.position = "";
-  document.body.style.top = "";
-  document.body.style.width = "";
-  window.scrollTo(0, scrollY);
-  if (_bookmarkDrawerTrap) { _bookmarkDrawerTrap(); _bookmarkDrawerTrap = null; }
-  if (_bookmarkDrawerLastFocus && _bookmarkDrawerLastFocus.focus) {
-    try { _bookmarkDrawerLastFocus.focus(); } catch {}
-  }
-
-  let finalized = false;
-  const finalize = () => {
-    if (finalized || closeSeq !== _bookmarkDrawerCloseSeq) return;
-    finalized = true;
-    if (_bookmarkDrawerCloseTimer) {
-      clearTimeout(_bookmarkDrawerCloseTimer);
-      _bookmarkDrawerCloseTimer = null;
-    }
-    $bookmarkDrawer.hidden = true;
-    $bookmarkDrawer.classList.remove("drawer-closing");
-    $bookmarkDrawer.style.height = "";
-    $bookmarkDrawer.style.width = "";
-  };
-  $bookmarkDrawer.addEventListener("animationend", finalize, { once: true });
-  _bookmarkDrawerCloseTimer = setTimeout(() => {
-    _bookmarkDrawerCloseTimer = null;
-    finalize();
-  }, 350); // fallback
-}
+function closeBookmarkDrawer() { drawerOverlay.close(); }
 
 // ── Bookmark tree rendering ──
 
@@ -2771,8 +2758,11 @@ document.addEventListener("keydown", (e) => {
 // close animation starts from the CSS default. maxRatio 0.92 is the drawer's
 // (slightly taller than the cite sheet's default 0.9).
 function initBookmarkSheetDrag() {
+  // onClose just dismisses; the drawer's closeTransition resets the inline
+  // height after the slide-out, so the exit animates from the dragged height
+  // (no jump to the rest size first).
   attachSheetDrag(_$("bookmark-drawer-handle"), _$("bookmark-drawer"), {
-    onClose: () => { closeBookmarkDrawer(); _$("bookmark-drawer").style.height = ""; },
+    onClose: closeBookmarkDrawer,
     maxRatio: 0.92,
   });
 }
