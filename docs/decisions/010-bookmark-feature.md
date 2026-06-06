@@ -182,6 +182,27 @@ ARIA tree widget(`role="tree"`, `role="treeitem"`, `role="group"`).
 **절 선택 바** (`#verse-select-bar`): 하단 고정. 롱프레스 300ms 또는
 드로어 "절 선택" 버튼으로 진입. 10px 이동 임계값으로 터치 드리프트 허용.
 
+> **개정 (2026-06-06):** 절 선택 바를 **텍스트 라벨 버튼 → 탭 dock 형식의
+> floating glass + 아이콘 전용**으로 개편(ADR-030 형식 통일). 구조는 탭 dock 미러 —
+> 투명 flex dock = `[아이콘 글래스 pill] + [취소 글래스 원형]`, 선택 카운트는 캡슐 위
+> 중앙에 부유하는 글래스 칩(`#verse-select-count`, `aria-live`). pill 안에 **북마크·복사 +
+> 노트 슬롯** 3개 아이콘(stroke, round cap/join — 탭 아이콘 언어). 북마크·복사는 선택 0
+> 일 때 `disabled`(흐림), **노트는 후속 기능 placeholder** 라 `aria-disabled`(탭 dock 노트
+> 탭과 동일 패턴, 탭 시 "준비 중" announce). 글래스 레시피는 탭 dock 과 동일 토큰 공유
+> (`--glass-sheen` + `--bg 50%` 틴트 + `blur(12px)` + 1px 테두리 + `--shadow-2` +
+> `--glass-inset`, `--radius-pill` + `corner-shape: superellipse(2)`, 60px 높이).
+> 다중 절 선택 모델이라 팝오버 대신 영속 하단 액션 바를 유지(iOS 26 다중 선택 컨텍스트
+> 툴바 idiom — 선택 시 등장, 해제 시 사라짐, 아이콘 contained 버튼). 기존 ID
+> (`#verse-select-bar`·`#verse-select-{count,bookmark-btn,copy-btn,cancel-btn}`)는 e2e·
+> inert 셀렉터 호환을 위해 모두 보존, pill 래퍼(`.verse-action-pill`)와 노트
+> 버튼(`#verse-select-note-btn`)만 신설. CSS 는 `#tab-dock`/`#tab-bar`/`.tab-item`/
+> `#tab-search` 패턴 미러. 등장 시 페이드/슬라이드 인(reduced-motion 스냅).
+> 절 선택 바가 하단 chrome 을 대체하므로 진입 시 탭 dock(홈·검색)·미니 오디오 바·
+> tabbar scrim 을 모두 숨기고 종료 시 복원(`body.verse-select-active`). 미니 오디오는
+> 스크롤 축소 규칙(`body.tabbar-collapsed #audio-bar:not([hidden])`, 특이도 1,2,1)이
+> 절 선택 숨김(1,1,1)을 이겨 축소 중 진입 시 액션 바 뒤로 비쳤던 버그를
+> `display: none !important` 로 해소.
+
 **헤더 북마크 아이콘** (`.title-bookmark-btn`): `buildBookmarkHeaderBtn()` 호출.
 아이콘: Material Icons `bookmarks` SVG. 장 북마크 여부 표시 제거
 (`.has-bookmark` 클래스 및 관련 CSS 삭제).

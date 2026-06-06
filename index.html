@@ -304,12 +304,29 @@
     </div>
   </div>
 
-  <!-- ── Verse Selection Action Bar ── -->
+  <!-- ── Verse Selection Action Bar (ADR-010; ADR-030 형식 통일) ──
+       탭 dock 미러: 투명 flex dock = [아이콘 글래스 pill] + [취소 글래스 원형].
+       선택 카운트는 캡슐 위 부유 글래스 칩(aria-live). 기존 ID 는 e2e·inert 셀렉터
+       호환을 위해 모두 보존하고, pill 래퍼와 노트 슬롯만 새로 추가한다. 아이콘은
+       탭 아이콘과 동일 stroke 언어(round cap/join). 북마크·복사는 disabled 속성(선택 0
+       일 때), 노트는 후속 기능 placeholder 라 aria-disabled. -->
   <div id="verse-select-bar" hidden>
     <span id="verse-select-count" aria-live="polite">구절을 눌러서 선택</span>
-    <button id="verse-select-bookmark-btn" type="button" disabled>북마크</button>
-    <button id="verse-select-copy-btn" type="button" disabled>복사</button>
-    <button id="verse-select-cancel-btn" type="button" aria-label="선택 취소">취소</button>
+    <div class="verse-action-pill">
+      <button id="verse-select-bookmark-btn" class="verse-action-btn" type="button" disabled aria-label="북마크에 저장">
+        <svg class="va-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 4.5h12a1 1 0 0 1 1 1V21l-7-4.7L5 21V5.5a1 1 0 0 1 1-1Z"/></svg>
+      </button>
+      <button id="verse-select-copy-btn" class="verse-action-btn" type="button" disabled aria-label="복사">
+        <svg class="va-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+      </button>
+      <!-- ADR-030: 노트 작성 슬롯 — 후속 기능 placeholder(비활성, 탭 dock 노트 탭과 동일 패턴). -->
+      <button id="verse-select-note-btn" class="verse-action-btn" type="button" aria-disabled="true" aria-label="노트 (준비 중)">
+        <svg class="va-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4.5" y="4" width="15" height="16" rx="2.2"/><path d="M8.5 9h7"/><path d="M8.5 12.5h7"/><path d="M8.5 16h4"/></svg>
+      </button>
+    </div>
+    <button id="verse-select-cancel-btn" type="button" aria-label="선택 취소">
+      <svg class="va-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6 18 18M18 6 6 18"/></svg>
+    </button>
   </div>
 
   <!-- Google tag (gtag.js) -->

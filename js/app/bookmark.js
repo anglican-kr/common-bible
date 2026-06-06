@@ -822,6 +822,9 @@ const $verseSelectBar = _$("verse-select-bar");
 const $verseSelectCount = _$("verse-select-count");
 const $verseSelectBookmarkBtn = /** @type {HTMLButtonElement} */ (_$("verse-select-bookmark-btn"));
 const $verseSelectCopyBtn = /** @type {HTMLButtonElement} */ (_$("verse-select-copy-btn"));
+// Note action is a placeholder slot (ADR-030) — not yet built. It uses
+// aria-disabled (not `disabled`) so a tap still announces "coming soon".
+const $verseSelectNoteBtn = _$("verse-select-note-btn");
 const $verseSelectCancelBtn = _$("verse-select-cancel-btn");
 
 // Build the chevron-left back button for page title headers
@@ -2563,6 +2566,8 @@ $bmAddFolderBtn.addEventListener("click", () => {
 $verseSelectCancelBtn.addEventListener("click", exitVerseSelectMode);
 $verseSelectBookmarkBtn.addEventListener("click", () => openSaveModal("verses"));
 $verseSelectCopyBtn.addEventListener("click", copySelectedVerses);
+// Placeholder — note-taking is a follow-up feature (ADR-030 note slot).
+$verseSelectNoteBtn.addEventListener("click", () => announce("노트 기능은 준비 중입니다."));
 
 $bmOverflowBtn.addEventListener("click", () => {
   const isOpen = !$bmOverflowPanel.hidden;

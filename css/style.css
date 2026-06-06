@@ -4111,8 +4111,12 @@ body.verse-select-active {
   user-select: none;
 }
 
+/* 절 선택 모드는 전용 액션 바가 하단 chrome 을 대체하므로 미니 오디오 바를 숨긴다
+   (닫으면 verse-select-active 해제로 자동 복원). !important 인 이유: 스크롤 축소 상태의
+   `body.tabbar-collapsed #audio-bar:not([hidden])`(특이도 1,2,1)가 이 규칙(1,1,1)을
+   이겨, 축소 중 절 선택에 들어가면 미니 오디오가 액션 바 뒤로 비쳐 보였다. */
 body.verse-select-active #audio-bar {
-  display: none;
+  display: none !important;
 }
 
 /* No inline padding/margin in select mode. A 0.15em horizontal padding
@@ -4195,100 +4199,139 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   border-radius: 0;
 }
 
-/* ── Verse selection action bar ── */
+/* ── Verse selection action bar (ADR-010; ADR-030 형식 통일) ──
+   탭 dock(#tab-dock/#tab-bar/.tab-item/#tab-search) 패턴을 미러한 floating glass.
+   투명 flex dock = [아이콘 글래스 pill] + [취소 글래스 원형], 카운트는 캡슐 위 부유 칩.
+   탭 dock·오디오 바는 body.verse-select-active 에서 숨으므로 이 바가 그 자리를 대체한다. */
 
+/* 투명 레이아웃 dock — #tab-dock 미러(표면 없음). 데스크탑은 max-width 중앙, 모바일은
+   space-4 패딩으로 가장자리 정렬. 키보드와 무관하므로 --kb-overlap 없음. */
 #verse-select-bar {
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
   display: none;
   position: fixed;
-  bottom: 0;
   left: 0;
   right: 0;
+  bottom: calc(var(--space-1) + env(safe-area-inset-bottom) * 0.75);
   margin-inline: auto;
   max-width: var(--max-width);
   z-index: 35;
-  background: color-mix(in srgb, var(--bg) 50%, transparent);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border-top: none;
-  padding: 0.65rem 1.25rem max(0.75rem, env(safe-area-inset-bottom));
   align-items: center;
-  gap: var(--space-3);
-}
-
-#verse-select-bar::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background: linear-gradient(to right, transparent, var(--border) 20%, var(--border) 80%, transparent);
+  padding: 0 var(--space-4);
+  background: none;
+  border: none;
+  box-shadow: none;
 }
 
 #verse-select-bar:not([hidden]) {
   display: flex;
+  animation: verse-bar-in var(--duration-base) var(--ease-standard);
 }
 
+@keyframes verse-bar-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #verse-select-bar:not([hidden]) { animation: none; }
+}
+
+/* 선택 카운트 — 캡슐 위 중앙 부유 글래스 칩(순수 표시, aria-live). dock(fixed)이 포지셔닝
+   컨텍스트. count=0 이면 "구절을 눌러서 선택" 안내, 선택 시 ref 스펙(updateVerseSelectBar). */
 #verse-select-count {
-  flex: 1;
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: var(--space-2);
+  white-space: nowrap;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-pill);
+  background: var(--glass-sheen), color-mix(in srgb, var(--bg) 70%, transparent);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
+  box-shadow: var(--shadow-1), var(--glass-inset);
   font-size: var(--font-sm);
   color: var(--text-secondary);
+  pointer-events: none;
 }
 
-#verse-select-bookmark-btn {
-  padding: var(--space-2) var(--space-5);
-  background: var(--accent);
-  color: var(--bg);
+/* 아이콘 글래스 pill — #tab-bar 레시피(글래스·테두리·shadow-2·inset·pill·squircle). */
+.verse-action-pill {
+  display: flex;
+  flex: 1;
+  align-items: stretch;
+  justify-content: space-around;
+  height: calc(var(--touch-target) + var(--space-2) * 2);
+  margin-right: var(--space-2);
+  border-radius: var(--radius-pill);
+  corner-shape: superellipse(2);
+  background: var(--glass-sheen), color-mix(in srgb, var(--bg) 50%, transparent);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
+  box-shadow: var(--shadow-2), var(--glass-inset);
+}
+
+/* pill 내 액션 버튼 — .tab-item 미러. 활성 시 중립 --text(크롬 중립화, ADR-028),
+   비활성(선택 0) 또는 노트 placeholder 는 흐림. */
+.verse-action-btn {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: none;
   border: none;
-  border-radius: var(--radius);
-  font-family: inherit;
-  font-size: var(--font-base);
+  color: var(--text);
   cursor: pointer;
-  transition: opacity var(--duration-fast);
+  -webkit-tap-highlight-color: transparent;
 }
 
-#verse-select-bookmark-btn:disabled {
+.verse-action-btn:disabled,
+.verse-action-btn[aria-disabled="true"] {
   opacity: 0.4;
   cursor: default;
 }
 
-#verse-select-copy-btn {
-  padding: var(--space-2) var(--space-4);
-  background: none;
-  border: 1px solid var(--accent);
-  border-radius: var(--radius);
-  font-family: inherit;
-  font-size: var(--font-base);
-  cursor: pointer;
-  color: var(--accent);
-  transition: background var(--duration-fast), opacity var(--duration-fast);
+.verse-action-btn:active:not(:disabled):not([aria-disabled="true"]) .va-icon {
+  transform: scale(0.92);
 }
 
-#verse-select-copy-btn:hover {
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-}
-
-#verse-select-copy-btn:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-
+/* 취소 글래스 원형 — #tab-search 미러(60px 원, squircle, 같은 글래스 레시피). */
 #verse-select-cancel-btn {
-  padding: var(--space-2) var(--space-4);
-  background: none;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  font-family: inherit;
-  font-size: var(--font-base);
-  cursor: pointer;
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: calc(var(--touch-target) + var(--space-2) * 2);
+  height: calc(var(--touch-target) + var(--space-2) * 2);
+  padding: 0;
+  border-radius: var(--radius-pill);
+  corner-shape: superellipse(2);
+  background: var(--glass-sheen), color-mix(in srgb, var(--bg) 50%, transparent);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
+  box-shadow: var(--shadow-2), var(--glass-inset);
   color: var(--text-secondary);
-  transition: background var(--duration-fast);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform var(--duration-fast) ease;
 }
 
-#verse-select-cancel-btn:hover {
-  background: var(--border);
+#verse-select-cancel-btn:active { transform: scale(0.92); }
+
+.va-icon {
+  width: 1.7rem;
+  height: 1.7rem;
+  transition: transform var(--duration-fast) ease;
 }
+
+/* 취소 X 는 약간 작게 — full-bleed 24 viewBox 라 광학적으로 커 보임. */
+#verse-select-cancel-btn .va-icon { width: 1.5rem; height: 1.5rem; }
 
 /* ── Bookmark drawer (right-side panel) ── */
 
