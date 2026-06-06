@@ -101,6 +101,7 @@
   --shadow-2: 0 4px 12px rgba(0, 0, 0, 0.12);
   --shadow-3: 0 4px 16px rgba(0, 0, 0, 0.12);   /* 헤더 스크롤 elevation (ADR-025) */
   --shadow-sheet: 0 -4px 24px rgba(0, 0, 0, 0.18); /* 바텀 시트 (위로 뜨는 그림자) */
+  --shadow-drawer: -4px 0 24px rgba(0, 0, 0, 0.15); /* 데스크탑 사이드 패널 (수평 그림자 — 5단 사다리에 없는 축, DESIGN.md §5) */
   --shadow-4: 0 12px 32px rgba(0, 0, 0, 0.25);  /* 모달 */
 
   /* ── Liquid-glass 질감 (절제) — 하단 floating chrome(탭 바·검색·오디오·인디케이터)
@@ -205,6 +206,7 @@
   --shadow-2: 0 4px 12px rgba(0, 0, 0, 0.35);
   --shadow-3: 0 4px 20px rgba(0, 0, 0, 0.25); /* 헤더 스크롤 elevation (ADR-025) */
   --shadow-sheet: 0 -4px 24px rgba(0, 0, 0, 0.4);
+  --shadow-drawer: -4px 0 24px rgba(0, 0, 0, 0.4);
   --shadow-4: 0 12px 32px rgba(0, 0, 0, 0.5);
 
   /* Liquid-glass 질감 다크 — 광택·하이라이트 알파↓, 하단 음영 알파↑ (ADR-030 후속⁵). */
@@ -873,7 +875,7 @@ body {
   left: 2px;
   width: 27px;
   height: 27px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25), 0 2px 4px rgba(0, 0, 0, 0.18);
+  box-shadow: var(--shadow-1);
 }
 .os-ios .switch-input:checked + .switch-track .switch-thumb {
   transform: translateX(20px);
@@ -897,7 +899,7 @@ body {
   border-radius: 50%;
   transform: translate(4px, -50%);
   background: var(--switch-m3-off-thumb);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18), 0 1px 1px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-1);
   transition:
     transform var(--duration-base) cubic-bezier(0.34, 1.45, 0.55, 1),
     background var(--duration-base) ease;
@@ -926,7 +928,7 @@ body {
   height: 20px;
   transform: translate(5px, -50%);
   background: var(--switch-m3-off-thumb);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18), 0 1px 1px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-1);
 }
 .os-desktop .switch-input:checked + .switch-track {
   background: var(--accent);
@@ -1056,7 +1058,7 @@ body {
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
+  box-shadow: var(--shadow-2);
   padding: var(--space-2);
   margin-top: var(--space-2);
   max-height: 60vh;
@@ -1403,7 +1405,7 @@ body {
   opacity: 0;
   pointer-events: none;
   z-index: 25;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
+  box-shadow: var(--shadow-2);
   will-change: transform, opacity;
 }
 
@@ -1937,17 +1939,17 @@ mark.search-highlight {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg-card);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--shadow-1);
   box-sizing: border-box;
   pointer-events: none;
   transition: transform var(--duration-base) var(--ease-standard);
 }
 
 /* Dark theme: nudge the chip a touch lighter than the track so it still reads as
-   raised, and deepen the shadow which would otherwise vanish on a dark surface. */
+   raised. The shadow itself is handled by --shadow-1, which already deepens in
+   dark (alpha 0.08 → 0.3), so no explicit box-shadow override is needed. */
 [data-theme="dark"] .division-tab-indicator {
   background: color-mix(in srgb, var(--bg-card) 92%, #ffffff 8%);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -2368,7 +2370,7 @@ body.cites-shown .note-anchor--variant:focus-visible {
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.18);
+  box-shadow: var(--shadow-3);
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
   font-size: var(--font-sm);
   line-height: var(--leading-normal);
@@ -2438,7 +2440,7 @@ body.cites-shown .note-anchor--variant:focus-visible {
     height: 95vh;
     max-height: none;
     border-radius: var(--radius-xl) 0 0 var(--radius-xl);
-    box-shadow: -4px 0 24px rgba(0, 0, 0, 0.15);
+    box-shadow: var(--shadow-drawer);
     padding-bottom: 0;
   }
 }
@@ -2650,6 +2652,12 @@ body.cites-shown .note-anchor--variant:focus-visible {
   font-size: var(--font-sm);
 }
 
+/* Error is a failure signal, not destructive: surface-on red text only
+   (DESIGN.md §6 — danger-text, dark-adapted). Loading stays secondary. */
+.cite-sheet-error {
+  color: var(--danger-text);
+}
+
 /* ── First-use coachmark for cite chips ─────────────────────────────────── */
 #cite-coachmark {
   position: fixed;
@@ -2667,7 +2675,7 @@ body.cites-shown .note-anchor--variant:focus-visible {
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.16);
+  box-shadow: var(--shadow-3);
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
   font-size: var(--font-sm);
   line-height: var(--leading-snug);
@@ -2893,9 +2901,6 @@ html.cite-sheet-open {
 }
 #tab-dock::before,
 #tab-dock::after { content: none; }
-/* 탭 dock 뒤 콘텐츠 데코레이션 scrim — 기본 숨김(데스크탑·base). 모바일에서만 노출.
-   하단으로 스크롤되는 본문이 플로팅 캡슐 양옆·아래로 노출되는 것을 페이드로 가린다. */
-#tabbar-scrim { display: none; }
 #tab-bar {
   /* dock 의 flex 자식 — flex:1 로 늘어나 검색 원형 바로 앞까지 채운다(margin-right
      space-2 만 남겨, 오디오 바↔탭 바 수직 간격과 동일한 8px 로 통일). 위치는 #tab-dock 책임. */
@@ -3304,80 +3309,6 @@ body.tabbar-searching #search-inpage-bar { display: none; }
 
 /* 탭 바 하단 공존 (ADR-029 P4). 데스크탑은 탭바가 없어 적용 안 함. */
 @media (max-width: 768px) {
-  /* ── 탭 dock 뒤 콘텐츠 데코레이션 scrim ──
-     플로팅 캡슐(#tab-bar·#tab-search·미니 오디오)은 투명 dock 위에 떠 있어, 그 양옆
-     틈과 아래 sliver 로 스크롤되는 본문이 그대로 비친다. dock 바로 아래(z 는 dock 미만)
-     에 화면 폭 전체 페이드 레이어를 깔아, 본문을 점진적으로 배경색으로 녹인다.
-     의도(ADR-030 개정 2026-06-05): 캡슐을 **솔리드로 가리지 않고** 캡슐 영역을 페이드
-     구간이 통과하게 둔다 → 더 투명해진 글래스(70→62%) 너머로 '이미 옅게 사라지는 중인'
-     본문이 부드럽게 비쳐 liquid-glass 깊이감을 준다(선명한 노출은 없음). 솔리드는 캡슐
-     아래·바닥 모서리(--scrim-solid)에만, 페이드는 --scrim-fade-top 에서 완전 투명. */
-  #tabbar-scrim {
-    /* 기준은 **캡슐(pill) 자체** — 페이드는 pill **윗변(위쪽 윤곽선) 기준 25% 높이만큼
-       더 위 지점**에서 투명에 도달한다. 즉 pill 전체를 페이드가 지나고 윗변 위로 pill
-       높이의 ¼ 만큼 더 올라가 투명에 닿는다 → pill 상단·바로 위 본문이 답답하지 않게
-       숨 쉴 여백을 확보한다(이전엔 윗변 25% 아래에서 끊겨 빡빡했다).
-       --scrim-pill-bottom = pill 밑변(바닥~캡슐 아래 모서리) 위치. fade-top 의 기하 기준점.
-       --scrim-solid = 솔리드 --bg 띠 높이(불투명도용, fade-top 기준과 분리). 0 = 띠 없음.
-       --scrim-fade-top = pill 밑변 + pill 높이의 125% → pill 윗변 위 ¼ 지점에서 투명.
-       pill 밑변·높이는 dock 의 실제 기하와 동일 식.
-       (pill 높이 = --touch-target 44 + --space-2 ×2 = 60px, 밑변 = --space-1 + safe×0.75)
-       솔리드 띠 제거(0) — 바닥부터 바로 페이드가 시작돼 완전 불투명 구간이 없다.
-       본문이 캡슐 아래·바닥까지 옅게 비친다. */
-    --scrim-pill-bottom: calc(var(--space-1) + env(safe-area-inset-bottom) * 0.75);
-    --scrim-solid: 0px;
-    --scrim-fade-top: calc(var(--scrim-pill-bottom) + 1.25 * (var(--touch-target) + var(--space-2) * 2));
-    display: block;
-    position: fixed;
-    left: 0;
-    right: 0;
-    /* 검색 키보드가 dock 을 --kb-overlap(visualViewport)만큼 위로 올리면 scrim 도 함께
-       올라가 캡슐 뒤를 계속 받친다(안 그러면 올라간 캡슐 옆으로 본문이 다시 노출).
-       --kb-overlap 은 tabbar.js 가 :root 에 설정 → dock·scrim 이 함께 상속. */
-    bottom: var(--kb-overlap, 0px);
-    height: var(--scrim-fade-top);
-    /* 스크롤 콘텐츠 위 · 하단 chrome(오디오 바 z:10 → tab-dock z:--nav-z 30) 아래.
-       chrome 보다 위면 scrim 솔리드/blur 가 그 위에 그려져 컨트롤을 가린다. 쌓임 순서:
-       content < #tabbar-scrim(9) < #audio-bar(10) < #tab-dock(30). */
-    z-index: 9;
-    pointer-events: none;
-    /* 절대 길이 stop — 솔리드 경계·투명 도달점을 캡슐 기하에 고정(% 면 height 변동 시 흔들림).
-       --scrim-bg = 그라디언트 최대 불투명도(바닥 색). 100% --bg 면 바닥이 완전 불투명한데,
-       80% 로 낮춰 바닥에서도 본문이 옅게 비치게 해 전체 그라디언트를 약하게 한다. */
-    --scrim-bg: color-mix(in srgb, var(--bg) 80%, transparent);
-    background: linear-gradient(to top,
-      var(--scrim-bg) 0,
-      var(--scrim-bg) var(--scrim-solid),
-      transparent var(--scrim-fade-top));
-    /* dock 이 숨는 상태와 동기화. */
-    transition: opacity var(--duration-base) var(--ease-standard);
-  }
-  #tabbar-scrim::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    -webkit-backdrop-filter: blur(2px);
-    backdrop-filter: blur(2px);
-    /* 얇은 blur 를 페이드 구간의 옅어진 본문에 얹어 '유리 밑으로 사라지는' 질감 보강.
-       최상단은 fade-out 으로 또렷한 본문이 흐려지지 않게 한다. blur 미지원·투명도 감소
-       환경에선 그래디언트만으로 동작(아래 prefers-reduced-transparency 분기). */
-    -webkit-mask-image: linear-gradient(to top, #000 0%, #000 80%, transparent 100%);
-    mask-image: linear-gradient(to top, #000 0%, #000 80%, transparent 100%);
-  }
-  /* 페이드 기준은 오디오 유무와 무관하게 **항상 탭 바 캡슐 윗변**으로 통일한다(위 base
-     규칙 그대로). 오디오 바는 탭 바 위에 스택되므로 그 위로 본문이 옅게 비칠 수 있으나,
-     scrim 기준을 오디오 바로 올리면 오디오 유무에 따라 페이드 높이가 출렁여 일관성이
-     떨어진다 → 의도적으로 탭 바 기준 고정(오디오 바 위 노출 감수). */
-  /* 절 선택 모드: 탭 dock 이 숨으므로 scrim 도 숨김. */
-  body.verse-select-active #tabbar-scrim { display: none; }
-  /* OS 투명도 감소 — 탭 chrome 과 동일하게 scrim 의 라이브 blur 도 끈다(그래디언트는 유지). */
-  @media (prefers-reduced-transparency: reduce) {
-    #tabbar-scrim::before {
-      -webkit-backdrop-filter: none;
-      backdrop-filter: none;
-    }
-  }
-
   /* 탭 바가 보이는 뷰에서만 하단 콘텐츠 자리 확보. 절 선택 모드는 탭 바를 숨기고
      전용 하단 바가 차지하므로 reserve 를 적용하지 않는다(빈 띠 방지). */
   body:not(.verse-select-active) #app { padding-bottom: var(--tabbar-reserve); }
@@ -3510,12 +3441,12 @@ body.tabbar-searching #search-inpage-bar { display: none; }
   justify-content: center;
   padding: 0;
   transition: transform var(--duration-instant) ease, box-shadow var(--duration-fast) ease;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-1);
 }
 
 .audio-play-btn:hover {
   transform: scale(1.08);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-2);
 }
 
 .audio-play-btn:active {
@@ -3794,7 +3725,7 @@ body.tabbar-searching #search-inpage-bar { display: none; }
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-2);
   font-size: var(--font-base);
   animation: toast-in var(--duration-base) ease-out;
 }
@@ -3848,7 +3779,7 @@ body.tabbar-searching #search-inpage-bar { display: none; }
 .search-result-ref-card:hover {
   background: var(--accent) !important;
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-2);
 }
 
 .search-result-ref-card:hover .search-result-ref-label,
@@ -4369,7 +4300,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   z-index: 71;
   background: var(--bg);
   border-radius: var(--radius-xl) var(--radius-xl) 0 0;
-  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-sheet);
   flex-direction: column;
   overflow: hidden;
 }
@@ -4406,7 +4337,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
     height: 95vh;
     max-height: none;
     border-radius: var(--radius-xl) 0 0 var(--radius-xl);
-    box-shadow: -4px 0 24px rgba(0, 0, 0, 0.15);
+    box-shadow: var(--shadow-drawer);
   }
 
   #bookmark-drawer:not([hidden]):not(.drawer-closing) {
@@ -5623,7 +5554,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   background: var(--bg-card);
   border: 1px solid var(--accent);
   border-radius: var(--radius);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.22);
+  box-shadow: var(--shadow-3);
   list-style: none;
   padding: 0;
   margin: 0;

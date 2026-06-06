@@ -70,6 +70,8 @@ ADR-029 는 Safari 26 home-indicator 틴팅 회피를 위해 glass 를 `::before
 > - **키보드 추종** — 검색 키보드가 `--kb-overlap`(visualViewport)로 dock 을 올리면 scrim 도 `bottom: var(--kb-overlap)`로 함께 올라가 올라간 캡슐 뒤를 계속 받친다(안 그러면 올라간 캡슐 옆으로 본문 재노출). 이를 위해 `tabbar.js` 가 `--kb-overlap` 을 `#tab-dock` 인라인이 아니라 **`:root`(documentElement)** 에 설정 → dock·scrim 이 함께 상속.
 > - 페이드 기준은 오디오 유무와 무관하게 항상 탭 바 캡슐 윗변(`--scrim-fade-top` base 규칙). 절 선택 모드는 dock 이 숨으므로 scrim 도 숨김. `--bg` 토큰 추종이라 다크/라이트 자동 대응. 모바일(≤768px) 전용. dev 스크린샷 검증(라이트·다크 × 오디오 유무).
 
+> **개정 (2026-06-06): scrim 전면 제거 — 절 선택 바와 패턴 통일.** 위 데코레이션 scrim(`#tabbar-scrim`)을 코드·DOM 요소·`--scrim-*` 토큰까지 **전량 제거**했다. floating 캡슐 양옆·아래로 비치는 본문을 페이드 그래디언트 + 얇은 blur 로 녹이는 대신, **절 선택 액션 바(`#verse-select-bar`, `background:none`)와 동일하게 scrim 없이 글래스 캡슐만 본문 위에 떠 있는 패턴**으로 통일한다 — 본문이 그대로 비치는 편이 시야가 가볍다는 사용자 피드백 + 두 하단 dock(탭 바·절 선택 바)의 디자인 패턴 일치. 캡슐 자체의 글래스(blur+틴트)와 키보드 시 `--kb-overlap` dock 추종은 그대로 유지(scrim 이 사라져 `:root` 상속 사유만 없어짐). 위 06-04·06-05 scrim 튜닝 기록은 이 결정으로 **무효**(역사 보존용).
+
 ### 3. 검색 모핑 (신규) — `js/app/tabbar.js`
 
 검색 원형 탭 → `#tab-dock.searching` 토글:
