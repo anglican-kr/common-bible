@@ -3982,13 +3982,13 @@ body.tabbar-searching #search-inpage-bar { display: none; }
   display: none;
 }
 
-/* Full-bleed row: leading label, trailing glyph (Apple Music menu pattern).
-   min-height honours the HIG 44px touch target. */
+/* Full-bleed row: leading glyph (icon or check) + label, so labels share one
+   indent across both groups (iOS Files menu pattern). 44px touch target. */
 .title-action-menu-item {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-4);
+  justify-content: flex-start;
+  gap: var(--space-3);
   width: 100%;
   min-height: var(--touch-target);
   padding: var(--space-2) var(--space-4);
@@ -4040,13 +4040,9 @@ body.tabbar-searching #search-inpage-bar { display: none; }
   background: var(--border);
 }
 
-/* 정렬 rows: leading checkmark slot + label (Apple Music sort group), so the
-   trailing glyph alignment of the action rows is replaced by a leading cue. */
-.title-action-menu-item--sort {
-  justify-content: flex-start;
-  gap: var(--space-2);
-}
-
+/* Leading slots — same width for the action icon and the sort checkmark so
+   every label lines up at one indent. */
+.title-action-menu-icon,
 .title-action-menu-check {
   width: 1.4rem;
   flex-shrink: 0;

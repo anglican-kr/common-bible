@@ -1676,13 +1676,15 @@ function buildBmViewActions() {
 
   // ── 액션 group ──
   const actionGroup = el("div", { className: "title-action-menu-group", role: "group" });
-  // Build a menu row: leading label + trailing SF-style glyph (label left, icon
-  // right per the Apple Music menu). Closes the menu before acting.
+  // Build a menu row: leading SF-style glyph + label (icon at the front, iOS
+  // Files menu pattern — its slot matches the sort checkmark so labels align).
   /** @param {string} label @param {string[]} iconPaths @param {() => void} onActivate */
   function addMenuItem(label, iconPaths, onActivate) {
-    const item = el("button", { className: "title-action-menu-item", type: "button", role: "menuitem" });
+    const item = el("button", { className: "title-action-menu-item title-action-menu-item--action", type: "button", role: "menuitem" });
+    const glyph = el("span", { className: "title-action-menu-icon", "aria-hidden": "true" });
+    glyph.appendChild(_bmMenuIcon(iconPaths));
+    item.appendChild(glyph);
     item.appendChild(el("span", { className: "title-action-menu-label" }, label));
-    item.appendChild(_bmMenuIcon(iconPaths));
     item.addEventListener("click", () => {
       closeMenu();
       onActivate();
