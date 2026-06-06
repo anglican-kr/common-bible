@@ -434,6 +434,8 @@ window.appCitations = (() => {
   // lives in the overlay controller (ADR-032), created in initCiteSheet.
   /** @type {ReturnType<typeof createOverlay> | null} */
   let _citeSheetOverlay = null;
+  /** @type {ReturnType<typeof setTimeout> | null} */
+  let _citeSheetCloseTimer = null;
   /** @type {{ src: string, parallels: ReadonlyArray<CiteParallelRef> | null, tradition: string | null, expandedRefIndex: number | null } | null} */
   let _sheetState = null;
 
@@ -922,16 +924,32 @@ window.appCitations = (() => {
     const sheet = /** @type {HTMLElement | null} */ (document.getElementById("cite-sheet"));
     if (sheet) {
       // No scrim (body stays interactive); closeOnEsc off — the custom 2-step
-      // Escape below steps expanded→list before closing (ADR-032).
+      // Escape below steps expanded→list before closing (ADR-032). closeTransition
+      // gives the sheet the same animated slide-out as the drawer: cleanup is
+      // immediate, the panel hides after `.cite-sheet-closing` plays (350ms
+      // fallback), and the drag-resized inline size resets *after* the slide so
+      // the exit animates from wherever the user left it.
       _citeSheetOverlay = createOverlay({
         panel: sheet,
         rootClass: "cite-sheet-open",
         closeOnEsc: false,
         initialFocus: () => document.getElementById("cite-sheet-close"),
-        onClose: () => {
-          sheet.style.height = "";
-          sheet.style.width = "";
-          _sheetState = null;
+        onOpen: () => {
+          if (_citeSheetCloseTimer) { clearTimeout(_citeSheetCloseTimer); _citeSheetCloseTimer = null; }
+          sheet.classList.remove("cite-sheet-closing"); // cancel any in-flight close anim
+        },
+        onClose: () => { _sheetState = null; },
+        closeTransition: (panel, finalizeHide) => {
+          panel.classList.add("cite-sheet-closing");
+          const done = () => {
+            if (_citeSheetCloseTimer) { clearTimeout(_citeSheetCloseTimer); _citeSheetCloseTimer = null; }
+            finalizeHide(); // no-op if reopened (seq guard)
+            panel.classList.remove("cite-sheet-closing");
+            panel.style.height = "";
+            panel.style.width = "";
+          };
+          panel.addEventListener("animationend", done, { once: true });
+          _citeSheetCloseTimer = setTimeout(done, 350); // fallback
         },
       });
     }

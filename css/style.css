@@ -2425,6 +2425,19 @@ body.cites-shown .note-anchor--variant:focus-visible {
   display: none;
 }
 
+/* Smooth slide in / out (ADR-032), matching the bookmark drawer. Reuses the
+   drawer's generic transform keyframes (bm-drawer-*); the exit slide is driven
+   by `.cite-sheet-closing`, which the overlay controller's closeTransition adds
+   until the animation ends, then hides the panel. */
+#cite-sheet:not([hidden]):not(.cite-sheet-closing) {
+  animation: bm-drawer-in-up var(--duration-base) cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+}
+
+#cite-sheet.cite-sheet-closing {
+  animation: bm-drawer-out-down var(--duration-base) ease-in both;
+  pointer-events: none;
+}
+
 /* Desktop: right-side panel (mirrors bookmark-drawer pattern). Slides over the
    right edge of the viewport; centered main content stays readable on the
    left. Resize handle on the left edge lets the user widen the panel. */
@@ -2443,6 +2456,10 @@ body.cites-shown .note-anchor--variant:focus-visible {
     box-shadow: var(--shadow-drawer);
     padding-bottom: 0;
   }
+
+  /* Desktop slides from the right edge (mirrors the drawer). */
+  #cite-sheet:not([hidden]):not(.cite-sheet-closing) { animation-name: bm-drawer-in-right; }
+  #cite-sheet.cite-sheet-closing { animation-name: bm-drawer-out-right; }
 }
 
 /* Larger vertical padding gives a comfortable touch target (~24px tall)
@@ -5730,6 +5747,10 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   }
   #bookmark-drawer:not([hidden]):not(.drawer-closing),
   #bookmark-drawer.drawer-closing {
+    animation: none;
+  }
+  #cite-sheet:not([hidden]):not(.cite-sheet-closing),
+  #cite-sheet.cite-sheet-closing {
     animation: none;
   }
   .bm-row-content {
