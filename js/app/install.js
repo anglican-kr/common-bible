@@ -9,7 +9,8 @@
 /** @typedef {import("../types").InstallNudgeState} InstallNudgeState */
 /** @typedef {import("../types").InstallObject} InstallObject */
 
-const { _$, el, clearNode, setInert, trapFocus } = window.appHelpers;
+const { _$, el, clearNode, setInert } = window.appHelpers;
+const { createOverlay } = window.appOverlay;
 const { _loadNudgeState, _saveNudgeState } = window.appStorage;
 
 // Platform detection states:
@@ -154,10 +155,9 @@ const $installModal = _$("install-modal");
 const $installModalBody = _$("install-modal-body");
 const $installModalClose = _$("install-modal-close");
 
-/** @type {(() => void) | null} */
-let installModalTrap = null;
-/** @type {Element | null} */
-let installModalLastFocus = null;
+// Modal lifecycle (scrim/hidden/inert/focus-trap/focus-restore) now lives in
+// the overlay controller (ADR-032). Background scroll-lock + neverShow
+// persistence + carousel cleanup are install-specific, handled via onOpen/onClose.
 
 // Elements that become inert (background) while the install modal is open.
 const INSTALL_INERT_SELECTORS = "#sticky-group, main#app, #audio-bar, #launch-screen, #bookmark-scrim, #bookmark-drawer, #verse-select-bar";
@@ -409,54 +409,50 @@ function buildInstallBody(platform) {
     "Chrome, Edge, Safari(iOS) 등에서 열면 앱으로 설치할 수 있습니다."));
 }
 
+// Standalone modal — owns Escape via closeOnEsc (ADR-032). onOpen/onClose carry
+// the install-specific background scroll-lock (iOS Safari position:fixed
+// technique), neverShow persistence, and carousel teardown.
+const installOverlay = createOverlay({
+  panel: $installModal,
+  scrim: $installScrim,
+  inertSelectors: INSTALL_INERT_SELECTORS,
+  closeOnEsc: true,
+  initialFocus: () => $installModalClose,
+  onOpen: () => {
+    const scrollY = window.scrollY;
+    document.body.style.overflow = "hidden";
+    document.body.style.position = "fixed";
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = "100%";
+    document.body.dataset.scrollY = String(scrollY);
+  },
+  onClose: () => {
+    const neverShowCb = /** @type {HTMLInputElement | null} */ (document.getElementById("install-never-show"));
+    if (neverShowCb && neverShowCb.checked) {
+      const state = _loadNudgeState();
+      state.neverShow = true;
+      _saveNudgeState(state);
+    }
+    $installModal.dispatchEvent(new Event("install:cleanup"));
+    const scrollY = parseInt(document.body.dataset.scrollY || "0", 10);
+    document.body.style.overflow = "";
+    document.body.style.position = "";
+    document.body.style.top = "";
+    document.body.style.width = "";
+    window.scrollTo(0, scrollY);
+  },
+});
+
 function openInstallModal() {
   const platform = install.detectPlatform();
   buildInstallBody(platform);
-  installModalLastFocus = document.activeElement;
-  $installScrim.hidden = false;
-  $installModal.hidden = false;
-  setBackgroundInert(true);
-  // Lock background scroll (iOS Safari requires position:fixed technique)
-  const scrollY = window.scrollY;
-  document.body.style.overflow = "hidden";
-  document.body.style.position = "fixed";
-  document.body.style.top = `-${scrollY}px`;
-  document.body.style.width = "100%";
-  document.body.dataset.scrollY = String(scrollY);
-  installModalTrap = trapFocus($installModal);
-  requestAnimationFrame(() => $installModalClose.focus());
+  installOverlay.open();
 }
 
-function closeInstallModal() {
-  if ($installModal.hidden) return;
-  const neverShowCb = /** @type {HTMLInputElement | null} */ (document.getElementById("install-never-show"));
-  if (neverShowCb && neverShowCb.checked) {
-    const state = _loadNudgeState();
-    state.neverShow = true;
-    _saveNudgeState(state);
-  }
-  $installModal.dispatchEvent(new Event("install:cleanup"));
-  $installScrim.hidden = true;
-  $installModal.hidden = true;
-  setBackgroundInert(false);
-  // Restore background scroll and position
-  const scrollY = parseInt(document.body.dataset.scrollY || "0", 10);
-  document.body.style.overflow = "";
-  document.body.style.position = "";
-  document.body.style.top = "";
-  document.body.style.width = "";
-  window.scrollTo(0, scrollY);
-  if (installModalTrap) { installModalTrap(); installModalTrap = null; }
-  if (installModalLastFocus && /** @type {HTMLElement} */ (installModalLastFocus).focus) {
-    try { /** @type {HTMLElement} */ (installModalLastFocus).focus(); } catch {}
-  }
-}
+function closeInstallModal() { installOverlay.close(); }
 
 $installModalClose.addEventListener("click", closeInstallModal);
 $installScrim.addEventListener("click", closeInstallModal);
-document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && !$installModal.hidden) closeInstallModal();
-});
 
 // ── Install nudge (auto-show) ──
 // ── BEGIN NUDGE ──

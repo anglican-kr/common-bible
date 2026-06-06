@@ -65,7 +65,8 @@ window.appCitations = (() => {
       .join(";");
   }
 
-  const { el, clearNode, trapFocus, dragReleaseAction } = window.appHelpers;
+  const { el, clearNode, dragReleaseAction } = window.appHelpers;
+  const { createOverlay } = window.appOverlay;
 
   /**
    * For each `(verseIndex, segmentIndex)` whose segment has a `cite`, decide
@@ -429,10 +430,10 @@ window.appCitations = (() => {
 
   /** @type {Map<string, string> | null} */
   let _booksByShort = null;
-  /** @type {HTMLElement | null} */
-  let _sheetReturnFocus = null;
-  /** @type {(() => void) | null} */
-  let _sheetTrapCleanup = null;
+  // Sheet lifecycle (hidden toggle, rootClass, focus-trap, focus-restore) now
+  // lives in the overlay controller (ADR-032), created in initCiteSheet.
+  /** @type {ReturnType<typeof createOverlay> | null} */
+  let _citeSheetOverlay = null;
   /** @type {{ src: string, parallels: ReadonlyArray<CiteParallelRef> | null, tradition: string | null, expandedRefIndex: number | null } | null} */
   let _sheetState = null;
 
@@ -946,47 +947,51 @@ window.appCitations = (() => {
     const sheet  = /** @type {HTMLElement | null} */ (document.getElementById("cite-sheet"));
     const titleEl = /** @type {HTMLElement | null} */ (document.getElementById("cite-sheet-title"));
     const bodyEl = /** @type {HTMLElement | null} */ (document.getElementById("cite-sheet-body"));
-    if (!sheet || !titleEl || !bodyEl) return;
+    if (!sheet || !titleEl || !bodyEl || !_citeSheetOverlay) return;
 
-    _sheetReturnFocus = returnFocusEl;
     _sheetState = { src, parallels: parallels || null, tradition: tradition || null, expandedRefIndex: null };
     titleEl.textContent = "인용된 구절";
     // Reset any drag-resize from a previous open. The body stays interactive
     // while the sheet is open (only a focus trap, no scrim) so cite chips
     // visible in the unobscured portion can re-trigger openCiteSheet without
     // a closeCiteSheet in between — the previous inline height/width would leak in.
+    // Re-trigger while open: open() is a no-op by the controller's idempotency
+    // guard, so the sheet stays open and we just refresh state + body. This also
+    // fixes a focus-trap listener leak the old hand-rolled path had on re-trigger;
+    // return-focus stays the first opener (ADR-032).
     sheet.style.height = "";
     sheet.style.width = "";
-    sheet.hidden = false;
-    document.documentElement.classList.add("cite-sheet-open");
+    _citeSheetOverlay.open(returnFocusEl);
     _updateSheetHeader();
-
-    const closeBtn = /** @type {HTMLElement | null} */ (document.getElementById("cite-sheet-close"));
-    if (closeBtn) closeBtn.focus();
-    _sheetTrapCleanup = trapFocus(sheet);
 
     await _renderSheetBody();
   }
 
+  // Lifecycle (hidden toggle, rootClass remove, focus-trap cleanup, focus
+  // restore) is owned by the controller; its onClose resets the drag-resize
+  // inline styles (so the next open starts from the CSS default) + clears state.
   function closeCiteSheet() {
-    const sheet = /** @type {HTMLElement | null} */ (document.getElementById("cite-sheet"));
-    if (!sheet) return;
-    sheet.hidden = true;
-    // Reset any drag-resize so the next open starts from the CSS default
-    // (mobile: 65vh height; desktop: min(440px, 90vw) width).
-    sheet.style.height = "";
-    sheet.style.width = "";
-    document.documentElement.classList.remove("cite-sheet-open");
-    if (_sheetTrapCleanup) { _sheetTrapCleanup(); _sheetTrapCleanup = null; }
-    if (_sheetReturnFocus && typeof _sheetReturnFocus.focus === "function") {
-      _sheetReturnFocus.focus();
-    }
-    _sheetReturnFocus = null;
-    _sheetState = null;
+    _citeSheetOverlay?.close();
   }
 
   /** Wire up close button, back button, drag handle, ESC key, and `.cite-chip` click delegation. */
   function initCiteSheet() {
+    const sheet = /** @type {HTMLElement | null} */ (document.getElementById("cite-sheet"));
+    if (sheet) {
+      // No scrim (body stays interactive); closeOnEsc off — the custom 2-step
+      // Escape below steps expanded→list before closing (ADR-032).
+      _citeSheetOverlay = createOverlay({
+        panel: sheet,
+        rootClass: "cite-sheet-open",
+        closeOnEsc: false,
+        initialFocus: () => document.getElementById("cite-sheet-close"),
+        onClose: () => {
+          sheet.style.height = "";
+          sheet.style.width = "";
+          _sheetState = null;
+        },
+      });
+    }
     document.getElementById("cite-sheet-close")?.addEventListener("click", closeCiteSheet);
     document.getElementById("cite-sheet-back")?.addEventListener("click", () => {
       if (!_sheetState || _sheetState.expandedRefIndex === null) return;
