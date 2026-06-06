@@ -466,6 +466,7 @@ OAuth 측면 (가장 큰 공격 표면):
 | [029](decisions/029-mobile-tab-bar.md)                  | 적응형 내비 Phase 1 — 모바일 하단 탭 바(홈·검색·북마크·설정 4탭, 전체화면 라우트 뷰, iOS 2026 Liquid Glass) |
 | [030](decisions/030-morphing-tab-bar.md)                | 모핑 탭 바 — 라벨 없는 아이콘 + 분리 검색 원형 → 입력 모핑(ADR-029 개정), 옛 검색 시트 제거, 스크롤 축소+오디오 미니(후속) |
 | [031](decisions/031-tab-history-restore.md)             | 탭 히스토리 — 탭별 마지막 라우트+스크롤 복원(홈=읽던 위치, 검색=마지막 검색), `scrollRestoration:"manual"` + route() 시퀀스 가드 |
+| [032](decisions/032-component-view-layer.md)            | 컴포넌트·뷰 층 모듈화 — `el()` 위 무의존성 컴포넌트 층(오버레이 컨트롤러·시트 팩토리·표현 빌더)으로 오버레이 생명주기 복제 단일화, 스트랭글러 이행 |
 
 ## 부록 B. 자주 보게 되는 파일 빠른 참조
 
