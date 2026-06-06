@@ -5887,6 +5887,11 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
     color: #fff;
     cursor: pointer;
     opacity: 0;
+    /* Both actions are full-width overlays stacked on each other; without this
+       the topmost (later in DOM) intercepts taps even over the *other* action's
+       visible label. Only the revealed action (below) re-enables pointer events
+       — full-swipe still fires via a programmatic .click(), unaffected. */
+    pointer-events: none;
     touch-action: manipulation;
   }
 
@@ -5921,6 +5926,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   .bm-folder-row.bm-swiping-edit .bm-swipe-edit,
   .bm-folder-row.bm-swiped-edit .bm-swipe-edit {
     opacity: 1;
+    pointer-events: auto;
   }
 
   /* Snap-open states: slide the content to expose one edge's action. */
