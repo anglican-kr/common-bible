@@ -465,6 +465,10 @@ function _setupDragHandle(li, row) {
     const isTouch = e.pointerType !== "mouse";
     const swipeActions = /** @type {HTMLElement | null} */ (row.querySelector(".bm-row-actions-mobile"));
     const canSwipe = _isMobileViewport() && isTouch && !!swipeActions;
+    // Drag-to-reorder only makes sense under 직접 정렬 (manual); an active
+    // auto-sort would re-sort the drop away. Evaluated per gesture so a sort
+    // change takes effect immediately. Swipe-to-reveal is always available.
+    const canDrag = getBookmarkSort() === "manual";
     // null until the first significant move classifies the gesture.
     // "drag" → reorder, "swipe" → reveal actions, "abort" → cede to browser scroll
     /** @type {"drag" | "swipe" | "abort" | null} */
@@ -478,7 +482,7 @@ function _setupDragHandle(li, row) {
     // Touch devices: long-press without movement enters drag-to-reorder mode
     // (haptic feedback acts as the visual cue). Action panel reveal is
     // horizontal-swipe only. Mouse users start dragging immediately on move.
-    if (isTouch && !startedSwiped) {
+    if (canDrag && isTouch && !startedSwiped) {
       longPressTimer = setTimeout(() => {
         if (mode !== null) return;
         mode = "drag";
@@ -546,10 +550,15 @@ function _setupDragHandle(li, row) {
           mode = "abort";
           cleanupPointerHandlers();
           return;
-        } else {
+        } else if (canDrag) {
           // Mouse user → immediate drag-to-reorder on any movement.
           mode = "drag";
           _beginDrag();
+        } else {
+          // Mouse + auto-sort: no reorder. Cede to scroll/click.
+          mode = "abort";
+          cleanupPointerHandlers();
+          return;
         }
       }
 
@@ -1044,9 +1053,10 @@ function _buildBookmarkItem(bm, depth) {
   if (depth > 0) li.setAttribute("aria-level", String(depth + 1));
   const isActive = _isActiveBookmark(bm);
   const row = el("div", { className: "bm-bookmark-row" + (isActive ? " bm-active" : "") });
-  // Drag-to-reorder only makes sense under manual order; an active auto-sort
-  // would re-sort the drop away, so leave the handle off then.
-  if (getBookmarkSort() === "manual") _setupDragHandle(li, row);
+  // Always wire the gesture handler: it owns mobile swipe-to-reveal (rename/
+  // delete) too, which must work under any sort. Drag-to-reorder self-gates on
+  // the active sort inside the handler.
+  _setupDragHandle(li, row);
   const content = el("div", { className: "bm-row-content" });
   const typeIcon = el("span", { className: "bm-bookmark-type-icon" });
   typeIcon.appendChild(_buildBookmarkTypeIcon(isActive));
@@ -1362,7 +1372,8 @@ function _buildFolderItem(folder, depth) {
   });
   if (depth > 0) li.setAttribute("aria-level", String(depth + 1));
   const row = el("div", { className: "bm-folder-row" });
-  if (getBookmarkSort() === "manual") _setupDragHandle(li, row);
+  // See bookmark row: handler owns swipe-to-reveal; reorder self-gates on sort.
+  _setupDragHandle(li, row);
   const content = el("div", { className: "bm-row-content" });
   const toggle = el("span", { className: "bm-folder-toggle", "aria-hidden": "true" });
   toggle.appendChild(_buildFolderToggleIcon(expanded));
@@ -1401,6 +1412,14 @@ function _buildFolderItem(folder, depth) {
     if (!window.confirm(msg)) return;
     closeSwipedRow(null);
     const store = loadBookmarks();
+    // Cascade: forget per-device viewed timestamps for every nested bookmark,
+    // mirroring single-bookmark delete, so the map doesn't accrue stale ids.
+    const found = _findItemInStore(store, folder.id);
+    if (found && found.item.type === "folder") {
+      _walkBookmarks(found.item.children, (it) => {
+        if (it.type === "bookmark") _forgetViewed(it.id);
+      });
+    }
     removeItemById(store, folder.id);
     saveBookmarks(store);
     _rerenderActiveBookmarkTree();
