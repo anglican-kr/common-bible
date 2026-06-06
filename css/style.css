@@ -133,6 +133,7 @@
 
   /* ── Control sizing (HIG) ── */
   --touch-target: 44px;   /* 최소 탭 영역 (HIG) */
+  --swipe-reveal: 88px;   /* 모바일 행 스와이프 액션 폭 (= JS SWIPE_REVEAL_PX) */
   --control-h: 36px;
   --control-h-sm: 28px;
   --icon-btn: 40px;
@@ -422,6 +423,16 @@ body {
   max-width: 40rem;
   margin: 0 auto;
   padding: var(--space-3) var(--space-4) var(--space-8);
+}
+
+/* The bookmark rows already carry their own horizontal inset (--space-4), so the
+   shared view padding doubles it and the list sits too far from the edges. Drop
+   the view's horizontal padding here for a single, standard list inset — and so
+   swiped rows go full-bleed (action color reaches the screen edge). Physical
+   longhands (not padding-inline) to unambiguously override the shared shorthand. */
+.bookmarks-view {
+  padding-left: 0;
+  padding-right: 0;
 }
 
 /* Bookmark tree reuses .bm-* item styles from the drawer; just lay out the
@@ -1796,6 +1807,14 @@ mark.search-highlight {
   max-width: var(--max-width);
   margin: 0 auto;
   padding: var(--space-8) var(--space-4) var(--space-4);
+}
+
+/* The bookmark tab view manages its own horizontal insets (rows full-bleed so a
+   swipe action's color reaches the screen edge; content text inset only by its
+   own padding). Drop #app's horizontal padding for it so it isn't double-inset. */
+#app:has(.bookmarks-view) {
+  padding-left: 0;
+  padding-right: 0;
 }
 
 /* ── Resume Banner ── */
@@ -3946,45 +3965,143 @@ body.tabbar-searching #search-inpage-bar { display: none; }
   opacity: 0.4;
 }
 
-/* Dropdown anchored below the ⋯ button (relative to .title-actions cluster). */
+/* Dropdown anchored below the ⋯ button (relative to .title-actions cluster).
+   iOS-26-style popup menu (HIG): large continuous-corner curvature (squircle),
+   full-bleed rows separated by hairlines, a soft elevation shadow, and the
+   shared liquid-glass sheen/inset texture (ADR-030 후속⁵). overflow:hidden clips
+   row hover/press highlights to the rounded corners. */
 .title-action-menu {
   position: absolute;
-  top: calc(100% + var(--space-1));
+  /* Pull the menu up so it overlaps (covers) the ⋯ trigger rather than
+     dropping below it — the open menu floats over the button. */
+  top: calc(-1 * var(--space-1));
   right: 0;
   z-index: 30;
   display: flex;
   flex-direction: column;
-  min-width: 9rem;
-  padding: var(--space-1);
-  background: var(--bg-card);
+  /* Width of the leading checkmark / icon slot, shared so action and sort rows
+     line up against one column. */
+  --menu-lead: 1.4rem;
+  min-width: 13rem;
+  max-width: calc(100vw - var(--space-4));
+  padding: 0;
+  overflow: hidden;
+  background: var(--glass-sheen), var(--bg-card);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-2);
+  border-radius: var(--radius-xl); /* 16px — iOS 26 큰 곡률 */
+  corner-shape: superellipse(2);   /* squircle (폴백: 둥근 모서리) */
+  box-shadow: var(--shadow-4), var(--glass-inset);
+  transform-origin: top right;
+  animation: title-action-menu-in var(--duration-fast) var(--ease-standard);
+}
+
+@keyframes title-action-menu-in {
+  from { opacity: 0; transform: scale(0.94); }
+  to   { opacity: 1; transform: scale(1); }
 }
 
 .title-action-menu[hidden] {
   display: none;
 }
 
+/* Full-bleed row: leading glyph (icon or check) + label, so labels share one
+   indent across both groups (iOS Files menu pattern). 44px touch target. */
 .title-action-menu-item {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--space-3);
   width: 100%;
-  text-align: right;
-  padding: var(--space-2) var(--space-3);
+  min-height: var(--touch-target);
+  padding: var(--space-2) var(--space-4);
+  text-align: left;
   background: none;
   border: none;
-  border-radius: var(--radius-sm);
+  border-radius: 0;
   font-family: inherit;
-  font-size: var(--font-base);
+  font-size: var(--font-md);
   font-weight: 400;
   line-height: var(--leading-snug);
   color: var(--text);
   cursor: pointer;
-  transition: background var(--duration-fast);
+  transition: background var(--duration-instant);
 }
 
-.title-action-menu-item:hover {
+.title-action-menu-label {
+  flex: 1;
+  min-width: 0;
+}
+
+.title-action-menu-item svg {
+  flex-shrink: 0;
+  width: 1.3rem;
+  height: 1.3rem;
+  color: var(--text-secondary);
+}
+
+.title-action-menu-item:hover,
+.title-action-menu-item:focus-visible {
   background: color-mix(in srgb, var(--accent) 8%, transparent);
+  outline: none;
+}
+
+.title-action-menu-item:active {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+/* Groups are layout-transparent so the menu's flex column still lays out the
+   rows directly; the wrappers carry only menu semantics (role="group"). */
+.title-action-menu-group {
+  display: contents;
+}
+
+/* Single hairline between the action and 정렬 groups. Vertical margin gives it
+   breathing room from the rows; horizontal margin insets it so the ends don't
+   touch the popover box edges. */
+.title-action-menu-sep {
+  height: 1px;
+  margin: var(--space-2) var(--space-4);
+  background: var(--border);
+}
+
+/* Leading slots — same width for the action icon and the sort checkmark. */
+.title-action-menu-icon,
+.title-action-menu-check {
+  width: var(--menu-lead);
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Deliberate HIG deviation: Apple's Files menu reserves the far-left column for
+   the checkmark and starts action icons one column in. We instead place the
+   action icon in that same far-left column as the sort checkmark, so both groups
+   share one icon column (and one label column) for a single consistent rhythm.
+   The action row therefore keeps the base padding-left — no extra indent. */
+
+.title-action-menu-check svg {
+  width: 1.15rem;
+  height: 1.15rem;
+  color: var(--accent);
+}
+
+/* Reserve the check column always; reveal the glyph only on the active row. */
+.title-action-menu-item--sort:not([aria-checked="true"]) .title-action-menu-check svg {
+  visibility: hidden;
+}
+
+.title-action-menu-item--sort[aria-checked="true"] {
+  color: var(--accent);
+  font-weight: 500;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .title-action-menu { background: var(--bg-card); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .title-action-menu { animation: none; }
 }
 
 
@@ -4479,24 +4596,24 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 .bm-bookmark-row {
   display: flex;
   align-items: center;
-  padding: var(--space-1) var(--space-3);
-  gap: var(--space-2);
-  /* Match folder rows to bookmark rows (label 0.88rem + ref 0.72rem,
-     line-height 1.8, gap 0.1rem, padding 0.6rem). */
-  min-height: 3.58rem;
+  padding: var(--space-3) var(--space-4);
+  gap: var(--space-3);
+  /* Roomier rows for easier scanning/tapping — comfortably above the HIG 44px
+     minimum (label --font-md + ref --font-xs, stacked, plus generous padding). */
+  min-height: 4rem;
   transition: background var(--duration-instant);
 }
 
 .bm-row-content {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-3);
   flex: 1;
   min-width: 0;
 }
 
-/* Mobile-only swipe-to-reveal panel; shown on viewports ≤768px (see ADR-010). */
-.bm-row-actions-mobile {
+/* Mobile-only swipe actions; shown on viewports ≤768px (see ADR-010). */
+.bm-swipe-action {
   display: none;
 }
 
@@ -4521,8 +4638,8 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 }
 
 .bm-folder-toggle {
-  width: 1.4rem;
-  height: 1.4rem;
+  width: 1.6rem;
+  height: 1.6rem;
   flex-shrink: 0;
   color: var(--accent);
   display: flex;
@@ -4532,7 +4649,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 
 .bm-folder-name {
   flex: 1;
-  font-size: var(--font-sm);
+  font-size: var(--font-md);
   color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -4556,7 +4673,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   color: var(--text);
   display: flex;
   flex-direction: column;
-  gap: var(--space-0_5);
+  gap: var(--space-1);
   min-width: 0;
 }
 
@@ -4565,19 +4682,19 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   color: var(--accent);
   display: inline-flex;
   align-items: center;
-  width: 1.4rem;
+  width: 1.6rem;
   justify-content: center;
 }
 
 .bm-bookmark-label {
-  font-size: var(--font-sm);
+  font-size: var(--font-md);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .bm-bookmark-ref {
-  font-size: var(--font-2xs);
+  font-size: var(--font-xs);
   color: var(--text-secondary);
 }
 
@@ -4622,10 +4739,36 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 }
 
 .bm-empty {
-  padding: var(--space-12) var(--space-4);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-12) var(--space-6);
   text-align: center;
   color: var(--text-secondary);
   font-size: var(--font-sm);
+}
+
+.bm-empty-icon {
+  width: 3rem;
+  height: 3rem;
+  color: var(--border);
+  margin-bottom: var(--space-1);
+}
+
+.bm-empty-title {
+  margin: 0;
+  font-size: var(--font-md);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.bm-empty-desc {
+  margin: 0;
+  max-width: 22rem;
+  font-size: var(--font-sm);
+  line-height: var(--leading-normal);
+  color: var(--text-secondary);
 }
 
 /* ── Save bookmark modal ── */
@@ -5067,6 +5210,87 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   color: var(--text-secondary);
 }
 
+/* ── Destructive confirm modal ── */
+
+#bm-confirm-scrim {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 76;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+#bm-confirm-scrim:not([hidden]) {
+  display: block;
+}
+
+#bm-confirm-modal {
+  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  display: none;
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 77;
+  width: min(92vw, 360px);
+  background: var(--bg-card);
+  color: var(--text);
+  border-radius: var(--radius-modal);
+  box-shadow: var(--shadow-4);
+  padding: var(--space-6);
+}
+
+#bm-confirm-modal:not([hidden]) {
+  display: block;
+}
+
+#bm-confirm-title {
+  font-size: var(--font-md);
+  font-weight: 700;
+  margin: 0 0 var(--space-3);
+}
+
+#bm-confirm-body {
+  font-size: var(--font-sm);
+  margin: 0 0 var(--space-4);
+  color: var(--text-secondary);
+  line-height: var(--leading-snug);
+}
+
+#bm-confirm-actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+#bm-confirm-cancel {
+  padding: var(--space-2) var(--space-4);
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-family: inherit;
+  font-size: var(--font-sm);
+  cursor: pointer;
+  color: var(--text);
+}
+
+#bm-confirm-ok {
+  padding: var(--space-2) var(--space-4);
+  background: #c0392b;
+  color: #fff;
+  border: 1px solid #c0392b;
+  border-radius: var(--radius);
+  font-family: inherit;
+  font-size: var(--font-sm);
+  cursor: pointer;
+}
+
+#bm-confirm-ok:hover {
+  background: #a93226;
+  border-color: #a93226;
+}
+
 /* ── Import bookmarks modal ── */
 
 #bm-import-scrim {
@@ -5238,12 +5462,21 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   }
 
   .bm-row-content {
-    padding: var(--space-1) var(--space-3);
+    padding: var(--space-3) var(--space-4);
     background: var(--bg);
     position: relative;
-    z-index: 0;
-    min-height: 44px;
+    z-index: 1; /* slider sits above the full-bleed actions, hiding them when closed */
+    /* Compact, list-appropriate leading (vs the body's relaxed 1.8 scripture
+       leading) so the 2-line bookmark stays within the shared row height. */
+    line-height: var(--leading-snug);
+    /* Shared floor so folder (1 line) and bookmark (2 lines) rows are the SAME
+       height; align-self:stretch then makes the content fill the row so the
+       action behind it never peeks above/below. */
+    min-height: 4.4rem;
+    align-self: stretch;
     box-sizing: border-box;
+    transition: transform var(--duration-base) cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    will-change: transform;
   }
 
   .bm-bookmark-row.bm-active {
@@ -5261,51 +5494,86 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
     background: transparent;
   }
 
-  /* Action panel slides in from the right and overlays the content;
-     the row text stays in place per the mobile UX request. */
-  .bm-row-actions-mobile {
+  /* Both actions are full-bleed behind the sliding content (ADR-010 개정):
+     삭제 (revealed by swiping right), 수정 (swiping left). Full-bleed so the
+     content card's rounded leading corner reveals the action color (not a bg
+     notch) and the color reaches the screen edge/corner sharply. Only the action
+     for the current swipe direction is shown. */
+  .bm-swipe-action {
     display: flex;
+    align-items: center;
     position: absolute;
     top: 0;
-    right: 0;
     bottom: 0;
-    width: 140px;
-    z-index: 1;
-    transform: translateX(100%);
-    transition: transform var(--duration-base) cubic-bezier(0.25, 0.46, 0.45, 0.94);
-    will-change: transform;
-  }
-
-  .bm-bookmark-row.bm-swiped .bm-row-actions-mobile,
-  .bm-folder-row.bm-swiped .bm-row-actions-mobile {
-    transform: translateX(0);
-  }
-
-  /* Disable the snap-back transition while the finger is dragging the row. */
-  .bm-bookmark-row.bm-swiping .bm-row-actions-mobile,
-  .bm-folder-row.bm-swiping .bm-row-actions-mobile {
-    transition: none;
-  }
-
-  .bm-mobile-action-btn {
-    flex: 1;
+    left: 0;
+    right: 0;
+    z-index: 0;
+    padding: 0;
     border: none;
-    font-family: inherit;
-    font-size: var(--font-sm);
     color: #fff;
     cursor: pointer;
-    padding: 0;
-    min-height: 44px;
+    opacity: 0;
     touch-action: manipulation;
   }
 
-  .bm-mobile-edit-btn {
-    background: var(--accent);
-    color: var(--bg);
+  /* Label sits in a fixed reveal-width zone pinned to the action's edge, so it
+     keeps its position when a full swipe widens the exposed area (no drift). */
+  .bm-swipe-label {
+    width: var(--swipe-reveal);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: var(--font-sm);
   }
 
-  .bm-mobile-delete-btn {
+  .bm-swipe-delete {
     background: #c0392b;
+    justify-content: flex-start;
+  }
+
+  .bm-swipe-edit {
+    background: var(--accent);
+    color: var(--bg);
+    justify-content: flex-end;
+  }
+
+  /* Show only the action matching the current swipe direction. */
+  .bm-bookmark-row.bm-swiping-delete .bm-swipe-delete,
+  .bm-bookmark-row.bm-swiped-delete .bm-swipe-delete,
+  .bm-folder-row.bm-swiping-delete .bm-swipe-delete,
+  .bm-folder-row.bm-swiped-delete .bm-swipe-delete,
+  .bm-bookmark-row.bm-swiping-edit .bm-swipe-edit,
+  .bm-bookmark-row.bm-swiped-edit .bm-swipe-edit,
+  .bm-folder-row.bm-swiping-edit .bm-swipe-edit,
+  .bm-folder-row.bm-swiped-edit .bm-swipe-edit {
+    opacity: 1;
+  }
+
+  /* Snap-open states: slide the content to expose one edge's action. */
+  .bm-bookmark-row.bm-swiped-edit .bm-row-content,
+  .bm-folder-row.bm-swiped-edit .bm-row-content {
+    transform: translateX(calc(-1 * var(--swipe-reveal)));
+  }
+
+  .bm-bookmark-row.bm-swiped-delete .bm-row-content,
+  .bm-folder-row.bm-swiped-delete .bm-row-content {
+    transform: translateX(var(--swipe-reveal));
+  }
+
+  /* Round the content card while swiping/open (the bookmark itself, not the row).
+     The row stays full-bleed (no margin) so the action color reaches the edge;
+     the card's rounded leading corner sits over the full-bleed action. */
+  .bm-bookmark-row.bm-swiping .bm-row-content,
+  .bm-bookmark-row.bm-swiped .bm-row-content,
+  .bm-folder-row.bm-swiping .bm-row-content,
+  .bm-folder-row.bm-swiped .bm-row-content {
+    border-radius: var(--radius-lg);
+  }
+
+  /* Disable the snap transition while the finger drives the slide. */
+  .bm-bookmark-row.bm-swiping .bm-row-content,
+  .bm-folder-row.bm-swiping .bm-row-content {
+    transition: none;
   }
 }
 
@@ -5319,7 +5587,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   #bookmark-drawer.drawer-closing {
     animation: none;
   }
-  .bm-row-actions-mobile {
+  .bm-row-content {
     transition: none;
   }
 }

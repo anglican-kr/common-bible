@@ -2,7 +2,7 @@
 
 import json
 
-from .conftest import CLEAR_APP_STORAGE
+from .conftest import CLEAR_APP_STORAGE, MOBILE_VIEWPORT, IPHONE_UA
 
 BASE = "http://localhost:8080"
 
@@ -174,3 +174,75 @@ def test_select_verses_button_preserves_chapter_after_drawer_close(browser):
         f"current chapter must remain gen/1, got: {state!r}"
 
     ctx.close()
+
+
+def test_mobile_header_bookmark_toggle_delete(browser):
+    """모바일: 이미 북마크된 장에서 헤더 북마크 아이콘을 누르면 삭제 확인
+    모달이 뜨고(저장 모달이 아님), 승인하면 북마크가 제거된다."""
+    ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA)
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    page = ctx.new_page()
+    try:
+        _open_chapter_and_wait(page, "gen/1")
+        seed = [{
+            "type": "bookmark", "id": "bm-toggle",
+            "bookId": "gen", "chapter": 1,
+            "label": "창세기 1장", "verseSpec": "all",
+        }]
+        page.evaluate(f"() => window.syncStoreV2.saveBookmarks({json.dumps(seed)})")
+
+        # Tap header bookmark icon → confirm-delete modal, NOT the save modal.
+        page.locator(".title-bookmark-btn").click()
+        page.wait_for_selector("#bm-confirm-modal:not([hidden])", timeout=2_000)
+        assert page.locator("#bm-save-modal").is_hidden(), \
+            "save modal must not appear when toggling off an existing bookmark"
+        assert '"창세기 1장"' in page.inner_text("#bm-confirm-body")
+
+        page.locator("#bm-confirm-ok").click()
+        page.wait_for_selector("#bm-confirm-modal", state="hidden")
+
+        store = page.evaluate("() => window.syncStoreV2.loadBookmarks()")
+        assert all(it.get("id") != "bm-toggle" for it in store), \
+            f"bookmark should be removed, store still has it: {store!r}"
+    finally:
+        ctx.close()
+
+
+def test_mobile_header_bookmark_toggle_delete_cancel_keeps_it(browser):
+    """모바일: 삭제 확인 모달에서 취소하면 북마크가 유지된다."""
+    ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA)
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    page = ctx.new_page()
+    try:
+        _open_chapter_and_wait(page, "gen/1")
+        seed = [{
+            "type": "bookmark", "id": "bm-keep",
+            "bookId": "gen", "chapter": 1,
+            "label": "창세기 1장", "verseSpec": "all",
+        }]
+        page.evaluate(f"() => window.syncStoreV2.saveBookmarks({json.dumps(seed)})")
+
+        page.locator(".title-bookmark-btn").click()
+        page.wait_for_selector("#bm-confirm-modal:not([hidden])", timeout=2_000)
+        page.locator("#bm-confirm-cancel").click()
+        page.wait_for_selector("#bm-confirm-modal", state="hidden")
+
+        store = page.evaluate("() => window.syncStoreV2.loadBookmarks()")
+        assert any(it.get("id") == "bm-keep" for it in store), \
+            "cancel must keep the bookmark"
+    finally:
+        ctx.close()
+
+
+def test_mobile_header_bookmark_when_absent_opens_save_modal(browser):
+    """모바일: 북마크가 없는 장에서는 헤더 아이콘이 저장 모달을 연다(토글 add)."""
+    ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA)
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    page = ctx.new_page()
+    try:
+        _open_chapter_and_wait(page, "gen/1")
+        page.locator(".title-bookmark-btn").click()
+        page.wait_for_selector("#bm-save-modal:not([hidden])", timeout=2_000)
+        assert page.locator("#bm-confirm-modal").is_hidden()
+    finally:
+        ctx.close()

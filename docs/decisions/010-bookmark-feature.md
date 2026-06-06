@@ -1,7 +1,7 @@
 # ADR-010: 즐겨찾기(북마크) 기능 설계
 
 - 일시: 2026-04-25
-- 개정: 2026-04-26 (UI 개선), 2026-05-03 (모바일 행 UX)
+- 개정: 2026-04-26 (UI 개선), 2026-05-03 (모바일 행 UX), 2026-06-06 (양방향 스와이프 + full-swipe)
 - 상태: 승인됨
 
 ## 결정
@@ -191,6 +191,19 @@ ARIA tree widget(`role="tree"`, `role="treeitem"`, `role="group"`).
 > 장 맥락이 없어 '이 장 저장'이 의미가 없고, 북마크 전체 관리는 하단 탭 바의
 > 북마크 탭(ADR-029)이 담당하므로 목록 헤더의 북마크 진입점은 중복이었다.
 
+> **개정 (2026-06-06):** 모바일 읽기 화면에서 헤더 북마크 아이콘이 **토글**로
+> 동작한다 — 장이 북마크돼 있지 않으면 기존대로 '이 장 저장' 모달, **이미
+> 북마크된 장이면 삭제 확인 모달**(`#bm-confirm-modal`)을 띄워 해당 장의
+> 북마크를 제거한다(채워진/빈 아이콘 토글과 동작 일치). 한 장에 북마크가
+> 여러 개면(예: 장 전체 + 절 범위) 모두 함께 삭제한다 — 채워진 아이콘은
+> 장 단위 토글이기 때문. 클릭 핸들러는 렌더 시점 상태가 아니라
+> `findExistingChapterBookmarks()`로 **클릭 시점에 재확인**한다.
+> 동시에 파괴적 삭제 확인을 네이티브 `window.confirm()` → 테마/포커스 트랩이
+> 적용된 공용 확인 모달(`openConfirmModal()`)로 통일했다 — 스와이프 행 북마크
+> 삭제·폴더 삭제도 같은 모달을 사용한다(확인 버튼 `#c0392b` 파괴색,
+> 기본 포커스는 안전한 '취소'). 확인 메시지 문안은 순수 함수
+> `_chapterDeleteMessage()`로 분리해 유닛 테스트.
+
 **검색 드로어** (`#search-sheet`): 개정 2026-04-26 — 닫기 버튼(`#search-sheet-close`) 추가.
 WCAG 일관성 유지 (북마크 드로어와 동일 패턴).
 
@@ -334,3 +347,28 @@ li.bm-bookmark
 > 또한 `.bm-row-content`에 `min-height: 44px`를 적용해 폴더와 북마크 행 높이를 일치시키고
 > 터치 타겟을 WCAG 기준에 맞춤. `prefers-reduced-motion` 처리 대상도
 > `.bm-row-content` → `.bm-row-actions-mobile`로 이동.
+
+> **개정 (2026-06-06): 양방향 스와이프 + full-swipe (iOS Files/Mail 벤치마크).**
+> 단방향(좌측 스와이프 → 우측 수정/삭제 2버튼 패널) 모델을 **양방향 edge-flush 스와이프 액션**으로 재구성.
+> 모델을 "패널 오버레이"에서 **"콘텐츠 슬라이드"**로 전환 — 불투명한 `.bm-row-content`(z-index:1)가
+> 슬라이더가 되어 행 양 끝에 깔린 단일 액션(`.bm-swipe-action`)을 노출한다.
+> - **왼쪽으로 스와이프** → 콘텐츠 좌측 이동 → 우측 가장자리 **수정**(`.bm-swipe-edit`, 중립 accent).
+> - **오른쪽으로 스와이프** → 콘텐츠 우측 이동 → 좌측 가장자리 **삭제**(`.bm-swipe-delete`, 빨강).
+> - **full-swipe**: 행 너비 ×0.45(최소 reveal+40px) 이상 밀고 놓으면 해당 액션 즉시 실행
+>   (armed 상태에서 액션 배경이 행 전체로 확장 — iOS 시각 큐). 절반 미만이면 닫힘,
+>   `SWIPE_REVEAL_PX/2` 이상이면 버튼 고정(reveal). `SWIPE_REVEAL_PX` 140→**88**(단일 버튼 폭),
+>   토큰 `--swipe-reveal: 88px`로 JS·CSS 동기화.
+> 상태는 `bm-swiped`(열림) + 방향 클래스 `bm-swiped-edit`/`bm-swiped-delete`로 추적,
+> `_openSwipedRow(row, dir)`·`_resetRowSwipe(row)`. full-swipe 실행은 노출된 버튼의 `.click()` 위임
+> (확인 다이얼로그·핸들러 재사용). 텍스트 오버레이 가림 이슈는 콘텐츠가 함께 미끄러지므로 자연 해소.
+> `prefers-reduced-motion`은 `.bm-row-content { transition: none }`. 순수 상태 로직은 유닛
+> (`SWIPED_ROW` 블록), 제스처·full-swipe는 e2e.
+>
+> **시각 다듬기 (2026-06-06 후속):** 액션을 **full-bleed**(좌우 0)로 깔고 방향 클래스
+> (`bm-swiping-delete/edit` 드래그 중, `bm-swiped-delete/edit` 고정)로 해당 방향만 `opacity:1` 노출 —
+> 평상시(닫힘) 액션이 안 보이고, 노출 시 **컬러가 화면 가장자리 끝까지** 채워진다(양방향). **콘텐츠 카드**에만
+> `border-radius`(스와이프/열림 시)를 줘 카드 모서리만 둥글고 액션은 가장자리 직각으로 닿는다. 라벨은
+> `--swipe-reveal` 폭 고정 span 을 가장자리에 핀(`flex-start`/`flex-end`)해 **full-swipe 로 액션이 넓어져도
+> 글자가 중앙으로 밀리지 않는다**. 행 높이: 본문 1.8 leading 상속으로 2줄 북마크가 1줄 폴더보다 커서 짧은
+> 폴더 뒤 액션이 비치던 문제 → `.bm-row-content` 에 `line-height: --leading-snug` + 공유 `min-height` +
+> `align-self: stretch` 로 폴더·북마크 **동일 높이** + 콘텐츠가 행을 꽉 채워 피킹 제거.

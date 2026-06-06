@@ -196,17 +196,18 @@ def test_folder_rename_via_prompt(browser):
 # ── 삭제 ──────────────────────────────────────────────────────────────────────
 
 def test_folder_delete(browser):
-    """폴더 삭제 버튼 클릭 → confirm 승인 → 폴더와 자식 모두 제거."""
+    """폴더 삭제 버튼 클릭 → 확인 모달 승인 → 폴더와 자식 모두 제거."""
     ctx = browser.new_context()
     ctx.add_init_script(CLEAR_APP_STORAGE)
     page = ctx.new_page()
-    page.on("dialog", lambda d: d.accept())
     try:
         _open_drawer(page)
         _set_store(page, [_FOLDER_1])
         page.wait_for_selector("li.bm-folder")
 
         page.locator("li.bm-folder[data-id='folder-1'] .bm-item-actions .bm-delete-btn").first.click()
+        page.wait_for_selector("#bm-confirm-modal:not([hidden])", timeout=2_000)
+        page.locator("#bm-confirm-ok").click()
         page.wait_for_timeout(300)
 
         store = _get_store(page)

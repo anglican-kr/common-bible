@@ -65,11 +65,15 @@ _LONGPRESS_UP_JS = """() => {
 
 
 def _open_drawer(page, bookmarks):
-    """Gen 1 로드 → syncStoreV2로 북마크 주입 → 드로어 열기."""
+    """Gen 1 로드 → syncStoreV2로 북마크 주입 → 드로어 열기.
+
+    드로어는 직접 연다(window.openBookmarkDrawer). 모바일에서 헤더 북마크
+    버튼은 '이 장 저장/삭제' 토글로 동작하므로(#190 이후) 더 이상 드로어를
+    열지 않는다 — 스와이프 동작 자체를 검증하기 위해 드로어를 프로그램적으로 연다."""
     page.goto(f"{BASE}/gen/1")
     page.wait_for_selector("article.chapter-text .verse")
     page.evaluate(f"() => window.syncStoreV2.saveBookmarks({json.dumps(bookmarks)})")
-    page.locator(".title-bookmark-btn").click()
+    page.evaluate("() => window.openBookmarkDrawer('gen', 1)")
     page.wait_for_selector("#bookmark-drawer:not([hidden])")
     page.wait_for_selector("li.bm-bookmark")
 
@@ -89,16 +93,17 @@ def _longpress(page, idx=0, ms=600):
 # ── Tests ─────────────────────────────────────────────────────────────────────
 
 def test_swipe_reveals_mobile_actions(browser):
-    """모바일에서 북마크 행을 왼쪽으로 스와이프하면 수정/삭제 버튼이 노출된다."""
+    """모바일에서 북마크 행을 왼쪽으로 스와이프하면 수정 액션이 노출된다.
+
+    양방향 스와이프(ADR-010 개정): 왼쪽 = 수정(우측 가장자리), 오른쪽 = 삭제."""
     ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA)
     ctx.add_init_script(CLEAR_APP_STORAGE)
     page = ctx.new_page()
     try:
         _open_drawer(page, [_BM_A])
         _swipe(page, idx=0, dx=-160)
-        page.wait_for_selector(_SWIPED_SEL, timeout=2_000)
-        assert page.locator(".bm-mobile-edit-btn").count() > 0
-        assert page.locator(".bm-mobile-delete-btn").count() > 0
+        page.wait_for_selector(".bm-bookmark-row.bm-swiped-edit", timeout=2_000)
+        assert page.locator(".bm-swipe-edit").count() > 0
     finally:
         ctx.close()
 
@@ -169,16 +174,20 @@ def test_swipe_no_effect_on_desktop(browser):
 
 
 def test_delete_via_swipe(browser):
-    """스와이프 → 삭제 버튼 클릭 → confirm 승인 → 북마크 제거."""
+    """오른쪽으로 스와이프 → 삭제 버튼 클릭 → 확인 모달 승인 → 북마크 제거.
+
+    삭제는 오른쪽 스와이프로 노출(좌측 가장자리). 액션은 full-bleed 라 콘텐츠가
+    가리지 않는 노출 영역(라벨)을 클릭한다."""
     ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA)
     ctx.add_init_script(CLEAR_APP_STORAGE)
     page = ctx.new_page()
-    page.on("dialog", lambda d: d.accept())
     try:
         _open_drawer(page, [_BM_A])
-        _swipe(page, idx=0, dx=-160)
-        page.wait_for_selector(_SWIPED_SEL, timeout=2_000)
-        page.locator(".bm-mobile-delete-btn").first.click()
+        _swipe(page, idx=0, dx=160)
+        page.wait_for_selector(".bm-bookmark-row.bm-swiped-delete", timeout=2_000)
+        page.locator(".bm-swipe-delete .bm-swipe-label").first.click()
+        page.wait_for_selector("#bm-confirm-modal:not([hidden])", timeout=2_000)
+        page.locator("#bm-confirm-ok").click()
         page.wait_for_timeout(400)
         store = page.evaluate("() => window.syncStoreV2.loadBookmarks()")
         ids = [bm["id"] for bm in store]

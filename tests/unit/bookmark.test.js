@@ -132,6 +132,7 @@ function loadBookmarkQuery(initialStore = []) {
     setStore: (s) => { storeForLoad = s; },
     _walkBookmarks: ctx._walkBookmarks,
     findExistingChapterBookmarks: ctx.findExistingChapterBookmarks,
+    _chapterDeleteMessage: ctx._chapterDeleteMessage,
     _findItemInStore: ctx._findItemInStore,
     _findParentFolderId: ctx._findParentFolderId,
     removeItemById: ctx.removeItemById,
@@ -190,7 +191,7 @@ function loadDragCore() {
 
 // ── SWIPED_ROW loader ────────────────────────────────────────────────────────
 // `closeSwipedRow`/`_openSwipedRow` mutate row.classList + read
-// row.querySelector(".bm-row-actions-mobile") + write actions.style.transform.
+// row.querySelector(".bm-row-content") + clear content.style.transform.
 // `closeSwipedRowIfOutside` uses `_swipedRow.contains(target) && target
 // instanceof Node`. We provide a minimal Element/Node stub that supports
 // just those.
@@ -214,14 +215,16 @@ function loadSwipedRow() {
     }
     /** Add a child as a descendant for `.contains()` to find. */
     appendChild(node) { this._descendants.add(node); return node; }
-    setActionsChild(actions) { this._actionsChild = actions; }
+    setContentChild(content) { this._contentChild = content; }
     querySelector(selector) {
-      if (selector === ".bm-row-actions-mobile") return this._actionsChild;
+      if (selector === ".bm-row-content") return this._contentChild;
       return null;
     }
     contains(target) { return this === target || this._descendants.has(target); }
   }
-  class ActionsEl extends Element {
+  // Stub for the sliding .bm-row-content layer; the swipe helpers clear its
+  // inline transform when opening/closing.
+  class ContentEl extends Element {
     constructor() {
       super();
       this.style = { transform: "" };
@@ -239,7 +242,7 @@ function loadSwipedRow() {
 
   return {
     ctx,
-    Node, Element, ActionsEl,
+    Node, Element, ContentEl,
     closeSwipedRow: ctx.closeSwipedRow,
     _openSwipedRow: ctx._openSwipedRow,
     resetSwipedRow: ctx.resetSwipedRow,
@@ -455,6 +458,23 @@ test('_walkBookmarks: returning false short-circuits remaining traversal', () =>
   assert.deepEqual(visited, ["bm-root1", "fld-old", "bm-ot1"]);
 });
 
+test('_walkBookmarks: folder with missing/null children does not throw', () => {
+  const h = loadBookmarkQuery();
+  const visited = [];
+  const store = [
+    { type: "folder", id: "f-nochildren" /* no children */ },
+    { type: "folder", id: "f-null", children: null },
+    { type: "bookmark", id: "bm" },
+  ];
+  assert.doesNotThrow(() => h._walkBookmarks(store, (item) => { visited.push(item.id); }));
+  assert.deepEqual(visited, ["f-nochildren", "f-null", "bm"]);
+});
+
+test('_walkBookmarks: null root → no-op (no throw)', () => {
+  const h = loadBookmarkQuery();
+  assert.doesNotThrow(() => h._walkBookmarks(null, () => {}));
+});
+
 // ── findExistingChapterBookmarks ─────────────────────────────────────────────
 
 test('findExistingChapterBookmarks: 0 matches when no bookmark in chapter', () => {
@@ -486,6 +506,24 @@ test('findExistingChapterBookmarks: empty store → empty array', () => {
   const h = loadBookmarkQuery();
   h.setStore([]);
   assert.equal(h.findExistingChapterBookmarks("gen", 1).length, 0);
+});
+
+// ── _chapterDeleteMessage ────────────────────────────────────────────────────
+
+test('_chapterDeleteMessage: single bookmark names it', () => {
+  const h = loadBookmarkQuery();
+  const msg = h._chapterDeleteMessage([{ label: "창세기 1장" }]);
+  assert.equal(msg, '"창세기 1장" 북마크를 삭제할까요?');
+});
+
+test('_chapterDeleteMessage: multiple bookmarks use the count', () => {
+  const h = loadBookmarkQuery();
+  const msg = h._chapterDeleteMessage([
+    { label: "창세기 1장" },
+    { label: "창세기 1:1-3" },
+    { label: "창세기 1:26" },
+  ]);
+  assert.equal(msg, "이 장에 저장된 북마크 3개를 모두 삭제할까요?");
 });
 
 // ── _findItemInStore ─────────────────────────────────────────────────────────
@@ -743,47 +781,63 @@ test('closeSwipedRow: when nothing swiped → no-op', () => {
 test('closeSwipedRow: when current row is the "except" → no-op (kept open)', () => {
   const h = loadSwipedRow();
   const row = new h.Element();
-  const actions = new h.ActionsEl();
-  row.setActionsChild(actions);
-  h._openSwipedRow(row);
+  const content = new h.ContentEl();
+  row.setContentChild(content);
+  h._openSwipedRow(row, "edit");
   // Now _swipedRow is `row`. close(row) should leave it alone.
   h.closeSwipedRow(row);
   assert.equal(h.peekSwipedRow(), row);
 });
 
-test('closeSwipedRow: closes when except differs — strips bm-swiped + clears actions transform', () => {
+test('closeSwipedRow: closes when except differs — strips swipe classes + clears content transform', () => {
   const h = loadSwipedRow();
   const row = new h.Element();
-  const actions = new h.ActionsEl();
-  row.setActionsChild(actions);
-  h._openSwipedRow(row);
+  const content = new h.ContentEl();
+  row.setContentChild(content);
+  h._openSwipedRow(row, "delete");
+  assert.ok(row.classList.contains("bm-swiped-delete"));
   // Different except (e.g. about to open another row)
   h.closeSwipedRow(new h.Element());
   assert.equal(h.peekSwipedRow(), null);
   assert.equal(row.classList.contains("bm-swiped"), false);
-  assert.equal(actions.style.transform, "");
+  assert.equal(row.classList.contains("bm-swiped-delete"), false);
+  assert.equal(content.style.transform, "");
 });
 
 // ── _openSwipedRow ───────────────────────────────────────────────────────────
 
-test('_openSwipedRow: marks new row + clears prior swiped row', () => {
+test('_openSwipedRow: marks new row (with direction) + clears prior swiped row', () => {
   const h = loadSwipedRow();
   const rowA = new h.Element();
-  const actionsA = new h.ActionsEl();
-  rowA.setActionsChild(actionsA);
+  rowA.setContentChild(new h.ContentEl());
   const rowB = new h.Element();
-  const actionsB = new h.ActionsEl();
-  rowB.setActionsChild(actionsB);
+  rowB.setContentChild(new h.ContentEl());
 
-  h._openSwipedRow(rowA);
+  h._openSwipedRow(rowA, "edit");
   assert.equal(h.peekSwipedRow(), rowA);
   assert.ok(rowA.classList.contains("bm-swiped"));
+  assert.ok(rowA.classList.contains("bm-swiped-edit"));
 
-  h._openSwipedRow(rowB);
+  h._openSwipedRow(rowB, "delete");
   // Auto-close of rowA when opening rowB
   assert.equal(h.peekSwipedRow(), rowB);
   assert.equal(rowA.classList.contains("bm-swiped"), false);
   assert.ok(rowB.classList.contains("bm-swiped"));
+  assert.ok(rowB.classList.contains("bm-swiped-delete"));
+});
+
+test('_openSwipedRow: re-snapping the same row to the opposite edge drops the stale direction', () => {
+  const h = loadSwipedRow();
+  const row = new h.Element();
+  row.setContentChild(new h.ContentEl());
+  h._openSwipedRow(row, "edit");
+  assert.ok(row.classList.contains("bm-swiped-edit"));
+  // Snap the SAME (already-tracked) row the other way — only the new direction
+  // class should remain, not both.
+  h._openSwipedRow(row, "delete");
+  assert.ok(row.classList.contains("bm-swiped-delete"));
+  assert.equal(row.classList.contains("bm-swiped-edit"), false);
+  assert.equal(h.peekSwipedRow(), row);
 });
 
 // ── resetSwipedRow ───────────────────────────────────────────────────────────
@@ -791,8 +845,8 @@ test('_openSwipedRow: marks new row + clears prior swiped row', () => {
 test('resetSwipedRow: clears _swipedRow without DOM mutation', () => {
   const h = loadSwipedRow();
   const row = new h.Element();
-  row.setActionsChild(new h.ActionsEl());
-  h._openSwipedRow(row);
+  row.setContentChild(new h.ContentEl());
+  h._openSwipedRow(row, "edit");
   // Tracking cleared but DOM class is intentionally left in place — caller
   // is expected to be re-rendering anyway, and stripping the class would
   // race the render replacement.
@@ -814,10 +868,10 @@ test('closeSwipedRowIfOutside: nothing swiped → no-op', () => {
 test('closeSwipedRowIfOutside: target inside swiped row → no-op (stays open)', () => {
   const h = loadSwipedRow();
   const row = new h.Element();
-  row.setActionsChild(new h.ActionsEl());
+  row.setContentChild(new h.ContentEl());
   const inner = new h.Element();
   row.appendChild(inner);
-  h._openSwipedRow(row);
+  h._openSwipedRow(row, "edit");
   h.closeSwipedRowIfOutside(inner);
   assert.equal(h.peekSwipedRow(), row);
 });
@@ -825,9 +879,9 @@ test('closeSwipedRowIfOutside: target inside swiped row → no-op (stays open)',
 test('closeSwipedRowIfOutside: target outside → closeSwipedRow fires', () => {
   const h = loadSwipedRow();
   const row = new h.Element();
-  const actions = new h.ActionsEl();
-  row.setActionsChild(actions);
-  h._openSwipedRow(row);
+  const content = new h.ContentEl();
+  row.setContentChild(content);
+  h._openSwipedRow(row, "delete");
   const outside = new h.Element();
   h.closeSwipedRowIfOutside(outside);
   assert.equal(h.peekSwipedRow(), null);
@@ -839,8 +893,8 @@ test('closeSwipedRowIfOutside: non-Node target → guard rejects, close fires', 
   // function falls through to closeSwipedRow(null).
   const h = loadSwipedRow();
   const row = new h.Element();
-  row.setActionsChild(new h.ActionsEl());
-  h._openSwipedRow(row);
+  row.setContentChild(new h.ContentEl());
+  h._openSwipedRow(row, "edit");
   h.closeSwipedRowIfOutside(/** @type {any} */ ({ not: "a node" }));
   assert.equal(h.peekSwipedRow(), null);
 });
@@ -1251,4 +1305,154 @@ test("_countBookmarks: folder with non-array children is skipped (no throw)", ()
     { type: "bookmark", id: "b" },
   ];
   assert.equal(h._countBookmarks(items), 1);
+});
+
+// ── BOOKMARK_SORT loader ─────────────────────────────────────────────────────
+// The sort helpers read/write localStorage for the per-device preference and
+// the last-viewed map. A Map-backed fake lets each test seed and inspect state.
+
+function makeFakeLocalStorage(seed = {}) {
+  const m = new Map(Object.entries(seed));
+  return {
+    getItem(k) { return m.has(k) ? m.get(k) : null; },
+    setItem(k, v) { m.set(k, String(v)); },
+    removeItem(k) { m.delete(k); },
+    _dump() { return Object.fromEntries(m); },
+  };
+}
+
+function loadBookmarkSort(seed = {}) {
+  const localStorage = makeFakeLocalStorage(seed);
+  const ctx = {
+    Object, Array, Set, String, Math, Number, JSON, console, Error, Date,
+    localStorage,
+  };
+  vm.createContext(ctx);
+  vm.runInContext(extractBlock("BOOKMARK_SORT"), ctx, { filename: "bookmark-sort.js" });
+  return {
+    getBookmarkSort: ctx.getBookmarkSort,
+    setBookmarkSort: ctx.setBookmarkSort,
+    markBookmarkViewed: ctx.markBookmarkViewed,
+    _forgetViewed: ctx._forgetViewed,
+    sortBookmarkNodes: ctx.sortBookmarkNodes,
+    _ls: localStorage,
+  };
+}
+
+const idsOf = (nodes) => nodes.map((n) => n.id);
+
+// ── sort preference (localStorage, per-device) ──
+
+test("getBookmarkSort: defaults to 'manual' when unset", () => {
+  const h = loadBookmarkSort();
+  assert.equal(h.getBookmarkSort(), "manual");
+});
+
+test("getBookmarkSort: returns a stored valid mode", () => {
+  const h = loadBookmarkSort({ "bible-bookmark-sort": "title" });
+  assert.equal(h.getBookmarkSort(), "title");
+});
+
+test("getBookmarkSort: ignores an unknown stored value → 'manual'", () => {
+  const h = loadBookmarkSort({ "bible-bookmark-sort": "bogus" });
+  assert.equal(h.getBookmarkSort(), "manual");
+});
+
+test("setBookmarkSort: persists a valid mode", () => {
+  const h = loadBookmarkSort();
+  h.setBookmarkSort("created");
+  assert.equal(h.getBookmarkSort(), "created");
+});
+
+test("setBookmarkSort: rejects an invalid mode (no write)", () => {
+  const h = loadBookmarkSort({ "bible-bookmark-sort": "title" });
+  h.setBookmarkSort("nope");
+  assert.equal(h.getBookmarkSort(), "title");
+});
+
+// ── last-viewed map (localStorage, per-device) ──
+
+test("markBookmarkViewed: records a timestamp under the bookmark id", () => {
+  const h = loadBookmarkSort();
+  h.markBookmarkViewed("bm-1");
+  const map = JSON.parse(h._ls.getItem("bible-bookmark-viewed"));
+  assert.ok(map["bm-1"] > 0);
+});
+
+test("markBookmarkViewed: ignores empty id", () => {
+  const h = loadBookmarkSort();
+  h.markBookmarkViewed("");
+  assert.equal(h._ls.getItem("bible-bookmark-viewed"), null);
+});
+
+test("_forgetViewed: removes a single id, leaves others", () => {
+  const h = loadBookmarkSort({ "bible-bookmark-viewed": JSON.stringify({ a: 10, b: 20 }) });
+  h._forgetViewed("a");
+  const map = JSON.parse(h._ls.getItem("bible-bookmark-viewed"));
+  assert.deepEqual(map, { b: 20 });
+});
+
+// ── sortBookmarkNodes ──
+
+test("sortBookmarkNodes: 'manual' preserves stored order (shallow copy)", () => {
+  const h = loadBookmarkSort({ "bible-bookmark-sort": "manual" });
+  const nodes = [
+    { type: "bookmark", id: "b", label: "Z" },
+    { type: "folder", id: "f", name: "A" },
+    { type: "bookmark", id: "a", label: "A" },
+  ];
+  const out = h.sortBookmarkNodes(nodes);
+  assert.deepEqual(idsOf(out), ["b", "f", "a"]);
+  assert.notStrictEqual(out, nodes); // copy, not the same array
+});
+
+test("sortBookmarkNodes: 'title' sorts folders-first, then by label A→Z", () => {
+  const h = loadBookmarkSort({ "bible-bookmark-sort": "title" });
+  const nodes = [
+    { type: "bookmark", id: "b-c", label: "다" },
+    { type: "folder", id: "f-b", name: "나" },
+    { type: "bookmark", id: "b-a", label: "가" },
+    { type: "folder", id: "f-a", name: "가" },
+  ];
+  // folders (가, 나) before bookmarks (가, 다), each alphabetical
+  assert.deepEqual(idsOf(h.sortBookmarkNodes(nodes)), ["f-a", "f-b", "b-a", "b-c"]);
+});
+
+test("sortBookmarkNodes: 'created' sorts newest-first", () => {
+  const h = loadBookmarkSort({ "bible-bookmark-sort": "created" });
+  const nodes = [
+    { type: "bookmark", id: "old", createdAt: 100 },
+    { type: "bookmark", id: "new", createdAt: 300 },
+    { type: "bookmark", id: "mid", createdAt: 200 },
+  ];
+  assert.deepEqual(idsOf(h.sortBookmarkNodes(nodes)), ["new", "mid", "old"]);
+});
+
+test("sortBookmarkNodes: 'modified' falls back to createdAt when updatedAt missing", () => {
+  const h = loadBookmarkSort({ "bible-bookmark-sort": "modified" });
+  const nodes = [
+    { type: "bookmark", id: "edited", createdAt: 100, updatedAt: 500 },
+    { type: "bookmark", id: "fresh",  createdAt: 400 },
+  ];
+  // edited's updatedAt(500) beats fresh's createdAt(400)
+  assert.deepEqual(idsOf(h.sortBookmarkNodes(nodes)), ["edited", "fresh"]);
+});
+
+test("sortBookmarkNodes: 'viewed' uses the local viewed map, newest-first", () => {
+  const h = loadBookmarkSort({
+    "bible-bookmark-sort": "viewed",
+    "bible-bookmark-viewed": JSON.stringify({ a: 10, c: 30 }),
+  });
+  const nodes = [
+    { type: "bookmark", id: "a", createdAt: 999 },
+    { type: "bookmark", id: "b", createdAt: 5 },   // never viewed → falls back to createdAt(5)
+    { type: "bookmark", id: "c", createdAt: 1 },
+  ];
+  // viewed: c(30), a(10), then b(createdAt 5)
+  assert.deepEqual(idsOf(h.sortBookmarkNodes(nodes)), ["c", "a", "b"]);
+});
+
+test("sortBookmarkNodes: non-array input → empty array", () => {
+  const h = loadBookmarkSort({ "bible-bookmark-sort": "title" });
+  assert.deepEqual(h.sortBookmarkNodes(undefined), []);
 });

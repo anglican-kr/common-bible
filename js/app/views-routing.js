@@ -1816,6 +1816,10 @@ async function route() {
   // lock) persist over the new view, blocking it (ADR-029).
   const bmDrawer = document.getElementById("bookmark-drawer");
   if (bmDrawer && !bmDrawer.hidden) window.closeBookmarkDrawer?.();
+  // Destructive-confirm modal: dismiss on nav so its scrim doesn't linger over
+  // the rebuilt view (e.g. OS back gesture while confirming). Self-guards.
+  const bmConfirm = document.getElementById("bm-confirm-modal");
+  if (bmConfirm && !bmConfirm.hidden) window.closeConfirmModal?.();
   // Desktop settings popover: close on nav too (it has a focus trap). Closing
   // here also makes the /settings desktop fallback's gear.click() always OPEN
   // (never toggle-closed) since the popover is already dismissed by this point.
@@ -1876,6 +1880,9 @@ async function route() {
     // over the book list so a deep-link / resize-down never dead-ends.
     if (view === "bookmarks") {
       if (isMobile()) {
+        // Ensure the books cache is populated so bookmark refs resolve to the
+        // Korean short name (창세) instead of falling back to the raw id (gen).
+        await loadBooks();
         window.renderBookmarksView();
         dismissLaunchScreen();
         updatePageMeta({ title: "북마크", description: "공동번역성서 북마크 목록" });

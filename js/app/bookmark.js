@@ -209,7 +209,9 @@ function serializeVerseRange(firstNode, lastNode) {
  * @returns {boolean}
  */
 function _walkBookmarks(store, fn) {
-  for (const item of store) {
+  // Guard against folders with missing/null `children` (and a null root) so the
+  // walk — and any caller mid-mutation (e.g. cascade delete) — can't throw.
+  for (const item of store || []) {
     if (fn(item, store) === false) return false;
     if (item.type === "folder") {
       if (_walkBookmarks(item.children, fn) === false) return false;
@@ -232,6 +234,20 @@ function findExistingChapterBookmarks(bookId, chapter) {
     }
   });
   return results;
+}
+
+// Confirmation copy for removing the bookmark(s) of the chapter currently open
+// in the reader (header bookmark toggle). One bookmark names it; several are
+// removed together since the filled icon is a per-chapter toggle.
+/**
+ * @param {BookmarkTreeBookmark[]} candidates
+ * @returns {string}
+ */
+function _chapterDeleteMessage(candidates) {
+  if (candidates.length === 1) {
+    return `"${candidates[0].label}" 북마크를 삭제할까요?`;
+  }
+  return `이 장에 저장된 북마크 ${candidates.length}개를 모두 삭제할까요?`;
 }
 
 /**
@@ -400,8 +416,11 @@ function _updateDragIndicators(clientX, clientY) {
 // of the swipe state surface.
 
 // Mobile swipe-to-reveal + long-press: tracks the single revealed row so
-// opening a new one auto-closes the previous. See ADR-010 (2026-05-03).
-const SWIPE_REVEAL_PX = 140;
+// opening a new one auto-closes the previous. Bidirectional (ADR-010 개정
+// 2026-06-06): swiping a row left reveals 수정 on the right edge, swiping right
+// reveals 삭제 on the left edge, and a full swipe executes the action. The
+// opaque .bm-row-content is the slider that exposes the edge-anchored actions.
+const SWIPE_REVEAL_PX = 88;
 const LONG_PRESS_MS = 500;
 /** @type {HTMLElement | null} */
 let _swipedRow = null;
@@ -412,22 +431,33 @@ function _isMobileViewport() {
   return window.matchMedia("(max-width: 768px)").matches;
 }
 
+// Clear any open-swipe state + inline slide transform on a row.
+/** @param {HTMLElement} row */
+function _resetRowSwipe(row) {
+  row.classList.remove("bm-swiped", "bm-swiped-edit", "bm-swiped-delete");
+  const content = /** @type {HTMLElement | null} */ (row.querySelector(".bm-row-content"));
+  if (content) content.style.transform = "";
+}
+
 /** @param {HTMLElement | null} except */
 function closeSwipedRow(except) {
   if (_swipedRow && _swipedRow !== except) {
-    _swipedRow.classList.remove("bm-swiped");
-    const prevActions = /** @type {HTMLElement | null} */ (_swipedRow.querySelector(".bm-row-actions-mobile"));
-    if (prevActions) prevActions.style.transform = "";
+    _resetRowSwipe(_swipedRow);
     _swipedRow = null;
   }
 }
 
-/** @param {HTMLElement} row */
-function _openSwipedRow(row) {
+// Snap a row open in `dir`: "edit" reveals 수정 (right edge, content slid left),
+// "delete" reveals 삭제 (left edge, content slid right). The CSS class drives the
+// slide, so the inline transform left by the drag is cleared.
+/** @param {HTMLElement} row @param {"edit" | "delete"} dir */
+function _openSwipedRow(row, dir) {
   closeSwipedRow(row);
-  row.classList.add("bm-swiped");
-  const actions = /** @type {HTMLElement | null} */ (row.querySelector(".bm-row-actions-mobile"));
-  if (actions) actions.style.transform = "";
+  // Reset THIS row too: closeSwipedRow skips it when it's already the tracked
+  // row, so re-snapping to the opposite edge would otherwise leave the prior
+  // bm-swiped-edit/delete class stacked alongside the new one.
+  _resetRowSwipe(row);
+  row.classList.add("bm-swiped", dir === "delete" ? "bm-swiped-delete" : "bm-swiped-edit");
   _swipedRow = row;
 }
 
@@ -463,22 +493,35 @@ function _setupDragHandle(li, row) {
     const startY = e.clientY;
     const origRect = li.getBoundingClientRect();
     const isTouch = e.pointerType !== "mouse";
-    const swipeActions = /** @type {HTMLElement | null} */ (row.querySelector(".bm-row-actions-mobile"));
-    const canSwipe = _isMobileViewport() && isTouch && !!swipeActions;
+    const contentEl = /** @type {HTMLElement | null} */ (row.querySelector(".bm-row-content"));
+    const canSwipe = _isMobileViewport() && isTouch && !!contentEl;
+    // Drag-to-reorder only makes sense under 직접 정렬 (manual); an active
+    // auto-sort would re-sort the drop away. Evaluated per gesture so a sort
+    // change takes effect immediately. Swipe-to-reveal is always available.
+    const canDrag = getBookmarkSort() === "manual";
     // null until the first significant move classifies the gesture.
     // "drag" → reorder, "swipe" → reveal actions, "abort" → cede to browser scroll
     /** @type {"drag" | "swipe" | "abort" | null} */
     let mode = null;
     let dragStarted = false;
-    const startedSwiped = canSwipe && row.classList.contains("bm-swiped");
-    const baseOffset = startedSwiped ? -SWIPE_REVEAL_PX : 0;
+    // Direction the row is already open in, so a re-grab continues from the
+    // revealed offset. "edit" = 수정 (right), "delete" = 삭제 (left).
+    /** @type {"edit" | "delete" | null} */
+    const startedDir = row.classList.contains("bm-swiped-edit") ? "edit"
+      : row.classList.contains("bm-swiped-delete") ? "delete" : null;
+    const startedSwiped = !!startedDir;
+    const baseOffset = startedDir === "edit" ? -SWIPE_REVEAL_PX
+      : startedDir === "delete" ? SWIPE_REVEAL_PX : 0;
+    const rowWidth = origRect.width;
+    // Full-swipe threshold: past this on release, the action executes.
+    const commitPx = Math.max(rowWidth * 0.45, SWIPE_REVEAL_PX + 40);
     /** @type {ReturnType<typeof setTimeout> | null} */
     let longPressTimer = null;
 
     // Touch devices: long-press without movement enters drag-to-reorder mode
     // (haptic feedback acts as the visual cue). Action panel reveal is
     // horizontal-swipe only. Mouse users start dragging immediately on move.
-    if (isTouch && !startedSwiped) {
+    if (canDrag && isTouch && !startedSwiped) {
       longPressTimer = setTimeout(() => {
         if (mode !== null) return;
         mode = "drag";
@@ -546,23 +589,29 @@ function _setupDragHandle(li, row) {
           mode = "abort";
           cleanupPointerHandlers();
           return;
-        } else {
+        } else if (canDrag) {
           // Mouse user → immediate drag-to-reorder on any movement.
           mode = "drag";
           _beginDrag();
+        } else {
+          // Mouse + auto-sort: no reorder. Cede to scroll/click.
+          mode = "abort";
+          cleanupPointerHandlers();
+          return;
         }
       }
 
       if (mode === "swipe") {
         let offset = baseOffset + dx;
-        if (offset > 0) offset = 0;
-        if (offset < -SWIPE_REVEAL_PX * 1.2) offset = -SWIPE_REVEAL_PX * 1.2;
-        // Slide the action panel in from the right; row content stays put.
-        // offset 0 → panel translateX(140) (off-screen); offset -140 → translateX(0) (open).
-        if (swipeActions) {
-          const panelTx = SWIPE_REVEAL_PX + offset;
-          swipeActions.style.transform = `translateX(${panelTx}px)`;
-        }
+        // Clamp within the row; either direction is allowed (bidirectional).
+        if (offset > rowWidth) offset = rowWidth;
+        if (offset < -rowWidth) offset = -rowWidth;
+        // Slide the content; the edge-anchored action beneath is exposed.
+        // offset < 0 → content slides left → 수정 (right). offset > 0 → 삭제 (left).
+        if (contentEl) contentEl.style.transform = `translateX(${offset}px)`;
+        // Show the action for the current direction (full-bleed behind content).
+        row.classList.toggle("bm-swiping-delete", offset > 0);
+        row.classList.toggle("bm-swiping-edit", offset < 0);
         return;
       }
 
@@ -578,13 +627,23 @@ function _setupDragHandle(li, row) {
       cleanupPointerHandlers();
 
       if (mode === "swipe") {
-        row.classList.remove("bm-swiping");
+        row.classList.remove("bm-swiping", "bm-swiping-delete", "bm-swiping-edit");
+        if (contentEl) contentEl.style.transform = "";
         const finalOffset = baseOffset + (e.clientX - startX);
-        if (finalOffset < -SWIPE_REVEAL_PX / 2) {
-          _openSwipedRow(row);
+        if (finalOffset <= -commitPx) {
+          // Full swipe left → 수정 (trigger the revealed button's handler).
+          closeSwipedRow(null);
+          /** @type {HTMLElement | null} */ (row.querySelector(".bm-swipe-edit"))?.click();
+        } else if (finalOffset >= commitPx) {
+          // Full swipe right → 삭제.
+          closeSwipedRow(null);
+          /** @type {HTMLElement | null} */ (row.querySelector(".bm-swipe-delete"))?.click();
+        } else if (finalOffset <= -SWIPE_REVEAL_PX / 2) {
+          _openSwipedRow(row, "edit");
+        } else if (finalOffset >= SWIPE_REVEAL_PX / 2) {
+          _openSwipedRow(row, "delete");
         } else {
-          row.classList.remove("bm-swiped");
-          if (swipeActions) swipeActions.style.transform = "";
+          _resetRowSwipe(row);
           if (_swipedRow === row) _swipedRow = null;
         }
         return;
@@ -618,13 +677,13 @@ function _setupDragHandle(li, row) {
       cleanupPointerHandlers();
 
       if (mode === "swipe") {
-        row.classList.remove("bm-swiping");
+        row.classList.remove("bm-swiping", "bm-swiping-delete", "bm-swiping-edit");
+        if (contentEl) contentEl.style.transform = "";
         // Snap back to the pre-gesture state on cancel.
-        if (startedSwiped) {
-          _openSwipedRow(row);
+        if (startedDir) {
+          _openSwipedRow(row, startedDir);
         } else {
-          row.classList.remove("bm-swiped");
-          if (swipeActions) swipeActions.style.transform = "";
+          _resetRowSwipe(row);
           if (_swipedRow === row) _swipedRow = null;
         }
         return;
@@ -662,6 +721,10 @@ let _bookmarkDrawerLastFocus = null;
 let _bmSaveModalTrap = null;
 /** @type {(() => void) | null} */
 let _bmMergeModalTrap = null;
+/** @type {(() => void) | null} */
+let _bmConfirmModalTrap = null;
+/** @type {HTMLElement | null} */
+let _bmConfirmLastFocus = null;
 /** @type {(() => void) | null} */
 let _bmNewFolderTrap = null;
 /** @type {((id: string) => void) | null} */
@@ -749,6 +812,12 @@ const $bmMergeBody = _$("bm-merge-body");
 const $bmMergeYes = _$("bm-merge-yes");
 const $bmMergeNo = _$("bm-merge-no");
 const $bmMergeCancel = _$("bm-merge-cancel");
+const $bmConfirmScrim = _$("bm-confirm-scrim");
+const $bmConfirmModal = _$("bm-confirm-modal");
+const $bmConfirmTitle = _$("bm-confirm-title");
+const $bmConfirmBody = _$("bm-confirm-body");
+const $bmConfirmOk = _$("bm-confirm-ok");
+const $bmConfirmCancel = _$("bm-confirm-cancel");
 const $verseSelectBar = _$("verse-select-bar");
 const $verseSelectCount = _$("verse-select-count");
 const $verseSelectBookmarkBtn = /** @type {HTMLButtonElement} */ (_$("verse-select-bookmark-btn"));
@@ -805,6 +874,31 @@ function buildHomeBtn(target, ariaLabel) {
 // is bookmarked" visual cue.
 const BOOKMARK_ICON_OUTLINE = "M160-80v-560q0-33 23.5-56.5T240-720h320q33 0 56.5 23.5T640-640v560L400-200 160-80Zm80-121 160-86 160 86v-439H240v439Zm480-39v-560H280v-80h440q33 0 56.5 23.5T800-800v560h-80ZM240-640h320-320Z";
 const BOOKMARK_ICON_FILLED = "M160-80v-560q0-33 23.5-56.5T240-720h320q33 0 56.5 23.5T640-640v560L400-200 160-80Zm560-160v-560H280v-80h440q33 0 56.5 23.5T800-800v560h-80Z";
+// "+" glyph centred in the front bookmark's hollow — composited as a second
+// <path> for the not-yet-bookmarked ("add this chapter") state. Same
+// 0 -960 960 960 coordinate system as the bookmark paths above.
+const BOOKMARK_ICON_ADD_PLUS = "M372-555h56v57h57v56h-57v57h-56v-57h-57v-56h57v-57Z";
+
+// Paint the header bookmark button's glyph for the current state. Bookmarked =
+// filled (unchanged cue). Not bookmarked = outline + "+" badge so the affordance
+// reads as "add this chapter". Rebuilds children because the add state needs two
+// paths; both buildBookmarkHeaderBtn and refreshBookmarkHeaderBtn route through
+// here so the build and the live toggle stay in sync.
+/** @param {SVGElement} svg @param {boolean} hasBookmark */
+function _setBookmarkBtnIcon(svg, hasBookmark) {
+  while (svg.firstChild) svg.removeChild(svg.firstChild);
+  const mk = (d) => {
+    const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    p.setAttribute("d", d);
+    return p;
+  };
+  if (hasBookmark) {
+    svg.appendChild(mk(BOOKMARK_ICON_FILLED));
+  } else {
+    svg.appendChild(mk(BOOKMARK_ICON_OUTLINE));
+    svg.appendChild(mk(BOOKMARK_ICON_ADD_PLUS));
+  }
+}
 
 // Build the bookmark icon SVG button for the chapter header
 function buildBookmarkHeaderBtn(bookId, chapter) {
@@ -822,15 +916,20 @@ function buildBookmarkHeaderBtn(bookId, chapter) {
   svg.setAttribute("viewBox", "0 -960 960 960");
   svg.setAttribute("fill", "currentColor");
   svg.setAttribute("aria-hidden", "true");
-  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-  path.setAttribute("d", hasBookmark ? BOOKMARK_ICON_FILLED : BOOKMARK_ICON_OUTLINE);
-  svg.appendChild(path);
+  _setBookmarkBtnIcon(svg, hasBookmark);
   btn.appendChild(svg);
-  // 모바일 읽기 화면(장 맥락 있음)에선 헤더 북마크 = '이 장 저장' 모달로 바로 진입.
+  // 모바일 읽기 화면(장 맥락 있음)에선 헤더 북마크가 토글로 동작 —
+  // 이미 북마크된 장이면 삭제 확인 모달, 아니면 '이 장 저장' 모달.
   // 그 외(데스크탑 전체, 또는 책 목록·장 선택처럼 장 맥락 없음)는 기존 드로어.
   btn.addEventListener("click", () => {
-    if (_isMobileViewport() && bookId && chapter != null) openSaveModal("chapter");
-    else openBookmarkDrawer(bookId, chapter);
+    if (_isMobileViewport() && bookId && chapter != null) {
+      // Re-check live: the rendered state may be stale after edits elsewhere.
+      const existing = findExistingChapterBookmarks(bookId, chapter);
+      if (existing.length > 0) confirmRemoveChapterBookmarks(existing);
+      else openSaveModal("chapter");
+    } else {
+      openBookmarkDrawer(bookId, chapter);
+    }
   });
   return btn;
 }
@@ -840,8 +939,8 @@ function refreshBookmarkHeaderBtn() {
   if (!btn || !readingContext.bookId || !readingContext.chapter) return;
   const hasBookmark = findExistingChapterBookmarks(readingContext.bookId, readingContext.chapter).length > 0;
   btn.classList.toggle("has-bookmark", hasBookmark);
-  const path = btn.querySelector("svg path");
-  if (path) path.setAttribute("d", hasBookmark ? BOOKMARK_ICON_FILLED : BOOKMARK_ICON_OUTLINE);
+  const svg = btn.querySelector("svg");
+  if (svg) _setBookmarkBtnIcon(svg, hasBookmark);
 }
 
 function openBookmarkDrawer(bookId, chapter) {
@@ -923,11 +1022,128 @@ function _bookmarkHref(bm) {
 }
 // ── END BOOKMARK_HREF ──
 
+// ── BEGIN BOOKMARK_SORT ──
+// Bookmark list ordering. The chosen sort is a per-device preference kept in
+// localStorage and deliberately NOT synced to Drive — ADR-011 sync covers the
+// bookmark objects, not this view setting. "manual" preserves the stored
+// (drag-reordered) order; the other modes cluster folders first, then
+// bookmarks, each group sorted by the chosen key. Sorting is display-only — it
+// returns a shallow copy and never rewrites the store.
+const _BM_SORT_KEY = "bible-bookmark-sort";
+/** @type {readonly string[]} */
+const _BM_SORT_MODES = ["manual", "title", "created", "modified", "viewed"];
+
+/** @returns {string} */
+function getBookmarkSort() {
+  try {
+    const v = localStorage.getItem(_BM_SORT_KEY);
+    return v && _BM_SORT_MODES.includes(v) ? v : "manual";
+  } catch { return "manual"; }
+}
+/** @param {string} mode */
+function setBookmarkSort(mode) {
+  if (!_BM_SORT_MODES.includes(mode)) return;
+  try { localStorage.setItem(_BM_SORT_KEY, mode); } catch { /* private mode */ }
+}
+
+// Per-device "last viewed" timestamps, keyed by bookmark id. Kept in
+// localStorage only: tracking this on the synced object would rewrite (and
+// re-sync) a bookmark every time it is merely opened, and would drag the
+// "수정한 날짜" key along with it.
+const _BM_VIEWED_KEY = "bible-bookmark-viewed";
+/** @returns {Record<string, number>} */
+function _loadViewedMap() {
+  try {
+    const raw = localStorage.getItem(_BM_VIEWED_KEY);
+    const m = raw ? JSON.parse(raw) : null;
+    return (m && typeof m === "object") ? m : {};
+  } catch { return {}; }
+}
+/** @param {string} id */
+function markBookmarkViewed(id) {
+  if (!id) return;
+  try {
+    const m = _loadViewedMap();
+    m[id] = Date.now();
+    localStorage.setItem(_BM_VIEWED_KEY, JSON.stringify(m));
+  } catch { /* private mode */ }
+}
+/** @param {string} id */
+function _forgetViewed(id) {
+  try {
+    const m = _loadViewedMap();
+    if (m[id] != null) { delete m[id]; localStorage.setItem(_BM_VIEWED_KEY, JSON.stringify(m)); }
+  } catch { /* private mode */ }
+}
+
+/** @param {BookmarkTreeNode} n @returns {string} */
+function _nodeTitle(n) {
+  return (n.type === "folder" ? n.name : n.label) || "";
+}
+
+// Build a comparator for a sort mode. Date modes sort newest-first; "title"
+// uses Korean locale collation. The viewed map is read once per sort rather
+// than once per comparison.
+/** @param {string} mode @returns {(a: BookmarkTreeNode, b: BookmarkTreeNode) => number} */
+function _bookmarkComparator(mode) {
+  if (mode === "title") {
+    return (a, b) => _nodeTitle(a).localeCompare(_nodeTitle(b), "ko");
+  }
+  const viewed = mode === "viewed" ? _loadViewedMap() : null;
+  /** @param {BookmarkTreeNode} n @returns {number} */
+  const keyOf = (n) => {
+    if (mode === "created")  return n.createdAt || 0;
+    if (mode === "modified") return n.updatedAt || n.createdAt || 0;
+    if (mode === "viewed")   return (viewed && viewed[n.id]) || n.createdAt || 0;
+    return 0;
+  };
+  return (a, b) => keyOf(b) - keyOf(a);
+}
+
+// Display-ordered shallow copy of `nodes` for the active sort mode. "manual"
+// keeps the exact stored order (including any folder/bookmark interleaving from
+// drag); other modes put folders before bookmarks, each sorted by the key.
+/** @param {BookmarkTreeNode[]} nodes @returns {BookmarkTreeNode[]} */
+function sortBookmarkNodes(nodes) {
+  const list = Array.isArray(nodes) ? nodes : [];
+  const mode = getBookmarkSort();
+  if (mode === "manual") return list.slice();
+  const cmp = _bookmarkComparator(mode);
+  const folders = list.filter(n => n.type === "folder").sort(cmp);
+  const marks   = list.filter(n => n.type !== "folder").sort(cmp);
+  return [...folders, ...marks];
+}
+// ── END BOOKMARK_SORT ──
+
+// Build the two edge-anchored mobile swipe actions: 삭제 (left edge, revealed by
+// swiping the row right) and 수정 (right edge, revealed by swiping left). They sit
+// behind the opaque .bm-row-content, which slides to expose them. Hidden on
+// desktop via CSS. Returns the buttons so the row can append them under content.
+/** @param {string} label @param {() => void} editAction @param {() => void} deleteAction */
+function _buildSwipeActions(label, editAction, deleteAction) {
+  const del = el("button", {
+    className: "bm-swipe-action bm-swipe-delete",
+    type: "button",
+    "aria-label": `${label} 삭제`,
+  }, el("span", { className: "bm-swipe-label" }, "삭제"));
+  del.addEventListener("click", deleteAction);
+  const edit = el("button", {
+    className: "bm-swipe-action bm-swipe-edit",
+    type: "button",
+    "aria-label": `${label} 수정`,
+  }, el("span", { className: "bm-swipe-label" }, "수정"));
+  edit.addEventListener("click", editAction);
+  return { del, edit };
+}
+
 function _buildBookmarkItem(bm, depth) {
   const li = el("li", { role: "treeitem", className: "bm-bookmark", "data-id": bm.id, tabIndex: "-1" });
   if (depth > 0) li.setAttribute("aria-level", String(depth + 1));
   const isActive = _isActiveBookmark(bm);
   const row = el("div", { className: "bm-bookmark-row" + (isActive ? " bm-active" : "") });
+  // Always wire the gesture handler: it owns mobile swipe-to-reveal (rename/
+  // delete) too, which must work under any sort. Drag-to-reorder self-gates on
+  // the active sort inside the handler.
   _setupDragHandle(li, row);
   const content = el("div", { className: "bm-row-content" });
   const typeIcon = el("span", { className: "bm-bookmark-type-icon" });
@@ -946,6 +1162,7 @@ function _buildBookmarkItem(bm, depth) {
       closeSwipedRow(null);
       return;
     }
+    markBookmarkViewed(bm.id);
     closeBookmarkDrawer();
     navigate(_bookmarkHref(bm));
   });
@@ -955,13 +1172,20 @@ function _buildBookmarkItem(bm, depth) {
     openSaveModal("edit", { existingId: bm.id });
   };
   const deleteAction = () => {
-    if (!window.confirm(`"${bm.label}" 북마크를 삭제할까요?`)) return;
-    closeSwipedRow(null);
-    const store = loadBookmarks();
-    removeItemById(store, bm.id);
-    saveBookmarks(store);
-    _rerenderActiveBookmarkTree();
-    refreshBookmarkHeaderBtn();
+    openConfirmModal({
+      title: "북마크 삭제",
+      message: `"${bm.label}" 북마크를 삭제할까요?`,
+      confirmLabel: "삭제",
+      onConfirm: () => {
+        closeSwipedRow(null);
+        _forgetViewed(bm.id);
+        const store = loadBookmarks();
+        removeItemById(store, bm.id);
+        saveBookmarks(store);
+        _rerenderActiveBookmarkTree();
+        refreshBookmarkHeaderBtn();
+      },
+    });
   };
 
   const actions = el("div", { className: "bm-item-actions" });
@@ -972,29 +1196,15 @@ function _buildBookmarkItem(bm, depth) {
   actions.appendChild(editBtn);
   actions.appendChild(delBtn);
 
-  // Mobile swipe-to-reveal actions panel (hidden on desktop via CSS).
-  // Slides in from the right and overlays the right edge of the row content.
-  const mobileActions = el("div", { className: "bm-row-actions-mobile", "aria-hidden": "true" });
-  const mEditBtn = el("button", {
-    className: "bm-mobile-action-btn bm-mobile-edit-btn",
-    type: "button",
-    "aria-label": `${bm.label} 수정`,
-  }, "수정");
-  mEditBtn.addEventListener("click", editAction);
-  const mDelBtn = el("button", {
-    className: "bm-mobile-action-btn bm-mobile-delete-btn",
-    type: "button",
-    "aria-label": `${bm.label} 삭제`,
-  }, "삭제");
-  mDelBtn.addEventListener("click", deleteAction);
-  mobileActions.appendChild(mEditBtn);
-  mobileActions.appendChild(mDelBtn);
+  // Mobile swipe actions (edge-anchored, hidden on desktop): 삭제 left, 수정 right.
+  const { del, edit } = _buildSwipeActions(bm.label ?? "", editAction, deleteAction);
 
   content.appendChild(typeIcon);
   content.appendChild(link);
   content.appendChild(actions);
+  row.appendChild(del);
+  row.appendChild(edit);
   row.appendChild(content);
-  row.appendChild(mobileActions);
   li.appendChild(row);
   return li;
 }
@@ -1242,6 +1452,7 @@ function _buildFolderItem(folder, depth) {
   });
   if (depth > 0) li.setAttribute("aria-level", String(depth + 1));
   const row = el("div", { className: "bm-folder-row" });
+  // See bookmark row: handler owns swipe-to-reveal; reorder self-gates on sort.
   _setupDragHandle(li, row);
   const content = el("div", { className: "bm-row-content" });
   const toggle = el("span", { className: "bm-folder-toggle", "aria-hidden": "true" });
@@ -1249,7 +1460,7 @@ function _buildFolderItem(folder, depth) {
   const name = el("span", { className: "bm-folder-name" }, folder.name);
   row.addEventListener("click", (e) => {
     const t = e.target;
-    if (t instanceof Element && t.closest(".bm-item-actions, .bm-row-actions-mobile")) return;
+    if (t instanceof Element && t.closest(".bm-item-actions, .bm-swipe-action")) return;
     if (row.classList.contains("bm-swiped")) {
       closeSwipedRow(null);
       return;
@@ -1269,7 +1480,7 @@ function _buildFolderItem(folder, depth) {
     if (!newName || !newName.trim()) return;
     const store = loadBookmarks();
     const found = _findItemInStore(store, folder.id);
-    if (found) found.item.name = newName.trim();
+    if (found) { found.item.name = newName.trim(); found.item.updatedAt = Date.now(); }
     saveBookmarks(store);
     _rerenderActiveBookmarkTree();
   };
@@ -1278,12 +1489,26 @@ function _buildFolderItem(folder, depth) {
     const msg = childCount > 0
       ? `"${folder.name}" 폴더와 안의 항목 ${childCount}개를 모두 삭제할까요?`
       : `"${folder.name}" 폴더를 삭제할까요?`;
-    if (!window.confirm(msg)) return;
-    closeSwipedRow(null);
-    const store = loadBookmarks();
-    removeItemById(store, folder.id);
-    saveBookmarks(store);
-    _rerenderActiveBookmarkTree();
+    openConfirmModal({
+      title: "폴더 삭제",
+      message: msg,
+      confirmLabel: "삭제",
+      onConfirm: () => {
+        closeSwipedRow(null);
+        const store = loadBookmarks();
+        // Cascade: forget per-device viewed timestamps for every nested bookmark,
+        // mirroring single-bookmark delete, so the map doesn't accrue stale ids.
+        const found = _findItemInStore(store, folder.id);
+        if (found && found.item.type === "folder") {
+          _walkBookmarks(found.item.children, (it) => {
+            if (it.type === "bookmark") _forgetViewed(it.id);
+          });
+        }
+        removeItemById(store, folder.id);
+        saveBookmarks(store);
+        _rerenderActiveBookmarkTree();
+      },
+    });
   };
 
   const actions = el("div", { className: "bm-item-actions" });
@@ -1294,30 +1519,18 @@ function _buildFolderItem(folder, depth) {
   actions.appendChild(renameBtn);
   actions.appendChild(delBtn);
 
-  const mobileActions = el("div", { className: "bm-row-actions-mobile", "aria-hidden": "true" });
-  const mRenameBtn = el("button", {
-    className: "bm-mobile-action-btn bm-mobile-edit-btn",
-    type: "button",
-    "aria-label": `${folder.name} 수정`,
-  }, "수정");
-  mRenameBtn.addEventListener("click", renameAction);
-  const mDelBtn = el("button", {
-    className: "bm-mobile-action-btn bm-mobile-delete-btn",
-    type: "button",
-    "aria-label": `${folder.name} 삭제`,
-  }, "삭제");
-  mDelBtn.addEventListener("click", deleteAction);
-  mobileActions.appendChild(mRenameBtn);
-  mobileActions.appendChild(mDelBtn);
+  // Mobile swipe actions (edge-anchored, hidden on desktop): 삭제 left, 수정 right.
+  const { del, edit } = _buildSwipeActions(folder.name, renameAction, deleteAction);
 
   content.appendChild(toggle);
   content.appendChild(name);
   content.appendChild(actions);
+  row.appendChild(del);
+  row.appendChild(edit);
   row.appendChild(content);
-  row.appendChild(mobileActions);
   li.appendChild(row);
   const children = el("ul", { role: "group", className: "bm-folder-children" });
-  for (const child of (folder.children || [])) {
+  for (const child of sortBookmarkNodes(folder.children || [])) {
     children.appendChild(child.type === "folder"
       ? _buildFolderItem(child, depth + 1)
       : _buildBookmarkItem(child, depth + 1));
@@ -1335,6 +1548,24 @@ function _buildFolderItem(folder, depth) {
  * on each bookmark's own `<a>` for keyboard reachability.
  * @param {HTMLElement} [target]
  */
+// Empty-state placeholder for the bookmark list (drawer + full view). Beyond the
+// "none yet" line it explains how bookmarks are created, so the screen is
+// actionable rather than a dead end. The icon matches the header add affordance.
+function _buildEmptyState() {
+  const li = el("li", { className: "bm-empty", role: "presentation" });
+  const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  icon.setAttribute("viewBox", "0 -960 960 960");
+  icon.setAttribute("fill", "currentColor");
+  icon.setAttribute("aria-hidden", "true");
+  icon.setAttribute("class", "bm-empty-icon");
+  _setBookmarkBtnIcon(/** @type {SVGElement} */ (icon), false);
+  li.appendChild(icon);
+  li.appendChild(el("p", { className: "bm-empty-title" }, "저장된 북마크가 없습니다"));
+  li.appendChild(el("p", { className: "bm-empty-desc" },
+    "읽는 화면 오른쪽 위의 북마크 버튼을 눌러 지금 보는 장을 저장하세요. 절을 선택하면 원하는 구절만 북마크할 수도 있습니다."));
+  return li;
+}
+
 function renderBookmarkTree(target = $bookmarkDrawerBody) {
   _renderPathname = window.location.pathname;
   // The previously swiped row may be replaced when we re-render; drop the
@@ -1343,10 +1574,10 @@ function renderBookmarkTree(target = $bookmarkDrawerBody) {
   clearNode(target);
   const store = loadBookmarks();
   if (!store.length) {
-    target.appendChild(el("li", { className: "bm-empty", role: "presentation" }, "저장된 북마크가 없습니다."));
+    target.appendChild(_buildEmptyState());
     return;
   }
-  for (const item of store) {
+  for (const item of sortBookmarkNodes(store)) {
     target.appendChild(item.type === "folder"
       ? _buildFolderItem(item, 0)
       : _buildBookmarkItem(item, 0));
@@ -1402,33 +1633,34 @@ function renderBookmarksView() {
   renderBookmarkTree(tree);
 }
 
-// Build the right-aligned action cluster for the bookmark tab view's title row:
-// a "+" (새 폴더) button and a "⋯" (더 보기) button with a dismissible menu
-// (내보내기 / 가져오기). Returns a wrapper node appended into #page-title.
-// Header-icon styling matches buildSettingsTrigger/buildBookmarkHeaderBtn via
-// the .title-action-btn class (44px touch target from --icon-btn-touch).
+// Build an inline-SVG glyph for a menu item from one or more stroked paths.
+// Matches the hairline weight of the other header icons (~1.7 stroke).
+/** @param {string[]} paths @returns {SVGSVGElement} */
+function _bmMenuIcon(paths) {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("fill", "none");
+  svg.setAttribute("aria-hidden", "true");
+  for (const d of paths) {
+    const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    p.setAttribute("d", d);
+    p.setAttribute("stroke", "currentColor");
+    p.setAttribute("stroke-width", "1.7");
+    p.setAttribute("stroke-linecap", "round");
+    p.setAttribute("stroke-linejoin", "round");
+    svg.appendChild(p);
+  }
+  return svg;
+}
+
+// Build the right-aligned action cluster for the bookmark tab view's title row.
+// Following Apple Music's pattern, the only header affordance is a single "⋯"
+// (더 보기) button; every global management action lives inside its dismissible
+// popup menu (새 폴더 / 내보내기 / 가져오기). Each menu row carries an SF-style
+// glyph on the trailing edge (HIG). Returns a wrapper appended into #page-title.
+// .title-action-btn mirrors the other header icon buttons (44px touch target).
 function buildBmViewActions() {
   const wrap = el("div", { className: "title-actions" });
-
-  // ── "+" 새 폴더 ──
-  const addSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  addSvg.setAttribute("viewBox", "0 0 24 24");
-  addSvg.setAttribute("fill", "none");
-  addSvg.setAttribute("aria-hidden", "true");
-  const addPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
-  addPath.setAttribute("d", "M12 5v14M5 12h14");
-  addPath.setAttribute("stroke", "currentColor");
-  addPath.setAttribute("stroke-width", "1.8");
-  addPath.setAttribute("stroke-linecap", "round");
-  addSvg.appendChild(addPath);
-  const addBtn = el("button", {
-    className: "title-action-btn",
-    type: "button",
-    "aria-label": "새 폴더",
-  }, addSvg);
-  addBtn.addEventListener("click", () => {
-    openNewFolderModal((_newId) => { _rerenderActiveBookmarkTree(); });
-  });
 
   // ── "⋯" 더 보기 + menu ──
   const moreSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -1451,10 +1683,15 @@ function buildBmViewActions() {
   }, moreSvg);
 
   const menu = el("div", { className: "title-action-menu", role: "menu", "aria-label": "더 보기", hidden: "" });
-  const exportItem = el("button", { className: "title-action-menu-item", type: "button", role: "menuitem" }, "내보내기");
-  const importItem = el("button", { className: "title-action-menu-item", type: "button", role: "menuitem" }, "가져오기");
-  menu.appendChild(exportItem);
-  menu.appendChild(importItem);
+  /** @type {{ item: HTMLElement, mode: string }[]} */
+  const sortItems = [];
+
+  // The menu DOM outlives a tree re-render (only the tree is rebuilt when sort
+  // changes), so refresh the radio checks from the live preference on each open.
+  function syncSortChecks() {
+    const cur = getBookmarkSort();
+    for (const { item, mode } of sortItems) item.setAttribute("aria-checked", String(mode === cur));
+  }
 
   function closeMenu() {
     if (menu.hidden) return;
@@ -1465,6 +1702,7 @@ function buildBmViewActions() {
   }
   function openMenu() {
     if (!menu.hidden) return;
+    syncSortChecks();
     menu.hidden = false;
     moreBtn.setAttribute("aria-expanded", "true");
     // Capture phase so an outside click closes before it acts elsewhere.
@@ -1495,17 +1733,95 @@ function buildBmViewActions() {
     if (menu.hidden) openMenu();
     else closeMenu();
   });
-  exportItem.addEventListener("click", () => {
-    closeMenu();
+
+  // ── 정렬 group (menuitemradio, 현재 선택에 체크) ──
+  // Per-device sort preference (localStorage), so selecting one re-renders the
+  // tree in place. Leading checkmark slot mirrors Apple Music's sort group.
+  const sortGroup = el("div", { className: "title-action-menu-group", role: "group", "aria-label": "정렬" });
+  /** @param {string} label @param {string} mode */
+  function addSortItem(label, mode) {
+    const item = el("button", {
+      className: "title-action-menu-item title-action-menu-item--sort",
+      type: "button",
+      role: "menuitemradio",
+      "aria-checked": String(getBookmarkSort() === mode),
+    });
+    // The check glyph is always present; CSS reveals it only on the active row
+    // (aria-checked), so syncSortChecks just flips the attribute.
+    const check = el("span", { className: "title-action-menu-check", "aria-hidden": "true" });
+    check.appendChild(_bmMenuIcon(["M5 12.5 10 17.5 19 7"]));
+    item.appendChild(check);
+    item.appendChild(el("span", { className: "title-action-menu-label" }, label));
+    item.addEventListener("click", () => {
+      setBookmarkSort(mode);
+      closeMenu();
+      _rerenderActiveBookmarkTree();
+    });
+    sortGroup.appendChild(item);
+    sortItems.push({ item, mode });
+    return item;
+  }
+  addSortItem("제목", "title");
+  addSortItem("직접 정렬", "manual");
+  addSortItem("추가된 날짜", "created");
+  addSortItem("최근에 본 날짜", "viewed");
+  addSortItem("수정한 날짜", "modified");
+
+  // ── 액션 group ──
+  const actionGroup = el("div", { className: "title-action-menu-group", role: "group" });
+  // Build a menu row: leading SF-style glyph + label. The glyph sits in the
+  // same far-left column as the sort group's checkmark (deliberate HIG
+  // deviation) so both groups share one icon column and one label column.
+  /** @param {string} label @param {string[]} iconPaths @param {() => void} onActivate */
+  function addMenuItem(label, iconPaths, onActivate) {
+    const item = el("button", { className: "title-action-menu-item title-action-menu-item--action", type: "button", role: "menuitem" });
+    const glyph = el("span", { className: "title-action-menu-icon", "aria-hidden": "true" });
+    glyph.appendChild(_bmMenuIcon(iconPaths));
+    item.appendChild(glyph);
+    item.appendChild(el("span", { className: "title-action-menu-label" }, label));
+    item.addEventListener("click", () => {
+      closeMenu();
+      onActivate();
+    });
+    actionGroup.appendChild(item);
+    return item;
+  }
+
+  // 새 폴더 — folder.badge.plus
+  addMenuItem("새 폴더", [
+    "M3 7.5a2 2 0 0 1 2-2h3.6l1.8 2H19a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7.5Z",
+    "M12 11.5v4",
+    "M10 13.5h4",
+  ], () => {
+    openNewFolderModal((_newId) => { _rerenderActiveBookmarkTree(); });
+  });
+  // 내보내기 — square.and.arrow.up. Arrow + tray are a true vertical mirror of
+  // 가져오기, and both arrowheads stop one unit above the tray (y12 vs tray y13)
+  // so neither fuses with it — the head fusing into the tray is what made the
+  // down arrow read as smaller (optical illusion, not actual size).
+  addMenuItem("내보내기", [
+    "M12 12V4",
+    "M8.5 7.5 12 4l3.5 3.5",
+    "M5 13v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5",
+  ], () => {
     exportBookmarks();
   });
-  importItem.addEventListener("click", () => {
-    closeMenu();
+  // 가져오기 — square.and.arrow.down (mirror of 내보내기 above)
+  addMenuItem("가져오기", [
+    "M12 4v8",
+    "M8.5 8.5 12 12l3.5-3.5",
+    "M5 13v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5",
+  ], () => {
     $bmImportInput.value = "";
     $bmImportInput.click();
   });
 
-  wrap.appendChild(addBtn);
+  // Action group on top, then a single hairline divider, then the 정렬 group
+  // (Apple Music keeps one group divider; per-item lines were dropped).
+  menu.appendChild(actionGroup);
+  menu.appendChild(el("div", { className: "title-action-menu-sep", role: "separator" }));
+  menu.appendChild(sortGroup);
+
   wrap.appendChild(moreBtn);
   wrap.appendChild(menu);
   return wrap;
@@ -1759,7 +2075,7 @@ function _commitNewFolder() {
   $bmNewFolderInput.removeAttribute("aria-invalid");
   const store = loadBookmarks();
   const id = generateId();
-  store.push({ type: "folder", id, name, children: [], expanded: false });
+  store.push({ type: "folder", id, name, children: [], expanded: false, createdAt: Date.now() });
   saveBookmarks(store);
   _rerenderActiveBookmarkTree();
   const cb = _bmNewFolderCallback;
@@ -1775,6 +2091,7 @@ function commitSaveBookmark(existingId, label, note, folderId, bookId, chapter, 
       found.item.label = label;
       found.item.note = note;
       found.item.verseSpec = verseSpec;
+      found.item.updatedAt = Date.now();
       const updatedItem = found.item;
       removeItemById(store, existingId);
       insertItem(store, folderId, updatedItem);
@@ -1883,6 +2200,67 @@ function openMergeDialog(candidates, incomingSpec, mode, fallbackContext = null)
   };
 
   $bmMergeCancel.onclick = cleanup;
+}
+
+// ── Destructive confirm modal ──
+// Reusable confirmation for destructive actions (bookmark/folder delete,
+// header bookmark toggle-off). Replaces the old native window.confirm() so the
+// prompt is themed, focus-trapped, and stacks above the drawer/save modals.
+/**
+ * @param {{ title: string, message: string, confirmLabel?: string, onConfirm: () => void }} opts
+ */
+function openConfirmModal({ title, message, confirmLabel = "삭제", onConfirm }) {
+  $bmConfirmTitle.textContent = title;
+  $bmConfirmBody.textContent = message;
+  $bmConfirmOk.textContent = confirmLabel;
+  _bmConfirmLastFocus = /** @type {HTMLElement | null} */ (document.activeElement);
+  $bmConfirmScrim.hidden = false;
+  $bmConfirmModal.hidden = false;
+  $bmConfirmOk.onclick = () => {
+    closeConfirmModal();
+    onConfirm();
+  };
+  _bmConfirmModalTrap = trapFocus($bmConfirmModal);
+  // Focus the safe (cancel) action by default — destructive button is opt-in.
+  requestAnimationFrame(() => $bmConfirmCancel.focus());
+}
+
+function closeConfirmModal() {
+  if ($bmConfirmModal.hidden) return;
+  $bmConfirmScrim.hidden = true;
+  $bmConfirmModal.hidden = true;
+  $bmConfirmOk.onclick = null;
+  if (_bmConfirmModalTrap) { _bmConfirmModalTrap(); _bmConfirmModalTrap = null; }
+  if (_bmConfirmLastFocus && _bmConfirmLastFocus.focus) {
+    try { _bmConfirmLastFocus.focus(); } catch {}
+  }
+  _bmConfirmLastFocus = null;
+}
+
+// Header bookmark toggle-off: confirm, then drop every bookmark in this chapter.
+/**
+ * @param {BookmarkTreeBookmark[]} candidates
+ */
+function confirmRemoveChapterBookmarks(candidates) {
+  if (!candidates.length) return;
+  openConfirmModal({
+    title: "북마크 삭제",
+    message: _chapterDeleteMessage(candidates),
+    confirmLabel: "삭제",
+    onConfirm: () => {
+      const store = loadBookmarks();
+      for (const bm of candidates) {
+        // Mirror swipe-row/folder delete: clear the per-device viewed timestamp
+        // so removed ids don't accrue as stale entries in the viewed map.
+        _forgetViewed(bm.id);
+        removeItemById(store, bm.id);
+      }
+      saveBookmarks(store);
+      _rerenderActiveBookmarkTree();
+      refreshBookmarkHeaderBtn();
+      announce("북마크를 삭제했습니다.");
+    },
+  });
 }
 
 // ── Export / Import bookmarks (Phase 2a) ──
@@ -2118,6 +2496,9 @@ $bookmarkScrim.addEventListener("click", closeBookmarkDrawer);
 $bmSaveClose.addEventListener("click", closeSaveModal);
 $bmSaveScrim.addEventListener("click", closeSaveModal);
 
+$bmConfirmCancel.addEventListener("click", closeConfirmModal);
+$bmConfirmScrim.addEventListener("click", closeConfirmModal);
+
 $bmNewFolderClose.addEventListener("click", closeNewFolderModal);
 $bmNewFolderScrim.addEventListener("click", closeNewFolderModal);
 $bmNewFolderCancel.addEventListener("click", closeNewFolderModal);
@@ -2159,7 +2540,7 @@ $bmAddFolderBtn.addEventListener("click", () => {
     const name = input.value.trim();
     if (!name) { cleanup(); return; }
     const store = loadBookmarks();
-    store.push({ type: "folder", id: generateId(), name, children: [], expanded: false });
+    store.push({ type: "folder", id: generateId(), name, children: [], expanded: false, createdAt: Date.now() });
     saveBookmarks(store);
     _rerenderActiveBookmarkTree();
     cleanup();
@@ -2234,6 +2615,7 @@ $bmImportScrim.addEventListener("click", () => {
 
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
+    if (!$bmConfirmModal.hidden) { closeConfirmModal(); return; }
     if (!$bmImportModal.hidden) {
       $bmImportScrim.hidden = true;
       $bmImportModal.hidden = true;
@@ -2388,6 +2770,10 @@ window.buildHomeBtn = buildHomeBtn;
 window.buildBookmarkHeaderBtn = buildBookmarkHeaderBtn;
 window.openBookmarkDrawer = openBookmarkDrawer;
 window.closeBookmarkDrawer = closeBookmarkDrawer;
+// Exposed so route() can dismiss the destructive-confirm overlay on any nav
+// (e.g. OS back gesture mid-confirm) — its scrim would otherwise persist over
+// the rebuilt view. Safe to call when already hidden (self-guards).
+window.closeConfirmModal = closeConfirmModal;
 window.renderBookmarkTree = renderBookmarkTree;
 // Re-render whichever bookmark surface is mounted (drawer OR /bookmarks full
 // view). Sync layer + mutation flows use this so the visible tree refreshes.

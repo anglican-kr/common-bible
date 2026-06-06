@@ -156,8 +156,11 @@ function saveLocal(doc) {
  * @returns {string}
  */
 function _contentKey(node) {
-  const { id, type, name, bookId, chapter, vref, verseSpec, color, label, note } = node;
-  return JSON.stringify({ id, type, name, bookId, chapter, vref, verseSpec, color, label, note });
+  // createdAt/updatedAt are content: include them so an edit that bumps only
+  // updatedAt (e.g. a no-op re-save) still bumps _u and therefore syncs. Without
+  // this, "수정한 날짜" could change locally yet never propagate after merge.
+  const { id, type, name, bookId, chapter, vref, verseSpec, color, label, note, createdAt, updatedAt } = node;
+  return JSON.stringify({ id, type, name, bookId, chapter, vref, verseSpec, color, label, note, createdAt, updatedAt });
 }
 
 // Save a bookmark tree into v2 flat-map, preserving _u for unchanged items
