@@ -1627,8 +1627,8 @@ function buildBmViewActions() {
     sortItems.push({ item, mode });
     return item;
   }
-  addSortItem("직접 정렬", "manual");
   addSortItem("제목", "title");
+  addSortItem("직접 정렬", "manual");
   addSortItem("추가된 날짜", "created");
   addSortItem("최근에 본 날짜", "viewed");
   addSortItem("수정한 날짜", "modified");
