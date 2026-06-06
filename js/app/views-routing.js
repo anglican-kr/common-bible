@@ -173,7 +173,7 @@ let appVersion = null;
   const SYNC_FEEDBACK_MS   = 900;  // how long the spinner stays after trigger
   // Modal/sheet roots whose internal scroll must not be hijacked by PTR. We
   // walk e.target to see if the touch landed inside one of these.
-  const MODAL_SELECTORS = "#bookmark-drawer, #install-modal, #bm-save-modal, #bm-new-folder-modal, #bm-import-modal, #bm-merge-modal, #drive-disconnect-modal, .settings-popover, .chapter-popover";
+  const MODAL_SELECTORS = "#bookmark-drawer, #install-modal, #bm-save-modal, #bm-new-folder-modal, #bm-import-modal, #bm-merge-modal, #bm-confirm-modal, #bm-chapter-delete-modal, #drive-disconnect-modal, .settings-popover, .chapter-popover";
 
   /** @type {HTMLElement | null} */
   let indicator = null;
