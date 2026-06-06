@@ -1,7 +1,7 @@
 # ADR-010: 즐겨찾기(북마크) 기능 설계
 
 - 일시: 2026-04-25
-- 개정: 2026-04-26 (UI 개선), 2026-05-03 (모바일 행 UX)
+- 개정: 2026-04-26 (UI 개선), 2026-05-03 (모바일 행 UX), 2026-06-06 (양방향 스와이프 + full-swipe)
 - 상태: 승인됨
 
 ## 결정
@@ -334,3 +334,19 @@ li.bm-bookmark
 > 또한 `.bm-row-content`에 `min-height: 44px`를 적용해 폴더와 북마크 행 높이를 일치시키고
 > 터치 타겟을 WCAG 기준에 맞춤. `prefers-reduced-motion` 처리 대상도
 > `.bm-row-content` → `.bm-row-actions-mobile`로 이동.
+
+> **개정 (2026-06-06): 양방향 스와이프 + full-swipe (iOS Files/Mail 벤치마크).**
+> 단방향(좌측 스와이프 → 우측 수정/삭제 2버튼 패널) 모델을 **양방향 edge-flush 스와이프 액션**으로 재구성.
+> 모델을 "패널 오버레이"에서 **"콘텐츠 슬라이드"**로 전환 — 불투명한 `.bm-row-content`(z-index:1)가
+> 슬라이더가 되어 행 양 끝에 깔린 단일 액션(`.bm-swipe-action`)을 노출한다.
+> - **왼쪽으로 스와이프** → 콘텐츠 좌측 이동 → 우측 가장자리 **수정**(`.bm-swipe-edit`, 중립 accent).
+> - **오른쪽으로 스와이프** → 콘텐츠 우측 이동 → 좌측 가장자리 **삭제**(`.bm-swipe-delete`, 빨강).
+> - **full-swipe**: 행 너비 ×0.45(최소 reveal+40px) 이상 밀고 놓으면 해당 액션 즉시 실행
+>   (armed 상태에서 액션 배경이 행 전체로 확장 — iOS 시각 큐). 절반 미만이면 닫힘,
+>   `SWIPE_REVEAL_PX/2` 이상이면 버튼 고정(reveal). `SWIPE_REVEAL_PX` 140→**88**(단일 버튼 폭),
+>   토큰 `--swipe-reveal: 88px`로 JS·CSS 동기화.
+> 상태는 `bm-swiped`(열림) + 방향 클래스 `bm-swiped-edit`/`bm-swiped-delete`로 추적,
+> `_openSwipedRow(row, dir)`·`_resetRowSwipe(row)`. full-swipe 실행은 노출된 버튼의 `.click()` 위임
+> (확인 다이얼로그·핸들러 재사용). 텍스트 오버레이 가림 이슈는 콘텐츠가 함께 미끄러지므로 자연 해소.
+> `prefers-reduced-motion`은 `.bm-row-content { transition: none }`. 순수 상태 로직은 유닛
+> (`SWIPED_ROW` 블록), 제스처·full-swipe는 e2e.

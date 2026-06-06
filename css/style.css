@@ -133,6 +133,7 @@
 
   /* ── Control sizing (HIG) ── */
   --touch-target: 44px;   /* 최소 탭 영역 (HIG) */
+  --swipe-reveal: 88px;   /* 모바일 행 스와이프 액션 폭 (= JS SWIPE_REVEAL_PX) */
   --control-h: 36px;
   --control-h-sm: 28px;
   --icon-btn: 40px;
@@ -4601,8 +4602,8 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   min-width: 0;
 }
 
-/* Mobile-only swipe-to-reveal panel; shown on viewports ≤768px (see ADR-010). */
-.bm-row-actions-mobile {
+/* Mobile-only swipe actions; shown on viewports ≤768px (see ADR-010). */
+.bm-swipe-action {
   display: none;
 }
 
@@ -5373,9 +5374,11 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
     padding: var(--space-3) var(--space-4);
     background: var(--bg);
     position: relative;
-    z-index: 0;
+    z-index: 1; /* slider sits above the edge-anchored actions, hiding them when closed */
     min-height: 3.5rem;
     box-sizing: border-box;
+    transition: transform var(--duration-base) cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    will-change: transform;
   }
 
   .bm-bookmark-row.bm-active {
@@ -5393,51 +5396,61 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
     background: transparent;
   }
 
-  /* Action panel slides in from the right and overlays the content;
-     the row text stays in place per the mobile UX request. */
-  .bm-row-actions-mobile {
+  /* Edge-anchored swipe actions behind the sliding content (ADR-010 개정):
+     삭제 on the left (revealed by swiping right), 수정 on the right (swiping left). */
+  .bm-swipe-action {
     display: flex;
+    align-items: center;
+    justify-content: center;
     position: absolute;
     top: 0;
-    right: 0;
     bottom: 0;
-    width: 140px;
-    z-index: 1;
-    transform: translateX(100%);
-    transition: transform var(--duration-base) cubic-bezier(0.25, 0.46, 0.45, 0.94);
-    will-change: transform;
-  }
-
-  .bm-bookmark-row.bm-swiped .bm-row-actions-mobile,
-  .bm-folder-row.bm-swiped .bm-row-actions-mobile {
-    transform: translateX(0);
-  }
-
-  /* Disable the snap-back transition while the finger is dragging the row. */
-  .bm-bookmark-row.bm-swiping .bm-row-actions-mobile,
-  .bm-folder-row.bm-swiping .bm-row-actions-mobile {
-    transition: none;
-  }
-
-  .bm-mobile-action-btn {
-    flex: 1;
+    z-index: 0;
+    min-width: var(--swipe-reveal);
+    padding: 0 var(--space-4);
     border: none;
     font-family: inherit;
     font-size: var(--font-sm);
     color: #fff;
     cursor: pointer;
-    padding: 0;
-    min-height: 44px;
     touch-action: manipulation;
   }
 
-  .bm-mobile-edit-btn {
+  .bm-swipe-delete {
+    left: 0;
+    background: #c0392b;
+  }
+
+  .bm-swipe-edit {
+    right: 0;
     background: var(--accent);
     color: var(--bg);
   }
 
-  .bm-mobile-delete-btn {
-    background: #c0392b;
+  /* Snap-open states: slide the content to expose one edge's action. */
+  .bm-bookmark-row.bm-swiped-edit .bm-row-content,
+  .bm-folder-row.bm-swiped-edit .bm-row-content {
+    transform: translateX(calc(-1 * var(--swipe-reveal)));
+  }
+
+  .bm-bookmark-row.bm-swiped-delete .bm-row-content,
+  .bm-folder-row.bm-swiped-delete .bm-row-content {
+    transform: translateX(var(--swipe-reveal));
+  }
+
+  /* Full-swipe arm: the target action fills the row behind the content. */
+  .bm-swipe-armed-edit .bm-swipe-edit {
+    left: 0;
+  }
+
+  .bm-swipe-armed-delete .bm-swipe-delete {
+    right: 0;
+  }
+
+  /* Disable the snap transition while the finger drives the slide. */
+  .bm-bookmark-row.bm-swiping .bm-row-content,
+  .bm-folder-row.bm-swiping .bm-row-content {
+    transition: none;
   }
 }
 
@@ -5451,7 +5464,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   #bookmark-drawer.drawer-closing {
     animation: none;
   }
-  .bm-row-actions-mobile {
+  .bm-row-content {
     transition: none;
   }
 }

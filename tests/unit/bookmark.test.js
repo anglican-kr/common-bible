@@ -190,7 +190,7 @@ function loadDragCore() {
 
 // ── SWIPED_ROW loader ────────────────────────────────────────────────────────
 // `closeSwipedRow`/`_openSwipedRow` mutate row.classList + read
-// row.querySelector(".bm-row-actions-mobile") + write actions.style.transform.
+// row.querySelector(".bm-row-content") + clear content.style.transform.
 // `closeSwipedRowIfOutside` uses `_swipedRow.contains(target) && target
 // instanceof Node`. We provide a minimal Element/Node stub that supports
 // just those.
@@ -214,14 +214,16 @@ function loadSwipedRow() {
     }
     /** Add a child as a descendant for `.contains()` to find. */
     appendChild(node) { this._descendants.add(node); return node; }
-    setActionsChild(actions) { this._actionsChild = actions; }
+    setContentChild(content) { this._contentChild = content; }
     querySelector(selector) {
-      if (selector === ".bm-row-actions-mobile") return this._actionsChild;
+      if (selector === ".bm-row-content") return this._contentChild;
       return null;
     }
     contains(target) { return this === target || this._descendants.has(target); }
   }
-  class ActionsEl extends Element {
+  // Stub for the sliding .bm-row-content layer; the swipe helpers clear its
+  // inline transform when opening/closing.
+  class ContentEl extends Element {
     constructor() {
       super();
       this.style = { transform: "" };
@@ -239,7 +241,7 @@ function loadSwipedRow() {
 
   return {
     ctx,
-    Node, Element, ActionsEl,
+    Node, Element, ContentEl,
     closeSwipedRow: ctx.closeSwipedRow,
     _openSwipedRow: ctx._openSwipedRow,
     resetSwipedRow: ctx.resetSwipedRow,
@@ -743,47 +745,49 @@ test('closeSwipedRow: when nothing swiped → no-op', () => {
 test('closeSwipedRow: when current row is the "except" → no-op (kept open)', () => {
   const h = loadSwipedRow();
   const row = new h.Element();
-  const actions = new h.ActionsEl();
-  row.setActionsChild(actions);
-  h._openSwipedRow(row);
+  const content = new h.ContentEl();
+  row.setContentChild(content);
+  h._openSwipedRow(row, "edit");
   // Now _swipedRow is `row`. close(row) should leave it alone.
   h.closeSwipedRow(row);
   assert.equal(h.peekSwipedRow(), row);
 });
 
-test('closeSwipedRow: closes when except differs — strips bm-swiped + clears actions transform', () => {
+test('closeSwipedRow: closes when except differs — strips swipe classes + clears content transform', () => {
   const h = loadSwipedRow();
   const row = new h.Element();
-  const actions = new h.ActionsEl();
-  row.setActionsChild(actions);
-  h._openSwipedRow(row);
+  const content = new h.ContentEl();
+  row.setContentChild(content);
+  h._openSwipedRow(row, "delete");
+  assert.ok(row.classList.contains("bm-swiped-delete"));
   // Different except (e.g. about to open another row)
   h.closeSwipedRow(new h.Element());
   assert.equal(h.peekSwipedRow(), null);
   assert.equal(row.classList.contains("bm-swiped"), false);
-  assert.equal(actions.style.transform, "");
+  assert.equal(row.classList.contains("bm-swiped-delete"), false);
+  assert.equal(content.style.transform, "");
 });
 
 // ── _openSwipedRow ───────────────────────────────────────────────────────────
 
-test('_openSwipedRow: marks new row + clears prior swiped row', () => {
+test('_openSwipedRow: marks new row (with direction) + clears prior swiped row', () => {
   const h = loadSwipedRow();
   const rowA = new h.Element();
-  const actionsA = new h.ActionsEl();
-  rowA.setActionsChild(actionsA);
+  rowA.setContentChild(new h.ContentEl());
   const rowB = new h.Element();
-  const actionsB = new h.ActionsEl();
-  rowB.setActionsChild(actionsB);
+  rowB.setContentChild(new h.ContentEl());
 
-  h._openSwipedRow(rowA);
+  h._openSwipedRow(rowA, "edit");
   assert.equal(h.peekSwipedRow(), rowA);
   assert.ok(rowA.classList.contains("bm-swiped"));
+  assert.ok(rowA.classList.contains("bm-swiped-edit"));
 
-  h._openSwipedRow(rowB);
+  h._openSwipedRow(rowB, "delete");
   // Auto-close of rowA when opening rowB
   assert.equal(h.peekSwipedRow(), rowB);
   assert.equal(rowA.classList.contains("bm-swiped"), false);
   assert.ok(rowB.classList.contains("bm-swiped"));
+  assert.ok(rowB.classList.contains("bm-swiped-delete"));
 });
 
 // ── resetSwipedRow ───────────────────────────────────────────────────────────
@@ -791,8 +795,8 @@ test('_openSwipedRow: marks new row + clears prior swiped row', () => {
 test('resetSwipedRow: clears _swipedRow without DOM mutation', () => {
   const h = loadSwipedRow();
   const row = new h.Element();
-  row.setActionsChild(new h.ActionsEl());
-  h._openSwipedRow(row);
+  row.setContentChild(new h.ContentEl());
+  h._openSwipedRow(row, "edit");
   // Tracking cleared but DOM class is intentionally left in place — caller
   // is expected to be re-rendering anyway, and stripping the class would
   // race the render replacement.
@@ -814,10 +818,10 @@ test('closeSwipedRowIfOutside: nothing swiped → no-op', () => {
 test('closeSwipedRowIfOutside: target inside swiped row → no-op (stays open)', () => {
   const h = loadSwipedRow();
   const row = new h.Element();
-  row.setActionsChild(new h.ActionsEl());
+  row.setContentChild(new h.ContentEl());
   const inner = new h.Element();
   row.appendChild(inner);
-  h._openSwipedRow(row);
+  h._openSwipedRow(row, "edit");
   h.closeSwipedRowIfOutside(inner);
   assert.equal(h.peekSwipedRow(), row);
 });
@@ -825,9 +829,9 @@ test('closeSwipedRowIfOutside: target inside swiped row → no-op (stays open)',
 test('closeSwipedRowIfOutside: target outside → closeSwipedRow fires', () => {
   const h = loadSwipedRow();
   const row = new h.Element();
-  const actions = new h.ActionsEl();
-  row.setActionsChild(actions);
-  h._openSwipedRow(row);
+  const content = new h.ContentEl();
+  row.setContentChild(content);
+  h._openSwipedRow(row, "delete");
   const outside = new h.Element();
   h.closeSwipedRowIfOutside(outside);
   assert.equal(h.peekSwipedRow(), null);
@@ -839,8 +843,8 @@ test('closeSwipedRowIfOutside: non-Node target → guard rejects, close fires', 
   // function falls through to closeSwipedRow(null).
   const h = loadSwipedRow();
   const row = new h.Element();
-  row.setActionsChild(new h.ActionsEl());
-  h._openSwipedRow(row);
+  row.setContentChild(new h.ContentEl());
+  h._openSwipedRow(row, "edit");
   h.closeSwipedRowIfOutside(/** @type {any} */ ({ not: "a node" }));
   assert.equal(h.peekSwipedRow(), null);
 });

@@ -400,8 +400,11 @@ function _updateDragIndicators(clientX, clientY) {
 // of the swipe state surface.
 
 // Mobile swipe-to-reveal + long-press: tracks the single revealed row so
-// opening a new one auto-closes the previous. See ADR-010 (2026-05-03).
-const SWIPE_REVEAL_PX = 140;
+// opening a new one auto-closes the previous. Bidirectional (ADR-010 개정
+// 2026-06-06): swiping a row left reveals 수정 on the right edge, swiping right
+// reveals 삭제 on the left edge, and a full swipe executes the action. The
+// opaque .bm-row-content is the slider that exposes the edge-anchored actions.
+const SWIPE_REVEAL_PX = 88;
 const LONG_PRESS_MS = 500;
 /** @type {HTMLElement | null} */
 let _swipedRow = null;
@@ -412,22 +415,31 @@ function _isMobileViewport() {
   return window.matchMedia("(max-width: 768px)").matches;
 }
 
+// Clear any open-swipe state + inline slide transform on a row.
+/** @param {HTMLElement} row */
+function _resetRowSwipe(row) {
+  row.classList.remove("bm-swiped", "bm-swiped-edit", "bm-swiped-delete");
+  const content = /** @type {HTMLElement | null} */ (row.querySelector(".bm-row-content"));
+  if (content) content.style.transform = "";
+}
+
 /** @param {HTMLElement | null} except */
 function closeSwipedRow(except) {
   if (_swipedRow && _swipedRow !== except) {
-    _swipedRow.classList.remove("bm-swiped");
-    const prevActions = /** @type {HTMLElement | null} */ (_swipedRow.querySelector(".bm-row-actions-mobile"));
-    if (prevActions) prevActions.style.transform = "";
+    _resetRowSwipe(_swipedRow);
     _swipedRow = null;
   }
 }
 
-/** @param {HTMLElement} row */
-function _openSwipedRow(row) {
+// Snap a row open in `dir`: "edit" reveals 수정 (right edge, content slid left),
+// "delete" reveals 삭제 (left edge, content slid right). The CSS class drives the
+// slide, so the inline transform left by the drag is cleared.
+/** @param {HTMLElement} row @param {"edit" | "delete"} dir */
+function _openSwipedRow(row, dir) {
   closeSwipedRow(row);
-  row.classList.add("bm-swiped");
-  const actions = /** @type {HTMLElement | null} */ (row.querySelector(".bm-row-actions-mobile"));
-  if (actions) actions.style.transform = "";
+  const content = /** @type {HTMLElement | null} */ (row.querySelector(".bm-row-content"));
+  if (content) content.style.transform = "";
+  row.classList.add("bm-swiped", dir === "delete" ? "bm-swiped-delete" : "bm-swiped-edit");
   _swipedRow = row;
 }
 
@@ -463,8 +475,8 @@ function _setupDragHandle(li, row) {
     const startY = e.clientY;
     const origRect = li.getBoundingClientRect();
     const isTouch = e.pointerType !== "mouse";
-    const swipeActions = /** @type {HTMLElement | null} */ (row.querySelector(".bm-row-actions-mobile"));
-    const canSwipe = _isMobileViewport() && isTouch && !!swipeActions;
+    const contentEl = /** @type {HTMLElement | null} */ (row.querySelector(".bm-row-content"));
+    const canSwipe = _isMobileViewport() && isTouch && !!contentEl;
     // Drag-to-reorder only makes sense under 직접 정렬 (manual); an active
     // auto-sort would re-sort the drop away. Evaluated per gesture so a sort
     // change takes effect immediately. Swipe-to-reveal is always available.
@@ -474,8 +486,17 @@ function _setupDragHandle(li, row) {
     /** @type {"drag" | "swipe" | "abort" | null} */
     let mode = null;
     let dragStarted = false;
-    const startedSwiped = canSwipe && row.classList.contains("bm-swiped");
-    const baseOffset = startedSwiped ? -SWIPE_REVEAL_PX : 0;
+    // Direction the row is already open in, so a re-grab continues from the
+    // revealed offset. "edit" = 수정 (right), "delete" = 삭제 (left).
+    /** @type {"edit" | "delete" | null} */
+    const startedDir = row.classList.contains("bm-swiped-edit") ? "edit"
+      : row.classList.contains("bm-swiped-delete") ? "delete" : null;
+    const startedSwiped = !!startedDir;
+    const baseOffset = startedDir === "edit" ? -SWIPE_REVEAL_PX
+      : startedDir === "delete" ? SWIPE_REVEAL_PX : 0;
+    const rowWidth = origRect.width;
+    // Full-swipe threshold: past this on release, the action executes.
+    const commitPx = Math.max(rowWidth * 0.45, SWIPE_REVEAL_PX + 40);
     /** @type {ReturnType<typeof setTimeout> | null} */
     let longPressTimer = null;
 
@@ -564,14 +585,15 @@ function _setupDragHandle(li, row) {
 
       if (mode === "swipe") {
         let offset = baseOffset + dx;
-        if (offset > 0) offset = 0;
-        if (offset < -SWIPE_REVEAL_PX * 1.2) offset = -SWIPE_REVEAL_PX * 1.2;
-        // Slide the action panel in from the right; row content stays put.
-        // offset 0 → panel translateX(140) (off-screen); offset -140 → translateX(0) (open).
-        if (swipeActions) {
-          const panelTx = SWIPE_REVEAL_PX + offset;
-          swipeActions.style.transform = `translateX(${panelTx}px)`;
-        }
+        // Clamp within the row; either direction is allowed (bidirectional).
+        if (offset > rowWidth) offset = rowWidth;
+        if (offset < -rowWidth) offset = -rowWidth;
+        // Slide the content; the edge-anchored action beneath is exposed.
+        // offset < 0 → content slides left → 수정 (right). offset > 0 → 삭제 (left).
+        if (contentEl) contentEl.style.transform = `translateX(${offset}px)`;
+        // Arm the action a full swipe would fire (it fills the row behind).
+        row.classList.toggle("bm-swipe-armed-edit", offset <= -commitPx);
+        row.classList.toggle("bm-swipe-armed-delete", offset >= commitPx);
         return;
       }
 
@@ -587,13 +609,23 @@ function _setupDragHandle(li, row) {
       cleanupPointerHandlers();
 
       if (mode === "swipe") {
-        row.classList.remove("bm-swiping");
+        row.classList.remove("bm-swiping", "bm-swipe-armed-edit", "bm-swipe-armed-delete");
+        if (contentEl) contentEl.style.transform = "";
         const finalOffset = baseOffset + (e.clientX - startX);
-        if (finalOffset < -SWIPE_REVEAL_PX / 2) {
-          _openSwipedRow(row);
+        if (finalOffset <= -commitPx) {
+          // Full swipe left → 수정 (trigger the revealed button's handler).
+          closeSwipedRow(null);
+          /** @type {HTMLElement | null} */ (row.querySelector(".bm-swipe-edit"))?.click();
+        } else if (finalOffset >= commitPx) {
+          // Full swipe right → 삭제.
+          closeSwipedRow(null);
+          /** @type {HTMLElement | null} */ (row.querySelector(".bm-swipe-delete"))?.click();
+        } else if (finalOffset <= -SWIPE_REVEAL_PX / 2) {
+          _openSwipedRow(row, "edit");
+        } else if (finalOffset >= SWIPE_REVEAL_PX / 2) {
+          _openSwipedRow(row, "delete");
         } else {
-          row.classList.remove("bm-swiped");
-          if (swipeActions) swipeActions.style.transform = "";
+          _resetRowSwipe(row);
           if (_swipedRow === row) _swipedRow = null;
         }
         return;
@@ -627,13 +659,13 @@ function _setupDragHandle(li, row) {
       cleanupPointerHandlers();
 
       if (mode === "swipe") {
-        row.classList.remove("bm-swiping");
+        row.classList.remove("bm-swiping", "bm-swipe-armed-edit", "bm-swipe-armed-delete");
+        if (contentEl) contentEl.style.transform = "";
         // Snap back to the pre-gesture state on cancel.
-        if (startedSwiped) {
-          _openSwipedRow(row);
+        if (startedDir) {
+          _openSwipedRow(row, startedDir);
         } else {
-          row.classList.remove("bm-swiped");
-          if (swipeActions) swipeActions.style.transform = "";
+          _resetRowSwipe(row);
           if (_swipedRow === row) _swipedRow = null;
         }
         return;
@@ -1048,6 +1080,27 @@ function sortBookmarkNodes(nodes) {
 }
 // ── END BOOKMARK_SORT ──
 
+// Build the two edge-anchored mobile swipe actions: 삭제 (left edge, revealed by
+// swiping the row right) and 수정 (right edge, revealed by swiping left). They sit
+// behind the opaque .bm-row-content, which slides to expose them. Hidden on
+// desktop via CSS. Returns the buttons so the row can append them under content.
+/** @param {string} label @param {() => void} editAction @param {() => void} deleteAction */
+function _buildSwipeActions(label, editAction, deleteAction) {
+  const del = el("button", {
+    className: "bm-swipe-action bm-swipe-delete",
+    type: "button",
+    "aria-label": `${label} 삭제`,
+  }, "삭제");
+  del.addEventListener("click", deleteAction);
+  const edit = el("button", {
+    className: "bm-swipe-action bm-swipe-edit",
+    type: "button",
+    "aria-label": `${label} 수정`,
+  }, "수정");
+  edit.addEventListener("click", editAction);
+  return { del, edit };
+}
+
 function _buildBookmarkItem(bm, depth) {
   const li = el("li", { role: "treeitem", className: "bm-bookmark", "data-id": bm.id, tabIndex: "-1" });
   if (depth > 0) li.setAttribute("aria-level", String(depth + 1));
@@ -1102,29 +1155,15 @@ function _buildBookmarkItem(bm, depth) {
   actions.appendChild(editBtn);
   actions.appendChild(delBtn);
 
-  // Mobile swipe-to-reveal actions panel (hidden on desktop via CSS).
-  // Slides in from the right and overlays the right edge of the row content.
-  const mobileActions = el("div", { className: "bm-row-actions-mobile", "aria-hidden": "true" });
-  const mEditBtn = el("button", {
-    className: "bm-mobile-action-btn bm-mobile-edit-btn",
-    type: "button",
-    "aria-label": `${bm.label} 수정`,
-  }, "수정");
-  mEditBtn.addEventListener("click", editAction);
-  const mDelBtn = el("button", {
-    className: "bm-mobile-action-btn bm-mobile-delete-btn",
-    type: "button",
-    "aria-label": `${bm.label} 삭제`,
-  }, "삭제");
-  mDelBtn.addEventListener("click", deleteAction);
-  mobileActions.appendChild(mEditBtn);
-  mobileActions.appendChild(mDelBtn);
+  // Mobile swipe actions (edge-anchored, hidden on desktop): 삭제 left, 수정 right.
+  const { del, edit } = _buildSwipeActions(bm.label ?? "", editAction, deleteAction);
 
   content.appendChild(typeIcon);
   content.appendChild(link);
   content.appendChild(actions);
+  row.appendChild(del);
+  row.appendChild(edit);
   row.appendChild(content);
-  row.appendChild(mobileActions);
   li.appendChild(row);
   return li;
 }
@@ -1380,7 +1419,7 @@ function _buildFolderItem(folder, depth) {
   const name = el("span", { className: "bm-folder-name" }, folder.name);
   row.addEventListener("click", (e) => {
     const t = e.target;
-    if (t instanceof Element && t.closest(".bm-item-actions, .bm-row-actions-mobile")) return;
+    if (t instanceof Element && t.closest(".bm-item-actions, .bm-swipe-action")) return;
     if (row.classList.contains("bm-swiped")) {
       closeSwipedRow(null);
       return;
@@ -1433,27 +1472,15 @@ function _buildFolderItem(folder, depth) {
   actions.appendChild(renameBtn);
   actions.appendChild(delBtn);
 
-  const mobileActions = el("div", { className: "bm-row-actions-mobile", "aria-hidden": "true" });
-  const mRenameBtn = el("button", {
-    className: "bm-mobile-action-btn bm-mobile-edit-btn",
-    type: "button",
-    "aria-label": `${folder.name} 수정`,
-  }, "수정");
-  mRenameBtn.addEventListener("click", renameAction);
-  const mDelBtn = el("button", {
-    className: "bm-mobile-action-btn bm-mobile-delete-btn",
-    type: "button",
-    "aria-label": `${folder.name} 삭제`,
-  }, "삭제");
-  mDelBtn.addEventListener("click", deleteAction);
-  mobileActions.appendChild(mRenameBtn);
-  mobileActions.appendChild(mDelBtn);
+  // Mobile swipe actions (edge-anchored, hidden on desktop): 삭제 left, 수정 right.
+  const { del, edit } = _buildSwipeActions(folder.name, renameAction, deleteAction);
 
   content.appendChild(toggle);
   content.appendChild(name);
   content.appendChild(actions);
+  row.appendChild(del);
+  row.appendChild(edit);
   row.appendChild(content);
-  row.appendChild(mobileActions);
   li.appendChild(row);
   const children = el("ul", { role: "group", className: "bm-folder-children" });
   for (const child of sortBookmarkNodes(folder.children || [])) {
