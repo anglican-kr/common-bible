@@ -1,7 +1,7 @@
 # ADR-032: 컴포넌트·뷰 층 모듈화 — 동작 스캐폴딩의 단일화
 
 - 일시: 2026-06-06
-- 상태: 승인됨 — 구현 대기
+- 상태: 승인됨 — 구현 완료(2026-06-06)
 - 관련 ADR: ADR-018(app.js 도메인 모듈 분할), ADR-019(ESM 일괄 채택), ADR-013(유닛 테스트 전략), ADR-028(디자인 시스템 — `DESIGN.md` 토큰 사다리), ADR-010(북마크 UI), ADR-022(인용·주석 바텀 시트), ADR-029/030(탭 바·오버레이 패턴)
 
 ## 맥락
@@ -149,13 +149,40 @@ e2e 책임) 통과를 유지하고, 옮긴 빌더는 유닛을 추가한다. 한
   회귀를 막고, 한 번에 한 오버레이만 옮겨 위험을 좁힌다. 빌더 과추상화는 "구조·토큰만,
   배선은 호출부" 원칙으로 억제.
 
+## 구현 (2026-06-06, 단계별 커밋)
+
+점진 교체로 완료. 원안 대비 달라진 점도 함께 기록한다.
+
+1. **오버레이 컨트롤러** `js/app/overlay.js`(`window.appOverlay.createOverlay`) — 결정 (1) 그대로.
+   `closeOnEsc` 기본 **off**: 갓 이행한 오버레이가 기존 스택형 Escape 라우터(bookmark.js,
+   app.js)에 계속 위임하다 전부 이행 후 일원화. **모달 9종**(북마크 새폴더·확인·저장·병합·
+   가져오기·장삭제·드라이브해제 + 설치)·**드로어**·**인용 시트**·**팝오버 2종**(설정·장선택)
+   = 흩어진 12곳을 전부 흡수.
+2. **Escape 일원화** — 팝오버는 app.js 중앙 코디네이터가 `window.close{Settings,ChapterPopover}`
+   로 위임(직접 hidden 금지), 모달은 각 모듈 스택 라우터가 컨트롤러 close 호출.
+3. **sheet 팩토리** — `attachSheetDrag`/`attachSheetResize`(드래그·리사이즈 pointer 배관 +
+   `dragReleaseAction` 결합). 드로어·인용 시트 공유(중복 ~105줄 제거).
+4. **비동기(애니메이션) dismiss — 원안에서 확장**. 당초 드로어 생명주기는 "비동기 hide 라
+   bespoke 유지"로 두려 했으나, 사용자의 부드러운-전환 선호로 방향 전환: `createOverlay` 에
+   `closeTransition(panel, finalizeHide)` + 재열기 시퀀스 가드를 추가해 **드로어를 완전히
+   흡수**하고, **인용 시트에도 동일한 슬라이드 in/out** 적용. 이제 애니메이션 시트가 한
+   메커니즘을 공유(노트·캘린더 후속도 재사용).
+5. **표현 빌더 — 부분 채택**. `emptyState({icon,title,subtitle,tag,role})`(helpers.js)로
+   북마크·검색 빈 상태를 단일 `.empty-state` 컴포넌트로 통일(DESIGN.md §6). **button/
+   iconButton 는 보류** — gear/home/back/bookmark 버튼이 각자 글리프·클래스·동작이 달라
+   `el()` 위 빌더가 실질 중복을 줄이지 못하고 과추상화가 됨(§3 평가 결과). 리스트 행 빌더도
+   동일 이유로 보류.
+
+검증: 유닛 644 통과(overlay 23 + emptyState 3 등 신규 포함), `tsc` 0 error(양 설정),
+e2e 는 오버레이·시트·팝오버·빈 상태 흐름 통과(신규 `tests/e2e/test_cite_sheet.py` 포함).
+
 ## 관련 파일
 
-- `js/app/helpers.js` — 기존 프리미티브(`el`·`clearNode`·`setInert`·`trapFocus`·
-  `dragReleaseAction`). 새 컴포넌트 층이 얹힐 토대.
-- (신규 예정) 오버레이 컨트롤러 / 시트 팩토리 / 표현 빌더 모듈 — 위치·파일명은 구현 시
-  확정(`js/app/` 하위, ADR-018/019 패턴).
-- 마이그레이션 대상: `js/app/bookmark.js`, `js/app/views-routing.js`,
-  `js/app/citations.js`, `js/app/install.js`, `js/app/settings-ui.js`, `js/app/search.js`.
-- `css/style.css` — `.bm-empty*` / `.search-empty-state` 등 빈 상태 클래스 통합 대상.
-- `docs/architecture.md` 부록 A — ADR 인덱스에 032 등재.
+- 신규: `js/app/overlay.js`(컨트롤러 + 시트 팩토리), `tests/unit/overlay.test.js`,
+  `tests/e2e/test_cite_sheet.py`.
+- `js/app/helpers.js` — 프리미티브 + `emptyState` 빌더.
+- 이행: `js/app/bookmark.js`·`views-routing.js`·`citations.js`·`install.js`·
+  `settings-ui.js`·`search.js`, `js/app.js`(중앙 Escape 위임), `js/types.d.ts`.
+- `css/style.css` — `.empty-state*` 통일(`.bm-empty*`/`.search-empty-state*` 대체) +
+  `#cite-sheet` 슬라이드 애니메이션. `DESIGN.md` §6 상태 컴포넌트 갱신.
+- `docs/architecture.md` 부록 A — ADR 인덱스 032 등재.
