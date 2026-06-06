@@ -3953,7 +3953,9 @@ body.tabbar-searching #search-inpage-bar { display: none; }
    row hover/press highlights to the rounded corners. */
 .title-action-menu {
   position: absolute;
-  top: calc(100% + var(--space-2));
+  /* Pull the menu up so it overlaps (covers) the ⋯ trigger rather than
+     dropping below it — the open menu floats over the button. */
+  top: calc(-1 * var(--space-1));
   right: 0;
   z-index: 30;
   display: flex;
