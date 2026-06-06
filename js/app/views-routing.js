@@ -1820,6 +1820,8 @@ async function route() {
   // the rebuilt view (e.g. OS back gesture while confirming). Self-guards.
   const bmConfirm = document.getElementById("bm-confirm-modal");
   if (bmConfirm && !bmConfirm.hidden) window.closeConfirmModal?.();
+  const bmChapterDelete = document.getElementById("bm-chapter-delete-modal");
+  if (bmChapterDelete && !bmChapterDelete.hidden) window.closeChapterDeleteModal?.();
   // Desktop settings popover: close on nav too (it has a focus trap). Closing
   // here also makes the /settings desktop fallback's gear.click() always OPEN
   // (never toggle-closed) since the popover is already dismissed by this point.

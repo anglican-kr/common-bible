@@ -1,7 +1,7 @@
 # ADR-010: 즐겨찾기(북마크) 기능 설계
 
 - 일시: 2026-04-25
-- 개정: 2026-04-26 (UI 개선), 2026-05-03 (모바일 행 UX), 2026-06-06 (양방향 스와이프 + full-swipe), 2026-06-06 (분절 산문 절 북마크 통합)
+- 개정: 2026-04-26 (UI 개선), 2026-05-03 (모바일 행 UX), 2026-06-06 (양방향 스와이프 + full-swipe), 2026-06-06 (분절 산문 절 북마크 통합), 2026-06-06 (장 북마크 선택 삭제)
 - 상태: 승인됨
 
 ## 결정
@@ -233,6 +233,27 @@ ARIA tree widget(`role="tree"`, `role="treeitem"`, `role="group"`).
 > 삭제·폴더 삭제도 같은 모달을 사용한다(확인 버튼 `#c0392b` 파괴색,
 > 기본 포커스는 안전한 '취소'). 확인 메시지 문안은 순수 함수
 > `_chapterDeleteMessage()`로 분리해 유닛 테스트.
+
+> **개정 (2026-06-06 후속): 장 북마크 선택 삭제 picker.**
+> 헤더 토글-오프의 단일 "이 장 전부 삭제" 확인 모달(`#bm-confirm-modal`)을
+> **장 안의 북마크를 골라 지우는 선택 모달**(`#bm-chapter-delete-modal`)로
+> 개편했다. 한 장에 장 전체·여러 절 범위 북마크가 섞여 있을 때 "전부 삭제"는
+> 너무 거칠어서, 이 장의 각 북마크를 **체크박스 목록**(라벨 + 참조 `창세 1:1-3`)
+> 으로 보여주고 사용자가 지울 항목만 고른다.
+> - **"전체 선택"**(`#bm-chapter-delete-all`)은 tri-state 토글 — 없음=빈,
+>   일부=indeterminate, 전부=체크. 순수 함수 `_selectAllState(sel, total)`로
+>   상태 계산.
+> - **기본은 미선택**(전체 선택이 일괄 선택 어포던스이므로). 삭제 버튼은 선택 0
+>   이면 `disabled`, 선택 시 `삭제 (N)` 카운트 표기 — 순수 함수
+>   `_deleteBtnLabel(count)`. 목록 선택 자체가 곧 확인이라 중첩 확인은 없다
+>   (단일 스텝, iOS 다중 선택 삭제 idiom).
+> - `openChapterDeleteModal(candidates)` / `closeChapterDeleteModal()` 신규.
+>   삭제색 `#c0392b` 확인 버튼·체크박스 `accent-color`, 기본 포커스는 안전한
+>   '취소', `trapFocus` + Escape + scrim 탭 닫기 + `route()`가 네비 시 dismiss
+>   (`window.closeChapterDeleteModal`). 모바일 전용(데스크탑은 종전대로 드로어).
+> - 구 `confirmRemoveChapterBookmarks()`·`_chapterDeleteMessage()` 제거,
+>   해당 유닛 테스트는 `_selectAllState`·`_deleteBtnLabel`로 대체. e2e는
+>   토글-삭제(전체 선택)·취소·**선택 삭제(고른 것만 지우고 나머지 유지)** 3종.
 
 **검색 드로어** (`#search-sheet`): 개정 2026-04-26 — 닫기 버튼(`#search-sheet-close`) 추가.
 WCAG 일관성 유지 (북마크 드로어와 동일 패턴).
