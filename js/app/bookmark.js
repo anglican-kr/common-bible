@@ -1632,11 +1632,6 @@ function buildBmViewActions() {
   addSortItem("추가된 날짜", "created");
   addSortItem("최근에 본 날짜", "viewed");
   addSortItem("수정한 날짜", "modified");
-  menu.appendChild(sortGroup);
-
-  // Single group divider between 정렬 and the action group (Apple Music keeps
-  // this one hairline; per-item lines were dropped).
-  menu.appendChild(el("div", { className: "title-action-menu-sep", role: "separator" }));
 
   // ── 액션 group ──
   const actionGroup = el("div", { className: "title-action-menu-group", role: "group" });
@@ -1680,7 +1675,12 @@ function buildBmViewActions() {
     $bmImportInput.value = "";
     $bmImportInput.click();
   });
+
+  // Action group on top, then a single hairline divider, then the 정렬 group
+  // (Apple Music keeps one group divider; per-item lines were dropped).
   menu.appendChild(actionGroup);
+  menu.appendChild(el("div", { className: "title-action-menu-sep", role: "separator" }));
+  menu.appendChild(sortGroup);
 
   wrap.appendChild(moreBtn);
   wrap.appendChild(menu);
