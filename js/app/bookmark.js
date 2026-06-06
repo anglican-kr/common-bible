@@ -1146,6 +1146,9 @@ function _buildBookmarkItem(bm, depth) {
   // the active sort inside the handler.
   _setupDragHandle(li, row);
   const content = el("div", { className: "bm-row-content" });
+  // Nested-row indent lives on the content (mobile keeps the row full-bleed so
+  // the swipe action reaches the screen edge) — one folder level = --space-8.
+  if (depth > 0) content.style.setProperty("--bm-indent", `calc(var(--space-8) * ${depth})`);
   const typeIcon = el("span", { className: "bm-bookmark-type-icon" });
   typeIcon.appendChild(_buildBookmarkTypeIcon(isActive));
   const link = el("a", { className: "bm-bookmark-link", href: _bookmarkHref(bm), draggable: "false" });
@@ -1455,6 +1458,8 @@ function _buildFolderItem(folder, depth) {
   // See bookmark row: handler owns swipe-to-reveal; reorder self-gates on sort.
   _setupDragHandle(li, row);
   const content = el("div", { className: "bm-row-content" });
+  // Same depth indent as bookmark rows (one folder level = --space-8).
+  if (depth > 0) content.style.setProperty("--bm-indent", `calc(var(--space-8) * ${depth})`);
   const toggle = el("span", { className: "bm-folder-toggle", "aria-hidden": "true" });
   toggle.appendChild(_buildFolderToggleIcon(expanded));
   const name = el("span", { className: "bm-folder-name" }, folder.name);

@@ -5461,8 +5461,18 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
     padding: 0;
   }
 
+  /* Nested rows go full-bleed (no UL indent) so a swipe action's color reaches
+     the screen edge even inside a folder; the visual indent moves onto the
+     content's padding-left (per depth via --bm-indent) below. */
+  .bm-folder-children {
+    padding-left: 0;
+  }
+
   .bm-row-content {
     padding: var(--space-3) var(--space-4);
+    /* Depth indent lives here (not on the folder-children UL) so the row stays
+       full-bleed; --bm-indent is set per nesting level by the item builders. */
+    padding-left: calc(var(--space-4) + var(--bm-indent, 0px));
     background: var(--bg);
     position: relative;
     z-index: 1; /* slider sits above the full-bleed actions, hiding them when closed */
