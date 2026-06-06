@@ -75,3 +75,25 @@ def test_cite_sheet_escape_closes(browser):
         assert not _sheet_open(page)
     finally:
         ctx.close()
+
+
+def test_cite_sheet_dismissed_instantly_on_navigation(browser):
+    """내비게이션(route) 시 인용 시트는 슬라이드 잔류 없이 즉시 사라진다.
+
+    closeTransition 의 지연 hide(애니메이션 끝까지 panel.hidden 보류)가 다음
+    화면 위에 남지 않도록, route() 가 동기적으로 hidden 을 강제하는지 검증한다
+    (ADR-032; Cursor Bugbot "Cite sheet survives route mid-close").
+    """
+    ctx, page = _open_chapter(browser)
+    try:
+        page.click(".cite-chip")
+        page.wait_for_selector("#cite-sheet:not([hidden])", timeout=8_000)
+        # navigate() 는 route() 를 동기 호출하고, route() 의 동기 구간이 시트를
+        # 강제로 hidden 처리한다 — 같은 JS 프레임에서 hidden 을 읽어 잔류 여부 확인.
+        hidden_now = page.evaluate(
+            "() => { window.navigate('/matt/17');"
+            " return document.getElementById('cite-sheet').hidden; }"
+        )
+        assert hidden_now is True
+    finally:
+        ctx.close()

@@ -1804,7 +1804,16 @@ async function route() {
   /** @param {string} id @param {() => void} close */
   const closeIfOpen = (id, close) => {
     const node = /** @type {HTMLElement | null} */ (document.getElementById(id));
-    if (node && !node.hidden) close();
+    if (node && !node.hidden) {
+      close();
+      // Animated-dismiss overlays (cite sheet / drawer closeTransition) set
+      // _open=false immediately but DEFER panel.hidden to the slide-out's end.
+      // On navigation we want the overlay gone now, not lingering over the next
+      // view — so force it hidden. Harmless no-op for synchronous overlays
+      // (already hidden by close()); their controllers' deferred finalize then
+      // self-skips, and the closing class is cleared on the next open (ADR-032).
+      if (!node.hidden) node.hidden = true;
+    }
   };
   // The citation sheet is anchored to a specific citation context, so a route
   // change (link nav or back/forward — both land here) should dismiss it.
