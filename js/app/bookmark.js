@@ -603,13 +603,14 @@ function _setupDragHandle(li, row) {
     let mode = null;
     let dragStarted = false;
     // Direction the row is already open in, so a re-grab continues from the
-    // revealed offset. "edit" = 수정 (right), "delete" = 삭제 (left).
+    // revealed offset. "edit" = 수정 (left edge, content slid right), "delete" =
+    // 삭제 (right edge, content slid left).
     /** @type {"edit" | "delete" | null} */
     const startedDir = row.classList.contains("bm-swiped-edit") ? "edit"
       : row.classList.contains("bm-swiped-delete") ? "delete" : null;
     const startedSwiped = !!startedDir;
-    const baseOffset = startedDir === "edit" ? -SWIPE_REVEAL_PX
-      : startedDir === "delete" ? SWIPE_REVEAL_PX : 0;
+    const baseOffset = startedDir === "edit" ? SWIPE_REVEAL_PX
+      : startedDir === "delete" ? -SWIPE_REVEAL_PX : 0;
     const rowWidth = origRect.width;
     // Full-swipe threshold: past this on release, the action executes.
     const commitPx = Math.max(rowWidth * 0.45, SWIPE_REVEAL_PX + 40);
@@ -704,12 +705,13 @@ function _setupDragHandle(li, row) {
         // Clamp within the row; either direction is allowed (bidirectional).
         if (offset > rowWidth) offset = rowWidth;
         if (offset < -rowWidth) offset = -rowWidth;
-        // Slide the content; the edge-anchored action beneath is exposed.
-        // offset < 0 → content slides left → 수정 (right). offset > 0 → 삭제 (left).
+        // Slide the content; the edge-anchored action beneath is exposed. iOS
+        // convention: swipe left (offset < 0) → content slides left → expose the
+        // RIGHT (trailing) edge → 삭제. Swipe right (offset > 0) → 수정 (left).
         if (contentEl) contentEl.style.transform = `translateX(${offset}px)`;
         // Show the action for the current direction (full-bleed behind content).
-        row.classList.toggle("bm-swiping-delete", offset > 0);
-        row.classList.toggle("bm-swiping-edit", offset < 0);
+        row.classList.toggle("bm-swiping-delete", offset < 0);
+        row.classList.toggle("bm-swiping-edit", offset > 0);
         return;
       }
 
@@ -729,17 +731,17 @@ function _setupDragHandle(li, row) {
         if (contentEl) contentEl.style.transform = "";
         const finalOffset = baseOffset + (e.clientX - startX);
         if (finalOffset <= -commitPx) {
-          // Full swipe left → 수정 (trigger the revealed button's handler).
-          closeSwipedRow(null);
-          /** @type {HTMLElement | null} */ (row.querySelector(".bm-swipe-edit"))?.click();
-        } else if (finalOffset >= commitPx) {
-          // Full swipe right → 삭제.
+          // Full swipe left → 삭제 (trigger the revealed button's handler).
           closeSwipedRow(null);
           /** @type {HTMLElement | null} */ (row.querySelector(".bm-swipe-delete"))?.click();
+        } else if (finalOffset >= commitPx) {
+          // Full swipe right → 수정.
+          closeSwipedRow(null);
+          /** @type {HTMLElement | null} */ (row.querySelector(".bm-swipe-edit"))?.click();
         } else if (finalOffset <= -SWIPE_REVEAL_PX / 2) {
-          _openSwipedRow(row, "edit");
-        } else if (finalOffset >= SWIPE_REVEAL_PX / 2) {
           _openSwipedRow(row, "delete");
+        } else if (finalOffset >= SWIPE_REVEAL_PX / 2) {
+          _openSwipedRow(row, "edit");
         } else {
           _resetRowSwipe(row);
           if (_swipedRow === row) _swipedRow = null;
@@ -1651,7 +1653,7 @@ function _buildFolderItem(folder, depth) {
 // title row (shown when bookmarks already exist, so returning users who forgot
 // the flow still have a reminder).
 const BOOKMARK_ADD_HELP =
-  "읽는 화면 오른쪽 위의 북마크 버튼을 눌러 지금 보는 장을 저장하세요. 절을 선택하면 원하는 구절만 북마크할 수도 있습니다.";
+  "성서를 읽다가 오른쪽 위의 북마크 버튼을 누르면 이곳에 북마크가 기록됩니다. 읽던 구절을 누른 후, 여러 절을 선택해 북마크할 수도 있습니다.";
 
 // Empty-state placeholder for the bookmark list (drawer + full view). Beyond the
 // "none yet" line it explains how bookmarks are created, so the screen is
