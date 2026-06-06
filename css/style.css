@@ -427,9 +427,12 @@ body {
 
 /* The bookmark rows already carry their own horizontal inset (--space-4), so the
    shared view padding doubles it and the list sits too far from the edges. Drop
-   the view's horizontal padding here for a single, standard list inset. */
+   the view's horizontal padding here for a single, standard list inset — and so
+   swiped rows go full-bleed (action color reaches the screen edge). Physical
+   longhands (not padding-inline) to unambiguously override the shared shorthand. */
 .bookmarks-view {
-  padding-inline: 0;
+  padding-left: 0;
+  padding-right: 0;
 }
 
 /* Bookmark tree reuses .bm-* item styles from the drawer; just lay out the
@@ -5436,6 +5439,17 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   .bm-bookmark-row.bm-swiped-delete .bm-row-content,
   .bm-folder-row.bm-swiped-delete .bm-row-content {
     transform: translateX(var(--swipe-reveal));
+  }
+
+  /* Round the row corners while swiping/open. The row stays full-bleed (no
+     margin) so the revealed action color reaches the screen edge on both sides;
+     overflow:hidden clips the content + action to the radius, giving the action
+     rounded outer corners right at the edge. */
+  .bm-bookmark-row.bm-swiping,
+  .bm-bookmark-row.bm-swiped,
+  .bm-folder-row.bm-swiping,
+  .bm-folder-row.bm-swiped {
+    border-radius: var(--radius-lg);
   }
 
   /* Full-swipe arm: the target action fills the row behind the content. */
