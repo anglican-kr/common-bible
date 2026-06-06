@@ -4776,8 +4776,11 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
-  width: 1.75rem;
-  margin-left: var(--space-1);
+  /* Full 44px tap target — in manual mode this is the primary reorder control,
+     so the hit box must meet the design system's --touch-target; the ≡ glyph
+     below stays small and centered within it. */
+  min-width: var(--touch-target);
+  min-height: var(--touch-target);
   color: var(--text-secondary);
   cursor: grab;
   /* Own the gesture so a drag from the handle reorders instead of scrolling. */
