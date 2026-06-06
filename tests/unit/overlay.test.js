@@ -378,6 +378,50 @@ test("open(arg): explicit return-focus argument overrides the default capture", 
   assert.equal(env.getActive(), explicit);
 });
 
+// ── closeTransition (animated / async dismiss) ───────────────────────────────
+
+test("closeTransition: defers panel hide to finalizeHide; cleanup is immediate", () => {
+  const env = makeEnv();
+  const panel = new env.StubEl();
+  const scrim = new env.StubEl();
+  /** @type {(() => void) | null} */
+  let finalize = null;
+  const ov = env.createOverlay({
+    panel, scrim, inertSelectors: "main",
+    closeTransition: (_panel, done) => { finalize = done; }, // capture, don't call yet
+  });
+  ov.open();
+  ov.close();
+  // Logical close ran immediately…
+  assert.equal(scrim.hidden, true);
+  assert.deepEqual(env.inertCalls.at(-1), [false, "main"]);
+  assert.equal(env.getTrapCleanupCount(), 1);
+  assert.equal(ov.isOpen, false);
+  // …but the panel is still visible while the exit animation plays.
+  assert.equal(panel.hidden, false);
+  // Animation end → finalize hides it.
+  /** @type {() => void} */ (finalize)();
+  assert.equal(panel.hidden, true);
+});
+
+test("closeTransition: re-open before finalizeHide cancels the pending hide", () => {
+  const env = makeEnv();
+  const panel = new env.StubEl();
+  /** @type {(() => void) | null} */
+  let finalize = null;
+  const ov = env.createOverlay({
+    panel,
+    closeTransition: (_panel, done) => { finalize = done; },
+  });
+  ov.open();
+  ov.close();
+  assert.equal(panel.hidden, false); // deferred
+  ov.open(); // re-open mid-animation
+  assert.equal(ov.isOpen, true);
+  /** @type {() => void} */ (finalize)(); // stale finalize from the cancelled close
+  assert.equal(panel.hidden, false); // NOT hidden — the re-open won
+});
+
 // ── attachSheetDrag (bottom-sheet drag-to-dismiss) ───────────────────────────
 
 /**

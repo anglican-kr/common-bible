@@ -35,6 +35,13 @@ window.appOverlay = (() => {
    * @property {string | null} [ariaExpanded]  Selector of trigger(s) whose `aria-expanded` mirrors the open state.
    * @property {(() => void) | null} [onOpen]
    * @property {(() => void) | null} [onClose]  Runs before focus restore, so it can tear down child state first.
+   * @property {((panel: HTMLElement, finalizeHide: () => void) => void) | null} [closeTransition]
+   *   Animated/async dismiss. When set, close() runs the logical close
+   *   immediately (scrim hide, inert off, trap/listener teardown, onClose, focus
+   *   restore) but DEFERS `panel.hidden = true` to `finalizeHide` — call it when
+   *   the exit animation ends. A re-open before then cancels the pending hide
+   *   (sequence-guarded), so rapid close→open never hides the freshly reopened
+   *   panel. Without it, the panel hides synchronously.
    */
 
   /**
@@ -60,9 +67,14 @@ window.appOverlay = (() => {
       ariaExpanded = null,
       onOpen = null,
       onClose = null,
+      closeTransition = null,
     } = opts;
 
     let _open = false;
+    // Monotonic guard bumped on every open + close. A deferred (animated) hide
+    // captures the seq at close time and only fires if it's still current —
+    // a re-open (which bumps the seq) cancels a pending hide.
+    let _seq = 0;
     /** @type {(() => void) | null} */
     let _trapCleanup = null;
     /** @type {HTMLElement | null} */
@@ -95,6 +107,7 @@ window.appOverlay = (() => {
     function open(explicitReturn) {
       if (_open) return;
       _open = true;
+      _seq++; // cancel any pending deferred hide from a prior animated close
 
       _returnTarget =
         explicitReturn !== undefined
@@ -149,9 +162,12 @@ window.appOverlay = (() => {
     function close() {
       if (!_open) return;
       _open = false;
+      const mySeq = ++_seq;
 
+      // Logical close runs immediately regardless of animation: the scrim,
+      // background inert, focus trap, listeners and focus are all released now
+      // so the app is interactive even while an exit animation plays.
       if (scrim) scrim.hidden = true;
-      panel.hidden = true;
       if (rootClass) document.documentElement.classList.remove(rootClass);
       if (inertSelectors) setInert(false, inertSelectors);
       setAriaExpanded("false");
@@ -167,6 +183,15 @@ window.appOverlay = (() => {
         try { _returnTarget.focus(); } catch { /* element gone — ignore */ }
       }
       _returnTarget = null;
+
+      // Hide the panel: synchronously by default, or deferred to the exit
+      // animation when closeTransition is set. The seq guard drops the hide if
+      // the overlay was reopened in the meantime.
+      if (closeTransition) {
+        closeTransition(panel, () => { if (mySeq === _seq) panel.hidden = true; });
+      } else {
+        panel.hidden = true;
+      }
     }
 
     return {

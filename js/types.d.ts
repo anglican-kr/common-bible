@@ -574,6 +574,9 @@ export interface OverlayOptions {
   ariaExpanded?: string | null;
   onOpen?: (() => void) | null;
   onClose?: (() => void) | null;
+  // Animated/async dismiss: close() defers panel.hidden=true to finalizeHide
+  // (call on animation end); a re-open before then cancels it (seq-guarded).
+  closeTransition?: ((panel: HTMLElement, finalizeHide: () => void) => void) | null;
 }
 
 export interface OverlayController {
