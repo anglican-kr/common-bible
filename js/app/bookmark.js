@@ -2248,7 +2248,12 @@ function confirmRemoveChapterBookmarks(candidates) {
     confirmLabel: "삭제",
     onConfirm: () => {
       const store = loadBookmarks();
-      for (const bm of candidates) removeItemById(store, bm.id);
+      for (const bm of candidates) {
+        // Mirror swipe-row/folder delete: clear the per-device viewed timestamp
+        // so removed ids don't accrue as stale entries in the viewed map.
+        _forgetViewed(bm.id);
+        removeItemById(store, bm.id);
+      }
       saveBookmarks(store);
       _rerenderActiveBookmarkTree();
       refreshBookmarkHeaderBtn();
