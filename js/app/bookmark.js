@@ -236,6 +236,20 @@ function findExistingChapterBookmarks(bookId, chapter) {
   return results;
 }
 
+// Confirmation copy for removing the bookmark(s) of the chapter currently open
+// in the reader (header bookmark toggle). One bookmark names it; several are
+// removed together since the filled icon is a per-chapter toggle.
+/**
+ * @param {BookmarkTreeBookmark[]} candidates
+ * @returns {string}
+ */
+function _chapterDeleteMessage(candidates) {
+  if (candidates.length === 1) {
+    return `"${candidates[0].label}" 북마크를 삭제할까요?`;
+  }
+  return `이 장에 저장된 북마크 ${candidates.length}개를 모두 삭제할까요?`;
+}
+
 /**
  * @param {BookmarkTreeNode[]} store
  * @param {string} id
@@ -708,6 +722,10 @@ let _bmSaveModalTrap = null;
 /** @type {(() => void) | null} */
 let _bmMergeModalTrap = null;
 /** @type {(() => void) | null} */
+let _bmConfirmModalTrap = null;
+/** @type {HTMLElement | null} */
+let _bmConfirmLastFocus = null;
+/** @type {(() => void) | null} */
 let _bmNewFolderTrap = null;
 /** @type {((id: string) => void) | null} */
 let _bmNewFolderCallback = null;
@@ -794,6 +812,12 @@ const $bmMergeBody = _$("bm-merge-body");
 const $bmMergeYes = _$("bm-merge-yes");
 const $bmMergeNo = _$("bm-merge-no");
 const $bmMergeCancel = _$("bm-merge-cancel");
+const $bmConfirmScrim = _$("bm-confirm-scrim");
+const $bmConfirmModal = _$("bm-confirm-modal");
+const $bmConfirmTitle = _$("bm-confirm-title");
+const $bmConfirmBody = _$("bm-confirm-body");
+const $bmConfirmOk = _$("bm-confirm-ok");
+const $bmConfirmCancel = _$("bm-confirm-cancel");
 const $verseSelectBar = _$("verse-select-bar");
 const $verseSelectCount = _$("verse-select-count");
 const $verseSelectBookmarkBtn = /** @type {HTMLButtonElement} */ (_$("verse-select-bookmark-btn"));
@@ -894,11 +918,18 @@ function buildBookmarkHeaderBtn(bookId, chapter) {
   svg.setAttribute("aria-hidden", "true");
   _setBookmarkBtnIcon(svg, hasBookmark);
   btn.appendChild(svg);
-  // 모바일 읽기 화면(장 맥락 있음)에선 헤더 북마크 = '이 장 저장' 모달로 바로 진입.
+  // 모바일 읽기 화면(장 맥락 있음)에선 헤더 북마크가 토글로 동작 —
+  // 이미 북마크된 장이면 삭제 확인 모달, 아니면 '이 장 저장' 모달.
   // 그 외(데스크탑 전체, 또는 책 목록·장 선택처럼 장 맥락 없음)는 기존 드로어.
   btn.addEventListener("click", () => {
-    if (_isMobileViewport() && bookId && chapter != null) openSaveModal("chapter");
-    else openBookmarkDrawer(bookId, chapter);
+    if (_isMobileViewport() && bookId && chapter != null) {
+      // Re-check live: the rendered state may be stale after edits elsewhere.
+      const existing = findExistingChapterBookmarks(bookId, chapter);
+      if (existing.length > 0) confirmRemoveChapterBookmarks(existing);
+      else openSaveModal("chapter");
+    } else {
+      openBookmarkDrawer(bookId, chapter);
+    }
   });
   return btn;
 }
@@ -1141,14 +1172,20 @@ function _buildBookmarkItem(bm, depth) {
     openSaveModal("edit", { existingId: bm.id });
   };
   const deleteAction = () => {
-    if (!window.confirm(`"${bm.label}" 북마크를 삭제할까요?`)) return;
-    closeSwipedRow(null);
-    _forgetViewed(bm.id);
-    const store = loadBookmarks();
-    removeItemById(store, bm.id);
-    saveBookmarks(store);
-    _rerenderActiveBookmarkTree();
-    refreshBookmarkHeaderBtn();
+    openConfirmModal({
+      title: "북마크 삭제",
+      message: `"${bm.label}" 북마크를 삭제할까요?`,
+      confirmLabel: "삭제",
+      onConfirm: () => {
+        closeSwipedRow(null);
+        _forgetViewed(bm.id);
+        const store = loadBookmarks();
+        removeItemById(store, bm.id);
+        saveBookmarks(store);
+        _rerenderActiveBookmarkTree();
+        refreshBookmarkHeaderBtn();
+      },
+    });
   };
 
   const actions = el("div", { className: "bm-item-actions" });
@@ -1452,20 +1489,26 @@ function _buildFolderItem(folder, depth) {
     const msg = childCount > 0
       ? `"${folder.name}" 폴더와 안의 항목 ${childCount}개를 모두 삭제할까요?`
       : `"${folder.name}" 폴더를 삭제할까요?`;
-    if (!window.confirm(msg)) return;
-    closeSwipedRow(null);
-    const store = loadBookmarks();
-    // Cascade: forget per-device viewed timestamps for every nested bookmark,
-    // mirroring single-bookmark delete, so the map doesn't accrue stale ids.
-    const found = _findItemInStore(store, folder.id);
-    if (found && found.item.type === "folder") {
-      _walkBookmarks(found.item.children, (it) => {
-        if (it.type === "bookmark") _forgetViewed(it.id);
-      });
-    }
-    removeItemById(store, folder.id);
-    saveBookmarks(store);
-    _rerenderActiveBookmarkTree();
+    openConfirmModal({
+      title: "폴더 삭제",
+      message: msg,
+      confirmLabel: "삭제",
+      onConfirm: () => {
+        closeSwipedRow(null);
+        const store = loadBookmarks();
+        // Cascade: forget per-device viewed timestamps for every nested bookmark,
+        // mirroring single-bookmark delete, so the map doesn't accrue stale ids.
+        const found = _findItemInStore(store, folder.id);
+        if (found && found.item.type === "folder") {
+          _walkBookmarks(found.item.children, (it) => {
+            if (it.type === "bookmark") _forgetViewed(it.id);
+          });
+        }
+        removeItemById(store, folder.id);
+        saveBookmarks(store);
+        _rerenderActiveBookmarkTree();
+      },
+    });
   };
 
   const actions = el("div", { className: "bm-item-actions" });
@@ -2158,6 +2201,62 @@ function openMergeDialog(candidates, incomingSpec, mode, fallbackContext = null)
   $bmMergeCancel.onclick = cleanup;
 }
 
+// ── Destructive confirm modal ──
+// Reusable confirmation for destructive actions (bookmark/folder delete,
+// header bookmark toggle-off). Replaces the old native window.confirm() so the
+// prompt is themed, focus-trapped, and stacks above the drawer/save modals.
+/**
+ * @param {{ title: string, message: string, confirmLabel?: string, onConfirm: () => void }} opts
+ */
+function openConfirmModal({ title, message, confirmLabel = "삭제", onConfirm }) {
+  $bmConfirmTitle.textContent = title;
+  $bmConfirmBody.textContent = message;
+  $bmConfirmOk.textContent = confirmLabel;
+  _bmConfirmLastFocus = /** @type {HTMLElement | null} */ (document.activeElement);
+  $bmConfirmScrim.hidden = false;
+  $bmConfirmModal.hidden = false;
+  $bmConfirmOk.onclick = () => {
+    closeConfirmModal();
+    onConfirm();
+  };
+  _bmConfirmModalTrap = trapFocus($bmConfirmModal);
+  // Focus the safe (cancel) action by default — destructive button is opt-in.
+  requestAnimationFrame(() => $bmConfirmCancel.focus());
+}
+
+function closeConfirmModal() {
+  if ($bmConfirmModal.hidden) return;
+  $bmConfirmScrim.hidden = true;
+  $bmConfirmModal.hidden = true;
+  $bmConfirmOk.onclick = null;
+  if (_bmConfirmModalTrap) { _bmConfirmModalTrap(); _bmConfirmModalTrap = null; }
+  if (_bmConfirmLastFocus && _bmConfirmLastFocus.focus) {
+    try { _bmConfirmLastFocus.focus(); } catch {}
+  }
+  _bmConfirmLastFocus = null;
+}
+
+// Header bookmark toggle-off: confirm, then drop every bookmark in this chapter.
+/**
+ * @param {BookmarkTreeBookmark[]} candidates
+ */
+function confirmRemoveChapterBookmarks(candidates) {
+  if (!candidates.length) return;
+  openConfirmModal({
+    title: "북마크 삭제",
+    message: _chapterDeleteMessage(candidates),
+    confirmLabel: "삭제",
+    onConfirm: () => {
+      const store = loadBookmarks();
+      for (const bm of candidates) removeItemById(store, bm.id);
+      saveBookmarks(store);
+      _rerenderActiveBookmarkTree();
+      refreshBookmarkHeaderBtn();
+      announce("북마크를 삭제했습니다.");
+    },
+  });
+}
+
 // ── Export / Import bookmarks (Phase 2a) ──
 
 function exportBookmarks() {
@@ -2391,6 +2490,9 @@ $bookmarkScrim.addEventListener("click", closeBookmarkDrawer);
 $bmSaveClose.addEventListener("click", closeSaveModal);
 $bmSaveScrim.addEventListener("click", closeSaveModal);
 
+$bmConfirmCancel.addEventListener("click", closeConfirmModal);
+$bmConfirmScrim.addEventListener("click", closeConfirmModal);
+
 $bmNewFolderClose.addEventListener("click", closeNewFolderModal);
 $bmNewFolderScrim.addEventListener("click", closeNewFolderModal);
 $bmNewFolderCancel.addEventListener("click", closeNewFolderModal);
@@ -2507,6 +2609,7 @@ $bmImportScrim.addEventListener("click", () => {
 
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
+    if (!$bmConfirmModal.hidden) { closeConfirmModal(); return; }
     if (!$bmImportModal.hidden) {
       $bmImportScrim.hidden = true;
       $bmImportModal.hidden = true;

@@ -280,6 +280,17 @@
     </div>
   </div>
 
+  <!-- ── Destructive Confirm Modal (bookmark/folder delete, header toggle-off) ── -->
+  <div id="bm-confirm-scrim" aria-hidden="true" hidden></div>
+  <div id="bm-confirm-modal" role="alertdialog" aria-modal="true" aria-labelledby="bm-confirm-title" aria-describedby="bm-confirm-body" hidden>
+    <h2 id="bm-confirm-title">삭제 확인</h2>
+    <p id="bm-confirm-body"></p>
+    <div id="bm-confirm-actions">
+      <button id="bm-confirm-cancel" type="button">취소</button>
+      <button id="bm-confirm-ok" type="button">삭제</button>
+    </div>
+  </div>
+
   <!-- ── Drive Disconnect Modal ── -->
   <div id="drive-disconnect-scrim" aria-hidden="true" hidden></div>
   <div id="drive-disconnect-modal" role="dialog" aria-modal="true" aria-labelledby="drive-disconnect-title" hidden>
