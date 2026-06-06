@@ -55,21 +55,18 @@ document.addEventListener("keydown", (e) => {
     // Escape closes the topmost layer first: open popovers → tab-bar search
     // morph (ADR-030). Each layer returns so a single Escape never collapses
     // two layers at once.
-    // #tab-search is excluded from the blanket aria-expanded reset — its morph
-    // (expanded) state is owned by tab-search logic, so closing a popover while
-    // search stays open must not flip it to aria-expanded="false" (ADR-030).
-    const popovers = /** @type {NodeListOf<HTMLElement>} */ (
-      document.querySelectorAll(".chapter-popover:not([hidden]), .settings-popover:not([hidden])")
-    );
-    if (popovers.length) {
-      popovers.forEach((p) => { p.hidden = true; });
-      /** @type {NodeListOf<HTMLElement>} */ (
-        document.querySelectorAll("[aria-expanded='true']:not(#tab-search)")
-      ).forEach((b) => { b.setAttribute("aria-expanded", "false"); b.focus(); });
-      return;
-    }
+    //
+    // Popovers own their lifecycle via the overlay controller (ADR-032): close
+    // them through their controller (window.close{Settings,ChapterPopover}) so
+    // focus-trap teardown + aria reset + focus restore run — never hide them
+    // directly here. Settings sits above the chapter picker, so it wins first.
+    if (document.querySelector(".settings-popover:not([hidden])")) { window.closeSettings?.(); return; }
+    if (document.querySelector(".chapter-popover:not([hidden])")) { window.closeChapterPopover?.(); return; }
     // No higher overlay — close the tab-bar search morph if active.
     if (window.closeTabSearch?.()) return;
+    // Fallback: reset any stray aria-expanded trigger (e.g. bookmark overflow).
+    // #tab-search is excluded — its morph (expanded) state is owned by tab-search
+    // logic, so a stray Escape must not flip it to aria-expanded="false" (ADR-030).
     /** @type {NodeListOf<HTMLElement>} */ (
       document.querySelectorAll("[aria-expanded='true']:not(#tab-search)")
     ).forEach((b) => { b.setAttribute("aria-expanded", "false"); b.focus(); });

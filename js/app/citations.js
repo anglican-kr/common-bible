@@ -65,7 +65,8 @@ window.appCitations = (() => {
       .join(";");
   }
 
-  const { el, clearNode, trapFocus, dragReleaseAction } = window.appHelpers;
+  const { el, clearNode } = window.appHelpers;
+  const { createOverlay, attachSheetDrag, attachSheetResize } = window.appOverlay;
 
   /**
    * For each `(verseIndex, segmentIndex)` whose segment has a `cite`, decide
@@ -429,10 +430,15 @@ window.appCitations = (() => {
 
   /** @type {Map<string, string> | null} */
   let _booksByShort = null;
-  /** @type {HTMLElement | null} */
-  let _sheetReturnFocus = null;
-  /** @type {(() => void) | null} */
-  let _sheetTrapCleanup = null;
+  // Sheet lifecycle (hidden toggle, rootClass, focus-trap, focus-restore) now
+  // lives in the overlay controller (ADR-032), created in initCiteSheet.
+  /** @type {ReturnType<typeof createOverlay> | null} */
+  let _citeSheetOverlay = null;
+  /** @type {ReturnType<typeof setTimeout> | null} */
+  let _citeSheetCloseTimer = null;
+  // Monotonic render token: a slow fetch from an older cite-sheet context must
+  // not append into the body after the user opened another citation.
+  let _sheetRenderSeq = 0;
   /** @type {{ src: string, parallels: ReadonlyArray<CiteParallelRef> | null, tradition: string | null, expandedRefIndex: number | null } | null} */
   let _sheetState = null;
 
@@ -795,12 +801,13 @@ window.appCitations = (() => {
    * user lands on the passage with its surrounding context already visible.
    */
   async function _renderSheetBody() {
+    const renderSeq = ++_sheetRenderSeq;
     const bodyEl = /** @type {HTMLElement | null} */ (document.getElementById("cite-sheet-body"));
     if (!bodyEl || !_sheetState) return;
     clearNode(bodyEl);
     bodyEl.appendChild(el("p", { className: "cite-sheet-loading" }, "불러오는 중…"));
     try {
-      clearNode(bodyEl);
+      const renderTarget = document.createElement("div");
       const { src, parallels, tradition, expandedRefIndex } = _sheetState;
       // Flatten primary + parallels into a single {ref, tradition} sequence
       // so per-entry tradition (ADR-022 §2 개정) flows through one code path.
@@ -812,22 +819,29 @@ window.appCitations = (() => {
       if (expandedRefIndex !== null) {
         const idx = expandedRefIndex;
         const r = refs[idx];
-        await _renderRef(bodyEl, r.ref, r.tradition, true, null);
+        await _renderRef(renderTarget, r.ref, r.tradition, true, null);
+        if (renderSeq !== _sheetRenderSeq) return;
+        clearNode(bodyEl);
+        while (renderTarget.firstChild) bodyEl.appendChild(renderTarget.firstChild);
         _scrollFirstHighlightIntoView(bodyEl);
       } else {
         for (let i = 0; i < refs.length; i++) {
-          if (i > 0) bodyEl.appendChild(el("hr", { className: "cite-sheet-divider" }));
+          if (i > 0) renderTarget.appendChild(el("hr", { className: "cite-sheet-divider" }));
           const idx = i;
           const r = refs[i];
-          await _renderRef(bodyEl, r.ref, r.tradition, false, () => {
+          await _renderRef(renderTarget, r.ref, r.tradition, false, () => {
             if (!_sheetState) return;
             _sheetState.expandedRefIndex = idx;
             _updateSheetHeader();
             void _renderSheetBody();
           });
+          if (renderSeq !== _sheetRenderSeq) return;
         }
+        clearNode(bodyEl);
+        while (renderTarget.firstChild) bodyEl.appendChild(renderTarget.firstChild);
       }
     } catch (_) {
+      if (renderSeq !== _sheetRenderSeq) return;
       clearNode(bodyEl);
       bodyEl.appendChild(el("p", { className: "cite-sheet-error" }, "불러오는 데 실패했습니다."));
     }
@@ -858,79 +872,22 @@ window.appCitations = (() => {
     backBtn.hidden = !(_sheetState && _sheetState.expandedRefIndex !== null);
   }
 
-  /**
-   * Drag-resize the sheet by its top handle. Mirrors the bookmark-drawer
-   * pattern (pointerdown → setPointerCapture → pointermove
-   * adjusts inline height → pointerup releases). Move clamp is loose (0 to
-   * 90vh) so the user can drag visually below the rest min; release decides
-   * close vs snap-back vs stay via `appHelpers.dragReleaseAction`.
-   */
+  // Drag (mobile, top handle) + width-resize (desktop, left edge) share the
+  // overlay factory with the bookmark drawer (ADR-032 §2). The factory owns the
+  // pointer batching + dragReleaseAction wiring; we just supply the handle,
+  // sheet, and the close callback.
   function _initSheetDrag() {
     const handle = document.getElementById("cite-sheet-handle");
     const sheet = /** @type {HTMLElement | null} */ (document.getElementById("cite-sheet"));
     if (!handle || !sheet) return;
-    let startY = 0;
-    let startH = 0;
-    /** @param {number} clientY */
-    function onMove(clientY) {
-      const delta = startY - clientY;
-      const newH = Math.min(
-        Math.max(startH + delta, 0),
-        window.innerHeight * 0.90,
-      );
-      sheet.style.height = `${newH}px`;
-    }
-    /** @param {PointerEvent} e */
-    function onPointerMove(e) { onMove(e.clientY); }
-    function onPointerUp() {
-      handle.removeEventListener("pointermove", onPointerMove);
-      const action = dragReleaseAction(sheet.offsetHeight, window.innerHeight);
-      if (action === "close") {
-        closeCiteSheet();
-      } else if (action === "snap-min") {
-        sheet.style.height = `${window.innerHeight * 0.30}px`;
-      }
-    }
-    handle.addEventListener("pointerdown", (e) => {
-      if (window.innerWidth >= 769) return; // desktop uses fixed-size side panel
-      e.preventDefault();
-      startY = e.clientY;
-      startH = sheet.offsetHeight;
-      handle.setPointerCapture(e.pointerId);
-      handle.addEventListener("pointermove", onPointerMove);
-      handle.addEventListener("pointerup", onPointerUp, { once: true });
-    });
+    attachSheetDrag(handle, sheet, { onClose: closeCiteSheet });
   }
 
-  /**
-   * Desktop-only: drag the left edge to resize the side panel width.
-   * Mirrors `initBookmarkDrawerResize` in bookmark.js — drag left widens, drag
-   * right narrows. Clamp [240, 85vw] matches that handler.
-   */
   function _initSheetResize() {
     const handle = document.getElementById("cite-sheet-resize");
     const sheet = /** @type {HTMLElement | null} */ (document.getElementById("cite-sheet"));
     if (!handle || !sheet) return;
-    let startX = 0;
-    let startW = 0;
-    /** @param {PointerEvent} e */
-    function onPointerMove(e) {
-      const delta = startX - e.clientX; // drag left = wider
-      const newW = Math.min(Math.max(startW + delta, 240), window.innerWidth * 0.85);
-      sheet.style.width = `${newW}px`;
-    }
-    function onPointerUp() {
-      handle.removeEventListener("pointermove", onPointerMove);
-    }
-    handle.addEventListener("pointerdown", (e) => {
-      if (window.innerWidth < 769) return;
-      e.preventDefault();
-      startX = e.clientX;
-      startW = sheet.offsetWidth;
-      handle.setPointerCapture(e.pointerId);
-      handle.addEventListener("pointermove", onPointerMove);
-      handle.addEventListener("pointerup", onPointerUp, { once: true });
-    });
+    attachSheetResize(handle, sheet);
   }
 
   /**
@@ -946,47 +903,67 @@ window.appCitations = (() => {
     const sheet  = /** @type {HTMLElement | null} */ (document.getElementById("cite-sheet"));
     const titleEl = /** @type {HTMLElement | null} */ (document.getElementById("cite-sheet-title"));
     const bodyEl = /** @type {HTMLElement | null} */ (document.getElementById("cite-sheet-body"));
-    if (!sheet || !titleEl || !bodyEl) return;
+    if (!sheet || !titleEl || !bodyEl || !_citeSheetOverlay) return;
 
-    _sheetReturnFocus = returnFocusEl;
     _sheetState = { src, parallels: parallels || null, tradition: tradition || null, expandedRefIndex: null };
     titleEl.textContent = "인용된 구절";
     // Reset any drag-resize from a previous open. The body stays interactive
     // while the sheet is open (only a focus trap, no scrim) so cite chips
     // visible in the unobscured portion can re-trigger openCiteSheet without
     // a closeCiteSheet in between — the previous inline height/width would leak in.
+    // Re-trigger while open: open() is a no-op by the controller's idempotency
+    // guard, so the sheet stays open and we just refresh state + body. This also
+    // fixes a focus-trap listener leak the old hand-rolled path had on re-trigger;
+    // return-focus stays the first opener (ADR-032).
     sheet.style.height = "";
     sheet.style.width = "";
-    sheet.hidden = false;
-    document.documentElement.classList.add("cite-sheet-open");
+    _citeSheetOverlay.open(returnFocusEl);
     _updateSheetHeader();
-
-    const closeBtn = /** @type {HTMLElement | null} */ (document.getElementById("cite-sheet-close"));
-    if (closeBtn) closeBtn.focus();
-    _sheetTrapCleanup = trapFocus(sheet);
 
     await _renderSheetBody();
   }
 
+  // Lifecycle (hidden toggle, rootClass remove, focus-trap cleanup, focus
+  // restore) is owned by the controller; its onClose resets the drag-resize
+  // inline styles (so the next open starts from the CSS default) + clears state.
   function closeCiteSheet() {
-    const sheet = /** @type {HTMLElement | null} */ (document.getElementById("cite-sheet"));
-    if (!sheet) return;
-    sheet.hidden = true;
-    // Reset any drag-resize so the next open starts from the CSS default
-    // (mobile: 65vh height; desktop: min(440px, 90vw) width).
-    sheet.style.height = "";
-    sheet.style.width = "";
-    document.documentElement.classList.remove("cite-sheet-open");
-    if (_sheetTrapCleanup) { _sheetTrapCleanup(); _sheetTrapCleanup = null; }
-    if (_sheetReturnFocus && typeof _sheetReturnFocus.focus === "function") {
-      _sheetReturnFocus.focus();
-    }
-    _sheetReturnFocus = null;
-    _sheetState = null;
+    _citeSheetOverlay?.close();
   }
 
   /** Wire up close button, back button, drag handle, ESC key, and `.cite-chip` click delegation. */
   function initCiteSheet() {
+    const sheet = /** @type {HTMLElement | null} */ (document.getElementById("cite-sheet"));
+    if (sheet) {
+      // No scrim (body stays interactive); closeOnEsc off — the custom 2-step
+      // Escape below steps expanded→list before closing (ADR-032). closeTransition
+      // gives the sheet the same animated slide-out as the drawer: cleanup is
+      // immediate, the panel hides after `.cite-sheet-closing` plays (350ms
+      // fallback), and the drag-resized inline size resets *after* the slide so
+      // the exit animates from wherever the user left it.
+      _citeSheetOverlay = createOverlay({
+        panel: sheet,
+        rootClass: "cite-sheet-open",
+        closeOnEsc: false,
+        initialFocus: () => document.getElementById("cite-sheet-close"),
+        onOpen: () => {
+          if (_citeSheetCloseTimer) { clearTimeout(_citeSheetCloseTimer); _citeSheetCloseTimer = null; }
+          sheet.classList.remove("cite-sheet-closing"); // cancel any in-flight close anim
+        },
+        onClose: () => { _sheetState = null; _sheetRenderSeq++; },
+        closeTransition: (panel, finalizeHide) => {
+          panel.classList.add("cite-sheet-closing");
+          const done = () => {
+            if (_citeSheetCloseTimer) { clearTimeout(_citeSheetCloseTimer); _citeSheetCloseTimer = null; }
+            finalizeHide(); // no-op if reopened (seq guard)
+            panel.classList.remove("cite-sheet-closing");
+            panel.style.height = "";
+            panel.style.width = "";
+          };
+          panel.addEventListener("animationend", done, { once: true });
+          _citeSheetCloseTimer = setTimeout(done, 350); // fallback
+        },
+      });
+    }
     document.getElementById("cite-sheet-close")?.addEventListener("click", closeCiteSheet);
     document.getElementById("cite-sheet-back")?.addEventListener("click", () => {
       if (!_sheetState || _sheetState.expandedRefIndex === null) return;

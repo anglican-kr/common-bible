@@ -13,7 +13,7 @@
 
 /** @typedef {import("../types").SearchHistoryList} SearchHistoryList */
 
-const { _$, el, clearNode, chUnit } = window.appHelpers;
+const { _$, el, clearNode, chUnit, emptyState } = window.appHelpers;
 const {
   SEARCH_HISTORY_MAX,
   loadSearchHistory, pushSearchHistory, removeSearchHistory, clearSearchHistory,
@@ -338,14 +338,26 @@ function buildInPageSearchInput(query, autofocus = false) {
  * @returns {HTMLElement}
  */
 function buildSearchEmptyState(title, subtitle) {
-  const box = el("div", { className: "search-empty-state" });
-  const icon = el("div", { className: "search-empty-icon", "aria-hidden": "true" });
-  icon.innerHTML =
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="6.4"/><path d="m20 20-3.7-3.7"/></svg>';
-  box.appendChild(icon);
-  box.appendChild(el("p", { className: "search-empty-title" }, title));
-  box.appendChild(el("p", { className: "search-empty-subtitle" }, subtitle));
-  return box;
+  // Shared empty-state component (ADR-032 / DESIGN.md §6). The magnifier glyph
+  // is built as an SVG node (no markup string) so the shared builder stays
+  // XSS-free.
+  const NS = "http://www.w3.org/2000/svg";
+  const icon = document.createElementNS(NS, "svg");
+  icon.setAttribute("viewBox", "0 0 24 24");
+  icon.setAttribute("fill", "none");
+  icon.setAttribute("stroke", "currentColor");
+  icon.setAttribute("stroke-width", "1.8");
+  icon.setAttribute("stroke-linecap", "round");
+  icon.setAttribute("stroke-linejoin", "round");
+  const circle = document.createElementNS(NS, "circle");
+  circle.setAttribute("cx", "11");
+  circle.setAttribute("cy", "11");
+  circle.setAttribute("r", "6.4");
+  const path = document.createElementNS(NS, "path");
+  path.setAttribute("d", "m20 20-3.7-3.7");
+  icon.appendChild(circle);
+  icon.appendChild(path);
+  return emptyState({ icon, title, subtitle });
 }
 
 // Empty-query mobile /search: render the in-page input plus an Apple-Music-style

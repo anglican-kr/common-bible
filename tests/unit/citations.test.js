@@ -61,6 +61,11 @@ function loadCitations() {
     clearNode: (n) => { n.children = []; },
     trapFocus: () => () => {},
   };
+  // citations.js destructures createOverlay at module load (ADR-032); these
+  // pure-function tests never open the sheet, so a no-op controller suffices.
+  ctx.appOverlay = {
+    createOverlay: () => ({ open() {}, close() {}, get isOpen() { return false; } }),
+  };
   // Minimal document stub — citations.js uses document.createTextNode in
   // buildNoteElement and the sheet body renderer.
   ctx.document = {

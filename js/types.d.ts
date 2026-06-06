@@ -553,6 +553,60 @@ export interface AppHelpers {
   setInert: (on: boolean, selectors: string) => void;
   trapFocus: (container: HTMLElement) => () => void;
   dragReleaseAction: (h: number, vh: number) => "close" | "snap-min" | "stay";
+  emptyState: (opts: {
+    icon: Node | null;
+    title: string;
+    subtitle: string;
+    tag?: keyof HTMLElementTagNameMap;
+    role?: string;
+  }) => HTMLElement;
+}
+
+// ── Overlay/dialog lifecycle controller (js/app/overlay.js, ADR-032) ─────────
+// Single factory over appHelpers primitives that owns the open/close + .hidden
+// toggle + scrim + trapFocus + Escape + setInert + focus-restore plumbing for
+// modals, drawers, sheets and popovers. See the module header for the Escape
+// opt-in migration note.
+export interface OverlayOptions {
+  panel: HTMLElement;
+  scrim?: HTMLElement | null;
+  inertSelectors?: string | null;
+  rootClass?: string | null;
+  closeOnEsc?: boolean;
+  closeOnOutside?: boolean;
+  outsideIgnore?: string | null;
+  trapContainer?: HTMLElement;
+  initialFocus?: (() => HTMLElement | null) | HTMLElement | string | null;
+  returnFocus?: boolean | HTMLElement;
+  ariaExpanded?: string | null;
+  onOpen?: (() => void) | null;
+  onClose?: (() => void) | null;
+  // Animated/async dismiss: close() defers panel.hidden=true to finalizeHide
+  // (call on animation end); a re-open before then cancels it (seq-guarded).
+  closeTransition?: ((panel: HTMLElement, finalizeHide: () => void) => void) | null;
+}
+
+export interface OverlayController {
+  open: (returnFocusEl?: HTMLElement | null) => void;
+  close: () => void;
+  readonly isOpen: boolean;
+}
+
+export interface AppOverlay {
+  createOverlay: (opts: OverlayOptions) => OverlayController;
+  // Bottom-sheet drag plumbing (ADR-032 §2), shared by the bookmark drawer +
+  // cite sheet. Lifecycle stays with the overlay/caller; these only wire the
+  // drag gesture onto a handle element.
+  attachSheetDrag: (
+    handle: HTMLElement,
+    sheet: HTMLElement,
+    opts: { onClose: () => void; maxRatio?: number },
+  ) => void;
+  attachSheetResize: (
+    handle: HTMLElement,
+    sheet: HTMLElement,
+    opts?: { minWidth?: number; maxRatio?: number },
+  ) => void;
 }
 
 // ── App storage facade (js/app/storage.js) ──────────────────────────────────
@@ -847,6 +901,7 @@ declare global {
 
     // App-layer module facades (ADR-018, see docs/design/app-modularization.md).
     appHelpers: AppHelpers;
+    appOverlay: AppOverlay;
     appStorage: AppStorage;
     appSettings: AppSettings;
     appInstall: AppInstall;
@@ -883,6 +938,7 @@ declare global {
     // redeclare conflict at the global scope.
     install?: InstallObject;
     openInstallModal?: () => void;
+    closeInstallModal?: () => void;
     maybeShowInstallNudge?: () => void;
 
     // UI side-effects defined in app.js. Optional because state-machine.js
@@ -890,6 +946,15 @@ declare global {
     rebuildDriveSyncSection?: () => void;
     _showSyncSnackbar?: (msg: string) => void;
     closeSettings?: () => void;
+    closeChapterPopover?: () => void;
+    closeBookmarkDrawer?: () => void;
+    closeSaveModal?: () => void;
+    closeNewFolderModal?: () => void;
+    closeMergeModal?: () => void;
+    closeImportModal?: () => void;
+    closeConfirmModal?: () => void;
+    closeChapterDeleteModal?: () => void;
+    closeDriveDisconnectModal?: () => void;
     renderBookmarkTree?: () => void;
     rerenderActiveBookmarkTree?: () => void;
     // Mobile tab-bar full-screen views (ADR-029 / P2). Always assigned at
@@ -995,6 +1060,12 @@ declare global {
   function buildBookmarkHeaderBtn(bookId: string | null, chapter: number | null): HTMLButtonElement;
   function openBookmarkDrawer(bookId: string | null, chapter: number | null): void;
   function closeBookmarkDrawer(): void;
+  function closeSaveModal(): void;
+  function closeNewFolderModal(): void;
+  function closeMergeModal(): void;
+  function closeImportModal(): void;
+  function closeConfirmModal(): void;
+  function closeChapterDeleteModal(): void;
   function renderBookmarkTree(target?: HTMLElement): void;
   function renderBookmarksView(): void;
   function enterVerseSelectMode(bookId: string, chapter: number): void;
@@ -1009,6 +1080,7 @@ declare global {
   function appendTextWithHighlight(target: Node, text: string, query: string): void;
   function consumeSearchAutoNavigate(): boolean;
   function openDriveDisconnectModal(): void;
+  function closeDriveDisconnectModal(): void;
   function clearAllCaches(): Promise<void>;
   // parsePath returns a view-discriminated union with extra view-specific
   // fields (page, resume, highlightQuery, etc.). Typed as `any` here until

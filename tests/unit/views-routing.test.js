@@ -35,6 +35,12 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const VIEWS_PATH = path.resolve(__dirname, "../../js/app/views-routing.js");
 const VIEWS_SOURCE = fs.readFileSync(VIEWS_PATH, "utf8");
+// The chapter popover drives the shared overlay controller (ADR-032). The
+// POPOVER loader injects the REAL overlay.js so its open/close lifecycle runs
+// against the test DOM stub. Strip the trailing `export {};` ESM marker.
+const OVERLAY_PATH = path.resolve(__dirname, "../../js/app/overlay.js");
+const OVERLAY_SOURCE = fs.readFileSync(OVERLAY_PATH, "utf8")
+  .replace(/\nexport\s*\{\s*\}\s*;?\s*$/, "");
 
 function extractBlock(name) {
   const begin = `// ── BEGIN ${name} ──`;
@@ -743,8 +749,20 @@ function loadPopover() {
     // applyTitleCompactness measures rendered geometry; in this DOM stub
     // there's no real layout, so it's a no-op for popover tests.
     applyTitleCompactness: () => {},
+    // The chapter popover drives the shared overlay controller (ADR-032); run
+    // rAF synchronously so the controller's outside-click listener + initial
+    // focus land within the synchronous _dispatch flow these tests use.
+    requestAnimationFrame: (cb) => { cb(); return 0; },
   };
   vm.createContext(ctx);
+  // Load the REAL overlay controller into this context so the popover tests
+  // exercise the production open/close lifecycle. trapFocus is the recording
+  // stub above (so existing call-count assertions still hold); setInert is a
+  // no-op (the chapter popover passes no inertSelectors).
+  ctx.window = ctx;
+  ctx.appHelpers = { setInert: () => {}, trapFocus: ctx.trapFocus };
+  vm.runInContext(OVERLAY_SOURCE, ctx, { filename: "overlay.js" });
+  ctx.createOverlay = ctx.appOverlay.createOverlay;
   vm.runInContext(EL_SHIM + extractBlock("POPOVER"), ctx, {
     filename: "views-routing-popover.js",
   });

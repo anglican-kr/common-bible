@@ -140,7 +140,28 @@ window.appHelpers = (() => {
     return "stay";
   }
 
-  return { _$, chUnit, el, clearNode, setInert, trapFocus, dragReleaseAction };
+  /**
+   * Build a centered empty-state placeholder — icon + title + subtitle, the
+   * shared "nothing here yet" surface for the bookmark list and search
+   * (ADR-032; DESIGN.md §6 상태 컴포넌트). Icon-agnostic: pass a built SVG/icon
+   * NODE (not markup — keeps the shared builder XSS-free); the
+   * `.empty-state-icon` slot normalizes its size/opacity via CSS, so both
+   * contexts render identically while keeping their own glyph. `tag`/`role` let
+   * the bookmark list mount it as a presentational <li> inside its <ul>.
+   * @param {{ icon: Node | null, title: string, subtitle: string, tag?: keyof HTMLElementTagNameMap, role?: string }} opts
+   * @returns {HTMLElement}
+   */
+  function emptyState({ icon, title, subtitle, tag = "div", role }) {
+    const box = el(tag, role ? { className: "empty-state", role } : { className: "empty-state" });
+    const iconWrap = el("div", { className: "empty-state-icon", "aria-hidden": "true" });
+    if (icon) iconWrap.appendChild(icon);
+    box.appendChild(iconWrap);
+    box.appendChild(el("p", { className: "empty-state-title" }, title));
+    box.appendChild(el("p", { className: "empty-state-subtitle" }, subtitle));
+    return box;
+  }
+
+  return { _$, chUnit, el, clearNode, setInert, trapFocus, dragReleaseAction, emptyState };
 })();
 
 // ESM module marker (ADR-019). No runtime effect; signals TypeScript that

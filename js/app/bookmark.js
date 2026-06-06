@@ -18,7 +18,8 @@
 /** @typedef {import("../types").DragState} DragState */
 /** @typedef {import("../types").BooksData} BooksData */
 
-const { _$, el, clearNode, chUnit, setInert, trapFocus, dragReleaseAction } = window.appHelpers;
+const { _$, el, clearNode, chUnit, emptyState } = window.appHelpers;
+const { createOverlay, attachSheetDrag, attachSheetResize } = window.appOverlay;
 const { loadBookmarks, saveBookmarks, generateId } = window.appStorage;
 const { readingContext } = window;
 
@@ -766,34 +767,18 @@ function _setupDragHandle(li, row) {
 // js/app/reading-context.js (ADR-018 Phase 6a) — see destructured
 // `readingContext` at the top of this file. Only bookmark-UI-specific
 // state remains here pending Phase 6b extraction to bookmark.js.
-/** @type {(() => void) | null} */
-let _bookmarkDrawerTrap = null;
-/** @type {HTMLElement | null} */
-let _bookmarkDrawerLastFocus = null;
-/** @type {(() => void) | null} */
-let _bmSaveModalTrap = null;
-/** @type {(() => void) | null} */
-let _bmMergeModalTrap = null;
-/** @type {(() => void) | null} */
-let _bmConfirmModalTrap = null;
-/** @type {HTMLElement | null} */
-let _bmConfirmLastFocus = null;
-/** @type {(() => void) | null} */
-let _bmChapterDeleteTrap = null;
-/** @type {HTMLElement | null} */
-let _bmChapterDeleteLastFocus = null;
-/** @type {(() => void) | null} */
-let _bmNewFolderTrap = null;
+// All overlay lifecycle (focus-trap, last-focus, background inert, scrim) now
+// lives inside the overlay controllers (ADR-032) — modals, drawer, etc. The
+// drawer's only remaining per-flow state is the animated-dismiss fallback timer
+// (its closeTransition; cleared on reopen). _bmNewFolderCallback is the
+// create-folder continuation.
 /** @type {((id: string) => void) | null} */
 let _bmNewFolderCallback = null;
-let _bookmarkDrawerCloseSeq = 0;
 /** @type {ReturnType<typeof setTimeout> | null} */
 let _bookmarkDrawerCloseTimer = null;
 // `_dragState` was extracted to js/app/bookmark.js (ADR-018 Phase 6a) along
 // with the drag & drop pointer handling that owns it.
 const BOOKMARK_INERT_SELECTORS = "#sticky-group, main#app, #audio-bar, #launch-screen, #install-scrim, #install-modal, #verse-select-bar";
-/** @param {boolean} on */
-function setBookmarkBackgroundInert(on) { setInert(on, BOOKMARK_INERT_SELECTORS); }
 
 // ── Bookmark UI ──
 
@@ -815,26 +800,20 @@ const $driveDisconnectDelete = _$("drive-disconnect-delete");
 const $driveDisconnectKeep = _$("drive-disconnect-keep");
 const $driveDisconnectCancel = _$("drive-disconnect-cancel");
 
-let _driveDisconnectTrap = null;
+// Standalone modal (settings flow), not part of the stacked bookmark Escape
+// group — so it owns Escape directly via closeOnEsc (ADR-032).
+const driveDisconnectOverlay = createOverlay({
+  panel: $driveDisconnectModal,
+  scrim: $driveDisconnectScrim,
+  closeOnEsc: true,
+  initialFocus: () => $driveDisconnectKeep,
+});
 
-function openDriveDisconnectModal() {
-  $driveDisconnectScrim.hidden = false;
-  $driveDisconnectModal.hidden = false;
-  _driveDisconnectTrap = trapFocus($driveDisconnectModal);
-  requestAnimationFrame(() => $driveDisconnectKeep.focus());
-}
-
-function closeDriveDisconnectModal() {
-  $driveDisconnectScrim.hidden = true;
-  $driveDisconnectModal.hidden = true;
-  if (_driveDisconnectTrap) { _driveDisconnectTrap(); _driveDisconnectTrap = null; }
-}
+function openDriveDisconnectModal() { driveDisconnectOverlay.open(); }
+function closeDriveDisconnectModal() { driveDisconnectOverlay.close(); }
 
 $driveDisconnectCancel.addEventListener("click", closeDriveDisconnectModal);
 $driveDisconnectScrim.addEventListener("click", closeDriveDisconnectModal);
-document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && !$driveDisconnectModal.hidden) closeDriveDisconnectModal();
-});
 
 $driveDisconnectKeep.addEventListener("click", () => {
   closeDriveDisconnectModal();
@@ -1009,73 +988,68 @@ function refreshBookmarkHeaderBtn() {
   if (svg) _setBookmarkBtnIcon(svg, hasBookmark);
 }
 
+// The drawer's overlay lifecycle now runs through the shared controller
+// (ADR-032). Its one bespoke trait — an animated slide-out dismiss — is carried
+// by closeTransition: the logical close (scrim, inert, trap, focus restore)
+// happens immediately while `drawer-closing` plays, then finalizeHide hides the
+// panel on animationend (350ms fallback). The controller's seq guard cancels a
+// pending hide if the drawer is reopened mid-animation; we still clear the
+// fallback timer + the drawer-closing class on (re)open so the in-animation
+// can take over and a stale timer never resets a freshly dragged height.
+// closeOnEsc stays off — bookmark.js's stacked Escape router closes the drawer
+// (lowest priority). Background scroll-lock (iOS position:fixed) is drawer-
+// specific, handled via onOpen/onClose like the install modal.
+const drawerOverlay = createOverlay({
+  panel: $bookmarkDrawer,
+  scrim: $bookmarkScrim,
+  inertSelectors: BOOKMARK_INERT_SELECTORS,
+  initialFocus: () => $bookmarkDrawerClose,
+  onOpen: () => {
+    if (_bookmarkDrawerCloseTimer) { clearTimeout(_bookmarkDrawerCloseTimer); _bookmarkDrawerCloseTimer = null; }
+    $bookmarkDrawer.classList.remove("drawer-closing"); // cancel any in-flight close anim
+    const scrollY = window.scrollY;
+    document.body.style.overflow = "hidden";
+    document.body.style.position = "fixed";
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = "100%";
+    document.body.dataset.scrollY = String(scrollY);
+  },
+  onClose: () => {
+    closeSwipedRow(null);
+    $bmOverflowPanel.hidden = true;
+    $bmOverflowBtn.setAttribute("aria-expanded", "false");
+    const scrollY = parseInt(document.body.dataset.scrollY || "0", 10);
+    document.body.style.overflow = "";
+    document.body.style.position = "";
+    document.body.style.top = "";
+    document.body.style.width = "";
+    window.scrollTo(0, scrollY);
+  },
+  closeTransition: (panel, finalizeHide) => {
+    panel.classList.add("drawer-closing");
+    const done = () => {
+      if (_bookmarkDrawerCloseTimer) { clearTimeout(_bookmarkDrawerCloseTimer); _bookmarkDrawerCloseTimer = null; }
+      finalizeHide(); // no-op if reopened in the meantime (seq guard)
+      panel.classList.remove("drawer-closing");
+      panel.style.height = "";
+      panel.style.width = "";
+    };
+    panel.addEventListener("animationend", done, { once: true });
+    _bookmarkDrawerCloseTimer = setTimeout(done, 350); // fallback
+  },
+});
+
 function openBookmarkDrawer(bookId, chapter) {
-  _bookmarkDrawerCloseSeq += 1;
-  if (_bookmarkDrawerCloseTimer) {
-    clearTimeout(_bookmarkDrawerCloseTimer);
-    _bookmarkDrawerCloseTimer = null;
-  }
-  $bookmarkDrawer.classList.remove("drawer-closing");
-  _bookmarkDrawerLastFocus = /** @type {HTMLElement | null} */ (document.activeElement);
-  $bookmarkScrim.hidden = false;
-  $bookmarkDrawer.hidden = false;
-  // Update toolbar visibility based on whether we're in a chapter
+  // Update toolbar visibility based on whether we're in a chapter, and render
+  // the tree before the controller reveals the drawer.
   const inChapter = bookId && chapter;
   $bmSaveChapterBtn.disabled = !inChapter;
   $bmSelectVersesBtn.disabled = !inChapter;
   _rerenderActiveBookmarkTree();
-  setBookmarkBackgroundInert(true);
-  const scrollY = window.scrollY;
-  document.body.style.overflow = "hidden";
-  document.body.style.position = "fixed";
-  document.body.style.top = `-${scrollY}px`;
-  document.body.style.width = "100%";
-  document.body.dataset.scrollY = String(scrollY);
-  _bookmarkDrawerTrap = trapFocus($bookmarkDrawer);
-  requestAnimationFrame(() => $bookmarkDrawerClose.focus());
+  drawerOverlay.open();
 }
 
-function closeBookmarkDrawer() {
-  if ($bookmarkDrawer.hidden || $bookmarkDrawer.classList.contains("drawer-closing")) return;
-  closeSwipedRow(null);
-  $bmOverflowPanel.hidden = true;
-  $bmOverflowBtn.setAttribute("aria-expanded", "false");
-  const closeSeq = ++_bookmarkDrawerCloseSeq;
-  $bookmarkScrim.hidden = true;
-  $bookmarkDrawer.classList.add("drawer-closing");
-
-  // Restore body scroll and focus immediately so the page feels responsive
-  setBookmarkBackgroundInert(false);
-  const scrollY = parseInt(document.body.dataset.scrollY || "0", 10);
-  document.body.style.overflow = "";
-  document.body.style.position = "";
-  document.body.style.top = "";
-  document.body.style.width = "";
-  window.scrollTo(0, scrollY);
-  if (_bookmarkDrawerTrap) { _bookmarkDrawerTrap(); _bookmarkDrawerTrap = null; }
-  if (_bookmarkDrawerLastFocus && _bookmarkDrawerLastFocus.focus) {
-    try { _bookmarkDrawerLastFocus.focus(); } catch {}
-  }
-
-  let finalized = false;
-  const finalize = () => {
-    if (finalized || closeSeq !== _bookmarkDrawerCloseSeq) return;
-    finalized = true;
-    if (_bookmarkDrawerCloseTimer) {
-      clearTimeout(_bookmarkDrawerCloseTimer);
-      _bookmarkDrawerCloseTimer = null;
-    }
-    $bookmarkDrawer.hidden = true;
-    $bookmarkDrawer.classList.remove("drawer-closing");
-    $bookmarkDrawer.style.height = "";
-    $bookmarkDrawer.style.width = "";
-  };
-  $bookmarkDrawer.addEventListener("animationend", finalize, { once: true });
-  _bookmarkDrawerCloseTimer = setTimeout(() => {
-    _bookmarkDrawerCloseTimer = null;
-    finalize();
-  }, 350); // fallback
-}
+function closeBookmarkDrawer() { drawerOverlay.close(); }
 
 // ── Bookmark tree rendering ──
 
@@ -1623,18 +1597,20 @@ function _buildFolderItem(folder, depth) {
 // "none yet" line it explains how bookmarks are created, so the screen is
 // actionable rather than a dead end. The icon matches the header add affordance.
 function _buildEmptyState() {
-  const li = el("li", { className: "bm-empty", role: "presentation" });
   const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   icon.setAttribute("viewBox", "0 -960 960 960");
   icon.setAttribute("fill", "currentColor");
   icon.setAttribute("aria-hidden", "true");
-  icon.setAttribute("class", "bm-empty-icon");
   _setBookmarkBtnIcon(/** @type {SVGElement} */ (icon), false);
-  li.appendChild(icon);
-  li.appendChild(el("p", { className: "bm-empty-title" }, "저장된 북마크가 없습니다"));
-  li.appendChild(el("p", { className: "bm-empty-desc" },
-    "읽는 화면 오른쪽 위의 북마크 버튼을 눌러 지금 보는 장을 저장하세요. 절을 선택하면 원하는 구절만 북마크할 수도 있습니다."));
-  return li;
+  // Shared empty-state component (ADR-032 / DESIGN.md §6). Mounted as a
+  // presentational <li> since the list is a <ul>.
+  return emptyState({
+    tag: "li",
+    role: "presentation",
+    icon,
+    title: "저장된 북마크가 없습니다",
+    subtitle: "읽는 화면 오른쪽 위의 북마크 버튼을 눌러 지금 보는 장을 저장하세요. 절을 선택하면 원하는 구절만 북마크할 수도 있습니다.",
+  });
 }
 
 function renderBookmarkTree(target = $bookmarkDrawerBody) {
@@ -2107,35 +2083,43 @@ function _showSaveModal(mode, bookId, chapter, verseSpec, existing) {
   $bmSaveBody.appendChild(folderField);
   $bmSaveBody.appendChild(actions);
 
-  $bmSaveScrim.hidden = false;
-  $bmSaveModal.hidden = false;
-  _bmSaveModalTrap = trapFocus($bmSaveModal);
-  requestAnimationFrame(() => labelInput.focus());
+  saveOverlay.open();
 }
 
-function closeSaveModal() {
-  const c = /** @type {HTMLElement & { _bmClose?: () => void } | null} */ (document.getElementById("bm-folder-combobox"));
-  if (c && c._bmClose) c._bmClose();
-  $bmSaveScrim.hidden = true;
-  $bmSaveModal.hidden = true;
-  if (_bmSaveModalTrap) { _bmSaveModalTrap(); _bmSaveModalTrap = null; }
-}
+// closeOnEsc stays off: the save modal participates in the stacked Escape
+// router below. Initial focus = the first input (label). onClose also dismisses
+// the folder combobox dropdown (ADR-032).
+const saveOverlay = createOverlay({
+  panel: $bmSaveModal,
+  scrim: $bmSaveScrim,
+  initialFocus: () => $bmSaveModal.querySelector("input"),
+  onClose: () => {
+    const c = /** @type {HTMLElement & { _bmClose?: () => void } | null} */ (document.getElementById("bm-folder-combobox"));
+    if (c && c._bmClose) c._bmClose();
+  },
+});
+
+function closeSaveModal() { saveOverlay.close(); }
+
+// Overlay lifecycle (scrim/hidden/focus-trap/focus-restore) is owned by the
+// shared controller (ADR-032). closeOnEsc stays off: Escape participates in the
+// stacked bookmark router below, so every focused control closes only this modal.
+const newFolderOverlay = createOverlay({
+  panel: $bmNewFolderModal,
+  scrim: $bmNewFolderScrim,
+  initialFocus: () => $bmNewFolderInput,
+  onClose: () => { _bmNewFolderCallback = null; },
+});
 
 function openNewFolderModal(onConfirm) {
   $bmNewFolderInput.value = "";
   $bmNewFolderInput.removeAttribute("aria-invalid");
   _bmNewFolderCallback = onConfirm || null;
-  $bmNewFolderScrim.hidden = false;
-  $bmNewFolderModal.hidden = false;
-  _bmNewFolderTrap = trapFocus($bmNewFolderModal);
-  requestAnimationFrame(() => $bmNewFolderInput.focus());
+  newFolderOverlay.open();
 }
 
 function closeNewFolderModal() {
-  $bmNewFolderScrim.hidden = true;
-  $bmNewFolderModal.hidden = true;
-  _bmNewFolderCallback = null;
-  if (_bmNewFolderTrap) { _bmNewFolderTrap(); _bmNewFolderTrap = null; }
+  newFolderOverlay.close();
 }
 
 function _commitNewFolder() {
@@ -2197,6 +2181,21 @@ function commitSaveBookmark(existingId, label, note, folderId, bookId, chapter, 
  * @param {string} mode
  * @param {{ bookId?: string | null, chapter?: number | null } | null} [fallbackContext]
  */
+// closeOnEsc off: in the stacked Escape router. onClose clears the per-open
+// onclick handlers (ADR-032).
+const mergeOverlay = createOverlay({
+  panel: $bmMergeModal,
+  scrim: $bmMergeScrim,
+  initialFocus: () => $bmMergeYes,
+  onClose: () => {
+    $bmMergeYes.onclick = null;
+    $bmMergeNo.onclick = null;
+    $bmMergeCancel.onclick = null;
+  },
+});
+
+function closeMergeModal() { mergeOverlay.close(); }
+
 function openMergeDialog(candidates, incomingSpec, mode, fallbackContext = null) {
   clearNode($bmMergeBody);
   const resolvedBookId =
@@ -2229,19 +2228,8 @@ function openMergeDialog(candidates, incomingSpec, mode, fallbackContext = null)
     $bmMergeBody.appendChild(radioGroup);
   }
 
-  $bmMergeScrim.hidden = false;
-  $bmMergeModal.hidden = false;
-  _bmMergeModalTrap = trapFocus($bmMergeModal);
-  requestAnimationFrame(() => $bmMergeYes.focus());
-
-  function cleanup() {
-    $bmMergeScrim.hidden = true;
-    $bmMergeModal.hidden = true;
-    if (_bmMergeModalTrap) { _bmMergeModalTrap(); _bmMergeModalTrap = null; }
-    $bmMergeYes.onclick = null;
-    $bmMergeNo.onclick = null;
-    $bmMergeCancel.onclick = null;
-  }
+  mergeOverlay.open();
+  const cleanup = closeMergeModal;
 
   $bmMergeYes.onclick = () => {
     const merged = mergeVerseSpecs(target.verseSpec ?? "all", incomingSpec);
@@ -2282,32 +2270,32 @@ function openMergeDialog(candidates, incomingSpec, mode, fallbackContext = null)
 /**
  * @param {{ title: string, message: string, confirmLabel?: string, onConfirm: () => void }} opts
  */
+// Overlay lifecycle (scrim/hidden/focus-trap/focus-restore) is owned by the
+// shared controller (ADR-032). closeOnEsc stays off: this modal participates in
+// bookmark.js's stacked Escape router (confirm > chapter-delete > … > drawer),
+// which calls closeConfirmModal() for the topmost overlay. A controller-level
+// Escape listener here would double-handle and also close whatever sits beneath.
+// Default initial focus = cancel (safe action); destructive button is opt-in.
+const confirmOverlay = createOverlay({
+  panel: $bmConfirmModal,
+  scrim: $bmConfirmScrim,
+  initialFocus: () => $bmConfirmCancel,
+  onClose: () => { $bmConfirmOk.onclick = null; },
+});
+
 function openConfirmModal({ title, message, confirmLabel = "삭제", onConfirm }) {
   $bmConfirmTitle.textContent = title;
   $bmConfirmBody.textContent = message;
   $bmConfirmOk.textContent = confirmLabel;
-  _bmConfirmLastFocus = /** @type {HTMLElement | null} */ (document.activeElement);
-  $bmConfirmScrim.hidden = false;
-  $bmConfirmModal.hidden = false;
   $bmConfirmOk.onclick = () => {
     closeConfirmModal();
     onConfirm();
   };
-  _bmConfirmModalTrap = trapFocus($bmConfirmModal);
-  // Focus the safe (cancel) action by default — destructive button is opt-in.
-  requestAnimationFrame(() => $bmConfirmCancel.focus());
+  confirmOverlay.open();
 }
 
 function closeConfirmModal() {
-  if ($bmConfirmModal.hidden) return;
-  $bmConfirmScrim.hidden = true;
-  $bmConfirmModal.hidden = true;
-  $bmConfirmOk.onclick = null;
-  if (_bmConfirmModalTrap) { _bmConfirmModalTrap(); _bmConfirmModalTrap = null; }
-  if (_bmConfirmLastFocus && _bmConfirmLastFocus.focus) {
-    try { _bmConfirmLastFocus.focus(); } catch {}
-  }
-  _bmConfirmLastFocus = null;
+  confirmOverlay.close();
 }
 
 // Header bookmark toggle-off (mobile): instead of a blunt "delete all", present
@@ -2318,6 +2306,19 @@ function closeConfirmModal() {
 /**
  * @param {BookmarkTreeBookmark[]} candidates
  */
+// closeOnEsc off: in the stacked Escape router. onClose clears per-open
+// handlers; returnFocus restores the pre-open focus (ADR-032).
+const chapterDeleteOverlay = createOverlay({
+  panel: $bmChapterDeleteModal,
+  scrim: $bmChapterDeleteScrim,
+  initialFocus: () => $bmChapterDeleteCancel,
+  onClose: () => {
+    $bmChapterDeleteConfirm.onclick = null;
+    $bmChapterDeleteCancel.onclick = null;
+    $bmChapterDeleteAll.onchange = null;
+  },
+});
+
 function openChapterDeleteModal(candidates) {
   if (!candidates.length) return;
   /** @type {Set<string>} */
@@ -2368,11 +2369,7 @@ function openChapterDeleteModal(candidates) {
   };
 
   syncChrome();
-  _bmChapterDeleteLastFocus = /** @type {HTMLElement | null} */ (document.activeElement);
-  $bmChapterDeleteScrim.hidden = false;
-  $bmChapterDeleteModal.hidden = false;
-  _bmChapterDeleteTrap = trapFocus($bmChapterDeleteModal);
-  requestAnimationFrame(() => $bmChapterDeleteCancel.focus());
+  chapterDeleteOverlay.open();
 
   $bmChapterDeleteConfirm.onclick = () => {
     if (!selected.size) return;
@@ -2393,19 +2390,7 @@ function openChapterDeleteModal(candidates) {
   $bmChapterDeleteCancel.onclick = closeChapterDeleteModal;
 }
 
-function closeChapterDeleteModal() {
-  if ($bmChapterDeleteModal.hidden) return;
-  $bmChapterDeleteScrim.hidden = true;
-  $bmChapterDeleteModal.hidden = true;
-  $bmChapterDeleteConfirm.onclick = null;
-  $bmChapterDeleteCancel.onclick = null;
-  $bmChapterDeleteAll.onchange = null;
-  if (_bmChapterDeleteTrap) { _bmChapterDeleteTrap(); _bmChapterDeleteTrap = null; }
-  if (_bmChapterDeleteLastFocus && _bmChapterDeleteLastFocus.focus) {
-    try { _bmChapterDeleteLastFocus.focus(); } catch {}
-  }
-  _bmChapterDeleteLastFocus = null;
-}
+function closeChapterDeleteModal() { chapterDeleteOverlay.close(); }
 
 // ── Export / Import bookmarks (Phase 2a) ──
 
@@ -2473,8 +2458,6 @@ function _mergeBookmarkStores(existing, incoming) {
   return [...existing, ...filterNew(incoming)];
 }
 
-let _bmImportModalTrap = null;
-
 function _countBookmarks(items) {
   let count = 0;
   for (const item of items) {
@@ -2488,6 +2471,22 @@ function _countBookmarks(items) {
 }
 // ── END IMPORT_EXPORT ──
 
+// closeOnEsc off: in the stacked Escape router. onClose clears per-open
+// handlers and resets the file input (ADR-032).
+const importOverlay = createOverlay({
+  panel: $bmImportModal,
+  scrim: $bmImportScrim,
+  initialFocus: () => $bmImportMerge,
+  onClose: () => {
+    $bmImportMerge.onclick = null;
+    $bmImportOverwrite.onclick = null;
+    $bmImportCancel.onclick = null;
+    $bmImportInput.value = "";
+  },
+});
+
+function closeImportModal() { importOverlay.close(); }
+
 function openImportModal(incoming) {
   const bmCount = _countBookmarks(incoming.bookmarks);
   clearNode($bmImportBody);
@@ -2495,20 +2494,8 @@ function openImportModal(incoming) {
     el("p", {}, `북마크 ${bmCount}개를 현재 목록에 병합하거나 덮어쓸 수 있습니다.`)
   );
 
-  $bmImportScrim.hidden = false;
-  $bmImportModal.hidden = false;
-  _bmImportModalTrap = trapFocus($bmImportModal);
-  requestAnimationFrame(() => $bmImportMerge.focus());
-
-  function cleanup() {
-    $bmImportScrim.hidden = true;
-    $bmImportModal.hidden = true;
-    if (_bmImportModalTrap) { _bmImportModalTrap(); _bmImportModalTrap = null; }
-    $bmImportMerge.onclick = null;
-    $bmImportOverwrite.onclick = null;
-    $bmImportCancel.onclick = null;
-    $bmImportInput.value = "";
-  }
+  importOverlay.open();
+  const cleanup = closeImportModal;
 
   $bmImportMerge.onclick = () => {
     const existing = loadBookmarks();
@@ -2651,7 +2638,6 @@ $bmNewFolderCancel.addEventListener("click", closeNewFolderModal);
 $bmNewFolderConfirm.addEventListener("click", _commitNewFolder);
 $bmNewFolderInput.addEventListener("keydown", (e) => {
   if (e.key === "Enter") { e.preventDefault(); _commitNewFolder(); }
-  else if (e.key === "Escape") { e.preventDefault(); closeNewFolderModal(); }
 });
 
 $bmSaveChapterBtn.addEventListener("click", () => {
@@ -2696,7 +2682,10 @@ $bmAddFolderBtn.addEventListener("click", () => {
   cancelBtn.addEventListener("click", cleanup);
   input.addEventListener("keydown", (e) => {
     if (e.key === "Enter") { e.preventDefault(); commit(); }
-    if (e.key === "Escape") cleanup();
+    // Consume Escape here so it cancels only this inline form — without
+    // stopPropagation it bubbles to the document Escape router, whose drawer
+    // fallback would also close the drawer underneath (ADR-032).
+    if (e.key === "Escape") { e.stopPropagation(); cleanup(); }
   });
 
   form.appendChild(input);
@@ -2749,41 +2738,15 @@ $bmImportInput.addEventListener("change", () => {
   reader.readAsText(file);
 });
 
-$bmImportScrim.addEventListener("click", () => {
-  if (!$bmImportModal.hidden) {
-    $bmImportScrim.hidden = true;
-    $bmImportModal.hidden = true;
-    if (_bmImportModalTrap) { _bmImportModalTrap(); _bmImportModalTrap = null; }
-    $bmImportMerge.onclick = null;
-    $bmImportOverwrite.onclick = null;
-    $bmImportCancel.onclick = null;
-    $bmImportInput.value = "";
-  }
-});
+$bmImportScrim.addEventListener("click", closeImportModal);
 
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
+    if (!$bmNewFolderModal.hidden) { e.preventDefault(); e.stopPropagation(); closeNewFolderModal(); return; }
     if (!$bmConfirmModal.hidden) { closeConfirmModal(); return; }
     if (!$bmChapterDeleteModal.hidden) { closeChapterDeleteModal(); return; }
-    if (!$bmImportModal.hidden) {
-      $bmImportScrim.hidden = true;
-      $bmImportModal.hidden = true;
-      if (_bmImportModalTrap) { _bmImportModalTrap(); _bmImportModalTrap = null; }
-      $bmImportMerge.onclick = null;
-      $bmImportOverwrite.onclick = null;
-      $bmImportCancel.onclick = null;
-      $bmImportInput.value = "";
-      return;
-    }
-    if (!$bmMergeModal.hidden) {
-      $bmMergeScrim.hidden = true;
-      $bmMergeModal.hidden = true;
-      if (_bmMergeModalTrap) { _bmMergeModalTrap(); _bmMergeModalTrap = null; }
-      $bmMergeYes.onclick = null;
-      $bmMergeNo.onclick = null;
-      $bmMergeCancel.onclick = null;
-      return;
-    }
+    if (!$bmImportModal.hidden) { closeImportModal(); return; }
+    if (!$bmMergeModal.hidden) { closeMergeModal(); return; }
     if (!$bmSaveModal.hidden) { closeSaveModal(); return; }
     if (!$bookmarkDrawer.hidden) { closeBookmarkDrawer(); return; }
     if (readingContext.verseSelectMode) { exitVerseSelectMode(); return; }
@@ -2798,72 +2761,23 @@ document.addEventListener("keydown", (e) => {
 // `window.initBookmarkSheetDrag` / `window.initBookmarkDrawerResize`
 // facade entries below.
 
+// Drag (mobile) + width-resize (desktop) plumbing is shared with the cite sheet
+// via the overlay factory (ADR-032 §2). The drawer's animated dismiss stays in
+// closeBookmarkDrawer; onClose also clears the dragged inline height so the
+// close animation starts from the CSS default. maxRatio 0.92 is the drawer's
+// (slightly taller than the cite sheet's default 0.9).
 function initBookmarkSheetDrag() {
-  const handle = _$("bookmark-drawer-handle");
-  const drawer = _$("bookmark-drawer");
-  let startY = 0;
-  let startH = 0;
-
-  function onMove(clientY) {
-    const delta = startY - clientY;
-    // Lower bound is 0 (not 30vh) so the user can drag the drawer visually
-    // below its rest min — that's the affordance for the snap-close gesture.
-    // A hard 30vh clamp here would make dragReleaseAction's close branch
-    // unreachable (Cursor Bugbot caught this exact regression in cite-sheet).
-    const newH = Math.min(Math.max(startH + delta, 0), window.innerHeight * 0.92);
-    drawer.style.height = `${newH}px`;
-  }
-
-  handle.addEventListener("pointerdown", (e) => {
-    if (window.innerWidth >= 769) return; // desktop uses fixed-size side panel
-    e.preventDefault();
-    startY = e.clientY;
-    startH = drawer.offsetHeight;
-    handle.setPointerCapture(e.pointerId);
-    handle.addEventListener("pointermove", onPointerMove);
-    handle.addEventListener("pointerup", onPointerUp, { once: true });
+  // onClose just dismisses; the drawer's closeTransition resets the inline
+  // height after the slide-out, so the exit animates from the dragged height
+  // (no jump to the rest size first).
+  attachSheetDrag(_$("bookmark-drawer-handle"), _$("bookmark-drawer"), {
+    onClose: closeBookmarkDrawer,
+    maxRatio: 0.92,
   });
-
-  /** @param {PointerEvent} e */
-  function onPointerMove(e) { onMove(e.clientY); }
-  function onPointerUp() {
-    handle.removeEventListener("pointermove", onPointerMove);
-    const action = dragReleaseAction(drawer.offsetHeight, window.innerHeight);
-    if (action === "close") {
-      closeBookmarkDrawer();
-      drawer.style.height = "";
-    } else if (action === "snap-min") {
-      drawer.style.height = `${window.innerHeight * 0.3}px`;
-    }
-  }
 }
 
 function initBookmarkDrawerResize() {
-  const handle = _$("bookmark-drawer-resize");
-  const drawer = _$("bookmark-drawer");
-  let startX = 0;
-  let startW = 0;
-
-  handle.addEventListener("pointerdown", (e) => {
-    if (window.innerWidth < 769) return;
-    e.preventDefault();
-    startX = e.clientX;
-    startW = drawer.offsetWidth;
-    handle.setPointerCapture(e.pointerId);
-    handle.addEventListener("pointermove", onPointerMove);
-    handle.addEventListener("pointerup", onPointerUp, { once: true });
-  });
-
-  /** @param {PointerEvent} e */
-  function onPointerMove(e) {
-    const delta = startX - e.clientX; // drag left = wider
-    const newW = Math.min(Math.max(startW + delta, 240), window.innerWidth * 0.85);
-    drawer.style.width = `${newW}px`;
-  }
-
-  function onPointerUp() {
-    handle.removeEventListener("pointermove", onPointerMove);
-  }
+  attachSheetResize(_$("bookmark-drawer-resize"), _$("bookmark-drawer"));
 }
 
 // ── Window facade ──
@@ -2919,6 +2833,10 @@ window.buildHomeBtn = buildHomeBtn;
 window.buildBookmarkHeaderBtn = buildBookmarkHeaderBtn;
 window.openBookmarkDrawer = openBookmarkDrawer;
 window.closeBookmarkDrawer = closeBookmarkDrawer;
+window.closeSaveModal = closeSaveModal;
+window.closeNewFolderModal = closeNewFolderModal;
+window.closeMergeModal = closeMergeModal;
+window.closeImportModal = closeImportModal;
 // Exposed so route() can dismiss the destructive-confirm overlay on any nav
 // (e.g. OS back gesture mid-confirm) — its scrim would otherwise persist over
 // the rebuilt view. Safe to call when already hidden (self-guards).
@@ -2935,6 +2853,7 @@ window.exitVerseSelectMode = exitVerseSelectMode;
 window.updateVerseSelectionBoundaries = updateVerseSelectionBoundaries;
 window.updateVerseSelectBar = updateVerseSelectBar;
 window.openDriveDisconnectModal = openDriveDisconnectModal;
+window.closeDriveDisconnectModal = closeDriveDisconnectModal;
 // Phase 8: drawer drag/resize handle init — called from app.js bootstrap.
 window.initBookmarkSheetDrag = initBookmarkSheetDrag;
 window.initBookmarkDrawerResize = initBookmarkDrawerResize;

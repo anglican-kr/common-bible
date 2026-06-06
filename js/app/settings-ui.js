@@ -16,7 +16,8 @@
 window.appSettings = (() => {
   /** @typedef {import("../types").ColorSchemeEntry} ColorSchemeEntry */
 
-  const { _$, el, clearNode, trapFocus } = window.appHelpers;
+  const { _$, el, clearNode } = window.appHelpers;
+  const { createOverlay } = window.appOverlay;
   const {
     FONT_SIZES, DEFAULT_FONT_SIZE, COLOR_SCHEMES,
     loadFontSize, saveFontSize,
@@ -775,15 +776,21 @@ window.appSettings = (() => {
       popover.style.right = `${window.innerWidth - rect.right}px`;
     }
 
-    /** @type {(() => void) | null} */
-    let cleanupTrap = null;
+    // Overlay lifecycle (hidden toggle, focus-trap, aria-expanded on every gear,
+    // outside-click, focus restore) is owned by the shared controller (ADR-032).
+    // closeOnEsc stays off: app.js's central Escape coordinator routes Escape
+    // here via window.closeSettings, keeping popover↔tab-search precedence in one
+    // place.
+    const settingsOverlay = createOverlay({
+      panel: popover,
+      closeOnOutside: true,
+      outsideIgnore: ".settings-btn",
+      ariaExpanded: ".settings-btn",
+      returnFocus: true,
+    });
 
-    function closeSettings() {
-      popover.hidden = true;
-      document.querySelectorAll(".settings-btn").forEach((b) => b.setAttribute("aria-expanded", "false"));
-      if (cleanupTrap) { cleanupTrap(); cleanupTrap = null; }
-    }
-    // Exposed so route() can dismiss the popover on navigation (ADR-029).
+    function closeSettings() { settingsOverlay.close(); }
+    // Exposed so route() + app.js's Escape coordinator can dismiss it (ADR-029/032).
     window.closeSettings = closeSettings;
 
     // Wire a gear button to the shared popover. Reused for the desktop button
@@ -791,37 +798,24 @@ window.appSettings = (() => {
     /** @param {HTMLElement} triggerBtn */
     function wireTrigger(triggerBtn) {
       triggerBtn.addEventListener("click", (e) => {
-        if (popover.hidden) {
-          activeAnchor = triggerBtn;
-          rebuild();
-          positionPopover();
-          popover.hidden = false;
-          triggerBtn.setAttribute("aria-expanded", "true");
-          cleanupTrap = trapFocus(popover);
-          // event.detail === 0 means activation via keyboard (Enter/Space).
-          // Focus the first control so keyboard users land on a target. For
-          // pointer activation, focus the popover container itself to avoid a
-          // stray :focus-visible ring on the first button (iOS Safari).
-          if (/** @type {MouseEvent} */ (e).detail === 0) {
-            const first = /** @type {HTMLElement | null} */ (popover.querySelector('button, a[href], input'));
-            if (first) first.focus();
-          } else {
-            popover.focus();
-          }
+        if (settingsOverlay.isOpen) { closeSettings(); return; }
+        activeAnchor = triggerBtn;
+        rebuild();
+        positionPopover();
+        settingsOverlay.open();
+        // event.detail === 0 means activation via keyboard (Enter/Space).
+        // Focus the first control so keyboard users land on a target. For
+        // pointer activation, focus the popover container itself to avoid a
+        // stray :focus-visible ring on the first button (iOS Safari).
+        if (/** @type {MouseEvent} */ (e).detail === 0) {
+          const first = /** @type {HTMLElement | null} */ (popover.querySelector('button, a[href], input'));
+          if (first) first.focus();
         } else {
-          closeSettings();
+          popover.focus();
         }
       });
     }
     wireTrigger(btn);
-
-    document.addEventListener("click", (e) => {
-      const t = e.target;
-      if (!popover.hidden && t instanceof Node && !popover.contains(t) &&
-          !(t instanceof Element && t.closest(".settings-btn"))) {
-        closeSettings();
-      }
-    });
 
     // Allow drive-sync.js to trigger a UI refresh when auth state changes.
     window.rebuildDriveSyncSection = () => { if (!popover.hidden) rebuild(); };

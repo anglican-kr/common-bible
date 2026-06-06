@@ -34,6 +34,7 @@ const SHELL_FILES = [
   "/privacy.html",
   "/js/app.js",
   "/js/app/helpers.js",
+  "/js/app/overlay.js",
   "/js/app/storage.js",
   "/js/app/settings-ui.js",
   "/js/app/install.js",

@@ -618,3 +618,36 @@ test("dragReleaseAction: thresholds scale with viewport height", () => {
   // 400px in 800px is 50vh → stay
   assert.equal(h.helpers.dragReleaseAction(400, 800), "stay");
 });
+
+// ── emptyState (shared empty-state builder, ADR-032) ─────────────────────────
+
+test("emptyState: builds icon slot + title + subtitle structure", () => {
+  const h = loadHelpers();
+  const icon = h.helpers.el("svg");
+  const node = h.helpers.emptyState({ icon, title: "없음", subtitle: "안내" });
+  assert.equal(node.tagName, "DIV");
+  assert.equal(node.className, "empty-state");
+  assert.equal(node._children.length, 3);
+  const [iconWrap, title, subtitle] = node._children;
+  assert.equal(iconWrap.className, "empty-state-icon");
+  assert.equal(iconWrap.getAttribute("aria-hidden"), "true");
+  assert.equal(iconWrap._children[0], icon); // the passed-in glyph node
+  assert.equal(title.className, "empty-state-title");
+  assert.equal(title.textContent, "없음");
+  assert.equal(subtitle.className, "empty-state-subtitle");
+  assert.equal(subtitle.textContent, "안내");
+});
+
+test("emptyState: tag + role mount it as a presentational <li>", () => {
+  const h = loadHelpers();
+  const node = h.helpers.emptyState({ icon: null, title: "t", subtitle: "s", tag: "li", role: "presentation" });
+  assert.equal(node.tagName, "LI");
+  assert.equal(node.getAttribute("role"), "presentation");
+});
+
+test("emptyState: null icon leaves an empty icon slot (no crash)", () => {
+  const h = loadHelpers();
+  const node = h.helpers.emptyState({ icon: null, title: "t", subtitle: "s" });
+  assert.equal(node._children[0].className, "empty-state-icon");
+  assert.equal(node._children[0]._children.length, 0);
+});

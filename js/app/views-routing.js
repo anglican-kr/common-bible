@@ -17,7 +17,8 @@
 /** @typedef {import("../types").BibleChapter} BibleChapter */
 /** @typedef {import("../types").BiblePrologue} BiblePrologue */
 
-const { _$, el, clearNode, chUnit, trapFocus } = window.appHelpers;
+const { _$, el, clearNode, chUnit } = window.appHelpers;
+const { createOverlay } = window.appOverlay;
 const {
   loadBookOrder, loadStartupBehavior,
   loadReadingPosition, saveReadingPosition, clearReadingPosition,
@@ -471,15 +472,21 @@ function setTitleWithChapterPicker(book, currentCh) {
   }
   popover.appendChild(grid);
 
-  /** @type {(() => void) | null} */
-  let cleanupTrap = null;
-
-  btn.addEventListener("click", () => {
-    const open = !popover.hidden;
-    popover.hidden = open;
-    btn.setAttribute("aria-expanded", String(!open));
-    if (!open) {
-      cleanupTrap = trapFocus(popover);
+  // Overlay lifecycle (hidden toggle, focus-trap, outside-click, focus restore)
+  // is owned by the shared controller (ADR-032). closeOnEsc stays off: app.js's
+  // central Escape coordinator routes Escape via window.closeChapterPopover.
+  // aria-expanded is set on the specific btn in onOpen/onClose (per-instance, so
+  // a document-wide ariaExpanded selector isn't needed). outsideIgnore is the
+  // toggle btn itself; clicking the settings gear (outside the popover, not the
+  // toggle) closes the picker — the controller's "outside panel" rule subsumes
+  // the old explicit settings-gear clause.
+  const chapterOverlay = createOverlay({
+    panel: popover,
+    closeOnOutside: true,
+    outsideIgnore: ".title-picker-btn",
+    returnFocus: true,
+    onOpen: () => {
+      btn.setAttribute("aria-expanded", "true");
       // Land on the currently-open chapter (falling back to the first link, e.g.
       // when arriving from the prologue). preventScroll keeps the browser from
       // jumping the element to the viewport edge; we then center it within the
@@ -491,33 +498,19 @@ function setTitleWithChapterPicker(book, currentCh) {
       if (current) {
         popover.scrollTop = current.offsetTop - (popover.clientHeight - current.offsetHeight) / 2;
       }
-    } else if (cleanupTrap) {
-      cleanupTrap(); cleanupTrap = null;
-    }
+    },
+    onClose: () => { btn.setAttribute("aria-expanded", "false"); },
   });
+  // Exposed for app.js's Escape coordinator + route() nav dismissal (ADR-032).
+  window.closeChapterPopover = () => chapterOverlay.close();
 
-  document.addEventListener("click", (e) => {
-    const t = e.target;
-    // Close on any click outside the title row, OR on the settings gear — the
-    // mobile settings trigger lives *inside* $title, so without the second
-    // clause the chapter popover would stay open behind the settings popover
-    // (two popovers visible at once).
-    const outsideTitle = t instanceof Node && !$title.contains(t);
-    const onSettingsBtn = t instanceof Element && !!t.closest(".title-settings-btn");
-    if (!popover.hidden && (outsideTitle || onSettingsBtn)) {
-      popover.hidden = true;
-      btn.setAttribute("aria-expanded", "false");
-      if (cleanupTrap) { cleanupTrap(); cleanupTrap = null; }
-    }
+  btn.addEventListener("click", () => {
+    if (chapterOverlay.isOpen) chapterOverlay.close(); else chapterOverlay.open();
   });
 
   popover.addEventListener("click", (e) => {
     const t = e.target;
-    if (t instanceof Element && t.tagName === "A") {
-      popover.hidden = true;
-      btn.setAttribute("aria-expanded", "false");
-      if (cleanupTrap) { cleanupTrap(); cleanupTrap = null; }
-    }
+    if (t instanceof Element && t.tagName === "A") chapterOverlay.close();
   });
 
   $title.appendChild(buildHomeBtn(`/${effectiveDivision(book)}`, "성서 목록으로"));
@@ -1805,28 +1798,44 @@ async function route() {
   clearNode($resumeBannerSlot);
   clearNode($divisionTabsSlot);
   if (readingContext.verseSelectMode) exitVerseSelectMode();
+  // Route changes should dismiss overlays through their controllers, not by
+  // flipping `hidden`, so scrims, focus traps, body scroll locks and focus
+  // restoration all unwind consistently (ADR-032).
+  /** @param {string} id @param {() => void} close */
+  const closeIfOpen = (id, close) => {
+    const node = /** @type {HTMLElement | null} */ (document.getElementById(id));
+    if (node && !node.hidden) {
+      close();
+      // Animated-dismiss overlays (cite sheet / drawer closeTransition) set
+      // _open=false immediately but DEFER panel.hidden to the slide-out's end.
+      // On navigation we want the overlay gone now, not lingering over the next
+      // view — so force it hidden. Harmless no-op for synchronous overlays
+      // (already hidden by close()); their controllers' deferred finalize then
+      // self-skips, and the closing class is cleared on the next open (ADR-032).
+      if (!node.hidden) node.hidden = true;
+    }
+  };
   // The citation sheet is anchored to a specific citation context, so a route
   // change (link nav or back/forward — both land here) should dismiss it.
-  // Tapping another cite chip re-opens it without routing, so the intended
-  // non-modal "tap chips in the visible page" behavior is preserved.
-  const citeSheet = document.getElementById("cite-sheet");
-  if (citeSheet && !citeSheet.hidden) window.appCitations?.closeCiteSheet();
-  // Overlays that lock body scroll (position:fixed / overflow:hidden) must be
-  // dismissed on any nav — incl. tab-bar switches — or they (and the scroll
-  // lock) persist over the new view, blocking it (ADR-029).
-  const bmDrawer = document.getElementById("bookmark-drawer");
-  if (bmDrawer && !bmDrawer.hidden) window.closeBookmarkDrawer?.();
-  // Destructive-confirm modal: dismiss on nav so its scrim doesn't linger over
-  // the rebuilt view (e.g. OS back gesture while confirming). Self-guards.
-  const bmConfirm = document.getElementById("bm-confirm-modal");
-  if (bmConfirm && !bmConfirm.hidden) window.closeConfirmModal?.();
-  const bmChapterDelete = document.getElementById("bm-chapter-delete-modal");
-  if (bmChapterDelete && !bmChapterDelete.hidden) window.closeChapterDeleteModal?.();
+  closeIfOpen("cite-sheet", () => window.appCitations?.closeCiteSheet());
+  closeIfOpen("install-modal", () => window.closeInstallModal?.());
+  closeIfOpen("drive-disconnect-modal", () => window.closeDriveDisconnectModal?.());
+  closeIfOpen("bookmark-drawer", () => window.closeBookmarkDrawer?.());
+  closeIfOpen("bm-new-folder-modal", () => window.closeNewFolderModal?.());
+  closeIfOpen("bm-confirm-modal", () => window.closeConfirmModal?.());
+  closeIfOpen("bm-chapter-delete-modal", () => window.closeChapterDeleteModal?.());
+  closeIfOpen("bm-import-modal", () => window.closeImportModal?.());
+  closeIfOpen("bm-merge-modal", () => window.closeMergeModal?.());
+  closeIfOpen("bm-save-modal", () => window.closeSaveModal?.());
   // Desktop settings popover: close on nav too (it has a focus trap). Closing
   // here also makes the /settings desktop fallback's gear.click() always OPEN
   // (never toggle-closed) since the popover is already dismissed by this point.
   const settingsPopover = document.querySelector(".settings-popover");
   if (settingsPopover && !(/** @type {HTMLElement} */ (settingsPopover)).hidden) window.closeSettings?.();
+  // Chapter picker has a focus trap + outside-click listener; dismiss on nav so
+  // a stale controller from the previous render doesn't linger (ADR-032).
+  const chapterPopover = document.querySelector(".chapter-popover");
+  if (chapterPopover && !(/** @type {HTMLElement} */ (chapterPopover)).hidden) window.closeChapterPopover?.();
   const parsed = parsePath();
   const { view, bookId, chapter, division } = parsed;
 
