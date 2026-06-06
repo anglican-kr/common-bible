@@ -1643,6 +1643,16 @@ function _buildFolderItem(folder, depth) {
  * on each bookmark's own `<a>` for keyboard reachability.
  * @param {HTMLElement} [target]
  */
+// Single source for the "how to add a bookmark" guidance. Adding is reading-
+// context only — you bookmark the chapter/verses you're reading (ADR-029) — so
+// the guidance points back to the reading screen rather than offering an add
+// action in the management view. Shared by two surfaces: the empty state (shown
+// when there are no bookmarks yet) and the 🛈 info popover in the full view's
+// title row (shown when bookmarks already exist, so returning users who forgot
+// the flow still have a reminder).
+const BOOKMARK_ADD_HELP =
+  "읽는 화면 오른쪽 위의 북마크 버튼을 눌러 지금 보는 장을 저장하세요. 절을 선택하면 원하는 구절만 북마크할 수도 있습니다.";
+
 // Empty-state placeholder for the bookmark list (drawer + full view). Beyond the
 // "none yet" line it explains how bookmarks are created, so the screen is
 // actionable rather than a dead end. The icon matches the header add affordance.
@@ -1659,7 +1669,7 @@ function _buildEmptyState() {
     role: "presentation",
     icon,
     title: "저장된 북마크가 없습니다",
-    subtitle: "읽는 화면 오른쪽 위의 북마크 버튼을 눌러 지금 보는 장을 저장하세요. 절을 선택하면 원하는 구절만 북마크할 수도 있습니다.",
+    subtitle: BOOKMARK_ADD_HELP,
   });
 }
 
@@ -1831,7 +1841,7 @@ function buildBmViewActions() {
   }
 
   moreBtn.addEventListener("click", () => {
-    if (menu.hidden) openMenu();
+    if (menu.hidden) { closeInfo(); openMenu(); }
     else closeMenu();
   });
 
@@ -1944,15 +1954,89 @@ function buildBmViewActions() {
   // Reflect emptiness whenever the menu opens (the DOM outlives re-renders).
   refreshDeleteEnabled = () => { deleteItem.disabled = loadBookmarks().length === 0; };
 
-  // Action group on top, then a single hairline divider, then the 정렬 group
-  // (Apple Music keeps one group divider; per-item lines were dropped). The
-  // destructive 삭제 action sits in its own group beneath a second divider.
+  // Action group on top, then a hairline, then the 정렬 group, then a second
+  // hairline, and the destructive 삭제 last (Apple Music keeps one group divider;
+  // per-item lines were dropped). 삭제 sits at the very bottom in its own group
+  // because Apple's menu convention places the most dangerous action last —
+  // never with non-destructive items below it.
   menu.appendChild(actionGroup);
   menu.appendChild(el("div", { className: "title-action-menu-sep", role: "separator" }));
-  menu.appendChild(deleteGroup);
-  menu.appendChild(el("div", { className: "title-action-menu-sep", role: "separator" }));
   menu.appendChild(sortGroup);
+  menu.appendChild(el("div", { className: "title-action-menu-sep", role: "separator" }));
+  menu.appendChild(deleteGroup);
 
+  // ── "🛈" 북마크 추가 방법 안내 팝오버 ──
+  // Sits to the LEFT of ⋯ (⋯ stays trailing-most as the overflow affordance).
+  // Reuses .title-action-btn so it shares the neutral charcoal (--accent) chrome
+  // — deliberately NOT a tinted / iOS-blue info glyph: ADR-028 froze chrome to
+  // neutral and reserves --theme for the nav signature only. Tap toggles a small
+  // text popover that reuses the empty-state guidance, so users who already have
+  // bookmarks still have a reminder of how adding works (reading-context only).
+  const infoSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  infoSvg.setAttribute("viewBox", "0 -960 960 960");
+  infoSvg.setAttribute("fill", "currentColor");
+  infoSvg.setAttribute("aria-hidden", "true");
+  const infoPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  // Material Symbols "info" (outlined).
+  infoPath.setAttribute("d", "M440-280h80v-240h-80v240Zm40-320q17 0 28.5-11.5T520-640q0-17-11.5-28.5T480-680q-17 0-28.5 11.5T440-640q0 17 11.5 28.5T480-600Zm0 520q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm0-80q134 0 227-93t93-227q0-134-93-227t-227-93q-134 0-227 93t-93 227q0 134 93 227t227 93Zm0-320Z");
+  infoSvg.appendChild(infoPath);
+  const infoBtn = el("button", {
+    className: "title-action-btn",
+    type: "button",
+    "aria-label": "북마크 추가 방법",
+    "aria-haspopup": "dialog",
+    "aria-expanded": "false",
+  }, infoSvg);
+
+  const infoPop = el("div", {
+    className: "title-action-popover",
+    role: "dialog",
+    "aria-labelledby": "bm-add-help-title",
+    hidden: "",
+  });
+  infoPop.appendChild(el("h2", { className: "title-action-popover-title", id: "bm-add-help-title" }, "북마크 추가하기"));
+  infoPop.appendChild(el("p", { className: "title-action-popover-text" }, BOOKMARK_ADD_HELP));
+
+  function closeInfo() {
+    if (infoPop.hidden) return;
+    infoPop.hidden = true;
+    infoBtn.setAttribute("aria-expanded", "false");
+    document.removeEventListener("click", onInfoDocClick, true);
+    document.removeEventListener("keydown", onInfoKeydown, true);
+  }
+  function openInfo() {
+    if (!infoPop.hidden) return;
+    infoPop.hidden = false;
+    infoBtn.setAttribute("aria-expanded", "true");
+    document.addEventListener("click", onInfoDocClick, true);
+    document.addEventListener("keydown", onInfoKeydown, true);
+  }
+  // Mirror the ⋯ menu's self-cleaning listeners: SPA nav can drop this DOM while
+  // the popover is open without calling closeInfo, so both handlers bail (and
+  // detach) once the trigger is disconnected.
+  /** @param {MouseEvent} e */
+  function onInfoDocClick(e) {
+    if (!infoBtn.isConnected) { closeInfo(); return; }
+    const t = /** @type {Node} */ (e.target);
+    if (wrap.contains(t)) return;
+    closeInfo();
+  }
+  /** @param {KeyboardEvent} e */
+  function onInfoKeydown(e) {
+    if (!infoBtn.isConnected) { closeInfo(); return; }
+    if (e.key === "Escape") {
+      e.preventDefault();
+      closeInfo();
+      infoBtn.focus();
+    }
+  }
+  infoBtn.addEventListener("click", () => {
+    if (infoPop.hidden) { closeMenu(); openInfo(); }
+    else closeInfo();
+  });
+
+  wrap.appendChild(infoBtn);
+  wrap.appendChild(infoPop);
   wrap.appendChild(moreBtn);
   wrap.appendChild(menu);
   return wrap;

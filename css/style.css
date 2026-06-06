@@ -1821,6 +1821,10 @@ mark.search-highlight {
 #app:has(.bookmarks-view) {
   padding-left: 0;
   padding-right: 0;
+  /* The page title sits directly above; #app's default top padding then leaves
+     an oversized gap before the first bookmark row. Drop it so the list starts
+     right under the title (the view keeps no extra top padding either). */
+  padding-top: 0;
 }
 
 /* ── Resume Banner ── */
@@ -4064,6 +4068,54 @@ body.tabbar-searching #search-inpage-bar { display: none; }
   .title-action-menu { animation: none; }
 }
 
+/* 🛈 "북마크 추가 방법" 안내 팝오버. ⋯ 메뉴와 같은 글래스 카드 컨테이너 레시피를
+   공유하되, 메뉴 행이 아니라 설명 텍스트 한 덩어리다. ⋯ 메뉴는 트리거 위에 겹쳐
+   뜨지만, 이 팝오버는 HIG "팝오버는 자신을 띄운 요소를 덮지 말 것" 권고에 맞춰 우측
+   정렬로 트리거 버튼 *아래*에 떨어진다. */
+.title-action-popover {
+  position: absolute;
+  top: calc(100% + var(--space-2));
+  right: 0;
+  z-index: 30;
+  width: 17rem;
+  max-width: calc(100vw - var(--space-4));
+  padding: var(--space-4);
+  background: var(--glass-sheen), var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  corner-shape: superellipse(2);
+  box-shadow: var(--shadow-4), var(--glass-inset);
+  transform-origin: top right;
+  animation: title-action-menu-in var(--duration-fast) var(--ease-standard);
+}
+
+.title-action-popover[hidden] {
+  display: none;
+}
+
+.title-action-popover-title {
+  margin: 0 0 var(--space-2);
+  font-size: var(--font-md);
+  font-weight: 600;
+  line-height: var(--leading-snug);
+  color: var(--text);
+}
+
+.title-action-popover-text {
+  margin: 0;
+  font-size: var(--font-sm);
+  line-height: var(--leading-normal);
+  color: var(--text-secondary);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .title-action-popover { background: var(--bg-card); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .title-action-popover { animation: none; }
+}
+
 
 /* ── Verse selection mode ── */
 
@@ -5691,6 +5743,11 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   touch-action: pan-y;
   -webkit-user-select: none;
   user-select: none;
+  /* Suppress iOS's native long-press tap highlight: it paints only the tapped
+     <a> (part of the row), reading as an awkward partial gray box. The whole
+     card lifts via the drag ghost instead, so no per-element highlight is wanted
+     (inherited by the row's links/buttons). */
+  -webkit-tap-highlight-color: transparent;
 }
 
 .bm-folder-row:active,
@@ -5723,6 +5780,9 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   background: var(--bg-card);
   border: 1px solid var(--accent);
   border-radius: var(--radius);
+  /* Clip the cloned row to the rounded border-box; otherwise its square content
+     box overflows the corners and the rounded outline reads as squared off. */
+  overflow: hidden;
   box-shadow: var(--shadow-3);
   list-style: none;
   padding: 0;
