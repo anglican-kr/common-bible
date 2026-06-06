@@ -555,6 +555,37 @@ export interface AppHelpers {
   dragReleaseAction: (h: number, vh: number) => "close" | "snap-min" | "stay";
 }
 
+// ── Overlay/dialog lifecycle controller (js/app/overlay.js, ADR-032) ─────────
+// Single factory over appHelpers primitives that owns the open/close + .hidden
+// toggle + scrim + trapFocus + Escape + setInert + focus-restore plumbing for
+// modals, drawers, sheets and popovers. See the module header for the Escape
+// opt-in migration note.
+export interface OverlayOptions {
+  panel: HTMLElement;
+  scrim?: HTMLElement | null;
+  inertSelectors?: string | null;
+  rootClass?: string | null;
+  closeOnEsc?: boolean;
+  closeOnOutside?: boolean;
+  outsideIgnore?: string | null;
+  trapContainer?: HTMLElement;
+  initialFocus?: (() => HTMLElement | null) | HTMLElement | string | null;
+  returnFocus?: boolean | HTMLElement;
+  ariaExpanded?: string | null;
+  onOpen?: (() => void) | null;
+  onClose?: (() => void) | null;
+}
+
+export interface OverlayController {
+  open: (returnFocusEl?: HTMLElement | null) => void;
+  close: () => void;
+  readonly isOpen: boolean;
+}
+
+export interface AppOverlay {
+  createOverlay: (opts: OverlayOptions) => OverlayController;
+}
+
 // ── App storage facade (js/app/storage.js) ──────────────────────────────────
 // Phase 2 of the app.js modularization (ADR-018). All localStorage-backed
 // load/save helpers. Each save also notifies the sync layer (window.syncStoreV2
@@ -847,6 +878,7 @@ declare global {
 
     // App-layer module facades (ADR-018, see docs/design/app-modularization.md).
     appHelpers: AppHelpers;
+    appOverlay: AppOverlay;
     appStorage: AppStorage;
     appSettings: AppSettings;
     appInstall: AppInstall;

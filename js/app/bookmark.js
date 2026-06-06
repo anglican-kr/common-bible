@@ -19,6 +19,7 @@
 /** @typedef {import("../types").BooksData} BooksData */
 
 const { _$, el, clearNode, chUnit, setInert, trapFocus, dragReleaseAction } = window.appHelpers;
+const { createOverlay } = window.appOverlay;
 const { loadBookmarks, saveBookmarks, generateId } = window.appStorage;
 const { readingContext } = window;
 
@@ -775,15 +776,12 @@ let _bmSaveModalTrap = null;
 /** @type {(() => void) | null} */
 let _bmMergeModalTrap = null;
 /** @type {(() => void) | null} */
-let _bmConfirmModalTrap = null;
-/** @type {HTMLElement | null} */
-let _bmConfirmLastFocus = null;
-/** @type {(() => void) | null} */
 let _bmChapterDeleteTrap = null;
 /** @type {HTMLElement | null} */
 let _bmChapterDeleteLastFocus = null;
-/** @type {(() => void) | null} */
-let _bmNewFolderTrap = null;
+// _bmConfirm* / _bmNewFolderTrap lifecycle state now lives inside their
+// overlay controllers (ADR-032). _bmNewFolderCallback is the only remaining
+// per-flow state (the create-folder continuation).
 /** @type {((id: string) => void) | null} */
 let _bmNewFolderCallback = null;
 let _bookmarkDrawerCloseSeq = 0;
@@ -2121,21 +2119,25 @@ function closeSaveModal() {
   if (_bmSaveModalTrap) { _bmSaveModalTrap(); _bmSaveModalTrap = null; }
 }
 
+// Overlay lifecycle (scrim/hidden/focus-trap/focus-restore) is owned by the
+// shared controller (ADR-032). closeOnEsc stays off: Escape for this modal is
+// handled by the input keydown below, consistent with pre-migration behavior.
+const newFolderOverlay = createOverlay({
+  panel: $bmNewFolderModal,
+  scrim: $bmNewFolderScrim,
+  initialFocus: () => $bmNewFolderInput,
+  onClose: () => { _bmNewFolderCallback = null; },
+});
+
 function openNewFolderModal(onConfirm) {
   $bmNewFolderInput.value = "";
   $bmNewFolderInput.removeAttribute("aria-invalid");
   _bmNewFolderCallback = onConfirm || null;
-  $bmNewFolderScrim.hidden = false;
-  $bmNewFolderModal.hidden = false;
-  _bmNewFolderTrap = trapFocus($bmNewFolderModal);
-  requestAnimationFrame(() => $bmNewFolderInput.focus());
+  newFolderOverlay.open();
 }
 
 function closeNewFolderModal() {
-  $bmNewFolderScrim.hidden = true;
-  $bmNewFolderModal.hidden = true;
-  _bmNewFolderCallback = null;
-  if (_bmNewFolderTrap) { _bmNewFolderTrap(); _bmNewFolderTrap = null; }
+  newFolderOverlay.close();
 }
 
 function _commitNewFolder() {
@@ -2282,32 +2284,32 @@ function openMergeDialog(candidates, incomingSpec, mode, fallbackContext = null)
 /**
  * @param {{ title: string, message: string, confirmLabel?: string, onConfirm: () => void }} opts
  */
+// Overlay lifecycle (scrim/hidden/focus-trap/focus-restore) is owned by the
+// shared controller (ADR-032). closeOnEsc stays off: this modal participates in
+// bookmark.js's stacked Escape router (confirm > chapter-delete > … > drawer),
+// which calls closeConfirmModal() for the topmost overlay. A controller-level
+// Escape listener here would double-handle and also close whatever sits beneath.
+// Default initial focus = cancel (safe action); destructive button is opt-in.
+const confirmOverlay = createOverlay({
+  panel: $bmConfirmModal,
+  scrim: $bmConfirmScrim,
+  initialFocus: () => $bmConfirmCancel,
+  onClose: () => { $bmConfirmOk.onclick = null; },
+});
+
 function openConfirmModal({ title, message, confirmLabel = "삭제", onConfirm }) {
   $bmConfirmTitle.textContent = title;
   $bmConfirmBody.textContent = message;
   $bmConfirmOk.textContent = confirmLabel;
-  _bmConfirmLastFocus = /** @type {HTMLElement | null} */ (document.activeElement);
-  $bmConfirmScrim.hidden = false;
-  $bmConfirmModal.hidden = false;
   $bmConfirmOk.onclick = () => {
     closeConfirmModal();
     onConfirm();
   };
-  _bmConfirmModalTrap = trapFocus($bmConfirmModal);
-  // Focus the safe (cancel) action by default — destructive button is opt-in.
-  requestAnimationFrame(() => $bmConfirmCancel.focus());
+  confirmOverlay.open();
 }
 
 function closeConfirmModal() {
-  if ($bmConfirmModal.hidden) return;
-  $bmConfirmScrim.hidden = true;
-  $bmConfirmModal.hidden = true;
-  $bmConfirmOk.onclick = null;
-  if (_bmConfirmModalTrap) { _bmConfirmModalTrap(); _bmConfirmModalTrap = null; }
-  if (_bmConfirmLastFocus && _bmConfirmLastFocus.focus) {
-    try { _bmConfirmLastFocus.focus(); } catch {}
-  }
-  _bmConfirmLastFocus = null;
+  confirmOverlay.close();
 }
 
 // Header bookmark toggle-off (mobile): instead of a blunt "delete all", present
