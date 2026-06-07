@@ -331,11 +331,38 @@ function buildInPageSearchInput(query, autofocus = false) {
 }
 
 // Friendly guidance for the empty-query /search view — mirrors the bookmark
-// list's explanatory empty state (BOOKMARK_ADD_HELP) so first-time users learn
-// what they can type (낱말 검색 · in: 범위 좁히기 · 장:절 바로 펼치기) instead of
-// just seeing a bare example string.
-const SEARCH_INTRO_HELP =
-  "낱말을 입력하면 성경 전체에서 찾아 드립니다. ‘사랑 in:요한’처럼 특정 책으로 범위를 좁히거나, ‘창세 1:3’처럼 장과 절을 입력해 그 구절을 바로 펼칠 수도 있습니다.";
+// list's explanatory empty state (BOOKMARK_ADD_HELP), but instead of cramming
+// every search form into one run-on sentence it lays them out as a small
+// "검색 방법" guide (example query + what it does) that's easier to scan.
+const SEARCH_INTRO_HELP = "낱말, 책 이름, 장·절로 찾을 수 있습니다.";
+
+// Each row of the 검색 방법 guide: the example query the user can type + a short
+// plain-language description of what that form does. Mirrors the in-field
+// placeholder examples (예: 사랑, 사랑 in:요한, 창세 1:3).
+const SEARCH_EXAMPLES = [
+  { q: "사랑", desc: "성경 전체에서 낱말 찾기" },
+  { q: "사랑 in:요한", desc: "특정 책 안에서만 찾기" },
+  { q: "창세 1:3", desc: "장·절로 그 구절 바로 펼치기" },
+];
+
+// Build the 검색 방법 guide as a definition-style list (example → description).
+// Tapping a row fills + commits that example so users can try it without typing.
+function buildSearchExamples() {
+  const wrap = el("div", { className: "search-examples" });
+  wrap.appendChild(el("p", { className: "search-examples-heading" }, "이렇게 검색해 보세요"));
+  const list = el("ul", { className: "search-examples-list", role: "list" });
+  for (const { q, desc } of SEARCH_EXAMPLES) {
+    const item = el("li", { className: "search-example" });
+    const btn = el("button", { type: "button", className: "search-example-btn" });
+    btn.appendChild(el("code", { className: "search-example-q" }, q));
+    btn.appendChild(el("span", { className: "search-example-desc" }, desc));
+    btn.addEventListener("click", () => commitTopSearch(q));
+    item.appendChild(btn);
+    list.appendChild(item);
+  }
+  wrap.appendChild(list);
+  return wrap;
+}
 
 // Apple-Music-style centered empty state (ADR-030 P3): large magnifier glyph +
 // title + subtitle. Used for the empty-query /search view and zero-result lists.
@@ -384,6 +411,7 @@ function renderSearchView() {
   view.appendChild(
     buildSearchEmptyState("찾고 싶은 말씀을 검색해 보세요", SEARCH_INTRO_HELP)
   );
+  view.appendChild(buildSearchExamples());
   $app.appendChild(view);
 }
 

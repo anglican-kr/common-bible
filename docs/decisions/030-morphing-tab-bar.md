@@ -87,6 +87,8 @@ ADR-029 는 Safari 26 home-indicator 틴팅 회피를 위해 glass 를 `::before
   - 홈 탭 등 검색 외 라우트로 가면 `views-routing` 의 `syncTabBarActive`가 `window.exitTabSearch`를 호출해 복구.
 - **빈 상태** — 결과 0건 / 빈 검색어 뷰에 중앙 빈 상태(돋보기 + 제목 + 부제).
 
+> **개정 (2026-06-07): 빈 검색 뷰 안내를 "검색 방법" 예시 가이드로.** 빈 검색어 뷰의 부제는 본래 예시 문자열(`예: 사랑, 사랑 in:요한, 창세 1:3`) 한 줄뿐이라 무엇을 입력할 수 있는지 불친절했다. 북마크 빈 목록(BOOKMARK_ADD_HELP)의 설명형 빈 상태를 참고하되, 세 검색 형식을 한 문장에 몰아넣는 대신 **예시별 안내 카드 목록**으로 풀었다 — 제목 "찾고 싶은 말씀을 검색해 보세요" + 한 줄 부제 + `이렇게 검색해 보세요` 가이드(`사랑`=낱말 / `사랑 in:요한`=책 범위 / `창세 1:3`=장·절 펼치기). 각 카드는 탭하면 그 예시로 바로 검색(`commitTopSearch`). `js/app/search.js` `SEARCH_EXAMPLES`/`buildSearchExamples`, `.search-examples*` CSS(중립 `--accent` 사용 — ADR-028 테마색 범위 유지). 결과 0건 부제도 다시 시도 제안으로 보완.
+
 ### 4. 옛 모바일 검색 시트 제거
 
 검색이 탭바 모핑 단일 경로가 되면서 **모바일 검색 바텀 시트(`openSearchSheet`/`closeSearchSheet`/`#search-sheet`·드래그)를 전면 제거**(search.js 대폭 감소). 데스크탑 인라인 검색 바 + `/search` 결과 경로는 유지. 검색 FAB 는 ADR-029 에서 이미 제거.
