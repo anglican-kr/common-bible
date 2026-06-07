@@ -669,8 +669,13 @@ function renderBookFilterList(body, books, working) {
 /** @param {HTMLElement} [returnFocusEl] */
 async function openBookFilterSheet(returnFocusEl) {
   const sheet = ensureBookSheet();
+  // Capture the route sequence; if navigation happens during the awaits below,
+  // bail before opening so the sheet (scrim + inert) never appears over a newer
+  // view — route() can't close a sheet that wasn't open yet (ADR-033, Bugbot).
+  const seq = window.routeSeq?.() ?? 0;
   await ensureBookMap();
   const books = await window.loadBooks().catch(() => []);
+  if ((window.routeSeq?.() ?? 0) !== seq) return;
   // Reset any inline height left by a prior mobile drag-resize / snap-min so each
   // open starts from the CSS default (ADR-032 cite-sheet reset pattern).
   const panel = document.getElementById("book-filter-sheet");
@@ -912,6 +917,9 @@ async function renderSearchResults(query, page, autoNavigate = false, opts = {})
 
   /** @param {any} partial */
   function onPartial(partial) {
+    // Drop in-flight partials once the user navigated away — resultsTarget is
+    // detached and announcing a stale query would mislead AT (ADR-033, Bugbot).
+    if ((window.routeSeq?.() ?? 0) !== seq || !resultsTarget.isConnected) return;
     renderSearchResultList(resultsTarget, partial, query, page, pageSize, paginationBuilder);
     window.announce(`"${query}" 검색 중… 현재 ${partial.total}건`);
   }
