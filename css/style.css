@@ -1578,9 +1578,19 @@ body {
 }
 
 .search-recent-text {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Absolute search date (ADR-014 개정 / ADR-033) — secondary, right-aligned. */
+.search-recent-date {
+  flex-shrink: 0;
+  font-size: var(--font-sm);
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
 }
 
 .search-recent-select:hover {

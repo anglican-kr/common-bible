@@ -16,7 +16,8 @@
 const { _$, el, clearNode, chUnit, emptyState } = window.appHelpers;
 const {
   SEARCH_HISTORY_MAX,
-  loadSearchHistory, pushSearchHistory, removeSearchHistory, clearSearchHistory,
+  loadSearchHistory, loadSearchHistoryEntries,
+  pushSearchHistory, removeSearchHistory, clearSearchHistory,
 } = window.appStorage;
 const { dismissLaunchScreen } = window.appSettings;
 
@@ -190,6 +191,18 @@ function buildSearchUrl(state) {
   for (const b of state.filterBooks || []) parts.push("in=" + encodeURIComponent(b));
   for (const t of state.andTerms || []) parts.push("and=" + encodeURIComponent(t));
   return "/search" + (parts.length ? "?" + parts.join("&") : "");
+}
+
+// Absolute date label for a recent-search entry (ADR-014 개정 / ADR-033). One
+// consistent absolute format ("YYYY. M. D.") — no relative "n일 전". Returns ""
+// for entries with no timestamp (migrated from the legacy string[] format) or
+// an unparseable ts, so the caller can omit the date.
+/** @param {number | null | undefined} ts @returns {string} */
+function formatSearchDate(ts) {
+  if (ts == null) return "";
+  const d = new Date(ts);
+  if (isNaN(d.getTime())) return "";
+  return `${d.getFullYear()}. ${d.getMonth() + 1}. ${d.getDate()}.`;
 }
 
 /**
@@ -680,8 +693,8 @@ function refreshRecents() {
 
 /** @returns {HTMLElement | null} */
 function buildRecentSearches() {
-  const list = loadSearchHistory();
-  if (!list.length) return null;
+  const entries = loadSearchHistoryEntries();
+  if (!entries.length) return null;
   const wrap = el("section", { className: "search-recents", "aria-label": "최근 검색" });
 
   const head = el("div", { className: "search-recents-head" });
@@ -696,11 +709,13 @@ function buildRecentSearches() {
   wrap.appendChild(head);
 
   const ul = el("ul", { className: "search-recents-list", role: "list" });
-  for (const q of list) {
+  for (const { q, ts } of entries) {
     const li = el("li", { className: "search-recent-item" });
     const select = el("button", { type: "button", className: "search-recent-select" });
     select.appendChild(svgIcon("search-recent-icon", ["M12 7v5l3 2"], [[12, 12, 8]]));
     select.appendChild(el("span", { className: "search-recent-text" }, q));
+    const dateLabel = formatSearchDate(ts);
+    if (dateLabel) select.appendChild(el("span", { className: "search-recent-date" }, dateLabel));
     select.addEventListener("click", () => commitTopSearch(q));
     const remove = el("button", {
       type: "button",

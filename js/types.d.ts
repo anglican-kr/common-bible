@@ -410,6 +410,14 @@ export interface AudioPosition {
 // at SEARCH_HISTORY_MAX. Local-only (see ADR-014).
 export type SearchHistoryList = string[];
 
+// Timestamped recent-search entry (ADR-014 개정 2026-06-07). Stored shape is
+// `SearchHistoryEntry[]`; `ts` is the search time (ms) or null for entries
+// migrated from the legacy `string[]` format.
+export interface SearchHistoryEntry {
+  q: string;
+  ts: number | null;
+}
+
 // Active during a touch/pointer drag over verse rows in select mode
 // (module-state `_verseSelectDrag`).
 export interface VerseSelectDrag {
@@ -650,7 +658,8 @@ export interface AppStorage {
   // Search history
   normalizeSearchQuery: (q: unknown) => string;
   loadSearchHistory: () => SearchHistoryList;
-  saveSearchHistory: (list: SearchHistoryList) => void;
+  loadSearchHistoryEntries: () => SearchHistoryEntry[];
+  saveSearchHistory: (list: SearchHistoryList | SearchHistoryEntry[]) => void;
   pushSearchHistory: (q: string) => SearchHistoryList;
   removeSearchHistory: (q: string) => SearchHistoryList;
   clearSearchHistory: () => SearchHistoryList;

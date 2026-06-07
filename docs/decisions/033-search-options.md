@@ -65,7 +65,7 @@ Apple HIG의 검색 패턴(필터/스코프 바 · 토큰 대신 칩 · recents 
 - **옵션 바(`.search-filters`)** — 빈 검색 뷰와 결과 뷰 위에 공통 렌더(모바일·데스크탑). 스코프 행(책 선택 버튼 + 책 칩) + (검색어가 있을 때) 결과 내 검색 행(추가어 칩 + 입력).
 - **책 선택 시트(`#book-filter-sheet`)** — 모바일 바텀 시트 / 데스크탑 중앙 모달. 분류(구약·외경·신약, 외경 설정 반영)별 그룹, 행 다중 선택(체크), "적용 (N)"이 한 번의 내비게이션으로 URL 범위 커밋, "초기화"로 비움. `createOverlay`(scrim·focus trap·inert·Esc·외부 탭) + `attachSheetDrag` 재사용.
 - **칩** — 라벨 + ×. 책 칩 제거 → 해당 책만 범위에서 제외, 추가어 칩 제거 → 해당 AND 낱말 제외.
-- **최근 검색** — 빈 쿼리 뷰에서 목록 노출(없으면 기존 안내 + 검색 예시). 행 탭 → `commitTopSearch`, × → `removeSearchHistory`, "지우기" → `clearSearchHistory`. ADR-014 저장 모델(`bible-search-history`, 로컬 전용)을 그대로 사용하며 헤더 ▾ 드롭다운과 같은 저장소를 공유해 동기화.
+- **최근 검색** — 빈 쿼리 뷰에서 목록 노출(없으면 기존 안내 + 검색 예시). 행 탭 → `commitTopSearch`, × → `removeSearchHistory`, "지우기" → `clearSearchHistory`. ADR-014 저장 모델(`bible-search-history`, 로컬 전용)을 그대로 사용하며 헤더 ▾ 드롭다운과 같은 저장소를 공유해 동기화. 각 행 우측에 **검색한 날짜(절대 표기 `YYYY. M. D.`, `formatSearchDate`)** 를 표시 — 이를 위해 저장 모델에 `ts` 타임스탬프를 추가했다(ADR-014 개정 2026-06-07; 상대 표기 미채택, 기간 만료 없음). 최대 30개(LRU)·기간 컷 없음은 유지.
 - **상태 보존 규칙** — 새 검색어 커밋(`commitTopSearch`)은 책 범위는 **유지**, 결과 내 검색·페이지는 **리셋**. 필터 변경은 페이지를 1로 리셋하고 `searchAutoNavigate`를 설정하지 않음(절 참조 자동 점프는 Enter 커밋에서만).
 
 ### D4. 노트 검색 대비

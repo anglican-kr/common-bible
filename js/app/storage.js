@@ -16,6 +16,7 @@ window.appStorage = (() => {
   /** @typedef {import("../types").ReadingPosition} ReadingPosition */
   /** @typedef {import("../types").AudioPosition} AudioPosition */
   /** @typedef {import("../types").SearchHistoryList} SearchHistoryList */
+  /** @typedef {import("../types").SearchHistoryEntry} SearchHistoryEntry */
   /** @typedef {import("../types").ColorSchemeId} ColorSchemeId */
   /** @typedef {import("../types").ColorSchemeEntry} ColorSchemeEntry */
   /** @typedef {import("../types").ThemeMode} ThemeMode */
@@ -117,53 +118,83 @@ window.appStorage = (() => {
   }
 
   // ── BEGIN SEARCH HISTORY HELPERS ──
-  // Local-only (not Drive-synced — see ADR-014). Whitespace-normalized strings,
-  // LRU-deduped, capped at SEARCH_HISTORY_MAX. The block between the BEGIN/END
-  // markers is sliced into tests/unit/storage.test.js, so changes to the
-  // LRU/normalization semantics need a corresponding test update.
+  // Local-only (not Drive-synced — see ADR-014). Whitespace-normalized queries,
+  // LRU-deduped, capped at SEARCH_HISTORY_MAX. Each entry now carries a `ts`
+  // (search time) so the /search recents list can show an absolute date
+  // (ADR-014 개정 2026-06-07). Stored shape is `[{ q, ts }]`; legacy `string[]`
+  // is migrated on read (ts → null). loadSearchHistory() keeps returning
+  // `string[]` (queries) for the header dropdown + existing callers; the dated
+  // view uses loadSearchHistoryEntries().
 
   /** @param {unknown} q @returns {string} */
   function normalizeSearchQuery(q) {
     return String(q || "").trim().replace(/\s+/g, " ");
   }
 
-  /** @returns {SearchHistoryList} */
-  function loadSearchHistory() {
+  /** @returns {SearchHistoryEntry[]} */
+  function loadSearchHistoryEntries() {
     try {
       const rawStr = localStorage.getItem(SEARCH_HISTORY_KEY);
       if (!rawStr) return [];
       const raw = JSON.parse(rawStr);
       if (!Array.isArray(raw)) return [];
-      return raw.filter((s) => typeof s === "string" && s.length > 0).slice(0, SEARCH_HISTORY_MAX);
+      /** @type {SearchHistoryEntry[]} */
+      const entries = [];
+      for (const item of raw) {
+        // Legacy format: bare query string (no timestamp).
+        if (typeof item === "string") {
+          if (item.length > 0) entries.push({ q: item, ts: null });
+        } else if (item && typeof item.q === "string" && item.q.length > 0) {
+          entries.push({ q: item.q, ts: typeof item.ts === "number" ? item.ts : null });
+        }
+      }
+      return entries.slice(0, SEARCH_HISTORY_MAX);
     } catch (_) {
       return [];
     }
   }
 
-  /** @param {SearchHistoryList} list */
-  function saveSearchHistory(list) {
+  /** @returns {SearchHistoryList} */
+  function loadSearchHistory() {
+    return loadSearchHistoryEntries().map((e) => e.q);
+  }
+
+  /** @param {SearchHistoryEntry[]} entries */
+  function saveSearchHistoryEntries(entries) {
     try {
-      localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(list.slice(0, SEARCH_HISTORY_MAX)));
+      localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(entries.slice(0, SEARCH_HISTORY_MAX)));
     } catch (_) {}
+  }
+
+  /**
+   * Legacy API: accepts a `string[]` (or entry array) and persists it. Strings
+   * are stored with `ts: null`. Kept for API/back-compat; the timestamped path
+   * is pushSearchHistory.
+   * @param {SearchHistoryList | SearchHistoryEntry[]} list
+   */
+  function saveSearchHistory(list) {
+    const entries = list.map((item) =>
+      typeof item === "string" ? { q: item, ts: null } : { q: item.q, ts: item.ts ?? null });
+    saveSearchHistoryEntries(entries);
   }
 
   /** @param {string} q @returns {SearchHistoryList} */
   function pushSearchHistory(q) {
     const norm = normalizeSearchQuery(q);
     if (!norm) return loadSearchHistory();
-    const list = loadSearchHistory().filter((s) => s !== norm);
-    list.unshift(norm);
-    const trimmed = list.slice(0, SEARCH_HISTORY_MAX);
-    saveSearchHistory(trimmed);
-    return trimmed;
+    const entries = loadSearchHistoryEntries().filter((e) => e.q !== norm);
+    entries.unshift({ q: norm, ts: Date.now() });
+    const trimmed = entries.slice(0, SEARCH_HISTORY_MAX);
+    saveSearchHistoryEntries(trimmed);
+    return trimmed.map((e) => e.q);
   }
 
   /** @param {string} q @returns {SearchHistoryList} */
   function removeSearchHistory(q) {
     const norm = normalizeSearchQuery(q);
-    const list = loadSearchHistory().filter((s) => s !== norm);
-    saveSearchHistory(list);
-    return list;
+    const entries = loadSearchHistoryEntries().filter((e) => e.q !== norm);
+    saveSearchHistoryEntries(entries);
+    return entries.map((e) => e.q);
   }
 
   /** @returns {SearchHistoryList} */
@@ -380,7 +411,7 @@ window.appStorage = (() => {
     FONT_SIZES, DEFAULT_FONT_SIZE, COLOR_SCHEMES, SEARCH_HISTORY_MAX,
     saveReadingPosition, loadReadingPosition, clearReadingPosition,
     saveAudioTime, loadAudioTime, clearAudioTime,
-    normalizeSearchQuery, loadSearchHistory, saveSearchHistory,
+    normalizeSearchQuery, loadSearchHistory, loadSearchHistoryEntries, saveSearchHistory,
     pushSearchHistory, removeSearchHistory, clearSearchHistory,
     loadStartupBehavior, saveStartupBehavior,
     loadCiteShow, saveCiteShow,

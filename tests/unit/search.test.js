@@ -241,7 +241,7 @@ function loadPureHelpers() {
   const ctx = {
     document,
     Object, Array, String, Math, JSON, console, Error,
-    encodeURIComponent,
+    encodeURIComponent, Date, isNaN,
   };
   vm.createContext(ctx);
   vm.runInContext(EL_SHIM + extractBlock("PURE HELPERS"), ctx, { filename: "search-pure-helpers.js" });
@@ -252,6 +252,7 @@ function loadPureHelpers() {
     buildSnippet: ctx.buildSnippet,
     buildSearchPagination: ctx.buildSearchPagination,
     buildSearchUrl: ctx.buildSearchUrl,
+    formatSearchDate: ctx.formatSearchDate,
   };
 }
 
@@ -501,6 +502,26 @@ test("buildSearchUrl: empty state → bare /search", () => {
   const h = loadPureHelpers();
   assert.strictEqual(h.buildSearchUrl({}), "/search");
   assert.strictEqual(h.buildSearchUrl({ q: "" }), "/search");
+});
+
+// ── formatSearchDate (ADR-014 개정 / ADR-033) ─────────────────────────────────
+
+test("formatSearchDate: absolute YYYY. M. D. for a timestamp", () => {
+  const h = loadPureHelpers();
+  // Local-time constructor avoids timezone drift in the assertion.
+  const ts = new Date(2026, 5, 5).getTime(); // 2026-06-05 (month is 0-based)
+  assert.strictEqual(h.formatSearchDate(ts), "2026. 6. 5.");
+});
+
+test("formatSearchDate: null/undefined → empty string (legacy entry)", () => {
+  const h = loadPureHelpers();
+  assert.strictEqual(h.formatSearchDate(null), "");
+  assert.strictEqual(h.formatSearchDate(undefined), "");
+});
+
+test("formatSearchDate: NaN/invalid timestamp → empty string", () => {
+  const h = loadPureHelpers();
+  assert.strictEqual(h.formatSearchDate(NaN), "");
 });
 
 // ── buildSearchPagination ────────────────────────────────────────────────────
