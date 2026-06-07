@@ -838,6 +838,12 @@ async function renderSearchView(state) {
   const seq = window.routeSeq?.() ?? 0;
   await ensureBookMap();
   if ((window.routeSeq?.() ?? 0) !== seq) return;
+  // "결과 내 검색"(and=) refines an active query; with an empty field there's no UI
+  // to view or remove it (the refine row only renders when q is set), so strip it
+  // from the URL while keeping the book-picker scope (in=) — ADR-033, Bugbot.
+  if (currentSearchState().andTerms.length) {
+    history.replaceState(history.state, "", buildSearchUrl({ filterBooks, andTerms: [] }));
+  }
   window.setTitle("검색");
   const $title = _$("page-title");
   $title.insertBefore(window.buildHomeBtn("/", "성서 목록으로"), $title.firstChild);
@@ -1011,7 +1017,10 @@ $searchClear.addEventListener("click", () => {
   $searchClear.hidden = true;
   $searchBar.dataset.clearHidden = "true";
   $searchInput.focus();
-  if (window.parsePath().view === "search") window.navigate("/");
+  // Mirror the in-page clear: on /search, drop the query (back to the empty/
+  // recents view) but keep the book-picker scope so clearing the field doesn't
+  // silently reset the filter or exit search to "/" (ADR-033, Bugbot).
+  if (window.parsePath().view === "search") navigateSearch({ q: "", andTerms: [] });
 });
 
 // ── BEGIN IS_MOBILE ──
