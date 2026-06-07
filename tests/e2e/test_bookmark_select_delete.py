@@ -289,3 +289,76 @@ def test_move_into_folder(browser):
         assert any(c["id"] == "bm-root" for c in folder["children"])
     finally:
         ctx.close()
+
+
+def test_move_new_folder_with_parent(browser):
+    """이동 → 새 폴더: 상위 폴더(대림시기)를 지정해 만든 폴더로 선택 항목이 이동한다."""
+    ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA)
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    ctx.add_init_script(_PIN_NUDGE)
+    page = ctx.new_page()
+    try:
+        _open_bookmarks_view(page)
+        _set_store(page, [dict(_BM_ROOT), {"type": "folder", "id": "folder-1",
+                                            "name": "대림시기", "children": [], "expanded": True}])
+        _enter_select_mode(page)
+        page.locator("li.bm-bookmark[data-id='bm-root'] .bm-bookmark-row").click()
+        page.wait_for_selector(".bm-select-circle.is-selected")
+        page.locator("#bm-select-move-btn").click()
+        page.wait_for_selector("#bm-move-modal:not([hidden])")
+        # "새 폴더" (below the list) → new-folder modal with a parent picker.
+        page.locator("#bm-move-new-folder").click()
+        page.wait_for_selector("#bm-new-folder-modal:not([hidden])")
+        page.fill("#bm-new-folder-input", "성탄절")
+        # Choose 대림시기 as the parent via the combobox.
+        page.locator("#bm-newfolder-parent-btn").click()
+        page.locator("#bm-newfolder-parent-listbox .bm-folder-combobox-option[data-id='folder-1']").click()
+        page.locator("#bm-new-folder-confirm").click()
+        page.wait_for_selector("#bm-new-folder-modal", state="hidden")
+        page.wait_for_selector("#bm-select-bar", state="hidden")
+
+        store = _get_store(page)
+        # New folder "성탄절" created under 대림시기, and bm-root moved into it.
+        assert all(n["id"] != "bm-root" for n in store)
+        folder1 = next(n for n in store if n["id"] == "folder-1")
+        newf = next(c for c in folder1["children"]
+                    if c.get("type") == "folder" and c["name"] == "성탄절")
+        assert any(c["id"] == "bm-root" for c in newf["children"])
+    finally:
+        ctx.close()
+
+
+def test_move_new_folder_excludes_selected_parent(browser):
+    """이동 → 새 폴더: 상위 폴더 후보에서 이동 중인 폴더(와 그 하위)는 제외된다.
+
+    빠지지 않으면 선택 폴더 안에 새 폴더가 생겨 이동이 no-op 가 되고 빈 폴더만 남는다.
+    """
+    ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA)
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    ctx.add_init_script(_PIN_NUDGE)
+    page = ctx.new_page()
+    try:
+        _open_bookmarks_view(page)
+        # outer 폴더 안에 inner 폴더 — outer 를 선택해 이동한다.
+        _set_store(page, [{
+            "type": "folder", "id": "outer", "name": "바깥", "expanded": True,
+            "children": [{"type": "folder", "id": "inner", "name": "안쪽",
+                          "children": [], "expanded": True}],
+        }])
+        _enter_select_mode(page)
+        page.locator("li.bm-folder[data-id='outer'] .bm-folder-row").click()
+        page.wait_for_selector(".bm-select-circle.is-selected")
+        page.locator("#bm-select-move-btn").click()
+        page.wait_for_selector("#bm-move-modal:not([hidden])")
+        page.locator("#bm-move-new-folder").click()
+        page.wait_for_selector("#bm-new-folder-modal:not([hidden])")
+        # The selected folder and its descendant must NOT be offered as a parent.
+        assert page.locator(
+            "#bm-newfolder-parent-listbox .bm-folder-combobox-option[data-id='outer']").count() == 0
+        assert page.locator(
+            "#bm-newfolder-parent-listbox .bm-folder-combobox-option[data-id='inner']").count() == 0
+        # 최상위 is always available.
+        assert page.locator(
+            "#bm-newfolder-parent-listbox .bm-folder-combobox-option[data-id='']").count() == 1
+    finally:
+        ctx.close()

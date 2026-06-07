@@ -829,6 +829,8 @@ function _setupDragHandle(li, row) {
 // create-folder continuation.
 /** @type {((id: string) => void) | null} */
 let _bmNewFolderCallback = null;
+/** @type {{ getValue: () => string|null, close: () => void } | null} */
+let _bmNewFolderParentCombo = null;
 /** @type {ReturnType<typeof setTimeout> | null} */
 let _bookmarkDrawerCloseTimer = null;
 // `_dragState` was extracted to js/app/bookmark.js (ADR-018 Phase 6a) along
@@ -895,6 +897,7 @@ const $bmNewFolderScrim = _$("bm-new-folder-scrim");
 const $bmNewFolderModal = _$("bm-new-folder-modal");
 const $bmNewFolderClose = _$("bm-new-folder-close");
 const $bmNewFolderInput = /** @type {HTMLInputElement} */ (_$("bm-new-folder-input"));
+const $bmNewFolderParent = _$("bm-new-folder-parent");
 const $bmNewFolderConfirm = _$("bm-new-folder-confirm");
 const $bmNewFolderCancel = _$("bm-new-folder-cancel");
 const $bmMergeScrim = _$("bm-merge-scrim");
@@ -934,6 +937,7 @@ const $bmSelectCancelBtn = _$("bm-select-cancel-btn");
 const $bmMoveScrim = _$("bm-move-scrim");
 const $bmMoveModal = _$("bm-move-modal");
 const $bmMoveList = _$("bm-move-list");
+const $bmMoveNewFolder = _$("bm-move-new-folder");
 const $bmMoveCancel = _$("bm-move-cancel");
 
 // Build the chevron-left back button for page title headers
@@ -1489,20 +1493,26 @@ function _buildFolderToggleIcon(open, size = 20) {
 /**
  * @param {Array<{ id: string, name: string, depth: number }>} folderOptions
  * @param {string|null|undefined} selectedFolderId
+ * @param {{ idPrefix?: string, allowNewFolder?: boolean }} [opts] idPrefix scopes the
+ *   element ids so two comboboxes can coexist (save modal + new-folder parent picker);
+ *   allowNewFolder=false drops the inline "+ 새 폴더" action (the new-folder modal's own
+ *   parent picker must not spawn another new-folder modal).
  * @returns {{ el: HTMLElement, getValue: () => string|null, close: () => void }}
  */
-function _buildFolderCombobox(folderOptions, selectedFolderId) {
+function _buildFolderCombobox(folderOptions, selectedFolderId, opts = {}) {
+  const idPrefix = opts.idPrefix || "bm-folder-combobox";
+  const allowNewFolder = opts.allowNewFolder !== false;
   const initial = selectedFolderId != null && String(selectedFolderId) !== "" ? String(selectedFolderId) : "";
-  const wrap = el("div", { className: "bm-folder-combobox", id: "bm-folder-combobox" });
+  const wrap = el("div", { className: "bm-folder-combobox", id: idPrefix });
   const hidden = el("input", { type: "hidden", className: "bm-folder-combobox-input", value: initial });
-  const listId = "bm-folder-listbox";
+  const listId = `${idPrefix}-listbox`;
   const iconSlot = el("span", { className: "bm-folder-combobox-btn-icon" });
   iconSlot.appendChild(_buildMaterialFolderIcon({ size: 16 }));
   const textSlot = el("span", { className: "bm-folder-combobox-btn-label" });
   const chevron = el("span", { className: "bm-folder-combobox-chevron", "aria-hidden": "true" }, "▾");
   const btn = el("button", {
     type: "button",
-    id: "bm-folder-combobox-btn",
+    id: `${idPrefix}-btn`,
     className: "bm-folder-combobox-btn",
     "aria-haspopup": "listbox",
     "aria-expanded": "false",
@@ -1590,32 +1600,36 @@ function _buildFolderCombobox(folderOptions, selectedFolderId) {
     list.appendChild(li);
   }
 
-  // Persistent "+ 새 폴더" action at the bottom of the listbox.
+  // Persistent "+ 새 폴더" action at the bottom of the listbox (omitted when
+  // allowNewFolder=false — e.g. the new-folder modal's own parent picker).
   // role="presentation" so screen readers don't read it as a folder option.
-  const newFolderItem = el("li", { role: "presentation", className: "bm-folder-combobox-new" });
-  const newFolderBtn = el("button", {
-    type: "button",
-    className: "bm-folder-combobox-new-btn",
-  }, "+ 새 폴더");
-  newFolderBtn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    closeList();
-    openNewFolderModal((newId) => {
-      const updated = collectFolderOptions(loadBookmarks());
-      rebuildOptions(updated);
-      hidden.value = String(newId);
-      updateButton();
-      updateOptionSelected();
+  let newFolderItem = null;
+  if (allowNewFolder) {
+    newFolderItem = el("li", { role: "presentation", className: "bm-folder-combobox-new" });
+    const newFolderBtn = el("button", {
+      type: "button",
+      className: "bm-folder-combobox-new-btn",
+    }, "+ 새 폴더");
+    newFolderBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      closeList();
+      openNewFolderModal((newId) => {
+        const updated = collectFolderOptions(loadBookmarks());
+        rebuildOptions(updated);
+        hidden.value = String(newId);
+        updateButton();
+        updateOptionSelected();
+      });
     });
-  });
-  newFolderItem.appendChild(newFolderBtn);
+    newFolderItem.appendChild(newFolderBtn);
+  }
 
   function rebuildOptions(options) {
     currentOptions = options;
     list.replaceChildren();
     addOption("", "최상위", 0);
     for (const o of options) addOption(String(o.id), o.name, o.depth);
-    list.appendChild(newFolderItem);
+    if (newFolderItem) list.appendChild(newFolderItem);
   }
 
   rebuildOptions(folderOptions);
@@ -2396,13 +2410,38 @@ const newFolderOverlay = createOverlay({
   panel: $bmNewFolderModal,
   scrim: $bmNewFolderScrim,
   initialFocus: () => $bmNewFolderInput,
-  onClose: () => { _bmNewFolderCallback = null; },
+  onClose: () => {
+    _bmNewFolderCallback = null;
+    if (_bmNewFolderParentCombo) _bmNewFolderParentCombo.close();
+    _bmNewFolderParentCombo = null;
+  },
 });
 
-function openNewFolderModal(onConfirm) {
+/**
+ * @param {((id: string) => void) | null} [onConfirm]
+ * @param {string|null} [presetParentId] preselect a parent folder (null/undefined = 최상위).
+ * @param {{ folderFilter?: (f: { id: string, name: string, depth: number }) => boolean }} [opts]
+ *   folderFilter narrows the parent options — used by the move flow to drop the folders
+ *   that are being moved (and their subtrees), so the new folder can't be created inside
+ *   the very selection it will receive (which would no-op the move and leave it empty).
+ */
+function openNewFolderModal(onConfirm, presetParentId, opts = {}) {
   $bmNewFolderInput.value = "";
   $bmNewFolderInput.removeAttribute("aria-invalid");
   _bmNewFolderCallback = onConfirm || null;
+  // Parent-folder picker: same combobox as the save modal, but scoped ids and no
+  // nested "+ 새 폴더" (it would re-open this very modal). 최상위 = create at root
+  // (always offered by the combobox, even when every folder is filtered out).
+  clearNode($bmNewFolderParent);
+  let folderOptions = collectFolderOptions(loadBookmarks());
+  if (opts.folderFilter) folderOptions = folderOptions.filter(opts.folderFilter);
+  const combo = _buildFolderCombobox(
+    folderOptions,
+    presetParentId,
+    { idPrefix: "bm-newfolder-parent", allowNewFolder: false },
+  );
+  _bmNewFolderParentCombo = combo;
+  $bmNewFolderParent.appendChild(combo.el);
   newFolderOverlay.open();
 }
 
@@ -2420,7 +2459,13 @@ function _commitNewFolder() {
   $bmNewFolderInput.removeAttribute("aria-invalid");
   const store = loadBookmarks();
   const id = generateId();
-  store.push({ type: "folder", id, name, children: [], expanded: false, createdAt: Date.now() });
+  const parentId = _bmNewFolderParentCombo ? _bmNewFolderParentCombo.getValue() : null;
+  insertItem(store, parentId, { type: "folder", id, name, children: [], expanded: false, createdAt: Date.now() });
+  // Reveal the destination so the new folder is visible after re-render.
+  if (parentId) {
+    const dest = _findItemInStore(store, parentId);
+    if (dest && dest.item.type === "folder") dest.item.expanded = true;
+  }
   saveBookmarks(store);
   _rerenderActiveBookmarkTree();
   const cb = _bmNewFolderCallback;
@@ -2938,20 +2983,20 @@ const moveOverlay = createOverlay({
   panel: $bmMoveModal,
   scrim: $bmMoveScrim,
   initialFocus: () => $bmMoveCancel,
-  onClose: () => { $bmMoveCancel.onclick = null; },
+  onClose: () => { $bmMoveCancel.onclick = null; $bmMoveNewFolder.onclick = null; },
 });
 
 // One destination row in the move modal: leading glyph + label, indented by depth.
-/** @param {string} label @param {"newfolder" | "root" | "folder"} kind @param {number} [depth] */
+// 최상위(root) gets a home glyph; folders get a folder glyph. (새 폴더 is a dedicated
+// button below the list, not a row.)
+/** @param {string} label @param {"root" | "folder"} kind @param {number} [depth] */
 function _buildMoveRow(label, kind, depth = 0) {
   const btn = el("button", { className: "bm-move-item", type: "button" });
   if (depth > 0) btn.style.setProperty("--bm-move-indent", `calc(var(--space-5) * ${depth})`);
   const icon = el("span", { className: "bm-move-icon", "aria-hidden": "true" });
-  const paths = kind === "newfolder"
-    ? ["M3 7.5a2 2 0 0 1 2-2h3.6l1.8 2H19a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7.5Z", "M12 11.5v4", "M10 13.5h4"]
-    : kind === "root"
-      ? ["M4 10.5 12 4l8 6.5", "M6 9.5V19a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V9.5"]
-      : ["M3 7.5a2 2 0 0 1 2-2h3.6l1.8 2H19a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7.5Z"];
+  const paths = kind === "root"
+    ? ["M4 10.5 12 4l8 6.5", "M6 9.5V19a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V9.5"]
+    : ["M3 7.5a2 2 0 0 1 2-2h3.6l1.8 2H19a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7.5Z"];
   icon.appendChild(_bmMenuIcon(paths));
   btn.appendChild(icon);
   btn.appendChild(el("span", { className: "bm-move-label" }, label));
@@ -2994,15 +3039,7 @@ function openMoveModal() {
   if (!_bmEffectiveTargets(parentMap).length) return;
   clearNode($bmMoveList);
 
-  // 새 폴더… — create a root folder, then move the selection into it.
-  const newRow = _buildMoveRow("새 폴더…", "newfolder");
-  newRow.addEventListener("click", () => {
-    closeMoveModal();
-    openNewFolderModal((newId) => { if (newId) _moveSelectedToFolder(newId); });
-  });
-  $bmMoveList.appendChild(newRow);
-
-  // 최상위 (root).
+  // 최상위 (root) first, then the folder list (indented by depth).
   const rootRow = _buildMoveRow("최상위", "root");
   rootRow.addEventListener("click", () => _moveSelectedToFolder(null));
   $bmMoveList.appendChild(rootRow);
@@ -3015,6 +3052,20 @@ function openMoveModal() {
     row.addEventListener("click", () => _moveSelectedToFolder(f.id));
     $bmMoveList.appendChild(row);
   }
+
+  // 새 폴더 (below the list) — opens the new-folder modal where a parent can be
+  // chosen (미지정=최상위); the created folder then receives the selection. The
+  // parent options exclude the same folders the move list omits (selected folders +
+  // folders under a selected ancestor) so the new folder can't be created inside the
+  // selection — otherwise the move would be a no-op and leave a stray empty folder.
+  $bmMoveNewFolder.onclick = () => {
+    closeMoveModal();
+    openNewFolderModal(
+      (newId) => { if (newId) _moveSelectedToFolder(newId); },
+      null,
+      { folderFilter: (f) => !(_bmSelected.has(f.id) || _bmAncestorSelected(f.id, parentMap)) },
+    );
+  };
 
   moveOverlay.open();
   $bmMoveCancel.onclick = closeMoveModal;
