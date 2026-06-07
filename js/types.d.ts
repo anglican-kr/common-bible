@@ -824,7 +824,7 @@ export interface AppBookmark {
 
 export interface AppSearch {
   renderSearchResults: (query: string, page: number, autoNavigate?: boolean, opts?: { filterBooks?: string[]; andTerms?: string[] }) => Promise<void>;
-  renderSearchView: (state?: { filterBooks?: string[] }) => void;
+  renderSearchView: (state?: { filterBooks?: string[] }) => Promise<void>;
   isMobile: () => boolean;
   appendTextWithHighlight: (target: Node, text: string, query: string) => void;
   consumeSearchAutoNavigate: () => boolean;
@@ -958,6 +958,7 @@ declare global {
     closeChapterPopover?: () => void;
     closeBookmarkDrawer?: () => void;
     closeSaveModal?: () => void;
+    closeBookFilterSheet?: () => void;
     closeNewFolderModal?: () => void;
     closeMergeModal?: () => void;
     closeImportModal?: () => void;
@@ -970,7 +971,7 @@ declare global {
     // module load; route() in views-routing.js calls them on the mobile branch.
     renderBookmarksView: () => void;
     renderSettingsView: () => void;
-    renderSearchView: (state?: { filterBooks?: string[] }) => void;
+    renderSearchView: (state?: { filterBooks?: string[] }) => Promise<void>;
     applyFontSize?: (size: number | string) => void;
     applyColorScheme?: (scheme: string) => void;
     applyTheme?: (theme: string) => void;
@@ -1071,6 +1072,7 @@ declare global {
   function openBookmarkDrawer(bookId: string | null, chapter: number | null): void;
   function closeBookmarkDrawer(): void;
   function closeSaveModal(): void;
+  function closeBookFilterSheet(): void;
   function closeNewFolderModal(): void;
   function closeMergeModal(): void;
   function closeImportModal(): void;
@@ -1085,7 +1087,7 @@ declare global {
   function initBookmarkSheetDrag(): void;
   function initBookmarkDrawerResize(): void;
   function renderSearchResults(query: string, page: number, autoNavigate?: boolean, opts?: { filterBooks?: string[]; andTerms?: string[] }): Promise<void>;
-  function renderSearchView(state?: { filterBooks?: string[] }): void;
+  function renderSearchView(state?: { filterBooks?: string[] }): Promise<void>;
   function isMobile(): boolean;
   function appendTextWithHighlight(target: Node, text: string, query: string): void;
   function consumeSearchAutoNavigate(): boolean;

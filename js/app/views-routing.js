@@ -1866,6 +1866,9 @@ async function route() {
   closeIfOpen("bm-import-modal", () => window.closeImportModal?.());
   closeIfOpen("bm-merge-modal", () => window.closeMergeModal?.());
   closeIfOpen("bm-save-modal", () => window.closeSaveModal?.());
+  // Book-filter sheet (ADR-033) — same teardown contract as the other overlays
+  // so leaving /search with the picker open doesn't strand the scrim/inert.
+  closeIfOpen("book-filter-sheet", () => window.closeBookFilterSheet?.());
   // Desktop settings popover: close on nav too (it has a focus trap). Closing
   // here also makes the /settings desktop fallback's gear.click() always OPEN
   // (never toggle-closed) since the popover is already dismissed by this point.
@@ -1911,11 +1914,13 @@ async function route() {
           title: `"${parsed.query}" 검색`,
           description: `공동번역성서에서 "${parsed.query}" 검색 결과`,
         });
-      } else if (isMobile()) {
-        // Empty-query /search on mobile: full-screen in-page search input (the
-        // bottom sheet is retired on the tab-bar path). Recent searches + the
-        // book-filter bar render here (ADR-033).
-        renderSearchView({ filterBooks: parsed.filterBooks });
+      } else if (isMobile() || parsed.filterBooks.length || parsed.andTerms.length) {
+        // Empty-query /search: recent searches + the book-filter bar (ADR-033).
+        // Mobile always shows this full-screen view. Desktop normally falls back
+        // to the book list, but when the URL carries an active filter (in=/and=)
+        // we render the search view so the scope is visible/removable instead of
+        // silently applied by a later header search (ADR-033, Bugbot).
+        await renderSearchView({ filterBooks: parsed.filterBooks });
         dismissLaunchScreen();
         updatePageMeta({ title: "검색", description: "공동번역성서 검색" });
       } else {

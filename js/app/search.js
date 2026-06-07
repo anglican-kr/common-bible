@@ -671,6 +671,10 @@ async function openBookFilterSheet(returnFocusEl) {
   const sheet = ensureBookSheet();
   await ensureBookMap();
   const books = await window.loadBooks().catch(() => []);
+  // Reset any inline height left by a prior mobile drag-resize / snap-min so each
+  // open starts from the CSS default (ADR-032 cite-sheet reset pattern).
+  const panel = document.getElementById("book-filter-sheet");
+  if (panel) panel.style.height = "";
   sheet.working.clear();
   for (const id of currentSearchState().filterBooks) sheet.working.add(id);
   renderBookFilterList(sheet.body, books, sheet.working);
@@ -820,9 +824,11 @@ function buildSearchEmptyState(title, subtitle) {
 // Shares the main-header chrome with renderSearchResults. `state.filterBooks`
 // keeps a pre-set book scope visible while the query field is empty (ADR-033).
 /** @param {{ filterBooks?: string[] }} [state] */
-function renderSearchView(state) {
+async function renderSearchView(state) {
   const filterBooks = (state && state.filterBooks) || [];
-  ensureBookMap(); // warm names for the next render (safe — all modules loaded)
+  // Resolve book names before building the filter bar so pre-set/deep-linked
+  // scope chips render with names rather than raw ids (ADR-033).
+  await ensureBookMap();
   window.setTitle("검색");
   const $title = _$("page-title");
   $title.insertBefore(window.buildHomeBtn("/", "성서 목록으로"), $title.firstChild);
@@ -830,10 +836,13 @@ function renderSearchView(state) {
   window.hideAudioBar();
   clearNode($app);
   const view = el("div", { className: "search-view" });
-  // During the tab-bar morph the bottom dock input owns focus; don't let the
-  // (hidden) in-page input grab it back via autofocus.
-  const morphing = document.body.classList.contains("tabbar-searching");
-  view.appendChild(buildInPageSearchInput("", !morphing));
+  // In-page input on mobile only — desktop uses the header search bar (mirrors
+  // renderSearchResults). During the tab-bar morph the bottom dock input owns
+  // focus; don't let the (hidden) in-page input grab it back via autofocus.
+  if (isMobile()) {
+    const morphing = document.body.classList.contains("tabbar-searching");
+    view.appendChild(buildInPageSearchInput("", !morphing));
+  }
   view.appendChild(buildSearchFilterBar({ q: "", filterBooks, andTerms: [] }));
   const dyn = el("div", { className: "search-empty-dynamic" });
   view.appendChild(dyn);
@@ -1270,6 +1279,9 @@ function consumeSearchAutoNavigate() {
 // chapter renderer reuses appendTextWithHighlight for ?hl= snippet highlighting).
 // ADR-030: 탭 바 하단 모핑 입력이 검색을 커밋할 때 재사용.
 window.commitTopSearch = commitTopSearch;
+// route() dismisses the book-filter sheet on navigation (ADR-033 / ADR-032
+// teardown contract). No-op when the sheet was never opened.
+window.closeBookFilterSheet = () => { if (_bookSheet) _bookSheet.overlay.close(); };
 window.renderSearchResults = renderSearchResults;
 window.renderSearchView = renderSearchView;
 window.isMobile = isMobile;
