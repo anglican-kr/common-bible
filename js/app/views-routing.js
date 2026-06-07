@@ -1719,12 +1719,17 @@ function parsePath() {
 
   const query = new URLSearchParams(location.search || "");
 
-  // Search route: /search?q=...&page=...
+  // Search route: /search?q=...&page=...&in=<bookId>&and=<keyword> (ADR-033).
+  // `in` (book-picker scope, repeatable) and `and` ("결과 내 검색" AND keywords,
+  // repeatable) live in the URL so they survive history/back-forward and tab
+  // restore (ADR-031), and so paginated/filtered links stay shareable.
   if (pathname === "search") {
     return {
       view: "search",
       query: query.get("q") || "",
       page: parseInt(query.get("page") ?? "", 10) || 1,
+      filterBooks: query.getAll("in").filter(Boolean),
+      andTerms: query.getAll("and").filter(Boolean),
     };
   }
 
@@ -1861,6 +1866,9 @@ async function route() {
   closeIfOpen("bm-import-modal", () => window.closeImportModal?.());
   closeIfOpen("bm-merge-modal", () => window.closeMergeModal?.());
   closeIfOpen("bm-save-modal", () => window.closeSaveModal?.());
+  // Book-filter sheet (ADR-033) — same teardown contract as the other overlays
+  // so leaving /search with the picker open doesn't strand the scrim/inert.
+  closeIfOpen("book-filter-sheet", () => window.closeBookFilterSheet?.());
   // Desktop settings popover: close on nav too (it has a focus trap). Closing
   // here also makes the /settings desktop fallback's gear.click() always OPEN
   // (never toggle-closed) since the popover is already dismissed by this point.
@@ -1895,7 +1903,10 @@ async function route() {
         // 이전 검색에 머문다. 복원 시엔 autoNavigate=false 라 refMatch 가 클릭 카드로
         // 떠 바운스 없이 마지막 검색이 그대로 복원된다.
         window.tabHistory?.recordPath(location.pathname + location.search);
-        await renderSearchResults(parsed.query, parsed.page, autoNav);
+        await renderSearchResults(parsed.query, parsed.page, autoNav, {
+          filterBooks: parsed.filterBooks,
+          andTerms: parsed.andTerms,
+        });
         // If renderSearchResults auto-navigated to a chapter, the inner route() call
         // already handles meta and analytics for that view — don't overwrite.
         if (parsePath().view !== "search") return;
@@ -1903,10 +1914,16 @@ async function route() {
           title: `"${parsed.query}" 검색`,
           description: `공동번역성서에서 "${parsed.query}" 검색 결과`,
         });
-      } else if (isMobile()) {
-        // Empty-query /search on mobile: full-screen in-page search input (the
-        // bottom sheet is retired on the tab-bar path).
-        renderSearchView();
+      } else if (isMobile() || parsed.filterBooks.length || parsed.andTerms.length) {
+        // Empty-query /search: recent searches + the book-filter bar (ADR-033).
+        // Mobile always shows this full-screen view. Desktop normally falls back
+        // to the book list, but when the URL carries an active filter (in=/and=)
+        // we render the search view so the scope is visible/removable instead of
+        // silently applied by a later header search (ADR-033, Bugbot).
+        await renderSearchView({ filterBooks: parsed.filterBooks });
+        // renderSearchView 가 ensureBookMap await 중 routeSeq 변경으로 일찍 빠져나갔으면
+        // 이미 다른 뷰가 떠 있으니, "검색" 제목·분석을 덮어쓰지 않는다 (ADR-033, Bugbot).
+        if (parsePath().view !== "search") return;
         dismissLaunchScreen();
         updatePageMeta({ title: "검색", description: "공동번역성서 검색" });
       } else {
@@ -2336,6 +2353,10 @@ window.initCompactHeader = initCompactHeader;
 window.initScrollElevation = initScrollElevation;
 window.getBooksCache = () => booksCache;
 window.setPendingBookFocus = setPendingBookFocus;
+// Monotonic route counter (ADR-031). Async view renderers (search.js) read this
+// before awaiting and bail if it changed, so a late await completion never
+// mutates #app over a newer view (ADR-033, Bugbot).
+window.routeSeq = () => _routeSeq;
 
 // Phase 7b ownership: routing + rendering helpers that earlier phases
 // (settings-ui / search / bookmark / app.js bootstrap) call as bare

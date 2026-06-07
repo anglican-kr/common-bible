@@ -2,7 +2,24 @@
 
 - 일시: 2026-05-07
 - 상태: 승인됨 — 적용 완료 (`js/app/search.js`의 `createSearchHistoryController`)
-- 관련 ADR: ADR-005(검색 인덱싱), ADR-001(SPA)
+- 관련 ADR: ADR-005(검색 인덱싱), ADR-001(SPA), ADR-033(검색 옵션 — 진입 시 최근 검색 목록·타임스탬프)
+
+> **개정 (2026-06-07): 검색어에 타임스탬프 추가 + 절대 날짜 표기.**
+> ADR-033이 빈 쿼리 `/search` 진입 시 최근 검색 **목록**을 노출하면서, 각 행에
+> "언제 검색했는지"를 보여줄 수 있도록 저장 모델을 확장했다.
+>
+> - **저장 형식**: `string[]` → `SearchHistoryEntry[]` (`{ q: string, ts: number | null }`).
+>   `ts`는 검색 시각(ms). **하위 호환**: 기존 `string[]`는 읽을 때 `{ q, ts: null }`로
+>   자동 마이그레이션(소리 없이, `loadSearchHistoryEntries`). 잘못된 항목(빈 q·q 없음·
+>   문자열/객체 아님)은 폐기. LRU·dedupe·30개 한도·로컬 전용은 그대로.
+> - **API**: `loadSearchHistory()`는 **여전히 `string[]`**(쿼리만) 반환 — 헤더 ▾
+>   드롭다운·기존 호출부 무변경. 신규 `loadSearchHistoryEntries()`가 `{ q, ts }`를
+>   반환해 날짜를 그릴 수 있게 한다. `pushSearchHistory`가 `ts: Date.now()`를 기록.
+> - **표기**: 상대("n일 전") 미채택, **절대 표기로 통일** — `formatSearchDate(ts)`가
+>   `YYYY. M. D.` 한 형식으로 출력(`ts`가 null이면 빈 문자열 → 날짜 생략). 진입 화면
+>   목록 행에만 표시(드롭다운은 기존대로 날짜 없음).
+> - **기간 만료 없음**: 타임스탬프는 표기용. 보존은 여전히 개수(30) LRU 한도만.
+> - 유닛: `storage.test.js`(마이그레이션·타임스탬프 회귀 +5), `search.test.js`(`formatSearchDate` +3).
 
 ## 결정
 

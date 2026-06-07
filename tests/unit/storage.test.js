@@ -325,6 +325,65 @@ test("search history: persists 30 entries across reloads", () => {
   assert.equal(list[29], "q1");
 });
 
+// ── search history: timestamps (ADR-014 개정 2026-06-07) ──
+
+test("pushSearchHistory: records a numeric timestamp per entry", () => {
+  const h = loadStorage();
+  const before = Date.now();
+  h.appStorage.pushSearchHistory("사랑");
+  const after = Date.now();
+  const entries = rehydrate(h.appStorage.loadSearchHistoryEntries());
+  assert.equal(entries.length, 1);
+  assert.equal(entries[0].q, "사랑");
+  assert.equal(typeof entries[0].ts, "number");
+  assert.ok(entries[0].ts >= before && entries[0].ts <= after);
+});
+
+test("loadSearchHistoryEntries: migrates legacy string[] with ts:null", () => {
+  const h = loadStorage({
+    localStorageInit: { "bible-search-history": JSON.stringify(["사랑", "은혜"]) },
+  });
+  const entries = rehydrate(h.appStorage.loadSearchHistoryEntries());
+  assert.deepEqual(entries, [
+    { q: "사랑", ts: null },
+    { q: "은혜", ts: null },
+  ]);
+});
+
+test("loadSearchHistoryEntries: preserves stored object entries + drops invalid", () => {
+  const raw = [
+    { q: "사랑", ts: 1717000000000 },
+    { q: "", ts: 123 },        // empty query → dropped
+    { ts: 5 },                  // no q → dropped
+    "은혜",                     // legacy string → ts null
+    42,                          // not string/object → dropped
+  ];
+  const h = loadStorage({ localStorageInit: { "bible-search-history": JSON.stringify(raw) } });
+  const entries = rehydrate(h.appStorage.loadSearchHistoryEntries());
+  assert.deepEqual(entries, [
+    { q: "사랑", ts: 1717000000000 },
+    { q: "은혜", ts: null },
+  ]);
+});
+
+test("loadSearchHistory: still returns string[] from timestamped storage", () => {
+  const h = loadStorage();
+  h.appStorage.pushSearchHistory("사랑");
+  h.appStorage.pushSearchHistory("은혜");
+  assert.deepEqual(rehydrate(h.appStorage.loadSearchHistory()), ["은혜", "사랑"]);
+});
+
+test("removeSearchHistory: keeps timestamps on the remaining entries", () => {
+  const h = loadStorage();
+  h.appStorage.pushSearchHistory("사랑");
+  h.appStorage.pushSearchHistory("은혜");
+  h.appStorage.removeSearchHistory("사랑");
+  const entries = rehydrate(h.appStorage.loadSearchHistoryEntries());
+  assert.equal(entries.length, 1);
+  assert.equal(entries[0].q, "은혜");
+  assert.equal(typeof entries[0].ts, "number");
+});
+
 // ── reading position ─────────────────────────────────────────────────────────
 
 test("saveReadingPosition: writes JSON to bible-last-read", () => {

@@ -241,7 +241,7 @@ function loadPureHelpers() {
   const ctx = {
     document,
     Object, Array, String, Math, JSON, console, Error,
-    encodeURIComponent,
+    encodeURIComponent, Date, isNaN,
   };
   vm.createContext(ctx);
   vm.runInContext(EL_SHIM + extractBlock("PURE HELPERS"), ctx, { filename: "search-pure-helpers.js" });
@@ -251,6 +251,8 @@ function loadPureHelpers() {
     appendTextWithHighlight: ctx.appendTextWithHighlight,
     buildSnippet: ctx.buildSnippet,
     buildSearchPagination: ctx.buildSearchPagination,
+    buildSearchUrl: ctx.buildSearchUrl,
+    formatSearchDate: ctx.formatSearchDate,
   };
 }
 
@@ -467,17 +469,72 @@ test("buildSnippet: returns DocumentFragment containing one span", () => {
   assert.strictEqual(frag.children[0].tagName, "SPAN");
 });
 
+// ── buildSearchUrl (ADR-033) ─────────────────────────────────────────────────
+
+test("buildSearchUrl: query only", () => {
+  const h = loadPureHelpers();
+  assert.strictEqual(h.buildSearchUrl({ q: "사랑" }), "/search?q=%EC%82%AC%EB%9E%91");
+});
+
+test("buildSearchUrl: page 1 is omitted, page >1 included", () => {
+  const h = loadPureHelpers();
+  assert.strictEqual(h.buildSearchUrl({ q: "x", page: 1 }), "/search?q=x");
+  assert.strictEqual(h.buildSearchUrl({ q: "x", page: 3 }), "/search?q=x&page=3");
+});
+
+test("buildSearchUrl: book filter (in=) repeated per book", () => {
+  const h = loadPureHelpers();
+  assert.strictEqual(
+    h.buildSearchUrl({ q: "사랑", filterBooks: ["john", "rom"] }),
+    "/search?q=%EC%82%AC%EB%9E%91&in=john&in=rom",
+  );
+});
+
+test("buildSearchUrl: AND terms (and=) repeated + encoded", () => {
+  const h = loadPureHelpers();
+  assert.strictEqual(
+    h.buildSearchUrl({ q: "사랑", andTerms: ["하느님"] }),
+    "/search?q=%EC%82%AC%EB%9E%91&and=%ED%95%98%EB%8A%90%EB%8B%98",
+  );
+});
+
+test("buildSearchUrl: empty state → bare /search", () => {
+  const h = loadPureHelpers();
+  assert.strictEqual(h.buildSearchUrl({}), "/search");
+  assert.strictEqual(h.buildSearchUrl({ q: "" }), "/search");
+});
+
+// ── formatSearchDate (ADR-014 개정 / ADR-033) ─────────────────────────────────
+
+test("formatSearchDate: absolute YYYY. M. D. for a timestamp", () => {
+  const h = loadPureHelpers();
+  // Local-time constructor avoids timezone drift in the assertion.
+  const ts = new Date(2026, 5, 5).getTime(); // 2026-06-05 (month is 0-based)
+  assert.strictEqual(h.formatSearchDate(ts), "2026. 6. 5.");
+});
+
+test("formatSearchDate: null/undefined → empty string (legacy entry)", () => {
+  const h = loadPureHelpers();
+  assert.strictEqual(h.formatSearchDate(null), "");
+  assert.strictEqual(h.formatSearchDate(undefined), "");
+});
+
+test("formatSearchDate: NaN/invalid timestamp → empty string", () => {
+  const h = loadPureHelpers();
+  assert.strictEqual(h.formatSearchDate(NaN), "");
+});
+
 // ── buildSearchPagination ────────────────────────────────────────────────────
 
 test("buildSearchPagination: middle page → prev link, page-info, next link", () => {
   const h = loadPureHelpers();
-  const nav = h.buildSearchPagination("사랑", 2, 5);
+  const nav = h.buildSearchPagination({ q: "사랑" }, 2, 5);
   assert.strictEqual(nav.tagName, "NAV");
   assert.strictEqual(nav.className, "search-pagination");
   assert.strictEqual(nav.children.length, 3);
-  // prev <a>
+  // prev <a> — page 1 is omitted from the URL
   assert.strictEqual(nav.children[0].tagName, "A");
-  assert.strictEqual(nav.children[0].getAttribute("href"), "/search?q=%EC%82%AC%EB%9E%91&page=1");
+  assert.strictEqual(nav.children[0].getAttribute("href"), "/search?q=%EC%82%AC%EB%9E%91");
   assert.strictEqual(recursiveText(nav.children[0]), "← 이전");
   // page-info <span>
   assert.strictEqual(nav.children[1].tagName, "SPAN");
@@ -489,9 +546,18 @@ test("buildSearchPagination: middle page → prev link, page-info, next link", (
   assert.strictEqual(recursiveText(nav.children[2]), "다음 →");
 });
 
+test("buildSearchPagination: carries book filter + AND terms into page links", () => {
+  const h = loadPureHelpers();
+  const nav = h.buildSearchPagination({ q: "사랑", filterBooks: ["john"], andTerms: ["하느님"] }, 2, 5);
+  assert.strictEqual(
+    nav.children[2].getAttribute("href"),
+    "/search?q=%EC%82%AC%EB%9E%91&page=3&in=john&and=%ED%95%98%EB%8A%90%EB%8B%98",
+  );
+});
+
 test("buildSearchPagination: first page → placeholder span instead of prev link", () => {
   const h = loadPureHelpers();
-  const nav = h.buildSearchPagination("q", 1, 3);
+  const nav = h.buildSearchPagination({ q: "q" }, 1, 3);
   assert.strictEqual(nav.children.length, 3);
   assert.strictEqual(nav.children[0].tagName, "SPAN");
   assert.strictEqual(nav.children[0].className, "placeholder");
@@ -500,7 +566,7 @@ test("buildSearchPagination: first page → placeholder span instead of prev lin
 
 test("buildSearchPagination: last page → placeholder span instead of next link", () => {
   const h = loadPureHelpers();
-  const nav = h.buildSearchPagination("q", 5, 5);
+  const nav = h.buildSearchPagination({ q: "q" }, 5, 5);
   assert.strictEqual(nav.children.length, 3);
   assert.strictEqual(nav.children[0].tagName, "A");
   assert.strictEqual(nav.children[2].tagName, "SPAN");
@@ -509,15 +575,15 @@ test("buildSearchPagination: last page → placeholder span instead of next link
 
 test("buildSearchPagination: encodeURIComponent applied to query", () => {
   const h = loadPureHelpers();
-  const nav = h.buildSearchPagination("a b/c", 2, 3);
-  // " " → "%20", "/" → "%2F"
-  assert.strictEqual(nav.children[0].getAttribute("href"), "/search?q=a%20b%2Fc&page=1");
+  const nav = h.buildSearchPagination({ q: "a b/c" }, 2, 3);
+  // " " → "%20", "/" → "%2F"; prev is page 1 (omitted)
+  assert.strictEqual(nav.children[0].getAttribute("href"), "/search?q=a%20b%2Fc");
   assert.strictEqual(nav.children[2].getAttribute("href"), "/search?q=a%20b%2Fc&page=3");
 });
 
 test("buildSearchPagination: nav has aria-label", () => {
   const h = loadPureHelpers();
-  const nav = h.buildSearchPagination("q", 1, 1);
+  const nav = h.buildSearchPagination({ q: "q" }, 1, 1);
   assert.strictEqual(nav.getAttribute("aria-label"), "검색 결과 페이지");
 });
 

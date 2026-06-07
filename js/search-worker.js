@@ -8,7 +8,11 @@
  *   Main → Worker:
  *     { type: "init", metaUrl: "data/search-meta.json",
  *       chunks: [{ name, url }, ...] }
- *     { type: "search", q: "keyword", page: 1, pageSize: 50, searchId: N }
+ *     { type: "search", q: "keyword", page: 1, pageSize: 50, searchId: N,
+ *       scopeBooks: ["john", ...], andTerms: ["사랑", ...] }
+ *       — scopeBooks: structured book filter (book ids) from the book picker,
+ *         merged with any typed `in:<alias>` tokens (ADR-033).
+ *       — andTerms: extra keywords AND-combined with `q` ("결과 내 검색", ADR-033).
  *
  *   Worker → Main:
  *     { type: "ready" }
@@ -77,6 +81,8 @@
  * @property {number} page
  * @property {number} pageSize
  * @property {number} searchId
+ * @property {string[]} [scopeBooks]
+ * @property {string[]} [andTerms]
  *
  * @typedef {InitMessage | SearchMessage} IncomingMessage
  */
@@ -220,10 +226,14 @@ function tryVerseRef(query) {
  * @param {string} q
  * @param {string[]} chunkNames
  * @param {Set<string> | null | undefined} restrictBooks
+ * @param {string[]} [andTerms]  Extra keywords that must ALSO be present in the
+ *   verse text (AND). Powers "결과 내 검색" (ADR-033).
  * @returns {MatchedRow[]}
  */
-function gatherResults(q, chunkNames, restrictBooks) {
+function gatherResults(q, chunkNames, restrictBooks, andTerms) {
   const qLower = q.toLowerCase();
+  // Lower-cased, de-blanked extra AND terms. Empty array → plain single-term search.
+  const extra = (andTerms || []).map((t) => t.toLowerCase().trim()).filter(Boolean);
   const hasRestrict = !!(restrictBooks && restrictBooks.size > 0);
   /** @type {MatchedRow[]} */
   const allMatched = [];
@@ -234,7 +244,10 @@ function gatherResults(q, chunkNames, restrictBooks) {
     const n = tArr.length;
     for (let i = 0; i < n; i++) {
       if (hasRestrict && !(/** @type {Set<string>} */ (restrictBooks)).has(books[bArr[i]])) continue;
-      if (tArr[i].toLowerCase().includes(qLower)) {
+      const tLower = tArr[i].toLowerCase();
+      if (!tLower.includes(qLower)) continue;
+      if (extra.length && !extra.every((term) => tLower.includes(term))) continue;
+      {
         allMatched.push({
           b: books[bArr[i]],
           c: cArr[i],
@@ -293,6 +306,8 @@ onmessage = /** @param {MessageEvent<IncomingMessage>} ev */ async (ev) => {
 
   if (msg.type === "search") {
     const { q, page, pageSize, searchId } = msg;
+    const scopeBooks = msg.scopeBooks || [];
+    const andTerms = msg.andTerms || [];
     currentSearchId = searchId;
 
     try {
@@ -314,6 +329,10 @@ onmessage = /** @param {MessageEvent<IncomingMessage>} ev */ async (ev) => {
       }
 
       const { keyword, restrictBooks, unmatched } = parseQuery(trimmed);
+
+      // Merge the structured book-picker scope (book ids) with any typed
+      // in:<alias> tokens — both restrict to the union of books (ADR-033).
+      for (const id of scopeBooks) restrictBooks.add(id);
 
       // Block search when any in: alias is unrecognized — the user gets the
       // notice instead of misleading "all-books" results that ignore their filter.
@@ -344,7 +363,7 @@ onmessage = /** @param {MessageEvent<IncomingMessage>} ev */ async (ev) => {
 
       // Send partial results if some chunks are still loading
       if (pendingNames.length > 0) {
-        const partial = gatherResults(keyword, loadedNames, restrictBooks);
+        const partial = gatherResults(keyword, loadedNames, restrictBooks, andTerms);
         const { results, total } = paginate(partial, page, pageSize);
         post("partial-results", {
           searchId, q: trimmed, keyword, results, total, page, pageSize,
@@ -358,7 +377,7 @@ onmessage = /** @param {MessageEvent<IncomingMessage>} ev */ async (ev) => {
       }
 
       // Full search across all chunks
-      const allMatched = gatherResults(keyword, chunkConfig.map((c) => c.name), restrictBooks);
+      const allMatched = gatherResults(keyword, chunkConfig.map((c) => c.name), restrictBooks, andTerms);
       const { results, total } = paginate(allMatched, page, pageSize);
       // `keyword` is the query stripped of in:<alias> tokens — used by the UI
       // for snippet highlighting and the ?hl= chapter-view param.

@@ -410,6 +410,14 @@ export interface AudioPosition {
 // at SEARCH_HISTORY_MAX. Local-only (see ADR-014).
 export type SearchHistoryList = string[];
 
+// Timestamped recent-search entry (ADR-014 개정 2026-06-07). Stored shape is
+// `SearchHistoryEntry[]`; `ts` is the search time (ms) or null for entries
+// migrated from the legacy `string[]` format.
+export interface SearchHistoryEntry {
+  q: string;
+  ts: number | null;
+}
+
 // Active during a touch/pointer drag over verse rows in select mode
 // (module-state `_verseSelectDrag`).
 export interface VerseSelectDrag {
@@ -650,7 +658,8 @@ export interface AppStorage {
   // Search history
   normalizeSearchQuery: (q: unknown) => string;
   loadSearchHistory: () => SearchHistoryList;
-  saveSearchHistory: (list: SearchHistoryList) => void;
+  loadSearchHistoryEntries: () => SearchHistoryEntry[];
+  saveSearchHistory: (list: SearchHistoryList | SearchHistoryEntry[]) => void;
   pushSearchHistory: (q: string) => SearchHistoryList;
   removeSearchHistory: (q: string) => SearchHistoryList;
   clearSearchHistory: () => SearchHistoryList;
@@ -814,8 +823,8 @@ export interface AppBookmark {
 // desktop top-bar input, mobile full-screen /search view, history panel.
 
 export interface AppSearch {
-  renderSearchResults: (query: string, page: number, autoNavigate?: boolean) => Promise<void>;
-  renderSearchView: () => void;
+  renderSearchResults: (query: string, page: number, autoNavigate?: boolean, opts?: { filterBooks?: string[]; andTerms?: string[] }) => Promise<void>;
+  renderSearchView: (state?: { filterBooks?: string[] }) => Promise<void>;
   isMobile: () => boolean;
   appendTextWithHighlight: (target: Node, text: string, query: string) => void;
   consumeSearchAutoNavigate: () => boolean;
@@ -919,6 +928,9 @@ declare global {
     // since `booksCache` lives in views-routing.js (Phase 7a). Always set
     // by views-routing.js at module-load time.
     getBooksCache: () => BooksData | null;
+    // Monotonic route counter (ADR-031 _routeSeq). Async view renderers read it
+    // before awaiting and bail if it changed (ADR-033). Set by views-routing.js.
+    routeSeq?: () => number;
     // Phase 7b: Audio Player state lives in views-routing.js; app.js's
     // Accessibility keydown handler reads currentAudio via this getter
     // for the spacebar play/pause toggle. Optional because views-routing
@@ -949,6 +961,7 @@ declare global {
     closeChapterPopover?: () => void;
     closeBookmarkDrawer?: () => void;
     closeSaveModal?: () => void;
+    closeBookFilterSheet?: () => void;
     closeNewFolderModal?: () => void;
     closeMergeModal?: () => void;
     closeImportModal?: () => void;
@@ -961,7 +974,7 @@ declare global {
     // module load; route() in views-routing.js calls them on the mobile branch.
     renderBookmarksView: () => void;
     renderSettingsView: () => void;
-    renderSearchView: () => void;
+    renderSearchView: (state?: { filterBooks?: string[] }) => Promise<void>;
     applyFontSize?: (size: number | string) => void;
     applyColorScheme?: (scheme: string) => void;
     applyTheme?: (theme: string) => void;
@@ -1062,6 +1075,7 @@ declare global {
   function openBookmarkDrawer(bookId: string | null, chapter: number | null): void;
   function closeBookmarkDrawer(): void;
   function closeSaveModal(): void;
+  function closeBookFilterSheet(): void;
   function closeNewFolderModal(): void;
   function closeMergeModal(): void;
   function closeImportModal(): void;
@@ -1075,8 +1089,8 @@ declare global {
   function updateVerseSelectBar(): void;
   function initBookmarkSheetDrag(): void;
   function initBookmarkDrawerResize(): void;
-  function renderSearchResults(query: string, page: number, autoNavigate?: boolean): Promise<void>;
-  function renderSearchView(): void;
+  function renderSearchResults(query: string, page: number, autoNavigate?: boolean, opts?: { filterBooks?: string[]; andTerms?: string[] }): Promise<void>;
+  function renderSearchView(state?: { filterBooks?: string[] }): Promise<void>;
   function isMobile(): boolean;
   function appendTextWithHighlight(target: Node, text: string, query: string): void;
   function consumeSearchAutoNavigate(): boolean;
