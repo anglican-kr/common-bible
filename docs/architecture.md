@@ -468,11 +468,13 @@ OAuth 측면 (가장 큰 공격 표면):
 | [031](decisions/031-tab-history-restore.md)             | 탭 히스토리 — 탭별 마지막 라우트+스크롤 복원(홈=읽던 위치, 검색=마지막 검색), `scrollRestoration:"manual"` + route() 시퀀스 가드 |
 | [032](decisions/032-component-view-layer.md)            | 컴포넌트·뷰 층 모듈화 — `el()` 위 무의존성 컴포넌트 층(`createOverlay` 단일 컨트롤러 + 시트 팩토리 + 비동기 `closeTransition` + `emptyState` 빌더)으로 오버레이 12곳·빈 상태 통일, 점진 교체 (구현 완료) |
 | [033](decisions/033-search-options.md)                  | 검색 옵션 — 책 picker(필터 시트)·결과 내 검색(AND)·진입 시 최근 검색 목록(개별/전체 삭제), URL 인코딩 필터 상태, 노트 검색 범위 확장 대비 (구현 완료) |
+| [034](decisions/034-views-routing-second-split.md)      | 뷰·라우팅·북마크 2차 분할 — 관심사별 모듈화 + 비순환 facade→명시 import 전환 + 순환 dispatch는 registry 역전 (ADR-018 후속, PR1 오디오 분리 완료) |
 
 ## 부록 B. 자주 보게 되는 파일 빠른 참조
 
 - 부트스트랩 / Service Worker 등록: `js/app.js`
 - 라우팅 + 본문 렌더 + 데이터 패칭: `js/app/views-routing.js`
+- 오디오 플레이어 (장별 mp3 UI·재생 상태·#audio-bar): `js/app/audio-player.js`
 - 검색 UI / 결과 시트 / 이력 패널: `js/app/search.js`
 - 북마크 (트리/모달/셀렉션): `js/app/bookmark.js`
 - 설정 화면 + 외관 적용: `js/app/settings-ui.js`
