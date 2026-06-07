@@ -246,6 +246,11 @@
       <label class="bm-form-label" for="bm-new-folder-input">폴더 이름</label>
       <input id="bm-new-folder-input" class="bm-form-input" type="text" maxlength="50" placeholder="예: 대림1주일" />
     </div>
+    <div class="bm-form-field">
+      <label class="bm-form-label" for="bm-newfolder-parent-btn">상위 폴더</label>
+      <!-- 폴더 콤보박스(최상위 + 폴더들)를 JS 가 주입. 미지정 = 최상위. -->
+      <div id="bm-new-folder-parent"></div>
+    </div>
     <div class="bm-form-actions">
       <button id="bm-new-folder-cancel" class="bm-btn-secondary" type="button">취소</button>
       <button id="bm-new-folder-confirm" class="bm-btn-primary" type="button">만들기</button>
@@ -365,13 +370,20 @@
     </button>
   </div>
 
-  <!-- 북마크 이동 모달 (ADR-029 개정) — 선택 모드 pill 의 "이동" 진입. 폴더 목록(최상위 +
-       새 폴더 + 폴더들)을 보여주고, 탭한 대상으로 선택 항목을 즉시 이동(확인 버튼 없음,
-       iOS "앨범으로 이동" 패턴). 선택에 포함된 폴더·그 하위는 목적지에서 제외된다. -->
+  <!-- 북마크 이동 모달 (ADR-029 개정) — 선택 모드 pill 의 "이동" 진입. 최상위 + 폴더 목록을
+       보여주고, 탭한 대상으로 선택 항목을 즉시 이동(확인 버튼 없음, iOS "앨범으로 이동" 패턴).
+       목록 아래 "새 폴더" 버튼은 상위 폴더 지정이 가능한 새 폴더 모달을 연다(미지정=최상위).
+       선택에 포함된 폴더·그 하위는 목적지에서 제외된다. -->
   <div id="bm-move-scrim" aria-hidden="true" hidden></div>
   <div id="bm-move-modal" role="dialog" aria-modal="true" aria-labelledby="bm-move-title" hidden>
     <h2 id="bm-move-title">이동할 폴더 선택</h2>
     <ul id="bm-move-list" role="group" aria-label="폴더 목록"></ul>
+    <button id="bm-move-new-folder" type="button" class="bm-move-newfolder">
+      <span class="bm-move-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5a2 2 0 0 1 2-2h3.6l1.8 2H19a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7.5Z"/><path d="M12 11.5v4"/><path d="M10 13.5h4"/></svg>
+      </span>
+      <span class="bm-move-label">새 폴더</span>
+    </button>
     <div id="bm-move-actions">
       <button id="bm-move-cancel" type="button">취소</button>
     </div>

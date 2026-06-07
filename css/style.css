@@ -64,6 +64,9 @@
   --bg-card: #ffffff;
   --text: #2a2520;
   --text-secondary: #5a554d;
+  /* 3차 텍스트·약화 어포던스 글리프(재정렬 핸들 ≡·disclosure·비활성 보조 아이콘). 보조
+     텍스트보다 한 단 더 연하다 — 본문 가독성이 아니라 "있되 물러난" 표식용 (DESIGN.md §2). */
+  --text-tertiary: #948e83;
   /* chrome 강조(버튼·링크·활성·포커스) — 고정 중립 차콜. 스킴을 따르지 않는다 (ADR-028 개정). */
   --accent: #3a3a42;
   --accent-light: #56565f;
@@ -195,6 +198,7 @@
   --bg-card: #252540;
   --text: #e0dcd6;
   --text-secondary: #a0a0a0;
+  --text-tertiary: #707070;
   --accent: #b8b8c2;
   --accent-light: #cecdd7;
   --border: #3a3a55;
@@ -4834,7 +4838,8 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
      below stays small and centered within it. */
   min-width: var(--touch-target);
   min-height: var(--touch-target);
-  color: var(--text-secondary);
+  /* 약화 어포던스 — 보조 텍스트보다 한 단 연한 3차 색(DESIGN.md §2). */
+  color: var(--text-tertiary);
   cursor: grab;
   /* Own the gesture so a drag from the handle reorders instead of scrolling. */
   touch-action: none;
@@ -5607,7 +5612,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 
 #bm-move-list {
   list-style: none;
-  margin: 0 0 var(--space-4);
+  margin: 0;
   padding: 0;
   overflow-y: auto;
   flex: 1 1 auto;
@@ -5652,6 +5657,33 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* 새 폴더 — dedicated action below the destination list, separated by a hairline.
+   Same row anatomy (leading glyph + label) as .bm-move-item but accent-tinted to
+   read as an action rather than a destination. */
+.bm-move-newfolder {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-2);
+  margin-bottom: var(--space-3);
+  min-height: var(--touch-target);
+  border: none;
+  border-top: 1px solid var(--border);
+  border-radius: 0 0 var(--radius) var(--radius);
+  background: none;
+  font-family: inherit;
+  font-size: var(--font-sm);
+  font-weight: 600;
+  color: var(--accent);
+  text-align: left;
+  cursor: pointer;
+}
+
+.bm-move-newfolder:hover { background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.bm-move-newfolder:active { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.bm-move-newfolder .bm-move-icon { color: var(--accent); }
 
 #bm-move-actions {
   display: flex;
