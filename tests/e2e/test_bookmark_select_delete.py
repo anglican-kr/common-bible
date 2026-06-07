@@ -326,3 +326,39 @@ def test_move_new_folder_with_parent(browser):
         assert any(c["id"] == "bm-root" for c in newf["children"])
     finally:
         ctx.close()
+
+
+def test_move_new_folder_excludes_selected_parent(browser):
+    """이동 → 새 폴더: 상위 폴더 후보에서 이동 중인 폴더(와 그 하위)는 제외된다.
+
+    빠지지 않으면 선택 폴더 안에 새 폴더가 생겨 이동이 no-op 가 되고 빈 폴더만 남는다.
+    """
+    ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA)
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    ctx.add_init_script(_PIN_NUDGE)
+    page = ctx.new_page()
+    try:
+        _open_bookmarks_view(page)
+        # outer 폴더 안에 inner 폴더 — outer 를 선택해 이동한다.
+        _set_store(page, [{
+            "type": "folder", "id": "outer", "name": "바깥", "expanded": True,
+            "children": [{"type": "folder", "id": "inner", "name": "안쪽",
+                          "children": [], "expanded": True}],
+        }])
+        _enter_select_mode(page)
+        page.locator("li.bm-folder[data-id='outer'] .bm-folder-row").click()
+        page.wait_for_selector(".bm-select-circle.is-selected")
+        page.locator("#bm-select-move-btn").click()
+        page.wait_for_selector("#bm-move-modal:not([hidden])")
+        page.locator("#bm-move-new-folder").click()
+        page.wait_for_selector("#bm-new-folder-modal:not([hidden])")
+        # The selected folder and its descendant must NOT be offered as a parent.
+        assert page.locator(
+            "#bm-newfolder-parent-listbox .bm-folder-combobox-option[data-id='outer']").count() == 0
+        assert page.locator(
+            "#bm-newfolder-parent-listbox .bm-folder-combobox-option[data-id='inner']").count() == 0
+        # 최상위 is always available.
+        assert page.locator(
+            "#bm-newfolder-parent-listbox .bm-folder-combobox-option[data-id='']").count() == 1
+    finally:
+        ctx.close()

@@ -2415,16 +2415,23 @@ const newFolderOverlay = createOverlay({
 /**
  * @param {((id: string) => void) | null} [onConfirm]
  * @param {string|null} [presetParentId] preselect a parent folder (null/undefined = 최상위).
+ * @param {{ folderFilter?: (f: { id: string, name: string, depth: number }) => boolean }} [opts]
+ *   folderFilter narrows the parent options — used by the move flow to drop the folders
+ *   that are being moved (and their subtrees), so the new folder can't be created inside
+ *   the very selection it will receive (which would no-op the move and leave it empty).
  */
-function openNewFolderModal(onConfirm, presetParentId) {
+function openNewFolderModal(onConfirm, presetParentId, opts = {}) {
   $bmNewFolderInput.value = "";
   $bmNewFolderInput.removeAttribute("aria-invalid");
   _bmNewFolderCallback = onConfirm || null;
   // Parent-folder picker: same combobox as the save modal, but scoped ids and no
-  // nested "+ 새 폴더" (it would re-open this very modal). 최상위 = create at root.
+  // nested "+ 새 폴더" (it would re-open this very modal). 최상위 = create at root
+  // (always offered by the combobox, even when every folder is filtered out).
   clearNode($bmNewFolderParent);
+  let folderOptions = collectFolderOptions(loadBookmarks());
+  if (opts.folderFilter) folderOptions = folderOptions.filter(opts.folderFilter);
   const combo = _buildFolderCombobox(
-    collectFolderOptions(loadBookmarks()),
+    folderOptions,
     presetParentId,
     { idPrefix: "bm-newfolder-parent", allowNewFolder: false },
   );
@@ -3042,10 +3049,17 @@ function openMoveModal() {
   }
 
   // 새 폴더 (below the list) — opens the new-folder modal where a parent can be
-  // chosen (미지정=최상위); the created folder then receives the selection.
+  // chosen (미지정=최상위); the created folder then receives the selection. The
+  // parent options exclude the same folders the move list omits (selected folders +
+  // folders under a selected ancestor) so the new folder can't be created inside the
+  // selection — otherwise the move would be a no-op and leave a stray empty folder.
   $bmMoveNewFolder.onclick = () => {
     closeMoveModal();
-    openNewFolderModal((newId) => { if (newId) _moveSelectedToFolder(newId); });
+    openNewFolderModal(
+      (newId) => { if (newId) _moveSelectedToFolder(newId); },
+      null,
+      { folderFilter: (f) => !(_bmSelected.has(f.id) || _bmAncestorSelected(f.id, parentMap)) },
+    );
   };
 
   moveOverlay.open();
