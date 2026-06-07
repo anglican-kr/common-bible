@@ -135,6 +135,27 @@ def test_book_list_click_then_chapter_loads(browser):
         ctx.close()
 
 
+def test_home_btn_focuses_book_just_read(browser):
+    """장(gen/1)에서 헤더 홈 버튼 클릭 → 책 목록의 창세기 항목에 포커스."""
+    ctx = browser.new_context()
+    page = ctx.new_page()
+    try:
+        page.goto(f"{BASE}/gen/1")
+        page.wait_for_selector("article.chapter-text .verse")
+
+        # Header home button → back up to the book list (구약 division tab)
+        page.locator(".title-home-btn").click()
+        page.wait_for_selector(".book-list", timeout=5_000)
+
+        # The Genesis list item should now hold focus, in context.
+        focused = page.evaluate(
+            "() => document.activeElement && document.activeElement.getAttribute('data-book-id')"
+        )
+        assert focused == "gen", f"Expected focus on gen, got {focused!r}"
+    finally:
+        ctx.close()
+
+
 def test_chapter_nav_next_btn_navigates(browser):
     """현재 장(gen/1)에서 다음 장 버튼 클릭 → gen/2 로드."""
     ctx = browser.new_context()
