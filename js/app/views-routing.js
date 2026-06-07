@@ -2350,6 +2350,10 @@ window.initCompactHeader = initCompactHeader;
 window.initScrollElevation = initScrollElevation;
 window.getBooksCache = () => booksCache;
 window.setPendingBookFocus = setPendingBookFocus;
+// Monotonic route counter (ADR-031). Async view renderers (search.js) read this
+// before awaiting and bail if it changed, so a late await completion never
+// mutates #app over a newer view (ADR-033, Bugbot).
+window.routeSeq = () => _routeSeq;
 
 // Phase 7b ownership: routing + rendering helpers that earlier phases
 // (settings-ui / search / bookmark / app.js bootstrap) call as bare

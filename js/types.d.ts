@@ -928,6 +928,9 @@ declare global {
     // since `booksCache` lives in views-routing.js (Phase 7a). Always set
     // by views-routing.js at module-load time.
     getBooksCache: () => BooksData | null;
+    // Monotonic route counter (ADR-031 _routeSeq). Async view renderers read it
+    // before awaiting and bail if it changed (ADR-033). Set by views-routing.js.
+    routeSeq?: () => number;
     // Phase 7b: Audio Player state lives in views-routing.js; app.js's
     // Accessibility keydown handler reads currentAudio via this getter
     // for the spacebar play/pause toggle. Optional because views-routing

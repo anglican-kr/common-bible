@@ -1396,7 +1396,7 @@ body {
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
-  min-height: 2rem;
+  min-height: var(--touch-target, 44px);
   padding: 0 var(--space-3);
   font-family: inherit;
   font-size: var(--font-sm);
@@ -1433,7 +1433,7 @@ body {
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
-  min-height: 2rem;
+  min-height: var(--touch-target, 44px);
   padding: 0 var(--space-1) 0 var(--space-3);
   font-size: var(--font-sm);
   color: var(--accent);
@@ -1445,10 +1445,12 @@ body {
   white-space: nowrap;
 }
 
+/* 44px square hit area meets the touch-target minimum (ADR-014 / DESIGN.md
+   --touch-target); the × glyph stays visually small. */
 .search-chip-remove {
   flex-shrink: 0;
-  width: 1.5rem;
-  height: 1.5rem;
+  width: var(--touch-target, 44px);
+  height: var(--touch-target, 44px);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1475,7 +1477,7 @@ body {
 .search-refine-input {
   flex: 1;
   min-width: 8rem;
-  min-height: 2rem;
+  min-height: var(--touch-target, 44px);
   padding: 0 var(--space-3);
   font-family: inherit;
   font-size: var(--font-sm);

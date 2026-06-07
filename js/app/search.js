@@ -827,8 +827,12 @@ function buildSearchEmptyState(title, subtitle) {
 async function renderSearchView(state) {
   const filterBooks = (state && state.filterBooks) || [];
   // Resolve book names before building the filter bar so pre-set/deep-linked
-  // scope chips render with names rather than raw ids (ADR-033).
+  // scope chips render with names rather than raw ids (ADR-033). Capture the
+  // route sequence first and bail if navigation happened during the await, so a
+  // late completion never mutates #app over a newer view (ADR-033, Bugbot).
+  const seq = window.routeSeq?.() ?? 0;
   await ensureBookMap();
+  if ((window.routeSeq?.() ?? 0) !== seq) return;
   window.setTitle("검색");
   const $title = _$("page-title");
   $title.insertBefore(window.buildHomeBtn("/", "성서 목록으로"), $title.firstChild);
@@ -863,6 +867,15 @@ async function renderSearchResults(query, page, autoNavigate = false, opts = {})
   const filterBooks = opts.filterBooks || [];
   const andTerms = opts.andTerms || [];
   const state = { q: query, page, filterBooks, andTerms };
+
+  // Resolve book names before any DOM mutation so deep-linked/restored `in=`
+  // scope chips render with names rather than raw ids (ADR-033). Capture the
+  // route sequence and bail if navigation happened during the await, so a late
+  // completion never clears/builds over a newer view (ADR-033, Bugbot).
+  const seq = window.routeSeq?.() ?? 0;
+  await ensureBookMap();
+  if ((window.routeSeq?.() ?? 0) !== seq) return;
+
   window.setTitle(`"${query}" 검색`);
   const $title = _$("page-title");
   $title.insertBefore(window.buildHomeBtn("/", "성서 목록으로"), $title.firstChild);
@@ -872,10 +885,6 @@ async function renderSearchResults(query, page, autoNavigate = false, opts = {})
   $title.appendChild(window.buildSettingsTrigger());
   window.hideAudioBar();
   clearNode($app);
-
-  // Resolve book names before building the filter bar so deep-linked/restored
-  // `in=` scope chips render with names rather than raw ids (ADR-033).
-  await ensureBookMap();
 
   // Both layouts share the .search-view wrapper: the search-options bar (book
   // picker + 결과 내 검색) sits above results, which render into their own box so
@@ -908,6 +917,10 @@ async function renderSearchResults(query, page, autoNavigate = false, opts = {})
   }
 
   const result = await doSearch(query, page, pageSize, onPartial, { scopeBooks: filterBooks, andTerms });
+
+  // Bail if the user navigated away while the search was running — the captured
+  // resultsTarget is stale and #app belongs to a newer view now (ADR-033, Bugbot).
+  if ((window.routeSeq?.() ?? 0) !== seq) return;
 
   if (!result) {
     window.renderError("검색에 실패했습니다.");
@@ -1012,7 +1025,7 @@ function isMobile() {
 // / clearSearchHistory. Returns an object with open/close/refresh/isOpen/
 // syncToggleVisibility/consumeEnter. Test loader provides a richer DOM
 // stub (querySelectorAll/contains/closest/focus) than the rest of search.js.
-function createSearchHistoryController({ wrap, input, toggle, panel, clearBtn, onSelect, syncClearHidden }) {
+function createSearchHistoryController({ wrap, input, toggle, panel, clearBtn, onSelect, syncClearHidden, onChange }) {
   let activeIndex = -1;
   let _expanded = false;  // "더 보기" pressed in this session — reset on close
 
@@ -1194,6 +1207,9 @@ function createSearchHistoryController({ wrap, input, toggle, panel, clearBtn, o
       e.stopPropagation();
       removeSearchHistory(remove.dataset.removeQuery);
       refresh();
+      // Keep the on-page /search recents list (if shown) in sync with a delete
+      // made from this dropdown (ADR-033, Bugbot).
+      if (onChange) onChange();
       return;
     }
     const more = e.target.closest(".search-history-more");
@@ -1209,6 +1225,7 @@ function createSearchHistoryController({ wrap, input, toggle, panel, clearBtn, o
       e.stopPropagation();
       clearSearchHistory();
       refresh();
+      if (onChange) onChange();
       input.focus({ preventScroll: true });
       return;
     }
@@ -1254,6 +1271,9 @@ const topSearchHistory = createSearchHistoryController({
   clearBtn: $searchClear,
   syncClearHidden: (hidden) => { $searchBar.dataset.clearHidden = String(hidden); },
   onSelect: (q) => commitTopSearch(q),
+  // Header-dropdown deletes/clear should also refresh the on-page /search
+  // recents list when it's mounted (ADR-033, Bugbot).
+  onChange: () => refreshRecents(),
 });
 topSearchHistory.syncToggleVisibility();
 
