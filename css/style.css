@@ -6156,7 +6156,11 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
     height: 1.45rem;
     border-radius: 50%;
     border: 1.5px solid color-mix(in srgb, var(--text) 32%, transparent);
-    color: #fff; /* checkmark color (visible once ticked/covered) */
+    /* Checkmark color on the --accent fill (visible once ticked/covered). Use the
+       auto-flipping --bg, not #fff: --accent flips to a LIGHT gray in dark mode, so
+       a hardcoded white check would fail contrast there (codebase convention for
+       accent fills). */
+    color: var(--bg);
     box-sizing: border-box;
     opacity: 0;
     transform: translateY(-50%) scale(0.7);
