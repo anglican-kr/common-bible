@@ -1055,7 +1055,8 @@ declare global {
   function gtag(...args: any[]): void;
   const dataLayer: any[];
   function buildBackBtn(ariaLabel: string, fallback: string): HTMLButtonElement;
-  function buildHomeBtn(target: string, ariaLabel: string): HTMLButtonElement;
+  function buildHomeBtn(target: string, ariaLabel: string, focusBookId?: string): HTMLButtonElement;
+  function setPendingBookFocus(bookId: string): void;
   function buildSettingsTrigger(): HTMLButtonElement;
   function buildBookmarkHeaderBtn(bookId: string | null, chapter: number | null): HTMLButtonElement;
   function openBookmarkDrawer(bookId: string | null, chapter: number | null): void;

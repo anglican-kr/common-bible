@@ -956,7 +956,9 @@ function buildBackBtn(ariaLabel, fallback) {
 // always navigates to a fixed destination (the book list / division tab),
 // never history.back() — the breadcrumb is gone, so this is the canonical way
 // back up to the book list from a chapter / prologue / chapter-list view.
-function buildHomeBtn(target, ariaLabel) {
+// `focusBookId`, when given, asks the book list to move focus onto the book
+// we were just reading once it renders, so keyboard users land in context.
+function buildHomeBtn(target, ariaLabel, focusBookId) {
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   svg.setAttribute("viewBox", "0 0 24 24");
   svg.setAttribute("aria-hidden", "true");
@@ -970,7 +972,10 @@ function buildHomeBtn(target, ariaLabel) {
   path.setAttribute("fill", "none");
   svg.appendChild(path);
   const btn = el("button", { className: "title-back-btn title-home-btn", "aria-label": ariaLabel }, svg);
-  btn.addEventListener("click", () => navigate(target));
+  btn.addEventListener("click", () => {
+    if (focusBookId) setPendingBookFocus(focusBookId);
+    navigate(target);
+  });
   return btn;
 }
 

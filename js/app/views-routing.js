@@ -513,7 +513,7 @@ function setTitleWithChapterPicker(book, currentCh) {
     if (t instanceof Element && t.tagName === "A") chapterOverlay.close();
   });
 
-  $title.appendChild(buildHomeBtn(`/${effectiveDivision(book)}`, "성서 목록으로"));
+  $title.appendChild(buildHomeBtn(`/${effectiveDivision(book)}`, "성서 목록으로", book.id));
   $title.appendChild(btn);
   $title.appendChild(popover);
   $title.appendChild(buildBookmarkHeaderBtn(book.id, currentCh));
@@ -656,9 +656,9 @@ const NT_MOBILE_NAME = {
 function buildBookListItem(b) {
   const mobile = NT_MOBILE_NAME[b.id];
   if (!mobile) {
-    return el("li", null, el("a", { href: `/${b.id}` }, b.name_ko));
+    return el("li", null, el("a", { href: `/${b.id}`, "data-book-id": b.id }, b.name_ko));
   }
-  const a = el("a", { href: `/${b.id}`, "aria-label": b.name_ko });
+  const a = el("a", { href: `/${b.id}`, "data-book-id": b.id, "aria-label": b.name_ko });
   a.appendChild(el("span", { className: "book-name-full" }, b.name_ko));
   a.appendChild(el("span", { className: "book-name-mobile" }, mobile));
   return el("li", null, a);
@@ -937,6 +937,19 @@ function startScrollTracking(bookId, chapter) {
 // division pages. `activeDivision` falls back to the first tab when missing or
 // invalid (e.g. /deuterocanon while in vulgate mode, which the router also
 // redirects to /old_testament).
+// When the reading-view home button sends us back to the book list, it stashes
+// the book we were reading here so renderBookList can move focus onto its list
+// item (keyboard users land in context instead of at the top). One-shot: it is
+// cleared the moment it is consumed, so a plain tab/back navigation to the list
+// never inherits a stale focus target.
+/** @type {string | null} */
+let _pendingBookFocus = null;
+
+/** @param {string} bookId */
+function setPendingBookFocus(bookId) {
+  _pendingBookFocus = bookId;
+}
+
 function renderBookList(books, activeDivision) {
   const labels = divisionLabels();
   const order = divisionOrder();
@@ -967,6 +980,23 @@ function renderBookList(books, activeDivision) {
   panel.appendChild(ul);
   $app.appendChild(panel);
   observeBookListsIn($app);
+  focusPendingBook();
+}
+
+// Consume a pending "focus the book I was just reading" request left by the
+// reading-view home button. We only act when the book is in the division that
+// is actually rendered (the home button targets the book's own division, so it
+// will be); scrollIntoView keeps it clear of the sticky header.
+function focusPendingBook() {
+  const id = _pendingBookFocus;
+  _pendingBookFocus = null;
+  if (!id) return;
+  const target = /** @type {HTMLAnchorElement | null} */ (
+    $app.querySelector(`.book-list a[data-book-id="${CSS.escape(id)}"]`)
+  );
+  if (!target) return;
+  target.focus({ preventScroll: true });
+  target.scrollIntoView({ block: "center" });
 }
 
 // `clearReadingPosition` was extracted to js/app/storage.js (ADR-018 Phase 2).
@@ -1073,7 +1103,7 @@ function _observeResumeBanner(wrapper) {
 
 function renderChapterList(book, books) {
   setTitle(book.name_ko, NT_MOBILE_NAME[book.id]);
-  $title.insertBefore(buildHomeBtn(`/${effectiveDivision(book)}`, "성서 목록으로"), $title.firstChild);
+  $title.insertBefore(buildHomeBtn(`/${effectiveDivision(book)}`, "성서 목록으로", book.id), $title.firstChild);
   $title.appendChild(buildBookmarkHeaderBtn(book.id, null));
   $title.appendChild(buildSettingsTrigger());
   hideAudioBar();
@@ -1631,7 +1661,7 @@ function renderChapter(data, book, opts) {
 function renderPrologue(data, book) {
   const mobileBookName = NT_MOBILE_NAME[book.id];
   setTitle(`${book.name_ko} 머리말`, mobileBookName ? `${mobileBookName} 머리말` : undefined);
-  $title.insertBefore(buildHomeBtn(`/${effectiveDivision(book)}`, "성서 목록으로"), $title.firstChild);
+  $title.insertBefore(buildHomeBtn(`/${effectiveDivision(book)}`, "성서 목록으로", book.id), $title.firstChild);
   $title.appendChild(buildSettingsTrigger());
   clearNode($app);
 
@@ -2302,6 +2332,7 @@ window.effectiveDivision = effectiveDivision;
 window.initCompactHeader = initCompactHeader;
 window.initScrollElevation = initScrollElevation;
 window.getBooksCache = () => booksCache;
+window.setPendingBookFocus = setPendingBookFocus;
 
 // Phase 7b ownership: routing + rendering helpers that earlier phases
 // (settings-ui / search / bookmark / app.js bootstrap) call as bare

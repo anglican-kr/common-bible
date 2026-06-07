@@ -141,3 +141,20 @@ CSS 미디어 쿼리로 둘 중 하나만 노출(`.title-settings-btn` ↔ `#set
 > 남색 기가 도는 `var(--text)` 대신 hueless grey 를 직접 지정한다. 비활성 탭은
 > `var(--text-secondary)` 유지. 슬라이드 transform·`_prevDivisionIdx` 애니메이션
 > 로직은 불변.
+
+## 개정 (2026-06-07) — 홈 버튼 → 읽던 책에 포커스
+
+> **읽기 헤더 홈 버튼이 책 목록의 "읽던 책" 항목에 포커스 (§4 보완).** 본문·장
+> 목록·머리말에서 홈 버튼(`buildHomeBtn`)을 누르면 그 책의 구분 탭(`/${division}`)
+> 으로 올라가는데, 도착한 책 목록에서 **방금 읽던 책의 항목에 포커스**가 가도록
+> 한다 — 긴 목록에서 맨 위가 아니라 읽던 위치(맥락)에 키보드 포커스를 떨어뜨려
+> 다음 탐색이 자연스럽게 이어진다(접근성). 구현: `buildHomeBtn(target, ariaLabel,
+> focusBookId)` 의 세 번째 인자로 책 id 를 받아, 클릭 시 `setPendingBookFocus(id)`
+> 로 1회성 펜딩 값을 세운 뒤 `navigate(target)`. `renderBookList` 가 렌더 직후
+> `focusPendingBook()` 으로 그 값을 소비 — `.book-list a[data-book-id="…"]` 항목을
+> `focus({preventScroll:true})` + `scrollIntoView({block:"center"})`(sticky 헤더에
+> 가리지 않게 중앙). 펜딩 값은 소비 즉시 비워 일반 탭/뒤로 이동이 낡은 포커스를
+> 물려받지 않게 한다. 홈 버튼 내비는 PUSH 라 ADR-031 스크롤 복원(POP/탭 전환만)과
+> 무관하므로 `scrollIntoView` 가 그대로 유지된다. 책 목록 앵커에 `data-book-id`
+> 식별자 추가. 라우팅/포커스는 e2e 책임(`test_navigation.py`
+> `test_home_btn_focuses_book_just_read`).
