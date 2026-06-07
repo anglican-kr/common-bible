@@ -346,7 +346,8 @@ def test_move_new_folder_excludes_selected_parent(browser):
                           "children": [], "expanded": True}],
         }])
         _enter_select_mode(page)
-        page.locator("li.bm-folder[data-id='outer'] .bm-folder-row").click()
+        # Direct child only — a nested folder also has a .bm-folder-row (strict mode).
+        page.locator("li.bm-folder[data-id='outer'] > .bm-folder-row").click()
         page.wait_for_selector(".bm-select-circle.is-selected")
         page.locator("#bm-select-move-btn").click()
         page.wait_for_selector("#bm-move-modal:not([hidden])")

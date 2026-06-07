@@ -3977,6 +3977,16 @@ body.tabbar-searching #search-inpage-bar { display: none; }
   opacity: 0.4;
 }
 
+/* 🛈 안내 버튼은 ⋯(주 액션)보다 한 단 물러난 약화 어포던스 — 보조 정보 트리거라
+   --accent(차콜) 대신 --text-tertiary 로 덜 눈에 띄게(≡ 재정렬 핸들과 동일 위계 색). */
+.title-action-btn[aria-haspopup="dialog"] {
+  color: var(--text-tertiary);
+}
+
+/* 명시적 [hidden] 규칙 — 위 display:flex 가 UA [hidden]{display:none} 을 이기므로 필요.
+   빈 북마크 목록에서 🛈 를 JS 가 hidden 으로 숨길 때 실제로 사라지게 한다. */
+.title-action-btn[hidden] { display: none; }
+
 /* 전체 선택 toggle (select-delete mode, ADR-029 개정) — occupies the title row's
    trailing slot, swapped for the .title-actions cluster (⋯/🛈) via body.bm-select-
    active. iOS Mail/Files put Select All here; "전체 삭제" is 전체 선택 → 삭제. */
@@ -4192,6 +4202,9 @@ body.bm-select-active .bm-select-allbtn { display: inline-flex; }
 .title-action-popover-text {
   margin: 0;
   font-size: var(--font-sm);
+  /* Reset the bold inherited from the #page-title <h1> (font-weight 700) — the
+     guidance message should read at normal weight, not heavier than its title. */
+  font-weight: 400;
   line-height: var(--leading-normal);
   color: var(--text-secondary);
 }

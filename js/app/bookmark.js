@@ -1813,6 +1813,12 @@ function renderBookmarkTree(target = $bookmarkDrawerBody) {
   // drag actually reorders; auto-sorts would re-sort the drop away, so no handle.
   target.classList.toggle("bm-sortable", getBookmarkSort() === "manual");
   const store = loadBookmarks();
+  // Full view: the 🛈 add-help button is for users who ALREADY have bookmarks (the
+  // empty state already shows the same guidance), so hide it when the list is empty.
+  if (target !== $bookmarkDrawerBody) {
+    const bmInfoBtn = document.querySelector('.title-action-btn[aria-haspopup="dialog"]');
+    if (bmInfoBtn instanceof HTMLElement) bmInfoBtn.hidden = !store.length;
+  }
   if (!store.length) {
     target.appendChild(_buildEmptyState());
     return;
