@@ -17,14 +17,17 @@
 /** @typedef {import("../types").BibleChapter} BibleChapter */
 /** @typedef {import("../types").BiblePrologue} BiblePrologue */
 
+// Audio Player lives in its own module (ADR-034 PR1). Explicit ESM import —
+// the in-module callers (renderChapter / renderPrologue) bind these directly
+// instead of through the window facade. applyAudioShow stays facade-only
+// (settings-ui / state-machine read it) so it is not imported here.
+import { showAudioPlayer, hideAudioBar } from "./audio-player.js";
+
 const { _$, el, clearNode, chUnit } = window.appHelpers;
 const { createOverlay } = window.appOverlay;
 const {
   loadBookOrder, loadStartupBehavior,
   loadReadingPosition, saveReadingPosition, clearReadingPosition,
-  loadAudioTime, saveAudioTime, clearAudioTime,
-  loadAudioShow,
-  _maybeRequestPersist,
 } = window.appStorage;
 const { dismissLaunchScreen } = window.appSettings;
 const { readingContext } = window;
@@ -883,16 +886,12 @@ function initScrollElevation() {
 
 // ── Phase 7b additions ──
 // Views (renderBookList / renderChapter / renderPrologue / etc.),
-// Routing (parsePath / route / navigate + popstate listener),
-// Audio Player. State vars + startScrollTracking from former app.js
-// Reading position section also live here since they are Routing-internal.
+// Routing (parsePath / route / navigate + popstate listener). The Audio Player
+// moved to js/app/audio-player.js (ADR-034 PR1); its showAudioPlayer /
+// hideAudioBar / applyAudioShow are imported above. State vars +
+// startScrollTracking from the former app.js Reading position section stay here
+// since they are Routing-internal.
 
-// Audio Player module state (was app.js L112-L116).
-let currentAudio = null;
-/** @type {AbortController | null} */
-let _audioController = null;
-/** @type {ReturnType<typeof setTimeout> | null} */
-let _audioSaveTimer = null;
 let _scrollTrackCleanup = null;
 let _isInitialLoad = true;
 // ADR-031: route() 호출마다 증가. 리다이렉트(books→resume 등)로 route 가 재진입하면
@@ -2129,203 +2128,10 @@ window.addEventListener("popstate", () => {
   route();
 });
 
-// ── Audio Player ──
-
-/** @param {number} sec @returns {string} */
-function formatTime(sec) {
-  if (!isFinite(sec)) return "0:00";
-  const m = Math.floor(sec / 60);
-  const s = Math.floor(sec % 60);
-  return `${m}:${s.toString().padStart(2, "0")}`;
-}
-
-function _teardownAudio() {
-  if (_audioController) { _audioController.abort(); _audioController = null; }
-  if (_audioSaveTimer !== null) { clearTimeout(_audioSaveTimer); _audioSaveTimer = null; }
-  if (currentAudio) { currentAudio.pause(); currentAudio = null; }
-}
-
-function hideAudioBar() {
-  _teardownAudio();
-  $audioBar.hidden = true;
-  clearNode($audioBar);
-}
-
-/** @param {string} bookId @param {number} chapter */
-function showAudioPlayer(bookId, chapter) {
-  if (!loadAudioShow()) { hideAudioBar(); return; }
-  _teardownAudio();
-  _audioController = new AbortController();
-  const { signal } = _audioController;
-  const src = `${DATA_DIR}/audio/${bookId}-${chapter}.mp3`;
-  clearNode($audioBar);
-
-  const audio = new Audio();
-  currentAudio = audio;
-
-  const savedTime = loadAudioTime(bookId, chapter);
-  // Always preload metadata so total duration is visible before first play.
-  // ADR-016 excludes preload accesses from LRU, so this does not pollute cache signals.
-  audio.preload = "metadata";
-  audio.src = src;
-
-  // Build player UI
-  const container = el("div", { className: "audio-player" });
-
-  const playBtn = el("button", {
-    className: "audio-play-btn",
-    "aria-label": "재생",
-  });
-  const playIcon = el("span", { className: "audio-icon-play", "aria-hidden": "true" });
-  playBtn.appendChild(playIcon);
-
-  const progress = document.createElement("input");
-  progress.type = "range";
-  progress.className = "audio-progress";
-  progress.min = "0";
-  progress.max = "100";
-  progress.value = "0";
-  progress.setAttribute("aria-label", "재생 위치");
-
-  function updateProgressFill() {
-    const max = Number(progress.max);
-    const pct = max > 0 ? (Number(progress.value) / max) * 100 : 0;
-    progress.style.setProperty("--fill", `${pct}%`);
-  }
-  updateProgressFill();
-
-  const timeDisplay = el("span", { className: "audio-time" }, "0:00");
-
-  const progressWrap = el("div", { className: "audio-progress-wrap" });
-  progressWrap.appendChild(progress);
-  progressWrap.appendChild(timeDisplay);
-
-  const SPEEDS = [1, 1.25, 1.5];
-  let speedIndex = 0;
-  const speedBtn = el("button", {
-    className: "audio-speed-btn",
-    "aria-label": "재생 속도 1배속",
-  }, "1×");
-  speedBtn.addEventListener("click", () => {
-    speedIndex = (speedIndex + 1) % SPEEDS.length;
-    const rate = SPEEDS[speedIndex];
-    audio.playbackRate = rate;
-    const label = `재생 속도 ${rate}배속`;
-    speedBtn.setAttribute("aria-label", label);
-    speedBtn.textContent = `${rate}×`;
-    announce(label);
-  });
-
-  container.appendChild(playBtn);
-  container.appendChild(progressWrap);
-  container.appendChild(speedBtn);
-
-  playBtn.addEventListener("click", () => {
-    if (audio.paused) {
-      audio.play();
-    } else {
-      audio.pause();
-    }
-  });
-
-  audio.addEventListener("play", () => {
-    playBtn.setAttribute("aria-label", "일시정지");
-    announce("재생");
-    // Touch LRU metadata + opportunistically request persisted storage on
-    // first play after install (value moment, ADR-016 §F).
-    const absUrl = new URL(src, location.href).href;
-    window.bibleAudioCache?.touch(absUrl).catch(() => {});
-    _maybeRequestPersist();
-  }, { signal });
-
-  audio.addEventListener("playing", () => {
-    playIcon.className = "audio-icon-pause";
-  }, { signal });
-
-  audio.addEventListener("waiting", () => {
-    playIcon.className = "audio-icon-loading";
-  }, { signal });
-
-  audio.addEventListener("pause", () => {
-    playIcon.className = "audio-icon-play";
-    playBtn.setAttribute("aria-label", "재생");
-    announce("일시정지");
-  }, { signal });
-
-  // Progress updates
-  audio.addEventListener("loadedmetadata", () => {
-    progress.max = String(Math.floor(audio.duration));
-    if (savedTime && savedTime < audio.duration - 3) {
-      audio.currentTime = savedTime;
-      progress.value = String(Math.floor(savedTime));
-      updateProgressFill();
-      timeDisplay.textContent = `${formatTime(savedTime)} / ${formatTime(audio.duration)}`;
-    } else {
-      timeDisplay.textContent = `${formatTime(0)} / ${formatTime(audio.duration)}`;
-    }
-  }, { signal });
-
-  audio.addEventListener("timeupdate", () => {
-    if (!seekingByUser) {
-      progress.value = String(Math.floor(audio.currentTime));
-    }
-    updateProgressFill();
-    timeDisplay.textContent = `${formatTime(audio.currentTime)} / ${formatTime(audio.duration)}`;
-    if (_audioSaveTimer !== null) clearTimeout(_audioSaveTimer);
-    _audioSaveTimer = setTimeout(() => {
-      if (audio.currentTime > 0 && !audio.ended) saveAudioTime(bookId, chapter, Math.floor(audio.currentTime));
-    }, 1000);
-  }, { signal });
-
-  audio.addEventListener("ended", () => {
-    clearAudioTime();
-  }, { signal });
-
-  // Seeking
-  let seekingByUser = false;
-  progress.addEventListener("input", () => {
-    seekingByUser = true;
-    audio.currentTime = Number(progress.value);
-    updateProgressFill();
-  });
-  progress.addEventListener("change", () => {
-    seekingByUser = false;
-  });
-
-  // Error: audio not found → show unavailable message
-  audio.addEventListener("error", () => {
-    _teardownAudio();
-    showAudioUnavailable();
-  }, { signal });
-
-  $audioBar.appendChild(container);
-  $audioBar.hidden = false;
-}
-
-function showAudioUnavailable() {
-  clearNode($audioBar);
-  const msg = el("p", { className: "audio-unavailable" });
-  msg.appendChild(el("span", { className: "audio-unavailable-icon", "aria-hidden": "true" }));
-  msg.appendChild(document.createTextNode(" 오디오 파일을 준비 중입니다."));
-  $audioBar.appendChild(msg);
-  $audioBar.hidden = false;
-}
-
-// Live-toggle the audio player from the settings popover. Off: tear it down
-// so the FAB's audio-bar CSS sibling rule drops it back to the lower default
-// position. On: rebuild for the chapter currently in view (no-op on non-chapter
-// routes — next chapter navigation will pick the toggle up via showAudioPlayer).
-/** @param {boolean} on */
-function applyAudioShow(on) {
-  if (!on) { hideAudioBar(); return; }
-  const parsed = parsePath();
-  if (parsed.view === "chapter") showAudioPlayer(parsed.bookId, parsed.chapter);
-  else if (parsed.view === "prologue") showAudioPlayer(parsed.bookId, 0);
-}
 // ── Window facade ──
 // Both an `appViewsRouting` aggregate and per-name globals so app.js's
-// Phase 7b territory (Views/Routing/Audio Player) can call setTitle / loadBooks
-// / divisionLabels etc. as bare globals. `window.appVersion` is mirrored by
+// Phase 7b territory (Views/Routing) can call setTitle / loadBooks /
+// divisionLabels etc. as bare globals. `window.appVersion` is mirrored by
 // `loadVersion` for settings-ui.js (Phase 3 owner) which reads it for the
 // version footer.
 
@@ -2334,7 +2140,7 @@ const appViewsRouting = {
   setTitle, setTitleWithChapterPicker,
   buildDivisionTabs, divisionLabels, divisionOrder, effectiveDivision,
   initCompactHeader, initScrollElevation,
-  parsePath, route, navigate, hideAudioBar, applyAudioShow, renderError,
+  parsePath, route, navigate, renderError,
   _verseSelectionUnit,
 };
 window.appViewsRouting = appViewsRouting;
@@ -2366,15 +2172,10 @@ window.routeSeq = () => _routeSeq;
 window.parsePath = parsePath;
 window.route = route;
 window.navigate = navigate;
-window.hideAudioBar = hideAudioBar;
-window.applyAudioShow = applyAudioShow;
 window.renderError = renderError;
 
-// Audio Player module state read accessor — app.js's Accessibility keydown
-// handler (Phase 8 territory) reads `currentAudio` for the spacebar
-// play/pause toggle. Migrates out when Accessibility itself moves into a
-// dedicated app-main module.
-window.getCurrentAudio = () => currentAudio;
+// hideAudioBar / applyAudioShow / getCurrentAudio moved to js/app/audio-player.js
+// (ADR-034 PR1), which owns their window facade for external callers.
 
 // (Phase 7a's temporary window.DIVISION_LABELS / OT_SUBCATEGORY{,_ORDER,_LABELS}
 // scaffolding was removed in Phase 7b — all callers (parsePath / route /
