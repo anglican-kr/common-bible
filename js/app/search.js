@@ -90,14 +90,21 @@ function ensureSearchWorker() {
  * @param {number} page
  * @param {number} pageSize
  * @param {((partial: any) => void) | null} [onPartial]
+ * @param {{ scopeBooks?: string[], andTerms?: string[] }} [opts]
+ *   scopeBooks — book-picker filter (book ids); andTerms — "결과 내 검색"
+ *   AND keywords. Both forwarded to the worker (ADR-033).
  */
-function doSearch(query, page, pageSize, onPartial) {
+function doSearch(query, page, pageSize, onPartial, opts) {
   return new Promise((resolve) => {
     const worker = ensureSearchWorker();
     activeSearchId += 1;
     pendingSearchCb = resolve;
     partialResultsCb = onPartial || null;
-    worker.postMessage({ type: "search", q: query, page, pageSize, searchId: activeSearchId });
+    worker.postMessage({
+      type: "search", q: query, page, pageSize, searchId: activeSearchId,
+      scopeBooks: (opts && opts.scopeBooks) || [],
+      andTerms: (opts && opts.andTerms) || [],
+    });
   });
 }
 // ── END WORKER WIRE-UP ──
@@ -169,16 +176,36 @@ function buildSnippet(text, query) {
 }
 
 /**
- * @param {string} query
+ * Build a /search URL from structured state (ADR-033). Pure — uses only
+ * encodeURIComponent — so the book-picker scope (`in=`) and "결과 내 검색" AND
+ * keywords (`and=`) round-trip through the URL (mirrors parsePath). `page` is
+ * dropped when 1; empty params are omitted.
+ * @param {{ q?: string, page?: number, filterBooks?: string[], andTerms?: string[] }} state
+ * @returns {string}
+ */
+function buildSearchUrl(state) {
+  const parts = [];
+  if (state.q) parts.push("q=" + encodeURIComponent(state.q));
+  if (state.page && state.page > 1) parts.push("page=" + state.page);
+  for (const b of state.filterBooks || []) parts.push("in=" + encodeURIComponent(b));
+  for (const t of state.andTerms || []) parts.push("and=" + encodeURIComponent(t));
+  return "/search" + (parts.length ? "?" + parts.join("&") : "");
+}
+
+/**
+ * @param {{ q?: string, filterBooks?: string[], andTerms?: string[] }} state
  * @param {number} currentPage
  * @param {number} totalPages
  */
-function buildSearchPagination(query, currentPage, totalPages) {
+function buildSearchPagination(state, currentPage, totalPages) {
   const nav = el("nav", { className: "search-pagination", "aria-label": "검색 결과 페이지" });
-  const encoded = encodeURIComponent(query);
+  /** @param {number} p */
+  const pageUrl = (p) => buildSearchUrl({
+    q: state.q, page: p, filterBooks: state.filterBooks, andTerms: state.andTerms,
+  });
 
   if (currentPage > 1) {
-    nav.appendChild(el("a", { href: `/search?q=${encoded}&page=${currentPage - 1}` }, "← 이전"));
+    nav.appendChild(el("a", { href: pageUrl(currentPage - 1) }, "← 이전"));
   } else {
     nav.appendChild(el("span", { className: "placeholder" }));
   }
@@ -186,7 +213,7 @@ function buildSearchPagination(query, currentPage, totalPages) {
   nav.appendChild(el("span", { className: "search-page-info" }, `${currentPage} / ${totalPages}`));
 
   if (currentPage < totalPages) {
-    nav.appendChild(el("a", { href: `/search?q=${encoded}&page=${currentPage + 1}` }, "다음 →"));
+    nav.appendChild(el("a", { href: pageUrl(currentPage + 1) }, "다음 →"));
   } else {
     nav.appendChild(el("span", { className: "placeholder" }));
   }
@@ -321,13 +348,392 @@ function buildInPageSearchInput(query, autofocus = false) {
     input.value = "";
     clear.hidden = true;
     input.focus();
-    if (window.parsePath().view === "search") window.navigate("/search");
+    // Drop the query (back to the recents/empty view) but keep the book-picker
+    // scope so a cleared field doesn't silently reset the filter (ADR-033).
+    if (window.parsePath().view === "search") navigateSearch({ q: "", andTerms: [] });
   });
 
   wrap.appendChild(input);
   wrap.appendChild(clear);
   if (autofocus) requestAnimationFrame(() => input.focus());
   return wrap;
+}
+
+// ── Search options: book-picker scope + "결과 내 검색" + recents (ADR-033) ──
+// Filter state is URL-encoded (parsePath → { filterBooks, andTerms }) so it
+// survives history/back-forward and tab restore (ADR-031). currentSearchState
+// reads the live URL; navigateSearch patches it and routes. A filter change
+// resets pagination to page 1 (unless the patch sets page) and never sets
+// searchAutoNavigate — only an explicit query commit (commitTopSearch) may
+// auto-jump to a verse reference.
+
+/** @returns {{ q: string, page: number, filterBooks: string[], andTerms: string[] }} */
+function currentSearchState() {
+  const p = window.parsePath();
+  return {
+    q: p.query || "",
+    page: p.page || 1,
+    filterBooks: (p.filterBooks || []).slice(),
+    andTerms: (p.andTerms || []).slice(),
+  };
+}
+
+/** @param {{ q?: string, page?: number, filterBooks?: string[], andTerms?: string[] }} patch */
+function navigateSearch(patch) {
+  const next = Object.assign(currentSearchState(), patch);
+  if (!("page" in patch)) next.page = 1;
+  const url = buildSearchUrl(next);
+  if (location.pathname + location.search === url) window.route();
+  else window.navigate(url);
+}
+
+// Lazy book-id → 한국어 이름 map, used for filter chip labels. Resolved on
+// demand (renderSearchResults awaits it before building the filter bar) rather
+// than at module load — search.js loads before views-routing.js, so
+// window.loadBooks isn't defined yet at init. On failure the cache stays null so
+// a later render retries; chips fall back to the raw id until names arrive.
+/** @type {{ [id: string]: string } | null} */
+let _bookMap = null;
+async function ensureBookMap() {
+  if (_bookMap) return _bookMap;
+  try {
+    if (typeof window.loadBooks !== "function") return {};
+    const books = await window.loadBooks();
+    /** @type {{ [id: string]: string }} */
+    const map = {};
+    for (const b of books) map[b.id] = b.name_ko;
+    _bookMap = map;
+    return _bookMap;
+  } catch {
+    return {}; // leave _bookMap null so a later render retries
+  }
+}
+/** @param {string} id */
+function bookName(id) {
+  return (_bookMap && _bookMap[id]) || id;
+}
+
+// CSP-safe inline SVG icon (no markup string — see buildSearchEmptyState).
+/**
+ * @param {string} className
+ * @param {string[]} paths  `d` attributes
+ * @param {Array<[number, number, number]>} [circles]  [cx, cy, r]
+ */
+function svgIcon(className, paths, circles) {
+  const NS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("fill", "none");
+  svg.setAttribute("stroke", "currentColor");
+  svg.setAttribute("stroke-width", "1.8");
+  svg.setAttribute("stroke-linecap", "round");
+  svg.setAttribute("stroke-linejoin", "round");
+  svg.setAttribute("aria-hidden", "true");
+  if (className) svg.setAttribute("class", className);
+  for (const [cx, cy, r] of circles || []) {
+    const c = document.createElementNS(NS, "circle");
+    c.setAttribute("cx", String(cx));
+    c.setAttribute("cy", String(cy));
+    c.setAttribute("r", String(r));
+    svg.appendChild(c);
+  }
+  for (const d of paths) {
+    const p = document.createElementNS(NS, "path");
+    p.setAttribute("d", d);
+    svg.appendChild(p);
+  }
+  return svg;
+}
+
+// A removable filter pill (book scope chip / 결과 내 검색어 chip).
+/**
+ * @param {string} label
+ * @param {string} removeAria
+ * @param {() => void} onRemove
+ */
+function buildFilterChip(label, removeAria, onRemove) {
+  const chip = el("span", { className: "search-chip" });
+  chip.appendChild(el("span", { className: "search-chip-label" }, label));
+  const x = el("button", { type: "button", className: "search-chip-remove", "aria-label": removeAria });
+  x.appendChild(el("span", { "aria-hidden": "true" }, "×"));
+  x.addEventListener("click", onRemove);
+  chip.appendChild(x);
+  return chip;
+}
+
+// The search-options bar shown above the empty view and results. Row 1 is the
+// scope: a "책 선택" button (opens the book-filter sheet) + a removable chip per
+// selected book. Row 2 is "결과 내 검색" — shown only when there's a primary
+// query (it narrows an existing result set, ADR-033): a chip per AND term + an
+// input to add another. The scope row is the future home of a 성서/노트 segment
+// (the request notes notes-search is coming); the bar already isolates that
+// concern from the query field.
+/**
+ * @param {{ q?: string, filterBooks?: string[], andTerms?: string[] }} state
+ */
+function buildSearchFilterBar(state) {
+  const filterBooks = state.filterBooks || [];
+  const andTerms = state.andTerms || [];
+  const bar = el("div", { className: "search-filters" });
+
+  const scopeRow = el("div", { className: "search-scope-row" });
+  const scopeBtn = el("button", {
+    type: "button",
+    className: filterBooks.length ? "search-scope-btn active" : "search-scope-btn",
+    "aria-haspopup": "dialog",
+  });
+  scopeBtn.appendChild(svgIcon("search-scope-icon", ["M3 5h18l-7 8v6l-4 2v-8z"]));
+  scopeBtn.appendChild(el("span", {}, filterBooks.length ? `책 ${filterBooks.length}권` : "책 선택"));
+  scopeBtn.addEventListener("click", () => openBookFilterSheet(scopeBtn));
+  scopeRow.appendChild(scopeBtn);
+
+  for (const id of filterBooks) {
+    const name = bookName(id);
+    scopeRow.appendChild(buildFilterChip(name, `책 범위에서 ${name} 제거`, () => {
+      navigateSearch({ filterBooks: currentSearchState().filterBooks.filter((b) => b !== id) });
+    }));
+  }
+  bar.appendChild(scopeRow);
+
+  if (state.q) {
+    const refineRow = el("div", { className: "search-refine-row" });
+    for (const term of andTerms) {
+      refineRow.appendChild(buildFilterChip(term, `결과 내 검색어 ${term} 제거`, () => {
+        navigateSearch({ andTerms: currentSearchState().andTerms.filter((t) => t !== term) });
+      }));
+    }
+    const refineInput = /** @type {HTMLInputElement} */ (el("input", {
+      type: "search",
+      className: "search-refine-input",
+      inputmode: "search",
+      enterkeyhint: "search",
+      autocorrect: "off",
+      autocapitalize: "off",
+      spellcheck: "false",
+      autocomplete: "off",
+      placeholder: "결과 내 검색",
+      "aria-label": "결과 내 검색",
+    }));
+    refineInput.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter") return;
+      e.preventDefault();
+      const term = refineInput.value.trim();
+      if (!term) return;
+      const cur = currentSearchState();
+      if (cur.andTerms.includes(term)) { refineInput.value = ""; return; }
+      navigateSearch({ andTerms: cur.andTerms.concat(term) });
+    });
+    refineRow.appendChild(refineInput);
+    bar.appendChild(refineRow);
+  }
+
+  return bar;
+}
+
+// ── Book-filter sheet (book picker) ──
+// Bottom sheet (mobile) / centered dialog (desktop, CSS) listing every book
+// grouped by division (respecting the 외경 book-order setting). Multi-select
+// toggles a working Set; "적용" commits it to the URL scope in one navigation,
+// "초기화" clears it. Built lazily as a body-level singleton (sibling of #app),
+// driven by the shared overlay controller (ADR-032).
+
+const BOOK_FILTER_INERT_SELECTORS =
+  "#sticky-group, main#app, #app-header, #audio-bar, #launch-screen, #tab-dock, #verse-select-bar";
+
+/** @type {{ overlay: any, body: HTMLElement, working: Set<string>, updateApplyLabel: () => void } | null} */
+let _bookSheet = null;
+
+function ensureBookSheet() {
+  if (_bookSheet) return _bookSheet;
+
+  const scrim = el("div", { className: "book-filter-scrim" });
+  scrim.hidden = true;
+  const panel = el("div", {
+    id: "book-filter-sheet",
+    className: "book-filter-sheet",
+    role: "dialog",
+    "aria-modal": "true",
+    "aria-labelledby": "book-filter-title",
+  });
+  panel.hidden = true;
+
+  const handle = el("div", { className: "book-filter-handle", "aria-hidden": "true" });
+  const head = el("div", { className: "book-filter-head" });
+  head.appendChild(el("h2", { id: "book-filter-title", className: "book-filter-title" }, "책 선택"));
+  const resetBtn = el("button", { type: "button", className: "book-filter-reset" }, "초기화");
+  head.appendChild(resetBtn);
+
+  const body = el("div", { className: "book-filter-body" });
+  const foot = el("div", { className: "book-filter-foot" });
+  const applyBtn = el("button", { type: "button", className: "book-filter-apply" }, "적용");
+  foot.appendChild(applyBtn);
+
+  panel.appendChild(handle);
+  panel.appendChild(head);
+  panel.appendChild(body);
+  panel.appendChild(foot);
+  document.body.appendChild(scrim);
+  document.body.appendChild(panel);
+
+  /** @type {Set<string>} */
+  const working = new Set();
+  function updateApplyLabel() {
+    applyBtn.textContent = working.size ? `적용 (${working.size})` : "적용";
+  }
+
+  const overlay = window.appOverlay.createOverlay({
+    panel,
+    scrim,
+    closeOnEsc: true,
+    closeOnOutside: true,
+    inertSelectors: BOOK_FILTER_INERT_SELECTORS,
+    initialFocus: () => applyBtn,
+  });
+  window.appOverlay.attachSheetDrag(handle, panel, { onClose: () => overlay.close() });
+
+  resetBtn.addEventListener("click", () => {
+    working.clear();
+    body.querySelectorAll(".book-filter-option").forEach((o) => o.setAttribute("aria-selected", "false"));
+    updateApplyLabel();
+  });
+  applyBtn.addEventListener("click", () => {
+    navigateSearch({ filterBooks: Array.from(working) });
+    overlay.close();
+  });
+  body.addEventListener("click", (e) => {
+    const t = /** @type {Element} */ (e.target);
+    const row = t.closest(".book-filter-option");
+    if (!row) return;
+    const id = /** @type {HTMLElement} */ (row).dataset.bookId || "";
+    if (working.has(id)) { working.delete(id); row.setAttribute("aria-selected", "false"); }
+    else { working.add(id); row.setAttribute("aria-selected", "true"); }
+    updateApplyLabel();
+  });
+
+  _bookSheet = { overlay, body, working, updateApplyLabel };
+  return _bookSheet;
+}
+
+/**
+ * @param {HTMLElement} body
+ * @param {any[]} books  BooksData entries ({ id, name_ko, division, … }).
+ * @param {Set<string>} working
+ */
+function renderBookFilterList(body, books, working) {
+  clearNode(body);
+  const order = window.divisionOrder();
+  const labels = window.divisionLabels();
+  for (const div of order) {
+    const inDiv = books.filter((b) => window.effectiveDivision(b) === div);
+    if (!inDiv.length) continue;
+    const section = el("section", { className: "book-filter-section" });
+    section.appendChild(el("h3", { className: "book-filter-section-title" }, labels[div]));
+    const ul = el("ul", {
+      className: "book-filter-list",
+      role: "listbox",
+      "aria-multiselectable": "true",
+      "aria-label": labels[div],
+    });
+    for (const b of inDiv) {
+      const li = el("li", { role: "presentation" });
+      const opt = el("button", {
+        type: "button",
+        className: "book-filter-option",
+        role: "option",
+        "aria-selected": working.has(b.id) ? "true" : "false",
+      });
+      opt.dataset.bookId = b.id;
+      opt.appendChild(el("span", { className: "book-filter-name" }, b.name_ko));
+      opt.appendChild(svgIcon("book-filter-check", ["M5 13l4 4L19 7"]));
+      li.appendChild(opt);
+      ul.appendChild(li);
+    }
+    section.appendChild(ul);
+    body.appendChild(section);
+  }
+}
+
+/** @param {HTMLElement} [returnFocusEl] */
+async function openBookFilterSheet(returnFocusEl) {
+  const sheet = ensureBookSheet();
+  await ensureBookMap();
+  const books = await window.loadBooks().catch(() => []);
+  sheet.working.clear();
+  for (const id of currentSearchState().filterBooks) sheet.working.add(id);
+  renderBookFilterList(sheet.body, books, sheet.working);
+  sheet.updateApplyLabel();
+  sheet.overlay.open(returnFocusEl || undefined);
+}
+
+// ── Recent searches (empty-query /search view) ──
+// Apple Safari/App-Store "recents" pattern: a "최근 검색" section with a "지우기"
+// (clear-all) action and one row per query (tap to run, trailing × to delete a
+// single keyword). Reads the same store as the header dropdown controller; both
+// stay in sync via refreshRecents + topSearchHistory.refresh (ADR-014/033).
+
+/** @type {HTMLElement | null} */
+let _emptyDynHost = null;
+
+function refreshRecents() {
+  if (_emptyDynHost && _emptyDynHost.isConnected) renderEmptyDynamic(_emptyDynHost);
+}
+
+/** @returns {HTMLElement | null} */
+function buildRecentSearches() {
+  const list = loadSearchHistory();
+  if (!list.length) return null;
+  const wrap = el("section", { className: "search-recents", "aria-label": "최근 검색" });
+
+  const head = el("div", { className: "search-recents-head" });
+  head.appendChild(el("h2", { className: "search-recents-title" }, "최근 검색"));
+  const clearAll = el("button", { type: "button", className: "search-recents-clear" }, "지우기");
+  clearAll.addEventListener("click", () => {
+    clearSearchHistory();
+    if (topSearchHistory) topSearchHistory.refresh();
+    refreshRecents();
+  });
+  head.appendChild(clearAll);
+  wrap.appendChild(head);
+
+  const ul = el("ul", { className: "search-recents-list", role: "list" });
+  for (const q of list) {
+    const li = el("li", { className: "search-recent-item" });
+    const select = el("button", { type: "button", className: "search-recent-select" });
+    select.appendChild(svgIcon("search-recent-icon", ["M12 7v5l3 2"], [[12, 12, 8]]));
+    select.appendChild(el("span", { className: "search-recent-text" }, q));
+    select.addEventListener("click", () => commitTopSearch(q));
+    const remove = el("button", {
+      type: "button",
+      className: "search-recent-remove",
+      "aria-label": `최근 검색어 "${q}" 삭제`,
+    });
+    remove.appendChild(el("span", { "aria-hidden": "true" }, "×"));
+    remove.addEventListener("click", () => {
+      removeSearchHistory(q);
+      if (topSearchHistory) topSearchHistory.refresh();
+      refreshRecents();
+    });
+    li.appendChild(select);
+    li.appendChild(remove);
+    ul.appendChild(li);
+  }
+  wrap.appendChild(ul);
+  return wrap;
+}
+
+// Empty-query body: recent searches if any, else the centered prompt + 검색 방법
+// examples. Lives in its own host so recents edits re-render in place without
+// rebuilding the input/filter bar (and losing focus).
+/** @param {HTMLElement} host */
+function renderEmptyDynamic(host) {
+  clearNode(host);
+  const recents = buildRecentSearches();
+  if (recents) {
+    host.appendChild(recents);
+  } else {
+    host.appendChild(buildSearchEmptyState("찾고 싶은 말씀을 검색해 보세요", SEARCH_INTRO_HELP));
+    host.appendChild(buildSearchExamples());
+  }
 }
 
 // Friendly guidance for the empty-query /search view — mirrors the bookmark
@@ -394,9 +800,14 @@ function buildSearchEmptyState(title, subtitle) {
   return emptyState({ icon, title, subtitle });
 }
 
-// Empty-query mobile /search: render the in-page input plus an Apple-Music-style
-// empty-state prompt. Shares the main-header chrome with renderSearchResults.
-function renderSearchView() {
+// Empty-query mobile /search: in-page input + search-options bar (book picker)
+// + recent searches (or the Apple-Music-style prompt when there's no history).
+// Shares the main-header chrome with renderSearchResults. `state.filterBooks`
+// keeps a pre-set book scope visible while the query field is empty (ADR-033).
+/** @param {{ filterBooks?: string[] }} [state] */
+function renderSearchView(state) {
+  const filterBooks = (state && state.filterBooks) || [];
+  ensureBookMap(); // warm names for the next render (safe — all modules loaded)
   window.setTitle("검색");
   const $title = _$("page-title");
   $title.insertBefore(window.buildHomeBtn("/", "성서 목록으로"), $title.firstChild);
@@ -408,19 +819,26 @@ function renderSearchView() {
   // (hidden) in-page input grab it back via autofocus.
   const morphing = document.body.classList.contains("tabbar-searching");
   view.appendChild(buildInPageSearchInput("", !morphing));
-  view.appendChild(
-    buildSearchEmptyState("찾고 싶은 말씀을 검색해 보세요", SEARCH_INTRO_HELP)
-  );
-  view.appendChild(buildSearchExamples());
+  view.appendChild(buildSearchFilterBar({ q: "", filterBooks, andTerms: [] }));
+  const dyn = el("div", { className: "search-empty-dynamic" });
+  view.appendChild(dyn);
   $app.appendChild(view);
+  _emptyDynHost = dyn;
+  renderEmptyDynamic(dyn);
 }
 
 /**
  * @param {string} query
  * @param {number} page
  * @param {boolean} [autoNavigate]
+ * @param {{ filterBooks?: string[], andTerms?: string[] }} [opts]
+ *   filterBooks — book-picker scope (book ids); andTerms — "결과 내 검색" AND
+ *   keywords. Both come from the URL via parsePath (ADR-033).
  */
-async function renderSearchResults(query, page, autoNavigate = false) {
+async function renderSearchResults(query, page, autoNavigate = false, opts = {}) {
+  const filterBooks = opts.filterBooks || [];
+  const andTerms = opts.andTerms || [];
+  const state = { q: query, page, filterBooks, andTerms };
   window.setTitle(`"${query}" 검색`);
   const $title = _$("page-title");
   $title.insertBefore(window.buildHomeBtn("/", "성서 목록으로"), $title.firstChild);
@@ -431,19 +849,20 @@ async function renderSearchResults(query, page, autoNavigate = false) {
   window.hideAudioBar();
   clearNode($app);
 
-  // Mobile full-screen view: keep an in-page search input pinned above the
-  // results so the query stays editable (desktop uses the header bar instead).
-  // Results render into their own container so re-rendering them never wipes
-  // the input. On desktop the results render straight into #app as before.
-  let resultsTarget = $app;
-  if (isMobile()) {
-    const view = el("div", { className: "search-view" });
-    view.appendChild(buildInPageSearchInput(query, false));
-    const resultsBox = el("div", { className: "search-view-results" });
-    view.appendChild(resultsBox);
-    $app.appendChild(view);
-    resultsTarget = resultsBox;
-  }
+  // Resolve book names before building the filter bar so deep-linked/restored
+  // `in=` scope chips render with names rather than raw ids (ADR-033).
+  await ensureBookMap();
+
+  // Both layouts share the .search-view wrapper: the search-options bar (book
+  // picker + 결과 내 검색) sits above results, which render into their own box so
+  // re-rendering them never wipes the bar/input. Mobile also keeps an in-page
+  // input pinned above (desktop uses the header bar).
+  const view = el("div", { className: "search-view" });
+  if (isMobile()) view.appendChild(buildInPageSearchInput(query, false));
+  view.appendChild(buildSearchFilterBar(state));
+  const resultsTarget = el("div", { className: "search-view-results" });
+  view.appendChild(resultsTarget);
+  $app.appendChild(view);
 
   resultsTarget.appendChild(el("div", { className: "loading", "aria-live": "polite" }, "검색 중…"));
 
@@ -453,13 +872,18 @@ async function renderSearchResults(query, page, autoNavigate = false) {
   const itemH = 80;
   const pageSize = Math.max(5, Math.floor(availH / itemH));
 
+  // Pagination links must carry the active book/AND filters (ADR-033); the
+  // closure binds the current state so renderSearchResultList stays filter-agnostic.
+  const paginationBuilder = (/** @type {string} */ _q, /** @type {number} */ p, /** @type {number} */ t) =>
+    buildSearchPagination(state, p, t);
+
   /** @param {any} partial */
   function onPartial(partial) {
-    renderSearchResultList(resultsTarget, partial, query, page, pageSize, buildSearchPagination);
+    renderSearchResultList(resultsTarget, partial, query, page, pageSize, paginationBuilder);
     window.announce(`"${query}" 검색 중… 현재 ${partial.total}건`);
   }
 
-  const result = await doSearch(query, page, pageSize, onPartial);
+  const result = await doSearch(query, page, pageSize, onPartial, { scopeBooks: filterBooks, andTerms });
 
   if (!result) {
     window.renderError("검색에 실패했습니다.");
@@ -482,13 +906,13 @@ async function renderSearchResults(query, page, autoNavigate = false) {
       window.route();
     } else {
       // Show the refMatch as a clickable result, and ensure UI is visible
-      renderSearchResultList(resultsTarget, result, query, page, pageSize, buildSearchPagination);
+      renderSearchResultList(resultsTarget, result, query, page, pageSize, paginationBuilder);
       dismissLaunchScreen();
     }
     return;
   }
 
-  renderSearchResultList(resultsTarget, result, query, page, pageSize, buildSearchPagination);
+  renderSearchResultList(resultsTarget, result, query, page, pageSize, paginationBuilder);
   dismissLaunchScreen();
 
   window.announce(`"${query}" 검색 결과 ${result.total}건`);
@@ -511,7 +935,10 @@ function commitTopSearch(rawQuery) {
   pushSearchHistory(q);
   if (topSearchHistory) topSearchHistory.refresh();
   searchAutoNavigate = true;
-  const newPath = `/search?q=${encodeURIComponent(q)}`;
+  // Keep the book-picker scope across a fresh query, but reset 결과 내 검색 (it
+  // refines a specific result set) and pagination (ADR-033).
+  const cur = currentSearchState();
+  const newPath = buildSearchUrl({ q, page: 1, filterBooks: cur.filterBooks, andTerms: [] });
   // If path is unchanged, popstate won't fire — call route() directly.
   if (location.pathname + location.search === newPath) {
     window.route();

@@ -1719,12 +1719,17 @@ function parsePath() {
 
   const query = new URLSearchParams(location.search || "");
 
-  // Search route: /search?q=...&page=...
+  // Search route: /search?q=...&page=...&in=<bookId>&and=<keyword> (ADR-033).
+  // `in` (book-picker scope, repeatable) and `and` ("결과 내 검색" AND keywords,
+  // repeatable) live in the URL so they survive history/back-forward and tab
+  // restore (ADR-031), and so paginated/filtered links stay shareable.
   if (pathname === "search") {
     return {
       view: "search",
       query: query.get("q") || "",
       page: parseInt(query.get("page") ?? "", 10) || 1,
+      filterBooks: query.getAll("in").filter(Boolean),
+      andTerms: query.getAll("and").filter(Boolean),
     };
   }
 
@@ -1895,7 +1900,10 @@ async function route() {
         // 이전 검색에 머문다. 복원 시엔 autoNavigate=false 라 refMatch 가 클릭 카드로
         // 떠 바운스 없이 마지막 검색이 그대로 복원된다.
         window.tabHistory?.recordPath(location.pathname + location.search);
-        await renderSearchResults(parsed.query, parsed.page, autoNav);
+        await renderSearchResults(parsed.query, parsed.page, autoNav, {
+          filterBooks: parsed.filterBooks,
+          andTerms: parsed.andTerms,
+        });
         // If renderSearchResults auto-navigated to a chapter, the inner route() call
         // already handles meta and analytics for that view — don't overwrite.
         if (parsePath().view !== "search") return;
@@ -1905,8 +1913,9 @@ async function route() {
         });
       } else if (isMobile()) {
         // Empty-query /search on mobile: full-screen in-page search input (the
-        // bottom sheet is retired on the tab-bar path).
-        renderSearchView();
+        // bottom sheet is retired on the tab-bar path). Recent searches + the
+        // book-filter bar render here (ADR-033).
+        renderSearchView({ filterBooks: parsed.filterBooks });
         dismissLaunchScreen();
         updatePageMeta({ title: "검색", description: "공동번역성서 검색" });
       } else {

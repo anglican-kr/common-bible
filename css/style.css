@@ -1372,6 +1372,469 @@ body {
   background: color-mix(in srgb, var(--accent) 10%, transparent);
 }
 
+/* ── Search options: filter bar + chips + recents + book picker (ADR-033) ── */
+
+/* Search-options bar above the empty view + results: scope row (book picker
+   + chips) and an optional "결과 내 검색" refine row. */
+.search-filters {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.search-scope-row,
+.search-refine-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* "책 선택" pill — outlined by default, accent-tinted when a scope is active. */
+.search-scope-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 2rem;
+  padding: 0 var(--space-3);
+  font-family: inherit;
+  font-size: var(--font-sm);
+  color: var(--text);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+}
+
+.search-scope-btn.active {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.search-scope-icon {
+  width: 1.05rem;
+  height: 1.05rem;
+  flex-shrink: 0;
+}
+
+.search-scope-btn:hover {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.search-scope-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+/* Removable filter pill (selected book / 결과 내 검색어). */
+.search-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 2rem;
+  padding: 0 var(--space-1) 0 var(--space-3);
+  font-size: var(--font-sm);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border-radius: var(--radius-pill);
+}
+
+.search-chip-label {
+  white-space: nowrap;
+}
+
+.search-chip-remove {
+  flex-shrink: 0;
+  width: 1.5rem;
+  height: 1.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--font-base);
+  line-height: 1;
+  color: inherit;
+  background: none;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  padding: 0;
+}
+
+.search-chip-remove:hover {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.search-chip-remove:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+/* "결과 내 검색" input — a compact pill mirroring the in-page search field. */
+.search-refine-input {
+  flex: 1;
+  min-width: 8rem;
+  min-height: 2rem;
+  padding: 0 var(--space-3);
+  font-family: inherit;
+  font-size: var(--font-sm);
+  color: var(--text);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.search-refine-input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.search-refine-input:focus-visible {
+  outline: none;
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+/* ── Recent searches (empty-query view) ── */
+.search-empty-dynamic {
+  display: block;
+}
+
+.search-recents {
+  margin-top: var(--space-2);
+}
+
+.search-recents-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--space-1) var(--space-1);
+}
+
+.search-recents-title {
+  margin: 0;
+  font-size: var(--font-sm);
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.search-recents-clear {
+  font-family: inherit;
+  font-size: var(--font-sm);
+  color: var(--accent);
+  background: none;
+  border: none;
+  padding: var(--space-1) var(--space-2);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+
+.search-recents-clear:hover {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.search-recents-clear:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+.search-recents-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.search-recent-item {
+  display: flex;
+  align-items: stretch;
+  min-height: var(--touch-target, 44px);
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+}
+
+.search-recent-select {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: 0 var(--space-2);
+  font-family: inherit;
+  font-size: var(--font-base);
+  color: var(--text);
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.search-recent-icon {
+  flex-shrink: 0;
+  width: 1.15rem;
+  height: 1.15rem;
+  color: var(--text-secondary);
+}
+
+.search-recent-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-recent-select:hover {
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+}
+
+.search-recent-select:focus-visible {
+  outline: none;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+.search-recent-remove {
+  flex-shrink: 0;
+  width: var(--touch-target, 44px);
+  height: var(--touch-target, 44px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--font-lg);
+  line-height: 1;
+  color: var(--text-secondary);
+  background: none;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  padding: 0;
+}
+
+.search-recent-remove:hover {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.search-recent-remove:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+/* ── Book-filter sheet (book picker) ── */
+.book-filter-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.book-filter-scrim[hidden] { display: none; }
+
+.book-filter-sheet {
+  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  margin-inline: auto;
+  max-width: var(--max-width);
+  z-index: 71;
+  display: flex;
+  flex-direction: column;
+  height: 70vh;
+  max-height: 85vh;
+  background: var(--bg);
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  box-shadow: var(--shadow-sheet);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.book-filter-sheet[hidden] { display: none; }
+
+.book-filter-sheet:not([hidden]) {
+  animation: bm-drawer-in-up var(--duration-base) cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+}
+
+/* Desktop: centered modal card rather than a bottom sheet. */
+@media (min-width: 769px) {
+  .book-filter-sheet {
+    top: 50%;
+    left: 50%;
+    right: auto;
+    bottom: auto;
+    transform: translate(-50%, -50%);
+    margin-inline: 0;
+    width: min(420px, 92vw);
+    max-width: none;
+    height: auto;
+    max-height: 80vh;
+    border-radius: var(--radius-xl);
+    padding-bottom: 0;
+    animation: none;
+  }
+}
+
+.book-filter-handle {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: var(--space-3) 0 var(--space-1);
+  cursor: ns-resize;
+  touch-action: none;
+}
+
+.book-filter-handle::before {
+  content: "";
+  width: 2.25rem;
+  height: 0.25rem;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--text) 25%, transparent);
+}
+
+@media (min-width: 769px) {
+  .book-filter-handle { display: none; }
+}
+
+.book-filter-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-2) var(--space-4) var(--space-3);
+  border-bottom: 1px solid var(--border);
+}
+
+.book-filter-title {
+  margin: 0;
+  font-size: var(--font-lg);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.book-filter-reset {
+  font-family: inherit;
+  font-size: var(--font-sm);
+  color: var(--accent);
+  background: none;
+  border: none;
+  padding: var(--space-1) var(--space-2);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+
+.book-filter-reset:hover {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.book-filter-reset:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+.book-filter-body {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding: var(--space-2) 0 var(--space-3);
+}
+
+.book-filter-section-title {
+  position: sticky;
+  top: 0;
+  margin: 0;
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--font-sm);
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: var(--bg);
+  z-index: 1;
+}
+
+.book-filter-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.book-filter-option {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: var(--touch-target, 44px);
+  padding: 0 var(--space-4);
+  font-family: inherit;
+  font-size: var(--font-base);
+  color: var(--text);
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.book-filter-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.book-filter-check {
+  flex-shrink: 0;
+  width: 1.25rem;
+  height: 1.25rem;
+  color: var(--accent);
+  opacity: 0;
+  transition: opacity var(--duration-fast);
+}
+
+.book-filter-option[aria-selected="true"] .book-filter-check {
+  opacity: 1;
+}
+
+.book-filter-option[aria-selected="true"] {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.book-filter-option:hover {
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+}
+
+.book-filter-option:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+.book-filter-foot {
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--border);
+}
+
+.book-filter-apply {
+  width: 100%;
+  min-height: var(--touch-target, 44px);
+  padding: var(--space-2) var(--space-5);
+  font-family: inherit;
+  font-size: var(--font-base);
+  color: var(--bg);
+  background: var(--accent);
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: opacity var(--duration-fast);
+}
+
+.book-filter-apply:hover { opacity: 0.88; }
+
+.book-filter-apply:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .book-filter-sheet:not([hidden]) { animation: none; }
+}
+
 /* ── Pull-to-refresh indicator (mobile) ── */
 #pull-refresh-scrim {
   position: fixed;

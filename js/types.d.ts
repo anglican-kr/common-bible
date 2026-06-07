@@ -814,8 +814,8 @@ export interface AppBookmark {
 // desktop top-bar input, mobile full-screen /search view, history panel.
 
 export interface AppSearch {
-  renderSearchResults: (query: string, page: number, autoNavigate?: boolean) => Promise<void>;
-  renderSearchView: () => void;
+  renderSearchResults: (query: string, page: number, autoNavigate?: boolean, opts?: { filterBooks?: string[]; andTerms?: string[] }) => Promise<void>;
+  renderSearchView: (state?: { filterBooks?: string[] }) => void;
   isMobile: () => boolean;
   appendTextWithHighlight: (target: Node, text: string, query: string) => void;
   consumeSearchAutoNavigate: () => boolean;
@@ -961,7 +961,7 @@ declare global {
     // module load; route() in views-routing.js calls them on the mobile branch.
     renderBookmarksView: () => void;
     renderSettingsView: () => void;
-    renderSearchView: () => void;
+    renderSearchView: (state?: { filterBooks?: string[] }) => void;
     applyFontSize?: (size: number | string) => void;
     applyColorScheme?: (scheme: string) => void;
     applyTheme?: (theme: string) => void;
@@ -1075,8 +1075,8 @@ declare global {
   function updateVerseSelectBar(): void;
   function initBookmarkSheetDrag(): void;
   function initBookmarkDrawerResize(): void;
-  function renderSearchResults(query: string, page: number, autoNavigate?: boolean): Promise<void>;
-  function renderSearchView(): void;
+  function renderSearchResults(query: string, page: number, autoNavigate?: boolean, opts?: { filterBooks?: string[]; andTerms?: string[] }): Promise<void>;
+  function renderSearchView(state?: { filterBooks?: string[] }): void;
   function isMobile(): boolean;
   function appendTextWithHighlight(target: Node, text: string, query: string): void;
   function consumeSearchAutoNavigate(): boolean;
