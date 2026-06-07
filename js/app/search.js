@@ -225,7 +225,7 @@ function renderSearchResultList(container, result, query, page, pageSize, pagina
   if (!hasRef && result.total === 0) {
     if (!result.unmatchedScopes || result.unmatchedScopes.length === 0) {
       container.appendChild(
-        buildSearchEmptyState("검색 결과 없음", `"${query}"에 대한 결과가 없습니다.`)
+        buildSearchEmptyState("검색 결과가 없습니다", `‘${query}’에 해당하는 구절을 찾지 못했어요. 다른 낱말로 검색하거나 띄어쓰기를 바꿔 보세요.`)
       );
     }
     return;
@@ -330,6 +330,13 @@ function buildInPageSearchInput(query, autofocus = false) {
   return wrap;
 }
 
+// Friendly guidance for the empty-query /search view — mirrors the bookmark
+// list's explanatory empty state (BOOKMARK_ADD_HELP) so first-time users learn
+// what they can type (낱말 검색 · in: 범위 좁히기 · 장:절 바로 펼치기) instead of
+// just seeing a bare example string.
+const SEARCH_INTRO_HELP =
+  "낱말을 입력하면 성경 전체에서 찾아 드립니다. ‘사랑 in:요한’처럼 특정 책으로 범위를 좁히거나, ‘창세 1:3’처럼 장과 절을 입력해 그 구절을 바로 펼칠 수도 있습니다.";
+
 // Apple-Music-style centered empty state (ADR-030 P3): large magnifier glyph +
 // title + subtitle. Used for the empty-query /search view and zero-result lists.
 /**
@@ -375,7 +382,7 @@ function renderSearchView() {
   const morphing = document.body.classList.contains("tabbar-searching");
   view.appendChild(buildInPageSearchInput("", !morphing));
   view.appendChild(
-    buildSearchEmptyState("검색", "예: 사랑, 사랑 in:요한, 창세 1:3")
+    buildSearchEmptyState("찾고 싶은 말씀을 검색해 보세요", SEARCH_INTRO_HELP)
   );
   $app.appendChild(view);
 }
