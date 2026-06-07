@@ -364,6 +364,90 @@ function buildSearchExamples() {
   return wrap;
 }
 
+// Recent-searches list for the mobile full-screen /search empty view. The
+// history CRUD (loadSearchHistory / removeSearchHistory / clearSearchHistory)
+// already backs the desktop header dropdown (ADR-014); here we surface the same
+// store as an in-body list so mobile users entering search see (and can re-run /
+// delete) their past queries. Returns a host element that repaints itself in
+// place on delete/clear so input focus is preserved. When the history is empty
+// (first run, or after 모두 지우기) it falls back to the empty-state prompt so the
+// view never goes blank.
+function buildRecentSearches() {
+  const host = el("div", { className: "search-recent-host" });
+  function paint() {
+    clearNode(host);
+    const list = loadSearchHistory();
+    if (!list.length) {
+      host.appendChild(
+        buildSearchEmptyState("찾고 싶은 말씀을 검색해 보세요", SEARCH_INTRO_HELP)
+      );
+      return;
+    }
+    const section = el("section", { className: "search-recent", "aria-label": "최근 검색" });
+    const head = el("div", { className: "search-recent-head" });
+    head.appendChild(el("h2", { className: "search-recent-title" }, "최근 검색"));
+    const clearAll = el("button", { type: "button", className: "search-recent-clear" }, "모두 지우기");
+    clearAll.addEventListener("click", () => {
+      clearSearchHistory();
+      topSearchHistory?.refresh();
+      paint();
+    });
+    head.appendChild(clearAll);
+    section.appendChild(head);
+
+    const ul = el("ul", { className: "search-recent-list", role: "list" });
+    for (const q of list) {
+      const li = el("li", { className: "search-recent-item" });
+      const select = el("button", { type: "button", className: "search-recent-select" });
+      select.appendChild(buildRecentIcon());
+      select.appendChild(el("span", { className: "search-recent-q" }, q));
+      select.addEventListener("click", () => commitTopSearch(q));
+      const remove = el("button", {
+        type: "button",
+        className: "search-recent-remove",
+        "aria-label": `최근 검색어 "${q}" 삭제`,
+      });
+      remove.appendChild(el("span", { "aria-hidden": "true" }, "×"));
+      remove.addEventListener("click", () => {
+        removeSearchHistory(q);
+        topSearchHistory?.refresh();
+        paint();
+      });
+      li.appendChild(select);
+      li.appendChild(remove);
+      ul.appendChild(li);
+    }
+    section.appendChild(ul);
+    host.appendChild(section);
+  }
+  paint();
+  return host;
+}
+
+// Small clock/history glyph for each recent-search row (built as an SVG node so
+// the markup stays string-free / XSS-safe, matching buildSearchEmptyState).
+function buildRecentIcon() {
+  const NS = "http://www.w3.org/2000/svg";
+  const icon = document.createElementNS(NS, "svg");
+  icon.setAttribute("viewBox", "0 0 24 24");
+  icon.setAttribute("fill", "none");
+  icon.setAttribute("stroke", "currentColor");
+  icon.setAttribute("stroke-width", "1.8");
+  icon.setAttribute("stroke-linecap", "round");
+  icon.setAttribute("stroke-linejoin", "round");
+  icon.setAttribute("aria-hidden", "true");
+  icon.classList.add("search-recent-icon");
+  const circle = document.createElementNS(NS, "circle");
+  circle.setAttribute("cx", "12");
+  circle.setAttribute("cy", "12");
+  circle.setAttribute("r", "9");
+  const hands = document.createElementNS(NS, "path");
+  hands.setAttribute("d", "M12 7v5l3 2");
+  icon.appendChild(circle);
+  icon.appendChild(hands);
+  return icon;
+}
+
 // Apple-Music-style centered empty state (ADR-030 P3): large magnifier glyph +
 // title + subtitle. Used for the empty-query /search view and zero-result lists.
 /**
@@ -408,9 +492,9 @@ function renderSearchView() {
   // (hidden) in-page input grab it back via autofocus.
   const morphing = document.body.classList.contains("tabbar-searching");
   view.appendChild(buildInPageSearchInput("", !morphing));
-  view.appendChild(
-    buildSearchEmptyState("찾고 싶은 말씀을 검색해 보세요", SEARCH_INTRO_HELP)
-  );
+  // Recent searches when present (else the empty-state prompt, handled inside);
+  // the 검색 방법 guide follows so first-timers always have an example to tap.
+  view.appendChild(buildRecentSearches());
   view.appendChild(buildSearchExamples());
   $app.appendChild(view);
 }

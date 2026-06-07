@@ -1745,6 +1745,98 @@ body {
   color: var(--text-secondary);
 }
 
+/* 최근 검색 list on the mobile /search empty view — surfaces the ADR-014 history
+   store (shared with the desktop header dropdown) as an in-body list. Rows are
+   full-width tap targets (re-run the query) with a trailing × (delete one); the
+   header carries 모두 지우기. Neutral --accent for chrome (ADR-028). */
+.search-recent {
+  width: 100%;
+  max-width: 32rem;
+  margin: var(--space-2) auto 0;
+}
+.search-recent-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 0 var(--space-1) var(--space-1);
+}
+.search-recent-title {
+  margin: 0;
+  font-size: var(--font-sm);
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.search-recent-clear {
+  flex: none;
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--font-sm);
+  color: var(--accent);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+.search-recent-clear:hover { text-decoration: underline; }
+.search-recent-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+}
+.search-recent-item {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+}
+.search-recent-item:last-child { border-bottom: none; }
+.search-recent-select {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  min-height: var(--touch-target);
+  padding: var(--space-2) var(--space-2);
+  background: none;
+  border: none;
+  text-align: left;
+  color: var(--text);
+  font-size: var(--font-base);
+  cursor: pointer;
+}
+.search-recent-select:hover,
+.search-recent-select:focus-visible {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  outline: none;
+}
+.search-recent-icon {
+  flex: none;
+  width: 1.15rem;
+  height: 1.15rem;
+  color: var(--text-secondary);
+  opacity: 0.7;
+}
+.search-recent-q {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.search-recent-remove {
+  flex: none;
+  width: var(--touch-target);
+  height: var(--touch-target);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--font-lg);
+  line-height: 1;
+  color: var(--text-secondary);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+.search-recent-remove:hover { color: var(--text); }
+
 .search-results {
   list-style: none;
 }
