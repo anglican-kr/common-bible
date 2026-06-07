@@ -1921,6 +1921,9 @@ async function route() {
         // we render the search view so the scope is visible/removable instead of
         // silently applied by a later header search (ADR-033, Bugbot).
         await renderSearchView({ filterBooks: parsed.filterBooks });
+        // renderSearchView 가 ensureBookMap await 중 routeSeq 변경으로 일찍 빠져나갔으면
+        // 이미 다른 뷰가 떠 있으니, "검색" 제목·분석을 덮어쓰지 않는다 (ADR-033, Bugbot).
+        if (parsePath().view !== "search") return;
         dismissLaunchScreen();
         updatePageMeta({ title: "검색", description: "공동번역성서 검색" });
       } else {
