@@ -156,7 +156,13 @@ function openSearch() {
     ? $inpage.value
     : (new URLSearchParams(location.search).get("q") || "");
   syncClearBtn();
-  requestAnimationFrame(() => $searchInput?.focus({ preventScroll: true }));
+  // 키보드는 검색 버튼 탭으로 떠야 한다. iOS Safari 는 프로그래밍 focus() 가 사용자
+  // 제스처(탭 핸들러)와 같은 동기 실행 안에서 호출될 때만 소프트 키보드를 띄운다 —
+  // rAF 로 미루면 제스처 체인이 끊겨 입력엔 포커스가 가도 키보드가 안 뜬다. openSearch
+  // 는 $searchBtn 클릭 핸들러에서 동기로 불리므로(그 위 navigate 도 동기), 여기서 바로
+  // focus 하면 같은 제스처 턴에 머문다. preventScroll: iOS 가 포커스 입력을 키보드 위로
+  // 보이려 페이지를 pan 하는 걸 막는다(dock 은 --kb-overlap 으로 별도로 올라간다).
+  $searchInput.focus({ preventScroll: true });
   attachKeyboardTracking();
 }
 

@@ -87,6 +87,8 @@ ADR-029 는 Safari 26 home-indicator 틴팅 회피를 위해 glass 를 `::before
   - 홈 탭 등 검색 외 라우트로 가면 `views-routing` 의 `syncTabBarActive`가 `window.exitTabSearch`를 호출해 복구.
 - **빈 상태** — 결과 0건 / 빈 검색어 뷰에 중앙 빈 상태(돋보기 + 제목 + 부제).
 
+> **개정 (2026-06-07): 빈 검색 뷰 안내를 "검색 방법" 예시 가이드로.** 빈 검색어 뷰의 부제는 본래 예시 문자열(`예: 사랑, 사랑 in:요한, 창세 1:3`) 한 줄뿐이라 무엇을 입력할 수 있는지 불친절했다. 북마크 빈 목록(BOOKMARK_ADD_HELP)의 설명형 빈 상태를 참고하되, 세 검색 형식을 한 문장에 몰아넣는 대신 **예시별 안내 카드 목록**으로 풀었다 — 제목 "찾고 싶은 말씀을 검색해 보세요" + 한 줄 부제 + `이렇게 검색해 보세요` 가이드(`사랑`=낱말 / `사랑 in:요한`=책 범위 / `창세 1:3`=장·절 펼치기). 각 카드는 탭하면 그 예시로 바로 검색(`commitTopSearch`). `js/app/search.js` `SEARCH_EXAMPLES`/`buildSearchExamples`, `.search-examples*` CSS(중립 `--accent` 사용 — ADR-028 테마색 범위 유지). 결과 0건 부제도 다시 시도 제안으로 보완.
+
 ### 4. 옛 모바일 검색 시트 제거
 
 검색이 탭바 모핑 단일 경로가 되면서 **모바일 검색 바텀 시트(`openSearchSheet`/`closeSearchSheet`/`#search-sheet`·드래그)를 전면 제거**(search.js 대폭 감소). 데스크탑 인라인 검색 바 + `/search` 결과 경로는 유지. 검색 FAB 는 ADR-029 에서 이미 제거.
@@ -107,6 +109,8 @@ ADR-029 는 Safari 26 home-indicator 틴팅 회피를 위해 glass 를 `::before
 
 - **축소 상태 복구 = 최상단 자동 복구 + 홈 탭(펼치기)**. (초안 "홈 탭으로만"에서 dev 검증 후 개정 — 최상단 도달 시 자동 복구가 자연스럽고, 홈 탭은 홈 이동이 아니라 펼치기로 일원화.) iOS Safari 식 "위로 스크롤 즉시 복구"는 끝에서 깜빡일 수 있어, **최상단에서만** 자동 복구 + 중간 위로 스크롤은 유지로 절충.
 - **검색 입력 = 하단 입력창 직접 검색 + visualViewport 키보드 위 띄움**(대안: 모핑은 연출만 하고 입력은 `/search` 상단으로 핸드오프 — 미채택). iOS 가 포커스 입력을 키보드 위로 올리려 페이지를 미는 문제는 **focus 시 `scrollTo(0,0)` + `preventScroll`**로 상쇄, **X(키보드 내리기) 노출·홈 숨김은 입력 focus/blur**에 묶어(visualViewport 높이 감지 불안정 회피) 안정화.
+
+> **개정 (2026-06-07): 검색 버튼 탭 → 키보드 즉시 표시.** 검색 원형 버튼을 눌러 모핑 진입할 때 dock 입력 `focus()` 를 `requestAnimationFrame` 안에서 호출하고 있었는데, iOS Safari 는 프로그래밍 `focus()` 가 **사용자 제스처(탭 핸들러)와 같은 동기 실행 턴** 안에서 불릴 때만 소프트 키보드를 띄운다 — rAF 로 미루면 제스처 체인이 끊겨 입력엔 포커스가 가도 키보드가 안 떴다(검색 화면만 열리고 키보드는 한 번 더 입력을 탭해야 등장). `openSearch()` 는 `#tab-search` 클릭 핸들러에서 동기로 불리고(그 안 `navigate` 도 동기), 입력은 `hidden=false` 후 같은 함수 안에서 다루므로, rAF 를 제거하고 **`$searchInput.focus({ preventScroll: true })` 를 동기 호출**해 같은 제스처 턴에 머물게 했다. `renderSearchView` 는 `body.tabbar-searching`(navigate 전 설정) 일 때 in-page 입력 autofocus 를 끄므로 dock 포커스를 가로채지 않고, 이미 검색 중 재진입 분기(127–132)도 동일하게 동기 focus 라 일관. 키보드 위치 보정(`liftForKeyboard`/`--kb-overlap`)·X 게이팅은 그대로.
 
 ## 검토한 대안
 
