@@ -159,6 +159,10 @@
      --dock-icon 은 그 안에 들어가는 아이콘(탭 아이콘 기준). ADR-028 §컨트롤. */
   --dock-control: calc(var(--touch-target) + var(--space-2) * 2);  /* 60px */
   --dock-icon: 1.7rem;
+  /* 북마크 트리 행의 선행 아이콘(책갈피·폴더) 표준 크기 — rem 이라 본문 폰트(Dynamic
+     Type)와 함께 커진다. 슬롯과 SVG 가 같은 토큰을 써 아이콘이 슬롯을 꽉 채운다
+     (옛날엔 1.6rem 슬롯 안에 고정 20px SVG 라 작아 보였다). */
+  --bm-row-icon: 1.6rem;
 
   /* ── Motion ── */
   --duration-instant: 0.1s;
@@ -4795,6 +4799,8 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   gap: var(--space-3);
   flex: 1;
   min-width: 0;
+  /* Positioning context for the drag drop-line (::after); mobile already sets this. */
+  position: relative;
 }
 
 /* Mobile-only swipe actions; shown on viewports ≤768px (see ADR-010). */
@@ -4823,13 +4829,21 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 }
 
 .bm-folder-toggle {
-  width: 1.6rem;
-  height: 1.6rem;
+  width: var(--bm-row-icon);
+  height: var(--bm-row-icon);
   flex-shrink: 0;
   color: var(--accent);
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+/* Tree-row icons fill their slot (the JS builds them at a fixed 20px; CSS overrides
+   so the size follows --bm-row-icon and scales with Dynamic Type). */
+.bm-folder-toggle svg,
+.bm-bookmark-type-icon svg {
+  width: var(--bm-row-icon);
+  height: var(--bm-row-icon);
 }
 
 .bm-folder-name {
@@ -4867,7 +4881,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   color: var(--accent);
   display: inline-flex;
   align-items: center;
-  width: 1.6rem;
+  width: var(--bm-row-icon);
   justify-content: center;
 }
 
@@ -5917,21 +5931,42 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
 }
 
-.bm-folder.drag-over-before > .bm-folder-row,
-.bm-bookmark.drag-over-before > .bm-bookmark-row {
-  box-shadow: inset 0 2px 0 var(--accent);
+/* Drop-position indicator (drag-reorder). Painted on the opaque .bm-row-content
+   (z-index 1 on mobile) — the row itself sits BEHIND the content there, so the old
+   row-level box-shadow was invisible while dragging. before/after = a 3px accent
+   insertion line at the target's top/bottom edge (the drop gap); into = the folder
+   row tinted + outlined. The drop line rides above the content via a ::after so the
+   row's own rounded-corner clip doesn't crop it. */
+.bm-folder.drag-over-before > .bm-folder-row > .bm-row-content::after,
+.bm-bookmark.drag-over-before > .bm-bookmark-row > .bm-row-content::after,
+.bm-folder.drag-over-after > .bm-folder-row > .bm-row-content::after,
+.bm-bookmark.drag-over-after > .bm-bookmark-row > .bm-row-content::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--accent);
+  border-radius: var(--radius-pill);
+  z-index: 2;
+  pointer-events: none;
 }
 
-.bm-folder.drag-over-after > .bm-folder-row,
-.bm-bookmark.drag-over-after > .bm-bookmark-row {
-  box-shadow: inset 0 -2px 0 var(--accent);
+.bm-folder.drag-over-before > .bm-folder-row > .bm-row-content::after,
+.bm-bookmark.drag-over-before > .bm-bookmark-row > .bm-row-content::after {
+  top: 0;
 }
 
-.bm-folder.drag-over-into > .bm-folder-row {
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-  border-radius: var(--radius);
+.bm-folder.drag-over-after > .bm-folder-row > .bm-row-content::after,
+.bm-bookmark.drag-over-after > .bm-bookmark-row > .bm-row-content::after {
+  bottom: 0;
+}
+
+.bm-folder.drag-over-into > .bm-folder-row > .bm-row-content {
+  background: color-mix(in srgb, var(--accent) 14%, var(--bg));
   outline: 2px solid var(--accent);
   outline-offset: -2px;
+  border-radius: var(--radius);
 }
 
 /* ── Mobile: swipe-to-reveal bookmark actions (ADR-010, 2026-05-03) ──

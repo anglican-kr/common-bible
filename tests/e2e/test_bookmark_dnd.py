@@ -145,3 +145,38 @@ def test_move_into_own_descendant_ignored(browser):
         assert "folder-f" in top_ids, "folder should remain at top level"
     finally:
         ctx.close()
+
+
+def test_drop_indicator_renders_on_content(browser):
+    """드롭 위치 삽입선이 콘텐츠 위에 그려진다 — 모바일에서 불투명 콘텐츠(z-index 1)가
+    행을 덮어 행에 그린 지시자가 안 보이던 회귀 방지. drag-over-* 클래스를 직접 적용해
+    .bm-row-content::after 삽입선(accent 3px)과 폴더 into 하이라이트를 검증한다."""
+    ctx = browser.new_context()
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    page = ctx.new_page()
+    try:
+        _open_drawer(page)
+        _set_store(page, [_BM_A, _BM_B, _FOLDER_F])
+
+        # before: 3px accent insertion line via ::after on the (visible) content.
+        page.evaluate(
+            "() => document.querySelector(\"li.bm-bookmark[data-id='bm-b']\")"
+            ".classList.add('drag-over-before')")
+        line = page.evaluate(
+            "() => { const s = getComputedStyle("
+            "document.querySelector(\"li.bm-bookmark[data-id='bm-b'] .bm-row-content\"), '::after');"
+            " return {content: s.content, height: s.height}; }")
+        assert line["content"] not in ("none", "normal", ""), f"no ::after line: {line}"
+        assert line["height"] == "3px", f"unexpected line height: {line}"
+
+        # into: the folder content row gets an outline highlight.
+        page.evaluate(
+            "() => document.querySelector(\"li.bm-folder[data-id='folder-f']\")"
+            ".classList.add('drag-over-into')")
+        outline = page.evaluate(
+            "() => getComputedStyle("
+            "document.querySelector(\"li.bm-folder[data-id='folder-f'] .bm-row-content\"))"
+            ".outlineStyle")
+        assert outline == "solid", f"expected solid outline for into, got: {outline}"
+    finally:
+        ctx.close()
