@@ -232,3 +232,37 @@ def test_delete_via_swipe(browser):
         assert "bm-a" not in ids, f"Deleted bookmark still in store: {ids}"
     finally:
         ctx.close()
+
+
+def test_cancel_delete_confirm_closes_swipe(browser):
+    """삭제 스와이프 → 삭제 → 확인 취소 시 행이 제자리로 닫혀야 한다.
+
+    회귀: 삭제는 onConfirm 안에서만 스와이프를 닫아, 확인을 취소하면 삭제 액션이
+    그대로 노출된 채 행이 열려 있었다(수정은 탭 즉시 닫혀 정상). 이제 삭제도 탭
+    즉시 닫는다."""
+    ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA)
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    ctx.add_init_script(_PIN_NUDGE)
+    page = ctx.new_page()
+    try:
+        _open_drawer(page, [_BM_A])
+        page.wait_for_timeout(300)
+        _swipe(page, idx=0, dx=-160)
+        page.wait_for_selector(".bm-bookmark-row.bm-swiped-delete", timeout=2_000)
+        page.wait_for_timeout(350)
+        box = page.evaluate(
+            "() => { const r = document.querySelector('.bm-bookmark-row.bm-swiped-delete')"
+            ".getBoundingClientRect(); return {x: r.x, y: r.y, w: r.width, h: r.height}; }"
+        )
+        page.mouse.click(box["x"] + box["w"] - 26, box["y"] + box["h"] / 2)
+        page.wait_for_selector("#bm-confirm-modal:not([hidden])", timeout=2_000)
+        # Cancel the confirm — the row must snap closed, not stay open.
+        page.locator("#bm-confirm-cancel").click()
+        page.wait_for_selector("#bm-confirm-modal", state="hidden")
+        page.wait_for_timeout(300)
+        assert page.locator(_SWIPED_SEL).count() == 0, "Row stayed swiped open after canceling delete"
+        # Bookmark untouched.
+        store = page.evaluate("() => window.syncStoreV2.loadBookmarks()")
+        assert any(bm["id"] == "bm-a" for bm in store)
+    finally:
+        ctx.close()

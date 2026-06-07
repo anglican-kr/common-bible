@@ -135,13 +135,36 @@ function loadBookmarkQuery(initialStore = []) {
     findExistingChapterBookmarks: ctx.findExistingChapterBookmarks,
     _selectAllState: ctx._selectAllState,
     _deleteBtnLabel: ctx._deleteBtnLabel,
+    _bmSelectCountLabel: ctx._bmSelectCountLabel,
     _findItemInStore: ctx._findItemInStore,
     _findParentFolderId: ctx._findParentFolderId,
     removeItemById: ctx.removeItemById,
     insertItem: ctx.insertItem,
     collectFolderOptions: ctx.collectFolderOptions,
-    _flattenBookmarkTree: ctx._flattenBookmarkTree,
     _descendantIds: ctx._descendantIds,
+  };
+}
+
+// ── BOOKMARK_SELECT loader ───────────────────────────────────────────────────
+// Pure cascade math for select-delete mode. The block reads the module-scoped
+// `_bmSelected` set; the prelude defines it so each test can seed explicit ticks.
+function loadBookmarkSelect() {
+  const ctx = {
+    Object, Array, Set, Map, String, Number, JSON, console, Error,
+  };
+  vm.createContext(ctx);
+  // `var` (not const/let) so the Set surfaces as a context property the test can
+  // seed via setSelected; the extracted functions close over the same binding.
+  const prelude = `var _bmSelected = new Set();\n`;
+  vm.runInContext(prelude + extractBlock("BOOKMARK_SELECT"), ctx, { filename: "bookmark-select.js" });
+  return {
+    /** @param {string[]} ids */
+    setSelected: (ids) => { ctx._bmSelected.clear(); for (const id of ids) ctx._bmSelected.add(id); },
+    _bmBuildParentMap: ctx._bmBuildParentMap,
+    _bmAncestorSelected: ctx._bmAncestorSelected,
+    _bmCountMarked: ctx._bmCountMarked,
+    _bmEffectiveTargets: ctx._bmEffectiveTargets,
+    _collectSelectedBookmarks: ctx._collectSelectedBookmarks,
   };
 }
 
@@ -592,6 +615,19 @@ test('_deleteBtnLabel: selection count appended', () => {
   assert.equal(h._deleteBtnLabel(3), "삭제 (3)");
 });
 
+// ── _bmSelectCountLabel ──────────────────────────────────────────────────────
+
+test('_bmSelectCountLabel: 0 → guidance prompt', () => {
+  const h = loadBookmarkQuery();
+  assert.equal(h._bmSelectCountLabel(0), "항목을 선택하세요");
+});
+
+test('_bmSelectCountLabel: count → "N개 선택됨"', () => {
+  const h = loadBookmarkQuery();
+  assert.equal(h._bmSelectCountLabel(1), "1개 선택됨");
+  assert.equal(h._bmSelectCountLabel(5), "5개 선택됨");
+});
+
 // ── _findItemInStore ─────────────────────────────────────────────────────────
 
 test('_findItemInStore: finds root-level bookmark', () => {
@@ -722,45 +758,6 @@ test('collectFolderOptions: bookmarks-only store → empty array', () => {
   assert.deepEqual(h.collectFolderOptions(onlyBookmarks), []);
 });
 
-// ── _flattenBookmarkTree ─────────────────────────────────────────────────────
-
-test('_flattenBookmarkTree: pre-order (folder before children) with depth + parentId', () => {
-  const h = loadBookmarkQuery();
-  const flat = h._flattenBookmarkTree(sampleStore());
-  // Every node appears once.
-  assert.equal(flat.length, 6);
-  assert.deepEqual(flat.map((e) => e.id), [
-    "bm-root1", "fld-old", "bm-ot1", "fld-pent", "bm-pent1", "bm-root2",
-  ]);
-  // Depth tracks nesting; parentId points at the enclosing folder (null at root).
-  const byId = Object.fromEntries(flat.map((e) => [e.id, e]));
-  assert.equal(byId["bm-root1"].depth, 0);
-  assert.equal(byId["bm-root1"].parentId, null);
-  assert.equal(byId["bm-ot1"].depth, 1);
-  assert.equal(byId["bm-ot1"].parentId, "fld-old");
-  assert.equal(byId["bm-pent1"].depth, 2);
-  assert.equal(byId["bm-pent1"].parentId, "fld-pent");
-});
-
-test('_flattenBookmarkTree: carries label/name + type', () => {
-  const h = loadBookmarkQuery();
-  const flat = h._flattenBookmarkTree([
-    { type: "folder", id: "f", name: "내 폴더", children: [
-      { type: "bookmark", id: "b", label: "창세 1장", bookId: "gen", chapter: 1, verseSpec: "all" },
-    ] },
-  ]);
-  assert.equal(flat[0].type, "folder");
-  assert.equal(flat[0].label, "내 폴더");
-  assert.equal(flat[1].type, "bookmark");
-  assert.equal(flat[1].label, "창세 1장");
-});
-
-test('_flattenBookmarkTree: empty / nullish store → empty array', () => {
-  const h = loadBookmarkQuery();
-  assert.deepEqual(h._flattenBookmarkTree([]), []);
-  assert.deepEqual(h._flattenBookmarkTree(null), []);
-});
-
 // ── _descendantIds ───────────────────────────────────────────────────────────
 
 test('_descendantIds: every nested id under a folder (excludes the folder)', () => {
@@ -780,6 +777,92 @@ test('_descendantIds: bookmark node → empty', () => {
 test('_descendantIds: empty folder → empty', () => {
   const h = loadBookmarkQuery();
   assert.deepEqual(h._descendantIds({ type: "folder", id: "f", name: "x", children: [] }), []);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BOOKMARK_SELECT tests (select-delete mode cascade math)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── _bmBuildParentMap ────────────────────────────────────────────────────────
+
+test('_bmBuildParentMap: maps each node id → parent folder id (null at root)', () => {
+  const h = loadBookmarkSelect();
+  const map = h._bmBuildParentMap(sampleStore());
+  assert.equal(map.size, 6);
+  assert.equal(map.get("bm-root1"), null);
+  assert.equal(map.get("fld-old"), null);
+  assert.equal(map.get("bm-ot1"), "fld-old");
+  assert.equal(map.get("fld-pent"), "fld-old");
+  assert.equal(map.get("bm-pent1"), "fld-pent");
+  assert.equal(map.get("bm-root2"), null);
+});
+
+// ── _bmAncestorSelected ──────────────────────────────────────────────────────
+
+test('_bmAncestorSelected: a ticked folder covers its whole subtree (any depth)', () => {
+  const h = loadBookmarkSelect();
+  const map = h._bmBuildParentMap(sampleStore());
+  h.setSelected(["fld-old"]);
+  assert.equal(h._bmAncestorSelected("bm-ot1", map), true);   // direct child
+  assert.equal(h._bmAncestorSelected("bm-pent1", map), true); // grandchild
+  assert.equal(h._bmAncestorSelected("fld-pent", map), true); // nested folder
+  assert.equal(h._bmAncestorSelected("fld-old", map), false); // the tick itself
+  assert.equal(h._bmAncestorSelected("bm-root1", map), false);// unrelated root
+});
+
+// ── _bmCountMarked ───────────────────────────────────────────────────────────
+
+test('_bmCountMarked: folder tick counts every node it removes', () => {
+  const h = loadBookmarkSelect();
+  const map = h._bmBuildParentMap(sampleStore());
+  h.setSelected(["fld-old"]); // fld-old + bm-ot1 + fld-pent + bm-pent1
+  assert.equal(h._bmCountMarked(map), 4);
+});
+
+test('_bmCountMarked: independent ticks sum (no double count)', () => {
+  const h = loadBookmarkSelect();
+  const map = h._bmBuildParentMap(sampleStore());
+  h.setSelected(["bm-root1", "fld-pent"]); // bm-root1 + fld-pent + bm-pent1
+  assert.equal(h._bmCountMarked(map), 3);
+});
+
+// ── _bmEffectiveTargets ──────────────────────────────────────────────────────
+
+test('_bmEffectiveTargets: drops ticks already covered by a ticked ancestor', () => {
+  const h = loadBookmarkSelect();
+  const map = h._bmBuildParentMap(sampleStore());
+  // bm-pent1 is under fld-old → redundant; only the top-most fld-old is a target.
+  h.setSelected(["fld-old", "bm-pent1"]);
+  assert.deepEqual(h._bmEffectiveTargets(map).sort(), ["fld-old"]);
+});
+
+test('_bmEffectiveTargets: independent ticks are all kept', () => {
+  const h = loadBookmarkSelect();
+  const map = h._bmBuildParentMap(sampleStore());
+  h.setSelected(["bm-root1", "fld-pent"]);
+  assert.deepEqual(h._bmEffectiveTargets(map).sort(), ["bm-root1", "fld-pent"].sort());
+});
+
+// ── _collectSelectedBookmarks (share expands folders to leaves) ───────────────
+
+test('_collectSelectedBookmarks: a ticked folder yields its bookmark leaves', () => {
+  const h = loadBookmarkSelect();
+  h.setSelected(["fld-old"]); // contains bm-ot1 + (fld-pent → bm-pent1)
+  const ids = h._collectSelectedBookmarks(sampleStore()).map((b) => b.id);
+  assert.deepEqual(ids, ["bm-ot1", "bm-pent1"]);
+});
+
+test('_collectSelectedBookmarks: ticked bookmarks included; folders contribute only leaves', () => {
+  const h = loadBookmarkSelect();
+  h.setSelected(["bm-root1", "fld-pent"]); // a bookmark + a folder (→ bm-pent1)
+  const ids = h._collectSelectedBookmarks(sampleStore()).map((b) => b.id);
+  assert.deepEqual(ids.sort(), ["bm-pent1", "bm-root1"]);
+});
+
+test('_collectSelectedBookmarks: nothing selected → empty', () => {
+  const h = loadBookmarkSelect();
+  h.setSelected([]);
+  assert.deepEqual(h._collectSelectedBookmarks(sampleStore()), []);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1031,7 +1114,7 @@ function loadBookmarkHref() {
   const ctx = { Object, Array, String, console, Error };
   vm.createContext(ctx);
   vm.runInContext(extractBlock("BOOKMARK_HREF"), ctx, { filename: "bookmark-href.js" });
-  return { _bookmarkHref: ctx._bookmarkHref };
+  return { _bookmarkHref: ctx._bookmarkHref, _buildSharePayload: ctx._buildSharePayload };
 }
 
 // ── BOOKMARK_ACTIVE loader ───────────────────────────────────────────────────
@@ -1088,6 +1171,29 @@ test("_bookmarkHref: chapter zero (theoretical) → /:bookId/0", () => {
   const h = loadBookmarkHref();
   // Sanity: pathname builder uses template literal, no minimum-chapter guard.
   assert.equal(h._bookmarkHref({ bookId: "x", chapter: 0, verseSpec: "all" }), "/x/0");
+});
+
+// ── _buildSharePayload (Web Share data from bookmarks) ────────────────────────
+
+test("_buildSharePayload: single bookmark → {title, url} (absolute SITE_BASE link)", () => {
+  const h = loadBookmarkHref();
+  const p = h._buildSharePayload([{ label: "창세기 1장", bookId: "gen", chapter: 1, verseSpec: "all" }]);
+  assert.equal(p.title, "창세기 1장");
+  assert.equal(p.url, "https://bible.anglican.kr/gen/1");
+  assert.equal(p.text, undefined);
+});
+
+test("_buildSharePayload: multiple → {title, text} list of label + absolute url", () => {
+  const h = loadBookmarkHref();
+  const p = h._buildSharePayload([
+    { label: "창세기 1장", bookId: "gen", chapter: 1, verseSpec: "all" },
+    { label: "요한 3장", bookId: "john", chapter: 3, verseSpec: "16" },
+  ]);
+  assert.equal(p.url, undefined);
+  assert.equal(
+    p.text,
+    "창세기 1장\nhttps://bible.anglican.kr/gen/1\n\n요한 3장\nhttps://bible.anglican.kr/john/3/16",
+  );
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
