@@ -174,7 +174,7 @@ let appVersion = null;
   const SYNC_FEEDBACK_MS   = 900;  // how long the spinner stays after trigger
   // Modal/sheet roots whose internal scroll must not be hijacked by PTR. We
   // walk e.target to see if the touch landed inside one of these.
-  const MODAL_SELECTORS = "#bookmark-drawer, #install-modal, #bm-save-modal, #bm-new-folder-modal, #bm-import-modal, #bm-merge-modal, #bm-confirm-modal, #bm-chapter-delete-modal, #bm-bulk-delete-modal, #drive-disconnect-modal, .settings-popover, .chapter-popover";
+  const MODAL_SELECTORS = "#bookmark-drawer, #install-modal, #bm-save-modal, #bm-new-folder-modal, #bm-import-modal, #bm-merge-modal, #bm-confirm-modal, #bm-chapter-delete-modal, #bm-move-modal, #drive-disconnect-modal, .settings-popover, .chapter-popover";
 
   /** @type {HTMLElement | null} */
   let indicator = null;
@@ -1828,6 +1828,9 @@ async function route() {
   clearNode($resumeBannerSlot);
   clearNode($divisionTabsSlot);
   if (readingContext.verseSelectMode) exitVerseSelectMode();
+  // Leaving the bookmarks view mid-select must drop the select bar too (self-
+  // guards when not in select mode).
+  window.exitBookmarkSelectMode?.();
   // Route changes should dismiss overlays through their controllers, not by
   // flipping `hidden`, so scrims, focus traps, body scroll locks and focus
   // restoration all unwind consistently (ADR-032).
@@ -1854,7 +1857,7 @@ async function route() {
   closeIfOpen("bm-new-folder-modal", () => window.closeNewFolderModal?.());
   closeIfOpen("bm-confirm-modal", () => window.closeConfirmModal?.());
   closeIfOpen("bm-chapter-delete-modal", () => window.closeChapterDeleteModal?.());
-  closeIfOpen("bm-bulk-delete-modal", () => window.closeBulkDeleteModal?.());
+  closeIfOpen("bm-move-modal", () => window.closeMoveModal?.());
   closeIfOpen("bm-import-modal", () => window.closeImportModal?.());
   closeIfOpen("bm-merge-modal", () => window.closeMergeModal?.());
   closeIfOpen("bm-save-modal", () => window.closeSaveModal?.());

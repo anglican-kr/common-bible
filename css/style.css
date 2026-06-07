@@ -64,6 +64,9 @@
   --bg-card: #ffffff;
   --text: #2a2520;
   --text-secondary: #5a554d;
+  /* 3차 텍스트·약화 어포던스 글리프(재정렬 핸들 ≡·disclosure·비활성 보조 아이콘). 보조
+     텍스트보다 한 단 더 연하다 — 본문 가독성이 아니라 "있되 물러난" 표식용 (DESIGN.md §2). */
+  --text-tertiary: #948e83;
   /* chrome 강조(버튼·링크·활성·포커스) — 고정 중립 차콜. 스킴을 따르지 않는다 (ADR-028 개정). */
   --accent: #3a3a42;
   --accent-light: #56565f;
@@ -151,6 +154,19 @@
      큰 폰트에서는 rem 으로 함께 커진다(§8). 고정 px --touch-target 과 달리 rem
      스케일. .title-back-btn·.title-bookmark-btn·#cite-sheet-back·#cite-sheet-close 공유. */
   --icon-btn-touch: 2.45rem;
+  /* 플로팅 dock 컨트롤 — 탭바를 기준점으로 한 공통 크기. 탭 pill 높이·검색/취소 원형
+     지름·오디오 바 높이·절/북마크 선택 바 pill·원형이 모두 이 크기(60px)를 공유한다.
+     --dock-icon 은 그 안에 들어가는 아이콘(탭 아이콘 기준). ADR-028 §컨트롤. */
+  --dock-control: calc(var(--touch-target) + var(--space-2) * 2);  /* 60px */
+  --dock-icon: 1.7rem;
+  /* 북마크 트리 행의 선행 아이콘(책갈피·폴더) 표준 크기 — rem 이라 본문 폰트(Dynamic
+     Type)와 함께 커진다. 슬롯과 SVG 가 같은 토큰을 써 아이콘이 슬롯을 꽉 채운다
+     (옛날엔 1.6rem 슬롯 안에 고정 20px SVG 라 작아 보였다). */
+  --bm-row-icon: 1.6rem;
+  /* 목록 행 높이 표준 — 북마크·폴더 행(현재) + 후속 목록(노트·캘린더 등)이 공유한다.
+     min-height 로 적용하고 세로 패딩은 작게(--space-1) 둬, 이 토큰이 곧 행 높이가 된다
+     (2줄 콘텐츠 ≈52px + 여백이 토큰 안에 들어감). rem 이라 Dynamic Type 추종. */
+  --list-row-h: 3.5rem;
 
   /* ── Motion ── */
   --duration-instant: 0.1s;
@@ -190,6 +206,7 @@
   --bg-card: #252540;
   --text: #e0dcd6;
   --text-secondary: #a0a0a0;
+  --text-tertiary: #707070;
   --accent: #b8b8c2;
   --accent-light: #cecdd7;
   --border: #3a3a55;
@@ -2987,7 +3004,7 @@ html.cite-sheet-open {
      인디케이터(정원)가 캡과 동심으로 겹친다(초승달 sliver 제거). */
   justify-content: space-between;
   /* 높이 60px 명시 = 캡 지름·검색 원형·각 탭 슬롯과 동일(정사각 슬롯 한 변). 상하 패딩 0. */
-  height: calc(var(--touch-target) + var(--space-2) * 2);
+  height: var(--dock-control);
   padding: 0;
   /* 검색 원형과의 8px 간격(오디오↔탭 바 수직 간격과 동일). dock gap 대신 여기서 줘서
      마지막 자식(idle width:0 닫기 버튼) 앞에 gap 이 끼는 부작용을 피한다 — 그래야
@@ -2996,10 +3013,8 @@ html.cite-sheet-open {
   /* 좌우 끝을 완전한 반원 캡으로 — stadium(pill) 형태. 모핑으로 홈만 남아 폭이
      60px 로 줄면(아래 #tab-dock.searching #tab-bar) 이 pill 캡이 그대로 정원이
      되어, 검색 원형 버튼·모핑 원과 형태 언어가 이어진다(둥근 사각 26px 의 모서리
-     불일치 해소). corner-shape: superellipse(2) 는 정원호 — 검색 원형(#tab-search)·
-     모핑 원과 통일하며, 미지원 브라우저는 border-radius 원호로 폴백. */
+     불일치 해소). border-radius: --radius-pill 만으로 반원/정원 끝 — squircle 미사용. */
   border-radius: var(--radius-pill);
-  corner-shape: superellipse(2);
   /* ADR-030: frosted glass 를 ::before 레이어가 아니라 #tab-bar 요소에 직접.
      #tab-dock(fixed)이 Safari home-indicator 샘플링 대상이라 투명하게 두므로, 자식인
      #tab-bar 는 직접 glass 를 줘도 틴팅 문제 없음(ADR-029 의 ::before 우회 불필요).
@@ -3027,7 +3042,7 @@ html.cite-sheet-open {
      늘지 않고(슬롯 고정) 좁은 화면에서만 축소 — 아래 wrap width:100%+aspect-ratio 라
      줄어도 항상 정원을 유지. */
   flex: 0 1 auto;
-  width: calc(var(--touch-target) + var(--space-2) * 2);
+  width: var(--dock-control);
   min-width: 0;
   /* 아이콘이 슬라이딩 인디케이터(z:0) 위에 그려지도록. */
   position: relative;
@@ -3053,14 +3068,14 @@ html.cite-sheet-open {
   /* 활성 인디케이터 = 정원(가로세로 1:1), 지름 56px — 바 높이(60px)에서 상하 2px 인셋.
      슬롯(60px) 안에 중앙 정렬되어 양 끝 탭은 캡 안쪽에 2px 여백으로 안착. 좁은 화면에선
      슬롯이 축소될 때 max-width:100% 로 슬롯을 넘지 않게(정원 유지). */
-  width: calc(var(--touch-target) + var(--space-2) * 2 - var(--space-1));
+  width: calc(var(--dock-control) - var(--space-1));
   max-width: 100%;
   aspect-ratio: 1 / 1;
   border-radius: var(--radius-pill);
   transition: background var(--duration-fast) ease, color var(--duration-fast) ease;
 }
 /* 커진 인디케이터 안에서 숨 쉬도록 아이콘은 약간 축소. rem 으로 Dynamic Type 추종. */
-.tab-icon { width: 1.7rem; height: 1.7rem; }
+.tab-icon { width: var(--dock-icon); height: var(--dock-icon); }
 
 /* 활성 탭 — 아이콘은 테마색. 56px 정원 인디케이터는 더 이상 per-tab 배경이 아니라
    공유 .tab-indicator(아래)가 탭 사이를 슬라이드한다(ADR-030 후속⁵). --theme 는
@@ -3081,7 +3096,7 @@ html.cite-sheet-open {
   top: 50%;
   left: 0;
   z-index: 0;
-  width: calc(var(--touch-target) + var(--space-2) * 2 - var(--space-1)); /* 56px */
+  width: calc(var(--dock-control) - var(--space-1)); /* 56px */
   aspect-ratio: 1 / 1;
   border-radius: var(--radius-pill);
   background: var(--glass-sheen), color-mix(in srgb, var(--theme) 14%, transparent);
@@ -3120,14 +3135,13 @@ html.cite-sheet-open {
 #tab-search {
   position: relative;
   /* 지름 = 아이콘랩(touch-target 44px) + 상하 패딩(space-2 ×2) = 60px → 탭 pill·오디오 바 높이와 일치. */
-  width: calc(var(--touch-target) + var(--space-2) * 2);
-  height: calc(var(--touch-target) + var(--space-2) * 2);
+  width: var(--dock-control);
+  height: var(--dock-control);
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 0;
   border-radius: var(--radius-pill);
-  corner-shape: superellipse(2); /* 원 — 폴백은 원형 border-radius */
   /* ADR-030: 탭 pill 과 동일 — frosted glass 를 요소에 직접(::before 레이어 제거).
      후속⁵: --glass-sheen 광택 + --glass-inset 두께감으로 탭 바와 동일 liquid-glass 질감. */
   background: var(--glass-sheen), color-mix(in srgb, var(--bg) 50%, transparent);
@@ -3144,7 +3158,7 @@ html.cite-sheet-open {
 [data-theme="dark"] #tab-search {
   background: var(--glass-sheen), color-mix(in srgb, var(--bg) 50%, transparent);
 }
-.tab-search-icon { width: 1.7rem; height: 1.7rem; } /* 탭 아이콘과 동일 크기로 통일 */
+.tab-search-icon { width: var(--dock-icon); height: var(--dock-icon); } /* 탭 아이콘과 동일 크기로 통일 */
 #tab-search:active { transform: scale(0.92); } /* press feedback */
 /* 현재 라우트가 /search 일 때 — 활성 탭 인디케이터와 동일 언어: 아이콘 테마색 +
    테마색 14% 틴트(원형 버튼 자체가 인디케이터 역할이라 글래스 위에 덧입힌다). */
@@ -3188,9 +3202,8 @@ html.cite-sheet-open {
      이 흡수하므로 무관. */
   margin-right: 0;
   flex: 0 0 auto;
-  width: calc(var(--touch-target) + var(--space-2) * 2); /* 60px */
+  width: var(--dock-control); /* 60px */
   border-radius: var(--radius-pill);
-  corner-shape: superellipse(2); /* 원 */
   justify-content: center;
 }
 #tab-dock.searching .tab-item:not([data-tab="home"]),
@@ -3219,7 +3232,7 @@ html.cite-sheet-open {
   flex: 1 1 0;
   min-width: 0;
   margin-left: 0; /* idle 의 margin-left:auto 해제 — flex:1 확장에 양보 */
-  height: calc(var(--touch-target) + var(--space-2) * 2); /* 60px — 탭 pill 과 동일 */
+  height: var(--dock-control); /* 60px — 탭 pill 과 동일 */
   padding: 0 var(--space-3);
   gap: var(--space-2);
   border-radius: var(--radius-pill);
@@ -3292,13 +3305,12 @@ html.cite-sheet-open {
   align-items: center;
   justify-content: center;
   width: 0;
-  height: calc(var(--touch-target) + var(--space-2) * 2); /* 60px — 다른 원형과 동일 */
+  height: var(--dock-control); /* 60px — 다른 원형과 동일 */
   padding: 0;
   border: none;
   background: none;
   box-shadow: none;
   border-radius: var(--radius-pill);
-  corner-shape: superellipse(2); /* 원 */
   color: var(--text-secondary);
   cursor: pointer;
   overflow: hidden;
@@ -3312,7 +3324,7 @@ html.cite-sheet-open {
 #tab-search-close svg { width: 1.6rem; height: 1.6rem; }
 #tab-search-close:active { transform: scale(0.92); }
 body.tabbar-keyboard #tab-dock.searching #tab-search-close {
-  width: calc(var(--touch-target) + var(--space-2) * 2); /* 60px 원형 */
+  width: var(--dock-control); /* 60px 원형 */
   opacity: 1;
   pointer-events: auto;
   /* 홈·검색 원형과 동일한 floating glass + 후속⁵ liquid-glass 질감. */
@@ -3403,12 +3415,10 @@ body.tabbar-searching #search-inpage-bar { display: none; }
     /* 플로팅 바: 가장자리·요소 간격을 12px 로 통일(여백 일정). 하단은 홈
        인디케이터 위로 떠 있어 safe-area 불필요 → 8px. */
     padding: var(--space-2) var(--space-3);
-    /* 탭 바와 동일한 플로팅 둥근 바 — 좌우 끝을 반원 캡(stadium)으로 통일.
-       corner-shape: superellipse(2) 는 정원호(탭 바 pill·검색 원형과 통일),
-       미지원 브라우저는 border-radius 원호로 폴백. 글래스(50%+blur)는 기존 유지,
-       테두리·그림자만 추가. */
+    /* 탭 바와 동일한 플로팅 둥근 바 — 좌우 끝을 반원 캡(stadium)으로 통일
+       (border-radius: --radius-pill, 탭 바 pill·검색 원형과 동일). 글래스(50%+blur)는
+       기존 유지, 테두리·그림자만 추가. */
     border-radius: var(--radius-pill);
-    corner-shape: superellipse(2);
     border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
     box-shadow: var(--shadow-2), var(--glass-inset); /* 후속⁵: 두께감 inset */
     transition: left var(--duration-base) var(--ease-standard),
@@ -3435,7 +3445,7 @@ body.tabbar-searching #search-inpage-bar { display: none; }
     left: calc(var(--space-4) + var(--touch-target) + var(--space-2) * 3);
     right: calc(var(--space-4) + var(--touch-target) + var(--space-2) * 3);
     margin: 0;
-    height: calc(var(--touch-target) + var(--space-2) * 2); /* 60px — 원형들과 동일 */
+    height: var(--dock-control); /* 60px — 원형들과 동일 */
     padding: 0 var(--space-3);
     display: flex;
     align-items: center;
@@ -3449,8 +3459,10 @@ body.tabbar-searching #search-inpage-bar { display: none; }
     padding-bottom: var(--tabbar-reserve);
   }
 
-  /* 절 선택 모드: 전용 하단 바가 차지하므로 탭 dock 숨김. */
-  body.verse-select-active #tab-dock { display: none; }
+  /* 절 선택 모드 / 북마크 선택 모드: 전용 하단 바가 차지하므로 탭 dock 숨김.
+     (북마크 선택 바는 탭 바와 같은 높이라 #app 의 --tabbar-reserve 패딩을 그대로 둔다.) */
+  body.verse-select-active #tab-dock,
+  body.bm-select-active #tab-dock { display: none; }
 }
 
 /* ── Audio Bar ── */
@@ -3973,8 +3985,44 @@ body.tabbar-searching #search-inpage-bar { display: none; }
   opacity: 0.4;
 }
 
+/* 🛈 안내 버튼은 ⋯(주 액션)보다 한 단 물러난 약화 어포던스 — 보조 정보 트리거라
+   --accent(차콜) 대신 --text-tertiary 로 덜 눈에 띄게(≡ 재정렬 핸들과 동일 위계 색). */
+.title-action-btn[aria-haspopup="dialog"] {
+  color: var(--text-tertiary);
+}
+
+/* 명시적 [hidden] 규칙 — 위 display:flex 가 UA [hidden]{display:none} 을 이기므로 필요.
+   빈 북마크 목록에서 🛈 를 JS 가 hidden 으로 숨길 때 실제로 사라지게 한다. */
+.title-action-btn[hidden] { display: none; }
+
+/* 전체 선택 toggle (select-delete mode, ADR-029 개정) — occupies the title row's
+   trailing slot, swapped for the .title-actions cluster (⋯/🛈) via body.bm-select-
+   active. iOS Mail/Files put Select All here; "전체 삭제" is 전체 선택 → 삭제. */
+.bm-select-allbtn {
+  display: none;
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  align-items: center;
+  padding: var(--space-1) var(--space-2);
+  background: none;
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  color: var(--accent);
+  font-size: var(--font-sm);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.bm-select-allbtn:active { opacity: 0.4; }
+
+body.bm-select-active .title-actions { display: none; }
+body.bm-select-active .bm-select-allbtn { display: inline-flex; }
+
 /* Dropdown anchored below the ⋯ button (relative to .title-actions cluster).
-   iOS-26-style popup menu (HIG): large continuous-corner curvature (squircle),
+   iOS-26-style popup menu (HIG): large rounded corners (--radius-xl),
    full-bleed rows separated by hairlines, a soft elevation shadow, and the
    shared liquid-glass sheen/inset texture (ADR-030 후속⁵). overflow:hidden clips
    row hover/press highlights to the rounded corners. */
@@ -3997,7 +4045,6 @@ body.tabbar-searching #search-inpage-bar { display: none; }
   background: var(--glass-sheen), var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-xl); /* 16px — iOS 26 큰 곡률 */
-  corner-shape: superellipse(2);   /* squircle (폴백: 둥근 모서리) */
   box-shadow: var(--shadow-4), var(--glass-inset);
   transform-origin: top right;
   animation: title-action-menu-in var(--duration-fast) var(--ease-standard);
@@ -4143,7 +4190,6 @@ body.tabbar-searching #search-inpage-bar { display: none; }
   background: var(--glass-sheen), var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-xl);
-  corner-shape: superellipse(2);
   box-shadow: var(--shadow-4), var(--glass-inset);
   transform-origin: top right;
   animation: title-action-menu-in var(--duration-fast) var(--ease-standard);
@@ -4164,6 +4210,9 @@ body.tabbar-searching #search-inpage-bar { display: none; }
 .title-action-popover-text {
   margin: 0;
   font-size: var(--font-sm);
+  /* Reset the bold inherited from the #page-title <h1> (font-weight 700) — the
+     guidance message should read at normal weight, not heavier than its title. */
+  font-weight: 400;
   line-height: var(--leading-normal);
   color: var(--text-secondary);
 }
@@ -4278,7 +4327,9 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 
 /* 투명 레이아웃 dock — #tab-dock 미러(표면 없음). 데스크탑은 max-width 중앙, 모바일은
    space-4 패딩으로 가장자리 정렬. 키보드와 무관하므로 --kb-overlap 없음. */
-#verse-select-bar {
+/* #bm-select-bar (북마크 선택 모드, ADR-029 개정) shares this dock layout/glass. */
+#verse-select-bar,
+#bm-select-bar {
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
   display: none;
   position: fixed;
@@ -4295,7 +4346,8 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   box-shadow: none;
 }
 
-#verse-select-bar:not([hidden]) {
+#verse-select-bar:not([hidden]),
+#bm-select-bar:not([hidden]) {
   display: flex;
   animation: verse-bar-in var(--duration-base) var(--ease-standard);
 }
@@ -4306,12 +4358,14 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  #verse-select-bar:not([hidden]) { animation: none; }
+  #verse-select-bar:not([hidden]),
+  #bm-select-bar:not([hidden]) { animation: none; }
 }
 
 /* 선택 카운트 — 캡슐 위 중앙 부유 글래스 칩(순수 표시, aria-live). dock(fixed)이 포지셔닝
    컨텍스트. count=0 이면 "구절을 눌러서 선택" 안내, 선택 시 ref 스펙(updateVerseSelectBar). */
-#verse-select-count {
+#verse-select-count,
+#bm-select-count {
   position: absolute;
   bottom: 100%;
   left: 50%;
@@ -4330,16 +4384,15 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   pointer-events: none;
 }
 
-/* 아이콘 글래스 pill — #tab-bar 레시피(글래스·테두리·shadow-2·inset·pill·squircle). */
+/* 아이콘 글래스 pill — #tab-bar 레시피(글래스·테두리·shadow-2·inset·반원 캡 pill). */
 .verse-action-pill {
   display: flex;
   flex: 1;
   align-items: stretch;
   justify-content: space-around;
-  height: calc(var(--touch-target) + var(--space-2) * 2);
+  height: var(--dock-control);
   margin-right: var(--space-2);
   border-radius: var(--radius-pill);
-  corner-shape: superellipse(2);
   background: var(--glass-sheen), color-mix(in srgb, var(--bg) 50%, transparent);
   -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
@@ -4372,17 +4425,17 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   transform: scale(0.92);
 }
 
-/* 취소 글래스 원형 — #tab-search 미러(60px 원, squircle, 같은 글래스 레시피). */
-#verse-select-cancel-btn {
+/* 취소 글래스 원형 — #tab-search 미러(60px 정원, 같은 글래스 레시피). */
+#verse-select-cancel-btn,
+#bm-select-cancel-btn {
   display: flex;
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-  width: calc(var(--touch-target) + var(--space-2) * 2);
-  height: calc(var(--touch-target) + var(--space-2) * 2);
+  width: var(--dock-control);
+  height: var(--dock-control);
   padding: 0;
   border-radius: var(--radius-pill);
-  corner-shape: superellipse(2);
   background: var(--glass-sheen), color-mix(in srgb, var(--bg) 50%, transparent);
   -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
@@ -4394,16 +4447,41 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   transition: transform var(--duration-fast) ease;
 }
 
-#verse-select-cancel-btn:active { transform: scale(0.92); }
+#verse-select-cancel-btn:active,
+#bm-select-cancel-btn:active { transform: scale(0.92); }
+
+/* Bookmark select dock: 공유·이동·삭제 pill (left) + 취소 circle (right). The pill is
+   content-width (snug) — NOT stretched to meet the cancel (iOS convention), so the
+   bar spreads them apart. 삭제 reads destructive via a red icon. Full capsule
+   (--radius-pill, from the base), like the cancel circle and the rest of the dock.
+   Sizing mirrors the tab bar: each action is a --dock-control (60px) square slot with
+   the icon centered. The end slots then nest concentrically inside the semicircular
+   caps (icon ⌀ ≈ half the slot → clears the curve), so no icon rides the rounded end.
+
+   The pill width is set EXPLICITLY from the slot count (3 × --dock-control) rather
+   than derived from the children's flex-basis via `width:auto`. WebKit/iOS Safari
+   ignores a flex item's flex-basis when computing its flex container's intrinsic
+   (max-content) width, so a content-sized pill collapsed to ~icon width while the
+   60px buttons kept their basis — the buttons then overflowed past the pill's right
+   cap (visible: 삭제 icon spilling out). An explicit width avoids that intrinsic-
+   sizing path entirely. Update the multiplier if an action is added/removed. */
+#bm-select-bar { justify-content: space-between; }
+#bm-select-bar .verse-action-pill {
+  flex: 0 0 auto;
+  width: calc(var(--dock-control) * 3); /* 3 slots: 공유·이동·삭제 */
+}
+#bm-select-bar .verse-action-btn { flex: 0 0 var(--dock-control); }
+.verse-action-btn--danger { color: var(--danger-text); }
 
 .va-icon {
-  width: 1.7rem;
-  height: 1.7rem;
+  width: var(--dock-icon);
+  height: var(--dock-icon);
   transition: transform var(--duration-fast) ease;
 }
 
 /* 취소 X 는 약간 작게 — full-bleed 24 viewBox 라 광학적으로 커 보임. */
-#verse-select-cancel-btn .va-icon { width: 1.5rem; height: 1.5rem; }
+#verse-select-cancel-btn .va-icon,
+#bm-select-cancel-btn .va-icon { width: 1.5rem; height: 1.5rem; }
 
 /* ── Bookmark drawer (right-side panel) ── */
 
@@ -4711,11 +4789,11 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 .bm-bookmark-row {
   display: flex;
   align-items: center;
-  padding: var(--space-3) var(--space-4);
+  /* Small vertical padding so --list-row-h (min-height) is the actual row height;
+     still well above the HIG 44px tap minimum. The 2-line label/ref is centered. */
+  padding: var(--space-1) var(--space-4);
   gap: var(--space-3);
-  /* Roomier rows for easier scanning/tapping — comfortably above the HIG 44px
-     minimum (label --font-md + ref --font-xs, stacked, plus generous padding). */
-  min-height: 4rem;
+  min-height: var(--list-row-h);
   transition: background var(--duration-instant);
 }
 
@@ -4725,6 +4803,8 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   gap: var(--space-3);
   flex: 1;
   min-width: 0;
+  /* Positioning context for the drag drop-line (::after); mobile already sets this. */
+  position: relative;
 }
 
 /* Mobile-only swipe actions; shown on viewports ≤768px (see ADR-010). */
@@ -4753,13 +4833,21 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 }
 
 .bm-folder-toggle {
-  width: 1.6rem;
-  height: 1.6rem;
+  width: var(--bm-row-icon);
+  height: var(--bm-row-icon);
   flex-shrink: 0;
   color: var(--accent);
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+/* Tree-row icons fill their slot (the JS builds them at a fixed 20px; CSS overrides
+   so the size follows --bm-row-icon and scales with Dynamic Type). */
+.bm-folder-toggle svg,
+.bm-bookmark-type-icon svg {
+  width: var(--bm-row-icon);
+  height: var(--bm-row-icon);
 }
 
 .bm-folder-name {
@@ -4797,7 +4885,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   color: var(--accent);
   display: inline-flex;
   align-items: center;
-  width: 1.6rem;
+  width: var(--bm-row-icon);
   justify-content: center;
 }
 
@@ -4841,7 +4929,8 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
      below stays small and centered within it. */
   min-width: var(--touch-target);
   min-height: var(--touch-target);
-  color: var(--text-secondary);
+  /* 약화 어포던스 — 보조 텍스트보다 한 단 연한 3차 색(DESIGN.md §2). */
+  color: var(--text-tertiary);
   cursor: grab;
   /* Own the gesture so a drag from the handle reorders instead of scrolling. */
   touch-action: none;
@@ -4858,6 +4947,13 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 .bm-drag-handle svg {
   width: 1.25rem;
   height: 1.25rem;
+}
+
+/* Leading selection circle (select-delete mode, ADR-029 개정). Built into every
+   row but hidden by default; revealed + animated only on the mobile full view in
+   select mode (see the @media block below). Select mode is mobile-only. */
+.bm-select-circle {
+  display: none;
 }
 
 .bm-action-btn {
@@ -5566,30 +5662,28 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   cursor: not-allowed;
 }
 
-/* ── Bulk delete picker (⋯ 메뉴 → 삭제) ──
-   Mirrors the chapter-delete modal, plus a leading type glyph and depth indent
-   so folders read above their (indented) children. Sits below the shared
-   destructive confirm (z 76/77) so "삭제 (N)" can stack that alert on top. */
-#bm-bulk-delete-scrim {
+/* ── Move-to-folder modal (선택 모드 → 이동) ──
+   Folder picker: tapping a destination row moves the selection there immediately
+   (no confirm button, iOS "Move to Album" pattern). Mirrors the chapter-delete
+   modal card. */
+#bm-move-scrim {
   display: none;
   position: fixed;
   inset: 0;
-  z-index: 74;
+  z-index: 78;
   background: rgba(0, 0, 0, 0.45);
 }
 
-#bm-bulk-delete-scrim:not([hidden]) {
-  display: block;
-}
+#bm-move-scrim:not([hidden]) { display: block; }
 
-#bm-bulk-delete-modal {
+#bm-move-modal {
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
   display: none;
   position: fixed;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  z-index: 75;
+  z-index: 79;
   width: min(92vw, 380px);
   max-height: 80vh;
   background: var(--bg-card);
@@ -5599,115 +5693,95 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   padding: var(--space-6);
 }
 
-#bm-bulk-delete-modal:not([hidden]) {
-  display: flex;
-  flex-direction: column;
-}
+#bm-move-modal:not([hidden]) { display: flex; flex-direction: column; }
 
-#bm-bulk-delete-title {
+#bm-move-title {
   font-size: var(--font-md);
   font-weight: 700;
-  margin: 0 0 var(--space-2);
-}
-
-#bm-bulk-delete-desc {
-  font-size: var(--font-sm);
   margin: 0 0 var(--space-3);
-  color: var(--text-secondary);
-  line-height: var(--leading-snug);
 }
 
-#bm-bulk-delete-all-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-2);
-  margin-bottom: var(--space-1);
-  border-bottom: 1px solid var(--border);
-  font-size: var(--font-sm);
-  font-weight: 600;
-  color: var(--text);
-  cursor: pointer;
-}
-
-#bm-bulk-delete-list {
+#bm-move-list {
   list-style: none;
-  margin: 0 0 var(--space-4);
+  margin: 0;
   padding: 0;
   overflow-y: auto;
   flex: 1 1 auto;
   -webkit-overflow-scrolling: touch;
 }
 
-.bm-bulk-delete-item {
-  margin: 0;
-}
-
-.bm-bulk-delete-label {
+/* One destination row: leading glyph + label, indented per folder depth. */
+.bm-move-item {
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  padding: var(--space-2) var(--space-2);
-  padding-left: calc(var(--space-2) + var(--bm-bulk-indent, 0px));
+  width: 100%;
+  padding: var(--space-2);
+  padding-left: calc(var(--space-2) + var(--bm-move-indent, 0px));
   min-height: var(--touch-target);
+  border: none;
+  background: none;
   border-radius: var(--radius);
+  font-family: inherit;
+  font-size: var(--font-sm);
+  color: var(--text);
+  text-align: left;
   cursor: pointer;
 }
 
-.bm-bulk-delete-label:hover {
-  background: color-mix(in srgb, var(--accent) 8%, transparent);
-}
+.bm-move-item:hover { background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.bm-move-item:active { background: color-mix(in srgb, var(--accent) 14%, transparent); }
 
-/* Both the "전체 선택" toggle and each row checkbox share the destructive
-   accent so a ticked box reads as "marked for deletion" (matches chapter-delete). */
-#bm-bulk-delete-all,
-.bm-bulk-delete-label input[type="checkbox"] {
-  accent-color: var(--danger);
-  flex-shrink: 0;
-  width: 1.1rem;
-  height: 1.1rem;
-}
-
-/* A row covered by a ticked ancestor folder is checked + disabled; dim it so the
-   cascade reads as "goes with the folder" rather than independently togglable. */
-.bm-bulk-delete-label input[type="checkbox"]:disabled {
-  opacity: 0.55;
-}
-.bm-bulk-delete-label:has(input:disabled) {
-  cursor: default;
-}
-
-.bm-bulk-delete-icon {
+.bm-move-icon {
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: var(--text-secondary);
+  color: var(--accent);
 }
 
-.bm-bulk-delete-icon svg {
-  width: 1.15rem;
-  height: 1.15rem;
-}
+.bm-move-icon svg { width: 1.4rem; height: 1.4rem; }
 
-.bm-bulk-delete-text {
-  flex: 1 1 auto;
-  min-width: 0;
-  font-size: var(--font-sm);
-  color: var(--text);
+.bm-move-label {
+  flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-#bm-bulk-delete-actions {
+/* 새 폴더 — dedicated action below the destination list, separated by a hairline.
+   Same row anatomy (leading glyph + label) as .bm-move-item but accent-tinted to
+   read as an action rather than a destination. */
+.bm-move-newfolder {
   display: flex;
-  gap: var(--space-2);
-  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-2);
+  margin-bottom: var(--space-3);
+  min-height: var(--touch-target);
+  border: none;
+  border-top: 1px solid var(--border);
+  border-radius: 0 0 var(--radius) var(--radius);
+  background: none;
+  font-family: inherit;
+  font-size: var(--font-sm);
+  font-weight: 600;
+  color: var(--accent);
+  text-align: left;
+  cursor: pointer;
+}
+
+.bm-move-newfolder:hover { background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.bm-move-newfolder:active { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.bm-move-newfolder .bm-move-icon { color: var(--accent); }
+
+#bm-move-actions {
+  display: flex;
   justify-content: flex-end;
 }
 
-#bm-bulk-delete-cancel {
+#bm-move-cancel {
   padding: var(--space-2) var(--space-4);
   background: none;
   border: 1px solid var(--border);
@@ -5716,27 +5790,6 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   font-size: var(--font-sm);
   cursor: pointer;
   color: var(--text);
-}
-
-#bm-bulk-delete-confirm {
-  padding: var(--space-2) var(--space-4);
-  background: var(--danger);
-  color: #fff;
-  border: 1px solid var(--danger);
-  border-radius: var(--radius);
-  font-family: inherit;
-  font-size: var(--font-sm);
-  cursor: pointer;
-}
-
-#bm-bulk-delete-confirm:hover:not(:disabled) {
-  background: var(--danger-strong);
-  border-color: var(--danger-strong);
-}
-
-#bm-bulk-delete-confirm:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
 }
 
 /* ── Import bookmarks modal ── */
@@ -5882,21 +5935,42 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
 }
 
-.bm-folder.drag-over-before > .bm-folder-row,
-.bm-bookmark.drag-over-before > .bm-bookmark-row {
-  box-shadow: inset 0 2px 0 var(--accent);
+/* Drop-position indicator (drag-reorder). Painted on the opaque .bm-row-content
+   (z-index 1 on mobile) — the row itself sits BEHIND the content there, so the old
+   row-level box-shadow was invisible while dragging. before/after = a 3px accent
+   insertion line at the target's top/bottom edge (the drop gap); into = the folder
+   row tinted + outlined. The drop line rides above the content via a ::after so the
+   row's own rounded-corner clip doesn't crop it. */
+.bm-folder.drag-over-before > .bm-folder-row > .bm-row-content::after,
+.bm-bookmark.drag-over-before > .bm-bookmark-row > .bm-row-content::after,
+.bm-folder.drag-over-after > .bm-folder-row > .bm-row-content::after,
+.bm-bookmark.drag-over-after > .bm-bookmark-row > .bm-row-content::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--accent);
+  border-radius: var(--radius-pill);
+  z-index: 2;
+  pointer-events: none;
 }
 
-.bm-folder.drag-over-after > .bm-folder-row,
-.bm-bookmark.drag-over-after > .bm-bookmark-row {
-  box-shadow: inset 0 -2px 0 var(--accent);
+.bm-folder.drag-over-before > .bm-folder-row > .bm-row-content::after,
+.bm-bookmark.drag-over-before > .bm-bookmark-row > .bm-row-content::after {
+  top: 0;
 }
 
-.bm-folder.drag-over-into > .bm-folder-row {
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-  border-radius: var(--radius);
+.bm-folder.drag-over-after > .bm-folder-row > .bm-row-content::after,
+.bm-bookmark.drag-over-after > .bm-bookmark-row > .bm-row-content::after {
+  bottom: 0;
+}
+
+.bm-folder.drag-over-into > .bm-folder-row > .bm-row-content {
+  background: color-mix(in srgb, var(--accent) 14%, var(--bg));
   outline: 2px solid var(--accent);
   outline-offset: -2px;
+  border-radius: var(--radius);
 }
 
 /* ── Mobile: swipe-to-reveal bookmark actions (ADR-010, 2026-05-03) ──
@@ -5925,7 +5999,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   }
 
   .bm-row-content {
-    padding: var(--space-3) var(--space-4);
+    padding: var(--space-1) var(--space-4);
     /* Depth indent lives here (not on the folder-children UL) so the row stays
        full-bleed; --bm-indent is set per nesting level by the item builders. */
     padding-left: calc(var(--space-4) + var(--bm-indent, 0px));
@@ -5938,10 +6012,13 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
     /* Shared floor so folder (1 line) and bookmark (2 lines) rows are the SAME
        height; align-self:stretch then makes the content fill the row so the
        action behind it never peeks above/below. */
-    min-height: 4.4rem;
+    min-height: var(--list-row-h);
     align-self: stretch;
     box-sizing: border-box;
-    transition: transform var(--duration-base) cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    /* padding-left animates the select-mode slide (room for the leading circle);
+       transform stays the swipe slider. Swipe sets .bm-swiping → transition:none. */
+    transition: transform var(--duration-base) cubic-bezier(0.25, 0.46, 0.45, 0.94),
+                padding-left var(--duration-base) var(--ease-standard);
     will-change: transform;
   }
 
@@ -6050,6 +6127,76 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   .bm-folder-row.bm-swiping .bm-row-content {
     transition: none;
   }
+
+  /* ── Bookmark select-delete mode (ADR-029 개정) ──
+     A leading selection circle slides in (iOS Files/Mail/Photos), the content
+     shifts right to make room, and a row tap toggles selection — so the drag
+     handle (≡) and swipe actions are suppressed. */
+  body.bm-select-active .bm-drag-handle,
+  body.bm-select-active .bm-swipe-action {
+    display: none;
+  }
+
+  body.bm-select-active .bm-row-content {
+    /* Circle column (~2.1rem) on top of the base full-bleed padding + depth indent. */
+    padding-left: calc(var(--space-4) + 2.1rem + var(--bm-indent, 0px));
+    cursor: pointer;
+  }
+
+  .bm-select-circle {
+    /* Override the global display:none; positioned in the freed-up left gutter,
+       above the sliding content (z-index 2 > content's 1). */
+    position: absolute;
+    left: var(--space-4);
+    top: 50%;
+    z-index: 2;
+    align-items: center;
+    justify-content: center;
+    width: 1.45rem;
+    height: 1.45rem;
+    border-radius: 50%;
+    border: 1.5px solid color-mix(in srgb, var(--text) 32%, transparent);
+    /* Checkmark color on the --accent fill (visible once ticked/covered). Use the
+       auto-flipping --bg, not #fff: --accent flips to a LIGHT gray in dark mode, so
+       a hardcoded white check would fail contrast there (codebase convention for
+       accent fills). */
+    color: var(--bg);
+    box-sizing: border-box;
+    opacity: 0;
+    transform: translateY(-50%) scale(0.7);
+    transition: opacity var(--duration-base) var(--ease-standard),
+                transform var(--duration-base) var(--ease-standard),
+                background var(--duration-fast), border-color var(--duration-fast);
+    pointer-events: none; /* the row owns the tap */
+  }
+
+  body.bm-select-active .bm-select-circle {
+    display: flex;
+    opacity: 1;
+    transform: translateY(-50%) scale(1);
+  }
+
+  .bm-select-circle svg {
+    width: 0.95rem;
+    height: 0.95rem;
+    opacity: 0; /* checkmark hidden until selected/covered */
+    transition: opacity var(--duration-fast);
+  }
+
+  /* Explicitly ticked: solid accent circle + checkmark. */
+  .bm-select-circle.is-selected {
+    background: var(--accent);
+    border-color: var(--accent);
+  }
+
+  /* Covered by a ticked ancestor folder: filled but dimmed + non-toggle look. */
+  .bm-select-circle.is-covered {
+    background: color-mix(in srgb, var(--accent) 45%, transparent);
+    border-color: transparent;
+  }
+
+  .bm-select-circle.is-selected svg,
+  .bm-select-circle.is-covered svg { opacity: 1; }
 }
 
 /* ── Reduced motion ── */

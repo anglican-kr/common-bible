@@ -196,7 +196,9 @@ def test_folder_rename_via_prompt(browser):
 # ── 삭제 ──────────────────────────────────────────────────────────────────────
 
 def test_folder_delete(browser):
-    """폴더 삭제 버튼 클릭 → 확인 모달 승인 → 폴더와 자식 모두 제거."""
+    """폴더 삭제 버튼 → 확인 승인 → 폴더와 안의 항목 모두 제거(cascade).
+
+    스와이프·선택 모드와 동일하게 "삭제 = 내용까지" 로 통일."""
     ctx = browser.new_context()
     ctx.add_init_script(CLEAR_APP_STORAGE)
     page = ctx.new_page()
@@ -211,6 +213,9 @@ def test_folder_delete(browser):
         page.wait_for_timeout(300)
 
         store = _get_store(page)
-        assert all(item["id"] != "folder-1" for item in store)
+        ids = [item["id"] for item in store]
+        # Folder and its nested bookmark both gone.
+        assert "folder-1" not in ids
+        assert "bm-a" not in ids
     finally:
         ctx.close()

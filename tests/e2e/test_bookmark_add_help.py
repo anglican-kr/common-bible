@@ -44,6 +44,25 @@ def _seed(mobile_context):
     return page
 
 
+def test_info_button_hidden_when_empty(mobile_context):
+    """빈 목록에선 🛈 가 숨는다 — 빈 상태 안내가 이미 추가 방법을 보여주므로 중복."""
+    mobile_context.add_init_script(_PIN_NUDGE)
+    page = mobile_context.new_page()
+    page.goto(f"{BASE}/bookmarks")
+    page.wait_for_selector("#bookmarks-view-tree", timeout=5_000)
+    page.evaluate("() => window.syncStoreV2.saveBookmarks([])")
+    page.evaluate("() => window.rerenderActiveBookmarkTree()")
+
+    # 🛈 hidden when there are no bookmarks; ⋯ stays.
+    assert page.locator(_INFO_BTN).is_hidden()
+    assert page.locator(_MORE_BTN).is_visible()
+
+    # Adding one reveals it again.
+    page.evaluate(f"() => window.syncStoreV2.saveBookmarks({json.dumps([_BM_ROOT])})")
+    page.evaluate("() => window.rerenderActiveBookmarkTree()")
+    assert page.locator(_INFO_BTN).is_visible()
+
+
 def test_info_button_left_of_more_and_opens_popover(mobile_context):
     """🛈 가 ⋯ 왼쪽에 있고, 탭하면 안내 팝오버가 열린다."""
     page = _seed(mobile_context)

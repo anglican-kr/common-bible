@@ -246,6 +246,11 @@
       <label class="bm-form-label" for="bm-new-folder-input">폴더 이름</label>
       <input id="bm-new-folder-input" class="bm-form-input" type="text" maxlength="50" placeholder="예: 대림1주일" />
     </div>
+    <div class="bm-form-field">
+      <label class="bm-form-label" for="bm-newfolder-parent-btn">상위 폴더</label>
+      <!-- 폴더 콤보박스(최상위 + 폴더들)를 JS 가 주입. 미지정 = 최상위. -->
+      <div id="bm-new-folder-parent"></div>
+    </div>
     <div class="bm-form-actions">
       <button id="bm-new-folder-cancel" class="bm-btn-secondary" type="button">취소</button>
       <button id="bm-new-folder-confirm" class="bm-btn-primary" type="button">만들기</button>
@@ -303,24 +308,6 @@
     </div>
   </div>
 
-  <!-- ── Bookmark Bulk Delete Selection Modal (⋯ 메뉴 → 삭제) ──
-       북마크 목록 전체를 트리 순서대로(폴더 → 자식) 체크박스 목록으로 펼쳐, 삭제할
-       대상을 골라 한 번에 지운다. 폴더를 선택하면 안의 항목이 cascade 로 함께 표시·
-       삭제된다. "삭제 (N)" 를 누르면 bm-confirm 알림으로 최종 확인을 받는다. -->
-  <div id="bm-bulk-delete-scrim" aria-hidden="true" hidden></div>
-  <div id="bm-bulk-delete-modal" role="dialog" aria-modal="true" aria-labelledby="bm-bulk-delete-title" aria-describedby="bm-bulk-delete-desc" hidden>
-    <h2 id="bm-bulk-delete-title">북마크 삭제</h2>
-    <p id="bm-bulk-delete-desc">삭제할 북마크나 폴더를 선택하세요. 폴더를 선택하면 안의 항목도 함께 삭제됩니다.</p>
-    <label id="bm-bulk-delete-all-row">
-      <input type="checkbox" id="bm-bulk-delete-all" />
-      <span>전체 선택</span>
-    </label>
-    <ul id="bm-bulk-delete-list" role="group" aria-label="북마크 목록"></ul>
-    <div id="bm-bulk-delete-actions">
-      <button id="bm-bulk-delete-cancel" type="button">취소</button>
-      <button id="bm-bulk-delete-confirm" type="button" disabled>삭제</button>
-    </div>
-  </div>
 
   <!-- ── Drive Disconnect Modal ── -->
   <div id="drive-disconnect-scrim" aria-hidden="true" hidden></div>
@@ -358,6 +345,48 @@
     <button id="verse-select-cancel-btn" type="button" aria-label="선택 취소">
       <svg class="va-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6 18 18M18 6 6 18"/></svg>
     </button>
+  </div>
+
+  <!-- 북마크 선택 모드 하단 액션 dock (ADR-029 개정). 모바일 /bookmarks 전체뷰의 ⋯ 메뉴
+       "선택"으로 진입 — body.bm-select-active 가 탭 dock 을 가리고 이 바가 그 자리를 대체한다.
+       절 선택 바와 동일 형식: [공유·이동·삭제 글래스 pill] + [취소 글래스 원형]. pill 은
+       내용 폭(snug) — 취소까지 늘리지 않음(iOS 관례). 선택 카운트는 캡슐 위 부유 칩(aria-live).
+       글래스·.va-icon 자산은 절 선택 바와 공유한다. 삭제만 파괴색. -->
+  <div id="bm-select-bar" hidden>
+    <span id="bm-select-count" aria-live="polite">항목을 선택하세요</span>
+    <div class="verse-action-pill">
+      <button id="bm-select-share-btn" class="verse-action-btn" type="button" disabled aria-label="선택한 항목 공유">
+        <svg class="va-icon" viewBox="2 2 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M8.5 6.5 12 3l3.5 3.5"/><path d="M7 11H6a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2h-1"/></svg>
+      </button>
+      <button id="bm-select-move-btn" class="verse-action-btn" type="button" disabled aria-label="선택한 항목 이동">
+        <svg class="va-icon" viewBox="2 2.75 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7.5a2 2 0 0 1 2-2h3.6l1.8 2H19a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7.5Z"/><path d="M11 14.5h5"/><path d="M14 12l2.5 2.5L14 17"/></svg>
+      </button>
+      <button id="bm-select-delete-btn" class="verse-action-btn verse-action-btn--danger" type="button" disabled aria-label="선택한 항목 삭제">
+        <svg class="va-icon" viewBox="2.5 3 19 19" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M9 7V5.5A1.5 1.5 0 0 1 10.5 4h3A1.5 1.5 0 0 1 15 5.5V7"/><path d="M6.5 7 7.5 19.5A1.5 1.5 0 0 0 9 21h6a1.5 1.5 0 0 0 1.5-1.5L17.5 7"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+      </button>
+    </div>
+    <button id="bm-select-cancel-btn" type="button" aria-label="선택 취소">
+      <svg class="va-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6 18 18M18 6 6 18"/></svg>
+    </button>
+  </div>
+
+  <!-- 북마크 이동 모달 (ADR-029 개정) — 선택 모드 pill 의 "이동" 진입. 최상위 + 폴더 목록을
+       보여주고, 탭한 대상으로 선택 항목을 즉시 이동(확인 버튼 없음, iOS "앨범으로 이동" 패턴).
+       목록 아래 "새 폴더" 버튼은 상위 폴더 지정이 가능한 새 폴더 모달을 연다(미지정=최상위).
+       선택에 포함된 폴더·그 하위는 목적지에서 제외된다. -->
+  <div id="bm-move-scrim" aria-hidden="true" hidden></div>
+  <div id="bm-move-modal" role="dialog" aria-modal="true" aria-labelledby="bm-move-title" hidden>
+    <h2 id="bm-move-title">이동할 폴더 선택</h2>
+    <ul id="bm-move-list" role="group" aria-label="폴더 목록"></ul>
+    <button id="bm-move-new-folder" type="button" class="bm-move-newfolder">
+      <span class="bm-move-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5a2 2 0 0 1 2-2h3.6l1.8 2H19a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7.5Z"/><path d="M12 11.5v4"/><path d="M10 13.5h4"/></svg>
+      </span>
+      <span class="bm-move-label">새 폴더</span>
+    </button>
+    <div id="bm-move-actions">
+      <button id="bm-move-cancel" type="button">취소</button>
+    </div>
   </div>
 
   <!-- Google tag (gtag.js) -->
