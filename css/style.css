@@ -4430,12 +4430,21 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
    bar spreads them apart. 삭제 reads destructive via a red icon. Full capsule
    (--radius-pill, from the base), like the cancel circle and the rest of the dock.
    Sizing mirrors the tab bar: each action is a --dock-control (60px) square slot with
-   the icon centered, so the capsule width derives from the icon arrangement
-   (3 × slot) and the slot itself is the standard inter-icon spacing (no ad-hoc
-   gap/padding). The end slots then nest concentrically inside the semicircular caps
-   (icon ⌀ ≈ half the slot → clears the curve), so no icon rides the rounded end. */
+   the icon centered. The end slots then nest concentrically inside the semicircular
+   caps (icon ⌀ ≈ half the slot → clears the curve), so no icon rides the rounded end.
+
+   The pill width is set EXPLICITLY from the slot count (3 × --dock-control) rather
+   than derived from the children's flex-basis via `width:auto`. WebKit/iOS Safari
+   ignores a flex item's flex-basis when computing its flex container's intrinsic
+   (max-content) width, so a content-sized pill collapsed to ~icon width while the
+   60px buttons kept their basis — the buttons then overflowed past the pill's right
+   cap (visible: 삭제 icon spilling out). An explicit width avoids that intrinsic-
+   sizing path entirely. Update the multiplier if an action is added/removed. */
 #bm-select-bar { justify-content: space-between; }
-#bm-select-bar .verse-action-pill { flex: 0 0 auto; }
+#bm-select-bar .verse-action-pill {
+  flex: 0 0 auto;
+  width: calc(var(--dock-control) * 3); /* 3 slots: 공유·이동·삭제 */
+}
 #bm-select-bar .verse-action-btn { flex: 0 0 var(--dock-control); }
 .verse-action-btn--danger { color: var(--danger-text); }
 
