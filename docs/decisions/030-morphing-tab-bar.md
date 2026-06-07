@@ -108,6 +108,8 @@ ADR-029 는 Safari 26 home-indicator 틴팅 회피를 위해 glass 를 `::before
 - **축소 상태 복구 = 최상단 자동 복구 + 홈 탭(펼치기)**. (초안 "홈 탭으로만"에서 dev 검증 후 개정 — 최상단 도달 시 자동 복구가 자연스럽고, 홈 탭은 홈 이동이 아니라 펼치기로 일원화.) iOS Safari 식 "위로 스크롤 즉시 복구"는 끝에서 깜빡일 수 있어, **최상단에서만** 자동 복구 + 중간 위로 스크롤은 유지로 절충.
 - **검색 입력 = 하단 입력창 직접 검색 + visualViewport 키보드 위 띄움**(대안: 모핑은 연출만 하고 입력은 `/search` 상단으로 핸드오프 — 미채택). iOS 가 포커스 입력을 키보드 위로 올리려 페이지를 미는 문제는 **focus 시 `scrollTo(0,0)` + `preventScroll`**로 상쇄, **X(키보드 내리기) 노출·홈 숨김은 입력 focus/blur**에 묶어(visualViewport 높이 감지 불안정 회피) 안정화.
 
+> **개정 (2026-06-07): 검색 버튼 탭 → 키보드 즉시 표시.** 검색 원형 버튼을 눌러 모핑 진입할 때 dock 입력 `focus()` 를 `requestAnimationFrame` 안에서 호출하고 있었는데, iOS Safari 는 프로그래밍 `focus()` 가 **사용자 제스처(탭 핸들러)와 같은 동기 실행 턴** 안에서 불릴 때만 소프트 키보드를 띄운다 — rAF 로 미루면 제스처 체인이 끊겨 입력엔 포커스가 가도 키보드가 안 떴다(검색 화면만 열리고 키보드는 한 번 더 입력을 탭해야 등장). `openSearch()` 는 `#tab-search` 클릭 핸들러에서 동기로 불리고(그 안 `navigate` 도 동기), 입력은 `hidden=false` 후 같은 함수 안에서 다루므로, rAF 를 제거하고 **`$searchInput.focus({ preventScroll: true })` 를 동기 호출**해 같은 제스처 턴에 머물게 했다. `renderSearchView` 는 `body.tabbar-searching`(navigate 전 설정) 일 때 in-page 입력 autofocus 를 끄므로 dock 포커스를 가로채지 않고, 이미 검색 중 재진입 분기(127–132)도 동일하게 동기 focus 라 일관. 키보드 위치 보정(`liftForKeyboard`/`--kb-overlap`)·X 게이팅은 그대로.
+
 ## 검토한 대안
 
 - **검색을 4탭 중 하나로 유지(ADR-029 원안)** — Apple Music idiom(분리 원형 + 모핑)과 어긋나고, 입력 확장 모션을 줄 자리가 없음. → 분리 원형 채택.
