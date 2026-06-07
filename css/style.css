@@ -163,6 +163,10 @@
      Type)와 함께 커진다. 슬롯과 SVG 가 같은 토큰을 써 아이콘이 슬롯을 꽉 채운다
      (옛날엔 1.6rem 슬롯 안에 고정 20px SVG 라 작아 보였다). */
   --bm-row-icon: 1.6rem;
+  /* 목록 행 높이 표준 — 북마크·폴더 행(현재) + 후속 목록(노트·캘린더 등)이 공유한다.
+     min-height 로 적용하고 세로 패딩은 작게(--space-1) 둬, 이 토큰이 곧 행 높이가 된다
+     (2줄 콘텐츠 ≈52px + 여백이 토큰 안에 들어감). rem 이라 Dynamic Type 추종. */
+  --list-row-h: 3.5rem;
 
   /* ── Motion ── */
   --duration-instant: 0.1s;
@@ -4785,11 +4789,11 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 .bm-bookmark-row {
   display: flex;
   align-items: center;
-  padding: var(--space-3) var(--space-4);
+  /* Small vertical padding so --list-row-h (min-height) is the actual row height;
+     still well above the HIG 44px tap minimum. The 2-line label/ref is centered. */
+  padding: var(--space-1) var(--space-4);
   gap: var(--space-3);
-  /* Roomier rows for easier scanning/tapping — comfortably above the HIG 44px
-     minimum (label --font-md + ref --font-xs, stacked, plus generous padding). */
-  min-height: 4rem;
+  min-height: var(--list-row-h);
   transition: background var(--duration-instant);
 }
 
@@ -5995,7 +5999,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   }
 
   .bm-row-content {
-    padding: var(--space-3) var(--space-4);
+    padding: var(--space-1) var(--space-4);
     /* Depth indent lives here (not on the folder-children UL) so the row stays
        full-bleed; --bm-indent is set per nesting level by the item builders. */
     padding-left: calc(var(--space-4) + var(--bm-indent, 0px));
@@ -6008,7 +6012,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
     /* Shared floor so folder (1 line) and bookmark (2 lines) rows are the SAME
        height; align-self:stretch then makes the content fill the row so the
        action behind it never peeks above/below. */
-    min-height: 4.4rem;
+    min-height: var(--list-row-h);
     align-self: stretch;
     box-sizing: border-box;
     /* padding-left animates the select-mode slide (room for the leading circle);
