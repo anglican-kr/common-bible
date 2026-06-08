@@ -777,8 +777,10 @@ function renderBookFilterList(body, books, working) {
         "aria-selected": working.has(b.id) ? "true" : "false",
       });
       opt.dataset.bookId = b.id;
-      opt.appendChild(el("span", { className: "book-filter-name" }, b.name_ko));
-      opt.appendChild(svgIcon("book-filter-check", ["M5 13l4 4L19 7"]));
+      // Chip grid (multi-select): the short name keeps chips compact so a whole
+      // division fits in a few wrapped rows instead of a long one-per-row scroll.
+      // Selection shows as a filled chip (aria-selected) — no inline check icon.
+      opt.appendChild(el("span", { className: "book-filter-name" }, b.short_name_ko || b.name_ko));
       li.appendChild(opt);
       ul.appendChild(li);
     }

@@ -1776,27 +1776,32 @@ body {
   z-index: 1;
 }
 
+/* Chip grid — books wrap as compact multi-select chips so a whole division fits
+   in a few rows instead of a long one-per-row scroll. */
 .book-filter-list {
   list-style: none;
   margin: 0;
-  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-4) var(--space-3);
 }
+.book-filter-list > li { display: contents; }
 
 .book-filter-option {
-  width: 100%;
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  min-height: var(--touch-target, 44px);
-  padding: 0 var(--space-4);
+  justify-content: center;
+  min-height: 2.5rem;
+  padding: var(--space-2) var(--space-3);
   font-family: inherit;
-  font-size: var(--font-base);
+  font-size: var(--font-sm);
   color: var(--text);
-  background: none;
-  border: none;
-  text-align: left;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .book-filter-name {
@@ -1805,30 +1810,23 @@ body {
   white-space: nowrap;
 }
 
-.book-filter-check {
-  flex-shrink: 0;
-  width: 1.25rem;
-  height: 1.25rem;
-  color: var(--accent);
-  opacity: 0;
-  transition: opacity var(--duration-fast);
-}
-
-.book-filter-option[aria-selected="true"] .book-filter-check {
-  opacity: 1;
-}
-
 .book-filter-option[aria-selected="true"] {
-  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--bg);
+  font-weight: 600;
 }
 
 .book-filter-option:hover {
-  background: color-mix(in srgb, var(--accent) 6%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+.book-filter-option[aria-selected="true"]:hover {
+  background: color-mix(in srgb, var(--accent) 88%, black);
 }
 
 .book-filter-option:focus-visible {
   outline: none;
-  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent);
 }
 
 .book-filter-foot {
