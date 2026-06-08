@@ -45,117 +45,6 @@ const $divisionTabsSlot = _$("division-tabs-slot");
 const $searchInput = /** @type {HTMLInputElement} */ (_$("search-input"));
 const $searchClear = _$("search-clear");
 const $searchBar = _$("search-bar");
-const $tabBar = _$("tab-bar");
-const $tabSearch = _$("tab-search");
-
-// ── Tab bar active state (ADR-029, ADR-030) ──
-// The global <a> click interceptor (further below) already SPA-navigates the
-// tab links; this only reflects the current route in the bar's active highlight.
-// Reading routes (/, /<division>, /<book>/<chapter>, …) all map to the home tab.
-// ADR-030: 검색은 탭에서 분리된 #tab-search 버튼 — seg==="search" 일 때 별도로 활성.
-function syncTabBarActive() {
-  if (!$tabBar) return;
-  const seg = location.pathname.replace(/^\//, "").split("/")[0];
-  const active = seg === "search" ? "search"
-    : seg === "bookmarks" ? "bookmarks"
-    : seg === "settings" ? "settings"
-    : "home";
-  for (const a of $tabBar.querySelectorAll(".tab-item")) {
-    const on = a.getAttribute("data-tab") === active;
-    a.classList.toggle("active", on);
-    if (on) a.setAttribute("aria-current", "page");
-    else a.removeAttribute("aria-current");
-  }
-  if ($tabSearch) {
-    const on = active === "search";
-    $tabSearch.classList.toggle("active", on);
-    if (on) $tabSearch.setAttribute("aria-current", "page");
-    else $tabSearch.removeAttribute("aria-current");
-  }
-  // ADR-030 P2: 검색 외 라우트로 가면(홈 탭 등) 검색 모핑을 복구. tabbar.js 가
-  // 노출하는 exitTabSearch — 검색 진입 시엔 active==='search' 라 호출 안 됨.
-  // 검색 라우트면(뒤로/앞으로로 ?q= 가 바뀌어도) dock 입력을 URL 에 동기화.
-  if (active !== "search") window.exitTabSearch?.();
-  else window.syncTabSearchQuery?.();
-  // ADR-030 P3: 라우트 변경 시 스크롤 축소 복구(새 뷰는 최상단에서 시작).
-  window.resetTabCollapse?.();
-  // ADR-030 후속⁵: 공유 슬라이딩 인디케이터를 활성 탭으로 이동(없으면 숨김).
-  _curTabActive = active;
-  positionTabIndicator(active);
-}
-
-// ── ADR-030 후속⁵: 슬라이딩 인디케이터 ──
-// division-tab 슬라이드(buildDivisionTabs)와 동일 패턴 — 단일 absolute 요소를 활성
-// 탭의 실측 위치(offsetLeft/Width; space-between 60px 슬롯이라 비선형)로 translateX.
-// 탭 사이 이동일 때만 슬라이드(CSS transition), 처음 표시/리사이즈/감속선호는 스냅.
-// 모핑(.searching)·축소(.collapsed) 중 숨김은 CSS(특이도)가 담당.
-let _prevTabIndic = null;   // 인디케이터가 현재 떠 있는 탭(없으면 null) — 슬라이드 판정
-let _curTabActive = "home"; // 리사이즈 재배치용 현재 활성 탭
-const _tabIndicMQL = typeof window !== "undefined" && window.matchMedia
-  ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
-
-/** @param {string} active */
-function positionTabIndicator(active) {
-  if (!$tabBar) return;
-  const ind = $tabBar.querySelector(".tab-indicator");
-  if (!(ind instanceof HTMLElement)) return;
-  const activeEl = active && active !== "search"
-    ? $tabBar.querySelector(`.tab-item[data-tab="${active}"]:not([aria-disabled="true"])`)
-    : null;
-  if (!(activeEl instanceof HTMLElement)) {
-    ind.classList.remove("is-shown");
-    _prevTabIndic = null; // 다음 표시는 스냅(검색 등에서 돌아올 때 stale 위치서 미끄러짐 방지)
-    return;
-  }
-  const apply = () => {
-    const left = activeEl.offsetLeft + (activeEl.offsetWidth - ind.offsetWidth) / 2;
-    const slide = _prevTabIndic !== null && _prevTabIndic !== active && !(_tabIndicMQL && _tabIndicMQL.matches);
-    if (slide) {
-      ind.style.transform = `translate(${left}px, -50%)`;
-    } else {
-      // 스냅: transition 잠시 끄고 위치 → reflow 커밋 → 복원(미끄러짐 없이 fade-in).
-      const prev = ind.style.transition;
-      ind.style.transition = "none";
-      ind.style.transform = `translate(${left}px, -50%)`;
-      void ind.offsetWidth;
-      ind.style.transition = prev;
-    }
-    ind.classList.add("is-shown");
-    _prevTabIndic = active;
-  };
-  if (typeof requestAnimationFrame === "function") requestAnimationFrame(apply);
-  else apply();
-}
-
-// space-between 슬롯 위치는 폭 의존 → 리사이즈/회전 시 재배치(스냅, 디바운스).
-// 라우트 변경이 아니므로 syncTabBarActive 가 안 불린다.
-if (typeof window !== "undefined" && window.addEventListener) {
-  /** @type {ReturnType<typeof setTimeout> | null} */
-  let _tabIndicTimer = null;
-  const reposition = () => {
-    _prevTabIndic = _curTabActive; // 같은 탭 → 슬라이드 없이 스냅
-    positionTabIndicator(_curTabActive);
-  };
-  window.addEventListener("resize", () => {
-    if (_tabIndicTimer) clearTimeout(_tabIndicTimer);
-    _tabIndicTimer = setTimeout(reposition, 120);
-  });
-  window.addEventListener("orientationchange", reposition);
-  // 모핑(검색/축소) 복귀 시 .tab-item max-width 가 ~0.25s 동안 애니메이트되므로,
-  // syncTabBarActive 의 즉시 rAF 측정은 중간값(좁은 폭)을 읽어 인디케이터가 어긋난다.
-  // → max-width transitionend 에서 활성 탭 실측으로 재배치(같은 탭이라 스냅). 한 번의
-  // 모핑이 여러 탭의 transitionend 를 내지만 모두 같은 활성 탭 스냅이라 무해(저비용).
-  if ($tabBar) {
-    $tabBar.addEventListener("transitionend", (e) => {
-      if (e.propertyName !== "max-width") return;
-      const t = e.target;
-      if (!(t instanceof HTMLElement) || !t.classList.contains("tab-item")) return;
-      reposition();
-    });
-  }
-  // tabbar.js 가 스크롤 축소 해제 후 재배치를 요청할 수 있도록 노출(필요 시).
-  window.syncTabIndicator = reposition;
-}
 
 // ── Rendering helpers ──
 
@@ -1586,7 +1475,9 @@ async function route() {
   // ADR-031: 떠나는 경로의 스크롤을 기억(DOM 변경 전) + 재진입 가드 시퀀스 발급.
   const routeSeq = ++_routeSeq;
   window.tabHistory?.onRouteStart();
-  syncTabBarActive();
+  // Tab-bar active state + sliding indicator moved to tabbar.js (ADR-034 PR3).
+  // Facade call: tabbar ↔ views-routing is a cycle, so this stays on window.
+  window.syncTabBarActive?.();
   if (_scrollTrackCleanup) _scrollTrackCleanup();
   clearNode($resumeBannerSlot);
   clearNode($divisionTabsSlot);
