@@ -1,10 +1,10 @@
 "use strict";
 // @ts-check
 
-// Data fetching — extracted from views-routing.js (ADR-034 PR2, follow-up to
+// Data fetching — extracted from views.js (ADR-034 PR2, follow-up to
 // ADR-018). Leaf module: fetch wrappers + module-level caches (booksCache /
 // appVersion) that feed Views/Routing and external modules. No DOM, no
-// app-module dependencies — the lowest layer of the views-routing split.
+// app-module dependencies — the lowest layer of the views split.
 
 /** @typedef {import("../types").BooksData} BooksData */
 /** @typedef {import("../types").BibleChapter} BibleChapter */
@@ -21,7 +21,7 @@ let booksCache = null;
 let appVersion = null;
 
 // ── BEGIN DATA_FETCHING ──
-// Exercised by tests/unit/views-routing.test.js (marker slice + prelude stubs
+// Exercised by tests/unit/views.test.js (marker slice + prelude stubs
 // for DATA_DIR / booksCache / appVersion / window). The 4 functions are fetch
 // wrappers with caching: loadBooks/loadVersion update module state
 // (booksCache/appVersion); loadChapter/loadPrologue are pure pass-throughs.
@@ -87,6 +87,6 @@ window.loadChapter = loadChapter;
 window.loadPrologue = loadPrologue;
 window.getBooksCache = getBooksCache;
 
-// In-module callers (views-routing.js route / renderChapter / renderPrologue)
+// In-module callers (views.js route / renderChapter / renderPrologue)
 // receive these as explicit ESM imports.
 export { loadBooks, loadVersion, loadChapter, loadPrologue, getBooksCache };

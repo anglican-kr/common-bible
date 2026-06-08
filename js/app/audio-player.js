@@ -1,7 +1,7 @@
 "use strict";
 // @ts-check
 
-// Audio Player — extracted from views-routing.js (ADR-034 PR1, follow-up to
+// Audio Player — extracted from views.js (ADR-034 PR1, follow-up to
 // ADR-018 Phase 7). Owns the per-chapter MP3 player UI, playback state, and the
 // #audio-bar lifecycle (build / teardown / live toggle / unavailable message).
 //
@@ -9,7 +9,7 @@
 // appStorage (audio time + show flag + persist hint), window.bibleAudioCache
 // (ADR-016 LRU), and the bare `announce` global (app.js Phase 8 owner). The one
 // upward edge — applyAudioShow() needs the current route — reads `window.parsePath`
-// via the facade rather than importing views-routing.js, which would create an
+// via the facade rather than importing views.js, which would create an
 // import cycle. ADR-034 PR5 (routing extraction) replaces that with a direct
 // downward import of parsePath.
 
@@ -21,10 +21,10 @@ const {
 
 const DATA_DIR = "/data";
 // DOM anchor. Redeclared locally so audio-player.js is self-contained (same
-// pattern as views-routing.js / bookmark.js).
+// pattern as views.js / bookmark.js).
 const $audioBar = _$("audio-bar");
 
-// Audio Player module state (was views-routing.js L891-L895 / app.js L112-L116).
+// Audio Player module state (was views.js L891-L895 / app.js L112-L116).
 let currentAudio = null;
 /** @type {AbortController | null} */
 let _audioController = null;
@@ -218,7 +218,7 @@ function showAudioUnavailable() {
 /** @param {boolean} on */
 function applyAudioShow(on) {
   if (!on) { hideAudioBar(); return; }
-  // Upward edge: parsePath lives in views-routing.js (PR5 → routing.js). Read
+  // Upward edge: parsePath lives in views.js (PR5 → routing.js). Read
   // it through the facade to keep this module free of an import cycle.
   const parsed = window.parsePath();
   if (parsed.view === "chapter") showAudioPlayer(parsed.bookId, parsed.chapter);
@@ -234,6 +234,6 @@ window.hideAudioBar = hideAudioBar;
 window.applyAudioShow = applyAudioShow;
 window.getCurrentAudio = () => currentAudio;
 
-// In-module callers (views-routing.js renderChapter / renderPrologue / route)
+// In-module callers (views.js renderChapter / renderPrologue / route)
 // receive these as explicit ESM imports.
 export { showAudioPlayer, hideAudioBar, applyAudioShow };

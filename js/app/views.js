@@ -30,7 +30,7 @@ const {
 const { dismissLaunchScreen } = window.appSettings;
 const { readingContext } = window;
 
-// DOM anchors. Redeclared locally so views-routing.js is self-contained.
+// DOM anchors. Redeclared locally so views.js is self-contained.
 const $app = _$("app");
 const $title = _$("page-title");
 const $audioBar = _$("audio-bar");
@@ -43,7 +43,7 @@ const $searchBar = _$("search-bar");
 // ── Rendering helpers ──
 
 // ── BEGIN TITLE ──
-// Exercised by tests/unit/views-routing.test.js with a tiny $title stub
+// Exercised by tests/unit/views.test.js with a tiny $title stub
 // + el / clearNode / announce shims provided by the loader prelude.
 /**
  * @param {string} text  full (canonical) title text
@@ -71,7 +71,7 @@ function setTitle(text, mobileText) {
 // ── END TITLE ──
 
 // ── BEGIN POPOVER ──
-// Exercised by tests/unit/views-routing.test.js. setTitleWithChapterPicker
+// Exercised by tests/unit/views.test.js. setTitleWithChapterPicker
 // renders a button that toggles a popover (focus trap inside,
 // click-outside-to-close, click-on-link-to-close).
 /**
@@ -170,7 +170,7 @@ function setTitleWithChapterPicker(book, currentCh) {
 // ── END POPOVER ──
 
 // ── BEGIN DIVISION ──
-// Exercised by tests/unit/views-routing.test.js. Pure: loadBookOrder() is
+// Exercised by tests/unit/views.test.js. Pure: loadBookOrder() is
 // the only side-effect (provided as a stub by the loader prelude).
 const DIVISION_LABELS = {
   old_testament: "구약",
@@ -203,7 +203,7 @@ function effectiveDivision(book) {
 // ── END DIVISION ──
 
 // ── BEGIN DIVISION_TABS ──
-// Exercised by tests/unit/views-routing.test.js. The book-list page is a
+// Exercised by tests/unit/views.test.js. The book-list page is a
 // single tabbed view (구약 / 외경 / 신약); the tab set follows the active
 // book-order setting (vulgate drops the 외경 tab). Tabs are anchors to the
 // per-division routes (/old_testament etc.) so deep links, the back button,
@@ -486,7 +486,7 @@ function measureTitleCompactness() {
 // Deferred: not needed until after first render and first scroll.
 
 // ── BEGIN COMPACT_HEADER ──
-// Exercised by tests/unit/views-routing.test.js. Hysteretic toggle:
+// Exercised by tests/unit/views.test.js. Hysteretic toggle:
 // scrolling past 60px adds .compact to #app-header; only when returning
 // near the top (<10px) do we remove it. Listener is passive — no
 // preventDefault — so it cannot block scrolling.
@@ -730,7 +730,7 @@ function renderChapterList(book, books) {
 }
 
 // ── BEGIN VERSE_NUMBER ──
-// Exercised by tests/unit/views-routing.test.js. Pure: derives the displayed
+// Exercised by tests/unit/views.test.js. Pure: derives the displayed
 // verse label/number from a verse object — no DOM, no global state.
 
 function formatVerseLabel(v) {
@@ -754,7 +754,7 @@ function formatVerseNumber(v) {
 // ── END VERSE_NUMBER ──
 
 // ── BEGIN VERSE_SELECTION ──
-// Exercised by tests/unit/views-routing.test.js. DOM-pure: reads classList +
+// Exercised by tests/unit/views.test.js. DOM-pure: reads classList +
 // data-vref from a passed article node, no global state, no event bindings.
 
 // Pure-poetry multi-part verses (e.g. Psalms, Proverbs, Wisdom books) are

@@ -402,7 +402,7 @@ function navigateSearch(patch) {
 
 // Lazy book-id → 한국어 이름 map, used for filter chip labels. Resolved on
 // demand (renderSearchResults awaits it before building the filter bar) rather
-// than at module load — search.js loads before views-routing.js, so
+// than at module load — search.js loads before views.js, so
 // window.loadBooks isn't defined yet at init. On failure the cache stays null so
 // a later render retries; chips fall back to the raw id until names arrive.
 /** @type {{ [id: string]: string } | null} */

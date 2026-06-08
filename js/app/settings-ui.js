@@ -821,7 +821,7 @@ window.appSettings = (() => {
     window.rebuildDriveSyncSection = () => { if (!popover.hidden) rebuild(); };
 
     // Per-view mobile trigger: the title row is re-rendered on every route, so
-    // views-routing.js mints a fresh one (CSS hides it on desktop, where the
+    // views.js mints a fresh one (CSS hides it on desktop, where the
     // top-row button is used instead). Shares this popover + open/close logic.
     window.buildSettingsTrigger = () => {
       const b = makeGearBtn();
@@ -836,7 +836,7 @@ window.appSettings = (() => {
   }
 
   // Per-name global for the mobile tab bar full-screen view (ADR-029 / P2),
-  // mirroring renderBookmarksView so views-routing.js can call it as a bare
+  // mirroring renderBookmarksView so views.js can call it as a bare
   // global from route().
   window.renderSettingsView = renderSettingsView;
 

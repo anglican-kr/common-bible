@@ -205,7 +205,7 @@ function mergeVerseSpecs(specA, specB) {
 // expand stanza/paragraph/pilcrow markers to blank lines and hemistich
 // markers to single line breaks, then normalize whitespace.
 //
-// Shared by the article-level system-copy handler (views-routing.js, fires on
+// Shared by the article-level system-copy handler (views.js, fires on
 // Cmd/Ctrl+C of a drag-selection) and the verse-select bar's 복사 button
 // (copySelectedVerses below). Keeping a single source ensures both paths emit
 // identical citation-ready text.

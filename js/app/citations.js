@@ -603,7 +603,7 @@ window.appCitations = (() => {
    *
    * Per ADR-022 §6 the sheet body deliberately skips cite chips and note
    * anchors (those are part of the main view only). This is a simpler
-   * mirror of views-routing.js's render loop minus those features.
+   * mirror of views.js's render loop minus those features.
    *
    * @param {HTMLElement} container
    * @param {ReadonlyArray<BibleVerse>} verses
@@ -620,7 +620,7 @@ window.appCitations = (() => {
       const startsWithPoetry = segs[0]?.type === "poetry";
       const isCited = !!(highlightedNumbers && highlightedNumbers.has(v.number));
 
-      // Inter-verse break (mirror views-routing.js logic).
+      // Inter-verse break (mirror views.js logic).
       if (!isFirst) {
         if (v.stanza_break) {
           article.appendChild(el("span", { className: "stanza-break", role: "presentation" }));
