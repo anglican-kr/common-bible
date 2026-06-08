@@ -787,31 +787,9 @@ export interface AppBookmark {
   collapseFullVerseRefs: (refs: string[], article: Element | null | undefined) => string[];
   selectedVersesToSpec: (refs: string[]) => string;
   mergeVerseSpecs: (specA: string, specB: string) => string;
-  findExistingChapterBookmarks: (bookId: string, chapter: number) => BookmarkTreeBookmark[];
-  _walkBookmarks: (
-    store: BookmarkTreeNode[],
-    fn: (item: BookmarkTreeNode, parent: BookmarkTreeNode[]) => unknown,
-  ) => boolean;
-  _findItemInStore: (
-    store: BookmarkTreeNode[],
-    id: string,
-  ) => { item: BookmarkTreeNode; parent: BookmarkTreeNode[]; index: number } | null;
-  _findParentFolderId: (
-    store: BookmarkTreeNode[],
-    id: string,
-    parentId?: string | null,
-  ) => string | null | undefined;
-  removeItemById: (store: BookmarkTreeNode[], id: string) => void;
-  insertItem: (
-    store: BookmarkTreeNode[],
-    folderId: string | null | undefined,
-    item: BookmarkTreeNode,
-  ) => void;
-  collectFolderOptions: (
-    store: BookmarkTreeNode[],
-    depth?: number,
-    options?: Array<{ id: string; name: string; depth: number }>,
-  ) => Array<{ id: string; name: string; depth: number }>;
+  // bookmark-core QUERY helpers (findExistingChapterBookmarks / _walkBookmarks /
+  // _findItemInStore / _findParentFolderId / removeItemById / insertItem /
+  // collectFolderOptions) are ESM-only now — no window/global facade.
   moveBookmarkItem: (draggedId: string, targetId: string, position: "before" | "after" | "into") => void;
   closeSwipedRow: (except: HTMLElement | null) => void;
   _setupDragHandle: (li: HTMLElement, row: HTMLElement) => void;
@@ -1015,31 +993,7 @@ declare global {
   function collapseFullVerseRefs(refs: string[], article: Element | null | undefined): string[];
   function selectedVersesToSpec(refs: string[]): string;
   function mergeVerseSpecs(specA: string, specB: string): string;
-  function findExistingChapterBookmarks(bookId: string, chapter: number): BookmarkTreeBookmark[];
-  function _walkBookmarks(
-    store: BookmarkTreeNode[],
-    fn: (item: BookmarkTreeNode, parent: BookmarkTreeNode[]) => unknown,
-  ): boolean;
-  function _findItemInStore(
-    store: BookmarkTreeNode[],
-    id: string,
-  ): { item: BookmarkTreeNode; parent: BookmarkTreeNode[]; index: number } | null;
-  function _findParentFolderId(
-    store: BookmarkTreeNode[],
-    id: string,
-    parentId?: string | null,
-  ): string | null | undefined;
-  function removeItemById(store: BookmarkTreeNode[], id: string): void;
-  function insertItem(
-    store: BookmarkTreeNode[],
-    folderId: string | null | undefined,
-    item: BookmarkTreeNode,
-  ): void;
-  function collectFolderOptions(
-    store: BookmarkTreeNode[],
-    depth?: number,
-    options?: Array<{ id: string; name: string; depth: number }>,
-  ): Array<{ id: string; name: string; depth: number }>;
+  // bookmark-core QUERY helpers are ESM-only now (see Window interface note above).
   function moveBookmarkItem(draggedId: string, targetId: string, position: "before" | "after" | "into"): void;
   function closeSwipedRow(except: HTMLElement | null): void;
   function _setupDragHandle(li: HTMLElement, row: HTMLElement): void;

@@ -5,8 +5,8 @@
 // bookmark logic: query/tree ops (QUERY block, loadBookmarks-backed), href/share
 // builders (HREF), sort/last-viewed helpers (SORT, localStorage), active-route
 // highlight predicates (ACTIVE, _renderPathname set by UI via setRenderPathname).
-// bookmark.js (UI) imports these; a few QUERY fns keep a window facade for the
-// legacy bare-global contract (types.d.ts). Deps: appStorage, localStorage.
+// bookmark.js (UI) and bookmark-modals.js import these via ESM. Deps: appStorage,
+// localStorage.
 
 /** @typedef {import("../types").BookmarkTreeNode} BookmarkTreeNode */
 /** @typedef {import("../types").BookmarkTreeBookmark} BookmarkTreeBookmark */
@@ -346,18 +346,6 @@ function _hasActiveDescendant(folder, pathname = _renderPathname) {
   return false;
 }
 // ── END BOOKMARK_ACTIVE ──
-
-// ── Window facade ──
-// QUERY tree helpers keep the legacy bare-global contract (types.d.ts declares
-// them on Window). No current module reads them, but preserved to avoid a hidden
-// runtime break.
-window._walkBookmarks = _walkBookmarks;
-window.findExistingChapterBookmarks = findExistingChapterBookmarks;
-window._findItemInStore = _findItemInStore;
-window._findParentFolderId = _findParentFolderId;
-window.removeItemById = removeItemById;
-window.insertItem = insertItem;
-window.collectFolderOptions = collectFolderOptions;
 
 export {
   _bookmarkHref, _buildSharePayload,

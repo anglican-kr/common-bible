@@ -1000,22 +1000,10 @@ function closeTopmostModal(e) {
   return false;
 }
 
-// ── Window facade ──
-// Vestigial: route() now dismisses every open overlay via
-// appOverlay.closeAllOverlays() (ADR-034), which superseded these per-modal
-// close facades. Kept behavior-neutral until a dedicated facade-cleanup pass
-// confirms no remaining caller, then removable.
-window.closeConfirmModal = closeConfirmModal;
-window.closeChapterDeleteModal = closeChapterDeleteModal;
-window.closeNewFolderModal = closeNewFolderModal;
-window.closeSaveModal = closeSaveModal;
-window.closeMergeModal = closeMergeModal;
-window.closeImportModal = closeImportModal;
-window.closeMoveModal = closeMoveModal;
-
-// Only the entry points bookmark.js calls are exported; each modal's close fn
-// stays module-internal (reached via closeTopmostModal + scrim/cancel listeners
-// here) and, where route() needs it, via the window facade above.
+// Each modal's close fn stays module-internal (reached via closeTopmostModal +
+// the scrim/cancel listeners above). route() dismisses any open overlay through
+// appOverlay.closeAllOverlays() (ADR-034), so no per-modal window facade is
+// needed. Only the entry points bookmark.js calls are exported.
 export {
   initBookmarkModals, closeTopmostModal,
   openConfirmModal, openChapterDeleteModal,
