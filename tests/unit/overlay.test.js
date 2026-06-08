@@ -55,6 +55,8 @@ function makeEnv() {
       super();
       this.tagName = String(tag).toUpperCase();
       this.hidden = false;
+      this.isConnected = true; // DOM-connected by default; tests set false to detach
+
       this._attrs = /** @type {Record<string,string>} */ ({});
       this._children = /** @type {StubEl[]} */ ([]);
       this._parent = /** @type {StubEl|null} */ (null);
@@ -165,6 +167,7 @@ function makeEnv() {
 
   return {
     createOverlay: ctx.appOverlay.createOverlay,
+    closeAllOverlays: ctx.appOverlay.closeAllOverlays,
     attachSheetDrag: ctx.appOverlay.attachSheetDrag,
     attachSheetResize: ctx.appOverlay.attachSheetResize,
     document,
@@ -420,6 +423,73 @@ test("closeTransition: re-open before finalizeHide cancels the pending hide", ()
   assert.equal(ov.isOpen, true);
   /** @type {() => void} */ (finalize)(); // stale finalize from the cancelled close
   assert.equal(panel.hidden, false); // NOT hidden — the re-open won
+});
+
+// ── closeAllOverlays (route() dismiss-on-navigation, ADR-034 PR5b) ───────────
+
+test("closeAllOverlays: closes every open overlay (full unwind) + force-hides panel", () => {
+  const env = makeEnv();
+  const a = new env.StubEl();
+  const b = new env.StubEl();
+  const ovA = env.createOverlay({ panel: a, inertSelectors: "main" });
+  const ovB = env.createOverlay({ panel: b });
+  ovA.open();
+  ovB.open();
+  env.closeAllOverlays();
+  assert.equal(ovA.isOpen, false);
+  assert.equal(ovB.isOpen, false);
+  assert.equal(a.hidden, true);
+  assert.equal(b.hidden, true);
+});
+
+// The bug Bugbot caught (PR #227): force-hide must key off panel VISIBILITY, not
+// isOpen. closeTransition overlays (cite sheet / drawer) set isOpen=false on
+// close() but keep the panel visible until the exit animation finalizes — so a
+// navigation mid-dismiss left them lingering when the force-hide was gated on
+// isOpen.
+test("closeAllOverlays: force-hides an animated panel mid-dismiss (isOpen already false)", () => {
+  const env = makeEnv();
+  const panel = new env.StubEl();
+  /** @type {(() => void) | null} */
+  let finalize = null;
+  const ov = env.createOverlay({
+    panel,
+    closeTransition: (_p, done) => { finalize = done; }, // capture, never finalize
+  });
+  ov.open();
+  ov.close(); // logical close: isOpen=false, panel deferred-visible
+  assert.equal(ov.isOpen, false);
+  assert.equal(panel.hidden, false); // still visible (animation in flight)
+  env.closeAllOverlays(); // navigation lands mid-dismiss
+  assert.equal(panel.hidden, true); // force-hidden so it doesn't linger over the next view
+});
+
+test("closeAllOverlays: leaves an already-hidden, never-opened overlay untouched", () => {
+  const env = makeEnv();
+  const panel = new env.StubEl();
+  panel.hidden = true; // overlays ship hidden until first open
+  env.createOverlay({ panel });
+  env.closeAllOverlays();
+  assert.equal(panel.hidden, true);
+});
+
+test("closeAllOverlays: skips detached panels (per-open-rebuilt overlays) without closing them", () => {
+  const env = makeEnv();
+  const stale = new env.StubEl();
+  const live = new env.StubEl();
+  const ovStale = env.createOverlay({ panel: stale });
+  const ovLive = env.createOverlay({ panel: live });
+  ovStale.open();
+  ovLive.open();
+  stale.isConnected = false; // its element was replaced in the DOM
+  env.closeAllOverlays();
+  // Detached entry is pruned + skipped (not closed); the live overlay still closes.
+  assert.equal(ovStale.isOpen, true);
+  assert.equal(ovLive.isOpen, false);
+  assert.equal(live.hidden, true);
+  // Pruned: a second pass is a no-op that doesn't revisit the stale entry.
+  env.closeAllOverlays();
+  assert.equal(ovLive.isOpen, false);
 });
 
 // ── attachSheetDrag (bottom-sheet drag-to-dismiss) ───────────────────────────

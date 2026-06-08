@@ -602,6 +602,9 @@ export interface OverlayController {
 
 export interface AppOverlay {
   createOverlay: (opts: OverlayOptions) => OverlayController;
+  // Dismiss every currently-open overlay (route() calls this on navigation).
+  // ADR-034 PR5b — replaces the router's hardcoded per-overlay teardown list.
+  closeAllOverlays: () => void;
   // Bottom-sheet drag plumbing (ADR-032 §2), shared by the bookmark drawer +
   // cite sheet. Lifecycle stays with the overlay/caller; these only wire the
   // drag gesture onto a handle element.
