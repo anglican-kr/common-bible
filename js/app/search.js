@@ -565,7 +565,11 @@ function mountSearchField(container, input) {
     const term = refineInput.value.trim();
     if (!term) { collapseRefine(); return; }
     const cur = currentSearchState();
-    if (cur.andTerms.includes(term)) { refineInput.value = ""; return; }
+    // Collapse the inline input before navigating — on the persistent header/
+    // pill fields the same element is reused, so leaving it open would keep the
+    // submitted text visible (duplicating the chip) and hide "＋ 좁히기" (Bugbot).
+    collapseRefine();
+    if (cur.andTerms.includes(term)) return;
     navigateSearch({ andTerms: cur.andTerms.concat(term) });
   });
   // Collapse on blur only when empty so an accidental focus loss keeps a term
