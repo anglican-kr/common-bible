@@ -1160,16 +1160,23 @@ async function commitTopSearch(rawQuery) {
   // Recents keep the raw typed form (incl. in:<alias>) as the history label.
   pushSearchHistory(raw);
   if (topSearchHistory) topSearchHistory.refresh();
-  searchAutoNavigate = true;
   // Absorb typed/example `in:<alias>` operators into book-scope chips so the
   // operator doesn't linger as raw text in the field (token UI). Unresolved
   // aliases stay in `q` — the worker still scopes the results from them.
+  // ensureAliasMap may await a cold book load; capture the route sequence so a
+  // navigation or newer commit during the await aborts this stale one (Bugbot).
+  const seq = window.routeSeq?.() ?? 0;
   const aliasMap = await ensureAliasMap();
+  if ((window.routeSeq?.() ?? 0) !== seq) return;
   const { keyword, ids } = extractInScope(raw, aliasMap);
   // Keep the book-picker scope across a fresh query (union in: tokens), but
   // reset 결과 내 검색 (it refines a specific result set) and pagination (ADR-033).
   const cur = currentSearchState();
   const filterBooks = ids.length ? Array.from(new Set(cur.filterBooks.concat(ids))) : cur.filterBooks;
+  // Arm verse-ref auto-navigate only when there's a keyword to search; a
+  // scope-only commit (in: absorbed → empty keyword) lands on the empty-query
+  // view, which never consumes the flag (would leave it stale — Bugbot).
+  searchAutoNavigate = !!keyword;
   const newPath = buildSearchUrl({ q: keyword, page: 1, filterBooks, andTerms: [] });
   // If path is unchanged, popstate won't fire — call route() directly.
   if (location.pathname + location.search === newPath) {
