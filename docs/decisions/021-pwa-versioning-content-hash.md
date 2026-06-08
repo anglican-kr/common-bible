@@ -18,7 +18,7 @@ const AUDIO_CACHE = "audio-1";    // mp3 — 오디오 저장소가 소유해야
 
 1. **소유권 경계 위반.** 데이터 저장소에서 JSON 포맷을 바꿔도 그 저장소 안에는 "포맷 rev이 몇이냐"를 표시할 자리가 없었다. 앱 dev가 서브모듈 포인터 bump 후 `release.py --bump-data`를 수동으로 떠올려 실행해야 했다 (ADR-020 §73-74의 "수동 두 단계").
 2. **무효화 단위가 너무 굵음.** `DATA_CACHE = "data-3" → "data-4"` 한 번이면 1328개 장 전체(~6 MB)를, `AUDIO_CACHE` bump 한 번이면 ~6.3 GB mp3 전체를 재다운로드. 한 장 수정이나 한 mp3 재인코딩 같은 흔한 변경에 비해 비용이 과함.
-3. **release.py에 git 자동화 없음** (감사 보고서 M8, `docs/audit/2026-05-08-second-comprehensive.md:87-88`). 한쪽만 bump 후 commit 누락 시 SW가 stale 셸 캐시 재사용.
+3. **release.py에 git 자동화 없음** (감사 보고서 M8, `docs/archive/audit/2026-05-08-second-comprehensive.md:87-88`). 한쪽만 bump 후 commit 누락 시 SW가 stale 셸 캐시 재사용.
 
 ## 결정
 
@@ -109,7 +109,7 @@ DATA_CACHE / AUDIO_CACHE는 이제 rev 없는 고정 이름 (`"data"`, `"audio"`
 - **Phase 1** (데이터 저장소): `scripts/gen_manifests.py` + `.github/workflows/build.yml` + 초기 매니페스트 baseline + `pipeline.yml` PR-only 좁힘.
 - **Phase 2** (앱 저장소): `sw-version.js` + `sw.js` 리팩터 + `js/manifest-sync.js` + `js/audio-cache.js` 캐시 이름 고정 + `js/app.js` 부팅 시퀀스 + `release.py` 재작성 + 단위 테스트 + 본 ADR + 관련 docs 갱신.
 - **Phase 3** (webhook 자동화): 데이터 build.yml 끝에 `gh api ... /dispatches`, 앱 `.github/workflows/sync-data.yml` 신설. 데이터 main 변경 → 앱 서브모듈 포인터 자동 bump → release.py 자동 commit·push.
-- **Phase 4** (실배포 검증): dev 배포 후 DevTools로 매니페스트 동기화·해시 무효화 동작 확인 → promote. `docs/qa/`에 비기술 독자용 보고서.
+- **Phase 4** (실배포 검증): dev 배포 후 DevTools로 매니페스트 동기화·해시 무효화 동작 확인 → promote. `docs/archive/qa/`에 비기술 독자용 보고서.
 
 ## 검증
 

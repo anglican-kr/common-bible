@@ -7,7 +7,7 @@
 - 종료: 2026-05-10 (2라운드 = ADR-018 모듈 분할과 동행 종료)
 - 상태: **완료** — 1라운드(PR-1~7, 점진 JSDoc 도입) + 2라운드(`// @ts-check` 영구 활성화 + `tsconfig.app.json` 삭제, ADR-018 Phase 8 동행). 모든 클라이언트 JS가 영구 타입 체크 대상
 - 관련 ADR: ADR-001(SPA), ADR-012(TS 점진 도입, 본 의제), ADR-013(유닛 테스트), ADR-018(모듈 분할 — 2라운드 동행)
-- 후속 설계 문서: `docs/design/app-modularization.md`
+- 후속 설계 문서: `docs/archive/design/app-modularization.md`
 
 ---
 
@@ -251,4 +251,4 @@ PR-7 시작 시 main `tsconfig.json` 검사 환경에서 `// @ts-check`를 `js/a
 | 2026-05-09 | PR-6 머지 (#86) | CI Unit tests + Cursor Bugbot 모두 green, main 통합 (rebase) |
 | 2026-05-09 | PR-7 시작 | `feat/app-jsdoc-pr7` 브랜치 분기. 영역: 내보내기/가져오기 + 절 선택 + 드로어 + SW 등록 (L5670-L6082, ~412줄) — 마지막 PR |
 | 2026-05-09 | PR-7 마무리 | **마이그레이션 1라운드 종료**. PR-7 영역 잔여 11 fix(button/input narrow, FileReader result narrow, `_$` 통일) + 모듈 상태 변수 ~30개 일괄 narrow(`booksCache: BooksData \| null`, `_audioSaveTimer: ReturnType<typeof setTimeout> \| null` 등) + narrow 부작용 정리(`loadBooks`/`loadVersion` 반환 흐름, `_audioSaveTimer` null guard, `getAttribute(...) ?? ""` 패턴 ~10곳, `_bookmarkDrawerLastFocus` `HTMLElement` narrow). `// @ts-check` 영구 활성화 + `tsconfig.app.json` 삭제는 **app.js 파일 분할 리팩터링과 결합한 별도 의제로 보류** ([§9](#9-pr-7-마무리-방식-변경)). 검증: tsconfig.app.json 잔여 3 (gtag-init.js 외부), main tsc 0, worker tsc 0, 유닛 111건 통과 |
-| 2026-05-10 | **2라운드 종료 — 본 의제 마무리** | ADR-018 모듈 분할(Phase 1~8)과 동행으로 진행. 각 도메인 모듈(`js/app/helpers.js` / `storage.js` / `settings-ui.js` / `install.js` / `search.js` / `reading-context.js` / `bookmark.js` / `views-routing.js`)을 추출하면서 모듈마다 `// @ts-check`를 영구 활성화. Phase 8(2026-05-10)에 잔류 `js/app.js`(283줄)에도 `// @ts-check` 영구 활성화 + **`tsconfig.app.json` 삭제 → 메인 `tsconfig.json` 단일 검증으로 통합**. 후속 ESM 일괄 전환(ADR-019, 2026-05-09)으로 모듈 scope 정착해 cross-file 글로벌 alias 충돌도 자연 해소. ADR-012에 2026-05-10 개정 블록 추가, status를 '1차 + 2차 적용 완료'로 갱신. 자세한 phase별 변천은 `docs/design/app-modularization.md` 참조 |
+| 2026-05-10 | **2라운드 종료 — 본 의제 마무리** | ADR-018 모듈 분할(Phase 1~8)과 동행으로 진행. 각 도메인 모듈(`js/app/helpers.js` / `storage.js` / `settings-ui.js` / `install.js` / `search.js` / `reading-context.js` / `bookmark.js` / `views-routing.js`)을 추출하면서 모듈마다 `// @ts-check`를 영구 활성화. Phase 8(2026-05-10)에 잔류 `js/app.js`(283줄)에도 `// @ts-check` 영구 활성화 + **`tsconfig.app.json` 삭제 → 메인 `tsconfig.json` 단일 검증으로 통합**. 후속 ESM 일괄 전환(ADR-019, 2026-05-09)으로 모듈 scope 정착해 cross-file 글로벌 alias 충돌도 자연 해소. ADR-012에 2026-05-10 개정 블록 추가, status를 '1차 + 2차 적용 완료'로 갱신. 자세한 phase별 변천은 `docs/archive/design/app-modularization.md` 참조 |

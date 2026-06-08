@@ -269,7 +269,7 @@ OAuth callback이 query string(`?code=...`)으로 오느냐 fragment(`#access_to
 
 Cache API는 access-time / byte-size 메타데이터를 노출하지 않으므로 LRU·쿼터 추적은 IndexedDB sidecar에 별도 보관하는 패턴이 자연스럽다 (ADR-016). 그러나 두 store가 독립 존재이므로 한쪽만 갱신·소실되면 추적이 영구 어긋난다. 또 Content-Length 헤더에 의존해 byteSize를 기록하면 chunked transfer / gzip / Range 응답에서 0이 들어가 LRU cap이 사실상 무력화된다.
 
-**사례 (2차 보안 감사 — `docs/audit/2026-05-08-second-comprehensive.md` H1·H2·H3):**
+**사례 (2차 보안 감사 — `docs/archive/audit/2026-05-08-second-comprehensive.md` H1·H2·H3):**
 
 - **H1** — `sw.js:139` `byteSize = cl ? Number(cl) : 0`. Content-Length 누락 시 0 기록 → totalSize 합산에서 빠짐 → HARD_CAP 도달 신호 못 받음 → Cache API 무한 누적 → origin-단위 quota 초과 시 DATA_CACHE까지 evict.
 - **H2** — `_putAudioAndEnforceCap`이 두 fetch에서 동시 진행되면 `pickEvictions` 결과가 방금 put된 url을 evict 대상에 포함시켜 재생 중 mp3 삭제.

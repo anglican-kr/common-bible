@@ -131,7 +131,7 @@ git submodule update --init --recursive
 
 ## Google Drive 동기화 (북마크·설정·읽기 위치)
 
-데스크탑·Android·iOS가 모두 동일하게 OAuth 2.0 Authorization Code + PKCE + refresh token 단일 경로 ([ADR-011 Phase 2h](docs/decisions/011-bookmark-sync.md), [`docs/design/pkce-migration.md`](docs/design/pkce-migration.md)). Phase 2h 이전에 있던 GIS Token Client / Implicit Flow / FedCM 분기는 모두 제거됨.
+데스크탑·Android·iOS가 모두 동일하게 OAuth 2.0 Authorization Code + PKCE + refresh token 단일 경로 ([ADR-011 Phase 2h](docs/decisions/011-bookmark-sync.md), [`docs/archive/design/pkce-migration.md`](docs/archive/design/pkce-migration.md)). Phase 2h 이전에 있던 GIS Token Client / Implicit Flow / FedCM 분기는 모두 제거됨.
 
 | 시나리오 | 동작 |
 |---------|-----|
@@ -156,7 +156,7 @@ git submodule update --init --recursive
 
 iOS Safari ITP로 인한 storage 정리는 동기화 외 다른 로컬 상태에도 영향을 주므로 [iOS 고유 제약](#ios-고유-제약) 절에 둠.
 
-보안 모델 자세히: [`docs/audit/2026-05-07-pkce-refresh-token.md`](docs/audit/2026-05-07-pkce-refresh-token.md).
+보안 모델 자세히: [`docs/archive/audit/2026-05-07-pkce-refresh-token.md`](docs/archive/audit/2026-05-07-pkce-refresh-token.md).
 
 ## 프로젝트 구조
 
@@ -207,10 +207,10 @@ tests/
   workflows/
     test.yml            ← CI: JS 유닛 자동 실행
 docs/
-  decisions/            ← 아키텍처 결정 기록 (ADR-001~020)
-  design/               ← 설계 변천 문서 (pkce-migration·app-modularization 등)
-  audit/                ← 보안 감사 보고서
-  qa/                   ← e2e 회귀 테스트 결과 보고서
+  decisions/            ← 아키텍처 결정 기록 (ADR)
+  status.md             ← 구현 현황 ("지금 무엇이 동작하는가")
+  known-issues.md       ← 미해결 이슈·후속 백로그
+  archive/              ← 완료·점-시점 기록 (design 설계 변천 · audit 보안 감사 · qa e2e 회귀 보고서)
   prd.md                ← 제품 요구사항 문서
   worklog.md            ← 작업 일지
 ```

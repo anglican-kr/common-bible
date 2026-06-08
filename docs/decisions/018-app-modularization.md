@@ -4,7 +4,7 @@
 - 개정: 2026-05-09 (ADR-019로 모듈 시스템 결정 갱신 — multi-script + `defer` + `window.X` → ESM 일괄. 본 ADR의 "IIFE + `<script defer>`" 결정은 ADR-019에 의해 상위 결정으로 갱신됨)
 - 개정: 2026-05-10 (Phase 1~8 완료 — `js/app.js` 6,082 → 283줄, 9개 도메인 모듈로 분할 성공. ESM 일괄 전환(ADR-019)도 동행)
 - 상태: 승인됨 — 완료 (Phase 1~8 종료, 2026-05-10)
-- 관련 설계 문서: `docs/design/app-modularization.md`
+- 관련 설계 문서: `docs/archive/design/app-modularization.md`
 
 ## 결정
 

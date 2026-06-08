@@ -42,7 +42,7 @@
 - `data/` — **서브모듈 `common-bible-data`** 마운트 위치 (73권 JSON `bible/`, 검색 인덱스 4종 `search-{meta,ot,nt,dc}.json`, 콘텐츠 해시 매니페스트 `bible-manifest.json`·`audio-manifest.json` (ADR-021), 오디오 nested 서브모듈 `audio/`, 마크다운 원본 `source/`, Python 파이프라인 `src/`, 데이터 검증 테스트 `tests/`)
 - `scripts/` — `release.py`(version.json + sw-version.js bump + 자동 commit), `changelog.py`(릴리스 노트용 변경 목록 — 앱 git log + data 서브모듈 compare, `--generate-notes` 대체), `serve.py`(SPA-aware 로컬 서버), `generate_splash.py`(iOS 스플래시, ADR-007)
 - `tests/` — e2e(`e2e/`, Playwright, 로컬 전용) + JS 유닛(`unit/`, ADR-013, CI 자동)
-- `docs/` — `architecture.md`(아키텍처 개요·ADR 인덱스), `status.md`(구현 현황 — "지금 무엇이 동작하는가"), `known-issues.md`(미해결 이슈·후속 백로그), `decisions/`(ADR), `design/`(설계 변천 문서), `audit/`(보안 감사), `qa/`(자동 테스트 회귀 보고서, 비기술 독자 톤), `coding-pitfalls.md`, `prd.md`, `worklog.md`
+- `docs/` — `architecture.md`(아키텍처 개요·ADR 인덱스), `status.md`(구현 현황 — "지금 무엇이 동작하는가"), `known-issues.md`(미해결 이슈·후속 백로그), `decisions/`(ADR), `archive/`(완료·점-시점 기록 — `design/` 설계 변천 · `audit/` 보안 감사 · `qa/` e2e 회귀 보고서), `coding-pitfalls.md`, `prd.md`, `worklog.md`
 - `assets/` — 아이콘(`icons/`), 스플래시(`splash/`, ADR-007), 설치 안내 3컷(`install-guide/`, ADR-008)
 - `.github/workflows/test.yml` — CI (Node 24 + `node --test`, ADR-013, pull_request 트리거)
 

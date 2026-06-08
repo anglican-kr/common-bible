@@ -7,7 +7,7 @@
 - 종료: 2026-05-08 (Phase 2h 단계 1~6 머지 완료)
 - 상태: **완료** — PKCE + refresh token 단일 경로 운영 중. 데스크톱·Android·iOS 모두 같은 흐름. 단계 6에서 dev/prod 환경 분리 + nginx BFF(ADR-017) + 탭 활성화 자동 sync까지 동행. 후속 Phase 2i(sync 사이클 캐시, 2026-05-08)도 종료
 - 관련 ADR: ADR-001(SPA), ADR-011(북마크 동기화, Phase 2h·2i 완료), ADR-012(TS), ADR-013(유닛 테스트), ADR-017(nginx BFF)
-- 보안 감사: `docs/audit/2026-05-07-pkce-refresh-token.md` — Critical/High/Medium 0건. `docs/audit/2026-05-08-second-comprehensive.md`(2차) — Critical 0, High 4 즉시 fix(PR #67)
+- 보안 감사: `docs/archive/audit/2026-05-07-pkce-refresh-token.md` — Critical/High/Medium 0건. `docs/archive/audit/2026-05-08-second-comprehensive.md`(2차) — Critical 0, High 4 즉시 fix(PR #67)
 
 ---
 
@@ -753,7 +753,7 @@ Phase 2h 진행 중 Bugbot이 발견한 4건의 race / leak / 마이그레이션
 - §12 콜백 URL 데이터 leak — flow별 transport 격차 (PR #54 2차)
 - §13 마이그레이션 시점의 sessionStorage / localStorage 키 격리 (단계 2~4 키 분리·인계 패턴)
 
-#### 7.2.3 `docs/audit/2026-05-07-pkce-refresh-token.md` 보안 감사
+#### 7.2.3 `docs/archive/audit/2026-05-07-pkce-refresh-token.md` 보안 감사
 
 이전 감사(`2026-05-02-171111.md`, `2026-05-04-drive-sync-security.md`)가 Implicit Flow 시점 기준이었으므로, PKCE + refresh token 도입 후의 위협 모델을 다시 정리. **Critical/High/Medium 0건**.
 
@@ -797,7 +797,7 @@ Phase 2g 시점의 GIS/Implicit/silent-blocked 표·설명을 Phase 2h 단일 PK
 
 - `bible-drive-silent-blocked` cleanup 코드도 제거
 - `coding-pitfalls.md`에 PKCE 함정 노트 추가
-- 보안 감사 문서 마무리 (`docs/audit/2026-05-XX-pkce-refresh-token.md`)
+- 보안 감사 문서 마무리 (`docs/archive/audit/2026-05-XX-pkce-refresh-token.md`)
 
 ---
 
@@ -817,7 +817,7 @@ Phase 2g 시점의 GIS/Implicit/silent-blocked 표·설명을 Phase 2h 단일 PK
 - 두 vhost 모두 `location = /oauth/token` 블록 적용
 - `proxy_set_body "$request_body&client_secret=..."`로 server-side secret 주입 → `https://oauth2.googleapis.com/token`
 - secret은 `/etc/nginx/sites-available/{bible,dev}`에만 존재. 브라우저·git·CDN 어디에도 노출 없음
-- 예시 설정: `nginx/oauth-proxy.example.conf`. 자세한 결정은 [ADR-017](../decisions/017-oauth-bff-proxy.md)
+- 예시 설정: `nginx/oauth-proxy.example.conf`. 자세한 결정은 [ADR-017](../../decisions/017-oauth-bff-proxy.md)
 
 ### 9.3 검수 상태 영향
 
@@ -856,7 +856,7 @@ Phase 2h 마이그레이션 종료. 5단계 + 1단계(인프라) 완료.
 - **B. Desktop app 클라이언트 타입 전환** — 거부 사유: redirect URI가 `http://127.0.0.1:port` 형태만 허용, HTTPS 도메인 불가. SPA에 부적합
 - **C. nginx BFF 프록시** ✅ 채택 — same-origin `/oauth/token` 요청에 nginx가 secret 주입 후 Google로 forward. secret은 nginx 설정 파일에만 존재
 
-자세한 결정 기록: [ADR-017](../decisions/017-oauth-bff-proxy.md).
+자세한 결정 기록: [ADR-017](../../decisions/017-oauth-bff-proxy.md).
 
 ### 10.4 ADR-011·CLAUDE.md·README 동기화
 

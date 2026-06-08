@@ -86,6 +86,6 @@
 
 ## 참고
 
-- §10 디자인 대안 검토 + 사용자 결정 기록 — 본 ADR 작성 입력 자료는 별도 조사 문서로 보관 (`docs/design/` 후보).
+- §10 디자인 대안 검토 + 사용자 결정 기록 — 본 ADR 작성 입력 자료는 별도 조사 문서로 보관 (`docs/archive/design/` 후보).
 - iOS 26 Safari toolbar tinting 동작 — 본 프로젝트 실측 결과는 [Ben Nasedkin](https://nasedk.in/blog/ios26-safari-toolbar-colors/) · [1ar.io](https://www.1ar.io/updates/safari-26-liquid-glass-web/) 와 일치.
 - `prefers-reduced-motion` 처리는 ADR-024 슬라이드 인디케이터와 동일한 패턴.

@@ -151,9 +151,9 @@ common-bible/                       # 앱 저장소 (공개)
 │   ├── unit/                       # JS 유닛 (Node --test, ADR-013, CI 자동)
 │   └── e2e/                        # Playwright (로컬 전용)
 └── docs/
-    ├── decisions/                  # ADR-001~020
-    ├── design/                     # 설계 변천 문서
-    ├── audit/ · qa/
+    ├── decisions/                  # ADR
+    ├── archive/                    # 완료·점-시점 기록 (design·audit·qa)
+    ├── status.md · known-issues.md
     └── prd.md · architecture.md · worklog.md
 
 common-bible-server/                # 서버 저장소 (비공개)
@@ -233,5 +233,5 @@ common-bible-server/                # 서버 저장소 (비공개)
 
 ### 7단계: 모바일 가독성 폴리시 — ✅ 완료
 
-- [x] 신약 책 이름 자동 짧게 표시 (책 목록·장 헤더): 터치 기기 미디어 쿼리 + 비-터치 ResizeObserver 측정. 글자 크기 변경 자동 재측정. 정식 명칭은 `aria-label` 로 항상 스크린리더에 노출 (2026-05-27, `docs/qa/2026-05-27-book-name-shortening.md`).
+- [x] 신약 책 이름 자동 짧게 표시 (책 목록·장 헤더): 터치 기기 미디어 쿼리 + 비-터치 ResizeObserver 측정. 글자 크기 변경 자동 재측정. 정식 명칭은 `aria-label` 로 항상 스크린리더에 노출 (2026-05-27, `docs/archive/qa/2026-05-27-book-name-shortening.md`).
 

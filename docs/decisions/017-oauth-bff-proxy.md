@@ -2,7 +2,7 @@
 
 **상태**: 채택됨 (2026-05-08)
 **개정**: 2026-05-11 (ADR-020 분할에 따라 nginx 설정 파일들(`oauth-proxy.example.conf`·`oauth-bff-shared.example.conf`·`oauth-bff-guard.example.js`·`security-headers.example.conf`)은 `common-bible-server/nginx/`로 이전. BFF 패턴 자체는 그대로 유지.)
-**관련**: [ADR-001](001-spa-architecture.md), [ADR-011](011-bookmark-sync.md), [ADR-020](020-monorepo-split.md), [`docs/design/pkce-migration.md`](../design/pkce-migration.md)
+**관련**: [ADR-001](001-spa-architecture.md), [ADR-011](011-bookmark-sync.md), [ADR-020](020-monorepo-split.md), [`docs/archive/design/pkce-migration.md`](../archive/design/pkce-migration.md)
 
 ## 맥락
 

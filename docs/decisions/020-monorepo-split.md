@@ -67,7 +67,7 @@ nginx 설정을 앱 저장소 안에 그대로 두고 `.example.conf` 패턴을 
 - ADR-002·003·006: data 저장소로 이전 (앱 ADR 인덱스에 stub만 남김)
 - `docs/architecture.md`: 빌드/배포 도식 + §4 구조 지도 + §11 로드맵 재작성
 - `CLAUDE.md`·`GEMINI.md`·`README.md`: 4분할 토폴로지 반영
-- `docs/audit/2026-05-07-pkce-refresh-token.md`·`2026-05-08-second-comprehensive.md`: nginx 설정 위치 참조 갱신
+- `docs/archive/audit/2026-05-07-pkce-refresh-token.md`·`2026-05-08-second-comprehensive.md`: nginx 설정 위치 참조 갱신
 
 ### 배포·운영
 - 일상 배포 흐름: 마크다운 수정 → data 저장소 push → CI 빌드·검증 → 앱 저장소 서브모듈 포인터 bump → server 저장소 `deploy.sh dev`. 한 사이클은 사람 손이 두 번 들어간다(데이터 push·앱 서브모듈 bump). 빈도 낮은 작업이므로 자동화는 후순위.

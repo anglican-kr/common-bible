@@ -188,6 +188,6 @@ ADR-015는 **사후 명문화**라 신규 코드 변경 없음. 다만 다음을
 - ADR-010 북마크 (localStorage 채택 근거)
 - ADR-011 북마크 동기화 (Phase 2c store-v2, Phase 2h PKCE + IDB 도입)
 - ADR-014 검색 히스토리 (로컬 전용 행동 데이터)
-- `docs/audit/2026-05-07-pkce-refresh-token.md` — refresh token 암호화 모델 보안 감사
-- `docs/design/pkce-migration.md` — Phase 2h 살아있는 설계 문서
+- `docs/archive/audit/2026-05-07-pkce-refresh-token.md` — refresh token 암호화 모델 보안 감사
+- `docs/archive/design/pkce-migration.md` — Phase 2h 살아있는 설계 문서
 - MDN: Web Crypto API `CryptoKey.extractable`, IndexedDB structured clone
