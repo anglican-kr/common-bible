@@ -1254,6 +1254,13 @@ body {
    in-page #search-inpage-bar, and the bottom morphing #tab-search-dock pill. */
 .token-zone { display: contents; }
 .token-zone[hidden] { display: none; }
+/* Chips/refine inherit this Sans stack (display:contents passes inheritance to
+   children) so tokens don't pick up the body Serif. */
+.field-token,
+.token-refine-add,
+.token-refine-input {
+  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+}
 
 /* Header bar becomes a flex row so tokens sit inline with the input; the
    toggle/clear/history stay position:absolute (out of flow), unaffected. */
@@ -1332,7 +1339,6 @@ body {
   height: 1.7rem;
   margin-right: 0.3rem;
   padding: 0 var(--space-2);
-  font-family: inherit;
   font-size: var(--font-2xs);
   color: var(--text-secondary);
   background: none;
@@ -1350,7 +1356,6 @@ body {
   height: 1.7rem;
   margin-right: 0.3rem;
   padding: 0 var(--space-2);
-  font-family: inherit;
   font-size: var(--font-2xs);
   color: var(--text);
   background: var(--bg-card);

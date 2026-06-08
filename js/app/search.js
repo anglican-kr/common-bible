@@ -417,7 +417,9 @@ async function ensureBookMap() {
     const books = await window.loadBooks();
     /** @type {{ [id: string]: string }} */
     const map = {};
-    for (const b of books) map[b.id] = b.name_ko;
+    // Token chips use the Korean short name (창세, 요한) — the full name (창세기,
+    // 요한의 복음서) overflows the compact in-field chip. Fall back to name_ko.
+    for (const b of books) map[b.id] = b.short_name_ko || b.name_ko;
     _bookMap = map;
     return _bookMap;
   } catch {
