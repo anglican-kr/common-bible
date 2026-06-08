@@ -3,8 +3,9 @@
 
 // Bookmark modals — extracted from bookmark.js (ADR-034 후속 PR5). DOM-bound
 // dialog UI: confirm + chapter-delete picker (PR5a), folder combobox + new-folder
-// modal (PR5b), save/edit + merge dialog (PR5c); move/import to follow.
-// bookmark.js (drawer/tree UI) opens these and injects its
+// modal (PR5b), save/edit + merge dialog (PR5c), import flow (PR5d). The move
+// modal stays in bookmark.js (it reads select-mode state); export is a plain
+// download, also in bookmark.js. bookmark.js (drawer/tree UI) opens these and injects its
 // render callbacks once via initBookmarkModals(), so the modal→render cycle
 // needs no circular import (의존성 주입). The modal Escape stack lives here as
 // closeTopmostModal(), which bookmark.js's document keydown handler delegates to
@@ -72,6 +73,14 @@ const $bmMergeBody = _$("bm-merge-body");
 const $bmMergeYes = _$("bm-merge-yes");
 const $bmMergeNo = _$("bm-merge-no");
 const $bmMergeCancel = _$("bm-merge-cancel");
+const $bmImportBtn = _$("bm-import-btn");
+const $bmImportInput = /** @type {HTMLInputElement} */ (_$("bm-import-input"));
+const $bmImportScrim = _$("bm-import-scrim");
+const $bmImportModal = _$("bm-import-modal");
+const $bmImportBody = _$("bm-import-body");
+const $bmImportMerge = _$("bm-import-merge");
+const $bmImportOverwrite = _$("bm-import-overwrite");
+const $bmImportCancel = _$("bm-import-cancel");
 
 // ── BEGIN BOOKMARK_CONFIRM ──
 // Generic destructive-confirm dialog. The caller passes the onConfirm action, so
@@ -725,6 +734,146 @@ function openMergeDialog(candidates, incomingSpec, mode, fallbackContext = null)
 }
 // ── END BOOKMARK_MERGE ──
 
+// ── BEGIN IMPORT_EXPORT ──
+// Exercised by tests/unit/bookmark.test.js. Pure helpers for the import
+// pipeline: validation (structural), merge (id-deduped union with existing
+// taking precedence), and recursive count.
+function _validateImportData(data) {
+  if (!data || typeof data !== "object") return false;
+  if (!Array.isArray(data.bookmarks)) return false;
+  return true;
+}
+
+function _mergeBookmarkStores(existing, incoming) {
+  const existingIds = new Set();
+  function collectIds(items) {
+    for (const item of items) {
+      existingIds.add(item.id);
+      if (item.type === "folder" && Array.isArray(item.children)) {
+        collectIds(item.children);
+      }
+    }
+  }
+  collectIds(existing);
+
+  function filterNew(items) {
+    const result = [];
+    for (const item of items) {
+      if (item.type === "folder") {
+        if (!existingIds.has(item.id)) {
+          const mergedChildren = filterNew(item.children || []);
+          result.push({ ...item, children: mergedChildren });
+        }
+      } else {
+        if (!existingIds.has(item.id)) {
+          result.push(item);
+        }
+      }
+    }
+    return result;
+  }
+
+  return [...existing, ...filterNew(incoming)];
+}
+
+function _countBookmarks(items) {
+  let count = 0;
+  for (const item of items) {
+    if (item.type === "bookmark") {
+      count += 1;
+    } else if (item.type === "folder" && Array.isArray(item.children)) {
+      count += _countBookmarks(item.children);
+    }
+  }
+  return count;
+}
+// ── END IMPORT_EXPORT ──
+
+// ── BEGIN BOOKMARK_IMPORT ──
+// Full import flow: a hidden file input + its trigger (openImportFilePicker, used
+// by the ⋯ menu's 가져오기), the read/parse/validate step, then the
+// merge-vs-overwrite confirmation modal. Export is a plain download and stays in
+// bookmark.js (no dialog).
+// closeOnEsc off: in the stacked Escape router. onClose clears per-open
+// handlers and resets the file input (so re-picking the same file re-fires
+// change) (ADR-032).
+const importOverlay = createOverlay({
+  panel: $bmImportModal,
+  scrim: $bmImportScrim,
+  initialFocus: () => $bmImportMerge,
+  onClose: () => {
+    $bmImportMerge.onclick = null;
+    $bmImportOverwrite.onclick = null;
+    $bmImportCancel.onclick = null;
+    $bmImportInput.value = "";
+  },
+});
+
+function closeImportModal() { importOverlay.close(); }
+
+// Open the OS file picker (called from bookmark.js's ⋯ menu). Resetting value
+// first lets the same file be picked twice in a row and still fire change.
+function openImportFilePicker() {
+  $bmImportInput.value = "";
+  $bmImportInput.click();
+}
+
+function openImportModal(incoming) {
+  const bmCount = _countBookmarks(incoming.bookmarks);
+  clearNode($bmImportBody);
+  $bmImportBody.appendChild(
+    el("p", {}, `북마크 ${bmCount}개를 현재 목록에 병합하거나 덮어쓸 수 있습니다.`)
+  );
+
+  importOverlay.open();
+  const cleanup = closeImportModal;
+
+  $bmImportMerge.onclick = () => {
+    const existing = loadBookmarks();
+    const merged = _mergeBookmarkStores(existing, incoming.bookmarks);
+    saveBookmarks(merged);
+    _deps.rerenderActiveBookmarkTree();
+    announce("북마크를 병합했습니다.");
+    cleanup();
+  };
+
+  $bmImportOverwrite.onclick = () => {
+    saveBookmarks(incoming.bookmarks);
+    _deps.rerenderActiveBookmarkTree();
+    announce("북마크를 덮어썼습니다.");
+    cleanup();
+  };
+
+  $bmImportCancel.onclick = cleanup;
+}
+
+$bmImportBtn.addEventListener("click", openImportFilePicker);
+$bmImportInput.addEventListener("change", () => {
+  const file = $bmImportInput.files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    let data;
+    try {
+      const result = /** @type {FileReader} */ (e.target).result;
+      data = JSON.parse(typeof result === "string" ? result : "");
+    } catch (_) {
+      announce("파일을 읽을 수 없습니다. 올바른 JSON 파일인지 확인해 주세요.");
+      $bmImportInput.value = "";
+      return;
+    }
+    if (!_validateImportData(data)) {
+      announce("북마크 파일 형식이 올바르지 않습니다.");
+      $bmImportInput.value = "";
+      return;
+    }
+    openImportModal(data);
+  };
+  reader.readAsText(file);
+});
+$bmImportScrim.addEventListener("click", closeImportModal);
+// ── END BOOKMARK_IMPORT ──
+
 // ── Static listeners (moved from bookmark.js) ──
 $bmConfirmCancel.addEventListener("click", closeConfirmModal);
 $bmConfirmScrim.addEventListener("click", closeConfirmModal);
@@ -754,6 +903,7 @@ function closeTopmostModal(e) {
   if (!$bmChapterDeleteModal.hidden) { closeChapterDeleteModal(); return true; }
   if (!$bmMergeModal.hidden) { closeMergeModal(); return true; }
   if (!$bmSaveModal.hidden) { closeSaveModal(); return true; }
+  if (!$bmImportModal.hidden) { closeImportModal(); return true; }
   return false;
 }
 
@@ -767,6 +917,7 @@ window.closeChapterDeleteModal = closeChapterDeleteModal;
 window.closeNewFolderModal = closeNewFolderModal;
 window.closeSaveModal = closeSaveModal;
 window.closeMergeModal = closeMergeModal;
+window.closeImportModal = closeImportModal;
 
 // Only the entry points bookmark.js calls are exported; each modal's close fn
 // stays module-internal (reached via closeTopmostModal + scrim/cancel listeners
@@ -775,4 +926,5 @@ export {
   initBookmarkModals, closeTopmostModal,
   openConfirmModal, openChapterDeleteModal,
   openNewFolderModal, openSaveModal,
+  openImportFilePicker,
 };

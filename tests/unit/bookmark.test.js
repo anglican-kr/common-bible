@@ -44,6 +44,10 @@ const VERSE_SPEC_SOURCE = fs.readFileSync(VERSE_SPEC_PATH, "utf8");
 // BOOKMARK_QUERY / BOOKMARK_ACTIVE) now live there.
 const BOOKMARK_CORE_PATH = path.resolve(__dirname, "../../js/app/bookmark-core.js");
 const BOOKMARK_CORE_SOURCE = fs.readFileSync(BOOKMARK_CORE_PATH, "utf8");
+// Modal dialogs (incl. the IMPORT_EXPORT pure helpers) moved to bookmark-modals.js
+// (ADR-034 후속 PR5); the IMPORT_EXPORT marker block now lives there.
+const BOOKMARK_MODALS_PATH = path.resolve(__dirname, "../../js/app/bookmark-modals.js");
+const BOOKMARK_MODALS_SOURCE = fs.readFileSync(BOOKMARK_MODALS_PATH, "utf8");
 
 function extractBlock(name, source = BOOKMARK_SOURCE) {
   const begin = `// ── BEGIN ${name} ──`;
@@ -1149,7 +1153,7 @@ function loadBookmarkActive() {
 function loadImportExport() {
   const ctx = { Object, Array, Set, String, JSON, console, Error };
   vm.createContext(ctx);
-  vm.runInContext(extractBlock("IMPORT_EXPORT"), ctx, { filename: "bookmark-import-export.js" });
+  vm.runInContext(extractBlock("IMPORT_EXPORT", BOOKMARK_MODALS_SOURCE), ctx, { filename: "bookmark-modals.js" });
   return {
     _validateImportData: ctx._validateImportData,
     _mergeBookmarkStores: ctx._mergeBookmarkStores,

@@ -52,6 +52,7 @@ import {
   initBookmarkModals, closeTopmostModal,
   openConfirmModal, openChapterDeleteModal,
   openNewFolderModal, openSaveModal,
+  openImportFilePicker,
 } from "./bookmark-modals.js";
 
 
@@ -490,8 +491,7 @@ const $bmAddFolderBtn = /** @type {HTMLButtonElement} */ (_$("bm-add-folder-btn"
 const $bmOverflowBtn = _$("bm-overflow-btn");
 const $bmOverflowPanel = _$("bm-overflow-panel");
 const $bmExportBtn = _$("bm-export-btn");
-const $bmImportBtn = _$("bm-import-btn");
-const $bmImportInput = /** @type {HTMLInputElement} */ (_$("bm-import-input"));
+// $bmImportBtn / $bmImportInput + the import modal refs moved to bookmark-modals.js (PR5d).
 const $driveDisconnectScrim = _$("drive-disconnect-scrim");
 const $driveDisconnectModal = _$("drive-disconnect-modal");
 const $driveDisconnectDelete = _$("drive-disconnect-delete");
@@ -523,12 +523,7 @@ $driveDisconnectDelete.addEventListener("click", async () => {
   await window.driveSync?.deleteRemoteFile();
   window.driveSync?.signOut();
 });
-const $bmImportScrim = _$("bm-import-scrim");
-const $bmImportModal = _$("bm-import-modal");
-const $bmImportBody = _$("bm-import-body");
-const $bmImportMerge = _$("bm-import-merge");
-const $bmImportOverwrite = _$("bm-import-overwrite");
-const $bmImportCancel = _$("bm-import-cancel");
+// $bmImport* modal refs moved to bookmark-modals.js (PR5d).
 // $bmSave* / $bmNewFolder* / $bmMerge* refs moved to bookmark-modals.js (PR5b~5c).
 // $bmConfirm* / $bmChapterDelete* refs moved to bookmark-modals.js (PR5a).
 const $verseSelectBar = _$("verse-select-bar");
@@ -1354,8 +1349,7 @@ function buildBmViewActions() {
     "M8.5 8.5 12 12l3.5-3.5",
     "M5 13v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5",
   ], () => {
-    $bmImportInput.value = "";
-    $bmImportInput.click();
+    openImportFilePicker();
   });
   // 선택 — checkmark.circle. Enters the in-place select mode (ADR-029 개정): rows
   // reveal a leading selection circle and the tab dock yields to #bm-select-bar
@@ -1954,105 +1948,10 @@ function exportBookmarks() {
   announce("북마크를 내보냈습니다.");
 }
 
-// ── BEGIN IMPORT_EXPORT ──
-// Exercised by tests/unit/bookmark.test.js. Pure helpers for the import
-// pipeline: validation (structural), merge (id-deduped union with existing
-// taking precedence), and recursive count.
-function _validateImportData(data) {
-  if (!data || typeof data !== "object") return false;
-  if (!Array.isArray(data.bookmarks)) return false;
-  return true;
-}
-
-function _mergeBookmarkStores(existing, incoming) {
-  const existingIds = new Set();
-  function collectIds(items) {
-    for (const item of items) {
-      existingIds.add(item.id);
-      if (item.type === "folder" && Array.isArray(item.children)) {
-        collectIds(item.children);
-      }
-    }
-  }
-  collectIds(existing);
-
-  function filterNew(items) {
-    const result = [];
-    for (const item of items) {
-      if (item.type === "folder") {
-        if (!existingIds.has(item.id)) {
-          const mergedChildren = filterNew(item.children || []);
-          result.push({ ...item, children: mergedChildren });
-        }
-      } else {
-        if (!existingIds.has(item.id)) {
-          result.push(item);
-        }
-      }
-    }
-    return result;
-  }
-
-  return [...existing, ...filterNew(incoming)];
-}
-
-function _countBookmarks(items) {
-  let count = 0;
-  for (const item of items) {
-    if (item.type === "bookmark") {
-      count += 1;
-    } else if (item.type === "folder" && Array.isArray(item.children)) {
-      count += _countBookmarks(item.children);
-    }
-  }
-  return count;
-}
-// ── END IMPORT_EXPORT ──
-
-// closeOnEsc off: in the stacked Escape router. onClose clears per-open
-// handlers and resets the file input (ADR-032).
-const importOverlay = createOverlay({
-  panel: $bmImportModal,
-  scrim: $bmImportScrim,
-  initialFocus: () => $bmImportMerge,
-  onClose: () => {
-    $bmImportMerge.onclick = null;
-    $bmImportOverwrite.onclick = null;
-    $bmImportCancel.onclick = null;
-    $bmImportInput.value = "";
-  },
-});
-
-function closeImportModal() { importOverlay.close(); }
-
-function openImportModal(incoming) {
-  const bmCount = _countBookmarks(incoming.bookmarks);
-  clearNode($bmImportBody);
-  $bmImportBody.appendChild(
-    el("p", {}, `북마크 ${bmCount}개를 현재 목록에 병합하거나 덮어쓸 수 있습니다.`)
-  );
-
-  importOverlay.open();
-  const cleanup = closeImportModal;
-
-  $bmImportMerge.onclick = () => {
-    const existing = loadBookmarks();
-    const merged = _mergeBookmarkStores(existing, incoming.bookmarks);
-    saveBookmarks(merged);
-    _rerenderActiveBookmarkTree();
-    announce("북마크를 병합했습니다.");
-    cleanup();
-  };
-
-  $bmImportOverwrite.onclick = () => {
-    saveBookmarks(incoming.bookmarks);
-    _rerenderActiveBookmarkTree();
-    announce("북마크를 덮어썼습니다.");
-    cleanup();
-  };
-
-  $bmImportCancel.onclick = cleanup;
-}
+// Import flow (file input + read/validate + merge/overwrite modal) and the
+// IMPORT_EXPORT pure helpers moved to bookmark-modals.js (PR5d); the ⋯ menu's
+// 가져오기 calls openImportFilePicker (imported above). exportBookmarks stays
+// below (plain download, no dialog).
 
 // ── Verse selection mode ──
 
@@ -2243,43 +2142,14 @@ $bmOverflowBtn.addEventListener("click", () => {
 });
 
 $bmExportBtn.addEventListener("click", exportBookmarks);
-
-$bmImportBtn.addEventListener("click", () => {
-  $bmImportInput.value = "";
-  $bmImportInput.click();
-});
-
-$bmImportInput.addEventListener("change", () => {
-  const file = $bmImportInput.files?.[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    let data;
-    try {
-      const result = /** @type {FileReader} */ (e.target).result;
-      data = JSON.parse(typeof result === "string" ? result : "");
-    } catch (_) {
-      announce("파일을 읽을 수 없습니다. 올바른 JSON 파일인지 확인해 주세요.");
-      $bmImportInput.value = "";
-      return;
-    }
-    if (!_validateImportData(data)) {
-      announce("북마크 파일 형식이 올바르지 않습니다.");
-      $bmImportInput.value = "";
-      return;
-    }
-    openImportModal(data);
-  };
-  reader.readAsText(file);
-});
-
-$bmImportScrim.addEventListener("click", closeImportModal);
+// import file-input + change listener moved to bookmark-modals.js (PR5d).
 
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
-    if (closeTopmostModal(e)) return;  // new-folder/confirm/chapter-delete/merge/save (bookmark-modals.js)
+    // move sits above the bookmark-modals.js modals (z 78-79 vs ≤77), so it must
+    // be checked first when both are open; the rest are owned by closeTopmostModal.
     if (!$bmMoveModal.hidden) { closeMoveModal(); return; }
-    if (!$bmImportModal.hidden) { closeImportModal(); return; }
+    if (closeTopmostModal(e)) return;
     if (!$bookmarkDrawer.hidden) { closeBookmarkDrawer(); return; }
     if (readingContext.verseSelectMode) { exitVerseSelectMode(); return; }
     if (_bmSelectMode) { exitBookmarkSelectMode(); return; }
@@ -2355,7 +2225,6 @@ window.buildHomeBtn = buildHomeBtn;
 window.buildBookmarkHeaderBtn = buildBookmarkHeaderBtn;
 window.openBookmarkDrawer = openBookmarkDrawer;
 window.closeBookmarkDrawer = closeBookmarkDrawer;
-window.closeImportModal = closeImportModal;
 // Exposed so route() can dismiss the move-to-folder overlay on any nav (e.g. OS
 // back gesture mid-move) — its scrim would otherwise persist over the rebuilt
 // view. Safe to call when already hidden (self-guards). The confirm /
