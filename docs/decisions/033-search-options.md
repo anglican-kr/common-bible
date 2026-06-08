@@ -16,6 +16,19 @@
 
 Apple HIG의 검색 패턴(필터/스코프 바 · 토큰 대신 칩 · recents 목록 · 시트 선택)을 따른다.
 
+> **개정 (2026-06-08) — "결과 내 검색"을 입력창에서 추가 버튼으로:** 항상 보이던
+> `.search-refine-input`(메인 검색 pill 을 그대로 흉내 낸 둥근 입력)이 하단 모핑 탭바의
+> 검색 pill 과 외형이 같아 **검색창이 두 개**로 보이는 어색함이 있었다(HIG "single,
+> clearly identified location" 위배). HIG 정석은 추가어를 메인 검색 필드 안의
+> **token** 으로 흡수하는 것이지만(이 ADR 대안 A — 헤더·in-page·모핑 3개 입력 지점 모두
+> 토큰 렌더가 필요해 비용이 커 보류됨), 어색함만 저비용으로 제거하기 위해 입력창을
+> **"＋ 낱말 추가" 고스트 칩 버튼**(dashed·muted, `.search-refine-add`)으로 바꿨다. 탭하면
+> 그 자리에서 인라인 입력이 펼쳐지고(Enter 커밋 → `navigateSearch` 재렌더로 버튼 복귀,
+> Esc/빈 blur → 접힘), AND 좁히기 기능·URL `and=` 스키마·워커 프로토콜은 그대로다. 책 선택 분류를
+> scope control segment 로 빼는 안은 별도 후속(선택). `css/style.css` `.search-refine-add*`
+> 추가, `js/app/search.js` `buildSearchFilterBar` 의 refine 행만 변경. DOM 상호작용이라 e2e
+> 책임이며 순수 로직(URL·페이지네이션) 유닛 회귀는 영향 없음(78 통과).
+
 ## 맥락
 
 - ADR-005가 `in:<별칭>` 연산자를 도입했고, ADR-030이 옛 검색 시트(`+ in:` 칩)를 제거하면서 책 범위 지정을 **타이핑으로만** 할 수 있게 됐다. 책 이름·별칭을 외워 입력하는 것은 발견성이 낮다.

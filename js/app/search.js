@@ -477,8 +477,8 @@ function buildFilterChip(label, removeAria, onRemove) {
 // The search-options bar shown above the empty view and results. Row 1 is the
 // scope: a "책 선택" button (opens the book-filter sheet) + a removable chip per
 // selected book. Row 2 is "결과 내 검색" — shown only when there's a primary
-// query (it narrows an existing result set, ADR-033): a chip per AND term + an
-// input to add another. The scope row is the future home of a 성서/노트 segment
+// query (it narrows an existing result set, ADR-033): a chip per AND term + a
+// "＋ 낱말 추가" button that reveals an inline input. The scope row is the future home of a 성서/노트 segment
 // (the request notes notes-search is coming); the bar already isolates that
 // concern from the query field.
 /**
@@ -515,6 +515,21 @@ function buildSearchFilterBar(state) {
         navigateSearch({ andTerms: currentSearchState().andTerms.filter((t) => t !== term) });
       }));
     }
+
+    // "결과 내 검색" add control (ADR-033 개정 — option A). Default to a compact
+    // chip-style "＋ 낱말 추가" button rather than a full-width input: a second
+    // input that mirrored the main search pill read as a duplicate search field
+    // (HIG "single, clearly identified location"). Tapping reveals an inline
+    // input; committing a term (Enter) re-renders via navigateSearch, which
+    // restores the collapsed button.
+    const addBtn = el("button", {
+      type: "button",
+      className: "search-refine-add",
+      "aria-label": "결과 내 검색어 추가",
+    });
+    addBtn.appendChild(el("span", { className: "search-refine-add-icon", "aria-hidden": "true" }, "+"));
+    addBtn.appendChild(el("span", {}, "낱말 추가"));
+
     const refineInput = /** @type {HTMLInputElement} */ (el("input", {
       type: "search",
       className: "search-refine-input",
@@ -527,15 +542,35 @@ function buildSearchFilterBar(state) {
       placeholder: "결과 내 검색",
       "aria-label": "결과 내 검색",
     }));
+    refineInput.hidden = true;
+
+    const collapse = () => {
+      refineInput.value = "";
+      refineInput.hidden = true;
+      addBtn.hidden = false;
+    };
+    addBtn.addEventListener("click", () => {
+      addBtn.hidden = true;
+      refineInput.hidden = false;
+      refineInput.focus();
+    });
     refineInput.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") { collapse(); return; }
       if (e.key !== "Enter") return;
       e.preventDefault();
       const term = refineInput.value.trim();
-      if (!term) return;
+      if (!term) { collapse(); return; }
       const cur = currentSearchState();
       if (cur.andTerms.includes(term)) { refineInput.value = ""; return; }
       navigateSearch({ andTerms: cur.andTerms.concat(term) });
     });
+    // Collapse on blur only when empty, so an accidental focus loss doesn't
+    // discard a term the user is still typing.
+    refineInput.addEventListener("blur", () => {
+      if (!refineInput.value.trim()) collapse();
+    });
+
+    refineRow.appendChild(addBtn);
     refineRow.appendChild(refineInput);
     bar.appendChild(refineRow);
   }

@@ -1473,7 +1473,42 @@ body {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent);
 }
 
-/* "결과 내 검색" input — a compact pill mirroring the in-page search field. */
+/* "결과 내 검색" add affordance — a ghost (dashed, muted) chip-button so it
+   reads as "add a term", not a second search field next to the main search
+   pill (ADR-033 개정, option A). Tapping reveals .search-refine-input. */
+.search-refine-add {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: var(--touch-target, 44px);
+  padding: 0 var(--space-3);
+  font-family: inherit;
+  font-size: var(--font-sm);
+  color: var(--text-secondary);
+  background: none;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+}
+
+.search-refine-add[hidden] { display: none; }
+
+.search-refine-add-icon {
+  font-size: var(--font-base);
+  line-height: 1;
+}
+
+.search-refine-add:hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.search-refine-add:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+/* Inline input revealed when the add button is tapped. */
 .search-refine-input {
   flex: 1;
   min-width: 8rem;
@@ -1747,14 +1782,19 @@ body {
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
-  padding: var(--space-2) 0 var(--space-3);
+  /* No padding-top: the first sticky section title pins flush to the head
+     border. A padding-top here left an uncovered sliver above the sticky
+     title where scrolling rows peeked through. */
+  padding: 0 0 var(--space-3);
 }
 
 .book-filter-section-title {
   position: sticky;
   top: 0;
   margin: 0;
-  padding: var(--space-2) var(--space-4);
+  /* Generous vertical padding so the section label reads as a clear divider
+     rather than crowding the rows above/below it. */
+  padding: var(--space-3) var(--space-4) var(--space-2);
   font-size: var(--font-sm);
   font-weight: 600;
   color: var(--text-secondary);
