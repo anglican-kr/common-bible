@@ -2,8 +2,9 @@
 // @ts-check
 
 // Bookmark modals — extracted from bookmark.js (ADR-034 후속 PR5). DOM-bound
-// dialog UI: confirm + chapter-delete picker for PR5a (save/folder/merge/move/
-// import to follow). bookmark.js (drawer/tree UI) opens these and injects its
+// dialog UI: confirm + chapter-delete picker (PR5a), folder combobox + new-folder
+// modal (PR5b); save/merge/move/import to follow. bookmark.js (drawer/tree UI)
+// opens these and injects its
 // render callbacks once via initBookmarkModals(), so the modal→render cycle
 // needs no circular import (의존성 주입). The modal Escape stack lives here as
 // closeTopmostModal(), which bookmark.js's document keydown handler delegates to
@@ -14,11 +15,12 @@
 
 import {
   _selectAllState, _deleteBtnLabel, _forgetViewed, removeItemById,
+  collectFolderOptions, insertItem, _findItemInStore,
 } from "./bookmark-core.js";
 
 const { _$, el, clearNode, chUnit } = window.appHelpers;
 const { createOverlay } = window.appOverlay;
-const { loadBookmarks, saveBookmarks } = window.appStorage;
+const { loadBookmarks, saveBookmarks, generateId } = window.appStorage;
 
 // ── Dependency injection ──
 // bookmark.js injects its render callbacks at startup so a modal can refresh the
@@ -48,6 +50,13 @@ const $bmChapterDeleteAll = /** @type {HTMLInputElement} */ (_$("bm-chapter-dele
 const $bmChapterDeleteList = _$("bm-chapter-delete-list");
 const $bmChapterDeleteConfirm = /** @type {HTMLButtonElement} */ (_$("bm-chapter-delete-confirm"));
 const $bmChapterDeleteCancel = _$("bm-chapter-delete-cancel");
+const $bmNewFolderScrim = _$("bm-new-folder-scrim");
+const $bmNewFolderModal = _$("bm-new-folder-modal");
+const $bmNewFolderClose = _$("bm-new-folder-close");
+const $bmNewFolderInput = /** @type {HTMLInputElement} */ (_$("bm-new-folder-input"));
+const $bmNewFolderParent = _$("bm-new-folder-parent");
+const $bmNewFolderConfirm = _$("bm-new-folder-confirm");
+const $bmNewFolderCancel = _$("bm-new-folder-cancel");
 
 // ── BEGIN BOOKMARK_CONFIRM ──
 // Generic destructive-confirm dialog. The caller passes the onConfirm action, so
@@ -177,18 +186,295 @@ function openChapterDeleteModal(candidates) {
 function closeChapterDeleteModal() { chapterDeleteOverlay.close(); }
 // ── END BOOKMARK_CHAPTER_DELETE ──
 
+// ── BEGIN BOOKMARK_FOLDER_ICON ──
+// Material "folder" glyph (currentColor-filled SVG). Used only by the folder
+// combobox below — the button icon and each option's leading icon.
+function _buildMaterialFolderIcon({ size = 18 } = {}) {
+  const ns = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(ns, "svg");
+  svg.setAttribute("width", String(size));
+  svg.setAttribute("height", String(size));
+  svg.setAttribute("viewBox", "0 -960 960 960");
+  svg.setAttribute("fill", "currentColor");
+  svg.setAttribute("aria-hidden", "true");
+  const path = document.createElementNS(ns, "path");
+  path.setAttribute("d", "M160-160q-33 0-56.5-23.5T80-240v-480q0-33 23.5-56.5T160-800h240l80 80h320q33 0 56.5 23.5T880-640v400q0 33-23.5 56.5T800-160H160Zm0-80h640v-400H447l-80-80H160v480Zm0 0v-480 480Z");
+  svg.appendChild(path);
+  return svg;
+}
+// ── END BOOKMARK_FOLDER_ICON ──
+
+// ── BEGIN BOOKMARK_FOLDER_COMBOBOX ──
+// Custom listbox folder picker shared by the save modal (저장 위치) and the
+// new-folder modal's own parent picker. Self-contained widget returning
+// { el, getValue, close }; the "+ 새 폴더" affordance re-enters openNewFolderModal.
+/**
+ * @param {Array<{ id: string, name: string, depth: number }>} folderOptions
+ * @param {string|null|undefined} selectedFolderId
+ * @param {{ idPrefix?: string, allowNewFolder?: boolean }} [opts] idPrefix scopes the
+ *   element ids so two comboboxes can coexist (save modal + new-folder parent picker);
+ *   allowNewFolder=false drops the inline "+ 새 폴더" action (the new-folder modal's own
+ *   parent picker must not spawn another new-folder modal).
+ * @returns {{ el: HTMLElement, getValue: () => string|null, close: () => void }}
+ */
+function _buildFolderCombobox(folderOptions, selectedFolderId, opts = {}) {
+  const idPrefix = opts.idPrefix || "bm-folder-combobox";
+  const allowNewFolder = opts.allowNewFolder !== false;
+  const initial = selectedFolderId != null && String(selectedFolderId) !== "" ? String(selectedFolderId) : "";
+  const wrap = el("div", { className: "bm-folder-combobox", id: idPrefix });
+  const hidden = el("input", { type: "hidden", className: "bm-folder-combobox-input", value: initial });
+  const listId = `${idPrefix}-listbox`;
+  const iconSlot = el("span", { className: "bm-folder-combobox-btn-icon" });
+  iconSlot.appendChild(_buildMaterialFolderIcon({ size: 16 }));
+  const textSlot = el("span", { className: "bm-folder-combobox-btn-label" });
+  const chevron = el("span", { className: "bm-folder-combobox-chevron", "aria-hidden": "true" }, "▾");
+  const btn = el("button", {
+    type: "button",
+    id: `${idPrefix}-btn`,
+    className: "bm-folder-combobox-btn",
+    "aria-haspopup": "listbox",
+    "aria-expanded": "false",
+    "aria-controls": listId,
+  });
+  btn.appendChild(iconSlot);
+  btn.appendChild(textSlot);
+  btn.appendChild(chevron);
+
+  const list = el("ul", { id: listId, className: "bm-folder-combobox-list", role: "listbox" });
+  list.hidden = true;
+
+  let currentOptions = folderOptions;
+
+  function labelForId(id) {
+    if (id === "" || id == null) return "최상위";
+    const o = currentOptions.find(f => f.id === id);
+    return o ? o.name : "최상위";
+  }
+
+  function updateButton() {
+    const id = hidden.value;
+    textSlot.textContent = labelForId(id);
+    btn.setAttribute("aria-label", `저장 위치: ${labelForId(id)}`);
+  }
+
+  function updateOptionSelected() {
+    const v = hidden.value;
+    for (const opt of list.querySelectorAll("[role=option]")) {
+      const oid = opt.getAttribute("data-id") || "";
+      opt.setAttribute("aria-selected", oid === v ? "true" : "false");
+    }
+  }
+
+  let docHandler = null;
+  let keyHandler = null;
+
+  function closeList() {
+    list.hidden = true;
+    btn.setAttribute("aria-expanded", "false");
+    if (docHandler) {
+      document.removeEventListener("click", docHandler, true);
+      if (keyHandler) document.removeEventListener("keydown", keyHandler, true);
+      docHandler = null;
+      keyHandler = null;
+    }
+  }
+
+  function openList() {
+    list.hidden = false;
+    btn.setAttribute("aria-expanded", "true");
+    updateOptionSelected();
+    keyHandler = (e) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        closeList();
+        btn.focus();
+      }
+    };
+    docHandler = (e) => {
+      if (!wrap.contains(e.target)) closeList();
+    };
+    setTimeout(() => {
+      document.addEventListener("keydown", keyHandler, true);
+      document.addEventListener("click", docHandler, true);
+    }, 0);
+  }
+
+  function addOption(dataId, displayName, depth) {
+    const li = el("li", { role: "option", className: "bm-folder-combobox-option", "data-id": dataId });
+    if (depth > 0) li.style.paddingLeft = `calc(0.55rem + ${depth} * 0.9rem)`;
+    const oIcon = el("span", { className: "bm-folder-combobox-option-icon" });
+    oIcon.appendChild(_buildMaterialFolderIcon({ size: 16 }));
+    li.appendChild(oIcon);
+    li.appendChild(el("span", { className: "bm-folder-combobox-option-label" }, displayName));
+    li.addEventListener("click", (e) => {
+      e.stopPropagation();
+      hidden.value = dataId;
+      updateButton();
+      updateOptionSelected();
+      closeList();
+      btn.focus();
+    });
+    list.appendChild(li);
+  }
+
+  // Persistent "+ 새 폴더" action at the bottom of the listbox (omitted when
+  // allowNewFolder=false — e.g. the new-folder modal's own parent picker).
+  // role="presentation" so screen readers don't read it as a folder option.
+  let newFolderItem = null;
+  if (allowNewFolder) {
+    newFolderItem = el("li", { role: "presentation", className: "bm-folder-combobox-new" });
+    const newFolderBtn = el("button", {
+      type: "button",
+      className: "bm-folder-combobox-new-btn",
+    }, "+ 새 폴더");
+    newFolderBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      closeList();
+      openNewFolderModal((newId) => {
+        const updated = collectFolderOptions(loadBookmarks());
+        rebuildOptions(updated);
+        hidden.value = String(newId);
+        updateButton();
+        updateOptionSelected();
+      });
+    });
+    newFolderItem.appendChild(newFolderBtn);
+  }
+
+  function rebuildOptions(options) {
+    currentOptions = options;
+    list.replaceChildren();
+    addOption("", "최상위", 0);
+    for (const o of options) addOption(String(o.id), o.name, o.depth);
+    if (newFolderItem) list.appendChild(newFolderItem);
+  }
+
+  rebuildOptions(folderOptions);
+  updateButton();
+  updateOptionSelected();
+
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (list.hidden) openList();
+    else closeList();
+  });
+
+  /** @type {HTMLElement & { _bmClose?: () => void }} */ (wrap)._bmClose = closeList;
+  wrap.appendChild(hidden);
+  wrap.appendChild(btn);
+  wrap.appendChild(list);
+
+  return {
+    el: wrap,
+    getValue: () => (hidden.value ? hidden.value : null),
+    close: closeList,
+  };
+}
+// ── END BOOKMARK_FOLDER_COMBOBOX ──
+
+// ── BEGIN BOOKMARK_NEWFOLDER ──
+// Create-folder modal. _bmNewFolderCallback is the create-folder continuation
+// (invoked with the new id, e.g. the combobox re-selects it); _bmNewFolderParentCombo
+// holds the open parent-picker so onClose can dismiss its dropdown.
+/** @type {((id: string) => void) | null} */
+let _bmNewFolderCallback = null;
+/** @type {{ getValue: () => string|null, close: () => void } | null} */
+let _bmNewFolderParentCombo = null;
+
+// Overlay lifecycle (scrim/hidden/focus-trap/focus-restore) is owned by the
+// shared controller (ADR-032). closeOnEsc stays off: Escape participates in the
+// stacked bookmark router, so every focused control closes only this modal.
+const newFolderOverlay = createOverlay({
+  panel: $bmNewFolderModal,
+  scrim: $bmNewFolderScrim,
+  initialFocus: () => $bmNewFolderInput,
+  onClose: () => {
+    _bmNewFolderCallback = null;
+    if (_bmNewFolderParentCombo) _bmNewFolderParentCombo.close();
+    _bmNewFolderParentCombo = null;
+  },
+});
+
+/**
+ * @param {((id: string) => void) | null} [onConfirm]
+ * @param {string|null} [presetParentId] preselect a parent folder (null/undefined = 최상위).
+ * @param {{ folderFilter?: (f: { id: string, name: string, depth: number }) => boolean }} [opts]
+ *   folderFilter narrows the parent options — used by the move flow to drop the folders
+ *   that are being moved (and their subtrees), so the new folder can't be created inside
+ *   the very selection it will receive (which would no-op the move and leave it empty).
+ */
+function openNewFolderModal(onConfirm, presetParentId, opts = {}) {
+  $bmNewFolderInput.value = "";
+  $bmNewFolderInput.removeAttribute("aria-invalid");
+  _bmNewFolderCallback = onConfirm || null;
+  // Parent-folder picker: same combobox as the save modal, but scoped ids and no
+  // nested "+ 새 폴더" (it would re-open this very modal). 최상위 = create at root
+  // (always offered by the combobox, even when every folder is filtered out).
+  clearNode($bmNewFolderParent);
+  let folderOptions = collectFolderOptions(loadBookmarks());
+  if (opts.folderFilter) folderOptions = folderOptions.filter(opts.folderFilter);
+  const combo = _buildFolderCombobox(
+    folderOptions,
+    presetParentId,
+    { idPrefix: "bm-newfolder-parent", allowNewFolder: false },
+  );
+  _bmNewFolderParentCombo = combo;
+  $bmNewFolderParent.appendChild(combo.el);
+  newFolderOverlay.open();
+}
+
+function closeNewFolderModal() {
+  newFolderOverlay.close();
+}
+
+function _commitNewFolder() {
+  const name = $bmNewFolderInput.value.trim();
+  if (!name) {
+    $bmNewFolderInput.setAttribute("aria-invalid", "true");
+    $bmNewFolderInput.focus();
+    return;
+  }
+  $bmNewFolderInput.removeAttribute("aria-invalid");
+  const store = loadBookmarks();
+  const id = generateId();
+  const parentId = _bmNewFolderParentCombo ? _bmNewFolderParentCombo.getValue() : null;
+  insertItem(store, parentId, { type: "folder", id, name, children: [], expanded: false, createdAt: Date.now() });
+  // Reveal the destination so the new folder is visible after re-render.
+  if (parentId) {
+    const dest = _findItemInStore(store, parentId);
+    if (dest && dest.item.type === "folder") dest.item.expanded = true;
+  }
+  saveBookmarks(store);
+  _deps.rerenderActiveBookmarkTree();
+  const cb = _bmNewFolderCallback;
+  closeNewFolderModal();
+  if (cb) cb(id);
+}
+// ── END BOOKMARK_NEWFOLDER ──
+
 // ── Static listeners (moved from bookmark.js) ──
 $bmConfirmCancel.addEventListener("click", closeConfirmModal);
 $bmConfirmScrim.addEventListener("click", closeConfirmModal);
 $bmChapterDeleteScrim.addEventListener("click", closeChapterDeleteModal);
+$bmNewFolderClose.addEventListener("click", closeNewFolderModal);
+$bmNewFolderScrim.addEventListener("click", closeNewFolderModal);
+$bmNewFolderCancel.addEventListener("click", closeNewFolderModal);
+$bmNewFolderConfirm.addEventListener("click", _commitNewFolder);
+$bmNewFolderInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { e.preventDefault(); _commitNewFolder(); }
+});
 
 // ── Modal Escape stack ──
 // Topmost-first dismissal for the modal overlays, priority order matching the
 // pre-split bookmark.js router. Returns true when it closed one so bookmark.js's
 // document keydown handler can stop before its drawer/select handling. As more
 // modals move here (PR5b~), the chain grows and bookmark.js's local checks shrink.
-/** @returns {boolean} */
-function closeTopmostModal() {
+// new-folder sits at the top and consumes the event (preventDefault/stopPropagation)
+// to match the pre-split behavior.
+/** @param {KeyboardEvent} e @returns {boolean} */
+function closeTopmostModal(e) {
+  if (!$bmNewFolderModal.hidden) { e.preventDefault(); e.stopPropagation(); closeNewFolderModal(); return true; }
   if (!$bmConfirmModal.hidden) { closeConfirmModal(); return true; }
   if (!$bmChapterDeleteModal.hidden) { closeChapterDeleteModal(); return true; }
   return false;
@@ -201,9 +487,12 @@ function closeTopmostModal() {
 // confirms no remaining caller, then removable.
 window.closeConfirmModal = closeConfirmModal;
 window.closeChapterDeleteModal = closeChapterDeleteModal;
+window.closeNewFolderModal = closeNewFolderModal;
 
 export {
   initBookmarkModals, closeTopmostModal,
   openConfirmModal, closeConfirmModal,
   openChapterDeleteModal, closeChapterDeleteModal,
+  openNewFolderModal, closeNewFolderModal,
+  _buildFolderCombobox,
 };
