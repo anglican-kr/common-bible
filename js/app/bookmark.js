@@ -39,8 +39,8 @@ import {
   getBookmarkSort, setBookmarkSort, markBookmarkViewed, _forgetViewed,
   sortBookmarkNodes,
   _walkBookmarks, findExistingChapterBookmarks, _findItemInStore,
-  _findParentFolderId, removeItemById, insertItem,
-  _selectAllState, _deleteBtnLabel, _bmSelectCountLabel, _descendantIds,
+  removeItemById, insertItem,
+  _selectAllState, _bmSelectCountLabel, _descendantIds,
   _isActiveBookmark, _hasActiveDescendant, setRenderPathname,
 } from "./bookmark-core.js";
 
