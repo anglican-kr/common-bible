@@ -1,0 +1,31 @@
+# 구현 현황 (현재 상태)
+
+"지금 무엇이 동작하는가"의 권위 출처. CLAUDE.md에서 분리(2026-06-08) — CLAUDE.md는 안정적 작업 가이드만 두고, 기능 단위 현황은 여기에 한두 줄로 기록한다.
+
+- 상세 결정·검토 대안은 각 ADR(`docs/decisions/`) + `docs/architecture.md` 부록 A 인덱스가 권위 출처.
+- 날짜별 작업 변천은 `docs/worklog.md`.
+- 미해결 이슈·후속 백로그는 `docs/known-issues.md`.
+
+구현 PR 머지 시 이 문서에 한 줄 추가/갱신한다 (ADR 워크플로우는 CLAUDE.md 참조).
+
+---
+
+- **Phase 1 완료** — 성경 읽기 PWA: 73권, 오프라인, 검색, 오디오, 접근성. 검색 UI 재설계도 포함(ADR-005)
+- **디자인 시스템 완료** — ADR-028, 2026-06-02. 단일 권위 출처 `DESIGN.md`(루트) + `css/style.css` `:root` 토큰 사다리(색상·반경·elevation·간격 8pt·타이포 rem·컨트롤·모션)에 ad-hoc 값 전면 스냅. 본문 Serif·frosted glass 적용 범위는 의도적 HIG 이탈로 명문화. 테마색(`--theme`)은 절 번호·단락 기호·내비 시그니처(활성 탭/검색 인디케이터)로 한정, 나머지 chrome 은 중립 차콜 동결. 상세·개정 이력은 ADR-028 §7·§9.
+- **모바일 하단 탭 바 완료** — ADR-029, 2026-06-03. 흩어진 내비를 모바일(≤768px) 하단 플로팅 탭 바(홈·검색·북마크·설정 4탭, iOS Liquid Glass 캡슐)로 통합, 각 탭=전체화면 라우트. 북마크 전체뷰는 ⋯ 팝업 메뉴(새 폴더·내보내기·가져오기·정렬·선택)+양방향 행 스와이프(수정/삭제)로 전역 관리 — ⋯ "선택"은 화면 내 **멀티-액션 선택 모드**(공유·이동·삭제, `#bm-select-bar`; 공유=`SITE_BASE` 링크→`navigator.share`, 이동=폴더 picker, 삭제=cascade), 폴더 삭제는 내용물까지 cascade. 데스크탑은 기존 헤더/드로어 유지. 상세·개정 이력은 ADR-029·ADR-010.
+- **모핑 탭 바 완료** — ADR-030, 2026-06-04. 탭 라벨 제거(아이콘 전용) + 검색 분리 원형 버튼. 검색 원형→입력 pill 모핑, 스크롤 시 홈·검색 원형으로 축소(오디오 북 읽기 화면 한정), 절제된 리퀴드 글라스 질감 + 공유 슬라이드 인디케이터(`positionTabIndicator`). 절 선택 액션 바(`#verse-select-bar`)도 동일 dock 형식으로 통일. 상세·개정 이력은 ADR-030.
+- **탭 히스토리(탭별 위치 복원) 완료** — ADR-031, 2026-06-05. 탭(홈·검색·북마크·설정)을 오가다 돌아오면 마지막 라우트+스크롤 복원(`js/app/tab-history.js`, `scrollRestoration="manual"`). 상세는 ADR-031.
+- **검색 옵션 완료** — ADR-033, 2026-06-07. 검색 화면에 검색 옵션 바(`.search-filters`): 책 picker(분류별 다중 선택 시트 `#book-filter-sheet`, 선택 책=제거 가능한 칩, 워커 `restrictBooks` 재사용) + 결과 내 검색(검색어 있을 때 추가어 AND 결합). 빈 쿼리로 `/search` 진입 시 최근 검색 목록(행 우측에 검색 날짜 절대표기 `YYYY. M. D.` — ADR-014 개정으로 저장 모델에 `ts` 추가·`string[]`→`{q,ts}` 자동 마이그레이션; 헤더 ▾ 드롭다운과 `bible-search-history` 공유). 필터 상태는 URL 인코딩(`?q&in&and&page`)으로 히스토리·탭 복원(ADR-031)·페이지네이션·공유 일관. 시트는 `createOverlay`(ADR-032) 재사용. 상세는 ADR-033·ADR-014.
+- **컴포넌트·뷰 층 모듈화 완료** — ADR-032, 2026-06-06. 오버레이 생명주기(scrim·trapFocus·Escape·inert·포커스 복원·애니메이션 dismiss)를 `js/app/overlay.js` 단일 컨트롤러 `createOverlay`로 통일(모달·드로어·시트·팝오버 12곳), 시트 팩토리·빈 상태 컴포넌트 공유. 상세는 ADR-032.
+- **성서 목록 탭 통합 + 헤더 내비 재설계 완료** — ADR-024, 2026-05-29. 구약·외경·신약을 탭 한 페이지(`renderBookList`)로 통합, 읽기 헤더는 홈 버튼(읽던 책 포커스) + 반응형 설정 배치 + sticky 구분 탭(슬라이드 인디케이터). 상세·개정 이력은 ADR-024.
+- **읽기 헤더 스크롤 elevation 그림자 완료** — ADR-025, 2026-05-30. `#scroll-sentinel` IntersectionObserver 가 최상단 이탈을 감지해 `#sticky-group` 그림자 페이드 인 + 1px hairline 경계 유지. frosted glass 는 iOS 26 status bar 회피로 의도적 미적용. 상세는 ADR-025.
+- **인용·주석 시스템 완료** — ADR-022 Phase 1(파이프라인) + Phase 2(앱 UI). 본문 `<cite>`→인용 바텀 시트, `[^id]` 주석→위첨자 ※ 툴팁(`js/app/citations.js`). Phase 3(NT 본문 저작)은 콘텐츠 작업. 상세·개정 이력은 ADR-022.
+- **단락 단위 병행 본문 마커 완료** — ADR-027, 2026-05-31. `<parallel>` block 마커→chapter `parallels` 메타데이터→range 시작 절 ※ anchor, 클릭 시 cite-sheet 로 병행 본문 표시(`js/app/parallels.js`). 실제 마크업은 콘텐츠 작업(시범 1건). 상세는 ADR-027.
+- **테스트 체계 완료** — ADR-004 데이터 파이프라인(Level 1-3, data 저장소) + e2e + ADR-013 유닛 537 케이스. 유닛은 vm + 수동 스텁(0 의존성), DOM-heavy 영역은 e2e가 책임
+- **북마크 + Google Drive 동기화 완료** — ADR-011, PKCE 단일 경로(2026-05-08). 상세는 `docs/design/pkce-migration.md`, ADR-017(nginx BFF), `docs/audit/2026-05-07-pkce-refresh-token.md`. Google OAuth 앱 검수 통과(2026-05-19) — refresh token TTL 영구, 코드 변경 0
+- **TypeScript 점진 도입 완료** — ADR-012. 모든 클라이언트 JS에 `// @ts-check` + JSDoc 영구 활성화. `npx tsc -p tsconfig.json --noEmit` 및 `tsconfig.worker.json` 모두 0 error
+- **app.js 모듈 분할 완료** — ADR-018, 2026-05-10. `js/app.js` 6,082 → 283줄, 9개 도메인 모듈, ESM(ADR-019). 상세는 `docs/design/app-modularization.md`
+- **2차 모듈 분할 진행 중** — ADR-034, 2026-06-08. ADR-018이 남긴 비대 모듈(`views-routing.js` 2,389줄·`bookmark.js` 3,578줄)을 관심사별로 재분할 + 비순환 facade를 명시 import로 전환(순환 dispatch는 registry 역전). PR1: 오디오 플레이어를 `js/app/audio-player.js`로 분리(views-routing 2,389→2,195줄), `route`측 호출은 명시 import, 외부 호출자용 `window.{hideAudioBar,applyAudioShow,getCurrentAudio}` facade 유지. PR4: 모바일 "당겨서 새로고침"(수동 Drive 동기화 트리거) **제거**(폐기) — 백그라운드 동기화(자동 폴·편집 업로드·visibilitychange)는 유지, views-routing 2,195→2,011줄. PR2: 데이터 페칭(loadBooks/Version/Chapter/Prologue + booksCache/appVersion 캐시)을 `js/app/data-fetch.js`(leaf)로 분리, 내부 호출은 명시 import·외부 소비자 facade 유지, views-routing 2,011→1,942줄. PR3: 탭 활성 상태+슬라이딩 인디케이터(`syncTabBarActive`·`positionTabIndicator`)를 `js/app/tabbar.js`로 병합(탭 바 로직 일원화), route()→`window.syncTabBarActive` facade(tabbar↔views 순환), views-routing 1,942→1,831줄. PR5a: 라우팅(parsePath·navigate·route·page meta·스크롤 추적·링크클릭/popstate 리스너)을 `js/app/routing.js`로 분리 — route()가 부르는 view 렌더러 8개는 views-routing에서 명시 import(단방향), search/bookmark/settings/citations는 facade 유지(순환), views-routing 1,831→1,354줄(2,389→1,354, −43%). PR5b: route()의 14개 오버레이 teardown(12 `closeIfOpen` + settings/chapter popover)을 `js/app/overlay.js`의 `closeAllOverlays()` 하나로 축약(createOverlay가 인스턴스를 registry 등록, 열린 것만 close + detached prune), routing→6모듈 close fn 하드코딩 의존 제거. 남은 PR5c(registerView 역전)는 **비용>효용으로 보류 권장** — 상세 `docs/known-issues.md`.
+- **보안 헤더 6종 통합 완료** — 2026-05-08. nginx server-level snippet, 두 vhost(dev/prod) 모두 적용. `common-bible-server/nginx/security-headers.example.conf` 참조
+- **모노레포 4분할 완료** — ADR-020, 2026-05-11. 앱·데이터·오디오·서버 4개 저장소. data는 본 저장소 `data/`에 직접 서브모듈, audio는 data 안에 nested 서브모듈, server는 별도 clone
+- **PWA 버전·캐시 무효화 재설계** — ADR-021, 2026-05-13. SHELL_CACHE 는 `version.json`에서 파생 (`sw-version.js` importScripts), DATA/AUDIO_CACHE 는 콘텐츠 해시 매니페스트(`bible-manifest.json`·`audio-manifest.json`) diff 로 항목 단위 lazy 무효화. 데이터 저장소 CI 가 main 머지 시 파이프라인 + 매니페스트 자동 빌드 + 자동 커밋백. release.py 가 git 자동 commit (M8 해소). Phase 3 webhook 자동화 후속
