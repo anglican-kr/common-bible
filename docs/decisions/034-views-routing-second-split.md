@@ -1,7 +1,7 @@
 # ADR-034: 뷰·라우팅·북마크 2차 분할 (modularization round 2)
 
 - 일시: 2026-06-08
-- 상태: 승인됨 — 구현 진행 중 (PR1 오디오 플레이어 분리 완료, 2026-06-08)
+- 상태: 승인됨 — views-routing 분할 PR1~5b 완료·PR5c 보류 / **bookmark.js 분할 PR5a~5e + 죽은 코드 정리 완료** (2026-06-08, 아래 개정 참조)
 - 관련: ADR-018(1차 분할), ADR-019(ESM), ADR-032(오버레이 컨트롤러), ADR-016(오디오 캐시), ADR-013(유닛 테스트 하네스)
 
 ## 결정
@@ -90,3 +90,28 @@ bookmark.js는 별도 후속 라운드(순수 로직 `bookmark-core.js` / UI `bo
 - ADR-018 후속으로 응집↑·결합↓ 동시 달성. `window.X` facade는 분할 범위 밖 호출자에만 잔존하다 후속 라운드에서 소멸.
 - `docs/architecture.md` 부록 A 인덱스 + 부록 B 빠른 참조 갱신.
 - 각 PR 머지 시 `docs/status.md`(구현 현황)에 한 줄. (status는 2026-06-08 CLAUDE.md에서 분리)
+
+## 개정 (2026-06-08): bookmark.js 분할 완료
+
+위 §목표 구조는 bookmark.js를 "순수 로직 `bookmark-core.js` / UI `bookmark-ui.js`" 2층으로만 스케치했다. 실제 구현은 **4개 모듈**로 갈렸고, 모달의 양방향 결합을 **의존성 주입**으로 끊는 패턴이 핵심으로 자리잡았다.
+
+**결과 모듈 (3,578 → bookmark.js 2,198줄, −38%):**
+
+| 파일 | 역할 | 라인 |
+|---|---|---|
+| `js/app/bookmark.js` | 북마크 UI — 트리 렌더·드래그&드롭·셀렉션 모드·드로어·export | ~2,200 |
+| `js/app/bookmark-modals.js` | 모달 7종 + 렌더 콜백 DI + 단일 Escape 스택 | ~1,010 |
+| `js/app/bookmark-core.js` | DOM-free 로직 (QUERY·HREF/SHARE·SORT·ACTIVE) | ~360 |
+| `js/app/verse-spec.js` | 절 스펙 파싱/비교/직렬화/병합 (leaf) | ~240 |
+
+**핵심 결정 — 모달→렌더 순환을 의존성 주입으로 차단.** 모달이 확정 시 트리/헤더를 다시 그려야 하는데(`bookmark.js → 모달 열기`, `모달 → 렌더 갱신`의 양방향 고리), 순환 import는 ADR-019 "ESM 평가시점 ReferenceError 함정"의 부류라 tsc가 못 잡는 런타임 깨짐 위험이 있다. 세 후보(① 의존성 주입 ② 순환 import 허용 ③ 이벤트 버스) 중 **①**을 택했다 — bookmark.js가 시작 시 `initBookmarkModals({ rerenderActiveBookmarkTree, refreshBookmarkHeaderBtn, exitVerseSelectMode })`로 콜백을 주입, 모달은 bookmark.js를 import하지 않아 고리가 구조적으로 차단된다(계약을 tsc가 검증).
+
+**Escape 스택.** 7개 모달이 우선순위 최상단 연속 블록이라 `bookmark-modals.js`의 `closeTopmostModal(e)` 하나가 z-순서대로 소유하고, bookmark.js 라우터는 위임만 한다(`if (closeTopmostModal(e)) return;`).
+
+**move = select-mode UI → 파라미터화로 이동.** move 모달은 `_bmSelected`·`_bmAncestorSelected` 같은 select 상태를 직접 읽어 범용 모달이 아니다. 지속 DI로 select 내부를 `_deps`에 주입하면 계약이 오염되므로, **호출 인자**(`openMoveModal({ excludeFolder, onPick })`)로 일반화 — select 로직은 bookmark.js에 남고 picker는 순수 UI. (대안 "select 통째 분리 `bookmark-select.js`"는 트리렌더↔select 양방향 결합 탓에 보류.)
+
+**PR 순서:** 5a confirm·chapter-delete → 5b 폴더 콤보박스·새 폴더 → 5c save·merge(상호결합) → 5d import → 5e move(파라미터화) → 죽은 facade·미사용 import 정리. 각 PR은 표준 검증 묶음(tsc main·worker + 유닛 + **playwright 로드 검사**(facade/DI 깨짐 포착) + e2e)을 거쳤고, 단계마다 미사용 import를 정리했다.
+
+**정리 PR:** 모달 분리 후 무참조가 된 `window.close*Modal` facade 7종 + bookmark-core QUERY facade 7종(types.d.ts Window·전역 선언 포함) + 미사용 core import를 전 저장소 grep + 로드 검사로 무참조 확증 후 제거.
+
+> `bookmark-core.js`의 QUERY 헬퍼는 ADR-019 원칙(비순환 seam은 명시 import)대로 **window facade 없이 ESM import 전용**이다. PR3에서 legacy bare-global 계약으로 잠시 facade를 보존했다가 정리 PR에서 무참조 확인 후 제거.
