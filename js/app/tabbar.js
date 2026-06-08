@@ -317,7 +317,7 @@ $searchClose?.addEventListener("click", () => {
   $searchBtn?.focus();
 });
 
-// views-routing 의 syncTabBarActive 가 라우트 변경 시 호출(검색 외 라우트면 복구).
+// views 의 syncTabBarActive 가 라우트 변경 시 호출(검색 외 라우트면 복구).
 W.exitTabSearch = exitSearch;
 // 검색 라우트가 바뀌면(뒤로/앞으로 등) dock 입력을 URL 쿼리에 동기화 — 모핑 중일
 // 때만(searching) 의미. route() 의 syncTabBarActive 가 매 라우트마다 호출.
@@ -371,9 +371,9 @@ W.resetTabCollapse = () => {
 };
 
 
-// Moved from views-routing.js (ADR-034 PR3) to consolidate all tab-bar logic
+// Moved from views.js (ADR-034 PR3) to consolidate all tab-bar logic
 // here. route() calls syncTabBarActive on every navigation via the
-// W.syncTabBarActive facade — kept a facade because tabbar <-> views-routing is
+// W.syncTabBarActive facade — kept a facade because tabbar <-> views is
 // a dependency cycle (this module already calls W.route / W.navigate / W.parsePath).
 const $tabBar = document.getElementById("tab-bar");
 
@@ -487,6 +487,6 @@ if (typeof window !== "undefined" && window.addEventListener) {
   window.syncTabIndicator = reposition;
 }
 
-// route() (views-routing) calls this on each navigation (facade, see cycle note).
+// route() (views) calls this on each navigation (facade, see cycle note).
 W.syncTabBarActive = syncTabBarActive;
 export {};

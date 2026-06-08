@@ -1,5 +1,5 @@
-// ── Unit tests for js/app/views-routing.js ──────────────────────────────────
-// Run with: node --test tests/unit/views-routing.test.js
+// ── Unit tests for js/app/views.js ──────────────────────────────────
+// Run with: node --test tests/unit/views.test.js
 //
 // Same vm + BEGIN/END marker slice approach as bookmark.test.js. Eight marker
 // pairs cover the testable surface; Pull-to-refresh / startScrollTracking /
@@ -33,7 +33,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const VIEWS_PATH = path.resolve(__dirname, "../../js/app/views-routing.js");
+const VIEWS_PATH = path.resolve(__dirname, "../../js/app/views.js");
 const VIEWS_SOURCE = fs.readFileSync(VIEWS_PATH, "utf8");
 // Data fetching moved to its own module (ADR-034 PR2). The DATA_FETCHING marker
 // block now lives there, so its loader slices from this source, not VIEWS_SOURCE.
@@ -119,7 +119,7 @@ function loadDivision(initialBookOrder = "canonical") {
   ctx._bookOrderImpl = () => bookOrder;
   const prelude = `function loadBookOrder() { return _bookOrderImpl(); }`;
   vm.runInContext(prelude + extractBlock("DIVISION"), ctx, {
-    filename: "views-routing-division.js",
+    filename: "views-division.js",
   });
   return {
     ctx,
@@ -236,7 +236,7 @@ function loadTitle() {
   };
   vm.createContext(ctx);
   vm.runInContext(EL_SHIM + extractBlock("TITLE"), ctx, {
-    filename: "views-routing-title.js",
+    filename: "views-title.js",
   });
   return {
     ctx, document, $title, announceCalls,
@@ -261,7 +261,7 @@ function loadDivisionTabs(order = ["old_testament", "deuterocanon", "new_testame
   };
   vm.createContext(ctx);
   vm.runInContext(EL_SHIM + extractBlock("DIVISION_TABS"), ctx, {
-    filename: "views-routing-division-tabs.js",
+    filename: "views-division-tabs.js",
   });
   return {
     ctx,
@@ -278,7 +278,7 @@ function loadVerseSelection() {
   const ctx = { Object, Array, String, Number, Boolean, console, Error };
   vm.createContext(ctx);
   vm.runInContext(extractBlock("VERSE_SELECTION"), ctx, {
-    filename: "views-routing-verse-selection.js",
+    filename: "views-verse-selection.js",
   });
   return { ctx, verseSelectionUnit: ctx._verseSelectionUnit };
 }
@@ -301,7 +301,7 @@ function loadVerseNumber() {
   const ctx = { Object, Array, String, Number, Boolean, console, Error };
   vm.createContext(ctx);
   vm.runInContext(extractBlock("VERSE_NUMBER"), ctx, {
-    filename: "views-routing-verse-number.js",
+    filename: "views-verse-number.js",
   });
   return { formatVerseNumber: ctx.formatVerseNumber };
 }
@@ -768,7 +768,7 @@ function loadPopover() {
   vm.runInContext(OVERLAY_SOURCE, ctx, { filename: "overlay.js" });
   ctx.createOverlay = ctx.appOverlay.createOverlay;
   vm.runInContext(EL_SHIM + extractBlock("POPOVER"), ctx, {
-    filename: "views-routing-popover.js",
+    filename: "views-popover.js",
   });
   return {
     ctx, dom, $title,
@@ -799,7 +799,7 @@ function loadCompactHeader() {
   };
   vm.createContext(ctx);
   vm.runInContext(extractBlock("COMPACT_HEADER"), ctx, {
-    filename: "views-routing-compact-header.js",
+    filename: "views-compact-header.js",
   });
   return {
     ctx, dom, $header,

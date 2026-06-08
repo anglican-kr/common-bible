@@ -731,7 +731,7 @@ export interface AppCitations {
 }
 
 // ── App parallels facade (js/app/parallels.js) ─────────────────────────────
-// ADR-027 chapter-level parallel-passage banner. Inserted by views-routing
+// ADR-027 chapter-level parallel-passage banner. Inserted by views
 // immediately before the first verse of each `ChapterParallel.range`.
 
 export interface AppParallels {
@@ -873,7 +873,7 @@ declare global {
     driveSync: DriveSyncFacade;
 
     // ADR-030 P2: 탭 바 검색 모핑 — search.js 가 commitTopSearch 노출, tabbar.js 가
-    // exitTabSearch 노출(views-routing 의 syncTabBarActive 가 라우트 변경 시 호출).
+    // exitTabSearch 노출(views 의 syncTabBarActive 가 라우트 변경 시 호출).
     commitTopSearch?: (rawQuery: string) => void;
     exitTabSearch?: () => void;
     syncTabSearchQuery?: () => void;
@@ -881,7 +881,7 @@ declare global {
     closeTabSearch?: () => boolean;
     // ADR-030 후속⁵: 슬라이딩 인디케이터 재배치(스크롤 축소 해제·외부 트리거용).
     syncTabIndicator?: () => void;
-    // ADR-034 PR3: tabbar.js 가 노출, route()(views-routing)가 라우트마다 호출.
+    // ADR-034 PR3: tabbar.js 가 노출, route()(views)가 라우트마다 호출.
     syncTabBarActive?: () => void;
 
     // ADR-031: 탭 히스토리(탭별 위치 복원). tab-history.js 가 노출 — route() 가
@@ -926,25 +926,25 @@ declare global {
     readingContext: ReadingContext;
 
     // Phase 7a constants (also declared as bare globals above for app.js's
-    // Phase 7b territory). Window assignment is what views-routing.js does.
+    // Phase 7b territory). Window assignment is what views.js does.
 
     // Phase 6b: bookmark UI module reads books metadata via this getter
-    // since `booksCache` lives in views-routing.js (Phase 7a). Always set
-    // by views-routing.js at module-load time.
+    // since `booksCache` lives in views.js (Phase 7a). Always set
+    // by views.js at module-load time.
     getBooksCache: () => BooksData | null;
     // Monotonic route counter (ADR-031 _routeSeq). Async view renderers read it
-    // before awaiting and bail if it changed (ADR-033). Set by views-routing.js.
+    // before awaiting and bail if it changed (ADR-033). Set by views.js.
     routeSeq?: () => number;
-    // Phase 7b: Audio Player state lives in views-routing.js; app.js's
+    // Phase 7b: Audio Player state lives in views.js; app.js's
     // Accessibility keydown handler reads currentAudio via this getter
-    // for the spacebar play/pause toggle. Optional because views-routing
+    // for the spacebar play/pause toggle. Optional because views
     // only sets it after module load.
     getCurrentAudio?: () => HTMLAudioElement | null;
     // Google Analytics gtag.js wrapper — set by gtag-init.js (window.gtag).
     // Module-load assignment because each ESM module has its own gtag scope.
     gtag?: (...args: any[]) => void;
     dataLayer?: any[];
-    // App version mirror — set by views-routing.js's loadVersion() (Phase 7a
+    // App version mirror — set by views.js's loadVersion() (Phase 7a
     // owner). Read by settings-ui.js's version footer.
     appVersion?: string | null;
 
@@ -975,7 +975,7 @@ declare global {
     renderBookmarkTree?: () => void;
     rerenderActiveBookmarkTree?: () => void;
     // Mobile tab-bar full-screen views (ADR-029 / P2). Always assigned at
-    // module load; route() in views-routing.js calls them on the mobile branch.
+    // module load; route() in views.js calls them on the mobile branch.
     renderBookmarksView: () => void;
     renderSettingsView: () => void;
     renderSearchView: (state?: { filterBooks?: string[] }) => Promise<void>;
@@ -1000,10 +1000,10 @@ declare global {
   //   renderSearchResults, renderSearchView → search.js (Phase 5) — DONE
   //   openDriveDisconnectModal → bookmark.js (Phase 6) or stays
   //   clearAllCaches         → settings-ui? or app-main (Phase 8)
-  //   parsePath, route, navigate → views-routing.js (Phase 7)
-  //   setTitle                   → views-routing.js (Phase 7)
+  //   parsePath, route, navigate → views.js (Phase 7)
+  //   setTitle                   → views.js (Phase 7)
   //   hideAudioBar               → audio player section (Phase 7)
-  //   renderError                → views-routing.js (Phase 7)
+  //   renderError                → views.js (Phase 7)
   function announce(msg: string): void;
   function openInstallModal(): void;
   function maybeShowInstallNudge(): void;
@@ -1048,7 +1048,7 @@ declare global {
   // Phase 6b — bookmark UI surface. Module-load assigns these to globalThis
   // so app.js's Phase 7 territory (Views / Routing / chapter rendering /
   // initBookmarkSheetDrag) can call them as bare globals.
-  // Phase 7a — views-routing.js: data fetching + rendering helpers +
+  // Phase 7a — views.js: data fetching + rendering helpers +
   // initCompactHeader. Module-load assigns these to globalThis so app.js's
   // Phase 7b territory (Views/Routing/Audio Player) can call them as bare
   // globals.
@@ -1065,9 +1065,9 @@ declare global {
   function initScrollElevation(): void;
   // (Phase 7a's temporary DIVISION_LABELS / OT_SUBCATEGORY{,_ORDER,_LABELS}
   // global declares were removed in Phase 7b — all callers now live inside
-  // views-routing.js so the bare-global hop is unnecessary.)
+  // views.js so the bare-global hop is unnecessary.)
   // Google Analytics gtag wrapper (gtag-init.js) — module-load assigns
-  // `window.gtag = gtag`. Declared as bare global so views-routing.js's
+  // `window.gtag = gtag`. Declared as bare global so views.js's
   // trackPageView can `typeof gtag === "function"` guard + call directly.
   function gtag(...args: any[]): void;
   const dataLayer: any[];
@@ -1103,7 +1103,7 @@ declare global {
   function clearAllCaches(): Promise<void>;
   // parsePath returns a view-discriminated union with extra view-specific
   // fields (page, resume, highlightQuery, etc.). Typed as `any` here until
-  // views-routing.js (Phase 7) ships a precise discriminated-union type.
+  // views.js (Phase 7) ships a precise discriminated-union type.
   function parsePath(): any;
   function route(): Promise<void>;
   function navigate(path: string): void;

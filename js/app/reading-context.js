@@ -6,7 +6,7 @@
 // (with the set of selected verses + an in-flight pointer-drag, if any).
 //
 // Phase 6a of the app.js modularization (ADR-018 §5.1 Option A). Other
-// modules — bookmark.js, search.js, future views-routing.js — read or
+// modules — bookmark.js, search.js, future views.js — read or
 // mutate these fields directly via the exported `readingContext` object,
 // rather than via getter/setter functions, because the access pattern is
 // hot-path (e.g. scroll-tracking writes `chapter` on every chapter render)

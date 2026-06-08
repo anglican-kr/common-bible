@@ -72,7 +72,7 @@ document.addEventListener("keydown", (e) => {
     ).forEach((b) => { b.setAttribute("aria-expanded", "false"); b.focus(); });
   }
   // Space to toggle audio playback (when not in an input/button). Audio
-  // Player state lives in views-routing.js (Phase 7b) — read via window
+  // Player state lives in views.js (Phase 7b) — read via window
   // getter; null while no chapter audio is loaded.
   const audio = window.getCurrentAudio?.();
   const target = e.target;
@@ -284,7 +284,7 @@ function registerServiceWorker() {
 
 // ── Bootstrap ──
 // All deferred init calls below resolve via the window facade set by their
-// owning module: route / loadVersion / initCompactHeader (views-routing.js),
+// owning module: route / loadVersion / initCompactHeader (views.js),
 // initBookmarkSheetDrag / initBookmarkDrawerResize (bookmark.js),
 // maybeShowInstallNudge (install.js). registerServiceWorker is module-local
 // to this file.

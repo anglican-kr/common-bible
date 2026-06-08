@@ -63,7 +63,7 @@ ADR-018은 6,082줄 `app.js`를 8 PR로 가르며, Phase 7에서 "Routing + View
 | 5a | **라우팅 파일 분리** ✅ | parsePath·navigate·route·updatePageMeta·trackPageView·startScrollTracking + 링크클릭/popstate 리스너 → `js/app/routing.js` | route()가 부르는 view 렌더러 8개(renderBookList/ChapterList/Chapter/Prologue/Loading/Error·divisionOrder·DIVISION_LABELS)는 views-routing에서 **명시 import**(routing→views 단방향, 검증). search/bookmark/settings/citations 뷰·오버레이는 facade 유지(순환). app.js·search 등의 `window.route/navigate/parsePath` 잔존 |
 | 5b | **closeAllOverlays** ✅ | route()의 14개 오버레이 teardown(12 `closeIfOpen` + settings/chapter popover)을 `js/app/overlay.js` 의 `closeAllOverlays()` 하나로 축약. createOverlay가 모든 인스턴스를 registry에 등록, closeAllOverlays가 열린 것만 close + detached panel prune | 안전 확인: 모든 close 함수가 순수 `overlay.close()` 래퍼(추가 정리는 `onClose`라 controller.close()가 자동 실행). routing→6개 모듈 close fn 하드코딩 의존 제거 |
 | 5c | registerView 역전 (보류 권장) | route()→외부 뷰 dispatch(search/bookmark/settings)를 registry로 역전 | **비용>효용**: 얕게 하면 marginal(window facade→registry lookup, route가 여전히 meta·fallback 오케스트레이션), 깊게 하면 high-risk(검색 분기 복잡—query/autoNav/filter, 3모듈 분산). audio `applyAudioShow→window.parsePath` edge(parsePath가 division+books에 얽혀 하향이 깔끔치 않음 → applyAudioShow가 route 컨텍스트를 인자로 받게)도 함께 검토. [[docs/known-issues.md]] |
-| → | 잔여 = `views.js`로 개명 | 렌더 헬퍼 + Views (398–1713) | |
+| → | 잔여 = `views.js`로 개명 ✅ | 렌더 헬퍼 + Views. 라우팅·오디오·데이터·탭이 모두 빠져 `views-routing` 이름이 미스노머 → `js/app/views.js` 개명(테스트도 `views.test.js`, ESM import·index.html·sw.js·타입·주석 참조 일괄 갱신) | |
 
 PR5까지 끝나면 잔여 `views.js`는 ~1,300줄. 체감 후 선택적 PR6로 내비 뷰(`views-list.js`)와 본문 뷰(`views-chapter.js`, `renderChapter` 470줄)를 더 가를 수 있으나, 과분할은 import 그래프만 키우므로 **PR5까지가 1차 목표, PR6는 보류**.
 

@@ -1,12 +1,12 @@
 "use strict";
 // @ts-check
 
-// Routing — extracted from views-routing.js (ADR-034 PR5a). Owns URL parsing
+// Routing — extracted from views.js (ADR-034 PR5a). Owns URL parsing
 // (parsePath), SPA navigation (navigate), the route() orchestrator + page meta
 // / analytics, the reading-position scroll tracker (startScrollTracking), and
 // the global link-click + popstate listeners.
 //
-// route() dispatches to view renderers IMPORTED from views-routing.js — the
+// route() dispatches to view renderers IMPORTED from views.js — the
 // dependency is one-directional (views never call route/navigate/parsePath,
 // verified). Search / bookmark / settings / citations view + overlay functions
 // are reached through the window facade because those modules call route /
@@ -20,7 +20,7 @@ import { loadBooks, loadChapter, loadPrologue } from "./data-fetch.js";
 import {
   renderBookList, renderChapterList, renderChapter, renderPrologue,
   renderLoading, renderError, divisionOrder, DIVISION_LABELS,
-} from "./views-routing.js";
+} from "./views.js";
 
 const { _$, clearNode, chUnit } = window.appHelpers;
 const {
@@ -192,7 +192,7 @@ async function route() {
   const routeSeq = ++_routeSeq;
   window.tabHistory?.onRouteStart();
   // Tab-bar active state + sliding indicator moved to tabbar.js (ADR-034 PR3).
-  // Facade call: tabbar ↔ views-routing is a cycle, so this stays on window.
+  // Facade call: tabbar ↔ views is a cycle, so this stays on window.
   window.syncTabBarActive?.();
   if (_scrollTrackCleanup) _scrollTrackCleanup();
   clearNode($resumeBannerSlot);
