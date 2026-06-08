@@ -655,9 +655,15 @@ function mountSearchField(container, input) {
 /** @param {SearchField} field */
 function syncOneField(field) {
   const { container, zone, funnel, refineAdd, refineInput } = field;
-  const onSearch = window.parsePath?.().view === "search";
+  const p = window.parsePath?.() || {};
   const isPill = container.id === "tab-search-dock";
-  const active = onSearch && (!isPill || document.body.classList.contains("tabbar-searching"));
+  // Desktop bare /search (no query/scope) renders the book list, not the search
+  // view — don't surface the header token zone there (mirrors routing.js's
+  // render condition; the old filter bar lived in the view so it never showed on
+  // the book-list fallback). Mobile always renders the search view for /search.
+  const searchView = p.view === "search" && (isMobile()
+    || !!p.query || (p.filterBooks && p.filterBooks.length) || (p.andTerms && p.andTerms.length));
+  const active = searchView && (!isPill || document.body.classList.contains("tabbar-searching"));
 
   zone.querySelectorAll(".field-token").forEach((n) => n.remove());
 
