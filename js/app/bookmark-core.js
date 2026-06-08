@@ -1,14 +1,191 @@
 "use strict";
 // @ts-check
 
-// Bookmark core — extracted from bookmark.js (ADR-034 후속 PR2). Pure bookmark
-// display/link logic with no DOM or UI state: href/share builders (HREF block)
-// and the sort/last-viewed helpers (SORT block, localStorage-backed per-device
-// view settings). bookmark.js (UI) imports these; no external callers, no
-// window facade. Leaf module (localStorage only).
+// Bookmark core — extracted from bookmark.js (ADR-034 후속 PR2~3). DOM-free
+// bookmark logic: query/tree ops (QUERY block, loadBookmarks-backed), href/share
+// builders (HREF), sort/last-viewed helpers (SORT, localStorage). bookmark.js (UI)
+// imports these; a few QUERY fns keep a window facade for the legacy bare-global
+// contract (types.d.ts). Deps: appStorage, localStorage.
 
 /** @typedef {import("../types").BookmarkTreeNode} BookmarkTreeNode */
 /** @typedef {import("../types").BookmarkTreeBookmark} BookmarkTreeBookmark */
+/** @typedef {import("../types").BookmarkTreeFolder} BookmarkTreeFolder */
+
+const { loadBookmarks } = window.appStorage;
+
+// ── BEGIN BOOKMARK_QUERY ──
+// Exercised by tests/unit/bookmark.test.js. Pure tree operations on the
+// in-memory bookmark store; only `findExistingChapterBookmarks` calls out
+// to `loadBookmarks` (provided as a stub by the test loader prelude).
+// ── Bookmark query helpers ──
+
+/**
+ * @param {BookmarkTreeNode[]} store
+ * @param {(item: BookmarkTreeNode, parent: BookmarkTreeNode[]) => unknown} fn
+ * @returns {boolean}
+ */
+function _walkBookmarks(store, fn) {
+  // Guard against folders with missing/null `children` (and a null root) so the
+  // walk — and any caller mid-mutation (e.g. cascade delete) — can't throw.
+  for (const item of store || []) {
+    if (fn(item, store) === false) return false;
+    if (item.type === "folder") {
+      if (_walkBookmarks(item.children, fn) === false) return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * @param {string} bookId
+ * @param {number} chapter
+ * @returns {BookmarkTreeBookmark[]}
+ */
+function findExistingChapterBookmarks(bookId, chapter) {
+  /** @type {BookmarkTreeBookmark[]} */
+  const results = [];
+  _walkBookmarks(loadBookmarks(), (item) => {
+    if (item.type === "bookmark" && item.bookId === bookId && item.chapter === chapter) {
+      results.push(item);
+    }
+  });
+  return results;
+}
+
+// Header bookmark toggle-off (mobile) presents the chapter's bookmarks with
+// checkboxes so the reader removes only the ones they mean to. These two pure
+// helpers drive that picker's chrome.
+
+// Tri-state for the "전체 선택" checkbox given how many of the chapter's
+// bookmarks are currently ticked: none → unchecked, all → checked, otherwise
+// indeterminate.
+/**
+ * @param {number} selectedCount
+ * @param {number} totalCount
+ * @returns {"none" | "some" | "all"}
+ */
+function _selectAllState(selectedCount, totalCount) {
+  if (totalCount <= 0 || selectedCount <= 0) return "none";
+  if (selectedCount >= totalCount) return "all";
+  return "some";
+}
+
+// Confirm-button label: bare "삭제" with nothing selected (button is disabled),
+// else the count appended so the destructive action states its scope.
+/**
+ * @param {number} selectedCount
+ * @returns {string}
+ */
+function _deleteBtnLabel(selectedCount) {
+  return selectedCount > 0 ? `삭제 (${selectedCount})` : "삭제";
+}
+
+// Floating count-chip text for the bookmark select dock (#bm-select-count).
+// 0 → the guidance prompt; otherwise the marked-node count (a ticked folder
+// counts every node under it, mirroring _bmCountMarked).
+/**
+ * @param {number} markedCount
+ * @returns {string}
+ */
+function _bmSelectCountLabel(markedCount) {
+  return markedCount > 0 ? `${markedCount}개 선택됨` : "항목을 선택하세요";
+}
+
+/**
+ * @param {BookmarkTreeNode[]} store
+ * @param {string} id
+ * @returns {{ item: BookmarkTreeNode, parent: BookmarkTreeNode[], index: number } | null}
+ */
+function _findItemInStore(store, id) {
+  for (let i = 0; i < store.length; i++) {
+    const it = store[i];
+    if (it.id === id) return { item: it, parent: store, index: i };
+    if (it.type === "folder") {
+      const found = _findItemInStore(it.children, id);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+// Returns the parent folder's id (null = root), or undefined if not found.
+/**
+ * @param {BookmarkTreeNode[]} store
+ * @param {string} id
+ * @param {string | null} [parentId]
+ * @returns {string | null | undefined}
+ */
+function _findParentFolderId(store, id, parentId = null) {
+  for (const item of store) {
+    if (item.id === id) return parentId;
+    if (item.type === "folder") {
+      const r = _findParentFolderId(item.children, id, item.id);
+      if (r !== undefined) return r;
+    }
+  }
+  return undefined;
+}
+
+/** @param {BookmarkTreeNode[]} store @param {string} id */
+function removeItemById(store, id) {
+  const found = _findItemInStore(store, id);
+  if (found) found.parent.splice(found.index, 1);
+}
+
+/**
+ * @param {BookmarkTreeNode[]} store
+ * @param {string | null | undefined} folderId
+ * @param {BookmarkTreeNode} item
+ */
+function insertItem(store, folderId, item) {
+  if (!folderId) {
+    store.push(item);
+    return;
+  }
+  const found = _findItemInStore(store, folderId);
+  if (found && found.item.type === "folder") {
+    found.item.children.push(item);
+  } else {
+    store.push(item);
+  }
+}
+
+/**
+ * @param {BookmarkTreeNode[]} store
+ * @param {number} [depth]
+ * @param {Array<{ id: string, name: string, depth: number }>} [options]
+ * @returns {Array<{ id: string, name: string, depth: number }>}
+ */
+function collectFolderOptions(store, depth = 0, options = []) {
+  for (const item of store) {
+    if (item.type === "folder") {
+      options.push({ id: item.id, name: item.name, depth });
+      collectFolderOptions(item.children, depth + 1, options);
+    }
+  }
+  return options;
+}
+
+/**
+ * Ids of every descendant under a node (folders + bookmarks), excluding the
+ * node itself; empty for a bookmark. Lets folder delete + the select-delete mode
+ * forget the per-device viewed timestamps of a folder's nested bookmarks before
+ * the folder is spliced out, and lets a folder tick subsume already-ticked
+ * descendants in select mode.
+ * @param {BookmarkTreeNode} node
+ * @param {string[]} [out]
+ * @returns {string[]}
+ */
+function _descendantIds(node, out = []) {
+  if (node && node.type === "folder") {
+    for (const child of node.children || []) {
+      out.push(child.id);
+      _descendantIds(child, out);
+    }
+  }
+  return out;
+}
+// ── END BOOKMARK_QUERY ──
 
 // ── BEGIN BOOKMARK_HREF ──
 // Exercised by tests/unit/bookmark.test.js. Pure URL builder — verseSpec="all"
@@ -140,8 +317,23 @@ function sortBookmarkNodes(nodes) {
 }
 // ── END BOOKMARK_SORT ──
 
+// ── Window facade ──
+// QUERY tree helpers keep the legacy bare-global contract (types.d.ts declares
+// them on Window). No current module reads them, but preserved to avoid a hidden
+// runtime break.
+window._walkBookmarks = _walkBookmarks;
+window.findExistingChapterBookmarks = findExistingChapterBookmarks;
+window._findItemInStore = _findItemInStore;
+window._findParentFolderId = _findParentFolderId;
+window.removeItemById = removeItemById;
+window.insertItem = insertItem;
+window.collectFolderOptions = collectFolderOptions;
+
 export {
   _bookmarkHref, _buildSharePayload,
   getBookmarkSort, setBookmarkSort, markBookmarkViewed, _forgetViewed,
   sortBookmarkNodes,
+  _walkBookmarks, findExistingChapterBookmarks, _findItemInStore,
+  _findParentFolderId, removeItemById, insertItem, collectFolderOptions,
+  _selectAllState, _deleteBtnLabel, _bmSelectCountLabel, _descendantIds,
 };

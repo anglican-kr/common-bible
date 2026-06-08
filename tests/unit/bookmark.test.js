@@ -135,7 +135,7 @@ function loadBookmarkQuery(initialStore = []) {
     function loadBookmarks() { return _loadBookmarksImpl(); }
   `;
   ctx._loadBookmarksImpl = () => storeForLoad;
-  vm.runInContext(prelude + extractBlock("BOOKMARK_QUERY"), ctx, { filename: "bookmark-query.js" });
+  vm.runInContext(prelude + extractBlock("BOOKMARK_QUERY", BOOKMARK_CORE_SOURCE), ctx, { filename: "bookmark-core.js" });
   return {
     ctx,
     setStore: (s) => { storeForLoad = s; },
@@ -208,7 +208,7 @@ function loadDragCore() {
   ctx._store = currentStore;
   ctx._saveCalls = saveCalls;
   vm.runInContext(
-    prelude + extractBlock("BOOKMARK_QUERY") + "\n" + extractBlock("DRAG_CORE"),
+    prelude + extractBlock("BOOKMARK_QUERY", BOOKMARK_CORE_SOURCE) + "\n" + extractBlock("DRAG_CORE"),
     ctx,
     { filename: "bookmark-drag-core.js" },
   );
