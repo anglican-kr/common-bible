@@ -89,4 +89,4 @@ bookmark.js는 별도 후속 라운드(순수 로직 `bookmark-core.js` / UI `bo
 
 - ADR-018 후속으로 응집↑·결합↓ 동시 달성. `window.X` facade는 분할 범위 밖 호출자에만 잔존하다 후속 라운드에서 소멸.
 - `docs/architecture.md` 부록 A 인덱스 + 부록 B 빠른 참조 갱신.
-- 각 PR 머지 시 CLAUDE.md "현재 상태"에 한 줄.
+- 각 PR 머지 시 `docs/status.md`(구현 현황)에 한 줄. (status는 2026-06-08 CLAUDE.md에서 분리)
