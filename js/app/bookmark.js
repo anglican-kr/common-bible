@@ -2146,8 +2146,10 @@ $bmExportBtn.addEventListener("click", exportBookmarks);
 
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
-    if (closeTopmostModal(e)) return;  // all modals except move (bookmark-modals.js)
+    // move sits above the bookmark-modals.js modals (z 78-79 vs ≤77), so it must
+    // be checked first when both are open; the rest are owned by closeTopmostModal.
     if (!$bmMoveModal.hidden) { closeMoveModal(); return; }
+    if (closeTopmostModal(e)) return;
     if (!$bookmarkDrawer.hidden) { closeBookmarkDrawer(); return; }
     if (readingContext.verseSelectMode) { exitVerseSelectMode(); return; }
     if (_bmSelectMode) { exitBookmarkSelectMode(); return; }
