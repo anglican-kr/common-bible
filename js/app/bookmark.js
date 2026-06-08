@@ -30,9 +30,10 @@ import {
   selectedVersesToSpec, mergeVerseSpecs, serializeVerseRange,
 } from "./verse-spec.js";
 
-// Bookmark logic (query/tree ops, href/share, sort) split out to bookmark-core.js
-// (ADR-034 후속 PR2~3). The QUERY tree helpers keep a window facade owned by
-// bookmark-core; bookmark.js imports everything it calls.
+// Bookmark logic (query/tree ops, href/share, sort, active-route highlight)
+// split out to bookmark-core.js (ADR-034 후속 PR2~4). The QUERY tree helpers
+// keep a window facade owned by bookmark-core; bookmark.js imports everything it
+// calls. _renderPathname now lives in core; the UI sets it via setRenderPathname.
 import {
   _bookmarkHref, _buildSharePayload,
   getBookmarkSort, setBookmarkSort, markBookmarkViewed, _forgetViewed,
@@ -40,6 +41,7 @@ import {
   _walkBookmarks, findExistingChapterBookmarks, _findItemInStore,
   _findParentFolderId, removeItemById, insertItem, collectFolderOptions,
   _selectAllState, _deleteBtnLabel, _bmSelectCountLabel, _descendantIds,
+  _isActiveBookmark, _hasActiveDescendant, setRenderPathname,
 } from "./bookmark-core.js";
 
 
@@ -939,28 +941,6 @@ function _buildBookmarkTypeIcon(active = false, size = 20) {
   return svg;
 }
 
-// ── BEGIN BOOKMARK_ACTIVE ──
-// Exercised by tests/unit/bookmark.test.js. Tracks the pathname rendered by
-// the bookmark tree so each bookmark/folder can self-highlight when the URL
-// matches it. The `pathname` parameter defaults to the module-scoped tracker
-// (set by renderBookmarkTree() from window.location.pathname) and exists as
-// an explicit parameter so tests can call without needing to drive the full
-// renderer.
-let _renderPathname = "";
-
-function _isActiveBookmark(bm, pathname = _renderPathname) {
-  return pathname === _bookmarkHref(bm);
-}
-
-function _hasActiveDescendant(folder, pathname = _renderPathname) {
-  for (const child of (folder.children || [])) {
-    if (child.type === "bookmark" && _isActiveBookmark(child, pathname)) return true;
-    if (child.type === "folder" && _hasActiveDescendant(child, pathname)) return true;
-  }
-  return false;
-}
-// ── END BOOKMARK_ACTIVE ──
-
 function _buildMaterialFolderIcon({ size = 18 } = {}) {
   const ns = "http://www.w3.org/2000/svg";
   const svg = document.createElementNS(ns, "svg");
@@ -1307,7 +1287,7 @@ function _buildEmptyState() {
 }
 
 function renderBookmarkTree(target = $bookmarkDrawerBody) {
-  _renderPathname = window.location.pathname;
+  setRenderPathname(window.location.pathname);
   // The previously swiped row may be replaced when we re-render; drop the
   // stale reference held by js/app/bookmark.js.
   resetSwipedRow();

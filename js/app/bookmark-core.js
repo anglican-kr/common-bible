@@ -1,11 +1,12 @@
 "use strict";
 // @ts-check
 
-// Bookmark core — extracted from bookmark.js (ADR-034 후속 PR2~3). DOM-free
+// Bookmark core — extracted from bookmark.js (ADR-034 후속 PR2~4). DOM-free
 // bookmark logic: query/tree ops (QUERY block, loadBookmarks-backed), href/share
-// builders (HREF), sort/last-viewed helpers (SORT, localStorage). bookmark.js (UI)
-// imports these; a few QUERY fns keep a window facade for the legacy bare-global
-// contract (types.d.ts). Deps: appStorage, localStorage.
+// builders (HREF), sort/last-viewed helpers (SORT, localStorage), active-route
+// highlight predicates (ACTIVE, _renderPathname set by UI via setRenderPathname).
+// bookmark.js (UI) imports these; a few QUERY fns keep a window facade for the
+// legacy bare-global contract (types.d.ts). Deps: appStorage, localStorage.
 
 /** @typedef {import("../types").BookmarkTreeNode} BookmarkTreeNode */
 /** @typedef {import("../types").BookmarkTreeBookmark} BookmarkTreeBookmark */
@@ -317,6 +318,35 @@ function sortBookmarkNodes(nodes) {
 }
 // ── END BOOKMARK_SORT ──
 
+// ── BEGIN BOOKMARK_ACTIVE ──
+// Exercised by tests/unit/bookmark.test.js. Tracks the pathname rendered by
+// the bookmark tree so each bookmark/folder can self-highlight when the URL
+// matches it. The `pathname` parameter defaults to the module-scoped tracker,
+// which the bookmark.js (UI) renderer sets via setRenderPathname() from
+// window.location.pathname; the explicit parameter lets tests call without
+// driving the full renderer. Depends on `_bookmarkHref` (HREF block above).
+let _renderPathname = "";
+
+/** @param {string} pathname */
+function setRenderPathname(pathname) {
+  _renderPathname = pathname;
+}
+
+/** @param {BookmarkTreeBookmark} bm @param {string} [pathname] @returns {boolean} */
+function _isActiveBookmark(bm, pathname = _renderPathname) {
+  return pathname === _bookmarkHref(bm);
+}
+
+/** @param {BookmarkTreeFolder} folder @param {string} [pathname] @returns {boolean} */
+function _hasActiveDescendant(folder, pathname = _renderPathname) {
+  for (const child of (folder.children || [])) {
+    if (child.type === "bookmark" && _isActiveBookmark(child, pathname)) return true;
+    if (child.type === "folder" && _hasActiveDescendant(child, pathname)) return true;
+  }
+  return false;
+}
+// ── END BOOKMARK_ACTIVE ──
+
 // ── Window facade ──
 // QUERY tree helpers keep the legacy bare-global contract (types.d.ts declares
 // them on Window). No current module reads them, but preserved to avoid a hidden
@@ -336,4 +366,5 @@ export {
   _walkBookmarks, findExistingChapterBookmarks, _findItemInStore,
   _findParentFolderId, removeItemById, insertItem, collectFolderOptions,
   _selectAllState, _deleteBtnLabel, _bmSelectCountLabel, _descendantIds,
+  _isActiveBookmark, _hasActiveDescendant, setRenderPathname,
 };
