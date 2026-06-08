@@ -16,18 +16,34 @@
 
 Apple HIG의 검색 패턴(필터/스코프 바 · 토큰 대신 칩 · recents 목록 · 시트 선택)을 따른다.
 
-> **개정 (2026-06-08) — "결과 내 검색"을 입력창에서 추가 버튼으로:** 항상 보이던
-> `.search-refine-input`(메인 검색 pill 을 그대로 흉내 낸 둥근 입력)이 하단 모핑 탭바의
-> 검색 pill 과 외형이 같아 **검색창이 두 개**로 보이는 어색함이 있었다(HIG "single,
-> clearly identified location" 위배). HIG 정석은 추가어를 메인 검색 필드 안의
-> **token** 으로 흡수하는 것이지만(이 ADR 대안 A — 헤더·in-page·모핑 3개 입력 지점 모두
-> 토큰 렌더가 필요해 비용이 커 보류됨), 어색함만 저비용으로 제거하기 위해 입력창을
-> **"＋ 낱말 추가" 고스트 칩 버튼**(dashed·muted, `.search-refine-add`)으로 바꿨다. 탭하면
-> 그 자리에서 인라인 입력이 펼쳐지고(Enter 커밋 → `navigateSearch` 재렌더로 버튼 복귀,
-> Esc/빈 blur → 접힘), AND 좁히기 기능·URL `and=` 스키마·워커 프로토콜은 그대로다. 책 선택 분류를
-> scope control segment 로 빼는 안은 별도 후속(선택). `css/style.css` `.search-refine-add*`
-> 추가, `js/app/search.js` `buildSearchFilterBar` 의 refine 행만 변경. DOM 상호작용이라 e2e
-> 책임이며 순수 로직(URL·페이지네이션) 유닛 회귀는 영향 없음(78 통과).
+> **개정 (2026-06-08) — 필터를 검색 필드 안 토큰으로 (대안 A 채택):** 별도 **필터 바**
+> (`.search-filters`: 책 선택 버튼 + 칩 줄 + "결과 내 검색" 입력)가 하단 모핑 탭바의 검색
+> pill 과 함께 떠 **검색창이 두 개**로 보이는 어색함이 있었다(HIG "single, clearly
+> identified location" 위배). 이를 본 ADR 의 **대안 A(검색어 필드 안 토큰, iOS 16 search
+> tokens)** 로 전환한다 — 당시 "헤더·in-page·모핑 3개 입력 지점 모두 구현" 비용 때문에
+> 보류했던 안.
+>
+> 비용을 낮춘 구현 방식: `<input>` 을 contenteditable 로 바꾸지 않고 **칩을 input 의 형제로
+> 같은 flex 행에 두는** wrapper(`.token-zone`, `display:contents`)를 쓴다. 실제 `<input>`
+> 이 그대로라 `.value`·`focus({preventScroll})`·focus/blur·visualViewport 배선(ADR-030)이
+> 전부 보존된다. 세 필드(`#search-bar` 헤더 · `#search-inpage-bar` · `#tab-search-dock`
+> 모핑 pill)에 `mountSearchField` 로 토큰 존을 끼우고, `syncSearchFields()` 가 매 route
+> (routing.js) + 모핑 open(tabbar.js)에서 URL 필터를 칩으로 다시 그린다.
+>
+> - **책 스코프** = 필드 좌측 **깔때기 버튼**(`.token-funnel`, 책 선택 시트 진입 — 시트는 유지)
+>   + 선택된 책마다 제거 가능한 **칩**(`.field-token`).
+> - **"결과 내 검색"(AND)** = 제거 가능한 칩 + 쿼리가 있을 때만 보이는 **"＋ 좁히기" 고스트
+>   토큰**(`.token-refine-add`); 탭하면 칩들 사이에서 **작은 인라인 입력**(`.token-refine-input`)
+>   이 펼쳐져 Enter 로 AND 토큰 추가. (전 줄 전체 폭 입력이 아니라 토큰 크기라 "두 번째
+>   검색창" 으로 안 보임.)
+> - **Backspace**(caret 0)로 마지막 토큰 제거(AND → 책 순), 칩 × 클릭으로 개별 제거.
+> - 모핑 pill 의 토큰은 `body.tabbar-searching` 일 때만 렌더(접힌 dock 엔 칩 없음).
+>
+> `buildSearchFilterBar`/`buildFilterChip` 및 별도 필터 바 제거. **워커·URL(`in=`/`and=`)
+> 스키마 무변경** — 필터가 *어떻게 보이는지*만 바뀜. `css/style.css` 의 옛 `.search-filters`
+> /`.search-scope-*`/`.search-refine-*`/`.search-chip*` 규칙은 사용처가 사라져 dead(후속 정리).
+> 라우팅·시트·모핑 DOM 상호작용은 e2e 책임(ADR-013), 순수 로직(URL·페이지네이션) 유닛
+> 회귀 없음(678 통과·tsc 0). **모바일 pill 레이아웃은 디바이스 시각 검증 필요.**
 
 ## 맥락
 

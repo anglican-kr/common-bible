@@ -1247,6 +1247,121 @@ body {
   color: var(--accent);
 }
 
+/* ── In-field search tokens (ADR-033 개정 B) ───────────────────────────────
+   Book scope + 결과 내 검색 surface as chips INSIDE the search field (HIG
+   search tokens). .token-zone uses display:contents so the funnel/chips/refine
+   flex inline within each field row — the header #search-bar, the mobile
+   in-page #search-inpage-bar, and the bottom morphing #tab-search-dock pill. */
+.token-zone { display: contents; }
+.token-zone[hidden] { display: none; }
+
+/* Header bar becomes a flex row so tokens sit inline with the input; the
+   toggle/clear/history stay position:absolute (out of flow), unaffected. */
+#search-bar { display: flex; align-items: center; }
+#search-bar #search-input { flex: 1 1 auto; width: auto; min-width: 4rem; }
+
+/* Funnel (book picker) — leading icon button inside the field. */
+.token-funnel {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  margin-right: 0.15rem;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: var(--radius-pill);
+}
+.token-funnel.active { color: var(--accent); }
+.token-funnel:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.token-funnel:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+.token-funnel-icon { width: 1.05rem; height: 1.05rem; }
+
+/* A removable in-field token (book scope or AND term). */
+.field-token {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.1rem;
+  max-width: 9rem;
+  height: 1.7rem;
+  margin-right: 0.3rem;
+  padding: 0 0.15rem 0 var(--space-2);
+  font-size: var(--font-2xs);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border-radius: var(--radius-pill);
+}
+.field-token-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.field-token-remove {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.4rem;
+  height: 1.4rem;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font-size: var(--font-sm);
+  line-height: 1;
+  cursor: pointer;
+  border-radius: 50%;
+}
+.field-token-remove:hover { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+
+/* "결과 내 검색" inline add — a ghost token that expands a compact inline input
+   (not a separate full-width box, which read as a second search field). */
+.token-refine-add {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.1rem;
+  height: 1.7rem;
+  margin-right: 0.3rem;
+  padding: 0 var(--space-2);
+  font-family: inherit;
+  font-size: var(--font-2xs);
+  color: var(--text-secondary);
+  background: none;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+}
+.token-refine-add[hidden] { display: none; }
+.token-refine-add:hover { color: var(--text); }
+.token-refine-add-icon { font-size: var(--font-sm); line-height: 1; }
+
+.token-refine-input {
+  flex: 0 1 7rem;
+  min-width: 4rem;
+  height: 1.7rem;
+  margin-right: 0.3rem;
+  padding: 0 var(--space-2);
+  font-family: inherit;
+  font-size: var(--font-2xs);
+  color: var(--text);
+  background: var(--bg-card);
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  border-radius: var(--radius-pill);
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.token-refine-input[hidden] { display: none; }
+
 /* ── Search history panel ── */
 #search-history {
   list-style: none;

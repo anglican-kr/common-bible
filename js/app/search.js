@@ -368,6 +368,9 @@ function buildInPageSearchInput(query, autofocus = false) {
 
   wrap.appendChild(input);
   wrap.appendChild(clear);
+  // Mount in-field tokens (book scope + 결과 내 검색) so the in-page bar is the
+  // single search surface on mobile — no separate filter bar (ADR-033 개정 B).
+  mountSearchField(wrap, input);
   if (autofocus) requestAnimationFrame(() => input.focus());
   return wrap;
 }
@@ -458,124 +461,190 @@ function svgIcon(className, paths, circles) {
   return svg;
 }
 
-// A removable filter pill (book scope chip / 결과 내 검색어 chip).
+// ── In-field search tokens (ADR-033 개정 2026-06-08 — option B) ──────────────
+// Book-scope + "결과 내 검색" filters render as removable chips INSIDE the search
+// field itself (HIG search tokens), so there is a single search surface — no
+// separate filter bar and no second input. Mounted on each field container
+// (header #search-bar, mobile in-page #search-inpage-bar, bottom morphing pill
+// #tab-search-dock) and refreshed from the URL on every route via
+// syncSearchFields(). The worker/URL schema (in=/and=) is unchanged — only how
+// the filters surface.
+
+/** @typedef {{ container: HTMLElement, input: HTMLInputElement, zone: HTMLElement, funnel: HTMLElement, refineAdd: HTMLElement, refineInput: HTMLInputElement }} SearchField */
+/** @type {SearchField[]} */
+const _searchFields = [];
+
+// One removable in-field token (a book scope or an AND term). Smaller than the
+// old filter-bar chip — it sits inline with the typed query.
 /**
  * @param {string} label
  * @param {string} removeAria
  * @param {() => void} onRemove
  */
-function buildFilterChip(label, removeAria, onRemove) {
-  const chip = el("span", { className: "search-chip" });
-  chip.appendChild(el("span", { className: "search-chip-label" }, label));
-  const x = el("button", { type: "button", className: "search-chip-remove", "aria-label": removeAria });
+function buildFieldToken(label, removeAria, onRemove) {
+  const chip = el("span", { className: "field-token" });
+  chip.appendChild(el("span", { className: "field-token-label" }, label));
+  const x = el("button", {
+    type: "button",
+    className: "field-token-remove",
+    "aria-label": removeAria,
+    tabindex: "-1",
+  });
   x.appendChild(el("span", { "aria-hidden": "true" }, "×"));
-  x.addEventListener("click", onRemove);
+  // pointerdown preventDefault keeps the field input focused (no keyboard flicker
+  // on the mobile pill); click does the removal.
+  x.addEventListener("pointerdown", (e) => e.preventDefault());
+  x.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); onRemove(); });
   chip.appendChild(x);
   return chip;
 }
 
-// The search-options bar shown above the empty view and results. Row 1 is the
-// scope: a "책 선택" button (opens the book-filter sheet) + a removable chip per
-// selected book. Row 2 is "결과 내 검색" — shown only when there's a primary
-// query (it narrows an existing result set, ADR-033): a chip per AND term + a
-// "＋ 낱말 추가" button that reveals an inline input. The scope row is the future home of a 성서/노트 segment
-// (the request notes notes-search is coming); the bar already isolates that
-// concern from the query field.
+// Insert the token zone (funnel button + chip slot + "결과 내 검색" inline add)
+// just before `input` inside `container`, wire the field-level interactions
+// (Backspace-to-remove, refine add), and register the field for
+// syncSearchFields(). The zone uses display:contents so its children flex inline
+// within the existing pill/bar row. Persistent fields (header, pill) mount once
+// at load; the in-page bar mounts each time it's rebuilt (stale ones are pruned).
 /**
- * @param {{ q?: string, filterBooks?: string[], andTerms?: string[] }} state
+ * @param {HTMLElement} container
+ * @param {HTMLInputElement} input
  */
-function buildSearchFilterBar(state) {
-  const filterBooks = state.filterBooks || [];
-  const andTerms = state.andTerms || [];
-  const bar = el("div", { className: "search-filters" });
+function mountSearchField(container, input) {
+  const zone = el("div", { className: "token-zone" });
 
-  const scopeRow = el("div", { className: "search-scope-row" });
-  const scopeBtn = el("button", {
+  // Funnel → book-picker sheet (replaces the old "책 선택" bar button).
+  const funnel = el("button", {
     type: "button",
-    className: filterBooks.length ? "search-scope-btn active" : "search-scope-btn",
+    className: "token-funnel",
     "aria-haspopup": "dialog",
+    "aria-label": "책 선택",
   });
-  scopeBtn.appendChild(svgIcon("search-scope-icon", ["M3 5h18l-7 8v6l-4 2v-8z"]));
-  scopeBtn.appendChild(el("span", {}, filterBooks.length ? `책 ${filterBooks.length}권` : "책 선택"));
-  scopeBtn.addEventListener("click", () => openBookFilterSheet(scopeBtn));
-  scopeRow.appendChild(scopeBtn);
+  funnel.appendChild(svgIcon("token-funnel-icon", ["M3 5h18l-7 8v6l-4 2v-8z"]));
+  funnel.addEventListener("pointerdown", (e) => e.preventDefault());
+  funnel.addEventListener("click", (e) => { e.preventDefault(); openBookFilterSheet(funnel); });
 
-  for (const id of filterBooks) {
+  // "결과 내 검색" inline add: a ghost "+" token that expands a compact inline
+  // input among the chips (not a separate full-width box — that read as a second
+  // search field, ADR-033 개정). Shown only when a primary query is active.
+  const refineAdd = el("button", {
+    type: "button",
+    className: "token-refine-add",
+    "aria-label": "결과 내 검색어 추가",
+  });
+  refineAdd.appendChild(el("span", { className: "token-refine-add-icon", "aria-hidden": "true" }, "+"));
+  refineAdd.appendChild(el("span", {}, "좁히기"));
+
+  const refineInput = /** @type {HTMLInputElement} */ (el("input", {
+    type: "text",
+    className: "token-refine-input",
+    autocomplete: "off",
+    autocorrect: "off",
+    autocapitalize: "off",
+    spellcheck: "false",
+    placeholder: "결과 내 검색",
+    "aria-label": "결과 내 검색",
+  }));
+  refineInput.hidden = true;
+
+  const collapseRefine = () => {
+    refineInput.value = "";
+    refineInput.hidden = true;
+    refineAdd.hidden = false;
+  };
+  refineAdd.addEventListener("pointerdown", (e) => e.preventDefault());
+  refineAdd.addEventListener("click", (e) => {
+    e.preventDefault();
+    refineAdd.hidden = true;
+    refineInput.hidden = false;
+    refineInput.focus();
+  });
+  refineInput.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") { e.stopPropagation(); collapseRefine(); input.focus(); return; }
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    const term = refineInput.value.trim();
+    if (!term) { collapseRefine(); return; }
+    const cur = currentSearchState();
+    if (cur.andTerms.includes(term)) { refineInput.value = ""; return; }
+    navigateSearch({ andTerms: cur.andTerms.concat(term) });
+  });
+  // Collapse on blur only when empty so an accidental focus loss keeps a term
+  // the user is still typing.
+  refineInput.addEventListener("blur", () => { if (!refineInput.value.trim()) collapseRefine(); });
+
+  zone.appendChild(funnel);
+  zone.appendChild(refineAdd); // chips get inserted between funnel and refineAdd
+  zone.appendChild(refineInput);
+  container.insertBefore(zone, input);
+
+  // Backspace at caret 0 (empty selection) removes the last token — AND term
+  // first, then book scope (mirrors iOS token fields).
+  input.addEventListener("keydown", (e) => {
+    if (e.key !== "Backspace") return;
+    if (input.selectionStart !== 0 || input.selectionEnd !== 0) return;
+    const cur = currentSearchState();
+    if (cur.andTerms.length) {
+      e.preventDefault();
+      navigateSearch({ andTerms: cur.andTerms.slice(0, -1) });
+    } else if (cur.filterBooks.length) {
+      e.preventDefault();
+      navigateSearch({ filterBooks: cur.filterBooks.slice(0, -1) });
+    }
+  });
+
+  /** @type {SearchField} */
+  const field = { container, input, zone, funnel, refineAdd, refineInput };
+  _searchFields.push(field);
+  syncOneField(field);
+}
+
+// Refresh one field's chips + funnel/refine state from the live URL. The pill is
+// only usable while the tab-bar morph is open, so it stays empty otherwise.
+/** @param {SearchField} field */
+function syncOneField(field) {
+  const { container, zone, funnel, refineAdd, refineInput } = field;
+  const onSearch = window.parsePath?.().view === "search";
+  const isPill = container.id === "tab-search-dock";
+  const active = onSearch && (!isPill || document.body.classList.contains("tabbar-searching"));
+
+  zone.querySelectorAll(".field-token").forEach((n) => n.remove());
+
+  if (!active) {
+    zone.hidden = true;
+    if (!refineInput.hidden) { refineInput.hidden = true; refineInput.value = ""; refineAdd.hidden = false; }
+    return;
+  }
+  zone.hidden = false;
+
+  const state = currentSearchState();
+  const frag = document.createDocumentFragment();
+  for (const id of state.filterBooks) {
     const name = bookName(id);
-    scopeRow.appendChild(buildFilterChip(name, `책 범위에서 ${name} 제거`, () => {
+    frag.appendChild(buildFieldToken(name, `책 범위에서 ${name} 제거`, () => {
       navigateSearch({ filterBooks: currentSearchState().filterBooks.filter((b) => b !== id) });
     }));
   }
-  bar.appendChild(scopeRow);
-
-  if (state.q) {
-    const refineRow = el("div", { className: "search-refine-row" });
-    for (const term of andTerms) {
-      refineRow.appendChild(buildFilterChip(term, `결과 내 검색어 ${term} 제거`, () => {
-        navigateSearch({ andTerms: currentSearchState().andTerms.filter((t) => t !== term) });
-      }));
-    }
-
-    // "결과 내 검색" add control (ADR-033 개정 — option A). Default to a compact
-    // chip-style "＋ 낱말 추가" button rather than a full-width input: a second
-    // input that mirrored the main search pill read as a duplicate search field
-    // (HIG "single, clearly identified location"). Tapping reveals an inline
-    // input; committing a term (Enter) re-renders via navigateSearch, which
-    // restores the collapsed button.
-    const addBtn = el("button", {
-      type: "button",
-      className: "search-refine-add",
-      "aria-label": "결과 내 검색어 추가",
-    });
-    addBtn.appendChild(el("span", { className: "search-refine-add-icon", "aria-hidden": "true" }, "+"));
-    addBtn.appendChild(el("span", {}, "낱말 추가"));
-
-    const refineInput = /** @type {HTMLInputElement} */ (el("input", {
-      type: "search",
-      className: "search-refine-input",
-      inputmode: "search",
-      enterkeyhint: "search",
-      autocorrect: "off",
-      autocapitalize: "off",
-      spellcheck: "false",
-      autocomplete: "off",
-      placeholder: "결과 내 검색",
-      "aria-label": "결과 내 검색",
+  for (const term of state.andTerms) {
+    frag.appendChild(buildFieldToken(term, `결과 내 검색어 ${term} 제거`, () => {
+      navigateSearch({ andTerms: currentSearchState().andTerms.filter((t) => t !== term) });
     }));
-    refineInput.hidden = true;
-
-    const collapse = () => {
-      refineInput.value = "";
-      refineInput.hidden = true;
-      addBtn.hidden = false;
-    };
-    addBtn.addEventListener("click", () => {
-      addBtn.hidden = true;
-      refineInput.hidden = false;
-      refineInput.focus();
-    });
-    refineInput.addEventListener("keydown", (e) => {
-      if (e.key === "Escape") { collapse(); return; }
-      if (e.key !== "Enter") return;
-      e.preventDefault();
-      const term = refineInput.value.trim();
-      if (!term) { collapse(); return; }
-      const cur = currentSearchState();
-      if (cur.andTerms.includes(term)) { refineInput.value = ""; return; }
-      navigateSearch({ andTerms: cur.andTerms.concat(term) });
-    });
-    // Collapse on blur only when empty, so an accidental focus loss doesn't
-    // discard a term the user is still typing.
-    refineInput.addEventListener("blur", () => {
-      if (!refineInput.value.trim()) collapse();
-    });
-
-    refineRow.appendChild(addBtn);
-    refineRow.appendChild(refineInput);
-    bar.appendChild(refineRow);
   }
+  zone.insertBefore(frag, refineAdd);
 
-  return bar;
+  funnel.classList.toggle("active", state.filterBooks.length > 0);
+  // "결과 내 검색" add is only meaningful once there's a query to narrow.
+  const showRefine = !!state.q;
+  if (!showRefine) { refineInput.hidden = true; refineInput.value = ""; }
+  refineAdd.hidden = !showRefine || !refineInput.hidden;
+}
+
+// Refresh every mounted field (called from route() and the tab-bar morph). Prune
+// detached in-page containers first so the list doesn't grow per render.
+function syncSearchFields() {
+  for (let i = _searchFields.length - 1; i >= 0; i--) {
+    if (!_searchFields[i].container.isConnected) _searchFields.splice(i, 1);
+  }
+  for (const f of _searchFields) syncOneField(f);
 }
 
 // ── Book-filter sheet (book picker) ──
@@ -893,10 +962,13 @@ async function renderSearchView(state) {
     const morphing = document.body.classList.contains("tabbar-searching");
     view.appendChild(buildInPageSearchInput("", !morphing));
   }
-  view.appendChild(buildSearchFilterBar({ q: "", filterBooks, andTerms: [] }));
   const dyn = el("div", { className: "search-empty-dynamic" });
   view.appendChild(dyn);
   $app.appendChild(view);
+  // Filters surface as in-field tokens now (ADR-033 개정 B) — the book scope is
+  // visible/removable in the mobile in-page bar or the desktop header field.
+  // Sync after the view is connected so a deep-linked scope resolves names.
+  syncSearchFields();
   _emptyDynHost = dyn;
   renderEmptyDynamic(dyn);
 }
@@ -932,16 +1004,18 @@ async function renderSearchResults(query, page, autoNavigate = false, opts = {})
   window.hideAudioBar();
   clearNode($app);
 
-  // Both layouts share the .search-view wrapper: the search-options bar (book
-  // picker + 결과 내 검색) sits above results, which render into their own box so
-  // re-rendering them never wipes the bar/input. Mobile also keeps an in-page
-  // input pinned above (desktop uses the header bar).
+  // Both layouts share the .search-view wrapper. Filters (book scope + 결과 내
+  // 검색) live as in-field tokens in the search field itself (ADR-033 개정 B):
+  // the mobile in-page bar / desktop header field / bottom morphing pill. Results
+  // render into their own box so re-rendering them never touches the field.
   const view = el("div", { className: "search-view" });
   if (isMobile()) view.appendChild(buildInPageSearchInput(query, false));
-  view.appendChild(buildSearchFilterBar(state));
   const resultsTarget = el("div", { className: "search-view-results" });
   view.appendChild(resultsTarget);
   $app.appendChild(view);
+  // Book/AND filters surface as in-field tokens (ADR-033 개정 B); sync the
+  // header/pill/in-page fields for this query + scope (after view is connected).
+  syncSearchFields();
 
   resultsTarget.appendChild(el("div", { className: "loading", "aria-live": "polite" }, "검색 중…"));
 
@@ -1329,6 +1403,17 @@ const topSearchHistory = createSearchHistoryController({
 });
 topSearchHistory.syncToggleVisibility();
 
+// Mount in-field tokens on the persistent search fields (ADR-033 개정 B). The
+// mobile in-page bar mounts on build (buildInPageSearchInput).
+mountSearchField($searchBar, $searchInput);
+{
+  const $tabDock = document.getElementById("tab-search-dock");
+  const $tabInput = document.getElementById("tab-search-input");
+  if ($tabDock && $tabInput instanceof HTMLInputElement) {
+    mountSearchField($tabDock, $tabInput);
+  }
+}
+
 
 // ── BEGIN AUTO_NAVIGATE ──
 // Read-and-reset helper for app.js's route() handler. `searchAutoNavigate`
@@ -1356,6 +1441,9 @@ window.commitTopSearch = commitTopSearch;
 window.closeBookFilterSheet = () => { if (_bookSheet) _bookSheet.overlay.close(); };
 window.renderSearchResults = renderSearchResults;
 window.renderSearchView = renderSearchView;
+// Refresh in-field search tokens (book scope + 결과 내 검색) from the URL —
+// called by route() and the tab-bar morph (ADR-033 개정 B).
+window.syncSearchFields = syncSearchFields;
 window.isMobile = isMobile;
 window.appendTextWithHighlight = appendTextWithHighlight;
 window.consumeSearchAutoNavigate = consumeSearchAutoNavigate;
