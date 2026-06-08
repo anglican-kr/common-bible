@@ -305,7 +305,13 @@ $searchClear?.addEventListener("click", () => {
   if (!$searchInput) return;
   $searchInput.value = "";
   syncClearBtn();
-  if (W.parsePath?.().view === "search") W.navigate("/search");
+  // Drop the query but KEEP the book-picker scope (in=) so clearing text in the
+  // pill doesn't silently remove book tokens the header/in-page clears would
+  // keep — navigateSearch preserves filterBooks (ADR-033 개정 B, Bugbot).
+  if (W.parsePath?.().view === "search") {
+    if (W.navigateSearch) W.navigateSearch({ q: "", andTerms: [] });
+    else W.navigate("/search");
+  }
   $searchInput.focus({ preventScroll: true });
 });
 

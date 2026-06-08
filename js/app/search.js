@@ -1524,6 +1524,10 @@ window.renderSearchView = renderSearchView;
 // Refresh in-field search tokens (book scope + 결과 내 검색) from the URL —
 // called by route() and the tab-bar morph (ADR-033 개정 B).
 window.syncSearchFields = syncSearchFields;
+// Patch the search URL preserving the rest of the state — the morphing pill's
+// clear (tabbar.js) uses it to drop the query while KEEPING the book scope,
+// matching the header/in-page clears (ADR-033 개정 B, Bugbot).
+window.navigateSearch = navigateSearch;
 window.isMobile = isMobile;
 window.appendTextWithHighlight = appendTextWithHighlight;
 window.consumeSearchAutoNavigate = consumeSearchAutoNavigate;
