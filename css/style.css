@@ -3397,16 +3397,17 @@ html.cite-sheet-open {
 #tab-dock::before,
 #tab-dock::after { content: none; }
 #tab-bar {
-  /* dock 의 flex 자식 — flex:1 로 늘어나 검색 원형 바로 앞까지 채운다(margin-right
-     space-2 만 남겨, 오디오 바↔탭 바 수직 간격과 동일한 8px 로 통일). 위치는 #tab-dock 책임. */
+  /* dock 의 flex 자식 — flex:0 0 auto 로 아이콘 4슬롯(4×60px) 폭만큼만 차지하고
+     늘어나지 않는다. 검색 원형과의 사이 여백은 비운다(#tab-search-dock margin-left:auto
+     가 검색 그룹을 우측 끝으로 밀어붙임). 위치는 #tab-dock 책임. */
   display: flex;
-  flex: 1;
+  flex: 0 0 auto;
   /* 슬라이딩 인디케이터(.tab-indicator, absolute)의 포지셔닝 컨텍스트. */
   position: relative;
   align-items: stretch;
-  /* 양 끝 정사각 슬롯을 pill 캡 안쪽에 밀어넣고 중간 두 슬롯을 균등 분배 — 끝
-     인디케이터(정원)가 캡과 동심으로 겹친다(초승달 sliver 제거). */
-  justify-content: space-between;
+  /* 콘텐츠 폭이라 자유 공간이 없어 4개 정사각 슬롯이 캡 안쪽에 밀착 배열된다 — 끝
+     슬롯이 좌우 캡과 동심(초승달 sliver 제거). bm-select pill 과 같은 60px 등간격 셀. */
+  justify-content: center;
   /* 높이 60px 명시 = 캡 지름·검색 원형·각 탭 슬롯과 동일(정사각 슬롯 한 변). 상하 패딩 0. */
   height: var(--dock-control);
   padding: 0;
@@ -3493,7 +3494,8 @@ html.cite-sheet-open {
 /* ── 공유 슬라이딩 인디케이터 (ADR-030 후속⁵) ─────────────────────────────────
    division-tab 슬라이드 패턴 미러링: 단일 absolute 요소를 JS(syncTabBarActive →
    positionTabIndicator)가 활성 탭 위치로 translateX. 56px 정원(바 60 − 상하 2px) +
-   --theme 14% 틴트 + liquid-glass 질감(sheen + 두께 inset). transform 만 애니메이트
+   --accent 14% 틴트(색상 스킴 무관한 중립 크롬색 — 활성 아이콘만 --theme 추종) +
+   liquid-glass 질감(sheen + 두께 inset). transform 만 애니메이트
    (backdrop-filter 미사용 → 글래스 중첩·성능 회피). 아이콘 뒤(z:0). */
 .tab-indicator {
   position: absolute;
@@ -3503,7 +3505,7 @@ html.cite-sheet-open {
   width: calc(var(--dock-control) - var(--space-1)); /* 56px */
   aspect-ratio: 1 / 1;
   border-radius: var(--radius-pill);
-  background: var(--glass-sheen), color-mix(in srgb, var(--theme) 14%, transparent);
+  background: var(--glass-sheen), color-mix(in srgb, var(--accent) 14%, transparent);
   box-shadow: var(--glass-inset);
   opacity: 0;
   transform: translate(0, -50%);
@@ -4788,12 +4790,25 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   pointer-events: none;
 }
 
-/* 아이콘 글래스 pill — #tab-bar 레시피(글래스·테두리·shadow-2·inset·반원 캡 pill). */
+/* 아이콘 글래스 pill — #tab-bar 레시피(글래스·테두리·shadow-2·inset·반원 캡 pill).
+   절 선택(#verse-select-bar)·북마크 선택(#bm-select-bar) 두 바가 공유한다. 각 바는
+   [pill (왼쪽)] + [취소 원형 (오른쪽)] 을 space-between 으로 양 끝에 벌린다(아래) — pill 은
+   내용 폭(snug)이라 취소까지 늘어나지 않는다(iOS 관례). 각 액션은 --dock-control(60px)
+   정사각 슬롯 + 중앙 아이콘, 끝 슬롯은 반원 캡 안쪽에 동심으로 안착(아이콘 ⌀ ≈ 슬롯
+   절반 → 곡선 침범 없음).
+
+   The pill width is set EXPLICITLY from the slot count (3 × --dock-control) rather
+   than derived from the children's flex-basis via `width:auto`. WebKit/iOS Safari
+   ignores a flex item's flex-basis when computing its flex container's intrinsic
+   (max-content) width, so a content-sized pill collapsed to ~icon width while the
+   60px buttons kept their basis — the buttons then overflowed past the pill's right
+   cap. An explicit width avoids that intrinsic-sizing path entirely. Update the
+   multiplier if an action is added/removed (both bars currently have 3). */
 .verse-action-pill {
   display: flex;
-  flex: 1;
+  flex: 0 0 auto;
+  width: calc(var(--dock-control) * 3); /* 3 slots */
   align-items: stretch;
-  justify-content: space-around;
   height: var(--dock-control);
   margin-right: var(--space-2);
   border-radius: var(--radius-pill);
@@ -4804,11 +4819,11 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   box-shadow: var(--shadow-2), var(--glass-inset);
 }
 
-/* pill 내 액션 버튼 — .tab-item 미러. 활성 시 중립 --text(크롬 중립화, ADR-028),
-   비활성(선택 0) 또는 노트 placeholder 는 흐림. */
+/* pill 내 액션 버튼 — .tab-item 미러. --dock-control(60px) 정사각 슬롯(늘지 않음).
+   활성 시 중립 --text(크롬 중립화, ADR-028), 비활성(선택 0)·노트 placeholder 는 흐림. */
 .verse-action-btn {
   display: flex;
-  flex: 1;
+  flex: 0 0 var(--dock-control);
   align-items: center;
   justify-content: center;
   padding: 0;
@@ -4854,27 +4869,11 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 #verse-select-cancel-btn:active,
 #bm-select-cancel-btn:active { transform: scale(0.92); }
 
-/* Bookmark select dock: 공유·이동·삭제 pill (left) + 취소 circle (right). The pill is
-   content-width (snug) — NOT stretched to meet the cancel (iOS convention), so the
-   bar spreads them apart. 삭제 reads destructive via a red icon. Full capsule
-   (--radius-pill, from the base), like the cancel circle and the rest of the dock.
-   Sizing mirrors the tab bar: each action is a --dock-control (60px) square slot with
-   the icon centered. The end slots then nest concentrically inside the semicircular
-   caps (icon ⌀ ≈ half the slot → clears the curve), so no icon rides the rounded end.
-
-   The pill width is set EXPLICITLY from the slot count (3 × --dock-control) rather
-   than derived from the children's flex-basis via `width:auto`. WebKit/iOS Safari
-   ignores a flex item's flex-basis when computing its flex container's intrinsic
-   (max-content) width, so a content-sized pill collapsed to ~icon width while the
-   60px buttons kept their basis — the buttons then overflowed past the pill's right
-   cap (visible: 삭제 icon spilling out). An explicit width avoids that intrinsic-
-   sizing path entirely. Update the multiplier if an action is added/removed. */
+/* 두 선택 바 공통: snug pill(왼쪽) ↔ 취소 원형(오른쪽)을 양 끝으로 벌린다.
+   슬롯 수·폭은 .verse-action-pill·.verse-action-btn base 가 담당(위). */
+#verse-select-bar,
 #bm-select-bar { justify-content: space-between; }
-#bm-select-bar .verse-action-pill {
-  flex: 0 0 auto;
-  width: calc(var(--dock-control) * 3); /* 3 slots: 공유·이동·삭제 */
-}
-#bm-select-bar .verse-action-btn { flex: 0 0 var(--dock-control); }
+/* 북마크 선택의 삭제만 파괴색(빨간 아이콘). */
 .verse-action-btn--danger { color: var(--danger-text); }
 
 .va-icon {
