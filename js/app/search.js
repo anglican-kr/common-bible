@@ -587,7 +587,10 @@ function mountSearchField(container, input) {
   // first, then book scope (mirrors iOS token fields).
   input.addEventListener("keydown", (e) => {
     if (e.key !== "Backspace") return;
-    if (input.selectionStart !== 0 || input.selectionEnd !== 0) return;
+    // Only fall through to token removal on an empty field with the caret at the
+    // start — otherwise Backspace at caret 0 with text would eat a token instead
+    // of doing normal in-field editing (Bugbot).
+    if (input.value !== "" || input.selectionStart !== 0 || input.selectionEnd !== 0) return;
     const cur = currentSearchState();
     if (cur.andTerms.length) {
       e.preventDefault();
