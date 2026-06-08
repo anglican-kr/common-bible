@@ -36,8 +36,12 @@ Apple HIG의 검색 패턴(필터/스코프 바 · 토큰 대신 칩 · recents 
 >   토큰**(`.token-refine-add`); 탭하면 칩들 사이에서 **작은 인라인 입력**(`.token-refine-input`)
 >   이 펼쳐져 Enter 로 AND 토큰 추가. (전 줄 전체 폭 입력이 아니라 토큰 크기라 "두 번째
 >   검색창" 으로 안 보임.)
-> - **Backspace**(caret 0)로 마지막 토큰 제거(AND → 책 순), 칩 × 클릭으로 개별 제거.
+> - **Backspace**(caret 0·빈 필드)로 마지막 토큰 제거(AND → 책 순), 칩 × 클릭으로 개별 제거.
 > - 모핑 pill 의 토큰은 `body.tabbar-searching` 일 때만 렌더(접힌 dock 엔 칩 없음).
+> - **`in:<별칭>` 흡수**: `commitTopSearch` 가 커밋 시 쿼리의 `in:` 연산자를 풀어 book id 로
+>   바꿔 `filterBooks`(칩)로 옮기고 `q` 에는 낱말만 남긴다(예제·최근검색·직접 입력 공통) — 토큰 UI 에서
+>   연산자가 입력창에 그대로 노출되지 않도록. 못 푼 별칭은 `q` 에 남아 워커가 그대로 처리(graceful).
+>   별칭 맵은 books 의 `short_name_ko`/`name_ko` 로 구성.
 >
 > `buildSearchFilterBar`/`buildFilterChip` 및 별도 필터 바 제거. **워커·URL(`in=`/`and=`)
 > 스키마 무변경** — 필터가 *어떻게 보이는지*만 바뀜. `css/style.css` 의 옛 `.search-filters`

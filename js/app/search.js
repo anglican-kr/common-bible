@@ -426,6 +426,49 @@ async function ensureBookMap() {
     return {}; // leave _bookMap null so a later render retries
   }
 }
+// alias(소문자) → book id, for absorbing typed/example `in:<alias>` operators
+// into book-scope chips at commit time. Built from book short + full Korean
+// names (covers the common cases); the worker still resolves any alias we miss
+// from search-meta, so an unresolved token simply stays as text in `q`.
+/** @type {Map<string, string> | null} */
+let _aliasMap = null;
+async function ensureAliasMap() {
+  if (_aliasMap) return _aliasMap;
+  /** @type {Map<string, string>} */
+  const map = new Map();
+  try {
+    if (typeof window.loadBooks !== "function") return map;
+    const books = await window.loadBooks();
+    for (const b of books) {
+      if (b.short_name_ko) map.set(b.short_name_ko.toLowerCase(), b.id);
+      if (b.name_ko) map.set(b.name_ko.toLowerCase(), b.id);
+    }
+    _aliasMap = map;
+  } catch { /* leave _aliasMap null so a later commit retries */ }
+  return _aliasMap || map;
+}
+
+// Mirrors the worker's IN_RE (search-worker.js): one or more `in:<alias>`,
+// whitespace after `in:` ignored, alias greedy on non-space.
+const IN_TOKEN_RE = /(?:^|\s)in:\s*(\S+)/g;
+/**
+ * Pull resolvable `in:<alias>` operators out of a raw query → book ids + the
+ * remaining keyword. Unresolved aliases are left in place (worker handles them).
+ * @param {string} raw
+ * @param {Map<string, string>} aliasMap
+ * @returns {{ keyword: string, ids: string[] }}
+ */
+function extractInScope(raw, aliasMap) {
+  /** @type {string[]} */
+  const ids = [];
+  const keyword = raw.replace(IN_TOKEN_RE, (whole, alias) => {
+    const id = aliasMap.get(String(alias).toLowerCase());
+    if (id) { ids.push(id); return " "; }
+    return whole;
+  }).replace(/\s+/g, " ").trim();
+  return { keyword, ids };
+}
+
 /** @param {string} id */
 function bookName(id) {
   return (_bookMap && _bookMap[id]) || id;
@@ -1111,16 +1154,23 @@ async function renderSearchResults(query, page, autoNavigate = false, opts = {})
 let searchAutoNavigate = false;
 
 /** @param {string} rawQuery */
-function commitTopSearch(rawQuery) {
-  const q = (rawQuery || "").trim();
-  if (!q) return;
-  pushSearchHistory(q);
+async function commitTopSearch(rawQuery) {
+  const raw = (rawQuery || "").trim();
+  if (!raw) return;
+  // Recents keep the raw typed form (incl. in:<alias>) as the history label.
+  pushSearchHistory(raw);
   if (topSearchHistory) topSearchHistory.refresh();
   searchAutoNavigate = true;
-  // Keep the book-picker scope across a fresh query, but reset 결과 내 검색 (it
-  // refines a specific result set) and pagination (ADR-033).
+  // Absorb typed/example `in:<alias>` operators into book-scope chips so the
+  // operator doesn't linger as raw text in the field (token UI). Unresolved
+  // aliases stay in `q` — the worker still scopes the results from them.
+  const aliasMap = await ensureAliasMap();
+  const { keyword, ids } = extractInScope(raw, aliasMap);
+  // Keep the book-picker scope across a fresh query (union in: tokens), but
+  // reset 결과 내 검색 (it refines a specific result set) and pagination (ADR-033).
   const cur = currentSearchState();
-  const newPath = buildSearchUrl({ q, page: 1, filterBooks: cur.filterBooks, andTerms: [] });
+  const filterBooks = ids.length ? Array.from(new Set(cur.filterBooks.concat(ids))) : cur.filterBooks;
+  const newPath = buildSearchUrl({ q: keyword, page: 1, filterBooks, andTerms: [] });
   // If path is unchanged, popstate won't fire — call route() directly.
   if (location.pathname + location.search === newPath) {
     window.route();
