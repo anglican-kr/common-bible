@@ -633,7 +633,10 @@ function syncOneField(field) {
       navigateSearch({ filterBooks: currentSearchState().filterBooks.filter((b) => b !== id) });
     }));
   }
-  for (const term of state.andTerms) {
+  // AND terms only narrow an active query — without `q` they're orphans
+  // (renderSearchView strips them from the URL), so don't render them on an
+  // empty field (matches showRefine below; Bugbot).
+  if (state.q) for (const term of state.andTerms) {
     frag.appendChild(buildFieldToken(term, `결과 내 검색어 ${term} 제거`, () => {
       navigateSearch({ andTerms: currentSearchState().andTerms.filter((t) => t !== term) });
     }));
