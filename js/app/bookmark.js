@@ -26,8 +26,8 @@ const { readingContext } = window;
 // Verse-spec utilities split out to verse-spec.js (ADR-034 후속). Imported for
 // the save/copy paths; parseVerseSpec stays facade-only (routing/views call it).
 import {
-  collapseSegmentedVerses, collapseFullVerseRefs,
-  selectedVersesToSpec, mergeVerseSpecs, serializeVerseRange,
+  collapseFullVerseRefs,
+  selectedVersesToSpec, serializeVerseRange,
 } from "./verse-spec.js";
 
 // Bookmark logic (query/tree ops, href/share, sort, active-route highlight)
@@ -50,9 +50,8 @@ import {
 // path needs no circular import back here.
 import {
   initBookmarkModals, closeTopmostModal,
-  openConfirmModal, closeConfirmModal,
-  openChapterDeleteModal, closeChapterDeleteModal,
-  openNewFolderModal, _buildFolderCombobox,
+  openConfirmModal, openChapterDeleteModal,
+  openNewFolderModal, openSaveModal,
 } from "./bookmark-modals.js";
 
 
@@ -530,18 +529,7 @@ const $bmImportBody = _$("bm-import-body");
 const $bmImportMerge = _$("bm-import-merge");
 const $bmImportOverwrite = _$("bm-import-overwrite");
 const $bmImportCancel = _$("bm-import-cancel");
-const $bmSaveScrim = _$("bm-save-scrim");
-const $bmSaveModal = _$("bm-save-modal");
-const $bmSaveClose = _$("bm-save-close");
-const $bmSaveTitle = _$("bm-save-title");
-const $bmSaveBody = _$("bm-save-body");
-// $bmNewFolder* refs moved to bookmark-modals.js (PR5b).
-const $bmMergeScrim = _$("bm-merge-scrim");
-const $bmMergeModal = _$("bm-merge-modal");
-const $bmMergeBody = _$("bm-merge-body");
-const $bmMergeYes = _$("bm-merge-yes");
-const $bmMergeNo = _$("bm-merge-no");
-const $bmMergeCancel = _$("bm-merge-cancel");
+// $bmSave* / $bmNewFolder* / $bmMerge* refs moved to bookmark-modals.js (PR5b~5c).
 // $bmConfirm* / $bmChapterDelete* refs moved to bookmark-modals.js (PR5a).
 const $verseSelectBar = _$("verse-select-bar");
 const $verseSelectCount = _$("verse-select-count");
@@ -1581,259 +1569,9 @@ $bookmarkDrawerBody.addEventListener("keydown", (e) => {
   }
 });
 
-// ── Save bookmark modal ──
-
-function openSaveModal(mode, opts = {}) {
-  const bookId = readingContext.bookId;
-  const chapter = readingContext.chapter;
-  let verseSpec = "all";
-  let existingId = opts.existingId || null;
-  let existing = null;
-
-  if (existingId) {
-    const found = _findItemInStore(loadBookmarks(), existingId);
-    if (found && found.item.type === "bookmark") existing = found.item;
-  }
-
-  if (mode === "verses") {
-    const article = document.querySelector("article.chapter-text");
-    // Bookmarks treat a cite-split prose verse as one whole verse, so a partial
-    // span selection (e.g. 23a but not 23b/23c) is promoted to 23.
-    const refs = collapseSegmentedVerses(Array.from(readingContext.selectedVerses), article);
-    verseSpec = refs.length ? selectedVersesToSpec(refs) : "all";
-  } else if (existing) {
-    verseSpec = existing.verseSpec ?? "all";
-  }
-
-  // Merge check (skip for edit mode)
-  if (mode !== "edit" && bookId && chapter) {
-    const sameChapterBms = findExistingChapterBookmarks(bookId, chapter)
-      .filter(bm => !existingId || bm.id !== existingId);
-    if (sameChapterBms.length > 0) {
-      openMergeDialog(sameChapterBms, verseSpec, mode, { bookId, chapter });
-      return;
-    }
-  }
-
-  _showSaveModal(mode, bookId, chapter, verseSpec, existing);
-}
-
-function _showSaveModal(mode, bookId, chapter, verseSpec, existing) {
-  const prevCombo = /** @type {HTMLElement & { _bmClose?: () => void } | null} */ (document.getElementById("bm-folder-combobox"));
-  if (prevCombo && prevCombo._bmClose) prevCombo._bmClose();
-
-  const store = loadBookmarks();
-  const folderOptions = collectFolderOptions(store);
-
-  const book = (window.getBooksCache() ?? []).find(b => b.id === bookId);
-  const bookName = book ? (book.short_name_ko || book.name_ko) : bookId;
-  const unit = chUnit(bookId);
-  let defaultLabel;
-  if (existing) {
-    defaultLabel = existing.label;
-  } else if (verseSpec === "all") {
-    defaultLabel = `${bookName} ${chapter}${unit}`;
-  } else {
-    defaultLabel = `${bookName} ${chapter}:${verseSpec}`;
-  }
-
-  clearNode($bmSaveBody);
-  $bmSaveTitle.textContent = existing ? "북마크 수정" : "북마크 저장";
-
-  const labelField = el("div", { className: "bm-form-field" });
-  labelField.appendChild(el("label", { className: "bm-form-label", for: "bm-label-input" }, "제목"));
-  const labelInput = el("input", {
-    id: "bm-label-input",
-    className: "bm-form-input",
-    type: "text",
-    value: defaultLabel,
-  });
-  labelField.appendChild(labelInput);
-
-  const noteField = el("div", { className: "bm-form-field" });
-  noteField.appendChild(el("label", { className: "bm-form-label", for: "bm-note-input" }, "메모 (선택)"));
-  const noteInput = el("textarea", {
-    id: "bm-note-input",
-    className: "bm-form-textarea",
-    placeholder: "메모를 입력하세요",
-  }, existing ? existing.note || "" : "");
-  noteField.appendChild(noteInput);
-
-  const folderField = el("div", { className: "bm-form-field" });
-  folderField.appendChild(el("label", { className: "bm-form-label", for: "bm-folder-combobox-btn" }, "저장 위치"));
-  const currentParentFolderId = existing ? _findParentFolderId(store, existing.id) : undefined;
-  const folderCombo = _buildFolderCombobox(folderOptions, currentParentFolderId);
-  folderField.appendChild(folderCombo.el);
-
-  const actions = el("div", { className: "bm-form-actions" });
-  const saveBtn = el("button", { className: "bm-btn-primary", type: "button" }, existing ? "수정" : "저장");
-  const cancelBtn = el("button", { className: "bm-btn-secondary", type: "button" }, "취소");
-  saveBtn.addEventListener("click", () => {
-    const label = labelInput.value.trim();
-    if (!label) {
-      labelInput.setAttribute("aria-invalid", "true");
-      labelInput.focus();
-      return;
-    }
-    labelInput.removeAttribute("aria-invalid");
-    const note = noteInput.value.trim();
-    const folderId = folderCombo.getValue();
-    commitSaveBookmark(existing ? existing.id : null, label, note, folderId, bookId, chapter, verseSpec);
-    closeSaveModal();
-    if (mode === "verses") exitVerseSelectMode();
-  });
-  cancelBtn.addEventListener("click", closeSaveModal);
-  actions.appendChild(cancelBtn);
-  actions.appendChild(saveBtn);
-
-  $bmSaveBody.appendChild(labelField);
-  $bmSaveBody.appendChild(noteField);
-  $bmSaveBody.appendChild(folderField);
-  $bmSaveBody.appendChild(actions);
-
-  saveOverlay.open();
-}
-
-// closeOnEsc stays off: the save modal participates in the stacked Escape
-// router below. Initial focus = the first input (label). onClose also dismisses
-// the folder combobox dropdown (ADR-032).
-const saveOverlay = createOverlay({
-  panel: $bmSaveModal,
-  scrim: $bmSaveScrim,
-  initialFocus: () => $bmSaveModal.querySelector("input"),
-  onClose: () => {
-    const c = /** @type {HTMLElement & { _bmClose?: () => void } | null} */ (document.getElementById("bm-folder-combobox"));
-    if (c && c._bmClose) c._bmClose();
-  },
-});
-
-function closeSaveModal() { saveOverlay.close(); }
-
-// new-folder modal (overlay + open/close/commit) moved to bookmark-modals.js
-// (PR5b); openNewFolderModal imported above.
-
-function commitSaveBookmark(existingId, label, note, folderId, bookId, chapter, verseSpec) {
-  const store = loadBookmarks();
-  if (existingId) {
-    const found = _findItemInStore(store, existingId);
-    if (found && found.item.type === "bookmark") {
-      found.item.label = label;
-      found.item.note = note;
-      found.item.verseSpec = verseSpec;
-      found.item.updatedAt = Date.now();
-      const updatedItem = found.item;
-      removeItemById(store, existingId);
-      insertItem(store, folderId, updatedItem);
-    }
-  } else {
-    /** @type {BookmarkTreeBookmark} */
-    const bm = {
-      type: "bookmark",
-      id: generateId(),
-      bookId,
-      chapter,
-      verseSpec,
-      label,
-      note,
-      createdAt: Date.now(),
-    };
-    insertItem(store, folderId, bm);
-  }
-  saveBookmarks(store);
-  _rerenderActiveBookmarkTree();
-  refreshBookmarkHeaderBtn();
-  announce(existingId ? "북마크를 수정했습니다." : "북마크를 저장했습니다.");
-}
-
-// ── Merge dialog ──
-
-/**
- * @param {BookmarkTreeBookmark[]} candidates
- * @param {string} incomingSpec
- * @param {string} mode
- * @param {{ bookId?: string | null, chapter?: number | null } | null} [fallbackContext]
- */
-// closeOnEsc off: in the stacked Escape router. onClose clears the per-open
-// onclick handlers (ADR-032).
-const mergeOverlay = createOverlay({
-  panel: $bmMergeModal,
-  scrim: $bmMergeScrim,
-  initialFocus: () => $bmMergeYes,
-  onClose: () => {
-    $bmMergeYes.onclick = null;
-    $bmMergeNo.onclick = null;
-    $bmMergeCancel.onclick = null;
-  },
-});
-
-function closeMergeModal() { mergeOverlay.close(); }
-
-function openMergeDialog(candidates, incomingSpec, mode, fallbackContext = null) {
-  clearNode($bmMergeBody);
-  const resolvedBookId =
-    (fallbackContext && fallbackContext.bookId) || readingContext.bookId;
-  const resolvedChapter =
-    (fallbackContext && fallbackContext.chapter) || readingContext.chapter;
-
-  let target = candidates[0];
-
-  if (candidates.length === 1) {
-    const desc = el("p", { className: "bm-merge-desc" },
-      `이 장에 이미 북마크("${candidates[0].label}")가 있습니다. 절을 합칠까요?`);
-    $bmMergeBody.appendChild(desc);
-  } else {
-    $bmMergeBody.appendChild(
-      el("p", { className: "bm-merge-desc" }, "이 장에 여러 북마크가 있습니다. 어느 북마크에 합칠까요?")
-    );
-    const radioGroup = el("div", { className: "bm-merge-radio-group" });
-    candidates.forEach((bm, i) => {
-      const id = `bm-merge-r${i}`;
-      const labelEl = el("label", { className: "bm-merge-radio", for: id });
-      const input = el("input", { type: "radio", id, name: "bm-merge-target" });
-      if (i === 0) input.checked = true;
-      input.addEventListener("change", () => { target = bm; });
-      const specNote = bm.verseSpec !== "all" ? ` (${bm.verseSpec}절)` : "";
-      labelEl.appendChild(input);
-      labelEl.appendChild(el("span", {}, bm.label + specNote));
-      radioGroup.appendChild(labelEl);
-    });
-    $bmMergeBody.appendChild(radioGroup);
-  }
-
-  mergeOverlay.open();
-  const cleanup = closeMergeModal;
-
-  $bmMergeYes.onclick = () => {
-    const merged = mergeVerseSpecs(target.verseSpec ?? "all", incomingSpec);
-    const store = loadBookmarks();
-    const found = _findItemInStore(store, target.id);
-    if (found && found.item.type === "bookmark") {
-      found.item.verseSpec = merged;
-      // Sync label to reflect the merged verse spec
-      const targetBookId = target.bookId ?? "";
-      const book = (window.getBooksCache() ?? []).find((b) => b.id === targetBookId);
-      const bookName = book ? (book.short_name_ko || book.name_ko) : targetBookId;
-      const unit = chUnit(targetBookId);
-      found.item.label = merged === "all"
-        ? `${bookName} ${target.chapter}${unit}`
-        : `${bookName} ${target.chapter}:${merged}`;
-    }
-    saveBookmarks(store);
-    _rerenderActiveBookmarkTree();
-    refreshBookmarkHeaderBtn();
-
-    if (mode === "verses") exitVerseSelectMode();
-    announce("북마크를 합쳤습니다.");
-    cleanup();
-  };
-
-  $bmMergeNo.onclick = () => {
-    cleanup();
-    _showSaveModal(mode, resolvedBookId, resolvedChapter, incomingSpec, null);
-  };
-
-  $bmMergeCancel.onclick = cleanup;
-}
+// Save/edit + merge modals moved to bookmark-modals.js (PR5c); openSaveModal
+// imported above (openMergeDialog is reached only via openSaveModal, internal to
+// that module).
 
 // ── Destructive confirm modal ──
 // openConfirmModal / openChapterDeleteModal moved to bookmark-modals.js (PR5a).
@@ -2424,8 +2162,7 @@ async function copySelectedVerses() {
 $bookmarkDrawerClose.addEventListener("click", closeBookmarkDrawer);
 $bookmarkScrim.addEventListener("click", closeBookmarkDrawer);
 
-$bmSaveClose.addEventListener("click", closeSaveModal);
-$bmSaveScrim.addEventListener("click", closeSaveModal);
+// save modal listeners moved to bookmark-modals.js (PR5c).
 
 // bookmark-modals.js owns its own scrim/cancel listeners; bookmark.js only
 // injects the render callbacks a modal needs to refresh the tree/header after a
@@ -2433,6 +2170,7 @@ $bmSaveScrim.addEventListener("click", closeSaveModal);
 initBookmarkModals({
   rerenderActiveBookmarkTree: _rerenderActiveBookmarkTree,
   refreshBookmarkHeaderBtn,
+  exitVerseSelectMode,
 });
 
 // new-folder modal listeners moved to bookmark-modals.js (PR5b).
@@ -2539,11 +2277,9 @@ $bmImportScrim.addEventListener("click", closeImportModal);
 
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
-    if (closeTopmostModal(e)) return;  // new-folder > confirm > chapter-delete (bookmark-modals.js)
+    if (closeTopmostModal(e)) return;  // new-folder/confirm/chapter-delete/merge/save (bookmark-modals.js)
     if (!$bmMoveModal.hidden) { closeMoveModal(); return; }
     if (!$bmImportModal.hidden) { closeImportModal(); return; }
-    if (!$bmMergeModal.hidden) { closeMergeModal(); return; }
-    if (!$bmSaveModal.hidden) { closeSaveModal(); return; }
     if (!$bookmarkDrawer.hidden) { closeBookmarkDrawer(); return; }
     if (readingContext.verseSelectMode) { exitVerseSelectMode(); return; }
     if (_bmSelectMode) { exitBookmarkSelectMode(); return; }
@@ -2619,8 +2355,6 @@ window.buildHomeBtn = buildHomeBtn;
 window.buildBookmarkHeaderBtn = buildBookmarkHeaderBtn;
 window.openBookmarkDrawer = openBookmarkDrawer;
 window.closeBookmarkDrawer = closeBookmarkDrawer;
-window.closeSaveModal = closeSaveModal;
-window.closeMergeModal = closeMergeModal;
 window.closeImportModal = closeImportModal;
 // Exposed so route() can dismiss the move-to-folder overlay on any nav (e.g. OS
 // back gesture mid-move) — its scrim would otherwise persist over the rebuilt
