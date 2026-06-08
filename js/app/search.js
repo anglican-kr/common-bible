@@ -663,12 +663,22 @@ function syncOneField(field) {
 
   if (!active) {
     zone.hidden = true;
+    if (isPill) document.getElementById("tab-dock")?.classList.remove("search-empty");
     if (!refineInput.hidden) { refineInput.hidden = true; refineInput.value = ""; refineAdd.hidden = false; }
     return;
   }
   zone.hidden = false;
 
   const state = currentSearchState();
+  // Morphing pill: a truly-empty search (no query, no book scope) shows the
+  // magnifier as the leading icon instead of the funnel — reads as "search"
+  // before you've typed; once there's a query or scope the funnel leads so you
+  // can filter (CSS keys off #tab-dock.search-empty). Driven by query/scope
+  // emptiness, not keyboard state.
+  if (isPill) {
+    const empty = !state.q && !state.filterBooks.length;
+    document.getElementById("tab-dock")?.classList.toggle("search-empty", empty);
+  }
   const frag = document.createDocumentFragment();
   for (const id of state.filterBooks) {
     const name = bookName(id);
