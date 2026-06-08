@@ -39,7 +39,7 @@ import {
   getBookmarkSort, setBookmarkSort, markBookmarkViewed, _forgetViewed,
   sortBookmarkNodes,
   _walkBookmarks, findExistingChapterBookmarks, _findItemInStore,
-  _findParentFolderId, removeItemById, insertItem, collectFolderOptions,
+  _findParentFolderId, removeItemById, insertItem,
   _selectAllState, _deleteBtnLabel, _bmSelectCountLabel, _descendantIds,
   _isActiveBookmark, _hasActiveDescendant, setRenderPathname,
 } from "./bookmark-core.js";
@@ -52,7 +52,7 @@ import {
   initBookmarkModals, closeTopmostModal,
   openConfirmModal, openChapterDeleteModal,
   openNewFolderModal, openSaveModal,
-  openImportFilePicker,
+  openImportFilePicker, openMoveModal,
 } from "./bookmark-modals.js";
 
 
@@ -542,11 +542,7 @@ const $bmSelectMoveBtn = /** @type {HTMLButtonElement} */ (_$("bm-select-move-bt
 const $bmSelectDeleteBtn = /** @type {HTMLButtonElement} */ (_$("bm-select-delete-btn"));
 const $bmSelectCancelBtn = _$("bm-select-cancel-btn");
 // Move-to-folder modal (선택 모드 → 이동).
-const $bmMoveScrim = _$("bm-move-scrim");
-const $bmMoveModal = _$("bm-move-modal");
-const $bmMoveList = _$("bm-move-list");
-const $bmMoveNewFolder = _$("bm-move-new-folder");
-const $bmMoveCancel = _$("bm-move-cancel");
+// $bmMove* refs moved to bookmark-modals.js with the move picker (PR5e).
 
 // Build the chevron-left back button for page title headers
 function buildBackBtn(ariaLabel, fallback) {
@@ -1821,32 +1817,9 @@ function _runBookmarkSelectShare() {
 }
 
 // ── 이동 (dock): move the selection into a chosen folder ──
-// Overlay lifecycle via the shared controller (ADR-032). closeOnEsc off — the
-// central Escape router closes it (above select mode). Reuses the chapter-delete
-// modal styling family.
-const moveOverlay = createOverlay({
-  panel: $bmMoveModal,
-  scrim: $bmMoveScrim,
-  initialFocus: () => $bmMoveCancel,
-  onClose: () => { $bmMoveCancel.onclick = null; $bmMoveNewFolder.onclick = null; },
-});
-
-// One destination row in the move modal: leading glyph + label, indented by depth.
-// 최상위(root) gets a home glyph; folders get a folder glyph. (새 폴더 is a dedicated
-// button below the list, not a row.)
-/** @param {string} label @param {"root" | "folder"} kind @param {number} [depth] */
-function _buildMoveRow(label, kind, depth = 0) {
-  const btn = el("button", { className: "bm-move-item", type: "button" });
-  if (depth > 0) btn.style.setProperty("--bm-move-indent", `calc(var(--space-5) * ${depth})`);
-  const icon = el("span", { className: "bm-move-icon", "aria-hidden": "true" });
-  const paths = kind === "root"
-    ? ["M4 10.5 12 4l8 6.5", "M6 9.5V19a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V9.5"]
-    : ["M3 7.5a2 2 0 0 1 2-2h3.6l1.8 2H19a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7.5Z"];
-  icon.appendChild(_bmMenuIcon(paths));
-  btn.appendChild(icon);
-  btn.appendChild(el("span", { className: "bm-move-label" }, label));
-  return btn;
-}
+// The move dialog (destination picker + 새 폴더) moved to bookmark-modals.js
+// (PR5e); select mode keeps the selection logic below and drives the picker via
+// openMoveModal({ excludeFolder, onPick }).
 
 // Move the top-most selected nodes into `targetFolderId` (null = root), preserving
 // each item (folders move whole). Skips a folder dropped into itself/its subtree.
@@ -1871,58 +1844,28 @@ function _moveSelectedToFolder(targetFolderId) {
     if (dest && dest.item.type === "folder") dest.item.expanded = true;
   }
   saveBookmarks(live);
-  closeMoveModal();
+  // The picker self-closes before invoking this (onPick), so no close here.
   announce(moved === 1 ? "1개 항목을 이동했습니다." : `${moved}개 항목을 이동했습니다.`);
   exitBookmarkSelectMode();
   _rerenderActiveBookmarkTree();
   refreshBookmarkHeaderBtn();
 }
 
-function openMoveModal() {
-  const store = loadBookmarks();
-  const parentMap = _bmBuildParentMap(store);
+// Open the move destination picker (bookmark-modals.js) for the current
+// selection: guard on having effective targets, then hand it the exclude
+// predicate (a selected folder or one under a selected ancestor can't be a
+// destination — that would be a no-op/empty-folder move) and the mover callback.
+function _openMoveSelection() {
+  const parentMap = _bmBuildParentMap(loadBookmarks());
   if (!_bmEffectiveTargets(parentMap).length) return;
-  clearNode($bmMoveList);
-
-  // 최상위 (root) first, then the folder list (indented by depth).
-  const rootRow = _buildMoveRow("최상위", "root");
-  rootRow.addEventListener("click", () => _moveSelectedToFolder(null));
-  $bmMoveList.appendChild(rootRow);
-
-  // Every folder except the ones being moved (a folder can't move into itself or
-  // its own subtree) — i.e. selected folders + folders under a selected folder.
-  for (const f of collectFolderOptions(store)) {
-    if (_bmSelected.has(f.id) || _bmAncestorSelected(f.id, parentMap)) continue;
-    const row = _buildMoveRow(f.name, "folder", f.depth);
-    row.addEventListener("click", () => _moveSelectedToFolder(f.id));
-    $bmMoveList.appendChild(row);
-  }
-
-  // 새 폴더 (below the list) — opens the new-folder modal where a parent can be
-  // chosen (미지정=최상위); the created folder then receives the selection. The
-  // parent options exclude the same folders the move list omits (selected folders +
-  // folders under a selected ancestor) so the new folder can't be created inside the
-  // selection — otherwise the move would be a no-op and leave a stray empty folder.
-  $bmMoveNewFolder.onclick = () => {
-    closeMoveModal();
-    openNewFolderModal(
-      (newId) => { if (newId) _moveSelectedToFolder(newId); },
-      null,
-      { folderFilter: (f) => !(_bmSelected.has(f.id) || _bmAncestorSelected(f.id, parentMap)) },
-    );
-  };
-
-  moveOverlay.open();
-  $bmMoveCancel.onclick = closeMoveModal;
+  const excludeFolder = (folderId) => _bmSelected.has(folderId) || _bmAncestorSelected(folderId, parentMap);
+  openMoveModal({ excludeFolder, onPick: _moveSelectedToFolder });
 }
 
-function closeMoveModal() { moveOverlay.close(); }
-
 $bmSelectShareBtn.addEventListener("click", _runBookmarkSelectShare);
-$bmSelectMoveBtn.addEventListener("click", openMoveModal);
+$bmSelectMoveBtn.addEventListener("click", _openMoveSelection);
 $bmSelectDeleteBtn.addEventListener("click", _runBookmarkSelectDelete);
 $bmSelectCancelBtn.addEventListener("click", exitBookmarkSelectMode);
-$bmMoveScrim.addEventListener("click", closeMoveModal);
 
 // ── Export / Import bookmarks (Phase 2a) ──
 
@@ -2146,10 +2089,7 @@ $bmExportBtn.addEventListener("click", exportBookmarks);
 
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
-    // move sits above the bookmark-modals.js modals (z 78-79 vs ≤77), so it must
-    // be checked first when both are open; the rest are owned by closeTopmostModal.
-    if (!$bmMoveModal.hidden) { closeMoveModal(); return; }
-    if (closeTopmostModal(e)) return;
+    if (closeTopmostModal(e)) return;  // all bookmark modals incl. move (bookmark-modals.js)
     if (!$bookmarkDrawer.hidden) { closeBookmarkDrawer(); return; }
     if (readingContext.verseSelectMode) { exitVerseSelectMode(); return; }
     if (_bmSelectMode) { exitBookmarkSelectMode(); return; }
@@ -2225,11 +2165,7 @@ window.buildHomeBtn = buildHomeBtn;
 window.buildBookmarkHeaderBtn = buildBookmarkHeaderBtn;
 window.openBookmarkDrawer = openBookmarkDrawer;
 window.closeBookmarkDrawer = closeBookmarkDrawer;
-// Exposed so route() can dismiss the move-to-folder overlay on any nav (e.g. OS
-// back gesture mid-move) — its scrim would otherwise persist over the rebuilt
-// view. Safe to call when already hidden (self-guards). The confirm /
-// chapter-delete equivalents moved with their modals to bookmark-modals.js.
-window.closeMoveModal = closeMoveModal;
+// (window.closeMoveModal moved to bookmark-modals.js with the move picker, PR5e.)
 window.renderBookmarkTree = renderBookmarkTree;
 // Re-render whichever bookmark surface is mounted (drawer OR /bookmarks full
 // view). Sync layer + mutation flows use this so the visible tree refreshes.
