@@ -1269,6 +1269,7 @@ body {
 
 /* Funnel (book picker) — leading icon button inside the field. */
 .token-funnel {
+  position: relative;
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
@@ -1282,6 +1283,21 @@ body {
   color: var(--text-secondary);
   cursor: pointer;
   border-radius: var(--radius-pill);
+}
+
+/* Keep the compact visual size but expand the tap area to the 44px touch target
+   via a transparent overlay (mirrors #tab-search-clear) so the in-field funnel
+   and chip × meet --touch-target (ADR-028 / WCAG) without growing the inline
+   pill (Bugbot). */
+.token-funnel::after,
+.field-token-remove::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--touch-target);
+  height: var(--touch-target);
+  transform: translate(-50%, -50%);
 }
 .token-funnel.active { color: var(--accent); }
 .token-funnel:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); }
@@ -1312,6 +1328,7 @@ body {
   white-space: nowrap;
 }
 .field-token-remove {
+  position: relative;
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
