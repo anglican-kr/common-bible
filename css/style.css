@@ -3661,16 +3661,11 @@ html.cite-sheet-open {
 [data-theme="dark"] #tab-dock.searching #tab-search-dock {
   background: var(--glass-sheen), color-mix(in srgb, var(--bg) 50%, transparent);
 }
-/* 검색 버튼 → 입력 pill 의 왼쪽 아이콘(자체 표면 제거). */
+/* 검색 활성(토큰 필드) 레이아웃에선 좌측 돋보기를 숨긴다 — funnel(책 선택)이
+   선두 아이콘 역할을 하고, 돋보기가 함께 있으면 중복이라 (ADR-033 개정 B).
+   idle 에선 #tab-search 가 그대로 "검색 진입" 원형 버튼으로 보인다. */
 #tab-dock.searching #tab-search {
-  width: auto;
-  height: auto;
-  flex: 0 0 auto;
-  background: none;
-  border: none;
-  box-shadow: none;
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
+  display: none;
 }
 /* 하단 검색 입력 — Sans(본문 Serif 상속 회피), 콘텐츠 무관 축소(flex-basis 0). */
 #tab-dock.searching #tab-search-input {
