@@ -3,9 +3,10 @@
 
 // Bookmark modals — extracted from bookmark.js (ADR-034 후속 PR5). DOM-bound
 // dialog UI: confirm + chapter-delete picker (PR5a), folder combobox + new-folder
-// modal (PR5b), save/edit + merge dialog (PR5c), import flow (PR5d). The move
-// modal stays in bookmark.js (it reads select-mode state); export is a plain
-// download, also in bookmark.js. bookmark.js (drawer/tree UI) opens these and injects its
+// modal (PR5b), save/edit + merge dialog (PR5c), import flow (PR5d), move
+// destination picker (PR5e — a parameterized folder picker; select-mode keeps the
+// selection logic and passes excludeFolder/onPick). export stays in bookmark.js
+// (plain download, no dialog). bookmark.js (drawer/tree UI) opens these and injects its
 // render callbacks once via initBookmarkModals(), so the modal→render cycle
 // needs no circular import (의존성 주입). The modal Escape stack lives here as
 // closeTopmostModal(), which bookmark.js's document keydown handler delegates to
@@ -81,6 +82,11 @@ const $bmImportBody = _$("bm-import-body");
 const $bmImportMerge = _$("bm-import-merge");
 const $bmImportOverwrite = _$("bm-import-overwrite");
 const $bmImportCancel = _$("bm-import-cancel");
+const $bmMoveScrim = _$("bm-move-scrim");
+const $bmMoveModal = _$("bm-move-modal");
+const $bmMoveList = _$("bm-move-list");
+const $bmMoveNewFolder = _$("bm-move-new-folder");
+const $bmMoveCancel = _$("bm-move-cancel");
 
 // ── BEGIN BOOKMARK_CONFIRM ──
 // Generic destructive-confirm dialog. The caller passes the onConfirm action, so
@@ -874,6 +880,94 @@ $bmImportInput.addEventListener("change", () => {
 $bmImportScrim.addEventListener("click", closeImportModal);
 // ── END BOOKMARK_IMPORT ──
 
+// ── BEGIN BOOKMARK_MOVE ──
+// Generic "pick a destination folder" dialog. Caller (bookmark.js select mode)
+// passes excludeFolder(id)→boolean to drop ineligible destinations and
+// onPick(targetFolderId|null) to perform the move; the modal self-closes before
+// invoking onPick. New-folder runs the create flow (filtered by the same
+// predicate) and forwards the new id to onPick. No select-mode state lives here.
+const moveOverlay = createOverlay({
+  panel: $bmMoveModal,
+  scrim: $bmMoveScrim,
+  initialFocus: () => $bmMoveCancel,
+  onClose: () => { $bmMoveCancel.onclick = null; $bmMoveNewFolder.onclick = null; },
+});
+
+// Stroke-style SVG from path data (same recipe as bookmark.js's menu icons),
+// kept local so the move rows don't pull a cross-module icon helper.
+function _moveRowIcon(paths) {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("fill", "none");
+  svg.setAttribute("aria-hidden", "true");
+  for (const d of paths) {
+    const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    p.setAttribute("d", d);
+    p.setAttribute("stroke", "currentColor");
+    p.setAttribute("stroke-width", "1.7");
+    p.setAttribute("stroke-linecap", "round");
+    p.setAttribute("stroke-linejoin", "round");
+    svg.appendChild(p);
+  }
+  return svg;
+}
+
+// One destination row: leading glyph + label, indented by depth. 최상위(root)
+// gets a home glyph; folders get a folder glyph. (새 폴더 is a dedicated button
+// below the list, not a row.)
+/** @param {string} label @param {"root" | "folder"} kind @param {number} [depth] */
+function _buildMoveRow(label, kind, depth = 0) {
+  const btn = el("button", { className: "bm-move-item", type: "button" });
+  if (depth > 0) btn.style.setProperty("--bm-move-indent", `calc(var(--space-5) * ${depth})`);
+  const icon = el("span", { className: "bm-move-icon", "aria-hidden": "true" });
+  const paths = kind === "root"
+    ? ["M4 10.5 12 4l8 6.5", "M6 9.5V19a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V9.5"]
+    : ["M3 7.5a2 2 0 0 1 2-2h3.6l1.8 2H19a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7.5Z"];
+  icon.appendChild(_moveRowIcon(paths));
+  btn.appendChild(icon);
+  btn.appendChild(el("span", { className: "bm-move-label" }, label));
+  return btn;
+}
+
+function closeMoveModal() { moveOverlay.close(); }
+
+/**
+ * @param {{ excludeFolder: (folderId: string) => boolean, onPick: (targetFolderId: string | null) => void }} opts
+ */
+function openMoveModal({ excludeFolder, onPick }) {
+  clearNode($bmMoveList);
+
+  // 최상위 (root) first, then the eligible folders (indented by depth).
+  const rootRow = _buildMoveRow("최상위", "root");
+  rootRow.addEventListener("click", () => { closeMoveModal(); onPick(null); });
+  $bmMoveList.appendChild(rootRow);
+
+  for (const f of collectFolderOptions(loadBookmarks())) {
+    if (excludeFolder(f.id)) continue;
+    const row = _buildMoveRow(f.name, "folder", f.depth);
+    row.addEventListener("click", () => { closeMoveModal(); onPick(f.id); });
+    $bmMoveList.appendChild(row);
+  }
+
+  // 새 폴더 (below the list) — opens the new-folder modal (parent picker filtered
+  // by the same predicate so the new folder can't land inside the selection),
+  // then forwards the created id to onPick.
+  $bmMoveNewFolder.onclick = () => {
+    closeMoveModal();
+    openNewFolderModal(
+      (newId) => { if (newId) onPick(newId); },
+      null,
+      { folderFilter: (f) => !excludeFolder(f.id) },
+    );
+  };
+
+  moveOverlay.open();
+  $bmMoveCancel.onclick = closeMoveModal;
+}
+
+$bmMoveScrim.addEventListener("click", closeMoveModal);
+// ── END BOOKMARK_MOVE ──
+
 // ── Static listeners (moved from bookmark.js) ──
 $bmConfirmCancel.addEventListener("click", closeConfirmModal);
 $bmConfirmScrim.addEventListener("click", closeConfirmModal);
@@ -889,21 +983,20 @@ $bmSaveClose.addEventListener("click", closeSaveModal);
 $bmSaveScrim.addEventListener("click", closeSaveModal);
 
 // ── Modal Escape stack ──
-// Topmost-first dismissal for the modal overlays. Returns true when it closed one
-// so bookmark.js's document keydown handler can stop before its drawer/select
-// handling. new-folder sits at the top and consumes the event
-// (preventDefault/stopPropagation) to match the pre-split behavior. move/import
-// stay in bookmark.js until PR5d; since every modal except new-folder is mutually
-// exclusive (only new-folder ever stacks, and it's checked first), the relative
-// order of the others across the module boundary doesn't affect behavior.
+// Topmost-first dismissal for every bookmark modal. Returns true when it closed
+// one so bookmark.js's document keydown handler can stop before its drawer/select
+// handling. Order follows z-index so the visually topmost layer is dismissed
+// first: new-folder (stacks above save/move, and consumes the event), then move
+// (z 78-79), then import (z 76-77), then the mutually-exclusive rest.
 /** @param {KeyboardEvent} e @returns {boolean} */
 function closeTopmostModal(e) {
   if (!$bmNewFolderModal.hidden) { e.preventDefault(); e.stopPropagation(); closeNewFolderModal(); return true; }
+  if (!$bmMoveModal.hidden) { closeMoveModal(); return true; }
+  if (!$bmImportModal.hidden) { closeImportModal(); return true; }
   if (!$bmConfirmModal.hidden) { closeConfirmModal(); return true; }
   if (!$bmChapterDeleteModal.hidden) { closeChapterDeleteModal(); return true; }
   if (!$bmMergeModal.hidden) { closeMergeModal(); return true; }
   if (!$bmSaveModal.hidden) { closeSaveModal(); return true; }
-  if (!$bmImportModal.hidden) { closeImportModal(); return true; }
   return false;
 }
 
@@ -918,6 +1011,7 @@ window.closeNewFolderModal = closeNewFolderModal;
 window.closeSaveModal = closeSaveModal;
 window.closeMergeModal = closeMergeModal;
 window.closeImportModal = closeImportModal;
+window.closeMoveModal = closeMoveModal;
 
 // Only the entry points bookmark.js calls are exported; each modal's close fn
 // stays module-internal (reached via closeTopmostModal + scrim/cancel listeners
@@ -926,5 +1020,5 @@ export {
   initBookmarkModals, closeTopmostModal,
   openConfirmModal, openChapterDeleteModal,
   openNewFolderModal, openSaveModal,
-  openImportFilePicker,
+  openImportFilePicker, openMoveModal,
 };
