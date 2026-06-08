@@ -42,6 +42,7 @@ const SHELL_FILES = [
   "/js/app/reading-context.js",
   "/js/app/verse-spec.js",
   "/js/app/bookmark-core.js",
+  "/js/app/bookmark-modals.js",
   "/js/app/bookmark.js",
   "/js/app/citations.js",
   "/js/app/parallels.js",
