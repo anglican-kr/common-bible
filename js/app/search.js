@@ -732,6 +732,11 @@ const BOOK_FILTER_INERT_SELECTORS =
 
 /** @type {{ overlay: any, body: HTMLElement, working: Set<string>, updateApplyLabel: () => void } | null} */
 let _bookSheet = null;
+// The field whose funnel opened the sheet — "적용" focuses its query input so the
+// user can type the term right away (keyboard up) instead of focus returning to
+// the funnel (user request). Set in openBookFilterSheet.
+/** @type {SearchField | null} */
+let _bookSheetReturnField = null;
 
 function ensureBookSheet() {
   if (_bookSheet) return _bookSheet;
@@ -789,6 +794,15 @@ function ensureBookSheet() {
   applyBtn.addEventListener("click", () => {
     navigateSearch({ filterBooks: Array.from(working) });
     overlay.close();
+    // Focus the originating field's query input so the user can type the term
+    // immediately (keyboard up on mobile). Persistent fields (header/pill)
+    // survive the re-render, so focus synchronously within this click gesture
+    // (iOS needs that for the soft keyboard). The rebuilt in-page bar autofocuses
+    // itself on render, so skip it here.
+    const field = _bookSheetReturnField;
+    if (field && field.container.id !== "search-inpage-bar" && field.input.isConnected) {
+      field.input.focus();
+    }
   });
   body.addEventListener("click", (e) => {
     const t = /** @type {Element} */ (e.target);
@@ -848,6 +862,8 @@ function renderBookFilterList(body, books, working) {
 /** @param {HTMLElement} [returnFocusEl] */
 async function openBookFilterSheet(returnFocusEl) {
   const sheet = ensureBookSheet();
+  // Remember which field's funnel opened this so "적용" can focus its query input.
+  _bookSheetReturnField = _searchFields.find((f) => f.funnel === returnFocusEl) || null;
   // Capture the route sequence; if navigation happens during the awaits below,
   // bail before opening so the sheet (scrim + inert) never appears over a newer
   // view — route() can't close a sheet that wasn't open yet (ADR-033, Bugbot).
