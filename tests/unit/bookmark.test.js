@@ -39,8 +39,9 @@ const BOOKMARK_SOURCE = fs.readFileSync(BOOKMARK_PATH, "utf8");
 // marker block now lives there, so its loader slices from this source.
 const VERSE_SPEC_PATH = path.resolve(__dirname, "../../js/app/verse-spec.js");
 const VERSE_SPEC_SOURCE = fs.readFileSync(VERSE_SPEC_PATH, "utf8");
-// Href/share + sort helpers moved to bookmark-core.js (ADR-034 후속 PR2); their
-// marker blocks (BOOKMARK_HREF / BOOKMARK_SORT) now live there.
+// Href/share, sort, query/tree, and active-route helpers moved to bookmark-core.js
+// (ADR-034 후속 PR2~4); their marker blocks (BOOKMARK_HREF / BOOKMARK_SORT /
+// BOOKMARK_QUERY / BOOKMARK_ACTIVE) now live there.
 const BOOKMARK_CORE_PATH = path.resolve(__dirname, "../../js/app/bookmark-core.js");
 const BOOKMARK_CORE_SOURCE = fs.readFileSync(BOOKMARK_CORE_PATH, "utf8");
 
@@ -1132,9 +1133,11 @@ function loadBookmarkHref() {
 function loadBookmarkActive() {
   const ctx = { Object, Array, String, console, Error };
   vm.createContext(ctx);
-  vm.runInContext(extractBlock("BOOKMARK_HREF", BOOKMARK_CORE_SOURCE) + "\n" + extractBlock("BOOKMARK_ACTIVE"), ctx, {
-    filename: "bookmark-active.js",
-  });
+  vm.runInContext(
+    extractBlock("BOOKMARK_HREF", BOOKMARK_CORE_SOURCE) + "\n" + extractBlock("BOOKMARK_ACTIVE", BOOKMARK_CORE_SOURCE),
+    ctx,
+    { filename: "bookmark-core.js" },
+  );
   return {
     _isActiveBookmark: ctx._isActiveBookmark,
     _hasActiveDescendant: ctx._hasActiveDescendant,
