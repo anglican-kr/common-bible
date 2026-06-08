@@ -41,7 +41,12 @@ Apple HIG의 검색 패턴(필터/스코프 바 · 토큰 대신 칩 · recents 
 > - **`in:<별칭>` 흡수**: `commitTopSearch` 가 커밋 시 쿼리의 `in:` 연산자를 풀어 book id 로
 >   바꿔 `filterBooks`(칩)로 옮기고 `q` 에는 낱말만 남긴다(예제·최근검색·직접 입력 공통) — 토큰 UI 에서
 >   연산자가 입력창에 그대로 노출되지 않도록. 못 푼 별칭은 `q` 에 남아 워커가 그대로 처리(graceful).
->   별칭 맵은 books 의 `short_name_ko`/`name_ko` 로 구성.
+>   별칭 맵은 books 의 `short_name_ko`/`name_ko` 로 구성하며 **부팅 시 미리 로드**(`ensureAliasMap`
+>   kick)해 `commitTopSearch` 는 **동기**로 유지 — async 로 두면 await 경합(stale 적용·flag 잔존)을
+>   매번 routeSeq 가드로 막아야 해, 표면 자체를 없앴다.
+> - **오버플로**: 토큰이 많으면 `.token-zone`(funnel+칩+좁히기)이 **가로 스크롤**되고, 메인 입력·
+>   clear 는 zone 밖이라 항상 닿는다. 탭타깃(funnel·칩 ×·좁히기)은 투명 `::after` 44px 오버레이로
+>   `--touch-target` 확보(시각 크기 유지). 책 칩 라벨은 `short_name_ko`(축약명).
 >
 > `buildSearchFilterBar`/`buildFilterChip` 및 별도 필터 바 제거. **워커·URL(`in=`/`and=`)
 > 스키마 무변경** — 필터가 *어떻게 보이는지*만 바뀜. `css/style.css` 의 옛 `.search-filters`

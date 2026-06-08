@@ -1154,24 +1154,21 @@ async function renderSearchResults(query, page, autoNavigate = false, opts = {})
 let searchAutoNavigate = false;
 
 /** @param {string} rawQuery */
-async function commitTopSearch(rawQuery) {
+function commitTopSearch(rawQuery) {
   const raw = (rawQuery || "").trim();
   if (!raw) return;
   // Absorb typed/example `in:<alias>` operators into book-scope chips so the
-  // operator doesn't linger as raw text in the field (token UI). Unresolved
-  // aliases stay in `q` — the worker still scopes the results from them.
+  // operator doesn't linger as raw text in the field (token UI). The alias map
+  // is preloaded at boot (ensureAliasMap kick at module init), so this stays
+  // SYNCHRONOUS — no await, hence no stale/race surface to guard (the async
+  // version needed routeSeq guards for each edge). If the map isn't ready yet
+  // (cold start) or an alias is unknown, the in: token simply stays in `q` and
+  // the worker still scopes the results from it (graceful, ADR-033 개정 B).
   let keyword = raw;
   /** @type {string[]} */
   let ids = [];
-  // Only the in:<alias> path needs the alias map (a possible cold loadBooks
-  // fetch) — skip the await entirely for plain queries so Enter stays snappy
-  // (Bugbot). When awaiting, capture the route sequence so a navigation or newer
-  // commit during the await aborts this stale one before it touches history/URL.
-  if (/(?:^|\s)in:/.test(raw)) {
-    const seq = window.routeSeq?.() ?? 0;
-    const aliasMap = await ensureAliasMap();
-    if ((window.routeSeq?.() ?? 0) !== seq) return;
-    ({ keyword, ids } = extractInScope(raw, aliasMap));
+  if (_aliasMap && /(?:^|\s)in:/.test(raw)) {
+    ({ keyword, ids } = extractInScope(raw, _aliasMap));
   }
   // Recents keep the raw typed form (incl. in:<alias>) as the history label.
   pushSearchHistory(raw);
@@ -1499,6 +1496,9 @@ mountSearchField($searchBar, $searchInput);
     mountSearchField($tabDock, $tabInput);
   }
 }
+// Preload the in:<alias> map (from prefetched books) so commitTopSearch can
+// absorb operators synchronously — keeps commit free of an async race surface.
+ensureAliasMap();
 
 
 // ── BEGIN AUTO_NAVIGATE ──

@@ -489,8 +489,10 @@ body {
 }
 
 #search-inpage-input {
-  flex: 1;
-  min-width: 0;
+  flex: 1 1 auto;
+  /* Keep a usable width so the token zone scrolls instead of the query input
+     crushing when several book chips are present (Bugbot). */
+  min-width: 5rem;
   border: none;
   background: none;
   font-family: inherit;
@@ -1252,7 +1254,22 @@ body {
    search tokens). .token-zone uses display:contents so the funnel/chips/refine
    flex inline within each field row — the header #search-bar, the mobile
    in-page #search-inpage-bar, and the bottom morphing #tab-search-dock pill. */
-.token-zone { display: contents; }
+/* Horizontal-scroll strip for the funnel + chips + 결과 내 검색 add — so many
+   book tokens scroll instead of crushing the query input or overflowing the bar
+   (Bugbot). The main input and trailing clear/toggle stay OUTSIDE this scroller,
+   so they're always reachable. align-self:stretch makes the zone the full bar
+   height so the 44px tap-target ::after overlays aren't clipped by overflow. */
+.token-zone {
+  display: flex;
+  align-items: center;
+  align-self: stretch;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+.token-zone::-webkit-scrollbar { display: none; }
 .token-zone[hidden] { display: none; }
 /* Chips/refine inherit this Sans stack (display:contents passes inheritance to
    children) so tokens don't pick up the body Serif. */
