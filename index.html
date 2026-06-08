@@ -153,8 +153,8 @@
     <a class="tab-item" href="/bookmarks" data-tab="bookmarks" aria-label="북마크">
       <span class="tab-icon-wrap"><svg class="tab-icon" viewBox="3.55 3.80 16.91 16.91" fill="none" stroke="currentColor" stroke-width="1.27" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.5 4.5h9a1 1 0 0 1 1 1V20l-5.5-3.7L6.5 20V5.5a1 1 0 0 1 1-1z"/></svg></span>
     </a>
-    <!-- ADR-030: 노트 탭 목업(후속 기능 — 현재 비활성 placeholder, 라우트 없음). -->
-    <button type="button" class="tab-item" data-tab="notes" aria-label="노트 (준비 중)" aria-disabled="true">
+    <!-- 노트 탭 — 기능 보류로 1.7.0 까지 hidden(바에서 제거, 탭바 폭은 flex:0 0 auto 라 자동 축소). -->
+    <button type="button" class="tab-item" data-tab="notes" aria-label="노트 (준비 중)" aria-disabled="true" hidden>
       <span class="tab-icon-wrap"><svg class="tab-icon" viewBox="3.82 3.82 16.36 16.36" fill="none" stroke="currentColor" stroke-width="1.23" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4.5h10a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1v-13a1 1 0 0 1 1-1z"/><path d="M9 9h6"/><path d="M9 12.5h6"/><path d="M9 16h4"/></svg></span>
     </button>
     <a class="tab-item" href="/settings" data-tab="settings" aria-label="설정">
@@ -337,8 +337,8 @@
       <button id="verse-select-copy-btn" class="verse-action-btn" type="button" disabled aria-label="복사">
         <svg class="va-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
       </button>
-      <!-- ADR-030: 노트 작성 슬롯 — 후속 기능 placeholder(비활성, 탭 dock 노트 탭과 동일 패턴). -->
-      <button id="verse-select-note-btn" class="verse-action-btn" type="button" aria-disabled="true" aria-label="노트 (준비 중)">
+      <!-- 노트 작성 슬롯 — 기능 보류로 1.7.0 까지 hidden(절 선택 pill 은 2슬롯으로 축소). -->
+      <button id="verse-select-note-btn" class="verse-action-btn" type="button" aria-disabled="true" aria-label="노트 (준비 중)" hidden>
         <svg class="va-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4.5" y="4" width="15" height="16" rx="2.2"/><path d="M8.5 9h7"/><path d="M8.5 12.5h7"/><path d="M8.5 16h4"/></svg>
       </button>
     </div>

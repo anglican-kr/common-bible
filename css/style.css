@@ -2354,10 +2354,9 @@ mark.search-highlight {
   align-items: center;
   /* Gap to the division tabs below; only present when the banner is shown. */
   margin-bottom: var(--space-4);
-  /* Surface card matching the division-tab strip/chip directly below — raised
-     via border + elevation rather than a solid accent fill. */
-  background: var(--bg-card);
-  border: 1px solid var(--border);
+  /* 테마색 솔리드 채움(중립화 전 --accent 채움을 --theme 으로 복원) — 바로 아래
+     중립 카드/탭과 대비되는 컬러 강조 배너. 테두리 없이 elevation 으로만 띄운다. */
+  background: var(--theme);
   border-radius: var(--radius);
   overflow: hidden;
   transition: opacity var(--duration-fast);
@@ -2367,7 +2366,7 @@ mark.search-highlight {
 .resume-banner-link {
   flex: 1;
   padding: var(--space-3) var(--space-4);
-  color: var(--text);
+  color: var(--bg);
   text-decoration: none;
   font-size: var(--font-base);
   text-align: center;
@@ -2392,9 +2391,10 @@ mark.search-highlight {
   justify-content: center;
   width: 2.2rem;
   border: none;
-  border-left: 1px solid var(--border);
+  /* 테마색 채움 위 — 구분선·아이콘은 --bg(반투명) 로 대비. */
+  border-left: 1px solid color-mix(in srgb, var(--bg) 25%, transparent);
   background: transparent;
-  color: var(--text-secondary);
+  color: var(--bg);
   font-size: var(--font-lg);
   cursor: pointer;
   padding: var(--space-3) 0;
@@ -2402,7 +2402,7 @@ mark.search-highlight {
 }
 
 .resume-banner-close:hover {
-  background: color-mix(in srgb, var(--text) 10%, transparent);
+  background: color-mix(in srgb, var(--bg) 15%, transparent);
 }
 
 /* ── Book List ── */
@@ -3683,9 +3683,8 @@ html.cite-sheet-open {
   background: var(--glass-sheen), color-mix(in srgb, var(--bg) 50%, transparent);
 }
 /* 검색 활성(토큰 필드) 레이아웃에선 좌측 돋보기를 숨긴다 — funnel(책 선택)이
-   선두 아이콘 역할을 하고, 돋보기가 함께 있으면 중복이라 (ADR-033 개정 B).
-   단, 쿼리·책 스코프가 모두 빈 "빈 검색"에선 돋보기를 선두로 보이고 funnel 은
-   숨긴다(아직 검색 전이라 '검색'으로 읽히도록 — 사용자 선택). idle 에선
+   빈 검색이든 아니든 항상 선두 아이콘 역할을 한다(ADR-033 개정 C — 빈 검색에서도
+   funnel 노출, 사용자 요청). 돋보기가 함께 있으면 중복이라 숨긴다(개정 B). idle 에선
    #tab-search 가 그대로 "검색 진입" 원형 버튼으로 보인다. */
 #tab-dock.searching #tab-search {
   width: auto;
@@ -3698,8 +3697,6 @@ html.cite-sheet-open {
   backdrop-filter: none;
   display: none;
 }
-#tab-dock.searching.search-empty #tab-search { display: flex; }
-#tab-dock.searching.search-empty .token-funnel { display: none; }
 /* 하단 검색 입력 — Sans(본문 Serif 상속 회피), 콘텐츠 무관 축소(flex-basis 0). */
 #tab-dock.searching #tab-search-input {
   flex: 1 1 0;
@@ -3856,9 +3853,11 @@ body.tabbar-searching #search-inpage-bar { display: none; }
        겹치지 않게(매직넘버 불일치 방지). */
     bottom: var(--tabbar-reserve);
     margin: 0;
-    /* 플로팅 바: 가장자리·요소 간격을 12px 로 통일(여백 일정). 하단은 홈
-       인디케이터 위로 떠 있어 safe-area 불필요 → 8px. */
-    padding: var(--space-2) var(--space-3);
+    /* 상하 8px, 우측 가장자리 12px. 좌단만 space-2(8px) — 재생 버튼(원)을 좌측 반원
+       캡 중심에 안착시키려는 의도: 캡 반지름 = 바 높이/2 = --dock-control/2, 버튼 =
+       --touch-target 이므로 좌단을 (--dock-control − --touch-target)/2 = --space-2 에
+       두면 버튼 중심 = 캡 중심. */
+    padding: var(--space-2) var(--space-3) var(--space-2) var(--space-2);
     /* 탭 바와 동일한 플로팅 둥근 바 — 좌우 끝을 반원 캡(stadium)으로 통일
        (border-radius: --radius-pill, 탭 바 pill·검색 원형과 동일). 글래스(50%+blur)는
        기존 유지, 테두리·그림자만 추가. */
@@ -3890,7 +3889,8 @@ body.tabbar-searching #search-inpage-bar { display: none; }
     right: calc(var(--space-4) + var(--touch-target) + var(--space-2) * 3);
     margin: 0;
     height: var(--dock-control); /* 60px — 원형들과 동일 */
-    padding: 0 var(--space-3);
+    /* 좌단 space-2 로 재생 버튼 중심을 좌측 캡 중심에 맞춤(플로팅 바와 동일 규칙). */
+    padding: 0 var(--space-3) 0 var(--space-2);
     display: flex;
     align-items: center;
     z-index: var(--nav-z);
@@ -3964,7 +3964,9 @@ body.tabbar-searching #search-inpage-bar { display: none; }
   height: var(--touch-target);
   border-radius: 50%;
   border: none;
-  background: var(--accent);
+  /* 테마색 채움(중립 --accent 에서 복원) — 글래스 바 위 컬러 강조점. 아이콘(삼각형·
+     일시정지 바)은 --bg 라 라이트/다크 모두 대비 확보. */
+  background: var(--theme);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -4841,7 +4843,8 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
    (max-content) width, so a content-sized pill collapsed to ~icon width while the
    60px buttons kept their basis — the buttons then overflowed past the pill's right
    cap. An explicit width avoids that intrinsic-sizing path entirely. Update the
-   multiplier if an action is added/removed (both bars currently have 3). */
+   multiplier if an action is added/removed (bm 3슬롯; 절 선택은 노트 보류로 2 —
+   아래 #verse-select-bar override). */
 .verse-action-pill {
   display: flex;
   flex: 0 0 auto;
@@ -4913,6 +4916,15 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 #bm-select-bar { justify-content: space-between; }
 /* 북마크 선택의 삭제만 파괴색(빨간 아이콘). */
 .verse-action-btn--danger { color: var(--danger-text); }
+
+/* ── 노트 기능 보류 (1.7.0 예정) ──────────────────────────────────────────────
+   탭바 노트 탭·절 선택 노트 버튼을 index.html 에서 [hidden] 처리. .tab-item·
+   .verse-action-btn 의 display:flex 가 UA [hidden](display:none)을 이기므로 명시
+   규칙으로 숨긴다. 탭바 폭은 flex:0 0 auto 라 자동 축소(4→3슬롯)되나, 절 선택 pill 은
+   명시 폭이라 2슬롯으로 내린다. 1.7.0 복원 시: hidden 제거 + 아래 두 규칙 제거. */
+.tab-item[hidden],
+.verse-action-btn[hidden] { display: none; }
+#verse-select-bar .verse-action-pill { width: calc(var(--dock-control) * 2); }
 
 .va-icon {
   width: var(--dock-icon);
