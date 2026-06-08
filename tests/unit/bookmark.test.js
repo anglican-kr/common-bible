@@ -35,16 +35,20 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const BOOKMARK_PATH = path.resolve(__dirname, "../../js/app/bookmark.js");
 const BOOKMARK_SOURCE = fs.readFileSync(BOOKMARK_PATH, "utf8");
+// Verse-spec utilities moved to verse-spec.js (ADR-034 후속); the VERSE_SPEC
+// marker block now lives there, so its loader slices from this source.
+const VERSE_SPEC_PATH = path.resolve(__dirname, "../../js/app/verse-spec.js");
+const VERSE_SPEC_SOURCE = fs.readFileSync(VERSE_SPEC_PATH, "utf8");
 
-function extractBlock(name) {
+function extractBlock(name, source = BOOKMARK_SOURCE) {
   const begin = `// ── BEGIN ${name} ──`;
   const end = `// ── END ${name} ──`;
-  const startIdx = BOOKMARK_SOURCE.indexOf(begin);
-  const endIdx = BOOKMARK_SOURCE.indexOf(end);
+  const startIdx = source.indexOf(begin);
+  const endIdx = source.indexOf(end);
   if (startIdx < 0 || endIdx < 0) {
-    throw new Error(`marker block ${name} not found in js/app/bookmark.js`);
+    throw new Error(`marker block ${name} not found`);
   }
-  return BOOKMARK_SOURCE.slice(startIdx, endIdx + end.length);
+  return source.slice(startIdx, endIdx + end.length);
 }
 
 // ── Helpers shared across loaders ─────────────────────────────────────────────
@@ -85,7 +89,7 @@ function loadVerseSpec() {
     parseInt,
   };
   vm.createContext(ctx);
-  vm.runInContext(extractBlock("VERSE_SPEC"), ctx, { filename: "bookmark-verse-spec.js" });
+  vm.runInContext(extractBlock("VERSE_SPEC", VERSE_SPEC_SOURCE), ctx, { filename: "verse-spec.js" });
   return {
     parseVerseSpec: ctx.parseVerseSpec,
     collapseFullVerseRefs: ctx.collapseFullVerseRefs,
