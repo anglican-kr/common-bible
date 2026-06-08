@@ -1792,7 +1792,7 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 2.5rem;
+  min-height: var(--touch-target);
   padding: var(--space-2) var(--space-3);
   font-family: inherit;
   font-size: var(--font-sm);
