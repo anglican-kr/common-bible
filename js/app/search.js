@@ -1157,17 +1157,18 @@ let searchAutoNavigate = false;
 async function commitTopSearch(rawQuery) {
   const raw = (rawQuery || "").trim();
   if (!raw) return;
-  // Recents keep the raw typed form (incl. in:<alias>) as the history label.
-  pushSearchHistory(raw);
-  if (topSearchHistory) topSearchHistory.refresh();
   // Absorb typed/example `in:<alias>` operators into book-scope chips so the
   // operator doesn't linger as raw text in the field (token UI). Unresolved
   // aliases stay in `q` — the worker still scopes the results from them.
   // ensureAliasMap may await a cold book load; capture the route sequence so a
-  // navigation or newer commit during the await aborts this stale one (Bugbot).
+  // navigation or newer commit during the await aborts this stale one — before
+  // we touch history or the URL, so an aborted commit leaves no recents (Bugbot).
   const seq = window.routeSeq?.() ?? 0;
   const aliasMap = await ensureAliasMap();
   if ((window.routeSeq?.() ?? 0) !== seq) return;
+  // Recents keep the raw typed form (incl. in:<alias>) as the history label.
+  pushSearchHistory(raw);
+  if (topSearchHistory) topSearchHistory.refresh();
   const { keyword, ids } = extractInScope(raw, aliasMap);
   // Keep the book-picker scope across a fresh query (union in: tokens), but
   // reset 결과 내 검색 (it refines a specific result set) and pagination (ADR-033).
