@@ -44,6 +44,29 @@ window.appOverlay = (() => {
    *   panel. Without it, the panel hides synchronously.
    */
 
+  // Registry of every createOverlay instance so closeAllOverlays() can dismiss
+  // all open overlays on a route change without the router hardcoding each one
+  // (ADR-034 PR5b).
+  /** @type {{ panel: HTMLElement, controller: { close: () => void, readonly isOpen: boolean } }[]} */
+  const _overlayRegistry = [];
+
+  // Close every currently-open overlay (route() calls this on navigation).
+  // Mirrors the old per-overlay teardown: controller.close() runs the full
+  // unwind (scrim / inert / focus trap / onClose / focus restore), then the
+  // panel is force-hidden so an animated dismiss doesn't linger over the
+  // incoming view. Detached panels (per-open-rebuilt overlays whose element was
+  // replaced, e.g. chapter picker) are pruned so the registry stays bounded.
+  function closeAllOverlays() {
+    for (let i = _overlayRegistry.length - 1; i >= 0; i--) {
+      const { panel, controller } = _overlayRegistry[i];
+      if (!panel.isConnected) { _overlayRegistry.splice(i, 1); continue; }
+      if (controller.isOpen) {
+        controller.close();
+        if (!panel.hidden) panel.hidden = true;
+      }
+    }
+  }
+
   /**
    * Build a controller for a single overlay. Returns stable `open`/`close`
    * handles plus an `isOpen` getter; both are idempotent (re-`open` while open
@@ -194,11 +217,15 @@ window.appOverlay = (() => {
       }
     }
 
-    return {
+    const controller = {
       open,
       close,
       get isOpen() { return _open; },
     };
+    // Per-open-rebuilt overlays push a fresh instance each time; closeAllOverlays
+    // prunes detached panels (ADR-034 PR5b).
+    _overlayRegistry.push({ panel, controller });
+    return controller;
   }
 
   // ── Bottom-sheet drag plumbing (ADR-032 §2) ─────────────────────────────────
@@ -283,7 +310,7 @@ window.appOverlay = (() => {
     });
   }
 
-  return { createOverlay, attachSheetDrag, attachSheetResize };
+  return { createOverlay, closeAllOverlays, attachSheetDrag, attachSheetResize };
 })();
 
 // ESM module marker (ADR-019). No runtime effect; signals TypeScript that

@@ -201,48 +201,15 @@ async function route() {
   // Leaving the bookmarks view mid-select must drop the select bar too (self-
   // guards when not in select mode).
   window.exitBookmarkSelectMode?.();
-  // Route changes should dismiss overlays through their controllers, not by
-  // flipping `hidden`, so scrims, focus traps, body scroll locks and focus
-  // restoration all unwind consistently (ADR-032).
-  /** @param {string} id @param {() => void} close */
-  const closeIfOpen = (id, close) => {
-    const node = /** @type {HTMLElement | null} */ (document.getElementById(id));
-    if (node && !node.hidden) {
-      close();
-      // Animated-dismiss overlays (cite sheet / drawer closeTransition) set
-      // _open=false immediately but DEFER panel.hidden to the slide-out's end.
-      // On navigation we want the overlay gone now, not lingering over the next
-      // view — so force it hidden. Harmless no-op for synchronous overlays
-      // (already hidden by close()); their controllers' deferred finalize then
-      // self-skips, and the closing class is cleared on the next open (ADR-032).
-      if (!node.hidden) node.hidden = true;
-    }
-  };
-  // The citation sheet is anchored to a specific citation context, so a route
-  // change (link nav or back/forward — both land here) should dismiss it.
-  closeIfOpen("cite-sheet", () => window.appCitations?.closeCiteSheet());
-  closeIfOpen("install-modal", () => window.closeInstallModal?.());
-  closeIfOpen("drive-disconnect-modal", () => window.closeDriveDisconnectModal?.());
-  closeIfOpen("bookmark-drawer", () => window.closeBookmarkDrawer?.());
-  closeIfOpen("bm-new-folder-modal", () => window.closeNewFolderModal?.());
-  closeIfOpen("bm-confirm-modal", () => window.closeConfirmModal?.());
-  closeIfOpen("bm-chapter-delete-modal", () => window.closeChapterDeleteModal?.());
-  closeIfOpen("bm-move-modal", () => window.closeMoveModal?.());
-  closeIfOpen("bm-import-modal", () => window.closeImportModal?.());
-  closeIfOpen("bm-merge-modal", () => window.closeMergeModal?.());
-  closeIfOpen("bm-save-modal", () => window.closeSaveModal?.());
-  // Book-filter sheet (ADR-033) — same teardown contract as the other overlays
-  // so leaving /search with the picker open doesn't strand the scrim/inert.
-  closeIfOpen("book-filter-sheet", () => window.closeBookFilterSheet?.());
-  // Desktop settings popover: close on nav too (it has a focus trap). Closing
-  // here also makes the /settings desktop fallback's gear.click() always OPEN
-  // (never toggle-closed) since the popover is already dismissed by this point.
-  const settingsPopover = document.querySelector(".settings-popover");
-  if (settingsPopover && !(/** @type {HTMLElement} */ (settingsPopover)).hidden) window.closeSettings?.();
-  // Chapter picker has a focus trap + outside-click listener; dismiss on nav so
-  // a stale controller from the previous render doesn't linger (ADR-032).
-  const chapterPopover = document.querySelector(".chapter-popover");
-  if (chapterPopover && !(/** @type {HTMLElement} */ (chapterPopover)).hidden) window.closeChapterPopover?.();
+  // Route changes dismiss every open overlay through its controller (ADR-034
+  // PR5b / ADR-032): scrims, focus traps, body scroll locks and focus
+  // restoration all unwind consistently, and animated-dismiss panels (cite
+  // sheet / drawer) are force-hidden so they don't linger over the incoming
+  // view. The overlay controller owns the registry, so the router no longer
+  // hardcodes each overlay's id + close fn (was 12 closeIfOpen calls + the
+  // settings / chapter popovers). Closing the chapter picker / settings popover
+  // on nav also makes the /settings desktop fallback's gear.click() always OPEN.
+  window.appOverlay.closeAllOverlays();
   const parsed = parsePath();
   const { view, bookId, chapter, division } = parsed;
 
