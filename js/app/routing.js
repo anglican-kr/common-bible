@@ -190,6 +190,14 @@ async function route() {
   _isInitialLoad = false;
   // ADR-031: 떠나는 경로의 스크롤을 기억(DOM 변경 전) + 재진입 가드 시퀀스 발급.
   const routeSeq = ++_routeSeq;
+  // route() 는 재진입형 async 함수다. 아래의 모든 await 뒤 continuation 은 공유 상태
+  // (#app 렌더 · updatePageMeta · trackPageView · 오버레이 · 이어읽기 위치)를 만지기
+  // 전에 이 가드로 자신이 여전히 최신 route() 호출인지 확인한다. 리다이렉트(navigate)나
+  // 사용자의 다른 네비게이션이 그 사이 _routeSeq 를 올렸으면, 늦게 끝난 fetch 가 이미
+  // 떠 있는 새 뷰를 덮어쓰지 않도록 곧장 빠져나간다. (검색 분기는 예전엔 parsePath().view
+  // 로 확인했으나 같은 축이라 이 가드로 통일했다 — auto-nav 의 inner route() 가 _routeSeq
+  // 를 동기적으로 올리므로 동치이고, 진행 중 다른 검색어로 이동한 경우까지 더 넓게 잡는다.)
+  const isStale = () => routeSeq !== _routeSeq;
   window.tabHistory?.onRouteStart();
   // Tab-bar active state + sliding indicator moved to tabbar.js (ADR-034 PR3).
   // Facade call: tabbar ↔ views is a cycle, so this stays on window.
@@ -239,9 +247,10 @@ async function route() {
           filterBooks: parsed.filterBooks,
           andTerms: parsed.andTerms,
         });
-        // If renderSearchResults auto-navigated to a chapter, the inner route() call
-        // already handles meta and analytics for that view — don't overwrite.
-        if (parsePath().view !== "search") return;
+        // renderSearchResults 가 verse-ref auto-nav 으로 inner route() 를 호출했으면
+        // _routeSeq 가 올라가 이 가드가 잡는다 — inner route() 가 챕터의 meta·분석을 이미
+        // 처리했으니 여기서 덮어쓰지 않는다. (예전 parsePath().view 체크와 동치.)
+        if (isStale()) return;
         updatePageMeta({
           title: `"${parsed.query}" 검색`,
           description: `공동번역성서에서 "${parsed.query}" 검색 결과`,
@@ -253,13 +262,14 @@ async function route() {
         // we render the search view so the scope is visible/removable instead of
         // silently applied by a later header search (ADR-033, Bugbot).
         await renderSearchView({ filterBooks: parsed.filterBooks });
-        // renderSearchView 가 ensureBookMap await 중 routeSeq 변경으로 일찍 빠져나갔으면
-        // 이미 다른 뷰가 떠 있으니, "검색" 제목·분석을 덮어쓰지 않는다 (ADR-033, Bugbot).
-        if (parsePath().view !== "search") return;
+        // renderSearchView 가 ensureBookMap await 중 _routeSeq 변경으로 일찍 빠져나갔거나
+        // 그 사이 다른 뷰로 이동했으면 "검색" 제목·분석을 덮어쓰지 않는다 (ADR-033, Bugbot).
+        if (isStale()) return;
         dismissLaunchScreen();
         updatePageMeta({ title: "검색", description: "공동번역성서 검색" });
       } else {
         const books = await loadBooks();
+        if (isStale()) return;
         renderBookList(books, divisionOrder()[0]);
         dismissLaunchScreen();
         updatePageMeta();
@@ -277,6 +287,7 @@ async function route() {
         // Ensure the books cache is populated so bookmark refs resolve to the
         // Korean short name (창세) instead of falling back to the raw id (gen).
         await loadBooks();
+        if (isStale()) return;
         window.renderBookmarksView();
         dismissLaunchScreen();
         updatePageMeta({ title: "북마크", description: "공동번역성서 북마크 목록" });
@@ -286,6 +297,7 @@ async function route() {
       // Desktop fallback: show the book list, then open the bookmark drawer
       // (the established desktop affordance) over it.
       const books = await loadBooks();
+      if (isStale()) return;
       renderBookList(books, divisionOrder()[0]);
       dismissLaunchScreen();
       updatePageMeta({ title: "북마크", description: "공동번역성서 북마크 목록" });
@@ -306,6 +318,7 @@ async function route() {
       // a routable page. Show the book list and click the desktop trigger to
       // open the popover so a deep-link / resize-down still lands somewhere.
       const books = await loadBooks();
+      if (isStale()) return;
       renderBookList(books, divisionOrder()[0]);
       dismissLaunchScreen();
       updatePageMeta({ title: "설정", description: "공동번역성서 설정" });
@@ -317,6 +330,7 @@ async function route() {
     }
 
     const books = await loadBooks();
+    if (isStale()) return;
 
     if (view === "books") {
       if (isInitialLoad && loadStartupBehavior() === "resume") {
@@ -376,6 +390,7 @@ async function route() {
     if (view === "prologue") {
       if (!bookId) return;
       const data = await loadPrologue(bookId);
+      if (isStale()) return;
       renderPrologue(data, book);
       saveReadingPosition(bookId, "prologue");
       updatePageMeta({
@@ -393,6 +408,7 @@ async function route() {
         return;
       }
       const data = await loadChapter(bookId, chapter);
+      if (isStale()) return;
       const savedPos = loadReadingPosition();
       const autoRestore = isInitialLoad
         && loadStartupBehavior() === "resume"
