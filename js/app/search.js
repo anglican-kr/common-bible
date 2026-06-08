@@ -645,6 +645,14 @@ function syncSearchFields() {
     if (!_searchFields[i].container.isConnected) _searchFields.splice(i, 1);
   }
   for (const f of _searchFields) syncOneField(f);
+  // route() can sync before a search view finishes ensureBookMap(); if a book
+  // scope is active while names aren't loaded yet, book tokens would show raw
+  // ids. Resolve the map and re-sync once so they flip to Korean names (Bugbot).
+  if (!_bookMap && currentSearchState().filterBooks.length) {
+    ensureBookMap().then((map) => {
+      if (Object.keys(map).length) for (const f of _searchFields) syncOneField(f);
+    });
+  }
 }
 
 // ── Book-filter sheet (book picker) ──
