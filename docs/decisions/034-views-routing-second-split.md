@@ -57,7 +57,7 @@ ADR-018은 6,082줄 `app.js`를 8 PR로 가르며, Phase 7에서 "Routing + View
 | PR | 작업 | 빼낼 영역 → 대상 파일 | 결합 처리 |
 |---|---|---|---|
 | 1 | **오디오 플레이어** | 2132–2324 + 오디오 상태 → `js/app/audio-player.js` | `route`측 호출을 명시 import로. 외부 호출자(search·settings·bookmark·app·sync)용 `window.{hideAudioBar,applyAudioShow,getCurrentAudio}` facade 유지. `applyAudioShow→parsePath` 상향 엣지는 `window.parsePath` 임시 경유(PR5에서 해소) |
-| 2 | **데이터 페칭** | 343–396 + `booksCache`/`appVersion` → `js/app/data-fetch.js` | leaf. 소비자 다수라 import 전환은 모듈 손댈 때 점진 |
+| 2 | **데이터 페칭** ✅ | `loadBooks/Version/Chapter/Prologue` + `booksCache`/`appVersion`/`DATA_DIR`/`getBooksCache` → `js/app/data-fetch.js` | leaf(의존 0). views-routing 내부 호출(loadBooks/Chapter/Prologue)은 명시 import, 외부 소비자(search·app·bookmark·settings) facade는 data-fetch가 소유. `DATA_FETCHING` 마커 + 유닛 테스트 슬라이스 경로 동반 이동 |
 | 3 | **탭 인디케이터** | 44–163 → 기존 `js/app/tabbar.js` 병합 | |
 | 4 | **Pull-to-refresh 제거(폐기)** | 164–342 `setupPullToRefresh` IIFE + CSS `#pull-refresh-*` 삭제 | 사용자 결정(2026-06-08): 모바일 "당겨서 새로고침"=수동 Drive 동기화 트리거이므로 제거. `driveSync.requestSync` API·상태기계·visibilitychange 자동 동기화·편집 시 자동 업로드 등 **백그라운드 동기화 로직은 전부 유지**(`requestSync`는 다른 경로도 호출) |
 | 5 | **라우팅** | 1714–2131 → `js/app/routing.js` | `parsePath`를 하위 모듈로 내려 audio의 상향 엣지를 하향 import로 정리. route()→외부 뷰 dispatch를 `registerView` registry로 역전. route()의 12개 `closeX` 모달 클로저 호출을 ADR-032 오버레이의 `closeAllOverlays()` 하나로 축약 |

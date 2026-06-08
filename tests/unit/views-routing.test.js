@@ -35,6 +35,10 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const VIEWS_PATH = path.resolve(__dirname, "../../js/app/views-routing.js");
 const VIEWS_SOURCE = fs.readFileSync(VIEWS_PATH, "utf8");
+// Data fetching moved to its own module (ADR-034 PR2). The DATA_FETCHING marker
+// block now lives there, so its loader slices from this source, not VIEWS_SOURCE.
+const DATA_FETCH_PATH = path.resolve(__dirname, "../../js/app/data-fetch.js");
+const DATA_FETCH_SOURCE = fs.readFileSync(DATA_FETCH_PATH, "utf8");
 // The chapter popover drives the shared overlay controller (ADR-032). The
 // POPOVER loader injects the REAL overlay.js so its open/close lifecycle runs
 // against the test DOM stub. Strip the trailing `export {};` ESM marker.
@@ -42,15 +46,15 @@ const OVERLAY_PATH = path.resolve(__dirname, "../../js/app/overlay.js");
 const OVERLAY_SOURCE = fs.readFileSync(OVERLAY_PATH, "utf8")
   .replace(/\nexport\s*\{\s*\}\s*;?\s*$/, "");
 
-function extractBlock(name) {
+function extractBlock(name, source = VIEWS_SOURCE) {
   const begin = `// ── BEGIN ${name} ──`;
   const end = `// ── END ${name} ──`;
-  const startIdx = VIEWS_SOURCE.indexOf(begin);
-  const endIdx = VIEWS_SOURCE.indexOf(end);
+  const startIdx = source.indexOf(begin);
+  const endIdx = source.indexOf(end);
   if (startIdx < 0 || endIdx < 0) {
-    throw new Error(`marker block ${name} not found in js/app/views-routing.js`);
+    throw new Error(`marker block ${name} not found`);
   }
-  return VIEWS_SOURCE.slice(startIdx, endIdx + end.length);
+  return source.slice(startIdx, endIdx + end.length);
 }
 
 // ── DATA_FETCHING loader ─────────────────────────────────────────────────────
@@ -90,8 +94,8 @@ function loadDataFetching() {
     function _peekAppVersion() { return appVersion; }
     function _setBooksCache(v) { booksCache = v; }
   `;
-  vm.runInContext(prelude + extractBlock("DATA_FETCHING"), ctx, {
-    filename: "views-routing-data-fetching.js",
+  vm.runInContext(prelude + extractBlock("DATA_FETCHING", DATA_FETCH_SOURCE), ctx, {
+    filename: "data-fetch.js",
   });
   return {
     ctx, fetchCalls, windowStub,

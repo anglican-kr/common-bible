@@ -2,15 +2,13 @@
 // @ts-check
 
 // Phase 7a of the app.js modularization (ADR-018). Owns:
-//  - Data fetching (loadBooks / loadVersion / loadChapter / loadPrologue)
-//    + module-level caches (booksCache, appVersion) that feed everything else.
 //  - Rendering helpers (setTitle / chapter picker / division tabs) + division
 //    constants and book-order resolution (canonical vs vulgate ordering).
 //  - Compact Header on Scroll (collapses breadcrumb past 60px scroll).
 //
 // Views and Routing join this module in Phase 7b; the file name reflects that
-// destination. (The Audio Player split out to audio-player.js and the
-// page-level Pull-to-refresh gesture was removed — both ADR-034.)
+// destination. (Data fetching → data-fetch.js, Audio Player → audio-player.js,
+// page-level Pull-to-refresh removed — all ADR-034.)
 
 /** @typedef {import("../types").BooksData} BooksData */
 /** @typedef {import("../types").BookEntry} BookEntry */
@@ -22,6 +20,12 @@
 // instead of through the window facade. applyAudioShow stays facade-only
 // (settings-ui / state-machine read it) so it is not imported here.
 import { showAudioPlayer, hideAudioBar } from "./audio-player.js";
+
+// Data fetching (loadBooks / loadChapter / loadPrologue) moved to data-fetch.js
+// (ADR-034 PR2). Imported for the route/render callers here. loadVersion /
+// getBooksCache stay facade-only (app.js / bookmark.js read them) and are not
+// used in this module.
+import { loadBooks, loadChapter, loadPrologue } from "./data-fetch.js";
 
 const { _$, el, clearNode, chUnit } = window.appHelpers;
 const { createOverlay } = window.appOverlay;
@@ -152,72 +156,6 @@ if (typeof window !== "undefined" && window.addEventListener) {
   // tabbar.js 가 스크롤 축소 해제 후 재배치를 요청할 수 있도록 노출(필요 시).
   window.syncTabIndicator = reposition;
 }
-
-// Mirrors app.js's DATA_DIR — Phase 7b's audio player still uses the same
-// constant in app.js until that section moves here as well.
-const DATA_DIR = "/data";
-
-// Module state — both caches are read by Phase 7b territory in app.js
-// (Views/Routing) via `window.getBooksCache()` and `window.appVersion`.
-/** @type {BooksData | null} */
-let booksCache = null;
-/** @type {string | null} */
-let appVersion = null;
-
-// ── Data fetching ──
-// ── BEGIN DATA_FETCHING ──
-// Exercised by tests/unit/views-routing.test.js. The 4 functions are
-// fetch wrappers with caching: loadBooks/loadVersion update module state
-// (booksCache/appVersion); loadChapter/loadPrologue are pure pass-throughs.
-// Test loader provides `fetch` stub + booksCache/appVersion state in prelude.
-
-/** @returns {Promise<BooksData>} */
-async function loadBooks() {
-  if (booksCache) return booksCache;
-  // Use pre-fetched promise if available
-  const promise = window.booksPromise || fetch(`${DATA_DIR}/books.json`).then((res) => {
-    if (!res.ok) throw new Error("Failed to load books.json");
-    return res.json();
-  });
-  const data = await promise;
-  booksCache = data;
-  return data;
-}
-
-/** @returns {Promise<string>} */
-async function loadVersion() {
-  if (appVersion) return appVersion;
-  try {
-    const res = await fetch("/version.json");
-    const data = await res.json();
-    appVersion = data.version;
-  } catch {
-    appVersion = "";
-  }
-  // Mirror to window so settings-ui.js can read it (ADR-018 Phase 3).
-  // Will move into js/app/data-fetching.js (Phase 7) along with loadVersion.
-  window.appVersion = appVersion;
-  return appVersion ?? "";
-}
-
-/**
- * @param {string} bookId
- * @param {number} chapter
- * @returns {Promise<BibleChapter>}
- */
-async function loadChapter(bookId, chapter) {
-  const res = await fetch(`${DATA_DIR}/bible/${bookId}-${chapter}.json`);
-  if (!res.ok) throw new Error(`Failed to load ${bookId}-${chapter}.json`);
-  return res.json();
-}
-
-/** @param {string} bookId @returns {Promise<BiblePrologue>} */
-async function loadPrologue(bookId) {
-  const res = await fetch(`${DATA_DIR}/bible/${bookId}-prologue.json`);
-  if (!res.ok) throw new Error(`Failed to load ${bookId}-prologue.json`);
-  return res.json();
-}
-// ── END DATA_FETCHING ──
 
 // ── Rendering helpers ──
 
@@ -1951,13 +1889,12 @@ window.addEventListener("popstate", () => {
 
 // ── Window facade ──
 // Both an `appViewsRouting` aggregate and per-name globals so app.js's
-// Phase 7b territory (Views/Routing) can call setTitle / loadBooks /
-// divisionLabels etc. as bare globals. `window.appVersion` is mirrored by
-// `loadVersion` for settings-ui.js (Phase 3 owner) which reads it for the
-// version footer.
+// Phase 7b territory (Views/Routing) can call setTitle / divisionLabels etc.
+// as bare globals. (Data fetching's facade — loadBooks / loadVersion /
+// getBooksCache + the window.appVersion mirror — moved to data-fetch.js,
+// ADR-034 PR2.)
 
 const appViewsRouting = {
-  loadBooks, loadVersion, loadChapter, loadPrologue,
   setTitle, setTitleWithChapterPicker,
   buildDivisionTabs, divisionLabels, divisionOrder, effectiveDivision,
   initCompactHeader, initScrollElevation,
@@ -1966,10 +1903,6 @@ const appViewsRouting = {
 };
 window.appViewsRouting = appViewsRouting;
 
-window.loadBooks = loadBooks;
-window.loadVersion = loadVersion;
-window.loadChapter = loadChapter;
-window.loadPrologue = loadPrologue;
 window.setTitle = setTitle;
 window.setTitleWithChapterPicker = setTitleWithChapterPicker;
 window.buildDivisionTabs = buildDivisionTabs;
@@ -1978,7 +1911,6 @@ window.divisionOrder = divisionOrder;
 window.effectiveDivision = effectiveDivision;
 window.initCompactHeader = initCompactHeader;
 window.initScrollElevation = initScrollElevation;
-window.getBooksCache = () => booksCache;
 window.setPendingBookFocus = setPendingBookFocus;
 // Monotonic route counter (ADR-031). Async view renderers (search.js) read this
 // before awaiting and bail if it changed, so a late await completion never
@@ -2003,7 +1935,6 @@ window.renderError = renderError;
 // renderBookList) now live in this module.)
 
 export {
-  loadBooks, loadVersion, loadChapter, loadPrologue,
   setTitle, setTitleWithChapterPicker,
   buildDivisionTabs, divisionLabels, divisionOrder, effectiveDivision,
   initCompactHeader, initScrollElevation,
