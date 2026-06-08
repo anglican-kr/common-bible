@@ -232,6 +232,10 @@ async function route() {
     $searchClear.hidden = true;
     $searchBar.dataset.clearHidden = "true";
   }
+  // Refresh in-field search tokens (book scope + 결과 내 검색) for the new route
+  // (ADR-033 개정 B) — keeps the persistent header/pill fields in sync with the
+  // URL filters across back/forward, pagination and tab restore.
+  window.syncSearchFields?.();
 
   try {
     if (view === "search") {

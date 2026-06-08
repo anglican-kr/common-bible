@@ -16,6 +16,44 @@
 
 Apple HIG의 검색 패턴(필터/스코프 바 · 토큰 대신 칩 · recents 목록 · 시트 선택)을 따른다.
 
+> **개정 (2026-06-08) — 필터를 검색 필드 안 토큰으로 (대안 A 채택):** 별도 **필터 바**
+> (`.search-filters`: 책 선택 버튼 + 칩 줄 + "결과 내 검색" 입력)가 하단 모핑 탭바의 검색
+> pill 과 함께 떠 **검색창이 두 개**로 보이는 어색함이 있었다(HIG "single, clearly
+> identified location" 위배). 이를 본 ADR 의 **대안 A(검색어 필드 안 토큰, iOS 16 search
+> tokens)** 로 전환한다 — 당시 "헤더·in-page·모핑 3개 입력 지점 모두 구현" 비용 때문에
+> 보류했던 안.
+>
+> 비용을 낮춘 구현 방식: `<input>` 을 contenteditable 로 바꾸지 않고 **칩을 input 의 형제로
+> 같은 flex 행에 두는** wrapper(`.token-zone`, `display:contents`)를 쓴다. 실제 `<input>`
+> 이 그대로라 `.value`·`focus({preventScroll})`·focus/blur·visualViewport 배선(ADR-030)이
+> 전부 보존된다. 세 필드(`#search-bar` 헤더 · `#search-inpage-bar` · `#tab-search-dock`
+> 모핑 pill)에 `mountSearchField` 로 토큰 존을 끼우고, `syncSearchFields()` 가 매 route
+> (routing.js) + 모핑 open(tabbar.js)에서 URL 필터를 칩으로 다시 그린다.
+>
+> - **책 스코프** = 필드 좌측 **깔때기 버튼**(`.token-funnel`, 책 선택 시트 진입 — 시트는 유지)
+>   + 선택된 책마다 제거 가능한 **칩**(`.field-token`).
+> - **"결과 내 검색"(AND)** = 제거 가능한 칩 + 쿼리가 있을 때만 보이는 **"＋ 좁히기" 고스트
+>   토큰**(`.token-refine-add`); 탭하면 칩들 사이에서 **작은 인라인 입력**(`.token-refine-input`)
+>   이 펼쳐져 Enter 로 AND 토큰 추가. (전 줄 전체 폭 입력이 아니라 토큰 크기라 "두 번째
+>   검색창" 으로 안 보임.)
+> - **Backspace**(caret 0·빈 필드)로 마지막 토큰 제거(AND → 책 순), 칩 × 클릭으로 개별 제거.
+> - 모핑 pill 의 토큰은 `body.tabbar-searching` 일 때만 렌더(접힌 dock 엔 칩 없음).
+> - **`in:<별칭>` 흡수**: `commitTopSearch` 가 커밋 시 쿼리의 `in:` 연산자를 풀어 book id 로
+>   바꿔 `filterBooks`(칩)로 옮기고 `q` 에는 낱말만 남긴다(예제·최근검색·직접 입력 공통) — 토큰 UI 에서
+>   연산자가 입력창에 그대로 노출되지 않도록. 못 푼 별칭은 `q` 에 남아 워커가 그대로 처리(graceful).
+>   별칭 맵은 books 의 `short_name_ko`/`name_ko` 로 구성하며 **부팅 시 미리 로드**(`ensureAliasMap`
+>   kick)해 `commitTopSearch` 는 **동기**로 유지 — async 로 두면 await 경합(stale 적용·flag 잔존)을
+>   매번 routeSeq 가드로 막아야 해, 표면 자체를 없앴다.
+> - **오버플로**: 토큰이 많으면 `.token-zone`(funnel+칩+좁히기)이 **가로 스크롤**되고, 메인 입력·
+>   clear 는 zone 밖이라 항상 닿는다. 탭타깃(funnel·칩 ×·좁히기)은 투명 `::after` 44px 오버레이로
+>   `--touch-target` 확보(시각 크기 유지). 책 칩 라벨은 `short_name_ko`(축약명).
+>
+> `buildSearchFilterBar`/`buildFilterChip` 및 별도 필터 바 제거. **워커·URL(`in=`/`and=`)
+> 스키마 무변경** — 필터가 *어떻게 보이는지*만 바뀜. `css/style.css` 의 옛 `.search-filters`
+> /`.search-scope-*`/`.search-refine-*`/`.search-chip*` 규칙은 사용처가 사라져 dead(후속 정리).
+> 라우팅·시트·모핑 DOM 상호작용은 e2e 책임(ADR-013), 순수 로직(URL·페이지네이션) 유닛
+> 회귀 없음(678 통과·tsc 0). **모바일 pill 레이아웃은 디바이스 시각 검증 필요.**
+
 ## 맥락
 
 - ADR-005가 `in:<별칭>` 연산자를 도입했고, ADR-030이 옛 검색 시트(`+ in:` 칩)를 제거하면서 책 범위 지정을 **타이핑으로만** 할 수 있게 됐다. 책 이름·별칭을 외워 입력하는 것은 발견성이 낮다.

@@ -119,6 +119,9 @@ function syncInputFromUrl() {
   if (!$searchInput || document.activeElement === $searchInput) return;
   $searchInput.value = new URLSearchParams(location.search).get("q") || "";
   syncClearBtn();
+  // Refresh the pill's in-field tokens (book scope + 결과 내 검색) for the
+  // current query/scope (ADR-033 개정 B).
+  W.syncSearchFields?.();
 }
 
 // ── 진입/복구 ──
@@ -156,6 +159,9 @@ function openSearch() {
     ? $inpage.value
     : (new URLSearchParams(location.search).get("q") || "");
   syncClearBtn();
+  // 모핑이 열리며 pill 이 단일 검색 필드가 되므로 책/AND 토큰을 즉시 반영
+  // (이미 /search 라 navigate→route 가 없을 때도 갱신). ADR-033 개정 B.
+  W.syncSearchFields?.();
   // 키보드는 검색 버튼 탭으로 떠야 한다. iOS Safari 는 프로그래밍 focus() 가 사용자
   // 제스처(탭 핸들러)와 같은 동기 실행 안에서 호출될 때만 소프트 키보드를 띄운다 —
   // rAF 로 미루면 제스처 체인이 끊겨 입력엔 포커스가 가도 키보드가 안 뜬다. openSearch
@@ -299,7 +305,13 @@ $searchClear?.addEventListener("click", () => {
   if (!$searchInput) return;
   $searchInput.value = "";
   syncClearBtn();
-  if (W.parsePath?.().view === "search") W.navigate("/search");
+  // Drop the query but KEEP the book-picker scope (in=) so clearing text in the
+  // pill doesn't silently remove book tokens the header/in-page clears would
+  // keep — navigateSearch preserves filterBooks (ADR-033 개정 B, Bugbot).
+  if (W.parsePath?.().view === "search") {
+    if (W.navigateSearch) W.navigateSearch({ q: "", andTerms: [] });
+    else W.navigate("/search");
+  }
   $searchInput.focus({ preventScroll: true });
 });
 

@@ -489,8 +489,10 @@ body {
 }
 
 #search-inpage-input {
-  flex: 1;
-  min-width: 0;
+  flex: 1 1 auto;
+  /* Keep a usable width so the token zone scrolls instead of the query input
+     crushing when several book chips are present (Bugbot). */
+  min-width: 5rem;
   border: none;
   background: none;
   font-family: inherit;
@@ -1247,6 +1249,160 @@ body {
   color: var(--accent);
 }
 
+/* ── In-field search tokens (ADR-033 개정 B) ───────────────────────────────
+   Book scope + 결과 내 검색 surface as chips INSIDE the search field (HIG
+   search tokens). .token-zone uses display:contents so the funnel/chips/refine
+   flex inline within each field row — the header #search-bar, the mobile
+   in-page #search-inpage-bar, and the bottom morphing #tab-search-dock pill. */
+/* Horizontal-scroll strip for the funnel + chips + 결과 내 검색 add — so many
+   book tokens scroll instead of crushing the query input or overflowing the bar
+   (Bugbot). The main input and trailing clear/toggle stay OUTSIDE this scroller,
+   so they're always reachable. align-self:stretch makes the zone the full bar
+   height so the 44px tap-target ::after overlays aren't clipped by overflow. */
+.token-zone {
+  display: flex;
+  align-items: center;
+  align-self: stretch;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+.token-zone::-webkit-scrollbar { display: none; }
+.token-zone[hidden] { display: none; }
+/* Chips/refine inherit this Sans stack (display:contents passes inheritance to
+   children) so tokens don't pick up the body Serif. */
+.field-token,
+.token-refine-add,
+.token-refine-input {
+  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+}
+
+/* Header bar becomes a flex row so tokens sit inline with the input; the
+   toggle/clear/history stay position:absolute (out of flow), unaffected. */
+#search-bar { display: flex; align-items: center; }
+#search-bar #search-input { flex: 1 1 auto; width: auto; min-width: 4rem; }
+
+/* Funnel (book picker) — leading icon button inside the field. */
+.token-funnel {
+  position: relative;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  margin-right: 0.15rem;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: var(--radius-pill);
+}
+
+/* Keep the compact visual size but expand the tap area to the 44px touch target
+   via a transparent overlay (mirrors #tab-search-clear) so the in-field funnel,
+   chip × and "＋ 좁히기" meet --touch-target (ADR-028 / WCAG) without growing the
+   inline pill (Bugbot). */
+.token-funnel::after,
+.token-refine-add::after,
+.field-token-remove::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--touch-target);
+  height: var(--touch-target);
+  transform: translate(-50%, -50%);
+}
+.token-funnel.active { color: var(--accent); }
+.token-funnel:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.token-funnel:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+.token-funnel-icon { width: 1.05rem; height: 1.05rem; }
+
+/* A removable in-field token (book scope or AND term). */
+.field-token {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.1rem;
+  max-width: 9rem;
+  height: 1.7rem;
+  margin-right: 0.3rem;
+  padding: 0 0.15rem 0 var(--space-2);
+  font-size: var(--font-2xs);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border-radius: var(--radius-pill);
+}
+.field-token-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.field-token-remove {
+  position: relative;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.4rem;
+  height: 1.4rem;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font-size: var(--font-sm);
+  line-height: 1;
+  cursor: pointer;
+  border-radius: 50%;
+}
+.field-token-remove:hover { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+
+/* "결과 내 검색" inline add — a ghost token that expands a compact inline input
+   (not a separate full-width box, which read as a second search field). */
+.token-refine-add {
+  position: relative;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.1rem;
+  height: 1.7rem;
+  margin-right: 0.3rem;
+  padding: 0 var(--space-2);
+  font-size: var(--font-2xs);
+  color: var(--text-secondary);
+  background: none;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+}
+.token-refine-add[hidden] { display: none; }
+.token-refine-add:hover { color: var(--text); }
+.token-refine-add-icon { font-size: var(--font-sm); line-height: 1; }
+
+.token-refine-input {
+  flex: 0 1 7rem;
+  min-width: 4rem;
+  height: 1.7rem;
+  margin-right: 0.3rem;
+  padding: 0 var(--space-2);
+  font-size: var(--font-2xs);
+  color: var(--text);
+  background: var(--bg-card);
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  border-radius: var(--radius-pill);
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.token-refine-input[hidden] { display: none; }
+
 /* ── Search history panel ── */
 #search-history {
   list-style: none;
@@ -1370,134 +1526,6 @@ body {
 .search-history-clear:focus-visible {
   outline: none;
   background: color-mix(in srgb, var(--accent) 10%, transparent);
-}
-
-/* ── Search options: filter bar + chips + recents + book picker (ADR-033) ── */
-
-/* Search-options bar above the empty view + results: scope row (book picker
-   + chips) and an optional "결과 내 검색" refine row. */
-.search-filters {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  margin-bottom: var(--space-3);
-}
-
-.search-scope-row,
-.search-refine-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-/* "책 선택" pill — outlined by default, accent-tinted when a scope is active. */
-.search-scope-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  min-height: var(--touch-target, 44px);
-  padding: 0 var(--space-3);
-  font-family: inherit;
-  font-size: var(--font-sm);
-  color: var(--text);
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-pill);
-  cursor: pointer;
-}
-
-.search-scope-btn.active {
-  color: var(--accent);
-  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
-  background: color-mix(in srgb, var(--accent) 10%, transparent);
-}
-
-.search-scope-icon {
-  width: 1.05rem;
-  height: 1.05rem;
-  flex-shrink: 0;
-}
-
-.search-scope-btn:hover {
-  background: color-mix(in srgb, var(--accent) 8%, transparent);
-}
-
-.search-scope-btn:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 40%, transparent);
-}
-
-/* Removable filter pill (selected book / 결과 내 검색어). */
-.search-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  min-height: var(--touch-target, 44px);
-  padding: 0 var(--space-1) 0 var(--space-3);
-  font-size: var(--font-sm);
-  color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-  border-radius: var(--radius-pill);
-}
-
-.search-chip-label {
-  white-space: nowrap;
-}
-
-/* 44px square hit area meets the touch-target minimum (ADR-014 / DESIGN.md
-   --touch-target); the × glyph stays visually small. */
-.search-chip-remove {
-  flex-shrink: 0;
-  width: var(--touch-target, 44px);
-  height: var(--touch-target, 44px);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: var(--font-base);
-  line-height: 1;
-  color: inherit;
-  background: none;
-  border: none;
-  border-radius: 50%;
-  cursor: pointer;
-  padding: 0;
-}
-
-.search-chip-remove:hover {
-  background: color-mix(in srgb, var(--accent) 18%, transparent);
-}
-
-.search-chip-remove:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent);
-}
-
-/* "결과 내 검색" input — a compact pill mirroring the in-page search field. */
-.search-refine-input {
-  flex: 1;
-  min-width: 8rem;
-  min-height: var(--touch-target, 44px);
-  padding: 0 var(--space-3);
-  font-family: inherit;
-  font-size: var(--font-sm);
-  color: var(--text);
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-pill);
-  -webkit-appearance: none;
-  appearance: none;
-}
-
-.search-refine-input::-webkit-search-cancel-button {
-  -webkit-appearance: none;
-  appearance: none;
-}
-
-.search-refine-input:focus-visible {
-  outline: none;
-  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent);
 }
 
 /* ── Recent searches (empty-query view) ── */
@@ -1747,14 +1775,19 @@ body {
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
-  padding: var(--space-2) 0 var(--space-3);
+  /* No padding-top: the first sticky section title pins flush to the head
+     border. A padding-top here left an uncovered sliver above the sticky
+     title where scrolling rows peeked through. */
+  padding: 0 0 var(--space-3);
 }
 
 .book-filter-section-title {
   position: sticky;
   top: 0;
   margin: 0;
-  padding: var(--space-2) var(--space-4);
+  /* Generous vertical padding so the section label reads as a clear divider
+     rather than crowding the rows above/below it. */
+  padding: var(--space-3) var(--space-4) var(--space-2);
   font-size: var(--font-sm);
   font-weight: 600;
   color: var(--text-secondary);
@@ -1762,27 +1795,32 @@ body {
   z-index: 1;
 }
 
+/* Chip grid — books wrap as compact multi-select chips so a whole division fits
+   in a few rows instead of a long one-per-row scroll. */
 .book-filter-list {
   list-style: none;
   margin: 0;
-  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-4) var(--space-3);
 }
+.book-filter-list > li { display: contents; }
 
 .book-filter-option {
-  width: 100%;
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  min-height: var(--touch-target, 44px);
-  padding: 0 var(--space-4);
+  justify-content: center;
+  min-height: var(--touch-target);
+  padding: var(--space-2) var(--space-3);
   font-family: inherit;
-  font-size: var(--font-base);
+  font-size: var(--font-sm);
   color: var(--text);
-  background: none;
-  border: none;
-  text-align: left;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .book-filter-name {
@@ -1791,30 +1829,23 @@ body {
   white-space: nowrap;
 }
 
-.book-filter-check {
-  flex-shrink: 0;
-  width: 1.25rem;
-  height: 1.25rem;
-  color: var(--accent);
-  opacity: 0;
-  transition: opacity var(--duration-fast);
-}
-
-.book-filter-option[aria-selected="true"] .book-filter-check {
-  opacity: 1;
-}
-
 .book-filter-option[aria-selected="true"] {
-  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--bg);
+  font-weight: 600;
 }
 
 .book-filter-option:hover {
-  background: color-mix(in srgb, var(--accent) 6%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+.book-filter-option[aria-selected="true"]:hover {
+  background: color-mix(in srgb, var(--accent) 88%, black);
 }
 
 .book-filter-option:focus-visible {
   outline: none;
-  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent);
 }
 
 .book-filter-foot {
@@ -3651,7 +3682,11 @@ html.cite-sheet-open {
 [data-theme="dark"] #tab-dock.searching #tab-search-dock {
   background: var(--glass-sheen), color-mix(in srgb, var(--bg) 50%, transparent);
 }
-/* 검색 버튼 → 입력 pill 의 왼쪽 아이콘(자체 표면 제거). */
+/* 검색 활성(토큰 필드) 레이아웃에선 좌측 돋보기를 숨긴다 — funnel(책 선택)이
+   선두 아이콘 역할을 하고, 돋보기가 함께 있으면 중복이라 (ADR-033 개정 B).
+   단, 쿼리·책 스코프가 모두 빈 "빈 검색"에선 돋보기를 선두로 보이고 funnel 은
+   숨긴다(아직 검색 전이라 '검색'으로 읽히도록 — 사용자 선택). idle 에선
+   #tab-search 가 그대로 "검색 진입" 원형 버튼으로 보인다. */
 #tab-dock.searching #tab-search {
   width: auto;
   height: auto;
@@ -3661,7 +3696,10 @@ html.cite-sheet-open {
   box-shadow: none;
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
+  display: none;
 }
+#tab-dock.searching.search-empty #tab-search { display: flex; }
+#tab-dock.searching.search-empty .token-funnel { display: none; }
 /* 하단 검색 입력 — Sans(본문 Serif 상속 회피), 콘텐츠 무관 축소(flex-basis 0). */
 #tab-dock.searching #tab-search-input {
   flex: 1 1 0;
