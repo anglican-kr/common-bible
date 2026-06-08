@@ -1,6 +1,6 @@
 # QA 보고서
 
-`docs/qa/`는 자동 테스트(e2e + 유닛) 실행 결과와 신규 시나리오 추가 내역을 기록하는 공간입니다. 회귀 발견 시 이력을 추적하고, 향후 작업자(개발자가 아니어도)가 "현재 어디까지 자동 검증되는가"를 한눈에 파악할 수 있도록 합니다.
+`docs/archive/qa/`는 자동 테스트(e2e + 유닛) 실행 결과와 신규 시나리오 추가 내역을 기록하는 공간입니다. 회귀 발견 시 이력을 추적하고, 향후 작업자(개발자가 아니어도)가 "현재 어디까지 자동 검증되는가"를 한눈에 파악할 수 있도록 합니다.
 
 ## 파일명 컨벤션
 
@@ -11,7 +11,7 @@ YYYY-MM-DD-unit-{topic}.md     # 유닛 테스트 (node --test, ADR-013)
 
 - `topic`은 Phase 또는 도메인 이름 (예: `infrastructure`, `1.3.0-features`, `bookmark-domain`, `settings`, `audio`, `search-nav`, `a11y`, `regression-baseline`, `storage`, `helpers`)
 - 동일 토픽을 다시 검증할 경우 새 날짜로 새 파일을 생성 (덮어쓰지 않음)
-- `docs/audit/`와 같은 컨벤션을 따름
+- `docs/archive/audit/`와 같은 컨벤션을 따름
 
 ## 톤
 
@@ -76,7 +76,7 @@ pytest tests/e2e/ -v
 1. 개발 서버 기동: `python3 scripts/serve.py 8080`
 2. 신규 테스트 실행: `pytest tests/e2e/test_{phase_topic}.py -v`
 3. 전체 회귀 실행: `pytest tests/e2e/ -v`
-4. 결과를 위 템플릿에 따라 `docs/qa/YYYY-MM-DD-e2e-{topic}.md`에 기록
+4. 결과를 위 템플릿에 따라 `docs/archive/qa/YYYY-MM-DD-e2e-{topic}.md`에 기록
 5. 신규 테스트 + 수정된 fixture/헬퍼 + QA 보고서를 단일 커밋으로
    - 메시지: `test: e2e {phase 주제} 커버리지 추가 + QA 보고서`
 

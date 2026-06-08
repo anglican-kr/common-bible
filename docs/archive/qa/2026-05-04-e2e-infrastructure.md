@@ -46,7 +46,7 @@
 | `open_settings(page)` | 설정 팝오버 열기 헬퍼 |
 | `close_popovers(page)` | Escape로 팝오버 닫기 헬퍼 |
 
-### 3-2. docs/qa/README.md 신설
+### 3-2. docs/archive/qa/README.md 신설
 
 보고서 파일명 컨벤션(`YYYY-MM-DD-e2e-{topic}.md`)과 표준 섹션 템플릿을 정의.
 

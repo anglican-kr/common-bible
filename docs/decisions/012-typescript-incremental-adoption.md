@@ -108,7 +108,7 @@ ADR-001은 "프레임워크 없는 Vanilla JS"를 선언하고 있고 ADR-005·0
 
 > **개정 (2026-05-09): `js/app.js` 2차 적용 1라운드 완료**
 >
-> 1차 적용에서 보류했던 `js/app.js`(~5,800줄)에 7단계 분할 PR(#81~#87)로 JSDoc + null/도메인 타입 가드를 도입. 살아있는 설계 문서: `docs/design/app-typescript-migration.md`.
+> 1차 적용에서 보류했던 `js/app.js`(~5,800줄)에 7단계 분할 PR(#81~#87)로 JSDoc + null/도메인 타입 가드를 도입. 살아있는 설계 문서: `docs/archive/design/app-typescript-migration.md`.
 >
 > **추가된 도메인 타입 (`js/types.d.ts`)**: `ReadingPosition`, `AudioPosition`, `SearchHistoryList`, `VerseSelectDrag`, `DragState`, `ColorSchemeId`, `ThemeMode`, `BookOrderKind`, `ColorSchemeEntry`, `BookEntry`, `BooksData`, `BibleVerseSegment`, `BibleVerse`, `BibleChapter`, `BiblePrologue`, `Window.booksPromise`. `ReadingPosition.chapter`는 `number | "prologue"` union으로 narrow.
 >

@@ -6,7 +6,7 @@
 //
 // Module pattern: IIFE + window namespace, mirrors the sync layer
 // (`window.driveSync`/`window.syncTransport`). See ADR-018 + design doc
-// `docs/design/app-modularization.md`.
+// `docs/archive/design/app-modularization.md`.
 //
 // Note: `announce(msg)` stays in app.js (Phase 8 owner) because it depends
 // on the `$announce` anchor; that anchor will move once app.js anchor

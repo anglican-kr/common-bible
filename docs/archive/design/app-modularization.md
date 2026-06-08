@@ -7,7 +7,7 @@
 - 종료: 2026-05-10 (Phase 1~8 머지 완료)
 - 상태: **완료** — `js/app.js` 6,082 → 283줄 (95% 감소), 9개 도메인 모듈 분할 + ESM 일괄 전환(ADR-019) + ADR-012 2차 라운드 종료
 - 관련 ADR: ADR-001(SPA), ADR-012(TS 점진 도입, 1·2차 완료), ADR-013(유닛 테스트), ADR-016(오디오 캐시), ADR-018(본 의제), ADR-019(ESM)
-- 1라운드 문서: `docs/design/app-typescript-migration.md`
+- 1라운드 문서: `docs/archive/design/app-typescript-migration.md`
 
 ---
 
