@@ -51,19 +51,20 @@ window.appOverlay = (() => {
   const _overlayRegistry = [];
 
   // Close every currently-open overlay (route() calls this on navigation).
-  // Mirrors the old per-overlay teardown: controller.close() runs the full
-  // unwind (scrim / inert / focus trap / onClose / focus restore), then the
-  // panel is force-hidden so an animated dismiss doesn't linger over the
-  // incoming view. Detached panels (per-open-rebuilt overlays whose element was
-  // replaced, e.g. chapter picker) are pruned so the registry stays bounded.
+  // controller.close() runs the full unwind (scrim / inert / focus trap /
+  // onClose / focus restore). The force-hide is keyed off panel VISIBILITY, not
+  // isOpen: animated-dismiss overlays (closeTransition — cite sheet, drawer) set
+  // isOpen=false immediately but keep the panel visible until the exit animation
+  // ends, so a navigation mid-dismiss must still force the panel hidden now or it
+  // lingers over the incoming view (matches the old closeIfOpen `!node.hidden`
+  // contract; Bugbot PR #227). Detached panels (per-open-rebuilt overlays whose
+  // element was replaced, e.g. chapter picker) are pruned so the list stays bounded.
   function closeAllOverlays() {
     for (let i = _overlayRegistry.length - 1; i >= 0; i--) {
       const { panel, controller } = _overlayRegistry[i];
       if (!panel.isConnected) { _overlayRegistry.splice(i, 1); continue; }
-      if (controller.isOpen) {
-        controller.close();
-        if (!panel.hidden) panel.hidden = true;
-      }
+      if (controller.isOpen) controller.close();
+      if (!panel.hidden) panel.hidden = true;
     }
   }
 
