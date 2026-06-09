@@ -229,6 +229,19 @@ async function renderBookmarkReadView(folderId = null) {
     return title;
   }
 
+  // Bookmarks exist but not a single chapter loaded (offline / all JSON missing):
+  // every item would be skipped below, leaving only headings or a blank panel.
+  // Show a load-failure state instead of a dead end.
+  if (!chapterCache.size) {
+    panel.appendChild(emptyState({
+      icon: null,
+      title: "본문을 불러오지 못했습니다",
+      subtitle: "네트워크 연결을 확인한 뒤 다시 시도해 주세요.",
+    }));
+    $app.appendChild(panel);
+    return title;
+  }
+
   const books = getBooksCache() ?? [];
   /** @param {string} id */
   const bookOf = (id) => books.find((b) => b.id === id);
