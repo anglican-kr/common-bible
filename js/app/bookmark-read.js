@@ -386,8 +386,14 @@ async function renderBookmarkReadView(folderId = null) {
   // between its neighbours — so it also breaks the run (flush), otherwise the
   // bookmarks on either side would be treated as list-adjacent and could merge
   // across the gap, violating the adjacent-only merge rule (ADR-035).
+  // A folder *entry* always emits a folder token (which flushes); a folder *exit*
+  // (returning to a shallower parent after a sub-folder) does not, so also flush
+  // whenever a bookmark's tree depth differs from the current run's — same-parent
+  // siblings share one depth, so a depth change means a folder boundary was
+  // crossed and the two regions must not merge.
   /** @type {BookmarkTreeBookmark[]} */
   let pending = [];
+  let pendingDepth = -1;
   for (const tok of seq) {
     if (tok.type === "folder") {
       flush(pending);
@@ -404,7 +410,10 @@ async function renderBookmarkReadView(folderId = null) {
         depth: tok.depth,
       });
     } else if (chapterCache.has(`${tok.bm.bookId}:${tok.bm.chapter}`)) {
+      // Folder-exit boundary (no token): a depth change ends the current run.
+      if (pending.length && tok.depth !== pendingDepth) { flush(pending); pending = []; }
       pending.push(tok.bm);
+      pendingDepth = tok.depth;
     } else {
       // Unloadable bookmark: end the current run so its neighbours don't merge.
       flush(pending);
