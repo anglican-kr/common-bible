@@ -521,13 +521,6 @@ body {
   margin: 0;
 }
 
-.reading-label {
-  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
-  font-size: var(--font-sm);
-  color: var(--text-secondary);
-  margin: var(--space-1) 0 0;
-}
-
 /* Joined chapters within one group flow as continuous reading: a paragraph gap,
    no repeated heading (창세 1장 → 창세 2:1-4a). */
 .reading-passage .chapter-text + .chapter-text { margin-top: var(--space-3); }
