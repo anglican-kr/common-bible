@@ -1711,7 +1711,7 @@ body {
 }
 
 /* Desktop: centered modal card rather than a bottom sheet. */
-@media (min-width: 769px) {
+@media (min-width: 769px) and (pointer: fine) {
   .book-filter-sheet {
     top: 50%;
     left: 50%;
@@ -1746,7 +1746,7 @@ body {
   background: color-mix(in srgb, var(--text) 25%, transparent);
 }
 
-@media (min-width: 769px) {
+@media (min-width: 769px) and (pointer: fine) {
   .book-filter-handle { display: none; }
 }
 
@@ -2965,7 +2965,7 @@ body.cites-shown .note-anchor--variant:focus-visible {
 /* Desktop: right-side panel (mirrors bookmark-drawer pattern). Slides over the
    right edge of the viewport; centered main content stays readable on the
    left. Resize handle on the left edge lets the user widen the panel. */
-@media (min-width: 769px) {
+@media (min-width: 769px) and (pointer: fine) {
   #cite-sheet {
     top: 2.5vh;
     right: 0;
@@ -2999,7 +2999,7 @@ body.cites-shown .note-anchor--variant:focus-visible {
 }
 
 /* Hide drag handle on desktop — width-resize replaces height-resize there. */
-@media (min-width: 769px) {
+@media (min-width: 769px) and (pointer: fine) {
   #cite-sheet-handle {
     display: none;
   }
@@ -3010,7 +3010,7 @@ body.cites-shown .note-anchor--variant:focus-visible {
   display: none;
 }
 
-@media (min-width: 769px) {
+@media (min-width: 769px) and (pointer: fine) {
   #cite-sheet-resize {
     display: flex;
     position: absolute;
@@ -3411,7 +3411,8 @@ html.cite-sheet-open {
 /* ── Tab bar (ADR-029, ADR-030) — 모바일 하단 내비, iOS Liquid Glass ────────
    플로팅 캡슐. ADR-030: fixed 요소는 #tab-dock(투명) 하나뿐이라 Safari 26 home-indicator
    틴팅 샘플링 문제 없음 → frosted glass 는 #tab-bar·#tab-search 요소에 직접(::before 우회 불필요).
-   데스크탑(≥769px)은 사이드바 단계 전까지 숨김. */
+   데스크탑(넓은 화면 + 마우스 = ≥769px and pointer:fine)은 사이드바 단계 전까지 숨김.
+   터치 기기는 가로 폰·태블릿 포함 탭 바를 유지(ADR-029 개정 2026-06-09). */
 /* ADR-030: 탭 pill + 검색 원형을 한 플로팅 dock 으로 — 좌측 정렬, 근접 배치.
    gap 으로 둘 사이 간격만 두고 화면 우측 여백은 비운다(짧은 3탭 pill 기준). */
 #tab-dock {
@@ -3838,19 +3839,19 @@ body.tabbar-searching #search-inpage-bar { display: none; }
 }
 
 /* 데스크탑: 사이드바 단계 전까지 탭 dock(탭바+검색) 숨김. */
-@media (min-width: 769px) {
+@media (min-width: 769px) and (pointer: fine) {
   #tab-dock { display: none; }
 }
 
 /* 모바일: 설정 기어·홈(성서 목록으로) 버튼은 탭 바로 이전 — 헤더에서 숨김
    (데스크탑은 탭바가 없어 유지). 챕터 북마크 추가 버튼은 보존. */
-@media (max-width: 768px) {
+@media (max-width: 768px), (pointer: coarse) {
   .title-settings-btn,
   .title-home-btn { display: none; }
 }
 
 /* 탭 바 하단 공존 (ADR-029 P4). 데스크탑은 탭바가 없어 적용 안 함. */
-@media (max-width: 768px) {
+@media (max-width: 768px), (pointer: coarse) {
   /* 탭 바가 보이는 뷰에서만 하단 콘텐츠 자리 확보. 절 선택 모드는 탭 바를 숨기고
      전용 하단 바가 차지하므로 reserve 를 적용하지 않는다(빈 띠 방지). */
   body:not(.verse-select-active) #app { padding-bottom: var(--tabbar-reserve); }
@@ -4178,7 +4179,7 @@ body.tabbar-searching #search-inpage-bar { display: none; }
 /* ── Responsive ── */
 
 /* Mobile: hide inline search (replaced by the bottom tab bar's 검색 tab) */
-@media (max-width: 768px) {
+@media (max-width: 768px), (pointer: coarse) {
   #search-bar {
     display: none;
   }
@@ -4379,12 +4380,13 @@ body.tabbar-searching #search-inpage-bar { display: none; }
   opacity: 0.7;
 }
 
-/* 모바일(탭 바 존재, ≤768px): 헤더 북마크는 '이 장 추가' 어포던스 전용. 네비·관리는
-   하단 탭 바의 북마크 탭이 담당하므로, 이미 북마크된 장(.has-bookmark)과 장-목록
-   (.is-list — 추가할 장 맥락 없음)에서는 숨긴다. 데스크탑·가로 폰처럼 탭 바가 없는
-   >768px 에서는 헤더가 유일한 북마크 진입점이라 유지 — 미디어 쿼리라 폰을 가로로
-   돌려 탭 바가 사라지는 순간 자동으로 다시 나타난다(ADR-010 개정 2026-06-09). */
-@media (max-width: 768px) {
+/* 모바일/터치(탭 바 존재 = 좁은 창 또는 터치): 헤더 북마크는 '이 장 추가' 어포던스
+   전용. 네비·관리는 하단 탭 바의 북마크 탭이 담당하므로, 이미 북마크된 장
+   (.has-bookmark)과 장-목록(.is-list — 추가할 장 맥락 없음)에서는 숨긴다. 탭 바가 없는
+   데스크탑(넓은 화면 + 마우스)에서는 헤더가 유일한 북마크 진입점이라 유지 — 분기가
+   포인터 인식 미디어 쿼리라(ADR-029 개정) 폰을 가로로 돌리거나 마우스를 붙여도 탭 바
+   유무에 자동으로 따라간다(ADR-010 개정 2026-06-09). */
+@media (max-width: 768px), (pointer: coarse) {
   .title-bookmark-btn.has-bookmark,
   .title-bookmark-btn.is-list { display: none; }
 }
@@ -4405,13 +4407,13 @@ body.tabbar-searching #search-inpage-bar { display: none; }
   padding: 0;
 }
 
-@media (min-width: 769px) {
+@media (min-width: 769px) and (pointer: fine) {
   .title-settings-btn {
     display: none;
   }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 768px), (pointer: coarse) {
   #settings-anchor {
     display: none;
   }
@@ -5021,7 +5023,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 }
 
 /* ── Bookmark drawer (desktop: right side panel) ── */
-@media (min-width: 769px) {
+@media (min-width: 769px) and (pointer: fine) {
   #bookmark-drawer {
     top: 2.5vh;
     right: 0;
@@ -5074,7 +5076,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 }
 
 /* Hide drag handle on desktop (must come after the base style above) */
-@media (min-width: 769px) {
+@media (min-width: 769px) and (pointer: fine) {
   #bookmark-drawer-handle {
     display: none;
   }
@@ -5084,7 +5086,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   display: none;
 }
 
-@media (min-width: 769px) {
+@media (min-width: 769px) and (pointer: fine) {
   #bookmark-drawer-resize {
     display: flex;
     position: absolute;
@@ -5178,7 +5180,7 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 }
 
 /* Mobile: toolbar moves below the list */
-@media (max-width: 768px) {
+@media (max-width: 768px), (pointer: coarse) {
   #bookmark-drawer-toolbar {
     order: 1;
   }
@@ -5285,7 +5287,8 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   position: relative;
 }
 
-/* Mobile-only swipe actions; shown on viewports ≤768px (see ADR-010). */
+/* Touch/narrow swipe actions; shown on the mobile tier — touch (any size) or a
+   narrow window (see ADR-010, breakpoint per ADR-029 개정). */
 .bm-swipe-action {
   display: none;
 }
@@ -6482,7 +6485,7 @@ body.bm-select-active .bm-folder-read-btn { display: none; }
    tap (iOS Safari treats first tap as :hover), forcing a double-tap to reach
    edit/delete. Replace with swipe-left or long-press to reveal a slide-out
    action panel; single tap navigates as expected. */
-@media (max-width: 768px) {
+@media (max-width: 768px), (pointer: coarse) {
   .bm-folder-row .bm-item-actions,
   .bm-bookmark-row .bm-item-actions {
     display: none;

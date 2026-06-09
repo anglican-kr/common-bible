@@ -591,7 +591,7 @@ test("isMobile: matchMedia.matches=false → false", () => {
   assert.strictEqual(isMobile(), false);
 });
 
-test("isMobile: queries the (max-width: 768px) media query", () => {
+test("isMobile: queries the pointer-aware mobile-tier media query (ADR-029 개정)", () => {
   let lastQuery = null;
   const ctx = {
     window: { matchMedia: (q) => { lastQuery = q; return { matches: false }; } },
@@ -600,7 +600,9 @@ test("isMobile: queries the (max-width: 768px) media query", () => {
   vm.createContext(ctx);
   vm.runInContext(extractBlock("IS_MOBILE"), ctx, { filename: "search-is-mobile-q.js" });
   ctx.isMobile();
-  assert.strictEqual(lastQuery, "(max-width: 768px)");
+  // Mobile/touch tier = narrow window OR touch device — so landscape phones and
+  // tablets (pointer:coarse) stay on the app layout instead of the desktop overlay.
+  assert.strictEqual(lastQuery, "(max-width: 768px), (pointer: coarse)");
 });
 
 // ── consumeSearchAutoNavigate ────────────────────────────────────────────────
