@@ -341,11 +341,11 @@ async function renderBookmarkReadView(folderId = null) {
   }
 
   // Walk the sequence; a folder heading flushes (and so breaks) the current run
-  // so different liturgical units never merge across a folder boundary. Skip any
-  // bookmark whose chapter JSON didn't load — it can't render, so it must not
-  // enter merge/heading reasoning either (else a missing chapter could be folded
-  // into a neighbour's cross-chapter heading with no body). Matches the existing
-  // "missing chapter — skip" intent.
+  // so different liturgical units never merge across a folder boundary. A
+  // bookmark whose chapter JSON didn't load can't render, but it WAS present
+  // between its neighbours — so it also breaks the run (flush), otherwise the
+  // bookmarks on either side would be treated as list-adjacent and could merge
+  // across the gap, violating the adjacent-only merge rule (ADR-035).
   /** @type {BookmarkTreeBookmark[]} */
   let pending = [];
   for (const tok of seq) {
@@ -356,6 +356,10 @@ async function renderBookmarkReadView(folderId = null) {
       panel.appendChild(h);
     } else if (chapterCache.has(`${tok.bm.bookId}:${tok.bm.chapter}`)) {
       pending.push(tok.bm);
+    } else {
+      // Unloadable bookmark: end the current run so its neighbours don't merge.
+      flush(pending);
+      pending = [];
     }
   }
   flush(pending);
