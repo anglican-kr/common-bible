@@ -160,10 +160,10 @@ function buildReadingSequence(nodes, depth = 0) {
  */
 async function renderBookmarkReadView(folderId = null) {
   // ADR-031 staleness guard: this renderer awaits chapter loads, so a slower
-  // fetch can resolve after the user has navigated away. Capture the route
-  // sequence now and re-check after the await before touching #app, so a late
-  // completion never injects bookmark-read content into a superseding view
-  // (route()'s own isStale runs only after we return — too late for our append).
+  // fetch can resolve after the user has navigated away. Load ALL data first and
+  // only touch #app after the post-await staleness check — so a navigation mid-
+  // load bails having mutated nothing (no blank #app, no clobbered later view).
+  // route()'s own isStale runs only after we return, too late to gate our DOM.
   const entrySeq = typeof window.routeSeq === "function" ? window.routeSeq() : null;
   const isStale = () => entrySeq !== null && window.routeSeq() !== entrySeq;
   const store = loadBookmarks();
@@ -182,17 +182,36 @@ async function renderBookmarkReadView(folderId = null) {
     }
   }
 
+  const seq = buildReadingSequence(nodes);
+  const bmTokens = /** @type {Array<{ type: "bookmark", bm: BookmarkTreeBookmark, depth: number }>} */ (
+    seq.filter((t) => t.type === "bookmark")
+  );
+
+  // Load every referenced chapter once (deduped) BEFORE touching the DOM. A
+  // missing chapter is skipped (the bookmark just won't render) rather than
+  // failing the whole view.
+  /** @type {Map<string, BibleChapter>} */
+  const chapterCache = new Map();
+  if (bmTokens.length) {
+    /** @type {Map<string, { bookId: string, chapter: number }>} */
+    const needed = new Map();
+    for (const t of bmTokens) needed.set(`${t.bm.bookId}:${t.bm.chapter}`, { bookId: t.bm.bookId, chapter: t.bm.chapter });
+    await Promise.all([...needed.values()].map(async ({ bookId, chapter }) => {
+      try { chapterCache.set(`${bookId}:${chapter}`, await loadChapter(bookId, chapter)); }
+      catch { /* missing chapter — skip */ }
+    }));
+    // Navigation superseded this route during the chapter loads — bail before
+    // any DOM mutation so #app keeps whatever the now-current route rendered.
+    if (isStale()) return title;
+  }
+
+  // ── From here on everything is synchronous — safe to commit to the DOM. ──
   setTitle(title);
   const $title = _$("page-title");
   // Back to the bookmark list (reuses the shared header back/home affordance).
   $title.insertBefore(window.buildHomeBtn("/bookmarks", "북마크로 돌아가기"), $title.firstChild);
   window.hideAudioBar?.();
   clearNode($app);
-
-  const seq = buildReadingSequence(nodes);
-  const bmTokens = /** @type {Array<{ type: "bookmark", bm: BookmarkTreeBookmark, depth: number }>} */ (
-    seq.filter((t) => t.type === "bookmark")
-  );
 
   const panel = el("div", { className: "bookmark-read" });
 
@@ -205,21 +224,6 @@ async function renderBookmarkReadView(folderId = null) {
     $app.appendChild(panel);
     return title;
   }
-
-  // Load every referenced chapter once (deduped). A missing chapter is skipped
-  // (the bookmark just won't render) rather than failing the whole view.
-  /** @type {Map<string, BibleChapter>} */
-  const chapterCache = new Map();
-  /** @type {Map<string, { bookId: string, chapter: number }>} */
-  const needed = new Map();
-  for (const t of bmTokens) needed.set(`${t.bm.bookId}:${t.bm.chapter}`, { bookId: t.bm.bookId, chapter: t.bm.chapter });
-  await Promise.all([...needed.values()].map(async ({ bookId, chapter }) => {
-    try { chapterCache.set(`${bookId}:${chapter}`, await loadChapter(bookId, chapter)); }
-    catch { /* missing chapter — skip */ }
-  }));
-  // Navigation superseded this route during the chapter loads — bail before
-  // building/appending the panel so we don't clobber the now-current view.
-  if (isStale()) return title;
 
   const books = getBooksCache() ?? [];
   /** @param {string} id */
