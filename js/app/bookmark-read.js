@@ -258,6 +258,18 @@ async function renderBookmarkReadView(folderId = null) {
   /** @type {Set<string>} */
   const seenVerses = new Set();
 
+  // Folder sub-headings are emitted lazily: a heading is only committed once a
+  // real passage under it is about to render. An empty folder, or one whose
+  // bookmarks all failed to load, thus never shows a body-less heading (the
+  // folder-level analogue of the empty-passage guard below). Consecutive
+  // (nested) headings queue up and flush together, preserving nesting order.
+  /** @type {HTMLElement[]} */
+  const pendingHeadings = [];
+  function flushPendingHeadings() {
+    for (const h of pendingHeadings) panel.appendChild(h);
+    pendingHeadings.length = 0;
+  }
+
   /** @param {BookmarkTreeBookmark[]} bms  contiguous group */
   function renderGroup(bms) {
     if (!bms.length) return;
@@ -322,7 +334,11 @@ async function renderBookmarkReadView(folderId = null) {
     }
     // Skip a heading-only section: if every chapter was empty (spec no longer
     // matches the loaded text, or all verses were deduped away), render nothing.
-    if (appendedAny) panel.appendChild(section);
+    // Commit any queued folder heading(s) only now that real content follows.
+    if (appendedAny) {
+      flushPendingHeadings();
+      panel.appendChild(section);
+    }
   }
 
   /** @param {BookmarkTreeBookmark[]} bms  consecutive run within one parent */
@@ -352,8 +368,8 @@ async function renderBookmarkReadView(folderId = null) {
     if (tok.type === "folder") {
       flush(pending);
       pending = [];
-      const h = el("h2", { className: `reading-folder reading-folder--d${Math.min(tok.depth, 3)}` }, tok.name || "이름 없는 폴더");
-      panel.appendChild(h);
+      // Queue, don't commit: the heading only renders if a passage under it does.
+      pendingHeadings.push(el("h2", { className: `reading-folder reading-folder--d${Math.min(tok.depth, 3)}` }, tok.name || "이름 없는 폴더"));
     } else if (chapterCache.has(`${tok.bm.bookId}:${tok.bm.chapter}`)) {
       pending.push(tok.bm);
     } else {

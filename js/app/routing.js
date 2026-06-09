@@ -322,9 +322,14 @@ async function route() {
     if (view === "bookmark-read") {
       await loadBooks();
       if (isStale()) return;
+      // Show the loading skeleton before awaiting chapter loads so #app reflects
+      // the new route immediately (the renderer is data-first and won't touch
+      // #app until its loads finish — without this the prior view would linger
+      // while the URL already reads /bookmarks/read). Mirrors the chapter branch.
+      renderLoading();
+      dismissLaunchScreen();
       const readTitle = await window.renderBookmarkReadView(parsed.folderId);
       if (isStale()) return;
-      dismissLaunchScreen();
       updatePageMeta({ title: readTitle || "북마크 읽기", description: "북마크한 본문 모아 읽기" });
       trackPageView();
       return;
