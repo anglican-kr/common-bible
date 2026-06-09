@@ -362,10 +362,8 @@ async function renderBookmarkReadView(folderId = null) {
     const section = el("section", { className: "reading-passage" });
     const heading = el("div", { className: "reading-heading" });
     heading.appendChild(el("h3", { className: "reading-ref" }, ref));
-    // The first bookmark's user label gives liturgical context (제1독서 등); show
-    // it under the reference when it adds something beyond the bare ref.
-    const label = (first.label || "").trim();
-    if (label && label !== ref) heading.appendChild(el("p", { className: "reading-label" }, label));
+    // Just the scripture reference — no per-bookmark label line under it (the
+    // combined reference is the section's title; the label was redundant).
     section.appendChild(heading);
 
     // Merge per-chapter verse coverage across the group, then render one
