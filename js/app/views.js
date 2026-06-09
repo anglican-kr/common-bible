@@ -788,84 +788,30 @@ function _verseSelectionUnit(article, vref) {
 }
 // ── END VERSE_SELECTION ──
 
-function renderChapter(data, book, opts) {
-  const ch = data.chapter;
-  const hlQuery = opts && opts.highlightQuery;
-  const hlVerse = opts && opts.highlightVerse;
-  let hlVerseEnd = opts && opts.highlightVerseEnd;
-  const hlVerseSpec = opts && opts.highlightVerseSpec;
-  let hlSegments = hlVerseSpec ? parseVerseSpec(hlVerseSpec) : null;
-
-  // Compute max verse number once; used by both clipping paths below.
-  let _maxVerse = 0;
-  for (const v of data.verses) {
-    const vn = v.range_end != null ? v.range_end : v.number;
-    if (vn > _maxVerse) _maxVerse = vn;
-  }
-
-  // ── Single simple range: clip hlVerseEnd to chapter max ──
-  // e.g. "창세 3:1-100" → "창세 3:1-24"
-  if (hlVerseEnd && !hlSegments) {
-    if (hlVerseEnd > _maxVerse) {
-      hlVerseEnd = _maxVerse;
-      const pathMatch = location.pathname.match(/^(\/[^/]+\/\d+\/\d+)-\d+$/);
-      if (pathMatch) {
-        history.replaceState(null, "", `${pathMatch[1]}-${_maxVerse}${location.search}`);
-      }
-    }
-  }
-  // Drop a single verse that is entirely out of range (works for both simple and range URLs).
-  if (!hlSegments && hlVerse > _maxVerse) {
-    const pathMatch = location.pathname.match(/^(\/[^/]+\/\d+)\/\d+.*$/);
-    if (pathMatch) history.replaceState(null, "", pathMatch[1] + location.search);
-  }
-
-  // ── Multi-segment: clamp integer segments to chapter max; drop out-of-range.
-  // Alpha-part segments (e.g. {start:3,end:3,part:"a"}) are kept as-is since
-  // they don't extend beyond a single verse.
-  if (hlSegments) {
-    const clamped = hlSegments
-      .map(s => s.part ? s : { start: s.start, end: Math.min(s.end, _maxVerse) })
-      .filter(s => s.start <= _maxVerse);
-    const pathBase = location.pathname.match(/^(\/[^/]+\/\d+)/)?.[1];
-    if (clamped.length === 0) {
-      hlSegments = null;
-      if (pathBase) history.replaceState(null, "", pathBase + location.search);
-    } else {
-      const serializeSeg = s => s.part ? `${s.start}${s.part}` : s.start === s.end ? `${s.start}` : `${s.start}-${s.end}`;
-      const newSpec = clamped.map(serializeSeg).join(",");
-      const needsRewrite = newSpec !== hlSegments.map(serializeSeg).join(",");
-      hlSegments = clamped;
-      if (needsRewrite && pathBase) {
-        history.replaceState(null, "", `${pathBase}/${newSpec}${location.search}`);
-      }
-    }
-  }
-
-  setTitleWithChapterPicker(book, ch);
-  // setTitleWithChapterPicker already prepends the home button; add the mobile
-  // settings trigger alongside the bookmark button it appended.
-  $title.appendChild(buildSettingsTrigger());
-  clearNode($app);
-
-  if (data.has_dual_numbering) {
-    $app.appendChild(
-      el("p", { className: "dual-numbering-note" }, "※ 괄호 안 번호는 70인역 사본(그리스어)의 절 번호입니다.")
-    );
-  }
-
-  const article = el("article", { className: "chapter-text", lang: "ko" });
+// Render a list of verses into `article` as inline verse spans + inter-verse
+// break markers + cite chips. Extracted from renderChapter so the bookmark
+// reading view (ADR-035) can render verse subsets through the same logic. Does
+// NOT wrap note anchors or run highlight-join post-processing — callers do that
+// on the finished article (note anchors match by integer verse number, so they
+// must be scoped per single-chapter article to avoid cross-chapter collisions).
+/**
+ * @param {HTMLElement} article
+ * @param {ReadonlyArray<BibleVerse>} verses
+ * @param {{ hlQuery?: string|null, hlVerse?: number|null, hlVerseEnd?: number|null, hlSegments?: Array<{start:number,end:number,part?:string}>|null, parallels?: ChapterParallel[]|null, chapter?: number|null }} [opts]
+ */
+function appendVerses(article, verses, opts = {}) {
+  const { hlQuery = null, hlVerse = null, hlVerseEnd = null, hlSegments = null, parallels = null, chapter = null } = opts;
   let isFirst = true;
   let prevVerseEndType = null;
 
   // ADR-022: precompute which (verse, segment) cite chips actually render
   // (dedup of consecutive same-cite groups; only LAST in group renders).
   const _citeShowAt = window.appCitations
-    ? window.appCitations._computeCiteShowPositions(data.verses)
+    ? window.appCitations._computeCiteShowPositions(verses)
     : new Set();
 
-  for (let vIdx = 0; vIdx < data.verses.length; vIdx++) {
-    const v = data.verses[vIdx];
+  for (let vIdx = 0; vIdx < verses.length; vIdx++) {
+    const v = verses[vIdx];
     const segs = v.segments || [{ type: "prose", text: v.text || "" }];
 
     // Inter-verse break
@@ -888,11 +834,11 @@ function renderChapter(data, book, opts) {
     // 이라 한 절에서 여러 marker 가 시작할 수 있고, 각자 자기 anchor 가
     // 나란히 렌더됨 (각 tooltip 독립). 클릭 시 footnote-style tooltip 이
     // 열리고 본문 안 sourceLink 가 cite-sheet 로 위임. 토글은 `body.cites-shown`.
-    if (window.appParallels && data.parallels && data.parallels.length) {
+    if (window.appParallels && parallels && parallels.length) {
       // Pass chapter so a range whose chapter prefix belongs elsewhere (rare —
       // parser cross-check normally catches it) cannot stray-render here.
       const matched = window.appParallels.findParallelsStartingAt(
-        data.parallels, v.number, data.chapter,
+        parallels, v.number, chapter,
       );
       for (const p of matched) {
         article.appendChild(window.appParallels.buildParallelAnchor(p));
@@ -1036,6 +982,79 @@ function renderChapter(data, book, opts) {
     prevVerseEndType = segs[segs.length - 1]?.type;
     isFirst = false;
   }
+}
+
+function renderChapter(data, book, opts) {
+  const ch = data.chapter;
+  const hlQuery = opts && opts.highlightQuery;
+  const hlVerse = opts && opts.highlightVerse;
+  let hlVerseEnd = opts && opts.highlightVerseEnd;
+  const hlVerseSpec = opts && opts.highlightVerseSpec;
+  let hlSegments = hlVerseSpec ? parseVerseSpec(hlVerseSpec) : null;
+
+  // Compute max verse number once; used by both clipping paths below.
+  let _maxVerse = 0;
+  for (const v of data.verses) {
+    const vn = v.range_end != null ? v.range_end : v.number;
+    if (vn > _maxVerse) _maxVerse = vn;
+  }
+
+  // ── Single simple range: clip hlVerseEnd to chapter max ──
+  // e.g. "창세 3:1-100" → "창세 3:1-24"
+  if (hlVerseEnd && !hlSegments) {
+    if (hlVerseEnd > _maxVerse) {
+      hlVerseEnd = _maxVerse;
+      const pathMatch = location.pathname.match(/^(\/[^/]+\/\d+\/\d+)-\d+$/);
+      if (pathMatch) {
+        history.replaceState(null, "", `${pathMatch[1]}-${_maxVerse}${location.search}`);
+      }
+    }
+  }
+  // Drop a single verse that is entirely out of range (works for both simple and range URLs).
+  if (!hlSegments && hlVerse > _maxVerse) {
+    const pathMatch = location.pathname.match(/^(\/[^/]+\/\d+)\/\d+.*$/);
+    if (pathMatch) history.replaceState(null, "", pathMatch[1] + location.search);
+  }
+
+  // ── Multi-segment: clamp integer segments to chapter max; drop out-of-range.
+  // Alpha-part segments (e.g. {start:3,end:3,part:"a"}) are kept as-is since
+  // they don't extend beyond a single verse.
+  if (hlSegments) {
+    const clamped = hlSegments
+      .map(s => s.part ? s : { start: s.start, end: Math.min(s.end, _maxVerse) })
+      .filter(s => s.start <= _maxVerse);
+    const pathBase = location.pathname.match(/^(\/[^/]+\/\d+)/)?.[1];
+    if (clamped.length === 0) {
+      hlSegments = null;
+      if (pathBase) history.replaceState(null, "", pathBase + location.search);
+    } else {
+      const serializeSeg = s => s.part ? `${s.start}${s.part}` : s.start === s.end ? `${s.start}` : `${s.start}-${s.end}`;
+      const newSpec = clamped.map(serializeSeg).join(",");
+      const needsRewrite = newSpec !== hlSegments.map(serializeSeg).join(",");
+      hlSegments = clamped;
+      if (needsRewrite && pathBase) {
+        history.replaceState(null, "", `${pathBase}/${newSpec}${location.search}`);
+      }
+    }
+  }
+
+  setTitleWithChapterPicker(book, ch);
+  // setTitleWithChapterPicker already prepends the home button; add the mobile
+  // settings trigger alongside the bookmark button it appended.
+  $title.appendChild(buildSettingsTrigger());
+  clearNode($app);
+
+  if (data.has_dual_numbering) {
+    $app.appendChild(
+      el("p", { className: "dual-numbering-note" }, "※ 괄호 안 번호는 70인역 사본(그리스어)의 절 번호입니다.")
+    );
+  }
+
+  const article = el("article", { className: "chapter-text", lang: "ko" });
+  appendVerses(article, data.verses, {
+    hlQuery, hlVerse, hlVerseEnd, hlSegments,
+    parallels: data.parallels, chapter: data.chapter,
+  });
 
   // ADR-022: wrap each note anchor in a clickable button — tooltip on click
   // shows the note body (no chapter-end section; ADR §6 개정 2026-05-24).
@@ -1351,4 +1370,5 @@ export {
   DIVISION_LABELS,
   renderBookList, renderChapterList, renderChapter, renderPrologue,
   renderLoading, renderError,
+  appendVerses,
 };
