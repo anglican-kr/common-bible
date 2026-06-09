@@ -437,6 +437,14 @@ async function ensureAliasMap() {
   /** @type {Map<string, string>} */
   const map = new Map();
   try {
+    // window.loadBooks (data-fetch.js) is defined by a module that loads AFTER
+    // search.js in index.html, so the boot-time preload kick can fire before it
+    // exists. Wait briefly for it instead of bailing once: a permanent bail left
+    // _aliasMap null with no retry, which silently killed in:<alias> absorb in
+    // commitTopSearch (regression from the #246 synchronous-absorb refactor).
+    for (let i = 0; typeof window.loadBooks !== "function" && i < 60; i++) {
+      await new Promise((r) => setTimeout(r, 25));
+    }
     if (typeof window.loadBooks !== "function") return map;
     const books = await window.loadBooks();
     for (const b of books) {
@@ -444,7 +452,7 @@ async function ensureAliasMap() {
       if (b.name_ko) map.set(b.name_ko.toLowerCase(), b.id);
     }
     _aliasMap = map;
-  } catch { /* leave _aliasMap null so a later commit retries */ }
+  } catch { /* leave _aliasMap null so a later call retries */ }
   return _aliasMap || map;
 }
 
