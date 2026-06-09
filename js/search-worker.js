@@ -9,10 +9,9 @@
  *     { type: "init", metaUrl: "data/search-meta.json",
  *       chunks: [{ name, url }, ...] }
  *     { type: "search", q: "keyword", page: 1, pageSize: 50, searchId: N,
- *       scopeBooks: ["john", ...], andTerms: ["사랑", ...] }
+ *       scopeBooks: ["john", ...] }
  *       — scopeBooks: structured book filter (book ids) from the book picker,
  *         merged with any typed `in:<alias>` tokens (ADR-033).
- *       — andTerms: extra keywords AND-combined with `q` ("결과 내 검색", ADR-033).
  *
  *   Worker → Main:
  *     { type: "ready" }
@@ -82,7 +81,6 @@
  * @property {number} pageSize
  * @property {number} searchId
  * @property {string[]} [scopeBooks]
- * @property {string[]} [andTerms]
  *
  * @typedef {InitMessage | SearchMessage} IncomingMessage
  */
@@ -226,14 +224,10 @@ function tryVerseRef(query) {
  * @param {string} q
  * @param {string[]} chunkNames
  * @param {Set<string> | null | undefined} restrictBooks
- * @param {string[]} [andTerms]  Extra keywords that must ALSO be present in the
- *   verse text (AND). Powers "결과 내 검색" (ADR-033).
  * @returns {MatchedRow[]}
  */
-function gatherResults(q, chunkNames, restrictBooks, andTerms) {
+function gatherResults(q, chunkNames, restrictBooks) {
   const qLower = q.toLowerCase();
-  // Lower-cased, de-blanked extra AND terms. Empty array → plain single-term search.
-  const extra = (andTerms || []).map((t) => t.toLowerCase().trim()).filter(Boolean);
   const hasRestrict = !!(restrictBooks && restrictBooks.size > 0);
   /** @type {MatchedRow[]} */
   const allMatched = [];
@@ -246,15 +240,12 @@ function gatherResults(q, chunkNames, restrictBooks, andTerms) {
       if (hasRestrict && !(/** @type {Set<string>} */ (restrictBooks)).has(books[bArr[i]])) continue;
       const tLower = tArr[i].toLowerCase();
       if (!tLower.includes(qLower)) continue;
-      if (extra.length && !extra.every((term) => tLower.includes(term))) continue;
-      {
-        allMatched.push({
-          b: books[bArr[i]],
-          c: cArr[i],
-          v: vArr[i],
-          t: tArr[i],
-        });
-      }
+      allMatched.push({
+        b: books[bArr[i]],
+        c: cArr[i],
+        v: vArr[i],
+        t: tArr[i],
+      });
     }
   }
   return allMatched;
@@ -307,7 +298,6 @@ onmessage = /** @param {MessageEvent<IncomingMessage>} ev */ async (ev) => {
   if (msg.type === "search") {
     const { q, page, pageSize, searchId } = msg;
     const scopeBooks = msg.scopeBooks || [];
-    const andTerms = msg.andTerms || [];
     currentSearchId = searchId;
 
     try {
@@ -363,7 +353,7 @@ onmessage = /** @param {MessageEvent<IncomingMessage>} ev */ async (ev) => {
 
       // Send partial results if some chunks are still loading
       if (pendingNames.length > 0) {
-        const partial = gatherResults(keyword, loadedNames, restrictBooks, andTerms);
+        const partial = gatherResults(keyword, loadedNames, restrictBooks);
         const { results, total } = paginate(partial, page, pageSize);
         post("partial-results", {
           searchId, q: trimmed, keyword, results, total, page, pageSize,
@@ -377,7 +367,7 @@ onmessage = /** @param {MessageEvent<IncomingMessage>} ev */ async (ev) => {
       }
 
       // Full search across all chunks
-      const allMatched = gatherResults(keyword, chunkConfig.map((c) => c.name), restrictBooks, andTerms);
+      const allMatched = gatherResults(keyword, chunkConfig.map((c) => c.name), restrictBooks);
       const { results, total } = paginate(allMatched, page, pageSize);
       // `keyword` is the query stripped of in:<alias> tokens — used by the UI
       // for snippet highlighting and the ?hl= chapter-view param.

@@ -63,6 +63,23 @@ Apple HIG의 검색 패턴(필터/스코프 바 · 토큰 대신 칩 · recents 
 > 2줄을 삭제. 돋보기(`#tab-search`)는 idle 의 "검색 진입" 원형 버튼 역할만 남는다.
 > 유닛 678 통과·tsc 0, 모핑 pill 빈/입력 상태 시각 검증 완료.
 
+> **개정 (2026-06-09) — "결과 내 검색"(AND) 전면 제거:** 본 ADR 항목 2(결과 내 검색)와
+> 그 UI("＋ 좁히기" 고스트 토큰 `.token-refine-add` + 인라인 입력 `.token-refine-input`)를
+> 제거한다. 사유(사용자 보고): ① 모바일에서 좁히기 크롬이 검색 바 공간을 잠식해 어색,
+> ② 데스크탑에서 좁히기 토큰이 검색 입력과 겹침, ③ 좁히기 입력을 연 뒤 ×(clear)를 누르면
+> 정의되지 않은 동작으로 검색 화면에 그냥 돌아감.
+>
+> 제거 범위(완전 제거): 워커 `andTerms` + `gatherResults` AND 매치, URL `and=`
+> (`parsePath`·`buildSearchUrl`·`buildSearchPagination`·`currentSearchState`·`navigateSearch`),
+> `mountSearchField` 의 refine 토큰·Backspace AND 분기, `syncOneField` 의 AND 칩 렌더,
+> `renderSearchView` 의 `and=` strip, `css/style.css` 의 `.token-refine-*` 규칙, 관련 유닛
+> 테스트. **책 picker(`in=`)·최근 검색·in:&lt;별칭&gt; 흡수는 유지.** 레거시 `and=` 가 URL 에
+> 남아도 `parsePath` 가 더는 읽지 않아 graceful 무시.
+>
+> 설계 기록(D1·D2·D3·항목 2·대안 B)은 보존한다 — 향후 더 나은 UX 의 결과-내-검색을 재도입할
+> 때 본 ADR 을 출발점으로 삼는다. 유닛 683 통과·tsc 0·브라우저 스모크(좁히기 UI 부재 ·
+> plain/`in:` 검색 · 레거시 `and=` graceful 무시) 확인.
+
 ## 맥락
 
 - ADR-005가 `in:<별칭>` 연산자를 도입했고, ADR-030이 옛 검색 시트(`+ in:` 칩)를 제거하면서 책 범위 지정을 **타이핑으로만** 할 수 있게 됐다. 책 이름·별칭을 외워 입력하는 것은 발견성이 낮다.

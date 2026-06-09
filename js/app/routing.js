@@ -82,17 +82,16 @@ function parsePath() {
 
   const query = new URLSearchParams(location.search || "");
 
-  // Search route: /search?q=...&page=...&in=<bookId>&and=<keyword> (ADR-033).
-  // `in` (book-picker scope, repeatable) and `and` ("결과 내 검색" AND keywords,
-  // repeatable) live in the URL so they survive history/back-forward and tab
-  // restore (ADR-031), and so paginated/filtered links stay shareable.
+  // Search route: /search?q=...&page=...&in=<bookId> (ADR-033).
+  // `in` (book-picker scope, repeatable) lives in the URL so it survives
+  // history/back-forward and tab restore (ADR-031), and so paginated/filtered
+  // links stay shareable.
   if (pathname === "search") {
     return {
       view: "search",
       query: query.get("q") || "",
       page: parseInt(query.get("page") ?? "", 10) || 1,
       filterBooks: query.getAll("in").filter(Boolean),
-      andTerms: query.getAll("and").filter(Boolean),
     };
   }
 
@@ -232,7 +231,7 @@ async function route() {
     $searchClear.hidden = true;
     $searchBar.dataset.clearHidden = "true";
   }
-  // Refresh in-field search tokens (book scope + 결과 내 검색) for the new route
+  // Refresh in-field search tokens (book scope) for the new route
   // (ADR-033 개정 B) — keeps the persistent header/pill fields in sync with the
   // URL filters across back/forward, pagination and tab restore.
   window.syncSearchFields?.();
@@ -249,7 +248,6 @@ async function route() {
         window.tabHistory?.recordPath(location.pathname + location.search);
         await renderSearchResults(parsed.query, parsed.page, autoNav, {
           filterBooks: parsed.filterBooks,
-          andTerms: parsed.andTerms,
         });
         // renderSearchResults 가 verse-ref auto-nav 으로 inner route() 를 호출했으면
         // _routeSeq 가 올라가 이 가드가 잡는다 — inner route() 가 챕터의 meta·분석을 이미
@@ -259,10 +257,10 @@ async function route() {
           title: `"${parsed.query}" 검색`,
           description: `공동번역성서에서 "${parsed.query}" 검색 결과`,
         });
-      } else if (isMobile() || parsed.filterBooks.length || parsed.andTerms.length) {
+      } else if (isMobile() || parsed.filterBooks.length) {
         // Empty-query /search: recent searches + the book-filter bar (ADR-033).
         // Mobile always shows this full-screen view. Desktop normally falls back
-        // to the book list, but when the URL carries an active filter (in=/and=)
+        // to the book list, but when the URL carries an active filter (in=)
         // we render the search view so the scope is visible/removable instead of
         // silently applied by a later header search (ADR-033, Bugbot).
         await renderSearchView({ filterBooks: parsed.filterBooks });

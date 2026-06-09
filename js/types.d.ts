@@ -804,7 +804,7 @@ export interface AppBookmark {
 // desktop top-bar input, mobile full-screen /search view, history panel.
 
 export interface AppSearch {
-  renderSearchResults: (query: string, page: number, autoNavigate?: boolean, opts?: { filterBooks?: string[]; andTerms?: string[] }) => Promise<void>;
+  renderSearchResults: (query: string, page: number, autoNavigate?: boolean, opts?: { filterBooks?: string[] }) => Promise<void>;
   renderSearchView: (state?: { filterBooks?: string[] }) => Promise<void>;
   isMobile: () => boolean;
   appendTextWithHighlight: (target: Node, text: string, query: string) => void;
@@ -1047,7 +1047,7 @@ declare global {
   function updateVerseSelectBar(): void;
   function initBookmarkSheetDrag(): void;
   function initBookmarkDrawerResize(): void;
-  function renderSearchResults(query: string, page: number, autoNavigate?: boolean, opts?: { filterBooks?: string[]; andTerms?: string[] }): Promise<void>;
+  function renderSearchResults(query: string, page: number, autoNavigate?: boolean, opts?: { filterBooks?: string[] }): Promise<void>;
   function renderSearchView(state?: { filterBooks?: string[] }): Promise<void>;
   function isMobile(): boolean;
   function appendTextWithHighlight(target: Node, text: string, query: string): void;
