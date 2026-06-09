@@ -800,13 +800,15 @@ function _verseSelectionUnit(article, vref) {
  * @param {{ hlQuery?: string|null, hlVerse?: number|null, hlVerseEnd?: number|null, hlSegments?: Array<{start:number,end:number,part?:string}>|null, parallels?: ChapterParallel[]|null, chapter?: number|null }} [opts]
  */
 function appendVerses(article, verses, opts = {}) {
-  const { hlQuery = null, hlVerse = null, hlVerseEnd = null, hlSegments = null, parallels = null, chapter = null } = opts;
+  const { hlQuery = null, hlVerse = null, hlVerseEnd = null, hlSegments = null, parallels = null, chapter = null, hideCites = false } = opts;
   let isFirst = true;
   let prevVerseEndType = null;
 
   // ADR-022: precompute which (verse, segment) cite chips actually render
   // (dedup of consecutive same-cite groups; only LAST in group renders).
-  const _citeShowAt = window.appCitations
+  // `hideCites` (ADR-035 bookmark reading view) suppresses inline cite chips for
+  // a clean reading surface — an empty set means no position ever shows a chip.
+  const _citeShowAt = (!hideCites && window.appCitations)
     ? window.appCitations._computeCiteShowPositions(verses)
     : new Set();
 

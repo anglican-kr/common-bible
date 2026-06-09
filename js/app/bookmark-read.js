@@ -274,8 +274,9 @@ async function renderBookmarkReadView(folderId = null) {
     section.appendChild(heading);
 
     // Merge per-chapter verse coverage across the group, then render one
-    // <article> per chapter (note anchors match by integer verse number, so a
-    // shared article across chapters would cross-attach — ADR-035).
+    // <article> per chapter — keeps each chapter a clean text block (a paragraph
+    // gap between joined chapters, ADR-035) and keeps appendVerses' per-array
+    // highlight/cite indexing scoped to a single chapter's verses.
     /** @type {Map<number, string[]>} */
     const byChapter = new Map();
     for (const bm of bms) {
@@ -298,8 +299,9 @@ async function renderBookmarkReadView(folderId = null) {
       });
       if (!verses.length) continue;
       const article = el("article", { className: "chapter-text", lang: "ko" });
-      appendVerses(article, verses, {});
-      if (window.appCitations) window.appCitations.wrapNoteAnchorsInArticle(article, verses);
+      // Clean 봉독 surface (ADR-035): no study-aid chrome — cite chips suppressed
+      // (hideCites), parallels (ADR-027 ※) not passed, note anchors not wrapped.
+      appendVerses(article, verses, { hideCites: true });
       section.appendChild(article);
     }
     panel.appendChild(section);
