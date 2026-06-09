@@ -249,7 +249,7 @@ HIG 의 절제된 깊이 표현. 라이트 기준 값이며, **다크에서는 `
   `--shadow-drawer`(수평 오프셋, 사다리에 없는 축)를 쓴다.
 - **스크롤 elevation**(ADR-025): 페이지 최상단에서 헤더는 평평(그림자 없음). 스크롤하면
   `#sticky-group.scrolled` 가 `--shadow-3` 를 0.18s 페이드 인. `#app-header::after`
-  1px hairline 은 always-on 경계로 별도 유지. 책 목록(탭 스트립) 화면에서는 그림자 생략.
+  1px hairline 은 always-on 경계로 별도 유지. 책 목록(탭 스트립) 화면도 동일하게 스크롤 그림자를 쓴다 — 탭 스트립과 스크롤 콘텐츠 사이에 고정 영역 하단 여백(`#sticky-group` padding-bottom = `--space-4`)을 둬, 그림자가 탭에 바로 닿지 않고 여백 아래 콘텐츠 경계에서 발현한다(ADR-025 개정 2026-06-09).
 - **frosted glass — 하단/오버레이만, 헤더는 솔리드**: 오디오 바·절 선택 바·검색 스크림
   등 하단/오버레이 표면에는 `backdrop-filter: blur` 를 적용한다. 하단 floating chrome(탭 바·검색
   원형·모핑 입력창·오디오 미니바·활성 인디케이터)은 그 위에 **절제된 liquid-glass 질감**을 더한다
