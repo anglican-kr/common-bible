@@ -69,7 +69,18 @@ function _bmRange(bm, maxVerse) {
   };
   if (bm.verseSpec === "all") return whole;
   const segs = parseVerseSpec(bm.verseSpec);
-  if (!segs.length) return whole;
+  // A spec that parses to nothing (import corruption, typo) is NOT a whole
+  // chapter — return a degenerate range with NaN bounds so it neither claims
+  // chapter-end coverage nor satisfies adjacency in either direction (it renders
+  // no verses and, with the empty-section guard, shows no heading).
+  if (!segs.length) {
+    return {
+      bookId: bm.bookId,
+      startCh: bm.chapter, startV: NaN,
+      endCh: bm.chapter, endV: NaN,
+      endDisplay: "", coversChapterEnd: false, wholeChapter: false,
+    };
+  }
   const ordered = segs.slice().sort((a, b) =>
     a.start !== b.start ? a.start - b.start : (a.part || "").localeCompare(b.part || ""));
   const first = ordered[0];
@@ -111,8 +122,11 @@ function _isContinuous(prev, cur) {
 function _combinedRef(bookName, unit, first, last, isSingleWhole) {
   if (isSingleWhole) return `${bookName} ${first.startCh}${unit}`;
   const startRef = `${first.startCh}:${first.startV}`;
+  // One-verse range collapses to a single ref — compared numerically so a
+  // hemistich-part end (e.g. "5a") still collapses (창세 5:5, the whole verse the
+  // body renders), not a degenerate "창세 5:5–5a".
+  if (first.startCh === last.endCh && first.startV === last.endV) return `${bookName} ${startRef}`;
   const endRef = last.endCh === first.startCh ? last.endDisplay : `${last.endCh}:${last.endDisplay}`;
-  if (endRef === `${first.startV}` || endRef === startRef) return `${bookName} ${startRef}`;
   return `${bookName} ${startRef}–${endRef}`;
 }
 
@@ -261,14 +275,20 @@ async function renderBookmarkReadView(folderId = null) {
   // Folder sub-headings are emitted lazily: a heading is only committed once a
   // real passage under it is about to render. An empty folder, or one whose
   // bookmarks all failed to load, thus never shows a body-less heading (the
-  // folder-level analogue of the empty-passage guard below). Consecutive
-  // (nested) headings queue up and flush together, preserving nesting order.
-  /** @type {HTMLElement[]} */
+  // folder-level analogue of the empty-passage guard below). Each queued heading
+  // carries its tree depth so that, when a later folder at depth d appears, any
+  // still-queued heading at depth ≥ d (a sibling/earlier subtree that ended with
+  // no content) is dropped rather than flushed alongside the new folder's
+  // content — only the current ancestor chain remains to flush.
+  /** @type {{ el: HTMLElement, depth: number }[]} */
   const pendingHeadings = [];
   function flushPendingHeadings() {
-    for (const h of pendingHeadings) panel.appendChild(h);
+    for (const h of pendingHeadings) panel.appendChild(h.el);
     pendingHeadings.length = 0;
   }
+  // Did any passage actually render? Drives the "loaded but nothing to show"
+  // empty state (every group skipped output via spec mismatch / dedup).
+  let renderedAnySection = false;
 
   /** @param {BookmarkTreeBookmark[]} bms  contiguous group */
   function renderGroup(bms) {
@@ -299,9 +319,12 @@ async function renderBookmarkReadView(folderId = null) {
     /** @type {Map<number, string[]>} */
     const byChapter = new Map();
     for (const bm of bms) {
-      const arr = byChapter.get(bm.chapter) || [];
+      // Coerce the chapter to a number so a stray string ("1" vs 1) can't split
+      // one chapter into two map entries (and two <article>s).
+      const ch = Number(bm.chapter);
+      const arr = byChapter.get(ch) || [];
       arr.push(bm.verseSpec);
-      byChapter.set(bm.chapter, arr);
+      byChapter.set(ch, arr);
     }
     let appendedAny = false;
     for (const chNum of [...byChapter.keys()].sort((a, b) => a - b)) {
@@ -338,6 +361,7 @@ async function renderBookmarkReadView(folderId = null) {
     if (appendedAny) {
       flushPendingHeadings();
       panel.appendChild(section);
+      renderedAnySection = true;
     }
   }
 
@@ -368,8 +392,17 @@ async function renderBookmarkReadView(folderId = null) {
     if (tok.type === "folder") {
       flush(pending);
       pending = [];
-      // Queue, don't commit: the heading only renders if a passage under it does.
-      pendingHeadings.push(el("h2", { className: `reading-folder reading-folder--d${Math.min(tok.depth, 3)}` }, tok.name || "이름 없는 폴더"));
+      // A folder at depth d means we've exited every still-queued folder at depth
+      // ≥ d whose subtree produced no content — drop those (don't let an empty
+      // earlier sibling's heading flush alongside this folder's content). Then
+      // queue this heading; it commits only when a passage under it renders.
+      while (pendingHeadings.length && pendingHeadings[pendingHeadings.length - 1].depth >= tok.depth) {
+        pendingHeadings.pop();
+      }
+      pendingHeadings.push({
+        el: el("h2", { className: `reading-folder reading-folder--d${Math.min(tok.depth, 3)}` }, tok.name || "이름 없는 폴더"),
+        depth: tok.depth,
+      });
     } else if (chapterCache.has(`${tok.bm.bookId}:${tok.bm.chapter}`)) {
       pending.push(tok.bm);
     } else {
@@ -379,6 +412,17 @@ async function renderBookmarkReadView(folderId = null) {
     }
   }
   flush(pending);
+
+  // Chapters loaded but every group skipped output (specs no longer match the
+  // loaded text, or everything was deduped) — show a notice rather than a bare
+  // header over an empty panel.
+  if (!renderedAnySection) {
+    panel.appendChild(emptyState({
+      icon: null,
+      title: "표시할 본문이 없습니다",
+      subtitle: "북마크한 절을 현재 본문에서 찾지 못했습니다.",
+    }));
+  }
 
   $app.appendChild(panel);
   return title;

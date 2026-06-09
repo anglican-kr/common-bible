@@ -144,6 +144,26 @@ test("_combinedRef: single verse collapses to one ref", () => {
   assert.strictEqual(ctx._combinedRef("창세", "장", r, r, false), "창세 3:5");
 });
 
+test("_combinedRef: single hemistich-part verse collapses (no degenerate 5:5–5a)", () => {
+  const r = ctx._bmRange({ bookId: "gen", chapter: 5, verseSpec: "5a" }, 24);
+  assert.strictEqual(ctx._combinedRef("창세", "장", r, r, false), "창세 5:5");
+});
+
+test("_bmRange: an unparseable spec is NOT treated as a whole chapter", () => {
+  const r = ctx._bmRange({ bookId: "gen", chapter: 1, verseSpec: "garbage" }, 31);
+  assert.strictEqual(r.wholeChapter, false);
+  assert.strictEqual(r.coversChapterEnd, false);
+  assert.ok(Number.isNaN(r.startV) && Number.isNaN(r.endV));
+});
+
+test("_isContinuous: an unparseable-spec bookmark never merges with a neighbour", () => {
+  const bad = ctx._bmRange({ bookId: "gen", chapter: 1, verseSpec: "garbage" }, 31);
+  const prevAll = ctx._bmRange({ bookId: "gen", chapter: 1, verseSpec: "all" }, 31); // would-be prev
+  const nextV1 = ctx._bmRange({ bookId: "gen", chapter: 1, verseSpec: "1-3" }, 31);  // would-be next (same ch v1)
+  assert.strictEqual(ctx._isContinuous(prevAll, bad), false); // as cur
+  assert.strictEqual(ctx._isContinuous(bad, nextV1), false);  // as prev
+});
+
 // ── _specCoversVerse ───────────────────────────────────────────────────────────
 
 test("_specCoversVerse: all covers everything", () => {
