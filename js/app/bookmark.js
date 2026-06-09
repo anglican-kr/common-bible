@@ -168,7 +168,9 @@ let _bmSelectMode = false;
 const _bmSelected = new Set();
 
 function _isMobileViewport() {
-  return window.matchMedia("(max-width: 768px)").matches;
+  // Mobile/touch tier — same query as isMobile() (ADR-029 개정) so the header
+  // bookmark / swipe gating tracks the tab bar's presence on every device.
+  return window.matchMedia("(max-width: 768px), (pointer: coarse)").matches;
 }
 
 // Clear any open-swipe state + inline slide transform on a row.

@@ -191,11 +191,12 @@ function exitSearch() {
   detachKeyboardTracking();
 }
 
-// 뷰포트가 데스크탑(≥769px)으로 넘어가면 dock 이 CSS 로 숨겨지므로, 모핑 상태
-// (searching·body.tabbar-searching·키보드 추적)를 정리한다. /search 뷰는 모바일
-// 레이아웃(search-view + in-page 입력)으로 그려져 있으므로 route() 를 다시 태워
-// 데스크탑 레이아웃(헤더 검색바 + #app 직접 결과)으로 재렌더한다.
-window.matchMedia("(min-width: 769px)").addEventListener("change", (e) => {
+// 데스크탑 티어(넓은 화면 + 마우스 = min-width:769px and pointer:fine)로 넘어가면
+// dock 이 CSS 로 숨겨지므로, 모핑 상태(searching·body.tabbar-searching·키보드 추적)를
+// 정리한다. 같은 포인터 인식 분기라(ADR-029 개정) 가로 폰·태블릿은 여기 걸리지 않고
+// 탭 바를 유지한다. /search 뷰는 모바일 레이아웃(search-view + in-page 입력)으로 그려져
+// 있으므로 route() 를 다시 태워 데스크탑 레이아웃(헤더 검색바 + #app 직접 결과)으로 재렌더.
+window.matchMedia("(min-width: 769px) and (pointer: fine)").addEventListener("change", (e) => {
   if (!e.matches || !searching) return;
   exitSearch();
   if (W.parsePath?.().view === "search") W.route?.();

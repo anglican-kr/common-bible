@@ -236,9 +236,16 @@ window.appOverlay = (() => {
   // `dragReleaseAction`). The lifecycle (open/close, scrim, focus) is the
   // overlay's / caller's concern; this only wires the drag gesture.
 
+  // Desktop tier = wide window AND a mouse (pointer:fine). Touch devices (phones
+  // in any orientation, tablets) stay on the bottom-sheet path regardless of
+  // width — same pointer-aware boundary as isMobile()/CSS (ADR-029 개정).
+  const _isDesktopPanel = () =>
+    window.matchMedia("(min-width: 769px) and (pointer: fine)").matches;
+
   /**
    * Drag the sheet's top handle to resize, and release to close / snap-min /
-   * stay (mobile only; desktop ≥769px uses a fixed side panel and is a no-op).
+   * stay (touch/narrow only; desktop = wide + mouse uses a fixed side panel and
+   * is a no-op).
    * The move clamp's lower bound is 0 (NOT the rest min) so the user can drag
    * visually below the rest height — that's the affordance the snap-close
    * gesture needs, and a hard rest-min clamp would make `dragReleaseAction`'s
@@ -269,7 +276,7 @@ window.appOverlay = (() => {
       else if (action === "snap-min") sheet.style.height = `${window.innerHeight * 0.3}px`;
     }
     handle.addEventListener("pointerdown", (e) => {
-      if (window.innerWidth >= 769) return; // desktop: fixed-size side panel
+      if (_isDesktopPanel()) return; // desktop (wide + mouse): fixed-size side panel
       e.preventDefault();
       startY = e.clientY;
       startH = sheet.offsetHeight;
@@ -280,9 +287,9 @@ window.appOverlay = (() => {
   }
 
   /**
-   * Desktop-only (≥769px): drag a left-edge handle to resize the side panel's
-   * width. Drag left widens; clamp to [minWidth, maxRatio·viewport-width].
-   * Mobile (<769px) is a no-op (the sheet is a bottom drawer there).
+   * Desktop-only (wide + mouse): drag a left-edge handle to resize the side
+   * panel's width. Drag left widens; clamp to [minWidth, maxRatio·viewport-width].
+   * Touch/narrow is a no-op (the sheet is a bottom drawer there).
    *
    * @param {HTMLElement} handle
    * @param {HTMLElement} sheet
@@ -301,7 +308,7 @@ window.appOverlay = (() => {
       handle.removeEventListener("pointermove", onPointerMove);
     }
     handle.addEventListener("pointerdown", (e) => {
-      if (window.innerWidth < 769) return; // mobile: bottom sheet, no width resize
+      if (!_isDesktopPanel()) return; // touch/narrow: bottom sheet, no width resize
       e.preventDefault();
       startX = e.clientX;
       startW = sheet.offsetWidth;
