@@ -1147,6 +1147,10 @@ body {
   justify-content: center;
   aspect-ratio: 1;
   font-size: var(--font-base);
+  /* Reset the bold inherited from the #page-title <h1> (font-weight 700) — the
+     장 picker shares the .chapter-grid card look, where numbers read at normal
+     weight. The current chapter is set apart by the filled accent + ring, not weight. */
+  font-weight: 400;
   font-variant-numeric: tabular-nums;
   text-decoration: none;
   color: var(--text);
@@ -4373,6 +4377,16 @@ body.tabbar-searching #search-inpage-bar { display: none; }
 
 .title-bookmark-btn:hover {
   opacity: 0.7;
+}
+
+/* 모바일(탭 바 존재, ≤768px): 헤더 북마크는 '이 장 추가' 어포던스 전용. 네비·관리는
+   하단 탭 바의 북마크 탭이 담당하므로, 이미 북마크된 장(.has-bookmark)과 장-목록
+   (.is-list — 추가할 장 맥락 없음)에서는 숨긴다. 데스크탑·가로 폰처럼 탭 바가 없는
+   >768px 에서는 헤더가 유일한 북마크 진입점이라 유지 — 미디어 쿼리라 폰을 가로로
+   돌려 탭 바가 사라지는 순간 자동으로 다시 나타난다(ADR-010 개정 2026-06-09). */
+@media (max-width: 768px) {
+  .title-bookmark-btn.has-bookmark,
+  .title-bookmark-btn.is-list { display: none; }
 }
 
 /* ── Settings button placement (responsive) ──

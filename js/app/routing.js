@@ -98,11 +98,14 @@ function parsePath() {
   // Tab-bar destinations (ADR-029 / P2). On mobile these render full-screen
   // views; on desktop route() falls back to the existing overlays.
   // Bookmark reading view (ADR-035): a folder's passages in one continuous
-  // screen (/bookmarks/read/<folderId>), or all bookmarks (/bookmarks/read).
-  // Checked before the bare "bookmarks" route since these are longer paths.
-  if (pathname === "bookmarks/read") return { view: "bookmark-read", folderId: null };
-  if (pathname.startsWith("bookmarks/read/")) {
-    return { view: "bookmark-read", folderId: decodeURIComponent(pathname.slice("bookmarks/read/".length)) };
+  // screen (/read/<folderId>), or all bookmarks (/read). Lives under the home
+  // (reading) tab — not /bookmarks — so launching it from a folder switches the
+  // tab bar to 홈, matching its "sit and read" nature (ADR-035 개정 2026-06-09).
+  // Resolved here, ahead of the generic single-segment book/division split, so
+  // "read" is never mistaken for a book id.
+  if (pathname === "read") return { view: "bookmark-read", folderId: null };
+  if (pathname.startsWith("read/")) {
+    return { view: "bookmark-read", folderId: decodeURIComponent(pathname.slice("read/".length)) };
   }
   if (pathname === "bookmarks") return { view: "bookmarks" };
   if (pathname === "settings") return { view: "settings" };
@@ -317,7 +320,8 @@ async function route() {
 
     // Bookmark reading view (ADR-035). Renders on both mobile and desktop — it
     // is just a reading page built from localStorage bookmarks (its entry point
-    // is the mobile bookmark tab header, but a deep link must still land). Needs
+    // is the per-folder 읽기 button, but a deep link must still land). Classified
+    // as a home-tab route (/read), so the tab bar reads 홈 while reading. Needs
     // the books cache so refs resolve to the Korean short name.
     if (view === "bookmark-read") {
       await loadBooks();
@@ -325,7 +329,7 @@ async function route() {
       // Show the loading skeleton before awaiting chapter loads so #app reflects
       // the new route immediately (the renderer is data-first and won't touch
       // #app until its loads finish — without this the prior view would linger
-      // while the URL already reads /bookmarks/read). Mirrors the chapter branch.
+      // while the URL already reads /read). Mirrors the chapter branch.
       renderLoading();
       dismissLaunchScreen();
       const readTitle = await window.renderBookmarkReadView(parsed.folderId);
