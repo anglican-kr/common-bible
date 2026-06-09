@@ -933,6 +933,39 @@ function _buildFolderToggleIcon(open, size = 20) {
 
 // _buildFolderCombobox moved to bookmark-modals.js (PR5b); imported above.
 
+// Per-folder "읽기" entry (ADR-035): a continuous reading screen of every
+// passage under this folder (nested sub-folders included, rendered as
+// sub-headings). Always-visible trailing icon so each folder — a liturgical
+// unit — is independently readable. Tap navigates to /bookmarks/read/<id>;
+// stops propagation so it never toggles the folder's expand/collapse.
+/** @param {{ id: string, name: string }} folder */
+function _buildFolderReadBtn(folder) {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", "0 -960 960 960");
+  svg.setAttribute("fill", "currentColor");
+  svg.setAttribute("aria-hidden", "true");
+  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  // Material Symbols "menu_book" (open book).
+  path.setAttribute("d", "M560-564v-68q33-14 67.5-21t72.5-7q26 0 51 4t49 10v64q-24-9-48.5-13.5T700-600q-38 0-73 9.5T560-564Zm0 220v-68q33-14 67.5-21t72.5-7q26 0 51 4t49 10v64q-24-9-48.5-13.5T700-380q-38 0-73 9t-67 27Zm0-110v-68q33-14 67.5-21t72.5-7q26 0 51 4t49 10v64q-24-9-48.5-13.5T700-490q-38 0-73 9.5T560-454ZM260-320q47 0 91.5 10.5T440-278v-394q-41-24-87-36t-93-12q-36 0-71.5 7T120-692v396q35-12 69.5-18t70.5-6Zm260 42q44-21 88.5-31.5T700-320q36 0 70.5 6t69.5 18v-396q-33-14-68.5-21t-71.5-7q-47 0-93 12t-87 36v394Zm-40 118q-48-38-104-59t-116-21q-42 0-82.5 11T140-198q-21 11-40.5-1T80-234v-482q0-11 5.5-21T102-752q46-24 96-36t102-12q58 0 113.5 15T520-740q51-30 106.5-45T740-800q52 0 102 12t96 36q11 5 16.5 15t5.5 21v482q0 23-19.5 35t-40.5 1q-37-20-77.5-31T740-280q-60 0-116 21t-104 59ZM280-494Z");
+  svg.appendChild(path);
+  const btn = el("button", {
+    className: "bm-folder-read-btn",
+    type: "button",
+    "aria-label": `${folder.name} 모아 읽기`,
+    draggable: "false",
+  }, svg);
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    // Select mode owns the row; don't navigate away mid-selection.
+    if (_bmSelectMode) return;
+    navigate(`/bookmarks/read/${folder.id}`);
+  });
+  // The drag handler treats the row as a drag/longpress surface; keep a pointer
+  // press on the read button from arming a drag.
+  btn.addEventListener("pointerdown", (e) => e.stopPropagation());
+  return btn;
+}
+
 function _buildFolderItem(folder, depth) {
   const expanded = _hasActiveDescendant(folder) || !!(folder.expanded);
   const li = el("li", {
@@ -954,7 +987,7 @@ function _buildFolderItem(folder, depth) {
   const name = el("span", { className: "bm-folder-name" }, folder.name);
   row.addEventListener("click", (e) => {
     const t = e.target;
-    if (t instanceof Element && t.closest(".bm-item-actions, .bm-swipe-action")) return;
+    if (t instanceof Element && t.closest(".bm-item-actions, .bm-swipe-action, .bm-folder-read-btn")) return;
     // Select mode: tapping a folder row toggles its selection (cascades to its
     // subtree) rather than expanding/collapsing.
     if (_bmSelectMode) { _toggleBmSelect(folder.id); return; }
@@ -1026,6 +1059,7 @@ function _buildFolderItem(folder, depth) {
 
   content.appendChild(toggle);
   content.appendChild(name);
+  content.appendChild(_buildFolderReadBtn(folder));
   content.appendChild(actions);
   content.appendChild(_buildDragHandle());
   row.appendChild(del);
