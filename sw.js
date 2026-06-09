@@ -51,6 +51,7 @@ const SHELL_FILES = [
   "/js/app/audio-player.js",
   "/js/app/views.js",
   "/js/app/routing.js",
+  "/js/app/bookmark-read.js",
   "/js/app/tabbar.js",
   "/js/drive-sync.js",
   "/js/audio-cache.js",

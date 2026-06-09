@@ -97,6 +97,13 @@ function parsePath() {
 
   // Tab-bar destinations (ADR-029 / P2). On mobile these render full-screen
   // views; on desktop route() falls back to the existing overlays.
+  // Bookmark reading view (ADR-035): a folder's passages in one continuous
+  // screen (/bookmarks/read/<folderId>), or all bookmarks (/bookmarks/read).
+  // Checked before the bare "bookmarks" route since these are longer paths.
+  if (pathname === "bookmarks/read") return { view: "bookmark-read", folderId: null };
+  if (pathname.startsWith("bookmarks/read/")) {
+    return { view: "bookmark-read", folderId: decodeURIComponent(pathname.slice("bookmarks/read/".length)) };
+  }
   if (pathname === "bookmarks") return { view: "bookmarks" };
   if (pathname === "settings") return { view: "settings" };
 
@@ -304,6 +311,21 @@ async function route() {
       dismissLaunchScreen();
       updatePageMeta({ title: "북마크", description: "공동번역성서 북마크 목록" });
       openBookmarkDrawer(null, null);
+      trackPageView();
+      return;
+    }
+
+    // Bookmark reading view (ADR-035). Renders on both mobile and desktop — it
+    // is just a reading page built from localStorage bookmarks (its entry point
+    // is the mobile bookmark tab header, but a deep link must still land). Needs
+    // the books cache so refs resolve to the Korean short name.
+    if (view === "bookmark-read") {
+      await loadBooks();
+      if (isStale()) return;
+      const readTitle = await window.renderBookmarkReadView(parsed.folderId);
+      if (isStale()) return;
+      dismissLaunchScreen();
+      updatePageMeta({ title: readTitle || "북마크 읽기", description: "북마크한 본문 모아 읽기" });
       trackPageView();
       return;
     }
