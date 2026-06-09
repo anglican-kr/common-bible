@@ -60,7 +60,11 @@ function _bmRange(bm, maxVerse) {
     startCh: bm.chapter, startV: 1,
     endCh: bm.chapter, endV: maxVerse,
     endDisplay: String(maxVerse),
-    coversChapterEnd: true,
+    // "covers the chapter end" requires actually knowing the end. maxVerse is 0
+    // when the chapter JSON failed to load — claim no coverage then, so an
+    // unrenderable whole-chapter bookmark can't merge across a chapter boundary
+    // and produce a cross-chapter heading with no body text.
+    coversChapterEnd: maxVerse > 0,
     wholeChapter: true,
   };
   if (bm.verseSpec === "all") return whole;
@@ -304,7 +308,11 @@ async function renderBookmarkReadView(folderId = null) {
   }
 
   // Walk the sequence; a folder heading flushes (and so breaks) the current run
-  // so different liturgical units never merge across a folder boundary.
+  // so different liturgical units never merge across a folder boundary. Skip any
+  // bookmark whose chapter JSON didn't load — it can't render, so it must not
+  // enter merge/heading reasoning either (else a missing chapter could be folded
+  // into a neighbour's cross-chapter heading with no body). Matches the existing
+  // "missing chapter — skip" intent.
   /** @type {BookmarkTreeBookmark[]} */
   let pending = [];
   for (const tok of seq) {
@@ -313,7 +321,7 @@ async function renderBookmarkReadView(folderId = null) {
       pending = [];
       const h = el("h2", { className: `reading-folder reading-folder--d${Math.min(tok.depth, 3)}` }, tok.name || "이름 없는 폴더");
       panel.appendChild(h);
-    } else {
+    } else if (chapterCache.has(`${tok.bm.bookId}:${tok.bm.chapter}`)) {
       pending.push(tok.bm);
     }
   }

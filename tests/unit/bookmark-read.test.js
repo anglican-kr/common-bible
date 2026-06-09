@@ -108,6 +108,19 @@ test("_isContinuous: different book never joins", () => {
   assert.strictEqual(ctx._isContinuous(prev, cur), false);
 });
 
+test("_bmRange: a whole-chapter bookmark with unloaded data (maxVerse 0) claims no chapter-end coverage", () => {
+  const r = ctx._bmRange({ bookId: "gen", chapter: 1, verseSpec: "all" }, 0);
+  assert.strictEqual(r.coversChapterEnd, false);
+});
+
+test("_isContinuous: an unloaded whole chapter does not merge into the next chapter", () => {
+  // maxVerse 0 → chapter JSON failed to load; must not be treated as reaching
+  // the chapter end (would otherwise produce a cross-chapter heading with no body).
+  const prev = ctx._bmRange({ bookId: "gen", chapter: 1, verseSpec: "all" }, 0);
+  const cur = ctx._bmRange({ bookId: "gen", chapter: 2, verseSpec: "1-3,4a" }, 25);
+  assert.strictEqual(ctx._isContinuous(prev, cur), false);
+});
+
 // ── _combinedRef ───────────────────────────────────────────────────────────────
 
 test("_combinedRef: a lone whole chapter reads as 창세 1장", () => {
