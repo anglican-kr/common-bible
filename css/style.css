@@ -486,9 +486,12 @@ body {
    headings (folder sub-heading + per-group reference/label) are sans-serif
    chrome, matching the other in-page views. */
 .bookmark-read {
-  max-width: var(--max-width);
-  margin: 0 auto;
-  padding: var(--space-3) var(--space-4) var(--space-12);
+  /* #app already owns the reading column (max-width + centering + --space-4 side
+     padding) and the tab-bar bottom reserve, so add NO inset of our own —
+     otherwise the text is double-padded and sits in a narrower column than the
+     regular chapter view. This makes the passage left/right margins identical to
+     the chapter reading screen (ADR-035: same paragraph layout, study aids off). */
+  padding: 0;
 }
 
 /* Nested-folder name → section sub-heading (depth-stepped). */
