@@ -56,6 +56,7 @@ const SHELL_FILES = [
   "/js/audio-cache.js",
   "/js/manifest-sync.js",
   "/js/sync/debug-log.js",
+  "/js/sync/refresh-store.js",
   "/js/sync/transport.js",
   "/js/sync/store-v2.js",
   "/js/sync/state-machine.js",
