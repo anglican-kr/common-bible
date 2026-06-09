@@ -251,6 +251,13 @@ async function renderBookmarkReadView(folderId = null) {
     return _bmRange(bm, data ? _chapterMaxVerse(data) : 0);
   };
 
+  // Verses already rendered anywhere in this view, so overlapping bookmarks
+  // (e.g. a whole chapter plus a sub-range of it, or two ranges that intersect)
+  // don't print the same verse twice across separate passage groups. Keyed by
+  // book:chapter:verse(+part/lxx) — a verse object renders at most once.
+  /** @type {Set<string>} */
+  const seenVerses = new Set();
+
   /** @param {BookmarkTreeBookmark[]} bms  contiguous group */
   function renderGroup(bms) {
     if (!bms.length) return;
@@ -284,18 +291,26 @@ async function renderBookmarkReadView(folderId = null) {
       arr.push(bm.verseSpec);
       byChapter.set(bm.chapter, arr);
     }
+    let appendedAny = false;
     for (const chNum of [...byChapter.keys()].sort((a, b) => a - b)) {
       const data = chapterCache.get(`${first.bookId}:${chNum}`);
       if (!data) continue;
       const specs = /** @type {string[]} */ (byChapter.get(chNum));
       const coversAll = specs.includes("all");
       const verses = (data.verses || []).filter((v) => {
-        if (coversAll) return true;
-        const end = v.range_end != null ? v.range_end : v.number;
-        for (let x = v.number; x <= end; x++) {
-          if (specs.some((spec) => _specCoversVerse(spec, x))) return true;
+        if (!coversAll) {
+          const end = v.range_end != null ? v.range_end : v.number;
+          let inSpec = false;
+          for (let x = v.number; x <= end && !inSpec; x++) {
+            if (specs.some((spec) => _specCoversVerse(spec, x))) inSpec = true;
+          }
+          if (!inSpec) return false;
         }
-        return false;
+        // Drop verses already shown by an earlier (overlapping) group.
+        const key = `${first.bookId}:${chNum}:${v.number}${v.part || ""}${v.lxx_only ? "_lxx" : ""}`;
+        if (seenVerses.has(key)) return false;
+        seenVerses.add(key);
+        return true;
       });
       if (!verses.length) continue;
       const article = el("article", { className: "chapter-text", lang: "ko" });
@@ -303,8 +318,11 @@ async function renderBookmarkReadView(folderId = null) {
       // (hideCites), parallels (ADR-027 ※) not passed, note anchors not wrapped.
       appendVerses(article, verses, { hideCites: true });
       section.appendChild(article);
+      appendedAny = true;
     }
-    panel.appendChild(section);
+    // Skip a heading-only section: if every chapter was empty (spec no longer
+    // matches the loaded text, or all verses were deduped away), render nothing.
+    if (appendedAny) panel.appendChild(section);
   }
 
   /** @param {BookmarkTreeBookmark[]} bms  consecutive run within one parent */
