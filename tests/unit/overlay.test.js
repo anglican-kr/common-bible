@@ -152,6 +152,16 @@ function makeEnv() {
     // Default mobile viewport (drag is mobile-only; resize is desktop-only).
     innerWidth: 400,
     innerHeight: 800,
+    // The sheet↔side-panel gate now reads matchMedia (ADR-029 개정 pointer-aware
+    // breakpoint) instead of innerWidth. Map the desktop/mobile-tier queries onto
+    // the stubbed innerWidth — these tests model a normal device where the pointer
+    // matches the width intent (wide ⇒ mouse). setViewport stays the control knob.
+    matchMedia: (q) => ({
+      media: q,
+      matches: q.includes("pointer: fine") ? ctx.innerWidth >= 769
+        : q.includes("pointer: coarse") ? ctx.innerWidth <= 768
+        : false,
+    }),
     requestAnimationFrame: (cb) => { rafCbs.push(cb); return rafCbs.length; },
     appHelpers: {
       setInert: (on, sel) => { inertCalls.push([on, sel]); },

@@ -1162,7 +1162,10 @@ $searchClear.addEventListener("click", () => {
 
 // ── BEGIN IS_MOBILE ──
 function isMobile() {
-  return window.matchMedia("(max-width: 768px)").matches;
+  // Mobile/touch tier = narrow window OR a touch device (phones in any
+  // orientation, tablets). Pointer-aware so landscape phones/tablets keep the
+  // app layout instead of flipping to the desktop overlay (ADR-029 개정).
+  return window.matchMedia("(max-width: 768px), (pointer: coarse)").matches;
 }
 // ── END IS_MOBILE ──
 
