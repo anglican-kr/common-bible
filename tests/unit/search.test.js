@@ -490,14 +490,6 @@ test("buildSearchUrl: book filter (in=) repeated per book", () => {
   );
 });
 
-test("buildSearchUrl: AND terms (and=) repeated + encoded", () => {
-  const h = loadPureHelpers();
-  assert.strictEqual(
-    h.buildSearchUrl({ q: "사랑", andTerms: ["하느님"] }),
-    "/search?q=%EC%82%AC%EB%9E%91&and=%ED%95%98%EB%8A%90%EB%8B%98",
-  );
-});
-
 test("buildSearchUrl: empty state → bare /search", () => {
   const h = loadPureHelpers();
   assert.strictEqual(h.buildSearchUrl({}), "/search");
@@ -546,12 +538,12 @@ test("buildSearchPagination: middle page → prev link, page-info, next link", (
   assert.strictEqual(recursiveText(nav.children[2]), "다음 →");
 });
 
-test("buildSearchPagination: carries book filter + AND terms into page links", () => {
+test("buildSearchPagination: carries book filter into page links", () => {
   const h = loadPureHelpers();
-  const nav = h.buildSearchPagination({ q: "사랑", filterBooks: ["john"], andTerms: ["하느님"] }, 2, 5);
+  const nav = h.buildSearchPagination({ q: "사랑", filterBooks: ["john"] }, 2, 5);
   assert.strictEqual(
     nav.children[2].getAttribute("href"),
-    "/search?q=%EC%82%AC%EB%9E%91&page=3&in=john&and=%ED%95%98%EB%8A%90%EB%8B%98",
+    "/search?q=%EC%82%AC%EB%9E%91&page=3&in=john",
   );
 });
 

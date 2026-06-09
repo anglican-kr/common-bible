@@ -91,9 +91,8 @@ function ensureSearchWorker() {
  * @param {number} page
  * @param {number} pageSize
  * @param {((partial: any) => void) | null} [onPartial]
- * @param {{ scopeBooks?: string[], andTerms?: string[] }} [opts]
- *   scopeBooks — book-picker filter (book ids); andTerms — "결과 내 검색"
- *   AND keywords. Both forwarded to the worker (ADR-033).
+ * @param {{ scopeBooks?: string[] }} [opts]
+ *   scopeBooks — book-picker filter (book ids), forwarded to the worker (ADR-033).
  */
 function doSearch(query, page, pageSize, onPartial, opts) {
   return new Promise((resolve) => {
@@ -104,7 +103,6 @@ function doSearch(query, page, pageSize, onPartial, opts) {
     worker.postMessage({
       type: "search", q: query, page, pageSize, searchId: activeSearchId,
       scopeBooks: (opts && opts.scopeBooks) || [],
-      andTerms: (opts && opts.andTerms) || [],
     });
   });
 }
@@ -178,10 +176,9 @@ function buildSnippet(text, query) {
 
 /**
  * Build a /search URL from structured state (ADR-033). Pure — uses only
- * encodeURIComponent — so the book-picker scope (`in=`) and "결과 내 검색" AND
- * keywords (`and=`) round-trip through the URL (mirrors parsePath). `page` is
- * dropped when 1; empty params are omitted.
- * @param {{ q?: string, page?: number, filterBooks?: string[], andTerms?: string[] }} state
+ * encodeURIComponent — so the book-picker scope (`in=`) round-trips through the
+ * URL (mirrors parsePath). `page` is dropped when 1; empty params are omitted.
+ * @param {{ q?: string, page?: number, filterBooks?: string[] }} state
  * @returns {string}
  */
 function buildSearchUrl(state) {
@@ -189,7 +186,6 @@ function buildSearchUrl(state) {
   if (state.q) parts.push("q=" + encodeURIComponent(state.q));
   if (state.page && state.page > 1) parts.push("page=" + state.page);
   for (const b of state.filterBooks || []) parts.push("in=" + encodeURIComponent(b));
-  for (const t of state.andTerms || []) parts.push("and=" + encodeURIComponent(t));
   return "/search" + (parts.length ? "?" + parts.join("&") : "");
 }
 
@@ -206,7 +202,7 @@ function formatSearchDate(ts) {
 }
 
 /**
- * @param {{ q?: string, filterBooks?: string[], andTerms?: string[] }} state
+ * @param {{ q?: string, filterBooks?: string[] }} state
  * @param {number} currentPage
  * @param {number} totalPages
  */
@@ -214,7 +210,7 @@ function buildSearchPagination(state, currentPage, totalPages) {
   const nav = el("nav", { className: "search-pagination", "aria-label": "검색 결과 페이지" });
   /** @param {number} p */
   const pageUrl = (p) => buildSearchUrl({
-    q: state.q, page: p, filterBooks: state.filterBooks, andTerms: state.andTerms,
+    q: state.q, page: p, filterBooks: state.filterBooks,
   });
 
   if (currentPage > 1) {
@@ -363,38 +359,37 @@ function buildInPageSearchInput(query, autofocus = false) {
     input.focus();
     // Drop the query (back to the recents/empty view) but keep the book-picker
     // scope so a cleared field doesn't silently reset the filter (ADR-033).
-    if (window.parsePath().view === "search") navigateSearch({ q: "", andTerms: [] });
+    if (window.parsePath().view === "search") navigateSearch({ q: "" });
   });
 
   wrap.appendChild(input);
   wrap.appendChild(clear);
-  // Mount in-field tokens (book scope + 결과 내 검색) so the in-page bar is the
+  // Mount in-field tokens (book scope) so the in-page bar is the
   // single search surface on mobile — no separate filter bar (ADR-033 개정 B).
   mountSearchField(wrap, input);
   if (autofocus) requestAnimationFrame(() => input.focus());
   return wrap;
 }
 
-// ── Search options: book-picker scope + "결과 내 검색" + recents (ADR-033) ──
-// Filter state is URL-encoded (parsePath → { filterBooks, andTerms }) so it
+// ── Search options: book-picker scope + recents (ADR-033) ──
+// Filter state is URL-encoded (parsePath → { filterBooks }) so it
 // survives history/back-forward and tab restore (ADR-031). currentSearchState
 // reads the live URL; navigateSearch patches it and routes. A filter change
 // resets pagination to page 1 (unless the patch sets page) and never sets
 // searchAutoNavigate — only an explicit query commit (commitTopSearch) may
 // auto-jump to a verse reference.
 
-/** @returns {{ q: string, page: number, filterBooks: string[], andTerms: string[] }} */
+/** @returns {{ q: string, page: number, filterBooks: string[] }} */
 function currentSearchState() {
   const p = window.parsePath();
   return {
     q: p.query || "",
     page: p.page || 1,
     filterBooks: (p.filterBooks || []).slice(),
-    andTerms: (p.andTerms || []).slice(),
   };
 }
 
-/** @param {{ q?: string, page?: number, filterBooks?: string[], andTerms?: string[] }} patch */
+/** @param {{ q?: string, page?: number, filterBooks?: string[] }} patch */
 function navigateSearch(patch) {
   const next = Object.assign(currentSearchState(), patch);
   if (!("page" in patch)) next.page = 1;
@@ -515,15 +510,14 @@ function svgIcon(className, paths, circles) {
 }
 
 // ── In-field search tokens (ADR-033 개정 2026-06-08 — option B) ──────────────
-// Book-scope + "결과 내 검색" filters render as removable chips INSIDE the search
-// field itself (HIG search tokens), so there is a single search surface — no
-// separate filter bar and no second input. Mounted on each field container
-// (header #search-bar, mobile in-page #search-inpage-bar, bottom morphing pill
-// #tab-search-dock) and refreshed from the URL on every route via
-// syncSearchFields(). The worker/URL schema (in=/and=) is unchanged — only how
-// the filters surface.
+// Book-scope filters render as removable chips INSIDE the search field itself
+// (HIG search tokens), so there is a single search surface — no separate filter
+// bar. Mounted on each field container (header #search-bar, mobile in-page
+// #search-inpage-bar, bottom morphing pill #tab-search-dock) and refreshed from
+// the URL on every route via syncSearchFields(). The worker/URL schema (in=) is
+// unchanged — only how the filters surface.
 
-/** @typedef {{ container: HTMLElement, input: HTMLInputElement, zone: HTMLElement, funnel: HTMLElement, refineAdd: HTMLElement, refineInput: HTMLInputElement }} SearchField */
+/** @typedef {{ container: HTMLElement, input: HTMLInputElement, zone: HTMLElement, funnel: HTMLElement }} SearchField */
 /** @type {SearchField[]} */
 const _searchFields = [];
 
@@ -552,9 +546,9 @@ function buildFieldToken(label, removeAria, onRemove) {
   return chip;
 }
 
-// Insert the token zone (funnel button + chip slot + "결과 내 검색" inline add)
-// just before `input` inside `container`, wire the field-level interactions
-// (Backspace-to-remove, refine add), and register the field for
+// Insert the token zone (funnel button + chip slot) just before `input` inside
+// `container`, wire the field-level interactions (Backspace-to-remove) and
+// register the field for
 // syncSearchFields(). The zone uses display:contents so its children flex inline
 // within the existing pill/bar row. Persistent fields (header, pill) mount once
 // at load; the in-page bar mounts each time it's rebuilt (stale ones are pruned).
@@ -576,66 +570,11 @@ function mountSearchField(container, input) {
   funnel.addEventListener("pointerdown", (e) => e.preventDefault());
   funnel.addEventListener("click", (e) => { e.preventDefault(); openBookFilterSheet(funnel); });
 
-  // "결과 내 검색" inline add: a ghost "+" token that expands a compact inline
-  // input among the chips (not a separate full-width box — that read as a second
-  // search field, ADR-033 개정). Shown only when a primary query is active.
-  const refineAdd = el("button", {
-    type: "button",
-    className: "token-refine-add",
-    "aria-label": "결과 내 검색어 추가",
-  });
-  refineAdd.appendChild(el("span", { className: "token-refine-add-icon", "aria-hidden": "true" }, "+"));
-  refineAdd.appendChild(el("span", {}, "좁히기"));
-
-  const refineInput = /** @type {HTMLInputElement} */ (el("input", {
-    type: "text",
-    className: "token-refine-input",
-    autocomplete: "off",
-    autocorrect: "off",
-    autocapitalize: "off",
-    spellcheck: "false",
-    placeholder: "결과 내 검색",
-    "aria-label": "결과 내 검색",
-  }));
-  refineInput.hidden = true;
-
-  const collapseRefine = () => {
-    refineInput.value = "";
-    refineInput.hidden = true;
-    refineAdd.hidden = false;
-  };
-  refineAdd.addEventListener("pointerdown", (e) => e.preventDefault());
-  refineAdd.addEventListener("click", (e) => {
-    e.preventDefault();
-    refineAdd.hidden = true;
-    refineInput.hidden = false;
-    refineInput.focus();
-  });
-  refineInput.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") { e.stopPropagation(); collapseRefine(); input.focus(); return; }
-    if (e.key !== "Enter") return;
-    e.preventDefault();
-    const term = refineInput.value.trim();
-    if (!term) { collapseRefine(); return; }
-    const cur = currentSearchState();
-    // Collapse the inline input before navigating — on the persistent header/
-    // pill fields the same element is reused, so leaving it open would keep the
-    // submitted text visible (duplicating the chip) and hide "＋ 좁히기" (Bugbot).
-    collapseRefine();
-    if (cur.andTerms.includes(term)) return;
-    navigateSearch({ andTerms: cur.andTerms.concat(term) });
-  });
-  // Collapse on blur only when empty so an accidental focus loss keeps a term
-  // the user is still typing.
-  refineInput.addEventListener("blur", () => { if (!refineInput.value.trim()) collapseRefine(); });
-
-  zone.appendChild(funnel);
-  zone.appendChild(refineAdd); // chips get inserted between funnel and refineAdd
-  zone.appendChild(refineInput);
+  zone.appendChild(funnel); // chips get appended after the funnel
   container.insertBefore(zone, input);
 
-  // Backspace at caret 0 (empty selection) removes the last token — AND term
-  // first, then book scope (mirrors iOS token fields).
+  // Backspace at caret 0 (empty selection) removes the last book-scope token
+  // (mirrors iOS token fields).
   input.addEventListener("keydown", (e) => {
     if (e.key !== "Backspace") return;
     // Only fall through to token removal on an empty field with the caret at the
@@ -643,26 +582,23 @@ function mountSearchField(container, input) {
     // of doing normal in-field editing (Bugbot).
     if (input.value !== "" || input.selectionStart !== 0 || input.selectionEnd !== 0) return;
     const cur = currentSearchState();
-    if (cur.andTerms.length) {
-      e.preventDefault();
-      navigateSearch({ andTerms: cur.andTerms.slice(0, -1) });
-    } else if (cur.filterBooks.length) {
+    if (cur.filterBooks.length) {
       e.preventDefault();
       navigateSearch({ filterBooks: cur.filterBooks.slice(0, -1) });
     }
   });
 
   /** @type {SearchField} */
-  const field = { container, input, zone, funnel, refineAdd, refineInput };
+  const field = { container, input, zone, funnel };
   _searchFields.push(field);
   syncOneField(field);
 }
 
-// Refresh one field's chips + funnel/refine state from the live URL. The pill is
+// Refresh one field's chips + funnel state from the live URL. The pill is
 // only usable while the tab-bar morph is open, so it stays empty otherwise.
 /** @param {SearchField} field */
 function syncOneField(field) {
-  const { container, zone, funnel, refineAdd, refineInput } = field;
+  const { container, zone, funnel } = field;
   const p = window.parsePath?.() || {};
   const isPill = container.id === "tab-search-dock";
   // Desktop bare /search (no query/scope) renders the book list, not the search
@@ -670,14 +606,13 @@ function syncOneField(field) {
   // render condition; the old filter bar lived in the view so it never showed on
   // the book-list fallback). Mobile always renders the search view for /search.
   const searchView = p.view === "search" && (isMobile()
-    || !!p.query || (p.filterBooks && p.filterBooks.length) || (p.andTerms && p.andTerms.length));
+    || !!p.query || (p.filterBooks && p.filterBooks.length));
   const active = searchView && (!isPill || document.body.classList.contains("tabbar-searching"));
 
   zone.querySelectorAll(".field-token").forEach((n) => n.remove());
 
   if (!active) {
     zone.hidden = true;
-    if (!refineInput.hidden) { refineInput.hidden = true; refineInput.value = ""; refineAdd.hidden = false; }
     return;
   }
   zone.hidden = false;
@@ -690,21 +625,9 @@ function syncOneField(field) {
       navigateSearch({ filterBooks: currentSearchState().filterBooks.filter((b) => b !== id) });
     }));
   }
-  // AND terms only narrow an active query — without `q` they're orphans
-  // (renderSearchView strips them from the URL), so don't render them on an
-  // empty field (matches showRefine below; Bugbot).
-  if (state.q) for (const term of state.andTerms) {
-    frag.appendChild(buildFieldToken(term, `결과 내 검색어 ${term} 제거`, () => {
-      navigateSearch({ andTerms: currentSearchState().andTerms.filter((t) => t !== term) });
-    }));
-  }
-  zone.insertBefore(frag, refineAdd);
+  zone.appendChild(frag);
 
   funnel.classList.toggle("active", state.filterBooks.length > 0);
-  // "결과 내 검색" add is only meaningful once there's a query to narrow.
-  const showRefine = !!state.q;
-  if (!showRefine) { refineInput.hidden = true; refineInput.value = ""; }
-  refineAdd.hidden = !showRefine || !refineInput.hidden;
 }
 
 // Refresh every mounted field (called from route() and the tab-bar morph). Prune
@@ -1037,12 +960,6 @@ async function renderSearchView(state) {
   const seq = window.routeSeq?.() ?? 0;
   await ensureBookMap();
   if ((window.routeSeq?.() ?? 0) !== seq) return;
-  // "결과 내 검색"(and=) refines an active query; with an empty field there's no UI
-  // to view or remove it (the refine row only renders when q is set), so strip it
-  // from the URL while keeping the book-picker scope (in=) — ADR-033, Bugbot.
-  if (currentSearchState().andTerms.length) {
-    history.replaceState(history.state, "", buildSearchUrl({ filterBooks, andTerms: [] }));
-  }
   window.setTitle("검색");
   const $title = _$("page-title");
   $title.insertBefore(window.buildHomeBtn("/", "성서 목록으로"), $title.firstChild);
@@ -1072,14 +989,12 @@ async function renderSearchView(state) {
  * @param {string} query
  * @param {number} page
  * @param {boolean} [autoNavigate]
- * @param {{ filterBooks?: string[], andTerms?: string[] }} [opts]
- *   filterBooks — book-picker scope (book ids); andTerms — "결과 내 검색" AND
- *   keywords. Both come from the URL via parsePath (ADR-033).
+ * @param {{ filterBooks?: string[] }} [opts]
+ *   filterBooks — book-picker scope (book ids), from the URL via parsePath (ADR-033).
  */
 async function renderSearchResults(query, page, autoNavigate = false, opts = {}) {
   const filterBooks = opts.filterBooks || [];
-  const andTerms = opts.andTerms || [];
-  const state = { q: query, page, filterBooks, andTerms };
+  const state = { q: query, page, filterBooks };
 
   // Resolve book names before any DOM mutation so deep-linked/restored `in=`
   // scope chips render with names rather than raw ids (ADR-033). Capture the
@@ -1099,8 +1014,8 @@ async function renderSearchResults(query, page, autoNavigate = false, opts = {})
   window.hideAudioBar();
   clearNode($app);
 
-  // Both layouts share the .search-view wrapper. Filters (book scope + 결과 내
-  // 검색) live as in-field tokens in the search field itself (ADR-033 개정 B):
+  // Both layouts share the .search-view wrapper. Filters (book scope) live as
+  // in-field tokens in the search field itself (ADR-033 개정 B):
   // the mobile in-page bar / desktop header field / bottom morphing pill. Results
   // render into their own box so re-rendering them never touches the field.
   const view = el("div", { className: "search-view" });
@@ -1134,7 +1049,7 @@ async function renderSearchResults(query, page, autoNavigate = false, opts = {})
     window.announce(`"${query}" 검색 중… 현재 ${partial.total}건`);
   }
 
-  const result = await doSearch(query, page, pageSize, onPartial, { scopeBooks: filterBooks, andTerms });
+  const result = await doSearch(query, page, pageSize, onPartial, { scopeBooks: filterBooks });
 
   // Bail if the user navigated away while the search was running — the captured
   // resultsTarget is stale and #app belongs to a newer view now (ADR-033, Bugbot).
@@ -1204,14 +1119,14 @@ function commitTopSearch(rawQuery) {
   pushSearchHistory(raw);
   if (topSearchHistory) topSearchHistory.refresh();
   // Keep the book-picker scope across a fresh query (union in: tokens), but
-  // reset 결과 내 검색 (it refines a specific result set) and pagination (ADR-033).
+  // reset pagination (ADR-033).
   const cur = currentSearchState();
   const filterBooks = ids.length ? Array.from(new Set(cur.filterBooks.concat(ids))) : cur.filterBooks;
   // Arm verse-ref auto-navigate only when there's a keyword to search; a
   // scope-only commit (in: absorbed → empty keyword) lands on the empty-query
   // view, which never consumes the flag (would leave it stale — Bugbot).
   searchAutoNavigate = !!keyword;
-  const newPath = buildSearchUrl({ q: keyword, page: 1, filterBooks, andTerms: [] });
+  const newPath = buildSearchUrl({ q: keyword, page: 1, filterBooks });
   // If path is unchanged, popstate won't fire — call route() directly.
   if (location.pathname + location.search === newPath) {
     window.route();
@@ -1242,7 +1157,7 @@ $searchClear.addEventListener("click", () => {
   // Mirror the in-page clear: on /search, drop the query (back to the empty/
   // recents view) but keep the book-picker scope so clearing the field doesn't
   // silently reset the filter or exit search to "/" (ADR-033, Bugbot).
-  if (window.parsePath().view === "search") navigateSearch({ q: "", andTerms: [] });
+  if (window.parsePath().view === "search") navigateSearch({ q: "" });
 });
 
 // ── BEGIN IS_MOBILE ──
@@ -1557,7 +1472,7 @@ window.commitTopSearch = commitTopSearch;
 window.closeBookFilterSheet = () => { if (_bookSheet) _bookSheet.overlay.close(); };
 window.renderSearchResults = renderSearchResults;
 window.renderSearchView = renderSearchView;
-// Refresh in-field search tokens (book scope + 결과 내 검색) from the URL —
+// Refresh in-field search tokens (book scope) from the URL —
 // called by route() and the tab-bar morph (ADR-033 개정 B).
 window.syncSearchFields = syncSearchFields;
 // Patch the search URL preserving the rest of the state — the morphing pill's

@@ -119,7 +119,7 @@ function syncInputFromUrl() {
   if (!$searchInput || document.activeElement === $searchInput) return;
   $searchInput.value = new URLSearchParams(location.search).get("q") || "";
   syncClearBtn();
-  // Refresh the pill's in-field tokens (book scope + 결과 내 검색) for the
+  // Refresh the pill's in-field tokens (book scope) for the
   // current query/scope (ADR-033 개정 B).
   W.syncSearchFields?.();
 }
@@ -309,7 +309,7 @@ $searchClear?.addEventListener("click", () => {
   // pill doesn't silently remove book tokens the header/in-page clears would
   // keep — navigateSearch preserves filterBooks (ADR-033 개정 B, Bugbot).
   if (W.parsePath?.().view === "search") {
-    if (W.navigateSearch) W.navigateSearch({ q: "", andTerms: [] });
+    if (W.navigateSearch) W.navigateSearch({ q: "" });
     else W.navigate("/search");
   }
   $searchInput.focus({ preventScroll: true });

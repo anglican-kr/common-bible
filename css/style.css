@@ -1255,15 +1255,15 @@ body {
 }
 
 /* ── In-field search tokens (ADR-033 개정 B) ───────────────────────────────
-   Book scope + 결과 내 검색 surface as chips INSIDE the search field (HIG
-   search tokens). .token-zone uses display:contents so the funnel/chips/refine
-   flex inline within each field row — the header #search-bar, the mobile
-   in-page #search-inpage-bar, and the bottom morphing #tab-search-dock pill. */
-/* Horizontal-scroll strip for the funnel + chips + 결과 내 검색 add — so many
-   book tokens scroll instead of crushing the query input or overflowing the bar
-   (Bugbot). The main input and trailing clear/toggle stay OUTSIDE this scroller,
-   so they're always reachable. align-self:stretch makes the zone the full bar
-   height so the 44px tap-target ::after overlays aren't clipped by overflow. */
+   Book scope surfaces as chips INSIDE the search field (HIG search tokens).
+   .token-zone uses display:contents so the funnel/chips flex inline within each
+   field row — the header #search-bar, the mobile in-page #search-inpage-bar,
+   and the bottom morphing #tab-search-dock pill. */
+/* Horizontal-scroll strip for the funnel + chips — so many book tokens scroll
+   instead of crushing the query input or overflowing the bar (Bugbot). The main
+   input and trailing clear/toggle stay OUTSIDE this scroller, so they're always
+   reachable. align-self:stretch makes the zone the full bar height so the 44px
+   tap-target ::after overlays aren't clipped by overflow. */
 .token-zone {
   display: flex;
   align-items: center;
@@ -1276,11 +1276,9 @@ body {
 }
 .token-zone::-webkit-scrollbar { display: none; }
 .token-zone[hidden] { display: none; }
-/* Chips/refine inherit this Sans stack (display:contents passes inheritance to
+/* Chips inherit this Sans stack (display:contents passes inheritance to
    children) so tokens don't pick up the body Serif. */
-.field-token,
-.token-refine-add,
-.token-refine-input {
+.field-token {
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
 }
 
@@ -1308,11 +1306,10 @@ body {
 }
 
 /* Keep the compact visual size but expand the tap area to the 44px touch target
-   via a transparent overlay (mirrors #tab-search-clear) so the in-field funnel,
-   chip × and "＋ 좁히기" meet --touch-target (ADR-028 / WCAG) without growing the
-   inline pill (Bugbot). */
+   via a transparent overlay (mirrors #tab-search-clear) so the in-field funnel
+   and chip × meet --touch-target (ADR-028 / WCAG) without growing the inline
+   pill (Bugbot). */
 .token-funnel::after,
-.token-refine-add::after,
 .field-token-remove::after {
   content: "";
   position: absolute;
@@ -1330,7 +1327,7 @@ body {
 }
 .token-funnel-icon { width: 1.05rem; height: 1.05rem; }
 
-/* A removable in-field token (book scope or AND term). */
+/* A removable in-field token (book scope). */
 .field-token {
   flex: 0 0 auto;
   display: inline-flex;
@@ -1368,45 +1365,6 @@ body {
   border-radius: 50%;
 }
 .field-token-remove:hover { background: color-mix(in srgb, var(--accent) 22%, transparent); }
-
-/* "결과 내 검색" inline add — a ghost token that expands a compact inline input
-   (not a separate full-width box, which read as a second search field). */
-.token-refine-add {
-  position: relative;
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.1rem;
-  height: 1.7rem;
-  margin-right: 0.3rem;
-  padding: 0 var(--space-2);
-  font-size: var(--font-2xs);
-  color: var(--text-secondary);
-  background: none;
-  border: 1px dashed var(--border);
-  border-radius: var(--radius-pill);
-  cursor: pointer;
-}
-.token-refine-add[hidden] { display: none; }
-.token-refine-add:hover { color: var(--text); }
-.token-refine-add-icon { font-size: var(--font-sm); line-height: 1; }
-
-.token-refine-input {
-  flex: 0 1 7rem;
-  min-width: 4rem;
-  height: 1.7rem;
-  margin-right: 0.3rem;
-  padding: 0 var(--space-2);
-  font-size: var(--font-2xs);
-  color: var(--text);
-  background: var(--bg-card);
-  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
-  border-radius: var(--radius-pill);
-  outline: none;
-  -webkit-appearance: none;
-  appearance: none;
-}
-.token-refine-input[hidden] { display: none; }
 
 /* ── Search history panel ── */
 #search-history {
