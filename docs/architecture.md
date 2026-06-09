@@ -477,7 +477,7 @@ OAuth 측면 (가장 큰 공격 표면):
 | [032](decisions/032-component-view-layer.md)            | 컴포넌트·뷰 층 모듈화 — `el()` 위 무의존성 컴포넌트 층(`createOverlay` 단일 컨트롤러 + 시트 팩토리 + 비동기 `closeTransition` + `emptyState` 빌더)으로 오버레이 12곳·빈 상태 통일, 점진 교체 (구현 완료) |
 | [033](decisions/033-search-options.md)                  | 검색 옵션 — 책 picker(필터 시트)·결과 내 검색(AND)·진입 시 최근 검색 목록(개별/전체 삭제), URL 인코딩 필터 상태, 노트 검색 범위 확장 대비 (구현 완료) |
 | [034](decisions/034-views-routing-second-split.md)      | 뷰·라우팅·북마크 2차 분할 — 관심사별 모듈화 + 비순환 facade→명시 import 전환 + 순환 dispatch는 registry 역전 (ADR-018 후속, PR1 오디오 분리 완료) |
-| [035](decisions/035-bookmark-reading-view.md)           | 북마크 모아 읽기 — 폴더 단위 연속 읽기 화면(`/bookmarks/read/<id>`), 폴더 행 `읽기` 진입, 인접·연속 본문 병합, 네스팅 폴더는 소제목. `renderChapter` 절 루프를 `appendVerses`로 추출(전례독서 페이지 기반 기술) (구현 중) |
+| [035](decisions/035-bookmark-reading-view.md)           | 북마크 모아 읽기 — 폴더 단위 연속 읽기 화면(`/read/<id>`, 홈 탭 분류), 폴더 행 `읽기`(auto_stories) 진입, 인접·연속 본문 병합, 네스팅 폴더는 소제목. `renderChapter` 절 루프를 `appendVerses`로 추출(전례독서 페이지 기반 기술) (구현 중) |
 
 ## 부록 B. 자주 보게 되는 파일 빠른 참조
 

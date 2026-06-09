@@ -10,7 +10,7 @@
 // chapter view uses — so this view is the reusable base for liturgical
 // lectionary pages later (ADR-035 로드맵 메모).
 //
-// The screen is built from localStorage bookmarks, so the /bookmarks/read URL
+// The screen is built from localStorage bookmarks, so the /read URL
 // is effectively non-shareable: a copied link renders the recipient's own
 // bookmarks (or nothing), never the author's reading list.
 
@@ -227,7 +227,7 @@ function _planReadingUnits(seq, endsOf, isLoaded) {
  * Full-screen reading view: every bookmark's scripture text under a folder (or
  * all bookmarks when no folder id), in display order, nested folders as
  * sub-headings, list-adjacent continuous passages joined. Rendered into #app
- * for the /bookmarks/read[/<folderId>] route (ADR-035). Returns the resolved
+ * for the /read[/<folderId>] route (ADR-035). Returns the resolved
  * page title so the router's page-meta matches the visible header.
  * @param {string | null} [folderId]
  * @returns {Promise<string>}
@@ -243,7 +243,7 @@ async function renderBookmarkReadView(folderId = null) {
   const store = loadBookmarks();
   // Folder scope: read that folder's subtree (nested folders become
   // sub-headings); each folder is independently readable (ADR-035). No id →
-  // every bookmark (kept as a fallback for a bare /bookmarks/read deep link).
+  // every bookmark (kept as a fallback for a bare /read deep link).
   let nodes = store;
   let title = "북마크 읽기";
   if (folderId) {
@@ -466,7 +466,7 @@ async function renderBookmarkReadView(folderId = null) {
 }
 
 // ── Window facade ──
-// routing.js calls this via window for the /bookmarks/read route (the views ↔
+// routing.js calls this via window for the /read route (the views ↔
 // router cycle stays on the facade per ADR-034).
 window.renderBookmarkReadView = renderBookmarkReadView;
 

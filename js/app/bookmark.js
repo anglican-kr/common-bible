@@ -50,7 +50,7 @@ import {
 // path needs no circular import back here.
 import {
   initBookmarkModals, closeTopmostModal,
-  openConfirmModal, openChapterDeleteModal,
+  openConfirmModal,
   openNewFolderModal, openSaveModal,
   openImportFilePicker, openMoveModal,
 } from "./bookmark-modals.js";
@@ -636,6 +636,11 @@ function buildBookmarkHeaderBtn(bookId, chapter) {
   if (hasBookmark) {
     btn.classList.add("has-bookmark");
   }
+  // No single-chapter context (book's chapter-list header): nothing to "add", so
+  // the mobile CSS hides it there (the tab bar's 북마크 탭 covers management).
+  if (chapter == null) {
+    btn.classList.add("is-list");
+  }
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   // Size comes from CSS (.title-bookmark-btn svg) in rem — see style.css header-icon rule.
   svg.setAttribute("viewBox", "0 -960 960 960");
@@ -643,15 +648,15 @@ function buildBookmarkHeaderBtn(bookId, chapter) {
   svg.setAttribute("aria-hidden", "true");
   _setBookmarkBtnIcon(svg, hasBookmark);
   btn.appendChild(svg);
-  // 모바일 읽기 화면(장 맥락 있음)에선 헤더 북마크가 토글로 동작 —
-  // 이미 북마크된 장이면 삭제 확인 모달, 아니면 '이 장 저장' 모달.
-  // 그 외(데스크탑 전체, 또는 책 목록·장 선택처럼 장 맥락 없음)는 기존 드로어.
+  // 모바일(탭 바 있음, ≤768px)에선 헤더 북마크가 '이 장 추가' 어포던스 전용 —
+  // 이미 북마크된 장(.has-bookmark)·장-목록(.is-list)에서는 CSS 가 숨기므로 보이는
+  // 건 미저장 장뿐이고, 탭하면 폴더 위치를 고르는 저장 모달(openSaveModal)을 연다.
+  // 그 외(데스크탑·가로 폰처럼 탭 바가 없는 >768px, 또는 장 맥락 없음)는 북마크 시트
+  // (드로어)를 연다 — 거기선 헤더가 유일한 북마크 진입점이라 상태 표시 겸 관리 창구다.
+  // 보임/숨김은 CSS 미디어 쿼리가 담당해 가로/세로 회전에도 자동으로 따라온다.
   btn.addEventListener("click", () => {
     if (_isMobileViewport() && bookId && chapter != null) {
-      // Re-check live: the rendered state may be stale after edits elsewhere.
-      const existing = findExistingChapterBookmarks(bookId, chapter);
-      if (existing.length > 0) openChapterDeleteModal(existing);
-      else openSaveModal("chapter");
+      openSaveModal("chapter");
     } else {
       openBookmarkDrawer(bookId, chapter);
     }
@@ -936,8 +941,9 @@ function _buildFolderToggleIcon(open, size = 20) {
 // Per-folder "읽기" entry (ADR-035): a continuous reading screen of every
 // passage under this folder (nested sub-folders included, rendered as
 // sub-headings). Always-visible trailing icon so each folder — a liturgical
-// unit — is independently readable. Tap navigates to /bookmarks/read/<id>;
-// stops propagation so it never toggles the folder's expand/collapse.
+// unit — is independently readable. Tap navigates to /read/<id> (a home-tab
+// route, so the tab bar switches to 홈 for the read); stops propagation so it
+// never toggles the folder's expand/collapse.
 /** @param {{ id: string, name: string }} folder */
 function _buildFolderReadBtn(folder) {
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -945,8 +951,9 @@ function _buildFolderReadBtn(folder) {
   svg.setAttribute("fill", "currentColor");
   svg.setAttribute("aria-hidden", "true");
   const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-  // Material Symbols "menu_book" (open book).
-  path.setAttribute("d", "M560-564v-68q33-14 67.5-21t72.5-7q26 0 51 4t49 10v64q-24-9-48.5-13.5T700-600q-38 0-73 9.5T560-564Zm0 220v-68q33-14 67.5-21t72.5-7q26 0 51 4t49 10v64q-24-9-48.5-13.5T700-380q-38 0-73 9t-67 27Zm0-110v-68q33-14 67.5-21t72.5-7q26 0 51 4t49 10v64q-24-9-48.5-13.5T700-490q-38 0-73 9.5T560-454ZM260-320q47 0 91.5 10.5T440-278v-394q-41-24-87-36t-93-12q-36 0-71.5 7T120-692v396q35-12 69.5-18t70.5-6Zm260 42q44-21 88.5-31.5T700-320q36 0 70.5 6t69.5 18v-396q-33-14-68.5-21t-71.5-7q-47 0-93 12t-87 36v394Zm-40 118q-48-38-104-59t-116-21q-42 0-82.5 11T140-198q-21 11-40.5-1T80-234v-482q0-11 5.5-21T102-752q46-24 96-36t102-12q58 0 113.5 15T520-740q51-30 106.5-45T740-800q52 0 102 12t96 36q11 5 16.5 15t5.5 21v482q0 23-19.5 35t-40.5 1q-37-20-77.5-31T740-280q-60 0-116 21t-104 59ZM280-494Z");
+  // Material Symbols "auto_stories" (open book with a turning page) — the
+  // canonical "read" glyph, livelier than the flat menu_book it replaced.
+  path.setAttribute("d", "M480-160q-48-38-104-59t-116-21q-42 0-82.5 11T100-198q-21 11-40.5-1T40-234v-482q0-11 5.5-21T62-752q46-24 96-36t102-12q58 0 113.5 15T480-740v484q51-32 107-48t113-16q36 0 70.5 6t69.5 18v-480q15 5 29.5 10.5T898-752q11 5 16.5 15t5.5 21v482q0 23-19.5 35t-40.5 1q-37-20-77.5-31T700-240q-60 0-116 21t-104 59Zm80-200v-380l200-200v400L560-360Zm-160 65v-396q-33-14-68.5-21.5T260-720q-37 0-72 7t-68 21v397q35-13 69.5-19t70.5-6q36 0 70.5 6t69.5 19Zm0 0v-396 396Z");
   svg.appendChild(path);
   const btn = el("button", {
     className: "bm-folder-read-btn",
@@ -958,7 +965,7 @@ function _buildFolderReadBtn(folder) {
     e.stopPropagation();
     // Select mode owns the row; don't navigate away mid-selection.
     if (_bmSelectMode) return;
-    navigate(`/bookmarks/read/${folder.id}`);
+    navigate(`/read/${folder.id}`);
   });
   // The drag handler treats the row as a drag/longpress surface; keep a pointer
   // press on the read button from arming a drag.
