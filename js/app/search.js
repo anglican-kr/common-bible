@@ -877,7 +877,7 @@ function renderEmptyDynamic(host) {
   if (recents) {
     host.appendChild(recents);
   } else {
-    host.appendChild(buildSearchEmptyState("찾고 싶은 말씀을 검색해 보세요", SEARCH_INTRO_HELP));
+    host.appendChild(buildSearchEmptyState("검색해 보세요", SEARCH_INTRO_HELP));
     host.appendChild(buildSearchExamples());
   }
 }
