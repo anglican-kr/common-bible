@@ -159,6 +159,13 @@ function buildReadingSequence(nodes, depth = 0) {
  * @returns {Promise<string>}
  */
 async function renderBookmarkReadView(folderId = null) {
+  // ADR-031 staleness guard: this renderer awaits chapter loads, so a slower
+  // fetch can resolve after the user has navigated away. Capture the route
+  // sequence now and re-check after the await before touching #app, so a late
+  // completion never injects bookmark-read content into a superseding view
+  // (route()'s own isStale runs only after we return — too late for our append).
+  const entrySeq = typeof window.routeSeq === "function" ? window.routeSeq() : null;
+  const isStale = () => entrySeq !== null && window.routeSeq() !== entrySeq;
   const store = loadBookmarks();
   // Folder scope: read that folder's subtree (nested folders become
   // sub-headings); each folder is independently readable (ADR-035). No id →
@@ -210,6 +217,9 @@ async function renderBookmarkReadView(folderId = null) {
     try { chapterCache.set(`${bookId}:${chapter}`, await loadChapter(bookId, chapter)); }
     catch { /* missing chapter — skip */ }
   }));
+  // Navigation superseded this route during the chapter loads — bail before
+  // building/appending the panel so we don't clobber the now-current view.
+  if (isStale()) return title;
 
   const books = getBooksCache() ?? [];
   /** @param {string} id */
