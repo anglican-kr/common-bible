@@ -2,7 +2,34 @@
 
 **상태**: 채택됨 (2026-05-08)
 **개정**: 2026-05-11 (ADR-020 분할에 따라 nginx 설정 파일들(`oauth-proxy.example.conf`·`oauth-bff-shared.example.conf`·`oauth-bff-guard.example.js`·`security-headers.example.conf`)은 `common-bible-server/nginx/`로 이전. BFF 패턴 자체는 그대로 유지.)
+**개정**: 2026-06-09 (채택 후 추가됐던 njs body 가드(M6)가 njs 0.8.2 세그폴트를 일으켜 `/oauth/token` POST 전부 다운 → 가드 제거하고 단일 location 직접 proxy로 환원. `limit_req` rate limit(M5)은 유지. 상세는 아래 개정 블록.)
 **관련**: [ADR-001](001-spa-architecture.md), [ADR-011](011-bookmark-sync.md), [ADR-020](020-monorepo-split.md), [`docs/archive/design/pkce-migration.md`](../archive/design/pkce-migration.md)
+
+> **개정 (2026-06-09): njs body 가드 제거 — njs 0.8.2 세그폴트**
+>
+> 본 ADR 채택 후 `/oauth/token`에 두 가지 하드닝이 추가됐었다 (당시 ADR 본문엔 미반영):
+> - **M5 — rate limit**: `limit_req zone=oauth_token` (아래 "향후 고려"의 rate limiting 항목 실행).
+> - **M6 — njs body 가드**: `js_content`(njs)로 요청 body를 검사해, 클라이언트가
+>   `client_secret=`을 끼워 넣은 RFC 6749 §3.2 위반(파라미터 중복) 트래픽을 400으로 early
+>   reject. 구조는 `location = /oauth/token`(가드) + 내부 `@oauth_token_upstream`(proxy) 2단.
+>
+> 2026-06-09, 이 njs 가드가 **`libnginx-mod-http-js` 0.8.2에서 세그폴트(SIGSEGV)**를 일으키는
+> 것이 확인됐다. `/oauth/token`으로 오는 **모든 POST**가 `js_content` 핸들러에서 워커를 죽여
+> (`worker exited on signal 11` — kernel/journald에만 기록, access·error 로그엔 무기록) 연결이
+> `ERR_CONNECTION_RESET`으로 끊겼다. 결과적으로 prod·dev 양쪽에서 silent refresh·신규 로그인이
+> 전부 실패 → **Drive 동기화 전면 중단**. (앱 코드 `transport.js`는 1.5.12 이후 무변경이라 무관.)
+>
+> **조치**: njs 가드(M6)와 `@oauth_token_upstream` 블록을 제거하고, secret 주입 + Google 직접
+> proxy를 **단일 `location = /oauth/token`**으로 환원했다 (= 본 ADR "구현 노트"의 원래 형태 +
+> `limit_req`). `proxy_pass`는 literal `https://oauth2.googleapis.com/token`.
+>
+> **보안 영향 없음**: M6는 방어적 부가장치였다. 클라이언트가 body에 `client_secret`을 끼워
+> 넣어도 nginx가 server-side secret을 추가해 파라미터가 중복되며 Google이 RFC 6749 §3.2 위반으로
+> 400 거부한다(secret oracle 불가). secret은 server-side 주입이라 클라이언트로 절대 노출되지
+> 않는다. M5(rate limit)는 유지.
+>
+> njs를 재도입하려면 세그폴트가 고쳐진 njs 버전인지 먼저 확인할 것. 서버 측 변경은
+> `common-bible-server` 저장소(`nginx/oauth-proxy.example.conf` 등, commit `2f4cbac`)에 반영됨.
 
 ## 맥락
 
@@ -109,6 +136,7 @@ Google이 발급하는 OAuth 클라이언트 중 "Desktop app" 또는 "Installed
 ```nginx
 location = /oauth/token {
     if ($request_method != POST) { return 405; }
+    limit_req zone=oauth_token burst=100 nodelay;   # M5 rate limit (개정 2026-06-09 참조)
     client_body_buffer_size 4k;
     client_max_body_size 4k;
 
@@ -140,5 +168,5 @@ location = /oauth/token {
 ## 향후 고려
 
 - **secret 로테이션 자동화**: 현재 수동(Cloud Console에서 새 secret 발급 → nginx 설정 수정 → reload). 분기별 또는 incident 시 자동화하려면 별도 스크립트 + 시크릿 매니지먼트.
-- **Rate limiting**: `/oauth/token`이 익명 공개 엔드포인트인 만큼, 악의적 트래픽 폭주 시 nginx `limit_req`로 보호 검토.
+- ~~**Rate limiting**~~ → 구현됨(M5): `limit_req zone=oauth_token` (분당 60회 + burst 100). 개정(2026-06-09) 참조. (참고: 같이 추가됐던 njs body 가드(M6)는 세그폴트로 철회.)
 - **OAuth 검수 통과 후 재검토**: Google이 검수 통과한 클라이언트에 한해 PKCE-only를 허용하는 경로를 향후 발표할 가능성. 발표되면 BFF 우회로 단순화 검토.
