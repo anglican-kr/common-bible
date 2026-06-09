@@ -165,6 +165,62 @@ function buildReadingSequence(nodes, depth = 0) {
   }
   return out;
 }
+
+/**
+ * Plan the reading view's render units from a flattened sequence — the pure,
+ * testable core of the merge/boundary logic (the DOM renderer just consumes the
+ * result). Emits a "folder" unit per folder token and a "group" unit per run of
+ * list-adjacent bookmarks that `_isContinuous` joins. A run is BROKEN (so two
+ * regions never merge into one passage/heading) by any of:
+ *   - a folder token (entering a sub-folder / new sibling folder),
+ *   - an unloadable bookmark (`isLoaded` false — it can't render but WAS there),
+ *   - a tree-depth change between consecutive bookmarks (folder *exit* back to a
+ *     shallower parent emits no token; same-parent siblings share one depth).
+ * `endsOf`/`isLoaded` are injected so this stays DOM-free and unit-testable.
+ * @param {Array<{ type: "folder", name: string, depth: number } | { type: "bookmark", bm: BookmarkTreeBookmark, depth: number }>} seq
+ * @param {(bm: BookmarkTreeBookmark) => ReturnType<typeof _bmRange>} endsOf
+ * @param {(bm: BookmarkTreeBookmark) => boolean} isLoaded
+ * @returns {Array<{ type: "folder", name: string, depth: number } | { type: "group", bms: BookmarkTreeBookmark[], depth: number }>}
+ */
+function _planReadingUnits(seq, endsOf, isLoaded) {
+  /** @type {Array<any>} */
+  const units = [];
+  /** @type {BookmarkTreeBookmark[]} */
+  let pending = [];
+  let pendingDepth = -1;
+  function flush() {
+    if (!pending.length) return;
+    // Every bookmark in a run shares one tree depth (a depth change breaks the
+    // run below), so the groups it splits into all carry that depth — the DOM
+    // renderer uses it to drop sibling-folder headings that don't contain them.
+    const depth = pendingDepth;
+    let group = [pending[0]];
+    for (let i = 1; i < pending.length; i++) {
+      if (_isContinuous(endsOf(pending[i - 1]), endsOf(pending[i]))) {
+        group.push(pending[i]);
+      } else {
+        units.push({ type: "group", bms: group, depth });
+        group = [pending[i]];
+      }
+    }
+    units.push({ type: "group", bms: group, depth });
+    pending = [];
+  }
+  for (const tok of seq) {
+    if (tok.type === "folder") {
+      flush();
+      units.push({ type: "folder", name: tok.name, depth: tok.depth });
+    } else if (isLoaded(tok.bm)) {
+      if (pending.length && tok.depth !== pendingDepth) flush();
+      pending.push(tok.bm);
+      pendingDepth = tok.depth;
+    } else {
+      flush();
+    }
+  }
+  flush();
+  return units;
+}
 // ── END BOOKMARK_READ ──
 
 /**
@@ -365,62 +421,36 @@ async function renderBookmarkReadView(folderId = null) {
     }
   }
 
-  /** @param {BookmarkTreeBookmark[]} bms  consecutive run within one parent */
-  function flush(bms) {
-    if (!bms.length) return;
-    let group = [bms[0]];
-    for (let i = 1; i < bms.length; i++) {
-      if (_isContinuous(endsOf(bms[i - 1]), endsOf(bms[i]))) {
-        group.push(bms[i]);
-      } else {
-        renderGroup(group);
-        group = [bms[i]];
-      }
-    }
-    renderGroup(group);
-  }
-
-  // Walk the sequence; a folder heading flushes (and so breaks) the current run
-  // so different liturgical units never merge across a folder boundary. A
-  // bookmark whose chapter JSON didn't load can't render, but it WAS present
-  // between its neighbours — so it also breaks the run (flush), otherwise the
-  // bookmarks on either side would be treated as list-adjacent and could merge
-  // across the gap, violating the adjacent-only merge rule (ADR-035).
-  // A folder *entry* always emits a folder token (which flushes); a folder *exit*
-  // (returning to a shallower parent after a sub-folder) does not, so also flush
-  // whenever a bookmark's tree depth differs from the current run's — same-parent
-  // siblings share one depth, so a depth change means a folder boundary was
-  // crossed and the two regions must not merge.
-  /** @type {BookmarkTreeBookmark[]} */
-  let pending = [];
-  let pendingDepth = -1;
-  for (const tok of seq) {
-    if (tok.type === "folder") {
-      flush(pending);
-      pending = [];
+  // Grouping/boundary logic lives in the pure `_planReadingUnits` (unit-tested);
+  // here we just render each unit. Folder units queue a heading (committed lazily
+  // when a passage under it actually renders, with depth-aware dropping of empty
+  // earlier subtrees); group units render their passage.
+  /** @param {BookmarkTreeBookmark} bm */
+  const isLoaded = (bm) => chapterCache.has(`${bm.bookId}:${bm.chapter}`);
+  for (const unit of _planReadingUnits(seq, endsOf, isLoaded)) {
+    if (unit.type === "folder") {
       // A folder at depth d means we've exited every still-queued folder at depth
       // ≥ d whose subtree produced no content — drop those (don't let an empty
-      // earlier sibling's heading flush alongside this folder's content). Then
-      // queue this heading; it commits only when a passage under it renders.
-      while (pendingHeadings.length && pendingHeadings[pendingHeadings.length - 1].depth >= tok.depth) {
+      // earlier sibling's heading flush alongside this folder's content).
+      while (pendingHeadings.length && pendingHeadings[pendingHeadings.length - 1].depth >= unit.depth) {
         pendingHeadings.pop();
       }
       pendingHeadings.push({
-        el: el("h2", { className: `reading-folder reading-folder--d${Math.min(tok.depth, 3)}` }, tok.name || "이름 없는 폴더"),
-        depth: tok.depth,
+        el: el("h2", { className: `reading-folder reading-folder--d${Math.min(unit.depth, 3)}` }, unit.name || "이름 없는 폴더"),
+        depth: unit.depth,
       });
-    } else if (chapterCache.has(`${tok.bm.bookId}:${tok.bm.chapter}`)) {
-      // Folder-exit boundary (no token): a depth change ends the current run.
-      if (pending.length && tok.depth !== pendingDepth) { flush(pending); pending = []; }
-      pending.push(tok.bm);
-      pendingDepth = tok.depth;
     } else {
-      // Unloadable bookmark: end the current run so its neighbours don't merge.
-      flush(pending);
-      pending = [];
+      // Drop queued headings that don't CONTAIN this group: a heading at depth ≥
+      // the group's depth is a sibling/earlier subtree (e.g. an empty folder that
+      // is a sibling of this bookmark), not an ancestor, so it must not be
+      // flushed above this group's text. Ancestors (depth < group depth) stay and
+      // commit inside renderGroup when a passage actually renders.
+      while (pendingHeadings.length && pendingHeadings[pendingHeadings.length - 1].depth >= unit.depth) {
+        pendingHeadings.pop();
+      }
+      renderGroup(unit.bms);
     }
   }
-  flush(pending);
 
   // Chapters loaded but every group skipped output (specs no longer match the
   // loaded text, or everything was deduped) — show a notice rather than a bare

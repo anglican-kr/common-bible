@@ -176,6 +176,62 @@ test("_specCoversVerse: range + hemistich membership", () => {
   assert.strictEqual(ctx._specCoversVerse("1-3,4a", 5), false);
 });
 
+// ── _planReadingUnits ──────────────────────────────────────────────────────────
+
+// Per-chapter max verse for coversChapterEnd; endsOf built from the real _bmRange.
+const MAXV = { "gen:1": 31, "gen:2": 25, "gen:3": 24, "exod:1": 22 };
+const endsOf = (bm) => ctx._bmRange(bm, MAXV[`${bm.bookId}:${bm.chapter}`] ?? 0);
+const bmTok = (id, bookId, chapter, verseSpec, depth = 0) =>
+  ({ type: "bookmark", bm: { id, bookId, chapter, verseSpec }, depth });
+const folderTok = (name, depth = 0) => ({ type: "folder", name, depth });
+// Compact a plan into easy-to-assert tokens: "folder:NAME" or "group:id,id".
+const planShape = (seq, isLoaded = () => true) =>
+  plain(ctx._planReadingUnits(seq, endsOf, isLoaded).map((u) =>
+    u.type === "folder" ? `folder:${u.name}` : `group:${u.bms.map((b) => b.id).join(",")}`));
+
+test("_planReadingUnits: continuous same-depth bookmarks merge into one group", () => {
+  const seq = [bmTok("a", "gen", 1, "all"), bmTok("b", "gen", 2, "1-3,4a")];
+  assert.deepStrictEqual(planShape(seq), ["group:a,b"]);
+});
+
+test("_planReadingUnits: a folder token breaks the run and emits a folder unit", () => {
+  const seq = [
+    folderTok("A"),
+    bmTok("a", "gen", 1, "all", 1),
+    folderTok("B", 1),
+    bmTok("b", "gen", 2, "1-3", 2),
+  ];
+  // 'a' and 'b' are text-continuous but the folder B token separates them.
+  assert.deepStrictEqual(planShape(seq), ["folder:A", "group:a", "folder:B", "group:b"]);
+});
+
+test("_planReadingUnits: an unloadable bookmark breaks the run (and is dropped)", () => {
+  const seq = [
+    bmTok("a", "gen", 1, "all"),
+    bmTok("x", "gen", 2, "1-3"),   // unloadable → breaks, not rendered
+    bmTok("c", "gen", 2, "1-3"),
+  ];
+  const isLoaded = (bm) => bm.id !== "x";
+  // 'a' would merge with gen2:1, but 'x' between them breaks; 'x' itself omitted.
+  assert.deepStrictEqual(planShape(seq, isLoaded), ["group:a", "group:c"]);
+});
+
+test("_planReadingUnits: a depth change (folder exit) breaks the run", () => {
+  // sub-folder's last bookmark (depth 2) then parent's direct bookmark (depth 1):
+  // text-continuous but in different folders → must not merge.
+  const seq = [
+    folderTok("B", 1),
+    bmTok("a", "gen", 1, "all", 2),
+    bmTok("b", "gen", 2, "1-3", 1),
+  ];
+  assert.deepStrictEqual(planShape(seq), ["folder:B", "group:a", "group:b"]);
+});
+
+test("_planReadingUnits: non-continuous same-depth bookmarks split into separate groups", () => {
+  const seq = [bmTok("a", "gen", 1, "1-3"), bmTok("b", "gen", 3, "5")];
+  assert.deepStrictEqual(planShape(seq), ["group:a", "group:b"]);
+});
+
 // ── buildReadingSequence ───────────────────────────────────────────────────────
 
 test("buildReadingSequence: folders emit depth-tagged headings, bookmarks leaves, nested recursed", () => {
