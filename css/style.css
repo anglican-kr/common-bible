@@ -5423,6 +5423,17 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 
 body.bm-select-active .bm-folder-read-btn { display: none; }
 
+/* Full bookmarks view — column alignment with the page header (🛈 + ⋯).
+   The trailing ≡ reorder handle already sits in the ⋯ column; tightening the
+   read button's gap to it from the row default (--space-3) down to the header's
+   icon gap (--space-1) lands the read button's center under 🛈. The two row
+   icons (읽기 + ≡) then mirror the two header icons (🛈 + ⋯) as clean columns.
+   The flex:1 folder name keeps the handle right-anchored, so only the read
+   button shifts. */
+.bookmarks-view .bm-folder-read-btn {
+  margin-right: calc(var(--space-1) - var(--space-3));
+}
+
 /* Reorder handle (≡): hidden by default, revealed only when the tree is in
    manual-sort mode (.bm-sortable on the list). Neutral, trailing grab affordance
    shared by the drawer and the full /bookmarks view. */
