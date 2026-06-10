@@ -536,6 +536,6 @@ function _setupDragHandle(li, row) {
 
 export {
   initBookmarkGestures,
-  moveBookmarkItem, _setupDragHandle, _isMobileViewport,
+  moveBookmarkItem, _setupDragHandle, _isMobileViewport, _isDescendant,
   closeSwipedRow, resetSwipedRow, closeSwipedRowIfOutside,
 };
