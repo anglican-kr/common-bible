@@ -149,3 +149,12 @@ ADR-029 는 Safari 26 home-indicator 틴팅 회피를 위해 glass 를 `::before
   (`--glass-sheen`/`--bg 50%`/`blur(12px)`/`--shadow-2`/`--glass-inset`/`--radius-pill` +
   `superellipse(2)`)와 60px 치수를 그대로 공유. 북마크·복사 + 노트 슬롯(placeholder).
   결정·구현 상세는 **ADR-010 §절 선택 바 개정 (2026-06-06)**.
+
+- **이어읽기 배너 → 가로 dock pill (2026-06-10).** 책 목록 뷰의 이어읽기 배너
+  (`.resume-banner`, sticky 그룹의 헤더 아래 가로 띠)를 **가로 모드에서만** 하단 dock 행으로
+  내린다 — 가로는 헤더 + 배너 띠 + 탭이 세로로 쌓여 본문을 많이 가린다는 피드백. `position:
+  fixed` 로 미니 오디오와 동일 자리(탭바 우측~검색 사이, `--tab-bar-w` 재사용)에 `--radius-pill`
+  + 60px(`--dock-control`) pill 로 띄운다. 배너는 책 목록 뷰, 오디오는 chapter 뷰 전용이라
+  같은 dock 자리를 다른 뷰에서 공유 — 충돌 없음. 테마색 솔리드 채움은 유지(주요 CTA 강조, 글래스
+  캡슐 사이에서 컬러 pill 로 도드라짐). 닫기 × 는 `align-self: stretch` 로 구분선이 pill 높이를
+  채운다. 순수 CSS(`@media (orientation: landscape)` + mobile 게이트), 세로는 무변경.

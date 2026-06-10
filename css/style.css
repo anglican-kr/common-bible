@@ -2429,6 +2429,30 @@ mark.search-highlight {
   background: color-mix(in srgb, var(--bg) 15%, transparent);
 }
 
+/* ── ADR-030 개정(가로): 이어읽기 배너 → 하단 dock pill ─────────────────────────
+   가로는 헤더 + 배너 띠 + 탭이 세로로 쌓여 본문을 많이 가린다. 가로에서만 이어읽기
+   배너를 sticky 그룹 띠에서 빼내 하단 dock 행(미니 오디오와 동일 자리 — 탭바 우측~검색
+   사이, --tab-bar-w 재사용)에 pill 로 띄운다. 책 목록 뷰 전용이라 오디오(chapter 뷰)와
+   같은 자리를 다른 뷰에서 공유 — 충돌 없음. 테마색 솔리드 채움은 유지(주요 CTA 강조).
+   세로는 무변경. 데스크탑은 탭바·dock 이 없어 제외 — 넓은 가로 아이폰(>768)은 pointer:coarse
+   로 포착(ADR-030 가로 오디오 규칙과 동일 게이트). */
+@media (orientation: landscape) and (max-width: 768px),
+       (orientation: landscape) and (pointer: coarse) {
+  .resume-banner {
+    position: fixed;
+    bottom: calc(var(--space-1) + env(safe-area-inset-bottom) * 0.75);
+    left: calc(var(--space-4) + var(--tab-bar-w, calc(var(--dock-control) * 4)) + var(--space-2));
+    right: calc(var(--space-4) + var(--dock-control) + var(--space-2));
+    height: var(--dock-control);
+    margin: 0;
+    /* dock 캡슐(탭바·검색·미니 오디오)과 동일 — 둥근 사각 --radius 대신 반원 캡 pill. */
+    border-radius: var(--radius-pill);
+    z-index: var(--nav-z);
+  }
+  /* 닫기 × 구분선이 60px pill 높이를 채우도록(가운데 정렬 대신 stretch). */
+  .resume-banner-close { align-self: stretch; }
+}
+
 /* ── Book List ── */
 /* Single tabbed page (구약 / 외경 / 신약). The tab strip fills the row width:
    each tab flexes equally so the three (or two, in vulgate mode) segments span
