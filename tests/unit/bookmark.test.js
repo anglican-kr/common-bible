@@ -147,7 +147,6 @@ function loadBookmarkQuery(initialStore = []) {
     _walkBookmarks: ctx._walkBookmarks,
     findExistingChapterBookmarks: ctx.findExistingChapterBookmarks,
     _selectAllState: ctx._selectAllState,
-    _deleteBtnLabel: ctx._deleteBtnLabel,
     _bmSelectCountLabel: ctx._bmSelectCountLabel,
     _findItemInStore: ctx._findItemInStore,
     _findParentFolderId: ctx._findParentFolderId,
@@ -592,7 +591,7 @@ test('findExistingChapterBookmarks: empty store → empty array', () => {
 });
 
 // ── _selectAllState ──────────────────────────────────────────────────────────
-// Tri-state for the chapter-delete picker's "전체 선택" checkbox.
+// Tri-state for the bookmark bulk-select "전체 선택" checkbox.
 
 test('_selectAllState: nothing ticked → none', () => {
   const h = loadBookmarkQuery();
@@ -613,19 +612,6 @@ test('_selectAllState: every row ticked → all', () => {
 test('_selectAllState: empty list → none (never indeterminate)', () => {
   const h = loadBookmarkQuery();
   assert.equal(h._selectAllState(0, 0), "none");
-});
-
-// ── _deleteBtnLabel ──────────────────────────────────────────────────────────
-
-test('_deleteBtnLabel: no selection → bare 삭제', () => {
-  const h = loadBookmarkQuery();
-  assert.equal(h._deleteBtnLabel(0), "삭제");
-});
-
-test('_deleteBtnLabel: selection count appended', () => {
-  const h = loadBookmarkQuery();
-  assert.equal(h._deleteBtnLabel(1), "삭제 (1)");
-  assert.equal(h._deleteBtnLabel(3), "삭제 (3)");
 });
 
 // ── _bmSelectCountLabel ──────────────────────────────────────────────────────

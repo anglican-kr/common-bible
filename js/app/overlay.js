@@ -12,7 +12,7 @@
 // 교체"). The Escape key is *opt-in* per overlay (`closeOnEsc`) precisely so a
 // freshly-migrated dialog can keep deferring to a pre-existing stacked Escape
 // router (e.g. bookmark.js's document-level handler that closes the topmost of
-// confirm > chapter-delete > import > merge > save > drawer) until every
+// confirm > import > merge > save > drawer) until every
 // sibling migrates and that router can be retired wholesale. Turning closeOnEsc
 // on while such a router still runs would double-handle Escape and close the
 // dialog *and* whatever sits beneath it.

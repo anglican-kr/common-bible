@@ -948,7 +948,6 @@ declare global {
     closeMergeModal?: () => void;
     closeImportModal?: () => void;
     closeConfirmModal?: () => void;
-    closeChapterDeleteModal?: () => void;
     closeDriveDisconnectModal?: () => void;
     renderBookmarkTree?: () => void;
     rerenderActiveBookmarkTree?: () => void;
@@ -1038,7 +1037,6 @@ declare global {
   function closeMergeModal(): void;
   function closeImportModal(): void;
   function closeConfirmModal(): void;
-  function closeChapterDeleteModal(): void;
   function renderBookmarkTree(target?: HTMLElement): void;
   function renderBookmarksView(): void;
   function enterVerseSelectMode(bookId: string, chapter: number): void;

@@ -2,7 +2,7 @@
 // @ts-check
 
 // Bookmark modals — extracted from bookmark.js (ADR-034 후속 PR5). DOM-bound
-// dialog UI: confirm + chapter-delete picker (PR5a), folder combobox + new-folder
+// dialog UI: confirm (PR5a), folder combobox + new-folder
 // modal (PR5b), save/edit + merge dialog (PR5c), import flow (PR5d), move
 // destination picker (PR5e — a parameterized folder picker; select-mode keeps the
 // selection logic and passes excludeFolder/onPick). export stays in bookmark.js
@@ -16,7 +16,7 @@
 /** @typedef {import("../types").BookmarkTreeBookmark} BookmarkTreeBookmark */
 
 import {
-  _selectAllState, _deleteBtnLabel, _forgetViewed, removeItemById,
+  _selectAllState, _forgetViewed, removeItemById,
   collectFolderOptions, insertItem, _findItemInStore,
   findExistingChapterBookmarks, _findParentFolderId,
 } from "./bookmark-core.js";
@@ -50,12 +50,6 @@ const $bmConfirmTitle = _$("bm-confirm-title");
 const $bmConfirmBody = _$("bm-confirm-body");
 const $bmConfirmOk = _$("bm-confirm-ok");
 const $bmConfirmCancel = _$("bm-confirm-cancel");
-const $bmChapterDeleteScrim = _$("bm-chapter-delete-scrim");
-const $bmChapterDeleteModal = _$("bm-chapter-delete-modal");
-const $bmChapterDeleteAll = /** @type {HTMLInputElement} */ (_$("bm-chapter-delete-all"));
-const $bmChapterDeleteList = _$("bm-chapter-delete-list");
-const $bmChapterDeleteConfirm = /** @type {HTMLButtonElement} */ (_$("bm-chapter-delete-confirm"));
-const $bmChapterDeleteCancel = _$("bm-chapter-delete-cancel");
 const $bmNewFolderScrim = _$("bm-new-folder-scrim");
 const $bmNewFolderModal = _$("bm-new-folder-modal");
 const $bmNewFolderClose = _$("bm-new-folder-close");
@@ -93,7 +87,7 @@ const $bmMoveCancel = _$("bm-move-cancel");
 // this stays a pure primitive with no render dependency.
 // Overlay lifecycle (scrim/hidden/focus-trap/focus-restore) is owned by the
 // shared controller (ADR-032). closeOnEsc stays off: this modal participates in
-// bookmark.js's stacked Escape router (confirm > chapter-delete > … > drawer),
+// bookmark.js's stacked Escape router (confirm > … > drawer),
 // which calls closeConfirmModal() for the topmost overlay. A controller-level
 // Escape listener here would double-handle and also close whatever sits beneath.
 // Default initial focus = cancel (safe action); destructive button is opt-in.
@@ -119,102 +113,6 @@ function closeConfirmModal() {
   confirmOverlay.close();
 }
 // ── END BOOKMARK_CONFIRM ──
-
-// ── BEGIN BOOKMARK_CHAPTER_DELETE ──
-// Header bookmark toggle-off (mobile): instead of a blunt "delete all", present
-// the chapter's bookmarks (whole-chapter + verse ranges) as a checkbox list so
-// the reader removes only what they mean to. "전체 선택" ticks them all at once.
-// Nothing is pre-selected (the select-all is the bulk affordance) and the
-// delete button stays disabled until at least one row is ticked.
-// closeOnEsc off: in the stacked Escape router. onClose clears per-open
-// handlers; returnFocus restores the pre-open focus (ADR-032).
-const chapterDeleteOverlay = createOverlay({
-  panel: $bmChapterDeleteModal,
-  scrim: $bmChapterDeleteScrim,
-  initialFocus: () => $bmChapterDeleteCancel,
-  onClose: () => {
-    $bmChapterDeleteConfirm.onclick = null;
-    $bmChapterDeleteCancel.onclick = null;
-    $bmChapterDeleteAll.onchange = null;
-  },
-});
-
-/**
- * @param {BookmarkTreeBookmark[]} candidates
- */
-function openChapterDeleteModal(candidates) {
-  if (!candidates.length) return;
-  /** @type {Set<string>} */
-  const selected = new Set();
-
-  const syncChrome = () => {
-    const state = _selectAllState(selected.size, candidates.length);
-    $bmChapterDeleteAll.checked = state === "all";
-    $bmChapterDeleteAll.indeterminate = state === "some";
-    $bmChapterDeleteConfirm.textContent = _deleteBtnLabel(selected.size);
-    $bmChapterDeleteConfirm.disabled = selected.size === 0;
-  };
-
-  clearNode($bmChapterDeleteList);
-  /** @type {HTMLInputElement[]} */
-  const rowChecks = [];
-  candidates.forEach((bm, i) => {
-    const id = `bm-chapter-del-${i}`;
-    const li = el("li", { className: "bm-chapter-delete-item" });
-    const labelEl = el("label", { className: "bm-chapter-delete-label", for: id });
-    const input = /** @type {HTMLInputElement} */ (el("input", { type: "checkbox", id }));
-    rowChecks.push(input);
-    input.addEventListener("change", () => {
-      if (input.checked) selected.add(bm.id);
-      else selected.delete(bm.id);
-      syncChrome();
-    });
-    const book = (window.getBooksCache() ?? []).find((b) => b.id === bm.bookId);
-    const bookName = book ? (book.short_name_ko || book.name_ko) : bm.bookId;
-    const refText = bm.verseSpec === "all"
-      ? `${bookName} ${bm.chapter}${chUnit(bm.bookId)}`
-      : `${bookName} ${bm.chapter}:${bm.verseSpec}`;
-    const text = el("span", { className: "bm-chapter-delete-text" });
-    text.appendChild(el("span", { className: "bm-chapter-delete-item-label" }, bm.label));
-    text.appendChild(el("span", { className: "bm-chapter-delete-item-ref" }, refText));
-    labelEl.appendChild(input);
-    labelEl.appendChild(text);
-    li.appendChild(labelEl);
-    $bmChapterDeleteList.appendChild(li);
-  });
-
-  $bmChapterDeleteAll.onchange = () => {
-    const checkAll = $bmChapterDeleteAll.checked;
-    selected.clear();
-    if (checkAll) candidates.forEach((bm) => selected.add(bm.id));
-    rowChecks.forEach((c) => { c.checked = checkAll; });
-    syncChrome();
-  };
-
-  syncChrome();
-  chapterDeleteOverlay.open();
-
-  $bmChapterDeleteConfirm.onclick = () => {
-    if (!selected.size) return;
-    const store = loadBookmarks();
-    for (const bmId of selected) {
-      // Mirror swipe-row/folder delete: clear the per-device viewed timestamp
-      // so removed ids don't accrue as stale entries in the viewed map.
-      _forgetViewed(bmId);
-      removeItemById(store, bmId);
-    }
-    const removed = selected.size;
-    saveBookmarks(store);
-    _deps.rerenderActiveBookmarkTree();
-    _deps.refreshBookmarkHeaderBtn();
-    announce(removed === 1 ? "북마크를 삭제했습니다." : `북마크 ${removed}개를 삭제했습니다.`);
-    closeChapterDeleteModal();
-  };
-  $bmChapterDeleteCancel.onclick = closeChapterDeleteModal;
-}
-
-function closeChapterDeleteModal() { chapterDeleteOverlay.close(); }
-// ── END BOOKMARK_CHAPTER_DELETE ──
 
 // ── BEGIN BOOKMARK_FOLDER_ICON ──
 // Material "folder" glyph (currentColor-filled SVG). Used only by the folder
@@ -971,7 +869,6 @@ $bmMoveScrim.addEventListener("click", closeMoveModal);
 // ── Static listeners (moved from bookmark.js) ──
 $bmConfirmCancel.addEventListener("click", closeConfirmModal);
 $bmConfirmScrim.addEventListener("click", closeConfirmModal);
-$bmChapterDeleteScrim.addEventListener("click", closeChapterDeleteModal);
 $bmNewFolderClose.addEventListener("click", closeNewFolderModal);
 $bmNewFolderScrim.addEventListener("click", closeNewFolderModal);
 $bmNewFolderCancel.addEventListener("click", closeNewFolderModal);
@@ -994,7 +891,6 @@ function closeTopmostModal(e) {
   if (!$bmMoveModal.hidden) { closeMoveModal(); return true; }
   if (!$bmImportModal.hidden) { closeImportModal(); return true; }
   if (!$bmConfirmModal.hidden) { closeConfirmModal(); return true; }
-  if (!$bmChapterDeleteModal.hidden) { closeChapterDeleteModal(); return true; }
   if (!$bmMergeModal.hidden) { closeMergeModal(); return true; }
   if (!$bmSaveModal.hidden) { closeSaveModal(); return true; }
   return false;
@@ -1006,7 +902,7 @@ function closeTopmostModal(e) {
 // needed. Only the entry points bookmark.js calls are exported.
 export {
   initBookmarkModals, closeTopmostModal,
-  openConfirmModal, openChapterDeleteModal,
+  openConfirmModal,
   openNewFolderModal, openSaveModal,
   openImportFilePicker, openMoveModal,
 };
