@@ -291,6 +291,52 @@ def test_move_into_folder(browser):
         ctx.close()
 
 
+def test_move_folder_into_folder(browser):
+    """이동 → 선택한 폴더를 다른 폴더로 옮긴다 (자기/하위 드롭 방지에 _isDescendant 사용).
+
+    회귀 가드: 선택 항목이 폴더일 때만 _moveSelectedToFolder 가 _isDescendant 를 호출한다.
+    제스처 모듈 분리(ADR-034 후속) 때 _isDescendant 가 bookmark-gestures.js 로 옮겨졌는데
+    export 누락으로 이 경로가 ReferenceError 로 깨졌었다(북마크만 옮기던 기존 테스트는 폴더
+    분기를 안 밟아 못 잡음). pageerror 가 0 이어야 하고 이동이 실제로 일어나야 한다.
+    """
+    ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA)
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    ctx.add_init_script(_PIN_NUDGE)
+    page = ctx.new_page()
+    errors = []
+    page.on("pageerror", lambda e: errors.append(str(e)))
+    try:
+        _open_bookmarks_view(page)
+        # folder-a(이동 대상, 안에 북마크 1개) + folder-b(목적지, 비어 있음).
+        _set_store(page, [
+            {"type": "folder", "id": "folder-a", "name": "이동대상",
+             "children": [dict(_BM_NESTED)], "expanded": True},
+            {"type": "folder", "id": "folder-b", "name": "목적지",
+             "children": [], "expanded": True},
+        ])
+        _enter_select_mode(page)
+        # Tick folder-a (direct child row — a nested row would also match in strict mode).
+        page.locator("li.bm-folder[data-id='folder-a'] > .bm-folder-row").click()
+        page.wait_for_selector(".bm-select-circle.is-selected")
+        page.locator("#bm-select-move-btn").click()
+        page.wait_for_selector("#bm-move-modal:not([hidden])")
+        # folder-a is excluded (it's the moving item); 목적지(folder-b) is the destination.
+        page.get_by_role("button", name="목적지").click()
+        page.wait_for_selector("#bm-move-modal", state="hidden")
+        page.wait_for_selector("#bm-select-bar", state="hidden")
+
+        store = _get_store(page)
+        # folder-a is now inside folder-b (with its bm-nested child intact), not at root.
+        assert all(n["id"] != "folder-a" for n in store), store
+        folder_b = next(n for n in store if n["id"] == "folder-b")
+        moved = next(c for c in folder_b["children"] if c["id"] == "folder-a")
+        assert any(c["id"] == "bm-nested" for c in moved["children"])
+        # No ReferenceError (the regression) reached the page.
+        assert errors == [], errors
+    finally:
+        ctx.close()
+
+
 def test_move_new_folder_with_parent(browser):
     """이동 → 새 폴더: 상위 폴더(대림시기)를 지정해 만든 폴더로 선택 항목이 이동한다."""
     ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA)
