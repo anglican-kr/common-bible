@@ -3932,12 +3932,83 @@ body.tabbar-searching #search-inpage-bar { display: none; }
     align-items: center;
     z-index: var(--nav-z);
   }
-  body.tabbar-collapsed #audio-bar:not([hidden]) .audio-time,
-  body.tabbar-collapsed #audio-bar:not([hidden]) .audio-speed-btn { display: none; }
+  /* 세로 모드 미니: 재생 버튼 + 진행바만(시간·속도 숨김). 가로 모드는 폭이 넓어
+     전체 컨트롤을 노출하므로 portrait 한정 — 가로 차등 숨김은 아래 별도 규칙. */
+  @media (orientation: portrait) {
+    body.tabbar-collapsed #audio-bar:not([hidden]) .audio-time,
+    body.tabbar-collapsed #audio-bar:not([hidden]) .audio-speed-btn { display: none; }
+  }
   body.tabbar-collapsed #audio-bar:not([hidden]) .audio-player { width: 100%; gap: var(--space-2); }
   /* 축소 시 오디오는 dock 행에 들어오므로 #app 추가 하단 여유 불필요(탭 바 footprint 만). */
   body.tabbar-collapsed:not(.verse-select-active) #app:has(~ #audio-bar:not([hidden])) {
     padding-bottom: var(--tabbar-reserve);
+  }
+
+  /* ── ADR-030 개정: 가로 모드 — 탭바 전체 유지 + 오디오 dock 미니 ───────────────
+     가로는 화면이 넓어(아이폰 가로 ≥568px) 탭바(보이는 탭 N×60px) + 미니 오디오 + 검색을
+     한 dock 행에 다 담고도 여유가 있다. 그래서 스크롤 축소(.collapsed)에도 탭바를 홈
+     원형으로 접지 않고 펴 둔 채 오디오만 dock 행 미니로 둔다. 검색 모핑(.searching)은
+     입력 폭이 필요하므로 가로에서도 홈 원형 유지 — 아래 revert 는 .collapsed 한정.
+     오디오 left 는 탭바 실폭(--tab-bar-w = 보이는 탭 수 × --dock-control, tabbar.js 가
+     설정)에 맞춰 정렬 — 노트 탭(현재 hidden, 1.7.0 예정)이 켜져 탭이 3→4개가 돼도 자동
+     적응. JS 미설정 시 폴백은 4탭(겹침 방지 — 넓게 잡아도 빈틈만 생김). */
+  @media (orientation: landscape) {
+    /* (1) .collapsed 의 탭바 홈-원형 모핑을 되돌려 탭바 전체 유지. */
+    #tab-dock.collapsed #tab-bar { width: auto; margin-right: var(--space-2); gap: 0; }
+    #tab-dock.collapsed .tab-item:not([data-tab="home"]) {
+      max-width: 6rem; min-width: 0; opacity: 1; overflow: visible; pointer-events: auto;
+    }
+    #tab-dock.collapsed .tab-item[data-tab="home"] { color: var(--text-secondary); }
+    #tab-dock.collapsed .tab-item[data-tab="home"].active,
+    #tab-dock.collapsed .tab-item[data-tab="home"][aria-current="page"] { color: var(--theme); }
+    #tab-dock.collapsed .tab-item[data-tab="home"] .tab-icon-wrap {
+      width: calc(var(--dock-control) - var(--space-1));
+    }
+    #tab-dock.collapsed .tab-indicator.is-shown { opacity: 1; }
+
+    /* (2) 축소 시 미니 오디오는 '전체 탭바' 우측~검색 사이에. 우측(검색)은 base 축소
+       규칙(space-4 + 60 + space-2)과 동일하므로 left 만 탭바 실폭(--tab-bar-w) 기준으로 옮긴다. */
+    body.tabbar-collapsed #audio-bar:not([hidden]) {
+      left: calc(var(--space-4) + var(--tab-bar-w, calc(var(--dock-control) * 4)) + var(--space-2));
+    }
+    /* 진행바 최소 길이 — 컨트롤이 늘어도 드래그 가능한 길이를 보장(차등 숨김의 바닥). */
+    #audio-bar:not([hidden]) .audio-progress { min-width: 6rem; }
+  }
+
+  /* (3) 가로 + 전체 컨트롤이 들어가는 넓은 폭(≥641px): 오디오를 항상 dock 행에 둔다 —
+     맨 위(비축소)에서도 floating 풀바로 올라오지 않는다. 검색 모핑(.tabbar-searching)
+     중엔 입력창이 dock 행을 차지하므로 제외(그때만 base floating 으로 복귀). */
+  @media (orientation: landscape) and (min-width: 641px) {
+    body:not(.tabbar-searching) #audio-bar:not([hidden]) {
+      position: fixed;
+      bottom: calc(var(--space-1) + env(safe-area-inset-bottom) * 0.75);
+      left: calc(var(--space-4) + var(--tab-bar-w, calc(var(--dock-control) * 4)) + var(--space-2));
+      right: calc(var(--space-4) + var(--dock-control) + var(--space-2));
+      margin: 0;
+      height: var(--dock-control);
+      padding: 0 var(--space-3) 0 var(--space-2);
+      display: flex;
+      align-items: center;
+      z-index: var(--nav-z);
+    }
+    body:not(.tabbar-searching) #audio-bar:not([hidden]) .audio-player {
+      width: 100%;
+      gap: var(--space-2);
+    }
+    /* 항상 dock 행이라 #app 하단 여유는 탭 바 footprint 만(floating 풀바 자리 불필요). */
+    body:not(.tabbar-searching):not(.verse-select-active) #app:has(~ #audio-bar:not([hidden])) {
+      padding-bottom: var(--tabbar-reserve);
+    }
+  }
+
+  /* (4) 좁은 가로(차등 숨김): 폭 부족 시 속도 → 시간 순으로 감춘다(dock 미니 한정).
+     iPhone SE(가로 568) 같은 구형 소형기 대응. 임계값은 진행바 최소 6rem + 컨트롤
+     폭 기준 산정 — 실기기 확인 후 조정 가능. */
+  @media (orientation: landscape) and (max-width: 640px) {
+    body.tabbar-collapsed #audio-bar:not([hidden]) .audio-speed-btn { display: none; }
+  }
+  @media (orientation: landscape) and (max-width: 580px) {
+    body.tabbar-collapsed #audio-bar:not([hidden]) .audio-time { display: none; }
   }
 
   /* 절 선택 모드 / 북마크 선택 모드: 전용 하단 바가 차지하므로 탭 dock 숨김.
