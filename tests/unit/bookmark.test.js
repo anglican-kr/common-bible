@@ -1,11 +1,13 @@
 // ── Unit tests for js/app/bookmark.js ────────────────────────────────────────
 // Run with: node --test tests/unit/bookmark.test.js
 //
-// Same vm + BEGIN/END marker slice approach as search.test.js. bookmark.js
-// is partly DOM/pointer-event bound at module top level (drag handle setup,
-// swipe state mutations against real DOM rows), so we extract testable
-// blocks via four marker pairs and run each in a vm context with the
-// minimum stubs that block needs.
+// Same vm + BEGIN/END marker slice approach as search.test.js. The bookmark
+// surface is partly DOM/pointer-event bound at module top level (drag handle
+// setup, swipe state mutations against real DOM rows), so we extract testable
+// blocks via marker pairs and run each in a vm context with the minimum stubs
+// that block needs. The blocks now live across the split bookmark modules
+// (bookmark-core / -modals / -gestures / verse-spec); each loader names the
+// source it slices from.
 //
 // Coverage:
 //   - VERSE_SPEC block — verse spec parse / compare / serialize / merge
@@ -48,6 +50,11 @@ const BOOKMARK_CORE_SOURCE = fs.readFileSync(BOOKMARK_CORE_PATH, "utf8");
 // (ADR-034 후속 PR5); the IMPORT_EXPORT marker block now lives there.
 const BOOKMARK_MODALS_PATH = path.resolve(__dirname, "../../js/app/bookmark-modals.js");
 const BOOKMARK_MODALS_SOURCE = fs.readFileSync(BOOKMARK_MODALS_PATH, "utf8");
+// Gesture engine (drag/swipe pointer handling) moved to bookmark-gestures.js
+// (ADR-034 후속); the DRAG_CORE / SWIPED_ROW / SWIPE_GESTURE marker blocks now
+// live there, so their loaders slice from this source.
+const BOOKMARK_GESTURES_PATH = path.resolve(__dirname, "../../js/app/bookmark-gestures.js");
+const BOOKMARK_GESTURES_SOURCE = fs.readFileSync(BOOKMARK_GESTURES_PATH, "utf8");
 
 function extractBlock(name, source = BOOKMARK_SOURCE) {
   const begin = `// ── BEGIN ${name} ──`;
@@ -190,31 +197,27 @@ function loadDragCore() {
   const saveCalls = [];
   const renderCalls = { count: 0 };
 
-  const windowStub = {
-    renderBookmarkTree() { renderCalls.count += 1; },
-  };
   const ctx = {
     Object, Array, Set, String, Number, JSON, console, Error,
-    window: windowStub,
   };
   vm.createContext(ctx);
-  // moveBookmarkItem calls _rerenderActiveBookmarkTree() (ADR-029: re-renders
-  // whichever bookmark surface is mounted — drawer or /bookmarks full view).
-  // The DRAG_CORE marker block doesn't include that dispatcher (nor the older
-  // renderBookmarkTree), so the prelude stubs both to bump the observable counter.
+  // moveBookmarkItem calls the injected _rerenderTree() (ADR-034 후속: the
+  // gesture module's hook into the orchestrator, which re-renders whichever
+  // bookmark surface is mounted — drawer or /bookmarks full view). The DRAG_CORE
+  // marker block doesn't include that hook, so the prelude stubs it (plus
+  // loadBookmarks/saveBookmarks) to bump the observable counter.
   const prelude = `
     function loadBookmarks() { return _store; }
     function saveBookmarks(s) { _saveCalls.push(JSON.parse(JSON.stringify(s))); _store = s; }
-    function renderBookmarkTree() { _renderCalls.count += 1; }
-    function _rerenderActiveBookmarkTree() { _renderCalls.count += 1; }
+    function _rerenderTree() { _renderCalls.count += 1; }
   `;
   ctx._renderCalls = renderCalls;
   ctx._store = currentStore;
   ctx._saveCalls = saveCalls;
   vm.runInContext(
-    prelude + extractBlock("BOOKMARK_QUERY", BOOKMARK_CORE_SOURCE) + "\n" + extractBlock("DRAG_CORE"),
+    prelude + extractBlock("BOOKMARK_QUERY", BOOKMARK_CORE_SOURCE) + "\n" + extractBlock("DRAG_CORE", BOOKMARK_GESTURES_SOURCE),
     ctx,
-    { filename: "bookmark-drag-core.js" },
+    { filename: "bookmark-gestures.js" },
   );
   return {
     ctx,
@@ -277,7 +280,7 @@ function loadSwipedRow() {
   // scope can read the binding AND attaches itself to globalThis (script
   // semantics, not module), so ctx._peekSwipedRow becomes callable.
   const peekHelper = `\nfunction _peekSwipedRow() { return _swipedRow; }\n`;
-  vm.runInContext(extractBlock("SWIPED_ROW") + peekHelper, ctx, { filename: "bookmark-swiped-row.js" });
+  vm.runInContext(extractBlock("SWIPED_ROW", BOOKMARK_GESTURES_SOURCE) + peekHelper, ctx, { filename: "bookmark-gestures.js" });
 
   return {
     ctx,
@@ -1113,7 +1116,7 @@ test('closeSwipedRowIfOutside: non-Node target → guard rejects, close fires', 
 function loadSwipeGesture() {
   const ctx = { Object, Array, Math, Number, console, Error };
   vm.createContext(ctx);
-  vm.runInContext(extractBlock("SWIPE_GESTURE"), ctx, { filename: "bookmark-swipe-gesture.js" });
+  vm.runInContext(extractBlock("SWIPE_GESTURE", BOOKMARK_GESTURES_SOURCE), ctx, { filename: "bookmark-gestures.js" });
   return {
     _classifySwipeAxis: ctx._classifySwipeAxis,
     _swipeReleaseVelocity: ctx._swipeReleaseVelocity,

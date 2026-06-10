@@ -115,3 +115,21 @@ bookmark.js는 별도 후속 라운드(순수 로직 `bookmark-core.js` / UI `bo
 **정리 PR:** 모달 분리 후 무참조가 된 `window.close*Modal` facade 7종 + bookmark-core QUERY facade 7종(types.d.ts Window·전역 선언 포함) + 미사용 core import를 전 저장소 grep + 로드 검사로 무참조 확증 후 제거.
 
 > `bookmark-core.js`의 QUERY 헬퍼는 ADR-019 원칙(비순환 seam은 명시 import)대로 **window facade 없이 ESM import 전용**이다. PR3에서 legacy bare-global 계약으로 잠시 facade를 보존했다가 정리 PR에서 무참조 확인 후 제거.
+
+## 개정 (2026-06-11): bookmark-gestures.js 분할
+
+위 모달 라운드 이후에도 bookmark.js는 폴더 모아 읽기(`bookmark-read.js`) 분리를 거쳐 다시 2,432줄까지 자랐다. 남은 후속 라운드(트리·메뉴·선택·제스처)의 **첫 모듈로 제스처 엔진을 분리**한다 — 가장 자족적이고 이미 마커 테스트가 잡고 있어 리스크가 가장 낮다(오디오 플레이어가 views-routing 분할의 첫 후보였던 것과 같은 역할).
+
+**결과 (2,432 → bookmark.js 1,952줄, −20%):**
+
+| 파일 | 역할 | 라인 |
+|---|---|---|
+| `js/app/bookmark-gestures.js` | 제스처 엔진 — 드래그 reorder(DRAG_CORE + 인디케이터) · 모바일 스와이프 액션 상태(SWIPED_ROW) · 스와이프 릴리스 수학(SWIPE_GESTURE) · 통합 포인터 핸들러(`_setupDragHandle`) | 541 |
+
+**핵심 결정 — 오케스트레이터로의 역방향 의존 2개를 의존성 주입으로 차단.** 제스처 핸들러는 (a) reorder 후 마운트된 북마크 화면 재렌더, (b) 선택 모드 활성 여부 읽기 — 둘 다 bookmark.js(오케스트레이터)가 소유한다. bookmark.js가 `_setupDragHandle`을 import하므로 제스처가 bookmark.js를 되받아 import하면 순환이 된다. 모달 라운드의 `initBookmarkModals` 선례대로 `initBookmarkGestures({ rerenderTree, isSelectMode })`로 두 훅을 시작 시 주입 — 제스처는 leaf로 남고(의존: appStorage·bookmark-core만), 고리가 구조적으로 차단된다.
+
+**select 상태(`_bmSelectMode`/`_bmSelected`)는 bookmark.js에 잔류.** SWIPED_ROW 마커 안에 끼어 있었으나 실제론 선택 모드 상태다(제스처는 읽기만, 쓰기는 enter/exit). 다음 라운드(`bookmark-select.js`)가 소유 예정이라 이번엔 오케스트레이터에 두고 `isSelectMode` 게터로만 노출한다.
+
+**테스트 하네스.** DRAG_CORE / SWIPED_ROW / SWIPE_GESTURE 마커 3개가 새 파일로 이동 — `bookmark.test.js`의 세 로더가 `BOOKMARK_GESTURES_SOURCE`에서 슬라이스하도록 갱신. DRAG_CORE prelude의 `_rerenderActiveBookmarkTree` stub은 주입 훅 이름 `_rerenderTree`로 교체. 표준 검증 묶음(tsc·유닛 728·playwright 로드 스모크·e2e dnd+swipe 14) 통과.
+
+**남은 라운드:** 선택 삭제 모드(`bookmark-select.js`, 트리렌더↔select 양방향 결합이 관문 — 위 move 파라미터화 노트 참조) → 절 선택 모드(`bookmark-verse-select.js`) → 트리 렌더링·⋯ 메뉴.
