@@ -266,6 +266,15 @@
 
 html {
   font-size: 18px;
+  /* Disable iOS Safari's automatic text inflation. By default (auto) iOS
+     enlarges body-text runs in landscape, but it leaves the rem-based verse
+     numbers and the em-based inline markers (cite chip · ※ anchors) behind —
+     producing a size mismatch and an over-large body column. Pinning to 100%
+     makes the single rem anchor (html font-size + user font setting) the only
+     thing that scales typography, per DESIGN.md §3. `100%` (not `none`) keeps
+     the user's pinch-zoom intact (WCAG 2.1 AA · 1.4.4). */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
   scroll-behavior: smooth;
   /* Disable the iOS rubber-band overscroll: at the top/bottom of the page the
      bounce translates the whole document, dragging the position:sticky header
