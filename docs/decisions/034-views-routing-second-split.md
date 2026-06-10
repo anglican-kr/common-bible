@@ -133,3 +133,27 @@ bookmark.js는 별도 후속 라운드(순수 로직 `bookmark-core.js` / UI `bo
 **테스트 하네스.** DRAG_CORE / SWIPED_ROW / SWIPE_GESTURE 마커 3개가 새 파일로 이동 — `bookmark.test.js`의 세 로더가 `BOOKMARK_GESTURES_SOURCE`에서 슬라이스하도록 갱신. DRAG_CORE prelude의 `_rerenderActiveBookmarkTree` stub은 주입 훅 이름 `_rerenderTree`로 교체. 표준 검증 묶음(tsc·유닛 728·playwright 로드 스모크·e2e dnd+swipe 14) 통과.
 
 **남은 라운드:** 선택 삭제 모드(`bookmark-select.js`, 트리렌더↔select 양방향 결합이 관문 — 위 move 파라미터화 노트 참조) → 절 선택 모드(`bookmark-verse-select.js`) → 트리 렌더링·⋯ 메뉴.
+
+> **후속 회귀 (#276):** 이 라운드에서 `_isDescendant`(순수 트리 헬퍼)를 gestures로 옮기며 export를 빠뜨려, bookmark.js의 `_moveSelectedToFolder`가 bare 참조 → 선택 모드에서 **폴더를 폴더로 이동** 시 `ReferenceError`. 폴더 분기(`type==="folder"`)에서만 호출돼 tsc·유닛·로드 스모크·기존 move e2e(북마크만 이동) 전부 못 잡음. export 추가 + 폴더-이동 회귀 e2e(`test_move_folder_into_folder`)로 수리. 교훈: 함수 추출 시 **비-export internal 헬퍼까지** 원본 잔여 코드에 grep하고, 조건 분기 뒤 참조는 그 경로를 구동하는 e2e로 가드.
+
+## 개정 (2026-06-11): bookmark-select.js 분할
+
+모달 라운드에서 "select 통째 분리는 트리렌더↔select 양방향 결합 탓에 보류"라 적었던 그 라운드를, 제스처/모달과 같은 패턴으로 결합을 끊어 진행한다.
+
+**결과 (1,952 → bookmark.js 1,652줄, −15%):**
+
+| 파일 | 역할 | 라인 |
+|---|---|---|
+| `js/app/bookmark-select.js` | 선택 삭제 모드 — 상태(`_bmSelectMode`/`_bmSelected`) · 캐스케이드 수학(BOOKMARK_SELECT, 테스트) · 생명주기/토글/chrome · 삭제·공유·이동 액션 · `#bm-select-bar` dock 참조+리스너 | 362 |
+
+**핵심 결정 — 트리렌더↔select 양방향을 import(한 방향) + 주입(반대 방향)으로 분해.**
+- **오케스트레이터 → select (명시 import):** bookmark.js가 `_bmSelectMode`(ESM **live binding**, 트리 빌더·keydown·헤더 refresh의 read 사이트) + 호출 핸들러(`_toggleBmSelect`·`enter/exitBookmarkSelectMode`·`_bmToggleSelectAll`·`_syncBmSelectChrome`)를 import.
+- **select → 오케스트레이터 (의존성 주입):** 삭제/이동 후 재렌더 + 헤더 refresh를 `initBookmarkSelect({ rerenderTree, refreshHeaderBtn })`로 주입 — select는 bookmark.js를 import하지 않아 고리 차단.
+
+→ `_bmSelectMode` 잔류(제스처 라운드)가 이 라운드에서 select로 이동, gestures의 `isSelectMode` 훅은 bookmark.js가 **import한 live binding**을 그대로 읽어 무변경. select의 chrome 조작(`_syncBmSelectChrome`/exit)은 전부 셀렉터 기반(`.bm-select-circle`, `#bookmarks-view-tree`)이라 DOM ref 주입 없이 자족.
+
+**정리.** 이동으로 무참조가 된 bookmark.js의 bookmark-core import 4종(`_descendantIds`·`_selectAllState`·`_bmSelectCountLabel`·`_buildSharePayload`) + gestures의 `_isDescendant` import(#276에서 추가했으나 소비자가 select로 이동) 제거.
+
+**테스트 하네스.** BOOKMARK_SELECT 마커가 새 파일로 이동 — `bookmark.test.js` 로더가 `BOOKMARK_SELECT_SOURCE`에서 슬라이스. 표준 검증 묶음(tsc main·worker·유닛 728·로드 스모크·e2e: select-delete 전체+dnd+swipe 26) 통과. (사전 실패: `test_bookmark_folders.py` 폴더 토글 2건 — base 동일, headless 포인터 계열.)
+
+**남은 라운드:** 절 선택 모드(`bookmark-verse-select.js`) → 트리 렌더링·⋯ 메뉴. `_isDescendant`를 본래 자리 bookmark-core로 옮기는 정리도 그때 함께.
