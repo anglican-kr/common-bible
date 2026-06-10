@@ -36,7 +36,8 @@ import {
 // calls. _renderPathname now lives in core; the UI sets it via setRenderPathname.
 import {
   _bookmarkHref, _buildSharePayload,
-  getBookmarkSort, setBookmarkSort, markBookmarkViewed, _forgetViewed,
+  getBookmarkSort, setBookmarkSort, getBookmarkSortDir, setBookmarkSortDir,
+  markBookmarkViewed, _forgetViewed,
   sortBookmarkNodes,
   _walkBookmarks, findExistingChapterBookmarks, _findItemInStore,
   removeItemById, insertItem,
@@ -1365,12 +1366,25 @@ function buildBmViewActions() {
   const menu = el("div", { className: "title-action-menu", role: "menu", "aria-label": "더 보기", hidden: "" });
   /** @type {{ item: HTMLElement, mode: string }[]} */
   const sortItems = [];
+  /** @type {{ item: HTMLButtonElement, dir: string }[]} */
+  const dirItems = [];
 
   // The menu DOM outlives a tree re-render (only the tree is rebuilt when sort
   // changes), so refresh the radio checks from the live preference on each open.
   function syncSortChecks() {
     const cur = getBookmarkSort();
     for (const { item, mode } of sortItems) item.setAttribute("aria-checked", String(mode === cur));
+  }
+  // 오름/내림 reflects the *active* mode's direction. "manual" has no direction,
+  // so both rows go disabled (greyed, no check) until a key-sorted mode is picked.
+  function syncDirChecks() {
+    const mode = getBookmarkSort();
+    const manual = mode === "manual";
+    const cur = manual ? null : getBookmarkSortDir(mode);
+    for (const { item, dir } of dirItems) {
+      item.disabled = manual;
+      item.setAttribute("aria-checked", String(!manual && dir === cur));
+    }
   }
 
   // Assigned once the 선택 item is built; refreshes its enabled state per open.
@@ -1386,6 +1400,7 @@ function buildBmViewActions() {
   function openMenu() {
     if (!menu.hidden) return;
     syncSortChecks();
+    syncDirChecks();
     refreshSelectEnabled();
     menu.hidden = false;
     moreBtn.setAttribute("aria-expanded", "true");
@@ -1458,6 +1473,37 @@ function buildBmViewActions() {
   addSortItem("최근에 본 날짜", "viewed");
   addSortItem("수정한 날짜", "modified");
 
+  // ── 정렬 순서 group (오름/내림, menuitemradio) ──
+  // A second radio set under the 정렬 fields (Apple Music pattern): applies to
+  // whichever field is active, remembered per field. Reuses the --sort row
+  // (leading checkmark slot) so it lines up with the fields above.
+  const dirGroup = el("div", { className: "title-action-menu-group", role: "group", "aria-label": "정렬 순서" });
+  /** @param {string} label @param {string} dir */
+  function addDirItem(label, dir) {
+    const item = /** @type {HTMLButtonElement} */ (el("button", {
+      className: "title-action-menu-item title-action-menu-item--sort",
+      type: "button",
+      role: "menuitemradio",
+      "aria-checked": "false",
+    }));
+    const check = el("span", { className: "title-action-menu-check", "aria-hidden": "true" });
+    check.appendChild(_bmMenuIcon(["M5 12.5 10 17.5 19 7"]));
+    item.appendChild(check);
+    item.appendChild(el("span", { className: "title-action-menu-label" }, label));
+    item.addEventListener("click", () => {
+      const mode = getBookmarkSort();
+      if (mode === "manual") return; // inert under 직접 정렬 (also disabled)
+      setBookmarkSortDir(mode, dir);
+      closeMenu();
+      _rerenderActiveBookmarkTree();
+    });
+    dirGroup.appendChild(item);
+    dirItems.push({ item, dir });
+    return item;
+  }
+  addDirItem("오름차순", "asc");
+  addDirItem("내림차순", "desc");
+
   // ── 액션 group ──
   const actionGroup = el("div", { className: "title-action-menu-group", role: "group" });
   // Build a menu row: leading SF-style glyph + label. The glyph sits in the
@@ -1519,12 +1565,14 @@ function buildBmViewActions() {
   // Reflect emptiness whenever the menu opens (the DOM outlives re-renders).
   refreshSelectEnabled = () => { selectItem.disabled = loadBookmarks().length === 0; };
 
-  // Two groups: management actions (새 폴더·내보내기·가져오기·선택) then a single
-  // hairline then the 정렬 radio set — the divider separates "do something" from
-  // "change ordering" (one group divider, Apple Music pattern).
+  // Three groups separated by hairlines: management actions (새 폴더·내보내기·
+  // 가져오기·선택), then the 정렬 field radios, then the 오름/내림 order radios —
+  // "do something" / "sort by what" / "in which direction" (Apple Music pattern).
   menu.appendChild(actionGroup);
   menu.appendChild(el("div", { className: "title-action-menu-sep", role: "separator" }));
   menu.appendChild(sortGroup);
+  menu.appendChild(el("div", { className: "title-action-menu-sep", role: "separator" }));
+  menu.appendChild(dirGroup);
 
   // ── "🛈" 북마크 추가 방법 안내 팝오버 ──
   // Sits to the LEFT of ⋯ (⋯ stays trailing-most as the overflow affordance).
