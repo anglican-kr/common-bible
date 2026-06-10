@@ -63,7 +63,7 @@ import {
 // — see the call right after _bmSelectMode is declared below.
 import {
   initBookmarkGestures,
-  moveBookmarkItem, _setupDragHandle, _isMobileViewport,
+  moveBookmarkItem, _setupDragHandle, _isMobileViewport, _isDescendant,
   closeSwipedRow, resetSwipedRow, closeSwipedRowIfOutside,
 } from "./bookmark-gestures.js";
 
