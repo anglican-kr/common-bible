@@ -165,3 +165,9 @@ ADR-029 는 Safari 26 home-indicator 틴팅 회피를 위해 glass 를 `::before
     가둬 z-index 만으로는 못 벗어난다. → **`#tab-dock{pointer-events:none}` + 실제 컨트롤(`#tab-bar`·
     `#tab-search-dock`·`#tab-search-close`)만 `pointer-events:auto`** 로 되살려 빈 가운데 클릭이 아래 pill 로
     통과하게 한다(가로 한정). 미니 오디오는 DOM 상 `#tab-dock` 뒤라 우연히 영향 없었음.
+    - **가드 (Bugbot 후속):** pass-through 는 pill 이 실제로 dock 에 있을 때만 켠다 —
+      `body:has(#resume-banner-slot .resume-banner):not(.tabbar-searching)` 로 게이트. 배너 없는 책
+      목록·다른 가로 뷰에선 dock 가 빈 가운데 탭을 그대로 흡수(불필요한 pass-through 제거). 또한
+      **검색 모핑(`.tabbar-searching`) 중엔** 검색 입력이 dock 행을 채우므로 pill 을 숨기고
+      (`body.tabbar-searching .resume-banner{display:none}`) dock pill 적용도 `body:not(.tabbar-searching)`
+      로 제외 — 가로 오디오 바의 `body:not(.tabbar-searching)` 게이트와 동일 취지(입력↔pill 충돌 방지).

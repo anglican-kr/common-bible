@@ -2438,7 +2438,10 @@ mark.search-highlight {
    로 포착(ADR-030 가로 오디오 규칙과 동일 게이트). */
 @media (orientation: landscape) and (max-width: 768px),
        (orientation: landscape) and (pointer: coarse) {
-  .resume-banner {
+  /* 검색 모핑(.tabbar-searching) 중엔 검색 입력이 dock 행을 채우므로 pill 을 빼낸다 —
+     평소에만 fixed dock pill, 검색 중엔 숨김(가로 오디오 바의 body:not(.tabbar-searching)
+     게이트와 같은 취지 — Bugbot Medium). */
+  body:not(.tabbar-searching) .resume-banner {
     position: fixed;
     bottom: calc(var(--space-1) + env(safe-area-inset-bottom) * 0.75);
     left: calc(var(--space-4) + var(--tab-bar-w, calc(var(--dock-control) * 4)) + var(--space-2));
@@ -2449,15 +2452,16 @@ mark.search-highlight {
     border-radius: var(--radius-pill);
     z-index: var(--nav-z);
   }
-  /* 투명 레이아웃 레이어인 #tab-dock 가 빈 가운데에서 클릭을 먹어, 그 아래 이어읽기 pill
-     (링크·× 버튼)이 안 눌렸다(#tab-dock 가 DOM 상 배너보다 뒤·동일 z 라 위에 깔림 +
-     #resume-banner-slot z-index:10 스택 컨텍스트가 pill z 를 가둬 z-index 로는 못 벗어남).
-     → #tab-dock 자체의 pointer-events 를 끄고 실제 컨트롤(탭바·검색·키보드닫기)만 되살려
-     빈 가운데 클릭이 아래 pill 로 통과하게 한다. 미니 오디오는 별도 요소라 영향 없음. */
-  #tab-dock { pointer-events: none; }
-  #tab-bar,
-  #tab-search-dock,
-  #tab-search-close { pointer-events: auto; }
+  body.tabbar-searching .resume-banner { display: none; }
+  /* 투명 레이아웃 레이어인 #tab-dock 가 빈 가운데 클릭을 먹어 그 아래 이어읽기 pill(링크·×)이
+     안 눌렸다(#tab-dock 가 DOM 상 배너보다 뒤·동일 z + #resume-banner-slot z-index:10 스택
+     컨텍스트가 pill z 를 가둠). → pill 이 실제로 dock 에 있을 때만(배너 존재 + 검색 아님)
+     #tab-dock pointer-events 를 끄고 실제 컨트롤만 되살린다. 배너 없는 책 목록·다른 뷰에선
+     dock 가 빈 가운데 탭을 그대로 흡수해야 하므로 :has() 로 가드(Bugbot Low). 미니 오디오는 별도 요소. */
+  body:has(#resume-banner-slot .resume-banner):not(.tabbar-searching) #tab-dock { pointer-events: none; }
+  body:has(#resume-banner-slot .resume-banner):not(.tabbar-searching) #tab-bar,
+  body:has(#resume-banner-slot .resume-banner):not(.tabbar-searching) #tab-search-dock,
+  body:has(#resume-banner-slot .resume-banner):not(.tabbar-searching) #tab-search-close { pointer-events: auto; }
   /* 닫기 × — 세로 구분선 제거 + × 키움 + 중심을 우측 반원 캡 중심에 정렬.
      버튼 폭을 --dock-control(60px)로 두고 × 를 가운데 정렬하면 × 중심 = 버튼 중심 =
      pill 우측 끝 −30px = 반원 캡(반지름 --dock-control/2=30px) 중심과 일치. */
