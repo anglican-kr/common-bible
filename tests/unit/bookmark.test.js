@@ -1696,6 +1696,8 @@ function loadBookmarkSort(seed = {}) {
   return {
     getBookmarkSort: ctx.getBookmarkSort,
     setBookmarkSort: ctx.setBookmarkSort,
+    getBookmarkSortDir: ctx.getBookmarkSortDir,
+    setBookmarkSortDir: ctx.setBookmarkSortDir,
     markBookmarkViewed: ctx.markBookmarkViewed,
     _forgetViewed: ctx._forgetViewed,
     sortBookmarkNodes: ctx.sortBookmarkNodes,
@@ -1819,4 +1821,72 @@ test("sortBookmarkNodes: 'viewed' uses the local viewed map, newest-first", () =
 test("sortBookmarkNodes: non-array input → empty array", () => {
   const h = loadBookmarkSort({ "bible-bookmark-sort": "title" });
   assert.deepEqual(h.sortBookmarkNodes(undefined), []);
+});
+
+// ── sort direction (per-mode, localStorage) ──
+
+test("getBookmarkSortDir: natural defaults — title asc, date keys desc", () => {
+  const h = loadBookmarkSort();
+  assert.equal(h.getBookmarkSortDir("title"), "asc");
+  assert.equal(h.getBookmarkSortDir("created"), "desc");
+  assert.equal(h.getBookmarkSortDir("modified"), "desc");
+  assert.equal(h.getBookmarkSortDir("viewed"), "desc");
+});
+
+test("getBookmarkSortDir: unknown mode → 'asc' fallback", () => {
+  const h = loadBookmarkSort();
+  assert.equal(h.getBookmarkSortDir("manual"), "asc");
+  assert.equal(h.getBookmarkSortDir("bogus"), "asc");
+});
+
+test("getBookmarkSortDir: returns a stored direction, ignores garbage", () => {
+  const h = loadBookmarkSort({
+    "bible-bookmark-sort-dir": JSON.stringify({ title: "desc", created: "nope" }),
+  });
+  assert.equal(h.getBookmarkSortDir("title"), "desc");      // stored
+  assert.equal(h.getBookmarkSortDir("created"), "desc");    // garbage → natural default
+});
+
+test("setBookmarkSortDir: persists per mode independently", () => {
+  const h = loadBookmarkSort();
+  h.setBookmarkSortDir("title", "desc");
+  h.setBookmarkSortDir("created", "asc");
+  assert.equal(h.getBookmarkSortDir("title"), "desc");
+  assert.equal(h.getBookmarkSortDir("created"), "asc");
+  assert.equal(h.getBookmarkSortDir("viewed"), "desc");     // untouched → default
+});
+
+test("setBookmarkSortDir: rejects manual mode and invalid direction (no write)", () => {
+  const h = loadBookmarkSort();
+  h.setBookmarkSortDir("manual", "asc");   // manual has no direction
+  h.setBookmarkSortDir("title", "sideways"); // invalid dir
+  assert.equal(h._ls.getItem("bible-bookmark-sort-dir"), null);
+});
+
+test("sortBookmarkNodes: 'created' with asc direction → oldest-first", () => {
+  const h = loadBookmarkSort({
+    "bible-bookmark-sort": "created",
+    "bible-bookmark-sort-dir": JSON.stringify({ created: "asc" }),
+  });
+  const nodes = [
+    { type: "bookmark", id: "old", createdAt: 100 },
+    { type: "bookmark", id: "new", createdAt: 300 },
+    { type: "bookmark", id: "mid", createdAt: 200 },
+  ];
+  assert.deepEqual(idsOf(h.sortBookmarkNodes(nodes)), ["old", "mid", "new"]);
+});
+
+test("sortBookmarkNodes: 'title' with desc direction → Z→A, folders still first", () => {
+  const h = loadBookmarkSort({
+    "bible-bookmark-sort": "title",
+    "bible-bookmark-sort-dir": JSON.stringify({ title: "desc" }),
+  });
+  const nodes = [
+    { type: "bookmark", id: "b-a", label: "가" },
+    { type: "folder", id: "f-a", name: "가" },
+    { type: "bookmark", id: "b-c", label: "다" },
+    { type: "folder", id: "f-b", name: "나" },
+  ];
+  // folders desc (나, 가) before bookmarks desc (다, 가)
+  assert.deepEqual(idsOf(h.sortBookmarkNodes(nodes)), ["f-b", "f-a", "b-c", "b-a"]);
 });
