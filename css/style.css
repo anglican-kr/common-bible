@@ -4743,6 +4743,18 @@ body.bm-select-active .bm-select-allbtn { display: inline-flex; }
   min-width: 0;
 }
 
+/* Field-specific 오름/내림 clarifier (e.g. "가나다순", "최신 순"), muted and set
+   after the label. Parentheses are CSS-only so screen readers read just the
+   words; :empty hides it (and its parens) under "직접 정렬" where it has none. */
+.title-action-menu-dir-note {
+  margin-left: 0.4em;
+  color: var(--text-secondary);
+  font-size: var(--font-sm);
+}
+.title-action-menu-dir-note::before { content: "("; }
+.title-action-menu-dir-note::after  { content: ")"; }
+.title-action-menu-dir-note:empty { display: none; }
+
 .title-action-menu-item svg {
   flex-shrink: 0;
   width: 1.3rem;
