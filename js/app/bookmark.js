@@ -1366,8 +1366,19 @@ function buildBmViewActions() {
   const menu = el("div", { className: "title-action-menu", role: "menu", "aria-label": "더 보기", hidden: "" });
   /** @type {{ item: HTMLElement, mode: string }[]} */
   const sortItems = [];
-  /** @type {{ item: HTMLButtonElement, dir: string }[]} */
+  /** @type {{ item: HTMLButtonElement, dir: string, note: HTMLElement }[]} */
   const dirItems = [];
+  // 오름/내림 alone is ambiguous and its meaning flips per field (제목 오름=가나다,
+  // but 추가된 날짜 오름=오래된 순), so each row carries a field-specific clarifier
+  // shown muted after the label, refreshed on open. "manual" has no direction
+  // (no entry → no note, rows disabled).
+  /** @type {Record<string, { asc: string, desc: string }>} */
+  const _DIR_CLARIFY = {
+    title:    { asc: "가나다순",    desc: "ㅎ→ㄱ" },
+    created:  { asc: "오래된 순",   desc: "최신 순" },
+    modified: { asc: "오래된 순",   desc: "최근 순" },
+    viewed:   { asc: "오래전 본 순", desc: "최근 본 순" },
+  };
 
   // The menu DOM outlives a tree re-render (only the tree is rebuilt when sort
   // changes), so refresh the radio checks from the live preference on each open.
@@ -1375,15 +1386,18 @@ function buildBmViewActions() {
     const cur = getBookmarkSort();
     for (const { item, mode } of sortItems) item.setAttribute("aria-checked", String(mode === cur));
   }
-  // 오름/내림 reflects the *active* mode's direction. "manual" has no direction,
-  // so both rows go disabled (greyed, no check) until a key-sorted mode is picked.
+  // 오름/내림 reflects the *active* mode's direction + its field-specific note.
+  // "manual" has no direction, so both rows go disabled (greyed, no check, no
+  // note) until a key-sorted mode is picked.
   function syncDirChecks() {
     const mode = getBookmarkSort();
     const manual = mode === "manual";
     const cur = manual ? null : getBookmarkSortDir(mode);
-    for (const { item, dir } of dirItems) {
+    const clar = _DIR_CLARIFY[mode] || null;
+    for (const { item, dir, note } of dirItems) {
       item.disabled = manual;
       item.setAttribute("aria-checked", String(!manual && dir === cur));
+      note.textContent = clar ? clar[dir] : "";
     }
   }
 
@@ -1489,7 +1503,12 @@ function buildBmViewActions() {
     const check = el("span", { className: "title-action-menu-check", "aria-hidden": "true" });
     check.appendChild(_bmMenuIcon(["M5 12.5 10 17.5 19 7"]));
     item.appendChild(check);
-    item.appendChild(el("span", { className: "title-action-menu-label" }, label));
+    // The clarifier sits inside the label so it reads as one phrase ("오름차순
+    // 가나다순"); the parentheses are CSS-only so screen readers skip them.
+    const labelSpan = el("span", { className: "title-action-menu-label" }, label);
+    const note = el("span", { className: "title-action-menu-dir-note" });
+    labelSpan.appendChild(note);
+    item.appendChild(labelSpan);
     item.addEventListener("click", () => {
       const mode = getBookmarkSort();
       if (mode === "manual") return; // inert under 직접 정렬 (also disabled)
@@ -1498,7 +1517,7 @@ function buildBmViewActions() {
       _rerenderActiveBookmarkTree();
     });
     dirGroup.appendChild(item);
-    dirItems.push({ item, dir });
+    dirItems.push({ item, dir, note });
     return item;
   }
   addDirItem("오름차순", "asc");
