@@ -239,6 +239,40 @@ function setBookmarkSort(mode) {
   try { localStorage.setItem(_BM_SORT_KEY, mode); } catch { /* private mode */ }
 }
 
+// Sort direction, remembered per mode so switching fields restores that field's
+// last direction (and its natural default the first time). The defaults
+// reproduce the pre-direction behavior exactly: "title" reads A→Z (asc), the
+// date keys read newest-first (desc). "manual" has no direction. Stored as a
+// {mode: "asc"|"desc"} map in localStorage, per-device like the mode itself.
+const _BM_SORT_DIR_KEY = "bible-bookmark-sort-dir";
+/** @type {Record<string, "asc" | "desc">} */
+const _BM_SORT_DIR_DEFAULTS = { title: "asc", created: "desc", modified: "desc", viewed: "desc" };
+/** @returns {Record<string, string>} */
+function _loadSortDirMap() {
+  try {
+    const raw = localStorage.getItem(_BM_SORT_DIR_KEY);
+    const m = raw ? JSON.parse(raw) : null;
+    return (m && typeof m === "object") ? m : {};
+  } catch { return {}; }
+}
+/** @param {string} mode @returns {"asc" | "desc"} */
+function getBookmarkSortDir(mode) {
+  const stored = _loadSortDirMap()[mode];
+  if (stored === "asc" || stored === "desc") return stored;
+  return _BM_SORT_DIR_DEFAULTS[mode] || "asc";
+}
+/** @param {string} mode @param {string} dir */
+function setBookmarkSortDir(mode, dir) {
+  // Direction only applies to the key-sorted modes (not "manual").
+  if (!(mode in _BM_SORT_DIR_DEFAULTS)) return;
+  if (dir !== "asc" && dir !== "desc") return;
+  try {
+    const m = _loadSortDirMap();
+    m[mode] = dir;
+    localStorage.setItem(_BM_SORT_DIR_KEY, JSON.stringify(m));
+  } catch { /* private mode */ }
+}
+
 // Per-device "last viewed" timestamps, keyed by bookmark id. Kept in
 // localStorage only: tracking this on the synced object would rewrite (and
 // re-sync) a bookmark every time it is merely opened, and would drag the
@@ -274,11 +308,12 @@ function _nodeTitle(n) {
   return (n.type === "folder" ? n.name : n.label) || "";
 }
 
-// Build a comparator for a sort mode. Date modes sort newest-first; "title"
-// uses Korean locale collation. The viewed map is read once per sort rather
-// than once per comparison.
+// Build an ASCENDING comparator for a sort mode: "title" uses Korean locale
+// collation (A→Z), the date keys sort oldest-first. Direction is applied on top
+// by sortBookmarkNodes (desc flips the sign). The viewed map is read once per
+// sort rather than once per comparison.
 /** @param {string} mode @returns {(a: BookmarkTreeNode, b: BookmarkTreeNode) => number} */
-function _bookmarkComparator(mode) {
+function _bookmarkAscComparator(mode) {
   if (mode === "title") {
     return (a, b) => _nodeTitle(a).localeCompare(_nodeTitle(b), "ko");
   }
@@ -290,18 +325,21 @@ function _bookmarkComparator(mode) {
     if (mode === "viewed")   return (viewed && viewed[n.id]) || n.createdAt || 0;
     return 0;
   };
-  return (a, b) => keyOf(b) - keyOf(a);
+  return (a, b) => keyOf(a) - keyOf(b);
 }
 
-// Display-ordered shallow copy of `nodes` for the active sort mode. "manual"
-// keeps the exact stored order (including any folder/bookmark interleaving from
-// drag); other modes put folders before bookmarks, each sorted by the key.
+// Display-ordered shallow copy of `nodes` for the active sort mode + direction.
+// "manual" keeps the exact stored order (including any folder/bookmark
+// interleaving from drag); other modes put folders before bookmarks, each
+// sorted by the key, then reversed when the mode's direction is "desc".
 /** @param {BookmarkTreeNode[]} nodes @returns {BookmarkTreeNode[]} */
 function sortBookmarkNodes(nodes) {
   const list = Array.isArray(nodes) ? nodes : [];
   const mode = getBookmarkSort();
   if (mode === "manual") return list.slice();
-  const cmp = _bookmarkComparator(mode);
+  const asc = _bookmarkAscComparator(mode);
+  const sign = getBookmarkSortDir(mode) === "desc" ? -1 : 1;
+  const cmp = (a, b) => sign * asc(a, b);
   const folders = list.filter(n => n.type === "folder").sort(cmp);
   const marks   = list.filter(n => n.type !== "folder").sort(cmp);
   return [...folders, ...marks];
@@ -339,7 +377,8 @@ function _hasActiveDescendant(folder, pathname = _renderPathname) {
 
 export {
   _bookmarkHref, _buildSharePayload,
-  getBookmarkSort, setBookmarkSort, markBookmarkViewed, _forgetViewed,
+  getBookmarkSort, setBookmarkSort, getBookmarkSortDir, setBookmarkSortDir,
+  markBookmarkViewed, _forgetViewed,
   sortBookmarkNodes,
   _walkBookmarks, findExistingChapterBookmarks, _findItemInStore,
   _findParentFolderId, removeItemById, insertItem, collectFolderOptions,

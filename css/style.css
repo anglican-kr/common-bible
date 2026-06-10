@@ -4817,12 +4817,15 @@ body.bm-select-active .bm-select-allbtn { display: inline-flex; }
   color: var(--danger-text);
 }
 
-.title-action-menu-item--danger:disabled {
+/* Disabled rows read greyed and inert — 삭제/선택 when the list is empty, and
+   the 오름/내림 order rows under "직접 정렬" (manual has no direction). */
+.title-action-menu-item:disabled {
   opacity: 0.4;
   cursor: not-allowed;
 }
 
-.title-action-menu-item--danger:disabled:hover {
+.title-action-menu-item:disabled:hover,
+.title-action-menu-item:disabled:active {
   background: none;
 }
 
