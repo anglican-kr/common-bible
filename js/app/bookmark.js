@@ -150,7 +150,8 @@ function _updateDragIndicators(clientX, clientY) {
 // 2026-06-06): swiping a row left reveals 수정 on the right edge, swiping right
 // reveals 삭제 on the left edge, and a full swipe executes the action. The
 // opaque .bm-row-content is the slider that exposes the edge-anchored actions.
-const SWIPE_REVEAL_PX = 88;
+// (SWIPE_REVEAL_PX lives in the SWIPE_GESTURE block below with the rest of
+// the gesture-math constants.)
 const LONG_PRESS_MS = 500;
 /** @type {HTMLElement | null} */
 let _swipedRow = null;
@@ -222,6 +223,90 @@ function closeSwipedRowIfOutside(target) {
 }
 // ── END SWIPED_ROW ──
 
+// ── BEGIN SWIPE_GESTURE ──
+// Pure gesture math for the row swipe handler (_setupDragHandle). No DOM
+// access: the handler feeds pointer deltas in and applies the returned
+// decision to the row. Exercised by tests/unit/bookmark.test.js.
+
+// How far the content slides to pin a revealed action; mirrored by the CSS
+// token --swipe-reveal (ADR-010 개정 2026-06-06).
+const SWIPE_REVEAL_PX = 88;
+// Movement (px, hypot) below this is undecided — contact-point noise from a
+// settling thumb. The old 5px classified before the thumb stabilized, so
+// scroll attempts got grabbed as swipes.
+const SWIPE_SLOP_PX = 8;
+// Horizontal must dominate vertical by this factor to classify as a swipe.
+// Inside the ambiguous diagonal cone (|dy| ≤ |dx| ≤ |dy|·bias) the gesture
+// stays unclassified and the next sample decides — the old strict |dx|>|dy|
+// one-shot meant a 1px difference at the 5px mark locked the mode for good.
+const SWIPE_ANGLE_BIAS = 1.2;
+// On release the velocity is projected this many ms forward before the snap
+// thresholds apply, so a quick short flick opens/closes the panel without
+// dragging the full distance. Flicks never escalate to commit (full-swipe
+// execute) — that stays distance-gated so 삭제 can't fire from a twitch.
+const SWIPE_FLICK_PROJECTION_MS = 80;
+// Only pointer samples this recent (ms) count toward the release velocity,
+// so pausing at the end of a drag releases at v≈0 (pure positional snap).
+const SWIPE_VELOCITY_WINDOW_MS = 100;
+
+// Classify the first significant movement of a touch gesture on a row.
+// "swipe" → horizontal-dominant, reveal the action panel. "scroll" →
+// vertical-dominant, cede to the browser. null → still ambiguous (sub-slop
+// or inside the diagonal cone): keep sampling.
+/** @param {number} dx @param {number} dy @returns {"swipe" | "scroll" | null} */
+function _classifySwipeAxis(dx, dy) {
+  if (Math.hypot(dx, dy) < SWIPE_SLOP_PX) return null;
+  const absDx = Math.abs(dx);
+  const absDy = Math.abs(dy);
+  if (absDx > absDy * SWIPE_ANGLE_BIAS) return "swipe";
+  if (absDy >= absDx) return "scroll";
+  return null;
+}
+
+// Release velocity (px/ms) over the recent sample window; 0 when fewer than
+// two samples land inside it.
+/** @param {{t: number, x: number}[]} samples @param {number} now */
+function _swipeReleaseVelocity(samples, now) {
+  let first = null;
+  let last = null;
+  for (const s of samples) {
+    if (now - s.t > SWIPE_VELOCITY_WINDOW_MS) continue;
+    if (!first) first = s;
+    last = s;
+  }
+  if (!first || !last || last.t <= first.t) return 0;
+  return (last.x - first.x) / (last.t - first.t);
+}
+
+// Decide what a released swipe does. `dx` is the gesture's own travel;
+// `baseOffset` is the row's pre-gesture offset (±SWIPE_REVEAL_PX when a row
+// was re-grabbed while open). Commit (full-swipe execute) is judged on the
+// GESTURE distance, not the absolute offset — judging the offset alone let a
+// re-grabbed open row execute 삭제 after a ~40px pull (hair-trigger) while
+// the reverse direction needed 132px (dead). The absolute-offset guard keeps
+// the reversal case (long pull from the opposite panel that has barely
+// crossed center) from committing.
+/**
+ * @param {number} dx gesture travel (px, signed)
+ * @param {number} baseOffset pre-gesture content offset (px, signed)
+ * @param {number} velocityX release velocity (px/ms, signed)
+ * @param {number} rowWidth
+ * @returns {"commit-delete" | "commit-edit" | "open-delete" | "open-edit" | "close"}
+ */
+function _resolveSwipeRelease(dx, baseOffset, velocityX, rowWidth) {
+  const commitPx = Math.max(rowWidth * 0.45, SWIPE_REVEAL_PX + 40);
+  const finalOffset = baseOffset + dx;
+  if (dx <= -commitPx && finalOffset <= -SWIPE_REVEAL_PX) return "commit-delete";
+  if (dx >= commitPx && finalOffset >= SWIPE_REVEAL_PX) return "commit-edit";
+  let projected = finalOffset + velocityX * SWIPE_FLICK_PROJECTION_MS;
+  if (projected > rowWidth) projected = rowWidth;
+  if (projected < -rowWidth) projected = -rowWidth;
+  if (projected <= -SWIPE_REVEAL_PX / 2) return "open-delete";
+  if (projected >= SWIPE_REVEAL_PX / 2) return "open-edit";
+  return "close";
+}
+// ── END SWIPE_GESTURE ──
+
 /** @param {HTMLElement} li @param {HTMLElement} row */
 function _setupDragHandle(li, row) {
   row.addEventListener("pointerdown", (e) => {
@@ -263,8 +348,9 @@ function _setupDragHandle(li, row) {
     const baseOffset = startedDir === "edit" ? SWIPE_REVEAL_PX
       : startedDir === "delete" ? -SWIPE_REVEAL_PX : 0;
     const rowWidth = origRect.width;
-    // Full-swipe threshold: past this on release, the action executes.
-    const commitPx = Math.max(rowWidth * 0.45, SWIPE_REVEAL_PX + 40);
+    // Recent pointer positions for the release-velocity (flick) calculation.
+    /** @type {{t: number, x: number}[]} */
+    const velocitySamples = [];
     /** @type {ReturnType<typeof setTimeout> | null} */
     let longPressTimer = null;
 
@@ -326,21 +412,35 @@ function _setupDragHandle(li, row) {
       const dy = e.clientY - startY;
 
       if (mode === null) {
-        if (Math.hypot(dx, dy) < 5) return;
+        if (Math.hypot(dx, dy) < SWIPE_SLOP_PX) return;
         clearLongPress();
         if (onHandle && canDrag) {
           // Dedicated reorder handle → start dragging right away (touch + mouse),
           // bypassing long-press and swipe classification.
           mode = "drag";
           _beginDrag();
-        } else if (canSwipe && Math.abs(dx) > Math.abs(dy)) {
-          // Horizontal-dominant gesture on touch → swipe-reveal action panel.
-          mode = "swipe";
-          row.classList.add("bm-swiping");
-          row.setPointerCapture(pointerId);
+        } else if (canSwipe) {
+          const axis = _classifySwipeAxis(dx, dy);
+          if (axis === "swipe") {
+            // Horizontal-dominant gesture on touch → swipe-reveal action panel.
+            mode = "swipe";
+            row.classList.add("bm-swiping");
+            row.setPointerCapture(pointerId);
+          } else if (axis === "scroll") {
+            // Vertical-dominant → user is scrolling the drawer body, not
+            // swiping. Cede to the browser.
+            mode = "abort";
+            cleanupPointerHandlers();
+            return;
+          } else {
+            // Ambiguous diagonal: stay unclassified and let the next sample
+            // decide. (touch-action: pan-y means the browser may claim the
+            // gesture meanwhile via pointercancel — that's the scroll path.)
+            return;
+          }
         } else if (isTouch) {
-          // Touch + vertical movement before long-press fired → user is
-          // scrolling the drawer body, not dragging. Cede to the browser.
+          // Touch + movement before long-press fired on a non-swipe surface →
+          // user is scrolling. Cede to the browser.
           mode = "abort";
           cleanupPointerHandlers();
           return;
@@ -357,6 +457,11 @@ function _setupDragHandle(li, row) {
       }
 
       if (mode === "swipe") {
+        velocitySamples.push({ t: e.timeStamp, x: e.clientX });
+        // Memory hygiene only — the velocity helper re-filters by window.
+        while (velocitySamples.length > 1 && e.timeStamp - velocitySamples[0].t > SWIPE_VELOCITY_WINDOW_MS) {
+          velocitySamples.shift();
+        }
         let offset = baseOffset + dx;
         // Clamp within the row; either direction is allowed (bidirectional).
         if (offset > rowWidth) offset = rowWidth;
@@ -385,18 +490,20 @@ function _setupDragHandle(li, row) {
       if (mode === "swipe") {
         row.classList.remove("bm-swiping", "bm-swiping-delete", "bm-swiping-edit");
         if (contentEl) contentEl.style.transform = "";
-        const finalOffset = baseOffset + (e.clientX - startX);
-        if (finalOffset <= -commitPx) {
+        velocitySamples.push({ t: e.timeStamp, x: e.clientX });
+        const velocityX = _swipeReleaseVelocity(velocitySamples, e.timeStamp);
+        const decision = _resolveSwipeRelease(e.clientX - startX, baseOffset, velocityX, rowWidth);
+        if (decision === "commit-delete") {
           // Full swipe left → 삭제 (trigger the revealed button's handler).
           closeSwipedRow(null);
           /** @type {HTMLElement | null} */ (row.querySelector(".bm-swipe-delete"))?.click();
-        } else if (finalOffset >= commitPx) {
+        } else if (decision === "commit-edit") {
           // Full swipe right → 수정.
           closeSwipedRow(null);
           /** @type {HTMLElement | null} */ (row.querySelector(".bm-swipe-edit"))?.click();
-        } else if (finalOffset <= -SWIPE_REVEAL_PX / 2) {
+        } else if (decision === "open-delete") {
           _openSwipedRow(row, "delete");
-        } else if (finalOffset >= SWIPE_REVEAL_PX / 2) {
+        } else if (decision === "open-edit") {
           _openSwipedRow(row, "edit");
         } else {
           _resetRowSwipe(row);

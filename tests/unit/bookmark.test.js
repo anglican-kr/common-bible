@@ -1107,6 +1107,137 @@ test('closeSwipedRowIfOutside: non-Node target → guard rejects, close fires', 
   assert.equal(h.peekSwipedRow(), null);
 });
 
+// ── SWIPE_GESTURE loader ─────────────────────────────────────────────────────
+// Pure functions + constants only — Math is the sole dependency.
+
+function loadSwipeGesture() {
+  const ctx = { Object, Array, Math, Number, console, Error };
+  vm.createContext(ctx);
+  vm.runInContext(extractBlock("SWIPE_GESTURE"), ctx, { filename: "bookmark-swipe-gesture.js" });
+  return {
+    _classifySwipeAxis: ctx._classifySwipeAxis,
+    _swipeReleaseVelocity: ctx._swipeReleaseVelocity,
+    _resolveSwipeRelease: ctx._resolveSwipeRelease,
+    SWIPE_REVEAL_PX: ctx.SWIPE_REVEAL_PX,
+    SWIPE_SLOP_PX: ctx.SWIPE_SLOP_PX,
+  };
+}
+
+// ── _classifySwipeAxis ───────────────────────────────────────────────────────
+
+test('_classifySwipeAxis: sub-slop movement → null (keep sampling)', () => {
+  const h = loadSwipeGesture();
+  assert.equal(h._classifySwipeAxis(5, 3), null);
+  assert.equal(h._classifySwipeAxis(-4, 4), null);
+  assert.equal(h._classifySwipeAxis(0, 0), null);
+});
+
+test('_classifySwipeAxis: horizontal-dominant beyond bias → "swipe"', () => {
+  const h = loadSwipeGesture();
+  assert.equal(h._classifySwipeAxis(10, 2), "swipe");
+  assert.equal(h._classifySwipeAxis(-12, 5), "swipe");
+  assert.equal(h._classifySwipeAxis(9, 0), "swipe");
+});
+
+test('_classifySwipeAxis: vertical-dominant → "scroll"', () => {
+  const h = loadSwipeGesture();
+  assert.equal(h._classifySwipeAxis(2, 10), "scroll");
+  assert.equal(h._classifySwipeAxis(5, -12), "scroll");
+  // Exact diagonal counts as scroll: when in doubt, don't steal the gesture
+  // from the browser.
+  assert.equal(h._classifySwipeAxis(8, 8), "scroll");
+});
+
+test('_classifySwipeAxis: ambiguous diagonal cone → null (wait for a clearer sample)', () => {
+  const h = loadSwipeGesture();
+  // |dy| < |dx| ≤ |dy|·1.2 — horizontal leads but not decisively.
+  assert.equal(h._classifySwipeAxis(10, 9), null);
+  assert.equal(h._classifySwipeAxis(-11, 10), null);
+});
+
+// ── _swipeReleaseVelocity ────────────────────────────────────────────────────
+
+test('_swipeReleaseVelocity: fewer than two samples in window → 0', () => {
+  const h = loadSwipeGesture();
+  assert.equal(h._swipeReleaseVelocity([], 1000), 0);
+  assert.equal(h._swipeReleaseVelocity([{ t: 1000, x: 50 }], 1000), 0);
+});
+
+test('_swipeReleaseVelocity: slope over the recent samples', () => {
+  const h = loadSwipeGesture();
+  const samples = [{ t: 900, x: 0 }, { t: 950, x: -25 }, { t: 1000, x: -50 }];
+  assert.equal(h._swipeReleaseVelocity(samples, 1000), -0.5);
+});
+
+test('_swipeReleaseVelocity: samples older than the window are ignored', () => {
+  const h = loadSwipeGesture();
+  // The 0→200 burst happened long ago; only the recent stationary samples
+  // count, so a drag that PAUSED before release has no flick velocity.
+  const samples = [{ t: 0, x: 0 }, { t: 100, x: 200 }, { t: 950, x: 200 }, { t: 1000, x: 200 }];
+  assert.equal(h._swipeReleaseVelocity(samples, 1000), 0);
+});
+
+// ── _resolveSwipeRelease ─────────────────────────────────────────────────────
+// rowWidth 360 → commitPx = max(360×0.45, 88+40) = 162. Reveal snap at ±44.
+
+test('_resolveSwipeRelease: closed row, slow pull — snap thresholds', () => {
+  const h = loadSwipeGesture();
+  assert.equal(h._resolveSwipeRelease(-30, 0, 0, 360), "close");
+  assert.equal(h._resolveSwipeRelease(-44, 0, 0, 360), "open-delete");
+  assert.equal(h._resolveSwipeRelease(44, 0, 0, 360), "open-edit");
+  assert.equal(h._resolveSwipeRelease(-161, 0, 0, 360), "open-delete");
+});
+
+test('_resolveSwipeRelease: closed row, full pull → commit', () => {
+  const h = loadSwipeGesture();
+  assert.equal(h._resolveSwipeRelease(-162, 0, 0, 360), "commit-delete");
+  assert.equal(h._resolveSwipeRelease(162, 0, 0, 360), "commit-edit");
+});
+
+test('_resolveSwipeRelease: narrow row — commit floor is reveal+40', () => {
+  const h = loadSwipeGesture();
+  // 200×0.45 = 90 < 128 → commitPx = 128.
+  assert.equal(h._resolveSwipeRelease(-127, 0, 0, 200), "open-delete");
+  assert.equal(h._resolveSwipeRelease(-128, 0, 0, 200), "commit-delete");
+});
+
+test('_resolveSwipeRelease: short flick opens without the full drag distance', () => {
+  const h = loadSwipeGesture();
+  // 30px alone would close; -0.6px/ms projects 48px further → open.
+  assert.equal(h._resolveSwipeRelease(-30, 0, -0.6, 360), "open-delete");
+  assert.equal(h._resolveSwipeRelease(30, 0, 0.6, 360), "open-edit");
+});
+
+test('_resolveSwipeRelease: flick back from an open row closes it', () => {
+  const h = loadSwipeGesture();
+  // Open-delete (base -88), small rightward flick → projected past -44 → close.
+  assert.equal(h._resolveSwipeRelease(20, -88, 0.5, 360), "close");
+});
+
+test('_resolveSwipeRelease: flick never escalates to commit', () => {
+  const h = loadSwipeGesture();
+  // Violent flick, modest distance: projection is clamped to the snap
+  // decision — 삭제 must not execute from a twitch.
+  assert.equal(h._resolveSwipeRelease(-100, 0, -10, 360), "open-delete");
+});
+
+test('_resolveSwipeRelease: re-grabbed open row needs the same gesture distance to commit', () => {
+  const h = loadSwipeGesture();
+  // Open-delete (base -88). Under the old absolute-offset rule a further
+  // -74px pull committed 삭제 (hair-trigger); now the gesture itself must
+  // travel commitPx.
+  assert.equal(h._resolveSwipeRelease(-74, -88, 0, 360), "open-delete");
+  assert.equal(h._resolveSwipeRelease(-162, -88, 0, 360), "commit-delete");
+});
+
+test('_resolveSwipeRelease: reversing from the opposite panel cannot commit at the center', () => {
+  const h = loadSwipeGesture();
+  // Open-edit (base +88), long pull left: gesture distance reaches commitPx
+  // but the row has barely crossed center (-74 > -88) → snap to open, not
+  // execute 삭제.
+  assert.equal(h._resolveSwipeRelease(-162, 88, 0, 360), "open-delete");
+});
+
 // ── BOOKMARK_HREF loader ─────────────────────────────────────────────────────
 
 function loadBookmarkHref() {
