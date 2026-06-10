@@ -511,6 +511,22 @@ if (typeof window !== "undefined" && window.addEventListener) {
   window.syncTabIndicator = reposition;
 }
 
+// ── ADR-030 개정(가로 dock 오디오): 탭바 실폭을 CSS 변수로 노출 ──
+// 가로 모드에서 미니 오디오는 '전체 탭바' 우측에 붙는다(css `#audio-bar` left calc).
+// 탭 슬롯은 --dock-control(60px) px 고정이라 폭은 '보이는 탭 수'에만 의존 — 노트 탭이
+// hidden(1.7.0 예정)이라 현재 3개. 개수를 세어 :root 에 --tab-bar-w 를 심으면 노트가
+// 켜져 4개가 돼도(다음 로드) 자동으로 left 가 맞는다. 측정이 아니라 개수 기반이라
+// 모핑(.collapsed/.searching 으로 탭바가 60px 로 줄어드는) 상태와 무관하게 항상 풀폭.
+function publishTabBarWidth() {
+  if (!$tabBar || typeof document === "undefined") return;
+  const n = $tabBar.querySelectorAll(".tab-item:not([hidden])").length;
+  document.documentElement.style.setProperty(
+    "--tab-bar-w",
+    `calc(${n} * var(--dock-control))`
+  );
+}
+publishTabBarWidth();
+
 // route() (views) calls this on each navigation (facade, see cycle note).
 W.syncTabBarActive = syncTabBarActive;
 export {};
