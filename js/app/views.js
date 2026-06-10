@@ -598,6 +598,20 @@ function focusPendingBook() {
   if (!target) return;
   target.focus({ preventScroll: true });
   target.scrollIntoView({ block: "center" });
+  // Programmatic focus() does not trigger :focus-visible (the browser reserves
+  // that pseudo-class for keyboard/AT focus), so the card would carry DOM focus
+  // with no visible highlight. Add an explicit one-shot marker class so the book
+  // we were just reading is unmistakably highlighted on the list. It clears on
+  // the first user interaction (pointer/key) — at which point :focus-visible
+  // takes over for keyboard users — and is gone anyway on the next render.
+  target.classList.add("is-last-read");
+  const clear = () => {
+    target.classList.remove("is-last-read");
+    document.removeEventListener("pointerdown", clear, true);
+    document.removeEventListener("keydown", clear, true);
+  };
+  document.addEventListener("pointerdown", clear, true);
+  document.addEventListener("keydown", clear, true);
 }
 
 // `clearReadingPosition` was extracted to js/app/storage.js (ADR-018 Phase 2).

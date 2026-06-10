@@ -2552,10 +2552,22 @@ mark.search-highlight {
 }
 
 .book-list a:hover,
-.book-list a:focus-visible {
+.book-list a:focus-visible,
+/* ADR-031: the book we were just reading, marked after pop-to-root. Programmatic
+   focus() doesn't trigger :focus-visible, so this gives an explicit highlight. */
+.book-list a.is-last-read {
   background: var(--accent);
   color: var(--bg);
   border-color: var(--accent);
+}
+
+/* The accent background fill above is the focus indicator for book cards (this
+   list never used an outline ring). Drop the UA default focus outline — on iOS
+   Safari it paints a ring on programmatic/touch focus (after pop-to-root, ADR-031)
+   whose top is clipped by the row above. Keyboard users keep the accent fill via
+   :focus-visible, so the affordance is preserved. */
+.book-list a:focus {
+  outline: none;
 }
 
 /* Book-name swap: NT books with long `name_ko` also render a shortened

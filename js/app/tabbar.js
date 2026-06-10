@@ -226,7 +226,6 @@ $home?.addEventListener("click", (e) => {
     return;
   }
   // ADR-031: 다른 탭(북마크·설정·검색)에서 홈으로 올 땐 마지막 읽던 위치로 복원.
-  // 이미 홈 스택에 있으면 기존대로 정적 href="/"(성서 목록)로 — iOS pop-to-root.
   // 복원 대상이 루트뿐이면(아직 읽은 적 없음) 가로채지 않고 기본 href 진행.
   const th = W.tabHistory;
   if (th && th.tabOf(th.fullPath()) !== "home") {
@@ -236,6 +235,18 @@ $home?.addEventListener("click", (e) => {
       th.requestRestore(); // 탭 전환(POP 의미론) → 읽던 스크롤 복원
       W.navigate(dest);
     }
+    return;
+  }
+  // ADR-031 개정: 이미 홈 스택이면 성서 목록으로 — iOS pop-to-root. 읽던 화면(장·
+  // 머리말·장 목록)에서 눌렀다면 그 책의 구분 탭으로 가서 읽던 책 카드에 포커스를
+  // 맞춘다(헤더 홈 버튼 buildHomeBtn 과 동일 UX — 키보드/스크린리더 사용자가 맥락에
+  // 착지). 목록·구분 화면(bookId 없음)에선 기본 href="/" 로 진행해 최상단.
+  const p = W.parsePath?.();
+  const book = p?.bookId && W.getBooksCache?.()?.find((/** @type {any} */ b) => b.id === p.bookId);
+  if (book) {
+    e.preventDefault();
+    W.setPendingBookFocus?.(book.id);
+    W.navigate(`/${W.effectiveDivision(book)}`);
   }
 });
 
