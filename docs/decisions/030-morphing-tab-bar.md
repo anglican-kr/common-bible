@@ -156,5 +156,12 @@ ADR-029 는 Safari 26 home-indicator 틴팅 회피를 위해 glass 를 `::before
   fixed` 로 미니 오디오와 동일 자리(탭바 우측~검색 사이, `--tab-bar-w` 재사용)에 `--radius-pill`
   + 60px(`--dock-control`) pill 로 띄운다. 배너는 책 목록 뷰, 오디오는 chapter 뷰 전용이라
   같은 dock 자리를 다른 뷰에서 공유 — 충돌 없음. 테마색 솔리드 채움은 유지(주요 CTA 강조, 글래스
-  캡슐 사이에서 컬러 pill 로 도드라짐). 닫기 × 는 `align-self: stretch` 로 구분선이 pill 높이를
-  채운다. 순수 CSS(`@media (orientation: landscape)` + mobile 게이트), 세로는 무변경.
+  캡슐 사이에서 컬러 pill 로 도드라짐). 닫기 × 는 세로 구분선 제거 + 크기 확대(`--font-2xl`) +
+  버튼 폭 `--dock-control`(60px) 로 두어 × 중심을 우측 반원 캡 중심(우측 끝 −30px)에 정렬.
+  순수 CSS(`@media (orientation: landscape)` + mobile 게이트), 세로는 무변경.
+  - **함정: `#tab-dock` 클릭 가로채기.** 이어읽기 pill 은 DOM 상 `#tab-dock` 보다 앞이고 z-index 가
+    같아(`--nav-z`), 투명한 `#tab-dock`(완전 폭 레이아웃 레이어)가 빈 가운데에서 pill(링크·×) 클릭을
+    먹어 **이어읽기·닫기가 모두 안 먹혔다**. `#resume-banner-slot{z-index:10}` 의 스택 컨텍스트가 pill z 를
+    가둬 z-index 만으로는 못 벗어난다. → **`#tab-dock{pointer-events:none}` + 실제 컨트롤(`#tab-bar`·
+    `#tab-search-dock`·`#tab-search-close`)만 `pointer-events:auto`** 로 되살려 빈 가운데 클릭이 아래 pill 로
+    통과하게 한다(가로 한정). 미니 오디오는 DOM 상 `#tab-dock` 뒤라 우연히 영향 없었음.

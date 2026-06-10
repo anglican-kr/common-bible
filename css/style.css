@@ -2449,8 +2449,24 @@ mark.search-highlight {
     border-radius: var(--radius-pill);
     z-index: var(--nav-z);
   }
-  /* 닫기 × 구분선이 60px pill 높이를 채우도록(가운데 정렬 대신 stretch). */
-  .resume-banner-close { align-self: stretch; }
+  /* 투명 레이아웃 레이어인 #tab-dock 가 빈 가운데에서 클릭을 먹어, 그 아래 이어읽기 pill
+     (링크·× 버튼)이 안 눌렸다(#tab-dock 가 DOM 상 배너보다 뒤·동일 z 라 위에 깔림 +
+     #resume-banner-slot z-index:10 스택 컨텍스트가 pill z 를 가둬 z-index 로는 못 벗어남).
+     → #tab-dock 자체의 pointer-events 를 끄고 실제 컨트롤(탭바·검색·키보드닫기)만 되살려
+     빈 가운데 클릭이 아래 pill 로 통과하게 한다. 미니 오디오는 별도 요소라 영향 없음. */
+  #tab-dock { pointer-events: none; }
+  #tab-bar,
+  #tab-search-dock,
+  #tab-search-close { pointer-events: auto; }
+  /* 닫기 × — 세로 구분선 제거 + × 키움 + 중심을 우측 반원 캡 중심에 정렬.
+     버튼 폭을 --dock-control(60px)로 두고 × 를 가운데 정렬하면 × 중심 = 버튼 중심 =
+     pill 우측 끝 −30px = 반원 캡(반지름 --dock-control/2=30px) 중심과 일치. */
+  .resume-banner-close {
+    align-self: stretch;
+    border-left: none;
+    width: var(--dock-control);
+    font-size: var(--font-2xl);
+  }
 }
 
 /* ── Book List ── */
