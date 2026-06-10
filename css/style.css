@@ -2429,6 +2429,50 @@ mark.search-highlight {
   background: color-mix(in srgb, var(--bg) 15%, transparent);
 }
 
+/* ── ADR-030 개정(가로): 이어읽기 배너 → 하단 dock pill ─────────────────────────
+   가로는 헤더 + 배너 띠 + 탭이 세로로 쌓여 본문을 많이 가린다. 가로에서만 이어읽기
+   배너를 sticky 그룹 띠에서 빼내 하단 dock 행(미니 오디오와 동일 자리 — 탭바 우측~검색
+   사이, --tab-bar-w 재사용)에 pill 로 띄운다. 책 목록 뷰 전용이라 오디오(chapter 뷰)와
+   같은 자리를 다른 뷰에서 공유 — 충돌 없음. 테마색 솔리드 채움은 유지(주요 CTA 강조).
+   세로는 무변경. 데스크탑은 탭바·dock 이 없어 제외 — 넓은 가로 아이폰(>768)은 pointer:coarse
+   로 포착(ADR-030 가로 오디오 규칙과 동일 게이트). */
+@media (orientation: landscape) and (max-width: 768px),
+       (orientation: landscape) and (pointer: coarse) {
+  /* 검색 모핑(.tabbar-searching) 중엔 검색 입력이 dock 행을 채우므로 pill 을 빼낸다 —
+     평소에만 fixed dock pill, 검색 중엔 숨김(가로 오디오 바의 body:not(.tabbar-searching)
+     게이트와 같은 취지 — Bugbot Medium). */
+  body:not(.tabbar-searching) .resume-banner {
+    position: fixed;
+    bottom: calc(var(--space-1) + env(safe-area-inset-bottom) * 0.75);
+    left: calc(var(--space-4) + var(--tab-bar-w, calc(var(--dock-control) * 4)) + var(--space-2));
+    right: calc(var(--space-4) + var(--dock-control) + var(--space-2));
+    height: var(--dock-control);
+    margin: 0;
+    /* dock 캡슐(탭바·검색·미니 오디오)과 동일 — 둥근 사각 --radius 대신 반원 캡 pill. */
+    border-radius: var(--radius-pill);
+    z-index: var(--nav-z);
+  }
+  body.tabbar-searching .resume-banner { display: none; }
+  /* 투명 레이아웃 레이어인 #tab-dock 가 빈 가운데 클릭을 먹어 그 아래 이어읽기 pill(링크·×)이
+     안 눌렸다(#tab-dock 가 DOM 상 배너보다 뒤·동일 z + #resume-banner-slot z-index:10 스택
+     컨텍스트가 pill z 를 가둠). → pill 이 실제로 dock 에 있을 때만(배너 존재 + 검색 아님)
+     #tab-dock pointer-events 를 끄고 실제 컨트롤만 되살린다. 배너 없는 책 목록·다른 뷰에선
+     dock 가 빈 가운데 탭을 그대로 흡수해야 하므로 :has() 로 가드(Bugbot Low). 미니 오디오는 별도 요소. */
+  body:has(#resume-banner-slot .resume-banner):not(.tabbar-searching) #tab-dock { pointer-events: none; }
+  body:has(#resume-banner-slot .resume-banner):not(.tabbar-searching) #tab-bar,
+  body:has(#resume-banner-slot .resume-banner):not(.tabbar-searching) #tab-search-dock,
+  body:has(#resume-banner-slot .resume-banner):not(.tabbar-searching) #tab-search-close { pointer-events: auto; }
+  /* 닫기 × — 세로 구분선 제거 + × 키움 + 중심을 우측 반원 캡 중심에 정렬.
+     버튼 폭을 --dock-control(60px)로 두고 × 를 가운데 정렬하면 × 중심 = 버튼 중심 =
+     pill 우측 끝 −30px = 반원 캡(반지름 --dock-control/2=30px) 중심과 일치. */
+  .resume-banner-close {
+    align-self: stretch;
+    border-left: none;
+    width: var(--dock-control);
+    font-size: var(--font-2xl);
+  }
+}
+
 /* ── Book List ── */
 /* Single tabbed page (구약 / 외경 / 신약). The tab strip fills the row width:
    each tab flexes equally so the three (or two, in vulgate mode) segments span
@@ -3953,18 +3997,32 @@ body.tabbar-searching #search-inpage-bar { display: none; }
      설정)에 맞춰 정렬 — 노트 탭(현재 hidden, 1.7.0 예정)이 켜져 탭이 3→4개가 돼도 자동
      적응. JS 미설정 시 폴백은 4탭(겹침 방지 — 넓게 잡아도 빈틈만 생김). */
   @media (orientation: landscape) {
-    /* (1) .collapsed 의 탭바 홈-원형 모핑을 되돌려 탭바 전체 유지. */
-    #tab-dock.collapsed #tab-bar { width: auto; margin-right: var(--space-2); gap: 0; }
-    #tab-dock.collapsed .tab-item:not([data-tab="home"]) {
+    /* (1) .collapsed(스크롤 축소) + .searching(검색 모핑) 둘 다 가로에선 탭바 전체 유지 —
+       검색 시에도 홈 원형으로 접지 않고, 검색 입력창은 탭바 우측~검색 사이 남은 공간만 쓴다
+       (#tab-search-dock flex:1 이 그 폭을 채움 — 미니 오디오·이어읽기 pill 이 쓰던 자리). */
+    #tab-dock.collapsed #tab-bar,
+    #tab-dock.searching #tab-bar { width: auto; }
+    /* .collapsed 는 dock gap 이 없어 탭바↔오디오 간격을 margin-right 로 준다
+       (.searching 은 #tab-dock.searching{gap} 이 간격 담당 → base margin-right:0 유지). */
+    #tab-dock.collapsed #tab-bar { margin-right: var(--space-2); }
+    #tab-dock.collapsed .tab-item:not([data-tab="home"]),
+    #tab-dock.searching .tab-item:not([data-tab="home"]) {
       max-width: 6rem; min-width: 0; opacity: 1; overflow: visible; pointer-events: auto;
     }
-    #tab-dock.collapsed .tab-item[data-tab="home"] { color: var(--text-secondary); }
+    #tab-dock.collapsed .tab-item[data-tab="home"],
+    #tab-dock.searching .tab-item[data-tab="home"] { color: var(--text-secondary); }
     #tab-dock.collapsed .tab-item[data-tab="home"].active,
-    #tab-dock.collapsed .tab-item[data-tab="home"][aria-current="page"] { color: var(--theme); }
-    #tab-dock.collapsed .tab-item[data-tab="home"] .tab-icon-wrap {
+    #tab-dock.collapsed .tab-item[data-tab="home"][aria-current="page"],
+    #tab-dock.searching .tab-item[data-tab="home"].active,
+    #tab-dock.searching .tab-item[data-tab="home"][aria-current="page"] { color: var(--theme); }
+    #tab-dock.collapsed .tab-item[data-tab="home"] .tab-icon-wrap,
+    #tab-dock.searching .tab-item[data-tab="home"] .tab-icon-wrap {
       width: calc(var(--dock-control) - var(--space-1));
     }
-    #tab-dock.collapsed .tab-indicator.is-shown { opacity: 1; }
+    #tab-dock.collapsed .tab-indicator.is-shown,
+    #tab-dock.searching .tab-indicator.is-shown { opacity: 1; }
+    /* 키보드가 떠도 가로에선 탭바 유지(세로는 input 풀폭 위해 base 가 display:none 으로 숨김). */
+    body.tabbar-keyboard #tab-dock.searching #tab-bar { display: flex; }
 
     /* (2) 축소 시 미니 오디오는 '전체 탭바' 우측~검색 사이에. 우측(검색)은 base 축소
        규칙(space-4 + 60 + space-2)과 동일하므로 left 만 탭바 실폭(--tab-bar-w) 기준으로 옮긴다. */

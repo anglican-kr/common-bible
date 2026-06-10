@@ -108,7 +108,8 @@ ADR-029 는 Safari 26 home-indicator 틴팅 회피를 위해 glass 를 `::before
 스크롤 감지는 throttle(rAF) scroll 리스너 + `nextScrollCollapsed` 순수 함수(임계 64px, 최상단 4px). 오디오 `sticky→fixed` 위치 전환이라 현재 모션은 스냅(부드러운 전환은 후속 다듬기).
 
 > **개정 (2026-06-10): 가로 모드 — 탭바 전체 유지 + 오디오 dock 미니(전체 컨트롤 + 차등 숨김).** §5 의 축소는 세로 기준 — 탭바를 홈 원형으로 접고 오디오 미니를 홈·검색 사이에 끼웠다. 가로는 화면이 넓어(아이폰 가로 ≥568px) 그렇게 접을 필요가 없다는 사용자 피드백에 따라 **가로(`orientation: landscape`) 전용 동작을 분기**한다(순수 CSS, JS 스크롤 로직 무변경 — `.collapsed`/`body.tabbar-collapsed` 훅 재해석).
-> - **탭바 전체 유지** — 가로에서 `.collapsed` 의 탭바 홈-원형 모핑을 되돌려 탭 전체를 펴 둔다(검색 모핑 `.searching` 은 입력 폭이 필요하므로 가로에서도 홈 원형 유지 — revert 는 `.collapsed` 한정).
+> - **탭바 전체 유지** — 가로에서 `.collapsed`(스크롤 축소)의 탭바 홈-원형 모핑을 되돌려 탭 전체를 펴 둔다.
+> - **검색 모핑도 탭바 유지 (개정 2026-06-10 후속).** 처음엔 `.searching` 은 입력 폭이 필요하다고 보아 가로에서도 홈 원형으로 뒀으나, 가로는 폭이 넉넉하다는 사용자 피드백에 따라 `.searching` 도 `.collapsed` 와 같은 탭바-전체-유지 revert 를 적용한다. 검색 입력(`#tab-search-dock` flex:1)은 **탭바 우측~검색 사이 남은 공간**(미니 오디오·이어읽기 pill 이 쓰던 자리)만 채운다. 키보드가 떠도 가로에선 탭바를 유지한다(세로의 `body.tabbar-keyboard #tab-bar{display:none}` 를 가로에서 `display:flex` 로 덮음). 이어읽기 pill 은 검색 중 `display:none` 으로 빠져 입력이 그 폭을 쓴다.
 > - **오디오는 dock 행 미니, 전체 컨트롤** — 세로 미니가 숨기던 시간·속도를 가로에선 노출(`@media (orientation: portrait)` 로 한정). 미니는 '전체 탭바' 우측~검색 사이에 놓는다. 탭바 실폭은 `tabbar.js` 가 보이는 탭 수를 세어 `:root --tab-bar-w = N × --dock-control` 로 노출 — 노트 탭(현재 hidden, 1.7.0 예정)이 켜져 3→4개가 돼도 자동 정렬(JS 미설정 폴백 4탭).
 > - **넓은 폭(≥641px)은 상시 dock** — 미니에 전체 컨트롤이 다 들어가는 폭이면, 맨 위(비축소)에서도 오디오가 floating 풀바로 올라오지 않고 **항상 dock 행**에 머문다(사용자 요청 — 세로 높이 절약). 검색 모핑 중(`body.tabbar-searching`)엔 입력창이 dock 행을 차지하므로 그때만 floating 복귀.
 > - **좁은 폭 차등 숨김** — 폭이 부족하면(구형 소형 아이폰: 가로 568 등) **속도(≤640px) → 재생 시간(≤580px) 순으로** 숨겨 진행바 최소 길이(`--audio-progress min-width: 6rem`)를 지킨다. 좁은 폭은 맨 위에서 floating 풀바(전체 컨트롤) 유지, 축소 시에만 미니.
@@ -149,3 +150,25 @@ ADR-029 는 Safari 26 home-indicator 틴팅 회피를 위해 glass 를 `::before
   (`--glass-sheen`/`--bg 50%`/`blur(12px)`/`--shadow-2`/`--glass-inset`/`--radius-pill` +
   `superellipse(2)`)와 60px 치수를 그대로 공유. 북마크·복사 + 노트 슬롯(placeholder).
   결정·구현 상세는 **ADR-010 §절 선택 바 개정 (2026-06-06)**.
+
+- **이어읽기 배너 → 가로 dock pill (2026-06-10).** 책 목록 뷰의 이어읽기 배너
+  (`.resume-banner`, sticky 그룹의 헤더 아래 가로 띠)를 **가로 모드에서만** 하단 dock 행으로
+  내린다 — 가로는 헤더 + 배너 띠 + 탭이 세로로 쌓여 본문을 많이 가린다는 피드백. `position:
+  fixed` 로 미니 오디오와 동일 자리(탭바 우측~검색 사이, `--tab-bar-w` 재사용)에 `--radius-pill`
+  + 60px(`--dock-control`) pill 로 띄운다. 배너는 책 목록 뷰, 오디오는 chapter 뷰 전용이라
+  같은 dock 자리를 다른 뷰에서 공유 — 충돌 없음. 테마색 솔리드 채움은 유지(주요 CTA 강조, 글래스
+  캡슐 사이에서 컬러 pill 로 도드라짐). 닫기 × 는 세로 구분선 제거 + 크기 확대(`--font-2xl`) +
+  버튼 폭 `--dock-control`(60px) 로 두어 × 중심을 우측 반원 캡 중심(우측 끝 −30px)에 정렬.
+  순수 CSS(`@media (orientation: landscape)` + mobile 게이트), 세로는 무변경.
+  - **함정: `#tab-dock` 클릭 가로채기.** 이어읽기 pill 은 DOM 상 `#tab-dock` 보다 앞이고 z-index 가
+    같아(`--nav-z`), 투명한 `#tab-dock`(완전 폭 레이아웃 레이어)가 빈 가운데에서 pill(링크·×) 클릭을
+    먹어 **이어읽기·닫기가 모두 안 먹혔다**. `#resume-banner-slot{z-index:10}` 의 스택 컨텍스트가 pill z 를
+    가둬 z-index 만으로는 못 벗어난다. → **`#tab-dock{pointer-events:none}` + 실제 컨트롤(`#tab-bar`·
+    `#tab-search-dock`·`#tab-search-close`)만 `pointer-events:auto`** 로 되살려 빈 가운데 클릭이 아래 pill 로
+    통과하게 한다(가로 한정). 미니 오디오는 DOM 상 `#tab-dock` 뒤라 우연히 영향 없었음.
+    - **가드 (Bugbot 후속):** pass-through 는 pill 이 실제로 dock 에 있을 때만 켠다 —
+      `body:has(#resume-banner-slot .resume-banner):not(.tabbar-searching)` 로 게이트. 배너 없는 책
+      목록·다른 가로 뷰에선 dock 가 빈 가운데 탭을 그대로 흡수(불필요한 pass-through 제거). 또한
+      **검색 모핑(`.tabbar-searching`) 중엔** 검색 입력이 dock 행을 채우므로 pill 을 숨기고
+      (`body.tabbar-searching .resume-banner{display:none}`) dock pill 적용도 `body:not(.tabbar-searching)`
+      로 제외 — 가로 오디오 바의 `body:not(.tabbar-searching)` 게이트와 동일 취지(입력↔pill 충돌 방지).
