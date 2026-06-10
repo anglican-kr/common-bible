@@ -55,6 +55,10 @@ const BOOKMARK_MODALS_SOURCE = fs.readFileSync(BOOKMARK_MODALS_PATH, "utf8");
 // live there, so their loaders slice from this source.
 const BOOKMARK_GESTURES_PATH = path.resolve(__dirname, "../../js/app/bookmark-gestures.js");
 const BOOKMARK_GESTURES_SOURCE = fs.readFileSync(BOOKMARK_GESTURES_PATH, "utf8");
+// Select-delete mode (cascade math) moved to bookmark-select.js (ADR-034 후속);
+// the BOOKMARK_SELECT marker block now lives there.
+const BOOKMARK_SELECT_PATH = path.resolve(__dirname, "../../js/app/bookmark-select.js");
+const BOOKMARK_SELECT_SOURCE = fs.readFileSync(BOOKMARK_SELECT_PATH, "utf8");
 
 function extractBlock(name, source = BOOKMARK_SOURCE) {
   const begin = `// ── BEGIN ${name} ──`;
@@ -175,7 +179,7 @@ function loadBookmarkSelect() {
   // `var` (not const/let) so the Set surfaces as a context property the test can
   // seed via setSelected; the extracted functions close over the same binding.
   const prelude = `var _bmSelected = new Set();\n`;
-  vm.runInContext(prelude + extractBlock("BOOKMARK_SELECT"), ctx, { filename: "bookmark-select.js" });
+  vm.runInContext(prelude + extractBlock("BOOKMARK_SELECT", BOOKMARK_SELECT_SOURCE), ctx, { filename: "bookmark-select.js" });
   return {
     /** @param {string[]} ids */
     setSelected: (ids) => { ctx._bmSelected.clear(); for (const id of ids) ctx._bmSelected.add(id); },
