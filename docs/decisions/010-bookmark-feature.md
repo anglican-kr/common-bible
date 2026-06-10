@@ -234,7 +234,7 @@ ARIA tree widget(`role="tree"`, `role="treeitem"`, `role="group"`).
 > 기본 포커스는 안전한 '취소'). 확인 메시지 문안은 순수 함수
 > `_chapterDeleteMessage()`로 분리해 유닛 테스트.
 
-> **개정 (2026-06-06 후속): 장 북마크 선택 삭제 picker.**
+> **개정 (2026-06-06 후속): 장 북마크 선택 삭제 picker.** *(→ 2026-06-10 제거됨 — 아래 참조. 헤더 토글이 폐지되며 진입점을 잃어 모달 DOM·CSS·`openChapterDeleteModal`·e2e 일괄 삭제. `_selectAllState`는 벌크 선택이 계속 사용해 보존.)*
 > 헤더 토글-오프의 단일 "이 장 전부 삭제" 확인 모달(`#bm-confirm-modal`)을
 > **장 안의 북마크를 골라 지우는 선택 모달**(`#bm-chapter-delete-modal`)로
 > 개편했다. 한 장에 장 전체·여러 절 범위 북마크가 섞여 있을 때 "전부 삭제"는
@@ -272,8 +272,10 @@ ARIA tree widget(`role="tree"`, `role="treeitem"`, `role="group"`).
 >   **폰을 가로로 돌려 탭 바가 사라지는 순간 헤더 북마크가 자동으로 다시 나타나** 회전에
 >   강건하다(JS resize 리스너 불필요). `.is-list`는 장 맥락 없는 헤더(chapter==null) 표식.
 > - **부수:** 헤더에서 더는 삭제하지 않으므로 장-삭제 선택 picker(`#bm-chapter-delete-modal`,
->   `openChapterDeleteModal`)는 진입점을 잃어 **현재 미사용**이다. 모달 DOM·함수·유닛은
->   남겨 둔다 — 죽은 코드 일괄 정리는 별도 백로그.
+>   `openChapterDeleteModal`)는 진입점을 잃어 미사용이 됐다 → **2026-06-10 제거 완료**:
+>   모달 DOM(index.html)·CSS·`open/closeChapterDeleteModal`·`_deleteBtnLabel`(picker 전용
+>   헬퍼)·관련 유닛/e2e 일괄 삭제. tri-state 헬퍼 `_selectAllState` 는 벌크 선택 모드
+>   (ADR-029)가 계속 쓰므로 보존. 삭제는 시트 안의 행 스와이프·선택 모드가 담당.
 
 **검색 드로어** (`#search-sheet`): 개정 2026-04-26 — 닫기 버튼(`#search-sheet-close`) 추가.
 WCAG 일관성 유지 (북마크 드로어와 동일 패턴).

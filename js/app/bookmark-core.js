@@ -57,9 +57,9 @@ function findExistingChapterBookmarks(bookId, chapter) {
 // checkboxes so the reader removes only the ones they mean to. These two pure
 // helpers drive that picker's chrome.
 
-// Tri-state for the "전체 선택" checkbox given how many of the chapter's
-// bookmarks are currently ticked: none → unchecked, all → checked, otherwise
-// indeterminate.
+// Tri-state for a "전체 선택" checkbox given how many of N items are currently
+// ticked: none → unchecked, all → checked, otherwise indeterminate. Used by the
+// bookmark bulk-select mode's select-all toggle.
 /**
  * @param {number} selectedCount
  * @param {number} totalCount
@@ -69,16 +69,6 @@ function _selectAllState(selectedCount, totalCount) {
   if (totalCount <= 0 || selectedCount <= 0) return "none";
   if (selectedCount >= totalCount) return "all";
   return "some";
-}
-
-// Confirm-button label: bare "삭제" with nothing selected (button is disabled),
-// else the count appended so the destructive action states its scope.
-/**
- * @param {number} selectedCount
- * @returns {string}
- */
-function _deleteBtnLabel(selectedCount) {
-  return selectedCount > 0 ? `삭제 (${selectedCount})` : "삭제";
 }
 
 // Floating count-chip text for the bookmark select dock (#bm-select-count).
@@ -353,6 +343,6 @@ export {
   sortBookmarkNodes,
   _walkBookmarks, findExistingChapterBookmarks, _findItemInStore,
   _findParentFolderId, removeItemById, insertItem, collectFolderOptions,
-  _selectAllState, _deleteBtnLabel, _bmSelectCountLabel, _descendantIds,
+  _selectAllState, _bmSelectCountLabel, _descendantIds,
   _isActiveBookmark, _hasActiveDescendant, setRenderPathname,
 };

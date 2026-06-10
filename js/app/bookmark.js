@@ -527,7 +527,7 @@ $driveDisconnectDelete.addEventListener("click", async () => {
 });
 // $bmImport* modal refs moved to bookmark-modals.js (PR5d).
 // $bmSave* / $bmNewFolder* / $bmMerge* refs moved to bookmark-modals.js (PR5b~5c).
-// $bmConfirm* / $bmChapterDelete* refs moved to bookmark-modals.js (PR5a).
+// $bmConfirm* refs moved to bookmark-modals.js (PR5a).
 const $verseSelectBar = _$("verse-select-bar");
 const $verseSelectCount = _$("verse-select-count");
 const $verseSelectBookmarkBtn = /** @type {HTMLButtonElement} */ (_$("verse-select-bookmark-btn"));
@@ -1607,7 +1607,7 @@ $bookmarkDrawerBody.addEventListener("keydown", (e) => {
 // that module).
 
 // ── Destructive confirm modal ──
-// openConfirmModal / openChapterDeleteModal moved to bookmark-modals.js (PR5a).
+// openConfirmModal moved to bookmark-modals.js (PR5a).
 
 // ── Bookmark select mode (ADR-029 개정 / ADR-010) ──
 // In-place multi-select over the mobile /bookmarks full view, replacing the old
