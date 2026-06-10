@@ -132,6 +132,29 @@ def test_home_tab_returns_to_root(mobile_context):
     )
 
 
+def test_home_tab_from_reading_focuses_book_card(mobile_context):
+    """ADR-031 개정: 신약(matt/1) 읽는 중 하단 home 탭 = pop-to-root 시 그 책의 구분
+    탭(신약)으로 가서 마태오 카드에 포커스. 기본 href='/'(구약만 렌더)였다면 신약 책이
+    목록에 없어 포커스가 안 잡혔을 케이스를 책 자신의 구분으로 라우팅해 해소."""
+    page = mobile_context.new_page()
+    page.goto(f"{BASE_URL}/matt/1")
+    page.wait_for_selector("article.chapter-text .verse", timeout=8_000)
+
+    page.locator("#tab-bar .tab-item[data-tab='home']").click()
+    page.wait_for_selector(".book-list a[data-book-id='matt']", timeout=5_000)
+
+    focused = page.evaluate(
+        "() => document.activeElement && document.activeElement.getAttribute('data-book-id')"
+    )
+    assert focused == "matt", f"Expected focus on matt, got {focused!r}"
+
+    # 프로그래밍 focus() 는 :focus-visible 을 트리거하지 않으므로, 명시적 .is-last-read
+    # 마커 클래스로 마태오 카드가 시각적으로 강조되는지 확인(색상 하이라이트의 근거).
+    card = page.locator(".book-list a[data-book-id='matt']")
+    assert "is-last-read" in (card.get_attribute("class") or ""), \
+        "read book card must carry the .is-last-read highlight marker"
+
+
 def test_book_list_does_not_collapse_on_scroll(mobile_context):
     """책 목록(books)에선 아래로 스크롤해도 탭바 유지(읽기 화면 전용 게이트)."""
     page = mobile_context.new_page()
