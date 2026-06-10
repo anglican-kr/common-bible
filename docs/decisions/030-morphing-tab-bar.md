@@ -108,7 +108,8 @@ ADR-029 는 Safari 26 home-indicator 틴팅 회피를 위해 glass 를 `::before
 스크롤 감지는 throttle(rAF) scroll 리스너 + `nextScrollCollapsed` 순수 함수(임계 64px, 최상단 4px). 오디오 `sticky→fixed` 위치 전환이라 현재 모션은 스냅(부드러운 전환은 후속 다듬기).
 
 > **개정 (2026-06-10): 가로 모드 — 탭바 전체 유지 + 오디오 dock 미니(전체 컨트롤 + 차등 숨김).** §5 의 축소는 세로 기준 — 탭바를 홈 원형으로 접고 오디오 미니를 홈·검색 사이에 끼웠다. 가로는 화면이 넓어(아이폰 가로 ≥568px) 그렇게 접을 필요가 없다는 사용자 피드백에 따라 **가로(`orientation: landscape`) 전용 동작을 분기**한다(순수 CSS, JS 스크롤 로직 무변경 — `.collapsed`/`body.tabbar-collapsed` 훅 재해석).
-> - **탭바 전체 유지** — 가로에서 `.collapsed` 의 탭바 홈-원형 모핑을 되돌려 탭 전체를 펴 둔다(검색 모핑 `.searching` 은 입력 폭이 필요하므로 가로에서도 홈 원형 유지 — revert 는 `.collapsed` 한정).
+> - **탭바 전체 유지** — 가로에서 `.collapsed`(스크롤 축소)의 탭바 홈-원형 모핑을 되돌려 탭 전체를 펴 둔다.
+> - **검색 모핑도 탭바 유지 (개정 2026-06-10 후속).** 처음엔 `.searching` 은 입력 폭이 필요하다고 보아 가로에서도 홈 원형으로 뒀으나, 가로는 폭이 넉넉하다는 사용자 피드백에 따라 `.searching` 도 `.collapsed` 와 같은 탭바-전체-유지 revert 를 적용한다. 검색 입력(`#tab-search-dock` flex:1)은 **탭바 우측~검색 사이 남은 공간**(미니 오디오·이어읽기 pill 이 쓰던 자리)만 채운다. 키보드가 떠도 가로에선 탭바를 유지한다(세로의 `body.tabbar-keyboard #tab-bar{display:none}` 를 가로에서 `display:flex` 로 덮음). 이어읽기 pill 은 검색 중 `display:none` 으로 빠져 입력이 그 폭을 쓴다.
 > - **오디오는 dock 행 미니, 전체 컨트롤** — 세로 미니가 숨기던 시간·속도를 가로에선 노출(`@media (orientation: portrait)` 로 한정). 미니는 '전체 탭바' 우측~검색 사이에 놓는다. 탭바 실폭은 `tabbar.js` 가 보이는 탭 수를 세어 `:root --tab-bar-w = N × --dock-control` 로 노출 — 노트 탭(현재 hidden, 1.7.0 예정)이 켜져 3→4개가 돼도 자동 정렬(JS 미설정 폴백 4탭).
 > - **넓은 폭(≥641px)은 상시 dock** — 미니에 전체 컨트롤이 다 들어가는 폭이면, 맨 위(비축소)에서도 오디오가 floating 풀바로 올라오지 않고 **항상 dock 행**에 머문다(사용자 요청 — 세로 높이 절약). 검색 모핑 중(`body.tabbar-searching`)엔 입력창이 dock 행을 차지하므로 그때만 floating 복귀.
 > - **좁은 폭 차등 숨김** — 폭이 부족하면(구형 소형 아이폰: 가로 568 등) **속도(≤640px) → 재생 시간(≤580px) 순으로** 숨겨 진행바 최소 길이(`--audio-progress min-width: 6rem`)를 지킨다. 좁은 폭은 맨 위에서 floating 풀바(전체 컨트롤) 유지, 축소 시에만 미니.

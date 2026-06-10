@@ -3997,18 +3997,32 @@ body.tabbar-searching #search-inpage-bar { display: none; }
      설정)에 맞춰 정렬 — 노트 탭(현재 hidden, 1.7.0 예정)이 켜져 탭이 3→4개가 돼도 자동
      적응. JS 미설정 시 폴백은 4탭(겹침 방지 — 넓게 잡아도 빈틈만 생김). */
   @media (orientation: landscape) {
-    /* (1) .collapsed 의 탭바 홈-원형 모핑을 되돌려 탭바 전체 유지. */
-    #tab-dock.collapsed #tab-bar { width: auto; margin-right: var(--space-2); gap: 0; }
-    #tab-dock.collapsed .tab-item:not([data-tab="home"]) {
+    /* (1) .collapsed(스크롤 축소) + .searching(검색 모핑) 둘 다 가로에선 탭바 전체 유지 —
+       검색 시에도 홈 원형으로 접지 않고, 검색 입력창은 탭바 우측~검색 사이 남은 공간만 쓴다
+       (#tab-search-dock flex:1 이 그 폭을 채움 — 미니 오디오·이어읽기 pill 이 쓰던 자리). */
+    #tab-dock.collapsed #tab-bar,
+    #tab-dock.searching #tab-bar { width: auto; }
+    /* .collapsed 는 dock gap 이 없어 탭바↔오디오 간격을 margin-right 로 준다
+       (.searching 은 #tab-dock.searching{gap} 이 간격 담당 → base margin-right:0 유지). */
+    #tab-dock.collapsed #tab-bar { margin-right: var(--space-2); }
+    #tab-dock.collapsed .tab-item:not([data-tab="home"]),
+    #tab-dock.searching .tab-item:not([data-tab="home"]) {
       max-width: 6rem; min-width: 0; opacity: 1; overflow: visible; pointer-events: auto;
     }
-    #tab-dock.collapsed .tab-item[data-tab="home"] { color: var(--text-secondary); }
+    #tab-dock.collapsed .tab-item[data-tab="home"],
+    #tab-dock.searching .tab-item[data-tab="home"] { color: var(--text-secondary); }
     #tab-dock.collapsed .tab-item[data-tab="home"].active,
-    #tab-dock.collapsed .tab-item[data-tab="home"][aria-current="page"] { color: var(--theme); }
-    #tab-dock.collapsed .tab-item[data-tab="home"] .tab-icon-wrap {
+    #tab-dock.collapsed .tab-item[data-tab="home"][aria-current="page"],
+    #tab-dock.searching .tab-item[data-tab="home"].active,
+    #tab-dock.searching .tab-item[data-tab="home"][aria-current="page"] { color: var(--theme); }
+    #tab-dock.collapsed .tab-item[data-tab="home"] .tab-icon-wrap,
+    #tab-dock.searching .tab-item[data-tab="home"] .tab-icon-wrap {
       width: calc(var(--dock-control) - var(--space-1));
     }
-    #tab-dock.collapsed .tab-indicator.is-shown { opacity: 1; }
+    #tab-dock.collapsed .tab-indicator.is-shown,
+    #tab-dock.searching .tab-indicator.is-shown { opacity: 1; }
+    /* 키보드가 떠도 가로에선 탭바 유지(세로는 input 풀폭 위해 base 가 display:none 으로 숨김). */
+    body.tabbar-keyboard #tab-dock.searching #tab-bar { display: flex; }
 
     /* (2) 축소 시 미니 오디오는 '전체 탭바' 우측~검색 사이에. 우측(검색)은 base 축소
        규칙(space-4 + 60 + space-2)과 동일하므로 left 만 탭바 실폭(--tab-bar-w) 기준으로 옮긴다. */
