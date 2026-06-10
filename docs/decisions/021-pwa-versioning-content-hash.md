@@ -1,7 +1,7 @@
 # ADR-021: PWA 버전 식별자를 콘텐츠 해시 매니페스트로 전환
 
 - 일시: 2026-05-13
-- 상태: 승인됨 — Phase 1·2 구현 완료, Phase 3(webhook) 후속, Phase 4(실배포 검증) 대기
+- 상태: 승인됨 — Phase 1·2·3 구현 완료 (Phase 3 webhook `sync-data.yml` 가동 중), Phase 4(실배포 검증·DevTools 캐시 동작 확인) 대기
 - 관련 ADR: ADR-001(SPA·서비스 워커 골격), ADR-015(저장 전략·캐시 분리), ADR-016(오디오 캐시 LRU), ADR-020(모노레포 4분할 — §22 release.py 위치 결정, §73-74 "수동 두 단계" 운영 흐름 개정 대상)
 
 ## 맥락
