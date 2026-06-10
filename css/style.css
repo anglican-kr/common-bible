@@ -4647,8 +4647,11 @@ body.bm-select-active .bm-select-allbtn { display: inline-flex; }
 /* Dropdown anchored below the ⋯ button (relative to .title-actions cluster).
    iOS-26-style popup menu (HIG): large rounded corners (--radius-xl),
    full-bleed rows separated by hairlines, a soft elevation shadow, and the
-   shared liquid-glass sheen/inset texture (ADR-030 후속⁵). overflow:hidden clips
-   row hover/press highlights to the rounded corners. */
+   shared liquid-glass sheen/inset texture (ADR-030 후속⁵). overflow-y:auto +
+   overflow-x:hidden clips row hover/press highlights to the rounded corners
+   while letting the menu scroll when its rows exceed the viewport (landscape:
+   9 rows > short height). max-height is set precisely in JS per open (anchor
+   top → viewport bottom); 80dvh is a pre-JS safety cap. ADR-030 후속⁷. */
 .title-action-menu {
   position: absolute;
   /* Pull the menu up so it overlaps (covers) the ⋯ trigger rather than
@@ -4663,14 +4666,41 @@ body.bm-select-active .bm-select-allbtn { display: inline-flex; }
   --menu-lead: 1.4rem;
   min-width: 13rem;
   max-width: calc(100vw - var(--space-4));
+  max-height: 80dvh;
   padding: 0;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+  /* Keep a flick at the menu's scroll edge from chaining to the page behind. */
+  overscroll-behavior: contain;
+  /* iOS-26 thin scrollbar. On iOS Safari the native overlay scrollbar (already
+     this style) shows and ignores the ::-webkit rules; these only refine
+     desktop WebKit/Chromium + Firefox to match (thin translucent pill, no
+     track, inset 2px so it never touches the --radius-xl corners). */
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--text) 24%, transparent) transparent;
   background: var(--glass-sheen), var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-xl); /* 16px — iOS 26 큰 곡률 */
   box-shadow: var(--shadow-4), var(--glass-inset);
   transform-origin: top right;
   animation: title-action-menu-in var(--duration-fast) var(--ease-standard);
+}
+
+.title-action-menu::-webkit-scrollbar {
+  width: 7px;
+}
+.title-action-menu::-webkit-scrollbar-track {
+  background: transparent;
+}
+.title-action-menu::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--text) 24%, transparent);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  border-radius: 999px;
+}
+.title-action-menu::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--text) 38%, transparent);
+  background-clip: padding-box;
 }
 
 @keyframes title-action-menu-in {
@@ -4690,6 +4720,9 @@ body.bm-select-active .bm-select-allbtn { display: inline-flex; }
   justify-content: flex-start;
   gap: var(--space-3);
   width: 100%;
+  /* The menu is now a flex-column scroll container (ADR-030 후속⁷); without
+     flex-shrink:0 its overflowing rows compress below the 44px touch target. */
+  flex-shrink: 0;
   min-height: var(--touch-target);
   padding: var(--space-2) var(--space-4);
   text-align: left;
@@ -4738,6 +4771,9 @@ body.bm-select-active .bm-select-allbtn { display: inline-flex; }
    touch the popover box edges. */
 .title-action-menu-sep {
   height: 1px;
+  /* flex-shrink:0 keeps this 1px hairline from collapsing to 0 when the menu
+     scrolls (overflowing flex column shrinks unprotected items — ADR-030 후속⁷). */
+  flex-shrink: 0;
   margin: var(--space-2) var(--space-4);
   background: var(--border);
 }

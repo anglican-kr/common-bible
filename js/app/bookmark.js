@@ -1389,6 +1389,13 @@ function buildBmViewActions() {
     refreshSelectEnabled();
     menu.hidden = false;
     moreBtn.setAttribute("aria-expanded", "true");
+    // Cap the menu so it never spills past the viewport bottom (landscape: its
+    // ~9 rows are taller than the short height, leaving lower items unreachable
+    // — ADR-030 후속⁷). Measure from the trigger button (not the menu, whose
+    // scale-in transform would skew getBoundingClientRect) and leave a bottom
+    // gap; CSS then scrolls the overflow with the iOS-26 thin scrollbar.
+    const anchorTop = moreBtn.getBoundingClientRect().top;
+    menu.style.maxHeight = `${Math.max(180, Math.round(window.innerHeight - anchorTop - 16))}px`;
     // Capture phase so an outside click closes before it acts elsewhere.
     document.addEventListener("click", onDocClick, true);
     document.addEventListener("keydown", onKeydown, true);
