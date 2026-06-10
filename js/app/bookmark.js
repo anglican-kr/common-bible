@@ -1404,12 +1404,26 @@ function buildBmViewActions() {
   // Assigned once the 선택 item is built; refreshes its enabled state per open.
   let refreshSelectEnabled = () => {};
 
+  // Cap the menu so it never spills past the viewport bottom (landscape: its
+  // rows are taller than the short height, leaving lower items unreachable —
+  // ADR-030 후속⁷). Measure from the trigger button (not the menu, whose
+  // scale-in transform would skew getBoundingClientRect) and leave a bottom gap;
+  // CSS then scrolls the overflow with the iOS-26 thin scrollbar. Recomputed on
+  // every resize while open so a rotation flips the cap with the orientation
+  // (both the available height and the anchor's top change) — without it a menu
+  // opened in one orientation keeps the other's cap (stale scrollbar / overflow).
+  function sizeMenu() {
+    if (!moreBtn.isConnected) { window.removeEventListener("resize", sizeMenu); return; }
+    const anchorTop = moreBtn.getBoundingClientRect().top;
+    menu.style.maxHeight = `${Math.max(180, Math.round(window.innerHeight - anchorTop - 16))}px`;
+  }
   function closeMenu() {
     if (menu.hidden) return;
     menu.hidden = true;
     moreBtn.setAttribute("aria-expanded", "false");
     document.removeEventListener("click", onDocClick, true);
     document.removeEventListener("keydown", onKeydown, true);
+    window.removeEventListener("resize", sizeMenu);
   }
   function openMenu() {
     if (!menu.hidden) return;
@@ -1418,13 +1432,8 @@ function buildBmViewActions() {
     refreshSelectEnabled();
     menu.hidden = false;
     moreBtn.setAttribute("aria-expanded", "true");
-    // Cap the menu so it never spills past the viewport bottom (landscape: its
-    // ~9 rows are taller than the short height, leaving lower items unreachable
-    // — ADR-030 후속⁷). Measure from the trigger button (not the menu, whose
-    // scale-in transform would skew getBoundingClientRect) and leave a bottom
-    // gap; CSS then scrolls the overflow with the iOS-26 thin scrollbar.
-    const anchorTop = moreBtn.getBoundingClientRect().top;
-    menu.style.maxHeight = `${Math.max(180, Math.round(window.innerHeight - anchorTop - 16))}px`;
+    sizeMenu();
+    window.addEventListener("resize", sizeMenu);
     // Capture phase so an outside click closes before it acts elsewhere.
     document.addEventListener("click", onDocClick, true);
     document.addEventListener("keydown", onKeydown, true);
