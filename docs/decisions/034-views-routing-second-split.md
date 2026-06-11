@@ -210,4 +210,8 @@ bookmark.js는 별도 후속 라운드(순수 로직 `bookmark-core.js` / UI `bo
 
 **검증서 배운 것 (중요).** 처음 tree.js에서 **import 8개를 통째로 누락**(`setRenderPathname`·`saveBookmarks`·`openSaveModal`·`openConfirmModal`·core 4종)했는데 **tsc·worker tsc 모두 통과** — checkJs가 미선언 식별자를 전역으로 묵인하는 사각지대(ADR-019 계열). **로드 스모크가 렌더 경로(`setRenderPathname`)를, 상호작용 e2e가 모달 경로(`openSaveModal` 등)를** 잡는다. 대상 모듈의 _전체_ export를 본문에 일괄 grep해 import을 도출해야 함. → `docs/known-issues.md` 추적, [[project_export_tsc_blindspot]].
 
-**테스트.** 마커 블록 없어 `bookmark.test.js` 무변경. 검증 tsc(main·worker)·유닛 728·로드 스모크(드로어+풀뷰 트리 렌더)·e2e 78통과(bookmark·edit·swipe·dnd·select-delete·add-help·export-import·copy + folders, 사전 실패 2건 제외). `_isDescendant`→core 정리는 향후 백로그로 남김.
+**테스트.** 마커 블록 없어 `bookmark.test.js` 무변경. 검증 tsc(main·worker)·유닛 728·로드 스모크(드로어+풀뷰 트리 렌더)·e2e 78통과(bookmark·edit·swipe·dnd·select-delete·add-help·export-import·copy + folders, 사전 실패 2건 제외).
+
+### 후속 정리 (2026-06-11): `_isDescendant` → bookmark-core
+
+순수 트리 술어 `_isDescendant`(폴더가 id를 하위에 품는지)를 `bookmark-gestures.js`의 DRAG_CORE 블록에서 본래 자리 `bookmark-core.js`의 BOOKMARK_QUERY 블록으로 이전. gestures(moveBookmarkItem)·select(_moveSelectedToFolder) 둘 다 쓰는 공유 헬퍼라 core가 맞는 집. gestures/select가 core에서 import, gestures export에서 제거. 테스트: QUERY 블록에 들어가 DRAG_CORE 로더(QUERY 선이어붙임)가 moveBookmarkItem 호출을 그대로 해결, `_isDescendant` 단위 테스트는 QUERY 로더로 이관. 검증 tsc·유닛 728·로드 스모크·e2e 8(folder-move 회귀·folder-exclude·dnd) 통과.

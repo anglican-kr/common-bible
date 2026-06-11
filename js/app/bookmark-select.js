@@ -28,9 +28,10 @@ const { loadBookmarks, saveBookmarks } = window.appStorage;
 import {
   _findItemInStore, _descendantIds, _selectAllState, _bmSelectCountLabel,
   _walkBookmarks, _forgetViewed, removeItemById, insertItem, _buildSharePayload,
+  _isDescendant,
 } from "./bookmark-core.js";
 import { openConfirmModal, openMoveModal } from "./bookmark-modals.js";
-import { closeSwipedRow, _isDescendant } from "./bookmark-gestures.js";
+import { closeSwipedRow } from "./bookmark-gestures.js";
 
 // ── Dependency injection ──
 // bookmark.js injects these at startup (initBookmarkSelect) so a delete/move can
