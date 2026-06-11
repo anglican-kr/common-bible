@@ -14,6 +14,12 @@
 
 const { loadBookmarks } = window.appStorage;
 
+// Shared guidance copy for "how bookmarks are created" — used by the empty-state
+// placeholder (drawer + full view) and the ⋯ menu's 🛈 info popover (bookmark.js /
+// bookmark-menu.js). A DOM-free content constant, so it lives in core.
+const BOOKMARK_ADD_HELP =
+  "성서를 읽다가 오른쪽 위의 북마크 버튼을 누르면 이곳에 북마크가 기록됩니다. 읽던 구절을 누른 후, 여러 절을 선택해 북마크할 수도 있습니다.";
+
 // ── BEGIN BOOKMARK_QUERY ──
 // Exercised by tests/unit/bookmark.test.js. Pure tree operations on the
 // in-memory bookmark store; only `findExistingChapterBookmarks` calls out
@@ -376,6 +382,7 @@ function _hasActiveDescendant(folder, pathname = _renderPathname) {
 // ── END BOOKMARK_ACTIVE ──
 
 export {
+  BOOKMARK_ADD_HELP,
   _bookmarkHref, _buildSharePayload,
   getBookmarkSort, setBookmarkSort, getBookmarkSortDir, setBookmarkSortDir,
   markBookmarkViewed, _forgetViewed,

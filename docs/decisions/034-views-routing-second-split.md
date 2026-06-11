@@ -173,3 +173,23 @@ bookmark.js는 별도 후속 라운드(순수 로직 `bookmark-core.js` / UI `bo
 **테스트 하네스.** 마커 블록 없음(절 선택은 DOM 바운드라 유닛 슬라이스 대상이 아니었음) → `bookmark.test.js` 무변경. 표준 검증(tsc main·worker·유닛 728·로드 스모크·e2e: copy·features·a11y-keyboard·bookmark 23) 통과.
 
 **남은 라운드:** 트리 렌더링·⋯ 메뉴(가장 큰 덩어리, 상태·제스처 강결합). 분리 후 bookmark.js는 드로어/헤더 오케스트레이터로 수렴. `_isDescendant`→bookmark-core 정리도 그때.
+
+## 개정 (2026-06-11): bookmark-menu.js 분할 (마지막 라운드 1/2)
+
+마지막 덩어리(트리 렌더링 + ⋯ 메뉴, ~930줄)는 한 PR로 빼기엔 결합·리뷰 범위가 커서 **2개 PR로 분리** — 자족적인 ⋯ 메뉴를 먼저, 가장 깊은 트리 렌더링을 다음에. 이 라운드는 메뉴.
+
+**결과 (1,546 → bookmark.js 1,145줄, −26%):**
+
+| 파일 | 역할 | 라인 |
+|---|---|---|
+| `js/app/bookmark-menu.js` | 탭 뷰 title-row 액션 — ⋯ 더 보기 메뉴(새 폴더·내보내기·가져오기·선택) + 정렬 필드·오름내림 radio 그룹 + 🛈 안내 팝오버 + 전체 선택 토글(`buildBmViewActions`) + `exportBookmarks`(plain JSON 다운로드) | 442 |
+
+**핵심 — 주입 훅 1개로 충분.** 메뉴는 정렬 변경/새 폴더 후 트리 재렌더(`_rerenderActiveBookmarkTree`)만 오케스트레이터에서 필요로 한다 → `initBookmarkMenu({ rerenderTree })` 하나 주입. 나머지는 전부 하향 import: bookmark-core(정렬 prefs) · bookmark-modals(새 폴더/가져오기) · bookmark-select(선택 진입·전체 선택). `renderBookmarksView`(아직 bookmark.js)가 `buildBmViewActions()`를 import해 title-row에 마운트.
+
+**`exportBookmarks`는 menu로 이동.** 메뉴 내보내기 + 드로어 `#bm-export-btn` 양쪽이 쓰는 leaf 유틸(orchestrator 의존 0). menu가 소유하고 bookmark.js가 `#bm-export-btn` 리스너용으로 역import(단방향, 무순환).
+
+**`BOOKMARK_ADD_HELP`는 bookmark-core로 이동.** 빈 상태 placeholder(트리, 현 bookmark.js)와 메뉴 🛈 팝오버가 공유하는 DOM-free 문자열 상수 → 중립 leaf인 core가 소유, 양쪽이 import(다음 트리 라운드와도 호환). 정리로 무참조가 된 core import 3종(`setBookmarkSort`·`getBookmarkSortDir`·`setBookmarkSortDir`) + select `_bmToggleSelectAll` 제거.
+
+**테스트.** 마커 블록 없어 `bookmark.test.js` 무변경. 검증 tsc(main·worker)·유닛 728·로드 스모크(⋯·🛈 렌더)·e2e(select-delete ⋯ 진입 + add-help 🛈 + export-import + bookmark + folders, 사전 실패 2건 제외 전부) 통과.
+
+**남은 라운드 (2/2):** 트리 렌더링(`bookmark-tree.js`) — 빌더 + `renderBookmarkTree`/`_rerenderActiveBookmarkTree`(주입 허브) + 키보드 내비. 분리 후 bookmark.js는 드로어/헤더 오케스트레이터로 수렴. `_isDescendant`→core 정리도 그때.
