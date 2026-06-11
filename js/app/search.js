@@ -517,7 +517,7 @@ function svgIcon(className, paths, circles) {
 // the URL on every route via syncSearchFields(). The worker/URL schema (in=) is
 // unchanged — only how the filters surface.
 
-/** @typedef {{ container: HTMLElement, input: HTMLInputElement, zone: HTMLElement, funnel: HTMLElement }} SearchField */
+/** @typedef {{ container: HTMLElement, input: HTMLInputElement, zone: HTMLElement, funnel: HTMLElement, focused?: boolean }} SearchField */
 /** @type {SearchField[]} */
 const _searchFields = [];
 
@@ -589,7 +589,11 @@ function mountSearchField(container, input) {
   });
 
   /** @type {SearchField} */
-  const field = { container, input, zone, funnel };
+  const field = { container, input, zone, funnel, focused: false };
+  // Focus reveals the funnel on any screen (syncOneField gates on field.focused);
+  // blur re-syncs so it hides again unless the search view keeps it up.
+  input.addEventListener("focus", () => { field.focused = true; syncOneField(field); });
+  input.addEventListener("blur", () => { field.focused = false; syncOneField(field); });
   _searchFields.push(field);
   syncOneField(field);
 }
@@ -607,7 +611,14 @@ function syncOneField(field) {
   // the book-list fallback). Mobile always renders the search view for /search.
   const searchView = p.view === "search" && (isMobile()
     || !!p.query || (p.filterBooks && p.filterBooks.length));
-  const active = searchView && (!isPill || document.body.classList.contains("tabbar-searching"));
+  // Reveal the token zone (funnel + any active chips) on the search view, OR
+  // whenever the field itself is focused — so the book-filter funnel is reachable
+  // from the search box on any screen, not only the search results view (user
+  // request). Off the search view there's no URL scope, so the chip loop below is
+  // empty and only the funnel shows. The pill (#tab-search-dock) is only live
+  // during the tab-bar search morph, so keep that guard.
+  const allowPill = !isPill || document.body.classList.contains("tabbar-searching");
+  const active = allowPill && (searchView || field.focused === true);
 
   zone.querySelectorAll(".field-token").forEach((n) => n.remove());
 
@@ -664,6 +675,9 @@ let _bookSheet = null;
 // the funnel (user request). Set in openBookFilterSheet.
 /** @type {SearchField | null} */
 let _bookSheetReturnField = null;
+// Fallback timer for the animated close (cleared on animationend / reopen).
+/** @type {ReturnType<typeof setTimeout> | null} */
+let _bookSheetCloseTimer = null;
 
 function ensureBookSheet() {
   if (_bookSheet) return _bookSheet;
@@ -679,17 +693,28 @@ function ensureBookSheet() {
   });
   panel.hidden = true;
 
+  // Left-edge width-resize grip (desktop side-panel only, hidden on mobile via
+  // CSS) — mirrors #cite-sheet-resize / #bookmark-drawer-resize.
+  const resize = el("div", { className: "book-filter-resize", "aria-hidden": "true" });
   const handle = el("div", { className: "book-filter-handle", "aria-hidden": "true" });
   const head = el("div", { className: "book-filter-head" });
   head.appendChild(el("h2", { id: "book-filter-title", className: "book-filter-title" }, "책 선택"));
+  const headActions = el("div", { className: "book-filter-head-actions" });
   const resetBtn = el("button", { type: "button", className: "book-filter-reset" }, "초기화");
-  head.appendChild(resetBtn);
+  // Close (×) for the desktop side-panel, matching the bookmark/cite panels; the
+  // scrim and Esc still close too. Always present (cite-sheet shows × on mobile
+  // too); harmless beside the mobile drag handle.
+  const closeBtn = el("button", { type: "button", className: "book-filter-close", "aria-label": "닫기" }, "×");
+  headActions.appendChild(resetBtn);
+  headActions.appendChild(closeBtn);
+  head.appendChild(headActions);
 
   const body = el("div", { className: "book-filter-body" });
   const foot = el("div", { className: "book-filter-foot" });
   const applyBtn = el("button", { type: "button", className: "book-filter-apply" }, "적용");
   foot.appendChild(applyBtn);
 
+  panel.appendChild(resize);
   panel.appendChild(handle);
   panel.appendChild(head);
   panel.appendChild(body);
@@ -710,8 +735,30 @@ function ensureBookSheet() {
     closeOnOutside: true,
     inertSelectors: BOOK_FILTER_INERT_SELECTORS,
     initialFocus: () => applyBtn,
+    onOpen: () => {
+      if (_bookSheetCloseTimer) { clearTimeout(_bookSheetCloseTimer); _bookSheetCloseTimer = null; }
+      panel.classList.remove("book-filter-closing"); // cancel any in-flight close anim
+    },
+    // Animated slide-out (down on mobile, right on the desktop side panel),
+    // matching the cite-sheet / drawer pattern. Cleanup is immediate; the panel
+    // hides after `.book-filter-closing` plays (350ms fallback), then any
+    // drag-resized inline size resets so the next open starts from the default.
+    closeTransition: (p, finalizeHide) => {
+      p.classList.add("book-filter-closing");
+      const done = () => {
+        if (_bookSheetCloseTimer) { clearTimeout(_bookSheetCloseTimer); _bookSheetCloseTimer = null; }
+        finalizeHide(); // no-op if reopened (seq guard)
+        p.classList.remove("book-filter-closing");
+        p.style.height = "";
+        p.style.width = "";
+      };
+      p.addEventListener("animationend", done, { once: true });
+      _bookSheetCloseTimer = setTimeout(done, 350);
+    },
   });
   window.appOverlay.attachSheetDrag(handle, panel, { onClose: () => overlay.close() });
+  window.appOverlay.attachSheetResize(resize, panel);
+  closeBtn.addEventListener("click", () => overlay.close());
 
   resetBtn.addEventListener("click", () => {
     working.clear();
@@ -801,7 +848,7 @@ async function openBookFilterSheet(returnFocusEl) {
   // Reset any inline height left by a prior mobile drag-resize / snap-min so each
   // open starts from the CSS default (ADR-032 cite-sheet reset pattern).
   const panel = document.getElementById("book-filter-sheet");
-  if (panel) panel.style.height = "";
+  if (panel) { panel.style.height = ""; panel.style.width = ""; }
   sheet.working.clear();
   for (const id of currentSearchState().filterBooks) sheet.working.add(id);
   renderBookFilterList(sheet.body, books, sheet.working);

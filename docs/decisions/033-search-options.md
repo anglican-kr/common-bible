@@ -80,6 +80,23 @@ Apple HIG의 검색 패턴(필터/스코프 바 · 토큰 대신 칩 · recents 
 > 때 본 ADR 을 출발점으로 삼는다. 유닛 683 통과·tsc 0·브라우저 스모크(좁히기 UI 부재 ·
 > plain/`in:` 검색 · 레거시 `and=` graceful 무시) 확인.
 
+> **개정 (2026-06-11) — 책 선택 시트를 데스크탑에서 우측 사이드 패널로:** 위 §구현 노트의
+> "책 선택 시트(`#book-filter-sheet`) — 모바일 바텀 시트 / **데스크탑 중앙 모달**" 중 데스크탑
+> 표현을 **우측 슬라이드-인 사이드 패널**로 바꾼다(사용자 요청). 북마크 드로어(`#bookmark-drawer`)·
+> 인용 시트(`#cite-sheet`)와 동일한 데스크탑 패턴(우측 정착·`bm-drawer-in-right`/`out-right`
+> 슬라이드·`--shadow-drawer`·좌상단/좌하단만 둥근 모서리·좌측 가장자리 폭-리사이즈 그립)으로
+> 통일해 세 패널의 디자인 일관성을 맞춘다. 더해 헤더에 닫기(×) 버튼(`.book-filter-close`)을 추가하고,
+> `createOverlay` 에 `closeTransition`(`.book-filter-closing`)을 연결해 닫힘에도 슬라이드
+> 애니메이션(모바일 down·데스크탑 right)을 부여 — 직전엔 즉시 사라졌다. `attachSheetResize`
+> 로 좌측 그립을 와이어. 모바일 바텀 시트 동작은 그대로.
+>
+> **개정 (2026-06-11) — 검색 필드 포커스 시 funnel 노출(모든 화면):** funnel(책 선택 진입점)은
+> 검색 뷰에서만 보였는데(`syncOneField` 의 `searchView` 게이트), 검색 입력에 **포커스가 가면
+> 어느 화면에서든** funnel 을 좌측에 노출한다(사용자 요청 — 검색 화면에선 이미 그랬으나 홈·읽기 등
+> 다른 화면의 헤더 검색에선 안 보였음). `SearchField.focused` 플래그를 두고 input 의 focus/blur
+> 에서 토글, `active = allowPill && (searchView || field.focused)` 로 게이트 확장. 검색 뷰가 아니면
+> URL 스코프가 없어 칩 루프는 비고 funnel 만 보인다.
+
 ## 맥락
 
 - ADR-005가 `in:<별칭>` 연산자를 도입했고, ADR-030이 옛 검색 시트(`+ in:` 칩)를 제거하면서 책 범위 지정을 **타이핑으로만** 할 수 있게 됐다. 책 이름·별칭을 외워 입력하는 것은 발견성이 낮다.
