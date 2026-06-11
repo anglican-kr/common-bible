@@ -97,7 +97,11 @@ def test_search_button_morphs_to_input(mobile_context):
     # 모핑 상태 + 하단 입력(모핑 입력 pill)이 보여야 한다.
     page.wait_for_selector("#tab-dock.searching", timeout=5_000)
     page.wait_for_selector("#tab-search-input:not([hidden])", timeout=5_000)
-    page.wait_for_selector("#tab-search[aria-current='page']", timeout=5_000)
+    # In searching mode the search circle morphs into the input pill, so
+    # #tab-search is hidden — assert the state is set (attached), not visible.
+    page.wait_for_selector(
+        "#tab-search[aria-current='page']", state="attached", timeout=5_000
+    )
 
 
 def test_scroll_collapse_and_home_expands_without_nav(mobile_context):

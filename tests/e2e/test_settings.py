@@ -218,8 +218,10 @@ def test_cache_clear_removes_caches(browser):
     """캐시 비우기 버튼 클릭 → clearAllCaches()가 실행되어 심어둔 캐시를 삭제한다.
 
     service_workers="block"으로 SW 간섭을 차단해 캐시 상태를 안정적으로 검증한다.
+    (블록하지 않으면 clearAllCaches 내부의 reg.unregister()가 headless chromium
+    에서 resolve 되지 않아 location.reload()까지 못 가고 테스트가 멈춘다.)
     """
-    ctx = browser.new_context()
+    ctx = browser.new_context(service_workers="block")
     ctx.add_init_script(CLEAR_APP_STORAGE)
     ctx.add_init_script("window.confirm = () => true;")  # bypass clearAllCaches confirm
     page = ctx.new_page()
@@ -232,10 +234,14 @@ def test_cache_clear_removes_caches(browser):
         has_before = page.evaluate("async () => await caches.has('e2e-test')")
         assert has_before, "e2e-test cache should exist before clear"
 
-        # clearAllCaches: confirm → delete all → location.reload()
-        with page.expect_navigation():
-            open_settings(page).get_by_role("button", name="캐시 비우기").click()
-        page.wait_for_selector("#search-input")
+        # clearAllCaches: confirm → delete all → location.reload().
+        # expect_navigation() is racy for in-page reloads; instead drop a window
+        # sentinel and wait for the reload to wipe it (fresh document), then for
+        # the shell to re-render. wait_for_function survives the navigation.
+        page.evaluate("() => { window.__preReload = true; }")
+        open_settings(page).get_by_role("button", name="캐시 비우기").click()
+        page.wait_for_function("() => window.__preReload === undefined")
+        page.wait_for_selector("#search-input", state="attached")
 
         has_after = page.evaluate("async () => await caches.has('e2e-test')")
         assert not has_after, "e2e-test cache should be deleted after reload"

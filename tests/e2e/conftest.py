@@ -56,8 +56,14 @@ def mobile_context(browser):
 
 
 def wait_app_ready(page) -> None:
-    """Block until the SPA shell has rendered at least one child element."""
-    page.wait_for_selector("#search-input")
+    """Block until the SPA shell has rendered at least one child element.
+
+    Wait for ``#search-input`` *attached* (in DOM), not *visible*: on mobile the
+    header ``#breadcrumb-row`` (which contains the search bar) is ``display:none``
+    by design — search lives in the bottom tab dock instead — so the default
+    ``visible`` state never resolves and every mobile test would time out.
+    """
+    page.wait_for_selector("#search-input", state="attached")
     page.wait_for_function(
         "() => !!document.getElementById('app') && "
         "document.getElementById('app').children.length > 0"
