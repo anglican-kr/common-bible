@@ -1715,26 +1715,71 @@ body {
 
 .book-filter-sheet[hidden] { display: none; }
 
-.book-filter-sheet:not([hidden]) {
+.book-filter-sheet:not([hidden]):not(.book-filter-closing) {
   animation: bm-drawer-in-up var(--duration-base) cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
 }
 
-/* Desktop: centered modal card rather than a bottom sheet. */
+/* Animated slide-out (mobile: down) driven by .book-filter-closing, which the
+   overlay controller's closeTransition adds until the animation ends, then hides
+   the panel — mirrors #cite-sheet. */
+.book-filter-sheet.book-filter-closing {
+  animation: bm-drawer-out-down var(--duration-base) ease-in both;
+  pointer-events: none;
+}
+
+/* Desktop: right-side slide-in panel (mirrors #cite-sheet / #bookmark-drawer)
+   rather than a centered modal — keeps the bookmark/cite/filter panels visually
+   consistent. Resize grip on the left edge; slides over the right viewport edge. */
 @media (min-width: 769px) and (pointer: fine) {
   .book-filter-sheet {
-    top: 50%;
-    left: 50%;
-    right: auto;
+    top: 2.5vh;
+    right: 0;
+    left: auto;
     bottom: auto;
-    transform: translate(-50%, -50%);
+    transform: none;
     margin-inline: 0;
-    width: min(420px, 92vw);
+    width: min(420px, 90vw);
     max-width: none;
-    height: auto;
-    max-height: 80vh;
-    border-radius: var(--radius-xl);
+    height: 95vh;
+    max-height: none;
+    border-radius: var(--radius-xl) 0 0 var(--radius-xl);
+    box-shadow: var(--shadow-drawer);
     padding-bottom: 0;
-    animation: none;
+  }
+
+  .book-filter-sheet:not([hidden]):not(.book-filter-closing) { animation-name: bm-drawer-in-right; }
+  .book-filter-sheet.book-filter-closing { animation-name: bm-drawer-out-right; }
+}
+
+/* Left-edge resize handle (desktop only) mirrors #cite-sheet-resize. */
+.book-filter-resize { display: none; }
+
+@media (min-width: 769px) and (pointer: fine) {
+  .book-filter-resize {
+    display: flex;
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: calc(0.22rem + 0.5rem * 2);
+    cursor: ew-resize;
+    align-items: center;
+    justify-content: center;
+    touch-action: none;
+    z-index: 1;
+  }
+
+  .book-filter-resize::after {
+    content: '';
+    width: 0.22rem;
+    height: 2.2rem;
+    background: var(--border);
+    border-radius: 2px;
+    transition: background var(--duration-fast);
+  }
+
+  .book-filter-resize:hover::after {
+    background: var(--accent);
   }
 }
 
@@ -1790,6 +1835,39 @@ body {
 }
 
 .book-filter-reset:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+/* Right-aligned head cluster: 초기화 + close ×. */
+.book-filter-head-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+/* Close (×) — mirrors #bookmark-drawer-close / #cite-sheet-close. */
+.book-filter-close {
+  width: 2rem;
+  height: 2rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: var(--font-xl);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-xs);
+  transition: color var(--duration-fast);
+  padding: 0;
+}
+
+.book-filter-close:hover {
+  color: var(--text);
+}
+
+.book-filter-close:focus-visible {
   outline: none;
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 40%, transparent);
 }
@@ -5258,6 +5336,15 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   #bookmark-drawer-header {
     padding-top: var(--space-4);
   }
+
+  /* Desktop drawer folder rows: trailing button order 수정 → 삭제 → 읽기 (user
+     request). The 읽기 (folder-read) button is built before the edit/delete
+     cluster in the DOM (always-visible vs hover-revealed); reorder visually with
+     flex `order` so the always-on read action sits last, after the hover pair.
+     Scoped to the drawer body so the full /bookmarks view keeps its own column
+     alignment (.bookmarks-view .bm-folder-read-btn). */
+  #bookmark-drawer-body .bm-folder-read-btn { order: 1; }
+  #bookmark-drawer-body .bm-drag-handle { order: 2; }
 }
 
 #bookmark-drawer-handle {
