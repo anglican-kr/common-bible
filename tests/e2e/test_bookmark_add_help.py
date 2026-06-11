@@ -25,17 +25,9 @@ _MENU = ".title-action-menu"
 _BM_ROOT = {"type": "bookmark", "id": "bm-root", "bookId": "gen", "chapter": 1,
             "label": "창세기 1장", "verseSpec": "all"}
 
-# On the iPhone UA the install nudge auto-opens after ~1.5s; its scrim then
-# intercepts taps and races these tests. Pin neverShow so the nudge never fires.
-_PIN_NUDGE = (
-    "localStorage.setItem('bible-install-nudge',"
-    " JSON.stringify({visits: 0, nextShow: 9999, neverShow: true}));"
-)
-
 
 def _seed(mobile_context):
     """Open the mobile /bookmarks full view with one bookmark already saved."""
-    mobile_context.add_init_script(_PIN_NUDGE)
     page = mobile_context.new_page()
     page.goto(f"{BASE}/bookmarks")
     page.wait_for_selector("#bookmarks-view-tree", timeout=5_000)
@@ -46,7 +38,6 @@ def _seed(mobile_context):
 
 def test_info_button_hidden_when_empty(mobile_context):
     """빈 목록에선 🛈 가 숨는다 — 빈 상태 안내가 이미 추가 방법을 보여주므로 중복."""
-    mobile_context.add_init_script(_PIN_NUDGE)
     page = mobile_context.new_page()
     page.goto(f"{BASE}/bookmarks")
     page.wait_for_selector("#bookmarks-view-tree", timeout=5_000)

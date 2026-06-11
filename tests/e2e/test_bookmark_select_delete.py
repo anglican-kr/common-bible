@@ -15,12 +15,7 @@ from .conftest import CLEAR_APP_STORAGE, MOBILE_VIEWPORT, IPHONE_UA
 BASE = "http://localhost:8080"
 
 # The full /bookmarks view (renderBookmarksView → #bookmarks-view-tree) and select
-# mode are mobile only, so these tests need a mobile viewport. On the iPhone UA the
-# install nudge auto-opens after ~1.5s and its scrim intercepts taps; pin neverShow.
-_PIN_NUDGE = (
-    "localStorage.setItem('bible-install-nudge',"
-    " JSON.stringify({visits: 0, nextShow: 9999, neverShow: true}));"
-)
+# mode are mobile only, so these tests need a mobile viewport.
 
 _BM_ROOT = {"type": "bookmark", "id": "bm-root", "bookId": "gen", "chapter": 1,
             "label": "창세기 1장", "verseSpec": "all"}
@@ -61,7 +56,6 @@ def test_enter_select_mode_swaps_chrome(browser):
     """삭제 진입 → body.bm-select-active, 하단 바 노출, 제목줄이 전체 선택 토글로 교체."""
     ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA)
     ctx.add_init_script(CLEAR_APP_STORAGE)
-    ctx.add_init_script(_PIN_NUDGE)
     page = ctx.new_page()
     try:
         _open_bookmarks_view(page)
@@ -85,7 +79,6 @@ def test_select_one_bookmark_and_delete(browser):
     """행을 눌러 선택 → 하단 삭제 → 확인 → 그 북마크만 사라지고 모드 종료."""
     ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA)
     ctx.add_init_script(CLEAR_APP_STORAGE)
-    ctx.add_init_script(_PIN_NUDGE)
     page = ctx.new_page()
     try:
         _open_bookmarks_view(page)
@@ -115,7 +108,6 @@ def test_folder_tick_cascades_and_deletes_subtree(browser):
     """폴더를 누르면 안의 북마크가 covered 로 표시되고, 삭제 시 함께 사라진다."""
     ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA)
     ctx.add_init_script(CLEAR_APP_STORAGE)
-    ctx.add_init_script(_PIN_NUDGE)
     page = ctx.new_page()
     try:
         _open_bookmarks_view(page)
@@ -146,7 +138,6 @@ def test_select_all_then_delete_empties(browser):
     """전체 선택 토글 → 모든 행 표시 → 삭제하면 목록이 빈다."""
     ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA)
     ctx.add_init_script(CLEAR_APP_STORAGE)
-    ctx.add_init_script(_PIN_NUDGE)
     page = ctx.new_page()
     try:
         _open_bookmarks_view(page)
@@ -173,7 +164,6 @@ def test_cancel_exits_without_deleting(browser):
     """취소(✕) 는 선택을 버리고 모드를 빠져나오며 아무것도 지우지 않는다."""
     ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA)
     ctx.add_init_script(CLEAR_APP_STORAGE)
-    ctx.add_init_script(_PIN_NUDGE)
     page = ctx.new_page()
     try:
         _open_bookmarks_view(page)
@@ -197,7 +187,6 @@ def test_confirm_cancel_keeps_store_and_stays_in_mode(browser):
     """확인 알림에서 취소하면 삭제되지 않고 선택 모드는 유지된다."""
     ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA)
     ctx.add_init_script(CLEAR_APP_STORAGE)
-    ctx.add_init_script(_PIN_NUDGE)
     page = ctx.new_page()
     try:
         _open_bookmarks_view(page)
@@ -222,7 +211,6 @@ def test_select_item_disabled_when_empty(browser):
     """목록이 비어 있으면 ⋯ 메뉴의 선택 항목이 비활성된다."""
     ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA)
     ctx.add_init_script(CLEAR_APP_STORAGE)
-    ctx.add_init_script(_PIN_NUDGE)
     page = ctx.new_page()
     try:
         _open_bookmarks_view(page)
@@ -238,7 +226,6 @@ def test_share_invokes_native_share_with_links(browser):
     """공유 → navigator.share 가 bible.anglican.kr 링크 payload 로 호출된다."""
     ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA)
     ctx.add_init_script(CLEAR_APP_STORAGE)
-    ctx.add_init_script(_PIN_NUDGE)
     # Stub navigator.share to capture the payload (headless has no share sheet).
     ctx.add_init_script(
         "navigator.share = (data) => { window.__shared = data; return Promise.resolve(); };"
@@ -265,7 +252,6 @@ def test_move_into_folder(browser):
     """이동 → 폴더 목록 모달에서 폴더를 탭하면 선택 항목이 그 폴더로 이동한다."""
     ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA)
     ctx.add_init_script(CLEAR_APP_STORAGE)
-    ctx.add_init_script(_PIN_NUDGE)
     page = ctx.new_page()
     try:
         _open_bookmarks_view(page)
@@ -301,7 +287,6 @@ def test_move_folder_into_folder(browser):
     """
     ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA)
     ctx.add_init_script(CLEAR_APP_STORAGE)
-    ctx.add_init_script(_PIN_NUDGE)
     page = ctx.new_page()
     errors = []
     page.on("pageerror", lambda e: errors.append(str(e)))
@@ -341,7 +326,6 @@ def test_move_new_folder_with_parent(browser):
     """이동 → 새 폴더: 상위 폴더(대림시기)를 지정해 만든 폴더로 선택 항목이 이동한다."""
     ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA)
     ctx.add_init_script(CLEAR_APP_STORAGE)
-    ctx.add_init_script(_PIN_NUDGE)
     page = ctx.new_page()
     try:
         _open_bookmarks_view(page)
@@ -381,7 +365,6 @@ def test_move_new_folder_excludes_selected_parent(browser):
     """
     ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA)
     ctx.add_init_script(CLEAR_APP_STORAGE)
-    ctx.add_init_script(_PIN_NUDGE)
     page = ctx.new_page()
     try:
         _open_bookmarks_view(page)

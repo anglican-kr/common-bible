@@ -11,11 +11,6 @@ BASE = "http://localhost:8080"
 
 _MORE_BTN = ".title-action-btn[aria-label='더 보기']"
 
-# On the iPhone UA the install nudge auto-opens after ~1.5s; pin neverShow.
-_PIN_NUDGE = (
-    "localStorage.setItem('bible-install-nudge',"
-    " JSON.stringify({visits: 0, nextShow: 9999, neverShow: true}));"
-)
 
 # Two root bookmarks whose insertion ("manual") order is the REVERSE of their
 # title (가나다) order, so a sort change visibly flips the first row.
@@ -29,7 +24,6 @@ _STORE = [
 
 
 def _seed(mobile_context):
-    mobile_context.add_init_script(_PIN_NUDGE)
     page = mobile_context.new_page()
     page.goto(f"{BASE}/bookmarks")
     page.wait_for_selector("#bookmarks-view-tree", timeout=5_000)

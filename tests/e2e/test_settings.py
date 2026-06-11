@@ -70,8 +70,14 @@ def test_book_order_vulgate(browser):
         # 기본값은 canonical(OFF); 켜면 vulgate.
         assert sw.is_checked() is False
         sw.click()
-        page.wait_for_timeout(100)
-        assert _ls(page, "bible-book-order") == "vulgate"
+        # 책 순서 변경은 목록 뷰를 다시 그린다(route()) → 설정 팝오버가 닫힌다.
+        # 따라서 토글 직후 같은 스위치를 다시 보지 말고, 영속값을 확인한 뒤
+        # 설정을 다시 열어 반영 상태(체크 + 캡션)를 검증한다.
+        page.wait_for_function(
+            "() => localStorage.getItem('bible-book-order') === 'vulgate'"
+        )
+        pop = open_settings(page)
+        sw = pop.get_by_role("switch", name="외경")
         assert sw.is_checked() is True
         assert pop.locator(".settings-toggle-caption").first.inner_text() == "구약에 포함"
     finally:
@@ -86,11 +92,17 @@ def test_book_order_canonical(browser):
     try:
         _open(page)
         pop = open_settings(page)
+        pop.get_by_role("switch", name="외경").click()  # → vulgate (route() 로 팝오버 닫힘)
+        page.wait_for_function(
+            "() => localStorage.getItem('bible-book-order') === 'vulgate'"
+        )
+        pop = open_settings(page)
+        pop.get_by_role("switch", name="외경").click()  # → canonical (다시 팝오버 닫힘)
+        page.wait_for_function(
+            "() => localStorage.getItem('bible-book-order') === 'canonical'"
+        )
+        pop = open_settings(page)
         sw = pop.get_by_role("switch", name="외경")
-        sw.click()  # → vulgate
-        sw.click()  # → canonical
-        page.wait_for_timeout(100)
-        assert _ls(page, "bible-book-order") == "canonical"
         assert sw.is_checked() is False
         assert pop.locator(".settings-toggle-caption").first.inner_text() == "별도 섹션에 표시"
     finally:
@@ -218,8 +230,10 @@ def test_cache_clear_removes_caches(browser):
     """캐시 비우기 버튼 클릭 → clearAllCaches()가 실행되어 심어둔 캐시를 삭제한다.
 
     service_workers="block"으로 SW 간섭을 차단해 캐시 상태를 안정적으로 검증한다.
+    (블록하지 않으면 clearAllCaches 내부의 reg.unregister()가 headless chromium
+    에서 resolve 되지 않아 location.reload()까지 못 가고 테스트가 멈춘다.)
     """
-    ctx = browser.new_context()
+    ctx = browser.new_context(service_workers="block")
     ctx.add_init_script(CLEAR_APP_STORAGE)
     ctx.add_init_script("window.confirm = () => true;")  # bypass clearAllCaches confirm
     page = ctx.new_page()
@@ -232,10 +246,14 @@ def test_cache_clear_removes_caches(browser):
         has_before = page.evaluate("async () => await caches.has('e2e-test')")
         assert has_before, "e2e-test cache should exist before clear"
 
-        # clearAllCaches: confirm → delete all → location.reload()
-        with page.expect_navigation():
-            open_settings(page).get_by_role("button", name="캐시 비우기").click()
-        page.wait_for_selector("#search-input")
+        # clearAllCaches: confirm → delete all → location.reload().
+        # expect_navigation() is racy for in-page reloads; instead drop a window
+        # sentinel and wait for the reload to wipe it (fresh document), then for
+        # the shell to re-render. wait_for_function survives the navigation.
+        page.evaluate("() => { window.__preReload = true; }")
+        open_settings(page).get_by_role("button", name="캐시 비우기").click()
+        page.wait_for_function("() => window.__preReload === undefined")
+        page.wait_for_selector("#search-input", state="attached")
 
         has_after = page.evaluate("async () => await caches.has('e2e-test')")
         assert not has_after, "e2e-test cache should be deleted after reload"
