@@ -197,3 +197,71 @@ def test_mobile_header_bookmark_when_absent_opens_save_modal(browser):
         assert page.locator("#bm-confirm-modal").is_hidden()
     finally:
         ctx.close()
+
+
+def test_drawer_bookmark_link_navigates_and_closes_drawer(browser):
+    """드로어에서 북마크 행을 누르면 그 장으로 이동하고 드로어가 닫힌다.
+
+    회귀 가드: tree.js 의 링크 클릭 핸들러가 주입된 closeBookmarkDrawer() + navigate()
+    + markBookmarkViewed/_bookmarkHref(core) 를 부르는 모듈 간 경로. 다른 e2e 는 링크의
+    *존재*만 확인하고 클릭→내비를 구동하지 않는다.
+    """
+    ctx = browser.new_context()
+    page = ctx.new_page()
+    page.add_init_script("localStorage.removeItem('bible-bookmarks');")
+    _open_chapter_and_wait(page, "gen/2")
+    # Seed a gen/1 whole-chapter bookmark (so the drawer lists it).
+    page.evaluate(
+        "() => window.syncStoreV2.saveBookmarks(["
+        "{type:'bookmark', id:'b1', bookId:'gen', chapter:1, label:'창세기 1장', verseSpec:'all'}"
+        "])"
+    )
+    page.locator(".title-bookmark-btn").click()
+    page.wait_for_selector("#bookmark-drawer:not([hidden])")
+
+    page.locator(".bm-bookmark-link", has_text="창세기 1장").click()
+
+    # Navigated to gen/1 and the drawer dismissed (the injected closeBookmarkDrawer).
+    page.wait_for_url("**/gen/1")
+    assert page.url.rstrip("/").endswith("/gen/1")
+    page.wait_for_selector("#bookmark-drawer[hidden]")
+    ctx.close()
+
+
+def test_drawer_tree_keyboard_navigation(browser):
+    """드로어 트리: ArrowRight 로 폴더 펼침, ArrowDown 으로 다음 treeitem 포커스 이동.
+
+    tree.js 의 드로어 body keydown 핸들러(roving tabindex)를 검증한다 — 어떤 e2e 도
+    트리 키보드 내비를 다루지 않았다. (펼침은 클릭이 아닌 _toggleFolder 직접 호출이라
+    headless 포인터 이슈와 무관하다.)
+    """
+    ctx = browser.new_context()
+    page = ctx.new_page()
+    page.add_init_script("localStorage.removeItem('bible-bookmarks');")
+    _open_chapter_and_wait(page, "gen/1")
+    # A collapsed folder (folders sort first) holding one child + a root bookmark.
+    page.evaluate(
+        "() => window.syncStoreV2.saveBookmarks(["
+        "{type:'folder', id:'f1', name:'폴더', expanded:false, children:["
+        "  {type:'bookmark', id:'c1', bookId:'exo', chapter:3, label:'자식', verseSpec:'all'}]},"
+        "{type:'bookmark', id:'b1', bookId:'gen', chapter:1, label:'뿌리', verseSpec:'all'}"
+        "])"
+    )
+    page.locator(".title-bookmark-btn").click()
+    page.wait_for_selector("#bookmark-drawer:not([hidden])")
+
+    folder = page.locator("li.bm-folder[data-id='f1']")
+    assert folder.get_attribute("aria-expanded") == "false"
+
+    # Focus the folder treeitem, then ArrowRight expands it.
+    folder.evaluate("el => el.focus()")
+    page.keyboard.press("ArrowRight")
+    assert folder.get_attribute("aria-expanded") == "true"
+
+    # ArrowDown moves the roving focus to the next visible treeitem (the child).
+    page.keyboard.press("ArrowDown")
+    focused_id = page.evaluate(
+        "() => document.activeElement?.closest('[role=treeitem]')?.dataset.id"
+    )
+    assert focused_id == "c1"
+    ctx.close()
