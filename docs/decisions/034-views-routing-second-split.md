@@ -157,3 +157,19 @@ bookmark.js는 별도 후속 라운드(순수 로직 `bookmark-core.js` / UI `bo
 **테스트 하네스.** BOOKMARK_SELECT 마커가 새 파일로 이동 — `bookmark.test.js` 로더가 `BOOKMARK_SELECT_SOURCE`에서 슬라이스. 표준 검증 묶음(tsc main·worker·유닛 728·로드 스모크·e2e: select-delete 전체+dnd+swipe 26) 통과. (사전 실패: `test_bookmark_folders.py` 폴더 토글 2건 — base 동일, headless 포인터 계열.)
 
 **남은 라운드:** 절 선택 모드(`bookmark-verse-select.js`) → 트리 렌더링·⋯ 메뉴. `_isDescendant`를 본래 자리 bookmark-core로 옮기는 정리도 그때 함께.
+
+## 개정 (2026-06-11): bookmark-verse-select.js 분할
+
+읽기 화면의 절 선택 모드(절 탭 → 하이라이트 → 북마크/복사)를 분리한다. 앞 두 라운드와 달리 **오케스트레이터를 되부르지 않는 near-leaf**라 가장 단순하다.
+
+**결과 (1,652 → bookmark.js 1,546줄, −6%):**
+
+| 파일 | 역할 | 라인 |
+|---|---|---|
+| `js/app/bookmark-verse-select.js` | 절 선택 모드 — enter/exit · `#verse-select-bar` dock(spec 표시·북마크·복사) · 인접 선택 코너 병합(`updateVerseSelectionBoundaries`) · 인용 포함 복사(`copySelectedVerses`) + dock 리스너 | 144 |
+
+**핵심 — DI 없음.** 5개 함수 어느 것도 bookmark 트리/오케스트레이터를 호출하지 않는다(절 선택은 읽기 화면 DOM + `readingContext`만 다룸). 의존은 전부 하향: verse-spec(spec build/serialize, import) · bookmark-modals(`openSaveModal("verses")`, import) · `window.{readingContext, getBooksCache, _showSyncSnackbar, announce}`. 따라서 주입 훅 없이 export만으로 충분 — bookmark.js는 enter/exit + bar/boundary updater 4개를 import해 드로어 버튼·keydown·모달 주입(`initBookmarkModals({ exitVerseSelectMode })`)·window 파사드에 연결.
+
+**테스트 하네스.** 마커 블록 없음(절 선택은 DOM 바운드라 유닛 슬라이스 대상이 아니었음) → `bookmark.test.js` 무변경. 표준 검증(tsc main·worker·유닛 728·로드 스모크·e2e: copy·features·a11y-keyboard·bookmark 23) 통과.
+
+**남은 라운드:** 트리 렌더링·⋯ 메뉴(가장 큰 덩어리, 상태·제스처 강결합). 분리 후 bookmark.js는 드로어/헤더 오케스트레이터로 수렴. `_isDescendant`→bookmark-core 정리도 그때.
