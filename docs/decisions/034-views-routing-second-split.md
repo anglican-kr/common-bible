@@ -1,7 +1,7 @@
 # ADR-034: 뷰·라우팅·북마크 2차 분할 (modularization round 2)
 
 - 일시: 2026-06-08
-- 상태: 승인됨 — views-routing 분할 PR1~5b 완료·PR5c 보류 / **bookmark.js 분할 PR5a~5e + 죽은 코드 정리 완료** (2026-06-08, 아래 개정 참조)
+- 상태: 승인됨 — views-routing 분할 PR1~5b 완료·PR5c 보류 / **bookmark.js 분할 완료: 모달·core·verse-spec·read(2026-06-08) → gestures·select·verse-select·menu·tree(2026-06-11), 2,432→590줄(−76%)** (아래 개정들 참조)
 - 관련: ADR-018(1차 분할), ADR-019(ESM), ADR-032(오버레이 컨트롤러), ADR-016(오디오 캐시), ADR-013(유닛 테스트 하네스)
 
 ## 결정
@@ -193,3 +193,21 @@ bookmark.js는 별도 후속 라운드(순수 로직 `bookmark-core.js` / UI `bo
 **테스트.** 마커 블록 없어 `bookmark.test.js` 무변경. 검증 tsc(main·worker)·유닛 728·로드 스모크(⋯·🛈 렌더)·e2e(select-delete ⋯ 진입 + add-help 🛈 + export-import + bookmark + folders, 사전 실패 2건 제외 전부) 통과.
 
 **남은 라운드 (2/2):** 트리 렌더링(`bookmark-tree.js`) — 빌더 + `renderBookmarkTree`/`_rerenderActiveBookmarkTree`(주입 허브) + 키보드 내비. 분리 후 bookmark.js는 드로어/헤더 오케스트레이터로 수렴. `_isDescendant`→core 정리도 그때.
+
+## 개정 (2026-06-11): bookmark-tree.js 분할 (마지막 라운드 2/2) — 분할 완료
+
+마지막 덩어리, 가장 깊은 결합. 트리 렌더링 일체를 분리해 bookmark.js를 드로어/헤더 오케스트레이터로 수렴시킨다.
+
+**결과 (1,145 → bookmark.js 590줄, −48%). 전체 분할 누계: 2,432 → 590줄 (−76%).**
+
+| 파일 | 역할 | 라인 |
+|---|---|---|
+| `js/app/bookmark-tree.js` | per-row 빌더(bookmark/folder item·swipe action·drag handle·select circle·folder read btn·empty state) + `renderBookmarkTree`(드로어 body OR #bookmarks-view-tree) + `_rerenderActiveBookmarkTree`(재렌더 허브) + `renderBookmarksView` + 드로어 body 키보드 내비(roving tabindex·arrow·Enter) + swipe-outside pointerdown | 628 |
+
+**핵심 — 역방향 3개만 주입, 나머지 전부 하향 import.** 트리 렌더러가 오케스트레이터에서 필요로 하는 건 `closeBookmarkDrawer`(링크/폴더읽기 탭 시 드로어 닫기)·`refreshBookmarkHeaderBtn`(읽기 헤더 갱신)·`_setBookmarkBtnIcon`(빈 상태 glyph, 헤더 버튼과 공유) 3개뿐 → `initBookmarkTree()`로 주입. **주입 훅을 빌더가 부르는 원래 이름 그대로 `let`으로 선언**해 추출 본문은 한 줄도 안 고침. `$bookmarkDrawerBody`(렌더 타깃+내비 루트)는 트리 전용이라 tree가 소유. `_rerenderActiveBookmarkTree`가 tree로 가면서 gesture/select/menu의 `rerenderTree` 주입은 bookmark.js가 import해 그대로 전달(여전히 순환이라 주입 유지).
+
+**정리.** 트리가 가져가며 무참조가 된 bookmark.js의 import 대거 제거: bookmark-core는 `findExistingChapterBookmarks` 하나만 남김(나머지 13종) + select `_toggleBmSelect`/`_syncBmSelectChrome` + menu `buildBmViewActions` + appHelpers `clearNode`/`chUnit`/`emptyState`.
+
+**검증서 배운 것 (중요).** 처음 tree.js에서 **import 8개를 통째로 누락**(`setRenderPathname`·`saveBookmarks`·`openSaveModal`·`openConfirmModal`·core 4종)했는데 **tsc·worker tsc 모두 통과** — checkJs가 미선언 식별자를 전역으로 묵인하는 사각지대(ADR-019 계열). **로드 스모크가 렌더 경로(`setRenderPathname`)를, 상호작용 e2e가 모달 경로(`openSaveModal` 등)를** 잡는다. 대상 모듈의 _전체_ export를 본문에 일괄 grep해 import을 도출해야 함. → `docs/known-issues.md` 추적, [[project_export_tsc_blindspot]].
+
+**테스트.** 마커 블록 없어 `bookmark.test.js` 무변경. 검증 tsc(main·worker)·유닛 728·로드 스모크(드로어+풀뷰 트리 렌더)·e2e 78통과(bookmark·edit·swipe·dnd·select-delete·add-help·export-import·copy + folders, 사전 실패 2건 제외). `_isDescendant`→core 정리는 향후 백로그로 남김.
