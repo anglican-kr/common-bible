@@ -6,14 +6,6 @@ from .conftest import CLEAR_APP_STORAGE, MOBILE_VIEWPORT, IPHONE_UA
 
 BASE = "http://localhost:8080"
 
-# On the iPhone UA the install nudge auto-opens after ~1.5s; its scrim then
-# intercepts header taps and races these tests. Pin neverShow so the nudge
-# stays down. CLEAR_APP_STORAGE removes the key, so this must run after it.
-SUPPRESS_INSTALL_NUDGE = (
-    "localStorage.setItem('bible-install-nudge',"
-    " JSON.stringify({visits: 0, nextShow: 9999, neverShow: true}));"
-)
-
 
 def _open_chapter_and_wait(page, path: str) -> None:
     page.goto(f"{BASE}/{path}")
@@ -188,7 +180,6 @@ def test_mobile_header_bookmark_when_absent_opens_save_modal(browser):
     """모바일: 북마크가 없는 장에서는 헤더 아이콘이 저장 모달을 연다(토글 add)."""
     ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA)
     ctx.add_init_script(CLEAR_APP_STORAGE)
-    ctx.add_init_script(SUPPRESS_INSTALL_NUDGE)
     page = ctx.new_page()
     try:
         _open_chapter_and_wait(page, "gen/1")

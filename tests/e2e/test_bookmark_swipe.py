@@ -20,12 +20,6 @@ _BM_A = {"type": "bookmark", "id": "bm-a", "bookId": "gen", "chapter": 1,
 _BM_B = {"type": "bookmark", "id": "bm-b", "bookId": "john", "chapter": 3,
           "label": "요한 3장", "verseSpec": "all"}
 
-# iPhone UA auto-opens the install nudge ~1.5s in; its scrim then intercepts taps
-# in the longer (click-through) tests. Pin neverShow so it never fires.
-_PIN_NUDGE = (
-    "localStorage.setItem('bible-install-nudge',"
-    " JSON.stringify({visits: 0, nextShow: 9999, neverShow: true}));"
-)
 
 _SWIPE_JS = """(args) => {
     const rows = document.querySelectorAll('li.bm-bookmark .bm-bookmark-row');
@@ -106,7 +100,6 @@ def test_swipe_left_reveals_delete(browser):
     오른쪽(leading) = 수정(좌측 가장자리)."""
     ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA)
     ctx.add_init_script(CLEAR_APP_STORAGE)
-    ctx.add_init_script(_PIN_NUDGE)
     page = ctx.new_page()
     try:
         _open_drawer(page, [_BM_A])
@@ -121,7 +114,6 @@ def test_swipe_right_reveals_edit(browser):
     """오른쪽으로 스와이프하면 수정 액션이 노출된다 (leading edge)."""
     ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA)
     ctx.add_init_script(CLEAR_APP_STORAGE)
-    ctx.add_init_script(_PIN_NUDGE)
     page = ctx.new_page()
     try:
         _open_drawer(page, [_BM_A])
@@ -136,7 +128,6 @@ def test_swipe_other_row_closes_previous(browser):
     """두 번째 행을 스와이프하면 첫 번째 행의 액션이 자동으로 닫힌다."""
     ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA)
     ctx.add_init_script(CLEAR_APP_STORAGE)
-    ctx.add_init_script(_PIN_NUDGE)
     page = ctx.new_page()
     try:
         _open_drawer(page, [_BM_A, _BM_B])
@@ -153,7 +144,6 @@ def test_longpress_starts_drag(browser):
     """500ms 이상 롱프레스하면 드래그-재정렬 모드가 시작된다 (액션 패널이 아님)."""
     ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA)
     ctx.add_init_script(CLEAR_APP_STORAGE)
-    ctx.add_init_script(_PIN_NUDGE)
     page = ctx.new_page()
     try:
         _open_drawer(page, [_BM_A])
@@ -174,7 +164,6 @@ def test_short_press_does_not_start_drag(browser):
     """짧은 press(<500ms)는 드래그를 시작하지 않고 액션 패널도 열리지 않는다."""
     ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA)
     ctx.add_init_script(CLEAR_APP_STORAGE)
-    ctx.add_init_script(_PIN_NUDGE)
     page = ctx.new_page()
     try:
         _open_drawer(page, [_BM_A])
@@ -190,7 +179,6 @@ def test_swipe_no_effect_on_desktop(browser):
     """데스크톱 viewport(>768px)에서는 canSwipe=false이므로 스와이프가 동작하지 않는다."""
     ctx = browser.new_context(viewport={"width": 1280, "height": 800})
     ctx.add_init_script(CLEAR_APP_STORAGE)
-    ctx.add_init_script(_PIN_NUDGE)
     page = ctx.new_page()
     try:
         _open_drawer(page, [_BM_A])
@@ -209,7 +197,6 @@ def test_delete_via_swipe(browser):
     수정 회귀."""
     ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA)
     ctx.add_init_script(CLEAR_APP_STORAGE)
-    ctx.add_init_script(_PIN_NUDGE)
     page = ctx.new_page()
     try:
         _open_drawer(page, [_BM_A])
@@ -242,7 +229,6 @@ def test_cancel_delete_confirm_closes_swipe(browser):
     즉시 닫는다."""
     ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA)
     ctx.add_init_script(CLEAR_APP_STORAGE)
-    ctx.add_init_script(_PIN_NUDGE)
     page = ctx.new_page()
     try:
         _open_drawer(page, [_BM_A])
