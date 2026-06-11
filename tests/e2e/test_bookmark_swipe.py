@@ -64,6 +64,35 @@ _LONGPRESS_UP_JS = """() => {
     }));
 }"""
 
+# Drag started from the ≡ reorder handle: the sole drag entry (ADR-010 개정
+# 2026-06-11). Presses the handle and drags downward past the slop threshold;
+# leaves the pointer down so the caller can assert drag mode, then releases.
+_HANDLE_DRAG_DOWN_JS = """(idx) => {
+    const handles = document.querySelectorAll('li.bm-bookmark .bm-drag-handle');
+    const handle = handles[idx] || handles[0];
+    if (!handle) return false;
+    const rect = handle.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const mk = (ex, ey) => ({
+        clientX: ex, clientY: ey, pointerId: 1, buttons: 1,
+        bubbles: true, cancelable: true, pointerType: 'touch', isPrimary: true,
+    });
+    handle.dispatchEvent(new PointerEvent('pointerdown', mk(cx, cy)));
+    const dy = 60, steps = 8;
+    for (let i = 1; i <= steps; i++) {
+        document.dispatchEvent(new PointerEvent('pointermove', mk(cx, cy + dy * i / steps)));
+    }
+    return true;
+}"""
+
+_HANDLE_DRAG_UP_JS = """() => {
+    document.dispatchEvent(new PointerEvent('pointerup', {
+        clientX: 0, clientY: 0, pointerId: 1,
+        bubbles: true, cancelable: true, pointerType: 'touch', isPrimary: true,
+    }));
+}"""
+
 
 def _open_drawer(page, bookmarks):
     """Gen 1 로드 → syncStoreV2로 북마크 주입 → 드로어 열기.
@@ -140,22 +169,42 @@ def test_swipe_other_row_closes_previous(browser):
         ctx.close()
 
 
-def test_longpress_starts_drag(browser):
-    """500ms 이상 롱프레스하면 드래그-재정렬 모드가 시작된다 (액션 패널이 아님)."""
+def test_longpress_does_not_start_drag(browser):
+    """롱프레스(행 본문)는 더 이상 드래그를 시작하지 않는다 — 재정렬은 ≡ 핸들
+    전용(ADR-010 개정 2026-06-11). 액션 패널도 열리지 않는다(스와이프는 수평 전용)."""
     ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA)
     ctx.add_init_script(CLEAR_APP_STORAGE)
     page = ctx.new_page()
     try:
         _open_drawer(page, [_BM_A])
         page.evaluate(_LONGPRESS_DOWN_JS, 0)
-        page.wait_for_timeout(600)
-        # bm-dragging class on the li indicates drag mode entered.
-        page.wait_for_selector("li.bm-bookmark.bm-dragging", timeout=2_000)
-        # Drag ghost element should exist on body.
-        assert page.locator(".bm-drag-ghost").count() > 0
-        # Action panel must NOT be revealed by long-press anymore.
+        page.wait_for_timeout(700)  # well past the old 500ms long-press window
+        # No drag mode entered: neither the dragging class nor the ghost appears.
+        assert page.locator("li.bm-bookmark.bm-dragging").count() == 0
+        assert page.locator(".bm-drag-ghost").count() == 0
         assert page.locator(_SWIPED_SEL).count() == 0
         page.evaluate(_LONGPRESS_UP_JS)
+    finally:
+        ctx.close()
+
+
+def test_handle_drag_starts_reorder(browser):
+    """≡ 핸들에서 시작한 드래그는 즉시 재정렬 모드로 진입한다 (롱프레스 없이)."""
+    ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA)
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    page = ctx.new_page()
+    try:
+        _open_drawer(page, [_BM_A, _BM_B])
+        # Manual sort renders the ≡ handle (.bm-sortable). It's the default, but
+        # set it explicitly so the test doesn't depend on the stored preference.
+        page.evaluate("() => window.setBookmarkSort && window.setBookmarkSort('manual')")
+        page.evaluate("() => renderBookmarkTree()")
+        page.wait_for_selector("li.bm-bookmark .bm-drag-handle")
+        page.evaluate(_HANDLE_DRAG_DOWN_JS, 0)
+        # Drag mode enters immediately on movement — no long-press wait.
+        page.wait_for_selector("li.bm-bookmark.bm-dragging", timeout=2_000)
+        assert page.locator(".bm-drag-ghost").count() > 0
+        page.evaluate(_HANDLE_DRAG_UP_JS)
     finally:
         ctx.close()
 
