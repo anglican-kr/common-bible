@@ -5,8 +5,10 @@
 // interaction layer for the bookmark tree: drag-to-reorder (DRAG_CORE + drag
 // indicators), mobile swipe-to-reveal-actions state (SWIPED_ROW), the pure
 // swipe-release math (SWIPE_GESTURE), and the unified pointer handler
-// (_setupDragHandle) that classifies a touch into drag / swipe / scroll and
-// drives them. bookmark.js (drawer/tree UI) imports the public surface via ESM.
+// (_setupDragHandle). Drag-to-reorder is initiated ONLY from the ≡ handle
+// (ADR-010 개정 2026-06-11); the handler otherwise classifies a touch into
+// swipe / scroll and cedes the row body. bookmark.js (drawer/tree UI) imports
+// the public surface via ESM.
 //
 // The handler reaches back into the orchestrator for two runtime hooks, injected
 // once via initBookmarkGestures() so this leaf never imports bookmark.js back (the
@@ -121,14 +123,13 @@ function _updateDragIndicators(clientX, clientY) {
 // cross-module accessors. `_dragState` and the constants are co-located
 // (ADR-010 mobile pattern) but are not part of the swipe state surface.
 
-// Mobile swipe-to-reveal + long-press: tracks the single revealed row so
-// opening a new one auto-closes the previous. Bidirectional (ADR-010 개정
-// 2026-06-06): swiping a row left reveals 수정 on the right edge, swiping right
-// reveals 삭제 on the left edge, and a full swipe executes the action. The
-// opaque .bm-row-content is the slider that exposes the edge-anchored actions.
+// Mobile swipe-to-reveal: tracks the single revealed row so opening a new one
+// auto-closes the previous. Bidirectional (ADR-010 개정 2026-06-06): swiping a
+// row left reveals 수정 on the right edge, swiping right reveals 삭제 on the
+// left edge, and a full swipe executes the action. The opaque .bm-row-content
+// is the slider that exposes the edge-anchored actions.
 // (SWIPE_REVEAL_PX lives in the SWIPE_GESTURE block below with the rest of
 // the gesture-math constants.)
-const LONG_PRESS_MS = 500;
 /** @type {HTMLElement | null} */
 let _swipedRow = null;
 /** @type {DragState | null} */
@@ -291,13 +292,16 @@ function _setupDragHandle(li, row) {
     const isTouch = e.pointerType !== "mouse";
     const contentEl = /** @type {HTMLElement | null} */ (row.querySelector(".bm-row-content"));
     const canSwipe = _isMobileViewport() && isTouch && !!contentEl;
-    // Pointer started on the reorder handle (≡, manual mode only): treat it as a
-    // dedicated grab — start the drag immediately on move (no long-press, no
+    // Pointer started on the reorder handle (≡, manual mode only). This is the
+    // ONLY entry into drag-to-reorder (ADR-010 개정 2026-06-11) — the row body no
+    // longer grabs via long-press (touch) or immediate move (mouse). The handle
+    // is a dedicated grab: start the drag immediately on move (no long-press, no
     // swipe classification), the way iOS's reorder control behaves.
     const onHandle = e.target instanceof Element && !!e.target.closest(".bm-drag-handle");
     // Drag-to-reorder only makes sense under 직접 정렬 (manual); an active
-    // auto-sort would re-sort the drop away. Evaluated per gesture so a sort
-    // change takes effect immediately. Swipe-to-reveal is always available.
+    // auto-sort would re-sort the drop away. The handle is hidden outside manual
+    // mode, but re-checked per gesture so a sort change takes effect immediately.
+    // Swipe-to-reveal is always available.
     const canDrag = getBookmarkSort() === "manual";
     // null until the first significant move classifies the gesture.
     // "drag" → reorder, "swipe" → reveal actions, "abort" → cede to browser scroll
@@ -310,29 +314,12 @@ function _setupDragHandle(li, row) {
     /** @type {"edit" | "delete" | null} */
     const startedDir = row.classList.contains("bm-swiped-edit") ? "edit"
       : row.classList.contains("bm-swiped-delete") ? "delete" : null;
-    const startedSwiped = !!startedDir;
     const baseOffset = startedDir === "edit" ? SWIPE_REVEAL_PX
       : startedDir === "delete" ? -SWIPE_REVEAL_PX : 0;
     const rowWidth = origRect.width;
     // Recent pointer positions for the release-velocity (flick) calculation.
     /** @type {{t: number, x: number}[]} */
     const velocitySamples = [];
-    /** @type {ReturnType<typeof setTimeout> | null} */
-    let longPressTimer = null;
-
-    // Touch devices: long-press without movement enters drag-to-reorder mode
-    // (haptic feedback acts as the visual cue). Action panel reveal is
-    // horizontal-swipe only. Mouse users start dragging immediately on move.
-    if (canDrag && isTouch && !startedSwiped) {
-      longPressTimer = setTimeout(() => {
-        if (mode !== null) return;
-        mode = "drag";
-        _beginDrag();
-        if (navigator.vibrate) {
-          try { navigator.vibrate(10); } catch {}
-        }
-      }, LONG_PRESS_MS);
-    }
 
     function _beginDrag() {
       dragStarted = true;
@@ -340,9 +327,8 @@ function _setupDragHandle(li, row) {
       ghost.className = "bm-drag-ghost";
       ghost.style.width = origRect.width + "px";
       ghost.style.left = origRect.left + "px";
-      // Pin to the source row's position so long-press entry (where no
-      // pointermove has fired yet) doesn't flash the ghost at the document's
-      // default position before the user starts moving.
+      // Pin to the source row's position so the ghost appears in place rather
+      // than flashing at the document's default position on the first frame.
       ghost.style.top = origRect.top + "px";
       // li always renders a row child first (.bm-folder-row or .bm-bookmark-row);
       // the cascade is defensive against partial DOM during transitions.
@@ -354,15 +340,7 @@ function _setupDragHandle(li, row) {
       _dragState = { id: li.dataset.id ?? "", ghost, origLi: li, startY, origTop: origRect.top };
     }
 
-    const clearLongPress = () => {
-      if (longPressTimer) {
-        clearTimeout(longPressTimer);
-        longPressTimer = null;
-      }
-    };
-
     const cleanupPointerHandlers = () => {
-      clearLongPress();
       document.removeEventListener("pointermove", onMove);
       document.removeEventListener("pointerup", finish);
       document.removeEventListener("pointercancel", cancel);
@@ -379,10 +357,10 @@ function _setupDragHandle(li, row) {
 
       if (mode === null) {
         if (Math.hypot(dx, dy) < SWIPE_SLOP_PX) return;
-        clearLongPress();
         if (onHandle && canDrag) {
-          // Dedicated reorder handle → start dragging right away (touch + mouse),
-          // bypassing long-press and swipe classification.
+          // The ≡ handle is the sole drag entry (ADR-010 개정 2026-06-11) →
+          // start dragging right away (touch + mouse), bypassing swipe
+          // classification.
           mode = "drag";
           _beginDrag();
         } else if (canSwipe) {
@@ -404,18 +382,9 @@ function _setupDragHandle(li, row) {
             // gesture meanwhile via pointercancel — that's the scroll path.)
             return;
           }
-        } else if (isTouch) {
-          // Touch + movement before long-press fired on a non-swipe surface →
-          // user is scrolling. Cede to the browser.
-          mode = "abort";
-          cleanupPointerHandlers();
-          return;
-        } else if (canDrag) {
-          // Mouse user → immediate drag-to-reorder on any movement.
-          mode = "drag";
-          _beginDrag();
         } else {
-          // Mouse + auto-sort: no reorder. Cede to scroll/click.
+          // Row body off the handle (touch scroll, mouse drag-select, or a
+          // non-swipe surface) → not a reorder. Cede to scroll/click.
           mode = "abort";
           cleanupPointerHandlers();
           return;
