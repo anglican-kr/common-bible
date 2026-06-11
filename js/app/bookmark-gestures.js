@@ -23,7 +23,7 @@
 
 const { loadBookmarks, saveBookmarks } = window.appStorage;
 
-import { _findItemInStore, getBookmarkSort } from "./bookmark-core.js";
+import { _findItemInStore, getBookmarkSort, _isDescendant } from "./bookmark-core.js";
 
 // ── Dependency injection ──
 // bookmark.js injects these at startup (initBookmarkGestures). Defaults are
@@ -42,12 +42,9 @@ function initBookmarkGestures(deps) {
 // `_findItemInStore` from there) and provides `loadBookmarks` /
 // `saveBookmarks` / `_rerenderTree` stubs in the prelude.
 // ── Drag & drop helpers ──
-
-/** @param {BookmarkTreeFolder} folder @param {string} id */
-function _isDescendant(folder, id) {
-  return (folder.children || []).some((c) =>
-    c.id === id || (c.type === "folder" && _isDescendant(c, id)));
-}
+// (_isDescendant moved to bookmark-core.js as a shared tree predicate, ADR-034 후속;
+// imported above. The DRAG_CORE test loader concatenates BOOKMARK_QUERY first, so
+// moveBookmarkItem's call still resolves in the vm slice.)
 
 /**
  * @param {string} draggedId
@@ -536,6 +533,6 @@ function _setupDragHandle(li, row) {
 
 export {
   initBookmarkGestures,
-  moveBookmarkItem, _setupDragHandle, _isMobileViewport, _isDescendant,
+  moveBookmarkItem, _setupDragHandle, _isMobileViewport,
   closeSwipedRow, resetSwipedRow, closeSwipedRowIfOutside,
 };

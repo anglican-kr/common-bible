@@ -26,6 +26,16 @@ const BOOKMARK_ADD_HELP =
 // to `loadBookmarks` (provided as a stub by the test loader prelude).
 // ── Bookmark query helpers ──
 
+// True when `id` is anywhere inside `folder`'s subtree. A pure tree predicate used
+// by drag-reorder (bookmark-gestures) and select-mode move (bookmark-select) to
+// reject dropping a folder into itself/its descendants. Lives here as core tree
+// logic (was in bookmark-gestures' DRAG_CORE block; moved ADR-034 후속).
+/** @param {BookmarkTreeFolder} folder @param {string} id @returns {boolean} */
+function _isDescendant(folder, id) {
+  return (folder.children || []).some((c) =>
+    c.id === id || (c.type === "folder" && _isDescendant(c, id)));
+}
+
 /**
  * @param {BookmarkTreeNode[]} store
  * @param {(item: BookmarkTreeNode, parent: BookmarkTreeNode[]) => unknown} fn
@@ -387,6 +397,7 @@ export {
   getBookmarkSort, setBookmarkSort, getBookmarkSortDir, setBookmarkSortDir,
   markBookmarkViewed, _forgetViewed,
   sortBookmarkNodes,
+  _isDescendant,
   _walkBookmarks, findExistingChapterBookmarks, _findItemInStore,
   _findParentFolderId, removeItemById, insertItem, collectFolderOptions,
   _selectAllState, _bmSelectCountLabel, _descendantIds,

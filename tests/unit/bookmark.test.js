@@ -13,11 +13,11 @@
 //   - VERSE_SPEC block — verse spec parse / compare / serialize / merge
 //     (+ collapseFullVerseRefs, with a tiny `article.querySelectorAll`
 //     stub so the rendered-spans lookup resolves)
-//   - BOOKMARK_QUERY block — _walkBookmarks / findExistingChapterBookmarks
+//   - BOOKMARK_QUERY block — _isDescendant / _walkBookmarks / findExistingChapterBookmarks
 //     / _findItemInStore / _findParentFolderId / removeItemById / insertItem
 //     / collectFolderOptions. `loadBookmarks` provided as stub.
-//   - DRAG_CORE block (loaded after BOOKMARK_QUERY so `_findItemInStore`
-//     resolves) — _isDescendant / moveBookmarkItem.
+//   - DRAG_CORE block (loaded after BOOKMARK_QUERY so `_findItemInStore` and
+//     `_isDescendant` resolve) — moveBookmarkItem.
 //   - SWIPED_ROW block — closeSwipedRow / _openSwipedRow / resetSwipedRow
 //     / closeSwipedRowIfOutside, with a minimal Element stub.
 //   - BOOKMARK_HREF block — _bookmarkHref (pure URL builder).
@@ -165,6 +165,7 @@ function loadBookmarkQuery(initialStore = []) {
     insertItem: ctx.insertItem,
     collectFolderOptions: ctx.collectFolderOptions,
     _descendantIds: ctx._descendantIds,
+    _isDescendant: ctx._isDescendant,
   };
 }
 
@@ -229,7 +230,6 @@ function loadDragCore() {
     getStore: () => ctx._store,
     saveCalls,
     renderCalls,
-    _isDescendant: ctx._isDescendant,
     moveBookmarkItem: ctx.moveBookmarkItem,
     _findItemInStore: ctx._findItemInStore,
   };
@@ -878,7 +878,7 @@ test('_collectSelectedBookmarks: nothing selected → empty', () => {
 // ── _isDescendant ────────────────────────────────────────────────────────────
 
 test('_isDescendant: direct child detected', () => {
-  const h = loadDragCore();
+  const h = loadBookmarkQuery();
   const folder = {
     type: "folder", id: "f1", name: "F1",
     children: [{ type: "bookmark", id: "child-bm" }],
@@ -887,7 +887,7 @@ test('_isDescendant: direct child detected', () => {
 });
 
 test('_isDescendant: deeply nested descendant detected', () => {
-  const h = loadDragCore();
+  const h = loadBookmarkQuery();
   const folder = {
     type: "folder", id: "f1", name: "F1",
     children: [{
@@ -902,7 +902,7 @@ test('_isDescendant: deeply nested descendant detected', () => {
 });
 
 test('_isDescendant: id not present → false', () => {
-  const h = loadDragCore();
+  const h = loadBookmarkQuery();
   const folder = {
     type: "folder", id: "f1", name: "F1",
     children: [{ type: "bookmark", id: "child-bm" }],
@@ -911,7 +911,7 @@ test('_isDescendant: id not present → false', () => {
 });
 
 test('_isDescendant: empty children → false', () => {
-  const h = loadDragCore();
+  const h = loadBookmarkQuery();
   const folder = { type: "folder", id: "f1", name: "F1", children: [] };
   assert.equal(h._isDescendant(folder, "anything"), false);
 });
