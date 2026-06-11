@@ -77,6 +77,15 @@ import {
   _toggleBmSelect, _bmToggleSelectAll, _syncBmSelectChrome,
 } from "./bookmark-select.js";
 
+// Verse selection mode (in-reading 절 선택 → 북마크/복사) split out to
+// bookmark-verse-select.js (ADR-034 후속). A near-leaf (no orchestrator callback),
+// so this module only imports the entry/exit + bar/boundary updaters it drives from
+// the drawer toolbar, keydown, modal injection, and the window facade.
+import {
+  enterVerseSelectMode, exitVerseSelectMode,
+  updateVerseSelectionBoundaries, updateVerseSelectBar,
+} from "./bookmark-verse-select.js";
+
 
 // ── BEGIN PHASE 6B (UI) ──
 // Bookmark UI: drawer + tree rendering + save/merge/import modals + verse
@@ -162,14 +171,8 @@ $driveDisconnectDelete.addEventListener("click", async () => {
 // $bmImport* modal refs moved to bookmark-modals.js (PR5d).
 // $bmSave* / $bmNewFolder* / $bmMerge* refs moved to bookmark-modals.js (PR5b~5c).
 // $bmConfirm* refs moved to bookmark-modals.js (PR5a).
-const $verseSelectBar = _$("verse-select-bar");
-const $verseSelectCount = _$("verse-select-count");
-const $verseSelectBookmarkBtn = /** @type {HTMLButtonElement} */ (_$("verse-select-bookmark-btn"));
-const $verseSelectCopyBtn = /** @type {HTMLButtonElement} */ (_$("verse-select-copy-btn"));
-// Note action is a placeholder slot (ADR-030) — not yet built. It uses
-// aria-disabled (not `disabled`) so a tap still announces "coming soon".
-const $verseSelectNoteBtn = _$("verse-select-note-btn");
-const $verseSelectCancelBtn = _$("verse-select-cancel-btn");
+// Verse selection mode (#verse-select-bar) + its refs/listeners moved to
+// bookmark-verse-select.js (ADR-034 후속).
 // Bookmark select dock (#bm-select-bar) + its refs/listeners moved to
 // bookmark-select.js (ADR-034 후속).
 // Move-to-folder modal (선택 모드 → 이동).
@@ -1350,109 +1353,6 @@ function exportBookmarks() {
 // 가져오기 calls openImportFilePicker (imported above). exportBookmarks stays
 // below (plain download, no dialog).
 
-// ── Verse selection mode ──
-
-// Flatten the inner corners between adjacent selected verses so a run of
-// consecutive selections renders as a single highlighted block.
-function updateVerseSelectionBoundaries(scope) {
-  const root = scope || document;
-  const verses = [...root.querySelectorAll(".verse[data-vref]")];
-  for (let i = 0; i < verses.length; i++) {
-    const v = verses[i];
-    const sel = v.classList.contains("verse-selected");
-    const prevSel = sel && i > 0 && verses[i - 1].classList.contains("verse-selected");
-    const nextSel = sel && i < verses.length - 1 && verses[i + 1].classList.contains("verse-selected");
-    v.classList.toggle("verse-selected-join-prev", prevSel);
-    v.classList.toggle("verse-selected-join-next", nextSel);
-  }
-}
-
-function enterVerseSelectMode(bookId, chapter) {
-  readingContext.verseSelectMode = true;
-  readingContext.selectedVerses.clear();
-  readingContext.bookId = bookId;
-  readingContext.chapter = chapter;
-  document.body.classList.add("verse-select-active");
-  $verseSelectBar.hidden = false;
-  updateVerseSelectBar();
-  announce("절 선택 모드. 절을 눌러서 선택하세요.");
-}
-
-function exitVerseSelectMode() {
-  readingContext.verseSelectMode = false;
-  readingContext.selectedVerses.clear();
-  document.body.classList.remove("verse-select-active");
-  $verseSelectBar.hidden = true;
-  document.querySelectorAll(".verse-selected, .verse-selected-join-prev, .verse-selected-join-next")
-    .forEach(v => v.classList.remove("verse-selected", "verse-selected-join-prev", "verse-selected-join-next"));
-}
-
-function updateVerseSelectBar() {
-  const count = readingContext.selectedVerses.size;
-  if (count === 0) {
-    $verseSelectCount.textContent = "구절을 눌러서 선택";
-  } else {
-    const articleEl = document.querySelector("article.chapter-text");
-    const refs = collapseFullVerseRefs(Array.from(readingContext.selectedVerses), articleEl);
-    const spec = refs.length
-      ? selectedVersesToSpec(refs)
-      : selectedVersesToSpec(Array.from(readingContext.selectedVerses));
-    $verseSelectCount.textContent = `${spec.replace(/,/g, ', ')}절 선택됨`;
-  }
-  $verseSelectBookmarkBtn.disabled = count === 0;
-  $verseSelectCopyBtn.disabled = count === 0;
-}
-
-// Serialize the currently selected verses to a clipboard-friendly text block
-// with a trailing citation. Mirrors the article-level copy handler: groups of
-// consecutive selected line-spans share their inter-verse breaks (stanza /
-// paragraph / hemistich), non-consecutive groups separate with a blank line.
-async function copySelectedVerses() {
-  const article = document.querySelector("article.chapter-text");
-  if (!article || readingContext.selectedVerses.size === 0) return;
-
-  const children = [...article.children];
-  /** @type {Array<[Element, Element]>} */
-  const groups = [];
-  /** @type {[Element, Element] | null} */
-  let current = null;
-  for (const child of children) {
-    if (!child.classList.contains("verse")) continue;
-    if (child.classList.contains("verse-selected")) {
-      if (!current) {
-        current = [child, child];
-        groups.push(current);
-      } else {
-        current[1] = child;
-      }
-    } else {
-      current = null;
-    }
-  }
-  if (!groups.length) return;
-
-  const textParts = groups.map(([first, last]) => serializeVerseRange(first, last));
-
-  const refs = collapseFullVerseRefs(Array.from(readingContext.selectedVerses), article);
-  const spec = refs.length
-    ? selectedVersesToSpec(refs)
-    : selectedVersesToSpec(Array.from(readingContext.selectedVerses));
-  const book = (window.getBooksCache() ?? []).find((b) => b.id === readingContext.bookId);
-  const bookName = book ? book.name_ko : readingContext.bookId;
-  const citation = `— ${bookName} ${readingContext.chapter}:${spec} (공동번역성서)`;
-  const fullText = `${textParts.join("\n\n")}\n\n${citation}`;
-
-  try {
-    await navigator.clipboard.writeText(fullText);
-    announce("복사했습니다.");
-    window._showSyncSnackbar?.("복사했습니다.");
-    exitVerseSelectMode();
-  } catch {
-    announce("복사하지 못했습니다.");
-    window._showSyncSnackbar?.("복사하지 못했습니다.");
-  }
-}
-
 // ── Drawer toolbar event handlers ──
 
 $bookmarkDrawerClose.addEventListener("click", closeBookmarkDrawer);
@@ -1525,12 +1425,6 @@ $bmAddFolderBtn.addEventListener("click", () => {
   toolbar.appendChild(form);
   requestAnimationFrame(() => input.focus());
 });
-
-$verseSelectCancelBtn.addEventListener("click", exitVerseSelectMode);
-$verseSelectBookmarkBtn.addEventListener("click", () => openSaveModal("verses"));
-$verseSelectCopyBtn.addEventListener("click", copySelectedVerses);
-// Placeholder — note-taking is a follow-up feature (ADR-030 note slot).
-$verseSelectNoteBtn.addEventListener("click", () => announce("노트 기능은 준비 중입니다."));
 
 $bmOverflowBtn.addEventListener("click", () => {
   const isOpen = !$bmOverflowPanel.hidden;
