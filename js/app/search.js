@@ -590,10 +590,23 @@ function mountSearchField(container, input) {
 
   /** @type {SearchField} */
   const field = { container, input, zone, funnel, focused: false };
-  // Focus reveals the funnel on any screen (syncOneField gates on field.focused);
-  // blur re-syncs so it hides again unless the search view keeps it up.
-  input.addEventListener("focus", () => { field.focused = true; syncOneField(field); });
-  input.addEventListener("blur", () => { field.focused = false; syncOneField(field); });
+  // Reveal the funnel on any screen while focus is anywhere in the search chrome.
+  // Track focus at the *container* level (it holds both input and funnel), not on
+  // the input alone: keying off input blur would hide the whole token-zone the
+  // moment focus moves input → funnel (Tab) — making the funnel vanish before it
+  // can be used (Bugbot). focusout only clears when focus truly leaves the chrome.
+  container.addEventListener("focusin", () => { field.focused = true; syncOneField(field); });
+  container.addEventListener("focusout", (e) => {
+    const rt = /** @type {Node|null} */ (e.relatedTarget);
+    if (container.contains(rt)) return;
+    // The funnel opens the book-filter picker (a body-level sibling, not inside
+    // the container). Keep the zone up while focus is in that picker — otherwise
+    // it hides the zone, and on close the overlay tries to restore focus to a
+    // funnel that's now display:none (unfocusable), so it never reappears.
+    if (rt instanceof Element && rt.closest("#book-filter-sheet")) return;
+    field.focused = false;
+    syncOneField(field);
+  });
   _searchFields.push(field);
   syncOneField(field);
 }
