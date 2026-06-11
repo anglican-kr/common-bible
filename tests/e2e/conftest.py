@@ -28,6 +28,13 @@ CLEAR_APP_STORAGE = """
     'bible-bookmarks-v2', 'bible-sync-meta',
   ];
   for (const k of keys) try { localStorage.removeItem(k); } catch(_) {}
+  // Suppress the install-promo nudge: its default state ({visits:0, nextShow:1})
+  // fires on the very first visit (visits→1, 1<1 is false), so the #install-scrim
+  // overlay covers the tab bar and intercepts clicks in every fresh context —
+  // failing the tab-bar tests for a reason unrelated to what they assert. Persist
+  // a neverShow state (the real "다시 보지 않기" path) so maybeShowInstallNudge
+  // returns early.
+  try { localStorage.setItem('bible-install-nudge', JSON.stringify({ visits: 0, nextShow: 9999, neverShow: true })); } catch(_) {}
 })();
 """
 
@@ -56,8 +63,14 @@ def mobile_context(browser):
 
 
 def wait_app_ready(page) -> None:
-    """Block until the SPA shell has rendered at least one child element."""
-    page.wait_for_selector("#search-input")
+    """Block until the SPA shell has rendered at least one child element.
+
+    Wait for ``#search-input`` *attached* (in DOM), not *visible*: on mobile the
+    header ``#breadcrumb-row`` (which contains the search bar) is ``display:none``
+    by design — search lives in the bottom tab dock instead — so the default
+    ``visible`` state never resolves and every mobile test would time out.
+    """
+    page.wait_for_selector("#search-input", state="attached")
     page.wait_for_function(
         "() => !!document.getElementById('app') && "
         "document.getElementById('app').children.length > 0"
