@@ -70,8 +70,14 @@ def test_book_order_vulgate(browser):
         # 기본값은 canonical(OFF); 켜면 vulgate.
         assert sw.is_checked() is False
         sw.click()
-        page.wait_for_timeout(100)
-        assert _ls(page, "bible-book-order") == "vulgate"
+        # 책 순서 변경은 목록 뷰를 다시 그린다(route()) → 설정 팝오버가 닫힌다.
+        # 따라서 토글 직후 같은 스위치를 다시 보지 말고, 영속값을 확인한 뒤
+        # 설정을 다시 열어 반영 상태(체크 + 캡션)를 검증한다.
+        page.wait_for_function(
+            "() => localStorage.getItem('bible-book-order') === 'vulgate'"
+        )
+        pop = open_settings(page)
+        sw = pop.get_by_role("switch", name="외경")
         assert sw.is_checked() is True
         assert pop.locator(".settings-toggle-caption").first.inner_text() == "구약에 포함"
     finally:
@@ -86,11 +92,17 @@ def test_book_order_canonical(browser):
     try:
         _open(page)
         pop = open_settings(page)
+        pop.get_by_role("switch", name="외경").click()  # → vulgate (route() 로 팝오버 닫힘)
+        page.wait_for_function(
+            "() => localStorage.getItem('bible-book-order') === 'vulgate'"
+        )
+        pop = open_settings(page)
+        pop.get_by_role("switch", name="외경").click()  # → canonical (다시 팝오버 닫힘)
+        page.wait_for_function(
+            "() => localStorage.getItem('bible-book-order') === 'canonical'"
+        )
+        pop = open_settings(page)
         sw = pop.get_by_role("switch", name="외경")
-        sw.click()  # → vulgate
-        sw.click()  # → canonical
-        page.wait_for_timeout(100)
-        assert _ls(page, "bible-book-order") == "canonical"
         assert sw.is_checked() is False
         assert pop.locator(".settings-toggle-caption").first.inner_text() == "별도 섹션에 표시"
     finally:

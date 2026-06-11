@@ -111,11 +111,15 @@ def test_folder_toggle_expand_collapse(browser):
         folder_li = page.locator("li.bm-folder[data-id='folder-1']")
         assert folder_li.get_attribute("aria-expanded") == "false"
 
-        page.locator("li.bm-folder[data-id='folder-1'] .bm-folder-row").click()
+        # 폴더명을 클릭한다. .bm-folder-row 의 기하학적 중심엔 액션 버튼
+        # (.bm-action-btn)이 깔려 있어 Playwright 의 center-click 이 버튼에
+        # 맞아 토글 핸들러의 early-return 에 걸린다(실사용자도 그 자리는 토글
+        # 안 됨). 토글 영역인 폴더명을 클릭해야 펼침/접음이 일어난다.
+        page.locator("li.bm-folder[data-id='folder-1'] .bm-folder-name").click()
         page.wait_for_timeout(100)
         assert folder_li.get_attribute("aria-expanded") == "true"
 
-        page.locator("li.bm-folder[data-id='folder-1'] .bm-folder-row").click()
+        page.locator("li.bm-folder[data-id='folder-1'] .bm-folder-name").click()
         page.wait_for_timeout(100)
         assert folder_li.get_attribute("aria-expanded") == "false"
     finally:
@@ -158,7 +162,8 @@ def test_folder_expanded_state_persists(browser):
         assert page.locator("li.bm-folder[data-id='folder-1']").get_attribute("aria-expanded") == "false"
 
         # 클릭으로 펼침
-        page.locator("li.bm-folder[data-id='folder-1'] .bm-folder-row").click()
+        # 폴더명 클릭 = 토글(행 중심의 액션 버튼을 피한다 — 위 토글 테스트 참조).
+        page.locator("li.bm-folder[data-id='folder-1'] .bm-folder-name").click()
         page.wait_for_timeout(200)
         assert page.locator("li.bm-folder[data-id='folder-1']").get_attribute("aria-expanded") == "true"
 
