@@ -1152,21 +1152,25 @@ function renderChapter(data, book, opts) {
   //
   // Inside select mode, range selection is anchored on the last individually
   // tapped verse (readingContext.selectAnchor):
-  //   • Desktop — click a verse, then Shift+click another to fill the range.
-  //   • Mobile  — hold one verse and tap another with a second finger to fill
-  //     the range. A one-finger slide is deliberately NOT used: a panning
-  //     finger fights the page scroll, whereas two still touch points never
-  //     start a scroll.
-  // A plain tap/click toggles a single verse and moves the anchor there.
+  //   • A plain tap/click toggles a single verse and moves the anchor there —
+  //     repeated taps build a non-contiguous selection.
+  //   • To fill a range, extend from the anchor to another verse. The page
+  //     stays scrollable, so the two endpoints need not share a screen:
+  //       – Desktop: Shift+click the far verse.
+  //       – Mobile:  long-press the far verse (the mobile equivalent of Shift).
+  //     A held finger is NOT required across the range — the anchor is
+  //     remembered — so the user can tap the start, scroll any distance, then
+  //     long-press the end.
   /** @type {ReturnType<typeof setTimeout> | null} */
   let _longPressTimer = null;
   let _longPressStartX = 0;
   let _longPressStartY = 0;
 
-  // In-flight touches in select mode: pointerId → { vref, consumed }. `consumed`
-  // marks a pointer whose pointerdown already drove a range selection, so its
-  // later pointerup must not also toggle the verse.
-  /** @type {Map<number, { vref: string, consumed: boolean }>} */
+  const LONG_PRESS_MS = 300;
+  // In-flight touches in select mode: pointerId → per-pointer gesture state.
+  // `timer` fires the long-press range extension; `longPressed`/`moved` decide
+  // whether the pointerup should still toggle (a plain tap) or do nothing.
+  /** @type {Map<number, { vref: string, x: number, y: number, timer: ReturnType<typeof setTimeout> | null, longPressed: boolean, moved: boolean }>} */
   const _activePointers = new Map();
 
   // Refresh verse-highlight classes + dock after mutating selectedVerses.
@@ -1210,24 +1214,23 @@ function renderChapter(data, book, opts) {
       const vs = t.closest(".verse[data-vref]");
       if (!vs) return;
       const vref = vs.getAttribute("data-vref") ?? "";
-      e.preventDefault(); // suppress native text selection / iOS callout
-      // Desktop: Shift+click extends the selection from the existing anchor.
+      // Desktop: Shift+click extends from the anchor immediately.
       if (e.shiftKey && readingContext.selectAnchor && selectRange(readingContext.selectAnchor, vref)) {
-        _activePointers.set(e.pointerId, { vref, consumed: true });
         return;
       }
-      // Mobile: a second finger landing on a different verse while the first is
-      // still held selects the range between the held verse and this one.
-      let heldVref = null;
-      for (const p of _activePointers.values()) {
-        if (p.vref && p.vref !== vref) { heldVref = p.vref; break; }
-      }
-      if (heldVref && selectRange(heldVref, vref)) {
-        for (const p of _activePointers.values()) p.consumed = true;
-        _activePointers.set(e.pointerId, { vref, consumed: true });
-        return;
-      }
-      _activePointers.set(e.pointerId, { vref, consumed: false });
+      // Otherwise arm a long-press: holding in place extends the range from the
+      // anchor; a quick lift (handled in pointerup) toggles the single verse. We
+      // do NOT preventDefault — that would block the page scroll the user needs
+      // to reach a far range endpoint (text selection is already suppressed by
+      // body.verse-select-active { user-select: none }).
+      const entry = { vref, x: e.clientX, y: e.clientY, timer: /** @type {ReturnType<typeof setTimeout> | null} */ (null), longPressed: false, moved: false };
+      entry.timer = setTimeout(() => {
+        entry.timer = null;
+        entry.longPressed = true;
+        if (readingContext.selectAnchor) selectRange(readingContext.selectAnchor, vref);
+        else toggleVerse(vref); // no anchor yet → behave like a tap (select + set anchor)
+      }, LONG_PRESS_MS);
+      _activePointers.set(e.pointerId, entry);
       return;
     }
     const vs = t.closest(".verse[data-vref]");
@@ -1245,7 +1248,7 @@ function renderChapter(data, book, opts) {
         readingContext.selectAnchor = vref;
         refreshSelection();
       }
-    }, 300);
+    }, LONG_PRESS_MS);
   });
 
   const cancelLongPress = (e) => {
@@ -1259,22 +1262,41 @@ function renderChapter(data, book, opts) {
     _longPressTimer = null;
   };
 
-  article.addEventListener("pointermove", cancelLongPress);
+  article.addEventListener("pointermove", (e) => {
+    // Cancel a pending in-mode long-press once the finger drifts >10px — the
+    // user is scrolling (to reach a far verse), not pressing-and-holding.
+    const entry = _activePointers.get(e.pointerId);
+    if (entry && !entry.longPressed) {
+      const dx = e.clientX - entry.x;
+      const dy = e.clientY - entry.y;
+      if (dx * dx + dy * dy >= 100) {
+        entry.moved = true;
+        if (entry.timer) { clearTimeout(entry.timer); entry.timer = null; }
+      }
+    }
+    cancelLongPress(e);
+  });
 
   article.addEventListener("pointerup", (e) => {
-    if (readingContext.verseSelectMode) {
-      const entry = _activePointers.get(e.pointerId);
-      if (entry) {
-        _activePointers.delete(e.pointerId);
-        if (!entry.consumed) toggleVerse(entry.vref);
-      }
+    const entry = _activePointers.get(e.pointerId);
+    if (entry) {
+      if (entry.timer) { clearTimeout(entry.timer); entry.timer = null; }
+      _activePointers.delete(e.pointerId);
+      // A quick tap (no long-press, no scroll-drift) toggles the verse. A
+      // long-press already extended the range; a drifted pointer was a scroll.
+      if (!entry.longPressed && !entry.moved) toggleVerse(entry.vref);
       return;
     }
     cancelLongPress(e);
   });
 
   article.addEventListener("pointercancel", (e) => {
-    if (readingContext.verseSelectMode) { _activePointers.delete(e.pointerId); return; }
+    const entry = _activePointers.get(e.pointerId);
+    if (entry) {
+      if (entry.timer) clearTimeout(entry.timer);
+      _activePointers.delete(e.pointerId);
+      return;
+    }
     cancelLongPress(e);
   });
 
