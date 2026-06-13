@@ -239,9 +239,19 @@ ARIA tree widget(`role="tree"`, `role="treeitem"`, `role="group"`).
 >   처리). 롱프레스 타이머 콜백과 pointerup 토글 모두 `readingContext.verseSelectMode`
 >   (타이머는 `article.isConnected` 도) 를 확인해, 모드 종료/네비게이션 후 늦은 발화가
 >   상태를 되살리지 않게 한다.
-> - 선택 모드 진입(읽기 화면 롱프레스 300ms / 드로어 "절 선택" 버튼) 시 앵커를
+> - 선택 모드 진입(읽기 화면 롱프레스 / 드로어 "절 선택" 버튼) 시 앵커를
 >   초기화하고, 롱프레스 진입 절을 첫 앵커로 둔다. 유닛 테스트: `tests/unit/views.test.js`
 >   `_verseRangeVrefs` 7케이스 추가(`node --test` 734 통과).
+
+> **개정 (2026-06-13): 선택 모드 진입 롱프레스 민감도 완화 — 300ms → 500ms.**
+> 읽기 중 손가락을 텍스트 위에 잠깐 얹거나 스크롤 직전 멈칫하는 0.3초가
+> 의도치 않게 절 선택 모드로 진입하던 오작동을 해소. 진입 임계값을 iOS·Android
+> 표준 롱프레스에 맞춰 **500ms**로 상향했다. 진입은 "정지한 손가락"과 "의도적
+> 누름"을 지속 시간으로만 구분하므로(이동 >10px 취소는 유지) 임계 시간이 유일한
+> 레버다. 한편 **선택 모드 안에서의 범위 확장 롱프레스는 300ms 유지** — 이미
+> 모드에 들어와 의도적으로 조작 중인 사용자의 제스처라 반응성을 지킨다.
+> `views.js` 의 단일 `LONG_PRESS_MS=300` 상수를 두 경로로 분리:
+> `ENTER_SELECT_MS=500`(진입) · `RANGE_EXTEND_MS=300`(범위 확장).
 
 **헤더 북마크 아이콘** (`.title-bookmark-btn`): `buildBookmarkHeaderBtn()` 호출.
 아이콘: Material Icons `bookmarks` SVG. 장 북마크 여부 표시 제거
