@@ -14,7 +14,6 @@
 /** @typedef {import("../types").BookmarkTreeNode} BookmarkTreeNode */
 /** @typedef {import("../types").BookmarkTreeBookmark} BookmarkTreeBookmark */
 /** @typedef {import("../types").BookmarkTreeFolder} BookmarkTreeFolder */
-/** @typedef {import("../types").VerseSelectDrag} VerseSelectDrag */
 /** @typedef {import("../types").DragState} DragState */
 /** @typedef {import("../types").BooksData} BooksData */
 

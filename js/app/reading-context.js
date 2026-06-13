@@ -12,15 +12,13 @@
 // hot-path (e.g. scroll-tracking writes `chapter` on every chapter render)
 // and JS object property access is the simplest cross-module mutation.
 
-/** @typedef {import("../types").VerseSelectDrag} VerseSelectDrag */
-
 /**
  * @typedef {Object} ReadingContext
  * @property {string | null} bookId      — id of the book currently rendered, or null on home/list views
  * @property {number | null} chapter     — chapter number currently rendered, or null
  * @property {boolean} verseSelectMode   — true when the user has entered verse-selection (long-press / FAB)
  * @property {Set<string>} selectedVerses — data-vref strings of currently selected verses
- * @property {VerseSelectDrag | null} verseSelectDrag — in-flight pointer drag during selection, or null
+ * @property {string | null} selectAnchor — data-vref of the last individually tapped verse; the anchor for range selection (Shift+click / hold-and-tap)
  */
 
 /** @type {ReadingContext} */
@@ -29,7 +27,7 @@ const readingContext = {
   chapter: null,
   verseSelectMode: false,
   selectedVerses: new Set(),
-  verseSelectDrag: null,
+  selectAnchor: null,
 };
 
 window.readingContext = readingContext;

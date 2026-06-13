@@ -20,8 +20,9 @@
 //     with addEventListener + classList + hidden + querySelector + contains.
 //   - COMPACT_HEADER block — initCompactHeader. Hysteretic 60px / 10px
 //     scroll-based class toggle. Window scroll listener stub.
-//   - VERSE_SELECTION block — _verseSelectionUnit. Pure-poetry multi-part
-//     grouping vs per-line selection control.
+//   - VERSE_SELECTION block — _verseSelectionUnit (pure-poetry multi-part
+//     grouping vs per-line selection control) + _verseRangeVrefs (anchor→target
+//     inclusive range, either direction, poetry-unit boundary expansion).
 //   - VERSE_NUMBER block — formatVerseNumber. Verse-number display string:
 //     plain / dual [N_M] / LXX-only [_N] / cross-ref / range / part.
 
@@ -280,7 +281,11 @@ function loadVerseSelection() {
   vm.runInContext(extractBlock("VERSE_SELECTION"), ctx, {
     filename: "views-verse-selection.js",
   });
-  return { ctx, verseSelectionUnit: ctx._verseSelectionUnit };
+  return {
+    ctx,
+    verseSelectionUnit: ctx._verseSelectionUnit,
+    verseRangeVrefs: ctx._verseRangeVrefs,
+  };
 }
 
 /** @param {Array<[string, boolean]>} verses [vref, isPoetry] tuples */
@@ -1048,6 +1053,52 @@ test("_verseSelectionUnit: groups by integer prefix, not contamination across ne
 test("_verseSelectionUnit: null article → defensive [vref]", () => {
   const h = loadVerseSelection();
   assert.deepEqual(h.verseSelectionUnit(null, "3a"), ["3a"]);
+});
+
+test("_verseRangeVrefs: forward range is inclusive of both endpoints", () => {
+  const h = loadVerseSelection();
+  const all = ["1", "2", "3", "4", "5"];
+  assert.deepEqual(h.verseRangeVrefs(all, "2", "4"), ["2", "3", "4"]);
+});
+
+test("_verseRangeVrefs: backward range (anchor after target) yields same span", () => {
+  const h = loadVerseSelection();
+  const all = ["1", "2", "3", "4", "5"];
+  assert.deepEqual(h.verseRangeVrefs(all, "4", "2"), ["2", "3", "4"]);
+});
+
+test("_verseRangeVrefs: same anchor and target → that single verse", () => {
+  const h = loadVerseSelection();
+  const all = ["1", "2", "3"];
+  assert.deepEqual(h.verseRangeVrefs(all, "2", "2"), ["2"]);
+});
+
+test("_verseRangeVrefs: unknown endpoint → empty (defensive)", () => {
+  const h = loadVerseSelection();
+  const all = ["1", "2", "3"];
+  assert.deepEqual(h.verseRangeVrefs(all, "2", "9"), []);
+  assert.deepEqual(h.verseRangeVrefs(all, "x", "2"), []);
+});
+
+test("_verseRangeVrefs: endpoint inside a poetry unit expands to the whole unit", () => {
+  const h = loadVerseSelection();
+  const all = ["1", "2a", "2b", "2c", "3", "4a", "4b"];
+  // target "2b" pulls in 2a/2c; anchor "4a" pulls in 4b.
+  const unit = (vref) => {
+    if (vref.startsWith("2")) return ["2a", "2b", "2c"];
+    if (vref.startsWith("4")) return ["4a", "4b"];
+    return [vref];
+  };
+  assert.deepEqual(
+    h.verseRangeVrefs(all, "4a", "2b", unit),
+    ["2a", "2b", "2c", "3", "4a", "4b"],
+  );
+});
+
+test("_verseRangeVrefs: without unitFn, no boundary expansion", () => {
+  const h = loadVerseSelection();
+  const all = ["1", "2a", "2b", "2c", "3"];
+  assert.deepEqual(h.verseRangeVrefs(all, "2b", "3"), ["2b", "2c", "3"]);
 });
 
 // ── VERSE_NUMBER ─────────────────────────────────────────────────────────────
