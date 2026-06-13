@@ -1214,8 +1214,13 @@ function renderChapter(data, book, opts) {
       const vs = t.closest(".verse[data-vref]");
       if (!vs) return;
       const vref = vs.getAttribute("data-vref") ?? "";
-      // Desktop: Shift+click extends from the anchor immediately.
-      if (e.shiftKey && readingContext.selectAnchor && selectRange(readingContext.selectAnchor, vref)) {
+      // Desktop: Shift+click extends from the anchor (or, with no anchor yet,
+      // acts as a plain toggle that sets the anchor). Handled fully here and
+      // returns, so it never also arms the tap/long-press path below — that
+      // would leave a spurious toggle queued for the matching pointerup.
+      if (e.shiftKey) {
+        if (readingContext.selectAnchor) selectRange(readingContext.selectAnchor, vref);
+        else toggleVerse(vref);
         return;
       }
       // Otherwise arm a long-press: holding in place extends the range from the
@@ -1226,6 +1231,10 @@ function renderChapter(data, book, opts) {
       const entry = { vref, x: e.clientX, y: e.clientY, timer: /** @type {ReturnType<typeof setTimeout> | null} */ (null), longPressed: false, moved: false };
       entry.timer = setTimeout(() => {
         entry.timer = null;
+        // Guard against firing after the user left select mode or navigated
+        // away while the finger was still down (the pointerup that would have
+        // cleared this timer never arrived in the same view).
+        if (!readingContext.verseSelectMode || !article.isConnected) return;
         entry.longPressed = true;
         if (readingContext.selectAnchor) selectRange(readingContext.selectAnchor, vref);
         else toggleVerse(vref); // no anchor yet → behave like a tap (select + set anchor)
@@ -1239,6 +1248,7 @@ function renderChapter(data, book, opts) {
     _longPressStartY = e.clientY;
     _longPressTimer = setTimeout(() => {
       _longPressTimer = null;
+      if (!article.isConnected) return; // view was replaced before the press matured
       enterVerseSelectMode(book.id, ch);
       const vref = vs.getAttribute("data-vref");
       if (vref) {
