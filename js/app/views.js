@@ -1240,6 +1240,12 @@ function renderChapter(data, book, opts) {
         else toggleVerse(vref); // no anchor yet → behave like a tap (select + set anchor)
       }, LONG_PRESS_MS);
       _activePointers.set(e.pointerId, entry);
+      // Capture the pointer so the matching pointermove/up/cancel always reach
+      // this article — even if the finger lifts or drifts outside it — so the
+      // timer and entry are reliably cleared. Capture does NOT block scrolling:
+      // when a pan begins the browser fires pointercancel (releasing capture),
+      // which our handler treats as an abort.
+      try { article.setPointerCapture(e.pointerId); } catch { /* pointer already released */ }
       return;
     }
     const vs = t.closest(".verse[data-vref]");
@@ -1294,7 +1300,9 @@ function renderChapter(data, book, opts) {
       _activePointers.delete(e.pointerId);
       // A quick tap (no long-press, no scroll-drift) toggles the verse. A
       // long-press already extended the range; a drifted pointer was a scroll.
-      if (!entry.longPressed && !entry.moved) toggleVerse(entry.vref);
+      // Guard verseSelectMode: if the mode ended while the finger was down
+      // (cancel / copy / navigation), a late pointerup must not re-toggle.
+      if (!entry.longPressed && !entry.moved && readingContext.verseSelectMode) toggleVerse(entry.vref);
       return;
     }
     cancelLongPress(e);

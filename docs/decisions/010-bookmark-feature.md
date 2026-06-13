@@ -232,6 +232,13 @@ ARIA tree widget(`role="tree"`, `role="treeitem"`, `role="group"`).
 >   선택 모드에서는 `pointerdown` 에 `preventDefault` 를 걸지 않아(스크롤 보존; 텍스트
 >   선택은 `body.verse-select-active { user-select:none }` 로 차단) 자유 스크롤이 된다.
 >   슬라이드 드래그 코드와 `VerseSelectDrag` 타입은 제거.
+> - **수명 가드(Bugbot 리뷰 대응):** 포인터는 `setPointerCapture` 로 잡아 손가락이
+>   article 밖에서 떼지거나 드리프트해도 pointermove/up/cancel 이 article 로 retarget
+>   되어 타이머·`_activePointers` 가 확실히 정리된다(캡처는 스크롤을 막지 않음 — 팬이
+>   시작되면 브라우저가 `pointercancel` 로 캡처를 해제하고, 핸들러는 이를 abort 로
+>   처리). 롱프레스 타이머 콜백과 pointerup 토글 모두 `readingContext.verseSelectMode`
+>   (타이머는 `article.isConnected` 도) 를 확인해, 모드 종료/네비게이션 후 늦은 발화가
+>   상태를 되살리지 않게 한다.
 > - 선택 모드 진입(읽기 화면 롱프레스 300ms / 드로어 "절 선택" 버튼) 시 앵커를
 >   초기화하고, 롱프레스 진입 절을 첫 앵커로 둔다. 유닛 테스트: `tests/unit/views.test.js`
 >   `_verseRangeVrefs` 7케이스 추가(`node --test` 734 통과).
