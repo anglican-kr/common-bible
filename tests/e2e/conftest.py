@@ -28,12 +28,11 @@ CLEAR_APP_STORAGE = """
     'bible-bookmarks-v2', 'bible-sync-meta',
   ];
   for (const k of keys) try { localStorage.removeItem(k); } catch(_) {}
-  // Suppress the install-promo nudge: its default state ({visits:0, nextShow:1})
-  // fires on the very first visit (visits→1, 1<1 is false), so the #install-scrim
-  // overlay covers the tab bar and intercepts clicks in every fresh context —
-  // failing the tab-bar tests for a reason unrelated to what they assert. Persist
-  // a neverShow state (the real "다시 보지 않기" path) so maybeShowInstallNudge
-  // returns early.
+  // Suppress the install-promo nudge so the #install-scrim overlay never covers
+  // the tab bar / intercepts clicks during tests. The default ({visits:0,
+  // nextShow:2}) already skips the first visit, but a test that boots the app
+  // more than once would still trip it — so persist a neverShow state (the real
+  // "다시 보지 않기" path) to make maybeShowInstallNudge return early regardless.
   try { localStorage.setItem('bible-install-nudge', JSON.stringify({ visits: 0, nextShow: 9999, neverShow: true })); } catch(_) {}
 })();
 """

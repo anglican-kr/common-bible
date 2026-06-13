@@ -833,7 +833,7 @@ test("saveBookmarks: swallows localStorage errors", () => {
 test("_loadNudgeState: returns default when no storage", () => {
   const h = loadStorage();
   assert.deepEqual(rehydrate(h.appStorage._loadNudgeState()),
-    { visits: 0, nextShow: 1, neverShow: false });
+    { visits: 0, nextShow: 2, neverShow: false });
 });
 
 test("_loadNudgeState: returns parsed value", () => {
@@ -845,7 +845,7 @@ test("_loadNudgeState: returns parsed value", () => {
 test("_loadNudgeState: returns default on malformed JSON", () => {
   const h = loadStorage({ localStorageInit: { "bible-install-nudge": "{not json" } });
   assert.deepEqual(rehydrate(h.appStorage._loadNudgeState()),
-    { visits: 0, nextShow: 1, neverShow: false });
+    { visits: 0, nextShow: 2, neverShow: false });
 });
 
 test("_saveNudgeState: writes serialized state", () => {
