@@ -1146,9 +1146,12 @@ function renderChapter(data, book, opts) {
   });
 
   // ── Verse selection gestures ──
-  // Outside select mode: a 300ms long-press on a verse enters select mode and
+  // Outside select mode: a 500ms long-press on a verse enters select mode and
   // selects that verse (pointermove only cancels after >10px to tolerate
-  // natural finger drift).
+  // natural finger drift). 500ms — not a snappier value — is deliberate: this
+  // is the false-positive-prone path, so a finger merely *resting* on the text
+  // while reading (or pausing before a scroll) must clear the platform-standard
+  // long-press window rather than tripping the mode on a brief 300ms touch.
   //
   // Inside select mode, range selection is anchored on the last individually
   // tapped verse (readingContext.selectAnchor):
@@ -1166,7 +1169,12 @@ function renderChapter(data, book, opts) {
   let _longPressStartX = 0;
   let _longPressStartY = 0;
 
-  const LONG_PRESS_MS = 300;
+  // Entering select mode is the false-positive-prone path (a finger merely
+  // resting on the text while reading must NOT arm it), so it uses the longer,
+  // platform-standard 500ms threshold. Range extension *inside* select mode is
+  // a deliberate gesture by an already-engaged user, so it stays snappier.
+  const ENTER_SELECT_MS = 500;
+  const RANGE_EXTEND_MS = 300;
   // In-flight touches in select mode: pointerId → per-pointer gesture state.
   // `timer` fires the long-press range extension; `longPressed`/`moved` decide
   // whether the pointerup should still toggle (a plain tap) or do nothing.
@@ -1238,7 +1246,7 @@ function renderChapter(data, book, opts) {
         entry.longPressed = true;
         if (readingContext.selectAnchor) selectRange(readingContext.selectAnchor, vref);
         else toggleVerse(vref); // no anchor yet → behave like a tap (select + set anchor)
-      }, LONG_PRESS_MS);
+      }, RANGE_EXTEND_MS);
       _activePointers.set(e.pointerId, entry);
       // Capture the pointer so the matching pointermove/up/cancel always reach
       // this article — even if the finger lifts or drifts outside it — so the
@@ -1264,7 +1272,7 @@ function renderChapter(data, book, opts) {
         readingContext.selectAnchor = vref;
         refreshSelection();
       }
-    }, LONG_PRESS_MS);
+    }, ENTER_SELECT_MS);
   });
 
   const cancelLongPress = (e) => {
