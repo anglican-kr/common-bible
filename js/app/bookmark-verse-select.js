@@ -49,6 +49,7 @@ function updateVerseSelectionBoundaries(scope) {
 function enterVerseSelectMode(bookId, chapter) {
   readingContext.verseSelectMode = true;
   readingContext.selectedVerses.clear();
+  readingContext.selectAnchor = null;
   readingContext.bookId = bookId;
   readingContext.chapter = chapter;
   document.body.classList.add("verse-select-active");
@@ -60,6 +61,7 @@ function enterVerseSelectMode(bookId, chapter) {
 function exitVerseSelectMode() {
   readingContext.verseSelectMode = false;
   readingContext.selectedVerses.clear();
+  readingContext.selectAnchor = null;
   document.body.classList.remove("verse-select-active");
   $verseSelectBar.hidden = true;
   document.querySelectorAll(".verse-selected, .verse-selected-join-prev, .verse-selected-join-next")

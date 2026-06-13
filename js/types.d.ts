@@ -418,22 +418,6 @@ export interface SearchHistoryEntry {
   ts: number | null;
 }
 
-// Active during a touch/pointer drag over verse rows in select mode
-// (module-state `_verseSelectDrag`).
-export interface VerseSelectDrag {
-  startIdx: number;
-  allVerses: HTMLElement[];
-  isAdding: boolean;
-  moved: boolean;
-  /**
-   * Snapshot of `readingContext.selectedVerses` taken at pointerdown so that
-   * a subsequent pointerup with no drag movement can revert (deselect what
-   * was tentatively highlighted during the in-flight drag). Optional because
-   * older drag-init paths set this lazily.
-   */
-  snapshot?: Set<string>;
-}
-
 // Active during a bookmark-list reorder drag (module-state `_dragState`).
 export interface DragState {
   id: string;
@@ -774,7 +758,7 @@ export interface ReadingContext {
   chapter: number | null;
   verseSelectMode: boolean;
   selectedVerses: Set<string>;
-  verseSelectDrag: VerseSelectDrag | null;
+  selectAnchor: string | null;
 }
 
 // ── App bookmark facade (js/app/bookmark.js) ────────────────────────────────

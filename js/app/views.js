@@ -800,6 +800,39 @@ function _verseSelectionUnit(article, vref) {
   }
   return [vref];
 }
+
+// Inclusive list of data-vref strings spanning anchor→target (in either
+// direction) given the document-order array `allVrefs`. Used by anchored range
+// selection (desktop Shift+click, mobile hold-and-tap). Each endpoint is
+// expanded to its whole pure-poetry unit via `unitFn` so a range edge that
+// lands on one line-part of a multi-part verse still pulls in the rest.
+/**
+ * @param {string[]} allVrefs
+ * @param {string} anchorVref
+ * @param {string} targetVref
+ * @param {(vref: string) => string[]} [unitFn]
+ * @returns {string[]}
+ */
+function _verseRangeVrefs(allVrefs, anchorVref, targetVref, unitFn) {
+  const ai = allVrefs.indexOf(anchorVref);
+  const ti = allVrefs.indexOf(targetVref);
+  if (ai === -1 || ti === -1) return [];
+  let lo = ai <= ti ? ai : ti;
+  let hi = ai <= ti ? ti : ai;
+  if (unitFn) {
+    const loUnit = unitFn(allVrefs[lo]);
+    if (loUnit.length > 1) {
+      const f = allVrefs.indexOf(loUnit[0]);
+      if (f !== -1 && f < lo) lo = f;
+    }
+    const hiUnit = unitFn(allVrefs[hi]);
+    if (hiUnit.length > 1) {
+      const l = allVrefs.indexOf(hiUnit[hiUnit.length - 1]);
+      if (l !== -1 && l > hi) hi = l;
+    }
+  }
+  return allVrefs.slice(lo, hi + 1);
+}
 // ── END VERSE_SELECTION ──
 
 // Render a list of verses into `article` as inline verse spans + inter-verse
@@ -1112,12 +1145,63 @@ function renderChapter(data, book, opts) {
     announce(`${vs.getAttribute("data-vref")}절`);
   });
 
-  // Long-press (300ms) to enter verse selection mode.
-  // pointermove only cancels after >10px of movement to tolerate natural finger drift.
+  // ── Verse selection gestures ──
+  // Outside select mode: a 300ms long-press on a verse enters select mode and
+  // selects that verse (pointermove only cancels after >10px to tolerate
+  // natural finger drift).
+  //
+  // Inside select mode, range selection is anchored on the last individually
+  // tapped verse (readingContext.selectAnchor):
+  //   • Desktop — click a verse, then Shift+click another to fill the range.
+  //   • Mobile  — hold one verse and tap another with a second finger to fill
+  //     the range. A one-finger slide is deliberately NOT used: a panning
+  //     finger fights the page scroll, whereas two still touch points never
+  //     start a scroll.
+  // A plain tap/click toggles a single verse and moves the anchor there.
   /** @type {ReturnType<typeof setTimeout> | null} */
   let _longPressTimer = null;
   let _longPressStartX = 0;
   let _longPressStartY = 0;
+
+  // In-flight touches in select mode: pointerId → { vref, consumed }. `consumed`
+  // marks a pointer whose pointerdown already drove a range selection, so its
+  // later pointerup must not also toggle the verse.
+  /** @type {Map<number, { vref: string, consumed: boolean }>} */
+  const _activePointers = new Map();
+
+  // Refresh verse-highlight classes + dock after mutating selectedVerses.
+  const refreshSelection = () => {
+    article.querySelectorAll(".verse[data-vref]").forEach((v) => {
+      v.classList.toggle("verse-selected", readingContext.selectedVerses.has(v.getAttribute("data-vref") ?? ""));
+    });
+    updateVerseSelectionBoundaries(article);
+    updateVerseSelectBar();
+  };
+
+  // Additively select every verse from `anchorVref` to `targetVref` inclusive,
+  // then move the anchor to the target. Returns false if the range is empty.
+  const selectRange = (anchorVref, targetVref) => {
+    const allVrefs = [...article.querySelectorAll(".verse[data-vref]")]
+      .map((v) => v.getAttribute("data-vref") ?? "");
+    const range = _verseRangeVrefs(allVrefs, anchorVref, targetVref,
+      (vref) => _verseSelectionUnit(article, vref));
+    if (!range.length) return false;
+    for (const r of range) readingContext.selectedVerses.add(r);
+    readingContext.selectAnchor = targetVref;
+    refreshSelection();
+    return true;
+  };
+
+  // Toggle a single verse's selection unit; the anchor follows a selection and
+  // clears on a deselection.
+  const toggleVerse = (vref) => {
+    const unit = _verseSelectionUnit(article, vref);
+    const wasSelected = unit.some((r) => readingContext.selectedVerses.has(r));
+    if (wasSelected) unit.forEach((r) => readingContext.selectedVerses.delete(r));
+    else unit.forEach((r) => readingContext.selectedVerses.add(r));
+    readingContext.selectAnchor = wasSelected ? null : vref;
+    refreshSelection();
+  };
 
   article.addEventListener("pointerdown", (e) => {
     const t = e.target;
@@ -1125,13 +1209,25 @@ function renderChapter(data, book, opts) {
     if (readingContext.verseSelectMode) {
       const vs = t.closest(".verse[data-vref]");
       if (!vs) return;
-      e.preventDefault(); // prevent text selection during drag
-      const allVerses = /** @type {HTMLElement[]} */ ([...article.querySelectorAll(".verse[data-vref]")]);
-      const startIdx = allVerses.indexOf(/** @type {HTMLElement} */ (vs));
-      const startUnit = _verseSelectionUnit(article, vs.getAttribute("data-vref") ?? "");
-      const isAdding = !startUnit.some((r) => readingContext.selectedVerses.has(r));
-      readingContext.verseSelectDrag = { startIdx, allVerses, isAdding, moved: false, snapshot: new Set(readingContext.selectedVerses) };
-      article.setPointerCapture(e.pointerId);
+      const vref = vs.getAttribute("data-vref") ?? "";
+      e.preventDefault(); // suppress native text selection / iOS callout
+      // Desktop: Shift+click extends the selection from the existing anchor.
+      if (e.shiftKey && readingContext.selectAnchor && selectRange(readingContext.selectAnchor, vref)) {
+        _activePointers.set(e.pointerId, { vref, consumed: true });
+        return;
+      }
+      // Mobile: a second finger landing on a different verse while the first is
+      // still held selects the range between the held verse and this one.
+      let heldVref = null;
+      for (const p of _activePointers.values()) {
+        if (p.vref && p.vref !== vref) { heldVref = p.vref; break; }
+      }
+      if (heldVref && selectRange(heldVref, vref)) {
+        for (const p of _activePointers.values()) p.consumed = true;
+        _activePointers.set(e.pointerId, { vref, consumed: true });
+        return;
+      }
+      _activePointers.set(e.pointerId, { vref, consumed: false });
       return;
     }
     const vs = t.closest(".verse[data-vref]");
@@ -1146,14 +1242,12 @@ function renderChapter(data, book, opts) {
         for (const r of _verseSelectionUnit(article, vref)) {
           readingContext.selectedVerses.add(r);
         }
-        article.querySelectorAll(".verse[data-vref]").forEach((v) => {
-          v.classList.toggle("verse-selected", readingContext.selectedVerses.has(v.getAttribute("data-vref") ?? ""));
-        });
-        updateVerseSelectionBoundaries(article);
-        updateVerseSelectBar();
+        readingContext.selectAnchor = vref;
+        refreshSelection();
       }
     }, 300);
   });
+
   const cancelLongPress = (e) => {
     if (!_longPressTimer) return;
     if (e && e.type === "pointermove") {
@@ -1165,77 +1259,22 @@ function renderChapter(data, book, opts) {
     _longPressTimer = null;
   };
 
-  article.addEventListener("pointermove", (e) => {
-    if (readingContext.verseSelectDrag) {
-      const target = document.elementFromPoint(e.clientX, e.clientY);
-      const vs = /** @type {HTMLElement | null} */ (target && target.closest(".verse[data-vref]"));
-      if (!vs) return;
-      const { startIdx, allVerses, isAdding, snapshot } = readingContext.verseSelectDrag;
-      const currentIdx = allVerses.indexOf(vs);
-      if (currentIdx === -1) return;
-      if (!readingContext.verseSelectDrag.moved && currentIdx === startIdx) return;
-      readingContext.verseSelectDrag.moved = true;
-      const [lo, hi] = startIdx <= currentIdx ? [startIdx, currentIdx] : [currentIdx, startIdx];
-      readingContext.selectedVerses = new Set(snapshot);
-      for (let i = lo; i <= hi; i++) {
-        const vref = allVerses[i].getAttribute("data-vref") ?? "";
-        if (isAdding) readingContext.selectedVerses.add(vref);
-        else readingContext.selectedVerses.delete(vref);
-      }
-      // Pure-poetry verses are atomic: if any part falls in [lo, hi], extend
-      // the toggle to all parts of that verse number.
-      const seenNums = new Set();
-      for (let i = lo; i <= hi; i++) {
-        const vref = allVerses[i].getAttribute("data-vref") ?? "";
-        const m = vref.match(/^(\d+)/);
-        const num = m ? m[1] : vref;
-        if (seenNums.has(num)) continue;
-        seenNums.add(num);
-        const unit = _verseSelectionUnit(article, vref);
-        if (unit.length === 1) continue;
-        if (isAdding) unit.forEach((r) => readingContext.selectedVerses.add(r));
-        else unit.forEach((r) => readingContext.selectedVerses.delete(r));
-      }
-      allVerses.forEach((v) => {
-        const vref = v.getAttribute("data-vref") ?? "";
-        v.classList.toggle("verse-selected", readingContext.selectedVerses.has(vref));
-      });
-      updateVerseSelectionBoundaries(article);
-      updateVerseSelectBar();
-      return;
-    }
-    cancelLongPress(e);
-  });
+  article.addEventListener("pointermove", cancelLongPress);
 
   article.addEventListener("pointerup", (e) => {
-    if (readingContext.verseSelectDrag) {
-      if (!readingContext.verseSelectDrag.moved) {
-        // Simple tap: toggle the verse's selection unit (whole verse for pure
-        // poetry, single line otherwise).
-        const vs = readingContext.verseSelectDrag.allVerses[readingContext.verseSelectDrag.startIdx];
-        if (vs) {
-          const vref = vs.getAttribute("data-vref") ?? "";
-          const unit = _verseSelectionUnit(article, vref);
-          if (readingContext.verseSelectDrag.isAdding) {
-            unit.forEach((r) => readingContext.selectedVerses.add(r));
-          } else {
-            unit.forEach((r) => readingContext.selectedVerses.delete(r));
-          }
-          readingContext.verseSelectDrag.allVerses.forEach((v) => {
-            v.classList.toggle("verse-selected", readingContext.selectedVerses.has(v.getAttribute("data-vref") ?? ""));
-          });
-          updateVerseSelectionBoundaries(article);
-          updateVerseSelectBar();
-        }
+    if (readingContext.verseSelectMode) {
+      const entry = _activePointers.get(e.pointerId);
+      if (entry) {
+        _activePointers.delete(e.pointerId);
+        if (!entry.consumed) toggleVerse(entry.vref);
       }
-      readingContext.verseSelectDrag = null;
       return;
     }
     cancelLongPress(e);
   });
 
   article.addEventListener("pointercancel", (e) => {
-    if (readingContext.verseSelectDrag) { readingContext.verseSelectDrag = null; return; }
+    if (readingContext.verseSelectMode) { _activePointers.delete(e.pointerId); return; }
     cancelLongPress(e);
   });
 
@@ -1361,6 +1400,7 @@ const appViewsRouting = {
   initCompactHeader, initScrollElevation,
   renderError,
   _verseSelectionUnit,
+  _verseRangeVrefs,
 };
 window.appViewsRouting = appViewsRouting;
 
@@ -1382,7 +1422,7 @@ export {
   setTitle, setTitleWithChapterPicker,
   buildDivisionTabs, divisionLabels, divisionOrder, effectiveDivision,
   initCompactHeader, initScrollElevation,
-  _verseSelectionUnit,
+  _verseSelectionUnit, _verseRangeVrefs,
   DIVISION_LABELS,
   renderBookList, renderChapterList, renderChapter, renderPrologue,
   renderLoading, renderError,

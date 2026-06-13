@@ -212,6 +212,26 @@ ARIA tree widget(`role="tree"`, `role="treeitem"`, `role="group"`).
 > 절 선택 숨김(1,1,1)을 이겨 축소 중 진입 시 액션 바 뒤로 비쳤던 버그를
 > `display: none !important` 로 해소.
 
+> **개정 (2026-06-13): 범위 선택을 한-손가락 슬라이드 → 앵커 기반으로 교체.**
+> 종전 선택 모드의 범위 선택은 한 절을 누른 채 손가락을 끌면(`pointermove` +
+> `document.elementFromPoint`) 시작 절~현재 절이 실시간으로 칠해지는 **슬라이드
+> 드래그**였다. 그러나 모바일에서 패닝하는 손가락이 페이지 스크롤과 경합해 사실상
+> 동작하지 않았다(끌면 화면만 스크롤). → **앵커 기반 모델**로 교체:
+> - **상태:** `readingContext.selectAnchor`(`string | null`) — 마지막으로 개별 토글된
+>   절의 `data-vref`. 일반 탭/클릭은 그 절을 토글하고 앵커를 그리로 옮긴다(해제면 null).
+> - **데스크탑:** 절을 클릭해 앵커를 잡고 다른 절을 **Shift+클릭** → 앵커~타깃 전체 선택
+>   (파일 탐색기·에디터 표준 관용구). `pointerdown` 에서 `e.shiftKey` 분기.
+> - **모바일:** 한 절을 **누른 채(정지)** 다른 절을 **두 번째 손가락으로 탭** → 두 절
+>   사이 전체 선택. 정지한 두 터치점은 스크롤을 시작시키지 않아 슬라이드의 스크롤
+>   경합 문제가 없다. `_activePointers`(pointerId→`{vref, consumed}`) 맵으로 멀티터치를
+>   추적하고, 범위를 만든 포인터는 `consumed` 표시해 이후 `pointerup` 토글을 막는다.
+> - 두 경로 모두 순수 헬퍼 `_verseRangeVrefs(allVrefs, anchor, target, unitFn)`
+>   (views.js `VERSE_SELECTION` 블록, 양방향·운문 다중부분 경계 확장)로 범위를 계산하고
+>   **additive** 로 더한다. 슬라이드 드래그 코드와 `VerseSelectDrag` 타입은 제거.
+> - 선택 모드 진입(롱프레스 300ms / 드로어 "절 선택" 버튼) 시 앵커를 초기화하고,
+>   롱프레스 진입 절을 첫 앵커로 둔다. 유닛 테스트: `tests/unit/views.test.js`
+>   `_verseRangeVrefs` 7케이스 추가(`node --test` 734 통과).
+
 **헤더 북마크 아이콘** (`.title-bookmark-btn`): `buildBookmarkHeaderBtn()` 호출.
 아이콘: Material Icons `bookmarks` SVG. 장 북마크 여부 표시 제거
 (`.has-bookmark` 클래스 및 관련 CSS 삭제).
