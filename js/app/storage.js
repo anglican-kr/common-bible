@@ -381,7 +381,11 @@ window.appStorage = (() => {
       const raw = localStorage.getItem(INSTALL_NUDGE_KEY);
       if (raw) return JSON.parse(raw);
     } catch (_) {}
-    return { visits: 0, nextShow: 1, neverShow: false };
+    // nextShow starts at 2 so the install nudge never fires on the first visit:
+    // it would cover the content like an intrusive interstitial for search
+    // arrivals, and crawlers (stateless → always visit 1) would otherwise see
+    // it on every render. A returning (2nd-visit) reader gets the nudge.
+    return { visits: 0, nextShow: 2, neverShow: false };
   }
 
   /** @param {InstallNudgeState} state */
