@@ -106,11 +106,12 @@
 
 ## 결과 저장
 
-감사가 완료되면 결과 전체를 `docs/audit/` 디렉터리에 저장한다.
+감사가 완료되면 결과 전체를 `docs/archive/audit/` 디렉터리에 저장한다.
 
-1. `date +"%Y-%m-%d-%H%M%S"` 명령으로 현재 타임스탬프를 구한다.
-2. 파일명: `docs/audit/YYYY-MM-DD-hhmmss.md`
-3. 파일 앞에 아래 헤더를 붙인다:
+1. `docs/archive/audit/` 디렉터리가 없으면 먼저 생성한다.
+2. `date +"%Y-%m-%d-%H%M%S"` 명령으로 현재 타임스탬프를 구한다.
+3. 파일명: `docs/archive/audit/YYYY-MM-DD-hhmmss.md`
+4. 파일 앞에 아래 헤더를 붙인다:
 
 ```
 # 보안 감사 — YYYY-MM-DD HH:MM:SS
@@ -119,5 +120,4 @@
 - **감사 시각**: YYYY-MM-DD HH:MM:SS
 ```
 
-4. 이어서 발견 사항 전체와 요약 테이블을 기록한다.
-5. `docs/audit/` 디렉터리가 없으면 먼저 생성한다.
+5. 이어서 발견 사항 전체와 요약 테이블을 기록한다.
