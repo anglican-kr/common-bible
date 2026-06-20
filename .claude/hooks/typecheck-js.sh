@@ -7,7 +7,10 @@
 #
 # Reads the hook input JSON on stdin; uses tool_input.file_path.
 set -u
-PROJECT="/home/joshua/projects/common-bible"
+# Project root: Claude Code passes $CLAUDE_PROJECT_DIR when invoking hooks; fall
+# back to deriving it from this script's location (PROJECT/.claude/hooks/x.sh) so
+# the hook works in any clone path, not just the one it was authored in.
+PROJECT="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 
 f=$(jq -r '.tool_input.file_path // empty')
 case "$f" in

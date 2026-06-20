@@ -5,7 +5,9 @@
 # before merge. Self-suppressing: the moment you edit CLAUDE.md or a docs/ file,
 # this goes quiet. Rationale: feedback_documentation.
 set -u
-PROJECT="/home/joshua/projects/common-bible"
+# Project root: $CLAUDE_PROJECT_DIR when set by Claude Code, else derived from
+# this script's location so the hook is portable across clone paths.
+PROJECT="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 cd "$PROJECT" || exit 0
 
 # Final path column of each porcelain line (handles renames: "R old -> new").
