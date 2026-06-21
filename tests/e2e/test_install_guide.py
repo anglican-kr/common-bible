@@ -102,25 +102,38 @@ def _goto_and_wait(page, ua: str, nudge_state: dict | None = None) -> None:
     page.wait_for_selector(".settings-btn")
 
 
-def test_nudge_shows_on_first_visit_ios_safari(browser):
-    """iOS Safari 첫 방문 시 설치 안내 모달이 자동으로 노출돼야 한다."""
+def test_nudge_shows_on_second_visit_ios_safari(browser):
+    """iOS Safari 2번째 방문 시 설치 안내 모달이 자동으로 노출돼야 한다.
+    기본값 nextShow=2 라 첫 방문에는 뜨지 않고(검색 유입·크롤러 배려),
+    돌아온 2번째 방문 독자에게 노출된다 (storage.js _loadNudgeState 주석)."""
     ctx = browser.new_context(user_agent=_IOS_SAFARI_UA)
     page = ctx.new_page()
-    _goto_and_wait(page, _IOS_SAFARI_UA)
+    _goto_and_wait(page, _IOS_SAFARI_UA, {"visits": 1, "nextShow": 2})
 
     page.wait_for_selector("#install-modal:not([hidden])", timeout=4000)
     assert "홈 화면에 추가" in page.inner_text("#install-modal-body")
     ctx.close()
 
 
-def test_nudge_shows_on_first_visit_android(browser):
-    """Android 첫 방문 시 설치 안내 모달이 자동으로 노출돼야 한다."""
+def test_nudge_shows_on_second_visit_android(browser):
+    """Android 2번째 방문 시 설치 안내 모달이 자동으로 노출돼야 한다."""
     ctx = browser.new_context(user_agent=_ANDROID_UA)
     page = ctx.new_page()
-    _goto_and_wait(page, _ANDROID_UA)
+    _goto_and_wait(page, _ANDROID_UA, {"visits": 1, "nextShow": 2})
 
     page.wait_for_selector("#install-modal:not([hidden])", timeout=4000)
     assert "홈 화면에 추가" in page.inner_text("#install-modal-body")
+    ctx.close()
+
+
+def test_nudge_not_shown_on_first_visit(browser):
+    """첫 방문(기본 상태)에는 넛지가 뜨지 않아야 한다 — nextShow=2 기본값.
+    검색 유입·크롤러가 첫 렌더에서 가로막히지 않도록 한 의도된 동작."""
+    ctx = browser.new_context(user_agent=_IOS_SAFARI_UA)
+    page = ctx.new_page()
+    _goto_and_wait(page, _IOS_SAFARI_UA)
+    page.wait_for_timeout(2500)
+    assert page.locator("#install-modal").get_attribute("hidden") is not None
     ctx.close()
 
 
@@ -202,7 +215,7 @@ def test_nudge_updates_next_show_after_display(browser):
     """넛지 표시 후 localStorage의 nextShow가 visits+3으로 갱신돼야 한다."""
     ctx = browser.new_context(user_agent=_IOS_SAFARI_UA)
     page = ctx.new_page()
-    _goto_and_wait(page, _IOS_SAFARI_UA)
+    _goto_and_wait(page, _IOS_SAFARI_UA, {"visits": 1, "nextShow": 2})
 
     page.wait_for_selector("#install-modal:not([hidden])", timeout=4000)
 
@@ -219,7 +232,7 @@ def test_never_show_checkbox_renders_in_ios_safari_modal(browser):
     """iOS Safari 모달에 '다시 열지 않음' 체크박스가 렌더링돼야 한다."""
     ctx = browser.new_context(user_agent=_IOS_SAFARI_UA)
     page = ctx.new_page()
-    _goto_and_wait(page, _IOS_SAFARI_UA)
+    _goto_and_wait(page, _IOS_SAFARI_UA, {"visits": 1, "nextShow": 2})
 
     page.wait_for_selector("#install-modal:not([hidden])", timeout=4000)
     checkbox = page.locator("#install-never-show")
@@ -232,7 +245,7 @@ def test_never_show_checkbox_renders_in_android_modal(browser):
     """Android 모달에 '다시 열지 않음' 체크박스가 렌더링돼야 한다."""
     ctx = browser.new_context(user_agent=_ANDROID_UA)
     page = ctx.new_page()
-    _goto_and_wait(page, _ANDROID_UA)
+    _goto_and_wait(page, _ANDROID_UA, {"visits": 1, "nextShow": 2})
 
     page.wait_for_selector("#install-modal:not([hidden])", timeout=4000)
     assert page.locator("#install-never-show").count() == 1
@@ -243,7 +256,7 @@ def test_never_show_checked_sets_flag_on_close(browser):
     """체크박스 체크 후 닫기 버튼 클릭 시 localStorage에 neverShow=true가 저장돼야 한다."""
     ctx = browser.new_context(user_agent=_IOS_SAFARI_UA)
     page = ctx.new_page()
-    _goto_and_wait(page, _IOS_SAFARI_UA)
+    _goto_and_wait(page, _IOS_SAFARI_UA, {"visits": 1, "nextShow": 2})
 
     page.wait_for_selector("#install-modal:not([hidden])", timeout=4000)
     page.locator("#install-never-show").check()
@@ -260,7 +273,7 @@ def test_never_show_unchecked_does_not_set_flag(browser):
     """체크박스 미체크 상태에서 닫으면 neverShow 플래그가 설정되지 않아야 한다."""
     ctx = browser.new_context(user_agent=_IOS_SAFARI_UA)
     page = ctx.new_page()
-    _goto_and_wait(page, _IOS_SAFARI_UA)
+    _goto_and_wait(page, _IOS_SAFARI_UA, {"visits": 1, "nextShow": 2})
 
     page.wait_for_selector("#install-modal:not([hidden])", timeout=4000)
     page.locator("#install-modal-close").click()

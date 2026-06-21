@@ -5,31 +5,23 @@ ADR-034(뷰·라우팅 2차 분할) 작업 중 발견·확인한 항목 모음. 
 
 ---
 
-## 1. 사전 존재 e2e 실패 (headless · main에도 동일 — 회귀 아님)
+## 1. e2e 사전 실패 — 전수 진단·해소 (2026-06-22)
 
-ADR-034 분할 PR 검증 중 baseline(main) 비교로 **분할 이전에도 동일하게 실패**함을 확인했다. 코드 회귀가 아니라 헤드리스 환경/테스트 견고성 문제로 추정. e2e는 CI 미실행(로컬 전용)이라 그동안 드러나지 않았다.
+> **해소됨 (2026-06-22).** 아래 §1a/1b/1c 묶음은 **옛 headless chromium 버전 아티팩트**였고, playwright/chromium 업그레이드(Chrome Headless Shell 148)로 **전부 통과**로 바뀌었다. 진단 중 전체 스위트를 돌려 드러난 **다른 12건은 모두 코드 변경을 e2e가 못 따라간 낡은 테스트**(앱 버그 0)였고 현행 동작에 맞게 수정했다. 현재 전체 e2e **215 통과 / 0 실패**(`test_a11y_axe.py` 는 선택적 의존성 `axe_playwright_python` 미설치 시 수집 제외). 상세 보고서: [`archive/qa/2026-06-22-e2e-stale-refresh.md`](archive/qa/2026-06-22-e2e-stale-refresh.md).
 
-### 1a. `test_tabbar.py` — 모핑 검색 (~7–8건)
+원래 묶음(현재 통과):
 
-- **증상**: `#search-input` 이 `aria-expanded="false"` hidden 상태로 남아 `wait_for_selector(visible)` 30s 타임아웃(65× 폴링).
-- **영향 케이스**: `test_tab_bar_present_and_search_separated`, `test_home_tab_active_on_root`, `test_bookmarks_tab_navigates_and_renders_view`, `test_settings_tab_navigates_and_renders_view`, `test_search_button_morphs_to_input`, `test_home_tab_returns_to_root`, `test_book_list_does_not_collapse_on_scroll` (± `test_scroll_collapse_and_home_expands_without_nav` — 실행마다 통과/실패 갈리는 플래키).
-- **추정 원인**: ADR-030 검색 원형 버튼 → 입력 pill 모핑이 headless chromium에서 펼쳐지지 않음(CSS transition/focus 타이밍 또는 visualViewport 처리).
-- **대응 후보**: 테스트가 모핑 완료(클래스/속성 변화)를 명시적으로 기다리도록 보강, 또는 실기기/헤드풀로 실제 모핑 동작 확인 후 테스트 갱신.
+- **1a. `test_tabbar.py` 모핑 검색** — `#search-input` 모핑이 옛 headless에서 안 펼쳐지던 문제. 새 chromium에서 11/11 통과.
+- **1b. `test_settings.py`** — `.settings-popover` 토글·`location.reload()` 타이밍. 3/3 통과.
+- **1c. `test_bookmark_folders.py`** — 데스크탑 드로어 `.bm-folder-row` 토글. 2/2 통과.
 
-### 1b. `test_settings.py` — 3건
+진단 중 발견·수정한 **낡은 테스트 12건**(설계가 바뀌었는데 e2e 미갱신 — e2e가 CI 미실행이라 드리프트가 조용히 쌓임):
 
-- `test_book_order_vulgate` / `test_book_order_canonical`: `.settings-popover` 의 "외경" switch `is_checked` 30s 타임아웃 — 설정 팝오버 토글 렌더/표시 타이밍.
-- `test_cache_clear_removes_caches`: `clearAllCaches()` → `location.reload()` 후 `expect_navigation('load')` 타임아웃 — reload navigation 미완료.
-- **대응 후보**: 팝오버 가시화·리로드 완료 대기 조건 보강, 또는 실제 동작 확인.
+- **`test_book_name_swap.py` 4건** — 복음서(마태오/마르코/루가/요한)에도 모바일 짧은 명칭이 추가(`NT_MOBILE_NAME`)됐는데 테스트는 "복음서는 정식명 유지" 옛 규칙을 단언. + 터치 기기는 `.compact` 클래스가 아니라 `pointer:coarse` 미디어쿼리로 전환 + 반응형 책 그리드가 폰트 따라 칼럼을 넓혀 32px로는 더 이상 안 넘침(좁은 창에서 측정). 모두 현행 동작에 맞게 수정 + 복음서 전환 양성 케이스 추가.
+- **`test_features.py` 롱프레스 1건** — 절 선택 진입 임계값 300→**500ms** 변경(커밋 a506958)인데 테스트는 350ms만 눌러 진입 실패. 650ms로 수정.
+- **`test_install_guide.py` 7건** — 첫 방문 너지 노출이 **의도적으로 제거**(기본 `nextShow` 2 — 검색 유입·크롤러 배려, 돌아온 2번째 방문 노출)됐는데 테스트는 첫 방문 노출을 기대. 2번째 방문 상태(`{visits:1, nextShow:2}`)로 수정 + 첫 방문 미노출 양성 케이스 추가.
 
-### 1c. `test_bookmark_folders.py` — 폴더 토글 2건 (2026-06-11 확인)
-
-- `test_folder_toggle_expand_collapse` / `test_folder_expanded_state_persists`: **데스크탑 드로어**에서 `.bm-folder-row` 클릭 후 `aria-expanded` 가 `false` 에 머묾(펼침 토글이 안 일어남) → `assert ... == "true"` 실패.
-- **회귀 아님 확인**: bookmark-select 분리(ADR-034 후속) 작업 중 발견했으나, 변경분을 stash 하고 `release/1.6.4` base 로 돌려도 동일하게 2건 실패. 같은 헤더의 모바일 select e2e(`test_bookmark_select_delete.py` 26건)는 전부 통과.
-- **추정 원인**: headless chromium 에서 `.bm-folder-row` 의 click 이 폴더 토글로 이어지지 않음 — `_setupDragHandle` 의 pointerdown 리스너와 합성 click 의 간섭, 또는 클릭 타깃이 토글 분기를 안 타는 문제로 추정.
-- **대응 후보**: (1) 실제 브라우저에서 데스크탑 드로어 폴더 펼침이 정상인지 먼저 확인 → 정상이면 테스트의 click 방식(좌표/대상 엘리먼트) 보강, 비정상이면 토글 핸들러(`_buildFolderItem` click → `_toggleFolder`) 결함 수정. (2) headless 포인터 간섭이면 `dispatch_event('click')` 등으로 우회.
-
-> 참고: 통과하는 e2e(내비·오디오·검색·북마크·설치 안내·a11y 등 다수)는 정상. 위 세 묶음만 환경 의존으로 실패.
+> **교훈**: e2e가 CI 미실행이라 코드 변경 시 e2e가 조용히 드리프트한다. 기능 변경 후 영향 e2e를 함께 갱신할 것. axe a11y 테스트를 돌리려면 `pip install axe-playwright-python` 필요.
 
 ---
 
