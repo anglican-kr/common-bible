@@ -76,6 +76,10 @@ function startScrollTracking(bookId, chapter) {
 
 // ── Routing ──
 
+// ── BEGIN PARSE_PATH ──
+// Pure URL → route descriptor. Reads location.pathname/search and the
+// DIVISION_LABELS / parseVerseSpec / selectedVersesToSpec deps; no DOM, no
+// history side effects — sliced + unit-tested in tests/unit/routing.test.js.
 function parsePath() {
   const pathname = location.pathname.replace(/^\//, "");
   if (!pathname) return { view: "books" };
@@ -163,6 +167,7 @@ function parsePath() {
     resume: query.has("resume"),
   };
 }
+// ── END PARSE_PATH ──
 
 /** @param {string} path */
 function navigate(path) {
