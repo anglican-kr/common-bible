@@ -74,7 +74,7 @@ data/source/*.md (73권, common-bible-data 서브모듈)
 
 ### 클라이언트 JS 유닛 테스트 (ADR-013)
 
-Node 자체 테스트 러너 + 자체 vm 하네스. 의존성 0, CI 자동 실행. **537 케이스 통과** (2026-05-27). 파일 명명 컨벤션: `tests/unit/<source-basename>.test.js`, 한 모듈 = 한 테스트 파일, 내부 영역은 `// ── <영역> ──` 섹션. 상세는 ADR-013.
+Node 자체 테스트 러너 + 자체 vm 하네스. 의존성 0, CI 자동 실행. **758 케이스 통과** (2026-06-21). 파일 명명 컨벤션: `tests/unit/<source-basename>.test.js`, 한 모듈 = 한 테스트 파일, 내부 영역은 `// ── <영역> ──` 섹션. 상세는 ADR-013.
 
 ```bash
 node --test tests/unit/*.test.js                 # 전체 (CI와 동일)
