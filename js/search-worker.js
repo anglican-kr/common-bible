@@ -164,6 +164,12 @@ function loadChunk(name, url) {
 
 // ── Search helpers ──
 
+// ── BEGIN SEARCH_PURE ──
+// Pure search logic — query parsing (in:<book> operator), verse-ref detection,
+// substring matching, pagination. Depend only on module state (meta /
+// loadedChunks), no worker globals — sliced + unit-tested in
+// tests/unit/search-worker.test.js with stubbed meta/loadedChunks.
+
 // Verse reference pattern: "창세 1:3" or "창세 1:3-11"
 const REF_RE = /^([가-힣a-zA-Z0-9\s]+?)\s*(\d+)\s*:\s*(\d+)(?:\s*[-–]\s*(\d+))?\s*$/;
 
@@ -271,6 +277,7 @@ function paginate(allMatched, page, pageSize) {
   }));
   return { results, total };
 }
+// ── END SEARCH_PURE ──
 
 // ── Message handler ──
 
