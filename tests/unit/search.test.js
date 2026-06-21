@@ -1222,3 +1222,79 @@ test("history controller: consumeEnter with active picks query + returns true", 
   assert.equal(c.input.value, "사랑");
   assert.deepEqual(c.onSelectCalls, ["사랑"]);
 });
+
+// ── SCOPE_HELPERS block — extractInScope / bookName ──────────────────────────
+// Pure helpers: extractInScope pulls `in:<alias>` operators out of a raw query
+// against an injected aliasMap (Map); bookName looks an id up in _bookMap with
+// id-fallback. The block declares IN_TOKEN_RE + both functions; the loader
+// supplies a settable _bookMap via prelude.
+
+function loadScopeHelpers() {
+  const ctx = { Object, Array, Set, Map, String, RegExp, console };
+  vm.createContext(ctx);
+  const prelude = `
+    let _bookMap = null;
+    function _setBookMap(m) { _bookMap = m; }
+  `;
+  vm.runInContext(prelude + extractBlock("SCOPE_HELPERS"), ctx, {
+    filename: "search-scope-helpers.js",
+  });
+  return ctx;
+}
+
+const scope = loadScopeHelpers();
+const ALIASES = new Map([["요한", "john"], ["창세", "genesis"], ["gen", "genesis"]]);
+
+test("extractInScope: 연산자 없으면 키워드 그대로, ids 빈 배열", () => {
+  assert.deepEqual(scope.extractInScope("사랑", ALIASES), { keyword: "사랑", ids: [] });
+});
+
+test("extractInScope: in:<별칭>을 ids로 빼고 키워드에서 제거", () => {
+  assert.deepEqual(scope.extractInScope("사랑 in:요한", ALIASES),
+    { keyword: "사랑", ids: ["john"] });
+});
+
+test("extractInScope: in:이 앞에 와도 동작", () => {
+  assert.deepEqual(scope.extractInScope("in:gen 사랑", ALIASES),
+    { keyword: "사랑", ids: ["genesis"] });
+});
+
+test("extractInScope: in: 뒤 공백 허용", () => {
+  assert.deepEqual(scope.extractInScope("사랑 in: 요한", ALIASES),
+    { keyword: "사랑", ids: ["john"] });
+});
+
+test("extractInScope: 여러 in:은 누적", () => {
+  const r = scope.extractInScope("사랑 in:요한 in:gen", ALIASES);
+  assert.equal(r.keyword, "사랑");
+  assert.deepEqual(r.ids, ["john", "genesis"]);
+});
+
+test("extractInScope: 별칭은 대소문자 무시(소문자 정규화)", () => {
+  assert.deepEqual(scope.extractInScope("사랑 in:GEN", ALIASES),
+    { keyword: "사랑", ids: ["genesis"] });
+});
+
+test("extractInScope: 해석 안 되는 별칭은 키워드에 그대로 남김(워커가 처리)", () => {
+  assert.deepEqual(scope.extractInScope("사랑 in:없는책", ALIASES),
+    { keyword: "사랑 in:없는책", ids: [] });
+});
+
+test("extractInScope: 중복 공백 정리", () => {
+  assert.equal(scope.extractInScope("  사랑   은혜  ", ALIASES).keyword, "사랑 은혜");
+});
+
+test("bookName: _bookMap에 있으면 한글 이름", () => {
+  scope._setBookMap({ john: "요한복음", genesis: "창세기" });
+  assert.equal(scope.bookName("john"), "요한복음");
+});
+
+test("bookName: 없는 id는 id 그대로 폴백", () => {
+  scope._setBookMap({ john: "요한복음" });
+  assert.equal(scope.bookName("unknown"), "unknown");
+});
+
+test("bookName: _bookMap이 null이어도 id 폴백(안전)", () => {
+  scope._setBookMap(null);
+  assert.equal(scope.bookName("john"), "john");
+});

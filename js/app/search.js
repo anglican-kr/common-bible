@@ -451,6 +451,11 @@ async function ensureAliasMap() {
   return _aliasMap || map;
 }
 
+// ── BEGIN SCOPE_HELPERS ──
+// Pure query-scope helpers — `in:<book>` extraction (client-side mirror of the
+// worker's parseQuery) + book-name lookup. Sliced + unit-tested in
+// tests/unit/search.test.js with a stubbed aliasMap / _bookMap.
+
 // Mirrors the worker's IN_RE (search-worker.js): one or more `in:<alias>`,
 // whitespace after `in:` ignored, alias greedy on non-space.
 const IN_TOKEN_RE = /(?:^|\s)in:\s*(\S+)/g;
@@ -476,6 +481,7 @@ function extractInScope(raw, aliasMap) {
 function bookName(id) {
   return (_bookMap && _bookMap[id]) || id;
 }
+// ── END SCOPE_HELPERS ──
 
 // CSP-safe inline SVG icon (no markup string — see buildSearchEmptyState).
 /**
