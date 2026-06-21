@@ -240,8 +240,8 @@ HIG 의 절제된 깊이 표현. 라이트 기준 값이며, **다크에서는 `
 | `--shadow-1` (=`--shadow`) | `0 1px 3px /.08` | 기본 카드·토글 노브·구분 탭 인디케이터·오디오 재생 버튼(resting) |
 | `--shadow-2` | `0 4px 12px /.12` | 팝오버·당겨 새로고침·업데이트 토스트·버튼 hover lift |
 | `--shadow-3` | `0 4px 16px /.12` | 주석 툴팁·코치마크·드래그 고스트 + **헤더 스크롤 elevation**(ADR-025) |
-| `--shadow-sheet` | `0 -4px 24px /.18` | 바텀 시트(위로 뜨는 그림자 — 모바일 북마크·인용 드로어) |
-| `--shadow-drawer` | `-4px 0 24px /.15` | **데스크탑 사이드 패널**(인용·북마크 드로어). 우측 고정 패널이라 그림자가 왼쪽으로 — 5단 사다리에 없는 **수평 오프셋** 축 |
+| `--shadow-sheet` | `0 -4px 24px /.18` | 바텀 시트(위로 뜨는 그림자 — 모바일·터치의 인용 시트·북마크 드로어·검색 책 범위 picker) |
+| `--shadow-drawer` | `-4px 0 24px /.15` | **데스크탑 사이드 패널**(같은 세 표면이 `pointer:fine`+≥769px 에서 우측 패널로 전환). 우측 고정 패널이라 그림자가 왼쪽으로 — 5단 사다리에 없는 **수평 오프셋** 축 |
 | `--shadow-4` | `0 12px 32px /.25` | 모달 다이얼로그 |
 
 ### 규약
@@ -278,7 +278,7 @@ HIG 의 절제된 깊이 표현. 라이트 기준 값이며, **다크에서는 `
 | 아이콘 버튼 | `.title-back-btn`·`.title-bookmark-btn`·`.settings-btn` | 투명·`--accent`·**≥44px 탭 영역** | ADR-024 |
 | 구분 탭 | `.division-tab`·`.division-tab-indicator` | 슬라이드 인디케이터(트랙 동색 칩 + elevation) | ADR-024 |
 | 챕터 팝오버 | `.chapter-popover`·`.popover-grid`·`.popover-item` | `--radius-lg`·격자 카드 | ADR-024 |
-| 바텀 시트 | `.cite-sheet`·`.bm-drawer` | `--radius-xl` 상단·`--shadow-sheet`·그래버 핸들·safe-area | ADR-022 |
+| 바텀 시트 / 사이드 패널 | `#cite-sheet`·`#bookmark-drawer`·`.book-filter-sheet` | 모바일·터치: 하단 시트(`--radius-xl` 상단·`--shadow-sheet`·그래버 핸들 + 높이 드래그 리사이즈·safe-area). `pointer:fine`+≥769px: 우측 패널(`--shadow-drawer` + 좌측 가장자리 폭 리사이즈) | ADR-022·032 |
 | 모달 | install/disconnect/bookmark 다이얼로그 | 중앙 정렬·`--radius-modal`·`--shadow-4`·scrim `rgba(0,0,0,.45)` | ADR-008 |
 | 툴팁(주석) | `.note-tooltip`·`.note-anchor`(※) | 클릭 트리거·footnote 패턴 | ADR-022·027 |
 | 인용 칩 | `.cite-chip` | 옅은 회색 칩·클릭 시 인용 시트 | ADR-022 |
@@ -316,8 +316,14 @@ HIG 의 절제된 깊이 표현. 라이트 기준 값이며, **다크에서는 `
 
 ### 시트 vs 모달 (HIG)
 
-- **바텀 시트** — 콘텐츠 연장(검색·인용·북마크). 상단 **그래버 핸들** + 드래그 리사이즈 +
-  safe-area 하단 패딩. 데스크탑에서는 우측 사이드 패널로 전환.
+- **바텀 시트** — 콘텐츠 연장. 세 표면이 같은 패턴을 공유한다: 인용(`#cite-sheet`)·북마크
+  드로어(`#bookmark-drawer`)·검색 책 범위 picker(`.book-filter-sheet`). 모바일·터치 기기에서는
+  화면 하단에 붙는 시트 — 상단 **그래버 핸들** + 높이 드래그 리사이즈 + safe-area 하단 패딩,
+  아래에서 위로 슬라이드 인(`bm-drawer-in-up`). **`pointer: fine` + ≥769px(마우스 데스크탑)에서만
+  우측 사이드 패널로 전환**(`top:2.5vh`·`height:95vh`, 좌측 가장자리 폭 리사이즈, `--shadow-drawer`,
+  오른쪽에서 슬라이드 인). 폭이 ≥769px 라도 **터치 태블릿(`pointer: coarse`)은 데스크탑 조건에 안
+  걸려 바텀 시트를 유지**한다 — 전환 기준은 폭 단독이 아니라 폭 + 포인터 종류다.
+  (전체화면 검색 `/search` 는 시트가 아니라 라우트다 — §7.)
 - **모달** — 결정 강제(설치 안내·연결 해제·북마크 저장). 중앙 정렬 + scrim + focus trap.
 
 ---

@@ -20,14 +20,15 @@
 
 ## 저장소 토폴로지 (ADR-020)
 
-| 저장소 | 가시성 | 역할 |
-|---|---|---|
-| `anglican-kr/common-bible` (본 저장소) | 공개 | PWA 프론트엔드 · sw.js · JS 유닛/e2e · 릴리스 스크립트 |
-| `anglican-kr/common-bible-data` | 비공개 | 마크다운 원본 + Python 파이프라인 + 빌드 출력 + 데이터 검증 테스트 |
-| `anglican-kr/common-bible-audio` | 비공개 | 장별 mp3 (Git LFS) |
-| `anglican-kr/common-bible-server` | 비공개 | nginx 설정(BFF·보안 헤더) + 배포 스크립트 |
+| 저장소                                 | 가시성 | 역할                                                               |
+| -------------------------------------- | ------ | ------------------------------------------------------------------ |
+| `anglican-kr/common-bible` (본 저장소) | 공개   | PWA 프론트엔드 · sw.js · JS 유닛/e2e · 릴리스 스크립트             |
+| `anglican-kr/common-bible-data`        | 비공개 | 마크다운 원본 + Python 파이프라인 + 빌드 출력 + 데이터 검증 테스트 |
+| `anglican-kr/common-bible-audio`       | 비공개 | 장별 mp3 (Git LFS)                                                 |
+| `anglican-kr/common-bible-server`      | 비공개 | nginx 설정(BFF·보안 헤더) + 배포 스크립트                          |
 
 서브모듈 토폴로지:
+
 - 본 저장소가 `data/`에 `common-bible-data` 마운트
 - `common-bible-data` 안의 `audio/`에 `common-bible-audio` nested 마운트
 - clone 시 `git clone --recurse-submodules` 또는 `git submodule update --init --recursive`
@@ -63,6 +64,7 @@ data/source/*.md (73권, common-bible-data 서브모듈)
 빌드·검증 절차 상세는 `common-bible-data/README.md` 참조.
 
 마크다운 수정 흐름 (ADR-021 이후, 2026-05-23 개정):
+
 1. `common-bible-data` 저장소에서 `source/*.md` 편집 → PR → main 머지
 2. main의 `build.yml` CI 가 자동으로 파이프라인 + 매니페스트 생성 + 자동 커밋백 (validate.yml 가 빌드된 산출물에 대해 재검증)
 3. 앱 저장소의 `sync-data.yml` webhook 이 자동으로 서브모듈 포인터 + `sitemap.xml` 갱신 commit·push (버전 bump 없음)
