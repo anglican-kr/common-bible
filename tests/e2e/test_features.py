@@ -51,7 +51,8 @@ def test_long_press_save_updates_header_bookmark_icon(browser):
 
     page.mouse.move(box["x"] + 10, box["y"] + 10)
     page.mouse.down()
-    page.wait_for_timeout(350)
+    # Long-press threshold is 500ms (views.js ENTER_SELECT_MS); hold past it.
+    page.wait_for_timeout(650)
     page.mouse.up()
 
     page.wait_for_selector("#verse-select-bar:not([hidden])")
