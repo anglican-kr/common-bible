@@ -1530,9 +1530,6 @@ function consumeSearchAutoNavigate() {
 // chapter renderer reuses appendTextWithHighlight for ?hl= snippet highlighting).
 // ADR-030: 탭 바 하단 모핑 입력이 검색을 커밋할 때 재사용.
 window.commitTopSearch = commitTopSearch;
-// route() dismisses the book-filter sheet on navigation (ADR-033 / ADR-032
-// teardown contract). No-op when the sheet was never opened.
-window.closeBookFilterSheet = () => { if (_bookSheet) _bookSheet.overlay.close(); };
 window.renderSearchResults = renderSearchResults;
 window.renderSearchView = renderSearchView;
 // Refresh in-field search tokens (book scope) from the URL —
@@ -1545,10 +1542,6 @@ window.navigateSearch = navigateSearch;
 window.isMobile = isMobile;
 window.appendTextWithHighlight = appendTextWithHighlight;
 window.consumeSearchAutoNavigate = consumeSearchAutoNavigate;
-window.appSearch = {
-  renderSearchResults, renderSearchView,
-  isMobile, appendTextWithHighlight, consumeSearchAutoNavigate,
-};
 
 export {
   renderSearchResults, renderSearchView,

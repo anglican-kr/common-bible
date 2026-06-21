@@ -783,18 +783,6 @@ export interface AppBookmark {
   initBookmarkDrawerResize: () => void;
 }
 
-// ── App search facade (js/app/search.js) ────────────────────────────────────
-// Phase 5 of the app.js modularization (ADR-018). Search worker wire-up,
-// desktop top-bar input, mobile full-screen /search view, history panel.
-
-export interface AppSearch {
-  renderSearchResults: (query: string, page: number, autoNavigate?: boolean, opts?: { filterBooks?: string[] }) => Promise<void>;
-  renderSearchView: (state?: { filterBooks?: string[] }) => Promise<void>;
-  isMobile: () => boolean;
-  appendTextWithHighlight: (target: Node, text: string, query: string) => void;
-  consumeSearchAutoNavigate: () => boolean;
-}
-
 // ── App install facade (js/app/install.js) ──────────────────────────────────
 // Phase 4 of the app.js modularization (ADR-018). PWA install detection,
 // install guide modal, and install nudge auto-show.
@@ -809,13 +797,6 @@ export interface InstallObject {
   detectPlatform: () => string;
   subscribe: (fn: (state: InstallSubscriptionState) => void) => () => void;
   triggerPrompt: () => Promise<{ outcome: string }>;
-}
-
-export interface AppInstall {
-  install: InstallObject;
-  openInstallModal: () => void;
-  closeInstallModal: () => void;
-  maybeShowInstallNudge: () => void;
 }
 
 // ── Window augmentation ──────────────────────────────────────────────────────
@@ -879,8 +860,6 @@ declare global {
     appOverlay: AppOverlay;
     appStorage: AppStorage;
     appSettings: AppSettings;
-    appInstall: AppInstall;
-    appSearch: AppSearch;
     appBookmark: AppBookmark;
     appCitations: AppCitations;
     appParallels: AppParallels;
@@ -927,7 +906,6 @@ declare global {
     closeChapterPopover?: () => void;
     closeBookmarkDrawer?: () => void;
     closeSaveModal?: () => void;
-    closeBookFilterSheet?: () => void;
     closeNewFolderModal?: () => void;
     closeMergeModal?: () => void;
     closeImportModal?: () => void;
@@ -1016,7 +994,6 @@ declare global {
   function openBookmarkDrawer(bookId: string | null, chapter: number | null): void;
   function closeBookmarkDrawer(): void;
   function closeSaveModal(): void;
-  function closeBookFilterSheet(): void;
   function closeNewFolderModal(): void;
   function closeMergeModal(): void;
   function closeImportModal(): void;

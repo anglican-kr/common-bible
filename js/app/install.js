@@ -493,6 +493,5 @@ window.install = install;
 window.openInstallModal = openInstallModal;
 window.closeInstallModal = closeInstallModal;
 window.maybeShowInstallNudge = maybeShowInstallNudge;
-window.appInstall = { install, openInstallModal, closeInstallModal, maybeShowInstallNudge };
 
 export { install, openInstallModal, closeInstallModal, maybeShowInstallNudge };
