@@ -8,6 +8,8 @@
 
 본 앱은 하단/오버레이 표면 — 오디오 바, 검색 시트, 북마크 드로어, 인용 바텀 시트 — 에 일관된 **frosted glass**(`backdrop-filter: blur(12px)` + 반투명 배경) 처리를 적용한다. 헤더(`#sticky-group` + `#app-header`)만 솔리드 `var(--bg)` 로 남아 시각적으로 분리돼 있었고, 사용자가 "헤더와 하단 컴포넌트가 안 어울린다" 고 느꼈다.
 
+> **개정 (2026-06-21, 코드 정합):** 위 "검색 시트·북마크 드로어·인용 바텀 시트 = frosted glass" 는 작성 시점(2026-05-30)의 상태다. 이후 이 세 시트/드로어는 **솔리드 `var(--bg)` 로 바뀌었다**(현행 코드: `#cite-sheet`·`#bookmark-drawer`·`.book-filter-sheet` 모두 `background: var(--bg)`, backdrop-filter 없음). 현재 **frosted glass 는 플로팅 dock(탭 바·오디오 미니바·검색 원형·절/북마크 선택 바)과 검색 스크림에만** 적용된다(`DESIGN.md` §1·§5). 본 ADR 의 결정(헤더 솔리드 + 스크롤 elevation)과 "표면이 아니라 다른 축에서 통일감" 통찰은 그대로 유효하다 — 헤더(솔리드) vs 플로팅 chrome(글래스)의 대비는 여전히 존재한다.
+
 자연스러운 첫 가설은 "헤더에도 글래스를 적용한다" 였으나 iOS 26 / Android / PWA 환경 조사 결과 다음 제약이 발견됐다:
 
 1. **iOS 26 Safari toolbar tinting 자동 추출** — `theme-color` meta 가 무시되고, viewport edge 근처 fixed/sticky 요소의 `background-color` 가 status bar 색을 결정한다. 헤더가 반투명이 되면 Safari 가 흰/검 fallback 으로 떨어져 status bar 와 본문 색이 어긋난다.
