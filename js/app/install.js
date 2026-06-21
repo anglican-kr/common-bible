@@ -9,7 +9,7 @@
 /** @typedef {import("../types").InstallNudgeState} InstallNudgeState */
 /** @typedef {import("../types").InstallObject} InstallObject */
 
-const { _$, el, clearNode, setInert } = window.appHelpers;
+const { _$, el, clearNode } = window.appHelpers;
 const { createOverlay } = window.appOverlay;
 const { _loadNudgeState, _saveNudgeState } = window.appStorage;
 
@@ -159,11 +159,9 @@ const $installModalClose = _$("install-modal-close");
 // the overlay controller (ADR-032). Background scroll-lock + neverShow
 // persistence + carousel cleanup are install-specific, handled via onOpen/onClose.
 
-// Elements that become inert (background) while the install modal is open.
+// Elements that become inert (background) while the install modal is open —
+// passed to the overlay controller, which applies/clears inert itself (ADR-032).
 const INSTALL_INERT_SELECTORS = "#sticky-group, main#app, #audio-bar, #launch-screen, #bookmark-scrim, #bookmark-drawer, #verse-select-bar, #bm-select-bar";
-
-/** @param {boolean} on */
-function setBackgroundInert(on) { setInert(on, INSTALL_INERT_SELECTORS); }
 
 function _buildNeverShowRow() {
   const row = el("div", { className: "install-never-show-row" });
