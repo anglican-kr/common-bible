@@ -478,6 +478,9 @@ OAuth 측면 (가장 큰 공격 표면):
 | [033](decisions/033-search-options.md)                  | 검색 옵션 — 책 picker(필터 시트)·결과 내 검색(AND)·진입 시 최근 검색 목록(개별/전체 삭제), URL 인코딩 필터 상태, 노트 검색 범위 확장 대비 (구현 완료) |
 | [034](decisions/034-views-routing-second-split.md)      | 뷰·라우팅·북마크 2차 분할 — 관심사별 모듈화 + 비순환 facade→명시 import 전환 + 순환 dispatch는 registry 역전 (ADR-018 후속, PR1 오디오 분리 완료) |
 | [035](decisions/035-bookmark-reading-view.md)           | 북마크 모아 읽기 — 폴더 단위 연속 읽기 화면(`/read/<id>`, 홈 탭 분류), 폴더 행 `읽기`(auto_stories) 진입, 인접·연속 본문 병합, 네스팅 폴더는 소제목. `renderChapter` 절 루프를 `appendVerses`로 추출(전례독서 페이지 기반 기술) (구현 중) |
+| [036](decisions/036-liturgical-calendar-data-model.md)  | 교회력(전례력) 데이터 모델 — 본기도 평면 배열(자기 좌표)·explode/병합 규칙·영어 값+`_vocab`·temporal/sanctoral·품계 8단계(2차)·전례색 4색·computus 기준·맺음구 분리 (구현 대기) |
+| [037](decisions/037-eucharist-lectionary-data-and-engine.md) | 감사성찬례 전례독서 데이터·엔진 — `eucharist-readings.json` 좌표 스키마(refs=장 경계, verseSpec 재사용, 대안 세트 explode), 전례시편 별도 책 `lps`(계응 DSL, 숨김), 연중 주간 구간표·KASI 음력, `liturgical-engine.js`(computus·후보 관측일 보존) (구현 대기) |
+| [038](decisions/038-calendar-lectionary-ui.md)          | 교회력 캘린더·전례독서 뷰·검색 이원화 — 캘린더 탭(홈 옆, 월간·주간·목록 3뷰), `/lectionary/YYYY-MM-DD`(본기도 열거+탭·맺음구 상수·계응 시편·세트/트랙 전환), 검색 상단 탭(성서 본문/전례독서) (구현 대기) |
 
 ## 부록 B. 자주 보게 되는 파일 빠른 참조
 
