@@ -70,13 +70,15 @@ window.appHelpers = (() => {
    * the baseline. Straight and curly forms both qualify — bible source is
    * typeset with " / ', the liturgical psalter with “ / ‘ (ADR-039) — and
    * both directions hang, since a line may begin with a closing quote.
-   * Single quotes are narrower, hence the smaller offset class.
+   * Each modifier carries the offset for that glyph's advance width; curly
+   * doubles are wider than straight ones, singles narrower than both.
    * Returns "" when the character does not open or close a quote.
    * @param {string | undefined} ch
    * @returns {string}
    */
   function hangingQuoteClass(ch) {
-    if (ch === '"' || ch === "“" || ch === "”") return "hanging-quote";
+    if (ch === '"') return "hanging-quote";
+    if (ch === "“" || ch === "”") return "hanging-quote hanging-quote--curly";
     if (ch === "'" || ch === "‘" || ch === "’") {
       return "hanging-quote hanging-quote--single";
     }
