@@ -65,7 +65,7 @@ window.appCitations = (() => {
       .join(";");
   }
 
-  const { el, clearNode } = window.appHelpers;
+  const { el, clearNode, hangingQuoteClass } = window.appHelpers;
   const { createOverlay, attachSheetDrag, attachSheetResize } = window.appOverlay;
 
   /**
@@ -674,9 +674,8 @@ window.appCitations = (() => {
           }
 
           // Hanging punctuation for poetry quote lines (parity with main render).
-          if (isPoetry && (line[0] === '"' || line[0] === "'")) {
-            const hqCls = line[0] === '"'
-              ? "hanging-quote" : "hanging-quote hanging-quote--single";
+          const hqCls = isPoetry ? hangingQuoteClass(line[0]) : "";
+          if (hqCls) {
             span.appendChild(el("span", { className: hqCls }, line[0]));
             _appendLineText(span, line.slice(1));
           } else {

@@ -65,6 +65,25 @@ window.appHelpers = (() => {
   }
 
   /**
+   * Hanging punctuation (ADR-006): a poetry line that opens with a quote
+   * pulls that quote into the indent gutter so the first letter stays on
+   * the baseline. Straight and curly forms both qualify — bible source is
+   * typeset with " / ', the liturgical psalter with “ / ‘ (ADR-039) — and
+   * both directions hang, since a line may begin with a closing quote.
+   * Single quotes are narrower, hence the smaller offset class.
+   * Returns "" when the character does not open or close a quote.
+   * @param {string | undefined} ch
+   * @returns {string}
+   */
+  function hangingQuoteClass(ch) {
+    if (ch === '"' || ch === "“" || ch === "”") return "hanging-quote";
+    if (ch === "'" || ch === "‘" || ch === "’") {
+      return "hanging-quote hanging-quote--single";
+    }
+    return "";
+  }
+
+  /**
    * Toggle background `inert` + `aria-hidden` for elements outside the
    * currently active modal/drawer. Selectors should match the elements
    * that need to be excluded from focus and screen reader output.
@@ -161,7 +180,7 @@ window.appHelpers = (() => {
     return box;
   }
 
-  return { _$, chUnit, el, clearNode, setInert, trapFocus, dragReleaseAction, emptyState };
+  return { _$, chUnit, el, clearNode, hangingQuoteClass, setInert, trapFocus, dragReleaseAction, emptyState };
 })();
 
 // ESM module marker (ADR-019). No runtime effect; signals TypeScript that

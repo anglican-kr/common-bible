@@ -25,6 +25,19 @@ const APP_PATH = path.resolve(__dirname, "../../js/app/citations.js");
 const APP_SOURCE = fs.readFileSync(APP_PATH, "utf8")
   .replace(/\nexport\s*\{\s*\}\s*;?\s*$/, "");
 
+// `hangingQuoteClass` comes from the real helpers.js rather than a stub — a
+// hand-copied version would drift from production silently. helpers.js only
+// defines functions at load, so an empty context is enough to evaluate it.
+const HELPERS_PATH = path.resolve(__dirname, "../../js/app/helpers.js");
+const HELPERS_SOURCE = fs.readFileSync(HELPERS_PATH, "utf8")
+  .replace(/\nexport\s*\{\s*\}\s*;?\s*$/, "");
+const { hangingQuoteClass } = (() => {
+  const helperCtx = vm.createContext({});
+  helperCtx.window = helperCtx;
+  vm.runInContext(HELPERS_SOURCE, helperCtx, { filename: "helpers.js" });
+  return helperCtx.appHelpers;
+})();
+
 // ── Minimal DOM element stub ─────────────────────────────────────────────────
 // `el(tag, attrs, ...children)` returns a plain object. Mirrors the
 // signature of window.appHelpers.el so citations.js code that builds DOM via
@@ -59,6 +72,7 @@ function loadCitations() {
   ctx.appHelpers = {
     el: makeStubEl(),
     clearNode: (n) => { n.children = []; },
+    hangingQuoteClass,
     trapFocus: () => () => {},
   };
   // citations.js destructures createOverlay at module load (ADR-032); these
