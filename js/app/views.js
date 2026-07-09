@@ -21,7 +21,7 @@
 // (settings-ui / state-machine read it) so it is not imported here.
 import { showAudioPlayer, hideAudioBar } from "./audio-player.js";
 
-const { _$, el, clearNode, chUnit } = window.appHelpers;
+const { _$, el, clearNode, chUnit, hangingQuoteClass } = window.appHelpers;
 const { createOverlay } = window.appOverlay;
 const {
   loadBookOrder, loadStartupBehavior,
@@ -1006,10 +1006,9 @@ function appendVerses(article, verses, opts = {}) {
         const segTextOpts = (!isPoetry && segWillShowChip && isLastSegLine)
           ? { noTrailingSpace: true } : undefined;
         // Hanging punctuation: pull leading quote outside the indent.
-        // Single quote is narrower, so it uses a smaller offset (see .hanging-quote--single).
-        if (isPoetry && (line[0] === '"' || line[0] === "'")) {
-          const cls = line[0] === '"' ? "hanging-quote" : "hanging-quote hanging-quote--single";
-          span.appendChild(el("span", { className: cls }, line[0]));
+        const hqCls = isPoetry ? hangingQuoteClass(line[0]) : "";
+        if (hqCls) {
+          span.appendChild(el("span", { className: hqCls }, line[0]));
           appendSegText(span, line.slice(1), segTextOpts);
         } else {
           appendSegText(span, line, segTextOpts);

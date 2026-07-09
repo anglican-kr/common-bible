@@ -12,6 +12,7 @@
 //   - chUnit (psalm vs everything else)
 //   - el (createElement + attrs + children)
 //   - clearNode (firstChild loop)
+//   - hangingQuoteClass (leading quote → gutter class, straight + curly)
 //   - setInert (inert + aria-hidden toggle on selector matches)
 //   - trapFocus (Tab / Shift-Tab cycling within a container)
 //   - dragReleaseAction (bottom-sheet drag-resize release thresholds)
@@ -363,6 +364,55 @@ test("clearNode: only removes direct children (not deeper)", () => {
   // The grandchild is still attached to its (now-detached) parent
   assert.equal(child._children.length, 1);
   assert.equal(child._children[0], grandchild);
+});
+
+// ── hangingQuoteClass ───────────────────────────────────────────────────────
+
+test("hangingQuoteClass: straight double quote hangs with the wide offset", () => {
+  const h = loadHelpers();
+  assert.equal(h.helpers.hangingQuoteClass('"'), "hanging-quote");
+});
+
+test("hangingQuoteClass: curly double quotes hang, both directions", () => {
+  const h = loadHelpers();
+  // Liturgical psalter text is typeset with “ ” (ADR-039). A poetry line may
+  // open with either, so both hang exactly as the straight form used to.
+  assert.equal(h.helpers.hangingQuoteClass("“"), "hanging-quote");
+  assert.equal(h.helpers.hangingQuoteClass("”"), "hanging-quote");
+});
+
+test("hangingQuoteClass: straight single quote gets the narrow offset", () => {
+  const h = loadHelpers();
+  assert.equal(
+    h.helpers.hangingQuoteClass("'"),
+    "hanging-quote hanging-quote--single",
+  );
+});
+
+test("hangingQuoteClass: curly single quotes get the narrow offset", () => {
+  const h = loadHelpers();
+  assert.equal(
+    h.helpers.hangingQuoteClass("‘"),
+    "hanging-quote hanging-quote--single",
+  );
+  assert.equal(
+    h.helpers.hangingQuoteClass("’"),
+    "hanging-quote hanging-quote--single",
+  );
+});
+
+test("hangingQuoteClass: non-quote characters do not hang", () => {
+  const h = loadHelpers();
+  assert.equal(h.helpers.hangingQuoteClass("주"), "");
+  assert.equal(h.helpers.hangingQuoteClass("("), "");
+  assert.equal(h.helpers.hangingQuoteClass("¶"), "");
+});
+
+test("hangingQuoteClass: empty line and undefined do not hang", () => {
+  const h = loadHelpers();
+  // `line[0]` is undefined on an empty line — must not throw or hang.
+  assert.equal(h.helpers.hangingQuoteClass(undefined), "");
+  assert.equal(h.helpers.hangingQuoteClass(""), "");
 });
 
 // ── setInert ───────────────────────────────────────────────────────────────
