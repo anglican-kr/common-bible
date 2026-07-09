@@ -373,12 +373,13 @@ test("hangingQuoteClass: straight double quote hangs with the wide offset", () =
   assert.equal(h.helpers.hangingQuoteClass('"'), "hanging-quote");
 });
 
-test("hangingQuoteClass: curly double quotes hang, both directions", () => {
+test("hangingQuoteClass: curly double quotes hang with their own offset", () => {
   const h = loadHelpers();
   // Liturgical psalter text is typeset with “ ” (ADR-039). A poetry line may
-  // open with either, so both hang exactly as the straight form used to.
-  assert.equal(h.helpers.hangingQuoteClass("“"), "hanging-quote");
-  assert.equal(h.helpers.hangingQuoteClass("”"), "hanging-quote");
+  // open with either, and both are wider than the straight form (0.444em vs
+  // 0.389em), so they carry the --curly offset.
+  assert.equal(h.helpers.hangingQuoteClass("“"), "hanging-quote hanging-quote--curly");
+  assert.equal(h.helpers.hangingQuoteClass("”"), "hanging-quote hanging-quote--curly");
 });
 
 test("hangingQuoteClass: straight single quote gets the narrow offset", () => {

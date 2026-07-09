@@ -2798,8 +2798,16 @@ mark.search-highlight {
   margin-right: 0;
 }
 
+/* Pull the leading quote into the gutter by its own advance width, so the
+   first letter lands on the poetry baseline. Widths measured in Noto Serif KR:
+   " 0.389em · “ ” 0.444em · ' ‘ ’ 0.222em. Modifiers must follow the base
+   rule — same specificity, later wins. */
 .verse.verse-poetry .hanging-quote {
   margin-left: -0.4em;
+}
+
+.verse.verse-poetry .hanging-quote--curly {
+  margin-left: -0.444em;
 }
 
 .verse.verse-poetry .hanging-quote--single {
