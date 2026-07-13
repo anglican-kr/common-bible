@@ -26,6 +26,11 @@ DATA_DIR = REPO_ROOT / "data"
 BOOKS_JSON = DATA_DIR / "books.json"
 OUTPUT = REPO_ROOT / "sitemap.xml"
 
+# books.json also carries books the reading UI never lists — lps (전례시편, its own
+# "liturgical" division, ADR-039). They have no /{book}/{chapter} route, so listing
+# them here would advertise 150 URLs that render nothing.
+BROWSABLE_DIVISIONS = {"old_testament", "new_testament", "deuterocanon"}
+
 COMMIT_PREFIX = "COMMIT "
 
 
@@ -130,6 +135,7 @@ def build_entries(books, chapters):
 
 def main() -> int:
     books = json.loads(BOOKS_JSON.read_text("utf-8"))
+    books = [b for b in books if b["division"] in BROWSABLE_DIVISIONS]
     chapters = chapter_lastmod_map()
     entries = build_entries(books, chapters)
 
