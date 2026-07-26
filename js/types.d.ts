@@ -87,7 +87,11 @@ export type SettingKey =
 // (applyFontSize / applyTheme / etc.).
 export type SyncSettingValue = MTimed<unknown>;
 
-export type SyncSettings = Record<SettingKey, SyncSettingValue>;
+// The index signature is deliberate: a newer build may store a setting key this
+// build has never heard of, and the merge has to carry it through untouched
+// instead of dropping it (which would delete that setting on the other device).
+export type SyncSettings = Record<SettingKey, SyncSettingValue>
+                         & Record<string, SyncSettingValue>;
 
 export interface LastReadValue {
   bookId: string;
