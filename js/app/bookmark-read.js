@@ -21,7 +21,9 @@
 import { loadChapter, getBooksCache } from "./data-fetch.js";
 import { setTitle, appendVerses } from "./views.js";
 import { sortBookmarkNodes, _findItemInStore } from "./bookmark-core.js";
-import { parseVerseSpec } from "./verse-spec.js";
+import {
+  parseVerseSpec, specCoversVerse, chapterMaxVerse, verseInstanceKeys,
+} from "./verse-spec.js";
 
 const { _$, el, clearNode, chUnit, emptyState } = window.appHelpers;
 const { loadBookmarks } = window.appStorage;
@@ -33,16 +35,6 @@ const $app = _$("app");
 // continuity test, combined-reference formatting, spec membership, and the
 // tree→sequence flatten. `parseVerseSpec` / `sortBookmarkNodes` are provided by
 // the test prelude (extracted from verse-spec.js / stubbed) — no DOM here.
-
-/** @param {BibleChapter} data @returns {number} */
-function _chapterMaxVerse(data) {
-  let m = 0;
-  for (const v of (data && data.verses) || []) {
-    const n = v.range_end != null ? v.range_end : v.number;
-    if (n > m) m = n;
-  }
-  return m;
-}
 
 /**
  * Resolve a bookmark to the verse range it occupies, so adjacency and the
@@ -128,20 +120,6 @@ function _combinedRef(bookName, unit, first, last, isSingleWhole) {
   if (first.startCh === last.endCh && first.startV === last.endV) return `${bookName} ${startRef}`;
   const endRef = last.endCh === first.startCh ? last.endDisplay : `${last.endCh}:${last.endDisplay}`;
   return `${bookName} ${startRef}–${endRef}`;
-}
-
-/**
- * Is verse number `n` covered by a verse spec? "all" covers everything; a
- * hemistich part ("4a") promotes to the whole verse 4 (read whole verses for
- * continuous reading — same spirit as ADR-010's prose-verse collapse).
- * @param {string} spec @param {number} n @returns {boolean}
- */
-function _specCoversVerse(spec, n) {
-  if (spec === "all") return true;
-  for (const seg of parseVerseSpec(spec)) {
-    if (n >= seg.start && n <= seg.end) return true;
-  }
-  return false;
 }
 
 /**
@@ -318,13 +296,16 @@ async function renderBookmarkReadView(folderId = null) {
   /** @param {BookmarkTreeBookmark} bm */
   const endsOf = (bm) => {
     const data = chapterCache.get(`${bm.bookId}:${bm.chapter}`);
-    return _bmRange(bm, data ? _chapterMaxVerse(data) : 0);
+    return _bmRange(bm, data ? chapterMaxVerse(data) : 0);
   };
 
   // Verses already rendered anywhere in this view, so overlapping bookmarks
   // (e.g. a whole chapter plus a sub-range of it, or two ranges that intersect)
   // don't print the same verse twice across separate passage groups. Keyed by
-  // book:chapter:verse(+part/lxx) — a verse object renders at most once.
+  // book:chapter:<verse instance key> — one verse *instance* renders at most
+  // once. The key has to be the instance identity, not the number: several
+  // verses can share a number (전례시편 ¶ 구절·에스델 추가 본문) and keying by
+  // number drops all but the first (verse-spec.js `verseInstanceKeys`).
   /** @type {Set<string>} */
   const seenVerses = new Set();
 
@@ -386,17 +367,21 @@ async function renderBookmarkReadView(folderId = null) {
       if (!data) continue;
       const specs = /** @type {string[]} */ (byChapter.get(chNum));
       const coversAll = specs.includes("all");
-      const verses = (data.verses || []).filter((v) => {
+      // Instance keys come from the FULL chapter list, so the same verse gets
+      // the same key no matter which subset a group renders.
+      const chapterVerses = data.verses || [];
+      const keys = verseInstanceKeys(chapterVerses);
+      const verses = chapterVerses.filter((v, i) => {
         if (!coversAll) {
           const end = v.range_end != null ? v.range_end : v.number;
           let inSpec = false;
           for (let x = v.number; x <= end && !inSpec; x++) {
-            if (specs.some((spec) => _specCoversVerse(spec, x))) inSpec = true;
+            if (specs.some((spec) => specCoversVerse(spec, x))) inSpec = true;
           }
           if (!inSpec) return false;
         }
         // Drop verses already shown by an earlier (overlapping) group.
-        const key = `${first.bookId}:${chNum}:${v.number}${v.part || ""}${v.lxx_only ? "_lxx" : ""}`;
+        const key = `${first.bookId}:${chNum}:${keys[i]}`;
         if (seenVerses.has(key)) return false;
         seenVerses.add(key);
         return true;

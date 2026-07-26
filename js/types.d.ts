@@ -481,6 +481,9 @@ export interface BibleVerseSegment {
   type: "prose" | "poetry";
   text: string;
   paragraph_break?: boolean;
+  // ADR-039 — 전례시편·송가(lps·cant)의 계응 구조. 응답 반행(회중이 받는 줄)에만
+  // 붙는다. 다른 책에는 없는 필드다(additive — 기존 렌더 경로에 무해).
+  response?: boolean;
   // ADR-022 — citation metadata, omitted when absent.
   cite?: string;
   parallels?: CiteParallelRef[];
@@ -502,6 +505,11 @@ export interface BibleVerse {
   lxx_only?: boolean;
   chapter_ref?: string;
   stanza_break?: boolean;
+  // ADR-039 — 전례시편·송가만. `versicle` = 번호 없는 후속 구절(¶, 앞 절의 번호를
+  // 물려받는다 → 한 장에 같은 number 가 둘 이상 생긴다), `section` = 부(部) 번호로
+  // 그 부의 모든 절에 붙는다(부분 발췌에서도 "(N)" 소제목을 붙일 수 있게).
+  versicle?: boolean;
+  section?: number;
   text?: string;
   segments?: BibleVerseSegment[];
   notes?: BibleVerseNote[];

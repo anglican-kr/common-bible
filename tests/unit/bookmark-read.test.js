@@ -164,17 +164,8 @@ test("_isContinuous: an unparseable-spec bookmark never merges with a neighbour"
   assert.strictEqual(ctx._isContinuous(bad, nextV1), false);  // as prev
 });
 
-// ── _specCoversVerse ───────────────────────────────────────────────────────────
-
-test("_specCoversVerse: all covers everything", () => {
-  assert.strictEqual(ctx._specCoversVerse("all", 99), true);
-});
-
-test("_specCoversVerse: range + hemistich membership", () => {
-  assert.strictEqual(ctx._specCoversVerse("1-3,4a", 2), true);
-  assert.strictEqual(ctx._specCoversVerse("1-3,4a", 4), true); // 4a promotes to verse 4
-  assert.strictEqual(ctx._specCoversVerse("1-3,4a", 5), false);
-});
+// `specCoversVerse` / `chapterMaxVerse` moved to verse-spec.js (ADR-038 §3 — the
+// lectionary view shares them); their tests moved to verse-spec.test.js.
 
 // ── _planReadingUnits ──────────────────────────────────────────────────────────
 

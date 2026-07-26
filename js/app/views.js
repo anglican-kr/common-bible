@@ -765,6 +765,26 @@ function formatVerseNumber(v) {
   if (v.alt_ref != null) dataV += `(${v.alt_ref})`;
   return dataV;
 }
+// The element a verse deep-link should scroll to. The exact id wins; otherwise
+// the first rendered span whose number matches. The fallback is what makes
+// `/dan/3/24`, `/job/27/24`, `/hos/14/14` work: those verses render under an
+// instance-qualified id (`v24_lxx`, `v24_c26`) because the number alone does not
+// identify them, so `getElementById("v24")` finds nothing.
+/**
+ * @param {Document | Element} root
+ * @param {number | string} n
+ * @returns {Element | null}
+ */
+function findVerseAnchor(root, n) {
+  const exact = /** @type {Document} */ (root).getElementById
+    ? /** @type {Document} */ (root).getElementById(`v${n}`)
+    : root.querySelector(`[id="v${n}"]`);
+  if (exact) return exact;
+  for (const span of root.querySelectorAll(".verse[data-vref]")) {
+    if (parseInt(span.getAttribute("data-vref") ?? "", 10) === Number(n)) return span;
+  }
+  return null;
+}
 // ── END VERSE_NUMBER ──
 
 // ── BEGIN VERSE_SELECTION ──
@@ -844,12 +864,19 @@ function _verseRangeVrefs(allVrefs, anchorVref, targetVref, unitFn) {
 /**
  * @param {HTMLElement} article
  * @param {ReadonlyArray<BibleVerse>} verses
- * @param {{ hlQuery?: string|null, hlVerse?: number|null, hlVerseEnd?: number|null, hlSegments?: Array<{start:number,end:number,part?:string}>|null, parallels?: ChapterParallel[]|null, chapter?: number|null }} [opts]
+ * @param {{ hlQuery?: string|null, hlVerse?: number|null, hlVerseEnd?: number|null, hlSegments?: Array<{start:number,end:number,part?:string}>|null, parallels?: ChapterParallel[]|null, chapter?: number|null, hideCites?: boolean }} [opts]
  */
 function appendVerses(article, verses, opts = {}) {
   const { hlQuery = null, hlVerse = null, hlVerseEnd = null, hlSegments = null, parallels = null, chapter = null, hideCites = false } = opts;
   let isFirst = true;
   let prevVerseEndType = null;
+  // Several verses in one chapter can share a number (전례시편의 ¶ 구절, 에스델
+  // 추가 본문) — DOM ids must come from the instance identity, not the number.
+  const instanceKeys = window.verseInstanceKeys
+    ? window.verseInstanceKeys(verses)
+    : verses.map((v) => String(v.number));
+  // ADR-039 부(部): 원문이 나눈 편에서 봉독 토막의 첫 절 앞에 "(N)" 소제목.
+  let prevSection = null;
 
   // ADR-022: precompute which (verse, segment) cite chips actually render
   // (dedup of consecutive same-cite groups; only LAST in group renders).
@@ -894,13 +921,20 @@ function appendVerses(article, verses, opts = {}) {
       }
     }
 
+    // ADR-039 부(部): "(N)" centred sub-heading before the section's first verse.
+    // Every verse of a section carries `section`, so a partial excerpt that does
+    // not include the section's first verse still labels the toma correctly.
+    if (v.section != null && v.section !== prevSection) {
+      article.appendChild(el("div", { className: "psalm-section" }, `(${v.section})`));
+    }
+    if (v.section != null) prevSection = v.section;
+
     const verseLabel = formatVerseLabel(v);
-    let verseId = `v${v.number}`;
-    if (v.part) verseId += v.part;
-    if (v.alt_ref != null) verseId += `_${v.alt_ref}`;
-    // LXX-only verses can share a number with a Hebrew verse in the same
-    // chapter (e.g. Daniel 3); suffix keeps the DOM id unique.
-    if (v.lxx_only) verseId += "_lxx";
+    // Instance key, not the bare number: an LXX-only verse can share a number
+    // with a Hebrew one (Daniel 3), a ¶ clause inherits the previous number
+    // (전례시편), and Greek Esther stacks its additions under one number.
+    // `~` (the duplicate-marker fallback) is not id-safe, so it becomes `-`.
+    const verseId = `v${instanceKeys[vIdx].replace(/~/g, "-")}`;
     const baseClasses = v.chapter_ref ? "verse verse-cross-ref" : "verse";
 
     const vn = v.number;
@@ -934,6 +968,8 @@ function appendVerses(article, verses, opts = {}) {
     let partIdx = 0;
     let isFirstLine = true;
     let prevSegType = null;
+    /** @type {HTMLElement|null} */
+    let lastSpan = null;
 
     for (let segIdx = 0; segIdx < segs.length; segIdx++) {
       const seg = segs[segIdx];
@@ -989,12 +1025,21 @@ function appendVerses(article, verses, opts = {}) {
         let classes = baseClasses;
         if (isPoetry) classes += " verse-poetry";
         if (isHighlightedSpan) classes += " verse-highlight";
+        // ADR-039 \uacc4\uc751: the response half-line is visually distinct from the
+        // cantor's half-line the congregation answers.
+        if (seg.response) classes += " verse-response";
 
         const span = el("span", { className: classes });
         if (isFirstLine) {
           span.id = verseId;
-          const sup = el("sup", { className: "verse-num", "aria-hidden": "true", "data-v": dataV });
-          span.appendChild(sup);
+          if (v.versicle) {
+            // ADR-039 \ubb34\ubc88\ud638 \ud6c4\uc18d \uad6c\uc808: printed as \u00b6, not as a verse number (it
+            // inherits the previous verse's number and has none of its own).
+            span.appendChild(el("span", { className: "versicle-mark", "aria-hidden": "true" }, "\u00b6"));
+          } else {
+            const sup = el("sup", { className: "verse-num", "aria-hidden": "true", "data-v": dataV });
+            span.appendChild(sup);
+          }
           span.appendChild(document.createTextNode("\u2060"));
         }
 
@@ -1014,7 +1059,16 @@ function appendVerses(article, verses, opts = {}) {
           appendSegText(span, line, segTextOpts);
         }
         article.appendChild(span);
+        lastSpan = span;
         isFirstLine = false;
+      }
+      // ADR-039 계응: ◯ closes the cantor's half-line to cue the response. Only
+      // where a response actually follows — a trailing cantor line with nothing
+      // answering it gets no cue ("마지막 아닌 홀수 줄").
+      if (!seg.response && segIdx < segs.length - 1 && segs[segIdx + 1]?.response && lastSpan) {
+        lastSpan.appendChild(el("span", {
+          className: "responsory-mark", "aria-hidden": "true",
+        }, "◯"));
       }
       // ADR-022: append cite chip after this segment if it carries one and
       // dedup decided this position should render (not suppressed).
@@ -1370,7 +1424,7 @@ function renderChapter(data, book, opts) {
   // Scroll to highlighted verse, resumed position, or top
   const scrollVerse = hlVerse || (opts && opts.resumeVerse) || null;
   if (scrollVerse) {
-    const target = document.getElementById(`v${scrollVerse}`);
+    const target = findVerseAnchor(document, scrollVerse);
     if (target) {
       const behavior = hlVerse ? "smooth" : "instant";
       requestAnimationFrame(() => target.scrollIntoView({ behavior, block: hlVerse ? "center" : "start" }));
