@@ -159,6 +159,77 @@ function selectedVersesToSpec(refs) {
   return result.join(",");
 }
 
+// Is verse number `n` covered by a verse spec? "all" covers everything; a
+// hemistich part ("4a") promotes to the whole verse 4 — continuous reading reads
+// whole verses (same spirit as ADR-010's prose-verse collapse).
+// Moved here from bookmark-read.js (ADR-038 §3) so the lectionary view shares
+// one implementation instead of copying the filter.
+/** @param {string} spec @param {number} n @returns {boolean} */
+function specCoversVerse(spec, n) {
+  if (spec === "all") return true;
+  for (const seg of parseVerseSpec(spec)) {
+    if (n >= seg.start && n <= seg.end) return true;
+  }
+  return false;
+}
+
+// Highest verse number in a chapter (counting a merged verse's range_end).
+/** @param {{ verses?: ReadonlyArray<{ number: number, range_end?: number|null }> } | null | undefined} data @returns {number} */
+function chapterMaxVerse(data) {
+  let m = 0;
+  for (const v of (data && data.verses) || []) {
+    const n = v.range_end != null ? v.range_end : v.number;
+    if (n > m) m = n;
+  }
+  return m;
+}
+
+// ── Verse instance identity ──
+// A verse number does NOT identify a verse: several verses in one chapter can
+// share a number and still be different verses —
+//   · `versicle` — 전례시편's unnumbered ¶ clause inherits the previous number (ADR-039)
+//   · `alt_ref`  — Greek Esther's additions all sit under one number (ADR-003)
+//   · `lxx_only` / `part` / `chapter_ref` — LXX-only, hemistich part, displaced verse
+// Keying by number alone therefore *drops* verses: the subset renderer deduped
+// on number+part+lxx_only and silently lost 130 verses across 77 chapters
+// (전례시편 69편의 ¶ 구절, 에스델 4장 31절 — 실측 2026-07-13).
+
+/**
+ * Content-derived identity of one verse instance.
+ * @param {{ number: number, part?: string|null, alt_ref?: number|null, lxx_only?: boolean, versicle?: boolean, chapter_ref?: number|null }} v
+ * @returns {string}
+ */
+function verseInstanceKey(v) {
+  let k = String(v.number);
+  if (v.part) k += v.part;
+  if (v.alt_ref != null) k += `_${v.alt_ref}`;
+  if (v.lxx_only) k += "_lxx";
+  if (v.versicle) k += "_v";
+  if (v.chapter_ref != null) k += `_c${v.chapter_ref}`;
+  return k;
+}
+
+/**
+ * Keys for a verse list, guaranteed unique within it.
+ *
+ * The content key above separates every legitimate instance, but a duplicated
+ * verse marker in the source text (5 chapters as of 2026-07-27 — job 32:9,
+ * 1chr 6:33, sir 29:15, lam 1:10, tob 11:15) can still collide. Rather than
+ * dropping the second one, an ordinal is appended so a data defect degrades to
+ * an odd id instead of a missing verse.
+ * @param {ReadonlyArray<Parameters<typeof verseInstanceKey>[0]>} verses
+ * @returns {string[]}
+ */
+function verseInstanceKeys(verses) {
+  /** @type {Record<string, number>} */
+  const seen = {};
+  return (verses || []).map((v) => {
+    const base = verseInstanceKey(v);
+    seen[base] = (seen[base] ?? 0) + 1;
+    return seen[base] === 1 ? base : `${base}~${seen[base]}`;
+  });
+}
+
 // Union of two verse spec strings
 /** @param {string} specA @param {string} specB @returns {string} */
 function mergeVerseSpecs(specA, specB) {
@@ -230,8 +301,10 @@ window.selectedVersesToSpec = selectedVersesToSpec;
 window.mergeVerseSpecs = mergeVerseSpecs;
 window.collapseFullVerseRefs = collapseFullVerseRefs;
 window.serializeVerseRange = serializeVerseRange;
+window.verseInstanceKeys = verseInstanceKeys;
 
 export {
   parseVerseSpec, collapseFullVerseRefs, collapseSegmentedVerses,
   selectedVersesToSpec, mergeVerseSpecs, serializeVerseRange,
+  specCoversVerse, chapterMaxVerse, verseInstanceKey, verseInstanceKeys,
 };

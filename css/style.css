@@ -2849,6 +2849,59 @@ mark.search-highlight {
   user-select: none;
 }
 
+/* ── 전례시편·송가 계응 조판 (ADR-039 · ADR-038 A2) ──
+   저장 형식에는 전례 글리프가 없다(자판 입력이 어려워서) — ◯·¶·"(N)" 은 모두
+   여기서 표시로만 복원한다. */
+
+/* 응답 반행: 회중이 받는 줄. 선창과 구별되어야 하지만 본문 서체를 벗어나지는
+   않는다 — 봉독하는 눈이 두 줄을 번갈아 따라갈 만큼만 다르게. */
+.verse.verse-response {
+  color: var(--text-secondary);
+}
+
+/* 선창 끝의 계응 표지. 글자와 붙지 않게 앞 여백만 준다. */
+.responsory-mark {
+  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  color: var(--theme);
+  margin-left: 0.25em;
+  user-select: none;
+}
+
+/* 무번호 후속 구절(¶) — 절 번호 자리에 온다. .verse-num 과 같은 자리를 쓰되
+   운문 들여쓰기 규칙(위 .verse-poetry .verse-num)과 어긋나지 않도록 같은 폭. */
+.versicle-mark {
+  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  font-size: var(--font-2xs);
+  color: var(--theme);
+  vertical-align: super;
+  margin-right: 0.15em;
+  user-select: none;
+}
+
+.verse.verse-poetry .versicle-mark {
+  display: inline-block;
+  box-sizing: border-box;
+  margin-left: -2rem;
+  width: 2rem;
+  text-align: left;
+  margin-right: 0;
+}
+
+/* 부(部) — 긴 시편의 봉독 토막. 인쇄본 그대로 "(N)" 가운데 소제목. */
+.psalm-section {
+  display: block;
+  margin: 1.5em 0 0.6em;
+  text-align: center;
+  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  font-size: var(--font-xs);
+  color: var(--text-secondary);
+  user-select: none;
+}
+
+.psalm-section:first-child {
+  margin-top: 0;
+}
+
 /* Dual numbering (alt_ref) */
 .alt-ref {
   /* 의도적으로 --font 스케일 floor(--font-2xs 0.7rem) 아래 — 자신이 주석하는
