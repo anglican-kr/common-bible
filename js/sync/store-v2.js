@@ -320,11 +320,19 @@ function mergeDocs(local, remote, deviceId) {
     }
   }
 
-  // Settings: per-key LWW. Object.keys() is `string[]`, so cast to SettingKey.
-  for (const key of /** @type {SettingKey[]} */ (Object.keys(merged.settings))) {
+  // Settings: per-key LWW over the **union** of both docs' keys. Iterating only
+  // the keys this build knows (_emptyDoc) would silently drop a setting written
+  // by a newer client: this device would upload a doc without it, and the other
+  // device would see its own setting deleted on the next sync.
+  const settingKeys = new Set([
+    ...Object.keys(merged.settings),
+    ...Object.keys(local.settings  ?? {}),
+    ...Object.keys(remote.settings ?? {}),
+  ]);
+  for (const key of settingKeys) {
     const lv = local.settings?.[key]  ?? { v: null, _u: 0 };
     const rv = remote.settings?.[key] ?? { v: null, _u: 0 };
-    merged.settings[key] = /** @type {SyncDoc["settings"][SettingKey]} */ (rv._u >= lv._u ? rv : lv);
+    merged.settings[key] = rv._u >= lv._u ? rv : lv;
   }
 
   // lastRead: LWW
