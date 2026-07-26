@@ -15,61 +15,61 @@
 Google Drive 동기화·OAuth는 외부 의존이지만 단 한 군데 — `/oauth/token` POST는 nginx가 `client_secret`을 server-side로 주입한 뒤 `oauth2.googleapis.com/token`으로 forward하는 BFF 패턴 — 만 서버 단 매개를 쓰고, 나머지는 클라이언트가 직접 Google 엔드포인트와 통신한다 ([ADR-017](decisions/017-oauth-bff-proxy.md)).
 
 ```
-        ┌──────────────────────────────────────────────────────────┐
-        │  common-bible-data  (비공개)                             │
-        │   source/*.md  →  src/parser.py → src/split_bible.py      │
+        ┌────────────────────────────────────────────────────────────┐
+        │  common-bible-data  (비공개)                               │
+        │   source/*.md  →  src/parser.py → src/split_bible.py       │
         │                →  src/search_indexer.py                    │
         │                →  bible/*.json + search-*.json + books.json│
         │   audio/  (nested 서브모듈 → common-bible-audio, LFS mp3)  │
-        └──────────────────────────────────┬───────────────────────┘
+        └──────────────────────────────────┬─────────────────────────┘
                                            │ git submodule pointer
                                            ▼
-        ┌──────────────────────────────────────────────────────────┐
-        │  common-bible  (공개, 본 저장소)                          │
+        ┌────────────────────────────────────────────────────────────┐
+        │  common-bible  (공개, 본 저장소)                           │
         │   index.html · sw.js · js/ · css/ · assets/                │
         │   data/  ← common-bible-data 마운트                        │
-        └──────────────────────────────────┬───────────────────────┘
+        └──────────────────────────────────┬─────────────────────────┘
                                            │ build-deploy.sh + ssh
                                            ▼
-        ┌──────────────────────────────────────────────────────────┐
-        │  common-bible-server  (비공개)                            │
-        │   nginx/  (BFF·보안 헤더)                                 │
+        ┌────────────────────────────────────────────────────────────┐
+        │  common-bible-server  (비공개)                             │
+        │   nginx/  (BFF·보안 헤더)                                  │
         │   scripts/deploy.sh  → seoul:/var/www/bible-{ver}-{sha}/   │
-        │                                                          │
-        │   bible.anglican.kr → /var/www/bible →                    │
-        │   dev.anglican.kr   → /var/www/dev   →                    │
-        │     (각 심볼릭 링크가 bible-{ver}-{sha}/ 가리킴)            │
-        │                                                          │
-        │   location = /oauth/token  (BFF, ADR-017)                 │
-        │     │ inject client_secret                                │
-        │     ▼                                                    │
-        │     oauth2.googleapis.com/token                           │
-        └──────────────────────────────────┬───────────────────────┘
-                                   │ HTTPS
-                                   ▼
-                  ┌────────────────────────────────────────────┐
-                  │  브라우저 (PWA)                              │
-                  │                                            │
-                  │   ┌─ index.html (<script> 19개, dep 순) ─┐   │
-                  │   │  app.js + app/* 8개  (UI·라우팅)      │   │
-                  │   │  drive-sync.js + sync/* 5개 (동기화)   │   │
-                  │   │  audio-cache.js  (오프라인 오디오)     │   │
-                  │   │  manifest-sync.js (콘텐츠 해시 diff)   │   │
-                  │   │  pre-fetch.js + gtag-init.js          │   │
-                  │   │  ─ Web Worker ─                       │   │
-                  │   │  search-worker.js (별도 컨텍스트)      │   │
-                  │   └───────────────────────────────────────┘   │
-                  │                                            │
-                  │   sw.js (오프라인 셸 + stale-while-          │
-                  │          revalidate, 폰트·OAuth 예외)        │
-                  │                                            │
-                  │   localStorage  +  IndexedDB(refresh-store) │
-                  └────────────────┬───────────────────────────┘
-                                   │ HTTPS
-                                   ▼
-                  Google: accounts.google.com (consent),
-                          www.googleapis.com (Drive appdata)
-                          ※ /token만 BFF 경유
+        │                                                            │
+        │   bible.anglican.kr → /var/www/bible →                     │
+        │   dev.anglican.kr   → /var/www/dev   →                     │
+        │     (각 심볼릭 링크가 bible-{ver}-{sha}/ 가리킴)           │
+        │                                                            │
+        │   location = /oauth/token  (BFF, ADR-017)                  │
+        │     │ inject client_secret                                 │
+        │     ▼                                                      │
+        │     oauth2.googleapis.com/token                            │
+        └──────────────────────────────────┬─────────────────────────┘
+                                           │ HTTPS
+                                           ▼
+        ┌────────────────────────────────────────────────────────────┐
+        │  브라우저 (PWA)                                            │
+        │                                                            │
+        │   ┌─ index.html (<script> 19개, dep 순) ─┐                 │
+        │   │  app.js + app/* 8개  (UI·라우팅)     │                 │
+        │   │  drive-sync.js + sync/* 5개 (동기화) │                 │
+        │   │  audio-cache.js  (오프라인 오디오)   │                 │
+        │   │  manifest-sync.js (콘텐츠 해시 diff) │                 │
+        │   │  pre-fetch.js + gtag-init.js         │                 │
+        │   │  ─ Web Worker ─                      │                 │
+        │   │  search-worker.js (별도 컨텍스트)    │                 │
+        │   └──────────────────────────────────────┘                 │
+        │                                                            │
+        │   sw.js (오프라인 셸 + stale-while-                        │
+        │          revalidate, 폰트·OAuth 예외)                      │
+        │                                                            │
+        │   localStorage  +  IndexedDB(refresh-store)                │
+        └──────────────────────────────────┬─────────────────────────┘
+                                           │ HTTPS
+                                           ▼
+                        Google: accounts.google.com (consent),
+                                www.googleapis.com (Drive appdata)
+                                ※ /token만 BFF 경유
 ```
 
 ## 2. 아키텍처를 결정한 4가지 제약
@@ -129,7 +129,7 @@ ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` ~6,000줄이 8개 도�
 | 로드 모드                                | 파일 수 | 비고                                                                                                                 |
 | ---------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------- |
 | `<script type="module">` (자동 deferred) | 17      | 대부분의 모듈. 모듈 scope + `import`/`export` 가능                                                                   |
-| `<script defer>` (classic)               | 2       | `audio-cache.js`·`manifest-sync.js` — `sw.js`의 `importScripts()` 호환을 위해 classic 유지 (ADR-019 §"예외")          |
+| `<script defer>` (classic)               | 2       | `audio-cache.js`·`manifest-sync.js` — `sw.js`의 `importScripts()` 호환을 위해 classic 유지 (ADR-019 §"예외")         |
 | `<script>` (head, 즉시 실행)             | 1       | `pre-fetch.js` — `<head>`에서 즉시 `data/books.json` 다운로드 시작. `type="module"`은 자동 deferred라 fetch가 늦어짐 |
 
 21번째 런타임 파일인 `search-worker.js`는 `<script>`가 아니라 `new Worker()`로 메인 스레드에서 별도 생성 — 독립 컨텍스트.
@@ -138,38 +138,38 @@ ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` ~6,000줄이 8개 도�
 
 **최상위 (`js/`):**
 
-| 파일                  | 역할                                                                                | 라인 수 |
-| --------------------- | ----------------------------------------------------------------------------------- | ------- |
-| `js/pre-fetch.js`     | 첫 페인트 직전 `data/books.json` 비동기 선패치                                      | ~10     |
-| `js/gtag-init.js`     | Google Analytics 초기화                                                             | ~15     |
-| `js/app.js`           | app-main 부트스트랩 + 접근성 keydown + Audio cache LRU 소프트캡 + SW 등록           | ~290    |
-| `js/audio-cache.js`   | 오디오 LRU IndexedDB sidecar ([ADR-016](decisions/016-audio-cache-lru.md))          | ~190    |
+| 파일                  | 역할                                                                                                                              | 라인 수 |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| `js/pre-fetch.js`     | 첫 페인트 직전 `data/books.json` 비동기 선패치                                                                                    | ~10     |
+| `js/gtag-init.js`     | Google Analytics 초기화                                                                                                           | ~15     |
+| `js/app.js`           | app-main 부트스트랩 + 접근성 keydown + Audio cache LRU 소프트캡 + SW 등록                                                         | ~290    |
+| `js/audio-cache.js`   | 오디오 LRU IndexedDB sidecar ([ADR-016](decisions/016-audio-cache-lru.md))                                                        | ~190    |
 | `js/manifest-sync.js` | 부팅 시 콘텐츠 해시 매니페스트 diff → DATA/AUDIO_CACHE 항목 단위 무효화 ([ADR-021](decisions/021-pwa-versioning-content-hash.md)) | ~200    |
-| `js/search-worker.js` | Web Worker. 청크 로딩 + 절 검색 + 페이지네이션                                      | ~370    |
-| `js/drive-sync.js`    | Drive 동기화 파사드(코디네이터)                                                     | ~250    |
-| `js/types.d.ts`       | 도메인 타입 단일 출처 ([ADR-012](decisions/012-typescript-incremental-adoption.md)) | —       |
+| `js/search-worker.js` | Web Worker. 청크 로딩 + 절 검색 + 페이지네이션                                                                                    | ~370    |
+| `js/drive-sync.js`    | Drive 동기화 파사드(코디네이터)                                                                                                   | ~250    |
+| `js/types.d.ts`       | 도메인 타입 단일 출처 ([ADR-012](decisions/012-typescript-incremental-adoption.md))                                               | —       |
 
 **`js/app/` — 도메인 모듈 (ADR-018 1차 분할 + ADR-022 인용·주석 + ADR-034 2차 분할):**
+
 <!-- 아래 표는 주요 모듈만. ADR-034 views-routing 분할 산출물(audio-player·tabbar·overlay)은 별도 후속 갱신 대상. -->
 
-
-| 파일                        | 역할                                                                                                                              | 라인 수 |
-| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ------- |
-| `js/app/helpers.js`         | 공통 DOM 헬퍼 (`_$`/`el`/`clearNode`/`setInert`/`trapFocus`)                                                                      | ~150    |
-| `js/app/storage.js`         | localStorage 헬퍼 + UI 공유 상수                                                                                                  | ~370    |
-| `js/app/settings-ui.js`     | 설정 팝오버 + 외관 적용 + 인용·주석 토글                                                                                          | ~650    |
-| `js/app/install.js`         | PWA 설치 감지 + 안내 모달 + nudge                                                                                                 | ~500    |
-| `js/app/search.js`          | 검색 워커 wire-up + 결과 렌더 + 이력 패널 + sheet                                                                                 | ~1,090  |
-| `js/app/reading-context.js` | 현재 책/장 + 절 선택 모드 공유 상태                                                                                               | ~40     |
-| `js/app/bookmark.js`        | 북마크 UI (트리 렌더·드래그&드롭·셀렉션 모드·드로어·export) — 모달·순수 로직·절 스펙은 아래 3모듈로 분리 (ADR-034)                  | ~2,200  |
+| 파일                        | 역할                                                                                                                                                                       | 라인 수 |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| `js/app/helpers.js`         | 공통 DOM 헬퍼 (`_$`/`el`/`clearNode`/`setInert`/`trapFocus`)                                                                                                               | ~150    |
+| `js/app/storage.js`         | localStorage 헬퍼 + UI 공유 상수                                                                                                                                           | ~370    |
+| `js/app/settings-ui.js`     | 설정 팝오버 + 외관 적용 + 인용·주석 토글                                                                                                                                   | ~650    |
+| `js/app/install.js`         | PWA 설치 감지 + 안내 모달 + nudge                                                                                                                                          | ~500    |
+| `js/app/search.js`          | 검색 워커 wire-up + 결과 렌더 + 이력 패널 + sheet                                                                                                                          | ~1,090  |
+| `js/app/reading-context.js` | 현재 책/장 + 절 선택 모드 공유 상태                                                                                                                                        | ~40     |
+| `js/app/bookmark.js`        | 북마크 UI (트리 렌더·드래그&드롭·셀렉션 모드·드로어·export) — 모달·순수 로직·절 스펙은 아래 3모듈로 분리 (ADR-034)                                                         | ~2,200  |
 | `js/app/bookmark-modals.js` | 북마크 모달 7종(confirm·chapter-delete·새 폴더·폴더 콤보박스·save/edit·merge·import·move picker) + 렌더 콜백 의존성 주입 + 단일 Escape 스택(`closeTopmostModal`) (ADR-034) | ~1,010  |
-| `js/app/bookmark-core.js`   | DOM-free 북마크 로직 (트리 query/insert/remove·href/share·정렬/최근본·active-route 술어), ESM import 전용 (ADR-034)                | ~360    |
-| `js/app/verse-spec.js`      | 절 스펙 파싱·비교·직렬화·병합 (leaf, ADR-034)                                                                                     | ~240    |
-| `js/app/citations.js`       | 인용 칩 dedup·렌더 + 인용 본문 바텀 시트 (확장 뷰·드래그 리사이즈) + 주석 anchor 위첨자 + 클릭 툴팁 ([ADR-022](decisions/022-citations-and-annotations.md)) | ~940    |
-| `js/app/views.js`           | 렌더 헬퍼 + Views + 책 이름/헤더 자동 짧게 swap (데이터 패칭→data-fetch.js·오디오→audio-player.js·탭 인디케이터→tabbar.js·라우팅→routing.js·PTR 제거, ADR-034)                          | ~1,350  |
-| `js/app/routing.js`         | URL 파싱(parsePath)·SPA 내비(navigate)·route() 오케스트레이터·page meta/분석·읽기 위치 스크롤 추적·링크클릭/popstate 리스너 (ADR-034 PR5a)                          | ~510  |
-| `js/app/bookmark-read.js`   | 북마크 모아 읽기 — 폴더 단위 연속 읽기 화면(`appendVerses`로 절 부분집합 렌더, 인접·연속 본문 병합, 네스팅 폴더는 소제목) (ADR-035)                          | ~315  |
-| `js/app/data-fetch.js`      | 데이터 패칭 (books/version/chapter/prologue fetch + booksCache/appVersion 캐시), leaf 모듈 (ADR-034 PR2)                          | ~85  |
+| `js/app/bookmark-core.js`   | DOM-free 북마크 로직 (트리 query/insert/remove·href/share·정렬/최근본·active-route 술어), ESM import 전용 (ADR-034)                                                        | ~360    |
+| `js/app/verse-spec.js`      | 절 스펙 파싱·비교·직렬화·병합 (leaf, ADR-034)                                                                                                                              | ~240    |
+| `js/app/citations.js`       | 인용 칩 dedup·렌더 + 인용 본문 바텀 시트 (확장 뷰·드래그 리사이즈) + 주석 anchor 위첨자 + 클릭 툴팁 ([ADR-022](decisions/022-citations-and-annotations.md))                | ~940    |
+| `js/app/views.js`           | 렌더 헬퍼 + Views + 책 이름/헤더 자동 짧게 swap (데이터 패칭→data-fetch.js·오디오→audio-player.js·탭 인디케이터→tabbar.js·라우팅→routing.js·PTR 제거, ADR-034)             | ~1,350  |
+| `js/app/routing.js`         | URL 파싱(parsePath)·SPA 내비(navigate)·route() 오케스트레이터·page meta/분석·읽기 위치 스크롤 추적·링크클릭/popstate 리스너 (ADR-034 PR5a)                                 | ~510    |
+| `js/app/bookmark-read.js`   | 북마크 모아 읽기 — 폴더 단위 연속 읽기 화면(`appendVerses`로 절 부분집합 렌더, 인접·연속 본문 병합, 네스팅 폴더는 소제목) (ADR-035)                                        | ~315    |
+| `js/app/data-fetch.js`      | 데이터 패칭 (books/version/chapter/prologue fetch + booksCache/appVersion 캐시), leaf 모듈 (ADR-034 PR2)                                                                   | ~85     |
 
 **`js/sync/` — 동기화 레이어:**
 
@@ -288,15 +288,15 @@ ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` ~6,000줄이 8개 도�
 
 `sw.js`는 3가지 전략을 도메인 / 요청 종류별로 분기한다 (`sw.js:101`). "캐시 우선(cache-first)"은 한 번 받아둔 자료가 있으면 그것부터 보여주고 없을 때만 네트워크로 가져오는 방식.
 
-| 대상                                                        | 전략                                                                          | 이유                                                        |
-| ----------------------------------------------------------- | ----------------------------------------------------------------------------- | ----------------------------------------------------------- |
-| `fonts.gstatic.com`                                         | 캐시 우선, **별도 `FONT_CACHE`** 보관, 다른 캐시가 갱신돼도 보존             | 폰트 파일은 절대 안 바뀌고 URL 자체에 버전이 박혀 있음     |
-| OAuth/Drive 4개 호스트                                      | **항상 네트워크 직행**, 서비스 워커 우회                                      | 캐싱 시 토큰·동기화 데이터가 깨진다                         |
-| 페이지 이동 요청 (HTML)                                     | `/index.html`로 대체 (단, `/privacy.html`은 통과)                             | SPA 라우팅                                                  |
-| 셸 (JS/CSS/HTML/icons + `books.json`·`search-meta.json`·매니페스트 2종)    | 캐시 우선 → `SHELL_CACHE`                                                     | 코드와 강결합, 매 릴리스 동기 갱신                          |
-| 본문·검색 (`/data/bible/*`, `/data/search-{ot,nt,dc}.json`) | 캐시 우선 → `DATA_CACHE` (이름 고정 `"data"`)                                 | 누적 캐시; 콘텐츠 해시 매니페스트 diff 로 항목 단위 갱신     |
-| 오디오 (`/data/audio/*`)                                    | 캐시 우선 → `AUDIO_CACHE` (이름 고정 `"audio"`)                               | 필요 시 다운로드; 콘텐츠 해시 매니페스트 diff 로 항목 단위 갱신 |
-| 매니페스트 (`/data/{bible,audio}-manifest.json`)            | **네트워크 우선**, 실패 시 SHELL_CACHE 의 precached 사본 fallback              | freshness 가 핵심                                            |
+| 대상                                                                    | 전략                                                              | 이유                                                            |
+| ----------------------------------------------------------------------- | ----------------------------------------------------------------- | --------------------------------------------------------------- |
+| `fonts.gstatic.com`                                                     | 캐시 우선, **별도 `FONT_CACHE`** 보관, 다른 캐시가 갱신돼도 보존  | 폰트 파일은 절대 안 바뀌고 URL 자체에 버전이 박혀 있음          |
+| OAuth/Drive 4개 호스트                                                  | **항상 네트워크 직행**, 서비스 워커 우회                          | 캐싱 시 토큰·동기화 데이터가 깨진다                             |
+| 페이지 이동 요청 (HTML)                                                 | `/index.html`로 대체 (단, `/privacy.html`은 통과)                 | SPA 라우팅                                                      |
+| 셸 (JS/CSS/HTML/icons + `books.json`·`search-meta.json`·매니페스트 2종) | 캐시 우선 → `SHELL_CACHE`                                         | 코드와 강결합, 매 릴리스 동기 갱신                              |
+| 본문·검색 (`/data/bible/*`, `/data/search-{ot,nt,dc}.json`)             | 캐시 우선 → `DATA_CACHE` (이름 고정 `"data"`)                     | 누적 캐시; 콘텐츠 해시 매니페스트 diff 로 항목 단위 갱신        |
+| 오디오 (`/data/audio/*`)                                                | 캐시 우선 → `AUDIO_CACHE` (이름 고정 `"audio"`)                   | 필요 시 다운로드; 콘텐츠 해시 매니페스트 diff 로 항목 단위 갱신 |
+| 매니페스트 (`/data/{bible,audio}-manifest.json`)                        | **네트워크 우선**, 실패 시 SHELL_CACHE 의 precached 사본 fallback | freshness 가 핵심                                               |
 
 캐시는 4개 식별자로 분리 (`sw.js`):
 
@@ -309,24 +309,24 @@ ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` ~6,000줄이 8개 도�
 
 ## 5. 영속 데이터 — 어디에 무엇이 저장되는가
 
-| 위치                     | 키/파일                                                                                     | 내용                                          | 동기화?   |
-| ------------------------ | ------------------------------------------------------------------------------------------- | --------------------------------------------- | --------- |
-| `localStorage`           | `bible-bookmarks-v2`                                                                        | 북마크/폴더 (flat-map + 툼스톤)               | ✅        |
-| `localStorage`           | `bible-font-size`, `bible-theme`, `bible-color-scheme`, `bible-book-order`, `bible-startup` | 설정 5종                                      | ✅        |
-| `localStorage`           | `bible-last-read`                                                                           | 마지막 읽기 위치 (이어읽기 배너)              | ✅        |
-| `localStorage`           | `bible-sync-meta`                                                                           | `{schemaVersion, deviceId}`                   | (메타)    |
-| `localStorage`           | `bible-drive-sync`                                                                          | sync enabled 플래그 ("0"/"1")                 | (메타)    |
-| `localStorage`           | `bible-drive-sync-email`, `bible-drive-sync-updated`                                        | 마지막 인증 이메일·시각                       | (메타)    |
-| `localStorage`           | `bible-drive-redirect-attempts`                                                             | 무한 리디렉션 카운터 (cap 3)                  | (메타)    |
-| `localStorage`           | `bible-audio-pos`                                                                           | 오디오 재생 위치                              | 로컬 전용 |
-| `sessionStorage`         | `bible-drive-redirect-state-pkce`                                                           | PKCE state nonce + verifier (10분 TTL)        | 임시      |
+| 위치                     | 키/파일                                                                                     | 내용                                                                                       | 동기화?   |
+| ------------------------ | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | --------- |
+| `localStorage`           | `bible-bookmarks-v2`                                                                        | 북마크/폴더 (flat-map + 툼스톤)                                                            | ✅        |
+| `localStorage`           | `bible-font-size`, `bible-theme`, `bible-color-scheme`, `bible-book-order`, `bible-startup` | 설정 5종                                                                                   | ✅        |
+| `localStorage`           | `bible-last-read`                                                                           | 마지막 읽기 위치 (이어읽기 배너)                                                           | ✅        |
+| `localStorage`           | `bible-sync-meta`                                                                           | `{schemaVersion, deviceId}`                                                                | (메타)    |
+| `localStorage`           | `bible-drive-sync`                                                                          | sync enabled 플래그 ("0"/"1")                                                              | (메타)    |
+| `localStorage`           | `bible-drive-sync-email`, `bible-drive-sync-updated`                                        | 마지막 인증 이메일·시각                                                                    | (메타)    |
+| `localStorage`           | `bible-drive-redirect-attempts`                                                             | 무한 리디렉션 카운터 (cap 3)                                                               | (메타)    |
+| `localStorage`           | `bible-audio-pos`                                                                           | 오디오 재생 위치                                                                           | 로컬 전용 |
+| `sessionStorage`         | `bible-drive-redirect-state-pkce`                                                           | PKCE state nonce + verifier (10분 TTL)                                                     | 임시      |
 | `IndexedDB`              | `refreshStore`                                                                              | AES-GCM 암호화 refresh token (암호화 키는 꺼낼 수 없는 상태로 저장 — `extractable: false`) | 로컬 전용 |
-| Cache Storage            | `shell-X.Y.Z` (SHELL_CACHE)                                                                 | 앱 셸 + `books.json` + `search-meta.json` + 매니페스트 2종 | (배포물)  |
-| Cache Storage            | `data` (DATA_CACHE)                                                                         | 1329장 본문 + 검색 인덱스 (ot/nt/dc)          | (누적)    |
-| Cache Storage            | `audio` (AUDIO_CACHE)                                                                       | 장별 mp3 (필요 시 다운로드)                   | (누적)    |
-| Cache Storage            | `fonts` (FONT_CACHE)                                                                        | Google Font 파일                              | (영구)    |
-| `IndexedDB`              | `bible-manifest-sync/snapshots`                                                             | 직전 매니페스트 스냅샷 (diff 기준)            | 로컬 전용 |
-| Google Drive (`appdata`) | `bookmarks-v2.json`                                                                         | 동기화 페이로드 (북마크+설정+이어읽기) + ETag | ☁️ 원격   |
+| Cache Storage            | `shell-X.Y.Z` (SHELL_CACHE)                                                                 | 앱 셸 + `books.json` + `search-meta.json` + 매니페스트 2종                                 | (배포물)  |
+| Cache Storage            | `data` (DATA_CACHE)                                                                         | 1329장 본문 + 검색 인덱스 (ot/nt/dc)                                                       | (누적)    |
+| Cache Storage            | `audio` (AUDIO_CACHE)                                                                       | 장별 mp3 (필요 시 다운로드)                                                                | (누적)    |
+| Cache Storage            | `fonts` (FONT_CACHE)                                                                        | Google Font 파일                                                                           | (영구)    |
+| `IndexedDB`              | `bible-manifest-sync/snapshots`                                                             | 직전 매니페스트 스냅샷 (diff 기준)                                                         | 로컬 전용 |
+| Google Drive (`appdata`) | `bookmarks-v2.json`                                                                         | 동기화 페이로드 (북마크+설정+이어읽기) + ETag                                              | ☁️ 원격   |
 
 동기화 대상이 아닌 항목(오디오 위치, 디바이스 ID, 캐시 등)은 의도적으로 기기 로컬에 머문다. 동기화 페이로드 스키마는 `js/types.d.ts`의 `SyncDoc` 타입과 `js/sync/store-v2.js:1` 헤더 주석에서 정의된다.
 
@@ -352,13 +352,13 @@ npx tsc -p tsconfig.worker.json --noEmit
 
 테스트는 비용/실행 빈도/원본 텍스트 의존성에 따라 4종으로 분리되어 있다.
 
-| 종류                                                                         | 위치                                       | 원본 필요?                               | CI?                   | 무엇을 보호하는가                                                                                                                                    |
-| ---------------------------------------------------------------------------- | ------------------------------------------ | ---------------------------------------- | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **클라이언트 JS 유닛** ([ADR-013](decisions/013-client-js-unit-tests.md))    | `tests/unit/*.test.js`                     | ❌                                       | ✅ (앱 저장소)        | sync 레이어(상태 머신·PKCE 등) + app 레이어(storage·helpers·install·search·bookmark·views 순수 영역) 485 케이스. DOM-heavy 영역은 e2e가 책임 |
-| **Level 1 완전성** ([ADR-004](decisions/004-data-pipeline-test-strategy.md)) | `data/tests/test_completeness.py` (서브모듈) | ❌                                       | ✅ (data 저장소)      | 1328개 장 파일·구조 누락                                                                                                                             |
-| **Level 2 절 순서**                                                          | `data/tests/test_ordering.py`              | ❌ (`fixtures/verse_sequence.json` 사용) | ✅ (data 저장소)      | 파이프라인 변경 시 절 순서 회귀                                                                                                                      |
-| **Level 3 스냅샷**                                                           | `data/tests/test_snapshots.py`             | ❌                                       | ✅ (data 저장소)      | cross-chapter 재배치 등 특수 케이스                                                                                                                  |
-| **E2E (Playwright)**                                                         | `tests/e2e/*.py`                           | ✅ (서버 + 본문)                         | ❌ (로컬)             | 검색 UI, 라우팅, 클립보드, 설치 안내, 동기화 등 회귀                                                                                                 |
+| 종류                                                                         | 위치                                         | 원본 필요?                               | CI?              | 무엇을 보호하는가                                                                                                                            |
+| ---------------------------------------------------------------------------- | -------------------------------------------- | ---------------------------------------- | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| **클라이언트 JS 유닛** ([ADR-013](decisions/013-client-js-unit-tests.md))    | `tests/unit/*.test.js`                       | ❌                                       | ✅ (앱 저장소)   | sync 레이어(상태 머신·PKCE 등) + app 레이어(storage·helpers·install·search·bookmark·views 순수 영역) 485 케이스. DOM-heavy 영역은 e2e가 책임 |
+| **Level 1 완전성** ([ADR-004](decisions/004-data-pipeline-test-strategy.md)) | `data/tests/test_completeness.py` (서브모듈) | ❌                                       | ✅ (data 저장소) | 1328개 장 파일·구조 누락                                                                                                                     |
+| **Level 2 절 순서**                                                          | `data/tests/test_ordering.py`                | ❌ (`fixtures/verse_sequence.json` 사용) | ✅ (data 저장소) | 파이프라인 변경 시 절 순서 회귀                                                                                                              |
+| **Level 3 스냅샷**                                                           | `data/tests/test_snapshots.py`               | ❌                                       | ✅ (data 저장소) | cross-chapter 재배치 등 특수 케이스                                                                                                          |
+| **E2E (Playwright)**                                                         | `tests/e2e/*.py`                             | ✅ (서버 + 본문)                         | ❌ (로컬)        | 검색 UI, 라우팅, 클립보드, 설치 안내, 동기화 등 회귀                                                                                         |
 
 유닛 테스트는 `node --test`만으로 돌고, `tests/unit/harness.js`가 자체 vm 컨텍스트를 생성해 글로벌 상태 누수를 막는다 — 의존성 0. 앱 저장소 CI(`.github/workflows/test.yml`)는 Node 24로 유닛 테스트를 자동 실행. Level 1-3 데이터 파이프라인 검증은 `common-bible-data` 저장소의 `.github/workflows/validate.yml`이 push 시 자동 실행 (분할 후 ADR-020).
 
@@ -442,45 +442,45 @@ OAuth 측면 (가장 큰 공격 표면):
 
 ## 부록 A. ADR 인덱스 (한 줄 요약)
 
-| ADR                                                     | 결정                                                       |
-| ------------------------------------------------------- | ---------------------------------------------------------- |
-| [001](decisions/001-spa-architecture.md)                | Vanilla JS SPA + Python 일회성 전처리                      |
-| [002](decisions/002-sirach-prologue-handling.md)        | 시락 머리말은 별도 JSON으로 추출 *(common-bible-data로 이전, ADR-020)* |
-| [003](decisions/003-physical-chapter-ordering.md)       | 원전의 물리적 장 순서를 따름 *(common-bible-data로 이전, ADR-020)* |
-| [004](decisions/004-data-pipeline-test-strategy.md)     | Level 1-3 데이터 검증 전략                                 |
-| [005](decisions/005-search-indexing-strategy.md)        | 검색 인덱스 구약/신약/외경 청크 분할                       |
-| [006](decisions/006-poetry-source-format.md)            | 운문 본문 segments 표현 *(common-bible-data로 이전, ADR-020)* |
-| [007](decisions/007-launch-screen-optimization.md)      | iOS 13종 디바이스 스플래시                                 |
-| [008](decisions/008-pwa-install-guide.md)               | 플랫폼별 설치 안내 모달                                    |
-| [009](decisions/009-history-api-routing.md)             | History API SPA 라우팅                                     |
-| [010](decisions/010-bookmark-feature.md)                | 북마크 데이터 모델 + UI                                    |
-| [011](decisions/011-bookmark-sync.md)                   | Google Drive 동기화 (Phase 2a~2h)                          |
-| [012](decisions/012-typescript-incremental-adoption.md) | `// @ts-check` + JSDoc 점진 도입                           |
-| [013](decisions/013-client-js-unit-tests.md)            | `node --test` + vm 하네스 유닛 테스트                      |
-| [014](decisions/014-search-history.md)                  | 검색 이력 (LRU·로컬 전용)                                  |
-| [015](decisions/015-storage-strategy.md)                | localStorage 키 네임스페이스·크기 가드                     |
-| [016](decisions/016-audio-cache-lru.md)                 | 오디오 캐시 LRU 제한                                       |
-| [017](decisions/017-oauth-bff-proxy.md)                 | nginx BFF로 `client_secret` 격리                           |
-| [018](decisions/018-app-modularization.md)              | `js/app.js` 6,082 → 283줄, 9개 도메인 모듈 분할            |
-| [019](decisions/019-esm-module-system.md)               | ESM 일괄 채택 (`<script type="module">`), 빌드 단계 0 유지 |
-| [020](decisions/020-monorepo-split.md)                  | 모노레포 4분할 (app·data·audio·server)                     |
-| [021](decisions/021-pwa-versioning-content-hash.md)     | SHELL_CACHE = version.json 파생, DATA/AUDIO 콘텐츠 해시 매니페스트 |
-| [022](decisions/022-citations-and-annotations.md)       | 본문 인용(`<cite>`) + 주석(footnote) 표현과 단일 토글 렌더  |
-| [023](decisions/023-settings-toggle-switches.md)        | 설정 상위 4개 옵션 → OS별 네이티브 토글 스위치             |
-| [024](decisions/024-book-list-tabs-and-header-nav.md)   | 성서 목록 탭 통합 + 읽기 헤더 내비 재설계                  |
-| [025](decisions/025-header-scroll-elevation.md)         | 읽기 헤더 스크롤 elevation 그림자                          |
-| [027](decisions/027-source-dsl-and-parallel-passages.md)| source markup DSL 위치 잡기 + 단락 단위 `<parallel>` element 도입 |
-| [028](decisions/028-design-system.md)                   | 디자인 시스템 — 토큰 사다리(간격·타이포·반경·elevation·컨트롤·모션) + HIG 정렬 (권위 문서 `DESIGN.md`) |
-| [029](decisions/029-mobile-tab-bar.md)                  | 적응형 내비 Phase 1 — 모바일 하단 탭 바(홈·검색·북마크·설정 4탭, 전체화면 라우트 뷰, iOS 2026 Liquid Glass) |
-| [030](decisions/030-morphing-tab-bar.md)                | 모핑 탭 바 — 라벨 없는 아이콘 + 분리 검색 원형 → 입력 모핑(ADR-029 개정), 옛 검색 시트 제거, 스크롤 축소+오디오 미니(후속) |
-| [031](decisions/031-tab-history-restore.md)             | 탭 히스토리 — 탭별 마지막 라우트+스크롤 복원(홈=읽던 위치, 검색=마지막 검색), `scrollRestoration:"manual"` + route() 시퀀스 가드 |
-| [032](decisions/032-component-view-layer.md)            | 컴포넌트·뷰 층 모듈화 — `el()` 위 무의존성 컴포넌트 층(`createOverlay` 단일 컨트롤러 + 시트 팩토리 + 비동기 `closeTransition` + `emptyState` 빌더)으로 오버레이 12곳·빈 상태 통일, 점진 교체 (구현 완료) |
-| [033](decisions/033-search-options.md)                  | 검색 옵션 — 책 picker(필터 시트)·결과 내 검색(AND)·진입 시 최근 검색 목록(개별/전체 삭제), URL 인코딩 필터 상태, 노트 검색 범위 확장 대비 (구현 완료) |
-| [034](decisions/034-views-routing-second-split.md)      | 뷰·라우팅·북마크 2차 분할 — 관심사별 모듈화 + 비순환 facade→명시 import 전환 + 순환 dispatch는 registry 역전 (ADR-018 후속, PR1 오디오 분리 완료) |
-| [035](decisions/035-bookmark-reading-view.md)           | 북마크 모아 읽기 — 폴더 단위 연속 읽기 화면(`/read/<id>`, 홈 탭 분류), 폴더 행 `읽기`(auto_stories) 진입, 인접·연속 본문 병합, 네스팅 폴더는 소제목. `renderChapter` 절 루프를 `appendVerses`로 추출(전례독서 페이지 기반 기술) (구현 중) |
-| [036](decisions/036-liturgical-calendar-data-model.md)  | 교회력(전례력) 데이터 모델 — 본기도 평면 배열(자기 좌표)·explode/병합 규칙·영어 값+`_vocab`·temporal/sanctoral·품계 8단계(2차)·전례색 4색·computus 기준·맺음구 분리 (구현 대기) |
+| ADR                                                          | 결정                                                                                                                                                                                                                                                          |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [001](decisions/001-spa-architecture.md)                     | Vanilla JS SPA + Python 일회성 전처리                                                                                                                                                                                                                         |
+| [002](decisions/002-sirach-prologue-handling.md)             | 시락 머리말은 별도 JSON으로 추출 _(common-bible-data로 이전, ADR-020)_                                                                                                                                                                                        |
+| [003](decisions/003-physical-chapter-ordering.md)            | 원전의 물리적 장 순서를 따름 _(common-bible-data로 이전, ADR-020)_                                                                                                                                                                                            |
+| [004](decisions/004-data-pipeline-test-strategy.md)          | Level 1-3 데이터 검증 전략                                                                                                                                                                                                                                    |
+| [005](decisions/005-search-indexing-strategy.md)             | 검색 인덱스 구약/신약/외경 청크 분할                                                                                                                                                                                                                          |
+| [006](decisions/006-poetry-source-format.md)                 | 운문 본문 segments 표현 _(common-bible-data로 이전, ADR-020)_                                                                                                                                                                                                 |
+| [007](decisions/007-launch-screen-optimization.md)           | iOS 13종 디바이스 스플래시                                                                                                                                                                                                                                    |
+| [008](decisions/008-pwa-install-guide.md)                    | 플랫폼별 설치 안내 모달                                                                                                                                                                                                                                       |
+| [009](decisions/009-history-api-routing.md)                  | History API SPA 라우팅                                                                                                                                                                                                                                        |
+| [010](decisions/010-bookmark-feature.md)                     | 북마크 데이터 모델 + UI                                                                                                                                                                                                                                       |
+| [011](decisions/011-bookmark-sync.md)                        | Google Drive 동기화 (Phase 2a~2h)                                                                                                                                                                                                                             |
+| [012](decisions/012-typescript-incremental-adoption.md)      | `// @ts-check` + JSDoc 점진 도입                                                                                                                                                                                                                              |
+| [013](decisions/013-client-js-unit-tests.md)                 | `node --test` + vm 하네스 유닛 테스트                                                                                                                                                                                                                         |
+| [014](decisions/014-search-history.md)                       | 검색 이력 (LRU·로컬 전용)                                                                                                                                                                                                                                     |
+| [015](decisions/015-storage-strategy.md)                     | localStorage 키 네임스페이스·크기 가드                                                                                                                                                                                                                        |
+| [016](decisions/016-audio-cache-lru.md)                      | 오디오 캐시 LRU 제한                                                                                                                                                                                                                                          |
+| [017](decisions/017-oauth-bff-proxy.md)                      | nginx BFF로 `client_secret` 격리                                                                                                                                                                                                                              |
+| [018](decisions/018-app-modularization.md)                   | `js/app.js` 6,082 → 283줄, 9개 도메인 모듈 분할                                                                                                                                                                                                               |
+| [019](decisions/019-esm-module-system.md)                    | ESM 일괄 채택 (`<script type="module">`), 빌드 단계 0 유지                                                                                                                                                                                                    |
+| [020](decisions/020-monorepo-split.md)                       | 모노레포 4분할 (app·data·audio·server)                                                                                                                                                                                                                        |
+| [021](decisions/021-pwa-versioning-content-hash.md)          | SHELL_CACHE = version.json 파생, DATA/AUDIO 콘텐츠 해시 매니페스트                                                                                                                                                                                            |
+| [022](decisions/022-citations-and-annotations.md)            | 본문 인용(`<cite>`) + 주석(footnote) 표현과 단일 토글 렌더                                                                                                                                                                                                    |
+| [023](decisions/023-settings-toggle-switches.md)             | 설정 상위 4개 옵션 → OS별 네이티브 토글 스위치                                                                                                                                                                                                                |
+| [024](decisions/024-book-list-tabs-and-header-nav.md)        | 성서 목록 탭 통합 + 읽기 헤더 내비 재설계                                                                                                                                                                                                                     |
+| [025](decisions/025-header-scroll-elevation.md)              | 읽기 헤더 스크롤 elevation 그림자                                                                                                                                                                                                                             |
+| [027](decisions/027-source-dsl-and-parallel-passages.md)     | source markup DSL 위치 잡기 + 단락 단위 `<parallel>` element 도입                                                                                                                                                                                             |
+| [028](decisions/028-design-system.md)                        | 디자인 시스템 — 토큰 사다리(간격·타이포·반경·elevation·컨트롤·모션) + HIG 정렬 (권위 문서 `DESIGN.md`)                                                                                                                                                        |
+| [029](decisions/029-mobile-tab-bar.md)                       | 적응형 내비 Phase 1 — 모바일 하단 탭 바(홈·검색·북마크·설정 4탭, 전체화면 라우트 뷰, iOS 2026 Liquid Glass)                                                                                                                                                   |
+| [030](decisions/030-morphing-tab-bar.md)                     | 모핑 탭 바 — 라벨 없는 아이콘 + 분리 검색 원형 → 입력 모핑(ADR-029 개정), 옛 검색 시트 제거, 스크롤 축소+오디오 미니(후속)                                                                                                                                    |
+| [031](decisions/031-tab-history-restore.md)                  | 탭 히스토리 — 탭별 마지막 라우트+스크롤 복원(홈=읽던 위치, 검색=마지막 검색), `scrollRestoration:"manual"` + route() 시퀀스 가드                                                                                                                              |
+| [032](decisions/032-component-view-layer.md)                 | 컴포넌트·뷰 층 모듈화 — `el()` 위 무의존성 컴포넌트 층(`createOverlay` 단일 컨트롤러 + 시트 팩토리 + 비동기 `closeTransition` + `emptyState` 빌더)으로 오버레이 12곳·빈 상태 통일, 점진 교체 (구현 완료)                                                      |
+| [033](decisions/033-search-options.md)                       | 검색 옵션 — 책 picker(필터 시트)·결과 내 검색(AND)·진입 시 최근 검색 목록(개별/전체 삭제), URL 인코딩 필터 상태, 노트 검색 범위 확장 대비 (구현 완료)                                                                                                         |
+| [034](decisions/034-views-routing-second-split.md)           | 뷰·라우팅·북마크 2차 분할 — 관심사별 모듈화 + 비순환 facade→명시 import 전환 + 순환 dispatch는 registry 역전 (ADR-018 후속, PR1 오디오 분리 완료)                                                                                                             |
+| [035](decisions/035-bookmark-reading-view.md)                | 북마크 모아 읽기 — 폴더 단위 연속 읽기 화면(`/read/<id>`, 홈 탭 분류), 폴더 행 `읽기`(auto_stories) 진입, 인접·연속 본문 병합, 네스팅 폴더는 소제목. `renderChapter` 절 루프를 `appendVerses`로 추출(전례독서 페이지 기반 기술) (구현 중)                     |
+| [036](decisions/036-liturgical-calendar-data-model.md)       | 교회력(전례력) 데이터 모델 — 본기도 평면 배열(자기 좌표)·explode/병합 규칙·영어 값+`_vocab`·temporal/sanctoral·품계 8단계(2차)·전례색 4색·computus 기준·맺음구 분리 (구현 대기)                                                                               |
 | [037](decisions/037-eucharist-lectionary-data-and-engine.md) | 감사성찬례 전례독서 데이터·엔진 — `eucharist-readings.json` 좌표 스키마(refs=장 경계, verseSpec 재사용, 대안 세트 explode), 전례시편 별도 책 `lps`(계응 DSL, 숨김), 연중 주간 구간표·KASI 음력, `liturgical-engine.js`(computus·후보 관측일 보존) (구현 대기) |
-| [038](decisions/038-calendar-lectionary-ui.md)          | 교회력 캘린더·전례독서 뷰·검색 이원화 — 캘린더 탭(홈 옆, 월간·주간·목록 3뷰), `/lectionary/YYYY-MM-DD`(본기도 열거+탭·맺음구 상수·계응 시편·세트/트랙 전환), 검색 상단 탭(성서 본문/전례독서) (구현 대기) |
+| [038](decisions/038-calendar-lectionary-ui.md)               | 교회력 캘린더·전례독서 뷰·검색 이원화 — 캘린더 탭(홈 옆, 월간·주간·목록 3뷰), `/lectionary/YYYY-MM-DD`(본기도 열거+탭·맺음구 상수·계응 시편·세트/트랙 전환), 검색 상단 탭(성서 본문/전례독서) (구현 대기)                                                     |
 
 ## 부록 B. 자주 보게 되는 파일 빠른 참조
 
