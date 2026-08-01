@@ -701,7 +701,7 @@ function createSyncMachine({ onStateChange } = {}) {
       const mergedMaxU = V2.maxU(merged);
 
       const hadRemoteChanges = (
-        /** @type {Array<import("../types").SettingKey>} */ (Object.keys(merged.settings)).some(k =>
+        Object.keys(merged.settings).some(k =>
           (merged.settings[k]?._u ?? 0) > (local.settings?.[k]?._u ?? 0)) ||
         (merged.lastRead?._u ?? 0) > (local.lastRead?._u ?? 0) ||
         Object.keys(merged.bookmarks?.items ?? {}).some(id =>
