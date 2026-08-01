@@ -864,17 +864,21 @@ function _verseRangeVrefs(allVrefs, anchorVref, targetVref, unitFn) {
 /**
  * @param {HTMLElement} article
  * @param {ReadonlyArray<BibleVerse>} verses
- * @param {{ hlQuery?: string|null, hlVerse?: number|null, hlVerseEnd?: number|null, hlSegments?: Array<{start:number,end:number,part?:string}>|null, parallels?: ChapterParallel[]|null, chapter?: number|null, hideCites?: boolean }} [opts]
+ * @param {{ hlQuery?: string|null, hlVerse?: number|null, hlVerseEnd?: number|null, hlSegments?: Array<{start:number,end:number,part?:string}>|null, parallels?: ChapterParallel[]|null, chapter?: number|null, hideCites?: boolean, instanceKeys?: ReadonlyArray<string>|null }} [opts]
  */
 function appendVerses(article, verses, opts = {}) {
-  const { hlQuery = null, hlVerse = null, hlVerseEnd = null, hlSegments = null, parallels = null, chapter = null, hideCites = false } = opts;
+  const { hlQuery = null, hlVerse = null, hlVerseEnd = null, hlSegments = null, parallels = null, chapter = null, hideCites = false, instanceKeys: keysOverride = null } = opts;
   let isFirst = true;
   let prevVerseEndType = null;
   // Several verses in one chapter can share a number (전례시편의 ¶ 구절, 에스델
   // 추가 본문) — DOM ids must come from the instance identity, not the number.
-  const instanceKeys = window.verseInstanceKeys
+  // The `~N` ordinal in that identity depends on which verses precede it, so
+  // subset callers (bookmark reading view) pass keys sliced from the FULL
+  // chapter list; recomputing from the excerpt could drift the ordinal on a
+  // duplicate-marker chapter.
+  const instanceKeys = keysOverride ?? (window.verseInstanceKeys
     ? window.verseInstanceKeys(verses)
-    : verses.map((v) => String(v.number));
+    : verses.map((v) => String(v.number)));
   // ADR-039 부(部): 원문이 나눈 편에서 봉독 토막의 첫 절 앞에 "(N)" 소제목.
   let prevSection = null;
 

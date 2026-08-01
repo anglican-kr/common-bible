@@ -368,9 +368,13 @@ async function renderBookmarkReadView(folderId = null) {
       const specs = /** @type {string[]} */ (byChapter.get(chNum));
       const coversAll = specs.includes("all");
       // Instance keys come from the FULL chapter list, so the same verse gets
-      // the same key no matter which subset a group renders.
+      // the same key no matter which subset a group renders. The selected
+      // verses' keys ride along to appendVerses (instanceKeys option) so DOM
+      // ids can't drift from the dedupe identity on an excerpt.
       const chapterVerses = data.verses || [];
       const keys = verseInstanceKeys(chapterVerses);
+      /** @type {string[]} */
+      const selKeys = [];
       const verses = chapterVerses.filter((v, i) => {
         if (!coversAll) {
           const end = v.range_end != null ? v.range_end : v.number;
@@ -384,13 +388,14 @@ async function renderBookmarkReadView(folderId = null) {
         const key = `${first.bookId}:${chNum}:${keys[i]}`;
         if (seenVerses.has(key)) return false;
         seenVerses.add(key);
+        selKeys.push(keys[i]);
         return true;
       });
       if (!verses.length) continue;
       const article = el("article", { className: "chapter-text", lang: "ko" });
       // Clean 봉독 surface (ADR-035): no study-aid chrome — cite chips suppressed
       // (hideCites), parallels (ADR-027 ※) not passed, note anchors not wrapped.
-      appendVerses(article, verses, { hideCites: true });
+      appendVerses(article, verses, { hideCites: true, instanceKeys: selKeys });
       section.appendChild(article);
       appendedAny = true;
     }
