@@ -108,6 +108,47 @@ def test_발췌_렌더에서도_무번호_구절이_살아있다(browser):
     ctx.close()
 
 
+def test_발췌_렌더는_전체_장_기준_인스턴스_키를_따른다(desktop_context):
+    """appendVerses 는 받은 배열에서 키를 재계산하지 않고 호출자가 전체 장
+    기준으로 추린 instanceKeys 를 따라야 한다. 중복 마커 쌍의 두 번째 절만
+    발췌되면, 재계산 시 서수 `~2` 가 사라져 id 가 v9 로 어긋난다."""
+    page = desktop_context.new_page()
+    _open(page, "gen/1")
+    ids = page.evaluate("""async () => {
+        const { appendVerses } = await import('/js/app/views.js');
+        const article = document.createElement('article');
+        appendVerses(article, [{ number: 9, text: 'x' }], { instanceKeys: ['9~2'] });
+        return Array.from(article.querySelectorAll('.verse[id]')).map(e => e.id);
+    }""")
+    assert ids == ["v9-2"], ids
+
+
+_JOB32_BOOKMARK = [{
+    "type": "bookmark", "id": "bm-job32", "bookId": "job", "chapter": 32,
+    "label": "욥기 32장 발췌", "verseSpec": "5-9",
+}]
+
+
+def test_중복_마커_장의_발췌_id가_전체_장_렌더와_일치한다(browser):
+    """욥 32:9 는 원본 절 마커 중복으로 number=9 가 둘이다(서수 폴백 `~2`).
+    발췌 렌더의 DOM id 는 전체 장 렌더와 같아야 한다 — selKeys 전달이
+    어긋나면(정렬 밀림 등) 여기서 갈라진다."""
+    ctx = browser.new_context()
+    page = ctx.new_page()
+    page.add_init_script("localStorage.removeItem('bible-bookmarks');")
+    _open(page, "job/32")
+    full_ids = page.eval_on_selector_all(
+        "article.chapter-text .verse[id]", "els => els.map(e => e.id)")
+    assert "v9" in full_ids and "v9-2" in full_ids, full_ids  # 중복 쌍 전제 확인
+    page.evaluate(f"() => window.syncStoreV2.saveBookmarks({json.dumps(_JOB32_BOOKMARK)})")
+    _open(page, "read")
+    sub_ids = page.eval_on_selector_all("#app .verse[id]", "els => els.map(e => e.id)")
+    assert len(sub_ids) == len(set(sub_ids)), f"DOM id 중복: {sub_ids}"
+    assert set(sub_ids) <= set(full_ids), f"전체 장에 없는 id: {set(sub_ids) - set(full_ids)}"
+    assert "v9" in sub_ids and "v9-2" in sub_ids, sub_ids
+    ctx.close()
+
+
 def test_일반_성서_장에는_전례_표기가_없다(desktop_context):
     page = desktop_context.new_page()
     _open(page, "gen/1")
