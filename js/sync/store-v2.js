@@ -302,6 +302,9 @@ function mergeDocs(local, remote, deviceId) {
   ]);
 
   for (const id of allIds) {
+    // A parsed doc can carry "__proto__" as an own key; assigning it would
+    // rewrite the merged object's prototype instead of adding an entry.
+    if (id === "__proto__") continue;
     const L  = local.bookmarks?.items?.[id];
     const R  = remote.bookmarks?.items?.[id];
     const LT = local.bookmarks?.tombstones?.[id]  ?? -Infinity;
@@ -330,6 +333,7 @@ function mergeDocs(local, remote, deviceId) {
     ...Object.keys(remote.settings ?? {}),
   ]);
   for (const key of settingKeys) {
+    if (key === "__proto__") continue; // same prototype-rewrite guard as above
     const lv = local.settings?.[key]  ?? { v: null, _u: 0 };
     const rv = remote.settings?.[key] ?? { v: null, _u: 0 };
     merged.settings[key] = rv._u >= lv._u ? rv : lv;
@@ -366,17 +370,24 @@ function validateRemote(data) {
 }
 
 // ── Tombstone GC ──────────────────────────────────────────────────────────────
-// Remove tombstones older than ageDays (default 30). Safe to call anytime;
-// only persists if there's anything to remove.
+// Remove bookmark tombstones and retired settings entries older than ageDays
+// (default 30). Retiring a setting key = writing { v: null, _u: now }; once
+// the null has had time to propagate to every device, the entry is dropped so
+// renamed/removed keys don't ride the sync doc forever. Entries with _u === 0
+// are the _emptyDoc defaults — every merge regenerates them, so sweeping them
+// would only churn saveLocal. Safe to call anytime; only persists on removal.
 /** @param {number} [ageDays] */
 function sweepTombstones(ageDays = 30) {
   const cutoff = Date.now() - ageDays * 864e5;
   const doc = loadLocal();
-  const before = Object.keys(doc.bookmarks.tombstones).length;
+  let removed = 0;
   for (const [id, ts] of Object.entries(doc.bookmarks.tombstones)) {
-    if (ts < cutoff) delete doc.bookmarks.tombstones[id];
+    if (ts < cutoff) { delete doc.bookmarks.tombstones[id]; removed++; }
   }
-  if (Object.keys(doc.bookmarks.tombstones).length < before) saveLocal(doc);
+  for (const [key, s] of Object.entries(doc.settings ?? {})) {
+    if (s?.v === null && s._u > 0 && s._u < cutoff) { delete doc.settings[key]; removed++; }
+  }
+  if (removed > 0) saveLocal(doc);
 }
 
 // ── Apply remote doc to localStorage legacy keys ──────────────────────────────

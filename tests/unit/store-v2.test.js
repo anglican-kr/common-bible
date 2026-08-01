@@ -202,3 +202,47 @@ test("applyToLegacyKeys 는 아는 키만 localStorage 에 쓴다", () => {
     false,
   );
 });
+
+// ── __proto__ 가드 ──
+// JSON.parse 는 "__proto__" 를 own key 로 만들 수 있고, 그 키를 그대로 대입하면
+// 병합 결과 객체의 프로토타입이 바뀐다(키 탈락 + 오염). 병합은 이 키를 무시한다.
+
+test("원격 settings 의 __proto__ 키는 병합에서 무시된다", () => {
+  const { store } = load();
+  const evil = doc();
+  evil.settings = JSON.parse('{"__proto__": { "v": "polluted", "_u": 999 }}');
+  const merged = store.mergeDocs(doc(), evil, "device-a");
+  assert.equal(Object.prototype.hasOwnProperty.call(merged.settings, "__proto__"), false);
+  // 프로토타입이 바뀌었다면 v 가 상속 프로퍼티로 보인다
+  assert.equal(merged.settings.v, undefined);
+});
+
+test("원격 북마크의 __proto__ id 는 병합에서 무시된다", () => {
+  const { store } = load();
+  const evil = doc();
+  evil.bookmarks.items = JSON.parse(
+    '{"__proto__": { "id": "__proto__", "type": "bookmark", "_u": 100 }}',
+  );
+  const merged = store.mergeDocs(doc(), evil, "device-a");
+  assert.equal(Object.prototype.hasOwnProperty.call(merged.bookmarks.items, "__proto__"), false);
+  assert.equal(merged.bookmarks.items.id, undefined);
+});
+
+// ── 설정 GC ──
+
+test("오래된 null 설정 항목은 sweepTombstones 가 걷어낸다", () => {
+  // 은퇴 규약: 키를 없앨 때 { v: null, _u: now } 를 쓰고, 30일 뒤 sweep 이 걷어낸다.
+  const { store } = load();
+  store.saveLocal(doc({ settings: {
+    "retired-setting": { v: null,   _u: 1 },          // 은퇴 표식, 30일 경과 → 제거
+    theme:             { v: "dark", _u: 1 },          // 값이 있으면 나이와 무관하게 유지
+    fontSize:          { v: null,   _u: 0 },          // _emptyDoc 기본값은 유지
+    "fresh-null":      { v: null,   _u: Date.now() }, // 아직 30일 안 지난 null 은 유지
+  } }));
+  store.sweepTombstones();
+  const s = store.loadLocal().settings;
+  assert.equal("retired-setting" in s, false);
+  assert.equal(s.theme.v, "dark");
+  assert.deepEqual(plain(s.fontSize), { v: null, _u: 0 });
+  assert.equal(s["fresh-null"].v, null);
+});
