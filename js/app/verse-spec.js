@@ -196,7 +196,7 @@ function chapterMaxVerse(data) {
 
 /**
  * Content-derived identity of one verse instance.
- * @param {{ number: number, part?: string|null, alt_ref?: number|null, lxx_only?: boolean, versicle?: boolean, chapter_ref?: number|null }} v
+ * @param {{ number: number, part?: string|null, alt_ref?: number|null, lxx_only?: boolean, versicle?: boolean, chapter_ref?: string|null }} v
  * @returns {string}
  */
 function verseInstanceKey(v) {

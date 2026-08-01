@@ -876,9 +876,13 @@ function appendVerses(article, verses, opts = {}) {
   // subset callers (bookmark reading view) pass keys sliced from the FULL
   // chapter list; recomputing from the excerpt could drift the ordinal on a
   // duplicate-marker chapter.
-  const instanceKeys = keysOverride ?? (window.verseInstanceKeys
-    ? window.verseInstanceKeys(verses)
-    : verses.map((v) => String(v.number)));
+  // A malformed override (length mismatch) falls back to recomputing — a
+  // drifted ordinal id is better than a mid-render crash on undefined.
+  const instanceKeys = (keysOverride && keysOverride.length === verses.length)
+    ? keysOverride
+    : (window.verseInstanceKeys
+      ? window.verseInstanceKeys(verses)
+      : verses.map((v) => String(v.number)));
   // ADR-039 부(部): 원문이 나눈 편에서 봉독 토막의 첫 절 앞에 "(N)" 소제목.
   let prevSection = null;
 
