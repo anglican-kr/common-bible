@@ -375,6 +375,50 @@ const yearCache = new Map();   // { easter, advent1, movable: Map<"MM-DD", Obser
 
 ### 5.2 실측 스키마 — 엔진이 방어해야 할 표기 불일치
 
+<!-- 아래 `facts` 블록은 tests/unit/docs-data-consistency.test.js 가 data/lectionary/ 와
+     기계적으로 대조한다. **숫자를 손으로 맞추지 말 것** — 데이터가 바뀌면 테스트가 먼저
+     알려주고, 그때 이 블록만 고치면 된다. 본문 산문이 같은 수치를 되풀이할 때는 여기를
+     정답으로 삼는다(수치가 여러 곳에 흩어져 서로 어긋나던 것이 2026-08-29 정합성 점검의
+     주된 원인이었다). 날짜가 박힌 로그 항목의 옛 수치는 대상이 아니다 — 그건 그때의 기록이다. -->
+
+```facts
+collects.total                 = 328
+collects.id.max                = 328
+collects.ending.A              = 318
+collects.ending.B              = 0
+collects.ending.C              = 10
+collects.review                = 0
+collects.note                  = 1
+collects.rank_null             = 4
+collects.color_null            = 2
+collects.collect_total_gt1     = 34
+readings.total                 = 923
+readings.set_no.1              = 841
+readings.set_no.2              = 81
+readings.set_no.3              = 1
+readings.set_total_gt1         = 163
+readings.slot.first            = 923
+readings.slot.psalm            = 923
+readings.slot.second           = 384
+readings.slot.gospel           = 922
+readings.reading_track_nonnull = 175
+readings.weekday_null          = 393
+sanctoral.total                = 149
+sanctoral.has_proper           = 52
+sanctoral.commemoration        = 16
+sanctoral.minor_feast          = 96
+temporal.total                 = 24
+temporal.rule_kinds            = 7
+temporal.easter_offset         = 12
+temporal.ember_wfs             = 4
+temporal.rule_null             = 0
+commons.classes                = 8
+commons.reading_sets           = 22
+ordinal_weeks.weeks            = 34
+ordinal_weeks.windows          = 38
+```
+
+
 ADR 이 정한 모델과 실제 JSON 사이에 **엔진이 흡수해야 하는 차이**가 있다. 아래는 2026-08-08 전수 집계로 확인한 것이다.
 
 **모든 파일이 객체 래퍼를 쓴다.** 배열 최상위는 하나도 없다.
