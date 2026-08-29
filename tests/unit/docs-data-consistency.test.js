@@ -98,9 +98,19 @@ test("설계서 facts 블록이 data/lectionary 와 일치한다", { skip: haveD
   const claims = parseClaims();
   const actual = measure();
 
-  // 문서가 데이터에 없는 키를 주장하면 그것도 결함이다 — 조용히 넘기지 않는다.
-  const unknown = Object.keys(claims).filter((k) => !(k in actual));
+  // 두 방향을 다 본다. 문서가 측정 못 하는 키를 주장해도 결함이지만, **측정할 수 있는
+  // 키가 문서에서 사라지는 것**도 결함이다 — 어긋난 줄을 지워서 통과시키는 길을 막는다.
+  // (형식 테스트의 「30개 이상」만으로는 어느 줄이 빠졌는지 잡지 못한다.)
+  const claimed = new Set(Object.keys(claims));
+  const measured = new Set(Object.keys(actual));
+  const unknown = [...claimed].filter((k) => !measured.has(k)).sort();
+  const missing = [...measured].filter((k) => !claimed.has(k)).sort();
   assert.deepEqual(unknown, [], `facts 블록에 측정 방법이 없는 키: ${unknown}`);
+  assert.deepEqual(
+    missing, [],
+    `측정 가능한데 facts 블록에서 빠진 키: ${missing}\n` +
+      `  줄을 지워서 대조를 피하지 말 것 — 그 수치를 더는 안 쓰기로 했다면 measure() 에서도 빼라.`,
+  );
 
   const wrong = Object.entries(claims)
     .filter(([k, v]) => actual[k] !== v)
