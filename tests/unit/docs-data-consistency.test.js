@@ -20,7 +20,10 @@ const ROOT = path.resolve(__dirname, "../..");
 const LECTIONARY = path.join(ROOT, "data", "lectionary");
 const DESIGN = path.join(ROOT, "docs", "design", "liturgical-engine.md");
 
-const haveData = fs.existsSync(path.join(LECTIONARY, "eucharist-collects.json"));
+// 체크아웃 여부만 본다. 개별 파일의 존재로 판별하면 그 파일이 지워지거나 이름이
+// 바뀐 데이터 커밋에서 검증 전체가 조용히 skip 된다 — 없어진 것이야말로 잡아야 할
+// 사고다. 파일 누락은 measure() 의 읽기 실패로 드러나게 둔다.
+const haveData = fs.existsSync(LECTIONARY);
 const load = (f) => JSON.parse(fs.readFileSync(path.join(LECTIONARY, f), "utf8"));
 const count = (arr, pred) => arr.reduce((n, e) => n + (pred(e) ? 1 : 0), 0);
 
@@ -32,8 +35,12 @@ function parseClaims() {
   const out = {};
   for (const line of m[1].split("\n")) {
     const kv = line.match(/^\s*([\w.]+)\s*=\s*(\d+)\s*$/);
-    if (kv) out[kv[1]] = Number(kv[2]);
-    else assert.equal(line.trim(), "", `facts 블록에 읽을 수 없는 줄: ${line}`);
+    if (kv) {
+      // 중복 키를 그냥 덮어쓰면, 같은 키에 서로 다른 두 주장이 있어도 마지막 것만
+      // 맞으면 통과한다 — 단일 정본이라는 전제가 조용히 깨진다.
+      assert.ok(!(kv[1] in out), `facts 블록에 키가 두 번 나온다: ${kv[1]}`);
+      out[kv[1]] = Number(kv[2]);
+    } else assert.equal(line.trim(), "", `facts 블록에 읽을 수 없는 줄: ${line}`);
   }
   return out;
 }
