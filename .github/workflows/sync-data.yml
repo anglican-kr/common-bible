@@ -42,18 +42,49 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: data + audio 서브모듈을 PAT 로 별도 클론
+      # 서브모듈은 **읽기 전용 배포 키**로 클론한다(2026-08-29). 종전에는 계정 PAT 를
+      # 썼는데 두 가지가 문제였다: ① 만료된다 — 실제로 2026-08 에 만료돼 이 워크플로가
+      # 조용히 실패했고, 같은 이름의 시크릿이 data 저장소에도 따로 있어 한쪽만 갈았다가
+      # 반쪽만 복구됐다. ② 계정 권한 범위를 통째로 들고 다닌다.
+      #
+      # 배포 키는 저장소 하나에 고정되고 GitHub 가 읽기 전용을 강제하며 만료가 없다.
+      # 훔쳐도 그 저장소를 읽는 것 외에는 쓸모가 없다. 이 워크플로는
+      # `workflow_dispatch` 전용이라 포크 PR 이 시크릿에 닿지 못한다.
+      #
+      # 저장소가 둘이라 키도 둘인데, SSH 는 호스트가 같으면 키를 고르지 못한다
+      # (github.com 하나에 키 둘). 그래서 호스트 별칭을 만들고 서브모듈 URL 을 거기로
+      # 돌린다 — 종전 PAT 방식이 쓰던 `insteadOf` 와 같은 수법이고, 서드파티 액션을
+      # 들이지 않는다.
+      - name: data + audio 서브모듈을 배포 키로 별도 클론
         env:
-          SUBMODULE_PAT: ${{ secrets.SUBMODULE_AND_DISPATCH_PAT }}
+          DATA_DEPLOY_KEY: ${{ secrets.DATA_DEPLOY_KEY }}
+          AUDIO_DEPLOY_KEY: ${{ secrets.AUDIO_DEPLOY_KEY }}
           # audio mp3 바이너리는 필요 없음 — release.py 가 더 이상 호출되지
           # 않고 sitemap 생성에도 LFS 본 바이트가 필요 없음.
           GIT_LFS_SKIP_SMUDGE: "1"
         run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$DATA_DEPLOY_KEY"  > ~/.ssh/data_key
+          printf '%s\n' "$AUDIO_DEPLOY_KEY" > ~/.ssh/audio_key
+          chmod 600 ~/.ssh/data_key ~/.ssh/audio_key
+          ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
+          cat >> ~/.ssh/config <<'SSHCFG'
+          Host github-data
+            HostName github.com
+            User git
+            IdentityFile ~/.ssh/data_key
+            IdentitiesOnly yes
+          Host github-audio
+            HostName github.com
+            User git
+            IdentityFile ~/.ssh/audio_key
+            IdentitiesOnly yes
+          SSHCFG
           git config --global \
-            url."https://x-access-token:${SUBMODULE_PAT}@github.com/anglican-kr/common-bible-data".insteadOf \
+            url."git@github-data:anglican-kr/common-bible-data".insteadOf \
             "git@github.com:anglican-kr/common-bible-data"
           git config --global \
-            url."https://x-access-token:${SUBMODULE_PAT}@github.com/anglican-kr/common-bible-audio".insteadOf \
+            url."git@github-audio:anglican-kr/common-bible-audio".insteadOf \
             "git@github.com:anglican-kr/common-bible-audio"
           git submodule update --init --recursive
 
