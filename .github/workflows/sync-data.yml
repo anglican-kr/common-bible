@@ -8,10 +8,11 @@ name: Sync data submodule
 # 따라서 sync/data-<run_id> 토픽 브랜치로 push 한 뒤 PR 을 만들고,
 # Unit tests CI 통과 시 자동 squash 머지하도록 한다 (auto-merge).
 #
-# PAT 두 개 분리:
-#   - SUBMODULE_AND_DISPATCH_PAT — common-bible-data·audio Contents:Read +
-#     common-bible Actions:Write (workflow_dispatch 트리거). 누출 시 영향
-#     범위를 좁히기 위해 PR 관련 권한은 부여하지 않는다.
+# 자격증명 셋 (2026-08-29 개정 — 서브모듈은 PAT 를 쓰지 않는다):
+#   - DATA_DEPLOY_KEY / AUDIO_DEPLOY_KEY — 각 비공개 저장소의 **읽기 전용 배포 키**.
+#     서브모듈 클론 전용. 저장소 하나에 고정되고 GitHub 가 읽기 전용을 강제하며
+#     만료가 없다. 종전의 SUBMODULE_AND_DISPATCH_PAT 이 하던 몫으로, 그 PAT 는
+#     2026-08 만료로 이 워크플로를 조용히 멈춰 세운 바 있다.
 #   - SYNC_DATA_PR_PAT — common-bible 의 Contents:Write + Pull requests:Write.
 #     PR 생성·auto-merge 활성화 전용. GITHUB_TOKEN 으로 만든 PR 은
 #     pull_request 트리거를 발화하지 않아 Unit tests 가 실행되지 않으므로
@@ -42,18 +43,56 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: data + audio 서브모듈을 PAT 로 별도 클론
+      # 서브모듈은 **읽기 전용 배포 키**로 클론한다(2026-08-29). 종전에는 계정 PAT 를
+      # 썼는데 두 가지가 문제였다: ① 만료된다 — 실제로 2026-08 에 만료돼 이 워크플로가
+      # 조용히 실패했고, 같은 이름의 시크릿이 data 저장소에도 따로 있어 한쪽만 갈았다가
+      # 반쪽만 복구됐다. ② 계정 권한 범위를 통째로 들고 다닌다.
+      #
+      # 배포 키는 저장소 하나에 고정되고 GitHub 가 읽기 전용을 강제하며 만료가 없다.
+      # 훔쳐도 그 저장소를 읽는 것 외에는 쓸모가 없다. 이 워크플로는
+      # `workflow_dispatch` 전용이라 포크 PR 이 시크릿에 닿지 못한다.
+      #
+      # 저장소가 둘이라 키도 둘인데, SSH 는 호스트가 같으면 키를 고르지 못한다
+      # (github.com 하나에 키 둘). 그래서 호스트 별칭을 만들고 서브모듈 URL 을 거기로
+      # 돌린다 — 종전 PAT 방식이 쓰던 `insteadOf` 와 같은 수법이고, 서드파티 액션을
+      # 들이지 않는다.
+      - name: data + audio 서브모듈을 배포 키로 별도 클론
         env:
-          SUBMODULE_PAT: ${{ secrets.SUBMODULE_AND_DISPATCH_PAT }}
+          DATA_DEPLOY_KEY: ${{ secrets.DATA_DEPLOY_KEY }}
+          AUDIO_DEPLOY_KEY: ${{ secrets.AUDIO_DEPLOY_KEY }}
           # audio mp3 바이너리는 필요 없음 — release.py 가 더 이상 호출되지
           # 않고 sitemap 생성에도 LFS 본 바이트가 필요 없음.
           GIT_LFS_SKIP_SMUDGE: "1"
         run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$DATA_DEPLOY_KEY"  > ~/.ssh/data_key
+          printf '%s\n' "$AUDIO_DEPLOY_KEY" > ~/.ssh/audio_key
+          chmod 600 ~/.ssh/data_key ~/.ssh/audio_key
+          # 호스트 키는 **TLS 로 인증된 경로**에서 받는다. `ssh-keyscan` 은 그때
+          # 네트워크가 주는 키를 그대로 신뢰해서(TOFU), 경로가 가로채이면 공격자
+          # 키가 known_hosts 에 박히고 그 뒤로 서브모듈을 통째로 신뢰하게 된다.
+          # 지문을 코드에 박지 않는 이유는 GitHub 가 실제로 키를 교체하기
+          # 때문이다(2023 RSA 교체) — /meta 는 교체를 따라간다.
+          curl -fsS https://api.github.com/meta \
+            | python3 -c "import json,sys; [print('github.com', k) for k in json.load(sys.stdin)['ssh_keys']]" \
+            >> ~/.ssh/known_hosts
+          cat >> ~/.ssh/config <<'SSHCFG'
+          Host github-data
+            HostName github.com
+            User git
+            IdentityFile ~/.ssh/data_key
+            IdentitiesOnly yes
+          Host github-audio
+            HostName github.com
+            User git
+            IdentityFile ~/.ssh/audio_key
+            IdentitiesOnly yes
+          SSHCFG
           git config --global \
-            url."https://x-access-token:${SUBMODULE_PAT}@github.com/anglican-kr/common-bible-data".insteadOf \
+            url."git@github-data:anglican-kr/common-bible-data".insteadOf \
             "git@github.com:anglican-kr/common-bible-data"
           git config --global \
-            url."https://x-access-token:${SUBMODULE_PAT}@github.com/anglican-kr/common-bible-audio".insteadOf \
+            url."git@github-audio:anglican-kr/common-bible-audio".insteadOf \
             "git@github.com:anglican-kr/common-bible-audio"
           git submodule update --init --recursive
 
@@ -62,6 +101,17 @@ jobs:
 
       - name: sitemap.xml 재생성
         run: python scripts/build_sitemap.py
+
+      # 데이터 포인터가 올라가면 설계서의 실측 수치가 낡을 수 있다. 서브모듈이 실제로
+      # 체크아웃되는 자리가 여기뿐이라(공개 저장소의 Unit tests 잡은 비공개 서브모듈을
+      # 못 받는다) 문서↔데이터 대조를 여기서 돌린다. 어긋나면 PR 을 열기 전에 멈춘다 —
+      # 낡은 수치가 적힌 채로 포인터만 올라가는 것을 막는다.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: 문서 실측치 ↔ 데이터 대조
+        run: node --test tests/unit/docs-data-consistency.test.js
 
       - name: 변경 여부 확인
         id: check
