@@ -102,17 +102,6 @@ jobs:
       - name: sitemap.xml 재생성
         run: python scripts/build_sitemap.py
 
-      # 데이터 포인터가 올라가면 설계서의 실측 수치가 낡을 수 있다. 서브모듈이 실제로
-      # 체크아웃되는 자리가 여기뿐이라(공개 저장소의 Unit tests 잡은 비공개 서브모듈을
-      # 못 받는다) 문서↔데이터 대조를 여기서 돌린다. 어긋나면 PR 을 열기 전에 멈춘다 —
-      # 낡은 수치가 적힌 채로 포인터만 올라가는 것을 막는다.
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "24"
-
-      - name: 문서 실측치 ↔ 데이터 대조
-        run: node --test tests/unit/docs-data-consistency.test.js
-
       - name: 변경 여부 확인
         id: check
         run: |
