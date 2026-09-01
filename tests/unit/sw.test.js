@@ -22,6 +22,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import vm from "node:vm";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -86,4 +87,66 @@ test("index.html이 로드하는 모든 로컬 script/style이 SHELL_FILES에 �
   const notPrecached = refs.filter((p) => !SHELL_SET.has(p));
   assert.deepEqual(notPrecached, [],
     `index.html loads these but sw.js won't precache them (offline gap): ${notPrecached}`);
+});
+
+// ── cacheNameFor ↔ bible-manifest 라우팅 ─────────────────────────────────────
+// `cacheNameFor` 에서 빠진 데이터 경로는 SHELL_CACHE 로 떨어지고, 거기 앉은
+// 바이트는 콘텐츠 해시 무효화를 못 받는다 — manifest-sync 가 낡은 항목을
+// DATA_CACHE 에서만 지우기 때문이다. 실제로 `lectionary/*.json` 11건이
+// bible-manifest 에 편입된 뒤에도 SHELL_CACHE 로 가고 있었다(ADR-037 §7 미이행).
+//
+// 그래서 개별 경로를 나열해 확인하는 대신, **매니페스트가 추적하는 접두사 전부**가
+// DATA_CACHE 로 가는지 대조한다. 새 데이터 디렉터리가 매니페스트에 들어왔는데
+// 라우팅을 안 고치면 그때 실패한다.
+
+function loadCacheNameFor(src) {
+  const block = extractBlock("CACHE_ROUTING", src, "sw.js");
+  const ctx = vm.createContext({ AUDIO_CACHE: "audio", DATA_CACHE: "data", SHELL_CACHE: "shell-x" });
+  vm.runInContext(block + "\nglobalThis.__fn = cacheNameFor;", ctx);
+  return ctx.__fn;
+}
+
+function extractBlock(name, source, file) {
+  const begin = `// ── BEGIN ${name} ──`;
+  const end = `// ── END ${name} ──`;
+  const startIdx = source.indexOf(begin);
+  const endIdx = source.indexOf(end);
+  if (startIdx < 0 || endIdx < 0) {
+    throw new Error(`marker block ${name} not found in ${file}`);
+  }
+  return source.slice(startIdx, endIdx + end.length);
+}
+
+const cacheNameFor = loadCacheNameFor(SW_SOURCE);
+
+test("cacheNameFor: 오디오·성서·전례 데이터가 각 캐시로 간다", () => {
+  assert.equal(cacheNameFor("/data/audio/gen-1.mp3"), "audio");
+  assert.equal(cacheNameFor("/data/bible/gen-1.json"), "data");
+  assert.equal(cacheNameFor("/data/lectionary/eucharist-readings.json"), "data");
+  assert.equal(cacheNameFor("/data/search-ot.json"), "data");
+  // 셸과 함께 실리는 데이터 파일은 SHELL_CACHE 가 맞다.
+  assert.equal(cacheNameFor("/data/books.json"), "shell-x");
+  assert.equal(cacheNameFor("/index.html"), "shell-x");
+});
+
+test("bible-manifest 가 추적하는 모든 접두사가 DATA_CACHE 로 라우팅된다", (t) => {
+  // data/ 는 비공개 서브모듈이라 CI 에 체크아웃되지 않는다. 없으면 이유를 남기고
+  // 건너뛴다 — 로컬과 sync-data.yml 에서는 실제로 돈다.
+  const manifestPath = path.join(REPO_ROOT, "data", "bible-manifest.json");
+  if (!fs.existsSync(manifestPath)) {
+    t.skip("data/ 서브모듈이 체크아웃되지 않았다 (비공개)");
+    return;
+  }
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+  const keys = Object.keys(manifest.entries);
+  assert.ok(keys.length > 0, "bible-manifest.json 에 entries 가 없다");
+
+  // 매니페스트 키는 /data/ 아래의 상대 경로다(manifest-sync._urlToManifestKey).
+  const misrouted = [...new Set(
+    keys.filter((k) => cacheNameFor(`/data/${k}`) !== "data")
+        .map((k) => (k.includes("/") ? k.slice(0, k.indexOf("/") + 1) : k)),
+  )];
+  assert.deepEqual(misrouted, [],
+    "매니페스트가 추적하는데 DATA_CACHE 로 안 가는 경로 — "
+    + `해시가 바뀌어도 무효화되지 않는다: ${misrouted}`);
 });
