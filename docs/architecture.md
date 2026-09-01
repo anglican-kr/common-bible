@@ -118,21 +118,21 @@ src/search_indexer.py     ← 절 단위 인덱스를 구약/신약/외경으로
 
 ## 4. 런타임 — 클라이언트 모듈 지도
 
-런타임은 21개의 자바스크립트 파일로 분산되어 있다 — 메인 스레드 20개 + Web Worker 1개(`search-worker.js`). `js/types.d.ts`는 TypeScript 컴파일러 전용이라 런타임 카운트에서 제외.
+런타임은 37개의 자바스크립트 파일로 분산되어 있다 — 메인 스레드 36개 + Web Worker 1개(`search-worker.js`). `js/types.d.ts`는 TypeScript 컴파일러 전용이라 런타임 카운트에서 제외.
 
-ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` ~6,000줄이 8개 도메인 모듈로 쪼개졌고, 잔류 `app.js`는 부트스트랩 + Service Worker 등록 정도만 남았다. 자세한 분할 결과는 [`docs/archive/design/app-modularization.md`](design/app-modularization.md). 이어서 ADR-019(2026-05-09)로 모듈 시스템을 **ESM 일괄 채택**. ADR-022 인용·주석 작업으로 `js/app/citations.js`가 추가되어 현재 도메인 모듈은 **9개**.
+ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` ~6,000줄이 8개 도메인 모듈로 쪼개졌고, 잔류 `app.js`는 부트스트랩 + Service Worker 등록 정도만 남았다. 자세한 분할 결과는 [`docs/archive/design/app-modularization.md`](design/app-modularization.md). 이어서 ADR-019(2026-05-09)로 모듈 시스템을 **ESM 일괄 채택**. 이후 ADR-022(인용·주석)·ADR-027·ADR-030~ADR-035가 모듈을 더했고, ADR-034 2차 분할과 그 후속 `bookmark.js` 분할이 비대 모듈을 갈라 현재 `js/app/` 도메인 모듈은 **25개**다.
 
 ### 로드 방식
 
-`index.html`이 19개 `<script>` 태그를 의존성이 있는 순서대로 **명시적으로 나열**한다 (ADR-019 §"채택 방식"). ESM이 `import` 그래프를 따라가며 알아서 의존성을 가져오는 방식은 **아니다** — `<script type="module">`도 결국 브라우저가 각 태그를 발견 순서로 로드한다.
+`index.html`이 31개 `<script src>` 태그를 의존성이 있는 순서대로 **명시적으로 나열**한다 (ADR-019 §"채택 방식"). ESM이 `import` 그래프를 따라가며 알아서 의존성을 가져오는 방식은 **아니다** — `<script type="module">`도 결국 브라우저가 각 태그를 발견 순서로 로드한다.
 
 | 로드 모드                                | 파일 수 | 비고                                                                                                                 |
 | ---------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------- |
-| `<script type="module">` (자동 deferred) | 17      | 대부분의 모듈. 모듈 scope + `import`/`export` 가능                                                                   |
+| `<script type="module">` (자동 deferred) | 28      | 대부분의 모듈. 모듈 scope + `import`/`export` 가능                                                                   |
 | `<script defer>` (classic)               | 2       | `audio-cache.js`·`manifest-sync.js` — `sw.js`의 `importScripts()` 호환을 위해 classic 유지 (ADR-019 §"예외")         |
 | `<script>` (head, 즉시 실행)             | 1       | `pre-fetch.js` — `<head>`에서 즉시 `data/books.json` 다운로드 시작. `type="module"`은 자동 deferred라 fetch가 늦어짐 |
 
-21번째 런타임 파일인 `search-worker.js`는 `<script>`가 아니라 `new Worker()`로 메인 스레드에서 별도 생성 — 독립 컨텍스트.
+`<script>` 태그가 없는 런타임 파일이 6개 더 있다: `search-worker.js`는 `new Worker()`로 별도 생성되는 독립 컨텍스트이고, `bookmark-{tree,gestures,select,menu,verse-select}.js` 5개는 `bookmark.js`가 ESM `import`로 끌어온다(브라우저가 import 그래프를 따라 가져온다).
 
 모듈 간 의존은 여전히 `window.X` 공개 인터페이스(facade — `window.driveSync` / `window.appHelpers` 등 전역 객체)가 주류이고, ADR-019는 이를 **점진 폐기** 대상으로 정의 — 신규 코드는 `import`/`export`로 작성 권장.
 
@@ -142,34 +142,44 @@ ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` ~6,000줄이 8개 도�
 | --------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ------- |
 | `js/pre-fetch.js`     | 첫 페인트 직전 `data/books.json` 비동기 선패치                                                                                    | ~10     |
 | `js/gtag-init.js`     | Google Analytics 초기화                                                                                                           | ~15     |
-| `js/app.js`           | app-main 부트스트랩 + 접근성 keydown + Audio cache LRU 소프트캡 + SW 등록                                                         | ~290    |
+| `js/app.js`           | app-main 부트스트랩 + 접근성 keydown + Audio cache LRU 소프트캡 + SW 등록                                                         | ~325    |
 | `js/audio-cache.js`   | 오디오 LRU IndexedDB sidecar ([ADR-016](decisions/016-audio-cache-lru.md))                                                        | ~190    |
 | `js/manifest-sync.js` | 부팅 시 콘텐츠 해시 매니페스트 diff → DATA/AUDIO_CACHE 항목 단위 무효화 ([ADR-021](decisions/021-pwa-versioning-content-hash.md)) | ~200    |
-| `js/search-worker.js` | Web Worker. 청크 로딩 + 절 검색 + 페이지네이션                                                                                    | ~370    |
+| `js/search-worker.js` | Web Worker. 청크 로딩 + 절 검색 + 페이지네이션                                                                                    | ~390    |
 | `js/drive-sync.js`    | Drive 동기화 파사드(코디네이터)                                                                                                   | ~250    |
 | `js/types.d.ts`       | 도메인 타입 단일 출처 ([ADR-012](decisions/012-typescript-incremental-adoption.md))                                               | —       |
 
-**`js/app/` — 도메인 모듈 (ADR-018 1차 분할 + ADR-022 인용·주석 + ADR-034 2차 분할):**
+**`js/app/` — 도메인 모듈 25개 (ADR-018 1차 분할 + ADR-022 인용·주석 + ADR-034 2차 분할 + bookmark 분할):**
 
-<!-- 아래 표는 주요 모듈만. ADR-034 views-routing 분할 산출물(audio-player·tabbar·overlay)은 별도 후속 갱신 대상. -->
+| 파일                               | 역할                                                                                                                                                                       | 라인 수 |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| `js/app/helpers.js`                | 공통 DOM 헬퍼 (`_$`/`el`/`clearNode`/`setInert`/`trapFocus`) + `emptyState` 빌더                                                                                           | ~190    |
+| `js/app/overlay.js`                | 오버레이 생명주기 단일 컨트롤러 `createOverlay`(scrim·trapFocus·Escape·inert·포커스 복원·애니메이션 dismiss) + 시트 팩토리 + `closeAllOverlays()` registry ([ADR-032](decisions/032-component-view-layer.md), ADR-034 PR5b) | ~325    |
+| `js/app/storage.js`                | localStorage 헬퍼 + UI 공유 상수                                                                                                                                           | ~435    |
+| `js/app/settings-ui.js`            | 설정 팝오버 + 외관 적용 + 인용·주석 토글                                                                                                                                   | ~855    |
+| `js/app/install.js`                | PWA 설치 감지 + 안내 모달 + nudge                                                                                                                                          | ~495    |
+| `js/app/search.js`                 | 검색 워커 wire-up + 결과 렌더 + 이력 패널 + sheet ([ADR-033](decisions/033-search-options.md))                                                                             | ~1,555  |
+| `js/app/reading-context.js`        | 현재 책/장 + 절 선택 모드 공유 상태                                                                                                                                        | ~35     |
+| `js/app/verse-spec.js`             | 절 스펙 파싱·비교·직렬화·병합 + `verseInstanceKey` (leaf, ADR-034·ADR-038 A2)                                                                                              | ~310    |
+| `js/app/bookmark-core.js`          | DOM-free 북마크 로직 (트리 query/insert/remove·href/share·정렬/최근본·active-route 술어), ESM import 전용 (ADR-034)                                                        | ~405    |
+| `js/app/bookmark-modals.js`        | 북마크 모달 7종(confirm·chapter-delete·새 폴더·폴더 콤보박스·save/edit·merge·import·move picker) + 렌더 콜백 의존성 주입 + 단일 Escape 스택(`closeTopmostModal`) (ADR-034) | ~910    |
+| `js/app/bookmark.js`               | 북마크 **드로어/헤더 오케스트레이터** — 드로어 lifecycle·헤더 버튼·init 배선·facade·keydown. 트리 렌더·제스처·선택·⋯ 메뉴·절 선택은 아래 5모듈로 분리 (ADR-034 후속, 2026-06-11) | ~590    |
+| `js/app/bookmark-tree.js`          | 트리 렌더링 — per-row 빌더(스와이프 액션·드래그 핸들·선택 원·폴더 읽기 버튼) + `renderBookmarkTree`(드로어 본문/전체뷰) + `_rerenderActiveBookmarkTree` 허브 + `renderBookmarksView` + 드로어 키보드 내비 | ~635    |
+| `js/app/bookmark-gestures.js`      | 제스처 엔진 — 드래그 reorder(≡ 핸들에서만 개시, ADR-010 개정) + 스와이프-액션 노출 + 스와이프 릴리스 수학(`SWIPE_GESTURE` 마커 블록, 유닛 테스트) + 통합 포인터 핸들러      | ~505    |
+| `js/app/bookmark-select.js`        | 선택 삭제 모드 — 선택 상태 + 캐스케이드 수학(`BOOKMARK_SELECT` 마커 블록) + `#bm-select-bar` dock(공유·이동·삭제) + 전체 선택 ([ADR-029](decisions/029-mobile-tab-bar.md) 개정) | ~365    |
+| `js/app/bookmark-menu.js`          | 전체뷰 title-row 액션 — ⋯ 오버플로 메뉴(새 폴더·내보내기·가져오기·선택) + 정렬 필드/순서 라디오 + 🛈 안내 팝오버 + `exportBookmarks`                                       | ~440    |
+| `js/app/bookmark-verse-select.js`  | 절 선택 모드 — 본문에서 절 탭 → `#verse-select-bar` dock(진행 중 스펙 + 북마크·복사), near-leaf                                                                            | ~145    |
+| `js/app/bookmark-read.js`          | 북마크 모아 읽기 — 폴더 단위 연속 읽기 화면(`appendVerses`로 절 부분집합 렌더, 인접·연속 본문 병합, 네스팅 폴더는 소제목) ([ADR-035](decisions/035-bookmark-reading-view.md)) | ~465    |
+| `js/app/citations.js`              | 인용 칩 dedup·렌더 + 인용 본문 바텀 시트 (확장 뷰·드래그 리사이즈) + 주석 anchor 위첨자 + 클릭 툴팁 ([ADR-022](decisions/022-citations-and-annotations.md))                | ~1,115  |
+| `js/app/parallels.js`              | 단락 단위 병행 본문 — `chapter.parallels` → range 시작 절 ※ anchor, 클릭 시 cite-sheet ([ADR-027](decisions/027-source-dsl-and-parallel-passages.md))                      | ~295    |
+| `js/app/tab-history.js`            | 탭별 라우트·스크롤 위치 복원 (POP 의미론: popstate·탭 전환에서만 복원) ([ADR-031](decisions/031-tab-history-restore.md))                                                   | ~135    |
+| `js/app/data-fetch.js`             | 데이터 패칭 (books/version/chapter/prologue fetch + booksCache/appVersion 캐시), leaf 모듈 (ADR-034 PR2)                                                                   | ~90     |
+| `js/app/audio-player.js`           | 장별 mp3 플레이어 UI + 재생 상태 + `#audio-bar` lifecycle (ADR-034 PR1)                                                                                                    | ~240    |
+| `js/app/views.js`                  | 렌더 헬퍼 + Views + `appendVerses` 절 렌더 + 책 이름/헤더 자동 짧게 swap (데이터 패칭→data-fetch.js·오디오→audio-player.js·탭 인디케이터→tabbar.js·라우팅→routing.js·PTR 제거, ADR-034) | ~1,540  |
+| `js/app/routing.js`                | URL 파싱(parsePath)·SPA 내비(navigate)·route() 오케스트레이터·page meta/분석·읽기 위치 스크롤 추적·링크클릭/popstate 리스너 (ADR-034 PR5a)                                 | ~530    |
+| `js/app/tabbar.js`                 | 탭 바 — 활성 상태·슬라이딩 인디케이터(ADR-034 PR3) + 검색 모핑 dock·하단 입력·visualViewport 키보드 처리 ([ADR-030](decisions/030-morphing-tab-bar.md))                    | ~530    |
 
-| 파일                        | 역할                                                                                                                                                                       | 라인 수 |
-| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
-| `js/app/helpers.js`         | 공통 DOM 헬퍼 (`_$`/`el`/`clearNode`/`setInert`/`trapFocus`)                                                                                                               | ~150    |
-| `js/app/storage.js`         | localStorage 헬퍼 + UI 공유 상수                                                                                                                                           | ~370    |
-| `js/app/settings-ui.js`     | 설정 팝오버 + 외관 적용 + 인용·주석 토글                                                                                                                                   | ~650    |
-| `js/app/install.js`         | PWA 설치 감지 + 안내 모달 + nudge                                                                                                                                          | ~500    |
-| `js/app/search.js`          | 검색 워커 wire-up + 결과 렌더 + 이력 패널 + sheet                                                                                                                          | ~1,090  |
-| `js/app/reading-context.js` | 현재 책/장 + 절 선택 모드 공유 상태                                                                                                                                        | ~40     |
-| `js/app/bookmark.js`        | 북마크 UI (트리 렌더·드래그&드롭·셀렉션 모드·드로어·export) — 모달·순수 로직·절 스펙은 아래 3모듈로 분리 (ADR-034)                                                         | ~2,200  |
-| `js/app/bookmark-modals.js` | 북마크 모달 7종(confirm·chapter-delete·새 폴더·폴더 콤보박스·save/edit·merge·import·move picker) + 렌더 콜백 의존성 주입 + 단일 Escape 스택(`closeTopmostModal`) (ADR-034) | ~1,010  |
-| `js/app/bookmark-core.js`   | DOM-free 북마크 로직 (트리 query/insert/remove·href/share·정렬/최근본·active-route 술어), ESM import 전용 (ADR-034)                                                        | ~360    |
-| `js/app/verse-spec.js`      | 절 스펙 파싱·비교·직렬화·병합 (leaf, ADR-034)                                                                                                                              | ~240    |
-| `js/app/citations.js`       | 인용 칩 dedup·렌더 + 인용 본문 바텀 시트 (확장 뷰·드래그 리사이즈) + 주석 anchor 위첨자 + 클릭 툴팁 ([ADR-022](decisions/022-citations-and-annotations.md))                | ~940    |
-| `js/app/views.js`           | 렌더 헬퍼 + Views + 책 이름/헤더 자동 짧게 swap (데이터 패칭→data-fetch.js·오디오→audio-player.js·탭 인디케이터→tabbar.js·라우팅→routing.js·PTR 제거, ADR-034)             | ~1,350  |
-| `js/app/routing.js`         | URL 파싱(parsePath)·SPA 내비(navigate)·route() 오케스트레이터·page meta/분석·읽기 위치 스크롤 추적·링크클릭/popstate 리스너 (ADR-034 PR5a)                                 | ~510    |
-| `js/app/bookmark-read.js`   | 북마크 모아 읽기 — 폴더 단위 연속 읽기 화면(`appendVerses`로 절 부분집합 렌더, 인접·연속 본문 병합, 네스팅 폴더는 소제목) (ADR-035)                                        | ~315    |
-| `js/app/data-fetch.js`      | 데이터 패칭 (books/version/chapter/prologue fetch + booksCache/appVersion 캐시), leaf 모듈 (ADR-034 PR2)                                                                   | ~85     |
+`bookmark-{tree,gestures,select,menu,verse-select}.js` 5개는 `index.html`에 `<script>` 태그가 없다 — `bookmark.js`가 ESM `import`로 끌어온다.
 
 **`js/sync/` — 동기화 레이어:**
 
@@ -177,11 +187,11 @@ ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` ~6,000줄이 8개 도�
 | -------------------------- | ----------------------------------------------------------------------------------------------- | ------- |
 | `js/sync/state-machine.js` | 동기화 상태 머신 (PKCE 단일 경로, [ADR-011](decisions/011-bookmark-sync.md) Phase 2h)           | ~1,000  |
 | `js/sync/transport.js`     | PKCE primitives + Drive REST + `/oauth/token` BFF ([ADR-017](decisions/017-oauth-bff-proxy.md)) | ~510    |
-| `js/sync/store-v2.js`      | per-record mtime + tombstone 머지                                                               | ~405    |
+| `js/sync/store-v2.js`      | per-record mtime + tombstone 머지                                                               | ~430    |
 | `js/sync/refresh-store.js` | OAuth refresh token 암호화 IDB (AES-GCM 비추출 키)                                              | ~190    |
 | `js/sync/debug-log.js`     | ring buffer 진단 로그                                                                           | ~160    |
 
-위 20개 파일 외에 `js/types.d.ts`는 TS 컴파일러 입력 전용으로 쓰인다(`@typedef`/`@type`이 참조). 의존 순서·로드 모드 변경 시 [ADR-019](decisions/019-esm-module-system.md) 참조.
+위 파일들 외에 `js/types.d.ts`는 TS 컴파일러 입력 전용으로 쓰인다(`@typedef`/`@type`이 참조). 의존 순서·로드 모드 변경 시 [ADR-019](decisions/019-esm-module-system.md) 참조.
 
 ### 4.1 라우팅 (History API SPA)
 
@@ -334,7 +344,7 @@ ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` ~6,000줄이 8개 도�
 
 빌드 산출물 0개를 유지하면서도 타입 안전성을 얻기 위해 **TypeScript를 컴파일러로만 사용**한다 ([ADR-012](decisions/012-typescript-incremental-adoption.md)).
 
-- 모든 클라이언트 JS 파일(sync 레이어 + `js/app.js` + `js/app/*.js` 9개 + `js/drive-sync.js` + `js/search-worker.js` + `js/audio-cache.js`)에 파일 상단 `// @ts-check`가 영구 활성화돼 있다 (2026-05-10, ADR-018 모듈 분할과 동행).
+- 모든 클라이언트 JS 파일(sync 레이어 + `js/app.js` + `js/app/*.js` 25개 + `js/drive-sync.js` + `js/search-worker.js` + `js/audio-cache.js`)에 파일 상단 `// @ts-check`가 영구 활성화돼 있다 (2026-05-10, ADR-018 모듈 분할과 동행).
 - 도메인 타입은 `js/types.d.ts` 한 곳에서 export.
 - 다른 파일은 `@typedef {import("../types").Foo} Foo`로 가져온다.
 - `tsconfig.json` (DOM lib) + `tsconfig.worker.json` (WebWorker lib) 두 개 분리.
@@ -476,7 +486,7 @@ OAuth 측면 (가장 큰 공격 표면):
 | [031](decisions/031-tab-history-restore.md)                  | 탭 히스토리 — 탭별 마지막 라우트+스크롤 복원(홈=읽던 위치, 검색=마지막 검색), `scrollRestoration:"manual"` + route() 시퀀스 가드                                                                                                                              |
 | [032](decisions/032-component-view-layer.md)                 | 컴포넌트·뷰 층 모듈화 — `el()` 위 무의존성 컴포넌트 층(`createOverlay` 단일 컨트롤러 + 시트 팩토리 + 비동기 `closeTransition` + `emptyState` 빌더)으로 오버레이 12곳·빈 상태 통일, 점진 교체 (구현 완료)                                                      |
 | [033](decisions/033-search-options.md)                       | 검색 옵션 — 책 picker(필터 시트)·결과 내 검색(AND)·진입 시 최근 검색 목록(개별/전체 삭제), URL 인코딩 필터 상태, 노트 검색 범위 확장 대비 (구현 완료)                                                                                                         |
-| [034](decisions/034-views-routing-second-split.md)           | 뷰·라우팅·북마크 2차 분할 — 관심사별 모듈화 + 비순환 facade→명시 import 전환 + 순환 dispatch는 registry 역전 (ADR-018 후속, PR1 오디오 분리 완료)                                                                                                             |
+| [034](decisions/034-views-routing-second-split.md)           | 뷰·라우팅·북마크 2차 분할 — 관심사별 모듈화 + 비순환 facade→명시 import 전환 + 순환 dispatch는 registry 역전 (ADR-018 후속. `views-routing.js` 2,389줄은 audio-player·data-fetch·tabbar·routing·overlay 로 분해돼 소멸, `bookmark.js` 3,578→589줄. PR5c registerView 역전만 보류)                                                                                                             |
 | [035](decisions/035-bookmark-reading-view.md)                | 북마크 모아 읽기 — 폴더 단위 연속 읽기 화면(`/read/<id>`, 홈 탭 분류), 폴더 행 `읽기`(auto_stories) 진입, 인접·연속 본문 병합, 네스팅 폴더는 소제목. `renderChapter` 절 루프를 `appendVerses`로 추출(전례독서 페이지 기반 기술) (구현 중)                     |
 | [036](decisions/036-liturgical-calendar-data-model.md)       | 교회력(전례력) 데이터 모델 — 본기도 평면 배열(자기 좌표)·explode/병합 규칙·영어 값+`_vocab`·temporal/sanctoral·품계 8단계(2차)·전례색 4색·computus 기준·맺음구 분리 (구현 대기)                                                                               |
 | [037](decisions/037-eucharist-lectionary-data-and-engine.md) | 감사성찬례 전례독서 데이터·엔진 — `eucharist-readings.json` 좌표 스키마(refs=장 경계, verseSpec 재사용, 대안 세트 explode), 전례시편 별도 책 `lps`(계응 DSL, 숨김), 연중 주간 구간표·KASI 음력, `liturgical-engine.js`(computus·후보 관측일 보존) (구현 대기) |
@@ -490,7 +500,11 @@ OAuth 측면 (가장 큰 공격 표면):
 - 데이터 패칭 (books/version/chapter/prologue + 캐시): `js/app/data-fetch.js`
 - 오디오 플레이어 (장별 mp3 UI·재생 상태·#audio-bar): `js/app/audio-player.js`
 - 검색 UI / 결과 시트 / 이력 패널: `js/app/search.js`
-- 북마크 (트리/모달/셀렉션): `js/app/bookmark.js`
+- 북마크 드로어/헤더 오케스트레이터: `js/app/bookmark.js`
+- 북마크 트리 렌더 (행 빌더·재렌더 허브·전체뷰): `js/app/bookmark-tree.js`
+- 북마크 제스처 (드래그 reorder·스와이프 액션): `js/app/bookmark-gestures.js`
+- 북마크 선택 삭제 모드 / 절 선택 모드: `js/app/bookmark-select.js` · `js/app/bookmark-verse-select.js`
+- 북마크 모달 7종 / 순수 로직 / 절 스펙: `js/app/bookmark-modals.js` · `js/app/bookmark-core.js` · `js/app/verse-spec.js`
 - 설정 화면 + 외관 적용: `js/app/settings-ui.js`
 - 공통 DOM 헬퍼 + `emptyState` 빌더: `js/app/helpers.js`
 - 오버레이 컨트롤러 / 시트 팩토리 (모달·드로어·시트·팝오버 생명주기): `js/app/overlay.js`

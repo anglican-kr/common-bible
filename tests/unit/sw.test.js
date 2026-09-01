@@ -1,11 +1,19 @@
-// ── sw.js SHELL_FILES 정적 검증 ──────────────────────────────────────────────
+// ── sw.js 정적 검증 — SHELL_FILES 패리티 + 캐시 라우팅 ───────────────────────
 // Run with: node --test tests/unit/sw.test.js
 //
 // sw.js precaches every SHELL_FILES entry atomically at install time (see the
 // install handler). If one entry 404s the whole install fails and the app
-// won't boot offline. These tests don't evaluate sw.js (it calls
-// importScripts at top level, which the vm harness can't run) — they parse the
-// SHELL_FILES array out of the source as text and assert two invariants:
+// won't boot offline. sw.js can't be imported as a whole — it calls
+// importScripts at top level — so this suite reaches into the source two ways:
+//
+//   • Text parsing, for the `const SHELL_FILES = [...]` array (invariants 1-2).
+//   • vm evaluation of the `// ── BEGIN/END CACHE_ROUTING ──` marker block,
+//     which brackets `cacheNameFor()` in sw.js so it can run in isolation with
+//     the three cache-name constants stubbed (invariant 3). **Those markers are
+//     load-bearing — do not delete them as unused comments**; extractBlock()
+//     throws when either one is missing.
+//
+// The invariants:
 //
 //   1. Existence — every app-repo SHELL_FILES entry resolves to a real file.
 //   2. Parity   — every local <script src> / <link href> that index.html
@@ -13,6 +21,15 @@
 //                 are all available offline. (This is the guard that would
 //                 have caught js/sync/refresh-store.js being loaded by the
 //                 page but absent from the precache list.)
+//   3. Routing  — every path prefix that bible-manifest.json tracks routes to
+//                 DATA_CACHE. A data path missing from cacheNameFor falls into
+//                 SHELL_CACHE, where manifest-sync never invalidates it (it
+//                 clears DATA_CACHE only), so a content-hash change leaves the
+//                 stale bytes sitting there until the next shell bump — which
+//                 is exactly what happened to lectionary/*.json (ADR-037 §7).
+//                 Skipped with a stated reason when the private data/ submodule
+//                 isn't checked out: it runs locally and in sync-data.yml, not
+//                 in test.yml.
 //
 // /data/* entries are intentionally excluded from the existence check: those
 // live in the common-bible-data submodule, which CI does not check out, and
