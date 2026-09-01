@@ -84,12 +84,20 @@ function measure() {
     "sanctoral.commemoration": count(s, (e) => e.rank === "commemoration"),
     "sanctoral.minor_feast": count(s, (e) => e.rank === "minor_feast"),
     "temporal.total": t.entries.length,
-    "temporal.rule_kinds": t._meta.rule_kinds.length,
+    // _meta 를 되읽지 않는다 — 생산자가 적어 둔 값을 읽으면 엔트리에 새 kind 가
+    // 생겼는데 _meta 갱신을 빠뜨렸을 때 문서가 낡은 값에 맞춰지는 순간 통과한다.
+    // 「데이터에서 직접 계산한다」는 이 테스트의 전제가 거기서 깨진다.
+    "temporal.rule_kinds": new Set(
+      t.entries.filter((e) => e.rule).map((e) => e.rule.kind),
+    ).size,
     "temporal.easter_offset": ruleKind("easter_offset"),
     "temporal.ember_wfs": ruleKind("ember_wfs"),
     "temporal.rule_null": count(t.entries, (e) => !e.rule),
     "commons.classes": Object.keys(cm.classes).length,
-    "commons.reading_sets": cm._meta.reading_sets,
+    "commons.reading_sets": Object.values(cm.classes).reduce(
+      (n, c) => n + (c.readings?.length ?? 0),
+      0,
+    ),
     "ordinal_weeks.weeks": ow.weeks.length,
     "ordinal_weeks.windows": ow.weeks.reduce((n, w) => n + w.windows.length, 0),
   };
