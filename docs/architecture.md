@@ -120,7 +120,7 @@ src/search_indexer.py     ← 절 단위 인덱스를 구약/신약/외경으로
 
 런타임은 37개의 자바스크립트 파일로 분산되어 있다 — 메인 스레드 36개 + Web Worker 1개(`search-worker.js`). `js/types.d.ts`는 TypeScript 컴파일러 전용이라 런타임 카운트에서 제외.
 
-ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` ~6,000줄이 8개 도메인 모듈로 쪼개졌고, 잔류 `app.js`는 부트스트랩 + Service Worker 등록 정도만 남았다. 자세한 분할 결과는 [`docs/archive/design/app-modularization.md`](design/app-modularization.md). 이어서 ADR-019(2026-05-09)로 모듈 시스템을 **ESM 일괄 채택**. 이후 ADR-022(인용·주석)·ADR-027·ADR-030~ADR-035가 모듈을 더했고, ADR-034 2차 분할과 그 후속 `bookmark.js` 분할이 비대 모듈을 갈라 현재 `js/app/` 도메인 모듈은 **25개**다.
+ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` ~6,000줄이 8개 도메인 모듈로 쪼개졌고, 잔류 `app.js`는 부트스트랩 + Service Worker 등록 정도만 남았다. 자세한 분할 결과는 [`docs/archive/design/app-modularization.md`](archive/design/app-modularization.md). 이어서 ADR-019(2026-05-09)로 모듈 시스템을 **ESM 일괄 채택**. 이후 ADR-022(인용·주석)·ADR-027·ADR-030~ADR-035가 모듈을 더했고, ADR-034 2차 분할과 그 후속 `bookmark.js` 분할이 비대 모듈을 갈라 현재 `js/app/` 도메인 모듈은 **25개**다.
 
 ### 로드 방식
 
@@ -428,7 +428,7 @@ OAuth 측면 (가장 큰 공격 표면):
   - `Referrer-Policy: strict-origin-when-cross-origin`: 모던 브라우저 기본값을 명시. 다른 사이트로 이동할 때는 도메인만 보내 URL 경로 노출 차단.
 - **nginx `add_header` 상속 함정 우회**: location 수준에 `add_header`가 하나라도 있으면 서버 수준 헤더가 통째로 끊긴다 — 알려진 함정. 파일별 Cache-Control이 있는 위치에도 같은 snippet을 다시 include해 일관 적용 보장.
 
-마지막 보안 감사: [`docs/archive/audit/2026-05-07-pkce-refresh-token.md`](audit/2026-05-07-pkce-refresh-token.md) — Critical/High/Medium 0건.
+마지막 보안 감사: [`docs/archive/audit/2026-05-07-pkce-refresh-token.md`](archive/audit/2026-05-07-pkce-refresh-token.md) — Critical/High/Medium 0건.
 
 ## 10. 알려진 한계와 의도적 비결정
 
