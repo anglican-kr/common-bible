@@ -208,6 +208,13 @@ DATA_CACHE / AUDIO_CACHE는 이제 rev 없는 고정 이름 (`"data"`, `"audio"`
 >
 > 3. **repo 설정 `allow_auto_merge: true`.** `gh pr merge --auto` 동작 조건.
 >
+> **개정 (2026-08-29)** — 위 2 의 `SUBMODULE_AND_DISPATCH_PAT` 은 **서브모듈 클론에 더
+> 이상 쓰지 않는다.** 그 PAT 가 2026-08 에 만료돼 `sync-data.yml` 이 조용히 멈춰 섰고,
+> 같은 이름의 시크릿이 data 저장소에도 따로 있어 한쪽만 갈았다가 반쪽만 복구되는 일도
+> 있었다. 서브모듈은 저장소별 **읽기 전용 배포 키**(`DATA_DEPLOY_KEY`·`AUDIO_DEPLOY_KEY`)로
+> 클론한다 — 만료가 없고 GitHub 가 읽기 전용을 강제한다. `SYNC_DATA_PR_PAT` 은 그대로다.
+> (data 저장소 `build.yml` 은 앱 워크플로 디스패치에 `Actions:Write` 가 필요해 PAT 를 계속 쓴다.)
+>
 > 4. **워크플로 이름 정리.** `Sync data submodule and release` →
 >    `Sync data submodule`. 2026-05-23 개정에서 release.py 호출이 이미
 >    제거되어 "and release" 가 실태와 어긋나 있었다.
