@@ -133,7 +133,7 @@ pytest tests/e2e/test_bookmark_sort.py -q   # 개별 파일
 | `test_a11y_axe.py` | axe-core 자동 스캔(WCAG 2.1 AA) | 7 |
 | `test_a11y_keyboard.py` | 키보드 인터랙션 | 7 |
 
-> **실측 (2026-09-05)**: `pytest tests/e2e` **225 통과 / 0 실패 / 0 skip** (5분 52초, Chrome Headless Shell). `test_a11y_axe.py` 7건은 선택적 의존성 `axe-playwright-python` 이 없으면 **그 파일만** skip 된다(`importorskip`). 그전엔 하드 import 라 수집 오류로 스위트 전체가 중단됐다. 옛 「headless 사전 실패」 묶음은 2026-06-22 에 해소 — [`docs/known-issues.md`](../docs/known-issues.md) §1.
+> **실측 (2026-09-05)**: `pytest tests/e2e` — 위 표 232건 중 **225 통과 / 0 실패 / 7 미실행** (5분 52초, Chrome Headless Shell). 미실행 7건은 `test_a11y_axe.py` 로, 선택적 의존성 `axe-playwright-python` 이 없으면 **그 파일만** 모듈 단위 skip 1건으로 빠진다(`importorskip`; pytest 요약에는 `225 passed, 1 skipped` 로 찍힌다). 그전엔 하드 import 라 수집 오류로 스위트 전체가 중단됐다. 옛 「headless 사전 실패」 묶음은 2026-06-22 에 해소 — [`docs/known-issues.md`](../docs/known-issues.md) §1.
 
 ## 4. 데이터 파이프라인 테스트 (서브모듈)
 

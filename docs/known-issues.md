@@ -7,7 +7,7 @@ ADR-034(뷰·라우팅 2차 분할) 작업 중 발견·확인한 항목 모음. 
 
 ## 1. e2e 사전 실패 — 전수 진단·해소 (2026-06-22)
 
-> **해소됨 (2026-06-22).** 아래 §1a/1b/1c 묶음은 **옛 headless chromium 버전 아티팩트**였고, playwright/chromium 업그레이드(Chrome Headless Shell 148)로 **전부 통과**로 바뀌었다. 진단 중 전체 스위트를 돌려 드러난 **다른 12건은 모두 코드 변경을 e2e가 못 따라간 낡은 테스트**(앱 버그 0)였고 현행 동작에 맞게 수정했다. 당시 전체 e2e **215 통과 / 0 실패**. **2026-09-05 재실측: 225 통과 / 0 실패 / 0 skip**(26파일 + `test_a11y_axe.py` 7건은 선택적 의존성 `axe_playwright_python` 미설치 시 그 파일만 skip — `importorskip`. 하드 import 였던 것을 #319 에서 고쳤다: 그 상태에선 수집 오류로 스위트 **전체가 중단**됐다). 상세 보고서: [`archive/qa/2026-06-22-e2e-stale-refresh.md`](archive/qa/2026-06-22-e2e-stale-refresh.md).
+> **해소됨 (2026-06-22).** 아래 §1a/1b/1c 묶음은 **옛 headless chromium 버전 아티팩트**였고, playwright/chromium 업그레이드(Chrome Headless Shell 148)로 **전부 통과**로 바뀌었다. 진단 중 전체 스위트를 돌려 드러난 **다른 12건은 모두 코드 변경을 e2e가 못 따라간 낡은 테스트**(앱 버그 0)였고 현행 동작에 맞게 수정했다. 당시 전체 e2e **215 통과 / 0 실패**. **2026-09-05 재실측: 232 중 225 통과 / 0 실패 / 7 미실행** — 26파일 225건 전부 통과, `test_a11y_axe.py` 7건은 선택적 의존성 `axe_playwright_python` 미설치라 모듈 단위 skip 1건으로 빠진다(`importorskip`). 하드 import 였던 것을 #319 에서 고쳤다: 그 상태에선 수집 오류로 스위트 **전체가 중단**됐다. 상세 보고서: [`archive/qa/2026-06-22-e2e-stale-refresh.md`](archive/qa/2026-06-22-e2e-stale-refresh.md).
 
 원래 묶음(현재 통과):
 
