@@ -4,7 +4,15 @@
 위반이 있으면 rule id·영향도·요소 셀렉터를 출력해 진단을 쉽게 한다.
 """
 import json
-from axe_playwright_python.sync_playwright import Axe
+
+import pytest
+
+# 선택적 의존성 — 없으면 이 파일만 skip 한다. 그냥 import 하면 ImportError 가
+# 수집 오류가 되어 스위트 전체가 중단된다(다른 26파일까지 안 돈다).
+Axe = pytest.importorskip(
+    "axe_playwright_python.sync_playwright",
+    reason="pip install axe-playwright-python",
+).Axe
 from .conftest import CLEAR_APP_STORAGE, open_settings
 
 BASE = "http://localhost:8080"

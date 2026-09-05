@@ -151,7 +151,7 @@
 ### 7. 파이프라인·캐시 편입
 
 - data 저장소 `build.yml` paths·빌드 스텝에 psalter 파서·독서 파서 추가. 산출 경로는 paths 밖(자가 트리거 루프 없음 — 기존 설계 유지).
-- `gen_manifests.py`가 `lectionary/*.json`을 bible-manifest 대상에 추가(lps는 `bible/*.json` glob 자동) → ADR-021 무효화 자동 편승. 앱 `sw.js cacheNameFor`에 `/data/lectionary/` → DATA_CACHE 라우팅 추가.
+- `gen_manifests.py`가 `lectionary/*.json`을 bible-manifest 대상에 추가(lps는 `bible/*.json` glob 자동) → ADR-021 무효화 자동 편승. 앱 `sw.js cacheNameFor`에 `/data/lectionary/` → DATA_CACHE 라우팅 추가. **완료 2026-09-01** — 매니페스트 편입은 진작 됐는데(11건) 앱 라우팅만 빠져 있어, 전례 데이터가 SHELL_CACHE 에 앉아 **콘텐츠 해시 무효화를 못 받고 있었다**(`manifest-sync` 는 DATA_CACHE 에서만 지운다). 재발 방지로 「매니페스트가 추적하는 접두사는 전부 DATA_CACHE 로 간다」를 `tests/unit/sw.test.js` 가 대조한다.
 - pytest: `tests/test_psalter.py`(md↔JSON 라운드트립·150편 갭 allowlist), `tests/test_lectionary.py`(스키마·모든 ref 실존 절 검증·난제 스냅샷·기사↔레코드 대사).
 
 ## 검토한 대안

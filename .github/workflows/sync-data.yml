@@ -110,8 +110,14 @@ jobs:
         with:
           node-version: "24"
 
-      - name: 문서 실측치 ↔ 데이터 대조
-        run: node --test tests/unit/docs-data-consistency.test.js
+      # 서브모듈이 실제로 체크아웃되는 자리는 여기뿐이라(공개 저장소의 Unit tests 잡은
+      # 비공개 서브모듈을 못 받는다) data/ 를 필요로 하는 테스트를 여기서 돌린다.
+      # sw.test.js 의 매니페스트↔캐시 라우팅 대조도 같은 이유로 여기 있어야 한다 —
+      # 없으면 새 데이터 디렉터리가 잘못 라우팅돼도 두 워크플로 어디서도 안 걸린다.
+      - name: 문서 실측치 ↔ 데이터 대조 + 매니페스트 ↔ 캐시 라우팅
+        run: |
+          node --test tests/unit/docs-data-consistency.test.js \
+                      tests/unit/sw.test.js
 
       - name: 변경 여부 확인
         id: check

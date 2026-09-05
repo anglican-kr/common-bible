@@ -1,7 +1,7 @@
 # ADR-034: 뷰·라우팅·북마크 2차 분할 (modularization round 2)
 
 - 일시: 2026-06-08
-- 상태: 승인됨 — views-routing 분할 PR1~5b 완료·PR5c 보류 / **bookmark.js 분할 완료: 모달·core·verse-spec·read(2026-06-08) → gestures·select·verse-select·menu·tree(2026-06-11), 2,432→590줄(−76%)** (아래 개정들 참조)
+- 상태: 승인됨 — views-routing 분할 PR1~5b 완료·PR5c 보류 / **bookmark.js 분할 완료: 모달·core·verse-spec·read(2026-06-08) → gestures·select·verse-select·menu·tree(2026-06-11), 2,432→589줄(−76%)** (아래 개정들 참조)
 - 관련: ADR-018(1차 분할), ADR-019(ESM), ADR-032(오버레이 컨트롤러), ADR-016(오디오 캐시), ADR-013(유닛 테스트 하네스)
 
 ## 결정
@@ -198,7 +198,7 @@ bookmark.js는 별도 후속 라운드(순수 로직 `bookmark-core.js` / UI `bo
 
 마지막 덩어리, 가장 깊은 결합. 트리 렌더링 일체를 분리해 bookmark.js를 드로어/헤더 오케스트레이터로 수렴시킨다.
 
-**결과 (1,145 → bookmark.js 590줄, −48%). 전체 분할 누계: 2,432 → 590줄 (−76%).**
+**결과 (1,145 → bookmark.js 589줄, −49%). 전체 분할 누계: 2,432 → 589줄 (−76%).**
 
 | 파일 | 역할 | 라인 |
 |---|---|---|

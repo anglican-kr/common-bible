@@ -8,9 +8,9 @@
 
 | 겹 | 도구 | 무엇을 보나 | 어디서 도나 | 규모 |
 |---|---|---|---|---|
-| **유닛** | `node --test` (의존성 0) | 순수 로직 — 함수 입출력·상태 계산 | **CI 자동** (PR마다) | 19파일 · 728케이스 |
+| **유닛** | `node --test` (의존성 0) | 순수 로직 — 함수 입출력·상태 계산 | **CI 자동** (PR마다) | 24파일 · 830케이스 |
 | **타입 검사** | `tsc --noEmit` (`@ts-check`+JSDoc) | 타입 불일치·오타 | 로컬 훅 + 수동 | 설정 2종(앱·워커) |
-| **E2E** | Playwright (실제 브라우저) | 화면·상호작용·모듈 간 배선 | **로컬 전용**(수동) | 26파일 · 208케이스 |
+| **E2E** | Playwright (실제 브라우저) | 화면·상호작용·모듈 간 배선 | **로컬 전용**(수동) | 27파일 · 232케이스 |
 | **데이터** | pytest (`common-bible-data` 서브모듈) | 성경 본문·검색 인덱스 정합성 | 그 저장소 CI | 별도 저장소 |
 
 ### 각 겹이 "혼자만 잡는" 것 — 왜 셋 다 필요한가
@@ -31,25 +31,30 @@ node --test tests/unit/storage.test.js    # 개별 파일
 ```
 
 | 파일 | 검증 대상 | 케이스 |
-|---|---|---|
+| --- | --- | --- |
 | `bookmark.test.js` | 북마크 핵심 로직 — 절 스펙 파싱, 트리 질의(`_isDescendant` 등), 드래그 이동, 스와이프 제스처 수학, 선택 캐스케이드, 정렬 | 169 |
 | `storage.test.js` | 로컬 저장소 — 북마크 v1→v2 마이그레이션, 읽음 표시, 설정 영속화 | 99 |
-| `search.test.js` | 검색 파이프라인 — 토큰화, 절 검색, 결과 랭킹/필터 | 77 |
-| `views.test.js` | 본문 렌더 — 절 span, 운문/산문, 인용 마크업 | 54 |
+| `search.test.js` | 검색 파이프라인 — 토큰화, 절 검색, 결과 랭킹/필터 | 88 |
+| `views.test.js` | 본문 렌더 — 절 span, 운문/산문, 인용 마크업 | 60 |
+| `helpers.test.js` | 공용 헬퍼 — DOM 빌더(`el`), 빈 상태, 단위 변환 | 48 |
 | `state-machine.test.js` | Drive 동기화 상태기계 — 전이·충돌·재시도 | 46 |
 | `install.test.js` | 설치 안내 — 플랫폼 분기, 넛지 타이밍 | 46 |
-| `helpers.test.js` | 공용 헬퍼 — DOM 빌더(`el`), 빈 상태, 단위 변환 | 42 |
 | `overlay.test.js` | 오버레이 컨트롤러(ADR-032) — 포커스 트랩, 닫기 스택 | 27 |
 | `parallels.test.js` | 평행 본문(인용·각주) 해석 | 26 |
-| `bookmark-read.test.js` | 폴더 모아 읽기(ADR-035) — 범위 해석, 연속 구절 병합 | 25 |
 | `transport.test.js` | 동기화 전송 계층 — 요청/응답·에러 매핑 | 25 |
+| `routing.test.js` | 라우팅(ADR-034 PR5a) — `parsePath` URL→라우트 서술자(books/bookmarks/settings/search·본문 딥링크) | 24 |
+| `search-worker.test.js` | 검색 워커 순수 블록 — 쿼리 파싱(`in:` 연산자)·절 참조 감지·부분 문자열 수집·페이지네이션 | 23 |
+| `bookmark-read.test.js` | 폴더 모아 읽기(ADR-035) — 범위 해석, 연속 구절 병합 | 23 |
 | `citations.test.js` | 인용 표시 — 참조 파싱, 시트 데이터 | 22 |
-| `audio-cache.test.js` | 오디오 캐시 — 장별 mp3 캐싱·정리 | 14 |
+| `store-v2.test.js` | 동기화 저장소 v2 — 설정 LWW 머지(모르는 키 보존)·레코드 라운드트립 | 17 |
 | `manifest-sync.test.js` | 콘텐츠 해시 매니페스트 동기화(ADR-021) | 14 |
+| `audio-cache.test.js` | 오디오 캐시 — 장별 mp3 캐싱·정리 | 14 |
 | `refresh-store.test.js` | 백그라운드 새로고침 상태 | 13 |
+| `verse-spec.test.js` | 절 스펙(ADR-038 §3) — `specCoversVerse`·`chapterMaxVerse`·`verseInstanceKey` 절 인스턴스 식별 | 12 |
 | `tabbar.test.js` | 모바일 탭 바 — 활성 표시·인디케이터 | 12 |
 | `tab-history.test.js` | 탭별 히스토리 복원(ADR-031) | 11 |
-| `sw.test.js` | 서비스 워커 `SHELL_FILES` 정적 검증 | 4 |
+| `sw.test.js` | 서비스 워커 정적 검증 — `SHELL_FILES` 존재·`index.html` 패리티·ESM import 닫힘·`cacheNameFor` 라우팅·매니페스트 대조(`data/` 없으면 skip, `sync-data.yml`에서 실행) | 7 |
+| `docs-data-consistency.test.js` | 설계서 `facts` 블록 ↔ `data/lectionary` 실측 대조(`data/` 없으면 skip, `sync-data.yml`에서 실행) | 2 |
 | `csp.test.js` | `index.html` CSP 인라인 해시 일관성 | 2 |
 
 ## 2. 타입 검사 — `tsc`
@@ -82,7 +87,7 @@ pytest tests/e2e/test_bookmark_sort.py -q   # 개별 파일
 
 > 서버가 `http://localhost:8080`에 떠 있어야 한다. `conftest.py`의 `base_url`이 8080을 하드코딩하므로 다른 포트는 안 된다.
 
-### 북마크 (이 영역이 가장 촘촘하다 — 9개 파일)
+### 북마크 (이 영역이 가장 촘촘하다 — 10개 파일)
 
 | 파일 | 검증 대상 | 케이스 |
 |---|---|---|
@@ -90,7 +95,7 @@ pytest tests/e2e/test_bookmark_sort.py -q   # 개별 파일
 | `test_bookmark_export_import.py` | 내보내기/가져오기(JSON) — 다운로드·병합·덮어쓰기·오류 처리·드로어 ⋯ 패널 | 24 |
 | `test_bookmark_select_delete.py` | 선택 모드 — 진입·삭제·캐스케이드·공유·이동(폴더 포함) | 12 |
 | `test_bookmark_folders.py` | 폴더 CRUD — 생성·이름변경·삭제·펼침/접음 | 8 |
-| `test_bookmark_swipe.py` | 모바일 스와이프/롱프레스 — 삭제·수정 노출, 드래그 진입 | 8 |
+| `test_bookmark_swipe.py` | 모바일 스와이프/롱프레스 — 삭제·수정 노출, 드래그 진입 | 9 |
 | `test_bookmark_dnd.py` | 드래그&드롭 재정렬 — before/after/into·순환 방지 | 6 |
 | `test_bookmark_add_help.py` | 전체뷰 🛈 안내 팝오버 — 위치·열고닫기·포커스 | 5 |
 | `test_bookmark_edit.py` | 항목 편집 — 레이블·메모·빈 레이블 거부 | 4 |
@@ -102,10 +107,12 @@ pytest tests/e2e/test_bookmark_sort.py -q   # 개별 파일
 | 파일 | 검증 대상 | 케이스 |
 |---|---|---|
 | `test_search.py` | 검색 흐름 — 입력·결과·필터·딥링크 | 12 |
-| `test_navigation.py` | 절 단위 딥링크 URL 라우팅 | 5 |
+| `test_navigation.py` | 절 단위 딥링크 URL 라우팅, 책 목록→장 로드, 홈 버튼 포커스, 장 이동/피커 | 12 |
 | `test_copy.py` | 절 선택→클립보드 복사 — 절 경계 확장·인용 포함 | 7 |
 | `test_cite_sheet.py` | 인용 바텀 시트 — 열기/닫기·Escape·포커스 | 4 |
-| `test_book_name_swap.py` | 책 이름 전체/짧은 명칭 뷰포트별 교체 | 7 |
+| `test_book_name_swap.py` | 책 이름 전체/짧은 명칭 뷰포트별 교체 | 8 |
+| `test_liturgical_render.py` | 전례시편·송가 계응 조판 렌더(ADR-038 A2) — 계응·`¶`·부(部)·에스델 하위 절·교차참조·발췌·일반 장 무회귀 | 10 |
+| `test_features.py` | 핵심 기능 — 이어 읽기 배너, 롱프레스 절 저장→헤더 아이콘, 모바일 헤더 북마크→저장 모달 | 3 |
 
 ### 오디오·동기화·설정·셸
 
@@ -115,7 +122,7 @@ pytest tests/e2e/test_bookmark_sort.py -q   # 개별 파일
 | `test_drive_sync_ios.py` | iOS Drive 동기화(OAuth BFF 경유) | 8 |
 | `test_audio.py` / `test_audio_controls.py` | 오디오 플레이어 — 표시·해제·에러 / 재생·배속·seek·위치복원 | 6 / 6 |
 | `test_settings.py` | 설정 팝오버 — 시작화면·책순서·글자크기·테마·색상·캐시 | 13 |
-| `test_install_guide.py` | 설치 안내 모달 — 플랫폼별 콘텐츠·진입점 | 15 |
+| `test_install_guide.py` | 설치 안내 모달 — 플랫폼별 콘텐츠·진입점, 넛지 방문 횟수 규칙, 「다시 보지 않기」 | 20 |
 | `test_tabbar.py` | 모바일 모핑 탭 바(ADR-029/030) | 11 |
 | `test_update_toast.py` | SW 업데이트 토스트 | 6 |
 
@@ -126,7 +133,7 @@ pytest tests/e2e/test_bookmark_sort.py -q   # 개별 파일
 | `test_a11y_axe.py` | axe-core 자동 스캔(WCAG 2.1 AA) | 7 |
 | `test_a11y_keyboard.py` | 키보드 인터랙션 | 7 |
 
-> **알려진 사전 실패**: `test_bookmark_folders.py`의 폴더 토글 2건 등 일부는 headless 환경 의존으로 실패한다(앱 버그 아님). 목록·원인은 [`docs/known-issues.md`](../docs/known-issues.md) §1.
+> **실측 (2026-09-05)**: `pytest tests/e2e` — 위 표 232건 중 **225 통과 / 0 실패 / 7 미실행** (5분 52초, Chrome Headless Shell). 미실행 7건은 `test_a11y_axe.py` 로, 선택적 의존성 `axe-playwright-python` 이 없으면 **그 파일만** 모듈 단위 skip 1건으로 빠진다(`importorskip`; pytest 요약에는 `225 passed, 1 skipped` 로 찍힌다). 그전엔 하드 import 라 수집 오류로 스위트 전체가 중단됐다. 옛 「headless 사전 실패」 묶음은 2026-06-22 에 해소 — [`docs/known-issues.md`](../docs/known-issues.md) §1.
 
 ## 4. 데이터 파이프라인 테스트 (서브모듈)
 

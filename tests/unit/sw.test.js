@@ -1,11 +1,20 @@
-// ── sw.js SHELL_FILES 정적 검증 ──────────────────────────────────────────────
+// ── sw.js 정적 검증 — SHELL_FILES 패리티 + 캐시 라우팅 ───────────────────────
 // Run with: node --test tests/unit/sw.test.js
 //
 // sw.js precaches every SHELL_FILES entry atomically at install time (see the
 // install handler). If one entry 404s the whole install fails and the app
-// won't boot offline. These tests don't evaluate sw.js (it calls
-// importScripts at top level, which the vm harness can't run) — they parse the
-// SHELL_FILES array out of the source as text and assert two invariants:
+// won't boot offline. sw.js can't be imported as a whole — it calls
+// importScripts at top level — so this suite reaches into the source two ways:
+//
+//   • Text parsing, for the `const SHELL_FILES = [...]` array and the static
+//     ESM `import` specifiers of every module the page reaches (invariants 1-3).
+//   • vm evaluation of the `// ── BEGIN/END CACHE_ROUTING ──` marker block,
+//     which brackets `cacheNameFor()` in sw.js so it can run in isolation with
+//     the three cache-name constants stubbed (invariant 4). **Those markers are
+//     load-bearing — do not delete them as unused comments**; extractBlock()
+//     throws when either one is missing.
+//
+// The invariants:
 //
 //   1. Existence — every app-repo SHELL_FILES entry resolves to a real file.
 //   2. Parity   — every local <script src> / <link href> that index.html
@@ -13,6 +22,25 @@
 //                 are all available offline. (This is the guard that would
 //                 have caught js/sync/refresh-store.js being loaded by the
 //                 page but absent from the precache list.)
+//   3. Closure  — every module reachable from those <script> tags through
+//                 static ESM `import` is in SHELL_FILES too. (2) only sees
+//                 tags, which is how bookmark.js's five import-only modules
+//                 (bookmark-{tree,gestures,select,menu,verse-select}.js) sat
+//                 outside the precache list unnoticed. On a first visit those
+//                 imports load before the SW exists, so nothing caches them;
+//                 the next launch offline serves bookmark.js from cache and
+//                 then fails resolving its imports, taking the whole module
+//                 graph down. Only a second online visit (fetches now routed
+//                 through the SW) heals it (PR #319).
+//   4. Routing  — every path prefix that bible-manifest.json tracks routes to
+//                 DATA_CACHE. A data path missing from cacheNameFor falls into
+//                 SHELL_CACHE, where manifest-sync never invalidates it (it
+//                 clears DATA_CACHE only), so a content-hash change leaves the
+//                 stale bytes sitting there until the next shell bump — which
+//                 is exactly what happened to lectionary/*.json (ADR-037 §7).
+//                 Skipped with a stated reason when the private data/ submodule
+//                 isn't checked out: it runs locally and in sync-data.yml, not
+//                 in test.yml.
 //
 // /data/* entries are intentionally excluded from the existence check: those
 // live in the common-bible-data submodule, which CI does not check out, and
@@ -22,6 +50,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import vm from "node:vm";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -86,4 +115,111 @@ test("index.html이 로드하는 모든 로컬 script/style이 SHELL_FILES에 �
   const notPrecached = refs.filter((p) => !SHELL_SET.has(p));
   assert.deepEqual(notPrecached, [],
     `index.html loads these but sw.js won't precache them (offline gap): ${notPrecached}`);
+});
+
+// ── ESM import 닫힘 ↔ SHELL_FILES 패리티 ─────────────────────────────────────
+// 위 패리티는 index.html 의 태그만 본다. ESM `import` 로만 끌려오는 모듈은 태그가
+// 없어 거기 안 걸린다 — bookmark.js 가 import 하는 5모듈이 실제로 SHELL_FILES 에
+// 없었다. 첫 방문에서는 그 import 가 SW 등록보다 먼저 로드돼 아무도 캐시하지
+// 않으므로, 설치 직후 오프라인으로 열면 bookmark.js 는 캐시에서 오고 그 import 는
+// 실패해 모듈 그래프째 깨진다. 두 번째 온라인 방문(이제 fetch 가 SW 를 거친다)
+// 에서야 채워지니 증상이 잘 안 보였을 뿐이다. 그래서 <script> 태그에서 출발해
+// 정적 import 를 끝까지 따라간 닫힘 전체가 SHELL_FILES 에 있는지 대조한다.
+
+// Static ESM specifiers only: `from "./x.js"` and bare `import "./x.js"`. JSDoc
+// type imports (`{import("../types").Foo}`) use parentheses, so they don't match.
+function parseStaticImports(src) {
+  return [...src.matchAll(/\b(?:from|import)\s*"(\.{1,2}\/[^"]+\.js)"/g)].map((m) => m[1]);
+}
+
+// Transitive closure of static imports reachable from `entries` (site-absolute
+// paths). Returns the reachable set and how many import edges were followed —
+// the edge count is a parser sanity check, not an invariant.
+function importClosure(entries) {
+  const reachable = new Set();
+  const queue = [...entries];
+  let edges = 0;
+  while (queue.length) {
+    const p = queue.shift();
+    if (reachable.has(p)) continue;
+    reachable.add(p);
+    const file = path.join(REPO_ROOT, p.slice(1));
+    if (!fs.existsSync(file)) continue; // existence is invariant 1's job
+    for (const spec of parseStaticImports(fs.readFileSync(file, "utf8"))) {
+      edges++;
+      queue.push(path.posix.normalize(path.posix.join(path.posix.dirname(p), spec)));
+    }
+  }
+  return { reachable, edges };
+}
+
+test("index.html 에서 ESM import 로 닿는 모든 모듈이 SHELL_FILES 에 있다", () => {
+  const entries = parseHtmlLocalRefs(INDEX_HTML).filter((p) => p.endsWith(".js"));
+  const { reachable, edges } = importClosure(entries);
+  assert.ok(edges > 0, "import 그래프에서 간선을 하나도 못 찾았다 — 파서가 깨졌을 가능성");
+  const notPrecached = [...reachable].filter((p) => !SHELL_SET.has(p));
+  assert.deepEqual(notPrecached, [],
+    `ESM import 로 로드되지만 sw.js 가 프리캐시하지 않는다 (오프라인 구멍): ${notPrecached}`);
+});
+
+// ── cacheNameFor ↔ bible-manifest 라우팅 ─────────────────────────────────────
+// `cacheNameFor` 에서 빠진 데이터 경로는 SHELL_CACHE 로 떨어지고, 거기 앉은
+// 바이트는 콘텐츠 해시 무효화를 못 받는다 — manifest-sync 가 낡은 항목을
+// DATA_CACHE 에서만 지우기 때문이다. 실제로 `lectionary/*.json` 11건이
+// bible-manifest 에 편입된 뒤에도 SHELL_CACHE 로 가고 있었다(ADR-037 §7 미이행).
+//
+// 그래서 개별 경로를 나열해 확인하는 대신, **매니페스트가 추적하는 접두사 전부**가
+// DATA_CACHE 로 가는지 대조한다. 새 데이터 디렉터리가 매니페스트에 들어왔는데
+// 라우팅을 안 고치면 그때 실패한다.
+
+function loadCacheNameFor(src) {
+  const block = extractBlock("CACHE_ROUTING", src, "sw.js");
+  const ctx = vm.createContext({ AUDIO_CACHE: "audio", DATA_CACHE: "data", SHELL_CACHE: "shell-x" });
+  vm.runInContext(block + "\nglobalThis.__fn = cacheNameFor;", ctx);
+  return ctx.__fn;
+}
+
+function extractBlock(name, source, file) {
+  const begin = `// ── BEGIN ${name} ──`;
+  const end = `// ── END ${name} ──`;
+  const startIdx = source.indexOf(begin);
+  const endIdx = source.indexOf(end);
+  if (startIdx < 0 || endIdx < 0) {
+    throw new Error(`marker block ${name} not found in ${file}`);
+  }
+  return source.slice(startIdx, endIdx + end.length);
+}
+
+const cacheNameFor = loadCacheNameFor(SW_SOURCE);
+
+test("cacheNameFor: 오디오·성서·전례 데이터가 각 캐시로 간다", () => {
+  assert.equal(cacheNameFor("/data/audio/gen-1.mp3"), "audio");
+  assert.equal(cacheNameFor("/data/bible/gen-1.json"), "data");
+  assert.equal(cacheNameFor("/data/lectionary/eucharist-readings.json"), "data");
+  assert.equal(cacheNameFor("/data/search-ot.json"), "data");
+  // 셸과 함께 실리는 데이터 파일은 SHELL_CACHE 가 맞다.
+  assert.equal(cacheNameFor("/data/books.json"), "shell-x");
+  assert.equal(cacheNameFor("/index.html"), "shell-x");
+});
+
+test("bible-manifest 가 추적하는 모든 접두사가 DATA_CACHE 로 라우팅된다", (t) => {
+  // data/ 는 비공개 서브모듈이라 CI 에 체크아웃되지 않는다. 없으면 이유를 남기고
+  // 건너뛴다 — 로컬과 sync-data.yml 에서는 실제로 돈다.
+  const manifestPath = path.join(REPO_ROOT, "data", "bible-manifest.json");
+  if (!fs.existsSync(manifestPath)) {
+    t.skip("data/ 서브모듈이 체크아웃되지 않았다 (비공개)");
+    return;
+  }
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+  const keys = Object.keys(manifest.entries);
+  assert.ok(keys.length > 0, "bible-manifest.json 에 entries 가 없다");
+
+  // 매니페스트 키는 /data/ 아래의 상대 경로다(manifest-sync._urlToManifestKey).
+  const misrouted = [...new Set(
+    keys.filter((k) => cacheNameFor(`/data/${k}`) !== "data")
+        .map((k) => (k.includes("/") ? k.slice(0, k.indexOf("/") + 1) : k)),
+  )];
+  assert.deepEqual(misrouted, [],
+    "매니페스트가 추적하는데 DATA_CACHE 로 안 가는 경로 — "
+    + `해시가 바뀌어도 무효화되지 않는다: ${misrouted}`);
 });
