@@ -6,10 +6,11 @@
 // won't boot offline. sw.js can't be imported as a whole — it calls
 // importScripts at top level — so this suite reaches into the source two ways:
 //
-//   • Text parsing, for the `const SHELL_FILES = [...]` array (invariants 1-2).
+//   • Text parsing, for the `const SHELL_FILES = [...]` array and the static
+//     ESM `import` specifiers of every module the page reaches (invariants 1-3).
 //   • vm evaluation of the `// ── BEGIN/END CACHE_ROUTING ──` marker block,
 //     which brackets `cacheNameFor()` in sw.js so it can run in isolation with
-//     the three cache-name constants stubbed (invariant 3). **Those markers are
+//     the three cache-name constants stubbed (invariant 4). **Those markers are
 //     load-bearing — do not delete them as unused comments**; extractBlock()
 //     throws when either one is missing.
 //
@@ -21,7 +22,15 @@
 //                 are all available offline. (This is the guard that would
 //                 have caught js/sync/refresh-store.js being loaded by the
 //                 page but absent from the precache list.)
-//   3. Routing  — every path prefix that bible-manifest.json tracks routes to
+//   3. Closure  — every module reachable from those <script> tags through
+//                 static ESM `import` is in SHELL_FILES too. (2) only sees
+//                 tags, which is how bookmark.js's five import-only modules
+//                 (bookmark-{tree,gestures,select,menu,verse-select}.js) sat
+//                 outside the precache list unnoticed — the runtime fetch
+//                 handler filled them in on the first online load, so nothing
+//                 showed on screen, but every release starts a fresh
+//                 SHELL_CACHE without them (PR #319).
+//   4. Routing  — every path prefix that bible-manifest.json tracks routes to
 //                 DATA_CACHE. A data path missing from cacheNameFor falls into
 //                 SHELL_CACHE, where manifest-sync never invalidates it (it
 //                 clears DATA_CACHE only), so a content-hash change leaves the
@@ -104,6 +113,50 @@ test("index.html이 로드하는 모든 로컬 script/style이 SHELL_FILES에 �
   const notPrecached = refs.filter((p) => !SHELL_SET.has(p));
   assert.deepEqual(notPrecached, [],
     `index.html loads these but sw.js won't precache them (offline gap): ${notPrecached}`);
+});
+
+// ── ESM import 닫힘 ↔ SHELL_FILES 패리티 ─────────────────────────────────────
+// 위 패리티는 index.html 의 태그만 본다. ESM `import` 로만 끌려오는 모듈은 태그가
+// 없어 거기 안 걸린다 — bookmark.js 가 import 하는 5모듈이 실제로 SHELL_FILES 에
+// 없었다. 런타임 fetch 핸들러가 첫 온라인 로드에서 채워 주니 화면엔 증상이 없지만,
+// install 의 원자적 프리캐시 밖이라 릴리스마다 새 SHELL_CACHE 가 그 파일들 없이
+// 시작한다. 그래서 <script> 태그에서 출발해 정적 import 를 끝까지 따라간 닫힘
+// 전체가 SHELL_FILES 에 있는지 대조한다.
+
+// Static ESM specifiers only: `from "./x.js"` and bare `import "./x.js"`. JSDoc
+// type imports (`{import("../types").Foo}`) use parentheses, so they don't match.
+function parseStaticImports(src) {
+  return [...src.matchAll(/\b(?:from|import)\s*"(\.{1,2}\/[^"]+\.js)"/g)].map((m) => m[1]);
+}
+
+// Transitive closure of static imports reachable from `entries` (site-absolute
+// paths). Returns the reachable set and how many import edges were followed —
+// the edge count is a parser sanity check, not an invariant.
+function importClosure(entries) {
+  const reachable = new Set();
+  const queue = [...entries];
+  let edges = 0;
+  while (queue.length) {
+    const p = queue.shift();
+    if (reachable.has(p)) continue;
+    reachable.add(p);
+    const file = path.join(REPO_ROOT, p.slice(1));
+    if (!fs.existsSync(file)) continue; // existence is invariant 1's job
+    for (const spec of parseStaticImports(fs.readFileSync(file, "utf8"))) {
+      edges++;
+      queue.push(path.posix.normalize(path.posix.join(path.posix.dirname(p), spec)));
+    }
+  }
+  return { reachable, edges };
+}
+
+test("index.html 에서 ESM import 로 닿는 모든 모듈이 SHELL_FILES 에 있다", () => {
+  const entries = parseHtmlLocalRefs(INDEX_HTML).filter((p) => p.endsWith(".js"));
+  const { reachable, edges } = importClosure(entries);
+  assert.ok(edges > 0, "import 그래프에서 간선을 하나도 못 찾았다 — 파서가 깨졌을 가능성");
+  const notPrecached = [...reachable].filter((p) => !SHELL_SET.has(p));
+  assert.deepEqual(notPrecached, [],
+    `ESM import 로 로드되지만 sw.js 가 프리캐시하지 않는다 (오프라인 구멍): ${notPrecached}`);
 });
 
 // ── cacheNameFor ↔ bible-manifest 라우팅 ─────────────────────────────────────

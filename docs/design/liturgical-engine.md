@@ -174,14 +174,8 @@ function preloadCalendar() {
 ### 3.6 등록 세 곳 (빠뜨리면 런타임에서 깨진다)
 
 1. **`index.html`** — `<script type="module" src="/js/app/liturgical-engine.js">` 를 **의존 순서대로 수동 나열**하는 목록에 추가. `views.js` 앞, `data-fetch.js` 부근(같은 leaf 계층).
-2. **`sw.js` 셸 캐시 목록** — 새 JS 파일을 프리캐시 대상에 추가.
-3. **`sw.js` `cacheNameFor()`** — **현재 `/data/lectionary/` 라우팅이 없다.** ADR-037 §7 과 ADR-038 §5 가 요구하는 한 줄이 빠져 있어, 지금 상태로 엔진을 붙이면 2MB 전례 데이터가 `DATA_CACHE` 가 아니라 `SHELL_CACHE` 로 들어간다. 셸 캐시는 릴리스마다 이름이 바뀌므로(ADR-021) 버전 올릴 때마다 통째로 다시 받는다.
-
-```js
-if (pathname.startsWith("/data/lectionary/")) return DATA_CACHE;
-```
-
-이 한 줄은 엔진과 독립이므로 **선행 PR 로 따로 낸다**(§8).
+2. **`sw.js` 셸 캐시 목록** — 새 JS 파일을 프리캐시 대상에 추가. 빠뜨리면 `tests/unit/sw.test.js` 가 잡는다 — `<script>` 태그 패리티에 더해 ESM `import` 닫힘까지 대조한다(#319).
+3. **`sw.js` `cacheNameFor()`** — ~~현재 `/data/lectionary/` 라우팅이 없다.~~ **PR0 로 완료 (2026-09-01, #319).** ADR-037 §7 과 ADR-038 §5 가 요구하는 `/data/lectionary/` → `DATA_CACHE` 한 줄이 빠져 있어 전례 JSON 11건이 `SHELL_CACHE` 에 앉아 콘텐츠 해시 무효화를 못 받고 있었다. 이제 라우팅이 있고, `sw.test.js` 가 「매니페스트가 추적하는 접두사는 전부 `DATA_CACHE` 로 간다」를 대조하므로 새 데이터 디렉터리를 매니페스트에 넣고 라우팅을 빠뜨리면 테스트가 잡는다. **엔진 PR 이 여기서 할 일은 없다.**
 
 ---
 
@@ -672,7 +666,7 @@ e2e 는 A1 단독으로는 붙일 화면이 없다 — ADR-038 A3 독서 뷰 PR 
 
 | PR | 내용 | 크기 |
 |---|---|---|
-| **0** | `sw.js` `cacheNameFor` 에 `/data/lectionary/` → `DATA_CACHE` 한 줄 (ADR-037 §7 미이행분) | 아주 작음 |
+| ~~**0**~~ | ~~`sw.js` `cacheNameFor` 에 `/data/lectionary/` → `DATA_CACHE` 한 줄 (ADR-037 §7 미이행분)~~ **완료 — #319 (2026-09-01)** | 아주 작음 |
 | **1** | A1-a 계산 계층 + `LITURGICAL_CORE` 블록 + 유닛 | 중 |
 | **2** | A1-b 조회 계층 + `LITURGICAL_LOOKUP` 블록 + 프리로드·캐시 + 유닛. `js/types.d.ts` 공유 타입 신설, `index.html`·`sw.js` 등록 | 중 |
 | **3** | B1 품계·이동·전례색 + 유닛 | 중 |

@@ -124,7 +124,7 @@ ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` ~6,000줄이 8개 도�
 
 ### 로드 방식
 
-`index.html`이 31개 `<script src>` 태그를 의존성이 있는 순서대로 **명시적으로 나열**한다 (ADR-019 §"채택 방식"). ESM이 `import` 그래프를 따라가며 알아서 의존성을 가져오는 방식은 **아니다** — `<script type="module">`도 결국 브라우저가 각 태그를 발견 순서로 로드한다.
+`index.html`이 31개 `<script src>` 태그를 의존성이 있는 순서대로 **명시적으로 나열**한다 (ADR-019 §"채택 방식"). 진입점 하나를 두고 ESM `import` 그래프에 로드를 맡기는 구조가 **아니다** — 모듈 대부분이 자기 `<script>` 태그를 가지며, 브라우저는 태그를 발견 순서로 로드한다. 예외는 아래의 `bookmark-*` 5개로, 이들만 태그 없이 `bookmark.js`의 `import`를 따라 로드된다.
 
 | 로드 모드                                | 파일 수 | 비고                                                                                                                 |
 | ---------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------- |
@@ -344,7 +344,7 @@ ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` ~6,000줄이 8개 도�
 
 빌드 산출물 0개를 유지하면서도 타입 안전성을 얻기 위해 **TypeScript를 컴파일러로만 사용**한다 ([ADR-012](decisions/012-typescript-incremental-adoption.md)).
 
-- 모든 클라이언트 JS 파일(sync 레이어 + `js/app.js` + `js/app/*.js` 25개 + `js/drive-sync.js` + `js/search-worker.js` + `js/audio-cache.js`)에 파일 상단 `// @ts-check`가 영구 활성화돼 있다 (2026-05-10, ADR-018 모듈 분할과 동행).
+- 클라이언트 JS 파일 상단에 `// @ts-check`가 영구 활성화돼 있다 (2026-05-10, ADR-018 모듈 분할과 동행) — sync 레이어 5개 + `js/app.js` + `js/app/*.js` 25개 + `js/drive-sync.js` + `js/audio-cache.js` + `js/manifest-sync.js` + `js/search-worker.js`(worker 설정). **예외 2개**: `js/pre-fetch.js`·`js/gtag-init.js`(각 10여 줄짜리 classic 스크립트)는 `@ts-check`가 없고, 두 tsconfig 모두 `checkJs: false`라 파일 단위 opt-in 방식이므로 이 둘은 타입 검사를 받지 않는다.
 - 도메인 타입은 `js/types.d.ts` 한 곳에서 export.
 - 다른 파일은 `@typedef {import("../types").Foo} Foo`로 가져온다.
 - `tsconfig.json` (DOM lib) + `tsconfig.worker.json` (WebWorker lib) 두 개 분리.

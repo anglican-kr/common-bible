@@ -44,6 +44,14 @@ const SHELL_FILES = [
   "/js/app/bookmark-core.js",
   "/js/app/bookmark-modals.js",
   "/js/app/bookmark.js",
+  // ESM import 로만 로드되는 모듈(index.html 에 <script> 태그 없음) — bookmark.js 가
+  // 끌어온다. 태그가 없으면 index.html↔SHELL_FILES 패리티 검사에 안 걸리므로
+  // tests/unit/sw.test.js 가 import 그래프 닫힘까지 따로 대조한다.
+  "/js/app/bookmark-tree.js",
+  "/js/app/bookmark-gestures.js",
+  "/js/app/bookmark-select.js",
+  "/js/app/bookmark-menu.js",
+  "/js/app/bookmark-verse-select.js",
   "/js/app/citations.js",
   "/js/app/parallels.js",
   "/js/app/tab-history.js",
