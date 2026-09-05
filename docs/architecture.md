@@ -344,7 +344,7 @@ ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` ~6,000줄이 8개 도�
 
 빌드 산출물 0개를 유지하면서도 타입 안전성을 얻기 위해 **TypeScript를 컴파일러로만 사용**한다 ([ADR-012](decisions/012-typescript-incremental-adoption.md)).
 
-- 클라이언트 JS 파일 상단에 `// @ts-check`가 영구 활성화돼 있다 (2026-05-10, ADR-018 모듈 분할과 동행) — sync 레이어 5개 + `js/app.js` + `js/app/*.js` 25개 + `js/drive-sync.js` + `js/audio-cache.js` + `js/manifest-sync.js` + `js/search-worker.js`(worker 설정). **예외 2개**: `js/pre-fetch.js`·`js/gtag-init.js`(각 10여 줄짜리 classic 스크립트)는 `@ts-check`가 없고, 두 tsconfig 모두 `checkJs: false`라 파일 단위 opt-in 방식이므로 이 둘은 타입 검사를 받지 않는다.
+- 클라이언트 JS 파일 상단에 `// @ts-check`가 영구 활성화돼 있다 (2026-05-10, ADR-018 모듈 분할과 동행) — sync 레이어 5개 + `js/app.js` + `js/app/*.js` 25개 + `js/drive-sync.js` + `js/audio-cache.js` + `js/manifest-sync.js` + `js/search-worker.js`(worker 설정). **예외 2개**: `js/pre-fetch.js`(`<head>` classic 스크립트)·`js/gtag-init.js`(`type="module"`)는 — 각 10여 줄 — `@ts-check`가 없고, 두 tsconfig 모두 `checkJs: false`라 파일 단위 opt-in 방식이므로 이 둘은 타입 검사를 받지 않는다.
 - 도메인 타입은 `js/types.d.ts` 한 곳에서 export.
 - 다른 파일은 `@typedef {import("../types").Foo} Foo`로 가져온다.
 - `tsconfig.json` (DOM lib) + `tsconfig.worker.json` (WebWorker lib) 두 개 분리.

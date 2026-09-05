@@ -8,7 +8,7 @@
 
 | 겹 | 도구 | 무엇을 보나 | 어디서 도나 | 규모 |
 |---|---|---|---|---|
-| **유닛** | `node --test` (의존성 0) | 순수 로직 — 함수 입출력·상태 계산 | **CI 자동** (PR마다) | 19파일 · 728케이스 |
+| **유닛** | `node --test` (의존성 0) | 순수 로직 — 함수 입출력·상태 계산 | **CI 자동** (PR마다) | 24파일 · 830케이스 |
 | **타입 검사** | `tsc --noEmit` (`@ts-check`+JSDoc) | 타입 불일치·오타 | 로컬 훅 + 수동 | 설정 2종(앱·워커) |
 | **E2E** | Playwright (실제 브라우저) | 화면·상호작용·모듈 간 배선 | **로컬 전용**(수동) | 26파일 · 208케이스 |
 | **데이터** | pytest (`common-bible-data` 서브모듈) | 성경 본문·검색 인덱스 정합성 | 그 저장소 CI | 별도 저장소 |
@@ -31,25 +31,30 @@ node --test tests/unit/storage.test.js    # 개별 파일
 ```
 
 | 파일 | 검증 대상 | 케이스 |
-|---|---|---|
+| --- | --- | --- |
 | `bookmark.test.js` | 북마크 핵심 로직 — 절 스펙 파싱, 트리 질의(`_isDescendant` 등), 드래그 이동, 스와이프 제스처 수학, 선택 캐스케이드, 정렬 | 169 |
 | `storage.test.js` | 로컬 저장소 — 북마크 v1→v2 마이그레이션, 읽음 표시, 설정 영속화 | 99 |
-| `search.test.js` | 검색 파이프라인 — 토큰화, 절 검색, 결과 랭킹/필터 | 77 |
-| `views.test.js` | 본문 렌더 — 절 span, 운문/산문, 인용 마크업 | 54 |
+| `search.test.js` | 검색 파이프라인 — 토큰화, 절 검색, 결과 랭킹/필터 | 88 |
+| `views.test.js` | 본문 렌더 — 절 span, 운문/산문, 인용 마크업 | 60 |
+| `helpers.test.js` | 공용 헬퍼 — DOM 빌더(`el`), 빈 상태, 단위 변환 | 48 |
 | `state-machine.test.js` | Drive 동기화 상태기계 — 전이·충돌·재시도 | 46 |
 | `install.test.js` | 설치 안내 — 플랫폼 분기, 넛지 타이밍 | 46 |
-| `helpers.test.js` | 공용 헬퍼 — DOM 빌더(`el`), 빈 상태, 단위 변환 | 42 |
 | `overlay.test.js` | 오버레이 컨트롤러(ADR-032) — 포커스 트랩, 닫기 스택 | 27 |
 | `parallels.test.js` | 평행 본문(인용·각주) 해석 | 26 |
-| `bookmark-read.test.js` | 폴더 모아 읽기(ADR-035) — 범위 해석, 연속 구절 병합 | 25 |
 | `transport.test.js` | 동기화 전송 계층 — 요청/응답·에러 매핑 | 25 |
+| `routing.test.js` | 라우팅(ADR-034 PR5a) — `parsePath` URL→라우트 서술자(books/bookmarks/settings/search·본문 딥링크) | 24 |
+| `search-worker.test.js` | 검색 워커 순수 블록 — 쿼리 파싱(`in:` 연산자)·절 참조 감지·부분 문자열 수집·페이지네이션 | 23 |
+| `bookmark-read.test.js` | 폴더 모아 읽기(ADR-035) — 범위 해석, 연속 구절 병합 | 23 |
 | `citations.test.js` | 인용 표시 — 참조 파싱, 시트 데이터 | 22 |
-| `audio-cache.test.js` | 오디오 캐시 — 장별 mp3 캐싱·정리 | 14 |
+| `store-v2.test.js` | 동기화 저장소 v2 — 설정 LWW 머지(모르는 키 보존)·레코드 라운드트립 | 17 |
 | `manifest-sync.test.js` | 콘텐츠 해시 매니페스트 동기화(ADR-021) | 14 |
+| `audio-cache.test.js` | 오디오 캐시 — 장별 mp3 캐싱·정리 | 14 |
 | `refresh-store.test.js` | 백그라운드 새로고침 상태 | 13 |
+| `verse-spec.test.js` | 절 스펙(ADR-038 §3) — `specCoversVerse`·`chapterMaxVerse`·`verseInstanceKey` 절 인스턴스 식별 | 12 |
 | `tabbar.test.js` | 모바일 탭 바 — 활성 표시·인디케이터 | 12 |
 | `tab-history.test.js` | 탭별 히스토리 복원(ADR-031) | 11 |
-| `sw.test.js` | 서비스 워커 `SHELL_FILES` 정적 검증 | 4 |
+| `sw.test.js` | 서비스 워커 정적 검증 — `SHELL_FILES` 존재·`index.html` 패리티·ESM import 닫힘·`cacheNameFor` 라우팅·매니페스트 대조(`data/` 없으면 skip, `sync-data.yml`에서 실행) | 7 |
+| `docs-data-consistency.test.js` | 설계서 `facts` 블록 ↔ `data/lectionary` 실측 대조(`data/` 없으면 skip, `sync-data.yml`에서 실행) | 2 |
 | `csp.test.js` | `index.html` CSP 인라인 해시 일관성 | 2 |
 
 ## 2. 타입 검사 — `tsc`
