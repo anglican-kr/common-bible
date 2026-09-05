@@ -10,7 +10,7 @@
 |---|---|---|---|---|
 | **유닛** | `node --test` (의존성 0) | 순수 로직 — 함수 입출력·상태 계산 | **CI 자동** (PR마다) | 24파일 · 830케이스 |
 | **타입 검사** | `tsc --noEmit` (`@ts-check`+JSDoc) | 타입 불일치·오타 | 로컬 훅 + 수동 | 설정 2종(앱·워커) |
-| **E2E** | Playwright (실제 브라우저) | 화면·상호작용·모듈 간 배선 | **로컬 전용**(수동) | 26파일 · 208케이스 |
+| **E2E** | Playwright (실제 브라우저) | 화면·상호작용·모듈 간 배선 | **로컬 전용**(수동) | 27파일 · 232케이스 |
 | **데이터** | pytest (`common-bible-data` 서브모듈) | 성경 본문·검색 인덱스 정합성 | 그 저장소 CI | 별도 저장소 |
 
 ### 각 겹이 "혼자만 잡는" 것 — 왜 셋 다 필요한가
@@ -87,7 +87,7 @@ pytest tests/e2e/test_bookmark_sort.py -q   # 개별 파일
 
 > 서버가 `http://localhost:8080`에 떠 있어야 한다. `conftest.py`의 `base_url`이 8080을 하드코딩하므로 다른 포트는 안 된다.
 
-### 북마크 (이 영역이 가장 촘촘하다 — 9개 파일)
+### 북마크 (이 영역이 가장 촘촘하다 — 10개 파일)
 
 | 파일 | 검증 대상 | 케이스 |
 |---|---|---|
@@ -95,7 +95,7 @@ pytest tests/e2e/test_bookmark_sort.py -q   # 개별 파일
 | `test_bookmark_export_import.py` | 내보내기/가져오기(JSON) — 다운로드·병합·덮어쓰기·오류 처리·드로어 ⋯ 패널 | 24 |
 | `test_bookmark_select_delete.py` | 선택 모드 — 진입·삭제·캐스케이드·공유·이동(폴더 포함) | 12 |
 | `test_bookmark_folders.py` | 폴더 CRUD — 생성·이름변경·삭제·펼침/접음 | 8 |
-| `test_bookmark_swipe.py` | 모바일 스와이프/롱프레스 — 삭제·수정 노출, 드래그 진입 | 8 |
+| `test_bookmark_swipe.py` | 모바일 스와이프/롱프레스 — 삭제·수정 노출, 드래그 진입 | 9 |
 | `test_bookmark_dnd.py` | 드래그&드롭 재정렬 — before/after/into·순환 방지 | 6 |
 | `test_bookmark_add_help.py` | 전체뷰 🛈 안내 팝오버 — 위치·열고닫기·포커스 | 5 |
 | `test_bookmark_edit.py` | 항목 편집 — 레이블·메모·빈 레이블 거부 | 4 |
@@ -107,10 +107,12 @@ pytest tests/e2e/test_bookmark_sort.py -q   # 개별 파일
 | 파일 | 검증 대상 | 케이스 |
 |---|---|---|
 | `test_search.py` | 검색 흐름 — 입력·결과·필터·딥링크 | 12 |
-| `test_navigation.py` | 절 단위 딥링크 URL 라우팅 | 5 |
+| `test_navigation.py` | 절 단위 딥링크 URL 라우팅, 책 목록→장 로드, 홈 버튼 포커스, 장 이동/피커 | 12 |
 | `test_copy.py` | 절 선택→클립보드 복사 — 절 경계 확장·인용 포함 | 7 |
 | `test_cite_sheet.py` | 인용 바텀 시트 — 열기/닫기·Escape·포커스 | 4 |
-| `test_book_name_swap.py` | 책 이름 전체/짧은 명칭 뷰포트별 교체 | 7 |
+| `test_book_name_swap.py` | 책 이름 전체/짧은 명칭 뷰포트별 교체 | 8 |
+| `test_liturgical_render.py` | 전례시편·송가 계응 조판 렌더(ADR-038 A2) — 계응·`¶`·부(部)·에스델 하위 절·교차참조·발췌·일반 장 무회귀 | 10 |
+| `test_features.py` | 핵심 기능 — 이어 읽기 배너, 롱프레스 절 저장→헤더 아이콘, 모바일 헤더 북마크→저장 모달 | 3 |
 
 ### 오디오·동기화·설정·셸
 
@@ -120,7 +122,7 @@ pytest tests/e2e/test_bookmark_sort.py -q   # 개별 파일
 | `test_drive_sync_ios.py` | iOS Drive 동기화(OAuth BFF 경유) | 8 |
 | `test_audio.py` / `test_audio_controls.py` | 오디오 플레이어 — 표시·해제·에러 / 재생·배속·seek·위치복원 | 6 / 6 |
 | `test_settings.py` | 설정 팝오버 — 시작화면·책순서·글자크기·테마·색상·캐시 | 13 |
-| `test_install_guide.py` | 설치 안내 모달 — 플랫폼별 콘텐츠·진입점 | 15 |
+| `test_install_guide.py` | 설치 안내 모달 — 플랫폼별 콘텐츠·진입점, 넛지 방문 횟수 규칙, 「다시 보지 않기」 | 20 |
 | `test_tabbar.py` | 모바일 모핑 탭 바(ADR-029/030) | 11 |
 | `test_update_toast.py` | SW 업데이트 토스트 | 6 |
 
@@ -131,7 +133,7 @@ pytest tests/e2e/test_bookmark_sort.py -q   # 개별 파일
 | `test_a11y_axe.py` | axe-core 자동 스캔(WCAG 2.1 AA) | 7 |
 | `test_a11y_keyboard.py` | 키보드 인터랙션 | 7 |
 
-> **알려진 사전 실패**: `test_bookmark_folders.py`의 폴더 토글 2건 등 일부는 headless 환경 의존으로 실패한다(앱 버그 아님). 목록·원인은 [`docs/known-issues.md`](../docs/known-issues.md) §1.
+> **실측 (2026-09-05)**: `pytest tests/e2e` **225 통과 / 0 실패 / 0 skip** (5분 52초, Chrome Headless Shell). `test_a11y_axe.py` 7건은 선택적 의존성 `axe-playwright-python` 이 없으면 **그 파일만** skip 된다(`importorskip`). 그전엔 하드 import 라 수집 오류로 스위트 전체가 중단됐다. 옛 「headless 사전 실패」 묶음은 2026-06-22 에 해소 — [`docs/known-issues.md`](../docs/known-issues.md) §1.
 
 ## 4. 데이터 파이프라인 테스트 (서브모듈)
 
