@@ -50,8 +50,9 @@ Google Drive 동기화·OAuth는 외부 의존이지만 단 한 군데 — `/oau
         ┌────────────────────────────────────────────────────────────┐
         │  브라우저 (PWA)                                            │
         │                                                            │
-        │   ┌─ index.html (<script> 19개, dep 순) ─┐                 │
-        │   │  app.js + app/* 8개  (UI·라우팅)     │                 │
+        │   ┌─ index.html (<script> 31개, dep 순) ─┐                 │
+        │   │  app.js + app/* 20개 (UI·라우팅)     │                 │
+        │   │   + import 전용 app/* 5개(bookmark-*)│                 │
         │   │  drive-sync.js + sync/* 5개 (동기화) │                 │
         │   │  audio-cache.js  (오프라인 오디오)   │                 │
         │   │  manifest-sync.js (콘텐츠 해시 diff) │                 │
