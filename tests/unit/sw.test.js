@@ -26,10 +26,12 @@
 //                 static ESM `import` is in SHELL_FILES too. (2) only sees
 //                 tags, which is how bookmark.js's five import-only modules
 //                 (bookmark-{tree,gestures,select,menu,verse-select}.js) sat
-//                 outside the precache list unnoticed — the runtime fetch
-//                 handler filled them in on the first online load, so nothing
-//                 showed on screen, but every release starts a fresh
-//                 SHELL_CACHE without them (PR #319).
+//                 outside the precache list unnoticed. On a first visit those
+//                 imports load before the SW exists, so nothing caches them;
+//                 the next launch offline serves bookmark.js from cache and
+//                 then fails resolving its imports, taking the whole module
+//                 graph down. Only a second online visit (fetches now routed
+//                 through the SW) heals it (PR #319).
 //   4. Routing  — every path prefix that bible-manifest.json tracks routes to
 //                 DATA_CACHE. A data path missing from cacheNameFor falls into
 //                 SHELL_CACHE, where manifest-sync never invalidates it (it
@@ -118,10 +120,11 @@ test("index.html이 로드하는 모든 로컬 script/style이 SHELL_FILES에 �
 // ── ESM import 닫힘 ↔ SHELL_FILES 패리티 ─────────────────────────────────────
 // 위 패리티는 index.html 의 태그만 본다. ESM `import` 로만 끌려오는 모듈은 태그가
 // 없어 거기 안 걸린다 — bookmark.js 가 import 하는 5모듈이 실제로 SHELL_FILES 에
-// 없었다. 런타임 fetch 핸들러가 첫 온라인 로드에서 채워 주니 화면엔 증상이 없지만,
-// install 의 원자적 프리캐시 밖이라 릴리스마다 새 SHELL_CACHE 가 그 파일들 없이
-// 시작한다. 그래서 <script> 태그에서 출발해 정적 import 를 끝까지 따라간 닫힘
-// 전체가 SHELL_FILES 에 있는지 대조한다.
+// 없었다. 첫 방문에서는 그 import 가 SW 등록보다 먼저 로드돼 아무도 캐시하지
+// 않으므로, 설치 직후 오프라인으로 열면 bookmark.js 는 캐시에서 오고 그 import 는
+// 실패해 모듈 그래프째 깨진다. 두 번째 온라인 방문(이제 fetch 가 SW 를 거친다)
+// 에서야 채워지니 증상이 잘 안 보였을 뿐이다. 그래서 <script> 태그에서 출발해
+// 정적 import 를 끝까지 따라간 닫힘 전체가 SHELL_FILES 에 있는지 대조한다.
 
 // Static ESM specifiers only: `from "./x.js"` and bare `import "./x.js"`. JSDoc
 // type imports (`{import("../types").Foo}`) use parentheses, so they don't match.
