@@ -8,6 +8,7 @@
 - 구현 대상: `js/app/liturgical-engine.js`(신규 leaf) · `tests/unit/liturgical-engine.test.js`(신규)
 - 관련 ADR: ADR-036(교회력 데이터 모델 — 좌표·품계·이동·전례색의 권위 출처), ADR-037 §6(엔진 명세 — 본 설계의 상위 문서), ADR-038(엔진을 소비하는 UI), ADR-039(전례시편 `lps`), ADR-013(유닛 테스트 하네스), ADR-012(JSDoc 타입), ADR-018·019·034(모듈 계층·ESM), ADR-021(캐시 무효화), ADR-035(절 부분집합 렌더)
 - 기도서 원문 전사: [`docs/reference/liturgical-calendar-rules.md`](../reference/liturgical-calendar-rules.md)
+- 검토 문서: [`docs/design/liturgical-engine-review.md`](liturgical-engine-review.md) — 외부 구현 벤치마크 판정(§3·§4) · PR 1~3 검증 체크리스트(§5) · 사제 확인 질문지(§6)
 
 ---
 
