@@ -224,7 +224,7 @@ GitHub 토픽 [lectionary](https://github.com/topics/lectionary) · [liturgical-
 
 - [ ] **C-P-1** 앵커(부활·대림·성탄·세례주일)만으로 순수 계산, 데이터 불필요 · 반환은 스팬마다 **달력년으로 자른 `[from,to]` 구간 배열**이고 소비자는 `inSpan(d, name)` 으로 묻는다 · 검증: 유닛 · 정본: 설계서 §4.10
 - [ ] **C-P-2** `transferGuard` = E−7..E+7(성지주일~부활2주일) 정확히, **§6.5 `guard(d)` 가 자체 날짜 비교 없이 이 스팬만 본다** · 검증: 유닛 · 정본: 설계서 §4.10 · §6.5 `guard`, 전사 주요축일 나-2
-- [ ] **C-P-3** `holyWeek` ∪ `easterOctave` = 색 가드(§6.4 소비) · `ascensionToPentecost` = E+39..E+48(부활6주 금·토의 승천 본기도 `_note`). **세 소비자가 같은 함수를 본다** · 검증: 유닛 · 정본: 설계서 §4.10 · §6.3 ① · §6.4, 전사 「재일」·「부활절기」
+- [ ] **C-P-3** `holyWeek` ∪ `easterOctave` = 색 가드(§6.4 소비) · `ascensionToPentecost` = **E+40..E+48**(승천일 E+39 **제외** — 전사 「승천일 이후」. 근거 사례가 부활6주 금·토다). **세 소비자가 같은 함수를 본다** · 검증: 유닛 · 정본: 설계서 §4.10 · §6.3 ① · §6.4, 전사 「재일」·「부활절기」
 - [ ] **C-P-4** **성탄 기간의 연도 경계** — `spansOf(2026).christmasToBaptism` 이 조각 **둘**(`2026-01-01..2026-01-11 세례주일` · `2026-12-25..2026-12-31`)이고 양쪽 끝이 다 참이다: `inSpan("2026-01-09")` 참(금요일 · 비소재일 — C-6.3-1 과 같은 날) · `inSpan("2026-12-25")` 참 · `inSpan("2026-01-16")` 거짓. `christmasOctave` 도 조각 둘 · 검증: 유닛 · 정본: 설계서 §4.10(9차 리뷰)
 
 ### 5.7 프리로드 · 캐시 · 결손 (§2 · §3.4 · §4.9) — PR 2
@@ -400,12 +400,13 @@ GitHub 토픽 [lectionary](https://github.com/topics/lectionary) · [liturgical-
   "skip": null,
   "applies": { "since": null, "until": null },
   "assertions": [
-    { "date": "2027-12-27", "expect": { "status": "transferred_in", "id": "d1226-성-스테파노", "from": "2027-12-26", "displacedBy": "grid:christmas-…" } },
+    { "date": "2027-12-27", "expect": { "status": "transferred_in", "id": "d1226-성-스테파노", "from": "2027-12-26", "displacedBy": "grid:christmas-1-sunday" } },
     { "date": "2027-12-29", "expect": { "status": "omitted", "id": "d1229-토마스-베켓", "displacedBy": "d1228-죄-없는-어린이들의-순교" } }
   ]
 }
 ```
 
+- `displacedBy` 는 **정확한 id** 로 쓴다(생략부호 금지 — 그러면 픽스처가 계약을 검증하지 못한다). 위 2027-12-26 은 성탄 후 첫 주일이라 `grid:christmas-**1**-sunday` 다 — 성탄절기 주일은 데이터에 주차가 있다(실측: `christmas/1/sunday` · `christmas/2/sunday` 가 독서·본기도 양쪽에 있다). `week: null` 일 때만 `x` 를 쓴다(성주간 평일 등).
 - `skip` 은 데이터 대기(미결13), `applies.since/until` 은 기도서 개정이나 사제 확인으로 규칙이 바뀐 **발효 연도**에만 쓴다.
 
 ## 부록 C — 외부 출처
