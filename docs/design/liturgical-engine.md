@@ -753,7 +753,8 @@ A1 이 끝난 뒤 별도 PR. 데이터가 `rank` · `precedence` · `priority_gr
 const MAX_SHIFT = 30;   // 이동 상한(날). 실측 최장 15 — 2029·2040 수태고지 3.25(성지주일) → 4.9
 
 /** @param {Set<string>} activated — §6.2 활성화 계약. 호출자가 반드시 넘긴다(연도 경계의 임시 패스도 같은 집합) */
-function computeTransfers(year, seed /* Y−1 에서 넘어온 arrivals */, activated) {
+/** @param {boolean} boundary — 연도 경계용 **임시** 패스인가(§6.5 연도 경계). 0단계가 year+1 까지 깐다 */
+function computeTransfers(year, seed /* Y−1 에서 넘어온 arrivals */, activated, boundary = false) {
   const arrivals   = new Map(seed);        // "YYYY-MM-DD" → Candidate[] (status transferred_in)
   const departures = new Map();            // "YYYY-MM-DD" → Candidate[] (status transferred_out)
   const optionals  = new Map();            // "YYYY-MM-DD" → Candidate[] (status optional) — §6.2
@@ -761,8 +762,13 @@ function computeTransfers(year, seed /* Y−1 에서 넘어온 arrivals */, acti
 
   // ── 0단계: 선택 봉헌 선색인 — 순위와 무관하고 목적지가 기원보다 **앞**일 수 있어(nearby_sunday 2028: 2.2 → 1.30)
   //    날짜 루프 안에서 처리하면 목적지를 이미 지나친 뒤라 늦는다. 루프 전에 한 해 전체를 먼저 깐다.
-  //    임시 패스(연도 경계)는 optionalObservancesOf(year) ∪ optionalObservancesOf(year+1) 을 깐다 — 12월 이동이 1월을 검사할 때 좌석이 맞아야 한다
-  for (const o of optionalObservancesOf(year)) {              // { observance, origin, dest } — §6.2 표의 네 종류
+  //    임시 패스는 year+1 까지 깐다 — 12월 이동이 1월을 검사할 때 isFree 가 그 좌석을 봐야 한다.
+  //    같은 arrivals·departures 에 넣는 이유: 목적지 점유(막기)와 기원 비움(열기) 두 효과가 다 필요한데
+  //    isFree 가 이미 그 둘을 본다. 대신 spill 이 그것을 seed 로 퍼가지 않도록 기원으로 거른다(아래 연도 경계).
+  const stage0 = boundary
+    ? [...optionalObservancesOf(year), ...optionalObservancesOf(year + 1)]
+    : optionalObservancesOf(year);
+  for (const o of stage0) {                                   // { observance, origin, dest } — §6.2 표의 네 종류
     if (activated.has(o.observance.id)) {                     // 켜진 것은 실제로 옮긴다 — optionals 가 아니라 도착. displacedBy 없음(택한 것)
       push(arrivals,   o.dest,   { observance: o.observance, status: "transferred_in",  from: o.origin });
       push(departures, o.origin, { observance: o.observance, status: "transferred_out", to: o.dest });
@@ -810,9 +816,11 @@ const EMPTY_PASS = () => ({ arrivals: new Map(), departures: new Map(), optional
 
 **패스가 결정적인 이유 셋.** ① 날짜를 오름차순으로 훑고, `next_day` 는 언제나 **앞으로만** 가므로 어떤 날짜 `d` 에 이르렀을 때 `arrivals.get(d)` 는 완성돼 있다 — 그 뒤에 도착할 것이 없다. ② 연쇄는 이 루프 자체다 — 도착이 그 날짜의 같은 값·낮은 값 **고유** 후보를 밀어내고(§6.2 ①), 밀린 것이 `transferable` 이면 루프가 `d` 에 이르렀을 때 `ranked` 에서 승자가 아니므로 다음날로 간다. 성탄 3축일이 하루씩 밀리는 것이 정확히 이 경로다(어린이들의 `from` 은 12.28, `displacedBy` 는 요한). 밀리는 것은 언제나 고유 후보다 — 도착은 밀리지 않는다(§6.2 ②). 같은 날을 노리는 도착 둘(2038 마르코·필립보와 야고보가 부활 8일을 건너 5.3 에 함께 닿으려는 경우)은 **기원이 이른 쪽**(마르코 4.25)이 5.3, 다음(필립보·야고보 5.1)이 5.4 다(2011 미국 성공회와 같은 배치). ③ 순서는 §6.2 tie-break 로 완전히 정해지고 배열 순서에 기대는 곳이 없다.
 
-**연도 경계.** `next_day` 는 해를 넘길 수 있다 — 12월 말에 밀린 축일이 1월 초에 닿는 경우. 현재 데이터로는 일어나지 않지만(12.26~28 은 늦어도 12.29 에 앉고, 12.31 실베스터·위클리프는 prec 7 이라 옮기지 않는다), 표가 바뀌면 조용히 깨질 자리라 규칙을 못박는다. 캐시에 넣는 `Y` 의 패스는 `computeTransfers(Y, spill(Y−1), activated)` 이고, `spill(Y−1)` 은 **`computeTransfers(Y−1, ∅, activated)` 의 arrivals 중 날짜가 `Y` 인 것**이다 — 임시 패스에도 **같은** `activated` 를 넘긴다(인자는 필수, 기본값 없음. 두 패스가 다른 집합을 보면 12월 결과가 어긋난다).
+**연도 경계.** `next_day` 는 해를 넘길 수 있다 — 12월 말에 밀린 축일이 1월 초에 닿는 경우. 현재 데이터로는 일어나지 않지만(12.26~28 은 늦어도 12.29 에 앉고, 12.31 실베스터·위클리프는 prec 7 이라 옮기지 않는다), 표가 바뀌면 조용히 깨질 자리라 규칙을 못박는다. 캐시에 넣는 `Y` 의 패스는 `computeTransfers(Y, spill(Y−1), activated)` 이고, `spill(Y−1)` 은 `computeTransfers(Y−1, ∅, activated, /* boundary */ true)` 의 arrivals 중 **날짜가 `Y` 이면서 `from` 이 `Y−1` 인 것**이다 — 임시 패스에도 **같은** `activated` 를 넘긴다(인자는 필수, 기본값 없음. 두 패스가 다른 집합을 보면 12월 결과가 어긋난다).
 
-**같은 집합을 넘기는 것만으로는 모자란다**(10차 리뷰). 0단계는 `optionalObservancesOf(year)` 를 깔므로 `computeTransfers(Y−1, …)` 의 0단계는 `Y−1` 것만 안다. 그런데 12월 이동의 목적지 탐색은 **`Y` 의 1월까지 넘어간다** — 그때 `isFree` 가 `Y` 의 0단계 좌석을 못 본다. 켜진 공현(`sunday_0102_0108`, 목적지가 1.2~1.8)이 1월 초에 앉아 있거나, 켠 주의 봉헌이 기원 2.2 를 비우고 1월 말 주일에 앉은 경우가 그렇다(2028 은 1.30). 그러면 spill 목적지가 완전한 `Y` 패스의 좌석과 달라진다. 그래서 **임시 패스의 0단계는 `optionalObservancesOf(Y−1) ∪ optionalObservancesOf(Y)` 를 깐다** — `Y` 항목들의 기원·목적지는 전부 `Y` 안이라 `Y−1` 의 12월 결과를 바꾸지 않고, 경계를 넘은 `isFree` 검사만 정확해진다. 재귀도 늘지 않는다(`optionalObservancesOf` 는 그해 앵커와 표만 보는 순수 함수이고 패스를 요구하지 않는다). 이 seed 없는 `Y−1` 패스는 **임시**다 — 12월 결과만 쓰고 버리며 캐시에 넣지 않는다(§4.9). `Y−1` 자체를 조회하게 되면 그때 `spill(Y−2)` 로 완전한 패스를 따로 만든다.
+**`from` 으로 거르는 것이 계약의 일부다**(11차 리뷰). 임시 패스의 0단계는 `Y` 의 선택 봉헌까지 깔아 두는데(아래), 켜진 것은 `Y` 날짜의 `arrivals` 에 들어간다. 「날짜가 `Y` 인 arrival」을 그대로 seed 로 퍼가면 **정식 `Y` 패스의 0단계가 같은 후보를 다시 만들어 도착이 둘이 된다**. 그것들의 기원은 `Y` 안이고(1.6 → 1.4 등) 임시 패스의 날짜 루프는 `Y−1` 만 도므로, **기원이 `Y−1` 인 arrival 만이 진짜 spill** 이다. §7 ⑧ 의 「출발 수 = 도착 수 − seed 도착 수」도 이 필터를 전제한다 — 거르지 않으면 seed 가 부풀어 좌변이 맞지 않는다.
+
+**같은 집합을 넘기는 것만으로는 모자란다**(10차 리뷰). 0단계는 `optionalObservancesOf(year)` 를 깔므로 `computeTransfers(Y−1, …)` 의 0단계는 `Y−1` 것만 안다. 그런데 12월 이동의 목적지 탐색은 **`Y` 의 1월까지 넘어간다** — 그때 `isFree` 가 `Y` 의 0단계 좌석을 못 본다. 켜진 공현(`sunday_0102_0108`, 목적지가 1.2~1.8)이 1월 초에 앉아 있거나, 켠 주의 봉헌이 기원 2.2 를 비우고 1월 말 주일에 앉은 경우가 그렇다(2028 은 1.30). 그러면 spill 목적지가 완전한 `Y` 패스의 좌석과 달라진다. 그래서 **임시 패스의 0단계는 `optionalObservancesOf(Y−1) ∪ optionalObservancesOf(Y)` 를 깐다** — `Y` 항목들의 기원·목적지는 전부 `Y` 안이라 `Y−1` 의 12월 결과를 바꾸지 않고, 경계를 넘은 `isFree` 검사만 정확해진다 — **그리고 그 사실이 위 `from` 필터가 그것들을 정확히 걸러내는 근거다**. 재귀도 늘지 않는다(`optionalObservancesOf` 는 그해 앵커와 표만 보는 순수 함수이고 패스를 요구하지 않는다). 이 seed 없는 `Y−1` 패스는 **임시**다 — 12월 결과만 쓰고 버리며 캐시에 넣지 않는다(§4.9). `Y−1` 자체를 조회하게 되면 그때 `spill(Y−2)` 로 완전한 패스를 따로 만든다.
 
 `Y−2` 없이 계산한 `Y−1` 의 12월이 완전한 패스의 12월과 같아야 재귀가 깊이 1 에서 끊긴다. **이것은 상한만으로 증명되지 않는다** — `MAX_SHIFT` 는 한 축일의 이동을 막지만, seed 가 밀어낸 고유 축일은 새 이동을 시작하고 그것이 또 다른 축일을 밀 수 있어 원리상 전파에 상한이 없다. 실제로는 전파가 **이동 가능한 축일이 연달아 놓인 날들**을 타고서만 이어지고, 도착이 아무것도 밀어내지 않는 첫 날(고유 후보가 `feria` 뿐인 날)에서 끊긴다 — 성인력에서 이동 가능 축일은 32건이 1년에 흩어져 있어 그런 사슬은 며칠을 넘지 못한다. 그래서 「깊이 1」은 **데이터에 대해 검증하는 불변식**으로 둔다: §7 ⑧ 이 1900~2100 전 연도에서 `computeTransfers(Y, spill(Y−1), A)` 과 `computeTransfers(Y, ∅, A)` 가 **2월 1일부터는 완전히 같다**를 단언한다. 표가 바뀌어 이 단언이 깨지면 그때 깊이를 늘리거나 완전한 전년도 패스를 재귀로 만드는 것이 답이고, 지금 코드는 검증된 가정 위에 서 있다. 이 단언이 성립하는 한 캐시 항목의 내용은 어느 해를 먼저 열었는지에 의존하지 않는다. 이 규칙은 **선택 봉헌 목적지에는 적용하지 않는다** — 그것들은 원래 날짜의 ±7일 안이고 해를 넘기는 날짜(1.6·2.2·11.1·승천)가 없다.
 
