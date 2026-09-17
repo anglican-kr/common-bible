@@ -162,6 +162,7 @@ ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` ~6,000줄이 8개 도�
 | `js/app/search.js`                 | 검색 워커 wire-up + 결과 렌더 + 이력 패널 + sheet ([ADR-033](decisions/033-search-options.md))                                                                             | ~1,555  |
 | `js/app/reading-context.js`        | 현재 책/장 + 절 선택 모드 공유 상태                                                                                                                                        | ~35     |
 | `js/app/verse-spec.js`             | 절 스펙 파싱·비교·직렬화·병합 + `verseInstanceKey` (leaf, ADR-034·ADR-038 A2)                                                                                              | ~310    |
+| `js/app/liturgical-engine.js`      | 교회력 계산 — computus·절기 스팬·연중 주차·주기·기간 축 (leaf, A1-a. ADR-037 §6, 설계서 §4). 조회·품계는 PR 2·3 | ~527 |
 | `js/app/bookmark-core.js`          | DOM-free 북마크 로직 (트리 query/insert/remove·href/share·정렬/최근본·active-route 술어), ESM import 전용 (ADR-034)                                                        | ~405    |
 | `js/app/bookmark-modals.js`        | 북마크 모달 7종(confirm·chapter-delete·새 폴더·폴더 콤보박스·save/edit·merge·import·move picker) + 렌더 콜백 의존성 주입 + 단일 Escape 스택(`closeTopmostModal`) (ADR-034) | ~910    |
 | `js/app/bookmark.js`               | 북마크 **드로어/헤더 오케스트레이터** — 드로어 lifecycle·헤더 버튼·init 배선·facade·keydown. 트리 렌더·제스처·선택·⋯ 메뉴·절 선택은 아래 5모듈로 분리 (ADR-034 후속, 2026-06-11) | ~590    |
@@ -490,7 +491,7 @@ OAuth 측면 (가장 큰 공격 표면):
 | [034](decisions/034-views-routing-second-split.md)           | 뷰·라우팅·북마크 2차 분할 — 관심사별 모듈화 + 비순환 facade→명시 import 전환 + 순환 dispatch는 registry 역전 (ADR-018 후속. `views-routing.js` 2,389줄은 audio-player·data-fetch·tabbar·routing·overlay 로 분해돼 소멸, `bookmark.js` 3,578→589줄. PR5c registerView 역전만 보류)                                                                                                             |
 | [035](decisions/035-bookmark-reading-view.md)                | 북마크 모아 읽기 — 폴더 단위 연속 읽기 화면(`/read/<id>`, 홈 탭 분류), 폴더 행 `읽기`(auto_stories) 진입, 인접·연속 본문 병합, 네스팅 폴더는 소제목. `renderChapter` 절 루프를 `appendVerses`로 추출(전례독서 페이지 기반 기술) (구현 중)                     |
 | [036](decisions/036-liturgical-calendar-data-model.md)       | 교회력(전례력) 데이터 모델 — 본기도 평면 배열(자기 좌표)·explode/병합 규칙·영어 값+`_vocab`·temporal/sanctoral·품계 8단계(2차)·전례색 4색·computus 기준·맺음구 분리 (구현 대기)                                                                               |
-| [037](decisions/037-eucharist-lectionary-data-and-engine.md) | 감사성찬례 전례독서 데이터·엔진 — `eucharist-readings.json` 좌표 스키마(refs=장 경계, verseSpec 재사용, 대안 세트 explode), 전례시편 별도 책 `lps`(계응 DSL, 숨김), 연중 주간 구간표·KASI 음력, `liturgical-engine.js`(computus·후보 관측일 보존) (구현 대기) |
+| [037](decisions/037-eucharist-lectionary-data-and-engine.md) | 감사성찬례 전례독서 데이터·엔진 — `eucharist-readings.json` 좌표 스키마(refs=장 경계, verseSpec 재사용, 대안 세트 explode), 전례시편 별도 책 `lps`(계응 DSL, 숨김), 연중 주간 구간표·KASI 음력, `liturgical-engine.js`(computus·후보 관측일 보존) **(A1-a 계산 계층 구현 2026-09-13 · 조회 PR 2 · 품계·이동 PR 3)** |
 | [038](decisions/038-calendar-lectionary-ui.md)               | 교회력 캘린더·전례독서 뷰·검색 이원화 — 캘린더 탭(홈 옆, 월간·주간·목록 3뷰), `/lectionary/YYYY-MM-DD`(본기도 열거+탭·맺음구 상수·계응 시편·세트/트랙 전환), 검색 상단 탭(성서 본문/전례독서) (구현 대기)                                                     |
 
 ## 부록 B. 자주 보게 되는 파일 빠른 참조
@@ -499,6 +500,7 @@ OAuth 측면 (가장 큰 공격 표면):
 - 라우팅 (parsePath·route·navigate·popstate): `js/app/routing.js`
 - 본문 렌더 + Views + 렌더 헬퍼: `js/app/views.js`
 - 데이터 패칭 (books/version/chapter/prologue + 캐시): `js/app/data-fetch.js`
+- 교회력 계산 (부활절 computus·절기 스팬·연중 주차·주기·기간 축): `js/app/liturgical-engine.js`
 - 오디오 플레이어 (장별 mp3 UI·재생 상태·#audio-bar): `js/app/audio-player.js`
 - 검색 UI / 결과 시트 / 이력 패널: `js/app/search.js`
 - 북마크 드로어/헤더 오케스트레이터: `js/app/bookmark.js`
