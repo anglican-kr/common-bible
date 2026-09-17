@@ -65,13 +65,15 @@ function toKey(y, m, d) {
 }
 
 /**
- * 날짜 문자열 덧셈. 입력이 틀리면 null.
+ * 날짜 문자열 덧셈. 입력이 틀리면 null — **델타가 정수가 아니어도** null 이다. `Date` 는
+ * 0.5 를 잘라 같은 날을 내고 NaN 은 `0NaN-NaN-NaN` 을, 문자열 "3" 은 연결돼 엉뚱한 날을
+ * 낸다. 규칙 오프셋이 JSON 에서 이리로 흐르므로 여기서 막아야 §2 의 「빈 결과」가 된다.
  * @param {string} s @param {number} n
  * @returns {string | null}
  */
 function addDays(s, n) {
   const p = parseDate(s);
-  if (!p) return null;
+  if (!p || !Number.isInteger(n)) return null;
   const dt = new Date(p.y, p.m - 1, p.d + n);
   return toKey(dt.getFullYear(), dt.getMonth() + 1, dt.getDate());
 }
@@ -139,7 +141,9 @@ function lastSundayBefore(s) {
  * @returns {string | null}
  */
 function nthSunday(y, m, n) {
-  if (!(n >= 1)) return null;
+  // 서수 1.5 는 `2026-11-4.5` 같은 깨진 키를 만든다 — 연·월·서수 모두 정수여야 한다.
+  if (!Number.isInteger(y) || !Number.isInteger(m) || m < 1 || m > 12) return null;
+  if (!Number.isInteger(n) || n < 1) return null;
   const first = toKey(y, m, 1);
   const w = dayOfWeek(first);
   if (w < 0) return null;
@@ -331,31 +335,35 @@ function evalRule(rule, y) {
   if (!rule || typeof rule.kind !== "string") return [];
   const a = yearAnchors(y);
   const one = (/** @type {string | null} */ v) => (v === null || v === undefined ? [] : [v]);
+  // JSON 의 숫자는 NaN·소수일 수 있다 — `days: 0.5` 는 Date 가 잘라 부활절 당일을, NaN 은
+  // `0NaN-NaN-NaN` 을 냈다. §2 의 결손은 빈 결과지 그럴듯한 오답이 아니다: 정수만 받는다.
+  /** @type {(v: unknown) => v is number} */
+  const int = (v) => Number.isInteger(v);
   switch (rule.kind) {
     case "easter_offset":
-      return typeof rule.days === "number" ? one(addDays(a.easter, rule.days)) : [];
+      return int(rule.days) ? one(addDays(a.easter, rule.days)) : [];
     case "advent1_offset":
-      return typeof rule.days === "number" ? one(addDays(a.advent1, rule.days)) : [];
+      return int(rule.days) ? one(addDays(a.advent1, rule.days)) : [];
     case "nth_sunday":
-      return typeof rule.month === "number" && typeof rule.nth === "number"
+      return int(rule.month) && int(rule.nth)
         ? one(nthSunday(y, rule.month, rule.nth)) : [];
     case "first_sunday_after":
-      return typeof rule.month === "number" && typeof rule.day === "number"
+      return int(rule.month) && int(rule.day)
         ? one(firstSundayAfter(toKey(y, rule.month, rule.day))) : [];
     case "nearest_sunday":
-      return typeof rule.month === "number" && typeof rule.day === "number"
+      return int(rule.month) && int(rule.day)
         ? one(nearestSunday(toKey(y, rule.month, rule.day))) : [];
     case "last_sunday_before":
-      return typeof rule.month === "number" && typeof rule.day === "number"
+      return int(rule.month) && int(rule.day)
         ? one(lastSundayBefore(toKey(y, rule.month, rule.day))) : [];
     case "ember_wfs": {
       const anc = rule.anchor;
       if (!anc || typeof anc !== "object") return [];
-      if (anc.kind === "easter_offset" && typeof anc.days === "number") {
+      if (anc.kind === "easter_offset" && int(anc.days)) {
         const k = addDays(a.easter, anc.days);
         return k === null ? [] : emberDaysAfter(k);
       }
-      if (anc.kind === "date" && typeof anc.month === "number" && typeof anc.day === "number") {
+      if (anc.kind === "date" && int(anc.month) && int(anc.day)) {
         return emberDaysAfter(toKey(y, anc.month, anc.day));
       }
       return [];
@@ -369,6 +377,13 @@ function evalRule(rule, y) {
 
 /** 달 길이(비윤년). 표의 `MM-DD` 가 실재하는 날인지 검사할 때 쓴다. */
 const MONTH_DAYS = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+
+/**
+ * 연중 주차의 계약 범위 1~34(§4.6 「34주 · 구간 38개」 · ADR-036 §11 왕이신 그리스도 = 연중34주).
+ * 표의 `_meta.weeks` 와 같은 값이지만 계약은 코드가 정한다 — 표가 0 · 2.5 · 35 를 실으면
+ * 결함이지 주차가 아니다.
+ */
+const ORDINAL_WEEKS = 34;
 
 /**
  * 표의 "MM-DD" → {m, d}. 형식이 틀리거나 없는 날이면 null. `01-32` 를 32 로 읽으면 2월
@@ -409,7 +424,8 @@ function buildOrdinalIndex(table) {
   // 행·창의 **모양**부터 검사한다 — `windows: 5` 같은 값은 `for…of` 가 throw 하고, 주차
   // 없는 행은 ordinalWeekOf 가 undefined 를 낸다. 결손은 건너뛴다(§2) — 오답을 내지 않는다.
   for (const w of weeks) {
-    if (!w || typeof w !== "object" || typeof w.week !== "number") continue;
+    if (!w || typeof w !== "object") continue;
+    if (!Number.isInteger(w.week) || w.week < 1 || w.week > ORDINAL_WEEKS) continue;   // 0 · 2.5 · 35 · NaN
     if (!Array.isArray(w.windows)) continue;
     for (const win of w.windows) {
       if (!win || typeof win !== "object") continue;
@@ -433,7 +449,7 @@ function buildOrdinalIndex(table) {
  * **연중 스팬 밖에서는 표를 보지 않는다.**
  * @param {string} dateStr
  * @param {ReturnType<typeof buildOrdinalIndex>} index
- * @returns {number | null}
+ * @returns {number | null} 1~34
  */
 function ordinalWeekOf(dateStr, index) {
   if (!index || !Array.isArray(index.doy) || !Array.isArray(index.date)) return null;  // 원시 표를 받으면

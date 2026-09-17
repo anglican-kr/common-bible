@@ -10,7 +10,7 @@
 
 ---
 
-- **교회력 엔진 A1-a 계산 계층 (ADR-037 §6 · 설계서 §4)** — 2026-09-13. `js/app/liturgical-engine.js` 의 `LITURGICAL_CORE` 블록 — 부활절 computus(1900~2100 권위 표 대조) · 규칙 7종 평가 · 절기 스팬 · 연중 주차(2052 윤년 회귀) · 주일/평일 주기 · 음력 조회 · 기간 축 `spansOf`. 유닛 40 + 실데이터 7(`liturgical-engine.data.test.js` — 공개 CI 는 서브모듈이 없어 skip, 머지 직후 `engine-data.yml` 과 `sync-data.yml` 에서 돈다). 조회 계층은 PR 2, 품계·이동은 PR 3.
+- **교회력 엔진 A1-a 계산 계층 (ADR-037 §6 · 설계서 §4)** — 2026-09-13. `js/app/liturgical-engine.js` 의 `LITURGICAL_CORE` 블록 — 부활절 computus(1900~2100 권위 표 대조) · 규칙 7종 평가 · 절기 스팬 · 연중 주차(2052 윤년 회귀) · 주일/평일 주기 · 음력 조회 · 기간 축 `spansOf`. 유닛 41 + 실데이터 7(`liturgical-engine.data.test.js` — 공개 CI 는 서브모듈이 없어 skip, 머지 직후 `engine-data.yml` 과 `sync-data.yml` 에서 돈다). 조회 계층은 PR 2, 품계·이동은 PR 3.
 - **Phase 1 완료** — 성경 읽기 PWA: 73권, 오프라인, 검색, 오디오, 접근성. 검색 UI 재설계도 포함(ADR-005)
 - **디자인 시스템 완료** — ADR-028, 2026-06-02. 단일 권위 출처 `DESIGN.md`(루트) + `css/style.css` `:root` 토큰 사다리(색상·반경·elevation·간격 8pt·타이포 rem·컨트롤·모션)에 ad-hoc 값 전면 스냅. 본문 Serif·frosted glass 적용 범위는 의도적 HIG 이탈로 명문화. 테마색(`--theme`)은 절 번호·단락 기호·내비 시그니처(활성 탭/검색 인디케이터)로 한정, 나머지 chrome 은 중립 차콜 동결. 상세·개정 이력은 ADR-028 §7·§9.
 - **모바일 하단 탭 바 완료** — ADR-029, 2026-06-03. 흩어진 내비를 모바일 하단 플로팅 탭 바(홈·검색·북마크·설정 4탭, iOS Liquid Glass 캡슐)로 통합, 각 탭=전체화면 라우트. 북마크 전체뷰는 ⋯ 팝업 메뉴(새 폴더·내보내기·가져오기·정렬[기준+오름/내림 방향]·선택)+양방향 행 스와이프(수정/삭제)로 전역 관리 — ⋯ "선택"은 화면 내 **멀티-액션 선택 모드**(공유·이동·삭제, `#bm-select-bar`; 공유=`SITE_BASE` 링크→`navigator.share`, 이동=폴더 picker, 삭제=cascade), 폴더 삭제는 내용물까지 cascade. 데스크탑은 기존 헤더/드로어 유지. **모바일/데스크탑 분기는 포인터 인식**(2026-06-09 개정) — 모바일/터치 티어 `(max-width:768px), (pointer:coarse)`, 데스크탑 `(min-width:769px) and (pointer:fine)` — 라 가로 폰·태블릿(아이패드 포함)도 탭 바를 유지한다. 상세·개정 이력은 ADR-029·ADR-010.

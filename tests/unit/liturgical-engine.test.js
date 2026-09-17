@@ -150,6 +150,33 @@ test("C-4.3-5 rule: null · 모르는 kind 는 건너뛴다 (throw 아님)", () 
   assert.deepStrictEqual(plain(ctx.evalRule({ kind: "ember_wfs", anchor: null }, 2026)), []);
 });
 
+test("§4.1 · §4.3 정수가 아닌 델타·서수·월일은 null / 빈 결과 — JSON 숫자는 NaN·소수일 수 있다 (§2)", () => {
+  // 종전: 0.5 는 Date 가 잘라 같은 날, NaN·Infinity 는 "0NaN-NaN-NaN", 문자열 "3" 은 연결돼 5월 23일
+  for (const bad of [0.5, -0.5, NaN, Infinity, -Infinity, "3", null, undefined, true]) {
+    assert.strictEqual(ctx.addDays("2026-04-05", bad), null, `addDays ${String(bad)}`);
+  }
+  assert.strictEqual(ctx.addDays("2026-04-05", 7), "2026-04-12");
+  assert.strictEqual(ctx.addDays("2026-04-05", -0), "2026-04-05");     // -0 도 정수다
+  // 종전: nthSunday(2026, 11, 1.5) → "2026-11-4.5"
+  for (const [y, m, n] of [[2026, 11, 1.5], [2026, 11, NaN], [2026, 11, "1"], [2026, 2.5, 1], [2026.5, 11, 1], [2026, 0, 1], [2026, 13, 1]]) {
+    assert.strictEqual(ctx.nthSunday(y, m, n), null, `nthSunday ${y} ${m} ${n}`);
+  }
+  assert.strictEqual(ctx.nthSunday(2026, 11, 1), "2026-11-01");
+  // 규칙 평가로 흘러들던 자리 — 종전엔 days: 0.5 가 부활절 당일을 냈다
+  const r = (rule) => plain(ctx.evalRule(rule, 2026));
+  assert.deepStrictEqual(r({ kind: "easter_offset", days: 0.5 }), []);
+  assert.deepStrictEqual(r({ kind: "easter_offset", days: NaN }), []);
+  assert.deepStrictEqual(r({ kind: "advent1_offset", days: "-7" }), []);
+  assert.deepStrictEqual(r({ kind: "nth_sunday", month: 11, nth: 1.5 }), []);
+  assert.deepStrictEqual(r({ kind: "first_sunday_after", month: 1.5, day: 6 }), []);
+  assert.deepStrictEqual(r({ kind: "nearest_sunday", month: 11, day: 30.5 }), []);
+  assert.deepStrictEqual(r({ kind: "last_sunday_before", month: NaN, day: 15 }), []);
+  assert.deepStrictEqual(r({ kind: "ember_wfs", anchor: { kind: "easter_offset", days: 0.5 } }), []);
+  assert.deepStrictEqual(r({ kind: "ember_wfs", anchor: { kind: "date", month: 9, day: 14.5 } }), []);
+  // 정수면 그대로 — 검사가 정상 규칙을 깎지 않는다
+  assert.deepStrictEqual(r({ kind: "easter_offset", days: -46 }), ["2026-02-18"]);
+});
+
 test("C-4.3-6 나머지 규칙 종류", () => {
   const r = (rule, y) => plain(ctx.evalRule(rule, y));
   assert.deepStrictEqual(r({ kind: "nth_sunday", month: 11, nth: 3 }, 2026), ["2026-11-15"]);
@@ -489,6 +516,16 @@ test("§4.6 표 형태 이탈은 건너뛴다 — 창이 배열이 아니거나 
   // 뒤집힌 창(from > to)은 어디에도 맞지 않는 결함이라 넣지 않는다
   assert.deepStrictEqual(build([{ week: 6, windows: [
     { from: "05-14", to: "05-08", anchor: "date" }, { from: "02-17", to: "02-11", anchor: "doy" }] }]), EMPTY);
+  // 주차는 1~34 정수다 — 종전엔 0 · 2.5 · 35 · NaN 이 인덱스에 들어가 그대로 반환됐다
+  for (const week of [0, 2.5, 35, -1, NaN, Infinity, "3"]) {
+    const t = { weeks: [{ week, windows: [{ from: "06-05", to: "06-11", anchor: "date" }] }] };
+    assert.deepStrictEqual(plain(ctx.buildOrdinalIndex(t)), EMPTY, String(week));
+    assert.strictEqual(ctx.ordinalWeekOf("2026-06-07", ctx.buildOrdinalIndex(t)), null, String(week));
+  }
+  for (const week of [1, 34]) {
+    const t = { weeks: [{ week, windows: [{ from: "06-05", to: "06-11", anchor: "date" }] }] };
+    assert.strictEqual(ctx.ordinalWeekOf("2026-06-07", ctx.buildOrdinalIndex(t)), week);
+  }
   // 온전한 창은 그대로 — 검사가 정상 표를 깎지 않는다
   assert.strictEqual(build(WEEKS.weeks).doy.length + build(WEEKS.weeks).date.length, 7);
 });
