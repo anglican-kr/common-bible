@@ -1,0 +1,58 @@
+name: Engine data tests
+
+# 엔진이 **실데이터**와 맞는지 검증한다. 공개 저장소의 필수 `Unit tests` 잡은
+# 서브모듈 없이 돌아(actions/checkout 기본값) `data/` 가 없고, 그래서
+# liturgical-engine.data.test.js 는 거기서 skip 가드로 넘어간다.
+#
+# **왜 pull_request 가 아니라 push 인가.** 배포 키를 `pull_request` 트리거에 걸면
+# 공개 저장소의 포크 PR 이 시크릿 경로에 닿는 문제가 생긴다 — sync-data.yml 이
+# 「workflow_dispatch 전용이라 포크 PR 이 시크릿에 닿지 못한다」로 피해 둔 그 결정을
+# 되돌리게 된다. 그래서 **머지 직후 main push** 에서 돈다: 사전 차단은 못 하지만
+# 깨진 엔진이 며칠 뒤 엉뚱한 sync/data-<run_id> PR 의 빨간불로 나타나는 것은 막는다.
+# 사전 검증까지 가려면 시크릿 정책을 함께 정해야 한다 — 설계서 §9 미결22.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'js/app/liturgical-engine.js'
+      - 'tests/unit/liturgical-engine.data.test.js'
+      - '.github/workflows/engine-data.yml'
+  workflow_dispatch:
+
+jobs:
+  engine-data:
+    name: 엔진 ↔ 실데이터
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      # 클론 절차는 sync-data.yml 과 같다(읽기 전용 배포 키 + 호스트 별칭).
+      # audio 는 필요 없어 data 만 받는다.
+      - name: data 서브모듈을 배포 키로 클론
+        env:
+          DATA_DEPLOY_KEY: ${{ secrets.DATA_DEPLOY_KEY }}
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$DATA_DEPLOY_KEY" > ~/.ssh/data_key
+          chmod 600 ~/.ssh/data_key
+          # 호스트 키는 TLS 로 인증된 경로에서 받는다(ssh-keyscan 은 TOFU 라 위험).
+          curl -fsS https://api.github.com/meta \
+            | python3 -c "import json,sys; [print('github.com', k) for k in json.load(sys.stdin)['ssh_keys']]" \
+            >> ~/.ssh/known_hosts
+          cat >> ~/.ssh/config <<'SSHCFG'
+          Host github-data
+            HostName github.com
+            User git
+            IdentityFile ~/.ssh/data_key
+            IdentitiesOnly yes
+          SSHCFG
+          git config --global \
+            url."git@github-data:anglican-kr/common-bible-data".insteadOf \
+            "git@github.com:anglican-kr/common-bible-data"
+          git submodule update --init data
+
+      - name: 엔진 실데이터 테스트
+        run: node --test tests/unit/liturgical-engine.data.test.js

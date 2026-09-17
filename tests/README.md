@@ -8,7 +8,7 @@
 
 | 겹 | 도구 | 무엇을 보나 | 어디서 도나 | 규모 |
 |---|---|---|---|---|
-| **유닛** | `node --test` (의존성 0) | 순수 로직 — 함수 입출력·상태 계산 | **CI 자동** (PR마다) | 24파일 · 830케이스 |
+| **유닛** | `node --test` (의존성 0) | 순수 로직 — 함수 입출력·상태 계산 | **CI 자동** (PR마다) | 26파일 · 878케이스 |
 | **타입 검사** | `tsc --noEmit` (`@ts-check`+JSDoc) | 타입 불일치·오타 | 로컬 훅 + 수동 | 설정 2종(앱·워커) |
 | **E2E** | Playwright (실제 브라우저) | 화면·상호작용·모듈 간 배선 | **로컬 전용**(수동) | 27파일 · 232케이스 |
 | **데이터** | pytest (`common-bible-data` 서브모듈) | 성경 본문·검색 인덱스 정합성 | 그 저장소 CI | 별도 저장소 |
@@ -39,6 +39,7 @@ node --test tests/unit/storage.test.js    # 개별 파일
 | `helpers.test.js` | 공용 헬퍼 — DOM 빌더(`el`), 빈 상태, 단위 변환 | 48 |
 | `state-machine.test.js` | Drive 동기화 상태기계 — 전이·충돌·재시도 | 46 |
 | `install.test.js` | 설치 안내 — 플랫폼 분기, 넛지 타이밍 | 46 |
+| `liturgical-engine.test.js` | 교회력 엔진 계산 계층(ADR-037 §6, 설계서 §4) — computus 1900~2100 권위 표 대조·규칙 7종·절기 스팬·연중 주차(2052 윤년)·주기·음력·기간 축·표 결손 내성(정수·날짜 검사). 합성 표만 | 41 |
 | `overlay.test.js` | 오버레이 컨트롤러(ADR-032) — 포커스 트랩, 닫기 스택 | 27 |
 | `parallels.test.js` | 평행 본문(인용·각주) 해석 | 26 |
 | `transport.test.js` | 동기화 전송 계층 — 요청/응답·에러 매핑 | 25 |
@@ -54,6 +55,7 @@ node --test tests/unit/storage.test.js    # 개별 파일
 | `tabbar.test.js` | 모바일 탭 바 — 활성 표시·인디케이터 | 12 |
 | `tab-history.test.js` | 탭별 히스토리 복원(ADR-031) | 11 |
 | `sw.test.js` | 서비스 워커 정적 검증 — `SHELL_FILES` 존재·`index.html` 패리티·ESM import 닫힘·`cacheNameFor` 라우팅·매니페스트 대조(`data/` 없으면 skip, `sync-data.yml`에서 실행) | 7 |
+| `liturgical-engine.data.test.js` | 교회력 엔진 ↔ `data/lectionary` 실측 — 연중 주차 38구간 전수(1900~2100, 두 묶음 연속성)·KASI 음력·temporal 규칙 전부 평가(`data/` 없으면 skip, `engine-data.yml`·`sync-data.yml`에서 실행) | 7 |
 | `docs-data-consistency.test.js` | 설계서 `facts` 블록 ↔ `data/lectionary` 실측 대조(`data/` 없으면 skip, `sync-data.yml`에서 실행) | 2 |
 | `csp.test.js` | `index.html` CSP 인라인 해시 일관성 | 2 |
 
