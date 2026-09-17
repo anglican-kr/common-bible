@@ -283,20 +283,46 @@ test("C-4.7-3 I/II 는 연중 평일에만 — 절기 평일·주일은 null", (
 
 // ── 5.3 절기 스팬 (§4.5) ──
 
-test("C-4.5-1 한 해가 정확히 한 절기씩 — 겹침 0 · 빈틈 0 (1900~2100)", () => {
-  const DOMAIN = ["advent", "christmas", "ordinary", "lent", "easter"];
+test("C-4.5-1 한 해가 정확히 한 절기씩 — 앵커로 독립 구성한 분할과 매일 일치 · 경계 전이 (1900~2100)", () => {
+  // seasonOf 는 스칼라 하나를 내므로 「도메인 안의 값 + 일수」만 보면 모든 날이 ordinary 여도
+  // 통과한다(4차 리뷰). 그래서 앵커에서 **분할을 따로 구성**해 매일 대조하고 경계마다 양쪽을 본다.
+  const bad = [];
   for (const y of YEARS) {
-    let d = ctx.toKey(y, 1, 1);
+    const E = ctx.easterDate(y);
+    const b = ctx.baptismDate(y), ash = ctx.addDays(E, -46), pent = ctx.addDays(E, 49), adv = ctx.advent1Date(y);
+    // 절기 순서대로 [이름, 시작, 끝] — 성탄절기는 해를 넘겨 앞뒤 두 조각이다
+    const runs = [
+      ["christmas", ctx.toKey(y, 1, 1), ctx.addDays(b, -1)],
+      ["ordinary", b, ctx.addDays(ash, -1)],
+      ["lent", ash, ctx.addDays(E, -1)],
+      ["easter", E, pent],
+      ["ordinary", ctx.addDays(pent, 1), ctx.addDays(adv, -1)],
+      ["advent", adv, ctx.toKey(y, 12, 24)],
+      ["christmas", ctx.toKey(y, 12, 25), ctx.toKey(y, 12, 31)],
+    ];
+    // 분할 자체가 빈틈·겹침 없이 이어진다 — 다음 조각의 시작은 앞 조각 끝의 다음날
+    for (let i = 1; i < runs.length; i++) {
+      if (runs[i][1] !== ctx.addDays(runs[i - 1][2], 1)) bad.push(`${y} ${runs[i - 1][0]}→${runs[i][0]} 이음새`);
+    }
+    // 경계 여섯 — 앞 조각의 마지막 날과 뒤 조각의 첫날이 각자의 절기다(전이가 실제로 일어난다)
+    for (let i = 1; i < runs.length; i++) {
+      const [prev, , last] = runs[i - 1], [next, first] = runs[i];
+      if (ctx.seasonOf(last) !== prev || ctx.seasonOf(first) !== next) {
+        bad.push(`${y} ${last}|${first} → ${ctx.seasonOf(last)}|${ctx.seasonOf(first)} (기대 ${prev}|${next})`);
+      }
+    }
+    // 매일 대조 — 한 해 전부가 기대한 조각에 든다
     let n = 0;
-    while (d.slice(0, 4) === String(y)) {
-      const s = ctx.seasonOf(d);
-      assert.ok(DOMAIN.includes(s), `${d} → ${s}`);
-      n++;
-      d = ctx.addDays(d, 1);
+    for (const [season, from, to] of runs) {
+      for (let d = from; d <= to; d = ctx.addDays(d, 1)) {
+        n++;
+        if (ctx.seasonOf(d) !== season) bad.push(`${d} ${ctx.seasonOf(d)} ≠ ${season}`);
+      }
     }
     const leap = (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
-    assert.strictEqual(n, leap ? 366 : 365, `${y} 일수`);
+    if (n !== (leap ? 366 : 365)) bad.push(`${y} 일수 ${n}`);
   }
+  assert.deepStrictEqual(bad, []);
 });
 
 test("C-4.5-2 경계 여섯 쌍", () => {
