@@ -367,13 +367,33 @@ function evalRule(rule, y) {
 
 // ── §4.6 연중 주차 ──
 
-/** "MM-DD" → **비윤년 기준** 연중 일수. 표의 구간은 2월이 28일일 때 맞아떨어진다. */
+/** 달 길이(비윤년). 표의 `MM-DD` 가 실재하는 날인지 검사할 때 쓴다. */
+const MONTH_DAYS = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+
+/**
+ * 표의 "MM-DD" → {m, d}. 형식이 틀리거나 없는 날이면 null. `01-32` 를 32 로 읽으면 2월
+ * 1일 주일이 **그럴듯한 오답**을 낸다 — §2 는 결손을 「빈 결과」로 흡수하라는 것이지
+ * 오답으로 흡수하라는 것이 아니다. 2/29 는 `date` 앵커에서만 실재한다(`doy` 표는
+ * 비윤년을 전제하므로 거기서는 없는 날이다).
+ * @param {unknown} s @param {boolean} leapOk
+ * @returns {{m: number, d: number} | null}
+ */
+function parseMmdd(s, leapOk) {
+  const m = typeof s === "string" ? s.match(/^(\d{2})-(\d{2})$/) : null;
+  if (!m) return null;
+  const mo = parseInt(m[1], 10);
+  const d = parseInt(m[2], 10);
+  if (mo < 1 || mo > 12) return null;
+  const max = MONTH_DAYS[mo - 1] + (leapOk && mo === 2 ? 1 : 0);
+  return d >= 1 && d <= max ? { m: mo, d } : null;
+}
+
+/** "MM-DD" → **비윤년 기준** 연중 일수. 표의 구간은 2월이 28일일 때 맞아떨어진다. 없는 날은 -1. */
 function nonLeapDoy(/** @type {string} */ mmdd) {
+  const p = parseMmdd(mmdd, false);
+  if (!p) return -1;
   const cum = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334];
-  const m = parseInt(mmdd.slice(0, 2), 10);
-  const d = parseInt(mmdd.slice(3, 5), 10);
-  if (!(m >= 1 && m <= 12) || !(d >= 1)) return -1;
-  return cum[m - 1] + d;
+  return cum[p.m - 1] + p.d;
 }
 
 /**
@@ -386,15 +406,19 @@ function buildOrdinalIndex(table) {
   /** @type {{doy: Array<{week: number, from: number, to: number}>, date: Array<{week: number, from: string, to: string}>}} */
   const idx = { doy: [], date: [] };
   const weeks = table && Array.isArray(table.weeks) ? table.weeks : [];
+  // 행·창의 **모양**부터 검사한다 — `windows: 5` 같은 값은 `for…of` 가 throw 하고, 주차
+  // 없는 행은 ordinalWeekOf 가 undefined 를 낸다. 결손은 건너뛴다(§2) — 오답을 내지 않는다.
   for (const w of weeks) {
-    if (typeof w.week !== "number") continue;               // 주차 없는 행은 건너뛴다 — 없으면
-    for (const win of (w.windows || [])) {                  // ordinalWeekOf 가 undefined 를 낸다
-      if (typeof win.from !== "string" || typeof win.to !== "string") continue;
+    if (!w || typeof w !== "object" || typeof w.week !== "number") continue;
+    if (!Array.isArray(w.windows)) continue;
+    for (const win of w.windows) {
+      if (!win || typeof win !== "object") continue;
       if (win.anchor === "doy") {
         const from = nonLeapDoy(win.from), to = nonLeapDoy(win.to);
-        if (from < 0 || to < 0) continue;
+        if (from < 0 || to < 0 || from > to) continue;       // 없는 날 · 뒤집힌 창
         idx.doy.push({ week: w.week, from, to });
       } else if (win.anchor === "date") {
+        if (!parseMmdd(win.from, true) || !parseMmdd(win.to, true) || win.from > win.to) continue;
         idx.date.push({ week: w.week, from: win.from, to: win.to });
       }
     }

@@ -162,7 +162,7 @@ ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` ~6,000줄이 8개 도�
 | `js/app/search.js`                 | 검색 워커 wire-up + 결과 렌더 + 이력 패널 + sheet ([ADR-033](decisions/033-search-options.md))                                                                             | ~1,555  |
 | `js/app/reading-context.js`        | 현재 책/장 + 절 선택 모드 공유 상태                                                                                                                                        | ~35     |
 | `js/app/verse-spec.js`             | 절 스펙 파싱·비교·직렬화·병합 + `verseInstanceKey` (leaf, ADR-034·ADR-038 A2)                                                                                              | ~310    |
-| `js/app/liturgical-engine.js`      | 교회력 계산 — computus·절기 스팬·연중 주차·주기·기간 축 (leaf, A1-a. ADR-037 §6, 설계서 §4). 조회·품계는 PR 2·3 | ~527 |
+| `js/app/liturgical-engine.js`      | 교회력 계산 — computus·절기 스팬·연중 주차·주기·기간 축 (leaf, A1-a. ADR-037 §6, 설계서 §4). 조회·품계는 PR 2·3 | ~551 |
 | `js/app/bookmark-core.js`          | DOM-free 북마크 로직 (트리 query/insert/remove·href/share·정렬/최근본·active-route 술어), ESM import 전용 (ADR-034)                                                        | ~405    |
 | `js/app/bookmark-modals.js`        | 북마크 모달 7종(confirm·chapter-delete·새 폴더·폴더 콤보박스·save/edit·merge·import·move picker) + 렌더 콜백 의존성 주입 + 단일 Escape 스택(`closeTopmostModal`) (ADR-034) | ~910    |
 | `js/app/bookmark.js`               | 북마크 **드로어/헤더 오케스트레이터** — 드로어 lifecycle·헤더 버튼·init 배선·facade·keydown. 트리 렌더·제스처·선택·⋯ 메뉴·절 선택은 아래 5모듈로 분리 (ADR-034 후속, 2026-06-11) | ~590    |

@@ -4,7 +4,7 @@
 // 설계서 §7 「테스트 계획」 · 검토 문서 §5.1~5.6(PR 1) 의 체크 항목을 잡는다.
 // **이 파일은 합성 표와 순수 계산만 쓴다** — 공개 저장소의 필수 `Unit tests` 잡은
 // actions/checkout 을 서브모듈 없이 돌려 `data/` 가 없다(설계서 §7). 실측 대조가
-// 필요한 케이스는 `liturgical-engine.data.test.js` 로 갈라 sync-data.yml 에서 돈다.
+// 필요한 케이스는 `liturgical-engine.data.test.js` 로 갈라 engine-data.yml·sync-data.yml 에서 돈다.
 //
 // ADR-013 하네스 — 각 테스트가 extractBlock 을 자기 안에 복사해 갖고 vm.createContext
 // 에 최소 전역만 넣는다. **`Date` 를 반드시 주입**해야 한다(기본 세트에 없다).
@@ -46,10 +46,51 @@ for (let y = 1900; y <= 2100; y++) YEARS.push(y);
 
 // ── 5.1 부활절 computus · 파생일 (§4.2 · §4.3) ──
 
-test("C-4.2-1 권위 표본과 일치", () => {
-  for (const [y, exp] of [[1900, "1900-04-15"], [1913, "1913-03-23"], [2000, "2000-04-23"],
-                          [2008, "2008-03-23"], [2038, "2038-04-25"], [2100, "2100-03-28"]]) {
-    assert.strictEqual(ctx.easterDate(y), exp, `${y}`);
+// 1900~2100 서방 부활절 **권위 표**. 미국 인구조사국 X-13ARIMA-SEATS `genhol` 부속 표
+// (census.gov/data/software/x13as/genhol/easter-dates.html, 1900~2099)를 그대로 옮기고 2100 은
+// 검토 문서 C-4.2-1 의 표본이다. Gauss 산식(엔진의 Meeus/Jones/Butcher 와 독립)으로 201년을
+// 재계산해 표와 전부 합치함을 확인했다. 한 행이 한 십년, 열이 연도 끝자리(0~9).
+// 표본 6개만 대조하던 종전 테스트는 나머지 195년을 주일·범위 불변식으로만 지켰다 — 범위
+// 안의 엉뚱한 주일을 내는 computus 도 통과했다(3차 리뷰).
+const EASTER = {
+  1900: "04-15 04-07 03-30 04-12 04-03 04-23 04-15 03-31 04-19 04-11",
+  1910: "03-27 04-16 04-07 03-23 04-12 04-04 04-23 04-08 03-31 04-20",
+  1920: "04-04 03-27 04-16 04-01 04-20 04-12 04-04 04-17 04-08 03-31",
+  1930: "04-20 04-05 03-27 04-16 04-01 04-21 04-12 03-28 04-17 04-09",
+  1940: "03-24 04-13 04-05 04-25 04-09 04-01 04-21 04-06 03-28 04-17",
+  1950: "04-09 03-25 04-13 04-05 04-18 04-10 04-01 04-21 04-06 03-29",
+  1960: "04-17 04-02 04-22 04-14 03-29 04-18 04-10 03-26 04-14 04-06",
+  1970: "03-29 04-11 04-02 04-22 04-14 03-30 04-18 04-10 03-26 04-15",
+  1980: "04-06 04-19 04-11 04-03 04-22 04-07 03-30 04-19 04-03 03-26",
+  1990: "04-15 03-31 04-19 04-11 04-03 04-16 04-07 03-30 04-12 04-04",
+  2000: "04-23 04-15 03-31 04-20 04-11 03-27 04-16 04-08 03-23 04-12",
+  2010: "04-04 04-24 04-08 03-31 04-20 04-05 03-27 04-16 04-01 04-21",
+  2020: "04-12 04-04 04-17 04-09 03-31 04-20 04-05 03-28 04-16 04-01",
+  2030: "04-21 04-13 03-28 04-17 04-09 03-25 04-13 04-05 04-25 04-10",
+  2040: "04-01 04-21 04-06 03-29 04-17 04-09 03-25 04-14 04-05 04-18",
+  2050: "04-10 04-02 04-21 04-06 03-29 04-18 04-02 04-22 04-14 03-30",
+  2060: "04-18 04-10 03-26 04-15 04-06 03-29 04-11 04-03 04-22 04-14",
+  2070: "03-30 04-19 04-10 03-26 04-15 04-07 04-19 04-11 04-03 04-23",
+  2080: "04-07 03-30 04-19 04-04 03-26 04-15 03-31 04-20 04-11 04-03",
+  2090: "04-16 04-08 03-30 04-12 04-04 04-24 04-15 03-31 04-20 04-12",
+  2100: "03-28",
+};
+
+test("C-4.2-1 1900~2100 전 연도가 권위 표와 일치", () => {
+  const bad = [];
+  let n = 0;
+  for (const [decade, row] of Object.entries(EASTER)) {
+    row.split(" ").forEach((mmdd, i) => {
+      const y = Number(decade) + i;
+      n++;
+      if (ctx.easterDate(y) !== `${y}-${mmdd}`) bad.push(`${y} ${ctx.easterDate(y)} ≠ ${mmdd}`);
+    });
+  }
+  assert.deepStrictEqual(bad, []);
+  assert.strictEqual(n, 201);
+  // 검토 문서 C-4.2-1 이 따로 적어 둔 표본 — 표를 옮기다 행이 밀리면 여기서 잡힌다.
+  for (const [y, exp] of [[1900, "04-15"], [1913, "03-23"], [2000, "04-23"], [2008, "03-23"], [2038, "04-25"], [2100, "03-28"]]) {
+    assert.strictEqual(EASTER[Math.floor(y / 10) * 10].split(" ")[y % 10], exp, `표본 ${y}`);
   }
 });
 
@@ -422,6 +463,34 @@ test("§4.6 표 결손은 건너뛴다 — throw 아님 (§2)", () => {
   assert.strictEqual(ctx.ordinalWeekOf("2026-01-11", noWeek), null);   // undefined 가 아니다
   assert.strictEqual(ctx.ordinalWeekOf("2026-06-10", { weeks: [] }), null);
   assert.deepStrictEqual(plain(ctx.buildOrdinalIndex(null)), { doy: [], date: [] });
+});
+
+test("§4.6 표 형태 이탈은 건너뛴다 — 창이 배열이 아니거나 없는 날 (§2)", () => {
+  const build = (weeks) => plain(ctx.buildOrdinalIndex({ weeks }));
+  const EMPTY = { doy: [], date: [] };
+  // windows 가 배열이 아닌 행 — 종전엔 for…of 가 throw 했다
+  for (const windows of [5, "x", {}, true, null]) {
+    assert.deepStrictEqual(build([{ week: 3, windows }]), EMPTY, String(windows));
+  }
+  assert.deepStrictEqual(build([null, 7, "row"]), EMPTY);                    // 행이 객체가 아님
+  assert.deepStrictEqual(build([{ week: 3, windows: [null, 1] }]), EMPTY);   // 창이 객체가 아님
+  // 없는 날 — 종전엔 `01-32` 를 32 로 읽어 2026-02-01(주일)이 4주라는 그럴듯한 오답을 냈다
+  const bogus = { weeks: [{ week: 4, windows: [{ from: "01-26", to: "01-32", anchor: "doy" }] }] };
+  assert.deepStrictEqual(plain(ctx.buildOrdinalIndex(bogus)), EMPTY);
+  assert.strictEqual(ctx.dayOfWeek("2026-02-01"), 0);
+  assert.strictEqual(ctx.ordinalWeekOf("2026-02-01", ctx.buildOrdinalIndex(bogus)), null);
+  for (const bad of ["2-17", "02-29", "13-01", "00-10", "01-00", "2026-01-07", "01/07", 7, null]) {
+    assert.deepStrictEqual(build([{ week: 4, windows: [{ from: bad, to: "02-03", anchor: "doy" }] }]), EMPTY, String(bad));
+    assert.deepStrictEqual(build([{ week: 4, windows: [{ from: "01-28", to: bad, anchor: "doy" }] }]), EMPTY, String(bad));
+  }
+  // date 앵커도 같은 검사 — 다만 2/29 는 실재하는 날이라 허용한다
+  assert.deepStrictEqual(build([{ week: 6, windows: [{ from: "05-08", to: "05-32", anchor: "date" }] }]), EMPTY);
+  assert.strictEqual(build([{ week: 6, windows: [{ from: "02-23", to: "02-29", anchor: "date" }] }]).date.length, 1);
+  // 뒤집힌 창(from > to)은 어디에도 맞지 않는 결함이라 넣지 않는다
+  assert.deepStrictEqual(build([{ week: 6, windows: [
+    { from: "05-14", to: "05-08", anchor: "date" }, { from: "02-17", to: "02-11", anchor: "doy" }] }]), EMPTY);
+  // 온전한 창은 그대로 — 검사가 정상 표를 깎지 않는다
+  assert.strictEqual(build(WEEKS.weeks).doy.length + build(WEEKS.weeks).date.length, 7);
 });
 
 test("§4.8 음력 표기 이탈은 건너뛴다 — 그럴듯한 오답을 내지 않는다 (§2)", () => {

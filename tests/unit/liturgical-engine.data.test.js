@@ -2,9 +2,10 @@
 // Run with: node --test tests/unit/liturgical-engine.data.test.js
 //
 // **공개 저장소의 필수 `Unit tests` 잡에서는 돌지 않는다.** 그 잡은 actions/checkout 을
-// 서브모듈 없이 돌려 `data/` 가 없다(설계서 §7). 서브모듈이 체크아웃되는 자리는
-// sync-data.yml 뿐이라 이 파일은 거기에 등록해 돌린다 — docs-data-consistency.test.js ·
-// sw.test.js 와 같은 이유다. 합성 표로 잡을 수 있는 것은 liturgical-engine.test.js 에 둔다.
+// 서브모듈 없이 돌려 `data/` 가 없다(설계서 §7). 서브모듈을 받는 자리는 둘이다 — 엔진 전용
+// engine-data.yml(머지 직후 main push · workflow_dispatch)과 데이터 동기화 sync-data.yml —
+// 이 파일은 **양쪽에** 등록돼 돈다(docs-data-consistency.test.js · sw.test.js 는 후자에서만).
+// 합성 표로 잡을 수 있는 것은 liturgical-engine.test.js 에 둔다.
 
 import test from "node:test";
 import assert from "node:assert";
@@ -39,28 +40,35 @@ const LECTIONARY = path.join(ROOT, "data", "lectionary");
 // 검증이 조용히 skip 된다(docs-data-consistency.test.js 와 같은 이유). 파일 누락은
 // read() 의 읽기 실패로 드러나게 둔다.
 const haveData = fs.existsSync(LECTIONARY);
-const SKIP = haveData ? false : "data/ 서브모듈 미체크아웃 — 로컬과 sync-data.yml 에서 돈다";
+const SKIP = haveData ? false : "data/ 서브모듈 미체크아웃 — 로컬과 engine-data.yml·sync-data.yml 에서 돈다";
 const read = (p) => JSON.parse(fs.readFileSync(path.join(LECTIONARY, p), "utf8"));
 
 // ── C-4.6-2 연중 주차 — 실제 표(34주 · 구간 38개) ──
 
-test("C-4.6-2 모든 연중 주일이 정확히 한 주차 · 1주부터 연속 · 34주로 끝 (1900~2100)", { skip: SKIP }, () => {
+test("C-4.6-2 모든 연중 주일이 정확히 한 주차 · 공현 후 1주부터 연속 · 성령강림 후 34주로 끝 (1900~2100)", { skip: SKIP }, () => {
   const idx = ctx.buildOrdinalIndex(read("ordinal-weeks.json"));
   assert.strictEqual(idx.doy.length + idx.date.length, 38, "구간 38개");
+  const consecutive = (ws) => ws.every((w, i) => i === 0 || w === ws[i - 1] + 1);
   const misses = [];
   for (let y = 1900; y <= 2100; y++) {
-    const weeks = [];
+    const ash = ctx.yearAnchors(y).ash;
+    const pre = [], post = [];   // 재의 수요일 전(공현 후) · 성령강림 후 — 연도 안 날짜 순
     let d = ctx.toKey(y, 1, 1);
     while (d.slice(0, 4) === String(y)) {
       if (ctx.seasonOf(d) === "ordinary" && ctx.dayOfWeek(d) === 0) {
         const w = ctx.ordinalWeekOf(d, idx);
         if (w === null) misses.push(`${d} 주차 없음`);
-        else weeks.push(w);
+        else (d < ash ? pre : post).push(w);
       }
       d = ctx.addDays(d, 1);
     }
-    // 그 해의 연중 주일은 중복 없이 한 주차씩이다(연도 경계에 걸친 해도 마찬가지).
-    if (new Set(weeks).size !== weeks.length) misses.push(`${y} 주차 중복 ${weeks.join(",")}`);
+    // 두 묶음이 각각 **한 칸씩 오른다** — 2·3 을 바꿔 달거나 2 에서 4 로 건너뛰면 잡힌다.
+    // 중복·결측만 보던 종전 단언은 그 둘을 놓쳤다(3차 리뷰). 묶음 사이의 빈 번호는 정상이다
+    // (부활절이 이르면 공현 후가 짧고 성령강림 후가 앞 번호를 되쓰지 않는다).
+    if (pre[0] !== 1 || !consecutive(pre)) misses.push(`${y} 공현 후 ${pre.join(",")}`);
+    if (post[post.length - 1] !== 34 || !consecutive(post)) misses.push(`${y} 성령강림 후 ${post.join(",")}`);
+    const all = pre.concat(post);
+    if (new Set(all).size !== all.length) misses.push(`${y} 주차 중복 ${all.join(",")}`);
   }
   assert.deepStrictEqual(misses, []);
 });

@@ -882,12 +882,12 @@ const EMPTY_PASS = () => ({ arrivals: new Map(), departures: new Map(), optional
 
 ## 7. 테스트 계획
 
-**파일을 둘로 가른다 — 공개 CI 가 서브모듈을 못 받기 때문이다**(14차 리뷰). `.github/workflows/test.yml` 의 필수 `Unit tests` 잡은 `actions/checkout@v4` 를 **서브모듈 없이** 돌리므로 `data/` 가 없다. 실제로 `docs-data-consistency.test.js` · `sw.test.js` 는 그래서 `sync-data.yml`(서브모듈을 받는 유일한 자리)에서 돈다. 엔진 테스트도 같은 규칙을 따른다:
+**파일을 둘로 가른다 — 공개 CI 가 서브모듈을 못 받기 때문이다**(14차 리뷰). `.github/workflows/test.yml` 의 필수 `Unit tests` 잡은 `actions/checkout@v4` 를 **서브모듈 없이** 돌리므로 `data/` 가 없다. 실제로 `docs-data-consistency.test.js` · `sw.test.js` 는 그래서 `sync-data.yml` 에서 돈다. 서브모듈을 받는 자리는 그것과 엔진 전용 `engine-data.yml`(머지 직후 main push — §9 미결22) 둘이다. 엔진 테스트도 같은 규칙을 따른다:
 
 | 파일 | 입력 | 어디서 도나 |
 |---|---|---|
 | `tests/unit/liturgical-engine.test.js` | **합성 표**와 순수 계산만 | 필수 `Unit tests`(모든 PR) |
-| `tests/unit/liturgical-engine.data.test.js` | `data/lectionary/` 실측 | `sync-data.yml` 의 데이터 잡에 **명시적으로 추가** |
+| `tests/unit/liturgical-engine.data.test.js` | `data/lectionary/` 실측 | `engine-data.yml`(머지 직후) + `sync-data.yml` 의 데이터 잡에 **명시적으로 추가** |
 
 가르지 않으면 실데이터 케이스가 공개 CI 에서 조용히 깨지거나(서브모듈 없음) 통째로 skip 되어, 체크에 `- [x]` 를 달아도 아무것도 지키지 못한다. 체크리스트의 「유닛(실데이터)」 표시가 곧 **아래 파일 행**을 뜻한다. 계산 계층(§4)은 데이터가 필요 없어 전부 위 파일이고, 조회·이동(§5·§6)은 합성 표로 잡을 수 있는 것을 위로 올리고 실측 대조만 아래로 내린다.
 
