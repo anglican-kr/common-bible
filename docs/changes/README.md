@@ -47,3 +47,5 @@ title: "feat: 한 줄 제목 (커밋 메시지 규칙과 동일)"
 - 작성 시점은 **PR 을 열기 직전**. 이 파일을 커밋한 뒤 `gh pr create --body-file` 로 연다. `.claude/hooks/pre-pr-ledger.sh` 가 파일 없는 PR 생성을 막고, `.github/workflows/ledger.yml` 이 PR diff 에 새 원장 파일이 있는지 CI 에서 다시 검사한다(`sync/` 자동 PR 은 면제).
 - PR 이 열린 뒤 내용이 바뀌면(리뷰 반영, 범위 변경) 원장 파일을 고치고 `gh pr edit --body-file` 로 본문을 다시 맞춘다.
 - 머지 후에는 고치지 않는다. 사실이 바뀌면 새 변경의 원장에 적고, 정리 층 문서를 갱신한다.
+- **머지된 PR 을 되돌릴 때도 원장은 남긴다.** `git revert` 는 그 PR 의 원장까지 지우므로 아래 게이트에 걸린다 — 되돌림 커밋에서 원장 파일을 제외하고(`git revert -n <sha>` 뒤 `git restore --staged --worktree -- docs/changes/`), 무엇을 왜 되돌렸는지 **새 원장**에 적는다. 되돌렸다는 사실도 기록이다.
+- 위 규칙은 세 장치가 강제한다 — CI `.github/workflows/ledger.yml` 이 base 에 이미 있는 원장을 PR 이 건드리면(추가 `A`·복사 `C` 를 뺀 모든 상태 — 수정·삭제·이름변경은 물론 심볼릭 링크로 바꿔치기까지) 실패시키고, `.claude/hooks/pre-commit-ledger.sh` 가 `git commit` 단계에서 같은 판정으로 deny 하며, `scripts/lock_merged_ledgers.sh` 가 로컬에서 머지된 원장을 읽기 전용(`chmod a-w`)으로 잠근다. 잠금은 손으로 고치는 것만 막는 보조 수단이다 — `npm test` 앞(`pretest`)과 `gh pr create` 뒤(`post-pr-ledger.sh`)에 자동으로 돌지만, git 이 파일 모드를 저장하지 않으므로 클론마다 사라지고 `git checkout`·`merge`·`apply` 는 잠금을 조용히 푼다(`--unlock` 으로도 푼다). 이 `README.md` 자체는 세 장치 모두 예외라 계속 고칠 수 있다.

@@ -6,6 +6,8 @@ name: Change ledger
 # 브랜치 보호의 필수 검사에 "Change ledger" 를 넣어야 실제로 머지를 막는다.
 # sync-data.yml 의 자동 PR(sync/ 브랜치)은 면제 — 잡은 돌되 바로 통과시킨다
 # (skip 하면 필수 검사가 "대기" 로 남아 auto-merge 가 막힌다).
+# 머지된 원장 불변 — base 에 이미 있는 docs/changes/*.md(README.md 제외)에 PR 이 손대면 실패한다.
+# 짝은 .claude/hooks/pre-commit-ledger.sh(커밋 단계에서 같은 검사).
 on:
   pull_request:
     branches: [main]
@@ -25,6 +27,21 @@ jobs:
         run: |
           case "$HEAD_REF" in sync/*) echo "자동 PR — 면제"; exit 0 ;; esac
           base="origin/$BASE_REF"
+          # 머지된 원장 불변 — base 에 이미 있는 원장(README.md 제외)에 손대면 실패.
+          # 상태가 A(추가)·C(복사 — 원본은 건드리지 않는다)가 **아니면** 전부 위반으로 본다: M/D/R 은
+          # 물론 T(원장을 심볼릭 링크로 바꿔치기)도 잡히고, git 이 새 상태 문자를 내도 기본이 「막음」이다.
+          # R/C 행은 "R100<TAB>old<TAB>new" — $2 가 base 쪽 경로.
+          # 이 PR 이 추가한 원장에 훅(post-pr-ledger.sh)이 `pr: N` 을 적는 후속 커밋은 base 에 없는
+          # 파일이라 merge-base 대비 diff 에서 A 로 잡히므로 걸리지 않는다.
+          # 아래 「원장 추가」 검사보다 **먼저** 둔다 — 머지된 원장을 지우고 새 원장을 추가하면 git 의
+          # rename 탐지가 둘을 R 한 줄로 합쳐 --diff-filter=A 가 비므로, 순서가 반대면 정작 원장을
+          # 추가한 작성자에게 「원장이 없다」는 엉뚱한 오류가 먼저 나간다.
+          touched=$(git diff --name-status "$base...HEAD" -- 'docs/changes/*.md' | awk -F'\t' 'NF && $1 !~ /^[AC]/ {print $2}' | grep -v '/README\.md$' || true)
+          if [ -n "$touched" ]; then
+            echo "::error::머지된 원장은 고치지 않습니다: $(echo $touched) — 사실이 바뀌면 새 변경의 원장에 적고 정리 층 문서를 갱신하세요(docs/changes/README.md 규칙). 머지된 PR 을 되돌릴 때도 원장은 남기고 되돌림을 새 원장에 적습니다"
+            exit 1
+          fi
+          echo "머지된 원장 수정 없음"
           added=$(git diff --name-only --diff-filter=A "$base...HEAD" -- 'docs/changes/*.md' | grep -v '/README\.md$' || true)
           if [ -z "$added" ]; then
             echo "::error::docs/changes/ 에 이 PR 의 원장 파일이 없습니다. 형식은 docs/changes/README.md"
