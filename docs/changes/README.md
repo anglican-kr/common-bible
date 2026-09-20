@@ -8,7 +8,7 @@ PR 본문은 여기 파일에서 파생한다 (`gh pr create --body-file docs/ch
 
 `YYYY-MM-DD-<slug>.md` — 날짜는 작성일(머지일 아님), slug 는 브랜치 이름에서 타입 접두어를 뗀 것. PR 번호는 생성 직후 훅이 frontmatter 에 적는다.
 
-- 백필(2026-09-20) 파일은 예외 — `…-worklog[-N].md` 는 옛 `docs/worklog.md` 를 날짜 블록별로 그대로 옮긴 것(`source: worklog`), `…-prNNN-<slug>.md` 는 머지된 PR 본문을 GitHub 에서 받아 저장한 것(날짜 = KST 머지일). 내용은 손대지 않았다.
+- 소급 기록(2026-09-20 에 빠져 있던 과거 기록을 한꺼번에 채워 넣은 것) 파일은 예외 — `…-worklog[-N].md` 는 옛 `docs/worklog.md` 를 날짜 블록별로 그대로 옮긴 것(`source: worklog`), `…-prNNN-<slug>.md` 는 머지된 PR 본문을 GitHub 에서 받아 저장한 것(날짜 = KST 머지일). 내용은 손대지 않았다.
 
 ## 형식
 

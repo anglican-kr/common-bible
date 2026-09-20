@@ -33,7 +33,7 @@ jobs:
           echo "원장 후보:"; printf '  %s\n' $added
           code=0
           if git diff --name-only "$base...HEAD" | grep -qE '^(js/|css/|index\.html|sw\.js)'; then code=1; fi
-          # 추가된 원장 중 하나 이상이 형식을 만족하면 통과 (백필처럼 여러 파일이 함께 들어와도 됨).
+          # 추가된 원장 중 하나 이상이 형식을 만족하면 통과 (소급 기록처럼 여러 파일이 함께 들어와도 됨).
           ok=0
           for f in $added; do
             grep -qE '^title: ' "$f" || { echo "  $f: frontmatter title: 없음"; continue; }
