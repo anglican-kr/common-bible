@@ -47,3 +47,4 @@ title: "feat: 한 줄 제목 (커밋 메시지 규칙과 동일)"
 - 작성 시점은 **PR 을 열기 직전**. 이 파일을 커밋한 뒤 `gh pr create --body-file` 로 연다. `.claude/hooks/pre-pr-ledger.sh` 가 파일 없는 PR 생성을 막고, `.github/workflows/ledger.yml` 이 PR diff 에 새 원장 파일이 있는지 CI 에서 다시 검사한다(`sync/` 자동 PR 은 면제).
 - PR 이 열린 뒤 내용이 바뀌면(리뷰 반영, 범위 변경) 원장 파일을 고치고 `gh pr edit --body-file` 로 본문을 다시 맞춘다.
 - 머지 후에는 고치지 않는다. 사실이 바뀌면 새 변경의 원장에 적고, 정리 층 문서를 갱신한다.
+- 위 규칙은 세 장치가 강제한다 — CI `.github/workflows/ledger.yml` 이 base 에 이미 있는 원장의 수정(M)·삭제(D)·이름변경(R)이 PR diff 에 있으면 실패시키고, `.claude/hooks/pre-commit-ledger.sh` 가 `git commit` 단계에서 같은 변경을 deny 하며, `scripts/lock_merged_ledgers.sh` 가 로컬에서 머지된 원장을 읽기 전용(`chmod a-w`)으로 잠근다. 잠금은 `npm test` 앞(`pretest`)과 `gh pr create` 뒤(`post-pr-ledger.sh`)에 자동으로 돌지만 git 은 파일 모드를 저장하지 않으므로 클론마다 다시 돈다(`--unlock` 으로 푼다). 이 `README.md` 자체는 세 장치 모두 예외라 계속 고칠 수 있다.

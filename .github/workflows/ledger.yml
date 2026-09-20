@@ -6,6 +6,8 @@ name: Change ledger
 # 브랜치 보호의 필수 검사에 "Change ledger" 를 넣어야 실제로 머지를 막는다.
 # sync-data.yml 의 자동 PR(sync/ 브랜치)은 면제 — 잡은 돌되 바로 통과시킨다
 # (skip 하면 필수 검사가 "대기" 로 남아 auto-merge 가 막힌다).
+# 머지된 원장 불변 — base 에 이미 있는 docs/changes/*.md(README.md 제외)가 PR 에서 수정·삭제·
+# 이름변경되면 실패한다. 짝은 .claude/hooks/pre-commit-ledger.sh(커밋 단계에서 같은 검사).
 on:
   pull_request:
     branches: [main]
@@ -48,3 +50,12 @@ jobs:
             echo "::error::형식을 만족하는 원장 파일이 없습니다 — title: · '## 요약' · (코드 변경 시) '## 갱신한 문서' 항목. 형식은 docs/changes/README.md"
             exit 1
           fi
+          # 머지된 원장 불변 — base 에 이미 있는 원장(README.md 제외)이 수정(M)·삭제(D)·이름변경(R) 되면 실패.
+          # 이 PR 이 추가한 원장에 훅(post-pr-ledger.sh)이 `pr: N` 을 적는 후속 커밋은 base 에 없는 파일이라
+          # merge-base 대비 diff 에서 A 로 잡히므로 걸리지 않는다. R 행은 "R100<TAB>old<TAB>new" — old 가 base 쪽 경로.
+          touched=$(git diff --name-status "$base...HEAD" -- 'docs/changes/*.md' | awk -F'\t' '$1 ~ /^(M|D|R)/ {print $2}' | grep -v '/README\.md$' || true)
+          if [ -n "$touched" ]; then
+            echo "::error::머지된 원장은 고치지 않습니다: $(echo $touched) — 사실이 바뀌면 새 변경의 원장에 적고 정리 층 문서를 갱신하세요(docs/changes/README.md 규칙)"
+            exit 1
+          fi
+          echo "머지된 원장 수정 없음"

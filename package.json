@@ -4,6 +4,7 @@
   "description": "공동번역성서 PWA — 타입 체크 및 유닛 테스트용 devDependency만 관리. 런타임 의존성 없음(ADR-001, ADR-012).",
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.worker.json --noEmit",
+    "pretest": "bash scripts/lock_merged_ledgers.sh",
     "test": "node --test tests/unit/*.test.js"
   },
   "devDependencies": {

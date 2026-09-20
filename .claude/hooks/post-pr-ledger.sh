@@ -28,4 +28,6 @@ else
   sed -i -E "0,/^date: /s//pr: $num\ndate: /" "$f"
 fi
 jq -cn --arg m "📒 원장 $f 에 pr: $num 기록 — 'docs: 원장에 PR #$num 기록' 으로 커밋·push 하세요." '{systemMessage:$m}'
+# 머지된 원장을 로컬에서 읽기 전용으로 잠근다(보조 수단 — scripts/lock_merged_ledgers.sh 머리 주석 참조).
+bash "$PROJECT/scripts/lock_merged_ledgers.sh" >/dev/null 2>&1 || true
 exit 0
