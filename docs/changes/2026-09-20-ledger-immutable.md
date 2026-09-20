@@ -1,4 +1,5 @@
 ---
+pr: 332
 date: 2026-09-20
 branch: chore/ledger-immutable
 title: "chore: 원장 불변 게이트 — 머지된 docs/changes 원장의 수정·삭제를 CI·커밋 훅·로컬 잠금으로 막는다"
