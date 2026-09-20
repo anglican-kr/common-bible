@@ -1,4 +1,5 @@
 ---
+pr: 334
 date: 2026-09-20
 branch: chore/drop-cursor-config
 title: "chore: 쓰지 않는 Cursor IDE 설정 제거 (.cursor/rules · .cursorignore)"
