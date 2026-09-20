@@ -3,7 +3,7 @@
 "지금 무엇이 동작하는가"의 권위 출처. CLAUDE.md에서 분리(2026-06-08) — CLAUDE.md는 안정적 작업 가이드만 두고, 기능 단위 현황은 여기에 한두 줄로 기록한다.
 
 - 상세 결정·검토 대안은 각 ADR(`docs/decisions/`) + `docs/architecture.md` 부록 A 인덱스가 권위 출처.
-- 날짜별 작업 변천은 `docs/worklog.md`.
+- 변경 단위 기록은 `docs/changes/`(변경 원장 — PR 본문의 원본).
 - 미해결 이슈·후속 백로그는 `docs/known-issues.md`.
 
 구현 PR 머지 시 이 문서에 한 줄 추가/갱신한다 (ADR 워크플로우는 CLAUDE.md 참조).

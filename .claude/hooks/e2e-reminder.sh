@@ -16,7 +16,7 @@ cd "$PROJECT" || exit 0
 p=$(git status --porcelain 2>/dev/null | awk '{print $NF}')
 
 # Behavior code changed? (the surfaces e2e exercises — not unit tests, not docs).
-# Mirrors doc-reminder.sh's set, incl. sw.js (cache/offline/install flows e2e covers).
+# Path set: js/, css/, index.html, sw.js (cache/offline/install flows e2e covers).
 printf '%s\n' "$p" | grep -qE '^(js/|css/|index\.html|sw\.js)' || exit 0
 # e2e already being updated alongside? -> stay quiet.
 printf '%s\n' "$p" | grep -qE '^tests/e2e/' && exit 0

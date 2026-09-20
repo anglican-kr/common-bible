@@ -43,9 +43,11 @@
 - `data/` — **서브모듈 `common-bible-data`** 마운트 위치 (73권 JSON `bible/`, 검색 인덱스 4종 `search-{meta,ot,nt,dc}.json`, 콘텐츠 해시 매니페스트 `bible-manifest.json`·`audio-manifest.json` (ADR-021), 오디오 nested 서브모듈 `audio/`, 마크다운 원본 `source/`, Python 파이프라인 `src/`, 데이터 검증 테스트 `tests/`)
 - `scripts/` — `release.py`(version.json + sw-version.js bump + 자동 commit), `changelog.py`(릴리스 노트용 변경 목록 — 앱 git log + data 서브모듈 compare, `--generate-notes` 대체), `serve.py`(SPA-aware 로컬 서버), `generate_splash.py`(iOS 스플래시, ADR-007)
 - `tests/` — e2e(`e2e/`, Playwright, 로컬 전용) + JS 유닛(`unit/`, ADR-013, CI 자동)
-- `docs/` — `architecture.md`(아키텍처 개요·ADR 인덱스), `status.md`(구현 현황 — "지금 무엇이 동작하는가"), `known-issues.md`(미해결 이슈·후속 백로그), `decisions/`(ADR), `design/`(진행 중인 구현 설계서 — 완료되면 `archive/design/` 으로 옮긴다), `reference/`(기도서 등 외부 원문 전사), `archive/`(완료·점-시점 기록 — `design/` 설계 변천 · `audit/` 보안 감사 · `qa/` e2e 회귀 보고서), `coding-pitfalls.md`, `prd.md`, `worklog.md`
+- `docs/` — `architecture.md`(아키텍처 개요·ADR 인덱스), `status.md`(구현 현황 — "지금 무엇이 동작하는가"), `known-issues.md`(미해결 이슈·후속 백로그), `decisions/`(ADR), `design/`(진행 중인 구현 설계서 — 완료되면 `archive/design/` 으로 옮긴다), `reference/`(기도서 등 외부 원문 전사), `archive/`(완료·점-시점 기록 — `design/` 설계 변천 · `audit/` 보안 감사 · `qa/` e2e 회귀 보고서), `index.md`(**진입점** — 작업 유형 → 먼저 읽을 문서), `changes/`(**변경 원장** — 변경 하나에 파일 하나, PR 본문의 원본), `coding-pitfalls.md`, `prd.md`
 - `assets/` — 아이콘(`icons/`), 스플래시(`splash/`, ADR-007), 설치 안내 3컷(`install-guide/`, ADR-008)
 - `.github/workflows/test.yml` — CI (Node 24 + `node --test`, ADR-013, pull_request 트리거)
+- `.github/workflows/ledger.yml` — CI `Change ledger` (PR 에 `docs/changes/` 원장 파일이 있는지 검사, `sync/` 자동 PR 면제)
+- `.claude/hooks/` — Claude Code 훅: `typecheck-js.sh`(편집 후 tsc) · `verify-on-stop.sh`(Stop 시 유닛) · `e2e-reminder.sh`(Stop 시 e2e 알림) · `pre-pr-ledger.sh`/`post-pr-ledger.sh`(PR 생성 전 원장 게이트 / 생성 후 pr 번호 기입)
 
 배포·nginx 설정은 `common-bible-server` 저장소(별도 clone).
 데이터 파이프라인은 `common-bible-data` 저장소 내부(서브모듈).
@@ -147,7 +149,7 @@ Phase 1(성경 읽기) → Phase 2(기도서) → Phase 3(교회력 계산기) �
 | ---------- | ---------------------------------- |
 | `feat`     | 새 기능 추가                       |
 | `fix`      | 버그 수정                          |
-| `docs`     | 문서만 변경 (PRD, worklog, ADR 등) |
+| `docs`     | 문서만 변경 (PRD, 원장, ADR 등)    |
 | `chore`    | 빌드, 설정, 파일 정리 등           |
 | `data`     | 데이터 서브모듈 포인터 bump        |
 | `style`    | CSS, UI 스타일만 변경              |
@@ -169,14 +171,24 @@ Phase 1(성경 읽기) → Phase 2(기도서) → Phase 3(교회력 계산기) �
 ```bash
 git checkout -b <topic-branch>
 # 작업 + 커밋
+# 원장 작성: docs/changes/<YYYY-MM-DD>-<slug>.md (형식은 docs/changes/README.md) + 커밋
 git push -u origin <topic-branch>
-gh pr create --title "..." --body "..."
-# CI 통과 확인 후
+gh pr create --title "..." --body-file docs/changes/<YYYY-MM-DD>-<slug>.md
+# 훅이 원장에 pr: N 을 적어 준다 → 커밋·push
+# CI(Unit tests + Change ledger) 통과 확인 후
 gh pr merge --rebase --delete-branch     # 또는 --squash
 ```
 
 `main` 에 직접 commit 후 push 하면 `protected branch hook declined` 로 거부된다. 핫픽스도 동일 — 짧은 브랜치 + PR 로 통과.
 
+## 지식 베이스 루프
+
+`docs/` 는 작업을 거듭할수록 쌓이는 지식 베이스다. 원자료 층(`docs/changes/` 변경 원장)과 정리 층(`status.md` · ADR · `known-issues.md` · `coding-pitfalls.md` · `index.md`)으로 나뉘고, 세 루프가 돌아야 살아 있다.
+
+1. **읽기 — 작업 시작 시.** [`docs/index.md`](docs/index.md) 를 읽고 표에서 작업 유형에 맞는 문서를 코드보다 먼저 연다. 같은 곳을 건드린 이전 변경은 `grep -ril <키워드> docs/changes/` 로 찾는다. 사용자가 이미 확정한 사실을 다시 묻거나 뒤집지 않기 위한 단계다.
+2. **쓰기 — PR 을 열기 직전.** 원장 파일 하나를 쓰고(요약 · 확정·근거 · 검증 · 갱신한 문서) 커밋한 뒤 `gh pr create --body-file` 로 연다. 그 파일을 쓰면서 정리 층 다섯 곳 중 갱신할 것이 있는지 판단해 같은 PR 에 넣는다. 사용자 교정과 도메인 확정은 PR 을 기다리지 말고 **그 자리에서** `coding-pitfalls.md` 에 날짜·근거와 함께 적는다. `.claude/hooks/pre-pr-ledger.sh` 와 CI `Change ledger` 가 원장 없는 PR 을 막는다.
+3. **정리 — 릴리스마다.** 마지막 정리 이후의 원장 파일을 훑어 `index.md` 행·훅이 실제 파일과 맞는지, 완료된 `design/` 문서를 `archive/` 로 옮겼는지, 정리 층끼리 모순이 없는지, 200줄을 넘긴 페이지를 나눌지 점검한다. 쌓이기만 하는 문서는 읽히지 않는다.
+
 ## 현재 상태
 
-"지금 무엇이 동작하는가"의 권위 출처는 [`docs/status.md`](docs/status.md) — 기능 단위 구현 현황. 구현 PR 머지 시 그 문서를 갱신한다(위 ADR 워크플로우 §3). 상세 결정은 각 ADR + [`docs/architecture.md`](docs/architecture.md) 부록 A 인덱스, 날짜별 변천은 `docs/worklog.md`, 미해결 이슈·후속 백로그는 `docs/known-issues.md`.
+"지금 무엇이 동작하는가"의 권위 출처는 [`docs/status.md`](docs/status.md) — 기능 단위 구현 현황. 구현 PR 머지 시 그 문서를 갱신한다(위 ADR 워크플로우 §3). 상세 결정은 각 ADR + [`docs/architecture.md`](docs/architecture.md) 부록 A 인덱스, 변경 단위 기록은 `docs/changes/`(변경 원장), 미해결 이슈·후속 백로그는 `docs/known-issues.md`.
