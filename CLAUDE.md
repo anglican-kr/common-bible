@@ -46,8 +46,8 @@
 - `docs/` — `architecture.md`(아키텍처 개요·ADR 인덱스), `status.md`(구현 현황 — "지금 무엇이 동작하는가"), `known-issues.md`(미해결 이슈·후속 백로그), `decisions/`(ADR), `design/`(진행 중인 구현 설계서 — 완료되면 `archive/design/` 으로 옮긴다), `reference/`(기도서 등 외부 원문 전사), `archive/`(완료·점-시점 기록 — `design/` 설계 변천 · `audit/` 보안 감사 · `qa/` e2e 회귀 보고서), `index.md`(**진입점** — 작업 유형 → 먼저 읽을 문서), `changes/`(**변경 원장** — 변경 하나에 파일 하나, PR 본문의 원본), `coding-pitfalls.md`, `prd.md`
 - `assets/` — 아이콘(`icons/`), 스플래시(`splash/`, ADR-007), 설치 안내 3컷(`install-guide/`, ADR-008)
 - `.github/workflows/test.yml` — CI (Node 24 + `node --test`, ADR-013, pull_request 트리거)
-- `.github/workflows/ledger.yml` — CI `Change ledger` (PR 에 `docs/changes/` 원장 파일이 있는지 검사 + 머지된 원장의 수정·삭제 차단, `sync/` 자동 PR 면제)
-- `.claude/hooks/` — Claude Code 훅: `typecheck-js.sh`(편집 후 tsc) · `verify-on-stop.sh`(Stop 시 유닛) · `e2e-reminder.sh`(Stop 시 e2e 알림) · `pre-pr-ledger.sh`/`post-pr-ledger.sh`(PR 생성 전 원장 게이트 / 생성 후 pr 번호 기입) · `pre-commit-ledger.sh`(머지된 원장 수정 커밋 차단)
+- `.github/workflows/ledger.yml` — CI `Change ledger` (PR 에 `docs/changes/` 원장 파일이 있는지 검사 + 머지된 원장 변경 차단, `sync/` 자동 PR 면제)
+- `.claude/hooks/` — Claude Code 훅: `typecheck-js.sh`(편집 후 tsc) · `verify-on-stop.sh`(Stop 시 유닛) · `e2e-reminder.sh`(Stop 시 e2e 알림) · `pre-pr-ledger.sh`/`post-pr-ledger.sh`(PR 생성 전 원장 게이트 / 생성 후 pr 번호 기입) · `pre-commit-ledger.sh`(머지된 원장 변경 커밋 차단)
 
 배포·nginx 설정은 `common-bible-server` 저장소(별도 clone).
 데이터 파이프라인은 `common-bible-data` 저장소 내부(서브모듈).
