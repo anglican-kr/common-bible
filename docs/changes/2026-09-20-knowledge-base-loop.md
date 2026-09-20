@@ -1,4 +1,5 @@
 ---
+pr: 331
 date: 2026-09-20
 branch: chore/knowledge-base-loop
 title: "chore: worklog 은퇴 · 변경 원장(docs/changes)·진입점(docs/index) 도입 · doc-reminder 훅 제거"
