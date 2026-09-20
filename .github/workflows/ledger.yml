@@ -30,14 +30,21 @@ jobs:
             echo "::error::docs/changes/ 에 이 PR 의 원장 파일이 없습니다. 형식은 docs/changes/README.md"
             exit 1
           fi
-          echo "원장: $added"
+          echo "원장 후보:"; printf '  %s\n' $added
+          code=0
+          if git diff --name-only "$base...HEAD" | grep -qE '^(js/|css/|index\.html|sw\.js)'; then code=1; fi
+          # 추가된 원장 중 하나 이상이 형식을 만족하면 통과 (백필처럼 여러 파일이 함께 들어와도 됨).
+          ok=0
           for f in $added; do
-            grep -qE '^title: ' "$f" || { echo "::error file=$f::frontmatter title: 없음"; exit 1; }
-            grep -qE '^## 요약' "$f"  || { echo "::error file=$f::'## 요약' 절 없음"; exit 1; }
-          done
-          if git diff --name-only "$base...HEAD" | grep -qE '^(js/|css/|index\.html|sw\.js)'; then
-            for f in $added; do
+            grep -qE '^title: ' "$f" || { echo "  $f: frontmatter title: 없음"; continue; }
+            grep -qE '^## 요약' "$f"  || { echo "  $f: '## 요약' 절 없음"; continue; }
+            if [ "$code" = 1 ]; then
               awk '/^## 갱신한 문서/{s=1;next} /^## /{s=0} s && /^- /{found=1} END{exit !found}' "$f" \
-                || { echo "::error file=$f::코드가 바뀐 PR — '## 갱신한 문서' 절에 항목이 필요합니다('- 없음 — 이유' 도 가능)"; exit 1; }
-            done
+                || { echo "  $f: 코드가 바뀐 PR — '## 갱신한 문서' 절에 항목이 없음"; continue; }
+            fi
+            echo "  $f: OK"; ok=1
+          done
+          if [ "$ok" = 0 ]; then
+            echo "::error::형식을 만족하는 원장 파일이 없습니다 — title: · '## 요약' · (코드 변경 시) '## 갱신한 문서' 항목. 형식은 docs/changes/README.md"
+            exit 1
           fi
