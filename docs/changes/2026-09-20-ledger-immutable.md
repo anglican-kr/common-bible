@@ -36,3 +36,22 @@ title: "chore: 원장 불변 게이트 — 머지된 docs/changes 원장의 수�
 - `docs/changes/README.md` — 「규칙」 절에 세 장치 불릿 추가(README.md 예외 명시).
 - `CLAUDE.md` — 「프로젝트 구조」의 `.claude/hooks/`·`scripts/`·`ledger.yml` 행, 「지식 베이스 루프」 2번 끝 문장.
 - `docs/status.md` — 없음 — 코드 변경 없음.
+
+## 리뷰 반영 (2026-09-20, 1회차)
+
+Copilot 이 아니라 세션 내 리뷰. 세 장치를 샌드박스 저장소에서 직접 돌려 7건을 재현하고 전부 반영했다(`7109a4f`).
+
+- **typechange(`T`) 가 세 장치를 모두 통과했다.** 머지된 원장을 지우고 같은 이름의 심볼릭 링크로 바꾸면 CI 가 「머지된 원장 수정 없음」을 찍고 exit 0 하고, 훅도 통과했다. 판정을 「`M`/`D`/`R` 열거」에서 「`A`(추가)·`C`(복사)가 **아니면** 위반」으로 뒤집었다 — 열거하면 빠진 글자가 곧 구멍이고, 이렇게 두면 git 이 새 상태 문자를 내도 기본이 「막음」이다. `C` 는 원본을 건드리지 않으므로 제외(복사 탐지가 켜진 설정에서 원본을 오탐하지 않게).
+- **CI 가 엉뚱한 오류를 냈다.** 머지된 원장을 지우면서 새 원장을 추가하면 rename 탐지가 둘을 `R054` 한 줄로 합쳐 `--diff-filter=A` 가 비고, 「원장 파일이 없습니다」가 먼저 나갔다. 불변 검사를 「원장 추가」 검사보다 앞으로 옮겨 맞는 메시지가 나가게 했다(다른 동작은 그대로).
+- **전역 옵션이 낀 커밋이 훅을 통과했다.** `git -c user.email=… commit` · `git -C <path> commit` · `git --no-pager commit` 은 인접 문자열 `"git commit"` 이 사라진다. 매칭을 `*git*commit*` 으로 넓혔다 — 실제 deny 는 스테이지 내용으로만 결정되므로 넓혀도 부작용이 없고, deny 이유가 안내하는 `git restore --staged` · `git checkout --` 에는 `commit` 이라는 낱말이 없어 탈출구는 막히지 않는다.
+- **`-a` 탐지가 커밋 메시지 본문에 걸렸다.** `git commit -m "fix -a flag"` · `-m "support --all"` 이 오탐으로 deny 되고(`--all` 가지에 앵커가 없었다), `git commit -am"msg"` 는 미탐이었다. 옵션을 찾기 전에 따옴표로 감싼 인자를 지우고 `--all` 을 `( |$)` 로 앵커했다.
+- **잠금만 범위가 달랐다.** `git ls-tree` 가 비재귀라 `docs/changes/sub/…md` 를 잠그지 않는데, 훅·CI 의 `docs/changes/*.md` 패스스펙은 하위 디렉터리를 잡는다. `-r` 을 붙여 셋을 맞췄다.
+- **잠금 머리 주석 정정.** 「클론마다 사라진다」만으로는 부족했다 — `git checkout`(내용이 다른 브랜치로) · `git merge` · `git apply` 가 모두 잠긴 파일을 조용히 덮어쓰고 644 로 되돌리는 것을 확인했다. 손으로 고치는 것만 막는 보조 수단임을 주석과 `README.md` 에 분명히 적었다.
+- **되돌리기 규칙이 없었다.** 머지된 PR 을 `git revert` 하면 그 PR 의 원장까지 지워져 훅·CI 가 둘 다 거부하는데 탈출구가 문서에 없었다. `docs/changes/README.md`「규칙」에 「원장은 남기고 되돌림을 새 원장에 적는다」를 추가하고 CI 오류 메시지에도 같은 안내를 넣었다.
+
+검증(변이 검사 — 옛 버전과 새 버전을 같은 시나리오에 나란히 돌려 갈리는 지점을 확인):
+
+- 훅 19건 전부 기대대로. 옛↔새가 갈린 8건: `T` 심볼릭 링크(pass→DENY) · `git -c`/`git -C`/`git --no-pager`(pass→DENY) · `-am"msg"`(pass→DENY) · `-m "fix -a flag"`/`-m "support --all"`/작은따옴표판(DENY→pass). 나머지 11건(스테이지된 `M` · `-a` 로 unstaged 포함 · unstaged 만 · `D` · `R` · 새 원장 `A` · `README.md` · 하위 디렉터리 원장 · `git status` · `ls` · 탈출구 `git restore`)은 옛·새 동일.
+- CI 10건 전부 기대대로. 갈린 3건: `T`(rc=0→rc=1) · 「기존 원장 삭제 + 새 원장 추가」와 「원장을 `docs/` 밖으로 이동」(오류 메시지가 「원장 파일이 없습니다」→「머지된 원장은 고치지 않습니다」). `sync/` 면제 · 원장 없는 PR · 형식 미달 · 코드 변경 시 「갱신한 문서」 검사는 그대로.
+- 잠금: 하위 디렉터리 원장이 새로 잠기고 `.txt`·`README.md` 는 제외, 멱등 재실행·`--unlock`·저장소 밖 호출 모두 rc=0. 실제 저장소에서 `npm run pretest` → 341/343 잠김(`README.md` 와 이 PR 의 원장 제외), `git status` 에 모드 변경 안 잡힘, 0.5초.
+- `npm run typecheck` 통과 · `node --test tests/unit/*.test.js` **878 통과**.
