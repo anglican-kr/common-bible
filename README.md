@@ -212,7 +212,8 @@ docs/
   known-issues.md       ← 미해결 이슈·후속 백로그
   archive/              ← 완료·점-시점 기록 (design 설계 변천 · audit 보안 감사 · qa e2e 회귀 보고서)
   prd.md                ← 제품 요구사항 문서
-  worklog.md            ← 작업 일지
+  index.md              ← 진입점: 작업 유형 → 먼저 읽을 문서
+  changes/              ← 변경 원장 (변경 하나에 파일 하나, PR 본문의 원본)
 ```
 
 배포 설정(nginx·deploy.sh)은 `common-bible-server` 저장소로 분리(ADR-020).
@@ -269,4 +270,4 @@ npx tsc -p tsconfig.worker.json --noEmit
 - [아키텍처 개요](docs/architecture.md) — 전체 구조 한눈에
 - [아키텍처 결정 기록](docs/decisions/) — ADR-001~020
 - [제품 요구사항](docs/prd.md)
-- [작업 일지](docs/worklog.md)
+- [변경 원장](docs/changes/) — 변경 하나에 파일 하나, PR 본문의 원본

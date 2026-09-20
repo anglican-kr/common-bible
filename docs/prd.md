@@ -154,7 +154,8 @@ common-bible/                       # 앱 저장소 (공개)
     ├── decisions/                  # ADR
     ├── archive/                    # 완료·점-시점 기록 (design·audit·qa)
     ├── status.md · known-issues.md
-    └── prd.md · architecture.md · worklog.md
+    ├── changes/                    # 변경 원장 (변경 하나에 파일 하나)
+    └── prd.md · architecture.md · index.md
 
 common-bible-server/                # 서버 저장소 (비공개)
 ├── nginx/                          # BFF·보안 헤더 (ADR-017)
