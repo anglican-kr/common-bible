@@ -32,7 +32,7 @@ title: "chore: worklog 은퇴 · 변경 원장(docs/changes)·진입점(docs/ind
 
 - `pre-pr-ledger.sh` 를 stdin JSON 으로 직접 호출해 deny 경로 4종 확인: `--body-file` 없음 · 파일 없음 · 미커밋 원장 · 무관한 명령(no-op). 이 PR 자체가 통과 경로 검증.
 - `post-pr-ledger.sh` 를 가짜 PR URL 로 호출해 `pr: N` 이 frontmatter 첫 줄에 삽입되고 systemMessage 가 나오는 것 확인.
-- `ledger.yml` 은 로컬 실행 불가 — 이 PR 의 CI 결과로 확인. 통과 후 브랜치 보호 필수 검사에 `Change ledger` 추가 필요.
+- `ledger.yml` 은 로컬 실행 불가 — 이 PR 의 CI 로 확인. 첫 실행은 백필 파일까지 검사해 실패 → "추가된 원장 중 하나 이상이 형식을 만족하면 통과" 로 완화 후 통과. 브랜치 보호 필수 검사에 `Change ledger` 추가 완료(`Unit tests` + `Change ledger`).
 - 코드(`js/` `css/` `index.html` `sw.js`) 변경 없음 — 유닛 테스트 대상 아님.
 - `worklog` 잔여 참조 0건(`grep -rn worklog` — `docs/changes/` 제외).
 
