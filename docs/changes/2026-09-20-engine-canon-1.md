@@ -1,4 +1,5 @@
 ---
+pr: 333
 date: 2026-09-20
 branch: docs/engine-canon-1-fixtures
 title: "docs: 교회력 엔진 정본 지도 ① — §1.4 번호 규약 · R- 정본 마커 · §7 실제 연도 기대값을 픽스처로 · 스냅샷·crossref 테스트"
