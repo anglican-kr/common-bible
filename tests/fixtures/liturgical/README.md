@@ -39,7 +39,7 @@
   "ifIssueFlips": { "issue": "미결26", "expect": { "color": "violet" } },
   "note": "…",
   "assertions": [
-    { "date": "2025-12-01", "expect": { "id": "d1130-사도-성-안드레아", "status": "transferred_in", "from": "2025-11-30", "displacedBy": "t-대림1주일" } },
+    { "date": "2025-12-01", "note": "…", "expect": { "id": "d1130-사도-성-안드레아", "status": "transferred_in", "from": "2025-11-30", "displacedBy": "t-대림1주일" } },
     { "years": [1900, 2100], "expect": { "neverDeparts": "d0929-대한성공회-설립-기념일" } }
   ]
 }
@@ -65,7 +65,7 @@
 
 ## 단언(`assertions[]`)
 
-`{ "date": "YYYY-MM-DD", "expect": {…} }` 또는 연도 범위 `{ "years": [from, to], "expect": {…} }`. `expect` 는 **부분집합 비교**다 — 적은 키만 검사하고 적지 않은 키는 보지 않는다. 한 날짜에 여러 단언을 둬도 된다(후보별로 하나씩).
+`{ "date": "YYYY-MM-DD", "expect": {…} }` 또는 연도 범위 `{ "years": [from, to], "expect": {…} }`. `expect` 는 **부분집합 비교**다 — 적은 키만 검사하고 적지 않은 키는 보지 않는다. 한 날짜에 여러 단언을 둬도 된다(후보별로 하나씩). 단언에 `note`(문자열)를 달 수 있는데 **`expect` 밖**이며 비교하지 않는다 — 엔진이 맞힐 수 없는 산문(「두 세트는 성직후보자·수도자」)은 전부 여기로 간다. `expect` 안에는 엔진 결과와 실제로 맞춰 볼 수 있는 값만 적는다.
 
 | `expect` 키 | 뜻 |
 |---|---|
@@ -82,13 +82,13 @@
 | `penitential` · `fast` | 후보의 `penitential` / 그날의 소재일 여부 |
 | `coord` | `ResolvedDate.coord` 부분집합 `{season, week, type}` |
 | `grid` | 그날 격자 합성 후보의 `{status}` |
-| `readings` | 그 후보로 `findReadings` 를 부른 결과 — `origin`(색인 날짜 `MM.DD`) · `record`(본문 레코드 id) · `common`(공통 분류) · `sets`(세트 수) · `slots`(4슬롯 성구 — 인쇄 순) · `empty: true` · `note` |
+| `readings` | 그 후보로 `findReadings` 를 부른 결과 — `origin`(색인 날짜 `MM.DD`) · `record`(본문 레코드 id) · `common`(공통 분류) · `sets`(세트 수) · `slots`(4슬롯 성구 — 인쇄 순) · `empty: true` |
 | `officialReadings` | `official` 후보의 독서 — 위와 같은 키 + `cycle`(A/B/C) |
-| `collects` | `findCollects` 결과 — `origin` · `count` · `note` |
+| `collects` | `findCollects` 결과 — `origin` · `count` |
 
 ## 소비 방법
 
-- **지금(PR 2 전)**: `tests/unit/liturgical-fixtures.test.js` 가 스키마 · id 유일성·형식 · 날짜 유효성 · `displacedBy` 생략부호 금지 · `status`/`kind` 도메인 · `canon`·`checks`·`issue` 가 문서에 존재하는지 · (`data/` 가 있으면) `expect` 의 관측일 id 가 실데이터에 존재하는지를 검사한다.
+- **지금(PR 2 전)**: `tests/unit/liturgical-fixtures.test.js` 가 스키마 · id 유일성·형식 · 날짜 유효성 · 관측일 id(`id`·`displacedBy`·`official`·`neverDeparts`) 생략부호 금지 · `status`/`kind` 도메인 · `ifIssueFlips.expect` 도 같은 검사 · `canon`·`checks`·`issue` 가 문서에 존재하는지 · (`data/` 가 있으면) `expect` 의 관측일 id 가 실데이터에 존재하는지를 검사한다.
 - **PR 3**: `tests/unit/liturgical-engine.data.test.js` 가 세 파일을 읽어 `status !== "skip"` 인 케이스마다 `resolveDate(date)`(activation 은 `activated` 를 넘긴 캐시로) 결과에 `expect` 를 부분집합 비교한다. `provisional` 은 「잠정」 표시로 돌리되 실패하면 실패다 — 뒤집힌 미결은 픽스처를 고쳐 닫는다.
 - **미결이 닫히면**: 그 PR 에서 `status` 를 `confirmed` 로 바꾸고 `source` 에 근거를 더한다. `ifIssueFlips` 대로 닫혔으면 `expect` 를 그 값으로 바꾸고 `ifIssueFlips` 를 지운다. id 는 그대로.
 - **사실 변경 0 증명**: `python3 scripts/docs_facts_snapshot.py --diff main HEAD` 가 문서와 픽스처(JSON 문자열 값)를 합쳐 토큰을 세므로, 문서에서 값을 지우고 픽스처로 옮겨도 「사라진 토큰」에 잡히지 않는다.

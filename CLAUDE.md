@@ -76,7 +76,7 @@ data/source/*.md (73권, common-bible-data 서브모듈)
 
 ### 클라이언트 JS 유닛 테스트 (ADR-013)
 
-Node 자체 테스트 러너 + 자체 vm 하네스. 의존성 0, CI 자동 실행. **895 케이스 통과** (2026-09-20). 파일 명명 컨벤션: `tests/unit/<source-basename>.test.js`, 한 모듈 = 한 테스트 파일 — 예외는 **실데이터 의존 케이스**다(공개 CI 의 `Unit tests` 잡이 비공개 `data/` 서브모듈을 받지 않는다). 그 표를 읽어야 하는 케이스는 `tests/unit/<source-basename>.data.test.js` 로 갈라 `haveData` skip 가드를 달고 `engine-data.yml`·`sync-data.yml` 에서 돌린다(선례 `liturgical-engine.data.test.js`, 설계서 §7). 내부 영역은 `// ── <영역> ──` 섹션. 상세는 ADR-013.
+Node 자체 테스트 러너 + 자체 vm 하네스. 의존성 0, CI 자동 실행. **896 케이스 통과** (2026-09-21). 파일 명명 컨벤션: `tests/unit/<source-basename>.test.js`, 한 모듈 = 한 테스트 파일 — **예외 둘**이다(tests/README §1 과 같은 규칙). ① **실데이터 의존 케이스** — 공개 CI 의 `Unit tests` 잡이 비공개 `data/` 서브모듈을 받지 않으므로, 그 표를 읽어야 하는 케이스는 `tests/unit/<source-basename>.data.test.js` 로 갈라 `haveData` skip 가드를 달고 `engine-data.yml`·`sync-data.yml` 에서 돌린다(선례 `liturgical-engine.data.test.js`, 설계서 §7). ② **소스 모듈이 없는 테스트** — 문서·픽스처의 정합성을 보는 `docs-*.test.js` · `liturgical-fixtures.test.js`. 이 둘이 함께 쓰는 추출기는 `tests/unit/helpers/` 에 두며 테스트 파일이 아니다. 내부 영역은 `// ── <영역> ──` 섹션. 상세는 ADR-013.
 
 ```bash
 node --test tests/unit/*.test.js                 # 전체 (CI와 동일)

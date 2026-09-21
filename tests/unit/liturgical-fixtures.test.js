@@ -4,7 +4,8 @@
 // 픽스처는 실제 연도 기대값의 **정본**이다(설계서 §1.4 정본 지도 · 픽스처 README).
 // 엔진이 값을 맞히는지는 PR 3 의 liturgical-engine.data.test.js 가 본다 — 여기서는
 // 정본이 정본답게 생겼는지만 본다: JSON 이 읽히고, id 가 유일하고 규칙대로이며, 날짜가
-// 실재하고, `displacedBy` 에 생략부호가 없고, status/kind 가 도메인 안이고, `canon`·
+// 실재하고, 관측일 id(`id`·`displacedBy`·`official`·`neverDeparts`)에 생략부호가 없고,
+// status/kind 가 도메인 안이고(`ifIssueFlips.expect` 도 같은 검사를 받는다), `canon`·
 // `checks`·`issue` 가 가리키는 문서 앵커가 실제로 있고, (data/ 가 있으면) 관측일 id 가
 // 실데이터에 있다. 전사 오류 — 가장 큰 위험 — 를 기계가 잡을 수 있는 만큼 잡는다.
 //
@@ -15,6 +16,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { checkIds, issueNumbers, rMarkerDefs, sectionList } from "./helpers/docs-anchors.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "../..");
@@ -54,6 +56,46 @@ function validDate(s) {
   return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d;
 }
 
+/** 자리표시자 — 홑 `…` 도 자리표시자다(`[…\.]{2,}` 만 보면 `t-…` 가 샌다). `grid:*` 는 호출 전에 거른다. */
+const ELLIPSIS_RE = /…|\.{2,}|\*/;
+
+/** `expect` 블록 하나의 키·값이 도메인 안인가. `ctx.years` 는 연도 범위 단언에서만 참.
+ *  단언의 `expect` 와 `ifIssueFlips.expect` 가 **같은** 검사를 받는다 — 후자는 미결이
+ *  반대로 닫히는 순간 `expect` 로 승격되는데, 그때는 아무도 다시 읽지 않는다. */
+function assertExpect(e, where, ctx) {
+  assert.ok(e && typeof e === "object", `${where}: expect`);
+  for (const k of Object.keys(e)) assert.ok(EXPECT_KEYS.has(k), `${where}: 모르는 expect 키 ${k}`);
+  const assertId = (v, key) => {
+    assert.match(v, OBS_ID_RE, `${where}: ${key} 형식 — ${v}`);
+    assert.doesNotMatch(v, ELLIPSIS_RE, `${where}: ${key} 에 생략부호 — ${v}`);
+  };
+  if (e.id !== undefined) assertId(e.id, "id");
+  if (e.status !== undefined) assert.ok(CANDIDATE_STATUS.has(e.status), `${where}: status ${e.status}`);
+  for (const k of ["from", "to"]) if (e[k] !== undefined) assert.ok(validDate(e[k]), `${where}: ${k} ${e[k]}`);
+  if ("displacedBy" in e && e.displacedBy !== null) assertId(e.displacedBy, "displacedBy");
+  if (e.official !== undefined && e.official !== "grid:*") assertId(e.official, "official");
+  if (e.color !== undefined) assert.ok(COLORS.has(e.color), `${where}: color ${e.color}`);
+  if (e.colors !== undefined) assert.ok(e.colors.every((x) => COLORS.has(x)), `${where}: colors`);
+  if (e.observanceColor !== undefined) assert.ok(COLORS.has(e.observanceColor), `${where}: observanceColor`);
+  if (e.neverDeparts !== undefined) {
+    assert.ok(ctx.years, `${where}: neverDeparts 는 years 단언에서만`);
+    assertId(e.neverDeparts, "neverDeparts");
+  }
+  if (e.absent || e.notInDepartures) assert.ok(e.id, `${where}: absent/notInDepartures 는 id 가 필요`);
+  if (e.coord) assert.ok(Object.keys(e.coord).every((k) => ["season", "week", "type"].includes(k)), `${where}: coord 키`);
+  if (e.grid) assert.ok(CANDIDATE_STATUS.has(e.grid.status), `${where}: grid.status`);
+  for (const k of ["readings", "officialReadings"]) if (e[k]) {
+    // `note` 는 여기 올 수 없다 — PR 3 의 부분집합 비교가 맞힐 수 없는 산문은 단언의 `note` 로 뺀다.
+    const ok = ["origin", "record", "common", "sets", "slots", "empty", "cycle"];
+    assert.ok(Object.keys(e[k]).every((x) => ok.includes(x)), `${where}: ${k} 키`);
+    if (e[k].origin) assert.match(e[k].origin, /^\d{2}\.\d{2}$/, `${where}: ${k}.origin MM.DD`);
+  }
+  if (e.collects) assert.ok(Object.keys(e.collects).every((x) => ["origin", "count"].includes(x)), `${where}: collects 키`);
+}
+
+/** 그 `expect` 가 가리키는 실데이터 관측일 id 전부(합성 id 제외는 호출자가 한다). */
+const observanceIds = (e) => [e.id, e.neverDeparts, e.displacedBy, e.official !== "grid:*" ? e.official : null];
+
 // ── 파일 · 케이스 골격 ──
 
 test("세 파일이 읽히고 _meta.kind 와 cases 배열을 가진다", () => {
@@ -91,14 +133,14 @@ test("status/kind 도메인 · provisional 은 issue · skip 은 skip 이유 · 
     if (c.alsoYears) assert.ok(c.alsoYears.every((y) => Number.isInteger(y) && y >= 1900 && y <= 2100), `${c.id}: alsoYears`);
     if (c.ifIssueFlips) {
       assert.match(c.ifIssueFlips.issue ?? "", /^미결\d+$/, `${c.id}: ifIssueFlips.issue`);
-      assert.ok(c.ifIssueFlips.expect && typeof c.ifIssueFlips.expect === "object", `${c.id}: ifIssueFlips.expect`);
+      assertExpect(c.ifIssueFlips.expect, `${c.id} @ ifIssueFlips`, { years: false });
     }
   }
 });
 
 // ── 단언 ──
 
-test("단언은 date 또는 years 를 가지며 expect 의 키·값이 도메인 안이고 displacedBy 에 생략부호가 없다", () => {
+test("단언은 date 또는 years 를 가지며 expect 의 키·값이 도메인 안이고 관측일 id 에 생략부호가 없다", () => {
   for (const c of cases) {
     assert.ok(Array.isArray(c.assertions) && c.assertions.length > 0, `${c.id}: assertions`);
     for (const a of c.assertions) {
@@ -107,45 +149,22 @@ test("단언은 date 또는 years 를 가지며 expect 의 키·값이 도메인
         assert.ok(Array.isArray(a.years) && a.years.length === 2 && a.years[0] <= a.years[1], `${where}: years`);
         assert.equal(a.date, undefined, `${where}: date 와 years 를 함께 쓸 수 없다`);
       } else assert.ok(validDate(a.date), `${where}: 날짜가 실재하지 않는다`);
-      assert.ok(a.expect && typeof a.expect === "object", `${where}: expect`);
-      const e = a.expect;
-      for (const k of Object.keys(e)) assert.ok(EXPECT_KEYS.has(k), `${where}: 모르는 expect 키 ${k}`);
-      if (e.id !== undefined) assert.match(e.id, OBS_ID_RE, `${where}: id 형식 — ${e.id}`);
-      if (e.status !== undefined) assert.ok(CANDIDATE_STATUS.has(e.status), `${where}: status ${e.status}`);
-      for (const k of ["from", "to"]) if (e[k] !== undefined) assert.ok(validDate(e[k]), `${where}: ${k} ${e[k]}`);
-      if ("displacedBy" in e && e.displacedBy !== null) {
-        assert.match(e.displacedBy, OBS_ID_RE, `${where}: displacedBy 형식 — ${e.displacedBy}`);
-        assert.doesNotMatch(e.displacedBy, /[…\.]{2,}|\*/, `${where}: displacedBy 에 생략부호`);
-      }
-      if (e.official !== undefined) assert.ok(e.official === "grid:*" || OBS_ID_RE.test(e.official), `${where}: official ${e.official}`);
-      if (e.color !== undefined) assert.ok(COLORS.has(e.color), `${where}: color ${e.color}`);
-      if (e.colors !== undefined) assert.ok(e.colors.every((x) => COLORS.has(x)), `${where}: colors`);
-      if (e.observanceColor !== undefined) assert.ok(COLORS.has(e.observanceColor), `${where}: observanceColor`);
-      if (e.neverDeparts !== undefined) {
-        assert.ok(a.years, `${where}: neverDeparts 는 years 단언에서만`);
-        assert.match(e.neverDeparts, OBS_ID_RE, `${where}: neverDeparts id`);
-      }
-      if (e.absent || e.notInDepartures) assert.ok(e.id, `${where}: absent/notInDepartures 는 id 가 필요`);
-      if (e.coord) assert.ok(Object.keys(e.coord).every((k) => ["season", "week", "type"].includes(k)), `${where}: coord 키`);
-      if (e.grid) assert.ok(CANDIDATE_STATUS.has(e.grid.status), `${where}: grid.status`);
-      for (const k of ["readings", "officialReadings"]) if (e[k]) {
-        const ok = ["origin", "record", "common", "sets", "slots", "empty", "note", "cycle"];
-        assert.ok(Object.keys(e[k]).every((x) => ok.includes(x)), `${where}: ${k} 키`);
-        if (e[k].origin) assert.match(e[k].origin, /^\d{2}\.\d{2}$/, `${where}: ${k}.origin MM.DD`);
-      }
-      if (e.collects) assert.ok(Object.keys(e.collects).every((x) => ["origin", "count", "note"].includes(x)), `${where}: collects 키`);
+      // 단언의 `note` 는 **서술 전용** — 비교 대상이 아니다(픽스처 README 「단언」).
+      if (a.note !== undefined) assert.ok(typeof a.note === "string" && a.note.length > 0, `${where}: note 가 비어 있다`);
+      assertExpect(a.expect, where, { years: !!a.years });
     }
   }
 });
 
 // ── 문서 앵커 참조 ──
 
-const R_DEFINED = new Set([...DESIGN.matchAll(/\*\*\[(R-\d+(?:\.\d+)?-[a-z0-9-]+)\]\*\*/g)].map((m) => m[1]));
-const DESIGN_SECTIONS = new Set([...DESIGN.matchAll(/^#{2,4} (\d+(?:\.\d+)?)\.? /gm)].map((m) => m[1]));
-const REVIEW_CHECKS = new Set([...REVIEW.matchAll(/\*\*((?:C-(?:P|\d+(?:\.\d+)?)|X|I)-\d+[a-z]?)\*\*/g)].map((m) => m[1]));
-const ISSUES = new Set(
-  [...DESIGN.slice(DESIGN.indexOf("\n## 9. ")).matchAll(/^(\d+)\. /gm)].map((m) => `미결${m[1]}`),
-);
+// 추출 문법은 helpers/docs-anchors.js 가 정본이다 — docs-crossref.test.js 와 사본을 두지 않는다.
+// (특히 §9 는 **다음 `## ` 헤딩에서 끊는다** — 「절은 말미 추가만」이라 뒤에 §10 이 붙으면
+//  경계 없는 슬라이스는 그 안의 번호 목록까지 미결로 센다.)
+const R_DEFINED = new Set(rMarkerDefs({ 설계서: DESIGN }).keys());
+const DESIGN_SECTIONS = new Set(sectionList(DESIGN));
+const REVIEW_CHECKS = checkIds(REVIEW);
+const ISSUES = new Set([...(issueNumbers(DESIGN, "\n## 9. ") ?? [])].map((n) => `미결${n}`));
 
 test("canon 은 설계서의 R- 마커 또는 실재하는 절(설계서 §x.y)을 가리킨다", () => {
   assert.ok(R_DEFINED.size >= 10, `설계서에 R- 마커가 너무 적다: ${R_DEFINED.size}`);
@@ -179,12 +198,8 @@ test("expect 의 관측일 id 가 data/lectionary 에 실재한다 (grid:/guard:
   const check = (id) => { if (id && !/^(grid|guard):/.test(id) && !known.has(id)) missing.add(id); };
   for (const c of cases) {
     for (const id of c.activated ?? []) check(id);
-    for (const a of c.assertions) {
-      const e = a.expect;
-      check(e.id); check(e.neverDeparts);
-      if (e.displacedBy) check(e.displacedBy);
-      if (e.official && e.official !== "grid:*") check(e.official);
-    }
+    for (const a of c.assertions) for (const id of observanceIds(a.expect)) check(id);
+    if (c.ifIssueFlips) for (const id of observanceIds(c.ifIssueFlips.expect)) check(id);
   }
   assert.deepEqual([...missing].sort(), [], `실데이터에 없는 관측일 id:\n  ${[...missing].join("\n  ")}`);
 });

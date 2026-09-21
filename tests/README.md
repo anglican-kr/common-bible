@@ -8,7 +8,7 @@
 
 | 겹 | 도구 | 무엇을 보나 | 어디서 도나 | 규모 |
 |---|---|---|---|---|
-| **유닛** | `node --test` (의존성 0) | 순수 로직 — 함수 입출력·상태 계산 + 문서·픽스처 정합성 | **CI 자동** (PR마다) | 28파일 · 895케이스 |
+| **유닛** | `node --test` (의존성 0) | 순수 로직 — 함수 입출력·상태 계산 + 문서·픽스처 정합성 | **CI 자동** (PR마다) | 28파일 · 896케이스 |
 | **타입 검사** | `tsc --noEmit` (`@ts-check`+JSDoc) | 타입 불일치·오타 | 로컬 훅 + 수동 | 설정 2종(앱·워커) |
 | **E2E** | Playwright (실제 브라우저) | 화면·상호작용·모듈 간 배선 | **로컬 전용**(수동) | 27파일 · 232케이스 |
 | **데이터** | pytest (`common-bible-data` 서브모듈) | 성경 본문·검색 인덱스 정합성 | 그 저장소 CI | 별도 저장소 |
@@ -23,7 +23,7 @@
 
 ## 1. 유닛 테스트 — `tests/unit/`
 
-순수 JS 로직을 Node 자체 테스트 러너 + 자체 `vm` 하네스로 검증한다. 의존성 0, CI가 PR마다 자동 실행. 한 모듈 = 한 테스트 파일(`<소스이름>.test.js`). 상세 규약은 [ADR-013](../docs/decisions/013-client-js-unit-tests.md). 예외 둘 — 문서를 읽는 테스트(`docs-*.test.js`: 설계서 facts 블록 ↔ 실데이터, 설계 문서 교차 참조)와 픽스처 테스트(`liturgical-fixtures.test.js`: `tests/fixtures/liturgical/` — 교회력 엔진 실제 연도 기대값의 **정본**, 스키마는 그 README · 설계서 §1.4).
+순수 JS 로직을 Node 자체 테스트 러너 + 자체 `vm` 하네스로 검증한다. 의존성 0, CI가 PR마다 자동 실행. 한 모듈 = 한 테스트 파일(`<소스이름>.test.js`). 상세 규약은 [ADR-013](../docs/decisions/013-client-js-unit-tests.md). 예외 둘 — 문서를 읽는 테스트(`docs-*.test.js`: 설계서 facts 블록 ↔ 실데이터, 설계 문서 교차 참조)와 픽스처 테스트(`liturgical-fixtures.test.js`: `tests/fixtures/liturgical/` — 교회력 엔진 실제 연도 기대값의 **정본**, 스키마는 그 README · 설계서 §1.4). 두 테스트가 함께 쓰는 문서 앵커 추출기는 `unit/helpers/docs-anchors.js` 에 한 벌만 둔다 — 사본을 두면 곧 어긋난다.
 
 ```bash
 node --test tests/unit/*.test.js          # 전체 (CI와 동일)
@@ -57,8 +57,8 @@ node --test tests/unit/storage.test.js    # 개별 파일
 | `sw.test.js` | 서비스 워커 정적 검증 — `SHELL_FILES` 존재·`index.html` 패리티·ESM import 닫힘·`cacheNameFor` 라우팅·매니페스트 대조(`data/` 없으면 skip, `sync-data.yml`에서 실행) | 7 |
 | `liturgical-engine.data.test.js` | 교회력 엔진 ↔ `data/lectionary` 실측 — 연중 주차 38구간 전수(1900~2100, 두 묶음 연속성)·KASI 음력·temporal 규칙 전부 평가(`data/` 없으면 skip, `engine-data.yml`·`sync-data.yml`에서 실행) | 7 |
 | `docs-data-consistency.test.js` | 설계서 `facts` 블록 ↔ `data/lectionary` 실측 대조(`data/` 없으면 skip, `sync-data.yml`에서 실행) | 2 |
-| `docs-crossref.test.js` | 교회력 설계 문서 5종(설계서·검토 문서·ADR-036/037/038) + status/architecture 의 교차 참조 — `§n.m`·`미결n`·`C-/X-/I-/Qn`·`R-` 정본 마커·픽스처 id 가 실재하는 앵커를 가리키는지, § 헤딩 집합·§9 항목·ADR 미결 수 불변, R- 마커 1회 정의. 5건은 리팩터링 PR ②~④ 게이트로 skip | 10 |
-| `liturgical-fixtures.test.js` | `tests/fixtures/liturgical/*.cases.json` 형식 — id 유일·규칙, 날짜 실재, `displacedBy` 생략부호 금지, status/kind 도메인, `canon`·`checks`·`issue` 앵커 실재, 관측일 id 실데이터 실재(`data/` 없으면 그 1건만 skip) | 7 |
+| `docs-crossref.test.js` | 교회력 설계 문서 5종(설계서·검토 문서·ADR-036/037/038) + status/architecture 의 교차 참조 — `§n.m`·`미결n`·`C-/X-/I-/Qn`·`R-` 정본 마커·픽스처 id 가 실재하는 앵커를 가리키는지, § 헤딩 목록(중복 포함)·§9 항목·ADR 미결 수 불변, R- 마커 1회 정의, 표기 금지 게이트의 §1.4 예외가 살아 있는지. 5건은 리팩터링 PR ②~④ 게이트로 skip | 11 |
+| `liturgical-fixtures.test.js` | `tests/fixtures/liturgical/*.cases.json` 형식 — id 유일·규칙, 날짜 실재, 관측일 id 생략부호 금지(`ifIssueFlips.expect` 포함), status/kind 도메인, `canon`·`checks`·`issue` 앵커 실재, 관측일 id 실데이터 실재(`data/` 없으면 그 1건만 skip) | 7 |
 | `csp.test.js` | `index.html` CSP 인라인 해시 일관성 | 2 |
 
 ## 2. 타입 검사 — `tsc`

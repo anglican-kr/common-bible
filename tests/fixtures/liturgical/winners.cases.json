@@ -37,7 +37,7 @@
         { "date": "2026-05-27", "expect": { "official": "grid:ordinary-8-weekday-wed" } },
         { "date": "2026-05-27", "expect": { "id": "t-하계재", "status": "proper", "displacedBy": null, "observanceColor": "violet", "penitential": true } },
         { "date": "2026-05-27", "expect": { "id": "d0527-대한성공회-초대-한국인-주교-이천환-주교-서품일", "status": "proper", "displacedBy": null } },
-        { "date": "2026-05-27", "expect": { "id": "t-하계재", "readings": { "sets": 2, "note": "성직자 — 시편 99 / 27:1-9" }, "collects": { "note": "성직자 본기도" } } },
+        { "date": "2026-05-27", "expect": { "id": "t-하계재", "readings": { "sets": 2 } } },
         { "date": "2026-05-27", "expect": { "fast": true } }
       ]
     },
@@ -159,7 +159,7 @@
       "checks": ["C-4.3-7", "C-5.4-3", "X-7"],
       "source": ["서울교구 2024 달력 12월 면 — 12.20 성직후보자·수도자 두 단(데이터 calendar/ember.md 4세트와 절 단위로 동일)"],
       "assertions": [
-        { "date": "2024-12-20", "expect": { "id": "t-동계재", "status": "proper", "readings": { "sets": 2, "note": "성직후보자·수도자" }, "collects": { "count": 2 } } }
+        { "date": "2024-12-20", "expect": { "id": "t-동계재", "status": "proper", "readings": { "sets": 2 }, "collects": { "count": 2 } }, "note": "두 세트는 성직후보자·수도자 — 세트 내용은 PR 3 에서 slots 로 확정한다." }
       ]
     },
     {

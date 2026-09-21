@@ -50,6 +50,7 @@ PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("count", re.compile(r"(\d+)\s*(건|쌍|행|회|일)(?![가-힣])")),
     ("id", re.compile(r"(?<![A-Za-z0-9가-힣-])(d\d{4}-[가-힣0-9A-Za-z-]+)")),
     ("id", re.compile(r"(?<![A-Za-z0-9가-힣-])(t-[가-힣][가-힣0-9A-Za-z-]*)")),
+    ("id", re.compile(r"(?<![A-Za-z0-9가-힣-])(lunar\d+-[가-힣0-9A-Za-z-]+)")),
     ("id", re.compile(r"((?:grid|guard|common):[a-z0-9-]+)")),
     ("prec", re.compile(r"prec(?:edence)?\s*:?\s*\**(\d(?:\.\d)?|null)\**")),
     ("transfer_to", re.compile(
@@ -64,14 +65,10 @@ PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("check", re.compile(r"\b(Q-?\d+)\b")),
     ("canon", re.compile(r"\b(R-\d+(?:\.\d+)?-[a-z0-9-]+)")),
     ("fixture", re.compile(r"\b([TOAW]-\d{4}-\d{2}-\d{2}-[a-z0-9-]+)")),
-    ("pr", re.compile(r"((?:data ?PR|data|PR ?)?#\d{2,4})\b")),
+    ("pr", re.compile(r"((?:data\s*(?:PR\s*)?|PR\s*)?#\d{2,})(?!\d)")),
 ]
 
 ALLOWED_NEW_DEFAULT = [r"^R-\d+(?:\.\d+)?-[a-z0-9-]+$", r"^[TOAW]-\d{4}-\d{2}-\d{2}-[a-z0-9-]+$"]
-
-
-def git(*args: str) -> str:
-    return subprocess.run(["git", *args], cwd=ROOT, check=True, capture_output=True, text=True).stdout
 
 
 def read_at(rev: str, path: str) -> str | None:
@@ -107,6 +104,9 @@ def json_strings(node) -> list[str]:
 
 
 def tokenize(text: str) -> dict[str, Counter]:
+    # 굵게 표시는 표현이지 사실이 아니다 — 지우지 않으면 `grid:christmas-**1**-sunday` 가
+    # `grid:christmas-` 로 잘리고, `**96**건` 처럼 건수도 통째로 놓친다.
+    text = text.replace("**", "")
     out: dict[str, Counter] = defaultdict(Counter)
     for kind, pat in PATTERNS:
         for m in pat.finditer(text):
@@ -115,8 +115,10 @@ def tokenize(text: str) -> dict[str, Counter]:
                 tok = f"prec {tok}"
             elif kind == "count":
                 tok = f"{m.group(1)}{m.group(2)}"
-            elif kind == "section":
-                tok = tok.rstrip(".")
+            elif kind == "pr":
+                # 「PR #333」 · 「#333」 · 「data PR #26」 · 「data#26」 → `#333` · `data#26`
+                num = re.search(r"#\d+", tok).group(0)
+                tok = f"data{num}" if "data" in tok else num
             elif kind == "check" and tok.startswith("Q-"):
                 tok = "Q" + tok[2:]
             out[kind][tok] += 1
@@ -167,10 +169,14 @@ def diff(a: dict, b: dict, ignore: set[str], allow_new: list[re.Pattern[str]], v
     """
     ua, ub = a["union"], b["union"]
     kinds = sorted(set(ua) | set(ub))
-    b_dates = set(ub.get("date", {}))
+    # 「형태 변환」은 **픽스처로 옮겨 갔을 때만** 성립한다 — 합집합(=문서 포함)으로 보면
+    # 아무 문서에나 같은 월·일로 끝나는 ISO 날짜가 하나 있다는 이유로 사라진 사실을 용서한다.
+    b_fixture_dates: set[str] = set()
     b_doc_tokens: dict[str, set[str]] = defaultdict(set)
     for path, per_kind in b["files"].items():
-        if not is_fixture(path):
+        if is_fixture(path):
+            b_fixture_dates.update(per_kind.get("date", {}))
+        else:
             for k, toks in per_kind.items():
                 b_doc_tokens[k].update(toks)
 
@@ -188,7 +194,7 @@ def diff(a: dict, b: dict, ignore: set[str], allow_new: list[re.Pattern[str]], v
                 if k == "monthday":
                     mm, dd = tok.split(".")
                     suffix = f"-{int(mm):02d}-{int(dd):02d}"
-                    iso = sorted(d for d in b_dates if d.endswith(suffix))
+                    iso = sorted(d for d in b_fixture_dates if d.endswith(suffix))
                     if iso:
                         converted.append((tok, "·".join(iso[:3]) + (" …" if len(iso) > 3 else "")))
                         continue

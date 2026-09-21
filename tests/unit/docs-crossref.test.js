@@ -20,6 +20,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { canonMapRange, checkIds, issueNumbers, rMarkerDefs, sectionList } from "./helpers/docs-anchors.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "../..");
@@ -42,6 +43,8 @@ const DOCS = {
   "ADR-038": "docs/decisions/038-calendar-lectionary-ui.md",
 };
 const SOURCES = { "status.md": "docs/status.md", "architecture.md": "docs/architecture.md" };
+// 파일명 한정어(`liturgical-engine.md §3.4`)를 추적 대상 문서로 되돌리는 역인덱스.
+const BY_BASENAME = Object.fromEntries(Object.entries(DOCS).map(([k, p]) => [path.basename(p), k]));
 const FIXTURE_DIR = "tests/fixtures/liturgical";
 
 // 번호 불변 상수 — 절을 말미에 더하거나 미결을 발급하면 여기도 함께 고친다(그게 규약이다).
@@ -58,32 +61,24 @@ const text = Object.fromEntries(
 );
 const lines = Object.fromEntries(Object.entries(text).map(([k, t]) => [k, t.split("\n")]));
 
-// ── 앵커 수집 ──
+// ── 앵커 수집 — 추출 문법은 helpers/docs-anchors.js 가 정본이다(사본을 두지 않는다) ──
 
-function sectionsOf(doc) {
-  const out = new Set();
-  for (const m of text[doc].matchAll(/^#{2,4} (\d+(?:\.\d+|-\d+)?)\.?\s/gm)) out.add(m[1]);
-  return out;
-}
-function issuesOf(doc) {
-  const t = text[doc];
-  const start = doc === "설계서" ? t.indexOf("\n## 9. ") : t.indexOf("\n## 미결 사항");
-  if (start < 0) return null;
-  const body = t.slice(start + 1);
-  const end = body.indexOf("\n## ", 1);
-  const sec = end < 0 ? body : body.slice(0, end);
-  return new Set([...sec.matchAll(/^(\d+)\. /gm)].map((m) => Number(m[1])));
-}
-const SECTIONS = Object.fromEntries(Object.keys(DOCS).map((d) => [d, sectionsOf(d)]));
-const ISSUES = Object.fromEntries(Object.keys(DOCS).map((d) => [d, issuesOf(d)]));
-const CHECKS = new Set(
-  [...text["검토 문서"].matchAll(/\*\*((?:C-(?:P|\d+(?:\.\d+)?)|X|I)-\d+[a-z]?)\*\*/g)].map((m) => m[1]),
-);
+const issueHeading = (doc) => (doc === "설계서" ? "\n## 9. " : "\n## 미결 사항");
+const DESIGN_SECTION_LIST = sectionList(text["설계서"]);
+const SECTIONS = Object.fromEntries(Object.keys(DOCS).map((d) => [d, new Set(sectionList(text[d]))]));
+const ISSUES = Object.fromEntries(Object.keys(DOCS).map((d) => [d, issueNumbers(text[d], issueHeading(d))]));
+const CHECKS = checkIds(text["검토 문서"]);
 const Q_ROWS = new Set([...text["검토 문서"].matchAll(/^\| \*\*(Q\d+)\*\*/gm)].map((m) => m[1]));
-const R_DEFS = new Map();
-for (const [doc, t] of Object.entries(text))
-  for (const m of t.matchAll(/\*\*\[(R-\d+(?:\.\d+)?-[a-z0-9-]+)\]\*\*/g))
-    R_DEFS.set(m[1], [...(R_DEFS.get(m[1]) ?? []), doc]);
+const R_DEFS = rMarkerDefs(text);
+
+// ── 표기 금지 게이트의 예외 — 설계서 §1.4 정본 지도 ──
+// 규약을 정의하는 절이라 금지 표기를 **예시로** 인용한다(``` ```facts ``` 행 · 「❌ `X-10 ②`」).
+// 빼지 않으면 PR ②~④ 에서 게이트를 켜는 순간 자기 정의에 걸려 영원히 실패한다.
+const CANON_MAP = canonMapRange(text["설계서"]);
+const inCanonMap = (doc, ln) => doc === "설계서" && CANON_MAP !== null && ln >= CANON_MAP[0] && ln < CANON_MAP[1];
+const gateText = Object.fromEntries(
+  Object.entries(lines).map(([doc, ls]) => [doc, ls.filter((_, i) => !inCanonMap(doc, i + 1)).join("\n")]),
+);
 const FIXTURE_IDS = new Set();
 for (const f of fs.readdirSync(rel(FIXTURE_DIR)).filter((f) => f.endsWith(".json")))
   for (const c of JSON.parse(fs.readFileSync(rel(path.join(FIXTURE_DIR, f)), "utf8")).cases) FIXTURE_IDS.add(c.id);
@@ -93,7 +88,7 @@ for (const f of fs.readdirSync(rel(FIXTURE_DIR)).filter((f) => f.endsWith(".json
 /** 매치 앞의 한정어를 찾는다 — `·`/`,` 로 이어진 참조 사슬(`ADR-036 §5·미결8·미결13`)은 건너뛰고,
  *  사슬 바로 앞에 붙어 있는 한정어만 인정한다(16자 안이라도 떨어져 있으면 무시 — 「검토 문서 Q11 · §9 미결10」의 §9 는 자기 문서). */
 const RUN_RE = /(?:(?:§\d+(?:\.\d+|-\d+)?|미결\d+|[①-⑳])[\s·,~]*)+$/;
-const QUAL_RE = /(설계서|설계 문서|검토 문서|본 문서|본 ADR|본 설계|이 문서|ADR-\d{3}|[\w-]+\.md|pitfalls|README|전사|기도서)\s*[(（]?\s*$/;
+const QUAL_RE = /(설계서|설계 문서|검토 문서|본 문서|본 ADR|본 설계|이 문서|ADR-\d{3}|[\w-]+\.md|pitfalls|README|전사|기도서)\s*[()（）]?\s*$/;
 function qualifierBefore(line, idx) {
   const before = line.slice(0, idx);
   const run = RUN_RE.exec(before);
@@ -101,7 +96,9 @@ function qualifierBefore(line, idx) {
   const m = QUAL_RE.exec(head.slice(-24));
   if (!m) return null;
   const q = m[1];
-  if (/\.md$|pitfalls|README|전사|기도서/.test(q)) return "external";
+  // 파일명 한정어는 추적 대상 5문서면 그 문서로 푼다 — `liturgical-engine.md §3.4` 는 외부 참조가 아니다.
+  if (/\.md$/.test(q)) return BY_BASENAME[q] ?? "external";
+  if (/pitfalls|README|전사|기도서/.test(q)) return "external";
   if (q.startsWith("ADR-")) return DOCS[q] ? q : "external";
   if (q === "설계서" || q === "설계 문서") return "설계서";
   if (q === "검토 문서") return "검토 문서";
@@ -190,8 +187,9 @@ test("모든 §·미결·C/X/I/Q·R-·픽스처 참조가 실재하는 앵커를
   assert.deepEqual(unresolved, [], `풀리지 않는 참조 ${unresolved.length}건:\n  ${unresolved.join("\n  ")}`);
 });
 
-test("설계서 § 헤딩 집합이 상수와 같다 — 절은 말미 추가만, 번호 재부여 금지", () => {
-  assert.deepEqual([...SECTIONS["설계서"]], DESIGN_SECTIONS);
+test("설계서 § 헤딩 목록이 상수와 같다 — 절은 말미 추가만, 번호 재부여·중복 금지", () => {
+  // 집합으로 비교하면 `### 6.2` 가 둘이어도 통과한다 — 목록으로 비교해야 중복이 잡힌다.
+  assert.deepEqual(DESIGN_SECTION_LIST, DESIGN_SECTIONS);
 });
 
 test("설계서 §9 항목이 1..N 연속이고 N ≥ 33 — 번호 재사용 금지", () => {
@@ -214,6 +212,14 @@ test("정본 마커 R- 는 문서 전체에서 정확히 1회 정의된다", () 
   assert.deepEqual(wrongSection, [], "R- 마커의 절 번호는 4.x · 6.x 여야 한다");
 });
 
+test("게이트 예외 범위(설계서 §1.4)가 실재하고 그 절 안에 갇혀 있다", () => {
+  assert.ok(CANON_MAP, "설계서에서 `### 1.4 ` 를 찾지 못했다 — 표기 금지 게이트의 예외가 통째로 사라진다");
+  const [from, to] = CANON_MAP;
+  assert.match(lines["설계서"][from - 1], /^### 1\.4 /, "예외 범위가 §1.4 에서 시작하지 않는다");
+  assert.ok(to - from <= 60, `예외 범위 ${to - from}줄 — §1.4 를 넘으면 게이트가 조용히 죽는다`);
+  assert.ok(gateText["설계서"].length < text["설계서"].length, "예외 범위가 실제로 빠지지 않았다");
+});
+
 test("센티널 문자열은 정본 파일 한 곳에만 있다", { skip: GATES.sentinels ? false : "PR ② 에서 켠다" }, () => {
   // 정본에서만 허용되는 문장 조각 — 켤 때 채운다.
   const SENTINELS = [
@@ -223,7 +229,7 @@ test("센티널 문자열은 정본 파일 한 곳에만 있다", { skip: GATES.
   ];
   const bad = [];
   for (const s of SENTINELS)
-    for (const [doc, t] of Object.entries(text)) {
+    for (const [doc, t] of Object.entries(gateText)) {
       const n = t.split(s.text).length - 1;
       if (n && !s.allow.includes(doc)) bad.push(`${s.text} in ${doc} ×${n}`);
       if (s.once && s.allow.includes(doc) && n !== 1) bad.push(`${s.text} in ${doc} ×${n} (1회여야)`);
@@ -235,6 +241,7 @@ test("동그라미 숫자 참조 형식이 없다", { skip: GATES.circledRefs ? 
   const bad = [];
   for (const doc of Object.keys(DOCS))
     lines[doc].forEach((line, i) => {
+      if (inCanonMap(doc, i + 1)) return;
       for (const m of line.matchAll(/(§\d+(?:\.\d+)? [①-⑳]|X-\d+ [①-⑳]|미결\d+ [①-⑳])/g)) bad.push(`${DOCS[doc]}:${i + 1}: ${m[1]}`);
     });
   assert.deepEqual(bad, []);
@@ -244,7 +251,7 @@ test("Qn 참조는 검토 문서 §6 대응표 줄을 빼고 없다", { skip: GA
   const bad = [];
   for (const doc of Object.keys(DOCS))
     lines[doc].forEach((line, i) => {
-      if (/Q→미결 대응|Q1→17/.test(line)) return;
+      if (inCanonMap(doc, i + 1) || /Q→미결 대응|Q1→17/.test(line)) return;
       if (/(?<![\w-])Q\d+(?![\w-])/.test(line)) bad.push(`${DOCS[doc]}:${i + 1}`);
     });
   assert.deepEqual(bad, []);
@@ -254,7 +261,7 @@ test("ADR 미결 번호 참조는 ADR 미결 절 대응표 줄을 빼고 없다"
   const bad = [];
   for (const doc of Object.keys(DOCS))
     lines[doc].forEach((line, i) => {
-      if (/대응표|↔/.test(line)) return;
+      if (inCanonMap(doc, i + 1) || /대응표|↔/.test(line)) return;
       if (/ADR-03[678] 미결\d+/.test(line)) bad.push(`${DOCS[doc]}:${i + 1}`);
     });
   assert.deepEqual(bad, []);
