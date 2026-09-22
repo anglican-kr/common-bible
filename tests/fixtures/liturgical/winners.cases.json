@@ -16,11 +16,12 @@
       "canon": ["R-4.5-baptism-ordinary-1"],
       "checks": ["C-4.5-4", "C-4.5-5", "X-10"],
       "source": ["2026 책자 일러두기 — 「성탄절기 … 주님의 세례 축일(1월 11일) 전일까지」 · 「연중시기 — 2026년 1월 11일(주님의 세례 축일, 연중 1주일)부터」"],
-      "alsoYears": [2027],
-      "note": "격자를 christmas 주일로 합성하면 절기 주일(prec 2)이 이겨 뒤집힌다. 2027 은 1.10. 색은 어느 쪽으로 읽어도 백.",
+      "note": "격자를 christmas 주일로 합성하면 절기 주일(prec 2)이 이겨 뒤집힌다. 2027 은 1.10 — 날짜가 해마다 달라 alsoYears 로 되풀이할 수 없어 따로 적는다. 색은 어느 쪽으로 읽어도 백.",
       "assertions": [
         { "date": "2026-01-11", "expect": { "official": "t-주님의-세례", "coord": { "season": "ordinary", "week": 1, "type": "sunday" }, "color": "white" } },
-        { "date": "2026-01-10", "expect": { "coord": { "season": "christmas" } } }
+        { "date": "2026-01-10", "expect": { "coord": { "season": "christmas" } } },
+        { "date": "2027-01-10", "expect": { "official": "t-주님의-세례", "coord": { "season": "ordinary", "week": 1, "type": "sunday" }, "color": "white" } },
+        { "date": "2027-01-09", "expect": { "coord": { "season": "christmas" } } }
       ]
     },
     {

@@ -16,6 +16,8 @@ on:
     paths:
       - 'js/app/liturgical-engine.js'
       - 'tests/unit/liturgical-engine.data.test.js'
+      - 'tests/unit/liturgical-fixtures.data.test.js'
+      - 'tests/fixtures/liturgical/**'
       - '.github/workflows/engine-data.yml'
   workflow_dispatch:
 
@@ -54,5 +56,7 @@ jobs:
             "git@github.com:anglican-kr/common-bible-data"
           git submodule update --init data
 
-      - name: 엔진 실데이터 테스트
-        run: node --test tests/unit/liturgical-engine.data.test.js
+      # 픽스처(실제 연도 기대값의 정본)의 관측일 id 가 실데이터에 실재하는지도 여기서만 본다 —
+      # 공개 Unit tests 잡은 data/ 가 없어 그 검사를 skip 한다(설계서 §1.4 · 픽스처 README).
+      - name: 엔진 실데이터 테스트 + 픽스처 관측일 id 실재
+        run: node --test tests/unit/liturgical-engine.data.test.js tests/unit/liturgical-fixtures.data.test.js

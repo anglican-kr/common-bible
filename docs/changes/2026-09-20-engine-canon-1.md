@@ -120,3 +120,49 @@ title: "docs: 교회력 엔진 정본 지도 ① — §1.4 번호 규약 · R- �
 | 검토 문서에서 「추수감사 11.15」의 날짜를 잃음 | 「11.15 → 2026-11-15 픽스처에 살아 있음」(거짓) · 0 | 「사라진 토큰 1」 · 1 |
 
 **검증(1회차 뒤).** `node --test tests/unit/*.test.js` — **896 케이스(891 통과 · 5 게이트 skip · 0 실패)**, 위 「검증」의 895 를 대체(crossref 10 → 11). `npm run typecheck` 통과. `python3 scripts/docs_facts_snapshot.py --diff main WORKTREE`(같은 `--allow-new` 다섯) — **사라진 토큰 0 · 허용 밖 0**, 사실 변경 0 유지. 「형태 변환」 목록은 11 그대로이되 `04.05` 의 짝이 `2026-04-05·2027-04-05` → `2027-04-05` 로 줄었다 — `2026-04-05` 는 픽스처가 아니라 문서에만 있던 날짜였다(예외를 픽스처로 한정한 결과이고, 위 「검증」의 목록을 그만큼 대체한다). `tests/README.md`(28파일 · 896케이스, crossref 11) · `CLAUDE.md`(896) 갱신.
+
+## 리뷰 반영 (2026-09-23, 2회차)
+
+12건 — 전부 반영했다. 이번에도 지적은 전사된 82 케이스가 아니라 **①이 만든 장치**(테스트 · 스냅샷 · 워크플로 등록)에 몰렸고, 데이터를 고친 것은 주의 세례 케이스의 `alsoYears` 하나다. 브랜치는 main(`b6f9f09`, #332·#334 머지 뒤)에 리베이스했다 — 1회차가 「②로 미룬다」고 적은 `CLAUDE.md` `scripts/` 행 충돌은 이제 없다(그 줄은 그대로 두고, `docs_facts_snapshot.py` 추가는 여전히 ②).
+
+**픽스처 데이터.**
+
+- `W-2026-01-11-baptism-of-the-lord` 의 `alsoYears: [2027]` — README 가 `alsoYears` 를 「연도만 바꿔 되풀이해도 된다」로 정의하는데 2027-01-11 은 **월요일**이다(주님의 세례 2027 은 1.10). 케이스의 `note` 가 이미 「2027 은 1.10」이라 적고 있어 필드와 모순됐다. → `alsoYears` 를 빼고 2027-01-10 · 01-09 단언을 따로 적었다. **`alsoYears` 의 해마다 날짜 단언의 요일이 같은지 검사하는 테스트**를 더했다(다른 12 케이스의 `alsoYears` 는 전부 요일이 같다 — 부활 날짜가 같은 해 · 같은 요일에 떨어지는 해). README 의 `alsoYears` 정의에 조건을 적었다.
+
+**`scripts/docs_facts_snapshot.py`.**
+
+- **「월.일 → ISO」 예외의 사면 범위.** 사라진 `MM.DD` 를 픽스처의 아무 ISO 날짜(같은 월·일)로 용서했다 — 재현: `01.07`(성탄주간 레코드 실측)을 지워도 「사라진 토큰 0 · 01.07 → 2024-01-07(공현 케이스)」로 통과. 1회차가 「픽스처 날짜만」으로 좁힌 것으로는 부족했다 — 이 PR 이 머지되면 그 106 개 월.일 토큰이 **영구히** 보호된다. → 자동 추정을 없애고 **`--moved MM.DD=YYYY-MM-DD` 로 명시**한 것만, 그것도 **그 ISO 날짜의 픽스처 출현 수가 A 보다 늘었을 때만** 형태 변환으로 인정한다. 지금 이 PR 의 11 건은 원장에 열거한다(아래 「검증」). 쓰이지 않은 `--moved` 는 경고.
+- **문서 누락의 침묵.** `read_at` 이 git 실패를 `None` 으로 삼키고 `snapshot` 이 `continue` 해, 경로가 바뀐 문서는 「사라진 토큰 0」의 시야에서 통째로 빠졌다(재현: 검토 문서 경로를 틀리게 두면 유일 토큰 719 → 516 으로 줄어도 정상 보고). `list_fixtures` 도 `ls-tree` 실패를 빈 목록으로 삼켰다. → 둘 다 **멈춘다**(메시지에 「DOCS 목록을 함께 고칠 것」). 픽스처 디렉터리가 아직 없는 리비전(① 이전 main)만 빈 목록. 헤더에 파일 수(`파일 5 → 8`)를 찍는다.
+- **`pr` 토큰.** 접두를 `data` 문자열로만 알아봐 「데이터 저장소 PR #17」은 `#17` 이 됐다 — 표기만 바꿔도 `data#17` 사라짐 + `#17` 새 토큰. `#\d{2,}` 라 한 자리 번호는 토큰이 아니었고, 그 뒤의 `(?!\d)` 와 `prec` 의 `\**` 는 죽은 코드였다. → `data|데이터( 저장소)?` 접두를 같은 토큰으로 정규화, `#\d+`, 죽은 가드 제거.
+
+**`tests/unit/docs-crossref.test.js` · `docs-anchors.js`.**
+
+- **파일명 한정어 24자 잘림.** `qualifierBefore` 가 끝 24자만 봐서 `liturgical-engine-review.md`(27자) · `036-…md` 가 잘려 `external` 로 빠졌다 — 1회차가 「파일명을 문서로 되돌렸다」고 적었지만 5문서 중 `liturgical-engine.md`(20자) 하나만 되돌아왔던 것. 역따옴표에 싸인 파일명은 `null`(자기 문서로 오해). → 길이 제한 없이 **끝에 붙은** 한정어만 보고, 파일명은 역따옴표 · 링크의 닫는 괄호 · 경로를 허용(`BY_BASENAME[path.basename(q)]`).
+- **참조원 검사 누락.** `if (isSource) return;` 이 status.md · architecture.md 의 C/X/I/Q · R- · 픽스처 id 검사를 건너뛰어 헤더·tests/README 의 「참조원도 검사한다」와 어긋났다. → 제거. 두 파일에 그런 토큰은 현재 0 이라 결과 불변.
+- **미결 번호 집합.** `issueNumbers` 가 `Set` 을 내 33 번 항목을 둘 적어도 {1..33} 으로 통과했다 — `sectionList` 에 1회차가 적용한 「목록으로 비교」를 여기엔 안 했던 것. → 목록(문서 순서·중복 포함). §9 테스트는 목록이 정확히 `[1..N]` 인지, ADR 테스트는 수 + 겹침 없음.
+- **§1.4 게이트 예외 → 인라인 코드 제거.** 1회차의 「§1.4 줄 범위를 빼는」 처리는 ≤60줄 가드 · 네 게이트의 호출 자리 · 설계서 하드코딩을 끌고 다녔고, §1.4 안에서는 게이트가 완전히 눈을 감았다. §1.4 가 인용하는 금지 표기는 전부 **인라인 코드**다(```` ```facts ```` · `X-10 ②` · `§6.2 ④` · `§7 ⑩`). → 표기 금지 게이트 다섯이 `stripInlineCode`(같은 길이 역따옴표 묶음 제거, 펜스 여는 줄은 보존)를 거친 **산문**만 본다. `canonMapRange` · 범위 테스트 · `inCanonMap` 을 지웠다(crossref 11 → 10). 게이트 다섯을 임시로 켜 확인: §1.4(L44~79) 안 지적 **0**, 나머지 지적은 ②~④ 가 지울 실제 중복. 비용 하나 — 설계서 §6.5 의 정렬 키 코드 `(유효 precedence, §6.2 ④ …)` 안의 동그라미 참조 한 곳은 이제 게이트 밖이다(② 에서 그 표현도 함께 바꾼다).
+- **`tests/unit/helpers/` → `tests/unit/docs-anchors.js`.** `helpers.test.js`(js/app/helpers.js 의 테스트)와 이름이 겹치고, 공용 비테스트 모듈의 자리는 이미 `tests/unit/harness.js` 선례가 있다. → 옮기고 import · `CLAUDE.md` · `tests/README.md` 갱신.
+
+**`tests/unit/liturgical-fixtures.test.js` → `.data.test.js` 분리.**
+
+- 관측일 id 실재 검사 — 「가장 큰 위험」이라 적은 전사 오류를 잡는 유일한 기계 검사 — 가 공개 CI 에서 skip 되고 `engine-data.yml`(`node --test liturgical-engine.data.test.js` 만, `paths:` 에 픽스처 없음) · `sync-data.yml`(세 파일만)에도 등록돼 있지 않아 **작성자 로컬에서만** 돌았다. CLAUDE.md 「실데이터 의존 케이스는 `.data.test.js` 로」 규칙(이 PR 이 고친 문장)도 어겼다. → `liturgical-fixtures.data.test.js` 로 갈라 두 워크플로에 등록하고, `engine-data.yml` `paths:` 에 `tests/fixtures/liturgical/**` 와 그 파일을 더했다(픽스처만 바뀐 머지도 돈다).
+- 모듈 로드에서 `data.cases.map` 을 풀어 `cases` 가 없는 파일이 「테스트가 지목」하는 대신 import 에서 터졌다 → 로더를 방어(`Array.isArray(data?.cases)`), id 테스트의 `assertions[0]` 도 방어(단언 유무는 「단언」 테스트가 판정).
+- 검증기가 README 보다 느슨했다 — `skip` 에 `issue` 를 안 요구(README 는 「provisional·skip 이면 ✓」), `readings` 와 `officialReadings` 가 키 목록을 공유해 `readings.cycle` 이 새고, `expect: {}` 가 통과. → 셋 다 README 대로.
+
+**변이 검사 — 전부 「옛 코드 통과 · 새 코드 실패(또는 지목)」.**
+
+| 변이 | 옛 | 새 |
+|---|---|---|
+| 설계서에서 `01.07` 실측 삭제 | 「사라진 0 · 01.07 → 2024-01-07」 · exit 0 | 사라진 1 · exit 1 |
+| §9 에 `33.` 항목 하나 더 | 통과 | 실패 |
+| status.md 에 `liturgical-engine-review.md §5.99` | 통과(external) | 풀리지 않는 참조 1 |
+| status.md 에 `` `liturgical-engine-review.md` §5.11 `` · `[x](…review.md) §5.12` | (자기 문서로 오해) | 통과(검토 문서로 해석) |
+| status.md 에 `R-6.4-ember-colour` · `T-…-anna-joachim2` | 통과 | 풀리지 않는 참조 2 |
+| ADR-036 「data PR#17」→「데이터 저장소 PR #17」 | `data#17` 사라짐 + `#17` 새 토큰 | 사라진 0 |
+| 검토 문서 경로를 틀리게(DOCS) · 없는 리비전 | 정상 보고 · 토큰 200여 개 증발 | 즉시 종료(exit 1) |
+| 주의 세례에 `alsoYears: [2027]` 재삽입 | 통과 | 요일 불일치로 실패 |
+| `readings.cycle` · 빈 `expect` · `skip` 에 `issue` 없음 | 통과 | 셋 다 실패 |
+| `optionals.cases.json` 의 `cases` 키 제거 | import 에서 TypeError | 「optionals.cases.json: cases」 지목 |
+| 게이트 다섯 전부 켬 | (§1.4 는 눈 감음) | §1.4 안 지적 0 · 밖은 ②~④ 몫 |
+
+**검증(2회차 뒤).** `node --test tests/unit/*.test.js` — **897 케이스(892 통과 · 5 게이트 skip · 0 실패)**: crossref 10 · fixtures 7 · fixtures.data 2(로컬 `data/` 있음 — 관측일 id 실재 통과). `npm run typecheck` 통과. 스냅샷 — `python3 scripts/docs_facts_snapshot.py --diff main HEAD --allow-new '^2026-09-20$' --allow-new '^§1\.4$' --allow-new '^#329$' --allow-new '^data#26$' --allow-new '^§5\.11$' --moved 02.03=2049-02-03 --moved 02.12=2032-02-12 --moved 04.02=2035-04-02 --moved 04.03=2035-04-03 --moved 04.05=2027-04-05 --moved 04.09=2029-04-09 --moved 04.28=2025-04-28 --moved 05.04=2038-05-04 --moved 05.14=2026-05-14 --moved 05.15=2026-05-15 --moved 06.01=2026-06-01` → **사라진 토큰 0 · 형태 변환 11(명시) · 허용 밖 0**(`data#26` 은 main 의 「데이터 #26」이 같은 토큰이 되어 더는 새 토큰이 아니다). 사실 변경 0 유지. `tests/README.md`(29파일 · 897케이스 · `.data.test.js` 행 · 추출기 경로) · `CLAUDE.md`(897 · 예외 ② 문장 · 추출기 경로) · 픽스처 README(`alsoYears` 조건 · 소비 방법의 두 테스트) 갱신.
