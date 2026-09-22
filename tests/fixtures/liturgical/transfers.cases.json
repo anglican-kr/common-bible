@@ -1,0 +1,496 @@
+{
+  "_meta": {
+    "kind": "transfer",
+    "schema": "tests/fixtures/liturgical/README.md",
+    "canon": "설계서 §1.4 정본 지도 — 실제 연도의 이동 기대값은 이 파일이 정본이다",
+    "transcribedFrom": "설계서 §7 이동 패스 행 ①~⑤·⑩ · §9 미결16·31 · 검토 문서 §5.11 (main 243bf83, 2026-09-20)",
+    "groupLegend": "group 은 리팩터링 전 §7 행의 ①~⑩ 묶음 표시일 뿐이다 — 참조 대상이 아니다. 참조는 id 로 한다"
+  },
+  "cases": [
+    {
+      "id": "T-2025-12-01-andrew",
+      "kind": "transfer",
+      "group": "①",
+      "title": "안드레아 11.30 → 12.1 — 대림 1주일에 밀림, 기원 날짜 본문 조회",
+      "status": "confirmed",
+      "canon": ["R-6.2-tie-ladder", "R-6.5-year-pass", "설계서 §5.6"],
+      "checks": ["C-6.5-1", "C-6.5-1c", "X-2", "X-10"],
+      "source": ["lectionarypage 2025", "2026 책자 — 2025-12-01 「사도 안드레아 (11월 30일에서 이동)」, 독서는 기원 11.30 것"],
+      "note": "displacedBy 는 격자 grid:advent-1-sunday 가 아니라 temporal 행 t-대림1주일 — 같은 좌표의 temporal 이 prec 2 동률에서 범주 사다리로 이긴다. 목적지 12.01 은 본문 데이터 0건이라 resolved.date 로 인덱스를 치는 구현은 빈 결과를 낸다(종전 미결9 회귀 케이스 — 메타데이터에서 끝내지 않고 본문까지 단언).",
+      "assertions": [
+        { "date": "2025-12-01", "expect": { "id": "d1130-사도-성-안드레아", "status": "transferred_in", "from": "2025-11-30", "displacedBy": "t-대림1주일" } },
+        { "date": "2025-11-30", "expect": { "id": "d1130-사도-성-안드레아", "status": "transferred_out", "to": "2025-12-01", "displacedBy": "t-대림1주일" } },
+        { "date": "2025-12-01", "expect": { "official": "d1130-사도-성-안드레아" } },
+        { "date": "2025-12-01", "expect": { "id": "d1130-사도-성-안드레아", "readings": { "origin": "11.30", "sets": 1, "slots": ["이사 52:7-10", "시편 19:1-6", "로마 10:12-18", "마태 4:18-22"] }, "collects": { "origin": "11.30", "count": 1 } } }
+      ]
+    },
+    {
+      "id": "T-2026-01-26-paul-conversion",
+      "kind": "transfer",
+      "group": "①",
+      "title": "바울로 회심 1.25 → 1.26 — 연중 3주일(격자 합성 id 가 displacedBy)",
+      "status": "confirmed",
+      "canon": ["설계서 §5.5", "R-6.2-destinations"],
+      "checks": ["C-6.5-1b", "C-6.5-4", "X-10"],
+      "source": ["2026 책자 — 1.26 「1월 25일에서 이동」, 디모테오와 디도는 이름 줄"],
+      "note": "연중 주일은 temporal 표에 행이 없어 격자가 원인이다.",
+      "assertions": [
+        { "date": "2026-01-26", "expect": { "id": "d0125-사도-성-바울로의-회심", "status": "transferred_in", "from": "2026-01-25", "displacedBy": "grid:ordinary-3-sunday" } },
+        { "date": "2026-01-25", "expect": { "id": "d0125-사도-성-바울로의-회심", "status": "transferred_out", "to": "2026-01-26" } }
+      ]
+    },
+    {
+      "id": "T-2026-12-07-nicholas",
+      "kind": "transfer",
+      "group": "①b",
+      "title": "니콜라 12.6 → 12.7 — 도착이 prec 7 고유 축일(암브로스)을 만나는 날, 첫 외부 확증",
+      "status": "confirmed",
+      "issue": "미결16",
+      "canon": ["R-6.1-prec7-omit", "R-6.2-destinations", "R-6.5-year-pass", "R-6.4-color-order", "설계서 §5.6"],
+      "checks": ["C-6.5-4b", "C-6.5-4", "X-5", "X-10"],
+      "source": ["서울교구 2026 달력 12월 면(사용자 제공 2026-09-17) — 12.7(월) [백] · 니콜라 · 암브로스 · 이사 58:8-12 · 시편 27 · 2고린 4:5-6 · 요한 12:35-47", "2026 책자"],
+      "note": "대림 2주일은 temporal 행이 없어 displacedBy 는 격자. 목적지 12.7 의 고유 후보는 암브로스(prec 7)·격자 평일(8)뿐이라 isFree ① 로 빈 날. 암브로스는 transferable: false 라 절차 ⑤ 로 옮기지 않고 omitted 로 후보에 남으며 departures 에 없다(뒤로 밀리지 않는다). 색은 대림 자색 위에 승자 백이 덮고 가드 밖. 이 한 날이 §6.1 C ∧ 절기 주일 · §6.2 next_day · §6.5 isFree ① · 절차 ⑤ 무이동 · §6.4 승자 색 · §5.6 기원 색인 여섯을 한꺼번에 확증한다. 달력이 암브로스 이름을 남긴 것은 「omitted 도 후보에 남는다」와 맞다.",
+      "assertions": [
+        { "date": "2026-12-07", "expect": { "official": "d1206-성-니콜라", "color": "white" } },
+        { "date": "2026-12-07", "expect": { "id": "d1206-성-니콜라", "status": "transferred_in", "from": "2026-12-06", "displacedBy": "grid:advent-2-sunday" } },
+        { "date": "2026-12-06", "expect": { "id": "d1206-성-니콜라", "status": "transferred_out", "to": "2026-12-07" } },
+        { "date": "2026-12-07", "expect": { "id": "d1207-암브로스", "status": "omitted", "displacedBy": "d1206-성-니콜라", "notInDepartures": true } },
+        { "date": "2026-12-07", "expect": { "id": "grid:advent-2-weekday-mon", "status": "proper" } },
+        { "date": "2026-12-07", "expect": { "id": "d1206-성-니콜라", "readings": { "origin": "12.06", "slots": ["이사 58:8-12", "시편 27", "2고린 4:5-6", "요한 12:35-47"] } } },
+        { "date": "2026-12-07", "expect": { "id": "d1207-암브로스", "readings": { "common": "pastor" } } }
+      ]
+    },
+    {
+      "id": "T-2025-12-29-holy-innocents",
+      "kind": "transfer",
+      "group": "②",
+      "title": "성탄 3축일 연쇄 — 12.28 이 주일인 해: 어린이들 → 12.29, 토마스 베켓 생략",
+      "status": "confirmed",
+      "canon": ["R-6.2-chain-model", "R-6.1-prec7-omit"],
+      "checks": ["C-6.5-2", "C-6.1-6", "X-2", "X-10"],
+      "source": ["lectionarypage 2025", "2026 책자 — 12.29 「죄 없는 아기들의 순교 / 토마스 베켓」: 어린이들 고유 독서, 베켓 이름 줄"],
+      "assertions": [
+        { "date": "2025-12-29", "expect": { "id": "d1228-죄-없는-어린이들의-순교", "status": "transferred_in", "from": "2025-12-28", "displacedBy": "grid:christmas-1-sunday" } },
+        { "date": "2025-12-28", "expect": { "id": "d1228-죄-없는-어린이들의-순교", "status": "transferred_out", "to": "2025-12-29" } },
+        { "date": "2025-12-29", "expect": { "official": "d1228-죄-없는-어린이들의-순교" } },
+        { "date": "2025-12-29", "expect": { "id": "d1229-토마스-베켓", "status": "omitted", "displacedBy": "d1228-죄-없는-어린이들의-순교" } }
+      ]
+    },
+    {
+      "id": "T-2026-12-28-john-chain",
+      "kind": "transfer",
+      "group": "②",
+      "title": "성탄 3축일 연쇄 — 12.27 이 주일인 해: 요한 → 12.28, 밀린 어린이들 → 12.29",
+      "status": "provisional",
+      "issue": "미결17",
+      "canon": ["R-6.2-chain-model"],
+      "checks": ["C-6.5-2", "X-2", "X-5", "X-10"],
+      "source": ["lectionarypage 2026 — 12-28 요한 · 12-29 어린이들", "2026 달력 12월 면과 책자는 12.26 에서 끝나 미판정(2026-09-18 확인) — 2027 책자로"],
+      "note": "건너뜀 모델(재위 우선)이면 요한 12.29 · 어린이들 12.28. 스테파노는 제자리.",
+      "assertions": [
+        { "date": "2026-12-28", "expect": { "id": "d1227-사도-성-요한", "status": "transferred_in", "from": "2026-12-27", "displacedBy": "grid:christmas-1-sunday" } },
+        { "date": "2026-12-26", "expect": { "id": "d1226-성-스테파노", "status": "proper" } },
+        { "date": "2026-12-27", "expect": { "id": "d1227-사도-성-요한", "status": "transferred_out", "to": "2026-12-28" } },
+        { "date": "2026-12-29", "expect": { "id": "d1228-죄-없는-어린이들의-순교", "status": "transferred_in", "from": "2026-12-28", "displacedBy": "d1227-사도-성-요한" } },
+        { "date": "2026-12-28", "expect": { "id": "d1228-죄-없는-어린이들의-순교", "status": "transferred_out", "to": "2026-12-29" } },
+        { "date": "2026-12-29", "expect": { "official": "d1228-죄-없는-어린이들의-순교" } },
+        { "date": "2026-12-29", "expect": { "id": "d1229-토마스-베켓", "status": "omitted", "displacedBy": "d1228-죄-없는-어린이들의-순교" } }
+      ]
+    },
+    {
+      "id": "T-2027-12-27-christmas-triad",
+      "kind": "transfer",
+      "group": "②",
+      "title": "성탄 3축일 연쇄 — 12.26 이 주일인 해: 스테파노 → 12.27, 요한 → 12.28, 어린이들 → 12.29 (+ 반대 모델 회귀)",
+      "status": "provisional",
+      "issue": "미결17",
+      "canon": ["R-6.2-chain-model"],
+      "checks": ["C-6.5-2", "C-6.5-3", "X-2", "X-3"],
+      "source": ["lectionarypage 2027 — 12-27 스테파노(transferred) · 12-28 요한(transferred) · 12-29 어린이들(transferred)", "영국 성공회 Common Worship 은 스테파노만 12.29 로(건너뜀 모델 — X-3 반대 모델 정답지)"],
+      "alsoYears": [2032, 2038, 2049],
+      "note": "반대 모델 회귀 — 2027 스테파노가 12.29 에 있으면 안 된다. 사제 확인으로 모델이 뒤집히면 이 케이스만 반전시킨다. 12.26 주일인 2032·2038·2049 도 같은 모양.",
+      "assertions": [
+        { "date": "2027-12-27", "expect": { "id": "d1226-성-스테파노", "status": "transferred_in", "from": "2027-12-26", "displacedBy": "grid:christmas-1-sunday" } },
+        { "date": "2027-12-28", "expect": { "id": "d1227-사도-성-요한", "status": "transferred_in", "from": "2027-12-27", "displacedBy": "d1226-성-스테파노" } },
+        { "date": "2027-12-29", "expect": { "id": "d1228-죄-없는-어린이들의-순교", "status": "transferred_in", "from": "2027-12-28", "displacedBy": "d1227-사도-성-요한" } },
+        { "date": "2027-12-29", "expect": { "id": "d1229-토마스-베켓", "status": "omitted", "displacedBy": "d1228-죄-없는-어린이들의-순교" } },
+        { "date": "2027-12-29", "expect": { "official": "d1228-죄-없는-어린이들의-순교" } },
+        { "date": "2027-12-29", "expect": { "id": "d1226-성-스테파노", "absent": true } }
+      ]
+    },
+    {
+      "id": "T-2026-05-15-matthias",
+      "kind": "transfer",
+      "group": "③",
+      "title": "마티아 5.14 → 5.15 — 승천대축일에 밀림",
+      "status": "confirmed",
+      "canon": ["R-6.2-destinations"],
+      "checks": ["C-6.5-4", "X-5", "X-10"],
+      "source": ["2026 책자 — 5.15 승천 다음날, 고유 독서"],
+      "assertions": [
+        { "date": "2026-05-15", "expect": { "id": "d0514-사도-성-마티아", "status": "transferred_in", "from": "2026-05-14", "displacedBy": "t-승천대축일" } },
+        { "date": "2026-05-14", "expect": { "id": "d0514-사도-성-마티아", "status": "transferred_out", "to": "2026-05-15" } }
+      ]
+    },
+    {
+      "id": "T-2026-06-01-visitation",
+      "kind": "transfer",
+      "group": "③",
+      "title": "성모 방문 5.31 → 6.1 — 삼위일체대축일에 밀림",
+      "status": "confirmed",
+      "canon": ["R-6.2-destinations"],
+      "checks": ["C-6.5-4", "X-2", "X-5", "X-10"],
+      "source": ["lectionarypage 2026", "2026 책자 — 6.1 「5월 31일에서 이동」, 저스틴 이름 줄"],
+      "assertions": [
+        { "date": "2026-06-01", "expect": { "id": "d0531-성모-방문", "status": "transferred_in", "from": "2026-05-31", "displacedBy": "t-성삼위일체대축일" } },
+        { "date": "2026-05-31", "expect": { "id": "d0531-성모-방문", "status": "transferred_out", "to": "2026-06-01" } }
+      ]
+    },
+    {
+      "id": "T-2026-07-27-anna-joachim",
+      "kind": "transfer",
+      "group": "③",
+      "title": "안나와 요아킴 7.26 → 7.27 — 연중 17주일에 밀림 (B 승격, 미결27)",
+      "status": "confirmed",
+      "issue": "미결27",
+      "canon": ["R-6.2-destinations", "설계서 §5.6"],
+      "checks": ["C-6.5-4", "X-5", "X-10"],
+      "source": ["2026 책자 p.40 — 7.27(월) 「안나와 요아킴 (성모 마리아의 양친, 7월 26일에서 이동)」 + 고유 독서"],
+      "note": "2026-09-19 사용자 확정으로 데이터 등급을 축일 → 주요축일B(prec 6 · transferable · next_day)로 고쳐 이동 목록에 들었다(minor_feast 96 → 95).",
+      "assertions": [
+        { "date": "2026-07-27", "expect": { "official": "d0726-안나와-요아킴" } },
+        { "date": "2026-07-27", "expect": { "id": "d0726-안나와-요아킴", "status": "transferred_in", "from": "2026-07-26", "displacedBy": "grid:ordinary-17-sunday" } },
+        { "date": "2026-07-26", "expect": { "id": "d0726-안나와-요아킴", "status": "transferred_out", "to": "2026-07-27" } },
+        { "date": "2026-07-27", "expect": { "id": "d0726-안나와-요아킴", "readings": { "origin": "07.26", "slots": ["즈가 2:10-13", "시편 127", "로마 8:28-30", "마태 13:16-17"] } } }
+      ]
+    },
+    {
+      "id": "T-2026-10-19-luke",
+      "kind": "transfer",
+      "group": "③",
+      "title": "루가 10.18 → 10.19 — 연중 주일에 밀림",
+      "status": "confirmed",
+      "canon": ["R-6.2-destinations"],
+      "checks": ["C-6.5-4", "X-5", "X-10"],
+      "source": ["2026 책자 — 10.19 「10월 18일에서 이동」"],
+      "note": "displacedBy 는 격자 연중 주일이나 문서에 주간 번호가 없어 적지 않았다.",
+      "assertions": [
+        { "date": "2026-10-19", "expect": { "id": "d1018-성-루가", "status": "transferred_in", "from": "2026-10-18" } },
+        { "date": "2026-10-18", "expect": { "id": "d1018-성-루가", "status": "transferred_out", "to": "2026-10-19" } }
+      ]
+    },
+    {
+      "id": "T-2025-04-28-mark",
+      "kind": "transfer",
+      "group": "③",
+      "title": "마르코 4.25(부활 1주 금) → 4.28 — 부활 8일 보호",
+      "status": "confirmed",
+      "canon": ["R-6.5-year-pass"],
+      "checks": ["C-6.5-5", "X-2"],
+      "source": ["lectionarypage 2025"],
+      "assertions": [
+        { "date": "2025-04-28", "expect": { "id": "d0425-성-마르코", "status": "transferred_in", "from": "2025-04-25", "displacedBy": "guard:easter-octave" } },
+        { "date": "2025-04-25", "expect": { "id": "d0425-성-마르코", "status": "transferred_out", "to": "2025-04-28", "displacedBy": "guard:easter-octave" } }
+      ]
+    },
+    {
+      "id": "T-2027-04-05-annunciation-maundy-thursday",
+      "kind": "transfer",
+      "group": "③",
+      "title": "수태고지 3.25 = 성 목요일 → 4.5 — 성 토요일 rank: null 을 guard 가 막는다",
+      "status": "confirmed",
+      "canon": ["R-6.5-year-pass"],
+      "checks": ["C-6.5-6", "X-2"],
+      "source": ["lectionarypage 2027"],
+      "assertions": [
+        { "date": "2027-04-05", "expect": { "id": "d0325-성모수태고지", "status": "transferred_in", "from": "2027-03-25", "displacedBy": "t-성-목요일" } },
+        { "date": "2027-03-25", "expect": { "id": "d0325-성모수태고지", "status": "transferred_out", "to": "2027-04-05" } }
+      ]
+    },
+    {
+      "id": "T-2035-04-02-joseph-first-come",
+      "kind": "transfer",
+      "group": "③",
+      "title": "기원이 보호 기간 안 + 선착순 — 요셉 3.19(성주간 월) → 4.2 그대로, 수태고지(3.25 = 부활대축일) → 4.3",
+      "status": "confirmed",
+      "canon": ["R-6.5-year-pass", "설계서 §6.2"],
+      "checks": ["C-6.5-7"],
+      "source": ["미국 성공회 2008 (요셉 3.31 · 수태고지 4.1) — 같은 모양"],
+      "alsoYears": [2046],
+      "note": "그날의 후보는 feria 뿐이라 guard 없이는 요셉이 승자가 되어 안 옮겨진다. 품계가 높은 수태고지가 먼저 온 요셉을 밀어내지 않는다(선착순 — §6.2 ②, 검토 문서 §6 Q1 부속). 2046 도 같은 배치(부활 3.25).",
+      "assertions": [
+        { "date": "2035-04-02", "expect": { "id": "d0319-성-요셉", "status": "transferred_in", "from": "2035-03-19", "displacedBy": "guard:easter-octave" } },
+        { "date": "2035-04-03", "expect": { "id": "d0325-성모수태고지", "status": "transferred_in", "from": "2035-03-25" } },
+        { "date": "2035-04-02", "expect": { "official": "d0319-성-요셉" } }
+      ]
+    },
+    {
+      "id": "T-2029-04-09-annunciation-palm-sunday",
+      "kind": "transfer",
+      "group": "③",
+      "title": "수태고지 3.25 = 성지주일 → 4.9 — 15일 최장 이동, displacedBy 는 실제 후보(성지주일)",
+      "status": "confirmed",
+      "canon": ["R-6.5-year-pass"],
+      "checks": ["C-6.5-8", "I-5"],
+      "source": ["미국 성공회 2018 — 같다"],
+      "alsoYears": [2040],
+      "note": "displacedBy 는 성지주일(실제 후보 우선)이지 guard:easter-octave 가 아니다.",
+      "assertions": [
+        { "date": "2029-04-09", "expect": { "id": "d0325-성모수태고지", "status": "transferred_in", "from": "2029-03-25", "displacedBy": "t-성지주일" } },
+        { "date": "2029-03-25", "expect": { "id": "d0325-성모수태고지", "status": "transferred_out", "to": "2029-04-09", "displacedBy": "t-성지주일" } }
+      ]
+    },
+    {
+      "id": "T-2043-04-06-annunciation",
+      "kind": "transfer",
+      "group": "③",
+      "title": "수태고지 3.25(성주간) → 4.6 — 12일",
+      "status": "confirmed",
+      "canon": ["R-6.5-year-pass"],
+      "checks": ["C-6.5-8"],
+      "source": ["검토 문서 C-6.5-8"],
+      "assertions": [
+        { "date": "2043-04-06", "expect": { "id": "d0325-성모수태고지", "status": "transferred_in", "from": "2043-03-25" } }
+      ]
+    },
+    {
+      "id": "T-2038-05-03-mark-easter-day",
+      "kind": "transfer",
+      "group": "③",
+      "title": "마르코 4.25 = 부활대축일 → 5.3, 필립보·야고보 5.1 → 5.4 — 도착끼리 기원 순",
+      "status": "confirmed",
+      "canon": ["R-6.5-year-pass", "설계서 §6.2"],
+      "checks": ["C-6.5-9"],
+      "source": ["미국 성공회 2011 (마르코 4.25 부활 월 → 5.2 · 필립보·야고보 5.1 → 5.3) — 같은 모양"],
+      "assertions": [
+        { "date": "2038-05-03", "expect": { "id": "d0425-성-마르코", "status": "transferred_in", "from": "2038-04-25" } },
+        { "date": "2038-05-04", "expect": { "id": "d0501-사도-성-필립보와-성-야고보", "status": "transferred_in", "from": "2038-05-01" } }
+      ]
+    },
+    {
+      "id": "T-2029-06-01-visitation-vs-corpus-christi",
+      "kind": "transfer",
+      "group": "⑤",
+      "title": "prec 3 동률(잠정) — 성체일 ∧ 성모 방문: 규칙일 유지, 고정일 다음날",
+      "status": "provisional",
+      "issue": "미결14",
+      "canon": ["설계서 §6.2"],
+      "checks": ["C-6.5-12"],
+      "source": ["로마 교회력 우선순위표(주님의 대축일 > 성모·성인)와 같은 결과 — 사제 확인 대상"],
+      "alsoYears": [2040],
+      "assertions": [
+        { "date": "2029-06-01", "expect": { "id": "d0531-성모-방문", "status": "transferred_in", "from": "2029-05-31", "displacedBy": "t-그리스도의-성체일" } },
+        { "date": "2029-05-31", "expect": { "official": "t-그리스도의-성체일" } }
+      ]
+    },
+    {
+      "id": "T-2038-06-25-john-baptist-vs-corpus-christi",
+      "kind": "transfer",
+      "group": "⑤",
+      "title": "prec 3 동률(잠정) — 성체일 ∧ 성 세례 요한 탄생: 요한이 6.25 로",
+      "status": "provisional",
+      "issue": "미결14",
+      "canon": ["설계서 §6.2"],
+      "checks": ["C-6.5-12"],
+      "source": ["사제 확인 대상"],
+      "assertions": [
+        { "date": "2038-06-25", "expect": { "id": "d0624-성-세례-요한-탄생", "status": "transferred_in", "from": "2038-06-24", "displacedBy": "t-그리스도의-성체일" } },
+        { "date": "2038-06-24", "expect": { "official": "t-그리스도의-성체일" } }
+      ]
+    },
+    {
+      "id": "T-2050-09-29-founding-day-co-observed",
+      "kind": "transfer",
+      "group": "③",
+      "title": "동시 봉헌 무이동 — 9.29 설립 기념일은 미카엘과 같은 고정일이라 1900~2100 어느 해에도 옮겨지지 않는다",
+      "status": "confirmed",
+      "canon": ["R-6.5-year-pass"],
+      "checks": ["C-6.5-13"],
+      "source": ["설계서 §6.5 variesByYear"],
+      "note": "2050 은 9.30 이 추석(prec 0)이라 규칙이 없으면 10.1 로 이틀 밀린다. 연중 주일(prec 5)은 prec 4 를 막지 못하므로 9.30 이 주일인 2029 는 반례가 아니다.",
+      "assertions": [
+        { "date": "2050-09-29", "expect": { "id": "d0929-대한성공회-설립-기념일", "status": "proper", "notInDepartures": true } },
+        { "date": "2050-09-30", "expect": { "official": "lunar815-추석-명절" } },
+        { "years": [1900, 2100], "expect": { "neverDeparts": "d0929-대한성공회-설립-기념일" } }
+      ]
+    },
+    {
+      "id": "T-2040-09-22-matthew-chuseok",
+      "kind": "transfer",
+      "group": "④",
+      "title": "명절 — 2040 추석 9.21 마태오 → 9.22",
+      "status": "confirmed",
+      "canon": ["R-6.2-destinations"],
+      "checks": ["C-6.5-10"],
+      "source": ["KASI 2040 8-15 = 09-21"],
+      "assertions": [
+        { "date": "2040-09-22", "expect": { "id": "d0921-사도-성-마태오", "status": "transferred_in", "from": "2040-09-21", "displacedBy": "lunar815-추석-명절" } },
+        { "date": "2040-09-21", "expect": { "official": "lunar815-추석-명절" } }
+      ]
+    },
+    {
+      "id": "T-2049-02-03-presentation-seollal",
+      "kind": "transfer",
+      "group": "④",
+      "title": "명절 — 2049 설 = 주의 봉헌 → 2.3 (선택 봉헌 종류인데 충돌 이동)",
+      "status": "confirmed",
+      "canon": ["R-6.2-destinations"],
+      "checks": ["C-6.5-10"],
+      "source": ["KASI 2049 1-1 = 02-02"],
+      "note": "충돌 이동의 목적지는 transfer_to 값(nearby_sunday)과 무관하게 언제나 다음 빈 날. 같은 해 1.31 의 optional 은 O-2049-01-31-presentation.",
+      "assertions": [
+        { "date": "2049-02-03", "expect": { "id": "d0202-주의-봉헌", "status": "transferred_in", "from": "2049-02-02", "displacedBy": "lunar11-설날" } },
+        { "date": "2049-02-02", "expect": { "official": "lunar11-설날" } }
+      ]
+    },
+    {
+      "id": "T-2032-02-12-ash-wednesday-seollal",
+      "kind": "transfer",
+      "group": "④",
+      "title": "명절 — 2032 설 = 재의 수요일 → 2.12 (데이터 수정 후)",
+      "status": "skip",
+      "issue": "미결13",
+      "skip": "미결13 — 데이터의 재의 수요일이 transferable: false 라 옮기지 않는다. calendar/ 표에서 transferable: true · transfer_to: next_day 로 고친 뒤 켠다",
+      "canon": ["R-6.2-destinations"],
+      "checks": ["C-6.5-11"],
+      "source": ["KASI 범위 안 유일한 겹침 2032-02-11"],
+      "assertions": [
+        { "date": "2032-02-12", "expect": { "id": "t-재의-수요일", "status": "transferred_in", "from": "2032-02-11", "displacedBy": "lunar11-설날" } }
+      ]
+    },
+    {
+      "id": "T-2025-06-30-peter-paul",
+      "kind": "transfer",
+      "group": "⑩",
+      "title": "베드로와 바울로 6.29 → 6.30 — 연중 13주일",
+      "status": "confirmed",
+      "issue": "미결16",
+      "canon": ["R-6.2-destinations"],
+      "checks": ["X-11"],
+      "source": ["2025 책자(2026-09-19) — 책자 오기 「7월 29일에서 이동」"],
+      "assertions": [
+        { "date": "2025-06-30", "expect": { "id": "d0629-사도-성-베드로와-바울로", "status": "transferred_in", "from": "2025-06-29", "displacedBy": "grid:ordinary-13-sunday" } }
+      ]
+    },
+    {
+      "id": "T-2025-08-25-bartholomew",
+      "kind": "transfer",
+      "group": "⑩",
+      "title": "바르톨로메오 8.24 → 8.25 — 연중 21주일",
+      "status": "confirmed",
+      "issue": "미결16",
+      "canon": ["R-6.2-destinations"],
+      "checks": ["X-11"],
+      "source": ["2025 책자"],
+      "assertions": [
+        { "date": "2025-08-25", "expect": { "id": "d0824-사도-성-바르톨로메오", "status": "transferred_in", "from": "2025-08-24", "displacedBy": "grid:ordinary-21-sunday" } }
+      ]
+    },
+    {
+      "id": "T-2025-09-15-holy-cross",
+      "kind": "transfer",
+      "group": "⑩",
+      "title": "성 십자가 9.14 → 9.15 — 연중 24주일; 같은 날 키프리안은 omitted (①b 암브로스와 같은 모양)",
+      "status": "confirmed",
+      "issue": "미결16",
+      "canon": ["R-6.2-destinations", "R-6.1-prec7-omit"],
+      "checks": ["X-11", "C-6.5-4b"],
+      "source": ["2025 책자 — 9.15 [백/홍] + 키프리안 이름 줄"],
+      "note": "책자 색은 [백/홍] 병기 — 평일 병기 규칙은 미정(미결26 ④)이라 색은 단언하지 않는다.",
+      "assertions": [
+        { "date": "2025-09-15", "expect": { "id": "d0914-성-십자가의-날", "status": "transferred_in", "from": "2025-09-14", "displacedBy": "grid:ordinary-24-sunday" } },
+        { "date": "2025-09-15", "expect": { "id": "d0915-키프리안", "status": "omitted", "displacedBy": "d0914-성-십자가의-날" } }
+      ]
+    },
+    {
+      "id": "T-2025-09-22-matthew",
+      "kind": "transfer",
+      "group": "⑩",
+      "title": "마태오 9.21 → 9.22 — 연중 25주일",
+      "status": "confirmed",
+      "issue": "미결16",
+      "canon": ["R-6.2-destinations"],
+      "checks": ["X-11"],
+      "source": ["2025 책자"],
+      "assertions": [
+        { "date": "2025-09-22", "expect": { "id": "d0921-사도-성-마태오", "status": "transferred_in", "from": "2025-09-21", "displacedBy": "grid:ordinary-25-sunday" } }
+      ]
+    },
+    {
+      "id": "T-2024-09-09-nativity-of-mary",
+      "kind": "transfer",
+      "group": "⑩",
+      "title": "성모 탄신 9.8 → 9.9 — 연중 23주일 (transferable 축일 셋 중 하나, 미결31)",
+      "status": "confirmed",
+      "issue": "미결31",
+      "canon": ["R-6.1-prec7-omit"],
+      "checks": ["X-12", "C-6.1-6"],
+      "source": ["2024 책자 — 9.9 「성모 탄신의 옮긴 축일」"],
+      "assertions": [
+        { "date": "2024-09-09", "expect": { "id": "d0908-성모-탄신", "status": "transferred_in", "from": "2024-09-08", "displacedBy": "grid:ordinary-23-sunday" } },
+        { "date": "2024-09-08", "expect": { "id": "d0908-성모-탄신", "status": "transferred_out", "to": "2024-09-09" } }
+      ]
+    },
+    {
+      "id": "T-2024-12-09-immaculate-conception",
+      "kind": "transfer",
+      "group": "⑩",
+      "title": "성모시태 12.8 → 12.9 — 대림 2주일 (절기 주일에서도 옮긴다, 미결31)",
+      "status": "confirmed",
+      "issue": "미결31",
+      "canon": ["R-6.1-prec7-omit"],
+      "checks": ["X-11", "X-12", "C-6.1-6"],
+      "source": ["2024·2025 책자 — 12.9 「12월 8일에서 이동」"],
+      "assertions": [
+        { "date": "2024-12-09", "expect": { "id": "d1208-성모시태", "status": "transferred_in", "from": "2024-12-08", "displacedBy": "grid:advent-2-sunday" } },
+        { "date": "2024-12-08", "expect": { "id": "d1208-성모시태", "status": "transferred_out", "to": "2024-12-09" } }
+      ]
+    },
+    {
+      "id": "T-2025-11-03-all-souls",
+      "kind": "transfer",
+      "group": "⑩",
+      "title": "모든 별세자의 날 11.2 → 11.3 — 연중 31주일; 격자 월요일은 proper 로 남는다 (미결31)",
+      "status": "confirmed",
+      "issue": "미결31",
+      "canon": ["R-6.1-prec7-omit"],
+      "checks": ["X-11", "C-6.1-6"],
+      "source": ["2025 책자 — 11.3 「11월 2일에서 이동」 [백/녹] + 「평일 감사성찬례」 병기"],
+      "note": "격자 연중 31주 월요일이 proper 로 남아 책자의 「평일 감사성찬례」 병기와 맞다(ADR-038 §3 두 독서 나란히). 색 병기 규칙은 미정(미결26 ④).",
+      "assertions": [
+        { "date": "2025-11-03", "expect": { "id": "d1102-모든-별세자의-날", "status": "transferred_in", "from": "2025-11-02", "displacedBy": "grid:ordinary-31-sunday" } },
+        { "date": "2025-11-03", "expect": { "id": "grid:ordinary-31-weekday-mon", "status": "proper" } }
+      ]
+    },
+    {
+      "id": "T-2033-09-09-nativity-of-mary-chuseok",
+      "kind": "transfer",
+      "group": "⑩",
+      "title": "주일 밖 충돌 — 2033 추석(목) ∧ 성모 탄신 → 9.9 (transferable 은 원인을 가리지 않는다)",
+      "status": "confirmed",
+      "issue": "미결31",
+      "canon": ["R-6.1-prec7-omit", "R-6.2-destinations"],
+      "checks": ["C-6.1-6"],
+      "source": ["KASI 2033 8-15 = 09-08 — 2025~2050 에 주일 밖 사례는 이 하나뿐"],
+      "assertions": [
+        { "date": "2033-09-09", "expect": { "id": "d0908-성모-탄신", "status": "transferred_in", "from": "2033-09-08", "displacedBy": "lunar815-추석-명절" } }
+      ]
+    },
+    {
+      "id": "T-2024-04-08-annunciation-holy-monday",
+      "kind": "transfer",
+      "group": "③",
+      "title": "성주간의 수태고지 — 설계는 guard 이동(3.25 성 월요일 → 4.8), 2024 책자는 무이동",
+      "status": "skip",
+      "issue": "미결32",
+      "skip": "미결32 — 2024 책자(옛 편집)는 3.25 [백] 「성모 수태고지 (성 월요일)」 로 두고 두 독서를 병기했다. 다음 사례 2027-03-25(성 목요일) 책자로 판정할 때까지 설계(guard 이동)를 유지하되 테스트로 고정하지 않는다",
+      "canon": ["R-6.5-year-pass"],
+      "checks": ["X-12"],
+      "source": ["2024 책자 p.22"],
+      "note": "뒤집히면 §6.5 guard 에서 수태고지만 예외(그날 proper 로 두고 두 독서를 선택지로)가 되고 2027·2029·2035·2040·2046 기대값이 바뀐다.",
+      "assertions": [
+        { "date": "2024-04-08", "expect": { "id": "d0325-성모수태고지", "status": "transferred_in", "from": "2024-03-25", "displacedBy": "guard:easter-octave" } }
+      ]
+    }
+  ]
+}
