@@ -1,4 +1,5 @@
 ---
+pr: 335
 date: 2026-10-09
 branch: docs/engine-canon-2-dedup
 title: "docs: 교회력 엔진 정본 지도 ② — 설계서 중복 제거 · §9 열림/닫힘 분리 · 동그라미 참조 → R- 마커 · 책자 대조 서술을 보관 문서로"
