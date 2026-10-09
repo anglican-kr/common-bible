@@ -206,6 +206,23 @@ test("설계서 §9 — §9.1(열림)·§9.2(닫힘)을 합치면 정확히 1..N
   assert.deepEqual(ISSUES["설계서"], [...open, ...closed], "`## 9.` 전체 목록이 두 소절의 합과 다르다 — 소절 밖에 항목이 있다");
 });
 
+test("설계서 §9.1 열림 항목은 일곱 필드(상태 · 확인 주체 · 질문 · 구체 예 · 잠정 답 · 뒤집히면/닫히면 · 정본)를 전부 가진다", () => {
+  const t = text["설계서"];
+  const start = t.indexOf("\n### 9.1 ");
+  assert.ok(start >= 0, "§9.1 헤딩이 없다");
+  const body = t.slice(start + 1).split(/\n#{1,3} /)[0].split("\n");
+  const FIELDS = [["상태:", /상태:/], ["확인 주체:", /확인 주체:/], ["질문:", /질문:/], ["구체 예", /구체 예(\(|:)/],
+    ["잠정 답", /잠정 답(\(|:)/], ["뒤집히면/닫히면", /(뒤집히면|닫히면)/], ["정본:", /정본:/]];
+  const bad = [];
+  for (const line of body) {
+    const m = /^- \*\*미결(\d+)\*\*/.exec(line);
+    if (!m) continue;
+    const missing = FIELDS.filter(([, re]) => !re.test(line)).map(([name]) => name);
+    if (missing.length) bad.push(`미결${m[1]}: ${missing.join(" · ")} 없음`);
+  }
+  assert.deepEqual(bad, [], `§9 머리의 필드 규약 위반:\n  ${bad.join("\n  ")}`);
+});
+
 test("설계서 §9.2 닫힘 항목은 한 줄이고 `닫힘(YYYY-MM-DD)` 을 적는다 — 전문은 §9.1 에서 옮길 때 한 줄로 줄인다", () => {
   const t = text["설계서"];
   const start = t.indexOf("\n### 9.2 ");
