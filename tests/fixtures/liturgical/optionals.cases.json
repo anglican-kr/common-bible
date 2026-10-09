@@ -1,0 +1,353 @@
+{
+  "_meta": {
+    "kind": "optional | activation",
+    "schema": "tests/fixtures/liturgical/README.md",
+    "canon": "설계서 §1.4 정본 지도 — 선택 봉헌(optional)과 활성화(activated) 기대값은 이 파일이 정본이다",
+    "transcribedFrom": "설계서 §7 이동 패스 행 ⑦·⑩ 선택 · 검토 문서 §5.12 (main 243bf83, 2026-09-20)",
+    "groupLegend": "group 은 리팩터링 전 §7 행의 묶음 표시일 뿐이다 — 참조 대상이 아니다"
+  },
+  "cases": [
+    {
+      "id": "O-2026-05-17-ascension",
+      "kind": "optional",
+      "group": "⑦",
+      "title": "승천 — 부활 7주일에 optional, 목요일 고유 후보는 그대로",
+      "status": "confirmed",
+      "canon": ["R-6.2-destinations"],
+      "checks": ["C-6.2-1", "X-10"],
+      "source": ["2026 책자 — 5.14 「오는 주일로 옮겨 지킬 수 있다」, 5.17 「(승천 후 주일)」"],
+      "assertions": [
+        { "date": "2026-05-17", "expect": { "id": "t-승천대축일", "status": "optional", "from": "2026-05-14" } },
+        { "date": "2026-05-14", "expect": { "id": "t-승천대축일", "status": "proper" } }
+      ]
+    },
+    {
+      "id": "O-2024-05-12-ascension",
+      "kind": "optional",
+      "group": "⑩",
+      "title": "승천 2024 — 5.9 → 5.12 optional",
+      "status": "confirmed",
+      "canon": ["R-6.2-destinations"],
+      "checks": ["X-12"],
+      "source": ["2024 책자 — 5.9 승천 「부활7주일(5.12)로」"],
+      "assertions": [
+        { "date": "2024-05-12", "expect": { "id": "t-승천대축일", "status": "optional", "from": "2024-05-09" } }
+      ]
+    },
+    {
+      "id": "O-2025-06-01-ascension",
+      "kind": "optional",
+      "group": "⑩",
+      "title": "승천 2025 — 5.29 → 6.1 optional (책자 안내 없음 — 편집 편차, 기대값 유지)",
+      "status": "confirmed",
+      "canon": ["R-6.2-destinations"],
+      "checks": ["X-11"],
+      "source": ["2025 책자 — 6.1 은 「승천 후 주일」 표기만, 안내 없음(편집 연도별 편차 — 엔진은 넷 다 optional 을 낸다)"],
+      "assertions": [
+        { "date": "2025-06-01", "expect": { "id": "t-승천대축일", "status": "optional", "from": "2025-05-29" } }
+      ]
+    },
+    {
+      "id": "O-2030-01-06-epiphany-on-sunday",
+      "kind": "optional",
+      "group": "⑦",
+      "title": "공현 — 1.6 이 주일인 해는 optional 없음",
+      "status": "confirmed",
+      "canon": ["R-6.2-destinations"],
+      "checks": ["C-6.2-2"],
+      "source": ["설계서 §6.2 표 sunday_0102_0108"],
+      "alsoYears": [2036, 2041, 2047],
+      "assertions": [
+        { "date": "2030-01-06", "expect": { "id": "d0106-공현대축일", "status": "optional", "absent": true } },
+        { "date": "2030-01-06", "expect": { "id": "d0106-공현대축일", "status": "proper" } }
+      ]
+    },
+    {
+      "id": "O-2026-11-01-all-saints-on-sunday",
+      "kind": "optional",
+      "group": "⑦",
+      "title": "모든 성인 — 11.1 이 주일인 해는 optional 없음",
+      "status": "confirmed",
+      "canon": ["R-6.2-destinations"],
+      "checks": ["C-6.2-2", "X-10"],
+      "source": ["2026 책자 — 모든 성인은 주일(11.1)이라 안내 없음"],
+      "alsoYears": [2037, 2043, 2048],
+      "assertions": [
+        { "date": "2026-11-01", "expect": { "id": "d1101-모든-성인의-날", "status": "optional", "absent": true } },
+        { "date": "2026-11-01", "expect": { "id": "d1101-모든-성인의-날", "status": "proper" } }
+      ]
+    },
+    {
+      "id": "O-2024-01-07-epiphany",
+      "kind": "optional",
+      "group": "⑩",
+      "title": "공현 2024 — 주님의 세례 주일(1.7)에 optional: sunday_0102_0108 은 세례 주일을 제외하지 않는다",
+      "status": "confirmed",
+      "canon": ["R-6.2-destinations", "R-4.5-baptism-ordinary-1"],
+      "checks": ["X-12"],
+      "source": ["2024 책자 — 1.7 주님의 세례 주일에 「공현대축일로 지킬 수 있다」(1.6 토)"],
+      "assertions": [
+        { "date": "2024-01-07", "expect": { "id": "d0106-공현대축일", "status": "optional", "from": "2024-01-06" } }
+      ]
+    },
+    {
+      "id": "O-2026-01-04-epiphany",
+      "kind": "optional",
+      "group": "⑩",
+      "title": "공현 2026 — 1.4 optional (목적지가 기원 1.6 보다 앞)",
+      "status": "confirmed",
+      "canon": ["R-6.2-destinations"],
+      "checks": ["C-6.2-2", "X-10"],
+      "source": ["2026 책자 — 1.4 「공현대축일로 지킬 수 있다」"],
+      "assertions": [
+        { "date": "2026-01-04", "expect": { "id": "d0106-공현대축일", "status": "optional", "from": "2026-01-06" } }
+      ]
+    },
+    {
+      "id": "O-2026-02-01-presentation",
+      "kind": "optional",
+      "group": "⑩",
+      "title": "주의 봉헌 2026 — 2.2(월) → 직전 주일 2.1",
+      "status": "confirmed",
+      "canon": ["R-6.2-nearby-sunday"],
+      "checks": ["C-6.2-3", "X-10"],
+      "source": ["2026 책자 — 2.2(월) 「전 주일로 옮겨 지킬 수 있다」 = 2.1"],
+      "assertions": [
+        { "date": "2026-02-01", "expect": { "id": "d0202-주의-봉헌", "status": "optional", "from": "2026-02-02" } }
+      ]
+    },
+    {
+      "id": "O-2024-02-04-presentation",
+      "kind": "optional",
+      "group": "⑩",
+      "title": "주의 봉헌 2024 — 2.2(금) → 다음 주일 2.4",
+      "status": "confirmed",
+      "canon": ["R-6.2-nearby-sunday"],
+      "checks": ["X-12"],
+      "source": ["2024 책자 — 2.4 연중 5주일 「주님의 봉헌 축일로 지킬 수 있다」"],
+      "assertions": [
+        { "date": "2024-02-04", "expect": { "id": "d0202-주의-봉헌", "status": "optional", "from": "2024-02-02" } }
+      ]
+    },
+    {
+      "id": "O-2028-01-30-presentation",
+      "kind": "optional",
+      "group": "⑦",
+      "title": "주의 봉헌 2028 — 2.2(수) → 직전 주일 1.30 (수요일은 직전 — 경계)",
+      "status": "confirmed",
+      "canon": ["R-6.2-nearby-sunday"],
+      "checks": ["C-6.2-3"],
+      "source": ["설계서 §6.2 nearby_sunday — 수요일은 직전 주일이 3일 전, 다음 주일이 4일 후"],
+      "assertions": [
+        { "date": "2028-01-30", "expect": { "id": "d0202-주의-봉헌", "status": "optional", "from": "2028-02-02" } }
+      ]
+    },
+    {
+      "id": "O-2034-02-05-presentation",
+      "kind": "optional",
+      "group": "⑦",
+      "title": "주의 봉헌 2034 — 2.2(목) → 다음 주일 2.5 (목요일부터 다음 — 경계)",
+      "status": "confirmed",
+      "canon": ["R-6.2-nearby-sunday"],
+      "checks": ["C-6.2-3"],
+      "source": ["설계서 §6.2 nearby_sunday"],
+      "assertions": [
+        { "date": "2034-02-05", "expect": { "id": "d0202-주의-봉헌", "status": "optional", "from": "2034-02-02" } }
+      ]
+    },
+    {
+      "id": "O-2031-02-02-presentation-on-sunday",
+      "kind": "optional",
+      "group": "⑦",
+      "title": "주의 봉헌 2031 — 2.2 가 주일이면 optional 없음",
+      "status": "confirmed",
+      "canon": ["R-6.2-nearby-sunday"],
+      "checks": ["C-6.2-3"],
+      "source": ["설계서 §6.2 nearby_sunday — 그날이 주일이면 목적지 없음"],
+      "assertions": [
+        { "date": "2031-02-02", "expect": { "id": "d0202-주의-봉헌", "status": "optional", "absent": true } }
+      ]
+    },
+    {
+      "id": "O-2049-01-31-presentation",
+      "kind": "optional",
+      "group": "④",
+      "title": "주의 봉헌 2049 — 2.2(화, 설과 겹침) → 직전 주일 1.31 optional; 충돌 이동 2.3 은 T-2049-02-03-presentation-seollal",
+      "status": "confirmed",
+      "canon": ["R-6.2-nearby-sunday"],
+      "checks": ["C-6.5-10"],
+      "source": ["KASI 2049 1-1 = 02-02"],
+      "assertions": [
+        { "date": "2049-01-31", "expect": { "id": "d0202-주의-봉헌", "status": "optional", "from": "2049-02-02" } }
+      ]
+    },
+    {
+      "id": "O-2026-08-09-transfiguration",
+      "kind": "optional",
+      "group": "⑦",
+      "title": "주의 변모 2026 — 8.6(목) → 다음 주일 8.9 (nearby_sunday, 미결28)",
+      "status": "confirmed",
+      "issue": "미결28",
+      "canon": ["R-6.2-nearby-sunday"],
+      "checks": ["C-6.2-10", "X-10"],
+      "source": ["2026 책자 p.41 — 8.6 「오는 주일로 옮겨 지킬 수 있다」"],
+      "note": "optionalObservancesOf 가 봉헌과 같은 nearestSunday 로 목적지를 낸다. 2026-09-19 사용자 확정 — 데이터 TRANSFER_TO[주의 변모] = nearby_sunday(종전 next_sunday 폐지).",
+      "assertions": [
+        { "date": "2026-08-09", "expect": { "id": "d0806-주의-변모", "status": "optional", "from": "2026-08-06" } }
+      ]
+    },
+    {
+      "id": "O-2024-08-04-transfiguration",
+      "kind": "optional",
+      "group": "⑩",
+      "title": "주의 변모 2024 — 8.6(화) → 직전 주일 8.4",
+      "status": "confirmed",
+      "issue": "미결28",
+      "canon": ["R-6.2-nearby-sunday"],
+      "checks": ["C-6.2-10", "X-12"],
+      "source": ["2024 책자 p.41 — 8.6(화) 「연중 18주일(8.4)로 옮긴 경우」"],
+      "assertions": [
+        { "date": "2024-08-04", "expect": { "id": "d0806-주의-변모", "status": "optional", "from": "2024-08-06" } }
+      ]
+    },
+    {
+      "id": "O-2025-08-03-transfiguration",
+      "kind": "optional",
+      "group": "⑩",
+      "title": "주의 변모 2025 — 8.6(수) → 직전 주일 8.3 (책자 안내 없음 — 규칙상 8.3)",
+      "status": "confirmed",
+      "issue": "미결28",
+      "canon": ["R-6.2-nearby-sunday"],
+      "checks": ["C-6.2-10", "X-11"],
+      "source": ["2025 책자 — 8.6(수)에는 안내 없음(편집 편차)"],
+      "assertions": [
+        { "date": "2025-08-03", "expect": { "id": "d0806-주의-변모", "status": "optional", "from": "2025-08-06" } }
+      ]
+    },
+    {
+      "id": "O-2028-08-06-transfiguration-on-sunday",
+      "kind": "optional",
+      "group": "⑦",
+      "title": "주의 변모 — 8.6 이 주일인 해는 optional 없음",
+      "status": "confirmed",
+      "issue": "미결28",
+      "canon": ["R-6.2-nearby-sunday"],
+      "checks": ["C-6.2-10"],
+      "source": ["설계서 §6.2 nearby_sunday"],
+      "alsoYears": [2034, 2045],
+      "assertions": [
+        { "date": "2028-08-06", "expect": { "id": "d0806-주의-변모", "status": "optional", "absent": true } }
+      ]
+    },
+    {
+      "id": "O-2024-11-03-all-saints",
+      "kind": "optional",
+      "group": "⑩",
+      "title": "모든 성인 2024 — 11.1(금) → 11.3 optional",
+      "status": "confirmed",
+      "canon": ["R-6.2-destinations"],
+      "checks": ["X-12"],
+      "source": ["2024 책자 — 11.1 「연중 31주일(11.3)로」 + 11.3 「모든 성인의 날로 지킬 경우」"],
+      "assertions": [
+        { "date": "2024-11-03", "expect": { "id": "d1101-모든-성인의-날", "status": "optional", "from": "2024-11-01" } }
+      ]
+    },
+    {
+      "id": "O-2025-11-02-all-saints",
+      "kind": "optional",
+      "group": "⑩",
+      "title": "모든 성인 2025 — 11.1(토) → 11.2 optional",
+      "status": "confirmed",
+      "canon": ["R-6.2-destinations"],
+      "checks": ["X-11"],
+      "source": ["2025 책자 — 11.1 「연중 31주일로 이동할 수 있다」(책자의 유일한 선택 봉헌 안내)"],
+      "assertions": [
+        { "date": "2025-11-02", "expect": { "id": "d1101-모든-성인의-날", "status": "optional", "from": "2025-11-01" } }
+      ]
+    },
+    {
+      "id": "A-2028-01-30-presentation-activated",
+      "kind": "activation",
+      "group": "⑦",
+      "title": "활성화 — 2028 주의 봉헌을 켜면 목적지 1.30 이 기원 2.2 보다 앞인데도 도착·출발이 만들어진다(0단계 선색인)",
+      "status": "confirmed",
+      "activated": ["d0202-주의-봉헌"],
+      "canon": ["R-6.2-destinations", "R-6.5-year-pass"],
+      "checks": ["C-6.2-5", "C-6.2-6"],
+      "source": ["설계서 §6.2 활성화 계약"],
+      "note": "displacedBy: null = 필드가 없어야 한다(밀린 것이 아니라 택한 것). 원래 날짜에 proper 봉헌은 없다 — 두 번 지키지 않는다.",
+      "assertions": [
+        { "date": "2028-01-30", "expect": { "official": "d0202-주의-봉헌" } },
+        { "date": "2028-01-30", "expect": { "id": "d0202-주의-봉헌", "status": "transferred_in", "from": "2028-02-02", "displacedBy": null } },
+        { "date": "2028-02-02", "expect": { "id": "d0202-주의-봉헌", "status": "transferred_out", "to": "2028-01-30", "displacedBy": null } },
+        { "date": "2028-02-02", "expect": { "id": "d0202-주의-봉헌", "status": "proper", "absent": true } }
+      ]
+    },
+    {
+      "id": "A-2049-01-31-presentation-activated",
+      "kind": "activation",
+      "group": "⑦",
+      "title": "활성화 — 2049 주의 봉헌을 켜면 1.31 도착 하나만 있고 2.3 충돌 이동은 생기지 않는다",
+      "status": "confirmed",
+      "activated": ["d0202-주의-봉헌"],
+      "canon": ["R-6.2-destinations"],
+      "checks": ["C-6.2-5"],
+      "source": ["설계서 §6.2 활성화 계약 ③ — 원래 날짜에서 충돌 판정에 오르지 않는다"],
+      "assertions": [
+        { "date": "2049-01-31", "expect": { "id": "d0202-주의-봉헌", "status": "transferred_in", "from": "2049-02-02", "displacedBy": null } },
+        { "date": "2049-02-02", "expect": { "id": "d0202-주의-봉헌", "status": "transferred_out", "to": "2049-01-31" } },
+        { "date": "2049-02-03", "expect": { "id": "d0202-주의-봉헌", "absent": true } }
+      ]
+    },
+    {
+      "id": "A-2030-02-03-presentation-vs-seollal",
+      "kind": "activation",
+      "group": "⑦",
+      "title": "활성화 — 2030 주의 봉헌(토) 목적지 2.3 이 설이다: 도착은 얹되 승자가 아니고 다시 옮기지 않는다",
+      "status": "provisional",
+      "issue": "미결19",
+      "activated": ["d0202-주의-봉헌"],
+      "canon": ["R-6.2-destinations", "R-6.5-year-pass"],
+      "checks": ["C-6.2-8", "I-2"],
+      "source": ["KASI 2030 1-1 = 02-03 — 2025~2050 에 이 배치는 이 한 해뿐"],
+      "note": "잠정 「켠 대로 둔다」(목회 판단 — 사제 확인 대상). 이 케이스만 I-2 「떠나지 않은 도착은 승자」에서 제외된다.",
+      "assertions": [
+        { "date": "2030-02-03", "expect": { "official": "lunar11-설날" } },
+        { "date": "2030-02-03", "expect": { "id": "d0202-주의-봉헌", "status": "transferred_in", "from": "2030-02-02", "notInDepartures": true } }
+      ]
+    },
+    {
+      "id": "A-2026-05-17-ascension-activated",
+      "kind": "activation",
+      "group": "⑦",
+      "title": "활성화 — 2026 승천을 켜면 5.17 official 이 승천, 5.14 는 transferred_out",
+      "status": "confirmed",
+      "activated": ["t-승천대축일"],
+      "canon": ["R-6.2-destinations"],
+      "checks": ["C-6.2-5"],
+      "source": ["설계서 §6.2 활성화 계약"],
+      "assertions": [
+        { "date": "2026-05-17", "expect": { "official": "t-승천대축일" } },
+        { "date": "2026-05-17", "expect": { "id": "t-승천대축일", "status": "transferred_in", "from": "2026-05-14", "displacedBy": null } },
+        { "date": "2026-05-14", "expect": { "id": "t-승천대축일", "status": "transferred_out", "to": "2026-05-17", "displacedBy": null } }
+      ]
+    },
+    {
+      "id": "A-2026-08-09-transfiguration-activated",
+      "kind": "activation",
+      "group": "⑦",
+      "title": "활성화 — 2026 주의 변모를 켜면 8.9 official 이 변모(A 특례 outranks_sunday), 8.6 은 transferred_out",
+      "status": "confirmed",
+      "issue": "미결28",
+      "activated": ["d0806-주의-변모"],
+      "canon": ["R-6.2-nearby-sunday", "R-6.1-ladder"],
+      "checks": ["C-6.2-10"],
+      "source": ["설계서 §6.2 활성화 계약 ②"],
+      "assertions": [
+        { "date": "2026-08-09", "expect": { "official": "d0806-주의-변모" } },
+        { "date": "2026-08-09", "expect": { "id": "d0806-주의-변모", "status": "transferred_in", "from": "2026-08-06", "displacedBy": null } },
+        { "date": "2026-08-06", "expect": { "id": "d0806-주의-변모", "status": "transferred_out", "to": "2026-08-09" } }
+      ]
+    }
+  ]
+}

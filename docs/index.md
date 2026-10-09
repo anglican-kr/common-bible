@@ -14,7 +14,7 @@
 | Drive 동기화 · OAuth              | ADR-011 · 017 · `architecture.md` §4.3 · §9 · pitfalls §11 · §12 · `archive/audit/`                                                                                             |
 | 설정 · 디자인 시스템 · CSS        | `DESIGN.md`(루트) · ADR-028 · 023 · 025 · pitfalls §8 · §14                                                                                                                      |
 | 오디오                            | ADR-016 · `js/app/audio-player.js` · pitfalls §15                                                                                                                                |
-| 교회력 · 전례독서 · 캘린더        | `reference/liturgical-calendar-rules.md`(기도서 원문 — 알고리즘의 권위) · `design/liturgical-engine.md`(설계 + 미결 목록) · ADR-036 · 037 · 038 · `design/liturgical-engine-review.md` |
+| 교회력 · 전례독서 · 캘린더        | `reference/liturgical-calendar-rules.md`(기도서 원문 — 알고리즘의 권위) · `design/liturgical-engine.md`(설계 + 미결 목록 — §1.4 정본 지도부터) · ADR-036 · 037 · 038 · `design/liturgical-engine-review.md` · `tests/fixtures/liturgical/README.md`(실제 연도 기대값 정본) |
 | 본문 데이터 · 마크업 · 인용·주석  | ADR-022 · 027 · `common-bible-data` 저장소 README (서브모듈 `data/`)                                                                                                            |
 | 유닛 테스트 · 타입 · 모듈 구조    | ADR-013 · 012 · 018 · 019 · `architecture.md` §4 · §6 · §7                                                                                                                       |
 | 설치 · 스플래시 · 접근성          | ADR-007 · 008 · pitfalls §5 · §10                                                                                                                                                |
