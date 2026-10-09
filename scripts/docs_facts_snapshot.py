@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 """교회력 설계 문서의 「사실 토큰」 스냅샷 · 비교 — 리팩터링이 사실을 지우지 않았음을 증명한다.
 
-대상: 설계서 · 검토 문서 · ADR-036/037/038 + tests/fixtures/liturgical/*.json (JSON 문자열 값).
+대상: 설계서 · 검토 문서 · ADR-036/037/038 + docs/archive/design/liturgical-engine-*.md(점-시점 보관 문서 —
+설계서에서 옮겨 간 관찰 서술) + tests/fixtures/liturgical/*.json (JSON 문자열 값).
 문서에서 날짜 · 월일 · 건수 · 관측일 id · precedence · transfer_to 값 · 전례색 · 미결 번호 · §번호 ·
-C-/X-/I-/Q/R id · 픽스처 id · PR 번호를 뽑아 문서별·합집합으로 센다.
+C-/X-/I-/Q/R id · 픽스처 id · PR 번호를 뽑아 문서별·합집합으로 센다. 보관 문서와 픽스처는 리비전마다 목록을
+구해(`git ls-tree`) 아직 없는 리비전에서는 비어 있는 것으로 본다 — 사실을 그리로 **옮기는** 변경이 사라짐으로
+잡히지 않게.
 
     python3 scripts/docs_facts_snapshot.py --rev main            # 스냅샷 JSON 을 stdout 으로
     python3 scripts/docs_facts_snapshot.py --rev main -o base.json
@@ -41,6 +44,8 @@ DOCS = [
     "docs/decisions/038-calendar-lectionary-ui.md",
 ]
 FIXTURE_DIR = "tests/fixtures/liturgical"
+# 설계서 §9 에서 옮겨 간 책자·달력 대조 서술의 보관처(점-시점 기록). 사실 토큰은 여기서도 센다 — 문서로 취급(픽스처 아님).
+ARCHIVE_DIR, ARCHIVE_PREFIX = "docs/archive/design", "liturgical-engine-"
 
 # 토큰 종류 → 정규식. 그룹이 있으면 그룹 1 이 토큰, 없으면 전체 매치.
 # 순서는 보고 순서일 뿐이다 — 종류끼리 겹쳐도 각각 따로 센다.
@@ -87,17 +92,26 @@ def read_at(rev: str, path: str) -> str:
     return r.stdout
 
 
-def list_fixtures(rev: str) -> list[str]:
-    """rev 의 픽스처 JSON 목록. 디렉터리가 아직 없는 리비전(① 이전 main)은 빈 목록이 맞다 —
-    그러나 리비전 자체가 틀리면 멈춘다(빈 목록으로 넘기면 픽스처 쪽 합집합이 통째로 빠진다)."""
+def list_dir(rev: str, directory: str, keep) -> list[str]:
+    """rev 의 directory 안 파일 중 keep(이름) 이 참인 것. 디렉터리가 아직 없는 리비전(① 이전 main 의 픽스처,
+    ② 이전 main 의 보관 문서)은 빈 목록이 맞다 — 그러나 리비전 자체가 틀리면 멈춘다(빈 목록으로 넘기면
+    그쪽 합집합이 통째로 빠진다)."""
     if rev == "WORKTREE":
-        d = ROOT / FIXTURE_DIR
-        return sorted(str(p.relative_to(ROOT)) for p in d.glob("*.json")) if d.exists() else []
-    r = subprocess.run(["git", "ls-tree", "--name-only", rev, f"{FIXTURE_DIR}/"],
+        d = ROOT / directory
+        return sorted(str(p.relative_to(ROOT)) for p in d.iterdir() if keep(p.name)) if d.exists() else []
+    r = subprocess.run(["git", "ls-tree", "--name-only", rev, f"{directory}/"],
                        cwd=ROOT, capture_output=True, text=True)
     if r.returncode != 0:
         sys.exit(f"{rev}: git ls-tree 실패 — {r.stderr.strip()}")
-    return sorted(p for p in r.stdout.split() if p.endswith(".json"))
+    return sorted(p for p in r.stdout.split() if keep(Path(p).name))
+
+
+def list_fixtures(rev: str) -> list[str]:
+    return list_dir(rev, FIXTURE_DIR, lambda n: n.endswith(".json"))
+
+
+def list_archives(rev: str) -> list[str]:
+    return list_dir(rev, ARCHIVE_DIR, lambda n: n.startswith(ARCHIVE_PREFIX) and n.endswith(".md"))
 
 
 def json_strings(node) -> list[str]:
@@ -140,7 +154,7 @@ def tokenize(text: str) -> dict[str, Counter]:
 def snapshot(rev: str) -> dict:
     files: dict[str, dict[str, dict[str, int]]] = {}
     union: dict[str, Counter] = defaultdict(Counter)
-    for path in DOCS:
+    for path in DOCS + list_archives(rev):
         toks = tokenize(read_at(rev, path))
         files[path] = {k: dict(sorted(v.items())) for k, v in toks.items()}
         for k, v in toks.items():

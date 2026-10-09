@@ -11,16 +11,20 @@ export function sectionList(text) {
   return [...text.matchAll(/^#{2,4} (\d+(?:\.\d+|-\d+)?)\.?\s/gm)].map((m) => m[1]);
 }
 
-/** 미결 원장(설계서 `## 9. ` · ADR `## 미결 사항`)의 항목 번호를 **나온 순서대로**(중복 포함 —
- *  집합이면 재사용된 번호가 사라진다, `sectionList` 와 같은 이유). 절이 없으면 null.
- *  §1.4 가 「절은 말미 추가만」을 규정하므로 뒤에 §10 · 부록이 붙는다 — **다음 `## ` 헤딩에서 끊는다**. */
+/** 미결 원장(설계서 `## 9. ` · `### 9.1 ` · `### 9.2 ` · ADR `## 미결 사항`)의 항목 번호를 **나온 순서대로**
+ *  (중복 포함 — 집합이면 재사용된 번호가 사라진다, `sectionList` 와 같은 이유). 절이 없으면 null.
+ *  §1.4 가 「절은 말미 추가만」을 규정하므로 뒤에 §10 · 부록이 붙는다 — **같은 깊이 이하의 다음 헤딩에서 끊는다**
+ *  (`## 9.` 는 `### 9.1`·`### 9.2` 를 품고, `### 9.2` 는 다음 `###` 이나 `##` 에서 끝난다).
+ *  항목 문법은 둘 — 설계서 §9 는 `- **미결n**` 불릿(열림·닫힘 두 목록으로 갈려 번호가 띄엄띄엄이라 순서 목록이면
+ *  렌더러가 1부터 다시 매긴다), ADR 「미결 사항」은 `n. ` 순서 목록. */
 export function issueNumbers(text, heading) {
   const start = text.indexOf(heading);
   if (start < 0) return null;
+  const level = /^\n(#+) /.exec(heading)?.[1].length ?? 2;
   const body = text.slice(start + 1);
-  const end = body.indexOf("\n## ", 1);
+  const end = body.search(new RegExp(`\\n#{1,${level}} `));
   const sec = end < 0 ? body : body.slice(0, end);
-  return [...sec.matchAll(/^(\d+)\. /gm)].map((m) => Number(m[1]));
+  return [...sec.matchAll(/^(?:(\d+)\. |- \*\*미결(\d+)\*\*)/gm)].map((m) => Number(m[1] ?? m[2]));
 }
 
 /** 검토 문서 §5 가 굵게 정의한 검증 항목 id(`C-6.5-4` · `C-P-1` · `X-10` · `I-7a`). */

@@ -2,7 +2,7 @@
 
 완료됐거나 점-시점(point-in-time) 기록이라 **더 이상 갱신되지 않는** 문서 보관소. 살아있는 가이드(`docs/architecture.md`·`status.md`·`known-issues.md`·`decisions/`)와 분리해 루트를 가볍게 유지한다 (2026-06-08 분리).
 
-- `design/` — 설계 변천 narrative. 완료된 마이그레이션·재설계의 경위 기록 (app 모듈 분할 ADR-018, TypeScript 도입 ADR-012, PKCE 마이그레이션 ADR-011, 검색 이력 ADR-014). ADR이 "관련 설계 문서"로 참조.
+- `design/` — 설계 변천 narrative. 완료된 마이그레이션·재설계의 경위 기록 (app 모듈 분할 ADR-018, TypeScript 도입 ADR-012, PKCE 마이그레이션 ADR-011, 검색 이력 ADR-014). ADR이 "관련 설계 문서"로 참조. 점-시점 관찰 기록도 여기 — `liturgical-engine-booklet-comparison-2026-09.md`(교회력 엔진 책자·달력 대조 원문, 설계서 §9 에서 옮겨 옴. 현행 결론은 설계서 §9·픽스처).
 - `audit/` — 날짜별 보안 감사 보고서.
 - `qa/` — 날짜별 자동 테스트(e2e·유닛) 회귀 보고서 (비기술 독자 톤).
 
