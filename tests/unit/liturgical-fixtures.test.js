@@ -33,7 +33,9 @@ const FILES = {
 const PREFIX = { transfer: "T", optional: "O", activation: "A", winner: "W" };
 const STATUS = new Set(["confirmed", "provisional", "skip"]);
 const CANDIDATE_STATUS = new Set(["proper", "transferred_in", "transferred_out", "optional", "commemorated", "omitted"]);
-const COLORS = new Set(["white", "red", "green", "violet", "rose", "blue"]);
+// 정식 전례색만(설계서 §6.4 · ADR-036 §8 · README 「단언」 표). `rose`·`blue` 는 `color_alt` 값이라
+// `color`·`colors`·`observanceColor` 에 오면 오타다 — 통과시키면 엔진의 다른 필드와 비교하게 된다.
+const COLORS = new Set(["white", "red", "green", "violet"]);
 const EXPECT_KEYS = new Set([
   "id", "status", "from", "to", "displacedBy", "absent", "notInDepartures", "neverDeparts",
   "official", "color", "colors", "observanceColor", "penitential", "fast", "coord", "grid",
