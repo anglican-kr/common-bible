@@ -166,3 +166,19 @@ title: "docs: 교회력 엔진 정본 지도 ① — §1.4 번호 규약 · R- �
 | 게이트 다섯 전부 켬 | (§1.4 는 눈 감음) | §1.4 안 지적 0 · 밖은 ②~④ 몫 |
 
 **검증(2회차 뒤).** `node --test tests/unit/*.test.js` — **897 케이스(892 통과 · 5 게이트 skip · 0 실패)**: crossref 10 · fixtures 7 · fixtures.data 2(로컬 `data/` 있음 — 관측일 id 실재 통과). `npm run typecheck` 통과. 스냅샷 — `python3 scripts/docs_facts_snapshot.py --diff main HEAD --allow-new '^2026-09-20$' --allow-new '^§1\.4$' --allow-new '^#329$' --allow-new '^data#26$' --allow-new '^§5\.11$' --moved 02.03=2049-02-03 --moved 02.12=2032-02-12 --moved 04.02=2035-04-02 --moved 04.03=2035-04-03 --moved 04.05=2027-04-05 --moved 04.09=2029-04-09 --moved 04.28=2025-04-28 --moved 05.04=2038-05-04 --moved 05.14=2026-05-14 --moved 05.15=2026-05-15 --moved 06.01=2026-06-01` → **사라진 토큰 0 · 형태 변환 11(명시) · 허용 밖 0**(`data#26` 은 main 의 「데이터 #26」이 같은 토큰이 되어 더는 새 토큰이 아니다). 사실 변경 0 유지. `tests/README.md`(29파일 · 897케이스 · `.data.test.js` 행 · 추출기 경로) · `CLAUDE.md`(897 · 예외 ② 문장 · 추출기 경로) · 픽스처 README(`alsoYears` 조건 · 소비 방법의 두 테스트) 갱신.
+
+## 리뷰 반영 (2026-10-09, 3회차)
+
+1건 — 반영했다. 리뷰 상한(2회)을 넘긴 회차라 **논리적 모순만** 보는데, 이 지적은 검사기와 계약 문서가 서로 다른 계약을 말하는 모순이다.
+
+- **검사기의 색 도메인이 계약보다 넓었다.** 픽스처 README 「단언」 표 · 설계서 §6.4 · ADR-036 §8 은 `color`·`colors`(`ResolvedDate.color`)를 정식 전례색 `white` `red` `green` `violet` 로 정의하고, `rose`·`blue` 를 별도 필드 `color_alt` 로 분리했다. 그런데 `liturgical-fixtures.test.js` 의 `COLORS` 는 여섯 값을 다 받아, 픽스처에 `"color": "rose"` 같은 오타가 통과하고 PR 3 에서 엔진의 엉뚱한 필드와 비교될 수 있었다. → 정식 넷으로 좁혔다. 같은 집합을 쓰는 `observanceColor`(`observance.color` — 데이터의 정식 색 필드, 도메인은 같다)도 함께 좁혀진다. 전사된 82 케이스의 색 값은 전부 넷 안에 있어 데이터 변경은 없다.
+
+**변이 검사 — 전부 「옛 코드 통과 · 새 코드 실패」.**
+
+| 변이(`winners.cases.json`) | 옛 | 새 |
+|---|---|---|
+| `"color": "green"` → `"rose"` | 통과 | 실패 |
+| `"observanceColor": "violet"` → `"blue"` | 통과 | 실패 |
+| `"color": "violet"` → `"colors": ["violet", "rose"]` | 통과 | 실패 |
+
+**검증(3회차 뒤).** `node --test tests/unit/*.test.js` — **897 케이스(892 통과 · 5 게이트 skip · 0 실패)**, 케이스 수 불변이라 `tests/README.md` · `CLAUDE.md` 의 수치는 그대로. `npm run typecheck` 통과. 스냅샷 — 2회차와 같은 명령 → **사라진 토큰 0 · 형태 변환 11(명시) · 허용 밖 0**. 사실 변경 0 유지.
