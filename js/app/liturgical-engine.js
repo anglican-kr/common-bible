@@ -263,7 +263,7 @@ function yearAnchors(y) {
 
 /**
  * 절기 스팬을 **먼저 확정**하고 남는 자리가 연중이다. 도메인 다섯 — `epiphany` 는
- * 없다(ADR-036 §4 개정). 주의 세례 주일은 **연중시기의 첫날**이라 성탄절기는 그
+ * 없다(ADR-036 §4). 주의 세례 주일은 **연중시기의 첫날**이라 성탄절기는 그
  * 전날 끝난다(§4.5 · 미결10 해소 2026-09-01).
  * @param {string} dateStr
  * @returns {"advent"|"christmas"|"ordinary"|"lent"|"easter"|null}
@@ -324,7 +324,7 @@ function emberDaysAfter(/** @type {string} */ anchorKey) {
 }
 
 /**
- * 데이터의 `rule` 은 빌드 시 이미 구조화돼 있다(ADR-036 개정①) — 엔진은 문법을 다시
+ * 데이터의 `rule` 은 빌드 시 이미 구조화돼 있다(ADR-036 §5) — 엔진은 문법을 다시
  * 파싱하지 않고 `rule.kind` 로만 분기한다. `rule` 이 null 이거나 모르는 kind 면
  * **건너뛴다**(빈 배열, throw 아님 — §2 설계 원칙).
  * @param {{kind?: string, days?: number, month?: number, day?: number, nth?: number, anchor?: any} | null | undefined} rule

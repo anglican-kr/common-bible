@@ -11,14 +11,16 @@
 //      `R-<§>-<slug>` → 설계서 정본 마커, `T-/O-/A-/W-<날짜>-<slug>` → 픽스처.
 //   2. 번호 불변: 설계서 § 헤딩 목록과 §9 항목(§9.1 열림 + §9.2 닫힘 = 1..N, 중복 없음, 각 목록 번호순 · §9.2 는
 //      한 줄 + 닫힘 날짜) · ADR 「미결 사항」 항목 수가 상수와 같다 — 번호 재부여·재사용을 막고, 미결 번호가
-//      설계서 §9 에서만 발급되게 한다.
+//      설계서 §9 에서만 발급되게 한다. ADR 「미결 사항」의 각 항목은 「닫힘」이거나 「→ 설계서 미결n」 승계다
+//      — 그 목록이 옛 ADR 미결 번호의 대응표다(④, 2026-10-10).
 //   3. 정본 마커는 문서 전체에서 정확히 1회 정의된다.
 //   3b. 검토 문서 §6 은 설계서 §9.1 에서 확인 주체에 사제가 든 항목의 뷰다 — 미결 집합과 상태의 첫 낱말이 같다.
 //   4. (아래 GATES — ② 부터 문서 단위로 켠다) 센티널 문자열 단일성 · 동그라미 참조 금지 · Qn/ADR 미결 참조 금지 ·
 //      편집 원칙(개정 블록 · 취소선 · 해소/재개/정정 꼬리표 0). 표기 금지 게이트는 **인라인 코드를 뺀 산문**만
 //      본다(docs-anchors.js `stripInlineCode`) — §1.4 가 규약을 정의하며 금지 표기를 코드로 인용하기 때문이다.
 //      점-시점 보관 문서(docs/archive/design/liturgical-engine-*.md)는 원장과 같은 층이라 검사 대상이 아니다.
-// 한정어 없는 참조가 자기 문서와 설계서 양쪽에서 풀리면 **경고**로만 낸다(t.diagnostic) — ②~④ 에서 한정어를 보강한다.
+// 한정어 없는 참조가 자기 문서와 설계서 양쪽에서 풀리면 **경고**로만 낸다(t.diagnostic) — ②~④ 에서 한정어를 보강해
+// ④ 에서 다섯 문서 모두 0 이 됐다. 새 경고가 뜨면 한정어(설계서 · 검토 문서 · 본 ADR · ADR-03n)를 붙여 없앤다.
 
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -32,13 +34,15 @@ const ROOT = path.resolve(__dirname, "../..");
 const rel = (p) => path.join(ROOT, p);
 
 // PR 단계별 게이트 — 센티널은 전 문서를 한꺼번에 보고(정본 밖에 있으면 안 되므로), 표기 금지 게이트 넷은
-// **문서 목록**으로 켠다: 그 PR 이 정리한 문서부터 지키고, 다음 PR 이 자기 문서를 더한다(② 설계서 → ③ 검토 문서 → ④ ADR).
+// **문서 목록**으로 켰다: 그 PR 이 정리한 문서부터 지키고, 다음 PR 이 자기 문서를 더했다(② 설계서 → ③ 검토 문서 → ④ ADR).
+// ④ 로 다섯 문서가 다 들어왔다 — 새 문서를 정본 지도에 넣으면 여기에도 더한다.
+const ALL_DOCS = ["설계서", "검토 문서", "ADR-036", "ADR-037", "ADR-038"];
 const GATES = {
-  sentinels: true,                        // ②: 센티널 문자열은 정본(설계서) 한 곳에만
-  circledRefs: ["설계서", "검토 문서"],  // ②·③: `§6.2 ④` · `X-10 ②` · `§7 ⑩` 형식 참조 0 — ④ ADR 추가
-  qRefs: ["설계서", "검토 문서"],        // ②·③: `Qn` 참조는 검토 문서 §6 의 Q→미결 대응표 줄을 빼고 0 — ④ ADR 추가
-  adrIssueRefs: [],                       // PR ④: `ADR-03[678] 미결n` 참조는 ADR 미결 절 대응표 줄을 빼고 0
-  editingPrinciple: ["설계서", "검토 문서"], // ②·③: `> **개정 (` · `~~` · 「해소/재개/정정」 꼬리표 0 — ④ ADR 추가
+  sentinels: true,             // ②: 센티널 문자열은 정본(설계서) 한 곳에만
+  circledRefs: ALL_DOCS,       // ②·③·④: `§6.2 ④` · `X-10 ②` · `§7 ⑩` 형식 참조 0
+  qRefs: ALL_DOCS,             // ②·③·④: `Qn` 참조는 검토 문서 §6 의 Q→미결 대응표 줄을 빼고 0
+  adrIssueRefs: ALL_DOCS,      // ④: `ADR-03[678] 미결n` 참조 0 — ADR 미결 번호는 그 ADR 「미결 사항」의 항목 목록(대응표)으로만 해독한다
+  editingPrinciple: ALL_DOCS,  // ②·③·④: `> **개정 (` · `~~` · 「해소/재개/정정」 꼬리표 0
 };
 const gateDocs = (names) => (names.length ? names : "다음 PR 에서 켠다");
 
@@ -60,7 +64,7 @@ const DESIGN_SECTIONS = [
   "4", "4.1", "4.2", "4.3", "4.4", "4.5", "4.6", "4.7", "4.8", "4.9", "4.10",
   "5", "5.1", "5.2", "5.3", "5.4", "5.5", "5.6", "6", "6.1", "6.2", "6.3", "6.4", "6.5", "7", "8", "9", "9.1", "9.2",
 ];
-const DESIGN_ISSUE_MAX = 33;
+const DESIGN_ISSUE_MAX = 42; // ④ 에서 ADR 「미결 사항」의 열린 항목을 승계해 34~42 를 발급했다
 const ADR_ISSUE_COUNT = { "ADR-036": 13, "ADR-037": 8, "ADR-038": 3 };
 
 const text = Object.fromEntries(
@@ -135,7 +139,7 @@ function resolveSection(doc, ln, line, m) {
     if (q === "self") { note("절", doc, ln, `§${sec}`, self); return; }
   }
   // 한정어 없음 · 자기 문서에 없음(또는 참조원) → 설계서 → 검토 문서 → ADR 순으로 찾고 경고한다.
-  // (ADR-037 §1 의 「§10 "잠정 순번 id 금지"」처럼 남의 절을 한정어 없이 가리키는 곳이 있다 — PR ④ 에서 보강)
+  // (ADR-037 §1 의 「§10 "잠정 순번 id 금지"」처럼 남의 절을 한정어 없이 가리키던 곳은 ④ 에서 「ADR-036 §10」으로 보강했다)
   for (const other of ["설계서", "검토 문서", "ADR-036", "ADR-037", "ADR-038"]) {
     if (other === self || !SECTIONS[other].has(sec)) continue;
     if (self || other !== "설계서") warn(`${fileOf(doc)}:${ln}: 한정어 없는 §${sec} — 자기 문서에 없어 ${other}로 풀었다`);
@@ -205,7 +209,7 @@ test("설계서 § 헤딩 목록이 상수와 같다 — 절은 말미 추가만
   assert.deepEqual(DESIGN_SECTION_LIST, DESIGN_SECTIONS);
 });
 
-test("설계서 §9 — §9.1(열림)·§9.2(닫힘)을 합치면 정확히 1..N(N ≥ 33), 각 목록은 오름차순 — 번호 재사용·건너뜀 금지", () => {
+test(`설계서 §9 — §9.1(열림)·§9.2(닫힘)을 합치면 정확히 1..N(N ≥ ${DESIGN_ISSUE_MAX}), 각 목록은 오름차순 — 번호 재사용·건너뜀 금지`, () => {
   // 두 목록을 **이어 붙여** 정렬 비교한다 — 같은 번호가 둘이면 길이가 늘어 1..N 과 어긋난다(집합은 그것을 삼킨다).
   const open = issueNumbers(text["설계서"], "\n### 9.1 ");
   const closed = issueNumbers(text["설계서"], "\n### 9.2 ");
@@ -256,6 +260,27 @@ test("ADR 「미결 사항」 항목 수가 상수와 같고 번호가 겹치지
     assert.equal(list.length, n, `${adr} 미결 항목 수 — 새 물음은 설계서 §9 에 발급하고 여기서는 번호로 가리킬 것`);
     assert.equal(new Set(list).size, list.length, `${adr} 미결 번호가 겹친다: ${list}`);
   }
+});
+
+test("ADR 「미결 사항」의 각 항목은 「닫힘」이거나 「→ 설계서 미결n」 승계다 — 그 항목 목록이 옛 ADR 미결 번호의 대응표다", () => {
+  // 원장 · PR 본문에 남은 `ADR-036 미결8` 은 그 ADR 의 8번 항목을 열어 해독한다 — 그 항목이 결론도 승계 대상도
+  // 적지 않으면 대응표가 끊긴다. 승계 대상의 실재(설계서 §9 에 그 번호가 있는가)는 첫 테스트의 참조 해석이 본다.
+  const bad = [];
+  for (const adr of Object.keys(ADR_ISSUE_COUNT)) {
+    const t = text[adr];
+    const start = t.indexOf("\n## 미결 사항");
+    assert.ok(start >= 0, `${adr} 에 「## 미결 사항」 절이 없다`);
+    const body = t.slice(start + 1);
+    const end = body.search(/\n#{1,2} /);
+    for (const line of (end < 0 ? body : body.slice(0, end)).split("\n")) {
+      const m = /^(\d+)\. (.*)$/.exec(line);
+      if (!m) continue;
+      const closed = / — 닫힘(\([^)]*\))? · /.test(m[2]);
+      const succeeded = /→ 설계서 미결\d+/.test(m[2]);
+      if (!closed && !succeeded) bad.push(`${adr} 「미결 사항」 ${m[1]}: 「 — 닫힘 · 」도 「→ 설계서 미결n」도 없다`);
+    }
+  }
+  assert.deepEqual(bad, [], `대응표가 끊긴 항목 ${bad.length}건:\n  ${bad.join("\n  ")}`);
 });
 
 test("검토 문서 §6 은 설계서 §9.1 에서 확인 주체에 사제가 든 항목의 뷰다 — 미결 집합과 상태의 첫 낱말이 같다", () => {
@@ -344,14 +369,16 @@ test("Qn 참조는 Q→미결 대응표 줄을 빼고 없다", { skip: GATES.qRe
   assert.deepEqual(bad, [], `Qn 참조 ${bad.length}건 — 미결n 으로:\n  ${bad.join("\n  ")}`);
 });
 
-test("ADR 미결 번호 참조는 ADR 미결 절 대응표 줄을 빼고 없다", { skip: GATES.adrIssueRefs.length ? false : "PR ④ 에서 켠다" }, () => {
+test("ADR 미결 번호로 가리키는 참조가 없다 — 옛 번호는 그 ADR 「미결 사항」의 항목 목록(대응표)으로만 해독한다", { skip: GATES.adrIssueRefs.length ? false : gateDocs(GATES.adrIssueRefs) }, () => {
+  // 면제 줄이 없다. ADR 은 자기 항목을 `n. ` 으로 적고 설계서 번호를 「→ 설계서 미결n」으로 가리키므로 이 꼴이 필요한
+  // 자리가 없다 — 「대응표 문구가 든 줄」을 면제하면 그 문구를 쓴 산문까지 새어 나간다(③ 4회차 Qn 게이트와 같은 결함).
+  // `ADR-036 「미결 사항」 11` 처럼 번호를 풀어 쓴 꼴도 같은 참조라 함께 잡는다.
   const bad = [];
   for (const doc of GATES.adrIssueRefs)
     prose[doc].forEach((line, i) => {
-      if (/대응표|↔/.test(line)) return;
-      if (/ADR-03[678] 미결\d+/.test(line)) bad.push(`${DOCS[doc]}:${i + 1}`);
+      for (const m of line.matchAll(/ADR-03[678] ?(?:「미결 사항」 ?|미결 ?)\d+/g)) bad.push(`${DOCS[doc]}:${i + 1}: ${m[0]}`);
     });
-  assert.deepEqual(bad, []);
+  assert.deepEqual(bad, [], `ADR 미결 번호 참조 ${bad.length}건 — 설계서 미결n 으로:\n  ${bad.join("\n  ")}`);
 });
 
 test("편집 원칙 — 개정 블록 · 취소선 · 해소/재개/정정 꼬리표가 없다", { skip: GATES.editingPrinciple.length ? false : gateDocs(GATES.editingPrinciple) }, () => {
