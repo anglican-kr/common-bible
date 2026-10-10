@@ -20,7 +20,7 @@ title: "docs: #339 리뷰 반영 — 미결25 갈래 · 미결35 정리 · 기�
 | 검토 문서 §4.3 재검증 4 「성 토요일까지 넷은 의도다」 — 맥추감사주일은 미해소 | 「셋」 + 맥추감사주일은 미결35 |
 | ADR-037 §8 동결 분석 표 「미결35 분류 2건 — 등급 칸」 — 노동자의 날은 행 신설 | 둘을 갈라 적음(미결35 구체 예에도) |
 | ADR-036 「구현 현황」 「2026-09-01 현재 327건 중 3·1」 — 미결35 와 어긋남 | facts 키 `collects.rank_null` · `collects.color_null` 로 |
-| 첫 temporal 기념일의 승자 케이스가 픽스처에 없다 — PR 3 이 성인력 인덱스만 보거나 `kind === "sanctoral"` 로 좁히면 prec 7 로 경쟁해도 잡히지 않는다 | 픽스처 `W-2026-09-06-womens-mission-commemoration`(2026 · 2027 — `official` 격자 연중 23주일 · 녹, 기념일 `proper` · 본문 없음) · 설계서 §7 · R-6.1-ineligible 실측 · C-6.1-12 에 인용 · 실데이터 테스트 단언에 `kind: temporal` |
+| 첫 temporal 기념일의 승자 케이스가 픽스처에 없다 | 픽스처 `W-2026-09-06-womens-mission-commemoration`(2026 · 2027 — `official` 격자 연중 23주일 · 녹, 기념일 `proper` · 본문 없음) · 설계서 §7 · R-6.1-ineligible 실측 · C-6.1-12 에 인용 · 실데이터 테스트 단언에 `kind: temporal`. 리뷰가 든 「`kind === "sanctoral"` 로 좁힌 구현」은 이 픽스처로 가를 수 없다 — 여성선교주일은 언제나 주일이라 7 로도 5 에 진다. 그 구분은 설계서 §7 B1 행 · C-6.1-12 의 합성 케이스(temporal 기념일 ∧ 평일 격자)로 PR 3 공개 스위트에 둔다(아래 리뷰 반영 1회차) |
 | §5.6 격자 경로 ① 의 날짜 목록에 1.7~1.12 가 없다 | 더하고, 그 주일은 언제나 주의 세례라 `season` 조건으로도 빠진다고 적음 |
 | facts 키 옆에 수를 되풀이(§2 「2건 · 1건」 · 미결35 「2 · 1」) | 수를 지우고 키만 |
 | temporal 의 null 품계 행 수(「다섯 행」 · 「5행」)에 facts 키가 없어 손으로 네 곳을 고쳤고 리뷰 1회차가 하나를 잡았다 | facts `temporal.precedence_null` · `temporal.commemoration` 신설(`docs-data-consistency.test.js` measure) — 설계서 §6.1 · 검토 문서 §4.3 재검증 4 · C-6.1-7 · C-6.1-12 가 키로 가리킨다 |
@@ -52,3 +52,12 @@ title: "docs: #339 리뷰 반영 — 미결25 갈래 · 미결35 정리 · 기�
 - `docs/coding-pitfalls.md` — §18
 - 테스트: `tests/unit/liturgical-engine.data.test.js`(주석 · `kind` 단언) · `tests/unit/docs-data-consistency.test.js`(키 둘) · `tests/fixtures/liturgical/winners.cases.json`(+1)
 - `status.md` · `known-issues.md` · `index.md` · `architecture.md` — 없음(앱 동작 · 구현 현황 변화 없음, 케이스 수 949 그대로)
+
+## 리뷰 반영 (2026-10-10, 1회차)
+
+Copilot 리뷰(`86a6654` 기준) — 스레드 하나. 재현해 사실로 확인하고 반영했다.
+
+- **픽스처 `W-2026-09-06-womens-mission-commemoration` 가 `kind === "sanctoral"` 로 잘못 좁힌 구현을 가르지 못한다**(Medium · `winners.cases.json`) — 사실. 여성선교주일은 `nth_sunday` 라 언제나 주일이고, 데이터 값 7 로도 격자 주일 5 에 지므로 `official` · `proper` 단언은 그 구현도 통과한다. 가르려면 temporal 기념일이 평일 격자(prec 8)와 겹쳐야 하는데 실데이터에 그런 행이 없다.
+  - 픽스처 `note` 에서 「이 케이스가 그 구분을 보호한다」는 취지의 문장을 걷어내고 한계를 적었다. 설계서 R-6.1-ineligible 실측 · §7 B1 행 · 검토 문서 C-6.1-12 · 이 원장의 요약 표도 같은 주장을 하고 있어 함께 고쳤다 — 합성 케이스(temporal 기념일 ∧ 평일 격자 → `official` 격자 · 기념일 `proper`, `kind` 로 좁히면 7 이 8 을 이겨 실패)를 §7 B1 행과 C-6.1-12 에 적었다.
+  - 테스트 자체는 지금 쓸 수 없다 — `official` 은 PR 3 이 만든다(PR 2 는 `null`, 엔진에 품계 비교가 없다). 합성 표 케이스는 픽스처 README 대로 `liturgical-engine.test.js`(공개 스위트)에 두고, PR 3 ① 이 §7 B1 행대로 만든다.
+  - 변이 검사 없음 — 테스트 변경이 아니라 문서와 픽스처 메모다. 유닛 949 · crossref · 픽스처 검사 통과.
