@@ -196,6 +196,28 @@ test("canon 은 설계서의 R- 마커 또는 실재하는 절(설계서 §x.y)�
   }
 });
 
+test("검토 문서 §5 항목이 「픽스처 …」 로 인용한 케이스는 checks 에 그 항목 id 를 단다 — 추적성은 양쪽에서 맞는다", () => {
+  // 검토 문서 §5.0 의 계약: C/X/I 항목은 실제 연도 값을 케이스 id 로 가리키고, 인용한 케이스는 그 항목을 checks 에 둔다.
+  // (반대 방향 — checks 의 id 가 검토 문서에 실재하는가 — 는 아래 테스트가 본다.)
+  const byId = new Map(cases.map((c) => [c.id, c]));
+  const s = REVIEW.indexOf("\n## 5. "), e = REVIEW.indexOf("\n## 6. ");
+  assert.ok(s >= 0 && e > s, "검토 문서 §5 · §6 헤딩을 못 찾았다");
+  const bad = [];
+  let cited = 0;
+  for (const line of REVIEW.slice(s, e).split("\n")) {
+    const m = /^- \[[ x]\] \*\*((?:C-(?:P|\d+(?:\.\d+)?)|X|I)-\d+[a-z]?)\*\*/.exec(line);
+    if (!m) continue;
+    for (const [, fx] of line.matchAll(/(?<![\w-])([TOAW]-\d{4}-\d{2}-\d{2}-[a-z0-9-]+)/g)) {
+      cited++;
+      const c = byId.get(fx);
+      if (!c) bad.push(`${m[1]}: 픽스처 ${fx} 없음`);
+      else if (!(c.checks ?? []).includes(m[1])) bad.push(`${m[1]}: ${fx} 의 checks 에 ${m[1]} 없음`);
+    }
+  }
+  assert.ok(cited >= 50, `검토 문서 §5 의 픽스처 인용이 너무 적다: ${cited}`);
+  assert.deepEqual(bad, [], `역참조 누락 ${bad.length}건:\n  ${bad.join("\n  ")}`);
+});
+
 test("checks 는 검토 문서의 C-/X-/I- 항목을, issue 는 설계서 §9 항목을 가리킨다", () => {
   assert.ok(REVIEW_CHECKS.size >= 100, `검토 문서 체크 항목이 너무 적다: ${REVIEW_CHECKS.size}`);
   assert.ok(ISSUE_LIST.length >= 33, `설계서 §9 항목이 너무 적다: ${ISSUE_LIST.length}`);   // 번호 유일성은 docs-crossref 가 본다
