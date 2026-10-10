@@ -76,7 +76,7 @@ data/source/*.md (73권, common-bible-data 서브모듈)
 
 ### 클라이언트 JS 유닛 테스트 (ADR-013)
 
-Node 자체 테스트 러너 + 자체 vm 하네스. 의존성 0, CI 자동 실행. **901 케이스 통과** (2026-10-10). 파일 명명 컨벤션: `tests/unit/<source-basename>.test.js`, 한 모듈 = 한 테스트 파일 — **예외 둘**이다(tests/README §1 과 같은 규칙). ① **실데이터 의존 케이스** — 공개 CI 의 `Unit tests` 잡이 비공개 `data/` 서브모듈을 받지 않으므로, 그 표를 읽어야 하는 케이스는 `tests/unit/<source-basename>.data.test.js` 로 갈라 `haveData` skip 가드를 달고 `engine-data.yml`·`sync-data.yml` 에서 돌린다(선례 `liturgical-engine.data.test.js`, 설계서 §7). ② **소스 모듈이 없는 테스트** — 문서·픽스처의 정합성을 보는 `docs-*.test.js` · `liturgical-fixtures.test.js`(픽스처의 관측일 id 실재는 ① 규칙대로 `liturgical-fixtures.data.test.js` 로 갈라 두 워크플로에서 돈다). 이들이 함께 쓰는 문서 앵커 추출기는 `tests/unit/docs-anchors.js` — 테스트 파일이 아니라 `harness.js` 와 같은 자리의 공용 모듈이다(`*.test.js` 글롭 밖). 내부 영역은 `// ── <영역> ──` 섹션. 상세는 ADR-013.
+Node 자체 테스트 러너 + 자체 vm 하네스. 의존성 0, CI 자동 실행. **902 케이스 통과** (2026-10-10). 파일 명명 컨벤션: `tests/unit/<source-basename>.test.js`, 한 모듈 = 한 테스트 파일 — **예외 둘**이다(tests/README §1 과 같은 규칙). ① **실데이터 의존 케이스** — 공개 CI 의 `Unit tests` 잡이 비공개 `data/` 서브모듈을 받지 않으므로, 그 표를 읽어야 하는 케이스는 `tests/unit/<source-basename>.data.test.js` 로 갈라 `haveData` skip 가드를 달고 `engine-data.yml`·`sync-data.yml` 에서 돌린다(선례 `liturgical-engine.data.test.js`, 설계서 §7). ② **소스 모듈이 없는 테스트** — 문서·픽스처의 정합성을 보는 `docs-*.test.js` · `liturgical-fixtures.test.js`(픽스처의 관측일 id 실재는 ① 규칙대로 `liturgical-fixtures.data.test.js` 로 갈라 두 워크플로에서 돈다). 이들이 함께 쓰는 문서 앵커 추출기는 `tests/unit/docs-anchors.js` — 테스트 파일이 아니라 `harness.js` 와 같은 자리의 공용 모듈이다(`*.test.js` 글롭 밖). 내부 영역은 `// ── <영역> ──` 섹션. 상세는 ADR-013.
 
 ```bash
 node --test tests/unit/*.test.js                 # 전체 (CI와 동일)
@@ -122,7 +122,7 @@ Phase 1(성경 읽기) → Phase 2(기도서) → Phase 3(교회력 계산기) �
    기존 결정(채택 이유, 검토한 대안, 데이터 스키마, UI 컴포넌트 등)과 충돌하지 않도록 맥락을 파악한다.
 2. **구현 후**: ADR에 기술된 내용과 실제 구현이 달라진 부분이 있으면 해당 ADR을 갱신한다.
    — 새로운 결정 항목이면 새 ADR 파일 생성(`NNN-이름.md`, 다음 번호 이어서)
-   — 기존 결정의 개정이면 해당 파일에 `> **개정 (날짜):**` 블록으로 내용 추가 또는 수정
+   — 기존 결정이 바뀌면 해당 파일의 본문을 현재 결론으로 제자리 갱신하고, 버린 선택지는 「검토한 대안」 절에 날짜·이유·재검토 조건과 함께 남긴다. 개정 블록·취소선·「해소/재개/정정」 꼬리표는 쓰지 않는다 — 시점 이력은 git 과 `docs/changes/` 원장이 맡는다(2026-10-10, 설계서 `docs/design/liturgical-engine.md` §1.4). ADR-001~035 의 옛 개정 블록에는 소급하지 않고 그 파일을 손댈 때 따른다
 3. **구현 PR 머지 시점**: ADR 상단 `상태` 필드와 `docs/status.md`(구현 현황)를 함께 갱신한다.
    — ADR 상태: `승인됨 — 구현 대기` → `승인됨 — 구현 완료` (날짜 병기 권장)
    — `docs/status.md` 에 한 줄 추가 또는 갱신 — "지금 무엇이 동작하는가" 의 권위 출처.
