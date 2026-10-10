@@ -396,7 +396,7 @@
       "canon": ["R-6.2-destinations", "R-6.1-prec7-omit"],
       "checks": ["X-11", "C-6.5-4b"],
       "source": ["2025 책자 — 9.15 [백/홍] + 키프리안 이름 줄"],
-      "note": "책자 색은 [백/홍] 병기 — 평일 병기 규칙은 미정(미결26 ④)이라 색은 단언하지 않는다.",
+      "note": "책자 색은 [백/홍] 병기 — 사계재 밖 평일의 병기는 세우지 않으므로(→ R-6.4-ember-color) 색은 단언하지 않는다.",
       "assertions": [
         { "date": "2025-09-15", "expect": { "id": "d0914-성-십자가의-날", "status": "transferred_in", "from": "2025-09-14", "displacedBy": "grid:ordinary-24-sunday" } },
         { "date": "2025-09-15", "expect": { "id": "d0915-키프리안", "status": "omitted", "displacedBy": "d0914-성-십자가의-날" } }
@@ -456,7 +456,7 @@
       "canon": ["R-6.1-prec7-omit"],
       "checks": ["X-11", "C-6.1-6"],
       "source": ["2025 책자 — 11.3 「11월 2일에서 이동」 [백/녹] + 「평일 감사성찬례」 병기"],
-      "note": "격자 연중 31주 월요일이 proper 로 남아 책자의 「평일 감사성찬례」 병기와 맞다(ADR-038 §3 두 독서 나란히). 색 병기 규칙은 미정(미결26 ④).",
+      "note": "격자 연중 31주 월요일이 proper 로 남아 책자의 「평일 감사성찬례」 병기와 맞다(ADR-038 §3 두 독서 나란히). 사계재 밖 평일의 색 병기는 세우지 않는다(→ R-6.4-ember-color).",
       "assertions": [
         { "date": "2025-11-03", "expect": { "id": "d1102-모든-별세자의-날", "status": "transferred_in", "from": "2025-11-02", "displacedBy": "grid:ordinary-31-sunday" } },
         { "date": "2025-11-03", "expect": { "id": "grid:ordinary-31-weekday-mon", "status": "proper" } }

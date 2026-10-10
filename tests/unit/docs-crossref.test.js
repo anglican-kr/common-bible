@@ -332,7 +332,7 @@ test("센티널 문자열은 정본 파일 한 곳에만 있다", { skip: GATES.
     { text: "도착한 축일은 품계와 무관하게 자리를 지킨다", allow: ["설계서"], once: true }, // R-6.2-first-come
     { text: "규칙일 유지 · 고정일 이동", allow: ["설계서"], once: true },        // R-6.2-rule-day-stays
     { text: "절기 기본색을 깔고", allow: ["설계서"], once: true },               // R-6.4-color-order
-    { text: "사계재 날의 색은 승자(절기 평일)의 절기색", allow: ["설계서"], once: true }, // R-6.4-ember-color
+    { text: "사계재 날의 색은 자다", allow: ["설계서"], once: true },            // R-6.4-ember-color(2026-10-10 미결26 닫힘 — 모델 (b))
     { text: "연도 캐시를 채울 때 한 번", allow: ["설계서"], once: true },        // R-6.5-year-pass
     { text: "```facts", allow: ["설계서"], once: true },                         // §5.2 실측 블록
   ];

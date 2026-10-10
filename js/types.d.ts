@@ -554,6 +554,9 @@ export type CycleCode = "A" | "B" | "C" | "I" | "II";
 // 정식 전례색 넷과 선택 대체색 둘(장미색 · 청색)은 다른 축이다(설계서 R-6.4-color-order).
 export type LiturgicalColor = "white" | "red" | "green" | "violet";
 export type LiturgicalColorAlt = "rose" | "blue";
+// 재일 — 대재일(재의 수요일 · 성 금요일) · 소재일(사순 주간 40일 · 사계재일 · 성탄절기 밖 금요일).
+// `fastOf(resolved)` 의 반환이고 `ResolvedDate` 에는 싣지 않는다(설계서 R-6.3-friday-fast).
+export type LiturgicalFast = "major" | "minor";
 export type LiturgicalRank =
   | "principal" | "privileged_sunday" | "major_feast" | "sunday"
   | "minor_feast" | "commemoration" | "feria" | "regional_festival";
@@ -650,11 +653,11 @@ export interface LiturgicalPeriod {
 }
 
 /**
- * `resolveDate` 의 반환. 색 필드 셋(2026-10-10 사용자 결정 — 설계서 미결26):
- * `color` 는 그날의 대표색 하나, `colors` 는 병기 목록(책자의 [자/백] — 병기 모델에서만
- * 둘 이상), `colorAlt` 는 선택 대체색(장미색 · 청색) 전용이고 데이터 `color_alt` 와 같은 3형이다
- * (대림 3주일은 둘 다 — ["rose", "blue"]). 색 판정은 B1(PR 3)이라 PR 2 는 `color: null` ·
- * `colorAlt: null` · `colors: []` 를 낸다.
+ * `resolveDate` 의 반환. `official` 은 엔진이 정한 승자 — 뷰의 초기 선택이고, 후보는 전부
+ * `candidates` 에 남는다(설계서 §5.5). 색 필드 셋(2026-10-10 사용자 결정 — 설계서 R-6.4-color-order ·
+ * R-6.4-ember-color): `color` 는 그날의 대표색 하나, `colors` 는 병기 목록(책자의 [자/백] — 사계재 날
+ * 축일이 이기면 둘, 그 밖은 `[color]`), `colorAlt` 는 선택 대체색(장미색 · 청색) 전용이고 데이터
+ * `color_alt` 와 같은 3형이다(대림 3주일은 둘 다 — ["rose", "blue"]).
  */
 export interface ResolvedDate {
   date: string;
