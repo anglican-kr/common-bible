@@ -263,7 +263,11 @@ test("검토 문서 §6 은 설계서 §9.1 에서 확인 주체에 사제가 �
   }
   const r = text["검토 문서"];
   const view = r.slice(r.indexOf("\n## 6. "), r.indexOf("\n## 7. "));
-  const got = new Map([...view.matchAll(/^\| 미결(\d+) \| .+ \| (.+?) \|$/gm)].map((m) => [Number(m[1]), m[2]]));
+  const rows = [...view.matchAll(/^\| 미결(\d+) \| .+ \| (.+?) \|$/gm)].map((m) => [Number(m[1]), m[2]]);
+  // Map 으로 줄이기 전에 중복을 거부한다 — 같은 미결이 두 행이면 뒤 행이 앞 행을 덮어써 상충하는 상태가 숨는다.
+  const dup = rows.map(([n]) => n).filter((n, i, a) => a.indexOf(n) !== i);
+  assert.deepEqual(dup, [], "검토 문서 §6 표에 같은 미결이 두 번 있다 — 항목마다 한 행(상태 하나)");
+  const got = new Map(rows);
   assert.ok(want.size >= 1, "설계서 §9.1 에서 확인 주체가 사제인 항목을 못 찾았다 — 필드 문법이 바뀌었나");
   assert.deepEqual([...got.keys()].sort((a, b) => a - b), [...want.keys()].sort((a, b) => a - b),
     "검토 문서 §6 표의 미결 목록이 설계서 §9.1 의 「확인 주체: …사제…」 항목과 다르다");
