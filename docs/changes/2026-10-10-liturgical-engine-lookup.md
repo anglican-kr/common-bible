@@ -1,4 +1,5 @@
 ---
+pr: 338
 date: 2026-10-10
 branch: feat/liturgical-engine-lookup
 title: "feat: 교회력 엔진 A1-b 조회 계층 — LITURGICAL_LOOKUP · 프리로드 · 공유 타입 (ADR-037 §6)"
