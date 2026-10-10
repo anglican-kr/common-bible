@@ -416,7 +416,7 @@ test("여성선교주일은 기념일 — 이름 줄로만 오르고 본문이 �
   const d = "2026-09-06";
   const c = pick(resolve(d), "t-여성선교주일");
   assert.ok(c, "후보로 오른다");
-  same([c.observance.rank, c.observance.precedence, c.status], ["commemoration", 7, "proper"]);
+  same([c.observance.kind, c.observance.rank, c.observance.precedence, c.status], ["temporal", "commemoration", 7, "proper"]);
   same(groupsAt(d, "t-여성선교주일"), []);
   same(collectsAt(d, "t-여성선교주일"), []);
   assert.ok(groupsAt(d, "grid:ordinary").length > 0 && collectsAt(d, "grid:ordinary").length > 0);
@@ -425,7 +425,7 @@ test("여성선교주일은 기념일 — 이름 줄로만 오르고 본문이 �
 
 test("§5.4 · §5.6 도달 범위 — 2025~2050 모든 날의 모든 후보를 조회하면 독서 · 본기도 레코드가 하나도 빠지지 않는다", { skip: SKIP }, () => {
   // 조인 경로(격자 날짜 · 고유명 평일 · 좌표 · 이름 · 사계재 · 날짜 · 음력) 중 하나가 끊기면 그 경로의 레코드가
-  // 어디에서도 안 나온다 — 개별 사례로는 놓치는 것을 전수로 잡는다(성주간 월~수 · 재의 수요일 후 목 · 토가 그 예다).
+  // 어디에서도 안 나온다 — 개별 사례로는 놓치는 것을 전수로 잡는다(성주간 월~수 · 재의 수요일 후 목 · 금 · 토가 그 예다).
   const seenR = new Set();
   const seenC = new Set();
   for (let y = 2025; y <= 2050; y++) {

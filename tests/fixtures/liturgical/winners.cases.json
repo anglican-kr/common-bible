@@ -178,6 +178,24 @@
       ]
     },
     {
+      "id": "W-2026-09-06-womens-mission-commemoration",
+      "kind": "winner",
+      "group": "B1",
+      "title": "temporal 기념일도 승자가 아니다 — 여성선교주일(9월 첫 주일)은 proper 이름 줄, official 은 격자 연중 주일",
+      "status": "confirmed",
+      "canon": ["R-6.1-ineligible"],
+      "checks": ["C-6.1-12", "X-10"],
+      "source": ["사용자 확정 2026-10-10 — 해마다 본기도·독서가 새로 정해져 고정 본문이 없다(ADR-036 §6 · data#27)", "2026 책자 — 9.6 여성선교주일은 연중 23주일 위의 안내 줄(X-10)"],
+      "note": "기념일 판별은 표(kind)가 아니라 rank 다 — 성인력 인덱스만 보면 이 temporal 행이 prec 7 로 연중 주일(5)에 지는 것처럼 보여도 유효값 9 라야 맞다. 9월 첫 주일은 해마다 날짜가 달라 alsoYears 로 되풀이할 수 없어 2027 을 따로 적는다(2028 은 연중 22주일).",
+      "assertions": [
+        { "date": "2026-09-06", "expect": { "official": "grid:ordinary-23-sunday", "color": "green" } },
+        { "date": "2026-09-06", "expect": { "id": "t-여성선교주일", "status": "proper", "displacedBy": null } },
+        { "date": "2026-09-06", "expect": { "id": "t-여성선교주일", "readings": { "empty": true }, "collects": { "count": 0 } } },
+        { "date": "2027-09-05", "expect": { "official": "grid:ordinary-23-sunday" } },
+        { "date": "2027-09-05", "expect": { "id": "t-여성선교주일", "status": "proper" } }
+      ]
+    },
+    {
       "id": "W-2025-02-02-presentation-over-sunday",
       "kind": "winner",
       "group": "⑩",
