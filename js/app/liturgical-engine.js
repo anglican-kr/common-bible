@@ -10,10 +10,12 @@
 //   LITURGICAL_CORE    — A1-a: date arithmetic, computus, rule evaluation, season
 //                        spans, ordinal weeks, cycles, lunar lookup, period axis.
 //   LITURGICAL_LOOKUP  — A1-b: table indexes, grid coordinate, candidate assembly,
-//                        fallback matching, readings/collects lookup. Pure — every
-//                        function takes the index it reads as an argument.
+//                        fallback matching, readings/collects lookup. B1: precedence
+//                        ladder, official + reclassification, colour, fast days. Pure —
+//                        every function takes the index it reads as an argument.
 //   LITURGICAL_PRELOAD — fetch + promise-cached preload and the public wrappers
-//                        that read module state. B1 (rank · transfer · colour) is PR 3.
+//                        that read module state. The transfer pass (design §6.5) is
+//                        the second half of PR 3 — until then the pass stays empty.
 //
 // 모든 날짜는 로컬 `new Date(y, m - 1, d)` 와 "YYYY-MM-DD" 문자열로 다룬다.
 // **`toISOString()` 으로 날짜 문자열을 만들지 않는다** — UTC 오프셋 때문에 KST 에서
@@ -30,6 +32,9 @@
 
 /** @typedef {import("../types").LiturgicalCoord} LiturgicalCoord */
 /** @typedef {import("../types").LiturgicalSeason} LiturgicalSeason */
+/** @typedef {import("../types").LiturgicalColor} LiturgicalColor */
+/** @typedef {import("../types").LiturgicalColorAlt} LiturgicalColorAlt */
+/** @typedef {import("../types").LiturgicalFast} LiturgicalFast */
 /** @typedef {import("../types").WeekdayCode} WeekdayCode */
 /** @typedef {import("../types").Observance} Observance */
 /** @typedef {import("../types").Candidate} Candidate */
@@ -655,6 +660,7 @@ function inSpan(dateStr, name) {
 
 /** 예약 접두사 — 정의 표 · 본문 표 id 에 나타나지 않는다(§5.5 · §5.6 · §6.5). */
 const GRID_PREFIX = "grid:";
+const GUARD_PREFIX = "guard:";
 const COMMON_PREFIX = "common:";
 
 /** 요일 번호(0 = 일) → 코드. 일요일 코드는 없다 — 주일은 `type: "sunday"` 다(§5.1). */
@@ -888,15 +894,42 @@ function gridName(dateStr, coord) {
 }
 
 /**
+ * 절기 기본색(ADR-036 §8). 성주간은 절기(사순)와 달리 전체가 홍이라 기간 축으로 따로 본다.
+ * @type {Record<LiturgicalSeason, LiturgicalColor>}
+ */
+const SEASON_COLOR = { advent: "violet", christmas: "white", ordinary: "green", lent: "violet", easter: "white" };
+
+/**
+ * 그 날의 **절기 기본색**과 선택 대체색(§6.4 결정 순서의 첫 단계 — 승자가 덮기 전의 바탕). 성주간
+ * (성지주일 ~ 성 토요일)은 전체 홍이다 — 경계는 `spansOf` 의 `holyWeek` 이고 날짜를 따로 비교하지
+ * 않는다(§4.10). 대체색은 데이터 `color_alt` 와 같은 뜻 · 같은 3형이다: 대림은 청(대림 3주일은 장미 ·
+ * 청 둘 다), 사순 4주일은 장미. 성령강림 · 삼위일체 · 왕이신 그리스도의 색은 그 날의 temporal 행이
+ * 승자로 덮는다 — 바탕은 절기만 안다.
+ * @param {string} dateStr @param {LiturgicalCoord} coord
+ * @returns {{color: LiturgicalColor, alt: import("../types").CodeField<LiturgicalColorAlt>}}
+ */
+function seasonColorOf(dateStr, coord) {
+  if (inSpan(dateStr, "holyWeek")) return { color: "red", alt: null };
+  const color = SEASON_COLOR[coord.season];
+  if (coord.season === "advent") {
+    return { color, alt: coord.type === "sunday" && coord.week === 3 ? ["rose", "blue"] : "blue" };
+  }
+  if (coord.season === "lent" && coord.type === "sunday" && coord.week === 4) return { color, alt: "rose" };
+  return { color, alt: null };
+}
+
+/**
  * ① 격자 관측일 — 정의 표에 행이 없어 좌표에서 **합성**한다(§5.5). id 는
  * `grid:<season>-<week|x>-<type>[-<weekday>]`, precedence 는 §6.1 사다리(절기 주일 2 · 연중 주일 5 ·
- * 평일 8). 색은 절기 기본색을 까는 B1 의 몫이라(§6.4) PR 2 는 null 이다.
+ * 평일 8). 색은 절기 기본색이다(§6.4 — ADR-036 §8 「격자일 레코드의 color 는 좌표에서 파생한 절기
+ * 기본색」). 그날의 색은 이 바탕 위에 승자가 덮는다(`dayColorsOf`).
  * @param {string} dateStr @param {LiturgicalCoord} coord
  * @returns {Observance}
  */
 function gridObservance(dateStr, coord) {
   const week = coord.week === null ? "x" : String(coord.week);
   const ordinarySunday = coord.type === "sunday" && coord.season === "ordinary";
+  const base = seasonColorOf(dateStr, coord);
   return {
     id: GRID_PREFIX + coord.season + "-" + week + "-" + coord.type + (coord.weekday ? "-" + coord.weekday : ""),
     kind: "temporal",
@@ -907,8 +940,8 @@ function gridObservance(dateStr, coord) {
     type: coord.type,
     rank: coord.type === "weekday" ? "feria" : ordinarySunday ? "sunday" : "privileged_sunday",
     precedence: coord.type === "weekday" ? 8 : ordinarySunday ? 5 : 2,
-    color: null,
-    color_alt: null,
+    color: base.color,
+    color_alt: base.alt,
   };
 }
 
@@ -924,8 +957,9 @@ function EMPTY_PASS() {
 }
 
 /**
- * 연도 `y` 의 이동 패스(§4.9 `transferCache`). 패스는 품계 비교(§6.1)를 쓰므로 B1(PR 3)이 채운다 —
- * PR 2 는 언제나 빈 패스이고, 빈 패스가 PR 2 의 **완전한** 패스다. 캐시에는 완전한 패스만 들어간다.
+ * 연도 `y` 의 이동 패스(§4.9 `transferCache`). 패스는 품계 비교(§6.1 — 아래 `compareCandidates`)를
+ * 쓰고, PR 3 의 둘째 GitHub PR 이 채운다 — 그때까지는 언제나 빈 패스이고, 빈 패스가 지금의
+ * **완전한** 패스다. 캐시에는 완전한 패스만 들어간다.
  * @param {number} y
  * @returns {TransferPass}
  */
@@ -956,60 +990,274 @@ function periodsOn(index, md) {
 }
 
 /**
+ * 그 날짜의 **고유** 관측일 — §5.5 출처 ② 날짜(성인력) · ③ 음력 · ④ 규칙 파생(① 격자는 따로 합성한다).
+ * 같은 행이 두 출처에서 오면 한 번만 낸다. 순서는 뜻이 없다 — 표시 · 승자 순서는 품계가 정한다
+ * (`compareCandidates`). 음력 표 범위 밖 연도는 ③ 이 빈다(§2).
+ * @param {CalendarIndex} index @param {string} dateStr
+ * @returns {Observance[]}
+ */
+function ownObservancesOn(index, dateStr) {
+  const y = parseInt(dateStr.slice(0, 4), 10);
+  const rows = [
+    ...(movableOf(index, y).get(dateStr) || []),
+    ...(index.sanctoralByDate.get(monthDayOf(dateStr)) || []),
+  ];
+  const lunar = lunarDatesOf(index.kasi, y);
+  for (const key of Object.keys(lunar)) {
+    if (lunar[key] === dateStr) rows.push(...(index.sanctoralByLunar.get(key) || []));
+  }
+  /** @type {Observance[]} */
+  const out = [];
+  const seen = new Set();
+  for (const r of rows) {
+    if (seen.has(r.id)) continue;
+    seen.add(r.id);
+    out.push(r);
+  }
+  return out;
+}
+
+// ── §6.1 · §6.2 품계 사다리 · 승자 · 재분류 (B1) ──
+
+/** 보호 기간의 합성 점유자 id(§6.5 `guard`) — 표에 없고 후보로 내지 않는다. */
+const GUARD_ID = GUARD_PREFIX + "easter-octave";
+
+/**
+ * 보호 기간(성지주일 ~ 부활 2주일 — `spansOf().transferGuard`, §4.10)의 가상 점유자. 그 안의 날에는
+ * 유효 precedence 1 · `transferable: false` 인 합성 후보 하나, 밖의 날에는 빈 배열이다. 순위에만 들어가고
+ * 그날의 후보(§5.5 출처 ①~⑤)로는 내지 않는다 — 뷰에 보이지 않는다(→ R-6.3-holy-week-guard).
+ * @param {string} dateStr
+ * @returns {Candidate[]}
+ */
+function guardCandidates(dateStr) {
+  if (!inSpan(dateStr, "transferGuard")) return [];
+  return [{
+    observance: {
+      id: GUARD_ID, kind: "temporal", name: "성주간·부활 8일", aliases: null,
+      rank: null, precedence: 1, transferable: false, transfer_to: null, color: null, color_alt: null,
+    },
+    status: "proper",
+  }];
+}
+
+/**
+ * 승자 자격이 없는 지향 · 이름 줄 — 사계재(규칙 종류)와 기념일(`rank`). 이름이 아니라 구조 필드로
+ * 판별하고, 표(`kind`)를 보지 않는다 — 기념일은 성인력과 temporal 양쪽에 있다(→ R-6.1-ineligible).
+ * @param {Observance} obs
+ */
+function isIneligible(obs) {
+  return obs.rank === "commemoration" || !!(obs.rule && obs.rule.kind === "ember_wfs");
+}
+
+/**
+ * 승자 판정의 **유효 precedence**(→ R-6.1-ladder) — 낮을수록 우선. `precedence: null` 은 정렬 최하위
+ * (등급이 없다), 지향 · 이름 줄은 9(등급은 있지만 그날의 독서를 정하지 않는다 — → R-6.1-ineligible),
+ * A 특례(`outranks_sunday`)는 1 과 2 사이라 1.5, 그 밖은 데이터 값 그대로다. **`rank` 로 비교하지
+ * 않는다** — `major_feast` 가 3 · 4 · 6 으로 갈린다.
+ * @param {Observance} obs
+ * @returns {number}
+ */
+function effectivePrecedence(obs) {
+  const p = obs.precedence;
+  if (typeof p !== "number" || !Number.isFinite(p)) return Number.POSITIVE_INFINITY;
+  if (isIneligible(obs)) return 9;
+  if (obs.outranks_sunday === true) return 1.5;
+  return p;
+}
+
+/** 범주 사다리의 칸(→ R-6.2-tie-ladder) — 도착 0 > temporal 규칙일 1 > sanctoral 고정일 2 > 격자 3 > 합성 guard 4. */
+function ladderOf(/** @type {Candidate} */ c) {
+  const id = c.observance.id;
+  if (id.startsWith(GUARD_PREFIX)) return 4;
+  if (c.status === "transferred_in") return 0;
+  if (id.startsWith(GRID_PREFIX)) return 3;
+  return c.observance.kind === "temporal" ? 1 : 2;
+}
+
+/**
+ * 순위 비교 — 키는 `(유효 precedence, 범주 사다리, 고유 본기도, id)` 이고 앞이 이긴다(→ R-6.2-tie-ladder).
+ * 고유 본기도(`has_proper`)가 있는 쪽이 먼저인 키는 같은 범주 안의 동률을 가른다 — prec 7 축일 다섯
+ * 쌍 가운데 한쪽만 고유 본기도를 가진 것은 3.01 뿐이라 삼일절이 데이빗 앞에 선다(→ R-6.1-prec7-tie-pairs).
+ * 마지막 `id` 사전순은 결정성만 지키는 안전망이다(§5.3 과 같은 안정 정렬).
+ * @param {Candidate} a @param {Candidate} b
+ * @returns {number}
+ */
+function compareCandidates(a, b) {
+  const pa = effectivePrecedence(a.observance);
+  const pb = effectivePrecedence(b.observance);
+  if (pa !== pb) return pa < pb ? -1 : 1;   // 뺄셈은 ∞ − ∞ 가 NaN 이다
+  const la = ladderOf(a);
+  const lb = ladderOf(b);
+  if (la !== lb) return la - lb;
+  const ha = a.observance.has_proper === true ? 0 : 1;
+  const hb = b.observance.has_proper === true ? 0 : 1;
+  if (ha !== hb) return ha - hb;
+  return compareIds(a.observance.id, b.observance.id);
+}
+
+/** 순위대로 정렬한 새 배열 — 입력 순서에 기대지 않는다. */
+function rankCandidates(/** @type {Candidate[]} */ cands) {
+  return [...cands].sort(compareCandidates);
+}
+
+/**
+ * 겹침이 해마다 달라지는가(§6.5 「고정일끼리는 충돌이 아니다」) — 격자 · temporal 규칙일 · 음력 명절 ·
+ * 도착 · guard 는 참(격자 · guard 도 `kind: "temporal"` 이다), sanctoral 의 고정 `date` 행은 거짓이다.
+ * @param {Candidate} c
+ */
+function variesByYear(c) {
+  if (c.status === "transferred_in") return true;
+  const o = c.observance;
+  if (o.kind === "temporal") return true;
+  return typeof o.lunar === "string" && o.lunar !== "";
+}
+
+/**
+ * `c` 를 **밀어낸 것** — 순위에서 `c` 보다 앞서고, 둘 중 어느 한쪽이라도 겹침이 해마다 달라지는 후보
+ * 가운데 **실제 후보를 우선**한 최상위, 실제 후보가 없을 때만 guard 다(§6.5 `displacer`). 앞선 것이 전부
+ * 고정일이면 null — 매년 같은 날에 함께 오는 **동시 봉헌**이라 진 쪽도 밀린 것이 아니다(9.29 설립
+ * 기념일 · 8.15 광복절 — §6.5 · 미결18). 같은 값의 도착이 고유 후보를 앞서는 것(→ R-6.2-chain-model)과
+ * 규칙일이 고정일을 앞서는 것(→ R-6.2-rule-day-stays)은 순위가 이미 담고 있다.
+ * @param {Candidate[]} ranked @param {Candidate} c
+ * @returns {Candidate | null}
+ */
+function displacerOf(ranked, c) {
+  const i = ranked.indexOf(c);
+  const above = ranked.slice(0, Math.max(i, 0)).filter((w) => variesByYear(w) || variesByYear(c));
+  return above.find((w) => !w.observance.id.startsWith(GUARD_PREFIX))
+    || above.find((w) => w.observance.id.startsWith(GUARD_PREFIX))
+    || null;
+}
+
+/**
+ * 승자와 재분류(§5.5 status 표 · R-6.2-conflict-steps). 그날 남아 있는 후보(`proper` · `transferred_in` —
+ * 떠난 것과 선택 봉헌은 순위에 들지 않는다)와 보호 기간의 guard 를 순위대로 세우고, 밀린(`displacerOf`)
+ * 고유 후보 가운데
+ *  - prec 7 **축일**(`minor_feast` · `transferable` 아님)은 `omitted`(→ R-6.1-prec7-omit — guard 도 밀어낸다:
+ *    성주간 · 부활 8일의 prec 7 은 생략, → R-6.3-holy-week-guard),
+ *  - `commemorate_only`(추수감사주일)는 `commemorated` — 둘 다 `displacedBy` 를 싣는다.
+ * 나머지는 그대로다 — 격자, 지향 · 이름 줄, `precedence: null`, `transferable: false` 인 상위 축일, 동시
+ * 봉헌에서 진 쪽, 그리고 옮겨질 축일(좌석은 이동 패스가 정한다 — §6.5).
+ *
+ * `official` 은 순위에서 처음 오는 **실제** 후보 가운데 승자 자격이 있고(유효 precedence ≤ 8) 재분류 뒤에도
+ * `proper` · `transferred_in` 인 것이다 — guard 는 후보가 아니라 승자가 되지 않는다(성주간 평일의 승자는
+ * 격자다). 격자가 언제나 있으므로 유효한 날짜에는 승자가 있다.
+ * @param {string} dateStr @param {Candidate[]} cands 그날의 후보 전부(출발 · 선택 봉헌 포함)
+ * @returns {{candidates: Candidate[], official: Candidate | null}} candidates 는 입력과 같은 순서 — 재분류된 것만 새 객체
+ */
+function settle(dateStr, cands) {
+  const staying = cands.filter((c) => c.status === "proper" || c.status === "transferred_in");
+  const ranked = rankCandidates([...staying, ...guardCandidates(dateStr)]);
+  /** @type {Map<Candidate, Candidate>} */
+  const reclassified = new Map();
+  for (const c of staying) {
+    if (c.status !== "proper") continue;   // 도착은 다시 밀리지 않는다(→ R-6.2-first-come)
+    const o = c.observance;
+    const omit = o.rank === "minor_feast" && o.transferable !== true;
+    const commemorate = o.transfer_to === "commemorate_only";
+    if (!omit && !commemorate) continue;
+    const by = displacerOf(ranked, c);
+    if (by) reclassified.set(c, { observance: o, status: omit ? "omitted" : "commemorated", displacedBy: by.observance.id });
+  }
+  const after = (/** @type {Candidate} */ c) => reclassified.get(c) || c;
+  const official = ranked.map(after).find((c) =>
+    !c.observance.id.startsWith(GUARD_PREFIX)
+    && (c.status === "proper" || c.status === "transferred_in")
+    && effectivePrecedence(c.observance) <= 8) || null;
+  return { candidates: cands.map(after), official };
+}
+
+// ── §6.4 전례색 · §6.3 재일 (B1) ──
+
+/** 사계재 후보인가 — 규칙 종류로 판별한다(이름 아님, → R-6.1-ineligible). */
+function isEmber(/** @type {Observance} */ obs) {
+  return !!(obs.rule && obs.rule.kind === "ember_wfs");
+}
+
+/**
+ * 그날의 색(→ R-6.4-color-order): 절기 기본색(격자 관측일의 색)을 깔고 → 승자 관측일의 색이 덮고 →
+ * 성주간 · 부활 8일(`holyWeek` ∪ `easterOctave`, §4.10)에는 승자가 덮지 못한다(E−1 은 승자가 부활밤이어도
+ * 홍 — 미결20). 승자의 색이 비었으면(추수감사주일) 바탕이 남는다. 사계재 날은 **자**다(→ R-6.4-ember-color):
+ * 바탕이 남으면(승자가 격자) 그날 색이 자이고, 축일이 덮으면 그 색이 대표로 남고 `colors` 에 자를 앞세워
+ * 병기한다(책자의 [자/백] 순). `colors` 는 병기 목록이라 병기가 없는 날은 `[color]` 다. `omitted` ·
+ * `commemorated` 후보와 기념일은 색에 기여하지 않는다.
+ * @param {string} dateStr @param {Candidate} grid @param {Candidate | null} official @param {Candidate[]} cands
+ * @returns {{color: LiturgicalColor | null, colorAlt: import("../types").CodeField<LiturgicalColorAlt>, colors: LiturgicalColor[]}}
+ */
+function dayColorsOf(dateStr, grid, official, cands) {
+  const guarded = inSpan(dateStr, "holyWeek") || inSpan(dateStr, "easterOctave");
+  const top = official && official.observance.color && !guarded ? official.observance : grid.observance;
+  const color = top.color;
+  const colorAlt = top.color_alt ?? null;
+  if (!color) return { color: null, colorAlt, colors: [] };
+  const ember = cands.find((c) => c.status === "proper" && isEmber(c.observance) && c.observance.color);
+  const violet = ember ? ember.observance.color : null;
+  if (!violet) return { color, colorAlt, colors: [color] };
+  if (top === grid.observance) return { color: violet, colorAlt, colors: [violet] };
+  return { color, colorAlt, colors: color === violet ? [violet] : [violet, color] };
+}
+
+/**
+ * 그날이 재일인가(§6.3 · 전사 「재일」) — `"major"` 대재일(재의 수요일 · 성 금요일), `"minor"` 소재일(사순
+ * 절기 중 주간 40일 · 사계재일 · 성탄절기를 제외한 모든 금요일), 아니면 null. **승자와 무관하다** — 그날
+ * 남아 있는 후보(`proper` · `transferred_in`)와 날짜로 판정한다: 사계재가 지향이어도 그날은 소재일이다.
+ * 금요일의 성탄절기는 `spansOf().christmasToBaptism`(§4.10)으로 보고 날짜를 따로 비교하지 않는다
+ * (→ R-6.3-friday-fast). 성 목요일은 대축일이고 재일이 아니다(ADR-036 §6) — 사순절기의 대축일 행이 그날
+ * 있으면 소재일에서 뺀다. `ResolvedDate` 의 형태를 바꾸지 않으려고 따로 둔 함수다(§6.5 마지막 단락).
+ * @param {ResolvedDate} resolved
+ * @returns {LiturgicalFast | null}
+ */
+function fastOf(resolved) {
+  if (!resolved || !resolved.coord || !Array.isArray(resolved.candidates)) return null;
+  const here = resolved.candidates
+    .filter((c) => c.status === "proper" || c.status === "transferred_in")
+    .map((c) => c.observance);
+  if (here.some((o) => o.rank === "principal" && o.type === "fast")) return "major";
+  if (here.some((o) => o.penitential === true)) return "minor";
+  const { season, type, weekday } = resolved.coord;
+  if (season === "lent" && type === "weekday") {
+    return here.some((o) => o.rank === "principal" && o.type === "feast" && o.season === "lent") ? null : "minor";
+  }
+  return weekday === "fri" && !inSpan(resolved.date, "christmasToBaptism") ? "minor" : null;
+}
+
+// ── §5.5 resolveDate ──
+
+/**
  * 그 날의 후보 **전부**(§5.5) — 출처 다섯: ① 격자 ② 날짜(성인력) ③ 음력 ④ 규칙 파생 ⑤ 도착.
  * ①~④ 가 그 날짜의 고유 후보(`proper`)이고 ⑤ 만 다른 날짜에서 온다. 패스의 출발 색인에 있는 고유
- * 후보는 `transferred_out` 으로, 선택 봉헌은 `optional` 로 덧붙는다. **PR 2 는 품계를 매기지 않는다** —
- * `official: null`, 색은 비어 있고(B1), 패스는 빈 패스다. 그래도 ⑤ · 출발 · 선택 봉헌을 읽는 경로는
- * 여기서 완성해 둔다 — PR 3 이 패스를 채워도 반환 형태가 바뀌지 않게(§6.5).
+ * 후보는 `transferred_out` 으로, 선택 봉헌은 `optional` 로 덧붙는다. 그 위에서 B1 이 승자를 정하고
+ * 밀린 고유 후보를 재분류하며(`settle`) 그날의 색을 낸다(`dayColorsOf`). 후보는 하나도 버리지 않는다
+ * (ADR-036 §7 「밀린 독서 보존」).
  *
- * 표시 순서(ADR-037 §6): ① 교회력에 따른 축일 · 재일(④ → ② → ③, 출처 안에서는 id 순 — 품계순은
- * B1) → ② 이동 축일(도착 · 선택 봉헌) → ③ 나머지(격자).
+ * 표시 순서(ADR-037 §6): ① 교회력에 따른 축일 · 재일(품계 순 — `compareCandidates`) → ② 이동 축일
+ * (도착 → 선택 봉헌, 패스의 순서) → ③ 나머지(격자).
  * @param {CalendarIndex} index @param {string} dateStr @param {TransferPass} pass
  * @returns {ResolvedDate | null} 잘못된 날짜면 null
  */
 function resolveDateIn(index, dateStr, pass) {
   const coord = coordOf(dateStr, index.ordinal);
   if (!coord) return null;
-  const y = parseInt(dateStr.slice(0, 4), 10);
-  const md = monthDayOf(dateStr);
-
-  /** @type {Observance[]} */
-  const own = [];
-  const seen = new Set();
-  /** @param {Observance[] | undefined} rows */
-  const take = (rows) => {
-    const fresh = (rows || []).filter((r) => !seen.has(r.id)).sort((a, b) => compareIds(a.id, b.id));
-    for (const r of fresh) { seen.add(r.id); own.push(r); }
-  };
-  take(movableOf(index, y).get(dateStr));                       // ④ 규칙 파생
-  take(index.sanctoralByDate.get(md));                          // ② 날짜
-  const lunar = lunarDatesOf(index.kasi, y);                    // ③ 음력 — 범위 밖 연도는 빈 객체(§2)
-  /** @type {Observance[]} */
-  const lunarRows = [];
-  for (const key of Object.keys(lunar)) {
-    if (lunar[key] === dateStr) lunarRows.push(...(index.sanctoralByLunar.get(key) || []));
-  }
-  take(lunarRows);
 
   /** @type {Map<string, Candidate>} */
   const departed = new Map();
   for (const c of pass.departures.get(dateStr) || []) departed.set(c.observance.id, c);
   /** @type {Candidate[]} */
-  const feasts = own.map((o) => departed.get(o.id) || { observance: o, status: "proper" });
+  const feasts = ownObservancesOn(index, dateStr).map((o) => departed.get(o.id) || { observance: o, status: "proper" });
   /** @type {Candidate[]} */
   const moved = [...(pass.arrivals.get(dateStr) || []), ...(pass.optionals.get(dateStr) || [])];
   /** @type {Candidate} */
   const grid = { observance: gridObservance(dateStr, coord), status: "proper" };
 
+  const { candidates, official } = settle(dateStr, [...feasts, ...moved, grid]);
+  const own = candidates.slice(0, feasts.length).sort(compareCandidates);
   return {
     date: dateStr,
     coord,
-    candidates: [...feasts, ...moved, grid],
-    official: null,
-    periods: periodsOn(index, md),
-    color: null,
-    colorAlt: null,
-    colors: [],
+    candidates: [...own, ...candidates.slice(feasts.length)],
+    official,
+    periods: periodsOn(index, monthDayOf(dateStr)),
+    ...dayColorsOf(dateStr, grid, official, candidates),
   };
 }
 
@@ -1452,5 +1700,5 @@ export {
   easterDate, advent1Date, baptismDate, liturgicalYearOf, yearAnchors,
   seasonOf, sundayCycle, weekdayCycle, evalRule,
   buildOrdinalIndex, ordinalWeekOf, lunarDatesOf, spansOf, inSpan,
-  preloadCalendar, preloadLectionary, resolveDate, findReadings, findCollects,
+  preloadCalendar, preloadLectionary, resolveDate, findReadings, findCollects, fastOf,
 };

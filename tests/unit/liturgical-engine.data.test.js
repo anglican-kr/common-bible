@@ -438,3 +438,319 @@ test("§5.4 · §5.6 도달 범위 — 2025~2050 모든 날의 모든 후보를 
   same([...ix().rec.keys()].filter((id) => !seenR.has(id)), []);
   same([...ix().col.keys()].filter((id) => !seenC.has(id)), []);
 });
+
+// ════════════════════════════════════════════════════════════════════════════
+// B1 품계 · 승자 · 전례색 · 재일 — 실데이터 (설계서 §6 · 검토 문서 §5.10 · §5.13 · PR 3)
+// ════════════════════════════════════════════════════════════════════════════
+// 실제 연도의 기대값은 픽스처가 정본이다(설계서 §1.4) — 아래 「픽스처 소비」가 winners.cases.json 을 그대로
+// 돌린다. 여기 단언은 픽스처에 없는 것(연도 범위 · 데이터 전체에 걸친 성질)만이다.
+
+const offId = (r) => (r.official ? r.official.observance.id : null);
+const gridIn = (r) => r.candidates.find((c) => c.observance.id.startsWith("grid:"));
+const COLORS = ["white", "red", "green", "violet"];
+const lunarDay = (y, key) => {
+  const v = read("kasi-lunar.json").years[String(y)][key];
+  return `${y}-${v}`;
+};
+
+test("B1 불변식 — 2025~2050 모든 날에 승자가 하나 있고 후보 가운데 하나이며, 색은 정식 4색 · colors 는 color 를 담는다", { skip: SKIP }, () => {
+  const bad = [];
+  for (let y = 2025; y <= 2050; y++) {
+    for (let d = `${y}-01-01`; d.startsWith(`${y}-`); d = ctx.addDays(d, 1)) {
+      const r = resolve(d);
+      const o = r.official;
+      if (!o || !r.candidates.includes(o)) { bad.push(`${d} 승자 없음/후보 밖`); continue; }
+      if (!(o.status === "proper" || o.status === "transferred_in")) bad.push(`${d} 승자 status ${o.status}`);
+      if (ctx.effectivePrecedence(o.observance) > 8) bad.push(`${d} 승자 자격 없음 ${o.observance.id}`);
+      if (!COLORS.includes(r.color) || !r.colors.includes(r.color) || r.colors.some((c) => !COLORS.includes(c))) {
+        bad.push(`${d} 색 ${r.color} / ${JSON.stringify(r.colors)}`);
+      }
+      for (const c of r.candidates) {
+        const reclassified = c.status === "omitted" || c.status === "commemorated";
+        if (reclassified !== ("displacedBy" in c)) bad.push(`${d} ${c.observance.id} ${c.status} displacedBy`);
+        if (c.status === "omitted" && c.observance.rank !== "minor_feast") bad.push(`${d} omitted ${c.observance.rank}`);
+        if (c.observance.rank === "commemoration" && c.status !== "proper") bad.push(`${d} 기념일 ${c.status}`);
+      }
+    }
+  }
+  same(bad, []);
+});
+
+test("C-6.1-2 A 특례 1.5 — 2031-02-02 주의 봉헌(주일) · 2034-01-01 거룩한 이름 예수(성탄 1주일) · 2028-08-06 주의 변모(주일)", { skip: SKIP }, () => {
+  for (const [d, id] of [["2031-02-02", "d0202-주의-봉헌"], ["2034-01-01", "d0101-거룩한-이름-예수"], ["2028-08-06", "d0806-주의-변모"]]) {
+    const r = resolve(d);
+    same([ctx.dayOfWeek(d), offId(r), gridIn(r).status], [0, id, "proper"], d);
+  }
+  same(gridIn(resolve("2034-01-01")).observance.precedence, 2);   // 절기 주일도 이긴다
+});
+
+test("C-6.1-3 명절 > 대재일 — 2032-02-11 설이 승자, 재의 수요일은 proper 로 남고 옮기지 않는다(미결13 — 데이터 transferable: false)", { skip: SKIP }, () => {
+  const r = resolve("2032-02-11");
+  same(offId(r), "lunar11-설날");
+  const ash = pick(r, "t-재의-수요일");
+  same([ash.status, "displacedBy" in ash, ash.observance.transferable], ["proper", false, false]);
+  same(ctx.fastOf(r), "major");
+});
+
+test("C-6.1-4 명절 ∧ 연중 주일 — 설 2027 · 2030 · 2034 · 2037 · 2040 · 2050, 추석 2032 · 2035 · 2039 · 2042: 명절 승자, 주일 격자 proper", { skip: SKIP }, () => {
+  const days = [
+    ...[2027, 2030, 2034, 2037, 2040, 2050].map((y) => [lunarDay(y, "1-1"), "lunar11-설날"]),
+    ...[2032, 2035, 2039, 2042].map((y) => [lunarDay(y, "8-15"), "lunar815-추석-명절"]),
+  ];
+  for (const [d, id] of days) {
+    const r = resolve(d);
+    same([ctx.dayOfWeek(d), r.coord.season, offId(r), gridIn(r).status, gridIn(r).observance.rank], [0, "ordinary", id, "proper", "sunday"], d);
+  }
+  // 2025~2050 에 명절이 주일인 해는 이 열이 전부다 — 목록이 데이터와 어긋나면 잡힌다
+  const all = [];
+  for (let y = 2025; y <= 2050; y++) for (const k of ["1-1", "8-15"]) if (ctx.dayOfWeek(lunarDay(y, k)) === 0) all.push(lunarDay(y, k));
+  same(all.sort(), days.map(([d]) => d).sort());
+});
+
+test("C-6.1-7 · C-2-1 precedence null 인 temporal 행은 후보로 있되 승자가 아니다 (2025~2050) — 성 토요일의 승자는 부활밤", { skip: SKIP }, () => {
+  const nullRows = read("temporal-feasts.json").entries.filter((e) => e.precedence === null).map((e) => e.id);
+  assert.ok(nullRows.length > 0);
+  const bad = [];
+  for (let y = 2025; y <= 2050; y++) {
+    const memo = ctx.movableOf(ix().cal, y);
+    for (const [d, rows] of memo) {
+      for (const row of rows) {
+        if (row.precedence !== null) continue;
+        const r = resolve(d);
+        const c = pick(r, row.id);
+        if (!c || c.status !== "proper") bad.push(`${d} ${row.id} 후보 ${c && c.status}`);
+        if (offId(r) === row.id) bad.push(`${d} ${row.id} 승자`);
+        if (row.id === "t-성-토요일" && offId(r) !== "t-부활밤") bad.push(`${d} 성 토요일 승자 ${offId(r)}`);
+        // 주의 변모 주일 · 가정 · 평화통일 · 맥추감사 — 그날 승자는 격자거나 그 주일을 이기는 축일(2.2 주의 봉헌 등)
+        if (row.id !== "t-성-토요일" && !offId(r).startsWith("grid:") && ctx.effectivePrecedence(r.official.observance) >= gridIn(r).observance.precedence) {
+          bad.push(`${d} ${row.id} 승자 ${offId(r)}`);
+        }
+      }
+    }
+  }
+  same(bad, []);
+  // 2026-02-15 — 변모 주일 독서는 후보로 닿는다(선택 독서), 그날 승자는 연중 6주일 격자 · 녹(X-10)
+  const feb15 = resolve("2026-02-15");
+  same([offId(feb15), feb15.color], ["grid:ordinary-6-sunday", "green"]);
+  assert.ok(groupsAt("2026-02-15", "t-주의-변모-주일").length > 0);
+});
+
+test("C-6.1-9 prec 7 축일 ∧ 축일 다섯 쌍 — 결정적이고 둘 다 proper, 3.01 은 고유 본기도가 있는 삼일절이 승자", { skip: SKIP }, () => {
+  const byDate = new Map();
+  for (const e of read("sanctoral.json").entries) {
+    if (e.rank === "minor_feast" && e.date) (byDate.get(e.date) || byDate.set(e.date, []).get(e.date)).push(e);
+  }
+  const pairs = [...byDate].filter(([, es]) => es.length === 2).map(([md]) => md).sort();
+  same(pairs, ["02.14", "03.01", "06.09", "08.05", "12.31"]);
+  for (const md of pairs) {
+    // 그 날짜가 평일인 해마다 — 승자는 둘 중 하나로 늘 같고, 진 쪽은 proper(고정일끼리 — 동시 봉헌)
+    const winners = new Set();
+    for (let y = 2025; y <= 2050; y++) {
+      const d = `${y}-${md.replace(".", "-")}`;
+      const r = resolve(d);
+      const two = byDate.get(md).map((e) => pick(r, e.id));
+      assert.ok(two.every(Boolean), d);
+      if (two.some((c) => c === r.official)) {
+        winners.add(offId(r));
+        assert.ok(two.every((c) => c.status === "proper" && !("displacedBy" in c)), d);
+      }
+    }
+    assert.strictEqual(winners.size, 1, `${md} ${[...winners]}`);
+  }
+  same(offId(resolve("2027-03-01")), "d0301-삼일절");   // 사순 평일 · 데이빗은 고유 본기도가 없다
+  same(offId(resolve("2031-03-01")), "d0301-삼일절");   // 재의 수요일 후 토요일(사용자 확정 2026-10-10)
+  same(offId(resolve("2047-03-01")), "d0301-삼일절");   // 재의 수요일 후 금요일
+  same(pick(resolve("2031-03-01"), "grid:").observance.name, "재의 수요일 후 토요일");   // 지정 독서는 격자 후보로 남는다
+});
+
+test("C-6.1-10 · C-5.5-3 동률에서 temporal 이 격자를 이긴다 — 2026-03-29 성지주일(홍) · 2026-11-29 대림1주일", { skip: SKIP }, () => {
+  const palm = resolve("2026-03-29");
+  same([offId(palm), palm.color, gridIn(palm).status], ["t-성지주일", "red", "proper"]);
+  const advent1 = resolve("2026-11-29");
+  same([offId(advent1), advent1.color, gridIn(advent1).status], ["t-대림1주일", "violet", "proper"]);
+});
+
+test("C-6.1-11 하계재 후보의 본문 — 2026-05-27 성직자 2세트(시편 99 / 27:1-9) · 성직자 본기도, 승자는 격자", { skip: SKIP }, () => {
+  const groups = groupsAt("2026-05-27", "t-하계재");
+  same(groups.map((g) => g.readings.find((s) => s.slot === "psalm").label), ["시편 99", "시편 27:1-9"]);
+  const collects = collectsAt("2026-05-27", "t-하계재");
+  assert.ok(collects.length > 0 && collects.every((c) => colOf(c).name.includes("성직자")));
+  same(offId(resolve("2026-05-27")).startsWith("grid:"), true);
+});
+
+test("C-6.1-12 기념일은 이름 줄 — 같은 날짜에 다른 행이 없는 성인력 기념일과 temporal 기념일은 해마다 승자가 격자 · 주일 (2025~2050)", { skip: SKIP }, () => {
+  const s = read("sanctoral.json").entries;
+  const lonely = s.filter((e) => e.rank === "commemoration" && e.date && s.filter((x) => x.date === e.date).length === 1);
+  same(lonely.length, 11);
+  const bad = [];
+  for (let y = 2025; y <= 2050; y++) {
+    for (const e of lonely) {
+      const r = resolve(`${y}-${e.date.replace(".", "-")}`);
+      const own = r.candidates.filter((c) => c.observance.id !== e.id && !c.observance.id.startsWith("grid:"));
+      if (own.length === 0 && !offId(r).startsWith("grid:")) bad.push(`${r.date} ${e.id} 승자 ${offId(r)}`);
+      if (offId(r) === e.id || pick(r, e.id).status !== "proper") bad.push(`${r.date} ${e.id}`);
+    }
+    for (const [d, rows] of ctx.movableOf(ix().cal, y)) {
+      for (const row of rows) if (row.rank === "commemoration" && !offId(resolve(d)).startsWith("grid:")) bad.push(`${d} ${row.id}`);
+    }
+  }
+  same(bad, []);
+});
+
+test("C-6.4-1 절기 기본색 · 승자 색 — 성주간 전체 홍(성 목 · 금 · 토) · 성령강림 홍 · 삼위일체 · 왕이신 그리스도 백 · 대림 3주일 장미 · 청 · 사순 4주일 장미 (2025~2050)", { skip: SKIP }, () => {
+  const bad = [];
+  for (let y = 2025; y <= 2050; y++) {
+    const E = ctx.easterDate(y);
+    const at = (n) => resolve(ctx.addDays(E, n));
+    for (let n = -7; n <= -1; n++) if (at(n).color !== "red") bad.push(`${y} E${n} ${at(n).color}`);
+    if (at(49).color !== "red") bad.push(`${y} 성령강림 ${at(49).color}`);
+    if (at(56).color !== "white") bad.push(`${y} 삼위일체 ${at(56).color}`);
+    const kingship = resolve(ctx.addDays(ctx.advent1Date(y), -7));
+    if (kingship.color !== "white" || offId(kingship) !== "t-왕이신-그리스도-주일") bad.push(`${y} 왕이신 그리스도 ${kingship.color}`);
+    const advent3 = resolve(ctx.addDays(ctx.advent1Date(y), 14));
+    if (JSON.stringify(plain(advent3.colorAlt)) !== JSON.stringify(["rose", "blue"]) && offId(advent3).startsWith("grid:")) {
+      bad.push(`${y} 대림 3주일 ${JSON.stringify(advent3.colorAlt)}`);
+    }
+    const lent4 = at(-21);
+    if (lent4.colorAlt !== "rose" && offId(lent4).startsWith("grid:")) bad.push(`${y} 사순 4주일 ${lent4.colorAlt}`);
+  }
+  same(bad, []);
+});
+
+test("C-6.4-2 성주간 · 부활 8일에는 성인 색이 덮지 못한다 — 2035-03-19 요셉(성주간 월) 홍 · 2025-04-25 마르코(부활 금) 백 · 순교자 평일 홍", { skip: SKIP }, () => {
+  same(resolve("2035-03-19").color, "red");
+  same(resolve("2025-04-25").color, "white");
+  const boniface = resolve("2026-06-05");   // 순교자 축일 평일 — 승자 색이 덮는다(픽스처 W-2026-06-05-boniface-color 와 같은 날)
+  same([offId(boniface), boniface.color], ["d0605-보니파스", "red"]);
+});
+
+test("C-6.3-1 재일 — 대재일 둘 · 사순 주간 40일(성 목요일은 아님) · 성탄절기 밖 금요일 (2025~2050)", { skip: SKIP }, () => {
+  const bad = [];
+  for (let y = 2025; y <= 2050; y++) {
+    const a = ctx.yearAnchors(y);
+    const counts = { major: 0, minor: 0, none: 0 };
+    for (let d = a.ash; d < a.easter; d = ctx.addDays(d, 1)) {
+      if (ctx.dayOfWeek(d) === 0) continue;
+      counts[ctx.fastOf(resolve(d)) || "none"]++;
+    }
+    if (JSON.stringify(counts) !== JSON.stringify({ major: 2, minor: 37, none: 1 })) bad.push(`${y} ${JSON.stringify(counts)}`);
+    if (ctx.fastOf(resolve(ctx.addDays(a.easter, -3))) !== null) bad.push(`${y} 성 목요일`);
+  }
+  same(bad, []);
+  same([ctx.fastOf(resolve("2026-01-09")), ctx.fastOf(resolve("2026-01-16"))], [null, "minor"]);   // 세례 주일 1.11
+});
+
+// ── 픽스처 소비 (tests/fixtures/liturgical/README.md 「소비 방법」) ──
+// 케이스마다 테스트 하나 — `status: "skip"` 은 건너뛰고 `provisional` 은 「잠정」 표시로 돌린다(실패하면 실패).
+// `expect` 는 부분집합 비교다: 적은 키만 본다. 모르는 키는 실패로 다룬다 — 소비자가 조용히 무시하면 그 단언은
+// 아무것도 지키지 못한다.
+
+const FIXTURES = path.join(ROOT, "tests", "fixtures", "liturgical");
+const fixtureCases = (file) => JSON.parse(fs.readFileSync(path.join(FIXTURES, file), "utf8")).cases;
+/** 이동 패스가 있어야 맞는 케이스 — PR 3 의 둘째 GitHub PR(이동 패스)이 transfers · optionals 와 함께 켠다. */
+const NEEDS_PASS = new Map([
+  ["W-2026-05-15-matthias-color", "마티아는 5.14 에서 옮겨 온 도착이 승자다 — 이동 패스(§6.5)"],
+  ["W-2025-12-29-holy-innocents-color", "어린이들은 12.28 에서 옮겨 온 도착이 승자다 — 이동 패스(§6.5)"],
+]);
+const EXPECT_KEYS = new Set([
+  "id", "status", "from", "to", "displacedBy", "absent", "notInDepartures", "official", "color", "colors",
+  "observanceColor", "penitential", "fast", "coord", "grid", "readings", "officialReadings", "collects",
+]);
+const READING_KEYS = new Set(["origin", "record", "common", "sets", "slots", "empty", "cycle"]);
+const COLLECT_KEYS = new Set(["origin", "count"]);
+const show = (v) => JSON.stringify(plain(v));
+
+/** 본문 레코드의 색인 날짜 — 표기를 `MM.DD` 로 맞춘다(§5.2). 공통 · 합성 그룹은 레코드가 없어 null. */
+function originOf(record) {
+  if (!record || typeof record.date !== "string") return null;
+  const [m, d] = record.date.split(/[.-]/);
+  return `${m.padStart(2, "0")}.${d.padStart(2, "0")}`;
+}
+
+/** 독서 단언 — `readings`(그 후보) · `officialReadings`(승자) 공통. */
+function checkReadings(r, c, want, label, bad) {
+  for (const k of Object.keys(want)) if (!READING_KEYS.has(k)) bad.push(`${label}.${k}: 모르는 키`);
+  const groups = ctx.findReadingsIn(ix().lec, ix().cal, r, c);
+  if (want.empty === true && groups.length) bad.push(`${label}: 비어야 하는데 ${groups.map((g) => g.id)}`);
+  if ("sets" in want && groups.length !== want.sets) bad.push(`${label}.sets: ${groups.length} ≠ ${want.sets}`);
+  if ("common" in want && !(groups.length && groups.every((g) => g.common === want.common))) {
+    bad.push(`${label}.common: ${show(groups.map((g) => g.common))} ≠ ${want.common}`);
+  }
+  if ("origin" in want) {
+    const origins = [...new Set(groups.map((g) => originOf(recOf(g))))];
+    if (show(origins) !== show([want.origin])) bad.push(`${label}.origin: ${show(origins)} ≠ ${want.origin}`);
+  }
+  if ("record" in want && !groups.some((g) => g.id === want.record)) bad.push(`${label}.record: ${show(groups.map((g) => g.id))} ∌ ${want.record}`);
+  if ("cycle" in want) {
+    const cycles = [...new Set(groups.map((g) => recOf(g) && recOf(g).year))];
+    if (show(cycles) !== show([want.cycle])) bad.push(`${label}.cycle: ${show(cycles)} ≠ ${want.cycle}`);
+  }
+  if ("slots" in want) {
+    const got = groups.length ? groups[0].readings.map((s) => s.label) : [];
+    if (show(got) !== show(want.slots)) bad.push(`${label}.slots: ${show(got)} ≠ ${show(want.slots)}`);
+  }
+}
+
+/** 날짜 단언 하나 — 어긋난 것을 문자열로 모은다. */
+function checkAssertion(date, exp) {
+  const bad = [];
+  for (const k of Object.keys(exp)) if (!EXPECT_KEYS.has(k)) bad.push(`${k}: 모르는 키`);
+  const r = resolve(date);
+  if ("id" in exp) {
+    const hits = r.candidates.filter((c) => c.observance.id === exp.id && (!("status" in exp) || c.status === exp.status));
+    if (exp.absent === true) {
+      if (hits.length) bad.push(`absent: ${exp.id}${exp.status ? ":" + exp.status : ""} 가 있다`);
+    } else if (!hits.length) {
+      bad.push(`id: ${exp.id}${exp.status ? ":" + exp.status : ""} 없음 — ${r.candidates.map((c) => `${c.observance.id}:${c.status}`).join(" ")}`);
+    } else {
+      const c = hits[0];
+      for (const k of ["from", "to"]) if (k in exp && c[k] !== exp[k]) bad.push(`${k}: ${c[k]} ≠ ${exp[k]}`);
+      if ("displacedBy" in exp) {
+        const got = "displacedBy" in c ? c.displacedBy : null;
+        if (got !== exp.displacedBy) bad.push(`displacedBy: ${got} ≠ ${exp.displacedBy}`);
+      }
+      if ("observanceColor" in exp && c.observance.color !== exp.observanceColor) bad.push(`observanceColor: ${c.observance.color} ≠ ${exp.observanceColor}`);
+      if ("penitential" in exp && (c.observance.penitential === true) !== exp.penitential) bad.push(`penitential: ${c.observance.penitential}`);
+      if ("notInDepartures" in exp) {
+        const deps = ctx.transfersOf(Number(date.slice(0, 4))).departures.get(date) || [];
+        if (deps.some((x) => x.observance.id === exp.id) === exp.notInDepartures) bad.push(`notInDepartures: ${exp.id}`);
+      }
+      if ("readings" in exp) checkReadings(r, c, exp.readings, "readings", bad);
+      if ("collects" in exp) {
+        for (const k of Object.keys(exp.collects)) if (!COLLECT_KEYS.has(k)) bad.push(`collects.${k}: 모르는 키`);
+        const cs = ctx.findCollectsIn(ix().lec, ix().cal, r).find((e) => e.candidate === c).collects;
+        if ("count" in exp.collects && cs.length !== exp.collects.count) bad.push(`collects.count: ${cs.length} ≠ ${exp.collects.count}`);
+        if ("origin" in exp.collects) {
+          const origins = [...new Set(cs.map((x) => originOf(colOf(x))))];
+          if (show(origins) !== show([exp.collects.origin])) bad.push(`collects.origin: ${show(origins)} ≠ ${exp.collects.origin}`);
+        }
+      }
+    }
+  }
+  if ("official" in exp) {
+    const got = offId(r);
+    const ok = exp.official === "grid:*" ? typeof got === "string" && got.startsWith("grid:") : got === exp.official;
+    if (!ok) bad.push(`official: ${got} ≠ ${exp.official}`);
+  }
+  if ("color" in exp && r.color !== exp.color) bad.push(`color: ${r.color} ≠ ${exp.color}`);
+  if ("colors" in exp && show(r.colors) !== show(exp.colors)) bad.push(`colors: ${show(r.colors)} ≠ ${show(exp.colors)}`);
+  // `fast` 는 그날의 소재일 여부다(README) — 대재일은 `fastOf` 가 "major" 로 따로 낸다
+  if ("fast" in exp && (ctx.fastOf(r) === "minor") !== exp.fast) bad.push(`fast: ${ctx.fastOf(r)} ≠ ${exp.fast}`);
+  if ("coord" in exp) for (const [k, v] of Object.entries(exp.coord)) if (r.coord[k] !== v) bad.push(`coord.${k}: ${r.coord[k]} ≠ ${v}`);
+  if ("grid" in exp) for (const [k, v] of Object.entries(exp.grid)) if (gridIn(r)[k] !== v) bad.push(`grid.${k}: ${gridIn(r)[k]} ≠ ${v}`);
+  if ("officialReadings" in exp) checkReadings(r, r.official, exp.officialReadings, "officialReadings", bad);
+  return bad;
+}
+
+for (const c of fixtureCases("winners.cases.json")) {
+  const name = `픽스처 ${c.id}${c.status === "provisional" ? ` (잠정 — ${c.issue})` : ""}`;
+  const skip = SKIP || (c.status === "skip" ? `${c.issue} — ${c.skip}` : NEEDS_PASS.get(c.id) || false);
+  test(name, { skip }, () => {
+    const bad = [];
+    for (const a of c.assertions) {
+      if (!a.date) { bad.push(`연도 범위 단언은 이동 패스와 함께 — ${show(a)}`); continue; }
+      for (const m of checkAssertion(a.date, a.expect)) bad.push(`${a.date} ${m}`);
+    }
+    same(bad, []);
+  });
+}

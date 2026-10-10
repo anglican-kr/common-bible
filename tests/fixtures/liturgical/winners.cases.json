@@ -46,30 +46,28 @@
       "id": "W-2026-05-27-ember-color",
       "kind": "winner",
       "group": "사계재 색",
-      "title": "하계재 수요일의 색 — 모델 (a) 승자(격자)의 절기색 녹 / 모델 (b) 책자대로 자",
-      "status": "provisional",
+      "title": "하계재 수요일의 색 — 승자는 격자 평일이어도 그날은 자(책자대로)",
+      "status": "confirmed",
       "issue": "미결26",
       "canon": ["R-6.4-ember-color"],
       "checks": ["C-6.4-3", "X-10"],
-      "source": ["2026 책자 — 5.27 [백/자](백은 그 주 전체가 [백] 인 편집 — 미결30 ③) · 5.29 [자] · 5.30 [자]"],
-      "ifIssueFlips": { "issue": "미결26", "expect": { "color": "violet" } },
+      "source": ["2026 책자 — 5.27 [백/자](백은 그 주 전체가 [백] 인 편집 — 미결30 ③) · 5.29 [자] · 5.30 [자]", "사용자 결정 2026-10-10 — 미결26 모델 (b): 사계재 날은 책자대로 자(그날 승자가 격자면 자, 축일이면 축일 색 + 자 병기)"],
       "assertions": [
-        { "date": "2026-05-27", "expect": { "color": "green" } }
+        { "date": "2026-05-27", "expect": { "official": "grid:*", "color": "violet", "colors": ["violet"] } }
       ]
     },
     {
       "id": "W-2026-09-18-ember-color",
       "kind": "winner",
       "group": "사계재 색",
-      "title": "추계재 금요일(격자 독서)의 색 — 모델 (a) 녹 / 모델 (b) 자",
-      "status": "provisional",
+      "title": "추계재 금요일(격자 독서)의 색 — 자(책자대로)",
+      "status": "confirmed",
       "issue": "미결26",
       "canon": ["R-6.4-ember-color"],
       "checks": ["C-6.4-3", "X-8"],
-      "source": ["서울교구 2026 달력 9월 면 — 9.18 은 격자 독서인데도 [자]"],
-      "ifIssueFlips": { "issue": "미결26", "expect": { "color": "violet" } },
+      "source": ["서울교구 2026 달력 9월 면 — 9.18 은 격자 독서인데도 [자]", "사용자 결정 2026-10-10 — 미결26 모델 (b): 사계재 날은 책자대로 자(그날 승자가 격자면 자, 축일이면 축일 색 + 자 병기)"],
       "assertions": [
-        { "date": "2026-09-18", "expect": { "official": "grid:*", "color": "green" } },
+        { "date": "2026-09-18", "expect": { "official": "grid:*", "color": "violet", "colors": ["violet"] } },
         { "date": "2026-09-18", "expect": { "id": "t-추계재", "status": "proper", "observanceColor": "violet" } }
       ]
     },
@@ -99,22 +97,21 @@
       "assertions": [
         { "date": "2025-12-17", "expect": { "official": "grid:*", "color": "violet" } },
         { "date": "2025-12-17", "expect": { "id": "t-동계재", "status": "proper", "observanceColor": "violet" } },
-        { "date": "2025-12-17", "expect": { "officialReadings": { "record": "d1217-성탄-8일-전", "slots": ["창세 49:2, 8-10", "시편 72:1-4, 18-19", "마태 1:1-17"] } } }
+        { "date": "2025-12-17", "expect": { "officialReadings": { "record": "d1217-성탄-8일-전-t1-s1", "slots": ["창세 49:2, 8-10", "시편 72:1-4, 18-19", "마태 1:1-17"] } } }
       ]
     },
     {
       "id": "W-2026-09-16-ninian-ember",
       "kind": "winner",
       "group": "사계재 ④",
-      "title": "축일이 이기는 사계재 날 — 니니안(prec 7) official, 추계재·격자 proper, 색은 니니안 것(잠정)",
-      "status": "provisional",
+      "title": "축일이 이기는 사계재 날 — 니니안(prec 7) official, 추계재·격자 proper, 색은 니니안 백 + 자 병기",
+      "status": "confirmed",
       "issue": "미결26",
       "canon": ["R-6.1-ineligible", "R-6.4-ember-color"],
       "checks": ["C-6.1-11", "C-6.4-3", "X-8"],
-      "source": ["서울교구 2026 달력 9월 면 — 9.16 니니안 [자/백] 병기, 독서는 연중 24주 평일 II 격자 것(미결25)"],
-      "ifIssueFlips": { "issue": "미결26", "expect": { "colors": ["violet", "white"] } },
+      "source": ["서울교구 2026 달력 9월 면 — 9.16 니니안 [자/백] 병기, 독서는 연중 24주 평일 II 격자 것(미결25)", "사용자 결정 2026-10-10 — 미결26 모델 (b): 사계재 날은 책자대로 자(그날 승자가 격자면 자, 축일이면 축일 색 + 자 병기)"],
       "assertions": [
-        { "date": "2026-09-16", "expect": { "official": "d0916-니니안", "color": "white" } },
+        { "date": "2026-09-16", "expect": { "official": "d0916-니니안", "color": "white", "colors": ["violet", "white"] } },
         { "date": "2026-09-16", "expect": { "id": "t-추계재", "status": "proper" } },
         { "date": "2026-09-16", "expect": { "grid": { "status": "proper" } } }
       ]
@@ -123,15 +120,14 @@
       "id": "W-2026-09-19-theodore-ember",
       "kind": "winner",
       "group": "사계재 ④",
-      "title": "축일이 이기는 사계재 날 — 데오도르(prec 7) official, 색은 데오도르 것(잠정)",
-      "status": "provisional",
+      "title": "축일이 이기는 사계재 날 — 데오도르(prec 7) official, 색은 데오도르 백 + 자 병기",
+      "status": "confirmed",
       "issue": "미결26",
       "canon": ["R-6.1-ineligible", "R-6.4-ember-color"],
       "checks": ["C-6.4-3", "X-8"],
-      "source": ["서울교구 2026 달력 9월 면 — 9.19 데오도르 [자/백] 병기"],
-      "ifIssueFlips": { "issue": "미결26", "expect": { "colors": ["violet", "white"] } },
+      "source": ["서울교구 2026 달력 9월 면 — 9.19 데오도르 [자/백] 병기", "사용자 결정 2026-10-10 — 미결26 모델 (b): 사계재 날은 책자대로 자(그날 승자가 격자면 자, 축일이면 축일 색 + 자 병기)"],
       "assertions": [
-        { "date": "2026-09-19", "expect": { "official": "d0919-탈수스의-데오도르", "color": "white" } },
+        { "date": "2026-09-19", "expect": { "official": "d0919-탈수스의-데오도르", "color": "white", "colors": ["violet", "white"] } },
         { "date": "2026-09-19", "expect": { "id": "t-추계재", "status": "proper" } }
       ]
     },
@@ -145,7 +141,7 @@
       "checks": ["C-6.1-12", "X-7"],
       "source": ["서울교구 2024 달력 12월 면 — 12.21 김희준 서품일은 이름 줄로만, 독서는 동계재 것(옛 편집 — 2025 부터라면 날짜 본문)"],
       "assertions": [
-        { "date": "2024-12-21", "expect": { "official": "grid:*", "officialReadings": { "record": "d1221-성탄-4일-전" } } },
+        { "date": "2024-12-21", "expect": { "official": "grid:*", "officialReadings": { "record": "d1221-성탄-4일-전-t1-s1" } } },
         { "date": "2024-12-21", "expect": { "id": "d1221-대한성공회-첫-한인-사제-김희준-서품일", "status": "proper", "displacedBy": null } },
         { "date": "2024-12-21", "expect": { "id": "t-동계재", "status": "proper" } }
       ]
@@ -367,7 +363,7 @@
       "canon": ["R-6.1-ladder", "R-6.1-prec7-omit"],
       "checks": ["X-11"],
       "source": ["2025 책자 — 10.6 추석 [백/홍] 고유 독서 + 피데스 이름 줄"],
-      "note": "책자 색은 [백/홍] 병기 — 평일 병기 규칙은 미정(미결26 ④)이라 승자 색만 단언한다.",
+      "note": "책자 색은 [백/홍] 병기 — 사계재 밖 평일의 병기는 세우지 않으므로(→ R-6.4-ember-color) 승자 색만 단언한다.",
       "assertions": [
         { "date": "2025-10-06", "expect": { "official": "lunar815-추석-명절", "color": "white" } },
         { "date": "2025-10-06", "expect": { "id": "d1006-피데스", "status": "omitted", "displacedBy": "lunar815-추석-명절" } }
