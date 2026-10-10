@@ -8,7 +8,7 @@
 
 | 겹 | 도구 | 무엇을 보나 | 어디서 도나 | 규모 |
 |---|---|---|---|---|
-| **유닛** | `node --test` (의존성 0) | 순수 로직 — 함수 입출력·상태 계산 + 문서·픽스처 정합성 | **CI 자동** (PR마다) | 29파일 · 899케이스 |
+| **유닛** | `node --test` (의존성 0) | 순수 로직 — 함수 입출력·상태 계산 + 문서·픽스처 정합성 | **CI 자동** (PR마다) | 29파일 · 900케이스 |
 | **타입 검사** | `tsc --noEmit` (`@ts-check`+JSDoc) | 타입 불일치·오타 | 로컬 훅 + 수동 | 설정 2종(앱·워커) |
 | **E2E** | Playwright (실제 브라우저) | 화면·상호작용·모듈 간 배선 | **로컬 전용**(수동) | 27파일 · 232케이스 |
 | **데이터** | pytest (`common-bible-data` 서브모듈) | 성경 본문·검색 인덱스 정합성 | 그 저장소 CI | 별도 저장소 |
@@ -57,7 +57,7 @@ node --test tests/unit/storage.test.js    # 개별 파일
 | `sw.test.js` | 서비스 워커 정적 검증 — `SHELL_FILES` 존재·`index.html` 패리티·ESM import 닫힘·`cacheNameFor` 라우팅·매니페스트 대조(`data/` 없으면 skip, `sync-data.yml`에서 실행) | 7 |
 | `liturgical-engine.data.test.js` | 교회력 엔진 ↔ `data/lectionary` 실측 — 연중 주차 38구간 전수(1900~2100, 두 묶음 연속성)·KASI 음력·temporal 규칙 전부 평가(`data/` 없으면 skip, `engine-data.yml`·`sync-data.yml`에서 실행) | 7 |
 | `docs-data-consistency.test.js` | 설계서 `facts` 블록 ↔ `data/lectionary` 실측 대조(`data/` 없으면 skip, `sync-data.yml`에서 실행) | 2 |
-| `docs-crossref.test.js` | 교회력 설계 문서 5종(설계서·검토 문서·ADR-036/037/038) + status/architecture 의 교차 참조 — `§n.m`·`미결n`·`C-/X-/I-/Qn`·`R-` 정본 마커·픽스처 id 가 실재하는 앵커를 가리키는지(참조원 둘도 같은 검사), 설계서 § 헤딩 목록·§9 항목(§9.1 열림 + §9.2 닫힘 = 1..N, 각 목록 번호순, §9.1 은 일곱 필드 전부, §9.2 는 한 줄 + 닫힘 날짜)·ADR 미결 수 불변, R- 마커 1회 정의. 표기 금지 게이트는 인라인 코드를 뺀 산문만 보며 **문서 단위로** 켠다 — ②(2026-10-09)에서 센티널(전 문서) · 동그라미 참조 · Qn · 편집 원칙(설계서)을 켰고 ③ 검토 문서 · ④ ADR 이 자기 문서를 더한다(ADR 미결 참조 게이트는 ④ 까지 skip) | 12 |
+| `docs-crossref.test.js` | 교회력 설계 문서 5종(설계서·검토 문서·ADR-036/037/038) + status/architecture 의 교차 참조 — `§n.m`·`미결n`·`C-/X-/I-`·`R-` 정본 마커·픽스처 id 가 실재하는 앵커를 가리키는지(참조원 둘도 같은 검사 — 폐지된 `Qn` 은 검토 문서 §6 의 Q→미결 대응표로 풀고 Q1~Q14 를 전부 덮는지 본다), 설계서 § 헤딩 목록·§9 항목(§9.1 열림 + §9.2 닫힘 = 1..N, 각 목록 번호순, §9.1 은 일곱 필드 전부, §9.2 는 한 줄 + 닫힘 날짜)·ADR 미결 수 불변, R- 마커 1회 정의, 검토 문서 §6 이 설계서 §9.1 의 「확인 주체 = 사제」 뷰와 같은지(미결 집합 · 상태 첫 낱말). 표기 금지 게이트는 인라인 코드를 뺀 산문만 보며 **문서 단위로** 켠다 — ②(2026-10-09)에서 센티널(전 문서) · 동그라미 참조 · Qn · 편집 원칙(설계서)을 켰고 ③(2026-10-10)이 검토 문서를 더했다 — ④ ADR 이 자기 문서를 더한다(ADR 미결 참조 게이트는 ④ 까지 skip) | 13 |
 | `liturgical-fixtures.test.js` | `tests/fixtures/liturgical/*.cases.json` 형식 — id 유일·규칙, 날짜 실재, 관측일 id 생략부호 금지(`ifIssueFlips.expect` 포함), status/kind 도메인(provisional·skip 은 `issue` 필수), `readings`/`officialReadings` 키 분리, 빈 `expect` 금지, `alsoYears` 요일 동일, `canon`·`checks`·`issue` 앵커 실재 | 7 |
 | `liturgical-fixtures.data.test.js` | 픽스처 관측일 id(`id`·`displacedBy`·`official`·`neverDeparts`·`activated`) ↔ `data/lectionary` 실재 — 전사 오류를 잡는 유일한 기계 검사(`data/` 없으면 skip, `engine-data.yml`·`sync-data.yml`에서 실행) | 2 |
 | `csp.test.js` | `index.html` CSP 인라인 해시 일관성 | 2 |

@@ -6,12 +6,14 @@
 //
 // 무엇을 잡나 —
 //   1. 참조가 실재하는 앵커를 가리키는가: `§n.m`(문서 한정어 우선 → 자기 문서 → 설계서 → 검토 문서 → ADR),
-//      `미결n`(한정어 → 자기 문서의 미결 목록 → 설계서 §9), `C-/X-/I-/Qn` → 검토 문서,
+//      `미결n`(한정어 → 자기 문서의 미결 목록 → 설계서 §9), `C-/X-/I-` → 검토 문서 §5, `Qn`(폐지된 사제 질문 번호)
+//      → 검토 문서 §6 의 Q→미결 대응표,
 //      `R-<§>-<slug>` → 설계서 정본 마커, `T-/O-/A-/W-<날짜>-<slug>` → 픽스처.
 //   2. 번호 불변: 설계서 § 헤딩 목록과 §9 항목(§9.1 열림 + §9.2 닫힘 = 1..N, 중복 없음, 각 목록 번호순 · §9.2 는
 //      한 줄 + 닫힘 날짜) · ADR 「미결 사항」 항목 수가 상수와 같다 — 번호 재부여·재사용을 막고, 미결 번호가
 //      설계서 §9 에서만 발급되게 한다.
 //   3. 정본 마커는 문서 전체에서 정확히 1회 정의된다.
+//   3b. 검토 문서 §6 은 설계서 §9.1 에서 확인 주체에 사제가 든 항목의 뷰다 — 미결 집합과 상태의 첫 낱말이 같다.
 //   4. (아래 GATES — ② 부터 문서 단위로 켠다) 센티널 문자열 단일성 · 동그라미 참조 금지 · Qn/ADR 미결 참조 금지 ·
 //      편집 원칙(개정 블록 · 취소선 · 해소/재개/정정 꼬리표 0). 표기 금지 게이트는 **인라인 코드를 뺀 산문**만
 //      본다(docs-anchors.js `stripInlineCode`) — §1.4 가 규약을 정의하며 금지 표기를 코드로 인용하기 때문이다.
@@ -32,11 +34,11 @@ const rel = (p) => path.join(ROOT, p);
 // PR 단계별 게이트 — 센티널은 전 문서를 한꺼번에 보고(정본 밖에 있으면 안 되므로), 표기 금지 게이트 넷은
 // **문서 목록**으로 켠다: 그 PR 이 정리한 문서부터 지키고, 다음 PR 이 자기 문서를 더한다(② 설계서 → ③ 검토 문서 → ④ ADR).
 const GATES = {
-  sentinels: true,                      // ②: 센티널 문자열은 정본(설계서) 한 곳에만
-  circledRefs: ["설계서"],              // ②: `§6.2 ④` · `X-10 ②` · `§7 ⑩` 형식 참조 0 — ③ 검토 문서 · ④ ADR 추가
-  qRefs: ["설계서"],                    // ②: `Qn` 참조는 §1.4 의 Q→미결 대응표 줄을 빼고 0 — ③ 검토 문서(§6 대응표) · ADR 추가
-  adrIssueRefs: [],                     // PR ④: `ADR-03[678] 미결n` 참조는 ADR 미결 절 대응표 줄을 빼고 0
-  editingPrinciple: ["설계서"],         // ②: `> **개정 (` · `~~` · 「해소/재개/정정」 꼬리표 0 — ④ 검토 문서 · ADR 추가
+  sentinels: true,                        // ②: 센티널 문자열은 정본(설계서) 한 곳에만
+  circledRefs: ["설계서", "검토 문서"],  // ②·③: `§6.2 ④` · `X-10 ②` · `§7 ⑩` 형식 참조 0 — ④ ADR 추가
+  qRefs: ["설계서", "검토 문서"],        // ②·③: `Qn` 참조는 검토 문서 §6 의 Q→미결 대응표 줄을 빼고 0 — ④ ADR 추가
+  adrIssueRefs: [],                       // PR ④: `ADR-03[678] 미결n` 참조는 ADR 미결 절 대응표 줄을 빼고 0
+  editingPrinciple: ["설계서", "검토 문서"], // ②·③: `> **개정 (` · `~~` · 「해소/재개/정정」 꼬리표 0 — ④ ADR 추가
 };
 const gateDocs = (names) => (names.length ? names : "다음 PR 에서 켠다");
 
@@ -76,7 +78,9 @@ const SECTIONS = Object.fromEntries(Object.keys(DOCS).map((d) => [d, new Set(sec
 // 미결 번호는 **목록**(문서 순서 · 중복 포함) — 재사용된 번호를 집합이 삼키지 않게.
 const ISSUES = Object.fromEntries(Object.keys(DOCS).map((d) => [d, issueNumbers(text[d], issueHeading(d))]));
 const CHECKS = checkIds(text["검토 문서"]);
-const Q_ROWS = new Set([...text["검토 문서"].matchAll(/^\| \*\*(Q\d+)\*\*/gm)].map((m) => m[1]));
+// `Qn` 은 2026-09-20 에 폐지됐다(설계서 §1.4) — 옛 번호는 검토 문서 §6 의 대응표 한 줄(「Q→미결 대응」)이 미결 번호로 푼다.
+const Q_DECODE_LINE = lines["검토 문서"].find((l) => /Q→미결 대응/.test(l)) ?? "";
+const Q_ROWS = new Set([...Q_DECODE_LINE.matchAll(/(?<![\w-])(Q\d+)(?: 부속)?→미결\d+/g)].map((m) => m[1]));
 const R_DEFS = rMarkerDefs(text);
 const FIXTURE_IDS = new Set();
 for (const f of fs.readdirSync(rel(FIXTURE_DIR)).filter((f) => f.endsWith(".json")))
@@ -173,7 +177,7 @@ for (const doc of Object.keys({ ...DOCS, ...SOURCES })) {
     for (const m of line.matchAll(/(?<![\w-])(C-(?:P|\d+(?:\.\d+)?)-\d+[a-z]?|X-\d+|I-\d+[ab]?)(?![\w-])/g))
       if (!CHECKS.has(m[1])) note("검증 항목", doc, ln, m[1], "검토 문서");
     for (const m of line.matchAll(/(?<![\w-])(Q\d+)(?![\w-])/g))
-      if (!Q_ROWS.has(m[1])) note("사제 질문", doc, ln, m[1], "검토 문서 §6");
+      if (!Q_ROWS.has(m[1])) note("옛 사제 질문", doc, ln, m[1], "검토 문서 §6 Q→미결 대응표");
     for (const m of line.matchAll(/(?<![\w[-])(R-\d+(?:\.\d+)?-[a-z0-9-]+)/g))
       if (!R_DEFS.has(m[1])) note("정본 마커", doc, ln, m[1], "설계서");
     for (const m of line.matchAll(/(?<![\w-])([TOAW]-\d{4}-\d{2}-\d{2}-[a-z0-9-]+)/g))
@@ -184,6 +188,8 @@ for (const doc of Object.keys({ ...DOCS, ...SOURCES })) {
 // ── 테스트 ──
 
 test("모든 §·미결·C/X/I/Q·R-·픽스처 참조가 실재하는 앵커를 가리킨다", (t) => {
+  assert.deepEqual([...Q_ROWS].sort(), Array.from({ length: 14 }, (_, i) => `Q${i + 1}`).sort(),
+    "검토 문서 §6 의 Q→미결 대응표가 옛 Q1~Q14 를 전부 덮지 않는다");
   if (warnings.length) t.diagnostic(`한정어 없는 참조 경고 ${warnings.length}건 (첫 8):\n  ${warnings.slice(0, 8).join("\n  ")}`);
   assert.deepEqual(unresolved, [], `풀리지 않는 참조 ${unresolved.length}건:\n  ${unresolved.join("\n  ")}`);
 });
@@ -244,6 +250,25 @@ test("ADR 「미결 사항」 항목 수가 상수와 같고 번호가 겹치지
     assert.equal(list.length, n, `${adr} 미결 항목 수 — 새 물음은 설계서 §9 에 발급하고 여기서는 번호로 가리킬 것`);
     assert.equal(new Set(list).size, list.length, `${adr} 미결 번호가 겹친다: ${list}`);
   }
+});
+
+test("검토 문서 §6 은 설계서 §9.1 에서 확인 주체에 사제가 든 항목의 뷰다 — 미결 집합과 상태의 첫 낱말이 같다", () => {
+  // 정본은 설계서 §9 다. 뷰의 행은 손으로 적으므로, 항목이 닫혀 §9.2 로 가거나 확인 주체가 바뀌면 여기서 어긋남을 잡는다.
+  const d = text["설계서"];
+  const open = d.slice(d.indexOf("\n### 9.1 "), d.indexOf("\n### 9.2 "));
+  const want = new Map();
+  for (const line of open.split("\n")) {
+    const m = /^- \*\*미결(\d+)\*\*.*? — 상태: ([^ ·(]+).*? · 확인 주체: (.*?) · 질문:/.exec(line);
+    if (m && /사제/.test(m[3])) want.set(Number(m[1]), m[2]);
+  }
+  const r = text["검토 문서"];
+  const view = r.slice(r.indexOf("\n## 6. "), r.indexOf("\n## 7. "));
+  const got = new Map([...view.matchAll(/^\| 미결(\d+) \| .+ \| (.+?) \|$/gm)].map((m) => [Number(m[1]), m[2]]));
+  assert.ok(want.size >= 1, "설계서 §9.1 에서 확인 주체가 사제인 항목을 못 찾았다 — 필드 문법이 바뀌었나");
+  assert.deepEqual([...got.keys()].sort((a, b) => a - b), [...want.keys()].sort((a, b) => a - b),
+    "검토 문서 §6 표의 미결 목록이 설계서 §9.1 의 「확인 주체: …사제…」 항목과 다르다");
+  const bad = [...want].filter(([n, s]) => !got.get(n)?.startsWith(s)).map(([n, s]) => `미결${n}: §9.1 「${s}」 vs §6 「${got.get(n)}」`);
+  assert.deepEqual(bad, [], "상태의 첫 낱말이 다르다");
 });
 
 test("정본 마커 R- 는 문서 전체에서 정확히 1회 정의된다", () => {
