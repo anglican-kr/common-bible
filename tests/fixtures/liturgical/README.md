@@ -77,9 +77,9 @@
 | `notInDepartures: true` | `departures.get(date)` 에 `id` 가 없다(도착 재이동 금지 · 절차 ⑤ 무이동 · 동시 봉헌) |
 | `neverDeparts` | 연도 범위 단언 — 그 id 가 어느 해에도 `departures` 에 나타나지 않는다 |
 | `official` | 그날 `official` 의 id. `"grid:*"` 는 「격자 합성 후보이면 된다」(주간 번호를 문서가 적지 않은 경우) |
-| `color` · `colors` | `ResolvedDate.color`(정식 전례색 `white` `red` `green` `violet`). `colors` 는 병기 모델(미결26)에서만 |
+| `color` · `colors` | `ResolvedDate.color`(정식 전례색 `white` `red` `green` `violet`) · `ResolvedDate.colors`(병기 목록 — 사계재 날 축일이 이기면 [자, 축일 색], 그 밖은 `[color]`, → R-6.4-ember-color) |
 | `observanceColor` | 그 후보 `observance.color`(뷰가 칩 선택 시 쓰는 색 — 사계재 `violet`) |
-| `penitential` · `fast` | 후보의 `penitential` / 그날의 소재일 여부 |
+| `penitential` · `fast` | 후보의 `penitential` / 그날의 소재일 여부(엔진 `fastOf(resolved) === "minor"` — 대재일은 `"major"` 라 `fast` 가 아니다) |
 | `coord` | `ResolvedDate.coord` 부분집합 `{season, week, type}` |
 | `grid` | 그날 격자 합성 후보의 `{status}` |
 | `readings` | 그 후보로 `findReadings` 를 부른 결과 — `origin`(색인 날짜 `MM.DD`) · `record`(본문 레코드 id) · `common`(공통 분류) · `sets`(세트 수) · `slots`(4슬롯 성구 — 인쇄 순) · `empty: true` |
@@ -89,6 +89,6 @@
 ## 소비 방법
 
 - **지금(PR 2 전)**: `tests/unit/liturgical-fixtures.test.js` 가 스키마 · id 유일성·형식 · 날짜 유효성 · 관측일 id(`id`·`displacedBy`·`official`·`neverDeparts`) 생략부호 금지 · `status`/`kind` 도메인(provisional·skip 은 `issue` 필수) · `ifIssueFlips.expect` 도 같은 검사 · 빈 `expect` 금지 · `alsoYears` 요일 동일 · `canon`·`checks`·`issue` 가 문서에 존재하는지를 검사한다(공개 CI). **관측일 id 가 실데이터에 실재하는지**는 `tests/unit/liturgical-fixtures.data.test.js` 가 `data/` 서브모듈이 있는 `engine-data.yml`(픽스처 변경도 트리거)·`sync-data.yml` 에서 검사한다 — 전사 오류를 잡는 유일한 기계 검사라 공개 CI 의 skip 만 믿지 않는다.
-- **PR 3**: `tests/unit/liturgical-engine.data.test.js` 가 세 파일을 읽어 `status !== "skip"` 인 케이스마다 `resolveDate(date)`(activation 은 `activated` 를 넘긴 캐시로) 결과에 `expect` 를 부분집합 비교한다. `provisional` 은 「잠정」 표시로 돌리되 실패하면 실패다 — 뒤집힌 미결은 픽스처를 고쳐 닫는다.
+- **PR 3**: `tests/unit/liturgical-engine.data.test.js` 가 세 파일을 읽어 `status !== "skip"` 인 케이스마다 `resolveDate(date)`(activation 은 `activated` 를 넘긴 캐시로) 결과에 `expect` 를 부분집합 비교한다 — 케이스 하나가 테스트 하나다. `provisional` 은 「잠정」 표시로 돌리되 실패하면 실패다 — 뒤집힌 미결은 픽스처를 고쳐 닫는다. `expect` 의 모르는 키는 실패로 다룬다(조용히 무시하면 그 단언이 아무것도 지키지 못한다). PR 3 은 둘로 나눠 낸다 — 첫째(#TBD)가 `winners.cases.json` 을 소비하고(이동 패스가 있어야 맞는 W-2026-05-15-matthias-color · W-2025-12-29-holy-innocents-color 둘은 그때까지 건너뛴다), 둘째가 이동 패스와 함께 `transfers` · `optionals` 와 연도 범위 단언(`neverDeparts`) · `activated` 를 켠다.
 - **미결이 닫히면**: 그 PR 에서 `status` 를 `confirmed` 로 바꾸고 `source` 에 근거를 더한다. `ifIssueFlips` 대로 닫혔으면 `expect` 를 그 값으로 바꾸고 `ifIssueFlips` 를 지운다. id 는 그대로.
 - **사실 변경 0 증명**: `python3 scripts/docs_facts_snapshot.py --diff main HEAD` 가 문서와 픽스처(JSON 문자열 값)를 합쳐 토큰을 세므로, 문서에서 값을 지우고 픽스처로 옮겨도 「사라진 토큰」에 잡히지 않는다.
