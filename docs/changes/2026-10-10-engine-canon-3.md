@@ -1,4 +1,5 @@
 ---
+pr: 336
 date: 2026-10-10
 branch: docs/engine-canon-3-review
 title: "docs: 교회력 엔진 정본 지도 ③ — 검토 문서 참조화 · 개정 블록 흡수 · Qn 폐지(§6 을 설계서 §9 사제 뷰로)"
