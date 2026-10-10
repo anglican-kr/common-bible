@@ -1,4 +1,5 @@
 ---
+pr: 340
 date: 2026-10-10
 branch: docs/pr339-review-followup
 title: "docs: #339 리뷰 반영 — 미결25 갈래 · 미결35 정리 · 기념일 정본 ADR-036 §6 · temporal facts 키 · 여성선교주일 픽스처"
