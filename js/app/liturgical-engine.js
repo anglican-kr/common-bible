@@ -6,9 +6,14 @@
 // then the resolve/find functions are synchronous and pure over the loaded
 // tables. See docs/design/liturgical-engine.md §3.4 for why.
 //
-// PR 1 (A1-a) implements the LITURGICAL_CORE block only — date arithmetic,
-// computus, rule evaluation, season spans, ordinal weeks, cycles, lunar lookup
-// and the period axis. The lookup layer (LITURGICAL_LOOKUP) lands in PR 2.
+// Three marker blocks, each sliced by the vm test harness (design §3.3):
+//   LITURGICAL_CORE    — A1-a: date arithmetic, computus, rule evaluation, season
+//                        spans, ordinal weeks, cycles, lunar lookup, period axis.
+//   LITURGICAL_LOOKUP  — A1-b: table indexes, grid coordinate, candidate assembly,
+//                        fallback matching, readings/collects lookup. Pure — every
+//                        function takes the index it reads as an argument.
+//   LITURGICAL_PRELOAD — fetch + promise-cached preload and the public wrappers
+//                        that read module state. B1 (rank · transfer · colour) is PR 3.
 //
 // 모든 날짜는 로컬 `new Date(y, m - 1, d)` 와 "YYYY-MM-DD" 문자열로 다룬다.
 // **`toISOString()` 으로 날짜 문자열을 만들지 않는다** — UTC 오프셋 때문에 KST 에서
@@ -23,12 +28,97 @@
 
 /** @typedef {{from: string, to: string}} Span */
 
+/** @typedef {import("../types").LiturgicalCoord} LiturgicalCoord */
+/** @typedef {import("../types").LiturgicalSeason} LiturgicalSeason */
+/** @typedef {import("../types").WeekdayCode} WeekdayCode */
+/** @typedef {import("../types").Observance} Observance */
+/** @typedef {import("../types").Candidate} Candidate */
+/** @typedef {import("../types").ResolvedDate} ResolvedDate */
+/** @typedef {import("../types").LiturgicalPeriod} LiturgicalPeriod */
+/** @typedef {import("../types").ReadingSlot} ReadingSlot */
+/** @typedef {import("../types").ReadingGroup} ReadingGroup */
+/** @typedef {import("../types").CollectOption} CollectOption */
+/** @typedef {import("../types").CandidateCollects} CandidateCollects */
+
+/**
+ * 본문 레코드 — eucharist-readings · eucharist-collects 가 공유하는 좌표 필드와 각자의 본문 필드.
+ * `weekday` · `year` 는 `null | 코드 | 코드 배열` 3형이다(설계서 §5.2).
+ * @typedef {{
+ *   id: string | number, kind?: string, season?: string | null, week?: number | null,
+ *   type?: string | null, weekday?: string | string[] | null, year?: string | string[] | null,
+ *   date?: string | null, lunar?: string | null, name?: string | null, aliases?: string[] | null,
+ *   title?: string, reading_track?: number | null, set_no?: number, set_total?: number,
+ *   set_note?: string | null, readings?: ReadingSlot[],
+ *   collect_no?: number, collect_total?: number, text?: string, ending?: string | null,
+ * }} TextRecord
+ */
+
+/**
+ * 본문 표 하나의 인덱스(설계서 §5.4 권장 인덱스 3). `byCoord` 에는 이름 · 날짜 · 음력이 모두 없는
+ * 격자 레코드만, `named` 에는 이름은 있고 날짜 · 음력이 없는 레코드만 오른다.
+ * @typedef {{
+ *   byDate: Map<string, TextRecord[]>, byLunar: Map<string, TextRecord[]>,
+ *   byName: Map<string, TextRecord[]>, byCoord: Map<string, TextRecord[]>, named: TextRecord[],
+ * }} TextIndex
+ */
+
+/**
+ * `commons.json` 의 분류 하나 — 본기도 하나(`{name}` 자리표시)와 독서 세트 N 개.
+ * @typedef {{
+ *   label?: string, color?: string | null,
+ *   collect?: {text?: string, ending?: string | null} | null,
+ *   readings?: Array<{set: number, slots: ReadingSlot[]}>,
+ * }} CommonClass
+ */
+
+/**
+ * @typedef {{
+ *   readings: TextIndex, collects: TextIndex,
+ *   commons: Record<string, CommonClass>, canticles: Record<string, unknown>,
+ * }} LectionaryIndex
+ */
+
+/**
+ * 캘린더 묶음의 인덱스(설계서 §5.4 권장 인덱스 1 · 2 · 4). `movable` 은 규칙 파생 관측일의
+ * 연도 메모다 — 표에 의존하므로 `anchorCache` 처럼 순수 파생값이 아니라 인덱스에 붙는다.
+ * @typedef {{
+ *   sanctoralByDate: Map<string, Observance[]>, sanctoralByLunar: Map<string, Observance[]>,
+ *   temporal: Observance[], periods: Array<{period: LiturgicalPeriod, from: string, to: string}>,
+ *   ordinal: ReturnType<typeof buildOrdinalIndex>,
+ *   kasi: {years?: Record<string, Record<string, string>>} | null,
+ *   movable: Map<number, Map<string, Observance[]>>,
+ * }} CalendarIndex
+ */
+
+/**
+ * 이동 패스(설계서 §6.5) — 한 해의 도착 · 출발 · 선택 봉헌 색인. 네 필드를 **모두** 갖는다.
+ * @typedef {{
+ *   arrivals: Map<string, Candidate[]>, departures: Map<string, Candidate[]>,
+ *   optionals: Map<string, Candidate[]>, defects: string[],
+ * }} TransferPass
+ */
+
 // 연도 캐시(§4.9) — 순수 파생값이라 무효화가 필요 없다. 블록 밖에 두어 테스트가
 // prelude 로 재선언한다(ADR-013 하네스 제약, 설계서 §3.3).
 /** @type {Map<number, YearAnchors>} */
 const anchorCache = new Map();
 /** @type {Map<number, Record<string, Span[]>>} */
 const spansCache = new Map();
+// 이동 패스 캐시(§4.9) — **완전한 패스만** 들어간다. PR 2 의 완전한 패스는 빈 패스다(§6.5).
+/** @type {Map<number, TransferPass>} */
+const transferCache = new Map();
+
+// 프리로드 상태(§3.4) — 값과 **promise** 를 따로 둔다. promise 를 캐시하므로 동시 진입이
+// fetch 를 한 번만 내고, 실패한 promise 는 비워 다음 진입이 다시 시도한다.
+const DATA_DIR = "/data";   // data-fetch.js does not export it
+/** @type {CalendarIndex | null} */
+let calendarIndex = null;
+/** @type {Promise<CalendarIndex> | null} */
+let calendarPromise = null;
+/** @type {LectionaryIndex | null} */
+let lectionaryIndex = null;
+/** @type {Promise<LectionaryIndex> | null} */
+let lectionaryPromise = null;
 
 // ── BEGIN LITURGICAL_CORE ──
 // 날짜 산술 · computus · 오프셋 전개 · 절기 스팬 · 연중 주차 · 주기 산정 · 기간 축.
@@ -264,7 +354,7 @@ function yearAnchors(y) {
 /**
  * 절기 스팬을 **먼저 확정**하고 남는 자리가 연중이다. 도메인 다섯 — `epiphany` 는
  * 없다(ADR-036 §4). 주의 세례 주일은 **연중시기의 첫날**이라 성탄절기는 그
- * 전날 끝난다(§4.5 · 미결10 해소 2026-09-01).
+ * 전날 끝난다(§4.5).
  * @param {string} dateStr
  * @returns {"advent"|"christmas"|"ordinary"|"lent"|"easter"|null}
  */
@@ -272,7 +362,7 @@ function seasonOf(dateStr) {
   const p = parseDate(dateStr);
   if (!p) return null;
   const a = yearAnchors(p.y);
-  // 전년 12.25 에 시작한 성탄절기 — 세례 **전날**까지.
+  // 전년 12.25 에 시작한 성탄절기 — 세례 **전날**까지(→ R-4.5-baptism-ordinary-1).
   if (dateStr < a.baptism) return "christmas";
   if (dateStr >= a.ash && dateStr < a.easter) return "lent";
   if (dateStr >= a.easter && dateStr <= a.pentecost) return "easter";
@@ -558,10 +648,806 @@ function inSpan(dateStr, name) {
 }
 // ── END LITURGICAL_CORE ──
 
+// ── BEGIN LITURGICAL_LOOKUP ──
+// 표 인덱스 · 격자 좌표 · 후보 조립 · 폴백 매칭 · 독서/본기도 조회. **순수하다** — 읽는 인덱스를
+// 전부 인자로 받는다(설계서 §3.3). 모듈 상태는 `transferCache` 하나만 읽고, 그것도 블록 밖에 둬
+// 테스트가 prelude 로 재선언한다. LITURGICAL_CORE 를 먼저 실행한 컨텍스트에서 돈다.
+
+/** 예약 접두사 — 정의 표 · 본문 표 id 에 나타나지 않는다(§5.5 · §5.6 · §6.5). */
+const GRID_PREFIX = "grid:";
+const COMMON_PREFIX = "common:";
+
+/** 요일 번호(0 = 일) → 코드. 일요일 코드는 없다 — 주일은 `type: "sunday"` 다(§5.1). */
+/** @type {Array<WeekdayCode | null>} */
+const WEEKDAY_CODES = [null, "mon", "tue", "wed", "thu", "fri", "sat"];
+
+/** 격자 관측일의 표시명 재료. 표시는 뷰의 몫이고 이 이름은 기본값이다. */
+const SEASON_LABEL = { advent: "대림", christmas: "성탄", ordinary: "연중", lent: "사순", easter: "부활" };
+const WEEKDAY_LABEL = { mon: "월요일", tue: "화요일", wed: "수요일", thu: "목요일", fri: "금요일", sat: "토요일" };
+
+/**
+ * **고유명 평일** — 데이터가 좌표가 아니라 이름으로만 가르는 앵커 파생 평일(ADR-036 §2 「고유명
+ * 평일은 제외」). 재의 수요일 주간과 성주간은 좌표가 똑같이 `(lent, null, weekday, 요일)` 이라
+ * 좌표로는 「재의 수요일 후 토요일」과 「성 토요일」을 가를 수 없다 — 그래서 그날의 격자 관측일이
+ * 이 이름을 달고, 본문은 그 이름으로 찾는다(§5.6 격자 경로 ②). 키는 부활절 기준 오프셋.
+ */
+/** @type {Record<string, string>} */
+const PROPER_WEEKDAY_NAMES = {
+  "-45": "재의 수요일 후 목요일", "-44": "재의 수요일 후 금요일", "-43": "재의 수요일 후 토요일",
+  "-6": "성주간 월요일", "-5": "성주간 화요일", "-4": "성주간 수요일",
+};
+
+// ── §5.2 표기 정규화 · 공용 ──
+
+/**
+ * 월·일 표기 → 내부 표준 `"MM.DD"`. 점 · 하이픈과 0 채움 유무를 다 받는다(§5.2 — 데이터에 세 표기가
+ * 섞여 있다). 형식 이탈 · 없는 날(`02.30`)은 null — 그 레코드는 날짜 인덱스에 오르지 않는다(§2).
+ * 02.29 는 실재하는 날로 받는다(윤년에만 오는 날짜 키).
+ * @param {unknown} s
+ * @returns {string | null}
+ */
+function normMonthDay(s) {
+  if (typeof s !== "string") return null;
+  const m = s.match(/^(\d{1,2})[.-](\d{1,2})$/);
+  if (!m) return null;
+  const mo = parseInt(m[1], 10);
+  const d = parseInt(m[2], 10);
+  if (mo < 1 || mo > 12 || d < 1 || d > MONTH_DAYS[mo - 1] + (mo === 2 ? 1 : 0)) return null;
+  return String(mo).padStart(2, "0") + "." + String(d).padStart(2, "0");
+}
+
+/** "YYYY-MM-DD" → "MM.DD". 유효한 키에만 쓴다. */
+function monthDayOf(/** @type {string} */ dateStr) {
+  return dateStr.slice(5, 7) + "." + dateStr.slice(8, 10);
+}
+
+/** 두 유효한 날짜 키 사이의 일수(to − from). */
+function dayDiff(/** @type {string} */ from, /** @type {string} */ to) {
+  const a = parseDate(from);
+  const b = parseDate(to);
+  if (!a || !b) return NaN;
+  return Math.round((new Date(b.y, b.m - 1, b.d).getTime() - new Date(a.y, a.m - 1, a.d).getTime()) / 86400000);
+}
+
+/**
+ * 래퍼 객체에서 행 배열을 꺼낸다(§5.2 — 모든 파일이 객체 래퍼다). 래퍼나 배열이 없으면 빈 배열,
+ * 객체가 아닌 행은 건너뛴다 — 모양 이탈은 결손이다(§2).
+ * @param {any} table @param {string} key
+ * @returns {any[]}
+ */
+function rowsOf(table, key) {
+  const v = table && typeof table === "object" ? table[key] : null;
+  return Array.isArray(v) ? v.filter((r) => r && typeof r === "object") : [];
+}
+
+/**
+ * @template T
+ * @param {Map<string, T[]>} map @param {string} key @param {T} value
+ */
+function pushTo(map, key, value) {
+  const arr = map.get(key);
+  if (arr) arr.push(value);
+  else map.set(key, [value]);
+}
+
+/**
+ * 정렬 키 비교 — **문자열은 사전순, 정수는 수치순**이고 둘을 섞지 않는다(§5.2 — readings id 는
+ * 문자열, collects id 는 정수). 섞이면 수가 앞이다(결정성만 지킨다).
+ * @param {string | number} a @param {string | number} b
+ */
+function compareIds(a, b) {
+  if (typeof a === "number" && typeof b === "number") return a - b;
+  if (typeof a === "number") return -1;
+  if (typeof b === "number") return 1;
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+/** 이름 · 별칭 목록. */
+function namesOfRow(/** @type {{name?: string | null, aliases?: string[] | null}} */ row) {
+  /** @type {string[]} */
+  const out = [];
+  if (typeof row.name === "string" && row.name !== "") out.push(row.name);
+  if (Array.isArray(row.aliases)) for (const a of row.aliases) if (typeof a === "string" && a !== "") out.push(a);
+  return out;
+}
+
+/** 두 행의 이름 · 별칭이 **정확히** 하나라도 겹치는가(미결12 잠정 — 느슨한 일치는 쓰지 않는다). */
+function namesMeet(/** @type {any} */ a, /** @type {any} */ b) {
+  const bs = namesOfRow(b);
+  return namesOfRow(a).some((n) => bs.includes(n));
+}
+
+// ── §5.4 캘린더 인덱스 ──
+
+/**
+ * 캘린더 묶음 다섯 표 → 조회 인덱스(§5.4 권장 인덱스 1 · 2 · 4). 프리로드 때 한 번 만든다.
+ * 표의 행은 **복사하지 않고 그대로** 관측일로 쓴다 — `Observance` 는 정의 표의 행이다(§1.3).
+ * 날짜 · 음력 인덱스는 **1:N** 이다(같은 날짜에 성인이 둘 이상 — §5.2).
+ * @param {{sanctoral?: any, temporal?: any, periods?: any, ordinalWeeks?: any, kasi?: any} | null} tables
+ * @returns {CalendarIndex}
+ */
+function buildCalendarIndex(tables) {
+  const t = tables || {};
+  /** @type {Map<string, Observance[]>} */
+  const sanctoralByDate = new Map();
+  /** @type {Map<string, Observance[]>} */
+  const sanctoralByLunar = new Map();
+  for (const row of rowsOf(t.sanctoral, "entries")) {
+    if (typeof row.id !== "string") continue;
+    const md = normMonthDay(row.date);
+    if (md) pushTo(sanctoralByDate, md, row);
+    if (typeof row.lunar === "string" && row.lunar !== "") pushTo(sanctoralByLunar, row.lunar, row);
+  }
+  /** @type {Array<{period: LiturgicalPeriod, from: string, to: string}>} */
+  const periods = [];
+  for (const row of rowsOf(t.periods, "entries")) {
+    const from = normMonthDay(row.from);
+    const to = normMonthDay(row.to);
+    if (typeof row.id === "string" && from && to) periods.push({ period: row, from, to });
+  }
+  periods.sort((a, b) => compareIds(a.period.id, b.period.id));
+  return {
+    sanctoralByDate,
+    sanctoralByLunar,
+    temporal: rowsOf(t.temporal, "entries").filter((r) => typeof r.id === "string"),
+    periods,
+    ordinal: buildOrdinalIndex(t.ordinalWeeks || null),
+    kasi: t.kasi && typeof t.kasi === "object" ? t.kasi : null,
+    movable: new Map(),
+  };
+}
+
+/**
+ * 규칙 파생 관측일(§5.5 출처 ④) — 그해 temporal 규칙을 **한 번** 평가해 날짜 → 행 색인으로 둔다.
+ * 규칙 일곱 종류는 전부 자기 달력년 안에 떨어진다(사계재 12.13 앵커 → 늦어도 12.23, 1.6 이후 첫
+ * 주일 → 늦어도 1.13) — 해를 넘기는 결과는 그 해의 날짜 조회가 닿지 않으므로 실데이터 테스트가
+ * 1900~2100 에서 단언한다. 같은 날짜에 두 행(성 토요일 · 부활밤 — easter −1)이면 둘 다 오른다(1:N).
+ * @param {CalendarIndex} index @param {number} y
+ * @returns {Map<string, Observance[]>}
+ */
+function movableOf(index, y) {
+  const hit = index.movable.get(y);
+  if (hit) return hit;
+  /** @type {Map<string, Observance[]>} */
+  const out = new Map();
+  for (const row of index.temporal) {
+    for (const d of new Set(evalRule(row.rule, y))) pushTo(out, d, row);
+  }
+  index.movable.set(y, out);
+  return out;
+}
+
+// ── §5.1 · §5.5 격자 좌표와 격자 관측일 ──
+
+/**
+ * 절기 주차 — 데이터의 격자 레코드가 쓰는 번호와 같다. 연중은 표(§4.6), 절기는 앵커에서 센다:
+ * 대림 1~4 · 사순 1~5(재의 수요일 주간과 성지주일 ~ 성 토요일은 null — 데이터가 이름으로 가르는
+ * 날들이다) · 부활 1~7(부활 8일의 평일이 1주, 부활 2주일 = E+7; 성령강림은 null) · 성탄 주일
+ * 1 · 2(12.26 ~ 1.1 이 1, 1.2 이후가 2 — 12.25 가 주일이면 null) · 성탄 평일은 null.
+ * @param {string} dateStr @param {LiturgicalSeason} season
+ * @param {ReturnType<typeof buildOrdinalIndex>} ordinal
+ * @returns {number | null}
+ */
+function seasonWeekOf(dateStr, season, ordinal) {
+  if (season === "ordinary") return ordinalWeekOf(dateStr, ordinal);
+  const a = yearAnchors(parseInt(dateStr.slice(0, 4), 10));
+  const sunday = sundayOfWeek(dateStr);
+  if (sunday === null) return null;
+  if (season === "advent") return Math.floor(dayDiff(a.advent1, sunday) / 7) + 1;
+  if (season === "lent") {
+    const first = shift(a.easter, -42);
+    if (dateStr >= shift(a.easter, -7) || sunday < first) return null;
+    return Math.floor(dayDiff(first, sunday) / 7) + 1;
+  }
+  if (season === "easter") {
+    const n = Math.floor(dayDiff(a.easter, dateStr) / 7) + 1;
+    return n <= 7 ? n : null;
+  }
+  // christmas
+  if (dayOfWeek(dateStr) !== 0) return null;
+  const md = monthDayOf(dateStr);
+  if (md === "12.25") return null;
+  return md >= "12.26" || md === "01.01" ? 1 : 2;
+}
+
+/**
+ * 그 날의 격자 좌표(§5.1). 잘못된 날짜면 null. `year` 는 연중 평일이면 I/II, 그 밖은 A/B/C 다 —
+ * 본문을 고를 때는 레코드 코드가 어느 축인지 보고 두 주기를 따로 대조한다(`matchScore`).
+ * @param {string} dateStr @param {ReturnType<typeof buildOrdinalIndex>} ordinal
+ * @returns {LiturgicalCoord | null}
+ */
+function coordOf(dateStr, ordinal) {
+  if (!parseDate(dateStr)) return null;
+  const season = seasonOf(dateStr);
+  if (season === null) return null;
+  const dow = dayOfWeek(dateStr);
+  return {
+    season,
+    week: seasonWeekOf(dateStr, season, ordinal),
+    type: dow === 0 ? "sunday" : "weekday",
+    weekday: WEEKDAY_CODES[dow] || null,
+    year: weekdayCycle(dateStr) || sundayCycle(dateStr),
+  };
+}
+
+/**
+ * 격자 관측일의 표시명. 고유명 평일(위 표)은 그 이름을 쓰고, 그 밖은 좌표에서 만든다(「연중 3주일」 ·
+ * 「사순 2주 화요일」). 성 목 · 금 · 토는 temporal 행이 따로 있으므로 격자는 「성주간 X요일」이다 —
+ * temporal 행의 이름을 빌리면 같은 본문이 후보 둘에 붙는다.
+ * @param {string} dateStr @param {LiturgicalCoord} coord
+ * @returns {string}
+ */
+function gridName(dateStr, coord) {
+  const s = SEASON_LABEL[coord.season];
+  if (coord.type === "sunday") return coord.week === null ? s + " 주일" : s + " " + coord.week + "주일";
+  const w = coord.weekday ? WEEKDAY_LABEL[coord.weekday] : "";
+  const proper = PROPER_WEEKDAY_NAMES[String(dayDiff(yearAnchors(parseInt(dateStr.slice(0, 4), 10)).easter, dateStr))];
+  if (proper) return proper;
+  if (coord.week === null && inSpan(dateStr, "holyWeek")) return "성주간 " + w;
+  return coord.week === null ? s + " " + w : s + " " + coord.week + "주 " + w;
+}
+
+/**
+ * ① 격자 관측일 — 정의 표에 행이 없어 좌표에서 **합성**한다(§5.5). id 는
+ * `grid:<season>-<week|x>-<type>[-<weekday>]`, precedence 는 §6.1 사다리(절기 주일 2 · 연중 주일 5 ·
+ * 평일 8). 색은 절기 기본색을 까는 B1 의 몫이라(§6.4) PR 2 는 null 이다.
+ * @param {string} dateStr @param {LiturgicalCoord} coord
+ * @returns {Observance}
+ */
+function gridObservance(dateStr, coord) {
+  const week = coord.week === null ? "x" : String(coord.week);
+  const ordinarySunday = coord.type === "sunday" && coord.season === "ordinary";
+  return {
+    id: GRID_PREFIX + coord.season + "-" + week + "-" + coord.type + (coord.weekday ? "-" + coord.weekday : ""),
+    kind: "temporal",
+    name: gridName(dateStr, coord),
+    aliases: null,
+    season: coord.season,
+    week: coord.week,
+    type: coord.type,
+    rank: coord.type === "weekday" ? "feria" : ordinarySunday ? "sunday" : "privileged_sunday",
+    precedence: coord.type === "weekday" ? 8 : ordinarySunday ? 5 : 2,
+    color: null,
+    color_alt: null,
+  };
+}
+
+// ── §4.9 · §6.5 이동 패스 ──
+
+/**
+ * 빈 이동 패스 — 네 필드를 **모두** 갖는다. §5.5 가 `optionals` 까지 읽으므로 둘만 있으면
+ * `undefined` 접근이다(§6.5 마지막 단락).
+ * @returns {TransferPass}
+ */
+function EMPTY_PASS() {
+  return { arrivals: new Map(), departures: new Map(), optionals: new Map(), defects: [] };
+}
+
+/**
+ * 연도 `y` 의 이동 패스(§4.9 `transferCache`). 패스는 품계 비교(§6.1)를 쓰므로 B1(PR 3)이 채운다 —
+ * PR 2 는 언제나 빈 패스이고, 빈 패스가 PR 2 의 **완전한** 패스다. 캐시에는 완전한 패스만 들어간다.
+ * @param {number} y
+ * @returns {TransferPass}
+ */
+function transfersOf(y) {
+  const hit = transferCache.get(y);
+  if (hit) return hit;
+  const pass = EMPTY_PASS();
+  transferCache.set(y, pass);
+  return pass;
+}
+
+// ── §5.5 resolveDate — 후보 집합 ──
+
+/**
+ * 그 날짜에 걸린 `periods` 행(배너용 겹침 표시) — 품계에 참여하지 않으므로 후보가 아니다.
+ * 해를 넘기는 기간(`12.25 ~ 01.05` 꼴)도 받는다.
+ * @param {CalendarIndex} index @param {string} md "MM.DD"
+ * @returns {LiturgicalPeriod[]}
+ */
+function periodsOn(index, md) {
+  /** @type {LiturgicalPeriod[]} */
+  const out = [];
+  for (const p of index.periods) {
+    const inside = p.from <= p.to ? md >= p.from && md <= p.to : md >= p.from || md <= p.to;
+    if (inside) out.push(p.period);
+  }
+  return out;
+}
+
+/**
+ * 그 날의 후보 **전부**(§5.5) — 출처 다섯: ① 격자 ② 날짜(성인력) ③ 음력 ④ 규칙 파생 ⑤ 도착.
+ * ①~④ 가 그 날짜의 고유 후보(`proper`)이고 ⑤ 만 다른 날짜에서 온다. 패스의 출발 색인에 있는 고유
+ * 후보는 `transferred_out` 으로, 선택 봉헌은 `optional` 로 덧붙는다. **PR 2 는 품계를 매기지 않는다** —
+ * `official: null`, 색은 비어 있고(B1), 패스는 빈 패스다. 그래도 ⑤ · 출발 · 선택 봉헌을 읽는 경로는
+ * 여기서 완성해 둔다 — PR 3 이 패스를 채워도 반환 형태가 바뀌지 않게(§6.5).
+ *
+ * 표시 순서(ADR-037 §6): ① 교회력에 따른 축일 · 재일(④ → ② → ③, 출처 안에서는 id 순 — 품계순은
+ * B1) → ② 이동 축일(도착 · 선택 봉헌) → ③ 나머지(격자).
+ * @param {CalendarIndex} index @param {string} dateStr @param {TransferPass} pass
+ * @returns {ResolvedDate | null} 잘못된 날짜면 null
+ */
+function resolveDateIn(index, dateStr, pass) {
+  const coord = coordOf(dateStr, index.ordinal);
+  if (!coord) return null;
+  const y = parseInt(dateStr.slice(0, 4), 10);
+  const md = monthDayOf(dateStr);
+
+  /** @type {Observance[]} */
+  const own = [];
+  const seen = new Set();
+  /** @param {Observance[] | undefined} rows */
+  const take = (rows) => {
+    const fresh = (rows || []).filter((r) => !seen.has(r.id)).sort((a, b) => compareIds(a.id, b.id));
+    for (const r of fresh) { seen.add(r.id); own.push(r); }
+  };
+  take(movableOf(index, y).get(dateStr));                       // ④ 규칙 파생
+  take(index.sanctoralByDate.get(md));                          // ② 날짜
+  const lunar = lunarDatesOf(index.kasi, y);                    // ③ 음력 — 범위 밖 연도는 빈 객체(§2)
+  /** @type {Observance[]} */
+  const lunarRows = [];
+  for (const key of Object.keys(lunar)) {
+    if (lunar[key] === dateStr) lunarRows.push(...(index.sanctoralByLunar.get(key) || []));
+  }
+  take(lunarRows);
+
+  /** @type {Map<string, Candidate>} */
+  const departed = new Map();
+  for (const c of pass.departures.get(dateStr) || []) departed.set(c.observance.id, c);
+  /** @type {Candidate[]} */
+  const feasts = own.map((o) => departed.get(o.id) || { observance: o, status: "proper" });
+  /** @type {Candidate[]} */
+  const moved = [...(pass.arrivals.get(dateStr) || []), ...(pass.optionals.get(dateStr) || [])];
+  /** @type {Candidate} */
+  const grid = { observance: gridObservance(dateStr, coord), status: "proper" };
+
+  return {
+    date: dateStr,
+    coord,
+    candidates: [...feasts, ...moved, grid],
+    official: null,
+    periods: periodsOn(index, md),
+    color: null,
+    colorAlt: null,
+    colors: [],
+  };
+}
+
+// ── §5.3 폴백 매칭 — 구체성 점수 ──
+
+/**
+ * @typedef {{
+ *   weekday: WeekdayCode | null, abc: "A" | "B" | "C" | null, i2: "I" | "II" | null,
+ *   axes?: {season: string, week: number | null, type: string},
+ * }} MatchRequest
+ */
+
+/** 축 하나의 점수 — 단일 코드 일치 2 · 배열 포함 1 · null 0 · 불일치 -1(§5.3). */
+function codeScore(/** @type {unknown} */ v, /** @type {(c: string) => boolean} */ ok) {
+  if (v === null || v === undefined) return 0;
+  if (Array.isArray(v)) return v.some((c) => typeof c === "string" && ok(c)) ? 1 : -1;
+  return typeof v === "string" && ok(v) ? 2 : -1;
+}
+
+/**
+ * 주기 코드가 그 날과 맞는가. A/B/C 는 주일 주기와, I/II 는 연중 평일 주기와 **따로** 대조한다 —
+ * 두 도메인이 겹치지 않으므로 레코드의 코드가 어느 축인지 말해 준다(11.01 모든 성인의 날 A/B/C
+ * 가 연중 평일에 와도 주일 주기로 갈린다).
+ * @param {string} code @param {MatchRequest} req
+ */
+function cycleMatches(code, req) {
+  if (code === "A" || code === "B" || code === "C") return code === req.abc;
+  if (code === "I" || code === "II") return code === req.i2;
+  return false;
+}
+
+/**
+ * 구체성 점수(§5.3) — `weekday` · `year` 두 축의 합, 어느 축이든 불일치면 -1. `axes` 를 주면
+ * `season` · `week` · `type` 은 **정확히** 맞아야 한다(폴백 없음 — 좌표 경로). 이름 · 날짜 경로는
+ * 그 셋을 보지 않는다(레코드가 자기 이름 · 날짜로 이미 정해져 있다).
+ * @param {TextRecord} record @param {MatchRequest} req
+ * @returns {number}
+ */
+function matchScore(record, req) {
+  if (req.axes) {
+    const ax = req.axes;
+    if (record.season !== ax.season || (record.week ?? null) !== ax.week || record.type !== ax.type) return -1;
+  }
+  const w = codeScore(record.weekday, (c) => c === req.weekday);
+  if (w < 0) return -1;
+  const y = codeScore(record.year, (c) => cycleMatches(c, req));
+  if (y < 0) return -1;
+  return w + y;
+}
+
+/**
+ * 최고점 **층** 전부(§5.3) — 한 건이 아니라 한 층이 이긴다. 같은 좌표에 의도적으로 공존하는 대체
+ * 본기도(`collect_no`) · 독서 세트(`set_no` · `reading_track`)는 점수가 같아 함께 남는다.
+ * @param {TextRecord[]} records @param {MatchRequest} req
+ * @returns {TextRecord[]}
+ */
+function topLayer(records, req) {
+  let best = -1;
+  /** @type {TextRecord[]} */
+  const out = [];
+  for (const r of new Set(records)) {
+    const s = matchScore(r, req);
+    if (s < 0 || s < best) continue;
+    if (s > best) { best = s; out.length = 0; }
+    out.push(r);
+  }
+  return out;
+}
+
+/** 그 날의 매칭 요청 — 요일과 두 주기. 주기는 **지키는 날**(`resolved.date`)의 것이다. */
+function requestOf(/** @type {ResolvedDate} */ resolved) {
+  return {
+    weekday: resolved.coord.weekday,
+    abc: sundayCycle(resolved.date),
+    i2: weekdayCycle(resolved.date),
+  };
+}
+
+// ── §5.4 · §5.6 본문 조회 ──
+
+/**
+ * 본문 표 하나 → 인덱스(§5.4 권장 인덱스 3). 레코드는 복사하지 않는다. 날짜 · 음력이 있는 레코드는
+ * 그 키로만 닿고, 이름만 있는 레코드는 `byName` · `named` 로, 셋 다 없는 격자 레코드만 `byCoord`
+ * 로 간다 — **이름 · 날짜가 있는 레코드는 폴백 해석을 하지 않는다**(§5.3 판정 규칙 — 성 토요일
+ * 독서가 성주간 평일 전체에 퍼지지 않게). 날짜 표기가 깨진 레코드는 어느 경로에도 오르지 않는다(§2).
+ * @param {any} table
+ * @returns {TextIndex}
+ */
+function buildTextIndex(table) {
+  /** @type {TextIndex} */
+  const ix = { byDate: new Map(), byLunar: new Map(), byName: new Map(), byCoord: new Map(), named: [] };
+  for (const r of rowsOf(table, "entries")) {
+    if (typeof r.id !== "string" && typeof r.id !== "number") continue;
+    const md = normMonthDay(r.date);
+    if (r.date != null && md === null) continue;
+    const lunar = typeof r.lunar === "string" && r.lunar !== "" ? r.lunar : null;
+    if (md) pushTo(ix.byDate, md, r);
+    if (lunar) pushTo(ix.byLunar, lunar, r);
+    if (md || lunar) continue;
+    const names = namesOfRow(r);
+    if (names.length) {
+      ix.named.push(r);
+      for (const n of new Set(names)) pushTo(ix.byName, n, r);
+    } else {
+      pushTo(ix.byCoord, coordKey(r.season, r.week, r.type), r);
+    }
+  }
+  return ix;
+}
+
+/** 좌표 인덱스 키. `week: null` 은 `x`. */
+function coordKey(/** @type {unknown} */ season, /** @type {unknown} */ week, /** @type {unknown} */ type) {
+  return String(season) + "|" + (week === null || week === undefined ? "x" : String(week)) + "|" + String(type);
+}
+
+/**
+ * 독서 묶음 네 표 → 인덱스. `commons.classes` 는 배열이 아니라 **맵**이고, `canticles` 는 래퍼조차
+ * 없는 id → 객체 맵이다(§5.2).
+ * @param {{readings?: any, collects?: any, commons?: any, canticles?: any} | null} tables
+ * @returns {LectionaryIndex}
+ */
+function buildLectionaryIndex(tables) {
+  const t = tables || {};
+  const classes = t.commons && typeof t.commons === "object" ? t.commons.classes : null;
+  return {
+    readings: buildTextIndex(t.readings),
+    collects: buildTextIndex(t.collects),
+    commons: classes && typeof classes === "object" && !Array.isArray(classes) ? classes : {},
+    canticles: t.canticles && typeof t.canticles === "object" ? t.canticles : {},
+  };
+}
+
+/**
+ * 한 관측일의 **고유** 본문 레코드(독서 또는 본기도 표) — 최고점 층(§5.3), 정렬 전.
+ *
+ * **어느 키로 인덱스를 치는가는 관측일의 출처가 정한다**(§5.6 — 키의 존재 여부가 아니라 id 접두사):
+ *
+ * - **격자**(`grid:`) — ① 물어본 날짜(`resolved.date`)의 **날짜 전용 본문**: 그날 좌표와 `type` ·
+ *   `season` 이 같은 것만(좁히기 규칙 ① — 주의 세례 뒤의 성탄주간 레코드는 버린다. 성인의 축일
+ *   레코드는 `type: feast` 라 여기 오지 않는다) ② **고유명 평일**의 이름(성주간 월 ~ 수 · 재의
+ *   수요일 후 목 ~ 토) ③ 좌표 폴백(§5.3 — 이름 · 날짜 없는 레코드만).
+ * - **규칙 행**(temporal) — `coord_name` · 별칭으로 이름 조인 / 사계재는 이름 부분문자열 + 요일
+ *   (§5.4 · 미결5) / 조인 이름이 없고 좌표가 있는 행(대림1주일)은 그 좌표로.
+ * - **성인력 · 음력 행** — 관측일 **자신의** `date` · `lunar`(옮겨 온 축일도 기원 날짜에 색인돼
+ *   있다). 날짜 인덱스는 1:N 이라 좁힌다(미결12 잠정): 날짜 전용 평일 본문(`type: weekday` — 격자
+ *   후보의 것)은 언제나 걷어내고, 그 날짜에 성인력 행이 둘 이상이면 같은 날짜의 **다른** 관측일
+ *   이름에 정확히 맞는 본문을 걷어낸 뒤 이 관측일의 이름 · 별칭에 정확히 맞는 것으로 좁힌다 —
+ *   좁히기가 실패하면 조용히 하나를 고르지 않고 **남은 것 전부**를 낸다. 행이 하나뿐인 날짜는
+ *   이름을 묻지 않는다(06.24 의 띄어쓰기 드리프트가 「고유 없음」으로 새지 않게).
+ * @param {TextIndex} tix @param {CalendarIndex} cal @param {ResolvedDate} resolved @param {Observance} obs
+ * @returns {TextRecord[]}
+ */
+function properRecords(tix, cal, resolved, obs) {
+  const req = requestOf(resolved);
+  const coord = resolved.coord;
+  if (obs.id.startsWith(GRID_PREFIX)) {
+    const same = (/** @type {TextRecord} */ r) => r.type === coord.type && r.season === coord.season;
+    const dated = (tix.byDate.get(monthDayOf(resolved.date)) || []).filter(same);
+    if (dated.length) return topLayer(dated, req);
+    const named = (tix.byName.get(obs.name) || []).filter(same);
+    if (named.length) return topLayer(named, req);
+    const axes = { season: coord.season, week: coord.week, type: coord.type };
+    return topLayer(tix.byCoord.get(coordKey(coord.season, coord.week, coord.type)) || [], { ...req, axes });
+  }
+
+  const md = normMonthDay(obs.date);
+  const lunar = typeof obs.lunar === "string" && obs.lunar !== "" ? obs.lunar : null;
+  if (md || lunar) {
+    const pool = (md ? tix.byDate.get(md) : lunar ? tix.byLunar.get(lunar) : null) || [];
+    const rows = (md ? cal.sanctoralByDate.get(md) : lunar ? cal.sanctoralByLunar.get(lunar) : null) || [];
+    const others = rows.filter((o) => o.id !== obs.id);
+    let mine = pool.filter((r) => r.type !== "weekday");
+    if (others.length) {
+      mine = mine.filter((r) => !others.some((o) => namesMeet(r, o)));
+      const exact = mine.filter((r) => namesMeet(r, obs));
+      if (exact.length) mine = exact;
+    }
+    return topLayer(mine, req);
+  }
+
+  if (obs.kind !== "temporal" || obs.id.includes(":")) return [];   // guard: 등 다른 합성 관측일
+  if (typeof obs.coord_name === "string" && obs.coord_name !== "") {
+    const keys = [obs.coord_name, ...(Array.isArray(obs.aliases) ? obs.aliases : [])];
+    return topLayer(keys.flatMap((k) => tix.byName.get(k) || []), req);
+  }
+  if (obs.rule && obs.rule.kind === "ember_wfs" && obs.name) {
+    return topLayer(tix.named.filter((r) => typeof r.name === "string" && r.name.includes(obs.name)), req);
+  }
+  if (obs.season && obs.type) {
+    const axes = { season: obs.season, week: obs.week ?? null, type: obs.type };
+    return topLayer(tix.byCoord.get(coordKey(axes.season, axes.week, axes.type)) || [], { ...req, axes });
+  }
+  return [];
+}
+
+/** 레코드 → 독서 그룹(세트 하나가 그룹 하나 — §5.6). 슬롯은 복사하지 않는다. */
+function readingGroupOf(/** @type {TextRecord} */ r) {
+  /** @type {ReadingGroup} */
+  const g = {
+    id: String(r.id),
+    title: typeof r.title === "string" ? r.title : "",
+    reading_track: r.reading_track === 1 || r.reading_track === 2 ? r.reading_track : null,
+    set_no: Number.isInteger(r.set_no) ? /** @type {number} */ (r.set_no) : 1,
+    set_total: Number.isInteger(r.set_total) ? /** @type {number} */ (r.set_total) : 1,
+    set_note: typeof r.set_note === "string" ? r.set_note : null,
+    readings: Array.isArray(r.readings) ? r.readings : [],
+    common: null,
+  };
+  return g;
+}
+
+/**
+ * 그룹 순서 — 트랙(없음 → 1 → 2) · 세트 번호 · id. 세트 번호는 데이터가 이미 결정적으로 매겼다
+ * (옛 연도판은 뒤로, 인쇄 순, 본 독서가 대안보다 앞 — ADR-037 §1 「세트 번호」). 배열 순서에 기대지 않는다.
+ * @param {ReadingGroup} a @param {ReadingGroup} b
+ */
+function compareGroups(a, b) {
+  return (a.reading_track ?? 0) - (b.reading_track ?? 0) || a.set_no - b.set_no || compareIds(a.id, b.id);
+}
+
+/** 공통 분류 — 프로토타입 키(`constructor` 등)를 분류로 읽지 않는다. */
+function commonClassOf(/** @type {LectionaryIndex} */ lix, /** @type {unknown} */ cls) {
+  if (typeof cls !== "string" || !Object.prototype.hasOwnProperty.call(lix.commons, cls)) return null;
+  const c = lix.commons[cls];
+  return c && typeof c === "object" ? c : null;
+}
+
+/**
+ * **성인 공통 독서 폴백**(§5.6 · 미결11). 호출자가 「좁힌 고유 독서 0건」을 확인한 뒤 부른다 —
+ * 트리거는 날짜 인덱스가 비었는가가 아니다. 자격: 분류가 공통에 있고 · 기념일이 아니고 · 세트가
+ * 있다. 후보의 `status` 는 보지 않는다(관측일로 판정). 반환은 고유와 같은 그룹 형태 + `common`
+ * 표지 + id `common:<class>-s<set>` — 세트를 전부 낸다(기도서가 「다음 중 하나」로 인쇄한 것).
+ * @param {LectionaryIndex} lix @param {Observance} obs
+ * @returns {ReadingGroup[]}
+ */
+function commonReadings(lix, obs) {
+  if (obs.rank === "commemoration") return [];
+  const cls = obs.sanctoral_class;
+  const entry = commonClassOf(lix, cls);
+  if (!entry || typeof cls !== "string") return [];
+  const sets = (Array.isArray(entry.readings) ? entry.readings : [])
+    .filter((s) => s && Number.isInteger(s.set) && Array.isArray(s.slots))
+    .sort((a, b) => a.set - b.set);
+  return sets.map((s) => ({
+    id: COMMON_PREFIX + cls + "-s" + s.set,
+    title: typeof entry.label === "string" ? entry.label : cls,
+    reading_track: null,
+    set_no: s.set,
+    set_total: sets.length,
+    set_note: null,
+    readings: s.slots,
+    common: cls,
+  }));
+}
+
+/**
+ * 고른 후보 **하나**의 독서(§5.6) — `reading_track` · `set_no` 별 그룹. 고유가 하나라도 있으면
+ * 공통을 내지 않는다(배타). 기념일은 설계상 본문이 없다(§2) — 날짜에 남의 본문이 있어도 받지 않는다.
+ * 결과가 없으면 빈 배열이다(throw 아님 — 격자 빈 칸 · 표에 없는 날도 정상 경로).
+ * @param {LectionaryIndex} lix @param {CalendarIndex} cal
+ * @param {ResolvedDate} resolved @param {Candidate} candidate
+ * @returns {ReadingGroup[]}
+ */
+function findReadingsIn(lix, cal, resolved, candidate) {
+  const obs = candidate && candidate.observance;
+  if (!obs || typeof obs.id !== "string" || !resolved || !resolved.coord) return [];
+  if (obs.rank === "commemoration") return [];
+  const own = properRecords(lix.readings, cal, resolved, obs);
+  if (own.length) return own.map(readingGroupOf).sort(compareGroups);
+  return commonReadings(lix, obs);
+}
+
+/** 한국어 접속 조사 — 끝 글자에 받침이 있으면 「과」, 없으면 「와」(안나와 요아킴 · 키릴과 메토디우스). */
+function withParticle(/** @type {string} */ word) {
+  const code = word.charCodeAt(word.length - 1);
+  const hangul = code >= 0xac00 && code <= 0xd7a3;
+  return word + (hangul && (code - 0xac00) % 28 !== 0 ? "과" : "와");
+}
+
+/**
+ * 공통 본기도의 `{name}` 자리에 넣을 이름. `common_names` 가 있으면 그것을(배열이면 「A와 B」),
+ * 없으면 표의 이름에서 끝의 괄호 설명(「(종교개혁자, 1384년)」)을 뗀 것.
+ * @param {Observance} obs
+ */
+function displayNameOf(obs) {
+  const names = Array.isArray(obs.common_names) ? obs.common_names.filter((n) => typeof n === "string" && n !== "") : [];
+  if (!names.length) names.push(String(obs.name || "").replace(/\s*\([^()]*\)\s*$/, ""));
+  if (names.length === 1) return names[0];
+  return names.slice(0, -2).map((n) => n + ", ").join("") + withParticle(names[names.length - 2]) + " " + names[names.length - 1];
+}
+
+/** 레코드 → 본기도 하나. */
+function collectOptionOf(/** @type {TextRecord} */ r) {
+  /** @type {CollectOption} */
+  const c = {
+    id: r.id,
+    title: typeof r.title === "string" ? r.title : "",
+    collect_no: Number.isInteger(r.collect_no) ? /** @type {number} */ (r.collect_no) : 1,
+    collect_total: Number.isInteger(r.collect_total) ? /** @type {number} */ (r.collect_total) : 1,
+    text: typeof r.text === "string" ? r.text : "",
+    ending: r.ending === "A" || r.ending === "B" || r.ending === "C" ? r.ending : null,
+    common: null,
+  };
+  return c;
+}
+
+/**
+ * 한 관측일의 본기도 — 같은 관측일의 자유선택 대체안(`collect_no`)이 여럿일 수 있다. 트리거가
+ * 독서와 다르다: **`has_proper: false` 이면 공통**이다(본기도 축의 사실 — 파서가 실매칭으로 정한다,
+ * §5.6). 공통은 `{name}` 을 성인 이름으로 채운 하나이고 id 는 `common:<class>-c1`.
+ * @param {LectionaryIndex} lix @param {CalendarIndex} cal @param {ResolvedDate} resolved @param {Observance} obs
+ * @returns {CollectOption[]}
+ */
+function collectsOf(lix, cal, resolved, obs) {
+  if (!obs || typeof obs.id !== "string" || obs.rank === "commemoration") return [];
+  if (obs.has_proper !== false) {
+    return properRecords(lix.collects, cal, resolved, obs)
+      .map(collectOptionOf)
+      .sort((a, b) => a.collect_no - b.collect_no || compareIds(a.id, b.id));
+  }
+  const cls = obs.sanctoral_class;
+  const entry = commonClassOf(lix, cls);
+  const tmpl = entry && entry.collect && typeof entry.collect.text === "string" ? entry.collect : null;
+  if (!entry || !tmpl || typeof cls !== "string") return [];
+  const e = tmpl.ending;
+  return [{
+    id: COMMON_PREFIX + cls + "-c1",
+    title: typeof entry.label === "string" ? entry.label : cls,
+    collect_no: 1,
+    collect_total: 1,
+    text: String(tmpl.text).split("{name}").join(displayNameOf(obs)),
+    ending: e === "A" || e === "B" || e === "C" ? e : null,
+    common: cls,
+  }];
+}
+
+/**
+ * 그날의 본기도(§5.6 · ADR-038 §3) — **두 축을 구분한다**: 원소 하나가 관측일 하나(`{candidate,
+ * collects}`, 순서는 `candidates` 순)이고 그 안의 `collects` 가 같은 관측일의 대체안이다. 뷰는
+ * 고른 후보의 것을 앞에 두고 나머지를 열거한다 — 재배열만 하고 재조회하지 않는다. 기념일 후보의
+ * 원소는 빈 `collects` 다.
+ * @param {LectionaryIndex} lix @param {CalendarIndex} cal @param {ResolvedDate} resolved
+ * @returns {CandidateCollects[]}
+ */
+function findCollectsIn(lix, cal, resolved) {
+  if (!resolved || !Array.isArray(resolved.candidates)) return [];
+  return resolved.candidates.map((candidate) => ({
+    candidate,
+    collects: collectsOf(lix, cal, resolved, candidate.observance),
+  }));
+}
+// ── END LITURGICAL_LOOKUP ──
+
+// ── BEGIN LITURGICAL_PRELOAD ──
+// 프리로드와 공개 래퍼(§3.4). 모듈 상태(`calendarIndex` 등)는 블록 밖에 있고 테스트가 prelude 로
+// 재선언한다 — `fetch` 도 테스트가 주입한다(data-fetch.js DATA_FETCHING 블록 선례).
+
+/** 캘린더 묶음(§3.5) — 소형 표 다섯, 캘린더 진입 · `resolveDate` 전에. */
+const CALENDAR_FILES = ["sanctoral", "temporal-feasts", "periods", "ordinal-weeks", "kasi-lunar"];
+/** 독서 묶음(§3.5) — 대형 표 넷, 독서 뷰 진입 · `findReadings`/`findCollects` 전에. */
+const LECTIONARY_FILES = ["eucharist-readings", "eucharist-collects", "commons", "canticles"];
+
+/** @param {string} name @returns {Promise<any>} */
+function fetchLectionaryJson(name) {
+  return fetch(`${DATA_DIR}/lectionary/${name}.json`).then((res) => {
+    if (!res.ok) throw new Error(`Failed to load lectionary/${name}.json`);
+    return res.json();
+  });
+}
+
+/**
+ * 캘린더 묶음을 싣는다. **promise 를 캐시**하므로 동시에 불러도 fetch 는 파일당 한 번이고, 거부된
+ * promise 는 비워 다음 호출이 다시 시도한다 — 오프라인에서 한 번 실패해도 달력이 영영 깨지지 않게(§3.4).
+ * 인덱스가 새로 서면 이동 패스 캐시를 비운다(패스는 표에 의존한다 — §4.9).
+ * @returns {Promise<CalendarIndex>}
+ */
+function preloadCalendar() {
+  return (calendarPromise ??= Promise.all(CALENDAR_FILES.map(fetchLectionaryJson))
+    .then(([sanctoral, temporal, periods, ordinalWeeks, kasi]) => {
+      transferCache.clear();
+      return (calendarIndex = buildCalendarIndex({ sanctoral, temporal, periods, ordinalWeeks, kasi }));
+    })
+    .catch((e) => { calendarPromise = null; throw e; }));
+}
+
+/**
+ * 독서 묶음을 싣는다 — 캐시 규칙은 `preloadCalendar` 와 같다(한쪽만 고치면 증상이 절반만 사라진다).
+ * @returns {Promise<LectionaryIndex>}
+ */
+function preloadLectionary() {
+  return (lectionaryPromise ??= Promise.all(LECTIONARY_FILES.map(fetchLectionaryJson))
+    .then(([readings, collects, commons, canticles]) =>
+      (lectionaryIndex = buildLectionaryIndex({ readings, collects, commons, canticles })))
+    .catch((e) => { lectionaryPromise = null; throw e; }));
+}
+
+/**
+ * 그 날이 교회력에서 무슨 날인가(§5.5) — **동기 · 순수**. 프리로드 전에 부르면 throw 한다: 조용히
+ * 빈 값을 주면 뷰가 「아무 날도 아님」으로 잘못 그린다(§3.4). 잘못된 날짜 문자열은 null.
+ * @param {string} dateStr "YYYY-MM-DD"
+ * @returns {ResolvedDate | null}
+ */
+function resolveDate(dateStr) {
+  if (!calendarIndex) throw new Error("preloadCalendar() must be awaited before resolveDate()");
+  const p = parseDate(dateStr);
+  if (!p) return null;
+  return resolveDateIn(calendarIndex, dateStr, transfersOf(p.y));
+}
+
+/**
+ * 고른 후보 하나의 독서 그룹(§5.6). 프리로드 전이면 throw — 「아직 안 불러옴」과 「빈 결과」(`[]`)를
+ * 뷰가 구별할 수 있게(§2). 1:N 좁히기가 같은 날짜의 성인력 행을 보므로 캘린더 묶음도 필요하다.
+ * @param {ResolvedDate} resolved @param {Candidate} candidate
+ * @returns {ReadingGroup[]}
+ */
+function findReadings(resolved, candidate) {
+  if (!lectionaryIndex) throw new Error("preloadLectionary() must be awaited before findReadings()");
+  if (!calendarIndex) throw new Error("preloadCalendar() must be awaited before findReadings()");
+  return findReadingsIn(lectionaryIndex, calendarIndex, resolved, candidate);
+}
+
+/**
+ * 그날의 본기도 — 관측일별 원소(§5.6). 프리로드 규칙은 `findReadings` 와 같다.
+ * @param {ResolvedDate} resolved
+ * @returns {CandidateCollects[]}
+ */
+function findCollects(resolved) {
+  if (!lectionaryIndex) throw new Error("preloadLectionary() must be awaited before findCollects()");
+  if (!calendarIndex) throw new Error("preloadCalendar() must be awaited before findCollects()");
+  return findCollectsIn(lectionaryIndex, calendarIndex, resolved);
+}
+// ── END LITURGICAL_PRELOAD ──
+
 export {
   parseDate, toKey, addDays, dayOfWeek, dayOfYear,
   nearestSunday, firstSundayAfter, lastSundayBefore, nthSunday, sundayOfWeek,
   easterDate, advent1Date, baptismDate, liturgicalYearOf, yearAnchors,
   seasonOf, sundayCycle, weekdayCycle, evalRule,
   buildOrdinalIndex, ordinalWeekOf, lunarDatesOf, spansOf, inSpan,
+  preloadCalendar, preloadLectionary, resolveDate, findReadings, findCollects,
 };

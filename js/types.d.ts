@@ -541,6 +541,172 @@ export interface BiblePrologue {
   paragraphs: string[];
 }
 
+// ── Liturgical engine (js/app/liturgical-engine.js, ADR-037 §6) ─────────────
+// 엔진이 뷰·검색과 함께 쓰는 공유 타입(설계서 §3.2). 엔진 내부 계산용 shape
+// (YearAnchors · TransferPass · 인덱스)은 그 파일 안의 @typedef 다.
+
+export type LiturgicalSeason = "advent" | "christmas" | "ordinary" | "lent" | "easter";
+export type LiturgicalDayType = "sunday" | "weekday" | "feast" | "fast";
+// 일요일 코드는 없다 — 주일은 `type: "sunday"` 다(설계서 §5.1).
+export type WeekdayCode = "mon" | "tue" | "wed" | "thu" | "fri" | "sat";
+// A/B/C 는 주일 주기(대림 전환), I/II 는 연중 평일 주기(1/1 전환) — 설계서 §4.7.
+export type CycleCode = "A" | "B" | "C" | "I" | "II";
+// 정식 전례색 넷과 선택 대체색 둘(장미색 · 청색)은 다른 축이다(설계서 R-6.4-color-order).
+export type LiturgicalColor = "white" | "red" | "green" | "violet";
+export type LiturgicalColorAlt = "rose" | "blue";
+export type LiturgicalRank =
+  | "principal" | "privileged_sunday" | "major_feast" | "sunday"
+  | "minor_feast" | "commemoration" | "feria" | "regional_festival";
+// 여섯 값 — 충돌 이동과 선택 봉헌을 한 열에 담는다(설계서 R-6.2-destinations).
+export type TransferTo =
+  | "next_day" | "commemorate_only" | "nearby_sunday"
+  | "sunday_0102_0108" | "sunday_1030_1105" | "easter7_sunday";
+// `null | 코드 | 코드 배열` 3형 — 원소 하나짜리 배열도 실재한다(설계서 §5.2).
+export type CodeField<T extends string> = T | T[] | null;
+
+/** 그날의 격자 좌표. `year` 는 연중 평일이면 I/II, 그 밖은 A/B/C(설계서 §5.1). */
+export interface LiturgicalCoord {
+  season: LiturgicalSeason;
+  week: number | null;
+  type: "sunday" | "weekday";
+  weekday: WeekdayCode | null;
+  year: CycleCode | null;
+}
+
+/** temporal-feasts 의 `rule` — 빌드 시 구조화돼 있다(ADR-036 §5). */
+export interface LiturgicalRule {
+  kind: string;
+  days?: number;
+  month?: number;
+  day?: number;
+  nth?: number;
+  anchor?: { kind: string; days?: number; month?: number; day?: number };
+}
+
+/**
+ * 관측일 — 정의 표(sanctoral · temporal-feasts)의 행을 **그대로** 담는다. 엔진이 합성한
+ * 값(옮겨 온 날짜 등)은 여기 얹지 않고 `Candidate` 가 싣는다(설계서 §1.3 · §5.5).
+ * 격자(`grid:`) · 보호 기간(`guard:`)은 표에 없는 합성 관측일이고 id 접두사로 가린다.
+ */
+export interface Observance {
+  id: string;
+  kind: "sanctoral" | "temporal";
+  name: string;
+  aliases?: string[] | null;
+  // sanctoral
+  date?: string | null;
+  lunar?: string | null;
+  sanctoral_class?: string | null;
+  common_names?: string[] | null;
+  has_proper?: boolean;
+  // temporal
+  coord_name?: string | null;
+  season?: LiturgicalSeason | null;
+  week?: number | null;
+  type?: LiturgicalDayType | null;
+  rule?: LiturgicalRule | null;
+  note?: string | null;
+  // 사계재 4행에만 `true`, 다른 행은 null 이거나 키가 없다 — `=== true` 로 읽는다(설계서 §5.2).
+  penitential?: boolean | null;
+  // 분류(ADR-036 §6 · §8)
+  rank: LiturgicalRank | null;
+  precedence: number | null;
+  priority_group?: "A" | "B" | "C" | null;
+  transferable?: boolean;
+  transfer_to?: TransferTo | null;
+  outranks_sunday?: boolean;
+  color: LiturgicalColor | null;
+  color_alt?: LiturgicalColorAlt | null;
+}
+
+/**
+ * 후보의 상태 — 여섯 값을 PR 2 가 전부 선언한다. PR 2 는 `proper` 만 내고 나머지는
+ * B1(PR 3)이 만든다 — 닫힌 union 을 넷으로 두면 PR 3 의 정상 값이 타입 오류가 된다(설계서 §5.5).
+ */
+export type CandidateStatus =
+  | "proper" | "transferred_in" | "transferred_out"
+  | "optional" | "commemorated" | "omitted";
+
+/** 관측일을 감싸는 래퍼 — 「어디서 왔나」·「왜 왔나」를 싣는다(설계서 §5.5). */
+export interface Candidate {
+  observance: Observance;
+  status: CandidateStatus;
+  /** 원래 날짜 "YYYY-MM-DD" — transferred_in · optional 에만. */
+  from?: string;
+  /** 도착 날짜 "YYYY-MM-DD" — transferred_out 에만. */
+  to?: string;
+  /** 밀어낸 것의 id — 충돌로 밀린 후보에만. 활성화된 선택 봉헌에는 없다(택한 것). */
+  displacedBy?: string;
+}
+
+/** `periods.json` 의 겹침 표시 행(배너용 — 품계 비교에 참여하지 않는다). */
+export interface LiturgicalPeriod {
+  id: string;
+  from: string;
+  to: string;
+  name: string;
+  note?: string | null;
+}
+
+/**
+ * `resolveDate` 의 반환. 색 필드 셋(2026-10-10 사용자 결정 — 설계서 미결26):
+ * `color` 는 그날의 대표색 하나, `colors` 는 병기 목록(책자의 [자/백] — 병기 모델에서만
+ * 둘 이상), `colorAlt` 는 선택 대체색(장미색 · 청색) 전용이다. 색 판정은 B1(PR 3)이라
+ * PR 2 는 `color: null` · `colorAlt: null` · `colors: []` 를 낸다.
+ */
+export interface ResolvedDate {
+  date: string;
+  coord: LiturgicalCoord;
+  candidates: Candidate[];
+  official: Candidate | null;
+  periods: LiturgicalPeriod[];
+  color: LiturgicalColor | null;
+  colorAlt: LiturgicalColorAlt | null;
+  colors: LiturgicalColor[];
+}
+
+/** 독서 슬롯 — 위치가 아니라 `slot` 이름으로 읽는다(ADR-037 §1 「슬롯 배정」). */
+export interface ReadingSlot {
+  slot: "first" | "psalm" | "second" | "gospel";
+  bookId: string;
+  refs: Array<{ chapter: number; verseSpec: string }>;
+  label: string;
+  canticle?: string;
+  scripture_ref?: string;
+}
+
+/**
+ * `findReadings` 의 그룹 — 세트 하나가 그룹 하나. 고유는 본문 레코드에서, 성인 공통은
+ * `commons.json` 에서 만든다(`common` 이 분류 키, id `common:<class>-s<set>`) — 설계서 §5.6.
+ */
+export interface ReadingGroup {
+  id: string;
+  title: string;
+  reading_track: 1 | 2 | null;
+  set_no: number;
+  set_total: number;
+  set_note: string | null;
+  readings: ReadingSlot[];
+  common: string | null;
+}
+
+/** 본기도 하나 — 같은 관측일의 자유선택 대체안이 `collect_no` 로 갈린다. 송영은 코드만(ADR-036 §3). */
+export interface CollectOption {
+  id: number | string;
+  title: string;
+  collect_no: number;
+  collect_total: number;
+  text: string;
+  ending: "A" | "B" | "C" | null;
+  common: string | null;
+}
+
+/** `findCollects` 의 원소 — 관측일별로 키잉한다(순서는 `candidates` 순, 설계서 §5.6). */
+export interface CandidateCollects {
+  candidate: Candidate;
+  collects: CollectOption[];
+}
+
 // ── App helpers facade (js/app/helpers.js) ──────────────────────────────────
 // Phase 1 of the app.js modularization (ADR-018). Common DOM helpers shared
 // by all app/* modules.

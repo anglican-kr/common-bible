@@ -56,6 +56,7 @@ const SHELL_FILES = [
   "/js/app/parallels.js",
   "/js/app/tab-history.js",
   "/js/app/data-fetch.js",
+  "/js/app/liturgical-engine.js",
   "/js/app/audio-player.js",
   "/js/app/views.js",
   "/js/app/routing.js",
