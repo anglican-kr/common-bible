@@ -8,7 +8,7 @@
 
 | 겹 | 도구 | 무엇을 보나 | 어디서 도나 | 규모 |
 |---|---|---|---|---|
-| **유닛** | `node --test` (의존성 0) | 순수 로직 — 함수 입출력·상태 계산 + 문서·픽스처 정합성 | **CI 자동** (PR마다) | 29파일 · 902케이스 |
+| **유닛** | `node --test` (의존성 0) | 순수 로직 — 함수 입출력·상태 계산 + 문서·픽스처 정합성 | **CI 자동** (PR마다) | 29파일 · 946케이스 |
 | **타입 검사** | `tsc --noEmit` (`@ts-check`+JSDoc) | 타입 불일치·오타 | 로컬 훅 + 수동 | 설정 2종(앱·워커) |
 | **E2E** | Playwright (실제 브라우저) | 화면·상호작용·모듈 간 배선 | **로컬 전용**(수동) | 27파일 · 232케이스 |
 | **데이터** | pytest (`common-bible-data` 서브모듈) | 성경 본문·검색 인덱스 정합성 | 그 저장소 CI | 별도 저장소 |
@@ -35,17 +35,18 @@ node --test tests/unit/storage.test.js    # 개별 파일
 | `bookmark.test.js` | 북마크 핵심 로직 — 절 스펙 파싱, 트리 질의(`_isDescendant` 등), 드래그 이동, 스와이프 제스처 수학, 선택 캐스케이드, 정렬 | 169 |
 | `storage.test.js` | 로컬 저장소 — 북마크 v1→v2 마이그레이션, 읽음 표시, 설정 영속화 | 99 |
 | `search.test.js` | 검색 파이프라인 — 토큰화, 절 검색, 결과 랭킹/필터 | 88 |
+| `liturgical-engine.test.js` | 교회력 엔진(ADR-037 §6) — **계산 계층**(설계서 §4): computus 1900~2100 권위 표 대조·규칙 7종·절기 스팬·연중 주차(2052 윤년)·주기·음력·기간 축·표 결손 내성 · **조회 계층**(설계서 §5): 격자 좌표·후보 출처 다섯과 표시 순서·구체성 점수·날짜 선택 순서·1:N 좁히기(미결12 잠정)·사계재 조인·성인 공통 독서·본기도 폴백·`findCollects` 관측일별 키잉·프리로드(promise 캐시·실패 재시도·프리로드 전 throw). 합성 표만 | 69 |
 | `views.test.js` | 본문 렌더 — 절 span, 운문/산문, 인용 마크업 | 60 |
 | `helpers.test.js` | 공용 헬퍼 — DOM 빌더(`el`), 빈 상태, 단위 변환 | 48 |
 | `state-machine.test.js` | Drive 동기화 상태기계 — 전이·충돌·재시도 | 46 |
 | `install.test.js` | 설치 안내 — 플랫폼 분기, 넛지 타이밍 | 46 |
-| `liturgical-engine.test.js` | 교회력 엔진 계산 계층(ADR-037 §6, 설계서 §4) — computus 1900~2100 권위 표 대조·규칙 7종·절기 스팬·연중 주차(2052 윤년)·주기·음력·기간 축·표 결손 내성(정수·날짜 검사). 합성 표만 | 41 |
 | `overlay.test.js` | 오버레이 컨트롤러(ADR-032) — 포커스 트랩, 닫기 스택 | 27 |
 | `parallels.test.js` | 평행 본문(인용·각주) 해석 | 26 |
 | `transport.test.js` | 동기화 전송 계층 — 요청/응답·에러 매핑 | 25 |
 | `routing.test.js` | 라우팅(ADR-034 PR5a) — `parsePath` URL→라우트 서술자(books/bookmarks/settings/search·본문 딥링크) | 24 |
 | `search-worker.test.js` | 검색 워커 순수 블록 — 쿼리 파싱(`in:` 연산자)·절 참조 감지·부분 문자열 수집·페이지네이션 | 23 |
 | `bookmark-read.test.js` | 폴더 모아 읽기(ADR-035) — 범위 해석, 연속 구절 병합 | 23 |
+| `liturgical-engine.data.test.js` | 교회력 엔진 ↔ `data/lectionary` 실측 — 연중 주차 38구간 전수(1900~2100, 두 묶음 연속성)·KASI 음력·temporal 규칙 전부 평가 · 조회 계층: 국가일 넷·성탄주간 날짜 본문·사계재 네 계절·좁히기 규칙 ①(2024·2030)·공통 폴백 불변식 82/13/16·본기도 폴백 전 행·**2025~2050 독서·본기도 레코드 전수 도달**(`data/` 없으면 skip, `engine-data.yml`·`sync-data.yml`에서 실행) | 23 |
 | `citations.test.js` | 인용 표시 — 참조 파싱, 시트 데이터 | 22 |
 | `store-v2.test.js` | 동기화 저장소 v2 — 설정 LWW 머지(모르는 키 보존)·레코드 라운드트립 | 17 |
 | `manifest-sync.test.js` | 콘텐츠 해시 매니페스트 동기화(ADR-021) | 14 |
@@ -55,7 +56,6 @@ node --test tests/unit/storage.test.js    # 개별 파일
 | `tabbar.test.js` | 모바일 탭 바 — 활성 표시·인디케이터 | 12 |
 | `tab-history.test.js` | 탭별 히스토리 복원(ADR-031) | 11 |
 | `sw.test.js` | 서비스 워커 정적 검증 — `SHELL_FILES` 존재·`index.html` 패리티·ESM import 닫힘·`cacheNameFor` 라우팅·매니페스트 대조(`data/` 없으면 skip, `sync-data.yml`에서 실행) | 7 |
-| `liturgical-engine.data.test.js` | 교회력 엔진 ↔ `data/lectionary` 실측 — 연중 주차 38구간 전수(1900~2100, 두 묶음 연속성)·KASI 음력·temporal 규칙 전부 평가(`data/` 없으면 skip, `engine-data.yml`·`sync-data.yml`에서 실행) | 7 |
 | `docs-data-consistency.test.js` | 설계서 `facts` 블록 ↔ `data/lectionary` 실측 대조(`data/` 없으면 skip, `sync-data.yml`에서 실행) | 2 |
 | `docs-crossref.test.js` | 교회력 설계 문서 5종(설계서·검토 문서·ADR-036/037/038) + status/architecture 의 교차 참조 — `§n.m`·`미결n`·`C-/X-/I-`·`R-` 정본 마커·픽스처 id 가 실재하는 앵커를 가리키는지(참조원 둘도 같은 검사 — 폐지된 `Qn` 은 검토 문서 §6 의 Q→미결 대응표로 풀고 Q1~Q14 를 전부 덮는지 본다), 설계서 § 헤딩 목록·§9 항목(§9.1 열림 + §9.2 닫힘 = 1..N, 각 목록 번호순, §9.1 은 일곱 필드 전부, §9.2 는 한 줄 + 닫힘 날짜)·ADR 미결 번호가 문서 순서대로 1..n(재부여 · 건너뜀 · 순서 바꿈 금지) · ADR 「미결 사항」 각 항목이 닫힘 또는 「→ 설계서 미결n」 승계(그 목록이 옛 ADR 미결 번호의 대응표), R- 마커 1회 정의, 검토 문서 §6 이 설계서 §9.1 의 「확인 주체 = 사제」 뷰와 같은지(미결 집합 · 상태 첫 낱말). 표기 금지 게이트는 인라인 코드를 뺀 산문만 보며 **문서 단위로** 켠다 — ②(2026-10-09)에서 센티널(전 문서) · 동그라미 참조 · Qn · 편집 원칙(설계서)을 켰고 ③(2026-10-10)이 검토 문서를, ④(2026-10-10)가 ADR 셋을 더하며 ADR 미결 번호 참조 게이트를 켰다(면제 줄 없음 — 다섯 문서 모두) | 14 |
 | `liturgical-fixtures.test.js` | `tests/fixtures/liturgical/*.cases.json` 형식 — id 유일·규칙, 날짜 실재, 관측일 id 생략부호 금지(`ifIssueFlips.expect` 포함), status/kind 도메인(provisional·skip 은 `issue` 필수), `readings`/`officialReadings` 키 분리, 빈 `expect` 금지, `alsoYears` 요일 동일, `canon`·`checks`·`issue` 앵커 실재, 검토 문서 §5 항목이 인용한 케이스는 `checks` 에 그 항목을 단다(역참조) | 8 |
