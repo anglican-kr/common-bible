@@ -7,7 +7,9 @@ title: "data: 재의 수요일 후 금요일 지정 독서 · 여성선교주일
 
 # data: 재의 수요일 후 금요일 지정 독서 · 여성선교주일은 기념일로 — 데이터 포인터 · facts · 설계서 (data#27)
 
-**머지 순서: anglican-kr/common-bible-data#27 먼저.** 이 PR 의 `data` 포인터는 지금 data#27 의 브랜치 커밋 `cce3cbd` 를 가리킨다. data#27 이 머지되면 포인터를 data `main` 의 머지 커밋으로 바꾼 뒤 이 PR 을 머지한다.
+**data#27 은 머지됐다**(2026-10-10, fast-forward). 브랜치 커밋 `cce3cbd` 가 그대로 data `main` 이고, data 쪽 빌드 워크플로도 새 커밋 없이 통과했다 — 이 PR 의 `data` 포인터가 그 커밋이다.
+
+data 푸시 직후 앱 `sync-data.yml` 이 돌다가 멈췄다. main 의 설계서 facts 여섯이 새 데이터와 어긋났기 때문이고, 이 PR 이 맞추는 바로 그 여섯이다. 같은 실행에서 main 쪽 엔진 실데이터 테스트는 새 데이터로도 모두 통과했다. 이 PR 이 머지되면 포인터가 이미 data `main` 이라 동기화가 따로 할 일은 없다.
 
 ## 요약
 
