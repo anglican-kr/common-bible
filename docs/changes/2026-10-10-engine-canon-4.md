@@ -1,4 +1,5 @@
 ---
+pr: 337
 date: 2026-10-10
 branch: docs/engine-canon-4-review
 title: "docs: 교회력 엔진 정본 지도 ④ — ADR 재서술 · 개정 블록 흡수 · 미결 승계(미결34~42) · 규약 문구"
