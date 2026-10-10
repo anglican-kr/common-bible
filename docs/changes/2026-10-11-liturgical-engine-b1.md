@@ -1,4 +1,5 @@
 ---
+pr: 341
 date: 2026-10-11
 branch: feat/liturgical-engine-b1
 title: "feat: 교회력 엔진 B1 품계 · 승자 · 전례색 · 재일 — official · 재분류 · 사계재 자 · fastOf (ADR-037 §6 · PR 3 첫째)"
