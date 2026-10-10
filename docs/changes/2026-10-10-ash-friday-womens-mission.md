@@ -1,4 +1,5 @@
 ---
+pr: 339
 date: 2026-10-10
 branch: data/ash-friday-womens-mission
 title: "data: 재의 수요일 후 금요일 지정 독서 · 여성선교주일은 기념일로 — 데이터 포인터 · facts · 설계서 (data#27)"
