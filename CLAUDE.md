@@ -38,7 +38,7 @@
 최상위 레이아웃만 — **모듈별 역할·라인 수 등 상세 지도는 [`docs/architecture.md`](docs/architecture.md) §4 + 부록 B**.
 
 - 루트 — `index.html` / `privacy.html` / `sw.js` / `sw-version.js` / `manifest.webmanifest` / `version.json` / `tsconfig.json` + `tsconfig.worker.json` (ADR-012). `sw-version.js`는 `release.py`가 갱신하며 sw.js가 importScripts로 가져와 SHELL_CACHE 이름을 파생 (ADR-021).
-- `js/` — 클라이언트 JS. 최상위(app/audio-cache/manifest-sync/search-worker/drive-sync/types.d.ts) + `js/app/` 9개 도메인 모듈 (ADR-018) + `js/sync/` 5개 동기화 레이어 (ADR-011)
+- `js/` — 클라이언트 JS. 최상위(app/audio-cache/manifest-sync/search-worker/drive-sync/types.d.ts) + `js/app/` 26개 도메인 모듈 (ADR-018 · ADR-034 — 목록은 architecture.md §4) + `js/sync/` 5개 동기화 레이어 (ADR-011)
 - `css/style.css` — 메인 스타일
 - `data/` — **서브모듈 `common-bible-data`** 마운트 위치 (73권 JSON `bible/`, 검색 인덱스 4종 `search-{meta,ot,nt,dc}.json`, 콘텐츠 해시 매니페스트 `bible-manifest.json`·`audio-manifest.json` (ADR-021), 오디오 nested 서브모듈 `audio/`, 마크다운 원본 `source/`, Python 파이프라인 `src/`, 데이터 검증 테스트 `tests/`)
 - `scripts/` — `release.py`(version.json + sw-version.js bump + 자동 commit), `changelog.py`(릴리스 노트용 변경 목록 — 앱 git log + data 서브모듈 compare, `--generate-notes` 대체), `serve.py`(SPA-aware 로컬 서버), `generate_splash.py`(iOS 스플래시, ADR-007), `lock_merged_ledgers.sh`(머지된 원장을 로컬에서 읽기 전용으로 잠금 — `npm test` 앞·PR 생성 후 자동, 클론마다 다시), `docs_facts_snapshot.py`(교회력 설계 문서 5종 + 보관 문서 + 픽스처의 사실 토큰을 리비전 간 비교 — 문서 리팩터링 PR 의 「사실 변경 0」 증명, `--diff main HEAD`)
