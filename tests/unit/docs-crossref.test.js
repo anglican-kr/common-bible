@@ -79,7 +79,8 @@ const SECTIONS = Object.fromEntries(Object.keys(DOCS).map((d) => [d, new Set(sec
 const ISSUES = Object.fromEntries(Object.keys(DOCS).map((d) => [d, issueNumbers(text[d], issueHeading(d))]));
 const CHECKS = checkIds(text["검토 문서"]);
 // `Qn` 은 2026-09-20 에 폐지됐다(설계서 §1.4) — 옛 번호는 검토 문서 §6 의 대응표 한 줄(「Q→미결 대응」)이 미결 번호로 푼다.
-const Q_DECODE_LINE = lines["검토 문서"].find((l) => /Q→미결 대응/.test(l)) ?? "";
+const Q_DECODE_IDX = lines["검토 문서"].findIndex((l) => /Q→미결 대응/.test(l));
+const Q_DECODE_LINE = lines["검토 문서"][Q_DECODE_IDX] ?? "";
 const Q_ROWS = new Set([...Q_DECODE_LINE.matchAll(/(?<![\w-])(Q\d+)(?: 부속)?→미결\d+/g)].map((m) => m[1]));
 const R_DEFS = rMarkerDefs(text);
 const FIXTURE_IDS = new Set();
@@ -324,9 +325,13 @@ test("동그라미 숫자 참조 형식이 없다", { skip: GATES.circledRefs.le
 
 test("Qn 참조는 Q→미결 대응표 줄을 빼고 없다", { skip: GATES.qRefs.length ? false : gateDocs(GATES.qRefs) }, () => {
   const bad = [];
+  // 대응표는 한 곳(검토 문서 §6)에 한 줄이다(설계서 §1.4) — 표시 문구가 다른 줄에도 있으면 어느 줄이 대응표인지 모호하다.
+  const markers = Object.keys(DOCS).flatMap((d) => lines[d].flatMap((l, i) => (/Q→미결 대응/.test(l) ? [`${DOCS[d]}:${i + 1}`] : [])));
+  assert.deepEqual(markers, [`${DOCS["검토 문서"]}:${Q_DECODE_IDX + 1}`], "「Q→미결 대응」 줄은 검토 문서 §6 의 한 줄뿐이어야 한다");
   for (const doc of GATES.qRefs)
     prose[doc].forEach((line, i) => {
-      if (/Q→미결 대응|Q1→17/.test(line)) return;
+      // 면제는 대응표 그 줄 하나 — 문구가 들어간 산문까지 건너뛰면 「대응표 줄만 뺀다」가 무너진다.
+      if (doc === "검토 문서" && i === Q_DECODE_IDX) return;
       if (/(?<![\w-])Q\d+(?![\w-])/.test(line)) bad.push(`${DOCS[doc]}:${i + 1}`);
     });
   assert.deepEqual(bad, [], `Qn 참조 ${bad.length}건 — 미결n 으로:\n  ${bad.join("\n  ")}`);
