@@ -396,6 +396,33 @@ test("미결12 잠정 — 실데이터 1:N 좁히기 (C-5.6-5 는 미결12 가 �
   }
 });
 
+test("고유명 평일 여섯 — 성주간 월~수 · 재의 수요일 후 목~토가 지정 독서 · 본기도를 낸다 (2026, data#27)", { skip: SKIP }, () => {
+  // 특별한 일이 없으면 이 날들은 지정 독서를 쓴다(사용자 확정 2026-10-10). 재의 수요일 후 금요일은
+  // 교구 사이트 기사에 수집 태그가 빠져 원료에 없었다 — data#27 이 실었다.
+  const E = ctx.easterDate(2026);
+  for (const off of [-45, -44, -43, -6, -5, -4]) {
+    const d = ctx.addDays(E, off);
+    const name = pick(resolve(d), "grid:").observance.name;
+    const gs = groupsAt(d, "grid:");
+    assert.ok(gs.length > 0 && gs.every((g) => recOf(g).name === name), `${d} ${name} 독서`);
+    const cs = collectsAt(d, "grid:");
+    assert.ok(cs.length > 0 && cs.every((c) => colOf(c).name === name), `${d} ${name} 본기도`);
+  }
+});
+
+test("여성선교주일은 기념일 — 이름 줄로만 오르고 본문이 없다 · 그날 주일 본문은 격자가 낸다 (2026-09-06, data#27)", { skip: SKIP }, () => {
+  // 해마다 본기도 · 독서가 새로 정해져 고정 본문이 없다(사용자 확정 2026-10-10) — 데이터는 등급을
+  // 기념일로 두고 그해 한정 본문을 싣지 않는다.
+  const d = "2026-09-06";
+  const c = pick(resolve(d), "t-여성선교주일");
+  assert.ok(c, "후보로 오른다");
+  same([c.observance.rank, c.observance.precedence, c.status], ["commemoration", 7, "proper"]);
+  same(groupsAt(d, "t-여성선교주일"), []);
+  same(collectsAt(d, "t-여성선교주일"), []);
+  assert.ok(groupsAt(d, "grid:ordinary").length > 0 && collectsAt(d, "grid:ordinary").length > 0);
+  assert.ok(![...ix().rec.values(), ...ix().col.values()].some((e) => e.name === "여성선교주일"));
+});
+
 test("§5.4 · §5.6 도달 범위 — 2025~2050 모든 날의 모든 후보를 조회하면 독서 · 본기도 레코드가 하나도 빠지지 않는다", { skip: SKIP }, () => {
   // 조인 경로(격자 날짜 · 고유명 평일 · 좌표 · 이름 · 사계재 · 날짜 · 음력) 중 하나가 끊기면 그 경로의 레코드가
   // 어디에서도 안 나온다 — 개별 사례로는 놓치는 것을 전수로 잡는다(성주간 월~수 · 재의 수요일 후 목 · 토가 그 예다).

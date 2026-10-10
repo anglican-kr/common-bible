@@ -8,7 +8,7 @@
 
 | 겹 | 도구 | 무엇을 보나 | 어디서 도나 | 규모 |
 |---|---|---|---|---|
-| **유닛** | `node --test` (의존성 0) | 순수 로직 — 함수 입출력·상태 계산 + 문서·픽스처 정합성 | **CI 자동** (PR마다) | 29파일 · 947케이스 |
+| **유닛** | `node --test` (의존성 0) | 순수 로직 — 함수 입출력·상태 계산 + 문서·픽스처 정합성 | **CI 자동** (PR마다) | 29파일 · 949케이스 |
 | **타입 검사** | `tsc --noEmit` (`@ts-check`+JSDoc) | 타입 불일치·오타 | 로컬 훅 + 수동 | 설정 2종(앱·워커) |
 | **E2E** | Playwright (실제 브라우저) | 화면·상호작용·모듈 간 배선 | **로컬 전용**(수동) | 27파일 · 232케이스 |
 | **데이터** | pytest (`common-bible-data` 서브모듈) | 성경 본문·검색 인덱스 정합성 | 그 저장소 CI | 별도 저장소 |
@@ -46,7 +46,7 @@ node --test tests/unit/storage.test.js    # 개별 파일
 | `routing.test.js` | 라우팅(ADR-034 PR5a) — `parsePath` URL→라우트 서술자(books/bookmarks/settings/search·본문 딥링크) | 24 |
 | `search-worker.test.js` | 검색 워커 순수 블록 — 쿼리 파싱(`in:` 연산자)·절 참조 감지·부분 문자열 수집·페이지네이션 | 23 |
 | `bookmark-read.test.js` | 폴더 모아 읽기(ADR-035) — 범위 해석, 연속 구절 병합 | 23 |
-| `liturgical-engine.data.test.js` | 교회력 엔진 ↔ `data/lectionary` 실측 — 연중 주차 38구간 전수(1900~2100, 두 묶음 연속성)·KASI 음력·temporal 규칙 전부 평가 · 조회 계층: 국가일 넷·성탄주간 날짜 본문·사계재 네 계절·좁히기 규칙 ①(2024·2030)·공통 폴백 불변식 82/13/16·본기도 폴백 전 행·**2025~2050 독서·본기도 레코드 전수 도달**(`data/` 없으면 skip, `engine-data.yml`·`sync-data.yml`에서 실행) | 23 |
+| `liturgical-engine.data.test.js` | 교회력 엔진 ↔ `data/lectionary` 실측 — 연중 주차 38구간 전수(1900~2100, 두 묶음 연속성)·KASI 음력·temporal 규칙 전부 평가 · 조회 계층: 국가일 넷·성탄주간 날짜 본문·사계재 네 계절·좁히기 규칙 ①(2024·2030)·공통 폴백 불변식 82/13/16·본기도 폴백 전 행·**2025~2050 독서·본기도 레코드 전수 도달**·고유명 평일 여섯의 지정 독서·여성선교주일 기념일(`data/` 없으면 skip, `engine-data.yml`·`sync-data.yml`에서 실행) | 25 |
 | `citations.test.js` | 인용 표시 — 참조 파싱, 시트 데이터 | 22 |
 | `store-v2.test.js` | 동기화 저장소 v2 — 설정 LWW 머지(모르는 키 보존)·레코드 라운드트립 | 17 |
 | `manifest-sync.test.js` | 콘텐츠 해시 매니페스트 동기화(ADR-021) | 14 |
