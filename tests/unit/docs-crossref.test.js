@@ -8,12 +8,14 @@
 //   1. 참조가 실재하는 앵커를 가리키는가: `§n.m`(문서 한정어 우선 → 자기 문서 → 설계서 → 검토 문서 → ADR),
 //      `미결n`(한정어 → 자기 문서의 미결 목록 → 설계서 §9), `C-/X-/I-/Qn` → 검토 문서,
 //      `R-<§>-<slug>` → 설계서 정본 마커, `T-/O-/A-/W-<날짜>-<slug>` → 픽스처.
-//   2. 번호 불변: 설계서 § 헤딩 목록과 §9 항목 1..N(연속·중복 없음) · ADR 「미결 사항」 항목 수가 상수와 같다 —
-//      번호 재부여·재사용을 막고, 미결 번호가 설계서 §9 에서만 발급되게 한다.
+//   2. 번호 불변: 설계서 § 헤딩 목록과 §9 항목(§9.1 열림 + §9.2 닫힘 = 1..N, 중복 없음, 각 목록 번호순 · §9.2 는
+//      한 줄 + 닫힘 날짜) · ADR 「미결 사항」 항목 수가 상수와 같다 — 번호 재부여·재사용을 막고, 미결 번호가
+//      설계서 §9 에서만 발급되게 한다.
 //   3. 정본 마커는 문서 전체에서 정확히 1회 정의된다.
-//   4. (PR ②~④ 에서 켠다 — 아래 GATES) 센티널 문자열 단일성 · 동그라미 참조 금지 · Qn/ADR 미결 참조 금지 ·
+//   4. (아래 GATES — ② 부터 문서 단위로 켠다) 센티널 문자열 단일성 · 동그라미 참조 금지 · Qn/ADR 미결 참조 금지 ·
 //      편집 원칙(개정 블록 · 취소선 · 해소/재개/정정 꼬리표 0). 표기 금지 게이트는 **인라인 코드를 뺀 산문**만
 //      본다(docs-anchors.js `stripInlineCode`) — §1.4 가 규약을 정의하며 금지 표기를 코드로 인용하기 때문이다.
+//      점-시점 보관 문서(docs/archive/design/liturgical-engine-*.md)는 원장과 같은 층이라 검사 대상이 아니다.
 // 한정어 없는 참조가 자기 문서와 설계서 양쪽에서 풀리면 **경고**로만 낸다(t.diagnostic) — ②~④ 에서 한정어를 보강한다.
 
 import test from "node:test";
@@ -27,14 +29,16 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "../..");
 const rel = (p) => path.join(ROOT, p);
 
-// PR 단계별 게이트 — 켤 때 주석의 PR 번호를 지운다.
+// PR 단계별 게이트 — 센티널은 전 문서를 한꺼번에 보고(정본 밖에 있으면 안 되므로), 표기 금지 게이트 넷은
+// **문서 목록**으로 켠다: 그 PR 이 정리한 문서부터 지키고, 다음 PR 이 자기 문서를 더한다(② 설계서 → ③ 검토 문서 → ④ ADR).
 const GATES = {
-  sentinels: false,        // PR ②: 센티널 문자열은 정본 파일 한 곳에만
-  circledRefs: false,      // PR ②: `§6.2 ④` · `X-10 ②` · `§7 ⑩` 형식 참조 0
-  qRefs: false,            // PR ③: `Qn` 참조는 검토 문서 §6 대응표 줄을 빼고 0
-  adrIssueRefs: false,     // PR ④: `ADR-03[678] 미결n` 참조는 ADR 미결 절 대응표 줄을 빼고 0
-  editingPrinciple: false, // PR ④: 5문서에 `> **개정 (` · `~~` · 「해소/재개/정정」 꼬리표 0
+  sentinels: true,                      // ②: 센티널 문자열은 정본(설계서) 한 곳에만
+  circledRefs: ["설계서"],              // ②: `§6.2 ④` · `X-10 ②` · `§7 ⑩` 형식 참조 0 — ③ 검토 문서 · ④ ADR 추가
+  qRefs: ["설계서"],                    // ②: `Qn` 참조는 §1.4 의 Q→미결 대응표 줄을 빼고 0 — ③ 검토 문서(§6 대응표) · ADR 추가
+  adrIssueRefs: [],                     // PR ④: `ADR-03[678] 미결n` 참조는 ADR 미결 절 대응표 줄을 빼고 0
+  editingPrinciple: ["설계서"],         // ②: `> **개정 (` · `~~` · 「해소/재개/정정」 꼬리표 0 — ④ 검토 문서 · ADR 추가
 };
+const gateDocs = (names) => (names.length ? names : "다음 PR 에서 켠다");
 
 const DOCS = {
   설계서: "docs/design/liturgical-engine.md",
@@ -52,7 +56,7 @@ const FIXTURE_DIR = "tests/fixtures/liturgical";
 const DESIGN_SECTIONS = [
   "1", "1.1", "1.2", "1.3", "1.4", "2", "3", "3.1", "3.2", "3.3", "3.4", "3.5", "3.6",
   "4", "4.1", "4.2", "4.3", "4.4", "4.5", "4.6", "4.7", "4.8", "4.9", "4.10",
-  "5", "5.1", "5.2", "5.3", "5.4", "5.5", "5.6", "6", "6.1", "6.2", "6.3", "6.4", "6.5", "7", "8", "9",
+  "5", "5.1", "5.2", "5.3", "5.4", "5.5", "5.6", "6", "6.1", "6.2", "6.3", "6.4", "6.5", "7", "8", "9", "9.1", "9.2",
 ];
 const DESIGN_ISSUE_MAX = 33;
 const ADR_ISSUE_COUNT = { "ADR-036": 13, "ADR-037": 8, "ADR-038": 3 };
@@ -189,11 +193,49 @@ test("설계서 § 헤딩 목록이 상수와 같다 — 절은 말미 추가만
   assert.deepEqual(DESIGN_SECTION_LIST, DESIGN_SECTIONS);
 });
 
-test("설계서 §9 항목이 문서 순서로 정확히 1..N(N ≥ 33) — 번호 재사용·건너뜀 금지", () => {
-  // 목록 비교 — 같은 번호가 둘이면 길이가 늘어 1..N 과 어긋난다(집합은 그것을 삼킨다).
-  const nums = ISSUES["설계서"];
-  assert.ok(nums && nums.length >= DESIGN_ISSUE_MAX, `§9 항목 수 ${nums?.length} < ${DESIGN_ISSUE_MAX}`);
-  assert.deepEqual(nums, nums.map((_, i) => i + 1), "§9 항목 번호가 1..N 이 아니다(재사용 · 건너뜀 · 순서)");
+test("설계서 §9 — §9.1(열림)·§9.2(닫힘)을 합치면 정확히 1..N(N ≥ 33), 각 목록은 오름차순 — 번호 재사용·건너뜀 금지", () => {
+  // 두 목록을 **이어 붙여** 정렬 비교한다 — 같은 번호가 둘이면 길이가 늘어 1..N 과 어긋난다(집합은 그것을 삼킨다).
+  const open = issueNumbers(text["설계서"], "\n### 9.1 ");
+  const closed = issueNumbers(text["설계서"], "\n### 9.2 ");
+  assert.ok(open && closed, "§9.1 · §9.2 헤딩이 없다");
+  const all = [...open, ...closed].sort((a, b) => a - b);
+  assert.ok(all.length >= DESIGN_ISSUE_MAX, `§9 항목 수 ${all.length} < ${DESIGN_ISSUE_MAX}`);
+  assert.deepEqual(all, all.map((_, i) => i + 1), "§9 항목 번호가 1..N 이 아니다(재사용 · 건너뜀 · 두 목록에 중복)");
+  assert.deepEqual(open, [...open].sort((a, b) => a - b), "§9.1 이 번호순이 아니다");
+  assert.deepEqual(closed, [...closed].sort((a, b) => a - b), "§9.2 가 번호순이 아니다");
+  assert.deepEqual(ISSUES["설계서"], [...open, ...closed], "`## 9.` 전체 목록이 두 소절의 합과 다르다 — 소절 밖에 항목이 있다");
+});
+
+test("설계서 §9.1 열림 항목은 일곱 필드(상태 · 확인 주체 · 질문 · 구체 예 · 잠정 답 · 뒤집히면/닫히면 · 정본)를 전부 가진다", () => {
+  const t = text["설계서"];
+  const start = t.indexOf("\n### 9.1 ");
+  assert.ok(start >= 0, "§9.1 헤딩이 없다");
+  const body = t.slice(start + 1).split(/\n#{1,3} /)[0].split("\n");
+  const FIELDS = [["상태:", /상태:/], ["확인 주체:", /확인 주체:/], ["질문:", /질문:/], ["구체 예", /구체 예(\(|:)/],
+    ["잠정 답", /잠정 답(\(|:)/], ["뒤집히면/닫히면", /(뒤집히면|닫히면)(\(|:)/], ["정본:", /정본:/]];
+  const bad = [];
+  for (const line of body) {
+    const m = /^- \*\*미결(\d+)\*\*/.exec(line);
+    if (!m) continue;
+    const missing = FIELDS.filter(([, re]) => !re.test(line)).map(([name]) => name);
+    if (missing.length) bad.push(`미결${m[1]}: ${missing.join(" · ")} 없음`);
+  }
+  assert.deepEqual(bad, [], `§9 머리의 필드 규약 위반:\n  ${bad.join("\n  ")}`);
+});
+
+test("설계서 §9.2 닫힘 항목은 한 줄이고 `닫힘(YYYY-MM-DD)` 을 적는다 — 전문은 §9.1 에서 옮길 때 한 줄로 줄인다", () => {
+  const t = text["설계서"];
+  const start = t.indexOf("\n### 9.2 ");
+  assert.ok(start >= 0, "§9.2 헤딩이 없다");
+  const body = t.slice(start + 1).split(/\n#{1,3} /)[0].split("\n").slice(1);
+  const bad = [];
+  body.forEach((line, i) => {
+    if (!line.trim()) return;
+    if (!/^- \*\*미결\d+/.test(line)) { bad.push(`${i + 1}: 항목 줄이 아니다 — ${line.slice(0, 40)}…`); return; }
+    // `제목 — 닫힘(YYYY-MM-DD) · ` 가 머리에 와야 한다 — 괄호 안은 날짜뿐(누가 정했는지 · 데이터 PR 같은 주석은 결론 · 근거 필드로).
+    if (!/^- \*\*미결\d+\*\* \*\*[^*]+\*\* — 닫힘\(\d{4}-\d{2}-\d{2}\) · /.test(line)) bad.push(`${i + 1}: 「제목 — 닫힘(YYYY-MM-DD) · 」 형식이 아니다 — ${line.slice(0, 60)}…`);
+  });
+  assert.deepEqual(bad, [], `§9.2 형식 위반:\n  ${bad.join("\n  ")}`);
 });
 
 test("ADR 「미결 사항」 항목 수가 상수와 같고 번호가 겹치지 않는다 — 미결 번호는 설계서 §9 에서만 발급한다", () => {
@@ -214,11 +256,21 @@ test("정본 마커 R- 는 문서 전체에서 정확히 1회 정의된다", () 
 });
 
 test("센티널 문자열은 정본 파일 한 곳에만 있다", { skip: GATES.sentinels ? false : "PR ② 에서 켠다" }, () => {
-  // 정본에서만 허용되는 문장 조각 — 켤 때 채운다. 인라인 코드 안의 인용(§1.4 의 ``` ```facts ```)은 세지 않는다.
+  // 정본 문장(R- 마커가 붙은 문장)에만 있어야 하는 조각 — 다른 곳에 또 나오면 사실이 두 번 적힌 것이다.
+  // 인라인 코드 안의 인용(§1.4 의 ``` ```facts ```)은 세지 않는다. 조각을 고치면 정본 문장도 함께 고친다.
   const SENTINELS = [
-    { text: "02.14 발렌틴 ∧ 키릴", allow: ["설계서"], once: true },
-    { text: "유효 precedence 9", allow: ["설계서"] },
-    { text: "```facts", allow: ["설계서"], once: true },
+    { text: "02.14 발렌틴 ∧ 키릴", allow: ["설계서"], once: true },             // R-6.1-prec7-tie-pairs — 5쌍 목록의 첫 쌍
+    { text: "유효 precedence 9", allow: ["설계서"], once: true },                // R-6.1-ineligible
+    { text: "주의 세례 주일은 연중시기의 첫날이다", allow: ["설계서"], once: true }, // R-4.5-baptism-ordinary-1
+    { text: "한 열에 담고 있다", allow: ["설계서"], once: true },               // R-6.2-destinations
+    { text: "수요일까지 직전, 목요일부터 다음", allow: ["설계서"], once: true },  // R-6.2-nearby-sunday — 경계
+    { text: "lectionarypage.net 2025~2027", allow: ["설계서"], once: true },     // R-6.2-chain-model — 연쇄 모델의 근거
+    { text: "도착한 축일은 품계와 무관하게 자리를 지킨다", allow: ["설계서"], once: true }, // R-6.2-first-come
+    { text: "규칙일 유지 · 고정일 이동", allow: ["설계서"], once: true },        // R-6.2-rule-day-stays
+    { text: "절기 기본색을 깔고", allow: ["설계서"], once: true },               // R-6.4-color-order
+    { text: "사계재 날의 색은 승자(절기 평일)의 절기색", allow: ["설계서"], once: true }, // R-6.4-ember-color
+    { text: "연도 캐시를 채울 때 한 번", allow: ["설계서"], once: true },        // R-6.5-year-pass
+    { text: "```facts", allow: ["설계서"], once: true },                         // §5.2 실측 블록
   ];
   const bad = [];
   for (const s of SENTINELS)
@@ -230,28 +282,28 @@ test("센티널 문자열은 정본 파일 한 곳에만 있다", { skip: GATES.
   assert.deepEqual(bad, []);
 });
 
-test("동그라미 숫자 참조 형식이 없다", { skip: GATES.circledRefs ? false : "PR ② 에서 켠다" }, () => {
+test("동그라미 숫자 참조 형식이 없다", { skip: GATES.circledRefs.length ? false : gateDocs(GATES.circledRefs) }, () => {
   const bad = [];
-  for (const doc of Object.keys(DOCS))
+  for (const doc of GATES.circledRefs)
     prose[doc].forEach((line, i) => {
       for (const m of line.matchAll(/(§\d+(?:\.\d+)? [①-⑳]|X-\d+ [①-⑳]|미결\d+ [①-⑳])/g)) bad.push(`${DOCS[doc]}:${i + 1}: ${m[1]}`);
     });
-  assert.deepEqual(bad, []);
+  assert.deepEqual(bad, [], `동그라미 참조 ${bad.length}건 — R- 마커 · 픽스처 id · 항목 이름으로 바꿀 것:\n  ${bad.join("\n  ")}`);
 });
 
-test("Qn 참조는 검토 문서 §6 대응표 줄을 빼고 없다", { skip: GATES.qRefs ? false : "PR ③ 에서 켠다" }, () => {
+test("Qn 참조는 Q→미결 대응표 줄을 빼고 없다", { skip: GATES.qRefs.length ? false : gateDocs(GATES.qRefs) }, () => {
   const bad = [];
-  for (const doc of Object.keys(DOCS))
+  for (const doc of GATES.qRefs)
     prose[doc].forEach((line, i) => {
       if (/Q→미결 대응|Q1→17/.test(line)) return;
       if (/(?<![\w-])Q\d+(?![\w-])/.test(line)) bad.push(`${DOCS[doc]}:${i + 1}`);
     });
-  assert.deepEqual(bad, []);
+  assert.deepEqual(bad, [], `Qn 참조 ${bad.length}건 — 미결n 으로:\n  ${bad.join("\n  ")}`);
 });
 
-test("ADR 미결 번호 참조는 ADR 미결 절 대응표 줄을 빼고 없다", { skip: GATES.adrIssueRefs ? false : "PR ④ 에서 켠다" }, () => {
+test("ADR 미결 번호 참조는 ADR 미결 절 대응표 줄을 빼고 없다", { skip: GATES.adrIssueRefs.length ? false : "PR ④ 에서 켠다" }, () => {
   const bad = [];
-  for (const doc of Object.keys(DOCS))
+  for (const doc of GATES.adrIssueRefs)
     prose[doc].forEach((line, i) => {
       if (/대응표|↔/.test(line)) return;
       if (/ADR-03[678] 미결\d+/.test(line)) bad.push(`${DOCS[doc]}:${i + 1}`);
@@ -259,11 +311,11 @@ test("ADR 미결 번호 참조는 ADR 미결 절 대응표 줄을 빼고 없다"
   assert.deepEqual(bad, []);
 });
 
-test("편집 원칙 — 개정 블록 · 취소선 · 해소/재개/정정 꼬리표가 없다", { skip: GATES.editingPrinciple ? false : "PR ④ 에서 켠다" }, () => {
+test("편집 원칙 — 개정 블록 · 취소선 · 해소/재개/정정 꼬리표가 없다", { skip: GATES.editingPrinciple.length ? false : gateDocs(GATES.editingPrinciple) }, () => {
   const bad = [];
-  for (const doc of Object.keys(DOCS))
+  for (const doc of GATES.editingPrinciple)
     prose[doc].forEach((line, i) => {
       if (/^> \*\*개정 \(|~~|\*\*(해소|재개|정정|재해소) (\d{4}-\d{2}-\d{2}|\()/.test(line)) bad.push(`${DOCS[doc]}:${i + 1}`);
     });
-  assert.deepEqual(bad, []);
+  assert.deepEqual(bad, [], `편집 원칙 위반 ${bad.length}건 — 본문을 현재 결론으로 고치고 버린 선택지는 §9.2 · ADR 「검토한 대안」으로:\n  ${bad.join("\n  ")}`);
 });

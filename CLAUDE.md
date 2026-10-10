@@ -41,7 +41,7 @@
 - `js/` — 클라이언트 JS. 최상위(app/audio-cache/manifest-sync/search-worker/drive-sync/types.d.ts) + `js/app/` 9개 도메인 모듈 (ADR-018) + `js/sync/` 5개 동기화 레이어 (ADR-011)
 - `css/style.css` — 메인 스타일
 - `data/` — **서브모듈 `common-bible-data`** 마운트 위치 (73권 JSON `bible/`, 검색 인덱스 4종 `search-{meta,ot,nt,dc}.json`, 콘텐츠 해시 매니페스트 `bible-manifest.json`·`audio-manifest.json` (ADR-021), 오디오 nested 서브모듈 `audio/`, 마크다운 원본 `source/`, Python 파이프라인 `src/`, 데이터 검증 테스트 `tests/`)
-- `scripts/` — `release.py`(version.json + sw-version.js bump + 자동 commit), `changelog.py`(릴리스 노트용 변경 목록 — 앱 git log + data 서브모듈 compare, `--generate-notes` 대체), `serve.py`(SPA-aware 로컬 서버), `generate_splash.py`(iOS 스플래시, ADR-007), `lock_merged_ledgers.sh`(머지된 원장을 로컬에서 읽기 전용으로 잠금 — `npm test` 앞·PR 생성 후 자동, 클론마다 다시)
+- `scripts/` — `release.py`(version.json + sw-version.js bump + 자동 commit), `changelog.py`(릴리스 노트용 변경 목록 — 앱 git log + data 서브모듈 compare, `--generate-notes` 대체), `serve.py`(SPA-aware 로컬 서버), `generate_splash.py`(iOS 스플래시, ADR-007), `lock_merged_ledgers.sh`(머지된 원장을 로컬에서 읽기 전용으로 잠금 — `npm test` 앞·PR 생성 후 자동, 클론마다 다시), `docs_facts_snapshot.py`(교회력 설계 문서 5종 + 보관 문서 + 픽스처의 사실 토큰을 리비전 간 비교 — 문서 리팩터링 PR 의 「사실 변경 0」 증명, `--diff main HEAD`)
 - `tests/` — e2e(`e2e/`, Playwright, 로컬 전용) + JS 유닛(`unit/`, ADR-013, CI 자동)
 - `docs/` — `architecture.md`(아키텍처 개요·ADR 인덱스), `status.md`(구현 현황 — "지금 무엇이 동작하는가"), `known-issues.md`(미해결 이슈·후속 백로그), `decisions/`(ADR), `design/`(진행 중인 구현 설계서 — 완료되면 `archive/design/` 으로 옮긴다), `reference/`(기도서 등 외부 원문 전사), `archive/`(완료·점-시점 기록 — `design/` 설계 변천 · `audit/` 보안 감사 · `qa/` e2e 회귀 보고서), `index.md`(**진입점** — 작업 유형 → 먼저 읽을 문서), `changes/`(**변경 원장** — 변경 하나에 파일 하나, PR 본문의 원본), `coding-pitfalls.md`, `prd.md`
 - `assets/` — 아이콘(`icons/`), 스플래시(`splash/`, ADR-007), 설치 안내 3컷(`install-guide/`, ADR-008)
@@ -76,7 +76,7 @@ data/source/*.md (73권, common-bible-data 서브모듈)
 
 ### 클라이언트 JS 유닛 테스트 (ADR-013)
 
-Node 자체 테스트 러너 + 자체 vm 하네스. 의존성 0, CI 자동 실행. **897 케이스 통과** (2026-09-23). 파일 명명 컨벤션: `tests/unit/<source-basename>.test.js`, 한 모듈 = 한 테스트 파일 — **예외 둘**이다(tests/README §1 과 같은 규칙). ① **실데이터 의존 케이스** — 공개 CI 의 `Unit tests` 잡이 비공개 `data/` 서브모듈을 받지 않으므로, 그 표를 읽어야 하는 케이스는 `tests/unit/<source-basename>.data.test.js` 로 갈라 `haveData` skip 가드를 달고 `engine-data.yml`·`sync-data.yml` 에서 돌린다(선례 `liturgical-engine.data.test.js`, 설계서 §7). ② **소스 모듈이 없는 테스트** — 문서·픽스처의 정합성을 보는 `docs-*.test.js` · `liturgical-fixtures.test.js`(픽스처의 관측일 id 실재는 ① 규칙대로 `liturgical-fixtures.data.test.js` 로 갈라 두 워크플로에서 돈다). 이들이 함께 쓰는 문서 앵커 추출기는 `tests/unit/docs-anchors.js` — 테스트 파일이 아니라 `harness.js` 와 같은 자리의 공용 모듈이다(`*.test.js` 글롭 밖). 내부 영역은 `// ── <영역> ──` 섹션. 상세는 ADR-013.
+Node 자체 테스트 러너 + 자체 vm 하네스. 의존성 0, CI 자동 실행. **899 케이스 통과** (2026-10-10). 파일 명명 컨벤션: `tests/unit/<source-basename>.test.js`, 한 모듈 = 한 테스트 파일 — **예외 둘**이다(tests/README §1 과 같은 규칙). ① **실데이터 의존 케이스** — 공개 CI 의 `Unit tests` 잡이 비공개 `data/` 서브모듈을 받지 않으므로, 그 표를 읽어야 하는 케이스는 `tests/unit/<source-basename>.data.test.js` 로 갈라 `haveData` skip 가드를 달고 `engine-data.yml`·`sync-data.yml` 에서 돌린다(선례 `liturgical-engine.data.test.js`, 설계서 §7). ② **소스 모듈이 없는 테스트** — 문서·픽스처의 정합성을 보는 `docs-*.test.js` · `liturgical-fixtures.test.js`(픽스처의 관측일 id 실재는 ① 규칙대로 `liturgical-fixtures.data.test.js` 로 갈라 두 워크플로에서 돈다). 이들이 함께 쓰는 문서 앵커 추출기는 `tests/unit/docs-anchors.js` — 테스트 파일이 아니라 `harness.js` 와 같은 자리의 공용 모듈이다(`*.test.js` 글롭 밖). 내부 영역은 `// ── <영역> ──` 섹션. 상세는 ADR-013.
 
 ```bash
 node --test tests/unit/*.test.js                 # 전체 (CI와 동일)
