@@ -232,7 +232,8 @@ test("설계서 §9.2 닫힘 항목은 한 줄이고 `닫힘(YYYY-MM-DD)` 을 �
   body.forEach((line, i) => {
     if (!line.trim()) return;
     if (!/^- \*\*미결\d+/.test(line)) { bad.push(`${i + 1}: 항목 줄이 아니다 — ${line.slice(0, 40)}…`); return; }
-    if (!/닫힘\(\d{4}-\d{2}-\d{2}/.test(line)) bad.push(`${i + 1}: 닫힘(날짜) 없음`);
+    // `제목 — 닫힘(YYYY-MM-DD) · ` 가 머리에 와야 한다 — 괄호 안은 날짜뿐(누가 정했는지 · 데이터 PR 같은 주석은 결론 · 근거 필드로).
+    if (!/^- \*\*미결\d+\*\* \*\*[^*]+\*\* — 닫힘\(\d{4}-\d{2}-\d{2}\) · /.test(line)) bad.push(`${i + 1}: 「제목 — 닫힘(YYYY-MM-DD) · 」 형식이 아니다 — ${line.slice(0, 60)}…`);
   });
   assert.deepEqual(bad, [], `§9.2 형식 위반:\n  ${bad.join("\n  ")}`);
 });
