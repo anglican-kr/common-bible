@@ -189,6 +189,11 @@ for (const doc of Object.keys({ ...DOCS, ...SOURCES })) {
 // ── 테스트 ──
 
 test("모든 §·미결·C/X/I/Q·R-·픽스처 참조가 실재하는 앵커를 가리킨다", (t) => {
+  // 대응표의 자리는 검토 문서 §6 이다(설계서 §1.4) — 문서 안 어디든 한 줄이면 통과하던 것을 §6 범위로 묶는다.
+  const rv = lines["검토 문서"];
+  const s6 = rv.findIndex((l) => /^## 6\. /.test(l)), s7 = rv.findIndex((l) => /^## 7\. /.test(l));
+  assert.ok(s6 >= 0 && s7 > s6, "검토 문서 §6 · §7 헤딩을 못 찾았다");
+  assert.ok(Q_DECODE_IDX > s6 && Q_DECODE_IDX < s7, `Q→미결 대응표 줄(${Q_DECODE_IDX + 1}행)이 검토 문서 §6 안에 없다`);
   assert.deepEqual([...Q_ROWS].sort(), Array.from({ length: 14 }, (_, i) => `Q${i + 1}`).sort(),
     "검토 문서 §6 의 Q→미결 대응표가 옛 Q1~Q14 를 전부 덮지 않는다");
   if (warnings.length) t.diagnostic(`한정어 없는 참조 경고 ${warnings.length}건 (첫 8):\n  ${warnings.slice(0, 8).join("\n  ")}`);
@@ -263,7 +268,9 @@ test("검토 문서 §6 은 설계서 §9.1 에서 확인 주체에 사제가 �
     if (m && /사제/.test(m[3])) want.set(Number(m[1]), m[2]);
   }
   const r = text["검토 문서"];
-  const view = r.slice(r.indexOf("\n## 6. "), r.indexOf("\n## 7. "));
+  const v6 = r.indexOf("\n## 6. "), v7 = r.indexOf("\n## 7. ");
+  assert.ok(v6 >= 0 && v7 > v6, "검토 문서 §6 · §7 헤딩을 못 찾았다");
+  const view = r.slice(v6, v7);
   const rows = [...view.matchAll(/^\| 미결(\d+) \| .+ \| (.+?) \|$/gm)].map((m) => [Number(m[1]), m[2]]);
   // Map 으로 줄이기 전에 중복을 거부한다 — 같은 미결이 두 행이면 뒤 행이 앞 행을 덮어써 상충하는 상태가 숨는다.
   const dup = rows.map(([n]) => n).filter((n, i, a) => a.indexOf(n) !== i);
