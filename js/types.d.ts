@@ -616,7 +616,8 @@ export interface Observance {
   transfer_to?: TransferTo | null;
   outranks_sunday?: boolean;
   color: LiturgicalColor | null;
-  color_alt?: LiturgicalColorAlt | null;
+  // `null | 스칼라 | 배열` 3형(ADR-036 §4 · 설계서 §5.2) — 대림 3주일은 ["rose", "blue"] 둘 다 허용한다.
+  color_alt?: CodeField<LiturgicalColorAlt>;
 }
 
 /**
@@ -651,8 +652,9 @@ export interface LiturgicalPeriod {
 /**
  * `resolveDate` 의 반환. 색 필드 셋(2026-10-10 사용자 결정 — 설계서 미결26):
  * `color` 는 그날의 대표색 하나, `colors` 는 병기 목록(책자의 [자/백] — 병기 모델에서만
- * 둘 이상), `colorAlt` 는 선택 대체색(장미색 · 청색) 전용이다. 색 판정은 B1(PR 3)이라
- * PR 2 는 `color: null` · `colorAlt: null` · `colors: []` 를 낸다.
+ * 둘 이상), `colorAlt` 는 선택 대체색(장미색 · 청색) 전용이고 데이터 `color_alt` 와 같은 3형이다
+ * (대림 3주일은 둘 다 — ["rose", "blue"]). 색 판정은 B1(PR 3)이라 PR 2 는 `color: null` ·
+ * `colorAlt: null` · `colors: []` 를 낸다.
  */
 export interface ResolvedDate {
   date: string;
@@ -661,7 +663,7 @@ export interface ResolvedDate {
   official: Candidate | null;
   periods: LiturgicalPeriod[];
   color: LiturgicalColor | null;
-  colorAlt: LiturgicalColorAlt | null;
+  colorAlt: CodeField<LiturgicalColorAlt>;
   colors: LiturgicalColor[];
 }
 

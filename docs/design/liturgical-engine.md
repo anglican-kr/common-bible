@@ -652,7 +652,7 @@ function resolveDate(dateStr) → {
   periods: Period[],           // 겹쳐 얹히는 기간 (배너용)
   color: Color | null,         // 그날의 대표색 하나 (B1 — PR 2 는 null)
   colors: Color[],             // 병기 목록 — 책자의 [자/백] (미결26 의 병기 모델에서만 둘 이상, PR 2 는 [])
-  colorAlt: "rose" | "blue" | null,   // 선택 대체색 — 데이터 color_alt 와 같은 뜻 (PR 2 는 null)
+  colorAlt: Alt | Alt[] | null, // 선택 대체색 "rose" · "blue" — 데이터 color_alt 와 같은 뜻 · 같은 3형(대림 3주일 ["rose","blue"]) (PR 2 는 null)
 }
 
 /** @typedef {{
@@ -705,7 +705,7 @@ function resolveDate(dateStr) → {
 
   **출처별 조회 경로**(PR 2 구현 — 반환은 §5.3 의 최고점 층):
 
-  | 출처 | 경로 — 앞 단계가 비면 다음 단계 |
+  | 출처 | 경로 — 앞 단계의 **최고점 층**(§5.3 — 요일 · 주기 점수를 매긴 결과)이 비면 다음 단계. 행이 있어도 층이 비면 넘어간다 |
   |---|---|
   | **격자**(`grid:`) | ① `resolved.date` 의 날짜 전용 본문 중 그날 좌표와 `type` · `season` 이 같은 것(좁히기 규칙 ① — 주일은 날짜 전용 평일 본문을 받지 않고, 성인의 축일 레코드는 `type: feast` 라 오지 않는다) ② 고유명 평일의 이름(§5.5) ③ 좌표 폴백 — 이름 · 날짜 · 음력이 없는 레코드만(§5.3) |
   | **규칙 행**(temporal) | `coord_name` · `aliases` 이름 조인 / 조인 이름이 없으면 사계재는 이름 부분문자열 + 요일(§5.4 · 미결5), 좌표를 가진 행(대림1주일)은 그 좌표로. 가정주일 · 평화통일주일은 본문이 없다 |

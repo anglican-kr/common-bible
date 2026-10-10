@@ -1150,7 +1150,8 @@ function buildLectionaryIndex(tables) {
  * - **격자**(`grid:`) — ① 물어본 날짜(`resolved.date`)의 **날짜 전용 본문**: 그날 좌표와 `type` ·
  *   `season` 이 같은 것만(좁히기 규칙 ① — 주의 세례 뒤의 성탄주간 레코드는 버린다. 성인의 축일
  *   레코드는 `type: feast` 라 여기 오지 않는다) ② **고유명 평일**의 이름(성주간 월 ~ 수 · 재의
- *   수요일 후 목 ~ 토) ③ 좌표 폴백(§5.3 — 이름 · 날짜 없는 레코드만).
+ *   수요일 후 목 ~ 토) ③ 좌표 폴백(§5.3 — 이름 · 날짜 없는 레코드만). 앞 단계의 **최고점 층**이
+ *   비어야 다음 단계로 간다 — 행이 있는지가 아니라 요일 · 주기 점수를 매긴 결과로 가른다.
  * - **규칙 행**(temporal) — `coord_name` · 별칭으로 이름 조인 / 사계재는 이름 부분문자열 + 요일
  *   (§5.4 · 미결5) / 조인 이름이 없고 좌표가 있는 행(대림1주일)은 그 좌표로.
  * - **성인력 · 음력 행** — 관측일 **자신의** `date` · `lunar`(옮겨 온 축일도 기원 날짜에 색인돼
@@ -1166,11 +1167,13 @@ function properRecords(tix, cal, resolved, obs) {
   const req = requestOf(resolved);
   const coord = resolved.coord;
   if (obs.id.startsWith(GRID_PREFIX)) {
+    // 단계마다 **점수를 매긴 뒤** 비었는지 본다 — 행이 있어도 요일 · 주기가 맞지 않아 최고점 층이
+    // 비면 다음 단계로 간다. 주기 한정 날짜 본문이 다른 해의 좌표 본문을 막으면 안 된다(2026-10-10 리뷰).
     const same = (/** @type {TextRecord} */ r) => r.type === coord.type && r.season === coord.season;
-    const dated = (tix.byDate.get(monthDayOf(resolved.date)) || []).filter(same);
-    if (dated.length) return topLayer(dated, req);
-    const named = (tix.byName.get(obs.name) || []).filter(same);
-    if (named.length) return topLayer(named, req);
+    const dated = topLayer((tix.byDate.get(monthDayOf(resolved.date)) || []).filter(same), req);
+    if (dated.length) return dated;
+    const named = topLayer((tix.byName.get(obs.name) || []).filter(same), req);
+    if (named.length) return named;
     const axes = { season: coord.season, week: coord.week, type: coord.type };
     return topLayer(tix.byCoord.get(coordKey(coord.season, coord.week, coord.type)) || [], { ...req, axes });
   }

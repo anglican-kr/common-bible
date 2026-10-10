@@ -829,7 +829,7 @@ test("C-5.5-4 periods 는 배너용 — 2026-01-20 일치 기도 주간, 후보�
   same(resolve("2027-01-03").periods.map((p) => p.id), []);
 });
 
-test("C-5.5-2 Candidate 래퍼 · status 여섯 값 · 색 필드 셋이 js/types.d.ts 에 선언돼 있다", () => {
+test("C-5.5-2 Candidate 래퍼 · status 여섯 값 · 색 필드 셋(colorAlt 는 color_alt 와 같은 3형)이 js/types.d.ts 에 선언돼 있다", () => {
   const types = fs.readFileSync(path.resolve(__dirname, "../../js/types.d.ts"), "utf8");
   const union = types.match(/export type CandidateStatus =([^;]+);/);
   assert.ok(union, "CandidateStatus");
@@ -837,8 +837,11 @@ test("C-5.5-2 Candidate 래퍼 · status 여섯 값 · 색 필드 셋이 js/type
     ["commemorated", "omitted", "optional", "proper", "transferred_in", "transferred_out"]);
   const resolved = types.match(/export interface ResolvedDate \{([^}]+)\}/);
   assert.ok(resolved, "ResolvedDate");
+  // colorAlt · color_alt 는 배열도 받는다 — 대림 3주일 본기도의 color_alt 는 ["rose", "blue"] 다(2026-10-10 리뷰)
   for (const f of ["candidates: Candidate[]", "official: Candidate | null", "color: LiturgicalColor | null",
-    "colorAlt: LiturgicalColorAlt | null", "colors: LiturgicalColor[]"]) assert.ok(resolved[1].includes(f), f);
+    "colorAlt: CodeField<LiturgicalColorAlt>;", "colors: LiturgicalColor[]"]) assert.ok(resolved[1].includes(f), f);
+  assert.match(types, /export type CodeField<T extends string> = T \| T\[\] \| null;/);
+  assert.match(types, /export interface Observance \{[^}]*color_alt\?: CodeField<LiturgicalColorAlt>;/);
   assert.match(types, /export interface Candidate \{[^}]*observance: Observance;[^}]*status: CandidateStatus;/);
 });
 
@@ -985,6 +988,22 @@ test("C-5.4-4 좁히기 규칙 ① — 날짜 전용 본문은 그날 절기와 
   // 2026-12-20 대림 4주일 — 「성탄 5일 전」(평일)이 아니라 주일 격자
   const adv4 = resolve("2026-12-20");
   same(readingIds(adv4, gridOf(adv4)), ["advent-4-sun-B"]);
+});
+
+test("§5.6 격자 경로는 단계마다 점수를 매긴 뒤 넘어간다 — 주기 한정 본문이 다른 해의 다음 단계를 막지 않는다", () => {
+  // 앞 단계에 행이 **있어도** 요일 · 주기가 맞지 않아 최고점 층이 비면 다음 단계로 간다(2026-10-10 리뷰).
+  const lix = ctx.buildLectionaryIndex({ ...LEC_TABLES, readings: { entries: [
+    REC("d1218-A-only", { kind: "sanctoral", season: "advent", type: "weekday", date: "12.18", name: "성탄 7일 전", year: "A" }),
+    REC("advent-3-fri", { season: "advent", week: 3, type: "weekday", weekday: "fri" }),
+    REC("advent-3-thu", { season: "advent", week: 3, type: "weekday", weekday: "thu" }),
+    REC("holy-mon-A-only", { season: "lent", type: "weekday", weekday: "mon", name: "성주간 월요일", year: "A" }),
+    REC("lent-x-weekday", { season: "lent", type: "weekday" }),
+  ] } });
+  const ids = (d) => { const r = resolve(d); return ctx.findReadingsIn(lix, CAL, r, gridOf(r)).map((g) => g.id); };
+  same(ids("2025-12-18"), ["d1218-A-only"]);   // 가해 — ① 날짜 전용 본문이 이긴다
+  same(ids("2026-12-18"), ["advent-3-fri"]);   // 나해 — ① 의 층이 비어 ③ 좌표로
+  same(ids("2026-03-30"), ["holy-mon-A-only"]); // 가해 — ② 고유명 평일
+  same(ids("2027-03-22"), ["lent-x-weekday"]);  // 나해 — ② 의 층이 비어 ③ 좌표로
 });
 
 test("C-5.6-6 날짜 선택 순서 — grid: 는 resolved.date, 그 밖은 관측일 자신의 date (키의 존재가 아니라 출처)", () => {
