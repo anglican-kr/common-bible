@@ -93,6 +93,9 @@ function measure() {
     "temporal.easter_offset": ruleKind("easter_offset"),
     "temporal.ember_wfs": ruleKind("ember_wfs"),
     "temporal.rule_null": count(t.entries, (e) => !e.rule),
+    // 승자 자격 판정의 두 집합(설계서 §6.1 · R-6.1-ineligible) — 산문이 「다섯 행」 식으로 되풀이하던 수
+    "temporal.precedence_null": count(t.entries, (e) => e.precedence === null),
+    "temporal.commemoration": count(t.entries, (e) => e.rank === "commemoration"),
     "commons.classes": Object.keys(cm.classes).length,
     "commons.reading_sets": Object.values(cm.classes).reduce(
       (n, c) => n + (c.readings?.length ?? 0),
