@@ -267,7 +267,9 @@ test("검토 문서 §6 은 설계서 §9.1 에서 확인 주체에 사제가 �
   assert.ok(want.size >= 1, "설계서 §9.1 에서 확인 주체가 사제인 항목을 못 찾았다 — 필드 문법이 바뀌었나");
   assert.deepEqual([...got.keys()].sort((a, b) => a - b), [...want.keys()].sort((a, b) => a - b),
     "검토 문서 §6 표의 미결 목록이 설계서 §9.1 의 「확인 주체: …사제…」 항목과 다르다");
-  const bad = [...want].filter(([n, s]) => !got.get(n)?.startsWith(s)).map(([n, s]) => `미결${n}: §9.1 「${s}」 vs §6 「${got.get(n)}」`);
+  // 첫 낱말은 양쪽 모두 같은 구분자(공백 · `·` · `(`)로 자른다 — startsWith 면 「잠정」 정본에 「잠정오류」 뷰도 통과한다.
+  const first = (s) => /^([^ ·(]+)/.exec(s)?.[1];
+  const bad = [...want].filter(([n, s]) => first(got.get(n) ?? "") !== s).map(([n, s]) => `미결${n}: §9.1 「${s}」 vs §6 「${got.get(n)}」`);
   assert.deepEqual(bad, [], "상태의 첫 낱말이 다르다");
 });
 
