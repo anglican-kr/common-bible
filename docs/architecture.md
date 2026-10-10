@@ -119,7 +119,7 @@ src/search_indexer.py     ← 절 단위 인덱스를 구약/신약/외경으로
 
 ## 4. 런타임 — 클라이언트 모듈 지도
 
-런타임은 37개의 자바스크립트 파일로 분산되어 있다 — 메인 스레드 36개 + Web Worker 1개(`search-worker.js`). `js/types.d.ts`는 TypeScript 컴파일러 전용이라 런타임 카운트에서 제외.
+런타임은 38개의 자바스크립트 파일로 분산되어 있다 — 메인 스레드 37개(`index.html` 의 `<script>` 32 + `import` 전용 `bookmark-*` 5) + Web Worker 1개(`search-worker.js`). `js/types.d.ts`는 TypeScript 컴파일러 전용이라 런타임 카운트에서 제외.
 
 ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` ~6,000줄이 8개 도메인 모듈로 쪼개졌고, 잔류 `app.js`는 부트스트랩 + Service Worker 등록 정도만 남았다. 자세한 분할 결과는 [`docs/archive/design/app-modularization.md`](archive/design/app-modularization.md). 이어서 ADR-019(2026-05-09)로 모듈 시스템을 **ESM 일괄 채택**. 이후 ADR-022(인용·주석)·ADR-027·ADR-030~ADR-035가 모듈을 더했고, ADR-034 2차 분할과 그 후속 `bookmark.js` 분할이 비대 모듈을 갈라 현재 `js/app/` 도메인 모듈은 **26개**다(교회력 엔진 `liturgical-engine.js` 포함).
 
