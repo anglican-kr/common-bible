@@ -1,4 +1,5 @@
 ---
+pr: 343
 date: 2026-10-11
 branch: feat/liturgical-engine-b1-transfers
 title: "feat: 교회력 엔진 B1 이동 패스 · 선택 봉헌 — computeTransfers · seed · activated · 픽스처 소비 · 불변식 · 골든 (ADR-037 §6 · PR 3 둘째)"

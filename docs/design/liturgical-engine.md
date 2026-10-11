@@ -4,7 +4,7 @@
 > 시점 고정 결정 기록은 ADR-036(데이터 모델·우선순위·전례색) · ADR-037(독서 데이터·엔진 명세) · ADR-038(캘린더·독서 뷰 UI).
 
 - 작성: 2026-08-08
-- 상태: **A1-a 계산 계층 구현(PR 1 · #325) · A1-b 조회 계층 구현(PR 2 · #338) · B1 품계 · 승자 · 전례색 · 재일 구현(PR 3 첫째 · #341) · B1 이동 패스 · 선택 봉헌 구현(PR 3 둘째 · #TBD) — A1 · B1 구현 완료.** 남은 것은 §9 의 열린 물음과 엔진을 소비하는 UI(ADR-038)다
+- 상태: **A1-a 계산 계층 구현(PR 1 · #325) · A1-b 조회 계층 구현(PR 2 · #338) · B1 품계 · 승자 · 전례색 · 재일 구현(PR 3 첫째 · #341) · B1 이동 패스 · 선택 봉헌 구현(PR 3 둘째 · #343) — A1 · B1 구현 완료.** 남은 것은 §9 의 열린 물음과 엔진을 소비하는 UI(ADR-038)다
 - 구현 대상: `js/app/liturgical-engine.js`(leaf) · `js/types.d.ts`(공유 타입) · `tests/unit/liturgical-engine.test.js`(합성 표) · `tests/unit/liturgical-engine.data.test.js`(실데이터 — §7)
 - 관련 ADR: ADR-036(교회력 데이터 모델 — 좌표·품계·이동·전례색의 권위 출처), ADR-037 §6(엔진 명세 — 본 설계의 상위 문서), ADR-038(엔진을 소비하는 UI), ADR-039(전례시편 `lps`), ADR-013(유닛 테스트 하네스), ADR-012(JSDoc 타입), ADR-018·019·034(모듈 계층·ESM), ADR-021(캐시 무효화), ADR-035(절 부분집합 렌더)
 - 기도서 원문 전사: [`docs/reference/liturgical-calendar-rules.md`](../reference/liturgical-calendar-rules.md)
@@ -418,7 +418,7 @@ const transferCache = new Map();   // §6.5 이동 패스 — 항목은 언제�
 
 캘린더 월간 뷰가 42칸을 그리며 `resolveDate` 를 42번 불러도 computus 는 **최대 세 번** 돈다 — 한 해 `Y` 의 완전한 패스가 seed 를 위해 `Y−1` 앵커를 요구하고(§6.5 연도 경계), 42칸이 `Y`·`Y+1` 을 걸치면 `Y−1`·`Y`·`Y+1` 이다. 한 해만 걸리면 두 번. **다음 해 좌석이 지연 계산이라 이 셈이 유지된다**: 현재 표에서는 12월 이동이 해를 넘기지 않으므로 `nextYearSeats` 가 앵커를 요구하는 일이 없다. 표가 바뀌어 `Y+1` 패스의 12월 이동이 실제로 해를 넘기면 그 해만 `Y+2` 앵커가 더 필요해 **네 번**이 된다 — 드물고, 캐시되므로 한 번뿐이다. `anchorCache` 는 순수 파생값이라 무효화가 필요 없다. `transferCache` 는 선택 봉헌 활성화 집합(§6.2 `activated`)에 의존하는 **유일한** 입력이 있어, 그 설정이 바뀌면 통째로 비운다(엔진 `setActivatedOptionals` — 집합이 실제로 바뀔 때만). **본당 설정은 패스의 입력이 아니다** — 본당 축일(주보성인 축일 · 성당축성일 전부, ADR-036 B2 지역 축일)은 기념일과 같은 성격이라 축일 이동에 영향을 주지 않는다(사용자 확정 2026-10-11 — 이유와 버린 갈래는 ADR-036 「성인력 보완 영역」(1) · 「검토한 대안 — 성당축성일 · 영명축일의 품계」). 그래서 본당을 바꿔도 캐시를 비울 일이 없다.
 
-`transferCache` 의 항목은 §6.5 이동 패스의 결과다 — 그해 안에서 옮겨간 축일이 **어디에 도착했고 어디서 떠났는지**의 색인. PR 2 까지는 빈 패스였고 PR 3 둘째(#TBD)가 채웠다(§8). `Y` 의 항목은 `Y−1` 12월에서 넘어온 spill 을 seed 로 받아 만든다(§6.5 연도 경계). 그 seed 를 얻기 위한 `Y−1` 의 **seed 없는 임시 패스는 `transferCache` 에 넣지 않는다** — `Y−1` 항목이 따로 필요해지면 그때 `Y−2` spill 로 완전하게 만든다. 임시 패스가 쓰는 `Y−1` 앵커는 `anchorCache` 에 남아도 된다. 패스는 표에 의존하므로 프리로드가 캘린더 인덱스를 새로 세우면 `transferCache` 를 비운다.
+`transferCache` 의 항목은 §6.5 이동 패스의 결과다 — 그해 안에서 옮겨간 축일이 **어디에 도착했고 어디서 떠났는지**의 색인. PR 2 까지는 빈 패스였고 PR 3 둘째(#343)가 채웠다(§8). `Y` 의 항목은 `Y−1` 12월에서 넘어온 spill 을 seed 로 받아 만든다(§6.5 연도 경계). 그 seed 를 얻기 위한 `Y−1` 의 **seed 없는 임시 패스는 `transferCache` 에 넣지 않는다** — `Y−1` 항목이 따로 필요해지면 그때 `Y−2` spill 로 완전하게 만든다. 임시 패스가 쓰는 `Y−1` 앵커는 `anchorCache` 에 남아도 된다. 패스는 표에 의존하므로 프리로드가 캘린더 인덱스를 새로 세우면 `transferCache` 를 비운다.
 
 **규칙 파생 관측일의 날짜는 `anchorCache` 에 두지 않는다.** 그해 temporal 규칙을 평가한 「날짜 → 행」 색인은 표(`temporal-feasts`)에 의존하므로 순수 파생값이 아니다 — 캘린더 인덱스에 연도 메모로 붙인다(`movableOf(index, y)`, §5.4 권장 인덱스 2). `anchorCache` 는 데이터 없이 연도만으로 정해지는 앵커만 담아 어느 경로로 채워도 되는 성질을 지킨다. 규칙 일곱 종류는 전부 자기 달력년 안에 떨어지므로(사계재 12.13 앵커 → 늦어도 12.23 · 1.6 이후 첫 주일 → 늦어도 1.13) 한 해의 메모가 그 해 날짜를 다 덮는다 — 실데이터 테스트가 1900~2100 에서 단언한다.
 
@@ -954,7 +954,7 @@ const EMPTY_PASS = () => ({ arrivals: new Map(), departures: new Map(), optional
 
 **선택 봉헌**(§6.2)은 날짜 루프 **전에** 0단계로 한 해 전체를 선색인한다 — 순위에 의존하지 않고, `nearby_sunday` 의 목적지는 기원보다 **앞**일 수 있어(2028 주의 봉헌 2.2 → 1.30) 루프 안에서 처리하면 목적지를 이미 지나친 뒤다. 꺼진 것은 **별도 색인 `optionals`** 에 얹고 원래 날짜의 고유 후보를 옮기지 않는다 — 목적지 주일에 `status: "optional"` 을 **더한다**. `arrivals` 에 섞지 않는 이유: 도착·출발 색인은 「출발 수 = 도착 수 − seed 도착 수」·「도착은 그 날의 승자」 불변식(I-1 · I-2)을 지는데, 선택 봉헌은 출발이 없고 승자도 아니라 섞이면 그 불변식이 매년(승천) 깨진다. `isFree` 는 `optionals` 를 보지 않는다(설정이 켜기 전에는 좌석을 차지하지 않는다).
 
-**패스가 B1 소속인 이유와 PR 2 의 몫.** 패스는 승자 판정과 같은 순위(`rankCandidates` — 정렬 키 `compareCandidates`)와 같은 「밀렸다」 판정(`displacerOf`)을 쓰므로 품계 비교(§6.1)가 있어야 돌아간다 — PR 3 이다. 그러나 `resolveDate` 의 반환 형태(`Candidate[]`·`official`)와 ⑤ 조회 경로는 PR 2 가 만든다. PR 2 의 `transfers` 는 `EMPTY_PASS()` — **네 필드를 모두 갖는** 빈 패스(`arrivals`·`departures`·`optionals` 빈 Map, `defects` 빈 배열)이고 모든 후보가 `proper` 다. §5.5 가 `optionals` 까지 읽으므로 둘만 만들면 PR 2 에서 `undefined` 접근이 난다. 이렇게 갈라야 PR 2 의 뷰·테스트가 PR 3 에서 형태 변경 없이 그대로 산다. **PR 3 은 GitHub PR 둘로 냈다**(2026-10-10 사용자 결정) — 첫째(#341)가 품계 · 승자 · 재분류 · 전례색 · 재일을 이 빈 패스 위에 세우고, 둘째(#TBD)가 패스를 채웠다. 승자 · 재분류는 패스를 읽기만 하므로(도착은 사다리 첫 칸에 서고, 떠난 것과 선택 봉헌은 순위에 들지 않는다) 둘째도 반환 형태를 바꾸지 않았다.
+**패스가 B1 소속인 이유와 PR 2 의 몫.** 패스는 승자 판정과 같은 순위(`rankCandidates` — 정렬 키 `compareCandidates`)와 같은 「밀렸다」 판정(`displacerOf`)을 쓰므로 품계 비교(§6.1)가 있어야 돌아간다 — PR 3 이다. 그러나 `resolveDate` 의 반환 형태(`Candidate[]`·`official`)와 ⑤ 조회 경로는 PR 2 가 만든다. PR 2 의 `transfers` 는 `EMPTY_PASS()` — **네 필드를 모두 갖는** 빈 패스(`arrivals`·`departures`·`optionals` 빈 Map, `defects` 빈 배열)이고 모든 후보가 `proper` 다. §5.5 가 `optionals` 까지 읽으므로 둘만 만들면 PR 2 에서 `undefined` 접근이 난다. 이렇게 갈라야 PR 2 의 뷰·테스트가 PR 3 에서 형태 변경 없이 그대로 산다. **PR 3 은 GitHub PR 둘로 냈다**(2026-10-10 사용자 결정) — 첫째(#341)가 품계 · 승자 · 재분류 · 전례색 · 재일을 이 빈 패스 위에 세우고, 둘째(#343)가 패스를 채웠다. 승자 · 재분류는 패스를 읽기만 하므로(도착은 사다리 첫 칸에 서고, 떠난 것과 선택 봉헌은 순위에 들지 않는다) 둘째도 반환 형태를 바꾸지 않았다.
 
 ---
 
@@ -1013,7 +1013,7 @@ e2e 는 A1 단독으로는 붙일 화면이 없다 — ADR-038 A3 독서 뷰 PR 
 | **0** | `sw.js` `cacheNameFor` 에 `/data/lectionary/` → `DATA_CACHE` 한 줄(ADR-037 §7 미이행분) — **완료 #319 (2026-09-01)** | 아주 작음 |
 | **1** | A1-a 계산 계층 + `LITURGICAL_CORE` 블록 + 유닛 — **완료 #325 (2026-09-13)** | 중 |
 | **2** | A1-b 조회 계층 + `LITURGICAL_LOOKUP` 블록 + 프리로드·캐시 + 유닛. `js/types.d.ts` 공유 타입 신설(`Candidate` 포함), `index.html`·`sw.js` 등록. `resolveDate` 는 `Candidate[]`·`official: null`·**빈 `transfers`** 로 낸다(§6.5 마지막 단락) — **완료 #338 (2026-10-10)** — 프리로드 · 공개 래퍼는 `LITURGICAL_PRELOAD` 블록(§3.3) | 중 |
-| **3** | B1 품계·전례색 + **이동 패스(§6.5)** + 선택 봉헌 `optional` + 유닛 §7 「이동 패스」행 + **§7 픽스처 소비** — `liturgical-engine.data.test.js` 가 `tests/fixtures/liturgical/` 세 파일을 읽어 `skip` 아닌 케이스마다 `resolveDate` 결과에 `expect` 를 부분집합 비교(README 「소비 방법」). **GitHub PR 둘로 낸다**(2026-10-10 사용자 결정): 첫째 #341 — 품계 · 승자 · 재분류 · 전례색 · 재일(`fastOf`) + `winners.cases.json` 소비(이동이 필요한 두 케이스 제외); 둘째 #TBD — 이동 패스 · 선택 봉헌 · `activated` + `transfers` · `optionals` 소비 · 1900~2100 불변식 · 골든 덤프 — **완료 #341 · #TBD (2026-10-11)** | 중 |
+| **3** | B1 품계·전례색 + **이동 패스(§6.5)** + 선택 봉헌 `optional` + 유닛 §7 「이동 패스」행 + **§7 픽스처 소비** — `liturgical-engine.data.test.js` 가 `tests/fixtures/liturgical/` 세 파일을 읽어 `skip` 아닌 케이스마다 `resolveDate` 결과에 `expect` 를 부분집합 비교(README 「소비 방법」). **GitHub PR 둘로 낸다**(2026-10-10 사용자 결정): 첫째 #341 — 품계 · 승자 · 재분류 · 전례색 · 재일(`fastOf`) + `winners.cases.json` 소비(이동이 필요한 두 케이스 제외); 둘째 #343 — 이동 패스 · 선택 봉헌 · `activated` + `transfers` · `optionals` 소비 · 1900~2100 불변식 · 골든 덤프 — **완료 #341 · #343 (2026-10-11)** | 중 |
 | 이후 | ADR-038 A3 독서 뷰 → A2 캘린더 탭 → A4 검색 이원화 | — |
 
 각 PR 에서 `npm run typecheck` 와 `node --test tests/unit/*.test.js` 를 돌리고(실데이터 케이스를 만든 PR 은 `liturgical-engine.data.test.js` 를 `sync-data.yml` 에 함께 등록한다 — §7), 머지 시 ADR-037 상태 · `docs/status.md` · `docs/architecture.md` §4 모듈 표를 함께 갱신한다.
