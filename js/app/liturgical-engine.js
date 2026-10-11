@@ -1069,8 +1069,10 @@ const GUARD_ID = GUARD_PREFIX + "easter-octave";
 
 /**
  * 보호 기간(성지주일 ~ 부활 2주일 — `spansOf().transferGuard`, §4.10)의 가상 점유자. 그 안의 날에는
- * 유효 precedence 1 · `transferable: false` 인 합성 후보 하나, 밖의 날에는 빈 배열이다. 순위에만 들어가고
- * 그날의 후보(§5.5 출처 ①~⑤)로는 내지 않는다 — 뷰에 보이지 않는다(→ R-6.3-holy-week-guard).
+ * 유효 precedence 1 · `transferable: false` 인 합성 후보 하나, 밖의 날에는 빈 배열이다. 승자 · 재분류
+ * (`settle`)의 순위에만 들어가 그 기간의 prec 7 축일을 생략시킨다 — 이동 패스는 보지 않는다(주요축일은
+ * 그날 지키고 그날의 대축일 · 주일에 질 때만 옮긴다, → R-6.3-holy-week-guard). 그날의 후보(§5.5 출처
+ * ①~⑤)로는 내지 않는다 — 뷰에 보이지 않는다.
  * @param {string} dateStr
  * @returns {Candidate[]}
  */
@@ -1159,7 +1161,8 @@ function variesByYear(c) {
 
 /**
  * `c` 를 **밀어낸 것** — 순위에서 `c` 보다 앞서고, 둘 중 어느 한쪽이라도 겹침이 해마다 달라지는 후보
- * 가운데 **실제 후보를 우선**한 최상위, 실제 후보가 없을 때만 guard 다(§6.5 `displacer`). 앞선 것이 전부
+ * 가운데 **실제 후보를 우선**한 최상위, 실제 후보가 없을 때만 guard 다(§6.5 `displacer` — guard 는 `settle`
+ * 의 순위에만 있다). 앞선 것이 전부
  * 고정일이면 null — 매년 같은 날에 함께 오는 **동시 봉헌**이라 진 쪽도 밀린 것이 아니다(9.29 설립
  * 기념일 · 8.15 광복절 — §6.5 · 미결18). 같은 값의 도착이 고유 후보를 앞서는 것(→ R-6.2-chain-model)과
  * 규칙일이 고정일을 앞서는 것(→ R-6.2-rule-day-stays)은 순위가 이미 담고 있다.
@@ -1187,7 +1190,9 @@ function displacerOf(ranked, c, staying) {
  * 떠난 것과 선택 봉헌은 순위에 들지 않는다)와 보호 기간의 guard 를 순위대로 세우고, 밀린(`displacerOf`)
  * 고유 후보 가운데
  *  - prec 7 **축일**(`minor_feast` · `transferable` 아님)은 `omitted`(→ R-6.1-prec7-omit — guard 도 밀어낸다:
- *    성주간 · 부활 8일의 prec 7 은 생략, → R-6.3-holy-week-guard),
+ *    성주간 · 부활 8일의 prec 7 은 생략, → R-6.3-holy-week-guard). `transferable` 인 축일 셋도 guard 에만
+ *    밀렸으면 `omitted` 다 — 이동 패스가 guard 를 보지 않아 옮기지 않았기 때문이다(그 셋의 날짜는 보호
+ *    기간에 들지 않아 실데이터에는 없다),
  *  - `commemorate_only`(추수감사주일)는 `commemorated` — 둘 다 `displacedBy` 를 싣는다.
  * 나머지는 그대로다 — 격자, 지향 · 이름 줄, `precedence: null`, `transferable: false` 인 상위 축일, 동시
  * 봉헌에서 진 쪽, 이동 상한을 넘겨 옮기지 못한 축일(`defects` — §6.5). 옮겨진 축일은 이동 패스가 이미
@@ -1207,11 +1212,15 @@ function settle(dateStr, cands) {
   for (const c of staying) {
     if (c.status !== "proper") continue;   // 도착은 다시 밀리지 않는다(→ R-6.2-first-come)
     const o = c.observance;
-    const omit = o.rank === "minor_feast" && o.transferable !== true;
+    const minor = o.rank === "minor_feast";
     const commemorate = o.transfer_to === "commemorate_only";
-    if (!omit && !commemorate) continue;
+    if (!minor && !commemorate) continue;
     const by = displacerOf(ranked, c);
-    if (by) reclassified.set(c, { observance: o, status: omit ? "omitted" : "commemorated", displacedBy: by.observance.id });
+    if (!by) continue;
+    // 옮길 수 있는 축일이 proper 로 남았으면 패스가 옮기지 않은 것이다 — guard 에만 밀렸으면 생략, 실제 후보에
+    // 밀렸는데 남았으면 이동 상한(`defects`)이라 그대로 둔다
+    const omit = minor && (o.transferable !== true || by.observance.id.startsWith(GUARD_PREFIX));
+    if (omit || commemorate) reclassified.set(c, { observance: o, status: omit ? "omitted" : "commemorated", displacedBy: by.observance.id });
   }
   const after = (/** @type {Candidate} */ c) => reclassified.get(c) || c;
   const official = ranked.map(after).find((c) =>
@@ -1223,7 +1232,7 @@ function settle(dateStr, cands) {
 
 // ── §6.2 · §6.5 이동 패스 (B1) ──
 
-/** 이동 상한(날, §6.5) — 실측 최장 15(수태고지 3.25 성지주일 → 4.9). 넘으면 옮기지 않고 `defects` 에 적는다. */
+/** 이동 상한(날, §6.5) — 실측 최장 4(수태고지 3.25 성 목요일 → 부활 월요일). 넘으면 옮기지 않고 `defects` 에 적는다. */
 const MAX_SHIFT = 30;
 
 /** 선택 봉헌 목적지 — `transfer_to` 여섯 값 가운데 충돌 이동이 아닌 넷(→ R-6.2-destinations). */
@@ -1308,15 +1317,17 @@ function movesOnConflict(o) {
  * 해를 깐다. 켜진 것은 실제로 옮기고(원래 날짜 `transferred_out` · 목적지 `transferred_in` — 밀린 것이 아니라
  * 택한 것이라 `displacedBy` 가 없다), 꺼진 것은 목적지 주일에 `optional` 로만 얹는다(§6.2 활성화 계약).
  *
- * **1단계 — 날짜 순 충돌 이동.** 그날의 후보(고유 관측일 — 켜진 선택 봉헌의 출발은 뺀다 — · 격자 · 도착 ·
- * guard)를 승자 판정과 같은 순위(`rankCandidates`)로 세우고, 옮길 수 있는 고유 후보가 밀렸으면(`displacerOf`
- * — `settle` 의 「밀렸다」와 같은 판정) 다음 빈 날로 보낸다. 떠난 것은 그날의 남은 패자를 밀지 못한다
- * (`staying`). 도착은 다시 옮기지 않는다(→ R-6.2-first-come). 이동이 `MAX_SHIFT` 를 넘으면 옮기지 않고
- * `defects` 에 적는다 — 그 축일은 기원 날짜에 `proper` 로 남는다.
+ * **1단계 — 날짜 순 충돌 이동.** 그날의 후보(고유 관측일 — 켜진 선택 봉헌의 출발은 뺀다 — · 격자 · 도착)를
+ * 승자 판정과 같은 순위(`rankCandidates`)로 세우고, 옮길 수 있는 고유 후보가 밀렸으면(`displacerOf` —
+ * `settle` 의 「밀렸다」와 같은 판정) 다음 빈 날로 보낸다. 보호 기간의 guard 는 여기 넣지 않는다 — 성주간 ·
+ * 부활 8일의 주요축일은 그날 지키고 그날의 대축일 · 주일(실제 후보)에 질 때만 옮긴다(→ R-6.3-holy-week-guard).
+ * 떠난 것은 그날의 남은 패자를 밀지 못한다(`staying`). 도착은 다시 옮기지 않는다(→ R-6.2-first-come). 이동이
+ * `MAX_SHIFT` 를 넘으면 옮기지 않고 `defects` 에 적는다 — 그 축일은 기원 날짜에 `proper` 로 남는다.
  *
- * 빈 날은 「`c` 보다 높은 고유 후보 · guard 가 없고(같은 값은 `c` 가 민다 — → R-6.2-chain-model), 도착한
- * 후보가 없다(품계 무관 — → R-6.2-first-come)」이다. 해를 넘긴 날짜에서는 이 패스가 이미 그리로 넘긴 도착과
- * 다음 해 좌석(`nextYearSeats`)을 **함께** 본다 — 한쪽만 보면 12월 축일 둘이 같은 1월 날에 앉는다.
+ * 빈 날은 「`c` 보다 높은 고유 후보가 없고(같은 값은 `c` 가 민다 — → R-6.2-chain-model), 도착한 후보가
+ * 없다(품계 무관 — → R-6.2-first-come)」이다 — 보호 기간은 막지 않는다. 해를 넘긴 날짜에서는 이 패스가
+ * 이미 그리로 넘긴 도착과 다음 해 좌석(`nextYearSeats`)을 **함께** 본다 — 한쪽만 보면 12월 축일 둘이 같은
+ * 1월 날에 앉는다.
  *
  * 순수 함수다 — 본당 설정을 보지 않고(지역 축일은 이동에 영향을 주지 않는다 — §4.9), `seed`(전년도 패스가
  * 넘긴 도착)의 배열은 복제해서 쓰며 인자를 바꾸지 않는다.
@@ -1361,20 +1372,21 @@ function computeTransfers(index, year, seed, activated) {
     const next = dest.startsWith(head) ? null : (seats ??= nextYearSeats(index, year, activated));
     // 도착이 하나라도 있으면 품계와 무관하게 찬 날(→ R-6.2-first-come)
     if ((arrivals.get(dest) || []).length || (next && (next.nextArrivals.get(dest) || []).length)) return false;
-    // 그날의 고유 후보 · guard 가운데 c 보다 높은 것이 없다 — 같은 값은 c 가 민다(→ R-6.2-chain-model)
+    // 그날의 고유 후보 가운데 c 보다 높은 것이 없다 — 같은 값은 c 가 민다(→ R-6.2-chain-model). 보호 기간은
+    // 막지 않는다 — 성 금요일 · 부활대축일 같은 실제 후보가 막고, 성 토요일은 부활밤(prec 1)이 막는다
     const mine = effectivePrecedence(c.observance);
-    const rivals = [...ownAt(dest, next ? next.nextDepartures : departures), ...guardCandidates(dest)];
-    return !rivals.some((w) => effectivePrecedence(w.observance) < mine);
+    return !ownAt(dest, next ? next.nextDepartures : departures).some((w) => effectivePrecedence(w.observance) < mine);
   };
 
   // ── 1단계: 충돌 이동 — 1.1 → 12.31 날짜 순. next_day 는 앞으로만 가므로 d 에 이르면 arrivals.get(d) 는 완성돼 있다
   for (let d = toKey(year, 1, 1); d.startsWith(head); d = shift(d, 1)) {
     // 옮길 수 있는 고유 관측일이 없는 날은 출발이 생기지 않는다(도착은 다시 옮기지 않는다) — 순위를 세우지 않는다
     if (!ownObservancesOn(index, d).some(movesOnConflict)) continue;
-    const ranked = rankCandidates([...ownAt(d, departures), ...(arrivals.get(d) || []), ...guardCandidates(d)]);
+    // guard 는 넣지 않는다 — 보호 기간이 주요축일을 밀지 않는다(→ R-6.3-holy-week-guard)
+    const ranked = rankCandidates([...ownAt(d, departures), ...(arrivals.get(d) || [])]);
     const staying = new Set(ranked);   // 떠난 것은 남은 패자를 밀어낼 수 없다
     for (const c of ranked.slice(1)) {   // 순위 순 — 같은 기원이면 정렬 키 순으로 먼저 앉는다(→ R-6.2-first-come)
-      if (c.status !== "proper" || !movesOnConflict(c.observance)) continue;   // 도착 · 격자 · guard 는 옮기지 않는다
+      if (c.status !== "proper" || !movesOnConflict(c.observance)) continue;   // 도착 · 격자는 옮기지 않는다
       const by = displacerOf(ranked, c, staying);
       if (!by) continue;   // 앞선 것이 전부 고정일이면 동시 봉헌 — 충돌이 아니다
       let dest = shift(d, 1);
@@ -1398,8 +1410,10 @@ function isEmber(/** @type {Observance} */ obs) {
 
 /**
  * 그날의 색(→ R-6.4-color-order): 절기 기본색(격자 관측일의 색)을 깔고 → 승자 관측일의 색이 덮고 →
- * 성주간 · 부활 8일(`holyWeek` ∪ `easterOctave`, §4.10)에는 승자가 덮지 못한다(E−1 은 승자가 부활밤이어도
- * 홍 — 미결20). 승자의 색이 비었으면(추수감사주일) 바탕이 남는다. 사계재 날은 **자**다(→ R-6.4-ember-color):
+ * 성주간 · 부활 8일(`holyWeek` ∪ `easterOctave`, §4.10)에는 temporal 승자가 덮지 못한다(E−1 은 승자가
+ * 부활밤이어도 홍 — 미결20). 그날 지키는 성인력 축일(주요축일 — 제자리든 도착이든)이 이기면 그 축일 색이다
+ * (→ R-6.3-holy-week-guard — 그 기간의 prec 7 축일은 생략되어 승자가 되지 않는다). 승자의 색이 비었으면
+ * (추수감사주일) 바탕이 남는다. 사계재 날은 **자**다(→ R-6.4-ember-color):
  * 바탕이 남으면(승자가 격자) 그날 색이 자이고, 축일이 덮으면 그 색이 대표로 남고 `colors` 에 자를 앞세워
  * 병기한다(책자의 [자/백] 순). `colors` 는 병기 목록이라 병기가 없는 날은 `[color]` 다. `omitted` ·
  * `commemorated` 후보와 기념일은 색에 기여하지 않는다.
@@ -1407,7 +1421,8 @@ function isEmber(/** @type {Observance} */ obs) {
  * @returns {{color: LiturgicalColor | null, colorAlt: import("../types").CodeField<LiturgicalColorAlt>, colors: LiturgicalColor[]}}
  */
 function dayColorsOf(dateStr, grid, official, cands) {
-  const guarded = inSpan(dateStr, "holyWeek") || inSpan(dateStr, "easterOctave");
+  const guarded = (inSpan(dateStr, "holyWeek") || inSpan(dateStr, "easterOctave"))
+    && !(official && official.observance.kind === "sanctoral");
   const top = official && official.observance.color && !guarded ? official.observance : grid.observance;
   const color = top.color;
   const colorAlt = top.color_alt ?? null;

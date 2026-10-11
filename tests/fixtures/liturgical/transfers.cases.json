@@ -183,88 +183,106 @@
       "id": "T-2025-04-28-mark",
       "kind": "transfer",
       "group": "③",
-      "title": "마르코 4.25(부활 1주 금) → 4.28 — 부활 8일 보호",
+      "title": "마르코 4.25(부활 1주 금) — 그날 지킨다, 보호 기간이 밀지 않는다(축일 색 홍)",
       "status": "confirmed",
-      "canon": ["R-6.5-year-pass"],
-      "checks": ["C-6.5-5", "X-2"],
-      "source": ["lectionarypage 2025"],
+      "canon": ["R-6.3-holy-week-guard", "R-6.4-color-order"],
+      "checks": ["C-6.5-5", "C-6.4-2", "X-11"],
+      "source": ["2025 책자 p.26 — 4.25 [홍] 「성 마르코 (복음사가)」 고유 독서만", "사용자 결정 2026-10-11 — 책자대로"],
+      "note": "id 의 4.28 은 옛 규칙(보호 기간 뒤로 이동 — lectionarypage 2025)의 목적지다. 첫 단언이 그 자리에 없음을 지킨다.",
       "assertions": [
-        { "date": "2025-04-28", "expect": { "id": "d0425-성-마르코", "status": "transferred_in", "from": "2025-04-25", "displacedBy": "guard:easter-octave" } },
-        { "date": "2025-04-25", "expect": { "id": "d0425-성-마르코", "status": "transferred_out", "to": "2025-04-28", "displacedBy": "guard:easter-octave" } }
+        { "date": "2025-04-28", "expect": { "id": "d0425-성-마르코", "absent": true } },
+        { "date": "2025-04-25", "expect": { "id": "d0425-성-마르코", "status": "proper" } },
+        { "date": "2025-04-25", "expect": { "official": "d0425-성-마르코", "color": "red" } }
       ]
     },
     {
       "id": "T-2027-04-05-annunciation-maundy-thursday",
       "kind": "transfer",
       "group": "③",
-      "title": "수태고지 3.25 = 성 목요일 → 4.5 — 성 토요일 rank: null 을 guard 가 막는다",
-      "status": "confirmed",
-      "canon": ["R-6.5-year-pass"],
-      "checks": ["C-6.5-6", "X-2"],
-      "source": ["lectionarypage 2027"],
+      "title": "수태고지 3.25 = 성 목요일 → 3.29 부활 월요일 — 다음 빈 날(성 금요일 · 부활밤이 있는 성 토요일 · 부활대축일을 건너뛴다)",
+      "status": "provisional",
+      "issue": "미결32",
+      "canon": ["R-6.3-holy-week-guard", "R-6.5-year-pass"],
+      "checks": ["C-6.5-6", "C-6.5-8", "I-5"],
+      "source": ["사용자 결정 2026-10-11 — 「주일과 겹치면 월요일로」, 「부활 8일 뒤」 개념은 우리 전례독서에 없다 · 2027 책자로 다시 확인(미결32)"],
+      "alsoYears": [2032],
+      "note": "id 의 4.5 는 옛 규칙(부활 2주일 뒤 — lectionarypage 2027)의 목적지다. 3.27 은 부활밤(prec 1)이 막는다 — 성 토요일 행은 rank: null 이라 막지 못한다. 1900~2100 최장 이동(4일 — I-5). 2032 도 같은 배치(부활 3.28).",
       "assertions": [
-        { "date": "2027-04-05", "expect": { "id": "d0325-성모수태고지", "status": "transferred_in", "from": "2027-03-25", "displacedBy": "t-성-목요일" } },
-        { "date": "2027-03-25", "expect": { "id": "d0325-성모수태고지", "status": "transferred_out", "to": "2027-04-05" } }
+        { "date": "2027-04-05", "expect": { "id": "d0325-성모수태고지", "absent": true } },
+        { "date": "2027-03-29", "expect": { "id": "d0325-성모수태고지", "status": "transferred_in", "from": "2027-03-25", "displacedBy": "t-성-목요일" } },
+        { "date": "2027-03-25", "expect": { "id": "d0325-성모수태고지", "status": "transferred_out", "to": "2027-03-29", "displacedBy": "t-성-목요일" } },
+        { "date": "2027-03-29", "expect": { "official": "d0325-성모수태고지", "color": "white" } }
       ]
     },
     {
       "id": "T-2035-04-02-joseph-first-come",
       "kind": "transfer",
       "group": "③",
-      "title": "기원이 보호 기간 안 + 선착순 — 요셉 3.19(성주간 월) → 4.2 그대로, 수태고지(3.25 = 부활대축일) → 4.3",
+      "title": "요셉 3.19(성주간 월)는 그날 지키고(축일 색 백), 수태고지 3.25(= 부활대축일) → 3.26 부활 월요일",
       "status": "confirmed",
-      "canon": ["R-6.5-year-pass", "설계서 §6.2"],
-      "checks": ["C-6.5-7"],
-      "source": ["미국 성공회 2008 (요셉 3.31 · 수태고지 4.1) — 같은 모양"],
+      "canon": ["R-6.3-holy-week-guard", "R-6.5-year-pass"],
+      "checks": ["C-6.5-5", "C-6.4-2"],
+      "source": ["사용자 결정 2026-10-11 — 책자대로(2024 수태고지 · 2025 마르코와 같은 꼴) · 대축일에 질 때만 다음 빈 날로"],
       "alsoYears": [2046],
-      "note": "그날의 후보는 feria 뿐이라 guard 없이는 요셉이 승자가 되어 안 옮겨진다. 품계가 높은 수태고지가 먼저 온 요셉을 밀어내지 않는다(선착순 — R-6.2-first-come, 설계서 미결17 부속). 2046 도 같은 배치(부활 3.25).",
+      "note": "id 의 4.2 는 옛 규칙의 목적지다 — 보호 기간이 요셉을 4.2 로, 뒤에 밀린 수태고지를 4.3 으로 보내던 선착순 배치(미국 성공회 2008)는 사라졌다. 선착순은 합성 케이스(C-6.5-7)가 지킨다. 2046 도 같은 배치(부활 3.25).",
       "assertions": [
-        { "date": "2035-04-02", "expect": { "id": "d0319-성-요셉", "status": "transferred_in", "from": "2035-03-19", "displacedBy": "guard:easter-octave" } },
-        { "date": "2035-04-03", "expect": { "id": "d0325-성모수태고지", "status": "transferred_in", "from": "2035-03-25", "displacedBy": "t-부활대축일" } },
-        { "date": "2035-04-02", "expect": { "official": "d0319-성-요셉" } }
+        { "date": "2035-04-02", "expect": { "id": "d0319-성-요셉", "absent": true } },
+        { "date": "2035-03-19", "expect": { "id": "d0319-성-요셉", "status": "proper" } },
+        { "date": "2035-03-19", "expect": { "official": "d0319-성-요셉", "color": "white" } },
+        { "date": "2035-03-26", "expect": { "id": "d0325-성모수태고지", "status": "transferred_in", "from": "2035-03-25", "displacedBy": "t-부활대축일" } },
+        { "date": "2035-04-03", "expect": { "id": "d0325-성모수태고지", "absent": true } }
       ]
     },
     {
       "id": "T-2029-04-09-annunciation-palm-sunday",
       "kind": "transfer",
       "group": "③",
-      "title": "수태고지 3.25 = 성지주일 → 4.9 — 15일 최장 이동, displacedBy 는 실제 후보(성지주일)",
+      "title": "수태고지 3.25 = 성지주일 → 3.26 성 월요일 — 주일과 겹치면 다음 빈 날(보호 기간이 막지 않는다), 도착한 날의 색은 축일 색",
       "status": "confirmed",
-      "canon": ["R-6.5-year-pass"],
-      "checks": ["C-6.5-8", "I-5"],
-      "source": ["미국 성공회 2018 — 같다"],
+      "canon": ["R-6.3-holy-week-guard", "R-6.5-year-pass"],
+      "checks": ["C-6.5-5", "C-6.4-2"],
+      "source": ["사용자 결정 2026-10-11 — 「주일과 겹치면 월요일로」(예: 2029 성지주일 → 3.26 성 월요일)"],
       "alsoYears": [2040],
-      "note": "displacedBy 는 성지주일(실제 후보 우선)이지 guard:easter-octave 가 아니다.",
+      "note": "id 의 4.9 는 옛 규칙(부활 2주일 뒤 — 15일, 미국 성공회 2018)의 목적지다. displacedBy 는 실제 후보(성지주일)다.",
       "assertions": [
-        { "date": "2029-04-09", "expect": { "id": "d0325-성모수태고지", "status": "transferred_in", "from": "2029-03-25", "displacedBy": "t-성지주일" } },
-        { "date": "2029-03-25", "expect": { "id": "d0325-성모수태고지", "status": "transferred_out", "to": "2029-04-09", "displacedBy": "t-성지주일" } }
+        { "date": "2029-04-09", "expect": { "id": "d0325-성모수태고지", "absent": true } },
+        { "date": "2029-03-26", "expect": { "id": "d0325-성모수태고지", "status": "transferred_in", "from": "2029-03-25", "displacedBy": "t-성지주일" } },
+        { "date": "2029-03-25", "expect": { "id": "d0325-성모수태고지", "status": "transferred_out", "to": "2029-03-26", "displacedBy": "t-성지주일" } },
+        { "date": "2029-03-26", "expect": { "official": "d0325-성모수태고지", "color": "white" } }
       ]
     },
     {
       "id": "T-2043-04-06-annunciation",
       "kind": "transfer",
       "group": "③",
-      "title": "수태고지 3.25(성주간) → 4.6 — 12일",
+      "title": "수태고지 3.25(성 수요일) — 그날 지킨다(축일 색 백)",
       "status": "confirmed",
-      "canon": ["R-6.5-year-pass"],
-      "checks": ["C-6.5-8"],
-      "source": ["검토 문서 C-6.5-8"],
+      "canon": ["R-6.3-holy-week-guard"],
+      "checks": ["C-6.5-5", "C-6.4-2"],
+      "source": ["사용자 결정 2026-10-11 — 책자대로(2024 책자 p.22 — 성 월요일의 수태고지 [백])"],
+      "note": "id 의 4.6 은 옛 규칙(보호 기간 뒤로 — 12일)의 목적지다.",
       "assertions": [
-        { "date": "2043-04-06", "expect": { "id": "d0325-성모수태고지", "status": "transferred_in", "from": "2043-03-25", "displacedBy": "guard:easter-octave" } }
+        { "date": "2043-04-06", "expect": { "id": "d0325-성모수태고지", "absent": true } },
+        { "date": "2043-03-25", "expect": { "id": "d0325-성모수태고지", "status": "proper" } },
+        { "date": "2043-03-25", "expect": { "official": "d0325-성모수태고지", "color": "white" } }
       ]
     },
     {
       "id": "T-2038-05-03-mark-easter-day",
       "kind": "transfer",
       "group": "③",
-      "title": "마르코 4.25 = 부활대축일 → 5.3, 필립보·야고보 5.1 → 5.4 — 도착끼리 기원 순",
+      "title": "마르코 4.25 = 부활대축일 → 4.26 부활 월요일, 필립보와 야고보 5.1(부활 1주 토)은 그날",
       "status": "confirmed",
-      "canon": ["R-6.5-year-pass", "설계서 §6.2"],
-      "checks": ["C-6.5-9"],
-      "source": ["미국 성공회 2011 (마르코 4.25 부활 월 → 5.2 · 필립보·야고보 5.1 → 5.3) — 같은 모양"],
+      "canon": ["R-6.3-holy-week-guard", "R-6.5-year-pass"],
+      "checks": ["C-6.5-5"],
+      "source": ["사용자 결정 2026-10-11 — 「주일과 겹치면 월요일로」(예: 2038 마르코 → 4.26)"],
+      "note": "id 의 5.3 은 옛 규칙의 목적지다 — 보호 기간을 건너 마르코 5.3 · 필립보와 야고보 5.4 로 도착끼리 기원 순이던 배치(미국 성공회 2011)는 사라졌다. 기원 순은 합성 케이스(C-6.5-9)가 지킨다.",
       "assertions": [
-        { "date": "2038-05-03", "expect": { "id": "d0425-성-마르코", "status": "transferred_in", "from": "2038-04-25", "displacedBy": "t-부활대축일" } },
-        { "date": "2038-05-04", "expect": { "id": "d0501-사도-성-필립보와-성-야고보", "status": "transferred_in", "from": "2038-05-01", "displacedBy": "guard:easter-octave" } }
+        { "date": "2038-05-03", "expect": { "id": "d0425-성-마르코", "absent": true } },
+        { "date": "2038-04-26", "expect": { "id": "d0425-성-마르코", "status": "transferred_in", "from": "2038-04-25", "displacedBy": "t-부활대축일" } },
+        { "date": "2038-05-01", "expect": { "id": "d0501-사도-성-필립보와-성-야고보", "status": "proper" } },
+        { "date": "2038-05-01", "expect": { "official": "d0501-사도-성-필립보와-성-야고보", "color": "red" } },
+        { "date": "2038-05-04", "expect": { "id": "d0501-사도-성-필립보와-성-야고보", "absent": true } }
       ]
     },
     {
@@ -480,16 +498,35 @@
       "id": "T-2024-04-08-annunciation-holy-monday",
       "kind": "transfer",
       "group": "③",
-      "title": "성주간의 수태고지 — 설계는 guard 이동(3.25 성 월요일 → 4.8), 2024 책자는 무이동",
-      "status": "skip",
+      "title": "성주간의 수태고지 — 3.25 성 월요일에 그날 지킨다(책자대로), 성 월요일 독서는 격자 후보로 함께",
+      "status": "confirmed",
       "issue": "미결32",
-      "skip": "미결32 — 2024 책자(옛 편집)는 3.25 [백] 「성모 수태고지 (성 월요일)」 로 두고 두 독서를 병기했다. 다음 사례 2027-03-25(성 목요일) 책자로 판정할 때까지 설계(guard 이동)를 유지하되 테스트로 고정하지 않는다",
-      "canon": ["R-6.5-year-pass"],
-      "checks": ["X-12"],
-      "source": ["2024 책자 p.22"],
-      "note": "뒤집히면 §6.5 guard 에서 수태고지만 예외(그날 proper 로 두고 두 독서를 선택지로)가 되고 2027·2029·2035·2040·2046 기대값이 바뀐다.",
+      "canon": ["R-6.3-holy-week-guard", "R-6.4-color-order"],
+      "checks": ["C-6.5-5", "C-6.4-2", "X-12"],
+      "source": ["2024 책자 p.22 — 3.25 [백] 「성모 수태고지 (성 월요일)」, 수태고지 독서 한 줄 + 성 월요일 독서", "사용자 결정 2026-10-11 — 책자대로"],
+      "note": "id 의 4.8 은 옛 규칙(보호 기간 뒤 부활 2주 월요일)의 목적지다. 미결32 에 남은 물음은 대축일에 밀릴 때의 목적지뿐이다(2027 책자).",
       "assertions": [
-        { "date": "2024-04-08", "expect": { "id": "d0325-성모수태고지", "status": "transferred_in", "from": "2024-03-25", "displacedBy": "guard:easter-octave" } }
+        { "date": "2024-04-08", "expect": { "id": "d0325-성모수태고지", "absent": true } },
+        { "date": "2024-03-25", "expect": { "id": "d0325-성모수태고지", "status": "proper" } },
+        { "date": "2024-03-25", "expect": { "official": "d0325-성모수태고지", "color": "white", "grid": { "status": "proper" } } }
+      ]
+    },
+    {
+      "id": "T-2062-03-27-annunciation-holy-saturday",
+      "kind": "transfer",
+      "group": "③",
+      "title": "수태고지 3.25 = 성 토요일 → 3.27 부활 월요일 — 부활밤(prec 1)이 밀고, 부활대축일이 막는다",
+      "status": "confirmed",
+      "canon": ["R-6.3-holy-week-guard", "R-6.5-year-pass"],
+      "checks": ["C-6.5-6"],
+      "source": ["사용자 결정 2026-10-11 — 부활밤이 있는 성 토요일에 질 때 옮기고 목적지는 다음 빈 날"],
+      "alsoYears": [2073, 2084],
+      "note": "성 토요일 행(t-성-토요일)은 rank: null 이라 밀지 못한다 — 밀어낸 것은 같은 날의 부활밤이다. 1900~2100 에 1967 · 1978 · 1989 · 2062 · 2073 · 2084(부활 3.26).",
+      "assertions": [
+        { "date": "2062-03-27", "expect": { "id": "d0325-성모수태고지", "status": "transferred_in", "from": "2062-03-25", "displacedBy": "t-부활밤" } },
+        { "date": "2062-03-25", "expect": { "id": "d0325-성모수태고지", "status": "transferred_out", "to": "2062-03-27", "displacedBy": "t-부활밤" } },
+        { "date": "2062-03-25", "expect": { "official": "t-부활밤", "color": "red" } },
+        { "date": "2062-03-27", "expect": { "official": "d0325-성모수태고지" } }
       ]
     }
   ]
