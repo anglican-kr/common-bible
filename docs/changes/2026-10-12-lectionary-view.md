@@ -1,4 +1,5 @@
 ---
+pr: 346
 date: 2026-10-12
 branch: feat/lectionary-view
 title: "feat: 교회력 전례독서 뷰 A3 — /lectionary 라우트 · 본기도 · 독서 · 관측일 스위처 · 세트/트랙 · 두 독서 나란히 (ADR-038 §3)"
