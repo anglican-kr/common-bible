@@ -128,6 +128,39 @@ test("parsePath: /read/<id> percent-encoding 디코드", () => {
   assert.equal(parse("/read/a%20b").folderId, "a b");
 });
 
+// ── lectionary route (ADR-038 §3) ──
+
+test("parsePath: /lectionary → lectionary 뷰, date null(오늘), 상태 전부 null", () => {
+  assert.deepEqual(parse("/lectionary"), {
+    view: "lectionary", date: null, obs: null, track: null, set: null, collect: null,
+  });
+});
+
+test("parsePath: /lectionary/YYYY-MM-DD + 쿼리 네 키 파싱", () => {
+  const r = parse("/lectionary/2026-04-05", "?obs=grid:easter-1-sunday&track=2&set=2&collect=3");
+  assert.deepEqual(r, {
+    view: "lectionary", date: "2026-04-05", obs: "grid:easter-1-sunday", track: 2, set: 2, collect: 3,
+  });
+});
+
+test("parsePath: lectionary 쿼리의 범위 밖 값은 null(track 3 · set 0 · 빈 obs)", () => {
+  const r = parse("/lectionary/2026-04-05", "?obs=&track=3&set=0&collect=abc");
+  assert.equal(r.obs, null);
+  assert.equal(r.track, null);
+  assert.equal(r.set, null);
+  assert.equal(r.collect, null);
+});
+
+test("parsePath: /lectionary/ 아래 나머지는 date 로 그대로 넘긴다(검증은 뷰) — A4 의 d/<slug> 포함", () => {
+  assert.equal(parse("/lectionary/d/advent-1-sun-A").date, "d/advent-1-sun-A");
+  assert.equal(parse("/lectionary/2026-13-99").date, "2026-13-99");
+});
+
+test("parsePath: 'lectionary' 는 책 id 로 읽히지 않는다", () => {
+  assert.equal(parse("/lectionary").view, "lectionary");
+  assert.equal(parse("/lectionaryx").view, "chapters");   // 정확 일치 · 접두 'lectionary/' 만
+});
+
 // ── division vs book (single segment) ──
 
 test("parsePath: 알려진 division id → division 뷰", () => {

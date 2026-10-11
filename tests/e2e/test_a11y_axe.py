@@ -79,6 +79,28 @@ def test_a11y_chapter_text(browser):
         ctx.close()
 
 
+def test_a11y_lectionary_view(browser):
+    """전례독서 뷰(부활대축일 — 본기도 세그먼트 · 칩 · 독서 넷) — critical/serious 위반 0건."""
+    ctx, page = _open(browser, "lectionary/2026-04-05")
+    try:
+        page.wait_for_selector(".lectionary .lect-reading[data-slot='gospel'] .verse", timeout=20_000)
+        v = _violations(page)
+        assert not v, f"Lectionary: {len(v)} violation(s):\n{_fmt(v)}"
+    finally:
+        ctx.close()
+
+
+def test_a11y_lectionary_pair_and_switcher(browser):
+    """전례독서 뷰(8.6 주의 변모 — 두 독서 카드 · 관측일 칩) — critical/serious 위반 0건."""
+    ctx, page = _open(browser, "lectionary/2026-08-06")
+    try:
+        page.wait_for_selector(".lectionary .lect-pair-card", timeout=20_000)
+        v = _violations(page)
+        assert not v, f"Lectionary pair: {len(v)} violation(s):\n{_fmt(v)}"
+    finally:
+        ctx.close()
+
+
 def test_a11y_search_results(browser):
     """검색 결과 화면 — critical/serious 위반 0건."""
     ctx, page = _open(browser)

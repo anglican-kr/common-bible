@@ -26,6 +26,7 @@ CLEAR_APP_STORAGE = """
     'bible-install-nudge', 'bible-install-nudge-state',
     'bible-drive-sync', 'bible-drive-sync-email', 'bible-drive-sync-updated',
     'bible-bookmarks-v2', 'bible-sync-meta',
+    'bible-lectionary-track',
   ];
   for (const k of keys) try { localStorage.removeItem(k); } catch(_) {}
   // Suppress the install-promo nudge so the #install-scrim overlay never covers
