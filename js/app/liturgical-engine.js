@@ -11,11 +11,12 @@
 //                        spans, ordinal weeks, cycles, lunar lookup, period axis.
 //   LITURGICAL_LOOKUP  — A1-b: table indexes, grid coordinate, candidate assembly,
 //                        fallback matching, readings/collects lookup. B1: precedence
-//                        ladder, official + reclassification, colour, fast days. Pure —
-//                        every function takes the index it reads as an argument.
+//                        ladder, official + reclassification, colour, fast days, and the
+//                        yearly transfer pass (design §6.5). Pure — every function takes
+//                        the index it reads as an argument; the only module state it
+//                        touches is the transfer-pass cache and the activation set.
 //   LITURGICAL_PRELOAD — fetch + promise-cached preload and the public wrappers
-//                        that read module state. The transfer pass (design §6.5) is
-//                        the second half of PR 3 — until then the pass stays empty.
+//                        that read module state.
 //
 // 모든 날짜는 로컬 `new Date(y, m - 1, d)` 와 "YYYY-MM-DD" 문자열로 다룬다.
 // **`toISOString()` 으로 날짜 문자열을 만들지 않는다** — UTC 오프셋 때문에 KST 에서
@@ -109,9 +110,14 @@
 const anchorCache = new Map();
 /** @type {Map<number, Record<string, Span[]>>} */
 const spansCache = new Map();
-// 이동 패스 캐시(§4.9) — **완전한 패스만** 들어간다. PR 2 의 완전한 패스는 빈 패스다(§6.5).
+// 이동 패스 캐시(§4.9) — **완전한(seed 받은) 패스만** 들어간다. 키는 연도이고 캘린더 인덱스 하나를 위한
+// 캐시다 — 인덱스가 새로 서면(`preloadCalendar`) · 활성화 집합이 바뀌면(`setActivatedOptionals`) 통째로 비운다.
 /** @type {Map<number, TransferPass>} */
 const transferCache = new Map();
+// 선택 봉헌 활성화 집합(§6.2 활성화 계약) — v1 은 빈 집합이다(설계서 미결15 — 채우는 설정 UI 는 아직 없다).
+// 이동 패스가 표 말고 의존하는 유일한 입력이라, 바뀌면 `transferCache` 를 비운다(§4.9).
+/** @type {Set<string>} */
+const activatedOptionals = new Set();
 
 // 프리로드 상태(§3.4) — 값과 **promise** 를 따로 둔다. promise 를 캐시하므로 동시 진입이
 // fetch 를 한 번만 내고, 실패한 promise 는 비워 다음 진입이 다시 시도한다.
@@ -654,8 +660,9 @@ function inSpan(dateStr, name) {
 // ── END LITURGICAL_CORE ──
 
 // ── BEGIN LITURGICAL_LOOKUP ──
-// 표 인덱스 · 격자 좌표 · 후보 조립 · 폴백 매칭 · 독서/본기도 조회. **순수하다** — 읽는 인덱스를
-// 전부 인자로 받는다(설계서 §3.3). 모듈 상태는 `transferCache` 하나만 읽고, 그것도 블록 밖에 둬
+// 표 인덱스 · 격자 좌표 · 후보 조립 · 폴백 매칭 · 독서/본기도 조회 · 품계와 이동 패스(B1). **순수하다** —
+// 읽는 인덱스를 전부 인자로 받는다(설계서 §3.3). 모듈 상태는 이동 패스 캐시 `transferCache` 와 선택 봉헌
+// 활성화 집합 `activatedOptionals` 둘만 만지고(`transfersOf` · `setActivatedOptionals`), 둘 다 블록 밖에 둬
 // 테스트가 prelude 로 재선언한다. LITURGICAL_CORE 를 먼저 실행한 컨텍스트에서 돈다.
 
 /** 예약 접두사 — 정의 표 · 본문 표 id 에 나타나지 않는다(§5.5 · §5.6 · §6.5). */
@@ -945,7 +952,7 @@ function gridObservance(dateStr, coord) {
   };
 }
 
-// ── §4.9 · §6.5 이동 패스 ──
+// ── §4.9 · §6.5 이동 패스 캐시 ──
 
 /**
  * 빈 이동 패스 — 네 필드를 **모두** 갖는다. §5.5 가 `optionals` 까지 읽으므로 둘만 있으면
@@ -957,18 +964,56 @@ function EMPTY_PASS() {
 }
 
 /**
- * 연도 `y` 의 이동 패스(§4.9 `transferCache`). 패스는 품계 비교(§6.1 — 아래 `compareCandidates`)를
- * 쓰고, PR 3 의 둘째 GitHub PR 이 채운다 — 그때까지는 언제나 빈 패스이고, 빈 패스가 지금의
- * **완전한** 패스다. 캐시에는 완전한 패스만 들어간다.
- * @param {number} y
+ * 연도 `y` 의 이동 패스(§4.9 `transferCache` · §6.5 연도 경계). 캐시에는 **완전한** 패스만 들어간다 —
+ * `y−1` 의 seed 없는 **임시** 패스를 돌려 `y` 로 넘어온 도착(spill)을 얻고, 그것을 seed 로 `y` 의 패스를
+ * 만든다. 임시 패스는 캐시에 넣지 않는다(`y−1` 을 조회하면 그때 `y−2` 의 spill 로 따로 완전하게 만든다).
+ * 두 패스에 **같은** 활성화 집합을 넘긴다 — 다른 집합을 보면 12월 결과가 어긋난다. 깊이 1 로 충분한지는
+ * 실데이터 불변식(검토 문서 I-7a)이 1900~2100 에서 지킨다.
+ * @param {CalendarIndex} index @param {number} y
  * @returns {TransferPass}
  */
-function transfersOf(y) {
+function transfersOf(index, y) {
   const hit = transferCache.get(y);
   if (hit) return hit;
-  const pass = EMPTY_PASS();
+  const prev = computeTransfers(index, y - 1, new Map(), activatedOptionals);
+  const pass = computeTransfers(index, y, spillOf(prev, y), activatedOptionals);
   transferCache.set(y, pass);
   return pass;
+}
+
+/**
+ * 전년도 패스가 `y` 로 넘긴 도착 — 날짜가 `y` 이고 `from` 이 전년도인 것(§6.5 연도 경계). `from` 거름은
+ * 이중 안전장치다 — 다음 해 좌석(`nextYearSeats`)은 별도 맵이라 애초에 패스의 도착에 섞이지 않는다.
+ * @param {TransferPass} prev @param {number} y
+ * @returns {Map<string, Candidate[]>}
+ */
+function spillOf(prev, y) {
+  const head = String(y).padStart(4, "0") + "-";
+  const prevHead = String(y - 1).padStart(4, "0") + "-";
+  /** @type {Map<string, Candidate[]>} */
+  const seed = new Map();
+  for (const [d, cs] of prev.arrivals) {
+    if (!d.startsWith(head)) continue;
+    const spilled = cs.filter((c) => typeof c.from === "string" && c.from.startsWith(prevHead));
+    if (spilled.length) seed.set(d, spilled);
+  }
+  return seed;
+}
+
+/**
+ * 선택 봉헌 활성화 집합을 바꾼다(§6.2 활성화 계약 — 켜진 축일은 원래 날짜를 떠나 목적지 주일의 도착이
+ * 된다). **집합이 실제로 바뀔 때만** 이동 패스 캐시를 비운다(§4.9) — 같은 집합을 다시 넣으면 패스를 다시
+ * 계산하지 않는다. v1 은 부르는 곳이 없다 — 빈 집합이다(설계서 미결15).
+ * @param {Iterable<string>} ids 켤 관측일 id
+ * @returns {boolean} 바뀌었으면 참
+ */
+function setActivatedOptionals(ids) {
+  const next = new Set(ids);
+  if (next.size === activatedOptionals.size && [...next].every((id) => activatedOptionals.has(id))) return false;
+  activatedOptionals.clear();
+  for (const id of next) activatedOptionals.add(id);
+  transferCache.clear();
+  return true;
 }
 
 // ── §5.5 resolveDate — 후보 집합 ──
@@ -1118,12 +1163,20 @@ function variesByYear(c) {
  * 고정일이면 null — 매년 같은 날에 함께 오는 **동시 봉헌**이라 진 쪽도 밀린 것이 아니다(9.29 설립
  * 기념일 · 8.15 광복절 — §6.5 · 미결18). 같은 값의 도착이 고유 후보를 앞서는 것(→ R-6.2-chain-model)과
  * 규칙일이 고정일을 앞서는 것(→ R-6.2-rule-day-stays)은 순위가 이미 담고 있다.
+ *
+ * **그날에 남아 있는 것만 센다**(`staying`). 이동 패스는 그날의 패자를 순위대로 떠나보내며 `staying` 을
+ * 줄여 넘긴다 — 고정일 W · 가변 V · 더 낮은 고정일 C 가 함께 있으면 V 가 떠난 뒤 C 에게 남은 상대는 W
+ * 뿐이라 C 는 밀린 것이 아니다(떠난 V 를 세면 고정일끼리인 W · C 가 충돌로 둔갑한다, §6.5). `settle` 은
+ * 떠난 것을 이미 뺀 순위를 넘기므로 `staying` 이 없다 — 승자 · 재분류의 「밀렸다」와 패스의 「밀렸다」가
+ * 이 한 함수다.
  * @param {Candidate[]} ranked @param {Candidate} c
+ * @param {Set<Candidate>} [staying] 그날 남아 있는 후보 — 없으면 `ranked` 전부
  * @returns {Candidate | null}
  */
-function displacerOf(ranked, c) {
+function displacerOf(ranked, c, staying) {
   const i = ranked.indexOf(c);
-  const above = ranked.slice(0, Math.max(i, 0)).filter((w) => variesByYear(w) || variesByYear(c));
+  const above = ranked.slice(0, Math.max(i, 0))
+    .filter((w) => (!staying || staying.has(w)) && (variesByYear(w) || variesByYear(c)));
   return above.find((w) => !w.observance.id.startsWith(GUARD_PREFIX))
     || above.find((w) => w.observance.id.startsWith(GUARD_PREFIX))
     || null;
@@ -1137,7 +1190,8 @@ function displacerOf(ranked, c) {
  *    성주간 · 부활 8일의 prec 7 은 생략, → R-6.3-holy-week-guard),
  *  - `commemorate_only`(추수감사주일)는 `commemorated` — 둘 다 `displacedBy` 를 싣는다.
  * 나머지는 그대로다 — 격자, 지향 · 이름 줄, `precedence: null`, `transferable: false` 인 상위 축일, 동시
- * 봉헌에서 진 쪽, 그리고 옮겨질 축일(좌석은 이동 패스가 정한다 — §6.5).
+ * 봉헌에서 진 쪽, 이동 상한을 넘겨 옮기지 못한 축일(`defects` — §6.5). 옮겨진 축일은 이동 패스가 이미
+ * `transferred_out` 으로 냈다.
  *
  * `official` 은 순위에서 처음 오는 **실제** 후보 가운데 승자 자격이 있고(유효 precedence ≤ 8) 재분류 뒤에도
  * `proper` · `transferred_in` 인 것이다 — guard 는 후보가 아니라 승자가 되지 않는다(성주간 평일의 승자는
@@ -1165,6 +1219,174 @@ function settle(dateStr, cands) {
     && (c.status === "proper" || c.status === "transferred_in")
     && effectivePrecedence(c.observance) <= 8) || null;
   return { candidates: cands.map(after), official };
+}
+
+// ── §6.2 · §6.5 이동 패스 (B1) ──
+
+/** 이동 상한(날, §6.5) — 실측 최장 15(수태고지 3.25 성지주일 → 4.9). 넘으면 옮기지 않고 `defects` 에 적는다. */
+const MAX_SHIFT = 30;
+
+/** 선택 봉헌 목적지 — `transfer_to` 여섯 값 가운데 충돌 이동이 아닌 넷(→ R-6.2-destinations). */
+const OPTIONAL_KINDS = new Set(["nearby_sunday", "sunday_0102_0108", "sunday_1030_1105", "easter7_sunday"]);
+
+/** @typedef {{observance: Observance, origin: string, dest: string}} OptionalObservance */
+/** @typedef {{nextArrivals: Map<string, Candidate[]>, nextDepartures: Map<string, Candidate[]>}} NextYearSeats */
+
+/**
+ * 선택 봉헌의 목적지 주일(→ R-6.2-destinations · R-6.2-nearby-sunday). 기원이 주일이면 `nearby_sunday` 는
+ * 그날 자신을 내고, 공현 · 모든 성인도 그날이 창 안의 주일이라 같은 날을 낸다 — 부르는 쪽이 「목적지 없음」으로 거른다.
+ * @param {string | null | undefined} kind @param {string} origin @param {number} y
+ * @returns {string | null}
+ */
+function optionalDestOf(kind, origin, y) {
+  switch (kind) {
+    case "nearby_sunday": return nearestSunday(origin);
+    case "sunday_0102_0108": return firstSundayAfter(toKey(y, 1, 1));     // 1.2~1.8 의 주일
+    case "sunday_1030_1105": return firstSundayAfter(toKey(y, 10, 29));   // 10.30~11.5 의 주일
+    case "easter7_sunday": return shift(yearAnchors(y).easter, 42);       // 승천 뒤 주일(부활 7주일)
+    default: return null;
+  }
+}
+
+/**
+ * 그해의 선택 봉헌(§6.2) — 0단계 선색인의 재료. 순위와 무관하고 그해 앵커와 표만 본다 — 패스를 요구하지
+ * 않으므로 다음 해 좌석(`nextYearSeats`)이 재귀 없이 부른다. 목적지가 그날 자신이면(그날이 주일) 없다.
+ * 순서는 기원 날짜 → id 다(표의 행 순서에 기대지 않는다).
+ * @param {CalendarIndex} index @param {number} y
+ * @returns {OptionalObservance[]}
+ */
+function optionalObservancesOf(index, y) {
+  /** @type {OptionalObservance[]} */
+  const out = [];
+  const add = (/** @type {Observance} */ o, /** @type {string} */ origin) => {
+    const dest = optionalDestOf(o.transfer_to, origin, y);
+    if (dest && dest !== origin) out.push({ observance: o, origin, dest });
+  };
+  for (const [md, rows] of index.sanctoralByDate) {
+    const origin = toKey(y, parseInt(md.slice(0, 2), 10), parseInt(md.slice(3, 5), 10));
+    if (!parseDate(origin)) continue;   // 02.29 는 윤년에만
+    for (const o of rows) if (o.transfer_to && OPTIONAL_KINDS.has(o.transfer_to)) add(o, origin);
+  }
+  for (const o of index.temporal) {
+    if (!o.transfer_to || !OPTIONAL_KINDS.has(o.transfer_to)) continue;
+    for (const origin of new Set(evalRule(o.rule, y))) add(o, origin);
+  }
+  return out.sort((a, b) => (a.origin !== b.origin ? (a.origin < b.origin ? -1 : 1) : compareIds(a.observance.id, b.observance.id)));
+}
+
+/**
+ * 다음 해 좌석(§6.5) — 켜진 선택 봉헌이 `year + 1` 에 **앉은 자리**(막는다)와 **비운 기원**(연다). 목적지
+ * 탐색이 실제로 해를 넘길 때만 부른다(§4.9 — 다음 해 computus 를 미리 돌리지 않는다). 별도 맵이라 패스의
+ * 도착 · 출발에 섞이지 않는다 — 캐시에도 spill 에도 불변식의 셈에도 들어가지 않는다.
+ * @param {CalendarIndex} index @param {number} year @param {Set<string>} activated
+ * @returns {NextYearSeats}
+ */
+function nextYearSeats(index, year, activated) {
+  /** @type {NextYearSeats} */
+  const seats = { nextArrivals: new Map(), nextDepartures: new Map() };
+  for (const o of optionalObservancesOf(index, year + 1)) {
+    if (!activated.has(o.observance.id)) continue;   // 꺼진 것은 좌석을 차지하지 않는다(§6.2)
+    pushTo(seats.nextArrivals, o.dest, /** @type {Candidate} */ ({ observance: o.observance, status: "transferred_in", from: o.origin }));
+    pushTo(seats.nextDepartures, o.origin, /** @type {Candidate} */ ({ observance: o.observance, status: "transferred_out", to: o.dest }));
+  }
+  return seats;
+}
+
+/**
+ * 충돌 이동에 참여하는가 — `transferable` ∧ 품계가 있고 ∧ 「기념만」이 아니다(§6.2). 목적지는 `transfer_to`
+ * 값과 무관하게 언제나 다음 빈 날이다 — 선택 봉헌 종류도 충돌로는 다음날로 간다(2049 주의 봉헌).
+ * @param {Observance} o
+ */
+function movesOnConflict(o) {
+  return o.transferable === true && typeof o.precedence === "number" && o.transfer_to !== "commemorate_only";
+}
+
+/**
+ * 연도 `year` 의 이동 패스(→ R-6.5-year-pass) — 연도 캐시를 채울 때 한 번 돈다(`transfersOf`).
+ *
+ * **0단계 — 선택 봉헌 선색인.** 목적지가 기원보다 앞일 수 있어(2028 주의 봉헌 2.2 → 1.30) 날짜 루프 전에 한
+ * 해를 깐다. 켜진 것은 실제로 옮기고(원래 날짜 `transferred_out` · 목적지 `transferred_in` — 밀린 것이 아니라
+ * 택한 것이라 `displacedBy` 가 없다), 꺼진 것은 목적지 주일에 `optional` 로만 얹는다(§6.2 활성화 계약).
+ *
+ * **1단계 — 날짜 순 충돌 이동.** 그날의 후보(고유 관측일 — 켜진 선택 봉헌의 출발은 뺀다 — · 격자 · 도착 ·
+ * guard)를 승자 판정과 같은 순위(`rankCandidates`)로 세우고, 옮길 수 있는 고유 후보가 밀렸으면(`displacerOf`
+ * — `settle` 의 「밀렸다」와 같은 판정) 다음 빈 날로 보낸다. 떠난 것은 그날의 남은 패자를 밀지 못한다
+ * (`staying`). 도착은 다시 옮기지 않는다(→ R-6.2-first-come). 이동이 `MAX_SHIFT` 를 넘으면 옮기지 않고
+ * `defects` 에 적는다 — 그 축일은 기원 날짜에 `proper` 로 남는다.
+ *
+ * 빈 날은 「`c` 보다 높은 고유 후보 · guard 가 없고(같은 값은 `c` 가 민다 — → R-6.2-chain-model), 도착한
+ * 후보가 없다(품계 무관 — → R-6.2-first-come)」이다. 해를 넘긴 날짜에서는 이 패스가 이미 그리로 넘긴 도착과
+ * 다음 해 좌석(`nextYearSeats`)을 **함께** 본다 — 한쪽만 보면 12월 축일 둘이 같은 1월 날에 앉는다.
+ *
+ * 순수 함수다 — 본당 설정을 보지 않고(지역 축일은 이동에 영향을 주지 않는다 — §4.9), `seed`(전년도 패스가
+ * 넘긴 도착)의 배열은 복제해서 쓰며 인자를 바꾸지 않는다.
+ * @param {CalendarIndex} index @param {number} year
+ * @param {Map<string, Candidate[]>} seed @param {Set<string>} activated 호출자가 반드시 넘긴다(기본값 없음)
+ * @returns {TransferPass}
+ */
+function computeTransfers(index, year, seed, activated) {
+  // 연도는 데이터가 아니라 코드가 넘긴다(공개 래퍼가 날짜를 먼저 검사한다) — 정수가 아니면 날짜 루프가
+  // 끝나지 않으므로(`NaN` 이면 접두사가 「0NaN-」으로 맞물린다) 조용히 흡수하지 않고 크게 실패한다(§2 ③)
+  if (!Number.isInteger(year)) throw new Error(`computeTransfers: year must be an integer, got ${year}`);
+  const head = String(year).padStart(4, "0") + "-";
+  /** @type {TransferPass} */
+  const pass = EMPTY_PASS();
+  const { arrivals, departures, optionals, defects } = pass;
+  for (const [d, cs] of seed) arrivals.set(d, [...cs]);   // 호출자의 배열에 push 하지 않는다
+
+  // ── 0단계: 선택 봉헌 선색인
+  for (const o of optionalObservancesOf(index, year)) {
+    if (activated.has(o.observance.id)) {
+      pushTo(arrivals, o.dest, /** @type {Candidate} */ ({ observance: o.observance, status: "transferred_in", from: o.origin }));
+      pushTo(departures, o.origin, /** @type {Candidate} */ ({ observance: o.observance, status: "transferred_out", to: o.dest }));
+    } else {
+      pushTo(optionals, o.dest, /** @type {Candidate} */ ({ observance: o.observance, status: "optional", from: o.origin }));
+    }
+  }
+
+  /** 그날 순위에 드는 고유 후보 — 고유 관측일(`ownObservancesOn`)과 격자에서 켜진 선택 봉헌의 출발을 뺀 것. */
+  const ownAt = (/** @type {string} */ d, /** @type {Map<string, Candidate[]>} */ gone) => {
+    const left = (gone.get(d) || []).map((x) => x.observance.id);
+    /** @type {Candidate[]} */
+    const out = ownObservancesOn(index, d).filter((o) => !left.includes(o.id)).map((o) => ({ observance: o, status: "proper" }));
+    const coord = coordOf(d, index.ordinal);
+    if (coord) out.push({ observance: gridObservance(d, coord), status: "proper" });
+    return out;
+  };
+
+  /** @type {NextYearSeats | null} */
+  let seats = null;   // 지연 — 목적지 탐색이 해를 넘길 때만 다음 해 앵커를 계산한다(§4.9)
+  /** `c` 가 `dest` 에서 이길 수 있으면 빈 날이다(§6.5 `isFree`). */
+  const isFree = (/** @type {string} */ dest, /** @type {Candidate} */ c) => {
+    const next = dest.startsWith(head) ? null : (seats ??= nextYearSeats(index, year, activated));
+    // 도착이 하나라도 있으면 품계와 무관하게 찬 날(→ R-6.2-first-come)
+    if ((arrivals.get(dest) || []).length || (next && (next.nextArrivals.get(dest) || []).length)) return false;
+    // 그날의 고유 후보 · guard 가운데 c 보다 높은 것이 없다 — 같은 값은 c 가 민다(→ R-6.2-chain-model)
+    const mine = effectivePrecedence(c.observance);
+    const rivals = [...ownAt(dest, next ? next.nextDepartures : departures), ...guardCandidates(dest)];
+    return !rivals.some((w) => effectivePrecedence(w.observance) < mine);
+  };
+
+  // ── 1단계: 충돌 이동 — 1.1 → 12.31 날짜 순. next_day 는 앞으로만 가므로 d 에 이르면 arrivals.get(d) 는 완성돼 있다
+  for (let d = toKey(year, 1, 1); d.startsWith(head); d = shift(d, 1)) {
+    // 옮길 수 있는 고유 관측일이 없는 날은 출발이 생기지 않는다(도착은 다시 옮기지 않는다) — 순위를 세우지 않는다
+    if (!ownObservancesOn(index, d).some(movesOnConflict)) continue;
+    const ranked = rankCandidates([...ownAt(d, departures), ...(arrivals.get(d) || []), ...guardCandidates(d)]);
+    const staying = new Set(ranked);   // 떠난 것은 남은 패자를 밀어낼 수 없다
+    for (const c of ranked.slice(1)) {   // 순위 순 — 같은 기원이면 정렬 키 순으로 먼저 앉는다(→ R-6.2-first-come)
+      if (c.status !== "proper" || !movesOnConflict(c.observance)) continue;   // 도착 · 격자 · guard 는 옮기지 않는다
+      const by = displacerOf(ranked, c, staying);
+      if (!by) continue;   // 앞선 것이 전부 고정일이면 동시 봉헌 — 충돌이 아니다
+      let dest = shift(d, 1);
+      while (dayDiff(d, dest) <= MAX_SHIFT && !isFree(dest, c)) dest = shift(dest, 1);
+      if (dayDiff(d, dest) > MAX_SHIFT) { defects.push(c.observance.id); continue; }
+      const displacedBy = by.observance.id;   // 실제로 밀어낸 것 — ranked[0] 이 아닐 수 있다
+      pushTo(arrivals, dest, /** @type {Candidate} */ ({ observance: c.observance, status: "transferred_in", from: d, displacedBy }));
+      pushTo(departures, d, /** @type {Candidate} */ ({ observance: c.observance, status: "transferred_out", to: dest, displacedBy }));
+      staying.delete(c);
+    }
+  }
+  return pass;
 }
 
 // ── §6.4 전례색 · §6.3 재일 (B1) ──
@@ -1667,7 +1889,7 @@ function resolveDate(dateStr) {
   if (!calendarIndex) throw new Error("preloadCalendar() must be awaited before resolveDate()");
   const p = parseDate(dateStr);
   if (!p) return null;
-  return resolveDateIn(calendarIndex, dateStr, transfersOf(p.y));
+  return resolveDateIn(calendarIndex, dateStr, transfersOf(calendarIndex, p.y));
 }
 
 /**
@@ -1701,4 +1923,5 @@ export {
   seasonOf, sundayCycle, weekdayCycle, evalRule,
   buildOrdinalIndex, ordinalWeekOf, lunarDatesOf, spansOf, inSpan,
   preloadCalendar, preloadLectionary, resolveDate, findReadings, findCollects, fastOf,
+  setActivatedOptionals,
 };

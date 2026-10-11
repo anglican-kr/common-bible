@@ -13,6 +13,7 @@ import vm from "node:vm";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { execFileSync } from "node:child_process";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "../..");
@@ -32,7 +33,8 @@ const ctx = {
   parseInt, isNaN, Date, NaN,
 };
 vm.createContext(ctx);
-vm.runInContext("const anchorCache = new Map(); const spansCache = new Map(); const transferCache = new Map();", ctx, { filename: "prelude" });
+vm.runInContext("const anchorCache = new Map(); const spansCache = new Map(); const transferCache = new Map(); const activatedOptionals = new Set();",
+  ctx, { filename: "prelude" });
 vm.runInContext(extractBlock("LITURGICAL_CORE", SOURCE), ctx, { filename: "liturgical-engine.js" });
 vm.runInContext(extractBlock("LITURGICAL_LOOKUP", SOURCE), ctx, { filename: "liturgical-engine.js#lookup" });
 
@@ -165,7 +167,9 @@ function ix() {
   const col = new Map(read("eucharist-collects.json").entries.map((e) => [e.id, e]));
   return (built = { cal, lec, rec, col });
 }
-const resolve = (d) => ctx.resolveDateIn(ix().cal, d, ctx.transfersOf(Number(d.slice(0, 4))));
+/** 이동 패스(연도 캐시)를 거치는 조회 — 공개 래퍼와 같은 길이다(날짜를 먼저 검사한다). */
+const passOf = (y) => ctx.transfersOf(ix().cal, y);
+const resolve = (d) => ctx.resolveDateIn(ix().cal, d, ctx.parseDate(d) ? passOf(Number(d.slice(0, 4))) : ctx.EMPTY_PASS());
 const pick = (r, prefix) => r.candidates.find((c) => c.observance.id.startsWith(prefix));
 /** 그 날 `prefix` 후보의 독서 그룹. */
 function groupsAt(d, prefix) {
@@ -453,7 +457,7 @@ const lunarDay = (y, key) => {
   return `${y}-${v}`;
 };
 
-test("B1 불변식 — 2025~2050 모든 날에 승자가 하나 있고 후보 가운데 하나이며, 색은 정식 4색 · colors 는 color 를 담는다", { skip: SKIP }, () => {
+test("B1 불변식 — 2025~2050 모든 날에 승자가 하나 있고(선택 봉헌 · 떠난 것은 승자가 아니다) 후보 가운데 하나이며, 색은 정식 4색 · colors 는 color 를 담는다 · 밀린 후보만 displacedBy", { skip: SKIP }, () => {
   const bad = [];
   for (let y = 2025; y <= 2050; y++) {
     for (let d = `${y}-01-01`; d.startsWith(`${y}-`); d = ctx.addDays(d, 1)) {
@@ -466,8 +470,9 @@ test("B1 불변식 — 2025~2050 모든 날에 승자가 하나 있고 후보 �
         bad.push(`${d} 색 ${r.color} / ${JSON.stringify(r.colors)}`);
       }
       for (const c of r.candidates) {
-        const reclassified = c.status === "omitted" || c.status === "commemorated";
-        if (reclassified !== ("displacedBy" in c)) bad.push(`${d} ${c.observance.id} ${c.status} displacedBy`);
+        // 밀린 것 — 재분류(omitted · commemorated)와 충돌 이동(transferred_in · out — activated = ∅ 라 전부 충돌)만 displacedBy 를 싣는다
+        const displaced = ["omitted", "commemorated", "transferred_in", "transferred_out"].includes(c.status);
+        if (displaced !== ("displacedBy" in c)) bad.push(`${d} ${c.observance.id} ${c.status} displacedBy`);
         if (c.status === "omitted" && c.observance.rank !== "minor_feast") bad.push(`${d} omitted ${c.observance.rank}`);
         if (c.observance.rank === "commemoration" && c.status !== "proper") bad.push(`${d} 기념일 ${c.status}`);
       }
@@ -643,21 +648,19 @@ test("C-6.3-1 재일 — 대재일 둘 · 사순 주간 40일(성 목요일은 �
 // ── 픽스처 소비 (tests/fixtures/liturgical/README.md 「소비 방법」) ──
 // 케이스마다 테스트 하나 — `status: "skip"` 은 건너뛰고 `provisional` 은 「잠정」 표시로 돌린다(실패하면 실패).
 // `expect` 는 부분집합 비교다: 적은 키만 본다. 모르는 키는 실패로 다룬다 — 소비자가 조용히 무시하면 그 단언은
-// 아무것도 지키지 못한다.
+// 아무것도 지키지 못한다. activation 케이스는 그 케이스의 `activated` 로 패스 캐시를 새로 만들고 끝나면 ∅ 로
+// 되돌린다(`setActivatedOptionals` — 집합이 바뀌면 캐시를 비운다). `alsoYears` 는 날짜 단언의 연도만 바꿔
+// 되풀이한다(README — 같은 월 · 일이 같은 요일인 해만 적는다). 연도 범위 단언은 `neverDeparts` 하나다.
 
 const FIXTURES = path.join(ROOT, "tests", "fixtures", "liturgical");
 const fixtureCases = (file) => JSON.parse(fs.readFileSync(path.join(FIXTURES, file), "utf8")).cases;
-/** 이동 패스가 있어야 맞는 케이스 — PR 3 의 둘째 GitHub PR(이동 패스)이 transfers · optionals 와 함께 켠다. */
-const NEEDS_PASS = new Map([
-  ["W-2026-05-15-matthias-color", "마티아는 5.14 에서 옮겨 온 도착이 승자다 — 이동 패스(§6.5)"],
-  ["W-2025-12-29-holy-innocents-color", "어린이들은 12.28 에서 옮겨 온 도착이 승자다 — 이동 패스(§6.5)"],
-]);
 const EXPECT_KEYS = new Set([
   "id", "status", "from", "to", "displacedBy", "absent", "notInDepartures", "official", "color", "colors",
   "observanceColor", "penitential", "fast", "coord", "grid", "readings", "officialReadings", "collects",
 ]);
 const READING_KEYS = new Set(["origin", "record", "common", "sets", "slots", "empty", "cycle"]);
 const COLLECT_KEYS = new Set(["origin", "count"]);
+const RANGE_KEYS = new Set(["neverDeparts"]);
 const show = (v) => JSON.stringify(plain(v));
 
 /** 본문 레코드의 색인 날짜 — 표기를 `MM.DD` 로 맞춘다(§5.2). 공통 · 합성 그룹은 레코드가 없어 null. */
@@ -712,7 +715,7 @@ function checkAssertion(date, exp) {
       if ("observanceColor" in exp && c.observance.color !== exp.observanceColor) bad.push(`observanceColor: ${c.observance.color} ≠ ${exp.observanceColor}`);
       if ("penitential" in exp && (c.observance.penitential === true) !== exp.penitential) bad.push(`penitential: ${c.observance.penitential}`);
       if ("notInDepartures" in exp) {
-        const deps = ctx.transfersOf(Number(date.slice(0, 4))).departures.get(date) || [];
+        const deps = passOf(Number(date.slice(0, 4))).departures.get(date) || [];
         if (deps.some((x) => x.observance.id === exp.id) === exp.notInDepartures) bad.push(`notInDepartures: ${exp.id}`);
       }
       if ("readings" in exp) checkReadings(r, c, exp.readings, "readings", bad);
@@ -742,15 +745,127 @@ function checkAssertion(date, exp) {
   return bad;
 }
 
-for (const c of fixtureCases("winners.cases.json")) {
-  const name = `픽스처 ${c.id}${c.status === "provisional" ? ` (잠정 — ${c.issue})` : ""}`;
-  const skip = SKIP || (c.status === "skip" ? `${c.issue} — ${c.skip}` : NEEDS_PASS.get(c.id) || false);
-  test(name, { skip }, () => {
-    const bad = [];
-    for (const a of c.assertions) {
-      if (!a.date) { bad.push(`연도 범위 단언은 이동 패스와 함께 — ${show(a)}`); continue; }
-      for (const m of checkAssertion(a.date, a.expect)) bad.push(`${a.date} ${m}`);
-    }
-    same(bad, []);
-  });
+/** ISO 날짜 문자열의 연도를 `dy` 만큼 옮긴다 — alsoYears 되풀이. 날짜가 아닌 값은 그대로. */
+const shiftYear = (v, dy) => (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v)
+  ? String(Number(v.slice(0, 4)) + dy).padStart(4, "0") + v.slice(4) : v);
+
+/** 연도 범위 단언 — 그 id 가 범위 안 어느 해의 출발 색인에도 없다(동시 봉헌 무이동). */
+function checkRange(a) {
+  const bad = [];
+  for (const k of Object.keys(a.expect)) if (!RANGE_KEYS.has(k)) bad.push(`${k}: 연도 범위 단언에서 모르는 키`);
+  for (let y = a.years[0]; y <= a.years[1]; y++) {
+    if ([...passOf(y).departures.values()].flat().some((c) => c.observance.id === a.expect.neverDeparts)) bad.push(`${y}: ${a.expect.neverDeparts} 가 떠났다`);
+  }
+  return bad;
 }
+
+for (const file of ["transfers.cases.json", "optionals.cases.json", "winners.cases.json"]) {
+  for (const c of fixtureCases(file)) {
+    const name = `픽스처 ${c.id}${c.status === "provisional" ? ` (잠정 — ${c.issue})` : ""}`;
+    const skip = SKIP || (c.status === "skip" ? `${c.issue} — ${c.skip}` : false);
+    test(name, { skip }, () => {
+      ctx.setActivatedOptionals(c.activated || []);
+      try {
+        const bad = [];
+        const first = c.assertions.find((a) => a.date);
+        const base = first ? Number(first.date.slice(0, 4)) : null;
+        for (const y of base === null ? [null] : [base, ...(c.alsoYears || [])]) {
+          const dy = y === null ? 0 : y - base;
+          for (const a of c.assertions) {
+            if (!a.date) {
+              if (!dy) for (const m of checkRange(a)) bad.push(`${a.years.join("~")} ${m}`);
+              continue;
+            }
+            const date = shiftYear(a.date, dy);
+            const exp = Object.fromEntries(Object.entries(a.expect).map(([k, v]) => [k, shiftYear(v, dy)]));
+            for (const m of checkAssertion(date, exp)) bad.push(`${date} ${m}`);
+          }
+        }
+        same(bad, []);
+      } finally {
+        ctx.setActivatedOptionals([]);
+      }
+    });
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// B1 이동 패스 — 1900~2100 불변식 · 골든 덤프 (설계서 §6.5 · §7 · 검토 문서 §5.14 · 부록 A)
+// ════════════════════════════════════════════════════════════════════════════
+// 실제 연도의 이동 기대값은 위 픽스처가 정본이다. 여기는 전 연도에 걸친 성질과 결과 전체의 회귀만 본다.
+// 활성화 집합은 ∅(v1 — 설계서 미결15)다. I-9(범위 · 절기 분할)는 공개 스위트의 C-4.2-2 · C-4.3-1 · C-4.5-1 이
+// 같은 1900~2100 에서 본다.
+
+const YEAR_FROM = 1900;
+const YEAR_TO = 2100;
+const inYear = (d, y) => typeof d === "string" && d.startsWith(`${y}-`);
+const candKey = (c) => [c.observance.id, c.status, c.from, c.to, c.displacedBy].join("|");
+/** 색인 하나를 비교용 배열로 — 날짜 순(Map 삽입 순서에 기대지 않는다). `from` 을 주면 그날부터. */
+const mapKey = (m, from = "") => [...m].filter(([d]) => d >= from).sort(([a], [b]) => (a < b ? -1 : 1)).map(([d, cs]) => [d, cs.map(candKey)]);
+const passKey = (p, from = "") => JSON.stringify([mapKey(p.arrivals, from), mapKey(p.departures, from), mapKey(p.optionals, from), p.defects]);
+
+test("I-1~I-8 이동 패스 불변식 — 1900~2100 (activated = ∅)", { skip: SKIP }, () => {
+  ctx.setActivatedOptionals([]);
+  const bad = [];
+  const forward = new Map();
+  for (let y = YEAR_FROM; y <= YEAR_TO; y++) {
+    const p = passOf(y);
+    forward.set(y, passKey(p));
+    const arrivals = [...p.arrivals.values()].flat();
+    const seeded = arrivals.filter((c) => !inYear(c.from, y)).length;
+    if ([...p.departures.values()].flat().length !== arrivals.length - seeded) bad.push(`I-1 ${y}`);
+    if (p.defects.length) bad.push(`I-4 ${y} ${p.defects}`);
+    for (const [d, cs] of p.departures) for (const c of cs) if (ctx.dayDiff(d, c.to) > 15) bad.push(`I-5 ${d} ${c.observance.id} → ${c.to}`);
+    for (const [D, cs] of p.arrivals) {
+      if (!inYear(D, y)) continue;   // 다음 해로 넘긴 도착은 그해 패스의 seed 로 본다
+      const deps = p.departures.get(D) || [];
+      if (cs.some((c) => deps.some((x) => x.observance.id === c.observance.id))) bad.push(`I-6 ${D}`);
+      if (ctx.inSpan(D, "transferGuard")) bad.push(`I-3 ${D} ${cs.map((c) => c.observance.id)}`);
+      // I-2 — 도착은 떠나지 않으므로(I-6) 그날의 승자다. 한 날에 도착은 하나다(선착순)
+      const r = resolve(D);
+      if (cs.length !== 1 || !r.official || r.official.status !== "transferred_in" || r.official.observance.id !== cs[0].observance.id) {
+        bad.push(`I-2 ${D} ${cs.map((c) => c.observance.id)} official ${r.official && r.official.observance.id}`);
+      }
+    }
+  }
+  for (let y = YEAR_FROM + 1; y <= YEAR_TO; y++) {
+    // I-7a — 깊이 1: 임시 Y−1 패스(seed 없음)의 Y 행 spill = spill(Y−2) 를 받은 완전한 Y−1 패스의 Y 행 spill
+    const temp = ctx.computeTransfers(ix().cal, y - 1, new Map(), new Set());
+    if (JSON.stringify(mapKey(ctx.spillOf(temp, y))) !== JSON.stringify(mapKey(ctx.spillOf(passOf(y - 1), y)))) bad.push(`I-7a ${y}`);
+    // I-7b — seed 영향 범위: seed 있는 Y 패스와 없는 Y 패스가 2월 1일부터 같다
+    const bare = ctx.computeTransfers(ix().cal, y, new Map(), new Set());
+    if (passKey(passOf(y), `${y}-02-01`) !== passKey(bare, `${y}-02-01`)) bad.push(`I-7b ${y}`);
+  }
+  // I-8 — 캐시를 거꾸로(다음 해부터) 채워도 항목의 내용이 같다
+  vm.runInContext("transferCache.clear()", ctx);
+  for (let y = YEAR_TO; y >= YEAR_FROM; y--) if (passKey(passOf(y)) !== forward.get(y)) bad.push(`I-8 ${y}`);
+  same(bad, []);
+});
+
+// 골든 덤프(검토 문서 부록 A · I-10) — 한 줄이 이동 하나, 기원 날짜 순. 머리줄의 data sha 는 기록용이고 비교는 본문만
+// 한다. 이동 결과가 바뀌면(엔진 · 데이터) 이 테스트가 깨진다 — `UPDATE_GOLDEN=1` 로 다시 만들고 diff 를 PR 에서 읽는다.
+const GOLDEN = path.join(FIXTURES, "transfers-1900-2100.golden.txt");
+
+test("I-10 이동 골든 덤프 — 1900~2100 본문 문자열 동등 (UPDATE_GOLDEN=1 로 다시 만든다)", { skip: SKIP }, () => {
+  ctx.setActivatedOptionals([]);
+  const lines = [];
+  for (let y = YEAR_FROM; y <= YEAR_TO; y++) {
+    for (const [d, cs] of passOf(y).departures) {
+      for (const c of cs) lines.push(`${d} → ${c.to}  ${c.observance.id}  by:${c.displacedBy}  shift:${ctx.dayDiff(d, c.to)}`);
+    }
+  }
+  lines.sort();   // 기원 → 목적지 → id 순(줄이 그 순서로 시작한다)
+  if (process.env.UPDATE_GOLDEN === "1") {
+    let sha = "unknown";
+    try { sha = execFileSync("git", ["-C", path.join(ROOT, "data"), "rev-parse", "HEAD"], { encoding: "utf8" }).trim(); } catch { /* 기록용 */ }
+    const head = `# data ${sha} · activated=∅ · MAX_SHIFT=${vm.runInContext("MAX_SHIFT", ctx)}`;
+    fs.writeFileSync(GOLDEN, [head, ...lines].join("\n") + "\n");
+    return;
+  }
+  const want = fs.readFileSync(GOLDEN, "utf8").split("\n").filter((l) => l !== "" && !l.startsWith("#"));
+  // 차이만 보인다 — 천 줄을 통째로 찍지 않는다
+  const got = new Set(lines);
+  const had = new Set(want);
+  same({ missing: want.filter((l) => !got.has(l)), extra: lines.filter((l) => !had.has(l)) }, { missing: [], extra: [] });
+  assert.ok(lines.every((l, i) => l === want[i]), "줄 순서");
+});

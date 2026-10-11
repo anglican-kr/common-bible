@@ -173,10 +173,10 @@
       "canon": ["R-6.2-destinations"],
       "checks": ["C-6.5-4", "X-5", "X-10"],
       "source": ["2026 책자 — 10.19 「10월 18일에서 이동」"],
-      "note": "displacedBy 는 격자 연중 주일이나 문서에 주간 번호가 없어 적지 않았다.",
+      "note": "displacedBy 는 격자 연중 29주일 — 연중 주일은 temporal 표에 행이 없다. 주간 번호는 이동 패스 구현(PR 3 둘째)에서 엔진 계산값(ordinalWeekOf 2026-10-18 = 29)으로 채웠다.",
       "assertions": [
-        { "date": "2026-10-19", "expect": { "id": "d1018-성-루가", "status": "transferred_in", "from": "2026-10-18" } },
-        { "date": "2026-10-18", "expect": { "id": "d1018-성-루가", "status": "transferred_out", "to": "2026-10-19" } }
+        { "date": "2026-10-19", "expect": { "id": "d1018-성-루가", "status": "transferred_in", "from": "2026-10-18", "displacedBy": "grid:ordinary-29-sunday" } },
+        { "date": "2026-10-18", "expect": { "id": "d1018-성-루가", "status": "transferred_out", "to": "2026-10-19", "displacedBy": "grid:ordinary-29-sunday" } }
       ]
     },
     {
@@ -220,7 +220,7 @@
       "note": "그날의 후보는 feria 뿐이라 guard 없이는 요셉이 승자가 되어 안 옮겨진다. 품계가 높은 수태고지가 먼저 온 요셉을 밀어내지 않는다(선착순 — R-6.2-first-come, 설계서 미결17 부속). 2046 도 같은 배치(부활 3.25).",
       "assertions": [
         { "date": "2035-04-02", "expect": { "id": "d0319-성-요셉", "status": "transferred_in", "from": "2035-03-19", "displacedBy": "guard:easter-octave" } },
-        { "date": "2035-04-03", "expect": { "id": "d0325-성모수태고지", "status": "transferred_in", "from": "2035-03-25" } },
+        { "date": "2035-04-03", "expect": { "id": "d0325-성모수태고지", "status": "transferred_in", "from": "2035-03-25", "displacedBy": "t-부활대축일" } },
         { "date": "2035-04-02", "expect": { "official": "d0319-성-요셉" } }
       ]
     },
@@ -250,7 +250,7 @@
       "checks": ["C-6.5-8"],
       "source": ["검토 문서 C-6.5-8"],
       "assertions": [
-        { "date": "2043-04-06", "expect": { "id": "d0325-성모수태고지", "status": "transferred_in", "from": "2043-03-25" } }
+        { "date": "2043-04-06", "expect": { "id": "d0325-성모수태고지", "status": "transferred_in", "from": "2043-03-25", "displacedBy": "guard:easter-octave" } }
       ]
     },
     {
@@ -263,8 +263,8 @@
       "checks": ["C-6.5-9"],
       "source": ["미국 성공회 2011 (마르코 4.25 부활 월 → 5.2 · 필립보·야고보 5.1 → 5.3) — 같은 모양"],
       "assertions": [
-        { "date": "2038-05-03", "expect": { "id": "d0425-성-마르코", "status": "transferred_in", "from": "2038-04-25" } },
-        { "date": "2038-05-04", "expect": { "id": "d0501-사도-성-필립보와-성-야고보", "status": "transferred_in", "from": "2038-05-01" } }
+        { "date": "2038-05-03", "expect": { "id": "d0425-성-마르코", "status": "transferred_in", "from": "2038-04-25", "displacedBy": "t-부활대축일" } },
+        { "date": "2038-05-04", "expect": { "id": "d0501-사도-성-필립보와-성-야고보", "status": "transferred_in", "from": "2038-05-01", "displacedBy": "guard:easter-octave" } }
       ]
     },
     {
