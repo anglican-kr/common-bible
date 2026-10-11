@@ -408,7 +408,7 @@ GitHub 토픽 [lectionary](https://github.com/topics/lectionary) · [liturgical-
 ```
 
 - 테스트는 본문 **문자열 동등**이다(calendarium-romanum `regression_spec.rb` 선례 — `liturgical-engine.data.test.js` 「I-10」). `UPDATE_GOLDEN=1` 로 재생성하고 diff 를 PR 리뷰에서 읽는다. 데이터가 이동 결과를 바꾸면 `sync-data.yml` 이 동기화 PR 을 열기 전에 멈춘다 — 앱 저장소에서 골든을 다시 만든 PR 이 데이터 포인터를 올린다.
-- 사제용 발췌: 2025~2035 를 잘라 이름을 한국어 표기로 바꾼 표 — 아직 만들지 않았다(사제 확인 때).
+- 사제용 발췌: 2025~2035 를 잘라 이름을 한국어 표기로 바꾼 표 — PR #343 원장(`docs/changes/2026-10-11-liturgical-engine-b1-transfers.md`) 「리뷰 반영 1회차」에 실었다. 점-시점 표다 — 골든 덤프가 바뀌면 다시 뽑는다.
 
 ## 부록 B — 이동 케이스 픽스처 스키마 (채택 — 정본은 `tests/fixtures/liturgical/README.md`)
 
