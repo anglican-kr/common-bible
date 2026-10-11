@@ -76,7 +76,7 @@ title: "feat: 교회력 전례독서 뷰 A3 — /lectionary 라우트 · 본기�
 
 ### 비공개 데이터 검증 결과
 
-(PR 생성 뒤 `gh workflow run engine-data.yml --ref feat/lectionary-view` 결과를 적는다.)
+`engine-data.yml` 을 PR 브랜치에서 수동 실행(workflow_dispatch) — **run 38183982453(`67dee7a`, 2026-10-12) 성공. 141건 중 140 통과 · 1 skip(T-2032 — 미결13) · 실패 0.** #345 때는 125건이었고, 늘어난 16 이 `lectionary.data.test.js` 다(송영 상수 ↔ `_meta.endings` · 라벨 ↔ `_vocab` · 실제 날짜 열둘 · 송가 영광송 표지 · 2025~2027 전수). 그 뒤 커밋은 `pr: 346` 기입과 이 절뿐이라 코드 · 테스트 · 데이터 포인터는 그대로다.
 
 ## 발견한 모순 · 후속
 
