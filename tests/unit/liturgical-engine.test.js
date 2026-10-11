@@ -758,16 +758,13 @@ const collectsFor = (r, id) => ctx.findCollectsIn(LEC, CAL, r).find((e) => e.can
 
 // ── 5.9 resolveDate 후보 (§5.5) ──
 
-test("C-5.5-1 후보 출처 다섯 — 격자 · 날짜 · 음력 · 규칙 파생, PR 2 는 전부 proper · official null · 빈 패스", () => {
+test("C-5.5-1 후보 출처 다섯 — 격자 · 날짜 · 음력 · 규칙 파생 · 빈 패스", () => {
   const r = resolve("2026-02-17");   // 합성 참회 화요일(E−47) ∧ 합성 축일(02.17) ∧ 설(KASI 2026 1-1)
-  same(r.candidates.map((c) => c.observance.id),
-    ["t-shrove", "d0217-feast", "lunar11-seol", "grid:ordinary-x-weekday-tue"]);
-  assert.ok(r.candidates.every((c) => c.status === "proper"));
-  assert.ok(r.candidates.every((c) => !("from" in c) && !("to" in c) && !("displacedBy" in c)));
-  assert.strictEqual(r.official, null);
-  assert.strictEqual(r.color, null);
-  assert.strictEqual(r.colorAlt, null);
-  same(plain(r.colors), []);
+  same(r.candidates.map((c) => c.observance.id).sort(),
+    ["d0217-feast", "grid:ordinary-x-weekday-tue", "lunar11-seol", "t-shrove"]);
+  // 빈 패스에서는 옮겨 온 것도 떠난 것도 없다 — 재분류(B1)는 아래 5.10 이 본다
+  assert.ok(r.candidates.every((c) => c.status === "proper" || c.status === "omitted"));
+  assert.ok(r.candidates.every((c) => !("from" in c) && !("to" in c)));
   // 빈 패스는 **네 필드 전부** — §5.5 가 optionals 까지 읽는다
   const pass = ctx.EMPTY_PASS();
   same(Object.keys(pass).sort(), ["arrivals", "defects", "departures", "optionals"]);
@@ -793,23 +790,29 @@ test("C-5.5-1 · C-5.5-5 ⑤ 도착 · 출발 · 선택 봉헌 경로와 표시 
   ]);
   assert.strictEqual(r.candidates[0].to, "2026-01-26");
   assert.strictEqual(r.candidates[1].from, "2025-11-30");
+  // 떠난 것 · 선택 봉헌은 순위에 들지 않는다 — 이 합성 패스에서는 도착(prec 6)이 연중 주일(5)에 진다
+  assert.strictEqual(r.official.observance.id, "grid:ordinary-3-sunday");
 });
 
-test("C-5.5-5 표시 순서 — 축일 · 재일 → 격자, 출처 안에서는 id 순(배열 순서에 기대지 않는다)", () => {
+test("C-5.5-5 표시 순서 — ① 축일 · 재일(품계 순, 같은 값이면 id 순 — 배열 순서에 기대지 않는다) → ③ 격자", () => {
   const r = resolve("2026-12-25");
   same(r.candidates.map((c) => c.observance.id),
     ["d1225-dawn", "d1225-day", "d1225-night", "grid:christmas-x-weekday-fri"]);
   const reversed = ctx.buildCalendarIndex({ ...CAL_TABLES, sanctoral: { entries: [...CAL_TABLES.sanctoral.entries].reverse() } });
   same(ctx.resolveDateIn(reversed, "2026-12-25", ctx.EMPTY_PASS()).candidates.map((c) => c.observance.id),
     r.candidates.map((c) => c.observance.id));
+  // 출처가 아니라 품계가 ① 의 순서를 정한다 — 설(0) · 참회 화요일(1) · 축일(7), 출처 순(규칙 · 날짜 · 음력)이 아니다
+  same(resolve("2026-02-17").candidates.map((c) => c.observance.id),
+    ["lunar11-seol", "t-shrove", "d0217-feast", "grid:ordinary-x-weekday-tue"]);
 });
 
 test("C-4.3-3 easter_offset −1 인덱스가 1:N — 성 토요일과 부활밤이 둘 다 후보", () => {
   const r = resolve("2026-04-04");
-  same(r.candidates.map((c) => c.observance.id), ["t-holy-sat", "t-vigil", "grid:lent-x-weekday-sat"]);
+  // 품계 순 — 부활밤(prec 1) 앞, 성 토요일(prec null)은 정렬 최하위
+  same(r.candidates.map((c) => c.observance.id), ["t-vigil", "t-holy-sat", "grid:lent-x-weekday-sat"]);
 });
 
-test("C-5.5-3 ◐ 격자 ∧ temporal 행은 공존한다 — 대체가 아니다 (승자는 PR 3)", () => {
+test("C-5.5-3 격자 ∧ temporal 행은 공존한다 — 대체가 아니다 · 동률은 사다리로 temporal 이 이긴다", () => {
   const advent1 = resolve("2026-11-29");
   same(advent1.candidates.map((c) => c.observance.id), ["t-advent1", "grid:advent-1-sunday"]);
   // 대림1주일 행은 조인 이름이 없다 — 자기 좌표로 격자 레코드에 닿는다(§5.4). 2026-11-29 는 나해
@@ -818,6 +821,13 @@ test("C-5.5-3 ◐ 격자 ∧ temporal 행은 공존한다 — 대체가 아니�
   const palm = resolve("2026-03-29");
   same(palm.candidates.map((c) => c.observance.id), ["t-palm", "grid:lent-x-sunday"]);
   same(readingIds(palm, cand(palm, "t-palm")), ["palm-A"]);   // 별칭(고난주일)도 조인 키
+  // prec 2 동률 — 범주 사다리(temporal > 격자)로 행이 이기고 격자는 proper 로 남는다(→ R-6.2-tie-ladder)
+  for (const r of [advent1, palm]) {
+    assert.strictEqual(r.official.observance.kind, "temporal", r.date);
+    assert.ok(!r.official.observance.id.startsWith("grid:"), r.date);
+    assert.strictEqual(gridOf(r).status, "proper", r.date);
+  }
+  assert.strictEqual(palm.color, "red");
 });
 
 test("C-5.5-4 periods 는 배너용 — 2026-01-20 일치 기도 주간, 후보에는 없다 · 해를 넘기는 기간", () => {
@@ -872,7 +882,8 @@ test("§5.5 격자 관측일 id · 이름 · precedence — 좌표에서 합성�
   assert.strictEqual(gridOf(resolve("2026-01-25")).observance.rank, "sunday");
   assert.strictEqual(gridOf(resolve("2026-02-22")).observance.rank, "privileged_sunday");
   assert.strictEqual(gridOf(resolve("2026-01-26")).observance.rank, "feria");
-  assert.strictEqual(gridOf(resolve("2026-01-26")).observance.color, null);   // 절기 기본색은 B1(PR 3)
+  // 격자의 색은 절기 기본색이다(§6.4 — ADR-036 §8 「격자일 레코드의 color 는 절기 기본색」)
+  same([gridOf(resolve("2026-01-26")).observance.color, gridOf(resolve("2026-01-26")).observance.color_alt], ["green", null]);
 });
 
 test("§5.1 좌표의 year — 연중 평일은 I/II, 그 밖은 A/B/C · 주일은 weekday null", () => {
@@ -955,7 +966,8 @@ test("C-5.4-1 date + lunar 1:N 인덱스 — 음력 관측일은 음력 키로, 
   same(readingIds(r, cand(r, "lunar11-seol")), ["lunar-seol"]);
   same(readingIds(r, cand(r, "d0217-feast")), ["d0217-feast"]);
   const samil = resolve("2026-03-01");
-  same(samil.candidates.map((c) => c.observance.id), ["d0301-david", "d0301-samil", "grid:lent-2-sunday"]);
+  // 한 날짜의 두 행은 둘 다 후보 — prec 7 동률은 고유 본기도가 있는 삼일절이 먼저다(→ R-6.1-prec7-tie-pairs)
+  same(samil.candidates.map((c) => c.observance.id), ["d0301-samil", "d0301-david", "grid:lent-2-sunday"]);
   // 표기 정규화(§5.2) — "2-14" 도 02.14 로 오른다, 없는 날 · 깨진 행은 건너뛴다
   assert.ok(cand(resolve("2026-02-14"), "d0214-cyril"));
   assert.ok(!CAL.sanctoralByDate.has("02.30"));
@@ -1128,6 +1140,299 @@ test("§2 표 결손은 흡수한다 — 래퍼 · 배열 · 행 모양이 틀�
   same(ctx.findCollectsIn(LEC, CAL, null), []);
   // rule: null 인 temporal 행은 후보에 오르지 않는다(C-4.3-5 와 같은 규칙)
   assert.ok(!CAL.temporal.every((t) => t.rule) && [...ctx.movableOf(CAL, 2026).values()].flat().every((t) => t.rule));
+});
+
+// ── 5.10 품계 · 5.13 전례색 · 재일 — B1 (§6.1 · §6.3 · §6.4) ──
+// 승자 · 재분류 · 색은 이동 패스와 무관하게 그날의 후보로 정해진다 — 빈 패스(또는 손으로 채운 패스)로 본다.
+// 실제 연도의 기대값은 픽스처(winners.cases.json)가 정본이라 실데이터 파일이 소비한다(설계서 §7).
+
+const B1_TABLES = {
+  sanctoral: { _meta: {}, entries: [
+    // 품계는 precedence 로만 — 같은 major_feast 가 3 · 6 으로 갈린다(C-6.1-1)
+    SAN("d0607-b-sunday", "06.07", "합성 B 주일", { rank: "major_feast", precedence: 6, priority_group: "B" }),
+    SAN("d0628-a-sunday", "06.28", "합성 A 주일", { rank: "major_feast", precedence: 3, priority_group: "A" }),
+    // A 특례(outranks_sunday) 1.5 는 절기 주일(2)을 이기고, 특례 없는 A(3)는 진다(C-6.1-2)
+    SAN("d0101-name", "01.01", "합성 거룩한 이름", { rank: "major_feast", precedence: 3, priority_group: "A", outranks_sunday: true }),
+    SAN("d1210-a", "12.10", "합성 A 대림", { rank: "major_feast", precedence: 3, priority_group: "A" }),
+    // A > C > B — 고정일끼리는 동시 봉헌이라 진 쪽도 proper(C-6.1-5)
+    SAN("d0612-a", "06.12", "합성 A", { rank: "major_feast", precedence: 3, priority_group: "A" }),
+    SAN("d0612-c", "06.12", "합성 C", { rank: "major_feast", precedence: 4, priority_group: "C" }),
+    SAN("d0612-b", "06.12", "합성 B", { rank: "major_feast", precedence: 6, priority_group: "B" }),
+    // prec 7 축일 — 주일에 생략 · 이동 축일 셋의 꼴은 생략하지 않는다 · 동시 봉헌 · 보호 기간(C-6.1-6)
+    SAN("d0614-minor", "06.14", "합성 축일"),
+    SAN("d0621-movable", "06.21", "합성 이동 축일", { transferable: true, transfer_to: "next_day" }),
+    SAN("d0815-a", "08.15", "합성 성모안식", { rank: "major_feast", precedence: 3, priority_group: "A" }),
+    SAN("d0815-minor", "08.15", "합성 광복절"),
+    SAN("d0330-minor", "03.30", "합성 성주간 축일"),
+    SAN("d0402-minor", "04.02", "합성 성 목요일 축일"),
+    SAN("d0408-minor", "04.08", "합성 부활 8일 축일"),
+    // prec 7 동률 — 고유 본기도가 있는 쪽 먼저, 같으면 id(C-6.1-9)
+    SAN("d0301-samil", "03.01", "삼일절", { has_proper: true, color: "red" }),
+    SAN("d0301-david", "03.01", "데이빗", { has_proper: false }),
+    SAN("d0214-valentine", "02.14", "발렌틴", { has_proper: false, color: "red" }),
+    SAN("d0214-cyril", "02.14", "키릴과 메토디우스", { has_proper: false }),
+    // 색 — 승자가 덮고(순교자 홍 · 성모 청 대체색), 성주간 · 부활 8일에서는 덮지 못한다(C-6.4-2)
+    SAN("d0617-martyr", "06.17", "합성 순교자", { color: "red" }),
+    SAN("d0616-mary", "06.16", "합성 성모 축일", { rank: "major_feast", precedence: 3, color_alt: "blue" }),
+    SAN("d0331-fixed", "03.31", "합성 고정 축일", { rank: "major_feast", precedence: 3, color_alt: "blue" }),
+    SAN("d0409-red", "04.09", "합성 사도", { rank: "major_feast", precedence: 6, color: "red" }),
+    // 사계재 날 축일이 이기면 병기(C-6.4-3)
+    SAN("d0529-feast", "05.29", "합성 니니안"),
+    // 성인력 기념일 — 이름 줄
+    SAN("d0611-memorial", "06.11", "합성 기념일", { rank: "commemoration", has_proper: false, color: null }),
+    // 동률은 규칙일이 남는다(→ R-6.2-rule-day-stays — 이동은 패스의 몫이고 여기서는 승자만)
+    SAN("d0531-visitation", "05.31", "합성 성모 방문", { rank: "major_feast", precedence: 3, transferable: true, transfer_to: "next_day" }),
+    SAN("lunar11-seol", null, "설날", { lunar: "1-1", rank: "regional_festival", precedence: 0 }),
+  ] },
+  temporal: { _meta: {}, entries: [
+    TMP("t-ash", "재의 수요일", { kind: "easter_offset", days: -46 }, { season: "lent", type: "fast", color: "violet" }),
+    TMP("t-maundy", "성 목요일", { kind: "easter_offset", days: -3 }, { season: "lent", type: "feast", color: "red" }),
+    TMP("t-good-friday", "성 금요일", { kind: "easter_offset", days: -2 }, { season: "lent", type: "fast", color: "red" }),
+    TMP("t-holy-sat", "성 토요일", { kind: "easter_offset", days: -1 }, { rank: null, precedence: null, season: "lent", type: "weekday", color: "red" }),
+    TMP("t-vigil", "부활밤", { kind: "easter_offset", days: -1 }, { season: "easter", type: "feast" }),
+    TMP("t-pentecost", "성령강림대축일", { kind: "easter_offset", days: 49 }, { season: "easter", type: "feast", color: "red" }),
+    TMP("t-corpus", "그리스도의 성체일", { kind: "easter_offset", days: 60 },
+      { season: "ordinary", type: "feast", rank: "major_feast", precedence: 3, priority_group: "A", transferable: true, transfer_to: "next_day" }),
+    TMP("t-kingship", "왕이신 그리스도 주일", { kind: "advent1_offset", days: -7 },
+      { season: "ordinary", week: 34, type: "sunday", rank: "major_feast", precedence: 3, priority_group: "A" }),
+    TMP("t-thanks", "추수감사주일", { kind: "nth_sunday", month: 11, nth: 3 },
+      { season: "ordinary", type: "feast", rank: "major_feast", precedence: 4, priority_group: "C", transferable: true,
+        transfer_to: "commemorate_only", color: null }),
+    TMP("t-family", "가정주일", { kind: "nth_sunday", month: 5, nth: 2 }, { coord_name: null, type: "sunday", rank: null, precedence: null, color: null }),
+    // temporal 기념일 — 평일에 떨어지는 합성 행(E+17 = 부활 3주 수요일, 보호 기간 밖). 승자 자격 판별을
+    // kind(성인력 행)로 좁히면 7 이 격자 평일 8 을 이겨 실패한다(설계서 §7 B1 행 · C-6.1-12 — #340)
+    TMP("t-memorial", "합성 temporal 기념일", { kind: "easter_offset", days: 17 },
+      { coord_name: null, season: "easter", type: "feast", rank: "commemoration", precedence: 7, color: null }),
+    TMP("t-ember-summer", "하계재", { kind: "ember_wfs", anchor: { kind: "easter_offset", days: 49 } },
+      { coord_name: null, type: "fast", rank: "feria", precedence: 8, color: "violet", penitential: true }),
+    TMP("t-ember-winter", "동계재", { kind: "ember_wfs", anchor: { kind: "date", month: 12, day: 13 } },
+      { coord_name: null, type: "fast", rank: "feria", precedence: 8, color: "violet", penitential: true }),
+  ] },
+  periods: { _meta: {}, entries: [] },
+  ordinalWeeks: { _meta: {}, weeks: [] },
+  // 설 — 2032 는 재의 수요일(02-11), 2027 은 연중 주일(02-07), 2026 은 평일(02-17)
+  kasi: { _meta: {}, years: { "2026": { "1-1": "02-17" }, "2027": { "1-1": "02-07" }, "2032": { "1-1": "02-11" } } },
+};
+const B1_CAL = ctx.buildCalendarIndex(B1_TABLES);
+const rb = (d, pass = ctx.EMPTY_PASS()) => ctx.resolveDateIn(B1_CAL, d, pass);
+/** [status, displacedBy] — displacedBy 가 없으면 null(필드가 없어야 한다). */
+const fate = (r, id) => {
+  const c = cand(r, id);
+  assert.ok(c, `${r.date} 후보 ${id}`);
+  return [c.status, "displacedBy" in c ? c.displacedBy : null];
+};
+const officialId = (r) => (r.official ? r.official.observance.id : null);
+
+test("C-6.1-1 유효 precedence — 비교는 precedence 로만(rank 아님) · null 은 최하위 · 지향 · 이름 줄 9 · A 특례 1.5", () => {
+  const ep = (o) => ctx.effectivePrecedence({ id: "x", kind: "sanctoral", name: "x", color: null, ...o });
+  same([ep({ rank: "major_feast", precedence: 3 }), ep({ rank: "major_feast", precedence: 6 })], [3, 6]);
+  assert.strictEqual(ep({ rank: null, precedence: null }), Infinity);
+  assert.strictEqual(ep({ rank: "commemoration", precedence: 7 }), 9);
+  assert.strictEqual(ep({ rank: "feria", precedence: 8, rule: { kind: "ember_wfs" } }), 9);
+  assert.strictEqual(ep({ rank: "major_feast", precedence: 3, outranks_sunday: true }), 1.5);
+  // 같은 rank(major_feast)가 연중 주일(5)에 대해 갈린다 — A(3)는 이기고 B(6)는 진다
+  same(officialId(rb("2026-06-28")), "d0628-a-sunday");
+  same(officialId(rb("2026-06-07")), "grid:ordinary-x-sunday");
+  same(fate(rb("2026-06-07"), "d0607-b-sunday"), ["proper", null]);   // 옮기는 것은 이동 패스의 몫(§6.5)
+});
+
+test("C-6.1-2 A 특례 1.5 — 절기 주일(2)도 이긴다, 특례 없는 A(3)는 절기 주일에 진다", () => {
+  const name = rb("2034-01-01");   // 성탄 1주일(prec 2)
+  same(officialId(name), "d0101-name");
+  same(gridOf(name).observance.id, "grid:christmas-1-sunday");
+  const plainA = rb("2028-12-10");  // 대림 2주일(prec 2)
+  same(officialId(plainA), "grid:advent-2-sunday");
+  same(fate(plainA, "d1210-a"), ["proper", null]);
+});
+
+test("C-6.1-3 명절 > 대재일 — 2032-02-11 설이 승자, 재의 수요일은 proper 로 남고(데이터 transferable: false — 미결13) 그날은 대재일", () => {
+  const r = rb("2032-02-11");
+  same(officialId(r), "lunar11-seol");
+  same(fate(r, "t-ash"), ["proper", null]);
+  same([r.color, ctx.fastOf(r)], ["white", "major"]);
+});
+
+test("C-6.1-4 명절 ∧ 연중 주일 — 명절이 이기고 주일 격자는 proper 로 남는다(밀린 독서 보존)", () => {
+  const r = rb("2027-02-07");
+  same(officialId(r), "lunar11-seol");
+  same(gridOf(r).status, "proper");
+  same(r.candidates.map((c) => c.observance.id), ["lunar11-seol", "grid:ordinary-x-sunday"]);
+});
+
+test("C-6.1-5 A > C > B (잠정 — ADR-036 §6) · 고정일끼리는 동시 봉헌이라 진 쪽도 proper", () => {
+  const r = rb("2026-06-12");
+  same(officialId(r), "d0612-a");
+  same(r.candidates.map((c) => `${c.observance.id}:${c.status}`),
+    ["d0612-a:proper", "d0612-c:proper", "d0612-b:proper", "grid:ordinary-x-weekday-fri:proper"]);
+  assert.ok(r.candidates.every((c) => !("displacedBy" in c)));
+  // 9.29 — 미카엘(3)이 설립 기념일(4)을 이기고 설립 기념일은 proper(미결18)
+  const m = resolve("2026-09-29");
+  same(officialId(m), "d0929-michael");
+  same(fate(m, "d0929-founding"), ["proper", null]);
+});
+
+test("C-6.1-6 prec 7 축일은 생략 — 가변인 상위에 밀리면 omitted(departures 와 무관) · 고정일 상위에는 동시 봉헌", () => {
+  // 주일에 밀린다 — 격자 주일이 displacedBy
+  const sun = rb("2026-06-14");
+  same(officialId(sun), "grid:ordinary-x-sunday");
+  same(fate(sun, "d0614-minor"), ["omitted", "grid:ordinary-x-sunday"]);
+  same(sun.color, "green");   // omitted 후보는 색에 기여하지 않는다
+  // 평일에서는 축일(7)이 격자 평일(8)을 이긴다
+  same(officialId(rb("2027-06-14")), "d0614-minor");
+  // 이동 축일 셋의 꼴(transferable)은 생략하지 않는다 — 옮기는 것은 패스(§6.5)
+  same(fate(rb("2026-06-21"), "d0621-movable"), ["proper", null]);
+  // 고정일 상위(8.15 성모안식)에는 밀린 것이 아니다 — 평일에는 proper, 주일에는 주일 격자에 밀린다
+  same(fate(rb("2026-08-15"), "d0815-minor"), ["proper", null]);
+  same(officialId(rb("2026-08-15")), "d0815-a");
+  const sun815 = rb("2027-08-15");
+  same(officialId(sun815), "d0815-a");
+  same(fate(sun815, "d0815-minor"), ["omitted", "grid:ordinary-x-sunday"]);
+  same(gridOf(sun815).status, "proper");
+  // 도착에 밀린다 — 같은 날 도착(prec 6)이 displacedBy(12.7 암브로스의 꼴)
+  const andrew = CAL.sanctoralByDate.get("11.30")[0];
+  const pass = ctx.EMPTY_PASS();
+  pass.arrivals.set("2026-06-17", [{ observance: andrew, status: "transferred_in", from: "2026-06-16", displacedBy: "x" }]);
+  const arr = rb("2026-06-17", pass);
+  same(officialId(arr), "d1130-andrew");
+  same(fate(arr, "d0617-martyr"), ["omitted", "d1130-andrew"]);
+});
+
+test("R-6.3-holy-week-guard 보호 기간의 prec 7 은 생략 — guard 는 실제 후보가 없을 때만 displacedBy, 승자는 되지 않는다", () => {
+  const mon = rb("2026-03-30");   // 성주간 월요일
+  same(fate(mon, "d0330-minor"), ["omitted", "guard:easter-octave"]);
+  same(officialId(mon), "grid:lent-x-weekday-mon");
+  assert.ok(!mon.candidates.some((c) => c.observance.id.startsWith("guard:")));   // 후보로 내지 않는다
+  const thu = rb("2026-04-02");   // 성 목요일 — 실제 후보가 guard 보다 앞
+  same(fate(thu, "d0402-minor"), ["omitted", "t-maundy"]);
+  same(officialId(thu), "t-maundy");
+  same(fate(rb("2026-04-08"), "d0408-minor"), ["omitted", "guard:easter-octave"]);   // 부활 8일
+  same(ctx.guardCandidates("2026-04-13").length, 0);   // 부활 2주일 다음 날부터 밖
+  same(ctx.guardCandidates("2026-04-12").map((c) => c.observance.id), ["guard:easter-octave"]);
+});
+
+test("C-6.1-7 · C-2-1 precedence null 은 정렬 최하위 · 승자가 아니다 — 성 토요일의 승자는 부활밤", () => {
+  const sat = rb("2026-04-04");
+  same(officialId(sat), "t-vigil");
+  same(sat.candidates.map((c) => c.observance.id), ["t-vigil", "t-holy-sat", "grid:lent-x-weekday-sat"]);
+  same(fate(sat, "t-holy-sat"), ["proper", null]);
+  const family = rb("2026-05-10");   // 가정주일 — 부활 6주일
+  same(officialId(family), "grid:easter-6-sunday");
+  same(fate(family, "t-family"), ["proper", null]);
+});
+
+test("C-6.1-9 prec 7 동률 — 고유 본기도가 있는 쪽 먼저(3.01 삼일절), 같으면 id 사전순 · 둘 다 proper", () => {
+  const samil = rb("2027-03-01");   // 사순 평일 — 둘 다 격자(8)를 이긴다
+  same(officialId(samil), "d0301-samil");
+  same([fate(samil, "d0301-samil"), fate(samil, "d0301-david")], [["proper", null], ["proper", null]]);
+  same(samil.color, "red");
+  const pair = rb("2025-02-14");   // 둘 다 고유 본기도 없음 — id 순
+  same(officialId(pair), "d0214-cyril");
+  same(fate(pair, "d0214-valentine"), ["proper", null]);
+  // 순서가 입력에 기대지 않는다
+  const rev = ctx.buildCalendarIndex({ ...B1_TABLES, sanctoral: { entries: [...B1_TABLES.sanctoral.entries].reverse() } });
+  same(ctx.resolveDateIn(rev, "2027-03-01", ctx.EMPTY_PASS()).official.observance.id, "d0301-samil");
+});
+
+test("R-6.2-tie-ladder 같은 값이면 도착 > temporal 규칙일 > sanctoral 고정일 > 격자", () => {
+  const corpus = rb("2029-05-31");   // 성체일(temporal 3) ∧ 성모 방문(sanctoral 3) — 규칙일이 남는다
+  same(officialId(corpus), "t-corpus");
+  same(fate(corpus, "d0531-visitation"), ["proper", null]);   // 옮기는 것은 패스(§6.5)
+  // 도착(prec 3) ∧ 같은 값 고유 후보 — 도착이 이긴다(→ R-6.2-chain-model)
+  const visit = B1_CAL.sanctoralByDate.get("05.31")[0];
+  const pass = ctx.EMPTY_PASS();
+  pass.arrivals.set("2026-06-16", [{ observance: visit, status: "transferred_in", from: "2026-05-31", displacedBy: "t-x" }]);
+  same(officialId(rb("2026-06-16", pass)), "d0531-visitation");
+  same(ctx.ladderOf({ observance: visit, status: "transferred_in" }), 0);
+  same(ctx.ladderOf({ observance: visit, status: "proper" }), 2);
+});
+
+test("C-6.1-11 · C-6.1-12 사계재 · 기념일은 승자가 아니다 — temporal 기념일 ∧ 평일 격자도(kind 가 아니라 rank)", () => {
+  const ember = rb("2026-05-27");   // 하계재 수요일
+  same(officialId(ember), "grid:ordinary-x-weekday-wed");
+  same(fate(ember, "t-ember-summer"), ["proper", null]);
+  const memorial = rb("2026-06-11");
+  same(officialId(memorial), "grid:ordinary-x-weekday-thu");
+  same(fate(memorial, "d0611-memorial"), ["proper", null]);
+  // 합성 temporal 기념일 — 부활 3주 수요일(격자 prec 8)
+  const tm = rb("2026-04-22");
+  same(officialId(tm), "grid:easter-3-weekday-wed");
+  same(fate(tm, "t-memorial"), ["proper", null]);
+  same(tm.color, "white");
+});
+
+test("commemorate_only — 밀린 추수감사주일은 commemorated(displacedBy), 이기면 승자 · 색이 비어 절기 바탕", () => {
+  const r = rb("2022-11-20");   // 11월 셋째 주일 = 왕이신 그리스도 주일(대림1 2022-11-27)
+  same(officialId(r), "t-kingship");
+  same(fate(r, "t-thanks"), ["commemorated", "t-kingship"]);
+  same(r.color, "white");
+  const won = rb("2026-11-15");
+  same(officialId(won), "t-thanks");
+  same([won.color, plain(won.colors)], ["green", ["green"]]);
+});
+
+test("C-6.4-1 절기 기본색 — 대림 자 · 청(3주일 장미 · 청) · 성탄 백 · 사순 자(4주일 장미) · 성주간 전체 홍 · 부활 백 · 연중 녹", () => {
+  const base = (d) => { const g = gridOf(rb(d)).observance; return [g.color, plain(g.color_alt)]; };
+  same(base("2026-12-01"), ["violet", "blue"]);
+  same(base("2026-12-13"), ["violet", ["rose", "blue"]]);
+  same(base("2026-12-16"), ["violet", "blue"]);
+  same(base("2026-12-28"), ["white", null]);
+  same(base("2026-02-24"), ["violet", null]);
+  same(base("2026-03-15"), ["violet", "rose"]);
+  for (const d of ["2026-03-29", "2026-03-30", "2026-04-01", "2026-04-02", "2026-04-03", "2026-04-04"]) same(base(d), ["red", null], d);
+  same(base("2026-04-05"), ["white", null]);
+  same(base("2026-05-24"), ["white", null]);
+  same(base("2026-07-07"), ["green", null]);
+  // 그날의 색 = 승자 — 격자만 있는 날은 바탕, 성령강림은 행의 홍
+  const advent3 = rb("2026-12-13");
+  same([advent3.color, plain(advent3.colorAlt), plain(advent3.colors)], ["violet", ["rose", "blue"], ["violet"]]);
+  same(rb("2026-05-24").color, "red");
+  same(rb("2026-04-03").color, "red");   // 성 금요일
+});
+
+test("C-6.4-2 승자 색이 덮는다 — 순교자 홍 · 성모 청 대체색, 성주간 · 부활 8일에는 덮지 못한다", () => {
+  same([rb("2026-06-17").color, rb("2026-06-17").colorAlt], ["red", null]);
+  const mary = rb("2026-06-16");
+  same([officialId(mary), mary.color, mary.colorAlt], ["d0616-mary", "white", "blue"]);
+  const holyTue = rb("2026-03-31");   // 성주간 화요일 — 고정 축일이 승자여도 홍
+  same([officialId(holyTue), holyTue.color, holyTue.colorAlt, plain(holyTue.colors)], ["d0331-fixed", "red", null, ["red"]]);
+  const octave = rb("2026-04-09");   // 부활 8일 — 홍 축일이 승자여도 백
+  same([officialId(octave), octave.color], ["d0409-red", "white"]);
+});
+
+test("C-6.4-3 사계재 날은 자(→ R-6.4-ember-color) — 격자가 이기면 그날 자, 축일이 이기면 축일 색 + [자, 축일 색] 병기", () => {
+  const wed = rb("2026-05-27");
+  same([wed.color, plain(wed.colors)], ["violet", ["violet"]]);
+  same(cand(wed, "t-ember-summer").observance.color, "violet");
+  const fri = rb("2026-05-29");   // 하계재 금요일 ∧ 합성 니니안(백)
+  same(officialId(fri), "d0529-feast");
+  same([fri.color, plain(fri.colors)], ["white", ["violet", "white"]]);
+  const winter = rb("2026-12-16");   // 동계재 — 대림 평일, 대체색은 대림의 청 그대로
+  same([winter.color, plain(winter.colorAlt), plain(winter.colors)], ["violet", "blue", ["violet"]]);
+  same(rb("2026-05-28").colors.length, 1);   // 사계재가 아닌 날은 병기가 없다
+});
+
+test("C-6.4-4 색은 등급과 독립 — 성 토요일은 승자가 부활밤(백)이어도 홍(가드 — 미결20)", () => {
+  const r = rb("2026-04-04");
+  same([officialId(r), r.official.observance.color, r.color, plain(r.colors)], ["t-vigil", "white", "red", ["red"]]);
+});
+
+test("C-6.3-1 재일 — 대재일 둘 · 사순 주간 40일(성 목요일은 아님) · 사계재 · 성탄절기 밖 금요일 (→ R-6.3-friday-fast)", () => {
+  const fast = (d) => ctx.fastOf(rb(d));
+  same([fast("2026-02-18"), fast("2026-04-03")], ["major", "major"]);
+  same([fast("2026-04-02"), fast("2026-04-04")], [null, "minor"]);   // 성 목요일 · 성 토요일(부활밤이 있어도)
+  // 사순절기 주간 40일 — 재의 수요일부터 성 토요일까지 주일을 뺀 날
+  const counts = { major: 0, minor: 0, none: 0 };
+  for (let d = "2026-02-18"; d <= "2026-04-04"; d = ctx.addDays(d, 1)) {
+    if (ctx.dayOfWeek(d) === 0) { same(fast(d), null, d); continue; }
+    counts[fast(d) || "none"]++;
+  }
+  same(counts, { major: 2, minor: 37, none: 1 });
+  // 금요일 — 성탄절기(12.25 ~ 세례 주일 전날)는 아니다
+  same([fast("2026-01-09"), fast("2026-01-16"), fast("2026-12-25"), fast("2027-01-08")], [null, "minor", null, null]);
+  same(fast("2027-01-15"), "minor");   // 2027 세례 주일 1.10 뒤
+  // 사계재는 승자와 무관하게 소재일 · 평범한 평일은 아니다
+  same([fast("2026-05-27"), fast("2026-05-26")], ["minor", null]);
+  same(ctx.fastOf(null), null);
 });
 
 // ── 5.7 프리로드 · 캐시 · 결손 (§3.4 · §4.9) ──
