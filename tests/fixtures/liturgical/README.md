@@ -11,8 +11,9 @@
 | `transfers.cases.json` | `transfer` | 충돌 이동(실제 연도) — 도착·출발·연쇄·보호 기간·명절·동률 |
 | `optionals.cases.json` | `optional` · `activation` | 선택 봉헌 `optional` 후보와 활성화(`activated`) 계약 |
 | `winners.cases.json` | `winner` | 승자(`official`)·전례색·승자 자격(사계재·기념일)·생략(`omitted`) |
+| `transfers-1900-2100.golden.txt` | — | **골든 덤프**(검토 문서 부록 A · I-10) — 1900~2100 이동 전부를 한 줄씩(`activated = ∅`). 손으로 쓰는 기대값이 아니라 엔진이 만든 회귀 기준이다 — `UPDATE_GOLDEN=1 node --test tests/unit/liturgical-engine.data.test.js` 로 다시 만들고 diff 를 PR 에서 읽는다. 머리줄의 data sha 는 기록용이라 비교하지 않는다. 기대값의 정본은 위 세 파일이다 |
 
-합성 표 케이스(연도 경계 · 이동 상한 · 좌석 경합 · 떠난 패자 제외 · 켜진 출발이 비운 자리)와 1900~2100 불변식(검토 문서 `I-n`)은 **여기 넣지 않는다** — 표를 코드가 만들므로 설계서 §7 본문과 `liturgical-engine.test.js` 에 둔다.
+합성 표 케이스(연도 경계 · 해를 넘긴 선착순 · 이동 상한 · 좌석 경합 · 떠난 패자 제외 · 켜진 출발이 비운 자리 · 도착 재이동 금지)와 1900~2100 불변식(검토 문서 `I-n`)은 **케이스로 넣지 않는다** — 합성 표는 코드가 만들므로 설계서 §7 본문과 `liturgical-engine.test.js` 에, 불변식은 `liturgical-engine.data.test.js` 에 둔다. 이 디렉터리에 두는 것은 I-10 의 골든 덤프(위 표)뿐이다.
 
 ## id 규칙
 
@@ -89,6 +90,6 @@
 ## 소비 방법
 
 - **지금(PR 2 전)**: `tests/unit/liturgical-fixtures.test.js` 가 스키마 · id 유일성·형식 · 날짜 유효성 · 관측일 id(`id`·`displacedBy`·`official`·`neverDeparts`) 생략부호 금지 · `status`/`kind` 도메인(provisional·skip 은 `issue` 필수) · `ifIssueFlips.expect` 도 같은 검사 · 빈 `expect` 금지 · `alsoYears` 요일 동일 · `canon`·`checks`·`issue` 가 문서에 존재하는지를 검사한다(공개 CI). **관측일 id 가 실데이터에 실재하는지**는 `tests/unit/liturgical-fixtures.data.test.js` 가 `data/` 서브모듈이 있는 `engine-data.yml`(픽스처 변경도 트리거)·`sync-data.yml` 에서 검사한다 — 전사 오류를 잡는 유일한 기계 검사라 공개 CI 의 skip 만 믿지 않는다.
-- **PR 3**: `tests/unit/liturgical-engine.data.test.js` 가 세 파일을 읽어 `status !== "skip"` 인 케이스마다 `resolveDate(date)`(activation 은 `activated` 를 넘긴 캐시로) 결과에 `expect` 를 부분집합 비교한다 — 케이스 하나가 테스트 하나다. `provisional` 은 「잠정」 표시로 돌리되 실패하면 실패다 — 뒤집힌 미결은 픽스처를 고쳐 닫는다. `expect` 의 모르는 키는 실패로 다룬다(조용히 무시하면 그 단언이 아무것도 지키지 못한다). PR 3 은 둘로 나눠 낸다 — 첫째(#341)가 `winners.cases.json` 을 소비하고(이동 패스가 있어야 맞는 W-2026-05-15-matthias-color · W-2025-12-29-holy-innocents-color 둘은 그때까지 건너뛴다), 둘째가 이동 패스와 함께 `transfers` · `optionals` 와 연도 범위 단언(`neverDeparts`) · `activated` 를 켠다.
+- **PR 3**: `tests/unit/liturgical-engine.data.test.js` 가 세 파일을 읽어 `status !== "skip"` 인 케이스마다 `resolveDate(date)` 결과에 `expect` 를 부분집합 비교한다 — 케이스 하나가 테스트 하나다. `provisional` 은 「잠정」 표시로 돌리되 실패하면 실패다 — 뒤집힌 미결은 픽스처를 고쳐 닫는다. `expect` 의 모르는 키는 실패로 다룬다(조용히 무시하면 그 단언이 아무것도 지키지 못한다). activation 케이스는 그 케이스의 `activated` 로 이동 패스 캐시를 새로 만들고(엔진 `setActivatedOptionals` — 집합이 바뀌면 캐시를 비운다) 끝나면 빈 집합으로 되돌린다. `alsoYears` 는 날짜 단언의 연도만 바꿔(`from` · `to` 같은 날짜 값도 함께) 되풀이한다. 연도 범위 단언은 `neverDeparts` 하나만 받는다. PR 3 은 둘로 나눠 냈다 — 첫째(#341)가 `winners.cases.json` 을, 둘째(#TBD)가 이동 패스와 함께 `transfers` · `optionals` · 연도 범위 단언 · `activated` 와 첫째가 건너뛴 둘(W-2026-05-15-matthias-color · W-2025-12-29-holy-innocents-color)을 켰다.
 - **미결이 닫히면**: 그 PR 에서 `status` 를 `confirmed` 로 바꾸고 `source` 에 근거를 더한다. `ifIssueFlips` 대로 닫혔으면 `expect` 를 그 값으로 바꾸고 `ifIssueFlips` 를 지운다. id 는 그대로.
 - **사실 변경 0 증명**: `python3 scripts/docs_facts_snapshot.py --diff main HEAD` 가 문서와 픽스처(JSON 문자열 값)를 합쳐 토큰을 세므로, 문서에서 값을 지우고 픽스처로 옮겨도 「사라진 토큰」에 잡히지 않는다.
