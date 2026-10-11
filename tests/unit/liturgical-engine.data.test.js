@@ -602,12 +602,18 @@ test("C-6.1-12 기념일은 이름 줄 — 같은 날짜에 다른 행이 없는
   same(bad, []);
 });
 
-test("C-6.4-1 절기 기본색 · 승자 색 — 성주간 전체 홍(성 목 · 금 · 토) · 성령강림 홍 · 삼위일체 · 왕이신 그리스도 백 · 대림 3주일 장미 · 청 · 사순 4주일 장미 (2025~2050)", { skip: SKIP }, () => {
+test("C-6.4-1 절기 기본색 · 승자 색 — 성주간 전체 홍(성 목 · 금 · 토 — 그날 지키는 성인력 축일만 축일 색) · 성령강림 홍 · 삼위일체 · 왕이신 그리스도 백 · 대림 3주일 장미 · 청 · 사순 4주일 장미 (2025~2050)", { skip: SKIP }, () => {
   const bad = [];
+  const feastDays = [];   // 성주간에 성인력 축일이 이긴 날 — 그날은 축일 색(→ R-6.3-holy-week-guard)
   for (let y = 2025; y <= 2050; y++) {
     const E = ctx.easterDate(y);
     const at = (n) => resolve(ctx.addDays(E, n));
-    for (let n = -7; n <= -1; n++) if (at(n).color !== "red") bad.push(`${y} E${n} ${at(n).color}`);
+    for (let n = -7; n <= -1; n++) {
+      const r = at(n);
+      const feast = r.official && r.official.observance.kind === "sanctoral" ? r.official.observance : null;
+      if (feast) feastDays.push(`${y} E${n}`);
+      if (r.color !== (feast ? feast.color : "red")) bad.push(`${y} E${n} ${r.color}`);
+    }
     if (at(49).color !== "red") bad.push(`${y} 성령강림 ${at(49).color}`);
     if (at(56).color !== "white") bad.push(`${y} 삼위일체 ${at(56).color}`);
     const kingship = resolve(ctx.addDays(ctx.advent1Date(y), -7));
@@ -620,11 +626,14 @@ test("C-6.4-1 절기 기본색 · 승자 색 — 성주간 전체 홍(성 목 ·
     if (lent4.colorAlt !== "rose" && offId(lent4).startsWith("grid:")) bad.push(`${y} 사순 4주일 ${lent4.colorAlt}`);
   }
   same(bad, []);
+  // 축일 색 예외가 실제로 돈다 — 요셉(2035 · 2046 성 월) · 수태고지(2029 · 2040 성지주일에서 도착 · 2043 성 수)
+  same(feastDays, ["2029 E-6", "2035 E-6", "2040 E-6", "2043 E-4", "2046 E-6"]);
 });
 
-test("C-6.4-2 성주간 · 부활 8일에는 성인 색이 덮지 못한다 — 2035-03-19 요셉(성주간 월) 홍 · 2025-04-25 마르코(부활 금) 백 · 순교자 평일 홍", { skip: SKIP }, () => {
-  same(resolve("2035-03-19").color, "red");
-  same(resolve("2025-04-25").color, "white");
+test("C-6.4-2 성주간 · 부활 8일에도 그날 지키는 성인력 축일은 축일 색 — 2035-03-19 요셉(성주간 월) 백 · 2025-04-25 마르코(부활 금) 홍 · 성 토요일 홍 · 순교자 평일 홍", { skip: SKIP }, () => {
+  same(resolve("2035-03-19").color, "white");
+  same(resolve("2025-04-25").color, "red");
+  same([offId(resolve("2025-04-19")), resolve("2025-04-19").color], ["t-부활밤", "red"]);   // E−1 — temporal 승자는 가드(미결20)
   const boniface = resolve("2026-06-05");   // 순교자 축일 평일 — 승자 색이 덮는다(픽스처 W-2026-06-05-boniface-color 와 같은 날)
   same([offId(boniface), boniface.color], ["d0605-보니파스", "red"]);
 });
@@ -804,7 +813,7 @@ const candKey = (c) => [c.observance.id, c.status, c.from, c.to, c.displacedBy].
 const mapKey = (m, from = "") => [...m].filter(([d]) => d >= from).sort(([a], [b]) => (a < b ? -1 : 1)).map(([d, cs]) => [d, cs.map(candKey)]);
 const passKey = (p, from = "") => JSON.stringify([mapKey(p.arrivals, from), mapKey(p.departures, from), mapKey(p.optionals, from), p.defects]);
 
-test("I-1~I-8 이동 패스 불변식 — 1900~2100 (activated = ∅)", { skip: SKIP }, () => {
+test("I-1~I-8 · I-11 이동 패스 불변식 — 1900~2100 (activated = ∅)", { skip: SKIP }, () => {
   ctx.setActivatedOptionals([]);
   const bad = [];
   const forward = new Map();
@@ -815,12 +824,20 @@ test("I-1~I-8 이동 패스 불변식 — 1900~2100 (activated = ∅)", { skip: 
     const seeded = arrivals.filter((c) => !inYear(c.from, y)).length;
     if ([...p.departures.values()].flat().length !== arrivals.length - seeded) bad.push(`I-1 ${y}`);
     if (p.defects.length) bad.push(`I-4 ${y} ${p.defects}`);
-    for (const [d, cs] of p.departures) for (const c of cs) if (ctx.dayDiff(d, c.to) > 15) bad.push(`I-5 ${d} ${c.observance.id} → ${c.to}`);
+    for (const [d, cs] of p.departures) {
+      for (const c of cs) {
+        if (ctx.dayDiff(d, c.to) > 4) bad.push(`I-5 ${d} ${c.observance.id} → ${c.to}`);
+        if (String(c.displacedBy).startsWith("guard:")) bad.push(`I-11 ${d} ${c.observance.id} by ${c.displacedBy}`);
+      }
+    }
     for (const [D, cs] of p.arrivals) {
       if (!inYear(D, y)) continue;   // 다음 해로 넘긴 도착은 그해 패스의 seed 로 본다
       const deps = p.departures.get(D) || [];
       if (cs.some((c) => deps.some((x) => x.observance.id === c.observance.id))) bad.push(`I-6 ${D}`);
-      if (ctx.inSpan(D, "transferGuard")) bad.push(`I-3 ${D} ${cs.map((c) => c.observance.id)}`);
+      // I-11 — 도착 날짜는 주일이 아니고 그날 유효 precedence ≤ 2 인 고유 후보(명절 · 대축일 · 대재일 · A 특례 · 절기
+      // 주일)가 없다. I-3(도착 ∉ 보호 기간)은 폐기 — 보호 기간이 막지 않는다(→ R-6.3-holy-week-guard)
+      const own = ctx.ownObservancesOn(ix().cal, D);
+      if (ctx.dayOfWeek(D) === 0 || own.some((o) => ctx.effectivePrecedence(o) <= 2)) bad.push(`I-11 ${D} ${cs.map((c) => c.observance.id)}`);
       // I-2 — 도착은 떠나지 않으므로(I-6) 그날의 승자다. 한 날에 도착은 하나다(선착순)
       const r = resolve(D);
       if (cs.length !== 1 || !r.official || r.official.status !== "transferred_in" || r.official.observance.id !== cs[0].observance.id) {

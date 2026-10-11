@@ -1390,14 +1390,18 @@ test("C-6.4-1 절기 기본색 — 대림 자 · 청(3주일 장미 · 청) · �
   same(rb("2026-04-03").color, "red");   // 성 금요일
 });
 
-test("C-6.4-2 승자 색이 덮는다 — 순교자 홍 · 성모 청 대체색, 성주간 · 부활 8일에는 덮지 못한다", () => {
+test("C-6.4-2 승자 색이 덮는다 — 순교자 홍 · 성모 청 대체색, 성주간 · 부활 8일에도 그날 지키는 성인력 축일은 축일 색 · temporal 승자는 가드", () => {
   same([rb("2026-06-17").color, rb("2026-06-17").colorAlt], ["red", null]);
   const mary = rb("2026-06-16");
   same([officialId(mary), mary.color, mary.colorAlt], ["d0616-mary", "white", "blue"]);
-  const holyTue = rb("2026-03-31");   // 성주간 화요일 — 고정 축일이 승자여도 홍
-  same([officialId(holyTue), holyTue.color, holyTue.colorAlt, plain(holyTue.colors)], ["d0331-fixed", "red", null, ["red"]]);
-  const octave = rb("2026-04-09");   // 부활 8일 — 홍 축일이 승자여도 백
-  same([officialId(octave), octave.color], ["d0409-red", "white"]);
+  // 성주간 화요일 · 부활 8일 — 그날 지키는 주요축일의 색이 기간 색을 넘는다(→ R-6.3-holy-week-guard, 책자 2024 [백] · 2025 [홍])
+  const holyTue = rb("2026-03-31");
+  same([officialId(holyTue), holyTue.color, holyTue.colorAlt, plain(holyTue.colors)], ["d0331-fixed", "white", "blue", ["white"]]);
+  const octave = rb("2026-04-09");
+  same([officialId(octave), octave.color], ["d0409-red", "red"]);
+  // temporal 승자는 덮지 못한다 — 성 토요일은 부활밤(백)이 이겨도 홍(C-6.4-4), 생략된 prec 7 은 색에 기여하지 않는다
+  same([officialId(rb("2026-04-04")), rb("2026-04-04").color], ["t-vigil", "red"]);
+  same([officialId(rb("2026-03-30")), rb("2026-03-30").color], ["grid:lent-x-weekday-mon", "red"]);
 });
 
 test("C-6.4-3 사계재 날은 자(→ R-6.4-ember-color) — 격자가 이기면 그날 자, 축일이 이기면 축일 색 + [자, 축일 색] 병기", () => {
@@ -1438,8 +1442,10 @@ test("C-6.3-1 재일 — 대재일 둘 · 사순 주간 40일(성 목요일은 �
 
 // ── 5.11 · 5.12 이동 패스 — 합성 표 (§6.2 · §6.5) ──
 // 실제 연도의 이동은 픽스처(transfers · optionals)가 정본이라 실데이터 파일이 소비한다(설계서 §7). 여기는 실제
-// 연도로는 만들 수 없는 경로 — 연도 경계 · 이동 상한 · 해를 넘긴 선착순 · 떠난 패자 · 좌석 경합 · 켜진 출발이
-// 비운 자리 · 경계 × 활성화 · 활성화 캐시 — 만 잡는다.
+// 연도로는 만들 수 없는 경로 — 연도 경계 · 이동 상한 · 선착순 · 도착끼리 기원 순 · 해를 넘긴 선착순 · 떠난 패자 ·
+// 좌석 경합 · 켜진 출발이 비운 자리 · 경계 × 활성화 · 활성화 캐시 — 와 보호 기간이 패스에 끼어들지 않는다는 것
+// (공개 스위트에서도 잡히게)을 잡는다. 선착순 · 기원 순의 실제 사례는 보호 기간 이동이 없어지며 1900~2100 에서
+// 사라졌다(2026-10-11 — 원장 docs/changes/2026-10-11-liturgical-engine-booklet-holy-week.md).
 
 /**
  * 이동 패스용 새 엔진 — 패스 캐시(연도 키 · 인덱스 하나용)와 활성화 집합이 표마다 새로 선다.
@@ -1504,6 +1510,57 @@ test("C-6.5-16 이동 상한 30일 — 넘으면 옮기지 않고 proper 로 남
   // 29일만 막으면 30일째(12.30)에 앉는다 — 상한이 30 보다 작아도, 31 이상이어도 이 둘 중 하나가 틀린다
   const edge = passEngine(passTables([MOV("d1130-x", "11.30"), ...walls(29)]));
   same([edge.pass(2025).defects, seats(edge.pass(2025).arrivals)], [[], { "2025-12-30": ["d1130-x<-2025-11-30"] }]);
+});
+
+/** 성주간 · 부활 대축일 — 2026 은 부활 4.5(성지주일 3.29 · 성 목 4.2 · 성 금 4.3 · 성 토 4.4 · 부활 2주일 4.12). */
+const HOLY_WEEK_ROWS = [
+  TMP("t-maundy", "성 목요일", { kind: "easter_offset", days: -3 }, { season: "lent", type: "feast", color: "red" }),
+  TMP("t-good-friday", "성 금요일", { kind: "easter_offset", days: -2 }, { season: "lent", type: "fast", color: "red" }),
+  TMP("t-holy-sat", "성 토요일", { kind: "easter_offset", days: -1 }, { rank: null, precedence: null, season: "lent", type: "weekday", color: "red" }),
+  TMP("t-vigil", "부활밤", { kind: "easter_offset", days: -1 }, { season: "easter", type: "feast" }),
+  TMP("t-easter", "부활대축일", { kind: "easter_offset", days: 0 }, { season: "easter", type: "feast" }),
+];
+
+test("R-6.3-holy-week-guard 이동 패스 — 보호 기간은 주요축일을 밀지도 막지도 않는다 · 그날의 대축일 · 주일에 질 때만 다음 빈 날로", () => {
+  const t = passEngine(passTables([
+    MOV("d0330-b", "03.30"),                                           // 성주간 월 — 그날 지킨다
+    MOV("d0402-a", "04.02", { precedence: 3, priority_group: "A" }),   // 성 목요일에 밀린다
+    MOV("d0409-red", "04.09", { color: "red" }),                       // 부활 1주 목 — 그날 지킨다
+    SAN("d0331-movable-minor", "03.31", "합성 이동 축일(prec 7)", { transferable: true, transfer_to: "next_day" }),
+  ], HOLY_WEEK_ROWS));
+  // 성 목요일의 A 는 성 금(prec 1) · 부활밤이 있는 성 토 · 부활대축일을 건너 부활 월요일에 — 옛 규칙은 부활 2주일 뒤(4.13)였다
+  same(seats(t.pass(2026).departures), { "2026-04-02": ["d0402-a->2026-04-06"] });
+  same(fate(t.at("2026-04-06"), "d0402-a"), ["transferred_in", "t-maundy"]);
+  for (const [d, id, color] of [["2026-03-30", "d0330-b", "white"], ["2026-04-09", "d0409-red", "red"]]) {
+    const r = t.at(d);
+    same([fate(r, id), officialId(r), r.color], [["proper", null], id, color], d);   // 축일 색이 기간 색(홍 · 백)을 넘는다
+  }
+  // 옮길 수 있는 축일(prec 7)은 패스가 옮기지 않고 guard 가 생략시킨다(→ R-6.1-prec7-omit)
+  const tue = t.at("2026-03-31");
+  same([fate(tue, "d0331-movable-minor"), officialId(tue), tue.color], [["omitted", "guard:easter-octave"], "grid:lent-x-weekday-tue", "red"]);
+  // 성 토요일은 부활밤이 민다 — 성 토요일 행은 rank: null 이라 밀지 못한다. 부활대축일이 막아 부활 월요일로
+  const sat = passEngine(passTables([MOV("d0404-x", "04.04")], HOLY_WEEK_ROWS));
+  same(seats(sat.pass(2026).arrivals), { "2026-04-06": ["d0404-x<-2026-04-04"] });
+  same(fate(sat.at("2026-04-04"), "d0404-x"), ["transferred_out", "t-vigil"]);
+});
+
+/** 이틀 연속 대축일(가변 — 2026-06-15 · 06-16 = E+71 · E+72) — 그 둘에 밀린 축일이 같은 날(6.17)을 노린다. */
+const TWO_WALLS = [
+  TMP("t-wall-1", "합성 가변 대축일 1", { kind: "easter_offset", days: 71 }, { season: "ordinary", type: "feast" }),
+  TMP("t-wall-2", "합성 가변 대축일 2", { kind: "easter_offset", days: 72 }, { season: "ordinary", type: "feast" }),
+];
+
+test("C-6.5-7 선착순 — 먼저 밀려 앉은 도착을 품계가 높은 뒤의 도착이 밀어내지 않는다(→ R-6.2-first-come)", () => {
+  const t = passEngine(passTables([MOV("d0615-b", "06.15"), MOV("d0616-a", "06.16", { precedence: 3, priority_group: "A" })], TWO_WALLS));
+  same(seats(t.pass(2026).arrivals), { "2026-06-17": ["d0615-b<-2026-06-15"], "2026-06-18": ["d0616-a<-2026-06-16"] });
+  same([officialId(t.at("2026-06-17")), officialId(t.at("2026-06-18"))], ["d0615-b", "d0616-a"]);
+  same(fate(t.at("2026-06-18"), "d0616-a"), ["transferred_in", "t-wall-2"]);
+});
+
+test("C-6.5-9 도착끼리 기원 순 — 같은 품계면 기원 날짜가 이른 쪽이 먼저 앉는다(id 순이 아니다)", () => {
+  // id 사전순은 aa-late 가 먼저다 — 기원 순(6.15 → 6.16)이 이긴다
+  const t = passEngine(passTables([MOV("zz-early", "06.15"), MOV("aa-late", "06.16")], TWO_WALLS));
+  same(seats(t.pass(2026).arrivals), { "2026-06-17": ["zz-early<-2026-06-15"], "2026-06-18": ["aa-late<-2026-06-16"] });
 });
 
 test("C-6.5-17 떠난 패자는 밀어내지 않는다 — 고정일 W · 가변 V · 고정일 C 가 한 날이면 V 만 옮겨지고 C 는 proper", () => {
