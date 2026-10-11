@@ -4,7 +4,7 @@
 > 시점 고정 결정 기록은 ADR-036(데이터 모델·우선순위·전례색) · ADR-037(독서 데이터·엔진 명세) · ADR-038(캘린더·독서 뷰 UI).
 
 - 작성: 2026-08-08
-- 상태: **A1-a 계산 계층 구현(PR 1 · #325) · A1-b 조회 계층 구현(PR 2 · #338) · B1 품계 · 승자 · 전례색 · 재일 구현(PR 3 첫째 · #341) · B1 이동 패스 · 선택 봉헌 구현(PR 3 둘째 · #343) — A1 · B1 구현 완료.** 성주간 · 부활 8일의 주요축일을 책자대로 그날 지키게 고쳤다(#TBD). 남은 것은 §9 의 열린 물음과 엔진을 소비하는 UI(ADR-038)다
+- 상태: **A1-a 계산 계층 구현(PR 1 · #325) · A1-b 조회 계층 구현(PR 2 · #338) · B1 품계 · 승자 · 전례색 · 재일 구현(PR 3 첫째 · #341) · B1 이동 패스 · 선택 봉헌 구현(PR 3 둘째 · #343) — A1 · B1 구현 완료.** 성주간 · 부활 8일의 주요축일을 책자대로 그날 지키게 고쳤다(#345). 남은 것은 §9 의 열린 물음과 엔진을 소비하는 UI(ADR-038)다
 - 구현 대상: `js/app/liturgical-engine.js`(leaf) · `js/types.d.ts`(공유 타입) · `tests/unit/liturgical-engine.test.js`(합성 표) · `tests/unit/liturgical-engine.data.test.js`(실데이터 — §7)
 - 관련 ADR: ADR-036(교회력 데이터 모델 — 좌표·품계·이동·전례색의 권위 출처), ADR-037 §6(엔진 명세 — 본 설계의 상위 문서), ADR-038(엔진을 소비하는 UI), ADR-039(전례시편 `lps`), ADR-013(유닛 테스트 하네스), ADR-012(JSDoc 타입), ADR-018·019·034(모듈 계층·ESM), ADR-021(캐시 무효화), ADR-035(절 부분집합 렌더)
 - 기도서 원문 전사: [`docs/reference/liturgical-calendar-rules.md`](../reference/liturgical-calendar-rules.md)
@@ -1014,7 +1014,7 @@ e2e 는 A1 단독으로는 붙일 화면이 없다 — ADR-038 A3 독서 뷰 PR 
 | **1** | A1-a 계산 계층 + `LITURGICAL_CORE` 블록 + 유닛 — **완료 #325 (2026-09-13)** | 중 |
 | **2** | A1-b 조회 계층 + `LITURGICAL_LOOKUP` 블록 + 프리로드·캐시 + 유닛. `js/types.d.ts` 공유 타입 신설(`Candidate` 포함), `index.html`·`sw.js` 등록. `resolveDate` 는 `Candidate[]`·`official: null`·**빈 `transfers`** 로 낸다(§6.5 마지막 단락) — **완료 #338 (2026-10-10)** — 프리로드 · 공개 래퍼는 `LITURGICAL_PRELOAD` 블록(§3.3) | 중 |
 | **3** | B1 품계·전례색 + **이동 패스(§6.5)** + 선택 봉헌 `optional` + 유닛 §7 「이동 패스」행 + **§7 픽스처 소비** — `liturgical-engine.data.test.js` 가 `tests/fixtures/liturgical/` 세 파일을 읽어 `skip` 아닌 케이스마다 `resolveDate` 결과에 `expect` 를 부분집합 비교(README 「소비 방법」). **GitHub PR 둘로 낸다**(2026-10-10 사용자 결정): 첫째 #341 — 품계 · 승자 · 재분류 · 전례색 · 재일(`fastOf`) + `winners.cases.json` 소비(이동이 필요한 두 케이스 제외); 둘째 #343 — 이동 패스 · 선택 봉헌 · `activated` + `transfers` · `optionals` 소비 · 1900~2100 불변식 · 골든 덤프 — **완료 #341 · #343 (2026-10-11)** | 중 |
-| **3 후속** | **책자대로** — 성주간 · 부활 8일에 걸린 주요축일은 그날 지키고 그날의 대축일 · 주일에 질 때만 다음 빈 날로(→ R-6.3-holy-week-guard — 2026-10-11 사용자 결정), 그날의 축일 색 · 보호 기간 픽스처 · 골든 덤프 · 불변식 I-11 — **#TBD (2026-10-11)** | 작음 |
+| **3 후속** | **책자대로** — 성주간 · 부활 8일에 걸린 주요축일은 그날 지키고 그날의 대축일 · 주일에 질 때만 다음 빈 날로(→ R-6.3-holy-week-guard — 2026-10-11 사용자 결정), 그날의 축일 색 · 보호 기간 픽스처 · 골든 덤프 · 불변식 I-11 — **#345 (2026-10-11)** | 작음 |
 | 이후 | ADR-038 A3 독서 뷰 → A2 캘린더 탭 → A4 검색 이원화 | — |
 
 각 PR 에서 `npm run typecheck` 와 `node --test tests/unit/*.test.js` 를 돌리고(실데이터 케이스를 만든 PR 은 `liturgical-engine.data.test.js` 를 `sync-data.yml` 에 함께 등록한다 — §7), 머지 시 ADR-037 상태 · `docs/status.md` · `docs/architecture.md` §4 모듈 표를 함께 갱신한다.

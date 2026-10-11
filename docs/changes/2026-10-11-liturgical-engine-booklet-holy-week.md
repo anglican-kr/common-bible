@@ -1,4 +1,5 @@
 ---
+pr: 345
 date: 2026-10-11
 branch: feat/liturgical-engine-booklet-holy-week
 title: "feat: 교회력 엔진 — 성주간 · 부활 8일의 주요축일은 책자대로 그날 지킨다 (R-6.3-holy-week-guard)"
