@@ -8,9 +8,9 @@
 
 | 겹 | 도구 | 무엇을 보나 | 어디서 도나 | 규모 |
 |---|---|---|---|---|
-| **유닛** | `node --test` (의존성 0) | 순수 로직 — 함수 입출력·상태 계산 + 문서·픽스처 정합성 | **CI 자동** (PR마다) | 29파일 · 1077케이스 |
+| **유닛** | `node --test` (의존성 0) | 순수 로직 — 함수 입출력·상태 계산 + 문서·픽스처 정합성 | **CI 자동** (PR마다) | 31파일 · 1138케이스 |
 | **타입 검사** | `tsc --noEmit` (`@ts-check`+JSDoc) | 타입 불일치·오타 | 로컬 훅 + 수동 | 설정 2종(앱·워커) |
-| **E2E** | Playwright (실제 브라우저) | 화면·상호작용·모듈 간 배선 | **로컬 전용**(수동) | 27파일 · 232케이스 |
+| **E2E** | Playwright (실제 브라우저) | 화면·상호작용·모듈 간 배선 | **로컬 전용**(수동) | 28파일 · 247케이스 |
 | **데이터** | pytest (`common-bible-data` 서브모듈) | 성경 본문·검색 인덱스 정합성 | 그 저장소 CI | 별도 저장소 |
 
 ### 각 겹이 "혼자만 잡는" 것 — 왜 셋 다 필요한가
@@ -43,9 +43,11 @@ node --test tests/unit/storage.test.js    # 개별 파일
 | `overlay.test.js` | 오버레이 컨트롤러(ADR-032) — 포커스 트랩, 닫기 스택 | 27 |
 | `parallels.test.js` | 평행 본문(인용·각주) 해석 | 26 |
 | `transport.test.js` | 동기화 전송 계층 — 요청/응답·에러 매핑 | 25 |
-| `routing.test.js` | 라우팅(ADR-034 PR5a) — `parsePath` URL→라우트 서술자(books/bookmarks/settings/search·본문 딥링크) | 24 |
+| `lectionary.test.js` | 전례독서 뷰 모델(ADR-038 §3 A3, `LECTIONARY_MODEL` 블록) — 초기 선택(승자 · 공통뿐이면 격자) · `?obs` · 트랙(URL > 기억 > 1) · 세트 라벨/캡션 · 슬롯 이름 순 · 본기도 열거 범위와 송영 코드 · 두 독서 카드 네 꼴(오는/지난 주일 계산) · 헤더 색(자기 색 규칙) · URL 기본값 생략 · 절 발췌 키 · 영광송 조건 · `buildLectionaryModel` 통합(사계재 날 · 기념일 · 트랙 기억 · 본기도 대체안). 합성 재료만 | 39 |
+| `routing.test.js` | 라우팅(ADR-034 PR5a) — `parsePath` URL→라우트 서술자(books/bookmarks/settings/search·본문 딥링크·`/lectionary` 날짜 + 쿼리 상태 넷) | 29 |
 | `search-worker.test.js` | 검색 워커 순수 블록 — 쿼리 파싱(`in:` 연산자)·절 참조 감지·부분 문자열 수집·페이지네이션 | 23 |
 | `bookmark-read.test.js` | 폴더 모아 읽기(ADR-035) — 범위 해석, 연속 구절 병합 | 23 |
+| `lectionary.data.test.js` | 전례독서 뷰 모델 ↔ `data/lectionary` 실측 — 송영 상수 ↔ `_meta.endings` · 라벨 ↔ `_vocab` · 실제 날짜(부활대축일 대체안 셋 · 9.16 사계재 날 초기 격자와 색 병기 · 8.6/8.9 선택 봉헌 카드와 「오는/지난 주일」 · 12.7 도착 카드 · 설날 · 1.1 기념일 · 성 토요일 · 12.25 · 트랙 기억 · 12.24 · 사순 2주일 조건부 세트 · 송가 영광송 표지) · **2025~2027 전수**(모델 · 복음 · 칩 · 색, 알려진 격자 결손 3칸 표) (`data/` 없으면 skip, `engine-data.yml`·`sync-data.yml`에서 실행) | 16 |
 | `liturgical-engine.data.test.js` | 교회력 엔진 ↔ `data/lectionary` 실측 — 연중 주차 38구간 전수(1900~2100, 두 묶음 연속성)·KASI 음력·temporal 규칙 전부 평가 · 조회 계층: 국가일 넷·성탄주간 날짜 본문·사계재 네 계절·좁히기 규칙 ①(2024·2030)·공통 폴백 불변식 82/13/16·본기도 폴백 전 행·**2025~2050 독서·본기도 레코드 전수 도달**·고유명 평일 여섯의 지정 독서·여성선교주일 기념일 · **B1**: 승자 · 색 불변식(2025~2050)·A 특례·명절 ∧ 대재일 / 연중 주일·null 품계·prec 7 다섯 쌍(3.01 삼일절)·기념일·절기 색·재일 40일 · **이동 패스**: 불변식 I-1~I-8 · I-11(1900~2100)·골든 덤프 I-10(`UPDATE_GOLDEN=1`) · **픽스처 소비** `transfers` · `optionals` · `winners`(케이스마다 테스트 — 활성화 · `alsoYears` · 연도 범위 단언, 데이터 대기 하나는 skip)(`data/` 없으면 skip, `engine-data.yml`·`sync-data.yml`에서 실행) | 123 |
 | `citations.test.js` | 인용 표시 — 참조 파싱, 시트 데이터 | 22 |
 | `store-v2.test.js` | 동기화 저장소 v2 — 설정 LWW 머지(모르는 키 보존)·레코드 라운드트립 | 17 |
@@ -54,7 +56,7 @@ node --test tests/unit/storage.test.js    # 개별 파일
 | `refresh-store.test.js` | 백그라운드 새로고침 상태 | 13 |
 | `verse-spec.test.js` | 절 스펙(ADR-038 §3) — `specCoversVerse`·`chapterMaxVerse`·`verseInstanceKey` 절 인스턴스 식별 | 12 |
 | `tabbar.test.js` | 모바일 탭 바 — 활성 표시·인디케이터 | 12 |
-| `tab-history.test.js` | 탭별 히스토리 복원(ADR-031) | 11 |
+| `tab-history.test.js` | 탭별 히스토리 복원(ADR-031) — `tabOf` 분류(`/lectionary`·`/calendar` 는 캘린더 탭) | 12 |
 | `sw.test.js` | 서비스 워커 정적 검증 — `SHELL_FILES` 존재·`index.html` 패리티·ESM import 닫힘·`cacheNameFor` 라우팅·매니페스트 대조(`data/` 없으면 skip, `sync-data.yml`에서 실행) | 7 |
 | `docs-data-consistency.test.js` | 설계서 `facts` 블록 ↔ `data/lectionary` 실측 대조(`data/` 없으면 skip, `sync-data.yml`에서 실행) | 2 |
 | `docs-crossref.test.js` | 교회력 설계 문서 5종(설계서·검토 문서·ADR-036/037/038) + status/architecture 의 교차 참조 — `§n.m`·`미결n`·`C-/X-/I-`·`R-` 정본 마커·픽스처 id 가 실재하는 앵커를 가리키는지(참조원 둘도 같은 검사 — 폐지된 `Qn` 은 검토 문서 §6 의 Q→미결 대응표로 풀고 Q1~Q14 를 전부 덮는지 본다), 설계서 § 헤딩 목록·§9 항목(§9.1 열림 + §9.2 닫힘 = 1..N, 각 목록 번호순, §9.1 은 일곱 필드 전부, §9.2 는 한 줄 + 닫힘 날짜)·ADR 미결 번호가 문서 순서대로 1..n(재부여 · 건너뜀 · 순서 바꿈 금지) · ADR 「미결 사항」 각 항목이 닫힘 또는 「→ 설계서 미결n」 승계(그 목록이 옛 ADR 미결 번호의 대응표), R- 마커 1회 정의, 검토 문서 §6 이 설계서 §9.1 의 「확인 주체 = 사제」 뷰와 같은지(미결 집합 · 상태 첫 낱말). 표기 금지 게이트는 인라인 코드를 뺀 산문만 보며 **문서 단위로** 켠다 — ②(2026-10-09)에서 센티널(전 문서) · 동그라미 참조 · Qn · 편집 원칙(설계서)을 켰고 ③(2026-10-10)이 검토 문서를, ④(2026-10-10)가 ADR 셋을 더하며 ADR 미결 번호 참조 게이트를 켰다(면제 줄 없음 — 다섯 문서 모두) | 14 |
@@ -117,6 +119,7 @@ pytest tests/e2e/test_bookmark_sort.py -q   # 개별 파일
 | `test_cite_sheet.py` | 인용 바텀 시트 — 열기/닫기·Escape·포커스 | 4 |
 | `test_book_name_swap.py` | 책 이름 전체/짧은 명칭 뷰포트별 교체 | 8 |
 | `test_liturgical_render.py` | 전례시편·송가 계응 조판 렌더(ADR-038 A2) — 계응·`¶`·부(部)·에스델 하위 절·교차참조·발췌·일반 장 무회귀 | 10 |
+| `test_lectionary_view.py` | 전례독서 뷰(ADR-038 §3 A3) — 본문 순서(본기도 세그먼트 → 독서 넷 · 영광송 · 송영 1회) · 관측일 칩(색 · 본문 전환) · 두 독서 카드(당일 · 목적지 주일 · 도착일) · 트랙 기억(전례년) · 조건부 세트 캡션 · 기념일 빈 상태 · 오늘/전날/다음날 · 잘못된 날짜 · 공유 링크 상태 · 모바일 탭 바(활성 탭 없음) | 12 |
 | `test_features.py` | 핵심 기능 — 이어 읽기 배너, 롱프레스 절 저장→헤더 아이콘, 모바일 헤더 북마크→저장 모달 | 3 |
 
 ### 오디오·동기화·설정·셸
@@ -135,8 +138,8 @@ pytest tests/e2e/test_bookmark_sort.py -q   # 개별 파일
 
 | 파일 | 검증 대상 | 케이스 |
 |---|---|---|
-| `test_a11y_axe.py` | axe-core 자동 스캔(WCAG 2.1 AA) | 7 |
-| `test_a11y_keyboard.py` | 키보드 인터랙션 | 7 |
+| `test_a11y_axe.py` | axe-core 자동 스캔(WCAG 2.1 AA) — 전례독서 뷰 두 화면 포함 | 9 |
+| `test_a11y_keyboard.py` | 키보드 인터랙션 — 전례독서 칩 Tab · Enter 포함 | 8 |
 
 > **실측 (2026-09-05)**: `pytest tests/e2e` — 위 표 232건 중 **225 통과 / 0 실패 / 7 미실행** (5분 52초, Chrome Headless Shell). 미실행 7건은 `test_a11y_axe.py` 로, 선택적 의존성 `axe-playwright-python` 이 없으면 **그 파일만** 모듈 단위 skip 1건으로 빠진다(`importorskip`; pytest 요약에는 `225 passed, 1 skipped` 로 찍힌다). 그전엔 하드 import 라 수집 오류로 스위트 전체가 중단됐다. 옛 「headless 사전 실패」 묶음은 2026-06-22 에 해소 — [`docs/known-issues.md`](../docs/known-issues.md) §1.
 
