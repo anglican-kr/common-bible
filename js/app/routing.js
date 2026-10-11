@@ -21,6 +21,10 @@ import {
   renderBookList, renderChapterList, renderChapter, renderPrologue,
   renderLoading, renderError, divisionOrder, DIVISION_LABELS,
 } from "./views.js";
+// Lectionary view (ADR-038 §3 A3) — a one-directional seam (lectionary never
+// calls route / navigate / parsePath; its controls are plain links), so it is
+// an explicit import rather than a window facade (ADR-034 principle 1).
+import { renderLectionaryView } from "./lectionary.js";
 
 const { _$, clearNode, chUnit } = window.appHelpers;
 const {
@@ -113,6 +117,32 @@ function parsePath() {
   }
   if (pathname === "bookmarks") return { view: "bookmarks" };
   if (pathname === "settings") return { view: "settings" };
+
+  // Lectionary reading view (ADR-038 §3): /lectionary (today) · /lectionary/YYYY-MM-DD.
+  // View state rides in the query (?obs=<observance id>&track=1|2&set=N&collect=N) so
+  // a shared link, the back button and tab restore (ADR-031) all land on the same
+  // screen; out-of-range values read as absent so a mangled link never throws.
+  // Resolved ahead of the generic single-segment split so "lectionary" is never
+  // read as a book id. The date itself is validated by the view (engine
+  // parseDate) — anything else under /lectionary/ (including the /lectionary/d/<slug>
+  // landing that A4 search will add) gets the view's invalid-date notice for now.
+  if (pathname === "lectionary" || pathname.startsWith("lectionary/")) {
+    const rest = pathname === "lectionary" ? "" : pathname.slice("lectionary/".length);
+    /** @param {string} k */
+    const positive = (k) => {
+      const n = parseInt(query.get(k) ?? "", 10);
+      return Number.isInteger(n) && n > 0 ? n : null;
+    };
+    const track = positive("track");
+    return {
+      view: "lectionary",
+      date: rest ? decodeURIComponent(rest) : null,
+      obs: query.get("obs") || null,
+      track: track === 1 || track === 2 ? track : null,
+      set: positive("set"),
+      collect: positive("collect"),
+    };
+  }
 
   const parts = pathname.split("/");
   if (parts.length === 1) {
@@ -340,6 +370,25 @@ async function route() {
       const readTitle = await window.renderBookmarkReadView(parsed.folderId);
       if (isStale()) return;
       updatePageMeta({ title: readTitle || "북마크 읽기", description: "북마크한 본문 모아 읽기" });
+      trackPageView();
+      return;
+    }
+
+    // Lectionary reading view (ADR-038 §3 A3). A full page on mobile and desktop
+    // alike (ADR-035 /read precedent — no drawer fallback), classified under the
+    // calendar tab (tab-history tabOf) even before A2 adds the tab button. The
+    // view preloads both engine bundles itself and commits the DOM data-first,
+    // so show the skeleton here so #app reflects the new route immediately
+    // (mirrors the bookmark-read branch above).
+    if (view === "lectionary") {
+      renderLoading();
+      dismissLaunchScreen();
+      const lectTitle = await renderLectionaryView(parsed);
+      if (isStale()) return;
+      updatePageMeta({
+        title: lectTitle,
+        description: "대한성공회 감사성찬례 전례독서 — 본기도 · 제1독서 · 시편 · 제2독서 · 복음",
+      });
       trackPageView();
       return;
     }

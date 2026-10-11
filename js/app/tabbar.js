@@ -406,12 +406,15 @@ const $tabBar = document.getElementById("tab-bar");
 // tab links; this only reflects the current route in the bar's active highlight.
 // Reading routes (/, /<division>, /<book>/<chapter>, …) all map to the home tab.
 // ADR-030: 검색은 탭에서 분리된 #tab-search 버튼 — seg==="search" 일 때 별도로 활성.
+// ADR-038 §3: /calendar·/lectionary 는 캘린더 탭 소속 — 탭 버튼은 A2 가 더하므로 그전엔
+// 어느 탭도 활성이 아니다(positionTabIndicator 가 짝 없는 탭을 숨긴다 — 검색과 같다).
 function syncTabBarActive() {
   if (!$tabBar) return;
   const seg = location.pathname.replace(/^\//, "").split("/")[0];
   const active = seg === "search" ? "search"
     : seg === "bookmarks" ? "bookmarks"
     : seg === "settings" ? "settings"
+    : seg === "calendar" || seg === "lectionary" ? "calendar"
     : "home";
   for (const a of $tabBar.querySelectorAll(".tab-item")) {
     const on = a.getAttribute("data-tab") === active;

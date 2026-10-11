@@ -59,6 +59,7 @@ const SHELL_FILES = [
   "/js/app/liturgical-engine.js",
   "/js/app/audio-player.js",
   "/js/app/views.js",
+  "/js/app/lectionary.js",
   "/js/app/routing.js",
   "/js/app/bookmark-read.js",
   "/js/app/tabbar.js",

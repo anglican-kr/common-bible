@@ -1939,4 +1939,7 @@ export {
   buildOrdinalIndex, ordinalWeekOf, lunarDatesOf, spansOf, inSpan,
   preloadCalendar, preloadLectionary, resolveDate, findReadings, findCollects, fastOf,
   setActivatedOptionals,
+  // 선택 봉헌의 목적지 주일(§6.2) — 독서 뷰(ADR-038 §3)가 「오는/지난 주일(날짜)로 옮겨 지키는 경우」
+  // 문구를 엔진과 같은 계산으로 만들기 위해 쓴다. 규칙은 그대로다 — 노출만 더했다.
+  optionalDestOf,
 };

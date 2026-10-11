@@ -29,28 +29,32 @@ window.tabHistory = (() => {
   // ── BEGIN TABOF ── (tests/unit/tab-history.test.js 가 슬라이스해 검증)
   /**
    * 전체 경로(pathname[+search])가 어느 탭에 속하는지 분류한다. 첫 세그먼트만 본다
-   * — /search·/bookmarks·/settings 는 각 탭, 그 외(/, /<division>, /<book>/<chapter>
-   * …)는 모두 홈(읽기 스택).
+   * — /search·/bookmarks·/settings 는 각 탭, /calendar·/lectionary 는 캘린더 탭
+   * (ADR-038 §3 — 전례독서 뷰는 날짜 탐색의 하위 화면이라 캘린더 소속; 탭 버튼 자체는
+   * A2 가 더한다), 그 외(/, /<division>, /<book>/<chapter> …)는 모두 홈(읽기 스택).
    * @param {string} path
-   * @returns {"home"|"search"|"bookmarks"|"settings"}
+   * @returns {"home"|"search"|"bookmarks"|"settings"|"calendar"}
    */
   function tabOf(path) {
     const seg = path.replace(/^\//, "").split(/[/?#]/)[0];
     if (seg === "search") return "search";
     if (seg === "bookmarks") return "bookmarks";
     if (seg === "settings") return "settings";
+    if (seg === "calendar" || seg === "lectionary") return "calendar";
     return "home";
   }
   // ── END TABOF ──
 
   /** @type {Map<string, number>} */
   const scrollMemory = new Map();
-  /** @type {Record<"home"|"search"|"bookmarks"|"settings", string>} */
+  /** @type {Record<"home"|"search"|"bookmarks"|"settings"|"calendar", string>} */
   const lastPathForTab = {
     home: "/",
     search: "/search",
     bookmarks: "/bookmarks",
     settings: "/settings",
+    // 캘린더 탭의 기본 착지는 A2 가 /calendar 로 바꾼다 — 지금은 오늘의 전례독서.
+    calendar: "/lectionary",
   };
   // 가장 최근 완료된 라우트 경로(= 지금 화면). onRouteStart 가 이 경로의 스크롤을
   // 저장하므로, 떠나기 직전 위치를 정확히 잡는다.
@@ -97,7 +101,7 @@ window.tabHistory = (() => {
   /**
    * 해당 탭이 마지막으로 본 경로. tabbar.js 의 홈/검색 진입이 정적 href 대신 이 값으로
    * 라우팅해 위치를 복원한다.
-   * @param {"home"|"search"|"bookmarks"|"settings"} tab
+   * @param {"home"|"search"|"bookmarks"|"settings"|"calendar"} tab
    * @returns {string}
    */
   function lastPath(tab) {

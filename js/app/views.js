@@ -213,30 +213,41 @@ function effectiveDivision(book) {
 // (each tab click is a full route change that rebuilds the nav).
 let _prevDivisionIdx = null;
 
-function buildDivisionTabs(activeDivision) {
-  const labels = divisionLabels();
-  const order = divisionOrder();
-  const activeIdx = Math.max(0, order.indexOf(activeDivision));
-  // Slide from the previous selection when one exists and differs; otherwise
-  // render the indicator already under the active tab (no animation).
-  const startIdx = _prevDivisionIdx != null && _prevDivisionIdx !== activeIdx && _prevDivisionIdx < order.length
-    ? _prevDivisionIdx
+/**
+ * Generic segmented tab row — the sliding-indicator pattern the division tabs
+ * established, reusable by any "pick one of N" control that routes through a
+ * link per option (the lectionary view's collect / set / track segments,
+ * ADR-038 §3). Options are anchors so deep links, the back button and keyboard
+ * navigation keep working without bespoke handlers. `startIdx` is where the
+ * indicator is painted first: pass the previously selected index to animate
+ * the slide, or omit it to render the indicator directly under the active tab.
+ * @param {Array<{ label: string, href: string, active: boolean, title?: string }>} items
+ * @param {{ ariaLabel: string, startIdx?: number | null, className?: string }} opts
+ * @returns {HTMLElement}
+ */
+function buildSegmentTabs(items, opts) {
+  const activeIdx = Math.max(0, items.findIndex((it) => it.active));
+  const startIdx = opts.startIdx != null && opts.startIdx !== activeIdx && opts.startIdx < items.length
+    ? opts.startIdx
     : activeIdx;
-  const nav = el("nav", { className: "division-tabs", "aria-label": "구분" });
+  const nav = el("nav", {
+    className: opts.className ? `division-tabs ${opts.className}` : "division-tabs",
+    "aria-label": opts.ariaLabel,
+  });
   // Style is applied via the CSSOM (.style), not a `style` attribute: the app's
   // CSP has no 'unsafe-inline' for style-src, so style attributes are blocked —
   // but programmatic .style assignments are always allowed.
-  nav.style.setProperty("--tab-count", String(order.length));
+  nav.style.setProperty("--tab-count", String(items.length));
   // The sliding accent-outlined box that marks the active tab. The transform is
   // set directly (not via a custom property) so `transition: transform` has a
   // proper before/after value to interpolate.
   const indicator = el("div", { className: "division-tab-indicator", "aria-hidden": "true" });
   indicator.style.transform = `translateX(${startIdx * 100}%)`;
   nav.appendChild(indicator);
-  for (const div of order) {
-    const isActive = div === activeDivision;
-    const a = el("a", { className: isActive ? "division-tab active" : "division-tab", href: `/${div}` }, labels[div]);
-    if (isActive) a.setAttribute("aria-current", "page");
+  for (const it of items) {
+    const a = el("a", { className: it.active ? "division-tab active" : "division-tab", href: it.href }, it.label);
+    if (it.title) a.setAttribute("title", it.title);
+    if (it.active) a.setAttribute("aria-current", "page");
     nav.appendChild(a);
   }
   // Browser-only: slide from the previously-active tab (startIdx, set inline
@@ -252,6 +263,19 @@ function buildDivisionTabs(activeDivision) {
       });
     });
   }
+  return nav;
+}
+
+function buildDivisionTabs(activeDivision) {
+  const labels = divisionLabels();
+  const order = divisionOrder();
+  const activeIdx = Math.max(0, order.indexOf(activeDivision));
+  // Slide from the previous selection when one exists and differs; otherwise
+  // render the indicator already under the active tab (no animation).
+  const nav = buildSegmentTabs(
+    order.map((div) => ({ label: labels[div], href: `/${div}`, active: div === activeDivision })),
+    { ariaLabel: "구분", startIdx: _prevDivisionIdx },
+  );
   _prevDivisionIdx = activeIdx;
   return nav;
 }
@@ -1529,7 +1553,7 @@ window.renderError = renderError;
 // is the view-renderer entry points routing.js imports (route() dispatch).
 export {
   setTitle, setTitleWithChapterPicker,
-  buildDivisionTabs, divisionLabels, divisionOrder, effectiveDivision,
+  buildDivisionTabs, buildSegmentTabs, divisionLabels, divisionOrder, effectiveDivision,
   initCompactHeader, initScrollElevation,
   _verseSelectionUnit, _verseRangeVrefs,
   DIVISION_LABELS,

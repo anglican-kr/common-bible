@@ -529,6 +529,11 @@ export interface BibleChapter {
   book_name_ko: string;
   book_name_en: string;
   chapter: number;
+  // 성무일과 송가(`cant`)만 — 인쇄본 제목(「즈가리야 송가 Benedictus Dominus Deus」). 다른 책에는 없다.
+  chapter_title?: string;
+  // 성무일과 송가(`cant`)만 — 끝에 영광송을 붙이지 않는 송가(창조송가 · 참회송가 · 찬양송가)가
+  // `false` 다. 키가 없으면 붙인다(ADR-038 §3 — 영광송은 독서 뷰가 편 끝에 1회).
+  gloria?: boolean;
   has_dual_numbering?: boolean;
   has_lxx_only?: boolean;
   verses: BibleVerse[];
@@ -851,6 +856,11 @@ export interface AppStorage {
   loadBookmarks: () => BookmarkTreeNode[];
   saveBookmarks: (store: BookmarkTreeNode[]) => void;
 
+  // Lectionary track (ADR-038 §3 — 전례년 단위로 기억하는 독서 1/2 선택). `year` 는 엔진의
+  // `liturgicalYearOf` 가 주는 전례년 번호다. 로컬 전용(Drive 동기화 없음).
+  loadLectionaryTrack: (year: number) => 1 | 2 | null;
+  saveLectionaryTrack: (year: number, track: 1 | 2) => void;
+
   // Install nudge state
   _loadNudgeState: () => InstallNudgeState;
   _saveNudgeState: (state: InstallNudgeState) => void;
@@ -1013,16 +1023,17 @@ declare global {
     // ADR-031: 탭 히스토리(탭별 위치 복원). tab-history.js 가 노출 — route() 가
     // onRouteStart/onRouteEnd 로 스크롤을 저장·복원하고, tabbar.js 가 lastPath/tabOf
     // 로 홈·검색 탭 재진입 시 마지막 경로를 복원한다.
+    // "calendar" 는 /calendar · /lectionary 의 탭(ADR-038 §3) — 탭 버튼은 A2 가 더한다.
     tabHistory?: {
-      tabOf: (path: string) => "home" | "search" | "bookmarks" | "settings";
+      tabOf: (path: string) => "home" | "search" | "bookmarks" | "settings" | "calendar";
       fullPath: () => string;
       onRouteStart: () => void;
       onRouteEnd: () => void;
       requestRestore: () => void;
-      lastPath: (tab: "home" | "search" | "bookmarks" | "settings") => string;
+      lastPath: (tab: "home" | "search" | "bookmarks" | "settings" | "calendar") => string;
       recordPath: (path: string) => void;
       _scrollMemory: Map<string, number>;
-      _lastPathForTab: Record<"home" | "search" | "bookmarks" | "settings", string>;
+      _lastPathForTab: Record<"home" | "search" | "bookmarks" | "settings" | "calendar", string>;
     };
 
     // Cross-module globals set by drive-sync.js / state-machine.js.
