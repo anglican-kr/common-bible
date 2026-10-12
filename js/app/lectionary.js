@@ -498,6 +498,36 @@ function selectVerses(chapter, verseSpec) {
 }
 
 /**
+ * 슬롯의 ref 들 → ref 마다 그릴 절. 같은 장의 ref 둘이 겹치면 한 번만 그리되, 중복 키는 **장 + 절 인스턴스**다 —
+ * 인스턴스 키(`verseInstanceKeys`)는 장 안에서만 유일해서 「요나 1:1-2:2」처럼 장을 넘는 독서(실데이터 32건 —
+ * 시편 42, 43 · 창세 6:9-22, 7:24, 8:14-19 …)에서 2장 1절이 1장 1절과 같은 키로 떨어져 조용히 빠졌다(Copilot
+ * 리뷰 1회차). DOM id 는 그대로 인스턴스 키다(`appendVerses` 의 `instanceKeys`).
+ * @param {ReadingSlot} slot @param {(chapter: number) => BibleChapter | null | undefined} chapterOf
+ * @returns {Array<{ chapter: number, data: BibleChapter | null, verses: import("../types").BibleVerse[], keys: string[] }>}
+ */
+function slotVerseRuns(slot, chapterOf) {
+  /** @type {Set<string>} */
+  const seen = new Set();
+  return (slot.refs || []).map((ref) => {
+    const data = chapterOf(ref.chapter) || null;
+    if (!data) return { chapter: ref.chapter, data: null, verses: [], keys: [] };
+    const picked = selectVerses(data, ref.verseSpec);
+    /** @type {import("../types").BibleVerse[]} */
+    const verses = [];
+    /** @type {string[]} */
+    const keys = [];
+    picked.verses.forEach((v, i) => {
+      const k = `${ref.chapter}:${picked.keys[i]}`;
+      if (seen.has(k)) return;
+      seen.add(k);
+      verses.push(v);
+      keys.push(picked.keys[i]);
+    });
+    return { chapter: ref.chapter, data, verses, keys };
+  });
+}
+
+/**
  * 시편 슬롯 끝에 영광송을 붙이나 — 전례시편(`lps`)은 언제나, 송가(`cant`)는 장 JSON 의 `gloria` 가 `false` 가
  * 아닐 때(창조송가 · 참회송가 · 찬양송가는 붙이지 않는다). 시편 자리의 일반 성서 본문(다니엘 · 요나 · 토비트)은 없다.
  * @param {ReadingSlot} slot @param {BibleChapter | null | undefined} lastChapter  슬롯 마지막 ref 의 장
@@ -571,8 +601,10 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
       prev: `/lectionary/${addDays(date, -1)}`,
       next: `/lectionary/${addDays(date, 1)}`,
       today: "/lectionary",
-      tracks: tracks.map((t) => ({ track: t, href: hrefFor(date, { ...base, track: t, set: null, collect: null }, defaults), active: t === track })),
-      options: options.map((_, i) => hrefFor(date, { ...base, set: i + 1, collect: null }, defaults)),
+      // 본기도 선택(`collect`)은 독서와 독립된 축이라 트랙 · 세트를 바꿔도 유지한다(Copilot 리뷰 1회차).
+      // 트랙이 바뀌면 세트는 그 트랙의 첫 세트로 돌아간다(세트는 트랙에 딸린 것).
+      tracks: tracks.map((t) => ({ track: t, href: hrefFor(date, { ...base, track: t, set: null }, defaults), active: t === track })),
+      options: options.map((_, i) => hrefFor(date, { ...base, set: i + 1 }, defaults)),
       collects: collects.map((o) => hrefFor(date, { ...base, collect: o.collect_no }, defaults)),
       pair: pair ? {
         a: hrefFor(date, { obs: pair.a.observance.id, track: null, set: null, collect: null }, defaults),
@@ -729,7 +761,17 @@ function buildControls(m) {
     // global <a> interceptor navigates after this listener runs.
     const ly = liturgicalYearOf(m.date);
     seg.querySelectorAll("a").forEach((a, i) => {
-      a.addEventListener("click", () => { if (Number.isFinite(ly)) saveLectionaryTrack(ly, m.hrefs.tracks[i].track); });
+      a.addEventListener("click", () => {
+        const next = m.hrefs.tracks[i].track;
+        // 기억을 바꾸면 트랙 없는 URL 의 뜻이 바뀐다 — 뒤로 가기가 지금 화면(지금 트랙)으로 돌아오게,
+        // 저장 전에 지금 history 항목의 URL 에 트랙을 명시해 둔다(Copilot 리뷰 1회차).
+        if (next !== m.track && m.track && !new URLSearchParams(location.search).has("track")) {
+          const u = new URL(location.href);
+          u.searchParams.set("track", String(m.track));
+          history.replaceState(history.state, "", u.pathname + u.search);
+        }
+        if (Number.isFinite(ly)) saveLectionaryTrack(ly, next);
+      });
     });
     ctl.appendChild(seg);
     wrap.appendChild(ctl);
@@ -819,29 +861,17 @@ function buildReading(m, slot, chapters) {
   const isOptional = optionalVerseTest(slot, shortSlot);
   section.appendChild(head);
 
-  // Verse instances already drawn in this slot — two refs of one chapter must
-  // not print the same verse twice (same key discipline as bookmark-read.js).
-  const seen = new Set();
-  for (const ref of refs) {
-    const data = chapters.get(`${slot.bookId}:${ref.chapter}`);
-    if (!data) {
-      section.appendChild(el("p", { className: "lect-missing", role: "status" }, `본문을 불러오지 못했습니다 (${slot.bookId} ${ref.chapter})`));
+  // ref 마다 한 <article> — 같은 장의 ref 둘이 겹치면 한 번만(키는 장 + 절 인스턴스, `slotVerseRuns`).
+  for (const run of slotVerseRuns(slot, (ch) => chapters.get(`${slot.bookId}:${ch}`))) {
+    if (!run.data) {
+      section.appendChild(el("p", { className: "lect-missing", role: "status" }, `본문을 불러오지 못했습니다 (${slot.bookId} ${run.chapter})`));
       continue;
     }
-    const picked = selectVerses(data, ref.verseSpec);
-    const verses = [];
-    const keys = [];
-    picked.verses.forEach((v, i) => {
-      if (seen.has(picked.keys[i])) return;
-      seen.add(picked.keys[i]);
-      verses.push(v);
-      keys.push(picked.keys[i]);
-    });
-    if (!verses.length) continue;
+    if (!run.verses.length) continue;
     const article = el("article", { className: "chapter-text", lang: "ko" });
     // Clean 봉독 surface (ADR-035): cite chips off, no parallels, no note anchors.
-    appendVerses(article, verses, { hideCites: true, instanceKeys: keys });
-    if (shortSlot) markOptionalVerses(article, ref.chapter, isOptional);
+    appendVerses(article, run.verses, { hideCites: true, instanceKeys: run.keys });
+    if (shortSlot) markOptionalVerses(article, run.chapter, isOptional);
     section.appendChild(article);
   }
   if (wantsGloria(slot, lastChapter)) section.appendChild(buildGloria());

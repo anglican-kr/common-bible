@@ -160,6 +160,33 @@ def test_track_toggle_persists_per_liturgical_year(desktop_context):
     assert page.evaluate("() => location.search") == ""
 
 
+def test_cross_chapter_reading_keeps_every_chapter(desktop_context):
+    """연중 12주일 다해 — 시편 42, 43: 장을 넘는 독서에서 둘째 장이 빠지지 않는다(Copilot 1회차 — 절 키가 장 안에서만 유일)."""
+    page = desktop_context.new_page()
+    _open(page, "lectionary/2025-06-22")
+    psalm = page.locator(".lect-reading[data-slot='psalm']")
+    assert "시편 42, 43" in psalm.locator(".lect-ref").inner_text()
+    articles = psalm.locator("article.chapter-text")
+    assert articles.count() == 2
+    assert articles.nth(0).locator(".verse").count() > 0
+    assert articles.nth(1).locator(".verse").count() > 0   # 43편 — 종전엔 42편과 키가 겹쳐 전부 빠졌다
+
+
+def test_back_after_track_change_returns_to_previous_track(desktop_context):
+    """트랙 없는 URL 에서 독서 2 를 고른 뒤 뒤로 가기 — 기억이 2 로 바뀌었어도 이전 화면(독서 1)으로 돌아온다(Copilot 1회차)."""
+    page = desktop_context.new_page()
+    _open(page, "lectionary/2026-06-14")
+    assert page.locator(".lect-track .division-tab.active").inner_text() == "독서 1"
+    page.locator(".lect-track .division-tab", has_text="독서 2").click()
+    page.wait_for_url("**/lectionary/2026-06-14?track=2")
+    page.wait_for_selector(".lect-track .division-tab.active:has-text('독서 2')")
+    page.go_back()
+    page.wait_for_url("**/lectionary/2026-06-14?track=1")   # 저장 전에 지금 항목에 트랙을 명시해 둔 것
+    page.wait_for_selector(".lect-track .division-tab.active:has-text('독서 1')")
+    # 기억은 2 그대로 — 다음에 트랙 없이 열면 독서 2.
+    assert page.evaluate("() => JSON.parse(localStorage.getItem('bible-lectionary-track') || 'null')") == {"2026": 2}
+
+
 def test_conditional_set_condition_is_the_label(desktop_context):
     """사순 2주일 가해 — 조건이 라벨: 「사순 2주일」 / 「주의 변모 주일로 지킬 때」, 캡션 줄 없음(미결38)."""
     page = desktop_context.new_page()

@@ -417,6 +417,23 @@ test("selectVerses: spec 범위 + 병합 절(range_end) + 전체 장 기준 인�
   assert.strictEqual(ctx.selectVerses({ verses: [] }, "1-3").verses.length, 0);
 });
 
+test("slotVerseRuns: 장을 넘는 ref 는 장마다 그린다 — 2장 1절이 1장 1절과 키가 같아도 빠지지 않는다(Copilot 1회차)", () => {
+  const ch = (n, count) => ({ book_id: "jon", chapter: n, verses: Array.from({ length: count }, (_, i) => ({ number: i + 1, text: `${n}:${i + 1}` })) });
+  const chapters = { 1: ch(1, 17), 2: ch(2, 11) };
+  const jonah = { slot: "first", bookId: "jon", refs: [{ chapter: 1, verseSpec: "1-17" }, { chapter: 2, verseSpec: "1-2,11" }], label: "요나 1:1-2:2, 11" };
+  const runs = ctx.slotVerseRuns(jonah, (n) => chapters[n]);
+  same(runs.map((r) => [r.chapter, r.verses.length]), [[1, 17], [2, 3]]);
+  same(runs[1].verses.map((v) => v.text), ["2:1", "2:2", "2:11"]);
+  same(runs[1].keys, ["1", "2", "11"]);   // DOM id 는 장 안의 인스턴스 키 그대로
+});
+
+test("slotVerseRuns: 같은 장의 ref 둘이 겹치면 한 번만, 없는 장은 data null 로 남긴다", () => {
+  const ch = { book_id: "gen", chapter: 1, verses: Array.from({ length: 6 }, (_, i) => ({ number: i + 1, text: String(i + 1) })) };
+  const slot = { slot: "first", bookId: "gen", refs: [{ chapter: 1, verseSpec: "1-3" }, { chapter: 1, verseSpec: "2-5" }, { chapter: 9, verseSpec: "all" }], label: "" };
+  const runs = ctx.slotVerseRuns(slot, (n) => (n === 1 ? ch : null));
+  same(runs.map((r) => [r.chapter, r.data ? "ok" : null, r.verses.map((v) => v.text)]), [[1, "ok", ["1", "2", "3"]], [1, "ok", ["4", "5"]], [9, null, []]]);
+});
+
 test("wantsGloria: 전례시편은 언제나, 송가는 gloria:false 가 아닐 때, 다른 슬롯 · 일반 성서는 아니다", () => {
   const psalm = slot("psalm", "lps", 23, "all", "시편 23");
   assert.strictEqual(ctx.wantsGloria(psalm, CHAPTER), true);
@@ -538,6 +555,9 @@ test("buildLectionaryModel: 트랙 — 전례년 기억이 기본, URL 이 이�
     { track: 1, href: "/lectionary/2026-06-14?track=1", active: false },
     { track: 2, href: "/lectionary/2026-06-14", active: true },
   ]);
+  // 트랙을 바꿔도 본기도 선택(collect=2)은 남고, 세트는 그 트랙의 첫 세트로 돌아간다(Copilot 1회차).
+  const withCollect = ctx.buildLectionaryModel(r, { obs: null, track: 2, set: null, collect: 2 }, groupsOf, [{ candidate: sunday, collects: [collect(59, "…", { collect_no: 1, collect_total: 2 }), collect(60, "…", { collect_no: 2, collect_total: 2 })] }], 2);
+  same(plain(withCollect.hrefs.tracks.map((t) => t.href)), ["/lectionary/2026-06-14?track=1&collect=2", "/lectionary/2026-06-14?collect=2"]);
   const overridden = ctx.buildLectionaryModel(r, { obs: null, track: 1, set: 2, collect: null }, groupsOf, entries, 2);
   assert.strictEqual(overridden.track, 1);
   assert.strictEqual(overridden.options.length, 1);   // ?set=2 는 범위 밖 → 첫(유일한) 선택지
@@ -556,6 +576,8 @@ test("buildLectionaryModel: 본기도 대체안 — ?collect 는 collect_no, hre
   assert.strictEqual(m.collectIndex, 2);
   assert.strictEqual(m.ending, "C");
   same(m.options.map((o) => o.label), ["독서 1", "독서 2"]);   // 원본 세트 둘 — 완전한 세트를 통째로 고른다
+  // 본기도 선택은 독립 축 — 세트를 바꿔도 collect=3 이 남는다(Copilot 1회차).
+  same(plain(m.hrefs.options), ["/lectionary/2026-04-05?collect=3", "/lectionary/2026-04-05?set=2&collect=3"]);
   same(plain(m.hrefs.collects), ["/lectionary/2026-04-05", "/lectionary/2026-04-05?collect=2", "/lectionary/2026-04-05?collect=3"]);
   assert.strictEqual(m.fast, null);
 });
