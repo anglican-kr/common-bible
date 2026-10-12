@@ -276,23 +276,17 @@ test("A3 송가 — 즈가리야 송가는 영광송을 붙이고 창조송가(g
 
 // ── 전수 — 2025~2027 모든 날 ──
 
-// 독서 레코드가 없는 격자 평일 칸(2026-10-12 실측 — 원료 기사의 수집 태그 누락 의심, pitfalls §18 의
-// 재의 수요일 후 금요일과 같은 종류 · 데이터 저장소 후속). 그날 격자가 초기 선택이면 뷰는 「독서 없음 —
-// 본기도만」을 그린다. 데이터가 채워지면 이 표가 낡아 아래 전수 검사가 멈춘다 — 그때 지운다.
-const KNOWN_READING_GAPS = new Set(["lent|2|tue", "lent|2|wed", "easter|4|sat"]);
-
-test("A3 2025~2027 모든 날 — 모델이 서고, 초기 선택에 복음까지 있는 독서가 있고(알려진 데이터 결손 3칸 제외), 칩 href 가 /lectionary/ 로 시작한다", { skip: SKIP }, () => {
+// 2026-10-12 처음 돌렸을 때 격자 평일 세 칸(사순 2주 화 · 수 · 부활 4주 토)에 독서 레코드가 없었다 —
+// 원료 기사의 수집 태그 누락(pitfalls §18 의 재의 수요일 후 금요일과 같은 종류). data#30 이 채웠고 이 전수
+// 검사가 그것을 지킨다 — 다시 빈 칸이 생기면 「독서 없음」으로 멈춘다.
+test("A3 2025~2027 모든 날 — 모델이 서고, 초기 선택에 복음까지 있는 독서가 있고, 칩 href 가 /lectionary/ 로 시작한다", { skip: SKIP }, () => {
   const bad = [];
-  const gaps = new Set();
   for (const y of [2025, 2026, 2027]) {
     let d = ctx.toKey(y, 1, 1);
     while (d.slice(0, 4) === String(y)) {
       const m = model(d);
-      const key = `${m.resolved.coord.season}|${m.resolved.coord.week}|${m.resolved.coord.weekday}`;
-      if (!m.group) {
-        if (ctx.isGrid(m.selected) && KNOWN_READING_GAPS.has(key)) gaps.add(key);
-        else bad.push(`${d} 독서 없음`);
-      } else if (!m.slots.some((s) => s.slot === "gospel")) bad.push(`${d} 복음 없음`);
+      if (!m.group) bad.push(`${d} 독서 없음`);
+      else if (!m.slots.some((s) => s.slot === "gospel")) bad.push(`${d} 복음 없음`);
       if (!m.chips.length || m.chips.some((c) => !c.href.startsWith("/lectionary/"))) bad.push(`${d} 칩`);
       if (!m.chips.some((c) => c.active)) bad.push(`${d} 활성 칩 없음`);
       if (!m.colors.length) bad.push(`${d} 색 없음`);
@@ -301,6 +295,4 @@ test("A3 2025~2027 모든 날 — 모델이 서고, 초기 선택에 복음까�
     }
   }
   same(bad, []);
-  // 결손 표가 실제와 정확히 같아야 한다 — 데이터가 채워지면 여기서 멈춰 표를 지우게 한다.
-  same([...gaps].sort(), [...KNOWN_READING_GAPS].sort());
 });
