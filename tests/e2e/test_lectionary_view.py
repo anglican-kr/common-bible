@@ -55,8 +55,10 @@ def test_easter_day_renders_collect_then_four_readings_in_order(desktop_context)
     # 본기도가 독서보다 앞에 온다.
     sections = page.eval_on_selector_all(".lect-section", "els => els.map(e => e.dataset.slot)")
     assert sections == ["collect"] + SLOT_ORDER, sections
-    assert page.locator(".lect-collects .division-tab").count() == 3
+    assert page.eval_on_selector_all(".lect-collects .division-tab", "els => els.map(e => e.textContent)") == ["본기도 1", "본기도 2", "본기도 3"]
     assert page.locator(".lect-collect-text").count() == 1
+    # 원본 세트 둘 = 「또는」 대안 — 완전한 세트를 통째로 고른다.
+    assert page.eval_on_selector_all(".lect-sets .division-tab", "els => els.map(e => e.textContent)") == ["독서 1", "독서 2"]
     assert page.locator(".lect-ending").count() == 1
     # 독서 본문이 실제로 그려졌다(절 span) — 복음까지.
     for slot in SLOT_ORDER:
@@ -77,7 +79,7 @@ def test_collect_alternative_segment_switches_text_and_url(desktop_context):
     first = page.inner_text(".lect-collect-text")
     page.locator(".lect-collects .division-tab").nth(1).click()
     page.wait_for_url("**/lectionary/2026-04-05?collect=2")
-    page.wait_for_selector(".lect-collects .division-tab.active:has-text('2안')")
+    page.wait_for_selector(".lect-collects .division-tab.active:has-text('본기도 2')")
     assert page.inner_text(".lect-collect-text") != first
 
 
@@ -158,12 +160,28 @@ def test_track_toggle_persists_per_liturgical_year(desktop_context):
     assert page.evaluate("() => location.search") == ""
 
 
-def test_set_segment_shows_conditional_caption(desktop_context):
-    """사순 2주일 가해 — 2안을 고르면 캡션 「주의 변모 주일로 지키는 경우」(미결38)."""
+def test_conditional_set_condition_is_the_label(desktop_context):
+    """사순 2주일 가해 — 조건이 라벨: 「사순 2주일」 / 「주의 변모 주일로 지킬 때」, 캡션 줄 없음(미결38)."""
     page = desktop_context.new_page()
     _open(page, "lectionary/2026-03-01?set=2")
-    assert page.locator(".lect-sets .division-tab.active").inner_text() == "2안"
-    assert "주의 변모 주일로 지키는 경우" in page.inner_text(".lect-sets .lect-caption")
+    assert page.eval_on_selector_all(".lect-sets .division-tab", "els => els.map(e => e.textContent)") == ["사순 2주일", "주의 변모 주일로 지킬 때"]
+    assert page.locator(".lect-sets .division-tab.active").inner_text() == "주의 변모 주일로 지킬 때"
+    assert page.locator(".lect-sets .lect-caption").count() == 0
+
+
+def test_bracket_set_merges_into_long_text_with_markers(desktop_context):
+    """연중 11주일 가해 — 괄호 선택 구절 세트는 세그먼트가 아니라 긴 본문 + 〔 〕 표시 + 「짧게 읽으면 …」 주석."""
+    page = desktop_context.new_page()
+    _open(page, "lectionary/2026-06-14")
+    assert page.locator(".lect-sets").count() == 0          # 대안 세그먼트 없음(합쳐짐)
+    assert page.locator(".lect-track").count() == 1         # 트랙 토글은 그대로
+    note = page.locator(".lect-optional-note")
+    assert note.count() == 1 and "짧게 읽으면" in note.inner_text()
+    brackets = page.locator(".lect-bracket")
+    assert brackets.count() >= 2 and brackets.count() % 2 == 0
+    assert page.locator(".verse.lect-optional").count() > 0
+    # 선택 구절은 그 슬롯 하나에만.
+    assert page.eval_on_selector_all(".lect-reading:has(.lect-bracket)", "els => els.length") == 1
 
 
 # ── ⑤ 기념일 ──

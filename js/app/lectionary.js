@@ -16,12 +16,14 @@
 // Every control is a link, so the global <a> interceptor (routing.js) does the
 // navigation and the back button / deep links / keyboard all work unchanged.
 //
-// 뷰가 처음 부딪힌 설계서 §9 미결의 잠정 답(2026-10-12 — 근거는 원장 docs/changes/2026-10-12-lectionary-view.md):
-//   미결25 고유 독서 없는 축일의 초기 독서 = 격자(그날의 주일 · 평일) 독서 — 책자대로. 제목 · 색은 승자.
-//   미결20 성 토요일: 부활밤 칩을 고르면 헤더 색이 부활밤의 백 — 사계재 규칙(ADR-038 §3)을 「자기 색을
-//          가진 비격자 후보」로 일반화했다. 저녁 전례 표지는 두지 않았다.
-//   미결38 `set_note` 는 캡션 그대로, 단 파서 내부 표지 「원본 세트 N」은 숨긴다.
-//   미결42 칩 라벨은 괄호 설명을 뗀 이름 + (주기, 독서 N) — 전체 이름은 title 속성.
+// 뷰가 처음 부딪힌 설계서 §9 미결 — 사용자가 하나씩 확정했다(2026-10-12, coding-pitfalls §21 · 원장
+// docs/changes/2026-10-12-lectionary-view.md):
+//   미결25 고유 독서 없는 축일의 초기 독서 = 격자(그날의 주일 · 평일) 독서 — 책자대로. 제목 · 색은 승자. (닫힘)
+//   미결20 성 토요일: 헤더 색은 「고른 본문의 색」 — 부활밤 본문이면 백(승자여도), 성 토요일 칩이면 홍.
+//          저녁 전례 표지(데이터 · 엔진)는 그대로 열려 있다.
+//   미결38 대안 세트: 「또는」 대안은 「독서 1 · 독서 2」(완전한 세트를 통째로 바꾼다), 조건부는 「…로 지킬 때」가
+//          라벨, 괄호 선택 구절 세트는 바탕 세트에 합쳐 긴 본문 + 〔 〕 표시. (닫힘)
+//   미결42 칩 라벨은 괄호 설명을 뗀 이름 + (주기, 독서 N) — 길면 CSS 말줄임, 전체 이름은 title 속성. (닫힘)
 
 /** @typedef {import("../types").ResolvedDate} ResolvedDate */
 /** @typedef {import("../types").Candidate} Candidate */
@@ -56,18 +58,18 @@ const PAGE_TITLE = "전례독서";
  * @typedef {{ kind: "optional-dest" | "arrival" | "festival" | "optional-origin", a: Candidate, b: Candidate, aText: PairCardText, bText: PairCardText }} LectionaryPair
  */
 /** @typedef {{ candidate: Candidate, label: string, title: string, href: string, active: boolean, muted: boolean }} LectionaryChip */
-/** @typedef {{ candidate: Candidate, collects: CollectOption[], selected: boolean }} CollectBlock */
+/** 화면의 「독서」 선택지 하나 — `short` 는 괄호 선택 구절 세트에 합쳐진 짧은 바탕 세트(〔 〕 표시의 기준). @typedef {{ group: ReadingGroup, short: ReadingGroup | null, label: string }} ReadingOption */
 /**
  * 뷰가 그리는 것 전부 — 순수 함수 `buildLectionaryModel` 의 반환. DOM 은 이것만 읽는다.
  * @typedef {{
  *   date: string, resolved: ResolvedDate, selected: Candidate, initial: Candidate,
  *   groups: ReadingGroup[], tracks: Array<1 | 2>, track: 1 | 2 | null,
- *   sets: ReadingGroup[], setIndex: number, group: ReadingGroup | null, slots: ReadingSlot[],
+ *   options: ReadingOption[], setIndex: number, group: ReadingGroup | null, shortGroup: ReadingGroup | null, slots: ReadingSlot[],
  *   chips: LectionaryChip[], pair: LectionaryPair | null,
- *   collects: CollectBlock[], collectIndex: number, ending: "A" | "B" | "C",
+ *   collects: CollectOption[], collectIndex: number, ending: "A" | "B" | "C",
  *   colors: string[], colorAlt: string[], ownColor: boolean,
  *   fast: "major" | "minor" | null, cycle: string | null, empty: boolean,
- *   hrefs: { prev: string, next: string, today: string, tracks: Array<{ track: 1 | 2, href: string, active: boolean }>, sets: string[], collects: string[], pair: { a: string, b: string } | null },
+ *   hrefs: { prev: string, next: string, today: string, tracks: Array<{ track: 1 | 2, href: string, active: boolean }>, options: string[], collects: string[], pair: { a: string, b: string } | null },
  * }} LectionaryModel
  */
 
@@ -93,6 +95,8 @@ const COLOR_LABEL = { white: "백색", red: "적색", green: "녹색", violet: "
 const FAST_LABEL = { major: "대재일", minor: "소재일" };
 const WEEKDAY_KO = ["일", "월", "화", "수", "목", "금", "토"];
 const GRID_ID_PREFIX = "grid:";
+/** 파서가 괄호 선택 확장(「9:35-10:8(9-23)」)으로 만든 세트의 표지(ADR-037 §1 「대안 세트 explode」). */
+const BRACKET_NOTE = "괄호 선택 구절 포함";
 /** 선택 봉헌의 네 목적지(설계서 R-6.2-destinations) — 엔진 OPTIONAL_TRANSFER_KINDS 와 같은 넷. */
 const OPTIONAL_TRANSFER_KINDS = ["nearby_sunday", "sunday_0102_0108", "sunday_1030_1105", "easter7_sunday"];
 
@@ -237,32 +241,93 @@ function setsOf(/** @type {ReadingGroup[]} */ groups, /** @type {1 | 2 | null} *
   return track === null ? groups : groups.filter((g) => g.reading_track === track);
 }
 
-/** `?set=` 은 보이는 세트 가운데 몇 번째인가(1부터) — 실데이터의 `set_no` 와 같다. 범위 밖이면 첫 세트. */
-function pickSet(/** @type {ReadingGroup[]} */ sets, /** @type {number | null} */ param) {
-  if (!sets.length) return -1;
-  if (param && param >= 1 && param <= sets.length) return param - 1;
+/** `?set=` 은 보이는 선택지 가운데 몇 번째인가(1부터). 범위 밖이면 첫 선택지. */
+function pickSet(/** @type {ReadingOption[]} */ options, /** @type {number | null} */ param) {
+  if (!options.length) return -1;
+  if (param && param >= 1 && param <= options.length) return param - 1;
   return 0;
 }
 
 /**
- * 세트 세그먼트 라벨 — 「1안」「2안」. 제목이 갈리는 세트들(미결12 — 좁히기에 실패해 남은 것 전부가 온 날)은
- * 제목으로 가른다.
- * @param {ReadingGroup[]} sets @param {number} i
+ * 세트의 조건 문구 — 「…로 지킬 때」 꼴로 통일(사용자 결정 2026-10-12; 데이터는 「…로 지키는 경우」와 섞여 있다).
+ * 조건이 아닌 파서 표지(「원본 세트 N」 · 괄호 선택 구절)는 null.
  */
-function setLabel(sets, i) {
-  const titles = new Set(sets.map((g) => g.title));
-  if (titles.size > 1) {
-    const dup = sets.filter((g) => g.title === sets[i].title).length > 1;
-    return dup ? `${sets[i].title} ${sets[i].set_no}안` : sets[i].title;
-  }
-  return `${i + 1}안`;
+function setCondition(/** @type {ReadingGroup} */ group) {
+  const n = group.set_note;
+  if (!n || /^원본 세트/.test(n) || n === BRACKET_NOTE) return null;
+  return n.replace(/로 지키는 경우$/, "로 지킬 때");
 }
 
-/** 조건부 세트 캡션(미결38 잠정) — `set_note` 그대로, 파서 내부 표지 「원본 세트 N」은 숨긴다. */
-function setCaption(/** @type {ReadingGroup} */ group) {
-  const n = group.set_note;
-  if (!n || /^원본 세트/.test(n)) return null;
-  return n;
+/**
+ * 괄호 선택 구절 세트의 바탕 — 앞선 선택지 가운데 슬롯 구성이 같고 **한 슬롯만** 라벨이 다른(짧은) 것, 가장 가까운 것.
+ * 실데이터의 괄호 세트 34건이 전부 이 꼴이다(2026-10-12 실측). 없으면 -1.
+ * @param {ReadingOption[]} options @param {ReadingGroup} g
+ */
+function findBracketBase(options, g) {
+  for (let i = options.length - 1; i >= 0; i--) {
+    const base = options[i].group;
+    if (base.readings.length !== g.readings.length) continue;
+    let diff = 0;
+    let ok = true;
+    for (const r of g.readings) {
+      const s = base.readings.find((x) => x && x.slot === r.slot);
+      if (!s || s.bookId !== r.bookId) { ok = false; break; }
+      if (s.label !== r.label) diff++;
+    }
+    if (ok && diff === 1) return i;
+  }
+  return -1;
+}
+
+/**
+ * 고른 트랙의 세트들 → 화면의 「독서」 선택지(사용자 결정 2026-10-12 — ADR-038 §3 「구현」).
+ * - 괄호 선택 구절 세트(`BRACKET_NOTE`)는 자기 바탕 세트에 **합친다** — 긴 본문을 그리고 짧은 본문과의 차이를
+ *   〔 〕 로 표시한다(`short` 가 그 바탕). 세그먼트에 오르지 않는다.
+ * - 남는 선택지가 둘 이상이면 「또는」 대안이다 — 대안이 있는 슬롯만 바꾼 **완전한 세트**를 통째로 고른다(ADR-037
+ *   §1): 「독서 1」「독서 2」. 조건부 세트는 조건(「…로 지킬 때」)이 라벨이고 그 바탕 세트는 관측일 이름이다.
+ * - 제목이 갈리는 세트들(미결12 — 좁히기에 실패해 남은 것 전부가 온 날)은 제목으로 가른다.
+ * @param {ReadingGroup[]} sets @param {string} baseName
+ * @returns {ReadingOption[]}
+ */
+function readingOptions(sets, baseName) {
+  /** @type {ReadingOption[]} */
+  const out = [];
+  for (const g of sets) {
+    if (g.set_note === BRACKET_NOTE) {
+      const i = findBracketBase(out, g);
+      if (i >= 0) { out[i] = { group: g, short: out[i].group, label: "" }; continue; }
+    }
+    out.push({ group: g, short: null, label: "" });
+  }
+  const titles = new Set(out.map((o) => o.group.title));
+  const conditional = out.some((o) => setCondition(o.group) !== null);
+  out.forEach((o, i) => {
+    const cond = setCondition(o.group);
+    if (titles.size > 1) {
+      const dup = out.filter((x) => x.group.title === o.group.title).length > 1;
+      o.label = dup ? `${o.group.title} 독서 ${o.group.set_no}` : o.group.title;
+    } else if (cond) {
+      o.label = cond;
+    } else if (conditional) {
+      o.label = baseName;
+    } else {
+      o.label = `독서 ${i + 1}`;
+    }
+  });
+  return out;
+}
+
+/**
+ * 괄호 선택 구절 판정 — 긴 본문(`slot`)에는 있고 짧은 바탕(`shortSlot`)에는 없는 절. 책자가 「(9-23)」 로
+ * 적는 선택 구절을 〔 〕 로 표시하기 위한 것(사용자 결정 2026-10-12 — 긴 본문을 싣고 짧은 본문이 어디까지인지 표시).
+ * @param {ReadingSlot} slot @param {ReadingSlot | null} shortSlot
+ * @returns {(chapter: number, n: number) => boolean}
+ */
+function optionalVerseTest(slot, shortSlot) {
+  if (!shortSlot) return () => false;
+  const covers = (/** @type {ReadingSlot} */ s, /** @type {number} */ ch, /** @type {number} */ n) =>
+    (s.refs || []).some((r) => r.chapter === ch && specCoversVerse(r.verseSpec, n));
+  return (chapter, n) => covers(slot, chapter, n) && !covers(shortSlot, chapter, n);
 }
 
 /** 슬롯을 **이름**으로 고른 순서 — 위치로 우기지 않는다(ADR-037 §1 「슬롯 배정」). 없는 슬롯은 건너뛴다. */
@@ -278,27 +343,16 @@ function slotsInOrder(/** @type {ReadingGroup | null} */ group) {
 }
 
 /**
- * 본기도 열거 순서(ADR-038 §3): 고른 관측일의 것이 앞, 그다음 같은 날을 함께 지키는 관측일(`proper` ·
- * `transferred_in` · `commemorated` — 기념만 하는 축일은 본기도만 따라온다)의 것이 `candidates` 순으로 따라온다.
- * 밀린 것(`omitted`) · 떠난 것(`transferred_out`) · 켜지 않은 선택 봉헌(`optional`) · 사계재(지향 — 고를 때만)는
- * 열거하지 않는다. 재조회 없이 `findCollects` 반환을 재배열만 한다.
+ * 본기도 — **고른 관측일의 것만**(사용자 결정 2026-10-12, pitfalls §21 · ADR-038 §3 「구현」). 같은 날의 다른
+ * 관측일 본기도는 그 칩을 골라야 보인다. 재조회 없이 `findCollects` 반환(관측일별 키잉)에서 고른 후보의 원소를
+ * 찾는다 — 본기도가 없는 후보(기념일 · 이름 줄)는 빈 배열.
  * @param {CandidateCollects[]} entries @param {Candidate} selected
- * @returns {CollectBlock[]}
+ * @returns {CollectOption[]}
  */
-function collectsOrder(entries, selected) {
+function collectsFor(entries, selected) {
   const sel = entries.find((e) => e.candidate === selected)
     || entries.find((e) => e.candidate.observance.id === selected.observance.id) || null;
-  /** @type {CollectBlock[]} */
-  const out = [];
-  if (sel && sel.collects.length) out.push({ candidate: sel.candidate, collects: sel.collects, selected: true });
-  for (const e of entries) {
-    if (e === sel || !e.collects.length) continue;
-    const c = e.candidate;
-    if (c.status !== "proper" && c.status !== "transferred_in" && c.status !== "commemorated") continue;
-    if (c.observance.penitential === true) continue;
-    out.push({ candidate: c, collects: e.collects, selected: false });
-  }
-  return out;
+  return sel ? sel.collects : [];
 }
 
 /** `?collect=` 는 `collect_no` 다. 없거나 틀리면 첫 대체안. */
@@ -311,7 +365,7 @@ function pickCollect(/** @type {CollectOption[]} */ options, /** @type {number |
   return 0;
 }
 
-/** 열거 마지막 본기도의 송영 코드 — 코드가 없으면 A(ADR-036 §3 기본). @returns {"A" | "B" | "C"} */
+/** 고른 본기도의 송영 코드 — 코드가 없으면 A(ADR-036 §3 기본). @returns {"A" | "B" | "C"} */
 function endingCodeOf(/** @type {CollectOption | null | undefined} */ last) {
   const e = last && last.ending;
   return e === "A" || e === "B" || e === "C" ? e : "A";
@@ -387,15 +441,17 @@ function altList(/** @type {unknown} */ v) {
 }
 
 /**
- * 헤더 색(ADR-038 §3 · 설계서 R-6.4-color-order): 그날의 `colors`(병기) + `colorAlt`. 고른 칩이 승자가 아니고
- * 자기 색을 가진 **비격자** 후보면(사계재 자 · 부활밤 백 · 생략된 성인) 그 색 하나 — 「재일 독서를 읽을 때만
- * 자색, 어차피 선택 독서」(2026-09-17)의 일반화. 격자 후보는 자기 색이 아니라 절기 바탕색을 들고 있어 제외.
+ * 헤더 색(ADR-038 §3 · 설계서 R-6.4-color-order) — **고른 본문의 색을 따른다**(사용자 결정 2026-10-12,
+ * pitfalls §21): 고른 칩이 자기 색을 가진 **비격자** 후보이고 그 색이 그날의 대표색과 다르면 그 색 하나
+ * (사계재 자 · 성 토요일의 부활밤 백 — 승자여도 · 생략된 성인). 그 밖은 그날의 `colors`(병기) + `colorAlt`
+ * 그대로 — 승자를 고르거나 색이 같은 후보를 고르면 사계재 날의 [자, 백] 병기가 남는다. 격자 후보는 자기
+ * 색이 아니라 절기 바탕색을 들고 있어 제외. 「재일 독서를 읽을 때만 자색, 어차피 선택 독서」(2026-09-17)의 일반화.
  * @param {ResolvedDate} resolved @param {Candidate | null} selected
  * @returns {{ colors: string[], colorAlt: string[], ownColor: boolean }}
  */
 function headerColors(resolved, selected) {
   const obs = selected ? selected.observance : null;
-  if (selected && obs && selected !== resolved.official && !isGrid(selected) && typeof obs.color === "string") {
+  if (selected && obs && !isGrid(selected) && typeof obs.color === "string" && obs.color !== resolved.color) {
     return { colors: [obs.color], colorAlt: altList(obs.color_alt), ownColor: true };
   }
   const colors = Array.isArray(resolved.colors) && resolved.colors.length ? resolved.colors.slice()
@@ -477,21 +533,18 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
   const tracks = tracksOf(groups);
   const track = pickTrack(groups, query.track, storedTrack);
   const defaults = { obs: initial.observance.id, track: pickTrack(groups, null, storedTrack) };
-  const sets = setsOf(groups, track);
-  const setIndex = pickSet(sets, query.set);
-  const group = setIndex >= 0 ? sets[setIndex] : null;
+  const options = readingOptions(setsOf(groups, track), shortName(selected.observance.name));
+  const setIndex = pickSet(options, query.set);
+  const option = setIndex >= 0 ? options[setIndex] : null;
+  const group = option ? option.group : null;
+  const shortGroup = option ? option.short : null;
   const slots = slotsInOrder(group);
 
-  const collects = collectsOrder(collectEntries, selected);
-  const first = collects.length && collects[0].selected ? collects[0] : null;
-  const collectIndex = first ? pickCollect(first.collects, query.collect) : -1;
-  // 열거 마지막 본기도의 송영 — 고른 관측일 혼자면 그 대체안의 것.
-  const lastBlock = collects.length ? collects[collects.length - 1] : null;
-  const lastCollect = lastBlock
-    ? (lastBlock.selected ? lastBlock.collects[Math.max(collectIndex, 0)] : lastBlock.collects[lastBlock.collects.length - 1])
-    : null;
+  const collects = collectsFor(collectEntries, selected);
+  const collectIndex = pickCollect(collects, query.collect);
+  const chosenCollect = collectIndex >= 0 ? collects[collectIndex] : null;
 
-  const base = { obs: selected.observance.id, track, set: setIndex + 1, collect: first ? first.collects[Math.max(collectIndex, 0)].collect_no : null };
+  const base = { obs: selected.observance.id, track, set: setIndex + 1, collect: chosenCollect ? chosenCollect.collect_no : null };
   const chips = resolved.candidates.map((c) => {
     const own = c === selected ? groups : groupsOf(c);
     const t = c === selected ? track : pickTrack(own, null, storedTrack);
@@ -506,11 +559,11 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
   });
   const pair = pairOf(resolved);
   const { colors, colorAlt, ownColor } = headerColors(resolved, selected);
-  const empty = !groups.length && !collects.some((b) => b.selected);
+  const empty = !groups.length && !collects.length;
 
   return {
-    date, resolved, selected, initial, groups, tracks, track, sets, setIndex, group, slots,
-    chips, pair, collects, collectIndex, ending: endingCodeOf(lastCollect),
+    date, resolved, selected, initial, groups, tracks, track, options, setIndex, group, shortGroup, slots,
+    chips, pair, collects, collectIndex, ending: endingCodeOf(chosenCollect),
     colors, colorAlt, ownColor, fast: fastOf(resolved),
     cycle: resolved.coord.year && CYCLE_LABEL[resolved.coord.year] ? CYCLE_LABEL[resolved.coord.year] : null,
     empty,
@@ -519,8 +572,8 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
       next: `/lectionary/${addDays(date, 1)}`,
       today: "/lectionary",
       tracks: tracks.map((t) => ({ track: t, href: hrefFor(date, { ...base, track: t, set: null, collect: null }, defaults), active: t === track })),
-      sets: sets.map((_, i) => hrefFor(date, { ...base, set: i + 1, collect: null }, defaults)),
-      collects: first ? first.collects.map((o) => hrefFor(date, { ...base, collect: o.collect_no }, defaults)) : [],
+      options: options.map((_, i) => hrefFor(date, { ...base, set: i + 1, collect: null }, defaults)),
+      collects: collects.map((o) => hrefFor(date, { ...base, collect: o.collect_no }, defaults)),
       pair: pair ? {
         a: hrefFor(date, { obs: pair.a.observance.id, track: null, set: null, collect: null }, defaults),
         b: hrefFor(date, { obs: pair.b.observance.id, track: null, set: null, collect: null }, defaults),
@@ -635,7 +688,7 @@ function buildChips(m) {
       className: chip.muted ? "lect-chip lect-chip--muted" : "lect-chip",
       href: chip.href,
       title: chip.title,
-    }, chip.label);
+    }, el("span", { className: "lect-chip-text" }, chip.label));
     if (chip.active) a.setAttribute("aria-current", "true");
     nav.appendChild(a);
   }
@@ -681,15 +734,15 @@ function buildControls(m) {
     ctl.appendChild(seg);
     wrap.appendChild(ctl);
   }
-  if (m.sets.length > 1) {
+  if (m.options.length > 1) {
+    // 「또는」 대안 · 조건부 세트 — 조건 · 종류가 라벨이다(사용자 결정 2026-10-12). 괄호 선택 구절 세트는
+    // 바탕에 합쳐져 여기 오르지 않는다(본문의 〔 〕 가 맡는다).
     const ctl = el("div", { className: "lect-control lect-sets" });
     ctl.appendChild(el("span", { className: "lect-control-label" }, "대안 독서"));
     ctl.appendChild(buildSegmentTabs(
-      m.sets.map((g, i) => ({ label: setLabel(m.sets, i), href: m.hrefs.sets[i], active: i === m.setIndex, title: setCaption(g) || undefined })),
+      m.options.map((o, i) => ({ label: o.label, href: m.hrefs.options[i], active: i === m.setIndex })),
       { ariaLabel: "대안 독서", className: "division-tabs--compact" },
     ));
-    const caption = m.group ? setCaption(m.group) : null;
-    if (caption) ctl.appendChild(el("p", { className: "lect-caption" }, caption));
     wrap.appendChild(ctl);
   }
   return wrap.childElementCount ? wrap : null;
@@ -700,30 +753,18 @@ function buildCollects(m) {
   if (!m.collects.length) return null;
   const section = el("section", { className: "lect-section lect-collects", "data-slot": "collect" });
   section.appendChild(el("h3", { className: "lect-slot" }, "본기도"));
-  for (const block of m.collects) {
-    const name = shortName(block.candidate.observance.name);
-    if (block.selected) {
-      if (block.collects.length > 1) {
-        section.appendChild(buildSegmentTabs(
-          block.collects.map((o, i) => ({ label: `${o.collect_no}안`, href: m.hrefs.collects[i], active: i === m.collectIndex })),
-          { ariaLabel: "본기도 대체안", className: "division-tabs--compact" },
-        ));
-      }
-      const o = block.collects[Math.max(m.collectIndex, 0)];
-      const art = el("article", { className: "lect-collect chapter-text", lang: "ko" });
-      if (o.common) art.appendChild(el("p", { className: "lect-caption" }, `${o.title} 공통 본기도`));
-      art.appendChild(el("p", { className: "lect-collect-text" }, o.text));
-      section.appendChild(art);
-    } else {
-      const art = el("article", { className: "lect-collect lect-collect--also chapter-text", lang: "ko" });
-      art.appendChild(el("h4", { className: "lect-collect-who" }, `${name} 본기도${block.collects[0].common ? " (공통)" : ""}`));
-      for (const o of block.collects) {
-        if (block.collects.length > 1) art.appendChild(el("p", { className: "lect-caption" }, `${o.collect_no}안`));
-        art.appendChild(el("p", { className: "lect-collect-text" }, o.text));
-      }
-      section.appendChild(art);
-    }
+  if (m.collects.length > 1) {
+    section.appendChild(buildSegmentTabs(
+      m.collects.map((o, i) => ({ label: `본기도 ${o.collect_no}`, href: m.hrefs.collects[i], active: i === m.collectIndex })),
+      { ariaLabel: "본기도 대체안", className: "division-tabs--compact" },
+    ));
   }
+  const o = m.collects[Math.max(m.collectIndex, 0)];
+  const art = el("article", { className: "lect-collect chapter-text", lang: "ko" });
+  if (o.common) art.appendChild(el("p", { className: "lect-caption" }, `${o.title} 공통 본기도`));
+  art.appendChild(el("p", { className: "lect-collect-text" }, o.text));
+  section.appendChild(art);
+  // 송영 — 고른 본기도 뒤에 1회(ADR-036 §3).
   section.appendChild(el("p", { className: "lect-ending chapter-text", lang: "ko" }, ENDINGS[m.ending]));
   return section;
 }
@@ -736,6 +777,25 @@ function buildGloria() {
   box.appendChild(v);
   box.appendChild(el("span", { className: "lect-gloria-line verse-response" }, GLORIA.response));
   return box;
+}
+
+/**
+ * 괄호 선택 구절 표시 — 선택 구절인 절 span 에 `lect-optional` 을 달고, 이어진 묶음의 앞뒤에 〔 〕 를 넣는다
+ * (책자의 「(9-23)」 표기 — 사용자 결정 2026-10-12). `appendVerses` 가 그린 뒤에 돈다.
+ * @param {HTMLElement} article @param {number} chapter @param {(chapter: number, n: number) => boolean} isOptional
+ */
+function markOptionalVerses(article, chapter, isOptional) {
+  const spans = /** @type {HTMLElement[]} */ ([...article.querySelectorAll(".verse[data-vref]")]);
+  const optAt = (/** @type {number} */ i) => {
+    const n = parseInt(spans[i].getAttribute("data-vref") || "", 10);
+    return Number.isFinite(n) && isOptional(chapter, n);
+  };
+  spans.forEach((span, i) => {
+    if (!optAt(i)) return;
+    span.classList.add("lect-optional");
+    if (i === 0 || !optAt(i - 1)) span.insertBefore(el("span", { className: "lect-bracket", "aria-hidden": "true" }, "〔"), span.firstChild);
+    if (i === spans.length - 1 || !optAt(i + 1)) span.appendChild(el("span", { className: "lect-bracket", "aria-hidden": "true" }, "〕"));
+  });
 }
 
 /**
@@ -752,6 +812,11 @@ function buildReading(m, slot, chapters) {
     const title = canticleTitleOf(lastChapter);
     if (title && !(slot.label || "").includes(title)) head.appendChild(el("span", { className: "lect-canticle" }, title));
   }
+  // 괄호 선택 구절 세트에 합쳐진 슬롯 — 긴 본문을 싣고 짧은 본문이 어디까지인지 적는다.
+  const shortRaw = m.shortGroup ? m.shortGroup.readings.find((r) => r && r.slot === slot.slot) || null : null;
+  const shortSlot = shortRaw && shortRaw.label !== slot.label ? shortRaw : null;
+  if (shortSlot) head.appendChild(el("span", { className: "lect-caption lect-optional-note" }, `〔 〕 안은 선택 구절 — 짧게 읽으면 ${shortSlot.label}`));
+  const isOptional = optionalVerseTest(slot, shortSlot);
   section.appendChild(head);
 
   // Verse instances already drawn in this slot — two refs of one chapter must
@@ -776,6 +841,7 @@ function buildReading(m, slot, chapters) {
     const article = el("article", { className: "chapter-text", lang: "ko" });
     // Clean 봉독 surface (ADR-035): cite chips off, no parallels, no note anchors.
     appendVerses(article, verses, { hideCites: true, instanceKeys: keys });
+    if (shortSlot) markOptionalVerses(article, ref.chapter, isOptional);
     section.appendChild(article);
   }
   if (wantsGloria(slot, lastChapter)) section.appendChild(buildGloria());

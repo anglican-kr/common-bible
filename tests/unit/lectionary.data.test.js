@@ -105,11 +105,9 @@ test("A3 주기 · 색 라벨이 데이터 _vocab 과 같다(ADR-036 §4 단일 
 test("A3 2026-04-05 부활대축일 — 본기도 대체안 셋이 세그먼트, 세트 둘(원본 세트 표지는 숨김), 슬롯 넷, 생략된 성인은 흐린 칩", { skip: SKIP }, () => {
   const m = model("2026-04-05");
   assert.strictEqual(id(m.selected), "t-부활대축일");
-  assert.strictEqual(m.collects[0].collects.length, 3);
+  assert.strictEqual(m.collects.length, 3);   // 부활대축일의 자유선택 대체안 셋 — 고른 관측일의 것만
   assert.strictEqual(m.collectIndex, 0);
-  assert.strictEqual(m.collects.length, 1);   // 밀린 마틴 루터 킹 · 본기도 없는 격자 주일은 열거되지 않는다
-  assert.strictEqual(m.sets.length, 2);
-  assert.strictEqual(ctx.setCaption(m.sets[0]), null);
+  same(m.options.map((o) => [o.label, o.short]), [["독서 1", null], ["독서 2", null]]);   // 원본 세트 둘 = 「또는」 대안
   same(m.slots.map((s) => s.slot), ["first", "psalm", "second", "gospel"]);
   same(m.chips.map((c) => [c.label, c.muted]),
     [["부활대축일", false], ["마틴 루터 킹 · 생략", true], ["부활 1주일 (가해)", false]]);
@@ -125,11 +123,11 @@ test("A3 2026-09-16 니니안 ∧ 추계재 — 초기 독서는 격자(미결25
   assert.strictEqual(id(m.selected), "grid:ordinary-24-weekday-wed");
   same(plain(m.colors), ["violet", "white"]);
   assert.strictEqual(m.group.common, null);
-  same(m.collects.map((b) => id(b.candidate)), ["grid:ordinary-24-weekday-wed", "d0916-니니안"]);
+  assert.strictEqual(m.collects.length, 1);   // 격자(연중 24주간) 본기도만 — 니니안 공통은 그 칩에서
   const ember = model("2026-09-16", { obs: "t-추계재" });
   same(plain(ember.colors), ["violet"]);
   assert.strictEqual(ember.ownColor, true);
-  assert.strictEqual(ember.sets.length, 2);
+  same(ember.options.map((o) => o.label), ["독서 1", "독서 2"]);
   assert.strictEqual(ember.fast, "minor");
   const saint = model("2026-09-16", { obs: "d0916-니니안" });
   assert.strictEqual(saint.group.common, "missionary");
@@ -174,7 +172,7 @@ test("A3 2026-12-07 성 니콜라 도착 — 도착 카드 둘, 칩에 「12월 
   assert.strictEqual(id(m.pair.a), "d1206-성-니콜라");
   assert.strictEqual(m.pair.aText.note, "12월 6일에서 옮겨 옴");
   assert.ok(m.chips.some((c) => c.label === "성 니콜라 · 12월 6일에서 옮겨 옴" && c.active));
-  same(m.collects.map((b) => id(b.candidate)), ["d1206-성-니콜라", "grid:advent-2-weekday-mon"]);
+  assert.strictEqual(m.collects.length, 1);   // 니콜라 본기도만(기원 날짜에 색인된 것 — §5.6)
   assert.strictEqual(m.slots.length, 4);   // 기원 날짜에 색인된 독서가 도착일에서 나온다(§5.6)
 });
 
@@ -192,46 +190,78 @@ test("A3 2026-01-01 세계평화 기도일 칩 — 기념일은 empty, 거룩한
   assert.ok(m.chips.find((c) => c.active).label.endsWith("· 기념일"));
   const feast = model("2026-01-01");
   assert.strictEqual(id(feast.selected), "d0101-거룩한-이름-예수");
-  assert.strictEqual(feast.sets.length, 2);
+  assert.strictEqual(feast.options.length, 2);
 });
 
-test("A3 2026-04-04 성 토요일 — 승자 부활밤은 그날 색 홍(미결20 잠정), 성 토요일 후보를 고르면 홍, 칩 셋", { skip: SKIP }, () => {
+test("A3 2026-04-04 성 토요일 — 고른 본문의 색: 승자 부활밤 본문은 백, 성 토요일 후보는 홍, 격자는 그날 색 홍, 칩 셋", { skip: SKIP }, () => {
   const m = model("2026-04-04");
   assert.strictEqual(id(m.selected), "t-부활밤");
-  same(plain(m.colors), ["red"]);
+  same(plain(m.colors), ["white"]);
+  assert.strictEqual(m.ownColor, true);
+  assert.strictEqual(m.resolved.color, "red");   // 엔진의 그날 색은 그대로 홍(미결20 — 저녁 표지는 열려 있다)
   assert.strictEqual(m.chips.length, 3);
   const sat = model("2026-04-04", { obs: "t-성-토요일" });
   same(plain(sat.colors), ["red"]);
-  assert.strictEqual(sat.sets.length, 2);
+  assert.strictEqual(sat.ownColor, false);
+  same(plain(model("2026-04-04", { obs: "grid:lent-x-weekday-sat" }).colors), ["red"]);
+  same(sat.options.map((o) => o.label), ["독서 1", "독서 2"]);   // 성 토요일 원본 세트 둘(욥기/마태 · 애가/요한)
 });
 
 test("A3 2026-12-25 — 초기 선택은 승자 성탄 낮(미결12), 밤 · 새벽은 칩", { skip: SKIP }, () => {
   const m = model("2026-12-25");
   assert.strictEqual(id(m.selected), "d1225-성탄-낮");
   same(m.chips.map((c) => c.label), ["성탄 낮", "성탄 밤", "성탄 새벽", "성탄 금요일 (나해)"]);
-  assert.strictEqual(m.collects.length, 3);   // 낮 · 밤 · 새벽 본기도가 모두 그날의 proper 후보라 열거된다
+  assert.strictEqual(m.collects.length, 1);   // 성탄 낮 본기도만 — 밤 · 새벽은 그 칩에서
 });
 
-test("A3 2026-06-14 연중 11주일 — 트랙 기억이 기본, URL 이 이기고, 세트 둘(괄호 선택 구절)", { skip: SKIP }, () => {
+test("A3 2026-06-14 연중 11주일 — 트랙 기억이 기본, URL 이 이기고, 괄호 선택 구절 세트는 바탕에 합쳐져 긴 본문 + 선택 구절", { skip: SKIP }, () => {
   const remembered = model("2026-06-14", NONE, 2);
   assert.strictEqual(remembered.track, 2);
   assert.strictEqual(remembered.group.reading_track, 2);
   const url = model("2026-06-14", { track: 1, set: 2 }, 2);
   assert.strictEqual(url.track, 1);
-  assert.strictEqual(url.group.set_no, 2);
-  assert.strictEqual(ctx.setCaption(url.group), "괄호 선택 구절 포함");
+  assert.strictEqual(url.options.length, 1);   // 괄호 세트가 합쳐져 선택지 하나 — ?set=2 는 범위 밖
+  assert.strictEqual(url.group.set_no, 2);      // 긴 본문
+  assert.strictEqual(url.shortGroup.set_no, 1); // 짧은 바탕
+  // 바탕과 다른 슬롯 하나에서만 선택 구절이 나온다.
+  const diff = url.slots.filter((s) => { const t = url.shortGroup.readings.find((r) => r.slot === s.slot); return t && t.label !== s.label; });
+  assert.strictEqual(diff.length, 1);
+  const isOpt = ctx.optionalVerseTest(diff[0], url.shortGroup.readings.find((r) => r.slot === diff[0].slot));
+  const marked = [];
+  for (const ref of diff[0].refs) for (let n = 1; n <= 60; n++) if (isOpt(ref.chapter, n)) marked.push(`${ref.chapter}:${n}`);
+  assert.ok(marked.length > 0 && marked.length < 60, marked.join(","));
+});
+
+test("A3 2024-03-24 성지주일 나해 — 긴 수난 · 짧은 수난 「독서 1 · 2」, 짧은 쪽에 괄호 세트(40-47)가 합쳐진다", { skip: SKIP }, () => {
+  const m = model("2024-03-24");
+  same(m.options.map((o) => [o.label, o.group.set_no, o.short && o.short.set_no]), [["독서 1", 1, null], ["독서 2", 3, 2]]);
+  const second = model("2024-03-24", { set: 2 });
+  const gospel = second.slots.find((s) => s.slot === "gospel");
+  const shortGospel = second.shortGroup.readings.find((r) => r.slot === "gospel");
+  const isOpt = ctx.optionalVerseTest(gospel, shortGospel);
+  assert.strictEqual(isOpt(15, 39), false);
+  assert.strictEqual(isOpt(15, 40), true);
+  assert.strictEqual(isOpt(15, 47), true);
+});
+
+test("A3 2026-11-22 왕이신 그리스도 가해 — 표지 없는 「또는」 대안(시편 100 / 95)도 「독서 1 · 2」", { skip: SKIP }, () => {
+  const m = model("2026-11-22");
+  same(m.options.map((o) => o.label), ["독서 1", "독서 2"]);
+  const psalms = m.options.map((o) => o.group.readings.find((r) => r.slot === "psalm").label);
+  assert.notStrictEqual(psalms[0], psalms[1]);
 });
 
 test("A3 2024-12-24 성탄 1일 전 — 날짜 전용 본문, 본기도 대체안 둘, 대체 청색", { skip: SKIP }, () => {
   const m = model("2024-12-24");
   assert.strictEqual(m.group.title, "성탄 1일 전");
-  assert.strictEqual(m.collects[0].collects.length, 2);
+  assert.strictEqual(m.collects.length, 2);   // 대체안 둘(1/2 · 2/2)
   same(plain(m.colorAlt), ["blue"]);
 });
 
-test("A3 2026-03-01 사순 2주일 — 조건부 세트 캡션 「주의 변모 주일로 지키는 경우」(미결38)", { skip: SKIP }, () => {
+test("A3 2026-03-01 사순 2주일 — 조건부 세트는 조건이 라벨 「주의 변모 주일로 지킬 때」, 바탕은 관측일 이름(미결38)", { skip: SKIP }, () => {
   const m = model("2026-03-01", { set: 2 });
-  assert.strictEqual(ctx.setCaption(m.group), "주의 변모 주일로 지키는 경우");
+  same(m.options.map((o) => o.label), ["사순 2주일", "주의 변모 주일로 지킬 때"]);   // 「…로 지키는 경우」 → 「…로 지킬 때」
+  assert.strictEqual(m.group.set_no, 2);
   same(m.chips.map((c) => c.muted), [true, true, false]);   // 삼일절 · 데이빗 생략
 });
 

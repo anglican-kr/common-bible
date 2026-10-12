@@ -171,11 +171,13 @@ test("selectCandidate: ?obs 가 후보에 있으면 그것, 없으면 초기 선
 
 // ── 트랙 · 세트 ──────────────────────────────────────────────────────────────
 
+// 괄호 선택 구절 세트 — 복음만 더 길다(마태 9:9-13, 18-26 → 18-31). 실데이터의 괄호 세트 34건이 다 이 꼴(한 슬롯만).
+const FOUR_LONG = [FOUR[0], FOUR[1], FOUR[2], slot("gospel", "matt", 9, "9-13,18-31", "마태 9:9-13, 18-31")];
 const TRACKED = [
   group("t1s1", FOUR, { reading_track: 1, set_no: 1, set_total: 2 }),
-  group("t1s2", FOUR, { reading_track: 1, set_no: 2, set_total: 2, set_note: "괄호 선택 구절 포함" }),
+  group("t1s2", FOUR_LONG, { reading_track: 1, set_no: 2, set_total: 2, set_note: "괄호 선택 구절 포함" }),
   group("t2s1", FOUR, { reading_track: 2, set_no: 1, set_total: 2 }),
-  group("t2s2", FOUR, { reading_track: 2, set_no: 2, set_total: 2, set_note: "괄호 선택 구절 포함" }),
+  group("t2s2", FOUR_LONG, { reading_track: 2, set_no: 2, set_total: 2, set_note: "괄호 선택 구절 포함" }),
 ];
 
 test("tracksOf · pickTrack: URL > 전례년 기억 > 첫 트랙 — 트랙 없는 날은 null", () => {
@@ -187,31 +189,66 @@ test("tracksOf · pickTrack: URL > 전례년 기억 > 첫 트랙 — 트랙 없�
   assert.strictEqual(ctx.pickTrack([group("x", FOUR)], 2, 2), null);
 });
 
-test("setsOf · pickSet: 고른 트랙의 세트만, 범위 밖 ?set 은 첫 세트", () => {
+test("setsOf · readingOptions · pickSet: 고른 트랙의 세트만 — 괄호 세트는 바탕에 합쳐져 선택지 하나, 범위 밖 ?set 은 첫 선택지", () => {
   const sets = ctx.setsOf(TRACKED, 2);
   same(sets.map((g) => g.id), ["t2s1", "t2s2"]);
-  assert.strictEqual(ctx.pickSet(sets, 2), 1);
-  assert.strictEqual(ctx.pickSet(sets, 9), 0);
-  assert.strictEqual(ctx.pickSet(sets, null), 0);
+  const opts = ctx.readingOptions(sets, "연중 11주일");
+  assert.strictEqual(opts.length, 1);
+  assert.strictEqual(opts[0].group.id, "t2s2");    // 긴 본문을 싣는다
+  assert.strictEqual(opts[0].short.id, "t2s1");    // 짧은 바탕은 〔 〕 표시의 기준
+  assert.strictEqual(ctx.pickSet(opts, 2), 0);
+  assert.strictEqual(ctx.pickSet(opts, null), 0);
   assert.strictEqual(ctx.pickSet([], 1), -1);
   assert.strictEqual(ctx.setsOf(TRACKED, null).length, 4);   // 트랙 없이 부르면 전부
 });
 
-test("setLabel: 「1안」「2안」 — 제목이 갈리는 세트(미결12 좁히기 실패)는 제목으로", () => {
-  const sets = ctx.setsOf(TRACKED, 1);
-  assert.strictEqual(ctx.setLabel(sets, 0), "1안");
-  assert.strictEqual(ctx.setLabel(sets, 1), "2안");
-  const mixed = [group("a", FOUR, { title: "성탄 밤", set_no: 1 }), group("b", FOUR, { title: "성탄 낮", set_no: 1 })];
-  assert.strictEqual(ctx.setLabel(mixed, 0), "성탄 밤");
-  const dup = [...mixed, group("c", FOUR, { title: "성탄 낮", set_no: 2 })];
-  assert.strictEqual(ctx.setLabel(dup, 1), "성탄 낮 1안");
+test("readingOptions: 「또는」 대안(완전한 세트 둘)은 「독서 1」「독서 2」 — 원본 세트 표지든 표지 없음이든", () => {
+  const alt = [FOUR[0], FOUR[1], slot("second", "rom", 5, "1-11", "로마 5:1-11"), FOUR[3]];
+  const plainPair = [group("a", FOUR, { set_no: 1, set_total: 2 }), group("b", alt, { set_no: 2, set_total: 2 })];
+  same(ctx.readingOptions(plainPair, "연중 10주일").map((o) => [o.label, o.group.id, o.short]), [["독서 1", "a", null], ["독서 2", "b", null]]);
+  const source = [group("e1", FOUR, { set_no: 1, set_total: 2, set_note: "원본 세트 1" }), group("e2", alt, { set_no: 2, set_total: 2, set_note: "원본 세트 2" })];
+  same(ctx.readingOptions(source, "부활대축일").map((o) => o.label), ["독서 1", "독서 2"]);
 });
 
-test("setCaption: 파서 내부 표지 「원본 세트 N」은 숨기고 조건 원문은 그대로(미결38)", () => {
-  assert.strictEqual(ctx.setCaption(group("a", FOUR, { set_note: "원본 세트 1" })), null);
-  assert.strictEqual(ctx.setCaption(group("a", FOUR, { set_note: "주의 변모 주일로 지키는 경우" })), "주의 변모 주일로 지키는 경우");
-  assert.strictEqual(ctx.setCaption(group("a", FOUR, { set_note: "괄호 선택 구절 포함" })), "괄호 선택 구절 포함");
-  assert.strictEqual(ctx.setCaption(group("a", FOUR)), null);
+test("readingOptions: 조건부 세트는 조건이 라벨, 바탕 세트는 관측일 이름 — 「…로 지키는 경우」도 「…로 지킬 때」로", () => {
+  const transfig = [FOUR[0], FOUR[1], FOUR[2], slot("gospel", "matt", 17, "1-9", "마태 17:1-9")];
+  const sets = [group("l1", FOUR, { set_no: 1, set_total: 2 }), group("l2", transfig, { set_no: 2, set_total: 2, set_note: "주의 변모 주일로 지키는 경우" })];
+  same(ctx.readingOptions(sets, "사순 2주일").map((o) => o.label), ["사순 2주일", "주의 변모 주일로 지킬 때"]);
+});
+
+test("readingOptions: 괄호 선택 구절 세트는 바탕(한 슬롯만 짧은 앞 세트)에 합친다 — 성지주일 나해 꼴(긴 수난 · 짧은 수난 · 짧은 수난 + 괄호)", () => {
+  const long = [FOUR[0], FOUR[1], FOUR[2], slot("gospel", "mark", 14, "all", "마르 14:1-15:47")];
+  const short = [FOUR[0], FOUR[1], FOUR[2], slot("gospel", "mark", 15, "1-39", "마르 15:1-39")];
+  const shortPlus = [FOUR[0], FOUR[1], FOUR[2], slot("gospel", "mark", 15, "1-47", "마르 15:1-39, 40-47")];
+  const sets = [group("p1", long, { set_no: 1, set_total: 3 }), group("p2", short, { set_no: 2, set_total: 3 }), group("p3", shortPlus, { set_no: 3, set_total: 3, set_note: "괄호 선택 구절 포함" })];
+  const opts = ctx.readingOptions(sets, "성지주일");
+  same(opts.map((o) => [o.label, o.group.id, o.short && o.short.id]), [["독서 1", "p1", null], ["독서 2", "p3", "p2"]]);
+});
+
+test("readingOptions: 바탕이 없는 괄호 세트(두 슬롯이 다름)는 그대로 선택지 — 제목이 갈리면 제목으로", () => {
+  const twoDiff = [slot("first", "isa", 1, "1-9", "이사 1:1-9"), FOUR[1], FOUR[2], slot("gospel", "matt", 9, "9-13,18-31", "마태 9:9-13, 18-31")];
+  const sets = [group("a", FOUR, { set_no: 1, set_total: 2 }), group("b", twoDiff, { set_no: 2, set_total: 2, set_note: "괄호 선택 구절 포함" })];
+  same(ctx.readingOptions(sets, "x").map((o) => [o.label, o.short]), [["독서 1", null], ["독서 2", null]]);
+  const mixed = [group("a", FOUR, { title: "성탄 밤", set_no: 1 }), group("b", FOUR, { title: "성탄 낮", set_no: 1 }), group("c", FOUR, { title: "성탄 낮", set_no: 2 })];
+  same(ctx.readingOptions(mixed, "성탄").map((o) => o.label), ["성탄 밤", "성탄 낮 독서 1", "성탄 낮 독서 2"]);
+});
+
+test("setCondition: 「…로 지키는 경우」→「…로 지킬 때」, 파서 표지(원본 세트 · 괄호)는 null", () => {
+  assert.strictEqual(ctx.setCondition(group("a", FOUR, { set_note: "원본 세트 1" })), null);
+  assert.strictEqual(ctx.setCondition(group("a", FOUR, { set_note: "괄호 선택 구절 포함" })), null);
+  assert.strictEqual(ctx.setCondition(group("a", FOUR, { set_note: "주의 변모 주일로 지키는 경우" })), "주의 변모 주일로 지킬 때");
+  assert.strictEqual(ctx.setCondition(group("a", FOUR, { set_note: "주의 변모 주일로 지킬 때" })), "주의 변모 주일로 지킬 때");
+  assert.strictEqual(ctx.setCondition(group("a", FOUR)), null);
+});
+
+test("optionalVerseTest: 긴 본문에는 있고 짧은 바탕에는 없는 절만 — 장이 다르면 아니다, 바탕이 없으면 언제나 거짓", () => {
+  const isOpt = ctx.optionalVerseTest(FOUR_LONG[3], FOUR[3]);
+  assert.strictEqual(isOpt(9, 26), false);
+  assert.strictEqual(isOpt(9, 27), true);
+  assert.strictEqual(isOpt(9, 31), true);
+  assert.strictEqual(isOpt(9, 14), false);   // 둘 다 없음
+  assert.strictEqual(isOpt(10, 27), false);
+  assert.strictEqual(ctx.optionalVerseTest(FOUR_LONG[3], null)(9, 27), false);
 });
 
 test("slotsInOrder: 이름으로 first → psalm → second → gospel, 위치는 무시, 없는 슬롯은 건너뛴다", () => {
@@ -222,32 +259,23 @@ test("slotsInOrder: 이름으로 first → psalm → second → gospel, 위치�
 
 // ── 본기도 ────────────────────────────────────────────────────────────────────
 
-test("collectsOrder: 고른 관측일이 앞 — proper · transferred_in · commemorated 만 따라오고 omitted · transferred_out · optional · 사계재는 뺀다", () => {
+test("collectsFor: 고른 관측일의 본기도만 — 다른 관측일 것은 열거하지 않는다(사용자 결정 2026-10-12)", () => {
   const feast = cand(obs("d1206-성-니콜라", "성 니콜라"), "transferred_in", { from: "2026-12-06" });
   const grid = cand(obs("grid:advent-2-weekday-mon", "대림 2주 월요일"));
   const omitted = cand(obs("d1207-암브로스", "암브로스"), "omitted");
-  const gone = cand(obs("d1210-x", "떠난 축일"), "transferred_out", { to: "2026-12-11" });
-  const optional = cand(obs("d0806-주의-변모", "주의 변모"), "optional", { from: "2026-08-06" });
-  const ember = cand(obs("t-동계재", "동계재", { penitential: true }));
-  const thanks = cand(obs("t-추수감사주일", "추수감사주일"), "commemorated");
-  const entries = [feast, grid, omitted, gone, optional, ember, thanks].map((c) => ({ candidate: c, collects: [collect(c.observance.id, "…")] }));
-  const order = ctx.collectsOrder(entries, grid);
-  same(order.map((b) => [b.candidate.observance.id, b.selected]),
-    [["grid:advent-2-weekday-mon", true], ["d1206-성-니콜라", false], ["t-추수감사주일", false]]);
+  const entries = [feast, grid, omitted].map((c) => ({ candidate: c, collects: [collect(c.observance.id, "…")] }));
+  same(ctx.collectsFor(entries, grid).map((o) => o.id), ["grid:advent-2-weekday-mon"]);
+  same(ctx.collectsFor(entries, feast).map((o) => o.id), ["d1206-성-니콜라"]);
+  same(ctx.collectsFor(entries, omitted).map((o) => o.id), ["d1207-암브로스"]);   // 생략된 축일도 고르면 그 본기도
 });
 
-test("collectsOrder: 고른 관측일이 사계재면 그 본기도가 앞에 온다(고를 때만 보인다)", () => {
-  const grid = cand(obs("grid:ordinary-24-weekday-wed", "연중 24주 수요일"));
-  const ember = cand(obs("t-추계재", "추계재", { penitential: true }));
-  const entries = [grid, ember].map((c) => ({ candidate: c, collects: [collect(c.observance.id, "…")] }));
-  same(ctx.collectsOrder(entries, ember).map((b) => b.candidate.observance.id), ["t-추계재", "grid:ordinary-24-weekday-wed"]);
-});
-
-test("collectsOrder: 빈 본기도(기념일)는 열거에 오르지 않는다 — 고른 것이라도", () => {
+test("collectsFor: 같은 id 의 다른 객체로도 찾고, 본기도 없는 후보(기념일)는 빈 배열", () => {
   const memo = cand(obs("d0101-세계평화", "세계평화를 위한 기도일", { rank: "commemoration" }));
   const feast = cand(obs("d0101-거룩한-이름-예수", "거룩한 이름 예수"));
   const entries = [{ candidate: feast, collects: [collect(1, "…")] }, { candidate: memo, collects: [] }];
-  same(ctx.collectsOrder(entries, memo).map((b) => [b.candidate.observance.id, b.selected]), [["d0101-거룩한-이름-예수", false]]);
+  same(ctx.collectsFor(entries, memo), []);
+  same(ctx.collectsFor(entries, cand(obs("d0101-거룩한-이름-예수", "거룩한 이름 예수"))).map((o) => o.id), [1]);
+  same(ctx.collectsFor(entries, cand(obs("none", "없음"))), []);
 });
 
 test("pickCollect · endingCodeOf: collect_no 로 고르고 없으면 첫 대체안, 코드가 없으면 송영 A", () => {
@@ -343,7 +371,7 @@ test("headerColors: 기본은 그날의 colors(병기) + colorAlt(3형 → 배�
   same(plain(ctx.headerColors(resolvedOf("2026-08-13", [grid], grid, { colors: [], color: "green" }), null).colors), ["green"]);
 });
 
-test("headerColors: 승자가 아닌 비격자 후보를 고르면 그 후보의 색 하나 — 사계재 자 · 성 토요일 홍", () => {
+test("headerColors: 고른 본문의 색 — 그날 대표색과 다른 비격자 후보면 그 색 하나(사계재 자 · 부활밤 백), 같으면 그날 병기 그대로", () => {
   const saint = cand(obs("d0916-니니안", "니니안", { color: "white" }));
   const ember = cand(obs("t-추계재", "추계재", { color: "violet", penitential: true }));
   const grid = cand(obs("grid:ordinary-24-weekday-wed", "연중 24주 수요일", { color: "green" }));
@@ -351,14 +379,14 @@ test("headerColors: 승자가 아닌 비격자 후보를 고르면 그 후보의
   same(plain(ctx.headerColors(r, ember)), { colors: ["violet"], colorAlt: [], ownColor: true });
   // 격자를 골라도 그날 색 그대로(격자는 절기 바탕색을 들고 있을 뿐이다) — 미결25 의 초기 선택이 색을 바꾸지 않는다.
   same(plain(ctx.headerColors(r, grid).colors), ["violet", "white"]);
-  // 승자를 고르면 그날 색(병기 포함).
-  same(plain(ctx.headerColors(r, saint).colors), ["violet", "white"]);
-  // 성 토요일: 승자 부활밤은 그날 색(홍 — 미결20 잠정), 성 토요일 후보를 고르면 그 행의 홍.
+  // 승자(색이 그날 대표색과 같다)를 고르면 그날 색(병기 포함).
+  same(plain(ctx.headerColors(r, saint)), { colors: ["violet", "white"], colorAlt: [], ownColor: false });
+  // 성 토요일(사용자 결정 2026-10-12): 승자 부활밤이라도 그 본문을 고르면 백, 성 토요일 후보면 그날 색 홍.
   const vigil = cand(obs("t-부활밤", "부활밤", { color: "white", precedence: 1 }));
   const holySat = cand(obs("t-성-토요일", "성 토요일", { color: "red" }));
   const hs = resolvedOf("2026-04-04", [vigil, holySat], vigil, { color: "red", colors: ["red"] });
-  same(plain(ctx.headerColors(hs, vigil).colors), ["red"]);
-  same(plain(ctx.headerColors(hs, holySat)), { colors: ["red"], colorAlt: [], ownColor: true });
+  same(plain(ctx.headerColors(hs, vigil)), { colors: ["white"], colorAlt: [], ownColor: true });
+  same(plain(ctx.headerColors(hs, holySat)), { colors: ["red"], colorAlt: [], ownColor: false });
 });
 
 // ── URL ───────────────────────────────────────────────────────────────────────
@@ -438,9 +466,9 @@ test("buildLectionaryModel: 사계재 날 — 초기 선택은 격자, 색은 �
   assert.strictEqual(m.ownColor, false);
   same(m.chips.map((c) => [c.label, c.active]),
     [["니니안", false], ["추계재", false], ["연중 24주 수요일 (짝수해)", true]]);
-  same(m.collects.map((b) => [b.candidate.observance.id, b.selected]),
-    [["grid:ordinary-24-weekday-wed", true], ["d0916-니니안", false]]);   // 사계재는 고를 때만
+  same(m.collects.map((o) => o.id), [114]);   // 고른 관측일(격자)의 본기도만
   assert.strictEqual(m.ending, "A");
+  assert.strictEqual(m.options.length, 1);
   assert.strictEqual(m.group.id, "grid-s1");
   same(m.slots.map((s) => s.slot), ["first", "psalm", "second", "gospel"]);
   assert.strictEqual(m.pair, null);
@@ -453,26 +481,28 @@ test("buildLectionaryModel: 사계재 날 — 초기 선택은 격자, 색은 �
   assert.strictEqual(m.chips[0].href, "/lectionary/2026-09-16?obs=d0916-%EB%8B%88%EB%8B%88%EC%95%88");
 });
 
-test("buildLectionaryModel: 추계재를 고르면 색은 자 하나, 세트 둘, 본기도는 추계재 → 격자 → 성인, 송영은 마지막 본기도의 코드", () => {
+test("buildLectionaryModel: 추계재를 고르면 색은 자 하나, 「독서 1 · 2」 선택지, 본기도는 추계재 것만, 송영은 그 본기도의 코드", () => {
   const { r, groupsOf, entries, ember } = emberDay();
   const m = ctx.buildLectionaryModel(r, { obs: "t-추계재", track: null, set: 2, collect: null }, groupsOf, entries, null);
   assert.strictEqual(m.selected, ember);
   same(plain(m.colors), ["violet"]);
   assert.strictEqual(m.ownColor, true);
-  assert.strictEqual(m.sets.length, 2);
+  same(m.options.map((o) => o.label), ["독서 1", "독서 2"]);
   assert.strictEqual(m.setIndex, 1);
   assert.strictEqual(m.group.id, "ember-s2");
-  // 고른 것이 앞, 나머지는 candidates 순(성인 → 격자) — 재배열만 하고 재조회하지 않는다.
-  same(m.collects.map((b) => b.candidate.observance.id), ["t-추계재", "d0916-니니안", "grid:ordinary-24-weekday-wed"]);
-  assert.strictEqual(m.ending, "A");   // 마지막은 격자 평일(A)
-  same(plain(m.hrefs.sets), ["/lectionary/2026-09-16?obs=t-%EC%B6%94%EA%B3%84%EC%9E%AC", "/lectionary/2026-09-16?obs=t-%EC%B6%94%EA%B3%84%EC%9E%AC&set=2"]);
+  assert.strictEqual(m.shortGroup, null);
+  same(m.collects.map((o) => o.id), [231]);   // 추계재(성직자의 성소) 본기도만
+  assert.strictEqual(m.ending, "C");   // 그 본기도의 송영 코드
+  same(plain(m.hrefs.options), ["/lectionary/2026-09-16?obs=t-%EC%B6%94%EA%B3%84%EC%9E%AC", "/lectionary/2026-09-16?obs=t-%EC%B6%94%EA%B3%84%EC%9E%AC&set=2"]);
 });
 
-test("buildLectionaryModel: 사계재 혼자 고른 날의 송영은 그 본기도의 코드(C)", () => {
+test("buildLectionaryModel: 본기도 없는 관측일을 고르면 collects 가 비고 송영은 A(기본) — 독서가 있으면 empty 는 아니다", () => {
   const { r, groupsOf, ember } = emberDay();
-  const entries = [{ candidate: ember, collects: [collect(231, "성직자의 성소", { ending: "C" })] }];
+  const entries = [{ candidate: ember, collects: [] }];
   const m = ctx.buildLectionaryModel(r, { obs: "t-추계재", track: null, set: null, collect: null }, groupsOf, entries, null);
-  assert.strictEqual(m.ending, "C");
+  same(m.collects, []);
+  assert.strictEqual(m.ending, "A");
+  assert.strictEqual(m.empty, false);
 });
 
 test("buildLectionaryModel: 기념일 칩을 고르면 empty — 본문도 본기도도 없다", () => {
@@ -499,7 +529,10 @@ test("buildLectionaryModel: 트랙 — 전례년 기억이 기본, URL 이 이�
   const entries = [{ candidate: sunday, collects: [collect(59, "…")] }];
   const remembered = ctx.buildLectionaryModel(r, { obs: null, track: null, set: null, collect: null }, groupsOf, entries, 2);
   assert.strictEqual(remembered.track, 2);
-  assert.strictEqual(remembered.group.id, "t2s1");
+  // 괄호 세트가 바탕에 합쳐져 선택지는 하나 — 긴 본문(t2s2)을 싣고 짧은 바탕(t2s1)은 〔 〕 기준.
+  assert.strictEqual(remembered.options.length, 1);
+  assert.strictEqual(remembered.group.id, "t2s2");
+  assert.strictEqual(remembered.shortGroup.id, "t2s1");
   assert.strictEqual(remembered.chips[0].label, "연중 11주일 (가해, 독서 2)");
   same(plain(remembered.hrefs.tracks), [
     { track: 1, href: "/lectionary/2026-06-14?track=1", active: false },
@@ -507,8 +540,10 @@ test("buildLectionaryModel: 트랙 — 전례년 기억이 기본, URL 이 이�
   ]);
   const overridden = ctx.buildLectionaryModel(r, { obs: null, track: 1, set: 2, collect: null }, groupsOf, entries, 2);
   assert.strictEqual(overridden.track, 1);
+  assert.strictEqual(overridden.options.length, 1);   // ?set=2 는 범위 밖 → 첫(유일한) 선택지
   assert.strictEqual(overridden.group.id, "t1s2");
-  same(plain(overridden.hrefs.sets), ["/lectionary/2026-06-14?track=1", "/lectionary/2026-06-14?track=1&set=2"]);
+  assert.strictEqual(overridden.shortGroup.id, "t1s1");
+  same(plain(overridden.hrefs.options), ["/lectionary/2026-06-14?track=1"]);
   assert.strictEqual(overridden.tracks.length, 2);
 });
 
@@ -520,6 +555,7 @@ test("buildLectionaryModel: 본기도 대체안 — ?collect 는 collect_no, hre
   const m = ctx.buildLectionaryModel(r, { obs: null, track: null, set: null, collect: 3 }, groupsOf, entries, null);
   assert.strictEqual(m.collectIndex, 2);
   assert.strictEqual(m.ending, "C");
+  same(m.options.map((o) => o.label), ["독서 1", "독서 2"]);   // 원본 세트 둘 — 완전한 세트를 통째로 고른다
   same(plain(m.hrefs.collects), ["/lectionary/2026-04-05", "/lectionary/2026-04-05?collect=2", "/lectionary/2026-04-05?collect=3"]);
   assert.strictEqual(m.fast, null);
 });
@@ -536,4 +572,5 @@ test("상수: 송영 셋 · 영광송 계응 둘 · 슬롯 라벨 넷", () => {
   same(plain(K("GLORIA")), { versicle: "영광이 성부와 성자와 성령께", response: "처음과 같이 지금도 그리고 영원히, 아멘." });
   same(plain(K("SLOT_ORDER")), ["first", "psalm", "second", "gospel"]);
   same(plain(K("OPTIONAL_TRANSFER_KINDS")), ["nearby_sunday", "sunday_0102_0108", "sunday_1030_1105", "easter7_sunday"]);
+  assert.strictEqual(K("BRACKET_NOTE"), "괄호 선택 구절 포함");
 });
