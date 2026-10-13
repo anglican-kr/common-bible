@@ -35,7 +35,7 @@
 /** @typedef {import("../types").BibleChapter} BibleChapter */
 
 import { loadChapter } from "./data-fetch.js";
-import { setTitle, appendVerses, buildSegmentTabs, bindCopyAttribution, formatVerseRanges } from "./views.js";
+import { setTitle, appendVerses, buildSegmentTabs, bindCopyAttribution, formatVerseRanges, absentVerseNumbers } from "./views.js";
 import { specCoversVerse, verseInstanceKeys, citationSource } from "./verse-spec.js";
 import {
   parseDate, toKey, addDays, dayOfWeek, optionalDestOf,
@@ -681,14 +681,17 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
   const chosenCollect = collectIndex >= 0 ? collects[collectIndex] : null;
 
   const base = { obs: selected.observance.id, track, set: setIndex + 1, collect: !linked && chosenCollect ? collectIndex + 1 : null };
+  // 후보마다 그 화면의 트랙 — 고른 후보는 지금 트랙, 다른 후보는 기억(없으면 첫 트랙). 칩 · 카드 링크도 이것을 적는다:
+  // 트랙은 주소에 언제나 적으므로(hrefFor), 빼면 공유받은 「독서 2」 화면에서 지금 칩을 눌러도 보는 사람의 기억대로
+  // 바뀌었다(머지 전 검토 2026-10-14).
+  const trackOf = (/** @type {Candidate} */ c) => (c === selected ? track : pickTrack(groupsOf(c), null, storedTrack));
   const chips = resolved.candidates.map((c) => {
-    const own = c === selected ? groups : groupsOf(c);
-    const t = c === selected ? track : pickTrack(own, null, storedTrack);
+    const t = trackOf(c);
     return {
       candidate: c,
       label: chipLabel(c, resolved, t),
       title: String(c.observance.name || "") + statusSuffix(c),
-      href: hrefFor(date, { obs: c.observance.id, track: null, set: null, collect: null }, defaults),
+      href: hrefFor(date, { obs: c.observance.id, track: t, set: null, collect: null }, defaults),
       active: c === selected,
       muted: isMutedCandidate(c),
     };
@@ -716,8 +719,8 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
         ? hrefFor(date, { ...base, set: linked.indexOf(j) + 1 }, defaults)
         : hrefFor(date, { ...base, collect: j + 1 }, defaults))),
       pair: pair ? {
-        a: hrefFor(date, { obs: pair.a.observance.id, track: null, set: null, collect: null }, defaults),
-        b: hrefFor(date, { obs: pair.b.observance.id, track: null, set: null, collect: null }, defaults),
+        a: hrefFor(date, { obs: pair.a.observance.id, track: trackOf(pair.a), set: null, collect: null }, defaults),
+        b: hrefFor(date, { obs: pair.b.observance.id, track: trackOf(pair.b), set: null, collect: null }, defaults),
       } : null,
     },
   };
@@ -925,6 +928,13 @@ function buildCollects(m) {
 }
 
 /** 영광송 — 선창 ◯ 응답, 계응 시편과 같은 표지(`responsory-mark` · `verse-response`). */
+/** 영광송 블록의 복사 글자 — 줄마다 한 줄, 선창 줄 끝에 「 ◯」(시편 본문 복사와 같은 꼴). @param {Element} box @returns {string} */
+function gloriaCopyText(box) {
+  return [...box.querySelectorAll(".lect-gloria-line")]
+    .map((line) => [...line.childNodes].map((c) => (c.textContent || "").trim()).filter(Boolean).join(" "))
+    .join("\n");
+}
+
 function buildGloria() {
   const box = el("div", { className: "lect-gloria", lang: "ko", role: "group", "aria-label": "영광송" });
   const v = el("span", { className: "lect-gloria-line" }, GLORIA.versicle);
@@ -1023,6 +1033,9 @@ function buildReading(m, slot, chapters) {
     // `data-chapter-last` = 그 장의 실제 마지막 절(병합 절은 끝 번호) — 복사 참조가 장 경계에서 정말 이어지는지 가리는 기준
     const chapterLast = run.data.verses.reduce((mx, v) => Math.max(mx, Number(v.range_end) || v.number), 0);
     const article = el("article", { className: "chapter-text", lang: "ko", "data-chapter": String(run.chapter), "data-chapter-last": String(chapterLast), "data-book": run.data.book_name_ko || slot.bookId });
+    // 이 번역에 없는 절 번호(장 전체 기준 — 발췌가 건너뛴 절과 다르다) — 복사 출처가 그 자리에서 구간을 끊지 않게(사용자 결정 2026-10-14)
+    const absent = absentVerseNumbers(run.data.verses);
+    if (absent.length) article.setAttribute("data-absent", absent.join(","));
     // Clean 봉독 surface (ADR-035): cite chips off, no parallels, no note anchors. 한 화면에 슬롯 · 장이 여럿이라
     // 절 id 에 슬롯 · 책 · 장 접두를 붙여 문서 안에서 유일하게(Copilot 리뷰 7회차).
     appendVerses(article, run.verses, { hideCites: true, instanceKeys: run.keys, idPrefix: `${slot.slot}-${slot.bookId}-${run.chapter}-` });
@@ -1139,8 +1152,11 @@ function commit(m, chapters) {
     for (const slot of m.slots) root.appendChild(buildReading(m, slot, chapters));
     // 복사 — 루트에 한 번(섹션마다가 아니라): 여러 독서에 걸친 선택도 섹션마다 「본문 — 출처」로 다 싣는다. 본기도 · 카드 ·
     // 헤더 글자까지 고르면 브라우저 기본 복사(고른 것을 빠뜨리지 않게 — 자체 리뷰 2026-10-13)
+    // 시편 끝 영광송까지 고르면 그 시편 블록에 함께 싣는다 — 출처 줄 앞(머지 전 검토 2026-10-14; 전례 표기를 남기는 것과 같은
+    // 이유 — 주보 등 전례 용도, 사용자 결정 2026-10-13).
     bindCopyAttribution(root, copyCitation, {
       unitSelector: ".lect-reading", bailoutSelector: ".lect-head, .lect-chips, .lect-pair, .lect-controls, .lect-collects", strictRoot: true,
+      tail: { selector: ".lect-gloria", text: gloriaCopyText },
     });
   } else {
     root.appendChild(emptyState({ icon: null, title: "독서 없음", subtitle: "이 관측일에는 독서가 없습니다 — 본기도만 있습니다." }));

@@ -762,3 +762,51 @@ def test_mobile_tab_bar_has_no_active_tab_on_lectionary(mobile_context):
     # 홈 탭을 누르면 홈 스택으로 돌아간다(캘린더 탭이 아니므로 가로채지 않고 기본 href).
     page.locator('#tab-bar [data-tab="home"]').click()
     page.wait_for_selector(".book-list")
+
+
+def test_psalm_copy_carries_gloria_when_selected(desktop_context):
+    """대림 4주일(2026-12-20) — 시편 끝 절에서 영광송까지 고르면 영광송이 시편 블록에 실리고(◯ 포함) 출처는 그 뒤 — 종전엔 빠졌다
+    (머지 전 검토 2026-10-14)."""
+    page = desktop_context.new_page()
+    _open(page, "lectionary/2026-12-20")
+    text = page.evaluate("""() => {
+      const sec = document.querySelector(".lect-reading[data-slot='psalm']");
+      const vs = sec.querySelectorAll('.verse[data-vref]');
+      const last = vs[vs.length - 1];
+      const vis = (n) => { const w = document.createTreeWalker(n, NodeFilter.SHOW_TEXT); let t; while ((t = w.nextNode()) && !/[^\\s\\u2060]/.test(t.textContent)); return t; };
+      const a = vis(last);
+      const resp = sec.querySelector('.lect-gloria .verse-response').firstChild;
+      const r = document.createRange(); r.setStart(a, 1); r.setEnd(resp, resp.length);
+      const s = getSelection(); s.removeAllRanges(); s.addRange(r);
+      const dt = new DataTransfer();
+      last.dispatchEvent(new ClipboardEvent('copy', { bubbles: true, cancelable: true, clipboardData: dt }));
+      return dt.getData('text/plain');
+    }""")
+    assert text == ("세상 임금 중에 가장 높은 임금으로 세우리라.\n\n영광이 성부와 성자와 성령께 ◯\n처음과 같이 지금도 그리고 영원히, 아멘."
+                    "\n\n— 전례시편 89:27 (대한성공회 기도서)"), text
+
+
+def test_gospel_copy_bridges_verse_numbers_absent_in_translation(desktop_context):
+    """연중 7주 목요일(2027-05-20) 복음 「마르 9:41-50」 — 공동번역에 없는 44 · 46절을 사이에 두어도 출처는 「9:41-50」
+    (사용자 결정 2026-10-14). 발췌가 건너뛴 절은 그대로 쉼표다(위 「118:2, 14」 테스트)."""
+    page = desktop_context.new_page()
+    _open(page, "lectionary/2027-05-20")
+    assert "마르 9:41-50" in page.inner_text(".lect-reading[data-slot='gospel'] .lect-ref")
+    sel = ".lect-reading[data-slot='gospel'] article.chapter-text .verse[data-vref]"
+    text = page.evaluate(_LECT_COPY_ACROSS, [sel, f"{sel}:last-of-type"])
+    assert text.endswith("\n\n— 마르코의 복음서 9:41-50 (공동번역성서)"), text[-80:]
+
+
+def test_active_chip_and_card_keep_the_shown_track(desktop_context):
+    """공유받은 「독서 2」 주소(보는 사람의 기억 없음)에서 지금 칩 · 카드를 눌러도 독서 2 — 칩 · 카드 링크가 화면의 트랙을 적는다
+    (머지 전 검토 2026-10-14; 종전엔 트랙 없는 링크라 기억대로 독서 1 이 됐다)."""
+    page = desktop_context.new_page()
+    _open(page, "lectionary/2026-06-14?track=2")
+    chip = page.locator(".lect-chip[aria-current]")
+    assert chip.get_attribute("href") == "/lectionary/2026-06-14?track=2"
+    chip.click()
+    page.wait_for_url("**/lectionary/2026-06-14?track=2")
+    assert page.locator(".lect-track .division-tab.active").inner_text() == "독서 2"
+    _open(page, "lectionary/2026-08-09?track=2")
+    hrefs = page.eval_on_selector_all(".lect-pair-card", "els => els.map(e => e.getAttribute('href'))")
+    assert any("track=2" in h for h in hrefs), hrefs   # 트랙이 있는 쪽(연중 주일) 카드는 그 트랙을 적는다

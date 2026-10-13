@@ -180,7 +180,7 @@ const TRACKED = [
   group("t2s2", FOUR_LONG, { reading_track: 2, set_no: 2, set_total: 2, set_note: "괄호 선택 구절 포함" }),
 ];
 
-test("tracksOf · pickTrack: URL > 전례년 기억 > 첫 트랙 — 트랙 없는 날은 null", () => {
+test("tracksOf · pickTrack: URL > 기억(마지막 선택) > 첫 트랙 — 트랙 없는 날은 null", () => {
   same(plain(ctx.tracksOf(TRACKED)), [1, 2]);
   same(plain(ctx.tracksOf([group("x", FOUR)])), []);
   assert.strictEqual(ctx.pickTrack(TRACKED, 2, 1), 2);
@@ -278,7 +278,7 @@ test("collectsFor: 같은 id 의 다른 객체로도 찾고, 본기도 없는 �
   same(ctx.collectsFor(entries, cand(obs("none", "없음"))), []);
 });
 
-test("pickCollect · endingCodeOf: collect_no 로 고르고 없으면 첫 대체안, 코드가 없으면 송영 A", () => {
+test("pickCollect · endingCodeOf: ?collect= 는 목록 위치로 고르고 범위 밖이면 첫 대체안, 코드가 없으면 송영 A", () => {
   const opts = [collect(1, "a", { collect_no: 1, collect_total: 3 }), collect(2, "b", { collect_no: 2, collect_total: 3, ending: "C" }), collect(3, "c", { collect_no: 3, collect_total: 3 })];
   assert.strictEqual(ctx.pickCollect(opts, 2), 1);
   assert.strictEqual(ctx.pickCollect(opts, 7), 0);
@@ -627,7 +627,7 @@ test("buildLectionaryModel: 기념일 칩을 고르면 empty — 본문도 본�
   assert.strictEqual(m0.selected, feast);
 });
 
-test("buildLectionaryModel: 트랙 — 전례년 기억이 기본, URL 이 이기고, href 는 트랙을 언제나 적는다(기억과 무관한 주소 — 자체 리뷰 2026-10-13)", () => {
+test("buildLectionaryModel: 트랙 — 기억(마지막 선택)이 기본, URL 이 이기고, href 는 칩 · 카드까지 트랙을 언제나 적는다(기억과 무관한 주소 — 자체 리뷰 2026-10-13 · 머지 전 검토 2026-10-14)", () => {
   const sunday = cand(obs("grid:ordinary-11-sunday", "연중 11주일", { rank: "sunday", precedence: 5, color: "green" }));
   const r = resolvedOf("2026-06-14", [sunday], sunday, { coord: { season: "ordinary", week: 11, type: "sunday", weekday: null, year: "A" } });
   const groupsOf = groupsOfFrom({ "grid:ordinary-11-sunday": TRACKED });
@@ -639,6 +639,7 @@ test("buildLectionaryModel: 트랙 — 전례년 기억이 기본, URL 이 이�
   assert.strictEqual(remembered.group.id, "t2s2");
   assert.strictEqual(remembered.shortGroup.id, "t2s1");
   assert.strictEqual(remembered.chips[0].label, "연중 11주일 (가해, 독서 2)");
+  assert.strictEqual(remembered.chips[0].href, "/lectionary/2026-06-14?track=2");   // 칩도 그 트랙을 적는다
   same(plain(remembered.hrefs.tracks), [
     { track: 1, href: "/lectionary/2026-06-14?track=1", active: false },
     { track: 2, href: "/lectionary/2026-06-14?track=2", active: true },
@@ -653,9 +654,11 @@ test("buildLectionaryModel: 트랙 — 전례년 기억이 기본, URL 이 이�
   assert.strictEqual(overridden.shortGroup.id, "t1s1");
   same(plain(overridden.hrefs.options), ["/lectionary/2026-06-14?track=1"]);
   assert.strictEqual(overridden.tracks.length, 2);
+  // 공유받은 「독서 1」 주소(기억은 2)에서 지금 칩을 눌러도 독서 1 — 칩 링크가 기억이 아니라 화면의 트랙을 적는다.
+  assert.strictEqual(overridden.chips[0].href, "/lectionary/2026-06-14?track=1");
 });
 
-test("buildLectionaryModel: 본기도 대체안 — ?collect 는 collect_no, href 와 송영이 따라간다", () => {
+test("buildLectionaryModel: 본기도 대체안 — ?collect 는 목록 위치, href 와 송영이 따라간다", () => {
   const easter = cand(obs("t-부활대축일", "부활대축일", { rank: "principal", precedence: 1, color: "white" }));
   const r = resolvedOf("2026-04-05", [easter], easter, { coord: { season: "easter", week: 1, type: "sunday", weekday: null, year: "A" }, color: "white", colors: ["white"] });
   const groupsOf = groupsOfFrom({ "t-부활대축일": [group("e1", FOUR, { set_no: 1, set_total: 2, set_note: "원본 세트 1" }), group("e2", FOUR, { set_no: 2, set_total: 2, set_note: "원본 세트 2" })] });

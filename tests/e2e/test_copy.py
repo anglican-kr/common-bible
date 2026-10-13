@@ -1,6 +1,8 @@
 """E2E: clipboard copy — partial selection expands to full verse boundaries,
 verse-select 복사 button, and pure-poetry whole-verse selection."""
 
+import re
+
 BASE = "http://localhost:8080"
 
 _COPY_TEMPLATE = """
@@ -356,3 +358,41 @@ def test_verse_select_copy_on_psalter_credits_prayer_book(page):
     text = page.evaluate("async () => await navigator.clipboard.readText()")
     assert text.startswith("(2)\n그 옛날"), text[:80]
     assert text.endswith("— 전례시편 89:19 (대한성공회 기도서)"), text[-80:]
+
+
+_SELECT_WHOLE_ARTICLE = """
+  const vs = [...document.querySelectorAll('article.chapter-text .verse[data-vref]')];
+  const vis = (n, last) => { const w = document.createTreeWalker(n, NodeFilter.SHOW_TEXT); let t, keep = null;
+    while ((t = w.nextNode())) if (/[^\\s\\u2060]/.test(t.textContent)) { if (!last) return t; keep = t; } return keep; };
+  const a = vis(vs[0], false), b = vis(vs[vs.length - 1], true);
+  const r = document.createRange(); r.setStart(a, 0); r.setEnd(b, b.length);
+  const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+"""
+
+
+def test_copy_reference_leaves_out_moved_and_greek_only_verse_numbers(page):
+    """다른 장에서 옮겨 실린 절(이사 40 의 41:6-7)과 그리스어 추가 본문(다니 3 의 (24)~(90))의 번호는 출처에 넣지 않는다 —
+    종전엔 「이사야 40:6-7, 19-20」 · 「다니엘 3:1-90」(머지 전 검토 2026-10-14 — main 의 출처로 돌아간다)."""
+    _open_chapter(page, "isa/40")
+    vrefs = page.eval_on_selector_all("article.chapter-text .verse[data-vref]", "els => els.map(e => e.getAttribute('data-vref'))")
+    first19 = next(v for v in vrefs if re.match(r"19[a-z]?$", v))
+    first20 = next(v for v in vrefs if re.match(r"20[a-z]?$", v))
+    text = _copy_text(page, _SELECT_LINES.replace("%A%", first19).replace("%B%", first20))
+    assert text.endswith("\n\n— 이사야 40:19-20 (공동번역성서)"), text[-80:]
+    _open_chapter(page, "dan/3")
+    text = _copy_text(page, _SELECT_WHOLE_ARTICLE)
+    assert "아자리야" in text   # 그리스어 추가 본문의 글자는 그대로 실린다 — 번호만 출처에서 뺀다
+    assert text.endswith("\n\n— 다니엘 3:1-33 (공동번역성서)"), text[-80:]
+
+
+def test_copy_reference_bridges_verse_numbers_absent_in_translation(page):
+    """공동번역에 없는 절 번호(마르 9:44 · 46)는 건너뛴 절이 아니다 — 출처는 한 구간 「9:43-48」 · 「9:1-50」(사용자 결정 2026-10-14,
+    main 과 같다; 이 PR 의 한때 출력은 「9:43, 45, 47-48」)."""
+    _open_chapter(page, "mark/9")
+    vrefs = page.eval_on_selector_all("article.chapter-text .verse[data-vref]", "els => els.map(e => e.getAttribute('data-vref'))")
+    first43 = next(v for v in vrefs if re.match(r"43[a-z]?$", v))
+    last48 = [v for v in vrefs if re.match(r"48[a-z]?$", v)][-1]
+    text = _copy_text(page, _SELECT_LINES.replace("%A%", first43).replace("%B%", last48))
+    assert text.endswith("\n\n— 마르코의 복음서 9:43-48 (공동번역성서)"), text[-80:]
+    text = _copy_text(page, _SELECT_WHOLE_ARTICLE)
+    assert text.endswith("\n\n— 마르코의 복음서 9:1-50 (공동번역성서)"), text[-80:]

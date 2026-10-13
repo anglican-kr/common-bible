@@ -970,7 +970,9 @@ function appendVerses(article, verses, opts = {}) {
     // `~` (the duplicate-marker fallback) is not id-safe, so it becomes `-`.
     // `idPrefix` keeps ids unique when one page renders several chapters (lectionary slots — Copilot review round 7)
     const verseId = `${idPrefix}v${instanceKeys[vIdx].replace(/~/g, "-")}`;
-    const baseClasses = v.chapter_ref ? "verse verse-cross-ref" : "verse";
+    // `verse-cross-ref` (moved in from another chapter) and `verse-lxx` (Greek-only addition, Daniel 3) mark the spans whose
+    // numbers are not this chapter's numbering — the copy citation leaves them out (bindCopyAttribution).
+    const baseClasses = v.chapter_ref ? "verse verse-cross-ref" : v.lxx_only ? "verse verse-lxx" : "verse";
 
     const vn = v.number;
 
@@ -1141,12 +1143,18 @@ function appendVerses(article, verses, opts = {}) {
  * the user selected is dropped (self-review 2026-10-13).
  *
  * Reference numbers are the verses actually selected — merged verses keep both ends
- * (「7-8」), excerpt gaps stay gaps (「2, 14」) — as continuous integer runs.
+ * (「7-8」), excerpt gaps stay gaps (「2, 14」) — as continuous integer runs. Two exceptions (pre-merge review
+ * 2026-10-14): numbers this translation does not have (the article's `data-absent` — 마르 9:44 · 46) do not break a
+ * run (「9:43-48」, as on main — user decision 2026-10-14), and spans whose number belongs to another numbering — moved
+ * in from another chapter (`verse-cross-ref`, 이사 40 의 41:6-7) or a Greek-only addition (`verse-lxx`, 다니 3) — are
+ * left out of the numbers unless nothing else was selected (otherwise 「이사야 40:6-7, 19-20」 · 「다니엘 3:1-90」).
+ * `tail` (the lectionary's 영광송 after a psalm) is extra text inside a unit that is not a verse: when the selection
+ * covers it, its text follows the unit's verses, before the reference.
  * @param {HTMLElement} root
  * @param {(unit: HTMLElement, runs: Array<{ article: HTMLElement, ranges: Array<[number, number]>, firstNum: number, lastNum: number, atStart: boolean, atEnd: boolean }>) => string} citeOf
  *   the text after 「— 」 for one unit; `runs` = per article in document order — `ranges` the selected verse numbers
  *   as continuous runs, `atStart`/`atEnd` whether the selection reached the article's first/last numbered verse
- * @param {{ unitSelector?: string, bailoutSelector?: string, strictRoot?: boolean }} [opts]
+ * @param {{ unitSelector?: string, bailoutSelector?: string, strictRoot?: boolean, tail?: { selector: string, text: (el: Element) => string } }} [opts]
  */
 function bindCopyAttribution(root, citeOf, opts = {}) {
   root.addEventListener("copy", (e) => {
@@ -1155,29 +1163,38 @@ function bindCopyAttribution(root, citeOf, opts = {}) {
     const range = sel.getRangeAt(0);
     if (opts.strictRoot && !root.contains(range.commonAncestorContainer)) return;
     if (opts.bailoutSelector && [...root.querySelectorAll(opts.bailoutSelector)].some((n) => overlapsText(range, n))) return;
-    const verses = [...root.querySelectorAll(".verse[data-vref]")].filter((v) => range.intersectsNode(v) && overlapsText(range, v));
-    if (!verses.length) return;
-    /** @type {Array<{ unit: HTMLElement, articles: Array<{ article: HTMLElement, spans: Element[] }> }>} */
+    const tail = opts.tail;
+    // Document order: querySelectorAll returns matches in tree order whatever the selector list order.
+    const items = [...root.querySelectorAll(tail ? `.verse[data-vref], ${tail.selector}` : ".verse[data-vref]")]
+      .filter((n) => range.intersectsNode(n) && overlapsText(range, n));
+    if (!items.some((n) => n.matches(".verse[data-vref]"))) return;
+    /** @type {Array<{ unit: HTMLElement, articles: Array<{ article: HTMLElement, spans: Element[] }>, tail: Element | null }>} */
     const units = [];
-    for (const v of verses) {
+    for (const v of items) {
       const unit = /** @type {HTMLElement} */ ((opts.unitSelector && v.closest(opts.unitSelector)) || root);
-      const article = /** @type {HTMLElement} */ (v.closest("article") || unit);
       let u = units[units.length - 1];
-      if (!u || u.unit !== unit) units.push(u = { unit, articles: [] });
+      if (!u || u.unit !== unit) units.push(u = { unit, articles: [], tail: null });
+      if (tail && v.matches(tail.selector)) { u.tail = v; continue; }
+      const article = /** @type {HTMLElement} */ (v.closest("article") || unit);
       let a = u.articles[u.articles.length - 1];
       if (!a || a.article !== article) u.articles.push(a = { article, spans: [] });
       a.spans.push(v);
     }
-    const blocks = units.map(({ unit, articles }) => {
+    const blocks = units.map(({ unit, articles, tail: tailEl }) => {
+      const parts = articles.map(({ spans }) => window.serializeVerseRange(spans[0], spans[spans.length - 1]));
+      if (tail && tailEl) parts.push(tail.text(tailEl));
+      const text = parts.join("\n\n");
+      if (!articles.length) return text;   // 영광송만 걸친 단위 — 본문 절이 없으니 출처도 없다
       const runs = articles.map(({ article, spans }) => {
-        const nums = [...new Set(spans.flatMap(vrefNumbers))].sort((x, y) => x - y);
+        const own = spans.filter((s) => !s.classList.contains("verse-cross-ref") && !s.classList.contains("verse-lxx"));
+        const nums = [...new Set((own.length ? own : spans).flatMap(vrefNumbers))].sort((x, y) => x - y);
+        const absent = new Set((article.getAttribute("data-absent") || "").split(",").filter(Boolean).map(Number));
         const numbered = article.querySelectorAll(".verse[data-vref]");
         return {
-          article, ranges: numberRuns(nums), firstNum: nums[0], lastNum: nums[nums.length - 1],
+          article, ranges: numberRuns(nums, absent), firstNum: nums[0], lastNum: nums[nums.length - 1],
           atStart: numbered[0] === spans[0], atEnd: numbered[numbered.length - 1] === spans[spans.length - 1],
         };
       });
-      const text = articles.map(({ spans }) => window.serializeVerseRange(spans[0], spans[spans.length - 1])).join("\n\n");
       return `${text}\n\n— ${citeOf(unit, runs)}`;
     });
     if (!e.clipboardData) return;
@@ -1203,15 +1220,47 @@ function vrefNumbers(v) {
   return Array.from({ length: Math.max(0, b - a) + 1 }, (_, i) => a + i);
 }
 
-/** 정렬된 번호 → 연속 구간. @param {number[]} nums @returns {Array<[number, number]>} */
-function numberRuns(nums) {
+/**
+ * 정렬된 번호 → 연속 구간. 사이에 이 번역에 없는 번호(`absent`)만 있으면 이어진 구간이다 — 없는 절은 건너뛴 절이
+ * 아니다(마르 9:43-48 — 사용자 결정 2026-10-14).
+ * @param {number[]} nums @param {Set<number>} [absent] @returns {Array<[number, number]>}
+ */
+function numberRuns(nums, absent) {
   /** @type {Array<[number, number]>} */
   const out = [];
   for (const n of nums) {
     const last = out[out.length - 1];
-    if (last && n === last[1] + 1) last[1] = n;
+    if (last && n > last[1] && onlyAbsentBetween(last[1], n, absent)) last[1] = n;
     else if (!last || n > last[1]) out.push([n, n]);
   }
+  return out;
+}
+
+/** a 와 b 사이의 번호가 모두 이 번역에 없는가(사이가 비면 참). @param {number} a @param {number} b @param {Set<number>} [absent] */
+function onlyAbsentBetween(a, b, absent) {
+  for (let k = a + 1; k < b; k++) if (!absent || !absent.has(k)) return false;
+  return true;
+}
+
+/**
+ * 이 장에서 이 번역에 없는 절 번호 — 1 부터 장의 마지막 절까지 가운데 어느 절도 덮지 않는 번호(병합 절은 끝까지 덮는다).
+ * 다른 장에서 옮겨 실린 절(`chapter_ref`)과 그리스어 추가 본문(`lxx_only`)은 이 장의 번호 체계가 아니라 세지 않는다.
+ * 장 본문 · 전례독서의 `<article data-absent>` 가 되어 복사 출처가 읽는다(마르 9 → [44, 46]).
+ * @param {import("../types").BibleVerse[]} verses @returns {number[]}
+ */
+function absentVerseNumbers(verses) {
+  /** @type {Set<number>} */
+  const have = new Set();
+  let last = 0;
+  for (const v of verses) {
+    if (v.lxx_only || v.chapter_ref != null) continue;
+    const end = Number(v.range_end) || v.number;
+    for (let n = v.number; n <= end; n++) have.add(n);
+    if (end > last) last = end;
+  }
+  /** @type {number[]} */
+  const out = [];
+  for (let n = 1; n <= last; n++) if (!have.has(n)) out.push(n);
   return out;
 }
 
@@ -1287,6 +1336,9 @@ function renderChapter(data, book, opts) {
   }
 
   const article = el("article", { className: "chapter-text", lang: "ko" });
+  // 이 번역에 없는 절 번호 — 복사 출처가 그 자리에서 구간을 끊지 않게(사용자 결정 2026-10-14, bindCopyAttribution)
+  const absent = absentVerseNumbers(data.verses);
+  if (absent.length) article.setAttribute("data-absent", absent.join(","));
   appendVerses(article, data.verses, {
     hlQuery, hlVerse, hlVerseEnd, hlSegments,
     parallels: data.parallels, chapter: data.chapter,
@@ -1625,7 +1677,7 @@ window.renderError = renderError;
 // is the view-renderer entry points routing.js imports (route() dispatch).
 export {
   setTitle, setTitleWithChapterPicker,
-  buildDivisionTabs, buildSegmentTabs, bindCopyAttribution, formatVerseRanges, divisionLabels, divisionOrder, effectiveDivision,
+  buildDivisionTabs, buildSegmentTabs, bindCopyAttribution, formatVerseRanges, absentVerseNumbers, divisionLabels, divisionOrder, effectiveDivision,
   initCompactHeader, initScrollElevation,
   _verseSelectionUnit, _verseRangeVrefs,
   DIVISION_LABELS,
