@@ -1130,36 +1130,66 @@ function appendVerses(article, verses, opts = {}) {
  * under `root` (a lectionary reading that crosses a chapter — 시편 42, 43): the
  * verses are grouped per article into `runs` so the reference can name both
  * chapters, and the text is serialized as one passage from the first to the last.
+ * Within an article the cited numbers are the verses actually selected, collapsed
+ * into continuous runs — a lectionary excerpt that skips verses (「요나 2:1-2, 11」)
+ * is cited with its gap, never as 「2:1-11」 (Copilot review round 8).
  * @param {HTMLElement} root  holds the `.verse[data-vref]` nodes — a chapter article, or a reading section with one article per chapter
- * @param {(runs: Array<{ article: HTMLElement, firstNum: number, lastNum: number }>) => string} refOf  per-article verse ranges, in document order → reference text (「창세기 1:1-3」)
+ * @param {(runs: Array<{ article: HTMLElement, ranges: Array<[number, number]>, first: number, last: number }>) => string} refOf
+ *   per article, in document order: `ranges` = selected verse numbers as continuous runs, `first`/`last` = that
+ *   article's first and last numbered verse (so a caller can tell a passage that continues across a chapter boundary)
  */
 function bindCopyAttribution(root, refOf) {
   root.addEventListener("copy", (e) => {
     const sel = window.getSelection();
     if (!sel || sel.isCollapsed) return;
     const range = sel.getRangeAt(0);
-    /** @type {Array<{ article: HTMLElement, first: Element, last: Element }>} */
+    /** @type {Array<{ article: HTMLElement, firstNode: Element, lastNode: Element, nums: number[] }>} */
     const runs = [];
     for (const v of root.querySelectorAll(".verse")) {
       if (!range.intersectsNode(v)) continue;
       const article = /** @type {HTMLElement} */ (v.closest("article") || root);
+      const n = verseNumberOf(v);
       const run = runs[runs.length - 1];
-      if (run && run.article === article) run.last = v;
-      else runs.push({ article, first: v, last: v });
+      if (run && run.article === article) { run.lastNode = v; if (n !== null) run.nums.push(n); }
+      else runs.push({ article, firstNode: v, lastNode: v, nums: n === null ? [] : [n] });
     }
-    if (!runs.length) return;
-    const nums = runs.map((r) => ({
-      article: r.article,
-      firstNum: parseInt(r.first.getAttribute("data-vref") ?? "", 10),
-      lastNum: parseInt(r.last.getAttribute("data-vref") ?? "", 10),
-    }));
-    if (nums.some((n) => !Number.isFinite(n.firstNum) || !Number.isFinite(n.lastNum))) return;
+    if (!runs.length || runs.some((r) => !r.nums.length)) return;
+    const meta = runs.map((r) => {
+      const numbered = [...r.article.querySelectorAll(".verse[data-vref]")].map(verseNumberOf).filter((n) => n !== null);
+      return { article: r.article, ranges: verseRuns(r.nums), first: numbered[0] ?? r.nums[0], last: numbered[numbered.length - 1] ?? r.nums[r.nums.length - 1] };
+    });
 
-    const plainText = window.serializeVerseRange(runs[0].first, runs[runs.length - 1].last);
+    const plainText = window.serializeVerseRange(runs[0].firstNode, runs[runs.length - 1].lastNode);
     if (!e.clipboardData) return;
-    e.clipboardData.setData("text/plain", `${plainText}\n\n— ${refOf(nums)} (공동번역성서)`);
+    e.clipboardData.setData("text/plain", `${plainText}\n\n— ${refOf(meta)} (공동번역성서)`);
     e.preventDefault();
   });
+}
+
+/** `data-vref` 의 절 번호(「11b」 → 11) — 없거나 숫자가 아니면 null. @param {Element} v @returns {number | null} */
+function verseNumberOf(v) {
+  const n = parseInt(v.getAttribute("data-vref") ?? "", 10);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * 문서 순서의 절 번호들을 연속 구간으로 — 같은 번호(반행 11a · 11b)와 바로 다음 번호는 한 구간, 건너뛴 번호에서 끊는다.
+ * @param {number[]} nums @returns {Array<[number, number]>}
+ */
+function verseRuns(nums) {
+  /** @type {Array<[number, number]>} */
+  const out = [];
+  for (const n of nums) {
+    const last = out[out.length - 1];
+    if (last && (n === last[1] || n === last[1] + 1)) last[1] = n;
+    else out.push([n, n]);
+  }
+  return out;
+}
+
+/** 구간들을 「1-2, 11」 꼴로. @param {Array<[number, number]>} ranges */
+function formatVerseRanges(ranges) {
+  return ranges.map(([a, b]) => (a === b ? String(a) : `${a}-${b}`)).join(", ");
 }
 
 function renderChapter(data, book, opts) {
@@ -1455,10 +1485,8 @@ function renderChapter(data, book, opts) {
     cancelLongPress(e);
   });
 
-  bindCopyAttribution(article, (runs) => {
-    const a = runs[0].firstNum, b = runs[runs.length - 1].lastNum;   // one article — one chapter
-    return a === b ? `${book.name_ko} ${ch}:${a}` : `${book.name_ko} ${ch}:${a}-${b}`;
-  });
+  // one article — one chapter; the whole chapter is rendered, so a selection is one continuous run
+  bindCopyAttribution(article, (runs) => `${book.name_ko} ${ch}:${formatVerseRanges(runs[0].ranges)}`);
 
   $app.appendChild(article);
   $app.appendChild(buildChapterNav(book, ch));
@@ -1567,7 +1595,7 @@ window.renderError = renderError;
 // is the view-renderer entry points routing.js imports (route() dispatch).
 export {
   setTitle, setTitleWithChapterPicker,
-  buildDivisionTabs, buildSegmentTabs, bindCopyAttribution, divisionLabels, divisionOrder, effectiveDivision,
+  buildDivisionTabs, buildSegmentTabs, bindCopyAttribution, formatVerseRanges, divisionLabels, divisionOrder, effectiveDivision,
   initCompactHeader, initScrollElevation,
   _verseSelectionUnit, _verseRangeVrefs,
   DIVISION_LABELS,

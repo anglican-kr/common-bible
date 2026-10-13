@@ -35,7 +35,7 @@
 /** @typedef {import("../types").BibleChapter} BibleChapter */
 
 import { loadChapter } from "./data-fetch.js";
-import { setTitle, appendVerses, buildSegmentTabs, bindCopyAttribution } from "./views.js";
+import { setTitle, appendVerses, buildSegmentTabs, bindCopyAttribution, formatVerseRanges } from "./views.js";
 import { specCoversVerse, verseInstanceKeys } from "./verse-spec.js";
 import {
   parseDate, toKey, addDays, dayOfWeek, liturgicalYearOf, optionalDestOf,
@@ -885,16 +885,32 @@ function buildReading(m, slot, chapters) {
     if (shortSlot) markOptionalVerses(article, run.chapter, isOptional);
     section.appendChild(article);
   }
-  // 복사 출처 — 장 본문과 같은 「— 책 장:절 (공동번역성서)」(Copilot 리뷰 6 · 7회차). 섹션에 한 번 묶어 장을 넘는 독서
-  // (시편 42, 43 — article 둘)의 선택도 한 본문으로 직렬화하고 「전례시편 42:9-43:1」 꼴로 적는다. 송가(cant)는 장 번호가
-  // 성서의 장이 아니라 슬롯 라벨(「루가 1:68-79(즈가리야 송가)」)을 그대로 쓴다.
+  // 복사 출처 — 장 본문과 같은 「— 책 장:절 (공동번역성서)」(Copilot 리뷰 6 · 7 · 8회차). 섹션에 한 번 묶어 장을 넘는
+  // 독서(시편 42, 43 — article 둘)의 선택도 한 본문으로 직렬화한다. 참조는 **실제로 고른 절**만 — 발췌가 건너뛴 절
+  // (「요나 2:1-2, 11」)은 쉼표로 남고, 장 경계에서 이어지는 구간(앞 장의 마지막 절 → 다음 장의 첫 절)만 「42:11-43:1」로
+  // 합친다. 송가(cant)는 장 번호가 성서의 장이 아니라 슬롯 라벨(「루가 1:68-79(즈가리야 송가)」)을 그대로 쓴다.
   bindCopyAttribution(section, (runs) => {
-    const first = runs[0], last = runs[runs.length - 1];
-    const bookName = first.article.getAttribute("data-book") || slot.bookId;
+    const bookName = runs[0].article.getAttribute("data-book") || slot.bookId;
     if (slot.bookId === "cant") return String(slot.label || bookName);
-    const chOf = (/** @type {{ article: HTMLElement }} */ r) => r.article.getAttribute("data-chapter") || "";
-    if (runs.length === 1) return `${bookName} ${chOf(first)}:${first.firstNum === first.lastNum ? first.firstNum : `${first.firstNum}-${first.lastNum}`}`;
-    return `${bookName} ${chOf(first)}:${first.firstNum}-${chOf(last)}:${last.lastNum}`;
+    /** @type {Array<{ ch: string, a: number, b: number, chEnd: string | null }>} */
+    const pieces = [];
+    runs.forEach((r, i) => {
+      const ch = r.article.getAttribute("data-chapter") || "";
+      r.ranges.forEach(([a, b], j) => {
+        const prev = pieces[pieces.length - 1];
+        const continues = i > 0 && j === 0 && prev && prev.b === runs[i - 1].last && a === r.first;
+        if (continues && prev) { prev.b = b; prev.chEnd = ch; }
+        else pieces.push({ ch, a, b, chEnd: null });
+      });
+    });
+    let out = "";
+    let lastCh = null;
+    for (const p of pieces) {
+      const body = p.chEnd ? `${p.a}-${p.chEnd}:${p.b}` : formatVerseRanges([[p.a, p.b]]);
+      out += (out ? ", " : "") + (p.ch !== lastCh ? `${p.ch}:` : "") + body;
+      lastCh = p.chEnd || p.ch;
+    }
+    return `${bookName} ${out}`;
   });
   if (wantsGloria(slot, lastChapter)) section.appendChild(buildGloria());
   return section;

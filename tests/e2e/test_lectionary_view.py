@@ -292,6 +292,39 @@ def test_copy_across_chapters_is_one_passage(desktop_context):
     assert head.lstrip("0123456789 ") [:3] in text and tail in text   # 두 장의 본문이 다 들어 있다
 
 
+_LECT_COPY_GAP = """
+async () => {
+  const section = document.querySelector(".lect-reading[data-slot='psalm']");
+  const verses = [...section.querySelectorAll('.verse[data-vref]')];
+  const i = verses.findLastIndex(v => parseInt(v.getAttribute('data-vref'), 10) === 2);   // 2b — 2절의 마지막 반행
+  const a = verses[i], b = verses[i + 1];
+  const t1 = document.createTreeWalker(a, NodeFilter.SHOW_TEXT).nextNode();
+  const t2 = document.createTreeWalker(b, NodeFilter.SHOW_TEXT).nextNode();
+  const r = document.createRange();
+  r.setStart(t1, Math.floor(t1.length / 2));
+  r.setEnd(t2, Math.min(5, t2.length));
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(r);
+  const dt = new DataTransfer();
+  const ev = new ClipboardEvent('copy', { bubbles: true, cancelable: true, clipboardData: dt });
+  a.dispatchEvent(ev);
+  return [dt.getData('text/plain'), b.getAttribute('data-vref')];
+}
+"""
+
+
+def test_copy_cites_only_selected_verses_across_a_gap(desktop_context):
+    """발췌가 건너뛴 절은 참조에서도 건너뛴다 — 부활대축일 시편 118:1-2, 14-24 에서 2절과 (바로 다음에 그려진) 14절을 걸쳐 복사하면
+    「118:2, 14」이지 「118:2-14」가 아니다(Copilot 8회차)."""
+    import re
+    page = desktop_context.new_page()
+    _open(page, "lectionary/2026-04-05")
+    text, b = page.evaluate(_LECT_COPY_GAP)
+    assert re.match(r"14", b), b   # 2절 다음에 그려진 절이 14절이어야 검사가 뜻이 있다
+    assert text.endswith("— 전례시편 118:2, 14 (공동번역성서)"), text
+
+
 def test_verse_ids_are_unique_across_slots_and_chapters(desktop_context):
     """한 화면에 슬롯 넷 · 장 여럿이 있어도 절 id 가 겹치지 않는다 — 슬롯 · 책 · 장 접두(Copilot 7회차)."""
     page = desktop_context.new_page()
