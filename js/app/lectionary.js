@@ -563,7 +563,9 @@ function hrefFor(date, state, defaults) {
  *   spec 이 그리스어에만 있는 번호(히브리 최대 번호보다 큰 `lxx_only` 번호)를 덮으면 그리스어 체계 — `lxx_only` 는
  *   제 번호로, 히브리 절은 `alt_ref`(불가타 번호)로 고른다. 아니면 히브리 체계 — `lxx_only` 를 뺀다. 「다니 3:25, 34-43」
  *   (사순 3주 화)은 아자리야의 기도, 「다니 3:14-20, 24-25, 28」(사순 5주 수)은 히브리 본문이다 — 로마 성서정과의
- *   Dn 3:25, 34-43 · Dn 3:14-20, 91-92, 95 와 같다. 에스델의 `alt_ref`(추가 본문 하위 절 — 미결39)는 `lxx_only` 가
+ *   Dn 3:25, 34-43 · Dn 3:14-20, 91-92, 95 와 같고, RCL(NRSV 번호) 계열 독서표 — 잉글랜드 CW 「Song of the Three 2, 11-20」 ·
+ *   「Dan 3.14-20, 24-25, 28」 — 와도 같은 본문이라 이 규칙으로 완결이다(사용자 결정 2026-10-13; 새 다니 3 참조는
+ *   lectionary.data.test.js 가 막는다). 에스델의 `alt_ref`(추가 본문 하위 절 — 미결39)는 `lxx_only` 가
  *   없는 장이라 이 규칙에 걸리지 않는다.
  * @param {BibleChapter} chapter @param {string} verseSpec
  * @returns {{ verses: import("../types").BibleVerse[], keys: string[] }}

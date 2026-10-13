@@ -218,6 +218,28 @@ test("A3 절 발췌 — 옮겨 실린 절(이사 40 의 41:6-7)과 다니 3 의 
   same(keysOf("dan", 3, "14-20,24-25,28"), ["14", "15", "16", "17", "18", "19", "20", "24_91", "25_92", "28_95"]);
 });
 
+test("A3 데이터의 다니 3 참조는 RCL(NRSV) 계열 독서표와 같은 본문을 고르고, 새 참조가 생기면 멈춘다(사용자 결정 2026-10-13 — 「RCL 과 일치하면 완결」)", { skip: SKIP }, () => {
+  // RCL 은 NRSV 번호를 쓴다(CCT RCL 서문 §10) — 다니 3 은 히브리 번호, 그리스어 추가 본문은 따로 「Song of the Three」(1~68,
+  // 그리스어 3:24~51 = NRSV 1~28). 잉글랜드 CW 평일 성찬 독서표가 같은 두 날을 이렇게 적는다:
+  //   사순 3주 화 「다니 3:25, 34-43」 = Song of the Three 2, 11-20 — 그리스어 (25) · (34)~(43)
+  //   사순 5주 수 「다니 3:14-20, 24-25, 28」 = Dan 3.14-20, 24-25, 28 — 히브리 번호(불가타 91 · 92 · 95)
+  const RCL_EQUIVALENT = {
+    "25,34-43": ["25_lxx", "34_lxx", "35_lxx", "36_lxx", "37_lxx", "38_lxx", "39_lxx", "40_lxx", "41_lxx", "42_lxx", "43_lxx"],
+    "14-20,24-25,28": ["14", "15", "16", "17", "18", "19", "20", "24_91", "25_92", "28_95"],
+  };
+  const found = new Set();
+  const walk = (/** @type {any} */ x) => {
+    if (Array.isArray(x)) { x.forEach(walk); return; }
+    if (!x || typeof x !== "object") return;
+    if (x.bookId === "dan" && Array.isArray(x.refs)) for (const ref of x.refs) if (ref.chapter === 3) found.add(ref.verseSpec);
+    Object.values(x).forEach(walk);
+  };
+  for (const f of ["eucharist-readings.json", "commons.json"]) walk(read(f));
+  same([...found].sort(), Object.keys(RCL_EQUIVALENT).sort(), "새 다니 3 참조 — RCL(NRSV) 기준과 대조해 RCL_EQUIVALENT 에 더할 것");
+  const dan3 = JSON.parse(fs.readFileSync(path.join(ROOT, "data", "bible", "dan-3.json"), "utf8"));
+  for (const [spec, keys] of Object.entries(RCL_EQUIVALENT)) same(plain(ctx.selectVerses(dan3, spec).keys), keys, spec);
+});
+
 test("A3 2026-12-07 성 니콜라 도착 — 도착 카드 둘, 칩에 「12월 6일에서 옮겨 옴」, 본기도는 고른 칩(니콜라)의 것만", { skip: SKIP }, () => {
   const m = model("2026-12-07");
   assert.ok(m.pair);
