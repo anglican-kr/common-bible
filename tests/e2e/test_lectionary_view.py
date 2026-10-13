@@ -228,6 +228,36 @@ def test_stale_lectionary_preload_failure_does_not_overwrite_new_route(browser):
         ctx.close()
 
 
+_LECT_COPY = """
+async () => {
+  const article = document.querySelector(".lect-reading[data-slot='first'] article.chapter-text");
+  const verses = article.querySelectorAll('.verse');
+  const t1 = document.createTreeWalker(verses[0], NodeFilter.SHOW_TEXT).nextNode();
+  const t2 = document.createTreeWalker(verses[1], NodeFilter.SHOW_TEXT).nextNode();
+  const r = document.createRange();
+  r.setStart(t1, Math.floor(t1.length / 2));
+  r.setEnd(t2, Math.min(5, t2.length));
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(r);
+  const dt = new DataTransfer();
+  const ev = new ClipboardEvent('copy', { bubbles: true, cancelable: true, clipboardData: dt });
+  article.dispatchEvent(ev);
+  return [dt.getData('text/plain'), verses[0].getAttribute('data-vref'), verses[1].getAttribute('data-vref')];
+}
+"""
+
+
+def test_copy_from_reading_appends_attribution(desktop_context):
+    """독서 본문을 복사하면 장 본문처럼 절 경계로 넓힌 본문 + 「— 책 장:절 (공동번역성서)」 출처가 붙는다(Copilot 6회차)."""
+    import re
+    page = desktop_context.new_page()
+    _open(page, "lectionary/2026-04-05")   # 부활대축일 — 제1독서 사도행전 10:34-43
+    text, a, b = page.evaluate(_LECT_COPY)
+    assert re.search(rf"\n\n— 사도행전 10:{a}-{b} \(공동번역성서\)$", text), text
+    assert "인용 출처" not in text
+
+
 def test_conditional_set_condition_is_the_label(desktop_context):
     """사순 2주일 가해 — 조건이 라벨: 「사순 2주일」 / 「주의 변모 주일로 지킬 때」, 캡션 줄 없음(미결38)."""
     page = desktop_context.new_page()

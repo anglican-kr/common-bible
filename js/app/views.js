@@ -1118,6 +1118,43 @@ function appendVerses(article, verses, opts = {}) {
   }
 }
 
+/**
+ * Copy handler shared by the chapter view and the lectionary view (lectionary.js —
+ * Copilot review round 6): serialize the selection ourselves so that stanza breaks
+ * become blank lines and the appended reference uses plain verse numbers (no
+ * line-part letters like "1a"). Shared serializer lives in bookmark.js
+ * (VERSE_SERIALIZE block) so this path and the 복사 button emit identical text.
+ * Partial selections expand to full verse boundaries so a dragged-across fragment
+ * still yields a complete citation.
+ * @param {HTMLElement} article  holds the `.verse[data-vref]` nodes
+ * @param {(firstNum: number, lastNum: number) => string} refOf  selected verse range → reference text (「창세기 1:1-3」)
+ */
+function bindCopyAttribution(article, refOf) {
+  article.addEventListener("copy", (e) => {
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed) return;
+    const range = sel.getRangeAt(0);
+    let firstVerse = null;
+    let lastVerse = null;
+    for (const v of article.querySelectorAll(".verse")) {
+      if (range.intersectsNode(v)) {
+        if (!firstVerse) firstVerse = v;
+        lastVerse = v;
+      }
+    }
+    if (!firstVerse || !lastVerse) return;
+
+    const firstNum = parseInt(firstVerse.getAttribute("data-vref") ?? "", 10);
+    const lastNum = parseInt(lastVerse.getAttribute("data-vref") ?? "", 10);
+    if (!Number.isFinite(firstNum) || !Number.isFinite(lastNum)) return;
+
+    const plainText = window.serializeVerseRange(firstVerse, lastVerse);
+    if (!e.clipboardData) return;
+    e.clipboardData.setData("text/plain", `${plainText}\n\n— ${refOf(firstNum, lastNum)} (공동번역성서)`);
+    e.preventDefault();
+  });
+}
+
 function renderChapter(data, book, opts) {
   const ch = data.chapter;
   const hlQuery = opts && opts.highlightQuery;
@@ -1411,40 +1448,7 @@ function renderChapter(data, book, opts) {
     cancelLongPress(e);
   });
 
-  // Copy handler: serialize the selection ourselves so that stanza breaks
-  // become blank lines and the appended reference uses plain verse numbers
-  // (no line-part letters like "1a"). Shared serializer lives in bookmark.js
-  // (VERSE_SERIALIZE block) so this path and the 복사 button emit identical text.
-  article.addEventListener("copy", (e) => {
-    const sel = window.getSelection();
-    if (!sel || sel.isCollapsed) return;
-
-    // Expand partial selections to full verse boundaries so a dragged-across
-    // fragment still yields a complete citation.
-    const range = sel.getRangeAt(0);
-    let firstVerse = null;
-    let lastVerse = null;
-    for (const v of article.querySelectorAll(".verse")) {
-      if (range.intersectsNode(v)) {
-        if (!firstVerse) firstVerse = v;
-        lastVerse = v;
-      }
-    }
-    if (!firstVerse || !lastVerse) return;
-
-    const firstNum = parseInt(firstVerse.getAttribute("data-vref") ?? "", 10);
-    const lastNum = parseInt(lastVerse.getAttribute("data-vref") ?? "", 10);
-    if (!Number.isFinite(firstNum) || !Number.isFinite(lastNum)) return;
-
-    const plainText = window.serializeVerseRange(firstVerse, lastVerse);
-    const ref = firstNum === lastNum
-      ? `${book.name_ko} ${ch}:${firstNum}`
-      : `${book.name_ko} ${ch}:${firstNum}-${lastNum}`;
-
-    if (!e.clipboardData) return;
-    e.clipboardData.setData("text/plain", `${plainText}\n\n— ${ref} (공동번역성서)`);
-    e.preventDefault();
-  });
+  bindCopyAttribution(article, (a, b) => (a === b ? `${book.name_ko} ${ch}:${a}` : `${book.name_ko} ${ch}:${a}-${b}`));
 
   $app.appendChild(article);
   $app.appendChild(buildChapterNav(book, ch));
@@ -1553,7 +1557,7 @@ window.renderError = renderError;
 // is the view-renderer entry points routing.js imports (route() dispatch).
 export {
   setTitle, setTitleWithChapterPicker,
-  buildDivisionTabs, buildSegmentTabs, divisionLabels, divisionOrder, effectiveDivision,
+  buildDivisionTabs, buildSegmentTabs, bindCopyAttribution, divisionLabels, divisionOrder, effectiveDivision,
   initCompactHeader, initScrollElevation,
   _verseSelectionUnit, _verseRangeVrefs,
   DIVISION_LABELS,

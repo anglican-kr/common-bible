@@ -18,7 +18,8 @@
 //
 // 뷰가 처음 부딪힌 설계서 §9 미결 — 사용자가 하나씩 확정했다(2026-10-12, coding-pitfalls §21 · 원장
 // docs/changes/2026-10-12-lectionary-view.md):
-//   미결25 고유 독서 없는 축일의 초기 독서 = 격자(그날의 주일 · 평일) 독서 — 책자대로. 제목 · 색은 승자. (닫힘)
+//   미결25 고유 독서 없는 축일의 초기 독서 = 격자(그날의 주일 · 평일) 독서 — 책자대로. 헤더 제목은 승자, 색은 고른
+//          본문의 색(headerColors — 격자면 그날 대표색), 본기도는 고른 칩의 것. (닫힘)
 //   미결20 성 토요일: 헤더 색은 「고른 본문의 색」 — 부활밤 본문이면 백(승자여도), 성 토요일 칩이면 홍.
 //          저녁 전례 표지(데이터 · 엔진)는 그대로 열려 있다.
 //   미결38 대안 세트: 「또는」 대안은 「독서 1 · 독서 2」(완전한 세트를 통째로 바꾼다), 조건부는 「…로 지킬 때」가
@@ -34,7 +35,7 @@
 /** @typedef {import("../types").BibleChapter} BibleChapter */
 
 import { loadChapter } from "./data-fetch.js";
-import { setTitle, appendVerses, buildSegmentTabs } from "./views.js";
+import { setTitle, appendVerses, buildSegmentTabs, bindCopyAttribution } from "./views.js";
 import { specCoversVerse, verseInstanceKeys } from "./verse-spec.js";
 import {
   parseDate, toKey, addDays, dayOfWeek, liturgicalYearOf, optionalDestOf,
@@ -190,7 +191,8 @@ function hasProperReadings(/** @type {ReadingGroup[]} */ groups) {
 
 /**
  * 초기 선택(ADR-038 §3 — `official` 이 초기 선택). 단 하나의 예외가 미결25 의 잠정 답이다: 승자의 독서가
- * 공통뿐이면(고유 독서 없는 축일) 책자대로 그날의 격자 독서를 먼저 보인다 — 제목 · 색은 여전히 승자다.
+ * 공통뿐이면(고유 독서 없는 축일) 책자대로 그날의 격자 독서를 먼저 보인다 — 헤더 제목은 여전히 승자이고 색은 고른
+ * 본문의 색(`headerColors` — 격자면 그날 대표색), 본기도는 고른 칩의 것이다.
  * @param {ResolvedDate} resolved @param {(c: Candidate) => ReadingGroup[]} groupsOf
  * @returns {Candidate | null}
  */
@@ -879,6 +881,10 @@ function buildReading(m, slot, chapters) {
     const article = el("article", { className: "chapter-text", lang: "ko" });
     // Clean 봉독 surface (ADR-035): cite chips off, no parallels, no note anchors.
     appendVerses(article, run.verses, { hideCites: true, instanceKeys: run.keys });
+    // 복사 출처 — 장 본문과 같은 「— 책 장:절 (공동번역성서)」(Copilot 리뷰 6회차). 송가(cant)는 장 번호가 성서의 장이
+    // 아니라 슬롯 라벨(「루가 1:68-79(즈가리야 송가)」)을 그대로 쓴다.
+    const bookName = run.data.book_name_ko || slot.bookId;
+    bindCopyAttribution(article, (a, b) => (slot.bookId === "cant" ? String(slot.label || bookName) : `${bookName} ${run.chapter}:${a === b ? a : `${a}-${b}`}`));
     if (shortSlot) markOptionalVerses(article, run.chapter, isOptional);
     section.appendChild(article);
   }
