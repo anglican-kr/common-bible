@@ -502,7 +502,10 @@ function headerColors(resolved, selected) {
 }
 
 /**
- * 상태 → URL. 기본값과 같은 키는 쓰지 않아 「/lectionary/2026-04-05」가 언제나 그날의 초기 화면이다.
+ * 상태 → URL. 기본값과 같은 키는 쓰지 않아 「/lectionary/2026-04-05」가 그날의 초기 화면이다 — 다만 **트랙은 트랙이 있는
+ * 날이면 언제나 적는다**(`defaults.track` 은 null): 기본 트랙이 보는 사람의 기억(전례년별)에 달려 있어, 빼면 같은 주소가
+ * 사람마다 · 기억이 바뀐 뒤마다 다른 화면이 된다(공유 링크 · 뒤로 가기 — 자체 리뷰 2026-10-13). 기억에서 온 트랙은
+ * 렌더할 때 지금 주소에 적어 둔다(`renderLectionaryView` — `withTrack`).
  * @param {string} date @param {LectionaryQuery} state @param {{ obs: string | null, track: 1 | 2 | null }} defaults
  */
 function hrefFor(date, state, defaults) {
@@ -622,7 +625,7 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
   const groups = groupsOf(selected);
   const tracks = tracksOf(groups);
   const track = pickTrack(groups, query.track, storedTrack);
-  const defaults = { obs: initial.observance.id, track: pickTrack(groups, null, storedTrack) };
+  const defaults = { obs: initial.observance.id, track: null };   // 트랙은 언제나 적는다(hrefFor)
   const options = readingOptions(setsOf(groups, track), shortName(selected.observance.name));
   const setIndex = pickSet(options, query.set);
   const option = setIndex >= 0 ? options[setIndex] : null;
@@ -827,15 +830,9 @@ function buildControls(m) {
         // 라우터(routing.js)가 가로채는 기본 클릭일 때만 — Ctrl/Cmd · Shift · 가운데 버튼은 새 탭 · 창으로 가는
         // 표준 링크 동작이라 지금 탭의 URL 과 기억을 건드리지 않는다(Copilot 리뷰 3회차).
         if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey || e.button !== 0) return;
-        const next = m.hrefs.tracks[i].track;
-        // 기억을 바꾸면 트랙을 담지 않은 URL(없거나 `?track=3` 처럼 깨진 값)의 뜻이 바뀐다 — 뒤로 가기가 지금
-        // 화면(지금 트랙)으로 돌아오게, 저장 전에 지금 history 항목의 URL 에 트랙을 명시해 둔다(Copilot 리뷰 1 · 5회차).
-        if (next !== m.track && m.track && new URLSearchParams(location.search).get("track") !== String(m.track)) {
-          const u = new URL(location.href);
-          u.searchParams.set("track", String(m.track));
-          history.replaceState(history.state, "", u.pathname + u.search);
-        }
-        if (Number.isFinite(ly)) saveLectionaryTrack(ly, next);
+        // 지금 항목의 주소에는 렌더할 때 이미 트랙이 적혀 있어(renderLectionaryView — withTrack) 기억을 바꿔도 뒤로 가기가
+        // 이 화면으로 돌아온다(Copilot 리뷰 1 · 5회차의 클릭 때 보정을 렌더 때로 옮겼다 — 자체 리뷰 2026-10-13).
+        if (Number.isFinite(ly)) saveLectionaryTrack(ly, m.hrefs.tracks[i].track);
       });
     });
     ctl.appendChild(seg);
@@ -1010,6 +1007,22 @@ function buildReading(m, slot, chapters) {
 }
 
 /**
+ * 쿼리에 `track` 을 적은 꼴 — `hrefFor` 와 같은 키 순서(obs → track → set → collect)를 지켜 같은 상태가 같은 주소가 되게.
+ * @param {string} search `location.search` @param {1 | 2} track @returns {string}
+ */
+function withTrack(search, track) {
+  const cur = new URLSearchParams(search);
+  const q = new URLSearchParams();
+  for (const k of ["obs", "track", "set", "collect"]) {
+    const v = k === "track" ? String(track) : cur.get(k);
+    if (v) q.set(k, v);
+  }
+  for (const [k, v] of cur) if (!q.has(k)) q.append(k, v);
+  const s = q.toString();
+  return s ? `?${s}` : "";
+}
+
+/**
  * Commit the whole view — synchronous, called only after every await resolved
  * and the route is still current.
  * @param {LectionaryModel} m @param {Map<string, BibleChapter | null>} chapters
@@ -1100,6 +1113,13 @@ async function renderLectionaryView(parsed) {
   const chapters = await loadSlotChapters(model.slots);
   if (isStale()) return PAGE_TITLE;
   commit(model, chapters);
+  // 트랙이 있는 날은 고른 트랙(URL > 기억 > 1)을 지금 history 항목에 적는다 — 이 항목의 화면이 나중에 기억이 바뀌어도
+  // 그대로 돌아오고(뒤로 가기), 공유한 주소가 받는 사람의 기억과 무관하게 같은 화면이며, 스크롤 기억(ADR-031 — 경로
+  // 키)도 이 주소로 잡힌다. route() 의 onRouteEnd 가 이 뒤에 지금 경로를 읽는다(자체 리뷰 2026-10-13).
+  if (model.tracks.length > 1 && model.track) {
+    const search = withTrack(location.search, model.track);
+    if (search !== location.search) history.replaceState(history.state, "", location.pathname + search);
+  }
   const official = resolved.official;
   return official ? `${shortName(official.observance.name)} ${PAGE_TITLE}` : PAGE_TITLE;
 }

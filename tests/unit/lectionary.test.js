@@ -596,7 +596,7 @@ test("buildLectionaryModel: 기념일 칩을 고르면 empty — 본문도 본�
   assert.strictEqual(m0.selected, feast);
 });
 
-test("buildLectionaryModel: 트랙 — 전례년 기억이 기본, URL 이 이기고, href 는 기본값을 생략한다", () => {
+test("buildLectionaryModel: 트랙 — 전례년 기억이 기본, URL 이 이기고, href 는 트랙을 언제나 적는다(기억과 무관한 주소 — 자체 리뷰 2026-10-13)", () => {
   const sunday = cand(obs("grid:ordinary-11-sunday", "연중 11주일", { rank: "sunday", precedence: 5, color: "green" }));
   const r = resolvedOf("2026-06-14", [sunday], sunday, { coord: { season: "ordinary", week: 11, type: "sunday", weekday: null, year: "A" } });
   const groupsOf = groupsOfFrom({ "grid:ordinary-11-sunday": TRACKED });
@@ -610,11 +610,11 @@ test("buildLectionaryModel: 트랙 — 전례년 기억이 기본, URL 이 이�
   assert.strictEqual(remembered.chips[0].label, "연중 11주일 (가해, 독서 2)");
   same(plain(remembered.hrefs.tracks), [
     { track: 1, href: "/lectionary/2026-06-14?track=1", active: false },
-    { track: 2, href: "/lectionary/2026-06-14", active: true },
+    { track: 2, href: "/lectionary/2026-06-14?track=2", active: true },
   ]);
   // 트랙을 바꿔도 본기도 선택(collect=2)은 남고, 세트는 그 트랙의 첫 세트로 돌아간다(Copilot 1회차).
   const withCollect = ctx.buildLectionaryModel(r, { obs: null, track: 2, set: null, collect: 2 }, groupsOf, [{ candidate: sunday, collects: [collect(59, "…", { collect_no: 1, collect_total: 2 }), collect(60, "…", { collect_no: 2, collect_total: 2 })] }], 2);
-  same(plain(withCollect.hrefs.tracks.map((t) => t.href)), ["/lectionary/2026-06-14?track=1&collect=2", "/lectionary/2026-06-14?collect=2"]);
+  same(plain(withCollect.hrefs.tracks.map((t) => t.href)), ["/lectionary/2026-06-14?track=1&collect=2", "/lectionary/2026-06-14?track=2&collect=2"]);
   const overridden = ctx.buildLectionaryModel(r, { obs: null, track: 1, set: 2, collect: null }, groupsOf, entries, 2);
   assert.strictEqual(overridden.track, 1);
   assert.strictEqual(overridden.options.length, 1);   // ?set=2 는 범위 밖 → 첫(유일한) 선택지

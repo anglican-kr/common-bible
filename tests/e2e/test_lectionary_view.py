@@ -156,8 +156,8 @@ def test_track_toggle_persists_per_liturgical_year(desktop_context):
     page.wait_for_selector(".lect-date time[datetime='2026-06-21']")
     assert page.locator(".lect-track .division-tab.active").inner_text() == "독서 2"
     assert "독서 2" in page.inner_text(".lect-chip[aria-current]")
-    # 기억된 트랙이 기본값이 됐으므로 URL 에는 track 이 붙지 않는다.
-    assert page.evaluate("() => location.search") == ""
+    # 기억에서 온 트랙도 주소에 적힌다 — 같은 주소가 기억과 무관하게 같은 화면(자체 리뷰 2026-10-13).
+    assert page.evaluate("() => location.search") == "?track=2"
 
 
 def test_cross_chapter_reading_keeps_every_chapter(desktop_context):
@@ -458,6 +458,23 @@ def test_verse_ids_are_unique_across_slots_and_chapters(desktop_context):
     assert page.locator("[id^='psalm-lps-43-v']").count() > 0
 
 
+def test_back_to_earlier_day_keeps_its_track_after_memory_changes(desktop_context):
+    """06-07(독서 1)에서 06-14 로 가서 독서 2 를 고른 뒤 06-07 로 돌아와도 독서 1 — 렌더 때 그 항목에 트랙을 적어 두므로
+    바뀐 기억으로 다시 읽히지 않는다(자체 리뷰 2026-10-13)."""
+    page = desktop_context.new_page()
+    _open(page, "lectionary/2026-06-07")
+    page.wait_for_url("**/lectionary/2026-06-07?track=1")
+    page.evaluate("() => window.navigate('/lectionary/2026-06-14')")
+    page.wait_for_url("**/lectionary/2026-06-14?track=1")
+    page.locator(".lect-track .division-tab", has_text="독서 2").click()
+    page.wait_for_url("**/lectionary/2026-06-14?track=2")
+    page.go_back()
+    page.wait_for_url("**/lectionary/2026-06-14?track=1")
+    page.go_back()
+    page.wait_for_url("**/lectionary/2026-06-07?track=1")
+    page.wait_for_selector(".lect-track .division-tab.active:has-text('독서 1')")
+
+
 def test_conditional_set_condition_is_the_label(desktop_context):
     """사순 2주일 가해 — 조건이 라벨: 「사순 2주일」 / 「주의 변모 주일로 지킬 때」, 캡션 줄 없음(미결38)."""
     page = desktop_context.new_page()
@@ -525,19 +542,27 @@ def test_malformed_percent_escape_shows_notice(desktop_context):
     assert page.locator(".lect-reading").count() == 0
 
 
-def test_modified_click_on_track_opens_new_page_without_touching_current(desktop_context):
-    """Ctrl+클릭(새 탭)은 지금 탭의 URL · 기억을 건드리지 않는다 — 라우터와 같은 기본 클릭 가드(Copilot 3회차)."""
-    page = desktop_context.new_page()
-    _open(page, "lectionary/2026-06-14")
-    assert page.locator(".lect-track .division-tab.active").inner_text() == "독서 1"
-    with desktop_context.expect_page() as opened:
-        page.locator(".lect-track .division-tab", has_text="독서 2").click(modifiers=["Control"])
-    new_page = opened.value
-    new_page.wait_for_url("**/lectionary/2026-06-14?track=2")   # 새 탭이 링크 href 로 간다
-    # 지금 탭은 그대로 — 가드가 없으면 replaceState 로 ?track=1 이 붙는다
-    assert page.url.endswith("/lectionary/2026-06-14")
-    assert page.locator(".lect-track .division-tab.active").inner_text() == "독서 1"
-    new_page.close()
+def test_modified_click_on_track_opens_new_page_without_touching_current(browser):
+    """Ctrl/Cmd+클릭(새 탭)은 지금 탭의 주소 · 트랙 기억을 건드리지 않는다 — 라우터와 같은 기본 클릭 가드(Copilot 3회차).
+    앱 저장소를 지우는 init script 가 없는 컨텍스트에서 본다 — 새 탭이 열리며 기억을 지우면 가드 없이도 통과하므로."""
+    ctx = browser.new_context()
+    page = ctx.new_page()
+    try:
+        _open(page, "lectionary/2026-06-14")
+        page.wait_for_url("**/lectionary/2026-06-14?track=1")
+        assert page.locator(".lect-track .division-tab.active").inner_text() == "독서 1"
+        assert page.evaluate("() => localStorage.getItem('bible-lectionary-track')") is None
+        with ctx.expect_page() as opened:
+            page.locator(".lect-track .division-tab", has_text="독서 2").click(modifiers=["ControlOrMeta"])
+        new_page = opened.value
+        new_page.wait_for_url("**/lectionary/2026-06-14?track=2")   # 새 탭이 링크 href 로 간다
+        assert page.url.endswith("/lectionary/2026-06-14?track=1")   # 지금 탭은 그대로
+        assert page.locator(".lect-track .division-tab.active").inner_text() == "독서 1"
+        # 가드가 없으면 클릭 리스너가 기억을 2 로 바꾼다
+        assert page.evaluate("() => localStorage.getItem('bible-lectionary-track')") is None
+        new_page.close()
+    finally:
+        ctx.close()
 
 
 def test_shared_link_with_state_lands_on_same_screen(desktop_context):
