@@ -419,6 +419,20 @@ def test_copy_excludes_optional_verse_brackets(desktop_context):
     assert "(공동번역성서)" in text
 
 
+def test_half_verse_on_two_line_verse_shows_only_that_line(desktop_context):
+    """성령강림대축일(2026-05-24) 「시편 104:24-34, 35하」 — 35절은 두 줄(선창 · 응답)이라 「하」 줄만, 절 번호는 남는다(자체 리뷰 2026-10-13)."""
+    page = desktop_context.new_page()
+    _open(page, "lectionary/2026-05-24")
+    psalm = page.locator(".lect-reading[data-slot='psalm']")
+    assert "35하" in psalm.locator(".lect-ref").inner_text()
+    text = psalm.locator("article.chapter-text").last.inner_text()
+    assert "악인들아" not in text, text[-200:]
+    assert "내 영혼아, 주님을 찬미하여라" in text
+    v35 = psalm.locator(".verse[data-vref='35b']")
+    assert v35.count() == 1 and v35.locator(".verse-num").count() == 1   # 번호가 남은 줄로 옮겨 왔다
+    assert psalm.locator(".verse[data-vref='35a']").count() == 0
+
+
 def test_verse_ids_are_unique_across_slots_and_chapters(desktop_context):
     """한 화면에 슬롯 넷 · 장 여럿이 있어도 절 id 가 겹치지 않는다 — 슬롯 · 책 · 장 접두(Copilot 7회차)."""
     page = desktop_context.new_page()

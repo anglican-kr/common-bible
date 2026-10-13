@@ -417,6 +417,25 @@ test("selectVerses: spec 범위 + 병합 절(range_end) + 전체 장 기준 인�
   assert.strictEqual(ctx.selectVerses({ verses: [] }, "1-3").verses.length, 0);
 });
 
+test("selectVerses: 다른 장에서 옮겨 실린 절(chapter_ref)은 번호가 걸려도 뺀다 — 이사 40 의 41:6-7(자체 리뷰 2026-10-13)", () => {
+  const ch = { verses: [1, 2, 3, 4, 5, 6, 7].map((n) => ({ number: n, text: `40:${n}` }))
+    .concat([{ number: 6, chapter_ref: 41, text: "41:6" }, { number: 7, chapter_ref: 41, text: "41:7" }, { number: 8, text: "40:8" }]) };
+  same(ctx.selectVerses(ch, "1-8").verses.map((v) => v.text), ["40:1", "40:2", "40:3", "40:4", "40:5", "40:6", "40:7", "40:8"]);
+});
+
+test("selectVerses: 번호 체계가 둘인 장(다니 3) — 그리스어에만 있는 번호를 덮으면 그리스어, 아니면 히브리(자체 리뷰 2026-10-13)", () => {
+  const plainV = Array.from({ length: 23 }, (_, i) => ({ number: i + 1, text: `h${i + 1}` }));
+  const lxx = Array.from({ length: 67 }, (_, i) => ({ number: 24 + i, lxx_only: true, text: `g${24 + i}` }));
+  const hebTail = Array.from({ length: 10 }, (_, i) => ({ number: 24 + i, alt_ref: 91 + i, text: `h${24 + i}` }));
+  const dan3 = { verses: [...plainV, ...lxx, ...hebTail] };
+  // 사순 3주 화 「다니 3:25, 34-43」 — 아자리야의 기도(그리스어 (25) · (34)~(43)), 히브리 25(92)는 없다
+  same(ctx.selectVerses(dan3, "25,34-43").verses.map((v) => v.text), ["g25", "g34", "g35", "g36", "g37", "g38", "g39", "g40", "g41", "g42", "g43"]);
+  // 사순 5주 수 「다니 3:14-20, 24-25, 28」 — 히브리 본문(로마 Dn 3:14-20, 91-92, 95), 그리스어 (24)(25)(28) 은 없다
+  same(ctx.selectVerses(dan3, "14-20,24-25,28").verses.map((v) => v.text), ["h14", "h15", "h16", "h17", "h18", "h19", "h20", "h24", "h25", "h28"]);
+  // 그리스어 체계에서 히브리 뒷부분은 불가타 번호(alt_ref)로 걸린다
+  same(ctx.selectVerses(dan3, "50,91-92").verses.map((v) => v.text), ["g50", "h24", "h25"]);
+});
+
 test("slotVerseRuns: 장을 넘는 ref 는 장마다 그린다 — 2장 1절이 1장 1절과 키가 같아도 빠지지 않는다(Copilot 1회차)", () => {
   const ch = (n, count) => ({ book_id: "jon", chapter: n, verses: Array.from({ length: count }, (_, i) => ({ number: i + 1, text: `${n}:${i + 1}` })) });
   const chapters = { 1: ch(1, 17), 2: ch(2, 11) };

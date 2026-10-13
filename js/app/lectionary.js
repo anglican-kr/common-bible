@@ -479,20 +479,36 @@ function hrefFor(date, state, defaults) {
 /**
  * 장 JSON 에서 `verseSpec` 이 덮는 절만 — 병합 절(`range_end`)은 범위 안 어느 번호든 걸리면 포함.
  * 인스턴스 키는 **장 전체**에서 계산해 발췌에서도 같은 절이 같은 id 를 받게 한다(ADR-035 개정 2026-07-27).
+ *
+ * 번호만으로 고르면 안 되는 절 둘(2026-10-13 자체 리뷰):
+ * - **다른 장에서 옮겨 실린 절**(`chapter_ref` — 이사 40 의 19절 뒤 41:6-7)은 이 장의 ref 가 아니다 — 뺀다.
+ *   「이사 40:1-11」(대림 2주일 나해)이 11절 뒤에 41:6-7 을 달고 있었다.
+ * - **번호 체계가 둘인 장**(다니 3 — 그리스어 추가 본문 `lxx_only` 24~90 ∧ 히브리 뒷부분 24~33 · `alt_ref` 91~100).
+ *   spec 이 그리스어에만 있는 번호(히브리 최대 번호보다 큰 `lxx_only` 번호)를 덮으면 그리스어 체계 — `lxx_only` 는
+ *   제 번호로, 히브리 절은 `alt_ref`(불가타 번호)로 고른다. 아니면 히브리 체계 — `lxx_only` 를 뺀다. 「다니 3:25, 34-43」
+ *   (사순 3주 화)은 아자리야의 기도, 「다니 3:14-20, 24-25, 28」(사순 5주 수)은 히브리 본문이다 — 로마 성서정과의
+ *   Dn 3:25, 34-43 · Dn 3:14-20, 91-92, 95 와 같다. 에스델의 `alt_ref`(추가 본문 하위 절 — 미결39)는 `lxx_only` 가
+ *   없는 장이라 이 규칙에 걸리지 않는다.
  * @param {BibleChapter} chapter @param {string} verseSpec
  * @returns {{ verses: import("../types").BibleVerse[], keys: string[] }}
  */
 function selectVerses(chapter, verseSpec) {
   const all = chapter.verses || [];
   const keys = verseInstanceKeys(all);
+  const hasLxx = all.some((v) => v.lxx_only);
+  const hebrewMax = hasLxx ? all.reduce((mx, v) => (v.lxx_only ? mx : Math.max(mx, v.range_end || v.number)), 0) : 0;
+  const greek = hasLxx && all.some((v) => v.lxx_only && v.number > hebrewMax && specCoversVerse(verseSpec, v.number));
   /** @type {import("../types").BibleVerse[]} */
   const verses = [];
   /** @type {string[]} */
   const selKeys = [];
   all.forEach((v, i) => {
-    const end = v.range_end != null ? v.range_end : v.number;
+    if (v.chapter_ref != null) return;
+    if (v.lxx_only && !greek) return;
+    const start = greek && !v.lxx_only && v.alt_ref != null ? v.alt_ref : v.number;
+    const end = start === v.number && v.range_end != null ? v.range_end : start;
     let inSpec = false;
-    for (let x = v.number; x <= end && !inSpec; x++) if (specCoversVerse(verseSpec, x)) inSpec = true;
+    for (let x = start; x <= end && !inSpec; x++) if (specCoversVerse(verseSpec, x)) inSpec = true;
     if (!inSpec) return;
     verses.push(v);
     selKeys.push(keys[i]);
@@ -506,14 +522,14 @@ function selectVerses(chapter, verseSpec) {
  * 시편 42, 43 · 창세 6:9-22, 7:24, 8:14-19 …)에서 2장 1절이 1장 1절과 같은 키로 떨어져 조용히 빠졌다(Copilot
  * 리뷰 1회차). DOM id 는 그대로 인스턴스 키다(`appendVerses` 의 `instanceKeys`).
  * @param {ReadingSlot} slot @param {(chapter: number) => BibleChapter | null | undefined} chapterOf
- * @returns {Array<{ chapter: number, data: BibleChapter | null, verses: import("../types").BibleVerse[], keys: string[] }>}
+ * @returns {Array<{ chapter: number, spec: string, data: BibleChapter | null, verses: import("../types").BibleVerse[], keys: string[] }>}
  */
 function slotVerseRuns(slot, chapterOf) {
   /** @type {Set<string>} */
   const seen = new Set();
   return (slot.refs || []).map((ref) => {
     const data = chapterOf(ref.chapter) || null;
-    if (!data) return { chapter: ref.chapter, data: null, verses: [], keys: [] };
+    if (!data) return { chapter: ref.chapter, spec: ref.verseSpec, data: null, verses: [], keys: [] };
     const picked = selectVerses(data, ref.verseSpec);
     /** @type {import("../types").BibleVerse[]} */
     const verses = [];
@@ -526,7 +542,7 @@ function slotVerseRuns(slot, chapterOf) {
       verses.push(v);
       keys.push(picked.keys[i]);
     });
-    return { chapter: ref.chapter, data, verses, keys };
+    return { chapter: ref.chapter, spec: ref.verseSpec, data, verses, keys };
   });
 }
 
@@ -852,6 +868,39 @@ function markOptionalVerses(article, chapter, isOptional) {
 }
 
 /**
+ * 반절(상 → `a` · 하 → `b`, ADR-037 §1) — 그 절이 **정확히 두 줄**로 그려졌으면 고른 줄만 남긴다. 데이터의 두 줄 절
+ * 22곳은 줄 경계가 곧 상/하 경계였다(¶ 문단 · 시행 · 계응 선창/응답 — 성령강림대축일 「시편 104:24-34, 35하」는
+ * 「악인들아 …」를 빼고 「내 영혼아, 주님을 찬미하여라. 알렐루야!」만). 한 줄 절(산문 54곳)은 나눌 수 없어 절 전체,
+ * 세 줄 이상(24곳)은 경계를 알 수 없어 절 전체를 그대로 둔다(2026-10-13 자체 리뷰).
+ * 첫 줄을 버리면 절 번호(`sup.verse-num` · U+2060)와 id 를 남는 줄로 옮기고, 둘째 줄을 버리면 선창 끝 ◯ 도 뗀다.
+ * @param {HTMLElement} article @param {string} verseSpec
+ */
+function trimHalfVerses(article, verseSpec) {
+  for (const tok of String(verseSpec || "").split(",")) {
+    const m = /^(\d+)([ab])$/.exec(tok.trim());
+    if (!m) continue;
+    const spans = /** @type {HTMLElement[]} */ ([...article.querySelectorAll(".verse[data-vref]")])
+      .filter((s) => new RegExp(`^${m[1]}[a-z]$`).test(s.getAttribute("data-vref") || ""));
+    if (spans.length !== 2) continue;
+    const [first, second] = spans;
+    const brk = second.previousElementSibling;
+    if (brk && (brk.classList.contains("hemistich-break") || brk.classList.contains("paragraph-break"))) brk.remove();
+    if (m[2] === "b") {
+      // 절 번호 · id 를 둘째 줄로 — sup 뒤의 U+2060 도 함께
+      const lead = [...first.childNodes].filter((n) => n instanceof HTMLElement
+        ? n.classList.contains("verse-num") || n.classList.contains("versicle-mark")
+        : n.nodeType === Node.TEXT_NODE && n.textContent === "\u2060");
+      for (const n of lead.reverse()) second.insertBefore(n, second.firstChild);
+      second.id = first.id;
+      first.remove();
+    } else {
+      first.querySelectorAll(".responsory-mark").forEach((n) => n.remove());
+      second.remove();
+    }
+  }
+}
+
+/**
  * @param {LectionaryModel} m @param {ReadingSlot} slot @param {Map<string, BibleChapter | null>} chapters
  */
 function buildReading(m, slot, chapters) {
@@ -885,6 +934,7 @@ function buildReading(m, slot, chapters) {
     // Clean 봉독 surface (ADR-035): cite chips off, no parallels, no note anchors. 한 화면에 슬롯 · 장이 여럿이라
     // 절 id 에 슬롯 · 책 · 장 접두를 붙여 문서 안에서 유일하게(Copilot 리뷰 7회차).
     appendVerses(article, run.verses, { hideCites: true, instanceKeys: run.keys, idPrefix: `${slot.slot}-${slot.bookId}-${run.chapter}-` });
+    trimHalfVerses(article, run.spec);
     if (shortSlot) markOptionalVerses(article, run.chapter, isOptional);
     section.appendChild(article);
   }

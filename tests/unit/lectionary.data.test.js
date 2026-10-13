@@ -165,6 +165,16 @@ test("A3 2026-08-09 연중 19주일 — 목적지 카드 둘(주일 · 변모 op
   same(plain(moved.colors), ["white"]);   // 변모를 고르면 그 축일의 백
 });
 
+test("A3 절 발췌 — 옮겨 실린 절(이사 40 의 41:6-7)과 다니 3 의 이중 번호를 번호만으로 고르지 않는다(자체 리뷰 2026-10-13)", { skip: SKIP }, () => {
+  const bible = (b, c) => JSON.parse(fs.readFileSync(path.join(ROOT, "data", "bible", `${b}-${c}.json`), "utf8"));
+  const keysOf = (b, c, spec) => plain(ctx.selectVerses(bible(b, c), spec).keys);
+  const isa = keysOf("isa", 40, "1-11");
+  assert.ok(!isa.some((k) => k.includes("_c41")), `이사 40:1-11 에 41:6-7 이 끼었다: ${isa}`);
+  assert.strictEqual(isa.length, 11);
+  same(keysOf("dan", 3, "25,34-43"), ["25_lxx", "34_lxx", "35_lxx", "36_lxx", "37_lxx", "38_lxx", "39_lxx", "40_lxx", "41_lxx", "42_lxx", "43_lxx"]);
+  same(keysOf("dan", 3, "14-20,24-25,28"), ["14", "15", "16", "17", "18", "19", "20", "24_91", "25_92", "28_95"]);
+});
+
 test("A3 2026-12-07 성 니콜라 도착 — 도착 카드 둘, 칩에 「12월 6일에서 옮겨 옴」, 본기도는 고른 칩(니콜라)의 것만", { skip: SKIP }, () => {
   const m = model("2026-12-07");
   assert.ok(m.pair);
