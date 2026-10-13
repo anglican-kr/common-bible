@@ -1521,16 +1521,16 @@ const HOLY_WEEK_ROWS = [
   TMP("t-easter", "부활대축일", { kind: "easter_offset", days: 0 }, { season: "easter", type: "feast" }),
 ];
 
-test("R-6.3-holy-week-guard 이동 패스 — 보호 기간은 주요축일을 밀지도 막지도 않는다 · 그날의 대축일 · 주일에 질 때만 다음 빈 날로", () => {
+test("R-6.3-holy-week-guard 이동 패스 — 보호 기간은 주요축일을 밀지도 막지도 않는다 · 그날의 대축일 · 주일에 질 때만 보호 기간 뒤 첫 빈 날로", () => {
   const t = passEngine(passTables([
     MOV("d0330-b", "03.30"),                                           // 성주간 월 — 그날 지킨다
     MOV("d0402-a", "04.02", { precedence: 3, priority_group: "A" }),   // 성 목요일에 밀린다
     MOV("d0409-red", "04.09", { color: "red" }),                       // 부활 1주 목 — 그날 지킨다
     SAN("d0331-movable-minor", "03.31", "합성 이동 축일(prec 7)", { transferable: true, transfer_to: "next_day" }),
   ], HOLY_WEEK_ROWS));
-  // 성 목요일의 A 는 성 금(prec 1) · 부활밤이 있는 성 토 · 부활대축일을 건너 부활 월요일에 — 옛 규칙은 부활 2주일 뒤(4.13)였다
-  same(seats(t.pass(2026).departures), { "2026-04-02": ["d0402-a->2026-04-06"] });
-  same(fate(t.at("2026-04-06"), "d0402-a"), ["transferred_in", "t-maundy"]);
+  // 성 목요일의 A 는 보호 기간(~ 부활 2주일 4.12)이 끝난 뒤 첫 빈 날 4.13 부활 2주 월요일로(→ R-6.3-guard-destination — 2027 책자)
+  same(seats(t.pass(2026).departures), { "2026-04-02": ["d0402-a->2026-04-13"] });
+  same(fate(t.at("2026-04-13"), "d0402-a"), ["transferred_in", "t-maundy"]);
   for (const [d, id, color] of [["2026-03-30", "d0330-b", "white"], ["2026-04-09", "d0409-red", "red"]]) {
     const r = t.at(d);
     same([fate(r, id), officialId(r), r.color], [["proper", null], id, color], d);   // 축일 색이 기간 색(홍 · 백)을 넘는다
@@ -1538,9 +1538,9 @@ test("R-6.3-holy-week-guard 이동 패스 — 보호 기간은 주요축일을 �
   // 옮길 수 있는 축일(prec 7)은 패스가 옮기지 않고 guard 가 생략시킨다(→ R-6.1-prec7-omit)
   const tue = t.at("2026-03-31");
   same([fate(tue, "d0331-movable-minor"), officialId(tue), tue.color], [["omitted", "guard:easter-octave"], "grid:lent-x-weekday-tue", "red"]);
-  // 성 토요일은 부활밤이 민다 — 성 토요일 행은 rank: null 이라 밀지 못한다. 부활대축일이 막아 부활 월요일로
+  // 성 토요일은 부활밤이 민다 — 성 토요일 행은 rank: null 이라 밀지 못한다. 목적지는 역시 보호 기간 뒤 4.13
   const sat = passEngine(passTables([MOV("d0404-x", "04.04")], HOLY_WEEK_ROWS));
-  same(seats(sat.pass(2026).arrivals), { "2026-04-06": ["d0404-x<-2026-04-04"] });
+  same(seats(sat.pass(2026).arrivals), { "2026-04-13": ["d0404-x<-2026-04-04"] });
   same(fate(sat.at("2026-04-04"), "d0404-x"), ["transferred_out", "t-vigil"]);
 });
 
@@ -1555,6 +1555,34 @@ test("C-6.5-7 선착순 — 먼저 밀려 앉은 도착을 품계가 높은 뒤�
   same(seats(t.pass(2026).arrivals), { "2026-06-17": ["d0615-b<-2026-06-15"], "2026-06-18": ["d0616-a<-2026-06-16"] });
   same([officialId(t.at("2026-06-17")), officialId(t.at("2026-06-18"))], ["d0615-b", "d0616-a"]);
   same(fate(t.at("2026-06-18"), "d0616-a"), ["transferred_in", "t-wall-2"]);
+});
+
+test("C-6.5-19 보호 기간 목적지 — 성주간 · 부활 8일 안에서 밀린 축일은 그 기간 다음 날(부활 2주 월요일)부터 빈 날을 찾는다(→ R-6.3-guard-destination)", () => {
+  // 2026 부활 4.5 — 성지주일 3.29 · 성 목요일 4.2 · 부활 2주일 4.12 · 부활 2주 월요일 4.13. 둘 다 4.13 부터 찾고 기원 순으로 앉는다
+  const walls = [
+    TMP("t-palm", "합성 성지주일", { kind: "easter_offset", days: -7 }, { rank: "privileged_sunday", precedence: 2 }),
+    TMP("t-thu", "합성 성 목요일", { kind: "easter_offset", days: -3 }),
+  ];
+  const t = passEngine(passTables([MOV("d0329-palm", "03.29"), MOV("d0402-thu", "04.02")], walls));
+  same(seats(t.pass(2026).arrivals), { "2026-04-13": ["d0329-palm<-2026-03-29"], "2026-04-14": ["d0402-thu<-2026-04-02"] });
+  same(fate(t.at("2026-04-13"), "d0329-palm"), ["transferred_in", "t-palm"]);
+  same(fate(t.at("2026-04-14"), "d0402-thu"), ["transferred_in", "t-thu"]);
+  same(fate(t.at("2026-04-02"), "d0402-thu"), ["transferred_out", "t-thu"]);
+});
+
+test("C-6.5-20 연쇄 범위 — 도착에 밀린 고유 축일은 사도 · 복음사가 · 순교 축일만 옮기고, 그 밖의 성인 축일은 그날 기념한다(→ R-6.2-chain-scope)", () => {
+  // 6.15 의 A(사도)가 wall-1(6.15) · wall-2(6.16)를 건너 6.17 에 도착한다 — 6.17 의 고유 축일 S 가 밀린다
+  const run = (cls) => passEngine(passTables([MOV("d0615-a", "06.15", { sanctoral_class: "apostle" }), MOV("d0617-s", "06.17", { sanctoral_class: cls })], TWO_WALLS));
+  const saint = run("saint");
+  same(seats(saint.pass(2026).arrivals), { "2026-06-17": ["d0615-a<-2026-06-15"] });   // S 는 옮기지 않는다
+  same(seats(saint.pass(2026).departures), { "2026-06-15": ["d0615-a->2026-06-17"] });
+  same(fate(saint.at("2026-06-17"), "d0617-s"), ["commemorated", "d0615-a"]);
+  assert.strictEqual(officialId(saint.at("2026-06-17")), "d0615-a");
+  for (const cls of ["apostle", "evangelist", "martyr"]) {   // 연쇄 대상은 하루 더 밀린다(→ R-6.2-chain-model)
+    const t = run(cls);
+    same(seats(t.pass(2026).arrivals), { "2026-06-17": ["d0615-a<-2026-06-15"], "2026-06-18": ["d0617-s<-2026-06-17"] }, cls);
+    same(fate(t.at("2026-06-18"), "d0617-s"), ["transferred_in", "d0615-a"], cls);
+  }
 });
 
 test("C-6.5-9 도착끼리 기원 순 — 같은 품계면 기원 날짜가 이른 쪽이 먼저 앉는다(id 순이 아니다)", () => {

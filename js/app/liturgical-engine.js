@@ -1193,7 +1193,9 @@ function displacerOf(ranked, c, staying) {
  *    성주간 · 부활 8일의 prec 7 은 생략, → R-6.3-holy-week-guard). `transferable` 인 축일 셋도 guard 에만
  *    밀렸으면 `omitted` 다 — 이동 패스가 guard 를 보지 않아 옮기지 않았기 때문이다(그 셋의 날짜는 보호
  *    기간에 들지 않아 실데이터에는 없다),
- *  - `commemorate_only`(추수감사주일)는 `commemorated` — 둘 다 `displacedBy` 를 싣는다.
+ *  - `commemorate_only`(추수감사주일)는 `commemorated`,
+ *  - 도착에 밀렸으나 연쇄 대상이 아닌 주요축일(안나와 요아킴 ← 야고보, → R-6.2-chain-scope)도 `commemorated` —
+ *    셋 다 `displacedBy` 를 싣는다.
  * 나머지는 그대로다 — 격자, 지향 · 이름 줄, `precedence: null`, `transferable: false` 인 상위 축일, 동시
  * 봉헌에서 진 쪽, 이동 상한을 넘겨 옮기지 못한 축일(`defects` — §6.5). 옮겨진 축일은 이동 패스가 이미
  * `transferred_out` 으로 냈다.
@@ -1214,13 +1216,16 @@ function settle(dateStr, cands) {
     const o = c.observance;
     const minor = o.rank === "minor_feast";
     const commemorate = o.transfer_to === "commemorate_only";
-    if (!minor && !commemorate) continue;
+    const movable = !minor && movesOnConflict(o);
+    if (!minor && !commemorate && !movable) continue;
     const by = displacerOf(ranked, c);
     if (!by) continue;
     // 옮길 수 있는 축일이 proper 로 남았으면 패스가 옮기지 않은 것이다 — guard 에만 밀렸으면 생략, 실제 후보에
     // 밀렸는데 남았으면 이동 상한(`defects`)이라 그대로 둔다
     const omit = minor && (o.transferable !== true || by.observance.id.startsWith(GUARD_PREFIX));
-    if (omit || commemorate) reclassified.set(c, { observance: o, status: omit ? "omitted" : "commemorated", displacedBy: by.observance.id });
+    // 도착에 밀렸는데 연쇄 대상이 아닌 주요축일 — 패스가 일부러 옮기지 않았다(→ R-6.2-chain-scope): 그날 기념
+    const stayed = movable && by.status === "transferred_in" && !chainsOnArrival(o);
+    if (omit || commemorate || stayed) reclassified.set(c, { observance: o, status: omit ? "omitted" : "commemorated", displacedBy: by.observance.id });
   }
   const after = (/** @type {Candidate} */ c) => reclassified.get(c) || c;
   const official = ranked.map(after).find((c) =>
@@ -1232,7 +1237,7 @@ function settle(dateStr, cands) {
 
 // ── §6.2 · §6.5 이동 패스 (B1) ──
 
-/** 이동 상한(날, §6.5) — 실측 최장 4(수태고지 3.25 성 목요일 → 부활 월요일). 넘으면 옮기지 않고 `defects` 에 적는다. */
+/** 이동 상한(날, §6.5) — 실측 최장 15(성지주일의 수태고지 · 요셉 → 부활 2주 월요일, → R-6.3-guard-destination). 넘으면 옮기지 않고 `defects` 에 적는다. */
 const MAX_SHIFT = 30;
 
 /** 선택 봉헌 목적지 — `transfer_to` 여섯 값 가운데 충돌 이동이 아닌 넷(→ R-6.2-destinations). */
@@ -1311,6 +1316,18 @@ function movesOnConflict(o) {
 }
 
 /**
+ * 도착(옮겨 온 축일)에 밀린 고유 축일이 연쇄로 옮겨지는가(→ R-6.2-chain-scope). 사도 · 복음사가와 성탄 8일의
+ * 순교 축일(스테파노 · 죄 없는 어린이들)만 연쇄한다 — 그 밖의 성인 축일은 옮기지 않고 그날 기념한다(사용자
+ * 확정 2026-10-13 — 2027 책자 7.26: 야고보가 7.25 주일에서 오자 안나와 요아킴은 그 자리에 이름만, 독서는
+ * 야고보). temporal 축일은 도착에 밀릴 수 없어(prec 1 · 2) 종전대로 둔다.
+ * @param {Observance} o
+ */
+function chainsOnArrival(o) {
+  if (o.kind !== "sanctoral") return true;
+  return o.sanctoral_class === "apostle" || o.sanctoral_class === "evangelist" || o.sanctoral_class === "martyr";
+}
+
+/**
  * 연도 `year` 의 이동 패스(→ R-6.5-year-pass) — 연도 캐시를 채울 때 한 번 돈다(`transfersOf`).
  *
  * **0단계 — 선택 봉헌 선색인.** 목적지가 기원보다 앞일 수 있어(2028 주의 봉헌 2.2 → 1.30) 날짜 루프 전에 한
@@ -1325,7 +1342,10 @@ function movesOnConflict(o) {
  * `MAX_SHIFT` 를 넘으면 옮기지 않고 `defects` 에 적는다 — 그 축일은 기원 날짜에 `proper` 로 남는다.
  *
  * 빈 날은 「`c` 보다 높은 고유 후보가 없고(같은 값은 `c` 가 민다 — → R-6.2-chain-model), 도착한 후보가
- * 없다(품계 무관 — → R-6.2-first-come)」이다 — 보호 기간은 막지 않는다. 해를 넘긴 날짜에서는 이 패스가
+ * 없다(품계 무관 — → R-6.2-first-come)」이다 — 보호 기간은 막지 않는다. 다만 **보호 기간 안에서 밀린** 축일은
+ * 그 기간 다음 날(부활 2주 월요일)부터 찾는다(→ R-6.3-guard-destination — 2027 책자: 성 목요일의 수태고지 →
+ * 4.5). 도착에 밀린 고유 축일은 연쇄 대상(사도 · 복음사가 · 성탄 8일의 순교 축일)일 때만 옮기고 그 밖은
+ * 그날 기념한다(→ R-6.2-chain-scope — `settle` 이 `commemorated` 로 낸다). 해를 넘긴 날짜에서는 이 패스가
  * 이미 그리로 넘긴 도착과 다음 해 좌석(`nextYearSeats`)을 **함께** 본다 — 한쪽만 보면 12월 축일 둘이 같은
  * 1월 날에 앉는다.
  *
@@ -1379,6 +1399,7 @@ function computeTransfers(index, year, seed, activated) {
   };
 
   // ── 1단계: 충돌 이동 — 1.1 → 12.31 날짜 순. next_day 는 앞으로만 가므로 d 에 이르면 arrivals.get(d) 는 완성돼 있다
+  const guard = spansOf(year).transferGuard[0];   // 성지주일 ~ 부활 2주일(§4.10) — 그 안에서 밀린 축일의 목적지 하한
   for (let d = toKey(year, 1, 1); d.startsWith(head); d = shift(d, 1)) {
     // 옮길 수 있는 고유 관측일이 없는 날은 출발이 생기지 않는다(도착은 다시 옮기지 않는다) — 순위를 세우지 않는다
     if (!ownObservancesOn(index, d).some(movesOnConflict)) continue;
@@ -1389,7 +1410,10 @@ function computeTransfers(index, year, seed, activated) {
       if (c.status !== "proper" || !movesOnConflict(c.observance)) continue;   // 도착 · 격자는 옮기지 않는다
       const by = displacerOf(ranked, c, staying);
       if (!by) continue;   // 앞선 것이 전부 고정일이면 동시 봉헌 — 충돌이 아니다
-      let dest = shift(d, 1);
+      // 도착에 밀린 고유 축일은 연쇄 대상일 때만 옮긴다 — 그 밖은 그날 기념(→ R-6.2-chain-scope; `settle` 이 commemorated 로)
+      if (by.status === "transferred_in" && !chainsOnArrival(c.observance)) continue;
+      // 보호 기간(성지주일 ~ 부활 2주일) 안에서 밀렸으면 그 기간이 끝난 뒤부터 빈 날을 찾는다(→ R-6.3-guard-destination)
+      let dest = shift(inSpan(d, "transferGuard") ? guard.to : d, 1);
       while (dayDiff(d, dest) <= MAX_SHIFT && !isFree(dest, c)) dest = shift(dest, 1);
       if (dayDiff(d, dest) > MAX_SHIFT) { defects.push(c.observance.id); continue; }
       const displacedBy = by.observance.id;   // 실제로 밀어낸 것 — ranked[0] 이 아닐 수 있다
