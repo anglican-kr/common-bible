@@ -128,15 +128,21 @@ function parsePath() {
   // landing that A4 search will add) gets the view's invalid-date notice for now.
   if (pathname === "lectionary" || pathname.startsWith("lectionary/")) {
     const rest = pathname === "lectionary" ? "" : pathname.slice("lectionary/".length);
+    // 값 전체가 양의 정수일 때만 — parseInt 는 「2junk」 「1.5」 같은 머리만 숫자인 값도 받아 라우트 계약
+    // (범위 밖 · 깨진 값은 null)을 어긴다(Copilot 리뷰 3회차).
     /** @param {string} k */
     const positive = (k) => {
-      const n = parseInt(query.get(k) ?? "", 10);
-      return Number.isInteger(n) && n > 0 ? n : null;
+      const v = query.get(k) ?? "";
+      return /^[1-9]\d*$/.test(v) ? Number(v) : null;
     };
     const track = positive("track");
+    // 깨진 퍼센트 이스케이프(`%E0%A4%A`)는 decodeURIComponent 가 throw 한다 — parsePath 는 route() 의 try 밖에서
+    // 돌므로 원문을 그대로 넘겨 뷰가 「잘못된 날짜」로 거부하게 한다(Copilot 리뷰 3회차).
+    /** @param {string} s */
+    const decodeOrRaw = (s) => { try { return decodeURIComponent(s); } catch { return s; } };
     return {
       view: "lectionary",
-      date: rest ? decodeURIComponent(rest) : null,
+      date: rest ? decodeOrRaw(rest) : null,
       obs: query.get("obs") || null,
       track: track === 1 || track === 2 ? track : null,
       set: positive("set"),

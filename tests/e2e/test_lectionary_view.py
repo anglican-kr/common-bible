@@ -246,6 +246,29 @@ def test_invalid_date_shows_notice_not_crash(desktop_context):
     assert page.locator(".lect-reading").count() == 0
 
 
+def test_malformed_percent_escape_shows_notice(desktop_context):
+    """깨진 퍼센트 이스케이프 — decodeURIComponent 가 throw 해도 라우트가 죽지 않고 「잘못된 날짜」(Copilot 3회차)."""
+    page = desktop_context.new_page()
+    _open(page, "lectionary/%E0%A4%A")
+    assert page.inner_text(".empty-state-title") == "잘못된 날짜입니다"
+    assert page.locator(".lect-reading").count() == 0
+
+
+def test_modified_click_on_track_opens_new_page_without_touching_current(desktop_context):
+    """Ctrl+클릭(새 탭)은 지금 탭의 URL · 기억을 건드리지 않는다 — 라우터와 같은 기본 클릭 가드(Copilot 3회차)."""
+    page = desktop_context.new_page()
+    _open(page, "lectionary/2026-06-14")
+    assert page.locator(".lect-track .division-tab.active").inner_text() == "독서 1"
+    with desktop_context.expect_page() as opened:
+        page.locator(".lect-track .division-tab", has_text="독서 2").click(modifiers=["Control"])
+    new_page = opened.value
+    new_page.wait_for_url("**/lectionary/2026-06-14?track=2")   # 새 탭이 링크 href 로 간다
+    # 지금 탭은 그대로 — 가드가 없으면 replaceState 로 ?track=1 이 붙는다
+    assert page.url.endswith("/lectionary/2026-06-14")
+    assert page.locator(".lect-track .division-tab.active").inner_text() == "독서 1"
+    new_page.close()
+
+
 def test_shared_link_with_state_lands_on_same_screen(desktop_context):
     """?obs=&track=&set= 가 든 링크는 그 화면 그대로(ADR-031 복원 · 공유 일관)."""
     page = desktop_context.new_page()

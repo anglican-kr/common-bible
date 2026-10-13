@@ -1,5 +1,5 @@
-"use strict";
 // @ts-check
+"use strict";
 
 // Lectionary reading view (ADR-038 §3 — A3). Renders one day's eucharistic
 // propers at /lectionary[/YYYY-MM-DD]: collect(s) → first reading → psalm →
@@ -528,14 +528,16 @@ function slotVerseRuns(slot, chapterOf) {
 }
 
 /**
- * 시편 슬롯 끝에 영광송을 붙이나 — 전례시편(`lps`)은 언제나, 송가(`cant`)는 장 JSON 의 `gloria` 가 `false` 가
- * 아닐 때(창조송가 · 참회송가 · 찬양송가는 붙이지 않는다). 시편 자리의 일반 성서 본문(다니엘 · 요나 · 토비트)은 없다.
+ * 시편 슬롯 끝에 영광송을 붙이나 — 전례시편(`lps`)은 장을 불러왔으면 언제나, 송가(`cant`)는 장 JSON 의 `gloria` 가
+ * `false` 가 아닐 때(창조송가 · 참회송가 · 찬양송가는 붙이지 않는다). 시편 자리의 일반 성서 본문(다니엘 · 요나 ·
+ * 토비트)은 없다. 마지막 장을 못 불러왔으면 어느 쪽도 붙이지 않는다 — 「본문을 불러오지 못했습니다」 뒤에 영광송만
+ * 홀로 남지 않게(Copilot 리뷰 3회차).
  * @param {ReadingSlot} slot @param {BibleChapter | null | undefined} lastChapter  슬롯 마지막 ref 의 장
  */
 function wantsGloria(slot, lastChapter) {
-  if (slot.slot !== "psalm") return false;
+  if (slot.slot !== "psalm" || !lastChapter) return false;
   if (slot.bookId === "lps") return true;
-  if (slot.bookId === "cant") return !!lastChapter && lastChapter.gloria !== false;
+  if (slot.bookId === "cant") return lastChapter.gloria !== false;
   return false;
 }
 
@@ -734,7 +736,9 @@ function buildPair(m) {
   const section = el("section", { className: "lect-pair", "aria-label": "두 독서 가운데 고르기" });
   section.appendChild(el("h3", { className: "lect-pair-title" }, "두 독서 가운데 고르기"));
   const row = el("div", { className: "lect-pair-row" });
-  for (const [cand, text, href] of [[pair.a, pair.aText, hrefs.a], [pair.b, pair.bText, hrefs.b]]) {
+  /** @type {Array<[Candidate, PairCardText, string]>} */
+  const cards = [[pair.a, pair.aText, hrefs.a], [pair.b, pair.bText, hrefs.b]];
+  for (const [cand, text, href] of cards) {
     const card = el("a", { className: "lect-pair-card", href });
     if (cand === m.selected) card.setAttribute("aria-current", "true");
     const label = el("span", { className: "lect-pair-label" }, text.label);
@@ -761,7 +765,10 @@ function buildControls(m) {
     // global <a> interceptor navigates after this listener runs.
     const ly = liturgicalYearOf(m.date);
     seg.querySelectorAll("a").forEach((a, i) => {
-      a.addEventListener("click", () => {
+      a.addEventListener("click", (e) => {
+        // 라우터(routing.js)가 가로채는 기본 클릭일 때만 — Ctrl/Cmd · Shift · 가운데 버튼은 새 탭 · 창으로 가는
+        // 표준 링크 동작이라 지금 탭의 URL 과 기억을 건드리지 않는다(Copilot 리뷰 3회차).
+        if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey || e.button !== 0) return;
         const next = m.hrefs.tracks[i].track;
         // 기억을 바꾸면 트랙 없는 URL 의 뜻이 바뀐다 — 뒤로 가기가 지금 화면(지금 트랙)으로 돌아오게,
         // 저장 전에 지금 history 항목의 URL 에 트랙을 명시해 둔다(Copilot 리뷰 1회차).
@@ -933,8 +940,9 @@ function commit(m, chapters) {
  * @returns {Promise<string>}
  */
 async function renderLectionaryView(parsed) {
-  const entrySeq = typeof window.routeSeq === "function" ? window.routeSeq() : null;
-  const isStale = () => entrySeq !== null && window.routeSeq() !== entrySeq;
+  const routeSeq = window.routeSeq;   // 한 번 잡아 둔다 — 클로저 안에서도 타입이 좁혀지게
+  const entrySeq = typeof routeSeq === "function" ? routeSeq() : null;
+  const isStale = () => entrySeq !== null && typeof routeSeq === "function" && routeSeq() !== entrySeq;
 
   const date = parsed.date || todayKey(new Date());
   if (!parseDate(date)) {

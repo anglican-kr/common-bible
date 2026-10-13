@@ -441,6 +441,7 @@ test("wantsGloria: 전례시편은 언제나, 송가는 gloria:false 가 아닐 
   assert.strictEqual(ctx.wantsGloria(cant, { book_id: "cant", chapter: 11, verses: [] }), true);
   assert.strictEqual(ctx.wantsGloria(cant, { book_id: "cant", chapter: 3, gloria: false, verses: [] }), false);
   assert.strictEqual(ctx.wantsGloria(cant, null), false);   // 장을 못 불러오면 붙이지 않는다
+  assert.strictEqual(ctx.wantsGloria(psalm, null), false);  // 전례시편도 — 「불러오지 못했습니다」 뒤에 영광송만 남지 않게(Copilot 3회차)
   assert.strictEqual(ctx.wantsGloria(slot("psalm", "dan", 3, "all", "다니 3"), CHAPTER), false);
   assert.strictEqual(ctx.wantsGloria(slot("first", "lps", 23, "all", "시편 23"), CHAPTER), false);
 });
