@@ -67,7 +67,7 @@ const PAGE_TITLE = "전례독서";
  *   groups: ReadingGroup[], tracks: Array<1 | 2>, track: 1 | 2 | null,
  *   options: ReadingOption[], setIndex: number, group: ReadingGroup | null, shortGroup: ReadingGroup | null, slots: ReadingSlot[],
  *   chips: LectionaryChip[], pair: LectionaryPair | null,
- *   collects: CollectOption[], collectIndex: number, ending: "A" | "B" | "C",
+ *   collects: CollectOption[], collectLabels: string[], collectIndex: number, ending: "A" | "B" | "C",
  *   colors: string[], colorAlt: string[], ownColor: boolean,
  *   fast: "major" | "minor" | null, cycle: string | null, empty: boolean,
  *   hrefs: { prev: string, next: string, today: string, tracks: Array<{ track: 1 | 2, href: string, active: boolean }>, options: string[], collects: string[], pair: { a: string, b: string } | null },
@@ -303,6 +303,9 @@ function readingOptions(sets, baseName) {
     out.push({ group: g, short: null, label: "" });
   }
   const titles = new Set(out.map((o) => o.group.title));
+  // 제목이 갈리면(한 날짜에 둘 — 5.1 사도 성 필립보와 성 야고보 ∧ 노동자의 날) 고른 관측일의 제목을 앞세운다 — 엔진은
+  // id 순이라 「노」가 먼저 와 사도 축일의 기본 독서가 노동자의 날 것이었다(자체 리뷰 2026-10-13). 안정 정렬.
+  if (titles.size > 1) out.sort((a, b) => Number(!sameName(a.group.title, baseName)) - Number(!sameName(b.group.title, baseName)));
   const conditional = out.some((o) => setCondition(o.group) !== null);
   out.forEach((o, i) => {
     const cond = setCondition(o.group);
@@ -355,17 +358,49 @@ function slotsInOrder(/** @type {ReadingGroup | null} */ group) {
 function collectsFor(entries, selected) {
   const sel = entries.find((e) => e.candidate === selected)
     || entries.find((e) => e.candidate.observance.id === selected.observance.id) || null;
-  return sel ? sel.collects : [];
+  if (!sel) return [];
+  // 같은 날짜에 정의된 다른 관측일의 본기도가 섞여 오면(5.1 노동자의 날 — 미결18 · 35) 고른 관측일 이름의 것을 앞세운다(안정 정렬)
+  const name = selected.observance.name;
+  return [...sel.collects].sort((a, b) => Number(!sameName(a.title, name)) - Number(!sameName(b.title, name)));
 }
 
-/** `?collect=` 는 `collect_no` 다. 없거나 틀리면 첫 대체안. */
+/** 괄호 설명을 뗀 이름이 같은가 — 세트 · 본기도의 제목과 관측일 이름 대조. */
+function sameName(/** @type {string | null | undefined} */ a, /** @type {string | null | undefined} */ b) {
+  return !!a && !!b && shortName(a) === shortName(b);
+}
+
+/**
+ * `?collect=` 는 본기도 목록의 몇 번째인가(1부터 — `?set=` 과 같은 규칙). 종전에는 `collect_no` 였는데, 한 관측일에
+ * 서로 다른 레코드 둘이 모두 `collect_no: 1` 인 날(사계재 금요일 성직후보자 · 수도자, 5.1)에 둘째에 닿을 수 없었다
+ * (자체 리뷰 2026-10-13). 범위 밖이면 첫 대체안.
+ */
 function pickCollect(/** @type {CollectOption[]} */ options, /** @type {number | null} */ param) {
   if (!options.length) return -1;
-  if (param) {
-    const i = options.findIndex((o) => o.collect_no === param);
-    if (i >= 0) return i;
-  }
+  if (param && param >= 1 && param <= options.length) return param - 1;
   return 0;
+}
+
+/**
+ * 본기도 세그먼트 라벨 — `collect_no` 가 서로 다르면 「본기도 N」, 겹치면 제목에서 낱말 단위로 공통 머리 · 꼬리를 뗀
+ * 부분(「성직후보자」 · 「수도자」 — 「…의 성소를 위한 추계재 금요일」; 모두 소유격 「의」로 끝나면 그것도 뗀다), 그래도
+ * 가를 수 없으면 제목 전체, 그것도 같으면 「본기도 N」(위치).
+ * @param {CollectOption[]} options @returns {string[]}
+ */
+function collectLabels(options) {
+  const nos = options.map((o) => o.collect_no);
+  if (new Set(nos).size === nos.length) return nos.map((n) => `본기도 ${n}`);
+  const titles = options.map((o) => shortName(o.title || ""));
+  const words = titles.map((t) => t.split(/\s+/).filter(Boolean));
+  const at = (/** @type {string[]} */ w, /** @type {number} */ i) => w[i];
+  let pre = 0;
+  while (words.every((w) => w.length > pre + 1 && at(w, pre) === at(words[0], pre))) pre++;
+  let suf = 0;
+  while (words.every((w) => w.length - suf - 1 > pre && at(w, w.length - 1 - suf) === at(words[0], words[0].length - 1 - suf))) suf++;
+  let mids = words.map((w) => w.slice(pre, w.length - suf).join(" "));
+  if (mids.every((x) => x.length > 1 && x.endsWith("의"))) mids = mids.map((x) => x.slice(0, -1));
+  const distinct = mids.every((x) => x) && new Set(mids).size === mids.length;
+  const full = titles.every((x) => x) && new Set(titles).size === titles.length;
+  return options.map((_, i) => (distinct ? mids[i] : full ? titles[i] : `본기도 ${i + 1}`));
 }
 
 /** 고른 본기도의 송영 코드 — 코드가 없으면 A(ADR-036 §3 기본). @returns {"A" | "B" | "C"} */
@@ -376,18 +411,22 @@ function endingCodeOf(/** @type {CollectOption | null | undefined} */ last) {
 
 /**
  * 두 독서 나란히(ADR-038 §3 · 미결15). 하루에 하나만 — 목적지 주일의 선택 봉헌 → 옮겨 온 축일의 도착일 →
- * 명절 → 선택 봉헌의 당일 순으로 처음 맞는 꼴. 없으면 null.
- * @param {ResolvedDate} resolved
+ * 명절 → 선택 봉헌의 당일 순으로 처음 맞는 꼴. 없으면 null. 어느 쪽이든 **독서가 없는** 후보는 카드로 내지 않는다 —
+ * 성탄 8일의 도착일(12.27~29)과 공현 당일(1.6)의 격자는 본문이 비어 카드를 누르면 빈 화면이었다(자체 리뷰 2026-10-13).
+ * @param {ResolvedDate} resolved @param {(c: Candidate) => ReadingGroup[]} [groupsOf] 없으면 본문 검사를 건너뛴다
  * @returns {LectionaryPair | null}
  */
-function pairOf(resolved) {
+function pairOf(resolved, groupsOf) {
   const cands = resolved.candidates;
   const grid = cands.find(isGrid) || null;
   const official = resolved.official;
   const gridName = grid ? shortName(grid.observance.name) : "";
+  const read = (/** @type {Candidate} */ c) => !groupsOf || groupsOf(c).length > 0;
+  // 격자 카드의 설명 — 명절이 주일이면(2027-02-07 설) 그날의 격자는 주일이다
+  const gridKind = dayOfWeek(resolved.date) === 0 ? "주일" : "평일";
 
   const optional = cands.find((c) => c.status === "optional");
-  if (optional && official && official !== optional) {
+  if (optional && official && official !== optional && read(official) && read(optional)) {
     return {
       kind: "optional-dest", a: official, b: optional,
       aText: { label: `${shortName(official.observance.name)} 독서`, note: "이날의 공식 독서", official: true },
@@ -399,7 +438,7 @@ function pairOf(resolved) {
     };
   }
   const arrived = cands.find((c) => c.status === "transferred_in");
-  if (arrived && grid && arrived !== grid) {
+  if (arrived && grid && arrived !== grid && read(arrived) && read(grid)) {
     return {
       kind: "arrival", a: arrived, b: grid,
       aText: {
@@ -407,18 +446,18 @@ function pairOf(resolved) {
         note: arrived.from ? `${monthDayLabel(arrived.from)}에서 옮겨 옴` : "옮겨 옴",
         official: arrived === official,
       },
-      bText: { label: `${gridName} 독서`, note: "이날의 평일 독서", official: grid === official },
+      bText: { label: `${gridName} 독서`, note: `이날의 ${gridKind} 독서`, official: grid === official },
     };
   }
-  if (official && official.observance.rank === "regional_festival" && grid && grid !== official) {
+  if (official && official.observance.rank === "regional_festival" && grid && grid !== official && read(official) && read(grid)) {
     return {
       kind: "festival", a: official, b: grid,
       aText: { label: `${shortName(official.observance.name)} 독서`, note: "명절 — 이날의 공식 독서", official: true },
-      bText: { label: `${gridName} 독서`, note: "이날의 평일 독서", official: false },
+      bText: { label: `${gridName} 독서`, note: `이날의 ${gridKind} 독서`, official: false },
     };
   }
   const origin = cands.find((c) => c.status === "proper" && OPTIONAL_TRANSFER_KINDS.includes(String(c.observance.transfer_to)));
-  if (origin && grid && origin !== grid) {
+  if (origin && grid && origin !== grid && read(origin) && read(grid)) {
     const y = parseInt(resolved.date.slice(0, 4), 10);
     const dest = optionalDestOf(origin.observance.transfer_to, resolved.date, y);
     if (dest && dest !== resolved.date) {
@@ -428,7 +467,7 @@ function pairOf(resolved) {
         aText: { label: `${shortName(origin.observance.name)} 독서`, note: "이날 지키는 경우 — 이날의 공식 독서", official: origin === official },
         bText: {
           label: `${gridName} 독서`,
-          note: `${when} 주일(${monthDayLabel(dest)})로 옮겨 지키는 경우 — 이날은 평일 독서`,
+          note: `${when} 주일(${monthDayLabel(dest)})로 옮겨 지키는 경우 — 이날은 ${gridKind} 독서`,
           official: grid === official,
         },
       };
@@ -595,7 +634,7 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
   const collectIndex = pickCollect(collects, query.collect);
   const chosenCollect = collectIndex >= 0 ? collects[collectIndex] : null;
 
-  const base = { obs: selected.observance.id, track, set: setIndex + 1, collect: chosenCollect ? chosenCollect.collect_no : null };
+  const base = { obs: selected.observance.id, track, set: setIndex + 1, collect: chosenCollect ? collectIndex + 1 : null };
   const chips = resolved.candidates.map((c) => {
     const own = c === selected ? groups : groupsOf(c);
     const t = c === selected ? track : pickTrack(own, null, storedTrack);
@@ -608,13 +647,13 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
       muted: isMutedCandidate(c),
     };
   });
-  const pair = pairOf(resolved);
+  const pair = pairOf(resolved, groupsOf);
   const { colors, colorAlt, ownColor } = headerColors(resolved, selected);
   const empty = !groups.length && !collects.length;
 
   return {
     date, resolved, selected, initial, groups, tracks, track, options, setIndex, group, shortGroup, slots,
-    chips, pair, collects, collectIndex, ending: endingCodeOf(chosenCollect),
+    chips, pair, collects, collectLabels: collectLabels(collects), collectIndex, ending: endingCodeOf(chosenCollect),
     colors, colorAlt, ownColor, fast: fastOf(resolved),
     cycle: resolved.coord.year && CYCLE_LABEL[resolved.coord.year] ? CYCLE_LABEL[resolved.coord.year] : null,
     empty,
@@ -626,7 +665,7 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
       // 트랙이 바뀌면 세트는 그 트랙의 첫 세트로 돌아간다(세트는 트랙에 딸린 것).
       tracks: tracks.map((t) => ({ track: t, href: hrefFor(date, { ...base, track: t, set: null }, defaults), active: t === track })),
       options: options.map((_, i) => hrefFor(date, { ...base, set: i + 1 }, defaults)),
-      collects: collects.map((o) => hrefFor(date, { ...base, collect: o.collect_no }, defaults)),
+      collects: collects.map((_, i) => hrefFor(date, { ...base, collect: i + 1 }, defaults)),
       pair: pair ? {
         a: hrefFor(date, { obs: pair.a.observance.id, track: null, set: null, collect: null }, defaults),
         b: hrefFor(date, { obs: pair.b.observance.id, track: null, set: null, collect: null }, defaults),
@@ -811,6 +850,9 @@ function buildControls(m) {
       m.options.map((o, i) => ({ label: o.label, href: m.hrefs.options[i], active: i === m.setIndex })),
       { ariaLabel: "대안 독서", className: "division-tabs--compact" },
     ));
+    // 공통 독서는 세그먼트에도 분류 라벨을 병기한다(ADR-038 §3 — 성인의 고유로 오인하지 않게)
+    const common = m.options.every((o) => o.group.common) ? m.options[0].group.title : null;
+    if (common) ctl.appendChild(el("span", { className: "lect-caption" }, `${common} 공통 독서`));
     wrap.appendChild(ctl);
   }
   return wrap.childElementCount ? wrap : null;
@@ -823,7 +865,7 @@ function buildCollects(m) {
   section.appendChild(el("h3", { className: "lect-slot" }, "본기도"));
   if (m.collects.length > 1) {
     section.appendChild(buildSegmentTabs(
-      m.collects.map((o, i) => ({ label: `본기도 ${o.collect_no}`, href: m.hrefs.collects[i], active: i === m.collectIndex })),
+      m.collects.map((_, i) => ({ label: m.collectLabels[i], href: m.hrefs.collects[i], active: i === m.collectIndex })),
       { ariaLabel: "본기도 대체안", className: "division-tabs--compact" },
     ));
   }

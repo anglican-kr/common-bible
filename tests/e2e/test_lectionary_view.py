@@ -419,6 +419,22 @@ def test_copy_excludes_optional_verse_brackets(desktop_context):
     assert "(공동번역성서)" in text
 
 
+def test_ember_friday_collects_both_reachable_and_common_caption(desktop_context):
+    """추계재 금요일 — 성직후보자 · 수도자 본기도가 둘 다 탭이고 둘째로 바뀐다(collect_no 가 둘 다 1 — 자체 리뷰 2026-10-13).
+    니니안(공통뿐인 성인)은 대안 독서 세그먼트에 「선교사 공통 독서」 캡션."""
+    page = desktop_context.new_page()
+    _open(page, "lectionary/2026-09-18?obs=t-%EC%B6%94%EA%B3%84%EC%9E%AC")
+    tabs = page.locator(".lect-collects .division-tab")
+    assert [tabs.nth(i).inner_text() for i in range(tabs.count())] == ["성직후보자", "수도자"]
+    first = page.inner_text(".lect-collect-text")
+    tabs.nth(1).click()
+    page.wait_for_url("**collect=2")
+    page.wait_for_selector(".lect-collects .division-tab.active:has-text('수도자')")
+    assert page.inner_text(".lect-collect-text") != first
+    _open(page, "lectionary/2026-09-16?obs=d0916-%EB%8B%88%EB%8B%88%EC%95%88")
+    assert "공통 독서" in page.inner_text(".lect-sets .lect-caption")
+
+
 def test_half_verse_on_two_line_verse_shows_only_that_line(desktop_context):
     """성령강림대축일(2026-05-24) 「시편 104:24-34, 35하」 — 35절은 두 줄(선창 · 응답)이라 「하」 줄만, 절 번호는 남는다(자체 리뷰 2026-10-13)."""
     page = desktop_context.new_page()

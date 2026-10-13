@@ -165,6 +165,26 @@ test("A3 2026-08-09 연중 19주일 — 목적지 카드 둘(주일 · 변모 op
   same(plain(moved.colors), ["white"]);   // 변모를 고르면 그 축일의 백
 });
 
+test("A3 5.1 · 사계재 금요일 — 고른 관측일의 독서 · 본기도가 먼저, 겹치는 collect_no 의 둘째에도 닿는다(자체 리뷰 2026-10-13)", { skip: SKIP }, () => {
+  const m = model("2026-05-01");
+  assert.strictEqual(m.options[0].label, "사도 성 필립보와 성 야고보");
+  assert.strictEqual(m.collects[0].title, "사도 성 필립보와 성 야고보");
+  same(m.collectLabels, ["사도 성 필립보와 성 야고보", "노동자의 날"]);
+  assert.strictEqual(model("2026-05-01", { collect: 2 }).collects[model("2026-05-01", { collect: 2 }).collectIndex].title, "노동자의 날");
+  const ember = model("2026-09-18", { obs: "t-추계재" });
+  same(ember.collectLabels, ["성직후보자", "수도자"]);
+  const second = model("2026-09-18", { obs: "t-추계재", collect: 2 });
+  assert.strictEqual(second.collects[second.collectIndex].id, 237);
+  assert.notStrictEqual(ember.hrefs.collects[0], ember.hrefs.collects[1]);
+});
+
+test("A3 두 독서 카드 — 본문 없는 격자로는 내지 않고(12.28 · 1.6), 명절이 주일이면 「이날의 주일 독서」(자체 리뷰 2026-10-13)", { skip: SKIP }, () => {
+  assert.strictEqual(model("2026-12-28").pair, null);
+  assert.strictEqual(model("2026-01-06").pair, null);
+  assert.strictEqual(model("2026-12-07").pair.kind, "arrival");   // 본문이 있는 도착일은 그대로
+  assert.strictEqual(model("2027-02-07").pair.bText.note, "이날의 주일 독서");
+});
+
 test("A3 절 발췌 — 옮겨 실린 절(이사 40 의 41:6-7)과 다니 3 의 이중 번호를 번호만으로 고르지 않는다(자체 리뷰 2026-10-13)", { skip: SKIP }, () => {
   const bible = (b, c) => JSON.parse(fs.readFileSync(path.join(ROOT, "data", "bible", `${b}-${c}.json`), "utf8"));
   const keysOf = (b, c, spec) => plain(ctx.selectVerses(bible(b, c), spec).keys);

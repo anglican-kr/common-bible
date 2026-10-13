@@ -320,6 +320,24 @@ test("pairOf: 당일이 주일이면(2028-08-06) 목적지가 그날 자신이�
   assert.strictEqual(ctx.pairOf(resolvedOf("2028-08-06", [feast, grid], feast)), null);
 });
 
+test("pairOf: 독서가 없는 쪽이 있으면 카드를 내지 않는다 — 성탄 8일 도착일의 빈 격자(자체 리뷰 2026-10-13)", () => {
+  const john = cand(obs("d1227-사도-성-요한", "사도 성 요한"), "transferred_in", { from: "2026-12-27", displacedBy: "grid:christmas-1-sunday" });
+  const grid = cand(obs("grid:christmas-x-weekday-mon", "성탄 월요일"));
+  const r = resolvedOf("2026-12-28", [john, grid], john);
+  assert.ok(ctx.pairOf(r));   // groupsOf 없이는 예전대로
+  assert.strictEqual(ctx.pairOf(r, groupsOfFrom({ "d1227-사도-성-요한": [group(1, FOUR)] })), null);
+  assert.ok(ctx.pairOf(r, groupsOfFrom({ "d1227-사도-성-요한": [group(1, FOUR)], "grid:christmas-x-weekday-mon": [group(2, FOUR)] })));
+});
+
+test("pairOf: 명절이 주일이면 격자 카드는 「이날의 주일 독서」(2027-02-07 설 — 자체 리뷰 2026-10-13)", () => {
+  const seollal = cand(obs("lunar11-설날", "설날", { rank: "regional_festival", precedence: 0 }));
+  const grid = cand(obs("grid:ordinary-5-sunday", "연중 5주일"));
+  const p = ctx.pairOf(resolvedOf("2027-02-07", [seollal, grid], seollal));
+  assert.strictEqual(p.kind, "festival");
+  assert.strictEqual(p.bText.note, "이날의 주일 독서");
+  assert.strictEqual(ctx.pairOf(resolvedOf("2026-02-17", [seollal, grid], seollal)).bText.note, "이날의 평일 독서");
+});
+
 test("pairOf: 목적지 주일 — 승자(격자 주일)와 optional 후보", () => {
   const grid = cand(obs("grid:ordinary-19-sunday", "연중 19주일", { rank: "sunday", precedence: 5 }));
   const opt = transfig("optional", { from: "2026-08-06" });
@@ -415,6 +433,25 @@ test("selectVerses: spec 범위 + 병합 절(range_end) + 전체 장 기준 인�
   same(plain(r.keys), ["2", "3", "4", "4_v", "5"]);
   assert.strictEqual(ctx.selectVerses(CHAPTER, "all").verses.length, 7);
   assert.strictEqual(ctx.selectVerses({ verses: [] }, "1-3").verses.length, 0);
+});
+
+test("collectLabels · pickCollect: 번호가 겹치면 제목의 다른 부분으로 가르고, ?collect= 는 위치다(자체 리뷰 2026-10-13)", () => {
+  same(ctx.collectLabels([collect(1, "a", { collect_no: 1 }), collect(2, "b", { collect_no: 2 })]), ["본기도 1", "본기도 2"]);
+  const ember = [collect(234, "a", { title: "성직후보자의 성소를 위한 추계재 금요일" }), collect(237, "b", { title: "수도자의 성소를 위한 추계재 금요일" })];
+  same(ctx.collectLabels(ember), ["성직후보자", "수도자"]);
+  same(ctx.collectLabels([collect(293, "a", { title: "노동자의 날" }), collect(294, "b", { title: "사도 성 필립보와 성 야고보" })]), ["노동자의 날", "사도 성 필립보와 성 야고보"]);
+  same(ctx.collectLabels([collect(1, "a", { title: "같다" }), collect(2, "b", { title: "같다" })]), ["본기도 1", "본기도 2"]);
+  assert.strictEqual(ctx.pickCollect(ember, 2), 1);
+  assert.strictEqual(ctx.pickCollect(ember, 3), 0);
+  assert.strictEqual(ctx.pickCollect(ember, null), 0);
+});
+
+test("collectsFor · readingOptions: 한 날짜에 섞여 온 다른 관측일의 것보다 고른 관측일 이름의 것을 앞세운다(5.1 — 자체 리뷰 2026-10-13)", () => {
+  const apostles = cand(obs("d0501-사도-성-필립보와-성-야고보", "사도 성 필립보와 성 야고보"));
+  const entries = [{ candidate: apostles, collects: [collect(293, "노동", { title: "노동자의 날" }), collect(294, "사도", { title: "사도 성 필립보와 성 야고보" })] }];
+  same(ctx.collectsFor(entries, apostles).map((o) => o.id), [294, 293]);
+  const opts = ctx.readingOptions([group(1, FOUR, { title: "노동자의 날" }), group(2, FOUR, { title: "사도 성 필립보와 성 야고보" })], "사도 성 필립보와 성 야고보");
+  same(opts.map((o) => o.label), ["사도 성 필립보와 성 야고보", "노동자의 날"]);
 });
 
 test("selectVerses: 다른 장에서 옮겨 실린 절(chapter_ref)은 번호가 걸려도 뺀다 — 이사 40 의 41:6-7(자체 리뷰 2026-10-13)", () => {
