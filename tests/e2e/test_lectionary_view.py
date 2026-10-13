@@ -491,18 +491,6 @@ def test_copy_across_readings_keeps_every_section(desktop_context):
     assert text.rstrip().endswith("(공동번역성서)") and "요한의 복음서 20:1" in text
 
 
-def test_copy_drops_psalm_section_heading(desktop_context):
-    """대림 4주일(2026-12-20) 시편 89:1-4, 19-27 — 부(部) 머리 「(2)」는 표시 전용이라 복사 본문에 붙지 않는다(자체 리뷰 2026-10-13)."""
-    page = desktop_context.new_page()
-    _open(page, "lectionary/2026-12-20")
-    assert page.locator(".lect-reading[data-slot='psalm'] .psalm-section").count() > 0   # 머리가 그려져 있어야 검사가 뜻이 있다
-    text = page.evaluate(_LECT_COPY_ACROSS, [
-        ".lect-reading[data-slot='psalm'] .verse[data-vref]",
-        ".lect-reading[data-slot='psalm'] article.chapter-text:last-of-type .verse[data-vref]:last-of-type",
-    ])
-    assert text and not re.search(r"\(\d+\)", text.split("\n\n— ")[0]), text[:300]
-
-
 def test_preload_failure_shows_lectionary_error_not_previous_header(browser):
     """교회력 자료를 받지 못하면(오프라인 · 캐시 없음) 전례독서 실패 화면 — 앞 화면(창세기 1장)의 제목 · 헤더가 남지 않는다(자체 리뷰 2026-10-13)."""
     ctx = browser.new_context(service_workers="block")

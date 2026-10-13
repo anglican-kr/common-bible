@@ -284,9 +284,10 @@ function serializeVerseRange(firstNode, lastNode) {
   // they are reading aids, not scripture text. Text-anchored `.note-anchor`
   // wraps real verse words, so it stays (its textContent flows through).
   // Presentation-only markers that the UI makes unselectable must not leak into copied scripture
-  // either: opt-out `data-copy-omit` (lectionary 〔 〕 optional-verse brackets), the 부(部) heading
-  // 「(N)」 of a long liturgical psalm and the ※ parallel-passage anchor (self-review 2026-10-13).
-  work.querySelectorAll(".cite-chip, .note-anchor--variant, [data-copy-omit], .psalm-section, .parallel-anchor").forEach((n) => n.remove());
+  // either: opt-out `data-copy-omit` (lectionary 〔 〕 optional-verse brackets) and the ※ parallel-passage
+  // anchor — a reading aid like the variant-note ※ above (self-review 2026-10-13). The liturgical marks
+  // ◯ · ¶ · 「(N)」 stay until the product call in docs/known-issues.md §4.
+  work.querySelectorAll(".cite-chip, .note-anchor--variant, [data-copy-omit], .parallel-anchor").forEach((n) => n.remove());
   work.querySelectorAll(".stanza-break, .paragraph-break, .pilcrow")
     .forEach((n) => { n.textContent = "\n\n"; });
   work.querySelectorAll(".hemistich-break").forEach((n) => { n.textContent = "\n"; });
