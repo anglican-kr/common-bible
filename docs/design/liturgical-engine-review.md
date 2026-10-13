@@ -298,7 +298,7 @@ GitHub 토픽 [lectionary](https://github.com/topics/lectionary) · [liturgical-
 - [x] **C-6.5-17** **떠난 패자는 밀어내지 않는다**(설계서 §6.5 「남아 있는 것만 센다」) — 고정일 W · 가변 V · 고정일 C 가 한 날이면 V 만 옮겨지고 C 는 `proper` · 검증: 유닛(합성 표) · 정본: 설계서 §6.5 · 엔진 `displacerOf` 의 `staying` — PR #343 (2026-10-11)
 - [x] **C-6.5-18** **해를 넘긴 선착순** — 12월 축일 둘이 같은 1월 날을 노리면 먼저 밀린 쪽이 앉고 다음은 그다음 날이다. `isFree` 가 해를 넘긴 날짜에서 이 패스의 도착과 다음 해 좌석을 **함께** 본다(2026-10-11 의사 코드 정정 — 사용자 결정; 실데이터에는 해를 넘긴 이동이 1900~2100 에 없다) · 검증: 유닛(합성 표) · 정본: 설계서 §6.5 `isFree` · R-6.2-first-come — PR #343 (2026-10-11)
 - [x] **C-6.5-19** **보호 기간 목적지** — 성주간 · 부활 8일 안에서 밀린 주요축일은 부활 2주 월요일부터 빈 날을 찾는다(→ R-6.3-guard-destination) · 픽스처 T-2027-04-05-annunciation-maundy-thursday(11일) · T-2029-04-09-annunciation-palm-sunday(15일) · T-2035-04-02-joseph-first-come · T-2038-05-03-mark-easter-day · T-2062-03-27-annunciation-holy-saturday(요셉 4.3 · 수태고지 4.4 — 기원 순) + 합성(성지주일 · 성 목요일에 밀린 둘이 4.13 · 4.14) · 검증: 유닛 · 실데이터 — PR #347 (2026-10-13) · 2027 책자(검토용) p.20
-- [x] **C-6.5-20** **연쇄 범위** — 도착에 밀린 고유 축일은 사도 · 복음사가 · 순교 축일만 옮기고 그 밖의 성인 축일은 `commemorated`(`displacedBy` = 도착한 축일, 패스에 출발 없음)(→ R-6.2-chain-scope) · 픽스처 T-2027-07-26-anna-joachim-commemorated + 합성(saint 는 기념, apostle · evangelist · martyr 는 연쇄) · 검증: 유닛 · 실데이터 — PR #347 (2026-10-13) · 2027 책자(검토용) p.36
+- [x] **C-6.5-20** **연쇄 범위** — 도착에 밀린 고유 축일은 사도 · 복음사가 · 순교 축일만 옮기고 그 밖의 성인 축일은 `commemorated`(`displacedBy` = 도착한 축일, 패스에 출발 없음)(→ R-6.2-chain-scope) · 픽스처 T-2027-07-26-anna-joachim-commemorated + 합성(saint · lord · 성탄 8일 밖의 martyr 는 기념, apostle · evangelist · 성탄 8일의 martyr 는 연쇄 — 12.26 · 12.27 합성 대축일) · 검증: 유닛 · 실데이터 — PR #347 (2026-10-13) · 2027 책자(검토용) p.36
 
 ### 5.12 선택 봉헌 · 활성화 (설계서 §6.2) — PR 3
 
