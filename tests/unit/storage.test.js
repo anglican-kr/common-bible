@@ -196,6 +196,40 @@ test("normalizeSearchQuery: handles null/undefined/non-string", () => {
   assert.equal(h.appStorage.normalizeSearchQuery(""), "");
 });
 
+// ── lectionary track memory (ADR-038 §3 A3 · ADR-036 §2 독서 연속성) ──
+
+test("loadLectionaryTrack/saveLectionaryTrack: 전례년별로 1 · 2 를 기억하고 다른 해에는 영향이 없다", () => {
+  const h = loadStorage();
+  assert.equal(h.appStorage.loadLectionaryTrack(2026), null);
+  h.appStorage.saveLectionaryTrack(2026, 2);
+  h.appStorage.saveLectionaryTrack(2027, 1);
+  assert.equal(h.appStorage.loadLectionaryTrack(2026), 2);
+  assert.equal(h.appStorage.loadLectionaryTrack(2027), 1);
+  assert.equal(h.appStorage.loadLectionaryTrack(2025), null);
+  h.appStorage.saveLectionaryTrack(2026, 1);   // 같은 해는 덮어쓴다
+  assert.equal(h.appStorage.loadLectionaryTrack(2026), 1);
+});
+
+test("loadLectionaryTrack: 깨진 JSON · 배열 · 범위 밖 값은 null(뷰가 1 을 기본으로 삼는다)", () => {
+  assert.equal(loadStorage({ localStorageInit: { "bible-lectionary-track": "not json" } }).appStorage.loadLectionaryTrack(2026), null);
+  assert.equal(loadStorage({ localStorageInit: { "bible-lectionary-track": "[1, 2]" } }).appStorage.loadLectionaryTrack(2026), null);
+  const h = loadStorage({ localStorageInit: { "bible-lectionary-track": JSON.stringify({ "2026": 3, "2027": "2", "2028": 2 }) } });
+  assert.equal(h.appStorage.loadLectionaryTrack(2026), null);   // 3 은 트랙이 아니다
+  assert.equal(h.appStorage.loadLectionaryTrack(2027), null);   // 문자열 "2" 도 아니다
+  assert.equal(h.appStorage.loadLectionaryTrack(2028), 2);
+});
+
+test("saveLectionaryTrack: 1 · 2 가 아니면 저장하지 않고, 깨진 지도는 새로 쓰며, 쓰기 실패는 삼킨다", () => {
+  const h = loadStorage({ localStorageInit: { "bible-lectionary-track": "not json" } });
+  h.appStorage.saveLectionaryTrack(2026, 3);
+  assert.equal(h.appStorage.loadLectionaryTrack(2026), null);
+  h.appStorage.saveLectionaryTrack(2026, 2);   // 깨진 지도를 버리고 새 지도로
+  assert.equal(h.appStorage.loadLectionaryTrack(2026), 2);
+  const failing = loadStorage({ localStorageThrowOn: new Set(["bible-lectionary-track"]) });
+  assert.doesNotThrow(() => failing.appStorage.saveLectionaryTrack(2026, 2));
+  assert.equal(failing.appStorage.loadLectionaryTrack(2026), null);   // 쓰지 못했으니 기억도 없다
+});
+
 test("loadSearchHistory: returns [] when storage is empty", () => {
   const h = loadStorage();
   assert.deepEqual(rehydrate(h.appStorage.loadSearchHistory()), []);

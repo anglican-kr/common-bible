@@ -771,9 +771,9 @@ function buildControls(m) {
         // 표준 링크 동작이라 지금 탭의 URL 과 기억을 건드리지 않는다(Copilot 리뷰 3회차).
         if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey || e.button !== 0) return;
         const next = m.hrefs.tracks[i].track;
-        // 기억을 바꾸면 트랙 없는 URL 의 뜻이 바뀐다 — 뒤로 가기가 지금 화면(지금 트랙)으로 돌아오게,
-        // 저장 전에 지금 history 항목의 URL 에 트랙을 명시해 둔다(Copilot 리뷰 1회차).
-        if (next !== m.track && m.track && !new URLSearchParams(location.search).has("track")) {
+        // 기억을 바꾸면 트랙을 담지 않은 URL(없거나 `?track=3` 처럼 깨진 값)의 뜻이 바뀐다 — 뒤로 가기가 지금
+        // 화면(지금 트랙)으로 돌아오게, 저장 전에 지금 history 항목의 URL 에 트랙을 명시해 둔다(Copilot 리뷰 1 · 5회차).
+        if (next !== m.track && m.track && new URLSearchParams(location.search).get("track") !== String(m.track)) {
           const u = new URL(location.href);
           u.searchParams.set("track", String(m.track));
           history.replaceState(history.state, "", u.pathname + u.search);

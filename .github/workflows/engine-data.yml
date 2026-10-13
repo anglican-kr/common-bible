@@ -16,6 +16,7 @@ on:
     paths:
       - 'js/app/liturgical-engine.js'
       - 'js/app/lectionary.js'
+      - 'js/app/verse-spec.js'
       - 'tests/unit/liturgical-engine.data.test.js'
       - 'tests/unit/liturgical-fixtures.data.test.js'
       - 'tests/unit/lectionary.data.test.js'

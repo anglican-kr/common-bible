@@ -187,6 +187,47 @@ def test_back_after_track_change_returns_to_previous_track(desktop_context):
     assert page.evaluate("() => JSON.parse(localStorage.getItem('bible-lectionary-track') || 'null')") == {"2026": 2}
 
 
+def test_back_after_track_change_from_malformed_track_url(desktop_context):
+    """`?track=3` 처럼 깨진 값으로 연 화면(독서 1 로 떨어짐)에서 독서 2 를 고른 뒤 뒤로 가기 — 깨진 URL 이 바뀐 기억(2)으로
+    읽히지 않게 저장 전에 지금 항목에 track=1 을 명시한다(Copilot 5회차)."""
+    page = desktop_context.new_page()
+    _open(page, "lectionary/2026-06-14?track=3")
+    assert page.locator(".lect-track .division-tab.active").inner_text() == "독서 1"
+    page.locator(".lect-track .division-tab", has_text="독서 2").click()
+    page.wait_for_url("**/lectionary/2026-06-14?track=2")
+    page.wait_for_selector(".lect-track .division-tab.active:has-text('독서 2')")
+    page.go_back()
+    page.wait_for_url("**/lectionary/2026-06-14?track=1")
+    page.wait_for_selector(".lect-track .division-tab.active:has-text('독서 1')")
+
+
+def test_stale_lectionary_preload_failure_does_not_overwrite_new_route(browser):
+    """전례독서 데이터 프리로드가 끝나기 전에 다른 화면으로 가고, 그 뒤 프리로드가 실패해도 새 화면이 남는다 —
+    낡은 실패가 공용 renderError 로 화면을 덮지 않는다(Copilot 5회차). 서비스 워커는 막아 fetch 가 page.route 에 잡히게."""
+    ctx = browser.new_context(service_workers="block")
+    page = ctx.new_page()
+    try:
+        page.goto(f"{BASE}/")
+        page.wait_for_selector(".book-list")
+        held = []
+        page.route("**/data/lectionary/**", lambda route: held.append(route))   # 응답을 붙잡아 둔다
+        page.evaluate("() => window.navigate('/lectionary/2026-06-14')")
+        for _ in range(50):
+            if held:
+                break
+            page.wait_for_timeout(100)
+        assert held, "전례독서 데이터 요청이 잡히지 않았다"
+        page.evaluate("() => window.navigate('/')")   # 프리로드가 끝나기 전에 떠난다
+        page.wait_for_selector(".book-list")
+        for route in held:
+            route.abort()   # 이제야 실패한다 — 낡은 요청
+        page.wait_for_timeout(500)
+        assert page.locator(".book-list").count() == 1
+        assert page.locator(".error").count() == 0
+    finally:
+        ctx.close()
+
+
 def test_conditional_set_condition_is_the_label(desktop_context):
     """사순 2주일 가해 — 조건이 라벨: 「사순 2주일」 / 「주의 변모 주일로 지킬 때」, 캡션 줄 없음(미결38)."""
     page = desktop_context.new_page()

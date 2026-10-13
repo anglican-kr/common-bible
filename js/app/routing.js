@@ -389,7 +389,15 @@ async function route() {
     if (view === "lectionary") {
       renderLoading();
       dismissLaunchScreen();
-      const lectTitle = await renderLectionaryView(parsed);
+      let lectTitle;
+      try {
+        lectTitle = await renderLectionaryView(parsed);
+      } catch (err) {
+        // 프리로드(엔진 데이터 fetch)가 실패했을 때 사용자가 이미 다른 화면으로 갔으면 낡은 실패다 — 공용
+        // catch 의 renderError 가 새 화면을 덮지 않게 여기서 삼킨다(Copilot 리뷰 5회차). 최신이면 그대로 올린다.
+        if (isStale()) return;
+        throw err;
+      }
       if (isStale()) return;
       updatePageMeta({
         title: lectTitle,
