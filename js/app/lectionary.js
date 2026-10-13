@@ -96,6 +96,9 @@ const COLOR_LABEL = { white: "백색", red: "적색", green: "녹색", violet: "
 const FAST_LABEL = { major: "대재일", minor: "소재일" };
 const WEEKDAY_KO = ["일", "월", "화", "수", "목", "금", "토"];
 const GRID_ID_PREFIX = "grid:";
+/** 교회력을 계산하는 연도 범위 — 그레고리력 첫 해부터 4자리 연도까지. */
+const MIN_YEAR = 1583;
+const MAX_YEAR = 9999;
 /** 파서가 괄호 선택 확장(「9:35-10:8(9-23)」)으로 만든 세트의 표지(ADR-037 §1 「대안 세트 explode」). */
 const BRACKET_NOTE = "괄호 선택 구절 포함";
 /** 선택 봉헌의 네 목적지(설계서 R-6.2-destinations) — 엔진 OPTIONAL_TRANSFER_KINDS 와 같은 넷. */
@@ -764,7 +767,7 @@ function buildHeader(m) {
   }
 
   const meta = el("p", { className: "lect-meta" });
-  const colors = el("span", { className: m.ownColor ? "lect-colors lect-colors--own" : "lect-colors", "aria-label": "전례색" });
+  const colors = el("span", { className: m.ownColor ? "lect-colors lect-colors--own" : "lect-colors", role: "group", "aria-label": "전례색" });
   for (const c of m.colors) colors.appendChild(buildColorMark(c, false));
   for (const c of m.colorAlt) colors.appendChild(buildColorMark(c, true));
   meta.appendChild(colors);
@@ -878,7 +881,7 @@ function buildCollects(m) {
 
 /** 영광송 — 선창 ◯ 응답, 계응 시편과 같은 표지(`responsory-mark` · `verse-response`). */
 function buildGloria() {
-  const box = el("div", { className: "lect-gloria", lang: "ko", "aria-label": "영광송" });
+  const box = el("div", { className: "lect-gloria", lang: "ko", role: "group", "aria-label": "영광송" });
   const v = el("span", { className: "lect-gloria-line" }, GLORIA.versicle);
   v.appendChild(el("span", { className: "responsory-mark", "aria-hidden": "true" }, "◯"));
   box.appendChild(v);
@@ -967,7 +970,8 @@ function buildReading(m, slot, chapters) {
   // ref 마다 한 <article> — 같은 장의 ref 둘이 겹치면 한 번만(키는 장 + 절 인스턴스, `slotVerseRuns`).
   for (const run of slotVerseRuns(slot, (ch) => chapters.get(`${slot.bookId}:${ch}`))) {
     if (!run.data) {
-      section.appendChild(el("p", { className: "lect-missing", role: "status" }, `본문을 불러오지 못했습니다 (${slot.bookId} ${run.chapter})`));
+      // 안쪽 책 id 대신 독서 라벨, 화면을 그릴 때 함께 나오는 정적 문구라 live region 이 아니다(자체 리뷰 2026-10-13)
+      section.appendChild(el("p", { className: "lect-missing" }, `본문을 불러오지 못했습니다 — ${slot.label || ""}`));
       continue;
     }
     if (!run.verses.length) continue;
@@ -1038,6 +1042,15 @@ function withTrack(search, track) {
 }
 
 /**
+ * 화면 안에서 날짜 · 관측일이 바뀌면 고정 문구 「전례독서」(setTitle) 대신 그날을 읽힌다 — 장 이동이 「창세기 2장」을
+ * 읽는 것과 같은 몫(자체 리뷰 2026-10-13).
+ * @param {LectionaryModel} m
+ */
+function announceDay(m) {
+  announce(`${dateLabel(m.date)} — ${shortName(m.selected.observance.name)} ${PAGE_TITLE}`);
+}
+
+/**
  * Commit the whole view — synchronous, called only after every await resolved
  * and the route is still current.
  * @param {LectionaryModel} m @param {Map<string, BibleChapter | null>} chapters
@@ -1065,6 +1078,7 @@ function commit(m, chapters) {
         : "이 관측일은 그날의 주일 · 평일 본문을 씁니다. 다른 관측일을 고르세요.",
     }));
     $app.appendChild(root);
+    announceDay(m);
     return;
   }
 
@@ -1087,6 +1101,7 @@ function commit(m, chapters) {
     root.appendChild(emptyState({ icon: null, title: "독서 없음", subtitle: "이 관측일에는 독서가 없습니다 — 본기도만 있습니다." }));
   }
   $app.appendChild(root);
+  announceDay(m);
 }
 
 /**
@@ -1106,7 +1121,23 @@ async function renderLectionaryView(parsed) {
     commitError("잘못된 날짜입니다", "주소는 /lectionary/YYYY-MM-DD 꼴이어야 합니다.");
     return PAGE_TITLE;
   }
-  await Promise.all([preloadCalendar(), preloadLectionary()]);
+  // 그레고리력(1583~) 밖은 교회력을 계산하지 않는다 — 0100년대는 엔진의 날짜 이동이 같은 날을 돌려줘 탭이 멈췄다
+  // (자체 리뷰 2026-10-13 — 엔진 쪽 고침은 별도)
+  const year = Number(date.slice(0, 4));
+  if (year < MIN_YEAR || year > MAX_YEAR) {
+    commitError("교회력을 계산할 수 없는 날짜입니다", `${MIN_YEAR}년부터 ${MAX_YEAR}년 사이의 날짜를 골라 주세요.`);
+    return PAGE_TITLE;
+  }
+  try {
+    await Promise.all([preloadCalendar(), preloadLectionary()]);
+  } catch (err) {
+    // 교회력 자료를 받지 못했다(오프라인 · 캐시 없음) — 이 뷰의 헤더 · 제목으로 실패 화면을 낸다. 낡은 요청이면 조용히
+    // 끝낸다(route() 가 새 화면을 그리고 있다). 공용 renderError 로 넘기면 앞 화면의 헤더 · 제목이 남았다(자체 리뷰 2026-10-13).
+    if (isStale()) return PAGE_TITLE;
+    console.error(err);
+    commitError("전례독서 자료를 불러오지 못했습니다", "네트워크 연결을 확인한 뒤 다시 열어 주세요.");
+    return PAGE_TITLE;
+  }
   if (isStale()) return PAGE_TITLE;
 
   const resolved = resolveDate(date);

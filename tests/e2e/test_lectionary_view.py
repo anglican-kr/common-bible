@@ -496,6 +496,65 @@ def test_copy_drops_psalm_section_heading(desktop_context):
     assert text and not re.search(r"\(\d+\)", text.split("\n\n— ")[0]), text[:300]
 
 
+def test_preload_failure_shows_lectionary_error_not_previous_header(browser):
+    """교회력 자료를 받지 못하면(오프라인 · 캐시 없음) 전례독서 실패 화면 — 앞 화면(창세기 1장)의 제목 · 헤더가 남지 않는다(자체 리뷰 2026-10-13)."""
+    ctx = browser.new_context(service_workers="block")
+    page = ctx.new_page()
+    try:
+        page.goto(f"{BASE}/gen/1")
+        page.wait_for_selector("article.chapter-text .verse")
+        page.route("**/data/lectionary/**", lambda route: route.abort())
+        page.evaluate("() => window.navigate('/lectionary/2026-04-05')")
+        page.wait_for_selector(".empty-state-title", timeout=10_000)
+        assert page.inner_text(".empty-state-title") == "전례독서 자료를 불러오지 못했습니다"
+        assert page.evaluate("() => document.title").startswith("전례독서")
+        assert page.locator(".error").count() == 0
+    finally:
+        ctx.close()
+
+
+def test_year_outside_gregorian_range_is_rejected_not_hung(desktop_context):
+    """0100년 — 엔진이 날짜를 넘기지 못해 멈추던 범위는 뷰가 먼저 거른다(자체 리뷰 2026-10-13)."""
+    page = desktop_context.new_page()
+    _open(page, "lectionary/0100-06-01")
+    assert page.inner_text(".empty-state-title") == "교회력을 계산할 수 없는 날짜입니다"
+
+
+def test_long_segment_labels_wrap_at_320px(browser):
+    """320px — 「사도 성 필립보와 성 야고보」 · 「주의 변모 주일로 지킬 때」 세그먼트가 가로 스크롤을 만들지 않는다(WCAG 1.4.10)."""
+    ctx = browser.new_context(viewport={"width": 320, "height": 640})
+    page = ctx.new_page()
+    try:
+        for day in ("2026-05-01", "2026-03-01"):
+            _open(page, f"lectionary/{day}")
+            assert page.locator(".lect-sets .division-tab").count() >= 2
+            assert page.evaluate("() => document.documentElement.scrollWidth") <= 320, day
+            over = page.evaluate("""() => [...document.querySelectorAll('.lect-sets .division-tab')]
+                .some(t => t.scrollWidth > t.clientWidth + 1)""")
+            assert not over, day
+    finally:
+        ctx.close()
+
+
+def test_day_change_announces_date_and_observance(desktop_context):
+    """화면 안에서 다음날로 가면 라이브 영역이 「전례독서」가 아니라 그날(날짜 — 관측일)을 읽는다(자체 리뷰 2026-10-13)."""
+    page = desktop_context.new_page()
+    _open(page, "lectionary/2026-09-15")
+    page.locator(".lect-datenav-btn[aria-label='다음날']").click()
+    page.wait_for_url("**/lectionary/2026-09-16")
+    page.wait_for_function("() => document.getElementById('a11y-announce').textContent.includes('2026년 9월 16일')")
+    assert "전례독서" in page.inner_text("#a11y-announce")
+
+
+def test_chapter_load_failure_names_the_reading(desktop_context):
+    """장 하나를 받지 못하면 그 독서 라벨로 알린다 — 안쪽 책 id(「acts 10」)가 아니다(자체 리뷰 2026-10-13)."""
+    page = desktop_context.new_page()
+    page.route("**/data/bible/acts-10.json", lambda route: route.abort())
+    _open(page, "lectionary/2026-04-05")
+    msg = page.inner_text(".lect-reading[data-slot='first'] .lect-missing")
+    assert msg.startswith("본문을 불러오지 못했습니다 — 사도") and "acts" not in msg
+
+
 def test_copy_including_collect_falls_back_to_browser_copy(desktop_context):
     """본기도 글자까지 고르면 처리기가 가로채지 않는다(브라우저 기본 복사 — 고른 것을 빠뜨리지 않게)."""
     page = desktop_context.new_page()
