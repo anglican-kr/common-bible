@@ -196,6 +196,39 @@ test("normalizeSearchQuery: handles null/undefined/non-string", () => {
   assert.equal(h.appStorage.normalizeSearchQuery(""), "");
 });
 
+// ── lectionary track memory (ADR-038 §3 A3 — 사용자 결정 2026-10-13) ──
+
+test("loadLectionaryTrack/saveLectionaryTrack: 마지막으로 고른 트랙 하나를 날짜 · 해와 무관하게 기억한다(다시 고르면 바뀐다)", () => {
+  const h = loadStorage();
+  assert.equal(h.appStorage.loadLectionaryTrack(), null);
+  h.appStorage.saveLectionaryTrack(2);
+  assert.equal(h.appStorage.loadLectionaryTrack(), 2);
+  assert.equal(h.localStorage.getItem("bible-lectionary-track"), "2");   // 전례년 키 없이 값 하나
+  h.appStorage.saveLectionaryTrack(1);   // 다시 고르면 그것이 새 기본값
+  assert.equal(h.appStorage.loadLectionaryTrack(), 1);
+});
+
+test("loadLectionaryTrack: 1 · 2 가 아닌 값 · 이 PR 의 옛 전례년별 표 · 읽기 실패는 null(뷰가 1 을 기본으로 삼는다)", () => {
+  const read = (/** @type {string} */ raw) => loadStorage({ localStorageInit: { "bible-lectionary-track": raw } }).appStorage.loadLectionaryTrack();
+  assert.equal(read("3"), null);
+  assert.equal(read("0"), null);
+  assert.equal(read(""), null);
+  assert.equal(read("not json"), null);
+  assert.equal(read(JSON.stringify({ "2026": 2 })), null);   // 옛 꼴 — 숫자가 아니다
+  assert.equal(read("1"), 1);
+  const failing = loadStorage({ localStorageThrowOn: new Set(["bible-lectionary-track"]) });
+  assert.equal(failing.appStorage.loadLectionaryTrack(), null);
+});
+
+test("saveLectionaryTrack: 1 · 2 가 아니면 저장하지 않고, 쓰기 실패는 삼킨다", () => {
+  const h = loadStorage({ localStorageInit: { "bible-lectionary-track": "2" } });
+  h.appStorage.saveLectionaryTrack(/** @type {any} */ (3));
+  assert.equal(h.appStorage.loadLectionaryTrack(), 2);   // 그대로
+  const failing = loadStorage({ localStorageThrowOn: new Set(["bible-lectionary-track"]) });
+  assert.doesNotThrow(() => failing.appStorage.saveLectionaryTrack(2));
+  assert.equal(failing.appStorage.loadLectionaryTrack(), null);   // 쓰지 못했으니 기억도 없다
+});
+
 test("loadSearchHistory: returns [] when storage is empty", () => {
   const h = loadStorage();
   assert.deepEqual(rehydrate(h.appStorage.loadSearchHistory()), []);

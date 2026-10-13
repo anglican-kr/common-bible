@@ -128,6 +128,55 @@ test("parsePath: /read/<id> percent-encoding 디코드", () => {
   assert.equal(parse("/read/a%20b").folderId, "a b");
 });
 
+// ── lectionary route (ADR-038 §3) ──
+
+test("parsePath: /lectionary → lectionary 뷰, date null(오늘), 상태 전부 null", () => {
+  assert.deepEqual(parse("/lectionary"), {
+    view: "lectionary", date: null, obs: null, track: null, set: null, collect: null,
+  });
+});
+
+test("parsePath: /lectionary/YYYY-MM-DD + 쿼리 네 키 파싱", () => {
+  const r = parse("/lectionary/2026-04-05", "?obs=grid:easter-1-sunday&track=2&set=2&collect=3");
+  assert.deepEqual(r, {
+    view: "lectionary", date: "2026-04-05", obs: "grid:easter-1-sunday", track: 2, set: 2, collect: 3,
+  });
+});
+
+test("parsePath: lectionary 쿼리의 범위 밖 값은 null(track 3 · set 0 · 빈 obs)", () => {
+  const r = parse("/lectionary/2026-04-05", "?obs=&track=3&set=0&collect=abc");
+  assert.equal(r.obs, null);
+  assert.equal(r.track, null);
+  assert.equal(r.set, null);
+  assert.equal(r.collect, null);
+});
+
+test("parsePath: lectionary 쿼리 값은 통째로 양의 정수여야 한다 — 「2junk」 「1.5」 「3x」 「02」 는 null(Copilot 3회차)", () => {
+  const r = parse("/lectionary/2026-04-05", "?track=2junk&set=1.5&collect=3x");
+  assert.deepEqual([r.track, r.set, r.collect], [null, null, null]);
+  assert.equal(parse("/lectionary/2026-04-05", "?set=02").set, null);
+  assert.equal(parse("/lectionary/2026-04-05", "?set=12").set, 12);
+  // 자릿수가 넘치면 Number 가 Infinity · 근사 정수가 된다 — 안전 정수가 아니면 null(Copilot 10회차)
+  assert.equal(parse("/lectionary/2026-04-05", "?set=" + "9".repeat(400)).set, null);
+  assert.equal(parse("/lectionary/2026-04-05", "?collect=9007199254740993").collect, null);
+  assert.equal(parse("/lectionary/2026-04-05", "?collect=9007199254740991").collect, 9007199254740991);
+});
+
+test("parsePath: 깨진 퍼센트 이스케이프는 throw 하지 않고 원문을 date 로 넘긴다 — 뷰가 「잘못된 날짜」로 거부(Copilot 3회차)", () => {
+  assert.equal(parse("/lectionary/%E0%A4%A").date, "%E0%A4%A");
+  assert.equal(parse("/lectionary/2026-04-05").date, "2026-04-05");
+});
+
+test("parsePath: /lectionary/ 아래 나머지는 date 로 그대로 넘긴다(검증은 뷰) — A4 의 d/<slug> 포함", () => {
+  assert.equal(parse("/lectionary/d/advent-1-sun-A").date, "d/advent-1-sun-A");
+  assert.equal(parse("/lectionary/2026-13-99").date, "2026-13-99");
+});
+
+test("parsePath: 'lectionary' 는 책 id 로 읽히지 않는다", () => {
+  assert.equal(parse("/lectionary").view, "lectionary");
+  assert.equal(parse("/lectionaryx").view, "chapters");   // 정확 일치 · 접두 'lectionary/' 만
+});
+
 // ── division vs book (single segment) ──
 
 test("parsePath: 알려진 division id → division 뷰", () => {

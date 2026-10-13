@@ -17,7 +17,7 @@ const { _$ } = window.appHelpers;
 const { readingContext } = window;
 
 import {
-  collapseFullVerseRefs, selectedVersesToSpec, serializeVerseRange,
+  collapseFullVerseRefs, selectedVersesToSpec, serializeVerseRange, citationSource,
 } from "./verse-spec.js";
 import { openSaveModal } from "./bookmark-modals.js";
 
@@ -120,7 +120,8 @@ async function copySelectedVerses() {
     : selectedVersesToSpec(Array.from(readingContext.selectedVerses));
   const book = (window.getBooksCache() ?? []).find((b) => b.id === readingContext.bookId);
   const bookName = book ? book.name_ko : readingContext.bookId;
-  const citation = `— ${bookName} ${readingContext.chapter}:${spec} (공동번역성서)`;
+  // 전례시편 · 송가는 기도서 번역 — 「(대한성공회 기도서)」(사용자 결정 2026-10-13; 종전엔 언제나 「(공동번역성서)」였다).
+  const citation = `— ${bookName} ${readingContext.chapter}:${spec} ${citationSource(book?.division === "liturgical")}`;
   const fullText = `${textParts.join("\n\n")}\n\n${citation}`;
 
   try {

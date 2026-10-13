@@ -10,7 +10,8 @@
 // BEGIN/END approach) and run it in a vm.
 //
 // Coverage:
-//   - tabOf: 첫 세그먼트 분류 — search/bookmarks/settings 각 탭, 그 외(읽기 스택)는 home
+//   - tabOf: 첫 세그먼트 분류 — search/bookmarks/settings 각 탭, lectionary/calendar 는
+//     calendar(ADR-038 §3), 그 외(읽기 스택)는 home
 //   - 쿼리스트링·해시·선행 슬래시 변형에도 첫 세그먼트만 본다
 
 import test from "node:test";
@@ -92,4 +93,12 @@ test("tabOf: 해시 변형도 첫 세그먼트만(/search#x → search)", () => 
 test("tabOf: 비슷하지만 다른 경로는 home(예: /searchers)", () => {
   // 정확 일치만 해당 탭 — 첫 세그먼트가 'searchers' 면 home 으로 떨어진다.
   assert.equal(tabOf("/searchers"), "home");
+});
+
+test("tabOf: /lectionary 와 /calendar 는 calendar(ADR-038 §3 — 탭 버튼은 A2)", () => {
+  assert.equal(tabOf("/lectionary"), "calendar");
+  assert.equal(tabOf("/lectionary/2026-04-05?obs=t-x&track=2"), "calendar");
+  assert.equal(tabOf("/calendar"), "calendar");
+  assert.equal(tabOf("/calendar/2026-04"), "calendar");
+  assert.equal(tabOf("/lectionaryx"), "home");
 });

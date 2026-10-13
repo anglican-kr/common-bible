@@ -20,6 +20,8 @@
 // instead of through the window facade. applyAudioShow stays facade-only
 // (settings-ui / state-machine read it) so it is not imported here.
 import { showAudioPlayer, hideAudioBar } from "./audio-player.js";
+// Copy-attribution translation label shared with the lectionary view and the verse-select bar (verse-spec.js).
+import { citationSource } from "./verse-spec.js";
 
 const { _$, el, clearNode, chUnit, hangingQuoteClass } = window.appHelpers;
 const { createOverlay } = window.appOverlay;
@@ -213,30 +215,41 @@ function effectiveDivision(book) {
 // (each tab click is a full route change that rebuilds the nav).
 let _prevDivisionIdx = null;
 
-function buildDivisionTabs(activeDivision) {
-  const labels = divisionLabels();
-  const order = divisionOrder();
-  const activeIdx = Math.max(0, order.indexOf(activeDivision));
-  // Slide from the previous selection when one exists and differs; otherwise
-  // render the indicator already under the active tab (no animation).
-  const startIdx = _prevDivisionIdx != null && _prevDivisionIdx !== activeIdx && _prevDivisionIdx < order.length
-    ? _prevDivisionIdx
+/**
+ * Generic segmented tab row — the sliding-indicator pattern the division tabs
+ * established, reusable by any "pick one of N" control that routes through a
+ * link per option (the lectionary view's collect / set / track segments,
+ * ADR-038 §3). Options are anchors so deep links, the back button and keyboard
+ * navigation keep working without bespoke handlers. `startIdx` is where the
+ * indicator is painted first: pass the previously selected index to animate
+ * the slide, or omit it to render the indicator directly under the active tab.
+ * @param {Array<{ label: string, href: string, active: boolean, title?: string }>} items
+ * @param {{ ariaLabel: string, startIdx?: number | null, className?: string }} opts
+ * @returns {HTMLElement}
+ */
+function buildSegmentTabs(items, opts) {
+  const activeIdx = Math.max(0, items.findIndex((it) => it.active));
+  const startIdx = opts.startIdx != null && opts.startIdx !== activeIdx && opts.startIdx < items.length
+    ? opts.startIdx
     : activeIdx;
-  const nav = el("nav", { className: "division-tabs", "aria-label": "구분" });
+  const nav = el("nav", {
+    className: opts.className ? `division-tabs ${opts.className}` : "division-tabs",
+    "aria-label": opts.ariaLabel,
+  });
   // Style is applied via the CSSOM (.style), not a `style` attribute: the app's
   // CSP has no 'unsafe-inline' for style-src, so style attributes are blocked —
   // but programmatic .style assignments are always allowed.
-  nav.style.setProperty("--tab-count", String(order.length));
+  nav.style.setProperty("--tab-count", String(items.length));
   // The sliding accent-outlined box that marks the active tab. The transform is
   // set directly (not via a custom property) so `transition: transform` has a
   // proper before/after value to interpolate.
   const indicator = el("div", { className: "division-tab-indicator", "aria-hidden": "true" });
   indicator.style.transform = `translateX(${startIdx * 100}%)`;
   nav.appendChild(indicator);
-  for (const div of order) {
-    const isActive = div === activeDivision;
-    const a = el("a", { className: isActive ? "division-tab active" : "division-tab", href: `/${div}` }, labels[div]);
-    if (isActive) a.setAttribute("aria-current", "page");
+  for (const it of items) {
+    const a = el("a", { className: it.active ? "division-tab active" : "division-tab", href: it.href }, it.label);
+    if (it.title) a.setAttribute("title", it.title);
+    if (it.active) a.setAttribute("aria-current", "page");
     nav.appendChild(a);
   }
   // Browser-only: slide from the previously-active tab (startIdx, set inline
@@ -252,6 +265,19 @@ function buildDivisionTabs(activeDivision) {
       });
     });
   }
+  return nav;
+}
+
+function buildDivisionTabs(activeDivision) {
+  const labels = divisionLabels();
+  const order = divisionOrder();
+  const activeIdx = Math.max(0, order.indexOf(activeDivision));
+  // Slide from the previous selection when one exists and differs; otherwise
+  // render the indicator already under the active tab (no animation).
+  const nav = buildSegmentTabs(
+    order.map((div) => ({ label: labels[div], href: `/${div}`, active: div === activeDivision })),
+    { ariaLabel: "구분", startIdx: _prevDivisionIdx },
+  );
   _prevDivisionIdx = activeIdx;
   return nav;
 }
@@ -864,10 +890,10 @@ function _verseRangeVrefs(allVrefs, anchorVref, targetVref, unitFn) {
 /**
  * @param {HTMLElement} article
  * @param {ReadonlyArray<BibleVerse>} verses
- * @param {{ hlQuery?: string|null, hlVerse?: number|null, hlVerseEnd?: number|null, hlSegments?: Array<{start:number,end:number,part?:string}>|null, parallels?: ChapterParallel[]|null, chapter?: number|null, hideCites?: boolean, instanceKeys?: ReadonlyArray<string>|null }} [opts]
+ * @param {{ hlQuery?: string|null, hlVerse?: number|null, hlVerseEnd?: number|null, hlSegments?: Array<{start:number,end:number,part?:string}>|null, parallels?: ChapterParallel[]|null, chapter?: number|null, hideCites?: boolean, instanceKeys?: ReadonlyArray<string>|null , idPrefix?: string}} [opts]
  */
 function appendVerses(article, verses, opts = {}) {
-  const { hlQuery = null, hlVerse = null, hlVerseEnd = null, hlSegments = null, parallels = null, chapter = null, hideCites = false, instanceKeys: keysOverride = null } = opts;
+  const { hlQuery = null, hlVerse = null, hlVerseEnd = null, hlSegments = null, parallels = null, chapter = null, hideCites = false, instanceKeys: keysOverride = null, idPrefix = "" } = opts;
   let isFirst = true;
   let prevVerseEndType = null;
   // Several verses in one chapter can share a number (전례시편의 ¶ 구절, 에스델
@@ -942,8 +968,11 @@ function appendVerses(article, verses, opts = {}) {
     // with a Hebrew one (Daniel 3), a ¶ clause inherits the previous number
     // (전례시편), and Greek Esther stacks its additions under one number.
     // `~` (the duplicate-marker fallback) is not id-safe, so it becomes `-`.
-    const verseId = `v${instanceKeys[vIdx].replace(/~/g, "-")}`;
-    const baseClasses = v.chapter_ref ? "verse verse-cross-ref" : "verse";
+    // `idPrefix` keeps ids unique when one page renders several chapters (lectionary slots — Copilot review round 7)
+    const verseId = `${idPrefix}v${instanceKeys[vIdx].replace(/~/g, "-")}`;
+    // `verse-cross-ref` (moved in from another chapter) and `verse-lxx` (Greek-only addition, Daniel 3) mark the spans whose
+    // numbers are not this chapter's numbering — the copy citation leaves them out (bindCopyAttribution).
+    const baseClasses = v.chapter_ref ? "verse verse-cross-ref" : v.lxx_only ? "verse verse-lxx" : "verse";
 
     const vn = v.number;
 
@@ -1094,6 +1123,152 @@ function appendVerses(article, verses, opts = {}) {
   }
 }
 
+/**
+ * Copy handler shared by the chapter view and the lectionary view: serialize the
+ * selection ourselves so that stanza breaks become blank lines, and append a plain
+ * verse-number reference (no line-part letters like "1a" — ADR-022 · the original
+ * chapter-view contract). Shared serializer: verse-spec.js `serializeVerseRange`.
+ *
+ * A verse counts only when the selection overlaps at least one character of it — a
+ * range that merely touches the next line's offset 0 (triple-click) or starts at the
+ * previous verse's end does not drag that verse in. Selected verses expand to whole
+ * rendered spans, as before.
+ *
+ * `root` may hold several citation units (`unitSelector` — the lectionary's reading
+ * sections), each possibly spanning several `<article>`s (a reading that crosses a
+ * chapter): every unit becomes its own block 「text — reference」, articles inside a
+ * unit are joined by a blank line, and blocks are joined by a blank line too. When
+ * the selection also covers other text (`bailoutSelector` — collects, cards, header),
+ * or leaves `root` with `strictRoot`, the browser's own copy runs instead so nothing
+ * the user selected is dropped (self-review 2026-10-13).
+ *
+ * Reference numbers are the verses actually selected — merged verses keep both ends
+ * (「7-8」), excerpt gaps stay gaps (「2, 14」) — as continuous integer runs. Two exceptions (pre-merge review
+ * 2026-10-14): numbers this translation does not have (the article's `data-absent` — 마르 9:44 · 46) do not break a
+ * run (「9:43-48」, as on main — user decision 2026-10-14), and spans whose number belongs to another numbering — moved
+ * in from another chapter (`verse-cross-ref`, 이사 40 의 41:6-7) or a Greek-only addition (`verse-lxx`, 다니 3) — are
+ * left out of the numbers unless nothing else was selected (otherwise 「이사야 40:6-7, 19-20」 · 「다니엘 3:1-90」).
+ * `tail` (the lectionary's 영광송 after a psalm) is extra text inside a unit that is not a verse: when the selection
+ * covers it, its text follows the unit's verses, before the reference.
+ * @param {HTMLElement} root
+ * @param {(unit: HTMLElement, runs: Array<{ article: HTMLElement, ranges: Array<[number, number]>, firstNum: number, lastNum: number, atStart: boolean, atEnd: boolean }>) => string} citeOf
+ *   the text after 「— 」 for one unit; `runs` = per article in document order — `ranges` the selected verse numbers
+ *   as continuous runs, `atStart`/`atEnd` whether the selection reached the article's first/last numbered verse
+ * @param {{ unitSelector?: string, bailoutSelector?: string, strictRoot?: boolean, tail?: { selector: string, text: (el: Element) => string } }} [opts]
+ */
+function bindCopyAttribution(root, citeOf, opts = {}) {
+  root.addEventListener("copy", (e) => {
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || !sel.rangeCount) return;
+    const range = sel.getRangeAt(0);
+    if (opts.strictRoot && !root.contains(range.commonAncestorContainer)) return;
+    if (opts.bailoutSelector && [...root.querySelectorAll(opts.bailoutSelector)].some((n) => overlapsText(range, n))) return;
+    const tail = opts.tail;
+    // Document order: querySelectorAll returns matches in tree order whatever the selector list order.
+    const items = [...root.querySelectorAll(tail ? `.verse[data-vref], ${tail.selector}` : ".verse[data-vref]")]
+      .filter((n) => range.intersectsNode(n) && overlapsText(range, n));
+    if (!items.some((n) => n.matches(".verse[data-vref]"))) return;
+    /** @type {Array<{ unit: HTMLElement, articles: Array<{ article: HTMLElement, spans: Element[] }>, tail: Element | null }>} */
+    const units = [];
+    for (const v of items) {
+      const unit = /** @type {HTMLElement} */ ((opts.unitSelector && v.closest(opts.unitSelector)) || root);
+      let u = units[units.length - 1];
+      if (!u || u.unit !== unit) units.push(u = { unit, articles: [], tail: null });
+      if (tail && v.matches(tail.selector)) { u.tail = v; continue; }
+      const article = /** @type {HTMLElement} */ (v.closest("article") || unit);
+      let a = u.articles[u.articles.length - 1];
+      if (!a || a.article !== article) u.articles.push(a = { article, spans: [] });
+      a.spans.push(v);
+    }
+    const blocks = units.map(({ unit, articles, tail: tailEl }) => {
+      const parts = articles.map(({ spans }) => window.serializeVerseRange(spans[0], spans[spans.length - 1]));
+      if (tail && tailEl) parts.push(tail.text(tailEl));
+      const text = parts.join("\n\n");
+      if (!articles.length) return text;   // 영광송만 걸친 단위 — 본문 절이 없으니 출처도 없다
+      const runs = articles.map(({ article, spans }) => {
+        const own = spans.filter((s) => !s.classList.contains("verse-cross-ref") && !s.classList.contains("verse-lxx"));
+        const nums = [...new Set((own.length ? own : spans).flatMap(vrefNumbers))].sort((x, y) => x - y);
+        const absent = new Set((article.getAttribute("data-absent") || "").split(",").filter(Boolean).map(Number));
+        const numbered = article.querySelectorAll(".verse[data-vref]");
+        return {
+          article, ranges: numberRuns(nums, absent), firstNum: nums[0], lastNum: nums[nums.length - 1],
+          atStart: numbered[0] === spans[0], atEnd: numbered[numbered.length - 1] === spans[spans.length - 1],
+        };
+      });
+      return `${text}\n\n— ${citeOf(unit, runs)}`;
+    });
+    if (!e.clipboardData) return;
+    e.clipboardData.setData("text/plain", blocks.join("\n\n"));
+    e.preventDefault();
+  });
+}
+
+/** 선택이 그 노드의 글자(공백 · U+2060 제외)와 한 글자 이상 겹치나 — 경계에 닿기만 한 것은 아니다. */
+function overlapsText(/** @type {Range} */ range, /** @type {Node} */ node) {
+  const r = document.createRange();
+  r.selectNodeContents(node);
+  if (range.compareBoundaryPoints(Range.START_TO_START, r) > 0) r.setStart(range.startContainer, range.startOffset);
+  if (range.compareBoundaryPoints(Range.END_TO_END, r) < 0) r.setEnd(range.endContainer, range.endOffset);
+  return /[^\s\u2060]/.test(r.toString());
+}
+
+/** `data-vref` 의 절 번호들 — 「7-8a」 → [7, 8] · 「11b」 → [11] · 「3」 → [3]. @param {Element} v @returns {number[]} */
+function vrefNumbers(v) {
+  const m = /^(\d+)(?:-(\d+))?/.exec(v.getAttribute("data-vref") || "");
+  if (!m) return [];
+  const a = Number(m[1]), b = m[2] ? Number(m[2]) : a;
+  return Array.from({ length: Math.max(0, b - a) + 1 }, (_, i) => a + i);
+}
+
+/**
+ * 정렬된 번호 → 연속 구간. 사이에 이 번역에 없는 번호(`absent`)만 있으면 이어진 구간이다 — 없는 절은 건너뛴 절이
+ * 아니다(마르 9:43-48 — 사용자 결정 2026-10-14).
+ * @param {number[]} nums @param {Set<number>} [absent] @returns {Array<[number, number]>}
+ */
+function numberRuns(nums, absent) {
+  /** @type {Array<[number, number]>} */
+  const out = [];
+  for (const n of nums) {
+    const last = out[out.length - 1];
+    if (last && n > last[1] && onlyAbsentBetween(last[1], n, absent)) last[1] = n;
+    else if (!last || n > last[1]) out.push([n, n]);
+  }
+  return out;
+}
+
+/** a 와 b 사이의 번호가 모두 이 번역에 없는가(사이가 비면 참). @param {number} a @param {number} b @param {Set<number>} [absent] */
+function onlyAbsentBetween(a, b, absent) {
+  for (let k = a + 1; k < b; k++) if (!absent || !absent.has(k)) return false;
+  return true;
+}
+
+/**
+ * 이 장에서 이 번역에 없는 절 번호 — 1 부터 장의 마지막 절까지 가운데 어느 절도 덮지 않는 번호(병합 절은 끝까지 덮는다).
+ * 다른 장에서 옮겨 실린 절(`chapter_ref`)과 그리스어 추가 본문(`lxx_only`)은 이 장의 번호 체계가 아니라 세지 않는다.
+ * 장 본문 · 전례독서의 `<article data-absent>` 가 되어 복사 출처가 읽는다(마르 9 → [44, 46]).
+ * @param {import("../types").BibleVerse[]} verses @returns {number[]}
+ */
+function absentVerseNumbers(verses) {
+  /** @type {Set<number>} */
+  const have = new Set();
+  let last = 0;
+  for (const v of verses) {
+    if (v.lxx_only || v.chapter_ref != null) continue;
+    const end = Number(v.range_end) || v.number;
+    for (let n = v.number; n <= end; n++) have.add(n);
+    if (end > last) last = end;
+  }
+  /** @type {number[]} */
+  const out = [];
+  for (let n = 1; n <= last; n++) if (!have.has(n)) out.push(n);
+  return out;
+}
+
+/** 구간 → 「1-3, 5」. @param {Array<[number, number]>} ranges */
+function formatVerseRanges(ranges) {
+  return ranges.map(([a, b]) => (a === b ? `${a}` : `${a}-${b}`)).join(", ");
+}
+
 function renderChapter(data, book, opts) {
   const ch = data.chapter;
   const hlQuery = opts && opts.highlightQuery;
@@ -1161,6 +1336,9 @@ function renderChapter(data, book, opts) {
   }
 
   const article = el("article", { className: "chapter-text", lang: "ko" });
+  // 이 번역에 없는 절 번호 — 복사 출처가 그 자리에서 구간을 끊지 않게(사용자 결정 2026-10-14, bindCopyAttribution)
+  const absent = absentVerseNumbers(data.verses);
+  if (absent.length) article.setAttribute("data-absent", absent.join(","));
   appendVerses(article, data.verses, {
     hlQuery, hlVerse, hlVerseEnd, hlSegments,
     parallels: data.parallels, chapter: data.chapter,
@@ -1387,40 +1565,10 @@ function renderChapter(data, book, opts) {
     cancelLongPress(e);
   });
 
-  // Copy handler: serialize the selection ourselves so that stanza breaks
-  // become blank lines and the appended reference uses plain verse numbers
-  // (no line-part letters like "1a"). Shared serializer lives in bookmark.js
-  // (VERSE_SERIALIZE block) so this path and the 복사 button emit identical text.
-  article.addEventListener("copy", (e) => {
-    const sel = window.getSelection();
-    if (!sel || sel.isCollapsed) return;
-
-    // Expand partial selections to full verse boundaries so a dragged-across
-    // fragment still yields a complete citation.
-    const range = sel.getRangeAt(0);
-    let firstVerse = null;
-    let lastVerse = null;
-    for (const v of article.querySelectorAll(".verse")) {
-      if (range.intersectsNode(v)) {
-        if (!firstVerse) firstVerse = v;
-        lastVerse = v;
-      }
-    }
-    if (!firstVerse || !lastVerse) return;
-
-    const firstNum = parseInt(firstVerse.getAttribute("data-vref") ?? "", 10);
-    const lastNum = parseInt(lastVerse.getAttribute("data-vref") ?? "", 10);
-    if (!Number.isFinite(firstNum) || !Number.isFinite(lastNum)) return;
-
-    const plainText = window.serializeVerseRange(firstVerse, lastVerse);
-    const ref = firstNum === lastNum
-      ? `${book.name_ko} ${ch}:${firstNum}`
-      : `${book.name_ko} ${ch}:${firstNum}-${lastNum}`;
-
-    if (!e.clipboardData) return;
-    e.clipboardData.setData("text/plain", `${plainText}\n\n— ${ref} (공동번역성서)`);
-    e.preventDefault();
-  });
+  // one article — one chapter. The liturgical books (전례시편 · 송가) are the prayer-book translation, not 공동번역
+  // (ADR-037 §1 · §3), so they are credited to 「(대한성공회 기도서)」 (사용자 결정 2026-10-13 — verse-spec.js citationSource).
+  bindCopyAttribution(article, (_unit, runs) =>
+    `${book.name_ko} ${ch}:${formatVerseRanges(runs[0].ranges)} ${citationSource(book.division === "liturgical")}`);
 
   $app.appendChild(article);
   $app.appendChild(buildChapterNav(book, ch));
@@ -1529,7 +1677,7 @@ window.renderError = renderError;
 // is the view-renderer entry points routing.js imports (route() dispatch).
 export {
   setTitle, setTitleWithChapterPicker,
-  buildDivisionTabs, divisionLabels, divisionOrder, effectiveDivision,
+  buildDivisionTabs, buildSegmentTabs, bindCopyAttribution, formatVerseRanges, absentVerseNumbers, divisionLabels, divisionOrder, effectiveDivision,
   initCompactHeader, initScrollElevation,
   _verseSelectionUnit, _verseRangeVrefs,
   DIVISION_LABELS,

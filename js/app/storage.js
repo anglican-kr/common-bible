@@ -36,6 +36,9 @@ window.appStorage = (() => {
   const BOOKMARK_KEY = "bible-bookmarks";
   const INSTALL_NUDGE_KEY = "bible-install-nudge";
   const SEARCH_HISTORY_KEY = "bible-search-history";
+  // ADR-038 §3 — 전례독서 뷰의 독서 1/2 선택. 값 하나 "1" | "2" — 마지막으로 고른 트랙이 날짜 · 해와
+  // 무관하게 기본값이다(사용자 결정 2026-10-13 · ADR-036 §2 독서 연속성). 로컬 전용.
+  const LECTIONARY_TRACK_KEY = "bible-lectionary-track";
   const SEARCH_HISTORY_MAX = 30; // storage cap (LRU)
 
   // ── UI-shared constants (consumed by settings-ui in Phase 3) ──
@@ -411,6 +414,29 @@ window.appStorage = (() => {
       .catch(() => {});
   }
 
+  // ── Lectionary track (ADR-038 §3) ──
+
+  /**
+   * 기억된 독서 트랙 — 마지막으로 고른 트랙이 날짜와 해를 가리지 않고 기본값이다(사용자 결정 2026-10-13: 「한번 선택하면
+   * 계속 일관성 있게 같은 트랙이 기본값」). 없거나 깨졌으면 null(뷰가 1 을 기본으로 삼는다). 이 PR 안에서 잠시 쓰인
+   * 전례년별 표(`{"2026":2}`)는 숫자가 아니라 null 로 읽힌다.
+   * @returns {1 | 2 | null}
+   */
+  function loadLectionaryTrack() {
+    try {
+      const t = Number(localStorage.getItem(LECTIONARY_TRACK_KEY));
+      return t === 1 || t === 2 ? t : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** @param {1 | 2} track */
+  function saveLectionaryTrack(track) {
+    if (track !== 1 && track !== 2) return;
+    try { localStorage.setItem(LECTIONARY_TRACK_KEY, String(track)); } catch { /* quota / private mode */ }
+  }
+
   return {
     FONT_SIZES, DEFAULT_FONT_SIZE, COLOR_SCHEMES, SEARCH_HISTORY_MAX,
     saveReadingPosition, loadReadingPosition, clearReadingPosition,
@@ -425,6 +451,7 @@ window.appStorage = (() => {
     loadTheme, saveTheme,
     loadBookOrder, saveBookOrder,
     generateId, loadBookmarks, saveBookmarks,
+    loadLectionaryTrack, saveLectionaryTrack,
     _loadNudgeState, _saveNudgeState,
     _maybeRequestPersist,
   };

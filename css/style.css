@@ -537,6 +537,320 @@ body {
    no repeated heading (창세 1장 → 창세 2:1-4a). */
 .reading-passage .chapter-text + .chapter-text { margin-top: var(--space-3); }
 
+/* ── 전례독서 뷰 (lectionary view, ADR-038 §3 A3) ──
+   One day's eucharistic propers (collect → readings). The scripture text reuses
+   .chapter-text (serif body, same column as the chapter view); the chrome —
+   date nav · day name · colour marks · observance chips · segments · slot
+   headings — is sans-serif like the other in-page views. */
+.lectionary { padding: 0; }
+#app:has(.lectionary) { padding-top: var(--space-4); }
+
+.lect-head {
+  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  margin-bottom: var(--space-4);
+}
+.lect-datenav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+/* ‹ › day steppers — ≥44px hit area (HIG), round like the dock controls. */
+.lect-datenav-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--touch-target);
+  min-height: var(--touch-target);
+  border-radius: var(--radius-pill);
+  color: var(--accent);
+  text-decoration: none;
+  font-size: var(--font-xl);
+  line-height: 1;
+}
+.lect-datenav-btn:hover,
+.lect-datenav-btn:focus-visible { background: var(--bg-card); }
+.lect-date {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-sm);
+  color: var(--text-secondary);
+}
+.lect-today {
+  font-size: var(--font-xs);
+  color: var(--accent);
+  text-decoration: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  padding: var(--space-0_5) var(--space-2);
+}
+.lect-day {
+  margin: var(--space-2) 0 0;
+  font-size: var(--font-xl);
+  font-weight: 700;
+  color: var(--text);
+  line-height: var(--leading-snug);
+}
+.lect-day-note {
+  margin: var(--space-1) 0 0;
+  font-size: var(--font-sm);
+  color: var(--text-secondary);
+}
+.lect-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-3);
+  margin: var(--space-2) 0 0;
+  font-size: var(--font-sm);
+  color: var(--text-secondary);
+}
+.lect-colors {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+}
+.lect-color-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+/* 대체색은 색 점만 옅게 — 글자까지 옅게 하면 대비가 4.5:1 아래로 떨어진다(WCAG 1.4.3, 자체 리뷰 2026-10-13). */
+.lect-color-item--alt .lect-color { opacity: 0.8; }
+/* Liturgical colour marks — the four official colours plus the two optional
+   alternates (ADR-036 §8). Fixed swatches, not theme tokens: these ARE the colours. */
+.lect-color {
+  width: 0.8em;
+  height: 0.8em;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.25);
+  box-sizing: border-box;
+}
+.lect-color--white { background: #f7f5f0; }
+.lect-color--red { background: #b3261e; }
+.lect-color--green { background: #2e7d32; }
+.lect-color--violet { background: #6a3fa0; }
+.lect-color--rose { background: #e39bb9; }
+.lect-color--blue { background: #3b6fb6; }
+[data-theme="dark"] .lect-color { border-color: rgba(255, 255, 255, 0.35); }
+
+/* Observance switcher — every candidate, always; horizontal scroll on narrow
+   screens, no scrollbar chrome. aria-current marks the selected one. */
+.lect-chips {
+  display: flex;
+  gap: var(--space-2);
+  overflow-x: auto;
+  padding: var(--space-1) 0 var(--space-2);
+  margin: 0 0 var(--space-2);
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+}
+.lect-chips::-webkit-scrollbar { display: none; }
+.lect-chip {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--touch-target);
+  padding: 0 var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--bg-card);
+  color: var(--text);
+  font-size: var(--font-sm);
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  /* Long saint names: keep the full text in the DOM (title + screen readers) and
+     clip the visible label with an ellipsis. The cap follows the viewport —
+     ~60% of a phone's width, up to 22rem on wide screens (사용자 결정 2026-10-12). */
+  max-width: clamp(9rem, 60vw, 22rem);
+}
+.lect-chip-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lect-chip[aria-current] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+[data-theme="dark"] .lect-chip[aria-current] { color: var(--bg); }
+/* Candidates that are not kept today (omitted · transferred out · commemorations
+   with no text) stay listed — 「후보 전부 노출」 — but read as secondary. */
+.lect-chip--muted {
+  color: var(--text-secondary);
+  border-style: dashed;
+  font-weight: 400;
+}
+.lect-chip--muted[aria-current] { border-style: solid; color: #fff; }
+[data-theme="dark"] .lect-chip--muted[aria-current] { color: var(--bg); }
+
+/* Side-by-side choice (ADR-038 §3 — optional transfer · transferred feast ·
+   regional festival): two cards, the reader picks. */
+.lect-pair {
+  margin: var(--space-4) 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+}
+.lect-pair-title {
+  margin: 0 0 var(--space-2);
+  font-size: var(--font-sm);
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.lect-pair-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2);
+}
+@media (max-width: 480px) {
+  .lect-pair-row { grid-template-columns: 1fr; }
+}
+.lect-pair-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-height: var(--touch-target);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-card);
+  color: var(--text);
+  text-decoration: none;
+}
+.lect-pair-card[aria-current] {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.lect-pair-label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-md);
+  font-weight: 700;
+}
+.lect-badge {
+  font-size: var(--font-2xs);
+  font-weight: 600;
+  line-height: 1.6;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-pill);
+  padding: 0 var(--space-2);
+}
+.lect-pair-note {
+  font-size: var(--font-sm);
+  color: var(--text-secondary);
+}
+
+/* Track (독서 1/2) and alternative-set segments — the division-tab pattern in a
+   compact size, labelled. */
+.lect-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-6);
+  margin: var(--space-4) 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+}
+.lect-control {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  /* 내용 폭으로 줄지 않고 줄을 채운다 — 긴 세그먼트 라벨이 칸 밖으로 넘치던 것(WCAG 1.4.10, 자체 리뷰 2026-10-13). */
+  flex: 1 1 16rem;
+  min-width: 0;
+  max-width: 100%;
+}
+.lect-control-label {
+  font-size: var(--font-xs);
+  color: var(--text-secondary);
+}
+.division-tabs--compact { margin: 0; }
+.division-tabs--compact .division-tab {
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--font-sm);
+  /* 「주의 변모 주일로 지킬 때」 · 「사도 성 필립보와 성 야고보」 — 좁은 칸에서는 낱말 사이에서 줄을 바꾼다(320px 가로 스크롤). */
+  white-space: normal;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+.lect-caption {
+  margin: var(--space-1) 0 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  font-size: var(--font-xs);
+  font-weight: 400;
+  color: var(--text-secondary);
+}
+
+/* Sections: 본기도 → 제1독서 → 시편 → 제2독서 → 복음. */
+.lect-section { margin: var(--space-8) 0; }
+.lect-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-2);
+  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+}
+.lect-slot {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  font-size: var(--font-md);
+  font-weight: 600;
+  color: var(--accent);
+}
+.lect-ref,
+.lect-canticle {
+  font-size: var(--font-sm);
+  color: var(--text-secondary);
+}
+.lect-reading-of {
+  margin: var(--space-6) 0 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  font-size: var(--font-sm);
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.lect-collects .division-tabs { margin: 0 0 var(--space-3); }
+.lect-collect { margin: 0; }
+.lect-collect-text { margin: 0 0 var(--space-3); }
+/* 괄호 선택 구절 — the booklet's "(9-23)": the long text is the reading, the
+   optional run is bracketed 〔 〕 and the head notes where the short text ends. */
+.lect-bracket {
+  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  color: var(--theme);
+  margin: 0 0.1em;
+  user-select: none;
+}
+.lect-optional-note { flex-basis: 100%; }
+/* 송영 — once, after the chosen collect (ADR-038 §3 「구현」). */
+.lect-ending {
+  margin: var(--space-3) 0 0;
+  color: var(--text-secondary);
+}
+.lect-missing {
+  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  font-size: var(--font-sm);
+  color: var(--danger-text);
+}
+/* 영광송 — after the psalm, typeset like a responsory couplet (poetry indent,
+   ◯ on the cantor's line, response in the secondary colour). */
+.lect-gloria {
+  display: block;
+  margin-top: 1.2em;
+  font-size: var(--font-md);
+  line-height: var(--leading-loose);
+}
+.lect-gloria-line {
+  display: block;
+  padding-left: 2rem;
+}
+.lect-gloria-line.verse-response { color: var(--text-secondary); }
+
 /* In-page search input (mirrors the header #search-bar, used in #app). */
 #search-inpage-bar {
   display: flex;
