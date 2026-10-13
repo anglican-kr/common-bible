@@ -14,6 +14,7 @@
 
 실데이터(data/ 서브모듈)가 필요하다 — 로컬 전용(CLAUDE.md 「E2E 테스트」).
 """
+import re
 import datetime
 import json
 import urllib.parse
@@ -232,8 +233,8 @@ _LECT_COPY = """
 async () => {
   const article = document.querySelector(".lect-reading[data-slot='first'] article.chapter-text");
   const verses = article.querySelectorAll('.verse');
-  const t1 = document.createTreeWalker(verses[0], NodeFilter.SHOW_TEXT).nextNode();
-  const t2 = document.createTreeWalker(verses[1], NodeFilter.SHOW_TEXT).nextNode();
+  const t1 = ((n) => { const w = document.createTreeWalker(n, NodeFilter.SHOW_TEXT); let t; while ((t = w.nextNode()) && !/[^\\s\\u2060]/.test(t.textContent)); return t; })(verses[0]);
+  const t2 = ((n) => { const w = document.createTreeWalker(n, NodeFilter.SHOW_TEXT); let t; while ((t = w.nextNode()) && !/[^\\s\\u2060]/.test(t.textContent)); return t; })(verses[1]);
   const r = document.createRange();
   r.setStart(t1, Math.floor(t1.length / 2));
   r.setEnd(t2, Math.min(5, t2.length));
@@ -265,8 +266,8 @@ async () => {
   const v1s = articles[0].querySelectorAll('.verse[data-vref]');
   const v2s = articles[1].querySelectorAll('.verse[data-vref]');
   const a = v1s[v1s.length - 1], b = v2s[0];
-  const t1 = document.createTreeWalker(a, NodeFilter.SHOW_TEXT).nextNode();
-  const t2 = document.createTreeWalker(b, NodeFilter.SHOW_TEXT).nextNode();
+  const t1 = ((n) => { const w = document.createTreeWalker(n, NodeFilter.SHOW_TEXT); let t; while ((t = w.nextNode()) && !/[^\\s\\u2060]/.test(t.textContent)); return t; })(a);
+  const t2 = ((n) => { const w = document.createTreeWalker(n, NodeFilter.SHOW_TEXT); let t; while ((t = w.nextNode()) && !/[^\\s\\u2060]/.test(t.textContent)); return t; })(b);
   const r = document.createRange();
   r.setStart(t1, Math.floor(t1.length / 2));
   r.setEnd(t2, Math.min(5, t2.length));
@@ -287,8 +288,10 @@ def test_copy_across_chapters_is_one_passage(desktop_context):
     page = desktop_context.new_page()
     _open(page, "lectionary/2025-06-22")
     text, a, b, head, tail = page.evaluate(_LECT_COPY_CROSS)
-    # 42편의 실제 마지막 절(11)에서 끝나 43편 1절로 이어지므로 합쳐 적는다 — 고른 반행 글자(「11b」 「1a」)는 북마크 복사 버튼처럼 그대로
-    assert text.endswith(f"\n\n— 전례시편 42:{a}-43:{b} (공동번역성서)"), text
+    # 42편의 실제 마지막 절(11)에서 끝나 43편 1절로 이어지므로 합쳐 적는다 — 번호는 줄 글자 없이, 전례시편은 「(공동번역성서)」 없이
+    na, nb = re.match(r"\d+", a).group(), re.match(r"\d+", b).group()
+    assert text.endswith(f"\n\n— 전례시편 42:{na}-43:{nb}"), text[-120:]
+    assert "\n\n" in text.split("\n\n— ")[0]   # 두 편의 본문 사이는 빈 줄(자체 리뷰 2026-10-13)
     assert head.lstrip("0123456789 ") [:3] in text and tail in text   # 두 장의 본문이 다 들어 있다
 
 
@@ -298,8 +301,8 @@ async () => {
   const verses = [...section.querySelectorAll('.verse[data-vref]')];
   const i = verses.findLastIndex(v => parseInt(v.getAttribute('data-vref'), 10) === 2);   // 2b — 2절의 마지막 반행
   const a = verses[i], b = verses[i + 1];
-  const t1 = document.createTreeWalker(a, NodeFilter.SHOW_TEXT).nextNode();
-  const t2 = document.createTreeWalker(b, NodeFilter.SHOW_TEXT).nextNode();
+  const t1 = ((n) => { const w = document.createTreeWalker(n, NodeFilter.SHOW_TEXT); let t; while ((t = w.nextNode()) && !/[^\\s\\u2060]/.test(t.textContent)); return t; })(a);
+  const t2 = ((n) => { const w = document.createTreeWalker(n, NodeFilter.SHOW_TEXT); let t; while ((t = w.nextNode()) && !/[^\\s\\u2060]/.test(t.textContent)); return t; })(b);
   const r = document.createRange();
   r.setStart(t1, Math.floor(t1.length / 2));
   r.setEnd(t2, Math.min(5, t2.length));
@@ -322,7 +325,7 @@ def test_copy_cites_only_selected_verses_across_a_gap(desktop_context):
     _open(page, "lectionary/2026-04-05")
     text, a, b = page.evaluate(_LECT_COPY_GAP)
     assert re.match(r"14", b), b   # 2절 다음에 그려진 절이 14절이어야 검사가 뜻이 있다
-    assert text.endswith(f"— 전례시편 118:{a},{b} (공동번역성서)"), text   # 북마크 복사 버튼과 같은 spec 꼴(쉼표, 반행 글자 유지)
+    assert text.endswith(f"— 전례시편 118:{re.match(r'\d+', a).group()}, {re.match(r'\d+', b).group()}"), text   # 건너뛴 절은 쉼표, 줄 글자 없이
 
 
 _LECT_COPY_EDGE = """
@@ -332,8 +335,8 @@ async (slot) => {
   const v1s = articles[0].querySelectorAll('.verse[data-vref]');
   const v2s = articles[1].querySelectorAll('.verse[data-vref]');
   const a = v1s[v1s.length - 1], b = v2s[0];
-  const t1 = document.createTreeWalker(a, NodeFilter.SHOW_TEXT).nextNode();
-  const t2 = document.createTreeWalker(b, NodeFilter.SHOW_TEXT).nextNode();
+  const t1 = ((n) => { const w = document.createTreeWalker(n, NodeFilter.SHOW_TEXT); let t; while ((t = w.nextNode()) && !/[^\\s\\u2060]/.test(t.textContent)); return t; })(a);
+  const t2 = ((n) => { const w = document.createTreeWalker(n, NodeFilter.SHOW_TEXT); let t; while ((t = w.nextNode()) && !/[^\\s\\u2060]/.test(t.textContent)); return t; })(b);
   const r = document.createRange();
   r.setStart(t1, Math.floor(t1.length / 2));
   r.setEnd(t2, Math.min(5, t2.length));
@@ -354,7 +357,7 @@ def test_copy_does_not_merge_chapters_when_excerpt_stops_short(desktop_context):
     _open(page, "lectionary/2027-11-13")
     text, a, b, last = page.evaluate(_LECT_COPY_EDGE, "first")
     assert int(last) > int(a.rstrip("ab")), (a, last)   # 발췌가 장 끝보다 먼저 끝난다
-    assert text.endswith(f"— 지혜서 18:{a}, 19:{b} (공동번역성서)"), text
+    assert text.endswith(f"— 지혜서 18:{int(a.rstrip('ab'))}, 19:{int(b.rstrip('ab'))} (공동번역성서)"), text
 
 
 _LECT_COPY_MERGED = """
@@ -365,8 +368,8 @@ async () => {
   const n = parseInt(verses[i].getAttribute('data-vref'), 10);
   const j = verses.findIndex((v, k) => k > i && parseInt(v.getAttribute('data-vref'), 10) !== n);   // 병합 절의 반행(7-8a · 7-8b) 다음 절
   const a = verses[i], b = verses[j];
-  const t1 = document.createTreeWalker(a, NodeFilter.SHOW_TEXT).nextNode();
-  const t2 = document.createTreeWalker(b, NodeFilter.SHOW_TEXT).nextNode();
+  const t1 = ((n) => { const w = document.createTreeWalker(n, NodeFilter.SHOW_TEXT); let t; while ((t = w.nextNode()) && !/[^\\s\\u2060]/.test(t.textContent)); return t; })(a);
+  const t2 = ((n) => { const w = document.createTreeWalker(n, NodeFilter.SHOW_TEXT); let t; while ((t = w.nextNode()) && !/[^\\s\\u2060]/.test(t.textContent)); return t; })(b);
   const r = document.createRange();
   r.setStart(t1, Math.floor(t1.length / 2));
   r.setEnd(t2, Math.min(5, t2.length));
@@ -386,7 +389,7 @@ def test_copy_keeps_both_endpoints_of_a_merged_verse(desktop_context):
     _open(page, "lectionary/2026-01-11")
     text, a, b = page.evaluate(_LECT_COPY_MERGED)
     assert a.startswith("7-8"), a   # 병합 절의 첫 반행(「7-8a」)
-    assert text.endswith(f"— 전례시편 29:7-8,{b} (공동번역성서)"), text   # 반행 둘을 다 골랐으니 「7-8」로 접힌다 — 「7」이 아니다
+    assert text.endswith(f"— 전례시편 29:7-{int(re.match(r'\d+', b).group())}"), text   # 병합 절의 두 끝(7 · 8)을 다 세어 「7-9」 — 「7」 만이 아니다
 
 
 _LECT_COPY_OPTIONAL = """
@@ -395,7 +398,7 @@ async () => {
   const verses = [...section.querySelectorAll('.verse[data-vref]')];
   const i = verses.findIndex(v => v.classList.contains('lect-optional'));
   const a = verses[Math.max(0, i - 1)], b = verses[i];   // 선택 구절 바로 앞 절부터 선택 구절까지
-  const t1 = document.createTreeWalker(a, NodeFilter.SHOW_TEXT).nextNode();
+  const t1 = ((n) => { const w = document.createTreeWalker(n, NodeFilter.SHOW_TEXT); let t; while ((t = w.nextNode()) && !/[^\\s\\u2060]/.test(t.textContent)); return t; })(a);
   const r = document.createRange();
   r.setStart(t1, Math.floor(t1.length / 2));
   r.setEndAfter(b);
@@ -447,6 +450,68 @@ def test_half_verse_on_two_line_verse_shows_only_that_line(desktop_context):
     v35 = psalm.locator(".verse[data-vref='35b']")
     assert v35.count() == 1 and v35.locator(".verse-num").count() == 1   # 번호가 남은 줄로 옮겨 왔다
     assert psalm.locator(".verse[data-vref='35a']").count() == 0
+
+
+_LECT_COPY_ACROSS = """
+async (sel) => {
+  const [startSel, endSel] = sel;
+  const a = document.querySelector(startSel), b = document.querySelector(endSel);
+  const ta = ((n) => { const w = document.createTreeWalker(n, NodeFilter.SHOW_TEXT); let t; while ((t = w.nextNode()) && !/[^\\s\\u2060]/.test(t.textContent)); return t; })(a);
+  const tb = ((n) => { const w = document.createTreeWalker(n, NodeFilter.SHOW_TEXT); let t; while ((t = w.nextNode()) && !/[^\\s\\u2060]/.test(t.textContent)); return t; })(b);
+  const r = document.createRange();
+  if (a === b) { r.setStart(ta, 0); r.setEnd(ta, ta.length); }   // 한 절 — 그 절의 글자 전부
+  else { r.setStart(ta, Math.floor(ta.length / 2)); r.setEnd(tb, Math.min(3, tb.length)); }
+  const s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+  const dt = new DataTransfer();
+  a.dispatchEvent(new ClipboardEvent('copy', { bubbles: true, cancelable: true, clipboardData: dt }));
+  return dt.getData('text/plain');
+}
+"""
+
+
+def test_copy_across_readings_keeps_every_section(desktop_context):
+    """부활대축일 — 제1독서 마지막 절부터 복음 첫 절까지 고르면 네 독서가 다 실리고 섹션마다 출처가 붙는다. 종전엔 시작한
+    섹션의 처리기가 제 절만 싣고 나머지를 버렸다(자체 리뷰 2026-10-13)."""
+    page = desktop_context.new_page()
+    _open(page, "lectionary/2026-04-05")
+    text = page.evaluate(_LECT_COPY_ACROSS, [
+        ".lect-reading[data-slot='first'] article.chapter-text .verse[data-vref]:last-of-type",
+        ".lect-reading[data-slot='gospel'] article.chapter-text .verse[data-vref]",
+    ])
+    assert "— 사도행전 10:43 (공동번역성서)" in text, text[:200]
+    assert "\n\n— 전례시편 118:" in text          # 시편은 「(공동번역성서)」 없이
+    assert text.count("(공동번역성서)") == 3          # 제1독서 · 제2독서 · 복음
+    assert text.rstrip().endswith("(공동번역성서)") and "요한의 복음서 20:1" in text
+
+
+def test_copy_drops_psalm_section_heading(desktop_context):
+    """대림 4주일(2026-12-20) 시편 89:1-4, 19-27 — 부(部) 머리 「(2)」는 표시 전용이라 복사 본문에 붙지 않는다(자체 리뷰 2026-10-13)."""
+    page = desktop_context.new_page()
+    _open(page, "lectionary/2026-12-20")
+    assert page.locator(".lect-reading[data-slot='psalm'] .psalm-section").count() > 0   # 머리가 그려져 있어야 검사가 뜻이 있다
+    text = page.evaluate(_LECT_COPY_ACROSS, [
+        ".lect-reading[data-slot='psalm'] .verse[data-vref]",
+        ".lect-reading[data-slot='psalm'] article.chapter-text:last-of-type .verse[data-vref]:last-of-type",
+    ])
+    assert text and not re.search(r"\(\d+\)", text.split("\n\n— ")[0]), text[:300]
+
+
+def test_copy_including_collect_falls_back_to_browser_copy(desktop_context):
+    """본기도 글자까지 고르면 처리기가 가로채지 않는다(브라우저 기본 복사 — 고른 것을 빠뜨리지 않게)."""
+    page = desktop_context.new_page()
+    _open(page, "lectionary/2026-04-05")
+    text = page.evaluate(_LECT_COPY_ACROSS, [".lect-collect-text", ".lect-reading[data-slot='first'] article.chapter-text .verse[data-vref]"])
+    assert text == ""   # 합성 이벤트라 기본 복사는 DataTransfer 를 채우지 않는다 — 가로채지 않았다는 뜻
+
+
+def test_canticle_copy_cites_canticle_name(desktop_context):
+    """대림 2주일(2027-12-05) 시편 자리의 즈가리야 송가 — 출처는 송가 이름 + 절, 「(공동번역성서)」 없음(기도서 번역)."""
+    page = desktop_context.new_page()
+    _open(page, "lectionary/2027-12-05")
+    sel = ".lect-reading[data-slot='psalm'] article.chapter-text .verse[data-vref]"
+    text = page.evaluate(_LECT_COPY_ACROSS, [sel, sel])
+    assert "(공동번역성서)" not in text, text[-80:]
+    assert re.search(r"\n\n— \S.*송가 1$", text), text[-80:]
 
 
 def test_verse_ids_are_unique_across_slots_and_chapters(desktop_context):

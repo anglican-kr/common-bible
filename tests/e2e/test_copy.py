@@ -19,7 +19,7 @@ async () => {
 _SELECT_MIDDLE_V16 = """
   const v16 = document.getElementById('v16');
   const w = document.createTreeWalker(v16, NodeFilter.SHOW_TEXT);
-  const t = w.nextNode();
+  let t; while ((t = w.nextNode()) && !/[^\\s\\u2060]/.test(t.textContent));
   const r = document.createRange();
   const mid = Math.floor(t.length / 2);
   r.setStart(t, mid);
@@ -33,9 +33,9 @@ _SELECT_CROSS_V16_V17 = """
   const v16 = document.getElementById('v16');
   const v17 = document.getElementById('v17');
   const w1 = document.createTreeWalker(v16, NodeFilter.SHOW_TEXT);
-  const t16 = w1.nextNode();
+  let t16; while ((t16 = w1.nextNode()) && !/[^\\s\\u2060]/.test(t16.textContent));
   const w2 = document.createTreeWalker(v17, NodeFilter.SHOW_TEXT);
-  const t17 = w2.nextNode();
+  let t17; while ((t17 = w2.nextNode()) && !/[^\\s\\u2060]/.test(t17.textContent));
   const r = document.createRange();
   r.setStart(t16, Math.floor(t16.length / 2));
   r.setEnd(t17, Math.min(5, t17.length));
@@ -116,9 +116,9 @@ _INJECT_MARKERS = """
   v16.parentNode.insertBefore(chip, v17);
   // Select across v16-v17 so both verses (and the chip between them) are in range.
   const w1 = document.createTreeWalker(v16, NodeFilter.SHOW_TEXT);
-  const t16 = w1.nextNode();
+  let t16; while ((t16 = w1.nextNode()) && !/[^\\s\\u2060]/.test(t16.textContent));
   const w2 = document.createTreeWalker(v17, NodeFilter.SHOW_TEXT);
-  const t17 = w2.nextNode();
+  let t17; while ((t17 = w2.nextNode()) && !/[^\\s\\u2060]/.test(t17.textContent));
   const r = document.createRange();
   r.setStart(t16, 0);
   r.setEnd(t17, Math.min(5, t17.length));
@@ -252,3 +252,73 @@ def test_psalm_pure_poetry_verse_tap_again_deselects_all_parts(page):
         f"tapping a part of a fully-selected pure-poetry verse should deselect "
         f"all parts, got {selected_after} still selected"
     )
+
+
+# ── Reference numbers (self-review 2026-10-13) ───────────────────────────────
+
+_SELECT_LINES = """
+  const vs = [...document.querySelectorAll('article.chapter-text .verse[data-vref]')];
+  const a = vs.find(v => v.getAttribute('data-vref') === '%A%');
+  const b = vs.find(v => v.getAttribute('data-vref') === '%B%');
+  const ta = ((n) => { const w = document.createTreeWalker(n, NodeFilter.SHOW_TEXT); let t; while ((t = w.nextNode()) && !/[^\\s\\u2060]/.test(t.textContent)); return t; })(a);
+  const tb = ((n) => { const w = document.createTreeWalker(n, NodeFilter.SHOW_TEXT); let t; while ((t = w.nextNode()) && !/[^\\s\\u2060]/.test(t.textContent)); return t; })(b);
+  const r = document.createRange();
+  r.setStart(ta, Math.floor(ta.length / 2));
+  r.setEnd(tb, Math.min(3, tb.length));
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(r);
+"""
+
+
+def _open_chapter(page, path):
+    page.goto(f"{BASE}/{path}")
+    page.wait_for_selector("article.chapter-text .verse")
+    page.wait_for_timeout(150)
+
+
+def test_partial_poetry_lines_cite_plain_verse_numbers(page):
+    """시편 23 의 1절 둘째 줄 ~ 3절 첫 줄 — 출처는 줄 글자 없는 「23:1-3」(장 본문의 원래 계약 — 9회차에서 「1b,1c,2,3a」로
+    바뀌었던 것을 되돌렸다)."""
+    _open_chapter(page, "ps/23")
+    text = _copy_text(page, _SELECT_LINES.replace("%A%", "1b").replace("%B%", "3a"))
+    assert text.endswith("— 시편 23:1-3 (공동번역성서)"), text[-80:]
+
+
+def test_boundary_touch_does_not_drag_in_next_verse(page):
+    """요한 3:16 전체를 고르되 범위 끝이 17절의 첫 글자 앞(offset 0)이면 17절은 들어가지 않는다 — 세 번 클릭의 꼴."""
+    _open_chapter(page, "john/3")
+    text = page.evaluate("""() => {
+      const article = document.querySelector('article.chapter-text');
+      const v16 = article.querySelector('.verse[data-vref="16"]');
+      const v17 = article.querySelector('.verse[data-vref="17"]');
+      const r = document.createRange();
+      r.setStartBefore(v16);
+      r.setStart(document.createTreeWalker(v16, NodeFilter.SHOW_TEXT).nextNode(), 0);
+      r.setEnd(document.createTreeWalker(v17, NodeFilter.SHOW_TEXT).nextNode(), 0);
+      const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+      const dt = new DataTransfer();
+      v16.dispatchEvent(new ClipboardEvent('copy', { bubbles: true, cancelable: true, clipboardData: dt }));
+      return dt.getData('text/plain');
+    }""")
+    assert text.endswith("— 요한의 복음서 3:16 (공동번역성서)"), text[-80:]
+
+
+def test_data_half_verses_collapse_to_whole_verse_numbers(page):
+    """이사 7:8-9 — 데이터가 반쪽 절(8a · 8b)이고 그 반쪽이 다시 두 줄이어도 출처는 「7:8-9」(9회차의 「8a,9a」 회귀)."""
+    _open_chapter(page, "isa/7")
+    vrefs = page.eval_on_selector_all("article.chapter-text .verse[data-vref]", "els => els.map(e => e.getAttribute('data-vref'))")
+    first8 = next(v for v in vrefs if v.startswith("8"))
+    last9 = [v for v in vrefs if v.startswith("9")][-1]
+    text = _copy_text(page, _SELECT_LINES.replace("%A%", first8).replace("%B%", last9))
+    assert text.endswith("— 이사야 7:8-9 (공동번역성서)"), text[-80:]
+
+
+def test_liturgical_psalter_copy_has_no_common_bible_suffix(page):
+    """전례시편은 기도서 번역이라 「(공동번역성서)」를 붙이지 않는다(ADR-037 §3)."""
+    _open_chapter(page, "lps/23")
+    vrefs = page.eval_on_selector_all("article.chapter-text .verse[data-vref]", "els => els.map(e => e.getAttribute('data-vref'))")
+    first2 = next(v for v in vrefs if v.startswith("2"))
+    text = _copy_text(page, _SELECT_LINES.replace("%A%", vrefs[0]).replace("%B%", first2))
+    assert "(공동번역성서)" not in text
+    assert "\n\n— 전례시편 23:1-2" in text

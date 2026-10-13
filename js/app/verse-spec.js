@@ -69,8 +69,9 @@ function collapseFullVerseRefs(refs, article) {
     const hasAlpha = allSpanRefs.some((r) => /[a-z]$/.test(r));
     const allSelected = allSpanRefs.length > 0 && allSpanRefs.every((r) => selected.has(r));
     if (hasAlpha && allSelected) {
-      // 반행 글자만 뗀다 — 병합 절 「7-8a」「7-8b」는 「7-8」이지 「7」이 아니다(끝 번호를 잃지 않게, Copilot 리뷰 9회차)
-      result.push(verseRefs[0].replace(/[a-z]$/, ""));
+      // 글자를 모두 뗀다 — 병합 절 「7-8a」「7-8b」는 「7-8」(끝 번호를 잃지 않게, Copilot 리뷰 9회차), 데이터의
+      // 반쪽 절이 다시 두 줄인 「8aa」…「8bb」는 「8」(줄 글자 하나만 떼면 「8a」가 됐다 — 자체 리뷰 2026-10-13)
+      result.push(verseRefs[0].replace(/[a-z]+$/, ""));
     } else {
       result.push(...verseRefs);
     }
@@ -282,9 +283,10 @@ function serializeVerseRange(firstNode, lastNode) {
   // Drop citation chips and the appended ※ variant-note markers entirely —
   // they are reading aids, not scripture text. Text-anchored `.note-anchor`
   // wraps real verse words, so it stays (its textContent flows through).
-  // Presentation-only markers opt out with `data-copy-omit` (lectionary 〔 〕 optional-verse brackets —
-  // aria-hidden and unselectable in the UI, so they must not leak into copied scripture either).
-  work.querySelectorAll(".cite-chip, .note-anchor--variant, [data-copy-omit]").forEach((n) => n.remove());
+  // Presentation-only markers that the UI makes unselectable must not leak into copied scripture
+  // either: opt-out `data-copy-omit` (lectionary 〔 〕 optional-verse brackets), the 부(部) heading
+  // 「(N)」 of a long liturgical psalm and the ※ parallel-passage anchor (self-review 2026-10-13).
+  work.querySelectorAll(".cite-chip, .note-anchor--variant, [data-copy-omit], .psalm-section, .parallel-anchor").forEach((n) => n.remove());
   work.querySelectorAll(".stanza-break, .paragraph-break, .pilcrow")
     .forEach((n) => { n.textContent = "\n\n"; });
   work.querySelectorAll(".hemistich-break").forEach((n) => { n.textContent = "\n"; });

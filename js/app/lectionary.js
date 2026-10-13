@@ -35,7 +35,7 @@
 /** @typedef {import("../types").BibleChapter} BibleChapter */
 
 import { loadChapter } from "./data-fetch.js";
-import { setTitle, appendVerses, buildSegmentTabs, bindCopyAttribution } from "./views.js";
+import { setTitle, appendVerses, buildSegmentTabs, bindCopyAttribution, formatVerseRanges } from "./views.js";
 import { specCoversVerse, verseInstanceKeys } from "./verse-spec.js";
 import {
   parseDate, toKey, addDays, dayOfWeek, liturgicalYearOf, optionalDestOf,
@@ -944,6 +944,8 @@ function trimHalfVerses(article, verseSpec) {
  */
 function buildReading(m, slot, chapters) {
   const section = el("section", { className: "lect-section lect-reading", "data-slot": slot.slot });
+  // 복사 출처(copyCitation)가 읽는 표지 — 전례시편 · 송가는 기도서 번역이라 「(공동번역성서)」를 붙이지 않는다(ADR-037 §1 · §3)
+  if (slot.bookId === "lps" || slot.bookId === "cant") section.setAttribute("data-liturgical", "");
   const head = el("div", { className: "lect-section-head" });
   head.appendChild(el("h3", { className: "lect-slot" }, SLOT_LABEL[slot.slot] || slot.slot));
   head.appendChild(el("span", { className: "lect-ref" }, slot.label || ""));
@@ -952,6 +954,8 @@ function buildReading(m, slot, chapters) {
   if (slot.bookId === "cant") {
     const title = canticleTitleOf(lastChapter);
     if (title && !(slot.label || "").includes(title)) head.appendChild(el("span", { className: "lect-canticle" }, title));
+    // 송가는 장 번호가 성서의 장이 아니다 — 출처는 송가 이름 + 고른 절(「즈가리야 송가 1-3」)
+    if (title) section.setAttribute("data-canticle", title);
   }
   // 괄호 선택 구절 세트에 합쳐진 슬롯 — 긴 본문을 싣고 짧은 본문이 어디까지인지 적는다.
   const shortRaw = m.shortGroup ? m.shortGroup.readings.find((r) => r && r.slot === slot.slot) || null : null;
@@ -977,33 +981,44 @@ function buildReading(m, slot, chapters) {
     if (shortSlot) markOptionalVerses(article, run.chapter, isOptional);
     section.appendChild(article);
   }
-  // 복사 출처 — 장 본문 · 북마크 복사 버튼과 같은 「— 책 장:절 (공동번역성서)」(Copilot 리뷰 6~9회차). 섹션에 한 번 묶어
-  // 장을 넘는 독서(시편 42, 43 — article 둘)의 선택도 한 본문으로 직렬화한다. 참조는 verse-spec.js 가 만든 **실제로 고른
-  // 절의 spec**(「1-2,11」 · 병합 절 「7-8,9」)이고, 장 경계에서는 앞 장의 **실제 마지막 절**(`data-chapter-last`)에서 끝나
-  // 다음 장의 1절에서 이어질 때만 「42:11-43:1」로 합친다 — 창세 6:9-22, 7:24 처럼 발췌가 장 끝에서 끊긴 것처럼 보여도
-  // 7:24 는 1절이 아니라 「6:22, 7:24」다. 송가(cant)는 장 번호가 성서의 장이 아니라 슬롯 라벨을 그대로 쓴다.
-  bindCopyAttribution(section, (runs) => {
-    const bookName = runs[0].article.getAttribute("data-book") || slot.bookId;
-    if (slot.bookId === "cant") return String(slot.label || bookName);
-    const chOf = (/** @type {{ article: HTMLElement }} */ r) => r.article.getAttribute("data-chapter") || "";
-    const lastOf = (/** @type {{ article: HTMLElement }} */ r) => Number(r.article.getAttribute("data-chapter-last"));
-    /** @type {string[]} */
-    const parts = [];   // 장마다 「42:9-11」 — 정말 이어지면 「42:9-43:3」으로 합친다
-    runs.forEach((r, i) => {
-      const prev = runs[i - 1];
-      const continues = !!prev && prev.atEnd && prev.lastNum === lastOf(prev) && r.atStart && r.firstNum === 1;
-      if (!continues) { parts.push(`${chOf(r)}:${r.spec}`); return; }
-      const pieces = parts[parts.length - 1].split(",");            // 「42:1-2,9-11」 → ["42:1-2", "9-11"]
-      const head = String(pieces.pop()).split("-")[0];              // 「9-11」 → 「9」 (「42:9-11」 이면 「42:9」)
-      const next = r.spec.split(",");                                // 「1-3,5」 → ["1-3", "5"]
-      const tail = String(next.shift()).split("-").pop();            // 「1-3」 → 「3」
-      pieces.push(`${head}-${chOf(r)}:${tail}`);
-      parts[parts.length - 1] = [...pieces, ...next].join(",");
-    });
-    return `${bookName} ${parts.join(", ")}`;
-  });
   if (wantsGloria(slot, lastChapter)) section.appendChild(buildGloria());
   return section;
+}
+
+/**
+ * 독서 섹션 하나의 복사 출처(`bindCopyAttribution` 의 citeOf — `commit` 이 뷰 루트에 한 번 묶는다). 고른 절을 장마다
+ * 연속 구간으로 적고, 앞 장이 **그 장의 실제 마지막 절**(`data-chapter-last`)에서 끝나 다음 장이 1절에서 이어질 때만
+ * 「42:11-43:1」로 합친다 — 창세 6:9-22, 7:24 · 지혜 18:14-16, 19:1-6 처럼 발췌가 끊긴 것은 「18:16, 19:1」. 송가는
+ * 「송가 이름 + 절」, 전례시편 · 송가에는 「(공동번역성서)」를 붙이지 않는다(자체 리뷰 2026-10-13).
+ * @param {HTMLElement} unit @param {Array<{ article: HTMLElement, ranges: Array<[number, number]>, firstNum: number, lastNum: number, atStart: boolean, atEnd: boolean }>} runs
+ */
+function copyCitation(unit, runs) {
+  const canticle = unit.getAttribute("data-canticle");
+  const liturgical = unit.hasAttribute("data-liturgical");
+  if (canticle) return `${canticle} ${formatVerseRanges(runs.flatMap((r) => r.ranges))}`;
+  const book = runs[0].article.getAttribute("data-book") || "";
+  /** @type {Array<{ ch: string, a: number, b: number, chEnd: string | null }>} */
+  const pieces = [];
+  runs.forEach((r, i) => {
+    const ch = r.article.getAttribute("data-chapter") || "";
+    const prevRun = runs[i - 1];
+    r.ranges.forEach(([a, b], j) => {
+      const prev = pieces[pieces.length - 1];
+      const continues = !!prevRun && j === 0 && !!prev && prevRun.atEnd && r.atStart && a === 1
+        && prev.b === Number(prevRun.article.getAttribute("data-chapter-last"));
+      if (continues && prev) { prev.b = b; prev.chEnd = ch; } else pieces.push({ ch, a, b, chEnd: null });
+    });
+  });
+  let out = "";
+  /** @type {string | null} */
+  let lastCh = null;
+  for (const p of pieces) {
+    const body = p.chEnd ? `${p.a}-${p.chEnd}:${p.b}` : p.a === p.b ? `${p.a}` : `${p.a}-${p.b}`;
+    out += (out ? ", " : "") + (p.ch !== lastCh ? `${p.ch}:` : "") + body;
+    lastCh = p.chEnd || p.ch;
+  }
+  const ref = `${book} ${out}`;
+  return liturgical ? ref : `${ref} (공동번역성서)`;
 }
 
 /**
@@ -1063,6 +1078,11 @@ function commit(m, chapters) {
     if (m.group.common) of.appendChild(el("span", { className: "lect-caption" }, ` — ${m.group.title} 공통 독서`));
     root.appendChild(of);
     for (const slot of m.slots) root.appendChild(buildReading(m, slot, chapters));
+    // 복사 — 루트에 한 번(섹션마다가 아니라): 여러 독서에 걸친 선택도 섹션마다 「본문 — 출처」로 다 싣는다. 본기도 · 카드 ·
+    // 헤더 글자까지 고르면 브라우저 기본 복사(고른 것을 빠뜨리지 않게 — 자체 리뷰 2026-10-13)
+    bindCopyAttribution(root, copyCitation, {
+      unitSelector: ".lect-reading", bailoutSelector: ".lect-head, .lect-chips, .lect-pair, .lect-controls, .lect-collects", strictRoot: true,
+    });
   } else {
     root.appendChild(emptyState({ icon: null, title: "독서 없음", subtitle: "이 관측일에는 독서가 없습니다 — 본기도만 있습니다." }));
   }

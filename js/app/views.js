@@ -1120,63 +1120,102 @@ function appendVerses(article, verses, opts = {}) {
 }
 
 /**
- * Copy handler shared by the chapter view and the lectionary view (lectionary.js —
- * Copilot review rounds 6~9): serialize the selection ourselves so that stanza breaks
- * become blank lines and the appended reference uses plain verse numbers (no
- * line-part letters like "1a" unless only that part was selected). Shared
- * serializer and citation spec live in verse-spec.js (VERSE_SERIALIZE block —
- * `serializeVerseRange` · `collapseFullVerseRefs` · `selectedVersesToSpec`), so this
- * path and the bookmark 복사 button emit identical text and identical citations.
- * Partial selections expand to full verse boundaries so a dragged-across fragment
- * still yields a complete citation. The selection may span several `<article>`s
- * under `root` (a lectionary reading that crosses a chapter — 시편 42, 43): the
- * verses are grouped per article into `runs` so the reference can name both
- * chapters, and the text is serialized as one passage from the first to the last.
- * The cited verses are the ones actually selected, exactly as the `data-vref`
- * values say — a lectionary excerpt that skips verses (「요나 2:1-2, 11」) is cited
- * with its gap, a merged verse keeps both endpoints (「7-8」), never 「2:1-11」.
- * @param {HTMLElement} root  holds the `.verse[data-vref]` nodes — a chapter article, or a reading section with one article per chapter
- * @param {(runs: Array<{ article: HTMLElement, spec: string, firstNum: number, lastNum: number, atStart: boolean, atEnd: boolean }>) => string} refOf
- *   per article, in document order: `spec` = the selected verses as a citation spec (「1-2,11」 · 「7-8,9」 · 「3b」),
- *   `firstNum`/`lastNum` = integer endpoints of the first/last selected verse, `atStart`/`atEnd` = whether the run
- *   touches the article's first/last numbered verse (so a caller can tell a passage that continues across chapters)
+ * Copy handler shared by the chapter view and the lectionary view: serialize the
+ * selection ourselves so that stanza breaks become blank lines, and append a plain
+ * verse-number reference (no line-part letters like "1a" — ADR-022 · the original
+ * chapter-view contract). Shared serializer: verse-spec.js `serializeVerseRange`.
+ *
+ * A verse counts only when the selection overlaps at least one character of it — a
+ * range that merely touches the next line's offset 0 (triple-click) or starts at the
+ * previous verse's end does not drag that verse in. Selected verses expand to whole
+ * rendered spans, as before.
+ *
+ * `root` may hold several citation units (`unitSelector` — the lectionary's reading
+ * sections), each possibly spanning several `<article>`s (a reading that crosses a
+ * chapter): every unit becomes its own block 「text — reference」, articles inside a
+ * unit are joined by a blank line, and blocks are joined by a blank line too. When
+ * the selection also covers other text (`bailoutSelector` — collects, cards, header),
+ * or leaves `root` with `strictRoot`, the browser's own copy runs instead so nothing
+ * the user selected is dropped (self-review 2026-10-13).
+ *
+ * Reference numbers are the verses actually selected — merged verses keep both ends
+ * (「7-8」), excerpt gaps stay gaps (「2, 14」) — as continuous integer runs.
+ * @param {HTMLElement} root
+ * @param {(unit: HTMLElement, runs: Array<{ article: HTMLElement, ranges: Array<[number, number]>, firstNum: number, lastNum: number, atStart: boolean, atEnd: boolean }>) => string} citeOf
+ *   the text after 「— 」 for one unit; `runs` = per article in document order — `ranges` the selected verse numbers
+ *   as continuous runs, `atStart`/`atEnd` whether the selection reached the article's first/last numbered verse
+ * @param {{ unitSelector?: string, bailoutSelector?: string, strictRoot?: boolean }} [opts]
  */
-function bindCopyAttribution(root, refOf) {
+function bindCopyAttribution(root, citeOf, opts = {}) {
   root.addEventListener("copy", (e) => {
     const sel = window.getSelection();
-    if (!sel || sel.isCollapsed) return;
+    if (!sel || sel.isCollapsed || !sel.rangeCount) return;
     const range = sel.getRangeAt(0);
-    /** @type {Array<{ article: HTMLElement, firstNode: Element, lastNode: Element, refs: string[] }>} */
-    const runs = [];
-    for (const v of root.querySelectorAll(".verse[data-vref]")) {
-      if (!range.intersectsNode(v)) continue;
-      const article = /** @type {HTMLElement} */ (v.closest("article") || root);
-      const ref = v.getAttribute("data-vref") || "";
-      const run = runs[runs.length - 1];
-      if (run && run.article === article) { run.lastNode = v; run.refs.push(ref); }
-      else runs.push({ article, firstNode: v, lastNode: v, refs: [ref] });
+    if (opts.strictRoot && !root.contains(range.commonAncestorContainer)) return;
+    if (opts.bailoutSelector && [...root.querySelectorAll(opts.bailoutSelector)].some((n) => overlapsText(range, n))) return;
+    const verses = [...root.querySelectorAll(".verse[data-vref]")].filter((v) => range.intersectsNode(v) && overlapsText(range, v));
+    if (!verses.length) return;
+    /** @type {Array<{ unit: HTMLElement, articles: Array<{ article: HTMLElement, spans: Element[] }> }>} */
+    const units = [];
+    for (const v of verses) {
+      const unit = /** @type {HTMLElement} */ ((opts.unitSelector && v.closest(opts.unitSelector)) || root);
+      const article = /** @type {HTMLElement} */ (v.closest("article") || unit);
+      let u = units[units.length - 1];
+      if (!u || u.unit !== unit) units.push(u = { unit, articles: [] });
+      let a = u.articles[u.articles.length - 1];
+      if (!a || a.article !== article) u.articles.push(a = { article, spans: [] });
+      a.spans.push(v);
     }
-    if (!runs.length) return;
-    const ints = (/** @type {string} */ ref) => (ref.match(/\d+/g) || []).map(Number);
-    const meta = runs.map((r) => {
-      const numbered = r.article.querySelectorAll(".verse[data-vref]");
-      const firstInts = ints(r.refs[0]), lastInts = ints(r.refs[r.refs.length - 1]);
-      return {
-        article: r.article,
-        spec: window.selectedVersesToSpec(window.collapseFullVerseRefs(r.refs, r.article)),
-        firstNum: firstInts.length ? Math.min(...firstInts) : NaN,
-        lastNum: lastInts.length ? Math.max(...lastInts) : NaN,
-        atStart: numbered[0] === r.firstNode,
-        atEnd: numbered[numbered.length - 1] === r.lastNode,
-      };
+    const blocks = units.map(({ unit, articles }) => {
+      const runs = articles.map(({ article, spans }) => {
+        const nums = [...new Set(spans.flatMap(vrefNumbers))].sort((x, y) => x - y);
+        const numbered = article.querySelectorAll(".verse[data-vref]");
+        return {
+          article, ranges: numberRuns(nums), firstNum: nums[0], lastNum: nums[nums.length - 1],
+          atStart: numbered[0] === spans[0], atEnd: numbered[numbered.length - 1] === spans[spans.length - 1],
+        };
+      });
+      const text = articles.map(({ spans }) => window.serializeVerseRange(spans[0], spans[spans.length - 1])).join("\n\n");
+      return `${text}\n\n— ${citeOf(unit, runs)}`;
     });
-    if (meta.some((m) => !Number.isFinite(m.firstNum) || !Number.isFinite(m.lastNum))) return;
-
-    const plainText = window.serializeVerseRange(runs[0].firstNode, runs[runs.length - 1].lastNode);
     if (!e.clipboardData) return;
-    e.clipboardData.setData("text/plain", `${plainText}\n\n— ${refOf(meta)} (공동번역성서)`);
+    e.clipboardData.setData("text/plain", blocks.join("\n\n"));
     e.preventDefault();
   });
+}
+
+/** 선택이 그 노드의 글자(공백 · U+2060 제외)와 한 글자 이상 겹치나 — 경계에 닿기만 한 것은 아니다. */
+function overlapsText(/** @type {Range} */ range, /** @type {Node} */ node) {
+  const r = document.createRange();
+  r.selectNodeContents(node);
+  if (range.compareBoundaryPoints(Range.START_TO_START, r) > 0) r.setStart(range.startContainer, range.startOffset);
+  if (range.compareBoundaryPoints(Range.END_TO_END, r) < 0) r.setEnd(range.endContainer, range.endOffset);
+  return /[^\s\u2060]/.test(r.toString());
+}
+
+/** `data-vref` 의 절 번호들 — 「7-8a」 → [7, 8] · 「11b」 → [11] · 「3」 → [3]. @param {Element} v @returns {number[]} */
+function vrefNumbers(v) {
+  const m = /^(\d+)(?:-(\d+))?/.exec(v.getAttribute("data-vref") || "");
+  if (!m) return [];
+  const a = Number(m[1]), b = m[2] ? Number(m[2]) : a;
+  return Array.from({ length: Math.max(0, b - a) + 1 }, (_, i) => a + i);
+}
+
+/** 정렬된 번호 → 연속 구간. @param {number[]} nums @returns {Array<[number, number]>} */
+function numberRuns(nums) {
+  /** @type {Array<[number, number]>} */
+  const out = [];
+  for (const n of nums) {
+    const last = out[out.length - 1];
+    if (last && n === last[1] + 1) last[1] = n;
+    else if (!last || n > last[1]) out.push([n, n]);
+  }
+  return out;
+}
+
+/** 구간 → 「1-3, 5」. @param {Array<[number, number]>} ranges */
+function formatVerseRanges(ranges) {
+  return ranges.map(([a, b]) => (a === b ? `${a}` : `${a}-${b}`)).join(", ");
 }
 
 function renderChapter(data, book, opts) {
@@ -1472,8 +1511,12 @@ function renderChapter(data, book, opts) {
     cancelLongPress(e);
   });
 
-  // one article — one chapter; the citation spec is the same one the bookmark 복사 button emits
-  bindCopyAttribution(article, (runs) => `${book.name_ko} ${ch}:${runs[0].spec}`);
+  // one article — one chapter. The liturgical books (전례시편 · 송가) are the prayer-book translation, not 공동번역
+  // (ADR-037 §1 · §3), so they carry no 「(공동번역성서)」 (self-review 2026-10-13).
+  bindCopyAttribution(article, (_unit, runs) => {
+    const ref = `${book.name_ko} ${ch}:${formatVerseRanges(runs[0].ranges)}`;
+    return book.division === "liturgical" ? ref : `${ref} (공동번역성서)`;
+  });
 
   $app.appendChild(article);
   $app.appendChild(buildChapterNav(book, ch));
@@ -1582,7 +1625,7 @@ window.renderError = renderError;
 // is the view-renderer entry points routing.js imports (route() dispatch).
 export {
   setTitle, setTitleWithChapterPicker,
-  buildDivisionTabs, buildSegmentTabs, bindCopyAttribution, divisionLabels, divisionOrder, effectiveDivision,
+  buildDivisionTabs, buildSegmentTabs, bindCopyAttribution, formatVerseRanges, divisionLabels, divisionOrder, effectiveDivision,
   initCompactHeader, initScrollElevation,
   _verseSelectionUnit, _verseRangeVrefs,
   DIVISION_LABELS,
