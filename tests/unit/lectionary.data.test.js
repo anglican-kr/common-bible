@@ -310,13 +310,11 @@ test("A3 송가 — 즈가리야 송가는 영광송을 붙이고 창조송가(g
 // 원료 기사의 수집 태그 누락(pitfalls §18 의 재의 수요일 후 금요일과 같은 종류). data#30 이 채웠고 이 전수
 // 검사가 그것을 지킨다 — 다시 빈 칸이 생기면 「독서 없음」으로 멈춘다.
 // 격자(그날의 주일 · 평일) 후보의 독서 결손 — 초기 선택만 보면 공통 독서가 초기인 날(2026-06-27 키릴)의 빈 격자를 놓친다
-// (자체 리뷰 2026-10-13). 성탄절기 평일은 날짜 본문(12.29~1.5)이 따로이고, 이동 축일(재의 수요일 · 성주간 · 부활 ·
-// 성령강림 · 왕이신 그리스도 …)이 있는 날은 그 temporal 후보가 독서를 들고 있어 격자가 비는 것이 정상이다. 알려진 결손은 표로 두고,
-// 데이터가 채워지면 이 표가 「채워졌다」로 멈춰 지우게 한다.
-const KNOWN_GRID_GAPS = new Set(["ordinary-12-sat-II"]);   // 연중 12주 토요일 짝수해 — 데이터 저장소 후속
+// (자체 리뷰 2026-10-13 — 그렇게 찾은 연중 12주 토요일 짝수해는 사용자가 기사를 찾아 주어 data#31 이 채웠다). 성탄절기 평일은
+// 날짜 본문(12.29~1.5)이 따로이고, 이동 축일(재의 수요일 · 성주간 · 부활 · 성령강림 · 왕이신 그리스도 …)이 있는 날은 그 temporal
+// 후보가 독서를 들고 있어 격자가 비는 것이 정상이다. 알려진 결손 표는 두지 않는다 — 빈 칸이 생기면 곧바로 멈춘다.
 test("A3 2025~2027 모든 날 — 모델이 서고, 초기 선택에 복음까지 있는 독서가 있고, 칩 href 가 그 칩의 상태로 돌아오며, 격자 독서가 비지 않는다", { skip: SKIP }, () => {
   const bad = [];
-  const seenGaps = new Set();
   for (const y of [2025, 2026, 2027]) {
     let d = ctx.toKey(y, 1, 1);
     while (d.slice(0, 4) === String(y)) {
@@ -335,9 +333,7 @@ test("A3 2025~2027 모든 날 — 모델이 서고, 초기 선택에 복음까�
         const key = `${co.season}-${co.week}-${co.weekday || co.type}-${co.year}`;
         const readsOf = (/** @type {any} */ c) => ctx.findReadingsIn(ix().lec, ix().cal, m.resolved, c).length > 0;
         const temporalOwns = m.resolved.candidates.some((c) => c !== grid && c.observance.kind === "temporal" && readsOf(c));
-        const empty = !temporalOwns && !readsOf(grid);
-        if (empty && KNOWN_GRID_GAPS.has(key)) seenGaps.add(key);
-        else if (empty) bad.push(`${d} 격자 독서 없음(${key})`);
+        if (!temporalOwns && !readsOf(grid)) bad.push(`${d} 격자 독서 없음(${key})`);
       }
       if (!m.chips.some((c) => c.active)) bad.push(`${d} 활성 칩 없음`);
       if (!m.colors.length) bad.push(`${d} 색 없음`);
@@ -346,7 +342,6 @@ test("A3 2025~2027 모든 날 — 모델이 서고, 초기 선택에 복음까�
     }
   }
   same(bad, []);
-  same([...KNOWN_GRID_GAPS].filter((k) => !seenGaps.has(k)), [], "알려진 격자 결손이 채워졌다 — KNOWN_GRID_GAPS 에서 지울 것");
 });
 
 test("A3 데이터 전수 — 괄호 선택 구절 세트는 모두 바탕에 합쳐지고, 「또는」 대안과 트랙이 한 좌표에 겹치지 않는다(pitfalls §21 실측의 지킴이 — 자체 리뷰 2026-10-13)", { skip: SKIP }, () => {
