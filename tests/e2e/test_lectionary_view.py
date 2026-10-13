@@ -389,6 +389,36 @@ def test_copy_keeps_both_endpoints_of_a_merged_verse(desktop_context):
     assert text.endswith(f"— 전례시편 29:7-8,{b} (공동번역성서)"), text   # 반행 둘을 다 골랐으니 「7-8」로 접힌다 — 「7」이 아니다
 
 
+_LECT_COPY_OPTIONAL = """
+async () => {
+  const section = document.querySelector(".lect-reading:has(.lect-bracket)");
+  const verses = [...section.querySelectorAll('.verse[data-vref]')];
+  const i = verses.findIndex(v => v.classList.contains('lect-optional'));
+  const a = verses[Math.max(0, i - 1)], b = verses[i];   // 선택 구절 바로 앞 절부터 선택 구절까지
+  const t1 = document.createTreeWalker(a, NodeFilter.SHOW_TEXT).nextNode();
+  const r = document.createRange();
+  r.setStart(t1, Math.floor(t1.length / 2));
+  r.setEndAfter(b);
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(r);
+  const dt = new DataTransfer();
+  a.dispatchEvent(new ClipboardEvent('copy', { bubbles: true, cancelable: true, clipboardData: dt }));
+  return [dt.getData('text/plain'), b.querySelector('.lect-bracket') ? 1 : 0];
+}
+"""
+
+
+def test_copy_excludes_optional_verse_brackets(desktop_context):
+    """괄호 선택 구절의 〔 〕는 표시 전용(aria-hidden · 선택 불가)이라 복사 본문에도 들어가지 않는다(Copilot 10회차)."""
+    page = desktop_context.new_page()
+    _open(page, "lectionary/2026-06-14")
+    text, has_bracket = page.evaluate(_LECT_COPY_OPTIONAL)
+    assert has_bracket == 1   # 고른 선택 구절에 표지가 붙어 있어야 검사가 뜻이 있다
+    assert "〔" not in text and "〕" not in text, text
+    assert "(공동번역성서)" in text
+
+
 def test_verse_ids_are_unique_across_slots_and_chapters(desktop_context):
     """한 화면에 슬롯 넷 · 장 여럿이 있어도 절 id 가 겹치지 않는다 — 슬롯 · 책 · 장 접두(Copilot 7회차)."""
     page = desktop_context.new_page()

@@ -156,6 +156,10 @@ test("parsePath: lectionary 쿼리 값은 통째로 양의 정수여야 한다 �
   assert.deepEqual([r.track, r.set, r.collect], [null, null, null]);
   assert.equal(parse("/lectionary/2026-04-05", "?set=02").set, null);
   assert.equal(parse("/lectionary/2026-04-05", "?set=12").set, 12);
+  // 자릿수가 넘치면 Number 가 Infinity · 근사 정수가 된다 — 안전 정수가 아니면 null(Copilot 10회차)
+  assert.equal(parse("/lectionary/2026-04-05", "?set=" + "9".repeat(400)).set, null);
+  assert.equal(parse("/lectionary/2026-04-05", "?collect=9007199254740993").collect, null);
+  assert.equal(parse("/lectionary/2026-04-05", "?collect=9007199254740991").collect, 9007199254740991);
 });
 
 test("parsePath: 깨진 퍼센트 이스케이프는 throw 하지 않고 원문을 date 로 넘긴다 — 뷰가 「잘못된 날짜」로 거부(Copilot 3회차)", () => {

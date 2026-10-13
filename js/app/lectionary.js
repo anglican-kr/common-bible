@@ -845,8 +845,9 @@ function markOptionalVerses(article, chapter, isOptional) {
   spans.forEach((span, i) => {
     if (!optAt(i)) return;
     span.classList.add("lect-optional");
-    if (i === 0 || !optAt(i - 1)) span.insertBefore(el("span", { className: "lect-bracket", "aria-hidden": "true" }, "〔"), span.firstChild);
-    if (i === spans.length - 1 || !optAt(i + 1)) span.appendChild(el("span", { className: "lect-bracket", "aria-hidden": "true" }, "〕"));
+    // 표시 전용 — aria-hidden · user-select: none 에 더해 복사 본문에서도 뺀다(`data-copy-omit`, verse-spec.js 직렬화 — Copilot 리뷰 10회차)
+    if (i === 0 || !optAt(i - 1)) span.insertBefore(el("span", { className: "lect-bracket", "aria-hidden": "true", "data-copy-omit": "" }, "〔"), span.firstChild);
+    if (i === spans.length - 1 || !optAt(i + 1)) span.appendChild(el("span", { className: "lect-bracket", "aria-hidden": "true", "data-copy-omit": "" }, "〕"));
   });
 }
 

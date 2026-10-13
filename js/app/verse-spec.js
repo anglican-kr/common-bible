@@ -282,7 +282,9 @@ function serializeVerseRange(firstNode, lastNode) {
   // Drop citation chips and the appended ※ variant-note markers entirely —
   // they are reading aids, not scripture text. Text-anchored `.note-anchor`
   // wraps real verse words, so it stays (its textContent flows through).
-  work.querySelectorAll(".cite-chip, .note-anchor--variant").forEach((n) => n.remove());
+  // Presentation-only markers opt out with `data-copy-omit` (lectionary 〔 〕 optional-verse brackets —
+  // aria-hidden and unselectable in the UI, so they must not leak into copied scripture either).
+  work.querySelectorAll(".cite-chip, .note-anchor--variant, [data-copy-omit]").forEach((n) => n.remove());
   work.querySelectorAll(".stanza-break, .paragraph-break, .pilcrow")
     .forEach((n) => { n.textContent = "\n\n"; });
   work.querySelectorAll(".hemistich-break").forEach((n) => { n.textContent = "\n"; });

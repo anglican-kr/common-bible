@@ -133,7 +133,9 @@ function parsePath() {
     /** @param {string} k */
     const positive = (k) => {
       const v = query.get(k) ?? "";
-      return /^[1-9]\d*$/.test(v) ? Number(v) : null;
+      if (!/^[1-9]\d*$/.test(v)) return null;
+      const n = Number(v);
+      return Number.isSafeInteger(n) ? n : null;   // 자릿수가 넘쳐 Infinity · 근사값이 되는 것도 계약 밖(Copilot 리뷰 10회차)
     };
     const track = positive("track");
     // 깨진 퍼센트 이스케이프(`%E0%A4%A`)는 decodeURIComponent 가 throw 한다 — parsePath 는 route() 의 try 밖에서
