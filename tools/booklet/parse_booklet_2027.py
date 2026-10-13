@@ -5,7 +5,7 @@
 2027 책자(검토용)의 꼴에 맞춘 파서다 — 월별 표(감사성찬례 · 아침기도 · 저녁기도 세 칸)가 행 단위로 섞여 나오고,
 날짜 줄은 「다음에 올 날짜 + 요일 글자」로 검증한다(요일 글자만 있는 줄도). 색은 글리프(֣ 녹 · ߔ 백 · ੗ 자 · ഘ 홍),
 성탄 독서 셋은 12/26 행 뒤에 찍히며, 「또는」은 줄 끝에도 오고 「또\n는」 「요\n한」처럼 낱말이 쪼개지기도 한다.
-책 이름 뒤에 숫자가 와야 독서 줄이다(「사도 안드레아」 「성모 방문」은 이름). 다른 해의 책자는 꼴이 다르므로 이 파서를
+쪼개진 낱말은 `rejoin_splits` 가 분류 전에 붙인다. 책 이름 뒤에 숫자가 와야 독서 줄이다(「사도 안드레아」 「성모 방문」은 이름). 다른 해의 책자는 꼴이 다르므로 이 파서를
 그대로 쓰지 말고 START · 꼴 판정을 고쳐 쓴다(2024~2026 책자는 「[백]」 꼴 색 표지에 펼침면 순서가 섞인다)."""
 import re, json, sys, datetime as dt
 SRC, BOOKS_JSON, DST, READINGS_JSON = sys.argv[1:5]
@@ -73,6 +73,20 @@ def is_book_line(l):
     if CANTICLE.match(l): return True
     t = first_token(l)
     return t in BOOKS and re.match(r"^\d?[가-힣]+\s+[\d(\[]", l) is not None
+def rejoin_splits(lines):
+    """pypdf 가 낱말 가운데서 줄을 바꾼 꼴을 분류 전에 붙인다 — 「루가 24:13-35 또는 요」+「한 20:19-23」, 「… 12-22 또」+「는 창세 22:1-14」,
+    「요」+「한 1:1-18」. 앞줄 끝의 한글 조각과 다음 줄 첫 토큰을 이으면 책 이름(또는 「또는」)이 될 때만 공백 없이 잇는다."""
+    out, i = [], 0
+    while i < len(lines):
+        cur = lines[i]
+        if i + 1 < len(lines):
+            m1 = re.search(r"([가-힣]{1,2})$", cur)
+            m2 = re.match(r"^([가-힣]{1,2})(\s+\d|\s+[가-힣]+\s+\d)", lines[i + 1])
+            if m1 and m2 and (m1.group(1) + m2.group(1) in BOOKS or m1.group(1) + m2.group(1) == "또는"):
+                out.append(cur + lines[i + 1]); i += 2; continue
+        out.append(cur); i += 1
+    return out
+
 def process(b):
     colors = set(GLYPH[c] for c in b["glyphs"])
     tokens = []      # (kind, text) — kind ∈ ref · name · note
@@ -80,7 +94,7 @@ def process(b):
     no_euch = False
     page_names = []
     after_footer = False
-    for l in b["lines"]:
+    for l in rejoin_splits(b["lines"]):
         if l == "<<FOOTER>>":
             after_footer = True; continue
         colors |= {GLYPH[c] for c in l if c in GLYPH}

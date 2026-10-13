@@ -1316,15 +1316,25 @@ function movesOnConflict(o) {
 }
 
 /**
- * 도착(옮겨 온 축일)에 밀린 고유 축일이 연쇄로 옮겨지는가(→ R-6.2-chain-scope). 사도 · 복음사가와 성탄 8일의
- * 순교 축일(스테파노 · 죄 없는 어린이들)만 연쇄한다 — 그 밖의 성인 축일은 옮기지 않고 그날 기념한다(사용자
- * 확정 2026-10-13 — 2027 책자 7.26: 야고보가 7.25 주일에서 오자 안나와 요아킴은 그 자리에 이름만, 독서는
- * 야고보). temporal 축일은 도착에 밀릴 수 없어(prec 1 · 2) 종전대로 둔다.
+ * 도착(옮겨 온 축일)에 밀린 고유 축일이 연쇄로 옮겨지는가(→ R-6.2-chain-scope). 사도 · 복음사가와 **성탄 8일**
+ * (12.25 ~ 1.1)의 순교 축일(스테파노 · 죄 없는 어린이들)만 연쇄한다 — 그 밖의 성인 축일(안나와 요아킴 · 성탄
+ * 8일 밖의 순교 축일)은 옮기지 않고 그날 기념한다(사용자 확정 2026-10-13 — 2027 책자 7.26: 야고보가 7.25
+ * 주일에서 오자 안나와 요아킴은 그 자리에 이름만, 독서는 야고보). temporal 축일은 도착에 밀릴 수 없어(prec 1 · 2)
+ * 종전대로 둔다.
  * @param {Observance} o
  */
 function chainsOnArrival(o) {
   if (o.kind !== "sanctoral") return true;
-  return o.sanctoral_class === "apostle" || o.sanctoral_class === "evangelist" || o.sanctoral_class === "martyr";
+  if (o.sanctoral_class === "apostle" || o.sanctoral_class === "evangelist") return true;
+  return o.sanctoral_class === "martyr" && inChristmasOctaveDate(o.date);
+}
+
+/**
+ * 고정 날짜(`MM.DD`)가 성탄 8일(12.25 ~ 1.1)에 드는가 — 연도와 무관한 달력 날짜라 `spansOf` 를 쓰지 않는다.
+ * @param {string | null | undefined} md
+ */
+function inChristmasOctaveDate(md) {
+  return typeof md === "string" && ((md >= "12.25" && md <= "12.31") || md === "01.01");
 }
 
 /**

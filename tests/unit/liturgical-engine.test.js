@@ -1570,19 +1570,31 @@ test("C-6.5-19 보호 기간 목적지 — 성주간 · 부활 8일 안에서 �
   same(fate(t.at("2026-04-02"), "d0402-thu"), ["transferred_out", "t-thu"]);
 });
 
-test("C-6.5-20 연쇄 범위 — 도착에 밀린 고유 축일은 사도 · 복음사가 · 순교 축일만 옮기고, 그 밖의 성인 축일은 그날 기념한다(→ R-6.2-chain-scope)", () => {
+/** 이틀 연속 대축일(가변 — 2026-12-26 · 12-27 = E+265 · E+266) — 성탄 8일 안에서 밀린 축일이 12.28 을 노린다. */
+const DEC_WALLS = [
+  TMP("t-wall-d1", "합성 가변 대축일 12.26", { kind: "easter_offset", days: 265 }, { season: "christmas", type: "feast" }),
+  TMP("t-wall-d2", "합성 가변 대축일 12.27", { kind: "easter_offset", days: 266 }, { season: "christmas", type: "feast" }),
+];
+
+test("C-6.5-20 연쇄 범위 — 도착에 밀린 고유 축일은 사도 · 복음사가 · 성탄 8일의 순교 축일만 옮기고, 그 밖의 성인 · 순교 축일은 그날 기념한다(→ R-6.2-chain-scope)", () => {
   // 6.15 의 A(사도)가 wall-1(6.15) · wall-2(6.16)를 건너 6.17 에 도착한다 — 6.17 의 고유 축일 S 가 밀린다
   const run = (cls) => passEngine(passTables([MOV("d0615-a", "06.15", { sanctoral_class: "apostle" }), MOV("d0617-s", "06.17", { sanctoral_class: cls })], TWO_WALLS));
-  const saint = run("saint");
-  same(seats(saint.pass(2026).arrivals), { "2026-06-17": ["d0615-a<-2026-06-15"] });   // S 는 옮기지 않는다
-  same(seats(saint.pass(2026).departures), { "2026-06-15": ["d0615-a->2026-06-17"] });
-  same(fate(saint.at("2026-06-17"), "d0617-s"), ["commemorated", "d0615-a"]);
-  assert.strictEqual(officialId(saint.at("2026-06-17")), "d0615-a");
-  for (const cls of ["apostle", "evangelist", "martyr"]) {   // 연쇄 대상은 하루 더 밀린다(→ R-6.2-chain-model)
+  for (const cls of ["saint", "martyr", "lord", null]) {   // 성탄 8일 밖의 순교 축일도 기념이다
+    const t = run(cls);
+    same(seats(t.pass(2026).arrivals), { "2026-06-17": ["d0615-a<-2026-06-15"] }, String(cls));   // S 는 옮기지 않는다
+    same(seats(t.pass(2026).departures), { "2026-06-15": ["d0615-a->2026-06-17"] }, String(cls));
+    same(fate(t.at("2026-06-17"), "d0617-s"), ["commemorated", "d0615-a"], String(cls));
+    assert.strictEqual(officialId(t.at("2026-06-17")), "d0615-a", String(cls));
+  }
+  for (const cls of ["apostle", "evangelist"]) {   // 연쇄 대상은 하루 더 밀린다(→ R-6.2-chain-model)
     const t = run(cls);
     same(seats(t.pass(2026).arrivals), { "2026-06-17": ["d0615-a<-2026-06-15"], "2026-06-18": ["d0617-s<-2026-06-17"] }, cls);
     same(fate(t.at("2026-06-18"), "d0617-s"), ["transferred_in", "d0615-a"], cls);
   }
+  // 성탄 8일의 순교 축일은 연쇄한다 — 12.26 의 A(사도)가 wall(12.26 · 12.27)을 건너 12.28 에 도착하면 그날의 순교 축일 S 가 12.29 로
+  const xmas = passEngine(passTables([MOV("d1226-a", "12.26", { sanctoral_class: "apostle" }), MOV("d1228-s", "12.28", { sanctoral_class: "martyr" })], DEC_WALLS));
+  same(seats(xmas.pass(2026).arrivals), { "2026-12-28": ["d1226-a<-2026-12-26"], "2026-12-29": ["d1228-s<-2026-12-28"] });
+  same(fate(xmas.at("2026-12-29"), "d1228-s"), ["transferred_in", "d1226-a"]);
 });
 
 test("C-6.5-9 도착끼리 기원 순 — 같은 품계면 기원 날짜가 이른 쪽이 먼저 앉는다(id 순이 아니다)", () => {
