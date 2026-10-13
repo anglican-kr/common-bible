@@ -1,5 +1,5 @@
 ---
-pr: TBD
+pr: 347
 date: 2026-10-13
 branch: feat/liturgical-engine-booklet-2027
 title: "feat: 교회력 엔진 — 2027 책자 대조: 보호 기간 목적지 · 연쇄 범위 (R-6.3-guard-destination · R-6.2-chain-scope) + tools/booklet"
