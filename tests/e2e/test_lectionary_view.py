@@ -287,8 +287,8 @@ def test_copy_across_chapters_is_one_passage(desktop_context):
     page = desktop_context.new_page()
     _open(page, "lectionary/2025-06-22")
     text, a, b, head, tail = page.evaluate(_LECT_COPY_CROSS)
-    a, b = re.match(r"\d+", a).group(), re.match(r"\d+", b).group()   # data-vref 「11b」 → 절 번호 11(반행 글자는 참조에 안 쓴다)
-    assert re.search(rf"\n\n— 전례시편 42:{a}-43:{b} \(공동번역성서\)$", text), text
+    # 42편의 실제 마지막 절(11)에서 끝나 43편 1절로 이어지므로 합쳐 적는다 — 고른 반행 글자(「11b」 「1a」)는 북마크 복사 버튼처럼 그대로
+    assert text.endswith(f"\n\n— 전례시편 42:{a}-43:{b} (공동번역성서)"), text
     assert head.lstrip("0123456789 ") [:3] in text and tail in text   # 두 장의 본문이 다 들어 있다
 
 
@@ -309,7 +309,7 @@ async () => {
   const dt = new DataTransfer();
   const ev = new ClipboardEvent('copy', { bubbles: true, cancelable: true, clipboardData: dt });
   a.dispatchEvent(ev);
-  return [dt.getData('text/plain'), b.getAttribute('data-vref')];
+  return [dt.getData('text/plain'), a.getAttribute('data-vref'), b.getAttribute('data-vref')];
 }
 """
 
@@ -320,9 +320,73 @@ def test_copy_cites_only_selected_verses_across_a_gap(desktop_context):
     import re
     page = desktop_context.new_page()
     _open(page, "lectionary/2026-04-05")
-    text, b = page.evaluate(_LECT_COPY_GAP)
+    text, a, b = page.evaluate(_LECT_COPY_GAP)
     assert re.match(r"14", b), b   # 2절 다음에 그려진 절이 14절이어야 검사가 뜻이 있다
-    assert text.endswith("— 전례시편 118:2, 14 (공동번역성서)"), text
+    assert text.endswith(f"— 전례시편 118:{a},{b} (공동번역성서)"), text   # 북마크 복사 버튼과 같은 spec 꼴(쉼표, 반행 글자 유지)
+
+
+_LECT_COPY_EDGE = """
+async (slot) => {
+  const section = document.querySelector(`.lect-reading[data-slot='${slot}']`);
+  const articles = section.querySelectorAll('article.chapter-text');
+  const v1s = articles[0].querySelectorAll('.verse[data-vref]');
+  const v2s = articles[1].querySelectorAll('.verse[data-vref]');
+  const a = v1s[v1s.length - 1], b = v2s[0];
+  const t1 = document.createTreeWalker(a, NodeFilter.SHOW_TEXT).nextNode();
+  const t2 = document.createTreeWalker(b, NodeFilter.SHOW_TEXT).nextNode();
+  const r = document.createRange();
+  r.setStart(t1, Math.floor(t1.length / 2));
+  r.setEnd(t2, Math.min(5, t2.length));
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(r);
+  const dt = new DataTransfer();
+  a.dispatchEvent(new ClipboardEvent('copy', { bubbles: true, cancelable: true, clipboardData: dt }));
+  return [dt.getData('text/plain'), a.getAttribute('data-vref'), b.getAttribute('data-vref'), articles[0].getAttribute('data-chapter-last')];
+}
+"""
+
+
+def test_copy_does_not_merge_chapters_when_excerpt_stops_short(desktop_context):
+    """연중 32주 토 홀수해(2027-11-13) 지혜 18:14-16, 19:1-6 — 18장은 25절까지 있어 16절에서 끝난 발췌는 19:1 과 이어지지 않는다:
+    「18:16,19:1」이지 「18:16-19:1」이 아니다(Copilot 9회차)."""
+    page = desktop_context.new_page()
+    _open(page, "lectionary/2027-11-13")
+    text, a, b, last = page.evaluate(_LECT_COPY_EDGE, "first")
+    assert int(last) > int(a.rstrip("ab")), (a, last)   # 발췌가 장 끝보다 먼저 끝난다
+    assert text.endswith(f"— 지혜서 18:{a}, 19:{b} (공동번역성서)"), text
+
+
+_LECT_COPY_MERGED = """
+async () => {
+  const section = document.querySelector(".lect-reading[data-slot='psalm']");
+  const verses = [...section.querySelectorAll('.verse[data-vref]')];
+  const i = verses.findIndex(v => v.getAttribute('data-vref').includes('-'));
+  const n = parseInt(verses[i].getAttribute('data-vref'), 10);
+  const j = verses.findIndex((v, k) => k > i && parseInt(v.getAttribute('data-vref'), 10) !== n);   // 병합 절의 반행(7-8a · 7-8b) 다음 절
+  const a = verses[i], b = verses[j];
+  const t1 = document.createTreeWalker(a, NodeFilter.SHOW_TEXT).nextNode();
+  const t2 = document.createTreeWalker(b, NodeFilter.SHOW_TEXT).nextNode();
+  const r = document.createRange();
+  r.setStart(t1, Math.floor(t1.length / 2));
+  r.setEnd(t2, Math.min(5, t2.length));
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(r);
+  const dt = new DataTransfer();
+  a.dispatchEvent(new ClipboardEvent('copy', { bubbles: true, cancelable: true, clipboardData: dt }));
+  return [dt.getData('text/plain'), a.getAttribute('data-vref'), b.getAttribute('data-vref')];
+}
+"""
+
+
+def test_copy_keeps_both_endpoints_of_a_merged_verse(desktop_context):
+    """주님의 세례 주일(2026-01-11) 시편 29 — 병합 절 「7-8」과 9절을 걸쳐 복사하면 「29:7-8,9」(7만 남기지 않는다)(Copilot 9회차)."""
+    page = desktop_context.new_page()
+    _open(page, "lectionary/2026-01-11")
+    text, a, b = page.evaluate(_LECT_COPY_MERGED)
+    assert a.startswith("7-8"), a   # 병합 절의 첫 반행(「7-8a」)
+    assert text.endswith(f"— 전례시편 29:7-8,{b} (공동번역성서)"), text   # 반행 둘을 다 골랐으니 「7-8」로 접힌다 — 「7」이 아니다
 
 
 def test_verse_ids_are_unique_across_slots_and_chapters(desktop_context):

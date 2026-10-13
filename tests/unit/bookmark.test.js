@@ -471,6 +471,14 @@ test('collapseFullVerseRefs: only some parts selected → original refs kept', (
   assert.deepEqual(h.collapseFullVerseRefs(["3a"], article), ["3a"]);
 });
 
+test('collapseFullVerseRefs: 병합 절(「7-8a」「7-8b」)을 다 고르면 「7-8」 — 끝 번호를 잃지 않는다(Copilot 9회차)', () => {
+  const h = loadVerseSpec();
+  const article = makeStubArticle(["6", "7-8a", "7-8b", "9"]);
+  assert.deepEqual(h.collapseFullVerseRefs(["7-8a", "7-8b"], article), ["7-8"]);
+  assert.deepEqual(h.collapseFullVerseRefs(["7-8a"], article), ["7-8a"]);   // 반만 골랐으면 그대로
+  assert.equal(h.selectedVersesToSpec(["7-8", "9"]), "7-8,9");             // 병합 구간은 제 모양대로, 다음 절은 쉼표
+});
+
 test('collapseFullVerseRefs: single-part verse (no alpha) unchanged', () => {
   const h = loadVerseSpec();
   // Article reports "3" with no alpha — `hasAlpha` is false, skip collapse

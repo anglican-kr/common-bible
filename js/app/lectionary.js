@@ -35,7 +35,7 @@
 /** @typedef {import("../types").BibleChapter} BibleChapter */
 
 import { loadChapter } from "./data-fetch.js";
-import { setTitle, appendVerses, buildSegmentTabs, bindCopyAttribution, formatVerseRanges } from "./views.js";
+import { setTitle, appendVerses, buildSegmentTabs, bindCopyAttribution } from "./views.js";
 import { specCoversVerse, verseInstanceKeys } from "./verse-spec.js";
 import {
   parseDate, toKey, addDays, dayOfWeek, liturgicalYearOf, optionalDestOf,
@@ -878,39 +878,39 @@ function buildReading(m, slot, chapters) {
       continue;
     }
     if (!run.verses.length) continue;
-    const article = el("article", { className: "chapter-text", lang: "ko", "data-chapter": String(run.chapter), "data-book": run.data.book_name_ko || slot.bookId });
+    // `data-chapter-last` = 그 장의 실제 마지막 절(병합 절은 끝 번호) — 복사 참조가 장 경계에서 정말 이어지는지 가리는 기준
+    const chapterLast = run.data.verses.reduce((mx, v) => Math.max(mx, Number(v.range_end) || v.number), 0);
+    const article = el("article", { className: "chapter-text", lang: "ko", "data-chapter": String(run.chapter), "data-chapter-last": String(chapterLast), "data-book": run.data.book_name_ko || slot.bookId });
     // Clean 봉독 surface (ADR-035): cite chips off, no parallels, no note anchors. 한 화면에 슬롯 · 장이 여럿이라
     // 절 id 에 슬롯 · 책 · 장 접두를 붙여 문서 안에서 유일하게(Copilot 리뷰 7회차).
     appendVerses(article, run.verses, { hideCites: true, instanceKeys: run.keys, idPrefix: `${slot.slot}-${slot.bookId}-${run.chapter}-` });
     if (shortSlot) markOptionalVerses(article, run.chapter, isOptional);
     section.appendChild(article);
   }
-  // 복사 출처 — 장 본문과 같은 「— 책 장:절 (공동번역성서)」(Copilot 리뷰 6 · 7 · 8회차). 섹션에 한 번 묶어 장을 넘는
-  // 독서(시편 42, 43 — article 둘)의 선택도 한 본문으로 직렬화한다. 참조는 **실제로 고른 절**만 — 발췌가 건너뛴 절
-  // (「요나 2:1-2, 11」)은 쉼표로 남고, 장 경계에서 이어지는 구간(앞 장의 마지막 절 → 다음 장의 첫 절)만 「42:11-43:1」로
-  // 합친다. 송가(cant)는 장 번호가 성서의 장이 아니라 슬롯 라벨(「루가 1:68-79(즈가리야 송가)」)을 그대로 쓴다.
+  // 복사 출처 — 장 본문 · 북마크 복사 버튼과 같은 「— 책 장:절 (공동번역성서)」(Copilot 리뷰 6~9회차). 섹션에 한 번 묶어
+  // 장을 넘는 독서(시편 42, 43 — article 둘)의 선택도 한 본문으로 직렬화한다. 참조는 verse-spec.js 가 만든 **실제로 고른
+  // 절의 spec**(「1-2,11」 · 병합 절 「7-8,9」)이고, 장 경계에서는 앞 장의 **실제 마지막 절**(`data-chapter-last`)에서 끝나
+  // 다음 장의 1절에서 이어질 때만 「42:11-43:1」로 합친다 — 창세 6:9-22, 7:24 처럼 발췌가 장 끝에서 끊긴 것처럼 보여도
+  // 7:24 는 1절이 아니라 「6:22, 7:24」다. 송가(cant)는 장 번호가 성서의 장이 아니라 슬롯 라벨을 그대로 쓴다.
   bindCopyAttribution(section, (runs) => {
     const bookName = runs[0].article.getAttribute("data-book") || slot.bookId;
     if (slot.bookId === "cant") return String(slot.label || bookName);
-    /** @type {Array<{ ch: string, a: number, b: number, chEnd: string | null }>} */
-    const pieces = [];
+    const chOf = (/** @type {{ article: HTMLElement }} */ r) => r.article.getAttribute("data-chapter") || "";
+    const lastOf = (/** @type {{ article: HTMLElement }} */ r) => Number(r.article.getAttribute("data-chapter-last"));
+    /** @type {string[]} */
+    const parts = [];   // 장마다 「42:9-11」 — 정말 이어지면 「42:9-43:3」으로 합친다
     runs.forEach((r, i) => {
-      const ch = r.article.getAttribute("data-chapter") || "";
-      r.ranges.forEach(([a, b], j) => {
-        const prev = pieces[pieces.length - 1];
-        const continues = i > 0 && j === 0 && prev && prev.b === runs[i - 1].last && a === r.first;
-        if (continues && prev) { prev.b = b; prev.chEnd = ch; }
-        else pieces.push({ ch, a, b, chEnd: null });
-      });
+      const prev = runs[i - 1];
+      const continues = !!prev && prev.atEnd && prev.lastNum === lastOf(prev) && r.atStart && r.firstNum === 1;
+      if (!continues) { parts.push(`${chOf(r)}:${r.spec}`); return; }
+      const pieces = parts[parts.length - 1].split(",");            // 「42:1-2,9-11」 → ["42:1-2", "9-11"]
+      const head = String(pieces.pop()).split("-")[0];              // 「9-11」 → 「9」 (「42:9-11」 이면 「42:9」)
+      const next = r.spec.split(",");                                // 「1-3,5」 → ["1-3", "5"]
+      const tail = String(next.shift()).split("-").pop();            // 「1-3」 → 「3」
+      pieces.push(`${head}-${chOf(r)}:${tail}`);
+      parts[parts.length - 1] = [...pieces, ...next].join(",");
     });
-    let out = "";
-    let lastCh = null;
-    for (const p of pieces) {
-      const body = p.chEnd ? `${p.a}-${p.chEnd}:${p.b}` : formatVerseRanges([[p.a, p.b]]);
-      out += (out ? ", " : "") + (p.ch !== lastCh ? `${p.ch}:` : "") + body;
-      lastCh = p.chEnd || p.ch;
-    }
-    return `${bookName} ${out}`;
+    return `${bookName} ${parts.join(", ")}`;
   });
   if (wantsGloria(slot, lastChapter)) section.appendChild(buildGloria());
   return section;

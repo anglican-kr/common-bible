@@ -69,7 +69,8 @@ function collapseFullVerseRefs(refs, article) {
     const hasAlpha = allSpanRefs.some((r) => /[a-z]$/.test(r));
     const allSelected = allSpanRefs.length > 0 && allSpanRefs.every((r) => selected.has(r));
     if (hasAlpha && allSelected) {
-      result.push(`${n}`);
+      // 반행 글자만 뗀다 — 병합 절 「7-8a」「7-8b」는 「7-8」이지 「7」이 아니다(끝 번호를 잃지 않게, Copilot 리뷰 9회차)
+      result.push(verseRefs[0].replace(/[a-z]$/, ""));
     } else {
       result.push(...verseRefs);
     }
