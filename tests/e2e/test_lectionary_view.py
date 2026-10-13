@@ -258,6 +258,49 @@ def test_copy_from_reading_appends_attribution(desktop_context):
     assert "인용 출처" not in text
 
 
+_LECT_COPY_CROSS = """
+async () => {
+  const section = document.querySelector(".lect-reading[data-slot='psalm']");
+  const articles = section.querySelectorAll('article.chapter-text');
+  const v1s = articles[0].querySelectorAll('.verse[data-vref]');
+  const v2s = articles[1].querySelectorAll('.verse[data-vref]');
+  const a = v1s[v1s.length - 1], b = v2s[0];
+  const t1 = document.createTreeWalker(a, NodeFilter.SHOW_TEXT).nextNode();
+  const t2 = document.createTreeWalker(b, NodeFilter.SHOW_TEXT).nextNode();
+  const r = document.createRange();
+  r.setStart(t1, Math.floor(t1.length / 2));
+  r.setEnd(t2, Math.min(5, t2.length));
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(r);
+  const dt = new DataTransfer();
+  const ev = new ClipboardEvent('copy', { bubbles: true, cancelable: true, clipboardData: dt });
+  a.dispatchEvent(ev);   // 실제 브라우저처럼 선택 안쪽에서 올라온다
+  return [dt.getData('text/plain'), a.getAttribute('data-vref'), b.getAttribute('data-vref'), a.textContent.trim().slice(0, 6), b.textContent.trim().slice(-6)];
+}
+"""
+
+
+def test_copy_across_chapters_is_one_passage(desktop_context):
+    """장을 넘는 독서(연중 12주일 다해 시편 42, 43)에서 42편 끝과 43편 첫 절을 걸쳐 복사하면 한 본문 + 「— 전례시편 42:a-43:b」(Copilot 7회차)."""
+    import re
+    page = desktop_context.new_page()
+    _open(page, "lectionary/2025-06-22")
+    text, a, b, head, tail = page.evaluate(_LECT_COPY_CROSS)
+    a, b = re.match(r"\d+", a).group(), re.match(r"\d+", b).group()   # data-vref 「11b」 → 절 번호 11(반행 글자는 참조에 안 쓴다)
+    assert re.search(rf"\n\n— 전례시편 42:{a}-43:{b} \(공동번역성서\)$", text), text
+    assert head.lstrip("0123456789 ") [:3] in text and tail in text   # 두 장의 본문이 다 들어 있다
+
+
+def test_verse_ids_are_unique_across_slots_and_chapters(desktop_context):
+    """한 화면에 슬롯 넷 · 장 여럿이 있어도 절 id 가 겹치지 않는다 — 슬롯 · 책 · 장 접두(Copilot 7회차)."""
+    page = desktop_context.new_page()
+    _open(page, "lectionary/2025-06-22")
+    dup = page.evaluate("() => { const ids = [...document.querySelectorAll('[id]')].map(e => e.id); return ids.length - new Set(ids).size; }")
+    assert dup == 0
+    assert page.locator("[id^='psalm-lps-43-v']").count() > 0
+
+
 def test_conditional_set_condition_is_the_label(desktop_context):
     """사순 2주일 가해 — 조건이 라벨: 「사순 2주일」 / 「주의 변모 주일로 지킬 때」, 캡션 줄 없음(미결38)."""
     page = desktop_context.new_page()

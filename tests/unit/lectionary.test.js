@@ -475,7 +475,7 @@ function emberDay() {
   return { r, groupsOf, entries, saint, ember, grid };
 }
 
-test("buildLectionaryModel: 사계재 날 — 초기 선택은 격자, 색은 병기, 칩 셋, 본기도는 격자 → 성인 순", () => {
+test("buildLectionaryModel: 사계재 날 — 초기 선택은 격자, 색은 병기, 칩 셋, 본기도는 고른 격자의 것만", () => {
   const { r, groupsOf, entries, grid } = emberDay();
   const m = ctx.buildLectionaryModel(r, { obs: null, track: null, set: null, collect: null }, groupsOf, entries, null);
   assert.strictEqual(m.selected, grid);

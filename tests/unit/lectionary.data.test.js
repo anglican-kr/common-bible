@@ -165,7 +165,7 @@ test("A3 2026-08-09 연중 19주일 — 목적지 카드 둘(주일 · 변모 op
   same(plain(moved.colors), ["white"]);   // 변모를 고르면 그 축일의 백
 });
 
-test("A3 2026-12-07 성 니콜라 도착 — 도착 카드 둘, 칩에 「12월 6일에서 옮겨 옴」, 본기도는 니콜라 → 대림 2주간", { skip: SKIP }, () => {
+test("A3 2026-12-07 성 니콜라 도착 — 도착 카드 둘, 칩에 「12월 6일에서 옮겨 옴」, 본기도는 고른 칩(니콜라)의 것만", { skip: SKIP }, () => {
   const m = model("2026-12-07");
   assert.ok(m.pair);
   assert.strictEqual(m.pair.kind, "arrival");

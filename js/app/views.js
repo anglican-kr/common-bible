@@ -888,10 +888,10 @@ function _verseRangeVrefs(allVrefs, anchorVref, targetVref, unitFn) {
 /**
  * @param {HTMLElement} article
  * @param {ReadonlyArray<BibleVerse>} verses
- * @param {{ hlQuery?: string|null, hlVerse?: number|null, hlVerseEnd?: number|null, hlSegments?: Array<{start:number,end:number,part?:string}>|null, parallels?: ChapterParallel[]|null, chapter?: number|null, hideCites?: boolean, instanceKeys?: ReadonlyArray<string>|null }} [opts]
+ * @param {{ hlQuery?: string|null, hlVerse?: number|null, hlVerseEnd?: number|null, hlSegments?: Array<{start:number,end:number,part?:string}>|null, parallels?: ChapterParallel[]|null, chapter?: number|null, hideCites?: boolean, instanceKeys?: ReadonlyArray<string>|null , idPrefix?: string}} [opts]
  */
 function appendVerses(article, verses, opts = {}) {
-  const { hlQuery = null, hlVerse = null, hlVerseEnd = null, hlSegments = null, parallels = null, chapter = null, hideCites = false, instanceKeys: keysOverride = null } = opts;
+  const { hlQuery = null, hlVerse = null, hlVerseEnd = null, hlSegments = null, parallels = null, chapter = null, hideCites = false, instanceKeys: keysOverride = null, idPrefix = "" } = opts;
   let isFirst = true;
   let prevVerseEndType = null;
   // Several verses in one chapter can share a number (전례시편의 ¶ 구절, 에스델
@@ -966,7 +966,8 @@ function appendVerses(article, verses, opts = {}) {
     // with a Hebrew one (Daniel 3), a ¶ clause inherits the previous number
     // (전례시편), and Greek Esther stacks its additions under one number.
     // `~` (the duplicate-marker fallback) is not id-safe, so it becomes `-`.
-    const verseId = `v${instanceKeys[vIdx].replace(/~/g, "-")}`;
+    // `idPrefix` keeps ids unique when one page renders several chapters (lectionary slots — Copilot review round 7)
+    const verseId = `${idPrefix}v${instanceKeys[vIdx].replace(/~/g, "-")}`;
     const baseClasses = v.chapter_ref ? "verse verse-cross-ref" : "verse";
 
     const vn = v.number;
@@ -1125,32 +1126,38 @@ function appendVerses(article, verses, opts = {}) {
  * line-part letters like "1a"). Shared serializer lives in bookmark.js
  * (VERSE_SERIALIZE block) so this path and the 복사 button emit identical text.
  * Partial selections expand to full verse boundaries so a dragged-across fragment
- * still yields a complete citation.
- * @param {HTMLElement} article  holds the `.verse[data-vref]` nodes
- * @param {(firstNum: number, lastNum: number) => string} refOf  selected verse range → reference text (「창세기 1:1-3」)
+ * still yields a complete citation. The selection may span several `<article>`s
+ * under `root` (a lectionary reading that crosses a chapter — 시편 42, 43): the
+ * verses are grouped per article into `runs` so the reference can name both
+ * chapters, and the text is serialized as one passage from the first to the last.
+ * @param {HTMLElement} root  holds the `.verse[data-vref]` nodes — a chapter article, or a reading section with one article per chapter
+ * @param {(runs: Array<{ article: HTMLElement, firstNum: number, lastNum: number }>) => string} refOf  per-article verse ranges, in document order → reference text (「창세기 1:1-3」)
  */
-function bindCopyAttribution(article, refOf) {
-  article.addEventListener("copy", (e) => {
+function bindCopyAttribution(root, refOf) {
+  root.addEventListener("copy", (e) => {
     const sel = window.getSelection();
     if (!sel || sel.isCollapsed) return;
     const range = sel.getRangeAt(0);
-    let firstVerse = null;
-    let lastVerse = null;
-    for (const v of article.querySelectorAll(".verse")) {
-      if (range.intersectsNode(v)) {
-        if (!firstVerse) firstVerse = v;
-        lastVerse = v;
-      }
+    /** @type {Array<{ article: HTMLElement, first: Element, last: Element }>} */
+    const runs = [];
+    for (const v of root.querySelectorAll(".verse")) {
+      if (!range.intersectsNode(v)) continue;
+      const article = /** @type {HTMLElement} */ (v.closest("article") || root);
+      const run = runs[runs.length - 1];
+      if (run && run.article === article) run.last = v;
+      else runs.push({ article, first: v, last: v });
     }
-    if (!firstVerse || !lastVerse) return;
+    if (!runs.length) return;
+    const nums = runs.map((r) => ({
+      article: r.article,
+      firstNum: parseInt(r.first.getAttribute("data-vref") ?? "", 10),
+      lastNum: parseInt(r.last.getAttribute("data-vref") ?? "", 10),
+    }));
+    if (nums.some((n) => !Number.isFinite(n.firstNum) || !Number.isFinite(n.lastNum))) return;
 
-    const firstNum = parseInt(firstVerse.getAttribute("data-vref") ?? "", 10);
-    const lastNum = parseInt(lastVerse.getAttribute("data-vref") ?? "", 10);
-    if (!Number.isFinite(firstNum) || !Number.isFinite(lastNum)) return;
-
-    const plainText = window.serializeVerseRange(firstVerse, lastVerse);
+    const plainText = window.serializeVerseRange(runs[0].first, runs[runs.length - 1].last);
     if (!e.clipboardData) return;
-    e.clipboardData.setData("text/plain", `${plainText}\n\n— ${refOf(firstNum, lastNum)} (공동번역성서)`);
+    e.clipboardData.setData("text/plain", `${plainText}\n\n— ${refOf(nums)} (공동번역성서)`);
     e.preventDefault();
   });
 }
@@ -1448,7 +1455,10 @@ function renderChapter(data, book, opts) {
     cancelLongPress(e);
   });
 
-  bindCopyAttribution(article, (a, b) => (a === b ? `${book.name_ko} ${ch}:${a}` : `${book.name_ko} ${ch}:${a}-${b}`));
+  bindCopyAttribution(article, (runs) => {
+    const a = runs[0].firstNum, b = runs[runs.length - 1].lastNum;   // one article — one chapter
+    return a === b ? `${book.name_ko} ${ch}:${a}` : `${book.name_ko} ${ch}:${a}-${b}`;
+  });
 
   $app.appendChild(article);
   $app.appendChild(buildChapterNav(book, ch));

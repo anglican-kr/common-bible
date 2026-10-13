@@ -878,16 +878,24 @@ function buildReading(m, slot, chapters) {
       continue;
     }
     if (!run.verses.length) continue;
-    const article = el("article", { className: "chapter-text", lang: "ko" });
-    // Clean 봉독 surface (ADR-035): cite chips off, no parallels, no note anchors.
-    appendVerses(article, run.verses, { hideCites: true, instanceKeys: run.keys });
-    // 복사 출처 — 장 본문과 같은 「— 책 장:절 (공동번역성서)」(Copilot 리뷰 6회차). 송가(cant)는 장 번호가 성서의 장이
-    // 아니라 슬롯 라벨(「루가 1:68-79(즈가리야 송가)」)을 그대로 쓴다.
-    const bookName = run.data.book_name_ko || slot.bookId;
-    bindCopyAttribution(article, (a, b) => (slot.bookId === "cant" ? String(slot.label || bookName) : `${bookName} ${run.chapter}:${a === b ? a : `${a}-${b}`}`));
+    const article = el("article", { className: "chapter-text", lang: "ko", "data-chapter": String(run.chapter), "data-book": run.data.book_name_ko || slot.bookId });
+    // Clean 봉독 surface (ADR-035): cite chips off, no parallels, no note anchors. 한 화면에 슬롯 · 장이 여럿이라
+    // 절 id 에 슬롯 · 책 · 장 접두를 붙여 문서 안에서 유일하게(Copilot 리뷰 7회차).
+    appendVerses(article, run.verses, { hideCites: true, instanceKeys: run.keys, idPrefix: `${slot.slot}-${slot.bookId}-${run.chapter}-` });
     if (shortSlot) markOptionalVerses(article, run.chapter, isOptional);
     section.appendChild(article);
   }
+  // 복사 출처 — 장 본문과 같은 「— 책 장:절 (공동번역성서)」(Copilot 리뷰 6 · 7회차). 섹션에 한 번 묶어 장을 넘는 독서
+  // (시편 42, 43 — article 둘)의 선택도 한 본문으로 직렬화하고 「전례시편 42:9-43:1」 꼴로 적는다. 송가(cant)는 장 번호가
+  // 성서의 장이 아니라 슬롯 라벨(「루가 1:68-79(즈가리야 송가)」)을 그대로 쓴다.
+  bindCopyAttribution(section, (runs) => {
+    const first = runs[0], last = runs[runs.length - 1];
+    const bookName = first.article.getAttribute("data-book") || slot.bookId;
+    if (slot.bookId === "cant") return String(slot.label || bookName);
+    const chOf = (/** @type {{ article: HTMLElement }} */ r) => r.article.getAttribute("data-chapter") || "";
+    if (runs.length === 1) return `${bookName} ${chOf(first)}:${first.firstNum === first.lastNum ? first.firstNum : `${first.firstNum}-${first.lastNum}`}`;
+    return `${bookName} ${chOf(first)}:${first.firstNum}-${chOf(last)}:${last.lastNum}`;
+  });
   if (wantsGloria(slot, lastChapter)) section.appendChild(buildGloria());
   return section;
 }
