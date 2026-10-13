@@ -82,8 +82,8 @@ title: "feat: 교회력 전례독서 뷰 A3 — /lectionary 라우트 · 본기�
   - 신규 `tests/unit/lectionary.data.test.js` **18**(실데이터 — 상수 ↔ `_meta` · `_vocab`, 실제 날짜 열다섯, 송가 표지, 2025~2027 전수). `engine-data.yml` · `sync-data.yml` 에 등록했다(설계서 §7 선례).
   - `routing.test.js` 24 → 31(`/lectionary` 파싱 + 3회차의 쿼리 값 통째 검증 · 깨진 퍼센트 이스케이프) · `tab-history.test.js` 11 → 12(캘린더 탭 분류).
 - **타입 검사** `npm run typecheck`(앱 · 워커) 0 오류.
-- **e2e**(로컬 — `python3 scripts/serve.py 8080` 뒤 `pytest tests/e2e/`) **260건** — 사용자 결정 반영 뒤 전체 재실행 결과는 아래 「e2e 전체 재실행」. 종전 232 에서 28 늘었다(리뷰 1회차 +2 · 3회차 +2 · 5회차 +2 · 6회차 +1 · 7회차 +2 · 8회차 +1 · 9회차 +2).
-  - 신규 `tests/e2e/test_lectionary_view.py` **25** — 본문 순서 · 「본기도 1·2·3」 세그먼트 · 「독서 1·2」 · 칩(색 · 본문 전환) · 두 독서 카드(당일 · 목적지 · 도착일) · 트랙 기억 · 조건부 세트 조건 라벨 · 괄호 선택 구절 합침(〔 〕 · 「짧게 읽으면」) · 기념일 빈 상태 · 오늘/전날/다음날 · 잘못된 날짜 · 공유 링크 · 모바일 탭 바.
+- **e2e**(로컬 — `python3 scripts/serve.py 8080` 뒤 `pytest tests/e2e/`) **261건** — 사용자 결정 반영 뒤 전체 재실행 결과는 아래 「e2e 전체 재실행」. 종전 232 에서 29 늘었다(리뷰 1회차 +2 · 3회차 +2 · 5회차 +2 · 6회차 +1 · 7회차 +2 · 8회차 +1 · 9회차 +2 · 10회차 +1).
+  - 신규 `tests/e2e/test_lectionary_view.py` **26** — 본문 순서 · 「본기도 1·2·3」 세그먼트 · 「독서 1·2」 · 칩(색 · 본문 전환) · 두 독서 카드(당일 · 목적지 · 도착일) · 트랙 기억 · 조건부 세트 조건 라벨 · 괄호 선택 구절 합침(〔 〕 · 「짧게 읽으면」) · 기념일 빈 상태 · 오늘/전날/다음날 · 잘못된 날짜 · 공유 링크 · 모바일 탭 바.
   - 접근성 — `test_a11y_axe.py` 7 → 9(뷰 두 화면, critical · serious 위반 0) · `test_a11y_keyboard.py` 7 → 8(칩 Tab · Enter).
 - **브라우저 스모크**(Playwright, 데스크톱 · 모바일 각 14 주소) — 콘솔 · 페이지 오류 0(기존 GA CSP 경고 제외).
 - **변이 검사**(코드를 일부러 틀리게 바꿔 테스트가 잡는지 보는 검사 — 파일을 백업해 두고 바꾼 뒤 복사로 되돌렸다): **18개 모두 잡혔다** — 미결25 가지 제거 · 모든 관측일 본기도 열거 · 괄호 세트를 합치지 않음 · 「지키는 경우」 정규화 제거 · 조건부 바탕 라벨 · 선택 구절 판정에서 바탕 무시 · 오는/지난 뒤바꿈 · 격자도 자기 색 · URL 기본값 · 원본 세트 표지를 조건으로 · 송가 영광송 표지 · 트랙 우선순위 · 슬롯 순서 · 독서 없는 격자 선택 · 도착일 카드 · 병합 절 · `track=3` 허용 · 탭 분류.
@@ -111,7 +111,7 @@ title: "feat: 교회력 전례독서 뷰 A3 — /lectionary 라우트 · 본기�
 - `docs/status.md` — 한 줄 추가
 - `docs/architecture.md` — §4 파일 수(38 → 39 · `<script>` 32 → 33 · 모듈 29 → 30) · 모듈 표(27개 · `lectionary.js` 행 · 줄 수 갱신) · §4.1 라우트 표 · §6 · 부록 A ADR-038 · 부록 B
 - `CLAUDE.md` — 모듈 26 → 27 · 케이스 수 1151 · 실데이터 테스트 선례
-- `tests/README.md` — 유닛 31파일 · 1151케이스, e2e 28파일 · 260케이스, 새 행 넷 · 갱신 행 넷
+- `tests/README.md` — 유닛 31파일 · 1151케이스, e2e 28파일 · 261케이스, 새 행 넷 · 갱신 행 넷
 - `docs/index.md` — 교회력 행에 뷰 정본 자리
 - `.github/workflows/engine-data.yml` · `sync-data.yml` — `lectionary.data.test.js` 등록
 - `data` 서브모듈 포인터 `0fd14cd` → `723b084`(data#30) · `docs/design/liturgical-engine.md` §5.2 facts 다섯
@@ -211,3 +211,12 @@ Copilot 9회차(`e84c9cc` 기준, pullrequestreview-5501531806)는 스레드 2 +
 **검증(9회차 뒤)** — 유닛 **1151건 — 1150 통과 · skip 1**(bookmark 169 → 170), `npm run typecheck` 통과, e2e `test_copy.py` + `test_lectionary_view.py` 전부 통과(25/25), 전체 e2e `pytest tests/e2e/` **260건 전부 통과**(6분 37초). 변이 검사 2/2.
 
 **리뷰가 되풀이된 까닭(6~9회차)** — 복사 출처를 6회차에 전례독서 전용으로 새로 짜면서 뷰가 이미 다루는 세 꼴(장을 넘는 독서 · 발췌의 빈 절 · 병합 절)을 참조 쪽에서 매번 하나씩 빠뜨렸다. 9회차에서 참조 계산을 verse-spec.js 의 기존 경로로 바꿔 네 꼴이 한 곳에서 처리된다.
+
+## 리뷰 반영 (2026-10-13, 10회차)
+
+Copilot 10회차(`3e07079` 기준, pullrequestreview-5502622459)는 「0 open findings」 + 본문 「previously missed」 2 — 코드 2. 코드 `10ed902`, 문서는 이 절을 담은 커밋.
+
+- **① 괄호 선택 구절의 〔 〕 표지가 복사 본문에 들어갔다** — 화면에서는 `aria-hidden` · `user-select: none` 인데 직렬화(`serializeVerseRange`)가 `.lect-bracket` 을 모르고 `textContent` 로 옮겼다. 직렬화에 **표시 전용 표지의 opt-out `data-copy-omit`** 을 두고(verse-spec.js 가 전례독서 클래스를 알지 않게) 표지 span 에 단다. e2e 1(2026-06-14 괄호 세트 — 선택 구절을 걸쳐 복사해도 〔 〕 없음). 변이: 속성을 빼면 실패.
+- **② `parsePath` 의 `positive()` 가 자릿수 넘치는 값(`?set=` + 9 가 400개)을 Infinity 로 받았다** — 꼴 검사(`/^[1-9]\d*$/`)만으로는 `Number()` 가 Infinity · 근사 정수를 낸다. `Number.isSafeInteger` 까지 요구. 유닛(기존 케이스에 셋 — 400자리 · 2⁵³+1 → null · 2⁵³−1 → 그대로). 변이: 검사를 빼면 실패.
+
+**검증(10회차 뒤)** — 유닛 1151(1150 통과 · skip 1), `npm run typecheck` 통과, e2e `test_copy.py` + `test_lectionary_view.py` 전부 통과(26/26), 전체 e2e `pytest tests/e2e/` **261건 전부 통과**(6분 56초). 변이 검사 2/2.
