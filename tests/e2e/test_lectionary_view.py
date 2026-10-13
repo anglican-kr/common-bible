@@ -220,9 +220,16 @@ def test_stale_lectionary_preload_failure_does_not_overwrite_new_route(browser):
         assert held, "전례독서 데이터 요청이 잡히지 않았다"
         page.evaluate("() => window.navigate('/')")   # 프리로드가 끝나기 전에 떠난다
         page.wait_for_selector(".book-list")
+        failed = []
+        page.on("requestfailed", lambda req: failed.append(req))
         for route in held:
             route.abort()   # 이제야 실패한다 — 낡은 요청
-        page.wait_for_timeout(500)
+        for _ in range(100):   # 실패가 페이지에 닿을 때까지 — 고정 대기 대신 신호
+            if len(failed) >= len(held):
+                break
+            page.wait_for_timeout(20)
+        assert len(failed) >= len(held)
+        page.evaluate("() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))")   # 거부 사슬이 다 돌 때까지
         assert page.locator(".book-list").count() == 1
         assert page.locator(".error").count() == 0
     finally:
@@ -352,7 +359,7 @@ async (slot) => {
 
 def test_copy_does_not_merge_chapters_when_excerpt_stops_short(desktop_context):
     """연중 32주 토 홀수해(2027-11-13) 지혜 18:14-16, 19:1-6 — 18장은 25절까지 있어 16절에서 끝난 발췌는 19:1 과 이어지지 않는다:
-    「18:16,19:1」이지 「18:16-19:1」이 아니다(Copilot 9회차)."""
+    「18:16, 19:1」이지 「18:16-19:1」이 아니다(Copilot 9회차)."""
     page = desktop_context.new_page()
     _open(page, "lectionary/2027-11-13")
     text, a, b, last = page.evaluate(_LECT_COPY_EDGE, "first")
@@ -642,7 +649,8 @@ def test_bare_route_shows_today_and_day_steppers_work(desktop_context):
     """/lectionary 는 오늘, ‹ › 로 전날 · 다음날."""
     page = desktop_context.new_page()
     _open(page, "lectionary")
-    today = datetime.date.today()
+    # 「오늘」은 브라우저의 날짜로 — 파이썬 쪽 날짜와 자정 경계에서 어긋나지 않게
+    today = datetime.date(*page.evaluate("() => { const d = new Date(); return [d.getFullYear(), d.getMonth() + 1, d.getDate()]; }"))
     assert page.get_attribute(".lect-date time", "datetime") == today.isoformat()
     page.locator(".lect-datenav-btn[aria-label='다음날']").click()
     page.wait_for_url(f"**/lectionary/{(today + datetime.timedelta(days=1)).isoformat()}")
@@ -690,12 +698,15 @@ def test_modified_click_on_track_opens_new_page_without_touching_current(browser
 
 
 def test_shared_link_with_state_lands_on_same_screen(desktop_context):
-    """?obs=&track=&set= 가 든 링크는 그 화면 그대로(ADR-031 복원 · 공유 일관)."""
+    """?obs= · ?track= · ?set= 가 든 링크는 그 화면 그대로(ADR-031 복원 · 공유 일관) — 셋 다 그날의 기본이 아닌 값으로."""
     page = desktop_context.new_page()
-    obs = urllib.parse.quote("grid:ordinary-19-sunday")
-    _open(page, f"lectionary/2026-08-09?obs={obs}&track=2")
-    assert "독서 2" in page.inner_text(".lect-chip[aria-current]")
+    obs = urllib.parse.quote("d0806-주의-변모")   # 8.9 의 초기 선택은 연중 19주일 — 주의 변모는 고른 것이다
+    _open(page, f"lectionary/2026-08-09?obs={obs}")
+    assert "주의 변모" in page.inner_text(".lect-chip[aria-current]")
+    _open(page, "lectionary/2026-06-14?track=2")
     assert page.locator(".lect-track .division-tab.active").inner_text() == "독서 2"
+    _open(page, "lectionary/2026-04-05?set=2")
+    assert page.locator(".lect-sets .division-tab.active").inner_text() == "독서 2"
 
 
 # ── ⑦ 탭 바 ──

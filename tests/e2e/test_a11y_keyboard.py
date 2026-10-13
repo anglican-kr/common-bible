@@ -130,8 +130,8 @@ def test_focus_returns_after_drawer_close(browser):
 
 # ── 전례독서 뷰 (ADR-038 §3) ──────────────────────────────────────────────────
 
-def test_lectionary_chips_and_segments_are_keyboard_reachable(browser):
-    """관측일 칩 · 세그먼트가 Tab 순서에 있고 Enter 로 이동한다(모두 링크)."""
+def test_lectionary_chips_are_keyboard_reachable(browser):
+    """관측일 칩이 Tab 순서에 있고 Enter 로 이동한다(모두 링크). 세그먼트의 키보드는 같은 링크 꼴 — 칩으로 대표한다."""
     ctx, page = _open(browser, "lectionary/2026-09-16")
     try:
         page.wait_for_selector(".lectionary .lect-chip", timeout=20_000)
@@ -142,9 +142,9 @@ def test_lectionary_chips_and_segments_are_keyboard_reachable(browser):
         assert page.evaluate("() => document.activeElement.textContent") == "추계재"
         page.keyboard.press("Enter")
         page.wait_for_url("**obs=t-*")
-        page.wait_for_selector(".lect-chip[aria-current]:has-text('추계재')")
+        page.wait_for_selector(".lect-chip:has-text('추계재')")
         # 고른 칩은 aria-current 로 읽힌다.
-        assert page.get_attribute(".lect-chip[aria-current]", "aria-current") == "true"
+        assert page.locator(".lect-chip", has_text="추계재").get_attribute("aria-current") == "true"
     finally:
         ctx.close()
 

@@ -19,7 +19,7 @@
 // 뷰가 처음 부딪힌 설계서 §9 미결 — 사용자가 하나씩 확정했다(2026-10-12, coding-pitfalls §21 · 원장
 // docs/changes/2026-10-12-lectionary-view.md):
 //   미결25 고유 독서 없는 축일의 초기 독서 = 격자(그날의 주일 · 평일) 독서 — 책자대로. 헤더 제목은 승자, 색은 고른
-//          본문의 색(headerColors — 격자면 그날 대표색), 본기도는 고른 칩의 것. (닫힘)
+//          본문의 색(headerColors — 격자면 그날의 병기 colors + 대체색), 본기도는 고른 칩의 것. (닫힘)
 //   미결20 성 토요일: 헤더 색은 「고른 본문의 색」 — 부활밤 본문이면 백(승자여도), 성 토요일 칩이면 홍.
 //          저녁 전례 표지(데이터 · 엔진)는 그대로 열려 있다.
 //   미결38 대안 세트: 「또는」 대안은 「독서 1 · 독서 2」(완전한 세트를 통째로 바꾼다), 조건부는 「…로 지킬 때」가
@@ -101,7 +101,7 @@ const MIN_YEAR = 1583;
 const MAX_YEAR = 9999;
 /** 파서가 괄호 선택 확장(「9:35-10:8(9-23)」)으로 만든 세트의 표지(ADR-037 §1 「대안 세트 explode」). */
 const BRACKET_NOTE = "괄호 선택 구절 포함";
-/** 선택 봉헌의 네 목적지(설계서 R-6.2-destinations) — 엔진 OPTIONAL_TRANSFER_KINDS 와 같은 넷. */
+/** 선택 봉헌의 네 목적지(설계서 R-6.2-destinations) — 엔진 `OPTIONAL_KINDS` 와 같은 넷(유닛이 대조한다). */
 const OPTIONAL_TRANSFER_KINDS = ["nearby_sunday", "sunday_0102_0108", "sunday_1030_1105", "easter7_sunday"];
 
 // 송영 3종 — 고른 본기도(대체안은 세그먼트로 택1) 끝에 **1회**, 그 본기도의 `ending` 코드로(ADR-036 §3 ·
@@ -144,7 +144,7 @@ function isGrid(/** @type {Candidate} */ c) {
 }
 
 /**
- * 칩 라벨용 짧은 이름(미결42 잠정) — 괄호 설명 전부를 뗀다: 「바실(주교, 379년)과 나지안조의
+ * 칩 라벨용 짧은 이름(미결42 닫힘 — 사용자 확정 2026-10-12) — 괄호 설명 전부를 뗀다: 「바실(주교, 379년)과 나지안조의
  * 그레고리(주교, 389년)」 → 「바실과 나지안조의 그레고리」. 떼고 나서 비면 원래 이름.
  * @param {string | null | undefined} name
  */
@@ -170,7 +170,7 @@ function statusSuffix(c) {
   }
 }
 
-/** 승자 자격이 없거나 밀린 후보 — 칩을 흐리게 그린다. */
+/** 생략된 · 옮겨 간 후보와 기념일 — 칩을 흐리게 그린다(사계재는 승자 자격이 없어도 고를 독서가 있어 흐리지 않는다). */
 function isMutedCandidate(/** @type {Candidate} */ c) {
   return c.status === "omitted" || c.status === "transferred_out" || c.observance.rank === "commemoration";
 }
@@ -193,9 +193,9 @@ function hasProperReadings(/** @type {ReadingGroup[]} */ groups) {
 }
 
 /**
- * 초기 선택(ADR-038 §3 — `official` 이 초기 선택). 단 하나의 예외가 미결25 의 잠정 답이다: 승자의 독서가
+ * 초기 선택(ADR-038 §3 — `official` 이 초기 선택). 단 하나의 예외가 미결25(사용자 확정 2026-10-12, 닫힘)다: 승자의 독서가
  * 공통뿐이면(고유 독서 없는 축일) 책자대로 그날의 격자 독서를 먼저 보인다 — 헤더 제목은 여전히 승자이고 색은 고른
- * 본문의 색(`headerColors` — 격자면 그날 대표색), 본기도는 고른 칩의 것이다.
+ * 본문의 색(`headerColors` — 격자면 그날의 병기 `colors` + 대체색), 본기도는 고른 칩의 것이다.
  * @param {ResolvedDate} resolved @param {(c: Candidate) => ReadingGroup[]} groupsOf
  * @returns {Candidate | null}
  */

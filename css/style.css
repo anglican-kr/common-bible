@@ -827,7 +827,7 @@ body {
   user-select: none;
 }
 .lect-optional-note { flex-basis: 100%; }
-/* 송영 — once, after the last collect. */
+/* 송영 — once, after the chosen collect (ADR-038 §3 「구현」). */
 .lect-ending {
   margin: var(--space-3) 0 0;
   color: var(--text-secondary);

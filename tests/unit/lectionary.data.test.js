@@ -309,15 +309,36 @@ test("A3 송가 — 즈가리야 송가는 영광송을 붙이고 창조송가(g
 // 2026-10-12 처음 돌렸을 때 격자 평일 세 칸(사순 2주 화 · 수 · 부활 4주 토)에 독서 레코드가 없었다 —
 // 원료 기사의 수집 태그 누락(pitfalls §18 의 재의 수요일 후 금요일과 같은 종류). data#30 이 채웠고 이 전수
 // 검사가 그것을 지킨다 — 다시 빈 칸이 생기면 「독서 없음」으로 멈춘다.
-test("A3 2025~2027 모든 날 — 모델이 서고, 초기 선택에 복음까지 있는 독서가 있고, 칩 href 가 /lectionary/ 로 시작한다", { skip: SKIP }, () => {
+// 격자(그날의 주일 · 평일) 후보의 독서 결손 — 초기 선택만 보면 공통 독서가 초기인 날(2026-06-27 키릴)의 빈 격자를 놓친다
+// (자체 리뷰 2026-10-13). 성탄절기 평일은 날짜 본문(12.29~1.5)이 따로이고, 이동 축일(재의 수요일 · 성주간 · 부활 ·
+// 성령강림 · 왕이신 그리스도 …)이 있는 날은 그 temporal 후보가 독서를 들고 있어 격자가 비는 것이 정상이다. 알려진 결손은 표로 두고,
+// 데이터가 채워지면 이 표가 「채워졌다」로 멈춰 지우게 한다.
+const KNOWN_GRID_GAPS = new Set(["ordinary-12-sat-II"]);   // 연중 12주 토요일 짝수해 — 데이터 저장소 후속
+test("A3 2025~2027 모든 날 — 모델이 서고, 초기 선택에 복음까지 있는 독서가 있고, 칩 href 가 그 칩의 상태로 돌아오며, 격자 독서가 비지 않는다", { skip: SKIP }, () => {
   const bad = [];
+  const seenGaps = new Set();
   for (const y of [2025, 2026, 2027]) {
     let d = ctx.toKey(y, 1, 1);
     while (d.slice(0, 4) === String(y)) {
       const m = model(d);
       if (!m.group) bad.push(`${d} 독서 없음`);
       else if (!m.slots.some((s) => s.slot === "gospel")) bad.push(`${d} 복음 없음`);
-      if (!m.chips.length || m.chips.some((c) => !c.href.startsWith("/lectionary/"))) bad.push(`${d} 칩`);
+      for (const c of m.chips) {   // 칩 href → 그 날짜 · 그 후보(초기 선택이면 obs 없음)
+        const u = new URL(c.href, "http://x");
+        const obsParam = u.searchParams.get("obs");
+        if (u.pathname !== `/lectionary/${d}` || (obsParam ? obsParam !== c.candidate.observance.id : c.candidate !== m.initial)) bad.push(`${d} 칩 href ${c.href}`);
+      }
+      if (!m.chips.length) bad.push(`${d} 칩 없음`);
+      const grid = m.resolved.candidates.find((c) => c.observance.id.startsWith("grid:"));
+      const co = m.resolved.coord;
+      if (grid && co && co.season !== "christmas") {
+        const key = `${co.season}-${co.week}-${co.weekday || co.type}-${co.year}`;
+        const readsOf = (/** @type {any} */ c) => ctx.findReadingsIn(ix().lec, ix().cal, m.resolved, c).length > 0;
+        const temporalOwns = m.resolved.candidates.some((c) => c !== grid && c.observance.kind === "temporal" && readsOf(c));
+        const empty = !temporalOwns && !readsOf(grid);
+        if (empty && KNOWN_GRID_GAPS.has(key)) seenGaps.add(key);
+        else if (empty) bad.push(`${d} 격자 독서 없음(${key})`);
+      }
       if (!m.chips.some((c) => c.active)) bad.push(`${d} 활성 칩 없음`);
       if (!m.colors.length) bad.push(`${d} 색 없음`);
       if (m.empty) bad.push(`${d} empty`);   // 본기도까지 없는 날은 없다
@@ -325,4 +346,30 @@ test("A3 2025~2027 모든 날 — 모델이 서고, 초기 선택에 복음까�
     }
   }
   same(bad, []);
+  same([...KNOWN_GRID_GAPS].filter((k) => !seenGaps.has(k)), [], "알려진 격자 결손이 채워졌다 — KNOWN_GRID_GAPS 에서 지울 것");
+});
+
+test("A3 데이터 전수 — 괄호 선택 구절 세트는 모두 바탕에 합쳐지고, 「또는」 대안과 트랙이 한 좌표에 겹치지 않는다(pitfalls §21 실측의 지킴이 — 자체 리뷰 2026-10-13)", { skip: SKIP }, () => {
+  const COORD = ["kind", "season", "week", "type", "weekday", "year", "date", "lunar", "name", "title"];
+  /** @type {Map<string, any[]>} */
+  const byCoord = new Map();
+  for (const e of read("eucharist-readings.json").entries) {
+    const k = JSON.stringify(COORD.map((f) => e[f] ?? null));
+    if (!byCoord.has(k)) byCoord.set(k, []);
+    byCoord.get(k).push(e);
+  }
+  const bad = [];
+  let merged = 0;
+  for (const [k, es] of byCoord) {
+    const tracks = [...new Set(es.map((e) => e.reading_track ?? null))];
+    for (const t of tracks) {
+      const sets = es.filter((e) => (e.reading_track ?? null) === t).sort((a, b) => a.set_no - b.set_no);
+      const opts = ctx.readingOptions(sets, "x");
+      merged += opts.filter((o) => o.short).length;
+      if (opts.some((o) => o.group.set_note === K("BRACKET_NOTE") && !o.short)) bad.push(`${k} 괄호 세트가 바탕을 못 찾음`);
+      if (tracks.length > 1 && opts.length > 1) bad.push(`${k} 트랙 ${t} 에 「또는」 대안 ${opts.length}`);
+    }
+  }
+  same(bad, []);
+  assert.strictEqual(merged, 34);   // pitfalls §21 실측(2026-10-12) — 데이터가 바뀌면 여기서 다시 센다
 });

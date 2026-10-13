@@ -490,7 +490,7 @@ test("slotVerseRuns: 같은 장의 ref 둘이 겹치면 한 번만, 없는 장�
   same(runs.map((r) => [r.chapter, r.data ? "ok" : null, r.verses.map((v) => v.text)]), [[1, "ok", ["1", "2", "3"]], [1, "ok", ["4", "5"]], [9, null, []]]);
 });
 
-test("wantsGloria: 전례시편은 언제나, 송가는 gloria:false 가 아닐 때, 다른 슬롯 · 일반 성서는 아니다", () => {
+test("wantsGloria: 전례시편은 장을 불러왔으면 언제나, 송가는 gloria:false 가 아닐 때, 다른 슬롯 · 일반 성서 · 불러오지 못한 장은 아니다", () => {
   const psalm = slot("psalm", "lps", 23, "all", "시편 23");
   assert.strictEqual(ctx.wantsGloria(psalm, CHAPTER), true);
   const cant = slot("psalm", "cant", 11, "all", "루가 1:68-79(즈가리야 송가)");
@@ -644,12 +644,22 @@ test("buildLectionaryModel: 후보가 없으면 null", () => {
   assert.strictEqual(ctx.buildLectionaryModel(r, { obs: null, track: null, set: null, collect: null }, () => [], [], null), null);
 });
 
-test("상수: 송영 셋 · 영광송 계응 둘 · 슬롯 라벨 넷", () => {
+test("칩: 라벨은 괄호를 뗀 짧은 이름, title 은 전체 이름 + 상태 꼬리(ADR-038 §3-1 — 사용자 확정 2026-10-12)", () => {
+  const saint = cand(obs("d0321-토마스-크랜머", "토마스 크랜머(캔터베리 대주교, 전례개혁자, 순교자, 1556년)", { rank: "minor_feast", precedence: 7 }));
+  const grid = cand(obs("grid:lent-4-weekday-sat", "사순 4주 토요일"));
+  const r = resolvedOf("2026-03-21", [saint, grid], saint, { coord: { season: "lent", week: 4, type: "weekday", weekday: "sat", year: "II" } });
+  const m = ctx.buildLectionaryModel(r, { obs: null, track: null, set: null, collect: null }, groupsOfFrom({ "d0321-토마스-크랜머": [group(1, FOUR)] }), [], null);
+  const chip = m.chips.find((c) => c.candidate === saint);
+  assert.ok(chip.label.startsWith("토마스 크랜머") && !chip.label.includes("("), chip.label);
+  assert.strictEqual(chip.title, "토마스 크랜머(캔터베리 대주교, 전례개혁자, 순교자, 1556년)");
+});
+
+test("상수: 송영 셋 · 영광송 계응 둘 · 슬롯 순서 넷 · 선택 봉헌 목적지 넷(엔진 OPTIONAL_KINDS 와 같다) · 괄호 세트 표지", () => {
   const endings = K("ENDINGS");
   same(Object.keys(plain(endings)), ["A", "B", "C"]);
   assert.ok(endings.A.endsWith("아멘") && endings.C.startsWith("성자께서는"));
   same(plain(K("GLORIA")), { versicle: "영광이 성부와 성자와 성령께", response: "처음과 같이 지금도 그리고 영원히, 아멘." });
   same(plain(K("SLOT_ORDER")), ["first", "psalm", "second", "gospel"]);
-  same(plain(K("OPTIONAL_TRANSFER_KINDS")), ["nearby_sunday", "sunday_0102_0108", "sunday_1030_1105", "easter7_sunday"]);
+  same(plain(K("OPTIONAL_TRANSFER_KINDS")).sort(), [...K("OPTIONAL_KINDS")].sort());   // 엔진의 넷과 같다 — 한쪽만 바뀌면 깨진다
   assert.strictEqual(K("BRACKET_NOTE"), "괄호 선택 구절 포함");
 });
