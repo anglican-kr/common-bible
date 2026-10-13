@@ -80,7 +80,7 @@ title: "feat: 교회력 전례독서 뷰 A3 — /lectionary 라우트 · 본기�
 - **유닛**(`node --test tests/unit/*.test.js`) **1147건 — 1146 통과 · skip 1**(T-2032-02-12-ash-wednesday-seollal — 미결13, 데이터 대기). 종전 1077 에서 70 늘었다(리뷰 1회차 +2 · 3회차 +2).
   - 신규 `tests/unit/lectionary.test.js` **44**(합성 재료 — 초기 선택 · 트랙 · 대안 세트 세 갈래 · 본기도 · 카드 네 꼴 · 색 · URL · 절 발췌 · 선택 구절 판정 · 영광송 · `buildLectionaryModel` 통합).
   - 신규 `tests/unit/lectionary.data.test.js` **18**(실데이터 — 상수 ↔ `_meta` · `_vocab`, 실제 날짜 열다섯, 송가 표지, 2025~2027 전수). `engine-data.yml` · `sync-data.yml` 에 등록했다(설계서 §7 선례).
-  - `routing.test.js` 24 → 29(`/lectionary` 파싱) · `tab-history.test.js` 11 → 12(캘린더 탭 분류).
+  - `routing.test.js` 24 → 31(`/lectionary` 파싱 + 3회차의 쿼리 값 통째 검증 · 깨진 퍼센트 이스케이프) · `tab-history.test.js` 11 → 12(캘린더 탭 분류).
 - **타입 검사** `npm run typecheck`(앱 · 워커) 0 오류.
 - **e2e**(로컬 — `python3 scripts/serve.py 8080` 뒤 `pytest tests/e2e/`) **252건** — 사용자 결정 반영 뒤 전체 재실행 결과는 아래 「e2e 전체 재실행」. 종전 232 에서 20 늘었다(리뷰 1회차 +2 · 3회차 +2).
   - 신규 `tests/e2e/test_lectionary_view.py` **17** — 본문 순서 · 「본기도 1·2·3」 세그먼트 · 「독서 1·2」 · 칩(색 · 본문 전환) · 두 독서 카드(당일 · 목적지 · 도착일) · 트랙 기억 · 조건부 세트 조건 라벨 · 괄호 선택 구절 합침(〔 〕 · 「짧게 읽으면」) · 기념일 빈 상태 · 오늘/전날/다음날 · 잘못된 날짜 · 공유 링크 · 모바일 탭 바.
@@ -151,3 +151,11 @@ Copilot 3회차(`2d4b61c` 기준, pullrequestreview-5497820182)는 「0 open fin
 - **⑧ tests/README 의 `lectionary.data.test.js` 행 「알려진 격자 결손 3칸 표」** — 같은 이유로 「결손 표 없이 빈 실패 목록을 기대」로.
 
 **검증(3회차 뒤)** — 유닛 **1147건 — 1146 통과 · skip 1**(routing 29 → 31), `npm run typecheck` 통과(이제 `lectionary.js` 포함), e2e `test_lectionary_view.py` 17/17, 전체 e2e `pytest tests/e2e/` **252건 전부 통과**(6분 38초). 변이 검사 4/4 — 전례시편 장 가드 제거 → 유닛 1 실패 · `positive` 를 `parseInt` 로 되돌림 → 1 실패 · `decodeOrRaw` 의 try 제거 → 1 실패 · 클릭 가드 제거 → e2e Ctrl+클릭 검사 실패. 스레드가 없어 해결할 것은 없고 PR 본문만 갱신했다.
+
+## 리뷰 반영 (2026-10-13, 4회차)
+
+Copilot 4회차(`7e2529d` 기준, pullrequestreview-5498091795)는 스레드 1 + 본문 「previously missed」 4 — 전부 문서 · 주석, 동작 변경 없음.
+
+- **① 원장 「검증」의 `routing.test.js` 파일별 수 29** — 3회차에서 31 이 됐는데 이 줄만 남았다 → 31.
+- **② · ③ · ④ 「승자의 본기도」 문장 셋** — 초기 선택이 격자인 날 본기도는 고른 칩(격자)의 것인데(`collectsFor(selected)`, ADR-038 §3 「구현」), `docs/architecture.md` 부록 A 의 ADR-038 요약(「본기도 열거+탭」) · `docs/coding-pitfalls.md` §21(「제목 · 색 · 본기도는 승자 성인」) · 설계서 §9.2 미결25(「성인(제목 · 색 · 본기도)」)가 종전 문구였다 → 「헤더의 제목 · 대표색은 승자, 본기도는 고른 칩의 것」으로.
+- **⑤ `lectionary.js` 의 송영 상수 주석**(「본기도 열거 마지막에 1회」) → 「고른 본기도 끝에 1회, 그 본기도의 `ending` 코드로」. 주석만이라 e2e 는 돌리지 않았다 — 유닛(docs 정합성 · lectionary)만.

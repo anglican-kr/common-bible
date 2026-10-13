@@ -100,7 +100,8 @@ const BRACKET_NOTE = "괄호 선택 구절 포함";
 /** 선택 봉헌의 네 목적지(설계서 R-6.2-destinations) — 엔진 OPTIONAL_TRANSFER_KINDS 와 같은 넷. */
 const OPTIONAL_TRANSFER_KINDS = ["nearby_sunday", "sunday_0102_0108", "sunday_1030_1105", "easter7_sunday"];
 
-// 송영 3종 — 본기도 열거 **마지막에 1회**(ADR-036 §3 · ADR-038 §3). 데이터 eucharist-collects.json
+// 송영 3종 — 고른 본기도(대체안은 세그먼트로 택1) 끝에 **1회**, 그 본기도의 `ending` 코드로(ADR-036 §3 ·
+// ADR-038 §3 「구현」 — 다른 관측일의 본기도는 열거하지 않는다). 데이터 eucharist-collects.json
 // `_meta.endings` 와 글자까지 같아야 한다(실데이터 테스트가 대조). A · B 의 선택 규정은 설계서
 // 미결37 — 데이터가 B 를 배정하지 않으므로 레코드의 코드를 그대로 받고, 코드가 없으면 A 다.
 /** @type {Record<"A" | "B" | "C", string>} */
