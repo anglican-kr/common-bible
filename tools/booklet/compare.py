@@ -99,7 +99,10 @@ color_rows = []; name_rows = []; transfer_rows = []; xmas_rows = []
 engine_colors = collections.Counter()
 for d in sorted(booklet):
     b = booklet[d]; e = engine.get(d)
-    if not e: rows.append((d, "엔진 없음")); continue
+    if not e or e.get("error"):   # 덤프 범위 밖이거나 엔진이 못 푼 날짜 — 집계 · 상세에만 적고 비교는 건너뛴다
+        counts["엔진 없음 · 미해결"] += 1
+        detail.append({"date": d, "weekday": b["weekday"], "names": b["names"], "status": "engine-missing", "error": (e or {}).get("error", "missing"), "flags": b["flags"]})
+        continue
     sets = engine_sets(e)
     sel = e["view"]["initial"] if e["view"] else (e["official"]["id"] if e["official"] else None)
     engine_colors[e["color"]] += 1

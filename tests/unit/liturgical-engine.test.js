@@ -1586,6 +1586,12 @@ test("C-6.5-20 연쇄 범위 — 도착에 밀린 고유 축일은 사도 · 복
     same(fate(t.at("2026-06-17"), "d0617-s"), ["commemorated", "d0615-a"], String(cls));
     assert.strictEqual(officialId(t.at("2026-06-17")), "d0615-a", String(cls));
   }
+  // prec 7 — 옮길 수 있는 축일(성모 탄신 꼴)은 도착에 밀리면 기념, 옮길 수 없는 축일은 종전대로 생략(→ R-6.1-prec7-omit)
+  const minor = (extra) => passEngine(passTables([MOV("d0615-a", "06.15", { sanctoral_class: "apostle" }), SAN("d0617-m", "06.17", "합성 축일", { sanctoral_class: "lord", ...extra })], TWO_WALLS));
+  const movableMinor = minor({ transferable: true, transfer_to: "next_day" });
+  same(seats(movableMinor.pass(2026).departures), { "2026-06-15": ["d0615-a->2026-06-17"] });   // 6.17 의 출발은 없다
+  same(fate(movableMinor.at("2026-06-17"), "d0617-m"), ["commemorated", "d0615-a"]);
+  same(fate(minor({}).at("2026-06-17"), "d0617-m"), ["omitted", "d0615-a"]);
   for (const cls of ["apostle", "evangelist"]) {   // 연쇄 대상은 하루 더 밀린다(→ R-6.2-chain-model)
     const t = run(cls);
     same(seats(t.pass(2026).arrivals), { "2026-06-17": ["d0615-a<-2026-06-15"], "2026-06-18": ["d0617-s<-2026-06-17"] }, cls);

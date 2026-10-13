@@ -1216,14 +1216,15 @@ function settle(dateStr, cands) {
     const o = c.observance;
     const minor = o.rank === "minor_feast";
     const commemorate = o.transfer_to === "commemorate_only";
-    const movable = !minor && movesOnConflict(o);
+    const movable = movesOnConflict(o);   // 옮길 수 있는 축일 전부 — prec 7 의 `transferable` 셋도(아래 stayed)
     if (!minor && !commemorate && !movable) continue;
     const by = displacerOf(ranked, c);
     if (!by) continue;
     // 옮길 수 있는 축일이 proper 로 남았으면 패스가 옮기지 않은 것이다 — guard 에만 밀렸으면 생략, 실제 후보에
     // 밀렸는데 남았으면 이동 상한(`defects`)이라 그대로 둔다
     const omit = minor && (o.transferable !== true || by.observance.id.startsWith(GUARD_PREFIX));
-    // 도착에 밀렸는데 연쇄 대상이 아닌 주요축일 — 패스가 일부러 옮기지 않았다(→ R-6.2-chain-scope): 그날 기념
+    // 도착에 밀렸는데 연쇄 대상이 아닌 옮길 수 있는 축일(주요축일 · transferable 인 prec 7) — 패스가 일부러 옮기지
+    // 않았다(→ R-6.2-chain-scope): 그날 기념. 옮길 수 없는 prec 7 은 위 omit 대로 생략이다
     const stayed = movable && by.status === "transferred_in" && !chainsOnArrival(o);
     if (omit || commemorate || stayed) reclassified.set(c, { observance: o, status: omit ? "omitted" : "commemorated", displacedBy: by.observance.id });
   }
