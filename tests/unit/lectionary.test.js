@@ -454,6 +454,37 @@ test("collectsFor · readingOptions: 한 날짜에 섞여 온 다른 관측일�
   same(opts.map((o) => o.label), ["사도 성 필립보와 성 야고보", "노동자의 날"]);
 });
 
+test("linkCollects: 세트와 본기도가 같은 제목으로 1:1 이면 세트마다 짝 본기도의 위치, 아니면 null(사용자 결정 2026-10-13)", () => {
+  const opts = ctx.readingOptions([group(1, FOUR, { title: "사도 성 필립보와 성 야고보" }), group(2, FOUR, { title: "노동자의 날" })], "사도 성 필립보와 성 야고보");
+  const cols = [collect(293, "노동", { title: "노동자의 날" }), collect(294, "사도", { title: "사도 성 필립보와 성 야고보" })];
+  same(ctx.linkCollects(opts, cols), [1, 0]);   // 순서가 달라도 제목으로 짝짓는다
+  assert.strictEqual(ctx.linkCollects(opts, cols.slice(0, 1)), null);   // 수가 다르면 따로
+  assert.strictEqual(ctx.linkCollects(opts, [collect(1, "a", { title: "다른 것" }), cols[0]]), null);   // 짝이 없는 세트가 있으면 따로
+  // 제목으로 갈리지 않는 「또는」 대안 · 본기도 1 · 2 는 독립된 축 — 짝이 아니다(Copilot 리뷰 1회차)
+  const easter = ctx.readingOptions([group("e1", FOUR, { set_no: 1, set_total: 2 }), group("e2", FOUR, { set_no: 2, set_total: 2 })], "부활대축일");
+  assert.strictEqual(ctx.linkCollects(easter, [collect(1, "a", { collect_no: 1 }), collect(2, "b", { collect_no: 2 })]), null);
+  assert.strictEqual(ctx.linkCollects([], []), null);
+});
+
+test("buildLectionaryModel: 세트와 본기도가 짝지어진 날 — ?set= 이 본기도까지 정하고, ?collect= 는 읽지도 쓰지도 않으며, 라벨은 제목을 가르는 짧은 이름(사용자 결정 2026-10-13)", () => {
+  const ember = cand(obs("t-추계재", "추계재", { rank: "commemoration", color: "violet" }));
+  const r = resolvedOf("2026-09-18", [ember], ember, { coord: { season: "ordinary", week: 24, type: "weekday", weekday: "fri", year: "II" }, color: "green", colors: ["green"] });
+  const groupsOf = groupsOfFrom({ "t-추계재": [
+    group("s1", FOUR, { title: "성직후보자의 성소를 위한 추계재 금요일" }), group("s2", FOUR, { title: "수도자의 성소를 위한 추계재 금요일" })] });
+  const entries = [{ candidate: ember, collects: [
+    collect(234, "a", { title: "성직후보자의 성소를 위한 추계재 금요일", collect_no: 1 }), collect(237, "b", { title: "수도자의 성소를 위한 추계재 금요일", collect_no: 1, ending: "C" })] }];
+  const m = ctx.buildLectionaryModel(r, { obs: null, track: null, set: 2, collect: 1 }, groupsOf, entries, null);
+  assert.strictEqual(m.collectsLinked, true);
+  same(m.options.map((o) => o.label), ["성직후보자", "수도자"]);
+  assert.strictEqual(m.group.id, "s2");
+  assert.strictEqual(m.collects[m.collectIndex].id, 237);   // ?collect=1 은 무시 — 세트 2 의 짝
+  assert.strictEqual(m.ending, "C");
+  same(plain(m.hrefs.options), ["/lectionary/2026-09-18", "/lectionary/2026-09-18?set=2"]);   // collect 를 쓰지 않는다
+  same(plain(m.hrefs.collects), ["/lectionary/2026-09-18", "/lectionary/2026-09-18?set=2"]);   // 본기도 링크도 짝 세트로
+  const first = ctx.buildLectionaryModel(r, { obs: null, track: null, set: null, collect: 2 }, groupsOf, entries, null);
+  assert.strictEqual(first.collects[first.collectIndex].id, 234);   // 세트 1(기본)의 짝 — 교차 조합은 없다
+});
+
 test("selectVerses: 다른 장에서 옮겨 실린 절(chapter_ref)은 번호가 걸려도 뺀다 — 이사 40 의 41:6-7(자체 리뷰 2026-10-13)", () => {
   const ch = { verses: [1, 2, 3, 4, 5, 6, 7].map((n) => ({ number: n, text: `40:${n}` }))
     .concat([{ number: 6, chapter_ref: 41, text: "41:6" }, { number: 7, chapter_ref: 41, text: "41:7" }, { number: 8, text: "40:8" }]) };

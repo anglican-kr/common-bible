@@ -442,20 +442,43 @@ def test_copy_excludes_optional_verse_brackets(desktop_context):
     assert "(공동번역성서)" in text
 
 
-def test_ember_friday_collects_both_reachable_and_common_caption(desktop_context):
-    """추계재 금요일 — 성직후보자 · 수도자 본기도가 둘 다 탭이고 둘째로 바뀐다(collect_no 가 둘 다 1 — 자체 리뷰 2026-10-13).
+def test_ember_friday_one_button_picks_readings_and_collect_and_common_caption(desktop_context):
+    """추계재 금요일 — 성직후보자 · 수도자는 「독서 · 본기도」 단추 하나로 독서와 본기도를 함께 바꾼다(교차 조합이 없다 — 사용자 결정
+    2026-10-13; 둘째에도 닿는다 — collect_no 가 둘 다 1, 자체 리뷰 2026-10-13). 본기도 칸에는 따로 세그먼트가 없다.
     니니안(공통뿐인 성인)은 대안 독서 세그먼트에 「선교사 공통 독서」 캡션."""
     page = desktop_context.new_page()
     _open(page, "lectionary/2026-09-18?obs=t-%EC%B6%94%EA%B3%84%EC%9E%AC")
-    tabs = page.locator(".lect-collects .division-tab")
+    assert page.inner_text(".lect-sets .lect-control-label") == "독서 · 본기도"
+    tabs = page.locator(".lect-sets .division-tab")
     assert [tabs.nth(i).inner_text() for i in range(tabs.count())] == ["성직후보자", "수도자"]
+    assert page.locator(".lect-collects .division-tab").count() == 0
     first = page.inner_text(".lect-collect-text")
     tabs.nth(1).click()
-    page.wait_for_url("**collect=2")
-    page.wait_for_selector(".lect-collects .division-tab.active:has-text('수도자')")
+    page.wait_for_url("**set=2")
+    assert "collect=" not in page.url
+    page.wait_for_selector(".lect-sets .division-tab.active:has-text('수도자')")
     assert page.inner_text(".lect-collect-text") != first
     _open(page, "lectionary/2026-09-16?obs=d0916-%EB%8B%88%EB%8B%88%EC%95%88")
+    assert page.inner_text(".lect-sets .lect-control-label") == "대안 독서"   # 짝이 아닌 날은 그대로
     assert "공통 독서" in page.inner_text(".lect-sets .lect-caption")
+
+
+def test_may1_one_button_switches_to_labour_day_readings_and_collect(desktop_context):
+    """5.1 — 사도 성 필립보와 성 야고보가 먼저이고, 지역 축일인 노동자의 날은 「독서 · 본기도」 단추 하나로 독서와 본기도를 함께
+    고른다(사용자 결정 2026-10-13 — 「대안 독서는 사도 축일, 본기도는 노동자의 날」 같은 교차 조합은 없다)."""
+    page = desktop_context.new_page()
+    _open(page, "lectionary/2026-05-01")
+    tabs = page.locator(".lect-sets .division-tab")
+    assert [tabs.nth(i).inner_text() for i in range(tabs.count())] == ["사도 성 필립보와 성 야고보", "노동자의 날"]
+    assert page.locator(".lect-sets .division-tab.active").inner_text() == "사도 성 필립보와 성 야고보"
+    assert page.locator(".lect-collects .division-tab").count() == 0
+    collect0 = page.inner_text(".lect-collect-text")
+    first0 = page.inner_text(".lect-reading[data-slot='first'] .lect-ref")
+    tabs.nth(1).click()
+    page.wait_for_url("**/lectionary/2026-05-01?set=2")
+    page.wait_for_selector(".lect-sets .division-tab.active:has-text('노동자의 날')")
+    assert page.inner_text(".lect-collect-text") != collect0
+    assert page.inner_text(".lect-reading[data-slot='first'] .lect-ref") != first0
 
 
 def test_half_verse_on_two_line_verse_shows_only_that_line(desktop_context):

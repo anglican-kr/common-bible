@@ -67,7 +67,7 @@ const PAGE_TITLE = "전례독서";
  *   groups: ReadingGroup[], tracks: Array<1 | 2>, track: 1 | 2 | null,
  *   options: ReadingOption[], setIndex: number, group: ReadingGroup | null, shortGroup: ReadingGroup | null, slots: ReadingSlot[],
  *   chips: LectionaryChip[], pair: LectionaryPair | null,
- *   collects: CollectOption[], collectLabels: string[], collectIndex: number, ending: "A" | "B" | "C",
+ *   collects: CollectOption[], collectLabels: string[], collectIndex: number, collectsLinked: boolean, ending: "A" | "B" | "C",
  *   colors: string[], colorAlt: string[], ownColor: boolean,
  *   fast: "major" | "minor" | null, cycle: string | null, empty: boolean,
  *   hrefs: { prev: string, next: string, today: string, tracks: Array<{ track: 1 | 2, href: string, active: boolean }>, options: string[], collects: string[], pair: { a: string, b: string } | null },
@@ -392,7 +392,17 @@ function pickCollect(/** @type {CollectOption[]} */ options, /** @type {number |
 function collectLabels(options) {
   const nos = options.map((o) => o.collect_no);
   if (new Set(nos).size === nos.length) return nos.map((n) => `본기도 ${n}`);
-  const titles = options.map((o) => shortName(o.title || ""));
+  const t = distinctTitles(options.map((o) => o.title || ""));
+  return options.map((_, i) => (t ? t[i] : `본기도 ${i + 1}`));
+}
+
+/**
+ * 제목들을 가르는 짧은 이름 — 낱말 단위로 공통 머리 · 꼬리를 뗀 부분(모두 소유격 「의」로 끝나면 그것도 뗀다), 그래도
+ * 가를 수 없으면 제목 전체, 그것도 같으면 null. 본기도 라벨(`collectLabels`)과 독서 · 본기도 짝 단추가 함께 쓴다.
+ * @param {string[]} raw @returns {string[] | null}
+ */
+function distinctTitles(raw) {
+  const titles = raw.map((t) => shortName(t || ""));
   const words = titles.map((t) => t.split(/\s+/).filter(Boolean));
   const at = (/** @type {string[]} */ w, /** @type {number} */ i) => w[i];
   let pre = 0;
@@ -403,7 +413,28 @@ function collectLabels(options) {
   if (mids.every((x) => x.length > 1 && x.endsWith("의"))) mids = mids.map((x) => x.slice(0, -1));
   const distinct = mids.every((x) => x) && new Set(mids).size === mids.length;
   const full = titles.every((x) => x) && new Set(titles).size === titles.length;
-  return options.map((_, i) => (distinct ? mids[i] : full ? titles[i] : `본기도 ${i + 1}`));
+  return distinct ? mids : full ? titles : null;
+}
+
+/**
+ * 독서 세트와 본기도가 같은 제목으로 1:1 짝지어지는 날 — 세트마다 짝 본기도의 위치, 아니면 null. 그런 날은 단추 하나로
+ * 둘을 함께 고른다 — 「대안 독서와 본기도가 교차해서 쓰이는 경우(대안 독서는 사도 축일, 본기도는 노동자의 날)는 없다」
+ * (사용자 결정 2026-10-13). 실데이터에서는 5.1(사도 성 필립보와 성 야고보 ∧ 노동자의 날)과 사계재 금요일 넷(성직후보자 ∧
+ * 수도자)뿐이다(2025~2028 전수 — lectionary.data.test.js). 「또는」 독서 1 · 2 와 본기도 1 · 2 · 3 처럼 제목으로 갈리지
+ * 않는 대안은 짝이 아니라 따로 고른다(Copilot 리뷰 1회차 — 독립된 축).
+ * @param {ReadingOption[]} options @param {CollectOption[]} collects @returns {number[] | null}
+ */
+function linkCollects(options, collects) {
+  if (options.length < 2 || options.length !== collects.length) return null;
+  if (new Set(options.map((o) => shortName(o.group.title || ""))).size !== options.length) return null;
+  /** @type {number[]} */
+  const out = [];
+  for (const o of options) {
+    const j = collects.findIndex((c, k) => !out.includes(k) && sameName(c.title, o.group.title));
+    if (j < 0) return null;
+    out.push(j);
+  }
+  return out;
 }
 
 /** 고른 본기도의 송영 코드 — 코드가 없으면 A(ADR-036 §3 기본). @returns {"A" | "B" | "C"} */
@@ -637,10 +668,17 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
   const slots = slotsInOrder(group);
 
   const collects = collectsFor(collectEntries, selected);
-  const collectIndex = pickCollect(collects, query.collect);
+  // 세트와 본기도가 같은 제목으로 짝지어지는 날은 세트가 본기도까지 정한다 — `?collect=` 는 읽지도 쓰지도 않고, 단추 라벨은
+  // 제목을 가르는 짧은 이름(「성직후보자」 · 「수도자」)이다(사용자 결정 2026-10-13 — `linkCollects`).
+  const linked = linkCollects(options, collects);
+  if (linked) {
+    const short = distinctTitles(options.map((o) => o.group.title || ""));
+    if (short) options.forEach((o, i) => { o.label = short[i]; });
+  }
+  const collectIndex = linked && setIndex >= 0 ? linked[setIndex] : pickCollect(collects, query.collect);
   const chosenCollect = collectIndex >= 0 ? collects[collectIndex] : null;
 
-  const base = { obs: selected.observance.id, track, set: setIndex + 1, collect: chosenCollect ? collectIndex + 1 : null };
+  const base = { obs: selected.observance.id, track, set: setIndex + 1, collect: !linked && chosenCollect ? collectIndex + 1 : null };
   const chips = resolved.candidates.map((c) => {
     const own = c === selected ? groups : groupsOf(c);
     const t = c === selected ? track : pickTrack(own, null, storedTrack);
@@ -659,7 +697,7 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
 
   return {
     date, resolved, selected, initial, groups, tracks, track, options, setIndex, group, shortGroup, slots,
-    chips, pair, collects, collectLabels: collectLabels(collects), collectIndex, ending: endingCodeOf(chosenCollect),
+    chips, pair, collects, collectLabels: collectLabels(collects), collectIndex, collectsLinked: !!linked, ending: endingCodeOf(chosenCollect),
     colors, colorAlt, ownColor, fast: fastOf(resolved),
     cycle: resolved.coord.year && CYCLE_LABEL[resolved.coord.year] ? CYCLE_LABEL[resolved.coord.year] : null,
     empty,
@@ -667,11 +705,14 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
       prev: `/lectionary/${addDays(date, -1)}`,
       next: `/lectionary/${addDays(date, 1)}`,
       today: "/lectionary",
-      // 본기도 선택(`collect`)은 독서와 독립된 축이라 트랙 · 세트를 바꿔도 유지한다(Copilot 리뷰 1회차).
+      // 본기도 선택(`collect`)은 독서와 독립된 축이라 트랙 · 세트를 바꿔도 유지한다(Copilot 리뷰 1회차) — 세트와 본기도가
+      // 제목으로 짝지어진 날만 예외로, 세트가 본기도를 정한다(`linked` — 그때 본기도 링크는 짝 세트의 링크와 같다).
       // 트랙이 바뀌면 세트는 그 트랙의 첫 세트로 돌아간다(세트는 트랙에 딸린 것).
       tracks: tracks.map((t) => ({ track: t, href: hrefFor(date, { ...base, track: t, set: null }, defaults), active: t === track })),
       options: options.map((_, i) => hrefFor(date, { ...base, set: i + 1 }, defaults)),
-      collects: collects.map((_, i) => hrefFor(date, { ...base, collect: i + 1 }, defaults)),
+      collects: collects.map((_, j) => (linked
+        ? hrefFor(date, { ...base, set: linked.indexOf(j) + 1 }, defaults)
+        : hrefFor(date, { ...base, collect: j + 1 }, defaults))),
       pair: pair ? {
         a: hrefFor(date, { obs: pair.a.observance.id, track: null, set: null, collect: null }, defaults),
         b: hrefFor(date, { obs: pair.b.observance.id, track: null, set: null, collect: null }, defaults),
@@ -842,12 +883,14 @@ function buildControls(m) {
   }
   if (m.options.length > 1) {
     // 「또는」 대안 · 조건부 세트 — 조건 · 종류가 라벨이다(사용자 결정 2026-10-12). 괄호 선택 구절 세트는
-    // 바탕에 합쳐져 여기 오르지 않는다(본문의 〔 〕 가 맡는다).
+    // 바탕에 합쳐져 여기 오르지 않는다(본문의 〔 〕 가 맡는다). 세트와 본기도가 제목으로 짝지어진 날(5.1 · 사계재 금요일)은
+    // 이 단추 하나가 둘을 함께 고른다 — 이름표도 「독서 · 본기도」(사용자 결정 2026-10-13).
+    const name = m.collectsLinked ? "독서 · 본기도" : "대안 독서";
     const ctl = el("div", { className: "lect-control lect-sets" });
-    ctl.appendChild(el("span", { className: "lect-control-label" }, "대안 독서"));
+    ctl.appendChild(el("span", { className: "lect-control-label" }, name));
     ctl.appendChild(buildSegmentTabs(
       m.options.map((o, i) => ({ label: o.label, href: m.hrefs.options[i], active: i === m.setIndex })),
-      { ariaLabel: "대안 독서", className: "division-tabs--compact" },
+      { ariaLabel: name, className: "division-tabs--compact" },
     ));
     // 공통 독서는 세그먼트에도 분류 라벨을 병기한다(ADR-038 §3 — 성인의 고유로 오인하지 않게)
     const common = m.options.every((o) => o.group.common) ? m.options[0].group.title : null;
@@ -862,7 +905,8 @@ function buildCollects(m) {
   if (!m.collects.length) return null;
   const section = el("section", { className: "lect-section lect-collects", "data-slot": "collect" });
   section.appendChild(el("h3", { className: "lect-slot" }, "본기도"));
-  if (m.collects.length > 1) {
+  // 세트와 짝지어진 날은 위의 「독서 · 본기도」 단추가 고른다 — 따로 세그먼트를 두지 않는다(사용자 결정 2026-10-13).
+  if (m.collects.length > 1 && !m.collectsLinked) {
     section.appendChild(buildSegmentTabs(
       m.collects.map((_, i) => ({ label: m.collectLabels[i], href: m.hrefs.collects[i], active: i === m.collectIndex })),
       { ariaLabel: "본기도 대체안", className: "division-tabs--compact" },

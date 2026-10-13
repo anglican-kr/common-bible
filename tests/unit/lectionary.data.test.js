@@ -165,17 +165,40 @@ test("A3 2026-08-09 연중 19주일 — 목적지 카드 둘(주일 · 변모 op
   same(plain(moved.colors), ["white"]);   // 변모를 고르면 그 축일의 백
 });
 
-test("A3 5.1 · 사계재 금요일 — 고른 관측일의 독서 · 본기도가 먼저, 겹치는 collect_no 의 둘째에도 닿는다(자체 리뷰 2026-10-13)", { skip: SKIP }, () => {
+test("A3 5.1 · 사계재 금요일 — 독서 세트와 본기도가 같은 제목으로 짝지어져 단추 하나(?set=)로 함께 바뀌고, 고른 관측일의 것이 먼저다(사용자 결정 2026-10-13)", { skip: SKIP }, () => {
   const m = model("2026-05-01");
-  assert.strictEqual(m.options[0].label, "사도 성 필립보와 성 야고보");
-  assert.strictEqual(m.collects[0].title, "사도 성 필립보와 성 야고보");
-  same(m.collectLabels, ["사도 성 필립보와 성 야고보", "노동자의 날"]);
-  assert.strictEqual(model("2026-05-01", { collect: 2 }).collects[model("2026-05-01", { collect: 2 }).collectIndex].title, "노동자의 날");
+  assert.strictEqual(m.collectsLinked, true);
+  same(m.options.map((o) => o.label), ["사도 성 필립보와 성 야고보", "노동자의 날"]);
+  assert.strictEqual(m.collects[m.collectIndex].title, "사도 성 필립보와 성 야고보");
+  same(plain(m.hrefs.options), ["/lectionary/2026-05-01", "/lectionary/2026-05-01?set=2"]);
+  const labour = model("2026-05-01", { set: 2 });
+  assert.strictEqual(labour.group.title, "노동자의 날");
+  assert.strictEqual(labour.collects[labour.collectIndex].title, "노동자의 날");
+  const crossed = model("2026-05-01", { collect: 2 });   // 교차 조합은 없다 — ?collect= 는 읽지 않는다
+  assert.strictEqual(crossed.collects[crossed.collectIndex].title, "사도 성 필립보와 성 야고보");
   const ember = model("2026-09-18", { obs: "t-추계재" });
-  same(ember.collectLabels, ["성직후보자", "수도자"]);
-  const second = model("2026-09-18", { obs: "t-추계재", collect: 2 });
+  assert.strictEqual(ember.collectsLinked, true);
+  same(ember.options.map((o) => o.label), ["성직후보자", "수도자"]);
+  const second = model("2026-09-18", { obs: "t-추계재", set: 2 });
   assert.strictEqual(second.collects[second.collectIndex].id, 237);
-  assert.notStrictEqual(ember.hrefs.collects[0], ember.hrefs.collects[1]);
+});
+
+test("A3 데이터 전수 — 독서 세트가 제목으로 갈리는 날은 본기도도 같은 제목으로 짝지어진다(5.1 · 사계재 금요일 넷뿐 — 사용자 결정 2026-10-13의 지킴이)", { skip: SKIP }, () => {
+  const bad = [];
+  const seen = new Set();
+  for (const y of [2025, 2026, 2027]) {
+    let d = ctx.toKey(y, 1, 1);
+    while (d.slice(0, 4) === String(y)) {
+      for (const chip of model(d).chips) {
+        const m = model(d, { obs: chip.candidate.observance.id });
+        if (new Set(m.options.map((o) => o.group.title)).size > 1 && !m.collectsLinked) bad.push(`${d} ${id(chip.candidate)}`);
+        if (m.collectsLinked) seen.add(id(chip.candidate));
+      }
+      d = ctx.addDays(d, 1);
+    }
+  }
+  same(bad, []);
+  same([...seen].sort(), ["d0501-사도-성-필립보와-성-야고보", "t-동계재", "t-추계재", "t-춘계재", "t-하계재"].sort());
 });
 
 test("A3 두 독서 카드 — 본문 없는 격자로는 내지 않고(12.28 · 1.6), 명절이 주일이면 「이날의 주일 독서」(자체 리뷰 2026-10-13)", { skip: SKIP }, () => {
