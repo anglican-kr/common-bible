@@ -77,13 +77,13 @@ title: "feat: 교회력 전례독서 뷰 A3 — /lectionary 라우트 · 본기�
 
 ## 검증
 
-- **유닛**(`node --test tests/unit/*.test.js`) **1145건 — 1144 통과 · skip 1**(T-2032-02-12-ash-wednesday-seollal — 미결13, 데이터 대기). 종전 1077 에서 68 늘었다(리뷰 1회차 +2).
+- **유닛**(`node --test tests/unit/*.test.js`) **1147건 — 1146 통과 · skip 1**(T-2032-02-12-ash-wednesday-seollal — 미결13, 데이터 대기). 종전 1077 에서 70 늘었다(리뷰 1회차 +2 · 3회차 +2).
   - 신규 `tests/unit/lectionary.test.js` **44**(합성 재료 — 초기 선택 · 트랙 · 대안 세트 세 갈래 · 본기도 · 카드 네 꼴 · 색 · URL · 절 발췌 · 선택 구절 판정 · 영광송 · `buildLectionaryModel` 통합).
   - 신규 `tests/unit/lectionary.data.test.js` **18**(실데이터 — 상수 ↔ `_meta` · `_vocab`, 실제 날짜 열다섯, 송가 표지, 2025~2027 전수). `engine-data.yml` · `sync-data.yml` 에 등록했다(설계서 §7 선례).
   - `routing.test.js` 24 → 29(`/lectionary` 파싱) · `tab-history.test.js` 11 → 12(캘린더 탭 분류).
 - **타입 검사** `npm run typecheck`(앱 · 워커) 0 오류.
-- **e2e**(로컬 — `python3 scripts/serve.py 8080` 뒤 `pytest tests/e2e/`) **250건** — 사용자 결정 반영 뒤 전체 재실행 결과는 아래 「e2e 전체 재실행」. 종전 232 에서 18 늘었다(리뷰 1회차 +2).
-  - 신규 `tests/e2e/test_lectionary_view.py` **15** — 본문 순서 · 「본기도 1·2·3」 세그먼트 · 「독서 1·2」 · 칩(색 · 본문 전환) · 두 독서 카드(당일 · 목적지 · 도착일) · 트랙 기억 · 조건부 세트 조건 라벨 · 괄호 선택 구절 합침(〔 〕 · 「짧게 읽으면」) · 기념일 빈 상태 · 오늘/전날/다음날 · 잘못된 날짜 · 공유 링크 · 모바일 탭 바.
+- **e2e**(로컬 — `python3 scripts/serve.py 8080` 뒤 `pytest tests/e2e/`) **252건** — 사용자 결정 반영 뒤 전체 재실행 결과는 아래 「e2e 전체 재실행」. 종전 232 에서 20 늘었다(리뷰 1회차 +2 · 3회차 +2).
+  - 신규 `tests/e2e/test_lectionary_view.py` **17** — 본문 순서 · 「본기도 1·2·3」 세그먼트 · 「독서 1·2」 · 칩(색 · 본문 전환) · 두 독서 카드(당일 · 목적지 · 도착일) · 트랙 기억 · 조건부 세트 조건 라벨 · 괄호 선택 구절 합침(〔 〕 · 「짧게 읽으면」) · 기념일 빈 상태 · 오늘/전날/다음날 · 잘못된 날짜 · 공유 링크 · 모바일 탭 바.
   - 접근성 — `test_a11y_axe.py` 7 → 9(뷰 두 화면, critical · serious 위반 0) · `test_a11y_keyboard.py` 7 → 8(칩 Tab · Enter).
 - **브라우저 스모크**(Playwright, 데스크톱 · 모바일 각 14 주소) — 콘솔 · 페이지 오류 0(기존 GA CSP 경고 제외).
 - **변이 검사**(코드를 일부러 틀리게 바꿔 테스트가 잡는지 보는 검사 — 파일을 백업해 두고 바꾼 뒤 복사로 되돌렸다): **18개 모두 잡혔다** — 미결25 가지 제거 · 모든 관측일 본기도 열거 · 괄호 세트를 합치지 않음 · 「지키는 경우」 정규화 제거 · 조건부 바탕 라벨 · 선택 구절 판정에서 바탕 무시 · 오는/지난 뒤바꿈 · 격자도 자기 색 · URL 기본값 · 원본 세트 표지를 조건으로 · 송가 영광송 표지 · 트랙 우선순위 · 슬롯 순서 · 독서 없는 격자 선택 · 도착일 카드 · 병합 절 · `track=3` 허용 · 탭 분류.
@@ -110,8 +110,8 @@ title: "feat: 교회력 전례독서 뷰 A3 — /lectionary 라우트 · 본기�
 - `docs/design/liturgical-engine.md` §9 — 미결25 · 38 · 42 닫힘(§9.1 → §9.2 한 줄, 사용자 결정) · 미결12 · 20 에 사용자 결정 문장
 - `docs/status.md` — 한 줄 추가
 - `docs/architecture.md` — §4 파일 수(38 → 39 · `<script>` 32 → 33 · 모듈 29 → 30) · 모듈 표(27개 · `lectionary.js` 행 · 줄 수 갱신) · §4.1 라우트 표 · §6 · 부록 A ADR-038 · 부록 B
-- `CLAUDE.md` — 모듈 26 → 27 · 케이스 수 1145 · 실데이터 테스트 선례
-- `tests/README.md` — 유닛 31파일 · 1145케이스, e2e 28파일 · 250케이스, 새 행 넷 · 갱신 행 넷
+- `CLAUDE.md` — 모듈 26 → 27 · 케이스 수 1147 · 실데이터 테스트 선례
+- `tests/README.md` — 유닛 31파일 · 1147케이스, e2e 28파일 · 252케이스, 새 행 넷 · 갱신 행 넷
 - `docs/index.md` — 교회력 행에 뷰 정본 자리
 - `.github/workflows/engine-data.yml` · `sync-data.yml` — `lectionary.data.test.js` 등록
 - `data` 서브모듈 포인터 `0fd14cd` → `723b084`(data#30) · `docs/design/liturgical-engine.md` §5.2 facts 다섯
@@ -136,3 +136,18 @@ Copilot 2회차(`7ad37e1` 기준, pullrequestreview-5497151884)는 지적 3건 �
 
 - **① · ② 원장 「검증」의 파일별 케이스 수** — 유닛 42 → **44**, e2e 13 → **15**. 1회차에서 더한 넷을 합계(1145 / 250)에는 반영하고 파일별 수에는 빠뜨렸다.
 - **③ 설계서 §6 `findCollects` 문단의 뒷문장**(「나머지를 ② 로 열거 · 반환값을 재배열」)이 기각된 잠정안이었다 — 「고른 후보의 항목만 찾아 ① 자리에 두고 나머지는 보이지 않는다 — 반환값에서 고를 뿐 재조회하지 않는다」로 고쳤다. 1회차 ④ 에서 앞문장만 고치고 뒷문장을 놓친 것.
+
+## 리뷰 반영 (2026-10-13, 3회차)
+
+Copilot 3회차(`2d4b61c` 기준, pullrequestreview-5497820182)는 「0 open findings」이되 본문에 **「previously missed」 8건**을 적었다(스레드 없음 — 바뀌지 않은 코드의 지적). 코드 5 · 문서 3, 전부 반영. 코드 `758e879`, 문서는 이 절을 담은 커밋.
+
+- **① `// @ts-check` 가 `"use strict";` 뒤에 있어 모듈 전체(975줄)가 타입 검사 밖이었다** — 첫 줄로 옮기자 오류 넷이 드러났다: 두 독서 카드의 튜플 배열(`Array<[Candidate, PairCardText, string]>` 로 명시) · `routeSeq` 클로저 좁힘(한 번 잡아 둔다). `npm run typecheck` 0.
+- **② 전례시편 영광송이 장을 못 불러와도 붙었다**(`wantsGloria` — 송가 가지만 장을 요구) — 전례시편도 마지막 장이 있어야 붙인다. 「본문을 불러오지 못했습니다」 뒤에 영광송만 홀로 남지 않는다. 유닛 1(lps + null → false).
+- **③ 트랙 세그먼트의 click 리스너가 라우터 가드 앞에서 `replaceState` · 기억 저장을 했다** — Ctrl/Cmd+클릭으로 새 탭을 열어도 지금 탭의 URL 이 `?track=1` 로 바뀌고 기억이 바뀌었다. 라우터와 같은 가드(`defaultPrevented` · Ctrl/Cmd/Shift/Alt · 비기본 버튼)를 맨 앞에. e2e 1(Ctrl+클릭 → 새 탭은 `?track=2`, 지금 탭은 그대로 「독서 1」).
+- **④ `parsePath` 의 `parseInt` 가 「2junk」 「1.5」 「3x」 를 받았다** — 값 전체가 양의 정수(`/^[1-9]\d*$/`)일 때만. 유닛 1.
+- **⑤ `decodeURIComponent` 가 깨진 퍼센트 이스케이프(`/lectionary/%E0%A4%A`)에 throw** — `parsePath` 는 `route()` 의 try 밖이라 화면이 멈췄다. 실패하면 원문을 그대로 넘겨 뷰가 「잘못된 날짜」로 거부. 유닛 1 · e2e 1.
+- **⑥ ADR-038 §3 「구현」 초기 선택 불릿의 「제목 · 색 · 본기도는 여전히 승자」** — 본기도는 고른 칩(초기엔 격자)의 것이라 모순이었다. 「헤더의 제목 · 대표색은 승자, 본기도는 고른 칩의 것」으로.
+- **⑦ ADR-038 기념일 불릿의 결손 세 칸 예시**(사순 2주 화 · 수 · 부활 4주 토) — data#30 으로 채워져 지금은 없다. 일반 「독서 없음」 동작은 두고 닫힌 사례로 적었다.
+- **⑧ tests/README 의 `lectionary.data.test.js` 행 「알려진 격자 결손 3칸 표」** — 같은 이유로 「결손 표 없이 빈 실패 목록을 기대」로.
+
+**검증(3회차 뒤)** — 유닛 **1147건 — 1146 통과 · skip 1**(routing 29 → 31), `npm run typecheck` 통과(이제 `lectionary.js` 포함), e2e `test_lectionary_view.py` 17/17, 전체 e2e `pytest tests/e2e/` **252건 전부 통과**(6분 38초). 변이 검사 4/4 — 전례시편 장 가드 제거 → 유닛 1 실패 · `positive` 를 `parseInt` 로 되돌림 → 1 실패 · `decodeOrRaw` 의 try 제거 → 1 실패 · 클릭 가드 제거 → e2e Ctrl+클릭 검사 실패. 스레드가 없어 해결할 것은 없고 PR 본문만 갱신했다.
