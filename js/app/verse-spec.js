@@ -257,11 +257,10 @@ function mergeVerseSpecs(specA, specB) {
 // ── END VERSE_SPEC ──
 
 // ── BEGIN VERSE_SERIALIZE ──
-// Exercised by tests/unit/bookmark.test.js. Pure DOM transform: clone the
-// range bounded by [firstNode, lastNode] (inclusive), strip aria-hidden
-// verse-number glyphs, drop citation chips and ※ variant-note markers,
-// expand stanza/paragraph/pilcrow markers to blank lines and hemistich
-// markers to single line breaks, then normalize whitespace.
+// Exercised by the e2e copy tests (tests/e2e/test_copy.py · test_lectionary_view.py — the transform needs a real
+// DOM Range). Pure DOM transform: clone the range bounded by [firstNode, lastNode] (inclusive), strip aria-hidden
+// verse-number glyphs, drop citation chips and ※ variant-note markers, expand stanza/paragraph/pilcrow markers to
+// blank lines and hemistich markers to single line breaks, then normalize whitespace.
 //
 // Shared by the article-level system-copy handler (views.js, fires on
 // Cmd/Ctrl+C of a drag-selection) and the verse-select bar's 복사 button
@@ -275,7 +274,11 @@ function mergeVerseSpecs(specA, specB) {
  */
 function serializeVerseRange(firstNode, lastNode) {
   const range = document.createRange();
-  range.setStartBefore(firstNode);
+  // ADR-039 부(部): the 「(N)」 sub-heading sits right before its section's first verse (views.js appendVerses), outside
+  // the verse spans — a copy that starts at that verse carries it too (사용자 결정 2026-10-13 — before this only the
+  // headings *inside* the range came along, so a whole-psalm copy had 「(2)」 but not 「(1)」).
+  const prev = firstNode instanceof Element ? firstNode.previousElementSibling : null;
+  range.setStartBefore(prev && prev.classList.contains("psalm-section") ? prev : firstNode);
   range.setEndAfter(lastNode);
   const work = document.createElement("div");
   work.appendChild(range.cloneContents());
@@ -285,9 +288,13 @@ function serializeVerseRange(firstNode, lastNode) {
   // wraps real verse words, so it stays (its textContent flows through).
   // Presentation-only markers that the UI makes unselectable must not leak into copied scripture
   // either: opt-out `data-copy-omit` (lectionary 〔 〕 optional-verse brackets) and the ※ parallel-passage
-  // anchor — a reading aid like the variant-note ※ above (self-review 2026-10-13). The liturgical marks
-  // ◯ · ¶ · 「(N)」 stay until the product call in docs/known-issues.md §4.
+  // anchor — a reading aid like the variant-note ※ above (self-review 2026-10-13).
   work.querySelectorAll(".cite-chip, .note-anchor--variant, [data-copy-omit], .parallel-anchor").forEach((n) => n.remove());
+  // The liturgical marks stay — they are what a bulletin needs (사용자 결정 2026-10-13, docs/known-issues.md §4): ◯ already
+  // ends the cantor's half-line after a space; ¶ (unnumbered versicle) stands where a verse number would, so it takes a
+  // space; 「(N)」 gets a line of its own so it does not read as a verse number glued to the next line.
+  work.querySelectorAll(".versicle-mark").forEach((n) => { n.textContent = "¶ "; });
+  work.querySelectorAll(".psalm-section").forEach((n) => { n.textContent = `\n\n${(n.textContent ?? "").trim()}\n`; });
   work.querySelectorAll(".stanza-break, .paragraph-break, .pilcrow")
     .forEach((n) => { n.textContent = "\n\n"; });
   work.querySelectorAll(".hemistich-break").forEach((n) => { n.textContent = "\n"; });
@@ -298,6 +305,19 @@ function serializeVerseRange(firstNode, lastNode) {
     .trim();
 }
 // ── END VERSE_SERIALIZE ──
+
+// ── BEGIN CITATION_SOURCE ──
+/**
+ * 복사 출처 줄 끝의 번역 표기 — 전례시편 · 송가(`division: "liturgical"`)는 대한성공회 기도서의 번역이라(ADR-037 §1 · §3)
+ * 「(대한성공회 기도서)」, 성서 본문은 「(공동번역성서)」(사용자 결정 2026-10-13). 장 본문 복사(views.js) · 전례독서 복사
+ * (lectionary.js) · 절 선택 복사 버튼(bookmark-verse-select.js)이 함께 쓴다.
+ * @param {boolean} liturgical
+ * @returns {string}
+ */
+function citationSource(liturgical) {
+  return liturgical ? "(대한성공회 기도서)" : "(공동번역성서)";
+}
+// ── END CITATION_SOURCE ──
 
 // ── Window facade ──
 // External callers (views.js system-copy, routing.js parsePath) call these as
@@ -311,6 +331,6 @@ window.verseInstanceKeys = verseInstanceKeys;
 
 export {
   parseVerseSpec, collapseFullVerseRefs, collapseSegmentedVerses,
-  selectedVersesToSpec, mergeVerseSpecs, serializeVerseRange,
+  selectedVersesToSpec, mergeVerseSpecs, serializeVerseRange, citationSource,
   specCoversVerse, chapterMaxVerse, verseInstanceKey, verseInstanceKeys,
 };

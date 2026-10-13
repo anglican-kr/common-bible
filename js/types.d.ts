@@ -856,10 +856,10 @@ export interface AppStorage {
   loadBookmarks: () => BookmarkTreeNode[];
   saveBookmarks: (store: BookmarkTreeNode[]) => void;
 
-  // Lectionary track (ADR-038 §3 — 전례년 단위로 기억하는 독서 1/2 선택). `year` 는 엔진의
-  // `liturgicalYearOf` 가 주는 전례년 번호다. 로컬 전용(Drive 동기화 없음).
-  loadLectionaryTrack: (year: number) => 1 | 2 | null;
-  saveLectionaryTrack: (year: number, track: 1 | 2) => void;
+  // Lectionary track (ADR-038 §3 — 독서 1/2 선택). 마지막으로 고른 트랙 하나를 날짜 · 해와 무관하게 기억한다
+  // (사용자 결정 2026-10-13). 로컬 전용(Drive 동기화 없음).
+  loadLectionaryTrack: () => 1 | 2 | null;
+  saveLectionaryTrack: (track: 1 | 2) => void;
 
   // Install nudge state
   _loadNudgeState: () => InstallNudgeState;

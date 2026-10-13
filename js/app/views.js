@@ -20,6 +20,8 @@
 // instead of through the window facade. applyAudioShow stays facade-only
 // (settings-ui / state-machine read it) so it is not imported here.
 import { showAudioPlayer, hideAudioBar } from "./audio-player.js";
+// Copy-attribution translation label shared with the lectionary view and the verse-select bar (verse-spec.js).
+import { citationSource } from "./verse-spec.js";
 
 const { _$, el, clearNode, chUnit, hangingQuoteClass } = window.appHelpers;
 const { createOverlay } = window.appOverlay;
@@ -1512,11 +1514,9 @@ function renderChapter(data, book, opts) {
   });
 
   // one article — one chapter. The liturgical books (전례시편 · 송가) are the prayer-book translation, not 공동번역
-  // (ADR-037 §1 · §3), so they carry no 「(공동번역성서)」 (self-review 2026-10-13).
-  bindCopyAttribution(article, (_unit, runs) => {
-    const ref = `${book.name_ko} ${ch}:${formatVerseRanges(runs[0].ranges)}`;
-    return book.division === "liturgical" ? ref : `${ref} (공동번역성서)`;
-  });
+  // (ADR-037 §1 · §3), so they are credited to 「(대한성공회 기도서)」 (사용자 결정 2026-10-13 — verse-spec.js citationSource).
+  bindCopyAttribution(article, (_unit, runs) =>
+    `${book.name_ko} ${ch}:${formatVerseRanges(runs[0].ranges)} ${citationSource(book.division === "liturgical")}`);
 
   $app.appendChild(article);
   $app.appendChild(buildChapterNav(book, ch));

@@ -314,11 +314,45 @@ def test_data_half_verses_collapse_to_whole_verse_numbers(page):
     assert text.endswith("— 이사야 7:8-9 (공동번역성서)"), text[-80:]
 
 
-def test_liturgical_psalter_copy_has_no_common_bible_suffix(page):
-    """전례시편은 기도서 번역이라 「(공동번역성서)」를 붙이지 않는다(ADR-037 §3)."""
+def test_liturgical_psalter_copy_credits_prayer_book(page):
+    """전례시편은 기도서 번역이라 출처가 「(대한성공회 기도서)」다 — 「(공동번역성서)」가 아니다(ADR-037 §3 · 사용자 결정 2026-10-13)."""
     _open_chapter(page, "lps/23")
     vrefs = page.eval_on_selector_all("article.chapter-text .verse[data-vref]", "els => els.map(e => e.getAttribute('data-vref'))")
     first2 = next(v for v in vrefs if v.startswith("2"))
     text = _copy_text(page, _SELECT_LINES.replace("%A%", vrefs[0]).replace("%B%", first2))
     assert "(공동번역성서)" not in text
-    assert "\n\n— 전례시편 23:1-2" in text
+    assert text.endswith("\n\n— 전례시편 23:1-2 (대한성공회 기도서)"), text[-80:]
+
+
+def test_psalter_copy_from_section_start_carries_heading_and_marks(page):
+    """전례시편 89편 19~20절 — 부 「(2)」의 첫 절부터 고르면 「(2)」가 제 줄로 실리고, ◯ 는 선창 끝에 남고, 무번호 구절은 「¶ 」로
+    시작한다(사용자 결정 2026-10-13 — 전례 표기는 복사에 남긴다, known-issues §4)."""
+    _open_chapter(page, "lps/89")
+    text = _copy_text(page, _SELECT_LINES.replace("%A%", "19a").replace("%B%", "20a"))
+    assert text.startswith("(2)\n그 옛날, 당신께서 스스로 나타나시어, ◯\n당신의 성도들에게 말씀하셨습니다.\n¶ “나는 용사들 위에"), text[:160]
+    assert "나는 나의 종 다윗을 찾아내어 ◯\n" in text, text
+    assert text.endswith("\n\n— 전례시편 89:19-20 (대한성공회 기도서)"), text[-80:]
+
+
+def test_psalter_copy_mid_section_has_no_heading(page):
+    """부의 가운데(89:20)부터 고르면 그 부의 「(2)」는 싣지 않는다 — 소제목은 그 부의 첫 절과 함께만."""
+    _open_chapter(page, "lps/89")
+    text = _copy_text(page, _SELECT_LINES.replace("%A%", "20a").replace("%B%", "20b"))
+    assert text.startswith("나는 나의 종 다윗을 찾아내어 ◯\n"), text[:80]
+    assert "(2)" not in text
+    assert text.endswith("\n\n— 전례시편 89:20 (대한성공회 기도서)"), text[-80:]
+
+
+def test_verse_select_copy_on_psalter_credits_prayer_book(page):
+    """절 선택 막대의 복사 버튼 — 전례시편이면 「(대한성공회 기도서)」, 부의 첫 절을 고르면 그 「(2)」도 싣는다(사용자 결정
+    2026-10-13; 종전엔 어느 책이든 「(공동번역성서)」였다)."""
+    page.context.grant_permissions(["clipboard-read", "clipboard-write"])
+    _open_chapter(page, "lps/89")
+    page.evaluate("() => enterVerseSelectMode('lps', 89)")
+    page.wait_for_selector("#verse-select-bar:not([hidden])")
+    page.click("#v19")
+    page.click("#verse-select-copy-btn")
+    page.wait_for_selector("#verse-select-bar", state="hidden", timeout=2_000)
+    text = page.evaluate("async () => await navigator.clipboard.readText()")
+    assert text.startswith("(2)\n그 옛날"), text[:80]
+    assert text.endswith("— 전례시편 89:19 (대한성공회 기도서)"), text[-80:]

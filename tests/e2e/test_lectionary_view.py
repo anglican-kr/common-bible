@@ -7,7 +7,7 @@
   ① 본문 순서 — 본기도 → 제1독서 → 시편(영광송 1회) → 제2독서 → 복음, 송영 1회
   ② 관측일 스위처 — 칩 전부 노출, 고르면 ?obs= 와 본문 · 색이 바뀐다
   ③ 두 독서 나란히 — 선택 봉헌 당일 · 목적지 주일 · 도착일 카드 둘
-  ④ 대안 세트 · 트랙 — 세그먼트, 트랙은 전례년 단위로 기억
+  ④ 대안 세트 · 트랙 — 세그먼트, 트랙은 마지막 선택을 날짜 · 해와 무관하게 기억
   ⑤ 기념일 칩 — 「기념일 — 본문 없음」
   ⑥ 날짜 — 오늘 · 전날/다음날 · 잘못된 날짜
   ⑦ 탭 바 — 캘린더 탭 소속이라(A2 전) 어느 탭도 활성이 아니다
@@ -139,8 +139,9 @@ def test_destination_sunday_and_arrival_day_offer_pairs(desktop_context):
 
 # ── ④ 대안 세트 · 트랙 ──
 
-def test_track_toggle_persists_per_liturgical_year(desktop_context):
-    """연중 11주일 — 독서 2 를 고르면 ?track=2 와 localStorage 기억, 다음 주일은 기억대로 독서 2."""
+def test_track_toggle_persists_across_days_and_years(desktop_context):
+    """연중 11주일 — 독서 2 를 고르면 ?track=2 와 localStorage 기억, 다음 주일도 이듬해 주일도 기억대로 독서 2(사용자 결정
+    2026-10-13 — 「한번 선택하면 계속 일관성 있게 같은 트랙이 기본값」; 종전엔 전례년마다 따로 기억해 해가 바뀌면 독서 1)."""
     page = desktop_context.new_page()
     _open(page, "lectionary/2026-06-14")
     assert page.locator(".lect-track .division-tab").count() == 2
@@ -148,8 +149,7 @@ def test_track_toggle_persists_per_liturgical_year(desktop_context):
     page.locator(".lect-track .division-tab", has_text="독서 2").click()
     page.wait_for_url("**/lectionary/2026-06-14?track=2")
     page.wait_for_selector(".lect-track .division-tab.active:has-text('독서 2')")
-    stored = page.evaluate("() => JSON.parse(localStorage.getItem('bible-lectionary-track') || 'null')")
-    assert stored == {"2026": 2}, stored   # 2026-06-14 는 전례년 2026(대림 2025 ~ 대림 2026 전)
+    assert page.evaluate("() => localStorage.getItem('bible-lectionary-track')") == "2"   # 전례년 키 없이 값 하나
     # 다음 주일로는 앱 안에서 이동한다 — desktop_context 의 init script 가 page.goto 마다
     # 앱 저장소(이 키 포함)를 지우므로, 전체 로드로 가면 기억이 아니라 초기화를 보게 된다.
     page.evaluate("() => window.navigate('/lectionary/2026-06-21')")
@@ -159,6 +159,18 @@ def test_track_toggle_persists_per_liturgical_year(desktop_context):
     assert "독서 2" in page.inner_text(".lect-chip[aria-current]")
     # 기억에서 온 트랙도 주소에 적힌다 — 같은 주소가 기억과 무관하게 같은 화면(자체 리뷰 2026-10-13).
     assert page.evaluate("() => location.search") == "?track=2"
+    # 이듬해(전례년 2027 — 대림 2026 뒤)의 연중 주일도 독서 2.
+    page.evaluate("() => window.navigate('/lectionary/2027-06-20')")
+    page.wait_for_selector(".lect-date time[datetime='2027-06-20']")
+    assert page.locator(".lect-track .division-tab.active").inner_text() == "독서 2"
+    assert page.evaluate("() => location.search") == "?track=2"
+    # 다시 독서 1 을 고르면 그것이 새 기본값 — 앞 해의 주일로 돌아가도 독서 1.
+    page.locator(".lect-track .division-tab", has_text="독서 1").click()
+    page.wait_for_url("**/lectionary/2027-06-20?track=1")
+    assert page.evaluate("() => localStorage.getItem('bible-lectionary-track')") == "1"
+    page.evaluate("() => window.navigate('/lectionary/2026-06-21')")
+    page.wait_for_selector(".lect-date time[datetime='2026-06-21']")
+    assert page.locator(".lect-track .division-tab.active").inner_text() == "독서 1"
 
 
 def test_cross_chapter_reading_keeps_every_chapter(desktop_context):
@@ -185,7 +197,7 @@ def test_back_after_track_change_returns_to_previous_track(desktop_context):
     page.wait_for_url("**/lectionary/2026-06-14?track=1")   # 저장 전에 지금 항목에 트랙을 명시해 둔 것
     page.wait_for_selector(".lect-track .division-tab.active:has-text('독서 1')")
     # 기억은 2 그대로 — 다음에 트랙 없이 열면 독서 2.
-    assert page.evaluate("() => JSON.parse(localStorage.getItem('bible-lectionary-track') || 'null')") == {"2026": 2}
+    assert page.evaluate("() => localStorage.getItem('bible-lectionary-track')") == "2"
 
 
 def test_back_after_track_change_from_malformed_track_url(desktop_context):
@@ -295,9 +307,9 @@ def test_copy_across_chapters_is_one_passage(desktop_context):
     page = desktop_context.new_page()
     _open(page, "lectionary/2025-06-22")
     text, a, b, head, tail = page.evaluate(_LECT_COPY_CROSS)
-    # 42편의 실제 마지막 절(11)에서 끝나 43편 1절로 이어지므로 합쳐 적는다 — 번호는 줄 글자 없이, 전례시편은 「(공동번역성서)」 없이
+    # 42편의 실제 마지막 절(11)에서 끝나 43편 1절로 이어지므로 합쳐 적는다 — 번호는 줄 글자 없이, 전례시편은 「(대한성공회 기도서)」
     na, nb = re.match(r"\d+", a).group(), re.match(r"\d+", b).group()
-    assert text.endswith(f"\n\n— 전례시편 42:{na}-43:{nb}"), text[-120:]
+    assert text.endswith(f"\n\n— 전례시편 42:{na}-43:{nb} (대한성공회 기도서)"), text[-120:]
     assert "\n\n" in text.split("\n\n— ")[0]   # 두 편의 본문 사이는 빈 줄(자체 리뷰 2026-10-13)
     assert head.lstrip("0123456789 ") [:3] in text and tail in text   # 두 장의 본문이 다 들어 있다
 
@@ -332,7 +344,7 @@ def test_copy_cites_only_selected_verses_across_a_gap(desktop_context):
     _open(page, "lectionary/2026-04-05")
     text, a, b = page.evaluate(_LECT_COPY_GAP)
     assert re.match(r"14", b), b   # 2절 다음에 그려진 절이 14절이어야 검사가 뜻이 있다
-    assert text.endswith(f"— 전례시편 118:{re.match(r'\d+', a).group()}, {re.match(r'\d+', b).group()}"), text   # 건너뛴 절은 쉼표, 줄 글자 없이
+    assert text.endswith(f"— 전례시편 118:{re.match(r'\d+', a).group()}, {re.match(r'\d+', b).group()} (대한성공회 기도서)"), text   # 건너뛴 절은 쉼표, 줄 글자 없이
 
 
 _LECT_COPY_EDGE = """
@@ -391,12 +403,13 @@ async () => {
 
 
 def test_copy_keeps_both_endpoints_of_a_merged_verse(desktop_context):
-    """주님의 세례 주일(2026-01-11) 시편 29 — 병합 절 「7-8」과 9절을 걸쳐 복사하면 「29:7-8,9」(7만 남기지 않는다)(Copilot 9회차)."""
+    """주님의 세례 주일(2026-01-11) 시편 29 — 병합 절 「7-8」과 9절을 걸쳐 복사하면 「29:7-9」 — 병합 절의 두 끝을 다 센다(7만 남기지
+    않는다 — Copilot 9회차; 그때의 「29:7-8,9」 꼴은 자체 리뷰가 장 본문과 같은 줄 글자 없는 정수 구간으로 바꿨다)."""
     page = desktop_context.new_page()
     _open(page, "lectionary/2026-01-11")
     text, a, b = page.evaluate(_LECT_COPY_MERGED)
     assert a.startswith("7-8"), a   # 병합 절의 첫 반행(「7-8a」)
-    assert text.endswith(f"— 전례시편 29:7-{int(re.match(r'\d+', b).group())}"), text   # 병합 절의 두 끝(7 · 8)을 다 세어 「7-9」 — 「7」 만이 아니다
+    assert text.endswith(f"— 전례시편 29:7-{int(re.match(r'\d+', b).group())} (대한성공회 기도서)"), text   # 병합 절의 두 끝(7 · 8)을 다 세어 「7-9」 — 「7」 만이 아니다
 
 
 _LECT_COPY_OPTIONAL = """
@@ -486,8 +499,9 @@ def test_copy_across_readings_keeps_every_section(desktop_context):
         ".lect-reading[data-slot='gospel'] article.chapter-text .verse[data-vref]",
     ])
     assert "— 사도행전 10:43 (공동번역성서)" in text, text[:200]
-    assert "\n\n— 전례시편 118:" in text          # 시편은 「(공동번역성서)」 없이
+    assert re.search(r"\n\n— 전례시편 118:[0-9, -]+ \(대한성공회 기도서\)\n\n", text), text   # 시편은 기도서 번역(사용자 결정 2026-10-13)
     assert text.count("(공동번역성서)") == 3          # 제1독서 · 제2독서 · 복음
+    assert text.count("(대한성공회 기도서)") == 1     # 시편
     assert text.rstrip().endswith("(공동번역성서)") and "요한의 복음서 20:1" in text
 
 
@@ -559,13 +573,28 @@ def test_copy_including_collect_falls_back_to_browser_copy(desktop_context):
 
 
 def test_canticle_copy_cites_canticle_name(desktop_context):
-    """대림 2주일(2027-12-05) 시편 자리의 즈가리야 송가 — 출처는 송가 이름 + 절, 「(공동번역성서)」 없음(기도서 번역)."""
+    """대림 2주일(2027-12-05) 시편 자리의 즈가리야 송가 — 출처는 송가 이름 + 절 + 「(대한성공회 기도서)」(기도서 번역 — 사용자 결정
+    2026-10-13; 「(공동번역성서)」가 아니다)."""
     page = desktop_context.new_page()
     _open(page, "lectionary/2027-12-05")
     sel = ".lect-reading[data-slot='psalm'] article.chapter-text .verse[data-vref]"
     text = page.evaluate(_LECT_COPY_ACROSS, [sel, sel])
     assert "(공동번역성서)" not in text, text[-80:]
-    assert re.search(r"\n\n— \S.*송가 1$", text), text[-80:]
+    assert re.search(r"\n\n— \S.*송가 1 \(대한성공회 기도서\)$", text), text[-80:]
+
+
+def test_psalm_copy_keeps_liturgical_marks_and_section_headings(desktop_context):
+    """대림 4주일(2026-12-20) 시편 89:1-4, 19-27 을 통째로 복사하면 ◯ · ¶ · 부 소제목이 다 실린다 — 「(1)」 · 「(2)」는 제 줄,
+    ¶ 뒤 한 칸, 출처는 「(대한성공회 기도서)」(사용자 결정 2026-10-13 — known-issues §4). 종전엔 「(1)」이 빠지고 「(2)그 옛날」로
+    붙어 절 번호처럼 읽혔다."""
+    page = desktop_context.new_page()
+    _open(page, "lectionary/2026-12-20")
+    verses = ".lect-reading[data-slot='psalm'] article.chapter-text .verse[data-vref]"
+    text = page.evaluate(_LECT_COPY_ACROSS, [verses, f"{verses}:last-of-type"])
+    assert text.startswith("(1)\n주여, 내가 당신의 사랑을 영원히 노래하리이다. ◯\n"), text[:120]
+    assert "왕노릇하게 하리라.”\n\n(2)\n그 옛날, 당신께서 스스로 나타나시어, ◯\n" in text, text
+    assert "\n¶ “나는 용사들 위에" in text, text
+    assert text.endswith("\n\n— 전례시편 89:1-4, 19-27 (대한성공회 기도서)"), text[-80:]
 
 
 def test_verse_ids_are_unique_across_slots_and_chapters(desktop_context):

@@ -36,9 +36,9 @@
 
 import { loadChapter } from "./data-fetch.js";
 import { setTitle, appendVerses, buildSegmentTabs, bindCopyAttribution, formatVerseRanges } from "./views.js";
-import { specCoversVerse, verseInstanceKeys } from "./verse-spec.js";
+import { specCoversVerse, verseInstanceKeys, citationSource } from "./verse-spec.js";
 import {
-  parseDate, toKey, addDays, dayOfWeek, liturgicalYearOf, optionalDestOf,
+  parseDate, toKey, addDays, dayOfWeek, optionalDestOf,
   preloadCalendar, preloadLectionary, resolveDate, findReadings, findCollects, fastOf,
 } from "./liturgical-engine.js";
 
@@ -230,7 +230,7 @@ function tracksOf(/** @type {ReadingGroup[]} */ groups) {
 }
 
 /**
- * 트랙 선택 — URL 이 먼저, 다음은 전례년에 기억된 것, 그다음 첫 트랙. 트랙이 없는 날은 null.
+ * 트랙 선택 — URL 이 먼저, 다음은 기억된 것(마지막으로 고른 트랙 — 사용자 결정 2026-10-13), 그다음 첫 트랙. 트랙이 없는 날은 null.
  * @param {ReadingGroup[]} groups @param {1 | 2 | null} param @param {1 | 2 | null} stored
  * @returns {1 | 2 | null}
  */
@@ -506,7 +506,7 @@ function headerColors(resolved, selected) {
 
 /**
  * 상태 → URL. 기본값과 같은 키는 쓰지 않아 「/lectionary/2026-04-05」가 그날의 초기 화면이다 — 다만 **트랙은 트랙이 있는
- * 날이면 언제나 적는다**(`defaults.track` 은 null): 기본 트랙이 보는 사람의 기억(전례년별)에 달려 있어, 빼면 같은 주소가
+ * 날이면 언제나 적는다**(`defaults.track` 은 null): 기본 트랙이 보는 사람의 기억(마지막 선택)에 달려 있어, 빼면 같은 주소가
  * 사람마다 · 기억이 바뀐 뒤마다 다른 화면이 된다(공유 링크 · 뒤로 가기 — 자체 리뷰 2026-10-13). 기억에서 온 트랙은
  * 렌더할 때 지금 주소에 적어 둔다(`renderLectionaryView` — `withTrack`).
  * @param {string} date @param {LectionaryQuery} state @param {{ obs: string | null, track: 1 | 2 | null }} defaults
@@ -616,7 +616,7 @@ function canticleTitleOf(/** @type {BibleChapter | null | undefined} */ chapter)
  * 뷰 모델 전부(순수). `groupsOf` 는 `findReadings(resolved, c)` 를 감싼 것 — 후보마다 한 번 부른다.
  * @param {ResolvedDate} resolved @param {LectionaryQuery} query
  * @param {(c: Candidate) => ReadingGroup[]} groupsOf @param {CandidateCollects[]} collectEntries
- * @param {1 | 2 | null} storedTrack  전례년에 기억된 트랙
+ * @param {1 | 2 | null} storedTrack  기억된 트랙 — 마지막으로 고른 것(해를 넘어 유지)
  * @returns {LectionaryModel | null}  후보가 하나도 없으면 null(유효한 날짜에는 격자가 언제나 있어 생기지 않는다)
  */
 function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedTrack) {
@@ -825,9 +825,8 @@ function buildControls(m) {
       m.hrefs.tracks.map((t) => ({ label: `독서 ${t.track}`, href: t.href, active: t.active })),
       { ariaLabel: "독서 트랙", className: "division-tabs--compact" },
     );
-    // Remember the choice for the liturgical year (ADR-036 §2 독서 연속성) — the
-    // global <a> interceptor navigates after this listener runs.
-    const ly = liturgicalYearOf(m.date);
+    // Remember the choice — the last-picked track is the default on every day and in every year until the reader picks
+    // again (사용자 결정 2026-10-13 — ADR-038 §3). The global <a> interceptor navigates after this listener runs.
     seg.querySelectorAll("a").forEach((a, i) => {
       a.addEventListener("click", (e) => {
         // 라우터(routing.js)가 가로채는 기본 클릭일 때만 — Ctrl/Cmd · Shift · 가운데 버튼은 새 탭 · 창으로 가는
@@ -835,7 +834,7 @@ function buildControls(m) {
         if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey || e.button !== 0) return;
         // 지금 항목의 주소에는 렌더할 때 이미 트랙이 적혀 있어(renderLectionaryView — withTrack) 기억을 바꿔도 뒤로 가기가
         // 이 화면으로 돌아온다(Copilot 리뷰 1 · 5회차의 클릭 때 보정을 렌더 때로 옮겼다 — 자체 리뷰 2026-10-13).
-        if (Number.isFinite(ly)) saveLectionaryTrack(ly, m.hrefs.tracks[i].track);
+        saveLectionaryTrack(m.hrefs.tracks[i].track);
       });
     });
     ctl.appendChild(seg);
@@ -947,7 +946,7 @@ function trimHalfVerses(article, verseSpec) {
  */
 function buildReading(m, slot, chapters) {
   const section = el("section", { className: "lect-section lect-reading", "data-slot": slot.slot });
-  // 복사 출처(copyCitation)가 읽는 표지 — 전례시편 · 송가는 기도서 번역이라 「(공동번역성서)」를 붙이지 않는다(ADR-037 §1 · §3)
+  // 복사 출처(copyCitation)가 읽는 표지 — 전례시편 · 송가는 기도서 번역이라 「(대한성공회 기도서)」로 적는다(ADR-037 §1 · §3 · 사용자 결정 2026-10-13)
   if (slot.bookId === "lps" || slot.bookId === "cant") section.setAttribute("data-liturgical", "");
   const head = el("div", { className: "lect-section-head" });
   head.appendChild(el("h3", { className: "lect-slot" }, SLOT_LABEL[slot.slot] || slot.slot));
@@ -993,13 +992,14 @@ function buildReading(m, slot, chapters) {
  * 독서 섹션 하나의 복사 출처(`bindCopyAttribution` 의 citeOf — `commit` 이 뷰 루트에 한 번 묶는다). 고른 절을 장마다
  * 연속 구간으로 적고, 앞 장이 **그 장의 실제 마지막 절**(`data-chapter-last`)에서 끝나 다음 장이 1절에서 이어질 때만
  * 「42:11-43:1」로 합친다 — 창세 6:9-22, 7:24 · 지혜 18:14-16, 19:1-6 처럼 발췌가 끊긴 것은 「18:16, 19:1」. 송가는
- * 「송가 이름 + 절」, 전례시편 · 송가에는 「(공동번역성서)」를 붙이지 않는다(자체 리뷰 2026-10-13).
+ * 「송가 이름 + 절」이다(자체 리뷰 2026-10-13). 번역 표기는 성서가 「(공동번역성서)」, 전례시편 · 송가가 「(대한성공회 기도서)」
+ * (사용자 결정 2026-10-13 — `citationSource`).
  * @param {HTMLElement} unit @param {Array<{ article: HTMLElement, ranges: Array<[number, number]>, firstNum: number, lastNum: number, atStart: boolean, atEnd: boolean }>} runs
  */
 function copyCitation(unit, runs) {
   const canticle = unit.getAttribute("data-canticle");
   const liturgical = unit.hasAttribute("data-liturgical");
-  if (canticle) return `${canticle} ${formatVerseRanges(runs.flatMap((r) => r.ranges))}`;
+  if (canticle) return `${canticle} ${formatVerseRanges(runs.flatMap((r) => r.ranges))} ${citationSource(true)}`;
   const book = runs[0].article.getAttribute("data-book") || "";
   /** @type {Array<{ ch: string, a: number, b: number, chEnd: string | null }>} */
   const pieces = [];
@@ -1021,8 +1021,7 @@ function copyCitation(unit, runs) {
     out += (out ? ", " : "") + (p.ch !== lastCh ? `${p.ch}:` : "") + body;
     lastCh = p.chEnd || p.ch;
   }
-  const ref = `${book} ${out}`;
-  return liturgical ? ref : `${ref} (공동번역성서)`;
+  return `${book} ${out} ${citationSource(liturgical)}`;
 }
 
 /**
@@ -1153,9 +1152,7 @@ async function renderLectionaryView(parsed) {
     if (!g) { g = findReadings(resolved, c); groupsCache.set(key, g); }
     return g;
   };
-  const ly = liturgicalYearOf(date);
-  const stored = Number.isFinite(ly) ? loadLectionaryTrack(ly) : null;
-  const model = buildLectionaryModel(resolved, parsed, groupsOf, findCollects(resolved), stored);
+  const model = buildLectionaryModel(resolved, parsed, groupsOf, findCollects(resolved), loadLectionaryTrack());
   if (!model) {
     commitError("이 날짜는 교회력에 없습니다", "다른 날짜를 골라 주세요.");
     return PAGE_TITLE;
