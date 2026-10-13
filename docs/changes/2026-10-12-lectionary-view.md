@@ -82,8 +82,8 @@ title: "feat: 교회력 전례독서 뷰 A3 — /lectionary 라우트 · 본기�
   - 신규 `tests/unit/lectionary.data.test.js` **18**(실데이터 — 상수 ↔ `_meta` · `_vocab`, 실제 날짜 열다섯, 송가 표지, 2025~2027 전수). `engine-data.yml` · `sync-data.yml` 에 등록했다(설계서 §7 선례).
   - `routing.test.js` 24 → 31(`/lectionary` 파싱 + 3회차의 쿼리 값 통째 검증 · 깨진 퍼센트 이스케이프) · `tab-history.test.js` 11 → 12(캘린더 탭 분류).
 - **타입 검사** `npm run typecheck`(앱 · 워커) 0 오류.
-- **e2e**(로컬 — `python3 scripts/serve.py 8080` 뒤 `pytest tests/e2e/`) **254건** — 사용자 결정 반영 뒤 전체 재실행 결과는 아래 「e2e 전체 재실행」. 종전 232 에서 22 늘었다(리뷰 1회차 +2 · 3회차 +2 · 5회차 +2).
-  - 신규 `tests/e2e/test_lectionary_view.py` **19** — 본문 순서 · 「본기도 1·2·3」 세그먼트 · 「독서 1·2」 · 칩(색 · 본문 전환) · 두 독서 카드(당일 · 목적지 · 도착일) · 트랙 기억 · 조건부 세트 조건 라벨 · 괄호 선택 구절 합침(〔 〕 · 「짧게 읽으면」) · 기념일 빈 상태 · 오늘/전날/다음날 · 잘못된 날짜 · 공유 링크 · 모바일 탭 바.
+- **e2e**(로컬 — `python3 scripts/serve.py 8080` 뒤 `pytest tests/e2e/`) **255건** — 사용자 결정 반영 뒤 전체 재실행 결과는 아래 「e2e 전체 재실행」. 종전 232 에서 23 늘었다(리뷰 1회차 +2 · 3회차 +2 · 5회차 +2 · 6회차 +1).
+  - 신규 `tests/e2e/test_lectionary_view.py` **20** — 본문 순서 · 「본기도 1·2·3」 세그먼트 · 「독서 1·2」 · 칩(색 · 본문 전환) · 두 독서 카드(당일 · 목적지 · 도착일) · 트랙 기억 · 조건부 세트 조건 라벨 · 괄호 선택 구절 합침(〔 〕 · 「짧게 읽으면」) · 기념일 빈 상태 · 오늘/전날/다음날 · 잘못된 날짜 · 공유 링크 · 모바일 탭 바.
   - 접근성 — `test_a11y_axe.py` 7 → 9(뷰 두 화면, critical · serious 위반 0) · `test_a11y_keyboard.py` 7 → 8(칩 Tab · Enter).
 - **브라우저 스모크**(Playwright, 데스크톱 · 모바일 각 14 주소) — 콘솔 · 페이지 오류 0(기존 GA CSP 경고 제외).
 - **변이 검사**(코드를 일부러 틀리게 바꿔 테스트가 잡는지 보는 검사 — 파일을 백업해 두고 바꾼 뒤 복사로 되돌렸다): **18개 모두 잡혔다** — 미결25 가지 제거 · 모든 관측일 본기도 열거 · 괄호 세트를 합치지 않음 · 「지키는 경우」 정규화 제거 · 조건부 바탕 라벨 · 선택 구절 판정에서 바탕 무시 · 오는/지난 뒤바꿈 · 격자도 자기 색 · URL 기본값 · 원본 세트 표지를 조건으로 · 송가 영광송 표지 · 트랙 우선순위 · 슬롯 순서 · 독서 없는 격자 선택 · 도착일 카드 · 병합 절 · `track=3` 허용 · 탭 분류.
@@ -111,7 +111,7 @@ title: "feat: 교회력 전례독서 뷰 A3 — /lectionary 라우트 · 본기�
 - `docs/status.md` — 한 줄 추가
 - `docs/architecture.md` — §4 파일 수(38 → 39 · `<script>` 32 → 33 · 모듈 29 → 30) · 모듈 표(27개 · `lectionary.js` 행 · 줄 수 갱신) · §4.1 라우트 표 · §6 · 부록 A ADR-038 · 부록 B
 - `CLAUDE.md` — 모듈 26 → 27 · 케이스 수 1150 · 실데이터 테스트 선례
-- `tests/README.md` — 유닛 31파일 · 1150케이스, e2e 28파일 · 254케이스, 새 행 넷 · 갱신 행 넷
+- `tests/README.md` — 유닛 31파일 · 1150케이스, e2e 28파일 · 255케이스, 새 행 넷 · 갱신 행 넷
 - `docs/index.md` — 교회력 행에 뷰 정본 자리
 - `.github/workflows/engine-data.yml` · `sync-data.yml` — `lectionary.data.test.js` 등록
 - `data` 서브모듈 포인터 `0fd14cd` → `723b084`(data#30) · `docs/design/liturgical-engine.md` §5.2 facts 다섯
@@ -171,3 +171,12 @@ Copilot 5회차(`b0a57e0` 기준, pullrequestreview-5498161879)는 「0 open fin
 - **⑤ `storage.js` 의 트랙 기억 API 가 `storage.test.js` 에 없었다** — 전례년별 왕복 · 깨진 JSON/배열/범위 밖 값 · 1 · 2 아닌 입력 · 쓰기 실패(삼킴) 케이스 셋.
 
 **검증(5회차 뒤)** — 유닛 **1150건 — 1149 통과 · skip 1**(storage 99 → 102), `npm run typecheck` 통과, e2e `test_lectionary_view.py` 19/19, 전체 e2e `pytest tests/e2e/` **254건 전부 통과**(6분 15초). 변이 검사 2/2 — ②의 조건을 「키 유무」로 되돌리면 e2e 1 실패 · ③의 stale 가드를 빼면 e2e 1 실패(2초 만에 홈이 `.error` 로 덮인다).
+
+## 리뷰 반영 (2026-10-13, 6회차)
+
+Copilot 6회차(`245b3c8` 기준, pullrequestreview-5498447041)는 「0 open findings」 + 본문 「previously missed」 2 — 코드 1 · 주석 1. 코드 `2d517b5`, 문서는 이 절을 담은 커밋.
+
+- **① 독서 본문을 복사하면 출처가 안 붙었다** — 장 본문의 복사 핸들러(선택을 절 경계로 넓혀 우리 직렬화로 쓰고 「— 책 장:절 (공동번역성서)」를 덧붙이는 것)가 `renderChapter` 안에 있어 `appendVerses` 만 쓰는 전례독서 `<article>` 은 브라우저 기본 복사였다. `views.js` 의 **`bindCopyAttribution(article, refOf)`** 로 빼서 장 본문과 전례독서가 같이 쓴다 — 전례독서는 장 JSON 의 `book_name_ko` + 그 article 의 장으로 참조를 만들고(「사도행전 10:34-35」), 송가(`cant`)는 장 번호가 성서의 장이 아니라 슬롯 라벨을 그대로 쓴다. e2e 1(부활대축일 제1독서 두 절을 가운데서 걸쳐 고른 뒤 합성 copy 이벤트 → 본문 + 「— 사도행전 10:34-35 (공동번역성서)」) · 장 본문 쪽은 `test_copy.py` 그대로 통과(회귀 없음).
+- **② 모듈 머리 주석과 `initialCandidate` 주석의 「제목 · 색은 승자」** — 색은 고른 본문의 색(`headerColors`)이라 모순 → 「제목은 승자, 색은 고른 본문의 색, 본기도는 고른 칩의 것」으로.
+
+**검증(6회차 뒤)** — 유닛 1150(1149 통과 · skip 1), `npm run typecheck` 통과, e2e `test_copy.py` + `test_lectionary_view.py` 전부 통과(20/20), 전체 e2e `pytest tests/e2e/` **255건 전부 통과**(6분 27초). 변이 검사 1/1 — 전례독서의 바인딩 호출을 빼면 새 e2e 가 실패한다(복사 결과가 빈 문자열).
