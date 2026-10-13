@@ -13,11 +13,13 @@ SLOTS = ["first", "psalm", "second", "gospel"]
 def norm(s):
     s = re.sub(r"[–—‐‑−]", "-", s); s = re.sub(r"\s+", "", s); return s.strip(",;")
 def loose(s):
-    s = norm(s); s = re.sub(r"(?<=\d)[상하]", "", s); s = re.sub(r"[\[\]()]", "", s); s = s.replace(".", ""); return s.replace(",", "").rstrip("/").lower()
+    """표기 차이만 지운다 — 쉼표 등 구분자는 남긴다(「1:1,3」≠「1:13」). 괄호 선택 절 「(1-9)10-18」 = 「1-9, 10-18」 은 verse_set 이 구조로 판정한다."""
+    s = norm(s); s = re.sub(r"(?<=\d)[상하]", "", s); s = re.sub(r"[\[\]()]", "", s); s = s.replace(".", ""); return s.rstrip("/").lower()
 ONE_CHAPTER = {"유다", "필레", "2요한", "3요한", "오바"}
 def verse_set(s):
-    """「책 장:절-절, 절; 장:절」 → {(장, 절)} — 같은 장 안의 범위만 전개한다(장을 넘는 범위는 글자 그대로)."""
-    s = norm(s); s = re.sub(r"(?<=\d)[상하]", "", s); s = re.sub(r"[\[\]()]", "", s); s = re.sub(r"[A-Za-z.]", "", s)
+    """「책 장:절-절, 절; 장:절」 → {(장, 절)} — 같은 장 안의 범위만 전개한다(장을 넘는 범위는 글자 그대로).
+    괄호(선택 절 「1:(1-9)10-18」 · 「1:1-4(5-10)11-14」)는 구분자로 읽어 쉼표 표기 「1:1-9, 10-18」 과 같은 집합이 된다."""
+    s = norm(s); s = re.sub(r"(?<=\d)[상하]", "", s); s = re.sub(r"[\[\]()]", ",", s); s = re.sub(r"[A-Za-z.]", "", s)
     m = re.match(r"^(\d?[가-힣]+)(.*)$", s)
     if not m: return None
     book, rest = m.group(1), m.group(2)
@@ -33,6 +35,7 @@ def verse_set(s):
             a, b = tok.split(":", 1)
             if "-" in a or not a.isdigit(): return None
             ch = int(a); tok = b
+            if not tok: continue   # 「2:(1-7)8-20」 → 「2:,1-7,8-20」 의 빈 첫 토큰
         if ch is None: return None
         if re.fullmatch(r"\d+", tok): out.add((ch, int(tok)))
         elif re.fullmatch(r"\d+-\d+", tok):
@@ -43,6 +46,12 @@ def verse_set(s):
             out.add(("span", tok)); ch = int(tok.split("-")[1].split(":")[0])
         else: return None
     return (book, frozenset(out))
+def slot_match(bvals, label):
+    """책자 대안 집합이 엔진 라벨(변형 포함)에 드는가 — 느슨 표기로, 아니면 절 집합으로."""
+    ev = variants(label)
+    if {loose(a) for a in bvals} <= {loose(v) for v in ev}: return True
+    bv = {verse_set(a) for a in bvals}
+    return None not in bv and bv <= {verse_set(v) for v in ev}
 def variants(label):
     out = {label}
     for x in re.findall(r"\(([^()]*\d+[^()]*)\)", label):
@@ -118,7 +127,7 @@ for d in sorted(booklet):
             for cid, groups in e["groups"].items():
                 for g in groups:
                     ok = all((not s["slots"].get(k) and not g["slots"].get(k)) or
-                             (s["slots"].get(k) and g["slots"].get(k) and {loose(a) for a in s["slots"][k]} <= {loose(v) for v in variants(g["slots"][k])})
+                             (s["slots"].get(k) and g["slots"].get(k) and slot_match(s["slots"][k], g["slots"][k]))
                              for k in SLOTS)
                     if ok: best = (cid, g.get("note"), g.get("set"), g.get("id"))
             xmas_rows.append((d, s["note"], best, s["slots"]))
