@@ -1,22 +1,22 @@
 // @ts-check
 // ADR-031 — 탭 히스토리(탭별 위치 복원).
 //
-// 탭(홈·북마크·설정·검색)을 오가다 다시 같은 탭으로 돌아오면, 그 탭이 마지막으로
+// 탭(홈·교회력·북마크·설정·검색)을 오가다 다시 같은 탭으로 돌아오면, 그 탭이 마지막으로
 // 보던 라우트와 스크롤 위치로 복원한다(iOS 탭 관용구). 성서를 읽다 북마크·설정
 // 탭으로 갔다가 홈으로 돌아오면 읽던 장·스크롤 지점으로 되돌아온다.
 //
 // 동작 두 축:
 //  1. scrollMemory: 전체 경로(pathname+search) → scrollY. route() 가 떠나는 경로의
 //     스크롤을 onRouteStart 에서 저장하고, **복원이 요청된 경우에만** onRouteEnd 에서
-//     복원한다. 복원 요청은 (a) 뒤로/앞으로(popstate) (b) 탭 전환(홈·검색·북마크·설정
-//     으로 다른 탭에서 진입) 두 경우뿐 — 즉 브라우저 표준의 POP 의미론. 일반 링크
+//     복원한다. 복원 요청은 (a) 뒤로/앞으로(popstate) (b) 탭 전환(홈·교회력·검색·북마크·
+//     설정으로 다른 탭에서 진입) 두 경우뿐 — 즉 브라우저 표준의 POP 의미론. 일반 링크
 //     이동(PUSH: 다음 장·절 딥링크·resume 등)은 복원하지 않아 뷰가 정한 스크롤
 //     (최상단/하이라이트 scrollIntoView)을 덮어쓰지 않는다.
-//  2. lastPathForTab: 각 탭이 마지막으로 본 경로. 홈(읽기 스택)·검색(?q=)은 하위
-//     경로가 가변이라 핵심. 북마크·설정은 단일 라우트라 정적 href 로 충분하지만,
-//     스크롤 복원은 scrollMemory 가 경로 키로 처리한다. 홈 탭 버튼은 정적
-//     href="/" 라, tabbar.js 가 다른 탭에서 홈으로 올 때 클릭을 가로채 lastPath("home")
-//     으로 보낸다(이미 홈이면 기존대로 루트="/" pop-to-root).
+//  2. lastPathForTab: 각 탭이 마지막으로 본 경로. 홈(읽기 스택)·교회력(달 · 전례독서)·
+//     검색(?q=)은 하위 경로가 가변이라 핵심. 북마크·설정은 단일 라우트라 정적 href 로
+//     충분하지만, 스크롤 복원은 scrollMemory 가 경로 키로 처리한다. 홈 · 교회력 탭 버튼은
+//     정적 href(「/」 · 「/calendar」)라, tabbar.js 가 다른 탭에서 올 때 클릭을 가로채
+//     lastPath 로 보낸다(이미 그 탭이면 기존대로 정적 href 로 pop-to-root).
 //
 // 왜 history.scrollRestoration = "manual" 인가: 기본값 auto 면 popstate(뒤로/앞으로)
 // 시 브라우저가 먼저 스크롤을 옮겨, onRouteStart 가 "떠나는 페이지"의 실제 scrollY 를
@@ -29,9 +29,9 @@ window.tabHistory = (() => {
   // ── BEGIN TABOF ── (tests/unit/tab-history.test.js 가 슬라이스해 검증)
   /**
    * 전체 경로(pathname[+search])가 어느 탭에 속하는지 분류한다. 첫 세그먼트만 본다
-   * — /search·/bookmarks·/settings 는 각 탭, /calendar·/lectionary 는 캘린더 탭
-   * (ADR-038 §3 — 전례독서 뷰는 날짜 탐색의 하위 화면이라 캘린더 소속; 탭 버튼 자체는
-   * A2 가 더한다), 그 외(/, /<division>, /<book>/<chapter> …)는 모두 홈(읽기 스택).
+   * — /search·/bookmarks·/settings 는 각 탭, /calendar·/lectionary 는 캘린더(교회력) 탭
+   * (ADR-038 §1 · §3 — 전례독서 뷰는 날짜 탐색의 하위 화면이라 캘린더 소속), 그 외
+   * (/, /<division>, /<book>/<chapter> …)는 모두 홈(읽기 스택).
    * @param {string} path
    * @returns {"home"|"search"|"bookmarks"|"settings"|"calendar"}
    */
@@ -53,8 +53,9 @@ window.tabHistory = (() => {
     search: "/search",
     bookmarks: "/bookmarks",
     settings: "/settings",
-    // 캘린더 탭의 기본 착지는 A2 가 /calendar 로 바꾼다 — 지금은 오늘의 전례독서.
-    calendar: "/lectionary",
+    // 캘린더 탭의 기본 착지는 이번 달 교회력(ADR-038 §1 A2). 전례독서(/lectionary/…)를 보다 다른 탭에
+    // 다녀오면 그 독서 화면으로 돌아온다 — 홈 탭이 읽던 장으로 돌아오는 것과 같다.
+    calendar: "/calendar",
   };
   // 가장 최근 완료된 라우트 경로(= 지금 화면). onRouteStart 가 이 경로의 스크롤을
   // 저장하므로, 떠나기 직전 위치를 정확히 잡는다.
@@ -64,7 +65,7 @@ window.tabHistory = (() => {
   let restoreNext = false;
 
   // 다음 라우트에서 저장된 스크롤을 복원하도록 요청. 뒤로/앞으로(popstate)와 탭 전환
-  // (다른 탭→홈·검색·북마크·설정)에서만 호출 — 일반 링크 이동(PUSH)은 호출하지 않아
+  // (다른 탭→홈·교회력·검색·북마크·설정)에서만 호출 — 일반 링크 이동(PUSH)은 호출하지 않아
   // 뷰의 스크롤(최상단/하이라이트)을 보존한다.
   function requestRestore() {
     restoreNext = true;

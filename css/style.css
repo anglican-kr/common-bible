@@ -84,6 +84,15 @@
   --danger-strong: #a93226;
   --danger-text: #c0392b;
   --danger-border: #e6a9a4;
+  /* 전례색(ADR-036 §8 · DESIGN.md §2 「전례색」) — chrome 색이 아니라 그날의 색 자체라 테마 · 스킴 ·
+     다크와 무관한 고정값. 색 점으로만 쓴다(글자 색 금지). 테두리만 다크에서 밝게 적응한다. */
+  --lit-white: #f7f5f0;
+  --lit-red: #b3261e;
+  --lit-green: #2e7d32;
+  --lit-violet: #6a3fa0;
+  --lit-rose: #e39bb9;
+  --lit-blue: #3b6fb6;
+  --lit-swatch-border: rgba(0, 0, 0, 0.25);
 
   /* ── Radius (HIG 곡률 사다리 — 기존 사용 값에 매핑, --radius 는 하위호환 유지) ── */
   --radius-xs: 4px;
@@ -215,6 +224,7 @@
      표면 위 텍스트·아웃라인만 밝은 빨강으로 적응해 어두운 배경에서 가독성 확보. */
   --danger-text: #ee8888;
   --danger-border: #884444;
+  --lit-swatch-border: rgba(255, 255, 255, 0.35);
 
   /* Elevation — 다크 배경에서는 옅은 그림자가 묻히므로 alpha 상향 (기존 패턴).
      --shadow 별칭은 :root 에서 var(--shadow-1) 로 정의돼 있어 여기선 --shadow-1
@@ -421,6 +431,18 @@ body {
   opacity: 0.7;
 }
 
+/* Desktop entry to the calendar tab (ADR-038 §1 A2) — the gear's twin in the
+   top row (#header-actions). Mobile hides the whole row; the tab bar has it. */
+.header-calendar-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent);
+  padding: 0.2em;
+  line-height: 1;
+}
+.header-calendar-btn:hover { opacity: 0.7; }
+
 .settings-popover {
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
   position: fixed;
@@ -619,21 +641,21 @@ body {
 /* 대체색은 색 점만 옅게 — 글자까지 옅게 하면 대비가 4.5:1 아래로 떨어진다(WCAG 1.4.3, 자체 리뷰 2026-10-13). */
 .lect-color-item--alt .lect-color { opacity: 0.8; }
 /* Liturgical colour marks — the four official colours plus the two optional
-   alternates (ADR-036 §8). Fixed swatches, not theme tokens: these ARE the colours. */
+   alternates (ADR-036 §8). The --lit-* tokens are fixed swatches, not theme
+   colours: these ARE the colours (DESIGN.md §2 「전례색」 — the calendar's dots use them too). */
 .lect-color {
   width: 0.8em;
   height: 0.8em;
   border-radius: 50%;
-  border: 1px solid rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--lit-swatch-border);
   box-sizing: border-box;
 }
-.lect-color--white { background: #f7f5f0; }
-.lect-color--red { background: #b3261e; }
-.lect-color--green { background: #2e7d32; }
-.lect-color--violet { background: #6a3fa0; }
-.lect-color--rose { background: #e39bb9; }
-.lect-color--blue { background: #3b6fb6; }
-[data-theme="dark"] .lect-color { border-color: rgba(255, 255, 255, 0.35); }
+.lect-color--white { background: var(--lit-white); }
+.lect-color--red { background: var(--lit-red); }
+.lect-color--green { background: var(--lit-green); }
+.lect-color--violet { background: var(--lit-violet); }
+.lect-color--rose { background: var(--lit-rose); }
+.lect-color--blue { background: var(--lit-blue); }
 
 /* Observance switcher — every candidate, always; horizontal scroll on narrow
    screens, no scrollbar chrome. aria-current marks the selected one. */
@@ -850,6 +872,131 @@ body {
   padding-left: 2rem;
 }
 .lect-gloria-line.verse-response { color: var(--text-secondary); }
+
+/* ── 교회력 뷰 (calendar tab, ADR-038 §1 · §2 A2) ──
+   A month as a 7-column table: every day is a link to its lectionary page. The
+   date nav row reuses the lectionary's .lect-datenav / .lect-datenav-btn /
+   .lect-today (DESIGN.md §6 「날짜 이동 줄」). Sans-serif like the other in-page
+   chrome. table-layout: fixed pins each column to 1/7 of the width whatever the
+   names say — the paused 1.6.0 calendar ran off phone screens because its cells
+   were flex items that could not shrink below their content (min-width trap). */
+.calendar {
+  padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+}
+#app:has(.calendar) { padding-top: var(--space-4); }
+.cal-head { margin-bottom: var(--space-3); }
+.cal-month {
+  margin: 0;
+  font-size: var(--font-lg);
+  font-weight: 700;
+  color: var(--text);
+  line-height: var(--leading-snug);
+}
+.cal-grid {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+.cal-grid th {
+  padding: var(--space-1) 0;
+  font-size: var(--font-2xs);
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-align: center;
+}
+.cal-grid td {
+  padding: 0;
+  vertical-align: top;
+  border-top: 1px solid var(--border);
+}
+/* The whole cell is the link. Fixed min-height in rem so rows line up and
+   grow with the font-size setting; names clamp to two lines below. */
+.cal-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-0_5);
+  min-width: 0;
+  /* date disc 1.6rem + dots 0.45rem + two name lines (2 × 0.7rem × 1.3) + gaps and padding ≈ 4.9rem */
+  min-height: 4.9rem;
+  padding: var(--space-1) 0 var(--space-2);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  text-decoration: none;
+}
+a.cal-cell:hover,
+a.cal-cell:focus-visible { background: var(--bg-card); }
+.cal-date {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.6rem;
+  height: 1.6rem;
+  border-radius: var(--radius-pill);
+  font-size: var(--font-sm);
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+/* Today — accent disc, text on accent is var(--bg) (DESIGN.md §2 규약). */
+.cal-cell--today .cal-date {
+  background: var(--accent);
+  color: var(--bg);
+}
+/* Days of the neighbouring months: still links, quieter, no name (the link's
+   accessible name keeps it). --text-secondary keeps 4.5:1 on --bg. */
+.cal-cell--out { color: var(--text-secondary); }
+.cal-cell--out .cal-date { font-weight: 400; }
+.cal-dots {
+  display: flex;
+  gap: var(--space-0_5);
+  min-height: 0.45rem;
+}
+/* Liturgical colour dots — DESIGN.md §2 「전례색」 tokens, same swatches as the
+   lectionary header's .lect-color marks. */
+.cal-dot {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  border: 1px solid var(--lit-swatch-border);
+  box-sizing: border-box;
+}
+.cal-dot--white { background: var(--lit-white); }
+.cal-dot--red { background: var(--lit-red); }
+.cal-dot--green { background: var(--lit-green); }
+.cal-dot--violet { background: var(--lit-violet); }
+.cal-dot--rose { background: var(--lit-rose); }
+.cal-dot--blue { background: var(--lit-blue); }
+/* The day's one name — two lines, then an ellipsis; words stay whole when they
+   fit (keep-all) and break anywhere only when one word is wider than the cell. */
+.cal-name {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  max-width: 100%;
+  font-size: var(--font-2xs);
+  line-height: var(--leading-tight);
+  text-align: center;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+/* 전례년 첫날(대림 1주일) — 「나해 시작」. */
+.cal-mark {
+  max-width: 100%;
+  padding: 0 var(--space-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  font-size: var(--font-2xs);
+  line-height: var(--leading-snug);
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cal-error-link { text-align: center; }
 
 /* In-page search input (mirrors the header #search-bar, used in #app). */
 #search-inpage-bar {
@@ -1393,7 +1540,8 @@ body {
    scale, leaving the three icons mismatched at large font sizes. */
 .title-back-icon,
 .title-bookmark-btn svg,
-.settings-btn svg {
+.settings-btn svg,
+.header-calendar-btn svg {
   width: 1.45rem;
   height: 1.45rem;
 }
@@ -3962,11 +4110,17 @@ html.cite-sheet-open {
 #tab-dock::before,
 #tab-dock::after { content: none; }
 #tab-bar {
-  /* dock 의 flex 자식 — flex:0 0 auto 로 아이콘 4슬롯(4×60px) 폭만큼만 차지하고
-     늘어나지 않는다. 검색 원형과의 사이 여백은 비운다(#tab-search-dock margin-left:auto
-     가 검색 그룹을 우측 끝으로 밀어붙임). 위치는 #tab-dock 책임. */
+  /* dock 의 flex 자식 — 아이콘 슬롯(보이는 탭 수 × 60px) 폭만큼만 차지하고 늘어나지
+     않는다. 검색 원형과의 사이 여백은 비운다(#tab-search-dock margin-left:auto 가 검색
+     그룹을 우측 끝으로 밀어붙임). 위치는 #tab-dock 책임.
+     줄어들기는 한다(flex-shrink 1 + min-width 0) — 보이는 탭이 넷(홈 · 교회력 · 북마크 ·
+     설정, ADR-038 A2)이면 320px 폭에서 240 + 8 + 검색 60 이 dock 안쪽 288px 를 넘어 검색
+     원형이 화면 밖으로 밀렸다. 이제 슬롯(.tab-item flex:0 1 auto)이 ~55px 로 고르게 줄고
+     인디케이터 원은 슬롯 폭을 넘지 않는다(.tab-icon-wrap max-width:100%). 340px 이상은
+     그대로 60px. */
   display: flex;
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  min-width: 0;
   /* 슬라이딩 인디케이터(.tab-indicator, absolute)의 포지셔닝 컨텍스트. */
   position: relative;
   align-items: stretch;
@@ -4067,7 +4221,10 @@ html.cite-sheet-open {
   top: 50%;
   left: 0;
   z-index: 0;
-  width: calc(var(--dock-control) - var(--space-1)); /* 56px */
+  /* 56px — 다만 좁은 폭에서 슬롯이 60px 아래로 줄면(#tab-bar flex-shrink) 슬롯 폭을 넘지 않는다:
+     100% 는 탭 바 폭, --tab-bar-n 은 보이는 탭 수(tabbar.js publishTabBarWidth). .tab-icon-wrap 의
+     max-width:100% 와 같은 원이 된다. */
+  width: min(calc(var(--dock-control) - var(--space-1)), calc(100% / var(--tab-bar-n, 4)));
   aspect-ratio: 1 / 1;
   border-radius: var(--radius-pill);
   background: var(--glass-sheen), color-mix(in srgb, var(--accent) 14%, transparent);

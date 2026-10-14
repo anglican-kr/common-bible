@@ -10,7 +10,7 @@
   ④ 대안 세트 · 트랙 — 세그먼트, 트랙은 마지막 선택을 날짜 · 해와 무관하게 기억
   ⑤ 기념일 칩 — 「기념일 — 본문 없음」
   ⑥ 날짜 — 오늘 · 전날/다음날 · 잘못된 날짜
-  ⑦ 탭 바 — 캘린더 탭 소속이라(A2 전) 어느 탭도 활성이 아니다
+  ⑦ 탭 바 — 교회력(캘린더) 탭 소속이라 독서 화면에서 교회력 탭이 활성(ADR-038 A2)
 
 실데이터(data/ 서브모듈)가 필요하다 — 로컬 전용(CLAUDE.md 「E2E 테스트」).
 """
@@ -751,15 +751,16 @@ def test_shared_link_with_state_lands_on_same_screen(desktop_context):
 
 # ── ⑦ 탭 바 ──
 
-def test_mobile_tab_bar_has_no_active_tab_on_lectionary(mobile_context):
-    """캘린더 탭 소속(A2 전) — 홈 탭이 활성으로 보이지 않고 인디케이터도 숨는다."""
+def test_mobile_tab_bar_marks_calendar_tab_on_lectionary(mobile_context):
+    """교회력(캘린더) 탭 소속(ADR-038 §1 · §3) — 독서 화면에서 교회력 탭이 활성이고 인디케이터가 그 탭에 선다."""
     page = mobile_context.new_page()
     _open(page, "lectionary/2026-04-05")
-    assert page.locator("#tab-bar .tab-item.active").count() == 0
-    assert page.locator("#tab-bar .tab-indicator.is-shown").count() == 0
+    page.wait_for_selector("#tab-bar [data-tab='calendar'][aria-current='page']")
+    assert page.eval_on_selector_all("#tab-bar .tab-item.active", "els => els.map(e => e.dataset.tab)") == ["calendar"]
+    assert page.locator("#tab-bar .tab-indicator.is-shown").count() == 1
     # 칩은 가로 스크롤 줄 하나 — 모바일 폭에서도 전부 DOM 에 있다.
     assert len(_chips(page)) == 3
-    # 홈 탭을 누르면 홈 스택으로 돌아간다(캘린더 탭이 아니므로 가로채지 않고 기본 href).
+    # 홈 탭을 누르면 홈 스택으로 돌아간다(읽은 장이 없으니 가로채지 않고 기본 href).
     page.locator('#tab-bar [data-tab="home"]').click()
     page.wait_for_selector(".book-list")
 
