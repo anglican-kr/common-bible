@@ -112,6 +112,33 @@ def test_a11y_lectionary_pair_and_switcher(browser):
         ctx.close()
 
 
+def test_a11y_calendar_month(browser):
+    """교회력 월간 표(2026년 11월 — 「나해」 표지 · 앞뒤 달 칸 · 데스크톱 헤더 입구) — critical/serious 위반 0건."""
+    ctx, page = _open(browser, "calendar/2026-11")
+    try:
+        page.wait_for_selector(".calendar .cal-grid .cal-mark", timeout=20_000)
+        v = _violations(page)
+        assert not v, f"Calendar: {len(v)} violation(s):\n{_fmt(v)}"
+    finally:
+        ctx.close()
+
+
+def test_a11y_calendar_month_mobile(browser):
+    """교회력 월간 표 모바일(2026년 9월 — 사계재 자 · 백 점 · 탭 바 넷째 탭) — critical/serious 위반 0건."""
+    from .conftest import IPHONE_UA, MOBILE_VIEWPORT
+    ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA, is_mobile=True, has_touch=True)
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    try:
+        page = ctx.new_page()
+        page.goto(f"{BASE}/calendar/2026-09")
+        page.wait_for_selector(".calendar .cal-grid", timeout=20_000)
+        page.wait_for_selector("#tab-bar [data-tab='calendar'][aria-current='page']")
+        v = _violations(page)
+        assert not v, f"Calendar mobile: {len(v)} violation(s):\n{_fmt(v)}"
+    finally:
+        ctx.close()
+
+
 def test_a11y_search_results(browser):
     """검색 결과 화면 — critical/serious 위반 0건."""
     ctx, page = _open(browser)

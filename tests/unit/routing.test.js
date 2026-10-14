@@ -177,6 +177,23 @@ test("parsePath: 'lectionary' 는 책 id 로 읽히지 않는다", () => {
   assert.equal(parse("/lectionaryx").view, "chapters");   // 정확 일치 · 접두 'lectionary/' 만
 });
 
+// ── calendar route (ADR-038 §1 · §2 A2) ──
+
+test("parsePath: /calendar → calendar 월간, month null(이번 달)", () => {
+  assert.deepEqual(parse("/calendar"), { view: "calendar", mode: "month", month: null });
+});
+
+test("parsePath: /calendar/YYYY-MM → 그 달 — 검증은 뷰(깨진 값도 month 로 넘긴다)", () => {
+  assert.deepEqual(parse("/calendar/2026-11"), { view: "calendar", mode: "month", month: "2026-11" });
+  assert.equal(parse("/calendar/2026-13").month, "2026-13");
+  assert.equal(parse("/calendar/%E0%A4%A").month, "%E0%A4%A");   // 깨진 퍼센트 이스케이프는 throw 하지 않는다
+});
+
+test("parsePath: 'calendar' 는 책 id 로 읽히지 않는다 — 정확 일치 · 접두 'calendar/' 만", () => {
+  assert.equal(parse("/calendar").view, "calendar");
+  assert.equal(parse("/calendarx").view, "chapters");
+});
+
 // ── division vs book (single segment) ──
 
 test("parsePath: 알려진 division id → division 뷰", () => {

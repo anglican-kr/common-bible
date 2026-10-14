@@ -250,6 +250,23 @@ $home?.addEventListener("click", (e) => {
   }
 });
 
+// ADR-038 §1 (A2): 교회력(캘린더) 탭 — 홈과 같은 꼴(ADR-031). 다른 탭에서 오면 마지막으로 보던
+// 교회력 화면(전례독서 /lectionary/… 포함)으로 복원하고, 이미 교회력 탭이면 가로채지 않아 정적
+// href="/calendar"(이번 달)로 pop-to-root 한다 — 전례독서를 보다 탭을 다시 누르면 이번 달 달력.
+// 스크롤 축소(.collapsed)에서는 홈 원형만 보여 이 탭이 눌릴 일이 없다.
+document
+  .querySelector('#tab-bar [data-tab="calendar"]')
+  ?.addEventListener("click", (e) => {
+    const th = W.tabHistory;
+    if (!th || th.tabOf(th.fullPath()) === "calendar") return;
+    th.requestRestore(); // 탭 전환(POP 의미론) → 그 화면의 스크롤 복원
+    const dest = th.lastPath("calendar");
+    if (dest && dest !== "/calendar") {
+      e.preventDefault();
+      W.navigate(dest);
+    }
+  });
+
 // ADR-031: 북마크·설정 탭은 정적 href 로 충분하지만(단일 라우트), 다른 탭에서 전환해
 // 들어올 땐 스크롤 복원을 요청한다. 같은 탭 재탭(=pop-to-root)이면 요청하지 않아 최상단.
 // preventDefault 안 함 — 전역 <a> 인터셉터가 href 로 navigate, requestRestore 는 플래그만.
@@ -406,8 +423,7 @@ const $tabBar = document.getElementById("tab-bar");
 // tab links; this only reflects the current route in the bar's active highlight.
 // Reading routes (/, /<division>, /<book>/<chapter>, …) all map to the home tab.
 // ADR-030: 검색은 탭에서 분리된 #tab-search 버튼 — seg==="search" 일 때 별도로 활성.
-// ADR-038 §3: /calendar·/lectionary 는 캘린더 탭 소속 — 탭 버튼은 A2 가 더하므로 그전엔
-// 어느 탭도 활성이 아니다(positionTabIndicator 가 짝 없는 탭을 숨긴다 — 검색과 같다).
+// ADR-038 §1 · §3: /calendar·/lectionary 는 캘린더(교회력) 탭 소속 — 홈 다음 두 번째 탭(A2).
 function syncTabBarActive() {
   if (!$tabBar) return;
   const seg = location.pathname.replace(/^\//, "").split("/")[0];
@@ -517,8 +533,8 @@ if (typeof window !== "undefined" && window.addEventListener) {
 // ── ADR-030 개정(가로 dock 오디오): 탭바 실폭을 CSS 변수로 노출 ──
 // 가로 모드에서 미니 오디오는 '전체 탭바' 우측에 붙는다(css `#audio-bar` left calc).
 // 탭 슬롯은 --dock-control(60px) px 고정이라 폭은 '보이는 탭 수'에만 의존 — 노트 탭이
-// hidden(1.7.0 예정)이라 현재 3개. 개수를 세어 :root 에 --tab-bar-w 를 심으면 노트가
-// 켜져 4개가 돼도(다음 로드) 자동으로 left 가 맞는다. 측정이 아니라 개수 기반이라
+// hidden 이라 현재 4개(홈·교회력·북마크·설정 — 교회력은 ADR-038 A2). 개수를 세어 :root 에
+// --tab-bar-w 를 심으면 노트가 켜져 5개가 돼도(다음 로드) 자동으로 left 가 맞는다. 측정이 아니라 개수 기반이라
 // 모핑(.collapsed/.searching 으로 탭바가 60px 로 줄어드는) 상태와 무관하게 항상 풀폭.
 function publishTabBarWidth() {
   if (!$tabBar || typeof document === "undefined") return;
@@ -527,6 +543,8 @@ function publishTabBarWidth() {
     "--tab-bar-w",
     `calc(${n} * var(--dock-control))`
   );
+  // 슬라이딩 인디케이터가 좁은 폭에서 줄어든 슬롯(탭 바 폭 / n)을 넘지 않게(css .tab-indicator).
+  document.documentElement.style.setProperty("--tab-bar-n", String(n));
 }
 publishTabBarWidth();
 

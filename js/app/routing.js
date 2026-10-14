@@ -25,6 +25,9 @@ import {
 // calls route / navigate / parsePath; its controls are plain links), so it is
 // an explicit import rather than a window facade (ADR-034 principle 1).
 import { renderLectionaryView } from "./lectionary.js";
+// Calendar tab (ADR-038 §1 · §2 A2) — the same one-directional seam: its
+// controls are plain links too.
+import { renderCalendarView } from "./calendar.js";
 
 const { _$, clearNode, chUnit } = window.appHelpers;
 const {
@@ -118,6 +121,21 @@ function parsePath() {
   if (pathname === "bookmarks") return { view: "bookmarks" };
   if (pathname === "settings") return { view: "settings" };
 
+  // 깨진 퍼센트 이스케이프(`%E0%A4%A`)는 decodeURIComponent 가 throw 한다 — parsePath 는 route() 의 try 밖에서
+  // 돌므로 원문을 그대로 넘겨 뷰가 「잘못된 날짜」로 거부하게 한다(Copilot 리뷰 3회차 — 교회력 · 전례독서 공통).
+  /** @param {string} s */
+  const decodeOrRaw = (s) => { try { return decodeURIComponent(s); } catch { return s; } };
+
+  // Calendar tab (ADR-038 §1 · §2 A2): /calendar (this month) · /calendar/YYYY-MM.
+  // Resolved ahead of the generic single-segment split so "calendar" is never
+  // read as a book id. The month itself is validated by the view (like the
+  // lectionary's date) — anything else under /calendar/ reaches it as `month`
+  // and gets the view's invalid-date notice.
+  if (pathname === "calendar" || pathname.startsWith("calendar/")) {
+    const rest = pathname === "calendar" ? "" : pathname.slice("calendar/".length);
+    return { view: "calendar", mode: "month", month: rest ? decodeOrRaw(rest) : null };
+  }
+
   // Lectionary reading view (ADR-038 §3): /lectionary (today) · /lectionary/YYYY-MM-DD.
   // View state rides in the query (?obs=<observance id>&track=1|2&set=N&collect=N) so
   // a shared link, the back button and tab restore (ADR-031) all land on the same
@@ -138,10 +156,6 @@ function parsePath() {
       return Number.isSafeInteger(n) ? n : null;   // 자릿수가 넘쳐 Infinity · 근사값이 되는 것도 계약 밖(Copilot 리뷰 10회차)
     };
     const track = positive("track");
-    // 깨진 퍼센트 이스케이프(`%E0%A4%A`)는 decodeURIComponent 가 throw 한다 — parsePath 는 route() 의 try 밖에서
-    // 돌므로 원문을 그대로 넘겨 뷰가 「잘못된 날짜」로 거부하게 한다(Copilot 리뷰 3회차).
-    /** @param {string} s */
-    const decodeOrRaw = (s) => { try { return decodeURIComponent(s); } catch { return s; } };
     return {
       view: "lectionary",
       date: rest ? decodeOrRaw(rest) : null,
@@ -382,12 +396,34 @@ async function route() {
       return;
     }
 
+    // Calendar tab (ADR-038 §1 · §2 A2). A full page on mobile and desktop alike,
+    // like the lectionary view below; the view preloads the small calendar
+    // bundle itself and commits the DOM data-first.
+    if (view === "calendar") {
+      renderLoading();
+      dismissLaunchScreen();
+      let calTitle;
+      try {
+        calTitle = await renderCalendarView(parsed);
+      } catch (err) {
+        // Same as the lectionary branch: a stale failure must not paint over the newer route.
+        if (isStale()) return;
+        throw err;
+      }
+      if (isStale()) return;
+      updatePageMeta({
+        title: calTitle,
+        description: "대한성공회 교회력 — 날마다의 전례일 · 전례색, 날짜를 누르면 그날의 전례독서",
+      });
+      trackPageView();
+      return;
+    }
+
     // Lectionary reading view (ADR-038 §3 A3). A full page on mobile and desktop
     // alike (ADR-035 /read precedent — no drawer fallback), classified under the
-    // calendar tab (tab-history tabOf) even before A2 adds the tab button. The
-    // view preloads both engine bundles itself and commits the DOM data-first,
-    // so show the skeleton here so #app reflects the new route immediately
-    // (mirrors the bookmark-read branch above).
+    // calendar tab (tab-history tabOf). The view preloads both engine bundles
+    // itself and commits the DOM data-first, so show the skeleton here so #app
+    // reflects the new route immediately (mirrors the bookmark-read branch above).
     if (view === "lectionary") {
       renderLoading();
       dismissLaunchScreen();
