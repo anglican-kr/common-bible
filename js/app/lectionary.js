@@ -773,7 +773,7 @@ async function loadSlotChapters(slots) {
 // ── DOM ──
 
 /**
- * 머리의 위 단계 링크 — 그 날짜가 든 달의 교회력(ADR-038 「후속」 A2; 그전엔 성서 목록 「/」 의 집 단추였다). 집 아이콘이 아니라
+ * 머리의 위 단계 링크 — 그 날짜가 든 달의 캘린더(ADR-038 「후속」 A2; 그전엔 성서 목록 「/」 의 집 단추였다). 집 아이콘이 아니라
  * 꺾쇠다 — 다른 탭 머리의 집 단추는 성서 목록을 뜻하고 모바일에서는 탭 바와 겹쳐 숨는데(`.title-home-btn`), 이 단추는 캘린더
  * 탭 안에서 한 단계 위(iOS 캘린더의 「< 10월」)라 모바일에서도 보인다. 다른 컨트롤처럼 링크라 전역 <a> 인터셉터가 이동한다.
  * @param {string | null} date  "YYYY-MM-DD" — null 이면 이번 달
@@ -784,7 +784,7 @@ function buildUpLink(date) {
   const a = el("a", {
     className: "title-back-btn",
     href: month ? `/calendar/${month}` : "/calendar",
-    "aria-label": p ? `${p.y}년 ${p.m}월 교회력으로` : "교회력으로",
+    "aria-label": p ? `${p.y}년 ${p.m}월 캘린더로` : "캘린더로",
   });
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   svg.setAttribute("viewBox", "0 0 24 24");
@@ -806,7 +806,7 @@ function buildUpLink(date) {
 function commitError(msg, subtitle) {
   setTitle(PAGE_TITLE);
   const $title = _$("page-title");
-  // 깨진 · 범위 밖 날짜에도 위 단계는 있다 — 이번 달의 교회력.
+  // 깨진 · 범위 밖 날짜에도 위 단계는 있다 — 이번 달의 캘린더.
   $title.insertBefore(buildUpLink(null), $title.firstChild);
   window.hideAudioBar?.();
   clearNode($app);
@@ -1147,7 +1147,7 @@ function announceDay(m) {
 function commit(m, chapters) {
   setTitle(PAGE_TITLE);
   const $title = _$("page-title");
-  // 위 단계는 그 날짜가 든 달의 교회력(A2) — 2026-12-25 의 독서에서 2026년 12월로.
+  // 위 단계는 그 날짜가 든 달의 캘린더(A2) — 2026-12-25 의 독서에서 2026년 12월로.
   $title.insertBefore(buildUpLink(m.date), $title.firstChild);
   window.hideAudioBar?.();
   clearNode($app);
@@ -1265,7 +1265,7 @@ async function renderLectionaryView(parsed) {
   return official ? `${shortName(official.observance.name)} ${PAGE_TITLE}` : PAGE_TITLE;
 }
 
-// 교회력 탭(calendar.js — ADR-038 §2 A2)이 같은 이름 · 날짜 · 색 규칙을 쓴다(복제 금지 — 칸 · 줄의 이름이 칩과 같은 꼴이어야 한다).
+// 캘린더 탭(calendar.js — ADR-038 §2 A2)이 같은 이름 · 날짜 · 색 규칙을 쓴다(복제 금지 — 칸 · 줄의 이름이 칩과 같은 꼴이어야 한다).
 export {
   renderLectionaryView, buildLectionaryModel,
   shortName, statusSuffix, isGrid, dateLabel, monthDayLabel, todayKey,

@@ -1,4 +1,4 @@
-"""E2E: 교회력(캘린더) 탭 /calendar[/YYYY-MM] (ADR-038 §1 · §2 A2).
+"""E2E: 캘린더 탭 /calendar[/YYYY-MM] (ADR-038 §1 · §2 A2).
 
 엔진(resolveDate)이 낸 날들을 월간 표(js/app/calendar.js)가 어떻게 그리는지 — 탭 바 →
 라우팅 → 캘린더 묶음 프리로드 → DOM 커밋의 배선과, 유닛이 못 보는 화면 동작(링크 이동 ·
@@ -8,7 +8,7 @@
   ② 달 이동 — 이전/다음/오늘이 링크(뒤로 가기 · 주소 그대로)
   ③ 칸 → 전례독서, 독서 화면의 위 단계 → 그 날짜의 달
   ④ 칸의 이름 · 색 점 · 링크 이름(사용자 결정 2026-10-15 의 날짜 예)
-  ⑤ 탭 복원 — 다른 탭에 다녀오면 마지막 교회력 화면, 탭을 다시 누르면 이번 달
+  ⑤ 탭 복원 — 다른 탭에 다녀오면 마지막 캘린더 화면, 탭을 다시 누르면 이번 달
   ⑥ 320px 폭에서 가로 넘침 없음(1.6.0 달력의 넘침 재발 방지)
   ⑦ 잘못된 달 · 자료 실패 · 데스크톱 헤더 입구
 
@@ -39,13 +39,13 @@ def _this_month():
 # ── ① 탭 ──
 
 def test_calendar_tab_is_second_and_opens_this_month(mobile_context):
-    """탭 순서 홈 · 교회력 · 북마크 · (노트 숨김) · 설정 — 교회력을 누르면 /calendar 이번 달, 탭 활성 · 인디케이터 · 오늘 칸."""
+    """탭 순서 홈 · 캘린더 · 북마크 · (노트 숨김) · 설정 — 캘린더를 누르면 /calendar 이번 달, 탭 활성 · 인디케이터 · 오늘 칸."""
     page = mobile_context.new_page()
     page.goto(BASE)
     page.wait_for_selector(".book-list", timeout=20_000)
     tabs = page.eval_on_selector_all("#tab-bar .tab-item", "els => els.map(e => e.dataset.tab + (e.hidden ? ':hidden' : ''))")
     assert tabs == ["home", "calendar", "bookmarks", "notes:hidden", "settings"], tabs
-    assert page.get_attribute("#tab-bar [data-tab='calendar']", "aria-label") == "교회력"
+    assert page.get_attribute("#tab-bar [data-tab='calendar']", "aria-label") == "캘린더"
     page.locator("#tab-bar [data-tab='calendar']").click()
     page.wait_for_selector(".calendar", timeout=20_000)
     assert page.url == f"{BASE}/calendar"
@@ -57,7 +57,7 @@ def test_calendar_tab_is_second_and_opens_this_month(mobile_context):
     assert current.count() == 1
     assert current.get_attribute("href") == f"/lectionary/{today.isoformat()}"
     assert current.get_attribute("aria-label").startswith("오늘, ")
-    assert page.title() == f"{title} 교회력 — 공동번역성서"
+    assert page.title() == f"{title} 캘린더 — 공동번역성서"
 
 
 # ── ② 달 이동 ──
@@ -108,9 +108,9 @@ def test_cell_opens_lectionary_and_up_link_returns_to_its_month(mobile_context):
     assert page.inner_text(".lect-day") == "성탄 낮"
     up = page.locator("#page-title a.title-back-btn")
     assert up.is_visible()
-    assert up.get_attribute("aria-label") == "2026년 12월 교회력으로"
+    assert up.get_attribute("aria-label") == "2026년 12월 캘린더로"
     assert page.locator("#page-title .title-home-btn").count() == 0   # 성서 목록 집 단추는 더 이상 없다
-    # 교회력 탭 소속 — 독서 화면에서도 교회력 탭이 활성
+    # 캘린더 탭 소속 — 독서 화면에서도 캘린더 탭이 활성
     assert page.get_attribute("#tab-bar [data-tab='calendar']", "aria-current") == "page"
     up.click()
     page.wait_for_url("**/calendar/2026-12")
@@ -163,7 +163,7 @@ def test_advent_sunday_marks_the_new_liturgical_year(desktop_context):
 # ── ⑤ 탭 복원 ──
 
 def test_calendar_tab_restores_last_screen_and_retap_pops_to_this_month(mobile_context):
-    """교회력 → 12.25 독서 → 북마크 탭 → 교회력 탭이면 그 독서 화면으로 돌아오고, 교회력 탭을 다시 누르면 이번 달."""
+    """캘린더 → 12.25 독서 → 북마크 탭 → 캘린더 탭이면 그 독서 화면으로 돌아오고, 캘린더 탭을 다시 누르면 이번 달."""
     page = mobile_context.new_page()
     _open(page, "calendar/2026-12")
     _cell(page, "2026-12-25").click()
@@ -182,7 +182,7 @@ def test_calendar_tab_restores_last_screen_and_retap_pops_to_this_month(mobile_c
 # ── ⑥ 좁은 화면 ──
 
 def test_month_fits_320px_without_horizontal_scroll(browser):
-    """320px 폭(가장 좁은 폰) — 가로 스크롤 0, 표는 화면 안, 탭 dock 도 화면 안(교회력 탭이 더해져도)."""
+    """320px 폭(가장 좁은 폰) — 가로 스크롤 0, 표는 화면 안, 탭 dock 도 화면 안(캘린더 탭이 더해져도)."""
     ctx = browser.new_context(viewport={"width": 320, "height": 640}, user_agent=IPHONE_UA, is_mobile=True, has_touch=True)
     ctx.add_init_script(CLEAR_APP_STORAGE)
     try:
@@ -227,14 +227,14 @@ def test_preload_failure_shows_calendar_error(browser):
 
 
 def test_desktop_header_has_calendar_entry_and_home_button(desktop_context):
-    """데스크톱 — 탭 바가 없어 헤더 윗줄의 교회력 단추가 입구, 교회력 화면의 집 단추는 성서 목록으로."""
+    """데스크톱 — 탭 바가 없어 헤더 윗줄의 캘린더 단추가 입구, 캘린더 화면의 집 단추는 성서 목록으로."""
     page = desktop_context.new_page()
     page.goto(BASE)
     page.wait_for_selector(".book-list", timeout=20_000)
     assert not page.locator("#tab-dock").is_visible()
     btn = page.locator("#header-calendar")
     assert btn.is_visible()
-    assert btn.get_attribute("aria-label") == "교회력"
+    assert btn.get_attribute("aria-label") == "캘린더"
     btn.click()
     page.wait_for_url(f"{BASE}/calendar")
     page.wait_for_selector(".cal-grid")
@@ -246,7 +246,7 @@ def test_desktop_header_has_calendar_entry_and_home_button(desktop_context):
 
 
 def test_header_calendar_entry_hidden_on_mobile(mobile_context):
-    """모바일 — 헤더 윗줄이 통째로 숨어 교회력 입구는 탭 바뿐이다."""
+    """모바일 — 헤더 윗줄이 통째로 숨어 캘린더 입구는 탭 바뿐이다."""
     page = mobile_context.new_page()
     page.goto(BASE)
     page.wait_for_selector(".book-list", timeout=20_000)

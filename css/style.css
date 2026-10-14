@@ -873,7 +873,7 @@ body {
 }
 .lect-gloria-line.verse-response { color: var(--text-secondary); }
 
-/* ── 교회력 뷰 (calendar tab, ADR-038 §1 · §2 A2) ──
+/* ── 캘린더 뷰 (calendar tab, ADR-038 §1 · §2 A2) ──
    A month as a 7-column table: every day is a link to its lectionary page. The
    date nav row reuses the lectionary's .lect-datenav / .lect-datenav-btn /
    .lect-today (DESIGN.md §6 「날짜 이동 줄」). Sans-serif like the other in-page
@@ -4113,7 +4113,7 @@ html.cite-sheet-open {
   /* dock 의 flex 자식 — 아이콘 슬롯(보이는 탭 수 × 60px) 폭만큼만 차지하고 늘어나지
      않는다. 검색 원형과의 사이 여백은 비운다(#tab-search-dock margin-left:auto 가 검색
      그룹을 우측 끝으로 밀어붙임). 위치는 #tab-dock 책임.
-     줄어들기는 한다(flex-shrink 1 + min-width 0) — 보이는 탭이 넷(홈 · 교회력 · 북마크 ·
+     줄어들기는 한다(flex-shrink 1 + min-width 0) — 보이는 탭이 넷(홈 · 캘린더 · 북마크 ·
      설정, ADR-038 A2)이면 320px 폭에서 240 + 8 + 검색 60 이 dock 안쪽 288px 를 넘어 검색
      원형이 화면 밖으로 밀렸다. 이제 슬롯(.tab-item flex:0 1 auto)이 ~55px 로 고르게 줄고
      인디케이터 원은 슬롯 폭을 넘지 않는다(.tab-icon-wrap max-width:100%). 340px 이상은

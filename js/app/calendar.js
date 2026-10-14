@@ -20,6 +20,7 @@
 //   선택 봉헌(「옮겨 지킬 수 있음」)은 월간 칸에 보이지 않는다 — 주간 · 목록 줄의 보조 이름으로.
 //   전례년이 바뀌는 날(대림 1주일)에 「나해 시작」 꼴 표지(설계서 미결3 — 엔진의 liturgicalYearOf 로 가른다).
 //   독서 성구는 달력에 싣지 않는다(설계서 미결41) — 독서 묶음(1.6MB)을 달력에서 받지 않으려고.
+//   탭 이름 · 화면 제목은 「캘린더」(사용자 「"교회력"은 "캘린더"로」 2026-10-15) — 교회력 자체를 말하는 문구는 그대로.
 
 /** @typedef {import("../types").ResolvedDate} ResolvedDate */
 /** @typedef {import("../types").Candidate} Candidate */
@@ -34,7 +35,7 @@ import {
 const { _$, el, clearNode, emptyState } = window.appHelpers;
 
 const $app = _$("app");
-const PAGE_TITLE = "교회력";
+const PAGE_TITLE = "캘린더";
 
 /**
  * parsePath 가 /calendar 에서 내는 서술자(routing.js PARSE_PATH). `month` 가 null 이면 이번 달.
@@ -267,7 +268,7 @@ function commitError(msg, subtitle) {
   clearNode($app);
   const panel = el("div", { className: "calendar" });
   panel.appendChild(emptyState({ icon: null, title: msg, subtitle: subtitle || "" }));
-  panel.appendChild(el("p", { className: "cal-error-link" }, el("a", { className: "lect-today", href: "/calendar" }, "이번 달 교회력")));
+  panel.appendChild(el("p", { className: "cal-error-link" }, el("a", { className: "lect-today", href: "/calendar" }, "이번 달 캘린더")));
   $app.appendChild(panel);
 }
 

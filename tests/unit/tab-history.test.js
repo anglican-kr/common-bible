@@ -95,7 +95,7 @@ test("tabOf: 비슷하지만 다른 경로는 home(예: /searchers)", () => {
   assert.equal(tabOf("/searchers"), "home");
 });
 
-test("tabOf: /lectionary 와 /calendar 는 calendar(ADR-038 §1 · §3 — 교회력 탭)", () => {
+test("tabOf: /lectionary 와 /calendar 는 calendar(ADR-038 §1 · §3 — 캘린더 탭)", () => {
   assert.equal(tabOf("/lectionary"), "calendar");
   assert.equal(tabOf("/lectionary/2026-04-05?obs=t-x&track=2"), "calendar");
   assert.equal(tabOf("/calendar"), "calendar");
