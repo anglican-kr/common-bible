@@ -1,4 +1,4 @@
-# data 0fd14cdf7140047efde007893ad02a5feffef0a9 · activated=∅ · MAX_SHIFT=30
+# data cda718fd2a9714c6784fd5b1718b29f117aa285f · activated=∅ · MAX_SHIFT=30
 1900-03-25 → 1900-03-26  d0325-성모수태고지  by:grid:lent-4-sunday  shift:1
 1900-07-22 → 1900-07-23  d0722-성-막달라-마리아  by:grid:ordinary-16-sunday  shift:1
 1900-10-28 → 1900-10-29  d1028-사도-성-시몬과-유다  by:grid:ordinary-30-sunday  shift:1
