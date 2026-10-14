@@ -1444,8 +1444,8 @@ test("C-6.3-1 재일 — 대재일 둘 · 사순 주간 40일(성 목요일은 �
 // 실제 연도의 이동은 픽스처(transfers · optionals)가 정본이라 실데이터 파일이 소비한다(설계서 §7). 여기는 실제
 // 연도로는 만들 수 없는 경로 — 연도 경계 · 이동 상한 · 선착순 · 도착끼리 기원 순 · 해를 넘긴 선착순 · 떠난 패자 ·
 // 좌석 경합 · 켜진 출발이 비운 자리 · 경계 × 활성화 · 활성화 캐시 — 와 보호 기간이 패스에 끼어들지 않는다는 것
-// (공개 스위트에서도 잡히게)을 잡는다. 선착순 · 기원 순의 실제 사례는 보호 기간 이동이 없어지며 1900~2100 에서
-// 사라졌다(2026-10-11 — 원장 docs/changes/2026-10-11-liturgical-engine-booklet-holy-week.md).
+// (공개 스위트에서도 잡히게)을 잡는다. 1900~2100 에서 선착순이 서열 순과 갈리는 실제 사례는 보호 기간의 6해(부활 3.26 —
+// 요셉 · 수태고지)뿐이고 그것은 서열 순이다(→ R-6.3-guard-order, 픽스처 T-2062-03-27) — 그 밖의 선착순은 여기 합성 표가 지킨다.
 
 /**
  * 이동 패스용 새 엔진 — 패스 캐시(연도 키 · 인덱스 하나용)와 활성화 집합이 표마다 새로 선다.
@@ -1558,7 +1558,8 @@ test("C-6.5-7 선착순 — 먼저 밀려 앉은 도착을 품계가 높은 뒤�
 });
 
 test("C-6.5-19 보호 기간 목적지 — 성주간 · 부활 8일 안에서 밀린 축일은 그 기간 다음 날(부활 2주 월요일)부터 빈 날을 찾는다(→ R-6.3-guard-destination)", () => {
-  // 2026 부활 4.5 — 성지주일 3.29 · 성 목요일 4.2 · 부활 2주일 4.12 · 부활 2주 월요일 4.13. 둘 다 4.13 부터 찾고 기원 순으로 앉는다
+  // 2026 부활 4.5 — 성지주일 3.29 · 성 목요일 4.2 · 부활 2주일 4.12 · 부활 2주 월요일 4.13. 둘 다 4.13 부터 찾고, 같은 서열(prec 6)
+  // 이라 원래 날짜 순으로 앉는다(→ R-6.3-guard-order — 서열이 다르면 C-6.5-22)
   const walls = [
     TMP("t-palm", "합성 성지주일", { kind: "easter_offset", days: -7 }, { rank: "privileged_sunday", precedence: 2 }),
     TMP("t-thu", "합성 성 목요일", { kind: "easter_offset", days: -3 }),
@@ -1601,6 +1602,64 @@ test("C-6.5-20 연쇄 범위 — 도착에 밀린 고유 축일은 사도 · 복
   const xmas = passEngine(passTables([MOV("d1226-a", "12.26", { sanctoral_class: "apostle" }), MOV("d1228-s", "12.28", { sanctoral_class: "martyr" })], DEC_WALLS));
   same(seats(xmas.pass(2026).arrivals), { "2026-12-28": ["d1226-a<-2026-12-26"], "2026-12-29": ["d1228-s<-2026-12-28"] });
   same(fate(xmas.at("2026-12-29"), "d1228-s"), ["transferred_in", "d1226-a"]);
+  // 고정 날짜는 색인과 같은 정규화로 판정한다(§5.2) — 「12-28」 로 적힌 성탄 8일 순교 축일도 연쇄하고
+  const dashed = passEngine(passTables([MOV("d1226-a", "12.26", { sanctoral_class: "apostle" }), MOV("d1228-s", "12-28", { sanctoral_class: "martyr" })], DEC_WALLS));
+  same(seats(dashed.pass(2026).arrivals), { "2026-12-28": ["d1226-a<-2026-12-26"], "2026-12-29": ["d1228-s<-2026-12-28"] });
+  // 「12.3」(12월 3일)은 성탄 8일 밖이라 기념이다 — 원문 문자열 비교면 "12.3" 이 "12.25" ~ "12.31" 사이로 잡힌다.
+  // 12.1 의 A(사도)가 합성 대축일 12.1 · 12.2(E+240 · E+241)를 건너 12.3 에 도착한다
+  const early = [
+    TMP("t-wall-e1", "합성 가변 대축일 12.1", { kind: "easter_offset", days: 240 }, { season: "advent", type: "feast" }),
+    TMP("t-wall-e2", "합성 가변 대축일 12.2", { kind: "easter_offset", days: 241 }, { season: "advent", type: "feast" }),
+  ];
+  const dec3 = passEngine(passTables([MOV("d1201-a", "12.01", { sanctoral_class: "apostle" }), MOV("d1203-s", "12.3", { sanctoral_class: "martyr" })], early));
+  same(seats(dec3.pass(2026).arrivals), { "2026-12-03": ["d1201-a<-2026-12-01"] });
+  same(fate(dec3.at("2026-12-03"), "d1203-s"), ["commemorated", "d1201-a"]);
+});
+
+test("C-6.5-21 연쇄 범위는 도착에만 밀린 축일에 — 주일도 밀어내면 도착이 함께 있어도 종전대로 옮긴다(→ R-6.2-chain-scope)", () => {
+  // 2026-06-19(금) · 06-20(토, E+75 · E+76) 가변 대축일이 A(prec 3)를 6.21 연중 주일로 보낸다(연중 주일 5 는 A 를 막지 못한다).
+  // 그 주일의 성인 축일 S(prec 6)는 A 와 주일 격자에 함께 밀린다 — 도착이 없었어도 주일이 옮겼을 것이므로 기념이 아니라 6.22 로
+  const walls = [
+    TMP("t-wall-fri", "합성 가변 대축일 금", { kind: "easter_offset", days: 75 }, { season: "ordinary", type: "feast" }),
+    TMP("t-wall-sat", "합성 가변 대축일 토", { kind: "easter_offset", days: 76 }, { season: "ordinary", type: "feast" }),
+  ];
+  const S = MOV("d0621-s", "06.21", { sanctoral_class: "saint" });
+  const t = passEngine(passTables([MOV("d0619-a", "06.19", { precedence: 3, priority_group: "A" }), S], walls));
+  same(seats(t.pass(2026).arrivals), { "2026-06-21": ["d0619-a<-2026-06-19"], "2026-06-22": ["d0621-s<-2026-06-21"] });
+  const sun = t.at("2026-06-21");
+  same([officialId(sun), fate(sun, "d0621-s")], ["d0619-a", ["transferred_out", "d0619-a"]]);   // displacedBy 는 밀어낸 것의 최상위
+  same(fate(t.at("2026-06-22"), "d0621-s"), ["transferred_in", "d0619-a"]);
+  // 도착이 없어도 주일에 밀려 같은 6.22 로 간다 — 도착은 그 결과를 바꾸지 않는다
+  same(seats(passEngine(passTables([S], walls)).pass(2026).arrivals), { "2026-06-22": ["d0621-s<-2026-06-21"] });
+});
+
+test("C-6.5-22 보호 기간 안에서 밀린 축일끼리는 서열 순 — 뒤에 밀린 높은 쪽이 부활 2주 월요일에 먼저 앉는다(→ R-6.3-guard-order)", () => {
+  // 2026 부활 4.5 — 성지주일 3.29 에 밀린 J(prec 6)가 먼저, 부활밤(성 토요일 4.4)에 밀린 A(prec 3)가 나중이다. 선착순이면 J 4.13 ·
+  // A 4.14 — 서열 순이라 A 4.13 · J 4.14(부활 3.26 인 해의 요셉 · 수태고지와 같은 꼴 — 픽스처 T-2062-03-27)
+  const t = passEngine(passTables([MOV("d0329-j", "03.29"), MOV("d0404-a", "04.04", { precedence: 3, priority_group: "A" })], [
+    ...HOLY_WEEK_ROWS,
+    TMP("t-palm", "합성 성지주일", { kind: "easter_offset", days: -7 }, { rank: "privileged_sunday", precedence: 2 }),
+  ]));
+  same(seats(t.pass(2026).arrivals), { "2026-04-13": ["d0404-a<-2026-04-04"], "2026-04-14": ["d0329-j<-2026-03-29"] });
+  same(fate(t.at("2026-04-13"), "d0404-a"), ["transferred_in", "t-vigil"]);
+  same(fate(t.at("2026-04-14"), "d0329-j"), ["transferred_in", "t-palm"]);
+  same(fate(t.at("2026-03-29"), "d0329-j"), ["transferred_out", "t-palm"]);
+});
+
+test("C-6.5-23 보호 기간은 막지 않는다 — 성지주일 전날 밀린 축일은 성주간 월요일에 앉아 그날 축일 색이고, 그날의 옮길 수 있는 prec 7 은 도착에 밀려도 생략이다", () => {
+  // 2026 — 3.28(토, E−8 — 보호 기간 밖)의 가변 대축일이 X(prec 3)를 민다. 3.29 성지주일(절기 주일 2)은 X 를 막고, 보호 기간 안의
+  // 3.30 성주간 월요일(격자 평일 8)은 막지 않는다(→ R-6.3-holy-week-guard · R-6.3-guard-destination). 막는 구현이면 4.13 으로 간다
+  const t = passEngine(passTables([
+    MOV("d0328-x", "03.28", { precedence: 3, priority_group: "A" }),                                    // 백
+    SAN("d0330-m", "03.30", "합성 이동 축일(prec 7)", { transferable: true, transfer_to: "next_day" }),
+  ], [TMP("t-wall-sat", "합성 가변 대축일", { kind: "easter_offset", days: -8 }, { season: "lent", type: "feast" })]));
+  same(seats(t.pass(2026).arrivals), { "2026-03-30": ["d0328-x<-2026-03-28"] });
+  const mon = t.at("2026-03-30");
+  // 성주간 평일을 이긴 성인력 축일은 그 축일 색이다 — 제자리든 도착이든(→ R-6.4-color-order)
+  same([officialId(mon), fate(mon, "d0328-x"), mon.color], ["d0328-x", ["transferred_in", "t-wall-sat"], "white"]);
+  // 보호 기간의 prec 7 은 생략이다 — 밀어낸 것이 도착이어도(guard 에만 밀린 경우는 위 R-6.3-holy-week-guard 테스트)
+  same(fate(mon, "d0330-m"), ["omitted", "d0328-x"]);
+  assert.strictEqual(cand(t.at("2026-04-13"), "d0328-x"), undefined);
 });
 
 test("C-6.5-9 도착끼리 기원 순 — 같은 품계면 기원 날짜가 이른 쪽이 먼저 앉는다(id 순이 아니다)", () => {

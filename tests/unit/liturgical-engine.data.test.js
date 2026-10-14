@@ -626,7 +626,8 @@ test("C-6.4-1 절기 기본색 · 승자 색 — 성주간 전체 홍(성 목 ·
     if (lent4.colorAlt !== "rose" && offId(lent4).startsWith("grid:")) bad.push(`${y} 사순 4주일 ${lent4.colorAlt}`);
   }
   same(bad, []);
-  // 축일 색 예외가 실제로 돈다 — 요셉(2035 · 2046 성 월) · 수태고지(2029 · 2040 성지주일에서 도착 · 2043 성 수)
+  // 축일 색 예외가 실제로 돈다 — 그날 지킨 요셉(2035 · 2046 성 월) · 수태고지(2043 성 수). 성주간에 도착이 이기는 날은 실데이터에
+  // 없다(보호 기간 안의 도착 0 — 도착이 이긴 날의 축일 색은 합성 C-6.5-23)
   same(feastDays, ["2035 E-6", "2043 E-4", "2046 E-6"]);
 });
 
@@ -826,7 +827,7 @@ test("I-1~I-8 · I-11 이동 패스 불변식 — 1900~2100 (activated = ∅)", 
     if (p.defects.length) bad.push(`I-4 ${y} ${p.defects}`);
     for (const [d, cs] of p.departures) {
       for (const c of cs) {
-        if (ctx.dayDiff(d, c.to) > 15) bad.push(`I-5 ${d} ${c.observance.id} → ${c.to}`);   // 성지주일 → 부활 2주 월요일(→ R-6.3-guard-destination)
+        if (ctx.dayDiff(d, c.to) > 16) bad.push(`I-5 ${d} ${c.observance.id} → ${c.to}`);   // 부활 3.26 인 해 성지주일의 요셉 → 부활 2주 화요일(→ R-6.3-guard-order)
         if (String(c.displacedBy).startsWith("guard:")) bad.push(`I-11 ${d} ${c.observance.id} by ${c.displacedBy}`);
       }
     }
