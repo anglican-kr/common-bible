@@ -11,6 +11,7 @@ import re, json, sys, datetime as dt
 SRC, BOOKS_JSON, DST, READINGS_JSON = sys.argv[1:5]
 GLYPH = {"֣": "green", "ߔ": "white", "੗": "violet", "ഘ": "red"}
 GL = "".join(GLYPH)
+SUP = str.maketrans("¹²³⁴⁵⁶⁷⁸⁹⁰⁻", "1234567890-")
 books = json.load(open(BOOKS_JSON, encoding="utf8"))
 BOOKS = {b["short_name_ko"] for b in books} | {"시편", "이사야", "창조송가", "성모송가", "성모", "즈가리야"}
 for e in json.load(open(READINGS_JSON, encoding="utf8"))["entries"]:
@@ -99,7 +100,10 @@ def process(b):
             after_footer = True; continue
         colors |= {GLYPH[c] for c in l if c in GLYPH}
         l = re.sub("[<>" + GL + "]", "", l)
-        l = re.sub(r"[¹²³⁴⁵⁶⁷⁸⁹⁰⁻ᦨ]", "", l).replace(" ", " ").strip()
+        # 위첨자는 하위 절 번호다(에스델 그리스어 부분 「에스 4:17¹²⁻¹⁶, 17²³⁻²⁵」) — 엔진 라벨처럼 괄호에 보통 숫자로 적는다
+        # (「4:17(12-16)」). 지우면 「에스 4:17, 17」 이 된다. 「ᦨ」 는 「사도 장(ᦨ) 야고보」 에 잘못 매핑된 글리프라 지운다
+        l = re.sub(r"[¹²³⁴⁵⁶⁷⁸⁹⁰⁻]+", lambda m: "(" + m.group(0).translate(SUP) + ")", l)
+        l = l.replace("ᦨ", "").replace(" ", " ").strip()
         if not l:
             continue
         if re.fullmatch(r"[월화수목금토]", l):

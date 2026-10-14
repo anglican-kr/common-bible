@@ -14,14 +14,20 @@ function extractBlock(name, source) {
   return source.slice(s, e + end.length);
 }
 const ENGINE = src("js/app/liturgical-engine.js"), VS = src("js/app/verse-spec.js");
-// 전례독서 뷰(ADR-038 A3)가 있으면 뷰 모델(초기 선택 · 세트 라벨)도 덤프한다 — 없으면(#346 이전 체크아웃) view: null 이고
-// compare.py 는 승자(official)로 비교한다. 뷰의 초기 선택과 달라 집계가 크게 바뀌므로 소리 내어 알린다.
-const LECT = fs.existsSync(path.join(ROOT, "js/app/lectionary.js")) ? src("js/app/lectionary.js") : null;
-if (!LECT) console.warn("경고: js/app/lectionary.js 가 없다 — view: null 로 덤프한다. compare.py 는 승자(official)로 비교하므로 뷰의 초기 선택 대조가 아니다(tools/booklet/README.md).");
 const ctx = { Object, Array, Set, Map, String, Number, Boolean, Math, JSON, console, Error, parseInt, isNaN, Date, NaN, URLSearchParams };
 vm.createContext(ctx);
 vm.runInContext("const anchorCache = new Map(); const spansCache = new Map(); const transferCache = new Map(); const activatedOptionals = new Set();", ctx);
 vm.runInContext(extractBlock("LITURGICAL_CORE", ENGINE), ctx, { filename: "engine-core" });
+// 인자를 엔진의 parseDate(YYYY-MM-DD 엄격 · 없는 날짜 거부)로 검사한다 — 아래 루프는 날짜를 문자열로 비교하므로 「2027-1-31」 은
+// 9월 30일까지 돌고 뒤바뀐 범위는 0일을 낸다(둘 다 오류 없이).
+if (!ctx.parseDate(from) || !ctx.parseDate(to) || from > to || !out) {
+  console.error("사용: node tools/booklet/engine-dump.mjs <from YYYY-MM-DD> <to YYYY-MM-DD> <out.json>   (from ≤ to, 저장소 루트에서)");
+  process.exit(1);
+}
+// 전례독서 뷰(ADR-038 A3)가 있으면 뷰 모델(초기 선택 · 세트 라벨)도 덤프한다 — 없으면(#346 이전 체크아웃) view: null 이고
+// compare.py 는 승자(official)로 비교한다. 뷰의 초기 선택과 달라 집계가 크게 바뀌므로 소리 내어 알린다.
+const LECT = fs.existsSync(path.join(ROOT, "js/app/lectionary.js")) ? src("js/app/lectionary.js") : null;
+if (!LECT) console.warn("경고: js/app/lectionary.js 가 없다 — view: null 로 덤프한다. compare.py 는 승자(official)로 비교하므로 뷰의 초기 선택 대조가 아니다(tools/booklet/README.md).");
 vm.runInContext(extractBlock("LITURGICAL_LOOKUP", ENGINE), ctx, { filename: "engine-lookup" });
 vm.runInContext(extractBlock("VERSE_SPEC", VS), ctx, { filename: "verse-spec" });
 if (LECT) vm.runInContext(extractBlock("LECTIONARY_MODEL", LECT), ctx, { filename: "lectionary-model" });
@@ -31,7 +37,8 @@ const lec = ctx.buildLectionaryIndex({ readings: read("eucharist-readings.json")
 const plain = (v) => JSON.parse(JSON.stringify(v));
 const NONE = { obs: null, track: null, set: null, collect: null };
 const slotsOf = (g) => { const o = {}; for (const s of (g && g.readings) || []) if (s) o[s.slot] = s.label; return o; };
-const cand = (c) => ({ id: c.observance.id, name: c.observance.name, status: c.status, from: c.from || null, to: c.to || null,
+// 이름은 name + aliases(엔진 namesOfRow) — compare.py 가 책자의 「고난주일」 · 「승천일」 을 별칭으로 맞춘다
+const cand = (c) => ({ id: c.observance.id, name: c.observance.name, aliases: c.observance.aliases || null, status: c.status, from: c.from || null, to: c.to || null,
   displacedBy: c.displacedBy || null, color: c.observance.color || null, colorAlt: c.observance.color_alt || null,
   precedence: c.observance.precedence ?? null, rank: c.observance.rank || null, kind: c.observance.kind || null, date: c.observance.date || null });
 const result = [];
