@@ -155,12 +155,12 @@ ADR-038 A2 렌더가 복원하는 전례 표기 — 계응 ◯(`.responsory-mark
 머지 전에 서브에이전트 둘(기존 앱 회귀 · 자체 리뷰 이후 변경)이 다시 본 뒤, 고친 것을 빼고 남긴 것.
 
 - **반절이 절 전체로 보이는 47곳**(데이터의 반절 참조 59곳 가운데 — 절이 한 줄 33곳 · 세 줄 이상 14곳). 정확히 두 줄인 절만 그 줄을 고르고 나머지는 절 전체를 그린다(ADR-038 §3 「구현」). 예: 「집회 51:12하-20상」의 끝 20상은 서울교구 게시글이 20절의 앞 두 줄에서 끝나는데 뷰는 네 줄을 다 그린다. 데이터 저장소의 게시글 캐시(`liturgical/html/`)가 반절의 실제 줄을 싣고 있어, 그것으로 반절마다 줄(또는 글자 위치)을 정해 데이터에 두면 정확해진다.
-- **전례독서 · 교회력 모듈을 모든 화면에서 내려받는다** — `index.html` 의 `<script type="module">` 이고 `routing.js` 가 정적으로 import 해서 성서만 읽는 사람도 `lectionary.js`(약 70KB)와 A2 의 `calendar.js`(약 20KB)를 받는다. 교회력 데이터는 `/calendar` · `/lectionary` 를 열 때만 받는다. 두 모듈을 함께 라우트에서 동적 `import()` 로 바꿀 수 있다 — A2 뒤 별도 PR(사용자 승인 2026-10-15, coding-pitfalls §24).
+- **전례독서 · 캘린더 모듈을 모든 화면에서 내려받는다** — `index.html` 의 `<script type="module">` 이고 `routing.js` 가 정적으로 import 해서 성서만 읽는 사람도 `lectionary.js`(약 70KB)와 A2 의 `calendar.js`(약 20KB)를 받는다. 교회력 데이터는 `/calendar` · `/lectionary` 를 열 때만 받는다. 두 모듈을 함께 라우트에서 동적 `import()` 로 바꿀 수 있다 — A2 뒤 별도 PR(사용자 승인 2026-10-15, coding-pitfalls §24).
 - **`/read/<깨진 퍼센트 이스케이프>`** 가 `URI malformed` 로 처리되지 않은 예외를 낸다(main 부터). #346 의 `decodeOrRaw` 는 `/lectionary` 갈래에만 있다.
 - **서비스 워커 설치와 오프라인 동작은 확인하지 못했다** — 헤드리스 Chromium 에서는 동시에 10개 넘게 받는 설치가 멈춰(main 의 `sw.js` 도 같다) 브라우저로 볼 수 없었다. `SHELL_FILES` 54개가 모두 200 으로 응답하는 것만 curl 로 확인했다. 배포 전 실기기에서 한 번 확인한다.
 
 ---
 
-## 7. A2(교회력 탭) 작업 중 찾은 후속 (2026-10-15)
+## 7. A2(캘린더 탭) 작업 중 찾은 후속 (2026-10-15)
 
 - **앱 모듈 24개가 실제로는 타입 검사를 받지 않는다**(오래된 결함 — main 부터). 첫 줄이 `"use strict";` 이고 둘째 줄이 `// @ts-check` 인 파일은 지시문이 파일 머리 주석이 아니게 되어 tsc 가 그 파일을 건너뛴다(`tsconfig.json` 은 `checkJs: false`). 일부러 넣은 타입 오류를 `npm run typecheck` 가 잡지 못하는 것으로 확인했다 — `js/app.js` 와 `js/app/` 의 23개(audio-player · bookmark 계열 10 · citations · data-fetch · helpers · install · overlay · parallels · reading-context · routing · search · settings-ui · verse-spec · views). 두 줄의 순서를 바꾸면 오류 **204건**이 드러난다(2026-10-15 실측 — bookmark-modals 50 · views 48 · search 22 · bookmark-read 16 · bookmark 13 · routing 12 · bookmark-tree 11 · citations 9 · app.js 6 · 나머지 17). `docs/status.md` 의 「모든 클라이언트 JS 에 `// @ts-check` … 0 error」는 이 파일들에서는 사실이 아니다. 같은 결함을 #346 이 `lectionary.js` 에서 고쳤다(975줄이 검사 밖이었다 — 원장 `docs/changes/2026-10-12-lectionary-view.md` 3회차 ①). A2 의 새 `calendar.js` 는 첫 줄이 `// @ts-check` 이고 일부러 넣은 오류가 잡히는 것을 확인했다. **고치는 법**: 파일마다 두 줄의 순서를 바꾸고 드러난 오류를 고친다 — 파일이 많고 오류가 실제 결함일 수도 있어 별도 PR(파일 묶음별)로.

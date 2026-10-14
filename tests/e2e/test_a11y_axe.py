@@ -113,7 +113,7 @@ def test_a11y_lectionary_pair_and_switcher(browser):
 
 
 def test_a11y_calendar_month(browser):
-    """교회력 월간 표(2026년 11월 — 「나해」 표지 · 앞뒤 달 칸 · 데스크톱 헤더 입구) — critical/serious 위반 0건."""
+    """캘린더 월간 표(2026년 11월 — 「나해」 표지 · 앞뒤 달 칸 · 데스크톱 헤더 입구) — critical/serious 위반 0건."""
     ctx, page = _open(browser, "calendar/2026-11")
     try:
         page.wait_for_selector(".calendar .cal-grid .cal-mark", timeout=20_000)
@@ -124,7 +124,7 @@ def test_a11y_calendar_month(browser):
 
 
 def test_a11y_calendar_month_mobile(browser):
-    """교회력 월간 표 모바일(2026년 9월 — 사계재 자 · 백 점 · 탭 바 넷째 탭) — critical/serious 위반 0건."""
+    """캘린더 월간 표 모바일(2026년 9월 — 사계재 자 · 백 점 · 탭 바 넷째 탭) — critical/serious 위반 0건."""
     from .conftest import IPHONE_UA, MOBILE_VIEWPORT
     ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA, is_mobile=True, has_touch=True)
     ctx.add_init_script(CLEAR_APP_STORAGE)

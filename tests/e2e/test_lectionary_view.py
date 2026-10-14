@@ -10,7 +10,7 @@
   ④ 대안 세트 · 트랙 — 세그먼트, 트랙은 마지막 선택을 날짜 · 해와 무관하게 기억
   ⑤ 기념일 칩 — 「기념일 — 본문 없음」
   ⑥ 날짜 — 오늘 · 전날/다음날 · 잘못된 날짜
-  ⑦ 탭 바 — 교회력(캘린더) 탭 소속이라 독서 화면에서 교회력 탭이 활성(ADR-038 A2)
+  ⑦ 탭 바 — 캘린더 탭 소속이라 독서 화면에서 캘린더 탭이 활성(ADR-038 A2)
 
 실데이터(data/ 서브모듈)가 필요하다 — 로컬 전용(CLAUDE.md 「E2E 테스트」).
 """
@@ -752,7 +752,7 @@ def test_shared_link_with_state_lands_on_same_screen(desktop_context):
 # ── ⑦ 탭 바 ──
 
 def test_mobile_tab_bar_marks_calendar_tab_on_lectionary(mobile_context):
-    """교회력(캘린더) 탭 소속(ADR-038 §1 · §3) — 독서 화면에서 교회력 탭이 활성이고 인디케이터가 그 탭에 선다."""
+    """캘린더 탭 소속(ADR-038 §1 · §3) — 독서 화면에서 캘린더 탭이 활성이고 인디케이터가 그 탭에 선다."""
     page = mobile_context.new_page()
     _open(page, "lectionary/2026-04-05")
     page.wait_for_selector("#tab-bar [data-tab='calendar'][aria-current='page']")

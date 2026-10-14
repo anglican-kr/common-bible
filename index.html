@@ -125,9 +125,9 @@
             <button id="search-clear" type="button" aria-label="검색어 지우기" hidden>&times;</button>
             <div id="search-history" role="listbox" aria-label="최근 검색어" hidden></div>
           </div>
-          <!-- ADR-038 §1 (A2): 데스크톱 교회력 입구 — 하단 탭 바가 없는 넓은 화면 · 마우스(#tab-dock 숨김)에서
-               교회력 탭과 같은 곳으로 간다. 모바일은 #breadcrumb-row 가 통째로 숨어 탭 바만 남는다. -->
-          <a id="header-calendar" class="header-calendar-btn" href="/calendar" aria-label="교회력">
+          <!-- ADR-038 §1 (A2): 데스크톱 캘린더 입구 — 하단 탭 바가 없는 넓은 화면 · 마우스(#tab-dock 숨김)에서
+               캘린더 탭과 같은 곳으로 간다. 모바일은 #breadcrumb-row 가 통째로 숨어 탭 바만 남는다. -->
+          <a id="header-calendar" class="header-calendar-btn" href="/calendar" aria-label="캘린더">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5.5 5.5h13a1 1 0 0 1 1 1V19a1 1 0 0 1-1 1h-13a1 1 0 0 1-1-1V6.5a1 1 0 0 1 1-1z"/><path d="M4.5 9.5h15"/><path d="M8.5 3.5v4"/><path d="M15.5 3.5v4"/></svg>
           </a>
           <div id="settings-anchor"></div>
@@ -155,9 +155,9 @@
     <a class="tab-item" href="/" data-tab="home" aria-label="홈">
       <span class="tab-icon-wrap"><svg class="tab-icon" viewBox="2.84 3.04 18.33 18.33" fill="none" stroke="currentColor" stroke-width="1.37" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.6 11.4 12 4.4l8.4 7"/><path d="M5.6 9.9V19a1 1 0 0 0 1 1h3.3v-5.4h4.2V20h3.3a1 1 0 0 0 1-1V9.9"/></svg></span>
     </a>
-    <!-- ADR-038 §1 (A2): 교회력 탭 — 홈 다음 두 번째. 광학 크기 정규화(ADR-030 개정 2026-06-05):
+    <!-- ADR-038 §1 (A2): 캘린더 탭 — 홈 다음 두 번째. 광학 크기 정규화(ADR-030 개정 2026-06-05):
          글리프 바운딩박스(4.5~19.5 × 3.5~20) 중심에 22/24 비율 viewBox, 획 1.8 × 18/24. -->
-    <a class="tab-item" href="/calendar" data-tab="calendar" aria-label="교회력">
+    <a class="tab-item" href="/calendar" data-tab="calendar" aria-label="캘린더">
       <span class="tab-icon-wrap"><svg class="tab-icon" viewBox="3.00 2.75 18.00 18.00" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5.5 5.5h13a1 1 0 0 1 1 1V19a1 1 0 0 1-1 1h-13a1 1 0 0 1-1-1V6.5a1 1 0 0 1 1-1z"/><path d="M4.5 9.5h15"/><path d="M8.5 3.5v4"/><path d="M15.5 3.5v4"/></svg></span>
     </a>
     <a class="tab-item" href="/bookmarks" data-tab="bookmarks" aria-label="북마크">
@@ -432,7 +432,7 @@
   <!-- ADR-038 §3 A3: 전례독서 뷰 — views(appendVerses · 세그먼트) · data-fetch · verse-spec ·
        liturgical-engine 위, routing(import) 아래. -->
   <script type="module" src="/js/app/lectionary.js"></script>
-  <!-- ADR-038 §2 A2: 교회력(캘린더) 뷰 — lectionary(이름 · 날짜 · 색 함수) · liturgical-engine · views 위,
+  <!-- ADR-038 §2 A2: 캘린더 뷰 — lectionary(이름 · 날짜 · 색 함수) · liturgical-engine · views 위,
        routing(import) 아래. -->
   <script type="module" src="/js/app/calendar.js"></script>
   <script type="module" src="/js/app/routing.js"></script>

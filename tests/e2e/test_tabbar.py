@@ -1,7 +1,7 @@
 """E2E: 모바일 모핑 탭 바 (ADR-029 + ADR-030).
 
 Covers:
-  - 탭 바 존재 + 탭 5개(홈·교회력·북마크·노트(숨김)·설정, 아이콘 전용) + 분리된 검색 원형
+  - 탭 바 존재 + 탭 5개(홈·캘린더·북마크·노트(숨김)·설정, 아이콘 전용) + 분리된 검색 원형
   - 탭 네비게이션 + active 상태(aria-current="page" / .active)
   - /bookmarks · /settings 전체 화면 뷰 렌더
   - 검색 원형 버튼 → /search 모핑(#tab-dock.searching, 하단 입력 표시)
@@ -22,7 +22,7 @@ def test_tab_bar_present_and_search_separated(mobile_context):
 
     page.wait_for_selector("#tab-bar", timeout=5_000)
     assert page.locator("#tab-bar").is_visible(), "tab bar must be visible on mobile"
-    # ADR-030 · ADR-038 A2: 홈·교회력·북마크·노트(숨김)·설정 = 5개 .tab-item. 검색은 탭에서 분리됨.
+    # ADR-030 · ADR-038 A2: 홈·캘린더·북마크·노트(숨김)·설정 = 5개 .tab-item. 검색은 탭에서 분리됨.
     assert page.locator("#tab-bar .tab-item").count() == 5, "expected 5 tab items"
     assert page.locator("#tab-bar .tab-item:not([hidden])").count() == 4, "expected 4 visible tab items"
     assert page.locator("#tab-bar .tab-item[data-tab='search']").count() == 0, \
