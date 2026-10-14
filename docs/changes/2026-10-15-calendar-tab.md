@@ -1,4 +1,5 @@
 ---
+pr: 348
 date: 2026-10-15
 branch: feat/calendar-tab
 title: "feat: 캘린더 탭 1단계 — 하단 탭 · /calendar 월간 표 · 데스크톱 입구 · 독서 화면 위 단계 (ADR-038 §1 · §2)"
