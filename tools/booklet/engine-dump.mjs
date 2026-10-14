@@ -14,8 +14,10 @@ function extractBlock(name, source) {
   return source.slice(s, e + end.length);
 }
 const ENGINE = src("js/app/liturgical-engine.js"), VS = src("js/app/verse-spec.js");
-// 전례독서 뷰(ADR-038 A3)가 있으면 뷰 모델(초기 선택 · 세트 라벨)도 덤프한다 — 없으면 view: null
+// 전례독서 뷰(ADR-038 A3)가 있으면 뷰 모델(초기 선택 · 세트 라벨)도 덤프한다 — 없으면(#346 이전 체크아웃) view: null 이고
+// compare.py 는 승자(official)로 비교한다. 뷰의 초기 선택과 달라 집계가 크게 바뀌므로 소리 내어 알린다.
 const LECT = fs.existsSync(path.join(ROOT, "js/app/lectionary.js")) ? src("js/app/lectionary.js") : null;
+if (!LECT) console.warn("경고: js/app/lectionary.js 가 없다 — view: null 로 덤프한다. compare.py 는 승자(official)로 비교하므로 뷰의 초기 선택 대조가 아니다(tools/booklet/README.md).");
 const ctx = { Object, Array, Set, Map, String, Number, Boolean, Math, JSON, console, Error, parseInt, isNaN, Date, NaN, URLSearchParams };
 vm.createContext(ctx);
 vm.runInContext("const anchorCache = new Map(); const spansCache = new Map(); const transferCache = new Map(); const activatedOptionals = new Set();", ctx);

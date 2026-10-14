@@ -11,14 +11,21 @@ engine = {x["date"]: x for x in json.load(open(EN, encoding="utf8"))}
 SLOTS = ["first", "psalm", "second", "gospel"]
 
 def norm(s):
-    s = re.sub(r"[–—‐‑−]", "-", s); s = re.sub(r"\s+", "", s); return s.strip(",;")
+    """대시를 하나로, 공백을 지운다 — 다만 숫자 사이의 공백은 한 칸 남긴다(「1 3」 을 「13」 으로 붙이지 않는다 — 모르는 꼴은
+    같다고 하지 않는다)."""
+    s = re.sub(r"[–—‐‑−]", "-", s); s = re.sub(r"(?<=\d)\s+(?=\d)", " ", s); s = re.sub(r"(?<!\d)\s+|\s+(?!\d)", "", s); return s.strip(",;")
 def loose(s):
-    """표기 차이만 지운다 — 쉼표 등 구분자는 남긴다(「1:1,3」≠「1:13」). 괄호 선택 절 「(1-9)10-18」 = 「1-9, 10-18」 은 verse_set 이 구조로 판정한다."""
-    s = norm(s); s = re.sub(r"(?<=\d)[상하]", "", s); s = re.sub(r"[\[\]()]", "", s); s = s.replace(".", ""); return s.rstrip("/").lower()
+    """표기 차이만 지운다(상/하 · 마침표 · 대소문자) — 구분자는 지우지 않는다: 쉼표는 남기고 괄호 · 대괄호는 쉼표로 읽어
+    겹친 쉼표만 줄인다(「1:(1-9)10-18」 = 「1:1-9,10-18」). 지우면 이웃 숫자가 붙어 「1:1,3」 · 「1:1(3)」 이 「1:13」 과 같아진다."""
+    s = norm(s); s = re.sub(r"(?<=\d)[상하]", "", s); s = re.sub(r"[\[\]()]", ",", s); s = s.replace(".", "")
+    s = re.sub(r",{2,}", ",", s).replace(":,", ":").strip(",")
+    return s.rstrip("/").lower()
 ONE_CHAPTER = {"유다", "필레", "2요한", "3요한", "오바"}
 def verse_set(s):
-    """「책 장:절-절, 절; 장:절」 → {(장, 절)} — 같은 장 안의 범위만 전개한다(장을 넘는 범위는 글자 그대로).
-    괄호(선택 절 「1:(1-9)10-18」 · 「1:1-4(5-10)11-14」)는 구분자로 읽어 쉼표 표기 「1:1-9, 10-18」 과 같은 집합이 된다."""
+    """「책 장:절-절, 절, 장:절」 → {(장, 절)} — 같은 장 안의 범위는 절마다 전개하고, 장을 넘는 범위 「18:21-19:2」 는
+    시작 · 끝 장과 절을 함께 담은 키 ("span", 18, 21, 19, 2) 하나로 둔다(장 길이를 모르니 전개하지 않는다 — 「18:21-35, 19:1-2」
+    와는 다르게 나온다: 같다고 잘못 말하지 않는 쪽). 괄호 · 대괄호(선택 절 「1:(1-9)10-18」 · 「4:6-8, [9-16]」)는 구분자로
+    읽어 쉼표 표기와 같은 집합이 된다. 모르는 꼴이면 None — 동치 판정에 쓰지 않는다."""
     s = norm(s); s = re.sub(r"(?<=\d)[상하]", "", s); s = re.sub(r"[\[\]()]", ",", s); s = re.sub(r"[A-Za-z.]", "", s)
     m = re.match(r"^(\d?[가-힣]+)(.*)$", s)
     if not m: return None
@@ -42,8 +49,12 @@ def verse_set(s):
             x, y = map(int, tok.split("-"))
             if y < x: return None
             out.update((ch, v) for v in range(x, y + 1))
-        elif re.fullmatch(r"\d+-\d+:\d+", tok):
-            out.add(("span", tok)); ch = int(tok.split("-")[1].split(":")[0])
+        elif m := re.fullmatch(r"(\d+)-(\d+):(\d+)", tok):   # 장을 넘는 범위 — 시작 장(ch)을 키에 넣는다
+            x, ech, ev = map(int, m.groups())
+            if ech < ch or (ech == ch and ev < x): return None
+            if ech == ch: out.update((ch, v) for v in range(x, ev + 1))
+            else: out.add(("span", ch, x, ech, ev))
+            ch = ech
         else: return None
     return (book, frozenset(out))
 def slot_match(bvals, label):
@@ -113,7 +124,7 @@ for d in sorted(booklet):
         detail.append({"date": d, "weekday": b["weekday"], "names": b["names"], "status": "engine-missing", "error": (e or {}).get("error", "missing"), "flags": b["flags"]})
         continue
     sets = engine_sets(e)
-    sel = e["view"]["initial"] if e["view"] else (e["official"]["id"] if e["official"] else None)
+    sel = e["view"]["initial"] if e.get("view") else (e["official"]["id"] if e["official"] else None)   # 뷰가 없으면 승자로(README)
     engine_colors[e["color"]] += 1
     rec = {"date": d, "weekday": b["weekday"], "names": b["names"], "sel": sel, "official": e["official"]["id"] if e["official"] else None,
            "candidates": [(c["id"], c["status"], c.get("from"), c.get("to")) for c in e["candidates"]], "slots": {}, "flags": b["flags"]}
@@ -180,6 +191,9 @@ json.dump(detail, open(DET, "w", encoding="utf8"), ensure_ascii=False, indent=0)
 L = []
 L.append(f"# 2027 전례독서 책자(검토용) ↔ 엔진 대조\n")
 L.append(f"범위 {min(booklet)} ~ {max(booklet)} — {len(booklet)}일. 엔진 색 어휘: {dict(engine_colors)}\n")
+no_view = sum(1 for d in booklet if engine.get(d) and not engine[d].get("error") and not engine[d].get("view"))
+if no_view:   # engine-dump.mjs 가 js/app/lectionary.js 없이 돌았다 — 집계가 뷰 대조와 크게 다르다(README)
+    L.append(f"> **뷰 없음 {no_view}일** — 엔진 덤프에 전례독서 뷰 모델이 없어(`js/app/lectionary.js` 없음) 그날은 승자(`official`)로 비교했다. 뷰의 초기 선택 대조가 아니다.\n")
 L.append("## 집계 (감사성찬례 독서, 날짜별 최악 슬롯)\n")
 for k, v in sorted(counts.items(), key=lambda x: -x[1]): L.append(f"- {k}: {v}")
 L.append("\n## 독서 불일치 (≠ · partial)\n")
