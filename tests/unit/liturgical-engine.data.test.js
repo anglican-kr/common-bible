@@ -604,7 +604,7 @@ test("C-6.1-12 기념일은 이름 줄 — 같은 날짜에 다른 행이 없는
 
 test("C-6.4-1 절기 기본색 · 승자 색 — 성주간 전체 홍(성 목 · 금 · 토 — 그날 지키는 성인력 축일만 축일 색) · 성령강림 홍 · 삼위일체 · 왕이신 그리스도 백 · 대림 3주일 장미 · 청 · 사순 4주일 장미 (2025~2050)", { skip: SKIP }, () => {
   const bad = [];
-  const feastDays = [];   // 성주간에 성인력 축일이 이긴 날 — 그날은 축일 색(→ R-6.3-holy-week-guard)
+  const feastDays = [];   // 성주간에 성인력 축일이 이긴 날 — 그날은 축일 색(→ R-6.3-holy-week-guard). 성지주일의 수태고지(2029 · 2040)는 보호 기간 뒤로 가 여기 없다(→ R-6.3-guard-destination)
   for (let y = 2025; y <= 2050; y++) {
     const E = ctx.easterDate(y);
     const at = (n) => resolve(ctx.addDays(E, n));
@@ -626,8 +626,9 @@ test("C-6.4-1 절기 기본색 · 승자 색 — 성주간 전체 홍(성 목 ·
     if (lent4.colorAlt !== "rose" && offId(lent4).startsWith("grid:")) bad.push(`${y} 사순 4주일 ${lent4.colorAlt}`);
   }
   same(bad, []);
-  // 축일 색 예외가 실제로 돈다 — 요셉(2035 · 2046 성 월) · 수태고지(2029 · 2040 성지주일에서 도착 · 2043 성 수)
-  same(feastDays, ["2029 E-6", "2035 E-6", "2040 E-6", "2043 E-4", "2046 E-6"]);
+  // 축일 색 예외가 실제로 돈다 — 그날 지킨 요셉(2035 · 2046 성 월) · 수태고지(2043 성 수). 성주간에 도착이 이기는 날은 실데이터에
+  // 없다(보호 기간 안의 도착 0 — 도착이 이긴 날의 축일 색은 합성 C-6.5-23)
+  same(feastDays, ["2035 E-6", "2043 E-4", "2046 E-6"]);
 });
 
 test("C-6.4-2 성주간 · 부활 8일에도 그날 지키는 성인력 축일은 축일 색 — 2035-03-19 요셉(성주간 월) 백 · 2025-04-25 마르코(부활 금) 홍 · 성 토요일 홍 · 순교자 평일 홍", { skip: SKIP }, () => {
@@ -826,7 +827,7 @@ test("I-1~I-8 · I-11 이동 패스 불변식 — 1900~2100 (activated = ∅)", 
     if (p.defects.length) bad.push(`I-4 ${y} ${p.defects}`);
     for (const [d, cs] of p.departures) {
       for (const c of cs) {
-        if (ctx.dayDiff(d, c.to) > 4) bad.push(`I-5 ${d} ${c.observance.id} → ${c.to}`);
+        if (ctx.dayDiff(d, c.to) > 16) bad.push(`I-5 ${d} ${c.observance.id} → ${c.to}`);   // 부활 3.26 인 해 성지주일의 요셉 → 부활 2주 화요일(→ R-6.3-guard-order)
         if (String(c.displacedBy).startsWith("guard:")) bad.push(`I-11 ${d} ${c.observance.id} by ${c.displacedBy}`);
       }
     }
