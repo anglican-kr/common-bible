@@ -156,7 +156,6 @@ ADR-038 §3 렌더 기반이 복원하는 전례 표기 — 계응 ◯(`.respons
 
 - **반절이 절 전체로 보이는 47곳**(데이터의 반절 참조 59곳 가운데 — 절이 한 줄 33곳 · 세 줄 이상 14곳). 정확히 두 줄인 절만 그 줄을 고르고 나머지는 절 전체를 그린다(ADR-038 §3 「구현」). 예: 「집회 51:12하-20상」의 끝 20상은 서울교구 게시글이 20절의 앞 두 줄에서 끝나는데 뷰는 네 줄을 다 그린다. 데이터 저장소의 게시글 캐시(`liturgical/html/`)가 반절의 실제 줄을 싣고 있어, 그것으로 반절마다 줄(또는 글자 위치)을 정해 데이터에 두면 정확해진다.
 - **전례독서 · 캘린더 모듈을 모든 화면에서 내려받는다** — `index.html` 의 `<script type="module">` 이고 `routing.js` 가 정적으로 import 해서 성서만 읽는 사람도 `lectionary.js`(약 70KB)와 A2 의 `calendar.js`(약 20KB)를 받는다. 교회력 데이터는 `/calendar` · `/lectionary` 를 열 때만 받는다. 두 모듈을 함께 라우트에서 동적 `import()` 로 바꿀 수 있다 — A2 뒤 별도 PR(사용자 승인 2026-10-15, coding-pitfalls §24).
-- **`/read/<깨진 퍼센트 이스케이프>`** 가 `URI malformed` 로 처리되지 않은 예외를 낸다(main 부터). #346 의 `decodeOrRaw` 는 `/lectionary` 갈래에만 있다.
 - **서비스 워커 설치와 오프라인 동작은 확인하지 못했다** — 헤드리스 Chromium 에서는 동시에 10개 넘게 받는 설치가 멈춰(main 의 `sw.js` 도 같다) 브라우저로 볼 수 없었다. `SHELL_FILES` 54개가 모두 200 으로 응답하는 것만 curl 로 확인했다. 배포 전 실기기에서 한 번 확인한다.
 
 ---
@@ -164,3 +163,13 @@ ADR-038 §3 렌더 기반이 복원하는 전례 표기 — 계응 ◯(`.respons
 ## 7. A2(캘린더 탭) 작업 중 찾은 후속 (2026-10-15)
 
 - **앱 모듈 24개가 실제로는 타입 검사를 받지 않는다**(오래된 결함 — main 부터). 첫 줄이 `"use strict";` 이고 둘째 줄이 `// @ts-check` 인 파일은 지시문이 파일 머리 주석이 아니게 되어 tsc 가 그 파일을 건너뛴다(`tsconfig.json` 은 `checkJs: false`). 일부러 넣은 타입 오류를 `npm run typecheck` 가 잡지 못하는 것으로 확인했다 — `js/app.js` 와 `js/app/` 의 23개(audio-player · bookmark 계열 10 · citations · data-fetch · helpers · install · overlay · parallels · reading-context · routing · search · settings-ui · verse-spec · views). 두 줄의 순서를 바꾸면 오류 **204건**이 드러난다(2026-10-15 실측 — bookmark-modals 50 · views 48 · search 22 · bookmark-read 16 · bookmark 13 · routing 12 · bookmark-tree 11 · citations 9 · app.js 6 · 나머지 17). `docs/status.md` 의 「모든 클라이언트 JS 에 `// @ts-check` … 0 error」는 이 파일들에서는 사실이 아니다. 같은 결함을 #346 이 `lectionary.js` 에서 고쳤다(975줄이 검사 밖이었다 — 원장 `docs/changes/2026-10-12-lectionary-view.md` 3회차 ①). A2 의 새 `calendar.js` 는 첫 줄이 `// @ts-check` 이고 일부러 넣은 오류가 잡히는 것을 확인했다. **고치는 법**: 파일마다 두 줄의 순서를 바꾸고 드러난 오류를 고친다 — 파일이 많고 오류가 실제 결함일 수도 있어 별도 PR(파일 묶음별)로.
+
+---
+
+## 8. PR #348 리뷰에서 넘긴 후속 (2026-10-15)
+
+#348(캘린더 탭 1단계)을 `/code-review` 로 본 13건 가운데 그 PR 에서 고치지 않고 넘긴 것. 고친 것과 각 건의 조치는 원장 `docs/changes/2026-10-15-calendar-tab.md` 「리뷰 반영」.
+
+- **고유명 평일을 뷰가 엔진 좌표로 가려낸다** — `calendar.js isNamedWeekday` 가 「성주간 월~수 · 재의 수요일 후 목~토」를 좌표 (lent, week null, weekday) 로 하드코딩해, 엔진의 좌표 의미를 뷰가 따로 들고 있다. 엔진이나 데이터가 그 좌표를 바꾸면(주 번호를 매기는 등) 그 칸들이 조용히 빈 이름이 되고, 유닛 합성 테스트는 좌표를 직접 만들어 넣어 잡지 못한다(실데이터 테스트 「고유명 평일」 두 날만 잡는다). 근본 자리는 엔진 · 데이터의 표지다 — 격자 관측일에 `named` 같은 표지를 두고 뷰는 그것을 읽는다. 엔진 PR 대상. #349(저녁 전례 — 성주간 토요일의 대표를 바꾼다)가 머지되면 성주간 칸을 한 번 다시 본다.
+- **헤더 아이콘 단추 생성이 셋으로 복제돼 있다** — `lectionary.js buildUpLink`(위 단계 꺾쇠)가 `bookmark.js buildHomeBtn`(집 단추)의 SVG 생성(`createElementNS` · 획 속성 여섯 · `title-back-icon`)을 거의 그대로 옮겼고, 같은 파일의 `buildBackBtn`(뒤로 꺾쇠)도 같은 꼴이다(리뷰는 둘을 짚었고 셋째는 기록하며 찾았다). 헤더 아이콘 규격(획 굵기 · 클래스 · 크기)이 바뀌면 세 곳을 같이 고쳐야 한다. path `d` 와 요소(`a` · `button`)만 받는 공용 헤더 아이콘 빌더로 묶는다 — `bookmark.js` 는 known-issues §7 의 타입 검사 밖 파일이라 그 정리와 함께 하는 편이 낫다.
+- **전례독서 화면도 다시 그린 뒤 포커스를 잃는다**(main 부터 — #346). 전날 · 다음날 · 「오늘」 · 관측일 칩 · 트랙 · 세트 · 본기도 세그먼트가 모두 `#app` 을 통째로 다시 그리는 링크라, 키보드로 누르면 포커스가 body 로 빠진다(WCAG 2.4.3). #348 이 캘린더의 달 이동에 넣은 방식 — 누른 컨트롤의 자리(`data-focus-key`)를 기억했다가 새 화면의 같은 자리로 — 을 옮겨 쓴다. 두 화면이 함께 쓰게 되면 그 도우미를 공용 자리로 올린다.
