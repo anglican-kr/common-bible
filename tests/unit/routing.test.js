@@ -124,6 +124,11 @@ test("parsePath: /read/<id> → folderId 디코드", () => {
     { view: "bookmark-read", folderId: "abc123" });
 });
 
+test("parsePath: /read/<깨진 퍼센트 이스케이프>는 throw 하지 않고 원문을 folderId 로 — 뷰가 「읽을 북마크가 없습니다」(PR #348 리뷰)", () => {
+  // parsePath 는 route() 의 try 밖에서 돈다 — 여기서 throw 하면 런치 화면이 걷히지 않는다(known-issues §6 이던 것).
+  assert.deepEqual(parse("/read/%E0%A4%A"), { view: "bookmark-read", folderId: "%E0%A4%A" });
+});
+
 test("parsePath: /read/<id> percent-encoding 디코드", () => {
   assert.equal(parse("/read/a%20b").folderId, "a b");
 });

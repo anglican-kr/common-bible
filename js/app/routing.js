@@ -29,7 +29,7 @@ import { renderLectionaryView } from "./lectionary.js";
 // controls are plain links too.
 import { renderCalendarView } from "./calendar.js";
 
-const { _$, clearNode, chUnit } = window.appHelpers;
+const { _$, clearNode, chUnit, isModifiedClick } = window.appHelpers;
 const {
   loadStartupBehavior, loadReadingPosition, saveReadingPosition, loadBookOrder,
 } = window.appStorage;
@@ -93,6 +93,13 @@ function parsePath() {
 
   const query = new URLSearchParams(location.search || "");
 
+  // 깨진 퍼센트 이스케이프(`%E0%A4%A`)는 decodeURIComponent 가 throw 한다 — parsePath 는 route() 의 try 밖에서
+  // 돌므로 원문을 그대로 넘겨 뷰가 거부하게 한다: 교회력 · 전례독서는 「잘못된 날짜」, 북마크 읽기는 없는 폴더라
+  // 「읽을 북마크가 없습니다」(Copilot 리뷰 3회차; /read 갈래는 PR #348 리뷰 — 이 정의보다 위에 있어 맨
+  // decodeURIComponent 로 남아 있었다).
+  /** @param {string} s */
+  const decodeOrRaw = (s) => { try { return decodeURIComponent(s); } catch { return s; } };
+
   // Search route: /search?q=...&page=...&in=<bookId> (ADR-033).
   // `in` (book-picker scope, repeatable) lives in the URL so it survives
   // history/back-forward and tab restore (ADR-031), and so paginated/filtered
@@ -116,15 +123,10 @@ function parsePath() {
   // "read" is never mistaken for a book id.
   if (pathname === "read") return { view: "bookmark-read", folderId: null };
   if (pathname.startsWith("read/")) {
-    return { view: "bookmark-read", folderId: decodeURIComponent(pathname.slice("read/".length)) };
+    return { view: "bookmark-read", folderId: decodeOrRaw(pathname.slice("read/".length)) };
   }
   if (pathname === "bookmarks") return { view: "bookmarks" };
   if (pathname === "settings") return { view: "settings" };
-
-  // 깨진 퍼센트 이스케이프(`%E0%A4%A`)는 decodeURIComponent 가 throw 한다 — parsePath 는 route() 의 try 밖에서
-  // 돌므로 원문을 그대로 넘겨 뷰가 「잘못된 날짜」로 거부하게 한다(Copilot 리뷰 3회차 — 교회력 · 전례독서 공통).
-  /** @param {string} s */
-  const decodeOrRaw = (s) => { try { return decodeURIComponent(s); } catch { return s; } };
 
   // Calendar tab (ADR-038 §1 · §2 A2): /calendar (this month) · /calendar/YYYY-MM.
   // Resolved ahead of the generic single-segment split so "calendar" is never
@@ -594,7 +596,7 @@ document.addEventListener("click", (e) => {
   const url = new URL(a.href, location.origin);
   if (url.origin !== location.origin) return;
   if (a.target === "_blank") return;
-  if (e.ctrlKey || e.metaKey || e.shiftKey || e.altKey || e.button !== 0) return;
+  if (isModifiedClick(e)) return;   // 새 탭 · 새 창 — 브라우저에 맡긴다(helpers.js)
   e.preventDefault();
   const path = url.pathname + url.search;
   if (path === location.pathname + location.search) {

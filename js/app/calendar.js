@@ -32,7 +32,7 @@ import {
   CYCLE_LABEL, COLOR_LABEL, WEEKDAY_KO, MIN_YEAR, MAX_YEAR,
 } from "./lectionary.js";
 
-const { _$, el, clearNode, emptyState } = window.appHelpers;
+const { _$, el, clearNode, emptyState, isModifiedClick } = window.appHelpers;
 
 const $app = _$("app");
 const PAGE_TITLE = "캘린더";
@@ -49,7 +49,7 @@ const PAGE_TITLE = "캘린더";
  * 교회력 하루 — 월간 칸 · 주간 줄 · 목록 줄이 같이 쓰는 표시 단위(`calendarDay` 의 반환).
  * @typedef {{
  *   date: string, day: number, weekday: number, href: string | null,
- *   cellName: string, cellTitle: string,
+ *   cellName: string, cellTitle: string, cellSuffix: string,
  *   primary: CalendarName | null, others: CalendarName[],
  *   colors: string[], cycle: string | null, yearStart: string | null,
  * }} CalendarDay
@@ -149,7 +149,8 @@ function nameOfCandidate(c) {
 
 /**
  * 하루의 표시 단위(순수). `resolved` 가 null 이면(계산 범위 밖 · 잘못된 날짜) 날짜만 있는 빈 하루 — 링크도 없다.
- * - 칸 이름: `cellCandidateOf` 하나 — 괄호 설명을 뗀 이름(칩과 같은 `shortName`), 전체 이름은 `cellTitle`.
+ * - 칸 이름: `cellCandidateOf` 하나 — 괄호 설명을 뗀 이름(칩과 같은 `shortName`), 전체 이름은 `cellTitle`, 그 후보의
+ *   상태 꼬리(「· 10월 18일에서 옮겨 옴」 · 「· 기념일」)는 `cellSuffix` — 칸에는 보이지 않고 링크 이름에 붙는다.
  * - 줄: 첫 이름은 그날의 대표(격자 평일도 이름이 있다 — 「연중 28주 금요일」), 그 밖의 이름 있는 후보(격자 제외)를
  *   후보 순서대로 — 상태 꼬리(「· 10월 18일에서 옮겨 옴」 · 「· 기념만」 · 「· 옮겨 지킬 수 있음」)를 칩과 같은 말로.
  * - 색: 그날의 정식 색(`colors` — 사계재 날 축일이면 [자, 백] 병기). 선택 대체색(장미 · 청)은 싣지 않는다(DESIGN.md §2).
@@ -164,7 +165,7 @@ function calendarDay(date, resolved) {
   const day = p ? p.d : Number(date.slice(-2)) || 0;
   const weekday = p ? dayOfWeek(date) : -1;
   if (!p || !resolved) {
-    return { date, day, weekday, href: null, cellName: "", cellTitle: "", primary: null, others: [], colors: [], cycle: null, yearStart: null };
+    return { date, day, weekday, href: null, cellName: "", cellTitle: "", cellSuffix: "", primary: null, others: [], colors: [], cycle: null, yearStart: null };
   }
   const cell = cellCandidateOf(resolved);
   const official = resolved.official || null;
@@ -176,18 +177,20 @@ function calendarDay(date, resolved) {
   const coord = resolved.coord;
   const cycleCode = coord && coord.type === "sunday" ? coord.year : null;
   const cycle = cycleCode && CYCLE_LABEL[cycleCode] ? CYCLE_LABEL[cycleCode] : null;
-  const prev = addDays(date, -1);
-  const turns = prev !== null && liturgicalYearOf(prev) !== liturgicalYearOf(date);
+  // 전례년은 대림 1주일 — 주일 — 에 바뀌므로 주기가 있는 날(주일)만 앞날과 견준다. 42칸마다 두 번씩 셈하지 않게.
+  const prev = cycle ? addDays(date, -1) : null;
+  const yearStart = prev !== null && liturgicalYearOf(prev) !== liturgicalYearOf(date) ? `${cycle} 시작` : null;
   return {
     date, day, weekday,
     href: `/lectionary/${date}`,
     cellName: cell ? cellLabel(cell.observance.name) : "",
     cellTitle: cell ? String(cell.observance.name || "") : "",
+    cellSuffix: cell ? statusSuffix(cell) : "",
     primary: official ? nameOfCandidate(official) : null,
     others,
     colors,
     cycle,
-    yearStart: turns && cycle ? `${cycle} 시작` : null,
+    yearStart,
   };
 }
 
@@ -197,8 +200,10 @@ function colorNames(colors) {
 }
 
 /**
- * 칸 · 줄 링크의 접근 가능한 이름 — 「오늘, 10월 15일 목요일, 아빌라의 데레사, 백색」. 칸에는 이름을 하나만 보이고
- * 색은 점뿐이라(DESIGN.md §2 — 색만으로 정보를 전하지 않는다) 대표 이름 · 전례년 표지 · 색 이름을 글자로 싣는다.
+ * 칸 링크의 접근 가능한 이름 — 「오늘, 10월 15일 목요일, 아빌라의 데레사, 백색」. 이름은 칸에 보이는 그대로다(주일 「연중24주」 ·
+ * 사계재 날 「추계재」) — 보이는 글자가 접근 가능한 이름 안에 있어야 음성 제어가 그 글자로 누르고 스크린리더도 보이는 이름을
+ * 읽는다(WCAG 2.5.3 Label in Name; 대표 이름을 싣던 때는 격자 평일 · 주일 칸이 어긋났다 — PR #348 리뷰). 이름 없는 평일 칸은
+ * 대표(격자) 이름을 싣고, 색은 점뿐이라(DESIGN.md §2 — 색만으로 정보를 전하지 않는다) 전례년 표지 · 색 이름도 글자로 싣는다.
  * @param {CalendarDay} d @param {boolean} isToday
  */
 function dayAriaLabel(d, isToday) {
@@ -206,10 +211,22 @@ function dayAriaLabel(d, isToday) {
   const parts = [];
   if (isToday) parts.push("오늘");
   parts.push(p ? `${p.m}월 ${p.d}일 ${CAL_WEEKDAY_FULL[d.weekday] || ""}`.trim() : d.date);
-  if (d.primary) parts.push(d.primary.name + d.primary.suffix);
+  if (d.cellName) parts.push(d.cellName + d.cellSuffix);
+  else if (d.primary) parts.push(d.primary.name + d.primary.suffix);
   if (d.yearStart) parts.push(d.yearStart);
   if (d.colors.length) parts.push(colorNames(d.colors));
   return parts.join(", ");
+}
+
+/**
+ * 표 칸의 날짜. 엔진의 날짜 덧셈은 계산 범위 끝 달의 앞뒤 칸(1583년 1월 표의 1582-12-26 · 9999년 12월 표의 10000-01-08)까지
+ * 낸다 — 그래도 null 이면 틀린 표를 그리지 말고 멈춘다(같은 날짜로 메우면 같은 링크가 여러 칸에 생긴다 — PR #348 리뷰).
+ * @param {string} from @param {number} n
+ */
+function gridDate(from, n) {
+  const d = addDays(from, n);
+  if (d === null) throw new Error(`calendar grid: addDays(${from}, ${n}) failed`);
+  return d;
 }
 
 /**
@@ -224,14 +241,14 @@ function dayAriaLabel(d, isToday) {
  */
 function buildMonthGrid(y, m, today, resolve) {
   const first = toKey(y, m, 1);
-  const start = addDays(first, -Math.max(0, dayOfWeek(first))) || first;
+  const start = gridDate(first, -dayOfWeek(first));
   /** @type {CalendarCell[][]} */
   const weeks = [];
   for (let w = 0; w < CAL_WEEKS; w++) {
     /** @type {CalendarCell[]} */
     const row = [];
     for (let i = 0; i < 7; i++) {
-      const date = addDays(start, w * 7 + i) || start;
+      const date = gridDate(start, w * 7 + i);
       const p = parseDate(date);
       const inRange = !!p && p.y >= MIN_YEAR && p.y <= MAX_YEAR;
       const d = calendarDay(date, inRange ? resolve(date) : null);
@@ -248,6 +265,20 @@ function buildMonthGrid(y, m, today, resolve) {
 // ── END CALENDAR_MODEL ──
 
 // ── DOM ──
+
+// 달 이동(이전 · 다음 · 오늘)은 #app 을 통째로 다시 그린다(route() 가 스켈레톤으로 먼저 비운다). 누른 링크가 사라져 포커스가
+// body 로 빠지면 키보드 · 스크린리더 사용자는 달을 넘길 때마다 건너뛰기 링크 · 헤더 · 탭부터 다시 지나와야 한다(WCAG 2.4.3 —
+// PR #348 리뷰). 누른 컨트롤의 자리(data-focus-key)를 기억했다가 새 머리 줄의 같은 자리로 포커스를 돌려준다(views.js 의
+// focusPendingBook 과 같은 꼴 — 다시 그리기 전에 자리만 남긴다).
+/** @type {string | null} */
+let pendingFocusKey = null;
+
+/** 달 이동 줄의 클릭 — 새 탭으로 여는 클릭은 이 화면을 다시 그리지 않으므로 기억하지 않는다. @param {MouseEvent} e */
+function rememberFocusKey(e) {
+  if (isModifiedClick(e)) return;
+  const a = e.target instanceof Element ? e.target.closest("a[data-focus-key]") : null;
+  pendingFocusKey = a instanceof HTMLElement ? a.dataset.focusKey || null : null;
+}
 
 /** 같은 화면 안에서 달이 바뀌면 고정 문구(setTitle) 대신 그 달을 읽힌다 — 전례독서의 announceDay 와 같은 몫. */
 function announceMonth(/** @type {CalendarMonth} */ model) {
@@ -272,22 +303,27 @@ function commitError(msg, subtitle) {
   $app.appendChild(panel);
 }
 
-/** 이전 · 다음 달 원형 링크 — 계산 범위 밖이면 자리만 지킨다(가운데가 흔들리지 않게). @param {string | null} href @param {string} label @param {string} glyph */
-function buildStep(href, label, glyph) {
+/**
+ * 이전 · 다음 달 원형 링크 — 계산 범위 밖이면 자리만 지킨다(가운데가 흔들리지 않게).
+ * @param {string | null} href @param {string} label @param {string} glyph @param {string} focusKey
+ */
+function buildStep(href, label, glyph, focusKey) {
   if (!href) return el("span", { className: "lect-datenav-btn", "aria-hidden": "true" });
-  return el("a", { className: "lect-datenav-btn", href, "aria-label": label }, glyph);
+  return el("a", { className: "lect-datenav-btn", href, "aria-label": label, "data-focus-key": focusKey }, glyph);
 }
 
 /** @param {CalendarMonth} model */
 function buildMonthHead(model) {
   const head = el("header", { className: "cal-head" });
   const nav = el("nav", { className: "lect-datenav", "aria-label": "달 이동" });
-  nav.appendChild(buildStep(model.hrefs.prev, "이전 달", "‹"));
+  nav.appendChild(buildStep(model.hrefs.prev, "이전 달", "‹", "prev"));
   const mid = el("div", { className: "lect-date" });
   mid.appendChild(el("h2", { className: "cal-month" }, model.title));
-  mid.appendChild(el("a", { className: "lect-today", href: model.hrefs.today }, "오늘"));
+  mid.appendChild(el("a", { className: "lect-today", href: model.hrefs.today, "data-focus-key": "today" }, "오늘"));
   nav.appendChild(mid);
-  nav.appendChild(buildStep(model.hrefs.next, "다음 달", "›"));
+  nav.appendChild(buildStep(model.hrefs.next, "다음 달", "›", "next"));
+  // 이 줄의 클릭이 전역 <a> 인터셉터(document)보다 먼저 닿는다 — 이동이 시작되기 전에 자리를 남긴다.
+  nav.addEventListener("click", rememberFocusKey);
   head.appendChild(nav);
   return head;
 }
@@ -295,7 +331,7 @@ function buildMonthHead(model) {
 /** 색 점 줄 — 장식(aria-hidden). 색 이름은 링크 이름이 싣는다. @param {string[]} colors */
 function buildDots(colors) {
   const dots = el("span", { className: "cal-dots", "aria-hidden": "true" });
-  for (const c of colors) dots.appendChild(el("span", { className: `cal-dot cal-dot--${c}` }));
+  for (const c of colors) dots.appendChild(el("span", { className: `cal-dot lit-swatch lit-swatch--${c}` }));
   return dots;
 }
 
@@ -305,10 +341,9 @@ function buildCell(cell) {
   const cls = ["cal-cell"];
   if (!cell.inMonth) cls.push("cal-cell--out");
   if (cell.isToday) cls.push("cal-cell--today");
-  if (cell.yearStart) cls.push("cal-cell--year-start");
   const inner = cell.href
     ? el("a", { className: cls.join(" "), href: cell.href, "aria-label": cell.label })
-    : el("span", { className: cls.concat("cal-cell--blank").join(" ") });
+    : el("span", { className: cls.join(" ") });
   if (cell.href && cell.isToday) inner.setAttribute("aria-current", "date");
   inner.appendChild(el("span", { className: "cal-date" }, String(cell.day)));
   if (cell.colors.length) inner.appendChild(buildDots(cell.colors));
@@ -343,8 +378,12 @@ function buildMonthTable(model) {
   return table;
 }
 
-/** Commit the month view — synchronous, called only after the preload resolved and the route is still current. @param {CalendarMonth} model */
-function commitMonth(model) {
+/**
+ * Commit the month view — synchronous, called only after the preload resolved and the route is still current.
+ * @param {CalendarMonth} model
+ * @param {string | null} focusKey  the month-nav control that led here (rememberFocusKey) — focus goes back to its twin
+ */
+function commitMonth(model, focusKey) {
   commitTitle();
   clearNode($app);
   const root = el("div", { className: "calendar" });
@@ -352,6 +391,11 @@ function commitMonth(model) {
   root.appendChild(buildMonthTable(model));
   $app.appendChild(root);
   announceMonth(model);
+  if (focusKey) {
+    // 계산 범위 끝(1583년 1월의 이전 · 9999년 12월의 다음)에서는 그 단추가 자리만 남으므로 「오늘」로.
+    const target = root.querySelector(`[data-focus-key="${focusKey}"]`) || root.querySelector('[data-focus-key="today"]');
+    if (target instanceof HTMLElement) target.focus({ preventScroll: true });
+  }
 }
 
 /**
@@ -364,6 +408,9 @@ async function renderCalendarView(parsed) {
   const routeSeq = window.routeSeq;   // 한 번 잡아 둔다 — 클로저 안에서도 타입이 좁혀지게
   const entrySeq = typeof routeSeq === "function" ? routeSeq() : null;
   const isStale = () => entrySeq !== null && typeof routeSeq === "function" && routeSeq() !== entrySeq;
+  // 달 이동 줄에서 왔으면 그 컨트롤의 자리 — 한 번만 쓴다(오류 화면 · 낡은 요청이면 버린다).
+  const focusKey = pendingFocusKey;
+  pendingFocusKey = null;
 
   const today = todayKey(new Date());
   const target = parsed.month === null ? parseMonthParam(today.slice(0, 7)) : parseMonthParam(parsed.month);
@@ -382,7 +429,7 @@ async function renderCalendarView(parsed) {
   }
   if (isStale()) return PAGE_TITLE;
   const model = buildMonthGrid(target.y, target.m, today, resolveDate);
-  commitMonth(model);
+  commitMonth(model, focusKey);
   return `${model.title} ${PAGE_TITLE}`;
 }
 

@@ -16,6 +16,7 @@
 //   - setInert (inert + aria-hidden toggle on selector matches)
 //   - trapFocus (Tab / Shift-Tab cycling within a container)
 //   - dragReleaseAction (bottom-sheet drag-resize release thresholds)
+//   - isModifiedClick (modifier / non-primary clicks the page leaves to the browser)
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -701,4 +702,21 @@ test("emptyState: null icon leaves an empty icon slot (no crash)", () => {
   const node = h.helpers.emptyState({ icon: null, title: "t", subtitle: "s" });
   assert.equal(node._children[0].className, "empty-state-icon");
   assert.equal(node._children[0]._children.length, 0);
+});
+
+// ── isModifiedClick (new-tab clicks the page must not act on, PR #348) ───────
+
+test("isModifiedClick: a plain primary click is handled in the page", () => {
+  const h = loadHelpers();
+  const plain = { ctrlKey: false, metaKey: false, shiftKey: false, altKey: false, button: 0 };
+  assert.equal(h.helpers.isModifiedClick(plain), false);
+});
+
+test("isModifiedClick: any modifier key or a non-primary button belongs to the browser (new tab / window)", () => {
+  const h = loadHelpers();
+  const base = { ctrlKey: false, metaKey: false, shiftKey: false, altKey: false, button: 0 };
+  for (const key of ["ctrlKey", "metaKey", "shiftKey", "altKey"]) {
+    assert.equal(h.helpers.isModifiedClick({ ...base, [key]: true }), true, key);
+  }
+  assert.equal(h.helpers.isModifiedClick({ ...base, button: 1 }), true, "middle button");
 });
