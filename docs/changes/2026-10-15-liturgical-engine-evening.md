@@ -31,6 +31,7 @@ title: "feat: 교회력 엔진 — 저녁 전례: 성 토요일의 대표는 성
 - `npm run typecheck` 0.
 - 유닛 `node --test tests/unit/*.test.js` — **1177**(1176 통과 · 실데이터 대기 1 skip). 새로 C-6.1-13(합성 — 저녁 후보의 자리 · 승자 밖 · 12.25 에 없음 · 상수 두 id) · C-6.1-13 실데이터(2025~2050 성 토요일 · 12.24 · 12.25, 2026 한 해 전수에서 저녁 후보는 두 날뿐, 상수 id 실재). 합성 표의 부활밤 · 성탄 밤 id 를 실제 id 로 바꿔(상수의 키) 공개 CI 에서도 저녁 규칙이 돈다. 갱신: C-4.3-3(후보 순서) · C-6.1-7(성 토요일의 승자 · 유효 precedence 8) · C-6.4-4 · C-6.4-2 · C-5.5-5 · 미결12 좁히기(성탄 밤은 12.24) · 성인력 행 전수 두 개(드리는 날로 조회 — `heldOn`) · A3 성 토요일 · 12.25/12.24 모델 · 픽스처 T-2062-03-27(대표 `t-성-토요일`, 이동은 그대로 `displacedBy: t-부활밤`).
 - 이동 골든 덤프(`liturgical-engine.data.test.js` I-10) 무변경 — 패스가 그대로임을 보인다.
+- CI — `Unit tests` · `Change ledger` 통과, 실데이터 워크플로를 PR 브랜치에서 돌림(`gh workflow run engine-data.yml --ref feat/liturgical-engine-evening` — run 38659029662: 153 중 152 통과 · skip 1).
 - e2e — `test_lectionary_view.py` 43(새 1: 성 토요일 「부활밤 · 저녁」 칩 → 백색 · 마태 28, 12.24 「성탄 밤 · 저녁」, 12.25 에 없음) · `test_a11y_axe.py` 10 통과.
 
 ## 갱신한 문서
