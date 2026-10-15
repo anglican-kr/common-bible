@@ -690,6 +690,18 @@ const PROPER_WEEKDAY_NAMES = {
   "-6": "성주간 월요일", "-5": "성주간 화요일", "-4": "성주간 수요일",
 };
 
+/**
+ * **저녁 전례**(→ R-6.1-evening — 설계서 미결20 닫힘, 사용자 결정 2026-10-15): 그날 저녁에 드리는 감사성찬례라
+ * 그날의 대표(`official`) · 색 · 재분류에 참여하지 않고 후보 목록 맨 끝에 `evening: true` 로 실린다 — 독서 화면에서
+ * 칩으로 고른다. 값은 데이터의 정의 날짜에서 실제로 드리는 날까지의 날 수다: 부활밤은 정의 날짜(성 토요일 —
+ * `easter_offset: -1`) 그날 저녁(0), 성탄 밤은 12.25 로 정의돼 있지만 전날 12.24 저녁(-1 — 2024 · 2025 · 2026
+ * 책자가 12.24 칸에 「성탄밤 [백]」으로 싣는다). 키는 정의 표의 id 다 — 실데이터 테스트가 두 id 의 실재를 지킨다.
+ * 이동 패스(§6.5 `computeTransfers`)는 이 표를 보지 않는다: 성 토요일에 걸린 주요축일은 여전히 부활밤(prec 1)이
+ * 밀어낸다(→ R-6.3-holy-week-guard).
+ * @type {Readonly<Record<string, number>>}
+ */
+const EVENING_LITURGIES = Object.freeze({ "t-부활밤": 0, "d1225-성탄-밤": -1 });
+
 // ── §5.2 표기 정규화 · 공용 ──
 
 /**
@@ -1098,7 +1110,8 @@ function isIneligible(obs) {
 
 /**
  * 승자 판정의 **유효 precedence**(→ R-6.1-ladder) — 낮을수록 우선. `precedence: null` 은 정렬 최하위
- * (등급이 없다), 지향 · 이름 줄은 9(등급은 있지만 그날의 독서를 정하지 않는다 — → R-6.1-ineligible),
+ * (등급이 없다) — 다만 temporal 평일 행이면 평일 8(아래 — 성 토요일), 지향 · 이름 줄은 9(등급은 있지만 그날의
+ * 독서를 정하지 않는다 — → R-6.1-ineligible),
  * A 특례(`outranks_sunday`)는 1 과 2 사이라 1.5, 그 밖은 데이터 값 그대로다. **`rank` 로 비교하지
  * 않는다** — `major_feast` 가 3 · 4 · 6 으로 갈린다.
  * @param {Observance} obs
@@ -1106,7 +1119,12 @@ function isIneligible(obs) {
  */
 function effectivePrecedence(obs) {
   const p = obs.precedence;
-  if (typeof p !== "number" || !Number.isFinite(p)) return Number.POSITIVE_INFINITY;
+  // 등급 칸이 빈 temporal **평일** 행(실데이터에서 성 토요일 하나)은 그날의 평일과 같은 8 이다 — 같은 날 격자 평일과
+  // 동률이라 범주 사다리(temporal 1 > 격자 3)로 그날의 대표가 된다(→ R-6.1-evening: 부활밤이 저녁 전례로 빠진 성
+  // 토요일의 대표는 성 토요일 행). 주일 이름 줄(가정 · 평화통일 · 맥추감사 · 주의 변모 주일)은 그대로 최하위다.
+  if (typeof p !== "number" || !Number.isFinite(p)) {
+    return obs.kind === "temporal" && obs.type === "weekday" ? 8 : Number.POSITIVE_INFINITY;
+  }
   if (isIneligible(obs)) return 9;
   if (obs.outranks_sunday === true) return 1.5;
   return p;
@@ -1502,8 +1520,8 @@ function isEmber(/** @type {Observance} */ obs) {
 
 /**
  * 그날의 색(→ R-6.4-color-order): 절기 기본색(격자 관측일의 색)을 깔고 → 승자 관측일의 색이 덮고 →
- * 성주간 · 부활 8일(`holyWeek` ∪ `easterOctave`, §4.10)에는 temporal 승자가 덮지 못한다(E−1 은 승자가
- * 부활밤이어도 홍 — 미결20). 그날 지키는 성인력 축일(주요축일 — 제자리든 도착이든)이 이기면 그 축일 색이다
+ * 성주간 · 부활 8일(`holyWeek` ∪ `easterOctave`, §4.10)에는 temporal 승자가 덮지 못한다(E−1 의 승자는 성 토요일
+ * 행 — 부활밤은 저녁 전례라 색에 참여하지 않는다, → R-6.1-evening). 그날 지키는 성인력 축일(주요축일 — 제자리든 도착이든)이 이기면 그 축일 색이다
  * (→ R-6.3-holy-week-guard — 그 기간의 prec 7 축일은 생략되어 승자가 되지 않는다). 승자의 색이 비었으면
  * (추수감사주일) 바탕이 남는다. 사계재 날은 **자**다(→ R-6.4-ember-color):
  * 바탕이 남으면(승자가 격자) 그날 색이 자이고, 축일이 덮으면 그 색이 대표로 남고 `colors` 에 자를 앞세워
@@ -1571,8 +1589,20 @@ function resolveDateIn(index, dateStr, pass) {
   /** @type {Map<string, Candidate>} */
   const departed = new Map();
   for (const c of pass.departures.get(dateStr) || []) departed.set(c.observance.id, c);
+  // 저녁 전례(→ R-6.1-evening)는 낮의 판정(승자 · 색 · 재분류 — `settle`)에서 뺀다. 오늘로 정의돼 오늘 저녁에 드리는
+  // 것(부활밤)과 내일로 정의돼 오늘 저녁에 드리는 것(성탄 밤 — 12.24 저녁)이 오늘의 저녁 후보이고, 오늘로 정의됐지만
+  // 전날 저녁에 드리는 것(12.25 의 성탄 밤)은 오늘의 후보가 아니다.
+  const ownRows = ownObservancesOn(index, dateStr);
+  const tomorrow = shift(dateStr, 1);
+  /** @type {Observance[]} */
+  const eveningRows = [
+    ...ownRows.filter((o) => EVENING_LITURGIES[o.id] === 0),
+    ...(tomorrow !== dateStr ? ownObservancesOn(index, tomorrow).filter((o) => EVENING_LITURGIES[o.id] === -1) : []),
+  ];
   /** @type {Candidate[]} */
-  const feasts = ownObservancesOn(index, dateStr).map((o) => departed.get(o.id) || { observance: o, status: "proper" });
+  const feasts = ownRows
+    .filter((o) => !Object.prototype.hasOwnProperty.call(EVENING_LITURGIES, o.id))
+    .map((o) => departed.get(o.id) || { observance: o, status: "proper" });
   /** @type {Candidate[]} */
   const moved = [...(pass.arrivals.get(dateStr) || []), ...(pass.optionals.get(dateStr) || [])];
   /** @type {Candidate} */
@@ -1580,10 +1610,13 @@ function resolveDateIn(index, dateStr, pass) {
 
   const { candidates, official } = settle(dateStr, [...feasts, ...moved, grid]);
   const own = candidates.slice(0, feasts.length).sort(compareCandidates);
+  /** @type {Candidate[]} */
+  const evening = eveningRows.map((o) => ({ observance: o, status: "proper", evening: true }));
   return {
     date: dateStr,
     coord,
-    candidates: [...own, ...candidates.slice(feasts.length)],
+    // 표시 순서(§5.5): 그날 낮의 후보(① 축일 · 재일 → ② 이동 → ③ 격자) 다음에 저녁 전례
+    candidates: [...own, ...candidates.slice(feasts.length), ...evening],
     official,
     periods: periodsOn(index, monthDayOf(dateStr)),
     ...dayColorsOf(dateStr, grid, official, candidates),

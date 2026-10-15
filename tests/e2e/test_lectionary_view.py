@@ -108,6 +108,27 @@ def test_switcher_shows_every_candidate_and_changes_body_and_color(desktop_conte
     assert "선교사 공통 독서" in page.inner_text(".lect-reading-of")
 
 
+def test_evening_liturgies_are_chips_not_the_day(desktop_context):
+    """저녁 전례(설계서 R-6.1-evening — 사용자 결정 2026-10-15): 성 토요일의 대표는 성 토요일(적색)이고 부활밤은 「· 저녁」 칩,
+    고르면 백색 · 부활밤 복음 · ?obs=. 성탄 밤은 12.24 의 「· 저녁」 칩이고 12.25 에는 없다."""
+    page = desktop_context.new_page()
+    _open(page, "lectionary/2026-04-04")
+    assert page.inner_text(".lect-day") == "성 토요일"
+    assert _colors(page) == ["적색"]
+    assert _chips(page) == ["*성 토요일", "성주간 토요일 (가해)", "부활밤 · 저녁"]
+    page.locator(".lect-chip", has_text="부활밤").click()
+    page.wait_for_selector(".lect-chip[aria-current]:has-text('부활밤')")
+    assert "obs=t-%EB%B6%80%ED%99%9C%EB%B0%A4" in page.url or "obs=t-부활밤" in urllib.parse.unquote(page.url)
+    assert _colors(page) == ["백색"]
+    assert "마태 28:1-10" in page.inner_text(".lect-reading[data-slot='gospel']")
+    assert page.inner_text(".lect-day") == "성 토요일"   # 제목은 그날의 대표 그대로
+    _open(page, "lectionary/2026-12-24")
+    assert _chips(page)[-1] == "성탄 밤 · 저녁"
+    assert _colors(page) == ["자색", "대체 청색"]   # 그날 낮(대림 평일)의 색 · 대체색
+    _open(page, "lectionary/2026-12-25")
+    assert not any("성탄 밤" in c for c in _chips(page))
+
+
 # ── ③ 두 독서 나란히 ──
 
 def test_transfiguration_day_offers_two_readings_side_by_side(desktop_context):

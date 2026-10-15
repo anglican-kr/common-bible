@@ -186,12 +186,16 @@ function collectsAt(d, prefix) {
   return e.collects;
 }
 const recOf = (g) => ix().rec.get(g.id);
+/** 저녁 전례(→ R-6.1-evening)는 정의 날짜가 아니라 드리는 날의 후보다 — 성탄 밤(12.25 정의)은 12.24 저녁. */
+const EVENING = vm.runInContext("EVENING_LITURGIES", ctx);
+const heldOn = (id, d) => (Object.prototype.hasOwnProperty.call(EVENING, id) ? ctx.addDays(d, EVENING[id]) : d);
 const colOf = (c) => ix().col.get(c.id);
 const WD = [null, "mon", "tue", "wed", "thu", "fri", "sat"];
 
-test("C-4.3-3 성 토요일 · 부활밤이 같은 날 후보 둘 — 각자 자기 본문 (2026-04-04)", { skip: SKIP }, () => {
+test("C-4.3-3 성 토요일 · 부활밤이 같은 날 후보 둘 — 각자 자기 본문, 부활밤은 저녁 전례로 맨 끝 (2026-04-04)", { skip: SKIP }, () => {
   const r = resolve("2026-04-04");
-  same(r.candidates.map((c) => c.observance.id), ["t-부활밤", "t-성-토요일", "grid:lent-x-weekday-sat"]);
+  same(r.candidates.map((c) => c.observance.id), ["t-성-토요일", "grid:lent-x-weekday-sat", "t-부활밤"]);
+  same(r.candidates.map((c) => c.evening === true), [false, false, true]);
   const sat = groupsAt("2026-04-04", "t-성-토요일");
   const vigil = groupsAt("2026-04-04", "t-부활밤");
   assert.ok(sat.length > 0 && sat.every((g) => recOf(g).name === "성 토요일"));
@@ -331,7 +335,7 @@ test("C-5.6-4 성인 공통 독서 폴백 — 양성 · 음성 · 불변식 82 /
   const kasi = read("kasi-lunar.json");
   let fallback = 0, properWithCommon = 0, memorialEmpty = 0;
   for (const row of read("sanctoral.json").entries) {
-    const d = row.date ? `2028-${row.date.replace(".", "-")}` : ctx.lunarDatesOf(kasi, 2028)[row.lunar];
+    const d = heldOn(row.id, row.date ? `2028-${row.date.replace(".", "-")}` : ctx.lunarDatesOf(kasi, 2028)[row.lunar]);
     const gs = groupsAt(d, row.id);
     if (row.rank === "commemoration") { if (gs.length === 0) memorialEmpty++; continue; }
     if (gs.length > 0 && gs.every((g) => g.common !== null)) fallback++;
@@ -344,7 +348,7 @@ test("§5.6 본기도 폴백은 빈틈 없이 닫힌다 — has_proper 참은 �
   const kasi = read("kasi-lunar.json");
   const bad = [];
   for (const row of read("sanctoral.json").entries) {
-    const d = row.date ? `2028-${row.date.replace(".", "-")}` : ctx.lunarDatesOf(kasi, 2028)[row.lunar];
+    const d = heldOn(row.id, row.date ? `2028-${row.date.replace(".", "-")}` : ctx.lunarDatesOf(kasi, 2028)[row.lunar]);
     const cs = collectsAt(d, row.id);
     const ok = row.rank === "commemoration" ? cs.length === 0
       : row.has_proper ? cs.length > 0 && cs.every((c) => c.common === null)
@@ -387,7 +391,7 @@ test("C-5.5-4 2026-01-20 — periods 에 그리스도인 일치 기도 주간, c
 
 test("미결12 잠정 — 실데이터 1:N 좁히기 (C-5.6-5 는 미결12 가 닫힐 때까지 열려 있다)", { skip: SKIP }, () => {
   for (const id of ["d1225-성탄-낮", "d1225-성탄-밤", "d1225-성탄-새벽"]) {
-    const gs = groupsAt("2026-12-25", id);
+    const gs = groupsAt(heldOn(id, "2026-12-25"), id);   // 성탄 밤은 12.24 저녁(→ R-6.1-evening) — 본문은 여전히 12.25 키
     const name = ix().cal.sanctoralByDate.get("12.25").find((o) => o.id === id).name;
     assert.ok(gs.length > 0 && gs.every((g) => recOf(g).name === name), id);
   }
@@ -512,7 +516,7 @@ test("C-6.1-4 명절 ∧ 연중 주일 — 설 2027 · 2030 · 2034 · 2037 · 2
   same(all.sort(), days.map(([d]) => d).sort());
 });
 
-test("C-6.1-7 · C-2-1 precedence null 인 temporal 행은 후보로 있되 승자가 아니다 (2025~2050) — 성 토요일의 승자는 부활밤", { skip: SKIP }, () => {
+test("C-6.1-7 · C-2-1 precedence null 인 temporal 행은 후보로 있되 승자가 아니다 — 성 토요일만 예외: 부활밤이 저녁 전례로 빠져 그날의 대표다 (2025~2050)", { skip: SKIP }, () => {
   const nullRows = read("temporal-feasts.json").entries.filter((e) => e.precedence === null).map((e) => e.id);
   assert.ok(nullRows.length > 0);
   const bad = [];
@@ -524,8 +528,9 @@ test("C-6.1-7 · C-2-1 precedence null 인 temporal 행은 후보로 있되 승�
         const r = resolve(d);
         const c = pick(r, row.id);
         if (!c || c.status !== "proper") bad.push(`${d} ${row.id} 후보 ${c && c.status}`);
+        // 성 토요일(등급 칸이 빈 유일한 평일 행 — 평일 8 로 격자와 동률, 사다리로 temporal)은 그날의 대표다(→ R-6.1-evening)
+        if (row.id === "t-성-토요일") { if (offId(r) !== "t-성-토요일") bad.push(`${d} 성 토요일 승자 ${offId(r)}`); continue; }
         if (offId(r) === row.id) bad.push(`${d} ${row.id} 승자`);
-        if (row.id === "t-성-토요일" && offId(r) !== "t-부활밤") bad.push(`${d} 성 토요일 승자 ${offId(r)}`);
         // 주의 변모 주일 · 가정 · 평화통일 · 맥추감사 — 그날 승자는 격자거나 그 주일을 이기는 축일(2.2 주의 봉헌 등)
         if (row.id !== "t-성-토요일" && !offId(r).startsWith("grid:") && ctx.effectivePrecedence(r.official.observance) >= gridIn(r).observance.precedence) {
           bad.push(`${d} ${row.id} 승자 ${offId(r)}`);
@@ -602,6 +607,33 @@ test("C-6.1-12 기념일은 이름 줄 — 같은 날짜에 다른 행이 없는
   same(bad, []);
 });
 
+test("C-6.1-13 저녁 전례(R-6.1-evening) 2025~2050 — 성 토요일은 승자 성 토요일 · 홍 · 맨 끝 부활밤, 12.24 는 승자 낮 · 자 · 맨 끝 성탄 밤, 12.25 엔 성탄 밤 없음, 저녁 후보는 그 두 날뿐", { skip: SKIP }, () => {
+  // 상수의 id 가 실데이터에 실재한다 — 표의 이름(곧 id)이 바뀌면 여기서 멈춘다
+  const ids = new Set([...read("temporal-feasts.json").entries, ...read("sanctoral.json").entries].map((e) => e.id));
+  for (const id of Object.keys(EVENING)) assert.ok(ids.has(id), `${id} 가 정의 표에 없다`);
+  const bad = [];
+  for (let y = 2025; y <= 2050; y++) {
+    const sat = resolve(ctx.addDays(ctx.easterDate(y), -1));
+    const sl = sat.candidates[sat.candidates.length - 1];
+    if (offId(sat) !== "t-성-토요일" || sat.color !== "red" || sl.observance.id !== "t-부활밤" || sl.evening !== true) {
+      bad.push(`${sat.date} ${offId(sat)} ${sat.color} ${sl.observance.id}`);
+    }
+    const eve = resolve(`${y}-12-24`);
+    const el = eve.candidates[eve.candidates.length - 1];
+    if (el.observance.id !== "d1225-성탄-밤" || el.evening !== true || eve.official.evening || eve.color !== "violet") {
+      bad.push(`${eve.date} ${offId(eve)} ${eve.color} ${el.observance.id}`);
+    }
+    if (resolve(`${y}-12-25`).candidates.some((c) => c.observance.id === "d1225-성탄-밤")) bad.push(`${y}-12-25 에 성탄 밤`);
+  }
+  same(bad, []);
+  const evenings = [];
+  for (let d = "2026-01-01"; d <= "2026-12-31"; d = ctx.addDays(d, 1)) {
+    const ev = resolve(d).candidates.filter((c) => c.evening).map((c) => c.observance.id);
+    if (ev.length) evenings.push(`${d}:${ev.join(",")}`);
+  }
+  same(evenings, ["2026-04-04:t-부활밤", "2026-12-24:d1225-성탄-밤"]);
+});
+
 test("C-6.4-1 절기 기본색 · 승자 색 — 성주간 전체 홍(성 목 · 금 · 토 — 그날 지키는 성인력 축일만 축일 색) · 성령강림 홍 · 삼위일체 · 왕이신 그리스도 백 · 대림 3주일 장미 · 청 · 사순 4주일 장미 (2025~2050)", { skip: SKIP }, () => {
   const bad = [];
   const feastDays = [];   // 성주간에 성인력 축일이 이긴 날 — 그날은 축일 색(→ R-6.3-holy-week-guard). 성지주일의 수태고지(2029 · 2040)는 보호 기간 뒤로 가 여기 없다(→ R-6.3-guard-destination)
@@ -634,7 +666,7 @@ test("C-6.4-1 절기 기본색 · 승자 색 — 성주간 전체 홍(성 목 ·
 test("C-6.4-2 성주간 · 부활 8일에도 그날 지키는 성인력 축일은 축일 색 — 2035-03-19 요셉(성주간 월) 백 · 2025-04-25 마르코(부활 금) 홍 · 성 토요일 홍 · 순교자 평일 홍", { skip: SKIP }, () => {
   same(resolve("2035-03-19").color, "white");
   same(resolve("2025-04-25").color, "red");
-  same([offId(resolve("2025-04-19")), resolve("2025-04-19").color], ["t-부활밤", "red"]);   // E−1 — temporal 승자는 가드(미결20)
+  same([offId(resolve("2025-04-19")), resolve("2025-04-19").color], ["t-성-토요일", "red"]);   // E−1 — 대표는 성 토요일(부활밤은 저녁 전례 — R-6.1-evening)
   const boniface = resolve("2026-06-05");   // 순교자 축일 평일 — 승자 색이 덮는다(픽스처 W-2026-06-05-boniface-color 와 같은 날)
   same([offId(boniface), boniface.color], ["d0605-보니파스", "red"]);
 });

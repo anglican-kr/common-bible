@@ -646,6 +646,11 @@ export interface Candidate {
   to?: string;
   /** 밀어낸 것의 id — 충돌로 밀린 후보에만. 활성화된 선택 봉헌에는 없다(택한 것). */
   displacedBy?: string;
+  /**
+   * 저녁 전례(부활밤 — 성 토요일 저녁, 성탄 밤 — 12.24 저녁)에만 `true`. 그날의 대표 · 색 · 재분류에 참여하지
+   * 않고 후보 목록 맨 끝에 온다 — 설계서 R-6.1-evening(미결20 닫힘, 사용자 결정 2026-10-15). `status` 는 `proper`.
+   */
+  evening?: true;
 }
 
 /** `periods.json` 의 겹침 표시 행(배너용 — 품계 비교에 참여하지 않는다). */
