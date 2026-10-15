@@ -268,25 +268,34 @@ test("A3 2026-01-01 세계평화 기도일 칩 — 기념일은 empty, 거룩한
   assert.strictEqual(feast.options.length, 2);
 });
 
-test("A3 2026-04-04 성 토요일 — 고른 본문의 색: 승자 부활밤 본문은 백, 성 토요일 후보는 홍, 격자는 그날 색 홍, 칩 셋", { skip: SKIP }, () => {
+test("A3 2026-04-04 성 토요일 — 그날의 대표 · 초기 선택은 성 토요일(홍), 부활밤은 「· 저녁」 칩으로 고르면 백(R-6.1-evening)", { skip: SKIP }, () => {
   const m = model("2026-04-04");
-  assert.strictEqual(id(m.selected), "t-부활밤");
-  same(plain(m.colors), ["white"]);
-  assert.strictEqual(m.ownColor, true);
-  assert.strictEqual(m.resolved.color, "red");   // 엔진의 그날 색은 그대로 홍(미결20 — 저녁 표지는 열려 있다)
-  assert.strictEqual(m.chips.length, 3);
-  const sat = model("2026-04-04", { obs: "t-성-토요일" });
-  same(plain(sat.colors), ["red"]);
-  assert.strictEqual(sat.ownColor, false);
+  assert.strictEqual(id(m.selected), "t-성-토요일");
+  same(plain(m.colors), ["red"]);
+  assert.strictEqual(m.ownColor, false);
+  assert.strictEqual(m.resolved.color, "red");
+  // 칩 셋 — 그날 낮(성 토요일 · 격자) 다음 저녁 전례(부활밤)
+  same(m.chips.map((c) => c.label), ["성 토요일", "성주간 토요일 (가해)", "부활밤 · 저녁"]);
+  same(m.options.map((o) => o.label), ["독서 1", "독서 2"]);   // 성 토요일 원본 세트 둘(욥기/마태 · 애가/요한)
+  const vigil = model("2026-04-04", { obs: "t-부활밤" });
+  same(plain(vigil.colors), ["white"]);   // 고른 본문의 색(사용자 결정 2026-10-12)
+  assert.strictEqual(vigil.ownColor, true);
   same(plain(model("2026-04-04", { obs: "grid:lent-x-weekday-sat" }).colors), ["red"]);
-  same(sat.options.map((o) => o.label), ["독서 1", "독서 2"]);   // 성 토요일 원본 세트 둘(욥기/마태 · 애가/요한)
 });
 
-test("A3 2026-12-25 — 초기 선택은 승자 성탄 낮(미결12), 밤 · 새벽은 칩", { skip: SKIP }, () => {
+test("A3 2026-12-25 · 12-24 — 12.25 는 성탄 낮(초기 · 미결12) · 새벽 칩, 성탄 밤은 12.24 의 「· 저녁」 칩(R-6.1-evening)", { skip: SKIP }, () => {
   const m = model("2026-12-25");
   assert.strictEqual(id(m.selected), "d1225-성탄-낮");
-  same(m.chips.map((c) => c.label), ["성탄 낮", "성탄 밤", "성탄 새벽", "성탄 금요일 (나해)"]);
-  assert.strictEqual(m.collects.length, 1);   // 성탄 낮 본기도만 — 밤 · 새벽은 그 칩에서
+  same(m.chips.map((c) => c.label), ["성탄 낮", "성탄 새벽", "성탄 금요일 (나해)"]);
+  assert.strictEqual(m.collects.length, 1);   // 성탄 낮 본기도만 — 새벽은 그 칩에서
+  const eve = model("2026-12-24");
+  assert.strictEqual(id(eve.selected), "grid:advent-4-weekday-thu");   // 그날의 대표 · 초기 선택은 대림 평일(자)
+  same(plain(eve.colors), ["violet"]);
+  same(eve.chips.map((c) => c.label), ["대림 4주 목요일 (나해)", "성탄 밤 · 저녁"]);
+  const night = model("2026-12-24", { obs: "d1225-성탄-밤" });
+  same(plain(night.colors), ["white"]);
+  assert.ok(night.group && night.slots.some((sl) => sl.label.startsWith("루가 2:1")), "성탄 밤 복음 루가 2:1-14");
+  assert.strictEqual(night.collects.length, 1);   // 성탄 밤 본기도 — 본문은 여전히 12.25 키로 찾는다
 });
 
 test("A3 2026-06-14 연중 11주일 — 트랙 기억이 기본, URL 이 이기고, 괄호 선택 구절 세트는 바탕에 합쳐져 긴 본문 + 선택 구절", { skip: SKIP }, () => {
