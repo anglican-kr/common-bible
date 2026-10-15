@@ -154,7 +154,7 @@ ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` ~6,000줄이 8개 도�
 
 | 파일                               | 역할                                                                                                                                                                       | 라인 수 |
 | ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
-| `js/app/helpers.js`                | 공통 DOM 헬퍼 (`_$`/`el`/`clearNode`/`setInert`/`trapFocus`) + `emptyState` 빌더                                                                                           | ~190    |
+| `js/app/helpers.js`                | 공통 DOM 헬퍼 (`_$`/`el`/`clearNode`/`setInert`/`trapFocus`) + `emptyState` 빌더 + `isModifiedClick`(새 탭 클릭 판정 — 전역 `<a>` 인터셉터 · 탭 처리기 공용)              | ~205    |
 | `js/app/overlay.js`                | 오버레이 생명주기 단일 컨트롤러 `createOverlay`(scrim·trapFocus·Escape·inert·포커스 복원·애니메이션 dismiss) + 시트 팩토리 + `closeAllOverlays()` registry ([ADR-032](decisions/032-component-view-layer.md), ADR-034 PR5b) | ~325    |
 | `js/app/storage.js`                | localStorage 헬퍼 + UI 공유 상수 (+ 전례독서 트랙 기억 `bible-lectionary-track`)                                                                                          | ~465    |
 | `js/app/settings-ui.js`            | 설정 팝오버 + 외관 적용 + 인용·주석 토글                                                                                                                                   | ~855    |
