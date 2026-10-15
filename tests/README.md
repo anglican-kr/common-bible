@@ -144,7 +144,7 @@ pytest tests/e2e/test_bookmark_sort.py -q   # 개별 파일
 | `test_a11y_axe.py` | axe-core 자동 스캔(WCAG 2.1 AA) — 전례독서 뷰 · 캘린더 월간 표(데스크톱 · 모바일) 포함 | 12 |
 | `test_a11y_keyboard.py` | 키보드 인터랙션 — 전례독서 칩 Tab · Enter 포함 | 8 |
 
-> **실측 (2026-10-15)**: `pytest tests/e2e` — 308건 모두 통과(PR #348 리뷰 반영 뒤 한 번에; 건수는 표 머리, 원장 `docs/changes/2026-10-15-calendar-tab.md` 「리뷰 반영」이 정본). `test_a11y_axe.py`(12건)는 선택적 의존성 `axe-playwright-python` 이 없으면 **그 파일만** 모듈 단위 skip 1건으로 빠진다(`importorskip`; pytest 요약에는 `N passed, 1 skipped` 로 찍힌다). 그전엔 하드 import 라 수집 오류로 스위트 전체가 중단됐다. 옛 「headless 사전 실패」 묶음은 2026-06-22 에 해소 — [`docs/known-issues.md`](../docs/known-issues.md) §1.
+> **실측 (2026-10-15)**: `pytest tests/e2e` — 309건 모두 통과(#349 를 #348 위로 옮긴 뒤 한 번에; 건수는 표 머리, 원장 `docs/changes/2026-10-15-liturgical-engine-evening.md` 「main 위로 옮김」이 정본). `test_a11y_axe.py`(12건)는 선택적 의존성 `axe-playwright-python` 이 없으면 **그 파일만** 모듈 단위 skip 1건으로 빠진다(`importorskip`; pytest 요약에는 `N passed, 1 skipped` 로 찍힌다). 그전엔 하드 import 라 수집 오류로 스위트 전체가 중단됐다. 옛 「headless 사전 실패」 묶음은 2026-06-22 에 해소 — [`docs/known-issues.md`](../docs/known-issues.md) §1.
 
 ## 4. 데이터 파이프라인 테스트 (서브모듈)
 
