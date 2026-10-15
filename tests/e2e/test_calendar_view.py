@@ -7,10 +7,11 @@
   ① 탭 — 홈 다음 두 번째, 누르면 이번 달 · 활성 표시 · 오늘 칸
   ② 달 이동 — 이전/다음/오늘이 링크(뒤로 가기 · 주소 그대로)
   ③ 칸 → 전례독서, 독서 화면의 위 단계 → 그 날짜의 달
-  ④ 칸의 이름 · 색 점 · 링크 이름(사용자 결정 2026-10-15 의 날짜 예)
-  ⑤ 탭 복원 — 다른 탭에 다녀오면 마지막 캘린더 화면, 탭을 다시 누르면 이번 달
+  ④ 칸의 이름 · 색 점 · 링크 이름(사용자 결정 2026-10-15 의 날짜 예 — 링크 이름은 칸에 보이는 이름 그대로)
+  ⑤ 탭 복원 — 다른 탭에 다녀오면 마지막 캘린더 화면, 탭을 다시 누르면 이번 달 · 수정 키 클릭은 새 탭 몫
   ⑥ 320px 폭에서 가로 넘침 없음(1.6.0 달력의 넘침 재발 방지)
-  ⑦ 잘못된 달 · 자료 실패 · 데스크톱 헤더 입구
+  ⑦ 잘못된 달 · 자료 실패 · 데스크톱 헤더 입구(탭과 같은 곳으로)
+  ⑧ 달 이동 뒤 키보드 포커스가 누른 컨트롤에 남는다
 
 실데이터(data/ 서브모듈)가 필요하다 — 로컬 전용(CLAUDE.md 「E2E 테스트」).
 """
@@ -131,16 +132,18 @@ def test_cells_show_one_name_colour_dots_and_full_label(desktop_context):
     def dots(date):
         return page.eval_on_selector_all(
             f".cal-grid a.cal-cell[href='/lectionary/{date}'] .cal-dot",
-            "els => els.map(e => [...e.classList].find(c => c.startsWith('cal-dot--')).slice(9))")
+            "els => els.map(e => [...e.classList].find(c => c.startsWith('lit-swatch--')).slice(12))")
 
     assert name("2026-09-29") == "성 미카엘과 모든 천사들"
     assert dots("2026-09-29") == ["white"]
     assert _cell(page, "2026-09-29").get_attribute("aria-label") == "9월 29일 화요일, 성 미카엘과 모든 천사들, 백색"
     assert name("2026-09-18") == "추계재" and dots("2026-09-18") == ["violet"]
+    # 링크 이름은 칸에 보이는 이름 그대로 — 대표(연중 24주 금요일)가 아니라(WCAG 2.5.3, PR #348 리뷰)
+    assert _cell(page, "2026-09-18").get_attribute("aria-label") == "9월 18일 금요일, 추계재, 자색"
     assert name("2026-09-16") == "니니안" and dots("2026-09-16") == ["violet", "white"]
     assert _cell(page, "2026-09-16").get_attribute("aria-label").endswith(", 자색 · 백색")
     assert name("2026-09-13") == "연중24주"
-    assert _cell(page, "2026-09-13").get_attribute("aria-label") == "9월 13일 일요일, 연중 24주일, 녹색"
+    assert _cell(page, "2026-09-13").get_attribute("aria-label") == "9월 13일 일요일, 연중24주, 녹색"
     assert name("2026-09-02") == ""
     assert _cell(page, "2026-09-02").get_attribute("aria-label") == "9월 2일 수요일, 연중 22주 수요일, 녹색"
     # 칸 이름에 괄호 설명은 없고, 전체 이름은 title 로
@@ -156,7 +159,7 @@ def test_advent_sunday_marks_the_new_liturgical_year(desktop_context):
     assert mark.inner_text() == "나해"
     assert mark.get_attribute("title") == "나해 시작"
     assert cell.locator(".cal-name").inner_text() == "대림1주"
-    assert cell.get_attribute("aria-label") == "11월 29일 일요일, 대림1주일, 나해 시작, 자색"
+    assert cell.get_attribute("aria-label") == "11월 29일 일요일, 대림1주, 나해 시작, 자색"
     assert page.locator(".cal-mark").count() == 1
 
 
@@ -177,6 +180,23 @@ def test_calendar_tab_restores_last_screen_and_retap_pops_to_this_month(mobile_c
     page.locator("#tab-bar [data-tab='calendar']").click()
     page.wait_for_url(f"{BASE}/calendar")
     page.wait_for_selector(f".cal-month:has-text('{_this_month()[1]}')")
+
+
+def test_modifier_click_on_calendar_tab_leaves_this_page_alone(mobile_context):
+    """⌘ · Ctrl-클릭은 새 탭 몫 — 지금 화면(북마크)은 마지막 캘린더 화면으로 옮겨 가지 않는다(PR #348 리뷰: 그전엔
+    preventDefault 뒤 같은 탭에서 독서 화면으로 이동해 새 탭 열기를 무시했다)."""
+    page = mobile_context.new_page()
+    _open(page, "calendar/2026-12")
+    _cell(page, "2026-12-25").click()
+    page.wait_for_url("**/lectionary/2026-12-25")
+    page.wait_for_selector(".lect-day", timeout=20_000)
+    page.locator("#tab-bar [data-tab='bookmarks']").click()
+    page.wait_for_url("**/bookmarks")
+    with mobile_context.expect_page(timeout=5_000) as opened:
+        page.locator("#tab-bar [data-tab='calendar']").click(modifiers=["ControlOrMeta"])
+    opened.value.close()
+    page.wait_for_timeout(300)
+    assert page.url == f"{BASE}/bookmarks"
 
 
 # ── ⑥ 좁은 화면 ──
@@ -245,6 +265,35 @@ def test_desktop_header_has_calendar_entry_and_home_button(desktop_context):
     page.wait_for_selector(".book-list")
 
 
+def test_desktop_header_calendar_entry_goes_where_the_tab_goes(desktop_context):
+    """헤더의 캘린더 단추는 탭과 같은 곳으로 — 다른 화면에서는 마지막 캘린더 화면(독서 포함), 캘린더 화면에서는 이번 달
+    (사용자 결정 2026-10-15 · PR #348 리뷰 — 그전엔 정적 href 라 늘 이번 달이었다)."""
+    page = desktop_context.new_page()
+    _open(page, "calendar/2026-12")
+    _cell(page, "2026-12-25").click()
+    page.wait_for_url("**/lectionary/2026-12-25")
+    page.wait_for_selector(".lect-day", timeout=20_000)
+    page.evaluate("navigate('/')")   # 다른 화면으로(링크 이동과 같은 PUSH)
+    page.wait_for_selector(".book-list")
+    page.locator("#header-calendar").click()
+    page.wait_for_url("**/lectionary/2026-12-25")
+    page.wait_for_selector(".lect-day:has-text('성탄 낮')", timeout=20_000)
+    # 위 단계 → 그 달 → 집 단추로 성서 목록 → 헤더 단추면 그 달로
+    page.locator("#page-title a.title-back-btn").click()
+    page.wait_for_url("**/calendar/2026-12")
+    page.wait_for_selector(".cal-month:has-text('2026년 12월')")
+    page.locator("#page-title .title-home-btn").click()
+    page.wait_for_url(f"{BASE}/")
+    page.wait_for_selector(".book-list")
+    page.locator("#header-calendar").click()
+    page.wait_for_url("**/calendar/2026-12")
+    page.wait_for_selector(".cal-month:has-text('2026년 12월')")
+    # 캘린더 화면에서 다시 누르면 이번 달(탭의 pop-to-root)
+    page.locator("#header-calendar").click()
+    page.wait_for_url(f"{BASE}/calendar")
+    page.wait_for_selector(f".cal-month:has-text('{_this_month()[1]}')")
+
+
 def test_header_calendar_entry_hidden_on_mobile(mobile_context):
     """모바일 — 헤더 윗줄이 통째로 숨어 캘린더 입구는 탭 바뿐이다."""
     page = mobile_context.new_page()
@@ -252,3 +301,41 @@ def test_header_calendar_entry_hidden_on_mobile(mobile_context):
     page.wait_for_selector(".book-list", timeout=20_000)
     assert not page.locator("#header-calendar").is_visible()
     assert page.locator("#tab-bar [data-tab='calendar']").is_visible()
+
+
+# ── ⑧ 달 이동 뒤 포커스 ──
+
+def _focused(page):
+    return page.evaluate("""() => {
+        const a = document.activeElement;
+        return { key: a?.dataset?.focusKey || null, inHead: !!a?.closest('.cal-head'), visible: !!a?.matches(':focus-visible') };
+    }""")
+
+
+def test_month_nav_keeps_keyboard_focus_on_the_pressed_control(desktop_context):
+    """키보드로 「다음 달」 · 「이전 달」 · 「오늘」을 눌러 표를 다시 그려도 포커스가 새 머리 줄의 같은 컨트롤에 있다 —
+    Enter 만 거듭 눌러 달을 넘긴다(WCAG 2.4.3 · PR #348 리뷰: 그전엔 누른 링크가 사라져 포커스가 body 로 빠졌다).
+    계산 범위 끝(9999년 12월)에서 「다음 달」이 사라지면 「오늘」로."""
+    page = desktop_context.new_page()
+    _open(page, "calendar/2026-12")
+    page.locator(".lect-datenav-btn[aria-label='다음 달']").focus()
+    page.keyboard.press("Enter")
+    page.wait_for_selector(".cal-month:has-text('2027년 1월')")
+    assert _focused(page) == {"key": "next", "inHead": True, "visible": True}
+    page.keyboard.press("Enter")
+    page.wait_for_selector(".cal-month:has-text('2027년 2월')")
+    assert _focused(page)["key"] == "next"
+    page.locator(".lect-datenav-btn[aria-label='이전 달']").focus()
+    page.keyboard.press("Enter")
+    page.wait_for_selector(".cal-month:has-text('2027년 1월')")
+    assert _focused(page)["key"] == "prev"
+    page.locator(".cal-head .lect-today").focus()
+    page.keyboard.press("Enter")
+    page.wait_for_selector(f".cal-month:has-text('{_this_month()[1]}')")
+    assert _focused(page)["key"] == "today"
+    _open(page, "calendar/9999-11")
+    page.locator(".lect-datenav-btn[aria-label='다음 달']").focus()
+    page.keyboard.press("Enter")
+    page.wait_for_selector(".cal-month:has-text('9999년 12월')")
+    assert page.locator(".lect-datenav-btn[aria-label='다음 달']").count() == 0
+    assert _focused(page)["key"] == "today"

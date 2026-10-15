@@ -740,6 +740,7 @@ export interface AppHelpers {
     tag?: keyof HTMLElementTagNameMap;
     role?: string;
   }) => HTMLElement;
+  isModifiedClick: (e: Event) => boolean;
 }
 
 // ── Overlay/dialog lifecycle controller (js/app/overlay.js, ADR-032) ─────────
@@ -1022,8 +1023,8 @@ declare global {
 
     // ADR-031: 탭 히스토리(탭별 위치 복원). tab-history.js 가 노출 — route() 가
     // onRouteStart/onRouteEnd 로 스크롤을 저장·복원하고, tabbar.js 가 lastPath/tabOf
-    // 로 홈·검색 탭 재진입 시 마지막 경로를 복원한다.
-    // "calendar" 는 /calendar · /lectionary 의 탭(ADR-038 §3) — 탭 버튼은 A2 가 더한다.
+    // 로 홈·검색·캘린더 탭(데스크톱은 헤더의 캘린더 단추) 재진입 시 마지막 경로를 복원한다.
+    // "calendar" 는 /calendar · /lectionary 의 탭(ADR-038 §1 · §3).
     tabHistory?: {
       tabOf: (path: string) => "home" | "search" | "bookmarks" | "settings" | "calendar";
       fullPath: () => string;

@@ -20,6 +20,7 @@ const $home = document.querySelector('#tab-bar [data-tab="home"]');
 
 /** @type {Window & typeof globalThis & Record<string, any>} */
 const W = /** @type {any} */ (window);
+const { isModifiedClick } = window.appHelpers;
 
 let searching = false;
 let collapsed = false; // ADR-030 P3: 스크롤 축소(탭 바 홈 원형) 상태
@@ -220,6 +221,8 @@ $searchBtn?.addEventListener("click", (e) => {
 // 전역 <a> 인터셉터(defaultPrevented 면 네비 안 함)를 막는다. 펼친 뒤 다시 아래로
 // 스크롤하면 정상적으로 재축소. 축소 상태가 아니면 평소대로 홈으로 이동.
 $home?.addEventListener("click", (e) => {
+  // 수정 키 클릭(새 탭 · 새 창)은 이 화면에서 펼치지도 옮기지도 않는다 — 전역 <a> 인터셉터와 같은 조건(helpers.js).
+  if (isModifiedClick(e)) return;
   if (collapsed) {
     e.preventDefault();
     applyCollapsed(false);
@@ -253,33 +256,43 @@ $home?.addEventListener("click", (e) => {
 // ADR-038 §1 (A2): 캘린더 탭 — 홈과 같은 꼴(ADR-031). 다른 탭에서 오면 마지막으로 보던
 // 캘린더 화면(전례독서 /lectionary/… 포함)으로 복원하고, 이미 캘린더 탭이면 가로채지 않아 정적
 // href="/calendar"(이번 달)로 pop-to-root 한다 — 전례독서를 보다 탭을 다시 누르면 이번 달 달력.
-// 스크롤 축소(.collapsed)에서는 홈 원형만 보여 이 탭이 눌릴 일이 없다.
-document
-  .querySelector('#tab-bar [data-tab="calendar"]')
-  ?.addEventListener("click", (e) => {
-    const th = W.tabHistory;
-    if (!th || th.tabOf(th.fullPath()) === "calendar") return;
-    th.requestRestore(); // 탭 전환(POP 의미론) → 그 화면의 스크롤 복원
-    const dest = th.lastPath("calendar");
-    if (dest && dest !== "/calendar") {
-      e.preventDefault();
-      W.navigate(dest);
-    }
-  });
+// 데스크톱 헤더의 캘린더 단추(#header-calendar — 탭 바가 없는 넓은 화면의 입구)도 이 처리기를 단다 —
+// 탭과 같은 곳으로 간다(사용자 결정 2026-10-15 · PR #348 리뷰; 그전엔 정적 href 뿐이라 늘 이번 달이었다).
+// 가로 모드의 스크롤 축소(.collapsed)에서는 탭이 다 보여 이 탭도 눌린다 — 같은 동작이고, 라우트가
+// 바뀌면 축소가 풀린다(syncTabBarActive → resetTabCollapse).
+/** @param {Event} e */
+function enterCalendarTab(e) {
+  // 수정 키 클릭은 이 화면을 옮기지 않으므로 복원도 요청하지 않는다 — 요청이 남으면 다음 링크
+  // 이동(PUSH)이 뷰가 정한 스크롤 대신 옛 위치로 튄다(전역 <a> 인터셉터와 같은 조건, helpers.js).
+  if (isModifiedClick(e)) return;
+  const th = W.tabHistory;
+  if (!th || th.tabOf(th.fullPath()) === "calendar") return;
+  th.requestRestore(); // 탭 전환(POP 의미론) → 그 화면의 스크롤 복원
+  const dest = th.lastPath("calendar");
+  if (dest && dest !== "/calendar") {
+    e.preventDefault();
+    W.navigate(dest);
+  }
+}
+document.querySelector('#tab-bar [data-tab="calendar"]')?.addEventListener("click", enterCalendarTab);
+document.getElementById("header-calendar")?.addEventListener("click", enterCalendarTab);
 
 // ADR-031: 북마크·설정 탭은 정적 href 로 충분하지만(단일 라우트), 다른 탭에서 전환해
 // 들어올 땐 스크롤 복원을 요청한다. 같은 탭 재탭(=pop-to-root)이면 요청하지 않아 최상단.
 // preventDefault 안 함 — 전역 <a> 인터셉터가 href 로 navigate, requestRestore 는 플래그만.
-function restoreOnTabSwitch(/** @type {"bookmarks"|"settings"} */ targetTab) {
+// 수정 키 클릭은 인터셉터가 가로채지 않아(새 탭) 이 화면은 그대로다 — 요청하지 않는다.
+/** @param {Event} e @param {"bookmarks"|"settings"} targetTab */
+function restoreOnTabSwitch(e, targetTab) {
+  if (isModifiedClick(e)) return;
   const th = W.tabHistory;
   if (th && th.tabOf(th.fullPath()) !== targetTab) th.requestRestore();
 }
 document
   .querySelector('#tab-bar [data-tab="bookmarks"]')
-  ?.addEventListener("click", () => restoreOnTabSwitch("bookmarks"));
+  ?.addEventListener("click", (e) => restoreOnTabSwitch(e, "bookmarks"));
 document
   .querySelector('#tab-bar [data-tab="settings"]')
-  ?.addEventListener("click", () => restoreOnTabSwitch("settings"));
+  ?.addEventListener("click", (e) => restoreOnTabSwitch(e, "settings"));
 
 // 하단 입력: Enter → 기존 검색 커밋(verse ref auto-nav 포함).
 $searchInput?.addEventListener("keydown", (e) => {
@@ -467,6 +480,20 @@ let _curTabActive = "home"; // 리사이즈 재배치용 현재 활성 탭
 const _tabIndicMQL = typeof window !== "undefined" && window.matchMedia
   ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
 
+// 인디케이터 지름 = 탭 슬롯의 활성 원(.tab-icon-wrap — 56px, 좁은 폭에서 슬롯이 줄면 그만큼 작다 — DESIGN.md §7).
+// 탭 바가 쉬고 있을 때만 잰다: 축소 · 검색 모핑과 그 복귀 중엔 슬롯이 애니메이트되어, 그 폭을 따라가면 펼칠 때
+// 작은 원이 커지며 나타난다(CSS 가 「탭 바 폭 / 탭 수」를 따라가던 때 — PR #348 리뷰). 그래서 라우트마다 부르는
+// syncTabBarActive 는 재지 않고, 처음 로드와 reposition(리사이즈 · 회전 · 모핑 끝의 max-width transitionend)만 잰다.
+function sizeTabIndicator() {
+  if (!$tabBar || !$dock) return;
+  if ($dock.classList.contains("collapsed") || $dock.classList.contains("searching")) return;
+  const ind = $tabBar.querySelector(".tab-indicator");
+  const wrap = $tabBar.querySelector(".tab-item:not([hidden]) .tab-icon-wrap");
+  if (!(ind instanceof HTMLElement) || !(wrap instanceof HTMLElement)) return;
+  const d = wrap.offsetWidth;
+  if (d > 0) ind.style.width = `${d}px`;   // 0 = 숨은 dock(데스크톱) — CSS 기본 56px 그대로
+}
+
 /** @param {string} active */
 function positionTabIndicator(active) {
   if (!$tabBar) return;
@@ -507,6 +534,7 @@ if (typeof window !== "undefined" && window.addEventListener) {
   let _tabIndicTimer = null;
   const reposition = () => {
     _prevTabIndic = _curTabActive; // 같은 탭 → 슬라이드 없이 스냅
+    sizeTabIndicator();
     positionTabIndicator(_curTabActive);
   };
   window.addEventListener("resize", () => {
@@ -543,10 +571,9 @@ function publishTabBarWidth() {
     "--tab-bar-w",
     `calc(${n} * var(--dock-control))`
   );
-  // 슬라이딩 인디케이터가 좁은 폭에서 줄어든 슬롯(탭 바 폭 / n)을 넘지 않게(css .tab-indicator).
-  document.documentElement.style.setProperty("--tab-bar-n", String(n));
 }
 publishTabBarWidth();
+sizeTabIndicator();
 
 // route() (views) calls this on each navigation (facade, see cycle note).
 W.syncTabBarActive = syncTabBarActive;

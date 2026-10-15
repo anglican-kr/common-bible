@@ -640,22 +640,27 @@ body {
 }
 /* 대체색은 색 점만 옅게 — 글자까지 옅게 하면 대비가 4.5:1 아래로 떨어진다(WCAG 1.4.3, 자체 리뷰 2026-10-13). */
 .lect-color-item--alt .lect-color { opacity: 0.8; }
-/* Liturgical colour marks — the four official colours plus the two optional
+/* Liturgical colour swatches — the four official colours plus the two optional
    alternates (ADR-036 §8). The --lit-* tokens are fixed swatches, not theme
-   colours: these ARE the colours (DESIGN.md §2 「전례색」 — the calendar's dots use them too). */
-.lect-color {
-  width: 0.8em;
-  height: 0.8em;
+   colours: these ARE the colours (DESIGN.md §2 「전례색」). Every mark that wears
+   a liturgical colour takes this shape + one modifier — the lectionary header's
+   .lect-color and the calendar's .cal-dot only set their size — so a new or
+   renamed colour is one edit here, not one per view (PR #348 review). */
+.lit-swatch {
   border-radius: 50%;
   border: 1px solid var(--lit-swatch-border);
   box-sizing: border-box;
 }
-.lect-color--white { background: var(--lit-white); }
-.lect-color--red { background: var(--lit-red); }
-.lect-color--green { background: var(--lit-green); }
-.lect-color--violet { background: var(--lit-violet); }
-.lect-color--rose { background: var(--lit-rose); }
-.lect-color--blue { background: var(--lit-blue); }
+.lit-swatch--white { background: var(--lit-white); }
+.lit-swatch--red { background: var(--lit-red); }
+.lit-swatch--green { background: var(--lit-green); }
+.lit-swatch--violet { background: var(--lit-violet); }
+.lit-swatch--rose { background: var(--lit-rose); }
+.lit-swatch--blue { background: var(--lit-blue); }
+.lect-color {
+  width: 0.8em;
+  height: 0.8em;
+}
 
 /* Observance switcher — every candidate, always; horizontal scroll on narrow
    screens, no scrollbar chrome. aria-current marks the selected one. */
@@ -953,21 +958,12 @@ a.cal-cell:focus-visible { background: var(--bg-card); }
   gap: var(--space-0_5);
   min-height: 0.45rem;
 }
-/* Liturgical colour dots — DESIGN.md §2 「전례색」 tokens, same swatches as the
-   lectionary header's .lect-color marks. */
+/* Liturgical colour dots — size only; the shape and colour are .lit-swatch's
+   (the same swatches as the lectionary header — DESIGN.md §2 「전례색」). */
 .cal-dot {
   width: 0.45rem;
   height: 0.45rem;
-  border-radius: 50%;
-  border: 1px solid var(--lit-swatch-border);
-  box-sizing: border-box;
 }
-.cal-dot--white { background: var(--lit-white); }
-.cal-dot--red { background: var(--lit-red); }
-.cal-dot--green { background: var(--lit-green); }
-.cal-dot--violet { background: var(--lit-violet); }
-.cal-dot--rose { background: var(--lit-rose); }
-.cal-dot--blue { background: var(--lit-blue); }
 /* The day's one name — two lines, then an ellipsis; words stay whole when they
    fit (keep-all) and break anywhere only when one word is wider than the cell. */
 .cal-name {
@@ -4116,8 +4112,8 @@ html.cite-sheet-open {
      줄어들기는 한다(flex-shrink 1 + min-width 0) — 보이는 탭이 넷(홈 · 캘린더 · 북마크 ·
      설정, ADR-038 A2)이면 320px 폭에서 240 + 8 + 검색 60 이 dock 안쪽 288px 를 넘어 검색
      원형이 화면 밖으로 밀렸다. 이제 슬롯(.tab-item flex:0 1 auto)이 ~55px 로 고르게 줄고
-     인디케이터 원은 슬롯 폭을 넘지 않는다(.tab-icon-wrap max-width:100%). 340px 이상은
-     그대로 60px. */
+     인디케이터 원은 슬롯 폭을 넘지 않는다(.tab-icon-wrap max-width:100% · 슬라이딩 인디케이터는
+     tabbar.js sizeTabIndicator). 340px 이상은 그대로 60px. */
   display: flex;
   flex: 0 1 auto;
   min-width: 0;
@@ -4221,10 +4217,11 @@ html.cite-sheet-open {
   top: 50%;
   left: 0;
   z-index: 0;
-  /* 56px — 다만 좁은 폭에서 슬롯이 60px 아래로 줄면(#tab-bar flex-shrink) 슬롯 폭을 넘지 않는다:
-     100% 는 탭 바 폭, --tab-bar-n 은 보이는 탭 수(tabbar.js publishTabBarWidth). .tab-icon-wrap 의
-     max-width:100% 와 같은 원이 된다. */
-  width: min(calc(var(--dock-control) - var(--space-1)), calc(100% / var(--tab-bar-n, 4)));
+  /* 56px — 좁은 폭에서 슬롯이 60px 아래로 줄면(#tab-bar flex-shrink) tabbar.js sizeTabIndicator 가
+     슬롯의 활성 원(.tab-icon-wrap, max-width:100%)을 재어 인라인 width 로 맞춘다. 탭 바 폭(100%)을
+     따라가지 않는 것은 축소 · 검색 모핑 중 탭 바가 60px 로 줄었다 펼쳐지는 동안 원이 작아졌다 커지며
+     나타나지 않게 하려는 것(PR #348 리뷰) — 크기는 탭 바가 쉬고 있을 때만 잰다. */
+  width: calc(var(--dock-control) - var(--space-1));
   aspect-ratio: 1 / 1;
   border-radius: var(--radius-pill);
   background: var(--glass-sheen), color-mix(in srgb, var(--accent) 14%, transparent);

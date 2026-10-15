@@ -126,7 +126,8 @@
             <div id="search-history" role="listbox" aria-label="최근 검색어" hidden></div>
           </div>
           <!-- ADR-038 §1 (A2): 데스크톱 캘린더 입구 — 하단 탭 바가 없는 넓은 화면 · 마우스(#tab-dock 숨김)에서
-               캘린더 탭과 같은 곳으로 간다. 모바일은 #breadcrumb-row 가 통째로 숨어 탭 바만 남는다. -->
+               캘린더 탭과 같은 곳으로 간다: tabbar.js 가 탭과 같은 클릭 처리기(enterCalendarTab)를 달아 다른 화면에서는
+               마지막 캘린더 화면으로, 캘린더 화면에서는 이 href(이번 달)로. 모바일은 #breadcrumb-row 가 통째로 숨어 탭 바만 남는다. -->
           <a id="header-calendar" class="header-calendar-btn" href="/calendar" aria-label="캘린더">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5.5 5.5h13a1 1 0 0 1 1 1V19a1 1 0 0 1-1 1h-13a1 1 0 0 1-1-1V6.5a1 1 0 0 1 1-1z"/><path d="M4.5 9.5h15"/><path d="M8.5 3.5v4"/><path d="M15.5 3.5v4"/></svg>
           </a>
@@ -163,7 +164,7 @@
     <a class="tab-item" href="/bookmarks" data-tab="bookmarks" aria-label="북마크">
       <span class="tab-icon-wrap"><svg class="tab-icon" viewBox="3.55 3.80 16.91 16.91" fill="none" stroke="currentColor" stroke-width="1.27" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.5 4.5h9a1 1 0 0 1 1 1V20l-5.5-3.7L6.5 20V5.5a1 1 0 0 1 1-1z"/></svg></span>
     </a>
-    <!-- 노트 탭 — 기능 보류로 1.7.0 까지 hidden(바에서 제거, 탭바 폭은 flex:0 0 auto 라 자동 축소). -->
+    <!-- 노트 탭 — 기능 보류로 1.7.0 까지 hidden(바에서 제거, 탭바 폭은 콘텐츠 폭 flex:0 1 auto 라 자동 축소). -->
     <button type="button" class="tab-item" data-tab="notes" aria-label="노트 (준비 중)" aria-disabled="true" hidden>
       <span class="tab-icon-wrap"><svg class="tab-icon" viewBox="3.82 3.82 16.36 16.36" fill="none" stroke="currentColor" stroke-width="1.23" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4.5h10a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1v-13a1 1 0 0 1 1-1z"/><path d="M9 9h6"/><path d="M9 12.5h6"/><path d="M9 16h4"/></svg></span>
     </button>

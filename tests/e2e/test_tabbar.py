@@ -7,11 +7,13 @@ Covers:
   - 검색 원형 버튼 → /search 모핑(#tab-dock.searching, 하단 입력 표시)
   - 스크롤 축소(#tab-dock.collapsed) + 축소 시 홈 탭 = 펼치기(홈 이동 아님)
   - 읽기 라우트에서 홈 탭 active 유지
+  - 슬라이딩 인디케이터 크기 — 축소에서 펼칠 때 그대로 · 320px 에서 줄어든 슬롯에 맞춤(PR #348 리뷰)
+  - 수정 키(⌘ · Ctrl) 탭 클릭은 새 탭 몫 — 이 화면에 스크롤 복원 요청을 남기지 않는다(PR #348 리뷰)
 
 데스크탑(≥769px)에서는 탭 dock 이 숨겨지고 기존 헤더/오버레이를 유지한다.
 """
 
-from .conftest import BASE_URL, wait_app_ready
+from .conftest import BASE_URL, CLEAR_APP_STORAGE, IPHONE_UA, wait_app_ready
 
 
 def test_tab_bar_present_and_search_separated(mobile_context):
@@ -111,8 +113,10 @@ def test_scroll_collapse_and_home_expands_without_nav(mobile_context):
     page.goto(f"{BASE_URL}/gen/1")
     page.wait_for_selector("article.chapter-text .verse", timeout=8_000)
 
-    # 아래로 스크롤 → 축소.
-    page.evaluate("window.scrollTo(0, 600)")
+    # 아래로 스크롤 → 축소. html 의 scroll-behavior:smooth 라 scrollTo(0, 600) 은 애니메이트된다 — 64px 를 넘는 순간
+    # 접히고, 스크롤이 끝나기 전에 홈을 누르면 남은 아래쪽 스크롤이 펼친 바를 다시 접는다(누르는 시점에 따라 갈리던
+    # 실패 — 2026-10-15 확인). 즉시 스크롤로 그 경합을 없앤다.
+    page.evaluate("window.scrollTo({ top: 600, behavior: 'instant' })")
     page.wait_for_selector("#tab-dock.collapsed", timeout=5_000)
 
     # 축소 상태에서 홈 탭 클릭 → 홈으로 이동하지 않고 펼쳐짐, 읽던 라우트 유지.
@@ -196,3 +200,83 @@ def test_reading_route_keeps_home_tab_active(mobile_context):
     )
     home = page.locator("#tab-bar .tab-item[data-tab='home']")
     assert "active" in (home.get_attribute("class") or "")
+
+
+# ── 슬라이딩 인디케이터 크기 (PR #348 리뷰) ──
+
+_IND_WIDTH = "() => document.querySelector('#tab-bar .tab-indicator').offsetWidth"
+
+
+def test_indicator_keeps_its_size_while_the_collapsed_bar_expands(mobile_context):
+    """스크롤 축소(탭 바 60px)에서 펼치는 동안 인디케이터는 56px 그대로 — 작은 원이 커지며 나타나지 않는다.
+    크기는 탭 바가 쉬고 있을 때만 잰다(그전엔 「탭 바 폭 / 탭 수」를 따라가 축소 중 15px 이었다)."""
+    page = mobile_context.new_page()
+    page.goto(f"{BASE_URL}/gen/1")
+    page.wait_for_selector("article.chapter-text .verse", timeout=8_000)
+    page.wait_for_selector("#tab-bar .tab-indicator.is-shown", timeout=5_000)
+    assert page.evaluate(_IND_WIDTH) == 56
+    page.evaluate("window.scrollTo({ top: 600, behavior: 'instant' })")
+    page.wait_for_selector("#tab-dock.collapsed", timeout=5_000)
+    page.wait_for_timeout(400)
+    assert page.evaluate(_IND_WIDTH) == 56
+    # 맨 위로 — 펼쳐지는 동안 매 프레임 폭을 잰다
+    widths = page.evaluate("""() => new Promise((resolve) => {
+        const ind = document.querySelector('#tab-bar .tab-indicator');
+        const seen = [];
+        window.scrollTo(0, 0);
+        const t0 = performance.now();
+        const tick = () => {
+            seen.push(ind.offsetWidth);
+            if (performance.now() - t0 < 500) requestAnimationFrame(tick); else resolve(seen);
+        };
+        requestAnimationFrame(tick);
+    })""")
+    page.wait_for_selector("#tab-dock:not(.collapsed)", timeout=5_000)
+    assert min(widths) == 56, widths
+
+
+def test_indicator_fits_the_shrunk_slot_at_320px(browser):
+    """320px — 탭 넷 + 검색이 dock 을 넘어 슬롯이 60px 아래로 준다. 인디케이터는 슬롯의 활성 원과 같은 크기(DESIGN.md §7),
+    축소했다 펼친 뒤에도."""
+    ctx = browser.new_context(viewport={"width": 320, "height": 640}, user_agent=IPHONE_UA)
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    try:
+        page = ctx.new_page()
+        page.goto(f"{BASE_URL}/gen/1")
+        page.wait_for_selector("article.chapter-text .verse", timeout=8_000)
+        page.wait_for_selector("#tab-bar .tab-indicator.is-shown", timeout=5_000)
+        sizes = "() => [document.querySelector('#tab-bar .tab-indicator').offsetWidth, document.querySelector(\"#tab-bar [data-tab='home'] .tab-icon-wrap\").offsetWidth, document.querySelector(\"#tab-bar [data-tab='home']\").offsetWidth]"
+        ind, wrap, slot = page.evaluate(sizes)
+        assert slot < 60 and ind == wrap <= slot, (ind, wrap, slot)
+        page.evaluate("window.scrollTo({ top: 600, behavior: 'instant' })")
+        page.wait_for_selector("#tab-dock.collapsed", timeout=5_000)
+        page.wait_for_timeout(400)
+        page.evaluate("window.scrollTo({ top: 0, behavior: 'instant' })")
+        page.wait_for_selector("#tab-dock:not(.collapsed)", timeout=5_000)
+        page.wait_for_timeout(600)
+        assert page.evaluate(sizes)[0] == wrap
+    finally:
+        ctx.close()
+
+
+# ── 수정 키 클릭 (PR #348 리뷰) ──
+
+def test_modifier_click_on_tab_leaves_no_scroll_restore_behind(mobile_context):
+    """⌘ · Ctrl-클릭으로 북마크 탭을 새 탭에 열어도 이 화면은 그대로이고, 다음 링크 이동(PUSH)은 뷰가 정한 스크롤(장 최상단)을
+    지킨다 — 그전엔 탭 처리기가 복원 요청을 먼저 세워 두어 그것이 남아, 다음 이동이 옛 스크롤 위치로 튀었다."""
+    page = mobile_context.new_page()
+    page.goto(f"{BASE_URL}/gen/1")
+    page.wait_for_selector("article.chapter-text .verse", timeout=8_000)
+    page.evaluate("window.scrollTo({ top: 600, behavior: 'instant' })")   # /gen/1 을 떠날 때 600 이 기억된다
+    page.wait_for_timeout(200)
+    page.evaluate("navigate('/settings')")
+    page.wait_for_url("**/settings")
+    page.wait_for_selector("#tab-dock:not(.collapsed)", timeout=5_000)
+    with mobile_context.expect_page(timeout=5_000) as opened:
+        page.locator("#tab-bar [data-tab='bookmarks']").click(modifiers=["ControlOrMeta"])
+    opened.value.close()
+    assert page.url.endswith("/settings")
+    page.evaluate("navigate('/gen/1')")           # 링크 이동과 같은 PUSH — 복원 요청 없음
+    page.wait_for_selector("article.chapter-text .verse", timeout=8_000)
+    page.wait_for_timeout(400)
+    assert page.evaluate("window.scrollY") == 0

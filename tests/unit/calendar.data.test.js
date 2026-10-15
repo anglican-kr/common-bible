@@ -158,6 +158,23 @@ test("2025 ~ 2027 의 모든 월간 표 — 그달 칸은 링크 · 색이 있�
   assert.ok(longest.length <= 40, longest);
 });
 
+test("2025 ~ 2027 — 칸에 보이는 이름은 늘 그 칸의 링크 이름 안에 있다(WCAG 2.5.3 Label in Name — PR #348 리뷰)", { skip: SKIP }, () => {
+  // 대표 이름을 링크 이름에 싣던 때는 사계재 · 기념일을 보이는 격자 평일 칸 54곳과 주일 칸 128곳(「연중24주」 ↔ 「연중 24주일」)이 어긋났다.
+  let named = 0;
+  for (let y = 2025; y <= 2027; y++) {
+    for (let m = 1; m <= 12; m++) {
+      for (const c of ctx.buildMonthGrid(y, m, "2026-10-15", resolve).weeks.flat()) {
+        if (!c.inMonth || !c.cellName) continue;
+        named++;
+        assert.ok(c.label.includes(c.cellName), `${c.date}: 「${c.cellName}」 ⊄ 「${c.label}」`);
+      }
+    }
+  }
+  assert.ok(named >= 400, `이름 단 칸 ${named}`);
+  assert.strictEqual(ctx.dayAriaLabel(day("2026-09-18"), false), "9월 18일 금요일, 추계재, 자색");
+  assert.strictEqual(ctx.dayAriaLabel(day("2026-09-13"), false), "9월 13일 일요일, 연중24주, 녹색");
+});
+
 test("42칸 월간 표가 엔진 연도 캐시를 지킨다 — 해를 걸친 2026년 12월은 앵커 세 해(2025 · 2026 · 2027), 6월은 두 해(설계서 §4.9 · C-4.9-1)", { skip: SKIP }, () => {
   // 규칙 파생 메모(`movableOf`)가 인덱스에 붙어 있어 새 인덱스로 센다 — 프리로드 직후와 같은 처지
   const fresh = ctx.buildCalendarIndex(TABLES());

@@ -42,7 +42,7 @@ import {
   preloadCalendar, preloadLectionary, resolveDate, findReadings, findCollects, fastOf,
 } from "./liturgical-engine.js";
 
-const { _$, el, clearNode, emptyState } = window.appHelpers;
+const { _$, el, clearNode, emptyState, isModifiedClick } = window.appHelpers;
 const { loadLectionaryTrack, saveLectionaryTrack } = window.appStorage;
 
 const $app = _$("app");
@@ -818,7 +818,7 @@ function commitError(msg, subtitle) {
 /** 색 점 + 라벨 하나. */
 function buildColorMark(/** @type {string} */ color, /** @type {boolean} */ alt) {
   const wrap = el("span", { className: alt ? "lect-color-item lect-color-item--alt" : "lect-color-item" });
-  wrap.appendChild(el("span", { className: `lect-color lect-color--${color}`, "aria-hidden": "true" }));
+  wrap.appendChild(el("span", { className: `lect-color lit-swatch lit-swatch--${color}`, "aria-hidden": "true" }));
   wrap.appendChild(document.createTextNode((alt ? "대체 " : "") + (COLOR_LABEL[color] || color)));
   return wrap;
 }
@@ -907,8 +907,9 @@ function buildControls(m) {
     seg.querySelectorAll("a").forEach((a, i) => {
       a.addEventListener("click", (e) => {
         // 라우터(routing.js)가 가로채는 기본 클릭일 때만 — Ctrl/Cmd · Shift · 가운데 버튼은 새 탭 · 창으로 가는
-        // 표준 링크 동작이라 지금 탭의 URL 과 기억을 건드리지 않는다(Copilot 리뷰 3회차).
-        if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey || e.button !== 0) return;
+        // 표준 링크 동작이라 지금 탭의 URL 과 기억을 건드리지 않는다(Copilot 리뷰 3회차; 조건은 라우터와 같은
+        // helpers.js isModifiedClick 하나 — PR #348 리뷰).
+        if (e.defaultPrevented || isModifiedClick(e)) return;
         // 지금 항목의 주소에는 렌더할 때 이미 트랙이 적혀 있어(renderLectionaryView — withTrack) 기억을 바꿔도 뒤로 가기가
         // 이 화면으로 돌아온다(Copilot 리뷰 1 · 5회차의 클릭 때 보정을 렌더 때로 옮겼다 — 자체 리뷰 2026-10-13).
         saveLectionaryTrack(m.hrefs.tracks[i].track);
@@ -1268,6 +1269,6 @@ async function renderLectionaryView(parsed) {
 // 캘린더 탭(calendar.js — ADR-038 §2 A2)이 같은 이름 · 날짜 · 색 규칙을 쓴다(복제 금지 — 칸 · 줄의 이름이 칩과 같은 꼴이어야 한다).
 export {
   renderLectionaryView, buildLectionaryModel,
-  shortName, statusSuffix, isGrid, dateLabel, monthDayLabel, todayKey,
+  shortName, statusSuffix, isGrid, todayKey,
   CYCLE_LABEL, COLOR_LABEL, WEEKDAY_KO, MIN_YEAR, MAX_YEAR,
 };

@@ -293,7 +293,7 @@ test("calendarDay: 전례년 첫날(대림 1주일 — 엔진 liturgicalYearOf �
 
 test("calendarDay: 엔진이 못 푼 날(null)은 날짜만 — 링크 · 이름 · 색 없음", () => {
   same(ctx.calendarDay("1582-12-31", null), {
-    date: "1582-12-31", day: 31, weekday: 5, href: null, cellName: "", cellTitle: "",
+    date: "1582-12-31", day: 31, weekday: 5, href: null, cellName: "", cellTitle: "", cellSuffix: "",
     primary: null, others: [], colors: [], cycle: null, yearStart: null,
   });
 });
@@ -312,9 +312,72 @@ test("dayAriaLabel: 「오늘, 10월 15일 목요일, 아빌라의 데레사, �
   assert.strictEqual(ctx.dayAriaLabel(ember, false), "9월 16일 수요일, 니니안, 자색 · 백색");
   const advent1 = ctx.calendarDay("2026-11-29", resolvedOf("2026-11-29", [cand(obs("t-대림1주일", "대림1주일"))],
     { coord: SUNDAY(1, "B", "advent"), color: "violet", colors: ["violet"] }));
-  assert.strictEqual(ctx.dayAriaLabel(advent1, false), "11월 29일 일요일, 대림1주일, 나해 시작, 자색");
+  assert.strictEqual(ctx.dayAriaLabel(advent1, false), "11월 29일 일요일, 대림1주, 나해 시작, 자색");
   const blank = ctx.calendarDay("1582-12-31", null);
   assert.strictEqual(ctx.dayAriaLabel(blank, false), "12월 31일 금요일");
+});
+
+test("dayAriaLabel: 이름은 칸에 보이는 그대로(WCAG 2.5.3) — 사계재 칸 「추계재」 · 주일 「연중29주」 · 꼬리말은 붙고, 이름 없는 평일만 대표 이름", () => {
+  // 대표가 격자 평일인 사계재 날 — 칸은 「추계재」를 보이므로 링크 이름도 「추계재」(대표 「연중 24주 금요일」이 아니라 — PR #348 리뷰)
+  const ember = ctx.calendarDay("2026-09-18", resolvedOf("2026-09-18",
+    [grid("ordinary-24-weekday-fri", "연중 24주 금요일"), cand(obs("t-추계재", "추계재", { rank: "feria", color: "violet" }))],
+    { color: "violet", colors: ["violet"] }));
+  assert.strictEqual(ember.cellName, "추계재");
+  assert.strictEqual(ctx.dayAriaLabel(ember, false), "9월 18일 금요일, 추계재, 자색");
+  // 주일 — 보이는 「연중29주」 그대로(앞의 「일요일」이 「주일」을 대신 말한다)
+  const sunday = ctx.calendarDay("2026-10-18", resolvedOf("2026-10-18", [grid("ordinary-29-sunday", "연중 29주일")], { coord: SUNDAY(29) }));
+  assert.strictEqual(ctx.dayAriaLabel(sunday, false), "10월 18일 일요일, 연중29주, 녹색");
+  // 격자 평일 칸의 기념일 — 칸 이름 + 칩과 같은 꼬리 「· 기념일」
+  const wesley = ctx.calendarDay("2025-05-24", resolvedOf("2025-05-24",
+    [grid("easter-5-weekday-sat", "부활 5주 토요일"), cand(obs("d0524-존-웨슬리", "존 웨슬리(사제)", { rank: "commemoration" }))],
+    { color: "white", colors: ["white"] }));
+  assert.strictEqual(wesley.cellName, "존 웨슬리");
+  assert.strictEqual(wesley.cellSuffix, " · 기념일");
+  assert.strictEqual(ctx.dayAriaLabel(wesley, false), "5월 24일 토요일, 존 웨슬리 · 기념일, 백색");
+  // 옮겨 온 대표 — 꼬리 「· 7월 25일에서 옮겨 옴」은 칸에 안 보이고 링크 이름에 붙는다
+  const james = cand(obs("d0725-사도-성-장-야고보", "사도 성 장 야고보", { rank: "major_feast", color: "red" }), "transferred_in", { from: "2027-07-25" });
+  const moved = ctx.calendarDay("2027-07-26", resolvedOf("2027-07-26", [james], { color: "red", colors: ["red"] }));
+  assert.strictEqual(ctx.dayAriaLabel(moved, false), "7월 26일 월요일, 사도 성 장 야고보 · 7월 25일에서 옮겨 옴, 적색");
+  // 이름 없는 평일 — 칸에는 날짜뿐이라 대표(격자) 이름이 링크 이름의 이름
+  const plain = ctx.calendarDay("2026-10-16", plainDay("2026-10-16"));
+  assert.strictEqual(plain.cellName, "");
+  assert.strictEqual(ctx.dayAriaLabel(plain, false), "10월 16일 금요일, 연중 28주 목요일, 녹색");
+});
+
+test("buildMonthGrid: 칸에 보이는 이름은 늘 그 칸의 링크 이름 안에 있다(WCAG 2.5.3)", () => {
+  // 주일은 주일 좌표, 18일은 사계재(격자 평일이 대표), 나머지는 이름 없는 평일
+  const resolve = (d) => {
+    if (ctx.dayOfWeek(d) === 0) return resolvedOf(d, [grid("ordinary-x-sunday", "연중 24주일")], { coord: SUNDAY(24) });
+    if (d.endsWith("-18")) {
+      return resolvedOf(d, [grid("ordinary-x-weekday", "연중 24주 금요일"), cand(obs("t-추계재", "추계재", { rank: "feria" }))]);
+    }
+    return plainDay(d);
+  };
+  const cells = ctx.buildMonthGrid(2026, 9, "2026-10-15", resolve).weeks.flat();
+  const named = cells.filter((c) => c.cellName);
+  assert.ok(named.length >= 7, "주일 · 사계재 칸이 이름을 단다");
+  for (const c of named) assert.ok(c.label.includes(c.cellName), `${c.date}: 「${c.cellName}」 ⊄ 「${c.label}」`);
+});
+
+test("calendarDay: 전례년 경계는 주일에만 견준다 — 평일 칸은 liturgicalYearOf 를 부르지 않는다(PR #348 리뷰 — 42칸마다 두 번씩 셈하던 것)", () => {
+  const original = ctx.liturgicalYearOf;
+  let calls = 0;
+  ctx.liturgicalYearOf = (d) => { calls++; return original(d); };
+  try {
+    const resolve = (d) => (ctx.dayOfWeek(d) === 0
+      ? resolvedOf(d, [grid("ordinary-x-sunday", "연중 29주일")], { coord: SUNDAY(29) })
+      : plainDay(d));
+    ctx.buildMonthGrid(2026, 10, "2026-10-15", resolve);
+    assert.strictEqual(calls, 6 * 2, "주일 여섯 칸 × (그날 · 앞날)");
+  } finally {
+    ctx.liturgicalYearOf = original;
+  }
+});
+
+test("buildMonthGrid: 엔진 날짜 덧셈이 실패하면 틀린 표를 그리지 않고 멈춘다 — 같은 날짜로 메우지 않는다(PR #348 리뷰)", () => {
+  assert.throws(() => ctx.gridDate("2026-13-01", 1), /calendar grid/);
+  assert.throws(() => ctx.buildMonthGrid(2026, 13, "2026-10-15", plainDay), /calendar grid/);
+  assert.strictEqual(ctx.gridDate("9999-12-31", 8), "10000-01-08");   // 계산 범위 끝 표의 뒤 칸까지는 낸다
 });
 
 test("buildMonthGrid: 칸의 label 이 dayAriaLabel 과 같고, 오늘 칸만 「오늘」로 시작한다", () => {

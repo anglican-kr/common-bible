@@ -45,3 +45,17 @@ def test_folder_read_button_opens_reading_view(browser):
     # The drawer closed on navigation.
     assert page.locator("#bookmark-drawer[hidden]").count() == 1
     ctx.close()
+
+
+def test_broken_escape_in_read_path_shows_empty_view(desktop_context):
+    """/read/<깨진 퍼센트 이스케이프> — 경로 해석이 throw 하지 않고 없는 폴더로 읽혀 「읽을 북마크가 없습니다」.
+    그전엔 parsePath 가 route() 의 try 밖에서 URIError 를 던져 화면이 그려지지 않고 런치 화면이 남았다(PR #348 리뷰 —
+    known-issues §6 이던 것)."""
+    page = desktop_context.new_page()
+    errors = []
+    page.on("pageerror", lambda e: errors.append(str(e)))
+    page.goto(f"{BASE}/read/%E0%A4%A")
+    page.wait_for_selector(".bookmark-read .empty-state-title", timeout=10_000)
+    assert page.inner_text(".bookmark-read .empty-state-title") == "읽을 북마크가 없습니다"
+    page.wait_for_selector("#launch-screen", state="detached", timeout=5_000)
+    assert not [e for e in errors if "URI" in e], errors

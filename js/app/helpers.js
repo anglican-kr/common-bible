@@ -182,7 +182,22 @@ window.appHelpers = (() => {
     return box;
   }
 
-  return { _$, chUnit, el, clearNode, hangingQuoteClass, setInert, trapFocus, dragReleaseAction, emptyState };
+  /**
+   * A click the browser should handle itself — modifier keys or a non-primary
+   * button mean "open in a new tab / window", so nothing should happen in this
+   * page. The global <a> interceptor (routing.js) bails on exactly this; any
+   * other click handler on a link (tab bar entries, a view remembering which
+   * control was pressed) must bail on the same condition, or it acts on a
+   * navigation that never happens here (PR #348 review).
+   * @param {Event} e  a click — typed as Event so listeners on a plain Element can pass theirs as is
+   * @returns {boolean}
+   */
+  function isModifiedClick(e) {
+    const m = /** @type {MouseEvent} */ (e);
+    return m.ctrlKey || m.metaKey || m.shiftKey || m.altKey || m.button !== 0;
+  }
+
+  return { _$, chUnit, el, clearNode, hangingQuoteClass, setInert, trapFocus, dragReleaseAction, emptyState, isModifiedClick };
 })();
 
 // ESM module marker (ADR-019). No runtime effect; signals TypeScript that
