@@ -1,4 +1,5 @@
 ---
+pr: 349
 date: 2026-10-15
 branch: feat/liturgical-engine-evening
 title: "feat: 교회력 엔진 — 저녁 전례: 성 토요일의 대표는 성 토요일, 부활밤 · 성탄 밤은 저녁 전례 (R-6.1-evening · 미결20 닫힘)"
