@@ -128,7 +128,9 @@ function cellCandidateOf(resolved) {
   if (!isGrid(official)) return official;
   if (resolved.coord && resolved.coord.type === "sunday") return official;
   if (isNamedWeekday(resolved)) return official;
-  return resolved.candidates.find((c) => !isGrid(c) && !isAwayCandidate(c) && c.status !== "optional") || null;
+  // 저녁 전례(성탄 밤 — 12.24 저녁)는 그날의 이름이 아니다(→ 설계서 R-6.1-evening — 그날 낮의 대표 · 색에 참여하지 않는다) —
+  // 칸에 실으면 「성탄 밤」 이름에 그날 색(자) 점이 붙는다(PR #349 리뷰). 주간 · 목록 줄에는 「· 저녁」 꼬리로 남는다.
+  return resolved.candidates.find((c) => !isGrid(c) && !isAwayCandidate(c) && c.status !== "optional" && !c.evening) || null;
 }
 
 /**

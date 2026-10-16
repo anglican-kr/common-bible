@@ -5,7 +5,7 @@
 하나씩 짝짓는다 — 라벨의 변형을 한데 모은 합집합과 비교하면 송가 이름이 붙은 라벨 하나도 대안 여럿처럼 보여 ⊂ 가 된다.
 판정: = 같음 · ⊂/⊃ 대안 수 차이 · ≈ 표기만(절 집합 동치 포함) · other 책자가 다른 후보(평일 등)의 독서 · partial/≠ 실질 불일치.
 이름(별칭 포함) · 이동 표기 · 색은 보조 표로 낸다(축성일 · 사계재 · 공휴일은 엔진 범위 밖이라 잡음이 섞인다)."""
-import json, re, sys, collections
+import json, re, sys, collections, datetime
 BK, EN, OUT, DET = sys.argv[1:5]
 booklet = {x["date"]: x for x in json.load(open(BK, encoding="utf8"))}
 engine = {x["date"]: x for x in json.load(open(EN, encoding="utf8"))}
@@ -115,9 +115,12 @@ def short(name):
     return re.sub(r"\s+", "", re.sub(r"\(.*?\)", "", name or "").replace("성 ", "").replace("사도 ", "").replace("복음사가 ", ""))
 
 def engine_alts(e):
-    """후보 id → 슬롯 → 엔진 대안 목록(트랙 · 세트에 걸친 라벨마다 하나 — 같은 꼴은 한 번)"""
+    """후보 id → 슬롯 → 엔진 대안 목록(트랙 · 세트에 걸친 라벨마다 하나 — 같은 꼴은 한 번). 저녁 전례(12.24 의 성탄 밤)는
+    그날 낮 본문의 대안이 아니다 — 책자는 그 본문을 12.25 블록에 싣는다(앱 설계서 R-6.1-evening)"""
+    evening = {c["id"] for c in e.get("candidates", []) if c.get("evening")}
     out = {}
     for cid, groups in e["groups"].items():
+        if cid in evening: continue
         per = {k: {} for k in SLOTS}
         for g in groups:
             for k in SLOTS:
@@ -184,9 +187,15 @@ for d in sorted(booklet):
     if not b["sets"]:
         counts["파싱 실패"] += 1; rec["status"] = "parse-fail"; detail.append(rec); continue
     if len(b["sets"]) > 1:   # 성탄
+        # 성탄 밤은 엔진에서 12.24 저녁 전례다(앱 설계서 R-6.1-evening) — 책자는 12.25 블록에 싣는다. 전날의 저녁 후보 본문도 함께 본다
+        pool = dict(e["groups"])
+        prev = engine.get(str(datetime.date.fromisoformat(d) - datetime.timedelta(days=1)))
+        if prev and not prev.get("error"):
+            for c in prev["candidates"]:
+                if c.get("evening"): pool[c["id"]] = prev["groups"].get(c["id"], [])
         for s in b["sets"]:
             best = None
-            for cid, groups in e["groups"].items():
+            for cid, groups in pool.items():
                 for g in groups:
                     ok = all((not s["slots"].get(k) and not g["slots"].get(k)) or
                              (s["slots"].get(k) and g["slots"].get(k) and slot_match(s["slots"][k], g["slots"][k]))
@@ -229,7 +238,8 @@ for d in sorted(booklet):
         nn = short(n)
         if not nn or "축성" in n or "축복" in n or "에서 이동" in n or n.startswith("("): continue
         if not any(nn in en or en in nn for ens in enames.values() for en in ens): unmatched_b.append(n)
-    unmatched_e = [c["id"] for c in ecands if c["status"] in ("proper", "transferred_in") and not any((en in short(n) or short(n) in en) for en in enames[c["id"]] for n in b["names"] if short(n))]
+    # 저녁 전례(12.24 의 성탄 밤 — 책자는 12.25 블록에 싣는다)는 그날 낮의 이름 대조에서 뺀다(앱 설계서 R-6.1-evening)
+    unmatched_e = [c["id"] for c in ecands if c["status"] in ("proper", "transferred_in") and not c.get("evening") and not any((en in short(n) or short(n) in en) for en in enames[c["id"]] for n in b["names"] if short(n))]
     if unmatched_b or unmatched_e:
         name_rows.append((d, b["weekday"], unmatched_b, unmatched_e, [c["id"] for c in e["candidates"]]))
     ein = {c["id"]: c["from"] for c in e["candidates"] if c["status"] == "transferred_in"}

@@ -294,8 +294,11 @@ test("A3 2026-12-25 · 12-24 — 12.25 는 성탄 낮(초기 · 미결12) · 새
   same(eve.chips.map((c) => c.label), ["대림 4주 목요일 (나해)", "성탄 밤 · 저녁"]);
   const night = model("2026-12-24", { obs: "d1225-성탄-밤" });
   same(plain(night.colors), ["white"]);
-  assert.ok(night.group && night.slots.some((sl) => sl.label.startsWith("루가 2:1")), "성탄 밤 복음 루가 2:1-14");
-  assert.strictEqual(night.collects.length, 1);   // 성탄 밤 본기도 — 본문은 여전히 12.25 키로 찾는다
+  // 성탄 밤의 본문 · 본기도 — 12.24 에서 12.25 키로 좁힌다. 새벽(이사 62 · 루가 2:1-7, 8-20 · 본기도 279)과 가르는 값으로 고정한다
+  // (「루가 2:1」 로 시작하는지만 보면 새벽 본문도 통과했다 — PR #349 리뷰)
+  assert.strictEqual(night.group.title, "성탄 밤");
+  same(night.slots.map((sl) => sl.label), ["이사 9:1-6", "시편 96", "디도 2:11-14", "루가 2:1-14, 15-20"]);
+  same(night.collects.map((c) => c.id), [278]);
 });
 
 test("A3 2026-06-14 연중 11주일 — 트랙 기억이 기본, URL 이 이기고, 괄호 선택 구절 세트는 바탕에 합쳐져 긴 본문 + 선택 구절", { skip: SKIP }, () => {

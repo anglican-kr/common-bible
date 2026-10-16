@@ -129,6 +129,31 @@ def test_evening_liturgies_are_chips_not_the_day(desktop_context):
     assert not any("성탄 밤" in c for c in _chips(page))
 
 
+def test_chips_wrap_so_every_chip_shows_on_phones(browser):
+    """휴대폰 폭에서도 칩이 모두 화면 안에 보인다 — 칩 줄은 낱말처럼 이어 놓고 줄이 차면 다음 줄로(사용자 결정 2026-10-15 — PR #349
+    리뷰: 가로 스크롤 줄 끝의 「부활밤 · 저녁」이 320px 에서 12px, 생략 성인이 있는 2042 년에는 0px 만 보였다). 성 토요일이 맨 앞
+    (그날의 대표 — prec 1, 생략된 마틴 루터 킹보다 앞)."""
+    for width in (320, 375):
+        ctx = browser.new_context(viewport={"width": width, "height": 740}, user_agent=IPHONE_UA)
+        ctx.add_init_script(CLEAR_APP_STORAGE)
+        try:
+            page = ctx.new_page()
+            for date in ("2026-04-04", "2042-04-05"):
+                _open(page, f"lectionary/{date}")
+                boxes = page.eval_on_selector_all(
+                    ".lect-chip", "els => els.map(e => { const r = e.getBoundingClientRect(); return [e.textContent, r.left, r.right]; })")
+                assert boxes[0][0] == "성 토요일", (width, date, boxes)
+                assert "부활밤 · 저녁" in [t for t, _, _ in boxes], (width, date, boxes)
+                for text, left, right in boxes:
+                    assert left >= 0 and right <= width, (width, date, text, left, right)
+                row = page.evaluate("() => { const r = document.querySelector('.lect-chips'); return r.scrollWidth - r.clientWidth; }")
+                assert row == 0, (width, date, row)   # 줄 안에 숨은 가로 스크롤이 없다
+                over = page.evaluate("() => document.documentElement.scrollWidth - document.documentElement.clientWidth")
+                assert over == 0, (width, date, over)
+        finally:
+            ctx.close()
+
+
 # ── ③ 두 독서 나란히 ──
 
 def test_transfiguration_day_offers_two_readings_side_by_side(desktop_context):

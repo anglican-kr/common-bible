@@ -662,19 +662,20 @@ body {
   height: 0.8em;
 }
 
-/* Observance switcher — every candidate, always; horizontal scroll on narrow
-   screens, no scrollbar chrome. aria-current marks the selected one. */
+/* Observance switcher — every candidate, always (ADR-038 §3). Chips sit in a row
+   like words and wrap to the next line when the row is full — never a hidden
+   horizontal scroll, where the evening chip at the end of the row (「부활밤 ·
+   저녁」) vanished on phones (사용자 결정 2026-10-15 — PR #349 리뷰). Each chip is
+   capped below the row width (.lect-chip max-width), so one never overflows.
+   aria-current marks the selected one. */
 .lect-chips {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--space-2);
-  overflow-x: auto;
   padding: var(--space-1) 0 var(--space-2);
   margin: 0 0 var(--space-2);
-  scrollbar-width: none;
-  -webkit-overflow-scrolling: touch;
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
 }
-.lect-chips::-webkit-scrollbar { display: none; }
 .lect-chip {
   flex: 0 0 auto;
   display: inline-flex;

@@ -647,7 +647,7 @@ const CAL_TABLES = {
   ] },
   temporal: { _meta: {}, entries: [
     TMP("t-shrove", "합성 참회 화요일", { kind: "easter_offset", days: -47 }, { coord_name: null }),
-    TMP("t-holy-sat", "성 토요일", { kind: "easter_offset", days: -1 }, { rank: null, precedence: null, season: "lent", type: "weekday", color: "red" }),
+    TMP("t-holy-sat", "성 토요일", { kind: "easter_offset", days: -1 }, { season: "lent", type: "weekday", color: "red" }),   // 실데이터처럼 prec 1 · 평일 성격(data#32)
     TMP("t-부활밤", "부활밤", { kind: "easter_offset", days: -1 }, { season: "easter", type: "feast" }),
     TMP("t-ember-summer", "하계재", { kind: "ember_wfs", anchor: { kind: "easter_offset", days: 49 } },
       { coord_name: null, type: "fast", rank: "feria", precedence: 8, color: "violet", penitential: true }),
@@ -809,7 +809,7 @@ test("C-5.5-5 표시 순서 — ① 축일 · 재일(품계 순, 같은 값이�
 
 test("C-4.3-3 easter_offset −1 인덱스가 1:N — 성 토요일과 부활밤이 둘 다 후보, 부활밤은 저녁 전례로 맨 끝", () => {
   const r = resolve("2026-04-04");
-  // 낮(성 토요일 — 평일 행이라 유효 8 · 격자) 다음 저녁 전례(부활밤 — R-6.1-evening)
+  // 낮(성 토요일 — prec 1 · 격자) 다음 저녁 전례(부활밤 — R-6.1-evening)
   same(r.candidates.map((c) => c.observance.id), ["t-holy-sat", "grid:lent-x-weekday-sat", "t-부활밤"]);
   same(r.candidates.map((c) => c.evening === true), [false, false, true]);
 });
@@ -1193,7 +1193,7 @@ const B1_TABLES = {
     TMP("t-ash", "재의 수요일", { kind: "easter_offset", days: -46 }, { season: "lent", type: "fast", color: "violet" }),
     TMP("t-maundy", "성 목요일", { kind: "easter_offset", days: -3 }, { season: "lent", type: "feast", color: "red" }),
     TMP("t-good-friday", "성 금요일", { kind: "easter_offset", days: -2 }, { season: "lent", type: "fast", color: "red" }),
-    TMP("t-holy-sat", "성 토요일", { kind: "easter_offset", days: -1 }, { rank: null, precedence: null, season: "lent", type: "weekday", color: "red" }),
+    TMP("t-holy-sat", "성 토요일", { kind: "easter_offset", days: -1 }, { season: "lent", type: "weekday", color: "red" }),   // 실데이터처럼 prec 1 · 평일 성격(data#32)
     TMP("t-부활밤", "부활밤", { kind: "easter_offset", days: -1 }, { season: "easter", type: "feast" }),
     TMP("t-pentecost", "성령강림대축일", { kind: "easter_offset", days: 49 }, { season: "easter", type: "feast", color: "red" }),
     TMP("t-corpus", "그리스도의 성체일", { kind: "easter_offset", days: 60 },
@@ -1315,16 +1315,18 @@ test("R-6.3-holy-week-guard 보호 기간의 prec 7 은 생략 — guard 는 실
   same(ctx.guardCandidates("2026-04-12").map((c) => c.observance.id), ["guard:easter-octave"]);
 });
 
-test("C-6.1-7 · C-2-1 precedence null 은 정렬 최하위 · 승자가 아니다 — 평일 행(성 토요일)만 유효 8 이라 격자와 동률 · 사다리로 그날의 대표(부활밤은 저녁 전례)", () => {
+test("C-6.1-7 · C-2-1 precedence null 은 정렬 최하위 · 승자가 아니다 — 주일 이름 줄(가정주일)은 그날 주일이 대표, 성 토요일은 prec 1 로 그날의 대표(부활밤은 저녁 전례)", () => {
   const sat = rb("2026-04-04");
   same(officialId(sat), "t-holy-sat");
   same(sat.candidates.map((c) => c.observance.id), ["t-holy-sat", "grid:lent-x-weekday-sat", "t-부활밤"]);
   same(fate(sat, "t-holy-sat"), ["proper", null]);
   same(fate(sat, "t-부활밤"), ["proper", null]);   // 저녁 전례 — 재분류 밖
-  // 유효 precedence: null 은 ∞, temporal 평일 행만 8(R-6.1-evening) — 주일 이름 줄은 그대로 ∞
-  same([ctx.effectivePrecedence({ kind: "temporal", type: "weekday", precedence: null }),
-    ctx.effectivePrecedence({ kind: "temporal", type: "sunday", precedence: null }),
-    ctx.effectivePrecedence({ kind: "sanctoral", precedence: null })], [8, Infinity, Infinity]);
+  // 유효 precedence: null 은 표 · 종류와 무관하게 ∞ — 등급 없는 temporal 평일 행을 8 로 읽던 예외는 성 토요일이 데이터에서
+  // prec 1 이 되며 지웠다(data#32). same() 은 JSON 왕복이라 Infinity 가 null 이 되므로 하나씩 strictEqual 로 본다(PR #349 리뷰)
+  for (const obs of [{ kind: "temporal", type: "weekday", precedence: null }, { kind: "temporal", type: "sunday", precedence: null },
+    { kind: "sanctoral", precedence: null }]) {
+    assert.strictEqual(ctx.effectivePrecedence(obs), Infinity, JSON.stringify(obs));
+  }
   const family = rb("2026-05-10");   // 가정주일 — 부활 6주일
   same(officialId(family), "grid:easter-6-sunday");
   same(fate(family, "t-family"), ["proper", null]);
@@ -1425,7 +1427,7 @@ test("C-6.4-3 사계재 날은 자(→ R-6.4-ember-color) — 격자가 이기�
   same(rb("2026-05-28").colors.length, 1);   // 사계재가 아닌 날은 병기가 없다
 });
 
-test("C-6.4-4 색은 등급과 독립 — 성 토요일(rank null) 홍, 부활밤(백)은 저녁 전례라 그날 색에 참여하지 않는다(R-6.1-evening)", () => {
+test("C-6.4-4 성 토요일은 홍 — 부활밤(백)은 저녁 전례라 그날 색에 참여하지 않는다(R-6.1-evening)", () => {
   const r = rb("2026-04-04");
   same([officialId(r), r.official.observance.color, r.color, plain(r.colors)], ["t-holy-sat", "red", "red", ["red"]]);
   const vigil = r.candidates.find((c) => c.observance.id === "t-부활밤");
@@ -1436,16 +1438,25 @@ test("C-6.1-13 저녁 전례(R-6.1-evening) — 성탄 밤은 12.24 후보 끝 �
   const xmasEve = resolve("2026-12-24");
   const last = xmasEve.candidates[xmasEve.candidates.length - 1];
   same([last.observance.id, last.status, last.evening], ["d1225-성탄-밤", "proper", true]);
-  assert.ok(xmasEve.official && !xmasEve.official.evening && xmasEve.official.observance.id.startsWith("grid:"), "12.24 의 승자는 낮(대림 평일)");
+  same(officialId(xmasEve), "grid:advent-4-weekday-thu");   // 12.24 의 대표는 낮(대림 평일) — 저녁 후보는 판정 밖
   const xmas = resolve("2026-12-25");
   assert.ok(!xmas.candidates.some((c) => c.observance.id === "d1225-성탄-밤"), "12.25 에는 성탄 밤이 없다");
-  assert.ok(xmas.official && !xmas.official.evening, "12.25 의 승자는 낮 · 새벽 가운데 하나(id 순 — C-6.1-8)");
+  same(officialId(xmas), "d1225-dawn");   // 12.25 의 대표는 낮 · 새벽 가운데 id 순(C-6.1-8) — 항상 참이던 단언을 id 로(PR #349 리뷰)
   const sat = rb("2026-04-04");
   same(sat.candidates.filter((c) => c.evening).map((c) => c.observance.id), ["t-부활밤"]);
   same([officialId(sat), sat.color], ["t-holy-sat", "red"]);
   for (const d of ["2026-04-05", "2026-12-23", "2026-12-26"]) assert.ok(!resolve(d).candidates.some((c) => c.evening), d);
   // 상수는 두 id 뿐 — 늘면 이 단언과 설계서 R-6.1-evening 을 함께 고친다
   same(Object.entries(vm.runInContext("EVENING_LITURGIES", ctx)), [["t-부활밤", 0], ["d1225-성탄-밤", -1]]);
+});
+
+test("C-6.3-1b 재일 판정에 저녁 후보는 들지 않는다 — 저녁 전례가 사순의 대축일이어도 그날 낮의 소재일은 그대로(→ R-6.1-evening)", () => {
+  // 실데이터의 부활밤은 부활 시기라 지금은 결과가 같다 — 저녁 후보를 낮 후보로 세던 잠재 결함을 합성으로 지킨다(PR #349 리뷰)
+  const coord = { season: "lent", week: null, type: "weekday", weekday: "sat", year: "A" };
+  const day = { observance: { id: "t-holy-sat", kind: "temporal", rank: "principal", precedence: 1, type: "weekday", season: "lent" }, status: "proper" };
+  const evening = { observance: { id: "t-x-eve", kind: "temporal", rank: "principal", precedence: 1, type: "feast", season: "lent" }, status: "proper", evening: true };
+  same(ctx.fastOf({ date: "2026-04-04", coord, candidates: [day, evening] }), "minor");
+  same(ctx.fastOf({ date: "2026-04-04", coord, candidates: [day, { ...evening, evening: undefined }] }), null);   // 낮 후보라면 소재일이 빠진다
 });
 
 test("C-6.3-1 재일 — 대재일 둘 · 사순 주간 40일(성 목요일은 아님) · 사계재 · 성탄절기 밖 금요일 (→ R-6.3-friday-fast)", () => {
@@ -1543,7 +1554,7 @@ test("C-6.5-16 이동 상한 30일 — 넘으면 옮기지 않고 proper 로 남
 const HOLY_WEEK_ROWS = [
   TMP("t-maundy", "성 목요일", { kind: "easter_offset", days: -3 }, { season: "lent", type: "feast", color: "red" }),
   TMP("t-good-friday", "성 금요일", { kind: "easter_offset", days: -2 }, { season: "lent", type: "fast", color: "red" }),
-  TMP("t-holy-sat", "성 토요일", { kind: "easter_offset", days: -1 }, { rank: null, precedence: null, season: "lent", type: "weekday", color: "red" }),
+  TMP("t-holy-sat", "성 토요일", { kind: "easter_offset", days: -1 }, { season: "lent", type: "weekday", color: "red" }),   // 실데이터처럼 prec 1 · 평일 성격(data#32)
   TMP("t-부활밤", "부활밤", { kind: "easter_offset", days: -1 }, { season: "easter", type: "feast" }),
   TMP("t-easter", "부활대축일", { kind: "easter_offset", days: 0 }, { season: "easter", type: "feast" }),
 ];
@@ -1565,10 +1576,11 @@ test("R-6.3-holy-week-guard 이동 패스 — 보호 기간은 주요축일을 �
   // 옮길 수 있는 축일(prec 7)은 패스가 옮기지 않고 guard 가 생략시킨다(→ R-6.1-prec7-omit)
   const tue = t.at("2026-03-31");
   same([fate(tue, "d0331-movable-minor"), officialId(tue), tue.color], [["omitted", "guard:easter-octave"], "grid:lent-x-weekday-tue", "red"]);
-  // 성 토요일은 부활밤이 민다 — 성 토요일 행은 rank: null 이라 밀지 못한다. 목적지는 역시 보호 기간 뒤 4.13
+  // 성 토요일은 성 토요일 행(prec 1)이 민다 — 부활밤은 저녁 전례라 이동 판정에 들지 않는다(사용자 결정 2026-10-15 「성 토요일은
+  // 부활밤에 밀리지 않아」, R-6.1-evening). 목적지는 역시 보호 기간 뒤 4.13
   const sat = passEngine(passTables([MOV("d0404-x", "04.04")], HOLY_WEEK_ROWS));
   same(seats(sat.pass(2026).arrivals), { "2026-04-13": ["d0404-x<-2026-04-04"] });
-  same(fate(sat.at("2026-04-04"), "d0404-x"), ["transferred_out", "t-부활밤"]);
+  same(fate(sat.at("2026-04-04"), "d0404-x"), ["transferred_out", "t-holy-sat"]);
 });
 
 /** 이틀 연속 대축일(가변 — 2026-06-15 · 06-16 = E+71 · E+72) — 그 둘에 밀린 축일이 같은 날(6.17)을 노린다. */
@@ -1596,6 +1608,12 @@ test("C-6.5-19 보호 기간 목적지 — 성주간 · 부활 8일 안에서 �
   same(fate(t.at("2026-04-13"), "d0329-palm"), ["transferred_in", "t-palm"]);
   same(fate(t.at("2026-04-14"), "d0402-thu"), ["transferred_in", "t-thu"]);
   same(fate(t.at("2026-04-02"), "d0402-thu"), ["transferred_out", "t-thu"]);
+  // 색 가드(→ R-6.4-color-order): 흰 temporal 승자(합성 성지주일 · 성 목요일)도 성주간에는 그날 색이 기간 색(홍)이다. 실데이터에서는
+  // 이 가드가 색을 바꾸는 날이 없어져(유일한 실사례가 승자 부활밤이었다) 합성으로 지킨다(PR #349 리뷰 — 설계서 §7 B1 「성주간 색 가드」)
+  for (const [d, id] of [["2026-03-29", "t-palm"], ["2026-04-02", "t-thu"]]) {
+    const r = t.at(d);
+    same([officialId(r), r.official.observance.color, r.color], [id, "white", "red"], d);
+  }
 });
 
 /** 이틀 연속 대축일(가변 — 2026-12-26 · 12-27 = E+265 · E+266) — 성탄 8일 안에서 밀린 축일이 12.28 을 노린다. */
@@ -1661,14 +1679,14 @@ test("C-6.5-21 연쇄 범위는 도착에만 밀린 축일에 — 주일도 밀�
 });
 
 test("C-6.5-22 보호 기간 안에서 밀린 축일끼리는 서열 순 — 뒤에 밀린 높은 쪽이 부활 2주 월요일에 먼저 앉는다(→ R-6.3-guard-order)", () => {
-  // 2026 부활 4.5 — 성지주일 3.29 에 밀린 J(prec 6)가 먼저, 부활밤(성 토요일 4.4)에 밀린 A(prec 3)가 나중이다. 선착순이면 J 4.13 ·
+  // 2026 부활 4.5 — 성지주일 3.29 에 밀린 J(prec 6)가 먼저, 성 토요일 4.4 에 밀린 A(prec 3)가 나중이다. 선착순이면 J 4.13 ·
   // A 4.14 — 서열 순이라 A 4.13 · J 4.14(부활 3.26 인 해의 요셉 · 수태고지와 같은 꼴 — 픽스처 T-2062-03-27)
   const t = passEngine(passTables([MOV("d0329-j", "03.29"), MOV("d0404-a", "04.04", { precedence: 3, priority_group: "A" })], [
     ...HOLY_WEEK_ROWS,
     TMP("t-palm", "합성 성지주일", { kind: "easter_offset", days: -7 }, { rank: "privileged_sunday", precedence: 2 }),
   ]));
   same(seats(t.pass(2026).arrivals), { "2026-04-13": ["d0404-a<-2026-04-04"], "2026-04-14": ["d0329-j<-2026-03-29"] });
-  same(fate(t.at("2026-04-13"), "d0404-a"), ["transferred_in", "t-부활밤"]);
+  same(fate(t.at("2026-04-13"), "d0404-a"), ["transferred_in", "t-holy-sat"]);
   same(fate(t.at("2026-04-14"), "d0329-j"), ["transferred_in", "t-palm"]);
   same(fate(t.at("2026-03-29"), "d0329-j"), ["transferred_out", "t-palm"]);
 });

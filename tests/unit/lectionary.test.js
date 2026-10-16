@@ -109,7 +109,7 @@ test("chipLabel: 격자 후보에만 주기를 붙이고, 트랙은 그 후보�
   assert.strictEqual(ctx.chipLabel(saint, r, null), "주의 변모");   // 성인 축일은 주기로 갈리지 않는다
 });
 
-test("chipLabel · statusSuffix: 밀림 · 옮김 · 선택 봉헌 · 기념 · 기념일 꼬리", () => {
+test("chipLabel · statusSuffix: 밀림 · 옮김 · 선택 봉헌 · 기념 · 기념일 · 저녁 꼬리", () => {
   const r = resolvedOf("2026-12-07", [], null);
   assert.strictEqual(ctx.chipLabel(cand(obs("d1206-성-니콜라", "성 니콜라(미라의 주교)"), "transferred_in", { from: "2026-12-06" }), r, null),
     "성 니콜라 · 12월 6일에서 옮겨 옴");
@@ -120,6 +120,9 @@ test("chipLabel · statusSuffix: 밀림 · 옮김 · 선택 봉헌 · 기념 · 
   assert.strictEqual(ctx.chipLabel(cand(obs("t-추수감사주일", "추수감사주일"), "commemorated"), r, null), "추수감사주일 · 기념만");
   assert.strictEqual(ctx.chipLabel(cand(obs("d0101-세계평화", "세계평화를 위한 기도일", { rank: "commemoration" })), r, null),
     "세계평화를 위한 기도일 · 기념일");
+  // 저녁 전례(설계서 R-6.1-evening) — 「· 저녁」. 필수 CI 가 이 꼬리를 지키는 유일한 자리다(실데이터 테스트는 data 워크플로에서만
+  // 돈다 — PR #349 리뷰)
+  assert.strictEqual(ctx.chipLabel(cand(obs("t-부활밤", "부활밤", { color: "white" }), "proper", { evening: true }), r, null), "부활밤 · 저녁");
 });
 
 test("isMutedCandidate: 생략 · 떠남 · 기념일만 흐리다", () => {
@@ -399,10 +402,12 @@ test("headerColors: 고른 본문의 색 — 그날 대표색과 다른 비격�
   same(plain(ctx.headerColors(r, grid).colors), ["violet", "white"]);
   // 승자(색이 그날 대표색과 같다)를 고르면 그날 색(병기 포함).
   same(plain(ctx.headerColors(r, saint)), { colors: ["violet", "white"], colorAlt: [], ownColor: false });
-  // 성 토요일(사용자 결정 2026-10-12): 승자 부활밤이라도 그 본문을 고르면 백, 성 토요일 후보면 그날 색 홍.
-  const vigil = cand(obs("t-부활밤", "부활밤", { color: "white", precedence: 1 }));
-  const holySat = cand(obs("t-성-토요일", "성 토요일", { color: "red" }));
-  const hs = resolvedOf("2026-04-04", [vigil, holySat], vigil, { color: "red", colors: ["red"] });
+  // 성 토요일(사용자 결정 2026-10-12 · 10-15): 대표는 성 토요일 행(홍)이고 부활밤은 후보 끝의 저녁 전례(R-6.1-evening) —
+  // 부활밤 칩을 고르면 백, 성 토요일 후보면 그날 색 홍.
+  const vigil = cand(obs("t-부활밤", "부활밤", { color: "white", precedence: 1 }), "proper", { evening: true });
+  const holySat = cand(obs("t-성-토요일", "성 토요일", { color: "red", precedence: 1 }));
+  const holyGrid = cand(obs("grid:lent-x-weekday-sat", "성주간 토요일", { color: "red" }));
+  const hs = resolvedOf("2026-04-04", [holySat, holyGrid, vigil], holySat, { color: "red", colors: ["red"] });
   same(plain(ctx.headerColors(hs, vigil)), { colors: ["white"], colorAlt: [], ownColor: true });
   same(plain(ctx.headerColors(hs, holySat)), { colors: ["red"], colorAlt: [], ownColor: false });
 });
