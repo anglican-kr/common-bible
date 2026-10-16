@@ -131,6 +131,22 @@ test("고유명 평일 — 2026-03-30 성주간 월요일 · 2026-02-19 재의 �
   assert.strictEqual(day("2026-03-03").cellName, "");   // 번호 있는 사순 평일
 });
 
+test("저녁 전례 — 평일 12.24 칸은 이름 없이(성탄 밤은 줄에 「· 저녁」), 성 토요일 칸은 「성 토요일」(PR #349 — R-6.1-evening)", { skip: SKIP }, () => {
+  // 1900 ~ 2100 의 평일 12.24 칸이 「성탄 밤」 이름에 그날 색(자) 점을 달던 결함(PR #349 리뷰) — 그날의 대표는 대림 평일이다
+  for (let y = 2025; y <= 2034; y++) {
+    const eve = `${y}-12-24`;
+    const d = day(eve);
+    if (d.weekday === 0) { assert.strictEqual(d.cellName, "대림4주", eve); continue; }   // 주일이면 대림 4주일
+    assert.strictEqual(d.cellName, "", eve);
+    assert.ok(others(d).includes("성탄 밤 · 저녁"), `${eve} ${others(d)}`);
+  }
+  for (const sat of ["2026-04-04", "2027-03-27", "2042-04-05"]) {
+    const d = day(sat);
+    assert.strictEqual(d.cellName, "성 토요일", sat);
+    same(d.colors, ["red"], sat);
+  }
+});
+
 test("기념일 — 2026-01-01 은 거룩한 이름 예수가 칸, 세계평화를 위한 기도일은 줄에 「· 기념일」", { skip: SKIP }, () => {
   const d = day("2026-01-01");
   assert.strictEqual(d.cellName, "거룩한 이름 예수");

@@ -40,7 +40,9 @@ const slotsOf = (g) => { const o = {}; for (const s of (g && g.readings) || []) 
 // 이름은 name + aliases(엔진 namesOfRow) — compare.py 가 책자의 「고난주일」 · 「승천일」 을 별칭으로 맞춘다
 const cand = (c) => ({ id: c.observance.id, name: c.observance.name, aliases: c.observance.aliases || null, status: c.status, from: c.from || null, to: c.to || null,
   displacedBy: c.displacedBy || null, color: c.observance.color || null, colorAlt: c.observance.color_alt || null,
-  precedence: c.observance.precedence ?? null, rank: c.observance.rank || null, kind: c.observance.kind || null, date: c.observance.date || null });
+  precedence: c.observance.precedence ?? null, rank: c.observance.rank || null, kind: c.observance.kind || null, date: c.observance.date || null,
+  // 저녁 전례(앱 설계서 R-6.1-evening — 12.24 의 성탄 밤 · 성 토요일의 부활밤)는 그날 낮의 후보가 아니다 — compare.py 가 가른다
+  evening: c.evening === true });
 const result = [];
 for (let d = from; d <= to; d = ctx.addDays(d, 1)) {
   const r = ctx.resolveDateIn(cal, d, ctx.transfersOf(cal, Number(d.slice(0, 4))));

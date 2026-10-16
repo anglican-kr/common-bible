@@ -217,6 +217,18 @@ test("calendarDay: 대표가 이름 없는 평일이면 그날 지키는 이름 
   assert.strictEqual(plain.primary.name, "연중 28주 목요일");
 });
 
+test("calendarDay: 저녁 전례(evening)는 칸 이름이 되지 않는다 — 12.24 평일 칸은 이름 없이, 성탄 밤은 줄에 「· 저녁」(PR #349 리뷰)", () => {
+  // 12.24 의 대표는 대림 평일(격자)이고 성탄 밤은 그날 저녁 후보다(설계서 R-6.1-evening) — 칸에 실으면 「성탄 밤」 이름에 그날 색(자)
+  // 점이 붙는다. 주일인 12.24 와 성 토요일(대표가 temporal 행)은 원래 저녁 후보를 고를 일이 없었다
+  const weekday = grid("advent-4-weekday-thu", "대림 4주 목요일");
+  const night = cand(obs("d1225-성탄-밤", "성탄 밤", { rank: "principal", precedence: 1, color: "white" }), "proper", { evening: true });
+  const d = ctx.calendarDay("2026-12-24", resolvedOf("2026-12-24", [weekday, night],
+    { coord: { season: "advent", week: 4, type: "weekday", weekday: "thu", year: "II" }, color: "violet", colors: ["violet"] }));
+  assert.strictEqual(d.cellName, "");
+  assert.strictEqual(ctx.dayAriaLabel(d, false), "12월 24일 목요일, 대림 4주 목요일, 자색");
+  same(d.others.map((o) => o.name + o.suffix), ["성탄 밤 · 저녁"]);   // 줄(2단계)에는 남는다
+});
+
 test("calendarDay: 고유명 평일(성주간 월~수 · 재의 수요일 후 목~토 — 좌표 (lent, null, weekday))은 격자여도 이름을 단다", () => {
   const holyMon = grid("lent-x-weekday-mon", "성주간 월요일");
   const d = ctx.calendarDay("2026-03-30", resolvedOf("2026-03-30", [holyMon],
