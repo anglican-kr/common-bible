@@ -181,7 +181,9 @@ function parsePath() {
 
   const parts = pathname.split("/");
   if (parts.length === 1) {
-    if (DIVISION_LABELS[parts[0]]) return { view: "division", division: parts[0] };
+    // Own keys only: a plain object also answers its inherited names (`/constructor` · `/toString` · `/__proto__`),
+    // which rendered the first tab under a page title like 「function Object() { [native code] }」(PR #353 리뷰).
+    if (Object.hasOwn(DIVISION_LABELS, parts[0])) return { view: "division", division: parts[0] };
     return { view: "chapters", bookId: parts[0] };
   }
   if (parts[1] === "prologue") return { view: "prologue", bookId: parts[0] };

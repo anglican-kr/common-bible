@@ -174,7 +174,8 @@ function setTitleWithChapterPicker(book, currentCh) {
 // ── BEGIN DIVISION ──
 // Exercised by tests/unit/views.test.js. Pure: loadBookOrder() is
 // the only side-effect (provided as a stub by the loader prelude).
-/** @type {Readonly<Record<string, string>>} */
+// Partial: routing.js looks it up with a URL segment, which can miss — the type says so instead of promising a string.
+/** @type {Readonly<Partial<Record<string, string>>>} */
 const DIVISION_LABELS = {
   old_testament: "구약",
   deuterocanon: "외경",
