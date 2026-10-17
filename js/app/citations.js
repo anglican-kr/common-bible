@@ -17,7 +17,11 @@
 // Cross-module dependencies:
 //   - window.appHelpers: el (DOM builder)
 
-window.appCitations = (() => {
+/** @typedef {import("../types").AppCitations} AppCitations */
+
+// The return type is declared so a member missing from `AppCitations` (types.d.ts) fails typecheck here, not
+// later in whichever module destructures it (helpers.js does the same for `AppHelpers`).
+window.appCitations = (/** @returns {AppCitations} */ () => {
   /** @typedef {import("../types").BibleVerseSegment} BibleVerseSegment */
   /** @typedef {import("../types").BibleVerse} BibleVerse */
   /** @typedef {import("../types").BibleVerseNote} BibleVerseNote */
