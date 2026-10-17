@@ -1,4 +1,5 @@
 ---
+pr: 350
 date: 2026-10-17
 branch: fix/known-issues-8
 title: "fix: PR #348 리뷰 후속 셋 — 고유명 평일은 엔진 표지 · 헤더 아이콘 SVG 하나 · 전례독서도 다시 그린 뒤 포커스 (known-issues §8)"
