@@ -164,9 +164,9 @@ Phase 1(성경 읽기) → Phase 2(기도서) → Phase 3(교회력 계산기) �
 
 `main` 은 보호 브랜치다 (2026-05-29 적용). 모든 변경은 feature 브랜치 → PR → 머지 흐름을 따른다.
 
-- **직접 push 금지** — 관리자(저장소 소유자) 포함 누구도 `main` 에 직접 push 불가 (`enforce_admins: true`).
-- **PR 필수** — `Unit tests` CI(`node --test tests/unit/*.test.js`) 통과해야 머지 가능. 승인자 수는 0이라 솔로 환경에서는 본인 PR 셀프 머지 OK.
-- **머지 방법** — rebase 또는 squash만 (저장소 설정, [[project_merge_policy]]). 머지 커밋 금지.
+- **직접 push 금지** — 관리자(저장소 소유자) 포함 누구도 검사를 거치지 않은 커밋을 `main`에 push할 수 없다 (`enforce_admins: true`). PR에서 필수 검사를 통과한 head를 그대로 FF push하는 것은 받아들여지지만(#354 · data#33에서 실측) 사용자가 따로 말할 때만 쓴다.
+- **PR 필수** — 필수 검사 `Unit tests`(유닛 `node --test tests/unit/*.test.js` + 타입 검사 `npm run typecheck`)와 `Change ledger`(원장)를 통과해야 머지 가능. 승인자 수는 0이라 솔로 환경에서는 본인 PR 셀프 머지 OK.
+- **머지 방법** — **squash**(사용자 결정 2026-10-17 — 「이제부터는 브랜치를 따서 작업한 건 스쿼시 머지를 하기로 하자」, [[project_merge_policy]]). 저장소 설정이 squash 커밋의 제목을 PR 제목으로(커밋이 하나면 그 커밋 제목), 본문을 커밋 메시지 목록으로 만들고 머지된 브랜치를 지운다. 머지 커밋은 저장소 설정이 막는다. rebase 머지는 쓰지 않는다 — GitHub가 SHA를 새로 쓰고 서명을 벗긴다.
 - **force push / 브랜치 삭제 금지**, PR 리뷰 코멘트 미해결 시 머지 차단.
 
 작업 표준 흐름:
@@ -178,8 +178,11 @@ git checkout -b <topic-branch>
 git push -u origin <topic-branch>
 gh pr create --title "..." --body-file docs/changes/<YYYY-MM-DD>-<slug>.md
 # 훅이 원장에 pr: N 을 적어 준다 → 커밋·push
-# CI(Unit tests + Change ledger) 통과 확인 후
-gh pr merge --rebase --delete-branch     # 또는 --squash
+# CI(Unit tests + Change ledger) 통과 · 사용자 확인 후 squash — 제목은 PR 제목 + 번호(REST)
+gh api -X PUT repos/anglican-kr/common-bible/pulls/<N>/merge -f merge_method=squash -f commit_title="<PR 제목> (#<N>)"
+git switch main && git pull --ff-only
+git diff <topic-branch> main --stat   # 비었는지 확인 — squash 뒤 브랜치는 main의 조상이 아니라 -d가 거절한다
+git branch -D <topic-branch>
 ```
 
 `main` 에 직접 commit 후 push 하면 `protected branch hook declined` 로 거부된다. 핫픽스도 동일 — 짧은 브랜치 + PR 로 통과.
