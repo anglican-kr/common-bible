@@ -40,10 +40,7 @@ const { _$, el, clearNode, emptyState } = window.appHelpers;
 const $app = _$("app");
 const PAGE_TITLE = "캘린더";
 
-/**
- * parsePath 가 /calendar 에서 내는 서술자(routing.js PARSE_PATH). `month` 가 null 이면 이번 달.
- * @typedef {{ view: "calendar", mode: "month", month: string | null }} CalendarRoute
- */
+/** parsePath 가 /calendar 에서 내는 서술자(routing.js PARSE_PATH — 정의는 types.d.ts `Route`). @typedef {import("../types").CalendarRoute} CalendarRoute */
 /**
  * 이름 하나 — 줄(주간 · 목록)의 이름 줄 원소. `away` 는 그날 지키지 않는 후보(옮겨 감 · 생략)라 흐리게 그린다.
  * @typedef {{ name: string, title: string, suffix: string, away: boolean }} CalendarName

@@ -454,14 +454,16 @@ export interface ColorSchemeEntry {
   iconBg: string;
 }
 
-// `data/books.json` parse shape. 73 entries; `division` partitions OT/NT/DC.
+// `data/books.json` parse shape. 75 entries; `division` partitions OT/NT/DC, plus
+// "liturgical" for the two prayer-book books (`lps` 전례시편 · `cant` 송가 — ADR-039)
+// that the reading UI hides (the division tabs list only the three).
 // `has_prologue` is true only for sir.
 export interface BookEntry {
   id: string;
   name_ko: string;
   short_name_ko: string;
   name_en: string;
-  division: "old_testament" | "new_testament" | "deuterocanon";
+  division: "old_testament" | "new_testament" | "deuterocanon" | "liturgical";
   chapter_count: number;
   has_prologue: boolean;
 }
@@ -503,7 +505,8 @@ export interface BibleVerse {
   range_end?: number;
   alt_ref?: number | null;
   lxx_only?: boolean;
-  chapter_ref?: string;
+  // 다른 장에서 옮겨 실린 절의 원래 장 번호(ADR-003 — 이사 40 의 41:6-7). 파이프라인이 정수로 낸다(parser.py).
+  chapter_ref?: number;
   stanza_break?: boolean;
   // ADR-039 — 전례시편·송가만. `versicle` = 번호 없는 후속 구절(¶, 앞 절의 번호를
   // 물려받는다 → 한 장에 같은 number 가 둘 이상 생긴다), `section` = 부(部) 번호로
@@ -545,6 +548,50 @@ export interface BiblePrologue {
   book_name_ko: string;
   paragraphs: string[];
 }
+
+// ── Route descriptor (js/app/routing.js parsePath, ADR-009) ─────────────────
+// What parsePath() reads off the URL — one member per view, discriminated by
+// `view`. route() narrows on it; the calendar · lectionary members are what
+// their renderers take.
+
+/** /calendar · /calendar/YYYY-MM — `month` 가 null 이면 이번 달. 값의 검사는 뷰가 한다(잘못된 값은 뷰의 안내 화면). */
+export interface CalendarRoute {
+  view: "calendar";
+  mode: "month";
+  month: string | null;
+}
+
+/** /lectionary · /lectionary/YYYY-MM-DD — `date` 가 null 이면 오늘. 쿼리의 범위 밖 · 깨진 값은 null(routing.js `positive`). */
+export interface LectionaryRoute {
+  view: "lectionary";
+  date: string | null;
+  obs: string | null;
+  track: 1 | 2 | null;
+  set: number | null;
+  collect: number | null;
+}
+
+export type Route =
+  | { view: "books" }
+  | { view: "search"; query: string; page: number; filterBooks: string[] }
+  | { view: "bookmark-read"; folderId: string | null }
+  | { view: "bookmarks" }
+  | { view: "settings" }
+  | CalendarRoute
+  | LectionaryRoute
+  | { view: "division"; division: string }
+  | { view: "chapters"; bookId: string }
+  | { view: "prologue"; bookId: string }
+  | {
+      view: "chapter";
+      bookId: string;
+      chapter: number;
+      highlightQuery: string | null;
+      highlightVerse: number | null;
+      highlightVerseEnd: number | null;
+      highlightVerseSpec: string | null;
+      resume: boolean;
+    };
 
 // ── Liturgical engine (js/app/liturgical-engine.js, ADR-037 §6) ─────────────
 // 엔진이 뷰·검색과 함께 쓰는 공유 타입(설계서 §3.2). 엔진 내부 계산용 shape
@@ -869,6 +916,9 @@ export interface AppStorage {
   saveAudioTime: (bookId: string, chapter: number, time: number) => void;
   loadAudioTime: (bookId: string, chapter: number) => number | null;
   clearAudioTime: () => void;
+  // Cite/note visibility (ADR-022 §6 — 인용 · 주석 표시 설정)
+  loadCiteShow: () => boolean;
+  saveCiteShow: (on: boolean) => void;
   // Audio book on/off (오디오 북 설정)
   loadAudioShow: () => boolean;
   saveAudioShow: (v: boolean) => void;
@@ -1107,6 +1157,12 @@ declare global {
     appViewsRouting: { [key: string]: any }; // Phase 7a aggregate (full type Phase 7b)
     readingContext: ReadingContext;
 
+    // verse-spec.js facade reached as `window.X` (views.js — appendVerses' DOM ids · the
+    // system-copy serializer). The other verse-spec facades are bare-global `function`
+    // declarations below.
+    serializeVerseRange: (firstNode: Node, lastNode: Node) => string;
+    verseInstanceKeys: (verses: ReadonlyArray<BibleVerse>) => string[];
+
     // Phase 7a constants (also declared as bare globals above for app.js's
     // Phase 7b territory). Window assignment is what views.js does.
 
@@ -1154,6 +1210,12 @@ declare global {
     closeDriveDisconnectModal?: () => void;
     renderBookmarkTree?: () => void;
     rerenderActiveBookmarkTree?: () => void;
+    // route() calls these on every navigation (routing.js). bookmark.js re-exposes the
+    // select-mode exit from bookmark-select.js; search.js owns the in-field book tokens.
+    exitBookmarkSelectMode?: () => void;
+    syncSearchFields?: () => void;
+    // Bookmark reading view (ADR-035, bookmark-read.js) — resolves to the page title.
+    renderBookmarkReadView: (folderId?: string | null) => Promise<string>;
     // Mobile tab-bar full-screen views (ADR-029 / P2). Always assigned at
     // module load; route() in views.js calls them on the mobile branch.
     renderBookmarksView: () => void;
@@ -1254,10 +1316,8 @@ declare global {
   function openDriveDisconnectModal(): void;
   function closeDriveDisconnectModal(): void;
   function clearAllCaches(): Promise<void>;
-  // parsePath returns a view-discriminated union with extra view-specific
-  // fields (page, resume, highlightQuery, etc.). Typed as `any` here until
-  // views.js (Phase 7) ships a precise discriminated-union type.
-  function parsePath(): any;
+  // routing.js — the view-discriminated route descriptor (`Route` above).
+  function parsePath(): Route;
   function route(): Promise<void>;
   function navigate(path: string): void;
   function setTitle(text: string): void;

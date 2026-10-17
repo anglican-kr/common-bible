@@ -1,5 +1,5 @@
-"use strict";
 // @ts-check
+"use strict";
 
 // Verse-spec utilities — extracted from bookmark.js (ADR-034 후속 PR1). Verse
 // spec parsing/serialization shared across modules: bookmark.js (save/copy),
@@ -198,7 +198,7 @@ function chapterMaxVerse(data) {
 
 /**
  * Content-derived identity of one verse instance.
- * @param {{ number: number, part?: string|null, alt_ref?: number|null, lxx_only?: boolean, versicle?: boolean, chapter_ref?: string|null }} v
+ * @param {{ number: number, part?: string|null, alt_ref?: number|null, lxx_only?: boolean, versicle?: boolean, chapter_ref?: number|null }} v
  * @returns {string}
  */
 function verseInstanceKey(v) {

@@ -1,5 +1,5 @@
-"use strict";
 // @ts-check
+"use strict";
 
 // ADR-022 citation + annotation chip rendering helpers.
 //
@@ -81,6 +81,7 @@ window.appCitations = (() => {
    * @returns {Set<string>} keys of the form `"<vi>:<si>"` that SHOULD render
    */
   function _computeCiteShowPositions(verses) {
+    /** @type {Array<{ vi: number, si: number, src: string, tr: string | null, par: string, vNum: number }>} */
     const flat = [];
     verses.forEach((v, vi) => {
       const segs = v.segments || [];
@@ -177,6 +178,11 @@ window.appCitations = (() => {
     return el("span", attrs, label);
   }
 
+  // Variant-style marker used when a note has no text anchor (typical case:
+  // "이 구절에 어떤 사본은 다음을 추가" — author wraps whitespace or empty
+  // in <note>...</note>). Rendered as a small ※ button at the verse end.
+  const VARIANT_MARKER = "※";
+
   /**
    * Walk an already-rendered chapter article and wrap each note's anchor
    * occurrence with a clickable button. The note body is stashed in a data
@@ -186,11 +192,6 @@ window.appCitations = (() => {
    * @param {HTMLElement} article  the `.chapter-text` article element
    * @param {ReadonlyArray<BibleVerse>} verses
    */
-  // Variant-style marker used when a note has no text anchor (typical case:
-  // "이 구절에 어떤 사본은 다음을 추가" — author wraps whitespace or empty
-  // in <note>...</note>). Rendered as a small ※ button at the verse end.
-  const VARIANT_MARKER = "※";
-
   function wrapNoteAnchorsInArticle(article, verses) {
     for (const v of verses) {
       if (!v.notes || !v.notes.length) continue;
@@ -575,6 +576,7 @@ window.appCitations = (() => {
     for (let d = 1; d <= maxDelta; d++) {
       for (const other of [ch + d, ch - d]) {
         if (other < 1 || other > chapterCount) continue;
+        /** @type {BibleChapter} */
         let data;
         try {
           const r = await fetch(`/data/bible/${bookId}-${other}.json`);
@@ -698,6 +700,8 @@ window.appCitations = (() => {
    * Append line text to `span`, splitting out a leading pilcrow (¶) as the
    * same `<span class="pilcrow">` the main render uses. Trailing space keeps
    * inter-verse spacing.
+   * @param {HTMLElement} span
+   * @param {string} raw
    */
   function _appendLineText(span, raw) {
     if (raw.startsWith("¶")) {

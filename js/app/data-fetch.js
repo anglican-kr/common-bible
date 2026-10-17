@@ -1,5 +1,5 @@
-"use strict";
 // @ts-check
+"use strict";
 
 // Data fetching — extracted from views.js (ADR-034 PR2, follow-up to
 // ADR-018). Leaf module: fetch wrappers + module-level caches (booksCache /

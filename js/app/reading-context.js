@@ -1,5 +1,5 @@
-"use strict";
 // @ts-check
+"use strict";
 
 // Cross-module transient state for the chapter view: which book/chapter the
 // user is currently reading, and whether they are in verse-selection mode

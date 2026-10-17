@@ -1,5 +1,5 @@
-"use strict";
 // @ts-check
+"use strict";
 
 // Bookmark core — extracted from bookmark.js (ADR-034 후속 PR2~4). DOM-free
 // bookmark logic: query/tree ops (QUERY block, loadBookmarks-backed), href/share
@@ -197,6 +197,7 @@ function _descendantIds(node, out = []) {
 // ── BEGIN BOOKMARK_HREF ──
 // Exercised by tests/unit/bookmark.test.js. Pure URL builder — verseSpec="all"
 // drops the verse segment so the link points at the whole chapter.
+/** @param {BookmarkTreeBookmark} bm @returns {string} */
 function _bookmarkHref(bm) {
   if (bm.verseSpec === "all") return `/${bm.bookId}/${bm.chapter}`;
   return `/${bm.bookId}/${bm.chapter}/${bm.verseSpec}`;
@@ -355,6 +356,7 @@ function sortBookmarkNodes(nodes) {
   if (mode === "manual") return list.slice();
   const asc = _bookmarkAscComparator(mode);
   const sign = getBookmarkSortDir(mode) === "desc" ? -1 : 1;
+  /** @param {BookmarkTreeNode} a @param {BookmarkTreeNode} b */
   const cmp = (a, b) => sign * asc(a, b);
   const folders = list.filter(n => n.type === "folder").sort(cmp);
   const marks   = list.filter(n => n.type !== "folder").sort(cmp);

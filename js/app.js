@@ -1,5 +1,5 @@
-"use strict";
 // @ts-check
+"use strict";
 // ADR-012 2차 적용 2라운드 종료 시점에 영구 활성화. Phase 8(2026-05-10)에
 // app.js가 ~280줄의 부트스트랩으로 축소된 후 추가됨. tsconfig.app.json은
 // 동시에 삭제됐고, 이제 메인 tsconfig.json(checkJs: false + 모듈별 opt-in)
@@ -174,10 +174,12 @@ function registerServiceWorker() {
   // Ask the waiting SW for the version it has cached, since loadVersion()
   // returns the version of the currently running app (served by the active SW).
   // Falls back to "" on timeout/error so the toast still renders.
+  /** @param {ServiceWorker} waitingSW @returns {Promise<string>} */
   function fetchWaitingVersion(waitingSW) {
     return new Promise((resolve) => {
       const channel = new MessageChannel();
       let settled = false;
+      /** @param {string | undefined} v — `version` of sw.js's GET_VERSION reply */
       const finish = (v) => {
         if (settled) return;
         settled = true;
@@ -194,6 +196,7 @@ function registerServiceWorker() {
     });
   }
 
+  /** @param {ServiceWorker} waitingSW */
   async function showUpdateToast(waitingSW) {
     // Prevent duplicate toasts
     if (document.getElementById("sw-update-toast")) return;
@@ -220,6 +223,7 @@ function registerServiceWorker() {
     document.body.appendChild(toast);
   }
 
+  /** @param {ServiceWorkerRegistration} reg */
   function trackInstalling(reg) {
     if (!reg.installing) return;
     reg.installing.addEventListener("statechange", () => {
@@ -232,6 +236,7 @@ function registerServiceWorker() {
   // visibilitychange/online also retrigger the check on tab return / reconnect,
   // since interval timers are heavily throttled in hidden tabs.
   const UPDATE_CHECK_INTERVAL_MS = 60 * 60 * 1000;
+  /** @param {ServiceWorkerRegistration} reg */
   function schedulePeriodicUpdate(reg) {
     let lastCheck = Date.now();
     const tick = () => {
