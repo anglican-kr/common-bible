@@ -896,10 +896,13 @@ def test_slow_redraw_leaves_focus_the_reader_moved_elsewhere(desktop_context):
 
 
 def test_invalid_date_shows_notice_not_crash(desktop_context):
+    """실패 화면의 글자는 산세리프 — 빈 상태가 .lectionary의 성서 본문 serif를 물려받던 것(DESIGN.md §6, 2026-10-17)."""
     page = desktop_context.new_page()
     _open(page, "lectionary/2026-13-99")
     assert page.inner_text(".empty-state-title") == "잘못된 날짜입니다"
     assert page.locator(".lect-reading").count() == 0
+    fonts = page.eval_on_selector_all(".empty-state-title, .empty-state-subtitle", "els => els.map(e => getComputedStyle(e).fontFamily)")
+    assert fonts and all("Noto Sans KR" in f and "Serif" not in f for f in fonts), fonts
 
 
 def test_malformed_percent_escape_shows_notice(desktop_context):

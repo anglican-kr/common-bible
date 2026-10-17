@@ -222,12 +222,16 @@ def test_month_fits_320px_without_horizontal_scroll(browser):
 # ── ⑦ 잘못된 달 · 자료 실패 · 데스크톱 입구 ──
 
 def test_invalid_month_shows_notice_with_link_to_this_month(desktop_context):
-    """/calendar/2026-13 · 계산 범위 밖 1500-01 — 「잘못된 날짜입니다」 + 이번 달 링크."""
+    """/calendar/2026-13 · 계산 범위 밖 1500-01 — 「잘못된 날짜입니다」 + 이번 달 링크.
+    링크는 전체 화면 실패의 다음 행동 — 높이가 터치 타깃(44px) 이상이다(DESIGN.md §6 · §8 — 그전엔 26px 칩)."""
     page = desktop_context.new_page()
     for bad in ("calendar/2026-13", "calendar/1500-01", "calendar/abc"):
         _open(page, bad)
         assert "잘못된 날짜입니다" in page.inner_text(".calendar")
-    page.locator(".cal-error-link a").click()
+    link = page.locator(".state-action a")
+    assert link.inner_text() == "이번 달 캘린더"
+    assert link.bounding_box()["height"] >= 44
+    link.click()
     page.wait_for_url(f"{BASE}/calendar")
     page.wait_for_selector(".cal-grid")
 

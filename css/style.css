@@ -1001,7 +1001,6 @@ a.cal-cell:focus-visible { background: var(--bg-card); }
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.cal-error-link { text-align: center; }
 
 /* In-page search input (mirrors the header #search-bar, used in #app). */
 #search-inpage-bar {
@@ -2686,8 +2685,10 @@ a.cal-cell:focus-visible { background: var(--bg-card); }
    style hero (ADR-030 P3), unified by ADR-032 / DESIGN.md §6 상태 컴포넌트. The
    builder is js/app/helpers.js `emptyState`; the icon slot normalizes any
    glyph's size + opacity, so contexts share the format while keeping their own
-   symbol. */
+   symbol. It sets its own sans-serif: inherited, it took the scripture serif
+   inside .lectionary (DESIGN.md §6 상태 컴포넌트). */
 .empty-state {
+  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -2716,6 +2717,36 @@ a.cal-cell:focus-visible { background: var(--bg-card); }
   line-height: var(--leading-snug);
   color: var(--text-secondary);
 }
+
+/* The one next step under a full-screen failure (DESIGN.md §6 「전체 화면 실패」):
+   a link when it goes elsewhere (the calendar's 「이번 달 캘린더」), a button when
+   it retries in place (「다시 불러오기」 — reloads the page). Same outlined pill
+   either way, a full touch target tall (§8). */
+.state-action {
+  margin: 0;
+  text-align: center;
+  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+}
+.state-action > a,
+.state-action > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--touch-target);
+  padding: 0 var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-size: var(--font-sm);
+  text-decoration: none;
+  cursor: pointer;
+}
+.state-action > a:hover,
+.state-action > a:focus-visible,
+.state-action > button:hover,
+.state-action > button:focus-visible { background: var(--bg-card); }
 
 /* 검색 방법 guide on the empty /search view (extends the ADR-030 P3 empty
    state): tappable example queries under the prompt. Centered column to match
@@ -4941,6 +4972,7 @@ body.tabbar-searching #search-inpage-bar { display: none; }
 }
 
 .error {
+  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
   text-align: center;
   padding: 3rem var(--space-4);
   color: var(--danger-text);

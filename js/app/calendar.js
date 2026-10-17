@@ -283,7 +283,8 @@ function commitError(msg, subtitle) {
   clearNode($app);
   const panel = el("div", { className: "calendar" });
   panel.appendChild(emptyState({ icon: null, title: msg, subtitle: subtitle || "" }));
-  panel.appendChild(el("p", { className: "cal-error-link" }, el("a", { className: "lect-today", href: "/calendar" }, "이번 달 캘린더")));
+  // 다음 행동 하나 — 다른 화면으로 가므로 링크(DESIGN.md §6 「전체 화면 실패」)
+  panel.appendChild(el("p", { className: "state-action" }, el("a", { href: "/calendar" }, "이번 달 캘린더")));
   $app.appendChild(panel);
 }
 
