@@ -3,14 +3,15 @@
 //
 // Loads citations.js in a vm context with stubbed window.appHelpers (`el`,
 // `clearNode`, `trapFocus`) and tests the pure helpers exposed on
-// window.appCitations. Sheet logic (DOM mounting, fetch) is out of scope for
-// unit tests — covered by e2e.
+// window.appCitations. Sheet logic (DOM mounting) is out of scope for
+// unit tests — covered by e2e. The relocation lookup's fetch is stubbed.
 //
 // Sections (one per `// ── <area> ──`):
 //   - _computeCiteShowPositions (dedup)
 //   - chipText
 //   - buildCiteChip
 //   - buildNoteElement
+//   - _findRelocated (ADR-003 — a verse printed in another chapter)
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -62,10 +63,12 @@ function makeStubEl() {
   };
 }
 
-function loadCitations() {
+/** @param {Record<string, unknown>} [globals] extra globals — `fetch` · `booksPromise` for _findRelocated */
+function loadCitations(globals = {}) {
   const ctx = {
     console, JSON, Date, Math, Object, Array, Set, Map, Promise, Error,
     String, Number, Boolean, parseInt, parseFloat,
+    ...globals,
   };
   vm.createContext(ctx);
   ctx.window = ctx;
@@ -315,3 +318,45 @@ test("buildCiteChip: aria-label includes display text", () => {
 // wrapNoteAnchorsInArticle and tooltip open/close are DOM-positioning logic
 // (TreeWalker, getBoundingClientRect, viewport math) — covered by e2e rather
 // than the vm stub harness here.
+
+// ── _findRelocated (ADR-003 — a verse printed in another chapter) ────────────
+// A cite whose verse is not in its own chapter file is looked up in the neighbouring chapters by `chapter_ref`.
+// The scan stops three chapters out (RELOCATION_MAX_DISTANCE) — before PR #353 리뷰(2026-10-17) a verse that is
+// nowhere fetched every chapter of the book one by one (149 for the Psalms). The data test
+// (citations.data.test.js) checks that every relocated verse in the real data lies within that distance.
+
+// A fake book: chapter files built from `chapters` ({ [n]: verses }), every fetched chapter number recorded.
+function relocationHarness(bookId, chapterCount, chapters) {
+  const fetched = [];
+  const c = loadCitations({
+    booksPromise: Promise.resolve([{ id: bookId, chapter_count: chapterCount }]),
+    fetch: async (url) => {
+      const n = Number(String(url).match(/-(\d+)\.json$/)[1]);
+      fetched.push(n);
+      return { ok: true, json: async () => ({ verses: chapters[n] ?? [{ number: 1 }] }) };
+    },
+  });
+  return { c, fetched };
+}
+
+test("_findRelocated: 어디에도 없는 절은 앞뒤 3장까지만 받고 멈춘다 — 책 전체를 받지 않는다", async () => {
+  const { c, fetched } = relocationHarness("ps", 150, {});
+  const r = await c._findRelocated("ps", 75, [{ startCh: 75, startV: 99, endCh: null, endV: null }]);
+  assert.equal(r, null);
+  assert.deepEqual([...fetched].sort((a, b) => a - b), [72, 73, 74, 76, 77, 78]);
+});
+
+test("_findRelocated: 책 끝 근처에서는 있는 장만 받는다", async () => {
+  const { c, fetched } = relocationHarness("ps", 150, {});
+  await c._findRelocated("ps", 149, [{ startCh: 149, startV: 99, endCh: null, endV: null }]);
+  assert.deepEqual([...fetched].sort((a, b) => a - b), [146, 147, 148, 150]);
+});
+
+test("_findRelocated: 3장 떨어진 장에 옮겨 실린 절은 찾는다 — 욥기 27장의 24:18-24 꼴", async () => {
+  const printed = [18, 19, 20].map((n) => ({ number: n, chapter_ref: 24 }));
+  const { c, fetched } = relocationHarness("job", 42, { 27: [{ number: 17 }, ...printed, { number: 18 }] });
+  const r = await c._findRelocated("job", 24, [{ startCh: 24, startV: 18, endCh: null, endV: 20 }]);
+  assert.equal(r?.fromChapter, 27);
+  assert.deepEqual(r.verses.map((v) => v.number), [18, 19, 20]);   // 27장 제 절(chapter_ref 없음)은 섞이지 않는다
+  assert.equal(fetched.at(-1), 27);                                  // 찾은 장에서 멈춘다
+});

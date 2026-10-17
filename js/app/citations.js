@@ -537,14 +537,20 @@ window.appCitations = (/** @returns {AppCitations} */ () => {
     return allVerses.filter((v) => wanted.has(v.number));
   }
 
+  // How far the printed text moves a verse from its own chapter (ADR-003). The farthest in the data today is
+  // 욥기 27 holding 24:18-24 — three chapters; tests/unit/citations.data.test.js finds every relocated verse in
+  // the data within this distance, so a farther one fails there, not silently here. Past it the scan stops: a cite
+  // whose verse is nowhere (a numbering gap) used to fetch every chapter of the book one by one — 149 for the
+  // Psalms (PR #353 리뷰, 2026-10-17).
+  const RELOCATION_MAX_DISTANCE = 3;
+
   /**
    * ADR-003 cross-chapter relocation lookup. When a cite names (ch, v) but
    * ch's own chapter file has no such v, the verse physically lives in a
    * neighboring chapter file marked with `chapter_ref === ch` (e.g.
    * 호세 13:14 sits inside hos-14.json between 14:5 and 14:6 because that
-   * is where the printed text places it). Scan outward (±1, ±2, …) until
-   * a home chapter is found. ADR-003 lists six such relocations; most are
-   * adjacent but 1역대 9:33 lives 3 chapters away in 1chr-6.
+   * is where the printed text places it). Scan outward (±1, ±2, ±3 —
+   * `RELOCATION_MAX_DISTANCE`) until a home chapter is found.
    *
    * Returns both the matching verses *and* the physical chapter data so
    * the caller can render the printed reading position when the user
@@ -576,8 +582,7 @@ window.appCitations = (/** @returns {AppCitations} */ () => {
     const chapterCount = book?.chapter_count ?? 0;
     if (chapterCount === 0) return null;
 
-    const maxDelta = Math.max(ch - 1, chapterCount - ch);
-    for (let d = 1; d <= maxDelta; d++) {
+    for (let d = 1; d <= RELOCATION_MAX_DISTANCE; d++) {
       for (const other of [ch + d, ch - d]) {
         if (other < 1 || other > chapterCount) continue;
         /** @type {BibleChapter} */
@@ -773,8 +778,8 @@ window.appCitations = (/** @returns {AppCitations} */ () => {
         const slice = _selectVerses(data.verses, parsed.parts, ch);
         // ADR-022 §2 + ADR-003: when the chapter file lacks the cited
         // verse, the verse physically lives in a neighboring chapter file
-        // with chapter_ref === ch (호세 13:14, 잠언 6:22, 이사 41:6,
-        // 1역대 9:33, 욥 26:5, 욥 26 → 27 are the six known cases).
+        // with chapter_ref === ch (e.g. 호세 13:14 in hos-14 — every such
+        // verse in the data: tests/unit/citations.data.test.js).
         // Expanded view shows the *physical* home chapter so the reader
         // sees the printed reading position ADR-003 preserves.
         const relocated = slice.length === 0
@@ -1111,6 +1116,7 @@ window.appCitations = (/** @returns {AppCitations} */ () => {
 
   return {
     _computeCiteShowPositions,
+    _findRelocated,   // test seam — tests/unit/citations{,.data}.test.js
     chipText,
     buildCiteChip,
     wrapNoteAnchorsInArticle,
