@@ -1,4 +1,5 @@
 ---
+pr: 352
 date: 2026-10-17
 branch: fix/router-focus-restore
 title: "fix: 다시 그린 뒤 포커스를 라우터가 돌려준다 — 구분 탭 · 검색 쪽 링크까지 · 「본문 바로가기」는 라우트가 아니다 · 검색 쪽 안내 (known-issues §10 · §5)"
