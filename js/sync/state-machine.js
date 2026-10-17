@@ -22,7 +22,9 @@
 //   "no_token"  — guard tripped  → ERROR (deterministic)
 //   "exception" — JS error       → ERROR (deterministic)
 //   other       — any other failed request (network · 403 · 429 · 5xx …, as
-//                  `http_<status>`) → backoff (max 5), then OFFLINE
+//                  `http_<status>`) → backoff (max 5); out of retries, a
+//                  network failure (`http_0`) parks in OFFLINE, an HTTP one
+//                  goes back to IDLE (the next request retries)
 //
 // Authentication flow (uniform across desktop/Android/iOS):
 //   • Cold start with refresh token in IDB → silent refresh (background fetch
@@ -597,6 +599,20 @@ function createSyncMachine({ onStateChange } = {}) {
     }
   }
 
+  /** @param {number | undefined} status */
+  function _is2xx(status) { return typeof status === "number" && status >= 200 && status < 300; }
+
+  // The failure branches every upload shares — 401 re-auth, 412 (another device wrote first: drop the
+  // cache so the retry takes the full download + merge path), any other failure as `http_<status>`.
+  // True when it dispatched; the caller returns.
+  /** @param {boolean} ok @param {number} status */
+  function _uploadFailed(ok, status) {
+    if (status === 401) { dispatch({ type: "SYNC_FAIL", reason: "401" });              return true; }
+    if (status === 412) { _clearCache(); dispatch({ type: "SYNC_FAIL", reason: "412" }); return true; }
+    if (!ok)            { dispatch({ type: "SYNC_FAIL", reason: `http_${status}` });   return true; }
+    return false;
+  }
+
   // DISABLE (signOut · disable) can land during any network await of a cycle. Sync is off from then
   // on, so the rest of the cycle must not touch Drive or local data — no upload built after the await
   // (it would carry edits made after sign-out, sent with the token already cleared), no remote doc
@@ -634,8 +650,8 @@ function createSyncMachine({ onStateChange } = {}) {
         if (_leftSyncing("find_file")) return;
         // Only a successful lookup may read as "no file yet" — a failed one retries instead of creating a
         // second sync.json next to the one it could not see.
-        if (found.status === 401)                      { dispatch({ type: "SYNC_FAIL", reason: "401" });                   return; }
-        if (found.status < 200 || found.status >= 300) { dispatch({ type: "SYNC_FAIL", reason: `http_${found.status}` }); return; }
+        if (found.status === 401)   { dispatch({ type: "SYNC_FAIL", reason: "401" });                   return; }
+        if (!_is2xx(found.status))  { dispatch({ type: "SYNC_FAIL", reason: `http_${found.status}` }); return; }
         fileId = found.fileId;
       } else {
         L.log({ kind: "ACTION", event: "FIND_FILE_CACHED", fileId: L.mask("fileId", fileId) });
@@ -649,8 +665,7 @@ function createSyncMachine({ onStateChange } = {}) {
         const { ok, status } = await T.uploadSyncFile(_token, V2.buildSyncPayload(_deviceId));
         L.log({ kind: "NETWORK", event: "UPLOAD_NEW", ok, status });
         if (_leftSyncing("upload_new")) return;
-        if (status === 401)             { dispatch({ type: "SYNC_FAIL", reason: "401" });              return; }
-        if (!ok)                        { dispatch({ type: "SYNC_FAIL", reason: `http_${status}` });   return; }
+        if (_uploadFailed(ok, status)) return;
         dispatch({ type: "SYNC_DONE" });
         return;
       }
@@ -680,7 +695,7 @@ function createSyncMachine({ onStateChange } = {}) {
       // Every other failure retries with backoff — Drive asks for it on 403 rate limits · 429 · 5xx, and a
       // 400 or another 403 stops at the retry cap. `doc` is null on any failure, so falling through would
       // read it as "no remote doc" and settle with SYNC_DONE.
-      if (typeof dlStatus === "number" && dlStatus !== 304 && (dlStatus < 200 || dlStatus >= 300)) {
+      if (typeof dlStatus === "number" && dlStatus !== 304 && !_is2xx(dlStatus)) {
         dispatch({ type: "SYNC_FAIL", reason: `http_${dlStatus}` });
         return;
       }
@@ -712,15 +727,7 @@ function createSyncMachine({ onStateChange } = {}) {
         );
         L.log({ kind: "NETWORK", event: "UPLOAD_UPDATE", ok, status });
         if (_leftSyncing("upload_update")) return;
-        if (status === 401) { dispatch({ type: "SYNC_FAIL", reason: "401" }); return; }
-        if (status === 412) {
-          // Lost race: another device wrote between our 304 and our PATCH.
-          // Drop cache so the retry takes the full download+merge path.
-          _clearCache();
-          dispatch({ type: "SYNC_FAIL", reason: "412" });
-          return;
-        }
-        if (!ok)            { dispatch({ type: "SYNC_FAIL", reason: `http_${status}` }); return; }
+        if (_uploadFailed(ok, status)) return;   // 412: another device wrote between our 304 and our PATCH
         // What was uploaded — an edit saved during the PATCH is newer and goes up next cycle.
         _saveCache({ fileId, etag: newEtag, syncedMaxU: V2.maxU(payload) });
         dispatch({ type: "SYNC_DONE" });
@@ -736,9 +743,7 @@ function createSyncMachine({ onStateChange } = {}) {
         const { ok, status, etag: newEtag } = await T.uploadSyncFile(_token, payload, { fileId, ifMatch: etag });
         L.log({ kind: "NETWORK", event: "UPLOAD_UPDATE", ok, status });
         if (_leftSyncing("upload_upgrade")) return;
-        if (status === 401)             { dispatch({ type: "SYNC_FAIL", reason: "401" });              return; }
-        if (status === 412)             { _clearCache(); dispatch({ type: "SYNC_FAIL", reason: "412" }); return; }
-        if (!ok)                        { dispatch({ type: "SYNC_FAIL", reason: `http_${status}` });   return; }
+        if (_uploadFailed(ok, status)) return;
         _saveCache({ fileId, etag: newEtag, syncedMaxU: V2.maxU(payload) });
         dispatch({ type: "SYNC_DONE" });
         return;
@@ -772,9 +777,7 @@ function createSyncMachine({ onStateChange } = {}) {
         const { ok, status, etag: newEtag } = await T.uploadSyncFile(_token, payload, { fileId, ifMatch: etag });
         L.log({ kind: "NETWORK", event: "UPLOAD_UPDATE", ok, status });
         if (_leftSyncing("upload_merged")) return;
-        if (status === 401)             { dispatch({ type: "SYNC_FAIL", reason: "401" });              return; }
-        if (status === 412)             { _clearCache(); dispatch({ type: "SYNC_FAIL", reason: "412" }); return; }
-        if (!ok)                        { dispatch({ type: "SYNC_FAIL", reason: `http_${status}` });   return; }
+        if (_uploadFailed(ok, status)) return;
         _saveCache({ fileId, etag: newEtag, syncedMaxU: V2.maxU(payload) });
       } else {
         // No upload needed — local now matches remote post-merge. Cache the
@@ -982,11 +985,18 @@ function createSyncMachine({ onStateChange } = {}) {
       _transition(S.ERROR, {}, event);
       _refreshUI();
     } else {
-      // Network / 5xx — exponential backoff, then OFFLINE.
+      // Any other failed request — exponential backoff (Drive asks for it on 403 rate limits · 429 · 5xx).
+      // A device that is offline, or out of retries on a network failure (`http_0`), parks in OFFLINE —
+      // the `online` event or the next request (requestSync) retries. Out of retries on an HTTP failure
+      // goes back to IDLE: the server did answer, and an `online` event never comes on a connected
+      // device, so OFFLINE would stop syncing for the rest of the session.
       const n = _ctx.netFails + 1;
-      if (n > MAX_NET_RETRIES || !navigator.onLine) {
+      if (!navigator.onLine || (n > MAX_NET_RETRIES && reason === "http_0")) {
         _transition(S.OFFLINE, {}, event);
         _refreshUI();
+      } else if (n > MAX_NET_RETRIES) {
+        L.log({ kind: "ACTION", event: "RETRIES_EXHAUSTED", reason });
+        _transition(S.IDLE, {}, event);   // counts reset — the next request starts afresh
       } else {
         const timer = _makeBackoffTimer(n);
         _transition(S.IDLE, { netFails: n, backoffTimer: timer }, event);
@@ -1031,6 +1041,9 @@ function createSyncMachine({ onStateChange } = {}) {
     const isPoll = typeof throttleMs === "number" && throttleMs > 0;
     // A poll during a cycle is already served by it; a user-driven request is kept for one more cycle.
     if (_state === S.SYNCING && !isPoll) { _resyncRequested = true; return; }
+    // OFFLINE waits for the `online` event, which never fires on a device that stayed online (requests
+    // that kept failing while connected) — any request retries from there instead.
+    if (_state === S.OFFLINE && navigator.onLine) { dispatch({ type: "NET_RECOVERED" }); return; }
     if (_state !== S.IDLE) return;
     if (isPoll && _lastSyncEndAt > 0) {
       const elapsed = Date.now() - _lastSyncEndAt;

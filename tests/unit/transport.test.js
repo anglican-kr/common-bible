@@ -414,3 +414,28 @@ test("23. refreshAccessToken: refresh_token이 빈 문자열로 와도 null로 �
   // 빈 문자열은 "rotation 없음"과 동일하게 처리 — 호출자는 기존 값 유지
   assert.equal(result.refresh_token, null);
 });
+
+// ── Drive REST — 실패를 「없음」 · 「성공」과 같은 값으로 돌려주지 않는다 ─────────
+// coding-pitfalls §28. 파일 찾기는 「없음」(2xx · fileId null)과 「실패」(그 밖의 status, 0 = 네트워크 ·
+// 읽지 못한 응답)를 가르고, 본문을 읽지 못한 2xx 내려받기는 status 0(실패)이다.
+
+/** @param {number} status @param {() => Promise<unknown>} json */
+const driveResponse = (status, json) => async () => ({
+  ok: status >= 200 && status < 300, status,
+  headers: { get: () => null },
+  json,
+});
+
+test("24. findSyncFileId: 2xx 의 빈 목록은 「없음」, 실패는 그 status, 읽지 못한 응답은 0", async () => {
+  const empty = loadTransport({ fetch: driveResponse(200, async () => ({ files: [] })) });
+  assert.deepEqual(norm(await empty.transport.findSyncFileId("t")), { fileId: null, status: 200 });
+  const failed = loadTransport({ fetch: driveResponse(503, async () => ({})) });
+  assert.deepEqual(norm(await failed.transport.findSyncFileId("t")), { fileId: null, status: 503 });
+  const unreadable = loadTransport({ fetch: driveResponse(200, async () => { throw new SyntaxError("bad json"); }) });
+  assert.deepEqual(norm(await unreadable.transport.findSyncFileId("t")), { fileId: null, status: 0 });
+});
+
+test("25. downloadSyncFile: 본문을 읽지 못한 2xx 는 status 0(실패) — 「원격 없음」이 아니다", async () => {
+  const { transport } = loadTransport({ fetch: driveResponse(200, async () => { throw new SyntaxError("cut"); }) });
+  assert.deepEqual(norm(await transport.downloadSyncFile("t", "fid")), { doc: null, etag: null, status: 0 });
+});

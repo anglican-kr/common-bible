@@ -1604,3 +1604,58 @@ test("61. 사이클 도중의 폴(requestSync({throttleMs}))은 쌓지 않는다
   await drain(8);
   assert.equal(downloads, 1, "폴은 다시 돌지 않는다");
 });
+
+// ── Group 17: 다시 시도가 끝난 뒤 — 연결된 기기에서 동기화가 멈추지 않는다 ────
+// 머지 전 /code-review(사용자 실행) 3번. HTTP 실패(429 · 403 rate limit · 5xx)가 다섯 번 넘게 이어지면 OFFLINE
+// 으로 갔는데, OFFLINE 은 `online` 이벤트로만 빠져나와 연결된 기기에서는 그 세션 내내 동기화가 멈췄다.
+// 이제 HTTP 실패는 IDLE 로 돌아가 다음 요청이 다시 돌고, 네트워크 실패로 OFFLINE 이 된 뒤에도 기기가
+// 온라인이면 다음 요청이 다시 시도한다(NET_RECOVERED).
+
+/** 가짜 타이머로 백오프를 끝까지 돈다 — 첫 사이클 + 재시도 다섯 번. */
+async function exhaustRetries(drain, fireAllTimers) {
+  await drain(6);
+  for (let i = 0; i < 6; i++) { fireAllTimers(); await drain(6); }
+}
+
+test("62. HTTP 실패(429)가 다섯 번 넘게 이어지면 OFFLINE 이 아니라 IDLE — 다음 요청이 다시 돈다", async () => {
+  let downloads = 0;
+  const { machine, drain, fireAllTimers, logEntries } = loadMachine({
+    initialRefreshToken: "rt-x",
+    useRealTimers: false,
+    initialStorage: {
+      [CACHE_FILE_ID_KEY]: "fid-cached",
+      [CACHE_ETAG_KEY]: '"e-cached"',
+      [CACHE_SYNCED_U_KEY]: "0",
+    },
+    overrideStubs: { T: { downloadSyncFile: async () => { downloads++; return { doc: null, etag: null, status: 429 }; } } },
+  });
+  machine.enable();
+  await exhaustRetries(drain, fireAllTimers);
+  assert.equal(machine.getState(), "IDLE", "OFFLINE 에 갇히지 않는다");
+  assert.ok(logEntries.some((e) => e.event === "RETRIES_EXHAUSTED"), "재시도를 다 썼다는 로그");
+  const before = downloads;
+  machine.requestSync();
+  await drain(6);
+  assert.equal(downloads, before + 1, "다음 요청이 다시 돈다");
+});
+
+test("63. 네트워크 실패(status 0)로 OFFLINE 이 된 뒤에도 온라인이면 다음 요청이 다시 시도한다", async () => {
+  let downloads = 0;
+  const { machine, drain, fireAllTimers } = loadMachine({
+    initialRefreshToken: "rt-x",
+    useRealTimers: false,
+    initialStorage: {
+      [CACHE_FILE_ID_KEY]: "fid-cached",
+      [CACHE_ETAG_KEY]: '"e-cached"',
+      [CACHE_SYNCED_U_KEY]: "0",
+    },
+    overrideStubs: { T: { downloadSyncFile: async () => { downloads++; return { doc: null, etag: null, status: 0 }; } } },
+  });
+  machine.enable();
+  await exhaustRetries(drain, fireAllTimers);
+  assert.equal(machine.getState(), "OFFLINE", "네트워크 실패는 OFFLINE");
+  const before = downloads;
+  machine.requestSync();   // 기기는 온라인이라 `online` 이벤트가 오지 않는다
+  await drain(8);
+  assert.equal(downloads, before + 1, "NET_RECOVERED 로 다시 시도한다");
+});

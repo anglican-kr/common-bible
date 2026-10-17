@@ -426,7 +426,9 @@ async function downloadSyncFile(token, fileId, { ifNoneMatch } = {}) {
     if (status === 304) return { doc: null, etag: null, status: 304 };
     if (!ok) return { doc: null, etag: null, status };
     let doc;
-    try { doc = await res.json(); } catch { return { doc: null, etag: null, status }; }
+    // An unreadable body (a connection cut mid-body, a body that is not JSON) is a failed download —
+    // status 0 like a network error; read as the 2xx it came with, it settled as "no remote doc".
+    try { doc = await res.json(); } catch { return { doc: null, etag: null, status: 0 }; }
     return { doc, etag, status };
   } catch { return { doc: null, etag: null, status: 0 }; }
 }
