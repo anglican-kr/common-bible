@@ -2,7 +2,7 @@
 
 - 일시: 2026-05-06
 - 개정: 2026-05-10 (2차 적용 완료 — `js/app.js` + `js/app/*.js` 9개 모듈 + `js/audio-cache.js` + `js/drive-sync.js` 모두 `// @ts-check` 영구 활성화, ADR-018 모듈 분할과 동행. 임시 `tsconfig.app.json` 삭제, 메인 `tsconfig.json` 단일 검증)
-- 상태: 승인됨 (1차 + 2차 적용 완료 — 모든 클라이언트 JS `// @ts-check` 영구 활성화)
+- 상태: 승인됨 (1차 + 2차 적용 완료 — 클라이언트 JS `// @ts-check` 영구 활성화. 지시문이 둘째 줄이라 검사 밖이던 22개 파일은 2026-10-17 부터 묶음별로 편입 중 — `docs/known-issues.md` §7)
 
 ## 결정
 
@@ -34,8 +34,13 @@ ADR-001은 "프레임워크 없는 Vanilla JS"를 선언하고 있고 ADR-005·0
 
 ```js
 // @ts-check
+"use strict";
 // ...module description...
 ```
+
+`// @ts-check` 는 파일의 **어떤 문(statement)보다도 앞**에 둔다 — 관례는 첫 줄. 앞에 주석만 있으면 괜찮지만, `"use strict";` 같은 문이 먼저 오면 TypeScript 는 지시문을 읽지 않고 그 파일을 오류 없이 검사에서 뺀다(`checkJs: false` 라 지시문이 없는 파일과 같다). 2026-10-15 에 22개 파일이 이 꼴로 검사 밖이었던 것이 드러났다(`docs/known-issues.md` §7 — 2026-10-17 부터 묶음별 편입). 새 파일 · 순서를 바꾼 파일은 타입 오류를 하나 일부러 넣어 `npm run typecheck` 가 그 파일에서 잡는지 확인한다.
+
+창 객체 꾸러미(`window.appX = (() => { … return { … }; })()`)는 IIFE 에 `@returns {AppX}`(`js/types.d.ts` 의 인터페이스)를 단다 — 반환 객체에 인터페이스에 없는 멤버가 있으면, 그것을 구조 분해하는 다른 모듈이 아니라 정의한 자리에서 오류가 난다(helpers · storage · settings-ui · citations · parallels · overlay).
 
 ### 도메인 타입 단일 출처
 
