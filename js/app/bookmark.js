@@ -173,6 +173,7 @@ $driveDisconnectScrim.addEventListener("click", closeDriveDisconnectModal);
 
 $driveDisconnectKeep.addEventListener("click", () => {
   closeDriveDisconnectModal();
+  window.driveSync?.clearDeletePending();   // the user keeps the file — an earlier unfinished delete no longer applies
   window.driveSync?.signOut();
 });
 
@@ -180,7 +181,8 @@ $driveDisconnectDelete.addEventListener("click", async () => {
   closeDriveDisconnectModal();
   const deleted = await window.driveSync?.deleteRemoteFile();
   window.driveSync?.signOut();
-  // The disconnect goes ahead either way — say so when the file stayed on Drive, so it can be deleted later.
+  // The disconnect goes ahead either way — say so when the file stayed on Drive (false; null = there was
+  // nothing to delete, e.g. already disconnected). Settings keeps a note until it is deleted.
   if (deleted === false) {
     window._showSyncSnackbar?.("연결은 해제했지만 Drive의 동기화 파일은 삭제하지 못했습니다. 다시 연결한 뒤 「파일도 삭제」를 눌러 주세요.");
   }

@@ -426,16 +426,31 @@ const driveResponse = (status, json) => async () => ({
   json,
 });
 
-test("24. findSyncFileId: 2xx 의 빈 목록은 「없음」, 실패는 그 status, 읽지 못한 응답은 0", async () => {
+test("24. findSyncFileId: 2xx 의 빈 목록은 「없음」, 실패는 그 status, 읽지 못한 응답은 0 · 찾은 id 는 모두", async () => {
   const empty = loadTransport({ fetch: driveResponse(200, async () => ({ files: [] })) });
-  assert.deepEqual(norm(await empty.transport.findSyncFileId("t")), { fileId: null, status: 200 });
+  assert.deepEqual(norm(await empty.transport.findSyncFileId("t")), { fileId: null, fileIds: [], status: 200 });
   const failed = loadTransport({ fetch: driveResponse(503, async () => ({})) });
-  assert.deepEqual(norm(await failed.transport.findSyncFileId("t")), { fileId: null, status: 503 });
+  assert.deepEqual(norm(await failed.transport.findSyncFileId("t")), { fileId: null, fileIds: [], status: 503 });
   const unreadable = loadTransport({ fetch: driveResponse(200, async () => { throw new SyntaxError("bad json"); }) });
-  assert.deepEqual(norm(await unreadable.transport.findSyncFileId("t")), { fileId: null, status: 0 });
+  assert.deepEqual(norm(await unreadable.transport.findSyncFileId("t")), { fileId: null, fileIds: [], status: 0 });
+  const two = loadTransport({ fetch: driveResponse(200, async () => ({ files: [{ id: "A" }, { id: "B" }] })) });
+  assert.deepEqual(norm(await two.transport.findSyncFileId("t")), { fileId: "A", fileIds: ["A", "B"], status: 200 },
+    "두 기기의 첫 동기화가 겹쳐 생긴 둘 — 「파일도 삭제」는 둘 다 지운다");
 });
 
 test("25. downloadSyncFile: 본문을 읽지 못한 2xx 는 status 0(실패) — 「원격 없음」이 아니다", async () => {
   const { transport } = loadTransport({ fetch: driveResponse(200, async () => { throw new SyntaxError("cut"); }) });
   assert.deepEqual(norm(await transport.downloadSyncFile("t", "fid")), { doc: null, etag: null, status: 0 });
+});
+
+test("26. uploadSyncFile: 새 파일 만들기는 응답의 id 를 돌려준다 — 목록을 거치지 않고 캐시 · 삭제에 쓴다", async () => {
+  const { transport, fetchCalls } = loadTransport({ fetch: driveResponse(200, async () => ({ kind: "drive#file", id: "fid-new" })) });
+  const res = norm(await transport.uploadSyncFile("t", { schemaVersion: 2 }));
+  assert.equal(res.fileId, "fid-new");
+  assert.equal(res.ok, true);
+  assert.ok(String(fetchCalls[0].url).includes("uploadType=multipart"), "만들기(multipart)");
+  const unreadable = loadTransport({ fetch: driveResponse(200, async () => { throw new SyntaxError("cut"); }) });
+  const r2 = norm(await unreadable.transport.uploadSyncFile("t", { schemaVersion: 2 }));
+  assert.equal(r2.ok, true, "본문을 못 읽어도 만들기는 됐다 — 다음 찾기가 그 파일을 본다");
+  assert.equal(r2.fileId, undefined);
 });

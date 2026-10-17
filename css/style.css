@@ -1126,6 +1126,16 @@ a.cal-cell:focus-visible { background: var(--bg-card); }
   white-space: normal;
 }
 
+/* Unfinished 「파일도 삭제」 — a lasting line under the drive row (the snackbar at the time is gone in
+   seconds). Caption scale, like the toggle captions. */
+.settings-drive-note {
+  margin: 0;
+  padding: 0 0 var(--space-1);
+  font-size: var(--font-xs);
+  line-height: var(--leading-normal);
+  color: var(--text-secondary);
+}
+
 .settings-drive-diag-btn {
   background: none;
   border: none;

@@ -387,7 +387,9 @@ async function driveFetch(path, { token, method = "GET", body, headers = {}, ifM
 
 // Looks up appDataFolder/sync.json. `status` tells "no file yet" (2xx with fileId null) apart from a
 // failed lookup (any other status; 0 = network error or an unreadable body) — read as "no file", a
-// failure made the sync cycle create a second sync.json next to the one it could not see.
+// failure made the sync cycle create a second sync.json next to the one it could not see. `fileIds`
+// lists every sync.json found (two devices' first syncs can each create one): the cycle uses the first,
+// 「파일도 삭제」 deletes them all.
 /**
  * @param {string} token
  * @returns {Promise<import("../types").DriveFindResult>}
@@ -398,11 +400,14 @@ async function findSyncFileId(token) {
       "/files?spaces=appDataFolder&fields=files(id)&q=name='sync.json'",
       { token }
     );
-    if (!ok) return { fileId: null, status };
+    if (!ok) return { fileId: null, fileIds: [], status };
     let data;
-    try { data = await res.json(); } catch { return { fileId: null, status: 0 }; }
-    return { fileId: data.files?.[0]?.id ?? null, status };
-  } catch { return { fileId: null, status: 0 }; }
+    try { data = await res.json(); } catch { return { fileId: null, fileIds: [], status: 0 }; }
+    /** @type {string[]} */
+    const fileIds = [];
+    for (const f of data.files ?? []) if (typeof f?.id === "string") fileIds.push(f.id);
+    return { fileId: fileIds[0] ?? null, fileIds, status };
+  } catch { return { fileId: null, fileIds: [], status: 0 }; }
 }
 
 // Returns { doc, etag, status } or { doc: null, etag: null, status } on any
@@ -472,6 +477,14 @@ async function uploadSyncFile(token, body, { fileId, ifMatch } = {}) {
         body: form,
       });
       etag = res.headers.get("ETag");
+      // The create answers with the new file's metadata — its id lets the cycle cache the file without
+      // a files.list round trip, and lets 「파일도 삭제」 delete it even before the listing shows it.
+      if (res.ok) {
+        try {
+          const created = await res.json();
+          if (typeof created?.id === "string") return { ok: true, status: res.status, etag: etag ?? null, fileId: created.id };
+        } catch { /* body unreadable — the file exists all the same; the next lookup finds it */ }
+      }
     }
     return { ok: res.ok, status: res.status, etag: etag ?? null };
   } catch { return { ok: false, status: 0, etag: null }; }

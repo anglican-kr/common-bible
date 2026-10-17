@@ -89,6 +89,17 @@ window.addEventListener("online", () => {
   if (_machine.isEnabled()) _machine.dispatch({ type: "NET_RECOVERED" });
 });
 
+// ── Another tab signed out ────────────────────────────────────────────────────
+// The sign-in flag is shared by every tab, the machine is per tab. When another tab signs out (or starts
+// 「파일도 삭제」) the flag turns "0" — stop here too, or this tab's next cycle would find no cached file
+// and re-create sync.json with every bookmark.
+window.addEventListener("storage", (e) => {
+  if (e.key !== "bible-drive-sync" || e.newValue !== "0" || !_machine.isEnabled()) return;
+  window.syncDebugLog?.log({ kind: "ACTION", event: "SIGNED_OUT_ELSEWHERE" });
+  _clearUploadTimer();
+  _machine.disable();
+});
+
 // ── Snackbar (UI notification, called by state machine and other modules) ─────
 // Uses --bg-card surface so the toast harmonizes with the page background
 // across themes; --border and a soft shadow keep it readable on cream/white.
@@ -175,6 +186,7 @@ function initDriveSync() {
 // Called by settings popover "연결" button.
 function signIn() {
   const T = window.syncTransport;
+  clearDeletePending();   // reconnecting puts the file back in use — the note no longer applies
   localStorage.setItem("bible-drive-sync", "1");
   // Reset attempt counter — this is an explicit user-initiated reconnect, so
   // any prior loop-cap should not block it. The cap exists to defend against
@@ -207,13 +219,34 @@ function signOut() {
   _machine.disable();
 }
 
-// Called by disconnect modal "파일도 삭제" path — signOut() follows. Resolves true when Drive's sync file is
-// gone; sync stops first so no cycle puts it back (state-machine.js deleteRemoteFile).
-/** @returns {Promise<boolean>} */
+// A 「파일도 삭제」 that has not been confirmed — set before it starts, cleared when the delete succeeds,
+// the user reconnects (signIn) or keeps the file. Survives a reload, so settings can keep saying the file
+// may still be on Drive (a snackbar alone is gone in seconds).
+const DELETE_PENDING_KEY = "bible-drive-delete-pending";
+function isDeletePending()    { return localStorage.getItem(DELETE_PENDING_KEY) === "1"; }
+function clearDeletePending() { localStorage.removeItem(DELETE_PENDING_KEY); }
+
+// Called by disconnect modal "파일도 삭제" path — signOut() follows. What would outlive a page closed
+// mid-delete goes first: the IDB refresh token (kept in memory for one quiet refresh), the sign-in flag
+// and the account keys. The delete itself only needs the in-memory tokens (state-machine.js
+// deleteRemoteFile — sync stops first so no cycle puts the file back). Resolves true when Drive holds no
+// sync.json any more, false when that could not be confirmed, null when not connected.
+/** @returns {Promise<boolean | null>} */
 async function deleteRemoteFile() {
   window.syncDebugLog?.log({ kind: "ACTION", event: "DELETE_REMOTE_FILE" });
   _clearUploadTimer();
-  return _machine.deleteRemoteFile();
+  if (!_machine.isAuthenticated()) return null;
+  localStorage.setItem(DELETE_PENDING_KEY, "1");
+  /** @type {string | null} */
+  let refreshToken = null;
+  try { refreshToken = (await window.refreshStore?.loadRefreshToken()) ?? null; } catch { /* none to use */ }
+  await window.refreshStore?.clearRefreshToken().catch(() => {});
+  localStorage.removeItem("bible-drive-sync-email");
+  localStorage.removeItem("bible-drive-sync-updated");
+  localStorage.setItem("bible-drive-sync", "0");
+  const deleted = await _machine.deleteRemoteFile({ refreshToken });
+  if (deleted) clearDeletePending();
+  return deleted;
 }
 
 // Called by all save* functions in app.js after any local data change.
@@ -238,6 +271,8 @@ window.driveSync = {
   signIn,
   signOut,
   deleteRemoteFile,
+  isDeletePending,
+  clearDeletePending,
   scheduleUpload,
   requestSync: () => _machine.requestSync(),
   pollSync: () => _machine.requestSync({ throttleMs: POLL_THROTTLE_MS }),

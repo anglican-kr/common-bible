@@ -55,6 +55,8 @@ const MAX_REAUTH    = 3;
 const MAX_CONFLICTS = 3;
 const MAX_NET_RETRIES = 5; // 5 retries → delays 1s/2s/4s/8s/16s; OFFLINE on 6th failure
 const MAX_REDIRECT_ATTEMPTS = 3;
+// 「파일도 삭제」 waits at most this long for a running cycle to finish the request it already sent.
+const CYCLE_WAIT_MS = 10_000;
 const REDIRECT_ATTEMPTS_KEY = "bible-drive-redirect-attempts";
 const SCOPE = "https://www.googleapis.com/auth/drive.appdata email";
 
@@ -107,6 +109,10 @@ function createSyncMachine({ onStateChange } = {}) {
   // cycle already sent has landed before the lookup that decides what to delete.
   /** @type {Promise<void>} */
   let _cycleDone = Promise.resolve();
+  // Files this page created (multipart create answers with the id) — 「파일도 삭제」 deletes them even when
+  // the listing does not show them yet.
+  /** @type {Set<string>} */
+  const _createdFileIds = new Set();
   // Timestamp (ms) when the last _syncCycle finished. Read by requestSync()
   // to throttle "poll" callers (visibilitychange) that would otherwise pay a
   // full 1+s round-trip even when nothing has changed. 0 means no cycle has
@@ -631,8 +637,14 @@ function createSyncMachine({ onStateChange } = {}) {
     return true;
   }
 
-  async function _syncCycle() {
+  // The one place a cycle starts — a cycle still running (it left SYNCING and came back) settles this
+  // SYNCING itself (see _leftSyncing), and _cycleDone keeps pointing at it.
+  function _startCycle() {
     if (_syncPending) return;
+    _cycleDone = _syncCycle();
+  }
+
+  async function _syncCycle() {
     _syncPending = true;
     try {
       if (!_token) throw new Error("no_token");
@@ -658,14 +670,15 @@ function createSyncMachine({ onStateChange } = {}) {
       }
 
       // ── No remote file yet: upload local state ──
-      // No fileId to cache after a fresh upload — the multipart create
-      // response is parsed by uploadSyncFile but the new ID isn't surfaced.
-      // Next cycle will pay one findSyncFileId before the cache fills.
+      // The create answers with the new id: cache it (the next cycle skips files.list) and remember it
+      // for 「파일도 삭제」. The etag stays uncached — the next cycle downloads once without If-None-Match.
       if (!fileId) {
-        const { ok, status } = await T.uploadSyncFile(_token, V2.buildSyncPayload(_deviceId));
-        L.log({ kind: "NETWORK", event: "UPLOAD_NEW", ok, status });
+        const { ok, status, fileId: createdId } = await T.uploadSyncFile(_token, V2.buildSyncPayload(_deviceId));
+        if (createdId) _createdFileIds.add(createdId);
+        L.log({ kind: "NETWORK", event: "UPLOAD_NEW", ok, status, fileId: L.mask("fileId", createdId ?? null) });
         if (_leftSyncing("upload_new")) return;
         if (_uploadFailed(ok, status)) return;
+        if (createdId) _saveCache({ fileId: createdId });
         dispatch({ type: "SYNC_DONE" });
         return;
       }
@@ -848,10 +861,9 @@ function createSyncMachine({ onStateChange } = {}) {
             conflictFails: _ctx.conflictFails,
             reAuthFails:  _ctx.reAuthFails,
           }, event);
-          // A cycle still running keeps its _cycleDone (_syncCycle would return at once). A new one reads
-          // local state afresh, so a pending re-run is covered by it.
+          // A new cycle reads local state afresh, so a pending re-run is covered by it.
           _resyncRequested = false;
-          if (!_syncPending) _cycleDone = _syncCycle();
+          _startCycle();
         } else if (event.type === "DISABLE") {
           _token = null;
           _transition(S.DISABLED, {}, event); // timer cleared here
@@ -1061,29 +1073,93 @@ function createSyncMachine({ onStateChange } = {}) {
   function isEnabled()       { return _state !== S.DISABLED && _state !== S.ERROR; }
   function isAuthenticated() { return !!_token; }
 
-  // "파일도 삭제" disconnect (bookmark.js — signOut() follows). Resolves true when Drive's sync file is gone
-  // (deleted, or there was none), false when that could not be confirmed (no token · the lookup or the
-  // delete failed). Sync stops first and stays stopped: the machine leaves SYNCING / IDLE for DISABLED
-  // without dropping the token — no new cycle starts (requestSync needs IDLE) and a running one stops at
-  // its next await (_leftSyncing) — then this waits for that cycle, so a request it already sent (a
-  // create would re-make the file) has landed before the lookup. The token stays for the delete;
-  // signOut() revokes it and disable() drops it.
-  /** @returns {Promise<boolean>} */
-  async function deleteRemoteFile() {
-    const token = _token;
-    if (!token) return false;
+  // "파일도 삭제" disconnect (bookmark.js; drive-sync.js has already cleared what would outlive a page
+  // closed mid-delete — the IDB refresh token, the sign-in flag, the account keys — and signOut() follows).
+  // Resolves true when Drive holds no sync.json any more, false when that could not be confirmed, null
+  // when there was nothing to do (not connected).
+  //
+  // Sync stops first and stays stopped: the token leaves `_token` — settings draws "연결" at once, no new
+  // cycle can start, a running one stops at its next await (_leftSyncing) — and this waits for that cycle
+  // (CYCLE_WAIT_MS at most — a hung request must not hold the sign-out) so a request it already sent has
+  // landed: a create landing after the delete would put the file back. Every sync.json the lookup lists
+  // is deleted, plus the cached file and any this page created (the listing may lag behind a create).
+  // If the cycle did not settle in time, it waits once more and deletes again. A 401 gets one quiet
+  // refresh with `refreshToken`. The token is revoked here, after the delete.
+  /**
+   * @param {{ refreshToken?: string | null }} [opts]
+   * @returns {Promise<boolean | null>}
+   */
+  async function deleteRemoteFile({ refreshToken = null } = {}) {
+    let token = _token;
+    if (!token) return null;
+    const cachedId = _loadCache().fileId;
     localStorage.setItem(SYNC_ENABLED_KEY, "0");
     _clearCache();   // the file it points to is about to go; a stopped cycle won't refill it
+    _token = null;
+    _resyncRequested = false;
     _transition(S.DISABLED, {}, { type: "DELETE_REMOTE_FILE" });
     _refreshUI();
-    await _cycleDone.catch(() => {});
-    const found = await T.findSyncFileId(token);
-    L.log({ kind: "NETWORK", event: "DELETE_FIND_FILE", status: found.status, fileId: L.mask("fileId", found.fileId) });
-    if (found.status < 200 || found.status >= 300) return false;
-    if (!found.fileId) return true;
-    const { ok, status } = await T.deleteSyncFile(token, found.fileId);
-    L.log({ kind: "NETWORK", event: "DELETE_FILE", ok, status });
-    return ok || status === 404;   // 404 — already gone
+
+    let refreshed = false;
+    /**
+     * One quiet refresh on the first 401 — no state change; the new token is the one revoked below.
+     * @template {{ status: number }} R
+     * @param {(t: string) => Promise<R>} call
+     * @returns {Promise<R>}
+     */
+    const withAuth = async (call) => {
+      let res = await call(/** @type {string} */ (token));
+      if (res.status === 401 && refreshToken && !refreshed) {
+        refreshed = true;
+        const resp = await T.refreshAccessToken(refreshToken, /** @type {string} */ (window._syncClientId));
+        L.log({ kind: "ACTION", event: "DELETE_TOKEN_REFRESH", ok: resp.ok, ...(resp.ok ? {} : { status: resp.status }) });
+        if (resp.ok) {
+          if (token) T.revokeToken(token);   // the expired one — harmless, keeps nothing behind
+          token = resp.access_token;
+          res = await call(token);
+        }
+      }
+      return res;
+    };
+    const deleteAll = async () => {
+      const found = await withAuth((t) => T.findSyncFileId(t));
+      L.log({ kind: "NETWORK", event: "DELETE_FIND_FILE", status: found.status, fileId: L.mask("fileId", found.fileId) });
+      if (!_is2xx(found.status)) return false;
+      const ids = new Set(found.fileIds);
+      if (cachedId) ids.add(cachedId);
+      for (const id of _createdFileIds) ids.add(id);
+      for (const id of ids) {
+        const { ok, status } = await withAuth((t) => T.deleteSyncFile(t, id));
+        L.log({ kind: "NETWORK", event: "DELETE_FILE", ok, status, fileId: L.mask("fileId", id) });
+        if (!ok && status !== 404) return false;   // 404 — already gone
+      }
+      _createdFileIds.clear();
+      return true;
+    };
+
+    let settled = await _settles(_cycleDone, CYCLE_WAIT_MS);
+    let deleted = await deleteAll();
+    if (deleted && !settled) {
+      // The cycle's request may still land and create a file — wait once more, then look again.
+      settled = await _settles(_cycleDone, CYCLE_WAIT_MS);
+      deleted = settled && await deleteAll();
+    }
+    T.revokeToken(token);
+    return deleted;
+  }
+
+  /**
+   * True when `p` settles within `ms`, false when the time runs out first (the timer is cleared either way).
+   * @param {Promise<unknown>} p
+   * @param {number} ms
+   * @returns {Promise<boolean>}
+   */
+  function _settles(p, ms) {
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => resolve(false), ms);
+      const done = () => { clearTimeout(timer); resolve(true); };
+      p.then(done, done);
+    });
   }
 
   return { enable, disable, requestSync, dispatch,

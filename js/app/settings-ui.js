@@ -529,6 +529,12 @@ window.appSettings = (/** @returns {AppSettings} */ () => {
           driveRow.appendChild(connectBtn);
         }
         section3.appendChild(driveRow);
+        // An unfinished 「파일도 삭제」 (failed, or the page closed mid-way) — stays until a delete succeeds,
+        // the user reconnects or keeps the file (the snackbar at the time was gone in seconds).
+        if (!driveAuthed && window.driveSync.isDeletePending()) {
+          section3.appendChild(el("p", { className: "settings-drive-note" },
+            "Drive에 동기화 파일이 남아 있을 수 있습니다. 지우려면 다시 연결한 뒤 「해제」에서 「파일도 삭제」를 눌러 주세요."));
+        }
 
         // Info row — description always present; email line + diag button only
         // when authenticated.
@@ -708,11 +714,23 @@ window.appSettings = (/** @returns {AppSettings} */ () => {
     window.hideAudioBar();
     clearNode($app);
 
-    const panel = el("div", { className: "settings-view", role: "region", "aria-label": "설정" });
+    const panel = el("div", { className: "settings-view", role: "region", "aria-label": "설정", tabindex: "-1" });
     $app.appendChild(panel);
     const rerender = () => buildSettingsSections(panel, { rerender, dismiss: () => {} });
     rerender();
+    _viewRerender = () => {
+      if (!panel.isConnected) { _viewRerender = null; return; }
+      // Same as the popover's rebuild: focus on a removed control would fall to body — keep it in the view.
+      const hadFocus = panel.contains(document.activeElement);
+      rerender();
+      if (hadFocus) panel.focus({ focusVisible: false });
+    };
   }
+
+  // The mobile settings view's re-render while it is on screen (renderSettingsView sets it) — auth changes
+  // (sign-out · 「파일도 삭제」) redraw it like the popover; it used to keep showing 「해제」.
+  /** @type {(() => void) | null} */
+  let _viewRerender = null;
 
   // ── Settings popover ──
   function initSettings() {
@@ -822,7 +840,10 @@ window.appSettings = (/** @returns {AppSettings} */ () => {
     wireTrigger(btn);
 
     // Allow drive-sync.js to trigger a UI refresh when auth state changes.
-    window.rebuildDriveSyncSection = () => { if (!popover.hidden) rebuild(); };
+    window.rebuildDriveSyncSection = () => {
+      if (!popover.hidden) rebuild();
+      _viewRerender?.();
+    };
 
     // Per-view mobile trigger: the title row is re-rendered on every route, so
     // views.js mints a fresh one (CSS hides it on desktop, where the

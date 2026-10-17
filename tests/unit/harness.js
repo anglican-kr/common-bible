@@ -81,7 +81,10 @@ function makeTransportStub({
     }),
     fetchUserInfo: async () => ({ email: "test@example.com" }),
     // `findFileId` is the file the lookup finds (null = none yet); a failed lookup is an override.
-    findSyncFileId: async () => ({ fileId: findFileId !== undefined ? findFileId : null, status: 200 }),
+    findSyncFileId: async () => {
+      const fileId = findFileId !== undefined ? findFileId : null;
+      return { fileId, fileIds: fileId ? [fileId] : [], status: 200 };
+    },
     downloadSyncFile: async () => (downloadResult ?? { doc: null, etag: null, status: 200 }),
     uploadSyncFile: async () => (uploadResult ?? { ok: true, status: 200, etag: '"etag-1"' }),
     deleteSyncFile: async () => ({ ok: true, status: 204 }),
@@ -372,6 +375,7 @@ export function loadTransport(opts = {}) {
     sessionStorage,
     localStorage,
     navigator: { userAgent, platform: "Linux x86_64", maxTouchPoints: 0 },
+    FormData, Blob,   // uploadSyncFile's multipart create
     fetch: (url, init) => fetch(url, init),
   };
   vm.createContext(ctx);

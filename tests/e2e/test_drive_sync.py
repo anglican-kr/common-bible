@@ -141,7 +141,9 @@ class FakeDrive:
                     self._file = {}
                 self._etag_n += 1
                 self._etag = f"etag-{self._etag_n}"
-                route.fulfill(status=200, headers={"ETag": self._etag})
+                # Like the API, the create answers with the new file's metadata (its id).
+                route.fulfill(status=200, headers={"ETag": self._etag}, content_type="application/json",
+                              body=json.dumps({"kind": "drive#file", "id": "sync-file-id", "name": "sync.json"}))
             return
 
         # Delete file
@@ -630,14 +632,103 @@ def test_drive_disconnect_delete_failure_says_so(browser, fake_drive, fake_oauth
         assert page.evaluate("window.driveSync.getStatus()") == "DISABLED", "the disconnect still happens"
         with fake_drive._lock:
             assert fake_drive._file is not None, "the file is still on Drive"
+
+        # The snackbar is gone in seconds — settings keeps saying so, also after a reload (WCAG 2.2.1).
+        note = ".settings-popover .settings-drive-note"
+        page.locator("#settings-anchor .settings-btn").click()
+        page.wait_for_selector(note, state="visible", timeout=5_000)
+        assert "남아 있을 수 있습니다" in page.inner_text(note)
+        page.reload()
+        page.wait_for_function("() => window.driveSync", timeout=10_000)
+        page.locator("#settings-anchor .settings-btn").click()
+        page.wait_for_selector(note, state="visible", timeout=5_000)
     finally:
         page.context.close()
 
 
+def test_drive_sign_out_in_one_tab_stops_the_other(browser, fake_drive, fake_oauth):
+    """Two tabs of the same browser, both connected: '파일도 삭제' in one stops the other too (the sign-in
+    flag is shared, the machine is per tab) — the other tab's next edit used to find no cached file and
+    re-create sync.json with every bookmark (code review 10)."""
+    fake_drive.reset()
+    ctx: BrowserContext = browser.new_context()
+
+    def wire(p: Page):
+        p.route("**/*googleapis.com/drive/**", fake_drive.handle)
+        p.route("**/*googleapis.com/upload/**", fake_drive.handle)
+        p.route("**/*googleapis.com/oauth2/v3/userinfo", fake_drive.handle)
+        p.route("**/oauth/token", fake_oauth.handle_token)
+        p.route("**/accounts.google.com/o/oauth2/**", fake_oauth.handle_auth)
+        return p
+
+    try:
+        tab_a = wire(ctx.new_page())
+        _load(tab_a)
+        _enable_sync(tab_a)
+        _add_bookmark(tab_a, "From-A")
+        _sync_now(tab_a)
+        tab_b = wire(ctx.new_page())
+        _load(tab_b)   # the shared refresh token signs this tab in silently
+        tab_b.wait_for_function("() => window.driveSync.getStatus() === 'IDLE'", timeout=10_000)
+
+        tab_a.evaluate("openDriveDisconnectModal()")
+        tab_a.wait_for_selector("#drive-disconnect-modal:not([hidden])")
+        tab_a.click("#drive-disconnect-delete")
+        for _ in range(100):   # until the fake Drive has seen the delete
+            with fake_drive._lock:
+                if fake_drive._file is None:
+                    break
+            tab_a.wait_for_timeout(50)
+        with fake_drive._lock:
+            assert fake_drive._file is None, "deleted from tab A"
+
+        tab_b.wait_for_function("() => window.driveSync.getStatus() === 'DISABLED'", timeout=5_000)
+        _add_bookmark(tab_b, "From-B-after-A-signed-out")
+        tab_b.evaluate("window.driveSync.scheduleUpload()")
+        tab_b.wait_for_timeout(800)
+        with fake_drive._lock:
+            assert fake_drive._file is None, "tab B re-created the deleted file"
+    finally:
+        ctx.close()
+
+
+def test_drive_mobile_settings_view_redraws_after_delete(browser, fake_drive, fake_oauth):
+    """Mobile full-screen settings (/settings at 390px): after '파일도 삭제' the view redraws to '연결'. It
+    used to keep '해제' (only the desktop popover was redrawn), and a second '파일도 삭제' then claimed the
+    already-deleted file could not be deleted (code review 4)."""
+    fake_drive.reset()
+    ctx: BrowserContext = browser.new_context(viewport={"width": 390, "height": 844})
+    page = ctx.new_page()
+    page.route("**/*googleapis.com/drive/**", fake_drive.handle)
+    page.route("**/*googleapis.com/upload/**", fake_drive.handle)
+    page.route("**/*googleapis.com/oauth2/v3/userinfo", fake_drive.handle)
+    page.route("**/oauth/token", fake_oauth.handle_token)
+    page.route("**/accounts.google.com/o/oauth2/**", fake_oauth.handle_auth)
+    try:
+        _load(page)
+        _enable_sync(page)
+        _add_bookmark(page, "Mobile")
+        _sync_now(page)
+        page.goto(BASE_URL + "/settings")
+        page.wait_for_function("() => window.driveSync?.getStatus() === 'IDLE'", timeout=10_000)
+        page.click('.settings-view [aria-label="Google Drive 연결 해제"]')
+        page.wait_for_selector("#drive-disconnect-modal:not([hidden])")
+        page.click("#drive-disconnect-delete")
+        page.wait_for_selector('.settings-view [aria-label="Google Drive 연결"]', timeout=5_000)
+        assert page.locator('.settings-view [aria-label="Google Drive 연결 해제"]').count() == 0
+        with fake_drive._lock:
+            assert fake_drive._file is None
+        assert not page.evaluate(
+            "() => [...document.body.children].some((n) => n.textContent.includes('삭제하지 못했습니다'))"
+        ), "no failure notice after a delete that worked"
+    finally:
+        ctx.close()
+
+
 def test_drive_settings_reopened_during_delete_updates_after_sign_out(browser, fake_drive, fake_oauth):
-    """Settings reopened while '파일도 삭제' is still deleting draws the account as connected (the token
-    is held for the delete). Once the sign-out lands it must switch to '연결' — the machine is already
-    DISABLED by then, so no DISABLE handler redrew it and it kept showing '해제' (Copilot review 1)."""
+    """Settings reopened while '파일도 삭제' is still deleting shows '연결' at once — the delete takes the
+    token out of the machine before it waits (it used to hold it, so settings drew '해제' and, after the
+    sign-out, kept showing it: Copilot review 1). It stays '연결' after the delete lands."""
     fake_drive.reset()
     page = _make_page(browser, fake_drive, fake_oauth)
     try:
@@ -654,9 +745,12 @@ def test_drive_settings_reopened_during_delete_updates_after_sign_out(browser, f
 
         page.locator("#settings-anchor .settings-btn").click()
         page.wait_for_selector(".settings-popover", state="visible")
-        fake_drive.release_held()
         page.wait_for_selector('.settings-popover [aria-label="Google Drive 연결"]', timeout=5_000)
-        assert page.locator('.settings-popover [aria-label="Google Drive 연결 해제"]').count() == 0
+        assert page.locator('.settings-popover [aria-label="Google Drive 연결 해제"]').count() == 0, \
+            "'해제' while the delete is still running"
+        fake_drive.release_held()
+        page.wait_for_function("() => window.driveSync.isDeletePending() === false", timeout=5_000)
+        assert page.locator('.settings-popover [aria-label="Google Drive 연결"]').count() == 1
         with fake_drive._lock:
             assert fake_drive._file is None, "the file was deleted"
     finally:

@@ -172,9 +172,11 @@ export interface SyncMachine {
   getEmail: () => string | null;
   isEnabled: () => boolean;
   isAuthenticated: () => boolean;
-  // "파일도 삭제" disconnect — true when Drive's sync file is gone (deleted, or there was none), false when
-  // that could not be confirmed. Stops sync first and keeps the token for the delete (signOut revokes it).
-  deleteRemoteFile: () => Promise<boolean>;
+  // "파일도 삭제" disconnect — true when Drive holds no sync.json any more, false when that could not be
+  // confirmed, null when there was nothing to do (not connected). Stops sync first, takes the token out of
+  // the machine (settings shows "연결" at once), deletes, then revokes it. `refreshToken` (already gone from
+  // IDB) buys one quiet refresh if the access token has expired.
+  deleteRemoteFile: (opts?: { refreshToken?: string | null }) => Promise<boolean | null>;
 }
 
 // ── Transport (Drive REST + PKCE OAuth) ──────────────────────────────────────
@@ -204,6 +206,8 @@ export interface DriveDownloadResult {
 // unreadable body) is a failed lookup, never "no file".
 export interface DriveFindResult {
   fileId: string | null;
+  // Every sync.json the lookup listed (`fileId` is the first) — 「파일도 삭제」 deletes them all.
+  fileIds: string[];
   status: number;
 }
 
@@ -211,6 +215,8 @@ export interface DriveUploadResult {
   ok: boolean;
   status: number;
   etag: string | null;
+  // multipart create only — the id of the file it made.
+  fileId?: string;
 }
 
 // PKCE Authorization Code callback. Success branch carries the auth code and
@@ -383,7 +389,11 @@ export interface DriveSyncFacade {
   initDriveSync: () => void;
   signIn: () => void;
   signOut: () => void;
-  deleteRemoteFile: () => Promise<boolean>;
+  deleteRemoteFile: () => Promise<boolean | null>;
+  // A 「파일도 삭제」 that did not finish (failed, or the page closed mid-way) — settings keeps a note until a
+  // delete succeeds, the user reconnects or keeps the file.
+  isDeletePending: () => boolean;
+  clearDeletePending: () => void;
   scheduleUpload: () => void;
   requestSync: () => void;
   // Throttled requestSync for visibilitychange-style polling: drops the
