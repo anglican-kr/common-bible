@@ -53,7 +53,7 @@ const S = Object.freeze({
 
 const MAX_REAUTH    = 3;
 const MAX_CONFLICTS = 3;
-const MAX_NET_RETRIES = 5; // 5 retries → delays 1s/2s/4s/8s/16s; OFFLINE on 6th failure
+const MAX_NET_RETRIES = 5; // 5 retries → delays 1s/2s/4s/8s/16s; on the 6th failure a network one parks in OFFLINE, an HTTP one goes back to IDLE
 const MAX_REDIRECT_ATTEMPTS = 3;
 // 「파일도 삭제」 waits at most this long for a running cycle to finish the request it already sent.
 const CYCLE_WAIT_MS = 10_000;
@@ -812,6 +812,25 @@ function createSyncMachine({ onStateChange } = {}) {
     }
   }
 
+  // ── _stopSync: the one way sync turns off ─────────────────────────────────
+  // disable() (DISABLE, from any state) and deleteRemoteFile() both come here.
+  //   • The flag goes to "0" first, so in-flight async work (silent refresh, code exchange) sees the
+  //     intent through the flag guards even when no transition fires (already DISABLED, a silent
+  //     refresh still pending).
+  //   • The cache goes, so a later sign-in (possibly another Google account) does not reuse a
+  //     fileId/etag that is no longer its own.
+  //   • The token goes, so no cycle can start and a running one stops at its next await (_leftSyncing).
+  //   • Settings redraws in every state — deleteRemoteFile() → signOut() → disable() lands in DISABLED.
+
+  /** @param {SyncEvent | { type: string }} event */
+  function _stopSync(event) {
+    localStorage.setItem(SYNC_ENABLED_KEY, "0");
+    _clearCache();
+    _token = null;
+    _transition(S.DISABLED, {}, event);   // from DISABLED this only resets the ctx
+    _refreshUI();
+  }
+
   // ── dispatch ──────────────────────────────────────────────────────────────
 
   /** @param {SyncEvent} event */
@@ -824,6 +843,12 @@ function createSyncMachine({ onStateChange } = {}) {
     if (event.type === "USER_CONSENT_REQUEST") {
       if (_state === S.IDLE || _state === S.SYNCING) return;
       _beginRedirect("consent");
+      return;
+    }
+
+    // DISABLE (sign-out · settings off · another tab signed out) works from every state, DISABLED included.
+    if (event.type === "DISABLE") {
+      _stopSync(event);
       return;
     }
 
@@ -848,10 +873,7 @@ function createSyncMachine({ onStateChange } = {}) {
         break;
 
       case S.NEEDS_CONSENT:
-        if (event.type === "DISABLE") {
-          _transition(S.DISABLED, {}, event);
-          _refreshUI();
-        }
+        // Left only by USER_CONSENT_REQUEST and DISABLE, both handled above.
         break;
 
       case S.IDLE:
@@ -866,10 +888,6 @@ function createSyncMachine({ onStateChange } = {}) {
           // A new cycle reads local state afresh, so a pending re-run is covered by it.
           _resyncRequested = false;
           _startCycle();
-        } else if (event.type === "DISABLE") {
-          _token = null;
-          _transition(S.DISABLED, {}, event); // timer cleared here
-          _refreshUI();
         }
         break;
 
@@ -890,10 +908,6 @@ function createSyncMachine({ onStateChange } = {}) {
           }
         } else if (event.type === "SYNC_FAIL") {
           _handleSyncFail(event);
-        } else if (event.type === "DISABLE") {
-          _token = null;
-          _transition(S.DISABLED, {}, event); // timer cleared
-          _refreshUI();
         }
         break;
 
@@ -910,10 +924,6 @@ function createSyncMachine({ onStateChange } = {}) {
               _refreshUI();
             }
           })();
-        } else if (event.type === "DISABLE") {
-          _token = null;
-          _transition(S.DISABLED, {}, event);
-          _refreshUI();
         }
         break;
 
@@ -923,10 +933,6 @@ function createSyncMachine({ onStateChange } = {}) {
           // reconnect gets a fresh window of MAX_REDIRECT_ATTEMPTS chances.
           localStorage.setItem(REDIRECT_ATTEMPTS_KEY, "0");
           _beginRedirect("consent");
-        } else if (event.type === "DISABLE") {
-          _token = null;
-          _transition(S.DISABLED, {}, event);
-          _refreshUI();
         }
         break;
     }
@@ -1021,28 +1027,7 @@ function createSyncMachine({ onStateChange } = {}) {
   // ── Public API ────────────────────────────────────────────────────────────
 
   function enable()      { dispatch({ type: "ENABLE" }); }
-  function disable() {
-    // Set the SYNC_ENABLED_KEY flag to "0" defensively before dispatching, so
-    // any in-flight async work (silent refresh, code exchange) sees the user
-    // intent through the flag-based race guards even when no transition fires
-    // (e.g. disable() while still DISABLED waiting for silent refresh to
-    // resolve — _transition would not flip the flag in that branch).
-    localStorage.setItem(SYNC_ENABLED_KEY, "0");
-    // Drop the sync cache so a subsequent sign-in (potentially as a different
-    // Google account) doesn't reuse a fileId/etag that no longer belongs to
-    // the new identity.
-    _clearCache();
-    // Drop the token in every state: the DISABLE handlers do it only for the states they leave, and
-    // deleteRemoteFile() parks the machine in DISABLED with the token kept for its delete — signOut()
-    // reads it for the revoke, then calls this.
-    const wasDisabled = _state === S.DISABLED;
-    _token = null;
-    _resyncRequested = false;
-    dispatch({ type: "DISABLE" });
-    // Already DISABLED, no DISABLE handler runs — refresh here so an open settings panel stops showing
-    // the account the delete kept (it read isAuthenticated() while the token was still held).
-    if (wasDisabled) _refreshUI();
-  }
+  function disable()     { dispatch({ type: "DISABLE" }); }   // every state — _stopSync
   // Public sync entry point. Internal callers (silent refresh, timers,
   // acceptRedirectCode) dispatch SYNC_REQUEST directly — only requests that
   // arrive from the UI/app layer go through here. Pass `throttleMs` to skip
@@ -1095,12 +1080,7 @@ function createSyncMachine({ onStateChange } = {}) {
     let token = _token;
     if (!token) return null;
     const cachedId = _loadCache().fileId;
-    localStorage.setItem(SYNC_ENABLED_KEY, "0");
-    _clearCache();   // the file it points to is about to go; a stopped cycle won't refill it
-    _token = null;
-    _resyncRequested = false;
-    _transition(S.DISABLED, {}, { type: "DELETE_REMOTE_FILE" });
-    _refreshUI();
+    _stopSync({ type: "DELETE_REMOTE_FILE" });   // the cached file is about to go; a stopped cycle won't refill it
 
     let refreshed = false;
     /**

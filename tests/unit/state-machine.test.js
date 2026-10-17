@@ -1443,7 +1443,7 @@ test("56. deleteRemoteFile — 파일 찾기가 실패하면 false · 지우기�
 
 test("57. 「파일도 삭제」는 시작하자마자 설정을 다시 그린다 · 이어지는 signOut 의 disable() 도 다시 그린다(Copilot 1회차)", async () => {
   // 지우는 동안 토큰을 쥐고 있던 때는 그사이 연 설정이 「해제」(연결됨)를 그렸다. 이제 토큰을 곧바로 내려놓고
-  // 다시 그리고, 이미 DISABLED 인 뒤의 disable() 도 다시 그린다(DISABLED 에는 DISABLE 처리기가 없다).
+  // 다시 그리고, 이미 DISABLED 인 뒤의 disable() 도 다시 그린다(DISABLE 은 상태와 상관없이 _stopSync 하나로 간다).
   let rebuilds = 0;
   const { machine, drain, ctx } = loadMachine({ initialRefreshToken: "rt-x", findFileId: "fid-1" });
   ctx.rebuildDriveSyncSection = () => { rebuilds++; };
