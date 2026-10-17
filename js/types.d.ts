@@ -198,6 +198,13 @@ export interface DriveDownloadResult {
   status?: number;
 }
 
+// findSyncFileId — 2xx with fileId null is "no file yet"; any other status (0 = network error or an
+// unreadable body) is a failed lookup, never "no file".
+export interface DriveFindResult {
+  fileId: string | null;
+  status: number;
+}
+
 export interface DriveUploadResult {
   ok: boolean;
   status: number;
@@ -257,7 +264,7 @@ export interface SyncTransport {
   revokeToken: (token: string | null) => void;
   fetchUserInfo: (token: string) => Promise<{ email: string | null }>;
   driveFetch: (path: string, opts: DriveFetchOptions) => Promise<DriveFetchResult>;
-  findSyncFileId: (token: string) => Promise<string | null>;
+  findSyncFileId: (token: string) => Promise<DriveFindResult>;
   downloadSyncFile: (
     token: string,
     fileId: string,

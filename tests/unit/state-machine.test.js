@@ -633,7 +633,7 @@ test("27. 첫 sync 후 fileId·etag·syncedMaxU가 localStorage에 캐시됨", a
     initialRefreshToken: "rt-x",
     overrideStubs: {
       T: {
-        findSyncFileId: async () => { findFileCalls.push(1); return "fid-1"; },
+        findSyncFileId: async () => { findFileCalls.push(1); return { fileId: "fid-1", status: 200 }; },
         downloadSyncFile: async () => ({ doc: remoteDoc, etag: '"e1"', status: 200 }),
       },
     },
@@ -660,7 +660,7 @@ test("28. 캐시 hit + 304 + 로컬 변화 없음 → upload·findSyncFileId 모
     },
     overrideStubs: {
       T: {
-        findSyncFileId: async () => { findCalls.push(1); return "fid-cached"; },
+        findSyncFileId: async () => { findCalls.push(1); return { fileId: "fid-cached", status: 200 }; },
         downloadSyncFile: async (_t, _id, opts) => {
           downloadCalls.push(opts ?? {});
           return { doc: null, etag: null, status: 304 };
@@ -883,7 +883,7 @@ test("36. _loadCache의 getItem이 SecurityError throw → slow path graceful fa
     },
     overrideStubs: {
       T: {
-        findSyncFileId: async () => { findCalls.push(1); return null; },
+        findSyncFileId: async () => { findCalls.push(1); return { fileId: null, status: 200 }; },
         uploadSyncFile: async () => ({ ok: true, status: 200, etag: '"e1"' }),
       },
     },
@@ -1106,7 +1106,7 @@ test("44. 파일 찾기 대기 중 disable() → 그 뒤 업로드하지 않는�
   assert.equal(machine.getState(), "SYNCING", "파일 찾기 hold 중 SYNCING");
   machine.disable();
   assert.equal(machine.getState(), "DISABLED");
-  resolveFind(null);   // Drive 에 파일이 아직 없다 — 옛 코드는 여기서 새 파일을 올렸다(token null)
+  resolveFind({ fileId: null, status: 200 });   // Drive 에 파일이 아직 없다 — 옛 코드는 여기서 새 파일을 올렸다(token null)
   await drain(5);
   assert.deepEqual(uploads, [], "로그아웃 뒤 업로드 없음");
   assert.equal(machine.getState(), "DISABLED");
@@ -1305,4 +1305,89 @@ test("50. 대기 중 disable() 뒤 그 대기가 예외로 끝나도 SYNC_EXCEPT
   assert.ok(!after.some((e) => e.event === "SYNC_EXCEPTION"), "SYNC_EXCEPTION 없음");
   assert.ok(!after.some((e) => e.kind === "ACTION" && e.event === "SYNC_FAIL"), "SYNC_FAIL 없음");
   assert.equal(machine.getState(), "DISABLED");
+});
+
+// ── Group 15: 실패를 성공으로 치지 않는다 ───────────────────────────────────
+// 머지 전 /code-review(2026-10-17) 1 · 3번. 파일 찾기는 「없음」(2xx · fileId null)과 「실패」를 가르고,
+// 실패한 찾기 · 내려받기 · v1 올리기는 SYNC_FAIL(백오프)로 간다 — 「파일 없음」 · 「원격 없음」 · 「동기화됨」으로
+// 읽으면 sync.json 이 둘이 되거나 재시도 없이 끝났다.
+
+test("51. 파일 찾기가 실패(503)하면 새 파일을 올리지 않는다 — SYNC_FAIL 로 다시 시도", async () => {
+  let uploadCalls = 0;
+  const { machine, drain, logEntries } = loadMachine({
+    initialRefreshToken: "rt-x",
+    useRealTimers: false,
+    overrideStubs: {
+      T: {
+        findSyncFileId: async () => ({ fileId: null, status: 503 }),
+        uploadSyncFile: async () => { uploadCalls++; return { ok: true, status: 200, etag: '"e1"' }; },
+      },
+    },
+  });
+  machine.enable();
+  await drain(6);
+  assert.equal(uploadCalls, 0, "실패한 찾기를 「파일 없음」으로 읽어 새 파일을 올리지 않음");
+  assert.ok(logEntries.some((e) => e.kind === "ACTION" && e.event === "SYNC_FAIL"), "SYNC_FAIL");
+  assert.ok(logEntries.some((e) => e.event === "RETRY_SCHEDULED"), "백오프 재시도 예약");
+  assert.equal(machine.getState(), "IDLE", "백오프 대기");
+});
+
+test("52. 파일 찾기 401 → 새 파일을 올리지 않고 곧장 재인증", async () => {
+  let uploadCalls = 0;
+  const { machine, drain, logEntries } = loadMachine({
+    initialRefreshToken: "rt-x",
+    useRealTimers: false,
+    overrideStubs: {
+      T: {
+        findSyncFileId: async () => ({ fileId: null, status: 401 }),
+        uploadSyncFile: async () => { uploadCalls++; return { ok: false, status: 401, etag: null }; },
+      },
+    },
+  });
+  machine.enable();
+  await drain(8);
+  assert.equal(uploadCalls, 0, "401 을 「파일 없음」으로 읽어 새 파일 올리기를 보내지 않음");
+  assert.ok(logEntries.some((e) => e.event === "REAUTH"), "401 재인증 경로");
+});
+
+test("53. 내려받기 403 → SYNC_DONE 이 아니라 SYNC_FAIL — 백오프로 다시 시도, redirect 시도 횟수는 그대로", async () => {
+  const { machine, drain, logEntries, localStorage } = loadMachine({
+    initialRefreshToken: "rt-x",
+    useRealTimers: false,
+    initialStorage: {
+      [CACHE_FILE_ID_KEY]: "fid-cached",
+      [CACHE_ETAG_KEY]: '"e-cached"',
+      [CACHE_SYNCED_U_KEY]: "0",
+      [REDIRECT_ATTEMPTS_KEY]: "2",
+    },
+    downloadResult: { doc: null, etag: null, status: 403 },
+  });
+  machine.enable();
+  await drain(6);
+  assert.ok(!logEntries.some((e) => e.kind === "ACTION" && e.event === "SYNC_DONE"), "SYNC_DONE 없음");
+  assert.ok(logEntries.some((e) => e.kind === "ACTION" && e.event === "SYNC_FAIL"), "SYNC_FAIL");
+  assert.ok(logEntries.some((e) => e.event === "RETRY_SCHEDULED"), "백오프 재시도 예약");
+  assert.equal(localStorage.getItem(REDIRECT_ATTEMPTS_KEY), "2", "성공이 아니므로 redirect 시도 횟수를 0 으로 돌리지 않음");
+});
+
+test("54. v1 문서 올리기가 실패(503)하면 캐시를 「동기화됨」으로 쓰지 않고 SYNC_FAIL", async () => {
+  const { machine, drain, logEntries, localStorage } = loadMachine({
+    initialRefreshToken: "rt-x",
+    useRealTimers: false,
+    initialStorage: {
+      [CACHE_FILE_ID_KEY]: "fid-cached",
+      [CACHE_ETAG_KEY]: '"e-cached"',
+      [CACHE_SYNCED_U_KEY]: "0",
+    },
+    downloadResult: { doc: { schemaVersion: 1, bookmarks: [] }, etag: '"e-v1"', status: 200 },
+    uploadResult: { ok: false, status: 503, etag: null },
+    overrideStubs: {
+      V2: { validateRemote: () => false, maxU: () => 7 },   // 원격이 옛 v1 · 로컬 maxU 7
+    },
+  });
+  machine.enable();
+  await drain(6);
+  assert.equal(localStorage.getItem(CACHE_SYNCED_U_KEY), "0", "syncedMaxU 를 올리지 않음 — 다음 사이클이 다시 올린다");
+  assert.ok(!logEntries.some((e) => e.kind === "ACTION" && e.event === "SYNC_DONE"), "SYNC_DONE 없음");
+  assert.ok(logEntries.some((e) => e.kind === "ACTION" && e.event === "SYNC_FAIL"), "SYNC_FAIL");
 });

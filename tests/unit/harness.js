@@ -80,7 +80,8 @@ function makeTransportStub({
       ok: true, access_token: "test-access-2", refresh_token: null, expires_in: 3600,
     }),
     fetchUserInfo: async () => ({ email: "test@example.com" }),
-    findSyncFileId: async () => (findFileId !== undefined ? findFileId : null),
+    // `findFileId` is the file the lookup finds (null = none yet); a failed lookup is an override.
+    findSyncFileId: async () => ({ fileId: findFileId !== undefined ? findFileId : null, status: 200 }),
     downloadSyncFile: async () => (downloadResult ?? { doc: null, etag: null, status: 200 }),
     uploadSyncFile: async () => (uploadResult ?? { ok: true, status: 200, etag: '"etag-1"' }),
     deleteSyncFile: async () => ({ ok: true }),

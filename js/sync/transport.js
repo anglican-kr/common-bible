@@ -385,22 +385,24 @@ async function driveFetch(path, { token, method = "GET", body, headers = {}, ifM
   };
 }
 
-// Returns the file ID of appDataFolder/sync.json, or null if not found.
+// Looks up appDataFolder/sync.json. `status` tells "no file yet" (2xx with fileId null) apart from a
+// failed lookup (any other status; 0 = network error or an unreadable body) — read as "no file", a
+// failure made the sync cycle create a second sync.json next to the one it could not see.
 /**
  * @param {string} token
- * @returns {Promise<string | null>}
+ * @returns {Promise<import("../types").DriveFindResult>}
  */
 async function findSyncFileId(token) {
   try {
-    const { res, ok } = await driveFetch(
+    const { res, ok, status } = await driveFetch(
       "/files?spaces=appDataFolder&fields=files(id)&q=name='sync.json'",
       { token }
     );
-    if (!ok) return null;
+    if (!ok) return { fileId: null, status };
     let data;
-    try { data = await res.json(); } catch { return null; }
-    return data.files?.[0]?.id ?? null;
-  } catch { return null; }
+    try { data = await res.json(); } catch { return { fileId: null, status: 0 }; }
+    return { fileId: data.files?.[0]?.id ?? null, status };
+  } catch { return { fileId: null, status: 0 }; }
 }
 
 // Returns { doc, etag, status } or { doc: null, etag: null, status } on any

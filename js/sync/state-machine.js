@@ -21,7 +21,8 @@
 //   "412"       — ETag mismatch  → re-merge retry (max 3)
 //   "no_token"  — guard tripped  → ERROR (deterministic)
 //   "exception" — JS error       → ERROR (deterministic)
-//   other       — network/5xx    → backoff (max 5), then OFFLINE
+//   other       — any other failed request (network · 403 · 429 · 5xx …, as
+//                  `http_<status>`) → backoff (max 5), then OFFLINE
 //
 // Authentication flow (uniform across desktop/Android/iOS):
 //   • Cold start with refresh token in IDB → silent refresh (background fetch
@@ -622,9 +623,14 @@ function createSyncMachine({ onStateChange } = {}) {
       // deleted from another device) → 404 below → clear + retry next cycle.
       let fileId = cache.fileId;
       if (!fileId) {
-        fileId = await T.findSyncFileId(_token);
-        L.log({ kind: "NETWORK", event: "FIND_FILE", fileId: L.mask("fileId", fileId) });
+        const found = await T.findSyncFileId(_token);
+        L.log({ kind: "NETWORK", event: "FIND_FILE", status: found.status, fileId: L.mask("fileId", found.fileId) });
         if (_leftSyncing("find_file")) return;
+        // Only a successful lookup may read as "no file yet" — a failed one retries instead of creating a
+        // second sync.json next to the one it could not see.
+        if (found.status === 401)                      { dispatch({ type: "SYNC_FAIL", reason: "401" });                   return; }
+        if (found.status < 200 || found.status >= 300) { dispatch({ type: "SYNC_FAIL", reason: `http_${found.status}` }); return; }
+        fileId = found.fileId;
       } else {
         L.log({ kind: "ACTION", event: "FIND_FILE_CACHED", fileId: L.mask("fileId", fileId) });
       }
@@ -665,7 +671,10 @@ function createSyncMachine({ onStateChange } = {}) {
         dispatch({ type: "SYNC_FAIL", reason: `http_${dlStatus}` });
         return;
       }
-      if (dlStatus === 0 || (dlStatus !== undefined && dlStatus >= 500)) {
+      // Every other failure retries with backoff — Drive asks for it on 403 rate limits · 429 · 5xx, and a
+      // 400 or another 403 stops at the retry cap. `doc` is null on any failure, so falling through would
+      // read it as "no remote doc" and settle with SYNC_DONE.
+      if (typeof dlStatus === "number" && dlStatus !== 304 && (dlStatus < 200 || dlStatus >= 300)) {
         dispatch({ type: "SYNC_FAIL", reason: `http_${dlStatus}` });
         return;
       }
@@ -713,6 +722,7 @@ function createSyncMachine({ onStateChange } = {}) {
         if (_leftSyncing("upload_upgrade")) return;
         if (status === 401)             { dispatch({ type: "SYNC_FAIL", reason: "401" });              return; }
         if (status === 412)             { _clearCache(); dispatch({ type: "SYNC_FAIL", reason: "412" }); return; }
+        if (!ok)                        { dispatch({ type: "SYNC_FAIL", reason: `http_${status}` });   return; }
         _saveCache({ fileId, etag: newEtag, syncedMaxU: localMaxU });
         dispatch({ type: "SYNC_DONE" });
         return;
@@ -1002,10 +1012,10 @@ function createSyncMachine({ onStateChange } = {}) {
 
   async function deleteRemoteFile() {
     if (!_token) return;
-    const fileId = await T.findSyncFileId(_token);
-    L.log({ kind: "NETWORK", event: "DELETE_FIND_FILE", fileId: L.mask("fileId", fileId) });
-    if (fileId) {
-      const { ok } = await T.deleteSyncFile(_token, fileId);
+    const found = await T.findSyncFileId(_token);
+    L.log({ kind: "NETWORK", event: "DELETE_FIND_FILE", status: found.status, fileId: L.mask("fileId", found.fileId) });
+    if (found.fileId) {
+      const { ok } = await T.deleteSyncFile(_token, found.fileId);
       L.log({ kind: "NETWORK", event: "DELETE_FILE", ok });
     }
     // Cached fileId/etag now point to a deleted file — drop them.
