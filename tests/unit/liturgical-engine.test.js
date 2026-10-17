@@ -888,6 +888,37 @@ test("§5.5 격자 관측일 id · 이름 · precedence — 좌표에서 합성�
   same([gridOf(resolve("2026-01-26")).observance.color, gridOf(resolve("2026-01-26")).observance.color_alt], ["green", null]);
 });
 
+test("§5.5 고유명 평일 표지 — 해마다 여섯 날(E−45~−43 · E−6~−4)의 격자에만 properWeekday: true, 그 밖의 격자에는 키가 없다", () => {
+  // 같은 좌표 (lent, null, weekday) 의 성 목 · 금 · 토 격자(「성주간 X요일」)와 재의 수요일 격자, 번호 있는 사순 평일에는
+  // 없다 — 뷰(캘린더 칸 이름)가 좌표로 다시 가려내지 않고 이 표지를 읽는다(PR #348 리뷰).
+  const NAMES = ["재의 수요일 후 목요일", "재의 수요일 후 금요일", "재의 수요일 후 토요일", "성주간 월요일", "성주간 화요일", "성주간 수요일"];
+  for (let y = 2025; y <= 2030; y++) {
+    const E = ctx.easterDate(y);
+    const want = [-45, -44, -43, -6, -5, -4].map((n) => ctx.addDays(E, n));
+    const marked = [];
+    for (let d = `${y}-01-01`; d <= `${y}-12-31`; d = ctx.addDays(d, 1)) {
+      const g = gridOf(resolve(d)).observance;
+      if ("properWeekday" in g) {
+        assert.strictEqual(g.properWeekday, true, d);   // 참일 때만 키를 둔다(evening 과 같은 꼴)
+        marked.push([d, g.name]);
+      }
+    }
+    same(marked, want.map((d, i) => [d, NAMES[i]]), String(y));
+  }
+  // 2026 의 표지 없는 이웃 — 좌표가 같거나 비슷한 날
+  for (const [d, id, name] of [
+    ["2026-04-02", "grid:lent-x-weekday-thu", "성주간 목요일"],     // 재의 수요일 후 목요일(2.19)과 같은 id
+    ["2026-04-03", "grid:lent-x-weekday-fri", "성주간 금요일"],
+    ["2026-04-04", "grid:lent-x-weekday-sat", "성주간 토요일"],
+    ["2026-02-18", "grid:lent-x-weekday-wed", "사순 수요일"],       // 재의 수요일 — 대표는 temporal 행
+    ["2026-03-03", "grid:lent-2-weekday-tue", "사순 2주 화요일"],
+    ["2026-03-29", "grid:lent-x-sunday", "사순 주일"],              // 성지주일
+  ]) {
+    const g = gridOf(resolve(d)).observance;
+    same([g.id, g.name, "properWeekday" in g], [id, name, false], d);
+  }
+});
+
 test("§5.1 좌표의 year — 연중 평일은 I/II, 그 밖은 A/B/C · 주일은 weekday null", () => {
   same(plain(resolve("2026-01-26").coord), { season: "ordinary", week: 3, type: "weekday", weekday: "mon", year: "II" });
   same(plain(resolve("2026-01-25").coord), { season: "ordinary", week: 3, type: "sunday", weekday: null, year: "A" });
@@ -1227,6 +1258,20 @@ const fate = (r, id) => {
   return [c.status, "displacedBy" in c ? c.displacedBy : null];
 };
 const officialId = (r) => (r.official ? r.official.observance.id : null);
+
+test("§5.5 고유명 평일 표지는 엔진이 합성한 격자에만 — 같은 좌표에 대표로 서는 temporal 행(재의 수요일 · 성 목 · 금 · 토)에는 없다", () => {
+  for (const [d, id] of [["2026-02-18", "t-ash"], ["2026-04-02", "t-maundy"], ["2026-04-03", "t-good-friday"], ["2026-04-04", "t-holy-sat"]]) {
+    const r = rb(d);
+    assert.strictEqual(officialId(r), id, d);
+    for (const c of r.candidates) assert.ok(!("properWeekday" in c.observance), `${d} ${c.observance.id}`);
+  }
+  // 고유명 평일 — 그날의 대표는 표지 단 격자다(캘린더 칸이 이 이름을 단다)
+  for (const d of ["2026-02-19", "2026-03-30"]) {
+    const r = rb(d);
+    assert.ok(officialId(r).startsWith("grid:"), d);
+    assert.strictEqual(r.official.observance.properWeekday, true, d);
+  }
+});
 
 test("C-6.1-1 유효 precedence — 비교는 precedence 로만(rank 아님) · null 은 최하위 · 지향 · 이름 줄 9 · A 특례 1.5", () => {
   const ep = (o) => ctx.effectivePrecedence({ id: "x", kind: "sanctoral", name: "x", color: null, ...o });
