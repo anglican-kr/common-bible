@@ -1,4 +1,5 @@
 ---
+pr: 353
 date: 2026-10-17
 branch: fix/typecheck-batch-1
 title: "fix: 타입 검사 밖이던 앱 모듈 16개를 검사 안으로 — 지시문 순서와 드러난 44건 (known-issues §7 묶음 ①)"
