@@ -243,14 +243,15 @@ $home?.addEventListener("click", (e) => {
   // ADR-031 개정: 이미 홈 스택이면 성서 목록으로 — iOS pop-to-root. 읽던 화면(장·
   // 머리말·장 목록)에서 눌렀다면 그 책의 구분 탭으로 가서 읽던 책 카드에 포커스를
   // 맞춘다(헤더 홈 버튼 buildHomeBtn 과 동일 UX — 키보드/스크린리더 사용자가 맥락에
-  // 착지). 목록·구분 화면(bookId 없음)에선 기본 href="/" 로 진행해 최상단.
+  // 착지). 구분 탭이 없는 책(전례시편 · 송가)은 성서 목록 첫 화면으로(views.js bookListPath).
+  // 목록·구분 화면(bookId 없음)에선 기본 href="/" 로 진행해 최상단.
   const p = W.parsePath?.();
   const bookId = p && "bookId" in p ? p.bookId : null;
   const book = bookId && W.getBooksCache?.()?.find((b) => b.id === bookId);
   if (book) {
     e.preventDefault();
     W.setPendingBookFocus?.(book.id);
-    W.navigate(`/${W.effectiveDivision(book)}`);
+    W.navigate(W.bookListPath(book));
   }
 });
 

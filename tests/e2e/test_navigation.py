@@ -156,6 +156,25 @@ def test_home_btn_focuses_book_just_read(browser):
         ctx.close()
 
 
+@pytest.mark.parametrize("path", ["lps/23", "cant"])
+def test_home_btn_on_book_in_no_tab_lands_on_book_list(browser, path):
+    """구분 탭이 없는 책(전례시편 장 · 송가 장 목록)에서 헤더 홈 버튼 → 성서 목록 첫 화면(/).
+
+    그전엔 `/liturgical` 로 가서 「해당 성서를 찾을 수 없습니다.」가 떴다(PR #353 리뷰, 2026-10-17 —
+    views.js bookListPath)."""
+    ctx = browser.new_context()
+    page = ctx.new_page()
+    try:
+        page.goto(f"{BASE}/{path}")
+        page.wait_for_selector("#page-title .title-home-btn")
+        page.locator("#page-title .title-home-btn").click()
+        page.wait_for_selector(".book-list", timeout=5_000)
+        assert page.evaluate("() => location.pathname") == "/"
+        assert "찾을 수 없습니다" not in page.locator("#app").inner_text()
+    finally:
+        ctx.close()
+
+
 def test_chapter_nav_next_btn_navigates(browser):
     """현재 장(gen/1)에서 다음 장 버튼 클릭 → gen/2 로드."""
     ctx = browser.new_context()
