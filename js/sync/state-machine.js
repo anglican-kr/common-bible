@@ -97,6 +97,10 @@ function createSyncMachine({ onStateChange } = {}) {
   /** @type {string | null} */
   let _email = null;
   let _syncPending = false;
+  // A user-driven SYNC_REQUEST that arrives while a cycle runs (requestSync) is not dropped — that cycle
+  // may already have read or uploaded local state without the edit it carries. One more cycle runs once
+  // this one settles with SYNC_DONE (a failure retries through its own backoff anyway).
+  let _resyncRequested = false;
   // The running _syncCycle (resolved when none). deleteRemoteFile waits on it so that a request the
   // cycle already sent has landed before the lookup that decides what to delete.
   /** @type {Promise<void>} */
@@ -617,8 +621,6 @@ function createSyncMachine({ onStateChange } = {}) {
     try {
       if (!_token) throw new Error("no_token");
 
-      const local     = V2.loadLocal();
-      const localMaxU = V2.maxU(local);
       const cache     = _loadCache();
 
       // ── Resolve fileId: cache hit skips files.list (~500ms saved) ──
@@ -683,6 +685,13 @@ function createSyncMachine({ onStateChange } = {}) {
         return;
       }
 
+      // Read local now, not at cycle start: edits saved while the lookup / download were in flight
+      // (bookmarks · settings · reading position) must reach the merge — `_applyMergedDoc` writes the
+      // whole doc, so a snapshot from before the awaits would erase them. No await separates this read
+      // from that write.
+      const local     = V2.loadLocal();
+      const localMaxU = V2.maxU(local);
+
       // ── 304 Not Modified: remote == cached snapshot. Skip merge entirely. ──
       // Two sub-cases by local divergence:
       //   localMaxU == cache.syncedMaxU → nothing changed on either side,
@@ -696,8 +705,9 @@ function createSyncMachine({ onStateChange } = {}) {
           dispatch({ type: "SYNC_DONE" });
           return;
         }
+        const payload = V2.buildSyncPayload(_deviceId);
         const { ok, status, etag: newEtag } = await T.uploadSyncFile(
-          _token, V2.buildSyncPayload(_deviceId),
+          _token, payload,
           { fileId, ifMatch: cache.etag },
         );
         L.log({ kind: "NETWORK", event: "UPLOAD_UPDATE", ok, status });
@@ -711,7 +721,8 @@ function createSyncMachine({ onStateChange } = {}) {
           return;
         }
         if (!ok)            { dispatch({ type: "SYNC_FAIL", reason: `http_${status}` }); return; }
-        _saveCache({ fileId, etag: newEtag, syncedMaxU: localMaxU });
+        // What was uploaded — an edit saved during the PATCH is newer and goes up next cycle.
+        _saveCache({ fileId, etag: newEtag, syncedMaxU: V2.maxU(payload) });
         dispatch({ type: "SYNC_DONE" });
         return;
       }
@@ -721,13 +732,14 @@ function createSyncMachine({ onStateChange } = {}) {
       // ── Remote is legacy v1: upgrade Drive to v2 ──
       if (!V2.validateRemote(remote)) {
         L.log({ kind: "ACTION", event: "REMOTE_SCHEMA_MISMATCH", schema: remote?.schemaVersion });
-        const { ok, status, etag: newEtag } = await T.uploadSyncFile(_token, V2.buildSyncPayload(_deviceId), { fileId, ifMatch: etag });
+        const payload = V2.buildSyncPayload(_deviceId);
+        const { ok, status, etag: newEtag } = await T.uploadSyncFile(_token, payload, { fileId, ifMatch: etag });
         L.log({ kind: "NETWORK", event: "UPLOAD_UPDATE", ok, status });
         if (_leftSyncing("upload_upgrade")) return;
         if (status === 401)             { dispatch({ type: "SYNC_FAIL", reason: "401" });              return; }
         if (status === 412)             { _clearCache(); dispatch({ type: "SYNC_FAIL", reason: "412" }); return; }
         if (!ok)                        { dispatch({ type: "SYNC_FAIL", reason: `http_${status}` });   return; }
-        _saveCache({ fileId, etag: newEtag, syncedMaxU: localMaxU });
+        _saveCache({ fileId, etag: newEtag, syncedMaxU: V2.maxU(payload) });
         dispatch({ type: "SYNC_DONE" });
         return;
       }
@@ -756,13 +768,14 @@ function createSyncMachine({ onStateChange } = {}) {
                         + Object.keys(merged.bookmarks?.tombstones ?? {}).length;
 
       if (mergedMaxU > remoteMaxU || mergedCount > remoteCount) {
-        const { ok, status, etag: newEtag } = await T.uploadSyncFile(_token, V2.buildSyncPayload(_deviceId), { fileId, ifMatch: etag });
+        const payload = V2.buildSyncPayload(_deviceId);
+        const { ok, status, etag: newEtag } = await T.uploadSyncFile(_token, payload, { fileId, ifMatch: etag });
         L.log({ kind: "NETWORK", event: "UPLOAD_UPDATE", ok, status });
         if (_leftSyncing("upload_merged")) return;
         if (status === 401)             { dispatch({ type: "SYNC_FAIL", reason: "401" });              return; }
         if (status === 412)             { _clearCache(); dispatch({ type: "SYNC_FAIL", reason: "412" }); return; }
         if (!ok)                        { dispatch({ type: "SYNC_FAIL", reason: `http_${status}` });   return; }
-        _saveCache({ fileId, etag: newEtag, syncedMaxU: mergedMaxU });
+        _saveCache({ fileId, etag: newEtag, syncedMaxU: V2.maxU(payload) });
       } else {
         // No upload needed — local now matches remote post-merge. Cache the
         // remote etag so the next cycle's conditional GET can hit 304.
@@ -832,7 +845,9 @@ function createSyncMachine({ onStateChange } = {}) {
             conflictFails: _ctx.conflictFails,
             reAuthFails:  _ctx.reAuthFails,
           }, event);
-          // A cycle still running keeps its _cycleDone (_syncCycle would return at once).
+          // A cycle still running keeps its _cycleDone (_syncCycle would return at once). A new one reads
+          // local state afresh, so a pending re-run is covered by it.
+          _resyncRequested = false;
           if (!_syncPending) _cycleDone = _syncCycle();
         } else if (event.type === "DISABLE") {
           _token = null;
@@ -850,6 +865,12 @@ function createSyncMachine({ onStateChange } = {}) {
           // immediately after every fresh token.
           localStorage.setItem(REDIRECT_ATTEMPTS_KEY, "0");
           _transition(S.IDLE, {}, event); // all counts reset, timer cleared
+          if (_resyncRequested) {
+            _resyncRequested = false;
+            // Next microtask: this dispatch runs inside the finishing cycle, whose finally (_syncPending
+            // = false) has not run yet — a SYNC_REQUEST now would find a cycle "still running".
+            void Promise.resolve().then(() => dispatch({ type: "SYNC_REQUEST" }));
+          }
         } else if (event.type === "SYNC_FAIL") {
           _handleSyncFail(event);
         } else if (event.type === "DISABLE") {
@@ -992,6 +1013,7 @@ function createSyncMachine({ onStateChange } = {}) {
     // reads it for the revoke, then calls this.
     const wasDisabled = _state === S.DISABLED;
     _token = null;
+    _resyncRequested = false;
     dispatch({ type: "DISABLE" });
     // Already DISABLED, no DISABLE handler runs — refresh here so an open settings panel stops showing
     // the account the delete kept (it read isAuthenticated() while the token was still held).
@@ -1005,9 +1027,12 @@ function createSyncMachine({ onStateChange } = {}) {
   // no value over a single recent cycle.
   /** @param {{ throttleMs?: number }} [opts] */
   function requestSync(opts) {
-    if (_state !== S.IDLE) return;
     const throttleMs = opts?.throttleMs;
-    if (typeof throttleMs === "number" && throttleMs > 0 && _lastSyncEndAt > 0) {
+    const isPoll = typeof throttleMs === "number" && throttleMs > 0;
+    // A poll during a cycle is already served by it; a user-driven request is kept for one more cycle.
+    if (_state === S.SYNCING && !isPoll) { _resyncRequested = true; return; }
+    if (_state !== S.IDLE) return;
+    if (isPoll && _lastSyncEndAt > 0) {
       const elapsed = Date.now() - _lastSyncEndAt;
       if (elapsed < throttleMs) {
         L.log({ kind: "ACTION", event: "SYNC_THROTTLED", elapsedMs: elapsed, throttleMs });

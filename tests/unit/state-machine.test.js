@@ -1465,3 +1465,142 @@ test("57. 「파일도 삭제」 뒤 signOut 의 disable() — 이미 DISABLED �
   assert.equal(machine.isAuthenticated(), false);
   assert.equal(rebuilds, before + 1, "이미 DISABLED 여도 설정 화면을 다시 그린다");
 });
+
+// ── Group 16: 사이클 도중의 로컬 편집 — 덮지 않고, 버리지 않는다 ─────────────
+// 머지 전 /code-review(2026-10-17, 사용자 실행) 1 · 7번. 사이클은 시작할 때 읽은 로컬 사본으로 병합한 뒤
+// `_applyMergedDoc` 가 로컬 문서 전체를 덮어써, 파일 찾기 · 내려받기를 기다리는 동안 저장한 북마크 · 설정 ·
+// 읽던 위치가 사라졌다. 304 갈래도 그 사본의 maxU 로 「변경 없음」을 판정했고, 도는 동안 들어온 사용자 요청
+// (scheduleUpload → requestSync)은 버려져 다시 돌지 않았다. 이제 기다린 뒤에 로컬을 읽고, 사용자 요청은
+// 사이클이 SYNC_DONE 으로 끝나면 한 번 더 돈다(폴은 쌓지 않는다).
+
+/** 하네스 기본 문서 꼴에 꼬리표 · maxU 표지를 단 로컬 문서. */
+function localDoc(tag, u = 0) {
+  return {
+    tag, u,
+    bookmarks: { items: {}, tombstones: {} },
+    settings: {
+      fontSize: { v: null, _u: 0 }, colorScheme: { v: null, _u: 0 },
+      theme: { v: null, _u: 0 }, bookOrder: { v: null, _u: 0 },
+      startupBehavior: { v: null, _u: 0 },
+    },
+    lastRead: { v: null, _u: 0 },
+  };
+}
+
+test("58. 내려받기 대기 중 저장한 편집이 병합에 들어간다 — 사이클 시작 때의 사본으로 덮지 않는다", async () => {
+  let resolveDownload;
+  const dlPromise = new Promise((r) => { resolveDownload = r; });
+  let current = localDoc("before");
+  const mergeInputs = [];
+  const { machine, drain } = loadMachine({
+    initialRefreshToken: "rt-x",
+    initialStorage: {
+      [CACHE_FILE_ID_KEY]: "fid-cached",
+      [CACHE_ETAG_KEY]: '"e-cached"',
+      [CACHE_SYNCED_U_KEY]: "0",
+    },
+    overrideStubs: {
+      T: { downloadSyncFile: () => dlPromise },
+      V2: {
+        loadLocal: () => current,
+        saveLocal: (doc) => { current = doc; },
+        mergeDocs: (local) => { mergeInputs.push(local.tag); return local; },
+      },
+    },
+  });
+  machine.enable();
+  await drain(3);
+  assert.equal(machine.getState(), "SYNCING", "내려받기 hold 중 SYNCING");
+  current = localDoc("added-during-download");   // 그사이 북마크를 저장했다
+  resolveDownload({ doc: { ...localDoc("remote"), schemaVersion: 2, deviceId: "remote" }, etag: '"e-remote"', status: 200 });
+  await drain(5);
+  assert.deepEqual(mergeInputs, ["added-during-download"], "병합은 기다린 뒤의 로컬로");
+  assert.equal(current.tag, "added-during-download", "저장한 편집이 남는다");
+});
+
+test("59. 304 — 내려받기 대기 중 편집이 있으면 올린다", async () => {
+  let resolveDownload;
+  const dlPromise = new Promise((r) => { resolveDownload = r; });
+  let current = localDoc("v0", 0);
+  let uploads = 0;
+  const { machine, drain } = loadMachine({
+    initialRefreshToken: "rt-x",
+    initialStorage: {
+      [CACHE_FILE_ID_KEY]: "fid-cached",
+      [CACHE_ETAG_KEY]: '"e-cached"',
+      [CACHE_SYNCED_U_KEY]: "0",
+    },
+    overrideStubs: {
+      T: {
+        downloadSyncFile: () => dlPromise,
+        uploadSyncFile: async () => { uploads++; return { ok: true, status: 200, etag: '"e-new"' }; },
+      },
+      V2: { loadLocal: () => current, maxU: (doc) => doc.u ?? 0, buildSyncPayload: () => current },
+    },
+  });
+  machine.enable();
+  await drain(3);
+  assert.equal(machine.getState(), "SYNCING");
+  current = localDoc("v1", 5);   // 내려받기를 기다리는 동안 편집
+  resolveDownload({ doc: null, etag: null, status: 304 });
+  await drain(5);
+  assert.equal(uploads, 1, "304 여도 기다린 뒤의 로컬이 캐시보다 새로우면 올린다");
+});
+
+test("60. 사이클 도중의 사용자 요청(requestSync)은 버리지 않고 끝난 뒤 한 번 더 돈다", async () => {
+  let downloads = 0;
+  let resolveFirst;
+  const { machine, drain } = loadMachine({
+    initialRefreshToken: "rt-x",
+    initialStorage: {
+      [CACHE_FILE_ID_KEY]: "fid-cached",
+      [CACHE_ETAG_KEY]: '"e-cached"',
+      [CACHE_SYNCED_U_KEY]: "0",
+    },
+    overrideStubs: {
+      T: {
+        downloadSyncFile: () => {
+          downloads++;
+          if (downloads === 1) return new Promise((r) => { resolveFirst = r; });
+          return Promise.resolve({ doc: null, etag: null, status: 304 });
+        },
+      },
+    },
+  });
+  machine.enable();
+  await drain(3);
+  assert.equal(machine.getState(), "SYNCING");
+  machine.requestSync();   // scheduleUpload 의 300ms 뒤 — 도는 중이라 예전엔 버려졌다
+  resolveFirst({ doc: null, etag: null, status: 304 });
+  await drain(8);
+  assert.equal(downloads, 2, "한 번 더 돈다");
+  assert.equal(machine.getState(), "IDLE");
+});
+
+test("61. 사이클 도중의 폴(requestSync({throttleMs}))은 쌓지 않는다 — 도는 사이클이 그 폴이다", async () => {
+  let downloads = 0;
+  let resolveFirst;
+  const { machine, drain } = loadMachine({
+    initialRefreshToken: "rt-x",
+    initialStorage: {
+      [CACHE_FILE_ID_KEY]: "fid-cached",
+      [CACHE_ETAG_KEY]: '"e-cached"',
+      [CACHE_SYNCED_U_KEY]: "0",
+    },
+    overrideStubs: {
+      T: {
+        downloadSyncFile: () => {
+          downloads++;
+          if (downloads === 1) return new Promise((r) => { resolveFirst = r; });
+          return Promise.resolve({ doc: null, etag: null, status: 304 });
+        },
+      },
+    },
+  });
+  machine.enable();
+  await drain(3);
+  machine.requestSync({ throttleMs: 30_000 });
+  resolveFirst({ doc: null, etag: null, status: 304 });
+  await drain(8);
+  assert.equal(downloads, 1, "폴은 다시 돌지 않는다");
+});
