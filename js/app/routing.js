@@ -29,7 +29,7 @@ import { renderLectionaryView } from "./lectionary.js";
 // controls are plain links too.
 import { renderCalendarView } from "./calendar.js";
 
-const { _$, clearNode, chUnit, isModifiedClick } = window.appHelpers;
+const { _$, clearNode, chUnit, isModifiedClick, focusSpotOf, restoreFocusSpot } = window.appHelpers;
 const {
   loadStartupBehavior, loadReadingPosition, saveReadingPosition, loadBookOrder,
 } = window.appStorage;
@@ -37,6 +37,7 @@ const { dismissLaunchScreen } = window.appSettings;
 const { readingContext } = window;
 
 // DOM anchors. Redeclared locally so routing.js is self-contained.
+const $app = _$("app");
 const $resumeBannerSlot = _$("resume-banner-slot");
 const $divisionTabsSlot = _$("division-tabs-slot");
 const $searchInput = /** @type {HTMLInputElement} */ (_$("search-input"));
@@ -49,6 +50,12 @@ let _isInitialLoad = true;
 // ADR-031: route() 호출마다 증가. 리다이렉트(books→resume 등)로 route 가 재진입하면
 // 바깥 호출의 finally(onRouteEnd 스크롤 복원)가 이미 낡았음을 알도록 시퀀스로 가드한다.
 let _routeSeq = 0;
+// 같은 화면을 다시 그리는 링크(`data-focus-key` — 전례독서의 날짜 이동 · 칩 · 카드 · 세그먼트, 캘린더의 달 이동, 구분 탭,
+// 검색의 페이지 이동)를 누른 자리(WCAG 2.4.3, ADR-031 §5). 아래 클릭 인터셉터가 이동 직전에 재고(helpers.js focusSpotOf),
+// route() 가 시작하자마자 꺼내 비운다 — 그래서 자리는 그것을 남긴 누름의 route() 에만 쓰인다(뒤로 가기 · 탭 전환 ·
+// 리다이렉트는 자리 없이 시작한다). 새 화면이 커밋된 뒤 finally 에서 그 route 가 여전히 최신이면 돌려준다.
+/** @type {import("../types").FocusSpot | null} */
+let _pendingFocusSpot = null;
 function startScrollTracking(bookId, chapter) {
   if (_scrollTrackCleanup) _scrollTrackCleanup();
   /** @type {ReturnType<typeof setTimeout> | null} */
@@ -256,6 +263,9 @@ function trackPageView() {
 async function route() {
   const isInitialLoad = _isInitialLoad;
   _isInitialLoad = false;
+  // 이 route 를 시작한 누름의 자리(위 `_pendingFocusSpot`) — await 앞에서 꺼내 비운다.
+  const focusSpot = _pendingFocusSpot;
+  _pendingFocusSpot = null;
   // ADR-031: 떠나는 경로의 스크롤을 기억(DOM 변경 전) + 재진입 가드 시퀀스 발급.
   const routeSeq = ++_routeSeq;
   // route() 는 재진입형 async 함수다. 아래의 모든 await 뒤 continuation 은 공유 상태
@@ -582,7 +592,12 @@ async function route() {
     dismissLaunchScreen(); // safety fallback (already a no-op if called above)
     // ADR-031: 이 호출이 여전히 최신 라우트일 때만 새 경로 기록 + 스크롤 복원.
     // 내부 navigate()(리다이렉트)가 _routeSeq 를 올렸으면 낡은 바깥 호출이라 건너뛴다.
-    if (routeSeq === _routeSeq) window.tabHistory?.onRouteEnd();
+    if (routeSeq === _routeSeq) {
+      window.tabHistory?.onRouteEnd();
+      // 누른 링크가 옛 화면과 함께 사라져 body 로 빠진 포커스를 새 화면의 같은 컨트롤로(ADR-031 §5). 오류 화면 ·
+      // 다른 뷰에는 같은 키가 없어 아무것도 하지 않는다.
+      restoreFocusSpot(focusSpot, $app);
+    }
   }
 }
 
@@ -599,10 +614,16 @@ document.addEventListener("click", (e) => {
   if (isModifiedClick(e)) return;   // 새 탭 · 새 창 — 브라우저에 맡긴다(helpers.js)
   e.preventDefault();
   const path = url.pathname + url.search;
-  if (path === location.pathname + location.search) {
-    route();
-  } else {
-    navigate(path);
+  // 같은 화면을 다시 그리는 링크면 그 자리 — route() 가 시작하자마자 꺼내 간다(위 `_pendingFocusSpot`).
+  _pendingFocusSpot = focusSpotOf(a, e, $app);
+  try {
+    if (path === location.pathname + location.search) {
+      route();
+    } else {
+      navigate(path);
+    }
+  } finally {
+    _pendingFocusSpot = null;   // route() 앞에서 던졌으면(pushState) 다음 route — 뒤로 가기 · 탭 전환 — 로 새지 않게
   }
 });
 

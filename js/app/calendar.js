@@ -35,7 +35,7 @@ import {
   CYCLE_LABEL, COLOR_LABEL, WEEKDAY_KO,
 } from "./lectionary.js";
 
-const { _$, el, clearNode, emptyState, createFocusMemory } = window.appHelpers;
+const { _$, el, clearNode, emptyState } = window.appHelpers;
 
 const $app = _$("app");
 const PAGE_TITLE = "캘린더";
@@ -264,9 +264,8 @@ function buildMonthGrid(y, m, today, resolve) {
 
 // 달 이동(이전 · 다음 · 오늘)은 #app 을 통째로 다시 그린다(route() 가 스켈레톤으로 먼저 비운다). 누른 링크가 사라져 포커스가
 // body 로 빠지면 키보드 · 스크린리더 사용자는 달을 넘길 때마다 건너뛰기 링크 · 헤더 · 탭부터 다시 지나와야 한다(WCAG 2.4.3 —
-// PR #348 리뷰). 누른 컨트롤의 자리(data-focus-key)를 기억했다가 새 머리 줄의 같은 자리로 포커스를 돌려준다 — 전례독서
-// 화면과 같은 도우미(helpers.js createFocusMemory)이고, 기억은 화면마다 따로다.
-const focusMemory = createFocusMemory();
+// PR #348 리뷰). 그 링크들은 `data-focus-key`(범위 끝에서 자리만 남는 앞뒤 단추는 `data-focus-fallback` 「오늘」도)만 달고,
+// 라우터가 누른 자리를 재 두었다가 새 화면의 같은 컨트롤로 포커스를 돌려준다(routing.js — 전례독서 · 구분 탭 · 검색과 같다).
 
 /** 같은 화면 안에서 달이 바뀌면 고정 문구(setTitle) 대신 그 달을 읽힌다 — 전례독서의 announceDay 와 같은 몫. */
 function announceMonth(/** @type {CalendarMonth} */ model) {
@@ -358,20 +357,15 @@ function buildMonthTable(model) {
 /**
  * Commit the month view — synchronous, called only after the preload resolved and the route is still current.
  * @param {CalendarMonth} model
- * @param {import("../types").FocusSpot | null} spot  the month-nav control that led here (focusMemory.take) — focus goes back to its twin
  */
-function commitMonth(model, spot) {
+function commitMonth(model) {
   commitTitle();
   clearNode($app);
   const root = el("div", { className: "calendar" });
-  // 이 화면의 클릭이 전역 <a> 인터셉터(document)보다 먼저 닿는다 — 이동이 시작되기 전에 누른 컨트롤의 자리를 남긴다.
-  root.addEventListener("click", focusMemory.remember);
   root.appendChild(buildMonthHead(model));
   root.appendChild(buildMonthTable(model));
   $app.appendChild(root);
   announceMonth(model);
-  // 계산 범위 끝(1583년 1월의 이전 · 9999년 12월의 다음)에서는 그 단추가 자리만 남으므로 「오늘」로.
-  focusMemory.restore(root, spot, "today");
 }
 
 /**
@@ -384,8 +378,6 @@ async function renderCalendarView(parsed) {
   const routeSeq = window.routeSeq;   // 한 번 잡아 둔다 — 클로저 안에서도 타입이 좁혀지게
   const entrySeq = typeof routeSeq === "function" ? routeSeq() : null;
   const isStale = () => entrySeq !== null && typeof routeSeq === "function" && routeSeq() !== entrySeq;
-  // 달 이동 줄에서 왔으면 그 컨트롤의 자리 — 한 번만 쓴다(오류 화면 · 낡은 요청이면 버린다).
-  const spot = focusMemory.take();
 
   const today = todayKey(new Date());
   const target = parsed.month === null ? parseMonthParam(today.slice(0, 7)) : parseMonthParam(parsed.month);
@@ -404,7 +396,7 @@ async function renderCalendarView(parsed) {
   }
   if (isStale()) return PAGE_TITLE;
   const model = buildMonthGrid(target.y, target.m, today, resolveDate);
-  commitMonth(model, spot);
+  commitMonth(model);
   return `${model.title} ${PAGE_TITLE}`;
 }
 

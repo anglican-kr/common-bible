@@ -223,9 +223,9 @@ let _prevDivisionIdx = null;
  * navigation keep working without bespoke handlers. `startIdx` is where the
  * indicator is painted first: pass the previously selected index to animate
  * the slide, or omit it to render the indicator directly under the active tab.
- * An item's `focusKey` becomes the anchor's `data-focus-key`, so a view that
- * redraws itself on these links can put focus back on the pressed option
- * (helpers.js createFocusMemory).
+ * An item's `focusKey` becomes the anchor's `data-focus-key`, so when these
+ * links redraw their own view the router puts focus back on the pressed option
+ * (routing.js — helpers.js focusSpotOf / restoreFocusSpot).
  * @param {Array<{ label: string, href: string, active: boolean, title?: string, focusKey?: string }>} items
  * @param {{ ariaLabel: string, startIdx?: number | null, className?: string }} opts
  * @returns {HTMLElement}
@@ -278,8 +278,11 @@ function buildDivisionTabs(activeDivision) {
   const activeIdx = Math.max(0, order.indexOf(activeDivision));
   // Slide from the previous selection when one exists and differs; otherwise
   // render the indicator already under the active tab (no animation).
+  // `focusKey`: route() clears this slot and redraws the list, so the router
+  // puts focus back on the pressed tab once the list is drawn (routing.js —
+  // WCAG 2.4.3; the slot lives outside #app, sticky, so no scroll restore).
   const nav = buildSegmentTabs(
-    order.map((div) => ({ label: labels[div], href: `/${div}`, active: div === activeDivision })),
+    order.map((div) => ({ label: labels[div], href: `/${div}`, active: div === activeDivision, focusKey: `div:${div}` })),
     { ariaLabel: "구분", startIdx: _prevDivisionIdx },
   );
   _prevDivisionIdx = activeIdx;

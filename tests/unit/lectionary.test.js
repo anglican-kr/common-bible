@@ -593,7 +593,7 @@ test("buildLectionaryModel: 사계재 날 — 초기 선택은 격자, 색은 �
 
 test("buildLectionaryModel: 전날 · 다음날 링크는 교회력을 계산하는 연도(1583~9999) 안에서만 — 끝에서는 null(단추가 자리만 남는다)", () => {
   // 범위 끝에서 누르면 「계산할 수 없는 날짜」 화면이었다 — 캘린더의 이전 · 다음 달처럼 단추를 두지 않으면, 다시 그린 뒤
-  // 포커스가 「오늘」로 간다(같은 자리가 없을 때의 대체 — helpers.js createFocusMemory)
+  // 포커스가 「오늘」로 간다(같은 자리가 없을 때의 대체 — 단추의 data-focus-fallback, 라우터가 돌려준다)
   const day = (date) => {
     const g = cand(obs("grid:christmas-x-weekday-mon", "성탄 월요일"));
     return ctx.buildLectionaryModel(resolvedOf(date, [g], g), { obs: null, track: null, set: null, collect: null },

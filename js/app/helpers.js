@@ -14,7 +14,6 @@
 
 /** @typedef {import("../types").AppHelpers} AppHelpers */
 /** @typedef {import("../types").FocusSpot} FocusSpot */
-/** @typedef {import("../types").FocusMemory} FocusMemory */
 
 // The return type is declared so a helper missing from `AppHelpers` (types.d.ts) fails typecheck here, not
 // later in whichever module destructures it.
@@ -258,113 +257,97 @@ window.appHelpers = (/** @returns {AppHelpers} */ () => {
   }
 
   // Whether the browser holds the visible content still when something above it changes size (CSS scroll
-  // anchoring — Chrome · Edge · Firefox, Safari 27+). createFocusMemory's restore depends on it.
+  // anchoring — Chrome · Edge · Firefox, Safari 27+). restoreFocusSpot depends on it.
   const SCROLL_ANCHORING = typeof CSS !== "undefined" && typeof CSS.supports === "function"
     && CSS.supports("overflow-anchor", "auto");
 
   /**
-   * Focus memory for a view whose own links redraw the whole screen (WCAG
-   * 2.4.3 — PR #348 review). route() empties #app before the new screen
-   * commits, so the pressed link is gone and focus falls back to <body>: a
-   * keyboard or screen-reader user would walk back from the skip link after
-   * every press. The view tags those links with `data-focus-key`, listens with
-   * `remember` on its root (the click reaches it before the global <a>
-   * interceptor on document), `take`s the spot when its render starts (one
-   * render per press — a stale or failed render drops it) and hands the new
-   * root to `restore` after committing. `restore` acts only when focus was
-   * really lost — if the reader moved it elsewhere while a slow redraw was
-   * loading, it stays there. `take` runs in the same click dispatch as
-   * `remember`, and a spot is good only while that click is still being
-   * dispatched — a press that never redrew (a click cancelled above the root)
-   * can't hand its spot to a later render. Each view also makes its own memory
-   * (the calendar and the lectionary share the `prev` · `next` · `today` keys).
-   * @returns {FocusMemory}
+   * Where the pressed control of a same-view redraw sat (WCAG 2.4.3). A link
+   * tagged `data-focus-key` redraws the view it belongs to — the router measures
+   * it right before routing and, once the new screen committed, puts focus back
+   * on its twin with `restoreFocusSpot` (routing.js). `data-focus-fallback` names
+   * the control that takes over when the new screen has no twin (the date step
+   * at the end of the computable range → 「오늘」, the search page link on the
+   * last page → the other one). `root` is the container a redraw replaces
+   * (#app): the offset within it serves the browsers without scroll anchoring.
+   * A control outside it (the division tabs in the sticky header) has none.
+   * @param {Element} a  the pressed link
+   * @param {Event} e  its click
+   * @param {Element | null} root
+   * @returns {FocusSpot | null}  null for a link without `data-focus-key`
    */
-  function createFocusMemory() {
-    /** @type {FocusSpot | null} */
-    let pending = null;
-    /** @type {Event | null} */
-    let pendingClick = null;   // the click that left `pending`
+  function focusSpotOf(a, e, root) {
+    if (!(a instanceof HTMLElement) || !a.dataset.focusKey) return null;
+    const top = a.getBoundingClientRect().top;
     return {
-      remember(e) {
-        // A new tab / window, or a click a handler under the root already cancelled — this page does not redraw
-        // (the global <a> interceptor bails on the same two; lectionary.js's track listener too).
-        if (e.defaultPrevented || isModifiedClick(e)) return;
-        const t = e.target;
-        const root = e.currentTarget;
-        const a = t instanceof Element ? t.closest("a[data-focus-key]") : null;
-        if (!(a instanceof HTMLElement && a.dataset.focusKey && root instanceof Element)) {
-          pending = null;
-          pendingClick = null;
-          return;
-        }
-        const top = a.getBoundingClientRect().top;
-        pending = {
-          key: a.dataset.focusKey, y: window.scrollY, top, offset: top - root.getBoundingClientRect().top,
-          // A pointer press (mouse, tap — `detail` counts the clicks) vs. Enter on the link (a synthetic click, detail 0;
-          // settings-ui.js tells the two apart the same way).
-          pointer: /** @type {MouseEvent} */ (e).detail > 0,
-        };
-        pendingClick = e;
-      },
-      take() {
-        // The render a press starts takes its spot inside that click's dispatch (interceptor → navigate → route →
-        // the view → take). Once the dispatch is over (eventPhase back to NONE, 0) the click never redrew — a
-        // handler above the root cancelled it — so its spot must not land on a later render (Back, a tab switch).
-        const spot = pendingClick && pendingClick.eventPhase === 0 ? null : pending;
-        pending = null;
-        pendingClick = null;
-        return spot;
-      },
-      restore(root, spot, fallbackKey) {
-        if (!spot) return null;
-        // The pressed link left with the old screen, so focus fell back to <body>. Focus anywhere else means
-        // the reader moved on while a slow redraw was loading (the header search, a popover, the tab bar) —
-        // leave focus and scroll where they are instead of pulling them back to this view.
-        const active = document.activeElement;
-        if (active && active !== document.body && active !== document.documentElement && !root.contains(active)) return null;
-        // Compare dataset values rather than build a selector — keys are data (an observance id such as
-        // `grid:lent-2-weekday-tue`), and a value comparison needs no escaping (a quoted selector would break
-        // on a `"` or `\` in a key; colons and Hangul are fine either way).
-        const tagged = Array.from(root.querySelectorAll("[data-focus-key]"));
-        const find = (/** @type {string} */ key) =>
-          tagged.find((n) => n instanceof HTMLElement && n.dataset.focusKey === key) || null;
-        // No twin (the step that led here is gone at the end of the computable range) → the fallback control.
-        const target = find(spot.key) || (fallbackKey ? find(fallbackKey) : null);
-        if (!(target instanceof HTMLElement)) return null;
-        // Keep the control where it was on screen. A redraw that had to fetch
-        // first painted the skeleton, which clamped the scroll to the top —
-        // without this the pressed control jumps, and one far down (a segment
-        // below the fold on a phone) comes back off-screen (2.4.7). The clamp can
-        // also re-expand the desktop header's search row (views.js
-        // initCompactHeader), which collapses again once the page is back down.
-        // With scroll anchoring the browser holds the content still through that
-        // collapse, so the control goes to its click-time viewport top in today's
-        // layout; without it (Safari before 27) the collapse itself moves the
-        // content, so the control goes back to its offset within the view root.
-        const r0 = target.getBoundingClientRect();
-        scrollToInstantly(SCROLL_ANCHORING
-          ? window.scrollY + r0.top - spot.top
-          : spot.y + (r0.top - root.getBoundingClientRect().top) - spot.offset);
-        // Focus goes back after every press — keyboard and VoiceOver users follow it — but a pointer press must not
-        // leave a ring: WebKit (iOS) focuses nothing on a tap, so a script focus afterwards counts as focus-visible and
-        // draws the accent outline (the book-list cards hit the same, 43db624). `focusVisible: false` (Safari 18.4+ ·
-        // Chrome 145+ · Firefox 104+; older engines ignore the option) keeps the focus without the ring.
-        target.focus(spot.pointer ? { preventScroll: true, focusVisible: false } : { preventScroll: true });
-        // Still off-screen: the control was already out of view when it was activated (a keyboard user read on
-        // with Space / Page Down, focus left on the link, then pressed Enter), or — without scroll anchoring —
-        // the re-expanded header pushed it below the fold. Bring it to the middle. (A shorter page never does
-        // this: the scroll clamp only moves an in-flow control toward the viewport.)
-        const r = target.getBoundingClientRect();
-        if (r.bottom < 0 || r.top > window.innerHeight) target.scrollIntoView({ block: "center", behavior: "instant" });
-        return target;
-      },
+      key: a.dataset.focusKey,
+      fallback: a.dataset.focusFallback || null,
+      y: window.scrollY,
+      top,
+      offset: root && root.contains(a) ? top - root.getBoundingClientRect().top : null,
+      // A pointer press (mouse, tap — `detail` counts the clicks) vs. Enter on the link (a synthetic click, detail 0;
+      // settings-ui.js tells the two apart the same way).
+      pointer: /** @type {MouseEvent} */ (e).detail > 0,
     };
+  }
+
+  /**
+   * Put focus back on the twin of the pressed control (`focusSpotOf`) once the
+   * new screen committed, at the same place on screen. Acts only when focus was
+   * really lost — the pressed link left with the old screen, so focus fell back
+   * to <body>; anywhere else means the reader moved on while a slow redraw was
+   * loading (the header search, a popover, the tab bar), or the view placed
+   * focus itself, and focus and scroll stay where they are.
+   * @param {FocusSpot | null} spot
+   * @param {Element | null} root  the container the redraw replaced (#app)
+   * @returns {HTMLElement | null}  the control that took focus, or null
+   */
+  function restoreFocusSpot(spot, root) {
+    if (!spot) return null;
+    const active = document.activeElement;
+    if (active && active !== document.body && active !== document.documentElement) return null;
+    // Compare dataset values rather than build a selector — keys are data (an observance id such as
+    // `grid:lent-2-weekday-tue`), and a value comparison needs no escaping (a quoted selector would break
+    // on a `"` or `\` in a key; colons and Hangul are fine either way).
+    const tagged = Array.from(document.querySelectorAll("[data-focus-key]"));
+    const find = (/** @type {string} */ key) =>
+      tagged.find((n) => n instanceof HTMLElement && n.dataset.focusKey === key) || null;
+    const target = find(spot.key) || (spot.fallback ? find(spot.fallback) : null);
+    if (!(target instanceof HTMLElement)) return null;
+    // Keep the control where it was on screen. A redraw that had to fetch
+    // first painted the skeleton, which clamped the scroll to the top —
+    // without this the pressed control jumps, and one far down (a segment
+    // below the fold on a phone) comes back off-screen (2.4.7). The clamp can
+    // also re-expand the desktop header's search row (views.js
+    // initCompactHeader), which collapses again once the page is back down.
+    // With scroll anchoring the browser holds the content still through that
+    // collapse, so the control goes to its click-time viewport top in today's
+    // layout; without it (Safari before 27) the collapse itself moves the
+    // content, so the control goes back to its offset within the root. A
+    // control outside the root (sticky) keeps its place by itself.
+    const r0 = target.getBoundingClientRect();
+    if (SCROLL_ANCHORING) {
+      scrollToInstantly(window.scrollY + r0.top - spot.top);
+    } else if (spot.offset !== null && root && root.contains(target)) {
+      scrollToInstantly(spot.y + (r0.top - root.getBoundingClientRect().top) - spot.offset);
+    }
+    // Focus goes back after every press — keyboard and VoiceOver users follow it — but a pointer press must not
+    // leave a ring: WebKit (iOS) focuses nothing on a tap, so a script focus afterwards counts as focus-visible and
+    // draws the accent outline (the book-list cards hit the same, 43db624). `focusVisible: false` (Safari 18.4+ ·
+    // Chrome 145+ · Firefox 104+; older engines ignore the option) keeps the focus without the ring.
+    target.focus(spot.pointer ? { preventScroll: true, focusVisible: false } : { preventScroll: true });
+    // Still off-screen: the control was already out of view when it was activated (a keyboard user read on
+    // with Space / Page Down, focus left on the link, then pressed Enter), or — without scroll anchoring —
+    // the re-expanded header pushed it below the fold. Bring it to the middle. (A shorter page never does
+    // this: the scroll clamp only moves an in-flow control toward the viewport.)
+    const r = target.getBoundingClientRect();
+    if (r.bottom < 0 || r.top > window.innerHeight) target.scrollIntoView({ block: "center", behavior: "instant" });
+    return target;
   }
 
   return {
     _$, chUnit, el, clearNode, hangingQuoteClass, setInert, trapFocus, dragReleaseAction, emptyState, headerIcon,
-    HEADER_ICON_PATHS, isModifiedClick, createFocusMemory,
+    HEADER_ICON_PATHS, isModifiedClick, focusSpotOf, restoreFocusSpot,
   };
 })();
 

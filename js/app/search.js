@@ -202,6 +202,11 @@ function formatSearchDate(ts) {
 }
 
 /**
+ * The page links redraw this view, so each carries `data-focus-key`: the router
+ * puts focus back on the pressed link of the new page (routing.js — WCAG 2.4.3;
+ * user decision 2026-10-17: the pressed link, not the top of the results). On
+ * the first / last page that link is gone and the other one takes over
+ * (`data-focus-fallback`).
  * @param {{ q?: string, filterBooks?: string[] }} state
  * @param {number} currentPage
  * @param {number} totalPages
@@ -214,7 +219,9 @@ function buildSearchPagination(state, currentPage, totalPages) {
   });
 
   if (currentPage > 1) {
-    nav.appendChild(el("a", { href: pageUrl(currentPage - 1) }, "← 이전"));
+    nav.appendChild(el("a", {
+      href: pageUrl(currentPage - 1), "data-focus-key": "page:prev", "data-focus-fallback": "page:next",
+    }, "← 이전"));
   } else {
     nav.appendChild(el("span", { className: "placeholder" }));
   }
@@ -222,7 +229,9 @@ function buildSearchPagination(state, currentPage, totalPages) {
   nav.appendChild(el("span", { className: "search-page-info" }, `${currentPage} / ${totalPages}`));
 
   if (currentPage < totalPages) {
-    nav.appendChild(el("a", { href: pageUrl(currentPage + 1) }, "다음 →"));
+    nav.appendChild(el("a", {
+      href: pageUrl(currentPage + 1), "data-focus-key": "page:next", "data-focus-fallback": "page:prev",
+    }, "다음 →"));
   } else {
     nav.appendChild(el("span", { className: "placeholder" }));
   }
@@ -1152,7 +1161,9 @@ async function renderSearchResults(query, page, autoNavigate = false, opts = {})
   dismissLaunchScreen();
 
   window.announce(`"${query}" 검색 결과 ${result.total}건`);
-  window.scrollTo(0, 0);
+  // Instant, not the root's smooth scroll: when a page link led here, the router then keeps that link where it was
+  // on screen (routing.js restoreFocusSpot), and a smooth scroll still running would carry it off afterwards.
+  window.scrollTo({ top: 0, behavior: "instant" });
 }
 
 // ── Search input event handlers (Desktop inline) ──

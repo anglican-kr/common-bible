@@ -759,35 +759,30 @@ export interface AppHelpers {
   /** 헤더 아이콘의 path — 글리프마다 하나(`back` 왼쪽 꺾쇠 · `home` 집). 같은 글리프를 그리는 곳은 모두 이것을 `headerIcon` 에 넘긴다. */
   HEADER_ICON_PATHS: Readonly<{ back: string; home: string }>;
   isModifiedClick: (e: Event) => boolean;
-  /** 화면 하나의 포커스 기억 — 화면마다 따로 만든다(한 화면이 기억한 자리가 다른 화면으로 새지 않게). */
-  createFocusMemory: () => FocusMemory;
+  /** 같은 화면을 다시 그리는 링크(`data-focus-key`)를 누른 자리 — 라우터가 이동 직전에 잰다(routing.js). 키가 없으면 null. */
+  focusSpotOf: (a: Element, e: Event, root: Element | null) => FocusSpot | null;
+  /**
+   * 새 화면이 커밋된 뒤 같은 키(없으면 `fallback`)의 컨트롤에 포커스를 둔다 — 누른 때의 화면 위치로. 찾은 컨트롤 또는 null.
+   * 포커스가 body 일 때만 — 다시 그리는 사이 독자가 다른 데(머리 검색 · 팝오버 · 탭 바)로 옮겼으면 아무것도 하지 않는다.
+   */
+  restoreFocusSpot: (spot: FocusSpot | null, root: Element | null) => HTMLElement | null;
 }
 
 /**
- * 다시 그린 화면에서 포커스를 돌려줄 자리 — 누른 컨트롤의 `data-focus-key`, 그때의 스크롤 · 화면 위치(viewport top) ·
- * 화면 루트 안에서의 위치. 새 화면의 같은 컨트롤을 누른 때와 같은 화면 위치에 둔다 — 스크롤 고정(scroll anchoring)이
- * 있는 브라우저는 `top` 으로, 없는 브라우저는 `y` · `offset` 으로(helpers.js `createFocusMemory`).
+ * 다시 그린 화면에서 포커스를 돌려줄 자리(helpers.js `focusSpotOf` → `restoreFocusSpot`, 라우터가 잇는다) — 누른 컨트롤의
+ * `data-focus-key` · 그 컨트롤이 없을 때 넘겨받을 `data-focus-fallback`, 그때의 스크롤 · 화면 위치(viewport top) · 바꿔
+ * 그리는 루트(#app) 안에서의 위치. 새 화면의 같은 컨트롤을 누른 때와 같은 화면 위치에 둔다 — 스크롤 고정(scroll
+ * anchoring)이 있는 브라우저는 `top` 으로, 없는 브라우저는 `y` · `offset` 으로.
  */
 export interface FocusSpot {
   key: string;
+  fallback: string | null;
   y: number;
   top: number;
-  offset: number;
+  /** 루트 안 위치 — 루트 밖 컨트롤(머리의 구분 탭 — sticky)은 null. */
+  offset: number | null;
   /** 마우스 · 탭으로 눌렀다(`detail` > 0) — 복원한 포커스에 링을 그리지 않는다. Enter 는 false. */
   pointer: boolean;
-}
-
-/** `createFocusMemory` 의 반환 — 클릭에서 `remember`, 렌더 시작에서 `take`, 커밋 뒤 `restore`(WCAG 2.4.3). */
-export interface FocusMemory {
-  /** 화면 루트의 click 처리기 — `data-focus-key` 링크면 그 자리를, 아니면 비운다. 새 탭 클릭 · 이미 취소된 클릭은 건너뛴다(라우터와 같은 조건). */
-  remember: (e: Event) => void;
-  /** 기억한 자리를 꺼내고 비운다 — 렌더 하나에 한 번. */
-  take: () => FocusSpot | null;
-  /**
-   * 새 루트에서 같은 키(없으면 `fallbackKey`)의 컨트롤에 포커스를 둔다 — 누른 때의 화면 위치로. 찾은 컨트롤 또는 null.
-   * 다시 그리는 사이 독자가 포커스를 다른 데(머리 검색 · 팝오버 · 탭 바)로 옮겼으면 아무것도 하지 않고 null.
-   */
-  restore: (root: Element, spot: FocusSpot | null, fallbackKey?: string) => HTMLElement | null;
 }
 
 // ── Overlay/dialog lifecycle controller (js/app/overlay.js, ADR-032) ─────────
