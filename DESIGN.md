@@ -318,7 +318,7 @@ HIG 의 절제된 깊이 표현. 라이트 기준 값이며, **다크에서는 `
 | 상태 메시지 | `.loading`·`.error`·`.cite-sheet-loading`·`.cite-sheet-error` | 중앙 정렬·`--text-secondary`(로딩)/`--danger-text`(에러)·산세리프 | — |
 | 빈 상태 | `.search-empty`·`.search-empty-state`·`.bm-empty` | 아이콘 + 제목(`--font-xl`) + 부제 중앙 정렬 | ADR-030 |
 | 업데이트 토스트 | `#sw-update-toast` | 하단 알림·`role="alert"`·버전 링크 + 업데이트 버튼 | ADR-021 |
-| 날짜 이동 줄 | `.lect-datenav`·`.lect-datenav-btn`·`.lect-today` | ‹ › 원형 링크(≥44px)·가운데 날짜 + 「오늘」 pill — 전례독서와 캘린더가 공유(‹ › 는 `lectionary.js buildDateStep` 하나)·계산 범위(1583~9999) 끝에서는 ‹ › 가 자리만 남는다(가운데가 흔들리지 않게) | ADR-038 |
+| 날짜 이동 줄 | `.lect-datenav`·`.lect-datenav-btn`·`.lect-today` | ‹ › 원형 링크(≥44px)·가운데 날짜 + 「오늘」 pill — 전례독서와 캘린더가 줄째 공유(`lectionary.js buildDateNav` 하나 — 화면마다 다른 것은 가운데 제목 요소와 이름표뿐)·계산 범위(1583~9999 — 엔진이 판정) 끝에서는 ‹ › 가 자리만 남는다(가운데가 흔들리지 않게) | ADR-038 |
 | 관측일 칩 줄 | `.lect-chips`·`.lect-chip`·`.lect-chip--muted` | 후보마다 pill 링크(≥44px)·**줄바꿈**(낱말처럼 이어 놓고 줄이 차면 다음 줄 — 가로 스크롤 금지: 휴대폰에서 끝 칩이 숨는다)·칩 최대 폭 `clamp(9rem, 60vw, 22rem)` 말줄임 + 전체 이름 `title`·고른 칩 `--accent` 채움·그날 지키지 않는 후보(생략 · 떠남 · 기념일)는 점선 테두리 + 보조 글자색 | ADR-038 |
 | 캘린더 월간 표 | `.cal-grid`·`.cal-cell`·`.cal-dot`·`.cal-name` | `<table>` 7열 `table-layout:fixed`(칸이 내용에 밀려 넓어지지 않는다 — 1.6.0 달력의 폰 넘침 재발 방지)·칸 전체가 링크·오늘은 날짜에 `--accent` 원(글자 `--bg`)·이름은 `--font-2xs` 두 줄 말줄임·색 점은 `.lit-swatch`(§2 「전례색」)·링크 이름은 칸에 보이는 이름 그대로(WCAG 2.5.3)·달 이동 뒤 포커스는 누른 단추로 | ADR-038 |
 

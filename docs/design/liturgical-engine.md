@@ -241,6 +241,9 @@ function preloadCalendar() {
 | `dayOfWeek(s)` | 0(일)~6(토) |
 | `dayOfYear(s)` | 1~366. **윤년의 2/29 를 센다** — 연중 주차 `doy` 앵커가 이 정의를 전제 |
 | `nearestSunday(s)` · `firstSundayAfter(s)` · `lastSundayBefore(s)` · `nthSunday(y, m, n)` | 이동 규칙 평가용 |
+| `isComputableYear(y)` · `isComputableDate(s)` · `MIN_YEAR` · `MAX_YEAR` | 교회력을 계산하는 범위 — 1583(그레고리력이 시작된 1582년의 이듬해 — computus §4.2 가 그레고리력 산식이다)~9999(`parseDate` 가 받는 네 자리 연도). **범위의 정본은 엔진이다** — 뷰(전례독서 · 캘린더)는 연도를 손으로 비교하지 않고 이것을 읽는다. 범위 밖 날짜는 `resolveDate` 가 null(§5.5) |
+
+내부 덧셈 `shift` 는 실패(`addDays` 의 null)를 throw 한다 — 같은 날로 삼키면 날짜를 하루씩 넘기는 루프(`computeTransfers`)가 끝나지 않는다(0100년대를 풀 때 탭이 멈췄다 — `parseDate` 가 0~99년을 거부한다). 계산 범위 안에서는 일어나지 않는다(1583~9999 전 날짜 3,074,246일 실측, 2026-10-17).
 
 ### 4.2 부활절 computus
 
@@ -646,7 +649,7 @@ d1230-성탄주간-t1-s1             name="성탄주간"     weekday=null  date=
 ### 5.5 `resolveDate` — 후보 집합을 전부 보존한다
 
 ```js
-/** @returns {ResolvedDate | null} — 잘못된 날짜 문자열이면 null */
+/** @returns {ResolvedDate | null} — 잘못된 날짜 문자열이거나 계산 범위(§4.1 — 1583~9999) 밖이면 null */
 function resolveDate(dateStr) → {
   date, coord,                 // 격자 좌표 (temporal) — year 는 연중 평일이면 I/II, 그 밖은 A/B/C
   candidates: Candidate[],     // 그날 지킬 수 있는 관측일 전부 — 옮겨온 것 포함
