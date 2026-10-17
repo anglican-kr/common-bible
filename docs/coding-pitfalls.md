@@ -495,6 +495,22 @@ A2 캘린더 탭 1단계(#348) 화면에서 성 토요일(2026-04-04) 칸이 「
 
 ---
 
+## 27. `// @ts-check` 가 문 뒤에 있으면 검사가 조용히 빠진다 — 선언이 데이터 · 코드와 어긋난 채 쌓인다 (2026-10-17)
+
+`checkJs: false` 라 파일마다 `// @ts-check` 로 검사를 켠다. 그런데 지시문 앞에 `"use strict";` 같은 문(statement)이 있으면 TypeScript 는 지시문을 읽지 않고 그 파일을 **오류 없이** 뺀다 — `npm run typecheck` 가 0 이어도 그 파일은 검사받지 않은 것이다(앞에 주석만 있는 것은 괜찮다). 검사 밖에서는 `js/types.d.ts` 의 선언이 실제 데이터 · 코드와 어긋나도 아무도 모른다.
+
+**사례:**
+- `lectionary.js`(#346) — 975줄이 검사 밖이었다(원장 `docs/changes/2026-10-12-lectionary-view.md` 3회차 ①).
+- 22개 파일(2026-10-15 발견 — `known-issues.md` §7) — 묶음 ① 16개를 켜자 44건(원장 `docs/changes/2026-10-17-typecheck-batch-1.md`): `BookEntry.division` 에 데이터의 `"liturgical"`(전례시편 · 송가)이 없었고, `BibleVerse.chapter_ref` 는 데이터가 정수인데 `string` 이었고, `AppStorage` 에 `loadCiteShow` · `saveCiteShow` 가, Window 에 창 객체 다섯이 빠져 있었고, `parsePath()` 의 전역 선언은 `any` 였다. 실행 결함은 없었지만 선언을 믿고 짠 새 코드가 틀릴 자리였다.
+- 같은 묶음 — JSDoc 블록과 함수 사이에 `const` 하나가 끼어 매개변수 타입이 함수에 붙지 않았고(citations.js `wrapNoteAnchorsInArticle`), `@param {T} [이름] — 설명`(대괄호 이름 바로 뒤 줄표)은 TS 가 「Invalid character」(TS1127)로 읽었다.
+
+**규칙:**
+- `// @ts-check` 는 첫 줄에 둔다(어떤 문보다 앞). 새 파일 · 순서를 바꾼 파일은 타입 오류를 일부러 하나 넣어 그 파일에서 잡히는지 본다(ADR-012 「파일 헤더」).
+- 창 객체 꾸러미(`window.appX = (() => { … })()`)의 IIFE 에는 `@returns {AppX}` 를 단다 — 인터페이스에 없는 멤버가 받는 쪽이 아니라 정의한 자리에서 걸린다.
+- 데이터 모양의 타입을 고칠 때는 파이프라인(`data/src/parser.py` 등)의 필드 타입과 실제 JSON 을 함께 대조한다.
+
+---
+
 ## 부록 A: 변수명 섀도잉
 
 DOM 쿼리 결과에 `el`, `node` 같은 짧은 이름을 쓰면 외부 스코프나 인접 코드의 동명 변수와 컨텍스트가 섞인다.
