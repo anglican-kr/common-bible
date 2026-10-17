@@ -968,6 +968,12 @@ export interface AppStorage {
 
 export interface AppCitations {
   _computeCiteShowPositions: (verses: ReadonlyArray<BibleVerse>) => Set<string>;
+  // Test seam — ADR-003 cross-chapter relocation lookup, bounded to RELOCATION_MAX_DISTANCE chapters.
+  _findRelocated: (
+    bookId: string,
+    ch: number,
+    parts: Array<{ startCh: number; startV: number; endCh: number | null; endV: number | null }>,
+  ) => Promise<{ verses: Array<BibleVerse>; fromChapter: number; chapterData: BibleChapter } | null>;
   chipText: (
     src: string,
     parallels: ReadonlyArray<CiteParallelRef> | null | undefined,
