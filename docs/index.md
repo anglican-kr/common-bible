@@ -11,7 +11,7 @@
 | Service Worker · 캐시 · 릴리스    | ADR-021 · `architecture.md` §4.6 · §8 · pitfalls §7 · §15 · `scripts/release.py` 헤더                                                                                            |
 | 검색                              | ADR-005 · 014 · 033 · `architecture.md` §4.2 · `js/search-worker.js` 헤더 주석                                                                                                  |
 | 북마크 · 절 선택 · 모아 읽기      | ADR-010 · 035 · `js/app/verse-spec.js` · pitfalls §6                                                                                                                             |
-| Drive 동기화 · OAuth              | ADR-011 · 017 · `architecture.md` §4.3 · §9 · pitfalls §11 · §12 · `archive/audit/`                                                                                             |
+| Drive 동기화 · OAuth              | ADR-011 · 017 · `architecture.md` §4.3 · §9 · pitfalls §11 · §12 · §28 · `archive/audit/`                                                                                       |
 | 설정 · 디자인 시스템 · CSS        | `DESIGN.md`(루트) · ADR-028 · 023 · 025 · pitfalls §8 · §14                                                                                                                      |
 | 오디오                            | ADR-016 · `js/app/audio-player.js` · pitfalls §15                                                                                                                                |
 | 교회력 · 전례독서 · 캘린더        | `reference/liturgical-calendar-rules.md`(기도서 원문 — 알고리즘의 권위) · `design/liturgical-engine.md`(설계 + 미결 목록 — §1.4 정본 지도부터) · ADR-036 · 037 · 038 · `design/liturgical-engine-review.md` · `tests/fixtures/liturgical/README.md`(실제 연도 기대값 정본) · `archive/design/liturgical-engine-booklet-comparison-2026-09.md`(2024~2026 책자·달력 대조 원문 — 점-시점) · 뷰는 ADR-038 §3 「구현」 + `js/app/lectionary.js` 머리 주석 · 캘린더는 ADR-038 §2 「구현」 + `js/app/calendar.js` 머리 주석 |
@@ -25,7 +25,7 @@
 
 - `status.md` — 기능 단위 "지금 무엇이 동작하는가". 구현 PR 머지 시 갱신. 권위 출처.
 - `known-issues.md` — 미해결 이슈·후속 백로그. 해결되면 지우고 원장에 남긴다 — 절이 통째로 비면 그 자리에 노트(왜 지웠나 · 어느 원장)를 두고 번호는 당기지 않는다(pitfalls §26).
-- `coding-pitfalls.md` — 반복된 실수 패턴 27절 + 부록. 코드 실수뿐 아니라 사용자 교정·도메인 확정도 여기에 쌓는다.
+- `coding-pitfalls.md` — 반복된 실수 패턴 29절 + 부록. 코드 실수뿐 아니라 사용자 교정·도메인 확정도 여기에 쌓는다.
 - `architecture.md` — 제약 4가지 · 빌드/런타임 모듈 지도 · 영속 데이터 · 보안 모델 · **부록 A ADR 인덱스** · 부록 B 파일 빠른 참조.
 - `decisions/NNN-*.md` — ADR. 상태 필드 + 본문은 현재 결론 — 결정이 바뀌면 제자리를 고치고 버린 선택지는 「검토한 대안」에 날짜·이유·재검토 조건과 함께 남긴다(개정 블록은 001~035 에 남은 옛 형식). 새 결정은 다음 번호.
 - `design/` — 진행 중인 구현 설계서(현재: 교회력 엔진 2종). 완료되면 `archive/design/` 으로.
