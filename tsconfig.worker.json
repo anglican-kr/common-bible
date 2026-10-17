@@ -6,7 +6,7 @@
     "moduleResolution": "node",
     "lib": ["WebWorker", "ES2022"],
     "allowJs": true,
-    "checkJs": false,
+    "checkJs": true,
     "noEmit": true,
     "strict": true,
     "noImplicitAny": true,
