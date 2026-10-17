@@ -1,5 +1,5 @@
-"use strict";
 // @ts-check
+"use strict";
 
 // Audio Player — extracted from views.js (ADR-034 PR1, follow-up to
 // ADR-018 Phase 7). Owns the per-chapter MP3 player UI, playback state, and the
@@ -25,6 +25,7 @@ const DATA_DIR = "/data";
 const $audioBar = _$("audio-bar");
 
 // Audio Player module state (was views.js L891-L895 / app.js L112-L116).
+/** @type {HTMLAudioElement | null} */
 let currentAudio = null;
 /** @type {AbortController | null} */
 let _audioController = null;

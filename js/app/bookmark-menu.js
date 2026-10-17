@@ -1,5 +1,5 @@
-"use strict";
 // @ts-check
+"use strict";
 
 // Bookmark tab-view title-row actions — extracted from bookmark.js (ADR-034 후속).
 // The "⋯" (더 보기) overflow menu (새 폴더·내보내기·가져오기·선택) + the 정렬 field /
@@ -86,7 +86,7 @@ function buildBmViewActions() {
   const menu = el("div", { className: "title-action-menu", role: "menu", "aria-label": "더 보기", hidden: "" });
   /** @type {{ item: HTMLElement, mode: string }[]} */
   const sortItems = [];
-  /** @type {{ item: HTMLButtonElement, dir: string, note: HTMLElement }[]} */
+  /** @type {{ item: HTMLButtonElement, dir: "asc" | "desc", note: HTMLElement }[]} */
   const dirItems = [];
   // 오름/내림 alone is ambiguous and its meaning flips per field (제목 오름=가나다,
   // but 추가된 날짜 오름=오래된 순), so each row carries a field-specific clarifier
@@ -221,7 +221,7 @@ function buildBmViewActions() {
   // whichever field is active, remembered per field. Reuses the --sort row
   // (leading checkmark slot) so it lines up with the fields above.
   const dirGroup = el("div", { className: "title-action-menu-group", role: "group", "aria-label": "정렬 순서" });
-  /** @param {string} label @param {string} dir */
+  /** @param {string} label @param {"asc" | "desc"} dir */
   function addDirItem(label, dir) {
     const item = /** @type {HTMLButtonElement} */ (el("button", {
       className: "title-action-menu-item title-action-menu-item--sort",

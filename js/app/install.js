@@ -1,5 +1,5 @@
-"use strict";
 // @ts-check
+"use strict";
 
 // PWA install detection + Install guide modal + Install nudge auto-show.
 // Phase 4 of the app.js modularization (ADR-018). First module written in

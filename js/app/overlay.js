@@ -1,5 +1,5 @@
-"use strict";
 // @ts-check
+"use strict";
 
 // Overlay/dialog lifecycle controller (ADR-032). One factory gathers the
 // open/close + `.hidden` toggle + scrim + trapFocus + Escape + setInert +

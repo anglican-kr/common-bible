@@ -1,5 +1,5 @@
-"use strict";
 // @ts-check
+"use strict";
 
 // Verse selection mode — extracted from bookmark.js (ADR-034 후속). The in-reading
 // affordance: tapping verses highlights them, the #verse-select-bar dock shows the
@@ -33,6 +33,7 @@ const $verseSelectCancelBtn = _$("verse-select-cancel-btn");
 
 // Flatten the inner corners between adjacent selected verses so a run of
 // consecutive selections renders as a single highlighted block.
+/** @param {Element | null} [scope] */
 function updateVerseSelectionBoundaries(scope) {
   const root = scope || document;
   const verses = [...root.querySelectorAll(".verse[data-vref]")];
@@ -46,6 +47,7 @@ function updateVerseSelectionBoundaries(scope) {
   }
 }
 
+/** @param {string} bookId @param {number} chapter */
 function enterVerseSelectMode(bookId, chapter) {
   readingContext.verseSelectMode = true;
   readingContext.selectedVerses.clear();

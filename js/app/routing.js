@@ -1,5 +1,5 @@
-"use strict";
 // @ts-check
+"use strict";
 
 // Routing — extracted from views.js (ADR-034 PR5a). Owns URL parsing
 // (parsePath), SPA navigation (navigate), the route() orchestrator + page meta
@@ -15,6 +15,7 @@
 
 /** @typedef {import("../types").BooksData} BooksData */
 /** @typedef {import("../types").BookEntry} BookEntry */
+/** @typedef {import("../types").Route} Route */
 
 import { loadBooks, loadChapter, loadPrologue } from "./data-fetch.js";
 import {
@@ -45,6 +46,7 @@ const $searchClear = _$("search-clear");
 const $searchBar = _$("search-bar");
 
 // ── Reading-position scroll tracker + route state ──
+/** @type {(() => void) | null} */
 let _scrollTrackCleanup = null;
 let _isInitialLoad = true;
 // ADR-031: route() 호출마다 증가. 리다이렉트(books→resume 등)로 route 가 재진입하면
@@ -56,6 +58,7 @@ let _routeSeq = 0;
 // 리다이렉트는 자리 없이 시작한다). 새 화면이 커밋된 뒤 finally 에서 그 route 가 여전히 최신이면 돌려준다.
 /** @type {import("../types").FocusSpot | null} */
 let _pendingFocusSpot = null;
+/** @param {string} bookId @param {number} chapter */
 function startScrollTracking(bookId, chapter) {
   if (_scrollTrackCleanup) _scrollTrackCleanup();
   /** @type {ReturnType<typeof setTimeout> | null} */
@@ -94,6 +97,7 @@ function startScrollTracking(bookId, chapter) {
 // Pure URL → route descriptor. Reads location.pathname/search and the
 // DIVISION_LABELS / parseVerseSpec / selectedVersesToSpec deps; no DOM, no
 // history side effects — sliced + unit-tested in tests/unit/routing.test.js.
+/** @returns {Route} */
 function parsePath() {
   const pathname = location.pathname.replace(/^\//, "");
   if (!pathname) return { view: "books" };
@@ -297,7 +301,8 @@ async function route() {
   // on nav also makes the /settings desktop fallback's gear.click() always OPEN.
   window.appOverlay.closeAllOverlays();
   const parsed = parsePath();
-  const { view, bookId, chapter, division } = parsed;
+  // Narrowing on the destructured `view` narrows `parsed` too — each branch reads its own fields off it.
+  const { view } = parsed;
 
   // Sync the desktop header search input with the current route. On mobile the
   // header bar is hidden and /search renders its own in-page input, so skip it.
@@ -499,6 +504,7 @@ async function route() {
     }
 
     if (view === "division") {
+      const { division } = parsed;
       // In vulgate mode, deuterocanon has no separate tab — redirect to old_testament
       if (division === "deuterocanon" && loadBookOrder() === "vulgate") {
         navigate("/old_testament");
@@ -515,6 +521,7 @@ async function route() {
       return;
     }
 
+    const { bookId } = parsed;
     const book = books.find((b) => b.id === bookId);
     if (!book) {
       renderError("해당 성서를 찾을 수 없습니다.");
@@ -553,6 +560,7 @@ async function route() {
     }
 
     if (view === "chapter") {
+      const { chapter } = parsed;
       if (!bookId || typeof chapter !== "number") return;
       if (chapter < 1 || chapter > book.chapter_count) {
         renderError("해당 장을 찾을 수 없습니다.");

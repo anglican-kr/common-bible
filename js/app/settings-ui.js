@@ -1,5 +1,5 @@
-"use strict";
 // @ts-check
+"use strict";
 
 // Settings popover + icon recoloring + theme/color/font apply + launch
 // screen. Phase 3 of the app.js modularization (ADR-018).
@@ -263,7 +263,7 @@ window.appSettings = (() => {
    * @param {string} opts.labelText
    * @param {boolean} opts.checked
    * @param {(on: boolean) => void} opts.onToggle
-   * @param {(on: boolean) => string} [opts.getCaption] — when given, a caption is rendered and updated on toggle
+   * @param {(on: boolean) => string} [opts.getCaption] When given, a caption is rendered and updated on toggle
    * @returns {HTMLDivElement}
    */
   function makeToggleRow({ labelText, checked, onToggle, getCaption }) {

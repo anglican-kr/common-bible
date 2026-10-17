@@ -1,5 +1,5 @@
-"use strict";
 // @ts-check
+"use strict";
 
 // ADR-027 chapter-level parallel-passage marker — footnote-anchor rendering.
 //

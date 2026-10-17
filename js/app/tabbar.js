@@ -245,7 +245,8 @@ $home?.addEventListener("click", (e) => {
   // 맞춘다(헤더 홈 버튼 buildHomeBtn 과 동일 UX — 키보드/스크린리더 사용자가 맥락에
   // 착지). 목록·구분 화면(bookId 없음)에선 기본 href="/" 로 진행해 최상단.
   const p = W.parsePath?.();
-  const book = p?.bookId && W.getBooksCache?.()?.find((/** @type {any} */ b) => b.id === p.bookId);
+  const bookId = p && "bookId" in p ? p.bookId : null;
+  const book = bookId && W.getBooksCache?.()?.find((b) => b.id === bookId);
   if (book) {
     e.preventDefault();
     W.setPendingBookFocus?.(book.id);

@@ -1,5 +1,5 @@
-"use strict";
 // @ts-check
+"use strict";
 
 // Bookmark gesture engine — extracted from bookmark.js (ADR-034 후속). The
 // interaction layer for the bookmark tree: drag-to-reorder (DRAG_CORE + drag

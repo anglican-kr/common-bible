@@ -1,5 +1,5 @@
-"use strict";
 // @ts-check
+"use strict";
 
 // Bookmark select-delete mode — extracted from bookmark.js (ADR-034 후속). In-place
 // multi-select over the mobile /bookmarks full view (ADR-029 개정 / ADR-010): rows
@@ -346,6 +346,7 @@ function _moveSelectedToFolder(targetFolderId) {
 function _openMoveSelection() {
   const parentMap = _bmBuildParentMap(loadBookmarks());
   if (!_bmEffectiveTargets(parentMap).length) return;
+  /** @param {string} folderId */
   const excludeFolder = (folderId) => _bmSelected.has(folderId) || _bmAncestorSelected(folderId, parentMap);
   openMoveModal({ excludeFolder, onPick: _moveSelectedToFolder });
 }

@@ -51,10 +51,7 @@ const PAGE_TITLE = "전례독서";
 // 이 화면의 링크(날짜 이동 · 칩 · 카드 · 세그먼트)는 #app 을 통째로 다시 그린다 — 그 링크들은 `data-focus-key` 만 달고, 라우터가
 // 누른 자리를 재 두었다가 새 화면의 같은 컨트롤로 포커스를 돌려준다(WCAG 2.4.3 — routing.js, 캘린더 · 구분 탭 · 검색과 같다).
 
-/**
- * parsePath 가 /lectionary 에서 내는 서술자(routing.js PARSE_PATH). `date` 가 null 이면 오늘.
- * @typedef {{ view: "lectionary", date: string | null, obs: string | null, track: 1 | 2 | null, set: number | null, collect: number | null }} LectionaryRoute
- */
+/** parsePath 가 /lectionary 에서 내는 서술자(routing.js PARSE_PATH — 정의는 types.d.ts `Route`). @typedef {import("../types").LectionaryRoute} LectionaryRoute */
 /** URL 쿼리에서 온 상태 — 넷 다 없을 수 있다. @typedef {{ obs: string | null, track: 1 | 2 | null, set: number | null, collect: number | null }} LectionaryQuery */
 /** @typedef {{ label: string, note: string, official: boolean }} PairCardText */
 /**
