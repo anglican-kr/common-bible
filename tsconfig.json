@@ -1,11 +1,12 @@
 {
+  "//": "checkJs: true — js/ 의 모든 파일을 검사한다. 뺄 파일은 첫 줄을 // @ts-nocheck 로(어떤 문보다 앞 — 잘못 두면 그 파일이 검사돼 오류로 드러난다). ADR-012 · docs/known-issues.md §7.",
   "compilerOptions": {
     "target": "ES2022",
     "module": "ES2022",
     "moduleResolution": "node",
     "lib": ["DOM", "DOM.Iterable", "ES2022"],
     "allowJs": true,
-    "checkJs": false,
+    "checkJs": true,
     "noEmit": true,
     "strict": true,
     "noImplicitAny": true,

@@ -20,3 +20,10 @@ jobs:
         with:
           node-version: "24"
       - run: node --test tests/unit/*.test.js
+      # 타입 검사(ADR-012)도 이 잡에서 돈다 — 브랜치 보호의 필수 검사가 이 잡(「Unit tests」)이라, 여기 두어야
+      # 타입 오류가 머지를 막는다. checkJs: true 라 js/ 의 모든 파일을 보고, 아직 고치지 못한 파일만 첫 줄
+      # `// @ts-nocheck` 로 빠진다(docs/known-issues.md §7). devDependency 는 typescript 하나 — 설치 스크립트는 돌리지 않는다.
+      - name: 타입 검사
+        run: |
+          npm ci --ignore-scripts
+          npm run typecheck

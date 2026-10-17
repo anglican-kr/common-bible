@@ -1,5 +1,5 @@
+// @ts-nocheck — 타입 오류가 남아 검사에서 뺐다(docs/known-issues.md §7 묶음 ②). 고치는 PR 이 이 줄을 지운다 — ADR-012.
 "use strict";
-// @ts-check
 
 // Search engine wire-up + UI controllers (desktop top-bar + mobile full-screen
 // /search view + history panel). Owns the Worker lifetime (`searchWorker`), all

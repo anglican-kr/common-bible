@@ -1,5 +1,5 @@
+// @ts-nocheck — 타입 오류가 남아 검사에서 뺐다(docs/known-issues.md §7 묶음 ③). 고치는 PR 이 이 줄을 지운다 — ADR-012.
 "use strict";
-// @ts-check
 
 // Bookmark tree rendering — extracted from bookmark.js (ADR-034 후속, 마지막 라운드 2/2).
 // The bookmark UI's core: per-row builders (bookmark/folder items, swipe actions,
