@@ -1280,7 +1280,7 @@ test("49. 합친 뒤 올리기 대기 중 disable() → 업로드가 끝나도 �
   assert.equal(localStorage.getItem(CACHE_SYNCED_U_KEY), null, "syncedMaxU 캐시가 다시 차지 않음");
 });
 
-test("50. 대기 중 disable() 뒤 그 대기가 예외로 끝나도 SYNC_EXCEPTION · SYNC_FAIL 을 내지 않는다", async () => {
+test("50. 대기 중 disable() 뒤 그 대기가 예외로 끝나면 — 사유는 SYNC_EXCEPTION 으로 남기되 SYNC_FAIL 은 내지 않는다", async () => {
   // 지금의 transport.js 는 예외를 던지지 않고 status 0 을 돌려준다 — 그 계약이 바뀌어도 멈춘 사이클은 조용해야 한다.
   let rejectDownload;
   const dlPromise = new Promise((_, rej) => { rejectDownload = rej; });
@@ -1301,9 +1301,9 @@ test("50. 대기 중 disable() 뒤 그 대기가 예외로 끝나도 SYNC_EXCEPT
   rejectDownload(new Error("network down"));
   await drain(5);
   const after = logEntries.slice(mark);
+  assert.ok(after.some((e) => e.event === "SYNC_EXCEPTION" && e.reason === "network down"), "사유는 진단에 남는다");
   assert.ok(after.some((e) => e.event === "SYNC_ABORTED" && e.at === "exception"), "SYNC_ABORTED(exception) 로그");
-  assert.ok(!after.some((e) => e.event === "SYNC_EXCEPTION"), "SYNC_EXCEPTION 없음");
-  assert.ok(!after.some((e) => e.kind === "ACTION" && e.event === "SYNC_FAIL"), "SYNC_FAIL 없음");
+  assert.ok(!after.some((e) => e.kind === "ACTION" && e.event === "SYNC_FAIL"), "멈춘 사이클은 SYNC_FAIL 을 내지 않는다");
   assert.equal(machine.getState(), "DISABLED");
 });
 
@@ -1434,7 +1434,7 @@ test("56. deleteRemoteFile — 파일 찾기가 실패하면 false · 지우기�
   let failFind = false;
   let finds = 0;
   const deletes = [];
-  const { machine, drain } = loadMachine({
+  const { machine, drain, logEntries } = loadMachine({
     initialRefreshToken: "rt-x",
     overrideStubs: {
       T: {
@@ -1452,6 +1452,8 @@ test("56. deleteRemoteFile — 파일 찾기가 실패하면 false · 지우기�
   failFind = true;
   assert.equal(await machine.deleteRemoteFile(), false, "찾기 실패 — 지웠는지 알 수 없다");
   assert.deepEqual(deletes, [], "지우기를 보내지 않음");
+  assert.ok(logEntries.some((e) => e.kind === "ERROR" && e.event === "DELETE_UNCONFIRMED" && e.reason === "lookup_http_503"),
+    "진단의 오류 칸에 남는다");
   assert.equal(machine.getState(), "DISABLED");
   failFind = false;   // 찾기가 된다 해도 —
   const before = finds;
@@ -1567,7 +1569,7 @@ function heldCreateMachine() {
 }
 
 test("67a. 「파일도 삭제」 — 진행 중 요청이 기다림 상한을 두 번 넘기면 false(안내가 남는다) · 로그아웃을 붙잡지 않는다", async () => {
-  const { machine, drain, fireAllTimers } = heldCreateMachine();
+  const { machine, drain, fireAllTimers, logEntries } = heldCreateMachine();
   machine.enable();
   await drain(4);
   assert.equal(machine.getState(), "SYNCING", "새 파일 올리기가 멈춰 있다");
@@ -1577,6 +1579,7 @@ test("67a. 「파일도 삭제」 — 진행 중 요청이 기다림 상한을 �
   await drain(3);
   fireAllTimers();   // 두 번째 기다림도 끝 — 그 요청이 뒤늦게 파일을 만들 수 있다
   assert.equal(await done, false, "지웠다고 말할 수 없다");
+  assert.ok(logEntries.some((e) => e.event === "DELETE_UNCONFIRMED" && e.reason === "cycle_still_running"));
 });
 
 test("67b. 「파일도 삭제」 — 두 번째 기다림 안에 그 요청이 도착하면 다시 찾아 지운다", async () => {

@@ -112,8 +112,10 @@ function _format(e, baseTs) {
   const parts = [`[+${elapsed}s]`, e.event ?? e.kind];
   if (e.from)       parts.push(`${e.from}→${e.to ?? "?"}`);
   if (e.state)      parts.push(`state:${e.state}`);
+  if (e.at)         parts.push(`at:${e.at}`);            // where a stopped sync cycle stopped (SYNC_ABORTED)
   if (e.reason)     parts.push(`reason:${e.reason}`);
-  if (e.status)     parts.push(`http:${e.status}`);
+  if (e.status != null) parts.push(`http:${e.status}`); // 0 = network error / unreadable body — shown too
+  if (e.ok !== undefined) parts.push(`ok:${e.ok}`);
   // Pre-masked by caller via mask("etag", value). Surfacing it in the dump
   // lets us diagnose why conditional GET (If-None-Match) never resolves to
   // 304 — `etag:null` here = ETag header missing in download response, which

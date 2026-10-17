@@ -800,9 +800,11 @@ function createSyncMachine({ onStateChange } = {}) {
 
       dispatch({ type: "SYNC_DONE" });
     } catch (err) {
-      if (_leftSyncing("exception")) return;
+      // Always reported (the reason is what a copied diagnostic needs) — but a cycle that has stopped
+      // (sign-out) or already settled dispatches nothing more.
       const msg = err instanceof Error ? err.message : String(err);
       L.log({ kind: "ERROR", event: "SYNC_EXCEPTION", reason: msg });
+      if (_leftSyncing("exception")) return;
       dispatch({ type: "SYNC_FAIL", reason: msg === "no_token" ? "no_token" : "exception" });
     } finally {
       _syncPending = false;
@@ -1121,17 +1123,19 @@ function createSyncMachine({ onStateChange } = {}) {
       }
       return res;
     };
+    /** @type {string | null} why the delete could not be confirmed — reported as an ERROR entry */
+    let unconfirmed = null;
     const deleteAll = async () => {
       const found = await withAuth((t) => T.findSyncFileId(t));
       L.log({ kind: "NETWORK", event: "DELETE_FIND_FILE", status: found.status, fileId: L.mask("fileId", found.fileId) });
-      if (!_is2xx(found.status)) return false;
+      if (!_is2xx(found.status)) { unconfirmed = `lookup_http_${found.status}`; return false; }
       const ids = new Set(found.fileIds);
       if (cachedId) ids.add(cachedId);
       for (const id of _createdFileIds) ids.add(id);
       for (const id of ids) {
         const { ok, status } = await withAuth((t) => T.deleteSyncFile(t, id));
         L.log({ kind: "NETWORK", event: "DELETE_FILE", ok, status, fileId: L.mask("fileId", id) });
-        if (!ok && status !== 404) return false;   // 404 — already gone
+        if (!ok && status !== 404) { unconfirmed = `delete_http_${status}`; return false; }   // 404 — already gone
       }
       _createdFileIds.clear();
       return true;
@@ -1142,8 +1146,10 @@ function createSyncMachine({ onStateChange } = {}) {
     if (deleted && !settled) {
       // The cycle's request may still land and create a file — wait once more, then look again.
       settled = await _settles(_cycleDone, CYCLE_WAIT_MS);
+      if (!settled) unconfirmed = "cycle_still_running";
       deleted = settled && await deleteAll();
     }
+    if (!deleted) L.log({ kind: "ERROR", event: "DELETE_UNCONFIRMED", reason: unconfirmed ?? "unknown" });
     T.revokeToken(token);
     return deleted;
   }
