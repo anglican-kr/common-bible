@@ -2665,6 +2665,7 @@ a.cal-cell:focus-visible { background: var(--bg-card); }
 /* ── Search Results ── */
 .search-count {
   font-size: var(--font-xs);
+  font-weight: normal;   /* an <h2> for screen-reader heading navigation — it looks like the plain line it was */
   color: var(--text-secondary);
   margin-bottom: var(--space-4);
 }
