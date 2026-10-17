@@ -1282,7 +1282,8 @@ declare global {
   function loadPrologue(bookId: string): Promise<BiblePrologue>;
   function setTitleWithChapterPicker(book: BookEntry, currentCh: number): void;
   function buildDivisionTabs(activeDivision: string): HTMLElement;
-  function divisionLabels(): Record<string, string>;
+  // Partial like views.js DIVISION_LABELS — a lookup by an arbitrary string can miss.
+  function divisionLabels(): Readonly<Partial<Record<string, string>>>;
   function divisionOrder(): string[];
   function effectiveDivision(book: BookEntry): string;
   // 「성서 목록으로」 destination — the book's division tab, or "/" for a book in no tab (전례시편 · 송가).

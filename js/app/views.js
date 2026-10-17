@@ -209,6 +209,7 @@ function effectiveDivision(book) {
 // division tab. A book in no tab — 전례시편 · 송가 (`division: "liturgical"`, ADR-037 §3; reached from the
 // lectionary, a bookmark or a shared link, never from the list) — lands on the list's first screen: `/liturgical`
 // is no route — parsePath reads it as a book id and the view says 「해당 성서를 찾을 수 없습니다」.
+/** @param {BookEntry} book @returns {string} */
 function bookListPath(book) {
   const division = effectiveDivision(book);
   return divisionOrder().includes(division) ? `/${division}` : "/";
