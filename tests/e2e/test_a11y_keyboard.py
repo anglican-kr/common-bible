@@ -196,6 +196,10 @@ def test_search_page_links_keep_keyboard_focus_on_the_pressed_link(browser):
         page.wait_for_url("**page=2")
         page.wait_for_function("() => document.querySelector('.search-page-info')?.textContent.startsWith('2 /')")
         assert _focus_key(page) == {"key": "page:next", "visible": True}
+        # 포커스가 「다음 →」에 남으므로 몇 쪽인지는 라이브 영역이 말로 알린다(「2/5」는 분수로 읽힐 수 있다) — 한 번, polite
+        page.wait_for_function(f"() => document.getElementById('a11y-announce').textContent.endsWith('전체 {total}쪽 중 2쪽')")
+        # 결과 건수 줄은 제목 — 포커스를 「다음 →」에 둔 채 제목 이동(VoiceOver 로터 · TalkBack)으로 새 결과 첫머리에 간다
+        assert page.evaluate("() => document.querySelector('.search-count').tagName") == "H2"
         # 마지막 쪽으로 — 누른 「다음 →」이 새 페이지에 없다
         page.goto(f"{BASE}/search?q=사랑&page={total - 1}")
         page.wait_for_function(f"() => document.querySelector('.search-page-info')?.textContent.startsWith('{total - 1} /')")

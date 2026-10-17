@@ -308,7 +308,9 @@ function renderSearchResultList(container, result, query, page, pageSize, pagina
     const countLabel = isPending
       ? `"${query}" 검색 중… (현재 ${result.total}건)`
       : `총 ${result.total}건 (${page}/${totalPages}쪽)`;
-    container.appendChild(el("p", { className: "search-count" }, countLabel));
+    // A heading, so a screen-reader user whose focus stayed on the pressed page link (routing.js) reaches the new
+    // page's results in one move — VoiceOver rotor / TalkBack headings. Looks the same as the old <p> (style.css).
+    container.appendChild(el("h2", { className: "search-count" }, countLabel));
 
     for (const r of result.results) {
       const li = el("li", { className: "search-result-item" });
@@ -1160,7 +1162,14 @@ async function renderSearchResults(query, page, autoNavigate = false, opts = {})
   renderSearchResultList(resultsTarget, result, query, page, pageSize, paginationBuilder);
   dismissLaunchScreen();
 
-  window.announce(`"${query}" 검색 결과 ${result.total}건`);
+  // After a page link the focus stays on it (routing.js — user decision 2026-10-17), so the page number is spoken
+  // here, once and politely — Apple's VoiceOver criteria ask status updates to be conveyed "in a timely but
+  // non-disruptive manner", Android 16 points to live regions used sparingly. 「2/5」 may be read as a fraction —
+  // say it in words.
+  const totalPages = Math.ceil(result.total / pageSize);
+  window.announce(totalPages > 1
+    ? `"${query}" 검색 결과 ${result.total}건, 전체 ${totalPages}쪽 중 ${page}쪽`
+    : `"${query}" 검색 결과 ${result.total}건`);
   // Instant, not the root's smooth scroll: when a page link led here, the router then keeps that link where it was
   // on screen (routing.js restoreFocusSpot), and a smooth scroll still running would carry it off afterwards.
   window.scrollTo({ top: 0, behavior: "instant" });
