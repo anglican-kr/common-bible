@@ -177,3 +177,17 @@ ADR-038 §3 렌더 기반이 복원하는 전례 표기 — 계응 ◯(`.respons
 #349(저녁 전례)의 `/code-review` 가 범위 밖으로 짚은 것. 지적 15건은 모두 그 PR 에서 고쳤다 — 조치는 원장 `docs/changes/2026-10-15-liturgical-engine-evening.md` 「리뷰 반영」.
 
 - **배포 목록에 `data/lectionary/` 가 없다 — 다음 릴리스를 막는다**(이 저장소 밖 — `common-bible-server`). `scripts/deploy-manifest.txt` 의 정적 자산 줄에 `data/bible/` · 검색 색인만 있고 교회력 · 전례독서 묶음(`data/lectionary/*.json`)이 없다(2026-10-16 확인). 이대로 배포하면 `deploy.zip` 에 묶음이 빠져 dev · 운영의 `/calendar` · `/lectionary` 가 「교회력 자료를 불러오지 못했습니다」 화면이 된다. 서버 저장소 PR 로 그 줄을 더하고 `deploy.sh verify` 가 묶음 하나의 200 을 보게 한다(메모의 「배포 목록 갱신 망각」 함정 — 목록 → 트리 방향만 검사된다).
+
+---
+
+## 10. PR #350 리뷰에서 넘긴 후속 (2026-10-17)
+
+#350(§8 셋)을 `/code-review` 로 본 것 가운데 그 PR 에서 고치지 않고 넘긴 것. 고친 것과 각 건의 조치는 원장 `docs/changes/2026-10-17-known-issues-8.md` 「리뷰 반영」.
+
+- **성서 목록의 구분 탭 · 검색의 「← 이전 · 다음 →」도 다시 그린 뒤 포커스를 잃는다**(main 부터 — WCAG 2.4.3, pitfalls §5 「다시 그리는 화면의 포커스 규칙」). Enter 를 누르면 포커스가 body 로 빠진다. 뷰마다 `createFocusMemory` 를 다는 지금 방식은 구분 탭을 덮지 못한다 — 탭이 뷰 루트 밖(`#division-tabs-slot`, `route()` 가 비운다)이고, 목록이 `route()` 의 `await loadBooks()` 뒤에 그려져 `take()` 가 await 뒤에 돈다. 라우터 수준 — 전역 `<a>` 인터셉터가 누른 자리를 남기고, `route()` 가 시작에서 꺼내 `finally`(`onRouteEnd` 옆)에서 돌려주며, 뷰는 `data-focus-key` 만 단다 — 이 더 넓게 덮는다. ADR-038 2단계(주간 · 목록, 화면을 건너는 월간|주간|목록 세그먼트)에 앞서 정한다. 검색 페이지 이동은 맨 위로 가는 것이 뜻이라 결과 제목으로 보내는 편이 맞을 수 있다.
+- **`createFocusMemory` 를 쓰는 화면마다 네 걸음을 손으로 잇는다**(만들기 · 커밋마다 루트에 `remember` · 렌더 시작에 `take` · 커밋 뒤 `restore` — 대체 키는 언제나 「오늘」). 리스너를 빠뜨리거나 다른 요소에 달아도 오류 없이 포커스만 잃는다. `mount(root, spot)` 하나로 묶을지는 위 라우터 수준 안과 함께 정한다.
+- **계산 범위(1583~9999) 판정이 다섯 군데에 손으로 적혀 있다** — `lectionary.js` `stepHref` · `renderLectionaryView`, `calendar.js` `parseMonthParam` · `monthHref` · `buildMonthGrid`. 엔진이 판정과 상수를 내고 `resolveDate` 가 범위 밖에 null 을 내면(§5 의 고치는 법과 같은 자리) 뷰는 그것만 읽는다.
+- **날짜 이동 줄은 단추(`buildDateStep`)만 공유한다** — 줄 전체(가운데 · 「오늘」과 그 `today` 키)는 `calendar.js buildMonthHead` 와 `lectionary.js buildHeader` 에 두 벌이다. ADR-038 2단계의 주간 화면이 셋째 벌을 만들기 전에 줄 하나(`buildDateNav`)로.
+- **인용 시트의 뒤로 단추 꺾쇠는 `index.html` 의 정적 사본이다** — `helpers.js headerIcon` 과 같은 규격(획 2 · `title-back-icon`)을 손으로 들고 있어, 규격을 바꾸면 그쪽만 옛 꼴로 남는다. `citations.js` 가 초기화 때 `headerIcon(...)` 을 붙이면 한 곳이 된다.
+- **iOS 18.4 미만에서는 탭한 뒤 다시 그린 화면에 포커스 링이 남을 수 있다 — 기기 확인 대기.** WebKit 은 탭으로 링크에 포커스를 주지 않아, 복원의 스크립트 포커스를 `:focus-visible` 로 쳐 링을 그린다(WebKit 소스 · 성서 목록 책 카드의 같은 일 `43db624`). #350 리뷰에서 포인터로 누른 복원은 `focus({ focusVisible: false })` 로 링 없이 두게 했는데, 그 옵션은 Safari 18.4 부터다. 실제 아이폰(18.4 이상 · 미만)에서 전례독서의 칩 · 세그먼트 · 카드 · ‹ › 와 캘린더의 달 이동을 눌러 보고, 18.4 미만이 의미 있으면 책 카드처럼 표지로 막는다(키보드 · VoiceOver 의 포커스 복원은 남긴다).
+- **Safari 26 이하 데스크톱 — 다시 그린 뒤 위치의 남은 경우.** 머리가 접힌 채 위로 되돌아온 자리(스크롤 10 ~ 60px — 이력 구간)에서 새 장을 받는 다시 그리기를 누르면, 돌아온 뒤에도 머리의 검색 줄이 펼친 채 남아 누른 컨트롤이 그 줄 높이(약 46px)만큼 아래에 선다. 스크롤 고정(scroll anchoring)이 있는 브라우저(Chrome · Edge · Firefox · Safari 27+)는 화면 위치 그대로다(`helpers.js createFocusMemory`). 근본은 같은 뷰를 다시 그릴 때 스켈레톤이 문서를 줄여 스크롤을 누르지 않게 하는 것(라우터 — 위 첫 항목과 함께).
