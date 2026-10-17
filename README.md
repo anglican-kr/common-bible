@@ -304,7 +304,7 @@ npm run typecheck   # tsc -p tsconfig.json --noEmit && tsc -p tsconfig.worker.js
 
 - [문서 진입점](docs/index.md) — 작업 유형 → 먼저 읽을 문서
 - [아키텍처 개요](docs/architecture.md) — 전체 구조 한눈에
-- [아키텍처 결정 기록](docs/decisions/) — ADR-001~038
+- [아키텍처 결정 기록](docs/decisions/) — ADR 001-038
 - [구현 현황](docs/status.md) · [알려진 이슈](docs/known-issues.md) · [자주 하는 실수](docs/coding-pitfalls.md) · [디자인 시스템](DESIGN.md)
 - [제품 요구사항](docs/prd.md)
 - [변경 원장](docs/changes/) — 변경 하나에 파일 하나, PR 본문의 원본
