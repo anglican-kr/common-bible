@@ -229,15 +229,25 @@ test("calendarDay: 저녁 전례(evening)는 칸 이름이 되지 않는다 — 
   same(d.others.map((o) => o.name + o.suffix), ["성탄 밤 · 저녁"]);   // 줄(2단계)에는 남는다
 });
 
-test("calendarDay: 고유명 평일(성주간 월~수 · 재의 수요일 후 목~토 — 좌표 (lent, null, weekday))은 격자여도 이름을 단다", () => {
-  const holyMon = grid("lent-x-weekday-mon", "성주간 월요일");
+test("calendarDay: 고유명 평일(성주간 월~수 · 재의 수요일 후 목~토)은 격자여도 이름을 단다 — 엔진 표지 properWeekday 로 가린다", () => {
+  // 좌표를 일부러 번호 있는 꼴로 둔다 — 엔진이 주 번호를 매겨도 표지만 있으면 칸 이름은 그대로다(PR #348 리뷰가 짚은 드리프트)
+  const holyMon = cand(obs("grid:lent-6-weekday-mon", "성주간 월요일", { properWeekday: true }));
   const d = ctx.calendarDay("2026-03-30", resolvedOf("2026-03-30", [holyMon],
-    { coord: { season: "lent", week: null, type: "weekday", weekday: "mon", year: "A" }, color: "red", colors: ["red"] }));
+    { coord: { season: "lent", week: 6, type: "weekday", weekday: "mon", year: "A" }, color: "red", colors: ["red"] }));
   assert.strictEqual(d.cellName, "성주간 월요일");
   const lentTue = grid("lent-2-weekday-tue", "사순 2주 화요일");
   const plain = ctx.calendarDay("2026-03-03", resolvedOf("2026-03-03", [lentTue],
     { coord: { season: "lent", week: 2, type: "weekday", weekday: "tue", year: "A" }, color: "violet", colors: ["violet"] }));
   assert.strictEqual(plain.cellName, "");   // 번호 있는 사순 평일은 이름 없는 평일
+});
+
+test("calendarDay: 좌표가 고유명 평일과 같아도(lent, null, weekday) 표지가 없는 격자는 이름 없는 평일 — 뷰는 좌표를 읽지 않는다", () => {
+  // 성 목 · 금 · 토의 격자(「성주간 X요일」)가 이 좌표다 — 그날의 대표는 temporal 행이지만, 격자가 대표로 와도 칸은 비어야 한다
+  const holyThu = grid("lent-x-weekday-thu", "성주간 목요일");
+  const d = ctx.calendarDay("2026-04-02", resolvedOf("2026-04-02", [holyThu],
+    { coord: { season: "lent", week: null, type: "weekday", weekday: "thu", year: "A" }, color: "red", colors: ["red"] }));
+  assert.strictEqual(d.cellName, "");
+  assert.strictEqual(ctx.dayAriaLabel(d, false), "4월 2일 목요일, 성주간 목요일, 적색");   // 이름 없는 평일 칸 — 링크 이름은 대표 이름
 });
 
 test("calendarDay: 옮겨 간 · 생략된 후보는 칸 이름이 되지 않고 줄에서 흐리게(away) — 꼬리말은 칩과 같은 말", () => {

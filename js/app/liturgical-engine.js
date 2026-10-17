@@ -925,6 +925,16 @@ function coordOf(dateStr, ordinal) {
 }
 
 /**
+ * 그날이 고유명 평일이면 그 이름(위 표), 아니면 undefined. 표의 키가 부활절 기준 오프셋이라 그해의 앵커로 센다.
+ * @param {string} dateStr @param {LiturgicalCoord} coord
+ * @returns {string | undefined}
+ */
+function properWeekdayNameOf(dateStr, coord) {
+  if (coord.type !== "weekday") return undefined;
+  return PROPER_WEEKDAY_NAMES[String(dayDiff(yearAnchors(parseInt(dateStr.slice(0, 4), 10)).easter, dateStr))];
+}
+
+/**
  * 격자 관측일의 표시명. 고유명 평일(위 표)은 그 이름을 쓰고, 그 밖은 좌표에서 만든다(「연중 3주일」 ·
  * 「사순 2주 화요일」). 성 목 · 금 · 토는 temporal 행이 따로 있으므로 격자는 「성주간 X요일」이다 —
  * temporal 행의 이름을 빌리면 같은 본문이 후보 둘에 붙는다.
@@ -935,7 +945,7 @@ function gridName(dateStr, coord) {
   const s = SEASON_LABEL[coord.season];
   if (coord.type === "sunday") return coord.week === null ? s + " 주일" : s + " " + coord.week + "주일";
   const w = coord.weekday ? WEEKDAY_LABEL[coord.weekday] : "";
-  const proper = PROPER_WEEKDAY_NAMES[String(dayDiff(yearAnchors(parseInt(dateStr.slice(0, 4), 10)).easter, dateStr))];
+  const proper = properWeekdayNameOf(dateStr, coord);
   if (proper) return proper;
   if (coord.week === null && inSpan(dateStr, "holyWeek")) return "성주간 " + w;
   return coord.week === null ? s + " " + w : s + " " + coord.week + "주 " + w;
@@ -971,6 +981,10 @@ function seasonColorOf(dateStr, coord) {
  * `grid:<season>-<week|x>-<type>[-<weekday>]`, precedence 는 §6.1 사다리(절기 주일 2 · 연중 주일 5 ·
  * 평일 8). 색은 절기 기본색이다(§6.4 — ADR-036 §8 「격자일 레코드의 color 는 좌표에서 파생한 절기
  * 기본색」). 그날의 색은 이 바탕 위에 승자가 덮는다(`dayColorsOf`).
+ *
+ * 고유명 평일(위 표의 여섯 날)에는 `properWeekday: true` 를 단다 — 그 밖의 날에는 키가 없다. 좌표가 `(lent, null,
+ * weekday)` 로 같은 날 가운데 어느 날이 고유한 이름을 가졌는지는 엔진만 안다(같은 좌표의 성 목 · 금 · 토 격자는 「성주간
+ * X요일」이라 표지가 없다). 뷰가 좌표로 다시 가려내지 않고 이 표지를 읽는다 — 캘린더 칸 이름(PR #348 리뷰).
  * @param {string} dateStr @param {LiturgicalCoord} coord
  * @returns {Observance}
  */
@@ -978,7 +992,8 @@ function gridObservance(dateStr, coord) {
   const week = coord.week === null ? "x" : String(coord.week);
   const ordinarySunday = coord.type === "sunday" && coord.season === "ordinary";
   const base = seasonColorOf(dateStr, coord);
-  return {
+  /** @type {Observance} */
+  const obs = {
     id: GRID_PREFIX + coord.season + "-" + week + "-" + coord.type + (coord.weekday ? "-" + coord.weekday : ""),
     kind: "temporal",
     name: gridName(dateStr, coord),
@@ -991,6 +1006,8 @@ function gridObservance(dateStr, coord) {
     color: base.color,
     color_alt: base.alt,
   };
+  if (properWeekdayNameOf(dateStr, coord)) obs.properWeekday = true;
+  return obs;
 }
 
 // ── §4.9 · §6.5 이동 패스 캐시 ──

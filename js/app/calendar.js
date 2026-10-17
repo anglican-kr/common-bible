@@ -100,16 +100,6 @@ function monthHref(y, m) {
   return `/calendar/${String(yy).padStart(4, "0")}-${String(mm).padStart(2, "0")}`;
 }
 
-/**
- * 고유명 평일인가 — 성주간 월 · 화 · 수 · 재의 수요일 후 목 · 금 · 토(설계서 §5.5 — 좌표가 (lent, null, weekday)
- * 로 같아 격자 관측일의 이름이 그 이름이다). 성 목 · 금 · 토도 같은 좌표지만 그날은 temporal 행이 대표다.
- * @param {ResolvedDate} resolved
- */
-function isNamedWeekday(resolved) {
-  const c = resolved.coord;
-  return !!c && c.type === "weekday" && c.season === "lent" && c.week === null;
-}
-
 /** 그날 지키지 않는 후보 — 다른 날로 옮겨 감 · 생략. 줄에서 흐리게 그린다(이름은 남긴다 — 「후보 전부 노출」). */
 function isAwayCandidate(/** @type {Candidate} */ c) {
   return c.status === "transferred_out" || c.status === "omitted";
@@ -118,7 +108,9 @@ function isAwayCandidate(/** @type {Candidate} */ c) {
 /**
  * 월간 칸에 이름을 다는 후보(사용자 결정 2026-10-15): 대표가 격자가 아니면 대표. 격자면 주일 · 고유명 평일은
  * 그 격자(「연중 29주일」 · 「성주간 월요일」), 그 밖의 평일은 그날 지키는 이름 있는 후보(사계재 · 기념일) — 없으면
- * 이름 없는 평일이라 null(칸에는 날짜와 색 점만).
+ * 이름 없는 평일이라 null(칸에는 날짜와 색 점만). 고유명 평일은 엔진이 격자 관측일에 단 표지(`properWeekday`)로
+ * 가린다 — 좌표 (lent, null, weekday) 는 성 목 · 금 · 토의 격자와 같아 좌표로는 가를 수 없고, 그 의미는 엔진의 몫이다
+ * (설계서 §5.5 — 좌표로 가리던 때는 엔진이 주 번호를 매기면 칸이 조용히 빈 이름이 됐다 — PR #348 리뷰).
  * @param {ResolvedDate} resolved
  * @returns {Candidate | null}
  */
@@ -127,7 +119,7 @@ function cellCandidateOf(resolved) {
   if (!official) return null;
   if (!isGrid(official)) return official;
   if (resolved.coord && resolved.coord.type === "sunday") return official;
-  if (isNamedWeekday(resolved)) return official;
+  if (official.observance.properWeekday === true) return official;
   // 저녁 전례(성탄 밤 — 12.24 저녁)는 그날의 이름이 아니다(→ 설계서 R-6.1-evening — 그날 낮의 대표 · 색에 참여하지 않는다) —
   // 칸에 실으면 「성탄 밤」 이름에 그날 색(자) 점이 붙는다(PR #349 리뷰). 주간 · 목록 줄에는 「· 저녁」 꼬리로 남는다.
   return resolved.candidates.find((c) => !isGrid(c) && !isAwayCandidate(c) && c.status !== "optional" && !c.evening) || null;
