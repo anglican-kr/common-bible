@@ -18,6 +18,7 @@
 //   - dragReleaseAction (bottom-sheet drag-resize release thresholds)
 //   - headerIcon (page-title icon SVG — one spec for every header control)
 //   - isModifiedClick (modifier / non-primary clicks the page leaves to the browser)
+//   - createFocusMemory (focus back to the pressed control after a view redraws itself)
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -46,6 +47,12 @@ function makeDom() {
   /** @type {Array<any>} */
   const registry = [];
   let activeElement = null;
+  // Page scroll for createFocusMemory: an element's `_docTop` is its document
+  // offset, so its viewport top is `_docTop - view.scrollY`. scrollTo clamps
+  // to [0, view.maxScroll] like a real page and records the root's inline
+  // scroll-behavior at call time (the restore must scroll instantly).
+  const view = { scrollY: 0, innerHeight: 800, maxScroll: 100000, scrolls: /** @type {Array<{ y: number, behavior: string }>} */ ([]) };
+  const rootStyle = { scrollBehavior: "" };
 
   function makeElement(tag) {
     const listeners = new Map(); // type -> Set<fn>
@@ -107,9 +114,27 @@ function makeDom() {
         if (!set) return;
         for (const fn of [...set]) fn(evt);
       },
-      focus() { activeElement = this; },
+      focus(opts) { activeElement = this; this._focusOpts = opts; },
       querySelectorAll(selector) {
         return findAll(this, selector);
+      },
+      closest(selector) {
+        for (let n = this; n; n = n._parent) if (n.tagName && matches(n, selector)) return n;
+        return null;
+      },
+      /** data-* attributes → camelCase keys, read-only (enough for `dataset.focusKey`). */
+      get dataset() {
+        const ds = {};
+        for (const [k, v] of Object.entries(this._attrs)) {
+          if (k.startsWith("data-")) ds[k.slice(5).replace(/-([a-z])/g, (_, c) => c.toUpperCase())] = v;
+        }
+        return ds;
+      },
+      _docTop: 0,
+      _height: 20,
+      getBoundingClientRect() {
+        const top = this._docTop - view.scrollY;
+        return { top, bottom: top + this._height, height: this._height };
       },
     };
     registry.push(el);
@@ -210,10 +235,13 @@ function makeDom() {
       return out;
     },
     get activeElement() { return activeElement; },
+    documentElement: { style: rootStyle },
   };
 
   return {
     document,
+    view,
+    rootStyle,
     /** Test-only hook to seed activeElement directly. */
     setActive(el) { activeElement = el; },
     /** Test-only hook to read activeElement without going through getter. */
@@ -224,11 +252,27 @@ function makeDom() {
 
 // ── Loader ──────────────────────────────────────────────────────────────────
 
+// `instanceof Element` / `HTMLElement` inside helpers.js — stub nodes pass by shape (they carry a tagName).
+function shapeClass() {
+  const C = function () {};
+  Object.defineProperty(C, Symbol.hasInstance, { value: (o) => !!o && typeof o.tagName === "string" });
+  return C;
+}
+
 function loadHelpers() {
   const dom = makeDom();
+  const { view } = dom;
   const ctx = {
-    console, JSON, Object, Array, Set, Map, Error, String, Number, Boolean,
+    console, JSON, Object, Array, Set, Map, Error, String, Number, Boolean, Math,
     document: dom.document,
+    Element: shapeClass(),
+    HTMLElement: shapeClass(),
+    get scrollY() { return view.scrollY; },
+    get innerHeight() { return view.innerHeight; },
+    scrollTo(_x, y) {
+      view.scrolls.push({ y, behavior: dom.rootStyle.scrollBehavior });
+      view.scrollY = Math.max(0, Math.min(view.maxScroll, y));
+    },
   };
   vm.createContext(ctx);
   ctx.window = ctx;
@@ -757,4 +801,115 @@ test("isModifiedClick: any modifier key or a non-primary button belongs to the b
     assert.equal(h.helpers.isModifiedClick({ ...base, [key]: true }), true, key);
   }
   assert.equal(h.helpers.isModifiedClick({ ...base, button: 1 }), true, "middle button");
+});
+
+// ── createFocusMemory (focus back to the pressed control after a redraw, PR #348 review) ──
+
+const CLICK = { ctrlKey: false, metaKey: false, shiftKey: false, altKey: false, button: 0 };
+
+/**
+ * A view root at document offset `rootTop` holding links tagged with data-focus-key,
+ * each `[key, offsetWithinRoot]`. Returns the root and the links by key.
+ */
+function viewWith(helpers, rootTop, links) {
+  const root = helpers.el("div", { className: "view" });
+  root._docTop = rootTop;
+  const byKey = {};
+  for (const [key, offset] of links) {
+    const a = helpers.el("a", { href: "/x", "data-focus-key": key }, helpers.el("span", null, key));
+    a._docTop = rootTop + offset;
+    root.appendChild(a);
+    byKey[key] = a;
+  }
+  return { root, byKey };
+}
+
+test("createFocusMemory: remember 는 누른 링크의 자리(키 · 스크롤 · 화면 루트 안 위치)를 남기고, take 는 한 번만 꺼낸다", () => {
+  const h = loadHelpers();
+  const mem = h.helpers.createFocusMemory();
+  const { root, byKey } = viewWith(h.helpers, 100, [["next", 60]]);
+  h.dom.view.scrollY = 50;
+  // 링크 안의 글자를 눌러도 그 링크의 키
+  mem.remember({ ...CLICK, target: byKey.next._children[0], currentTarget: root });
+  assert.deepEqual({ ...mem.take() }, { key: "next", y: 50, offset: 60 });
+  assert.equal(mem.take(), null, "렌더 하나에 한 번");
+});
+
+test("createFocusMemory: 새 탭으로 여는 클릭(수정 키 · 가운데 단추)은 기억하지 않고, 키 없는 곳을 누르면 앞서 남긴 자리를 지운다", () => {
+  const h = loadHelpers();
+  const mem = h.helpers.createFocusMemory();
+  const { root, byKey } = viewWith(h.helpers, 0, [["prev", 10], ["next", 10]]);
+  mem.remember({ ...CLICK, metaKey: true, target: byKey.next, currentTarget: root });
+  mem.remember({ ...CLICK, button: 1, target: byKey.next, currentTarget: root });
+  assert.equal(mem.take(), null, "새 탭 클릭만 있었다");
+  mem.remember({ ...CLICK, target: byKey.prev, currentTarget: root });
+  mem.remember({ ...CLICK, ctrlKey: true, target: byKey.next, currentTarget: root });   // 이 화면은 그대로 — 앞의 자리가 남는다
+  assert.equal(mem.take().key, "prev");
+  mem.remember({ ...CLICK, target: byKey.prev, currentTarget: root });
+  mem.remember({ ...CLICK, target: root, currentTarget: root });   // 키 없는 곳 — 이 화면을 다시 그리지 않는 클릭
+  assert.equal(mem.take(), null);
+});
+
+test("createFocusMemory: 기억은 만든 화면마다 따로다 — 한 화면이 남긴 자리를 다른 화면이 꺼내지 않는다", () => {
+  const h = loadHelpers();
+  const calendar = h.helpers.createFocusMemory();
+  const lectionary = h.helpers.createFocusMemory();
+  const { root, byKey } = viewWith(h.helpers, 0, [["next", 10]]);
+  lectionary.remember({ ...CLICK, target: byKey.next, currentTarget: root });
+  assert.equal(calendar.take(), null);
+  assert.equal(lectionary.take().key, "next");
+});
+
+test("createFocusMemory: restore 는 새 루트에서 같은 키를 값으로 찾는다 — 콜론 · 한글이 든 관측일 id 도, 없으면 대체 키, 그것도 없으면 null", () => {
+  const h = loadHelpers();
+  const mem = h.helpers.createFocusMemory();
+  const keys = ["prev", "today", "obs:grid:lent-2-weekday-tue", "obs:d0916-니니안"];
+  const { root, byKey } = viewWith(h.helpers, 0, keys.map((k, i) => [k, 40 * i]));
+  assert.equal(mem.restore(root, { key: "obs:d0916-니니안", y: 0, offset: 120 }, "today"), byKey["obs:d0916-니니안"]);
+  assert.equal(h.dom.getActive(), byKey["obs:d0916-니니안"]);
+  assert.deepEqual({ ...byKey["obs:d0916-니니안"]._focusOpts }, { preventScroll: true });   // 스크롤은 restore 가 정한다
+  assert.equal(mem.restore(root, { key: "obs:grid:lent-2-weekday-tue", y: 0, offset: 80 }), byKey["obs:grid:lent-2-weekday-tue"]);
+  // 계산 범위 끝 — 누른 「다음」이 새 화면에 없으면 「오늘」
+  assert.equal(mem.restore(root, { key: "next", y: 0, offset: 0 }, "today"), byKey.today);
+  h.dom.setActive(null);
+  assert.equal(mem.restore(root, { key: "next", y: 0, offset: 0 }), null);
+  assert.equal(mem.restore(root, null, "today"), null);
+  assert.equal(h.dom.getActive(), null, "찾지 못하면 포커스를 옮기지 않는다");
+});
+
+test("createFocusMemory: restore 는 누른 때의 화면 위치로 — 스켈레톤이 스크롤을 맨 위로 눌렀어도 같은 컨트롤이 같은 자리에, 스크롤은 즉시", () => {
+  const h = loadHelpers();
+  const mem = h.helpers.createFocusMemory();
+  // 누른 때: 스크롤 218, 루트 문서 위치 100, 컨트롤은 루트 안 300 — 화면 위치 182
+  const spot = { key: "set:2", y: 218, offset: 300 };
+  h.dom.view.scrollY = 0;   // 새 장을 받는 사이 스켈레톤이 그려져 맨 위로
+  const { root, byKey } = viewWith(h.helpers, 100, [["set:1", 300], ["set:2", 300]]);
+  mem.restore(root, spot, "today");
+  assert.equal(h.dom.view.scrollY, 218);
+  assert.equal(byKey["set:2"].getBoundingClientRect().top, 182);
+  assert.deepEqual(h.dom.view.scrolls, [{ y: 218, behavior: "auto" }], "root 의 scroll-behavior: smooth 를 그 순간만 끈다");
+  assert.equal(h.dom.rootStyle.scrollBehavior, "", "끝나면 되돌린다");
+  // 새 화면에서 컨트롤이 루트 안 40px 아래로 왔으면(위의 내용이 늘었다) 그만큼 더 내려 화면 위치를 지킨다
+  const h2 = loadHelpers();
+  const m2 = h2.helpers.createFocusMemory();
+  const v2 = viewWith(h2.helpers, 100, [["set:2", 340]]);
+  m2.restore(v2.root, spot, "today");
+  assert.equal(v2.byKey["set:2"].getBoundingClientRect().top, 182);
+  // 스크롤이 그대로인 다시 그리기(받을 것이 없었다)는 스크롤하지 않는다
+  const h3 = loadHelpers();
+  h3.dom.view.scrollY = 218;
+  const v3 = viewWith(h3.helpers, 100, [["set:2", 300]]);
+  h3.helpers.createFocusMemory().restore(v3.root, spot, "today");
+  assert.deepEqual(h3.dom.view.scrolls, []);
+});
+
+test("createFocusMemory: 같은 자리로 돌려도 화면 밖이면(페이지가 짧아져 스크롤이 닿지 않으면) 가운데로", () => {
+  const h = loadHelpers();
+  const mem = h.helpers.createFocusMemory();
+  h.dom.view.maxScroll = 0;   // 스크롤할 수 없는 짧은 페이지 — 그런데 컨트롤은 그 아래(1000)
+  const { root, byKey } = viewWith(h.helpers, 1000, [["next", 0]]);
+  mem.restore(root, { key: "next", y: 300, offset: 0 }, "today");
+  assert.equal(h.dom.getActive(), byKey.next);
+  assert.equal(h.dom.view.scrolls.length, 2, "같은 자리 → 가운데");
+  assert.equal(h.dom.view.scrolls[1].y, 1000 - (800 - 20) / 2);
 });

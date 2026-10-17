@@ -745,6 +745,103 @@ def test_bare_route_shows_today_and_day_steppers_work(desktop_context):
     page.wait_for_url(f"**/lectionary/{today.isoformat()}")
 
 
+def _focused(page):
+    """지금 포커스 — 그 컨트롤의 자리(data-focus-key) · 화면 안인지 · :focus-visible."""
+    return page.evaluate("""() => {
+        const a = document.activeElement;
+        const r = a ? a.getBoundingClientRect() : null;
+        return { key: a?.dataset?.focusKey || null, inView: !!r && r.top >= 0 && r.bottom <= innerHeight,
+                 visible: !!a?.matches(':focus-visible') };
+    }""")
+
+
+def _enter_on(page, selector):
+    page.locator(selector).focus()
+    page.keyboard.press("Enter")
+
+
+def test_redraws_keep_keyboard_focus_on_the_pressed_control(desktop_context):
+    """키보드로 날짜 이동(다음날 · 전날 · 오늘) · 관측일 칩 · 두 독서 카드 · 세그먼트(트랙 · 세트 · 본기도)를 눌러 #app 을 다시
+    그려도 포커스가 새 화면의 같은 컨트롤에 있고(:focus-visible) 화면 안이다 — Enter 만 거듭 눌러 날을 넘긴다(WCAG 2.4.3 ·
+    2.4.7 — PR #348 리뷰에서 넘긴 것: 그전엔 누른 링크가 사라져 포커스가 body 로 빠졌다; 캘린더의 달 이동과 같은 도우미).
+    계산 범위 끝(9999-12-31)에서는 「다음날」이 자리만 남아 「오늘」로."""
+    page = desktop_context.new_page()
+    _open(page, "lectionary/2026-09-15")
+    ok = {"inView": True, "visible": True}
+    _enter_on(page, ".lect-datenav-btn[aria-label='다음날']")
+    page.wait_for_selector(".lect-date time[datetime='2026-09-16']")
+    assert _focused(page) == {"key": "next", **ok}
+    page.keyboard.press("Enter")
+    page.wait_for_selector(".lect-date time[datetime='2026-09-17']")
+    assert _focused(page) == {"key": "next", **ok}
+    _enter_on(page, ".lect-datenav-btn[aria-label='전날']")
+    page.wait_for_selector(".lect-date time[datetime='2026-09-16']")
+    assert _focused(page) == {"key": "prev", **ok}
+    # 칩 — 관측일 id 의 한글 · 콜론이 든 키(선택자가 아니라 값으로 찾는다)
+    _enter_on(page, ".lect-chip:has-text('추계재')")
+    page.wait_for_selector(".lect-chip[aria-current]:has-text('추계재')")
+    assert _focused(page) == {"key": "obs:t-추계재", **ok}
+    _enter_on(page, ".lect-chip:has-text('연중 24주 수요일')")
+    page.wait_for_url("**/lectionary/2026-09-16")
+    page.wait_for_selector(".lect-chip[aria-current]:has-text('연중 24주 수요일')")
+    assert _focused(page) == {"key": "obs:grid:ordinary-24-weekday-wed", **ok}
+    # 세트 세그먼트(추계재 — 독서 1 · 2)
+    _enter_on(page, ".lect-chip:has-text('추계재')")
+    page.wait_for_selector(".lect-chip[aria-current]:has-text('추계재')")
+    _enter_on(page, ".lect-sets .division-tab >> nth=1")
+    page.wait_for_url("**set=2")
+    page.wait_for_function("() => document.querySelectorAll('.lect-sets .division-tab')[1]?.classList.contains('active')")
+    assert _focused(page) == {"key": "set:2", **ok}
+    # 트랙 · 본기도 세그먼트 · 두 독서 카드
+    _open(page, "lectionary/2026-06-14")
+    _enter_on(page, ".lect-track .division-tab:has-text('독서 2')")
+    page.wait_for_selector(".lect-track .division-tab.active:has-text('독서 2')")
+    assert _focused(page) == {"key": "track:2", **ok}
+    _open(page, "lectionary/2026-04-05")
+    _enter_on(page, ".lect-collects .division-tab >> nth=1")
+    page.wait_for_selector(".lect-collects .division-tab.active:has-text('본기도 2')")
+    assert _focused(page) == {"key": "collect:2", **ok}
+    _open(page, "lectionary/2026-08-06")
+    _enter_on(page, ".lect-pair-card >> nth=1")
+    page.wait_for_selector(".lect-pair-card[aria-current]:has-text('연중 18주 목요일')")
+    assert _focused(page) == {"key": "pair:b", **ok}
+    # 오늘 — 브라우저의 날짜로
+    today = datetime.date(*page.evaluate("() => { const d = new Date(); return [d.getFullYear(), d.getMonth() + 1, d.getDate()]; }"))
+    _enter_on(page, ".lect-head .lect-today")
+    page.wait_for_selector(f".lect-date time[datetime='{today.isoformat()}']")
+    assert _focused(page) == {"key": "today", **ok}
+    # 계산 범위 끝 — 9999-12-31 에는 「다음날」이 없다(그 화면의 「전날」은 있다)
+    _open(page, "lectionary/9999-12-30")
+    _enter_on(page, ".lect-datenav-btn[aria-label='다음날']")
+    page.wait_for_selector(".lect-date time[datetime='9999-12-31']")
+    assert page.locator(".lect-datenav-btn[aria-label='다음날']").count() == 0
+    assert page.locator(".lect-datenav-btn[aria-label='전날']").count() == 1
+    assert _focused(page) == {"key": "today", **ok}
+    _open(page, "lectionary/1583-01-01")
+    assert page.locator(".lect-datenav-btn[aria-label='전날']").count() == 0   # 1582년은 교회력을 계산하지 않는다
+
+
+def test_redraw_after_a_fetch_keeps_the_pressed_control_where_it_was(mobile_context):
+    """새 장을 받아야 하는 다시 그리기(부활절 세트 2 — 다른 독서)는 스켈레톤이 먼저 그려져 스크롤이 맨 위로 눌렸다 — 누른 세그먼트가
+    아래로 밀리고, 화면 아래쪽 컨트롤이면 화면 밖으로 나갔다(2.4.7). 포커스와 함께 누른 때의 화면 위치로 돌아온다."""
+    page = mobile_context.new_page()
+    _open(page, "lectionary/2026-04-05")
+    seg = page.locator(".lect-sets .division-tab >> nth=1")
+    page.evaluate("""(el) => { const r = el.getBoundingClientRect();
+        window.scrollTo({ top: window.scrollY + r.top - 200, behavior: 'instant' }); }""", seg.element_handle())
+    page.wait_for_timeout(300)
+    before = page.evaluate("(el) => ({ y: scrollY, top: el.getBoundingClientRect().top })", seg.element_handle())
+    assert before["y"] > 100, before   # 맨 위가 아닌 자리에서 누른다
+    seg.focus()
+    page.keyboard.press("Enter")
+    page.wait_for_url("**/lectionary/2026-04-05?set=2")
+    page.wait_for_selector(".lect-sets .division-tab.active:has-text('독서 2')")
+    page.wait_for_timeout(300)
+    assert _focused(page) == {"key": "set:2", "inView": True, "visible": True}
+    after = page.evaluate("() => ({ y: scrollY, top: document.activeElement.getBoundingClientRect().top })")
+    assert abs(after["top"] - before["top"]) <= 2, (before, after)
+
+
 def test_invalid_date_shows_notice_not_crash(desktop_context):
     page = desktop_context.new_page()
     _open(page, "lectionary/2026-13-99")
