@@ -31,26 +31,56 @@ BASE_URL = "http://localhost:8080"
 # ── Fake Drive server ─────────────────────────────────────────────────────────
 
 class FakeDrive:
-    """Thread-safe in-memory Drive appDataFolder with ETag support."""
+    """Thread-safe in-memory Drive appDataFolder with ETag support.
+
+    Like the real API it answers 401 to a request without a token (`Bearer null` — what the app
+    sends once sign-out has cleared it). `requests` logs every (method, url) it receives;
+    `hold_list = True` keeps the next files.list pending until `release_held()` — a sync cycle
+    parked on its first await.
+    """
 
     def __init__(self):
         self._lock = threading.Lock()
         self._file: dict | None = None
         self._etag = "etag-0"
         self._etag_n = 0
+        self.requests: list[tuple[str, str]] = []
+        self.hold_list = False
+        self.held: list[Route] = []
 
     def reset(self):
         with self._lock:
             self._file = None
             self._etag = "etag-0"
             self._etag_n = 0
+        self.requests = []
+        self.hold_list = False
+        self.held = []
+
+    def release_held(self):
+        """Answer the held files.list requests with the current file list."""
+        held, self.held = self.held, []
+        for route in held:
+            with self._lock:
+                files = [{"id": "sync-file-id"}] if self._file is not None else []
+            route.fulfill(status=200, content_type="application/json",
+                          body=json.dumps({"files": files}))
 
     def handle(self, route: Route):
         req = route.request
         url = req.url
+        self.requests.append((req.method, url))
+
+        if req.headers.get("authorization", "") in ("", "Bearer null", "Bearer undefined"):
+            route.fulfill(status=401)
+            return
 
         # List files
         if "spaces=appDataFolder" in url and "fields=files" in url:
+            if self.hold_list:
+                self.hold_list = False
+                self.held.append(route)
+                return
             with self._lock:
                 files = [{"id": "sync-file-id"}] if self._file is not None else []
             route.fulfill(status=200, content_type="application/json",
@@ -405,6 +435,41 @@ def test_sign_out_clears_sync(browser, fake_drive, fake_oauth):
             items = list(file.get("bookmarks", {}).get("items", {}).values())
             names = [it.get("name") for it in items]
             assert "After-Sign-Out" not in names, "Bookmark uploaded after sign-out"
+    finally:
+        page.context.close()
+
+
+def test_sign_out_mid_cycle_sends_nothing_after(browser, fake_drive, fake_oauth):
+    """A cycle already waiting on Drive when the user signs out stops there (known-issues §11).
+
+    The first cycle after sign-in is parked on files.list; sign-out and a new bookmark land
+    while it waits, then the list answers "no file yet" — the branch that used to build the
+    upload after the await (so it carried the new bookmark) and send it with the cleared token.
+    Nothing may reach Drive after sign-out.
+    """
+    fake_drive.reset()
+    fake_drive.hold_list = True
+    page = _make_page(browser, fake_drive, fake_oauth)
+    try:
+        _load(page)
+        _enable_sync(page)
+        for _ in range(100):
+            if fake_drive.held:
+                break
+            page.wait_for_timeout(50)
+        assert fake_drive.held, "first sync cycle never asked for the file list"
+        assert page.evaluate("window.driveSync.getStatus()") == "SYNCING"
+
+        page.evaluate("window.driveSync.signOut()")
+        assert page.evaluate("window.driveSync.getStatus()") == "DISABLED"
+        _add_bookmark(page, "After-Sign-Out")
+        sent_before = len(fake_drive.requests)
+        fake_drive.release_held()
+        page.wait_for_timeout(500)
+
+        after = fake_drive.requests[sent_before:]
+        assert after == [], f"Drive requests after sign-out: {after}"
+        assert page.evaluate("window.driveSync.getStatus()") == "DISABLED"
     finally:
         page.context.close()
 

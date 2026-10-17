@@ -1079,3 +1079,104 @@ test("39. 401 + IDB 비어있음 → NEEDS_CONSENT + 캐시 클리어", async ()
   assert.equal(machine.getState(), "NEEDS_CONSENT");
   assert.equal(localStorage.getItem(CACHE_FILE_ID_KEY), null, "401 reauth no-token 폴백에서 캐시 클리어");
 });
+
+// ── Group 14: 사이클 도중 로그아웃 — 대기 뒤에는 Drive · 로컬을 건드리지 않는다 ──
+// signOut()(→ disable → DISABLE)이 _syncCycle 의 네트워크 대기 중에 오면, 대기 뒤의 업로드가
+// 로그아웃 뒤에 더한 편집까지 담아 `_token` 이 비워진 채(Bearer null)로 나갔다 — 실제 Drive 는 401
+// 로 거절하지만 e2e 의 가짜 Drive 는 받아 test_sign_out_clears_sync 가 가끔 실패했다(known-issues §11).
+// 대기마다 상태가 아직 SYNCING 인지 본다(_leftSyncing): 업로드 · 원격 자료 쓰기 · 캐시 다시 채우기 없음.
+
+test("44. 파일 찾기 대기 중 disable() → 그 뒤 업로드하지 않는다", async () => {
+  let resolveFind;
+  const findPromise = new Promise((r) => { resolveFind = r; });
+  const uploads = [];
+  const { machine, drain, logEntries } = loadMachine({
+    initialRefreshToken: "rt-x",
+    overrideStubs: {
+      T: {
+        findSyncFileId: () => findPromise,
+        uploadSyncFile: async (token) => { uploads.push(token); return { ok: true, status: 200, etag: '"e1"' }; },
+      },
+    },
+  });
+  machine.enable();
+  await drain(3);
+  assert.equal(machine.getState(), "SYNCING", "파일 찾기 hold 중 SYNCING");
+  machine.disable();
+  assert.equal(machine.getState(), "DISABLED");
+  resolveFind(null);   // Drive 에 파일이 아직 없다 — 옛 코드는 여기서 새 파일을 올렸다(token null)
+  await drain(5);
+  assert.deepEqual(uploads, [], "로그아웃 뒤 업로드 없음");
+  assert.equal(machine.getState(), "DISABLED");
+  assert.ok(logEntries.some((e) => e.event === "SYNC_ABORTED" && e.at === "find_file"), "SYNC_ABORTED(find_file) 로그");
+});
+
+test("45. 내려받기 대기 중 disable() → 원격 자료를 로컬에 쓰지 않고 캐시도 다시 채우지 않는다", async () => {
+  let resolveDownload;
+  const dlPromise = new Promise((r) => { resolveDownload = r; });
+  const saved = [];
+  const remoteDoc = {
+    schemaVersion: 2,
+    bookmarks: { items: {}, tombstones: {} },
+    settings: {
+      fontSize: { v: null, _u: 0 }, colorScheme: { v: null, _u: 0 },
+      theme: { v: null, _u: 0 }, bookOrder: { v: null, _u: 0 },
+      startupBehavior: { v: null, _u: 0 },
+    },
+    lastRead: { v: null, _u: 0 },
+    deviceId: "remote",
+  };
+  const { machine, drain, localStorage } = loadMachine({
+    initialRefreshToken: "rt-x",
+    initialStorage: {
+      [CACHE_FILE_ID_KEY]: "fid-cached",
+      [CACHE_ETAG_KEY]: '"e-cached"',
+      [CACHE_SYNCED_U_KEY]: "0",
+    },
+    overrideStubs: {
+      T: { downloadSyncFile: () => dlPromise },
+      V2: { saveLocal: (doc) => { saved.push(doc); } },
+    },
+  });
+  machine.enable();
+  await drain(3);
+  assert.equal(machine.getState(), "SYNCING", "내려받기 hold 중 SYNCING");
+  machine.disable();   // 캐시를 비운다(테스트 32)
+  resolveDownload({ doc: remoteDoc, etag: '"e-remote"', status: 200 });
+  await drain(5);
+  assert.equal(saved.length, 0, "로그아웃 뒤 원격 자료를 로컬에 쓰지 않음");
+  assert.equal(localStorage.getItem(CACHE_FILE_ID_KEY), null, "fileId 캐시가 다시 차지 않음");
+  assert.equal(localStorage.getItem(CACHE_ETAG_KEY), null, "etag 캐시가 다시 차지 않음");
+  assert.equal(machine.getState(), "DISABLED");
+});
+
+test("46. 올리기 대기 중 disable() → 업로드가 끝나도 캐시를 다시 채우지 않는다", async () => {
+  // 업로드는 이미 나갔다(로그아웃 전에 만든 본문 · 그때의 토큰) — 막을 수 있는 것은 그 뒤의 캐시 쓰기다.
+  let resolveUpload;
+  const upPromise = new Promise((r) => { resolveUpload = r; });
+  let uploadCalls = 0;
+  const { machine, drain, localStorage } = loadMachine({
+    initialRefreshToken: "rt-x",
+    initialStorage: {
+      [CACHE_FILE_ID_KEY]: "fid-cached",
+      [CACHE_ETAG_KEY]: '"e-cached"',
+      [CACHE_SYNCED_U_KEY]: "0",
+    },
+    downloadResult: { doc: null, etag: null, status: 304 },
+    overrideStubs: {
+      T: { uploadSyncFile: () => { uploadCalls++; return upPromise; } },
+      V2: { maxU: () => 5 },   // 로컬이 마지막 동기화(0) 뒤에 바뀌었다 → 304 + 올리기만
+    },
+  });
+  machine.enable();
+  await drain(4);
+  assert.equal(uploadCalls, 1, "304 뒤 올리기 hold");
+  assert.equal(machine.getState(), "SYNCING");
+  machine.disable();
+  resolveUpload({ ok: true, status: 200, etag: '"e-new"' });
+  await drain(5);
+  assert.equal(machine.getState(), "DISABLED");
+  assert.equal(localStorage.getItem(CACHE_FILE_ID_KEY), null, "fileId 캐시가 다시 차지 않음");
+  assert.equal(localStorage.getItem(CACHE_ETAG_KEY), null, "etag 캐시가 다시 차지 않음");
+  assert.equal(localStorage.getItem(CACHE_SYNCED_U_KEY), null, "syncedMaxU 캐시가 다시 차지 않음");
+});

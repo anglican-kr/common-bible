@@ -588,6 +588,20 @@ function createSyncMachine({ onStateChange } = {}) {
     }
   }
 
+  // DISABLE (signOut · disable) can land during any network await of a cycle. Sync is off from then
+  // on, so the rest of the cycle must not touch Drive or local data — no upload built after the await
+  // (it would carry edits made after sign-out, sent with the token already cleared), no remote doc
+  // merged into local storage, no cache re-filled after disable() cleared it. Every await in
+  // _syncCycle is followed by this check. It reads the state, not a per-cycle id: were the machine
+  // SYNCING again by the time the await returns, this cycle is the one that settles it —
+  // _syncPending keeps that SYNC_REQUEST from starting a second cycle.
+  /** @param {string} at */
+  function _leftSyncing(at) {
+    if (_state === S.SYNCING) return false;
+    L.log({ kind: "ACTION", event: "SYNC_ABORTED", at, state: _state });
+    return true;
+  }
+
   async function _syncCycle() {
     if (_syncPending) return;
     _syncPending = true;
@@ -606,6 +620,7 @@ function createSyncMachine({ onStateChange } = {}) {
       if (!fileId) {
         fileId = await T.findSyncFileId(_token);
         L.log({ kind: "NETWORK", event: "FIND_FILE", fileId: L.mask("fileId", fileId) });
+        if (_leftSyncing("find_file")) return;
       } else {
         L.log({ kind: "ACTION", event: "FIND_FILE_CACHED", fileId: L.mask("fileId", fileId) });
       }
@@ -617,6 +632,7 @@ function createSyncMachine({ onStateChange } = {}) {
       if (!fileId) {
         const { ok, status } = await T.uploadSyncFile(_token, V2.buildSyncPayload(_deviceId));
         L.log({ kind: "NETWORK", event: "UPLOAD_NEW", ok, status });
+        if (_leftSyncing("upload_new")) return;
         if (status === 401)             { dispatch({ type: "SYNC_FAIL", reason: "401" });              return; }
         if (!ok)                        { dispatch({ type: "SYNC_FAIL", reason: `http_${status}` });   return; }
         dispatch({ type: "SYNC_DONE" });
@@ -634,6 +650,7 @@ function createSyncMachine({ onStateChange } = {}) {
         conditionalEtag ? { ifNoneMatch: conditionalEtag } : {},
       );
       L.log({ kind: "NETWORK", event: "DOWNLOAD", status: dlStatus, etag: L.mask("etag", etag) });
+      if (_leftSyncing("download")) return;
 
       if (dlStatus === 401)             { dispatch({ type: "SYNC_FAIL", reason: "401" });              return; }
       if (dlStatus === 404) {
@@ -667,6 +684,7 @@ function createSyncMachine({ onStateChange } = {}) {
           { fileId, ifMatch: cache.etag },
         );
         L.log({ kind: "NETWORK", event: "UPLOAD_UPDATE", ok, status });
+        if (_leftSyncing("upload_update")) return;
         if (status === 401) { dispatch({ type: "SYNC_FAIL", reason: "401" }); return; }
         if (status === 412) {
           // Lost race: another device wrote between our 304 and our PATCH.
@@ -688,6 +706,7 @@ function createSyncMachine({ onStateChange } = {}) {
         L.log({ kind: "ACTION", event: "REMOTE_SCHEMA_MISMATCH", schema: remote?.schemaVersion });
         const { ok, status, etag: newEtag } = await T.uploadSyncFile(_token, V2.buildSyncPayload(_deviceId), { fileId, ifMatch: etag });
         L.log({ kind: "NETWORK", event: "UPLOAD_UPDATE", ok, status });
+        if (_leftSyncing("upload_upgrade")) return;
         if (status === 401)             { dispatch({ type: "SYNC_FAIL", reason: "401" });              return; }
         if (status === 412)             { _clearCache(); dispatch({ type: "SYNC_FAIL", reason: "412" }); return; }
         _saveCache({ fileId, etag: newEtag, syncedMaxU: localMaxU });
@@ -721,6 +740,7 @@ function createSyncMachine({ onStateChange } = {}) {
       if (mergedMaxU > remoteMaxU || mergedCount > remoteCount) {
         const { ok, status, etag: newEtag } = await T.uploadSyncFile(_token, V2.buildSyncPayload(_deviceId), { fileId, ifMatch: etag });
         L.log({ kind: "NETWORK", event: "UPLOAD_UPDATE", ok, status });
+        if (_leftSyncing("upload_merged")) return;
         if (status === 401)             { dispatch({ type: "SYNC_FAIL", reason: "401" });              return; }
         if (status === 412)             { _clearCache(); dispatch({ type: "SYNC_FAIL", reason: "412" }); return; }
         if (!ok)                        { dispatch({ type: "SYNC_FAIL", reason: `http_${status}` });   return; }
