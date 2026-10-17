@@ -46,7 +46,7 @@
 - `tests/` — e2e(`e2e/`, Playwright, 로컬 전용) + JS 유닛(`unit/`, ADR-013, CI 자동)
 - `docs/` — `architecture.md`(아키텍처 개요·ADR 인덱스), `status.md`(구현 현황 — "지금 무엇이 동작하는가"), `known-issues.md`(미해결 이슈·후속 백로그), `decisions/`(ADR), `design/`(진행 중인 구현 설계서 — 완료되면 `archive/design/` 으로 옮긴다), `reference/`(기도서 등 외부 원문 전사), `archive/`(완료·점-시점 기록 — `design/` 설계 변천 · `audit/` 보안 감사 · `qa/` e2e 회귀 보고서), `index.md`(**진입점** — 작업 유형 → 먼저 읽을 문서), `changes/`(**변경 원장** — 변경 하나에 파일 하나, PR 본문의 원본), `coding-pitfalls.md`, `prd.md`
 - `assets/` — 아이콘(`icons/`), 스플래시(`splash/`, ADR-007), 설치 안내 3컷(`install-guide/`, ADR-008)
-- `.github/workflows/test.yml` — CI (Node 24 + `node --test`, ADR-013, pull_request 트리거)
+- `.github/workflows/test.yml` — CI (Node 24 + `node --test`, ADR-013 · 같은 잡에서 타입 검사 `npm run typecheck`, ADR-012 · pull_request 트리거)
 - `.github/workflows/ledger.yml` — CI `Change ledger` (PR 에 `docs/changes/` 원장 파일이 있는지 검사 + 머지된 원장 변경 차단, `sync/` 자동 PR 면제)
 - `.claude/hooks/` — Claude Code 훅: `typecheck-js.sh`(편집 후 tsc) · `verify-on-stop.sh`(Stop 시 유닛) · `e2e-reminder.sh`(Stop 시 e2e 알림) · `pre-pr-ledger.sh`/`post-pr-ledger.sh`(PR 생성 전 원장 게이트 / 생성 후 pr 번호 기입) · `pre-commit-ledger.sh`(머지된 원장 변경 커밋 차단)
 
@@ -77,7 +77,7 @@ data/source/*.md (73권, common-bible-data 서브모듈)
 
 ### 클라이언트 JS 유닛 테스트 (ADR-013)
 
-Node 자체 테스트 러너 + 자체 vm 하네스. 의존성 0, CI 자동 실행. **1244 케이스 — 1243 통과 · 실데이터 1 skip(데이터 대기 픽스처 — 미결13)** (2026-10-17). 파일 명명 컨벤션: `tests/unit/<source-basename>.test.js`, 한 모듈 = 한 테스트 파일 — **예외 둘**이다(tests/README §1 과 같은 규칙). ① **실데이터 의존 케이스** — 공개 CI 의 `Unit tests` 잡이 비공개 `data/` 서브모듈을 받지 않으므로, 그 표를 읽어야 하는 케이스는 `tests/unit/<source-basename>.data.test.js` 로 갈라 `haveData` skip 가드를 달고 `engine-data.yml`·`sync-data.yml` 에서 돌린다(선례 `liturgical-engine.data.test.js` · `lectionary.data.test.js`, 설계서 §7). ② **소스 모듈이 없는 테스트** — 문서·픽스처의 정합성을 보는 `docs-*.test.js` · `liturgical-fixtures.test.js`(픽스처의 관측일 id 실재는 ① 규칙대로 `liturgical-fixtures.data.test.js` 로 갈라 두 워크플로에서 돈다). 이들이 함께 쓰는 문서 앵커 추출기는 `tests/unit/docs-anchors.js` — 테스트 파일이 아니라 `harness.js` 와 같은 자리의 공용 모듈이다(`*.test.js` 글롭 밖). 내부 영역은 `// ── <영역> ──` 섹션. 상세는 ADR-013.
+Node 자체 테스트 러너 + 자체 vm 하네스. 의존성 0, CI 자동 실행. **1252 케이스 — 1251 통과 · 실데이터 1 skip(데이터 대기 픽스처 — 미결13)** (2026-10-17). 파일 명명 컨벤션: `tests/unit/<source-basename>.test.js`, 한 모듈 = 한 테스트 파일 — **예외 둘**이다(tests/README §1 과 같은 규칙). ① **실데이터 의존 케이스** — 공개 CI 의 `Unit tests` 잡이 비공개 `data/` 서브모듈을 받지 않으므로, 그 표를 읽어야 하는 케이스는 `tests/unit/<source-basename>.data.test.js` 로 갈라 `haveData` skip 가드를 달고 `engine-data.yml`·`sync-data.yml` 에서 돌린다(선례 `liturgical-engine.data.test.js` · `lectionary.data.test.js`, 설계서 §7). ② **소스 모듈이 없는 테스트** — 문서·픽스처의 정합성을 보는 `docs-*.test.js` · `liturgical-fixtures.test.js`(픽스처의 관측일 id 실재는 ① 규칙대로 `liturgical-fixtures.data.test.js` 로 갈라 두 워크플로에서 돈다). 이들이 함께 쓰는 문서 앵커 추출기는 `tests/unit/docs-anchors.js` — 테스트 파일이 아니라 `harness.js` 와 같은 자리의 공용 모듈이다(`*.test.js` 글롭 밖). 내부 영역은 `// ── <영역> ──` 섹션. 상세는 ADR-013.
 
 ```bash
 node --test tests/unit/*.test.js                 # 전체 (CI와 동일)
