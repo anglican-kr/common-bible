@@ -822,12 +822,13 @@ function commitError(msg, subtitle) {
 
 /**
  * 날짜 이동 줄의 원형 단추 하나(DESIGN.md §6 「날짜 이동 줄」 — 캘린더의 달 이동도 이 부품을 쓴다). 링크가 없으면(계산 범위
- * 끝) 자리만 지켜 가운데가 흔들리지 않게 한다. `focusKey` 는 다시 그린 뒤 포커스를 돌려줄 자리(helpers.js createFocusMemory).
- * @param {string | null} href @param {string} label @param {string} glyph @param {string} focusKey
+ * 끝) 자리만 지켜 가운데가 흔들리지 않게 한다. 방향이 글리프(‹ ›)와 다시 그린 뒤 포커스를 돌려줄 자리(`data-focus-key` —
+ * `prev` · `next`, helpers.js createFocusMemory)를 정한다.
+ * @param {"prev" | "next"} dir @param {string | null} href @param {string} label
  */
-function buildDateStep(href, label, glyph, focusKey) {
+function buildDateStep(dir, href, label) {
   if (!href) return el("span", { className: "lect-datenav-btn", "aria-hidden": "true" });
-  return el("a", { className: "lect-datenav-btn", href, "aria-label": label, "data-focus-key": focusKey }, glyph);
+  return el("a", { className: "lect-datenav-btn", href, "aria-label": label, "data-focus-key": dir }, dir === "prev" ? "‹" : "›");
 }
 
 /** 색 점 + 라벨 하나. */
@@ -843,12 +844,12 @@ function buildHeader(m) {
   const head = el("header", { className: "lect-head" });
 
   const nav = el("nav", { className: "lect-datenav", "aria-label": "날짜 이동" });
-  nav.appendChild(buildDateStep(m.hrefs.prev, "전날", "‹", "prev"));
+  nav.appendChild(buildDateStep("prev", m.hrefs.prev, "전날"));
   const mid = el("div", { className: "lect-date" });
   mid.appendChild(el("time", { datetime: m.date }, dateLabel(m.date)));
   mid.appendChild(el("a", { className: "lect-today", href: m.hrefs.today, "data-focus-key": "today" }, "오늘"));
   nav.appendChild(mid);
-  nav.appendChild(buildDateStep(m.hrefs.next, "다음날", "›", "next"));
+  nav.appendChild(buildDateStep("next", m.hrefs.next, "다음날"));
   head.appendChild(nav);
 
   const official = m.resolved.official;
@@ -893,11 +894,10 @@ function buildPair(m) {
   const section = el("section", { className: "lect-pair", "aria-label": "두 독서 가운데 고르기" });
   section.appendChild(el("h3", { className: "lect-pair-title" }, "두 독서 가운데 고르기"));
   const row = el("div", { className: "lect-pair-row" });
-  /** @type {Array<[Candidate, PairCardText, string, string]>} */
-  const cards = [[pair.a, pair.aText, hrefs.a, "pair:a"], [pair.b, pair.bText, hrefs.b, "pair:b"]];
-  for (const [cand, text, href, focusKey] of cards) {
-    const card = el("a", { className: "lect-pair-card", href, "data-focus-key": focusKey });
-    if (cand === m.selected) card.setAttribute("aria-current", "true");
+  for (const side of /** @type {const} */ (["a", "b"])) {
+    const text = side === "a" ? pair.aText : pair.bText;
+    const card = el("a", { className: "lect-pair-card", href: hrefs[side], "data-focus-key": `pair:${side}` });
+    if (pair[side] === m.selected) card.setAttribute("aria-current", "true");
     const label = el("span", { className: "lect-pair-label" }, text.label);
     if (text.official) label.appendChild(el("span", { className: "lect-badge" }, "공식"));
     card.appendChild(label);
@@ -1173,6 +1173,13 @@ function commit(m, chapters, spot) {
   const root = el("div", { className: "lectionary" });
   // 이 화면의 클릭이 전역 <a> 인터셉터(document)보다 먼저 닿는다 — 이동이 시작되기 전에 누른 컨트롤의 자리를 남긴다.
   root.addEventListener("click", focusMemory.remember);
+  // 붙이기 · 알리기 · 누른 컨트롤로 — 빈 관측일 화면도 같은 끝이다(그 화면에도 날짜 이동 · 칩 · 카드가 있다). 계산 범위 끝
+  // (1583-01-01 의 전날 · 9999-12-31 의 다음날)에서 그 단추가 자리만 남으면 「오늘」로.
+  const finish = () => {
+    $app.appendChild(root);
+    announceDay(m);
+    focusMemory.restore(root, spot, "today");
+  };
   root.appendChild(buildHeader(m));
   root.appendChild(buildChips(m));
   if (m.pair) root.appendChild(buildPair(m));
@@ -1186,9 +1193,7 @@ function commit(m, chapters, spot) {
         ? "기념일은 고유 본기도와 독서를 두지 않습니다. 그날의 본문은 다른 관측일을 고르세요."
         : "이 관측일은 그날의 주일 · 평일 본문을 씁니다. 다른 관측일을 고르세요.",
     }));
-    $app.appendChild(root);
-    announceDay(m);
-    focusMemory.restore(root, spot, "today");
+    finish();
     return;
   }
 
@@ -1213,10 +1218,7 @@ function commit(m, chapters, spot) {
   } else {
     root.appendChild(emptyState({ icon: null, title: "독서 없음", subtitle: "이 관측일에는 독서가 없습니다 — 본기도만 있습니다." }));
   }
-  $app.appendChild(root);
-  announceDay(m);
-  // 누른 컨트롤로 — 계산 범위 끝(1583-01-01 의 전날 · 9999-12-31 의 다음날)에서 그 단추가 자리만 남으면 「오늘」로.
-  focusMemory.restore(root, spot, "today");
+  finish();
 }
 
 /**

@@ -294,12 +294,12 @@ function buildMonthHead(model) {
   const head = el("header", { className: "cal-head" });
   const nav = el("nav", { className: "lect-datenav", "aria-label": "달 이동" });
   // 이전 · 다음 달 — 계산 범위 밖이면 자리만 지킨다(전례독서의 날짜 이동 줄과 같은 부품)
-  nav.appendChild(buildDateStep(model.hrefs.prev, "이전 달", "‹", "prev"));
+  nav.appendChild(buildDateStep("prev", model.hrefs.prev, "이전 달"));
   const mid = el("div", { className: "lect-date" });
   mid.appendChild(el("h2", { className: "cal-month" }, model.title));
   mid.appendChild(el("a", { className: "lect-today", href: model.hrefs.today, "data-focus-key": "today" }, "오늘"));
   nav.appendChild(mid);
-  nav.appendChild(buildDateStep(model.hrefs.next, "다음 달", "›", "next"));
+  nav.appendChild(buildDateStep("next", model.hrefs.next, "다음 달"));
   head.appendChild(nav);
   return head;
 }

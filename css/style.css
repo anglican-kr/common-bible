@@ -590,8 +590,10 @@ body {
   font-size: var(--font-xl);
   line-height: 1;
 }
-.lect-datenav-btn:hover,
-.lect-datenav-btn:focus-visible { background: var(--bg-card); }
+/* a. — at the computable range's ends the step is an aria-hidden placeholder span (buildDateStep); it must not
+   light up like a button (same scoping as a.cal-cell). */
+a.lect-datenav-btn:hover,
+a.lect-datenav-btn:focus-visible { background: var(--bg-card); }
 .lect-date {
   display: flex;
   align-items: center;

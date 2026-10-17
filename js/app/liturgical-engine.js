@@ -939,13 +939,13 @@ function properWeekdayNameOf(dateStr, coord) {
  * 「사순 2주 화요일」). 성 목 · 금 · 토는 temporal 행이 따로 있으므로 격자는 「성주간 X요일」이다 —
  * temporal 행의 이름을 빌리면 같은 본문이 후보 둘에 붙는다.
  * @param {string} dateStr @param {LiturgicalCoord} coord
+ * @param {string | undefined} proper  `properWeekdayNameOf(dateStr, coord)` — 부르는 쪽(gridObservance)이 표지에도 쓰므로 한 번 센 값을 받는다
  * @returns {string}
  */
-function gridName(dateStr, coord) {
+function gridName(dateStr, coord, proper) {
   const s = SEASON_LABEL[coord.season];
   if (coord.type === "sunday") return coord.week === null ? s + " 주일" : s + " " + coord.week + "주일";
   const w = coord.weekday ? WEEKDAY_LABEL[coord.weekday] : "";
-  const proper = properWeekdayNameOf(dateStr, coord);
   if (proper) return proper;
   if (coord.week === null && inSpan(dateStr, "holyWeek")) return "성주간 " + w;
   return coord.week === null ? s + " " + w : s + " " + coord.week + "주 " + w;
@@ -992,11 +992,12 @@ function gridObservance(dateStr, coord) {
   const week = coord.week === null ? "x" : String(coord.week);
   const ordinarySunday = coord.type === "sunday" && coord.season === "ordinary";
   const base = seasonColorOf(dateStr, coord);
+  const proper = properWeekdayNameOf(dateStr, coord);
   /** @type {Observance} */
   const obs = {
     id: GRID_PREFIX + coord.season + "-" + week + "-" + coord.type + (coord.weekday ? "-" + coord.weekday : ""),
     kind: "temporal",
-    name: gridName(dateStr, coord),
+    name: gridName(dateStr, coord, proper),
     aliases: null,
     season: coord.season,
     week: coord.week,
@@ -1006,7 +1007,7 @@ function gridObservance(dateStr, coord) {
     color: base.color,
     color_alt: base.alt,
   };
-  if (properWeekdayNameOf(dateStr, coord)) obs.properWeekday = true;
+  if (proper) obs.properWeekday = true;
   return obs;
 }
 

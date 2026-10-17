@@ -592,9 +592,10 @@ export interface LiturgicalRule {
 }
 
 /**
- * 관측일 — 정의 표(sanctoral · temporal-feasts)의 행을 **그대로** 담는다. 엔진이 합성한
- * 값(옮겨 온 날짜 등)은 여기 얹지 않고 `Candidate` 가 싣는다(설계서 §1.3 · §5.5).
- * 격자(`grid:`) · 보호 기간(`guard:`)은 표에 없는 합성 관측일이고 id 접두사로 가린다.
+ * 관측일 — 정의 표(sanctoral · temporal-feasts)의 행을 **그대로** 담는다. 표의 행에 엔진이 합성한
+ * 값(옮겨 온 날짜 등)은 얹지 않고 `Candidate` 가 싣는다(설계서 §1.3 · §5.5).
+ * 격자(`grid:`) · 보호 기간(`guard:`)은 표에 없는 합성 관측일이고 id 접두사로 가린다 — 격자는 엔진이 통째로
+ * 만들므로 `name` 처럼 「무엇인가」를 말하는 표지(`properWeekday`)를 단다. 「어디서 왔나」는 여기에도 싣지 않는다.
  */
 export interface Observance {
   id: string;
@@ -741,6 +742,8 @@ export interface AppHelpers {
     ...children: Array<Node | string | null | undefined>
   ) => HTMLElementTagNameMap[K];
   clearNode: (node: Node) => void;
+  /** 운문 줄 머리 따옴표의 걸침 클래스(ADR-006) — 따옴표가 아니면 "". */
+  hangingQuoteClass: (ch: string | undefined) => string;
   setInert: (on: boolean, selectors: string) => void;
   trapFocus: (container: HTMLElement) => () => void;
   dragReleaseAction: (h: number, vh: number) => "close" | "snap-min" | "stay";
@@ -759,22 +762,29 @@ export interface AppHelpers {
 }
 
 /**
- * 다시 그린 화면에서 포커스를 돌려줄 자리 — 누른 컨트롤의 `data-focus-key`, 그때의 스크롤, 화면 루트 안에서의 위치.
- * 뒤의 둘로 새 화면의 같은 컨트롤을 누른 때와 같은 화면 위치에 둔다(helpers.js `createFocusMemory`).
+ * 다시 그린 화면에서 포커스를 돌려줄 자리 — 누른 컨트롤의 `data-focus-key`, 그때의 스크롤 · 화면 위치(viewport top) ·
+ * 화면 루트 안에서의 위치. 새 화면의 같은 컨트롤을 누른 때와 같은 화면 위치에 둔다 — 스크롤 고정(scroll anchoring)이
+ * 있는 브라우저는 `top` 으로, 없는 브라우저는 `y` · `offset` 으로(helpers.js `createFocusMemory`).
  */
 export interface FocusSpot {
   key: string;
   y: number;
+  top: number;
   offset: number;
+  /** 마우스 · 탭으로 눌렀다(`detail` > 0) — 복원한 포커스에 링을 그리지 않는다. Enter 는 false. */
+  pointer: boolean;
 }
 
 /** `createFocusMemory` 의 반환 — 클릭에서 `remember`, 렌더 시작에서 `take`, 커밋 뒤 `restore`(WCAG 2.4.3). */
 export interface FocusMemory {
-  /** 화면 루트의 click 처리기 — `data-focus-key` 링크면 그 자리를, 아니면 비운다. 새 탭 클릭은 건너뛴다. */
+  /** 화면 루트의 click 처리기 — `data-focus-key` 링크면 그 자리를, 아니면 비운다. 새 탭 클릭 · 이미 취소된 클릭은 건너뛴다(라우터와 같은 조건). */
   remember: (e: Event) => void;
   /** 기억한 자리를 꺼내고 비운다 — 렌더 하나에 한 번. */
   take: () => FocusSpot | null;
-  /** 새 루트에서 같은 키(없으면 `fallbackKey`)의 컨트롤에 포커스를 둔다. 찾은 컨트롤 또는 null. */
+  /**
+   * 새 루트에서 같은 키(없으면 `fallbackKey`)의 컨트롤에 포커스를 둔다 — 누른 때의 화면 위치로. 찾은 컨트롤 또는 null.
+   * 다시 그리는 사이 독자가 포커스를 다른 데(머리 검색 · 팝오버 · 탭 바)로 옮겼으면 아무것도 하지 않고 null.
+   */
   restore: (root: Element, spot: FocusSpot | null, fallbackKey?: string) => HTMLElement | null;
 }
 
@@ -1031,6 +1041,10 @@ export interface InstallObject {
 // ── Window augmentation ──────────────────────────────────────────────────────
 
 declare global {
+  // HTML `FocusOptions.focusVisible`(Safari 18.4+ · Chrome 145+ · Firefox 104+) — TS 5.9 의 lib.dom 에는 아직 없다.
+  interface FocusOptions {
+    focusVisible?: boolean;
+  }
   interface Window {
     // Sync layer singletons (set by their respective modules at load time).
     syncTransport: SyncTransport;
