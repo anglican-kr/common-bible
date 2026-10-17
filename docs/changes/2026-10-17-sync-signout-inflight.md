@@ -1,4 +1,5 @@
 ---
+pr: 354
 date: 2026-10-17
 branch: fix/sync-signout-inflight
 title: "fix: Drive 동기화 — 로그아웃 경합 · 실패 처리 · 「파일도 삭제」"
