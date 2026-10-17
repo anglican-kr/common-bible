@@ -12,7 +12,11 @@
 // `loadBookmarks` collide with store-v2.js (sync layer) at the TypeScript
 // global level. See ADR-018 §"채택 방식 — module-vs-script 예외".
 
-window.appStorage = (() => {
+/** @typedef {import("../types").AppStorage} AppStorage */
+
+// The return type is declared so a helper missing from `AppStorage` (types.d.ts) fails typecheck here, not
+// later in whichever module destructures it (helpers.js does the same for `AppHelpers`).
+window.appStorage = (/** @returns {AppStorage} */ () => {
   /** @typedef {import("../types").ReadingPosition} ReadingPosition */
   /** @typedef {import("../types").AudioPosition} AudioPosition */
   /** @typedef {import("../types").SearchHistoryList} SearchHistoryList */
