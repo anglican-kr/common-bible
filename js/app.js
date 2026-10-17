@@ -198,9 +198,12 @@ function registerServiceWorker() {
 
   /** @param {ServiceWorker} waitingSW */
   async function showUpdateToast(waitingSW) {
-    // Prevent duplicate toasts
+    // Prevent duplicate toasts — checked again after the version round-trip (up to 1.5 s): a second call (the
+    // settings panel's 「업데이트 지금 확인」, or another statechange) that arrives meanwhile also passes the first
+    // check, and both would append a toast with the same ids (PR #353 리뷰, 2026-10-17).
     if (document.getElementById("sw-update-toast")) return;
     const version = await fetchWaitingVersion(waitingSW);
+    if (document.getElementById("sw-update-toast")) return;
     const btn = el("button", { id: "sw-update-btn", "aria-label": "새 버전이 있습니다." }, "업데이트");
     const releaseUrl = version
       ? `https://github.com/anglican-kr/common-bible/releases/tag/${encodeURIComponent(version)}`

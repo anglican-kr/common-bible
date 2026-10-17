@@ -46,6 +46,24 @@ def test_update_toast_appears_when_waiting_sw(browser):
         ctx.close()
 
 
+def test_update_toast_single_when_checked_while_version_pending(browser):
+    """버전을 묻는 동안(가짜 SW 는 답하지 않아 1.5초 시한까지) 「업데이트 지금 확인」이 또 불러도 토스트는 하나.
+
+    그전엔 중복 확인이 기다리기 전에만 있어 두 호출이 다 지나 같은 id 의 토스트가 둘 붙었다
+    (PR #353 리뷰, 2026-10-17 — app.js showUpdateToast 가 기다린 뒤 한 번 더 본다)."""
+    ctx, page = _make_page_with_waiting_sw(browser)
+    try:
+        page.wait_for_function("() => typeof window.checkForUpdates === 'function'", timeout=5_000)
+        # 첫 호출(register 직후)이 버전을 기다리는 동안 두 번째 호출 — 두 기다림이 모두 끝난 뒤에 센다.
+        page.evaluate("() => window.checkForUpdates()")
+        page.wait_for_selector("#sw-update-toast", timeout=5_000)
+        page.wait_for_timeout(2_000)
+        assert page.locator("#sw-update-toast").count() == 1
+        assert page.locator("#sw-update-btn").count() == 1
+    finally:
+        ctx.close()
+
+
 def test_update_release_link_points_to_github(browser):
     """토스트 안의 릴리스 링크가 GitHub releases 페이지를 가리킨다."""
     ctx, page = _make_page_with_waiting_sw(browser)
