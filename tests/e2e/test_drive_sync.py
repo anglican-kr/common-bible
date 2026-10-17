@@ -34,9 +34,10 @@ class FakeDrive:
     """Thread-safe in-memory Drive appDataFolder with ETag support.
 
     Like the real API it answers 401 to a request without a token (`Bearer null` — what the app
-    sends once sign-out has cleared it). `requests` logs every (method, url) it receives;
-    `hold_list = True` keeps the next files.list pending until `release_held()` — a sync cycle
-    parked on its first await.
+    sends once sign-out has cleared it). `requests` logs every (method, url) it receives.
+    `hold_list = True` / `hold_create = True` keep the next files.list / multipart create pending
+    until `release_held()` serves them — a sync cycle parked on that await. `fail_list = <status>`
+    answers every files.list with that status.
     """
 
     def __init__(self):
@@ -46,6 +47,8 @@ class FakeDrive:
         self._etag_n = 0
         self.requests: list[tuple[str, str]] = []
         self.hold_list = False
+        self.hold_create = False
+        self.fail_list: int | None = None
         self.held: list[Route] = []
 
     def reset(self):
@@ -55,16 +58,15 @@ class FakeDrive:
             self._etag_n = 0
         self.requests = []
         self.hold_list = False
+        self.hold_create = False
+        self.fail_list = None
         self.held = []
 
     def release_held(self):
-        """Answer the held files.list requests with the current file list."""
+        """Serve the held requests now — the list answers with the file list as it is at this point."""
         held, self.held = self.held, []
         for route in held:
-            with self._lock:
-                files = [{"id": "sync-file-id"}] if self._file is not None else []
-            route.fulfill(status=200, content_type="application/json",
-                          body=json.dumps({"files": files}))
+            self._serve(route)
 
     def handle(self, route: Route):
         req = route.request
@@ -74,12 +76,24 @@ class FakeDrive:
         if req.headers.get("authorization", "") in ("", "Bearer null", "Bearer undefined"):
             route.fulfill(status=401)
             return
+        is_list = "spaces=appDataFolder" in url and "fields=files" in url
+        if (is_list and self.hold_list) or ("uploadType=multipart" in url and self.hold_create):
+            if is_list:
+                self.hold_list = False
+            else:
+                self.hold_create = False
+            self.held.append(route)
+            return
+        self._serve(route)
+
+    def _serve(self, route: Route):
+        req = route.request
+        url = req.url
 
         # List files
         if "spaces=appDataFolder" in url and "fields=files" in url:
-            if self.hold_list:
-                self.hold_list = False
-                self.held.append(route)
+            if self.fail_list is not None:
+                route.fulfill(status=self.fail_list)
                 return
             with self._lock:
                 files = [{"id": "sync-file-id"}] if self._file is not None else []
@@ -546,6 +560,69 @@ def test_drive_disconnect_delete_file(browser, fake_drive, fake_oauth):
             "Sync should be DISABLED after disconnect"
         with fake_drive._lock:
             assert fake_drive._file is None, "Drive file should have been deleted"
+    finally:
+        page.context.close()
+
+
+def _wait_held(page: Page, fake_drive: "FakeDrive"):
+    for _ in range(100):
+        if fake_drive.held:
+            return
+        page.wait_for_timeout(50)
+    raise AssertionError("no request was held — the sync cycle never got that far")
+
+
+def test_drive_disconnect_delete_waits_for_inflight_create(browser, fake_drive, fake_oauth):
+    """'파일도 삭제' while the first cycle's create is still in flight — the file must not come back.
+
+    The create is parked; the delete path stops sync, then waits for that cycle before it looks the
+    file up. It used to look up at once (no file yet), delete nothing, and let the create land after.
+    """
+    fake_drive.reset()
+    fake_drive.hold_create = True
+    page = _make_page(browser, fake_drive, fake_oauth)
+    try:
+        _load(page)
+        _enable_sync(page)
+        _wait_held(page, fake_drive)
+
+        page.evaluate("openDriveDisconnectModal()")
+        page.wait_for_selector("#drive-disconnect-modal:not([hidden])")
+        page.click("#drive-disconnect-delete")
+        page.wait_for_timeout(300)
+        assert page.evaluate("window.driveSync.getStatus()") == "DISABLED", "sync stops before the delete"
+        fake_drive.release_held()   # the create lands
+        page.wait_for_timeout(800)
+
+        with fake_drive._lock:
+            assert fake_drive._file is None, "the in-flight create re-made the deleted file"
+        assert page.evaluate("window.driveSync.getStatus()") == "DISABLED"
+    finally:
+        page.context.close()
+
+
+def test_drive_disconnect_delete_failure_says_so(browser, fake_drive, fake_oauth):
+    """'파일도 삭제' when the file can't be looked up: the disconnect still happens, and a snackbar says
+    the file stayed on Drive (it used to say nothing)."""
+    fake_drive.reset()
+    page = _make_page(browser, fake_drive, fake_oauth)
+    try:
+        _load(page)
+        _enable_sync(page)
+        _add_bookmark(page, "Stays-on-Drive")
+        _sync_now(page)
+        fake_drive.fail_list = 503
+
+        page.evaluate("openDriveDisconnectModal()")
+        page.wait_for_selector("#drive-disconnect-modal:not([hidden])")
+        page.click("#drive-disconnect-delete")
+        page.wait_for_function(
+            "() => [...document.body.children].some((n) => n.textContent.includes('동기화 파일은 삭제하지 못했습니다'))",
+            timeout=5_000,
+        )
+        assert page.evaluate("window.driveSync.getStatus()") == "DISABLED", "the disconnect still happens"
+        with fake_drive._lock:
+            assert fake_drive._file is not None, "the file is still on Drive"
     finally:
         page.context.close()
 

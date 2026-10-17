@@ -475,17 +475,17 @@ async function uploadSyncFile(token, body, { fileId, ifMatch } = {}) {
   } catch { return { ok: false, status: 0, etag: null }; }
 }
 
-// Delete the sync file. Returns { ok }.
+// Delete the sync file. Returns { ok, status } — 404 means it was already gone; 0 = network error.
 /**
  * @param {string} token
  * @param {string} fileId
- * @returns {Promise<{ ok: boolean }>}
+ * @returns {Promise<{ ok: boolean, status: number }>}
  */
 async function deleteSyncFile(token, fileId) {
   try {
-    const { ok } = await driveFetch(`/files/${fileId}`, { token, method: "DELETE" });
-    return { ok };
-  } catch { return { ok: false }; }
+    const { ok, status } = await driveFetch(`/files/${fileId}`, { token, method: "DELETE" });
+    return { ok, status };
+  } catch { return { ok: false, status: 0 }; }
 }
 
 window.syncTransport = {

@@ -97,6 +97,10 @@ function createSyncMachine({ onStateChange } = {}) {
   /** @type {string | null} */
   let _email = null;
   let _syncPending = false;
+  // The running _syncCycle (resolved when none). deleteRemoteFile waits on it so that a request the
+  // cycle already sent has landed before the lookup that decides what to delete.
+  /** @type {Promise<void>} */
+  let _cycleDone = Promise.resolve();
   // Timestamp (ms) when the last _syncCycle finished. Read by requestSync()
   // to throttle "poll" callers (visibilitychange) that would otherwise pay a
   // full 1+s round-trip even when nothing has changed. 0 means no cycle has
@@ -828,7 +832,8 @@ function createSyncMachine({ onStateChange } = {}) {
             conflictFails: _ctx.conflictFails,
             reAuthFails:  _ctx.reAuthFails,
           }, event);
-          _syncCycle();
+          // A cycle still running keeps its _cycleDone (_syncCycle would return at once).
+          if (!_syncPending) _cycleDone = _syncCycle();
         } else if (event.type === "DISABLE") {
           _token = null;
           _transition(S.DISABLED, {}, event); // timer cleared here
@@ -982,6 +987,10 @@ function createSyncMachine({ onStateChange } = {}) {
     // Google account) doesn't reuse a fileId/etag that no longer belongs to
     // the new identity.
     _clearCache();
+    // Drop the token in every state: the DISABLE handlers do it only for the states they leave, and
+    // deleteRemoteFile() parks the machine in DISABLED with the token kept for its delete — signOut()
+    // reads it for the revoke, then calls this.
+    _token = null;
     dispatch({ type: "DISABLE" });
   }
   // Public sync entry point. Internal callers (silent refresh, timers,
@@ -1010,16 +1019,29 @@ function createSyncMachine({ onStateChange } = {}) {
   function isEnabled()       { return _state !== S.DISABLED && _state !== S.ERROR; }
   function isAuthenticated() { return !!_token; }
 
+  // "파일도 삭제" disconnect (bookmark.js — signOut() follows). Resolves true when Drive's sync file is gone
+  // (deleted, or there was none), false when that could not be confirmed (no token · the lookup or the
+  // delete failed). Sync stops first and stays stopped: the machine leaves SYNCING / IDLE for DISABLED
+  // without dropping the token — no new cycle starts (requestSync needs IDLE) and a running one stops at
+  // its next await (_leftSyncing) — then this waits for that cycle, so a request it already sent (a
+  // create would re-make the file) has landed before the lookup. The token stays for the delete;
+  // signOut() revokes it and disable() drops it.
+  /** @returns {Promise<boolean>} */
   async function deleteRemoteFile() {
-    if (!_token) return;
-    const found = await T.findSyncFileId(_token);
+    const token = _token;
+    if (!token) return false;
+    localStorage.setItem(SYNC_ENABLED_KEY, "0");
+    _clearCache();   // the file it points to is about to go; a stopped cycle won't refill it
+    _transition(S.DISABLED, {}, { type: "DELETE_REMOTE_FILE" });
+    _refreshUI();
+    await _cycleDone.catch(() => {});
+    const found = await T.findSyncFileId(token);
     L.log({ kind: "NETWORK", event: "DELETE_FIND_FILE", status: found.status, fileId: L.mask("fileId", found.fileId) });
-    if (found.fileId) {
-      const { ok } = await T.deleteSyncFile(_token, found.fileId);
-      L.log({ kind: "NETWORK", event: "DELETE_FILE", ok });
-    }
-    // Cached fileId/etag now point to a deleted file — drop them.
-    _clearCache();
+    if (found.status < 200 || found.status >= 300) return false;
+    if (!found.fileId) return true;
+    const { ok, status } = await T.deleteSyncFile(token, found.fileId);
+    L.log({ kind: "NETWORK", event: "DELETE_FILE", ok, status });
+    return ok || status === 404;   // 404 — already gone
   }
 
   return { enable, disable, requestSync, dispatch,

@@ -204,10 +204,13 @@ function signOut() {
   _machine.disable();
 }
 
-// Called by disconnect modal "삭제" path.
+// Called by disconnect modal "파일도 삭제" path — signOut() follows. Resolves true when Drive's sync file is
+// gone; sync stops first so no cycle puts it back (state-machine.js deleteRemoteFile).
+/** @returns {Promise<boolean>} */
 async function deleteRemoteFile() {
   window.syncDebugLog?.log({ kind: "ACTION", event: "DELETE_REMOTE_FILE" });
-  await _machine.deleteRemoteFile();
+  _clearUploadTimer();
+  return _machine.deleteRemoteFile();
 }
 
 // Called by all save* functions in app.js after any local data change.

@@ -1307,10 +1307,11 @@ test("50. 대기 중 disable() 뒤 그 대기가 예외로 끝나도 SYNC_EXCEPT
   assert.equal(machine.getState(), "DISABLED");
 });
 
-// ── Group 15: 실패를 성공으로 치지 않는다 ───────────────────────────────────
-// 머지 전 /code-review(2026-10-17) 1 · 3번. 파일 찾기는 「없음」(2xx · fileId null)과 「실패」를 가르고,
+// ── Group 15: 실패를 성공으로 치지 않는다 · 「파일도 삭제」 ─────────────────────
+// 머지 전 /code-review(2026-10-17) 1 · 3 · 4번. 파일 찾기는 「없음」(2xx · fileId null)과 「실패」를 가르고,
 // 실패한 찾기 · 내려받기 · v1 올리기는 SYNC_FAIL(백오프)로 간다 — 「파일 없음」 · 「원격 없음」 · 「동기화됨」으로
-// 읽으면 sync.json 이 둘이 되거나 재시도 없이 끝났다.
+// 읽으면 sync.json 이 둘이 되거나 재시도 없이 끝났다. 「파일도 삭제」는 동기화를 먼저 멈추고, 진행 중 사이클이
+// 이미 보낸 요청이 끝난 뒤에 찾아 지운다(그전엔 지운 뒤 도착한 새 파일 올리기가 파일을 되살렸다).
 
 test("51. 파일 찾기가 실패(503)하면 새 파일을 올리지 않는다 — SYNC_FAIL 로 다시 시도", async () => {
   let uploadCalls = 0;
@@ -1390,4 +1391,60 @@ test("54. v1 문서 올리기가 실패(503)하면 캐시를 「동기화됨」�
   assert.equal(localStorage.getItem(CACHE_SYNCED_U_KEY), "0", "syncedMaxU 를 올리지 않음 — 다음 사이클이 다시 올린다");
   assert.ok(!logEntries.some((e) => e.kind === "ACTION" && e.event === "SYNC_DONE"), "SYNC_DONE 없음");
   assert.ok(logEntries.some((e) => e.kind === "ACTION" && e.event === "SYNC_FAIL"), "SYNC_FAIL");
+});
+
+test("55. deleteRemoteFile — 진행 중 사이클의 새 파일 올리기가 끝난 뒤에 찾아 지운다 · 토큰은 signOut 이 폐기하도록 남는다", async () => {
+  let resolveUpload;
+  const upPromise = new Promise((r) => { resolveUpload = r; });
+  let created = false;
+  const finds = [];
+  const deletes = [];
+  const { machine, drain } = loadMachine({
+    initialRefreshToken: "rt-x",
+    overrideStubs: {
+      T: {
+        findSyncFileId: async () => { finds.push(created); return { fileId: created ? "fid-new" : null, status: 200 }; },
+        uploadSyncFile: () => upPromise.then((r) => { created = true; return r; }),
+        deleteSyncFile: async (token, fileId) => { deletes.push({ token, fileId }); return { ok: true, status: 204 }; },
+      },
+    },
+  });
+  machine.enable();
+  await drain(4);
+  assert.equal(machine.getState(), "SYNCING", "새 파일 올리기 hold");
+  const token = machine.getToken();
+  const done = machine.deleteRemoteFile();
+  assert.equal(machine.getState(), "DISABLED", "지우기 전에 동기화를 멈춘다");
+  await drain(3);
+  assert.deepEqual(finds, [false], "사이클의 찾기만 — 지우기의 찾기는 올리기가 끝나기를 기다린다");
+  resolveUpload({ ok: true, status: 200, etag: '"e1"' });
+  assert.equal(await done, true, "지웠다");
+  assert.deepEqual(finds, [false, true], "지우기의 찾기는 만들어진 파일을 본다");
+  assert.deepEqual(deletes, [{ token, fileId: "fid-new" }], "그 파일을 그 토큰으로 지운다");
+  assert.equal(machine.getToken(), token, "토큰은 signOut 이 폐기하도록 남는다");
+  machine.disable();
+  assert.equal(machine.getToken(), null, "disable() 이 토큰을 지운다");
+});
+
+test("56. deleteRemoteFile — 파일 찾기가 실패하면 false · 지우기를 보내지 않는다, 토큰이 없으면 false", async () => {
+  let failFind = false;
+  const deletes = [];
+  const { machine, drain } = loadMachine({
+    initialRefreshToken: "rt-x",
+    overrideStubs: {
+      T: {
+        findSyncFileId: async () => (failFind ? { fileId: null, status: 503 } : { fileId: "fid-1", status: 200 }),
+        deleteSyncFile: async (_t, fileId) => { deletes.push(fileId); return { ok: true, status: 204 }; },
+      },
+    },
+  });
+  machine.enable();
+  await drain(6);
+  assert.equal(machine.getState(), "IDLE", "첫 사이클 끝");
+  failFind = true;
+  assert.equal(await machine.deleteRemoteFile(), false, "찾기 실패 — 지웠는지 알 수 없다");
+  assert.deepEqual(deletes, [], "지우기를 보내지 않음");
+  assert.equal(machine.getState(), "DISABLED");
+  machine.disable();
+  assert.equal(await machine.deleteRemoteFile(), false, "토큰 없음");
 });

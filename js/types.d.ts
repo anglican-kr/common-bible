@@ -172,7 +172,9 @@ export interface SyncMachine {
   getEmail: () => string | null;
   isEnabled: () => boolean;
   isAuthenticated: () => boolean;
-  deleteRemoteFile: () => Promise<void>;
+  // "파일도 삭제" disconnect — true when Drive's sync file is gone (deleted, or there was none), false when
+  // that could not be confirmed. Stops sync first and keeps the token for the delete (signOut revokes it).
+  deleteRemoteFile: () => Promise<boolean>;
 }
 
 // ── Transport (Drive REST + PKCE OAuth) ──────────────────────────────────────
@@ -275,7 +277,7 @@ export interface SyncTransport {
     body: SyncPayload,
     opts?: { fileId?: string; ifMatch?: string | null },
   ) => Promise<DriveUploadResult>;
-  deleteSyncFile: (token: string, fileId: string) => Promise<{ ok: boolean }>;
+  deleteSyncFile: (token: string, fileId: string) => Promise<{ ok: boolean; status: number }>;
 }
 
 // ── Refresh Token Store (Phase 2h 단계 1) ────────────────────────────────────
@@ -381,7 +383,7 @@ export interface DriveSyncFacade {
   initDriveSync: () => void;
   signIn: () => void;
   signOut: () => void;
-  deleteRemoteFile: () => Promise<void>;
+  deleteRemoteFile: () => Promise<boolean>;
   scheduleUpload: () => void;
   requestSync: () => void;
   // Throttled requestSync for visibilitychange-style polling: drops the

@@ -178,8 +178,12 @@ $driveDisconnectKeep.addEventListener("click", () => {
 
 $driveDisconnectDelete.addEventListener("click", async () => {
   closeDriveDisconnectModal();
-  await window.driveSync?.deleteRemoteFile();
+  const deleted = await window.driveSync?.deleteRemoteFile();
   window.driveSync?.signOut();
+  // The disconnect goes ahead either way — say so when the file stayed on Drive, so it can be deleted later.
+  if (deleted === false) {
+    window._showSyncSnackbar?.("연결은 해제했지만 Drive의 동기화 파일은 삭제하지 못했습니다. 다시 연결한 뒤 「파일도 삭제」를 눌러 주세요.");
+  }
 });
 // $bmImport* modal refs moved to bookmark-modals.js (PR5d).
 // $bmSave* / $bmNewFolder* / $bmMerge* refs moved to bookmark-modals.js (PR5b~5c).

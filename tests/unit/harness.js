@@ -84,7 +84,7 @@ function makeTransportStub({
     findSyncFileId: async () => ({ fileId: findFileId !== undefined ? findFileId : null, status: 200 }),
     downloadSyncFile: async () => (downloadResult ?? { doc: null, etag: null, status: 200 }),
     uploadSyncFile: async () => (uploadResult ?? { ok: true, status: 200, etag: '"etag-1"' }),
-    deleteSyncFile: async () => ({ ok: true }),
+    deleteSyncFile: async () => ({ ok: true, status: 204 }),
     DRIVE_HOSTNAMES: [],
   };
 }
