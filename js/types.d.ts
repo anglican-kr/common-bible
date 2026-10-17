@@ -751,6 +751,8 @@ export interface AppHelpers {
     tag?: keyof HTMLElementTagNameMap;
     role?: string;
   }) => HTMLElement;
+  /** 헤더 아이콘의 SVG — path `d` 만 받는다(규격은 helpers.js 한 곳). 단추 · 링크와 그 동작은 호출 쪽 몫. */
+  headerIcon: (d: string) => SVGSVGElement;
   isModifiedClick: (e: Event) => boolean;
 }
 
@@ -1192,7 +1194,6 @@ declare global {
   // trackPageView can `typeof gtag === "function"` guard + call directly.
   function gtag(...args: any[]): void;
   const dataLayer: any[];
-  function buildBackBtn(ariaLabel: string, fallback: string): HTMLButtonElement;
   function buildHomeBtn(target: string, ariaLabel: string, focusBookId?: string): HTMLButtonElement;
   function setPendingBookFocus(bookId: string): void;
   function buildSettingsTrigger(): HTMLButtonElement;

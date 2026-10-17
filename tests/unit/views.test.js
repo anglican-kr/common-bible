@@ -701,7 +701,7 @@ function makeRichDom() {
 
 // ── POPOVER loader ───────────────────────────────────────────────────────────
 // Provides shims for el / clearNode / chUnit / trapFocus + stubs for
-// announce, divisionLabels/divisionOrder, buildBackBtn /
+// announce, divisionLabels/divisionOrder, buildHomeBtn /
 // buildBookmarkHeaderBtn. Loads only the POPOVER block.
 
 function loadPopover() {

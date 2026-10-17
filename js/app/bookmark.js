@@ -17,7 +17,7 @@
 /** @typedef {import("../types").DragState} DragState */
 /** @typedef {import("../types").BooksData} BooksData */
 
-const { _$, el } = window.appHelpers;
+const { _$, el, headerIcon } = window.appHelpers;
 const { createOverlay, attachSheetDrag, attachSheetResize } = window.appOverlay;
 const { loadBookmarks, saveBookmarks, generateId } = window.appStorage;
 const { readingContext } = window;
@@ -191,47 +191,15 @@ $driveDisconnectDelete.addEventListener("click", async () => {
 // Move-to-folder modal (선택 모드 → 이동).
 // $bmMove* refs moved to bookmark-modals.js with the move picker (PR5e).
 
-// Build the chevron-left back button for page title headers
-function buildBackBtn(ariaLabel, fallback) {
-  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  svg.setAttribute("viewBox", "0 0 24 24");
-  svg.setAttribute("aria-hidden", "true");
-  svg.setAttribute("class", "title-back-icon");
-  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-  path.setAttribute("d", "M15.5 5 8.5 12l7 7");
-  path.setAttribute("stroke", "currentColor");
-  path.setAttribute("stroke-width", "2");
-  path.setAttribute("stroke-linecap", "round");
-  path.setAttribute("stroke-linejoin", "round");
-  path.setAttribute("fill", "none");
-  svg.appendChild(path);
-  const btn = el("button", { className: "title-back-btn", "aria-label": ariaLabel }, svg);
-  btn.addEventListener("click", () => {
-    if (history.length > 1) history.back();
-    else navigate(fallback);
-  });
-  return btn;
-}
-
-// Build the home button for reading-view headers. Unlike buildBackBtn this
-// always navigates to a fixed destination (the book list / division tab),
-// never history.back() — the breadcrumb is gone, so this is the canonical way
-// back up to the book list from a chapter / prologue / chapter-list view.
+// Build the home button for page-title headers. It always navigates to a fixed
+// destination (the book list / division tab), never history.back() — the
+// breadcrumb is gone, so this is the canonical way back up to the book list
+// from a chapter / prologue / chapter-list view.
 // `focusBookId`, when given, asks the book list to move focus onto the book
 // we were just reading once it renders, so keyboard users land in context.
+// The glyph comes from helpers.js headerIcon — the header icon spec lives there.
 function buildHomeBtn(target, ariaLabel, focusBookId) {
-  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  svg.setAttribute("viewBox", "0 0 24 24");
-  svg.setAttribute("aria-hidden", "true");
-  svg.setAttribute("class", "title-back-icon");
-  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-  path.setAttribute("d", "M3 11.5 12 4l9 7.5M5.5 9.8V19a1 1 0 0 0 1 1h11a1 1 0 0 0 1-1V9.8");
-  path.setAttribute("stroke", "currentColor");
-  path.setAttribute("stroke-width", "2");
-  path.setAttribute("stroke-linecap", "round");
-  path.setAttribute("stroke-linejoin", "round");
-  path.setAttribute("fill", "none");
-  svg.appendChild(path);
+  const svg = headerIcon("M3 11.5 12 4l9 7.5M5.5 9.8V19a1 1 0 0 0 1 1h11a1 1 0 0 0 1-1V9.8");
   const btn = el("button", { className: "title-back-btn title-home-btn", "aria-label": ariaLabel }, svg);
   btn.addEventListener("click", () => {
     if (focusBookId) setPendingBookFocus(focusBookId);
@@ -516,9 +484,9 @@ function initBookmarkDrawerResize() {
 
 // ── Window facade ──
 // Both an `appBookmark` aggregate (for new ESM-style import-or-window
-// access) and per-name globals (so existing bare `parseVerseSpec(...)` /
-// `buildBackBtn(...)` calls in app.js's Phase 7 territory resolve via
-// globalThis until those callers move into this module). Also exposes
+// access) and per-name globals (so existing bare `buildHomeBtn(...)` /
+// `openBookmarkDrawer(...)` calls in other modules resolve via globalThis
+// until those callers move to ESM imports). Also exposes
 // `renderBookmarkTree` for sync/state-machine.js's post-sync re-render.
 
 const appBookmark = {
@@ -526,7 +494,7 @@ const appBookmark = {
   moveBookmarkItem, closeSwipedRow, _setupDragHandle,
   resetSwipedRow, closeSwipedRowIfOutside,
   // Phase 6b UI
-  buildBackBtn, buildBookmarkHeaderBtn,
+  buildBookmarkHeaderBtn,
   openBookmarkDrawer, closeBookmarkDrawer,
   renderBookmarkTree, renderBookmarksView, refreshBookmarkHeaderBtn,
   enterVerseSelectMode, exitVerseSelectMode,
@@ -551,7 +519,6 @@ window.resetSwipedRow = resetSwipedRow;
 window.closeSwipedRowIfOutside = closeSwipedRowIfOutside;
 
 // Phase 6b per-name globals
-window.buildBackBtn = buildBackBtn;
 window.buildHomeBtn = buildHomeBtn;
 window.buildBookmarkHeaderBtn = buildBookmarkHeaderBtn;
 window.openBookmarkDrawer = openBookmarkDrawer;
@@ -579,7 +546,7 @@ window.initBookmarkDrawerResize = initBookmarkDrawerResize;
 export {
   moveBookmarkItem, closeSwipedRow, _setupDragHandle,
   resetSwipedRow, closeSwipedRowIfOutside,
-  buildBackBtn, buildBookmarkHeaderBtn,
+  buildBookmarkHeaderBtn,
   openBookmarkDrawer, closeBookmarkDrawer,
   renderBookmarkTree, renderBookmarksView, refreshBookmarkHeaderBtn,
   enterVerseSelectMode, exitVerseSelectMode,
