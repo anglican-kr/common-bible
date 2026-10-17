@@ -1,3 +1,5 @@
+// @ts-check
+
 // Start fetching books.json immediately to avoid waiting for app.js to load.
 //
 // This file stays as a classic script (no `export {};` marker, no
