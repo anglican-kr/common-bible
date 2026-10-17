@@ -1,9 +1,6 @@
 // @ts-check
 "use strict";
-// ADR-012 2차 적용 2라운드 종료 시점에 영구 활성화. Phase 8(2026-05-10)에
-// app.js가 ~280줄의 부트스트랩으로 축소된 후 추가됨. tsconfig.app.json은
-// 동시에 삭제됐고, 이제 메인 tsconfig.json(checkJs: false + 모듈별 opt-in)
-// 한 곳에서만 검증한다.
+// 타입 검사는 tsconfig.json 이 js/ 전체에 켠다(checkJs: true — ADR-012). 위 지시문은 관례로 남은 것이다.
 
 // ── app-main ──
 // app.js is the residual app-bootstrap module after the ADR-018 modular
