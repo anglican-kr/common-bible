@@ -162,7 +162,7 @@ ADR-038 §3 렌더 기반이 복원하는 전례 표기 — 계응 ◯(`.respons
 
 ## 7. A2(캘린더 탭) 작업 중 찾은 후속 (2026-10-15)
 
-- **앱 모듈 24개가 실제로는 타입 검사를 받지 않는다**(오래된 결함 — main 부터). 첫 줄이 `"use strict";` 이고 둘째 줄이 `// @ts-check` 인 파일은 지시문이 파일 머리 주석이 아니게 되어 tsc 가 그 파일을 건너뛴다(`tsconfig.json` 은 `checkJs: false`). 일부러 넣은 타입 오류를 `npm run typecheck` 가 잡지 못하는 것으로 확인했다 — `js/app.js` 와 `js/app/` 의 23개(audio-player · bookmark 계열 10 · citations · data-fetch · helpers · install · overlay · parallels · reading-context · routing · search · settings-ui · verse-spec · views). 두 줄의 순서를 바꾸면 오류 **204건**이 드러난다(2026-10-15 실측 — bookmark-modals 50 · views 48 · search 22 · bookmark-read 16 · bookmark 13 · routing 12 · bookmark-tree 11 · citations 9 · app.js 6 · 나머지 17). `docs/status.md` 의 「모든 클라이언트 JS 에 `// @ts-check` … 0 error」는 이 파일들에서는 사실이 아니다. 같은 결함을 #346 이 `lectionary.js` 에서 고쳤다(975줄이 검사 밖이었다 — 원장 `docs/changes/2026-10-12-lectionary-view.md` 3회차 ①). A2 의 새 `calendar.js` 는 첫 줄이 `// @ts-check` 이고 일부러 넣은 오류가 잡히는 것을 확인했다. **고치는 법**: 파일마다 두 줄의 순서를 바꾸고 드러난 오류를 고친다 — 파일이 많고 오류가 실제 결함일 수도 있어 별도 PR(파일 묶음별)로.
+- **앱 모듈 22개가 실제로는 타입 검사를 받지 않는다**(오래된 결함 — main 부터). 첫 줄이 `"use strict";` 이고 둘째 줄이 `// @ts-check` 인 파일은 지시문이 파일 머리 주석이 아니게 되어 tsc 가 그 파일을 건너뛴다(`tsconfig.json` 은 `checkJs: false`). 일부러 넣은 타입 오류를 `npm run typecheck` 가 잡지 못하는 것으로 확인했다 — `js/app.js` 와 `js/app/` 의 21개(audio-player · bookmark 계열 9 · citations · data-fetch · install · overlay · parallels · reading-context · routing · search · settings-ui · verse-spec · views). 두 줄의 순서를 바꾸면 오류 **203건**이 드러난다(2026-10-17 실측 — bookmark-modals 50 · views 48 · search 22 · bookmark-read 16 · routing 13 · bookmark-tree 11 · bookmark 11 · citations 9 · app.js 6 · 나머지 17). `docs/status.md` 의 「모든 클라이언트 JS 에 `// @ts-check` … 0 error」는 이 파일들에서는 사실이 아니다. 같은 결함을 #346 이 `lectionary.js` 에서 고쳤다(975줄이 검사 밖이었다 — 원장 `docs/changes/2026-10-12-lectionary-view.md` 3회차 ①). A2 의 새 `calendar.js` 는 첫 줄이 `// @ts-check` 이고 일부러 넣은 오류가 잡히는 것을 확인했다. **고치는 법**: 파일마다 두 줄의 순서를 바꾸고 드러난 오류를 고친다 — 파일이 많고 오류가 실제 결함일 수도 있어 별도 PR(파일 묶음별)로.
 
 ---
 
@@ -170,7 +170,6 @@ ADR-038 §3 렌더 기반이 복원하는 전례 표기 — 계응 ◯(`.respons
 
 #348(캘린더 탭 1단계)을 `/code-review` 로 본 13건 가운데 그 PR 에서 고치지 않고 넘긴 것. 고친 것과 각 건의 조치는 원장 `docs/changes/2026-10-15-calendar-tab.md` 「리뷰 반영」.
 
-- **헤더 아이콘 단추 생성이 셋으로 복제돼 있다** — `lectionary.js buildUpLink`(위 단계 꺾쇠)가 `bookmark.js buildHomeBtn`(집 단추)의 SVG 생성(`createElementNS` · 획 속성 여섯 · `title-back-icon`)을 거의 그대로 옮겼고, 같은 파일의 `buildBackBtn`(뒤로 꺾쇠)도 같은 꼴이다(리뷰는 둘을 짚었고 셋째는 기록하며 찾았다). 헤더 아이콘 규격(획 굵기 · 클래스 · 크기)이 바뀌면 세 곳을 같이 고쳐야 한다. path `d` 와 요소(`a` · `button`)만 받는 공용 헤더 아이콘 빌더로 묶는다 — `bookmark.js` 는 known-issues §7 의 타입 검사 밖 파일이라 그 정리와 함께 하는 편이 낫다.
 - **전례독서 화면도 다시 그린 뒤 포커스를 잃는다**(main 부터 — #346). 전날 · 다음날 · 「오늘」 · 관측일 칩 · 트랙 · 세트 · 본기도 세그먼트가 모두 `#app` 을 통째로 다시 그리는 링크라, 키보드로 누르면 포커스가 body 로 빠진다(WCAG 2.4.3). #348 이 캘린더의 달 이동에 넣은 방식 — 누른 컨트롤의 자리(`data-focus-key`)를 기억했다가 새 화면의 같은 자리로 — 을 옮겨 쓴다. 두 화면이 함께 쓰게 되면 그 도우미를 공용 자리로 올린다.
 
 ---

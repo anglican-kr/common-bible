@@ -1,5 +1,5 @@
-"use strict";
 // @ts-check
+"use strict";
 
 // Common DOM helpers used by all app modules. Anchored to `window.appHelpers`
 // so other modules can `const { el } = window.appHelpers;` after defer load.
@@ -183,6 +183,33 @@ window.appHelpers = (() => {
   }
 
   /**
+   * The glyph of a page-title icon control — the 24×24 stroked SVG every header
+   * button / link draws (home → book list, up a level → the calendar month).
+   * Only the path differs per icon, so the header icon spec (viewBox, stroke,
+   * the `title-back-icon` class) lives here once; the caller owns the element
+   * (a `<button>` or an `<a>`) and what it does. No width / height: the
+   * `.title-back-icon` rem rule in style.css sizes it (DESIGN.md).
+   * @param {string} d  the icon's path data
+   * @returns {SVGSVGElement}
+   */
+  function headerIcon(d) {
+    const ns = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(ns, "svg");
+    svg.setAttribute("viewBox", "0 0 24 24");
+    svg.setAttribute("aria-hidden", "true");
+    svg.setAttribute("class", "title-back-icon");
+    const path = document.createElementNS(ns, "path");
+    path.setAttribute("d", d);
+    path.setAttribute("stroke", "currentColor");
+    path.setAttribute("stroke-width", "2");
+    path.setAttribute("stroke-linecap", "round");
+    path.setAttribute("stroke-linejoin", "round");
+    path.setAttribute("fill", "none");
+    svg.appendChild(path);
+    return svg;
+  }
+
+  /**
    * A click the browser should handle itself — modifier keys or a non-primary
    * button mean "open in a new tab / window", so nothing should happen in this
    * page. The global <a> interceptor (routing.js) bails on exactly this; any
@@ -197,7 +224,7 @@ window.appHelpers = (() => {
     return m.ctrlKey || m.metaKey || m.shiftKey || m.altKey || m.button !== 0;
   }
 
-  return { _$, chUnit, el, clearNode, hangingQuoteClass, setInert, trapFocus, dragReleaseAction, emptyState, isModifiedClick };
+  return { _$, chUnit, el, clearNode, hangingQuoteClass, setInert, trapFocus, dragReleaseAction, emptyState, headerIcon, isModifiedClick };
 })();
 
 // ESM module marker (ADR-019). No runtime effect; signals TypeScript that

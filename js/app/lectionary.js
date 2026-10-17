@@ -43,7 +43,7 @@ import {
   preloadCalendar, preloadLectionary, resolveDate, findReadings, findCollects, fastOf,
 } from "./liturgical-engine.js";
 
-const { _$, el, clearNode, emptyState, isModifiedClick } = window.appHelpers;
+const { _$, el, clearNode, emptyState, headerIcon, isModifiedClick } = window.appHelpers;
 const { loadLectionaryTrack, saveLectionaryTrack } = window.appStorage;
 
 const $app = _$("app");
@@ -789,19 +789,7 @@ function buildUpLink(date) {
     href: month ? `/calendar/${month}` : "/calendar",
     "aria-label": p ? `${p.y}년 ${p.m}월 캘린더로` : "캘린더로",
   });
-  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  svg.setAttribute("viewBox", "0 0 24 24");
-  svg.setAttribute("aria-hidden", "true");
-  svg.setAttribute("class", "title-back-icon");
-  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-  path.setAttribute("d", "M15.5 5 8.5 12l7 7");
-  path.setAttribute("stroke", "currentColor");
-  path.setAttribute("stroke-width", "2");
-  path.setAttribute("stroke-linecap", "round");
-  path.setAttribute("stroke-linejoin", "round");
-  path.setAttribute("fill", "none");
-  svg.appendChild(path);
-  a.appendChild(svg);
+  a.appendChild(headerIcon("M15.5 5 8.5 12l7 7"));   // 왼쪽 꺾쇠
   return a;
 }
 

@@ -154,7 +154,7 @@ ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` ~6,000줄이 8개 도�
 
 | 파일                               | 역할                                                                                                                                                                       | 라인 수 |
 | ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
-| `js/app/helpers.js`                | 공통 DOM 헬퍼 (`_$`/`el`/`clearNode`/`setInert`/`trapFocus`) + `emptyState` 빌더 + `isModifiedClick`(새 탭 클릭 판정 — 전역 `<a>` 인터셉터 · 탭 처리기 공용)              | ~205    |
+| `js/app/helpers.js`                | 공통 DOM 헬퍼 (`_$`/`el`/`clearNode`/`setInert`/`trapFocus`) + `emptyState` 빌더 + `headerIcon`(헤더 아이콘 SVG — 집 단추 · 전례독서 위 단계 꺾쇠 공용) + `isModifiedClick`(새 탭 클릭 판정 — 전역 `<a>` 인터셉터 · 탭 처리기 공용) | ~230    |
 | `js/app/overlay.js`                | 오버레이 생명주기 단일 컨트롤러 `createOverlay`(scrim·trapFocus·Escape·inert·포커스 복원·애니메이션 dismiss) + 시트 팩토리 + `closeAllOverlays()` registry ([ADR-032](decisions/032-component-view-layer.md), ADR-034 PR5b) | ~325    |
 | `js/app/storage.js`                | localStorage 헬퍼 + UI 공유 상수 (+ 전례독서 트랙 기억 `bible-lectionary-track`)                                                                                          | ~465    |
 | `js/app/settings-ui.js`            | 설정 팝오버 + 외관 적용 + 인용·주석 토글                                                                                                                                   | ~855    |
@@ -350,7 +350,7 @@ ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` ~6,000줄이 8개 도�
 
 빌드 산출물 0개를 유지하면서도 타입 안전성을 얻기 위해 **TypeScript를 컴파일러로만 사용**한다 ([ADR-012](decisions/012-typescript-incremental-adoption.md)).
 
-- 클라이언트 JS 파일 상단에 `// @ts-check`가 영구 활성화돼 있다 (2026-05-10, ADR-018 모듈 분할과 동행) — sync 레이어 5개 + `js/app.js` + `js/app/*.js` 28개 + `js/drive-sync.js` + `js/audio-cache.js` + `js/manifest-sync.js` + `js/search-worker.js`(worker 설정). **예외 2개**: `js/pre-fetch.js`(`<head>` classic 스크립트)·`js/gtag-init.js`(`type="module"`)는 — 각 10여 줄 — `@ts-check`가 없고, 두 tsconfig 모두 `checkJs: false`라 파일 단위 opt-in 방식이므로 이 둘은 타입 검사를 받지 않는다. **알려진 구멍(2026-10-15)**: 첫 줄이 `"use strict";` 이고 둘째 줄이 `// @ts-check` 인 파일 24개(`js/app.js` + `js/app/` 23개)는 지시문이 파일 머리가 아니라 tsc 가 건너뛴다 — 순서를 바꾸면 오류 204건이 드러난다. [`known-issues.md`](known-issues.md) §7.
+- 클라이언트 JS 파일 상단에 `// @ts-check`가 영구 활성화돼 있다 (2026-05-10, ADR-018 모듈 분할과 동행) — sync 레이어 5개 + `js/app.js` + `js/app/*.js` 28개 + `js/drive-sync.js` + `js/audio-cache.js` + `js/manifest-sync.js` + `js/search-worker.js`(worker 설정). **예외 2개**: `js/pre-fetch.js`(`<head>` classic 스크립트)·`js/gtag-init.js`(`type="module"`)는 — 각 10여 줄 — `@ts-check`가 없고, 두 tsconfig 모두 `checkJs: false`라 파일 단위 opt-in 방식이므로 이 둘은 타입 검사를 받지 않는다. **알려진 구멍(2026-10-15 발견 · 2026-10-17 재실측)**: 첫 줄이 `"use strict";` 이고 둘째 줄이 `// @ts-check` 인 파일 22개(`js/app.js` + `js/app/` 21개)는 지시문이 파일 머리가 아니라 tsc 가 건너뛴다 — 순서를 바꾸면 오류 203건이 드러난다. [`known-issues.md`](known-issues.md) §7.
 - 도메인 타입은 `js/types.d.ts` 한 곳에서 export.
 - 다른 파일은 `@typedef {import("../types").Foo} Foo`로 가져온다.
 - `tsconfig.json` (DOM lib) + `tsconfig.worker.json` (WebWorker lib) 두 개 분리.

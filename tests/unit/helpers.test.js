@@ -16,6 +16,7 @@
 //   - setInert (inert + aria-hidden toggle on selector matches)
 //   - trapFocus (Tab / Shift-Tab cycling within a container)
 //   - dragReleaseAction (bottom-sheet drag-resize release thresholds)
+//   - headerIcon (page-title icon SVG — one spec for every header control)
 //   - isModifiedClick (modifier / non-primary clicks the page leaves to the browser)
 
 import { test } from "node:test";
@@ -197,6 +198,8 @@ function makeDom() {
 
   const document = {
     createElement: (tag) => makeElement(tag),
+    // headerIcon builds SVG — keep the namespace so the test can check it
+    createElementNS: (ns, tag) => Object.assign(makeElement(tag), { namespaceURI: ns }),
     createTextNode: (d) => makeText(d),
     getElementById: (id) => registry.find((e) => e._attrs.id === id) || null,
     querySelectorAll: (selector) => {
@@ -702,6 +705,41 @@ test("emptyState: null icon leaves an empty icon slot (no crash)", () => {
   const node = h.helpers.emptyState({ icon: null, title: "t", subtitle: "s" });
   assert.equal(node._children[0].className, "empty-state-icon");
   assert.equal(node._children[0]._children.length, 0);
+});
+
+// ── headerIcon (page-title icon glyph — one spec for every header control) ───
+
+test("headerIcon: a 24×24 stroked SVG with the given path — the header icon spec the home button and the lectionary up link share", () => {
+  const h = loadHelpers();
+  const SVG_NS = "http://www.w3.org/2000/svg";
+  const svg = h.helpers.headerIcon("M15.5 5 8.5 12l7 7");
+  assert.equal(svg.tagName, "SVG");
+  assert.equal(svg.namespaceURI, SVG_NS);
+  // No width / height — the .title-back-icon rem rule in style.css sizes it
+  assert.deepEqual({ ...svg._attrs }, { viewBox: "0 0 24 24", "aria-hidden": "true", class: "title-back-icon" });
+  assert.equal(svg._children.length, 1);
+  const path = svg._children[0];
+  assert.equal(path.tagName, "PATH");
+  assert.equal(path.namespaceURI, SVG_NS);
+  assert.deepEqual({ ...path._attrs }, {
+    d: "M15.5 5 8.5 12l7 7",
+    stroke: "currentColor", "stroke-width": "2", "stroke-linecap": "round", "stroke-linejoin": "round", fill: "none",
+  });
+});
+
+test("headerIcon: only the path differs between icons, and every call builds a fresh node", () => {
+  const h = loadHelpers();
+  const HOME = "M3 11.5 12 4l9 7.5M5.5 9.8V19a1 1 0 0 0 1 1h11a1 1 0 0 0 1-1V9.8";
+  const a = h.helpers.headerIcon(HOME);
+  const b = h.helpers.headerIcon(HOME);
+  assert.notEqual(a, b);
+  assert.notEqual(a._children[0], b._children[0]);
+  assert.equal(a._children[0].getAttribute("d"), HOME);
+  const back = h.helpers.headerIcon("M15.5 5 8.5 12l7 7");
+  assert.deepEqual({ ...a._attrs }, { ...back._attrs });
+  const { d: _d1, ...homeStroke } = a._children[0]._attrs;
+  const { d: _d2, ...backStroke } = back._children[0]._attrs;
+  assert.deepEqual(homeStroke, backStroke);
 });
 
 // ── isModifiedClick (new-tab clicks the page must not act on, PR #348) ───────
