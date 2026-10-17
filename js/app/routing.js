@@ -20,17 +20,17 @@
 import { loadBooks, loadChapter, loadPrologue } from "./data-fetch.js";
 import {
   renderBookList, renderChapterList, renderChapter, renderPrologue,
-  renderLoading, renderError, divisionOrder, DIVISION_LABELS,
+  renderLoading, renderError, setTitle, divisionOrder, DIVISION_LABELS,
 } from "./views.js";
-// Lectionary view (ADR-038 §3 A3) — a one-directional seam (lectionary never
-// calls route / navigate / parsePath; its controls are plain links), so it is
-// an explicit import rather than a window facade (ADR-034 principle 1).
-import { renderLectionaryView } from "./lectionary.js";
-// Calendar tab (ADR-038 §1 · §2 A2) — the same one-directional seam: its
-// controls are plain links too.
-import { renderCalendarView } from "./calendar.js";
+// The calendar tab and the lectionary view (ADR-038 §1-§3) are not imported
+// here: route() loads them with import() the first time one of their routes
+// opens, so a session that only reads the Bible never parses the liturgical
+// engine, the lectionary view or the calendar (about 210KB of source). The seam
+// stays one-directional — neither calls route / navigate / parsePath, their
+// controls are plain links (ADR-034 principle 1). sw.js still precaches all
+// three for offline, and tests/unit/sw.test.js follows these import() calls.
 
-const { _$, clearNode, chUnit, isModifiedClick, focusSpotOf, restoreFocusSpot } = window.appHelpers;
+const { _$, el, clearNode, chUnit, emptyState, isModifiedClick, focusSpotOf, restoreFocusSpot } = window.appHelpers;
 const {
   loadStartupBehavior, loadReadingPosition, saveReadingPosition, loadBookOrder,
 } = window.appStorage;
@@ -266,6 +266,51 @@ function trackPageView() {
   });
 }
 
+// ── Views loaded on first visit (ADR-038 §2 「구현」) ──
+
+/**
+ * Loads a view module the first time its route opens. Resolves null when the module can't be fetched or linked
+ * (offline with nothing cached, or a deploy that landed between the page load and this import) — the view's own
+ * failure screen lives inside the module that just failed, so the caller draws `renderViewLoadFailure` instead.
+ * Keep the import() specifier a string literal at the call site: tests/unit/sw.test.js reads it to check that the
+ * module and everything it imports are precached for offline (a computed specifier can't be followed).
+ * @template T
+ * @param {() => Promise<T>} load
+ * @returns {Promise<T | null>}
+ */
+async function loadViewModule(load) {
+  try {
+    return await load();
+  } catch (err) {
+    console.error(err);
+    return null;
+  }
+}
+
+/**
+ * 화면 모듈을 받지 못했을 때의 실패 화면(DESIGN.md §6 「전체 화면 실패」) — 뷰가 자료를 받지 못했을 때의 실패 화면과 같은
+ * 자리 · 제목에 다음 행동 「다시 불러오기」를 단다. 단추는 페이지를 새로 고친다: 브라우저는 한 번 실패한 모듈을 새로 고칠
+ * 때까지 기억해서(그것을 바꾼 HTML 표준 변경이 2026-07 — 엔진마다 반영 중) 화면을 다시 여는 것만으로는 풀리지 않을 수 있다
+ * (사용자 결정 2026-10-17). 앞 화면의 헤더 · 제목 · 오디오 바는 남기지 않는다(ADR-038 §3 「실패 · 범위」).
+ * @param {{ title: string, panel: string, message: string }} view  title — 그 뷰의 제목(뷰 모듈의 PAGE_TITLE과 같게 —
+ *   모듈을 받지 못해 거기서 읽을 수 없다) · panel — 뷰의 바깥 상자 클래스 · message — 안 된 것(뷰의 자료 실패 제목과 같다)
+ * @returns {string} 페이지 메타의 제목
+ */
+function renderViewLoadFailure({ title, panel, message }) {
+  setTitle(title);
+  const $title = _$("page-title");
+  $title.insertBefore(window.buildHomeBtn("/", "성서 목록으로"), $title.firstChild);
+  window.hideAudioBar?.();
+  clearNode($app);
+  const reload = el("button", { type: "button" }, "다시 불러오기");
+  reload.addEventListener("click", () => location.reload());
+  const box = el("div", { className: panel });
+  box.appendChild(emptyState({ icon: null, title: message, subtitle: "네트워크 연결을 확인한 뒤 「다시 불러오기」를 눌러 주세요." }));
+  box.appendChild(el("p", { className: "state-action" }, reload));
+  $app.appendChild(box);
+  return title;
+}
+
 async function route() {
   const isInitialLoad = _isInitialLoad;
   _isInitialLoad = false;
@@ -417,13 +462,19 @@ async function route() {
 
     // Calendar tab (ADR-038 §1 · §2 A2). A full page on mobile and desktop alike,
     // like the lectionary view below; the view preloads the small calendar
-    // bundle itself and commits the DOM data-first.
+    // bundle itself and commits the DOM data-first. Its module (with the
+    // lectionary view and the engine it imports) loads on the first visit — see
+    // the note at the imports.
     if (view === "calendar") {
       renderLoading();
       dismissLaunchScreen();
+      const calendar = await loadViewModule(() => import("./calendar.js"));
+      if (isStale()) return;
       let calTitle;
       try {
-        calTitle = await renderCalendarView(parsed);
+        calTitle = calendar
+          ? await calendar.renderCalendarView(parsed)
+          : renderViewLoadFailure({ title: "캘린더", panel: "calendar", message: "교회력 자료를 불러오지 못했습니다" });
       } catch (err) {
         // Same as the lectionary branch: a stale failure must not paint over the newer route.
         if (isStale()) return;
@@ -443,12 +494,17 @@ async function route() {
     // calendar tab (tab-history tabOf). The view preloads both engine bundles
     // itself and commits the DOM data-first, so show the skeleton here so #app
     // reflects the new route immediately (mirrors the bookmark-read branch above).
+    // Its module (with the engine, not the calendar) loads on the first visit.
     if (view === "lectionary") {
       renderLoading();
       dismissLaunchScreen();
+      const lectionary = await loadViewModule(() => import("./lectionary.js"));
+      if (isStale()) return;
       let lectTitle;
       try {
-        lectTitle = await renderLectionaryView(parsed);
+        lectTitle = lectionary
+          ? await lectionary.renderLectionaryView(parsed)
+          : renderViewLoadFailure({ title: "전례독서", panel: "lectionary", message: "전례독서 자료를 불러오지 못했습니다" });
       } catch (err) {
         // 프리로드(엔진 데이터 fetch)가 실패했을 때 사용자가 이미 다른 화면으로 갔으면 낡은 실패다 — 공용
         // catch 의 renderError 가 새 화면을 덮지 않게 여기서 삼킨다(Copilot 리뷰 5회차). 최신이면 그대로 올린다.
