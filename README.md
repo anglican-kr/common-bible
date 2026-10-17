@@ -17,7 +17,7 @@ source/*.md  (data 저장소 안, 73권 마크다운)
   → split_bible.py → bible/{book_id}-{chapter}.json (1328) + books.json
   → search_indexer.py → search-{meta,ot,nt,dc}.json
 liturgical/  (data 저장소 안 — 전례시편 · 송가 정본, 교회력 표, 전례독서 원료)
-  → liturgical_psalter.py → bible/lps-{n}.json (150) · cant-{n}.json (13) + books.json 에 2권 추가 (→ 75권)
+  → liturgical_psalter.py → bible/lps-{n}.json (150) · cant-{n}.json (13) + books.json에 2권 추가 (→ 75권)
   → liturgical/parse_*.py · normalize.py → lectionary/*.json (교회력 · 전례독서 · 본기도)
 ```
 
@@ -123,31 +123,31 @@ git submodule update --init --recursive
 | Android Chrome / Edge / Samsung Internet | `beforeinstallprompt` 자동 캡처 → "설치" 버튼 → 네이티브 프롬프트 | 1-탭 설치 |
 | Desktop Chrome / Edge | 동일 (`beforeinstallprompt`) | macOS Safari·Firefox는 미지원 |
 | **iOS Safari** | 수동 3단계 안내 모달 (공유 → 홈 화면에 추가) | `beforeinstallprompt` 미지원 (WebKit 정책) |
-| iOS Chrome / Firefox / Edge | "Safari에서 열어 설치" 안내 | iOS 모든 브라우저는 WebKit 래퍼지만 설치는 Safari만 가능 |
+| iOS Chrome / Firefox / Edge | iOS 17+: 공유 메뉴 → 「홈 화면에 추가」 안내 · iOS 16 이하: "Safari에서 열어 설치" 안내 | iOS 모든 브라우저는 WebKit 래퍼 — iOS 17부터는 다른 브라우저도 홈 화면에 추가할 수 있다 (ADR-008 개정 2026-05-11) |
 
 자세한 안내 화면 설계는 [ADR-008](docs/decisions/008-pwa-install-guide.md), iOS 디바이스별 스플래시(13종 `apple-touch-startup-image`)는 [ADR-007](docs/decisions/007-launch-screen-optimization.md) 참고.
 
 ### iOS 고유 제약
 
 - **iOS Safari 탭 사용 시 7일 ITP**: 홈 화면에 설치하지 않고 Safari 탭에서 직접 여는 경우, 7일 미사용 시 ITP가 storage(쿠키 + localStorage + IndexedDB 포함)를 정리 → 모든 로컬 상태(북마크·설정·동기화 인증) 재구성 필요. **홈 화면 설치 PWA(iOS 17+ HSWA)는 storage가 영속되어 ITP 적용 대상 아님** — ADR-011 §맥락 참고.
-- **iOS Chrome / Firefox / Edge (WebKit 래퍼)**: 설치 불가 + Drive 동기화 시 PWA-격리 컨텍스트 미보장. "Safari에서 열기" 안내로 끝.
+- **iOS Chrome / Firefox / Edge (WebKit 래퍼)**: iOS 17+ 는 공유 메뉴로 홈 화면에 추가할 수 있고, iOS 16 이하는 설치할 수 없어 "Safari에서 열기" 안내로 끝. Drive 동기화 시 PWA-격리 컨텍스트 미보장.
 
 ## Google Drive 동기화 (북마크·설정·읽기 위치)
 
-데스크탑·Android·iOS가 모두 동일하게 OAuth 2.0 Authorization Code + PKCE + refresh token 단일 경로 ([ADR-011 Phase 2h](docs/decisions/011-bookmark-sync.md), [`docs/archive/design/pkce-migration.md`](docs/archive/design/pkce-migration.md)). Phase 2h 이전에 있던 GIS Token Client / Implicit Flow / FedCM 분기는 모두 제거됨. Google OAuth 앱 검수는 2026-05-19 에 통과해(「In production」) refresh token 에 만료 기간이 없다.
+데스크탑·Android·iOS가 모두 동일하게 OAuth 2.0 Authorization Code + PKCE + refresh token 단일 경로 ([ADR-011 Phase 2h](docs/decisions/011-bookmark-sync.md), [`docs/archive/design/pkce-migration.md`](docs/archive/design/pkce-migration.md)). Phase 2h 이전에 있던 GIS Token Client / Implicit Flow / FedCM 분기는 모두 제거됨. Google OAuth 앱 검수는 2026-05-19에 통과해(「In production」) refresh token에 만료 기간이 없다.
 
 | 시나리오 | 동작 |
 |---------|-----|
 | 첫 연결 ("연결" 클릭) | `accounts.google.com`로 풀페이지 리디렉션 → consent → callback `?code=…` → same-origin `/oauth/token` POST → access + refresh token 수신 → IDLE |
 | 앱 재실행 (refresh token 보유) | IndexedDB의 AES-GCM 암호화 refresh token으로 백그라운드 `/oauth/token` POST → access token 갱신 → IDLE. UI 변화 없음, 팝업·리디렉션·깜박임 없음. |
 | 앱 재실행 (refresh token 없음) | NEEDS_CONSENT에 정착, 설정 화면에 "연결" 버튼 노출 |
-| 탭 활성화 | visibilitychange로 `requestSync()` 한 번 — 다른 디바이스의 변경분을 새로고침 없이 자동 pull (IDLE 상태일 때만) |
+| 탭 활성화 | visibilitychange로 `pollSync()` 한 번 — 다른 디바이스의 변경분을 새로고침 없이 자동 pull. 사이클이 끝난 지 15초 안이면 건너뛰고 도는 중이면 버린다 · OFFLINE이고 기기가 온라인이면 다시 시도 |
 | 401 (access token 만료) | refresh token으로 백그라운드 갱신 → 동기화 재개. refresh token도 invalid면 NEEDS_CONSENT로 폴백 |
 | `signOut()` | Google `/revoke` 호출 + IDB clear + email/state localStorage 정리 |
-| 동기화 도중 로그아웃 | 진행 중이던 사이클은 다음 대기에서 멈춘다 — 로그아웃 뒤에는 Drive 로 요청을 보내지 않고, 원격 자료를 로컬에 쓰지 않으며, 비운 캐시를 다시 채우지 않는다 |
+| 동기화 도중 로그아웃 | 진행 중이던 사이클은 다음 대기에서 멈춘다 — 로그아웃 뒤에는 Drive로 요청을 보내지 않고, 원격 자료를 로컬에 쓰지 않으며, 비운 캐시를 다시 채우지 않는다 |
 | 요청 실패 (네트워크 · 403 · 429 · 5xx 등, 401 제외) | 지수 백오프(1 · 2 · 4 · 8 · 16초)로 다섯 번까지 다시 시도. 그래도 실패하면 네트워크 실패는 OFFLINE(`online` 이벤트나 다음 요청이 다시 시도), 그 밖의 실패는 IDLE(다음 요청이 다시 시도). 실패한 응답을 「파일 없음」 · 「원격 없음」으로 읽지 않는다 |
-| 연결 해제 → 「파일도 삭제」 | 자격 증명(IDB refresh token · 계정 키)을 먼저 지우고, 진행 중 사이클을 10초까지 기다린 뒤 appDataFolder 의 sync.json 을 모두 지운다(만료된 토큰이면 한 번 갱신). 지우지 못하면 스낵바로 알리고, 다시 연결할 때까지 설정에 안내를 남긴다 |
-| 다른 탭에서 로그아웃 | 공유 켬 표지(`bible-drive-sync`)가 "0" 이 되면(`storage` 이벤트) 이 탭도 멈춘다 |
+| 연결 해제 → 「파일도 삭제」 | 자격 증명(IDB refresh token · 계정 키)을 먼저 지우고, 진행 중 사이클을 10초까지 기다린 뒤 appDataFolder의 sync.json을 모두 지운다(만료된 토큰이면 한 번 갱신). 지우지 못하면 스낵바로 알리고, 다시 연결할 때까지 설정에 안내를 남긴다 |
+| 다른 탭에서 로그아웃 | 공유 켬 표지(`bible-drive-sync`)가 "0"이 되면(`storage` 이벤트) 이 탭도 멈춘다 |
 
 **OAuth /token BFF**: `/oauth/token`은 nginx가 같은 origin에서 받은 요청에 `client_secret`을 server-side로 주입한 뒤 `oauth2.googleapis.com/token`으로 forward한다. Google "Web application" 클라이언트 타입의 RFC 7636 일탈(PKCE에서도 secret 강제) + GitHub secret scanner 자동 무효화 위험을 회피하기 위함이다 ([ADR-017](docs/decisions/017-oauth-bff-proxy.md), `common-bible-server/nginx/oauth-proxy.example.conf`).
 
@@ -171,14 +171,14 @@ iOS Safari ITP로 인한 storage 정리는 동기화 외 다른 로컬 상태에
 index.html              ← SPA 진입점 (단일 HTML)
 privacy.html            ← 개인정보처리방침
 sw.js                   ← 서비스 워커 (오프라인, 루트 필수)
-sw-version.js           ← 셸 캐시 이름의 버전 — release.py 가 갱신, sw.js 가 importScripts (ADR-021)
+sw-version.js           ← 셸 캐시 이름의 버전 — release.py가 갱신, sw.js가 importScripts (ADR-021)
 manifest.webmanifest    ← PWA 매니페스트
 favicon.ico             ← 파비콘 (루트 필수)
 robots.txt / sitemap.xml
 version.json            ← 앱 버전 (release.py로 관리)
 tsconfig.json           ← TypeScript 설정 (--noEmit · checkJs — js/ 전체 기본 검사, ADR-012)
 tsconfig.worker.json    ← Web Worker 전용 tsconfig
-package.json            ← devDependency 는 typescript 하나 — npm run typecheck · npm test
+package.json            ← devDependency는 typescript 하나 — npm run typecheck · npm test
 DESIGN.md               ← 디자인 시스템 (토큰 · 컴포넌트 · 접근성)
 js/
   app.js                ← 부트스트랩 · 서비스 워커 등록 · 접근성 키보드 · 탭 복귀 처리
@@ -223,11 +223,11 @@ tests/
 tools/
   booklet/              ← 개발자용 — 「전례독서」 책자 PDF ↔ 교회력 엔진 대조 (앱이 쓰지 않는다)
 .claude/
-  hooks/                ← Claude Code 훅 — 편집 뒤 타입 검사 · 끝낼 때 유닛 · PR 의 변경 원장 게이트
+  hooks/                ← Claude Code 훅 — 편집 뒤 타입 검사 · 끝낼 때 유닛 · PR의 변경 원장 게이트
 .github/
   workflows/
     test.yml            ← CI 「Unit tests」: JS 유닛 + 타입 검사 (PR 필수)
-    ledger.yml          ← CI 「Change ledger」: PR 의 변경 원장 검사 (PR 필수)
+    ledger.yml          ← CI 「Change ledger」: PR의 변경 원장 검사 (PR 필수)
     engine-data.yml     ← 교회력 엔진 ↔ 실데이터 테스트
     sync-data.yml       ← data 서브모듈 포인터 · sitemap 자동 갱신
 docs/
@@ -248,7 +248,7 @@ docs/
 
 ## 데이터 파이프라인 실행
 
-보통은 `common-bible-data` 의 `build.yml` CI 가 main 에 push 될 때 전체를 돌리고 산출물을 커밋한다. 손으로 돌릴 때는 서브모듈 접근 권한이 있는 환경에서 **순서를 지킨다** — `split_bible.py` 가 `books.json` 을 73권으로 새로 쓰므로, 전례시편 · 송가 파서가 그 뒤여야 두 권의 등록이 남는다.
+보통은 `common-bible-data`의 `build.yml` CI가 main에 push될 때 전체를 돌리고 산출물을 커밋한다. 손으로 돌릴 때는 서브모듈 접근 권한이 있는 환경에서 **순서를 지킨다** — `split_bible.py`가 `books.json`을 73권으로 새로 쓰므로, 전례시편 · 송가 파서가 그 뒤여야 두 권의 등록이 남는다.
 
 ```bash
 # 서브모듈 초기화 (최초 1회, recursive로 audio까지)
@@ -263,7 +263,7 @@ python src/liturgical_psalter.py      # 전례시편 · 송가 — 73권 파이�
 # 그 뒤 교회력 · 전례독서 표(liturgical/parse_*.py · normalize.py)와 매니페스트(scripts/gen_manifests.py)
 ```
 
-전체 명령과 표 파서끼리의 순서는 `data/CLAUDE.md` 「파이프라인 명령」이 정본이다(`build.yml` 이 같은 순서로 돈다). 검증 절차는 `data/README.md`.
+전체 명령과 표 파서끼리의 순서는 `data/CLAUDE.md` 「파이프라인 명령」이 정본이다(`build.yml`이 같은 순서로 돈다). 검증 절차는 `data/README.md`.
 
 ## 테스트
 
@@ -274,7 +274,7 @@ node --test tests/unit/*.test.js
 # 타입 검사 (CI 자동 실행 — 「Unit tests」 잡)
 npm run typecheck
 
-# 실데이터 의존 유닛만 (data 서브모듈이 없으면 건너뛴다 — CI 는 engine-data.yml · sync-data.yml)
+# 실데이터 의존 유닛만 (data 서브모듈이 없으면 건너뛴다 — CI는 engine-data.yml · sync-data.yml)
 node --test tests/unit/*.data.test.js
 
 # 데이터 파이프라인 검증 (data 서브모듈 내부)
@@ -287,7 +287,7 @@ pytest tests/e2e/ -v
 
 ## 정적 타입 검사
 
-JSDoc 기반, 빌드 산출물 없음. 두 tsconfig 가 `checkJs: true` 라 `js/` 전체가 기본으로 검사를 받고, 아직 빼 둔 파일은 첫 줄 `// @ts-nocheck` 로 표시한다(남은 것은 [`docs/known-issues.md`](docs/known-issues.md) §7). CI 「Unit tests」 잡이 PR 마다 돌린다 ([ADR-012](docs/decisions/012-typescript-incremental-adoption.md)).
+JSDoc 기반, 빌드 산출물 없음. 두 tsconfig가 `checkJs: true`라 `js/` 전체가 기본으로 검사를 받고, 아직 빼 둔 파일은 첫 줄 `// @ts-nocheck`로 표시한다(남은 것은 [`docs/known-issues.md`](docs/known-issues.md) §7). CI 「Unit tests」 잡이 PR마다 돌린다 ([ADR-012](docs/decisions/012-typescript-incremental-adoption.md)).
 
 ```bash
 npm run typecheck   # tsc -p tsconfig.json --noEmit && tsc -p tsconfig.worker.json --noEmit

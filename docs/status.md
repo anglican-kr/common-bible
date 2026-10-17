@@ -31,7 +31,7 @@
 - **컴포넌트·뷰 층 모듈화 완료** — ADR-032, 2026-06-06. 오버레이 생명주기(scrim·trapFocus·Escape·inert·포커스 복원·애니메이션 dismiss)를 `js/app/overlay.js` 단일 컨트롤러 `createOverlay`로 통일(모달·드로어·시트·팝오버 12곳), 시트 팩토리·빈 상태 컴포넌트 공유. 상세는 ADR-032.
 - **성서 목록 탭 통합 + 헤더 내비 재설계 완료** — ADR-024, 2026-05-29. 구약·외경·신약을 탭 한 페이지(`renderBookList`)로 통합, 읽기 헤더는 홈 버튼(읽던 책 포커스) + 반응형 설정 배치 + sticky 구분 탭(슬라이드 인디케이터). 상세·개정 이력은 ADR-024.
 - **읽기 헤더 스크롤 elevation 그림자 완료** — ADR-025, 2026-05-30. `#scroll-sentinel` IntersectionObserver 가 최상단 이탈을 감지해 `#sticky-group` 그림자 페이드 인 + 1px hairline 경계 유지. frosted glass 는 iOS 26 status bar 회피로 의도적 미적용. 상세는 ADR-025.
-- **인용·주석 시스템 완료** — ADR-022 Phase 1(파이프라인) + Phase 2(앱 UI). 본문 `<cite>`→인용 바텀 시트, `[^id]` 주석→위첨자 ※ 툴팁(`js/app/citations.js`). Phase 3(NT 본문 저작)은 콘텐츠 작업. 상세·개정 이력은 ADR-022.
+- **인용·주석 시스템 완료** — ADR-022 Phase 1(파이프라인) + Phase 2(앱 UI). 본문 `<cite>`→인용 바텀 시트, `[^id]` 주석→본문 어절 툴팁(어절이 없으면 ※, `js/app/citations.js`). Phase 3(NT 본문 저작)은 콘텐츠 작업. 상세·개정 이력은 ADR-022.
 - **단락 단위 병행 본문 마커 완료** — ADR-027, 2026-05-31. `<parallel>` block 마커→chapter `parallels` 메타데이터→range 시작 절 ※ anchor, 클릭 시 cite-sheet 로 병행 본문 표시(`js/app/parallels.js`). 실제 마크업은 콘텐츠 작업(시범 1건). 상세는 ADR-027.
 - **테스트 체계 완료** — ADR-004 데이터 파이프라인(Level 1-3, data 저장소) + e2e + ADR-013 유닛 537 케이스. 유닛은 vm + 수동 스텁(0 의존성), DOM-heavy 영역은 e2e가 책임
 - **북마크 + Google Drive 동기화 완료** — ADR-011, PKCE 단일 경로(2026-05-08). 상세는 `docs/archive/design/pkce-migration.md`, ADR-017(nginx BFF), `docs/archive/audit/2026-05-07-pkce-refresh-token.md`. Google OAuth 앱 검수 통과(2026-05-19) — refresh token TTL 영구, 코드 변경 0

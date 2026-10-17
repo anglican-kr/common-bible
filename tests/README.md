@@ -42,7 +42,7 @@ node --test tests/unit/storage.test.js    # 개별 파일
 | `install.test.js` | 설치 안내 — 플랫폼 분기, 넛지 타이밍 | 46 |
 | `overlay.test.js` | 오버레이 컨트롤러(ADR-032) — 포커스 트랩, 닫기 스택 | 27 |
 | `parallels.test.js` | 평행 본문(인용·각주) 해석 | 26 |
-| `transport.test.js` | 동기화 전송 계층 — 요청/응답·에러 매핑 · 찾은 sync.json 전부(`fileIds`) · 본문을 읽지 못한 2xx 는 실패(status 0) · 새 파일 만들기의 id | 28 |
+| `transport.test.js` | 동기화 전송 계층 — 요청/응답·에러 매핑 · 찾은 sync.json 전부(`fileIds`) · 본문을 읽지 못한 2xx는 실패(status 0) · 새 파일 만들기의 id | 28 |
 | `lectionary.test.js` | 전례독서 뷰 모델(ADR-038 §3 A3, `LECTIONARY_MODEL` 블록) — 초기 선택(승자 · 공통뿐이면 격자) · `?obs` · 트랙(URL > 기억 > 1) · 대안 세트 세 갈래(「또는」 = 독서 N · 조건부 = 조건 라벨 · 괄호 선택 구절 = 바탕에 합침 + 선택 절 판정) · 슬롯 이름 순 · 본기도(고른 관측일만 · 세트와 같은 제목으로 짝지어지면 단추 하나 — `linkCollects`)와 송영 코드 · 두 독서 카드 네 꼴(오는/지난 주일 계산) · 헤더 색(고른 본문의 색) · URL 기본값 생략(본기도 선택은 트랙 · 세트를 바꿔도 유지) · 절 발췌 키 · 장을 넘는 독서의 절 묶음(`slotVerseRuns` — 장 + 절 키) · 영광송 조건 · `buildLectionaryModel` 통합(사계재 날 · 기념일 · 트랙 기억 · 본기도 대체안) · 전날 · 다음날 링크는 계산 범위(1583~9999) 안에서만. 합성 재료만 · 저녁 전례 칩 꼬리 「· 저녁」 | 54 |
 | `calendar.test.js` | 캘린더 월간 표 모델(ADR-038 §2 A2, `CALENDAR_MODEL` 블록) — 6주 × 7일 일요일 시작(1일이 일요일인 달 · 윤년 2월 · 해 넘김) · 계산 범위 끝(1583-01 · 9999-12 — 범위 밖 칸은 엔진에 묻지 않고 링크 없음) · 칸 이름 하나(대표 · 격자 평일이면 사계재 · 기념일 · 고유명 평일 — 엔진 표지 `properWeekday` 로, 좌표는 읽지 않는다 · 번호 주일 「연중29주」) · 줄의 이름(옮겨 감 · 생략은 흐리게, 선택 봉헌 · 기념만 꼬리말) · 색(병기 · 대체색 제외) · 전례년 첫날 「나해 시작」(주일만 셈 — 평일은 엔진에 묻지 않는다) · 링크 이름(「오늘, …, 백색」 — 칸에 보이는 이름 그대로 · 꼬리말, WCAG 2.5.3) · 날짜 덧셈이 실패하면 틀린 표 대신 멈춤 · 블록 이름이 엔진 · 전례독서 블록과 겹치지 않음. 합성 재료만 · 저녁 전례 후보는 칸 이름이 되지 않음 | 25 |
 | `routing.test.js` | 라우팅(ADR-034 PR5a) — `parsePath` URL→라우트 서술자(books/bookmarks/settings/search·본문 딥링크·`/lectionary` 날짜 + 쿼리 상태 넷 · `/calendar` 월간(이번 달 · `YYYY-MM` — 검증은 뷰) · 쿼리 값 통째 검증(안전 정수만) · 깨진 퍼센트 이스케이프는 원문 그대로 — `/read` 포함) · 객체가 물려받은 이름(`/constructor` 등)은 구분이 아니다 · 페이지 안 링크 판정(`inPageTargetId` — 「본문 바로가기」는 라우트가 아니다) | 38 |
@@ -131,7 +131,7 @@ pytest tests/e2e/test_bookmark_sort.py -q   # 개별 파일
 
 | 파일 | 검증 대상 | 케이스 |
 |---|---|---|
-| `test_drive_sync.py` | Google Drive 동기화 — 연결·업로드·충돌 · 사이클 도중 로그아웃(가짜 Drive 는 토큰 없는 요청에 401 — 로그아웃 뒤 요청 기록으로 확인) · 「파일도 삭제」가 진행 중 생성을 기다림 · 지우기 실패 알림(스낵바 · live region · 설정의 남는 안내 — 새로 고침 뒤에도) · 지우는 동안 연 설정의 갱신 · 다른 탭의 로그아웃 · 모바일 설정 화면 다시 그리기 | 19 |
+| `test_drive_sync.py` | Google Drive 동기화 — 연결·업로드·충돌 · 사이클 도중 로그아웃(가짜 Drive는 토큰 없는 요청에 401 — 로그아웃 뒤 요청 기록으로 확인) · 「파일도 삭제」가 진행 중 생성을 기다림 · 지우기 실패 알림(스낵바 · live region · 설정의 남는 안내 — 새로 고침 뒤에도) · 지우는 동안 연 설정의 갱신 · 다른 탭의 로그아웃 · 모바일 설정 화면 다시 그리기 | 19 |
 | `test_drive_sync_ios.py` | iOS Drive 동기화(OAuth BFF 경유) | 8 |
 | `test_audio.py` / `test_audio_controls.py` | 오디오 플레이어 — 표시·해제·에러 / 재생·배속·seek·위치복원 | 6 / 6 |
 | `test_settings.py` | 설정 팝오버 — 시작화면·책순서·글자크기·테마·색상·캐시 | 13 |
@@ -146,7 +146,7 @@ pytest tests/e2e/test_bookmark_sort.py -q   # 개별 파일
 | `test_a11y_axe.py` | axe-core 자동 스캔(WCAG 2.1 AA) — 전례독서 뷰 · 캘린더 월간 표(데스크톱 · 모바일) 포함 | 12 |
 | `test_a11y_keyboard.py` | 키보드 인터랙션 — 전례독서 칩 Tab · Enter 포함 · 다시 그린 뒤 포커스(구분 탭 · 검색 쪽 링크 — 마지막 쪽은 「← 이전」, 쪽 안내 · 결과 건수 제목) · 「본문 바로가기」(라우트 없이 본문으로) | 11 |
 
-> **실측 (2026-10-17)**: `pytest tests/e2e` — 330건 모두 통과(Drive 동기화 수정의 마지막 판, 한 번에 8분 19초; 건수는 표 머리, 원장 `docs/changes/2026-10-17-sync-signout-inflight.md` 이 정본). `test_a11y_axe.py`(12건)는 선택적 의존성 `axe-playwright-python` 이 없으면 **그 파일만** 모듈 단위 skip 1건으로 빠진다(`importorskip`; pytest 요약에는 `N passed, 1 skipped` 로 찍힌다). 그전엔 하드 import 라 수집 오류로 스위트 전체가 중단됐다. 옛 「headless 사전 실패」 묶음은 2026-06-22 에 해소 — [`docs/known-issues.md`](../docs/known-issues.md) §1.
+> **실측 (2026-10-17)**: `pytest tests/e2e` — 330건 모두 통과(Drive 동기화 수정의 마지막 판, 한 번에 8분 19초; 건수는 표 머리, 원장 `docs/changes/2026-10-17-sync-signout-inflight.md`이 정본). `test_a11y_axe.py`(12건)는 선택적 의존성 `axe-playwright-python`이 없으면 **그 파일만** 모듈 단위 skip 1건으로 빠진다(`importorskip`; pytest 요약에는 `N passed, 1 skipped`로 찍힌다). 그전엔 하드 import라 수집 오류로 스위트 전체가 중단됐다. 옛 「headless 사전 실패」 묶음은 2026-06-22에 해소 — [`docs/known-issues.md`](../docs/known-issues.md) §1.
 
 ## 4. 데이터 파이프라인 테스트 (서브모듈)
 
