@@ -777,7 +777,7 @@ def test_redraws_keep_keyboard_focus_on_the_pressed_control(desktop_context):
     _enter_on(page, ".lect-datenav-btn[aria-label='전날']")
     page.wait_for_selector(".lect-date time[datetime='2026-09-16']")
     assert _focused(page) == {"key": "prev", **ok}
-    # 칩 — 관측일 id 의 한글 · 콜론이 든 키(선택자가 아니라 값으로 찾는다)
+    # 칩 — 관측일 id 의 한글 · 콜론이 든 키
     _enter_on(page, ".lect-chip:has-text('추계재')")
     page.wait_for_selector(".lect-chip[aria-current]:has-text('추계재')")
     assert _focused(page) == {"key": "obs:t-추계재", **ok}
@@ -829,17 +829,70 @@ def test_redraw_after_a_fetch_keeps_the_pressed_control_where_it_was(mobile_cont
     seg = page.locator(".lect-sets .division-tab >> nth=1")
     page.evaluate("""(el) => { const r = el.getBoundingClientRect();
         window.scrollTo({ top: window.scrollY + r.top - 200, behavior: 'instant' }); }""", seg.element_handle())
-    page.wait_for_timeout(300)
+    page.evaluate("() => document.fonts.ready.then(() => 0)")   # 글꼴이 바뀌면 칩 줄이 다시 감겨 세그먼트가 움직인다
     before = page.evaluate("(el) => ({ y: scrollY, top: el.getBoundingClientRect().top })", seg.element_handle())
     assert before["y"] > 100, before   # 맨 위가 아닌 자리에서 누른다
     seg.focus()
     page.keyboard.press("Enter")
     page.wait_for_url("**/lectionary/2026-04-05?set=2")
-    page.wait_for_selector(".lect-sets .division-tab.active:has-text('독서 2')")
-    page.wait_for_timeout(300)
+    page.wait_for_selector(".lect-sets .division-tab.active:has-text('독서 2')")   # 복원은 이 커밋 안에서 끝난다
     assert _focused(page) == {"key": "set:2", "inView": True, "visible": True}
     after = page.evaluate("() => ({ y: scrollY, top: document.activeElement.getBoundingClientRect().top })")
     assert abs(after["top"] - before["top"]) <= 2, (before, after)
+
+
+def _slow_chapters(page, ms):
+    """장 JSON 받기를 ms 만큼 늦춘다(실제 네트워크 — 로컬 서버는 너무 빨라 스켈레톤 사이의 일이 드러나지 않는다). 끝나면 page.unroute."""
+    def handler(route):
+        page.wait_for_timeout(ms)
+        route.continue_()
+    page.route("**/data/bible/**", handler)
+
+
+def test_slow_redraw_keeps_the_pressed_control_in_place_on_desktop(desktop_context):
+    """데스크톱 — 새 장을 받는 사이 스켈레톤이 스크롤을 맨 위로 누르면 머리의 검색 줄(#breadcrumb-row)이 펼쳐지고, 돌아온 뒤 다시
+    접힌다. 누른 세그먼트가 그 줄 높이(약 46px)만큼 아래로 내려앉던 것을 막는다(PR #350 리뷰 — 위의 모바일 테스트는 그 줄이 없고
+    로컬 서버는 너무 빨라 보지 못했다). 머리가 접힌 채 위로 되돌아온 자리(이력 — 60px 넘어야 접히고 10px 아래라야 펼친다)도 본다."""
+    page = desktop_context.new_page()
+    for scroll_back in (None, 40):
+        _open(page, "lectionary/2026-04-05")
+        seg = page.locator(".lect-sets .division-tab >> nth=1")
+        page.evaluate("""(el) => { const r = el.getBoundingClientRect();
+            window.scrollTo({ top: window.scrollY + r.top - 170, behavior: 'instant' }); }""", seg.element_handle())
+        page.wait_for_timeout(400)   # 머리가 접히는 전환(0.25s)
+        if scroll_back is not None:
+            page.evaluate("(y) => window.scrollTo({ top: y, behavior: 'instant' })", scroll_back)
+            page.wait_for_timeout(400)
+        assert page.evaluate("() => document.getElementById('app-header').classList.contains('compact')")
+        before = page.evaluate("(el) => el.getBoundingClientRect().top", seg.element_handle())
+        _slow_chapters(page, 400)
+        seg.focus()
+        page.keyboard.press("Enter")
+        page.wait_for_selector(".lect-sets .division-tab.active:has-text('독서 2')", timeout=20_000)
+        page.wait_for_timeout(600)   # 머리가 다시 접히는 전환까지
+        page.unroute("**/data/bible/**")
+        assert _focused(page) == {"key": "set:2", "inView": True, "visible": True}
+        after = page.evaluate("() => document.activeElement.getBoundingClientRect().top")
+        assert abs(after - before) <= 2, (scroll_back, before, after)
+
+
+def test_slow_redraw_leaves_focus_the_reader_moved_elsewhere(desktop_context):
+    """새 장을 받는 사이 독자가 머리의 검색 칸으로 옮겨 치기 시작했으면, 다 그린 뒤에도 포커스는 그 칸에 남는다 — 누른 세그먼트로
+    끌고 오면 이어 친 글자가 사라지고 Enter 가 검색 대신 그 링크를 눌렀다(PR #350 리뷰). 포커스는 누른 링크와 함께 사라져 body 로
+    떨어졌을 때만 돌려준다."""
+    page = desktop_context.new_page()
+    _open(page, "lectionary/2026-04-05")
+    _slow_chapters(page, 800)
+    page.locator(".lect-sets .division-tab >> nth=1").focus()
+    page.keyboard.press("Enter")
+    page.wait_for_selector(".loading")
+    page.locator("#search-input").focus()
+    page.keyboard.type("love")
+    page.wait_for_selector(".lect-sets .division-tab.active:has-text('독서 2')", timeout=20_000)
+    page.keyboard.type("ly")
+    page.unroute("**/data/bible/**")
+    assert page.evaluate("() => document.activeElement.id") == "search-input"
+    assert page.input_value("#search-input") == "lovely"
 
 
 def test_invalid_date_shows_notice_not_crash(desktop_context):
