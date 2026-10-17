@@ -24,8 +24,11 @@ import {
 } from "./views.js";
 // The calendar tab and the lectionary view (ADR-038 §1-§3) are not imported
 // here: route() loads them with import() the first time one of their routes
-// opens, so a session that only reads the Bible never parses the liturgical
-// engine, the lectionary view or the calendar (about 210KB of source). The seam
+// opens, so a session that only reads the Bible never loads the liturgical
+// engine, the lectionary view or the calendar (about 210KB of source, 70KB
+// gzipped). The measured gain is the cold first visit's boot path (Slow 4G
+// DOMContentLoaded −390 ms, 2026-10-17); a warm start was within noise either
+// way, since the browser compiles function bodies lazily. The seam
 // stays one-directional — neither calls route / navigate / parsePath, their
 // controls are plain links (ADR-034 principle 1). sw.js still precaches all
 // three for offline, and tests/unit/sw.test.js follows these import() calls.
@@ -291,7 +294,8 @@ async function loadViewModule(load) {
  * 화면 모듈을 받지 못했을 때의 실패 화면(DESIGN.md §6 「전체 화면 실패」) — 뷰가 자료를 받지 못했을 때의 실패 화면과 같은
  * 자리 · 제목에 다음 행동 「다시 불러오기」를 단다. 단추는 페이지를 새로 고친다: 브라우저는 한 번 실패한 모듈을 새로 고칠
  * 때까지 기억해서(그것을 바꾼 HTML 표준 변경이 2026-07 — 엔진마다 반영 중) 화면을 다시 여는 것만으로는 풀리지 않을 수 있다
- * (사용자 결정 2026-10-17). 앞 화면의 헤더 · 제목 · 오디오 바는 남기지 않는다(ADR-038 §3 「실패 · 범위」).
+ * (사용자 결정 2026-10-17). 앞 화면의 헤더 · 제목 · 오디오 바는 남기지 않는다(ADR-038 §3 「실패 · 범위」). 머리에는 성서 목록
+ * 집 단추를 둔다 — 전례독서 화면의 위 단계(그 달의 캘린더)는 받지 못한 모듈 쪽이다.
  * @param {{ title: string, panel: string, message: string }} view  title — 그 뷰의 제목(뷰 모듈의 PAGE_TITLE과 같게 —
  *   모듈을 받지 못해 거기서 읽을 수 없다) · panel — 뷰의 바깥 상자 클래스 · message — 안 된 것(뷰의 자료 실패 제목과 같다)
  * @returns {string} 페이지 메타의 제목
@@ -464,11 +468,17 @@ async function route() {
     // like the lectionary view below; the view preloads the small calendar
     // bundle itself and commits the DOM data-first. Its module (with the
     // lectionary view and the engine it imports) loads on the first visit — see
-    // the note at the imports.
+    // the note at the imports. All three are requested at once: awaiting
+    // calendar.js before the browser discovers its own imports costs one more
+    // round trip on a cold first visit (measured 2026-10-17, Slow 4G: tab →
+    // grid +676 ms sequential, +527 ms at once). The module map fetches each URL
+    // only once, so naming the dependencies here is free.
     if (view === "calendar") {
       renderLoading();
       dismissLaunchScreen();
-      const calendar = await loadViewModule(() => import("./calendar.js"));
+      const calendar = await loadViewModule(() => Promise.all([
+        import("./calendar.js"), import("./lectionary.js"), import("./liturgical-engine.js"),
+      ]).then(([mod]) => mod));
       if (isStale()) return;
       let calTitle;
       try {
@@ -494,11 +504,14 @@ async function route() {
     // calendar tab (tab-history tabOf). The view preloads both engine bundles
     // itself and commits the DOM data-first, so show the skeleton here so #app
     // reflects the new route immediately (mirrors the bookmark-read branch above).
-    // Its module (with the engine, not the calendar) loads on the first visit.
+    // Its module (with the engine, not the calendar) loads on the first visit,
+    // both requested at once like the calendar branch above.
     if (view === "lectionary") {
       renderLoading();
       dismissLaunchScreen();
-      const lectionary = await loadViewModule(() => import("./lectionary.js"));
+      const lectionary = await loadViewModule(() => Promise.all([
+        import("./lectionary.js"), import("./liturgical-engine.js"),
+      ]).then(([mod]) => mod));
       if (isStale()) return;
       let lectTitle;
       try {
