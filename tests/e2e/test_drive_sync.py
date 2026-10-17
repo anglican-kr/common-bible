@@ -616,13 +616,49 @@ def test_drive_disconnect_delete_failure_says_so(browser, fake_drive, fake_oauth
         page.evaluate("openDriveDisconnectModal()")
         page.wait_for_selector("#drive-disconnect-modal:not([hidden])")
         page.click("#drive-disconnect-delete")
+        # The snackbar (a plain div) for sighted users, and the same text in the live region for screen
+        # readers (Copilot review 1 — the snackbar alone was never announced).
         page.wait_for_function(
-            "() => [...document.body.children].some((n) => n.textContent.includes('동기화 파일은 삭제하지 못했습니다'))",
+            "() => [...document.body.children].some((n) => n.id !== 'a11y-announce'"
+            " && n.textContent.includes('동기화 파일은 삭제하지 못했습니다'))",
+            timeout=5_000,
+        )
+        page.wait_for_function(
+            "() => document.getElementById('a11y-announce').textContent.includes('동기화 파일은 삭제하지 못했습니다')",
             timeout=5_000,
         )
         assert page.evaluate("window.driveSync.getStatus()") == "DISABLED", "the disconnect still happens"
         with fake_drive._lock:
             assert fake_drive._file is not None, "the file is still on Drive"
+    finally:
+        page.context.close()
+
+
+def test_drive_settings_reopened_during_delete_updates_after_sign_out(browser, fake_drive, fake_oauth):
+    """Settings reopened while '파일도 삭제' is still deleting draws the account as connected (the token
+    is held for the delete). Once the sign-out lands it must switch to '연결' — the machine is already
+    DISABLED by then, so no DISABLE handler redrew it and it kept showing '해제' (Copilot review 1)."""
+    fake_drive.reset()
+    page = _make_page(browser, fake_drive, fake_oauth)
+    try:
+        _load(page)
+        _enable_sync(page)
+        _add_bookmark(page, "Delete-me")
+        _sync_now(page)
+        fake_drive.hold_list = True   # the delete path's lookup waits (cycles use the cached fileId)
+
+        page.evaluate("openDriveDisconnectModal()")
+        page.wait_for_selector("#drive-disconnect-modal:not([hidden])")
+        page.click("#drive-disconnect-delete")
+        _wait_held(page, fake_drive)
+
+        page.locator("#settings-anchor .settings-btn").click()
+        page.wait_for_selector(".settings-popover", state="visible")
+        fake_drive.release_held()
+        page.wait_for_selector('.settings-popover [aria-label="Google Drive 연결"]', timeout=5_000)
+        assert page.locator('.settings-popover [aria-label="Google Drive 연결 해제"]').count() == 0
+        with fake_drive._lock:
+            assert fake_drive._file is None, "the file was deleted"
     finally:
         page.context.close()
 

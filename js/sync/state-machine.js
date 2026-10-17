@@ -990,8 +990,12 @@ function createSyncMachine({ onStateChange } = {}) {
     // Drop the token in every state: the DISABLE handlers do it only for the states they leave, and
     // deleteRemoteFile() parks the machine in DISABLED with the token kept for its delete — signOut()
     // reads it for the revoke, then calls this.
+    const wasDisabled = _state === S.DISABLED;
     _token = null;
     dispatch({ type: "DISABLE" });
+    // Already DISABLED, no DISABLE handler runs — refresh here so an open settings panel stops showing
+    // the account the delete kept (it read isAuthenticated() while the token was still held).
+    if (wasDisabled) _refreshUI();
   }
   // Public sync entry point. Internal callers (silent refresh, timers,
   // acceptRedirectCode) dispatch SYNC_REQUEST directly — only requests that

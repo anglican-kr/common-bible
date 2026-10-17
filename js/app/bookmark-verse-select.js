@@ -11,7 +11,8 @@
 // A near-leaf: it never calls back into the bookmark tree/orchestrator, so no
 // dependency injection is needed (unlike the gesture/select rounds). Deps:
 // verse-spec (spec build/serialize), bookmark-modals (openSaveModal for 북마크),
-// window.{readingContext, getBooksCache, _showSyncSnackbar, announce}, appHelpers.
+// window.{readingContext, getBooksCache, _showSyncSnackbar, announce}, appHelpers. The snackbar also
+// announces its text, so the copy result is not announced separately.
 
 const { _$ } = window.appHelpers;
 const { readingContext } = window;
@@ -128,11 +129,9 @@ async function copySelectedVerses() {
 
   try {
     await navigator.clipboard.writeText(fullText);
-    announce("복사했습니다.");
-    window._showSyncSnackbar?.("복사했습니다.");
+    window._showSyncSnackbar?.("복사했습니다.");   // also announces it (live region)
     exitVerseSelectMode();
   } catch {
-    announce("복사하지 못했습니다.");
     window._showSyncSnackbar?.("복사하지 못했습니다.");
   }
 }

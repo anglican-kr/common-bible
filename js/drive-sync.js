@@ -92,7 +92,10 @@ window.addEventListener("online", () => {
 // ── Snackbar (UI notification, called by state machine and other modules) ─────
 // Uses --bg-card surface so the toast harmonizes with the page background
 // across themes; --border and a soft shadow keep it readable on cream/white.
+// The toast is visual only, so the same text also goes to the live region (announce →
+// #a11y-announce, WCAG 4.1.3) — callers don't announce it separately.
 window._showSyncSnackbar = function (msg) {
+  window.announce?.(msg);
   const el = document.createElement("div");
   el.textContent = msg;
   el.style.cssText = "position:fixed;bottom:calc(env(safe-area-inset-bottom, 0px) + 80px);left:50%;transform:translateX(-50%);max-width:calc(100vw - 32px);background:var(--bg-card);color:var(--text);border:1px solid var(--border);padding:12px 20px;border-radius:8px;font-family:-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Noto Sans KR',sans-serif;font-size:14px;line-height:1.4;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,.15);text-align:center;";

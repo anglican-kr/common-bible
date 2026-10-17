@@ -1448,3 +1448,20 @@ test("56. deleteRemoteFile — 파일 찾기가 실패하면 false · 지우기�
   machine.disable();
   assert.equal(await machine.deleteRemoteFile(), false, "토큰 없음");
 });
+
+test("57. 「파일도 삭제」 뒤 signOut 의 disable() — 이미 DISABLED 여도 설정 화면을 다시 그린다(Copilot 1회차)", async () => {
+  // 지우는 동안 토큰을 쥐고 있어 그사이 연 설정은 isAuthenticated() 로 「해제」(연결됨)를 그린다. 로그아웃이
+  // 토큰을 지운 뒤 다시 그리지 않으면 그 화면이 「해제」로 남는다 — DISABLED 에는 DISABLE 처리기가 없다.
+  let rebuilds = 0;
+  const { machine, drain, ctx } = loadMachine({ initialRefreshToken: "rt-x", findFileId: "fid-1" });
+  ctx.rebuildDriveSyncSection = () => { rebuilds++; };
+  machine.enable();
+  await drain(6);
+  assert.equal(machine.getState(), "IDLE");
+  assert.equal(await machine.deleteRemoteFile(), true);
+  assert.equal(machine.isAuthenticated(), true, "지우는 동안 토큰을 쥐고 있었다(signOut 이 폐기한다)");
+  const before = rebuilds;
+  machine.disable();
+  assert.equal(machine.isAuthenticated(), false);
+  assert.equal(rebuilds, before + 1, "이미 DISABLED 여도 설정 화면을 다시 그린다");
+});
