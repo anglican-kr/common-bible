@@ -818,14 +818,32 @@ function commitError(msg, subtitle) {
 }
 
 /**
- * 날짜 이동 줄의 원형 단추 하나(DESIGN.md §6 「날짜 이동 줄」 — 캘린더의 달 이동도 이 부품을 쓴다). 링크가 없으면(계산 범위
- * 끝) 자리만 지켜 가운데가 흔들리지 않게 한다. 방향이 글리프(‹ ›)와 다시 그린 뒤 포커스를 돌려줄 자리(`data-focus-key` —
- * `prev` · `next`, helpers.js createFocusMemory)를 정한다.
+ * 날짜 이동 줄의 원형 단추 하나. 링크가 없으면(계산 범위 끝) 자리만 지켜 가운데가 흔들리지 않게 한다. 방향이 글리프(‹ ›)와
+ * 다시 그린 뒤 포커스를 돌려줄 자리(`data-focus-key` — `prev` · `next`, helpers.js createFocusMemory)를 정한다.
  * @param {"prev" | "next"} dir @param {string | null} href @param {string} label
  */
 function buildDateStep(dir, href, label) {
   if (!href) return el("span", { className: "lect-datenav-btn", "aria-hidden": "true" });
   return el("a", { className: "lect-datenav-btn", href, "aria-label": label, "data-focus-key": dir }, dir === "prev" ? "‹" : "›");
+}
+
+/**
+ * 날짜 이동 줄(DESIGN.md §6 「날짜 이동 줄」) — ‹ · 가운데(제목 + 「오늘」) · ›. 전례독서의 날짜 이동과 캘린더의 달 이동이
+ * 같은 줄이고(ADR-038 2단계의 주간 화면도 이것을 쓴다), 화면마다 다른 것은 가운데 제목 요소(날짜 `<time>` · 달 `<h2>`)와
+ * 이름표뿐이다. 「오늘」의 `data-focus-key` 는 `today` — 앞뒤 단추가 자리만 남는 범위 끝에서 포커스가 돌아갈 대체 자리다.
+ * @param {{ ariaLabel: string, title: HTMLElement, todayHref: string,
+ *   prev: { href: string | null, label: string }, next: { href: string | null, label: string } }} o
+ * @returns {HTMLElement}
+ */
+function buildDateNav(o) {
+  const nav = el("nav", { className: "lect-datenav", "aria-label": o.ariaLabel });
+  nav.appendChild(buildDateStep("prev", o.prev.href, o.prev.label));
+  const mid = el("div", { className: "lect-date" });
+  mid.appendChild(o.title);
+  mid.appendChild(el("a", { className: "lect-today", href: o.todayHref, "data-focus-key": "today" }, "오늘"));
+  nav.appendChild(mid);
+  nav.appendChild(buildDateStep("next", o.next.href, o.next.label));
+  return nav;
 }
 
 /** 색 점 + 라벨 하나. */
@@ -840,14 +858,13 @@ function buildColorMark(/** @type {string} */ color, /** @type {boolean} */ alt)
 function buildHeader(m) {
   const head = el("header", { className: "lect-head" });
 
-  const nav = el("nav", { className: "lect-datenav", "aria-label": "날짜 이동" });
-  nav.appendChild(buildDateStep("prev", m.hrefs.prev, "전날"));
-  const mid = el("div", { className: "lect-date" });
-  mid.appendChild(el("time", { datetime: m.date }, dateLabel(m.date)));
-  mid.appendChild(el("a", { className: "lect-today", href: m.hrefs.today, "data-focus-key": "today" }, "오늘"));
-  nav.appendChild(mid);
-  nav.appendChild(buildDateStep("next", m.hrefs.next, "다음날"));
-  head.appendChild(nav);
+  head.appendChild(buildDateNav({
+    ariaLabel: "날짜 이동",
+    title: el("time", { datetime: m.date }, dateLabel(m.date)),
+    todayHref: m.hrefs.today,
+    prev: { href: m.hrefs.prev, label: "전날" },
+    next: { href: m.hrefs.next, label: "다음날" },
+  }));
 
   const official = m.resolved.official;
   const dayName = official ? String(official.observance.name || "") : "";
@@ -1291,6 +1308,6 @@ async function renderLectionaryView(parsed) {
 // 캘린더 탭(calendar.js — ADR-038 §2 A2)이 같은 이름 · 날짜 · 색 규칙을 쓴다(복제 금지 — 칸 · 줄의 이름이 칩과 같은 꼴이어야 한다).
 export {
   renderLectionaryView, buildLectionaryModel,
-  shortName, statusSuffix, isGrid, todayKey, buildDateStep,
+  shortName, statusSuffix, isGrid, todayKey, buildDateNav,
   CYCLE_LABEL, COLOR_LABEL, WEEKDAY_KO,
 };
