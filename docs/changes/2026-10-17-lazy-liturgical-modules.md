@@ -1,4 +1,5 @@
 ---
+pr: 355
 date: 2026-10-17
 branch: refactor/lazy-liturgical-modules
 title: "refactor: 캘린더 · 전례독서 모듈 지연 로드"
