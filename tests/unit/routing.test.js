@@ -280,3 +280,29 @@ test("parsePath: resume 쿼리 존재 시 resume true", () => {
 test("parsePath: chapter는 정수로 파싱", () => {
   assert.strictEqual(parse("/genesis/12").chapter, 12);
 });
+
+// ── IN_PAGE_LINK — 페이지 안 링크(「본문 바로가기」)는 라우트가 아니다 ─────────────
+// 전역 <a> 인터셉터가 이것으로 갈라 대상으로 포커스만 옮긴다(known-issues §5 — 그전엔 route() 로 같은 화면을 다시 그렸다).
+
+function loadInPageLink() {
+  const ctx = { decodeURIComponent, String };
+  vm.createContext(ctx);
+  vm.runInContext(extractBlock("IN_PAGE_LINK", ROUTING_SOURCE, "routing.js"), ctx, { filename: "routing.js#in-page" });
+  return ctx.inPageTargetId;
+}
+const inPageTargetId = loadInPageLink();
+const linkUrl = (href) => new URL(href, "https://bible.anglican.kr/john/3?hl=x");
+const HERE = { pathname: "/john/3", search: "?hl=x" };
+
+test("inPageTargetId: 같은 경로 · 쿼리로 가는 조각 링크는 대상 id — 「본문 바로가기」(#app)", () => {
+  assert.strictEqual(inPageTargetId(linkUrl("#app"), HERE), "app");
+  assert.strictEqual(inPageTargetId(linkUrl("/john/3?hl=x#app"), HERE), "app");
+  assert.strictEqual(inPageTargetId(linkUrl("#%EB%B3%B8%EB%AC%B8"), HERE), "본문");   // 퍼센트 이스케이프는 풀어서
+  assert.strictEqual(inPageTargetId(linkUrl("#%E0%A4%A"), HERE), "%E0%A4%A");        // 깨진 이스케이프는 원문 그대로(throw 아님)
+});
+
+test("inPageTargetId: 조각이 없거나(빈 「#」 포함) 다른 경로 · 쿼리로 가는 링크는 null — 라우터가 이동한다", () => {
+  for (const href of ["/john/3?hl=x", "/john/4#app", "/john/3#app", "#", "/john/3?hl=x#"]) {
+    assert.strictEqual(inPageTargetId(linkUrl(href), HERE), null, href);
+  }
+});

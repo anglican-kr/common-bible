@@ -24,6 +24,12 @@
   top: 0;
 }
 
+/* The skip link's target — routing.js focusInPageTarget gives it tabindex="-1". A landmark, not a control: the
+   next Tab goes on from it, and a ring around the whole page would only flash. */
+#app:focus {
+  outline: none;
+}
+
 .sr-only {
   position: absolute;
   width: 1px;

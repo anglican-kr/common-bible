@@ -601,6 +601,38 @@ async function route() {
   }
 }
 
+// ── BEGIN IN_PAGE_LINK ──
+/**
+ * 링크가 이 페이지 안에서 가리키는 요소의 id — 「본문 바로가기」(`#app`) — 를, 다른 경로 · 쿼리로 가거나 조각(#)이 없으면
+ * null 을 낸다. 순수 함수 — 두 인자만 읽는다.
+ * @param {{ pathname: string, search: string, hash: string }} url  링크의 href 를 푼 것
+ * @param {{ pathname: string, search: string }} loc  지금 주소
+ * @returns {string | null}
+ */
+function inPageTargetId(url, loc) {
+  if (!url.hash || url.hash === "#") return null;
+  if (url.pathname !== loc.pathname || url.search !== loc.search) return null;
+  const raw = url.hash.slice(1);
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;   // 깨진 퍼센트 이스케이프 — 원문 그대로 id 로 찾는다(parsePath 의 decodeOrRaw 와 같은 처리)
+  }
+}
+// ── END IN_PAGE_LINK ──
+
+/**
+ * 페이지 안 링크의 대상으로 포커스를 옮긴다. 대화형이 아닌 대상(`<main>` 랜드마크)은 `tabindex="-1"` 이 있어야 포커스를
+ * 받으므로 처음 쓸 때 단다. 화면 밖이면 브라우저가 보이게 스크롤한다(focus 의 기본 동작).
+ * @param {string} id
+ */
+function focusInPageTarget(id) {
+  const target = document.getElementById(id);
+  if (!(target instanceof HTMLElement)) return;
+  if (!target.hasAttribute("tabindex")) target.setAttribute("tabindex", "-1");
+  target.focus();
+}
+
 document.addEventListener("click", (e) => {
   const t = e.target;
   if (!(t instanceof Element)) return;
@@ -613,6 +645,13 @@ document.addEventListener("click", (e) => {
   if (a.target === "_blank") return;
   if (isModifiedClick(e)) return;   // 새 탭 · 새 창 — 브라우저에 맡긴다(helpers.js)
   e.preventDefault();
+  // 페이지 안 링크는 라우트가 아니다 — 대상으로 포커스를 옮긴다(known-issues §5). 그전엔 여기서 route() 를 불러 같은 화면을
+  // 다시 그리기만 하고 포커스는 본문으로 가지 않았다. 브라우저에 맡기면 주소에 「#app」이 붙어 기록 항목이 하나 더 생긴다.
+  const targetId = inPageTargetId(url, location);
+  if (targetId !== null) {
+    focusInPageTarget(targetId);
+    return;
+  }
   const path = url.pathname + url.search;
   // 같은 화면을 다시 그리는 링크면 그 자리 — route() 가 시작하자마자 꺼내 간다(위 `_pendingFocusSpot`).
   _pendingFocusSpot = focusSpotOf(a, e, $app);
