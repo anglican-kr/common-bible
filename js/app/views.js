@@ -160,7 +160,7 @@ function setTitleWithChapterPicker(book, currentCh) {
     if (t instanceof Element && t.tagName === "A") chapterOverlay.close();
   });
 
-  $title.appendChild(buildHomeBtn(`/${effectiveDivision(book)}`, "성서 목록으로", book.id));
+  $title.appendChild(buildHomeBtn(bookListPath(book), "성서 목록으로", book.id));
   $title.appendChild(btn);
   $title.appendChild(popover);
   $title.appendChild(buildBookmarkHeaderBtn(book.id, currentCh));
@@ -202,6 +202,15 @@ function divisionOrder() {
 function effectiveDivision(book) {
   if (loadBookOrder() === "vulgate" && book.division === "deuterocanon") return "old_testament";
   return book.division;
+}
+
+// Where 「성서 목록으로」 (the reading views' home button · the tab bar's home tab) lands: the book's own
+// division tab. A book in no tab — 전례시편 · 송가 (`division: "liturgical"`, ADR-037 §3; reached from the
+// lectionary, a bookmark or a shared link, never from the list) — lands on the list's first screen: `/liturgical`
+// is no route — parsePath reads it as a book id and the view says 「해당 성서를 찾을 수 없습니다」.
+function bookListPath(book) {
+  const division = effectiveDivision(book);
+  return divisionOrder().includes(division) ? `/${division}` : "/";
 }
 // ── END DIVISION ──
 
@@ -752,7 +761,7 @@ function _observeResumeBanner(wrapper) {
 
 function renderChapterList(book, books) {
   setTitle(book.name_ko, NT_MOBILE_NAME[book.id]);
-  $title.insertBefore(buildHomeBtn(`/${effectiveDivision(book)}`, "성서 목록으로", book.id), $title.firstChild);
+  $title.insertBefore(buildHomeBtn(bookListPath(book), "성서 목록으로", book.id), $title.firstChild);
   $title.appendChild(buildBookmarkHeaderBtn(book.id, null));
   $title.appendChild(buildSettingsTrigger());
   hideAudioBar();
@@ -1601,7 +1610,7 @@ function renderChapter(data, book, opts) {
 function renderPrologue(data, book) {
   const mobileBookName = NT_MOBILE_NAME[book.id];
   setTitle(`${book.name_ko} 머리말`, mobileBookName ? `${mobileBookName} 머리말` : undefined);
-  $title.insertBefore(buildHomeBtn(`/${effectiveDivision(book)}`, "성서 목록으로", book.id), $title.firstChild);
+  $title.insertBefore(buildHomeBtn(bookListPath(book), "성서 목록으로", book.id), $title.firstChild);
   $title.appendChild(buildSettingsTrigger());
   clearNode($app);
 
@@ -1675,6 +1684,7 @@ window.buildDivisionTabs = buildDivisionTabs;
 window.divisionLabels = divisionLabels;
 window.divisionOrder = divisionOrder;
 window.effectiveDivision = effectiveDivision;
+window.bookListPath = bookListPath;   // tabbar.js — the home tab lands where the home button does
 window.initCompactHeader = initCompactHeader;
 window.initScrollElevation = initScrollElevation;
 window.setPendingBookFocus = setPendingBookFocus;
@@ -1686,6 +1696,7 @@ window.renderError = renderError;
 export {
   setTitle, setTitleWithChapterPicker,
   buildDivisionTabs, buildSegmentTabs, bindCopyAttribution, formatVerseRanges, absentVerseNumbers, divisionLabels, divisionOrder, effectiveDivision,
+  bookListPath,
   initCompactHeader, initScrollElevation,
   _verseSelectionUnit, _verseRangeVrefs,
   DIVISION_LABELS,

@@ -7,6 +7,7 @@ Covers:
   - 검색 원형 버튼 → /search 모핑(#tab-dock.searching, 하단 입력 표시)
   - 스크롤 축소(#tab-dock.collapsed) + 축소 시 홈 탭 = 펼치기(홈 이동 아님)
   - 읽기 라우트에서 홈 탭 active 유지
+  - 구분 탭이 없는 책(전례시편)에서 홈 탭 → 성서 목록 첫 화면(PR #353 리뷰)
   - 슬라이딩 인디케이터 크기 — 축소에서 펼칠 때 그대로 · 320px 에서 줄어든 슬롯에 맞춤(PR #348 리뷰)
   - 수정 키(⌘ · Ctrl) 탭 클릭은 새 탭 몫 — 이 화면에 스크롤 복원 요청을 남기지 않는다(PR #348 리뷰)
 
@@ -162,6 +163,21 @@ def test_home_tab_from_reading_focuses_book_card(mobile_context):
     card = page.locator(".book-list a[data-book-id='matt']")
     assert "is-last-read" in (card.get_attribute("class") or ""), \
         "read book card must carry the .is-last-read highlight marker"
+
+
+def test_home_tab_from_book_in_no_tab_lands_on_book_list(mobile_context):
+    """전례시편(lps/23)은 구분 탭이 없다 — 이미 홈 스택에서 홈 탭을 누르면 성서 목록 첫 화면(/)으로.
+
+    그전엔 `/liturgical` 로 가서 「해당 성서를 찾을 수 없습니다.」가 떴다(PR #353 리뷰, 2026-10-17 — 헤더 홈 버튼과
+    같은 views.js bookListPath)."""
+    page = mobile_context.new_page()
+    page.goto(f"{BASE_URL}/lps/23")
+    page.wait_for_selector("article.chapter-text .verse", timeout=8_000)
+
+    page.locator("#tab-bar .tab-item[data-tab='home']").click()
+    page.wait_for_selector(".book-list", timeout=5_000)
+    assert page.evaluate("() => location.pathname") == "/"
+    assert "찾을 수 없습니다" not in page.locator("#app").inner_text()
 
 
 def test_book_list_does_not_collapse_on_scroll(mobile_context):

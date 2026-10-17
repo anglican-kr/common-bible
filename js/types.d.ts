@@ -1279,6 +1279,8 @@ declare global {
   function divisionLabels(): Record<string, string>;
   function divisionOrder(): string[];
   function effectiveDivision(book: BookEntry): string;
+  // 「성서 목록으로」 destination — the book's division tab, or "/" for a book in no tab (전례시편 · 송가).
+  function bookListPath(book: BookEntry): string;
   function initCompactHeader(): void;
   function initScrollElevation(): void;
   // (Phase 7a's temporary DIVISION_LABELS / OT_SUBCATEGORY{,_ORDER,_LABELS}

@@ -11,8 +11,8 @@
 //   - DATA_FETCHING block — loadBooks / loadVersion / loadChapter /
 //     loadPrologue. fetch + window stubs.
 //   - TITLE block — setTitle. $title + clearNode + el + announce stubs.
-//   - DIVISION block — divisionLabels / divisionOrder / effectiveDivision +
-//     constants. loadBookOrder stub.
+//   - DIVISION block — divisionLabels / divisionOrder / effectiveDivision /
+//     bookListPath + constants. loadBookOrder stub.
 //   - DIVISION_TABS block — buildDivisionTabs. Tab anchors per book-order
 //     setting + active-tab marking. el + divisionLabels/divisionOrder stubs.
 //   - POPOVER block — setTitleWithChapterPicker. Open/close contract + focus
@@ -128,6 +128,7 @@ function loadDivision(initialBookOrder = "canonical") {
     divisionLabels: ctx.divisionLabels,
     divisionOrder: ctx.divisionOrder,
     effectiveDivision: ctx.effectiveDivision,
+    bookListPath: ctx.bookListPath,
     DIVISION_LABELS: ctx.DIVISION_LABELS,
     DIVISION_ORDER: ctx.DIVISION_ORDER,
   };
@@ -462,6 +463,27 @@ test("effectiveDivision: vulgate mode preserves non-deuterocanon divisions", () 
   assert.equal(h.effectiveDivision({ id: "matt", division: "new_testament" }), "new_testament");
 });
 
+// 「성서 목록으로」(헤더 집 단추 · 탭 바 홈)의 목적지. 전례시편 · 송가는 구분 탭 어디에도 없어 `/liturgical` 로 가면
+// 「해당 성서를 찾을 수 없습니다」가 떴다 — 성서 목록 첫 화면으로 간다(PR #353 리뷰, 2026-10-17).
+test("bookListPath: canonical — the book's own division tab", () => {
+  const h = loadDivision("canonical");
+  assert.equal(h.bookListPath({ id: "john", division: "new_testament" }), "/new_testament");
+  assert.equal(h.bookListPath({ id: "tob", division: "deuterocanon" }), "/deuterocanon");
+});
+
+test("bookListPath: vulgate — deuterocanon folds into the old_testament tab", () => {
+  const h = loadDivision("vulgate");
+  assert.equal(h.bookListPath({ id: "tob", division: "deuterocanon" }), "/old_testament");
+});
+
+test("bookListPath: a book in no tab (전례시편 · 송가) → the list's first screen, not /liturgical", () => {
+  for (const order of ["canonical", "vulgate"]) {
+    const h = loadDivision(order);
+    assert.equal(h.bookListPath({ id: "lps", division: "liturgical" }), "/", order);
+    assert.equal(h.bookListPath({ id: "cant", division: "liturgical" }), "/", order);
+  }
+});
+
 // (DIVISION_LABELS / DIVISION_ORDER constants are not exposed on globalThis
 // — `const` at script top-level binds in script scope, not on the vm
 // context object. The contents are exercised indirectly via the
@@ -765,7 +787,9 @@ function loadPopover() {
       a.textContent = label;
       return a;
     },
-    effectiveDivision: (b) => b.division,
+    // 「성서 목록으로」 destination — the rule itself is the DIVISION block's (tested there); here only that the
+    // home button takes it.
+    bookListPath: (b) => `/list-for-${b.id}`,
     buildBookmarkHeaderBtn: (_bookId, _chapter) => {
       return new dom.RichElement("button");
     },
@@ -846,7 +870,7 @@ test("setTitleWithChapterPicker: appends home btn + picker btn + popover + bookm
   // children: homeBtn, btn, popover, bookmarkBtn — 4 entries
   assert.equal(h.$title.children.length, 4);
   assert.equal(h.$title.children[0].tagName, "A");      // home btn (stub returns <a>)
-  assert.equal(h.$title.children[0].getAttribute("href"), "/old_testament"); // → book's division tab
+  assert.equal(h.$title.children[0].getAttribute("href"), "/list-for-gen"); // → bookListPath(book)
   assert.equal(h.$title.children[1].tagName, "BUTTON"); // picker btn
   assert.equal(h.$title.children[2].tagName, "DIV");    // popover (chapter)
   assert.equal(h.$title.children[3].tagName, "BUTTON"); // bookmark btn
