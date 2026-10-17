@@ -592,9 +592,13 @@ function createSyncMachine({ onStateChange } = {}) {
   // on, so the rest of the cycle must not touch Drive or local data — no upload built after the await
   // (it would carry edits made after sign-out, sent with the token already cleared), no remote doc
   // merged into local storage, no cache re-filled after disable() cleared it. Every await in
-  // _syncCycle is followed by this check. It reads the state, not a per-cycle id: were the machine
-  // SYNCING again by the time the await returns, this cycle is the one that settles it —
-  // _syncPending keeps that SYNC_REQUEST from starting a second cycle.
+  // _syncCycle is followed by this check, and so is its catch (an await that rejects after DISABLE).
+  // It reads the state, not a per-cycle id: were the machine SYNCING again by the time the await
+  // returns, this cycle is the one that settles it — _syncPending keeps that SYNC_REQUEST from
+  // starting a second cycle.
+  // A check per await is the chosen shape — cancelling in-flight requests (an AbortController per
+  // cycle) or a shared await wrapper was weighed and declined (2026-10-17, coding-pitfalls §11):
+  // a request already sent before sign-out carries pre-sign-out edits and may finish.
   /** @param {string} at */
   function _leftSyncing(at) {
     if (_state === S.SYNCING) return false;
@@ -753,6 +757,7 @@ function createSyncMachine({ onStateChange } = {}) {
 
       dispatch({ type: "SYNC_DONE" });
     } catch (err) {
+      if (_leftSyncing("exception")) return;
       const msg = err instanceof Error ? err.message : String(err);
       L.log({ kind: "ERROR", event: "SYNC_EXCEPTION", reason: msg });
       dispatch({ type: "SYNC_FAIL", reason: msg === "no_token" ? "no_token" : "exception" });

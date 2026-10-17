@@ -460,10 +460,12 @@ def test_sign_out_mid_cycle_sends_nothing_after(browser, fake_drive, fake_oauth)
         assert fake_drive.held, "first sync cycle never asked for the file list"
         assert page.evaluate("window.driveSync.getStatus()") == "SYNCING"
 
+        # Counted before sign-out: nothing from the sign-out call on (the call itself, the new
+        # bookmark, the released cycle) may reach Drive.
+        sent_before = len(fake_drive.requests)
         page.evaluate("window.driveSync.signOut()")
         assert page.evaluate("window.driveSync.getStatus()") == "DISABLED"
         _add_bookmark(page, "After-Sign-Out")
-        sent_before = len(fake_drive.requests)
         fake_drive.release_held()
         page.wait_for_timeout(500)
 

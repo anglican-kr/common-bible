@@ -1085,6 +1085,8 @@ test("39. 401 + IDB 비어있음 → NEEDS_CONSENT + 캐시 클리어", async ()
 // 로그아웃 뒤에 더한 편집까지 담아 `_token` 이 비워진 채(Bearer null)로 나갔다 — 실제 Drive 는 401
 // 로 거절하지만 e2e 의 가짜 Drive 는 받아 test_sign_out_clears_sync 가 가끔 실패했다(known-issues §11).
 // 대기마다 상태가 아직 SYNCING 인지 본다(_leftSyncing): 업로드 · 원격 자료 쓰기 · 캐시 다시 채우기 없음.
+// 멈추는 자리 여섯(find_file · upload_new · download · upload_update · upload_upgrade · upload_merged)과
+// catch(exception)를 하나씩 덮는다 — 대기 뒤 확인을 하나라도 빼면 그 자리의 테스트가 실패한다.
 
 test("44. 파일 찾기 대기 중 disable() → 그 뒤 업로드하지 않는다", async () => {
   let resolveFind;
@@ -1179,4 +1181,128 @@ test("46. 올리기 대기 중 disable() → 업로드가 끝나도 캐시를 �
   assert.equal(localStorage.getItem(CACHE_FILE_ID_KEY), null, "fileId 캐시가 다시 차지 않음");
   assert.equal(localStorage.getItem(CACHE_ETAG_KEY), null, "etag 캐시가 다시 차지 않음");
   assert.equal(localStorage.getItem(CACHE_SYNCED_U_KEY), null, "syncedMaxU 캐시가 다시 차지 않음");
+});
+
+test("47. 새 파일 올리기 대기 중 disable() → 끝난 업로드로 SYNC_DONE 을 내지 않는다", async () => {
+  let resolveUpload;
+  const upPromise = new Promise((r) => { resolveUpload = r; });
+  let uploadCalls = 0;
+  const { machine, drain, logEntries } = loadMachine({
+    initialRefreshToken: "rt-x",
+    findFileId: null,   // Drive 에 파일이 없다 → 새 파일 올리기
+    overrideStubs: {
+      T: { uploadSyncFile: () => { uploadCalls++; return upPromise; } },
+    },
+  });
+  machine.enable();
+  await drain(4);
+  assert.equal(uploadCalls, 1, "새 파일 올리기 hold");
+  assert.equal(machine.getState(), "SYNCING");
+  machine.disable();
+  const mark = logEntries.length;
+  resolveUpload({ ok: true, status: 200, etag: '"e1"' });
+  await drain(5);
+  const after = logEntries.slice(mark);
+  assert.ok(after.some((e) => e.event === "SYNC_ABORTED" && e.at === "upload_new"), "SYNC_ABORTED(upload_new) 로그");
+  assert.ok(!after.some((e) => e.kind === "ACTION" && e.event === "SYNC_DONE"), "로그아웃 뒤 SYNC_DONE 없음");
+  assert.equal(machine.getState(), "DISABLED");
+});
+
+test("48. v1 문서 올리기 대기 중 disable() → 업로드가 끝나도 캐시를 다시 채우지 않는다", async () => {
+  let resolveUpload;
+  const upPromise = new Promise((r) => { resolveUpload = r; });
+  let uploadCalls = 0;
+  const { machine, drain, localStorage } = loadMachine({
+    initialRefreshToken: "rt-x",
+    initialStorage: {
+      [CACHE_FILE_ID_KEY]: "fid-cached",
+      [CACHE_ETAG_KEY]: '"e-cached"',
+      [CACHE_SYNCED_U_KEY]: "0",
+    },
+    downloadResult: { doc: { schemaVersion: 1, bookmarks: [] }, etag: '"e-v1"', status: 200 },
+    overrideStubs: {
+      T: { uploadSyncFile: () => { uploadCalls++; return upPromise; } },
+      V2: { validateRemote: () => false },   // 원격이 옛 v1 문서 → v2 로 올린다
+    },
+  });
+  machine.enable();
+  await drain(4);
+  assert.equal(uploadCalls, 1, "v1 → v2 올리기 hold");
+  assert.equal(machine.getState(), "SYNCING");
+  machine.disable();
+  resolveUpload({ ok: true, status: 200, etag: '"e-new"' });
+  await drain(5);
+  assert.equal(machine.getState(), "DISABLED");
+  assert.equal(localStorage.getItem(CACHE_FILE_ID_KEY), null, "fileId 캐시가 다시 차지 않음");
+  assert.equal(localStorage.getItem(CACHE_ETAG_KEY), null, "etag 캐시가 다시 차지 않음");
+  assert.equal(localStorage.getItem(CACHE_SYNCED_U_KEY), null, "syncedMaxU 캐시가 다시 차지 않음");
+});
+
+test("49. 합친 뒤 올리기 대기 중 disable() → 업로드가 끝나도 캐시를 다시 채우지 않는다", async () => {
+  let resolveUpload;
+  const upPromise = new Promise((r) => { resolveUpload = r; });
+  let uploadCalls = 0;
+  const remoteDoc = {
+    schemaVersion: 2,
+    bookmarks: { items: {}, tombstones: {} },
+    settings: {
+      fontSize: { v: null, _u: 0 }, colorScheme: { v: null, _u: 0 },
+      theme: { v: null, _u: 0 }, bookOrder: { v: null, _u: 0 },
+      startupBehavior: { v: null, _u: 0 },
+    },
+    lastRead: { v: null, _u: 0 },
+    deviceId: "remote",
+  };
+  const { machine, drain, localStorage } = loadMachine({
+    initialRefreshToken: "rt-x",
+    initialStorage: {
+      [CACHE_FILE_ID_KEY]: "fid-cached",
+      [CACHE_ETAG_KEY]: '"e-cached"',
+      [CACHE_SYNCED_U_KEY]: "0",
+    },
+    downloadResult: { doc: remoteDoc, etag: '"e-remote"', status: 200 },
+    overrideStubs: {
+      T: { uploadSyncFile: () => { uploadCalls++; return upPromise; } },
+      // 로컬(합친 결과)이 원격보다 새롭다 → 합친 뒤 올린다
+      V2: { maxU: (doc) => (doc && doc.deviceId === "remote" ? 0 : 5) },
+    },
+  });
+  machine.enable();
+  await drain(4);
+  assert.equal(uploadCalls, 1, "합친 뒤 올리기 hold");
+  assert.equal(machine.getState(), "SYNCING");
+  machine.disable();
+  resolveUpload({ ok: true, status: 200, etag: '"e-new"' });
+  await drain(5);
+  assert.equal(machine.getState(), "DISABLED");
+  assert.equal(localStorage.getItem(CACHE_FILE_ID_KEY), null, "fileId 캐시가 다시 차지 않음");
+  assert.equal(localStorage.getItem(CACHE_ETAG_KEY), null, "etag 캐시가 다시 차지 않음");
+  assert.equal(localStorage.getItem(CACHE_SYNCED_U_KEY), null, "syncedMaxU 캐시가 다시 차지 않음");
+});
+
+test("50. 대기 중 disable() 뒤 그 대기가 예외로 끝나도 SYNC_EXCEPTION · SYNC_FAIL 을 내지 않는다", async () => {
+  // 지금의 transport.js 는 예외를 던지지 않고 status 0 을 돌려준다 — 그 계약이 바뀌어도 멈춘 사이클은 조용해야 한다.
+  let rejectDownload;
+  const dlPromise = new Promise((_, rej) => { rejectDownload = rej; });
+  const { machine, drain, logEntries } = loadMachine({
+    initialRefreshToken: "rt-x",
+    initialStorage: {
+      [CACHE_FILE_ID_KEY]: "fid-cached",
+      [CACHE_ETAG_KEY]: '"e-cached"',
+      [CACHE_SYNCED_U_KEY]: "0",
+    },
+    overrideStubs: { T: { downloadSyncFile: () => dlPromise } },
+  });
+  machine.enable();
+  await drain(3);
+  assert.equal(machine.getState(), "SYNCING", "내려받기 hold 중 SYNCING");
+  machine.disable();
+  const mark = logEntries.length;
+  rejectDownload(new Error("network down"));
+  await drain(5);
+  const after = logEntries.slice(mark);
+  assert.ok(after.some((e) => e.event === "SYNC_ABORTED" && e.at === "exception"), "SYNC_ABORTED(exception) 로그");
+  assert.ok(!after.some((e) => e.event === "SYNC_EXCEPTION"), "SYNC_EXCEPTION 없음");
+  assert.ok(!after.some((e) => e.kind === "ACTION" && e.event === "SYNC_FAIL"), "SYNC_FAIL 없음");
+  assert.equal(machine.getState(), "DISABLED");
 });
