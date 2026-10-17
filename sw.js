@@ -56,9 +56,12 @@ const SHELL_FILES = [
   "/js/app/parallels.js",
   "/js/app/tab-history.js",
   "/js/app/data-fetch.js",
-  "/js/app/liturgical-engine.js",
   "/js/app/audio-player.js",
   "/js/app/views.js",
+  // 동적 import()로만 로드되는 모듈(태그 없음) — routing.js가 /calendar · /lectionary에
+  // 처음 갈 때 불러온다(ADR-038 §2 「구현」). 오프라인에서도 그 화면이 열리도록 여기서
+  // 미리 받는다 — tests/unit/sw.test.js의 닫힘 검사가 import()도 따라간다.
+  "/js/app/liturgical-engine.js",
   "/js/app/lectionary.js",
   "/js/app/calendar.js",
   "/js/app/routing.js",

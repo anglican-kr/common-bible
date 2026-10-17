@@ -6,8 +6,9 @@
 // won't boot offline. sw.js can't be imported as a whole — it calls
 // importScripts at top level — so this suite reaches into the source two ways:
 //
-//   • Text parsing, for the `const SHELL_FILES = [...]` array and the static
-//     ESM `import` specifiers of every module the page reaches (invariants 1-3).
+//   • Text parsing, for the `const SHELL_FILES = [...]` array and the ESM
+//     import specifiers — static, and dynamic import() with a literal
+//     specifier — of every module the page reaches (invariants 1-3 and 5).
 //   • vm evaluation of the `// ── BEGIN/END CACHE_ROUTING ──` marker block,
 //     which brackets `cacheNameFor()` in sw.js so it can run in isolation with
 //     the three cache-name constants stubbed (invariant 4). **Those markers are
@@ -23,7 +24,9 @@
 //                 have caught js/sync/refresh-store.js being loaded by the
 //                 page but absent from the precache list.)
 //   3. Closure  — every module reachable from those <script> tags through
-//                 static ESM `import` is in SHELL_FILES too. (2) only sees
+//                 ESM import (static, or a literal dynamic import() — how
+//                 routing.js loads the calendar · lectionary views on first
+//                 visit) is in SHELL_FILES too. (2) only sees
 //                 tags, which is how bookmark.js's five import-only modules
 //                 (bookmark-{tree,gestures,select,menu,verse-select}.js) sat
 //                 outside the precache list unnoticed. On a first visit those
@@ -41,6 +44,11 @@
 //                 Skipped with a stated reason when the private data/ submodule
 //                 isn't checked out: it runs locally and in sync-data.yml, not
 //                 in test.yml.
+//   5. Lazy     — the liturgical engine, the lectionary view and the calendar
+//                 stay out of the boot graph (tags + static imports) and are
+//                 reached by dynamic import only (ADR-038 §2). A tag or static
+//                 import coming back keeps the app working, so nothing else
+//                 would notice — every Bible-only session would parse them again.
 //
 // /data/* entries are intentionally excluded from the existence check: those
 // live in the common-bible-data submodule, which CI does not check out, and
@@ -124,18 +132,30 @@ test("index.html이 로드하는 모든 로컬 script/style이 SHELL_FILES에 �
 // 않으므로, 설치 직후 오프라인으로 열면 bookmark.js 는 캐시에서 오고 그 import 는
 // 실패해 모듈 그래프째 깨진다. 두 번째 온라인 방문(이제 fetch 가 SW 를 거친다)
 // 에서야 채워지니 증상이 잘 안 보였을 뿐이다. 그래서 <script> 태그에서 출발해
-// 정적 import 를 끝까지 따라간 닫힘 전체가 SHELL_FILES 에 있는지 대조한다.
+// import를 끝까지 따라간 닫힘 전체가 SHELL_FILES에 있는지 대조한다. 정적 import만이
+// 아니라 지정자가 글자 그대로인 동적 import()도 따라간다 — routing.js가 캘린더 · 전례독서
+// 모듈을 그 화면에 처음 갈 때 그렇게 불러온다(ADR-038 §2 「구현」). 그 모듈이나 그것이
+// import하는 모듈이 빠지면 오프라인에서 그 화면만 「다시 불러오기」 실패 화면이 된다.
 
-// Static ESM specifiers only: `from "./x.js"` and bare `import "./x.js"`. JSDoc
-// type imports (`{import("../types").Foo}`) use parentheses, so they don't match.
+// Static ESM specifiers: `from "./x.js"` and bare `import "./x.js"`. JSDoc type
+// imports (`{import("../types").Foo}`) use parentheses, so they don't match.
 function parseStaticImports(src) {
   return [...src.matchAll(/\b(?:from|import)\s*"(\.{1,2}\/[^"]+\.js)"/g)].map((m) => m[1]);
 }
 
-// Transitive closure of static imports reachable from `entries` (site-absolute
-// paths). Returns the reachable set and how many import edges were followed —
-// the edge count is a parser sanity check, not an invariant.
-function importClosure(entries) {
+// Dynamic imports with a literal specifier — import() of a quoted "./x.js". A
+// JSDoc type import names no `.js` file (`import("../types")`), so the `.js` the
+// pattern requires keeps those out. A computed specifier can't be followed at
+// all, which is why routing.js keeps its import() specifiers literal.
+function parseDynamicImports(src) {
+  return [...src.matchAll(/\bimport\(\s*"(\.{1,2}\/[^"]+\.js)"\s*\)/g)].map((m) => m[1]);
+}
+
+// Transitive closure of the imports reachable from `entries` (site-absolute
+// paths) — static ones only (what the page loads at boot), or static + dynamic
+// (everything it can load). Returns the reachable set and how many import edges
+// were followed — the edge count is a parser sanity check, not an invariant.
+function importClosure(entries, { dynamic }) {
   const reachable = new Set();
   const queue = [...entries];
   let edges = 0;
@@ -145,7 +165,9 @@ function importClosure(entries) {
     reachable.add(p);
     const file = path.join(REPO_ROOT, p.slice(1));
     if (!fs.existsSync(file)) continue; // existence is invariant 1's job
-    for (const spec of parseStaticImports(fs.readFileSync(file, "utf8"))) {
+    const src = fs.readFileSync(file, "utf8");
+    const specs = dynamic ? [...parseStaticImports(src), ...parseDynamicImports(src)] : parseStaticImports(src);
+    for (const spec of specs) {
       edges++;
       queue.push(path.posix.normalize(path.posix.join(path.posix.dirname(p), spec)));
     }
@@ -153,13 +175,31 @@ function importClosure(entries) {
   return { reachable, edges };
 }
 
-test("index.html 에서 ESM import 로 닿는 모든 모듈이 SHELL_FILES 에 있다", () => {
-  const entries = parseHtmlLocalRefs(INDEX_HTML).filter((p) => p.endsWith(".js"));
-  const { reachable, edges } = importClosure(entries);
+const BOOT_ENTRIES = parseHtmlLocalRefs(INDEX_HTML).filter((p) => p.endsWith(".js"));
+
+test("index.html에서 import(정적 · 동적)로 닿는 모든 모듈이 SHELL_FILES에 있다", () => {
+  const { reachable, edges } = importClosure(BOOT_ENTRIES, { dynamic: true });
   assert.ok(edges > 0, "import 그래프에서 간선을 하나도 못 찾았다 — 파서가 깨졌을 가능성");
   const notPrecached = [...reachable].filter((p) => !SHELL_SET.has(p));
   assert.deepEqual(notPrecached, [],
-    `ESM import 로 로드되지만 sw.js 가 프리캐시하지 않는다 (오프라인 구멍): ${notPrecached}`);
+    `import로 로드되지만 sw.js가 프리캐시하지 않는다 (오프라인 구멍): ${notPrecached}`);
+});
+
+// ── 전례 모듈 지연 로드 — 부팅 그래프 밖 ─────────────────────────────────────
+// 캘린더 · 전례독서 · 교회력 엔진(원본 약 210KB)은 index.html의 태그나 정적 import로
+// 싣지 않고, routing.js가 /calendar · /lectionary에 처음 갈 때 import()로 불러온다
+// (ADR-038 §2 「구현」, known-issues §6 — 2026-10-17). 태그나 정적 import가 하나라도
+// 다시 생기면 앱은 그대로 돌아 다른 검사로는 드러나지 않고, 성서만 읽는 세션이 앱을
+// 열 때마다 셋을 해석한다.
+const LAZY_LITURGICAL = ["/js/app/liturgical-engine.js", "/js/app/lectionary.js", "/js/app/calendar.js"];
+
+test("전례 모듈 셋은 부팅 그래프 밖에 있고 동적 import로만 닿는다", () => {
+  const boot = importClosure(BOOT_ENTRIES, { dynamic: false }).reachable;
+  assert.deepEqual(LAZY_LITURGICAL.filter((p) => boot.has(p)), [],
+    "부팅 때 싣는 그래프(태그 + 정적 import)에 들어왔다 — 성서만 읽는 세션도 해석한다");
+  const all = importClosure(BOOT_ENTRIES, { dynamic: true }).reachable;
+  assert.deepEqual(LAZY_LITURGICAL.filter((p) => !all.has(p)), [],
+    "동적 import로도 닿지 않는다 — routing.js의 import()를 파서가 못 읽었거나 지정자가 글자 그대로가 아니다");
 });
 
 // ── cacheNameFor ↔ bible-manifest 라우팅 ─────────────────────────────────────
