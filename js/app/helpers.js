@@ -12,6 +12,9 @@
 // on the `$announce` anchor; that anchor will move once app.js anchor
 // declarations are themselves modularized.
 
+/** @typedef {import("../types").FocusSpot} FocusSpot */
+/** @typedef {import("../types").FocusMemory} FocusMemory */
+
 window.appHelpers = (() => {
   /**
    * Get the element by ID. Casts to HTMLElement non-null on the assumption
@@ -224,7 +227,90 @@ window.appHelpers = (() => {
     return m.ctrlKey || m.metaKey || m.shiftKey || m.altKey || m.button !== 0;
   }
 
-  return { _$, chUnit, el, clearNode, hangingQuoteClass, setInert, trapFocus, dragReleaseAction, emptyState, headerIcon, isModifiedClick };
+  /**
+   * Scroll the page to `y` at once. The root's `scroll-behavior: smooth`
+   * (style.css) is for gestures and in-page jumps, not for putting a redrawn
+   * screen back where it was; an inline `auto` for the call (a CSSOM write —
+   * the CSP allows it) makes the plain two-argument scrollTo instant.
+   * @param {number} y
+   */
+  function scrollToInstantly(y) {
+    if (Math.abs(window.scrollY - y) < 1) return;
+    const root = document.documentElement;
+    const prev = root.style.scrollBehavior;
+    root.style.scrollBehavior = "auto";
+    try {
+      window.scrollTo(0, y);
+    } finally {
+      root.style.scrollBehavior = prev;
+    }
+  }
+
+  /**
+   * Focus memory for a view whose own links redraw the whole screen (WCAG
+   * 2.4.3 — PR #348 review). route() empties #app before the new screen
+   * commits, so the pressed link is gone and focus falls back to <body>: a
+   * keyboard or screen-reader user would walk back from the skip link after
+   * every press. The view tags those links with `data-focus-key`, listens with
+   * `remember` on its root (the click reaches it before the global <a>
+   * interceptor on document), `take`s the spot when its render starts (one
+   * render per press — a stale or failed render drops it) and hands the new
+   * root to `restore` after committing. Each view makes its own memory, so a
+   * spot one screen remembered never lands on another screen's control (a
+   * press overtaken by a tab switch).
+   * @returns {FocusMemory}
+   */
+  function createFocusMemory() {
+    /** @type {FocusSpot | null} */
+    let pending = null;
+    return {
+      remember(e) {
+        if (isModifiedClick(e)) return;   // a new tab / window — this page does not redraw
+        const t = e.target;
+        const root = e.currentTarget;
+        const a = t instanceof Element ? t.closest("a[data-focus-key]") : null;
+        pending = a instanceof HTMLElement && a.dataset.focusKey && root instanceof Element
+          ? { key: a.dataset.focusKey, y: window.scrollY, offset: a.getBoundingClientRect().top - root.getBoundingClientRect().top }
+          : null;
+      },
+      take() {
+        const spot = pending;
+        pending = null;
+        return spot;
+      },
+      restore(root, spot, fallbackKey) {
+        if (!spot) return null;
+        // Compare dataset values, not a selector string — keys carry colons and
+        // Hangul (an observance id such as `grid:lent-2-weekday-tue`).
+        const tagged = Array.from(root.querySelectorAll("[data-focus-key]"));
+        const find = (/** @type {string} */ key) =>
+          tagged.find((n) => n instanceof HTMLElement && n.dataset.focusKey === key) || null;
+        // No twin (the step that led here is gone at the end of the computable range) → the fallback control.
+        const target = find(spot.key) || (fallbackKey ? find(fallbackKey) : null);
+        if (!(target instanceof HTMLElement)) return null;
+        // Keep the control where it was on screen. A redraw that had to fetch
+        // first painted the skeleton, which clamped the scroll to the top —
+        // without this the pressed control jumps, and one far down (a segment
+        // below the fold on a phone) comes back off-screen (2.4.7). Offsets are
+        // taken within the view root, so the header collapsing or expanding on
+        // the way does not skew them.
+        const offset = target.getBoundingClientRect().top - root.getBoundingClientRect().top;
+        scrollToInstantly(spot.y + offset - spot.offset);
+        target.focus({ preventScroll: true });
+        // Still nowhere on screen (the page came back much shorter) — bring it to the middle.
+        const r = target.getBoundingClientRect();
+        if (r.bottom < 0 || r.top > window.innerHeight) {
+          scrollToInstantly(window.scrollY + r.top - (window.innerHeight - r.height) / 2);
+        }
+        return target;
+      },
+    };
+  }
+
+  return {
+    _$, chUnit, el, clearNode, hangingQuoteClass, setInert, trapFocus, dragReleaseAction, emptyState, headerIcon,
+    isModifiedClick, createFocusMemory,
+  };
 })();
 
 // ESM module marker (ADR-019). No runtime effect; signals TypeScript that

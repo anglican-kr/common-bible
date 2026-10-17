@@ -43,11 +43,14 @@ import {
   preloadCalendar, preloadLectionary, resolveDate, findReadings, findCollects, fastOf,
 } from "./liturgical-engine.js";
 
-const { _$, el, clearNode, emptyState, headerIcon, isModifiedClick } = window.appHelpers;
+const { _$, el, clearNode, emptyState, headerIcon, isModifiedClick, createFocusMemory } = window.appHelpers;
 const { loadLectionaryTrack, saveLectionaryTrack } = window.appStorage;
 
 const $app = _$("app");
 const PAGE_TITLE = "전례독서";
+// 이 화면의 링크(날짜 이동 · 칩 · 카드 · 세그먼트)는 #app 을 통째로 다시 그린다 — 누른 컨트롤의 자리를 기억했다가 새 화면의
+// 같은 컨트롤로 포커스를 돌려준다(WCAG 2.4.3 — PR #348 리뷰, 캘린더의 달 이동과 같은 도우미 · 기억은 화면마다 따로).
+const focusMemory = createFocusMemory();
 
 /**
  * parsePath 가 /lectionary 에서 내는 서술자(routing.js PARSE_PATH). `date` 가 null 이면 오늘.
@@ -71,7 +74,7 @@ const PAGE_TITLE = "전례독서";
  *   collects: CollectOption[], collectLabels: string[], collectIndex: number, collectsLinked: boolean, ending: "A" | "B" | "C",
  *   colors: string[], colorAlt: string[], ownColor: boolean,
  *   fast: "major" | "minor" | null, cycle: string | null, empty: boolean,
- *   hrefs: { prev: string, next: string, today: string, tracks: Array<{ track: 1 | 2, href: string, active: boolean }>, options: string[], collects: string[], pair: { a: string, b: string } | null },
+ *   hrefs: { prev: string | null, next: string | null, today: string, tracks: Array<{ track: 1 | 2, href: string, active: boolean }>, options: string[], collects: string[], pair: { a: string, b: string } | null },
  * }} LectionaryModel
  */
 
@@ -539,6 +542,17 @@ function headerColors(resolved, selected) {
 }
 
 /**
+ * 전날 · 다음날 링크 — 교회력을 계산하는 연도(1583~9999) 밖이면 null 이라 단추가 자리만 남는다(캘린더의 이전 · 다음 달과 같다).
+ * 범위 끝에서 누르면 「계산할 수 없는 날짜」 화면이었고, 다시 그린 뒤 포커스를 돌려줄 같은 단추도 「오늘」도 없었다.
+ * @param {string} date @param {number} n @returns {string | null}
+ */
+function stepHref(date, n) {
+  const d = addDays(date, n);
+  const p = d ? parseDate(d) : null;
+  return p && p.y >= MIN_YEAR && p.y <= MAX_YEAR ? `/lectionary/${d}` : null;
+}
+
+/**
  * 상태 → URL. 기본값과 같은 키는 쓰지 않아 「/lectionary/2026-04-05」가 그날의 초기 화면이다 — 다만 **트랙은 트랙이 있는
  * 날이면 언제나 적는다**(`defaults.track` 은 null): 기본 트랙이 보는 사람의 기억(마지막 선택)에 달려 있어, 빼면 같은 주소가
  * 사람마다 · 기억이 바뀐 뒤마다 다른 화면이 된다(공유 링크 · 뒤로 가기 — 자체 리뷰 2026-10-13). 기억에서 온 트랙은
@@ -710,8 +724,8 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
     cycle: resolved.coord.year && CYCLE_LABEL[resolved.coord.year] ? CYCLE_LABEL[resolved.coord.year] : null,
     empty,
     hrefs: {
-      prev: `/lectionary/${addDays(date, -1)}`,
-      next: `/lectionary/${addDays(date, 1)}`,
+      prev: stepHref(date, -1),
+      next: stepHref(date, 1),
       today: "/lectionary",
       // 본기도 선택(`collect`)은 독서와 독립된 축이라 트랙 · 세트를 바꿔도 유지한다(Copilot 리뷰 1회차) — 세트와 본기도가
       // 제목으로 짝지어진 날만 예외로, 세트가 본기도를 정한다(`linked` — 그때 본기도 링크는 짝 세트의 링크와 같다).
@@ -806,6 +820,16 @@ function commitError(msg, subtitle) {
   $app.appendChild(panel);
 }
 
+/**
+ * 날짜 이동 줄의 원형 단추 하나(DESIGN.md §6 「날짜 이동 줄」 — 캘린더의 달 이동도 이 부품을 쓴다). 링크가 없으면(계산 범위
+ * 끝) 자리만 지켜 가운데가 흔들리지 않게 한다. `focusKey` 는 다시 그린 뒤 포커스를 돌려줄 자리(helpers.js createFocusMemory).
+ * @param {string | null} href @param {string} label @param {string} glyph @param {string} focusKey
+ */
+function buildDateStep(href, label, glyph, focusKey) {
+  if (!href) return el("span", { className: "lect-datenav-btn", "aria-hidden": "true" });
+  return el("a", { className: "lect-datenav-btn", href, "aria-label": label, "data-focus-key": focusKey }, glyph);
+}
+
 /** 색 점 + 라벨 하나. */
 function buildColorMark(/** @type {string} */ color, /** @type {boolean} */ alt) {
   const wrap = el("span", { className: alt ? "lect-color-item lect-color-item--alt" : "lect-color-item" });
@@ -819,12 +843,12 @@ function buildHeader(m) {
   const head = el("header", { className: "lect-head" });
 
   const nav = el("nav", { className: "lect-datenav", "aria-label": "날짜 이동" });
-  nav.appendChild(el("a", { className: "lect-datenav-btn", href: m.hrefs.prev, "aria-label": "전날" }, "‹"));
+  nav.appendChild(buildDateStep(m.hrefs.prev, "전날", "‹", "prev"));
   const mid = el("div", { className: "lect-date" });
   mid.appendChild(el("time", { datetime: m.date }, dateLabel(m.date)));
-  mid.appendChild(el("a", { className: "lect-today", href: m.hrefs.today }, "오늘"));
+  mid.appendChild(el("a", { className: "lect-today", href: m.hrefs.today, "data-focus-key": "today" }, "오늘"));
   nav.appendChild(mid);
-  nav.appendChild(el("a", { className: "lect-datenav-btn", href: m.hrefs.next, "aria-label": "다음날" }, "›"));
+  nav.appendChild(buildDateStep(m.hrefs.next, "다음날", "›", "next"));
   head.appendChild(nav);
 
   const official = m.resolved.official;
@@ -854,6 +878,7 @@ function buildChips(m) {
       className: chip.muted ? "lect-chip lect-chip--muted" : "lect-chip",
       href: chip.href,
       title: chip.title,
+      "data-focus-key": `obs:${chip.candidate.observance.id}`,
     }, el("span", { className: "lect-chip-text" }, chip.label));
     if (chip.active) a.setAttribute("aria-current", "true");
     nav.appendChild(a);
@@ -868,10 +893,10 @@ function buildPair(m) {
   const section = el("section", { className: "lect-pair", "aria-label": "두 독서 가운데 고르기" });
   section.appendChild(el("h3", { className: "lect-pair-title" }, "두 독서 가운데 고르기"));
   const row = el("div", { className: "lect-pair-row" });
-  /** @type {Array<[Candidate, PairCardText, string]>} */
-  const cards = [[pair.a, pair.aText, hrefs.a], [pair.b, pair.bText, hrefs.b]];
-  for (const [cand, text, href] of cards) {
-    const card = el("a", { className: "lect-pair-card", href });
+  /** @type {Array<[Candidate, PairCardText, string, string]>} */
+  const cards = [[pair.a, pair.aText, hrefs.a, "pair:a"], [pair.b, pair.bText, hrefs.b, "pair:b"]];
+  for (const [cand, text, href, focusKey] of cards) {
+    const card = el("a", { className: "lect-pair-card", href, "data-focus-key": focusKey });
     if (cand === m.selected) card.setAttribute("aria-current", "true");
     const label = el("span", { className: "lect-pair-label" }, text.label);
     if (text.official) label.appendChild(el("span", { className: "lect-badge" }, "공식"));
@@ -890,7 +915,7 @@ function buildControls(m) {
     const ctl = el("div", { className: "lect-control lect-track" });
     ctl.appendChild(el("span", { className: "lect-control-label" }, "독서"));
     const seg = buildSegmentTabs(
-      m.hrefs.tracks.map((t) => ({ label: `독서 ${t.track}`, href: t.href, active: t.active })),
+      m.hrefs.tracks.map((t) => ({ label: `독서 ${t.track}`, href: t.href, active: t.active, focusKey: `track:${t.track}` })),
       { ariaLabel: "독서 트랙", className: "division-tabs--compact" },
     );
     // Remember the choice — the last-picked track is the default on every day and in every year until the reader picks
@@ -917,7 +942,7 @@ function buildControls(m) {
     const ctl = el("div", { className: "lect-control lect-sets" });
     ctl.appendChild(el("span", { className: "lect-control-label" }, name));
     ctl.appendChild(buildSegmentTabs(
-      m.options.map((o, i) => ({ label: o.label, href: m.hrefs.options[i], active: i === m.setIndex })),
+      m.options.map((o, i) => ({ label: o.label, href: m.hrefs.options[i], active: i === m.setIndex, focusKey: `set:${i + 1}` })),
       { ariaLabel: name, className: "division-tabs--compact" },
     ));
     // 공통 독서는 세그먼트에도 분류 라벨을 병기한다(ADR-038 §3 — 성인의 고유로 오인하지 않게)
@@ -936,7 +961,7 @@ function buildCollects(m) {
   // 세트와 짝지어진 날은 위의 「독서 · 본기도」 단추가 고른다 — 따로 세그먼트를 두지 않는다(사용자 결정 2026-10-13).
   if (m.collects.length > 1 && !m.collectsLinked) {
     section.appendChild(buildSegmentTabs(
-      m.collects.map((_, i) => ({ label: m.collectLabels[i], href: m.hrefs.collects[i], active: i === m.collectIndex })),
+      m.collects.map((_, i) => ({ label: m.collectLabels[i], href: m.hrefs.collects[i], active: i === m.collectIndex, focusKey: `collect:${i + 1}` })),
       { ariaLabel: "본기도 대체안", className: "division-tabs--compact" },
     ));
   }
@@ -1135,8 +1160,9 @@ function announceDay(m) {
  * Commit the whole view — synchronous, called only after every await resolved
  * and the route is still current.
  * @param {LectionaryModel} m @param {Map<string, BibleChapter | null>} chapters
+ * @param {import("../types").FocusSpot | null} spot  the control on this screen that led here (focusMemory.take) — focus goes back to its twin
  */
-function commit(m, chapters) {
+function commit(m, chapters, spot) {
   setTitle(PAGE_TITLE);
   const $title = _$("page-title");
   // 위 단계는 그 날짜가 든 달의 캘린더(A2) — 2026-12-25 의 독서에서 2026년 12월로.
@@ -1145,6 +1171,8 @@ function commit(m, chapters) {
   clearNode($app);
 
   const root = el("div", { className: "lectionary" });
+  // 이 화면의 클릭이 전역 <a> 인터셉터(document)보다 먼저 닿는다 — 이동이 시작되기 전에 누른 컨트롤의 자리를 남긴다.
+  root.addEventListener("click", focusMemory.remember);
   root.appendChild(buildHeader(m));
   root.appendChild(buildChips(m));
   if (m.pair) root.appendChild(buildPair(m));
@@ -1160,6 +1188,7 @@ function commit(m, chapters) {
     }));
     $app.appendChild(root);
     announceDay(m);
+    focusMemory.restore(root, spot, "today");
     return;
   }
 
@@ -1186,6 +1215,8 @@ function commit(m, chapters) {
   }
   $app.appendChild(root);
   announceDay(m);
+  // 누른 컨트롤로 — 계산 범위 끝(1583-01-01 의 전날 · 9999-12-31 의 다음날)에서 그 단추가 자리만 남으면 「오늘」로.
+  focusMemory.restore(root, spot, "today");
 }
 
 /**
@@ -1199,6 +1230,8 @@ async function renderLectionaryView(parsed) {
   const routeSeq = window.routeSeq;   // 한 번 잡아 둔다 — 클로저 안에서도 타입이 좁혀지게
   const entrySeq = typeof routeSeq === "function" ? routeSeq() : null;
   const isStale = () => entrySeq !== null && typeof routeSeq === "function" && routeSeq() !== entrySeq;
+  // 이 화면의 컨트롤에서 왔으면 그 자리 — 한 번만 쓴다(오류 화면 · 낡은 요청이면 버린다).
+  const spot = focusMemory.take();
 
   const date = parsed.date || todayKey(new Date());
   if (!parseDate(date)) {
@@ -1245,7 +1278,7 @@ async function renderLectionaryView(parsed) {
 
   const chapters = await loadSlotChapters(model.slots);
   if (isStale()) return PAGE_TITLE;
-  commit(model, chapters);
+  commit(model, chapters, spot);
   // 트랙이 있는 날은 고른 트랙(URL > 기억 > 1)을 지금 history 항목에 적는다 — 이 항목의 화면이 나중에 기억이 바뀌어도
   // 그대로 돌아오고(뒤로 가기), 공유한 주소가 받는 사람의 기억과 무관하게 같은 화면이며, 스크롤 기억(ADR-031 — 경로
   // 키)도 이 주소로 잡힌다. route() 의 onRouteEnd 가 이 뒤에 지금 경로를 읽는다(자체 리뷰 2026-10-13).
@@ -1260,6 +1293,6 @@ async function renderLectionaryView(parsed) {
 // 캘린더 탭(calendar.js — ADR-038 §2 A2)이 같은 이름 · 날짜 · 색 규칙을 쓴다(복제 금지 — 칸 · 줄의 이름이 칩과 같은 꼴이어야 한다).
 export {
   renderLectionaryView, buildLectionaryModel,
-  shortName, statusSuffix, isGrid, todayKey,
+  shortName, statusSuffix, isGrid, todayKey, buildDateStep,
   CYCLE_LABEL, COLOR_LABEL, WEEKDAY_KO, MIN_YEAR, MAX_YEAR,
 };

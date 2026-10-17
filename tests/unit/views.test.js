@@ -267,6 +267,7 @@ function loadDivisionTabs(order = ["old_testament", "deuterocanon", "new_testame
   return {
     ctx,
     buildDivisionTabs: ctx.buildDivisionTabs,
+    buildSegmentTabs: ctx.buildSegmentTabs,
   };
 }
 
@@ -538,6 +539,17 @@ test("buildDivisionTabs: marks the active tab with class + aria-current", () => 
   assert.equal(nt.className, "division-tab active");
   assert.equal(nt.getAttribute("aria-current"), "page");
   assert.equal(ot.getAttribute("aria-current"), null);
+});
+
+test("buildSegmentTabs: an item's focusKey becomes the anchor's data-focus-key — the redrawing view puts focus back on it", () => {
+  const h = loadDivisionTabs();
+  const nav = h.buildSegmentTabs([
+    { label: "본기도 1", href: "/lectionary/2026-04-05", active: true, focusKey: "collect:1" },
+    { label: "본기도 2", href: "/lectionary/2026-04-05?collect=2", active: false, focusKey: "collect:2" },
+    { label: "키 없음", href: "/x", active: false },
+  ], { ariaLabel: "본기도 대체안" });
+  const tabs = nav.children.filter((c) => c.tagName === "A");
+  assert.deepEqual(tabs.map((a) => a.getAttribute("data-focus-key")), ["collect:1", "collect:2", null]);
 });
 
 // ── Richer DOM stub for POPOVER + COMPACT_HEADER ─────────────────────────────

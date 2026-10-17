@@ -223,7 +223,10 @@ let _prevDivisionIdx = null;
  * navigation keep working without bespoke handlers. `startIdx` is where the
  * indicator is painted first: pass the previously selected index to animate
  * the slide, or omit it to render the indicator directly under the active tab.
- * @param {Array<{ label: string, href: string, active: boolean, title?: string }>} items
+ * An item's `focusKey` becomes the anchor's `data-focus-key`, so a view that
+ * redraws itself on these links can put focus back on the pressed option
+ * (helpers.js createFocusMemory).
+ * @param {Array<{ label: string, href: string, active: boolean, title?: string, focusKey?: string }>} items
  * @param {{ ariaLabel: string, startIdx?: number | null, className?: string }} opts
  * @returns {HTMLElement}
  */
@@ -249,6 +252,7 @@ function buildSegmentTabs(items, opts) {
   for (const it of items) {
     const a = el("a", { className: it.active ? "division-tab active" : "division-tab", href: it.href }, it.label);
     if (it.title) a.setAttribute("title", it.title);
+    if (it.focusKey) a.setAttribute("data-focus-key", it.focusKey);
     if (it.active) a.setAttribute("aria-current", "page");
     nav.appendChild(a);
   }

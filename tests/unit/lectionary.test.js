@@ -591,6 +591,23 @@ test("buildLectionaryModel: 사계재 날 — 초기 선택은 격자, 색은 �
   assert.strictEqual(m.chips[0].href, "/lectionary/2026-09-16?obs=d0916-%EB%8B%88%EB%8B%88%EC%95%88");
 });
 
+test("buildLectionaryModel: 전날 · 다음날 링크는 교회력을 계산하는 연도(1583~9999) 안에서만 — 끝에서는 null(단추가 자리만 남는다)", () => {
+  // 범위 끝에서 누르면 「계산할 수 없는 날짜」 화면이었다 — 캘린더의 이전 · 다음 달처럼 단추를 두지 않으면, 다시 그린 뒤
+  // 포커스가 「오늘」로 간다(같은 자리가 없을 때의 대체 — helpers.js createFocusMemory)
+  const day = (date) => {
+    const g = cand(obs("grid:christmas-x-weekday-mon", "성탄 월요일"));
+    return ctx.buildLectionaryModel(resolvedOf(date, [g], g), { obs: null, track: null, set: null, collect: null },
+      groupsOfFrom({ [g.observance.id]: [group("g1", FOUR)] }), [], null);
+  };
+  const first = day("1583-01-01");
+  assert.strictEqual(first.hrefs.prev, null);
+  assert.strictEqual(first.hrefs.next, "/lectionary/1583-01-02");
+  const last = day("9999-12-31");
+  assert.strictEqual(last.hrefs.prev, "/lectionary/9999-12-30");
+  assert.strictEqual(last.hrefs.next, null);
+  assert.strictEqual(day("2026-12-31").hrefs.next, "/lectionary/2027-01-01");   // 해 넘김은 그대로
+});
+
 test("buildLectionaryModel: 추계재를 고르면 색은 자 하나, 「독서 1 · 2」 선택지, 본기도는 추계재 것만, 송영은 그 본기도의 코드", () => {
   const { r, groupsOf, entries, ember } = emberDay();
   const m = ctx.buildLectionaryModel(r, { obs: "t-추계재", track: null, set: 2, collect: null }, groupsOf, entries, null);

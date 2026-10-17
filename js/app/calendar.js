@@ -28,11 +28,11 @@
 import { parseDate, toKey, addDays, dayOfWeek, liturgicalYearOf, preloadCalendar, resolveDate } from "./liturgical-engine.js";
 import { setTitle } from "./views.js";
 import {
-  shortName, statusSuffix, isGrid, todayKey,
+  shortName, statusSuffix, isGrid, todayKey, buildDateStep,
   CYCLE_LABEL, COLOR_LABEL, WEEKDAY_KO, MIN_YEAR, MAX_YEAR,
 } from "./lectionary.js";
 
-const { _$, el, clearNode, emptyState, isModifiedClick } = window.appHelpers;
+const { _$, el, clearNode, emptyState, createFocusMemory } = window.appHelpers;
 
 const $app = _$("app");
 const PAGE_TITLE = "캘린더";
@@ -262,17 +262,9 @@ function buildMonthGrid(y, m, today, resolve) {
 
 // 달 이동(이전 · 다음 · 오늘)은 #app 을 통째로 다시 그린다(route() 가 스켈레톤으로 먼저 비운다). 누른 링크가 사라져 포커스가
 // body 로 빠지면 키보드 · 스크린리더 사용자는 달을 넘길 때마다 건너뛰기 링크 · 헤더 · 탭부터 다시 지나와야 한다(WCAG 2.4.3 —
-// PR #348 리뷰). 누른 컨트롤의 자리(data-focus-key)를 기억했다가 새 머리 줄의 같은 자리로 포커스를 돌려준다(views.js 의
-// focusPendingBook 과 같은 꼴 — 다시 그리기 전에 자리만 남긴다).
-/** @type {string | null} */
-let pendingFocusKey = null;
-
-/** 달 이동 줄의 클릭 — 새 탭으로 여는 클릭은 이 화면을 다시 그리지 않으므로 기억하지 않는다. @param {MouseEvent} e */
-function rememberFocusKey(e) {
-  if (isModifiedClick(e)) return;
-  const a = e.target instanceof Element ? e.target.closest("a[data-focus-key]") : null;
-  pendingFocusKey = a instanceof HTMLElement ? a.dataset.focusKey || null : null;
-}
+// PR #348 리뷰). 누른 컨트롤의 자리(data-focus-key)를 기억했다가 새 머리 줄의 같은 자리로 포커스를 돌려준다 — 전례독서
+// 화면과 같은 도우미(helpers.js createFocusMemory)이고, 기억은 화면마다 따로다.
+const focusMemory = createFocusMemory();
 
 /** 같은 화면 안에서 달이 바뀌면 고정 문구(setTitle) 대신 그 달을 읽힌다 — 전례독서의 announceDay 와 같은 몫. */
 function announceMonth(/** @type {CalendarMonth} */ model) {
@@ -297,27 +289,17 @@ function commitError(msg, subtitle) {
   $app.appendChild(panel);
 }
 
-/**
- * 이전 · 다음 달 원형 링크 — 계산 범위 밖이면 자리만 지킨다(가운데가 흔들리지 않게).
- * @param {string | null} href @param {string} label @param {string} glyph @param {string} focusKey
- */
-function buildStep(href, label, glyph, focusKey) {
-  if (!href) return el("span", { className: "lect-datenav-btn", "aria-hidden": "true" });
-  return el("a", { className: "lect-datenav-btn", href, "aria-label": label, "data-focus-key": focusKey }, glyph);
-}
-
 /** @param {CalendarMonth} model */
 function buildMonthHead(model) {
   const head = el("header", { className: "cal-head" });
   const nav = el("nav", { className: "lect-datenav", "aria-label": "달 이동" });
-  nav.appendChild(buildStep(model.hrefs.prev, "이전 달", "‹", "prev"));
+  // 이전 · 다음 달 — 계산 범위 밖이면 자리만 지킨다(전례독서의 날짜 이동 줄과 같은 부품)
+  nav.appendChild(buildDateStep(model.hrefs.prev, "이전 달", "‹", "prev"));
   const mid = el("div", { className: "lect-date" });
   mid.appendChild(el("h2", { className: "cal-month" }, model.title));
   mid.appendChild(el("a", { className: "lect-today", href: model.hrefs.today, "data-focus-key": "today" }, "오늘"));
   nav.appendChild(mid);
-  nav.appendChild(buildStep(model.hrefs.next, "다음 달", "›", "next"));
-  // 이 줄의 클릭이 전역 <a> 인터셉터(document)보다 먼저 닿는다 — 이동이 시작되기 전에 자리를 남긴다.
-  nav.addEventListener("click", rememberFocusKey);
+  nav.appendChild(buildDateStep(model.hrefs.next, "다음 달", "›", "next"));
   head.appendChild(nav);
   return head;
 }
@@ -375,21 +357,20 @@ function buildMonthTable(model) {
 /**
  * Commit the month view — synchronous, called only after the preload resolved and the route is still current.
  * @param {CalendarMonth} model
- * @param {string | null} focusKey  the month-nav control that led here (rememberFocusKey) — focus goes back to its twin
+ * @param {import("../types").FocusSpot | null} spot  the month-nav control that led here (focusMemory.take) — focus goes back to its twin
  */
-function commitMonth(model, focusKey) {
+function commitMonth(model, spot) {
   commitTitle();
   clearNode($app);
   const root = el("div", { className: "calendar" });
+  // 이 화면의 클릭이 전역 <a> 인터셉터(document)보다 먼저 닿는다 — 이동이 시작되기 전에 누른 컨트롤의 자리를 남긴다.
+  root.addEventListener("click", focusMemory.remember);
   root.appendChild(buildMonthHead(model));
   root.appendChild(buildMonthTable(model));
   $app.appendChild(root);
   announceMonth(model);
-  if (focusKey) {
-    // 계산 범위 끝(1583년 1월의 이전 · 9999년 12월의 다음)에서는 그 단추가 자리만 남으므로 「오늘」로.
-    const target = root.querySelector(`[data-focus-key="${focusKey}"]`) || root.querySelector('[data-focus-key="today"]');
-    if (target instanceof HTMLElement) target.focus({ preventScroll: true });
-  }
+  // 계산 범위 끝(1583년 1월의 이전 · 9999년 12월의 다음)에서는 그 단추가 자리만 남으므로 「오늘」로.
+  focusMemory.restore(root, spot, "today");
 }
 
 /**
@@ -403,8 +384,7 @@ async function renderCalendarView(parsed) {
   const entrySeq = typeof routeSeq === "function" ? routeSeq() : null;
   const isStale = () => entrySeq !== null && typeof routeSeq === "function" && routeSeq() !== entrySeq;
   // 달 이동 줄에서 왔으면 그 컨트롤의 자리 — 한 번만 쓴다(오류 화면 · 낡은 요청이면 버린다).
-  const focusKey = pendingFocusKey;
-  pendingFocusKey = null;
+  const spot = focusMemory.take();
 
   const today = todayKey(new Date());
   const target = parsed.month === null ? parseMonthParam(today.slice(0, 7)) : parseMonthParam(parsed.month);
@@ -423,7 +403,7 @@ async function renderCalendarView(parsed) {
   }
   if (isStale()) return PAGE_TITLE;
   const model = buildMonthGrid(target.y, target.m, today, resolveDate);
-  commitMonth(model, focusKey);
+  commitMonth(model, spot);
   return `${model.title} ${PAGE_TITLE}`;
 }
 

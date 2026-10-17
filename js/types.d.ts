@@ -754,6 +754,28 @@ export interface AppHelpers {
   /** 헤더 아이콘의 SVG — path `d` 만 받는다(규격은 helpers.js 한 곳). 단추 · 링크와 그 동작은 호출 쪽 몫. */
   headerIcon: (d: string) => SVGSVGElement;
   isModifiedClick: (e: Event) => boolean;
+  /** 화면 하나의 포커스 기억 — 화면마다 따로 만든다(한 화면이 기억한 자리가 다른 화면으로 새지 않게). */
+  createFocusMemory: () => FocusMemory;
+}
+
+/**
+ * 다시 그린 화면에서 포커스를 돌려줄 자리 — 누른 컨트롤의 `data-focus-key`, 그때의 스크롤, 화면 루트 안에서의 위치.
+ * 뒤의 둘로 새 화면의 같은 컨트롤을 누른 때와 같은 화면 위치에 둔다(helpers.js `createFocusMemory`).
+ */
+export interface FocusSpot {
+  key: string;
+  y: number;
+  offset: number;
+}
+
+/** `createFocusMemory` 의 반환 — 클릭에서 `remember`, 렌더 시작에서 `take`, 커밋 뒤 `restore`(WCAG 2.4.3). */
+export interface FocusMemory {
+  /** 화면 루트의 click 처리기 — `data-focus-key` 링크면 그 자리를, 아니면 비운다. 새 탭 클릭은 건너뛴다. */
+  remember: (e: Event) => void;
+  /** 기억한 자리를 꺼내고 비운다 — 렌더 하나에 한 번. */
+  take: () => FocusSpot | null;
+  /** 새 루트에서 같은 키(없으면 `fallbackKey`)의 컨트롤에 포커스를 둔다. 찾은 컨트롤 또는 null. */
+  restore: (root: Element, spot: FocusSpot | null, fallbackKey?: string) => HTMLElement | null;
 }
 
 // ── Overlay/dialog lifecycle controller (js/app/overlay.js, ADR-032) ─────────
