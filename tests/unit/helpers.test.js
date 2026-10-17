@@ -16,7 +16,7 @@
 //   - setInert (inert + aria-hidden toggle on selector matches)
 //   - trapFocus (Tab / Shift-Tab cycling within a container)
 //   - dragReleaseAction (bottom-sheet drag-resize release thresholds)
-//   - headerIcon (page-title icon SVG — one spec for the header controls built in JS)
+//   - headerIcon · HEADER_ICON_PATHS (page-title icon SVG — one spec and one path per glyph for every header control)
 //   - isModifiedClick (modifier / non-primary clicks the page leaves to the browser)
 //   - createFocusMemory (focus back to the pressed control after a view redraws itself)
 
@@ -769,7 +769,7 @@ test("emptyState: null icon leaves an empty icon slot (no crash)", () => {
   assert.equal(node._children[0]._children.length, 0);
 });
 
-// ── headerIcon (page-title icon glyph — one spec for the JS-built header controls) ──
+// ── headerIcon · HEADER_ICON_PATHS (page-title icon glyph — one spec, one path per glyph) ──
 
 test("headerIcon: a 24×24 stroked SVG with the given path — the header icon spec the home button and the lectionary up link share", () => {
   const h = loadHelpers();
@@ -787,6 +787,18 @@ test("headerIcon: a 24×24 stroked SVG with the given path — the header icon s
     d: "M15.5 5 8.5 12l7 7",
     stroke: "currentColor", "stroke-width": "2", "stroke-linecap": "round", "stroke-linejoin": "round", fill: "none",
   });
+});
+
+test("HEADER_ICON_PATHS: one frozen path per glyph — every control drawing the chevron or the house passes the same entry", () => {
+  const h = loadHelpers();
+  const P = h.helpers.HEADER_ICON_PATHS;
+  // back: the lectionary's up link and the cite sheet's back button (index.html used to hold a static copy)
+  assert.deepEqual({ ...P }, {
+    back: "M15.5 5 8.5 12l7 7",
+    home: "M3 11.5 12 4l9 7.5M5.5 9.8V19a1 1 0 0 0 1 1h11a1 1 0 0 0 1-1V9.8",
+  });
+  assert.ok(Object.isFrozen(P));
+  assert.equal(h.helpers.headerIcon(P.back)._children[0].getAttribute("d"), P.back);
 });
 
 test("headerIcon: only the path differs between icons, and every call builds a fresh node", () => {

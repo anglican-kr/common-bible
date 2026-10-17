@@ -97,3 +97,28 @@ def test_cite_sheet_dismissed_instantly_on_navigation(browser):
         assert hidden_now is True
     finally:
         ctx.close()
+
+
+def test_cite_sheet_back_button_draws_the_shared_chevron(browser):
+    """「› 더 보기」로 인용 하나를 펼치면 머리의 뒤로 단추가 보이고, 그 꺾쇠는 머리 아이콘 규격 하나(helpers.js headerIcon ·
+    HEADER_ICON_PATHS.back)에서 온다 — index.html 의 정적 사본을 지웠다(known-issues §10). 단추를 누르면 목록으로 돌아가 숨는다."""
+    ctx, page = _open_chapter(browser)
+    try:
+        page.click(".cite-chip")
+        page.wait_for_selector("#cite-sheet:not([hidden])", timeout=8_000)
+        assert page.locator("#cite-sheet-back").is_hidden()
+        page.click(".cite-sheet-ref-expand >> nth=0")
+        page.wait_for_selector("#cite-sheet-back:not([hidden])", timeout=8_000)
+        icon = page.evaluate("""() => {
+            const svgs = document.querySelectorAll('#cite-sheet-back svg');
+            const path = svgs[0]?.querySelector('path');
+            return { count: svgs.length, cls: svgs[0]?.getAttribute('class'), d: path?.getAttribute('d'),
+                     width: path?.getAttribute('stroke-width'), same: path?.getAttribute('d') === window.appHelpers.HEADER_ICON_PATHS.back };
+        }""")
+        assert icon == {"count": 1, "cls": "title-back-icon", "d": "M15.5 5 8.5 12l7 7", "width": "2", "same": True}, icon
+        page.click("#cite-sheet-back")
+        page.wait_for_selector("#cite-sheet-back[hidden]", state="attached", timeout=8_000)
+        # 다시 목록 — 본문은 비동기로 다시 그린다(_renderSheetBody), 단추는 그 전에 숨는다
+        page.wait_for_selector(".cite-sheet-ref-expand", timeout=8_000)
+    finally:
+        ctx.close()

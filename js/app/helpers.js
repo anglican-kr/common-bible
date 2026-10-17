@@ -189,13 +189,23 @@ window.appHelpers = (/** @returns {AppHelpers} */ () => {
   }
 
   /**
+   * Path data of the header icons, one entry per glyph — every control that
+   * draws a glyph passes the same entry to `headerIcon`.
+   */
+  const HEADER_ICON_PATHS = Object.freeze({
+    // Left chevron — up a level / back (lectionary → its calendar month, the cite sheet's back button)
+    back: "M15.5 5 8.5 12l7 7",
+    // House — the reading headers' way up to the book list
+    home: "M3 11.5 12 4l9 7.5M5.5 9.8V19a1 1 0 0 0 1 1h11a1 1 0 0 0 1-1V9.8",
+  });
+
+  /**
    * The glyph of a page-title icon control — the 24×24 stroked SVG every header
-   * button / link built in JS draws (home → book list, up a level → the calendar
-   * month). Only the path differs per icon, so the header icon spec (viewBox,
-   * stroke, the `title-back-icon` class) lives here for them; the caller owns the
-   * element (a `<button>` or an `<a>`) and what it does. The cite sheet's back
-   * button (`#cite-sheet-back`) is static markup in index.html with its own copy
-   * of the chevron — keep the two in step. No width / height: the
+   * button / link draws (home → book list, up a level → the calendar month, the
+   * cite sheet's back button). Only the path differs per icon
+   * (`HEADER_ICON_PATHS`), so the header icon spec (viewBox, stroke, the
+   * `title-back-icon` class) lives here once; the caller owns the element (a
+   * `<button>` or an `<a>`) and what it does. No width / height: the
    * `.title-back-icon` rem rule in style.css sizes it (DESIGN.md).
    * @param {string} d  the icon's path data
    * @returns {SVGSVGElement}
@@ -354,7 +364,7 @@ window.appHelpers = (/** @returns {AppHelpers} */ () => {
 
   return {
     _$, chUnit, el, clearNode, hangingQuoteClass, setInert, trapFocus, dragReleaseAction, emptyState, headerIcon,
-    isModifiedClick, createFocusMemory,
+    HEADER_ICON_PATHS, isModifiedClick, createFocusMemory,
   };
 })();
 

@@ -17,7 +17,7 @@
 /** @typedef {import("../types").DragState} DragState */
 /** @typedef {import("../types").BooksData} BooksData */
 
-const { _$, el, headerIcon } = window.appHelpers;
+const { _$, el, headerIcon, HEADER_ICON_PATHS } = window.appHelpers;
 const { createOverlay, attachSheetDrag, attachSheetResize } = window.appOverlay;
 const { loadBookmarks, saveBookmarks, generateId } = window.appStorage;
 const { readingContext } = window;
@@ -199,7 +199,7 @@ $driveDisconnectDelete.addEventListener("click", async () => {
 // we were just reading once it renders, so keyboard users land in context.
 // The glyph comes from helpers.js headerIcon — the header icon spec lives there.
 function buildHomeBtn(target, ariaLabel, focusBookId) {
-  const svg = headerIcon("M3 11.5 12 4l9 7.5M5.5 9.8V19a1 1 0 0 0 1 1h11a1 1 0 0 0 1-1V9.8");
+  const svg = headerIcon(HEADER_ICON_PATHS.home);
   const btn = el("button", { className: "title-back-btn title-home-btn", "aria-label": ariaLabel }, svg);
   btn.addEventListener("click", () => {
     if (focusBookId) setPendingBookFocus(focusBookId);
