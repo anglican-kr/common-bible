@@ -512,7 +512,7 @@ async function route() {
       }
       dismissLaunchScreen(); // Start fade-out immediately
       renderBookList(books, division);
-      const divLabel = DIVISION_LABELS[division ?? ""] ?? division;
+      const divLabel = DIVISION_LABELS[division] ?? division;
       updatePageMeta({
         title: divLabel,
         description: `공동번역성서 ${divLabel} 목록`,
@@ -546,7 +546,6 @@ async function route() {
     dismissLaunchScreen();
 
     if (view === "prologue") {
-      if (!bookId) return;
       const data = await loadPrologue(bookId);
       if (isStale()) return;
       renderPrologue(data, book);
@@ -561,8 +560,10 @@ async function route() {
 
     if (view === "chapter") {
       const { chapter } = parsed;
-      if (!bookId || typeof chapter !== "number") return;
-      if (chapter < 1 || chapter > book.chapter_count) {
+      // parsePath's parseInt gives NaN for a segment that isn't a number (`/john/` · `/john/abc`), and NaN fails
+      // both range comparisons — without the integer check it would fetch `john-NaN.json` and show the load
+      // failure instead of this notice (PR #353 리뷰, 2026-10-17).
+      if (!Number.isInteger(chapter) || chapter < 1 || chapter > book.chapter_count) {
         renderError("해당 장을 찾을 수 없습니다.");
         return;
       }

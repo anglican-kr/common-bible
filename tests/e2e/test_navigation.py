@@ -175,6 +175,28 @@ def test_home_btn_on_book_in_no_tab_lands_on_book_list(browser, path):
         ctx.close()
 
 
+@pytest.mark.parametrize("path", ["john/", "john/abc"])
+def test_non_numeric_chapter_says_not_found(browser, path):
+    """장 자리가 숫자가 아니면 「해당 장을 찾을 수 없습니다.」 — 범위 밖 장(`/john/0` · `/john/99`)과 같은 안내.
+
+    그전엔 parseInt 의 NaN 이 범위 검사를 지나 `john-NaN.json` 을 요청하고 「데이터를 불러올 수 없습니다.」가
+    떴다(PR #353 리뷰, 2026-10-17 — routing.js route() 의 정수 검사)."""
+    ctx = browser.new_context()
+    page = ctx.new_page()
+    nan_requests = []
+    page.on("request", lambda r: "NaN" in r.url and nan_requests.append(r.url))
+    try:
+        page.goto(f"{BASE}/{path}")
+        page.wait_for_function(
+            "() => /찾을 수 없습니다|불러올 수 없습니다/.test(document.getElementById('app')?.innerText || '')",
+            timeout=5_000,
+        )
+        assert "해당 장을 찾을 수 없습니다." in page.locator("#app").inner_text()
+        assert nan_requests == [], nan_requests
+    finally:
+        ctx.close()
+
+
 def test_chapter_nav_next_btn_navigates(browser):
     """현재 장(gen/1)에서 다음 장 버튼 클릭 → gen/2 로드."""
     ctx = browser.new_context()
