@@ -25,11 +25,14 @@
 /** @typedef {import("../types").ResolvedDate} ResolvedDate */
 /** @typedef {import("../types").Candidate} Candidate */
 
-import { parseDate, toKey, addDays, dayOfWeek, liturgicalYearOf, preloadCalendar, resolveDate } from "./liturgical-engine.js";
+import {
+  parseDate, toKey, addDays, dayOfWeek, liturgicalYearOf, preloadCalendar, resolveDate,
+  MIN_YEAR, MAX_YEAR, isComputableYear, isComputableDate,
+} from "./liturgical-engine.js";
 import { setTitle } from "./views.js";
 import {
   shortName, statusSuffix, isGrid, todayKey, buildDateStep,
-  CYCLE_LABEL, COLOR_LABEL, WEEKDAY_KO, MIN_YEAR, MAX_YEAR,
+  CYCLE_LABEL, COLOR_LABEL, WEEKDAY_KO,
 } from "./lectionary.js";
 
 const { _$, el, clearNode, emptyState, createFocusMemory } = window.appHelpers;
@@ -78,7 +81,7 @@ const CAL_WEEKS = 6;
 const CAL_WEEKDAY_FULL = ["일요일", "월요일", "화요일", "수요일", "목요일", "금요일", "토요일"];
 
 /**
- * "YYYY-MM" → {y, m}. 형식이 틀리거나 교회력을 계산하는 연도(1583~9999) 밖이면 null.
+ * "YYYY-MM" → {y, m}. 형식이 틀리거나 교회력을 계산하는 연도(엔진 `isComputableYear` — 1583~9999) 밖이면 null.
  * @param {string | null | undefined} s
  * @returns {{ y: number, m: number } | null}
  */
@@ -88,7 +91,7 @@ function parseMonthParam(s) {
   if (!mt) return null;
   const y = Number(mt[1]);
   const m = Number(mt[2]);
-  if (m < 1 || m > 12 || y < MIN_YEAR || y > MAX_YEAR) return null;
+  if (m < 1 || m > 12 || !isComputableYear(y)) return null;
   return { y, m };
 }
 
@@ -96,7 +99,7 @@ function parseMonthParam(s) {
 function monthHref(y, m) {
   const yy = m < 1 ? y - 1 : m > 12 ? y + 1 : y;
   const mm = m < 1 ? 12 : m > 12 ? 1 : m;
-  if (yy < MIN_YEAR || yy > MAX_YEAR) return null;
+  if (!isComputableYear(yy)) return null;
   return `/calendar/${String(yy).padStart(4, "0")}-${String(mm).padStart(2, "0")}`;
 }
 
@@ -244,8 +247,7 @@ function buildMonthGrid(y, m, today, resolve) {
     for (let i = 0; i < 7; i++) {
       const date = gridDate(start, w * 7 + i);
       const p = parseDate(date);
-      const inRange = !!p && p.y >= MIN_YEAR && p.y <= MAX_YEAR;
-      const d = calendarDay(date, inRange ? resolve(date) : null);
+      const d = calendarDay(date, isComputableDate(date) ? resolve(date) : null);
       const isToday = date === today;
       row.push({ ...d, inMonth: !!p && p.y === y && p.m === m, isToday, label: dayAriaLabel(d, isToday) });
     }

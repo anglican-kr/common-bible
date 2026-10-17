@@ -587,6 +587,25 @@ test("§4.1 toISOString 함정 회피 — 로컬 날짜가 그대로 돈다", ()
   assert.strictEqual(ctx.addDays("2023-02-28", 1), "2023-03-01");
 });
 
+test("§4.1 계산 범위 — 그레고리력 이듬해(1583)부터 네 자리 연도(9999)까지, 판정 둘 · 상수는 엔진이 낸다(뷰는 손으로 비교하지 않는다)", () => {
+  same([vm.runInContext("MIN_YEAR", ctx), vm.runInContext("MAX_YEAR", ctx)], [1583, 9999]);
+  for (const y of [1583, 2026, 9999]) assert.strictEqual(ctx.isComputableYear(y), true, String(y));
+  for (const y of [1582, 10000, 100, 99, 0, 2026.5, NaN, "2026"]) assert.strictEqual(ctx.isComputableYear(y), false, String(y));
+  for (const d of ["1583-01-01", "2026-10-17", "9999-12-31"]) assert.strictEqual(ctx.isComputableDate(d), true, d);
+  for (const d of ["1582-12-31", "0100-06-01", "0099-12-31", "10000-01-01", "2026-02-30", "2026-1-1", "", null]) {
+    assert.strictEqual(ctx.isComputableDate(d), false, String(d));
+  }
+});
+
+test("§4.1 내부 날짜 덧셈(shift)은 실패를 같은 날로 삼키지 않는다 — 삼키면 날짜를 하루씩 넘기는 루프가 끝나지 않았다(0100년대)", () => {
+  // parseDate 는 0~99년을 거부한다(JS Date 가 1900년대로 바꾼다) — 그 해의 앵커에서 shift 가 같은 날을 돌려주면
+  // computeTransfers 의 날짜 루프가 멈추지 않아 탭이 멈췄다(known-issues §5). 계산 범위 안에서는 실패하지 않는다(전 날짜 실측).
+  assert.throws(() => ctx.shift("0099-12-31", 1), /shift: addDays\(0099-12-31, 1\) failed/);
+  assert.throws(() => ctx.shift("2026-02-30", 1), /shift: addDays/);
+  assert.strictEqual(ctx.shift("9999-12-31", -1), "9999-12-30");
+  assert.strictEqual(ctx.shift("1583-01-01", -7), "1582-12-25");   // 범위 앞 해도 날짜 산술은 된다(1583 의 대림 · 성탄 절기)
+});
+
 // ════════════════════════════════════════════════════════════════════════════
 // A1-b 조회 계층 — 합성 표 (설계서 §5 · 검토 문서 §5.7~§5.9 · PR 2)
 // ════════════════════════════════════════════════════════════════════════════
@@ -1970,6 +1989,15 @@ test("C-2-2 「빈 결과」와 「아직 안 불러옴」을 뷰가 구별할 �
   assert.ok(Array.isArray(empty) && empty.length === 0);
   same(plain(e.findCollects(r)).map((x) => x.collects), [[]]);
   assert.strictEqual(e.resolveDate("2026-13-01"), null);                         // 잘못된 날짜는 null(throw 아님)
+});
+
+test("C-2-3 resolveDate 는 계산 범위(1583~9999) 밖에 null — 이동 패스에 닿기 전에 돌려보낸다(0100년대에서 탭이 멈췄다)", async () => {
+  const e = loadEngine(fakeFetch([]));
+  await e.preloadCalendar();
+  for (const d of ["1582-12-31", "0100-06-01", "0101-01-01", "1000-03-01"]) assert.strictEqual(e.resolveDate(d), null, d);
+  assert.strictEqual(vm.runInContext("transferCache.size", e), 0, "범위 밖 날짜는 이동 패스를 계산하지 않는다");
+  // 범위 끝은 푼다 — 앞뒤 해(1582 · 10000)의 앵커에 기대는 날도 shift 가 실패하지 않는다
+  for (const d of ["1583-01-01", "9999-12-31"]) assert.ok(e.resolveDate(d)?.official, d);
 });
 
 test("§4.9 캘린더 인덱스가 새로 서면 이동 패스 캐시를 비운다", async () => {

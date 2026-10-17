@@ -39,7 +39,7 @@ import { loadChapter } from "./data-fetch.js";
 import { setTitle, appendVerses, buildSegmentTabs, bindCopyAttribution, formatVerseRanges, absentVerseNumbers } from "./views.js";
 import { specCoversVerse, verseInstanceKeys, citationSource } from "./verse-spec.js";
 import {
-  parseDate, toKey, addDays, dayOfWeek, optionalDestOf,
+  parseDate, toKey, addDays, dayOfWeek, optionalDestOf, MIN_YEAR, MAX_YEAR, isComputableDate,
   preloadCalendar, preloadLectionary, resolveDate, findReadings, findCollects, fastOf,
 } from "./liturgical-engine.js";
 
@@ -100,9 +100,6 @@ const COLOR_LABEL = { white: "백색", red: "적색", green: "녹색", violet: "
 const FAST_LABEL = { major: "대재일", minor: "소재일" };
 const WEEKDAY_KO = ["일", "월", "화", "수", "목", "금", "토"];
 const GRID_ID_PREFIX = "grid:";
-/** 교회력을 계산하는 연도 범위 — 그레고리력 첫 해부터 4자리 연도까지. */
-const MIN_YEAR = 1583;
-const MAX_YEAR = 9999;
 /** 파서가 괄호 선택 확장(「9:35-10:8(9-23)」)으로 만든 세트의 표지(ADR-037 §1 「대안 세트 explode」). */
 const BRACKET_NOTE = "괄호 선택 구절 포함";
 /** 선택 봉헌의 네 목적지(설계서 R-6.2-destinations) — 엔진 `OPTIONAL_KINDS` 와 같은 넷(유닛이 대조한다). */
@@ -542,14 +539,14 @@ function headerColors(resolved, selected) {
 }
 
 /**
- * 전날 · 다음날 링크 — 교회력을 계산하는 연도(1583~9999) 밖이면 null 이라 단추가 자리만 남는다(캘린더의 이전 · 다음 달과 같다).
- * 범위 끝에서 누르면 「계산할 수 없는 날짜」 화면이었고, 다시 그린 뒤 포커스를 돌려줄 같은 단추도 「오늘」도 없었다.
+ * 전날 · 다음날 링크 — 교회력을 계산하는 날짜(엔진 `isComputableDate` — 1583~9999) 밖이면 null 이라 단추가 자리만 남는다
+ * (캘린더의 이전 · 다음 달과 같다). 범위 끝에서 누르면 「계산할 수 없는 날짜」 화면이었고, 다시 그린 뒤 포커스를 돌려줄
+ * 같은 단추도 「오늘」도 없었다.
  * @param {string} date @param {number} n @returns {string | null}
  */
 function stepHref(date, n) {
   const d = addDays(date, n);
-  const p = d ? parseDate(d) : null;
-  return p && p.y >= MIN_YEAR && p.y <= MAX_YEAR ? `/lectionary/${d}` : null;
+  return d && isComputableDate(d) ? `/lectionary/${d}` : null;
 }
 
 /**
@@ -1240,10 +1237,9 @@ async function renderLectionaryView(parsed) {
     commitError("잘못된 날짜입니다", "주소는 /lectionary/YYYY-MM-DD 꼴이어야 합니다.");
     return PAGE_TITLE;
   }
-  // 그레고리력(1583~) 밖은 교회력을 계산하지 않는다 — 0100년대는 엔진의 날짜 이동이 같은 날을 돌려줘 탭이 멈췄다
-  // (자체 리뷰 2026-10-13 — 엔진 쪽 고침은 별도)
-  const year = Number(date.slice(0, 4));
-  if (year < MIN_YEAR || year > MAX_YEAR) {
+  // 교회력을 계산하는 연도(엔진 — 1583~9999) 밖이면 자료를 받기 전에 알린다. 엔진의 `resolveDate` 도 범위 밖에 null 을
+  // 낸다(그전엔 0100년대에서 날짜 이동이 같은 날을 돌려줘 탭이 멈췄다 — 자체 리뷰 2026-10-13).
+  if (!isComputableDate(date)) {
     commitError("교회력을 계산할 수 없는 날짜입니다", `${MIN_YEAR}년부터 ${MAX_YEAR}년 사이의 날짜를 골라 주세요.`);
     return PAGE_TITLE;
   }
@@ -1296,5 +1292,5 @@ async function renderLectionaryView(parsed) {
 export {
   renderLectionaryView, buildLectionaryModel,
   shortName, statusSuffix, isGrid, todayKey, buildDateStep,
-  CYCLE_LABEL, COLOR_LABEL, WEEKDAY_KO, MIN_YEAR, MAX_YEAR,
+  CYCLE_LABEL, COLOR_LABEL, WEEKDAY_KO,
 };

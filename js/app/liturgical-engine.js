@@ -168,6 +168,31 @@ function toKey(y, m, d) {
   return String(y).padStart(4, "0") + "-" + String(m).padStart(2, "0") + "-" + String(d).padStart(2, "0");
 }
 
+// 교회력을 계산하는 연도 — 그레고리력이 시작된(1582-10-15) 이듬해부터 날짜 키가 네 자리인 해까지. computus(§4.2)는
+// 그레고리력 산식이고 `parseDate` 는 네 자리 연도만 받는다(0~99년은 JS `Date` 가 1900년대로 바꿔 거부한다). 범위의
+// 정본은 엔진이다 — 뷰(전례독서 · 캘린더)는 연도를 손으로 비교하지 않고 아래 두 판정과 이 상수를 읽는다(문구의 「1583년」).
+const MIN_YEAR = 1583;
+const MAX_YEAR = 9999;
+
+/**
+ * 교회력을 계산하는 연도인가 — 정수이고 `MIN_YEAR` ~ `MAX_YEAR`.
+ * @param {number} y
+ * @returns {boolean}
+ */
+function isComputableYear(y) {
+  return Number.isInteger(y) && y >= MIN_YEAR && y <= MAX_YEAR;
+}
+
+/**
+ * 교회력을 계산하는 날짜인가 — 형식이 맞고(`parseDate`) 연도가 범위 안. `resolveDate` 가 null 을 내는 경계와 같다.
+ * @param {string} s "YYYY-MM-DD"
+ * @returns {boolean}
+ */
+function isComputableDate(s) {
+  const p = parseDate(s);
+  return !!p && isComputableYear(p.y);
+}
+
 /**
  * 날짜 문자열 덧셈. 입력이 틀리면 null — **델타가 정수가 아니어도** null 이다. `Date` 는
  * 0.5 를 잘라 같은 날을 내고 NaN 은 `0NaN-NaN-NaN` 을, 문자열 "3" 은 연결돼 엉뚱한 날을
@@ -272,12 +297,16 @@ function sundayOfWeek(s) {
  * 내부 전용 날짜 덧셈. **입력이 언제나 유효한 자리에서만** 쓴다(앵커 · toKey 산출물).
  * `addDays` 는 공개 계약이 `string | null` 이라 그대로 쓰면 호출부마다 캐스트가 생기고,
  * 캐스트는 `@ts-check` 가 검증하지 않는다 — 그래서 좁히기를 한 곳에 모은다.
+ * 실패는 크게 낸다 — 같은 날로 삼키면 날짜를 하루씩 넘기는 루프(`computeTransfers`)가 끝나지 않는다(0100년대를
+ * 풀 때 탭이 멈췄다 — `parseDate` 가 0~99년을 거부한다). 계산 범위(`isComputableYear`) 안에서는 일어나지 않는다
+ * (1583~9999 전 날짜 실측, 2026-10-17); 범위 밖은 공개 래퍼 `resolveDate` 가 먼저 null 로 돌려보낸다.
  * @param {string} dateStr @param {number} nn
  * @returns {string}
  */
 function shift(dateStr, nn) {
   const v = addDays(dateStr, nn);
-  return v === null ? dateStr : v;   // 도달 불가: 유효한 키만 넘긴다
+  if (v === null) throw new Error(`shift: addDays(${dateStr}, ${nn}) failed — the date is outside the computable range`);
+  return v;
 }
 
 // ── §4.2 부활절 computus ──
@@ -2075,14 +2104,15 @@ function preloadLectionary() {
 
 /**
  * 그 날이 교회력에서 무슨 날인가(§5.5) — **동기 · 순수**. 프리로드 전에 부르면 throw 한다: 조용히
- * 빈 값을 주면 뷰가 「아무 날도 아님」으로 잘못 그린다(§3.4). 잘못된 날짜 문자열은 null.
+ * 빈 값을 주면 뷰가 「아무 날도 아님」으로 잘못 그린다(§3.4). 잘못된 날짜 문자열과 교회력을 계산하는 연도
+ * (`isComputableYear` — 1583~9999) 밖의 날짜는 null — 범위 밖은 이동 패스(`transfersOf`)에 닿기 전에 돌려보낸다.
  * @param {string} dateStr "YYYY-MM-DD"
  * @returns {ResolvedDate | null}
  */
 function resolveDate(dateStr) {
   if (!calendarIndex) throw new Error("preloadCalendar() must be awaited before resolveDate()");
   const p = parseDate(dateStr);
-  if (!p) return null;
+  if (!p || !isComputableYear(p.y)) return null;
   return resolveDateIn(calendarIndex, dateStr, transfersOf(calendarIndex, p.y));
 }
 
@@ -2112,6 +2142,7 @@ function findCollects(resolved) {
 
 export {
   parseDate, toKey, addDays, dayOfWeek, dayOfYear,
+  MIN_YEAR, MAX_YEAR, isComputableYear, isComputableDate,
   nearestSunday, firstSundayAfter, lastSundayBefore, nthSunday, sundayOfWeek,
   easterDate, advent1Date, baptismDate, liturgicalYearOf, yearAnchors,
   seasonOf, sundayCycle, weekdayCycle, evalRule,
