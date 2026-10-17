@@ -81,12 +81,15 @@ CRUD 작업 후 의존하는 UI 컴포넌트의 갱신 함수를 호출하지 �
 - `16b70ae` — 폴더 드롭 순환 참조 검사에서 `_isDescendant`의 인자 순서가 반대였음. 실제로는 "드래그 대상이 드롭 위치의 조상인가"를 봐야 하는데 반대로 검사.
 - `f154a56` — 같은 순환 참조 검사가 `position === "into"` 분기에만 있고 `before`/`after` 분기에는 누락. 폴더를 자기 조상의 형제로 드롭하면 통과.
 - `3b9727f` — 단일 절 범위 초과 체크가 `hlVerseEnd != null` 블록 **내부**에만 있어, 정작 필요한 케이스에서 작동 안 함. 블록 밖으로 이동.
+- 2026-10-17(PR #353 리뷰 — 원장 `docs/changes/2026-10-17-typecheck-batch-1.md`) — URL 에서 온 값의 검사 둘. `/john/abc` 의 장 번호는 `parseInt` 가 `NaN` 으로 내는데 `chapter < 1 || chapter > count` 가 둘 다 false 라 `john-NaN.json` 을 요청했다(`Number.isInteger` 를 더함). `/constructor` 는 구분 표 `DIVISION_LABELS[name]` 의 참거짓으로 가르다가 일반 객체가 물려받은 이름까지 구분이 됐다(`Object.hasOwn`).
 
 **규칙:**
 - 부모-자식 관계 검사 헬퍼는 인자 순서가 헷갈리지 않게 시그니처 위에 한 줄 주석:
   `// _isDescendant(ancestor, candidateId) — candidate가 ancestor의 후손인가?`
 - 분기로 갈라진 동일 의도 검증이 있는지 확인. "이 검증이 다른 분기에도 필요한가?"를 한 번 더 묻는다.
 - 가드 절은 가능한 한 **분기 시작 시점**에 두고, 분기 내부에 두면 의도하지 않은 패스가 생기지 않는지 확인.
+- URL · 저장소에서 온 수는 범위 비교만으로 거르지 않는다 — `NaN` 은 모든 비교에서 false 다. `Number.isInteger`(또는 정규식으로 통째 검사 — `routing.js` 전례독서 쿼리의 `positive`)를 먼저.
+- 바깥에서 온 문자열을 일반 객체의 키로 찾을 때는 `Object.hasOwn`(또는 `Map`) — `constructor` · `toString` · `__proto__` 도 참이다.
 
 ---
 
@@ -218,6 +221,7 @@ DATA_CACHE/AUDIO_CACHE 이름 자체는 더 이상 bump하지 않음 (`"data"`, 
 
 - `c4d0c72` — `_attemptSilentRefresh`가 `_state` 기반 race 가드만 가짐. 사용자가 silent refresh 진행 중 `signOut()`/`disable()`을 호출하면 `_state`는 그대로(혹은 정상 진행 중인 값)이지만 `localStorage["bible-drive-sync"]`는 `"0"`으로 바뀜 → state 가드만 통과시켜 IDLE/NEEDS_CONSENT로 전이하면 사용자가 끊은 sync를 다시 살림. 해결: `localStorage.getItem(SYNC_ENABLED_KEY) === "0"` 검사 추가.
 - `f090c83` — 같은 함수에 race 가드를 진입 시점에만 둠. 그러나 `await refreshAccessToken(...)` 직후 race 가드를 통과한 뒤에도 `await refreshStore.saveRefreshToken(...)` (rotation) 또는 `await refreshStore.clearRefreshToken()` (invalid_grant) 같은 IDB await가 남아있음. 그 IDB await 동안 사용자가 `disable()`을 호출하면 후속 `_transition(IDLE/NEEDS_CONSENT)`이 다시 `SYNC_ENABLED_KEY = "1"`로 덮어씀. 해결: 매 `await` 직후마다 race 가드를 다시 검사. 단계 4 후 `enable()`이 동기적으로 DISABLED를 빠져나가지 않으므로 state-based 가드만으로 cold-start 경로 보호 불가능 — flag-based 가드가 필수.
+- (2026-10-17, PR #353 리뷰 — `docs/changes/2026-10-17-typecheck-batch-1.md`) — 업데이트 토스트 `showUpdateToast` 의 「이미 떴나」 검사가 대기 SW 에 버전을 묻는 `await`(최대 1.5초) 앞에만 있어, 그 사이 설정의 「업데이트 지금 확인」이 또 부르면 둘 다 검사를 지나 같은 id 의 토스트가 둘 붙었다. 해결: `await` 뒤에 한 번 더 본다. 동기화 레이어 밖에서도 같은 꼴이 나온다.
 
 **규칙:**
 
@@ -495,19 +499,21 @@ A2 캘린더 탭 1단계(#348) 화면에서 성 토요일(2026-04-04) 칸이 「
 
 ---
 
-## 27. `// @ts-check` 가 문 뒤에 있으면 검사가 조용히 빠진다 — 선언이 데이터 · 코드와 어긋난 채 쌓인다 (2026-10-17)
+## 27. 타입 검사가 조용히 꺼져 있었다 — `// @ts-check` 가 문 뒤에 있던 파일들, 선언이 데이터 · 코드와 어긋난 채 쌓였다 (2026-10-17)
 
-`checkJs: false` 라 파일마다 `// @ts-check` 로 검사를 켠다. 그런데 지시문 앞에 `"use strict";` 같은 문(statement)이 있으면 TypeScript 는 지시문을 읽지 않고 그 파일을 **오류 없이** 뺀다 — `npm run typecheck` 가 0 이어도 그 파일은 검사받지 않은 것이다(앞에 주석만 있는 것은 괜찮다). 검사 밖에서는 `js/types.d.ts` 의 선언이 실제 데이터 · 코드와 어긋나도 아무도 모른다.
+검사를 파일마다 `// @ts-check` 로 켜던 때(`checkJs: false`)에는 지시문 앞에 `"use strict";` 같은 문(statement)이 있으면 TypeScript 가 지시문을 읽지 않고 그 파일을 **오류 없이** 뺐다 — `npm run typecheck` 가 0 이어도 그 파일은 검사받지 않은 것이었고(앞에 주석만 있는 것은 괜찮다), CI 는 타입 검사를 돌리지 않았다. 검사 밖에서는 `js/types.d.ts` 의 선언이 실제 데이터 · 코드와 어긋나도 아무도 모른다. 2026-10-17(PR #353 리뷰)부터 `checkJs: true` 로 `js/` 전체를 기본으로 검사하고, 필수 CI 「Unit tests」 잡이 타입 검사를 돌린다(ADR-012).
 
 **사례:**
 - `lectionary.js`(#346) — 975줄이 검사 밖이었다(원장 `docs/changes/2026-10-12-lectionary-view.md` 3회차 ①).
-- 22개 파일(2026-10-15 발견 — `known-issues.md` §7) — 묶음 ① 16개를 켜자 44건(원장 `docs/changes/2026-10-17-typecheck-batch-1.md`): `BookEntry.division` 에 데이터의 `"liturgical"`(전례시편 · 송가)이 없었고, `BibleVerse.chapter_ref` 는 데이터가 정수인데 `string` 이었고, `AppStorage` 에 `loadCiteShow` · `saveCiteShow` 가, Window 에 창 객체 다섯이 빠져 있었고, `parsePath()` 의 전역 선언은 `any` 였다. 실행 결함은 없었지만 선언을 믿고 짠 새 코드가 틀릴 자리였다.
+- 22개 파일(2026-10-15 발견 — `known-issues.md` §7) — 묶음 ① 16개를 켜자 44건(원장 `docs/changes/2026-10-17-typecheck-batch-1.md`): `BookEntry.division` 에 데이터의 `"liturgical"`(전례시편 · 송가)이 없었고, `BibleVerse.chapter_ref` 는 데이터가 정수인데 `string` 이었고, `AppStorage` 에 `loadCiteShow` · `saveCiteShow` 가, Window 에 창 객체 다섯이 빠져 있었고, `parsePath()` 의 전역 선언은 `any` 였다. 그 자체로 실행 결함은 아니었지만 선언을 믿고 짠 새 코드가 틀릴 자리였다.
 - 같은 묶음 — JSDoc 블록과 함수 사이에 `const` 하나가 끼어 매개변수 타입이 함수에 붙지 않았고(citations.js `wrapNoteAnchorsInArticle`), `@param {T} [이름] — 설명`(대괄호 이름 바로 뒤 줄표)은 TS 가 「Invalid character」(TS1127)로 읽었다.
+- 같은 묶음의 리뷰 — `division` 타입에 `"liturgical"` 을 넣어 선언은 바로잡았지만, 그 값으로 경로를 만드는 곳(`` `/${effectiveDivision(book)}` `` — 헤더 집 단추 · 탭 바 홈)은 그대로라 전례시편 · 송가에서 없는 `/liturgical` 로 갔다(main 부터). 타입은 문자열 이어 붙이기를 막지 않는다.
 
 **규칙:**
-- `// @ts-check` 는 첫 줄에 둔다(어떤 문보다 앞). 새 파일 · 순서를 바꾼 파일은 타입 오류를 일부러 하나 넣어 그 파일에서 잡히는지 본다(ADR-012 「파일 헤더」).
+- 검사에서 빼는 파일은 첫 줄 `// @ts-nocheck`(어떤 문보다 앞) + 같은 줄에 이유와 고칠 곳. 고치는 PR 이 그 줄을 지운다. 그 줄을 문 뒤에 두면 무시돼 파일이 검사되고 오류로 드러난다 — 빼는 쪽의 실수가 조용하지 않다(ADR-012 「파일 헤더」).
+- 검사 장치는 「켜는 쪽」이 아니라 「빼는 쪽」을 명시하게 두고, 필수 CI 에서 돌린다 — 꺼진 줄 모르는 검사가 가장 비싸다. 설정 · 꾸러미 반환 타입을 바꿀 때는 타입 오류를 일부러 하나 넣어 그 파일에서 잡히는지 본다.
 - 창 객체 꾸러미(`window.appX = (() => { … })()`)의 IIFE 에는 `@returns {AppX}` 를 단다 — 인터페이스에 없는 멤버가 받는 쪽이 아니라 정의한 자리에서 걸린다.
-- 데이터 모양의 타입을 고칠 때는 파이프라인(`data/src/parser.py` 등)의 필드 타입과 실제 JSON 을 함께 대조한다.
+- 데이터 모양의 타입을 고칠 때는 파이프라인(`data/src/parser.py` 등)의 필드 타입과 실제 JSON 을 함께 대조하고, 타입을 넓혔으면(새 값) 그 값을 **쓰는 곳**이 새 값을 다루는지 `grep` 으로 함께 본다 — 경로 · 표시 문자열 · 표 색인.
 
 ---
 

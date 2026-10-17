@@ -118,7 +118,7 @@ orch     : routing.js · bookmark.js
 ### 3.2 파일 골격
 
 ```js
-// @ts-check   ← 첫 줄이어야 한다 — "use strict" 뒤에 오면 tsc 가 그 파일을 건너뛴다(docs/known-issues.md §7)
+// @ts-check   ← 관례일 뿐 — js/ 는 지시문 없이도 검사된다(checkJs, ADR-012). 검사에서 뺄 때만 첫 줄을 // @ts-nocheck 로
 "use strict";
 
 // Liturgical calendar engine (ADR-037 §6). Leaf module: no imports, no DOM.

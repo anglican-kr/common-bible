@@ -143,7 +143,7 @@ ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` ~6,000줄이 8개 도�
 | --------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ------- |
 | `js/pre-fetch.js`     | 첫 페인트 직전 `data/books.json` 비동기 선패치                                                                                    | ~10     |
 | `js/gtag-init.js`     | Google Analytics 초기화                                                                                                           | ~15     |
-| `js/app.js`           | app-main 부트스트랩 + 접근성 keydown + Audio cache LRU 소프트캡 + SW 등록                                                         | ~330    |
+| `js/app.js`           | app-main 부트스트랩 + 접근성 keydown + Audio cache LRU 소프트캡 + SW 등록                                                         | ~335    |
 | `js/audio-cache.js`   | 오디오 LRU IndexedDB sidecar ([ADR-016](decisions/016-audio-cache-lru.md))                                                        | ~190    |
 | `js/manifest-sync.js` | 부팅 시 콘텐츠 해시 매니페스트 diff → DATA/AUDIO_CACHE 항목 단위 무효화 ([ADR-021](decisions/021-pwa-versioning-content-hash.md)) | ~200    |
 | `js/search-worker.js` | Web Worker. 청크 로딩 + 절 검색 + 페이지네이션                                                                                    | ~390    |
@@ -174,13 +174,13 @@ ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` ~6,000줄이 8개 도�
 | `js/app/bookmark-menu.js`          | 전체뷰 title-row 액션 — ⋯ 오버플로 메뉴(새 폴더·내보내기·가져오기·선택) + 정렬 필드/순서 라디오 + 🛈 안내 팝오버 + `exportBookmarks`                                       | ~440    |
 | `js/app/bookmark-verse-select.js`  | 절 선택 모드 — 본문에서 절 탭 → `#verse-select-bar` dock(진행 중 스펙 + 북마크·복사), near-leaf                                                                            | ~150    |
 | `js/app/bookmark-read.js`          | 북마크 모아 읽기 — 폴더 단위 연속 읽기 화면(`appendVerses`로 절 부분집합 렌더, 인접·연속 본문 병합, 네스팅 폴더는 소제목) ([ADR-035](decisions/035-bookmark-reading-view.md)) | ~465    |
-| `js/app/citations.js`              | 인용 칩 dedup·렌더 + 인용 본문 바텀 시트 (확장 뷰·드래그 리사이즈) + 주석 anchor 위첨자 + 클릭 툴팁 ([ADR-022](decisions/022-citations-and-annotations.md)). 시트 머리의 뒤로 꺾쇠는 `headerIcon` 으로 그린다 | ~1,125  |
+| `js/app/citations.js`              | 인용 칩 dedup·렌더 + 인용 본문 바텀 시트 (확장 뷰·드래그 리사이즈) + 주석 anchor 위첨자 + 클릭 툴팁 ([ADR-022](decisions/022-citations-and-annotations.md)). 시트 머리의 뒤로 꺾쇠는 `headerIcon` 으로 그린다 | ~1,135  |
 | `js/app/parallels.js`              | 단락 단위 병행 본문 — `chapter.parallels` → range 시작 절 ※ anchor, 클릭 시 cite-sheet ([ADR-027](decisions/027-source-dsl-and-parallel-passages.md))                      | ~295    |
 | `js/app/tab-history.js`            | 탭별 라우트·스크롤 위치 복원 (POP 의미론: popstate·탭 전환에서만 복원; `/lectionary`·`/calendar` 는 캘린더 탭) ([ADR-031](decisions/031-tab-history-restore.md))           | ~140    |
 | `js/app/data-fetch.js`             | 데이터 패칭 (books/version/chapter/prologue fetch + booksCache/appVersion 캐시), leaf 모듈 (ADR-034 PR2)                                                                   | ~90     |
 | `js/app/audio-player.js`           | 장별 mp3 플레이어 UI + 재생 상태 + `#audio-bar` lifecycle (ADR-034 PR1)                                                                                                    | ~240    |
-| `js/app/views.js`                  | 렌더 헬퍼 + Views + `appendVerses` 절 렌더 + 세그먼트 탭 빌더 `buildSegmentTabs`(구분 탭 · 독서 뷰 세그먼트 공유 — 항목의 `focusKey` 로 라우터가 다시 그린 뒤 포커스를 돌려준다) + 책 이름/헤더 자동 짧게 swap (데이터 패칭→data-fetch.js·오디오→audio-player.js·탭 인디케이터→tabbar.js·라우팅→routing.js·PTR 제거, ADR-034) | ~1,695 |
-| `js/app/routing.js`                | URL 파싱(parsePath — `/lectionary` 쿼리 상태 포함)·SPA 내비(navigate)·route() 오케스트레이터·page meta/분석·읽기 위치 스크롤 추적·링크클릭/popstate 리스너 (ADR-034 PR5a). 링크클릭 인터셉터가 같은 화면을 다시 그리는 링크의 자리를 재 두었다가 `route()` 의 `finally` 에서 돌려주고(ADR-031 §5), 페이지 안 링크(「본문 바로가기」)는 라우트하지 않고 대상으로 포커스만 옮긴다 | ~700 |
+| `js/app/views.js`                  | 렌더 헬퍼 + Views + `appendVerses` 절 렌더 + 세그먼트 탭 빌더 `buildSegmentTabs`(구분 탭 · 독서 뷰 세그먼트 공유 — 항목의 `focusKey` 로 라우터가 다시 그린 뒤 포커스를 돌려준다) + 책 이름/헤더 자동 짧게 swap (데이터 패칭→data-fetch.js·오디오→audio-player.js·탭 인디케이터→tabbar.js·라우팅→routing.js·PTR 제거, ADR-034) | ~1,710 |
+| `js/app/routing.js`                | URL 파싱(parsePath — `/lectionary` 쿼리 상태 포함)·SPA 내비(navigate)·route() 오케스트레이터·page meta/분석·읽기 위치 스크롤 추적·링크클릭/popstate 리스너 (ADR-034 PR5a). 링크클릭 인터셉터가 같은 화면을 다시 그리는 링크의 자리를 재 두었다가 `route()` 의 `finally` 에서 돌려주고(ADR-031 §5), 페이지 안 링크(「본문 바로가기」)는 라우트하지 않고 대상으로 포커스만 옮긴다 | ~705 |
 | `js/app/tabbar.js`                 | 탭 바 — 활성 상태·슬라이딩 인디케이터(ADR-034 PR3) + 검색 모핑 dock·하단 입력·visualViewport 키보드 처리 ([ADR-030](decisions/030-morphing-tab-bar.md))                    | ~580    |
 
 `bookmark-{tree,gestures,select,menu,verse-select}.js` 5개는 `index.html`에 `<script>` 태그가 없다 — `bookmark.js`가 ESM `import`로 끌어온다.
@@ -346,11 +346,11 @@ ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` ~6,000줄이 8개 도�
 
 동기화 대상이 아닌 항목(오디오 위치, 디바이스 ID, 캐시 등)은 의도적으로 기기 로컬에 머문다. 동기화 페이로드 스키마는 `js/types.d.ts`의 `SyncDoc` 타입과 `js/sync/store-v2.js:1` 헤더 주석에서 정의된다.
 
-## 6. 정적 타입 검사 — `// @ts-check` + JSDoc
+## 6. 정적 타입 검사 — JSDoc + `tsc --noEmit`
 
 빌드 산출물 0개를 유지하면서도 타입 안전성을 얻기 위해 **TypeScript를 컴파일러로만 사용**한다 ([ADR-012](decisions/012-typescript-incremental-adoption.md)).
 
-- 클라이언트 JS 파일 상단에 `// @ts-check`가 영구 활성화돼 있다 (2026-05-10, ADR-018 모듈 분할과 동행) — sync 레이어 5개 + `js/app.js` + `js/app/*.js` 28개 + `js/drive-sync.js` + `js/audio-cache.js` + `js/manifest-sync.js` + `js/pre-fetch.js`(`<head>` classic 스크립트) + `js/gtag-init.js` + `js/search-worker.js`(worker 설정). 두 tsconfig 모두 `checkJs: false` 라 파일 단위 opt-in 이고, **지시문은 어떤 문(statement)보다도 앞**에 있어야 한다(관례는 첫 줄) — `"use strict";` 가 먼저 오면 tsc 가 그 파일을 오류 없이 건너뛴다(ADR-012 「파일 헤더」). **알려진 구멍(2026-10-15 발견)**: 그 꼴이던 22개 가운데 16개를 2026-10-17 에 편입했고, 남은 6개(`views` · `search` · bookmark 계열 넷)는 순서를 바꾸면 오류 155건이 드러난다. `sw.js` 는 어느 tsconfig 의 `include` 에도 없다. [`known-issues.md`](known-issues.md) §7.
+- **`js/` 의 모든 클라이언트 JS 가 검사 대상이다** — 두 tsconfig 모두 `checkJs: true`(2026-10-17). 앱 모듈 · sync 레이어 · `js/pre-fetch.js`(`<head>` classic 스크립트) · `js/gtag-init.js` 등은 `tsconfig.json`(DOM), `js/search-worker.js` 는 `tsconfig.worker.json`(WebWorker). 검사에서 빼는 파일은 첫 줄 `// @ts-nocheck` 로 명시한다 — 지금은 오류가 남은 6개(`views` · `search` · bookmark 계열 넷 — 떼면 155건)뿐이고, 그 줄을 문 뒤에 두면 무시돼 파일이 검사된다(ADR-012 「파일 헤더」). 그전(2026-05-10 ~ 10-17)에는 파일마다 `// @ts-check` 로 켜는 방식이라, 지시문이 `"use strict";` 뒤에 있던 22개가 오류 없이 검사 밖이었다. `sw.js` 는 어느 tsconfig 의 `include` 에도 없다. [`known-issues.md`](known-issues.md) §7.
 - 도메인 타입은 `js/types.d.ts` 한 곳에서 export.
 - 다른 파일은 `@typedef {import("../types").Foo} Foo`로 가져온다.
 - `tsconfig.json` (DOM lib) + `tsconfig.worker.json` (WebWorker lib) 두 개 분리.
@@ -362,7 +362,7 @@ npx tsc -p tsconfig.json --noEmit
 npx tsc -p tsconfig.worker.json --noEmit
 ```
 
-두 명령 모두 0 error를 유지하는 것이 PR 머지 전제.
+두 명령(`npm run typecheck`)을 CI 의 필수 검사 「Unit tests」 잡이 PR 마다 돌린다 — 0 error 가 머지 전제다(2026-10-17 부터; 그전엔 로컬 훅뿐이었다).
 
 ## 7. 테스트 — 3계층 + 유닛
 
@@ -376,7 +376,7 @@ npx tsc -p tsconfig.worker.json --noEmit
 | **Level 3 스냅샷**                                                           | `data/tests/test_snapshots.py`               | ❌                                       | ✅ (data 저장소) | cross-chapter 재배치 등 특수 케이스                                                                                                          |
 | **E2E (Playwright)**                                                         | `tests/e2e/*.py`                             | ✅ (서버 + 본문)                         | ❌ (로컬)        | 검색 UI, 라우팅, 클립보드, 설치 안내, 동기화 등 회귀                                                                                         |
 
-유닛 테스트는 `node --test`만으로 돌고, `tests/unit/harness.js`가 자체 vm 컨텍스트를 생성해 글로벌 상태 누수를 막는다 — 의존성 0. 앱 저장소 CI(`.github/workflows/test.yml`)는 Node 24로 유닛 테스트를 자동 실행. Level 1-3 데이터 파이프라인 검증은 `common-bible-data` 저장소의 `.github/workflows/validate.yml`이 push 시 자동 실행 (분할 후 ADR-020).
+유닛 테스트는 `node --test`만으로 돌고, `tests/unit/harness.js`가 자체 vm 컨텍스트를 생성해 글로벌 상태 누수를 막는다 — 의존성 0. 앱 저장소 CI(`.github/workflows/test.yml`)는 Node 24로 유닛 테스트를 자동 실행하고, 같은 잡에서 타입 검사(`npm run typecheck` — §6)도 돌린다. 실데이터가 있어야 도는 `*.data.test.js` 는 그 잡에서 skip 되고 `engine-data.yml` · `sync-data.yml` 이 돌린다. Level 1-3 데이터 파이프라인 검증은 `common-bible-data` 저장소의 `.github/workflows/validate.yml`이 push 시 자동 실행 (분할 후 ADR-020).
 
 E2E는 의도적으로 CI에서 제외 — 본문 텍스트가 있는 환경에서만 의미가 있고, 시각 회귀는 사람이 봐야 가장 정확하다.
 
@@ -471,7 +471,7 @@ OAuth 측면 (가장 큰 공격 표면):
 | [009](decisions/009-history-api-routing.md)                  | History API SPA 라우팅                                                                                                                                                                                                                                        |
 | [010](decisions/010-bookmark-feature.md)                     | 북마크 데이터 모델 + UI                                                                                                                                                                                                                                       |
 | [011](decisions/011-bookmark-sync.md)                        | Google Drive 동기화 (Phase 2a~2h)                                                                                                                                                                                                                             |
-| [012](decisions/012-typescript-incremental-adoption.md)      | `// @ts-check` + JSDoc 점진 도입                                                                                                                                                                                                                              |
+| [012](decisions/012-typescript-incremental-adoption.md)      | JSDoc + `tsc --noEmit` 점진 도입 — `js/` 전체 기본 검사(`checkJs`) · 빼는 파일은 `// @ts-nocheck` · CI 필수                                                                                                                                                                |
 | [013](decisions/013-client-js-unit-tests.md)                 | `node --test` + vm 하네스 유닛 테스트                                                                                                                                                                                                                         |
 | [014](decisions/014-search-history.md)                       | 검색 이력 (LRU·로컬 전용)                                                                                                                                                                                                                                     |
 | [015](decisions/015-storage-strategy.md)                     | localStorage 키 네임스페이스·크기 가드                                                                                                                                                                                                                        |
