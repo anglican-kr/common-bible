@@ -24,14 +24,14 @@ function loadDebugLog() {
   return ctx.syncDebugLog;
 }
 
-test("1. dump 은 멈춘 자리(at) · 결과(ok) · status 0 을 보여 준다", () => {
+test("1. dump는 멈춘 자리(at) · 결과(ok) · status 0을 보여 준다", () => {
   const L = loadDebugLog();
   L.log({ kind: "ACTION", event: "SYNC_ABORTED", at: "find_file", state: "DISABLED" });
   L.log({ kind: "NETWORK", event: "DELETE_FIND_FILE", status: 0 });
   L.log({ kind: "NETWORK", event: "DELETE_FILE", ok: false, status: 503 });
   const out = L.dump();
   assert.match(out, /SYNC_ABORTED state:DISABLED at:find_file/);
-  assert.match(out, /DELETE_FIND_FILE http:0/, "status 0 도 찍는다");
+  assert.match(out, /DELETE_FIND_FILE http:0/, "status 0도 찍는다");
   assert.match(out, /DELETE_FILE http:503 ok:false/);
 });
 

@@ -1081,9 +1081,9 @@ test("39. 401 + IDB 비어있음 → NEEDS_CONSENT + 캐시 클리어", async ()
 });
 
 // ── Group 14: 사이클 도중 로그아웃 — 대기 뒤에는 Drive · 로컬을 건드리지 않는다 ──
-// signOut()(→ disable → DISABLE)이 _syncCycle 의 네트워크 대기 중에 오면, 대기 뒤의 업로드가
-// 로그아웃 뒤에 더한 편집까지 담아 `_token` 이 비워진 채(Bearer null)로 나갔다 — 실제 Drive 는 401
-// 로 거절하지만 e2e 의 가짜 Drive 는 받아 test_sign_out_clears_sync 가 가끔 실패했다(known-issues §11).
+// signOut()(→ disable → DISABLE)이 _syncCycle의 네트워크 대기 중에 오면, 대기 뒤의 업로드가
+// 로그아웃 뒤에 더한 편집까지 담아 `_token`이 비워진 채(Bearer null)로 나갔다 — 실제 Drive는 401
+// 로 거절하지만 e2e의 가짜 Drive는 받아 test_sign_out_clears_sync가 가끔 실패했다(known-issues §11).
 // 대기마다 상태가 아직 SYNCING 인지 본다(_leftSyncing): 업로드 · 원격 자료 쓰기 · 캐시 다시 채우기 없음.
 // 멈추는 자리 여섯(find_file · upload_new · download · upload_update · upload_upgrade · upload_merged)과
 // catch(exception)를 하나씩 덮는다 — 대기 뒤 확인을 하나라도 빼면 그 자리의 테스트가 실패한다.
@@ -1106,7 +1106,7 @@ test("44. 파일 찾기 대기 중 disable() → 그 뒤 업로드하지 않는�
   assert.equal(machine.getState(), "SYNCING", "파일 찾기 hold 중 SYNCING");
   machine.disable();
   assert.equal(machine.getState(), "DISABLED");
-  resolveFind({ fileId: null, status: 200 });   // Drive 에 파일이 아직 없다 — 옛 코드는 여기서 새 파일을 올렸다(token null)
+  resolveFind({ fileId: null, status: 200 });   // Drive에 파일이 아직 없다 — 옛 코드는 여기서 새 파일을 올렸다(token null)
   await drain(5);
   assert.deepEqual(uploads, [], "로그아웃 뒤 업로드 없음");
   assert.equal(machine.getState(), "DISABLED");
@@ -1173,13 +1173,13 @@ test("46. 올리기 대기 중 disable() → 업로드가 끝나도 캐시를 �
   assert.equal(localStorage.getItem(CACHE_SYNCED_U_KEY), null, "syncedMaxU 캐시가 다시 차지 않음");
 });
 
-test("47. 새 파일 올리기 대기 중 disable() → 끝난 업로드로 SYNC_DONE 을 내지 않는다", async () => {
+test("47. 새 파일 올리기 대기 중 disable() → 끝난 업로드로 SYNC_DONE을 내지 않는다", async () => {
   let resolveUpload;
   const upPromise = new Promise((r) => { resolveUpload = r; });
   let uploadCalls = 0;
   const { machine, drain, logEntries } = loadMachine({
     initialRefreshToken: "rt-x",
-    findFileId: null,   // Drive 에 파일이 없다 → 새 파일 올리기
+    findFileId: null,   // Drive에 파일이 없다 → 새 파일 올리기
     overrideStubs: {
       T: { uploadSyncFile: () => { uploadCalls++; return upPromise; } },
     },
@@ -1212,7 +1212,7 @@ test("48. v1 문서 올리기 대기 중 disable() → 업로드가 끝나도 �
     downloadResult: { doc: { schemaVersion: 1, bookmarks: [] }, etag: '"e-v1"', status: 200 },
     overrideStubs: {
       T: { uploadSyncFile: () => { uploadCalls++; return upPromise; } },
-      V2: { validateRemote: () => false },   // 원격이 옛 v1 문서 → v2 로 올린다
+      V2: { validateRemote: () => false },   // 원격이 옛 v1 문서 → v2로 올린다
     },
   });
   machine.enable();
@@ -1260,8 +1260,8 @@ test("49. 합친 뒤 올리기 대기 중 disable() → 업로드가 끝나도 �
   assert.equal(localStorage.getItem(CACHE_SYNCED_U_KEY), null, "syncedMaxU 캐시가 다시 차지 않음");
 });
 
-test("50. 대기 중 disable() 뒤 그 대기가 예외로 끝나면 — 사유는 SYNC_EXCEPTION 으로 남기되 SYNC_FAIL 은 내지 않는다", async () => {
-  // 지금의 transport.js 는 예외를 던지지 않고 status 0 을 돌려준다 — 그 계약이 바뀌어도 멈춘 사이클은 조용해야 한다.
+test("50. 대기 중 disable() 뒤 그 대기가 예외로 끝나면 — 사유는 SYNC_EXCEPTION으로 남기되 SYNC_FAIL은 내지 않는다", async () => {
+  // 지금의 transport.js는 예외를 던지지 않고 status 0을 돌려준다 — 그 계약이 바뀌어도 멈춘 사이클은 조용해야 한다.
   let rejectDownload;
   const dlPromise = new Promise((_, rej) => { rejectDownload = rej; });
   const { machine, drain, logEntries } = loadMachine({
@@ -1283,17 +1283,17 @@ test("50. 대기 중 disable() 뒤 그 대기가 예외로 끝나면 — 사유�
   const after = logEntries.slice(mark);
   assert.ok(after.some((e) => e.event === "SYNC_EXCEPTION" && e.reason === "network down"), "사유는 진단에 남는다");
   assert.ok(after.some((e) => e.event === "SYNC_ABORTED" && e.at === "exception"), "SYNC_ABORTED(exception) 로그");
-  assert.ok(!after.some((e) => e.kind === "ACTION" && e.event === "SYNC_FAIL"), "멈춘 사이클은 SYNC_FAIL 을 내지 않는다");
+  assert.ok(!after.some((e) => e.kind === "ACTION" && e.event === "SYNC_FAIL"), "멈춘 사이클은 SYNC_FAIL을 내지 않는다");
   assert.equal(machine.getState(), "DISABLED");
 });
 
 // ── Group 15: 실패를 성공으로 치지 않는다 · 「파일도 삭제」 ─────────────────────
 // 머지 전 /code-review(2026-10-17) 1 · 3 · 4번. 파일 찾기는 「없음」(2xx · fileId null)과 「실패」를 가르고,
 // 실패한 찾기 · 내려받기 · v1 올리기는 SYNC_FAIL(백오프)로 간다 — 「파일 없음」 · 「원격 없음」 · 「동기화됨」으로
-// 읽으면 sync.json 이 둘이 되거나 재시도 없이 끝났다. 「파일도 삭제」는 동기화를 먼저 멈추고, 진행 중 사이클이
+// 읽으면 sync.json이 둘이 되거나 재시도 없이 끝났다. 「파일도 삭제」는 동기화를 먼저 멈추고, 진행 중 사이클이
 // 이미 보낸 요청이 끝난 뒤에 찾아 지운다(그전엔 지운 뒤 도착한 새 파일 올리기가 파일을 되살렸다).
 
-test("51. 파일 찾기가 실패(503)하면 새 파일을 올리지 않는다 — SYNC_FAIL 로 다시 시도", async () => {
+test("51. 파일 찾기가 실패(503)하면 새 파일을 올리지 않는다 — SYNC_FAIL로 다시 시도", async () => {
   let uploadCalls = 0;
   const { machine, drain, logEntries } = loadMachine({
     initialRefreshToken: "rt-x",
@@ -1327,11 +1327,11 @@ test("52. 파일 찾기 401 → 새 파일을 올리지 않고 곧장 재인증"
   });
   machine.enable();
   await drain(8);
-  assert.equal(uploadCalls, 0, "401 을 「파일 없음」으로 읽어 새 파일 올리기를 보내지 않음");
+  assert.equal(uploadCalls, 0, "401을 「파일 없음」으로 읽어 새 파일 올리기를 보내지 않음");
   assert.ok(logEntries.some((e) => e.event === "REAUTH"), "401 재인증 경로");
 });
 
-test("53. 내려받기 403 → SYNC_DONE 이 아니라 SYNC_FAIL — 백오프로 다시 시도, redirect 시도 횟수는 그대로", async () => {
+test("53. 내려받기 403 → SYNC_DONE이 아니라 SYNC_FAIL — 백오프로 다시 시도, redirect 시도 횟수는 그대로", async () => {
   const { machine, drain, logEntries, localStorage } = loadMachine({
     initialRefreshToken: "rt-x",
     useRealTimers: false,
@@ -1348,7 +1348,7 @@ test("53. 내려받기 403 → SYNC_DONE 이 아니라 SYNC_FAIL — 백오프�
   assert.ok(!logEntries.some((e) => e.kind === "ACTION" && e.event === "SYNC_DONE"), "SYNC_DONE 없음");
   assert.ok(logEntries.some((e) => e.kind === "ACTION" && e.event === "SYNC_FAIL"), "SYNC_FAIL");
   assert.ok(logEntries.some((e) => e.event === "RETRY_SCHEDULED"), "백오프 재시도 예약");
-  assert.equal(localStorage.getItem(REDIRECT_ATTEMPTS_KEY), "2", "성공이 아니므로 redirect 시도 횟수를 0 으로 돌리지 않음");
+  assert.equal(localStorage.getItem(REDIRECT_ATTEMPTS_KEY), "2", "성공이 아니므로 redirect 시도 횟수를 0으로 돌리지 않음");
 });
 
 test("54. v1 문서 올리기가 실패(503)하면 캐시를 「동기화됨」으로 쓰지 않고 SYNC_FAIL", async () => {
@@ -1368,7 +1368,7 @@ test("54. v1 문서 올리기가 실패(503)하면 캐시를 「동기화됨」�
   });
   machine.enable();
   await drain(6);
-  assert.equal(localStorage.getItem(CACHE_SYNCED_U_KEY), "0", "syncedMaxU 를 올리지 않음 — 다음 사이클이 다시 올린다");
+  assert.equal(localStorage.getItem(CACHE_SYNCED_U_KEY), "0", "syncedMaxU를 올리지 않음 — 다음 사이클이 다시 올린다");
   assert.ok(!logEntries.some((e) => e.kind === "ACTION" && e.event === "SYNC_DONE"), "SYNC_DONE 없음");
   assert.ok(logEntries.some((e) => e.kind === "ACTION" && e.event === "SYNC_FAIL"), "SYNC_FAIL");
 });
@@ -1406,7 +1406,7 @@ test("55. deleteRemoteFile — 진행 중 사이클의 새 파일 올리기가 �
   resolveUpload({ ok: true, status: 200, etag: '"e1"', fileId: "fid-new" });
   assert.equal(await done, true, "지웠다");
   assert.deepEqual(finds, [false, true], "지우기의 찾기는 만들어진 파일을 본다");
-  assert.deepEqual(deletes, [{ token, fileId: "fid-new" }], "그 파일을 한 번만 지운다(목록 · 만든 id 가 겹친다)");
+  assert.deepEqual(deletes, [{ token, fileId: "fid-new" }], "그 파일을 한 번만 지운다(목록 · 만든 id가 겹친다)");
   assert.deepEqual(revoked, [token], "지운 뒤 그 토큰을 폐기한다");
 });
 
@@ -1441,9 +1441,9 @@ test("56. deleteRemoteFile — 파일 찾기가 실패하면 false · 지우기�
   assert.equal(finds, before, "토큰 없이 요청을 보내지 않는다(Bearer null)");
 });
 
-test("57. 「파일도 삭제」는 시작하자마자 설정을 다시 그린다 · 이어지는 signOut 의 disable() 도 다시 그린다(Copilot 1회차)", async () => {
+test("57. 「파일도 삭제」는 시작하자마자 설정을 다시 그린다 · 이어지는 signOut의 disable()도 다시 그린다(Copilot 1회차)", async () => {
   // 지우는 동안 토큰을 쥐고 있던 때는 그사이 연 설정이 「해제」(연결됨)를 그렸다. 이제 토큰을 곧바로 내려놓고
-  // 다시 그리고, 이미 DISABLED 인 뒤의 disable() 도 다시 그린다(DISABLE 은 상태와 상관없이 _stopSync 하나로 간다).
+  // 다시 그리고, 이미 DISABLED인 뒤의 disable()도 다시 그린다(DISABLE은 상태와 상관없이 _stopSync 하나로 간다).
   let rebuilds = 0;
   const { machine, drain, ctx } = loadMachine({ initialRefreshToken: "rt-x", findFileId: "fid-1" });
   ctx.rebuildDriveSyncSection = () => { rebuilds++; };
@@ -1460,7 +1460,7 @@ test("57. 「파일도 삭제」는 시작하자마자 설정을 다시 그린�
   assert.equal(rebuilds, before + 1, "이미 DISABLED 여도 다시 그린다");
 });
 
-test("64. 「파일도 삭제」는 목록의 모든 sync.json 과 캐시된 파일을 지운다", async () => {
+test("64. 「파일도 삭제」는 목록의 모든 sync.json과 캐시된 파일을 지운다", async () => {
   const deletes = [];
   const { machine, drain } = loadMachine({
     initialRefreshToken: "rt-x",
@@ -1483,7 +1483,7 @@ test("64. 「파일도 삭제」는 목록의 모든 sync.json 과 캐시된 파
   assert.deepEqual([...deletes].sort(), ["fid-A", "fid-B", "fid-C"], "두 기기가 만든 둘과 캐시된 하나");
 });
 
-test("65. 「파일도 삭제」 — 지우기가 404 면 이미 없어진 것이라 true", async () => {
+test("65. 「파일도 삭제」 — 지우기가 404면 이미 없어진 것이라 true", async () => {
   const { machine, drain } = loadMachine({
     initialRefreshToken: "rt-x",
     findFileId: "fid-1",
@@ -1494,7 +1494,7 @@ test("65. 「파일도 삭제」 — 지우기가 404 면 이미 없어진 것�
   assert.equal(await machine.deleteRemoteFile(), true);
 });
 
-test("66. 「파일도 삭제」 — 401 이면 넘겨받은 refresh token 으로 한 번 갱신해 다시 시도한다", async () => {
+test("66. 「파일도 삭제」 — 401이면 넘겨받은 refresh token으로 한 번 갱신해 다시 시도한다", async () => {
   const findTokens = [];
   const refreshes = [];
   const revoked = [];
@@ -1522,7 +1522,7 @@ test("66. 「파일도 삭제」 — 401 이면 넘겨받은 refresh token 으�
   deleting = true;   // 그 뒤 한 시간쯤 사이클이 없어 액세스 토큰이 만료됐다
   assert.equal(await machine.deleteRemoteFile({ refreshToken: "rt-mem" }), true, "갱신한 토큰으로 지웠다");
   assert.deepEqual(findTokens, ["boot", "fresh"], "401 뒤 갱신한 토큰으로 다시 찾는다");
-  assert.deepEqual(refreshes.slice(1), ["rt-mem"], "넘겨받은 refresh token 으로 한 번만");
+  assert.deepEqual(refreshes.slice(1), ["rt-mem"], "넘겨받은 refresh token으로 한 번만");
   assert.deepEqual(revoked, ["boot", "fresh"], "만료된 토큰과 갱신한 토큰 모두 폐기");
 });
 
@@ -1575,7 +1575,7 @@ test("67b. 「파일도 삭제」 — 두 번째 기다림 안에 그 요청이 
   assert.deepEqual(deletes, ["fid-late"]);
 });
 
-test("68. 「파일도 삭제」 — 지우는 사이 도착한 새 파일 만들기는, 목록이 아직 보여 주지 않아도 그 응답의 id 로 지운다", async () => {
+test("68. 「파일도 삭제」 — 지우는 사이 도착한 새 파일 만들기는, 목록이 아직 보여 주지 않아도 그 응답의 id로 지운다", async () => {
   // 지우기가 캐시를 비운 뒤에 도착한 만들기라 캐시에는 없다 — 멈춘 사이클은 캐시를 쓰지 않는다.
   let resolveUpload;
   const upPromise = new Promise((r) => { resolveUpload = r; });
@@ -1597,15 +1597,15 @@ test("68. 「파일도 삭제」 — 지우는 사이 도착한 새 파일 만�
   await drain(3);
   resolveUpload({ ok: true, status: 200, etag: '"e1"', fileId: "fid-created" });
   assert.equal(await done, true);
-  assert.deepEqual(deletes, ["fid-created"], "목록에 없어도 만든 id 를 지운다");
+  assert.deepEqual(deletes, ["fid-created"], "목록에 없어도 만든 id를 지운다");
 });
 
 // ── Group 16: 사이클 도중의 로컬 편집 — 덮지 않고, 버리지 않는다 ─────────────
 // 머지 전 /code-review(2026-10-17, 사용자 실행) 1 · 7번. 사이클은 시작할 때 읽은 로컬 사본으로 병합한 뒤
-// `_applyMergedDoc` 가 로컬 문서 전체를 덮어써, 파일 찾기 · 내려받기를 기다리는 동안 저장한 북마크 · 설정 ·
-// 읽던 위치가 사라졌다. 304 갈래도 그 사본의 maxU 로 「변경 없음」을 판정했고, 도는 동안 들어온 사용자 요청
+// `_applyMergedDoc`가 로컬 문서 전체를 덮어써, 파일 찾기 · 내려받기를 기다리는 동안 저장한 북마크 · 설정 ·
+// 읽던 위치가 사라졌다. 304 갈래도 그 사본의 maxU로 「변경 없음」을 판정했고, 도는 동안 들어온 사용자 요청
 // (scheduleUpload → requestSync)은 버려져 다시 돌지 않았다. 이제 기다린 뒤에 로컬을 읽고, 사용자 요청은
-// 사이클이 SYNC_DONE 으로 끝나면 한 번 더 돈다(폴은 쌓지 않는다).
+// 사이클이 SYNC_DONE으로 끝나면 한 번 더 돈다(폴은 쌓지 않는다).
 
 /** 하네스 기본 문서 꼴에 꼬리표 · maxU 표지를 단 로컬 문서. */
 function localDoc(tag, u = 0) {
@@ -1704,7 +1704,7 @@ test("60. 사이클 도중의 사용자 요청(requestSync)은 버리지 않고 
   machine.enable();
   await drain(3);
   assert.equal(machine.getState(), "SYNCING");
-  machine.requestSync();   // scheduleUpload 의 300ms 뒤 — 도는 중이라 예전엔 버려졌다
+  machine.requestSync();   // scheduleUpload의 300ms 뒤 — 도는 중이라 예전엔 버려졌다
   resolveFirst({ doc: null, etag: null, status: 304 });
   await drain(8);
   assert.equal(downloads, 2, "한 번 더 돈다");
@@ -1741,8 +1741,8 @@ test("61. 사이클 도중의 폴(requestSync({throttleMs}))은 쌓지 않는다
 
 // ── Group 17: 다시 시도가 끝난 뒤 — 연결된 기기에서 동기화가 멈추지 않는다 ────
 // 머지 전 /code-review(사용자 실행) 3번. HTTP 실패(429 · 403 rate limit · 5xx)가 다섯 번 넘게 이어지면 OFFLINE
-// 으로 갔는데, OFFLINE 은 `online` 이벤트로만 빠져나와 연결된 기기에서는 그 세션 내내 동기화가 멈췄다.
-// 이제 HTTP 실패는 IDLE 로 돌아가 다음 요청이 다시 돌고, 네트워크 실패로 OFFLINE 이 된 뒤에도 기기가
+// 으로 갔는데, OFFLINE은 `online` 이벤트로만 빠져나와 연결된 기기에서는 그 세션 내내 동기화가 멈췄다.
+// 이제 HTTP 실패는 IDLE로 돌아가 다음 요청이 다시 돌고, 네트워크 실패로 OFFLINE이 된 뒤에도 기기가
 // 온라인이면 다음 요청이 다시 시도한다(NET_RECOVERED).
 
 /** 가짜 타이머로 백오프를 끝까지 돈다 — 첫 사이클 + 재시도 다섯 번. */
@@ -1751,7 +1751,7 @@ async function exhaustRetries(drain, fireAllTimers) {
   for (let i = 0; i < 6; i++) { fireAllTimers(); await drain(6); }
 }
 
-test("62. HTTP 실패(429)가 다섯 번 넘게 이어지면 OFFLINE 이 아니라 IDLE — 다음 요청이 다시 돈다", async () => {
+test("62. HTTP 실패(429)가 다섯 번 넘게 이어지면 OFFLINE이 아니라 IDLE — 다음 요청이 다시 돈다", async () => {
   let downloads = 0;
   const { machine, drain, fireAllTimers, logEntries } = loadMachine({
     initialRefreshToken: "rt-x",
@@ -1765,7 +1765,7 @@ test("62. HTTP 실패(429)가 다섯 번 넘게 이어지면 OFFLINE 이 아니�
   });
   machine.enable();
   await exhaustRetries(drain, fireAllTimers);
-  assert.equal(machine.getState(), "IDLE", "OFFLINE 에 갇히지 않는다");
+  assert.equal(machine.getState(), "IDLE", "OFFLINE에 갇히지 않는다");
   assert.ok(logEntries.some((e) => e.event === "RETRIES_EXHAUSTED"), "재시도를 다 썼다는 로그");
   const before = downloads;
   machine.requestSync();
@@ -1773,7 +1773,7 @@ test("62. HTTP 실패(429)가 다섯 번 넘게 이어지면 OFFLINE 이 아니�
   assert.equal(downloads, before + 1, "다음 요청이 다시 돈다");
 });
 
-test("63. 네트워크 실패(status 0)로 OFFLINE 이 된 뒤에도 온라인이면 다음 요청이 다시 시도한다", async () => {
+test("63. 네트워크 실패(status 0)로 OFFLINE이 된 뒤에도 온라인이면 다음 요청이 다시 시도한다", async () => {
   let downloads = 0;
   const { machine, drain, fireAllTimers } = loadMachine({
     initialRefreshToken: "rt-x",
@@ -1791,12 +1791,12 @@ test("63. 네트워크 실패(status 0)로 OFFLINE 이 된 뒤에도 온라인�
   const before = downloads;
   machine.requestSync();   // 기기는 온라인이라 `online` 이벤트가 오지 않는다
   await drain(8);
-  assert.equal(downloads, before + 1, "NET_RECOVERED 로 다시 시도한다");
+  assert.equal(downloads, before + 1, "NET_RECOVERED로 다시 시도한다");
 });
 
-test("69. 사이클이 도는 사이 다시 SYNCING 이 되면 두 번째 사이클을 띄우지 않는다 — 돌던 사이클이 마무리한다", async () => {
-  // 같은 페이지에서 disable() 뒤 다시 켜지는 길은 실제로는 없다(켬 표지 "0" 이 조용한 갱신을 물린다) — 표지를
-  // 직접 "1" 로 돌려 그 경우를 만든다. _startCycle 의 가드가 없으면 사이클 둘이 겹쳐 돈다.
+test("69. 사이클이 도는 사이 다시 SYNCING이 되면 두 번째 사이클을 띄우지 않는다 — 돌던 사이클이 마무리한다", async () => {
+  // 같은 페이지에서 disable() 뒤 다시 켜지는 길은 실제로는 없다(켬 표지 "0"이 조용한 갱신을 물린다) — 표지를
+  // 직접 "1"로 돌려 그 경우를 만든다. _startCycle의 가드가 없으면 사이클 둘이 겹쳐 돈다.
   let downloads = 0;
   let resolveFirst;
   const { machine, drain, localStorage } = loadMachine({
@@ -1827,6 +1827,6 @@ test("69. 사이클이 도는 사이 다시 SYNCING 이 되면 두 번째 사이
   assert.equal(downloads, 1, "두 번째 사이클을 띄우지 않았다");
   resolveFirst({ doc: null, etag: null, status: 304 });
   await drain(6);
-  assert.equal(machine.getState(), "IDLE", "돌던 사이클이 다시 SYNCING 이 된 상태를 마무리했다");
+  assert.equal(machine.getState(), "IDLE", "돌던 사이클이 다시 SYNCING이 된 상태를 마무리했다");
 });
 
