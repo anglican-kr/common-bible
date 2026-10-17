@@ -212,6 +212,14 @@ test("parsePath: division이 아닌 단일 세그먼트는 책 chapters 뷰", ()
   assert.deepEqual(parse("/genesis"), { view: "chapters", bookId: "genesis" });
 });
 
+test("parsePath: 객체가 물려받은 이름(constructor · toString · __proto__ · hasOwnProperty)은 division 이 아니다 — 책 id 로 읽혀 뷰가 「찾을 수 없습니다」(PR #353 리뷰)", () => {
+  // 구분 표를 그냥 색인하면 이 이름들도 참이라 구분 뷰로 갈렸고, 탭 제목이
+  // 「function Object() { [native code] } — 공동번역성서」가 됐다(main 부터 — 2026-10-17 재현).
+  for (const name of ["constructor", "toString", "__proto__", "hasOwnProperty"]) {
+    assert.deepEqual(parse(`/${name}`), { view: "chapters", bookId: name }, name);
+  }
+});
+
 // ── prologue ──
 
 test("parsePath: /<book>/prologue → prologue 뷰", () => {
