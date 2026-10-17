@@ -65,7 +65,7 @@ window.appCitations = (() => {
       .join(";");
   }
 
-  const { el, clearNode, hangingQuoteClass } = window.appHelpers;
+  const { el, clearNode, hangingQuoteClass, headerIcon, HEADER_ICON_PATHS } = window.appHelpers;
   const { createOverlay, attachSheetDrag, attachSheetResize } = window.appOverlay;
 
   /**
@@ -964,7 +964,10 @@ window.appCitations = (() => {
       });
     }
     document.getElementById("cite-sheet-close")?.addEventListener("click", closeCiteSheet);
-    document.getElementById("cite-sheet-back")?.addEventListener("click", () => {
+    const backBtn = document.getElementById("cite-sheet-back");
+    // The chevron comes from the header icon spec (helpers.js headerIcon) — index.html keeps no static copy of it.
+    backBtn?.appendChild(headerIcon(HEADER_ICON_PATHS.back));
+    backBtn?.addEventListener("click", () => {
       if (!_sheetState || _sheetState.expandedRefIndex === null) return;
       _sheetState.expandedRefIndex = null;
       _updateSheetHeader();

@@ -43,7 +43,7 @@ import {
   preloadCalendar, preloadLectionary, resolveDate, findReadings, findCollects, fastOf,
 } from "./liturgical-engine.js";
 
-const { _$, el, clearNode, emptyState, headerIcon, isModifiedClick, createFocusMemory } = window.appHelpers;
+const { _$, el, clearNode, emptyState, headerIcon, HEADER_ICON_PATHS, isModifiedClick, createFocusMemory } = window.appHelpers;
 const { loadLectionaryTrack, saveLectionaryTrack } = window.appStorage;
 
 const $app = _$("app");
@@ -800,7 +800,7 @@ function buildUpLink(date) {
     href: month ? `/calendar/${month}` : "/calendar",
     "aria-label": p ? `${p.y}년 ${p.m}월 캘린더로` : "캘린더로",
   });
-  a.appendChild(headerIcon("M15.5 5 8.5 12l7 7"));   // 왼쪽 꺾쇠
+  a.appendChild(headerIcon(HEADER_ICON_PATHS.back));   // 왼쪽 꺾쇠
   return a;
 }
 

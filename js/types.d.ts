@@ -756,6 +756,8 @@ export interface AppHelpers {
   }) => HTMLElement;
   /** 헤더 아이콘의 SVG — path `d` 만 받는다(규격은 helpers.js 한 곳). 단추 · 링크와 그 동작은 호출 쪽 몫. */
   headerIcon: (d: string) => SVGSVGElement;
+  /** 헤더 아이콘의 path — 글리프마다 하나(`back` 왼쪽 꺾쇠 · `home` 집). 같은 글리프를 그리는 곳은 모두 이것을 `headerIcon` 에 넘긴다. */
+  HEADER_ICON_PATHS: Readonly<{ back: string; home: string }>;
   isModifiedClick: (e: Event) => boolean;
   /** 화면 하나의 포커스 기억 — 화면마다 따로 만든다(한 화면이 기억한 자리가 다른 화면으로 새지 않게). */
   createFocusMemory: () => FocusMemory;
