@@ -252,10 +252,8 @@ def fake_oauth():
     oauth.reset()
 
 
-def _make_page(browser, fake_drive, fake_oauth) -> Page:
-    """Create a fresh BrowserContext + Page wired to fakes."""
-    ctx: BrowserContext = browser.new_context()
-    page = ctx.new_page()
+def _wire(page: Page, fake_drive, fake_oauth) -> Page:
+    """Route a page's Drive · OAuth requests to the fakes."""
     page.route("**/*googleapis.com/drive/**", fake_drive.handle)
     page.route("**/*googleapis.com/upload/**", fake_drive.handle)
     page.route("**/*googleapis.com/oauth2/v3/userinfo", fake_drive.handle)
@@ -265,6 +263,12 @@ def _make_page(browser, fake_drive, fake_oauth) -> Page:
     page.route("**/oauth/token", fake_oauth.handle_token)
     page.route("**/accounts.google.com/o/oauth2/**", fake_oauth.handle_auth)
     return page
+
+
+def _make_page(browser, fake_drive, fake_oauth, **context_opts) -> Page:
+    """Create a fresh BrowserContext + Page wired to fakes (context_opts — e.g. a viewport)."""
+    ctx: BrowserContext = browser.new_context(**context_opts)
+    return _wire(ctx.new_page(), fake_drive, fake_oauth)
 
 
 def _load(page: Page):
@@ -430,12 +434,20 @@ def test_412_triggers_remerge(browser, fake_drive, fake_oauth):
 
 
 def test_sign_out_clears_sync(browser, fake_drive, fake_oauth):
-    """Signing out disables sync; subsequent changes don't upload."""
+    """Signing out disables sync; a later edit + scheduleUpload sends nothing to Drive.
+
+    Settles the first sync before signing out — a cycle still in flight at sign-out is
+    test_sign_out_mid_cycle_sends_nothing_after. Checks the request log, not only the stored file:
+    the fake Drive answers a tokenless request with 401 and stores nothing, so a file-content check
+    alone would pass even if a request went out (code review 14).
+    """
     fake_drive.reset()
     page = _make_page(browser, fake_drive, fake_oauth)
     try:
         _load(page)
         _enable_sync(page)
+        _wait_idle(page)
+        sent_before = len(fake_drive.requests)
         page.evaluate("window.driveSync.signOut()")
 
         status = page.evaluate("window.driveSync.getStatus()")
@@ -445,6 +457,7 @@ def test_sign_out_clears_sync(browser, fake_drive, fake_oauth):
         page.evaluate("window.driveSync.scheduleUpload()")
         page.wait_for_timeout(500)
 
+        assert fake_drive.requests[sent_before:] == [], f"Drive requests after sign-out: {fake_drive.requests[sent_before:]}"
         with fake_drive._lock:
             file = fake_drive._file
         if file:
@@ -652,22 +665,13 @@ def test_drive_sign_out_in_one_tab_stops_the_other(browser, fake_drive, fake_oau
     re-create sync.json with every bookmark (code review 10)."""
     fake_drive.reset()
     ctx: BrowserContext = browser.new_context()
-
-    def wire(p: Page):
-        p.route("**/*googleapis.com/drive/**", fake_drive.handle)
-        p.route("**/*googleapis.com/upload/**", fake_drive.handle)
-        p.route("**/*googleapis.com/oauth2/v3/userinfo", fake_drive.handle)
-        p.route("**/oauth/token", fake_oauth.handle_token)
-        p.route("**/accounts.google.com/o/oauth2/**", fake_oauth.handle_auth)
-        return p
-
     try:
-        tab_a = wire(ctx.new_page())
+        tab_a = _wire(ctx.new_page(), fake_drive, fake_oauth)
         _load(tab_a)
         _enable_sync(tab_a)
         _add_bookmark(tab_a, "From-A")
         _sync_now(tab_a)
-        tab_b = wire(ctx.new_page())
+        tab_b = _wire(ctx.new_page(), fake_drive, fake_oauth)
         _load(tab_b)   # the shared refresh token signs this tab in silently
         tab_b.wait_for_function("() => window.driveSync.getStatus() === 'IDLE'", timeout=10_000)
 
@@ -697,13 +701,7 @@ def test_drive_mobile_settings_view_redraws_after_delete(browser, fake_drive, fa
     used to keep '해제' (only the desktop popover was redrawn), and a second '파일도 삭제' then claimed the
     already-deleted file could not be deleted (code review 4)."""
     fake_drive.reset()
-    ctx: BrowserContext = browser.new_context(viewport={"width": 390, "height": 844})
-    page = ctx.new_page()
-    page.route("**/*googleapis.com/drive/**", fake_drive.handle)
-    page.route("**/*googleapis.com/upload/**", fake_drive.handle)
-    page.route("**/*googleapis.com/oauth2/v3/userinfo", fake_drive.handle)
-    page.route("**/oauth/token", fake_oauth.handle_token)
-    page.route("**/accounts.google.com/o/oauth2/**", fake_oauth.handle_auth)
+    page = _make_page(browser, fake_drive, fake_oauth, viewport={"width": 390, "height": 844})
     try:
         _load(page)
         _enable_sync(page)
@@ -722,7 +720,7 @@ def test_drive_mobile_settings_view_redraws_after_delete(browser, fake_drive, fa
             "() => [...document.body.children].some((n) => n.textContent.includes('삭제하지 못했습니다'))"
         ), "no failure notice after a delete that worked"
     finally:
-        ctx.close()
+        page.context.close()
 
 
 def test_drive_settings_reopened_during_delete_updates_after_sign_out(browser, fake_drive, fake_oauth):

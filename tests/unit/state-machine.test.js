@@ -1117,17 +1117,7 @@ test("45. 내려받기 대기 중 disable() → 원격 자료를 로컬에 쓰�
   let resolveDownload;
   const dlPromise = new Promise((r) => { resolveDownload = r; });
   const saved = [];
-  const remoteDoc = {
-    schemaVersion: 2,
-    bookmarks: { items: {}, tombstones: {} },
-    settings: {
-      fontSize: { v: null, _u: 0 }, colorScheme: { v: null, _u: 0 },
-      theme: { v: null, _u: 0 }, bookOrder: { v: null, _u: 0 },
-      startupBehavior: { v: null, _u: 0 },
-    },
-    lastRead: { v: null, _u: 0 },
-    deviceId: "remote",
-  };
+  const remoteDoc = { ...localDoc("remote"), schemaVersion: 2, deviceId: "remote" };
   const { machine, drain, localStorage } = loadMachine({
     initialRefreshToken: "rt-x",
     initialStorage: {
@@ -1242,17 +1232,7 @@ test("49. 합친 뒤 올리기 대기 중 disable() → 업로드가 끝나도 �
   let resolveUpload;
   const upPromise = new Promise((r) => { resolveUpload = r; });
   let uploadCalls = 0;
-  const remoteDoc = {
-    schemaVersion: 2,
-    bookmarks: { items: {}, tombstones: {} },
-    settings: {
-      fontSize: { v: null, _u: 0 }, colorScheme: { v: null, _u: 0 },
-      theme: { v: null, _u: 0 }, bookOrder: { v: null, _u: 0 },
-      startupBehavior: { v: null, _u: 0 },
-    },
-    lastRead: { v: null, _u: 0 },
-    deviceId: "remote",
-  };
+  const remoteDoc = { ...localDoc("remote"), schemaVersion: 2, deviceId: "remote" };
   const { machine, drain, localStorage } = loadMachine({
     initialRefreshToken: "rt-x",
     initialStorage: {
@@ -1813,3 +1793,40 @@ test("63. 네트워크 실패(status 0)로 OFFLINE 이 된 뒤에도 온라인�
   await drain(8);
   assert.equal(downloads, before + 1, "NET_RECOVERED 로 다시 시도한다");
 });
+
+test("69. 사이클이 도는 사이 다시 SYNCING 이 되면 두 번째 사이클을 띄우지 않는다 — 돌던 사이클이 마무리한다", async () => {
+  // 같은 페이지에서 disable() 뒤 다시 켜지는 길은 실제로는 없다(켬 표지 "0" 이 조용한 갱신을 물린다) — 표지를
+  // 직접 "1" 로 돌려 그 경우를 만든다. _startCycle 의 가드가 없으면 사이클 둘이 겹쳐 돈다.
+  let downloads = 0;
+  let resolveFirst;
+  const { machine, drain, localStorage } = loadMachine({
+    initialRefreshToken: "rt-x",
+    initialStorage: {
+      [CACHE_FILE_ID_KEY]: "fid-cached",
+      [CACHE_ETAG_KEY]: '"e-cached"',
+      [CACHE_SYNCED_U_KEY]: "0",
+    },
+    overrideStubs: {
+      T: {
+        downloadSyncFile: () => {
+          downloads++;
+          if (downloads === 1) return new Promise((r) => { resolveFirst = r; });
+          return Promise.resolve({ doc: null, etag: null, status: 304 });
+        },
+      },
+    },
+  });
+  machine.enable();
+  await drain(3);
+  assert.equal(machine.getState(), "SYNCING", "첫 사이클이 내려받기에 멈춰 있다");
+  machine.disable();
+  localStorage.setItem(SYNC_ENABLED_KEY, "1");
+  machine.enable();   // 조용한 갱신 → IDLE → SYNC_REQUEST → SYNCING
+  await drain(6);
+  assert.equal(machine.getState(), "SYNCING");
+  assert.equal(downloads, 1, "두 번째 사이클을 띄우지 않았다");
+  resolveFirst({ doc: null, etag: null, status: 304 });
+  await drain(6);
+  assert.equal(machine.getState(), "IDLE", "돌던 사이클이 다시 SYNCING 이 된 상태를 마무리했다");
+});
+
