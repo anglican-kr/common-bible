@@ -1,4 +1,5 @@
 ---
+pr: 351
 date: 2026-10-17
 branch: fix/known-issues-10-part1
 title: "fix: 계산 범위의 정본을 엔진으로 — 범위 밖 resolveDate 는 null · shift 실패는 throw · 날짜 이동 줄 하나 · 인용 시트 꺾쇠도 headerIcon (known-issues §10 · §5)"
