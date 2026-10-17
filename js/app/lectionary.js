@@ -43,14 +43,13 @@ import {
   preloadCalendar, preloadLectionary, resolveDate, findReadings, findCollects, fastOf,
 } from "./liturgical-engine.js";
 
-const { _$, el, clearNode, emptyState, headerIcon, HEADER_ICON_PATHS, isModifiedClick, createFocusMemory } = window.appHelpers;
+const { _$, el, clearNode, emptyState, headerIcon, HEADER_ICON_PATHS, isModifiedClick } = window.appHelpers;
 const { loadLectionaryTrack, saveLectionaryTrack } = window.appStorage;
 
 const $app = _$("app");
 const PAGE_TITLE = "전례독서";
-// 이 화면의 링크(날짜 이동 · 칩 · 카드 · 세그먼트)는 #app 을 통째로 다시 그린다 — 누른 컨트롤의 자리를 기억했다가 새 화면의
-// 같은 컨트롤로 포커스를 돌려준다(WCAG 2.4.3 — PR #348 리뷰, 캘린더의 달 이동과 같은 도우미 · 기억은 화면마다 따로).
-const focusMemory = createFocusMemory();
+// 이 화면의 링크(날짜 이동 · 칩 · 카드 · 세그먼트)는 #app 을 통째로 다시 그린다 — 그 링크들은 `data-focus-key` 만 달고, 라우터가
+// 누른 자리를 재 두었다가 새 화면의 같은 컨트롤로 포커스를 돌려준다(WCAG 2.4.3 — routing.js, 캘린더 · 구분 탭 · 검색과 같다).
 
 /**
  * parsePath 가 /lectionary 에서 내는 서술자(routing.js PARSE_PATH). `date` 가 null 이면 오늘.
@@ -819,12 +818,15 @@ function commitError(msg, subtitle) {
 
 /**
  * 날짜 이동 줄의 원형 단추 하나. 링크가 없으면(계산 범위 끝) 자리만 지켜 가운데가 흔들리지 않게 한다. 방향이 글리프(‹ ›)와
- * 다시 그린 뒤 포커스를 돌려줄 자리(`data-focus-key` — `prev` · `next`, helpers.js createFocusMemory)를 정한다.
+ * 다시 그린 뒤 포커스를 돌려줄 자리(`data-focus-key` — `prev` · `next`, 라우터가 돌려준다 — helpers.js focusSpotOf)를 정한다.
+ * 범위 끝으로 가 새 화면에 같은 단추가 없으면 「오늘」이 넘겨받는다(`data-focus-fallback`).
  * @param {"prev" | "next"} dir @param {string | null} href @param {string} label
  */
 function buildDateStep(dir, href, label) {
   if (!href) return el("span", { className: "lect-datenav-btn", "aria-hidden": "true" });
-  return el("a", { className: "lect-datenav-btn", href, "aria-label": label, "data-focus-key": dir }, dir === "prev" ? "‹" : "›");
+  return el("a", {
+    className: "lect-datenav-btn", href, "aria-label": label, "data-focus-key": dir, "data-focus-fallback": "today",
+  }, dir === "prev" ? "‹" : "›");
 }
 
 /**
@@ -1174,9 +1176,8 @@ function announceDay(m) {
  * Commit the whole view — synchronous, called only after every await resolved
  * and the route is still current.
  * @param {LectionaryModel} m @param {Map<string, BibleChapter | null>} chapters
- * @param {import("../types").FocusSpot | null} spot  the control on this screen that led here (focusMemory.take) — focus goes back to its twin
  */
-function commit(m, chapters, spot) {
+function commit(m, chapters) {
   setTitle(PAGE_TITLE);
   const $title = _$("page-title");
   // 위 단계는 그 날짜가 든 달의 캘린더(A2) — 2026-12-25 의 독서에서 2026년 12월로.
@@ -1185,14 +1186,10 @@ function commit(m, chapters, spot) {
   clearNode($app);
 
   const root = el("div", { className: "lectionary" });
-  // 이 화면의 클릭이 전역 <a> 인터셉터(document)보다 먼저 닿는다 — 이동이 시작되기 전에 누른 컨트롤의 자리를 남긴다.
-  root.addEventListener("click", focusMemory.remember);
-  // 붙이기 · 알리기 · 누른 컨트롤로 — 빈 관측일 화면도 같은 끝이다(그 화면에도 날짜 이동 · 칩 · 카드가 있다). 계산 범위 끝
-  // (1583-01-01 의 전날 · 9999-12-31 의 다음날)에서 그 단추가 자리만 남으면 「오늘」로.
+  // 붙이기 · 알리기 — 빈 관측일 화면도 같은 끝이다. 누른 컨트롤로 포커스를 돌려주는 것은 그 뒤 라우터의 몫이다(routing.js).
   const finish = () => {
     $app.appendChild(root);
     announceDay(m);
-    focusMemory.restore(root, spot, "today");
   };
   root.appendChild(buildHeader(m));
   root.appendChild(buildChips(m));
@@ -1246,8 +1243,6 @@ async function renderLectionaryView(parsed) {
   const routeSeq = window.routeSeq;   // 한 번 잡아 둔다 — 클로저 안에서도 타입이 좁혀지게
   const entrySeq = typeof routeSeq === "function" ? routeSeq() : null;
   const isStale = () => entrySeq !== null && typeof routeSeq === "function" && routeSeq() !== entrySeq;
-  // 이 화면의 컨트롤에서 왔으면 그 자리 — 한 번만 쓴다(오류 화면 · 낡은 요청이면 버린다).
-  const spot = focusMemory.take();
 
   const date = parsed.date || todayKey(new Date());
   if (!parseDate(date)) {
@@ -1293,7 +1288,7 @@ async function renderLectionaryView(parsed) {
 
   const chapters = await loadSlotChapters(model.slots);
   if (isStale()) return PAGE_TITLE;
-  commit(model, chapters, spot);
+  commit(model, chapters);
   // 트랙이 있는 날은 고른 트랙(URL > 기억 > 1)을 지금 history 항목에 적는다 — 이 항목의 화면이 나중에 기억이 바뀌어도
   // 그대로 돌아오고(뒤로 가기), 공유한 주소가 받는 사람의 기억과 무관하게 같은 화면이며, 스크롤 기억(ADR-031 — 경로
   // 키)도 이 주소로 잡힌다. route() 의 onRouteEnd 가 이 뒤에 지금 경로를 읽는다(자체 리뷰 2026-10-13).

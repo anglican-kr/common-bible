@@ -149,6 +149,65 @@ def test_lectionary_chips_are_keyboard_reachable(browser):
         ctx.close()
 
 
+# ── 다시 그린 뒤 포커스 — 라우터가 돌려준다(ADR-031 §5) · 「본문 바로가기」 ──────────
+
+def _focus_key(page):
+    """지금 포커스의 data-focus-key 와 :focus-visible."""
+    return page.evaluate("""() => { const a = document.activeElement;
+        return { key: a?.dataset?.focusKey || null, visible: !!a?.matches(':focus-visible') }; }""")
+
+
+def _mark_focused_for_redraw(page):
+    """포커스된 컨트롤에 표지를 단다 — 같은 주소를 다시 그렸는지(옛 노드가 사라졌는지) 기다리는 데 쓴다."""
+    page.evaluate("() => { document.activeElement.dataset.probe = 'old'; }")
+
+
+def test_division_tab_redraw_keeps_keyboard_focus_on_the_pressed_tab(browser):
+    """구분 탭(구약 · 외경 · 신약)을 Enter 로 누르면 route() 가 탭 줄과 목록을 통째로 다시 그린다 — 그전엔 누른 탭이 사라져
+    포커스가 body 로 빠졌다(main 부터, known-issues §10). 탭 줄은 #app 밖(머리 · sticky)이고 목록은 await 뒤에 그려져 화면마다
+    다는 방식으로는 못 덮던 곳 — 라우터가 새 탭 줄의 같은 탭으로 돌려준다. 같은 주소(지금 탭)를 다시 눌러도 같다."""
+    ctx, page = _open(browser, "old_testament")
+    try:
+        page.wait_for_selector("#division-tabs-slot .division-tab.active", timeout=20_000)
+        page.locator("#division-tabs-slot .division-tab", has_text="신약").focus()
+        page.keyboard.press("Enter")
+        page.wait_for_url("**/new_testament")
+        page.wait_for_selector("#division-tabs-slot .division-tab.active:has-text('신약')")
+        assert _focus_key(page) == {"key": "div:new_testament", "visible": True}
+        _mark_focused_for_redraw(page)
+        page.keyboard.press("Enter")   # 지금 탭 — 같은 주소라 route() 만 다시 돈다
+        page.wait_for_function("() => !document.querySelector('[data-probe=old]')")
+        page.wait_for_selector("#division-tabs-slot .division-tab.active:has-text('신약')")
+        assert _focus_key(page) == {"key": "div:new_testament", "visible": True}
+    finally:
+        ctx.close()
+
+
+def test_search_page_links_keep_keyboard_focus_on_the_pressed_link(browser):
+    """검색 결과의 「다음 →」을 Enter 로 누르면 새 페이지에서도 그 링크에 포커스가 남는다(사용자 결정 2026-10-17 — 결과 목록
+    맨 위로 보내는 안 대신; 전례독서의 「다음날」과 같은 규칙). 마지막 쪽에는 「다음 →」이 없어 「← 이전」이 넘겨받는다."""
+    ctx, page = _open(browser, "search?q=사랑")
+    try:
+        page.wait_for_selector(".search-pagination", timeout=20_000)
+        total = int(page.inner_text(".search-page-info").split("/")[1])
+        assert total >= 3, total
+        page.locator(".search-pagination a[data-focus-key='page:next']").focus()
+        page.keyboard.press("Enter")
+        page.wait_for_url("**page=2")
+        page.wait_for_function("() => document.querySelector('.search-page-info')?.textContent.startsWith('2 /')")
+        assert _focus_key(page) == {"key": "page:next", "visible": True}
+        # 마지막 쪽으로 — 누른 「다음 →」이 새 페이지에 없다
+        page.goto(f"{BASE}/search?q=사랑&page={total - 1}")
+        page.wait_for_function(f"() => document.querySelector('.search-page-info')?.textContent.startsWith('{total - 1} /')")
+        page.locator(".search-pagination a[data-focus-key='page:next']").focus()
+        page.keyboard.press("Enter")
+        page.wait_for_function(f"() => document.querySelector('.search-page-info')?.textContent.startsWith('{total} /')")
+        assert page.locator(".search-pagination a[data-focus-key='page:next']").count() == 0
+        assert _focus_key(page) == {"key": "page:prev", "visible": True}
+    finally:
+        ctx.close()
+
+
 # ── verse select Escape ───────────────────────────────────────────────────────
 
 def test_verse_select_cancel_btn_exits_mode(browser):

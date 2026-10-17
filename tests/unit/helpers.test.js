@@ -18,7 +18,7 @@
 //   - dragReleaseAction (bottom-sheet drag-resize release thresholds)
 //   - headerIcon · HEADER_ICON_PATHS (page-title icon SVG — one spec and one path per glyph for every header control)
 //   - isModifiedClick (modifier / non-primary clicks the page leaves to the browser)
-//   - createFocusMemory (focus back to the pressed control after a view redraws itself)
+//   - focusSpotOf · restoreFocusSpot (the router puts focus back on the pressed control after a redraw)
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -259,6 +259,17 @@ function makeDom() {
     setActive(el) { activeElement = el; },
     /** Test-only hook to read activeElement without going through getter. */
     getActive() { return activeElement; },
+    /**
+     * Test-only hook: drop `node` and its subtree from the document, like
+     * route() clearing the old screen — `document.querySelectorAll` stops
+     * finding it.
+     */
+    detach(node) {
+      const gone = new Set();
+      const walk = (n) => { gone.add(n); for (const c of n._children || []) walk(c); };
+      walk(node);
+      for (let i = registry.length - 1; i >= 0; i--) if (gone.has(registry[i])) registry.splice(i, 1);
+    },
     _registry: registry,
   };
 }
@@ -833,20 +844,25 @@ test("isModifiedClick: any modifier key or a non-primary button belongs to the b
   assert.equal(h.helpers.isModifiedClick({ ...base, button: 1 }), true, "middle button");
 });
 
-// ── createFocusMemory (focus back to the pressed control after a redraw, PR #348 review) ──
+// ── focusSpotOf · restoreFocusSpot (the router puts focus back on the pressed control after a redraw) ──
 
-const CLICK = { ctrlKey: false, metaKey: false, shiftKey: false, altKey: false, button: 0 };
+const CLICK = { ctrlKey: false, metaKey: false, shiftKey: false, altKey: false, button: 0, detail: 0 };
+
+/** A FocusSpot with defaults — each case sets what it varies. */
+const spotOf = (o) => ({ key: "next", fallback: null, y: 0, top: 0, offset: 0, pointer: false, ...o });
 
 /**
  * A view root at document offset `rootTop` holding links tagged with data-focus-key,
- * each `[key, offsetWithinRoot]`. Returns the root and the links by key.
+ * each `[key, offsetWithinRoot, fallback?]`. Returns the root and the links by key.
  */
 function viewWith(helpers, rootTop, links) {
   const root = helpers.el("div", { className: "view" });
   root._docTop = rootTop;
   const byKey = {};
-  for (const [key, offset] of links) {
-    const a = helpers.el("a", { href: "/x", "data-focus-key": key }, helpers.el("span", null, key));
+  for (const [key, offset, fallback] of links) {
+    const attrs = { href: "/x", "data-focus-key": key };
+    if (fallback) attrs["data-focus-fallback"] = fallback;
+    const a = helpers.el("a", attrs, helpers.el("span", null, key));
     a._docTop = rootTop + offset;
     root.appendChild(a);
     byKey[key] = a;
@@ -854,167 +870,133 @@ function viewWith(helpers, rootTop, links) {
   return { root, byKey };
 }
 
-test("createFocusMemory: remember 는 누른 링크의 자리(키 · 스크롤 · 화면 루트 안 위치)를 남기고, take 는 한 번만 꺼낸다", () => {
+test("focusSpotOf: 누른 링크의 자리 — 키 · 대체 키 · 스크롤 · 화면 위치 · 루트(#app) 안 위치 · 누른 방식(Enter 는 detail 0, 마우스 · 탭은 누른 횟수)", () => {
   const h = loadHelpers();
-  const mem = h.helpers.createFocusMemory();
-  const { root, byKey } = viewWith(h.helpers, 100, [["next", 60]]);
+  const { root, byKey } = viewWith(h.helpers, 100, [["next", 60, "today"]]);
   h.dom.view.scrollY = 50;
-  // 링크 안의 글자를 눌러도 그 링크의 키
-  mem.remember({ ...CLICK, target: byKey.next._children[0], currentTarget: root });
-  assert.deepEqual({ ...mem.take() }, { key: "next", y: 50, top: 110, offset: 60, pointer: false });
-  assert.equal(mem.take(), null, "렌더 하나에 한 번");
+  assert.deepEqual({ ...h.helpers.focusSpotOf(byKey.next, CLICK, root) },
+    { key: "next", fallback: "today", y: 50, top: 110, offset: 60, pointer: false });
+  assert.equal(h.helpers.focusSpotOf(byKey.next, { ...CLICK, detail: 1 }, root).pointer, true);
 });
 
-test("createFocusMemory: 새 탭으로 여는 클릭(수정 키 · 가운데 단추)은 기억하지 않고, 키 없는 곳을 누르면 앞서 남긴 자리를 지운다", () => {
+test("focusSpotOf: data-focus-key 가 없는 링크는 자리가 없고, 루트 밖 컨트롤(머리의 구분 탭 — sticky)은 루트 안 위치가 없다", () => {
   const h = loadHelpers();
-  const mem = h.helpers.createFocusMemory();
-  const { root, byKey } = viewWith(h.helpers, 0, [["prev", 10], ["next", 10]]);
-  mem.remember({ ...CLICK, metaKey: true, target: byKey.next, currentTarget: root });
-  mem.remember({ ...CLICK, button: 1, target: byKey.next, currentTarget: root });
-  assert.equal(mem.take(), null, "새 탭 클릭만 있었다");
-  mem.remember({ ...CLICK, target: byKey.prev, currentTarget: root });
-  mem.remember({ ...CLICK, ctrlKey: true, target: byKey.next, currentTarget: root });   // 이 화면은 그대로 — 앞의 자리가 남는다
-  assert.equal(mem.take().key, "prev");
-  mem.remember({ ...CLICK, target: byKey.prev, currentTarget: root });
-  mem.remember({ ...CLICK, target: root, currentTarget: root });   // 키 없는 곳 — 이 화면을 다시 그리지 않는 클릭
-  assert.equal(mem.take(), null);
+  const { root } = viewWith(h.helpers, 100, []);
+  const verse = h.helpers.el("a", { href: "/john/3" }, "요한 3장");
+  root.appendChild(verse);
+  assert.equal(h.helpers.focusSpotOf(verse, CLICK, root), null, "다른 화면으로 가는 링크 — 라우터는 자리를 남기지 않는다");
+  const tab = h.helpers.el("a", { href: "/new_testament", "data-focus-key": "div:new_testament" }, "신약");
+  tab._docTop = 40;
+  assert.deepEqual({ ...h.helpers.focusSpotOf(tab, CLICK, root) },
+    { key: "div:new_testament", fallback: null, y: 0, top: 40, offset: null, pointer: false });
 });
 
-test("createFocusMemory: 이미 취소된 클릭(defaultPrevented — 라우터가 이동하지 않는다)은 기억하지 않는다", () => {
+test("restoreFocusSpot: 새 화면에서 같은 키를 값으로 찾는다 — 콜론 · 한글이 든 관측일 id 도, 없으면 대체 키(범위 끝의 「오늘」 · 마지막 쪽의 「← 이전」), 그것도 없으면 null", () => {
   const h = loadHelpers();
-  const mem = h.helpers.createFocusMemory();
-  const { root, byKey } = viewWith(h.helpers, 0, [["next", 10]]);
-  mem.remember({ ...CLICK, defaultPrevented: true, target: byKey.next, currentTarget: root });
-  assert.equal(mem.take(), null, "다음 렌더(뒤로 가기 · 탭 전환)가 엉뚱한 자리를 꺼내지 않게");
-});
-
-test("createFocusMemory: 자리는 그것을 남긴 클릭이 아직 퍼지는 동안에만 꺼낸다 — 루트 위에서 취소돼 다시 그리지 못한 클릭의 자리가 나중 렌더(뒤로 가기 · 탭 전환)로 새지 않게", () => {
-  const h = loadHelpers();
-  const mem = h.helpers.createFocusMemory();
-  const { root, byKey } = viewWith(h.helpers, 0, [["next", 10]]);
-  // 버블링 중(3) — document 의 전역 <a> 인터셉터가 route() 를 부르고 뷰가 take 하는 바로 그 디스패치 안
-  const click = { ...CLICK, eventPhase: 3, target: byKey.next, currentTarget: root };
-  mem.remember(click);
-  assert.equal(mem.take().key, "next");
-  mem.remember(click);
-  click.eventPhase = 0;   // 디스패치가 끝났다 — 루트 위의 처리기가 취소해 라우터가 움직이지 않았다
-  assert.equal(mem.take(), null);
-});
-
-test("createFocusMemory: 마우스 · 탭으로 누른 복원은 링 없이(focusVisible: false — iOS 는 탭 뒤 스크립트 포커스에 링을 그린다), Enter 는 링을 남긴다", () => {
-  const h = loadHelpers();
-  const mem = h.helpers.createFocusMemory();
-  const { root, byKey } = viewWith(h.helpers, 0, [["next", 10]]);
-  mem.remember({ ...CLICK, detail: 1, target: byKey.next, currentTarget: root });   // 탭 · 마우스 — 누른 횟수
-  mem.restore(root, mem.take(), "today");
-  assert.deepEqual({ ...byKey.next._focusOpts }, { preventScroll: true, focusVisible: false });
-  mem.remember({ ...CLICK, detail: 0, target: byKey.next, currentTarget: root });   // Enter — 키보드가 만든 클릭
-  mem.restore(root, mem.take(), "today");
-  assert.deepEqual({ ...byKey.next._focusOpts }, { preventScroll: true });
-});
-
-test("createFocusMemory: 기억은 만든 화면마다 따로다 — 한 화면이 남긴 자리를 다른 화면이 꺼내지 않는다", () => {
-  const h = loadHelpers();
-  const calendar = h.helpers.createFocusMemory();
-  const lectionary = h.helpers.createFocusMemory();
-  const { root, byKey } = viewWith(h.helpers, 0, [["next", 10]]);
-  lectionary.remember({ ...CLICK, target: byKey.next, currentTarget: root });
-  assert.equal(calendar.take(), null);
-  assert.equal(lectionary.take().key, "next");
-});
-
-test("createFocusMemory: restore 는 새 루트에서 같은 키를 값으로 찾는다 — 콜론 · 한글이 든 관측일 id 도, 없으면 대체 키, 그것도 없으면 null", () => {
-  const h = loadHelpers();
-  const mem = h.helpers.createFocusMemory();
-  const keys = ["prev", "today", "obs:grid:lent-2-weekday-tue", "obs:d0916-니니안"];
+  const keys = ["prev", "today", "obs:grid:lent-2-weekday-tue", "obs:d0916-니니안", "page:prev"];
   const { root, byKey } = viewWith(h.helpers, 0, keys.map((k, i) => [k, 40 * i]));
-  assert.equal(mem.restore(root, { key: "obs:d0916-니니안", y: 0, offset: 120 }, "today"), byKey["obs:d0916-니니안"]);
+  const restore = (spot) => { h.dom.setActive(null); return h.helpers.restoreFocusSpot(spot, root); };
+  assert.equal(restore(spotOf({ key: "obs:d0916-니니안", top: 120, offset: 120 })), byKey["obs:d0916-니니안"]);
   assert.equal(h.dom.getActive(), byKey["obs:d0916-니니안"]);
   assert.deepEqual({ ...byKey["obs:d0916-니니안"]._focusOpts }, { preventScroll: true });   // 스크롤은 restore 가 정한다
-  assert.equal(mem.restore(root, { key: "obs:grid:lent-2-weekday-tue", y: 0, offset: 80 }), byKey["obs:grid:lent-2-weekday-tue"]);
-  // 계산 범위 끝 — 누른 「다음」이 새 화면에 없으면 「오늘」
-  assert.equal(mem.restore(root, { key: "next", y: 0, offset: 0 }, "today"), byKey.today);
-  h.dom.setActive(null);
-  assert.equal(mem.restore(root, { key: "next", y: 0, offset: 0 }), null);
-  assert.equal(mem.restore(root, null, "today"), null);
+  assert.equal(restore(spotOf({ key: "obs:grid:lent-2-weekday-tue", top: 80, offset: 80 })), byKey["obs:grid:lent-2-weekday-tue"]);
+  assert.equal(restore(spotOf({ key: "next", fallback: "today", top: 40, offset: 40 })), byKey.today);
+  assert.equal(restore(spotOf({ key: "page:next", fallback: "page:prev", top: 160, offset: 160 })), byKey["page:prev"]);
+  assert.equal(restore(spotOf({ key: "next" })), null);
+  assert.equal(restore(null), null);
   assert.equal(h.dom.getActive(), null, "찾지 못하면 포커스를 옮기지 않는다");
 });
 
-test("createFocusMemory: restore 는 누른 때의 화면 위치로 — 스켈레톤이 스크롤을 맨 위로 눌렀어도 같은 컨트롤이 같은 자리에, 스크롤은 즉시", () => {
+test("restoreFocusSpot: 누른 때의 화면 위치로 — 스켈레톤이 스크롤을 맨 위로 눌렀어도 같은 컨트롤이 같은 자리에, 스크롤은 즉시", () => {
   const h = loadHelpers();
-  const mem = h.helpers.createFocusMemory();
   // 누른 때: 스크롤 218, 루트 문서 위치 100, 컨트롤은 루트 안 300 — 화면 위치 182
-  const spot = { key: "set:2", y: 218, top: 182, offset: 300 };
+  const spot = spotOf({ key: "set:2", y: 218, top: 182, offset: 300 });
   h.dom.view.scrollY = 0;   // 새 장을 받는 사이 스켈레톤이 그려져 맨 위로
   const { root, byKey } = viewWith(h.helpers, 100, [["set:1", 300], ["set:2", 300]]);
-  mem.restore(root, spot, "today");
+  h.helpers.restoreFocusSpot(spot, root);
   assert.equal(h.dom.view.scrollY, 218);
   assert.equal(byKey["set:2"].getBoundingClientRect().top, 182);
   // root 의 scroll-behavior: smooth 를 옵션으로 넘는다 — 인라인 스타일 토글은 Chromium 에서 (0, 0) 스크롤이 여전히 애니메이트됐다
   assert.deepEqual(h.dom.view.scrolls, [{ y: 218, behavior: "instant" }]);
   // 새 화면에서 컨트롤이 루트 안 40px 아래로 왔으면(위의 내용이 늘었다) 그만큼 더 내려 화면 위치를 지킨다
   const h2 = loadHelpers();
-  const m2 = h2.helpers.createFocusMemory();
   const v2 = viewWith(h2.helpers, 100, [["set:2", 340]]);
-  m2.restore(v2.root, spot, "today");
+  h2.helpers.restoreFocusSpot(spot, v2.root);
   assert.equal(v2.byKey["set:2"].getBoundingClientRect().top, 182);
   // 스크롤이 그대로인 다시 그리기(받을 것이 없었다)는 스크롤하지 않는다
   const h3 = loadHelpers();
   h3.dom.view.scrollY = 218;
   const v3 = viewWith(h3.helpers, 100, [["set:2", 300]]);
-  h3.helpers.createFocusMemory().restore(v3.root, spot, "today");
+  h3.helpers.restoreFocusSpot(spot, v3.root);
   assert.deepEqual(h3.dom.view.scrolls, []);
 });
 
-test("createFocusMemory: 누를 때 이미 화면 밖이던 컨트롤(포커스를 둔 채 스크롤해 내려간 뒤 Enter)은 같은 자리 대신 가운데로", () => {
+test("restoreFocusSpot: 누를 때 이미 화면 밖이던 컨트롤(포커스를 둔 채 스크롤해 내려간 뒤 Enter)은 같은 자리 대신 가운데로", () => {
   const h = loadHelpers();
-  const mem = h.helpers.createFocusMemory();
   // 누른 때: 스크롤 2000, 「다음날」은 문서 120(루트 100 + 20) — 화면 위 -1880
-  const spot = { key: "next", y: 2000, top: -1880, offset: 20 };
+  const spot = spotOf({ key: "next", y: 2000, top: -1880, offset: 20 });
   const { root, byKey } = viewWith(h.helpers, 100, [["prev", 20], ["next", 20]]);
-  mem.restore(root, spot, "today");
+  h.helpers.restoreFocusSpot(spot, root);
   assert.equal(h.dom.getActive(), byKey.next);
   assert.deepEqual(h.dom.view.scrolls.map((s) => s.behavior), ["instant", "instant"], "같은 자리 → 가운데, 둘 다 즉시");
   assert.equal(h.dom.view.scrollY, 0);   // 가운데에 둘 만큼 올라갈 수 없어 맨 위 — 컨트롤은 화면 안
   assert.equal(byKey.next.getBoundingClientRect().top, 120);
 });
 
-test("createFocusMemory: 스크롤 고정(scroll anchoring)이 있으면 누른 때의 화면 위치(top)로 — 그사이 데스크톱 머리의 검색 줄이 펼쳐져 루트가 내려가도", () => {
+test("restoreFocusSpot: 스크롤 고정(scroll anchoring)이 있으면 누른 때의 화면 위치(top)로 — 그사이 데스크톱 머리의 검색 줄이 펼쳐져 루트가 내려가도", () => {
   // 누른 때: 스크롤 166, 머리가 접혀 루트는 문서 100, 컨트롤은 루트 안 236 — 화면 위치 170
   const press = (h) => {
-    const mem = h.helpers.createFocusMemory();
     h.dom.view.scrollY = 166;
     const v = viewWith(h.helpers, 100, [["set:2", 236]]);
-    mem.remember({ ...CLICK, target: v.byKey["set:2"], currentTarget: v.root });
-    return { mem, spot: mem.take() };
+    const spot = h.helpers.focusSpotOf(v.byKey["set:2"], CLICK, v.root);
+    h.dom.detach(v.root);   // route() 가 옛 화면을 비운다
+    return spot;
   };
   // 새 장을 받는 사이 스크롤이 0 으로 눌리며 머리의 검색 줄(46px)이 펼쳐졌다 — 새 루트는 문서 146
-  const redraw = (h, mem, spot) => {
+  const redraw = (h, spot) => {
     h.dom.view.scrollY = 0;
     const v = viewWith(h.helpers, 146, [["set:2", 236]]);
-    mem.restore(v.root, spot, "today");
+    h.helpers.restoreFocusSpot(spot, v.root);
     return v.byKey["set:2"].getBoundingClientRect().top;
   };
   const a = loadHelpers({ anchoring: true });
-  const pa = press(a);
-  assert.equal(redraw(a, pa.mem, pa.spot), 170, "지금 레이아웃에서 화면 위치 그대로 — 머리가 다시 접혀도 브라우저가 내용을 붙잡는다");
+  assert.equal(redraw(a, press(a)), 170, "지금 레이아웃에서 화면 위치 그대로 — 머리가 다시 접혀도 브라우저가 내용을 붙잡는다");
   // 스크롤 고정이 없는 브라우저(Safari 26 까지)는 루트 안 위치로 — 지금은 46px 아래지만, 머리가 다시 접히며 내용이 올라와 170
   const b = loadHelpers();
-  const pb = press(b);
-  assert.equal(redraw(b, pb.mem, pb.spot), 216);
+  assert.equal(redraw(b, press(b)), 216);
 });
 
-test("createFocusMemory: 다시 그리는 사이 독자가 포커스를 다른 데로 옮겼으면(머리의 검색 · 팝오버) 포커스도 스크롤도 건드리지 않는다", () => {
+test("restoreFocusSpot: 루트 밖 컨트롤(머리의 구분 탭 — sticky)은 스크롤 고정이 없어도 스크롤하지 않고 포커스만 — 제자리에 붙어 있다", () => {
   const h = loadHelpers();
-  const mem = h.helpers.createFocusMemory();
+  const { root } = viewWith(h.helpers, 100, [["div:old_testament", 0]]);   // 새 목록(#app) 에는 다른 키뿐
+  const tab = h.helpers.el("a", { href: "/new_testament", "data-focus-key": "div:new_testament" }, "신약");
+  tab._docTop = 40;
+  assert.equal(h.helpers.restoreFocusSpot(spotOf({ key: "div:new_testament", y: 300, top: 40, offset: null }), root), tab);
+  assert.equal(h.dom.getActive(), tab);
+  assert.deepEqual(h.dom.view.scrolls, []);
+});
+
+test("restoreFocusSpot: 마우스 · 탭으로 누른 복원은 링 없이(focusVisible: false — iOS 는 탭 뒤 스크립트 포커스에 링을 그린다), Enter 는 링을 남긴다", () => {
+  const h = loadHelpers();
+  const { root, byKey } = viewWith(h.helpers, 0, [["next", 10]]);
+  h.helpers.restoreFocusSpot(spotOf({ key: "next", top: 10, offset: 10, pointer: true }), root);
+  assert.deepEqual({ ...byKey.next._focusOpts }, { preventScroll: true, focusVisible: false });
+  h.dom.setActive(null);
+  h.helpers.restoreFocusSpot(spotOf({ key: "next", top: 10, offset: 10, pointer: false }), root);
+  assert.deepEqual({ ...byKey.next._focusOpts }, { preventScroll: true });
+});
+
+test("restoreFocusSpot: 다시 그리는 사이 독자가 포커스를 다른 데로 옮겼으면(머리의 검색 · 팝오버) 포커스도 스크롤도 건드리지 않는다", () => {
+  const h = loadHelpers();
   // 누른 링크는 옛 화면과 함께 사라져 포커스가 body 로 떨어진다 — 그때만 돌려준다
   const search = h.helpers.el("input", { id: "search-input" });
   h.dom.setActive(search);
   const { root, byKey } = viewWith(h.helpers, 100, [["set:2", 300]]);
-  assert.equal(mem.restore(root, { key: "set:2", y: 218, top: 182, offset: 300 }, "today"), null);
+  const spot = spotOf({ key: "set:2", y: 218, top: 182, offset: 300 });
+  assert.equal(h.helpers.restoreFocusSpot(spot, root), null);
   assert.equal(h.dom.getActive(), search, "검색 칸에 남는다 — 이어 치는 글자 · Enter 가 그 칸으로 간다");
   assert.deepEqual(h.dom.view.scrolls, []);
   h.dom.setActive(h.dom.document.body);
-  assert.equal(mem.restore(root, { key: "set:2", y: 218, top: 182, offset: 300 }, "today"), byKey["set:2"]);
+  assert.equal(h.helpers.restoreFocusSpot(spot, root), byKey["set:2"]);
   assert.equal(h.dom.getActive(), byKey["set:2"]);
 });

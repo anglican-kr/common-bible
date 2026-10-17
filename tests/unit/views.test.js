@@ -541,6 +541,12 @@ test("buildDivisionTabs: marks the active tab with class + aria-current", () => 
   assert.equal(ot.getAttribute("aria-current"), null);
 });
 
+test("buildDivisionTabs: each tab carries a focus key — route() clears the slot, the router puts focus back on the pressed tab", () => {
+  const h = loadDivisionTabs();
+  const tabs = h.buildDivisionTabs("old_testament").children.filter((c) => c.tagName === "A");
+  assert.deepEqual(tabs.map((a) => a.getAttribute("data-focus-key")), ["div:old_testament", "div:deuterocanon", "div:new_testament"]);
+});
+
 test("buildSegmentTabs: an item's focusKey becomes the anchor's data-focus-key — the redrawing view puts focus back on it", () => {
   const h = loadDivisionTabs();
   const nav = h.buildSegmentTabs([

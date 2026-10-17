@@ -538,6 +538,16 @@ test("buildSearchPagination: middle page → prev link, page-info, next link", (
   assert.strictEqual(recursiveText(nav.children[2]), "다음 →");
 });
 
+test("buildSearchPagination: page links carry focus keys — the router puts focus back on the pressed one, the other takes over on the first / last page", () => {
+  // 사용자 결정 2026-10-17: 새 페이지에서도 누른 링크 그대로(결과 목록 맨 위로 보내는 안 대신) — routing.js restoreFocusSpot
+  const h = loadPureHelpers();
+  const nav = h.buildSearchPagination({ q: "사랑" }, 2, 5);
+  const [prev, , next] = nav.children;
+  assert.deepStrictEqual([prev.getAttribute("data-focus-key"), prev.getAttribute("data-focus-fallback")], ["page:prev", "page:next"]);
+  assert.deepStrictEqual([next.getAttribute("data-focus-key"), next.getAttribute("data-focus-fallback")], ["page:next", "page:prev"]);
+  assert.strictEqual(nav.children[1].getAttribute("data-focus-key"), null, "쪽 번호는 컨트롤이 아니다");
+});
+
 test("buildSearchPagination: carries book filter into page links", () => {
   const h = loadPureHelpers();
   const nav = h.buildSearchPagination({ q: "사랑", filterBooks: ["john"] }, 2, 5);
