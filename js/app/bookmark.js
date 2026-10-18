@@ -1,4 +1,3 @@
-// @ts-nocheck — 타입 오류가 남아 검사에서 뺐다(docs/known-issues.md §7 묶음 ③). 고치는 PR 이 이 줄을 지운다 — ADR-012.
 "use strict";
 
 // Bookmark module: utility helpers (verse spec, query, drag&drop) +
@@ -16,6 +15,7 @@
 /** @typedef {import("../types").BookmarkTreeFolder} BookmarkTreeFolder */
 /** @typedef {import("../types").DragState} DragState */
 /** @typedef {import("../types").BooksData} BooksData */
+/** @typedef {import("../types").AppBookmark} AppBookmark */
 
 const { _$, el, headerIcon, HEADER_ICON_PATHS } = window.appHelpers;
 const { createOverlay, attachSheetDrag, attachSheetResize } = window.appOverlay;
@@ -204,6 +204,7 @@ $driveDisconnectDelete.addEventListener("click", async () => {
 // `focusBookId`, when given, asks the book list to move focus onto the book
 // we were just reading once it renders, so keyboard users land in context.
 // The glyph comes from helpers.js headerIcon — the header icon spec lives there.
+/** @param {string} target @param {string} ariaLabel @param {string} [focusBookId] @returns {HTMLButtonElement} */
 function buildHomeBtn(target, ariaLabel, focusBookId) {
   const svg = headerIcon(HEADER_ICON_PATHS.home);
   const btn = el("button", { className: "title-back-btn title-home-btn", "aria-label": ariaLabel }, svg);
@@ -233,7 +234,7 @@ const BOOKMARK_ICON_ADD_PLUS = "M372-555h56v57h57v56h-57v57h-56v-57h-57v-56h57v-
 /** @param {SVGElement} svg @param {boolean} hasBookmark */
 function _setBookmarkBtnIcon(svg, hasBookmark) {
   while (svg.firstChild) svg.removeChild(svg.firstChild);
-  const mk = (d) => {
+  const mk = /** @param {string} d */ (d) => {
     const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
     p.setAttribute("d", d);
     return p;
@@ -247,13 +248,15 @@ function _setBookmarkBtnIcon(svg, hasBookmark) {
 }
 
 // Build the bookmark icon SVG button for the chapter header
+/** @param {string | null} bookId @param {number | null} chapter  null on the chapter-list header @returns {HTMLButtonElement} */
 function buildBookmarkHeaderBtn(bookId, chapter) {
   const btn = el("button", {
     className: "title-bookmark-btn",
     "aria-label": "북마크",
     type: "button",
   });
-  const hasBookmark = findExistingChapterBookmarks(bookId, chapter).length > 0;
+  // No chapter, no chapter bookmark — the lookup would compare against a null chapter.
+  const hasBookmark = bookId != null && chapter != null && findExistingChapterBookmarks(bookId, chapter).length > 0;
   if (hasBookmark) {
     btn.classList.add("has-bookmark");
   }
@@ -345,6 +348,7 @@ const drawerOverlay = createOverlay({
   },
 });
 
+/** @param {string | null} bookId @param {number | null} chapter  both null outside a chapter (the 「이 장 저장」 · 「절 선택」 buttons disable) */
 function openBookmarkDrawer(bookId, chapter) {
   // Update toolbar visibility based on whether we're in a chapter, and render
   // the tree before the controller reveals the drawer.
@@ -393,8 +397,10 @@ $bmSaveChapterBtn.addEventListener("click", () => {
 });
 
 $bmSelectVersesBtn.addEventListener("click", () => {
+  const { bookId, chapter } = readingContext;
+  if (!bookId || chapter == null) return;  // the button is disabled outside a chapter (openBookmarkDrawer)
   closeBookmarkDrawer();
-  enterVerseSelectMode(readingContext.bookId, readingContext.chapter);
+  enterVerseSelectMode(bookId, chapter);
 });
 
 $bmAddFolderBtn.addEventListener("click", () => {
@@ -495,6 +501,7 @@ function initBookmarkDrawerResize() {
 // until those callers move to ESM imports). Also exposes
 // `renderBookmarkTree` for sync/state-machine.js's post-sync re-render.
 
+/** @type {AppBookmark} */
 const appBookmark = {
   // Phase 6a helpers (verse-spec → verse-spec.js, query/href/sort → bookmark-core.js, ADR-034 후속)
   moveBookmarkItem, closeSwipedRow, _setupDragHandle,
