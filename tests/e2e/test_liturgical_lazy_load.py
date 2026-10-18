@@ -11,7 +11,8 @@
      「불러오는 중…」을 한 프레임도 그리지 않는다
   ③ 모듈을 받지 못하거나 그리다 던지면 그 뷰의 제목 · 머리와 「다시 불러오기」(DESIGN.md §6 「전체 화면 실패」) —
      누르면 새로 고쳐 열린다
-  ④ 늦게 끝난 실패 · 늦게 도착한 모듈은 그사이 연 화면을 덮지 않는다(route()의 isStale 가드 — 공용 catch까지)
+  ④ 늦게 끝난 실패 · 늦게 도착한 모듈 · 늦게 던진 오류는 그사이 연 화면을 덮지 않는다(route()의 isStale 가드 —
+     openLazyView의 받은 뒤 · catch, 공용 catch까지)
 
 서비스 워커는 막는다 — 설치가 SHELL_FILES(셋 포함)를 미리 받아 요청 기록을 흐리고, page.route는 서비스 워커가
 처리한 요청을 가로채지 못한다(conftest의 공용 컨텍스트는 막지 않아 따로 둔다). 실데이터(data/ 서브모듈)가 필요하다 —
@@ -314,6 +315,39 @@ def test_late_module_arrival_does_not_paint_over_newer_screen(browser):
         assert urllib.parse.urlparse(page.url).path == "/john/4"
         assert page.locator(".lectionary").count() == 0
         assert page.locator("article.chapter-text .verse").count() > 0
+        assert "요한" in page.evaluate("() => document.title")
+    finally:
+        ctx.close()
+
+
+def test_late_render_error_does_not_paint_over_newer_screen(browser):
+    """전례독서 뷰가 그리는 사이 다른 화면(요한 4장)으로 가고 그 뒤 뷰가 던져도, 늦은 오류는 그 화면을 덮지 않는다 —
+    routing.js openLazyView의 catch 가드(PR #355 2회차 리뷰 — 덮는 테스트가 없었다). 그린 뒤의 가드는
+    test_lectionary_view.py의 낡은 프리로드 실패 테스트가 본다(탭 제목이 바뀌지 않는다)."""
+    original = urllib.request.urlopen(f"{BASE}{LECTIONARY}").read().decode("utf-8")
+    target = "async function renderLectionaryView(parsed) {"
+    assert target in original, "lectionary.js에서 renderLectionaryView 머리를 찾지 못했다 — 테스트를 고칠 것"
+    # 그리기를 문 앞에 세워 두었다가, 테스트가 문을 열면 던진다 — 시간이 아니라 신호로 순서를 정한다
+    gated = original.replace(target, target + ' window.__renderStarted = true; await window.__renderGate;'
+                             ' throw new TypeError("늦게 던진다");', 1)
+    ctx = _context(browser)
+    page = ctx.new_page()
+    try:
+        page.route(f"**{LECTIONARY}",
+                   lambda route: route.fulfill(status=200, content_type="text/javascript; charset=utf-8", body=gated))
+        page.goto(f"{BASE}/john/3")
+        page.wait_for_selector("article.chapter-text .verse", timeout=20_000)
+        page.evaluate("() => { window.__renderGate = new Promise((r) => { window.__openRenderGate = r; }); }")
+        page.evaluate("() => window.navigate('/lectionary/2026-10-18')")
+        page.wait_for_function("() => window.__renderStarted === true", timeout=20_000)
+        page.evaluate("() => window.navigate('/john/4')")
+        page.wait_for_function(
+            "() => location.pathname === '/john/4' && !!document.querySelector('article.chapter-text .verse')")
+        with page.expect_console_message(lambda m: m.type == "error" and "늦게 던진다" in m.text):
+            page.evaluate("() => window.__openRenderGate()")
+        page.evaluate(TWO_FRAMES)
+        assert page.locator(".lectionary").count() == 0
+        assert page.locator(".empty-state").count() == 0
         assert "요한" in page.evaluate("() => document.title")
     finally:
         ctx.close()

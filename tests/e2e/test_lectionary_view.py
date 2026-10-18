@@ -262,7 +262,9 @@ def test_back_after_track_change_from_malformed_track_url(desktop_context):
 
 def test_stale_lectionary_preload_failure_does_not_overwrite_new_route(browser):
     """전례독서 데이터 프리로드가 끝나기 전에 다른 화면으로 가고, 그 뒤 프리로드가 실패해도 새 화면이 남는다 —
-    낡은 실패가 공용 renderError 로 화면을 덮지 않는다(Copilot 5회차). 서비스 워커는 막아 fetch 가 page.route 에 잡히게."""
+    낡은 실패가 공용 renderError로 화면을 덮지 않는다(Copilot 5회차). 탭 제목도 새 화면의 것이다 — 라우터가 낡은 뷰의
+    제목으로 페이지 메타를 고치지 않는다(routing.js openLazyView의 그린 뒤 가드 — PR #355 2회차 리뷰). 서비스 워커는 막아
+    fetch가 page.route에 잡히게."""
     ctx = browser.new_context(service_workers="block")
     page = ctx.new_page()
     try:
@@ -290,6 +292,7 @@ def test_stale_lectionary_preload_failure_does_not_overwrite_new_route(browser):
         page.evaluate("() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))")   # 거부 사슬이 다 돌 때까지
         assert page.locator(".book-list").count() == 1
         assert page.locator(".error").count() == 0
+        assert page.evaluate("() => document.title") == "공동번역성서"
     finally:
         ctx.close()
 
