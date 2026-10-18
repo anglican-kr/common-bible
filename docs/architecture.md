@@ -150,9 +150,9 @@ ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` 약 6,000줄이 8개 �
 | ---------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------- |
 | `<script type="module">` (자동 deferred) | 28      | 대부분의 모듈. 모듈 scope + `import`/`export` 가능                                                                   |
 | `<script defer>` (classic)               | 2       | `audio-cache.js`·`manifest-sync.js` — `audio-cache.js`는 `sw.js`의 `importScripts()`도 가져가므로 classic이어야 한다 (ADR-019 §"예외"). `manifest-sync.js`도 classic이지만 `sw.js`는 가져가지 않는다 |
-| `<script>` (head, 즉시 실행)             | 1       | `pre-fetch.js` — `<head>`에서 즉시 `data/books.json` 다운로드 시작, `/calendar` · `/lectionary`로 바로 들어오면 그 화면 모듈도 미리 받기(`modulepreload`). `type="module"`은 자동 deferred라 시작이 늦어짐 |
+| `<script>` (head, 즉시 실행)             | 1       | `pre-fetch.js` — `<head>`에서 즉시 `data/books.json` 다운로드 시작. `type="module"`은 자동 deferred라 fetch가 늦어짐 |
 
-`<script>` 태그가 없는 런타임 파일이 9개 더 있다: `search-worker.js`는 `new Worker()`로 별도 생성되는 독립 컨텍스트이고, `bookmark-{tree,gestures,select,menu,verse-select}.js` 5개는 `bookmark.js`가 ESM `import`로 끌어오며(브라우저가 import 그래프를 따라 가져온다), 교회력 셋은 `routing.js`가 그 화면에 처음 갈 때 동적 `import()`로 불러온다 — 캘린더 탭은 셋을, 전례독서 화면은 뷰와 엔진 둘을 한꺼번에 요청한다(차례로 받으면 왕복이 한 번 더 든다). 성서만 읽는 세션은 셋(원본 약 210KB · gzip 약 70KB)을 싣지 않고, 서비스 워커는 오프라인용으로 셋을 미리 받는다(§4.6). 이득과 대가는 서비스 워커 캐시가 없는 첫 방문에만 있다 — 첫 화면은 느린 4G에서 0.39초 빨라지고, 첫 방문에 캘린더를 바로 열면 0.53초 늦어진다. 재방문의 부팅 시간은 어느 쪽이든 측정 오차 안이다(ADR-038 §2 「구현」의 실측). 받지 못하면 라우터가 그 뷰의 제목으로 실패 화면을 그리고 「다시 불러오기」(페이지 새로 고침)를 단다. 지정자는 글자 그대로 둔다 — `tests/unit/sw.test.js`가 그것을 따라가 오프라인 목록을 대조하고, 셋이 부팅 그래프 밖에 있는지도 본다.
+`<script>` 태그가 없는 런타임 파일이 9개 더 있다: `search-worker.js`는 `new Worker()`로 별도 생성되는 독립 컨텍스트이고, `bookmark-{tree,gestures,select,menu,verse-select}.js` 5개는 `bookmark.js`가 ESM `import`로 끌어오며(브라우저가 import 그래프를 따라 가져온다), 교회력 셋은 `routing.js`가 그 화면에 처음 갈 때 동적 `import()`로 불러온다 — 캘린더 탭은 셋을, 전례독서 화면은 뷰와 엔진 둘을 한꺼번에 요청한다(차례로 받으면 왕복이 한 번 더 든다 — Chromium; WebKit은 앱 안에서 처음 갈 때 의존 모듈을 한 번 더 요청한다, [`known-issues.md`](known-issues.md) §13). 성서만 읽는 세션은 셋(원본 약 210KB · gzip 약 70KB)을 싣지 않고, 서비스 워커는 오프라인용으로 셋을 미리 받는다(§4.6). 이득과 대가는 서비스 워커 캐시가 없는 첫 방문에만 있다 — 첫 화면은 느린 4G에서 0.39초 빨라지고, 첫 방문에 성서 화면에서 캘린더 탭을 열면 0.53초, 그 주소로 바로 들어오면 0.16-0.2초 늦어진다(바로 열기를 미리 받는 `modulepreload`는 WebKit에서 실패한 미리 받기가 그 탭을 막아 넣지 않았다 — ADR-038 「검토한 대안 — 모듈 로드」 E). 재방문의 부팅 시간은 어느 쪽이든 측정 오차 안이다(ADR-038 §2 「구현」의 실측). 받지 못하면 라우터가 그 뷰의 제목으로 실패 화면을 그리고 「다시 불러오기」(페이지 새로 고침)를 단다. 지정자는 글자 그대로 둔다 — `tests/unit/sw.test.js`가 그것을 따라가 오프라인 목록을 대조하고, 셋이 부팅 그래프 밖에 있는지도 본다.
 
 모듈 간 의존은 여전히 `window.X` 공개 인터페이스(facade — `window.driveSync` / `window.appHelpers` 등 전역 객체)가 주류이고, ADR-019는 이를 **점진 폐기** 대상으로 정의 — 신규 코드는 `import`/`export`로 작성 권장.
 
@@ -160,7 +160,7 @@ ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` 약 6,000줄이 8개 �
 
 | 파일                  | 역할                                                                                                                              | 라인 수 |
 | --------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ------- |
-| `js/pre-fetch.js`     | 첫 페인트 직전 `data/books.json` 비동기 선패치 · 캘린더 · 전례독서 주소면 그 화면 모듈 미리 받기(`modulepreload` — 목록은 `routing.js`의 묶음과 같다) | ~35     |
+| `js/pre-fetch.js`     | 첫 페인트 직전 `data/books.json` 비동기 선패치                                                                                    | ~10     |
 | `js/gtag-init.js`     | Google Analytics 초기화                                                                                                           | ~15     |
 | `js/app.js`           | app-main 부트스트랩 + 접근성 keydown + Audio cache LRU 소프트캡 + SW 등록 · 업데이트 확인(한 시간에 한 번까지 · `checkForUpdates`) · 업데이트 토스트 + 탭 복귀 때 Drive `pollSync` · `clearAllCaches` | ~330    |
 | `js/audio-cache.js`   | 오디오 LRU IndexedDB sidecar ([ADR-016](decisions/016-audio-cache-lru.md))                                                        | ~190    |
