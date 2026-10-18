@@ -319,6 +319,44 @@ def test_import_all_bad_items_stops_with_visible_notice(browser, tmp_path):
     ctx.close()
 
 
+def test_import_skips_items_that_would_break_the_store(browser, tmp_path):
+    """객체 기본 속성 이름인 id(`toString`) · 자식을 단 북마크는 빼고 들인다 — 동기화 저장소가 id를 객체 키로
+    쓰고 북마크의 자식도 훑으므로, 들이면 목록 읽기가 깨지거나 「덮어썼습니다」 뒤에도 목록이 그대로였다.
+    덮어쓴 뒤 새로 고쳐도 목록이 그려져야 한다(PR #359 리뷰)."""
+    incoming = {
+        "_version": 1,
+        "exportedAt": 0,
+        "bookmarks": [_BM_A, {**_BM_B, "id": "toString"}, {**_BM_C, "id": "bm-kids", "children": [None]}],
+    }
+    import_file = tmp_path / "store_breakers.json"
+    import_file.write_text(json.dumps(incoming), encoding="utf-8")
+
+    ctx = browser.new_context()
+    page = ctx.new_page()
+    errors = []
+    page.on("pageerror", lambda e: errors.append(str(e)))
+    _open_bookmark_drawer(page)
+
+    page.locator("#bm-import-input").set_input_files(str(import_file))
+    page.wait_for_selector("#bm-import-modal:not([hidden])")
+    body = page.inner_text("#bm-import-body")
+    assert "북마크 1개를" in body
+    assert "올바르지 않은 항목 3개는 빼고 가져옵니다." in body   # toString 1 + bm-kids와 그 자식 2
+
+    page.locator("#bm-import-overwrite").click()
+    page.wait_for_selector("#bm-import-modal", state="hidden")
+    assert [n["id"] for n in _get_bookmarks(page)] == ["bm-a"]
+
+    page.reload()
+    page.wait_for_selector("article.chapter-text .verse")
+    assert [n["id"] for n in _get_bookmarks(page)] == ["bm-a"]
+    page.locator(".title-bookmark-btn").click()
+    page.wait_for_selector("#bookmark-drawer-body [data-id='bm-a']")
+    assert errors == []
+
+    ctx.close()
+
+
 # ── 가져오기 확인 모달 ────────────────────────────────────────────────────────
 
 

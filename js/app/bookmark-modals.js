@@ -759,15 +759,29 @@ function _optionalOf(v, type) {
   return v === undefined || typeof v === type;
 }
 
+// An id the sync store can key by. The store keeps items in plain objects keyed by id (store-v2.js
+// `_flattenTree` · `bookmarkTreeFromFlat`), so an id naming an Object.prototype member breaks it — `toString` ·
+// `constructor` make the next read call `.sort()` on the inherited function and the whole list fails to load,
+// `__proto__` vanishes while flattening (PR #359 review). The app's own ids (`generateId` — base-36 time +
+// random) can never be one of these names; only an imported file can bring one.
+/** @param {unknown} id @returns {id is string} */
+function _isUsableId(id) {
+  return typeof id === "string" && id !== "" && !Object.hasOwn(Object.prototype, id);
+}
+
 /**
  * A bookmark the app can draw and open: a known book, a chapter inside it, a readable verse spec and a label
- * (the tree link reads `/<book>/<chapter>/<spec>` — a missing spec made it `/gen/1/undefined`).
+ * (the tree link reads `/<book>/<chapter>/<spec>` — a missing spec made it `/gen/1/undefined`). It has no
+ * `children`: that field is structure, not an unknown extra — the sync store walks any node's children while
+ * flattening, so `[null]` threw inside `saveBookmarks` (which swallows it — 「덮어썼습니다」 over an unchanged
+ * list) and a child reusing an existing id overwrote that item on 병합 (PR #359 review). The app never writes
+ * `children` on a bookmark (`bookmarkTreeFromFlat` gives it to folders only).
  * @param {unknown} x
  * @param {(bookId: string) => number | null} chapterCountOf  chapters in that book, null for an unknown book
  * @returns {x is BookmarkTreeBookmark}
  */
 function _isWellFormedBookmark(x, chapterCountOf) {
-  if (!_isRecord(x) || x.type !== "bookmark") return false;
+  if (!_isRecord(x) || x.type !== "bookmark" || x.children !== undefined) return false;
   const { id, bookId, chapter, verseSpec, label } = x;
   const count = typeof bookId === "string" ? chapterCountOf(bookId) : null;
   return typeof id === "string" && count != null
@@ -806,7 +820,7 @@ function _sanitizeImportItems(items, chapterCountOf) {
     const out = [];
     for (const x of list) {
       const id = _isRecord(x) ? x.id : undefined;
-      if (typeof id !== "string" || id === "" || seen.has(id)) {
+      if (!_isUsableId(id) || seen.has(id)) {
         skipped += _nodeCount(x);
       } else if (_isWellFormedFolder(x)) {
         seen.add(id);

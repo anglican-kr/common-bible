@@ -33,6 +33,7 @@ import vm from "node:vm";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { stripEsmMarker, makeLocalStorage } from "./harness.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const BOOKMARK_PATH = path.resolve(__dirname, "../../js/app/bookmark.js");
@@ -1787,6 +1788,76 @@ test("_sanitizeImportItems: unknown fields ride along (a newer app's extras surv
   const { nodes } = h._sanitizeImportItems(items, importChapterCountOf);
   assert.equal(nodes[0].color, "red");
   assert.deepEqual(JSON.parse(JSON.stringify(nodes[0].futureField)), { x: 1 });
+});
+
+test("_sanitizeImportItems: an id naming an Object.prototype member is left out (PR #359 review)", () => {
+  const h = loadImportExport();
+  const items = [
+    appBookmark({ id: "constructor" }), appBookmark({ id: "toString" }), appBookmark({ id: "__proto__" }),
+    { type: "folder", id: "hasOwnProperty", name: "x", children: [appBookmark({ id: "inner" })] },
+    appBookmark({ id: "ok" }),
+  ];
+  const { nodes, skipped } = h._sanitizeImportItems(items, importChapterCountOf);
+  assert.deepEqual(nodes.map((n) => n.id), ["ok"]);
+  assert.equal(skipped, 3 + 2);   // three bookmarks, then the folder with its child
+});
+
+test("_sanitizeImportItems: a bookmark carrying children is left out with them — children is structure (PR #359 review)", () => {
+  const h = loadImportExport();
+  const items = [
+    appBookmark({ id: "b-empty", children: [] }),
+    appBookmark({ id: "b-null", children: [null] }),
+    appBookmark({ id: "b-kid", children: [appBookmark({ id: "kid" })] }),
+    appBookmark({ id: "ok" }),
+  ];
+  const { nodes, skipped } = h._sanitizeImportItems(items, importChapterCountOf);
+  assert.deepEqual(nodes.map((n) => n.id), ["ok"]);
+  assert.equal(skipped, 1 + 2 + 2);
+});
+
+// Round trip through the real sync store (js/sync/store-v2.js — saveBookmarks · loadBookmarks go through it once
+// sync is loaded): what the import check keeps must survive a save and a read. The raw file breaks the store in
+// three ways, so these tests do exercise the hazards the check guards against (PR #359 review).
+const STORE_V2_SOURCE = stripEsmMarker(fs.readFileSync(path.resolve(__dirname, "../../js/sync/store-v2.js"), "utf8"));
+function loadSyncStore() {
+  const win = {};
+  const ctx = {
+    localStorage: makeLocalStorage({}), window: win,
+    JSON, Object, Array, Set, Map, String, Number, Boolean, Math, Date, console, Error, isNaN, parseInt,
+  };
+  ctx.globalThis = ctx;
+  vm.createContext(ctx);
+  vm.runInContext(STORE_V2_SOURCE, ctx, { filename: "store-v2.js" });
+  return win.syncStoreV2;
+}
+
+test("_sanitizeImportItems: the raw file breaks the sync store — a null child, a toString id, a __proto__ id", () => {
+  // Throws while flattening — storage.js saveBookmarks swallows it, so 「덮어썼습니다」 stood over an unchanged list.
+  assert.throws(() => loadSyncStore().saveBookmarks([appBookmark({ id: "b-kid", children: [null] })]), { name: "TypeError" });
+  // Saves, then the next read calls .sort() on the inherited toString — the whole list fails to load.
+  const s1 = loadSyncStore();
+  s1.saveBookmarks([appBookmark({ id: "toString" }), appBookmark({ id: "b" })]);
+  assert.throws(() => s1.loadBookmarks(), { name: "TypeError" });   // the vm realm's TypeError — match by name
+  // Vanishes without a sound.
+  const s2 = loadSyncStore();
+  s2.saveBookmarks([appBookmark({ id: "__proto__" }), appBookmark({ id: "b" })]);
+  assert.deepEqual(s2.loadBookmarks().map((n) => n.id), ["b"]);
+});
+
+test("_sanitizeImportItems: what it keeps survives the sync store's save and read unchanged", () => {
+  const h = loadImportExport();
+  const raw = [
+    { type: "folder", id: "f1", name: "대림", expanded: false, createdAt: 1, children: [appBookmark({ id: "a" }), { type: "folder", id: "f2", name: "", children: [] }] },
+    appBookmark({ id: "toString" }),
+    appBookmark({ id: "__proto__" }),
+    appBookmark({ id: "b-kid", children: [null] }),
+    appBookmark({ id: "b", verseSpec: "all" }),
+  ];
+  const { nodes, skipped } = h._sanitizeImportItems(raw, importChapterCountOf);
+  assert.equal(skipped, 1 + 1 + 2);
+  const store = loadSyncStore();
+  store.saveBookmarks(nodes);
+  assert.deepEqual(JSON.parse(JSON.stringify(store.loadBookmarks())), JSON.parse(JSON.stringify(nodes)));
 });
 
 // ── BOOKMARK_SORT loader ─────────────────────────────────────────────────────
