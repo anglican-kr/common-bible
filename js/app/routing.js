@@ -666,8 +666,12 @@ async function route() {
       trackPageView();
     }
   } catch (err) {
-    renderError("데이터를 불러올 수 없습니다.");
     console.error(err);
+    // A route a newer one already replaced fails quietly — its late rejection (a chapter fetch that failed after the
+    // user moved on to the calendar) must not paint the shared error over the screen now showing. Same guard as after
+    // every await above (review 2026-10-18 — main had the gap too).
+    if (isStale()) return;
+    renderError("데이터를 불러올 수 없습니다.");
   } finally {
     dismissLaunchScreen(); // safety fallback (already a no-op if called above)
     // ADR-031: 이 호출이 여전히 최신 라우트일 때만 새 경로 기록 + 스크롤 복원.
