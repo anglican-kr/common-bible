@@ -1239,6 +1239,8 @@ declare global {
     // select-mode exit from bookmark-select.js; search.js owns the in-field book tokens.
     exitBookmarkSelectMode?: () => void;
     syncSearchFields?: () => void;
+    // search.js — patches the /search URL keeping the rest of its state (the tab-bar pill's clear keeps the book scope).
+    navigateSearch?: (patch: { q?: string; page?: number; filterBooks?: string[] }) => void;
     // Bookmark reading view (ADR-035, bookmark-read.js) — resolves to the page title.
     renderBookmarkReadView: (folderId?: string | null) => Promise<string>;
     // Mobile tab-bar full-screen views (ADR-029 / P2). Always assigned at
@@ -1339,7 +1341,7 @@ declare global {
   function renderSearchResults(query: string, page: number, autoNavigate?: boolean, opts?: { filterBooks?: string[] }): Promise<void>;
   function renderSearchView(state?: { filterBooks?: string[] }): Promise<void>;
   function isMobile(): boolean;
-  function appendTextWithHighlight(target: Node, text: string, query: string): void;
+  function appendTextWithHighlight(target: Node, text: string, query: string | null): void;
   function consumeSearchAutoNavigate(): boolean;
   function openDriveDisconnectModal(): void;
   function closeDriveDisconnectModal(): void;

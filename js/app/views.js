@@ -1,4 +1,3 @@
-// @ts-nocheck — 타입 오류가 남아 검사에서 뺐다(docs/known-issues.md §7 묶음 ②). 고치는 PR 이 이 줄을 지운다 — ADR-012.
 "use strict";
 
 // Phase 7a of the app.js modularization (ADR-018). Owns:
@@ -14,6 +13,8 @@
 /** @typedef {import("../types").BookEntry} BookEntry */
 /** @typedef {import("../types").BibleChapter} BibleChapter */
 /** @typedef {import("../types").BiblePrologue} BiblePrologue */
+/** @typedef {import("../types").BibleVerse} BibleVerse */
+/** @typedef {import("../types").ChapterParallel} ChapterParallel */
 
 // Audio Player lives in its own module (ADR-034 PR1). Explicit ESM import —
 // the in-module callers (renderChapter / renderPrologue) bind these directly
@@ -184,6 +185,7 @@ const DIVISION_LABELS = {
 
 const DIVISION_ORDER = ["old_testament", "deuterocanon", "new_testament"];
 
+/** @type {Readonly<Partial<Record<string, string>>>} */
 const VULGATE_DIVISION_LABELS = {
   old_testament: "구약",
   new_testament: "신약",
@@ -192,14 +194,17 @@ const VULGATE_DIVISION_LABELS = {
 const VULGATE_DIVISION_ORDER = ["old_testament", "new_testament"];
 
 // Returns the appropriate labels/order for the current book-order setting
+/** @returns {Readonly<Partial<Record<string, string>>>} */
 function divisionLabels() {
   return loadBookOrder() === "vulgate" ? VULGATE_DIVISION_LABELS : DIVISION_LABELS;
 }
+/** @returns {string[]} */
 function divisionOrder() {
   return loadBookOrder() === "vulgate" ? VULGATE_DIVISION_ORDER : DIVISION_ORDER;
 }
 
 // In vulgate mode, deuterocanon books are grouped under old_testament
+/** @param {BookEntry} book @returns {string} */
 function effectiveDivision(book) {
   if (loadBookOrder() === "vulgate" && book.division === "deuterocanon") return "old_testament";
   return book.division;
@@ -225,6 +230,7 @@ function bookListPath(book) {
 // Active-tab index of the most recent render, so the sliding indicator can
 // animate from the previously selected tab to the new one across re-renders
 // (each tab click is a full route change that rebuilds the nav).
+/** @type {number | null} */
 let _prevDivisionIdx = null;
 
 /**
@@ -284,6 +290,7 @@ function buildSegmentTabs(items, opts) {
   return nav;
 }
 
+/** @param {string} activeDivision @returns {HTMLElement} */
 function buildDivisionTabs(activeDivision) {
   const labels = divisionLabels();
   const order = divisionOrder();
@@ -294,7 +301,7 @@ function buildDivisionTabs(activeDivision) {
   // puts focus back on the pressed tab once the list is drawn (routing.js —
   // WCAG 2.4.3; the slot lives outside #app, sticky, so no scroll restore).
   const nav = buildSegmentTabs(
-    order.map((div) => ({ label: labels[div], href: `/${div}`, active: div === activeDivision, focusKey: `div:${div}` })),
+    order.map((div) => ({ label: labels[div] ?? div, href: `/${div}`, active: div === activeDivision, focusKey: `div:${div}` })),
     { ariaLabel: "구분", startIdx: _prevDivisionIdx },
   );
   _prevDivisionIdx = activeIdx;
@@ -310,6 +317,8 @@ function buildDivisionTabs(activeDivision) {
 // swap to it (.compact class) when the full name would wrap inside the button.
 // 복음서 4권은 "~의 복음서" 접미사를 떼어 표시(마태오/마르코/루가/요한). 사도행전은
 // 명칭 변경 없음.
+// Partial: looked up by any book id, and only NT books have an entry.
+/** @type {Readonly<Partial<Record<string, string>>>} */
 const NT_MOBILE_NAME = {
   matt:   "마태오",
   mark:   "마르코",
@@ -343,6 +352,7 @@ const NT_MOBILE_NAME = {
 // exists, emits two spans (.book-name-full / .book-name-mobile) and sets the
 // anchor's aria-label to the canonical name so screen readers always speak
 // the formal title regardless of which span is visually shown.
+/** @param {BookEntry} b @returns {HTMLLIElement} */
 function buildBookListItem(b) {
   const mobile = NT_MOBILE_NAME[b.id];
   if (!mobile) {
@@ -596,6 +606,7 @@ function setPendingBookFocus(bookId) {
   _pendingBookFocus = bookId;
 }
 
+/** @param {BooksData} books @param {string} activeDivision */
 function renderBookList(books, activeDivision) {
   const labels = divisionLabels();
   const order = divisionOrder();
@@ -661,6 +672,7 @@ function focusPendingBook() {
 
 // `clearReadingPosition` was extracted to js/app/storage.js (ADR-018 Phase 2).
 
+/** @param {BooksData} books */
 function renderResumeBanner(books) {
   const pos = loadReadingPosition();
   if (!pos) return;
@@ -761,6 +773,7 @@ function _observeResumeBanner(wrapper) {
   _resumeBannerObs.observe(wrapper);
 }
 
+/** @param {BookEntry} book @param {BooksData} books */
 function renderChapterList(book, books) {
   setTitle(book.name_ko, NT_MOBILE_NAME[book.id]);
   $title.insertBefore(buildHomeBtn(bookListPath(book), "성서 목록으로", book.id), $title.firstChild);
@@ -792,6 +805,7 @@ function renderChapterList(book, books) {
 // Exercised by tests/unit/views.test.js. Pure: derives the displayed
 // verse label/number from a verse object — no DOM, no global state.
 
+/** @param {BibleVerse} v @returns {string} */
 function formatVerseLabel(v) {
   let label = String(v.number);
   if (v.part) label += v.part;
@@ -803,6 +817,7 @@ function formatVerseLabel(v) {
 // LXX-only verses ([_N]) show the LXX number in parens; dual-numbered verses
 // ([N_M]) append the LXX number in parens; cross-chapter refs prefix the
 // original chapter number.
+/** @param {BibleVerse} v @returns {string} */
 function formatVerseNumber(v) {
   const label = formatVerseLabel(v);
   if (v.lxx_only) return `(${label})`;
@@ -909,10 +924,12 @@ function _verseRangeVrefs(allVrefs, anchorVref, targetVref, unitFn) {
 /**
  * @param {HTMLElement} article
  * @param {ReadonlyArray<BibleVerse>} verses
- * @param {{ hlQuery?: string|null, hlVerse?: number|null, hlVerseEnd?: number|null, hlSegments?: Array<{start:number,end:number,part?:string}>|null, parallels?: ChapterParallel[]|null, chapter?: number|null, hideCites?: boolean, instanceKeys?: ReadonlyArray<string>|null , idPrefix?: string}} [opts]
+ * @param {{ hlQuery?: string|null, hlVerse?: number|null, hlVerseEnd?: number|null, hlSegments?: Array<{start:number,end:number,part?:string}>|null, parallels?: ChapterParallel[]|null, chapter?: number, hideCites?: boolean, instanceKeys?: ReadonlyArray<string>|null , idPrefix?: string}} [opts]
  */
 function appendVerses(article, verses, opts = {}) {
-  const { hlQuery = null, hlVerse = null, hlVerseEnd = null, hlSegments = null, parallels = null, chapter = null, hideCites = false, instanceKeys: keysOverride = null, idPrefix = "" } = opts;
+  // `chapter` has no null default: findParallelsStartingAt skips its chapter guard only for `undefined` — a null
+  // would fail every range's chapter check and drop all ※ markers (no caller passes parallels without a chapter today).
+  const { hlQuery = null, hlVerse = null, hlVerseEnd = null, hlSegments = null, parallels = null, chapter, hideCites = false, instanceKeys: keysOverride = null, idPrefix = "" } = opts;
   let isFirst = true;
   let prevVerseEndType = null;
   // Several verses in one chapter can share a number (전례시편의 ¶ 구절, 에스델
@@ -998,6 +1015,7 @@ function appendVerses(article, verses, opts = {}) {
     // Verse number (rendered via CSS ::before to exclude from clipboard)
     const dataV = formatVerseNumber(v);
 
+    /** @param {HTMLElement} target @param {string} raw @param {{ noTrailingSpace?: boolean }} [opts] */
     function appendSegText(target, raw, opts) {
       const hasPilcrow = raw.startsWith("¶");
       if (hasPilcrow) {
@@ -1288,6 +1306,11 @@ function formatVerseRanges(ranges) {
   return ranges.map(([a, b]) => (a === b ? `${a}` : `${a}-${b}`)).join(", ");
 }
 
+/**
+ * @param {BibleChapter} data
+ * @param {BookEntry} book
+ * @param {{ highlightQuery?: string | null, highlightVerse?: number | null, highlightVerseEnd?: number | null, highlightVerseSpec?: string | null, resumeVerse?: number | null }} [opts]
+ */
 function renderChapter(data, book, opts) {
   const ch = data.chapter;
   const hlQuery = opts && opts.highlightQuery;
@@ -1315,7 +1338,7 @@ function renderChapter(data, book, opts) {
     }
   }
   // Drop a single verse that is entirely out of range (works for both simple and range URLs).
-  if (!hlSegments && hlVerse > _maxVerse) {
+  if (!hlSegments && hlVerse != null && hlVerse > _maxVerse) {
     const pathMatch = location.pathname.match(/^(\/[^/]+\/\d+)\/\d+.*$/);
     if (pathMatch) history.replaceState(null, "", pathMatch[1] + location.search);
   }
@@ -1332,7 +1355,8 @@ function renderChapter(data, book, opts) {
       hlSegments = null;
       if (pathBase) history.replaceState(null, "", pathBase + location.search);
     } else {
-      const serializeSeg = s => s.part ? `${s.start}${s.part}` : s.start === s.end ? `${s.start}` : `${s.start}-${s.end}`;
+      const serializeSeg = /** @param {{ start: number, end: number, part?: string }} s */ (s) =>
+        s.part ? `${s.start}${s.part}` : s.start === s.end ? `${s.start}` : `${s.start}-${s.end}`;
       const newSpec = clamped.map(serializeSeg).join(",");
       const needsRewrite = newSpec !== hlSegments.map(serializeSeg).join(",");
       hlSegments = clamped;
@@ -1450,6 +1474,7 @@ function renderChapter(data, book, opts) {
 
   // Additively select every verse from `anchorVref` to `targetVref` inclusive,
   // then move the anchor to the target. Returns false if the range is empty.
+  /** @param {string} anchorVref @param {string} targetVref */
   const selectRange = (anchorVref, targetVref) => {
     const allVrefs = [...article.querySelectorAll(".verse[data-vref]")]
       .map((v) => v.getAttribute("data-vref") ?? "");
@@ -1464,6 +1489,7 @@ function renderChapter(data, book, opts) {
 
   // Toggle a single verse's selection unit; the anchor follows a selection and
   // clears on a deselection.
+  /** @param {string} vref */
   const toggleVerse = (vref) => {
     const unit = _verseSelectionUnit(article, vref);
     const wasSelected = unit.some((r) => readingContext.selectedVerses.has(r));
@@ -1533,6 +1559,7 @@ function renderChapter(data, book, opts) {
     }, ENTER_SELECT_MS);
   });
 
+  /** @param {PointerEvent} e */
   const cancelLongPress = (e) => {
     if (!_longPressTimer) return;
     if (e && e.type === "pointermove") {
@@ -1609,6 +1636,7 @@ function renderChapter(data, book, opts) {
   }
 }
 
+/** @param {BiblePrologue} data @param {BookEntry} book */
 function renderPrologue(data, book) {
   const mobileBookName = NT_MOBILE_NAME[book.id];
   setTitle(`${book.name_ko} 머리말`, mobileBookName ? `${mobileBookName} 머리말` : undefined);
@@ -1631,6 +1659,7 @@ function renderPrologue(data, book) {
   window.scrollTo(0, 0);
 }
 
+/** @param {BookEntry} book @param {number} currentCh @returns {HTMLElement} */
 function buildChapterNav(book, currentCh) {
   const unit = chUnit(book.id);
   const nav = el("nav", { className: "chapter-nav", "aria-label": `${unit} 이동` });
@@ -1657,6 +1686,7 @@ function renderLoading() {
   $app.appendChild(el("div", { className: "loading", "aria-live": "polite" }, "불러오는 중…"));
 }
 
+/** @param {string} msg */
 function renderError(msg) {
   clearNode($app);
   $app.appendChild(el("div", { className: "error", role: "alert" }, msg));

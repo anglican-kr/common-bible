@@ -159,7 +159,7 @@ ADR-038 §3 렌더 기반이 복원하는 전례 표기 — 계응 ◯(`.respons
 
 ## 7. A2(캘린더 탭) 작업 중 찾은 후속 (2026-10-15)
 
-- **앱 모듈 6개가 아직 타입 검사를 받지 않는다**(오래된 결함 — main 부터). 파일마다 `// @ts-check` 로 검사를 켜던 때(`checkJs: false`)에는 첫 줄이 `"use strict";` 이고 둘째 줄이 지시문인 파일을 tsc 가 오류 없이 건너뛰었다 — 22개였다. 묶음 ①(`js/app.js` · routing · citations · verse-spec · bookmark-verse-select 등 16개, 44건)을 2026-10-17 에 편입했고(원장 `docs/changes/2026-10-17-typecheck-batch-1.md` — 드러난 44건은 모두 선언이 틀리거나 빠진 것이었다), 같은 PR 에서 검사를 기본으로 켰다(`checkJs: true` · CI 「Unit tests」 잡의 타입 검사 — ADR-012). 남은 6개는 첫 줄 `// @ts-nocheck` 로 **명시해** 뺐고, 그 줄을 떼면 오류 **155건**이 드러난다(2026-10-17, 묶음 ① 위에서 실측 — bookmark-modals 50 · views 44 · search 24 · bookmark-read 15 · bookmark-tree 11 · bookmark 11). 다음 묶음은 ② views · search(68건) → ③ bookmark 넷(87건). `docs/status.md` 의 타입 검사 줄은 이 6개가 남았다고 적고 있다 — 다 마치면 그 문장을 고친다. 같은 결함을 #346 이 `lectionary.js` 에서 고쳤다(975줄이 검사 밖이었다 — 원장 `docs/changes/2026-10-12-lectionary-view.md` 3회차 ①). **고치는 법**: 파일의 `// @ts-nocheck` 줄을 지우고 드러난 오류를 실제 타입으로 고친다 — 묶음별 PR.
+- **앱 모듈 4개가 아직 타입 검사를 받지 않는다**(오래된 결함 — main부터). 파일마다 `// @ts-check`로 검사를 켜던 때(`checkJs: false`)에는 첫 줄이 `"use strict";`이고 둘째 줄이 지시문인 파일을 tsc가 오류 없이 건너뛰었다 — 22개였다. 묶음 ①(`js/app.js` · routing · citations · verse-spec · bookmark-verse-select 등 16개, 44건)을 2026-10-17에 편입했고(원장 `docs/changes/2026-10-17-typecheck-batch-1.md` — 드러난 44건은 모두 선언이 틀리거나 빠진 것이었다), 같은 PR에서 검사를 기본으로 켰다(`checkJs: true` · CI 「Unit tests」 잡의 타입 검사 — ADR-012). 묶음 ②(`views` · `search`, 68건)는 2026-10-18에 편입했다(원장 `docs/changes/2026-10-18-typecheck-batch-2.md` — 실행 결함은 없었고, 아직 밟지 않은 null · undefined 어긋남 하나를 막았다). 남은 4개(bookmark 계열)는 첫 줄 `// @ts-nocheck`로 **명시해** 뺐고, 그 줄을 떼면 오류 **87건**이 드러난다(2026-10-18, 묶음 ② 위에서 실측 — bookmark-modals 50 · bookmark-read 15 · bookmark-tree 11 · bookmark 11). 다음 묶음은 ③ bookmark 넷. `docs/status.md`의 타입 검사 줄은 이 4개가 남았다고 적고 있다 — 다 마치면 그 문장을 고친다. 같은 결함을 #346이 `lectionary.js`에서 고쳤다(975줄이 검사 밖이었다 — 원장 `docs/changes/2026-10-12-lectionary-view.md` 3회차 ①). **고치는 법**: 파일의 `// @ts-nocheck` 줄을 지우고 드러난 오류를 실제 타입으로 고친다 — 묶음별 PR.
 - **`sw.js`(서비스 워커)는 어느 tsconfig 에도 들지 않는다**(2026-10-17 발견 — main 부터). `tsconfig.json` 의 `include` 는 `js/**` 이고 `tsconfig.worker.json` 은 `js/search-worker.js` 하나라, 루트의 `sw.js`(396줄)는 검사 밖이다(`checkJs: true` 도 `include` 밖의 파일에는 닿지 않는다). WebWorker lib 설정으로 재 보면 40건 — 이벤트가 `FetchEvent` · `ExtendableEvent` · `ExtendableMessageEvent` 가 아니라 `Event` 로 잡히는 것 23(`request` · `waitUntil` · `respondWith` · `data` · `ports`), `self` 가 `ServiceWorkerGlobalScope` 가 아니라 `WorkerGlobalScope` 로 잡히는 것 6(`skipWaiting` · `clients` · `importScripts` 로 실은 `APP_VERSION` · `bibleAudioCache`), 매개변수 타입 11. **고치는 법**: 서비스 워커 전용 설정(`include: ["sw.js"]`, WebWorker lib)을 두어 `npm run typecheck` 에 한 줄을 더하고, `self` 와 리스너 이벤트의 타입을 JSDoc 으로 적는다 — 캐시 · 업데이트의 중심이라 §6 의 실기기 오프라인 확인과 함께 본다.
 
 ---
@@ -170,11 +170,9 @@ ADR-038 §3 렌더 기반이 복원하는 전례 표기 — 계응 ◯(`.respons
 
 ---
 
-## 9. PR #349 리뷰에서 넘긴 후속 (2026-10-16)
+## 9. PR #349 리뷰에서 넘긴 후속 (2026-10-16) — 해소 (2026-10-18)
 
-#349(저녁 전례)의 `/code-review` 가 범위 밖으로 짚은 것. 지적 15건은 모두 그 PR 에서 고쳤다 — 조치는 원장 `docs/changes/2026-10-15-liturgical-engine-evening.md` 「리뷰 반영」.
-
-- **배포 목록에 `data/lectionary/` 가 없다 — 다음 릴리스를 막는다**(이 저장소 밖 — `common-bible-server`). `scripts/deploy-manifest.txt` 의 정적 자산 줄에 `data/bible/` · 검색 색인만 있고 교회력 · 전례독서 묶음(`data/lectionary/*.json`)이 없다(2026-10-16 확인). 이대로 배포하면 `deploy.zip` 에 묶음이 빠져 dev · 운영의 `/calendar` · `/lectionary` 가 「교회력 자료를 불러오지 못했습니다」 화면이 된다. 서버 저장소 PR 로 그 줄을 더하고 `deploy.sh verify` 가 묶음 하나의 200 을 보게 한다(메모의 「배포 목록 갱신 망각」 함정 — 목록 → 트리 방향만 검사된다).
+> **해소됨 (2026-10-18) — 본문을 지웠다.** 하나 남았던 「배포 목록에 `data/lectionary/`가 없다 — 다음 릴리스를 막는다」를 서버 저장소가 고쳤다(`common-bible-server` `2b28813` — 배포 목록에 `data/lectionary/`를 더하고, `deploy.sh verify`가 교회력 · 전례독서 묶음에서 한 파일씩 200을 본다). 2026-10-18 dev 배포(`bible-1.6.4-64f132f`)에서 검증 9종이 통과했고, 사용자가 dev의 캘린더를 확인했다(이상 없음). 넘길 때의 기록은 원장 `docs/changes/2026-10-15-liturgical-engine-evening.md` 「리뷰 반영」, 지운 기록은 원장 `docs/changes/2026-10-18-typecheck-batch-2.md`. §10을 당겨 번호를 메우지 않는다 — 머지된 원장 · 메모가 절을 번호로 가리킨다.
 
 ---
 

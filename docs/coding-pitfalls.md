@@ -519,12 +519,14 @@ A2 캘린더 탭 1단계(#348) 화면에서 성 토요일(2026-04-04) 칸이 「
 - 22개 파일(2026-10-15 발견 — `known-issues.md` §7) — 묶음 ① 16개를 켜자 44건(원장 `docs/changes/2026-10-17-typecheck-batch-1.md`): `BookEntry.division` 에 데이터의 `"liturgical"`(전례시편 · 송가)이 없었고, `BibleVerse.chapter_ref` 는 데이터가 정수인데 `string` 이었고, `AppStorage` 에 `loadCiteShow` · `saveCiteShow` 가, Window 에 창 객체 다섯이 빠져 있었고, `parsePath()` 의 전역 선언은 `any` 였다. 그 자체로 실행 결함은 아니었지만 선언을 믿고 짠 새 코드가 틀릴 자리였다.
 - 같은 묶음 — JSDoc 블록과 함수 사이에 `const` 하나가 끼어 매개변수 타입이 함수에 붙지 않았고(citations.js `wrapNoteAnchorsInArticle`), `@param {T} [이름] — 설명`(대괄호 이름 바로 뒤 줄표)은 TS 가 「Invalid character」(TS1127)로 읽었다.
 - 같은 묶음의 리뷰 — `division` 타입에 `"liturgical"` 을 넣어 선언은 바로잡았지만, 그 값으로 경로를 만드는 곳(`` `/${effectiveDivision(book)}` `` — 헤더 집 단추 · 탭 바 홈)은 그대로라 전례시편 · 송가에서 없는 `/liturgical` 로 갔다(main 부터). 타입은 문자열 이어 붙이기를 막지 않는다.
+- 묶음 ②(`views` · `search`, 2026-10-18 — 원장 `docs/changes/2026-10-18-typecheck-batch-2.md`) — `appendVerses`가 `chapter`를 null 기본값으로 받아 `findParallelsStartingAt(…, chapter)`에 넘겼는데, 받는 쪽은 `currentChapter`가 `undefined`일 때만 장 비교를 건너뛴다. null이 오면 모든 범위가 장 비교에 걸려 ※(평행 본문) 표시가 모두 빠진다. 평행 본문을 넘기는 호출부(장 화면)는 장 번호를 늘 함께 넘겨 아직 밟지 않았다 — `number | null`을 `number | undefined` 자리에 넘긴다는 타입 오류가 그 어긋남을 드러냈다.
 
 **규칙:**
 - 검사에서 빼는 파일은 첫 줄 `// @ts-nocheck`(어떤 문보다 앞) + 같은 줄에 이유와 고칠 곳. 고치는 PR 이 그 줄을 지운다. 그 줄을 문 뒤에 두면 무시돼 파일이 검사되고 오류로 드러난다 — 빼는 쪽의 실수가 조용하지 않다(ADR-012 「파일 헤더」).
 - 검사 장치는 「켜는 쪽」이 아니라 「빼는 쪽」을 명시하게 두고, 필수 CI 에서 돌린다 — 꺼진 줄 모르는 검사가 가장 비싸다. 설정 · 꾸러미 반환 타입을 바꿀 때는 타입 오류를 일부러 하나 넣어 그 파일에서 잡히는지 본다.
 - 창 객체 꾸러미(`window.appX = (() => { … })()`)의 IIFE 에는 `@returns {AppX}` 를 단다 — 인터페이스에 없는 멤버가 받는 쪽이 아니라 정의한 자리에서 걸린다.
 - 데이터 모양의 타입을 고칠 때는 파이프라인(`data/src/parser.py` 등)의 필드 타입과 실제 JSON 을 함께 대조하고, 타입을 넓혔으면(새 값) 그 값을 **쓰는 곳**이 새 값을 다루는지 `grep` 으로 함께 본다 — 경로 · 표시 문자열 · 표 색인.
+- 선택 매개변수(`@param {T} [x]`)는 `undefined`만 「없음」으로 받는다. 넘기는 쪽이 null을 「없음」으로 쓰면 `!== undefined`로 가르는 받는 쪽과 조용히 갈린다 — 넘기는 쪽의 null 기본값을 없애거나 받는 쪽을 `!= null`로 맞추고, 두 쪽의 타입을 그대로 적어 검사가 잡게 한다.
 
 ---
 
