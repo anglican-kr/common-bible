@@ -15,6 +15,8 @@
   color: var(--bg);
   padding: var(--space-2) var(--space-4);
   z-index: 100;
+  /* UI 글자 — body 의 serif(성서 본문)를 물려받지 않게 산세리프를 스스로 정한다(DESIGN.md §6 상태 표면과 같은 까닭) */
+  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
   font-size: var(--font-base);
   text-decoration: none;
   border-radius: 0 0 var(--radius) 0;
