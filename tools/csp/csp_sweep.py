@@ -32,7 +32,7 @@ INIT = """(() => {
   document.addEventListener('securitypolicyviolation', (e) => {
     window.__csp.push({ directive: e.effectiveDirective || e.violatedDirective, blocked: e.blockedURI });
   });
-  // 설치 안내 넛지가 화면을 덮지 않게(e2e conftest 와 같은 값)
+  // 설치 안내 넛지가 화면을 덮지 않게(e2e conftest와 같은 값)
   try { localStorage.setItem('bible-install-nudge', JSON.stringify({ visits: 0, nextShow: 9999, neverShow: true })); } catch (_) {}
 })();"""
 
