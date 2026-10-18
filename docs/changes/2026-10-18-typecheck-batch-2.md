@@ -1,4 +1,5 @@
 ---
+pr: 357
 date: 2026-10-18
 branch: fix/typecheck-batch-2
 title: "fix: views · search를 타입 검사 안으로"
