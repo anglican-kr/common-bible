@@ -29,12 +29,15 @@ import {
 // source, 70KB gzipped). The measured gain is the cold first visit's boot path
 // (Slow 4G DOMContentLoaded −390 ms, 2026-10-17); a warm start was within noise
 // either way, since the browser compiles function bodies lazily. A deep link
-// to either view starts fetching its modules from js/pre-fetch.js, with the
-// boot. The seam stays one-directional — neither calls route / navigate /
-// parsePath, their controls are plain links (ADR-034 principle 1), and the
-// shell they share with this module (title, header control, failure screen)
-// lives in views.js. sw.js still precaches all three for offline, and
-// tests/unit/sw.test.js follows these import() calls.
+// to either view also loads them only once route() runs — a cold first visit
+// draws the view later than when they were boot tags (Slow 4G +160-198 ms,
+// accepted 2026-10-18: a modulepreload from <head> closed that gap, but WebKit
+// kept a failed preload for the tab, so 「다시 불러오기」 could not recover —
+// ADR-038 「검토한 대안 — 모듈 로드」 E). The seam stays one-directional —
+// neither calls route / navigate / parsePath, their controls are plain links
+// (ADR-034 principle 1), and the shell they share with this module (title,
+// header control, failure screen) lives in views.js. sw.js still precaches all
+// three for offline, and tests/unit/sw.test.js follows these import() calls.
 
 const { _$, clearNode, chUnit, isModifiedClick, focusSpotOf, restoreFocusSpot } = window.appHelpers;
 const {
@@ -294,10 +297,11 @@ async function loadViewModule(load) {
 
 // What the calendar tab and the lectionary view load on their first visit: the view module and everything it
 // imports, requested at once. Awaiting calendar.js before the browser discovers its own imports costs one more round
-// trip on a cold first visit (measured 2026-10-17, Slow 4G: tab → grid +676 ms sequential, +527 ms at once); the
-// module map fetches each URL only once, so naming the dependencies here is free. tests/unit/sw.test.js reads these
-// lists — each must be exactly the first module's static imports minus the boot graph, every specifier a string
-// literal (it follows them to check the offline precache), and js/pre-fetch.js preloads the same lists for a deep link.
+// trip on a cold first visit (measured 2026-10-17 in Chromium, Slow 4G: tab → grid +676 ms sequential, +527 ms at
+// once). Chromium's module map then fetches each URL once; WebKit fetches the dependencies a second time when
+// calendar.js's own imports resolve (5 requests instead of 3 — PR #355 2nd review, known-issues §13), so there the
+// group saves nothing. tests/unit/sw.test.js reads these lists — each must be exactly the first module's static
+// imports minus the boot graph, and every specifier a string literal (it follows them to check the offline precache).
 const loadCalendarView = () => Promise.all([
   import("./calendar.js"), import("./lectionary.js"), import("./liturgical-engine.js"),
 ]).then(([mod]) => mod.renderCalendarView);

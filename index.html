@@ -430,8 +430,8 @@
   <script type="module" src="/js/app/audio-player.js"></script>
   <script type="module" src="/js/app/views.js"></script>
   <!-- ADR-038 §2 「구현」: 캘린더 · 전례독서 · 교회력 엔진(calendar · lectionary · liturgical-engine)은 태그가 없다 —
-       routing.js가 그 화면에 처음 갈 때 import()로 불러온다(그 주소로 바로 들어오면 pre-fetch.js가 미리 받는다).
-       태그나 정적 import를 다시 달면 첫 방문의 부팅이 셋을 다시 받는다(tests/unit/sw.test.js가 막는다). -->
+       routing.js가 그 화면에 처음 갈 때 import()로 불러온다. 태그나 정적 import를 다시 달면 첫 방문의 부팅이
+       셋을 다시 받는다(tests/unit/sw.test.js가 막는다). -->
   <script type="module" src="/js/app/routing.js"></script>
   <script type="module" src="/js/app/bookmark-read.js"></script>
   <script type="module" src="/js/app/tabbar.js"></script>

@@ -59,8 +59,7 @@
 //                 routing.js names exactly a's static imports minus the boot
 //                 graph, so a view's modules are requested together instead of
 //                 one round trip after another (ADR-038 「검토한 대안 — 모듈
-//                 로드」 D), and js/pre-fetch.js preloads the same group for a
-//                 deep link to that view.
+//                 로드」 D).
 //
 // /data/* entries are intentionally excluded from the existence check: those
 // live in the common-bible-data submodule, which CI does not check out, and
@@ -331,7 +330,7 @@ test("SHELL_FILES의 스크립트는 (Worker · importScripts 대상을 빼면) 
     "SHELL_FILES에 있는데 index.html에서 import로 닿지 않는다 — 파서가 간선을 놓쳤거나 쓰지 않는 파일이다");
 });
 
-// ── 지연 로드 — 부팅 그래프 밖 · 한꺼번에 · 바로 열기 ────────────────────────
+// ── 지연 로드 — 부팅 그래프 밖 · 한꺼번에 ───────────────────────────────────
 // 캘린더 · 전례독서 · 교회력 엔진(원본 약 210KB)은 index.html의 태그나 정적 import로 싣지 않고, routing.js가
 // /calendar · /lectionary에 처음 갈 때 import()로 불러온다(ADR-038 §2 「구현」, known-issues §6 — 2026-10-17).
 // 태그나 정적 import가 하나라도 다시 생기면 앱은 그대로 돌아 다른 검사로는 드러나지 않고, 첫 방문의 부팅이 셋을
@@ -403,23 +402,6 @@ test("routing.js의 한꺼번에 묶음은 그 화면 모듈이 끌어오는 것
   for (const group of groups) {
     const want = sorted([...importClosure([group[0]], { dynamic: false }).reachable].filter((p) => !BOOT_GRAPH.reachable.has(p)));
     assert.deepEqual(sorted(group), want, `${group[0]}의 묶음이 그 모듈의 import와 다르다`);
-  }
-});
-
-test("pre-fetch.js가 바로 열기에 미리 받는 목록은 그 화면의 한꺼번에 묶음과 같다", () => {
-  // /calendar · /lectionary로 바로 들어오면(공유 링크) pre-fetch.js가 부팅과 함께 그 화면의 모듈을 미리 받는다(리뷰
-  // 2026-10-18). 키는 주소의 첫 마디이고 묶음의 첫 모듈 /js/app/<키>.js와 짝이다.
-  const src = readSite("/js/pre-fetch.js");
-  const block = src.match(/new Map\(\[([\s\S]*?)\]\);/);
-  assert.ok(block, "pre-fetch.js에서 LAZY_VIEW_MODULES의 new Map([...])을 찾지 못했다");
-  const preload = new Map([...block[1].matchAll(/\["([\w-]+)",\s*\[([^\]]*)\]\]/g)]
-    .map((m) => [m[1], [...m[2].matchAll(/"([^"]+)"/g)].map((x) => x[1])]));
-  const groups = atOnceGroups();
-  assert.deepEqual(sorted([...preload.keys()]), sorted(groups.map((g) => path.posix.basename(g[0], ".js"))),
-    "미리 받는 화면과 routing.js의 묶음이 짝지어지지 않는다");
-  for (const group of groups) {
-    const key = path.posix.basename(group[0], ".js");
-    assert.deepEqual(sorted(preload.get(key)), sorted(group), `pre-fetch.js의 ${key} 목록이 routing.js 묶음과 다르다`);
   }
 });
 

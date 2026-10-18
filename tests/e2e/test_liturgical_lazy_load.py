@@ -1,13 +1,14 @@
 """E2E: 캘린더 · 전례독서 모듈의 지연 로드 (ADR-038 §2 「구현」 · known-issues §6 — 2026-10-17).
 
 교회력 엔진 · 전례독서 뷰 · 캘린더(js/app/liturgical-engine.js · lectionary.js · calendar.js)는 index.html에
-태그가 없고, routing.js가 /calendar · /lectionary에 처음 갈 때 import()로 불러온다 — 그 주소로 바로 들어오면
-pre-fetch.js가 부팅과 함께 미리 받기 시작한다. 유닛(tests/unit/sw.test.js)은 부팅 그래프 · 오프라인 목록 · 한꺼번에
-묶음 · 미리 받기 목록의 글자만 본다 — 요청이 실제로 언제 나가는지, 받지 못했을 때 어떤 화면이 되는지는 여기서 본다.
+태그가 없고, routing.js가 /calendar · /lectionary에 처음 갈 때 import()로 불러온다(그 주소로 바로 들어와도 같다 —
+미리 받기는 WebKit에서 실패한 미리 받기가 그 탭을 막아 되돌렸다, ADR-038 「검토한 대안 — 모듈 로드」 E). 유닛
+(tests/unit/sw.test.js)은 부팅 그래프 · 오프라인 목록 · 한꺼번에 묶음의 글자만 본다 — 요청이 실제로 언제 나가는지,
+받지 못했을 때 어떤 화면이 되는지는 여기서 본다.
 
   ① 성서 화면(성서 목록 · 장 · 장 사이 이동)에서는 셋을 요청하지 않는다
   ② 캘린더 탭은 셋을, 전례독서는 엔진과 뷰 둘을(캘린더 없이) 받는다 — 화면을 옮겨도 다시 받지 않고, 다시 그릴 때
-     「불러오는 중…」을 한 프레임도 그리지 않는다. 바로 들어오면 부팅과 함께 미리 받는다
+     「불러오는 중…」을 한 프레임도 그리지 않는다
   ③ 모듈을 받지 못하거나 그리다 던지면 그 뷰의 제목 · 머리와 「다시 불러오기」(DESIGN.md §6 「전체 화면 실패」) —
      누르면 새로 고쳐 열린다
   ④ 늦게 끝난 실패 · 늦게 도착한 모듈은 그사이 연 화면을 덮지 않는다(route()의 isStale 가드 — 공용 catch까지)
@@ -77,8 +78,7 @@ def _calendar_tab(page):
 # ── ① 성서 화면 ──
 
 def test_bible_screens_do_not_request_liturgical_modules(browser):
-    """성서 목록 · 장 · 장 사이 이동에서는 엔진 · 전례독서 · 캘린더를 요청하지 않는다(main은 어느 화면에서나 셋을 받았다).
-    미리 받기(pre-fetch.js)도 걸지 않는다 — 캘린더 · 전례독서 주소일 때만이다."""
+    """성서 목록 · 장 · 장 사이 이동에서는 엔진 · 전례독서 · 캘린더를 요청하지 않는다(main은 어느 화면에서나 셋을 받았다)."""
     ctx = _context(browser)
     page = ctx.new_page()
     try:
@@ -92,7 +92,6 @@ def test_bible_screens_do_not_request_liturgical_modules(browser):
             "() => location.pathname === '/john/4' && !!document.querySelector('article.chapter-text .verse')")
         page.wait_for_load_state("networkidle")
         assert seen == [], seen
-        assert page.locator("link[rel=modulepreload]").count() == 0
     finally:
         ctx.close()
 
@@ -169,35 +168,6 @@ def test_lectionary_loads_engine_and_view_without_calendar(browser):
         page.wait_for_selector(".lect-reading", timeout=20_000)
         page.wait_for_load_state("networkidle")
         assert sorted(seen) == sorted([ENGINE, LECTIONARY]), seen
-    finally:
-        ctx.close()
-
-
-def test_deep_link_preloads_view_modules_with_the_boot(browser):
-    """/calendar · /lectionary로 바로 들어오면(공유 링크) pre-fetch.js가 그 화면의 모듈을 부팅과 함께 받기 시작한다 —
-    요청이 DOMContentLoaded 전에 나가고, 라우터의 import()가 같은 것을 다시 받지 않는다. 그전엔 route()가 돈 뒤에야
-    요청해 모듈 태그로 싣던 main보다 늦게 그려졌다(PR #355 리뷰 — 느린 4G +158-198ms)."""
-    ctx = _context(browser)
-    try:
-        for path, want, ready in (
-            ("calendar/2026-10", LAZY, ".cal-grid"),
-            ("lectionary/2026-10-18", (ENGINE, LECTIONARY), ".lect-reading"),
-        ):
-            page = ctx.new_page()
-            seen = _record_lazy_requests(page)
-            page.goto(f"{BASE}/{path}")
-            page.wait_for_selector(ready, timeout=20_000)
-            page.wait_for_load_state("networkidle")
-            assert sorted(seen) == sorted(want), (path, seen)   # 미리 받기와 import()를 합쳐 한 번씩
-            preloads = page.eval_on_selector_all(
-                "link[rel=modulepreload]", "ls => ls.map((l) => new URL(l.href).pathname)")
-            assert sorted(preloads) == sorted(want), (path, preloads)
-            early = page.evaluate("""want => {
-              const dcl = performance.getEntriesByType('navigation')[0].domContentLoadedEventStart;
-              return want.map((p) => performance.getEntriesByName(location.origin + p)[0].startTime < dcl);
-            }""", list(want))
-            assert all(early), (path, early)
-            page.close()
     finally:
         ctx.close()
 
