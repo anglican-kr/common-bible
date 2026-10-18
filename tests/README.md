@@ -147,7 +147,7 @@ pytest tests/e2e/test_bookmark_sort.py -q   # 개별 파일
 | `test_a11y_axe.py` | axe-core 자동 스캔(WCAG 2.1 AA) — 전례독서 뷰 · 캘린더 월간 표(데스크톱 · 모바일) 포함 | 12 |
 | `test_a11y_keyboard.py` | 키보드 인터랙션 — 전례독서 칩 Tab · Enter 포함 · 다시 그린 뒤 포커스(구분 탭 · 검색 쪽 링크 — 마지막 쪽은 「← 이전」, 쪽 안내 · 결과 건수 제목) · 「본문 바로가기」(라우트 없이 본문으로 · 본문 영역은 이름 없는 main 하나 · 글자는 산세리프) | 11 |
 
-> **실측 (2026-10-18)**: `pytest tests/e2e` — 341건 모두 통과(캘린더 · 전례독서 지연 로드의 2회차 리뷰 반영 뒤, 8분 54초; 건수는 표 머리, 원장 `docs/changes/2026-10-17-lazy-liturgical-modules.md`가 정본). `test_a11y_axe.py`(12건)는 선택적 의존성 `axe-playwright-python`이 없으면 **그 파일만** 모듈 단위 skip 1건으로 빠진다(`importorskip`; pytest 요약에는 `N passed, 1 skipped`로 찍힌다). 그전엔 하드 import라 수집 오류로 스위트 전체가 중단됐다. 옛 「headless 사전 실패」 묶음은 2026-06-22에 해소 — [`docs/known-issues.md`](../docs/known-issues.md) §1.
+> **실측 (2026-10-18)**: `pytest tests/e2e` — 343건 모두 통과(북마크 가져오기 항목 검사 — ADR-040 — 뒤, 8분 50초; 건수는 표 머리, 원장 `docs/changes/2026-10-18-bookmark-import-items.md`가 정본). `test_a11y_axe.py`(12건)는 선택적 의존성 `axe-playwright-python`이 없으면 **그 파일만** 모듈 단위 skip 1건으로 빠진다(`importorskip`; pytest 요약에는 `N passed, 1 skipped`로 찍힌다). 그전엔 하드 import라 수집 오류로 스위트 전체가 중단됐다. 옛 「headless 사전 실패」 묶음은 2026-06-22에 해소 — [`docs/known-issues.md`](../docs/known-issues.md) §1.
 
 ## 4. 데이터 파이프라인 테스트 (서브모듈)
 
