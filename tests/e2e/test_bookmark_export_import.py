@@ -55,9 +55,11 @@ def _intercept_export(page) -> dict:
 
 # ── 테스트용 픽스처 데이터 ──────────────────────────────────────────────────
 
-_BM_A = {"type": "bookmark", "id": "bm-a", "bookId": "gen", "chapter": 1, "label": "창세기 1장"}
-_BM_B = {"type": "bookmark", "id": "bm-b", "bookId": "john", "chapter": 3, "label": "요한 3장"}
-_BM_C = {"type": "bookmark", "id": "bm-c", "bookId": "ps", "chapter": 23, "label": "시편 23편"}
+# 앱이 내보내는 모양 그대로 — `verseSpec`이 없는 북마크는 가져오기가 뺀다(트리 링크가 `/gen/1/undefined`가
+# 되던 꼴 — 2026-10-18, known-issues §14).
+_BM_A = {"type": "bookmark", "id": "bm-a", "bookId": "gen", "chapter": 1, "verseSpec": "all", "label": "창세기 1장"}
+_BM_B = {"type": "bookmark", "id": "bm-b", "bookId": "john", "chapter": 3, "verseSpec": "all", "label": "요한 3장"}
+_BM_C = {"type": "bookmark", "id": "bm-c", "bookId": "ps", "chapter": 23, "verseSpec": "all", "label": "시편 23편"}
 
 _FOLDER_WITH_CHILD = {
     "type": "folder",
@@ -82,6 +84,16 @@ def _set_bookmarks(page, store: list) -> None:
 
 def _get_bookmarks(page) -> list:
     return page.evaluate("() => window.syncStoreV2.loadBookmarks()")
+
+
+def _wait_visible_notice(page, text: str) -> None:
+    """Wait for the on-screen snackbar with exactly `text` — the live region (#a11y-announce, sr-only)
+    carries the same words, so it is left out."""
+    page.wait_for_function(
+        """(t) => [...document.querySelectorAll('body > div')].some(
+            (d) => d.id !== 'a11y-announce' && d.textContent === t && d.checkVisibility())""",
+        arg=text,
+    )
 
 
 def _open_bookmark_drawer(page) -> None:
@@ -203,6 +215,8 @@ def test_import_invalid_json_shows_error(browser, tmp_path):
     page.wait_for_function(
         "() => document.getElementById('a11y-announce')?.textContent.includes('읽을 수 없습니다')"
     )
+    # 눈에도 보인다 — 예전엔 화면 읽기 영역에만 들어가 아무 일도 없는 것처럼 보였다(2026-10-18).
+    _wait_visible_notice(page, "파일을 읽을 수 없습니다. 올바른 JSON 파일인지 확인해 주세요.")
     assert page.locator("#bm-import-modal").get_attribute("hidden") is not None
 
     ctx.close()
@@ -222,6 +236,7 @@ def test_import_missing_bookmarks_field_shows_error(browser, tmp_path):
     page.wait_for_function(
         "() => document.getElementById('a11y-announce')?.textContent.includes('형식이 올바르지 않습니다')"
     )
+    _wait_visible_notice(page, "북마크 파일 형식이 올바르지 않습니다.")
     assert page.locator("#bm-import-modal").get_attribute("hidden") is not None
 
     ctx.close()
@@ -240,6 +255,66 @@ def test_import_valid_file_opens_modal(browser, tmp_path):
     page.wait_for_selector("#bm-import-modal:not([hidden])")
 
     assert "2개" in page.inner_text("#bm-import-body")
+    assert "올바르지 않은" not in page.inner_text("#bm-import-body")
+
+    ctx.close()
+
+
+def test_import_partial_file_skips_bad_items_and_says_so(browser, tmp_path):
+    """어긋난 항목만 빼고 들인다 — 확인 대화상자가 뺄 개수를 먼저 알리고, 덮어쓰면 올바른 항목만 남는다
+    (사용자 결정 2026-10-18, known-issues §14)."""
+    incoming = {
+        "_version": 1,
+        "exportedAt": 0,
+        "bookmarks": [
+            _BM_A,
+            None,                                                        # 객체가 아님
+            {**_BM_B, "id": "bm-bad-book", "bookId": "xyz"},             # 없는 책
+            {"type": "folder", "id": "folder-bad", "name": "x", "children": "not an array"},
+            _FOLDER_WITH_CHILD,                                          # 폴더 안의 bm-c 는 들어온다
+        ],
+    }
+    import_file = tmp_path / "partial.json"
+    import_file.write_text(json.dumps(incoming), encoding="utf-8")
+
+    ctx = browser.new_context()
+    page = ctx.new_page()
+    page.add_init_script("localStorage.removeItem('bible-bookmarks');")
+    _open_bookmark_drawer(page)
+    _set_bookmarks(page, [{**_BM_B, "id": "bm-existing"}])
+
+    page.locator("#bm-import-input").set_input_files(str(import_file))
+    page.wait_for_selector("#bm-import-modal:not([hidden])")
+    body = page.inner_text("#bm-import-body")
+    assert "북마크 2개를" in body
+    assert "올바르지 않은 항목 3개는 빼고 가져옵니다." in body
+
+    page.locator("#bm-import-overwrite").click()
+    page.wait_for_selector("#bm-import-modal", state="hidden")
+    store = _get_bookmarks(page)
+    assert {n["id"] for n in store} == {"bm-a", "folder-1"}
+    folder = next(n for n in store if n["id"] == "folder-1")
+    assert [n["id"] for n in folder["children"]] == ["bm-c"]
+
+    ctx.close()
+
+
+def test_import_all_bad_items_stops_with_visible_notice(browser, tmp_path):
+    """들일 항목이 하나도 없으면 대화상자를 열지 않고 스낵바로 알린다 — 목록은 그대로."""
+    incoming = {"_version": 1, "exportedAt": 0, "bookmarks": [None, {"type": "bookmark", "id": "zz1"}]}
+    import_file = tmp_path / "all_bad.json"
+    import_file.write_text(json.dumps(incoming), encoding="utf-8")
+
+    ctx = browser.new_context()
+    page = ctx.new_page()
+    page.add_init_script("localStorage.removeItem('bible-bookmarks');")
+    _open_bookmark_drawer(page)
+    _set_bookmarks(page, [_BM_A])
+
+    page.locator("#bm-import-input").set_input_files(str(import_file))
+    _wait_visible_notice(page, "가져올 수 있는 항목이 없습니다. 파일에는 올바르지 않은 항목 2개만 들어 있습니다.")
+    assert page.locator("#bm-import-modal").get_attribute("hidden") is not None
+    assert [n["id"] for n in _get_bookmarks(page)] == ["bm-a"]
 
     ctx.close()
 

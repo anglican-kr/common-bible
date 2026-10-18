@@ -1292,11 +1292,14 @@ function loadBookmarkActive() {
 function loadImportExport() {
   const ctx = { Object, Array, Set, String, JSON, console, Error };
   vm.createContext(ctx);
+  // The item check reads verse specs with verse-spec.js's parseVerseSpec (imported in the module).
+  vm.runInContext(extractBlock("VERSE_SPEC", VERSE_SPEC_SOURCE), ctx, { filename: "verse-spec.js" });
   vm.runInContext(extractBlock("IMPORT_EXPORT", BOOKMARK_MODALS_SOURCE), ctx, { filename: "bookmark-modals.js" });
   return {
     _validateImportData: ctx._validateImportData,
     _mergeBookmarkStores: ctx._mergeBookmarkStores,
     _countBookmarks: ctx._countBookmarks,
+    _sanitizeImportItems: ctx._sanitizeImportItems,
   };
 }
 
@@ -1691,6 +1694,99 @@ test("_countBookmarks: folder with non-array children is skipped (no throw)", ()
     { type: "bookmark", id: "b" },
   ];
   assert.equal(h._countBookmarks(items), 1);
+});
+
+// ── _sanitizeImportItems ────────────────────────────────────────────────────
+// 가져오기는 어긋난 항목만 빼고 들인다(사용자 결정 2026-10-18). 「올바르다」 = 앱이 써 온 모양(ADR-010).
+
+/** Chapter counts for the books these cases use — gen 50 · john 21 · ps 150; anything else is unknown. */
+const IMPORT_CHAPTERS = { gen: 50, john: 21, ps: 150 };
+const importChapterCountOf = (id) => IMPORT_CHAPTERS[id] ?? null;
+
+/** A bookmark exactly as the app saves it (bookmark-modals.js commitSaveBookmark). */
+function appBookmark(over = {}) {
+  return { type: "bookmark", id: "b1", bookId: "john", chapter: 3, verseSpec: "16", label: "요한 3:16", note: "", createdAt: 1_700_000_000_000, ...over };
+}
+
+test("_sanitizeImportItems: a tree in the app's own shape comes through unchanged", () => {
+  const h = loadImportExport();
+  const items = [
+    { type: "folder", id: "f1", name: "대림1주일", expanded: false, createdAt: 1, children: [
+      appBookmark({ id: "b1" }),
+      { type: "folder", id: "f2", name: "", expanded: true, children: [appBookmark({ id: "b2", verseSpec: "1-5,10-15" })] },
+    ] },
+    appBookmark({ id: "b3", bookId: "gen", chapter: 1, verseSpec: "all", label: "창세 1장" }),
+    appBookmark({ id: "b4", bookId: "ps", chapter: 150, verseSpec: "3a,3b,5-7", updatedAt: 2 }),
+  ];
+  const { nodes, skipped } = h._sanitizeImportItems(items, importChapterCountOf);
+  assert.equal(skipped, 0);
+  assert.deepEqual(JSON.parse(JSON.stringify(nodes)), items);
+});
+
+test("_sanitizeImportItems: empty file → nothing kept, nothing skipped", () => {
+  const h = loadImportExport();
+  assert.deepEqual(JSON.parse(JSON.stringify(h._sanitizeImportItems([], importChapterCountOf))), { nodes: [], skipped: 0 });
+});
+
+test("_sanitizeImportItems: each ill-formed bookmark is left out and counted", () => {
+  const h = loadImportExport();
+  const bad = [
+    null, 1, "x", [],                                   // not an object
+    appBookmark({ id: "" }), appBookmark({ id: 7 }),       // id
+    appBookmark({ type: "note" }),                         // unknown type
+    appBookmark({ bookId: undefined }), appBookmark({ bookId: "xyz" }),   // book
+    appBookmark({ chapter: 0 }), appBookmark({ chapter: 1.5 }), appBookmark({ chapter: "3" }), appBookmark({ chapter: 22 }),   // chapter (john has 21)
+    appBookmark({ verseSpec: undefined }), appBookmark({ verseSpec: "" }), appBookmark({ verseSpec: "1-x" }),
+    appBookmark({ verseSpec: "0" }), appBookmark({ verseSpec: "3,abc" }),  // spec — a segment parseVerseSpec drops
+    appBookmark({ label: undefined }), appBookmark({ label: 3 }),          // label
+    appBookmark({ note: 5 }), appBookmark({ createdAt: "today" }), appBookmark({ updatedAt: null }),   // optional fields
+  ].map((x, i) => (x && typeof x === "object" && !Array.isArray(x) && typeof x.id === "string" && x.id !== "" ? { ...x, id: `bad${i}` } : x));
+  const good = appBookmark({ id: "good" });
+  const { nodes, skipped } = h._sanitizeImportItems([...bad, good], importChapterCountOf);
+  assert.deepEqual(nodes.map((n) => n.id), ["good"]);
+  assert.equal(skipped, bad.length);
+});
+
+test("_sanitizeImportItems: an ill-formed folder takes its whole subtree, counted node by node", () => {
+  const h = loadImportExport();
+  const items = [
+    { type: "folder", id: "f1", name: 3, children: [appBookmark({ id: "a" }), { type: "folder", id: "f2", name: "x", children: [appBookmark({ id: "b" })] }] },
+    { type: "folder", id: "f3", name: "x", children: "not an array" },
+    appBookmark({ id: "c" }),
+  ];
+  const { nodes, skipped } = h._sanitizeImportItems(items, importChapterCountOf);
+  assert.deepEqual(nodes.map((n) => n.id), ["c"]);
+  assert.equal(skipped, 4 + 1);   // f1 · a · f2 · b, then f3
+});
+
+test("_sanitizeImportItems: a well-formed folder keeps its well-formed children only", () => {
+  const h = loadImportExport();
+  const items = [{ type: "folder", id: "f1", name: "x", children: [appBookmark({ id: "a" }), appBookmark({ id: "b", chapter: 99 })] }];
+  const { nodes, skipped } = h._sanitizeImportItems(items, importChapterCountOf);
+  assert.equal(skipped, 1);
+  assert.deepEqual(nodes[0].children.map((n) => n.id), ["a"]);
+});
+
+test("_sanitizeImportItems: a repeated id keeps the first well-formed item, anywhere in the tree", () => {
+  const h = loadImportExport();
+  const items = [
+    appBookmark({ id: "dup", label: "first" }),
+    { type: "folder", id: "f1", name: "x", children: [appBookmark({ id: "dup", label: "second" })] },
+    appBookmark({ id: "late", chapter: 0 }),      // ill-formed, so the later "late" is the first well-formed one
+    appBookmark({ id: "late", label: "kept" }),
+  ];
+  const { nodes, skipped } = h._sanitizeImportItems(items, importChapterCountOf);
+  assert.equal(skipped, 2);
+  assert.deepEqual(nodes.map((n) => n.label ?? n.id), ["first", "f1", "kept"]);
+  assert.equal(nodes[1].children.length, 0);
+});
+
+test("_sanitizeImportItems: unknown fields ride along (a newer app's extras survive)", () => {
+  const h = loadImportExport();
+  const items = [appBookmark({ id: "a", color: "red", futureField: { x: 1 } })];
+  const { nodes } = h._sanitizeImportItems(items, importChapterCountOf);
+  assert.equal(nodes[0].color, "red");
+  assert.deepEqual(JSON.parse(JSON.stringify(nodes[0].futureField)), { x: 1 });
 });
 
 // ── BOOKMARK_SORT loader ─────────────────────────────────────────────────────

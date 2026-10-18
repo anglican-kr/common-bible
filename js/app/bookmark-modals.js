@@ -21,7 +21,7 @@ import {
   collectFolderOptions, insertItem, _findItemInStore,
   findExistingChapterBookmarks, _findParentFolderId,
 } from "./bookmark-core.js";
-import { collapseSegmentedVerses, selectedVersesToSpec, mergeVerseSpecs } from "./verse-spec.js";
+import { collapseSegmentedVerses, selectedVersesToSpec, mergeVerseSpecs, parseVerseSpec } from "./verse-spec.js";
 
 const { _$, el, clearNode, chUnit } = window.appHelpers;
 const { createOverlay } = window.appOverlay;
@@ -727,6 +727,101 @@ function _countBookmarks(items) {
   }
   return count;
 }
+
+// ── Import item check ──
+// 가져오기는 어긋난 항목만 빼고 들인다 — 뺀 개수는 확인 대화상자가 병합 · 덮어쓰기 전에 알린다(사용자 결정
+// 2026-10-18 — 파일 전체 거절과 견준 뒤. 북마크는 서로를 가리키지 않는 기록이라 일부만 들어와도 목록이 어긋나지
+// 않고, 깨진 항목 하나 때문에 백업 전체를 못 쓰는 쪽이 더 큰 손실이다). 「올바르다」는 앱이 북마크를 처음
+// 저장한 날(2026-04-25)부터 써 온 모양 그대로다(ADR-010) — 이 앱이 내보낸 파일은 모두 통과한다.
+
+/** @param {unknown} x @returns {x is Record<string, unknown>} */
+function _isRecord(x) {
+  return x !== null && typeof x === "object" && !Array.isArray(x);
+}
+
+// How many nodes an item stands for: itself plus whatever it holds, read as loosely as possible —
+// a skipped folder's count includes everything inside it.
+/** @param {unknown} x @returns {number} */
+function _nodeCount(x) {
+  const kids = _isRecord(x) ? x.children : undefined;
+  return 1 + (Array.isArray(kids) ? kids.reduce((n, k) => n + _nodeCount(k), 0) : 0);
+}
+
+// "all", or a spec whose every comma segment parseVerseSpec keeps — it drops what it cannot read
+// silently, and a bookmark whose spec lost a segment would point at fewer verses than it says.
+/** @param {string} spec */
+function _isWellFormedSpec(spec) {
+  return spec === "all" || (spec !== "" && parseVerseSpec(spec).length === spec.split(",").length);
+}
+
+/** @param {unknown} v @param {string} type  optional fields are checked only when present */
+function _optionalOf(v, type) {
+  return v === undefined || typeof v === type;
+}
+
+/**
+ * A bookmark the app can draw and open: a known book, a chapter inside it, a readable verse spec and a label
+ * (the tree link reads `/<book>/<chapter>/<spec>` — a missing spec made it `/gen/1/undefined`).
+ * @param {unknown} x
+ * @param {(bookId: string) => number | null} chapterCountOf  chapters in that book, null for an unknown book
+ * @returns {x is BookmarkTreeBookmark}
+ */
+function _isWellFormedBookmark(x, chapterCountOf) {
+  if (!_isRecord(x) || x.type !== "bookmark") return false;
+  const { id, bookId, chapter, verseSpec, label } = x;
+  const count = typeof bookId === "string" ? chapterCountOf(bookId) : null;
+  return typeof id === "string" && count != null
+    && typeof chapter === "number" && Number.isInteger(chapter) && chapter >= 1 && chapter <= count
+    && typeof verseSpec === "string" && _isWellFormedSpec(verseSpec)
+    && typeof label === "string"
+    && _optionalOf(x.note, "string") && _optionalOf(x.createdAt, "number") && _optionalOf(x.updatedAt, "number");
+}
+
+/**
+ * @param {unknown} x
+ * @returns {x is { type: "folder", id: string, name: string, children: unknown[], expanded?: boolean }}
+ */
+function _isWellFormedFolder(x) {
+  if (!_isRecord(x) || x.type !== "folder") return false;
+  const { id, name, children } = x;
+  return typeof id === "string" && typeof name === "string" && Array.isArray(children)
+    && _optionalOf(x.expanded, "boolean") && _optionalOf(x.createdAt, "number") && _optionalOf(x.updatedAt, "number");
+}
+
+/**
+ * Keep the well-formed items of an import file. A skipped folder takes its subtree with it — nothing inside
+ * is moved elsewhere. A repeated id keeps its first well-formed item (two rows answering to one id would
+ * break move · delete · sync). Unknown fields ride along, so a newer app's extra fields survive.
+ * @param {unknown[]} items  the file's `bookmarks`
+ * @param {(bookId: string) => number | null} chapterCountOf
+ * @returns {{ nodes: BookmarkTreeNode[], skipped: number }}  `skipped` counts every node left out
+ */
+function _sanitizeImportItems(items, chapterCountOf) {
+  /** @type {Set<string>} */
+  const seen = new Set();
+  let skipped = 0;
+  /** @param {unknown[]} list @returns {BookmarkTreeNode[]} */
+  function walk(list) {
+    /** @type {BookmarkTreeNode[]} */
+    const out = [];
+    for (const x of list) {
+      const id = _isRecord(x) ? x.id : undefined;
+      if (typeof id !== "string" || id === "" || seen.has(id)) {
+        skipped += _nodeCount(x);
+      } else if (_isWellFormedFolder(x)) {
+        seen.add(id);
+        out.push({ ...x, children: walk(x.children) });
+      } else if (_isWellFormedBookmark(x, chapterCountOf)) {
+        seen.add(id);
+        out.push(x);
+      } else {
+        skipped += _nodeCount(x);
+      }
+    }
+    return out;
+  }
+  return { nodes: walk(items), skipped };
+}
 // ── END IMPORT_EXPORT ──
 
 // ── BEGIN BOOKMARK_IMPORT ──
@@ -758,16 +853,19 @@ function openImportFilePicker() {
   $bmImportInput.click();
 }
 
-/** @param {{ bookmarks: unknown[] }} incoming  passed _validateImportData */
-function openImportModal(incoming) {
-  // The items are taken as bookmark nodes as they are — only the envelope was checked (see
-  // _validateImportData). Item-level checks are a known-issues §14 follow-up, not this cast's job.
-  const items = /** @type {BookmarkTreeNode[]} */ (incoming.bookmarks);
+/**
+ * @param {BookmarkTreeNode[]} items  the well-formed items (_sanitizeImportItems)
+ * @param {number} skipped  items left out — said before 병합 · 덮어쓰기 so nobody takes a partial import for a whole one
+ */
+function openImportModal(items, skipped) {
   const bmCount = _countBookmarks(items);
   clearNode($bmImportBody);
   $bmImportBody.appendChild(
     el("p", {}, `북마크 ${bmCount}개를 현재 목록에 병합하거나 덮어쓸 수 있습니다.`)
   );
+  if (skipped > 0) {
+    $bmImportBody.appendChild(el("p", {}, `올바르지 않은 항목 ${skipped}개는 빼고 가져옵니다.`));
+  }
 
   importOverlay.open();
   const cleanup = closeImportModal;
@@ -791,27 +889,48 @@ function openImportModal(incoming) {
   $bmImportCancel.onclick = cleanup;
 }
 
+// An import that stops early says why on screen — the snackbar also reads it to the live region. These lines
+// were live-region-only before, so a sighted user saw nothing happen.
+/** @param {string} msg */
+function _importStopped(msg) {
+  if (window._showSyncSnackbar) window._showSyncSnackbar(msg);
+  else announce(msg);
+  $bmImportInput.value = "";
+}
+
 $bmImportBtn.addEventListener("click", openImportFilePicker);
 $bmImportInput.addEventListener("change", () => {
   const file = $bmImportInput.files?.[0];
   if (!file) return;
   const reader = new FileReader();
-  reader.onload = (e) => {
+  reader.onload = async (e) => {
     let data;
     try {
       const result = /** @type {FileReader} */ (e.target).result;
       data = JSON.parse(typeof result === "string" ? result : "");
     } catch (_) {
-      announce("파일을 읽을 수 없습니다. 올바른 JSON 파일인지 확인해 주세요.");
-      $bmImportInput.value = "";
+      _importStopped("파일을 읽을 수 없습니다. 올바른 JSON 파일인지 확인해 주세요.");
       return;
     }
     if (!_validateImportData(data)) {
-      announce("북마크 파일 형식이 올바르지 않습니다.");
-      $bmImportInput.value = "";
+      _importStopped("북마크 파일 형식이 올바르지 않습니다.");
       return;
     }
-    openImportModal(data);
+    // The item check needs each book's chapter count (an unknown book or a chapter past the end is left out).
+    /** @type {Map<string, number>} */
+    let chapterCounts;
+    try {
+      chapterCounts = new Map((await window.loadBooks()).map((b) => [b.id, b.chapter_count]));
+    } catch (_) {
+      _importStopped("성서 목록을 불러오지 못해 가져오지 않았습니다. 연결을 확인한 뒤 「가져오기」를 다시 눌러 주세요.");
+      return;
+    }
+    const { nodes, skipped } = _sanitizeImportItems(data.bookmarks, (id) => chapterCounts.get(id) ?? null);
+    if (!nodes.length && skipped > 0) {
+      _importStopped(`가져올 수 있는 항목이 없습니다. 파일에는 올바르지 않은 항목 ${skipped}개만 들어 있습니다.`);
+      return;
+    }
+    openImportModal(nodes, skipped);
   };
   reader.readAsText(file);
 });
