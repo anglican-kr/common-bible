@@ -223,11 +223,13 @@ def test_month_fits_320px_without_horizontal_scroll(browser):
 
 def test_invalid_month_shows_notice_with_link_to_this_month(desktop_context):
     """/calendar/2026-13 · 계산 범위 밖 1500-01 — 「잘못된 날짜입니다」 + 이번 달 링크.
-    링크는 전체 화면 실패의 다음 행동 — 높이가 터치 타깃(44px) 이상이다(DESIGN.md §6 · §8 — 그전엔 26px 칩)."""
+    링크는 전체 화면 실패의 다음 행동 — 높이가 터치 타깃(44px) 이상이다(DESIGN.md §6 · §8 — 그전엔 26px 칩). 부제는 그
+    단추 이름으로 할 일을 말한다(coding-pitfalls §29 — PR #355 리뷰)."""
     page = desktop_context.new_page()
     for bad in ("calendar/2026-13", "calendar/1500-01", "calendar/abc"):
         _open(page, bad)
         assert "잘못된 날짜입니다" in page.inner_text(".calendar")
+        assert page.inner_text(".empty-state-subtitle").endswith("「이번 달 캘린더」를 눌러 주세요.")
     link = page.locator(".state-action a")
     assert link.inner_text() == "이번 달 캘린더"
     assert link.bounding_box()["height"] >= 44
@@ -237,15 +239,23 @@ def test_invalid_month_shows_notice_with_link_to_this_month(desktop_context):
 
 
 def test_preload_failure_shows_calendar_error(browser):
-    """교회력 자료(정의 표)를 받지 못하면 이 뷰의 실패 화면 — 앞 화면이 남지 않는다."""
+    """교회력 자료(정의 표)를 받지 못하면 이 뷰의 실패 화면 — 앞 화면이 남지 않는다. 다음 행동은 「다시 불러오기」(화면 모듈을
+    받지 못했을 때와 같은 화면)이고, 누르면 실패한 그 달이 다시 열린다 — 그전의 「이번 달 캘린더」는 /calendar/2027-03 에서
+    실패한 3월이 아니라 이번 달로 갔다(PR #355 리뷰)."""
     ctx = browser.new_context(service_workers="block")
     ctx.add_init_script(CLEAR_APP_STORAGE)
     try:
         ctx.route("**/data/lectionary/sanctoral.json", lambda route: route.abort())
         page = ctx.new_page()
-        _open(page, "calendar/2026-10")
+        _open(page, "calendar/2027-03")
         assert "교회력 자료를 불러오지 못했습니다" in page.inner_text(".calendar")
+        assert page.inner_text(".empty-state-subtitle") == "네트워크 연결을 확인한 뒤 「다시 불러오기」를 눌러 주세요."
         assert page.locator(".cal-grid").count() == 0
+        ctx.unroute("**/data/lectionary/sanctoral.json")
+        page.locator(".state-action button").click()
+        page.wait_for_selector(".cal-grid", timeout=20_000)
+        assert page.url == f"{BASE}/calendar/2027-03"
+        assert page.inner_text(".cal-month") == "2027년 3월"
     finally:
         ctx.close()
 

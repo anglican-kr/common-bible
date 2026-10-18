@@ -57,5 +57,9 @@ def test_broken_escape_in_read_path_shows_empty_view(desktop_context):
     page.goto(f"{BASE}/read/%E0%A4%A")
     page.wait_for_selector(".bookmark-read .empty-state-title", timeout=10_000)
     assert page.inner_text(".bookmark-read .empty-state-title") == "읽을 북마크가 없습니다"
+    # 빈 상태는 UI 글자라 산세리프 — .empty-state 가 글꼴을 스스로 정한다(2026-10-17 · DESIGN.md §6; 그전엔 body 의 serif)
+    fonts = page.eval_on_selector_all(".bookmark-read .empty-state-title, .bookmark-read .empty-state-subtitle",
+                                      "els => els.map(e => getComputedStyle(e).fontFamily)")
+    assert fonts and all("Noto Sans KR" in f and "Serif" not in f for f in fonts), fonts
     page.wait_for_selector("#launch-screen", state="detached", timeout=5_000)
     assert not [e for e in errors if "URI" in e], errors
