@@ -746,7 +746,7 @@ def test_bare_route_shows_today_and_day_steppers_work(desktop_context):
     assert page.get_attribute(".lect-date time", "datetime") == today.isoformat()
     # 경로만 본다 — 트랙이 있는 날은 그린 뒤 주소에 「?track=」이 붙는데(지금 항목에 고른 트랙을 적는다), 장을 이미 받은
     # 날로 돌아오면 그 일이 이동과 한 태스크 안에 끝나 「?track=」 없는 주소를 볼 틈이 없다(오늘이 트랙 있는 주일일 때 —
-    # 2026-10-18 에 드러났다)
+    # 2026-10-18에 드러났다)
     def path_is(date):
         return lambda url: urllib.parse.urlparse(url).path == f"/lectionary/{date.isoformat()}"
     page.locator(".lect-datenav-btn[aria-label='다음날']").click()

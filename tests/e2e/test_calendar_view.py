@@ -240,7 +240,7 @@ def test_invalid_month_shows_notice_with_link_to_this_month(desktop_context):
 
 def test_preload_failure_shows_calendar_error(browser):
     """교회력 자료(정의 표)를 받지 못하면 이 뷰의 실패 화면 — 앞 화면이 남지 않는다. 다음 행동은 「다시 불러오기」(화면 모듈을
-    받지 못했을 때와 같은 화면)이고, 누르면 실패한 그 달이 다시 열린다 — 그전의 「이번 달 캘린더」는 /calendar/2027-03 에서
+    받지 못했을 때와 같은 화면)이고, 누르면 실패한 그 달이 다시 열린다 — 그전의 「이번 달 캘린더」는 /calendar/2027-03에서
     실패한 3월이 아니라 이번 달로 갔다(PR #355 리뷰)."""
     ctx = browser.new_context(service_workers="block")
     ctx.add_init_script(CLEAR_APP_STORAGE)

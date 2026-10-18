@@ -50,7 +50,7 @@ const { _$, el, clearNode, emptyState, isModifiedClick } = window.appHelpers;
 const { loadLectionaryTrack, saveLectionaryTrack } = window.appStorage;
 
 const $app = _$("app");
-// 이름은 views.js 에 있다 — 이 모듈을 받지 못했을 때 라우터가 같은 제목으로 실패 화면을 그린다.
+// 이름은 views.js에 있다 — 이 모듈을 받지 못했을 때 라우터가 같은 제목으로 실패 화면을 그린다.
 const PAGE_TITLE = LITURGICAL_VIEWS.lectionary.title;
 // 이 화면의 링크(날짜 이동 · 칩 · 카드 · 세그먼트)는 #app 을 통째로 다시 그린다 — 그 링크들은 `data-focus-key` 만 달고, 라우터가
 // 누른 자리를 재 두었다가 새 화면의 같은 컨트롤로 포커스를 돌려준다(WCAG 2.4.3 — routing.js, 캘린더 · 구분 탭 · 검색과 같다).
@@ -1160,7 +1160,7 @@ function announceDay(m) {
  * @param {LectionaryModel} m @param {Map<string, BibleChapter | null>} chapters
  */
 function commit(m, chapters) {
-  // 제목 + 위 단계 꺾쇠 — 그 날짜가 든 달의 캘린더(views.js, A2): 2026-12-25 의 독서에서 2026년 12월로.
+  // 제목 + 위 단계 꺾쇠 — 그 날짜가 든 달의 캘린더(views.js, A2): 2026-12-25의 독서에서 2026년 12월로.
   commitLiturgicalTitle("lectionary", parseDate(m.date));
   clearNode($app);
 
@@ -1225,7 +1225,7 @@ async function renderLectionaryView(parsed) {
 
   const date = parsed.date || todayKey(new Date());
   if (!parseDate(date)) return pickAnotherDate("잘못된 날짜입니다");
-  // 교회력을 계산하는 연도(엔진 — 1583-9999) 밖이면 자료를 받기 전에 알린다. 엔진의 `resolveDate` 도 범위 밖에 null 을
+  // 교회력을 계산하는 연도(엔진 — 1583-9999) 밖이면 자료를 받기 전에 알린다. 엔진의 `resolveDate`도 범위 밖에 null을
   // 낸다(그전엔 0100년대에서 날짜 이동이 같은 날을 돌려줘 탭이 멈췄다 — 자체 리뷰 2026-10-13).
   if (!isComputableDate(date)) return pickAnotherDate("교회력을 계산할 수 없는 날짜입니다");
   try {

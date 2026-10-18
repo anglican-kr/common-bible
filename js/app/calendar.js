@@ -40,7 +40,7 @@ import {
 const { _$, el, clearNode } = window.appHelpers;
 
 const $app = _$("app");
-// 이름은 views.js 에 있다 — 이 모듈을 받지 못했을 때 라우터가 같은 제목으로 실패 화면을 그린다.
+// 이름은 views.js에 있다 — 이 모듈을 받지 못했을 때 라우터가 같은 제목으로 실패 화면을 그린다.
 const PAGE_TITLE = LITURGICAL_VIEWS.calendar.title;
 
 /** parsePath 가 /calendar 에서 내는 서술자(routing.js PARSE_PATH — 정의는 types.d.ts `Route`). @typedef {import("../types").CalendarRoute} CalendarRoute */

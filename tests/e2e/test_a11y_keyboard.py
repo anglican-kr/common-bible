@@ -223,7 +223,7 @@ def test_skip_link_moves_focus_into_main_without_redrawing(browser):
         assert page.evaluate("() => document.querySelectorAll('main, [role=main]').length") == 1
         url_before = page.url
         seq_before = page.evaluate("() => window.routeSeq()")
-        # UI 글자라 산세리프 — body 의 serif(성서 본문)를 물려받았다(PR #355 리뷰 — main부터)
+        # UI 글자라 산세리프 — body의 serif(성서 본문)를 물려받았다(PR #355 리뷰 — main부터)
         font = page.evaluate("() => getComputedStyle(document.querySelector('.skip-link')).fontFamily")
         assert "Noto Sans KR" in font and "Serif" not in font, font
         page.locator(".skip-link").focus()

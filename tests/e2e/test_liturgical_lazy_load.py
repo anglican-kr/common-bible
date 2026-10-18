@@ -113,7 +113,7 @@ def test_calendar_tab_loads_the_three_modules_once(browser):
         assert sorted(seen) == sorted(LAZY), seen
         month = page.inner_text(".cal-month")
         page.locator(".cal-head a.lect-datenav-btn[data-focus-key='next']").click()
-        # 새 달 이름이 그려질 때까지 — 누르자마자 「불러오는 중…」이 .cal-month 를 지워 「다르다」만으로는 바로 참이다
+        # 새 달 이름이 그려질 때까지 — 누르자마자 「불러오는 중…」이 .cal-month를 지워 「다르다」만으로는 바로 참이다
         page.wait_for_function(
             "m => { const t = document.querySelector('.cal-month')?.textContent; return !!t && t !== m; }", arg=month)
         page.evaluate("() => window.navigate('/lectionary/2026-10-18')")
@@ -270,7 +270,7 @@ def test_view_that_throws_while_rendering_shows_its_failure_screen(browser):
     어긋남이 풀린다(PR #355 리뷰 — 그전엔 「데이터를 불러올 수 없습니다.」 한 줄 위에 「창세기 1장」 머리가 남았다)."""
     original = urllib.request.urlopen(f"{BASE}{LECTIONARY}").read().decode("utf-8")
     target = "async function renderLectionaryView(parsed) {"
-    assert target in original, "lectionary.js 에서 renderLectionaryView 머리를 찾지 못했다 — 테스트를 고칠 것"
+    assert target in original, "lectionary.js에서 renderLectionaryView 머리를 찾지 못했다 — 테스트를 고칠 것"
     broken = original.replace(target, target + ' throw new TypeError("다음 판의 모듈과 이어지지 않는다");', 1)
     ctx = _context(browser)
     page = ctx.new_page()
@@ -306,7 +306,7 @@ def test_late_module_failure_does_not_paint_over_newer_screen(browser):
         _wait_held(page, held, "calendar.js")
         page.evaluate("() => window.navigate('/john/3')")
         page.wait_for_selector("article.chapter-text .verse", timeout=20_000)
-        # 라우터가 실패를 받았다는 신호(loadViewModule 의 console.error)를 기다린 뒤 본다 — 고정 시간이 아니라
+        # 라우터가 실패를 받았다는 신호(loadViewModule의 console.error)를 기다린 뒤 본다 — 고정 시간이 아니라
         with page.expect_console_message(lambda m: m.type == "error" and "dynamically imported module" in m.text):
             held[0].abort()
         page.evaluate(TWO_FRAMES)
@@ -333,7 +333,7 @@ def test_late_module_arrival_does_not_paint_over_newer_screen(browser):
         page.evaluate("() => window.navigate('/john/4')")
         page.wait_for_function(
             "() => location.pathname === '/john/4' && !!document.querySelector('article.chapter-text .verse')")
-        # 낡은 route 가 뷰를 그리기 시작하면 곧바로 교회력 자료를 요청한다 — 그 화면은 자료(1.6MB)를 받은 뒤에야 그려져
+        # 낡은 route가 뷰를 그리기 시작하면 곧바로 교회력 자료를 요청한다 — 그 화면은 자료(1.6MB)를 받은 뒤에야 그려져
         # 화면만 보면 가드가 없어도 늦게 드러난다. 요청이 하나도 나가지 않았는지를 본다.
         page.on("request", lambda r: "/data/lectionary/" in r.url and data_requests.append(r.url))
         held[0].continue_()
@@ -363,7 +363,7 @@ def test_late_chapter_failure_does_not_paint_over_calendar(browser):
         _wait_held(page, held, "john-4.json")
         _calendar_tab(page).click()
         page.wait_for_selector(".cal-grid", timeout=20_000)
-        # 낡은 route() 가 실패를 받았다는 신호(공용 catch 의 console.error — fetch 의 TypeError)
+        # 낡은 route()가 실패를 받았다는 신호(공용 catch의 console.error — fetch의 TypeError)
         with page.expect_console_message(lambda m: m.type == "error" and "Failed to fetch" in m.text):
             held[0].abort()
         page.evaluate(TWO_FRAMES)
