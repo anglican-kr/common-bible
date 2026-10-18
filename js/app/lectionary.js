@@ -36,18 +36,22 @@
 /** @typedef {import("../types").BibleChapter} BibleChapter */
 
 import { loadChapter } from "./data-fetch.js";
-import { setTitle, appendVerses, buildSegmentTabs, bindCopyAttribution, formatVerseRanges, absentVerseNumbers } from "./views.js";
+import {
+  appendVerses, buildSegmentTabs, bindCopyAttribution, formatVerseRanges, absentVerseNumbers,
+  LITURGICAL_VIEWS, THIS_MONTH_LABEL, commitLiturgicalTitle, renderLiturgicalFailure, renderLiturgicalLoadFailure,
+} from "./views.js";
 import { specCoversVerse, verseInstanceKeys, citationSource } from "./verse-spec.js";
 import {
-  parseDate, toKey, addDays, dayOfWeek, optionalDestOf, MIN_YEAR, MAX_YEAR, isComputableDate,
+  parseDate, toKey, addDays, dayOfWeek, optionalDestOf, isComputableDate,
   preloadCalendar, preloadLectionary, resolveDate, findReadings, findCollects, fastOf,
 } from "./liturgical-engine.js";
 
-const { _$, el, clearNode, emptyState, headerIcon, HEADER_ICON_PATHS, isModifiedClick } = window.appHelpers;
+const { _$, el, clearNode, emptyState, isModifiedClick } = window.appHelpers;
 const { loadLectionaryTrack, saveLectionaryTrack } = window.appStorage;
 
 const $app = _$("app");
-const PAGE_TITLE = "전례독서";
+// 이름은 views.js에 있다 — 이 모듈을 받지 못했을 때 라우터가 같은 제목으로 실패 화면을 그린다.
+const PAGE_TITLE = LITURGICAL_VIEWS.lectionary.title;
 // 이 화면의 링크(날짜 이동 · 칩 · 카드 · 세그먼트)는 #app 을 통째로 다시 그린다 — 그 링크들은 `data-focus-key` 만 달고, 라우터가
 // 누른 자리를 재 두었다가 새 화면의 같은 컨트롤로 포커스를 돌려준다(WCAG 2.4.3 — routing.js, 캘린더 · 구분 탭 · 검색과 같다).
 
@@ -783,34 +787,15 @@ async function loadSlotChapters(slots) {
 // ── DOM ──
 
 /**
- * 머리의 위 단계 링크 — 그 날짜가 든 달의 캘린더(ADR-038 「후속」 A2; 그전엔 성서 목록 「/」 의 집 단추였다). 집 아이콘이 아니라
- * 꺾쇠다 — 다른 탭 머리의 집 단추는 성서 목록을 뜻하고 모바일에서는 탭 바와 겹쳐 숨는데(`.title-home-btn`), 이 단추는 캘린더
- * 탭 안에서 한 단계 위(iOS 캘린더의 「< 10월」)라 모바일에서도 보인다. 다른 컨트롤처럼 링크라 전역 <a> 인터셉터가 이동한다.
- * @param {string | null} date  "YYYY-MM-DD" — null 이면 이번 달
+ * 날짜를 다시 골라야 하는 실패(깨진 · 범위 밖 날짜 · 교회력에 없는 날) — 전체 화면 실패(DESIGN.md §6, views.js)의 다음 행동은
+ * 「이번 달 캘린더」다. 머리의 위 단계도 이번 달의 캘린더로 간다(깨진 날짜에는 그 달이 없다).
+ * @param {string} message  안 된 것
+ * @returns {string} 페이지 메타의 제목
  */
-function buildUpLink(date) {
-  const p = date ? parseDate(date) : null;
-  const month = p ? `${String(p.y).padStart(4, "0")}-${String(p.m).padStart(2, "0")}` : null;
-  const a = el("a", {
-    className: "title-back-btn",
-    href: month ? `/calendar/${month}` : "/calendar",
-    "aria-label": p ? `${p.y}년 ${p.m}월 캘린더로` : "캘린더로",
+function pickAnotherDate(message) {
+  return renderLiturgicalFailure("lectionary", {
+    message, subtitle: `「${THIS_MONTH_LABEL}」를 눌러 다른 날짜를 골라 주세요.`, action: "this-month",
   });
-  a.appendChild(headerIcon(HEADER_ICON_PATHS.back));   // 왼쪽 꺾쇠
-  return a;
-}
-
-/** @param {string} msg @param {string} [subtitle] */
-function commitError(msg, subtitle) {
-  setTitle(PAGE_TITLE);
-  const $title = _$("page-title");
-  // 깨진 · 범위 밖 날짜에도 위 단계는 있다 — 이번 달의 캘린더.
-  $title.insertBefore(buildUpLink(null), $title.firstChild);
-  window.hideAudioBar?.();
-  clearNode($app);
-  const panel = el("div", { className: "lectionary" });
-  panel.appendChild(emptyState({ icon: null, title: msg, subtitle: subtitle || "" }));
-  $app.appendChild(panel);
 }
 
 /**
@@ -1175,11 +1160,8 @@ function announceDay(m) {
  * @param {LectionaryModel} m @param {Map<string, BibleChapter | null>} chapters
  */
 function commit(m, chapters) {
-  setTitle(PAGE_TITLE);
-  const $title = _$("page-title");
-  // 위 단계는 그 날짜가 든 달의 캘린더(A2) — 2026-12-25 의 독서에서 2026년 12월로.
-  $title.insertBefore(buildUpLink(m.date), $title.firstChild);
-  window.hideAudioBar?.();
+  // 제목 + 위 단계 꺾쇠 — 그 날짜가 든 달의 캘린더(views.js, A2): 2026-12-25의 독서에서 2026년 12월로.
+  commitLiturgicalTitle("lectionary", parseDate(m.date));
   clearNode($app);
 
   const root = el("div", { className: "lectionary" });
@@ -1242,33 +1224,24 @@ async function renderLectionaryView(parsed) {
   const isStale = () => entrySeq !== null && typeof routeSeq === "function" && routeSeq() !== entrySeq;
 
   const date = parsed.date || todayKey(new Date());
-  if (!parseDate(date)) {
-    commitError("잘못된 날짜입니다", "주소는 /lectionary/YYYY-MM-DD 꼴이어야 합니다.");
-    return PAGE_TITLE;
-  }
-  // 교회력을 계산하는 연도(엔진 — 1583~9999) 밖이면 자료를 받기 전에 알린다. 엔진의 `resolveDate` 도 범위 밖에 null 을
+  if (!parseDate(date)) return pickAnotherDate("잘못된 날짜입니다");
+  // 교회력을 계산하는 연도(엔진 — 1583-9999) 밖이면 자료를 받기 전에 알린다. 엔진의 `resolveDate`도 범위 밖에 null을
   // 낸다(그전엔 0100년대에서 날짜 이동이 같은 날을 돌려줘 탭이 멈췄다 — 자체 리뷰 2026-10-13).
-  if (!isComputableDate(date)) {
-    commitError("교회력을 계산할 수 없는 날짜입니다", `${MIN_YEAR}년부터 ${MAX_YEAR}년 사이의 날짜를 골라 주세요.`);
-    return PAGE_TITLE;
-  }
+  if (!isComputableDate(date)) return pickAnotherDate("교회력을 계산할 수 없는 날짜입니다");
   try {
     await Promise.all([preloadCalendar(), preloadLectionary()]);
   } catch (err) {
     // 교회력 자료를 받지 못했다(오프라인 · 캐시 없음) — 이 뷰의 헤더 · 제목으로 실패 화면을 낸다. 낡은 요청이면 조용히
     // 끝낸다(route() 가 새 화면을 그리고 있다). 공용 renderError 로 넘기면 앞 화면의 헤더 · 제목이 남았다(자체 리뷰 2026-10-13).
+    // 화면 모듈을 받지 못했을 때와 같은 실패 화면이다 — 「다시 불러오기」가 그날을 다시 연다.
     if (isStale()) return PAGE_TITLE;
     console.error(err);
-    commitError("전례독서 자료를 불러오지 못했습니다", "네트워크 연결을 확인한 뒤 다시 열어 주세요.");
-    return PAGE_TITLE;
+    return renderLiturgicalLoadFailure("lectionary");
   }
   if (isStale()) return PAGE_TITLE;
 
   const resolved = resolveDate(date);
-  if (!resolved) {
-    commitError("이 날짜는 교회력에 없습니다", "다른 날짜를 골라 주세요.");
-    return PAGE_TITLE;
-  }
+  if (!resolved) return pickAnotherDate("이 날짜는 교회력에 없습니다");
   /** @type {Map<string, ReadingGroup[]>} */
   const groupsCache = new Map();
   const groupsOf = (/** @type {Candidate} */ c) => {
@@ -1278,10 +1251,7 @@ async function renderLectionaryView(parsed) {
     return g;
   };
   const model = buildLectionaryModel(resolved, parsed, groupsOf, findCollects(resolved), loadLectionaryTrack());
-  if (!model) {
-    commitError("이 날짜는 교회력에 없습니다", "다른 날짜를 골라 주세요.");
-    return PAGE_TITLE;
-  }
+  if (!model) return pickAnotherDate("이 날짜는 교회력에 없습니다");
 
   const chapters = await loadSlotChapters(model.slots);
   if (isStale()) return PAGE_TITLE;

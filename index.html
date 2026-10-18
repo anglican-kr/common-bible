@@ -139,7 +139,7 @@
     <div id="resume-banner-slot"></div>
     <div id="division-tabs-slot"></div>
   </div>
-  <main id="app" aria-label="성경 본문"></main>
+  <main id="app"></main>
   <!-- Adaptive nav (ADR-029): mobile bottom tab bar. iOS-idiom stroke icons,
        Liquid Glass surface. Desktop (≥769px) hides this until the sidebar phase.
        ADR-030: 라벨 없는 아이콘 전용 + 검색 분리(아래 #tab-search-dock). 노트 탭은 후속. -->
@@ -427,15 +427,11 @@
   <script type="module" src="/js/app/parallels.js"></script>
   <script type="module" src="/js/app/tab-history.js"></script>
   <script type="module" src="/js/app/data-fetch.js"></script>
-  <script type="module" src="/js/app/liturgical-engine.js"></script>
   <script type="module" src="/js/app/audio-player.js"></script>
   <script type="module" src="/js/app/views.js"></script>
-  <!-- ADR-038 §3 A3: 전례독서 뷰 — views(appendVerses · 세그먼트) · data-fetch · verse-spec ·
-       liturgical-engine 위, routing(import) 아래. -->
-  <script type="module" src="/js/app/lectionary.js"></script>
-  <!-- ADR-038 §2 A2: 캘린더 뷰 — lectionary(이름 · 날짜 · 색 함수) · liturgical-engine · views 위,
-       routing(import) 아래. -->
-  <script type="module" src="/js/app/calendar.js"></script>
+  <!-- ADR-038 §2 「구현」: 캘린더 · 전례독서 · 교회력 엔진(calendar · lectionary · liturgical-engine)은 태그가 없다 —
+       routing.js가 그 화면에 처음 갈 때 import()로 불러온다. 태그나 정적 import를 다시 달면 첫 방문의 부팅이
+       셋을 다시 받는다(tests/unit/sw.test.js가 막는다). -->
   <script type="module" src="/js/app/routing.js"></script>
   <script type="module" src="/js/app/bookmark-read.js"></script>
   <script type="module" src="/js/app/tabbar.js"></script>

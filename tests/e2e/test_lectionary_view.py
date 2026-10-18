@@ -262,7 +262,9 @@ def test_back_after_track_change_from_malformed_track_url(desktop_context):
 
 def test_stale_lectionary_preload_failure_does_not_overwrite_new_route(browser):
     """전례독서 데이터 프리로드가 끝나기 전에 다른 화면으로 가고, 그 뒤 프리로드가 실패해도 새 화면이 남는다 —
-    낡은 실패가 공용 renderError 로 화면을 덮지 않는다(Copilot 5회차). 서비스 워커는 막아 fetch 가 page.route 에 잡히게."""
+    낡은 실패가 공용 renderError로 화면을 덮지 않는다(Copilot 5회차). 탭 제목도 새 화면의 것이다 — 라우터가 낡은 뷰의
+    제목으로 페이지 메타를 고치지 않는다(routing.js openLazyView의 그린 뒤 가드 — PR #355 2회차 리뷰). 서비스 워커는 막아
+    fetch가 page.route에 잡히게."""
     ctx = browser.new_context(service_workers="block")
     page = ctx.new_page()
     try:
@@ -290,6 +292,7 @@ def test_stale_lectionary_preload_failure_does_not_overwrite_new_route(browser):
         page.evaluate("() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))")   # 거부 사슬이 다 돌 때까지
         assert page.locator(".book-list").count() == 1
         assert page.locator(".error").count() == 0
+        assert page.evaluate("() => document.title") == "공동번역성서"
     finally:
         ctx.close()
 
@@ -587,6 +590,10 @@ def test_preload_failure_shows_lectionary_error_not_previous_header(browser):
         assert page.inner_text(".empty-state-title") == "전례독서 자료를 불러오지 못했습니다"
         assert page.evaluate("() => document.title").startswith("전례독서")
         assert page.locator(".error").count() == 0
+        # 다음 행동은 「다시 불러오기」 — 그날을 다시 연다(그전엔 단추가 없었다 — PR #355 리뷰). 머리는 「캘린더로」 꺾쇠.
+        assert page.inner_text(".empty-state-subtitle") == "네트워크 연결을 확인한 뒤 「다시 불러오기」를 눌러 주세요."
+        assert page.locator(".state-action button").inner_text() == "다시 불러오기"
+        assert page.locator("#page-title .title-back-btn").get_attribute("href") == "/calendar"
     finally:
         ctx.close()
 
@@ -596,6 +603,8 @@ def test_year_outside_gregorian_range_is_rejected_not_hung(desktop_context):
     page = desktop_context.new_page()
     _open(page, "lectionary/0100-06-01")
     assert page.inner_text(".empty-state-title") == "교회력을 계산할 수 없는 날짜입니다"
+    assert page.inner_text(".empty-state-subtitle") == "「이번 달 캘린더」를 눌러 다른 날짜를 골라 주세요."
+    assert page.locator(".state-action a").get_attribute("href") == "/calendar"
 
 
 def test_long_segment_labels_wrap_at_320px(browser):
@@ -738,11 +747,16 @@ def test_bare_route_shows_today_and_day_steppers_work(desktop_context):
     # 「오늘」은 브라우저의 날짜로 — 파이썬 쪽 날짜와 자정 경계에서 어긋나지 않게
     today = datetime.date(*page.evaluate("() => { const d = new Date(); return [d.getFullYear(), d.getMonth() + 1, d.getDate()]; }"))
     assert page.get_attribute(".lect-date time", "datetime") == today.isoformat()
+    # 경로만 본다 — 트랙이 있는 날은 그린 뒤 주소에 「?track=」이 붙는데(지금 항목에 고른 트랙을 적는다), 장을 이미 받은
+    # 날로 돌아오면 그 일이 이동과 한 태스크 안에 끝나 「?track=」 없는 주소를 볼 틈이 없다(오늘이 트랙 있는 주일일 때 —
+    # 2026-10-18에 드러났다)
+    def path_is(date):
+        return lambda url: urllib.parse.urlparse(url).path == f"/lectionary/{date.isoformat()}"
     page.locator(".lect-datenav-btn[aria-label='다음날']").click()
-    page.wait_for_url(f"**/lectionary/{(today + datetime.timedelta(days=1)).isoformat()}")
+    page.wait_for_url(path_is(today + datetime.timedelta(days=1)))
     page.wait_for_selector(".lectionary")
     page.locator(".lect-datenav-btn[aria-label='전날']").click()
-    page.wait_for_url(f"**/lectionary/{today.isoformat()}")
+    page.wait_for_url(path_is(today))
 
 
 def _focused(page):
@@ -896,10 +910,20 @@ def test_slow_redraw_leaves_focus_the_reader_moved_elsewhere(desktop_context):
 
 
 def test_invalid_date_shows_notice_not_crash(desktop_context):
+    """실패 화면의 글자는 산세리프 — 빈 상태가 .lectionary의 성서 본문 serif를 물려받던 것(DESIGN.md §6, 2026-10-17).
+    다음 행동은 「이번 달 캘린더」 하나이고 부제가 그 이름으로 할 일을 말한다 — 그전엔 단추 없이 「…골라 주세요」였다(PR #355 리뷰)."""
     page = desktop_context.new_page()
     _open(page, "lectionary/2026-13-99")
     assert page.inner_text(".empty-state-title") == "잘못된 날짜입니다"
     assert page.locator(".lect-reading").count() == 0
+    fonts = page.eval_on_selector_all(".empty-state-title, .empty-state-subtitle", "els => els.map(e => getComputedStyle(e).fontFamily)")
+    assert fonts and all("Noto Sans KR" in f and "Serif" not in f for f in fonts), fonts
+    assert page.inner_text(".empty-state-subtitle") == "「이번 달 캘린더」를 눌러 다른 날짜를 골라 주세요."
+    link = page.locator(".state-action a")
+    assert link.inner_text() == "이번 달 캘린더"
+    link.click()
+    page.wait_for_url(f"{BASE}/calendar")
+    page.wait_for_selector(".cal-grid", timeout=20_000)
 
 
 def test_malformed_percent_escape_shows_notice(desktop_context):

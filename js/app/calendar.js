@@ -29,16 +29,19 @@ import {
   parseDate, toKey, addDays, dayOfWeek, liturgicalYearOf, preloadCalendar, resolveDate,
   MIN_YEAR, MAX_YEAR, isComputableYear, isComputableDate,
 } from "./liturgical-engine.js";
-import { setTitle } from "./views.js";
+import {
+  LITURGICAL_VIEWS, THIS_MONTH_LABEL, commitLiturgicalTitle, renderLiturgicalFailure, renderLiturgicalLoadFailure,
+} from "./views.js";
 import {
   shortName, statusSuffix, isGrid, todayKey, buildDateNav,
   CYCLE_LABEL, COLOR_LABEL, WEEKDAY_KO,
 } from "./lectionary.js";
 
-const { _$, el, clearNode, emptyState } = window.appHelpers;
+const { _$, el, clearNode } = window.appHelpers;
 
 const $app = _$("app");
-const PAGE_TITLE = "캘린더";
+// 이름은 views.js에 있다 — 이 모듈을 받지 못했을 때 라우터가 같은 제목으로 실패 화면을 그린다.
+const PAGE_TITLE = LITURGICAL_VIEWS.calendar.title;
 
 /** parsePath 가 /calendar 에서 내는 서술자(routing.js PARSE_PATH — 정의는 types.d.ts `Route`). @typedef {import("../types").CalendarRoute} CalendarRoute */
 /**
@@ -269,24 +272,6 @@ function announceMonth(/** @type {CalendarMonth} */ model) {
   announce(`${model.title} ${PAGE_TITLE}`);
 }
 
-/** 머리 줄 — 제목 + 성서 목록 집 단추(데스크톱 — 모바일은 탭 바가 대신해 CSS 가 숨긴다; 설정 · 북마크 탭 화면과 같다). */
-function commitTitle() {
-  setTitle(PAGE_TITLE);
-  const $title = _$("page-title");
-  $title.insertBefore(window.buildHomeBtn("/", "성서 목록으로"), $title.firstChild);
-  window.hideAudioBar?.();
-}
-
-/** @param {string} msg @param {string} [subtitle] */
-function commitError(msg, subtitle) {
-  commitTitle();
-  clearNode($app);
-  const panel = el("div", { className: "calendar" });
-  panel.appendChild(emptyState({ icon: null, title: msg, subtitle: subtitle || "" }));
-  panel.appendChild(el("p", { className: "cal-error-link" }, el("a", { className: "lect-today", href: "/calendar" }, "이번 달 캘린더")));
-  $app.appendChild(panel);
-}
-
 /** @param {CalendarMonth} model */
 function buildMonthHead(model) {
   const head = el("header", { className: "cal-head" });
@@ -356,7 +341,7 @@ function buildMonthTable(model) {
  * @param {CalendarMonth} model
  */
 function commitMonth(model) {
-  commitTitle();
+  commitLiturgicalTitle("calendar");   // 제목 + 성서 목록 집 단추(views.js)
   clearNode($app);
   const root = el("div", { className: "calendar" });
   root.appendChild(buildMonthHead(model));
@@ -379,17 +364,21 @@ async function renderCalendarView(parsed) {
   const today = todayKey(new Date());
   const target = parsed.month === null ? parseMonthParam(today.slice(0, 7)) : parseMonthParam(parsed.month);
   if (!target) {
-    commitError("잘못된 날짜입니다", `주소는 /calendar/YYYY-MM 꼴이어야 합니다(${MIN_YEAR}년 ~ ${MAX_YEAR}년).`);
-    return PAGE_TITLE;
+    // 전체 화면 실패(DESIGN.md §6) — 다음 행동은 「이번 달 캘린더」(다른 화면으로 가므로 링크)
+    return renderLiturgicalFailure("calendar", {
+      message: "잘못된 날짜입니다",
+      subtitle: `주소는 /calendar/YYYY-MM 꼴이어야 합니다(${MIN_YEAR}년 ~ ${MAX_YEAR}년). 「${THIS_MONTH_LABEL}」를 눌러 주세요.`,
+      action: "this-month",
+    });
   }
   try {
     await preloadCalendar();
   } catch (err) {
     // 교회력 자료를 받지 못했다(오프라인 · 캐시 없음) — 낡은 요청이면 조용히 끝낸다(route() 가 새 화면을 그리고 있다).
+    // 화면 모듈을 받지 못했을 때와 같은 실패 화면이다 — 「다시 불러오기」가 실패한 그 달을 다시 연다.
     if (isStale()) return PAGE_TITLE;
     console.error(err);
-    commitError("교회력 자료를 불러오지 못했습니다", "네트워크 연결을 확인한 뒤 다시 열어 주세요.");
-    return PAGE_TITLE;
+    return renderLiturgicalLoadFailure("calendar");
   }
   if (isStale()) return PAGE_TITLE;
   const model = buildMonthGrid(target.y, target.m, today, resolveDate);

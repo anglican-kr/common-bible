@@ -23,7 +23,7 @@ import { showAudioPlayer, hideAudioBar } from "./audio-player.js";
 // Copy-attribution translation label shared with the lectionary view and the verse-select bar (verse-spec.js).
 import { citationSource } from "./verse-spec.js";
 
-const { _$, el, clearNode, chUnit, hangingQuoteClass } = window.appHelpers;
+const { _$, el, clearNode, chUnit, hangingQuoteClass, emptyState, headerIcon, HEADER_ICON_PATHS } = window.appHelpers;
 const { createOverlay } = window.appOverlay;
 const {
   loadBookOrder, loadStartupBehavior,
@@ -1662,6 +1662,104 @@ function renderError(msg) {
   $app.appendChild(el("div", { className: "error", role: "alert" }, msg));
 }
 
+// ── Liturgical view shell (ADR-038) ──
+// 캘린더 탭 · 전례독서 화면의 껍데기 — 이름 · 바깥 상자 · 머리 · 전체 화면 실패. 두 화면의 모듈(calendar.js · lectionary.js)은
+// 처음 갈 때 받고(routing.js), 그 모듈을 받지 못하면 모듈 안의 것을 쓸 수 없으므로 라우터와 두 모듈이 같이 쓰는 것은 부팅
+// 모듈인 여기 둔다. 한 곳이라 머리 컨트롤 · 문구가 화면마다 갈라지지 않는다(PR #355 리뷰, 2026-10-18 — 그전엔 세 벌이었고,
+// 전례독서 모듈을 받지 못한 화면만 휴대폰에서 머리에 누를 단추가 없었다).
+
+/** @typedef {"calendar" | "lectionary"} LiturgicalView */
+
+/**
+ * 두 화면의 이름 · 바깥 상자 클래스 · 자료(또는 화면 모듈)를 받지 못했을 때의 제목.
+ * @type {Readonly<Record<LiturgicalView, { title: string, panel: string, loadFailure: string }>>}
+ */
+const LITURGICAL_VIEWS = Object.freeze({
+  calendar: { title: "캘린더", panel: "calendar", loadFailure: "교회력 자료를 불러오지 못했습니다" },
+  lectionary: { title: "전례독서", panel: "lectionary", loadFailure: "전례독서 자료를 불러오지 못했습니다" },
+});
+
+// 전체 화면 실패의 다음 행동 이름 — 부제가 이 이름으로 할 일을 가리킨다(coding-pitfalls §29).
+const RELOAD_LABEL = "다시 불러오기";
+const THIS_MONTH_LABEL = "이번 달 캘린더";
+
+/**
+ * 머리 — 제목과 머리 컨트롤, 오디오 바는 내린다(성공 화면 · 실패 화면이 같이 쓴다). 캘린더는 성서 목록 집 단추(데스크톱 —
+ * 모바일은 탭 바가 대신해 CSS가 숨긴다; 설정 · 북마크 탭 화면과 같다). 전례독서는 위 단계 — 그 날짜가 든 달의 캘린더로 가는
+ * 꺾쇠다(ADR-038 §2 「구현」). 다른 탭 머리의 집 단추는 성서 목록을 뜻하고 모바일에서 숨는데(`.title-home-btn`), 이 꺾쇠는
+ * 캘린더 탭 안에서 한 단계 위(iOS 캘린더의 「< 10월」)라 모바일에서도 보인다. 다른 컨트롤처럼 링크라 전역 <a> 인터셉터가 이동한다.
+ * @param {LiturgicalView} view
+ * @param {{ y: number, m: number } | null} [month]  전례독서 — 그 날짜가 든 달. 없으면(깨진 · 범위 밖 날짜 · 실패 화면) 이번 달
+ */
+function commitLiturgicalTitle(view, month = null) {
+  setTitle(LITURGICAL_VIEWS[view].title);
+  const control = view === "calendar" ? window.buildHomeBtn("/", "성서 목록으로") : buildCalendarUpLink(month);
+  $title.insertBefore(control, $title.firstChild);
+  hideAudioBar();
+}
+
+/** @param {{ y: number, m: number } | null} month */
+function buildCalendarUpLink(month) {
+  const a = el("a", month
+    ? {
+      className: "title-back-btn",
+      href: `/calendar/${String(month.y).padStart(4, "0")}-${String(month.m).padStart(2, "0")}`,
+      "aria-label": `${month.y}년 ${month.m}월 캘린더로`,
+    }
+    : { className: "title-back-btn", href: "/calendar", "aria-label": "캘린더로" });
+  a.appendChild(headerIcon(HEADER_ICON_PATHS.back));   // 왼쪽 꺾쇠
+  return a;
+}
+
+/**
+ * 전체 화면 실패(DESIGN.md §6) — 캘린더 · 전례독서를 통째로 그리지 못했을 때. 머리는 그 뷰의 것이고 앞 화면의 헤더 · 제목 ·
+ * 오디오 바를 남기지 않는다(ADR-038 §3 「실패 · 범위」 — 그래서 본문만 바꾸는 `.error` 한 줄이 아니다). 본문은 아이콘 없는 빈
+ * 상태(제목은 안 된 것, 부제는 다음 할 일을 단추 이름으로)와 다음 행동 하나. 라이브 영역에는 제목과 안 된 것을 함께 읽힌다 —
+ * setTitle 만으로는 제목만 들려 성공한 화면과 귀로 구별되지 않았다(리뷰 2026-10-18).
+ * @param {LiturgicalView} view
+ * @param {{ message: string, subtitle: string, action: "reload" | "this-month" }} failure  action — 「다시 불러오기」(그 자리에서
+ *   다시 — 단추) 또는 「이번 달 캘린더」(날짜를 다시 고르러 — 링크)
+ * @returns {string} 페이지 메타의 제목
+ */
+function renderLiturgicalFailure(view, { message, subtitle, action }) {
+  const { title, panel } = LITURGICAL_VIEWS[view];
+  commitLiturgicalTitle(view);
+  clearNode($app);
+  const box = el("div", { className: panel });
+  box.appendChild(emptyState({ icon: null, title: message, subtitle }));
+  box.appendChild(el("p", { className: "state-action" },
+    action === "reload" ? buildReloadButton() : el("a", { href: "/calendar" }, THIS_MONTH_LABEL)));
+  $app.appendChild(box);
+  announce(`${title} — ${message}`);
+  return title;
+}
+
+/**
+ * 「다시 불러오기」 — 페이지를 새로 고친다. 화면 모듈을 받지 못했을 때 브라우저는 그 실패를 새로 고칠 때까지 기억해서(그것을
+ * 바꾼 HTML 표준 변경이 2026-07 — 엔진마다 반영 중) 화면을 다시 여는 것만으로는 풀리지 않을 수 있다(사용자 결정 2026-10-17).
+ * 교회력 자료를 받지 못했을 때도 같은 단추다 — 같은 꼴의 화면에 같은 행동이고, 실패한 그 달 · 그날이 다시 열린다(리뷰
+ * 2026-10-18 — 그전의 「이번 달 캘린더」는 /calendar/2027-03에서 실패한 3월이 아니라 이번 달로 갔다).
+ */
+function buildReloadButton() {
+  const button = el("button", { type: "button" }, RELOAD_LABEL);
+  button.addEventListener("click", () => location.reload());
+  return button;
+}
+
+/**
+ * 자료나 화면 모듈을 받지 못했을 때(연결이 끊김 · 캐시 없음 · 배포 사이의 어긋남)의 실패 화면 — 사용자에게는 같은 일이라
+ * 화면도 같다.
+ * @param {LiturgicalView} view
+ * @returns {string} 페이지 메타의 제목
+ */
+function renderLiturgicalLoadFailure(view) {
+  return renderLiturgicalFailure(view, {
+    message: LITURGICAL_VIEWS[view].loadFailure,
+    subtitle: `네트워크 연결을 확인한 뒤 「${RELOAD_LABEL}」를 눌러 주세요.`,
+    action: "reload",
+  });
+}
+
 // ── Window facade ──
 // `appViewsRouting` aggregate + per-name globals so other modules (app.js
 // bootstrap, settings-ui / search / bookmark) call setTitle / divisionLabels /
@@ -1694,7 +1792,8 @@ window.setPendingBookFocus = setPendingBookFocus;
 window.renderError = renderError;
 
 // ESM exports. The first group is the long-standing public surface; the second
-// is the view-renderer entry points routing.js imports (route() dispatch).
+// is the view-renderer entry points routing.js imports (route() dispatch); the
+// last is the liturgical view shell calendar.js · lectionary.js · routing.js share.
 export {
   setTitle, setTitleWithChapterPicker,
   buildDivisionTabs, buildSegmentTabs, bindCopyAttribution, formatVerseRanges, absentVerseNumbers, divisionLabels, divisionOrder, effectiveDivision,
@@ -1705,4 +1804,5 @@ export {
   renderBookList, renderChapterList, renderChapter, renderPrologue,
   renderLoading, renderError,
   appendVerses,
+  LITURGICAL_VIEWS, THIS_MONTH_LABEL, commitLiturgicalTitle, renderLiturgicalFailure, renderLiturgicalLoadFailure,
 };

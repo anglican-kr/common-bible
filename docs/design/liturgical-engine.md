@@ -219,7 +219,7 @@ function preloadCalendar() {
 
 ### 3.6 등록 세 곳 (빠뜨리면 런타임에서 깨진다)
 
-1. **`index.html`** — `<script type="module" src="/js/app/liturgical-engine.js">` 를 **의존 순서대로 수동 나열**하는 목록에 추가. `views.js` 앞, `data-fetch.js` 부근(같은 leaf 계층).
+1. **`routing.js`의 한꺼번에 묶음 — `index.html`에는 태그를 달지 않는다**(2026-10-17부터, ADR-038 §2 「구현」). 교회력 모듈은 `routing.js`가 그 화면에 처음 갈 때 `import()`로 불러온다. 새 화면 모듈은 묶음(`loadCalendarView` · `loadLectionaryView` 꼴)을 하나 더 두고, 엔진처럼 화면 모듈이 import하는 모듈은 그 모듈의 묶음들에 더한다. `tests/unit/sw.test.js`가 「묶음 = 그 화면 모듈의 정적 import − 부팅 그래프」 · 「import() 대상은 부팅 그래프 밖」을 대조한다 — 태그나 부팅 모듈의 정적 import를 달면 실패한다(첫 방문의 부팅이 다시 셋을 받는다 — 느린 4G 첫 화면 +390ms).
 2. **`sw.js` 셸 캐시 목록** — 새 JS 파일을 프리캐시 대상에 추가. 빠뜨리면 `tests/unit/sw.test.js` 가 잡는다 — `<script>` 태그 패리티에 더해 ESM `import` 닫힘까지 대조한다(#319).
 3. **`sw.js` `cacheNameFor()`** — `/data/lectionary/` → `DATA_CACHE` 라우팅(ADR-037 §7 · ADR-038 §5 의 요구)은 PR 0(#319, 2026-09-01)이 갖췄다 — 그전엔 그 한 줄이 빠져 전례 JSON 11건이 `SHELL_CACHE` 에 앉아 콘텐츠 해시 무효화를 못 받았다. 라우팅이 있고, `sw.test.js` 가 「매니페스트가 추적하는 접두사는 전부 `DATA_CACHE` 로 간다」를 대조하므로 새 데이터 디렉터리를 매니페스트에 넣고 라우팅을 빠뜨리면 테스트가 잡는다. **엔진 PR 이 여기서 할 일은 없다.**
 

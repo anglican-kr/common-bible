@@ -214,12 +214,18 @@ def test_search_page_links_keep_keyboard_focus_on_the_pressed_link(browser):
 
 def test_skip_link_moves_focus_into_main_without_redrawing(browser):
     """「본문 바로가기」(#app)는 라우트가 아니다 — 포커스가 본문(<main id=app>)으로 가고 주소 · 화면은 그대로다(known-issues §5 —
-    그전엔 전역 <a> 인터셉터가 route() 를 불러 같은 화면을 다시 그리기만 하고 포커스는 본문으로 가지 않았다). 다음 Tab 은 본문 안."""
+    그전엔 전역 <a> 인터셉터가 route()를 불러 같은 화면을 다시 그리기만 하고 포커스는 본문으로 가지 않았다). 다음 Tab은 본문 안.
+    본문 영역은 이름이 없다 — 하나뿐인 main 랜드마크라 역할로 충분하고, 「성경 본문」이 모든 화면에서 읽혔다(DESIGN.md §10, 2026-10-17)."""
     ctx, page = _open(browser, "john/3")
     try:
         page.wait_for_selector("#app .verse", timeout=20_000)
+        assert page.evaluate("() => document.getElementById('app').getAttribute('aria-label')") is None
+        assert page.evaluate("() => document.querySelectorAll('main, [role=main]').length") == 1
         url_before = page.url
         seq_before = page.evaluate("() => window.routeSeq()")
+        # UI 글자라 산세리프 — body의 serif(성서 본문)를 물려받았다(PR #355 리뷰 — main부터)
+        font = page.evaluate("() => getComputedStyle(document.querySelector('.skip-link')).fontFamily")
+        assert "Noto Sans KR" in font and "Serif" not in font, font
         page.locator(".skip-link").focus()
         page.keyboard.press("Enter")
         assert page.evaluate("() => document.activeElement.id") == "app"
