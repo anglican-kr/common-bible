@@ -1,4 +1,3 @@
-// @ts-nocheck — 타입 오류가 남아 검사에서 뺐다(docs/known-issues.md §7 묶음 ②). 고치는 PR 이 이 줄을 지운다 — ADR-012.
 "use strict";
 
 // Search engine wire-up + UI controllers (desktop top-bar + mobile full-screen
@@ -12,6 +11,7 @@
 // `/search?q=`).
 
 /** @typedef {import("../types").SearchHistoryList} SearchHistoryList */
+/** @typedef {import("../types").BooksData} BooksData */
 
 const { _$, el, clearNode, chUnit, emptyState } = window.appHelpers;
 const {
@@ -117,7 +117,7 @@ function doSearch(query, page, pageSize, onPartial, opts) {
 /**
  * @param {Node} target
  * @param {string} text
- * @param {string} query
+ * @param {string | null} query  empty or null → plain text (the chapter view passes null when nothing is highlighted)
  */
 function appendTextWithHighlight(target, text, query) {
   if (!query) {
@@ -393,6 +393,8 @@ function buildInPageSearchInput(query, autofocus = false) {
 /** @returns {{ q: string, page: number, filterBooks: string[] }} */
 function currentSearchState() {
   const p = window.parsePath();
+  // Off /search (the header field commits from any view) there is no search state yet.
+  if (p.view !== "search") return { q: "", page: 1, filterBooks: [] };
   return {
     q: p.query || "",
     page: p.page || 1,
@@ -824,7 +826,7 @@ function ensureBookSheet() {
 
 /**
  * @param {HTMLElement} body
- * @param {any[]} books  BooksData entries ({ id, name_ko, division, … }).
+ * @param {BooksData} books
  * @param {Set<string>} working
  */
 function renderBookFilterList(body, books, working) {
@@ -1268,6 +1270,18 @@ function isMobile() {
 // / clearSearchHistory. Returns an object with open/close/refresh/isOpen/
 // syncToggleVisibility/consumeEnter. Test loader provides a richer DOM
 // stub (querySelectorAll/contains/closest/focus) than the rest of search.js.
+/**
+ * @typedef {object} SearchHistoryControllerOptions
+ * @property {HTMLElement} wrap  the field's wrapper — carries `data-history-hidden`
+ * @property {HTMLInputElement} input
+ * @property {HTMLElement} toggle  the ▾ button
+ * @property {HTMLElement} panel  the listbox the history renders into
+ * @property {HTMLElement | null} [clearBtn]
+ * @property {(q: string) => void} onSelect
+ * @property {(hidden: boolean) => void} syncClearHidden
+ * @property {() => void} [onChange]  after a delete / clear-all, so the on-page recents list follows
+ */
+/** @param {SearchHistoryControllerOptions} options */
 function createSearchHistoryController({ wrap, input, toggle, panel, clearBtn, onSelect, syncClearHidden, onChange }) {
   let activeIndex = -1;
   let _expanded = false;  // "더 보기" pressed in this session — reset on close
@@ -1381,6 +1395,7 @@ function createSearchHistoryController({ wrap, input, toggle, panel, clearBtn, o
     render();
   }
 
+  /** @param {number} delta */
   function moveActive(delta) {
     const list = loadSearchHistory();
     if (!list.length) return;
@@ -1403,6 +1418,7 @@ function createSearchHistoryController({ wrap, input, toggle, panel, clearBtn, o
     updateActive();
   }
 
+  /** @param {string} q */
   function pickQuery(q) {
     input.value = q;
     if (clearBtn) clearBtn.hidden = false;
@@ -1444,25 +1460,28 @@ function createSearchHistoryController({ wrap, input, toggle, panel, clearBtn, o
     e.preventDefault();
   });
   panel.addEventListener("click", (e) => {
-    const remove = e.target.closest(".search-history-item-remove");
+    // A click inside the panel always targets an element. Cast, not `instanceof`: the unit harness
+    // (search.test.js) dispatches stub elements that are no `Element`.
+    const t = /** @type {Element} */ (e.target);
+    const remove = /** @type {HTMLElement | null} */ (t.closest(".search-history-item-remove"));
     if (remove) {
       e.preventDefault();
       e.stopPropagation();
-      removeSearchHistory(remove.dataset.removeQuery);
+      removeSearchHistory(remove.dataset.removeQuery ?? "");
       refresh();
       // Keep the on-page /search recents list (if shown) in sync with a delete
       // made from this dropdown (ADR-033, Bugbot).
       if (onChange) onChange();
       return;
     }
-    const more = e.target.closest(".search-history-more");
+    const more = t.closest(".search-history-more");
     if (more) {
       e.preventDefault();
       e.stopPropagation();
       expandMore();
       return;
     }
-    const clearAllBtn = e.target.closest(".search-history-clear");
+    const clearAllBtn = t.closest(".search-history-clear");
     if (clearAllBtn) {
       e.preventDefault();
       e.stopPropagation();
@@ -1472,17 +1491,18 @@ function createSearchHistoryController({ wrap, input, toggle, panel, clearBtn, o
       input.focus({ preventScroll: true });
       return;
     }
-    const select = e.target.closest(".search-history-item-select");
+    const select = /** @type {HTMLElement | null} */ (t.closest(".search-history-item-select"));
     if (select) {
       e.preventDefault();
       e.stopPropagation();
-      pickQuery(select.dataset.query);
+      pickQuery(select.dataset.query ?? "");
     }
   });
 
   document.addEventListener("pointerdown", (e) => {
     if (!isOpen()) return;
-    if (panel.contains(e.target) || toggle.contains(e.target) || input.contains(e.target)) return;
+    const t = /** @type {Node | null} */ (e.target);  // same harness reason as the panel click above
+    if (panel.contains(t) || toggle.contains(t) || input.contains(t)) return;
     close();
   });
 
@@ -1492,14 +1512,15 @@ function createSearchHistoryController({ wrap, input, toggle, panel, clearBtn, o
     isOpen,
     refresh,
     syncToggleVisibility,
+    /** @param {KeyboardEvent} e */
     consumeEnter(e) {
       if (!isOpen() || activeIndex < 0) return false;
-      const opts = panel.querySelectorAll(".search-history-item-select");
+      const opts = /** @type {NodeListOf<HTMLElement>} */ (panel.querySelectorAll(".search-history-item-select"));
       const target = opts[activeIndex];
       if (!target) return false;
       e.preventDefault();
       e.stopPropagation();
-      pickQuery(target.dataset.query);
+      pickQuery(target.dataset.query ?? "");
       return true;
     },
   };

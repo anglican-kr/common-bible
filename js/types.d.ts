@@ -1239,6 +1239,8 @@ declare global {
     // select-mode exit from bookmark-select.js; search.js owns the in-field book tokens.
     exitBookmarkSelectMode?: () => void;
     syncSearchFields?: () => void;
+    // search.js — patches the /search URL keeping the rest of its state (the tab-bar pill's clear keeps the book scope).
+    navigateSearch?: (patch: { q?: string; page?: number; filterBooks?: string[] }) => void;
     // Bookmark reading view (ADR-035, bookmark-read.js) — resolves to the page title.
     renderBookmarkReadView: (folderId?: string | null) => Promise<string>;
     // Mobile tab-bar full-screen views (ADR-029 / P2). Always assigned at
