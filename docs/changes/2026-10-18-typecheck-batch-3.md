@@ -1,4 +1,5 @@
 ---
+pr: 358
 date: 2026-10-18
 branch: fix/typecheck-batch-3
 title: "fix: 북마크 모듈을 타입 검사 안으로"
