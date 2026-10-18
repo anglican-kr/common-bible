@@ -170,11 +170,9 @@ ADR-038 §3 렌더 기반이 복원하는 전례 표기 — 계응 ◯(`.respons
 
 ---
 
-## 9. PR #349 리뷰에서 넘긴 후속 (2026-10-16)
+## 9. PR #349 리뷰에서 넘긴 후속 (2026-10-16) — 해소 (2026-10-18)
 
-#349(저녁 전례)의 `/code-review` 가 범위 밖으로 짚은 것. 지적 15건은 모두 그 PR 에서 고쳤다 — 조치는 원장 `docs/changes/2026-10-15-liturgical-engine-evening.md` 「리뷰 반영」.
-
-- **배포 목록에 `data/lectionary/` 가 없다 — 다음 릴리스를 막는다**(이 저장소 밖 — `common-bible-server`). `scripts/deploy-manifest.txt` 의 정적 자산 줄에 `data/bible/` · 검색 색인만 있고 교회력 · 전례독서 묶음(`data/lectionary/*.json`)이 없다(2026-10-16 확인). 이대로 배포하면 `deploy.zip` 에 묶음이 빠져 dev · 운영의 `/calendar` · `/lectionary` 가 「교회력 자료를 불러오지 못했습니다」 화면이 된다. 서버 저장소 PR 로 그 줄을 더하고 `deploy.sh verify` 가 묶음 하나의 200 을 보게 한다(메모의 「배포 목록 갱신 망각」 함정 — 목록 → 트리 방향만 검사된다).
+> **해소됨 (2026-10-18) — 본문을 지웠다.** 하나 남았던 「배포 목록에 `data/lectionary/`가 없다 — 다음 릴리스를 막는다」를 서버 저장소가 고쳤다(`common-bible-server` `2b28813` — 배포 목록에 `data/lectionary/`를 더하고, `deploy.sh verify`가 교회력 · 전례독서 묶음에서 한 파일씩 200을 본다). 2026-10-18 dev 배포(`bible-1.6.4-64f132f`)에서 검증 9종이 통과했고, 사용자가 dev의 캘린더를 확인했다(이상 없음). 넘길 때의 기록은 원장 `docs/changes/2026-10-15-liturgical-engine-evening.md` 「리뷰 반영」, 지운 기록은 원장 `docs/changes/2026-10-18-typecheck-batch-2.md`. §10을 당겨 번호를 메우지 않는다 — 머지된 원장 · 메모가 절을 번호로 가리킨다.
 
 ---
 
