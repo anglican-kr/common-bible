@@ -287,7 +287,7 @@ pytest tests/e2e/ -v
 
 ## 정적 타입 검사
 
-JSDoc 기반, 빌드 산출물 없음. 두 tsconfig가 `checkJs: true`라 `js/` 전체가 기본으로 검사를 받고, 아직 빼 둔 파일은 첫 줄 `// @ts-nocheck`로 표시한다(남은 것은 [`docs/known-issues.md`](docs/known-issues.md) §7). CI 「Unit tests」 잡이 PR마다 돌린다 ([ADR-012](docs/decisions/012-typescript-incremental-adoption.md)).
+JSDoc 기반, 빌드 산출물 없음. 두 tsconfig가 `checkJs: true`라 `js/` 전체가 기본으로 검사를 받고, 빼야 할 파일은 첫 줄 `// @ts-nocheck`로 표시한다(지금은 없다 — 2026-10-18). CI 「Unit tests」 잡이 PR마다 돌린다 ([ADR-012](docs/decisions/012-typescript-incremental-adoption.md)).
 
 ```bash
 npm run typecheck   # tsc -p tsconfig.json --noEmit && tsc -p tsconfig.worker.json --noEmit

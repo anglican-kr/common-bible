@@ -1,13 +1,13 @@
 # ADR-012: TypeScript 점진 도입 (JSDoc + `tsc --noEmit`)
 
 - 일시: 2026-05-06
-- 상태: 승인됨 — 구현 완료 (2026-05-06 동기화 레이어 · 2026-05-10 앱 레이어 · 2026-10-17 기본 검사(`checkJs: true`)와 CI 타입 검사). 아직 오류가 남은 앱 모듈 4개(bookmark 계열)는 첫 줄 `// @ts-nocheck`로 빠져 있고 `sw.js`는 어느 설정에도 없다 — `docs/known-issues.md` §7
+- 상태: 승인됨 — 구현 완료 (2026-05-06 동기화 레이어 · 2026-05-10 앱 레이어 · 2026-10-17 기본 검사(`checkJs: true`)와 CI 타입 검사 · 2026-10-18 검사 밖이던 앱 모듈 모두 편입). `sw.js`는 아직 어느 설정에도 없다 — `docs/known-issues.md` §7
 
 ## 결정
 
 빌드 단계를 두지 않고 TypeScript 를 **타입 검사기로만** 쓴다 — JSDoc 타입 주석 + `js/types.d.ts` + `tsc --noEmit`. 브라우저는 원본 `.js` 를 그대로 받는다.
 
-- **대상은 `js/`의 모든 클라이언트 JS 다**(`checkJs: true`). 파일에 지시문이 없어도 검사된다. 검사에서 빼야 하는 파일은 첫 줄을 `// @ts-nocheck`로 명시한다 — 지금은 오류가 남은 4개뿐이고, 그 오류를 고치는 PR이 그 줄을 지운다(`docs/known-issues.md` §7).
+- **대상은 `js/`의 모든 클라이언트 JS 다**(`checkJs: true`). 파일에 지시문이 없어도 검사된다. 검사에서 빼야 하는 파일은 첫 줄을 `// @ts-nocheck`로 명시한다 — 지금은 그런 파일이 없다(2026-10-18 — 검사 밖이던 22개를 세 묶음으로 모두 들였다). 빼야 할 때는 같은 줄에 이유와 고칠 곳을 적고, 그 오류를 고치는 PR이 그 줄을 지운다.
 - 설정은 둘이다 — `tsconfig.json`(DOM · 앱 모듈) · `tsconfig.worker.json`(WebWorker · 검색 워커). 서비스 워커 `sw.js` 는 아직 어느 설정에도 없다(known-issues §7).
 - **CI 의 필수 검사 「Unit tests」 잡이 `npm run typecheck`(두 설정)를 돌린다** — 타입 오류가 있으면 머지되지 않는다. 로컬에서는 편집 뒤 훅(`.claude/hooks/typecheck-js.sh`)이 같은 명령을 돈다.
 
@@ -50,9 +50,9 @@ ADR-001은 "프레임워크 없는 Vanilla JS"를 선언하고 있고 ADR-005·0
 
 `checkJs: true` 라 지시문 없이도 검사된다. 기존 파일 첫 줄의 `// @ts-check` 는 그대로 둔다 — 해가 없고, 파일을 `checkJs: false` 설정으로 옮겨도 검사가 따라간다. 새 파일에는 적지 않아도 된다.
 
-검사에서 빼야 하는 파일만 첫 줄에 `// @ts-nocheck`를 두고, 같은 줄에 이유와 고칠 곳을 적는다(`// @ts-nocheck — 타입 오류가 남아 검사에서 뺐다(docs/known-issues.md §7 묶음 ③). …`). 지시문은 파일의 **어떤 문(statement)보다도 앞**에 있어야 TypeScript가 읽는다 — 앞에 주석만 있는 것은 괜찮다. `"use strict";` 뒤에 둔 `// @ts-nocheck`는 무시돼 그 파일이 검사되고 오류가 드러난다(2026-10-17 확인 — `bookmark.js` 11건). 빼는 쪽의 실수가 조용하지 않다.
+검사에서 빼야 하는 파일만 첫 줄에 `// @ts-nocheck`를 두고, 같은 줄에 이유와 고칠 곳을 적는다(2026-10-17부터 10-18까지 쓴 꼴 — `// @ts-nocheck — 타입 오류가 남아 검사에서 뺐다(docs/known-issues.md §7 묶음 ③). …`). 지시문은 파일의 **어떤 문(statement)보다도 앞**에 있어야 TypeScript가 읽는다 — 앞에 주석만 있는 것은 괜찮다. `"use strict";` 뒤에 둔 `// @ts-nocheck`는 무시돼 그 파일이 검사되고 오류가 드러난다(2026-10-17 확인 — `bookmark.js` 11건). 빼는 쪽의 실수가 조용하지 않다.
 
-창 객체 꾸러미(`window.appX = (() => { … return { … }; })()`)는 IIFE 에 `@returns {AppX}`(`js/types.d.ts` 의 인터페이스)를 단다 — 반환 객체에 인터페이스에 없는 멤버가 있으면, 그것을 구조 분해하는 다른 모듈이 아니라 정의한 자리에서 오류가 난다(helpers · storage · settings-ui · citations · parallels · overlay).
+창 객체 꾸러미(`window.appX = (() => { … return { … }; })()`)는 IIFE에 `@returns {AppX}`(`js/types.d.ts`의 인터페이스)를 단다 — 반환 객체에 인터페이스에 없는 멤버가 있으면, 그것을 구조 분해하는 다른 모듈이 아니라 정의한 자리에서 오류가 난다(helpers · storage · settings-ui · citations · parallels · overlay). 꾸러미가 IIFE가 아니라 객체 리터럴이면 `@type {AppX}`를 단다(bookmark — 2026-10-18, 선언이 실제 객체와 어긋나 있었다).
 
 ### 도메인 타입 단일 출처
 
@@ -103,8 +103,8 @@ ADR-001은 "프레임워크 없는 Vanilla JS"를 선언하고 있고 ADR-005·0
 
 - Phase 2b~2f 정제 과정에서 발견된 결함 패턴(누락 키 갱신, 부분 응답 미처리, 상수 중복) 대부분이 정적 검사 단계에서 차단 가능
 - `js/types.d.ts`는 ADR-011 스키마 변경 시 first-class 갱신 대상 — ADR ↔ 코드 표류 감지점
-- 검사 밖에 있던 파일은 선언이 데이터 · 코드와 어긋난 채 쌓였다(2026-10-17 첫 묶음 — `BookEntry.division` 에 데이터의 `"liturgical"` 없음 · `chapter_ref` 가 `string` · 창 객체 선언 누락). 실행 결함은 아니었지만 선언을 믿고 짠 새 코드가 틀릴 자리였다
-- 남은 일: 앱 모듈 4개(`// @ts-nocheck` — bookmark 계열)와 `sw.js` 설정 — known-issues §7. `tests/unit/*.js`는 검사 대상 밖(`exclude`)
+- 검사 밖에 있던 파일은 선언이 데이터 · 코드와 어긋난 채 쌓였다(2026-10-17 첫 묶음 — `BookEntry.division`에 데이터의 `"liturgical"` 없음 · `chapter_ref`가 `string` · 창 객체 선언 누락). 실행 결함은 아니었지만 선언을 믿고 짠 새 코드가 틀릴 자리였다. 마지막 묶음(2026-10-18, 북마크 모듈)에서도 같았다 — `AppBookmark` 선언은 verse-spec.js로 옮겨 간 함수 넷을 들고 실제 멤버 스물 가운데 열셋을 빠뜨렸고, 함수와 떨어진 JSDoc 둘이 엉뚱한 선언에 붙어 있었다(원장 `docs/changes/2026-10-18-typecheck-batch-3.md`)
+- 남은 일: `sw.js` 설정 — known-issues §7. `tests/unit/*.js`는 검사 대상 밖(`exclude`)
 
 ## 관련 ADR
 

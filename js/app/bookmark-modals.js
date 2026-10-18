@@ -1,4 +1,3 @@
-// @ts-nocheck — 타입 오류가 남아 검사에서 뺐다(docs/known-issues.md §7 묶음 ③). 고치는 PR 이 이 줄을 지운다 — ADR-012.
 "use strict";
 
 // Bookmark modals — extracted from bookmark.js (ADR-034 후속 PR5). DOM-bound
@@ -14,6 +13,8 @@
 // appStorage, bookmark-core, window.{announce, getBooksCache}.
 
 /** @typedef {import("../types").BookmarkTreeBookmark} BookmarkTreeBookmark */
+/** @typedef {import("../types").BookmarkTreeNode} BookmarkTreeNode */
+/** @typedef {"chapter" | "verses" | "edit"} SaveMode  이 장 저장 · 절 선택 저장 · 북마크 수정 */
 
 import {
   _selectAllState, _forgetViewed, removeItemById,
@@ -98,6 +99,7 @@ const confirmOverlay = createOverlay({
   onClose: () => { $bmConfirmOk.onclick = null; },
 });
 
+/** @param {{ title: string, message: string, confirmLabel?: string, onConfirm: () => void }} opts */
 function openConfirmModal({ title, message, confirmLabel = "삭제", onConfirm }) {
   $bmConfirmTitle.textContent = title;
   $bmConfirmBody.textContent = message;
@@ -173,6 +175,7 @@ function _buildFolderCombobox(folderOptions, selectedFolderId, opts = {}) {
 
   let currentOptions = folderOptions;
 
+  /** @param {string} id */
   function labelForId(id) {
     if (id === "" || id == null) return "최상위";
     const o = currentOptions.find(f => f.id === id);
@@ -193,7 +196,9 @@ function _buildFolderCombobox(folderOptions, selectedFolderId, opts = {}) {
     }
   }
 
+  /** @type {((e: MouseEvent) => void) | null} */
   let docHandler = null;
+  /** @type {((e: KeyboardEvent) => void) | null} */
   let keyHandler = null;
 
   function closeList() {
@@ -220,14 +225,17 @@ function _buildFolderCombobox(folderOptions, selectedFolderId, opts = {}) {
       }
     };
     docHandler = (e) => {
-      if (!wrap.contains(e.target)) closeList();
+      if (!(e.target instanceof Node && wrap.contains(e.target))) closeList();
     };
+    // Closed again before the timer ran → the handlers are null and there is nothing to add
+    // (adding a null listener was a no-op too).
     setTimeout(() => {
-      document.addEventListener("keydown", keyHandler, true);
-      document.addEventListener("click", docHandler, true);
+      if (keyHandler) document.addEventListener("keydown", keyHandler, true);
+      if (docHandler) document.addEventListener("click", docHandler, true);
     }, 0);
   }
 
+  /** @param {string} dataId @param {string} displayName @param {number} depth */
   function addOption(dataId, displayName, depth) {
     const li = el("li", { role: "option", className: "bm-folder-combobox-option", "data-id": dataId });
     if (depth > 0) li.style.paddingLeft = `calc(0.55rem + ${depth} * 0.9rem)`;
@@ -249,6 +257,7 @@ function _buildFolderCombobox(folderOptions, selectedFolderId, opts = {}) {
   // Persistent "+ 새 폴더" action at the bottom of the listbox (omitted when
   // allowNewFolder=false — e.g. the new-folder modal's own parent picker).
   // role="presentation" so screen readers don't read it as a folder option.
+  /** @type {HTMLLIElement | null} */
   let newFolderItem = null;
   if (allowNewFolder) {
     newFolderItem = el("li", { role: "presentation", className: "bm-folder-combobox-new" });
@@ -270,6 +279,7 @@ function _buildFolderCombobox(folderOptions, selectedFolderId, opts = {}) {
     newFolderItem.appendChild(newFolderBtn);
   }
 
+  /** @param {Array<{ id: string, name: string, depth: number }>} options */
   function rebuildOptions(options) {
     currentOptions = options;
     list.replaceChildren();
@@ -385,6 +395,7 @@ function _commitNewFolder() {
 // Save/edit bookmark modal. openSaveModal resolves the verse spec from the
 // reading context, short-circuits to the merge dialog when the chapter already
 // has bookmarks, then _showSaveModal builds the form (label/note/folder picker).
+/** @param {SaveMode} mode @param {{ existingId?: string }} [opts]  existingId — the bookmark being edited */
 function openSaveModal(mode, opts = {}) {
   const bookId = readingContext.bookId;
   const chapter = readingContext.chapter;
@@ -420,6 +431,12 @@ function openSaveModal(mode, opts = {}) {
   _showSaveModal(mode, bookId, chapter, verseSpec, existing);
 }
 
+/**
+ * `bookId` · `chapter` are the reading context — null only when editing from outside a chapter
+ * (the 북마크 tab), where the label is the existing one and they go unused.
+ * @param {SaveMode} mode @param {string | null} bookId @param {number | null} chapter
+ * @param {string} verseSpec @param {BookmarkTreeBookmark | null} existing
+ */
 function _showSaveModal(mode, bookId, chapter, verseSpec, existing) {
   const prevCombo = /** @type {HTMLElement & { _bmClose?: () => void } | null} */ (document.getElementById("bm-folder-combobox"));
   if (prevCombo && prevCombo._bmClose) prevCombo._bmClose();
@@ -429,7 +446,7 @@ function _showSaveModal(mode, bookId, chapter, verseSpec, existing) {
 
   const book = (window.getBooksCache() ?? []).find(b => b.id === bookId);
   const bookName = book ? (book.short_name_ko || book.name_ko) : bookId;
-  const unit = chUnit(bookId);
+  const unit = chUnit(bookId ?? "");
   let defaultLabel;
   if (existing) {
     defaultLabel = existing.label;
@@ -511,6 +528,11 @@ const saveOverlay = createOverlay({
 
 function closeSaveModal() { saveOverlay.close(); }
 
+/**
+ * @param {string | null} existingId  set when editing — the item keeps its own book and chapter
+ * @param {string} label @param {string} note @param {string | null} folderId  null = 최상위
+ * @param {string | null} bookId @param {number | null} chapter @param {string} verseSpec
+ */
 function commitSaveBookmark(existingId, label, note, folderId, bookId, chapter, verseSpec) {
   const store = loadBookmarks();
   if (existingId) {
@@ -525,6 +547,9 @@ function commitSaveBookmark(existingId, label, note, folderId, bookId, chapter, 
       insertItem(store, folderId, updatedItem);
     }
   } else {
+    // A new bookmark needs its chapter. Every create path (이 장 저장 · 절 선택 저장) runs in a chapter
+    // view, so this does not trip — it keeps an item with a null book or chapter out of the store if one ever did.
+    if (!bookId || chapter == null) return;
     /** @type {BookmarkTreeBookmark} */
     const bm = {
       type: "bookmark",
@@ -549,12 +574,6 @@ function commitSaveBookmark(existingId, label, note, folderId, bookId, chapter, 
 // Shown when saving into a chapter that already has bookmark(s): offers to merge
 // the incoming verse spec into an existing bookmark (single → yes/no, multiple →
 // pick a target), or "아니오" falls through to a fresh save via _showSaveModal.
-/**
- * @param {BookmarkTreeBookmark[]} candidates
- * @param {string} incomingSpec
- * @param {string} mode
- * @param {{ bookId?: string | null, chapter?: number | null } | null} [fallbackContext]
- */
 // closeOnEsc off: in the stacked Escape router. onClose clears the per-open
 // onclick handlers (ADR-032).
 const mergeOverlay = createOverlay({
@@ -570,6 +589,14 @@ const mergeOverlay = createOverlay({
 
 function closeMergeModal() { mergeOverlay.close(); }
 
+// The JSDoc sat above `mergeOverlay` (the overlay was declared between it and this function), so these
+// types never reached the parameters — the same detached-JSDoc shape as pitfalls §27's citations.js case.
+/**
+ * @param {BookmarkTreeBookmark[]} candidates
+ * @param {string} incomingSpec
+ * @param {SaveMode} mode
+ * @param {{ bookId?: string | null, chapter?: number | null } | null} [fallbackContext]
+ */
 function openMergeDialog(candidates, incomingSpec, mode, fallbackContext = null) {
   clearNode($bmMergeBody);
   const resolvedBookId =
@@ -642,14 +669,20 @@ function openMergeDialog(candidates, incomingSpec, mode, fallbackContext = null)
 // Exercised by tests/unit/bookmark.test.js. Pure helpers for the import
 // pipeline: validation (structural), merge (id-deduped union with existing
 // taking precedence), and recursive count.
+// Structural only — the envelope, not the items (bookmark.test.js pins `{ bookmarks: [{}] }` → true),
+// so the predicate promises `unknown[]`; openImportModal is where the items are taken as nodes.
+/** @param {unknown} data @returns {data is { bookmarks: unknown[] }} */
 function _validateImportData(data) {
   if (!data || typeof data !== "object") return false;
-  if (!Array.isArray(data.bookmarks)) return false;
+  if (!Array.isArray(/** @type {{ bookmarks?: unknown }} */ (data).bookmarks)) return false;
   return true;
 }
 
+/** @param {BookmarkTreeNode[]} existing @param {BookmarkTreeNode[]} incoming @returns {BookmarkTreeNode[]} */
 function _mergeBookmarkStores(existing, incoming) {
+  /** @type {Set<string>} */
   const existingIds = new Set();
+  /** @param {BookmarkTreeNode[]} items */
   function collectIds(items) {
     for (const item of items) {
       existingIds.add(item.id);
@@ -660,7 +693,9 @@ function _mergeBookmarkStores(existing, incoming) {
   }
   collectIds(existing);
 
+  /** @param {BookmarkTreeNode[]} items @returns {BookmarkTreeNode[]} */
   function filterNew(items) {
+    /** @type {BookmarkTreeNode[]} */
     const result = [];
     for (const item of items) {
       if (item.type === "folder") {
@@ -680,6 +715,7 @@ function _mergeBookmarkStores(existing, incoming) {
   return [...existing, ...filterNew(incoming)];
 }
 
+/** @param {BookmarkTreeNode[]} items @returns {number} */
 function _countBookmarks(items) {
   let count = 0;
   for (const item of items) {
@@ -722,8 +758,12 @@ function openImportFilePicker() {
   $bmImportInput.click();
 }
 
+/** @param {{ bookmarks: unknown[] }} incoming  passed _validateImportData */
 function openImportModal(incoming) {
-  const bmCount = _countBookmarks(incoming.bookmarks);
+  // The items are taken as bookmark nodes as they are — only the envelope was checked (see
+  // _validateImportData). Item-level checks are a known-issues §14 follow-up, not this cast's job.
+  const items = /** @type {BookmarkTreeNode[]} */ (incoming.bookmarks);
+  const bmCount = _countBookmarks(items);
   clearNode($bmImportBody);
   $bmImportBody.appendChild(
     el("p", {}, `북마크 ${bmCount}개를 현재 목록에 병합하거나 덮어쓸 수 있습니다.`)
@@ -734,7 +774,7 @@ function openImportModal(incoming) {
 
   $bmImportMerge.onclick = () => {
     const existing = loadBookmarks();
-    const merged = _mergeBookmarkStores(existing, incoming.bookmarks);
+    const merged = _mergeBookmarkStores(existing, items);
     saveBookmarks(merged);
     _deps.rerenderActiveBookmarkTree();
     announce("북마크를 병합했습니다.");
@@ -742,7 +782,7 @@ function openImportModal(incoming) {
   };
 
   $bmImportOverwrite.onclick = () => {
-    saveBookmarks(incoming.bookmarks);
+    saveBookmarks(items);
     _deps.rerenderActiveBookmarkTree();
     announce("북마크를 덮어썼습니다.");
     cleanup();
@@ -793,6 +833,7 @@ const moveOverlay = createOverlay({
 
 // Stroke-style SVG from path data (same recipe as bookmark.js's menu icons),
 // kept local so the move rows don't pull a cross-module icon helper.
+/** @param {string[]} paths  SVG path data @returns {SVGSVGElement} */
 function _moveRowIcon(paths) {
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   svg.setAttribute("viewBox", "0 0 24 24");

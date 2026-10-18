@@ -70,7 +70,7 @@ node --test tests/unit/storage.test.js    # 개별 파일
 
 ## 2. 타입 검사 — `tsc`
 
-순수 JS에 JSDoc 주석으로 타입을 달고, `tsc --noEmit`으로 **출력 없이 타입만** 검사한다(ADR-012). "컴파일"이 아니라 타입 검사 용도. `tsc`는 TypeScript Compiler의 약자. `checkJs: true` 라 `js/` 의 모든 파일이 대상이고, 아직 오류가 남은 파일만 첫 줄 `// @ts-nocheck` 로 빠진다([`docs/known-issues.md`](../docs/known-issues.md) §7). CI 의 필수 「Unit tests」 잡이 PR 마다 `npm run typecheck` 를 돌린다.
+순수 JS에 JSDoc 주석으로 타입을 달고, `tsc --noEmit`으로 **출력 없이 타입만** 검사한다(ADR-012). "컴파일"이 아니라 타입 검사 용도. `tsc`는 TypeScript Compiler의 약자. `checkJs: true`라 `js/`의 모든 파일이 대상이고, 검사에서 빼야 하는 파일만 첫 줄 `// @ts-nocheck`로 빠진다 — 지금은 없다(2026-10-18). CI의 필수 「Unit tests」 잡이 PR마다 `npm run typecheck`를 돌린다.
 
 ```bash
 npx tsc -p tsconfig.json --noEmit          # 앱 코드

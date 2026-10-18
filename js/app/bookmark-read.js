@@ -1,4 +1,3 @@
-// @ts-nocheck — 타입 오류가 남아 검사에서 뺐다(docs/known-issues.md §7 묶음 ③). 고치는 PR 이 이 줄을 지운다 — ADR-012.
 "use strict";
 
 // Bookmark reading view (ADR-035). Gathers every saved bookmark's scripture
@@ -47,10 +46,15 @@ const $app = _$("app");
  * @returns {{ bookId: string, startCh: number, startV: number, endCh: number, endV: number, endDisplay: string, coversChapterEnd: boolean, wholeChapter: boolean }}
  */
 function _bmRange(bm, maxVerse) {
+  // The view ranges only bookmarks whose chapter loaded, so book and chapter are there. The type
+  // allows an item without them (an import is not checked item by item) — such an item gets the
+  // degenerate NaN chapter, which never satisfies adjacency.
+  const bookId = bm.bookId ?? "";
+  const ch = bm.chapter ?? NaN;
   const whole = {
-    bookId: bm.bookId,
-    startCh: bm.chapter, startV: 1,
-    endCh: bm.chapter, endV: maxVerse,
+    bookId,
+    startCh: ch, startV: 1,
+    endCh: ch, endV: maxVerse,
     endDisplay: String(maxVerse),
     // "covers the chapter end" requires actually knowing the end. maxVerse is 0
     // when the chapter JSON failed to load — claim no coverage then, so an
@@ -60,16 +64,16 @@ function _bmRange(bm, maxVerse) {
     wholeChapter: true,
   };
   if (bm.verseSpec === "all") return whole;
-  const segs = parseVerseSpec(bm.verseSpec);
+  const segs = parseVerseSpec(bm.verseSpec ?? "");
   // A spec that parses to nothing (import corruption, typo) is NOT a whole
   // chapter — return a degenerate range with NaN bounds so it neither claims
   // chapter-end coverage nor satisfies adjacency in either direction (it renders
   // no verses and, with the empty-section guard, shows no heading).
   if (!segs.length) {
     return {
-      bookId: bm.bookId,
-      startCh: bm.chapter, startV: NaN,
-      endCh: bm.chapter, endV: NaN,
+      bookId,
+      startCh: ch, startV: NaN,
+      endCh: ch, endV: NaN,
       endDisplay: "", coversChapterEnd: false, wholeChapter: false,
     };
   }
@@ -78,9 +82,9 @@ function _bmRange(bm, maxVerse) {
   const first = ordered[0];
   const last = ordered[ordered.length - 1];
   return {
-    bookId: bm.bookId,
-    startCh: bm.chapter, startV: first.start,
-    endCh: bm.chapter, endV: last.end,
+    bookId,
+    startCh: ch, startV: first.start,
+    endCh: ch, endV: last.end,
     endDisplay: last.part ? `${last.end}${last.part}` : `${last.end}`,
     coversChapterEnd: maxVerse > 0 && last.end >= maxVerse,
     wholeChapter: false,
@@ -217,7 +221,7 @@ async function renderBookmarkReadView(folderId = null) {
   // load bails having mutated nothing (no blank #app, no clobbered later view).
   // route()'s own isStale runs only after we return, too late to gate our DOM.
   const entrySeq = typeof window.routeSeq === "function" ? window.routeSeq() : null;
-  const isStale = () => entrySeq !== null && window.routeSeq() !== entrySeq;
+  const isStale = () => entrySeq !== null && window.routeSeq?.() !== entrySeq;
   const store = loadBookmarks();
   // Folder scope: read that folder's subtree (nested folders become
   // sub-headings); each folder is independently readable (ADR-035). No id →
@@ -247,7 +251,13 @@ async function renderBookmarkReadView(folderId = null) {
   if (bmTokens.length) {
     /** @type {Map<string, { bookId: string, chapter: number }>} */
     const needed = new Map();
-    for (const t of bmTokens) needed.set(`${t.bm.bookId}:${t.bm.chapter}`, { bookId: t.bm.bookId, chapter: t.bm.chapter });
+    for (const t of bmTokens) {
+      const { bookId, chapter } = t.bm;
+      // Nothing to load for an item without a book or chapter (an import can carry one) — it stays
+      // unloaded and breaks its run like a missing chapter, as the 404 for `undefined-undefined.json` did.
+      if (!bookId || chapter == null) continue;
+      needed.set(`${bookId}:${chapter}`, { bookId, chapter });
+    }
     await Promise.all([...needed.values()].map(async ({ bookId, chapter }) => {
       try { chapterCache.set(`${bookId}:${chapter}`, await loadChapter(bookId, chapter)); }
       catch { /* missing chapter — skip */ }
@@ -332,9 +342,11 @@ async function renderBookmarkReadView(folderId = null) {
     if (!bms.length) return;
     const first = bms[0];
     const last = bms[bms.length - 1];
-    const book = bookOf(first.bookId);
-    const bookName = book ? (book.short_name_ko || book.name_ko) : first.bookId;
-    const unit = chUnit(first.bookId);
+    // A group holds only loaded bookmarks, so the book is always there (`?? ""` is for the optional type).
+    const bookId = first.bookId ?? "";
+    const book = bookOf(bookId);
+    const bookName = book ? (book.short_name_ko || book.name_ko) : bookId;
+    const unit = chUnit(bookId);
     const firstEnds = endsOf(first);
     const lastEnds = endsOf(last);
     const isSingleWhole = bms.length === 1 && firstEnds.wholeChapter;
@@ -358,12 +370,12 @@ async function renderBookmarkReadView(folderId = null) {
       // one chapter into two map entries (and two <article>s).
       const ch = Number(bm.chapter);
       const arr = byChapter.get(ch) || [];
-      arr.push(bm.verseSpec);
+      arr.push(bm.verseSpec ?? "");  // no spec covers no verse (parseVerseSpec), as undefined did
       byChapter.set(ch, arr);
     }
     let appendedAny = false;
     for (const chNum of [...byChapter.keys()].sort((a, b) => a - b)) {
-      const data = chapterCache.get(`${first.bookId}:${chNum}`);
+      const data = chapterCache.get(`${bookId}:${chNum}`);
       if (!data) continue;
       const specs = /** @type {string[]} */ (byChapter.get(chNum));
       const coversAll = specs.includes("all");
@@ -385,7 +397,7 @@ async function renderBookmarkReadView(folderId = null) {
           if (!inSpec) return false;
         }
         // Drop verses already shown by an earlier (overlapping) group.
-        const key = `${first.bookId}:${chNum}:${keys[i]}`;
+        const key = `${bookId}:${chNum}:${keys[i]}`;
         if (seenVerses.has(key)) return false;
         seenVerses.add(key);
         selKeys.push(keys[i]);

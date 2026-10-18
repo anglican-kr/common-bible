@@ -1073,23 +1073,31 @@ export interface ReadingContext {
 }
 
 // ── App bookmark facade (js/app/bookmark.js) ────────────────────────────────
-// Phase 6a of the app.js modularization (ADR-018). Verse spec utilities,
-// bookmark store query helpers, drag & drop pointer handling. UI rendering
-// (tree, drawer, modals) joins this module in Phase 6b.
+// `window.appBookmark` — the aggregate bookmark.js assigns (nothing reads it today; other
+// modules call the per-name globals below). The verse-spec helpers moved to verse-spec.js
+// and the bookmark-core QUERY helpers (findExistingChapterBookmarks / _walkBookmarks /
+// _findItemInStore / _findParentFolderId / removeItemById / insertItem / collectFolderOptions)
+// are ESM-only — neither is on the aggregate.
 
 export interface AppBookmark {
-  parseVerseSpec: (spec: string) => Array<{ start: number; end: number; part?: string }>;
-  collapseFullVerseRefs: (refs: string[], article: Element | null | undefined) => string[];
-  selectedVersesToSpec: (refs: string[]) => string;
-  mergeVerseSpecs: (specA: string, specB: string) => string;
-  // bookmark-core QUERY helpers (findExistingChapterBookmarks / _walkBookmarks /
-  // _findItemInStore / _findParentFolderId / removeItemById / insertItem /
-  // collectFolderOptions) are ESM-only now — no window/global facade.
   moveBookmarkItem: (draggedId: string, targetId: string, position: "before" | "after" | "into") => void;
   closeSwipedRow: (except: HTMLElement | null) => void;
   _setupDragHandle: (li: HTMLElement, row: HTMLElement) => void;
   resetSwipedRow: () => void;
   closeSwipedRowIfOutside: (target: EventTarget | null) => void;
+  buildBookmarkHeaderBtn: (bookId: string | null, chapter: number | null) => HTMLButtonElement;
+  openBookmarkDrawer: (bookId: string | null, chapter: number | null) => void;
+  closeBookmarkDrawer: () => void;
+  renderBookmarkTree: (target?: HTMLElement) => void;
+  renderBookmarksView: () => void;
+  refreshBookmarkHeaderBtn: () => void;
+  enterVerseSelectMode: (bookId: string, chapter: number) => void;
+  exitVerseSelectMode: () => void;
+  updateVerseSelectionBoundaries: (scope?: Element | null) => void;
+  updateVerseSelectBar: () => void;
+  enterBookmarkSelectMode: () => void;
+  exitBookmarkSelectMode: () => void;
+  openDriveDisconnectModal: () => void;
   initBookmarkSheetDrag: () => void;
   initBookmarkDrawerResize: () => void;
 }
@@ -1238,6 +1246,8 @@ declare global {
     // route() calls these on every navigation (routing.js). bookmark.js re-exposes the
     // select-mode exit from bookmark-select.js; search.js owns the in-field book tokens.
     exitBookmarkSelectMode?: () => void;
+    // bookmark.js re-exposes the select-mode entry too (its comment says for e2e; no test reads it today).
+    enterBookmarkSelectMode?: () => void;
     syncSearchFields?: () => void;
     // search.js — patches the /search URL keeping the rest of its state (the tab-bar pill's clear keeps the book scope).
     navigateSearch?: (patch: { q?: string; page?: number; filterBooks?: string[] }) => void;
