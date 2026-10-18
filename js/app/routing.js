@@ -20,20 +20,23 @@
 import { loadBooks, loadChapter, loadPrologue } from "./data-fetch.js";
 import {
   renderBookList, renderChapterList, renderChapter, renderPrologue,
-  renderLoading, renderError, setTitle, divisionOrder, DIVISION_LABELS,
+  renderLoading, renderError, divisionOrder, DIVISION_LABELS, renderLiturgicalLoadFailure,
 } from "./views.js";
 // The calendar tab and the lectionary view (ADR-038 §1-§3) are not imported
 // here: route() loads them with import() the first time one of their routes
-// opens, so a session that only reads the Bible never loads the liturgical
-// engine, the lectionary view or the calendar (about 210KB of source, 70KB
-// gzipped). The measured gain is the cold first visit's boot path (Slow 4G
-// DOMContentLoaded −390 ms, 2026-10-17); a warm start was within noise either
-// way, since the browser compiles function bodies lazily. The seam
-// stays one-directional — neither calls route / navigate / parsePath, their
-// controls are plain links (ADR-034 principle 1). sw.js still precaches all
-// three for offline, and tests/unit/sw.test.js follows these import() calls.
+// opens (openLazyView), so a session that only reads the Bible never loads the
+// liturgical engine, the lectionary view or the calendar (about 210KB of
+// source, 70KB gzipped). The measured gain is the cold first visit's boot path
+// (Slow 4G DOMContentLoaded −390 ms, 2026-10-17); a warm start was within noise
+// either way, since the browser compiles function bodies lazily. A deep link
+// to either view starts fetching its modules from js/pre-fetch.js, with the
+// boot. The seam stays one-directional — neither calls route / navigate /
+// parsePath, their controls are plain links (ADR-034 principle 1), and the
+// shell they share with this module (title, header control, failure screen)
+// lives in views.js. sw.js still precaches all three for offline, and
+// tests/unit/sw.test.js follows these import() calls.
 
-const { _$, el, clearNode, chUnit, emptyState, isModifiedClick, focusSpotOf, restoreFocusSpot } = window.appHelpers;
+const { _$, clearNode, chUnit, isModifiedClick, focusSpotOf, restoreFocusSpot } = window.appHelpers;
 const {
   loadStartupBehavior, loadReadingPosition, saveReadingPosition, loadBookOrder,
 } = window.appStorage;
@@ -273,10 +276,9 @@ function trackPageView() {
 
 /**
  * Loads a view module the first time its route opens. Resolves null when the module can't be fetched or linked
- * (offline with nothing cached, or a deploy that landed between the page load and this import) — the view's own
- * failure screen lives inside the module that just failed, so the caller draws `renderViewLoadFailure` instead.
- * Keep the import() specifier a string literal at the call site: tests/unit/sw.test.js reads it to check that the
- * module and everything it imports are precached for offline (a computed specifier can't be followed).
+ * (offline with nothing cached, or a deploy that landed between the page load and this import and broke a link) —
+ * the view's own failure screen lives inside the module that just failed, so the caller draws views.js
+ * `renderLiturgicalLoadFailure` instead.
  * @template T
  * @param {() => Promise<T>} load
  * @returns {Promise<T | null>}
@@ -290,29 +292,48 @@ async function loadViewModule(load) {
   }
 }
 
+// What the calendar tab and the lectionary view load on their first visit: the view module and everything it
+// imports, requested at once. Awaiting calendar.js before the browser discovers its own imports costs one more round
+// trip on a cold first visit (measured 2026-10-17, Slow 4G: tab → grid +676 ms sequential, +527 ms at once); the
+// module map fetches each URL only once, so naming the dependencies here is free. tests/unit/sw.test.js reads these
+// lists — each must be exactly the first module's static imports minus the boot graph, every specifier a string
+// literal (it follows them to check the offline precache), and js/pre-fetch.js preloads the same lists for a deep link.
+const loadCalendarView = () => Promise.all([
+  import("./calendar.js"), import("./lectionary.js"), import("./liturgical-engine.js"),
+]).then(([mod]) => mod.renderCalendarView);
+const loadLectionaryView = () => Promise.all([
+  import("./lectionary.js"), import("./liturgical-engine.js"),
+]).then(([mod]) => mod.renderLectionaryView);
+
+/** @type {Record<"calendar" | "lectionary", string>} */
+const LAZY_VIEW_DESCRIPTIONS = {
+  calendar: "대한성공회 교회력 — 날마다의 전례일 · 전례색, 날짜를 누르면 그날의 전례독서",
+  lectionary: "대한성공회 감사성찬례 전례독서 — 본기도 · 제1독서 · 시편 · 제2독서 · 복음",
+};
+
 /**
- * 화면 모듈을 받지 못했을 때의 실패 화면(DESIGN.md §6 「전체 화면 실패」) — 뷰가 자료를 받지 못했을 때의 실패 화면과 같은
- * 자리 · 제목에 다음 행동 「다시 불러오기」를 단다. 단추는 페이지를 새로 고친다: 브라우저는 한 번 실패한 모듈을 새로 고칠
- * 때까지 기억해서(그것을 바꾼 HTML 표준 변경이 2026-07 — 엔진마다 반영 중) 화면을 다시 여는 것만으로는 풀리지 않을 수 있다
- * (사용자 결정 2026-10-17). 앞 화면의 헤더 · 제목 · 오디오 바는 남기지 않는다(ADR-038 §3 「실패 · 범위」). 머리에는 성서 목록
- * 집 단추를 둔다 — 전례독서 화면의 위 단계(그 달의 캘린더)는 받지 못한 모듈 쪽이다.
- * @param {{ title: string, panel: string, message: string }} view  title — 그 뷰의 제목(뷰 모듈의 PAGE_TITLE과 같게 —
- *   모듈을 받지 못해 거기서 읽을 수 없다) · panel — 뷰의 바깥 상자 클래스 · message — 안 된 것(뷰의 자료 실패 제목과 같다)
- * @returns {string} 페이지 메타의 제목
+ * Opens the calendar tab or the lectionary view: loads its module on the first visit, then renders. A view that
+ * throws while rendering — a bug, or a deploy that landed between the page load and the import and linked a new module
+ * to an old helper it calls — gets the same failure screen as a module that couldn't load: its own title · header and
+ * 「다시 불러오기」, not the shared one-line error that kept the previous screen's header (review 2026-10-18).
+ * @template P
+ * @param {"calendar" | "lectionary"} view
+ * @param {() => Promise<(parsed: P) => Promise<string>>} load
+ * @param {P} parsed
+ * @param {() => boolean} isStale  route()'s guard — true once a newer route took over
+ * @returns {Promise<string | null>} the page title, or null when a newer route took over
  */
-function renderViewLoadFailure({ title, panel, message }) {
-  setTitle(title);
-  const $title = _$("page-title");
-  $title.insertBefore(window.buildHomeBtn("/", "성서 목록으로"), $title.firstChild);
-  window.hideAudioBar?.();
-  clearNode($app);
-  const reload = el("button", { type: "button" }, "다시 불러오기");
-  reload.addEventListener("click", () => location.reload());
-  const box = el("div", { className: panel });
-  box.appendChild(emptyState({ icon: null, title: message, subtitle: "네트워크 연결을 확인한 뒤 「다시 불러오기」를 눌러 주세요." }));
-  box.appendChild(el("p", { className: "state-action" }, reload));
-  $app.appendChild(box);
-  return title;
+async function openLazyView(view, load, parsed, isStale) {
+  const render = await loadViewModule(load);
+  if (isStale()) return null;
+  if (!render) return renderLiturgicalLoadFailure(view);
+  try {
+    const title = await render(parsed);
+    return isStale() ? null : title;
+  } catch (err) {
+    console.error(err);
+    return isStale() ? null : renderLiturgicalLoadFailure(view);
+  }
 }
 
 async function route() {
@@ -464,71 +485,19 @@ async function route() {
       return;
     }
 
-    // Calendar tab (ADR-038 §1 · §2 A2). A full page on mobile and desktop alike,
-    // like the lectionary view below; the view preloads the small calendar
-    // bundle itself and commits the DOM data-first. Its module (with the
-    // lectionary view and the engine it imports) loads on the first visit — see
-    // the note at the imports. All three are requested at once: awaiting
-    // calendar.js before the browser discovers its own imports costs one more
-    // round trip on a cold first visit (measured 2026-10-17, Slow 4G: tab →
-    // grid +676 ms sequential, +527 ms at once). The module map fetches each URL
-    // only once, so naming the dependencies here is free.
-    if (view === "calendar") {
+    // Calendar tab (ADR-038 §1 · §2 A2) and lectionary view (§3 A3). Full pages on mobile and desktop alike (ADR-035
+    // /read precedent — no drawer fallback); the lectionary view is classified under the calendar tab (tab-history
+    // tabOf). Each view preloads its engine bundle(s) itself and commits the DOM data-first, so show the skeleton here
+    // so #app reflects the new route immediately (mirrors the bookmark-read branch above). Their modules load on the first visit (see
+    // the note at the imports).
+    if (view === "calendar" || view === "lectionary") {
       renderLoading();
       dismissLaunchScreen();
-      const calendar = await loadViewModule(() => Promise.all([
-        import("./calendar.js"), import("./lectionary.js"), import("./liturgical-engine.js"),
-      ]).then(([mod]) => mod));
-      if (isStale()) return;
-      let calTitle;
-      try {
-        calTitle = calendar
-          ? await calendar.renderCalendarView(parsed)
-          : renderViewLoadFailure({ title: "캘린더", panel: "calendar", message: "교회력 자료를 불러오지 못했습니다" });
-      } catch (err) {
-        // Same as the lectionary branch: a stale failure must not paint over the newer route.
-        if (isStale()) return;
-        throw err;
-      }
-      if (isStale()) return;
-      updatePageMeta({
-        title: calTitle,
-        description: "대한성공회 교회력 — 날마다의 전례일 · 전례색, 날짜를 누르면 그날의 전례독서",
-      });
-      trackPageView();
-      return;
-    }
-
-    // Lectionary reading view (ADR-038 §3 A3). A full page on mobile and desktop
-    // alike (ADR-035 /read precedent — no drawer fallback), classified under the
-    // calendar tab (tab-history tabOf). The view preloads both engine bundles
-    // itself and commits the DOM data-first, so show the skeleton here so #app
-    // reflects the new route immediately (mirrors the bookmark-read branch above).
-    // Its module (with the engine, not the calendar) loads on the first visit,
-    // both requested at once like the calendar branch above.
-    if (view === "lectionary") {
-      renderLoading();
-      dismissLaunchScreen();
-      const lectionary = await loadViewModule(() => Promise.all([
-        import("./lectionary.js"), import("./liturgical-engine.js"),
-      ]).then(([mod]) => mod));
-      if (isStale()) return;
-      let lectTitle;
-      try {
-        lectTitle = lectionary
-          ? await lectionary.renderLectionaryView(parsed)
-          : renderViewLoadFailure({ title: "전례독서", panel: "lectionary", message: "전례독서 자료를 불러오지 못했습니다" });
-      } catch (err) {
-        // 프리로드(엔진 데이터 fetch)가 실패했을 때 사용자가 이미 다른 화면으로 갔으면 낡은 실패다 — 공용
-        // catch 의 renderError 가 새 화면을 덮지 않게 여기서 삼킨다(Copilot 리뷰 5회차). 최신이면 그대로 올린다.
-        if (isStale()) return;
-        throw err;
-      }
-      if (isStale()) return;
-      updatePageMeta({
-        title: lectTitle,
-        description: "대한성공회 감사성찬례 전례독서 — 본기도 · 제1독서 · 시편 · 제2독서 · 복음",
-      });
+      const title = view === "calendar"
+        ? await openLazyView("calendar", loadCalendarView, parsed, isStale)
+        : await openLazyView("lectionary", loadLectionaryView, parsed, isStale);
+      if (title === null) return;
+      updatePageMeta({ title, description: LAZY_VIEW_DESCRIPTIONS[view] });
       trackPageView();
       return;
     }
