@@ -1,4 +1,5 @@
 ---
+pr: 356
 date: 2026-10-18
 branch: fix/csp-google-collect
 title: "fix: CSP가 애널리틱스의 페이지 이탈 요청을 막는다"
