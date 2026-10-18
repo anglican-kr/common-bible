@@ -62,3 +62,9 @@ title: "fix: views · search를 타입 검사 안으로"
 - `docs/decisions/012-typescript-incremental-adoption.md` — 상태 줄 · 「결정」 · 「결과」의 남은 수(6 → 4), 「파일 헤더」의 예시를 묶음 ③으로.
 - `docs/coding-pitfalls.md` §27 — 묶음 ② 사례(null · undefined 어긋남)와 규칙 한 줄(선택 매개변수는 `undefined`만 「없음」으로 받는다).
 - `tests/README.md` · `CLAUDE.md` — 고치지 않았다(유닛 건수가 그대로다).
+
+## 리뷰 반영 (2026-10-18, Copilot 1회차)
+
+Copilot은 「승인 권장」에 낮은 등급 문서 지적 1건을 남겼다.
+
+1. **pitfalls §27 사례의 조건이 거꾸로였다**(`dc5ffe5`) — 「받는 쪽은 `currentChapter !== undefined`일 때만 장 비교를 건너뛴다」를 「`currentChapter`가 `undefined`일 때만 건너뛴다」로 고쳤다. `parallels.js`는 `!== undefined`일 때 장을 비교한다. 같은 내용을 적은 다른 곳(이 원장의 「드러난 68건」 · `views.js`의 주석 · 커밋 메시지 · §27 규칙 줄)은 맞게 적혀 있었다.
