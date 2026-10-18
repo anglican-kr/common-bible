@@ -311,6 +311,14 @@ const LAZY_VIEW_DESCRIPTIONS = {
   lectionary: "대한성공회 감사성찬례 전례독서 — 본기도 · 제1독서 · 시편 · 제2독서 · 복음",
 };
 
+// The render function of each view module already loaded, kept so a redraw (the calendar's month steps, the
+// lectionary's chips · segments · date steps) renders without awaiting import() again. Even for a module already in
+// the module map, import() settles a task later, so the renderLoading() skeleton painted for a frame on every redraw
+// (PR #355 review: 40 of 40 month steps in Chromium, main 0). Only a success is kept — a failure is tried again on the
+// next visit.
+/** @type {Map<string, unknown>} */
+const loadedViews = new Map();
+
 /**
  * Opens the calendar tab or the lectionary view: loads its module on the first visit, then renders. A view that
  * throws while rendering — a bug, or a deploy that landed between the page load and the import and linked a new module
@@ -324,9 +332,14 @@ const LAZY_VIEW_DESCRIPTIONS = {
  * @returns {Promise<string | null>} the page title, or null when a newer route took over
  */
 async function openLazyView(view, load, parsed, isStale) {
-  const render = await loadViewModule(load);
-  if (isStale()) return null;
-  if (!render) return renderLiturgicalLoadFailure(view);
+  let render = /** @type {((parsed: P) => Promise<string>) | undefined} */ (loadedViews.get(view));
+  if (!render) {
+    const loaded = await loadViewModule(load);
+    if (loaded) loadedViews.set(view, loaded);
+    if (isStale()) return null;
+    if (!loaded) return renderLiturgicalLoadFailure(view);
+    render = loaded;
+  }
   try {
     const title = await render(parsed);
     return isStale() ? null : title;
@@ -488,8 +501,8 @@ async function route() {
     // Calendar tab (ADR-038 §1 · §2 A2) and lectionary view (§3 A3). Full pages on mobile and desktop alike (ADR-035
     // /read precedent — no drawer fallback); the lectionary view is classified under the calendar tab (tab-history
     // tabOf). Each view preloads its engine bundle(s) itself and commits the DOM data-first, so show the skeleton here
-    // so #app reflects the new route immediately (mirrors the bookmark-read branch above). Their modules load on the first visit (see
-    // the note at the imports).
+    // so #app reflects the new route immediately (mirrors the bookmark-read branch above) — a redraw whose data is
+    // cached commits before it paints (loadedViews). Their modules load on the first visit (see the note at the imports).
     if (view === "calendar" || view === "lectionary") {
       renderLoading();
       dismissLaunchScreen();
