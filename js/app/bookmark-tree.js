@@ -1,4 +1,3 @@
-// @ts-nocheck — 타입 오류가 남아 검사에서 뺐다(docs/known-issues.md §7 묶음 ③). 고치는 PR 이 이 줄을 지운다 — ADR-012.
 "use strict";
 
 // Bookmark tree rendering — extracted from bookmark.js (ADR-034 후속, 마지막 라운드 2/2).
@@ -135,6 +134,7 @@ function _buildSelectCircle() {
   return el("span", { className: "bm-select-circle", "aria-hidden": "true" }, svg);
 }
 
+/** @param {BookmarkTreeBookmark} bm @param {number} depth @returns {HTMLLIElement} */
 function _buildBookmarkItem(bm, depth) {
   const li = el("li", { role: "treeitem", className: "bm-bookmark", "data-id": bm.id, tabIndex: "-1" });
   if (depth > 0) li.setAttribute("aria-level", String(depth + 1));
@@ -155,7 +155,7 @@ function _buildBookmarkItem(bm, depth) {
   const book = (window.getBooksCache() ?? []).find(b => b.id === bm.bookId);
   const bookName = book ? (book.short_name_ko || book.name_ko) : bm.bookId;
   const refText = bm.verseSpec === "all"
-    ? `${bookName} ${bm.chapter}${chUnit(bm.bookId)}`
+    ? `${bookName} ${bm.chapter}${chUnit(bm.bookId ?? "")}`
     : `${bookName} ${bm.chapter}:${bm.verseSpec}`;
   link.appendChild(el("span", { className: "bm-bookmark-ref" }, refText));
   link.addEventListener("click", (e) => {
@@ -250,6 +250,7 @@ function _buildBookmarkTypeIcon(active = false, size = 20) {
 
 // _buildMaterialFolderIcon moved to bookmark-modals.js with the folder combobox (PR5b).
 
+/** @param {boolean} open @param {number} [size] @returns {SVGSVGElement} */
 function _buildFolderToggleIcon(open, size = 20) {
   const ns = "http://www.w3.org/2000/svg";
   const svg = document.createElementNS(ns, "svg");
@@ -306,6 +307,7 @@ function _buildFolderReadBtn(folder) {
   return btn;
 }
 
+/** @param {BookmarkTreeFolder} folder @param {number} depth @returns {HTMLLIElement} */
 function _buildFolderItem(folder, depth) {
   const expanded = _hasActiveDescendant(folder) || !!(folder.expanded);
   const li = el("li", {
@@ -417,15 +419,6 @@ function _buildFolderItem(folder, depth) {
   return li;
 }
 
-/**
- * Render the bookmark tree into a target `<ul role="tree">`. Defaults to the
- * drawer body so the existing drawer keeps calling this with no arguments. The
- * mobile full-screen view (renderBookmarksView) passes its own in-page `<ul>`.
- * Roving-tabindex + keyboard arrow navigation are wired only on the drawer body
- * (the listeners below are bound to `$bookmarkDrawerBody`); the full view relies
- * on each bookmark's own `<a>` for keyboard reachability.
- * @param {HTMLElement} [target]
- */
 // BOOKMARK_ADD_HELP (empty-state + 🛈 popover guidance) moved to bookmark-core.js
 // (ADR-034 후속) — shared by the empty state here and the menu's info popover.
 
@@ -449,6 +442,16 @@ function _buildEmptyState() {
   });
 }
 
+/**
+ * Render the bookmark tree into a target `<ul role="tree">`. Defaults to the
+ * drawer body so the existing drawer keeps calling this with no arguments. The
+ * mobile full-screen view (renderBookmarksView) passes its own in-page `<ul>`.
+ * Roving-tabindex + keyboard arrow navigation are wired only on the drawer body
+ * (the listeners below are bound to `$bookmarkDrawerBody`); the full view relies
+ * on each bookmark's own `<a>` for keyboard reachability.
+ * (This block sat above _buildEmptyState, which has no `target` — TS8024.)
+ * @param {HTMLElement} [target]
+ */
 function renderBookmarkTree(target = $bookmarkDrawerBody) {
   setRenderPathname(window.location.pathname);
   // The previously swiped row may be replaced when we re-render; drop the
@@ -529,11 +532,15 @@ function renderBookmarksView() {
 }
 
 // Returns all currently visible treeitems in DOM order (skips children of collapsed folders)
+/** @returns {HTMLElement[]} */
 function _getVisibleTreeItems() {
+  /** @type {HTMLElement[]} */
   const result = [];
+  /** @param {Element} ul */
   function walk(ul) {
     for (const li of ul.children) {
-      if (!li.matches("[role=treeitem]")) continue;
+      // Tree items are <li> — the instanceof only tells TS so (focus() lives on HTMLElement).
+      if (!(li instanceof HTMLElement) || !li.matches("[role=treeitem]")) continue;
       result.push(li);
       const expanded = li.getAttribute("aria-expanded") === "true";
       const group = li.querySelector(":scope > [role=group]");
@@ -544,6 +551,7 @@ function _getVisibleTreeItems() {
   return result;
 }
 
+/** @param {HTMLElement} item */
 function _focusTreeItem(item) {
   const prev = $bookmarkDrawerBody.querySelector("[role=treeitem][tabindex='0']");
   if (prev && prev !== item) prev.setAttribute("tabIndex", "-1");
@@ -551,6 +559,7 @@ function _focusTreeItem(item) {
   item.focus();
 }
 
+/** @param {Element} li */
 function _toggleFolder(li) {
   const toggle = li.querySelector(".bm-folder-toggle");
   const newExpanded = li.getAttribute("aria-expanded") !== "true";
@@ -594,7 +603,7 @@ $bookmarkDrawerBody.addEventListener("keydown", (e) => {
       } else {
         const group = item.querySelector(":scope > [role=group]");
         const firstChild = group && group.querySelector("[role=treeitem]");
-        if (firstChild) _focusTreeItem(firstChild);
+        if (firstChild instanceof HTMLElement) _focusTreeItem(firstChild);
       }
     }
   } else if (e.key === "ArrowLeft") {
@@ -606,7 +615,7 @@ $bookmarkDrawerBody.addEventListener("keydown", (e) => {
       // Move to parent treeitem
       const parentGroup = item.closest("[role=group]");
       const parentItem = parentGroup && parentGroup.closest("[role=treeitem]");
-      if (parentItem) _focusTreeItem(parentItem);
+      if (parentItem instanceof HTMLElement) _focusTreeItem(parentItem);
     }
   } else if (e.key === "Home") {
     e.preventDefault();
