@@ -59,8 +59,10 @@ const SHELL_FILES = [
   "/js/app/audio-player.js",
   "/js/app/views.js",
   // 동적 import()로만 로드되는 모듈(태그 없음) — routing.js가 /calendar · /lectionary에
-  // 처음 갈 때 불러온다(ADR-038 §2 「구현」). 오프라인에서도 그 화면이 열리도록 여기서
-  // 미리 받는다 — tests/unit/sw.test.js의 닫힘 검사가 import()도 따라간다.
+  // 처음 갈 때 불러온다(ADR-038 §2 「구현」). 설치 때 여기서 미리 받아, 앱을 한 번 연
+  // 기기는 연결 없이도 그 화면의 모듈을 캐시에서 받는다(교회력 표는 처음 쓸 때 DATA_CACHE
+  // 에 들어가므로, 오프라인에서 열리는 것은 온라인에서 한 번 연 화면이다) —
+  // tests/unit/sw.test.js의 닫힘 검사가 import()도 따라간다.
   "/js/app/liturgical-engine.js",
   "/js/app/lectionary.js",
   "/js/app/calendar.js",

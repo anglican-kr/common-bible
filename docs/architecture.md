@@ -150,7 +150,7 @@ ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` 약 6,000줄이 8개 �
 | ---------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------- |
 | `<script type="module">` (자동 deferred) | 28      | 대부분의 모듈. 모듈 scope + `import`/`export` 가능                                                                   |
 | `<script defer>` (classic)               | 2       | `audio-cache.js`·`manifest-sync.js` — `audio-cache.js`는 `sw.js`의 `importScripts()`도 가져가므로 classic이어야 한다 (ADR-019 §"예외"). `manifest-sync.js`도 classic이지만 `sw.js`는 가져가지 않는다 |
-| `<script>` (head, 즉시 실행)             | 1       | `pre-fetch.js` — `<head>`에서 즉시 `data/books.json` 다운로드 시작. `type="module"`은 자동 deferred라 fetch가 늦어짐 |
+| `<script>` (head, 즉시 실행)             | 1       | `pre-fetch.js` — `<head>`에서 즉시 `data/books.json` 다운로드 시작, `/calendar` · `/lectionary`로 바로 들어오면 그 화면 모듈도 미리 받기(`modulepreload`). `type="module"`은 자동 deferred라 시작이 늦어짐 |
 
 `<script>` 태그가 없는 런타임 파일이 9개 더 있다: `search-worker.js`는 `new Worker()`로 별도 생성되는 독립 컨텍스트이고, `bookmark-{tree,gestures,select,menu,verse-select}.js` 5개는 `bookmark.js`가 ESM `import`로 끌어오며(브라우저가 import 그래프를 따라 가져온다), 교회력 셋은 `routing.js`가 그 화면에 처음 갈 때 동적 `import()`로 불러온다 — 캘린더 탭은 셋을, 전례독서 화면은 뷰와 엔진 둘을 한꺼번에 요청한다(차례로 받으면 왕복이 한 번 더 든다). 성서만 읽는 세션은 셋(원본 약 210KB · gzip 약 70KB)을 싣지 않고, 서비스 워커는 오프라인용으로 셋을 미리 받는다(§4.6). 이득과 대가는 서비스 워커 캐시가 없는 첫 방문에만 있다 — 첫 화면은 느린 4G에서 0.39초 빨라지고, 첫 방문에 캘린더를 바로 열면 0.53초 늦어진다. 재방문의 부팅 시간은 어느 쪽이든 측정 오차 안이다(ADR-038 §2 「구현」의 실측). 받지 못하면 라우터가 그 뷰의 제목으로 실패 화면을 그리고 「다시 불러오기」(페이지 새로 고침)를 단다. 지정자는 글자 그대로 둔다 — `tests/unit/sw.test.js`가 그것을 따라가 오프라인 목록을 대조하고, 셋이 부팅 그래프 밖에 있는지도 본다.
 
@@ -160,7 +160,7 @@ ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` 약 6,000줄이 8개 �
 
 | 파일                  | 역할                                                                                                                              | 라인 수 |
 | --------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ------- |
-| `js/pre-fetch.js`     | 첫 페인트 직전 `data/books.json` 비동기 선패치                                                                                    | ~10     |
+| `js/pre-fetch.js`     | 첫 페인트 직전 `data/books.json` 비동기 선패치 · 캘린더 · 전례독서 주소면 그 화면 모듈 미리 받기(`modulepreload` — 목록은 `routing.js`의 묶음과 같다) | ~35     |
 | `js/gtag-init.js`     | Google Analytics 초기화                                                                                                           | ~15     |
 | `js/app.js`           | app-main 부트스트랩 + 접근성 keydown + Audio cache LRU 소프트캡 + SW 등록 · 업데이트 확인(한 시간에 한 번까지 · `checkForUpdates`) · 업데이트 토스트 + 탭 복귀 때 Drive `pollSync` · `clearAllCaches` | ~330    |
 | `js/audio-cache.js`   | 오디오 LRU IndexedDB sidecar ([ADR-016](decisions/016-audio-cache-lru.md))                                                        | ~190    |
@@ -182,8 +182,8 @@ ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` 약 6,000줄이 8개 �
 | `js/app/reading-context.js`        | 현재 책/장 + 절 선택 모드 공유 상태                                                                                                                                        | ~35     |
 | `js/app/verse-spec.js`             | 절 스펙 파싱·비교·직렬화·병합 + `verseInstanceKey` (leaf, ADR-034·ADR-038 §3 렌더 기반)                                                                                              | ~335    |
 | `js/app/liturgical-engine.js`      | 교회력 엔진 (leaf, ADR-037 §6) — 계산(A1-a, 설계서 §4: computus·절기 스팬·연중 주차·주기·기간 축) + 조회(A1-b, 설계서 §5: 두 묶음 프리로드·`resolveDate` 후보 집합·`findReadings`·`findCollects`) + 품계·승자·전례색·재일·이동(B1, 설계서 §6: 범주 사다리·재분류·`fastOf`·연도 단위 이동 패스 `computeTransfers`·선택 봉헌 `setActivatedOptionals`). 교회력을 계산하는 범위(1583-9999 — `MIN_YEAR` · `MAX_YEAR` · `isComputableYear` · `isComputableDate`)의 정본이고 `resolveDate`는 범위 밖에 null. 부팅 때 싣지 않는다 — 전례독서 · 캘린더가 import하고, 그 둘을 `routing.js`가 그 화면에 처음 갈 때 `import()`로 불러온다 | ~2,155 |
-| `js/app/lectionary.js`             | 전례독서 뷰 — `/lectionary[/YYYY-MM-DD]`: 순수 모델 `buildLectionaryModel`(초기 선택 · 트랙 · 대안 세트 세 갈래(「또는」·조건부·괄호 선택 구절 합침) · 본기도 · 칩 라벨 · 두 독서 카드 · 헤더 색 · URL 상태, `LECTIONARY_MODEL` 마커 블록) + DOM(본기도 → 독서 네 슬롯 — `appendVerses` 계응 시편 + 영광송 1회 + 선택 구절 〔 〕, 관측일 칩, 세그먼트, 날짜 이동 줄 `buildDateNav` — 캘린더와 공유; 다시 그리는 링크는 포커스 키만 단다 — 라우터가 돌려준다). 엔진의 첫 소비자 ([ADR-038](decisions/038-calendar-lectionary-ui.md) §3). 부팅 때 싣지 않는다 — `/lectionary`(또는 캘린더 탭)에 처음 갈 때 `routing.js`가 `import()`로 불러온다 | ~1,305 |
-| `js/app/calendar.js`               | 캘린더 탭 — `/calendar[/YYYY-MM]` 월간 표: 순수 모델 `buildMonthGrid` · `calendarDay`(6주 × 7일 · 칸 이름 하나 — 대표, 격자 평일이면 사계재 · 기념일 · 번호 주일 「연중29주」 · 그날의 전례색 `colors` · 전례년 첫날 표지 · 링크 이름, `CALENDAR_MODEL` 마커 블록) + DOM(`<table>` 7열 · 이전/다음/오늘 링크). 캘린더 묶음만 프리로드, 이름 · 날짜 · 색 함수와 날짜 이동 줄은 `lectionary.js`에서, 계산 범위 판정은 엔진에서 import ([ADR-038](decisions/038-calendar-lectionary-ui.md) §1 · §2). 부팅 때 싣지 않는다 — `/calendar`에 처음 갈 때 `routing.js`가 `import()`로 불러온다 | ~400 |
+| `js/app/lectionary.js`             | 전례독서 뷰 — `/lectionary[/YYYY-MM-DD]`: 순수 모델 `buildLectionaryModel`(초기 선택 · 트랙 · 대안 세트 세 갈래(「또는」·조건부·괄호 선택 구절 합침) · 본기도 · 칩 라벨 · 두 독서 카드 · 헤더 색 · URL 상태, `LECTIONARY_MODEL` 마커 블록) + DOM(본기도 → 독서 네 슬롯 — `appendVerses` 계응 시편 + 영광송 1회 + 선택 구절 〔 〕, 관측일 칩, 세그먼트, 날짜 이동 줄 `buildDateNav` — 캘린더와 공유; 다시 그리는 링크는 포커스 키만 단다 — 라우터가 돌려준다). 엔진의 첫 소비자 ([ADR-038](decisions/038-calendar-lectionary-ui.md) §3). 머리 · 실패 화면은 `views.js`의 것을 쓴다. 부팅 때 싣지 않는다 — `/lectionary`(또는 캘린더 탭)에 처음 갈 때 `routing.js`가 `import()`로 불러온다 | ~1,275 |
+| `js/app/calendar.js`               | 캘린더 탭 — `/calendar[/YYYY-MM]` 월간 표: 순수 모델 `buildMonthGrid` · `calendarDay`(6주 × 7일 · 칸 이름 하나 — 대표, 격자 평일이면 사계재 · 기념일 · 번호 주일 「연중29주」 · 그날의 전례색 `colors` · 전례년 첫날 표지 · 링크 이름, `CALENDAR_MODEL` 마커 블록) + DOM(`<table>` 7열 · 이전/다음/오늘 링크). 캘린더 묶음만 프리로드, 이름 · 날짜 · 색 함수와 날짜 이동 줄은 `lectionary.js`에서, 계산 범위 판정은 엔진에서, 머리 · 실패 화면은 `views.js`에서 import ([ADR-038](decisions/038-calendar-lectionary-ui.md) §1 · §2). 부팅 때 싣지 않는다 — `/calendar`에 처음 갈 때 `routing.js`가 `import()`로 불러온다 | ~390 |
 | `js/app/bookmark-core.js`          | DOM-free 북마크 로직 (트리 query/insert/remove·href/share·정렬/최근본·active-route 술어) — 창 객체(facade) 없이 다른 모듈이 `import`로 쓴다(자기 `<script>` 태그는 있다, ADR-034) | ~405    |
 | `js/app/bookmark-modals.js`        | 북마크 모달 7종(confirm·새 폴더·폴더 콤보박스·save/edit·merge·import·move picker) + 렌더 콜백 의존성 주입 + 단일 Escape 스택(`closeTopmostModal`) (ADR-034) | ~910    |
 | `js/app/bookmark.js`               | 북마크 **드로어/헤더 오케스트레이터** — 드로어 lifecycle·헤더 버튼·init 배선·facade·keydown + Drive 연결 해제 모달(「파일 유지」 · 「파일도 삭제」). 트리 렌더·제스처·선택·⋯ 메뉴·절 선택은 아래 5모듈로 분리 (ADR-034 후속, 2026-06-11) | ~560    |
@@ -198,8 +198,8 @@ ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` 약 6,000줄이 8개 �
 | `js/app/tab-history.js`            | 탭별 라우트·스크롤 위치 복원 (POP 의미론: popstate·탭 전환에서만 복원; `/lectionary`·`/calendar` 는 캘린더 탭) ([ADR-031](decisions/031-tab-history-restore.md))           | ~140    |
 | `js/app/data-fetch.js`             | 데이터 패칭 (books/version/chapter/prologue fetch + booksCache/appVersion 캐시), leaf 모듈 (ADR-034 PR2)                                                                   | ~90     |
 | `js/app/audio-player.js`           | 장별 mp3 플레이어 UI + 재생 상태 + `#audio-bar` lifecycle (ADR-034 PR1)                                                                                                    | ~240    |
-| `js/app/views.js`                  | 렌더 헬퍼 + Views + `appendVerses` 절 렌더 + 세그먼트 탭 빌더 `buildSegmentTabs`(구분 탭 · 독서 뷰 세그먼트 공유 — 항목의 `focusKey` 로 라우터가 다시 그린 뒤 포커스를 돌려준다) + 책 이름/헤더 자동 짧게 swap (데이터 패칭→data-fetch.js·오디오→audio-player.js·탭 인디케이터→tabbar.js·라우팅→routing.js·PTR 제거, ADR-034) | ~1,710 |
-| `js/app/routing.js`                | URL 파싱(parsePath — `/lectionary` 쿼리 상태 포함)·SPA 내비(navigate)·route() 오케스트레이터·page meta/분석·읽기 위치 스크롤 추적·링크클릭/popstate 리스너 (ADR-034 PR5a). 링크클릭 인터셉터가 같은 화면을 다시 그리는 링크의 자리를 재 두었다가 `route()`의 `finally`에서 돌려주고(ADR-031 §5), 페이지 안 링크(「본문 바로가기」)는 라우트하지 않고 대상으로 포커스만 옮긴다. 캘린더 · 전례독서 모듈은 그 분기에서 처음 갈 때 `import()`로 한꺼번에 받고(`loadViewModule`), 받지 못하면 그 뷰의 제목 · 「다시 불러오기」 실패 화면을 그린다(`renderViewLoadFailure` — [ADR-038](decisions/038-calendar-lectionary-ui.md) §2 「구현」) | ~770 |
+| `js/app/views.js`                  | 렌더 헬퍼 + Views + `appendVerses` 절 렌더 + 세그먼트 탭 빌더 `buildSegmentTabs`(구분 탭 · 독서 뷰 세그먼트 공유 — 항목의 `focusKey`로 라우터가 다시 그린 뒤 포커스를 돌려준다) + 책 이름/헤더 자동 짧게 swap + 캘린더 · 전례독서의 머리 · 전체 화면 실패(`commitLiturgicalTitle` · `renderLiturgicalFailure` — 두 화면 모듈과 라우터가 함께 쓴다; 화면 모듈을 받지 못해도 그릴 수 있게 부팅 모듈에 둔다) (데이터 패칭→data-fetch.js·오디오→audio-player.js·탭 인디케이터→tabbar.js·라우팅→routing.js·PTR 제거, ADR-034) | ~1,810 |
+| `js/app/routing.js`                | URL 파싱(parsePath — `/lectionary` 쿼리 상태 포함)·SPA 내비(navigate)·route() 오케스트레이터·page meta/분석·읽기 위치 스크롤 추적·링크클릭/popstate 리스너 (ADR-034 PR5a). 링크클릭 인터셉터가 같은 화면을 다시 그리는 링크의 자리를 재 두었다가 `route()`의 `finally`에서 돌려주고(ADR-031 §5), 페이지 안 링크(「본문 바로가기」)는 라우트하지 않고 대상으로 포커스만 옮긴다. 캘린더 · 전례독서 모듈은 그 분기에서 처음 갈 때 `import()`로 한꺼번에 받고(`openLazyView` — 받은 모듈은 기억해 다시 그릴 때 기다리지 않는다), 받지 못하거나 그리다 오류가 나면 `views.js`의 실패 화면(그 뷰의 제목 · 머리 · 「다시 불러오기」 — [ADR-038](decisions/038-calendar-lectionary-ui.md) §2 「구현」)을 그린다. 공용 `catch`도 낡은 route의 실패는 버린다 | ~760 |
 | `js/app/tabbar.js`                 | 탭 바 — 활성 상태·슬라이딩 인디케이터(ADR-034 PR3) + 검색 모핑 dock·하단 입력·visualViewport 키보드 처리 ([ADR-030](decisions/030-morphing-tab-bar.md))                    | ~580    |
 
 `bookmark-{tree,gestures,select,menu,verse-select}.js` 5개는 `index.html`에 `<script>` 태그가 없다 — `bookmark.js`가 ESM `import`로 끌어온다. 교회력 셋(`liturgical-engine.js` · `lectionary.js` · `calendar.js`)도 태그가 없다 — 위 「로드 방식」.
@@ -350,7 +350,7 @@ ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` 약 6,000줄이 8개 �
 
 캐시는 4개 식별자로 분리 (`sw.js`):
 
-- `SHELL_CACHE` (예: `shell-1.6.4`) — 셸과 부팅에 필요한 메타, 그리고 부팅 때 싣지 않는 교회력 모듈 셋(그 화면을 오프라인에서도 처음 열 수 있게 설치 때 미리 받는다). `importScripts('/sw-version.js')`로 `self.APP_VERSION`을 읽어 `"shell-" + APP_VERSION`으로 파생. 매 릴리스 갱신.
+- `SHELL_CACHE` (예: `shell-1.6.4`) — 셸과 부팅에 필요한 메타, 그리고 부팅 때 싣지 않는 교회력 모듈 셋(설치 때 미리 받는다 — 교회력 표는 처음 쓸 때 `DATA_CACHE`에 들어가므로, 오프라인에서 열리는 캘린더 · 전례독서는 온라인에서 한 번 연 화면이다). `importScripts('/sw-version.js')`로 `self.APP_VERSION`을 읽어 `"shell-" + APP_VERSION`으로 파생. 매 릴리스 갱신.
 - `DATA_CACHE` (`"data"`) — 본문 장 JSON(73권 1328장 + 머리말 · 전례시편 150 · 송가 13) + 검색 청크 셋 + 교회력 · 전례독서 표. 이름 자체는 고정, 항목별 무효화는 `js/manifest-sync.js`가 담당 (ADR-021).
 - `AUDIO_CACHE` (`"audio"`) — 장별 mp3. 같은 메커니즘.
 - `FONT_CACHE` (`"fonts"`) — Google Font 파일. 콘텐츠 주소 기반이라 사실상 영구.
@@ -551,7 +551,7 @@ Phase 1(성경 읽기 PWA)은 완성됐고, Phase 3(교회력)은 일부 구현�
 
 - 부트스트랩 / Service Worker 등록: `js/app.js`
 - 라우팅 (parsePath·route·navigate·popstate · 교회력 모듈을 그 화면에 처음 갈 때 `import()`): `js/app/routing.js`
-- 본문 렌더 + Views + 렌더 헬퍼: `js/app/views.js`
+- 본문 렌더 + Views + 렌더 헬퍼 · 캘린더 · 전례독서의 머리 · 실패 화면: `js/app/views.js`
 - 데이터 패칭 (books/version/chapter/prologue + 캐시): `js/app/data-fetch.js`
 - 교회력 계산·조회·품계·이동 (computus·절기 스팬·연중 주차·주기·기간 축 / 프리로드·`resolveDate`·`findReadings`·`findCollects` / 승자·재분류·전례색·`fastOf` / 이동 패스·선택 봉헌): `js/app/liturgical-engine.js`
 - 전례독서 뷰 (`/lectionary` — 관측일 칩·본기도·독서 네 슬롯·영광송·세트/트랙·두 독서 카드): `js/app/lectionary.js`

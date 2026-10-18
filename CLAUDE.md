@@ -77,7 +77,7 @@ data/source/*.md (73권, common-bible-data 서브모듈)
 
 ### 클라이언트 JS 유닛 테스트 (ADR-013)
 
-Node 자체 테스트 러너 + 자체 vm 하네스. 의존성 0, CI 자동 실행. **1285 케이스 — 1284 통과 · 실데이터 1 skip(데이터 대기 픽스처 — 미결13)** (2026-10-17). 파일 명명 컨벤션: `tests/unit/<source-basename>.test.js`, 한 모듈 = 한 테스트 파일 — **예외 둘**이다(tests/README §1과 같은 규칙). ① **실데이터 의존 케이스** — 공개 CI의 `Unit tests` 잡이 비공개 `data/` 서브모듈을 받지 않으므로, 그 표를 읽어야 하는 케이스는 `tests/unit/<source-basename>.data.test.js`로 갈라 `haveData` skip 가드를 달고 `engine-data.yml`·`sync-data.yml`에서 돌린다(선례 `liturgical-engine.data.test.js` · `lectionary.data.test.js`, 설계서 §7). ② **소스 모듈이 없는 테스트** — 문서·픽스처의 정합성을 보는 `docs-*.test.js` · `liturgical-fixtures.test.js`(픽스처의 관측일 id 실재는 ① 규칙대로 `liturgical-fixtures.data.test.js`로 갈라 두 워크플로에서 돈다). 이들이 함께 쓰는 문서 앵커 추출기는 `tests/unit/docs-anchors.js` — 테스트 파일이 아니라 `harness.js`와 같은 자리의 공용 모듈이다(`*.test.js` 글롭 밖). 내부 영역은 `// ── <영역> ──` 섹션. 상세는 ADR-013.
+Node 자체 테스트 러너 + 자체 vm 하네스. 의존성 0, CI 자동 실행. **1290 케이스 — 1289 통과 · 실데이터 1 skip(데이터 대기 픽스처 — 미결13)** (2026-10-18). 파일 명명 컨벤션: `tests/unit/<source-basename>.test.js`, 한 모듈 = 한 테스트 파일 — **예외 둘**이다(tests/README §1과 같은 규칙). ① **실데이터 의존 케이스** — 공개 CI의 `Unit tests` 잡이 비공개 `data/` 서브모듈을 받지 않으므로, 그 표를 읽어야 하는 케이스는 `tests/unit/<source-basename>.data.test.js`로 갈라 `haveData` skip 가드를 달고 `engine-data.yml`·`sync-data.yml`에서 돌린다(선례 `liturgical-engine.data.test.js` · `lectionary.data.test.js`, 설계서 §7). ② **소스 모듈이 없는 테스트** — 문서·픽스처의 정합성을 보는 `docs-*.test.js` · `liturgical-fixtures.test.js`(픽스처의 관측일 id 실재는 ① 규칙대로 `liturgical-fixtures.data.test.js`로 갈라 두 워크플로에서 돈다). 이들이 함께 쓰는 문서 앵커 추출기는 `tests/unit/docs-anchors.js` — 테스트 파일이 아니라 `harness.js`와 같은 자리의 공용 모듈이다(`*.test.js` 글롭 밖). 내부 영역은 `// ── <영역> ──` 섹션. 상세는 ADR-013.
 
 ```bash
 node --test tests/unit/*.test.js                 # 전체 (CI와 동일)
@@ -181,8 +181,8 @@ gh pr create --title "..." --body-file docs/changes/<YYYY-MM-DD>-<slug>.md
 # CI(Unit tests + Change ledger) 통과 · 사용자 확인 후 squash — 제목은 PR 제목 + 번호(REST)
 gh api -X PUT repos/anglican-kr/common-bible/pulls/<N>/merge -f merge_method=squash -f commit_title="<PR 제목> (#<N>)"
 git switch main && git pull --ff-only
-git diff <topic-branch> main --stat   # 비었는지 확인 — squash 뒤 브랜치는 main의 조상이 아니라 -d가 거절한다
-git branch -D <topic-branch>
+git diff <topic-branch> main --stat -- $(git diff --name-only main...<topic-branch>)   # PR이 바꾼 파일만 — 비었으면 squash가 다 담았다(그사이 main에 들어온 데이터 자동 PR은 보지 않는다)
+git branch -D <topic-branch>   # squash 커밋은 브랜치 커밋과 이어지지 않는다 — -d는 원격 브랜치가 정리됐으면 거절하고, 남아 있으면 경고만 낸다
 ```
 
 `main` 에 직접 commit 후 push 하면 `protected branch hook declined` 로 거부된다. 핫픽스도 동일 — 짧은 브랜치 + PR 로 통과.
