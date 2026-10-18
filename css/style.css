@@ -7082,6 +7082,7 @@ body.bm-select-active .bm-folder-read-btn { display: none; }
   color: var(--bg);
   border: none;
   border-radius: var(--radius);
+  font-family: inherit;
   font-size: var(--font-sm);
   font-weight: 600;
   cursor: pointer;
@@ -7097,6 +7098,7 @@ body.bm-select-active .bm-folder-read-btn { display: none; }
   background: none;
   border: 1px solid var(--border);
   border-radius: var(--radius);
+  font-family: inherit;
   font-size: var(--font-sm);
   color: var(--text);
   cursor: pointer;
