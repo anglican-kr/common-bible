@@ -271,7 +271,7 @@ def test_import_partial_file_skips_bad_items_and_says_so(browser, tmp_path):
             None,                                                        # 객체가 아님
             {**_BM_B, "id": "bm-bad-book", "bookId": "xyz"},             # 없는 책
             {"type": "folder", "id": "folder-bad", "name": "x", "children": "not an array"},
-            _FOLDER_WITH_CHILD,                                          # 폴더 안의 bm-c 는 들어온다
+            _FOLDER_WITH_CHILD,                                          # 폴더 안의 bm-c는 들어온다
         ],
     }
     import_file = tmp_path / "partial.json"
