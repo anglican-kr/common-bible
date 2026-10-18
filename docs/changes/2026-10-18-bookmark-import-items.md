@@ -1,4 +1,5 @@
 ---
+pr: 359
 date: 2026-10-18
 branch: fix/bookmark-import-items
 title: "fix: 가져오기가 어긋난 북마크를 빼고 들인다"
