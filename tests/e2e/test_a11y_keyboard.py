@@ -131,7 +131,7 @@ def test_focus_returns_after_drawer_close(browser):
 # ── 전례독서 뷰 (ADR-038 §3) ──────────────────────────────────────────────────
 
 def test_lectionary_chips_are_keyboard_reachable(browser):
-    """관측일 칩이 Tab 순서에 있고 Enter 로 이동한다(모두 링크). 세그먼트의 키보드는 같은 링크 꼴 — 칩으로 대표한다."""
+    """관측일 칩이 Tab 순서에 있고 Enter로 이동한다(모두 링크). 세그먼트도 같은 링크라 키보드 동작이 같다 — 칩으로 대표한다."""
     ctx, page = _open(browser, "lectionary/2026-09-16")
     try:
         page.wait_for_selector(".lectionary .lect-chip", timeout=20_000)

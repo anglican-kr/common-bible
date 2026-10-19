@@ -218,7 +218,7 @@ test("loadLectionaryTrack: 1 · 2 가 아닌 값 · 이 PR 의 옛 전례년별 
   assert.equal(read("0"), null);
   assert.equal(read(""), null);
   assert.equal(read("not json"), null);
-  assert.equal(read(JSON.stringify({ "2026": 2 })), null);   // 옛 꼴 — 숫자가 아니다
+  assert.equal(read(JSON.stringify({ "2026": 2 })), null);   // 옛 형식 — 숫자가 아니다
   assert.equal(read("1"), 1);
   const failing = loadStorage({ localStorageThrowOn: new Set(["bible-lectionary-track"]) });
   assert.equal(failing.appStorage.loadLectionaryTrack(), null);

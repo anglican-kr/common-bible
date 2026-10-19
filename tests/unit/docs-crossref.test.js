@@ -371,9 +371,9 @@ test("Qn 참조는 Q→미결 대응표 줄을 빼고 없다", { skip: GATES.qRe
 });
 
 test("ADR 미결 번호로 가리키는 참조가 없다 — 옛 번호는 그 ADR 「미결 사항」의 항목 목록(대응표)으로만 해독한다", { skip: GATES.adrIssueRefs.length ? false : gateDocs(GATES.adrIssueRefs) }, () => {
-  // 면제 줄이 없다. ADR 은 자기 항목을 `n. ` 으로 적고 설계서 번호를 「→ 설계서 미결n」으로 가리키므로 이 꼴이 필요한
+  // 면제 줄이 없다. ADR은 자기 항목을 `n. `으로 적고 설계서 번호를 「→ 설계서 미결n」으로 가리키므로 이 형식이 필요한
   // 자리가 없다 — 「대응표 문구가 든 줄」을 면제하면 그 문구를 쓴 산문까지 새어 나간다(③ 4회차 Qn 게이트와 같은 결함).
-  // `ADR-036 「미결 사항」 11` 처럼 번호를 풀어 쓴 꼴도 같은 참조라 함께 잡는다.
+  // `ADR-036 「미결 사항」 11`처럼 번호를 풀어 쓴 표기도 같은 참조라 함께 잡는다.
   const bad = [];
   for (const doc of GATES.adrIssueRefs)
     prose[doc].forEach((line, i) => {

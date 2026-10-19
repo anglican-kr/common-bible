@@ -85,7 +85,7 @@ test("verseInstanceKey: 같은 번호의 무번호 구절이 번호 절과 갈�
 
 // ── verseInstanceKeys ──
 
-test("verseInstanceKeys: 전례시편 23편 꼴에서 7개 절이 모두 남는다", () => {
+test("verseInstanceKeys: 전례시편 23편과 같은 구조에서 7개 절이 모두 남는다", () => {
   const verses = [
     { number: 1 }, { number: 2 }, { number: 3 }, { number: 4 },
     { number: 4, versicle: true }, { number: 5 }, { number: 6 },

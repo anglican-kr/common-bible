@@ -352,7 +352,7 @@ test("_findRelocated: 책 끝 근처에서는 있는 장만 받는다", async ()
   assert.deepEqual([...fetched].sort((a, b) => a - b), [146, 147, 148, 150]);
 });
 
-test("_findRelocated: 3장 떨어진 장에 옮겨 실린 절은 찾는다 — 욥기 27장의 24:18-24 꼴", async () => {
+test("_findRelocated: 3장 떨어진 장에 옮겨 실린 절은 찾는다 — 욥기 27장의 24:18-24 같은 경우", async () => {
   const printed = [18, 19, 20].map((n) => ({ number: n, chapter_ref: 24 }));
   const { c, fetched } = relocationHarness("job", 42, { 27: [{ number: 17 }, ...printed, { number: 18 }] });
   const r = await c._findRelocated("job", 24, [{ startCh: 24, startV: 18, endCh: null, endV: 20 }]);

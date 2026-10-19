@@ -56,7 +56,7 @@ def _intercept_export(page) -> dict:
 # ── 테스트용 픽스처 데이터 ──────────────────────────────────────────────────
 
 # 앱이 내보내는 모양 그대로 — `verseSpec`이 없는 북마크는 가져오기가 뺀다(트리 링크가 `/gen/1/undefined`가
-# 되던 꼴 — 2026-10-18, known-issues §14).
+# 되던 경우 — 2026-10-18, known-issues §14).
 _BM_A = {"type": "bookmark", "id": "bm-a", "bookId": "gen", "chapter": 1, "verseSpec": "all", "label": "창세기 1장"}
 _BM_B = {"type": "bookmark", "id": "bm-b", "bookId": "john", "chapter": 3, "verseSpec": "all", "label": "요한 3장"}
 _BM_C = {"type": "bookmark", "id": "bm-c", "bookId": "ps", "chapter": 23, "verseSpec": "all", "label": "시편 23편"}
@@ -478,7 +478,7 @@ def _bookmarks(n: int, **over) -> list:
 
 def test_import_file_too_big_stops_before_the_dialog(browser, tmp_path):
     """들인 뒤의 저장량이 한도를 넘으면 대화상자를 열지 않고 스낵바로 알린다 — 저장이 조용히 실패해
-    「덮어썼습니다」 뒤에도 옛 목록이 남던 꼴(PR #359 리뷰 2회차)."""
+    「덮어썼습니다」 뒤에도 옛 목록이 남던 결함(PR #359 리뷰 2회차)."""
     incoming = {"_version": 1, "exportedAt": 0, "bookmarks": [{**_BM_B, "note": "x" * 1_400_000}]}
     import_file = tmp_path / "huge.json"
     import_file.write_text(json.dumps(incoming), encoding="utf-8")

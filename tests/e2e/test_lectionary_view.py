@@ -453,7 +453,7 @@ async () => {
 
 def test_copy_keeps_both_endpoints_of_a_merged_verse(desktop_context):
     """주님의 세례 주일(2026-01-11) 시편 29 — 병합 절 「7-8」과 9절을 걸쳐 복사하면 「29:7-9」 — 병합 절의 두 끝을 다 센다(7만 남기지
-    않는다 — Copilot 9회차; 그때의 「29:7-8,9」 꼴은 자체 리뷰가 장 본문과 같은 줄 글자 없는 정수 구간으로 바꿨다)."""
+    않는다 — Copilot 9회차; 그때의 「29:7-8,9」 표기는 자체 리뷰가 장 본문과 같은 줄 글자 없는 정수 구간으로 바꿨다)."""
     page = desktop_context.new_page()
     _open(page, "lectionary/2026-01-11")
     text, a, b = page.evaluate(_LECT_COPY_MERGED)
