@@ -175,7 +175,7 @@ ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` 약 6,000줄이 8개 �
 | ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
 | `js/app/helpers.js`                | 공통 DOM 헬퍼 (`_$`/`el`/`clearNode`/`setInert`/`trapFocus`) + `emptyState` 빌더 + `headerIcon` · `HEADER_ICON_PATHS`(헤더 아이콘 SVG 규격 하나와 글리프마다 path 하나 — 집 단추 · 전례독서 위 단계 꺾쇠 · 인용 시트 뒤로 단추 공용) + `isModifiedClick`(새 탭 클릭 판정 — 전역 `<a>` 인터셉터 · 탭 처리기 공용) + `focusSpotOf` · `restoreFocusSpot`(같은 화면을 다시 그린 뒤 누른 컨트롤로 포커스 · 화면 위치를 돌려준다 — 라우터가 잇는다, 포커스를 잃었을 때만, ADR-031 §5) | ~355    |
 | `js/app/overlay.js`                | 오버레이 생명주기 단일 컨트롤러 `createOverlay`(scrim·trapFocus·Escape·inert·포커스 복원·애니메이션 dismiss) + 시트 팩토리 + `closeAllOverlays()` registry ([ADR-032](decisions/032-component-view-layer.md), ADR-034 PR5b) | ~330    |
-| `js/app/storage.js`                | localStorage 헬퍼 + UI 공유 상수 (+ 전례독서 트랙 기억 `bible-lectionary-track`)                                                                                          | ~465    |
+| `js/app/storage.js`                | localStorage 헬퍼 + UI 공유 상수 (+ 전례독서 트랙 기억 `bible-lectionary-track`)                                                                                          | ~480    |
 | `js/app/settings-ui.js`            | 설정 팝오버 · 모바일 설정 화면 + 외관 적용 + 인용·주석 토글 + Drive 줄(연결 · 해제 · 진단 복사 · 끝나지 않은 삭제의 남는 안내 `.settings-drive-note` — 로그인 상태가 바뀌면 두 화면 다 다시 그린다) | ~880    |
 | `js/app/install.js`                | PWA 설치 감지 + 안내 모달 + nudge                                                                                                                                          | ~495    |
 | `js/app/search.js`                 | 검색 워커 wire-up + 결과 렌더 + 이력 패널 + sheet ([ADR-033](decisions/033-search-options.md)). 쪽 링크는 포커스 키를 달고(라우터가 돌려준다 — ADR-031 §5) 쪽은 라이브 영역이 말로 알린다, 결과 건수 줄은 `h2` | ~1,595  |
@@ -210,7 +210,7 @@ ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` 약 6,000줄이 8개 �
 | -------------------------- | ----------------------------------------------------------------------------------------------- | ------- |
 | `js/sync/state-machine.js` | 동기화 상태 머신 (PKCE 단일 경로, [ADR-011](decisions/011-bookmark-sync.md) Phase 2h) — 사이클 대기마다 `_leftSyncing` · 끄는 길 `_stopSync` · 「파일도 삭제」 `deleteRemoteFile` | ~1,160  |
 | `js/sync/transport.js`     | PKCE primitives + Drive REST + `/oauth/token` BFF ([ADR-017](decisions/017-oauth-bff-proxy.md)) — 찾기 · 내려받기 · 올리기 · 지우기는 상태 코드를 함께 돌려준다 | ~525    |
-| `js/sync/store-v2.js`      | per-record mtime + tombstone 머지                                                               | ~430    |
+| `js/sync/store-v2.js`      | per-record mtime + tombstone 머지                                                               | ~450    |
 | `js/sync/refresh-store.js` | OAuth refresh token 암호화 IDB (AES-GCM 비추출 키)                                              | ~190    |
 | `js/sync/debug-log.js`     | ring buffer 진단 로그                                                                           | ~160    |
 
