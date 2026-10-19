@@ -203,6 +203,28 @@ test("applyToLegacyKeys 는 아는 키만 localStorage 에 쓴다", () => {
   );
 });
 
+// ── 저장 전 크기 계산 (ADR-040 — 북마크 가져오기의 크기 검사) ──
+
+test("projectedBookmarksEntry는 saveBookmarks가 쓸 항목의 글자 수 그대로다 — 쓰지는 않는다", () => {
+  // 자식마다 되풀이되는 부모 id(1,000자), 바뀌지 않은 다시 저장(_u 유지), 덮어써 생기는 삭제 기록까지.
+  const { store, localStorage } = load();
+  const bm = (id) => ({ type: "bookmark", id, bookId: "john", chapter: 3, verseSpec: "16", label: "요한 3:16" });
+  const longId = "f".repeat(1000);
+  const first = [{ type: "folder", id: longId, name: "긴 id", children: [bm("a"), bm("b")] }, bm("c")];
+  const second = [bm("d"), { type: "folder", id: "g", name: "", children: [] }];
+  const occurrences = (id) => localStorage.getItem("bible-bookmarks-v2").split(id).length - 1;
+  for (const [tree, longIds] of [[first, 4], [first, 4], [second, 1]]) {
+    const before = JSON.stringify(localStorage._raw);
+    const entry = store.projectedBookmarksEntry(tree);
+    assert.equal(JSON.stringify(localStorage._raw), before);
+    store.saveBookmarks(tree);
+    assert.equal(entry.key, "bible-bookmarks-v2");
+    assert.equal(entry.chars, entry.key.length + localStorage.getItem(entry.key).length);
+    // 폴더의 키 · id, 자식 둘의 parentId — 덮어쓴 뒤에는 삭제 기록의 키 하나
+    assert.equal(occurrences(longId), longIds);
+  }
+});
+
 // ── __proto__ 가드 ──
 // JSON.parse 는 "__proto__" 를 own key 로 만들 수 있고, 그 키를 그대로 대입하면
 // 병합 결과 객체의 프로토타입이 바뀐다(키 탈락 + 오염). 병합은 이 키를 무시한다.

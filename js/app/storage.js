@@ -380,6 +380,22 @@ window.appStorage = (/** @returns {AppStorage} */ () => {
     } catch (_) {}
   }
 
+  // Every character localStorage would hold once saveBookmarks(store) ran — keys and values: the list's two copies (the
+  // legacy key, and the sync store's entry measured from the very document it writes) in place of the current ones,
+  // every other key as it is. saveBookmarks swallows a save past the quota, so the bookmark import checks this first
+  // (ADR-040).
+  /** @param {BookmarkTreeNode[]} store @returns {number} */
+  function projectedStorageChars(store) {
+    const entry = window.syncStoreV2?.projectedBookmarksEntry(store);
+    let chars = BOOKMARK_KEY.length + JSON.stringify(store).length + (entry ? entry.chars : 0);
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key === null || key === BOOKMARK_KEY || key === entry?.key) continue;
+      chars += key.length + (localStorage.getItem(key) ?? "").length;
+    }
+    return chars;
+  }
+
   // ── Install nudge state ──
 
   /** @returns {InstallNudgeState} */
@@ -454,7 +470,7 @@ window.appStorage = (/** @returns {AppStorage} */ () => {
     loadColorScheme, saveColorScheme,
     loadTheme, saveTheme,
     loadBookOrder, saveBookOrder,
-    generateId, loadBookmarks, saveBookmarks,
+    generateId, loadBookmarks, saveBookmarks, projectedStorageChars,
     loadLectionaryTrack, saveLectionaryTrack,
     _loadNudgeState, _saveNudgeState,
     _maybeRequestPersist,

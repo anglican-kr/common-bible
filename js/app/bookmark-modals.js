@@ -25,7 +25,7 @@ import { collapseSegmentedVerses, selectedVersesToSpec, mergeVerseSpecs } from "
 
 const { _$, el, clearNode, chUnit } = window.appHelpers;
 const { createOverlay } = window.appOverlay;
-const { loadBookmarks, saveBookmarks, generateId } = window.appStorage;
+const { loadBookmarks, saveBookmarks, generateId, projectedStorageChars } = window.appStorage;
 const { readingContext } = window;
 
 // ── Dependency injection ──
@@ -912,18 +912,24 @@ function _sanitizeImportItems(items, chapterCountOf, existingTypeOf = () => null
   return { nodes: walk(items, 1), skipped };
 }
 
-// The list after an import has to fit the device's storage with room to spare. Past the quota, saving failed silently:
-// 「덮어썼습니다」 over the old list, later edits lost, and another device's sync stopped on the quota (PR #359 review).
-// The strictest engine is Safari — 5 MiB per origin counted in bytes, 2 bytes a character once any Korean is in the
-// text (WebKit `localStorageQuotaInBytes` · `String::sizeInBytes`; WebKit 26.4 measures the same), so 2,621,440
-// characters for every key together.
-// Chromium counts characters: 5,242,880. The list is stored twice — the legacy key, and the sync store with per-item
-// fields — and an 덮어쓰기 leaves the replaced ids as tombstones for 30 days: up to 3.2× the list's JSON (store-v2.js,
-// measured). 600,000 characters is about 4,100 bookmarks as the app writes them and leaves Safari over 1 MiB.
-const IMPORT_MAX_CHARS = 600_000;
-/** @param {BookmarkTreeNode[]} list */
-function _fitsStorage(list) {
-  return JSON.stringify(list).length <= IMPORT_MAX_CHARS;
+// The quota an import is checked against: Safari's — 5 MiB per origin counted in bytes, 2 bytes a character once any
+// Korean is in the text (WebKit `localStorageQuotaInBytes` · `String::sizeInBytes`; WebKit 26.4 measures the same), the
+// strictest engine. Chromium counts characters (5,242,880), so this is half its room; kept for every engine, as sync
+// carries the list to the user's other devices. Past the quota, saving failed silently (saveBookmarks swallows it):
+// 「덮어썼습니다」 over the old list, later edits lost, another device's sync stopped (PR #359 review).
+const STORAGE_QUOTA_BYTES = 5 * 1024 * 1024;
+// Left free after an import, for what the app saves next — about 90 bookmarks (714 bytes each, both copies).
+const STORAGE_HEADROOM_BYTES = 64 * 1024;
+
+/**
+ * Whether the device takes a save, counted the strictest way. The measure is what will actually be stored, not the
+ * list: a fixed budget on the list's JSON (600,000 characters) let a 1,000-character folder id through — the sync store
+ * repeats it under every child, 21 times the list — yet turned away the app's own backup of notes, about twice the list
+ * (PR #359 review).
+ * @param {number} chars  every character localStorage would hold after the save (storage.js projectedStorageChars)
+ */
+function _fitsStorage(chars) {
+  return 2 * chars <= STORAGE_QUOTA_BYTES - STORAGE_HEADROOM_BYTES;
 }
 // ── END IMPORT_EXPORT ──
 
@@ -976,9 +982,14 @@ function openImportModal(items, skipped) {
   $bmImportMerge.onclick = () => {
     const existing = loadBookmarks();
     const merged = _mergeBookmarkStores(existing, items);
-    if (!_fitsStorage(merged)) {
-      // The dialog stays open — 덮어쓰기 still fits (the file was checked on its own), or 취소.
-      _importNotice("북마크를 병합하지 않았습니다. 합친 목록이 너무 커서 이 기기에 저장할 수 없습니다.");
+    if (!_fitsStorage(projectedStorageChars(merged))) {
+      // Said in the dialog, which stays open — 덮어쓰기 was checked to fit when the file was read. A snackbar sat over
+      // the dialog's buttons on a phone held sideways (PR #359 review).
+      const msg = "합친 목록이 너무 커서 병합할 수 없습니다. 「덮어쓰기」나 「취소」를 눌러 주세요.";
+      if (!$bmImportBody.querySelector(".bm-import-refusal")) {
+        $bmImportBody.appendChild(el("p", { className: "bm-import-refusal" }, msg));
+      }
+      announce(msg);
       return;
     }
     saveBookmarks(merged);
@@ -997,17 +1008,12 @@ function openImportModal(items, skipped) {
   $bmImportCancel.onclick = cleanup;
 }
 
-// An import that stops says why on screen — the snackbar also reads it to the live region. These lines
-// were live-region-only before, so a sighted user saw nothing happen. The snackbar sits above the dialog's scrim.
-/** @param {string} msg */
-function _importNotice(msg) {
-  if (window._showSyncSnackbar) window._showSyncSnackbar(msg);
-  else announce(msg);
-}
-
+// An import that stops early says why on screen — the snackbar also reads it to the live region. These lines
+// were live-region-only before, so a sighted user saw nothing happen.
 /** @param {string} msg */
 function _importStopped(msg) {
-  _importNotice(msg);
+  if (window._showSyncSnackbar) window._showSyncSnackbar(msg);
+  else announce(msg);
   $bmImportInput.value = "";
 }
 
@@ -1054,8 +1060,8 @@ $bmImportInput.addEventListener("change", () => {
       _importStopped(`가져올 수 있는 항목이 없습니다. 파일에는 올바르지 않은 항목 ${skipped}개만 들어 있습니다.`);
       return;
     }
-    if (!_fitsStorage(nodes)) {
-      _importStopped("북마크를 가져오지 않았습니다. 파일이 너무 커서 이 기기에 저장할 수 없습니다.");
+    if (!_fitsStorage(projectedStorageChars(nodes))) {
+      _importStopped("북마크를 가져오지 않았습니다. 목록이 너무 커서 저장할 수 없습니다.");
       return;
     }
     openImportModal(nodes, skipped);

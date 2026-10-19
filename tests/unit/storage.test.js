@@ -52,6 +52,8 @@ function makeLocalStorage(initial = {}, opts = {}) {
     setItem(k, v) { maybeThrow(k); store[k] = String(v); },
     removeItem: (k) => { delete store[k]; },
     clear: () => { for (const k of Object.keys(store)) delete store[k]; },
+    key: (i) => Object.keys(store)[i] ?? null,
+    get length() { return Object.keys(store).length; },
     _raw: store,
   };
 }
@@ -72,6 +74,8 @@ function makeSyncStoreV2Spy(opts = {}) {
     saveSetting: (key, val) => { calls.saveSetting.push({ key, val }); },
     saveBookmarks: (val) => { calls.saveBookmarks.push(val); },
     loadBookmarks: () => { calls.loadBookmarks++; return bookmarksReturn; },
+    // A fixed entry — store-v2.test.js checks the real one against what saveBookmarks writes.
+    projectedBookmarksEntry: () => ({ key: "bible-bookmarks-v2", chars: 1234 }),
     _calls: calls,
     _setBookmarks: (b) => { bookmarksReturn = b; },
   };
@@ -859,6 +863,29 @@ test("saveBookmarks: _maybeRequestPersist guards against double-call", async () 
 test("saveBookmarks: swallows localStorage errors", () => {
   const h = loadStorage({ localStorageThrowOn: "all" });
   assert.doesNotThrow(() => h.appStorage.saveBookmarks([{ id: "1" }]));
+});
+
+test("projectedStorageChars: the list's two copies in place of the current ones, every other key as it is (ADR-040)", () => {
+  const h = loadStorage({
+    localStorageInit: {
+      "bible-bookmarks": "x".repeat(500),        // replaced by the list
+      "bible-bookmarks-v2": "y".repeat(900),     // replaced by the sync store's projected entry
+      "bible-theme": "dark",
+      "bible-search-history": "[\"사랑\"]",
+    },
+  });
+  const list = [{ type: "bookmark", id: "a", bookId: "john", chapter: 3, verseSpec: "16", label: "요한 3:16" }];
+  const expected = "bible-bookmarks".length + JSON.stringify(list).length + 1234
+    + "bible-theme".length + "dark".length + "bible-search-history".length + "[\"사랑\"]".length;
+  assert.equal(h.appStorage.projectedStorageChars(list), expected);
+  assert.equal(h.localStorage._raw["bible-bookmarks"], "x".repeat(500));   // nothing written
+});
+
+test("projectedStorageChars: without the sync store, the legacy copy and every other key", () => {
+  const h = loadStorage({ withSyncStoreV2: false, localStorageInit: { "bible-bookmarks": "x".repeat(500), "bible-theme": "dark" } });
+  const list = [{ type: "folder", id: "f", name: "", children: [] }];
+  assert.equal(h.appStorage.projectedStorageChars(list),
+    "bible-bookmarks".length + JSON.stringify(list).length + "bible-theme".length + "dark".length);
 });
 
 // ── install nudge ────────────────────────────────────────────────────────────

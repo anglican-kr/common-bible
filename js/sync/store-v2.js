@@ -163,10 +163,10 @@ function _contentKey(node) {
   return JSON.stringify({ id, type, name, bookId, chapter, vref, verseSpec, color, label, note, createdAt, updatedAt });
 }
 
-// Save a bookmark tree into v2 flat-map, preserving _u for unchanged items
-// and adding tombstones for removed items.
-/** @param {BookmarkTreeNode[]} tree */
-function saveBookmarks(tree) {
+// The document saveBookmarks(tree) writes — the stored one with `tree` flattened in, _u preserved for unchanged
+// items and tombstones added for removed ones — built without writing it.
+/** @param {BookmarkTreeNode[]} tree @returns {SyncDoc} */
+function _docWithBookmarks(tree) {
   const now = Date.now();
   const doc = loadLocal();
   const oldItems = doc.bookmarks.items;
@@ -190,7 +190,23 @@ function saveBookmarks(tree) {
   }
 
   doc.bookmarks.items = nextItems;
-  saveLocal(doc);
+  return doc;
+}
+
+// Save a bookmark tree into v2 flat-map, preserving _u for unchanged items
+// and adding tombstones for removed items.
+/** @param {BookmarkTreeNode[]} tree */
+function saveBookmarks(tree) {
+  saveLocal(_docWithBookmarks(tree));
+}
+
+// This store's localStorage entry once saveBookmarks(tree) ran — its key, and the characters of key and value. The
+// bookmark import adds it up with the rest before saving (storage.js projectedStorageChars, ADR-040): measured from
+// the very document saveBookmarks writes, so a parentId repeated under every child and the tombstones an overwrite
+// leaves are counted as they will be stored.
+/** @param {BookmarkTreeNode[]} tree @returns {{ key: string, chars: number }} */
+function projectedBookmarksEntry(tree) {
+  return { key: _STORE_KEY, chars: _STORE_KEY.length + JSON.stringify(_docWithBookmarks(tree)).length };
 }
 
 // Load and reconstruct the bookmark tree, filtering out tombstoned items.
@@ -414,7 +430,7 @@ window.syncStoreV2 = {
   getDeviceId,
   loadLocal, saveLocal,
   sweepTombstones,
-  loadBookmarks, saveBookmarks,
+  loadBookmarks, saveBookmarks, projectedBookmarksEntry,
   saveSetting, saveLastRead,
   migrateLegacyIfNeeded,
   mergeDocs, maxU,

@@ -349,6 +349,8 @@ export interface SyncStoreV2 {
   sweepTombstones: (ageDays?: number) => void;
   loadBookmarks: () => BookmarkTreeNode[];
   saveBookmarks: (tree: BookmarkTreeNode[]) => void;
+  /** This store's entry once saveBookmarks(tree) ran — its key, and the characters of key and value. */
+  projectedBookmarksEntry: (tree: BookmarkTreeNode[]) => { key: string; chars: number };
   saveSetting: (key: SettingKey, value: unknown) => void;
   saveLastRead: (value: LastReadValue) => void;
   migrateLegacyIfNeeded: () => void;
@@ -967,6 +969,8 @@ export interface AppStorage {
   generateId: () => string;
   loadBookmarks: () => BookmarkTreeNode[];
   saveBookmarks: (store: BookmarkTreeNode[]) => void;
+  /** Every character localStorage would hold once saveBookmarks(store) ran — the bookmark import's size check (ADR-040). */
+  projectedStorageChars: (store: BookmarkTreeNode[]) => number;
 
   // Lectionary track (ADR-038 §3 — 독서 1/2 선택). 마지막으로 고른 트랙 하나를 날짜 · 해와 무관하게 기억한다
   // (사용자 결정 2026-10-13). 로컬 전용(Drive 동기화 없음).

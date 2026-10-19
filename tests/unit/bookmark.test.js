@@ -1305,8 +1305,9 @@ function loadImportExport() {
     _sanitizeImportItems: ctx._sanitizeImportItems,
     _isWellFormedSpec: ctx._isWellFormedSpec,
     _fitsStorage: ctx._fitsStorage,
-    IMPORT_MAX_CHARS: constant("IMPORT_MAX_CHARS"),
     IMPORT_MAX_FOLDER_DEPTH: constant("IMPORT_MAX_FOLDER_DEPTH"),
+    STORAGE_QUOTA_BYTES: constant("STORAGE_QUOTA_BYTES"),
+    STORAGE_HEADROOM_BYTES: constant("STORAGE_HEADROOM_BYTES"),
   };
 }
 
@@ -2037,43 +2038,94 @@ test("_sanitizeImportItems: an id the current list uses for the other kind is le
   assert.equal(skipped, 2 + 1);
 });
 
-test("_fitsStorage: a list whose JSON runs to IMPORT_MAX_CHARS characters fits, one more does not", () => {
+test("_fitsStorage: the save's characters at 2 bytes each must leave 64 KiB of Safari's 5 MiB", () => {
   const h = loadImportExport();
-  const sized = (n) => [appBookmark({ note: "x".repeat(n - JSON.stringify([appBookmark()]).length) })];
-  assert.equal(JSON.stringify(sized(h.IMPORT_MAX_CHARS)).length, h.IMPORT_MAX_CHARS);
-  assert.equal(h._fitsStorage(sized(h.IMPORT_MAX_CHARS)), true);
-  assert.equal(h._fitsStorage(sized(h.IMPORT_MAX_CHARS + 1)), false);
-  assert.equal(h._fitsStorage([]), true);
+  assert.equal(h.STORAGE_QUOTA_BYTES, 5 * 1024 * 1024);
+  assert.equal(h.STORAGE_HEADROOM_BYTES, 64 * 1024);
+  const limit = (h.STORAGE_QUOTA_BYTES - h.STORAGE_HEADROOM_BYTES) / 2;   // 2,588,672 characters
+  assert.equal(h._fitsStorage(limit), true);
+  assert.equal(h._fitsStorage(limit + 1), false);
 });
 
-// The budget against the strictest quota: Safari's 5 MiB per origin counted in bytes, 2 bytes a character once any
-// Korean is in the text (WebKit LocalStorageManager.cpp `localStorageQuotaInBytes` · WTFString.h `sizeInBytes`).
-// Worst case — the smallest items (empty folders, against which the sync store's per-item fields weigh most), one
-// Korean name, and an 덮어쓰기 of another such list, whose ids stay as tombstones for 30 days. Every other key the app
-// keeps (settings, search history, …) needs room too, so the list may take at most 4 MiB.
-test("IMPORT_MAX_CHARS: the worst-case list, stored as the app stores it, leaves Safari 1 MiB", () => {
-  const h = loadImportExport();
-  const listOf = (prefix) => {
-    const out = [];
-    for (let i = 0, len = 2; ; i++) {
-      const f = { type: "folder", id: `${prefix}${i.toString(36)}`, name: i === 0 ? "가" : "", children: [] };
-      const add = JSON.stringify(f).length + (out.length ? 1 : 0);
-      if (len + add > h.IMPORT_MAX_CHARS) return out;
-      out.push(f);
-      len += add;
-    }
+// localStorage as WebKit counts it (LocalStorageManager.cpp `localStorageQuotaInBytes` · SQLiteStorageArea::requestSpace
+// · WTFString.h `sizeInBytes`): key and value in bytes — 1 a character for a Latin-1-only string, 2 once anything else is
+// in it — against 5 MiB per origin. A write past it throws, as the browser's does.
+function makeWebKitLocalStorage() {
+  const map = new Map();
+  const bytes = (str) => str.length * (/[^\u0000-ÿ]/.test(str) ? 2 : 1);
+  let used = 0;
+  return {
+    getItem: (k) => (map.has(k) ? map.get(k) : null),
+    setItem(k, v) {
+      const value = String(v);
+      const next = used + bytes(value) - (map.has(k) ? bytes(map.get(k)) : -bytes(k));
+      if (next > 5 * 1024 * 1024) throw Object.assign(new Error("The quota has been exceeded."), { name: "QuotaExceededError" });
+      map.set(k, value);
+      used = next;
+    },
+    removeItem(k) { if (map.has(k)) { used -= bytes(k) + bytes(map.get(k)); map.delete(k); } },
+    key: (i) => [...map.keys()][i] ?? null,
+    get length() { return map.size; },
   };
-  const first = listOf("a");
-  const second = listOf("b");
-  assert.ok(h._fitsStorage(first) && h._fitsStorage(second));
-  const localStorage = makeLocalStorage({});
-  const store = loadSyncStore(localStorage);
-  // storage.js saveBookmarks: the legacy key, then the sync store
-  const save = (list) => { localStorage.setItem("bible-bookmarks", JSON.stringify(list)); store.saveBookmarks(list); };
-  save(first);
-  save(second);
-  const chars = Object.entries(localStorage._raw).reduce((t, [k, val]) => t + k.length + val.length, 0);
-  assert.ok(2 * chars <= 4 * 1024 * 1024, `${(2 * chars).toLocaleString()} bytes`);
+}
+
+// The app's two storage layers in one realm — storage.js over the real sync store — on the given localStorage, so a
+// save takes the app's own path (storage.js saveBookmarks: the legacy key, then store-v2.js).
+const STORAGE_SOURCE = stripEsmMarker(fs.readFileSync(path.resolve(__dirname, "../../js/app/storage.js"), "utf8"));
+function loadAppStorage(localStorage) {
+  const ctx = {
+    localStorage, navigator: {},
+    JSON, Object, Array, Set, Map, String, Number, Boolean, Math, Date, console, Error, isNaN, parseInt,
+  };
+  ctx.window = ctx;
+  ctx.globalThis = ctx;
+  vm.createContext(ctx);
+  vm.runInContext(STORE_V2_SOURCE, ctx, { filename: "store-v2.js" });
+  vm.runInContext(STORAGE_SOURCE, ctx, { filename: "storage.js" });
+  return { appStorage: ctx.appStorage, syncStore: ctx.syncStoreV2 };
+}
+
+// The check measures what will be stored. The fixed budget it replaced — the list's JSON at most 600,000 characters —
+// got both of these wrong (PR #359 review): the sync store repeats a parent's id under every child, and a list of
+// notes is stored at about twice its JSON.
+test("_fitsStorage over projectedStorageChars: a backup of notes comes in, a 1,000-character folder id stays out", () => {
+  const h = loadImportExport();
+  const bm = (i, over = {}) => appBookmark({ id: `b${i.toString(36)}`, ...over });
+  const notes = Array.from({ length: 300 }, (_, i) => bm(i, { note: "메".repeat(2000) }));
+  assert.ok(JSON.stringify(notes).length > 600_000);
+  const a = loadAppStorage(makeWebKitLocalStorage());
+  assert.equal(h._fitsStorage(a.appStorage.projectedStorageChars(notes)), true);
+  a.appStorage.saveBookmarks(notes);
+  assert.equal(a.syncStore.loadBookmarks().length, 300);
+
+  const longId = "f".repeat(1000);
+  const tree = [{ type: "folder", id: longId, name: "x", children: Array.from({ length: 3000 }, (_, i) => bm(i)) }];
+  assert.ok(JSON.stringify(tree).length < 600_000);
+  const b = loadAppStorage(makeWebKitLocalStorage());
+  assert.equal(h._fitsStorage(b.appStorage.projectedStorageChars(tree)), false);
+  b.appStorage.saveBookmarks(tree);                  // saved anyway: the legacy key takes it, the sync store does not
+  assert.equal(b.syncStore.loadBookmarks().length, 0);
+});
+
+test("_fitsStorage over projectedStorageChars: the largest overwrite it lets in, WebKit stores in full", () => {
+  // The smallest items (empty folders — the sync store's per-record fields weigh most against them), one Korean name,
+  // over another list whose ids then stay as tombstones for 30 days.
+  const h = loadImportExport();
+  const folders = (prefix, n) => Array.from({ length: n }, (_, i) => ({ type: "folder", id: `${prefix}${i.toString(36)}`, name: i ? "" : "가", children: [] }));
+  const { appStorage, syncStore } = loadAppStorage(makeWebKitLocalStorage());
+  appStorage.saveBookmarks(folders("a", 6000));
+  assert.equal(syncStore.loadBookmarks().length, 6000);
+  const fits = (n) => h._fitsStorage(appStorage.projectedStorageChars(folders("b", n)));
+  let lo = 6000, hi = 20000;                           // fits(lo), !fits(hi) — the edge is 16,415 today
+  assert.ok(fits(lo) && !fits(hi));
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >> 1;
+    if (fits(mid)) lo = mid; else hi = mid;
+  }
+  const largest = folders("b", lo);
+  appStorage.saveBookmarks(largest);
+  assert.equal(syncStore.loadBookmarks().length, lo);
+  assert.equal(appStorage.loadBookmarks().length, lo);
 });
 
 // ── BOOKMARK_SORT loader ─────────────────────────────────────────────────────

@@ -413,7 +413,8 @@ def test_import_keeps_64_levels_of_folders(browser, tmp_path):
 
 def test_import_skips_an_id_the_list_uses_for_the_other_kind(browser, tmp_path):
     """지금 목록에 북마크로 있는 id가 파일에서 폴더로 오면 그 폴더를 안의 것까지 뺀다 — 동기화가 항목마다
-    나중 것을 따르므로, 다른 기기가 옛 북마크를 고치면 폴더의 자식이 북마크 밑에 숨었다(PR #359 리뷰 2회차)."""
+    나중 것을 따르므로, 다른 기기가 옛 북마크를 고치면 폴더의 자식이 북마크 밑에 숨었다(PR #359 리뷰 2회차).
+    덮어쓰기로 본다 — 병합은 이미 있는 id를 원래 버려, 저장 결과로는 이 규칙이 드러나지 않는다(자체 리뷰)."""
     incoming = {
         "_version": 1,
         "exportedAt": 0,
@@ -434,10 +435,10 @@ def test_import_skips_an_id_the_list_uses_for_the_other_kind(browser, tmp_path):
     assert "북마크 1개를" in body
     assert "올바르지 않은 항목 2개는 빼고 가져옵니다." in body
 
-    page.locator("#bm-import-merge").click()
+    page.locator("#bm-import-overwrite").click()
     page.wait_for_selector("#bm-import-modal", state="hidden")
     store = _get_bookmarks(page)
-    assert [(n["id"], n["type"]) for n in store] == [("bm-a", "bookmark"), ("bm-c", "bookmark")]
+    assert [(n["id"], n["type"]) for n in store] == [("bm-c", "bookmark")]
 
     ctx.close()
 
@@ -467,14 +468,18 @@ def test_import_overwrite_mends_a_list_the_store_cannot_read(browser, tmp_path):
     ctx.close()
 
 
-# 크기 예산은 bookmark-modals.js `IMPORT_MAX_CHARS`(목록 JSON 600,000자 — Safari의 저장 한도에서 정했다).
-# 아래 크기는 그 값에 맞춘 것이다 — 예산을 바꾸면 함께 고친다.
+# 크기 검사는 들인 뒤 저장될 크기(옛 키 + 동기화 저장소 + 다른 키)를 한 글자 2바이트로 세어, Safari 한도 5 MiB에서
+# 64 KiB를 남기는지 본다 — 약 2,588,672자(bookmark-modals.js `_fitsStorage`). 아래 크기는 그 값에 맞춘 것이다.
+
+
+def _bookmarks(n: int, **over) -> list:
+    return [{**_BM_B, "id": f"bm-n{i}", **over} for i in range(n)]
 
 
 def test_import_file_too_big_stops_before_the_dialog(browser, tmp_path):
-    """가져올 목록이 기기에 저장할 수 없을 만큼 크면 대화상자를 열지 않고 스낵바로 알린다 — 저장이 조용히
-    실패해 「덮어썼습니다」 뒤에도 옛 목록이 남던 꼴(PR #359 리뷰 2회차)."""
-    incoming = {"_version": 1, "exportedAt": 0, "bookmarks": [{**_BM_B, "note": "x" * 700_000}]}
+    """들인 뒤의 저장량이 한도를 넘으면 대화상자를 열지 않고 스낵바로 알린다 — 저장이 조용히 실패해
+    「덮어썼습니다」 뒤에도 옛 목록이 남던 꼴(PR #359 리뷰 2회차)."""
+    incoming = {"_version": 1, "exportedAt": 0, "bookmarks": [{**_BM_B, "note": "x" * 1_400_000}]}
     import_file = tmp_path / "huge.json"
     import_file.write_text(json.dumps(incoming), encoding="utf-8")
 
@@ -485,43 +490,99 @@ def test_import_file_too_big_stops_before_the_dialog(browser, tmp_path):
     _set_bookmarks(page, [_BM_A])
 
     page.locator("#bm-import-input").set_input_files(str(import_file))
-    _wait_visible_notice(page, "북마크를 가져오지 않았습니다. 파일이 너무 커서 이 기기에 저장할 수 없습니다.")
+    _wait_visible_notice(page, "북마크를 가져오지 않았습니다. 목록이 너무 커서 저장할 수 없습니다.")
     assert page.locator("#bm-import-modal").get_attribute("hidden") is not None
     assert [n["id"] for n in _get_bookmarks(page)] == ["bm-a"]
 
     ctx.close()
 
 
-def test_import_merge_too_big_keeps_the_dialog_open(browser, tmp_path):
-    """합친 목록이 너무 크면 병합하지 않고 스낵바로 알린 뒤 대화상자를 열어 둔다 — 파일만으로는 들어가므로
-    덮어쓰기는 된다. 스낵바는 대화상자의 막 위에 보여야 하고, 덮어쓴 목록은 새로 고친 뒤에도 남아야 한다."""
-    incoming = {"_version": 1, "exportedAt": 0, "bookmarks": [{**_BM_B, "note": "x" * 300_000}]}
-    import_file = tmp_path / "big.json"
-    import_file.write_text(json.dumps(incoming), encoding="utf-8")
-    notice = "북마크를 병합하지 않았습니다. 합친 목록이 너무 커서 이 기기에 저장할 수 없습니다."
+def test_import_measures_what_will_be_stored(browser, tmp_path):
+    """동기화 저장소는 자식마다 부모 id를 되풀이한다 — 1,000자 id 폴더에 북마크 3,000개면 목록 JSON은
+    작아도(약 33만 자) 저장량은 한도를 넘는다. 목록 JSON에 둔 고정 예산은 이것을 들여 「덮어썼습니다」 뒤에
+    저장되지 않았다(자체 리뷰)."""
+    folder = {"type": "folder", "id": "f" * 1000, "name": "긴 id", "children": _bookmarks(3000)}
+    import_file = tmp_path / "long_id.json"
+    import_file.write_text(json.dumps({"_version": 1, "exportedAt": 0, "bookmarks": [folder]}), encoding="utf-8")
+
+    ctx = browser.new_context()
+    page = ctx.new_page()
+    page.add_init_script("localStorage.removeItem('bible-bookmarks');")
+    _open_bookmark_drawer(page)
+    _set_bookmarks(page, [_BM_A])
+
+    page.locator("#bm-import-input").set_input_files(str(import_file))
+    _wait_visible_notice(page, "북마크를 가져오지 않았습니다. 목록이 너무 커서 저장할 수 없습니다.")
+    assert page.locator("#bm-import-modal").get_attribute("hidden") is not None
+    assert [n["id"] for n in _get_bookmarks(page)] == ["bm-a"]
+
+    ctx.close()
+
+
+def test_import_restores_a_backup_of_long_notes_and_merges_onto_it(browser, tmp_path):
+    """메모가 긴 목록은 저장량이 목록 JSON의 두 배쯤이라, JSON이 60만 자를 넘어도 기기에 들어간다 — 고정 예산은
+    그 백업을 되살리는 것도, 그 위에 북마크 하나를 병합하는 것도 막았다(자체 리뷰)."""
+    backup = {"_version": 1, "exportedAt": 0, "bookmarks": _bookmarks(300, note="메" * 2000)}
+    backup_file = tmp_path / "notes.json"
+    backup_file.write_text(json.dumps(backup, ensure_ascii=False), encoding="utf-8")
+    one_more = tmp_path / "one.json"
+    one_more.write_text(json.dumps({"_version": 1, "exportedAt": 0, "bookmarks": [_BM_C]}), encoding="utf-8")
 
     ctx = browser.new_context(service_workers="block")   # 새로 고침 — SW가 처음 페이지를 차지할 때의 새로 고침과 겹치지 않게
     page = ctx.new_page()
     _open_bookmark_drawer(page)
+
+    page.locator("#bm-import-input").set_input_files(str(backup_file))
+    page.wait_for_selector("#bm-import-modal:not([hidden])")
+    page.locator("#bm-import-overwrite").click()
+    page.wait_for_selector("#bm-import-modal", state="hidden")
+    page.reload()
+    page.wait_for_selector("article.chapter-text .verse")
+    assert page.evaluate("() => window.syncStoreV2.loadBookmarks().length") == 300
+
+    page.locator(".title-bookmark-btn").click()
+    page.wait_for_selector("#bookmark-drawer:not([hidden])")
+    page.locator("#bm-import-input").set_input_files(str(one_more))
+    page.wait_for_selector("#bm-import-modal:not([hidden])")
+    page.locator("#bm-import-merge").click()
+    page.wait_for_selector("#bm-import-modal", state="hidden")
+    assert page.evaluate("() => window.syncStoreV2.loadBookmarks().length") == 301
+
+    ctx.close()
+
+
+def test_import_merge_too_big_says_so_in_the_dialog(browser, tmp_path):
+    """합친 목록이 너무 크면 병합하지 않고 대화상자 안에 까닭을 적은 채 열어 둔다 — 파일만으로는 들어가므로
+    덮어쓰기는 된다. 스낵바로 알리던 때는 가로로 든 휴대폰에서 그것이 대화상자의 단추를 3.5초 덮었다(자체 리뷰).
+    덮어쓴 목록은 새로 고친 뒤에도 남아야 한다."""
+    incoming = {"_version": 1, "exportedAt": 0, "bookmarks": [{**_BM_B, "note": "x" * 700_000}]}
+    import_file = tmp_path / "big.json"
+    import_file.write_text(json.dumps(incoming), encoding="utf-8")
+    refusal = "합친 목록이 너무 커서 병합할 수 없습니다. 「덮어쓰기」나 「취소」를 눌러 주세요."
+
+    ctx = browser.new_context(service_workers="block", viewport={"width": 844, "height": 390})   # 새로 고침 · 가로 화면
+    page = ctx.new_page()
+    _open_bookmark_drawer(page)
     page.evaluate(
-        f"() => window.appStorage.saveBookmarks([{json.dumps({**_BM_A, 'note': 'y' * 350_000})}])"
+        f"() => window.appStorage.saveBookmarks([{json.dumps({**_BM_A, 'note': 'y' * 700_000})}])"
     )
 
     page.locator("#bm-import-input").set_input_files(str(import_file))
     page.wait_for_selector("#bm-import-modal:not([hidden])")
     page.locator("#bm-import-merge").click()
-    _wait_visible_notice(page, notice)
-    on_top = page.evaluate(
-        """(t) => {
-            const d = [...document.querySelectorAll('body > div')].find((x) => x.id !== 'a11y-announce' && x.textContent === t);
-            const r = d.getBoundingClientRect();
-            return document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2) === d;
-        }""",
-        notice,
-    )
-    assert on_top
+    page.wait_for_selector("#bm-import-body .bm-import-refusal")
+    assert page.inner_text("#bm-import-body .bm-import-refusal") == refusal
     assert page.locator("#bm-import-modal").get_attribute("hidden") is None
     assert [n["id"] for n in _get_bookmarks(page)] == ["bm-a"]
+    for button in ("#bm-import-merge", "#bm-import-overwrite", "#bm-import-cancel"):   # 아무것도 단추를 덮지 않는다
+        assert page.evaluate(
+            """(sel) => {
+                const b = document.querySelector(sel);
+                const r = b.getBoundingClientRect();
+                return r.bottom <= window.innerHeight && document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2) === b;
+            }""",
+            button,
+        ), button
 
     page.locator("#bm-import-overwrite").click()
     page.wait_for_selector("#bm-import-modal", state="hidden")
@@ -529,7 +590,7 @@ def test_import_merge_too_big_keeps_the_dialog_open(browser, tmp_path):
     page.wait_for_selector("article.chapter-text .verse")
     store = _get_bookmarks(page)
     assert [n["id"] for n in store] == ["bm-b"]
-    assert len(store[0]["note"]) == 300_000
+    assert len(store[0]["note"]) == 700_000
 
     ctx.close()
 
