@@ -19,9 +19,9 @@
 import {
   _selectAllState, _forgetViewed, removeItemById,
   collectFolderOptions, insertItem, _findItemInStore,
-  findExistingChapterBookmarks, _findParentFolderId,
+  findExistingChapterBookmarks, _findParentFolderId, _walkBookmarks,
 } from "./bookmark-core.js";
-import { collapseSegmentedVerses, selectedVersesToSpec, mergeVerseSpecs, parseVerseSpec } from "./verse-spec.js";
+import { collapseSegmentedVerses, selectedVersesToSpec, mergeVerseSpecs } from "./verse-spec.js";
 
 const { _$, el, clearNode, chUnit } = window.appHelpers;
 const { createOverlay } = window.appOverlay;
@@ -739,19 +739,72 @@ function _isRecord(x) {
   return x !== null && typeof x === "object" && !Array.isArray(x);
 }
 
-// How many nodes an item stands for: itself plus whatever it holds, read as loosely as possible —
-// a skipped folder's count includes everything inside it.
+// How many nodes an item stands for: itself plus whatever it holds, read as loosely as possible — a skipped folder's
+// count includes everything inside it. A loop, not recursion: a skipped subtree can be thousands of levels deep.
 /** @param {unknown} x @returns {number} */
 function _nodeCount(x) {
-  const kids = _isRecord(x) ? x.children : undefined;
-  return 1 + (Array.isArray(kids) ? kids.reduce((n, k) => n + _nodeCount(k), 0) : 0);
+  let count = 0;
+  /** @type {unknown[]} */
+  const stack = [x];
+  while (stack.length) {
+    const cur = stack.pop();
+    count += 1;
+    const kids = _isRecord(cur) ? cur.children : undefined;
+    if (Array.isArray(kids)) for (const k of kids) stack.push(k);
+  }
+  return count;
 }
 
-// "all", or a spec whose every comma segment parseVerseSpec keeps — it drops what it cannot read
-// silently, and a bookmark whose spec lost a segment would point at fewer verses than it says.
-/** @param {string} spec */
+// A verse-spec segment: "16", "1-5", "3a" as the app writes them (selectedVersesToSpec · mergeVerseSpecs), and two forms
+// the app wrote before 2026-06-06 (#205) for one line of a half verse or of a merged verse — "16aa", "16-17a" — kept as
+// they are (사용자 결정 2026-10-19 — 지금 앱도 그 구간은 강조하지 않고 장만 연다. 그 상태 그대로 돌아온다). Numbers
+// 1-999 without a leading 0 (the highest verse number is 176), part letters a-p (views.js appendVerses).
+const SPEC_SEGMENT = /^([1-9]\d{0,2})(?:-([1-9]\d{0,2})([a-p])?|([a-p]{1,2}))?$/;
+// More segments than any chapter can yield — Psalm 119 renders 357 selectable units. A flood of segments froze every
+// scroll for seconds once the bookmark was open (the tab bar parses the address on every scroll frame — tabbar.js
+// `collapseEnabled`).
+const SPEC_MAX_SEGMENTS = 1000;
+
+/**
+ * "all", or segments in the order the app writes them: ascending, a range runs forward, an integer segment never
+ * repeats or overlaps the one before, the part segments of a verse ascend by letter. The pre-#205 forms only have to
+ * be distinct — that serializer did not sort them. Checked against 34,003 specs today's app writes over every chapter
+ * of the real data, 60,384 the pre-#205 app wrote over its chapters with parts, and the fixtures — all pass (the unit
+ * test does the same over synthetic chapters). What got through before (PR #359
+ * review): a huge number hung 합치기, a huge range threw while routing (on a cold load the splash never cleared),
+ * whitespace stayed in the link so nothing was highlighted, and "5-0" lost verses on 합치기.
+ * @param {string} spec
+ */
 function _isWellFormedSpec(spec) {
-  return spec === "all" || (spec !== "" && parseVerseSpec(spec).length === spec.split(",").length);
+  if (spec === "all") return true;
+  const segs = spec.split(",");
+  if (spec === "" || segs.length > SPEC_MAX_SEGMENTS) return false;
+  let prevStart = 0;
+  let prevIntEnd = 0;
+  /** @type {[number, string] | null} */
+  let prevPart = null;
+  /** @type {Set<string>} */
+  const legacy = new Set();
+  for (const seg of segs) {
+    const m = SPEC_SEGMENT.exec(seg);
+    if (!m) return false;
+    const start = Number(m[1]);
+    const end = m[2] ? Number(m[2]) : start;
+    if ((m[2] && end <= start) || start < prevStart) return false;
+    if (m[3] || (m[4] && m[4].length === 2)) {               // pre-#205 "16-17a" · "16aa"
+      if ((start < prevIntEnd && start !== prevStart) || legacy.has(seg)) return false;
+      legacy.add(seg);
+    } else if (m[4]) {                                        // "3a"
+      if (start < prevIntEnd && start !== prevStart) return false;
+      if (prevPart && (start < prevPart[0] || (start === prevPart[0] && m[4] <= prevPart[1]))) return false;
+      prevPart = [start, m[4]];
+    } else {                                                  // "16" · "1-5"
+      if (start <= prevIntEnd) return false;
+      prevIntEnd = end;
+    }
+    prevStart = start;
+  }
+  return true;
 }
 
 /** @param {unknown} v @param {string} type  optional fields are checked only when present */
@@ -759,14 +812,23 @@ function _optionalOf(v, type) {
   return v === undefined || typeof v === type;
 }
 
-// An id the sync store can key by. The store keeps items in plain objects keyed by id (store-v2.js
-// `_flattenTree` · `bookmarkTreeFromFlat`), so an id naming an Object.prototype member breaks it — `toString` ·
-// `constructor` make the next read call `.sort()` on the inherited function and the whole list fails to load,
-// `__proto__` vanishes while flattening (PR #359 review). The app's own ids (`generateId` — base-36 time +
-// random) can never be one of these names; only an imported file can bring one.
+// A time stamp, checked only when present: a finite number. JSON reads 1e400 as Infinity, which saving stored as
+// null — and the app's own export then failed this check, losing the item on restore (PR #359 review).
+/** @param {unknown} v */
+function _optionalTime(v) {
+  return v === undefined || (typeof v === "number" && Number.isFinite(v));
+}
+
+// An id the app can key, link and sync by. The app's own ids (`generateId` — base-36 time + random) are lower-case
+// letters and digits. The sync store keys records by id in plain objects (store-v2.js `_flattenTree` ·
+// `bookmarkTreeFromFlat`), so an id naming an Object.prototype member broke it — `toString` · `constructor` made the
+// next read call `.sort()` on the inherited function and the whole list failed to load, `__proto__` vanished. A folder
+// id also goes into the 모아 읽기 URL unencoded (`/read/<id>` — bookmark-tree.js), so `?` · `#` · `/` · `%` ·
+// whitespace · `..` broke that route (PR #359 review).
+const ID_PATTERN = /^[A-Za-z0-9_-]+$/;
 /** @param {unknown} id @returns {id is string} */
 function _isUsableId(id) {
-  return typeof id === "string" && id !== "" && !Object.hasOwn(Object.prototype, id);
+  return typeof id === "string" && ID_PATTERN.test(id) && !Object.hasOwn(Object.prototype, id);
 }
 
 /**
@@ -774,8 +836,9 @@ function _isUsableId(id) {
  * (the tree link reads `/<book>/<chapter>/<spec>` — a missing spec made it `/gen/1/undefined`). It has no
  * `children`: that field is structure, not an unknown extra — the sync store walks any node's children while
  * flattening, so `[null]` threw inside `saveBookmarks` (which swallows it — 「덮어썼습니다」 over an unchanged
- * list) and a child reusing an existing id overwrote that item on 병합 (PR #359 review). The app never writes
- * `children` on a bookmark (`bookmarkTreeFromFlat` gives it to folders only).
+ * list) and a child reusing an existing id overwrote that item on 병합 (PR #359 review). In the app's own data a
+ * bookmark never has children, so it never carries the field (`bookmarkTreeFromFlat` adds `children` to folders
+ * and to any node that has children).
  * @param {unknown} x
  * @param {(bookId: string) => number | null} chapterCountOf  chapters in that book, null for an unknown book
  * @returns {x is BookmarkTreeBookmark}
@@ -788,7 +851,7 @@ function _isWellFormedBookmark(x, chapterCountOf) {
     && typeof chapter === "number" && Number.isInteger(chapter) && chapter >= 1 && chapter <= count
     && typeof verseSpec === "string" && _isWellFormedSpec(verseSpec)
     && typeof label === "string"
-    && _optionalOf(x.note, "string") && _optionalOf(x.createdAt, "number") && _optionalOf(x.updatedAt, "number");
+    && _optionalOf(x.note, "string") && _optionalTime(x.createdAt) && _optionalTime(x.updatedAt);
 }
 
 /**
@@ -799,32 +862,44 @@ function _isWellFormedFolder(x) {
   if (!_isRecord(x) || x.type !== "folder") return false;
   const { id, name, children } = x;
   return typeof id === "string" && typeof name === "string" && Array.isArray(children)
-    && _optionalOf(x.expanded, "boolean") && _optionalOf(x.createdAt, "number") && _optionalOf(x.updatedAt, "number");
+    && _optionalOf(x.expanded, "boolean") && _optionalTime(x.createdAt) && _optionalTime(x.updatedAt);
 }
 
+// Folders nested deeper than this are left out with everything inside them. The app sets no limit, but nobody builds
+// 64 levels one 새 폴더 at a time — and every level recurses somewhere: a few hundred levels stalled the list for
+// seconds, a few thousand broke the sync store's read (neither the chapter view nor the list drew again, and the chain
+// synced to other devices) or overflowed this very check (PR #359 review).
+const IMPORT_MAX_FOLDER_DEPTH = 64;
+
 /**
- * Keep the well-formed items of an import file. A skipped folder takes its subtree with it — nothing inside
- * is moved elsewhere. A repeated id keeps its first well-formed item (two rows answering to one id would
- * break move · delete · sync). Unknown fields ride along, so a newer app's extra fields survive.
+ * Keep the well-formed items of an import file. A skipped folder takes its subtree with it — nothing inside is moved
+ * elsewhere. A repeated id keeps its first well-formed item (two rows answering to one id would break move · delete ·
+ * sync). Unknown fields ride along, so a newer app's extra fields survive on this device (the sync store's content key
+ * lists the known fields only).
  * @param {unknown[]} items  the file's `bookmarks`
  * @param {(bookId: string) => number | null} chapterCountOf
+ * @param {(id: string) => string | null} [existingTypeOf]  the kind the current list already uses an id for. An id
+ *   reused for the other kind (bookmark ↔ folder) is left out: the sync store merges record by record, last write
+ *   wins, so a later edit of the old kind on another device brought it back with this item's children hidden under
+ *   a bookmark on every device (PR #359 review).
  * @returns {{ nodes: BookmarkTreeNode[], skipped: number }}  `skipped` counts every node left out
  */
-function _sanitizeImportItems(items, chapterCountOf) {
+function _sanitizeImportItems(items, chapterCountOf, existingTypeOf = () => null) {
   /** @type {Set<string>} */
   const seen = new Set();
   let skipped = 0;
-  /** @param {unknown[]} list @returns {BookmarkTreeNode[]} */
-  function walk(list) {
+  /** @param {unknown[]} list @param {number} depth @returns {BookmarkTreeNode[]} */
+  function walk(list, depth) {
     /** @type {BookmarkTreeNode[]} */
     const out = [];
     for (const x of list) {
       const id = _isRecord(x) ? x.id : undefined;
-      if (!_isUsableId(id) || seen.has(id)) {
+      const prior = _isUsableId(id) ? existingTypeOf(id) : null;
+      if (!_isUsableId(id) || seen.has(id) || (prior !== null && _isRecord(x) && prior !== x.type)) {
         skipped += _nodeCount(x);
-      } else if (_isWellFormedFolder(x)) {
+      } else if (_isWellFormedFolder(x) && depth <= IMPORT_MAX_FOLDER_DEPTH) {
         seen.add(id);
-        out.push({ ...x, children: walk(x.children) });
+        out.push({ ...x, children: walk(x.children, depth + 1) });
       } else if (_isWellFormedBookmark(x, chapterCountOf)) {
         seen.add(id);
         out.push(x);
@@ -834,7 +909,20 @@ function _sanitizeImportItems(items, chapterCountOf) {
     }
     return out;
   }
-  return { nodes: walk(items), skipped };
+  return { nodes: walk(items, 1), skipped };
+}
+
+// The list after an import has to fit the device's storage with room to spare. Past the quota, saving failed silently:
+// 「덮어썼습니다」 over the old list, later edits lost, and another device's sync stopped on the quota (PR #359 review).
+// The strictest engine is Safari — 5 MiB per origin counted in bytes, 2 bytes a character once any Korean is in the
+// text (WebKit `localStorageQuotaInBytes` · `String::sizeInBytes`), so 2,621,440 characters for every key together.
+// Chromium counts characters: 5,242,880. The list is stored twice — the legacy key, and the sync store with per-item
+// fields — and an 덮어쓰기 leaves the replaced ids as tombstones for 30 days: up to 3.2× the list's JSON (store-v2.js,
+// measured). 600,000 characters is about 4,100 bookmarks as the app writes them and leaves Safari over 1 MiB.
+const IMPORT_MAX_CHARS = 600_000;
+/** @param {BookmarkTreeNode[]} list */
+function _fitsStorage(list) {
+  return JSON.stringify(list).length <= IMPORT_MAX_CHARS;
 }
 // ── END IMPORT_EXPORT ──
 
@@ -887,6 +975,11 @@ function openImportModal(items, skipped) {
   $bmImportMerge.onclick = () => {
     const existing = loadBookmarks();
     const merged = _mergeBookmarkStores(existing, items);
+    if (!_fitsStorage(merged)) {
+      // The dialog stays open — 덮어쓰기 still fits (the file was checked on its own), or 취소.
+      _importNotice("북마크를 병합하지 않았습니다. 합친 목록이 너무 커서 이 기기에 저장할 수 없습니다.");
+      return;
+    }
     saveBookmarks(merged);
     _deps.rerenderActiveBookmarkTree();
     announce("북마크를 병합했습니다.");
@@ -903,12 +996,17 @@ function openImportModal(items, skipped) {
   $bmImportCancel.onclick = cleanup;
 }
 
-// An import that stops early says why on screen — the snackbar also reads it to the live region. These lines
-// were live-region-only before, so a sighted user saw nothing happen.
+// An import that stops says why on screen — the snackbar also reads it to the live region. These lines
+// were live-region-only before, so a sighted user saw nothing happen. The snackbar sits above the dialog's scrim.
 /** @param {string} msg */
-function _importStopped(msg) {
+function _importNotice(msg) {
   if (window._showSyncSnackbar) window._showSyncSnackbar(msg);
   else announce(msg);
+}
+
+/** @param {string} msg */
+function _importStopped(msg) {
+  _importNotice(msg);
   $bmImportInput.value = "";
 }
 
@@ -939,9 +1037,24 @@ $bmImportInput.addEventListener("change", () => {
       _importStopped("성서 목록을 불러오지 못해 가져오지 않았습니다. 연결을 확인한 뒤 「가져오기」를 다시 눌러 주세요.");
       return;
     }
-    const { nodes, skipped } = _sanitizeImportItems(data.bookmarks, (id) => chapterCounts.get(id) ?? null);
+    // The kind each id has in the current list. A list the sync store cannot read (a `toString` id from an unchecked
+    // import) has nothing to compare against — and 덮어쓰기 is how it gets fixed, so the import goes on.
+    /** @type {Map<string, string>} */
+    const existingTypes = new Map();
+    try {
+      _walkBookmarks(loadBookmarks(), (item) => { existingTypes.set(item.id, item.type); });
+    } catch (_) { /* nothing to compare */ }
+    const { nodes, skipped } = _sanitizeImportItems(
+      data.bookmarks,
+      (id) => chapterCounts.get(id) ?? null,
+      (id) => existingTypes.get(id) ?? null,
+    );
     if (!nodes.length && skipped > 0) {
       _importStopped(`가져올 수 있는 항목이 없습니다. 파일에는 올바르지 않은 항목 ${skipped}개만 들어 있습니다.`);
+      return;
+    }
+    if (!_fitsStorage(nodes)) {
+      _importStopped("북마크를 가져오지 않았습니다. 파일이 너무 커서 이 기기에 저장할 수 없습니다.");
       return;
     }
     openImportModal(nodes, skipped);

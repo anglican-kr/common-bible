@@ -25,7 +25,9 @@
 //     + _hasActiveDescendant. Tests pass the pathname explicitly via the
 //     optional parameter rather than driving the renderer.
 //   - IMPORT_EXPORT block — _validateImportData / _mergeBookmarkStores /
-//     _countBookmarks (pure helpers, no DOM).
+//     _countBookmarks / _sanitizeImportItems / _isWellFormedSpec / _fitsStorage
+//     (pure helpers, no DOM), with the real sync store (js/sync/store-v2.js)
+//     for the save-and-read round trips.
 
 import test from "node:test";
 import assert from "node:assert";
@@ -1293,14 +1295,18 @@ function loadBookmarkActive() {
 function loadImportExport() {
   const ctx = { Object, Array, Set, String, JSON, console, Error };
   vm.createContext(ctx);
-  // The item check reads verse specs with verse-spec.js's parseVerseSpec (imported in the module).
-  vm.runInContext(extractBlock("VERSE_SPEC", VERSE_SPEC_SOURCE), ctx, { filename: "verse-spec.js" });
   vm.runInContext(extractBlock("IMPORT_EXPORT", BOOKMARK_MODALS_SOURCE), ctx, { filename: "bookmark-modals.js" });
+  // A top-level const is not a property of the context's global — read it as an expression.
+  const constant = (name) => vm.runInContext(name, ctx);
   return {
     _validateImportData: ctx._validateImportData,
     _mergeBookmarkStores: ctx._mergeBookmarkStores,
     _countBookmarks: ctx._countBookmarks,
     _sanitizeImportItems: ctx._sanitizeImportItems,
+    _isWellFormedSpec: ctx._isWellFormedSpec,
+    _fitsStorage: ctx._fitsStorage,
+    IMPORT_MAX_CHARS: constant("IMPORT_MAX_CHARS"),
+    IMPORT_MAX_FOLDER_DEPTH: constant("IMPORT_MAX_FOLDER_DEPTH"),
   };
 }
 
@@ -1738,7 +1744,8 @@ test("_sanitizeImportItems: each ill-formed bookmark is left out and counted", (
     appBookmark({ bookId: undefined }), appBookmark({ bookId: "xyz" }),   // book
     appBookmark({ chapter: 0 }), appBookmark({ chapter: 1.5 }), appBookmark({ chapter: "3" }), appBookmark({ chapter: 22 }),   // chapter (john has 21)
     appBookmark({ verseSpec: undefined }), appBookmark({ verseSpec: "" }), appBookmark({ verseSpec: "1-x" }),
-    appBookmark({ verseSpec: "0" }), appBookmark({ verseSpec: "3,abc" }),  // spec — a segment parseVerseSpec drops
+    appBookmark({ verseSpec: "0" }), appBookmark({ verseSpec: "3,abc" }),  // spec — not the form the app writes
+    appBookmark({ verseSpec: " 16" }), appBookmark({ verseSpec: "1-20000000" }),
     appBookmark({ label: undefined }), appBookmark({ label: 3 }),          // label
     appBookmark({ note: 5 }), appBookmark({ createdAt: "today" }), appBookmark({ updatedAt: null }),   // optional fields
   ].map((x, i) => (x && typeof x === "object" && !Array.isArray(x) && typeof x.id === "string" && x.id !== "" ? { ...x, id: `bad${i}` } : x));
@@ -1819,10 +1826,10 @@ test("_sanitizeImportItems: a bookmark carrying children is left out with them �
 // sync is loaded): what the import check keeps must survive a save and a read. The raw file breaks the store in
 // three ways, so these tests do exercise the hazards the check guards against (PR #359 review).
 const STORE_V2_SOURCE = stripEsmMarker(fs.readFileSync(path.resolve(__dirname, "../../js/sync/store-v2.js"), "utf8"));
-function loadSyncStore() {
+function loadSyncStore(localStorage = makeLocalStorage({})) {
   const win = {};
   const ctx = {
-    localStorage: makeLocalStorage({}), window: win,
+    localStorage, window: win,
     JSON, Object, Array, Set, Map, String, Number, Boolean, Math, Date, console, Error, isNaN, parseInt,
   };
   ctx.globalThis = ctx;
@@ -1858,6 +1865,215 @@ test("_sanitizeImportItems: what it keeps survives the sync store's save and rea
   const store = loadSyncStore();
   store.saveBookmarks(nodes);
   assert.deepEqual(JSON.parse(JSON.stringify(store.loadBookmarks())), JSON.parse(JSON.stringify(nodes)));
+});
+
+// ── PR #359 리뷰 2회차 — 검사가 타입만 보고 소비자가 받는 꼴을 보지 않아 샌 것들 ──
+
+test("_isWellFormedSpec: the forms the app writes, and the two the pre-#205 app wrote, are accepted", () => {
+  const h = loadImportExport();
+  const accepted = [
+    "all", "16", "1-5,10-15", "3a,3b,5-7", "1-3", "3a", "6,7-8,9", "3,3a", "2-3,3a,4", "176", "1p",
+    // #205(2026-06-06) 전 앱이 쓴 꼴 — 반쪽 절의 한 줄 「16aa」, 병합 절의 한 줄 「16-17a」. 그 판의 정렬은 줄 글자를
+    // 따르지 않았다(「16-17b,16-17a」). 그대로 받는다(사용자 결정 2026-10-19).
+    "16aa", "16-17a,16-17b", "16-17b,16-17a", "8ba,8ab", "3a,3bb",
+  ];
+  assert.deepEqual(accepted.filter((spec) => !h._isWellFormedSpec(spec)), []);
+});
+
+test("_isWellFormedSpec: what got through before is rejected (PR #359 review)", () => {
+  const h = loadImportExport();
+  const flood = (seg, n) => Array(n).fill(seg).join(",");
+  const rejected = [
+    // a huge number hung 합치기 (mergeVerseSpecs walks every verse of a range) · a huge range threw while routing
+    "9007199254740992", "9".repeat(400), "1000", "1-1000", "1-4294967296,7", "1-20000000",
+    // whitespace stayed in the link, so nothing was highlighted
+    " 16 ", "1, 2", "16　", "﻿16", "16\t", "1,\n2", " all",
+    // backward and empty ranges — "5-0" lost verses on 합치기
+    "5-0", "1-0", "0-5", "0", "5-3", "3-3",
+    // repeats, overlaps, out of order
+    "16,16", "1-5,3-7", "5,3", "3b,3a", "16aa,16aa", "1-5,3a",
+    // not a segment
+    "", ",1", "1,", "1,,2", "01", "3z", "3A", "3ab-5", "16aaa", "16-17ab", "16-15a", "ALL", "abc",
+    // floods — the router re-reads the spec on every scroll frame
+    flood("16", 100_000), flood("1-176", 100_000),
+    Array.from({ length: 2000 }, (_, i) => `${1 + Math.floor(i / 16)}${"abcdefghijklmnop"[i % 16]}a`).join(","),
+  ];
+  assert.deepEqual(rejected.filter((spec) => h._isWellFormedSpec(spec)).map((spec) => spec.slice(0, 24)), []);
+});
+
+// Every spec the app writes passes: today's 저장 (collapseSegmentedVerses → selectedVersesToSpec) and 합치기
+// (mergeVerseSpecs), and the per-line form collapseFullVerseRefs keeps (what the pre-#205 저장 wrote). Synthetic
+// chapters shaped like the data — half verses ("3a" "3b"), merged verses ("7-8"), verses drawn in lines ("9a" … up to
+// "p"), and both at once ("8aa", "7-8a") — from a fixed seed, so no real data is needed (the public CI has none).
+// Checked once against the real data too: 34,003 specs today's app writes, 60,384 the pre-#205 app wrote — all pass.
+test("_isWellFormedSpec: every spec the app writes over synthetic chapters is accepted", () => {
+  const h = loadImportExport();
+  const v = loadVerseSpec();
+  let seed = 20261019;
+  const rnd = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+  const LINE = "abcdefghijklmnop";
+  const lines = (label, k) => (k === 1 ? [label] : Array.from({ length: k }, (_, i) => `${label}${LINE[i]}`));
+  const lineCount = () => (rnd() < 0.15 ? (rnd() < 0.1 ? 16 : 2 + Math.floor(rnd() * 3)) : 1);
+  const failures = [];
+  let checked = 0;
+  for (let c = 0; c < 120; c++) {
+    const refs = [];
+    // Mostly short chapters (the collapse helpers scan the whole chapter per verse); every tenth up to 176 (Psalm 119)
+    const last = 5 + Math.floor(rnd() * (c % 10 === 0 ? 172 : 30));
+    for (let n = 1; n <= last;) {
+      const kind = rnd();
+      if (kind < 0.08 && n < last) {                   // a merged verse
+        const end = n + 1 + Math.floor(rnd() * 2);
+        refs.push(...lines(`${n}-${end}`, lineCount()));
+        n = end + 1;
+      } else if (kind < 0.16) {                        // half verses from the data
+        refs.push(...lines(`${n}a`, lineCount()), ...lines(`${n}b`, lineCount()));
+        n += 1;
+      } else {
+        refs.push(...lines(`${n}`, lineCount()));
+        n += 1;
+      }
+    }
+    const article = makeStubArticle(refs);
+    const written = [];
+    for (let t = 0; t < 9; t++) {
+      let pick;
+      if (t % 3 === 0) {
+        const a = Math.floor(rnd() * refs.length);
+        pick = refs.slice(a, a + 1 + Math.floor(rnd() * 8));
+      } else {
+        pick = refs.filter(() => rnd() < (t % 3 === 1 ? 0.15 : 0.5));
+      }
+      if (!pick.length) continue;
+      written.push(v.selectedVersesToSpec(v.collapseSegmentedVerses(pick, article)));
+      written.push(v.selectedVersesToSpec(v.collapseFullVerseRefs(pick, article)));
+    }
+    const saved = written.length;
+    for (let i = 1; i < saved; i++) written.push(v.mergeVerseSpecs(written[i - 1], written[i]));
+    for (const spec of written) {
+      checked += 1;
+      if (!h._isWellFormedSpec(spec)) failures.push(spec);
+    }
+  }
+  assert.ok(checked > 3000, `${checked} specs`);
+  assert.ok(failures.length === 0, `rejected: ${failures.slice(0, 5).join(" | ")}`);
+});
+
+/** `depth` folders, each inside the one before, with a bookmark at the bottom. */
+function folderChain(depth) {
+  let node = appBookmark({ id: "leaf" });
+  for (let d = depth; d >= 1; d--) node = { type: "folder", id: `f${d}`, name: "", children: [node] };
+  return node;
+}
+/** How many levels of folders a kept tree has. */
+function folderDepth(nodes) {
+  const foldersIn = (list) => list.filter((n) => n.type === "folder");
+  let depth = 0;
+  for (let level = foldersIn(nodes); level.length; level = level.flatMap((f) => foldersIn(f.children))) depth += 1;
+  return depth;
+}
+
+test("_sanitizeImportItems: folders 64 deep are kept, the 65th level goes with what it holds (PR #359 review)", () => {
+  const h = loadImportExport();
+  assert.equal(h.IMPORT_MAX_FOLDER_DEPTH, 64);
+  const at64 = h._sanitizeImportItems([folderChain(64)], importChapterCountOf);
+  assert.equal(at64.skipped, 0);
+  assert.equal(folderDepth(at64.nodes), 64);
+  const at65 = h._sanitizeImportItems([folderChain(65)], importChapterCountOf);
+  assert.equal(at65.skipped, 2);   // f65 and the bookmark in it
+  assert.equal(folderDepth(at65.nodes), 64);
+});
+
+test("_sanitizeImportItems: 20,000 levels neither overflow the check nor reach the list", () => {
+  const h = loadImportExport();
+  const { nodes, skipped } = h._sanitizeImportItems([folderChain(20_000)], importChapterCountOf);
+  assert.equal(folderDepth(nodes), 64);
+  assert.equal(skipped, 20_000 - 64 + 1);
+});
+
+test("_sanitizeImportItems: 64 levels of folders survive the sync store's save and read", () => {
+  const h = loadImportExport();
+  const { nodes } = h._sanitizeImportItems([folderChain(64)], importChapterCountOf);
+  const store = loadSyncStore();
+  store.saveBookmarks(nodes);
+  assert.deepEqual(JSON.parse(JSON.stringify(store.loadBookmarks())), JSON.parse(JSON.stringify(nodes)));
+});
+
+test("_sanitizeImportItems: a time stamp has to be a finite number — JSON reads 1e400 as Infinity (PR #359 review)", () => {
+  const h = loadImportExport();
+  const items = [
+    ...JSON.parse('[{"type":"bookmark","id":"e400","bookId":"john","chapter":3,"verseSpec":"16","label":"x","createdAt":1e400}]'),
+    appBookmark({ id: "inf", updatedAt: Infinity }), appBookmark({ id: "ninf", createdAt: -Infinity }), appBookmark({ id: "nan", createdAt: NaN }),
+    { type: "folder", id: "f", name: "x", createdAt: Infinity, children: [appBookmark({ id: "in-f" })] },
+    { type: "folder", id: "g", name: "x", updatedAt: 1_760_000_000_000, children: [] },
+    appBookmark({ id: "ok", createdAt: 0, updatedAt: 1_760_000_000_000 }),
+  ];
+  const { nodes, skipped } = h._sanitizeImportItems(items, importChapterCountOf);
+  assert.deepEqual(nodes.map((n) => n.id), ["g", "ok"]);
+  assert.equal(skipped, 4 + 2);
+});
+
+test("_sanitizeImportItems: an id is letters, digits, _ and - — a folder id goes into the 모아 읽기 link as is (PR #359 review)", () => {
+  const h = loadImportExport();
+  const bad = ["a b", "a/b", "a?b", "a#b", "%41", "..", ".", "a.b", "é", "가", "a\nb", "a​b"];
+  const good = ["lq8x2k9z3abcdef", "ABC_def-123"];
+  const { nodes, skipped } = h._sanitizeImportItems([...bad, ...good].map((id) => appBookmark({ id })), importChapterCountOf);
+  assert.deepEqual(nodes.map((n) => n.id), good);
+  assert.equal(skipped, bad.length);
+});
+
+test("_sanitizeImportItems: an id the current list uses for the other kind is left out (PR #359 review)", () => {
+  const h = loadImportExport();
+  const current = { bm: "bookmark", fd: "folder" };
+  const items = [
+    { type: "folder", id: "bm", name: "x", children: [appBookmark({ id: "kid" })] },   // a bookmark in the list
+    appBookmark({ id: "fd" }),                                                        // a folder in the list
+    appBookmark({ id: "bm", label: "same kind" }),   // the same kind — 병합 keeps the list's, 덮어쓰기 takes this one
+    appBookmark({ id: "new" }),
+  ];
+  const { nodes, skipped } = h._sanitizeImportItems(items, importChapterCountOf, (id) => current[id] ?? null);
+  assert.deepEqual(nodes.map((n) => n.id), ["bm", "new"]);
+  assert.equal(nodes[0].label, "same kind");
+  assert.equal(skipped, 2 + 1);
+});
+
+test("_fitsStorage: a list whose JSON runs to IMPORT_MAX_CHARS characters fits, one more does not", () => {
+  const h = loadImportExport();
+  const sized = (n) => [appBookmark({ note: "x".repeat(n - JSON.stringify([appBookmark()]).length) })];
+  assert.equal(JSON.stringify(sized(h.IMPORT_MAX_CHARS)).length, h.IMPORT_MAX_CHARS);
+  assert.equal(h._fitsStorage(sized(h.IMPORT_MAX_CHARS)), true);
+  assert.equal(h._fitsStorage(sized(h.IMPORT_MAX_CHARS + 1)), false);
+  assert.equal(h._fitsStorage([]), true);
+});
+
+// The budget against the strictest quota: Safari's 5 MiB per origin counted in bytes, 2 bytes a character once any
+// Korean is in the text (WebKit LocalStorageManager.cpp `localStorageQuotaInBytes` · WTFString.h `sizeInBytes`).
+// Worst case — the smallest items (empty folders, against which the sync store's per-item fields weigh most), one
+// Korean name, and an 덮어쓰기 of another such list, whose ids stay as tombstones for 30 days. Every other key the app
+// keeps (settings, search history, …) needs room too, so the list may take at most 4 MiB.
+test("IMPORT_MAX_CHARS: the worst-case list, stored as the app stores it, leaves Safari 1 MiB", () => {
+  const h = loadImportExport();
+  const listOf = (prefix) => {
+    const out = [];
+    for (let i = 0, len = 2; ; i++) {
+      const f = { type: "folder", id: `${prefix}${i.toString(36)}`, name: i === 0 ? "가" : "", children: [] };
+      const add = JSON.stringify(f).length + (out.length ? 1 : 0);
+      if (len + add > h.IMPORT_MAX_CHARS) return out;
+      out.push(f);
+      len += add;
+    }
+  };
+  const first = listOf("a");
+  const second = listOf("b");
+  assert.ok(h._fitsStorage(first) && h._fitsStorage(second));
+  const localStorage = makeLocalStorage({});
+  const store = loadSyncStore(localStorage);
+  // storage.js saveBookmarks: the legacy key, then the sync store
+  const save = (list) => { localStorage.setItem("bible-bookmarks", JSON.stringify(list)); store.saveBookmarks(list); };
+  save(first);
+  save(second);
+  const chars = Object.entries(localStorage._raw).reduce((t, [k, val]) => t + k.length + val.length, 0);
+  assert.ok(2 * chars <= 4 * 1024 * 1024, `${(2 * chars).toLocaleString()} bytes`);
 });
 
 // ── BOOKMARK_SORT loader ─────────────────────────────────────────────────────
