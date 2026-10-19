@@ -1,4 +1,5 @@
 ---
+pr: 360
 date: 2026-10-20
 branch: docs/plain-wording-kkol
 title: "docs: 「꼴」을 뜻에 맞는 말로 바꾼다"
