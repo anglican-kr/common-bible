@@ -367,7 +367,7 @@ async function renderCalendarView(parsed) {
     // 전체 화면 실패(DESIGN.md §6) — 다음 행동은 「이번 달 캘린더」(다른 화면으로 가므로 링크)
     return renderLiturgicalFailure("calendar", {
       message: "잘못된 날짜입니다",
-      subtitle: `주소는 /calendar/YYYY-MM 꼴이어야 합니다(${MIN_YEAR}년 ~ ${MAX_YEAR}년). 「${THIS_MONTH_LABEL}」를 눌러 주세요.`,
+      subtitle: `주소는 /calendar/YYYY-MM 형식이어야 합니다(${MIN_YEAR}년 ~ ${MAX_YEAR}년). 「${THIS_MONTH_LABEL}」를 눌러 주세요.`,
       action: "this-month",
     });
   }
