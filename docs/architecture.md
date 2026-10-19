@@ -194,7 +194,7 @@ ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` 약 6,000줄이 8개 �
 | `js/app/bookmark-verse-select.js`  | 절 선택 모드 — 본문에서 절 탭 → `#verse-select-bar` dock(진행 중 스펙 + 북마크·복사), near-leaf                                                                            | ~150    |
 | `js/app/bookmark-read.js`          | 북마크 모아 읽기 — 폴더 단위 연속 읽기 화면(`appendVerses`로 절 부분집합 렌더, 인접·연속 본문 병합, 네스팅 폴더는 소제목) ([ADR-035](decisions/035-bookmark-reading-view.md)) | ~475    |
 | `js/app/citations.js`              | 인용 칩 dedup·렌더 + 인용 본문 바텀 시트 (확장 뷰·드래그 리사이즈) + 주석 anchor 위첨자 + 클릭 툴팁 ([ADR-022](decisions/022-citations-and-annotations.md)). 시트 머리의 뒤로 꺾쇠는 `headerIcon` 으로 그린다 | ~1,135  |
-| `js/app/parallels.js`              | 단락 단위 병행 본문 — `chapter.parallels` → range 시작 절 ※ anchor, 누르면 주석 꼴 툴팁 · 그 안의 출처를 누르면 cite-sheet ([ADR-027](decisions/027-source-dsl-and-parallel-passages.md)) | ~295    |
+| `js/app/parallels.js`              | 단락 단위 병행 본문 — `chapter.parallels` → range 시작 절 ※ anchor, 누르면 주석과 같은 모양의 툴팁 · 그 안의 출처를 누르면 cite-sheet ([ADR-027](decisions/027-source-dsl-and-parallel-passages.md)) | ~295    |
 | `js/app/tab-history.js`            | 탭별 라우트·스크롤 위치 복원 (POP 의미론: popstate·탭 전환에서만 복원; `/lectionary`·`/calendar` 는 캘린더 탭) ([ADR-031](decisions/031-tab-history-restore.md))           | ~140    |
 | `js/app/data-fetch.js`             | 데이터 패칭 (books/version/chapter/prologue fetch + booksCache/appVersion 캐시), leaf 모듈 (ADR-034 PR2)                                                                   | ~90     |
 | `js/app/audio-player.js`           | 장별 mp3 플레이어 UI + 재생 상태 + `#audio-bar` lifecycle (ADR-034 PR1)                                                                                                    | ~240    |
