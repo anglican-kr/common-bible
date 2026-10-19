@@ -915,7 +915,8 @@ function _sanitizeImportItems(items, chapterCountOf, existingTypeOf = () => null
 // The list after an import has to fit the device's storage with room to spare. Past the quota, saving failed silently:
 // 「덮어썼습니다」 over the old list, later edits lost, and another device's sync stopped on the quota (PR #359 review).
 // The strictest engine is Safari — 5 MiB per origin counted in bytes, 2 bytes a character once any Korean is in the
-// text (WebKit `localStorageQuotaInBytes` · `String::sizeInBytes`), so 2,621,440 characters for every key together.
+// text (WebKit `localStorageQuotaInBytes` · `String::sizeInBytes`; WebKit 26.4 measures the same), so 2,621,440
+// characters for every key together.
 // Chromium counts characters: 5,242,880. The list is stored twice — the legacy key, and the sync store with per-item
 // fields — and an 덮어쓰기 leaves the replaced ids as tombstones for 30 days: up to 3.2× the list's JSON (store-v2.js,
 // measured). 600,000 characters is about 4,100 bookmarks as the app writes them and leaves Safari over 1 MiB.
