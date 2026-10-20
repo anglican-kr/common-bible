@@ -1,4 +1,5 @@
 ---
+pr: 362
 date: 2026-10-21
 branch: fix/verse-range-link
 title: "fix: 공유 링크의 절 범위가 앱을 멈추지 않게 한다"
