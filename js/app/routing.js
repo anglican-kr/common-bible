@@ -18,6 +18,7 @@
 /** @typedef {import("../types").Route} Route */
 
 import { loadBooks, loadChapter, loadPrologue } from "./data-fetch.js";
+import { isWellFormedSpec } from "./verse-spec.js";
 import {
   renderBookList, renderChapterList, renderChapter, renderPrologue,
   renderLoading, renderError, divisionOrder, DIVISION_LABELS, renderLiturgicalLoadFailure,
@@ -206,6 +207,11 @@ function parsePath() {
 
   if (parts[2]) {
     const spec = parts[2];
+    // A single verse or range never expands — renderChapter clips its end to the chapter. The multi-segment form
+    // expands verse by verse below, so it takes only the forms the app writes (isWellFormedSpec — the bookmark import's
+    // check, ADR-040): a huge range (`1-4294967296,5`) threw before the first screen, and a flood of segments stalled
+    // every scroll frame, which re-reads the address (tabbar.js `collapseEnabled`) — known-issues §15. Any other spec
+    // opens the chapter without a highlight.
     const simpleMatch = spec.match(/^(\d+)(?:-(\d+))?$/);
     if (simpleMatch) {
       const v1 = parseInt(simpleMatch[1], 10);
@@ -218,7 +224,7 @@ function parsePath() {
           highlightVerse = v1;
         }
       }
-    } else if (/^[\d,\-a-z]+$/.test(spec)) {
+    } else if (isWellFormedSpec(spec)) {
       const segs = parseVerseSpec(spec);
       if (segs.length > 0) {
         // Sort ascending (by start, then part letter) and re-serialize for canonical URLs.

@@ -21,7 +21,7 @@ import {
   collectFolderOptions, insertItem, _findItemInStore,
   findExistingChapterBookmarks, _findParentFolderId, _walkBookmarks,
 } from "./bookmark-core.js";
-import { collapseSegmentedVerses, selectedVersesToSpec, mergeVerseSpecs } from "./verse-spec.js";
+import { collapseSegmentedVerses, selectedVersesToSpec, mergeVerseSpecs, isWellFormedSpec } from "./verse-spec.js";
 
 const { _$, el, clearNode, chUnit } = window.appHelpers;
 const { createOverlay } = window.appOverlay;
@@ -755,58 +755,6 @@ function _nodeCount(x) {
   return count;
 }
 
-// A verse-spec segment: "16", "1-5", "3a" as the app writes them (selectedVersesToSpec · mergeVerseSpecs), and two forms
-// the app wrote before 2026-06-06 (#205) for one line of a half verse or of a merged verse — "16aa", "16-17a" — kept as
-// they are (사용자 결정 2026-10-19 — 지금 앱도 그 구간은 강조하지 않고 장만 연다. 그 상태 그대로 돌아온다). Numbers
-// 1-999 without a leading 0 (the highest verse number is 176), part letters a-p (views.js appendVerses).
-const SPEC_SEGMENT = /^([1-9]\d{0,2})(?:-([1-9]\d{0,2})([a-p])?|([a-p]{1,2}))?$/;
-// More segments than any chapter can yield — Psalm 119 renders 357 selectable units. A flood of segments froze every
-// scroll for seconds once the bookmark was open (the tab bar parses the address on every scroll frame — tabbar.js
-// `collapseEnabled`).
-const SPEC_MAX_SEGMENTS = 1000;
-
-/**
- * "all", or segments in the order the app writes them: ascending, a range runs forward, an integer segment never
- * repeats or overlaps the one before, the part segments of a verse ascend by letter. The pre-#205 forms only have to
- * be distinct — that serializer did not sort them. Checked against 34,003 specs today's app writes over every chapter
- * of the real data, 60,384 the pre-#205 app wrote over its chapters with parts, and the fixtures — all pass (the unit
- * test does the same over synthetic chapters). What got through before (PR #359
- * review): a huge number hung 합치기, a huge range threw while routing (on a cold load the splash never cleared),
- * whitespace stayed in the link so nothing was highlighted, and "5-0" lost verses on 합치기.
- * @param {string} spec
- */
-function _isWellFormedSpec(spec) {
-  if (spec === "all") return true;
-  const segs = spec.split(",");
-  if (spec === "" || segs.length > SPEC_MAX_SEGMENTS) return false;
-  let prevStart = 0;
-  let prevIntEnd = 0;
-  /** @type {[number, string] | null} */
-  let prevPart = null;
-  /** @type {Set<string>} */
-  const legacy = new Set();
-  for (const seg of segs) {
-    const m = SPEC_SEGMENT.exec(seg);
-    if (!m) return false;
-    const start = Number(m[1]);
-    const end = m[2] ? Number(m[2]) : start;
-    if ((m[2] && end <= start) || start < prevStart) return false;
-    if (m[3] || (m[4] && m[4].length === 2)) {               // pre-#205 "16-17a" · "16aa"
-      if ((start < prevIntEnd && start !== prevStart) || legacy.has(seg)) return false;
-      legacy.add(seg);
-    } else if (m[4]) {                                        // "3a"
-      if (start < prevIntEnd && start !== prevStart) return false;
-      if (prevPart && (start < prevPart[0] || (start === prevPart[0] && m[4] <= prevPart[1]))) return false;
-      prevPart = [start, m[4]];
-    } else {                                                  // "16" · "1-5"
-      if (start <= prevIntEnd) return false;
-      prevIntEnd = end;
-    }
-    prevStart = start;
-  }
-  return true;
-}
-
 /** @param {unknown} v @param {string} type  optional fields are checked only when present */
 function _optionalOf(v, type) {
   return v === undefined || typeof v === type;
@@ -849,7 +797,7 @@ function _isWellFormedBookmark(x, chapterCountOf) {
   const count = typeof bookId === "string" ? chapterCountOf(bookId) : null;
   return typeof id === "string" && count != null
     && typeof chapter === "number" && Number.isInteger(chapter) && chapter >= 1 && chapter <= count
-    && typeof verseSpec === "string" && _isWellFormedSpec(verseSpec)
+    && typeof verseSpec === "string" && isWellFormedSpec(verseSpec)
     && typeof label === "string"
     && _optionalOf(x.note, "string") && _optionalTime(x.createdAt) && _optionalTime(x.updatedAt);
 }
