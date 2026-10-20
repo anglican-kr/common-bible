@@ -42,7 +42,7 @@
 - `css/style.css` — 메인 스타일
 - `data/` — **서브모듈 `common-bible-data`** 마운트 위치 (73권 JSON `bible/`, 검색 인덱스 4종 `search-{meta,ot,nt,dc}.json`, 콘텐츠 해시 매니페스트 `bible-manifest.json`·`audio-manifest.json` (ADR-021), 오디오 nested 서브모듈 `audio/`, 마크다운 원본 `source/`, Python 파이프라인 `src/`, 데이터 검증 테스트 `tests/`)
 - `scripts/` — `release.py`(version.json + sw-version.js bump + 자동 commit), `changelog.py`(릴리스 노트용 변경 목록 — 앱 git log + data 서브모듈 compare, `--generate-notes` 대체), `serve.py`(SPA-aware 로컬 서버), `generate_splash.py`(iOS 스플래시, ADR-007), `lock_merged_ledgers.sh`(머지된 원장을 로컬에서 읽기 전용으로 잠금 — `npm test` 앞·PR 생성 후 자동, 클론마다 다시), `docs_facts_snapshot.py`(교회력 설계 문서 5종 + 보관 문서 + 픽스처의 사실 토큰을 리비전 간 비교 — 문서 리팩터링 PR 의 「사실 변경 0」 증명, `--diff main HEAD`)
-- `tools/` — 개발자용 보조 도구(앱이 쓰지 않는다). `booklet/`(「전례독서」 책자 PDF ↔ 엔진 대조 — pypdf 추출 · 2027 꼴 파서 · 엔진 덤프 · 대조 보고서, README 참조) · `csp/`(CSP 위반 점검 — 릴리스 전에 주요 화면을 실제 브라우저로 돌며 콘솔의 CSP 위반을 모은다, README 참조)
+- `tools/` — 개발자용 보조 도구(앱이 쓰지 않는다). `booklet/`(「전례독서」 책자 PDF ↔ 엔진 대조 — pypdf 추출 · 2027년 책자 형식의 파서 · 엔진 덤프 · 대조 보고서, README 참조) · `csp/`(CSP 위반 점검 — 릴리스 전에 주요 화면을 실제 브라우저로 돌며 콘솔의 CSP 위반을 모은다, README 참조)
 - `tests/` — e2e(`e2e/`, Playwright, 로컬 전용) + JS 유닛(`unit/`, ADR-013, CI 자동)
 - `docs/` — `architecture.md`(아키텍처 개요·ADR 인덱스), `status.md`(구현 현황 — "지금 무엇이 동작하는가"), `known-issues.md`(미해결 이슈·후속 백로그), `decisions/`(ADR), `design/`(진행 중인 구현 설계서 — 완료되면 `archive/design/` 으로 옮긴다), `reference/`(기도서 등 외부 원문 전사), `archive/`(완료·점-시점 기록 — `design/` 설계 변천 · `audit/` 보안 감사 · `qa/` e2e 회귀 보고서), `index.md`(**진입점** — 작업 유형 → 먼저 읽을 문서), `changes/`(**변경 원장** — 변경 하나에 파일 하나, PR 본문의 원본), `coding-pitfalls.md`, `prd.md`
 - `assets/` — 아이콘(`icons/`), 스플래시(`splash/`, ADR-007), 설치 안내 3컷(`install-guide/`, ADR-008)
@@ -136,6 +136,7 @@ Phase 1(성경 읽기) → Phase 2(기도서) → Phase 3(교회력 계산기) �
 - 문서: 한국어 기본
 - 영어 · 한국어가 섞인 문장: 영어 단어 뒤의 조사 · 용언은 붙여 쓴다(「`sync.json`을」, 「push되면」) — 뒤가 명사면 띄운다(「HTTP 실패」). 사용자 교정 2026-10-17, coding-pitfalls §31
 - 숫자 구간은 물결표(~) 대신 하이픈: 「44-50」, 「ADR 001-038」 — GitHub 마크다운이 물결표 쌍을 취소선으로 읽는다. 날짜 구간은 「2026-05-10부터 10-17까지」. 사용자 교정 2026-10-17, coding-pitfalls §32
+- 「꼴」을 쓰지 않는다 — 한 낱말이 표기 · 형식 · 구조 · 경우를 함께 맡아 읽기 어렵다. 그 자리의 뜻을 쓴다(문자열을 적는 방식은 「표기」, 값의 모양은 「형식」, 저장소의 모양은 「저장 구조」, 예는 「경우」). 사용자 교정 2026-10-20, coding-pitfalls §36
 - 코드 주석: **영어·한국어 모두 허용** — 언어는 규칙이 아니라 내용이 정한다.
   - 코드가 왜 그렇게 도는지(경계·자료구조·성능)는 **영어**가 자연스럽다 — 주변 식별자와
     같은 어휘를 쓴다.

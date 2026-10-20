@@ -12,7 +12,7 @@ engine = {x["date"]: x for x in json.load(open(EN, encoding="utf8"))}
 SLOTS = ["first", "psalm", "second", "gospel"]
 
 def norm(s):
-    """대시를 하나로, 공백을 지운다 — 다만 숫자 사이의 공백은 한 칸 남긴다(「1 3」 을 「13」 으로 붙이지 않는다 — 모르는 꼴은
+    """대시를 하나로, 공백을 지운다 — 다만 숫자 사이의 공백은 한 칸 남긴다(「1 3」 을 「13」 으로 붙이지 않는다 — 모르는 표기는
     같다고 하지 않는다)."""
     s = re.sub(r"[–—‐‑−]", "-", s); s = re.sub(r"(?<=\d)\s+(?=\d)", " ", s); s = re.sub(r"(?<!\d)\s+|\s+(?!\d)", "", s); return s.strip(",;")
 def loose(s):
@@ -30,7 +30,7 @@ def verse_set(s):
     시작 · 끝 장과 절을 함께 담은 키 ("span", 18, 21, 19, 2) 하나로 둔다(장 길이를 모르니 전개하지 않는다 — 「18:21-35, 19:1-2」
     와는 다르게 나온다: 같다고 잘못 말하지 않는 쪽). 괄호 · 대괄호(선택 절 「1:(1-9)10-18」 · 「4:6-8, [9-16]」)는 구분자로
     읽어 쉼표 표기와 같은 집합이 된다 — 다만 숫자에 붙은 괄호가 앞 절을 바로 잇지 않으면(하위 절 번호 「에스 4:17(12-16)」)
-    모르는 꼴이다: 구분자로 읽으면 없는 절 「4:12-16」 이 생긴다. 모르는 꼴이면 None — 동치 판정에 쓰지 않는다."""
+    모르는 표기다: 구분자로 읽으면 없는 절 「4:12-16」 이 생긴다. 모르는 표기면 None — 동치 판정에 쓰지 않는다."""
     s = norm(s); s = re.sub(r"(?<=\d)[상하]", "", s)
     if sub_verse(s): return None
     s = re.sub(r"[\[\]()]", ",", s); s = re.sub(r"[A-Za-z.]", "", s)
@@ -65,7 +65,7 @@ def verse_set(s):
         else: return None
     return (book, frozenset(out))
 def variants(label):
-    """엔진 라벨 하나의 표기 변형 — 같은 독서를 책자가 달리 적는 꼴: 「출처(송가 이름)」 의 출처만 · 「송가 이름(출처)」 의
+    """엔진 라벨 하나의 표기 변형 — 같은 독서를 책자가 달리 적는 방식: 「출처(송가 이름)」 의 출처만 · 「송가 이름(출처)」 의
     이름만과 출처만 · 한글 / 라틴 반쪽 · 「/」 앞뒤. 괄호 안을 따로 세우는 것은 온전한 출처(책 이름 + 장:절)가 든 괄호뿐이고
     괄호 앞 토막을 세우는 것은 그 토막에 숫자가 없을 때(송가 이름)뿐이다 — 「에스 4:17(12-16), 17(23-25)」 의 「12-16」 ·
     「에스 4:17」 처럼 괄호 안 숫자(하위 절)나 숫자가 든 앞 토막은 없는 독서다."""
@@ -83,24 +83,24 @@ def variants(label):
     out.add(re.sub(r"^[^/]*/\s*", "", label))
     return {v.strip() for v in out if v.strip()}
 def alt_of(label):
-    """엔진 대안 하나(라벨 하나) — 그대로의 꼴 · 표기 변형(norm · loose) · 절 집합."""
+    """엔진 대안 하나(라벨 하나) — 원래 표기 · 표기 변형(norm · loose) · 절 집합."""
     vs = variants(label)
     return {"exact": norm(label), "n": {norm(v) for v in vs}, "l": {loose(v) for v in vs}, "v": {verse_set(v) for v in vs} - {None}}
 def level(a, E):
-    """책자 대안 a 가 엔진 대안 E 와 맞는 수준 — 0 같은 꼴 · 1 표기만(변형 · 느슨한 표기) · 2 절 집합 동치 · None 다른 독서."""
+    """책자 대안 a가 엔진 대안 E와 맞는 수준 — 0 그대로 같음 · 1 표기만(변형 · 느슨한 표기) · 2 절 집합 동치 · None 다른 독서."""
     if norm(a) == E["exact"]: return 0
     if norm(a) in E["n"] or loose(a) in E["l"]: return 1
     v = verse_set(a)
     return 2 if v is not None and v in E["v"] else None
 def without_optional(a):
-    """책자 대안에서 선택 절(숫자로 여는 괄호 · 대괄호)을 뺀 꼴 — 「요한 1:(1-9)10-18」 → 「요한1:,10-18」. 없거나 하위 절 꼴이면 None."""
+    """책자 대안에서 선택 절(숫자로 여는 괄호 · 대괄호)을 뺀 표기 — 「요한 1:(1-9)10-18」 → 「요한1:,10-18」. 없거나 하위 절 표기면 None."""
     s = norm(a)
     if not re.search(r"[(\[]\d", s) or sub_verse(s): return None
     return re.sub(r"[(\[]\d[^()\[\]]*[)\]]", ",", s)
 def match(B, alts):
     """책자 대안마다 · 엔진 대안마다 가장 가까운 짝의 수준(짝이 없으면 None) — (책자 쪽 목록, 엔진 쪽 목록).
-    책자의 선택 절 한 줄 「요한 1:(1-9)10-18」 은 엔진의 두 세트(넣은 것 · 뺀 것)를 함께 적은 꼴이라, 넣은 꼴이 짝을 찾았을 때만
-    뺀 꼴과 맞는 엔진 대안도 짝(표기만)으로 센다 — 엔진에 뺀 꼴만 있으면 넣은 꼴이 짝이 없어 그대로 차이로 남는다."""
+    책자의 선택 절 한 줄 「요한 1:(1-9)10-18」 은 엔진의 두 세트(넣은 것 · 뺀 것)를 함께 적은 것이라, 넣은 쪽이 짝을 찾았을 때만
+    뺀 쪽과 맞는 엔진 대안도 짝(표기만)으로 센다 — 엔진에 뺀 쪽만 있으면 넣은 쪽이 짝이 없어 그대로 차이로 남는다."""
     m = [[level(a, E) for E in alts] for a in B]
     best = lambda xs: min((x for x in xs if x is not None), default=None)
     bl, el = [best(r) for r in m], [best([r[j] for r in m]) for j in range(len(alts))]
@@ -115,7 +115,7 @@ def short(name):
     return re.sub(r"\s+", "", re.sub(r"\(.*?\)", "", name or "").replace("성 ", "").replace("사도 ", "").replace("복음사가 ", ""))
 
 def engine_alts(e):
-    """후보 id → 슬롯 → 엔진 대안 목록(트랙 · 세트에 걸친 라벨마다 하나 — 같은 꼴은 한 번). 저녁 전례(12.24 의 성탄 밤)는
+    """후보 id → 슬롯 → 엔진 대안 목록(트랙 · 세트에 걸친 라벨마다 하나 — 같은 라벨은 한 번). 저녁 전례(12.24의 성탄 밤)는
     그날 낮 본문의 대안이 아니다 — 책자는 그 본문을 12.25 블록에 싣는다(앱 설계서 R-6.1-evening)"""
     evening = {c["id"] for c in e.get("candidates", []) if c.get("evening")}
     out = {}
@@ -142,7 +142,7 @@ def classify(B, alts, sel, slot):
         how = "절 집합 동치" if 2 in bl + el else "표기만"
         if None not in el: return ("=", "") if max(bl + el) == 0 else ("≈", how + " — 엔진 " + labs(Es))
         miss = labs([E for E, x in zip(Es, el) if x is None])
-        # 책자 대안이 모두 엔진에 있다 — 같은 꼴이면 대안 수만 다르고(⊂), 표기도 다르면 ≈ 에 대안 수 차이를 덧붙인다
+        # 책자 대안이 모두 엔진에 있다 — 그대로 같으면 대안 수만 다르고(⊂), 표기도 다르면 ≈ 에 대안 수 차이를 덧붙인다
         return ("⊂", "책자 일부만 — 엔진만 " + miss) if max(bl) == 0 else ("≈", how + " · 책자 대안이 적다 — 엔진만 " + miss)
     others = [c for c in alts if c != sel and alts[c][slot] and None not in match(B, alts[c][slot])[0]]
     if others: return ("other", ",".join(others))

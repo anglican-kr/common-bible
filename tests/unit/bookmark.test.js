@@ -1868,13 +1868,13 @@ test("_sanitizeImportItems: what it keeps survives the sync store's save and rea
   assert.deepEqual(JSON.parse(JSON.stringify(store.loadBookmarks())), JSON.parse(JSON.stringify(nodes)));
 });
 
-// ── PR #359 리뷰 2회차 — 검사가 타입만 보고 소비자가 받는 꼴을 보지 않아 샌 것들 ──
+// ── PR #359 리뷰 2회차 — 검사가 타입만 보고, 그 값을 받는 코드가 다룰 수 있는 형식인지 보지 않아 샌 것들 ──
 
 test("_isWellFormedSpec: the forms the app writes, and the two the pre-#205 app wrote, are accepted", () => {
   const h = loadImportExport();
   const accepted = [
     "all", "16", "1-5,10-15", "3a,3b,5-7", "1-3", "3a", "6,7-8,9", "3,3a", "2-3,3a,4", "176", "1p",
-    // #205(2026-06-06) 전 앱이 쓴 꼴 — 반쪽 절의 한 줄 「16aa」, 병합 절의 한 줄 「16-17a」. 그 판의 정렬은 줄 글자를
+    // #205(2026-06-06) 전 앱이 쓴 표기 — 반쪽 절의 한 줄 「16aa」, 병합 절의 한 줄 「16-17a」. 그 판의 정렬은 줄 글자를
     // 따르지 않았다(「16-17b,16-17a」). 그대로 받는다(사용자 결정 2026-10-19).
     "16aa", "16-17a,16-17b", "16-17b,16-17a", "8ba,8ab", "3a,3bb",
   ];

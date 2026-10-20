@@ -63,7 +63,7 @@ const K = (name) => vm.runInContext(name, ctx);
 
 // ── 합성 재료 ─────────────────────────────────────────────────────────────────
 
-/** 정의 표의 행 꼴 관측일. `extra` 로 rank · color · transfer_to 등을 얹는다. */
+/** 정의 표의 행 형식으로 만든 관측일. `extra`로 rank · color · transfer_to 등을 얹는다. */
 const obs = (id, name, extra = {}) => ({
   id, kind: id.startsWith("t-") || id.startsWith("grid:") ? "temporal" : "sanctoral", name,
   rank: null, precedence: null, color: null, color_alt: null, transferable: false, transfer_to: null, ...extra,
@@ -76,7 +76,7 @@ const group = (id, readings, extra = {}) => ({
 const collect = (id, text, extra = {}) => ({ id, title: "", collect_no: 1, collect_total: 1, text, ending: "A", common: null, ...extra });
 const FOUR = [slot("first", "gen", 12, "1-9", "창세 12:1-9"), slot("psalm", "lps", 33, "1-12", "시편 33:1-12"),
   slot("second", "rom", 4, "13-25", "로마 4:13-25"), slot("gospel", "matt", 9, "9-13,18-26", "마태 9:9-13, 18-26")];
-/** `ResolvedDate` 꼴 — 연중 평일(짝수해)이 기본 좌표. */
+/** `ResolvedDate` 형식 — 연중 평일(짝수해)이 기본 좌표. */
 const resolvedOf = (date, candidates, official, extra = {}) => ({
   date, coord: { season: "ordinary", week: 18, type: "weekday", weekday: "thu", year: "II" },
   candidates, official, periods: [], color: "green", colors: ["green"], colorAlt: null, ...extra,
@@ -174,7 +174,7 @@ test("selectCandidate: ?obs 가 후보에 있으면 그것, 없으면 초기 선
 
 // ── 트랙 · 세트 ──────────────────────────────────────────────────────────────
 
-// 괄호 선택 구절 세트 — 복음만 더 길다(마태 9:9-13, 18-26 → 18-31). 실데이터의 괄호 세트 34건이 다 이 꼴(한 슬롯만).
+// 괄호 선택 구절 세트 — 복음만 더 길다(마태 9:9-13, 18-26 → 18-31). 실데이터의 괄호 세트 34건이 다 이 형식(한 슬롯만).
 const FOUR_LONG = [FOUR[0], FOUR[1], FOUR[2], slot("gospel", "matt", 9, "9-13,18-31", "마태 9:9-13, 18-31")];
 const TRACKED = [
   group("t1s1", FOUR, { reading_track: 1, set_no: 1, set_total: 2 }),
@@ -219,7 +219,7 @@ test("readingOptions: 조건부 세트는 조건이 라벨, 바탕 세트는 관
   same(ctx.readingOptions(sets, "사순 2주일").map((o) => o.label), ["사순 2주일", "주의 변모 주일로 지킬 때"]);
 });
 
-test("readingOptions: 괄호 선택 구절 세트는 바탕(한 슬롯만 짧은 앞 세트)에 합친다 — 성지주일 나해 꼴(긴 수난 · 짧은 수난 · 짧은 수난 + 괄호)", () => {
+test("readingOptions: 괄호 선택 구절 세트는 바탕(한 슬롯만 짧은 앞 세트)에 합친다 — 성지주일 나해 같은 경우(긴 수난 · 짧은 수난 · 짧은 수난 + 괄호)", () => {
   const long = [FOUR[0], FOUR[1], FOUR[2], slot("gospel", "mark", 14, "all", "마르 14:1-15:47")];
   const short = [FOUR[0], FOUR[1], FOUR[2], slot("gospel", "mark", 15, "1-39", "마르 15:1-39")];
   const shortPlus = [FOUR[0], FOUR[1], FOUR[2], slot("gospel", "mark", 15, "1-47", "마르 15:1-39, 40-47")];
@@ -546,7 +546,7 @@ test("canticleTitleOf: 장 제목의 한국어 부분만", () => {
 
 // ── buildLectionaryModel ──────────────────────────────────────────────────────
 
-/** 사계재 날(2026-09-16 꼴) — 승자 성인(공통만) · 사계재(세트 둘) · 격자(지정 독서). */
+/** 사계재 날(2026-09-16 같은 날) — 승자 성인(공통만) · 사계재(세트 둘) · 격자(지정 독서). */
 function emberDay() {
   const saint = cand(obs("d0916-니니안", "니니안(갈로웨이의 주교)", { rank: "minor_feast", precedence: 7, color: "white", sanctoral_class: "missionary", has_proper: false }));
   const ember = cand(obs("t-추계재", "추계재", { rank: "feria", precedence: 8, color: "violet", penitential: true, type: "fast" }));

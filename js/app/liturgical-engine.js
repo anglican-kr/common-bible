@@ -1108,7 +1108,7 @@ function setActivatedOptionals(ids) {
 
 /**
  * 그 날짜에 걸린 `periods` 행(배너용 겹침 표시) — 품계에 참여하지 않으므로 후보가 아니다.
- * 해를 넘기는 기간(`12.25 ~ 01.05` 꼴)도 받는다.
+ * 해를 넘기는 기간(예: `12.25 ~ 01.05`)도 받는다.
  * @param {CalendarIndex} index @param {string} md "MM.DD"
  * @returns {LiturgicalPeriod[]}
  */
@@ -1424,7 +1424,7 @@ function movesOnConflict(o) {
 function chainsOnArrival(o) {
   if (o.kind !== "sanctoral") return true;
   if (o.sanctoral_class === "apostle" || o.sanctoral_class === "evangelist") return true;
-  // 색인과 같은 정규화 — 데이터에는 「12-28」 · 「1.1」 꼴도 섞일 수 있다(§5.2). 원문 문자열을 비교하면 「12-28」 은
+  // 색인과 같은 정규화 — 데이터에는 「12-28」 · 「1.1」 같은 표기도 섞일 수 있다(§5.2). 원문 문자열을 비교하면 「12-28」 은
   // 성탄 8일 밖, 「12.3」 은 안으로 잘못 간다
   return o.sanctoral_class === "martyr" && inChristmasOctaveDate(normMonthDay(o.date));
 }

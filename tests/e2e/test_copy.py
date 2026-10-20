@@ -288,7 +288,7 @@ def test_partial_poetry_lines_cite_plain_verse_numbers(page):
 
 
 def test_boundary_touch_does_not_drag_in_next_verse(page):
-    """요한 3:16 전체를 고르되 범위 끝이 17절의 첫 글자 앞(offset 0)이면 17절은 들어가지 않는다 — 세 번 클릭의 꼴."""
+    """요한 3:16 전체를 고르되 범위 끝이 17절의 첫 글자 앞(offset 0)이면 17절은 들어가지 않는다 — 세 번 클릭하면 생기는 범위."""
     _open_chapter(page, "john/3")
     text = page.evaluate("""() => {
       const article = document.querySelector('article.chapter-text');

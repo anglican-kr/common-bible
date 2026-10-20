@@ -1607,7 +1607,7 @@ test("68. 「파일도 삭제」 — 지우는 사이 도착한 새 파일 만�
 // (scheduleUpload → requestSync)은 버려져 다시 돌지 않았다. 이제 기다린 뒤에 로컬을 읽고, 사용자 요청은
 // 사이클이 SYNC_DONE으로 끝나면 한 번 더 돈다(폴은 쌓지 않는다).
 
-/** 하네스 기본 문서 꼴에 꼬리표 · maxU 표지를 단 로컬 문서. */
+/** 하네스 기본 문서 형식에 꼬리표 · maxU 표지를 단 로컬 문서. */
 function localDoc(tag, u = 0) {
   return {
     tag, u,

@@ -73,7 +73,7 @@ const obs = (id, name, extra = {}) => ({
 const cand = (observance, status = "proper", extra = {}) => ({ observance, status, ...extra });
 const WEEKDAY = { season: "ordinary", week: 28, type: "weekday", weekday: "thu", year: "II" };
 const SUNDAY = (week, year = "A", season = "ordinary") => ({ season, week, type: "sunday", weekday: null, year });
-/** `ResolvedDate` 꼴 — 연중 평일(짝수해)이 기본 좌표, 대표는 첫 후보. */
+/** `ResolvedDate` 형식 — 연중 평일(짝수해)이 기본 좌표, 대표는 첫 후보. */
 const resolvedOf = (date, candidates, extra = {}) => ({
   date, coord: WEEKDAY, candidates, official: candidates[0] || null, periods: [],
   color: "green", colors: ["green"], colorAlt: null, ...extra,
@@ -189,7 +189,7 @@ test("calendarDay: 대표가 성인 축일이면 그 이름 — 괄호 설명은
   assert.strictEqual(d.href, "/lectionary/2026-10-15");
 });
 
-test("calendarDay: 주일은 격자 이름을 「연중29주」 꼴로 줄인다(ADR-038 §2) — 줄과 링크 이름은 그대로", () => {
+test("calendarDay: 주일은 격자 이름을 「연중29주」처럼 줄인다(ADR-038 §2) — 줄과 링크 이름은 그대로", () => {
   const sunday = grid("ordinary-29-sunday", "연중 29주일");
   const d = ctx.calendarDay("2026-10-18", resolvedOf("2026-10-18", [sunday], { coord: SUNDAY(29) }));
   assert.strictEqual(d.cellName, "연중29주");
@@ -230,7 +230,7 @@ test("calendarDay: 저녁 전례(evening)는 칸 이름이 되지 않는다 — 
 });
 
 test("calendarDay: 고유명 평일(성주간 월~수 · 재의 수요일 후 목~토)은 격자여도 이름을 단다 — 엔진 표지 properWeekday 로 가린다", () => {
-  // 좌표를 일부러 번호 있는 꼴로 둔다 — 엔진이 주 번호를 매겨도 표지만 있으면 칸 이름은 그대로다(PR #348 리뷰가 짚은 드리프트)
+  // 좌표를 일부러 번호 있는 형식으로 둔다 — 엔진이 주 번호를 매겨도 표지만 있으면 칸 이름은 그대로다(PR #348 리뷰가 짚은 드리프트)
   const holyMon = cand(obs("grid:lent-6-weekday-mon", "성주간 월요일", { properWeekday: true }));
   const d = ctx.calendarDay("2026-03-30", resolvedOf("2026-03-30", [holyMon],
     { coord: { season: "lent", week: 6, type: "weekday", weekday: "mon", year: "A" }, color: "red", colors: ["red"] }));

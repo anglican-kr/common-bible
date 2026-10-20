@@ -258,7 +258,7 @@ function pickSet(/** @type {ReadingOption[]} */ options, /** @type {number | nul
 }
 
 /**
- * 세트의 조건 문구 — 「…로 지킬 때」 꼴로 통일(사용자 결정 2026-10-12; 데이터는 「…로 지키는 경우」와 섞여 있다).
+ * 세트의 조건 문구 — 「…로 지킬 때」라는 문구로 통일(사용자 결정 2026-10-12; 데이터는 「…로 지키는 경우」와 섞여 있다).
  * 조건이 아닌 파서 표지(「원본 세트 N」 · 괄호 선택 구절)는 null.
  */
 function setCondition(/** @type {ReadingGroup} */ group) {
@@ -269,7 +269,7 @@ function setCondition(/** @type {ReadingGroup} */ group) {
 
 /**
  * 괄호 선택 구절 세트의 바탕 — 앞선 선택지 가운데 슬롯 구성이 같고 **한 슬롯만** 라벨이 다른(짧은) 것, 가장 가까운 것.
- * 실데이터의 괄호 세트 34건이 전부 이 꼴이다(2026-10-12 실측). 없으면 -1.
+ * 실데이터의 괄호 세트 34건이 전부 이 형식이다(2026-10-12 실측). 없으면 -1.
  * @param {ReadingOption[]} options @param {ReadingGroup} g
  */
 function findBracketBase(options, g) {
@@ -448,7 +448,7 @@ function endingCodeOf(/** @type {CollectOption | null | undefined} */ last) {
 
 /**
  * 두 독서 나란히(ADR-038 §3 · 미결15). 하루에 하나만 — 목적지 주일의 선택 봉헌 → 옮겨 온 축일의 도착일 →
- * 명절 → 선택 봉헌의 당일 순으로 처음 맞는 꼴. 없으면 null. 어느 쪽이든 **독서가 없는** 후보는 카드로 내지 않는다 —
+ * 명절 → 선택 봉헌의 당일 순으로 처음 맞는 것 하나. 없으면 null. 어느 쪽이든 **독서가 없는** 후보는 카드로 내지 않는다 —
  * 성탄 8일의 도착일(12.27~29)과 공현 당일(1.6)의 격자는 본문이 비어 카드를 누르면 빈 화면이었다(자체 리뷰 2026-10-13).
  * @param {ResolvedDate} resolved @param {(c: Candidate) => ReadingGroup[]} [groupsOf] 없으면 본문 검사를 건너뛴다
  * @returns {LectionaryPair | null}
@@ -974,7 +974,7 @@ function buildCollects(m) {
 }
 
 /** 영광송 — 선창 ◯ 응답, 계응 시편과 같은 표지(`responsory-mark` · `verse-response`). */
-/** 영광송 블록의 복사 글자 — 줄마다 한 줄, 선창 줄 끝에 「 ◯」(시편 본문 복사와 같은 꼴). @param {Element} box @returns {string} */
+/** 영광송 블록의 복사 글자 — 줄마다 한 줄, 선창 줄 끝에 「 ◯」(시편 본문 복사와 같은 방식). @param {Element} box @returns {string} */
 function gloriaCopyText(box) {
   return [...box.querySelectorAll(".lect-gloria-line")]
     .map((line) => [...line.childNodes].map((c) => (c.textContent || "").trim()).filter(Boolean).join(" "))
@@ -1130,7 +1130,7 @@ function copyCitation(unit, runs) {
 }
 
 /**
- * 쿼리에 `track` 을 적은 꼴 — `hrefFor` 와 같은 키 순서(obs → track → set → collect)를 지켜 같은 상태가 같은 주소가 되게.
+ * 쿼리에 `track`을 적은 문자열 — `hrefFor`와 같은 키 순서(obs → track → set → collect)를 지켜 같은 상태가 같은 주소가 되게.
  * @param {string} search `location.search` @param {1 | 2} track @returns {string}
  */
 function withTrack(search, track) {
@@ -1267,7 +1267,7 @@ async function renderLectionaryView(parsed) {
   return official ? `${shortName(official.observance.name)} ${PAGE_TITLE}` : PAGE_TITLE;
 }
 
-// 캘린더 탭(calendar.js — ADR-038 §2 A2)이 같은 이름 · 날짜 · 색 규칙을 쓴다(복제 금지 — 칸 · 줄의 이름이 칩과 같은 꼴이어야 한다).
+// 캘린더 탭(calendar.js — ADR-038 §2 A2)이 같은 이름 · 날짜 · 색 규칙을 쓴다(복제 금지 — 칸 · 줄의 이름이 칩과 같아야 한다).
 export {
   renderLectionaryView, buildLectionaryModel,
   shortName, statusSuffix, isGrid, todayKey, buildDateNav,

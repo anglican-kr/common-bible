@@ -918,7 +918,7 @@ test("§5.5 고유명 평일 표지 — 해마다 여섯 날(E−45~−43 · E�
     for (let d = `${y}-01-01`; d <= `${y}-12-31`; d = ctx.addDays(d, 1)) {
       const g = gridOf(resolve(d)).observance;
       if ("properWeekday" in g) {
-        assert.strictEqual(g.properWeekday, true, d);   // 참일 때만 키를 둔다(evening 과 같은 꼴)
+        assert.strictEqual(g.properWeekday, true, d);   // 참일 때만 키를 둔다(evening과 같은 방식)
         marked.push([d, g.name]);
       }
     }
@@ -1213,7 +1213,7 @@ const B1_TABLES = {
     SAN("d0612-a", "06.12", "합성 A", { rank: "major_feast", precedence: 3, priority_group: "A" }),
     SAN("d0612-c", "06.12", "합성 C", { rank: "major_feast", precedence: 4, priority_group: "C" }),
     SAN("d0612-b", "06.12", "합성 B", { rank: "major_feast", precedence: 6, priority_group: "B" }),
-    // prec 7 축일 — 주일에 생략 · 이동 축일 셋의 꼴은 생략하지 않는다 · 동시 봉헌 · 보호 기간(C-6.1-6)
+    // prec 7 축일 — 주일에 생략 · 이동 축일 셋과 같은 종류는 생략하지 않는다 · 동시 봉헌 · 보호 기간(C-6.1-6)
     SAN("d0614-minor", "06.14", "합성 축일"),
     SAN("d0621-movable", "06.21", "합성 이동 축일", { transferable: true, transfer_to: "next_day" }),
     SAN("d0815-a", "08.15", "합성 성모안식", { rank: "major_feast", precedence: 3, priority_group: "A" }),
@@ -1348,7 +1348,7 @@ test("C-6.1-6 prec 7 축일은 생략 — 가변인 상위에 밀리면 omitted(
   same(sun.color, "green");   // omitted 후보는 색에 기여하지 않는다
   // 평일에서는 축일(7)이 격자 평일(8)을 이긴다
   same(officialId(rb("2027-06-14")), "d0614-minor");
-  // 이동 축일 셋의 꼴(transferable)은 생략하지 않는다 — 옮기는 것은 패스(§6.5)
+  // 이동 축일 셋과 같은 종류(transferable)는 생략하지 않는다 — 옮기는 것은 패스(§6.5)
   same(fate(rb("2026-06-21"), "d0621-movable"), ["proper", null]);
   // 고정일 상위(8.15 성모안식)에는 밀린 것이 아니다 — 평일에는 proper, 주일에는 주일 격자에 밀린다
   same(fate(rb("2026-08-15"), "d0815-minor"), ["proper", null]);
@@ -1357,7 +1357,7 @@ test("C-6.1-6 prec 7 축일은 생략 — 가변인 상위에 밀리면 omitted(
   same(officialId(sun815), "d0815-a");
   same(fate(sun815, "d0815-minor"), ["omitted", "grid:ordinary-x-sunday"]);
   same(gridOf(sun815).status, "proper");
-  // 도착에 밀린다 — 같은 날 도착(prec 6)이 displacedBy(12.7 암브로스의 꼴)
+  // 도착에 밀린다 — 같은 날 도착(prec 6)이 displacedBy(12.7 암브로스와 같은 경우)
   const andrew = CAL.sanctoralByDate.get("11.30")[0];
   const pass = ctx.EMPTY_PASS();
   pass.arrivals.set("2026-06-17", [{ observance: andrew, status: "transferred_in", from: "2026-06-16", displacedBy: "x" }]);
@@ -1569,7 +1569,7 @@ const WALL = (id, date) => SAN(id, date, id, { rank: "principal", precedence: 1 
 const passTables = (sanctoral, temporal = [], kasi = null) => ({
   sanctoral: { entries: sanctoral }, temporal: { entries: temporal }, periods: { entries: [] }, ordinalWeeks: { weeks: [] }, kasi,
 });
-/** 패스의 색인 하나를 `날짜 → [id<-from ...]` 꼴로 — 비교하기 쉽게. `prefix` 를 주면 그 날짜들만(seed · 이웃 해 0단계를 거른다). */
+/** 패스의 색인 하나를 `날짜 → [id<-from ...]` 형식으로 — 비교하기 쉽게. `prefix`를 주면 그 날짜들만(seed · 이웃 해 0단계를 거른다). */
 const seats = (m, prefix = "") => Object.fromEntries([...m].filter(([d]) => d.startsWith(prefix)).sort()
   .map(([d, cs]) => [d, cs.map((c) => c.observance.id + (c.from ? "<-" + c.from : c.to ? "->" + c.to : ""))]));
 const count = (m) => [...m.values()].flat().length;
@@ -1696,7 +1696,7 @@ test("C-6.5-20 연쇄 범위 — 도착에 밀린 고유 축일은 사도 · 복
     same(fate(t.at("2026-06-17"), "d0617-s"), ["commemorated", "d0615-a"], String(cls));
     assert.strictEqual(officialId(t.at("2026-06-17")), "d0615-a", String(cls));
   }
-  // prec 7 — 옮길 수 있는 축일(성모 탄신 꼴)은 도착에 밀리면 기념, 옮길 수 없는 축일은 종전대로 생략(→ R-6.1-prec7-omit)
+  // prec 7 — 옮길 수 있는 축일(성모 탄신 같은 축일)은 도착에 밀리면 기념, 옮길 수 없는 축일은 종전대로 생략(→ R-6.1-prec7-omit)
   const minor = (extra) => passEngine(passTables([MOV("d0615-a", "06.15", { sanctoral_class: "apostle" }), SAN("d0617-m", "06.17", "합성 축일", { sanctoral_class: "lord", ...extra })], TWO_WALLS));
   const movableMinor = minor({ transferable: true, transfer_to: "next_day" });
   same(seats(movableMinor.pass(2026).departures), { "2026-06-15": ["d0615-a->2026-06-17"] });   // 6.17 의 출발은 없다
@@ -1744,7 +1744,7 @@ test("C-6.5-21 연쇄 범위는 도착에만 밀린 축일에 — 주일도 밀�
 
 test("C-6.5-22 보호 기간 안에서 밀린 축일끼리는 서열 순 — 뒤에 밀린 높은 쪽이 부활 2주 월요일에 먼저 앉는다(→ R-6.3-guard-order)", () => {
   // 2026 부활 4.5 — 성지주일 3.29 에 밀린 J(prec 6)가 먼저, 성 토요일 4.4 에 밀린 A(prec 3)가 나중이다. 선착순이면 J 4.13 ·
-  // A 4.14 — 서열 순이라 A 4.13 · J 4.14(부활 3.26 인 해의 요셉 · 수태고지와 같은 꼴 — 픽스처 T-2062-03-27)
+  // A 4.14 — 서열 순이라 A 4.13 · J 4.14(부활 3.26인 해의 요셉 · 수태고지와 같은 경우 — 픽스처 T-2062-03-27)
   const t = passEngine(passTables([MOV("d0329-j", "03.29"), MOV("d0404-a", "04.04", { precedence: 3, priority_group: "A" })], [
     ...HOLY_WEEK_ROWS,
     TMP("t-palm", "합성 성지주일", { kind: "easter_offset", days: -7 }, { rank: "privileged_sunday", precedence: 2 }),

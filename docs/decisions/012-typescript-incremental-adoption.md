@@ -50,7 +50,7 @@ ADR-001은 "프레임워크 없는 Vanilla JS"를 선언하고 있고 ADR-005·0
 
 `checkJs: true` 라 지시문 없이도 검사된다. 기존 파일 첫 줄의 `// @ts-check` 는 그대로 둔다 — 해가 없고, 파일을 `checkJs: false` 설정으로 옮겨도 검사가 따라간다. 새 파일에는 적지 않아도 된다.
 
-검사에서 빼야 하는 파일만 첫 줄에 `// @ts-nocheck`를 두고, 같은 줄에 이유와 고칠 곳을 적는다(2026-10-17부터 10-18까지 쓴 꼴 — `// @ts-nocheck — 타입 오류가 남아 검사에서 뺐다(docs/known-issues.md §7 묶음 ③). …`). 지시문은 파일의 **어떤 문(statement)보다도 앞**에 있어야 TypeScript가 읽는다 — 앞에 주석만 있는 것은 괜찮다. `"use strict";` 뒤에 둔 `// @ts-nocheck`는 무시돼 그 파일이 검사되고 오류가 드러난다(2026-10-17 확인 — `bookmark.js` 11건). 빼는 쪽의 실수가 조용하지 않다.
+검사에서 빼야 하는 파일만 첫 줄에 `// @ts-nocheck`를 두고, 같은 줄에 이유와 고칠 곳을 적는다(2026-10-17부터 10-18까지 쓴 형식 — `// @ts-nocheck — 타입 오류가 남아 검사에서 뺐다(docs/known-issues.md §7 묶음 ③). …`). 지시문은 파일의 **어떤 문(statement)보다도 앞**에 있어야 TypeScript가 읽는다 — 앞에 주석만 있는 것은 괜찮다. `"use strict";` 뒤에 둔 `// @ts-nocheck`는 무시돼 그 파일이 검사되고 오류가 드러난다(2026-10-17 확인 — `bookmark.js` 11건). 빼는 쪽의 실수가 조용하지 않다.
 
 창 객체 꾸러미(`window.appX = (() => { … return { … }; })()`)는 IIFE에 `@returns {AppX}`(`js/types.d.ts`의 인터페이스)를 단다 — 반환 객체에 인터페이스에 없는 멤버가 있으면, 그것을 구조 분해하는 다른 모듈이 아니라 정의한 자리에서 오류가 난다(helpers · storage · settings-ui · citations · parallels · overlay). 꾸러미가 IIFE가 아니라 객체 리터럴이면 `@type {AppX}`를 단다(bookmark — 2026-10-18, 선언이 실제 객체와 어긋나 있었다).
 
