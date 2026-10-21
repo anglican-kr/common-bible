@@ -396,3 +396,114 @@ def test_copy_reference_bridges_verse_numbers_absent_in_translation(page):
     assert text.endswith("\n\n— 마르코의 복음서 9:43-48 (공동번역성서)"), text[-80:]
     text = _copy_text(page, _SELECT_WHOLE_ARTICLE)
     assert text.endswith("\n\n— 마르코의 복음서 9:1-50 (공동번역성서)"), text[-80:]
+
+
+# ── 절 선택 막대 — 번호가 같은 다른 절 (known-issues §5) ──────────────────────
+# 선택이 `data-vref`(번호)로 묶여, 번호가 같은 다른 절까지 함께 칠해지고 출처가 그 번호를 섞었다(main 부터). 이제 줄마다
+# 다른 `data-vkey` 로 고르고, 출처 번호는 장 본문 복사와 같은 규칙(옮겨 실린 절 · 그리스어 절은 그것만 골랐을 때만)이다.
+
+_SELECTED_IDS = ("() => [...document.querySelectorAll('article.chapter-text .verse.verse-selected')]"
+                 ".filter(v => v.id).map(v => v.id)")
+
+
+def _verse_select(page, path, first, last=None):
+    """`path` 를 열어 절 선택 모드에서 `first`(id)를 누르고, `last` 가 있으면 Shift+클릭으로 범위를 넓힌다.
+    고른 절의 id(절마다 첫 줄) · 막대 글자를 돌려준다."""
+    book, chapter = path.split("/")
+    _open_chapter(page, path)
+    page.evaluate(f"() => enterVerseSelectMode('{book}', {chapter})")
+    page.wait_for_selector("#verse-select-bar:not([hidden])")
+    page.click(f"#{first}")
+    if last:
+        page.click(f"#{last}", modifiers=["Shift"])
+    return page.evaluate(_SELECTED_IDS), page.inner_text("#verse-select-count")
+
+
+def _copy_selection(page):
+    page.click("#verse-select-copy-btn")
+    page.wait_for_selector("#verse-select-bar", state="hidden", timeout=2_000)
+    return page.evaluate("async () => await navigator.clipboard.readText()")
+
+
+def test_verse_select_moved_verses_keep_their_place(page):
+    """이사 40:19 → 20 — 사이에 옮겨 실린 41:6-7 은 함께 골라 본문에 싣고 출처 번호에서는 뺀다. 이 장의 40:6-7 은 칠하지
+    않는다(종전 「40:6a,6b,7,19-20」). 41:6 만 누르면 41:6 만이고, 출처는 제 장 「41:6」이다(종전엔 40:6 도 칠하고
+    「40:6」 — 사용자 결정 2026-10-21)."""
+    page.context.grant_permissions(["clipboard-read", "clipboard-write"])
+    ids, label = _verse_select(page, "isa/40", "v19", "v20")
+    assert ids == ["v19", "v6_c41", "v7_c41", "v20"], ids
+    assert label == "19-20절 선택됨", label
+    text = _copy_selection(page)
+    assert "끼리끼리 손발이 맞아" in text   # 41:6 의 글자
+    assert text.endswith("\n\n— 이사야 40:19-20 (공동번역성서)"), text[-80:]
+    ids, label = _verse_select(page, "isa/40", "v6_c41", "v7_c41")
+    assert ids == ["v6_c41", "v7_c41"], ids
+    assert label == "41:6-7절 선택됨", label
+    text = _copy_selection(page)
+    assert text.endswith("\n\n— 이사야 41:6-7 (공동번역성서)"), text[-80:]
+
+
+def test_copy_reference_of_moved_verses_alone_names_their_chapter(page):
+    """장 본문을 끌어 옮겨 실린 절만 고르면 출처는 제 장이다 — 이사 40 의 41:6-7 은 「이사야 41:6-7」(종전 「40:6-7」 —
+    40장 자신의 6-7절을 가리켰다, 사용자 결정 2026-10-21). 욥 27 에 옮겨 실린 24:18-24 도 같다."""
+    _open_chapter(page, "isa/40")
+    text = _copy_text(page, _SELECT_LINES.replace("%A%", "6a").replace("%B%", "7a")
+                      .replace("vs.find(v => v.getAttribute('data-vref') === '6a')", "document.querySelector('#v6_c41')")
+                      .replace("vs.find(v => v.getAttribute('data-vref') === '7a')", "document.querySelector('#v7_c41')"))
+    assert "끼리끼리 손발이 맞아" in text
+    assert text.endswith("\n\n— 이사야 41:6-7 (공동번역성서)"), text[-80:]
+    _open_chapter(page, "job/27")
+    text = _copy_text(page, _SELECT_LINES
+                      .replace("vs.find(v => v.getAttribute('data-vref') === '%A%')", "document.querySelector('#v18_c24')")
+                      .replace("vs.find(v => v.getAttribute('data-vref') === '%B%')", "document.querySelector('#v24_c24')"))
+    assert text.endswith("\n\n— 욥기 24:18-24 (공동번역성서)"), text[-80:]
+
+
+def test_verse_select_greek_additions_stand_apart(page):
+    """다니 3 의 그리스어 (24)-(25) 를 고르면 같은 번호의 히브리 24(91)-25(92) 는 칠하지 않는다 — 본문도 그리스어만."""
+    page.context.grant_permissions(["clipboard-read", "clipboard-write"])
+    ids, label = _verse_select(page, "dan/3", "v24_lxx", "v25_lxx")
+    assert ids == ["v24_lxx", "v25_lxx"], ids
+    assert label == "24-25절 선택됨", label
+    text = _copy_selection(page)
+    assert "아자리야" in text and "깜짝 놀랄" not in text, text[:120]
+    assert text.endswith("\n\n— 다니엘 3:24-25 (공동번역성서)"), text[-80:]
+
+
+def test_verse_select_one_esther_addition_is_one_verse(page):
+    """에스 4:17 의 추가 본문 하나를 누르면 그 절만 칠한다 — 종전엔 첫 줄이 같은 「17a」인 25 절이 한꺼번에 칠해지고 출처가
+    「4:17a」였다. 한 번호 아래 여러 절이라 출처는 줄 글자 없이 「4:17」."""
+    page.context.grant_permissions(["clipboard-read", "clipboard-write"])
+    ids, label = _verse_select(page, "esth/4", "v17_5")
+    assert ids == ["v17_5"], ids
+    assert label == "17절 선택됨", label
+    text = _copy_selection(page)
+    assert text.endswith("\n\n— 에스델 4:17 (공동번역성서)"), text[-80:]
+
+
+def test_verse_select_bookmark_still_saves_by_number(page):
+    """북마크 저장은 번호 단위 그대로다(ADR-010) — 선택이 줄 키로 바뀌어도 그리스어 (24)-(25) 는 「24-25」로 저장된다."""
+    ids, _ = _verse_select(page, "dan/3", "v24_lxx", "v25_lxx")
+    assert ids == ["v24_lxx", "v25_lxx"], ids
+    page.click("#verse-select-bookmark-btn")
+    page.wait_for_selector("#bm-save-modal:not([hidden])")
+    page.click("#bm-save-modal .bm-btn-primary")
+    page.wait_for_selector("#bm-save-modal", state="hidden")
+    specs = page.evaluate("""() => {
+      const out = [];
+      const walk = (items) => { for (const it of items) { if (it.type === 'bookmark') out.push([it.bookId, it.chapter, it.verseSpec]); if (it.children) walk(it.children); } };
+      walk(window.appStorage.loadBookmarks());
+      return out;
+    }""")
+    assert ["dan", 3, "24-25"] in specs, specs
+
+
+def test_verse_select_duplicated_marker_cites_the_number(page):
+    """토비 11:15 — 원본에 절 표시가 중복된 곳이다(운문 두 줄인 15절과 한 줄인 둘째 15절). 15절을 고르면 출처는 줄 글자 없이
+    「11:15」다(리뷰 2026-10-21 — 한때 「11:15a,15b」)."""
+    page.context.grant_permissions(["clipboard-read", "clipboard-write"])
+    ids, label = _verse_select(page, "tob/11", "v15")
+    assert ids == ["v15"], ids
+    assert label == "15절 선택됨", label
+    text = _copy_selection(page)
+    assert text.endswith("\n\n— 토비트 11:15 (공동번역성서)"), text[-80:]

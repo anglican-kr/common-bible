@@ -77,7 +77,7 @@ data/source/*.md (73권, common-bible-data 서브모듈)
 
 ### 클라이언트 JS 유닛 테스트 (ADR-013)
 
-Node 자체 테스트 러너 + 자체 vm 하네스. 의존성 0, CI 자동 실행. **1322 케이스 — 1321 통과 · 실데이터 1 skip(데이터 대기 픽스처 — 미결13)** (2026-10-21). 파일 명명 컨벤션: `tests/unit/<source-basename>.test.js`, 한 모듈 = 한 테스트 파일 — **예외 둘**이다(tests/README §1과 같은 규칙). ① **실데이터 의존 케이스** — 공개 CI의 `Unit tests` 잡이 비공개 `data/` 서브모듈을 받지 않으므로, 그 표를 읽어야 하는 케이스는 `tests/unit/<source-basename>.data.test.js`로 갈라 `haveData` skip 가드를 달고 `engine-data.yml`·`sync-data.yml`에서 돌린다(선례 `liturgical-engine.data.test.js` · `lectionary.data.test.js`, 설계서 §7). ② **소스 모듈이 없는 테스트** — 문서·픽스처의 정합성을 보는 `docs-*.test.js` · `liturgical-fixtures.test.js`(픽스처의 관측일 id 실재는 ① 규칙대로 `liturgical-fixtures.data.test.js`로 갈라 두 워크플로에서 돈다). 이들이 함께 쓰는 문서 앵커 추출기는 `tests/unit/docs-anchors.js` — 테스트 파일이 아니라 `harness.js`와 같은 자리의 공용 모듈이다(`*.test.js` 글롭 밖). 내부 영역은 `// ── <영역> ──` 섹션. 상세는 ADR-013.
+Node 자체 테스트 러너 + 자체 vm 하네스. 의존성 0, CI 자동 실행. **1330 케이스 — 1329 통과 · 실데이터 1 skip(데이터 대기 픽스처 — 미결13)** (2026-10-21). 파일 명명 컨벤션: `tests/unit/<source-basename>.test.js`, 한 모듈 = 한 테스트 파일 — **예외 둘**이다(tests/README §1과 같은 규칙). ① **실데이터 의존 케이스** — 공개 CI의 `Unit tests` 잡이 비공개 `data/` 서브모듈을 받지 않으므로, 그 표를 읽어야 하는 케이스는 `tests/unit/<source-basename>.data.test.js`로 갈라 `haveData` skip 가드를 달고 `engine-data.yml`·`sync-data.yml`에서 돌린다(선례 `liturgical-engine.data.test.js` · `lectionary.data.test.js`, 설계서 §7). ② **소스 모듈이 없는 테스트** — 문서·픽스처의 정합성을 보는 `docs-*.test.js` · `liturgical-fixtures.test.js`(픽스처의 관측일 id 실재는 ① 규칙대로 `liturgical-fixtures.data.test.js`로 갈라 두 워크플로에서 돈다). 이들이 함께 쓰는 문서 앵커 추출기는 `tests/unit/docs-anchors.js` — 테스트 파일이 아니라 `harness.js`와 같은 자리의 공용 모듈이다(`*.test.js` 글롭 밖). 내부 영역은 `// ── <영역> ──` 섹션. 상세는 ADR-013.
 
 ```bash
 node --test tests/unit/*.test.js                 # 전체 (CI와 동일)
@@ -137,6 +137,7 @@ Phase 1(성경 읽기) → Phase 2(기도서) → Phase 3(교회력 계산기) �
 - 영어 · 한국어가 섞인 문장: 영어 단어 뒤의 조사 · 용언은 붙여 쓴다(「`sync.json`을」, 「push되면」) — 뒤가 명사면 띄운다(「HTTP 실패」). 사용자 교정 2026-10-17, coding-pitfalls §31
 - 숫자 구간은 물결표(~) 대신 하이픈: 「44-50」, 「ADR 001-038」 — GitHub 마크다운이 물결표 쌍을 취소선으로 읽는다. 날짜 구간은 「2026-05-10부터 10-17까지」. 사용자 교정 2026-10-17, coding-pitfalls §32
 - 「꼴」을 쓰지 않는다 — 한 낱말이 표기 · 형식 · 구조 · 경우를 함께 맡아 읽기 어렵다. 그 자리의 뜻을 쓴다(문자열을 적는 방식은 「표기」, 값의 모양은 「형식」, 저장소의 모양은 「저장 구조」, 예는 「경우」). 사용자 교정 2026-10-20, coding-pitfalls §36
+- 한국어 문장은 완결된 형태로, 간결하게, 그 분야의 용어로 쓴다. 명사를 가운뎃점(·)과 줄표(—)로 이어 붙이지 않고, 용어를 긴 설명으로 풀지도 않는다. 사용자 교정 2026-10-21, coding-pitfalls §37
 - 코드 주석: **영어·한국어 모두 허용** — 언어는 규칙이 아니라 내용이 정한다.
   - 코드가 왜 그렇게 도는지(경계·자료구조·성능)는 **영어**가 자연스럽다 — 주변 식별자와
     같은 어휘를 쓴다.

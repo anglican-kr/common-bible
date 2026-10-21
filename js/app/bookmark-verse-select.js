@@ -18,7 +18,7 @@ const { _$ } = window.appHelpers;
 const { readingContext } = window;
 
 import {
-  collapseFullVerseRefs, selectedVersesToSpec, serializeVerseRange, citationSource,
+  selectionCitation, selectedVersesToSpec, serializeVerseRange, citationSource,
 } from "./verse-spec.js";
 import { openSaveModal } from "./bookmark-modals.js";
 
@@ -73,15 +73,12 @@ function exitVerseSelectMode() {
 
 function updateVerseSelectBar() {
   const count = readingContext.selectedVerses.size;
-  if (count === 0) {
+  const { chapter, refs } = selectionCitation(readingContext.selectedVerses, document.querySelector("article.chapter-text"));
+  if (refs.length === 0) {
     $verseSelectCount.textContent = "구절을 눌러서 선택";
   } else {
-    const articleEl = document.querySelector("article.chapter-text");
-    const refs = collapseFullVerseRefs(Array.from(readingContext.selectedVerses), articleEl);
-    const spec = refs.length
-      ? selectedVersesToSpec(refs)
-      : selectedVersesToSpec(Array.from(readingContext.selectedVerses));
-    $verseSelectCount.textContent = `${spec.replace(/,/g, ', ')}절 선택됨`;
+    // 옮겨 실린 절만이면 그 장을 붙인다 — 「41:6절 선택됨」(「6절」은 이 장의 6절로 읽힌다)
+    $verseSelectCount.textContent = `${chapter != null ? `${chapter}:` : ""}${selectedVersesToSpec(refs).replace(/,/g, ', ')}절 선택됨`;
   }
   $verseSelectBookmarkBtn.disabled = count === 0;
   $verseSelectCopyBtn.disabled = count === 0;
@@ -117,14 +114,13 @@ async function copySelectedVerses() {
 
   const textParts = groups.map(([first, last]) => serializeVerseRange(first, last));
 
-  const refs = collapseFullVerseRefs(Array.from(readingContext.selectedVerses), article);
-  const spec = refs.length
-    ? selectedVersesToSpec(refs)
-    : selectedVersesToSpec(Array.from(readingContext.selectedVerses));
+  const cite = selectionCitation(readingContext.selectedVerses, article);
+  if (!cite.refs.length) return;
+  const spec = selectedVersesToSpec(cite.refs);
   const book = (window.getBooksCache() ?? []).find((b) => b.id === readingContext.bookId);
   const bookName = book ? book.name_ko : readingContext.bookId;
   // 전례시편 · 송가는 기도서 번역 — 「(대한성공회 기도서)」(사용자 결정 2026-10-13; 종전엔 언제나 「(공동번역성서)」였다).
-  const citation = `— ${bookName} ${readingContext.chapter}:${spec} ${citationSource(book?.division === "liturgical")}`;
+  const citation = `— ${bookName} ${cite.chapter ?? readingContext.chapter}:${spec} ${citationSource(book?.division === "liturgical")}`;
   const fullText = `${textParts.join("\n\n")}\n\n${citation}`;
 
   try {

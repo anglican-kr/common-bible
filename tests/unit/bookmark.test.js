@@ -11,9 +11,10 @@
 //
 // Coverage:
 //   - VERSE_SPEC block — verse spec parse / compare / serialize / merge
-//     (+ collapseFullVerseRefs, with a tiny `article.querySelectorAll`
+//     (+ collapseSegmentedVerses, with a tiny `article.querySelectorAll`
 //     stub so the rendered-spans lookup resolves) + isWellFormedSpec, the
-//     check a spec from outside (import file · address) must pass
+//     check a spec from outside (import file · address) must pass. The
+//     verse-select citation (selectionCitation) is in verse-spec.test.js
 //   - BOOKMARK_QUERY block — _isDescendant / _walkBookmarks / findExistingChapterBookmarks
 //     / _findItemInStore / _findParentFolderId / removeItemById / insertItem
 //     / collectFolderOptions. `loadBookmarks` provided as stub.
@@ -104,7 +105,7 @@ function sampleStore() {
 }
 
 // ── VERSE_SPEC loader ────────────────────────────────────────────────────────
-// `collapseFullVerseRefs` calls `article.querySelectorAll(".verse[data-vref]")`
+// `collapseSegmentedVerses` calls `article.querySelectorAll(".verse[data-vref]")`
 // and reads `.getAttribute("data-vref")`. We pass either `null` (early
 // return) or a tiny stub article — no full DOM needed for this slice.
 
@@ -118,8 +119,9 @@ function loadVerseSpec() {
   return {
     parseVerseSpec: ctx.parseVerseSpec,
     isWellFormedSpec: ctx.isWellFormedSpec,
-    collapseFullVerseRefs: ctx.collapseFullVerseRefs,
     collapseSegmentedVerses: ctx.collapseSegmentedVerses,
+    selectedSpanVrefs: ctx.selectedSpanVrefs,
+    selectionCitation: ctx.selectionCitation,
     _compareRefs: ctx._compareRefs,
     selectedVersesToSpec: ctx.selectedVersesToSpec,
     mergeVerseSpecs: ctx.mergeVerseSpecs,
@@ -127,15 +129,17 @@ function loadVerseSpec() {
 }
 
 /**
- * Tiny article stub for `collapseFullVerseRefs`. Each ref string in
+ * Tiny article stub for `collapseSegmentedVerses`. Each ref string in
  * `verseSpans` becomes one element with a `.getAttribute("data-vref")` that
  * returns the string. `querySelectorAll(".verse[data-vref]")` returns them
  * all, regardless of selector specifics — that selector is the only one
  * the function uses.
  */
 function makeStubArticle(verseSpans) {
-  const elements = verseSpans.map((ref) => ({
-    getAttribute(name) { return name === "data-vref" ? ref : null; },
+  // `data-vkey` is "<i>/<ref>" — one key per span, as views.js appendVerses gives (selectionCitation reads it).
+  const elements = verseSpans.map((ref, i) => ({
+    getAttribute(name) { return name === "data-vref" ? ref : name === "data-vkey" ? `${i}/${ref}` : null; },
+    classList: { contains: () => false },
   }));
   return {
     querySelectorAll(_selector) { return elements; },
@@ -453,50 +457,6 @@ test('mergeVerseSpecs: alpha ref dropped when integer covers same number', () =>
 test('mergeVerseSpecs: alpha-only union sorts and keeps each part', () => {
   const h = loadVerseSpec();
   assert.equal(h.mergeVerseSpecs("3a", "3b"), "3a,3b");
-});
-
-// ── collapseFullVerseRefs ────────────────────────────────────────────────────
-
-test('collapseFullVerseRefs: null article → returns refs unchanged', () => {
-  const h = loadVerseSpec();
-  const refs = ["3a", "3b"];
-  assert.deepEqual(h.collapseFullVerseRefs(refs, null), refs);
-});
-
-test('collapseFullVerseRefs: all parts of multi-part verse selected → collapsed to integer', () => {
-  const h = loadVerseSpec();
-  // Article reports verse 3 has spans "3a" and "3b"; both are selected
-  const article = makeStubArticle(["3a", "3b"]);
-  assert.deepEqual(h.collapseFullVerseRefs(["3a", "3b"], article), ["3"]);
-});
-
-test('collapseFullVerseRefs: only some parts selected → original refs kept', () => {
-  const h = loadVerseSpec();
-  // Article has 3a and 3b; only 3a selected → no collapse
-  const article = makeStubArticle(["3a", "3b"]);
-  assert.deepEqual(h.collapseFullVerseRefs(["3a"], article), ["3a"]);
-});
-
-test('collapseFullVerseRefs: 병합 절(「7-8a」「7-8b」)을 다 고르면 「7-8」 — 끝 번호를 잃지 않는다(Copilot 9회차)', () => {
-  const h = loadVerseSpec();
-  const article = makeStubArticle(["6", "7-8a", "7-8b", "9"]);
-  assert.deepEqual(h.collapseFullVerseRefs(["7-8a", "7-8b"], article), ["7-8"]);
-  assert.deepEqual(h.collapseFullVerseRefs(["7-8a"], article), ["7-8a"]);   // 반만 골랐으면 그대로
-  assert.equal(h.selectedVersesToSpec(["7-8", "9"]), "7-8,9");             // 병합 구간은 제 모양대로, 다음 절은 쉼표
-});
-
-test('collapseFullVerseRefs: 데이터 반쪽 절이 다시 두 줄(「8aa」…「8bb」)이면 다 골랐을 때 「8」(9회차 「8a」 회귀 — 자체 리뷰 2026-10-13)', () => {
-  const h = loadVerseSpec();
-  const article = makeStubArticle(["7", "8aa", "8ab", "8ba", "8bb", "9"]);
-  assert.deepEqual(h.collapseFullVerseRefs(["8aa", "8ab", "8ba", "8bb"], article), ["8"]);
-  assert.deepEqual(h.collapseFullVerseRefs(["8aa", "8ab"], article), ["8aa", "8ab"]);   // 반만 골랐으면 그대로
-});
-
-test('collapseFullVerseRefs: single-part verse (no alpha) unchanged', () => {
-  const h = loadVerseSpec();
-  // Article reports "3" with no alpha — `hasAlpha` is false, skip collapse
-  const article = makeStubArticle(["3"]);
-  assert.deepEqual(h.collapseFullVerseRefs(["3"], article), ["3"]);
 });
 
 // ── collapseSegmentedVerses (bookmark-only whole-verse promotion) ─────────────
@@ -1907,7 +1867,8 @@ test("isWellFormedSpec: what got through before is rejected (PR #359 review)", (
 });
 
 // Every spec the app writes passes: today's 저장 (collapseSegmentedVerses → selectedVersesToSpec) and 합치기
-// (mergeVerseSpecs), and the per-line form collapseFullVerseRefs keeps (what the pre-#205 저장 wrote). Synthetic
+// (mergeVerseSpecs), and the per-line form the verse-select citation keeps (selectionCitation — what the pre-#205 저장
+// wrote). Synthetic
 // chapters shaped like the data — half verses ("3a" "3b"), merged verses ("7-8"), verses drawn in lines ("9a" … up to
 // "p"), and both at once ("8aa", "7-8a") — from a fixed seed, so no real data is needed (the public CI has none).
 // Checked once against the real data too: 34,003 specs today's app writes, 60,384 the pre-#205 app wrote — all pass.
@@ -1939,18 +1900,19 @@ test("isWellFormedSpec: every spec the app writes over synthetic chapters is acc
       }
     }
     const article = makeStubArticle(refs);
+    const keys = refs.map((r, i) => `${i}/${r}`);
     const written = [];
     for (let t = 0; t < 9; t++) {
       let pick;
       if (t % 3 === 0) {
-        const a = Math.floor(rnd() * refs.length);
-        pick = refs.slice(a, a + 1 + Math.floor(rnd() * 8));
+        const a = Math.floor(rnd() * keys.length);
+        pick = keys.slice(a, a + 1 + Math.floor(rnd() * 8));
       } else {
-        pick = refs.filter(() => rnd() < (t % 3 === 1 ? 0.15 : 0.5));
+        pick = keys.filter(() => rnd() < (t % 3 === 1 ? 0.15 : 0.5));
       }
       if (!pick.length) continue;
-      written.push(v.selectedVersesToSpec(v.collapseSegmentedVerses(pick, article)));
-      written.push(v.selectedVersesToSpec(v.collapseFullVerseRefs(pick, article)));
+      written.push(v.selectedVersesToSpec(v.collapseSegmentedVerses(v.selectedSpanVrefs(new Set(pick), article), article)));
+      written.push(v.selectedVersesToSpec(v.selectionCitation(new Set(pick), article).refs));
     }
     const saved = written.length;
     for (let i = 1; i < saved; i++) written.push(v.mergeVerseSpecs(written[i - 1], written[i]));

@@ -10,10 +10,9 @@
 
 // ── Verse spec utilities ──
 // ── BEGIN VERSE_SPEC ──
-// Exercised by tests/unit/bookmark.test.js. The 5 functions below operate
-// on plain strings and arrays, with `collapseFullVerseRefs` taking the
-// chapter article element as a parameter so the test loader provides a
-// minimal DOM stub.
+// Exercised by tests/unit/bookmark.test.js · verse-spec.test.js. The functions below operate on plain strings and
+// arrays; the ones that read the chapter article (selectedSpanVrefs · selectionCitation · collapseSegmentedVerses) take
+// it as a parameter so the test loader provides a minimal DOM stub.
 
 // "1-5,10-15,3a,3b" → [{start:1,end:5},{start:10,end:15},{start:3,end:3,part:"a"},...]
 /**
@@ -101,41 +100,82 @@ function isWellFormedSpec(spec) {
   return true;
 }
 
-// If all rendered spans of a multi-part verse are selected, collapse "3a,3b" → "3".
-// Single-part verses ("3" with no alpha suffix) are unchanged.
+// The verse-select bar keys its selection by `data-vkey` (views.js appendVerses — instance key "/" data-vref), not by
+// `data-vref`: a number does not identify a verse (verseInstanceKey below), so selecting by `data-vref` lit up every
+// span that shared it — 이사 40 의 41:6 을 누르면 40:6 도, 에스델 4:17(5) 하나에 추가 본문 25 절이(main 부터,
+// known-issues §5).
+
 /**
- * @param {string[]} refs
- * @param {Element | null | undefined} article
+ * `data-vref` of the selected spans, document order — what the bookmark save path stores (ADR-010 — the stored spec
+ * stays number-based).
+ * @param {ReadonlySet<string>} selected `data-vkey` values
+ * @param {ParentNode | null | undefined} article
  * @returns {string[]}
  */
-function collapseFullVerseRefs(refs, article) {
-  if (!article) return refs;
-  const selected = new Set(refs);
-  // Group by integer verse number
-  /** @type {Record<string, string[]>} */
-  const byVerse = {};
-  for (const ref of refs) {
+function selectedSpanVrefs(selected, article) {
+  if (!article) return [];
+  return [...article.querySelectorAll(".verse[data-vkey]")]
+    .filter((s) => selected.has(s.getAttribute("data-vkey") ?? ""))
+    .map((s) => s.getAttribute("data-vref") ?? "");
+}
+
+/**
+ * What a verse-select selection cites — the bar's 「…절 선택됨」 and the 복사 citation. `refs` go to
+ * selectedVersesToSpec: a span-level ref ("3a") stays while a verse is partly selected; once every line of a number is
+ * selected it collapses to the number ("3a,3b" → "3"). `chapter` is null for the open chapter's own numbering.
+ *
+ * The numbers follow the chapter's own numbering, as the drag-copy citation does (views.js bindCopyAttribution —
+ * pre-merge review 2026-10-14): spans moved in from another chapter (`verse-cross-ref`, 이사 40 의 41:6-7) and
+ * Greek-only additions (`verse-lxx`, 다니 3 의 (24)-(90)) are left out unless nothing else is selected — then their
+ * numbers alone, and moved-in verses under their own chapter (`data-chapter-ref` → 「41:6-7」, 사용자 결정
+ * 2026-10-21 — 「40:6-7」 named chapter 40's own verses). And where two verses of that numbering share a number
+ * (에스델 4:17 과 그 추가 본문, a ¶ clause and its verse — 전례시편, a duplicated source marker — 토비 11:15), a line
+ * letter cannot say which verse's line it is, so any selection there cites the number. Verses are told apart by the
+ * instance key less its part letter: a data half verse (이사 7 의 8a · 8b) is a part of one verse, not another verse —
+ * its line letters still address it.
+ * @param {ReadonlySet<string>} selected `data-vkey` values
+ * @param {ParentNode | null | undefined} article
+ * @returns {{ chapter: number | null, refs: string[] }}
+ */
+function selectionCitation(selected, article) {
+  if (!article) return { chapter: null, refs: [] };
+  const spans = [...article.querySelectorAll(".verse[data-vkey]")];
+  /** @param {Element} s */
+  const foreign = (s) => s.classList.contains("verse-cross-ref") || s.classList.contains("verse-lxx");
+  /** @param {Element} s */
+  const isSelected = (s) => selected.has(s.getAttribute("data-vkey") ?? "");
+  const picked = spans.filter(isSelected);
+  if (!picked.length) return { chapter: null, refs: [] };
+  const ownNumbering = picked.some((s) => !foreign(s));
+  const fromChapters = new Set(picked.map((s) => s.getAttribute("data-chapter-ref")));
+  const fromChapter = !ownNumbering && fromChapters.size === 1 ? [...fromChapters][0] : null;
+  /** @type {Map<number, { all: string[], sel: string[], verses: Set<string> }>} */
+  const byNumber = new Map();
+  for (const s of spans) {
+    if (foreign(s) === ownNumbering) continue;
+    const ref = s.getAttribute("data-vref") ?? "";
+    const key = s.getAttribute("data-vkey") ?? "";
     const n = parseInt(ref, 10);
-    if (!byVerse[n]) byVerse[n] = [];
-    byVerse[n].push(ref);
+    let g = byNumber.get(n);
+    if (!g) byNumber.set(n, g = { all: [], sel: [], verses: new Set() });
+    g.all.push(ref);
+    g.verses.add(key.slice(0, key.indexOf("/")).replace(/^(\d+)[a-p]/, "$1"));
+    if (isSelected(s)) g.sel.push(ref);
   }
-  const result = [];
-  for (const [n, verseRefs] of Object.entries(byVerse)) {
-    // All spans rendered for this verse number
-    const allSpanRefs = [...article.querySelectorAll(".verse[data-vref]")]
-      .map((s) => s.getAttribute("data-vref") ?? "")
-      .filter((r) => r && parseInt(r, 10) === Number(n));
-    const hasAlpha = allSpanRefs.some((r) => /[a-z]$/.test(r));
-    const allSelected = allSpanRefs.length > 0 && allSpanRefs.every((r) => selected.has(r));
-    if (hasAlpha && allSelected) {
+  const refs = [];
+  for (const { all, sel, verses } of byNumber.values()) {
+    if (!sel.length) continue;
+    const shared = verses.size > 1;
+    const whole = sel.length === all.length && all.some((r) => /[a-z]$/.test(r));
+    if (shared || whole) {
       // 글자를 모두 뗀다 — 병합 절 「7-8a」「7-8b」는 「7-8」(끝 번호를 잃지 않게, Copilot 리뷰 9회차), 데이터의
       // 반쪽 절이 다시 두 줄인 「8aa」…「8bb」는 「8」(줄 글자 하나만 떼면 「8a」가 됐다 — 자체 리뷰 2026-10-13)
-      result.push(verseRefs[0].replace(/[a-z]+$/, ""));
+      refs.push(...new Set(sel.map((r) => r.replace(/[a-z]+$/, ""))));
     } else {
-      result.push(...verseRefs);
+      refs.push(...sel);
     }
   }
-  return result;
+  return { chapter: fromChapter ? Number(fromChapter) : null, refs };
 }
 
 // Bookmark-only (ADR-010): a prose verse split into a/b/c line-spans by an
@@ -384,12 +424,11 @@ function citationSource(liturgical) {
 window.parseVerseSpec = parseVerseSpec;
 window.selectedVersesToSpec = selectedVersesToSpec;
 window.mergeVerseSpecs = mergeVerseSpecs;
-window.collapseFullVerseRefs = collapseFullVerseRefs;
 window.serializeVerseRange = serializeVerseRange;
 window.verseInstanceKeys = verseInstanceKeys;
 
 export {
-  parseVerseSpec, isWellFormedSpec, collapseFullVerseRefs, collapseSegmentedVerses,
+  parseVerseSpec, isWellFormedSpec, selectedSpanVrefs, selectionCitation, collapseSegmentedVerses,
   selectedVersesToSpec, mergeVerseSpecs, serializeVerseRange, citationSource,
   specCoversVerse, chapterMaxVerse, verseInstanceKey, verseInstanceKeys,
 };

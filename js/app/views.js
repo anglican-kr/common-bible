@@ -849,69 +849,79 @@ function findVerseAnchor(root, n) {
 
 // ── BEGIN VERSE_SELECTION ──
 // Exercised by tests/unit/views.test.js. DOM-pure: reads classList +
-// data-vref from a passed article node, no global state, no event bindings.
+// data-vkey from a passed article node, no global state, no event bindings.
+//
+// Selection is keyed by `data-vkey` — "<instance key>/<data-vref>" (appendVerses), one per span — because `data-vref`
+// repeats wherever two verses share a number (다니 3 의 그리스어 (24) 와 히브리 24, 이사 40 의 41:6 과 40:6).
+
+// The verse a span belongs to, for grouping its lines: the instance key before "/" (verse-spec.js verseInstanceKey)
+// less its part letter and ¶ mark. A data half verse (이사 7 의 8a · 8b — 9a 를 사이에 두고 나뉘어 실림) and a ¶ clause
+// (전례시편 — the number it inherits) are lines of one numbered verse: the tap unit took them together while selection
+// went by number, and cutting a half off would cite it as 「8aa,8ab」.
+/** @param {string} key @returns {string} */
+function _verseOfKey(key) {
+  const slash = key.indexOf("/");
+  return (slash === -1 ? key : key.slice(0, slash)).replace(/^(\d+)[a-p]/, "$1").replace(/_v(?=$|[_~])/, "");
+}
 
 // Pure-poetry multi-part verses (e.g. Psalms, Proverbs, Wisdom books) are
 // treated as a single selection unit: tapping one line selects/deselects the
 // whole verse. Prose-only or mixed (poetry+prose) multi-part verses, plus
 // single-span verses, keep per-line control.
 //
-// Returns the array of data-vref values that should be toggled together with
-// `vref`. For pure-poetry multi-part verses this is every part of the verse
-// number; otherwise just [vref].
+// Returns the array of data-vkey values that should be toggled together with
+// `key`. For pure-poetry multi-part verses this is every line of the verse;
+// otherwise just [key].
 /**
  * @param {ParentNode | null | undefined} article
- * @param {string} vref
+ * @param {string} key
  * @returns {string[]}
  */
-function _verseSelectionUnit(article, vref) {
-  if (!article) return [vref];
-  const m = vref.match(/^(\d+)/);
-  const num = m ? m[1] : vref;
+function _verseSelectionUnit(article, key) {
+  if (!article) return [key];
+  const verse = _verseOfKey(key);
   /** @type {Element[]} */
   const parts = [];
-  for (const v of article.querySelectorAll(".verse[data-vref]")) {
-    const r = v.getAttribute("data-vref") ?? "";
-    const rm = r.match(/^(\d+)/);
-    if ((rm ? rm[1] : r) === num) parts.push(v);
+  for (const v of article.querySelectorAll(".verse[data-vkey]")) {
+    if (_verseOfKey(v.getAttribute("data-vkey") ?? "") === verse) parts.push(v);
   }
   if (parts.length > 1 && parts.every((p) => p.classList.contains("verse-poetry"))) {
-    return parts.map((p) => p.getAttribute("data-vref") ?? "");
+    return parts.map((p) => p.getAttribute("data-vkey") ?? "");
   }
-  return [vref];
+  return [key];
 }
 
-// Inclusive list of data-vref strings spanning anchor→target (in either
-// direction) given the document-order array `allVrefs`. Used by anchored range
+// Inclusive list of data-vkey strings spanning anchor→target (in either
+// direction) given the document-order array `allKeys`. Used by anchored range
 // selection (desktop Shift+click, mobile hold-and-tap). Each endpoint is
 // expanded to its whole pure-poetry unit via `unitFn` so a range edge that
 // lands on one line-part of a multi-part verse still pulls in the rest.
 /**
- * @param {string[]} allVrefs
- * @param {string} anchorVref
- * @param {string} targetVref
- * @param {(vref: string) => string[]} [unitFn]
+ * @param {string[]} allKeys
+ * @param {string} anchorKey
+ * @param {string} targetKey
+ * @param {(key: string) => string[]} [unitFn]
  * @returns {string[]}
  */
-function _verseRangeVrefs(allVrefs, anchorVref, targetVref, unitFn) {
-  const ai = allVrefs.indexOf(anchorVref);
-  const ti = allVrefs.indexOf(targetVref);
+function _verseRangeKeys(allKeys, anchorKey, targetKey, unitFn) {
+  const ai = allKeys.indexOf(anchorKey);
+  const ti = allKeys.indexOf(targetKey);
   if (ai === -1 || ti === -1) return [];
   let lo = ai <= ti ? ai : ti;
   let hi = ai <= ti ? ti : ai;
   if (unitFn) {
-    const loUnit = unitFn(allVrefs[lo]);
+    const loUnit = unitFn(allKeys[lo]);
     if (loUnit.length > 1) {
-      const f = allVrefs.indexOf(loUnit[0]);
+      const f = allKeys.indexOf(loUnit[0]);
       if (f !== -1 && f < lo) lo = f;
     }
-    const hiUnit = unitFn(allVrefs[hi]);
+    const hiUnit = unitFn(allKeys[hi]);
     if (hiUnit.length > 1) {
-      const l = allVrefs.indexOf(hiUnit[hiUnit.length - 1]);
+      const l = allKeys.indexOf(hiUnit[hiUnit.length - 1]);
       if (l !== -1 && l > hi) hi = l;
     }
   }
-  return allVrefs.slice(lo, hi + 1);
+  return allKeys.slice(lo, hi + 1);
 }
 // ── END VERSE_SELECTION ──
 
@@ -1118,6 +1128,10 @@ function appendVerses(article, verses, opts = {}) {
         }
 
         span.setAttribute("data-vref", vref);
+        // The verse-select key — unique per span where `data-vref` is not (verse-spec.js selectionCitation).
+        span.setAttribute("data-vkey", `${instanceKeys[vIdx]}/${vref}`);
+        // A verse moved in from another chapter is cited by that chapter when it is all that was copied (이사 40 의 41:6-7).
+        if (v.chapter_ref != null) span.setAttribute("data-chapter-ref", String(v.chapter_ref));
         // Suppress trailing space on the last line of a prose cite segment
         // — the chip that follows immediately provides its own padding gap.
         const segWillShowChip = !!(seg.cite && _citeShowAt.has(`${vIdx}:${segIdx}`));
@@ -1184,13 +1198,16 @@ function appendVerses(article, verses, opts = {}) {
  * 2026-10-14): numbers this translation does not have (the article's `data-absent` — 마르 9:44 · 46) do not break a
  * run (「9:43-48」, as on main — user decision 2026-10-14), and spans whose number belongs to another numbering — moved
  * in from another chapter (`verse-cross-ref`, 이사 40 의 41:6-7) or a Greek-only addition (`verse-lxx`, 다니 3) — are
- * left out of the numbers unless nothing else was selected (otherwise 「이사야 40:6-7, 19-20」 · 「다니엘 3:1-90」).
+ * left out of the numbers unless nothing else was selected (otherwise 「이사야 40:6-7, 19-20」 · 「다니엘 3:1-90」). When
+ * only moved-in verses were selected, `chapterRef` is the chapter they come from, so the reference names that chapter
+ * (「이사야 41:6-7」 — 사용자 결정 2026-10-21; 「40:6-7」 named chapter 40's own verses).
  * `tail` (the lectionary's 영광송 after a psalm) is extra text inside a unit that is not a verse: when the selection
  * covers it, its text follows the unit's verses, before the reference.
  * @param {HTMLElement} root
- * @param {(unit: HTMLElement, runs: Array<{ article: HTMLElement, ranges: Array<[number, number]>, firstNum: number, lastNum: number, atStart: boolean, atEnd: boolean }>) => string} citeOf
+ * @param {(unit: HTMLElement, runs: Array<{ article: HTMLElement, ranges: Array<[number, number]>, firstNum: number, lastNum: number, atStart: boolean, atEnd: boolean, chapterRef: number | null }>) => string} citeOf
  *   the text after 「— 」 for one unit; `runs` = per article in document order — `ranges` the selected verse numbers
- *   as continuous runs, `atStart`/`atEnd` whether the selection reached the article's first/last numbered verse
+ *   as continuous runs, `atStart`/`atEnd` whether the selection reached the article's first/last numbered verse,
+ *   `chapterRef` the chapter the numbers belong to when it is not the article's (only moved-in verses selected)
  * @param {{ unitSelector?: string, bailoutSelector?: string, strictRoot?: boolean, tail?: { selector: string, text: (el: Element) => string } }} [opts]
  */
 function bindCopyAttribution(root, citeOf, opts = {}) {
@@ -1225,11 +1242,15 @@ function bindCopyAttribution(root, citeOf, opts = {}) {
       const runs = articles.map(({ article, spans }) => {
         const own = spans.filter((s) => !s.classList.contains("verse-cross-ref") && !s.classList.contains("verse-lxx"));
         const nums = [...new Set((own.length ? own : spans).flatMap(vrefNumbers))].sort((x, y) => x - y);
-        const absent = new Set((article.getAttribute("data-absent") || "").split(",").filter(Boolean).map(Number));
+        const fromChapters = new Set(spans.map((s) => s.getAttribute("data-chapter-ref")));
+        const fromChapter = !own.length && fromChapters.size === 1 ? [...fromChapters][0] : null;
+        // `data-absent` lists the article's own numbering — not the chapter moved-in verses come from
+        const absent = new Set(fromChapter ? [] : (article.getAttribute("data-absent") || "").split(",").filter(Boolean).map(Number));
         const numbered = article.querySelectorAll(".verse[data-vref]");
         return {
           article, ranges: numberRuns(nums, absent), firstNum: nums[0], lastNum: nums[nums.length - 1],
           atStart: numbered[0] === spans[0], atEnd: numbered[numbered.length - 1] === spans[spans.length - 1],
+          chapterRef: fromChapter ? Number(fromChapter) : null,
         };
       });
       return `${text}\n\n— ${citeOf(unit, runs)}`;
@@ -1464,42 +1485,42 @@ function renderChapter(data, book, opts) {
   // In-flight touches in select mode: pointerId → per-pointer gesture state.
   // `timer` fires the long-press range extension; `longPressed`/`moved` decide
   // whether the pointerup should still toggle (a plain tap) or do nothing.
-  /** @type {Map<number, { vref: string, x: number, y: number, timer: ReturnType<typeof setTimeout> | null, longPressed: boolean, moved: boolean }>} */
+  /** @type {Map<number, { key: string, x: number, y: number, timer: ReturnType<typeof setTimeout> | null, longPressed: boolean, moved: boolean }>} */
   const _activePointers = new Map();
 
   // Refresh verse-highlight classes + dock after mutating selectedVerses.
   const refreshSelection = () => {
-    article.querySelectorAll(".verse[data-vref]").forEach((v) => {
-      v.classList.toggle("verse-selected", readingContext.selectedVerses.has(v.getAttribute("data-vref") ?? ""));
+    article.querySelectorAll(".verse[data-vkey]").forEach((v) => {
+      v.classList.toggle("verse-selected", readingContext.selectedVerses.has(v.getAttribute("data-vkey") ?? ""));
     });
     updateVerseSelectionBoundaries(article);
     updateVerseSelectBar();
   };
 
-  // Additively select every verse from `anchorVref` to `targetVref` inclusive,
+  // Additively select every verse from `anchorKey` to `targetKey` inclusive,
   // then move the anchor to the target. Returns false if the range is empty.
-  /** @param {string} anchorVref @param {string} targetVref */
-  const selectRange = (anchorVref, targetVref) => {
-    const allVrefs = [...article.querySelectorAll(".verse[data-vref]")]
-      .map((v) => v.getAttribute("data-vref") ?? "");
-    const range = _verseRangeVrefs(allVrefs, anchorVref, targetVref,
-      (vref) => _verseSelectionUnit(article, vref));
+  /** @param {string} anchorKey @param {string} targetKey */
+  const selectRange = (anchorKey, targetKey) => {
+    const allKeys = [...article.querySelectorAll(".verse[data-vkey]")]
+      .map((v) => v.getAttribute("data-vkey") ?? "");
+    const range = _verseRangeKeys(allKeys, anchorKey, targetKey,
+      (key) => _verseSelectionUnit(article, key));
     if (!range.length) return false;
-    for (const r of range) readingContext.selectedVerses.add(r);
-    readingContext.selectAnchor = targetVref;
+    for (const k of range) readingContext.selectedVerses.add(k);
+    readingContext.selectAnchor = targetKey;
     refreshSelection();
     return true;
   };
 
   // Toggle a single verse's selection unit; the anchor follows a selection and
   // clears on a deselection.
-  /** @param {string} vref */
-  const toggleVerse = (vref) => {
-    const unit = _verseSelectionUnit(article, vref);
-    const wasSelected = unit.some((r) => readingContext.selectedVerses.has(r));
-    if (wasSelected) unit.forEach((r) => readingContext.selectedVerses.delete(r));
-    else unit.forEach((r) => readingContext.selectedVerses.add(r));
-    readingContext.selectAnchor = wasSelected ? null : vref;
+  /** @param {string} key */
+  const toggleVerse = (key) => {
+    const unit = _verseSelectionUnit(article, key);
+    const wasSelected = unit.some((k) => readingContext.selectedVerses.has(k));
+    if (wasSelected) unit.forEach((k) => readingContext.selectedVerses.delete(k));
+    else unit.forEach((k) => readingContext.selectedVerses.add(k));
+    readingContext.selectAnchor = wasSelected ? null : key;
     refreshSelection();
   };
 
@@ -1507,16 +1528,16 @@ function renderChapter(data, book, opts) {
     const t = e.target;
     if (!(t instanceof Element)) return;
     if (readingContext.verseSelectMode) {
-      const vs = t.closest(".verse[data-vref]");
+      const vs = t.closest(".verse[data-vkey]");
       if (!vs) return;
-      const vref = vs.getAttribute("data-vref") ?? "";
+      const key = vs.getAttribute("data-vkey") ?? "";
       // Desktop: Shift+click extends from the anchor (or, with no anchor yet,
       // acts as a plain toggle that sets the anchor). Handled fully here and
       // returns, so it never also arms the tap/long-press path below — that
       // would leave a spurious toggle queued for the matching pointerup.
       if (e.shiftKey) {
-        if (readingContext.selectAnchor) selectRange(readingContext.selectAnchor, vref);
-        else toggleVerse(vref);
+        if (readingContext.selectAnchor) selectRange(readingContext.selectAnchor, key);
+        else toggleVerse(key);
         return;
       }
       // Otherwise arm a long-press: holding in place extends the range from the
@@ -1524,7 +1545,7 @@ function renderChapter(data, book, opts) {
       // do NOT preventDefault — that would block the page scroll the user needs
       // to reach a far range endpoint (text selection is already suppressed by
       // body.verse-select-active { user-select: none }).
-      const entry = { vref, x: e.clientX, y: e.clientY, timer: /** @type {ReturnType<typeof setTimeout> | null} */ (null), longPressed: false, moved: false };
+      const entry = { key, x: e.clientX, y: e.clientY, timer: /** @type {ReturnType<typeof setTimeout> | null} */ (null), longPressed: false, moved: false };
       entry.timer = setTimeout(() => {
         entry.timer = null;
         // Guard against firing after the user left select mode or navigated
@@ -1532,8 +1553,8 @@ function renderChapter(data, book, opts) {
         // cleared this timer never arrived in the same view).
         if (!readingContext.verseSelectMode || !article.isConnected) return;
         entry.longPressed = true;
-        if (readingContext.selectAnchor) selectRange(readingContext.selectAnchor, vref);
-        else toggleVerse(vref); // no anchor yet → behave like a tap (select + set anchor)
+        if (readingContext.selectAnchor) selectRange(readingContext.selectAnchor, key);
+        else toggleVerse(key); // no anchor yet → behave like a tap (select + set anchor)
       }, RANGE_EXTEND_MS);
       _activePointers.set(e.pointerId, entry);
       // Capture the pointer so the matching pointermove/up/cancel always reach
@@ -1544,7 +1565,7 @@ function renderChapter(data, book, opts) {
       try { article.setPointerCapture(e.pointerId); } catch { /* pointer already released */ }
       return;
     }
-    const vs = t.closest(".verse[data-vref]");
+    const vs = t.closest(".verse[data-vkey]");
     if (!vs) return;
     _longPressStartX = e.clientX;
     _longPressStartY = e.clientY;
@@ -1552,12 +1573,12 @@ function renderChapter(data, book, opts) {
       _longPressTimer = null;
       if (!article.isConnected) return; // view was replaced before the press matured
       enterVerseSelectMode(book.id, ch);
-      const vref = vs.getAttribute("data-vref");
-      if (vref) {
-        for (const r of _verseSelectionUnit(article, vref)) {
-          readingContext.selectedVerses.add(r);
+      const key = vs.getAttribute("data-vkey");
+      if (key) {
+        for (const k of _verseSelectionUnit(article, key)) {
+          readingContext.selectedVerses.add(k);
         }
-        readingContext.selectAnchor = vref;
+        readingContext.selectAnchor = key;
         refreshSelection();
       }
     }, ENTER_SELECT_MS);
@@ -1599,7 +1620,7 @@ function renderChapter(data, book, opts) {
       // long-press already extended the range; a drifted pointer was a scroll.
       // Guard verseSelectMode: if the mode ended while the finger was down
       // (cancel / copy / navigation), a late pointerup must not re-toggle.
-      if (!entry.longPressed && !entry.moved && readingContext.verseSelectMode) toggleVerse(entry.vref);
+      if (!entry.longPressed && !entry.moved && readingContext.verseSelectMode) toggleVerse(entry.key);
       return;
     }
     cancelLongPress(e);
@@ -1618,7 +1639,7 @@ function renderChapter(data, book, opts) {
   // one article — one chapter. The liturgical books (전례시편 · 송가) are the prayer-book translation, not 공동번역
   // (ADR-037 §1 · §3), so they are credited to 「(대한성공회 기도서)」 (사용자 결정 2026-10-13 — verse-spec.js citationSource).
   bindCopyAttribution(article, (_unit, runs) =>
-    `${book.name_ko} ${ch}:${formatVerseRanges(runs[0].ranges)} ${citationSource(book.division === "liturgical")}`);
+    `${book.name_ko} ${runs[0].chapterRef ?? ch}:${formatVerseRanges(runs[0].ranges)} ${citationSource(book.division === "liturgical")}`);
 
   $app.appendChild(article);
   $app.appendChild(buildChapterNav(book, ch));
@@ -1808,7 +1829,7 @@ const appViewsRouting = {
   initCompactHeader, initScrollElevation,
   renderError,
   _verseSelectionUnit,
-  _verseRangeVrefs,
+  _verseRangeKeys,
 };
 window.appViewsRouting = appViewsRouting;
 
@@ -1833,7 +1854,7 @@ export {
   buildDivisionTabs, buildSegmentTabs, bindCopyAttribution, formatVerseRanges, absentVerseNumbers, divisionLabels, divisionOrder, effectiveDivision,
   bookListPath,
   initCompactHeader, initScrollElevation,
-  _verseSelectionUnit, _verseRangeVrefs,
+  _verseSelectionUnit, _verseRangeKeys,
   DIVISION_LABELS,
   renderBookList, renderChapterList, renderChapter, renderPrologue,
   renderLoading, renderError,

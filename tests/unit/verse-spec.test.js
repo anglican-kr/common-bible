@@ -4,8 +4,10 @@
 // Same vm + BEGIN/END marker slice approach as bookmark-read.test.js. Covers the
 // parts of the VERSE_SPEC block that are not exercised through bookmark.test.js:
 // `specCoversVerse` / `chapterMaxVerse` (moved here from bookmark-read.js so the
-// lectionary view can share them — ADR-038 §3) and the verse-instance identity
-// helpers (ADR-039 ¶ 구절 · ADR-003 에스델 추가 본문).
+// lectionary view can share them — ADR-038 §3), the verse-instance identity
+// helpers (ADR-039 ¶ 구절 · ADR-003 에스델 추가 본문), and the verse-select citation
+// that reads them off the rendered spans (selectionCitation · selectedSpanVrefs —
+// known-issues §5).
 
 import test from "node:test";
 import assert from "node:assert";
@@ -110,4 +112,129 @@ test("verseInstanceKeys: 원본 중복 마커는 절을 버리지 않고 순번�
 test("verseInstanceKeys: 빈 입력은 빈 배열", () => {
   assert.deepStrictEqual(plain(ctx.verseInstanceKeys([])), []);
   assert.deepStrictEqual(plain(ctx.verseInstanceKeys(null)), []);
+});
+
+// ── selectionCitation · selectedSpanVrefs ──
+// 절 선택 막대의 「…절 선택됨」 · 복사 출처. 선택은 줄마다 다른 `data-vkey`(인스턴스 키 "/" data-vref)로 하고, 출처는
+// 그 줄들의 `data-vref` 로 적는다. 아래 장 발췌는 실제 화면의 키 · 표지 그대로다(2026-10-21 덤프).
+
+/** @param {Array<[string, string?, string?]>} rows [data-vkey, class list, data-chapter-ref] in document order */
+function articleOf(rows) {
+  const elements = rows.map(([key, cls = "", chapterRef = null]) => ({
+    getAttribute: (k) => (k === "data-vkey" ? key : k === "data-vref" ? key.slice(key.indexOf("/") + 1)
+      : k === "data-chapter-ref" ? chapterRef : null),
+    classList: { contains: (c) => cls.split(" ").includes(c) },
+  }));
+  return { querySelectorAll: (sel) => (sel === ".verse[data-vkey]" ? elements : []) };
+}
+/** 「장:절」 — 이 장의 번호면 장 없이 절만. */
+const citeSpec = (keys, article) => {
+  const { chapter, refs } = ctx.selectionCitation(new Set(keys), article);
+  return `${chapter != null ? `${chapter}:` : ""}${ctx.selectedVersesToSpec(refs)}`;
+};
+const linesOf = (rows, verse) => rows.map(([k]) => k).filter((k) => k.startsWith(`${verse}/`));
+
+// 이사 40 — 41:6-7 이 19 와 20 사이에 옮겨 실렸다.
+const ISA40 = [
+  ["6/6a", "verse-poetry"], ["6/6b", "verse-poetry"], ["6/6c", "verse-poetry"], ["6/6d", "verse-poetry"],
+  ["7/7a", "verse-poetry"], ["7/7b", "verse-poetry"], ["7/7c", "verse-poetry"],
+  ["19/19a", "verse-poetry"], ["19/19b", "verse-poetry"], ["19/19c", "verse-poetry"],
+  ["6_c41/6a", "verse-cross-ref verse-poetry", "41"], ["6_c41/6b", "verse-cross-ref verse-poetry", "41"],
+  ["7_c41/7a", "verse-cross-ref verse-poetry", "41"], ["7_c41/7b", "verse-cross-ref verse-poetry", "41"],
+  ["20/20a", "verse-poetry"], ["20/20b", "verse-poetry"],
+];
+// 다니 3 — 그리스어 추가 본문 (24)- 가 히브리 24(91)- 와 번호를 함께 쓴다.
+const DAN3 = [
+  ["23/23"], ["24_lxx/24", "verse-lxx"], ["25_lxx/25", "verse-lxx"],
+  ["26_lxx/26a", "verse-lxx verse-poetry"], ["26_lxx/26b", "verse-lxx verse-poetry"],
+  ["24_91/24"], ["25_92/25"], ["26_93/26"],
+];
+// 에스 4 — 추가 본문이 모두 17 이다.
+const ESTH4 = [
+  ["16/16"], ["17/17"], ["17_1/17"],
+  ["17_2/17a", "verse-poetry"], ["17_2/17b", "verse-poetry"],
+  ["17_5/17a", "verse-poetry"], ["17_5/17b", "verse-poetry"], ["17_5/17c", "verse-poetry"],
+  ["17_11/17"],
+  ["17_14/17a"], ["17_14/17b", "verse-poetry"],
+];
+
+test("selectionCitation: 이사 40:19 → 20 — 사이에 옮겨 실린 41:6-7 은 출처 번호에 들지 않는다(종전 「6a,6b,7,19-20」)", () => {
+  const keys = [...linesOf(ISA40, "19"), ...linesOf(ISA40, "6_c41"), ...linesOf(ISA40, "7_c41"), ...linesOf(ISA40, "20")];
+  assert.strictEqual(citeSpec(keys, articleOf(ISA40)), "19-20");
+});
+
+test("selectionCitation: 이사 40 — 옮겨 실린 절만 고르면 제 장의 번호(「41:6」 — 사용자 결정 2026-10-21), 이 장의 6절은 그 줄만 본다", () => {
+  const a = articleOf(ISA40);
+  assert.strictEqual(citeSpec(linesOf(ISA40, "6_c41"), a), "41:6");
+  assert.strictEqual(citeSpec([...linesOf(ISA40, "6_c41"), ...linesOf(ISA40, "7_c41")], a), "41:6-7");
+  assert.strictEqual(citeSpec(["6_c41/6a"], a), "41:6a");
+  assert.strictEqual(citeSpec(linesOf(ISA40, "6"), a), "6");          // 41:6 의 줄이 남아도 40:6 은 다 골랐다
+  assert.strictEqual(citeSpec(["6/6a", "6/6b"], a), "6a,6b");
+});
+
+test("selectionCitation: 다니 3 — 그리스어 절은 히브리 절과 섞이지 않는다", () => {
+  const a = articleOf(DAN3);
+  assert.strictEqual(citeSpec(["24_lxx/24", "25_lxx/25"], a), "24-25");
+  assert.strictEqual(citeSpec(["26_lxx/26a"], a), "26a");             // 그리스어 (26) 의 첫 줄
+  assert.strictEqual(citeSpec(linesOf(DAN3, "26_lxx"), a), "26");
+  assert.strictEqual(citeSpec(["26_lxx/26a", "26_93/26"], a), "26");   // 히브리 절이 있으면 그 번호 체계만
+  assert.strictEqual(citeSpec(["23/23", "24_lxx/24", "24_91/24"], a), "23-24");
+});
+
+test("selectionCitation: 에스 4:17 — 한 번호 아래 여러 절이면 줄 글자 없이 번호로(종전 「17a」)", () => {
+  const a = articleOf(ESTH4);
+  assert.strictEqual(citeSpec(linesOf(ESTH4, "17_5"), a), "17");
+  assert.strictEqual(citeSpec(["17_5/17b"], a), "17");
+  assert.strictEqual(citeSpec(["17_14/17a"], a), "17");
+  assert.strictEqual(citeSpec(["16/16", "17/17"], a), "16-17");
+});
+
+test("selectionCitation: 토비 11:15 — 원본의 중복 절 표시도 한 번호를 함께 쓰는 다른 절이라 번호로 적는다(줄 글자가 겹치지 않아도)", () => {
+  // 15절은 운문 두 줄(15a · 15b), 중복 표시된 둘째 15절(15~2)은 한 줄(15) — data-vref 는 겹치지 않는다(리뷰 2026-10-21).
+  const a = articleOf([["14/14"], ["15/15a", "verse-poetry"], ["15/15b", "verse-poetry"], ["15~2/15"], ["16/16"]]);
+  assert.strictEqual(citeSpec(["15/15a", "15/15b"], a), "15");
+  assert.strictEqual(citeSpec(["14/14", "15/15a", "15/15b"], a), "14-15");
+  assert.strictEqual(citeSpec(["15~2/15"], a), "15");
+});
+
+test("selectionCitation: 전례시편 ¶ 구절 — 앞 절과 줄 글자가 겹쳐 번호로 적는다", () => {
+  const a = articleOf([["4/4a", "verse-poetry"], ["4/4b", "verse-poetry"], ["4_v/4a", "verse-poetry"], ["4_v/4b", "verse-poetry"], ["5/5a", "verse-poetry"]]);
+  assert.strictEqual(citeSpec(["4_v/4a", "4_v/4b"], a), "4");
+  assert.strictEqual(citeSpec(["4/4a", "4/4b", "4_v/4a", "4_v/4b", "5/5a"], a), "4-5");
+  // ¶ 구절이 한 줄이라 줄 글자가 겹치지 않아도 같다.
+  const b = articleOf([["4/4a"], ["4/4b"], ["4_v/4"]]);
+  assert.strictEqual(citeSpec(["4/4a"], b), "4");
+});
+
+test("selectionCitation: 번호가 겹치지 않는 장은 종전과 같다 — 다 고르면 번호, 일부면 줄 글자", () => {
+  const a = articleOf([["2/2"], ["3/3a"], ["3/3b"], ["4/4"]]);
+  assert.strictEqual(citeSpec(["3/3a", "3/3b"], a), "3");
+  assert.strictEqual(citeSpec(["3/3a"], a), "3a");
+  assert.strictEqual(citeSpec(["2/2", "3/3b", "4/4"], a), "2,3b,4");
+  assert.strictEqual(citeSpec(["4/4"], a), "4");
+});
+
+test("selectionCitation: 병합 절 「7-8a」「7-8b」를 다 고르면 「7-8」 — 끝 번호를 잃지 않는다(Copilot 9회차)", () => {
+  const a = articleOf([["6/6"], ["7/7-8a"], ["7/7-8b"], ["9/9"]]);
+  assert.strictEqual(citeSpec(["7/7-8a", "7/7-8b"], a), "7-8");
+  assert.strictEqual(citeSpec(["7/7-8a"], a), "7-8a");                 // 반만 골랐으면 그대로
+  assert.strictEqual(citeSpec(["7/7-8a", "7/7-8b", "9/9"], a), "7-8,9");
+});
+
+test("selectionCitation: 데이터 반쪽 절이 다시 두 줄(「8aa」…「8bb」)이면 다 골랐을 때 「8」(자체 리뷰 2026-10-13)", () => {
+  // 이사 7 — 8a · 9a · 8b · 9b 순서로 실린다.
+  const a = articleOf([["8a/8aa"], ["8a/8ab"], ["9a/9aa"], ["9a/9ab"], ["8b/8ba"], ["8b/8bb"], ["9b/9ba"], ["9b/9bb"]]);
+  assert.strictEqual(citeSpec(["8a/8aa", "8a/8ab", "8b/8ba", "8b/8bb"], a), "8");
+  assert.strictEqual(citeSpec(["8a/8aa", "8a/8ab"], a), "8aa,8ab");    // 반만 골랐으면 그대로
+});
+
+test("selectionCitation: 기사가 없거나 고른 줄이 화면에 없으면 빈 refs", () => {
+  assert.deepStrictEqual(plain(ctx.selectionCitation(new Set(["3/3"]), null)), { chapter: null, refs: [] });
+  assert.deepStrictEqual(plain(ctx.selectionCitation(new Set(["9/9"]), articleOf([["3/3"]]))), { chapter: null, refs: [] });
+});
+
+test("selectedSpanVrefs: 고른 줄의 data-vref 를 문서 순서로 — 북마크 저장은 번호 단위 그대로(ADR-010)", () => {
+  const a = articleOf(ISA40);
+  assert.deepStrictEqual(plain(ctx.selectedSpanVrefs(new Set(["20/20a", "6_c41/6a", "19/19a"]), a)), ["19a", "6a", "20a"]);
+  assert.deepStrictEqual(plain(ctx.selectedSpanVrefs(new Set(["19/19a"]), null)), []);
 });

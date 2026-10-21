@@ -21,7 +21,7 @@ import {
   collectFolderOptions, insertItem, _findItemInStore,
   findExistingChapterBookmarks, _findParentFolderId, _walkBookmarks,
 } from "./bookmark-core.js";
-import { collapseSegmentedVerses, selectedVersesToSpec, mergeVerseSpecs, isWellFormedSpec } from "./verse-spec.js";
+import { collapseSegmentedVerses, selectedSpanVrefs, selectedVersesToSpec, mergeVerseSpecs, isWellFormedSpec } from "./verse-spec.js";
 
 const { _$, el, clearNode, chUnit } = window.appHelpers;
 const { createOverlay } = window.appOverlay;
@@ -411,8 +411,9 @@ function openSaveModal(mode, opts = {}) {
   if (mode === "verses") {
     const article = document.querySelector("article.chapter-text");
     // Bookmarks treat a cite-split prose verse as one whole verse, so a partial
-    // span selection (e.g. 23a but not 23b/23c) is promoted to 23.
-    const refs = collapseSegmentedVerses(Array.from(readingContext.selectedVerses), article);
+    // span selection (e.g. 23a but not 23b/23c) is promoted to 23. The selection holds span keys (`data-vkey`); the
+    // stored spec is by number (ADR-010), so it goes through the spans' `data-vref`.
+    const refs = collapseSegmentedVerses(selectedSpanVrefs(readingContext.selectedVerses, article), article);
     verseSpec = refs.length ? selectedVersesToSpec(refs) : "all";
   } else if (existing) {
     verseSpec = existing.verseSpec ?? "all";
