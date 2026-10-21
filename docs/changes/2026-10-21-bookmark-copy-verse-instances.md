@@ -1,4 +1,5 @@
 ---
+pr: 363
 date: 2026-10-21
 branch: fix/bookmark-copy-verse-instances
 title: "fix: 절 선택이 번호가 같은 다른 절을 함께 고르지 않게 한다"
