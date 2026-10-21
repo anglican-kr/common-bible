@@ -1,7 +1,7 @@
 # ADR-010: 즐겨찾기(북마크) 기능 설계
 
 - 일시: 2026-04-25
-- 상태: 승인됨 — 구현 완료 (2026-04-25 · 모바일 행 제스처는 2026-05-03부터 06-11까지 다듬었다 · 절 선택 막대 2026-06-06 · 범위 선택 2026-06-13 · 주소의 절 범위 검사 2026-10-21 — ADR-040)
+- 상태: 승인됨 — 구현 완료 (2026-04-25 · 모바일 행 제스처는 2026-05-03부터 06-11까지 다듬었다 · 절 선택 막대 2026-06-06 · 범위 선택 2026-06-13 · 주소의 절 범위 검사 2026-10-21 — ADR-040 · 절 선택을 줄 키로 2026-10-21)
 - 관련: ADR-011(기기 사이 동기화 · 내보내기 · 가져오기), ADR-022(인용 — 산문 절의 분절), ADR-029(하단 탭 바 · 북마크 탭 · 선택 모드), ADR-030(모핑 탭 바 · 글래스), ADR-032(오버레이 컨트롤러), ADR-034(모듈 분할), ADR-035(모아 읽기), ADR-040(가져오기 항목 검사 · 절 범위 검사)
 
 ## 결정
@@ -9,7 +9,7 @@
 `localStorage` 기반 클라이언트 전용 북마크 저장소를 구현한다. 사용자는 현재 장 전체 또는 선택한 절(세그먼트 단위 포함)을 저장하고, 폴더로 분류 · 관리할 수 있다.
 
 - **절 범위는 URL path에 spec 문자열로 인코딩한다**(`/john/3/1-5,10-15`, `/ps/23/3a,5-7`). 장 화면이 이를 해석해 해당 span만 하이라이트한다. 여러 구간은 앱이 쓰는 표기일 때만 강조한다(검사는 ADR-040 — 아래 「절 범위와 주소」).
-- **세그먼트는 `data-vref` 문자열로 식별한다** — 단일 행 절은 `"3"`, 다중 행 절은 `"3a"` · `"3b"` · `"3c"` …. 북마크를 저장할 때는 인용으로 분절된 산문 절을 절 전체로 올린다.
+- **세그먼트는 `data-vref` 문자열로 적는다** — 단일 행 절은 `"3"`, 다중 행 절은 `"3a"` · `"3b"` · `"3c"` …. 북마크를 저장할 때는 인용으로 분절된 산문 절을 절 전체로 올린다. **절 선택은 줄마다 다른 `data-vkey`로 한다** — 한 장에 번호가 같은 다른 절이 있어(다니 3 의 그리스어 (24) 와 히브리 24, 이사 40 에 옮겨 실린 41:6, 에스 4:17 의 추가 본문) `data-vref`로는 줄이 갈리지 않는다. 저장되는 spec은 그대로 번호 단위다.
 - **모바일 행** — 탭은 이동, 왼쪽으로 밀면 삭제, 오른쪽으로 밀면 수정(iOS 관례), 끝까지 밀면 바로 실행한다. 재정렬은 직접 정렬일 때 보이는 ≡ 핸들에서만 시작한다.
 - **헤더 북마크** — 모바일(탭 바가 있는 판)은 「이 장 추가」만, 데스크톱은 상태 표시와 북마크 드로어 진입점이다. 관리는 북마크 탭(ADR-029)이 맡는다.
 - **절 선택 모드** — 읽기 화면을 길게 눌러(500ms) 들어가고, 앵커 방식으로 범위를 고른다. 하단 글래스 막대에 북마크 · 복사가 있다.
@@ -81,10 +81,11 @@ const isHighlightedSpan = hlSegments
 
 ### 세그먼트와 저장 표기
 
-운문 절은 여러 span으로 분리 렌더링된다. 선택은 `data-vref` 원문을 그대로 모은다(`readingContext.selectedVerses: Set<string>` — 「3a」와 「3b」를 따로 고를 수 있다).
+운문 절은 여러 span으로 분리 렌더링된다. 선택은 span마다 다른 `data-vkey`를 모은다(`readingContext.selectedVerses: Set<string>` — 「3a」와 「3b」를 따로 고를 수 있다). `data-vkey`는 `<절 인스턴스 키>/<data-vref>`다(`views.js appendVerses` — 인스턴스 키는 DOM id와 같은 `verse-spec.js verseInstanceKeys`, ADR-038 A2). 번호만으로는 절이 갈리지 않는다 — 옮겨 실린 절(`chapter_ref`) · 그리스어 추가 본문(`lxx_only`) · 에스델 추가 본문(`alt_ref`) · 전례시편의 ¶ 구절(`versicle`)이 이 장의 다른 절과 번호를 함께 쓴다. `data-vref`로 고르던 때(2026-10-20까지)는 그런 절 하나를 누르면 같은 `data-vref`의 줄이 모두 칠해졌다 — 이사 40 의 41:6 을 누르면 40:6 도, 에스 4:17 의 추가 본문 하나에 25 절이.
 
-- **선택 막대 · 복사** — 한 절의 모든 세그먼트가 선택되면 `collapseFullVerseRefs()`가 DOM을 조회해 `"3a,3b"`를 `"3"`으로 통합한다. 일부만 선택하면 span 단위 그대로다.
-- **북마크 저장** — `collapseSegmentedVerses(refs, article)`. 인용(`<cite>`)이 박힌 산문 절은 인용 위치에서 a/b/c 라인-스팬으로 분절되는데(ADR-022), 개념상 한 절이므로 일부만 선택해도(예: 23a만, 또는 23a · 23c) 저장되는 spec은 `23`이다 — 다중-스팬 절이면 `allSelected` 조건 없이 정수 절번호로 통합한다. 운문 다중-스팬 절은 이미 한 덩어리로 선택되므로 영향이 없다.
+- **운문 단위** — 운문으로만 된 다중 행 절은 한 줄을 눌러도 절 전체를 고른다(`_verseSelectionUnit`). 「절」은 인스턴스 키에서 반절 글자와 ¶ 표지를 뗀 것이다 — 데이터의 반쪽 절(이사 7 의 8a · 8b — 9a 를 사이에 두고 나뉘어 실림)과 ¶ 구절은 그 번호 절과 한 단위다(번호로 고르던 때와 같다). 그 밖의 인스턴스는 번호가 같아도 따로다.
+- **선택 막대 · 복사** — `selectionCitation(selected, article)`가 고른 줄의 `data-vref`로 출처를 만든다. 한 번호의 줄을 다 고르면 `"3a,3b"`를 `"3"`으로 통합하고, 일부만 고르면 span 단위 그대로다. 번호는 장 본문 복사의 출처(`views.js bindCopyAttribution` — ADR-038 §3 「구현」)와 같은 규칙을 따른다: 옮겨 실린 절(`verse-cross-ref`)과 그리스어 추가 본문(`verse-lxx`)은 그것만 골랐을 때만 그 번호를 쓰고, 다른 절과 함께면 뺀다(이사 40:19 → 20 은 사이의 41:6-7 을 함께 골라도 「40:19-20」). 옮겨 실린 절만이면 제 장으로 적는다 — 출처 「이사야 41:6-7」, 막대 「41:6-7절 선택됨」(사용자 결정 2026-10-21 — 버린 안은 ADR-038 「검토한 대안」). 남은 절 가운데 한 번호를 여러 절이 함께 쓰면(에스 4:17 과 추가 본문, ¶ 구절과 그 절) 줄 글자가 어느 절의 줄인지 말하지 못하므로 그 번호의 어느 줄을 골라도 번호로 적는다(「4:17」).
+- **북마크 저장** — `collapseSegmentedVerses(selectedSpanVrefs(selected, article), article)` — 고른 줄의 `data-vref`를 모아 종전대로 번호 단위로 접는다. 인용(`<cite>`)이 박힌 산문 절은 인용 위치에서 a/b/c 라인-스팬으로 분절되는데(ADR-022), 개념상 한 절이므로 일부만 선택해도(예: 23a만, 또는 23a · 23c) 저장되는 spec은 `23`이다 — 다중-스팬 절이면 `allSelected` 조건 없이 정수 절번호로 통합한다. 운문 다중-스팬 절은 이미 한 덩어리로 선택되므로 영향이 없다.
 
 ### 주요 유틸리티 함수
 
@@ -94,7 +95,8 @@ const isHighlightedSpan = hlSegments
 | `isWellFormedSpec(spec)` | `verse-spec.js` | 앱이 쓰는 표기인가 — 가져오기와 주소가 함께 쓴다(ADR-040) |
 | `selectedVersesToSpec(refs)` | `verse-spec.js` | `string[]` → spec 문자열. 정수 연속 구간만 범위 압축 |
 | `_compareRefs(a, b)` | `verse-spec.js` | `"3" < "3a" < "3b" < "4"` 정렬 |
-| `collapseFullVerseRefs(refs, article)` | `verse-spec.js` | DOM 조회로 전체 세그먼트 선택 시 `"3a,3b"` → `"3"` 통합 (선택 막대 · 복사 경로) |
+| `selectionCitation(selected, article)` | `verse-spec.js` | 고른 줄(`data-vkey`)의 출처 `{ chapter, refs }` — 다 고른 번호는 `"3a,3b"` → `"3"`, 옮겨 실린 절 · 그리스어 절은 그것만일 때만(옮겨 실린 절은 `chapter`가 제 장) (선택 막대 · 복사 경로) |
+| `selectedSpanVrefs(selected, article)` | `verse-spec.js` | 고른 줄의 `data-vref`, 문서 순서 (북마크 저장 경로) |
 | `collapseSegmentedVerses(refs, article)` | `verse-spec.js` | 북마크 저장 전용. 다중-스팬 절은 부분 선택이어도 절 전체로 승격 (`"23a,23c"` → `"23"`) |
 | `mergeVerseSpecs(specA, specB)` | `verse-spec.js` | 두 spec의 합집합(합치기) |
 | `_findParentFolderId(store, id)` | `bookmark-core.js` | 북마크가 속한 폴더 ID 반환 (root = null) |
@@ -145,15 +147,15 @@ const isHighlightedSpan = hlSegments
   - 기존 ID(`#verse-select-bar` · `#verse-select-{count,bookmark-btn,copy-btn,cancel-btn}`)는 e2e · inert 셀렉터 호환을 위해 모두 보존하고, pill 래퍼(`.verse-action-pill`)와 노트 버튼(`#verse-select-note-btn`)만 따로 있다.
   - 절 선택 막대가 하단 chrome을 대체하므로 모드 동안 탭 dock(홈 · 검색) · 미니 오디오 바 · tabbar scrim을 모두 숨기고, 끝나면 되돌린다(`body.verse-select-active`). 미니 오디오는 스크롤 축소 규칙(`body.tabbar-collapsed #audio-bar:not([hidden])`, 특이도 1,2,1)이 절 선택 숨김(1,1,1)을 이겨, 축소 중에 들어가면 액션 바 뒤로 비쳤다 — `display: none !important`로 숨긴다.
 - **범위 선택 — 기억된 앵커 기반**
-  - **상태:** `readingContext.selectAnchor`(`string | null`) — 마지막으로 개별 토글된 절의 `data-vref`. 일반 탭/클릭은 그 절을 토글하고 앵커를 그리로 옮긴다(해제면 null). 반복 탭으로 **비연속 절**을 모은다.
+  - **상태:** `readingContext.selectAnchor`(`string | null`) — 마지막으로 개별 토글된 절의 `data-vkey`. 일반 탭/클릭은 그 절을 토글하고 앵커를 그리로 옮긴다(해제면 null). 반복 탭으로 **비연속 절**을 모은다.
   - **범위 확장(앵커 → 타깃, additive):** 앵커가 기억돼 있어 두 끝점이 한 화면에 같이 보일 필요가 없다 — 시작 절을 탭하고 임의 거리만큼 스크롤한 뒤 끝 절을 지정한다.
     - **데스크톱:** 끝 절을 **Shift+클릭**. `pointerdown`의 `e.shiftKey` 분기에서 즉시 확장한다.
     - **모바일:** 끝 절을 **롱프레스**(300ms — `RANGE_EXTEND_MS`, 모바일의 「Shift」 역할). 선택 모드 안에서는 `pointerdown`이 per-pointer 타이머를 걸고, 10px 넘는 드리프트(스크롤)나 빠른 lift(= 탭)면 타이머를 취소한다(`_activePointers` 맵). 손가락을 끝까지 물고 있을 필요가 없어 스크롤 경합이 없다. 이미 모드에 들어와 의도적으로 조작 중인 사용자의 제스처라 진입(500ms)보다 짧게 둔다.
-  - 두 경로 모두 순수 헬퍼 `_verseRangeVrefs(allVrefs, anchor, target, unitFn)`(`views.js` `VERSE_SELECTION` 블록 — 양방향, 운문 다중부분 경계 확장)로 범위를 계산한다.
+  - 두 경로 모두 순수 헬퍼 `_verseRangeKeys(allKeys, anchor, target, unitFn)`(`views.js` `VERSE_SELECTION` 블록 — 양방향, 운문 다중부분 경계 확장)로 범위를 계산한다. 키가 줄마다 달라 옮겨 실린 41:6 에서 시작한 범위가 그 자리에서 시작한다(번호로는 앞의 40:6 에서 시작했다).
   - 선택 모드에서는 `pointerdown`에 `preventDefault`를 걸지 않아 자유 스크롤이 된다(텍스트 선택은 `body.verse-select-active { user-select: none }`으로 차단).
   - **수명 가드:** 포인터는 `setPointerCapture`로 잡아, 손가락이 article 밖에서 떼지거나 드리프트해도 pointermove/up/cancel이 article로 retarget되어 타이머 · `_activePointers`가 확실히 정리된다(캡처는 스크롤을 막지 않는다 — 팬이 시작되면 브라우저가 `pointercancel`로 캡처를 해제하고, 핸들러는 이를 abort로 처리한다). 롱프레스 타이머 콜백과 pointerup 토글 모두 `readingContext.verseSelectMode`(타이머는 `article.isConnected`도)를 확인해, 모드 종료 · 네비게이션 뒤 늦게 도는 것이 상태를 되살리지 않게 한다.
   - 선택 모드 진입(읽기 화면 롱프레스 / 드로어 「절 선택」 버튼) 시 앵커를 초기화하고, 롱프레스 진입 절을 첫 앵커로 둔다.
-  - 유닛 `tests/unit/views.test.js` — `_verseRangeVrefs` 7케이스.
+  - 유닛 `tests/unit/views.test.js` — `_verseRangeKeys` 7케이스 · `_verseSelectionUnit` 8케이스, `tests/unit/verse-spec.test.js` — `selectionCitation` · `selectedSpanVrefs`(세 장의 실제 키). e2e `tests/e2e/test_copy.py` 「번호가 같은 다른 절」 다섯.
 
 ### 모바일 행 — 스와이프 (`js/app/bookmark-gestures.js` · `js/app/bookmark-tree.js`)
 
@@ -283,8 +285,15 @@ li.bm-bookmark                       (role="treeitem", data-id)
 - 기존 구현. `parseInt("3a", 10) === 3`으로 coerce되어 "3a"와 "3b"를 구분 불가
 - 기각 2026-04-25 · 재검토: 없음
 
-#### B. vref 문자열 기반 (`_selectedVerseRefs: Set<string>`) (채택)
-- `data-vref` 원문을 그대로 추적. "3a"와 "3b"를 독립적으로 선택 가능. 지금은 `readingContext.selectedVerses`(모듈 분할 — ADR-018 · 034)
+#### B. vref 문자열 기반 (`_selectedVerseRefs: Set<string>`)
+- `data-vref` 원문을 그대로 추적. "3a"와 "3b"를 독립적으로 선택 가능
+- 기각 2026-10-21 · 이유: 번호가 같은 다른 절이 `data-vref`도 같아, 하나를 누르면 같은 값의 줄이 모두 칠해지고 출처가 그 번호를 섞었다(이사 40:19-20 이 「40:6a,6b,7,19-20」, 에스 4:17 의 추가 본문 하나에 25 절 — known-issues §5, 2026-04-25부터) · 재검토: 없음
+
+#### C. 줄 키 기반 (`data-vkey` — `<절 인스턴스 키>/<data-vref>`) (채택)
+- 2026-10-21. 선택 상태는 `readingContext.selectedVerses`(모듈 분할 — ADR-018 · 034)에 둔다. 저장 · 주소 · 출처는 계속 `data-vref`로 적는다 — 키는 화면 안의 선택에만 쓴다
+
+#### 절 인스턴스를 저장 · 주소 문법에도 넣기(`17_12-16` 같은 하위 절 표기)
+- 보류 2026-10-21 · 이유: 저장 데이터 · 공유 주소 · `routing.js` 주소 검사가 함께 바뀌는 일이라 절 선택 수리와 가른다 — 옮겨 실린 절 · 그리스어 절 · 에스델 추가 본문을 북마크하면 여전히 그 번호로 저장된다 · 재검토: 전례독서의 하위 절 인용(ADR-037 「에스델 하위 절」 · 설계서 미결39)을 다룰 때
 
 #### 분절된 산문 절을 span 단위로 저장(`"23a,23c"`)
 - 기각 2026-06-06 · 이유: 인용(`<cite>`) 위치에서 나뉜 줄은 개념상 한 절이다 — 저장할 때만 절 전체로 올리고, 선택 막대 라벨과 복사 직렬화는 per-span 단위를 유지한다 · 재검토: 없음
