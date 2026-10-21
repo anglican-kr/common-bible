@@ -805,8 +805,8 @@ function renderChapterList(book, books) {
 // Exercised by tests/unit/views.test.js. Pure: derives the displayed
 // verse label/number from a verse object — no DOM, no global state.
 
-// `mark` writes a data half verse's part letter — as is for `data-vref` (the address and stored form, 「8a」), the
-// printed letter for the verse number on screen (「8ㄱ」 — formatVerseNumber).
+// `mark` writes a data half verse's part letter — as is for `data-vref` (「8a」, the letter of the address and stored
+// grammar), the printed letter for the verse number on screen (「8ㄱ」 — formatVerseNumber).
 /** @param {BibleVerse} v @param {(part: string) => string} [mark] @returns {string} */
 function formatVerseLabel(v, mark = (part) => part) {
   let label = String(v.number);

@@ -116,9 +116,9 @@ test("verseInstanceKeys: 빈 입력은 빈 배열", () => {
 
 // ── selectionCitation · selectedSpanVrefs ──
 // 절 선택 막대의 「…절 선택됨」 · 복사 출처. 선택은 줄마다 다른 `data-vkey`(인스턴스 키 "/" data-vref)로 하고, 출처는
-// 그 줄들의 `data-vref` 로 적는다. 장 이름을 붙인 발췌(이사 40, 다니 3, 에스 4, 이사 7, 1사무 24, 욥 31, 나훔 1,
-// 이사 10, 판관 17)는 실제 화면의 키 · 표지 그대로다(2026-10-21 · 10-22 덤프 — 가운데 절을 뺀 곳은 있다). 이름 없는
-// 발췌는 규칙을 보이려고 만든 것이다. 화면은 절 전체를 고르므로(views.js `_verseSelectionUnit`, 사용자 결정 2026-10-22)
+// 그 줄들의 `data-vref`로 적는다. 장 이름을 붙인 발췌(이사 40, 다니 3, 에스 4, 이사 7, 1사무 24, 욥 31, 나훔 1,
+// 이사 10, 판관 17)는 실제 화면의 키와 표지에서 뽑았다(2026-10-21 · 10-22 덤프). 가운데 절이나 절의 뒷줄을 뺀 곳이
+// 있다. 이름 없는 발췌는 규칙을 보이려고 만든 것이다. 화면은 절 전체를 고르므로(views.js `_verseSelectionUnit`, 사용자 결정 2026-10-22)
 // 한 줄만 고른 경우는 생기지 않지만, 생겨도 출처에 줄 글자를 쓰지 않는다는 것을 함께 본다.
 
 /** @param {Array<[string, string?, string?]>} rows [data-vkey, class list, data-chapter-ref] in document order */
@@ -231,7 +231,8 @@ test("selectionCitation: 병합 절 「7-8a」「7-8b」를 다 고르면 「7-8
 
 test("selectionCitation: 데이터의 반쪽 절 — 둘 다 고르면 번호, 한쪽이면 인쇄본대로 「8ㄱ」(사용자 결정 2026-10-22, 종전 「8aa,8ab」)", () => {
   // 이사 7 — 8a · 9a · 8b · 9b 순서로 실린다.
-  const a = articleOf([["7/7a"], ["7/7b"], ["8a/8aa"], ["8a/8ab"], ["9a/9aa"], ["9a/9ab"], ["8b/8ba"], ["8b/8bb"], ["9b/9ba"], ["9b/9bb"]]);
+  const a = articleOf([...poem("7", "7", "ab"), ...poem("8a", "8a", "ab"), ...poem("9a", "9a", "ab"), ...poem("8b", "8b", "ab"),
+    ...poem("9b", "9b", "ab")]);
   assert.strictEqual(citeSpec(["8a/8aa", "8a/8ab", "8b/8ba", "8b/8bb"], a), "8");
   assert.strictEqual(citeSpec(["8a/8aa", "8a/8ab"], a), "8ㄱ");
   assert.strictEqual(citeSpec(["8b/8ba", "8b/8bb"], a), "8ㄴ");
