@@ -22,7 +22,7 @@
 // (settings-ui / state-machine read it) so it is not imported here.
 import { showAudioPlayer, hideAudioBar } from "./audio-player.js";
 // Copy-attribution translation label shared with the lectionary view and the verse-select bar (verse-spec.js).
-import { citationSource } from "./verse-spec.js";
+import { citationSource, halfVerseMark } from "./verse-spec.js";
 
 const { _$, el, clearNode, chUnit, hangingQuoteClass, emptyState, headerIcon, HEADER_ICON_PATHS } = window.appHelpers;
 const { createOverlay } = window.appOverlay;
@@ -805,10 +805,12 @@ function renderChapterList(book, books) {
 // Exercised by tests/unit/views.test.js. Pure: derives the displayed
 // verse label/number from a verse object — no DOM, no global state.
 
-/** @param {BibleVerse} v @returns {string} */
-function formatVerseLabel(v) {
+// `mark` writes a data half verse's part letter — as is for `data-vref` (the address and stored form, 「8a」), the
+// printed letter for the verse number on screen (「8ㄱ」 — formatVerseNumber).
+/** @param {BibleVerse} v @param {(part: string) => string} [mark] @returns {string} */
+function formatVerseLabel(v, mark = (part) => part) {
   let label = String(v.number);
-  if (v.part) label += v.part;
+  if (v.part) label += mark(v.part);
   if (v.range_end) label += `-${v.range_end}`;
   return label;
 }
@@ -816,10 +818,10 @@ function formatVerseLabel(v) {
 // Display string for the verse-number marker (rendered via CSS ::before).
 // LXX-only verses ([_N]) show the LXX number in parens; dual-numbered verses
 // ([N_M]) append the LXX number in parens; cross-chapter refs prefix the
-// original chapter number.
+// original chapter number; a data half verse shows the printed letter (「8ㄱ」 — 사용자 결정 2026-10-22).
 /** @param {BibleVerse} v @returns {string} */
 function formatVerseNumber(v) {
-  const label = formatVerseLabel(v);
+  const label = formatVerseLabel(v, halfVerseMark);
   if (v.lxx_only) return `(${label})`;
   let dataV = v.chapter_ref ? `${v.chapter_ref}:${label}` : label;
   if (v.alt_ref != null) dataV += `(${v.alt_ref})`;
@@ -854,24 +856,23 @@ function findVerseAnchor(root, n) {
 // Selection is keyed by `data-vkey` — "<instance key>/<data-vref>" (appendVerses), one per span — because `data-vref`
 // repeats wherever two verses share a number (다니 3 의 그리스어 (24) 와 히브리 24, 이사 40 의 41:6 과 40:6).
 
-// The verse a span belongs to, for grouping its lines: the instance key before "/" (verse-spec.js verseInstanceKey)
-// less its part letter and ¶ mark. A data half verse (이사 7 의 8a · 8b — 9a 를 사이에 두고 나뉘어 실림) and a ¶ clause
-// (전례시편 — the number it inherits) are lines of one numbered verse: the tap unit took them together while selection
-// went by number, and cutting a half off would cite it as 「8aa,8ab」.
+// The unit a span belongs to, for grouping its lines: the instance key before "/" (verse-spec.js verseInstanceKey)
+// less its ¶ mark — a ¶ clause (전례시편) carries on the verse whose number it inherits. A data half verse keeps its
+// part letter: 이사 7 의 8a 와 8b 는 9a 를 사이에 두고 따로 실리고 인쇄본도 「8ㄱ」 「8ㄴ」으로 따로 적으므로, 따로 고른다
+// (사용자 결정 2026-10-22 — 둘을 한 단위로 묶었을 때는 나훔 1:2ㄱ 까지의 범위가 9절 뒤의 2ㄴ 까지 늘어났다).
 /** @param {string} key @returns {string} */
 function _verseOfKey(key) {
   const slash = key.indexOf("/");
-  return (slash === -1 ? key : key.slice(0, slash)).replace(/^(\d+)[a-p]/, "$1").replace(/_v(?=$|[_~])/, "");
+  return (slash === -1 ? key : key.slice(0, slash)).replace(/_v(?=$|[_~])/, "");
 }
 
-// Pure-poetry multi-part verses (e.g. Psalms, Proverbs, Wisdom books) are
-// treated as a single selection unit: tapping one line selects/deselects the
-// whole verse. Prose-only or mixed (poetry+prose) multi-part verses, plus
-// single-span verses, keep per-line control.
+// The selection unit is a whole verse: tapping any line of a multi-line verse — poetry, prose, or both — selects or
+// deselects every line of it (사용자 결정 2026-10-22). The lines of a prose verse are mostly a screen artifact — a cite
+// chip's place splits it (258 of the 380 prose-only multi-line verses), 마태 10:35 mid-sentence — and a line letter
+// (「35b」) is not a printed citation. Until then only pure-poetry verses were one unit (#122, 2026-05-12). Desktop drag
+// copy still takes any lines.
 //
-// Returns the array of data-vkey values that should be toggled together with
-// `key`. For pure-poetry multi-part verses this is every line of the verse;
-// otherwise just [key].
+// Returns the array of data-vkey values that should be toggled together with `key`, in document order.
 /**
  * @param {ParentNode | null | undefined} article
  * @param {string} key
@@ -880,22 +881,17 @@ function _verseOfKey(key) {
 function _verseSelectionUnit(article, key) {
   if (!article) return [key];
   const verse = _verseOfKey(key);
-  /** @type {Element[]} */
-  const parts = [];
-  for (const v of article.querySelectorAll(".verse[data-vkey]")) {
-    if (_verseOfKey(v.getAttribute("data-vkey") ?? "") === verse) parts.push(v);
-  }
-  if (parts.length > 1 && parts.every((p) => p.classList.contains("verse-poetry"))) {
-    return parts.map((p) => p.getAttribute("data-vkey") ?? "");
-  }
-  return [key];
+  const unit = [...article.querySelectorAll(".verse[data-vkey]")]
+    .map((v) => v.getAttribute("data-vkey") ?? "")
+    .filter((k) => _verseOfKey(k) === verse);
+  return unit.length ? unit : [key];
 }
 
 // Inclusive list of data-vkey strings spanning anchor→target (in either
 // direction) given the document-order array `allKeys`. Used by anchored range
 // selection (desktop Shift+click, mobile hold-and-tap). Each endpoint is
-// expanded to its whole pure-poetry unit via `unitFn` so a range edge that
-// lands on one line-part of a multi-part verse still pulls in the rest.
+// expanded to its whole verse via `unitFn` so a range edge that lands on one
+// line of a multi-line verse still pulls in the rest.
 /**
  * @param {string[]} allKeys
  * @param {string} anchorKey
@@ -1449,7 +1445,9 @@ function renderChapter(data, book, opts) {
       e.stopPropagation(); // selection is handled by pointer events
       return;
     }
-    announce(`${vs.getAttribute("data-vref")}절`);
+    // 줄 글자 없이 절 번호로 — 「3a절」이 아니라 「3절」, 데이터의 반쪽 절은 화면의 번호처럼 「8ㄱ절」(사용자 결정 2026-10-22)
+    const half = /^\d+([a-p])/.exec(vs.getAttribute("data-vkey") ?? "");
+    announce(`${(vs.getAttribute("data-vref") ?? "").replace(/[a-p]+$/, "")}${half ? halfVerseMark(half[1]) : ""}절`);
   });
 
   // ── Verse selection gestures ──

@@ -507,3 +507,94 @@ def test_verse_select_duplicated_marker_cites_the_number(page):
     assert label == "15절 선택됨", label
     text = _copy_selection(page)
     assert text.endswith("\n\n— 토비트 11:15 (공동번역성서)"), text[-80:]
+
+
+# ── 절 선택 — 여러 줄 절은 절 전체, 반쪽 절은 「ㄱ · ㄴ」 (사용자 결정 2026-10-22) ──────────────────────
+# 산문 절과 섞인 절도 한 줄을 누르면 절 전체를 고르고, 출처에 줄 글자(「35b」)를 쓰지 않는다. 절보다 작은 단위는 데이터의
+# 반쪽 절뿐이고 따로 고른다. 화면의 절 번호와 출처는 인쇄본대로 「8ㄱ」 「8ㄴ」이다. 종전 막대는 이사 7 「7-8, 9aa, 9ab」,
+# 욥 31 「40aa」, 나훔 1 의 1 → 2ㄱ 은 「1-6, 7-8, 9」였다.
+
+_SELECTED_KEYS = ("() => [...document.querySelectorAll('article.chapter-text .verse.verse-selected')]"
+                  ".map(v => v.getAttribute('data-vkey'))")
+
+
+def test_verse_select_prose_and_mixed_verses_are_one_unit(page):
+    """마태 10:35 는 인용 칩 자리에서 두 줄로 나뉜 산문 절이다. 둘째 줄을 눌러도 절 전체를 고르고 출처는 「10:35」다.
+    1고린 15:54 는 산문 줄과 인용 구절(운문)이 섞인 절이다. 인용 구절을 눌러도 절 전체를 고른다."""
+    page.context.grant_permissions(["clipboard-read", "clipboard-write"])
+    _open_chapter(page, "matt/10")
+    page.evaluate("() => enterVerseSelectMode('matt', 10)")
+    page.wait_for_selector("#verse-select-bar:not([hidden])")
+    page.click('.verse[data-vkey="35/35b"]')
+    assert page.evaluate(_SELECTED_KEYS) == ["35/35a", "35/35b"]
+    assert page.inner_text("#verse-select-count") == "35절 선택됨"
+    text = _copy_selection(page)
+    assert text.startswith("나는") and "서로 맞서게" in text, text
+    assert text.endswith("\n\n— 마태오의 복음서 10:35 (공동번역성서)"), text[-80:]
+
+    _open_chapter(page, "1cor/15")
+    page.evaluate("() => enterVerseSelectMode('1cor', 15)")
+    page.wait_for_selector("#verse-select-bar:not([hidden])")
+    page.click('.verse[data-vkey="54/54b"]')
+    assert page.evaluate(_SELECTED_KEYS) == ["54/54a", "54/54b"]
+    assert page.inner_text("#verse-select-count") == "54절 선택됨"
+
+
+def test_half_verse_numbers_show_printed_letters(page):
+    """이사 7 은 8ㄱ · 9ㄱ · 8ㄴ · 9ㄴ 순서로 싣는다. 화면의 절 번호도 인쇄본대로 「8ㄱ」이다(종전 「8a」). 주소와 줄 표지는
+    「8a」 그대로다."""
+    _open_chapter(page, "isa/7")
+    nums = page.eval_on_selector_all("article.chapter-text .verse-num", "els => els.map(e => e.getAttribute('data-v'))")
+    assert nums[6:11] == ["7", "8ㄱ", "9ㄱ", "8ㄴ", "9ㄴ"], nums[:12]
+    shown = page.evaluate("() => getComputedStyle(document.querySelector('#v8a .verse-num'), '::before').content")
+    assert shown == '"8ㄱ"', shown
+    assert page.get_attribute("#v8a", "data-vref") == "8aa"
+    # 절을 누르면 읽어 주는 안내도 화면의 번호와 같다(종전 「8aa절」 「7b절」).
+    page.click('.verse[data-vkey="8a/8ab"]')
+    page.wait_for_function("() => document.querySelector('#a11y-announce').textContent === '8ㄱ절'")
+    page.click('.verse[data-vkey="7/7b"]')
+    page.wait_for_function("() => document.querySelector('#a11y-announce').textContent === '7절'")
+
+
+def test_verse_select_half_verses_cite_printed_letters(page):
+    """재현 표(2026-10-21)의 네 장과 나훔 1. 범위 끝이 반쪽 절에 닿으면 그 반쪽 절에서 멈추고, 출처는 「ㄱ · ㄴ」으로 적는다."""
+    page.context.grant_permissions(["clipboard-read", "clipboard-write"])
+    cases = [
+        ("isa/7", "v7", "v8a", ["v7", "v8a"], "7, 8ㄱ", "이사야 7:7,8ㄱ"),
+        ("isa/7", "v7", "v9a", ["v7", "v8a", "v9a"], "7, 8ㄱ, 9ㄱ", "이사야 7:7,8ㄱ,9ㄱ"),
+        ("isa/7", "v7", "v9b", ["v7", "v8a", "v9a", "v8b", "v9b"], "7-9", "이사야 7:7-9"),
+        ("isa/10", "v15", "v16a", ["v15", "v16a"], "15, 16ㄱ", "이사야 10:15,16ㄱ"),
+        ("isa/33", "v22", "v23a", ["v23a", "v22"], "22, 23ㄱ", "이사야 33:22,23ㄱ"),
+        ("job/31", "v40a", None, ["v40a"], "40ㄱ", "욥기 31:40ㄱ"),
+        ("nah/1", "v1", "v2a", ["v1", "v2a"], "1, 2ㄱ", "나훔 1:1,2ㄱ"),
+        ("nah/1", "v1", "v9", ["v1", "v2a", "v3", "v4", "v5", "v6", "v7", "v9"], "1, 2ㄱ, 3-9", "나훔 1:1,2ㄱ,3-9"),
+        ("nah/1", "v1", "v2b", ["v1", "v2a", "v3", "v4", "v5", "v6", "v7", "v9", "v2b"], "1-9", "나훔 1:1-9"),
+    ]
+    for path, first, last, want_ids, want_label, want_cite in cases:
+        ids, label = _verse_select(page, path, first, last)
+        assert ids == want_ids, (path, first, last, ids)
+        assert label == f"{want_label}절 선택됨", (path, first, last, label)
+        text = _copy_selection(page)
+        assert text.endswith(f"\n\n— {want_cite} (공동번역성서)"), (path, first, last, text[-80:])
+
+
+def test_verse_select_one_half_verse_is_its_own_unit(page):
+    """욥 31:40ㄱ 은 8절 뒤에, 40ㄴ 은 장 끝에 실린다. 40ㄱ 을 눌러도 장 끝의 40ㄴ 은 칠하지 않는다. 두 반쪽을 다 고르면
+    출처는 「31:40」이다. 북마크 저장은 번호 단위 그대로다(ADR-010)."""
+    ids, label = _verse_select(page, "job/31", "v40a")
+    page.click("#v40b")
+    assert page.evaluate(_SELECTED_IDS) == ["v40a", "v40b"]
+    assert page.inner_text("#verse-select-count") == "40절 선택됨"
+    page.click("#v40b")
+    assert page.inner_text("#verse-select-count") == "40ㄱ절 선택됨"
+    page.click("#verse-select-bookmark-btn")
+    page.wait_for_selector("#bm-save-modal:not([hidden])")
+    page.click("#bm-save-modal .bm-btn-primary")
+    page.wait_for_selector("#bm-save-modal", state="hidden")
+    specs = page.evaluate("""() => {
+      const out = [];
+      const walk = (items) => { for (const it of items) { if (it.type === 'bookmark') out.push([it.bookId, it.chapter, it.verseSpec]); if (it.children) walk(it.children); } };
+      walk(window.appStorage.loadBookmarks());
+      return out;
+    }""")
+    assert ["job", 31, "40"] in specs, specs
