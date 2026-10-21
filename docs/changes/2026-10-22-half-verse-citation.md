@@ -1,4 +1,5 @@
 ---
+pr: 364
 date: 2026-10-22
 branch: fix/half-verse-citation
 title: "fix: 절 선택은 절 단위로 하고 반쪽 절은 「8ㄱ」으로 적는다"
