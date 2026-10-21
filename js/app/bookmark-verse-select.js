@@ -18,7 +18,7 @@ const { _$ } = window.appHelpers;
 const { readingContext } = window;
 
 import {
-  selectionCitation, selectedVersesToSpec, serializeVerseRange, citationSource,
+  selectionCitation, citationVerseSpec, serializeVerseRange, citationSource,
 } from "./verse-spec.js";
 import { openSaveModal } from "./bookmark-modals.js";
 
@@ -78,7 +78,7 @@ function updateVerseSelectBar() {
     $verseSelectCount.textContent = "구절을 눌러서 선택";
   } else {
     // 옮겨 실린 절만이면 그 장을 붙인다 — 「41:6절 선택됨」(「6절」은 이 장의 6절로 읽힌다)
-    $verseSelectCount.textContent = `${chapter != null ? `${chapter}:` : ""}${selectedVersesToSpec(refs).replace(/,/g, ', ')}절 선택됨`;
+    $verseSelectCount.textContent = `${chapter != null ? `${chapter}:` : ""}${citationVerseSpec(refs).replace(/,/g, ', ')}절 선택됨`;
   }
   $verseSelectBookmarkBtn.disabled = count === 0;
   $verseSelectCopyBtn.disabled = count === 0;
@@ -116,7 +116,7 @@ async function copySelectedVerses() {
 
   const cite = selectionCitation(readingContext.selectedVerses, article);
   if (!cite.refs.length) return;
-  const spec = selectedVersesToSpec(cite.refs);
+  const spec = citationVerseSpec(cite.refs);
   const book = (window.getBooksCache() ?? []).find((b) => b.id === readingContext.bookId);
   const bookName = book ? book.name_ko : readingContext.bookId;
   // 전례시편 · 송가는 기도서 번역 — 「(대한성공회 기도서)」(사용자 결정 2026-10-13; 종전엔 언제나 「(공동번역성서)」였다).

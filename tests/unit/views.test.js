@@ -20,12 +20,12 @@
 //     with addEventListener + classList + hidden + querySelector + contains.
 //   - COMPACT_HEADER block — initCompactHeader. Hysteretic 60px / 10px
 //     scroll-based class toggle. Window scroll listener stub.
-//   - VERSE_SELECTION block — _verseSelectionUnit (pure-poetry multi-part
-//     grouping vs per-line selection control, by verse instance — not by the
-//     number two verses can share) + _verseRangeKeys (anchor→target inclusive
-//     range, either direction, poetry-unit boundary expansion).
+//   - VERSE_SELECTION block — _verseSelectionUnit (every line of a verse is
+//     one unit, by verse instance — not by the number two verses can share; a
+//     data half verse is its own unit) + _verseRangeKeys (anchor→target
+//     inclusive range, either direction, verse-unit boundary expansion).
 //   - VERSE_NUMBER block — formatVerseNumber. Verse-number display string:
-//     plain / dual [N_M] / LXX-only [_N] / cross-ref / range / part.
+//     plain / dual [N_M] / LXX-only [_N] / cross-ref / range / half verse (「2ㄱ」).
 
 import test from "node:test";
 import assert from "node:assert";
@@ -305,9 +305,14 @@ function makeArticleStub(verses) {
 // ── VERSE_NUMBER loader ──────────────────────────────────────────────────────
 // Pure verse-number formatting. No DOM, no globals.
 
+// formatVerseNumber imports halfVerseMark from verse-spec.js — run that module's block first so the test uses the
+// real mapping.
+const VERSE_SPEC_SOURCE = fs.readFileSync(path.resolve(__dirname, "../../js/app/verse-spec.js"), "utf8");
+
 function loadVerseNumber() {
-  const ctx = { Object, Array, String, Number, Boolean, console, Error };
+  const ctx = { Object, Array, Set, Map, String, Number, Boolean, Math, JSON, console, Error, parseInt, isNaN };
   vm.createContext(ctx);
+  vm.runInContext(extractBlock("VERSE_SPEC", VERSE_SPEC_SOURCE), ctx, { filename: "verse-spec.js" });
   vm.runInContext(extractBlock("VERSE_NUMBER"), ctx, {
     filename: "views-verse-number.js",
   });
@@ -1069,18 +1074,20 @@ test("_verseSelectionUnit: pure-poetry multi-part → all parts (any entry key)"
   assert.deepEqual(h.verseSelectionUnit(article, "3/3c"), ["3/3a", "3/3b", "3/3c"]);
 });
 
-test("_verseSelectionUnit: pure-prose multi-part → just [key]", () => {
+test("_verseSelectionUnit: 산문 여러 줄 절도 절 전체 — 인용 칩 자리에서 나뉜 줄이다(사용자 결정 2026-10-22, 종전엔 누른 줄만)", () => {
   const h = loadVerseSelection();
-  const article = makeArticleStub([["3/3a", false], ["3/3b", false]]);
-  assert.deepEqual(h.verseSelectionUnit(article, "3/3a"), ["3/3a"]);
-  assert.deepEqual(h.verseSelectionUnit(article, "3/3b"), ["3/3b"]);
+  // 마태 10:35 — 산문 두 줄, 문장 중간에서 끊긴다.
+  const article = makeArticleStub([["34/34", false], ["35/35a", false], ["35/35b", false], ["36/36", false]]);
+  assert.deepEqual(h.verseSelectionUnit(article, "35/35a"), ["35/35a", "35/35b"]);
+  assert.deepEqual(h.verseSelectionUnit(article, "35/35b"), ["35/35a", "35/35b"]);
 });
 
-test("_verseSelectionUnit: mixed poetry+prose multi-part → just [key]", () => {
+test("_verseSelectionUnit: 운문과 산문이 섞인 절도 절 전체(사용자 결정 2026-10-22, 종전엔 누른 줄만)", () => {
   const h = loadVerseSelection();
-  const article = makeArticleStub([["3/3a", true], ["3/3b", false]]);
-  assert.deepEqual(h.verseSelectionUnit(article, "3/3a"), ["3/3a"]);
-  assert.deepEqual(h.verseSelectionUnit(article, "3/3b"), ["3/3b"]);
+  // 1고린 15:54 — 산문 줄 다음에 인용 구절(운문).
+  const article = makeArticleStub([["54/54a", false], ["54/54b", true], ["55/55a", true]]);
+  assert.deepEqual(h.verseSelectionUnit(article, "54/54a"), ["54/54a", "54/54b"]);
+  assert.deepEqual(h.verseSelectionUnit(article, "54/54b"), ["54/54a", "54/54b"]);
 });
 
 test("_verseSelectionUnit: groups by verse, not contamination across neighboring verses", () => {
@@ -1100,7 +1107,7 @@ test("_verseSelectionUnit: 번호가 같은 다른 절은 한 단위가 아니�
   ]);
   assert.deepEqual(h.verseSelectionUnit(isa, "6_c41/6a"), ["6_c41/6a", "6_c41/6b"]);
   assert.deepEqual(h.verseSelectionUnit(isa, "6/6b"), ["6/6a", "6/6b"]);
-  // 그리스어 (26) 은 두 줄 운문, 히브리 26(93) 은 산문 한 줄 — 번호로 묶던 때는 섞여서 운문 단위가 꺼졌다.
+  // 그리스어 (26) 은 두 줄 운문, 히브리 26(93) 은 산문 한 줄 — 번호로 묶던 때는 둘이 한 단위였다.
   const dan = makeArticleStub([["26_lxx/26a", true], ["26_lxx/26b", true], ["26_93/26", false]]);
   assert.deepEqual(h.verseSelectionUnit(dan, "26_lxx/26b"), ["26_lxx/26a", "26_lxx/26b"]);
   assert.deepEqual(h.verseSelectionUnit(dan, "26_93/26"), ["26_93/26"]);
@@ -1109,13 +1116,17 @@ test("_verseSelectionUnit: 번호가 같은 다른 절은 한 단위가 아니�
   assert.deepEqual(h.verseSelectionUnit(job, "9~2/9a"), ["9~2/9a", "9~2/9b"]);
 });
 
-test("_verseSelectionUnit: 데이터 반쪽 절과 ¶ 구절은 그 번호 절과 한 단위 — 번호로 고르던 때와 같다", () => {
+test("_verseSelectionUnit: 데이터의 반쪽 절은 따로 고른다(사용자 결정 2026-10-22, 종전엔 운문이면 두 반쪽을 함께) · ¶ 구절은 그 번호 절과 한 단위", () => {
   const h = loadVerseSelection();
   // 이사 7 — 8a · 9a · 8b · 9b 순서.
   const isa7 = makeArticleStub([
     ["8a/8aa", true], ["8a/8ab", true], ["9a/9aa", true], ["9a/9ab", true], ["8b/8ba", true], ["8b/8bb", true],
   ]);
-  assert.deepEqual(h.verseSelectionUnit(isa7, "8b/8ba"), ["8a/8aa", "8a/8ab", "8b/8ba", "8b/8bb"]);
+  assert.deepEqual(h.verseSelectionUnit(isa7, "8b/8ba"), ["8b/8ba", "8b/8bb"]);
+  assert.deepEqual(h.verseSelectionUnit(isa7, "8a/8ab"), ["8a/8aa", "8a/8ab"]);
+  // 1사무 24 — 한 줄짜리 산문 반쪽 절.
+  const sam = makeArticleStub([["4/4", false], ["5a/5a", false], ["7/7", false], ["8a/8a", false], ["5b/5b", false]]);
+  assert.deepEqual(h.verseSelectionUnit(sam, "5a/5a"), ["5a/5a"]);
   // 전례시편 23 — 4절 다음 ¶ 구절.
   const lps = makeArticleStub([["4/4a", true], ["4/4b", true], ["4_v/4a", true], ["4_v/4b", true], ["5/5a", true]]);
   assert.deepEqual(h.verseSelectionUnit(lps, "4_v/4a"), ["4/4a", "4/4b", "4_v/4a", "4_v/4b"]);
@@ -1172,6 +1183,23 @@ test("_verseRangeKeys: without unitFn, no boundary expansion", () => {
   assert.deepEqual(h.verseRangeKeys(all, "2b", "3"), ["2b", "2c", "3"]);
 });
 
+test("_verseRangeKeys: 나훔 1:1 → 2ㄱ — 범위가 9절 뒤의 2ㄴ 까지 늘어나지 않는다(사용자 결정 2026-10-22, 종전 1-9절)", () => {
+  const h = loadVerseSelection();
+  // 실제 화면의 키(2026-10-22 덤프, 10절까지). 1절만 산문, 7-8 은 일곱 줄인 병합 절이다.
+  const poem = (instance, ref, letters) => [...letters].map((l) => [`${instance}/${ref}${l}`, true]);
+  const rows = [["1/1", false], ...poem("2a", "2a", "ab"), ...poem("3", "3", "abcde"), ...poem("4", "4", "abcd"),
+    ...poem("5", "5", "abcd"), ...poem("6", "6", "abcd"), ...poem("7", "7-8", "abcdefg"), ...poem("9", "9", "abc"),
+    ...poem("2b", "2b", "ab"), ...poem("10", "10", "ab")];
+  const article = makeArticleStub(rows);
+  const all = rows.map(([k]) => k);
+  const lines = (instance) => all.filter((k) => k.startsWith(`${instance}/`));
+  const unit = (key) => h.verseSelectionUnit(article, key);
+  assert.deepEqual(h.verseRangeKeys(all, "1/1", "2a/2ab", unit), ["1/1", ...lines("2a")]);
+  assert.deepEqual(h.verseRangeKeys(all, "2b/2ba", "9/9b", unit), [...lines("9"), ...lines("2b")]);
+  assert.deepEqual(h.verseRangeKeys(all, "3/3b", "1/1", unit), ["1/1", ...lines("2a"), ...lines("3")]);
+  assert.deepEqual(h.verseRangeKeys(all, "6/6d", "7/7-8c", unit), [...lines("6"), ...lines("7")]);
+});
+
 test("_verseRangeKeys: 옮겨 실린 41:6 에서 시작한 범위는 그 자리에서 시작한다 — 번호로는 앞의 40:6 에서 시작했다", () => {
   const h = loadVerseSelection();
   const all = ["6/6a", "6/6b", "19/19a", "6_c41/6a", "6_c41/6b", "20/20a"];
@@ -1205,7 +1233,8 @@ test("formatVerseNumber: verse range → start-end", () => {
   assert.equal(formatVerseNumber({ number: 17, range_end: 18 }), "17-18");
 });
 
-test("formatVerseNumber: split-verse part → number + part letter", () => {
+test("formatVerseNumber: 데이터의 반쪽 절은 인쇄본대로 「2ㄱ」 「2ㄴ」(사용자 결정 2026-10-22, 종전 「2a」)", () => {
   const { formatVerseNumber } = loadVerseNumber();
-  assert.equal(formatVerseNumber({ number: 2, part: "a" }), "2a");
+  assert.equal(formatVerseNumber({ number: 2, part: "a" }), "2ㄱ");
+  assert.equal(formatVerseNumber({ number: 2, part: "b" }), "2ㄴ");
 });

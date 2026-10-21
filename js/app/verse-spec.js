@@ -120,19 +120,21 @@ function selectedSpanVrefs(selected, article) {
 }
 
 /**
- * What a verse-select selection cites — the bar's 「…절 선택됨」 and the 복사 citation. `refs` go to
- * selectedVersesToSpec: a span-level ref ("3a") stays while a verse is partly selected; once every line of a number is
- * selected it collapses to the number ("3a,3b" → "3"). `chapter` is null for the open chapter's own numbering.
+ * What a verse-select selection cites — the bar's 「…절 선택됨」 and the 복사 citation (citationVerseSpec turns `refs`
+ * into the text). A ref is a verse number, never a line: the selection unit is a whole verse (views.js
+ * `_verseSelectionUnit` — 사용자 결정 2026-10-22), so a multi-line verse cites its number ("3a,3b" → "3", a merged
+ * verse "7-8a,7-8b" → "7-8"). The one unit smaller than a verse is a data half verse (이사 7 의 8a · 8b — 9a 를 사이에
+ * 두고 나뉘어 실림): one half alone cites as that half ("8a", lines "8aa,8ab" included), both halves as "8". `chapter`
+ * is null for the open chapter's own numbering.
  *
  * The numbers follow the chapter's own numbering, as the drag-copy citation does (views.js bindCopyAttribution —
  * pre-merge review 2026-10-14): spans moved in from another chapter (`verse-cross-ref`, 이사 40 의 41:6-7) and
  * Greek-only additions (`verse-lxx`, 다니 3 의 (24)-(90)) are left out unless nothing else is selected — then their
  * numbers alone, and moved-in verses under their own chapter (`data-chapter-ref` → 「41:6-7」, 사용자 결정
  * 2026-10-21 — 「40:6-7」 named chapter 40's own verses). And where two verses of that numbering share a number
- * (에스델 4:17 과 그 추가 본문, a ¶ clause and its verse — 전례시편, a duplicated source marker — 토비 11:15), a line
- * letter cannot say which verse's line it is, so any selection there cites the number. Verses are told apart by the
- * instance key less its part letter: a data half verse (이사 7 의 8a · 8b) is a part of one verse, not another verse —
- * its line letters still address it.
+ * (에스델 4:17 과 그 추가 본문, a ¶ clause and its verse — 전례시편, a duplicated source marker — 토비 11:15), any
+ * selection there cites the number. Verses are told apart by the instance key less its part letter: the two halves of
+ * a data half verse are parts of one verse, not two verses.
  * @param {ReadonlySet<string>} selected `data-vkey` values
  * @param {ParentNode | null | undefined} article
  * @returns {{ chapter: number | null, refs: string[] }}
@@ -149,40 +151,70 @@ function selectionCitation(selected, article) {
   const ownNumbering = picked.some((s) => !foreign(s));
   const fromChapters = new Set(picked.map((s) => s.getAttribute("data-chapter-ref")));
   const fromChapter = !ownNumbering && fromChapters.size === 1 ? [...fromChapters][0] : null;
-  /** @type {Map<number, { all: string[], sel: string[], verses: Set<string> }>} */
+  /** @type {Map<number, { lines: number, sel: string[], halves: Set<string>, verses: Set<string> }>} */
   const byNumber = new Map();
   for (const s of spans) {
     if (foreign(s) === ownNumbering) continue;
     const ref = s.getAttribute("data-vref") ?? "";
     const key = s.getAttribute("data-vkey") ?? "";
+    const instance = key.slice(0, key.indexOf("/"));
     const n = parseInt(ref, 10);
     let g = byNumber.get(n);
-    if (!g) byNumber.set(n, g = { all: [], sel: [], verses: new Set() });
-    g.all.push(ref);
-    g.verses.add(key.slice(0, key.indexOf("/")).replace(/^(\d+)[a-p]/, "$1"));
-    if (isSelected(s)) g.sel.push(ref);
+    if (!g) byNumber.set(n, g = { lines: 0, sel: [], halves: new Set(), verses: new Set() });
+    g.lines++;
+    g.verses.add(instance.replace(/^(\d+)[a-p]/, "$1"));
+    if (isSelected(s)) {
+      g.sel.push(ref);
+      g.halves.add(/^\d+[a-p]/.exec(instance)?.[0] ?? "");   // "" — a line of a whole verse
+    }
   }
   const refs = [];
-  for (const { all, sel, verses } of byNumber.values()) {
+  for (const { lines, sel, halves, verses } of byNumber.values()) {
     if (!sel.length) continue;
-    const shared = verses.size > 1;
-    const whole = sel.length === all.length && all.some((r) => /[a-z]$/.test(r));
-    if (shared || whole) {
+    if (verses.size === 1 && sel.length < lines && !halves.has("")) {
+      refs.push(...[...halves].sort());
+    } else {
       // 글자를 모두 뗀다 — 병합 절 「7-8a」「7-8b」는 「7-8」(끝 번호를 잃지 않게, Copilot 리뷰 9회차), 데이터의
       // 반쪽 절이 다시 두 줄인 「8aa」…「8bb」는 「8」(줄 글자 하나만 떼면 「8a」가 됐다 — 자체 리뷰 2026-10-13)
       refs.push(...new Set(sel.map((r) => r.replace(/[a-z]+$/, ""))));
-    } else {
-      refs.push(...sel);
     }
   }
   return { chapter: fromChapter ? Number(fromChapter) : null, refs };
 }
 
+/**
+ * The citation a person reads — the verse-select bar's 「…절 선택됨」 and the 복사 citation, from selectionCitation's
+ * `refs`. The numbers are those selectedVersesToSpec writes in the spec grammar of addresses and bookmarks, written two
+ * ways it does not: a merged verse joins the run around it (나훔 1:1-9 — 「1-6,7-8,9」 before), and a data half verse
+ * takes the printed letter (「9a」 → 「9ㄱ」).
+ * @param {string[]} refs
+ * @returns {string}
+ */
+function citationVerseSpec(refs) {
+  const nums = refs.flatMap((r) => {
+    const m = /^(\d+)-(\d+)$/.exec(r);
+    if (!m) return [r];
+    const a = Number(m[1]);
+    return Array.from({ length: Number(m[2]) - a + 1 }, (_, i) => String(a + i));
+  });
+  return selectedVersesToSpec(nums).replace(/(\d)([a-p])(?=,|$)/g, (_, d, p) => d + halfVerseMark(p));
+}
+
+// 데이터의 반쪽 절(`part`)을 사람이 읽는 표기로 — 인쇄본은 「이사 7:8ㄱ」 「8ㄴ」이다(사용자 결정 2026-10-22). 화면의 절
+// 번호와 절 선택 출처가 쓴다. 주소와 저장 표기의 반쪽 절 글자는 「a」 · 「b」 그대로다(ADR-010 · 040). 데이터의 `part`는
+// a · b뿐이다.
+/** @param {string} part @returns {string} */
+function halfVerseMark(part) {
+  return "ㄱㄴㄷㄹㅁㅂㅅㅇㅈㅊㅋㅌㅍㅎ".charAt(part.charCodeAt(0) - 97) || part;
+}
+
 // Bookmark-only (ADR-010): a prose verse split into a/b/c line-spans by an
 // inline citation is conceptually one verse, so bookmarks ignore the sub-verse
 // segmentation — selecting *any* span of a multi-part verse stores the whole
-// verse number, even on a partial selection. (The selection bar label and the
-// copy serializer keep per-span granularity; only the saved bookmark collapses.)
+// verse number, even on a partial selection. Verse select picks whole verses
+// (views.js _verseSelectionUnit), so a partial selection here is one half of a
+// data half verse — saved as the number too ("8aa,8ab" → "8"), while the bar
+// and the copy cite it as 「8ㄱ」 (selectionCitation).
 // Single-part verses pass through unchanged.
 /**
  * @param {string[]} refs
@@ -428,7 +460,7 @@ window.serializeVerseRange = serializeVerseRange;
 window.verseInstanceKeys = verseInstanceKeys;
 
 export {
-  parseVerseSpec, isWellFormedSpec, selectedSpanVrefs, selectionCitation, collapseSegmentedVerses,
-  selectedVersesToSpec, mergeVerseSpecs, serializeVerseRange, citationSource,
+  parseVerseSpec, isWellFormedSpec, selectedSpanVrefs, selectionCitation, citationVerseSpec, halfVerseMark,
+  collapseSegmentedVerses, selectedVersesToSpec, mergeVerseSpecs, serializeVerseRange, citationSource,
   specCoversVerse, chapterMaxVerse, verseInstanceKey, verseInstanceKeys,
 };

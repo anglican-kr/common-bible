@@ -544,6 +544,17 @@ def test_half_verse_on_two_line_verse_shows_only_that_line(desktop_context):
     assert psalm.locator(".verse[data-vref='35a']").count() == 0
 
 
+def test_data_half_verse_numbers_show_printed_letters(desktop_context):
+    """연중 15주 화 짝수해(2026-07-14)의 제1독서 이사 7:1-9 — 데이터의 반쪽 절 번호는 장 화면과 같이 「8ㄱ」 「9ㄴ」이다
+    (사용자 결정 2026-10-22, 종전 「8a」). 독서 참조의 「상 · 하」와는 다른 표기이고, 한 절에서 겹치지 않는다."""
+    page = desktop_context.new_page()
+    _open(page, "lectionary/2026-07-14")
+    first = page.locator(".lect-reading[data-slot='first']")
+    assert "7:1-9" in first.locator(".lect-ref").inner_text()
+    nums = first.locator(".verse-num").evaluate_all("els => els.map(e => e.getAttribute('data-v'))")
+    assert nums[6:11] == ["7", "8ㄱ", "9ㄱ", "8ㄴ", "9ㄴ"], nums
+
+
 _LECT_COPY_ACROSS = """
 async (sel) => {
   const [startSel, endSel] = sel;
