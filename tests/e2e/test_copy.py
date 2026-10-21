@@ -496,3 +496,14 @@ def test_verse_select_bookmark_still_saves_by_number(page):
       return out;
     }""")
     assert ["dan", 3, "24-25"] in specs, specs
+
+
+def test_verse_select_duplicated_marker_cites_the_number(page):
+    """토비 11:15 — 원본에 절 표시가 중복된 곳이다(운문 두 줄인 15절과 한 줄인 둘째 15절). 15절을 고르면 출처는 줄 글자 없이
+    「11:15」다(리뷰 2026-10-21 — 한때 「11:15a,15b」)."""
+    page.context.grant_permissions(["clipboard-read", "clipboard-write"])
+    ids, label = _verse_select(page, "tob/11", "v15")
+    assert ids == ["v15"], ids
+    assert label == "15절 선택됨", label
+    text = _copy_selection(page)
+    assert text.endswith("\n\n— 토비트 11:15 (공동번역성서)"), text[-80:]

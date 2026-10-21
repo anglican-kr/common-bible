@@ -129,8 +129,10 @@ function selectedSpanVrefs(selected, article) {
  * Greek-only additions (`verse-lxx`, 다니 3 의 (24)-(90)) are left out unless nothing else is selected — then their
  * numbers alone, and moved-in verses under their own chapter (`data-chapter-ref` → 「41:6-7」, 사용자 결정
  * 2026-10-21 — 「40:6-7」 named chapter 40's own verses). And where two verses of that numbering share a number
- * (에스델 4:17 과 그 추가 본문, a ¶ clause and its verse — 전례시편), a line letter cannot say which verse's line it
- * is, so any selection there cites the number.
+ * (에스델 4:17 과 그 추가 본문, a ¶ clause and its verse — 전례시편, a duplicated source marker — 토비 11:15), a line
+ * letter cannot say which verse's line it is, so any selection there cites the number. Verses are told apart by the
+ * instance key less its part letter: a data half verse (이사 7 의 8a · 8b) is a part of one verse, not another verse —
+ * its line letters still address it.
  * @param {ReadonlySet<string>} selected `data-vkey` values
  * @param {ParentNode | null | undefined} article
  * @returns {{ chapter: number | null, refs: string[] }}
@@ -147,21 +149,23 @@ function selectionCitation(selected, article) {
   const ownNumbering = picked.some((s) => !foreign(s));
   const fromChapters = new Set(picked.map((s) => s.getAttribute("data-chapter-ref")));
   const fromChapter = !ownNumbering && fromChapters.size === 1 ? [...fromChapters][0] : null;
-  /** @type {Map<number, { all: string[], sel: string[] }>} */
+  /** @type {Map<number, { all: string[], sel: string[], verses: Set<string> }>} */
   const byNumber = new Map();
   for (const s of spans) {
     if (foreign(s) === ownNumbering) continue;
     const ref = s.getAttribute("data-vref") ?? "";
+    const key = s.getAttribute("data-vkey") ?? "";
     const n = parseInt(ref, 10);
     let g = byNumber.get(n);
-    if (!g) byNumber.set(n, g = { all: [], sel: [] });
+    if (!g) byNumber.set(n, g = { all: [], sel: [], verses: new Set() });
     g.all.push(ref);
+    g.verses.add(key.slice(0, key.indexOf("/")).replace(/^(\d+)[a-p]/, "$1"));
     if (isSelected(s)) g.sel.push(ref);
   }
   const refs = [];
-  for (const { all, sel } of byNumber.values()) {
+  for (const { all, sel, verses } of byNumber.values()) {
     if (!sel.length) continue;
-    const shared = new Set(all).size < all.length;
+    const shared = verses.size > 1;
     const whole = sel.length === all.length && all.some((r) => /[a-z]$/.test(r));
     if (shared || whole) {
       // 글자를 모두 뗀다 — 병합 절 「7-8a」「7-8b」는 「7-8」(끝 번호를 잃지 않게, Copilot 리뷰 9회차), 데이터의

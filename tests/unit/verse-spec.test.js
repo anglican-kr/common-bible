@@ -189,10 +189,21 @@ test("selectionCitation: 에스 4:17 — 한 번호 아래 여러 절이면 줄 
   assert.strictEqual(citeSpec(["16/16", "17/17"], a), "16-17");
 });
 
+test("selectionCitation: 토비 11:15 — 원본의 중복 절 표시도 한 번호를 함께 쓰는 다른 절이라 번호로 적는다(줄 글자가 겹치지 않아도)", () => {
+  // 15절은 운문 두 줄(15a · 15b), 중복 표시된 둘째 15절(15~2)은 한 줄(15) — data-vref 는 겹치지 않는다(리뷰 2026-10-21).
+  const a = articleOf([["14/14"], ["15/15a", "verse-poetry"], ["15/15b", "verse-poetry"], ["15~2/15"], ["16/16"]]);
+  assert.strictEqual(citeSpec(["15/15a", "15/15b"], a), "15");
+  assert.strictEqual(citeSpec(["14/14", "15/15a", "15/15b"], a), "14-15");
+  assert.strictEqual(citeSpec(["15~2/15"], a), "15");
+});
+
 test("selectionCitation: 전례시편 ¶ 구절 — 앞 절과 줄 글자가 겹쳐 번호로 적는다", () => {
   const a = articleOf([["4/4a", "verse-poetry"], ["4/4b", "verse-poetry"], ["4_v/4a", "verse-poetry"], ["4_v/4b", "verse-poetry"], ["5/5a", "verse-poetry"]]);
   assert.strictEqual(citeSpec(["4_v/4a", "4_v/4b"], a), "4");
   assert.strictEqual(citeSpec(["4/4a", "4/4b", "4_v/4a", "4_v/4b", "5/5a"], a), "4-5");
+  // ¶ 구절이 한 줄이라 줄 글자가 겹치지 않아도 같다.
+  const b = articleOf([["4/4a"], ["4/4b"], ["4_v/4"]]);
+  assert.strictEqual(citeSpec(["4/4a"], b), "4");
 });
 
 test("selectionCitation: 번호가 겹치지 않는 장은 종전과 같다 — 다 고르면 번호, 일부면 줄 글자", () => {
