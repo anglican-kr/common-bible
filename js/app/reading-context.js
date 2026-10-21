@@ -17,8 +17,8 @@
  * @property {string | null} bookId      — id of the book currently rendered, or null on home/list views
  * @property {number | null} chapter     — chapter number currently rendered, or null
  * @property {boolean} verseSelectMode   — true when the user has entered verse-selection (long-press / FAB)
- * @property {Set<string>} selectedVerses — data-vref strings of currently selected verses
- * @property {string | null} selectAnchor — data-vref of the last individually tapped verse; the anchor for range selection (Shift+click / hold-and-tap)
+ * @property {Set<string>} selectedVerses — `data-vkey` of the currently selected verse spans (views.js appendVerses — unique per span; `data-vref` repeats where two verses share a number)
+ * @property {string | null} selectAnchor — `data-vkey` of the last individually tapped verse; the anchor for range selection (Shift+click / hold-and-tap)
  */
 
 /** @type {ReadingContext} */

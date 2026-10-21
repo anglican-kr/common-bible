@@ -25,7 +25,6 @@ const { readingContext } = window;
 // Verse-spec utilities split out to verse-spec.js (ADR-034 후속). Imported for
 // the save/copy paths; parseVerseSpec stays facade-only (routing/views call it).
 import {
-  collapseFullVerseRefs,
   selectedVersesToSpec, serializeVerseRange,
 } from "./verse-spec.js";
 
@@ -520,7 +519,7 @@ const appBookmark = {
 window.appBookmark = appBookmark;
 
 // Phase 6a per-name globals (existing). Verse-spec facade (parseVerseSpec /
-// collapseFullVerseRefs / selectedVersesToSpec / mergeVerseSpecs /
+// selectedVersesToSpec / mergeVerseSpecs /
 // serializeVerseRange) moved to verse-spec.js (ADR-034 후속).
 // QUERY tree helpers' facade (findExistingChapterBookmarks / _walkBookmarks /
 // _findItemInStore / _findParentFolderId / removeItemById / insertItem /

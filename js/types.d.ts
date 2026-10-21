@@ -1295,7 +1295,6 @@ declare global {
   // / modals / drawer handlers) can call them as bare globals until those
   // callers move into bookmark.js in Phase 6b.
   function parseVerseSpec(spec: string): Array<{ start: number; end: number; part?: string }>;
-  function collapseFullVerseRefs(refs: string[], article: Element | null | undefined): string[];
   function selectedVersesToSpec(refs: string[]): string;
   function mergeVerseSpecs(specA: string, specB: string): string;
   // bookmark-core QUERY helpers are ESM-only now (see Window interface note above).

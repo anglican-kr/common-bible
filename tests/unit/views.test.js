@@ -21,8 +21,9 @@
 //   - COMPACT_HEADER block — initCompactHeader. Hysteretic 60px / 10px
 //     scroll-based class toggle. Window scroll listener stub.
 //   - VERSE_SELECTION block — _verseSelectionUnit (pure-poetry multi-part
-//     grouping vs per-line selection control) + _verseRangeVrefs (anchor→target
-//     inclusive range, either direction, poetry-unit boundary expansion).
+//     grouping vs per-line selection control, by verse instance — not by the
+//     number two verses can share) + _verseRangeKeys (anchor→target inclusive
+//     range, either direction, poetry-unit boundary expansion).
 //   - VERSE_NUMBER block — formatVerseNumber. Verse-number display string:
 //     plain / dual [N_M] / LXX-only [_N] / cross-ref / range / part.
 
@@ -273,9 +274,9 @@ function loadDivisionTabs(order = ["old_testament", "deuterocanon", "new_testame
 }
 
 // ── VERSE_SELECTION loader ───────────────────────────────────────────────────
-// DOM-pure helper that reads classList + data-vref off a passed article node.
+// DOM-pure helper that reads classList + data-vkey off a passed article node.
 // Mini article stub returns the supplied verse spans for querySelectorAll
-// (".verse[data-vref]"); per-span classList.contains is a one-class check.
+// (".verse[data-vkey]"); per-span classList.contains is a one-class check.
 
 function loadVerseSelection() {
   const ctx = { Object, Array, String, Number, Boolean, console, Error };
@@ -286,18 +287,18 @@ function loadVerseSelection() {
   return {
     ctx,
     verseSelectionUnit: ctx._verseSelectionUnit,
-    verseRangeVrefs: ctx._verseRangeVrefs,
+    verseRangeKeys: ctx._verseRangeKeys,
   };
 }
 
-/** @param {Array<[string, boolean]>} verses [vref, isPoetry] tuples */
+/** @param {Array<[string, boolean]>} verses [data-vkey, isPoetry] tuples — "<instance key>/<data-vref>" */
 function makeArticleStub(verses) {
-  const elements = verses.map(([vref, isPoetry]) => ({
-    getAttribute: (k) => (k === "data-vref" ? vref : null),
+  const elements = verses.map(([key, isPoetry]) => ({
+    getAttribute: (k) => (k === "data-vkey" ? key : null),
     classList: { contains: (cls) => isPoetry && cls === "verse-poetry" },
   }));
   return {
-    querySelectorAll: (sel) => (sel === ".verse[data-vref]" ? elements : []),
+    querySelectorAll: (sel) => (sel === ".verse[data-vkey]" ? elements : []),
   };
 }
 
@@ -1054,93 +1055,127 @@ test("initCompactHeader: repeated transitions toggle correctly", () => {
 
 // ── VERSE_SELECTION ──────────────────────────────────────────────────────────
 
-test("_verseSelectionUnit: single-span verse → [vref] only", () => {
+test("_verseSelectionUnit: single-span verse → [key] only", () => {
   const h = loadVerseSelection();
-  const article = makeArticleStub([["3", false]]);
-  assert.deepEqual(h.verseSelectionUnit(article, "3"), ["3"]);
+  const article = makeArticleStub([["3/3", false]]);
+  assert.deepEqual(h.verseSelectionUnit(article, "3/3"), ["3/3"]);
 });
 
-test("_verseSelectionUnit: pure-poetry multi-part → all parts (any entry vref)", () => {
+test("_verseSelectionUnit: pure-poetry multi-part → all parts (any entry key)", () => {
   const h = loadVerseSelection();
-  const article = makeArticleStub([["3a", true], ["3b", true], ["3c", true]]);
-  assert.deepEqual(h.verseSelectionUnit(article, "3a"), ["3a", "3b", "3c"]);
-  assert.deepEqual(h.verseSelectionUnit(article, "3b"), ["3a", "3b", "3c"]);
-  assert.deepEqual(h.verseSelectionUnit(article, "3c"), ["3a", "3b", "3c"]);
+  const article = makeArticleStub([["3/3a", true], ["3/3b", true], ["3/3c", true]]);
+  assert.deepEqual(h.verseSelectionUnit(article, "3/3a"), ["3/3a", "3/3b", "3/3c"]);
+  assert.deepEqual(h.verseSelectionUnit(article, "3/3b"), ["3/3a", "3/3b", "3/3c"]);
+  assert.deepEqual(h.verseSelectionUnit(article, "3/3c"), ["3/3a", "3/3b", "3/3c"]);
 });
 
-test("_verseSelectionUnit: pure-prose multi-part → just [vref]", () => {
+test("_verseSelectionUnit: pure-prose multi-part → just [key]", () => {
   const h = loadVerseSelection();
-  const article = makeArticleStub([["3a", false], ["3b", false]]);
-  assert.deepEqual(h.verseSelectionUnit(article, "3a"), ["3a"]);
-  assert.deepEqual(h.verseSelectionUnit(article, "3b"), ["3b"]);
+  const article = makeArticleStub([["3/3a", false], ["3/3b", false]]);
+  assert.deepEqual(h.verseSelectionUnit(article, "3/3a"), ["3/3a"]);
+  assert.deepEqual(h.verseSelectionUnit(article, "3/3b"), ["3/3b"]);
 });
 
-test("_verseSelectionUnit: mixed poetry+prose multi-part → just [vref]", () => {
+test("_verseSelectionUnit: mixed poetry+prose multi-part → just [key]", () => {
   const h = loadVerseSelection();
-  const article = makeArticleStub([["3a", true], ["3b", false]]);
-  assert.deepEqual(h.verseSelectionUnit(article, "3a"), ["3a"]);
-  assert.deepEqual(h.verseSelectionUnit(article, "3b"), ["3b"]);
+  const article = makeArticleStub([["3/3a", true], ["3/3b", false]]);
+  assert.deepEqual(h.verseSelectionUnit(article, "3/3a"), ["3/3a"]);
+  assert.deepEqual(h.verseSelectionUnit(article, "3/3b"), ["3/3b"]);
 });
 
-test("_verseSelectionUnit: groups by integer prefix, not contamination across neighboring verses", () => {
+test("_verseSelectionUnit: groups by verse, not contamination across neighboring verses", () => {
   const h = loadVerseSelection();
   const article = makeArticleStub([
-    ["3a", true], ["3b", true], ["3c", true],
-    ["4a", true], ["4b", true],
+    ["3/3a", true], ["3/3b", true], ["3/3c", true],
+    ["4/4a", true], ["4/4b", true],
   ]);
-  assert.deepEqual(h.verseSelectionUnit(article, "3a"), ["3a", "3b", "3c"]);
-  assert.deepEqual(h.verseSelectionUnit(article, "4a"), ["4a", "4b"]);
+  assert.deepEqual(h.verseSelectionUnit(article, "3/3a"), ["3/3a", "3/3b", "3/3c"]);
+  assert.deepEqual(h.verseSelectionUnit(article, "4/4a"), ["4/4a", "4/4b"]);
 });
 
-test("_verseSelectionUnit: null article → defensive [vref]", () => {
+test("_verseSelectionUnit: 번호가 같은 다른 절은 한 단위가 아니다 — 이사 40 의 41:6 · 다니 3 의 그리스어 (26)(known-issues §5)", () => {
   const h = loadVerseSelection();
-  assert.deepEqual(h.verseSelectionUnit(null, "3a"), ["3a"]);
+  const isa = makeArticleStub([
+    ["6/6a", true], ["6/6b", true], ["19/19a", true], ["6_c41/6a", true], ["6_c41/6b", true],
+  ]);
+  assert.deepEqual(h.verseSelectionUnit(isa, "6_c41/6a"), ["6_c41/6a", "6_c41/6b"]);
+  assert.deepEqual(h.verseSelectionUnit(isa, "6/6b"), ["6/6a", "6/6b"]);
+  // 그리스어 (26) 은 두 줄 운문, 히브리 26(93) 은 산문 한 줄 — 번호로 묶던 때는 섞여서 운문 단위가 꺼졌다.
+  const dan = makeArticleStub([["26_lxx/26a", true], ["26_lxx/26b", true], ["26_93/26", false]]);
+  assert.deepEqual(h.verseSelectionUnit(dan, "26_lxx/26b"), ["26_lxx/26a", "26_lxx/26b"]);
+  assert.deepEqual(h.verseSelectionUnit(dan, "26_93/26"), ["26_93/26"]);
+  // 원본 중복 마커(욥 32:9 등)의 두 절도 따로다.
+  const job = makeArticleStub([["9/9a", true], ["9/9b", true], ["9~2/9a", true], ["9~2/9b", true]]);
+  assert.deepEqual(h.verseSelectionUnit(job, "9~2/9a"), ["9~2/9a", "9~2/9b"]);
 });
 
-test("_verseRangeVrefs: forward range is inclusive of both endpoints", () => {
+test("_verseSelectionUnit: 데이터 반쪽 절과 ¶ 구절은 그 번호 절과 한 단위 — 번호로 고르던 때와 같다", () => {
+  const h = loadVerseSelection();
+  // 이사 7 — 8a · 9a · 8b · 9b 순서.
+  const isa7 = makeArticleStub([
+    ["8a/8aa", true], ["8a/8ab", true], ["9a/9aa", true], ["9a/9ab", true], ["8b/8ba", true], ["8b/8bb", true],
+  ]);
+  assert.deepEqual(h.verseSelectionUnit(isa7, "8b/8ba"), ["8a/8aa", "8a/8ab", "8b/8ba", "8b/8bb"]);
+  // 전례시편 23 — 4절 다음 ¶ 구절.
+  const lps = makeArticleStub([["4/4a", true], ["4/4b", true], ["4_v/4a", true], ["4_v/4b", true], ["5/5a", true]]);
+  assert.deepEqual(h.verseSelectionUnit(lps, "4_v/4a"), ["4/4a", "4/4b", "4_v/4a", "4_v/4b"]);
+});
+
+test("_verseSelectionUnit: null article → defensive [key]", () => {
+  const h = loadVerseSelection();
+  assert.deepEqual(h.verseSelectionUnit(null, "3/3a"), ["3/3a"]);
+});
+
+test("_verseRangeKeys: forward range is inclusive of both endpoints", () => {
   const h = loadVerseSelection();
   const all = ["1", "2", "3", "4", "5"];
-  assert.deepEqual(h.verseRangeVrefs(all, "2", "4"), ["2", "3", "4"]);
+  assert.deepEqual(h.verseRangeKeys(all, "2", "4"), ["2", "3", "4"]);
 });
 
-test("_verseRangeVrefs: backward range (anchor after target) yields same span", () => {
+test("_verseRangeKeys: backward range (anchor after target) yields same span", () => {
   const h = loadVerseSelection();
   const all = ["1", "2", "3", "4", "5"];
-  assert.deepEqual(h.verseRangeVrefs(all, "4", "2"), ["2", "3", "4"]);
+  assert.deepEqual(h.verseRangeKeys(all, "4", "2"), ["2", "3", "4"]);
 });
 
-test("_verseRangeVrefs: same anchor and target → that single verse", () => {
+test("_verseRangeKeys: same anchor and target → that single verse", () => {
   const h = loadVerseSelection();
   const all = ["1", "2", "3"];
-  assert.deepEqual(h.verseRangeVrefs(all, "2", "2"), ["2"]);
+  assert.deepEqual(h.verseRangeKeys(all, "2", "2"), ["2"]);
 });
 
-test("_verseRangeVrefs: unknown endpoint → empty (defensive)", () => {
+test("_verseRangeKeys: unknown endpoint → empty (defensive)", () => {
   const h = loadVerseSelection();
   const all = ["1", "2", "3"];
-  assert.deepEqual(h.verseRangeVrefs(all, "2", "9"), []);
-  assert.deepEqual(h.verseRangeVrefs(all, "x", "2"), []);
+  assert.deepEqual(h.verseRangeKeys(all, "2", "9"), []);
+  assert.deepEqual(h.verseRangeKeys(all, "x", "2"), []);
 });
 
-test("_verseRangeVrefs: endpoint inside a poetry unit expands to the whole unit", () => {
+test("_verseRangeKeys: endpoint inside a poetry unit expands to the whole unit", () => {
   const h = loadVerseSelection();
   const all = ["1", "2a", "2b", "2c", "3", "4a", "4b"];
   // target "2b" pulls in 2a/2c; anchor "4a" pulls in 4b.
-  const unit = (vref) => {
-    if (vref.startsWith("2")) return ["2a", "2b", "2c"];
-    if (vref.startsWith("4")) return ["4a", "4b"];
-    return [vref];
+  const unit = (key) => {
+    if (key.startsWith("2")) return ["2a", "2b", "2c"];
+    if (key.startsWith("4")) return ["4a", "4b"];
+    return [key];
   };
   assert.deepEqual(
-    h.verseRangeVrefs(all, "4a", "2b", unit),
+    h.verseRangeKeys(all, "4a", "2b", unit),
     ["2a", "2b", "2c", "3", "4a", "4b"],
   );
 });
 
-test("_verseRangeVrefs: without unitFn, no boundary expansion", () => {
+test("_verseRangeKeys: without unitFn, no boundary expansion", () => {
   const h = loadVerseSelection();
   const all = ["1", "2a", "2b", "2c", "3"];
-  assert.deepEqual(h.verseRangeVrefs(all, "2b", "3"), ["2b", "2c", "3"]);
+  assert.deepEqual(h.verseRangeKeys(all, "2b", "3"), ["2b", "2c", "3"]);
+});
+
+test("_verseRangeKeys: 옮겨 실린 41:6 에서 시작한 범위는 그 자리에서 시작한다 — 번호로는 앞의 40:6 에서 시작했다", () => {
+  const h = loadVerseSelection();
+  const all = ["6/6a", "6/6b", "19/19a", "6_c41/6a", "6_c41/6b", "20/20a"];
+  assert.deepEqual(h.verseRangeKeys(all, "6_c41/6a", "20/20a"), ["6_c41/6a", "6_c41/6b", "20/20a"]);
 });
 
 // ── VERSE_NUMBER ─────────────────────────────────────────────────────────────
