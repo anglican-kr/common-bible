@@ -58,10 +58,13 @@ const SPEC_MAX_SEGMENTS = 1000;
  * of the real data, 60,384 the pre-#205 app wrote over its chapters with parts, and the fixtures — all pass (the unit
  * test does the same over synthetic chapters).
  *
- * Both ways a spec comes in from outside check it here: a bookmark file (bookmark-modals.js `_isWellFormedBookmark` —
- * ADR-040) and an address (routing.js `parsePath` — a shared or typed link). What got through before (PR #359 review ·
+ * Two of the three ways a spec comes in from outside check it here: a bookmark file (bookmark-modals.js
+ * `_isWellFormedBookmark` — ADR-040) and an address (routing.js `parsePath` — a shared or typed link, after trimming
+ * commas at either end). A bookmark stored without this check — imported in 1.6.4 or earlier, kept on that device or
+ * synced to another — is not checked again (known-issues §15). What got through before (PR #359 review ·
  * known-issues §15): a huge number hung 합치기, a huge range threw while routing (on a cold load the splash never
- * cleared), whitespace stayed in the link so nothing was highlighted, and "5-0" lost verses on 합치기.
+ * cleared; an ascending one crashed the tab), whitespace stayed in the link so nothing was highlighted, and "5-0" lost
+ * verses on 합치기.
  * @param {string} spec
  * @returns {boolean}
  */

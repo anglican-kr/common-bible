@@ -1895,8 +1895,8 @@ test("isWellFormedSpec: what got through before is rejected (PR #359 review)", (
     " 16 ", "1, 2", "16　", "﻿16", "16\t", "1,\n2", " all",
     // backward and empty ranges — "5-0" lost verses on 합치기
     "5-0", "1-0", "0-5", "0", "5-3", "3-3",
-    // repeats, overlaps, out of order
-    "16,16", "1-5,3-7", "5,3", "3b,3a", "16aa,16aa", "1-5,3a",
+    // repeats, overlaps, out of order — "5a,3" · "16aa,3" are caught only by the ascending-start check (PR #362 review)
+    "16,16", "1-5,3-7", "5,3", "3b,3a", "16aa,16aa", "1-5,3a", "5a,3", "16aa,3",
     // not a segment
     "", ",1", "1,", "1,,2", "01", "3z", "3A", "3ab-5", "16aaa", "16-17ab", "16-15a", "ALL", "abc",
     // floods — the router re-reads the spec on every scroll frame

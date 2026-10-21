@@ -1331,9 +1331,13 @@ function renderChapter(data, book, opts) {
   if (hlVerseEnd && !hlSegments) {
     if (hlVerseEnd > _maxVerse) {
       hlVerseEnd = _maxVerse;
-      const pathMatch = location.pathname.match(/^(\/[^/]+\/\d+\/\d+)-\d+$/);
-      if (pathMatch) {
-        history.replaceState(null, "", `${pathMatch[1]}-${_maxVerse}${location.search}`);
+      // The new address comes from the parsed bounds, which parsePath already put in ascending order — not from the
+      // typed text, where 「요한 3:40-10」 became 「40-36」 and reopened as verse 36 alone (PR #362 리뷰). A start past the
+      // chapter is dropped just below.
+      const base = location.pathname.match(/^(\/[^/]+\/\d+)\//)?.[1];
+      if (base && hlVerse != null && hlVerse <= _maxVerse) {
+        const range = hlVerse === _maxVerse ? `${hlVerse}` : `${hlVerse}-${_maxVerse}`;
+        history.replaceState(null, "", `${base}/${range}${location.search}`);
       }
     }
   }

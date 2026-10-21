@@ -105,8 +105,8 @@ function startScrollTracking(bookId, chapter) {
 
 // ── BEGIN PARSE_PATH ──
 // Pure URL → route descriptor. Reads location.pathname/search and the
-// DIVISION_LABELS / parseVerseSpec / selectedVersesToSpec deps; no DOM, no
-// history side effects — sliced + unit-tested in tests/unit/routing.test.js.
+// DIVISION_LABELS / parseVerseSpec / selectedVersesToSpec / isWellFormedSpec deps;
+// no DOM, no history side effects — sliced + unit-tested in tests/unit/routing.test.js.
 /** @returns {Route} */
 function parsePath() {
   const pathname = location.pathname.replace(/^\//, "");
@@ -206,7 +206,16 @@ function parsePath() {
   let highlightVerseSpec = null;
 
   if (parts[2]) {
-    const spec = parts[2];
+    // 앞뒤 쉼표는 걷고 본다 — 링크 바로 뒤에 친 쉼표를 메신저가 링크에 넣을 수 있다(main은 parseVerseSpec이 빈 구간을
+    // 건너뛰어 그런 링크도 강조했다). 주소에서만 걷고, 가져오기 검사는 그대로 엄격하다(사용자 결정 2026-10-21, PR #362 리뷰).
+    // Trimmed with a loop, not /^,+|,+$/ — that regex backtracks quadratically on a long run of commas followed by
+    // another character (40,000 commas took about a second), and this runs on every scroll frame.
+    const raw = parts[2];
+    let from = 0;
+    let to = raw.length;
+    while (from < to && raw[from] === ",") from++;
+    while (to > from && raw[to - 1] === ",") to--;
+    const spec = raw.slice(from, to);
     // A single verse or range never expands — renderChapter clips its end to the chapter. The multi-segment form
     // expands verse by verse below, so it takes only the forms the app writes (isWellFormedSpec — the bookmark import's
     // check, ADR-040): a huge range (`1-4294967296,5`) threw before the first screen, and a flood of segments stalled
