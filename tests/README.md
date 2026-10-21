@@ -8,7 +8,7 @@
 
 | 겹 | 도구 | 무엇을 보나 | 어디서 도나 | 규모 |
 |---|---|---|---|---|
-| **유닛** | `node --test` (의존성 0) | 순수 로직 — 함수 입출력·상태 계산 + 문서·픽스처 정합성 | **CI 자동** (PR마다) | 35파일 · 1329케이스 |
+| **유닛** | `node --test` (의존성 0) | 순수 로직 — 함수 입출력·상태 계산 + 문서·픽스처 정합성 | **CI 자동** (PR마다) | 35파일 · 1330케이스 |
 | **타입 검사** | `tsc --noEmit` (JSDoc, `js/` 전체 — `checkJs`) | 타입 불일치·오타 | **CI 자동**(「Unit tests」 잡) + 로컬 훅 | 설정 2종(앱·검색 워커) |
 | **E2E** | Playwright (실제 브라우저) | 화면·상호작용·모듈 간 배선 | **로컬 전용**(수동) | 30파일 · 360케이스 |
 | **데이터** | pytest (`common-bible-data` 서브모듈) | 성경 본문·검색 인덱스 정합성 | 그 저장소 CI | 별도 저장소 |
@@ -57,7 +57,7 @@ node --test tests/unit/storage.test.js    # 개별 파일
 | `manifest-sync.test.js` | 콘텐츠 해시 매니페스트 동기화(ADR-021) | 14 |
 | `audio-cache.test.js` | 오디오 캐시 — 장별 mp3 캐싱·정리 | 14 |
 | `refresh-store.test.js` | 백그라운드 새로고침 상태 | 13 |
-| `verse-spec.test.js` | 절 스펙(ADR-038 §3) — `specCoversVerse`·`chapterMaxVerse`·`verseInstanceKey` 절 인스턴스 식별 · 절 선택의 출처(`selectionCitation` — 이사 40 · 다니 3 · 에스 4 의 실제 키, ADR-010) | 22 |
+| `verse-spec.test.js` | 절 스펙(ADR-038 §3) — `specCoversVerse`·`chapterMaxVerse`·`verseInstanceKey` 절 인스턴스 식별 · 절 선택의 출처(`selectionCitation` — 이사 40 · 다니 3 · 에스 4 의 실제 키, 토비 11:15, ADR-010) | 23 |
 | `tabbar.test.js` | 모바일 탭 바 — 활성 표시·인디케이터 | 12 |
 | `tab-history.test.js` | 탭별 히스토리 복원(ADR-031) — `tabOf` 분류(`/lectionary`·`/calendar` 는 캘린더 탭) | 12 |
 | `sw.test.js` | 서비스 워커 정적 검증 — `SHELL_FILES` 존재·`index.html` 패리티·import 닫힘(정적 + 지정자가 글자 그대로인 동적 `import()` — 주석 · 문자열을 걷은 코드에서 읽는다, 그 파서의 엣지 케이스 포함)과 거꾸로(프리캐시한 스크립트는 Worker · importScripts 대상만 빼고 import로 닿는다)·지연 로드(`js/`의 `import()`는 모두 글자 그대로 · import()로 부르는 모듈은 부팅 그래프 밖 · `routing.js`의 한꺼번에 묶음 = 그 화면 모듈의 정적 import − 부팅 그래프 — ADR-038 §2)·`cacheNameFor` 라우팅·매니페스트 대조(`data/` 없으면 skip, `sync-data.yml`에서 실행) | 12 |
