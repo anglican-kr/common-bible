@@ -1185,14 +1185,19 @@ test("_verseRangeKeys: without unitFn, no boundary expansion", () => {
 
 test("_verseRangeKeys: 나훔 1:1 → 2ㄱ — 범위가 9절 뒤의 2ㄴ 까지 늘어나지 않는다(사용자 결정 2026-10-22, 종전 1-9절)", () => {
   const h = loadVerseSelection();
-  const keys = [["1/1", false], ["2a/2aa", true], ["2a/2ab", true], ["3/3a", true], ["3/3b", true],
-    ["9/9a", true], ["9/9b", true], ["2b/2ba", true], ["2b/2bb", true], ["10/10", true]];
-  const article = makeArticleStub(keys);
-  const all = keys.map(([k]) => k);
+  // 실제 화면의 키(2026-10-22 덤프, 10절까지). 1절만 산문, 7-8 은 일곱 줄인 병합 절이다.
+  const poem = (instance, ref, letters) => [...letters].map((l) => [`${instance}/${ref}${l}`, true]);
+  const rows = [["1/1", false], ...poem("2a", "2a", "ab"), ...poem("3", "3", "abcde"), ...poem("4", "4", "abcd"),
+    ...poem("5", "5", "abcd"), ...poem("6", "6", "abcd"), ...poem("7", "7-8", "abcdefg"), ...poem("9", "9", "abc"),
+    ...poem("2b", "2b", "ab"), ...poem("10", "10", "ab")];
+  const article = makeArticleStub(rows);
+  const all = rows.map(([k]) => k);
+  const lines = (instance) => all.filter((k) => k.startsWith(`${instance}/`));
   const unit = (key) => h.verseSelectionUnit(article, key);
-  assert.deepEqual(h.verseRangeKeys(all, "1/1", "2a/2ab", unit), ["1/1", "2a/2aa", "2a/2ab"]);
-  assert.deepEqual(h.verseRangeKeys(all, "2b/2ba", "9/9b", unit), ["9/9a", "9/9b", "2b/2ba", "2b/2bb"]);
-  assert.deepEqual(h.verseRangeKeys(all, "3/3b", "1/1", unit), ["1/1", "2a/2aa", "2a/2ab", "3/3a", "3/3b"]);
+  assert.deepEqual(h.verseRangeKeys(all, "1/1", "2a/2ab", unit), ["1/1", ...lines("2a")]);
+  assert.deepEqual(h.verseRangeKeys(all, "2b/2ba", "9/9b", unit), [...lines("9"), ...lines("2b")]);
+  assert.deepEqual(h.verseRangeKeys(all, "3/3b", "1/1", unit), ["1/1", ...lines("2a"), ...lines("3")]);
+  assert.deepEqual(h.verseRangeKeys(all, "6/6d", "7/7-8c", unit), [...lines("6"), ...lines("7")]);
 });
 
 test("_verseRangeKeys: 옮겨 실린 41:6 에서 시작한 범위는 그 자리에서 시작한다 — 번호로는 앞의 40:6 에서 시작했다", () => {

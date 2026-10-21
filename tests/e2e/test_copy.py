@@ -582,6 +582,8 @@ def test_verse_select_one_half_verse_is_its_own_unit(page):
     """욥 31:40ㄱ 은 8절 뒤에, 40ㄴ 은 장 끝에 실린다. 40ㄱ 을 눌러도 장 끝의 40ㄴ 은 칠하지 않는다. 두 반쪽을 다 고르면
     출처는 「31:40」이다. 북마크 저장은 번호 단위 그대로다(ADR-010)."""
     ids, label = _verse_select(page, "job/31", "v40a")
+    assert ids == ["v40a"], ids
+    assert label == "40ㄱ절 선택됨", label
     page.click("#v40b")
     assert page.evaluate(_SELECTED_IDS) == ["v40a", "v40b"]
     assert page.inner_text("#verse-select-count") == "40절 선택됨"

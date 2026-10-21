@@ -116,9 +116,10 @@ test("verseInstanceKeys: 빈 입력은 빈 배열", () => {
 
 // ── selectionCitation · selectedSpanVrefs ──
 // 절 선택 막대의 「…절 선택됨」 · 복사 출처. 선택은 줄마다 다른 `data-vkey`(인스턴스 키 "/" data-vref)로 하고, 출처는
-// 그 줄들의 `data-vref` 로 적는다. 아래 장 발췌는 실제 화면의 키 · 표지 그대로다(2026-10-21 덤프). 화면은 절 전체를
-// 고르므로(views.js `_verseSelectionUnit`, 사용자 결정 2026-10-22) 한 줄만 고른 경우는 생기지 않지만, 생겨도 출처에
-// 줄 글자를 쓰지 않는다는 것을 함께 본다.
+// 그 줄들의 `data-vref` 로 적는다. 장 이름을 붙인 발췌(이사 40, 다니 3, 에스 4, 이사 7, 1사무 24, 욥 31, 나훔 1,
+// 이사 10, 판관 17)는 실제 화면의 키 · 표지 그대로다(2026-10-21 · 10-22 덤프 — 가운데 절을 뺀 곳은 있다). 이름 없는
+// 발췌는 규칙을 보이려고 만든 것이다. 화면은 절 전체를 고르므로(views.js `_verseSelectionUnit`, 사용자 결정 2026-10-22)
+// 한 줄만 고른 경우는 생기지 않지만, 생겨도 출처에 줄 글자를 쓰지 않는다는 것을 함께 본다.
 
 /** @param {Array<[string, string?, string?]>} rows [data-vkey, class list, data-chapter-ref] in document order */
 function articleOf(rows) {
@@ -135,6 +136,8 @@ const citeSpec = (keys, article) => {
   return `${chapter != null ? `${chapter}:` : ""}${ctx.citationVerseSpec(refs)}`;
 };
 const linesOf = (rows, verse) => rows.map(([k]) => k).filter((k) => k.startsWith(`${verse}/`));
+/** 운문 여러 줄 — 줄 글자마다 [「인스턴스/번호+글자」, "verse-poetry"]. */
+const poem = (instance, ref, letters) => [...letters].map((l) => [`${instance}/${ref}${l}`, "verse-poetry"]);
 
 // 이사 40 — 41:6-7 이 19 와 20 사이에 옮겨 실렸다.
 const ISA40 = [
@@ -244,18 +247,37 @@ test("selectionCitation: 한 줄짜리 반쪽 절(1사무 24:5ㄱ)과 줄 수가
   assert.strictEqual(citeSpec(["5a/5a"], sam), "5ㄱ");
   assert.strictEqual(citeSpec(["4/4", "5a/5a", "7/7"], sam), "4,5ㄱ,7");
   assert.strictEqual(citeSpec(["5a/5a", "5b/5b"], sam), "5");
-  const job = articleOf([["39/39"], ["40a/40aa"], ["40a/40ab"], ["9/9"], ["40b/40b"]]);
+  // 욥 31 — 38-40ㄱ 이 8절 뒤에 실리고 40ㄴ(산문 한 줄)은 장 끝에 있다(사이의 절은 뺐다).
+  const job = articleOf([...poem("39", "39", "ab"), ...poem("40a", "40a", "ab"), ...poem("9", "9", "ab"), ["40b/40b"]]);
   assert.strictEqual(citeSpec(["40a/40aa", "40a/40ab"], job), "40ㄱ");   // 종전 막대 「40aa」
   assert.strictEqual(citeSpec(["40b/40b"], job), "40ㄴ");
 });
 
+// 나훔 1 — 2ㄱ 은 1절 뒤, 2ㄴ 은 9절 뒤에 실린다. 7-8 은 일곱 줄인 병합 절이다. 1절만 산문이다(10절까지).
+const NAH1 = [["1/1"], ...poem("2a", "2a", "ab"), ...poem("3", "3", "abcde"), ...poem("4", "4", "abcd"),
+  ...poem("5", "5", "abcd"), ...poem("6", "6", "abcd"), ...poem("7", "7-8", "abcdefg"), ...poem("9", "9", "abc"),
+  ...poem("2b", "2b", "ab"), ...poem("10", "10", "ab")];
+
 test("selectionCitation: 나훔 1 — 2ㄱ 은 1절 뒤, 2ㄴ 은 9절 뒤에 실린다(사용자 결정 2026-10-22, 종전 1 → 2ㄱ 이 「1-6,7-8,9」)", () => {
-  const rows = [["1/1"], ["2a/2aa"], ["2a/2ab"], ["3/3"], ["4/4"], ["5/5"], ["6/6"], ["7/7-8a"], ["7/7-8b"], ["9/9"],
-    ["2b/2ba"], ["2b/2bb"], ["10/10"]];
-  const a = articleOf(rows);
-  assert.strictEqual(citeSpec(["1/1", "2a/2aa", "2a/2ab"], a), "1,2ㄱ");
-  assert.strictEqual(citeSpec(rows.slice(0, 10).map(([k]) => k), a), "1,2ㄱ,3-9");
-  assert.strictEqual(citeSpec(rows.map(([k]) => k), a), "1-10");
+  const a = articleOf(NAH1);
+  const keys = NAH1.map(([k]) => k);
+  assert.strictEqual(citeSpec(["1/1", ...linesOf(NAH1, "2a")], a), "1,2ㄱ");
+  assert.strictEqual(citeSpec(keys.slice(0, keys.indexOf("2b/2ba")), a), "1,2ㄱ,3-9");
+  assert.strictEqual(citeSpec(keys, a), "1-10");
+  assert.strictEqual(citeSpec(linesOf(NAH1, "7"), a), "7-8");
+});
+
+test("selectionCitation: ㄴ 이 ㄱ 보다 앞에 실린 장 — 이사 10(18ㄴ 이 16ㄱ · 16ㄴ 사이) · 판관 17(3ㄴ 이 2ㄱ · 2ㄴ 사이)", () => {
+  const ISA10 = [...poem("15", "15", "abcd"), ...poem("16a", "16a", "ab"), ...poem("18b", "18b", "ab"),
+    ...poem("16b", "16b", "ab"), ...poem("17", "17", "abc"), ...poem("18a", "18a", "ab"), ...poem("19", "19", "ab")];
+  const isa = articleOf(ISA10);
+  assert.strictEqual(citeSpec([...linesOf(ISA10, "16a"), ...linesOf(ISA10, "18b"), ...linesOf(ISA10, "16b")], isa), "16,18ㄴ");
+  assert.strictEqual(citeSpec(linesOf(ISA10, "18b"), isa), "18ㄴ");
+  assert.strictEqual(citeSpec(ISA10.map(([k]) => k).filter((k) => !k.startsWith("19/")), isa), "15-18");
+  const judg = articleOf([["1/1"], ["2a/2a"], ["3b/3b"], ["2b/2b"], ["3a/3a"], ["4/4"]]);
+  assert.strictEqual(citeSpec(["3b/3b"], judg), "3ㄴ");
+  assert.strictEqual(citeSpec(["1/1", "2a/2a", "3b/3b"], judg), "1,2ㄱ,3ㄴ");
+  assert.strictEqual(citeSpec(["1/1", "2a/2a", "3b/3b", "2b/2b", "3a/3a"], judg), "1-3");
 });
 
 test("citationVerseSpec: 병합 절을 구간에 잇고 반쪽 절은 「ㄱ · ㄴ」 — 저장 표기(selectedVersesToSpec)와 다른 두 곳", () => {
