@@ -3,9 +3,10 @@
 // Unit tests for js/app/routing.js — the pure PARSE_PATH block (parsePath).
 // parsePath turns location.pathname/search into a route descriptor with no DOM
 // or history side effects, so it slices cleanly into a bare vm. The real
-// verse-spec VERSE_SPEC block (parseVerseSpec / selectedVersesToSpec) is loaded
-// alongside so the multi-segment deep-link branch is exercised faithfully
-// rather than against a stub. Harness mirrors tests/unit/views.test.js.
+// verse-spec VERSE_SPEC block (parseVerseSpec / selectedVersesToSpec /
+// isWellFormedSpec) is loaded alongside so the multi-segment deep-link branch
+// is exercised faithfully rather than against a stub. Harness mirrors
+// tests/unit/views.test.js.
 
 const test = require("node:test");
 const assert = require("node:assert");
@@ -264,11 +265,92 @@ test("parsePath: 동일 범위(16-16)는 단일 절로 축약", () => {
 });
 
 test("parsePath: 다중 세그먼트 스펙은 verse-spec로 정규화", () => {
-  const r = parse("/john/3/10-12,1-3");
-  // segs sorted ascending → start 1, end 12; spec re-serialized canonical.
+  const r = parse("/john/3/1-3,4,10-12");
+  // start 1, end 12; adjacent segments merge as the spec is re-serialized canonical.
   assert.equal(r.highlightVerse, 1);
   assert.equal(r.highlightVerseEnd, 12);
-  assert.equal(r.highlightVerseSpec, "1-3,10-12");
+  assert.equal(r.highlightVerseSpec, "1-4,10-12");
+});
+
+// ── 여러 구간은 앱이 쓰는 표기만 — 아래 갈래가 절 하나하나로 펼친다(known-issues §15) ──
+
+test("parsePath: 큰 범위가 든 여러 구간은 펼치지 않고 강조 없이 장만 연다 — 예외는 시작 화면을 멈췄다(known-issues §15)", () => {
+  // 1-4294967296 — Array.from이 「Invalid array length」를 던져 route()가 끝나지 못했다(처음 여는 링크면 시작 화면에서 멈춤).
+  // 1-100000000은 30초 넘게 펼치다 「Set maximum size exceeded」. 이 넷은 뒤의 「,5」 때문에 순서 검사에도 걸린다 —
+  // 숫자 상한(1-999)만 따로 보는 것은 오름차순 셋이다. 5,7-4294967296은 배열 길이 한도(2³²−1) 안이라 예외 없이
+  // 42억 칸을 채우다 탭이 죽었다(Page crashed — PR #362 리뷰).
+  for (const spec of [
+    "1-4294967296,5", "1-100000000,5", "1-1000,5", "9007199254740993,5",
+    "5,7-4294967296", "5,1000", "5,9007199254740993",
+  ]) {
+    const r = parse(`/john/3/${spec}`);
+    assert.equal(r.view, "chapter", spec);
+    assert.equal(r.chapter, 3, spec);
+    assert.equal(r.highlightVerseSpec, null, spec);
+    assert.equal(r.highlightVerse, null, spec);
+    assert.equal(r.highlightVerseEnd, null, spec);
+  }
+});
+
+test("parsePath: 구간이 1,000개를 넘거나 같은 구간을 되풀이한 주소는 강조 없이 장만 연다 — 탭 바가 스크롤 프레임마다 주소를 다시 읽는다", () => {
+  const LETTERS = "abcdefghijklmnop";
+  const floods = [
+    Array.from({ length: 1001 }, (_, i) => `${1 + Math.floor(i / 16)}${LETTERS[i % 16]}`).join(","),   // 오름차순 부분 절 1,001개
+    Array(1000).fill("1-176").join(","),
+    Array(100_000).fill("16").join(","),
+  ];
+  for (const spec of floods) {
+    const r = parse(`/ps/119/${spec}`);
+    assert.equal(r.highlightVerseSpec, null, spec.slice(0, 24));
+    assert.equal(r.highlightVerse, null, spec.slice(0, 24));
+  }
+});
+
+test("parsePath: 앱이 쓰지 않는 순서 · 겹침 · 앞자리 0의 여러 구간도 강조 없이 장만 연다(가져오기 검사와 같은 기준 — ADR-040)", () => {
+  for (const spec of ["10-12,1-3", "1-5,3-7", "16,16", "3b,3a", "016,20", "5-3,7", "5a,3", "16aa,3"]) {
+    const r = parse(`/john/3/${spec}`);
+    assert.equal(r.view, "chapter", spec);
+    assert.equal(r.highlightVerseSpec, null, spec);
+    assert.equal(r.highlightVerse, null, spec);
+  }
+});
+
+test("parsePath: 주소의 앞뒤 쉼표는 걷고 본다 — 링크 바로 뒤에 친 쉼표(사용자 결정 2026-10-21)", () => {
+  // main은 parseVerseSpec이 빈 구간을 건너뛰어 이런 링크도 강조했다. 가져오기 검사는 그대로 엄격하다(bookmark.test.js).
+  assert.equal(parse("/john/3/16,").highlightVerse, 16);
+  assert.equal(parse(`/john/3/16${",".repeat(200_000)}`).highlightVerse, 16);
+  assert.equal(parse("/john/3/16-18,20,").highlightVerseSpec, "16-18,20");
+  const lead = parse("/john/3/,,16-18");
+  assert.equal(lead.highlightVerse, 16);
+  assert.equal(lead.highlightVerseEnd, 18);
+  // 가운데의 빈 구간 · 같은 값 범위는 그대로 앱이 쓰지 않는 표기라 장만 연다.
+  for (const spec of ["16,,18", "16-16,18", ","]) {
+    const r = parse(`/john/3/${spec}`);
+    assert.equal(r.highlightVerseSpec, null, spec);
+    assert.equal(r.highlightVerse, null, spec);
+  }
+});
+
+test("parsePath: 긴 쉼표 줄 뒤에 다른 글자가 와도 바로 끝난다 — 정규식(/^,+|,+$/)으로 걷으면 제곱 시간", () => {
+  // 그 정규식은 쉼표 4만 개에 약 1초가 걸렸다(쉼표가 두 배면 네 배). 이 함수는 스크롤 프레임마다 돈다.
+  // 반복문은 처음 · 마지막 글자에서 바로 멈춘다 — 상한은 그 차이를 넉넉히 덮는다.
+  const started = Date.now();
+  const r = parse(`/john/3/16${",".repeat(100_000)}x`);
+  assert.ok(Date.now() - started < 2000, `${Date.now() - started}ms`);
+  assert.equal(r.highlightVerseSpec, null);
+  assert.equal(r.highlightVerse, null);
+});
+
+test("parsePath: #205 전 앱이 쓴 표기(16aa · 16-17a)는 예전처럼 그 구간만 빠진다(사용자 결정 2026-10-19)", () => {
+  assert.equal(parse("/john/3/16aa,17").highlightVerseSpec, "17");
+  assert.equal(parse("/john/3/16-17a,16-17b").highlightVerseSpec, null);
+});
+
+test("parsePath: 구간 하나는 펼치지 않으므로 큰 끝도 그대로 넘긴다 — renderChapter가 장의 마지막 절로 자른다", () => {
+  const r = parse("/john/3/1-4294967296");
+  assert.equal(r.highlightVerse, 1);
+  assert.equal(r.highlightVerseEnd, 4294967296);
+  assert.equal(r.highlightVerseSpec, null);
 });
 
 test("parsePath: 부분 절(3a,3b) 스펙 보존", () => {

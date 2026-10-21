@@ -124,9 +124,9 @@ function _updateDragIndicators(clientX, clientY) {
 // (ADR-010 mobile pattern) but are not part of the swipe state surface.
 
 // Mobile swipe-to-reveal: tracks the single revealed row so opening a new one
-// auto-closes the previous. Bidirectional (ADR-010 개정 2026-06-06): swiping a
-// row left reveals 수정 on the right edge, swiping right reveals 삭제 on the
-// left edge, and a full swipe executes the action. The opaque .bm-row-content
+// auto-closes the previous. Bidirectional (ADR-010 「모바일 행」): swiping a
+// row left reveals 삭제 on the right (trailing) edge, swiping right reveals 수정
+// on the left (leading) edge, and a full swipe executes the action. The opaque .bm-row-content
 // is the slider that exposes the edge-anchored actions.
 // (SWIPE_REVEAL_PX lives in the SWIPE_GESTURE block below with the rest of
 // the gesture-math constants.)
@@ -157,8 +157,8 @@ function closeSwipedRow(except) {
   }
 }
 
-// Snap a row open in `dir`: "edit" reveals 수정 (right edge, content slid left),
-// "delete" reveals 삭제 (left edge, content slid right). The CSS class drives the
+// Snap a row open in `dir`: "edit" reveals 수정 (left edge, content slid right),
+// "delete" reveals 삭제 (right edge, content slid left). The CSS class drives the
 // slide, so the inline transform left by the drag is cleared.
 /** @param {HTMLElement} row @param {"edit" | "delete"} dir */
 function _openSwipedRow(row, dir) {

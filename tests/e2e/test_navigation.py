@@ -5,10 +5,16 @@ Covers:
   - verse range path           /#/john/3/16-20
   - over-range clamped         /#/john/3/16-200  → 16-36 + URL rewritten
   - reversed range normalized  /#/john/3/20-16
+  - reversed and over-range    /#/john/3/40-10   → 10-36 + URL rewritten ascending (was 40-36)
   - legacy query form ignored  /#/gen/1?v=3&ve=5
   - combined path + hl param   /#/john/3/16?hl=사랑
   - invalid verse ignored      /#/john/3/abc
   - same-value range           /#/john/3/16-16
+  - multi-segment              /#/john/3/16-18,20 → highlighted; trailing comma /#/john/3/16-18, → highlighted;
+                               out of order /#/john/3/20,16-18 → chapter only
+  - multi-segment the app does not write → chapter only, no page error
+      cold link: huge range · ascending huge range · 100M range · repeated segments (launch screen cleared)
+      in-app navigation: huge range
 """
 
 import re
@@ -89,6 +95,37 @@ def navigate_and_wait(page, hash_: str):
             None,
             None,
         ),
+        (
+            # 거꾸로 되고 장을 넘는 범위 — 다시 쓴 주소가 「40-36」이 되어 다시 열면 36절만 강조됐다(PR #362 리뷰).
+            "reversed and over-range rewritten ascending",
+            "#/john/3/40-10",
+            [f"v{n}" for n in range(10, 37)],
+            r"/john/3/10-36$",
+            None,
+        ),
+        (
+            "multi-segment as the app writes it",
+            "#/john/3/16-18,20",
+            ["v16", "v17", "v18", "v20"],
+            None,
+            None,
+        ),
+        (
+            # 링크 바로 뒤에 친 쉼표 — 주소에서만 앞뒤 쉼표를 걷는다(사용자 결정 2026-10-21).
+            "multi-segment with a trailing comma",
+            "#/john/3/16-18,",
+            ["v16", "v17", "v18"],
+            None,
+            None,
+        ),
+        (
+            # 여러 구간은 앱이 쓰는 표기만 강조한다 — 가져오기 검사와 같은 기준(known-issues §15, ADR-040).
+            "multi-segment out of order opens the chapter only",
+            "#/john/3/20,16-18",
+            [],
+            None,
+            None,
+        ),
     ],
 )
 def test_verse_url(page, label, hash_, expected_ids, hash_re, expected_mark):
@@ -109,6 +146,58 @@ def test_verse_url(page, label, hash_, expected_ids, hash_re, expected_mark):
             ".map(m => m.textContent)"
         )
         assert expected_mark in marks, f"[{label}] mark {expected_mark!r} not found in {marks}"
+
+
+# ── 여러 구간 주소의 절 범위 — 앱이 쓰지 않는 표기는 장만 연다(known-issues §15) ─────────────
+
+@pytest.mark.parametrize(
+    "spec",
+    ["1-4294967296,5", "5,7-4294967296", "1-100000000,5", ",".join(["1-36"] * 1600)],
+    ids=["huge-range", "ascending-huge-range", "hundred-million-range", "repeated-segments"],
+)
+def test_multi_segment_spec_the_app_does_not_write_opens_chapter(browser, spec):
+    """처음 여는 링크의 여러 구간에 앱이 쓰지 않는 절 범위가 있으면 강조 없이 장만 연다.
+
+    그전엔 parsePath가 구간을 절 하나하나로 펼쳐, 큰 범위는 「Invalid array length」로 시작 화면에서 멈췄고
+    오름차순 큰 범위(5,7-4294967296)는 배열 길이 한도 안이라 42억 칸을 채우다 탭이 죽었다. 1억 절 범위는 30초
+    넘게 멈췄다. 같은 구간을 되풀이한 주소는 장이 열렸지만, 탭 바가 스크롤 프레임마다 주소를 다시 읽어 그만큼
+    펼쳤다(여기서는 1,600번 — nginx가 기본으로 받는 요청 줄 8KB 안의 길이)."""
+    ctx = browser.new_context(service_workers="block")
+    page = ctx.new_page()
+    errors = []
+    page.on("pageerror", lambda e: errors.append(str(e)))
+    try:
+        page.goto(f"{BASE}/john/3/{spec}")
+        page.wait_for_selector("article.chapter-text .verse", timeout=5_000)
+        # The launch screen fades out after fonts are ready (settings-ui.js dismissLaunchScreen) — wait for it.
+        page.wait_for_function("() => document.documentElement.classList.contains('launch-done')", timeout=5_000)
+        assert page.locator("article.chapter-text .verse").count() == 36
+        assert highlighted_verse_ids(page) == []
+        assert errors == [], errors
+    finally:
+        ctx.close()
+
+
+def test_in_app_navigation_to_huge_range_draws_chapter(browser):
+    """앱 안에서 그런 주소로 가도 장을 그린다 — 검사 없는 1.6.4 이하에서 들인 북마크(그 기기에 남은 것 · 동기화로
+    온 것)도 이 길로 연다. 그전엔 route()가 예외로 끝나 앞 화면(창세기 1장)에 머물렀다."""
+    ctx = browser.new_context(service_workers="block")
+    page = ctx.new_page()
+    errors = []
+    page.on("pageerror", lambda e: errors.append(str(e)))
+    try:
+        page.goto(f"{BASE}/gen/1")
+        page.wait_for_selector("article.chapter-text .verse")
+        page.evaluate("() => window.navigate('/john/3/1-4294967296,5')")
+        page.wait_for_function(
+            "() => document.getElementById('page-title')?.textContent.includes('요한의 복음서 3장')"
+            " && document.querySelectorAll('article.chapter-text .verse').length === 36",
+            timeout=5_000,
+        )
+        assert highlighted_verse_ids(page) == []
+        assert errors == [], errors
+    finally:
+        ctx.close()
 
 
 # ── 보강: 책 목록 / 장 이동 / 장 선택 팝오버 ─────────────────────────────────

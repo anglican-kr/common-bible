@@ -12,7 +12,8 @@
 // Coverage:
 //   - VERSE_SPEC block — verse spec parse / compare / serialize / merge
 //     (+ collapseFullVerseRefs, with a tiny `article.querySelectorAll`
-//     stub so the rendered-spans lookup resolves)
+//     stub so the rendered-spans lookup resolves) + isWellFormedSpec, the
+//     check a spec from outside (import file · address) must pass
 //   - BOOKMARK_QUERY block — _isDescendant / _walkBookmarks / findExistingChapterBookmarks
 //     / _findItemInStore / _findParentFolderId / removeItemById / insertItem
 //     / collectFolderOptions. `loadBookmarks` provided as stub.
@@ -25,8 +26,9 @@
 //     + _hasActiveDescendant. Tests pass the pathname explicitly via the
 //     optional parameter rather than driving the renderer.
 //   - IMPORT_EXPORT block — _validateImportData / _mergeBookmarkStores /
-//     _countBookmarks / _sanitizeImportItems / _isWellFormedSpec / _fitsStorage
-//     (pure helpers, no DOM), with the real sync store (js/sync/store-v2.js)
+//     _countBookmarks / _sanitizeImportItems / _fitsStorage
+//     (pure helpers, no DOM — loaded after VERSE_SPEC, whose isWellFormedSpec
+//     the item check imports), with the real sync store (js/sync/store-v2.js)
 //     for the save-and-read round trips.
 
 import test from "node:test";
@@ -115,6 +117,7 @@ function loadVerseSpec() {
   vm.runInContext(extractBlock("VERSE_SPEC", VERSE_SPEC_SOURCE), ctx, { filename: "verse-spec.js" });
   return {
     parseVerseSpec: ctx.parseVerseSpec,
+    isWellFormedSpec: ctx.isWellFormedSpec,
     collapseFullVerseRefs: ctx.collapseFullVerseRefs,
     collapseSegmentedVerses: ctx.collapseSegmentedVerses,
     _compareRefs: ctx._compareRefs,
@@ -1295,6 +1298,8 @@ function loadBookmarkActive() {
 function loadImportExport() {
   const ctx = { Object, Array, Set, String, JSON, console, Error };
   vm.createContext(ctx);
+  // The verse-spec check (isWellFormedSpec) is an import of bookmark-modals.js — the VERSE_SPEC block stands in for it.
+  vm.runInContext(extractBlock("VERSE_SPEC", VERSE_SPEC_SOURCE), ctx, { filename: "verse-spec.js" });
   vm.runInContext(extractBlock("IMPORT_EXPORT", BOOKMARK_MODALS_SOURCE), ctx, { filename: "bookmark-modals.js" });
   // A top-level const is not a property of the context's global — read it as an expression.
   const constant = (name) => vm.runInContext(name, ctx);
@@ -1303,7 +1308,6 @@ function loadImportExport() {
     _mergeBookmarkStores: ctx._mergeBookmarkStores,
     _countBookmarks: ctx._countBookmarks,
     _sanitizeImportItems: ctx._sanitizeImportItems,
-    _isWellFormedSpec: ctx._isWellFormedSpec,
     _fitsStorage: ctx._fitsStorage,
     IMPORT_MAX_FOLDER_DEPTH: constant("IMPORT_MAX_FOLDER_DEPTH"),
     STORAGE_QUOTA_BYTES: constant("STORAGE_QUOTA_BYTES"),
@@ -1870,19 +1874,19 @@ test("_sanitizeImportItems: what it keeps survives the sync store's save and rea
 
 // ── PR #359 리뷰 2회차 — 검사가 타입만 보고, 그 값을 받는 코드가 다룰 수 있는 형식인지 보지 않아 샌 것들 ──
 
-test("_isWellFormedSpec: the forms the app writes, and the two the pre-#205 app wrote, are accepted", () => {
-  const h = loadImportExport();
+test("isWellFormedSpec: the forms the app writes, and the two the pre-#205 app wrote, are accepted", () => {
+  const h = loadVerseSpec();
   const accepted = [
     "all", "16", "1-5,10-15", "3a,3b,5-7", "1-3", "3a", "6,7-8,9", "3,3a", "2-3,3a,4", "176", "1p",
     // #205(2026-06-06) 전 앱이 쓴 표기 — 반쪽 절의 한 줄 「16aa」, 병합 절의 한 줄 「16-17a」. 그 판의 정렬은 줄 글자를
     // 따르지 않았다(「16-17b,16-17a」). 그대로 받는다(사용자 결정 2026-10-19).
     "16aa", "16-17a,16-17b", "16-17b,16-17a", "8ba,8ab", "3a,3bb",
   ];
-  assert.deepEqual(accepted.filter((spec) => !h._isWellFormedSpec(spec)), []);
+  assert.deepEqual(accepted.filter((spec) => !h.isWellFormedSpec(spec)), []);
 });
 
-test("_isWellFormedSpec: what got through before is rejected (PR #359 review)", () => {
-  const h = loadImportExport();
+test("isWellFormedSpec: what got through before is rejected (PR #359 review)", () => {
+  const h = loadVerseSpec();
   const flood = (seg, n) => Array(n).fill(seg).join(",");
   const rejected = [
     // a huge number hung 합치기 (mergeVerseSpecs walks every verse of a range) · a huge range threw while routing
@@ -1891,15 +1895,15 @@ test("_isWellFormedSpec: what got through before is rejected (PR #359 review)", 
     " 16 ", "1, 2", "16　", "﻿16", "16\t", "1,\n2", " all",
     // backward and empty ranges — "5-0" lost verses on 합치기
     "5-0", "1-0", "0-5", "0", "5-3", "3-3",
-    // repeats, overlaps, out of order
-    "16,16", "1-5,3-7", "5,3", "3b,3a", "16aa,16aa", "1-5,3a",
+    // repeats, overlaps, out of order — "5a,3" · "16aa,3" are caught only by the ascending-start check (PR #362 review)
+    "16,16", "1-5,3-7", "5,3", "3b,3a", "16aa,16aa", "1-5,3a", "5a,3", "16aa,3",
     // not a segment
     "", ",1", "1,", "1,,2", "01", "3z", "3A", "3ab-5", "16aaa", "16-17ab", "16-15a", "ALL", "abc",
     // floods — the router re-reads the spec on every scroll frame
     flood("16", 100_000), flood("1-176", 100_000),
     Array.from({ length: 2000 }, (_, i) => `${1 + Math.floor(i / 16)}${"abcdefghijklmnop"[i % 16]}a`).join(","),
   ];
-  assert.deepEqual(rejected.filter((spec) => h._isWellFormedSpec(spec)).map((spec) => spec.slice(0, 24)), []);
+  assert.deepEqual(rejected.filter((spec) => h.isWellFormedSpec(spec)).map((spec) => spec.slice(0, 24)), []);
 });
 
 // Every spec the app writes passes: today's 저장 (collapseSegmentedVerses → selectedVersesToSpec) and 합치기
@@ -1907,8 +1911,7 @@ test("_isWellFormedSpec: what got through before is rejected (PR #359 review)", 
 // chapters shaped like the data — half verses ("3a" "3b"), merged verses ("7-8"), verses drawn in lines ("9a" … up to
 // "p"), and both at once ("8aa", "7-8a") — from a fixed seed, so no real data is needed (the public CI has none).
 // Checked once against the real data too: 34,003 specs today's app writes, 60,384 the pre-#205 app wrote — all pass.
-test("_isWellFormedSpec: every spec the app writes over synthetic chapters is accepted", () => {
-  const h = loadImportExport();
+test("isWellFormedSpec: every spec the app writes over synthetic chapters is accepted", () => {
   const v = loadVerseSpec();
   let seed = 20261019;
   const rnd = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
@@ -1953,7 +1956,7 @@ test("_isWellFormedSpec: every spec the app writes over synthetic chapters is ac
     for (let i = 1; i < saved; i++) written.push(v.mergeVerseSpecs(written[i - 1], written[i]));
     for (const spec of written) {
       checked += 1;
-      if (!h._isWellFormedSpec(spec)) failures.push(spec);
+      if (!v.isWellFormedSpec(spec)) failures.push(spec);
     }
   }
   assert.ok(checked > 3000, `${checked} specs`);
