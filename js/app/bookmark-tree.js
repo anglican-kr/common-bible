@@ -203,7 +203,7 @@ function _buildBookmarkItem(bm, depth) {
   actions.appendChild(editBtn);
   actions.appendChild(delBtn);
 
-  // Mobile swipe actions (edge-anchored, hidden on desktop): 삭제 left, 수정 right.
+  // Mobile swipe actions (edge-anchored, hidden on desktop): 삭제 on the right edge (swipe left), 수정 on the left (swipe right).
   const { del, edit } = _buildSwipeActions(bm.label ?? "", editAction, deleteAction);
 
   content.appendChild(typeIcon);
@@ -396,7 +396,7 @@ function _buildFolderItem(folder, depth) {
   actions.appendChild(renameBtn);
   actions.appendChild(delBtn);
 
-  // Mobile swipe actions (edge-anchored, hidden on desktop): 삭제 left, 수정 right.
+  // Mobile swipe actions (edge-anchored, hidden on desktop): 삭제 on the right edge (swipe left), 수정 on the left (swipe right).
   const { del, edit } = _buildSwipeActions(folder.name, renameAction, deleteAction);
 
   content.appendChild(toggle);
