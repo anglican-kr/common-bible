@@ -2,13 +2,13 @@
 
 **변경 하나에 파일 하나.** 이 디렉터리는 지식 베이스의 **원자료 층**이다 — 여기서 추려 낸 정리 층이 `status.md`(지금 동작하는 것) · `decisions/`(왜 그렇게 정했나) · `known-issues.md`(남은 것) · `coding-pitfalls.md`(조심할 것) · `index.md`(무엇을 먼저 읽나)다.
 
-PR 본문은 여기 파일에서 파생한다 (`gh pr create --body-file docs/changes/<파일>`). 같은 글을 두 번 쓰지 않고, 원본은 항상 저장소 안에 남는다. 흐름을 보려면 GitHub 가 아니라 이 디렉터리를 `ls`·`grep` 한다.
+PR 본문은 여기 파일에서 파생한다. frontmatter를 뺀 나머지가 본문이다(`scripts/pr_body.sh`). 같은 글을 두 번 쓰지 않고, 원본은 항상 저장소 안에 남는다. 흐름을 보려면 GitHub 가 아니라 이 디렉터리를 `ls`·`grep` 한다.
 
 ## 파일 이름
 
 `YYYY-MM-DD-<slug>.md` — 날짜는 작성일(머지일 아님), slug 는 브랜치 이름에서 타입 접두어를 뗀 것. PR 번호는 생성 직후 훅이 frontmatter 에 적는다.
 
-- 소급 기록(2026-09-20 에 빠져 있던 과거 기록을 한꺼번에 채워 넣은 것) 파일은 예외 — `…-worklog[-N].md` 는 옛 `docs/worklog.md` 를 날짜 블록별로 그대로 옮긴 것(`source: worklog`), `…-prNNN-<slug>.md` 는 머지된 PR 본문을 GitHub 에서 받아 저장한 것(날짜 = KST 머지일). 내용은 손대지 않았다.
+- 이 디렉터리의 원장은 2026-09-20부터다. 그 전의 기록은 여기 없다. PR 본문은 GitHub에, 옛 `docs/worklog.md`는 git 이력에 있다(`git show 243bf83^:docs/worklog.md`). #331이 이 둘을 소급해 들여왔던 사본 340개(`…-worklog[-N].md`, `…-prNNN-<slug>.md`)는 2026-10-22에 지웠다(사용자 결정, coding-pitfalls §17). `2026-10-10-pr339-review-followup.md`는 이름이 비슷하지만 이 형식으로 쓴 원장이다.
 
 ## 형식
 
@@ -16,10 +16,8 @@ PR 본문은 여기 파일에서 파생한다 (`gh pr create --body-file docs/ch
 ---
 date: 2026-09-20
 branch: feat/xxx
-title: "feat: 한 줄 제목 (커밋 메시지 규칙과 동일)"
+title: "feat: 짧은 문구 제목 (커밋 메시지 규칙과 동일)"
 ---
-
-# feat: 한 줄 제목
 
 ## 요약
 
@@ -44,10 +42,12 @@ title: "feat: 한 줄 제목 (커밋 메시지 규칙과 동일)"
 
 ## 규칙
 
-- **제목(`title:` — 곧 PR 제목)은 짧고 간결하게** — 무엇을 고쳤는지 한 줄만. 절 번호 · 건수 · 「무엇이 어떻게」 같은 세부는 본문(「요약」 이하)에 채운다(사용자 교정 2026-10-17 — 「PR 제목은 길지 않고 간결하게」 · 「세부 내용은 PR 본문에 채우면 되니까」).
+- **제목(`title:` — 곧 PR 제목)은 짧고 간결하게** — 무엇을 고쳤는지 한 줄만. 절 번호 · 건수 · 「무엇이 어떻게」 같은 세부는 본문(「요약」 이하)에 채운다(사용자 교정 2026-10-17 — 「PR 제목은 길지 않고 간결하게」 · 「세부 내용은 PR 본문에 채우면 되니까」). 문장이 아니라 문구로 쓴다(「docs: 사용하지 않는 기록 정리」). 사용자 교정 2026-10-22, coding-pitfalls §30.
+- **PR 본문에는 frontmatter와 제목을 넣지 않는다**(사용자 교정 2026-10-22). 그래서 원장에도 `# 제목` 줄을 두지 않는다. 본문은 `scripts/pr_body.sh <원장>`이 frontmatter를 빼고 만든다.
 - **머지는 squash**(사용자 결정 2026-10-17 — CLAUDE.md 「브랜치 보호」). 그래서 `title:`이 그대로 main의 커밋 제목이 된다(`<제목> (#N)`) — 타입 접두어와 짧은 제목이 곧 main 이력이다. 항목별 커밋은 계속 의미가 있다 — 그 메시지 목록이 squash 커밋의 본문이 된다. 원장에 적는 커밋 SHA(리뷰 반영의 묶음별 커밋 등)는 main에 남지 않고 PR 페이지(Commits 탭)에만 남는다 — rebase 머지도 SHA를 새로 써서 같은 처지였다.
-- 작성 시점은 **PR 을 열기 직전**. 이 파일을 커밋한 뒤 `gh pr create --body-file` 로 연다. `.claude/hooks/pre-pr-ledger.sh` 가 파일 없는 PR 생성을 막고, `.github/workflows/ledger.yml` 이 PR diff 에 새 원장 파일이 있는지 CI 에서 다시 검사한다(`sync/` 자동 PR 은 면제).
-- PR이 열린 뒤 내용이 바뀌면(리뷰 반영, 범위 변경) 원장 파일을 고치고 PR 본문을 REST로 다시 맞춘다 — `gh api -X PATCH repos/anglican-kr/common-bible/pulls/<N> -F body=@<파일>`. GraphQL을 쓰는 `gh pr edit --body-file`은 projectCards 오류로 실패한 적이 있다(2026-09).
+- 작성 시점은 **PR 을 열기 직전**. 이 파일을 커밋한 뒤 `gh pr create --body-file` 로 연다. 이 명령은 파일을 frontmatter째 올리므로, 만든 직후 아래 줄의 명령으로 본문을 맞춘다. `.claude/hooks/pre-pr-ledger.sh` 가 파일 없는 PR 생성을 막고, `.github/workflows/ledger.yml` 이 PR diff 에 새 원장 파일이 있는지 CI 에서 다시 검사한다(`sync/` 자동 PR 은 면제).
+- PR이 열린 뒤 내용이 바뀌면(리뷰 반영, 범위 변경) 원장 파일을 고치고 PR 본문을 REST로 다시 맞춘다 — `bash scripts/pr_body.sh <파일> | gh api -X PATCH repos/anglican-kr/common-bible/pulls/<N> -F body=@-`. GraphQL을 쓰는 `gh pr edit --body-file`은 projectCards 오류로 실패한 적이 있다(2026-09).
 - 머지 후에는 고치지 않는다. 사실이 바뀌면 새 변경의 원장에 적고, 정리 층 문서를 갱신한다.
 - **머지된 PR을 되돌릴 때도 원장은 남긴다.** `git revert`는 그 PR의 원장까지 지우므로 아래 게이트에 걸린다 — 되돌림 커밋에서 원장 파일을 제외하고(`git revert -n <sha>` — 그 PR의 squash 커밋 하나 — 뒤 `git restore --staged --worktree -- docs/changes/`), 무엇을 왜 되돌렸는지 **새 원장**에 적는다. 되돌렸다는 사실도 기록이다.
 - 위 규칙은 세 장치가 강제한다 — CI `.github/workflows/ledger.yml` 이 base 에 이미 있는 원장을 PR 이 건드리면(추가 `A`·복사 `C` 를 뺀 모든 상태 — 수정·삭제·이름변경은 물론 심볼릭 링크로 바꿔치기까지) 실패시키고, `.claude/hooks/pre-commit-ledger.sh` 가 `git commit` 단계에서 같은 판정으로 deny 하며, `scripts/lock_merged_ledgers.sh` 가 로컬에서 머지된 원장을 읽기 전용(`chmod a-w`)으로 잠근다. 잠금은 손으로 고치는 것만 막는 보조 수단이다 — `npm test` 앞(`pretest`)과 `gh pr create` 뒤(`post-pr-ledger.sh`)에 자동으로 돌지만, git 이 파일 모드를 저장하지 않으므로 클론마다 사라지고 `git checkout`·`merge`·`apply` 는 잠금을 조용히 푼다(`--unlock` 으로도 푼다). 이 `README.md` 자체는 세 장치 모두 예외라 계속 고칠 수 있다.
+- **일회성 예외 (2026-10-22).** CI와 커밋 훅은 #331(`243bf83`)이 들여온 소급 사본 340개의 **삭제만** 허용한다. 고치기와 이름 바꾸기는 막는다. 삭제가 머지되면 base에 그 파일들이 없어 예외가 하는 일이 없으므로 다음 정리 PR에서 지운다.

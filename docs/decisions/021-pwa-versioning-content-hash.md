@@ -109,8 +109,7 @@ DATA_CACHE / AUDIO_CACHE는 이제 rev 없는 고정 이름 (`"data"`, `"audio"`
 - **Phase 1** (데이터 저장소): `scripts/gen_manifests.py` + `.github/workflows/build.yml` + 초기 매니페스트 baseline + `pipeline.yml` PR-only 좁힘.
 - **Phase 2** (앱 저장소): `sw-version.js` + `sw.js` 리팩터 + `js/manifest-sync.js` + `js/audio-cache.js` 캐시 이름 고정 + `js/app.js` 부팅 시퀀스 + `release.py` 재작성 + 단위 테스트 + 본 ADR + 관련 docs 갱신.
 - **Phase 3** (webhook 자동화): 데이터 build.yml 끝에 `gh api ... /dispatches`, 앱 `.github/workflows/sync-data.yml` 신설. 데이터 main 변경 → 앱 서브모듈 포인터 자동 bump → release.py 자동 commit·push.
-- **Phase 4** (실배포 검증): dev 배포 후 DevTools로 매니페스트 동기화·해시 무효화 동작 확인 → promote. `docs/archive/qa/`에 비기술 독자용 보고서.
-
+- **Phase 4** (실배포 검증): dev 배포 후 DevTools로 매니페스트 동기화·해시 무효화 동작 확인 → promote.
 ## 검증
 
 - 단위 (`tests/unit/manifest-sync.test.js`, 14 케이스): `_staleKeys` 5종, `_urlToManifestKey` 4종, `syncManifests` 5종 (first-boot no-op, hash 변경 시 해당 항목 단독 evict, 네트워크 실패 시 캐시 보존, malformed JSON 무시, 매니페스트 entry 삭제 → 캐시 evict).

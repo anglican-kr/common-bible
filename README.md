@@ -216,6 +216,7 @@ scripts/
   csp_hashes.py         ← index.html CSP 인라인 해시 검사 · 갱신
   generate_splash.py    ← iOS 스플래시 PNG 생성 (cairosvg + Pillow)
   lock_merged_ledgers.sh ← 머지된 변경 원장을 로컬에서 읽기 전용으로
+  pr_body.sh            ← 변경 원장에서 PR 본문 생성 (frontmatter 제외)
   docs_facts_snapshot.py ← 교회력 설계 문서의 사실 토큰을 리비전 간 비교
 tests/
   unit/                 ← 클라이언트 JS 유닛 테스트 (Node --test, ADR-013)
@@ -238,8 +239,7 @@ docs/
   coding-pitfalls.md    ← 반복된 실수 패턴 · 사용자 교정 · 도메인 확정
   design/               ← 진행 중인 구현 설계서 (완료되면 archive/design/ 으로)
   reference/            ← 기도서 등 외부 원문 전사
-  archive/              ← 완료·점-시점 기록 (design 설계 변천 · audit 보안 감사 · qa e2e 회귀 보고서)
-  prd.md                ← 제품 요구사항 문서
+  archive/              ← 완료·점-시점 기록 (design 설계 변천 · audit 보안 감사)
   index.md              ← 진입점: 작업 유형 → 먼저 읽을 문서
   changes/              ← 변경 원장 (변경 하나에 파일 하나, PR 본문의 원본)
 ```
@@ -306,5 +306,4 @@ npm run typecheck   # tsc -p tsconfig.json --noEmit && tsc -p tsconfig.worker.js
 - [아키텍처 개요](docs/architecture.md) — 전체 구조 한눈에
 - [아키텍처 결정 기록](docs/decisions/) — ADR 001-038
 - [구현 현황](docs/status.md) · [알려진 이슈](docs/known-issues.md) · [자주 하는 실수](docs/coding-pitfalls.md) · [디자인 시스템](DESIGN.md)
-- [제품 요구사항](docs/prd.md)
 - [변경 원장](docs/changes/) — 변경 하나에 파일 하나, PR 본문의 원본

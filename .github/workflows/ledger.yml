@@ -36,7 +36,16 @@ jobs:
           # 아래 「원장 추가」 검사보다 **먼저** 둔다 — 머지된 원장을 지우고 새 원장을 추가하면 git 의
           # rename 탐지가 둘을 R 한 줄로 합쳐 --diff-filter=A 가 비므로, 순서가 반대면 정작 원장을
           # 추가한 작성자에게 「원장이 없다」는 엉뚱한 오류가 먼저 나간다.
-          touched=$(git diff --name-status "$base...HEAD" -- 'docs/changes/*.md' | awk -F'\t' 'NF && $1 !~ /^[AC]/ {print $2}' | grep -v '/README\.md$' || true)
+          # 일회성 예외(사용자 결정 2026-10-22): #331(243bf83)이 소급해 들여온 사본(옛 PR 본문 · worklog 블록
+          # 340개)의 삭제(D)만 허용한다. 고치기 · 이름 바꾸기는 여전히 막는다. #331 자신의 원장
+          # (knowledge-base-loop)은 실제 원장이라 예외가 아니다. 삭제가 머지되면 base 에 이 파일들이 없어
+          # 예외가 하는 일이 없다 — 다음 정리 PR 에서 지운다. 짝: .claude/hooks/pre-commit-ledger.sh.
+          retro=$(mktemp)
+          git diff --name-only --diff-filter=A 243bf83^ 243bf83 -- 'docs/changes/*.md' \
+            | grep -v -e '/README\.md$' -e '/2026-09-20-knowledge-base-loop\.md$' > "$retro" || true
+          touched=$(git diff --name-status "$base...HEAD" -- 'docs/changes/*.md' \
+            | awk -F'\t' 'FNR==NR {retro[$0]=1; next} NF && $1 !~ /^[AC]/ && !($1 == "D" && ($2 in retro)) {print $2}' "$retro" - \
+            | grep -v '/README\.md$' || true)
           if [ -n "$touched" ]; then
             echo "::error::머지된 원장은 고치지 않습니다: $(echo $touched) — 사실이 바뀌면 새 변경의 원장에 적고 정리 층 문서를 갱신하세요(docs/changes/README.md 규칙). 머지된 PR 을 되돌릴 때도 원장은 남기고 되돌림을 새 원장에 적습니다"
             exit 1

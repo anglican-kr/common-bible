@@ -46,11 +46,19 @@ if printf '%s' "$opts" | grep -qE -- '(^| )(-[a-zA-Z]*a[a-zA-Z]*|--all)( |$)'; t
   changes=$(printf '%s\n%s' "$changes" "$(git diff --name-status -- 'docs/changes/*.md')")
 fi
 
+# 일회성 예외(사용자 결정 2026-10-22): #331(243bf83)이 소급해 들여온 사본(옛 PR 본문 · worklog 블록 340개)은
+# 지울 수 있다. 고치기 · 이름 바꾸기는 여전히 막는다. #331 자신의 원장(knowledge-base-loop)은 실제 원장이라
+# 예외가 아니다. 삭제가 머지되면 base 에 이 파일들이 없어 예외가 하는 일이 없다 — 다음 정리 PR 에서 지운다.
+# 짝: .github/workflows/ledger.yml 의 같은 예외.
+retro=$(git diff --name-only --diff-filter=A 243bf83^ 243bf83 -- 'docs/changes/*.md' 2>/dev/null \
+  | grep -v -e '/README\.md$' -e '/2026-09-20-knowledge-base-loop\.md$' || true)
+
 # 행 형식: "M<TAB>path" / "D<TAB>path" / "T<TAB>path" / "R100<TAB>old<TAB>new" — R 은 old 경로로 판정.
 while IFS=$'\t' read -r st old _new; do
   [ -n "$st" ] || continue
   case "$st" in A*|C*) continue ;; esac      # 추가·복사는 base 쪽 파일을 그대로 둔다
   case "$old" in */README.md) continue ;; esac
+  if [ "$st" = D ] && printf '%s\n' "$retro" | grep -qxF -- "$old"; then continue; fi
   git cat-file -e "$base:$old" 2>/dev/null || continue   # base 에 없으면 이 PR 이 추가한 원장 — 고쳐도 된다
   deny "머지된 원장은 고치지 않습니다: $old — 사실이 바뀌면 새 변경의 원장에 적고 정리 층 문서를 갱신하세요(docs/changes/README.md 규칙). 커밋에서 빼려면: git restore --staged -- $old && git checkout -- $old"
 done <<CHANGES
