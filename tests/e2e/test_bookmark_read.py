@@ -66,7 +66,7 @@ def test_broken_escape_in_read_path_shows_empty_view(desktop_context):
 
 
 # 옛 판(2026-04-25부터 06-06 #205까지)이 저장한 줄 글자 — 앱을 시작할 때 지금 표기로 옮긴다(사용자 결정 2026-10-22,
-# coding-pitfalls §38). main에서는 글자가 둘인 「16aa」 · 「7-8a」 북마크가 모아 읽기에서 사라졌다.
+# coding-pitfalls §38). main에서는 `parseVerseSpec`이 읽지 못하는 「16aa」 · 「7-8a」 북마크가 모아 읽기에서 사라졌다.
 _PRE205_FOLDER = {
     "type": "folder", "id": "f-old", "name": "옛 북마크", "expanded": True,
     "children": [

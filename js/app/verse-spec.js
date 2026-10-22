@@ -202,8 +202,8 @@ function citationVerseSpec(refs) {
 }
 
 // 데이터의 반쪽 절(`part`)을 사람이 읽는 표기로 — 인쇄본은 「이사 7:8ㄱ」 「8ㄴ」이다(사용자 결정 2026-10-22). 화면의 절
-// 번호와 절 선택 출처가 쓴다. 주소와 저장 표기의 반쪽 절 글자는 「a」 · 「b」 그대로다(ADR-010 · 040). 데이터의 `part`는
-// a · b뿐이다.
+// 번호와 절 선택 출처가 쓴다. 주소의 반쪽 절 글자는 「a」 · 「b」 그대로다(ADR-040). 북마크는 반쪽 절도 번호로 저장한다
+// (ADR-010). 데이터의 `part`는 a · b뿐이다.
 /** @param {string} part @returns {string} */
 function halfVerseMark(part) {
   return "ㄱㄴㄷㄹㅁㅂㅅㅇㅈㅊㅋㅌㅍㅎ".charAt(part.charCodeAt(0) - 97) || part;
@@ -366,8 +366,9 @@ function verseInstanceKeys(verses) {
 }
 
 // Union of two verse spec strings, in verse numbers as a bookmark stores them (verseNumberSpec). A part letter goes
-// with the rest — before 2026-10-22 a one-letter part stayed ("23a,23c" + "1" → "1,23a,23c") and a two-letter one of
-// the pre-#205 forms was dropped with its verse ("16aa" + "1" → "1" — 16절이 빠졌다).
+// with the rest. Before 2026-10-22 a part of one letter after a number stayed ("23a,23c" + "1" → "1,23a,23c"), and the
+// pre-#205 forms parseVerseSpec does not read ("16aa", "7-8a") were dropped with their verses ("16aa" + "1" → "1" —
+// 16절이 빠졌다).
 /** @param {string} specA @param {string} specB @returns {string} */
 function mergeVerseSpecs(specA, specB) {
   if (specA === "all" || specB === "all") return "all";

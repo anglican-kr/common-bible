@@ -1267,7 +1267,7 @@ declare global {
     rerenderActiveBookmarkTree?: () => void;
     // bookmark-core.js — the move of pre-#205 verse ranges (coding-pitfalls §38): the stored list before the first
     // view (app.js), a merged sync document before it is saved (state-machine.js, optional for its unit harness).
-    migrateStoredBookmarks: () => void;
+    migrateStoredBookmarks: () => Promise<void>;
     migrateLegacyBookmarkDoc?: (doc: SyncDoc) => void;
     // route() calls these on every navigation (routing.js). bookmark.js re-exposes the
     // select-mode exit from bookmark-select.js; search.js owns the in-field book tokens.

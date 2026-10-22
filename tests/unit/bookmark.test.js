@@ -465,16 +465,16 @@ test('mergeVerseSpecs: part letters go — the result is in verse numbers, as a 
 
 test('mergeVerseSpecs: a pre-#205 spec keeps its verses — 「16aa」에 1절을 합치면 16절이 빠졌다(2026-10-22 재현)', () => {
   const h = loadVerseSpec();
-  assert.equal(h.mergeVerseSpecs("16aa", "1"), "1,16");          // 이사 10 — main 은 「1」
-  assert.equal(h.mergeVerseSpecs("7-8a", "1"), "1,7-8");         // 나훔 1 — main 은 「1」
-  assert.equal(h.mergeVerseSpecs("20a,20c", "1"), "1,20");       // 창세 27 — main 은 「1,20a,20c」
-  assert.equal(h.mergeVerseSpecs("16-17a", "16-17b"), "16-17");   // 아모 5 — main 은 「all」(장 전체). 옛 판끼리만 닿는다
+  assert.equal(h.mergeVerseSpecs("16aa", "1"), "1,16");          // 이사 10 — main은 「1」
+  assert.equal(h.mergeVerseSpecs("7-8a", "1"), "1,7-8");         // 나훔 1 — main은 「1」
+  assert.equal(h.mergeVerseSpecs("20a,20c", "1"), "1,20");       // 창세 27 — main은 「1,20a,20c」
+  assert.equal(h.mergeVerseSpecs("16-17a", "16-17b"), "16-17");   // 아모 5 — main은 「all」(장 전체). 옛 판끼리만 닿는다
 });
 
 test('mergeVerseSpecs: a range from an unchecked import is not walked verse by verse (known-issues §15)', () => {
   const h = loadVerseSpec();
   const t0 = Date.now();
-  assert.equal(h.mergeVerseSpecs("1-20000000", "5"), "1-20000000");   // main 은 4-5초 뒤 「Set maximum size exceeded」
+  assert.equal(h.mergeVerseSpecs("1-20000000", "5"), "1-20000000");   // main은 4-5초 뒤 「Set maximum size exceeded」
   assert.ok(Date.now() - t0 < 50, `${Date.now() - t0}ms`);
 });
 
@@ -1211,15 +1211,37 @@ function loadBookmarkHref() {
   return { _bookmarkHref: ctx._bookmarkHref, _buildSharePayload: ctx._buildSharePayload };
 }
 
-// ── BOOKMARK_LEGACY loader ───────────────────────────────────────────────────
-// migrateLegacyBookmark calls wholeVerseSpec (an import of bookmark-core.js) — the VERSE_SPEC block stands in for it.
+const LEGACY_BOOKS = [
+  { id: "isa", name_ko: "이사야", short_name_ko: "이사", chapter_count: 66 },
+  { id: "gen", name_ko: "창세기", short_name_ko: "창세", chapter_count: 50 },
+  { id: "nah", name_ko: "나훔", short_name_ko: "나훔", chapter_count: 3 },
+];
 
-function loadBookmarkLegacy() {
-  const ctx = { Object, Array, Set, String, Math, Number, JSON, console, Error, parseInt };
+// ── BOOKMARK_LEGACY loader ───────────────────────────────────────────────────
+// The block calls wholeVerseSpec (an import of bookmark-core.js) — the VERSE_SPEC block stands in for it — and the
+// store's loadBookmarks · rewriteBookmarks (window.appStorage) and window.loadBooks · getBooksCache, stubbed here.
+// `calls` records what the startup move asked for.
+
+function loadBookmarkLegacy({ stored = [], books = LEGACY_BOOKS, booksFail = false, storeThrows = false } = {}) {
+  const calls = { loadBooks: 0, rewrites: [] };
+  const ctx = {
+    Object, Array, Set, String, Math, Number, JSON, console, Error, parseInt, Promise,
+    loadBookmarks: () => { if (storeThrows) throw new TypeError("unreadable"); return stored; },
+    rewriteBookmarks: (patch) => { calls.rewrites.push(patch); },
+    window: {
+      loadBooks: () => { calls.loadBooks += 1; return booksFail ? Promise.reject(new Error("offline")) : Promise.resolve(books); },
+      getBooksCache: () => books,
+    },
+  };
   vm.createContext(ctx);
   vm.runInContext(extractBlock("VERSE_SPEC", VERSE_SPEC_SOURCE), ctx, { filename: "verse-spec.js" });
   vm.runInContext(extractBlock("BOOKMARK_LEGACY", BOOKMARK_CORE_SOURCE), ctx, { filename: "bookmark-core.js" });
-  return { migrateLegacyBookmark: ctx.migrateLegacyBookmark };
+  return {
+    migrateLegacyBookmark: ctx.migrateLegacyBookmark,
+    migrateStoredBookmarks: ctx.migrateStoredBookmarks,
+    migrateLegacyBookmarkDoc: ctx.migrateLegacyBookmarkDoc,
+    calls,
+  };
 }
 
 // ── BOOKMARK_ACTIVE loader ───────────────────────────────────────────────────
@@ -1317,12 +1339,6 @@ test("_buildSharePayload: multiple → {title, text} list of label + absolute ur
 // coding-pitfalls §38)
 // ─────────────────────────────────────────────────────────────────────────────
 
-const LEGACY_BOOKS = [
-  { id: "isa", name_ko: "이사야", short_name_ko: "이사", chapter_count: 66 },
-  { id: "gen", name_ko: "창세기", short_name_ko: "창세", chapter_count: 50 },
-  { id: "nah", name_ko: "나훔", short_name_ko: "나훔", chapter_count: 3 },
-];
-
 test("migrateLegacyBookmark: the range moves, and an old default name with it", () => {
   const h = loadBookmarkLegacy();
   const bm = { type: "bookmark", id: "a", bookId: "isa", chapter: 10, verseSpec: "16aa", label: "이사 10:16aa", note: "" };
@@ -1359,6 +1375,65 @@ test("migrateLegacyBookmark: today's ranges and the forms the app never wrote ar
     assert.equal(h.migrateLegacyBookmark(bm, LEGACY_BOOKS), false, String(verseSpec));
     assert.equal(JSON.stringify(bm), before);
   }
+});
+
+test("migrateStoredBookmarks: nothing to move — resolves at once, without waiting for the book list (PR #367 review)", async () => {
+  const stored = [
+    { type: "bookmark", id: "a", bookId: "john", chapter: 3, verseSpec: "16", label: "요한 3:16" },
+    { type: "folder", id: "f", name: "", children: [{ type: "bookmark", id: "b", bookId: "gen", chapter: 1, verseSpec: "all", label: "" }] },
+  ];
+  const h = loadBookmarkLegacy({ stored });
+  await h.migrateStoredBookmarks();
+  assert.deepEqual({ loadBooks: h.calls.loadBooks, rewrites: h.calls.rewrites.length }, { loadBooks: 0, rewrites: 0 });
+});
+
+test("migrateStoredBookmarks: a pre-#205 range in a folder — waits for the book list, then rewrites with the move", async () => {
+  const stored = [{ type: "folder", id: "f", name: "", children: [
+    { type: "bookmark", id: "a", bookId: "isa", chapter: 10, verseSpec: "16aa", label: "이사 10:16aa" },
+  ] }];
+  const h = loadBookmarkLegacy({ stored });
+  await h.migrateStoredBookmarks();
+  assert.equal(h.calls.loadBooks, 1);
+  assert.equal(h.calls.rewrites.length, 1);
+  // The patch handed to rewriteBookmarks is the move itself — the store applies it to both copies (storage.test.js).
+  const item = { bookId: "isa", chapter: 10, verseSpec: "16aa", label: "이사 10:16aa", _u: 5 };
+  assert.equal(h.calls.rewrites[0](item), true);
+  assert.deepEqual({ ...item }, { bookId: "isa", chapter: 10, verseSpec: "16", label: "이사 10:16", _u: 5 });
+});
+
+test("migrateStoredBookmarks: the book list fails or the store cannot be read — nothing moves, and it still resolves", async () => {
+  const stored = [{ type: "bookmark", id: "a", bookId: "isa", chapter: 10, verseSpec: "16aa", label: "" }];
+  const offline = loadBookmarkLegacy({ stored, booksFail: true });
+  await offline.migrateStoredBookmarks();
+  assert.deepEqual({ loadBooks: offline.calls.loadBooks, rewrites: offline.calls.rewrites.length }, { loadBooks: 1, rewrites: 0 });
+  const broken = loadBookmarkLegacy({ storeThrows: true });
+  await broken.migrateStoredBookmarks();
+  assert.deepEqual({ loadBooks: broken.calls.loadBooks, rewrites: broken.calls.rewrites.length }, { loadBooks: 0, rewrites: 0 });
+});
+
+test("migrateLegacyBookmarkDoc: a merged sync document's bookmarks move in place, per-item times kept, odd items passed over", () => {
+  const h = loadBookmarkLegacy();
+  const doc = { bookmarks: { tombstones: {}, items: {
+    a: { id: "a", type: "bookmark", bookId: "isa", chapter: 10, verseSpec: "16aa", label: "이사 10:16aa", parentId: "f", _order: 0, _u: 7 },
+    b: { id: "b", type: "bookmark", bookId: "gen", chapter: 27, verseSpec: "20a,20c", label: "야곱의 속임수", parentId: null, _order: 1, _u: 9 },
+    c: { id: "c", type: "bookmark", bookId: "gen", chapter: 1, verseSpec: "1-3", label: "창세 1:1-3", parentId: null, _order: 2, _u: 3 },
+    f: { id: "f", type: "folder", name: "옛 북마크", parentId: null, _order: 3, _u: 1 },
+    n: null, s: "x",
+  } } };
+  assert.doesNotThrow(() => h.migrateLegacyBookmarkDoc(doc));
+  const it = doc.bookmarks.items;
+  assert.deepEqual([it.a.verseSpec, it.a.label, it.a._u], ["16", "이사 10:16", 7]);
+  assert.deepEqual([it.b.verseSpec, it.b.label, it.b._u], ["20", "야곱의 속임수", 9]);
+  assert.deepEqual([it.c.verseSpec, it.c._u], ["1-3", 3]);
+  assert.deepEqual([it.n, it.s], [null, "x"]);
+  assert.doesNotThrow(() => h.migrateLegacyBookmarkDoc(undefined));
+});
+
+test("migrateLegacyBookmarkDoc: without the book list nothing moves", () => {
+  const h = loadBookmarkLegacy({ books: null });
+  const doc = { bookmarks: { tombstones: {}, items: { a: { id: "a", type: "bookmark", bookId: "isa", chapter: 10, verseSpec: "16aa", label: "", _u: 1 } } } };
+  h.migrateLegacyBookmarkDoc(doc);
+  assert.equal(doc.bookmarks.items.a.verseSpec, "16aa");
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

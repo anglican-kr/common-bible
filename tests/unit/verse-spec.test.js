@@ -320,7 +320,7 @@ test("verseNumberSpec: 고른 줄의 글자를 모두 떼고 번호를 구간으
   assert.strictEqual(ctx.verseNumberSpec(["1", "3", "4", "5", "9"]), "1,3-5,9");
   assert.strictEqual(ctx.verseNumberSpec(["9", "3"]), "3,9");
   assert.strictEqual(ctx.verseNumberSpec([]), "all");
-  // 데이터의 반쪽 절은 그 번호로 — 「8ㄱ」만 골라도 8(이사 7 은 반쪽 절이 다시 두 줄이다)
+  // 데이터의 반쪽 절은 그 번호로 — 「8ㄱ」만 골라도 8(이사 7은 반쪽 절이 다시 두 줄이다)
   assert.strictEqual(ctx.verseNumberSpec(["8aa", "8ab"]), "8");
   assert.strictEqual(ctx.verseNumberSpec(["5a"]), "5");
 });

@@ -302,8 +302,9 @@ window.addEventListener("DOMContentLoaded", () => {
   }
 
   // 1. Prioritize UI rendering — once the stored bookmarks' pre-#205 verse ranges are in today's form, so the first
-  //    view already reads them (coding-pitfalls §38). That move needs the book list, which the first view loads anyway.
-  window.loadBooks().then(() => window.migrateStoredBookmarks()).catch(() => {}).finally(() => route().finally(() => {
+  //    view already reads them (coding-pitfalls §38). Only a start with something to move waits (for the book list).
+  //    Called inside the promise, so a missing bookmark module cannot stop the first view.
+  Promise.resolve().then(() => window.migrateStoredBookmarks()).catch(() => {}).finally(() => route().finally(() => {
     // 2. Load non-critical work after first paint. Each item targets a surface
     //    the user cannot interact with until they explicitly open it (drawers)
     //    or that has no first-paint impact (version label, compact-header
