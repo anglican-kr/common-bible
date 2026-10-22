@@ -10,7 +10,7 @@
 | 라우팅 · 뷰 · 탭 바 · 오버레이    | ADR-009 · 029 · 030 · 031(§5 다시 그린 뒤 포커스) · 032 · 034 · `architecture.md` §4.1 · pitfalls §2 · §5 · §16 · §33(다시 그리는 길에서 `import()`를 기다리지 않는다) · §34(WebKit의 `modulepreload`는 새로 고쳐도 다시 받지 않는다) · §35(주소도 바깥 입력 — 여러 구간의 절 범위는 가져오기와 같은 검사, ADR-040) |
 | Service Worker · 캐시 · 릴리스    | ADR-021 · `architecture.md` §4.6 · §8 · pitfalls §7 · §15 · `scripts/release.py` 헤더 · `tools/csp/README.md`(릴리스 전 CSP 점검)                                                                                            |
 | 검색                              | ADR-005 · 014 · 033 · `architecture.md` §4.2 · `js/search-worker.js` 헤더 주석                                                                                                  |
-| 북마크 · 절 선택 · 모아 읽기      | ADR-010 · 035 · 040(가져오기 항목 검사) · `js/app/verse-spec.js` · pitfalls §6 · §35(외부 입력은 그 값을 받는 코드가 다룰 수 있는 형식인지 검사) · §38(옛 판의 저장값은 지금 표기로 옮기고 수정 시각은 올리지 않는다)                                                                                   |
+| 북마크 · 절 선택 · 모아 읽기      | `areas/bookmark.md` 하나(지금 동작, 결정, 함정, 남은 일이 다 있다). 결정을 바꿀 때만 그 문서가 가리키는 ADR-010 · 035 · 040을 연다                                                                                   |
 | Drive 동기화 · OAuth              | ADR-011 · 017 · `architecture.md` §4.3 · §9 · pitfalls §11 · §12 · §28 · §5 · §29(알림 · 상시 안내 · 문구) · `archive/audit/`                                                    |
 | 설정 · 디자인 시스템 · CSS        | `DESIGN.md`(루트) · ADR-028 · 023 · 025 · pitfalls §8 · §14                                                                                                                      |
 | 오디오                            | ADR-016 · `js/app/audio-player.js` · pitfalls §15                                                                                                                                |
@@ -23,6 +23,7 @@
 
 ## 페이지 한 줄 훅
 
+- `areas/` — 영역 문서. 작업 영역마다 한 장에 지금 동작, 결정, 함정, 남은 일을 모은다. 틀과 규칙은 `areas/README.md`. 지금은 북마크 영역만 옮겼고(2026-10-22), 나머지 영역은 아직 아래 문서들에 있다.
 - `status.md` — 기능 단위 "지금 무엇이 동작하는가". 구현 PR 머지 시 갱신. 권위 출처.
 - `known-issues.md` — 미해결 이슈·후속 백로그. 해결되면 지우고 원장에 남긴다 — 절이 통째로 비면 그 자리에 노트(왜 지웠나 · 어느 원장)를 두고 번호는 당기지 않는다(pitfalls §26).
 - `coding-pitfalls.md` — 반복된 실수 패턴 38절 + 부록. 코드 실수뿐 아니라 사용자 교정·도메인 확정도 여기에 쌓는다.
