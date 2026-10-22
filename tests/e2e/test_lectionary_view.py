@@ -18,6 +18,7 @@ import re
 import datetime
 import json
 import urllib.parse
+from pathlib import Path
 
 from .conftest import CLEAR_APP_STORAGE, MOBILE_VIEWPORT, IPHONE_UA
 
@@ -602,18 +603,47 @@ def test_half_verses_follow_the_boundary_table(desktop_context):
     assert "헤아릴 수 없습니다. 하느님께서는" in text and "종 다윗의 심정을" not in text, text[:200]
 
 
+_WATCH_LOADING_FRAMES = """() => {
+  window.__loadingFrames = 0;
+  const tick = () => {
+    if (document.querySelector('#app .loading')) window.__loadingFrames++;
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}"""
+_TWO_FRAMES = "() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))"
+
+
 def test_missing_half_verse_table_draws_whole_verses(browser):
-    """반절 경계 표를 받지 못해도 화면은 열리고, 반절 대신 절 전체를 그린다(리뷰 2026-10-22 — 업데이트 뒤 처음 오프라인으로
-    열면 데이터 캐시에 이 표만 없을 수 있다). 종전에는 표 하나 때문에 전례독서 화면 전체가 실패 화면이 됐다."""
+    """반절 경계 표를 받지 못해도 화면은 열리고, 반절 대신 절 전체를 그린다(업데이트 뒤 처음 오프라인으로 열면 데이터 캐시에
+    이 표만 없을 수 있다). 다시 그릴 때는 큰 표 넷을 다시 받지 않고 「불러오는 중…」도 그리지 않는다 — 반절 표만 뒤에서 다시
+    받는다. 이 PR의 첫 엔진은 표 하나 때문에 화면 전체를 실패 화면으로 그렸고(리뷰 1회차), 고친 엔진은 다시 그릴 때마다 묶음
+    다섯을 다시 받았다(리뷰 2회차)."""
     ctx = browser.new_context(service_workers="block")
-    page = ctx.new_page()
-    page.route("**/data/lectionary/half-verses.json", lambda route: route.abort())
-    _open(page, "lectionary/2026-03-01")
-    first = page.locator(".lect-reading[data-slot='first'] article.chapter-text")
-    text = first.inner_text().replace("\u2060", "")
-    assert "롯도 함께 떠났다" in text and text.rstrip().endswith("칠십오 세였다."), text[-120:]
-    assert first.locator(".verse-num").evaluate_all(_VERSE_NUMS)[-1] == "4"
-    ctx.close()
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    try:
+        page = ctx.new_page()
+        page.route("**/data/lectionary/half-verses.json", lambda route: route.abort())
+        _open(page, "lectionary/2026-03-01")
+        first = page.locator(".lect-reading[data-slot='first'] article.chapter-text")
+        text = first.inner_text().replace("\u2060", "")
+        assert "롯도 함께 떠났다" in text and text.rstrip().endswith("칠십오 세였다."), text[-120:]
+        assert first.locator(".verse-num").evaluate_all(_VERSE_NUMS)[-1] == "4"
+        # 다음날(새 장을 받는다)에 갔다가 장을 이미 받은 그날로 돌아온다
+        page.locator(".lect-datenav-btn[data-focus-key='next']").click()
+        page.wait_for_function(
+            "() => location.pathname === '/lectionary/2026-03-02' && !!document.querySelector('.lect-reading')", timeout=20_000)
+        requests = []
+        page.on("request", lambda req: requests.append(req.url) if "/data/lectionary/" in req.url else None)
+        page.evaluate(_WATCH_LOADING_FRAMES)
+        page.locator(".lect-datenav-btn[data-focus-key='prev']").click()
+        page.wait_for_function(
+            "() => location.pathname === '/lectionary/2026-03-01' && !!document.querySelector('.lect-reading')")
+        page.evaluate(_TWO_FRAMES)
+        assert page.evaluate("() => window.__loadingFrames") == 0
+        assert [u for u in requests if not u.endswith("/half-verses.json")] == [], requests
+    finally:
+        ctx.close()
 
 
 # 반절 60곳 전부 — 엔진으로 찾은 화면(날짜, 칩 · 세트 · 트랙을 바꾼 쿼리, 슬롯)에서 확인한다. 데이터의 독서가 바뀌면
@@ -714,7 +744,9 @@ async ([key, slot]) => {
 def test_every_half_verse_follows_the_table(desktop_context):
     """반절 참조 60곳(전례독서 59 · 성인 공통 1)을 모두 화면에서 그려, 그린 글자가 데이터의 경계 표대로인지와 절 번호의
     「상」 · 「하」를 본다(사용자 결정 2026-10-22). 로마 3:22하는 「전체」라 번호가 「22」다."""
-    assert len(_HALF_VERSE_VIEWS) == 60
+    table = json.loads((Path(__file__).resolve().parents[2] / "data" / "lectionary" / "half-verses.json").read_text(encoding="utf-8"))
+    keys = {f"{e['bookId']}:{e['chapter']}:{e['verse']}{e['half']}" for e in table["entries"]}
+    assert [k for k, *_ in _HALF_VERSE_VIEWS] == sorted(keys)   # 표의 행마다 화면이 하나씩(60곳)
     page = desktop_context.new_page()
     bad = []
     for key, date, query, slot in _HALF_VERSE_VIEWS:

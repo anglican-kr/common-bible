@@ -1931,7 +1931,8 @@ function loadEngine(fetchImpl) {
   };
   vm.createContext(c);
   vm.runInContext(STATE_PRELUDE + ' const DATA_DIR = "/data"; let calendarIndex = null; let calendarPromise = null;'
-    + " let lectionaryIndex = null; let lectionaryPromise = null;", c, { filename: "prelude" });
+    + " let lectionaryIndex = null; let lectionaryPromise = null; let halfVersesLoaded = false; let halfVersesRetry = null;",
+    c, { filename: "prelude" });
   for (const b of ["LITURGICAL_CORE", "LITURGICAL_LOOKUP", "LITURGICAL_PRELOAD"]) {
     vm.runInContext(extractBlock(b, SOURCE), c, { filename: `liturgical-engine.js#${b}` });
   }
@@ -1972,23 +1973,35 @@ test("C-3.5-1 반절 경계 표는 독서 묶음과 함께 실리고 「책:장:
   assert.strictEqual(e.buildLectionaryIndex({ ...LEC_TABLES, halfVerses: null }).halfVerses.size, 0);
 });
 
-test("C-3.5-2 반절 경계 표를 받지 못해도 독서 묶음은 선다 — 절 전체로 그리고, 다음 진입에서 다시 받는다(리뷰 2026-10-22 — 업데이트 뒤 처음 오프라인)", async () => {
+test("C-3.5-2 반절 경계 표를 받지 못해도 독서 묶음은 선다 — 절 전체로 그리고, 다음 진입마다 이 표만 뒤에서 다시 받는다(리뷰 2026-10-22 — 업데이트 뒤 처음 오프라인)", async () => {
+  const settle = () => new Promise((r) => setTimeout(r, 0));
   const calls = [];
   const fail = new Set(["half-verses"]);
   const e = loadEngine(fakeFetch(calls, fail));
   await e.preloadCalendar();
-  await e.preloadLectionary();                                   // 거부하지 않는다
+  const bundle = e.preloadLectionary();
+  await bundle;                                                  // 거부하지 않는다
   assert.strictEqual(e.findHalfVerse("lps", 104, 35, "b"), null);  // 빈 표 — 반절 대신 절 전체
   const r = e.resolveDate("2026-01-25");
   assert.ok(Array.isArray(e.findReadings(r, r.candidates[0])));    // 독서는 그대로 찾는다
-  assert.strictEqual(vm.runInContext("lectionaryPromise", e), null);  // 다음 진입이 다시 받는다
+  // 다음 진입 — 묶음 promise는 그대로라 큰 표 넷을 다시 받지 않고, 반절 표만 뒤에서 다시 받는다(동시에 둘이 와도 한 번)
+  calls.length = 0;
+  assert.strictEqual(e.preloadLectionary(), bundle);
+  assert.strictEqual(e.preloadLectionary(), bundle);
+  await settle();
+  same(calls, ["/data/lectionary/half-verses.json"]);
+  assert.strictEqual(e.findHalfVerse("lps", 104, 35, "b"), null);  // 아직 못 받았다
+  // 연결이 돌아오면 다음 진입이 받고, 그다음 조회부터 반절이 있다
   fail.clear();
   calls.length = 0;
   await e.preloadLectionary();
-  assert.ok(calls.includes("/data/lectionary/half-verses.json"));
+  await settle();
+  same(calls, ["/data/lectionary/half-verses.json"]);
   assert.strictEqual(e.findHalfVerse("lps", 104, 35, "b").line, 2);
+  // 다 받았으면 더 받지 않는다
   calls.length = 0;
-  await e.preloadLectionary();                                   // 다 받았으면 promise 를 캐시한다
+  await e.preloadLectionary();
+  await settle();
   assert.strictEqual(calls.length, 0);
 });
 

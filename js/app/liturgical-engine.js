@@ -135,6 +135,10 @@ let calendarPromise = null;
 let lectionaryIndex = null;
 /** @type {Promise<LectionaryIndex> | null} */
 let lectionaryPromise = null;
+// 반절 경계 표를 받았는가 · 다시 받는 중인가(§3.5) — 못 받았으면 다음 진입마다 이 표만 뒤에서 다시 받는다.
+let halfVersesLoaded = false;
+/** @type {Promise<void> | null} */
+let halfVersesRetry = null;
 
 // ── BEGIN LITURGICAL_CORE ──
 // 날짜 산술 · computus · 오프셋 전개 · 절기 스팬 · 연중 주차 · 주기 산정 · 기간 축.
@@ -1821,7 +1825,7 @@ function coordKey(/** @type {unknown} */ season, /** @type {unknown} */ week, /*
 }
 
 /**
- * 독서 묶음 다섯 표 → 인덱스. `commons.classes` 는 배열이 아니라 **맵**이고, `canticles` 는 래퍼조차
+ * 독서 묶음 다섯 표 → 인덱스. `commons.classes`는 배열이 아니라 **맵**이고, `canticles`는 래퍼조차
  * 없는 id → 객체 맵이다(§5.2). 반절 경계 표는 「bookId:장:절+a|b」 키로 찾는다(`halfVerseKey`).
  * @param {{readings?: any, collects?: any, commons?: any, canticles?: any, halfVerses?: any} | null} tables
  * @returns {LectionaryIndex}
@@ -1829,18 +1833,23 @@ function coordKey(/** @type {unknown} */ season, /** @type {unknown} */ week, /*
 function buildLectionaryIndex(tables) {
   const t = tables || {};
   const classes = t.commons && typeof t.commons === "object" ? t.commons.classes : null;
-  /** @type {Map<string, HalfVerse>} */
-  const halfVerses = new Map();
-  for (const e of (t.halfVerses && Array.isArray(t.halfVerses.entries) ? t.halfVerses.entries : [])) {
-    halfVerses.set(halfVerseKey(e.bookId, e.chapter, e.verse, e.half), e);
-  }
   return {
     readings: buildTextIndex(t.readings),
     collects: buildTextIndex(t.collects),
     commons: classes && typeof classes === "object" && !Array.isArray(classes) ? classes : {},
     canticles: t.canticles && typeof t.canticles === "object" ? t.canticles : {},
-    halfVerses,
+    halfVerses: buildHalfVerseIndex(t.halfVerses),
   };
+}
+
+/** 반절 경계 표 → 「bookId:장:절+a|b」 키의 Map. 표가 없거나 형식이 깨졌으면 빈 Map이다. @param {any} table */
+function buildHalfVerseIndex(table) {
+  /** @type {Map<string, HalfVerse>} */
+  const map = new Map();
+  for (const e of (table && Array.isArray(table.entries) ? table.entries : [])) {
+    map.set(halfVerseKey(e.bookId, e.chapter, e.verse, e.half), e);
+  }
+  return map;
 }
 
 /** @param {string} bookId @param {number} chapter @param {number} verse @param {string} half @returns {string} */
@@ -2081,8 +2090,8 @@ const CALENDAR_FILES = ["sanctoral", "temporal-feasts", "periods", "ordinal-week
 /** 독서 묶음(§3.5) — 대형 표 넷, 독서 뷰 진입 · `findReadings`/`findCollects` 전에. */
 const LECTIONARY_FILES = ["eucharist-readings", "eucharist-collects", "commons", "canticles"];
 /**
- * 반절 경계 표(§3.5) — 독서 묶음과 함께 싣되, 받지 못해도 묶음을 막지 않는다. 반절 대신 절 전체를 그리는 것은
- * 종전 화면이고, 업데이트 뒤 처음 오프라인으로 열면 데이터 캐시에 이 표만 없을 수 있다(리뷰 2026-10-22).
+ * 반절 경계 표(§3.5) — 독서 묶음과 함께 싣되, 받지 못해도 묶음을 막지 않는다. 업데이트 뒤 처음 오프라인으로 열면
+ * 데이터 캐시에 이 표만 없을 수 있다(PR #365 리뷰). 그때는 반절 대신 절 전체를 그린다.
  */
 const HALF_VERSE_FILE = "half-verses";
 
@@ -2110,20 +2119,36 @@ function preloadCalendar() {
 }
 
 /**
- * 독서 묶음을 싣는다 — 캐시 규칙은 `preloadCalendar` 와 같다(한쪽만 고치면 증상이 절반만 사라진다). 반절 경계 표만
- * 실패를 받아들여 빈 표로 세운다. 그때는 promise 를 비워 다음 진입이 다시 받는다 — 지금 화면은 절 전체로 그린다.
+ * 독서 묶음을 싣는다. 캐시 규칙은 `preloadCalendar`와 같다(한쪽만 고치면 증상이 절반만 사라진다). 반절 경계 표는
+ * 함께 받되 실패를 받아들여, 인덱스를 빈 표로 세운다. 묶음 promise는 그대로 캐시하고, 다음 진입마다 반절 표만 뒤에서
+ * 다시 받는다(`retryHalfVerses`). 큰 표 넷을 다시 받지 않고, 다시 그리기도 기다리게 하지 않는다(PR #365 리뷰 2회차).
  * @returns {Promise<LectionaryIndex>}
  */
 function preloadLectionary() {
-  return (lectionaryPromise ??= Promise.all([
+  if (lectionaryPromise) {
+    if (lectionaryIndex && !halfVersesLoaded) retryHalfVerses();
+    return lectionaryPromise;
+  }
+  return (lectionaryPromise = Promise.all([
     ...LECTIONARY_FILES.map(fetchLectionaryJson),
     fetchLectionaryJson(HALF_VERSE_FILE).catch(() => null),
   ])
     .then(([readings, collects, commons, canticles, halfVerses]) => {
-      if (halfVerses === null) lectionaryPromise = null;
+      halfVersesLoaded = halfVerses !== null;
       return (lectionaryIndex = buildLectionaryIndex({ readings, collects, commons, canticles, halfVerses }));
     })
     .catch((e) => { lectionaryPromise = null; throw e; }));
+}
+
+/** 받지 못한 반절 경계 표를 뒤에서 다시 받는다. 받으면 그다음 그리기부터 반절을 그린다. 동시에는 한 번만 낸다. */
+function retryHalfVerses() {
+  halfVersesRetry ??= fetchLectionaryJson(HALF_VERSE_FILE)
+    .then((table) => {
+      if (lectionaryIndex) lectionaryIndex.halfVerses = buildHalfVerseIndex(table);
+      halfVersesLoaded = true;
+    })
+    .catch(() => {})
+    .finally(() => { halfVersesRetry = null; });
 }
 
 /**
@@ -2164,7 +2189,7 @@ function findCollects(resolved) {
 }
 
 /**
- * 반절 하나의 경계(표 행) — 표에 없으면 null(절 전체를 그린다). 프리로드 규칙은 `findReadings` 와 같다.
+ * 반절 하나의 경계(표 행) — 표에 없으면 null(절 전체를 그린다). 프리로드 규칙은 `findReadings`와 같다.
  * @param {string} bookId @param {number} chapter @param {number} verse @param {"a" | "b"} half
  * @returns {HalfVerse | null}
  */
