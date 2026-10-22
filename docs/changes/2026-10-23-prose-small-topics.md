@@ -1,4 +1,5 @@
 ---
+pr: 373
 date: 2026-10-23
 branch: docs/prose-small-topics
 title: "docs: 작은 주제 문서 넷의 문장 정리"
