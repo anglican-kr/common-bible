@@ -1,4 +1,5 @@
 ---
+pr: 369
 date: 2026-10-22
 branch: chore/docs-lint-tools
 title: "chore: 문서 검사 도구 추가"
