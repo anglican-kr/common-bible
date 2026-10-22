@@ -542,6 +542,60 @@ def test_half_verse_on_two_line_verse_shows_only_that_line(desktop_context):
     v35 = psalm.locator(".verse[data-vref='35b']")
     assert v35.count() == 1 and v35.locator(".verse-num").count() == 1   # 번호가 남은 줄로 옮겨 왔다
     assert psalm.locator(".verse[data-vref='35a']").count() == 0
+    # 자른 절의 번호는 「35하」, 복사 출처도 「35하」다(사용자 결정 2026-10-22 — 종전 출처는 「104:24-35」로 35절 전체를 가리켰다)
+    assert v35.locator(".verse-num").get_attribute("data-v") == "35하"
+    assert page.evaluate(_LECT_COPY_SLOT, "psalm").endswith("\n\n— 전례시편 104:24-34, 35하 (대한성공회 기도서)")
+
+
+_LECT_COPY_SLOT = """
+(slot) => {
+  const articles = document.querySelectorAll(`.lect-reading[data-slot='${slot}'] article.chapter-text`);
+  const verses = [...articles].flatMap((a) => [...a.querySelectorAll('.verse')]);
+  const r = document.createRange();
+  r.setStartBefore(verses[0]);
+  r.setEndAfter(verses[verses.length - 1]);
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(r);
+  const dt = new DataTransfer();
+  articles[0].dispatchEvent(new ClipboardEvent('copy', { bubbles: true, cancelable: true, clipboardData: dt }));
+  return dt.getData('text/plain');
+}
+"""
+
+_VERSE_NUMS = "els => els.map(e => e.getAttribute('data-v'))"
+
+
+def test_half_verses_follow_the_boundary_table(desktop_context):
+    """반절은 데이터의 경계 표대로 그린다(사용자 결정 2026-10-22). 한 줄 절도 줄 안에서 나누고, 여러 줄 절은 표의 줄까지
+    그린다. 자른 절의 번호는 「4상」 「20하」로 보이고, 복사 출처에도 상 · 하를 붙인다."""
+    page = desktop_context.new_page()
+    # 줄 안의 상 — 사순 2주일 가해 「창세 12:1-4상」: 「…길을 떠났다.」까지(게시글 16312), 「롯도 함께 떠났다.」는 뺀다
+    _open(page, "lectionary/2026-03-01")
+    first = page.locator(".lect-reading[data-slot='first'] article.chapter-text")
+    text = first.inner_text().replace("\u2060", "")   # 절 번호 뒤의 U+2060
+    assert text.rstrip().endswith("길을 떠났다.") and "롯도 함께 떠났다" not in text, text[-120:]
+    assert first.locator(".verse-num").evaluate_all(_VERSE_NUMS)[-1] == "4상"
+    assert page.evaluate(_LECT_COPY_SLOT, "first").endswith("\n\n— 창세기 12:1-4상 (공동번역성서)")
+    # 줄 안의 하 — 재의 수요일 「2고린 5:20하-6:10」: 「하느님과 화해하십시오.」부터(게시글 19870). 장을 넘는 출처도 「5:20하-6:10」
+    _open(page, "lectionary/2026-02-18")
+    second = page.locator(".lect-reading[data-slot='second'] article.chapter-text").first
+    text = second.inner_text().replace("\u2060", "")
+    assert text.lstrip().startswith("하느님과 화해하십시오.") and "그리스도의 사절로서" not in text, text[:120]
+    assert second.locator(".verse-num").evaluate_all(_VERSE_NUMS)[0] == "20하"
+    assert page.evaluate(_LECT_COPY_SLOT, "second").endswith("\n\n— 고린토인들에게 보낸 둘째 편지 5:20하-6:10 (공동번역성서)")
+    # 줄 경계 — 「집회 51:12하-20상」: 12절은 둘째 줄부터, 20절은 앞의 두 줄까지(게시글 20007). 종전에는 20절 네 줄을 다 그렸다
+    _open(page, "lectionary/2027-05-29")
+    first = page.locator(".lect-reading[data-slot='first'] article.chapter-text")
+    text = first.inner_text().replace("\u2060", "")   # 절 번호 뒤의 U+2060
+    assert text.lstrip().startswith("주님의 이름을 찬미하옵니다.") and "이에 당신께 감사드리고" not in text, text[:120]
+    assert text.rstrip().endswith("마침내 순결 속에서 지혜를 찾아내었다.") and "버림을 당하지 않을 것이다" not in text, text[-120:]
+    nums = first.locator(".verse-num").evaluate_all(_VERSE_NUMS)
+    assert (nums[0], nums[-1]) == ("12하", "20상"), nums
+    assert page.evaluate(_LECT_COPY_SLOT, "first").endswith("\n\n— 집회서 51:12하-20상 (공동번역성서)")
+    # 구간 사이의 상 — 「사도 2:14상, 22-32」: 출처는 「2:14상, 22-32」
+    _open(page, "lectionary/2026-04-12")
+    assert page.evaluate(_LECT_COPY_SLOT, "first").endswith("\n\n— 사도행전 2:14상, 22-32 (공동번역성서)")
 
 
 def test_data_half_verse_numbers_show_printed_letters(desktop_context):

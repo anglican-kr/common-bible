@@ -43,7 +43,7 @@ import {
 import { specCoversVerse, verseInstanceKeys, citationSource } from "./verse-spec.js";
 import {
   parseDate, toKey, addDays, dayOfWeek, optionalDestOf, isComputableDate,
-  preloadCalendar, preloadLectionary, resolveDate, findReadings, findCollects, fastOf,
+  preloadCalendar, preloadLectionary, resolveDate, findReadings, findCollects, findHalfVerse, fastOf,
 } from "./liturgical-engine.js";
 
 const { _$, el, clearNode, emptyState, isModifiedClick } = window.appHelpers;
@@ -639,6 +639,47 @@ function slotVerseRuns(slot, chapterOf) {
 }
 
 /**
+ * 반절 경계 표 한 행(엔진 `findHalfVerse`) → 그 절의 줄 가운데 남길 줄(0부터, 양 끝 포함)과 줄 안에서 자를 줄.
+ * 상은 처음부터 경계까지, 하는 경계부터 끝까지다(사용자 결정 2026-10-22 — 데이터 `liturgical/half-verses.md`).
+ * 나누지 않으면 null이다. 표에 없거나 「전체」인 반절(로마 3:22하), 표의 줄이 그려진 줄 수를 넘는 절이 그렇다 —
+ * 데이터가 어긋나면 반절 대신 절 전체를 그리는 편이 낫다.
+ * @param {number} lineCount @param {import("../types").HalfVerse | null | undefined} entry
+ * @returns {{ first: number, last: number, cut: number | null, text: string | null } | null}
+ */
+function halfVerseLines(lineCount, entry) {
+  if (!entry || entry.whole || !entry.line || entry.line > lineCount) return null;
+  const i = entry.line - 1;
+  const text = entry.text || null;
+  const [first, last] = entry.half === "a" ? [0, i] : [i, lineCount - 1];
+  if (!text && first === 0 && last === lineCount - 1) return null;
+  return { first, last, cut: text ? i : null, text };
+}
+
+/**
+ * 복사 출처의 연속 구간을 반절에서 가른다. 하로 자른 절은 구간의 첫 절로만, 상으로 자른 절은 끝 절로만 이어진다 —
+ * 「24-34, 35하」 · 「12하-20상」 · 「14상, 22-32」. 성령강림 「시편 104:24-34, 35하」를 복사하면 출처가
+ * 「104:24-35」로 35절 전체를 가리켰다(2026-10-22 발견).
+ * @param {Array<[number, number]>} ranges @param {ReadonlyMap<number, string>} halves 절 번호 → "a"(상) | "b"(하)
+ * @returns {Array<{ a: number, b: number, aHalf: string, bHalf: string }>}
+ */
+function halfVerseRanges(ranges, halves) {
+  const piece = (/** @type {number} */ a, /** @type {number} */ b) =>
+    ({ a, b, aHalf: halves.get(a) === "b" ? "하" : "", bHalf: halves.get(b) === "a" ? "상" : "" });
+  /** @type {Array<{ a: number, b: number, aHalf: string, bHalf: string }>} */
+  const out = [];
+  for (const [a, b] of ranges) {
+    let start = a;
+    for (const [n, h] of [...halves].sort((x, y) => x[0] - y[0])) {
+      if (n < start || n > b) continue;
+      if (h === "b" && n > start) { out.push(piece(start, n - 1)); start = n; }
+      else if (h === "a" && n < b) { out.push(piece(start, n)); start = n + 1; }
+    }
+    out.push(piece(start, b));
+  }
+  return out;
+}
+
+/**
  * 시편 슬롯 끝에 영광송을 붙이나 — 전례시편(`lps`)은 장을 불러왔으면 언제나, 송가(`cant`)는 장 JSON 의 `gloria` 가
  * `false` 가 아닐 때(창조송가 · 참회송가 · 찬양송가는 붙이지 않는다). 시편 자리의 일반 성서 본문(다니엘 · 요나 ·
  * 토비트)은 없다. 마지막 장을 못 불러왔으면 어느 쪽도 붙이지 않는다 — 「본문을 불러오지 못했습니다」 뒤에 영광송만
@@ -1011,36 +1052,95 @@ function markOptionalVerses(article, chapter, isOptional) {
 }
 
 /**
- * 반절(상 → `a` · 하 → `b`, ADR-037 §1) — 그 절이 **정확히 두 줄**로 그려졌으면 고른 줄만 남긴다. 데이터의 두 줄 절
- * 22곳은 줄 경계가 곧 상/하 경계였다(¶ 문단 · 시행 · 계응 선창/응답 — 성령강림대축일 「시편 104:24-34, 35하」는
- * 「악인들아 …」를 빼고 「내 영혼아, 주님을 찬미하여라. 알렐루야!」만). 한 줄 절(산문 54곳)은 나눌 수 없어 절 전체,
- * 세 줄 이상(24곳)은 경계를 알 수 없어 절 전체를 그대로 둔다(2026-10-13 자체 리뷰).
- * 첫 줄을 버리면 절 번호(`sup.verse-num` · U+2060)와 id 를 남는 줄로 옮기고, 둘째 줄을 버리면 선창 끝 ◯ 도 뗀다.
- * @param {HTMLElement} article @param {string} verseSpec
+ * 반절(상 → `a` · 하 → `b`, ADR-037 §1)을 경계 표대로 그린다(엔진 `findHalfVerse` — 데이터
+ * `lectionary/half-verses.json`, 사용자 결정 2026-10-22). 표는 줄 경계를 주거나(상은 그 줄까지, 하는 그 줄부터) 줄
+ * 안의 경계 문구를 준다(상은 문구까지, 하는 문구부터 — 한 줄 절도 나눈다). 표에 없거나 「전체」인 반절, 표와 줄이
+ * 맞지 않는 절은 절 전체를 그대로 둔다(`halfVerseLines`).
+ * 남은 첫 줄로 절 번호(`sup.verse-num` · U+2060)와 id 를 옮기고, 번호를 「35하」처럼 적는다(사용자 결정
+ * 2026-10-22 — 독서 제목과 복사 출처, 게시글과 같게). 뒷줄을 버리면 선창 끝 ◯ 도 뗀다. 자른 절은 article 의
+ * `data-halves`(「35b」)에 적어 복사 출처가 읽는다(`copyCitation`).
+ * @param {HTMLElement} article @param {string} verseSpec @param {string} bookId @param {number} chapter
  */
-function trimHalfVerses(article, verseSpec) {
+function trimHalfVerses(article, verseSpec, bookId, chapter) {
+  /** @type {string[]} */
+  const trimmed = [];
   for (const tok of String(verseSpec || "").split(",")) {
     const m = /^(\d+)([ab])$/.exec(tok.trim());
     if (!m) continue;
-    const spans = /** @type {HTMLElement[]} */ ([...article.querySelectorAll(".verse[data-vref]")])
-      .filter((s) => new RegExp(`^${m[1]}[a-z]$`).test(s.getAttribute("data-vref") || ""));
-    if (spans.length !== 2) continue;
-    const [first, second] = spans;
-    const brk = second.previousElementSibling;
-    if (brk && (brk.classList.contains("hemistich-break") || brk.classList.contains("paragraph-break"))) brk.remove();
-    if (m[2] === "b") {
-      // 절 번호 · id 를 둘째 줄로 — sup 뒤의 U+2060 도 함께
-      const lead = [...first.childNodes].filter((n) => n instanceof HTMLElement
+    const half = m[2] === "a" ? "a" : "b";
+    // 그 번호의 본절만 — 같은 번호의 ¶ 구절(「35_v」) · 그리스어 · 옮겨 실린 절은 인스턴스 키가 「35_」로 시작한다
+    const spans = /** @type {HTMLElement[]} */ ([...article.querySelectorAll(`.verse[data-vkey^="${m[1]}/"]`)]);
+    const keep = halfVerseLines(spans.length, findHalfVerse(bookId, chapter, Number(m[1]), half));
+    if (!keep) continue;
+    const first = spans[keep.first], last = spans[keep.last];
+    if (keep.cut !== null && keep.text && !cutLineText(spans[keep.cut], keep.text, half === "b")) continue;
+    if (first !== spans[0]) {
+      // 절 번호 · id 를 남는 첫 줄로 — sup 뒤의 U+2060 도 함께
+      const lead = [...spans[0].childNodes].filter((n) => n instanceof HTMLElement
         ? n.classList.contains("verse-num") || n.classList.contains("versicle-mark")
         : n.nodeType === Node.TEXT_NODE && n.textContent === "\u2060");
-      for (const n of lead.reverse()) second.insertBefore(n, second.firstChild);
-      second.id = first.id;
-      first.remove();
-    } else {
-      first.querySelectorAll(".responsory-mark").forEach((n) => n.remove());
-      second.remove();
+      for (const n of lead.reverse()) first.insertBefore(n, first.firstChild);
+      first.id = spans[0].id;
+      dropSiblings(spans[0], /** @type {Element} */ (first.previousElementSibling));
     }
+    if (last !== spans[spans.length - 1]) {
+      last.querySelectorAll(".responsory-mark").forEach((n) => n.remove());
+      dropSiblings(/** @type {Element} */ (last.nextElementSibling), spans[spans.length - 1]);
+    }
+    const num = first.querySelector(".verse-num");
+    if (num) num.setAttribute("data-v", `${num.getAttribute("data-v") || m[1]}${half === "a" ? "상" : "하"}`);
+    trimmed.push(`${m[1]}${half}`);
   }
+  if (trimmed.length) article.setAttribute("data-halves", trimmed.join(","));
+}
+
+/** 형제 요소 `from`부터 `to`까지(둘 다 포함, 문서 순서) 지운다 — 버리는 줄과 그 사이의 시행 · 단락 · 연 구분 표지. */
+function dropSiblings(/** @type {Element} */ from, /** @type {Element} */ to) {
+  for (let n = /** @type {Element | null} */ (from); n; ) {
+    const next = n.nextElementSibling;
+    n.remove();
+    if (n === to) break;
+    n = next;
+  }
+}
+
+/**
+ * 한 줄 span 안에서 경계 문구를 찾아 앞(하) 또는 뒤(상)를 지운다. 본문 글자만 센다 — 절 번호(CSS 로 그린다) ·
+ * U+2060 · ¶ · ◯ 는 문구에 들지 않는다(표의 문구는 데이터의 본문 글자다). 문구가 그 줄에 꼭 한 번 나오지 않으면
+ * false — 절 전체가 남는다. 상을 자르면 줄 끝 공백도 잘리므로 한 칸을 되돌려 다음 절과 띄운다(appendVerses 의 줄 끝 공백).
+ * @param {HTMLElement} span @param {string} text @param {boolean} keepTail 하(문구부터 남긴다)
+ */
+function cutLineText(span, text, keepTail) {
+  /** @type {Array<[Text, number]>} */
+  const nodes = [];
+  let joined = "";
+  const walker = document.createTreeWalker(span, NodeFilter.SHOW_TEXT);
+  for (let n = /** @type {Text | null} */ (walker.nextNode()); n; n = /** @type {Text | null} */ (walker.nextNode())) {
+    if (n.textContent === "\u2060" || n.parentElement?.closest(".verse-num, .pilcrow, .versicle-mark, .responsory-mark")) continue;
+    nodes.push([n, joined.length]);
+    joined += n.textContent;
+  }
+  const at = joined.indexOf(text);
+  if (at < 0 || joined.indexOf(text, at + 1) >= 0) return false;
+  const pos = keepTail ? at : at + text.length;
+  const hit = nodes.filter(([, s]) => s <= pos).pop();
+  if (!hit) return false;
+  const [node, offset] = hit;
+  const range = document.createRange();
+  if (keepTail) {
+    // 절 번호 · U+2060 뒤부터 문구 앞까지 — 줄 머리의 ¶ 도 버리는 앞부분에 든다
+    const lead = [...span.childNodes].filter((n) => n instanceof HTMLElement
+      ? n.classList.contains("verse-num") || n.classList.contains("versicle-mark")
+      : n.nodeType === Node.TEXT_NODE && n.textContent === "\u2060").pop();
+    if (lead) range.setStartAfter(lead); else range.setStart(span, 0);
+    range.setEnd(node, pos - offset);
+  } else {
+    range.setStart(node, pos - offset);
+    range.setEndAfter(/** @type {Node} */ (span.lastChild));
+  }
+  range.deleteContents();
+  if (!keepTail) span.appendChild(document.createTextNode(" "));
+  return true;
 }
 
 /**
@@ -1085,7 +1185,7 @@ function buildReading(m, slot, chapters) {
     // Clean 봉독 surface (ADR-035): cite chips off, no parallels, no note anchors. 한 화면에 슬롯 · 장이 여럿이라
     // 절 id 에 슬롯 · 책 · 장 접두를 붙여 문서 안에서 유일하게(Copilot 리뷰 7회차).
     appendVerses(article, run.verses, { hideCites: true, instanceKeys: run.keys, idPrefix: `${slot.slot}-${slot.bookId}-${run.chapter}-` });
-    trimHalfVerses(article, run.spec);
+    trimHalfVerses(article, run.spec, slot.bookId, run.chapter);
     if (shortSlot) markOptionalVerses(article, run.chapter, isOptional);
     section.appendChild(article);
   }
@@ -1097,7 +1197,8 @@ function buildReading(m, slot, chapters) {
  * 독서 섹션 하나의 복사 출처(`bindCopyAttribution` 의 citeOf — `commit` 이 뷰 루트에 한 번 묶는다). 고른 절을 장마다
  * 연속 구간으로 적고, 앞 장이 **그 장의 실제 마지막 절**(`data-chapter-last`)에서 끝나 다음 장이 1절에서 이어질 때만
  * 「42:11-43:1」로 합친다 — 창세 6:9-22, 7:24 · 지혜 18:14-16, 19:1-6 처럼 발췌가 끊긴 것은 「18:16, 19:1」. 송가는
- * 「송가 이름 + 절」이다(자체 리뷰 2026-10-13). 번역 표기는 성서가 「(공동번역성서)」, 전례시편 · 송가가 「(대한성공회 기도서)」
+ * 「송가 이름 + 절」이다(자체 리뷰 2026-10-13). 반절로 그린 절은 「35하」 「21상」으로 적고 그 자리에서 구간을 가른다
+ * (「24-34, 35하」 — `halfVerseRanges`, 2026-10-22). 번역 표기는 성서가 「(공동번역성서)」, 전례시편 · 송가가 「(대한성공회 기도서)」
  * (사용자 결정 2026-10-13 — `citationSource`).
  * @param {HTMLElement} unit @param {Array<{ article: HTMLElement, ranges: Array<[number, number]>, firstNum: number, lastNum: number, atStart: boolean, atEnd: boolean }>} runs
  */
@@ -1106,23 +1207,27 @@ function copyCitation(unit, runs) {
   const liturgical = unit.hasAttribute("data-liturgical");
   if (canticle) return `${canticle} ${formatVerseRanges(runs.flatMap((r) => r.ranges))} ${citationSource(true)}`;
   const book = runs[0].article.getAttribute("data-book") || "";
-  /** @type {Array<{ ch: string, a: number, b: number, chEnd: string | null }>} */
+  /** @type {Array<{ ch: string, a: number, b: number, aHalf: string, bHalf: string, chEnd: string | null }>} */
   const pieces = [];
   runs.forEach((r, i) => {
     const ch = r.article.getAttribute("data-chapter") || "";
     const prevRun = runs[i - 1];
-    r.ranges.forEach(([a, b], j) => {
+    // 반절로 그린 절(trimHalfVerses 의 `data-halves` — 「35b」)은 「35하」로 적고, 그 자리에서 구간을 가른다
+    const halves = new Map((r.article.getAttribute("data-halves") || "").split(",").filter(Boolean)
+      .map((t) => [parseInt(t, 10), t.slice(-1)]));
+    halfVerseRanges(r.ranges, halves).forEach(({ a, b, aHalf, bHalf }, j) => {
       const prev = pieces[pieces.length - 1];
-      const continues = !!prevRun && j === 0 && !!prev && prevRun.atEnd && r.atStart && a === 1
+      const continues = !!prevRun && j === 0 && !!prev && prevRun.atEnd && r.atStart && a === 1 && !prev.bHalf && !aHalf
         && prev.b === Number(prevRun.article.getAttribute("data-chapter-last"));
-      if (continues && prev) { prev.b = b; prev.chEnd = ch; } else pieces.push({ ch, a, b, chEnd: null });
+      if (continues && prev) { prev.b = b; prev.bHalf = bHalf; prev.chEnd = ch; } else pieces.push({ ch, a, b, aHalf, bHalf, chEnd: null });
     });
   });
   let out = "";
   /** @type {string | null} */
   let lastCh = null;
   for (const p of pieces) {
-    const body = p.chEnd ? `${p.a}-${p.chEnd}:${p.b}` : p.a === p.b ? `${p.a}` : `${p.a}-${p.b}`;
+    const [a, b] = [`${p.a}${p.aHalf}`, `${p.b}${p.bHalf}`];
+    const body = p.chEnd ? `${a}-${p.chEnd}:${b}` : p.a === p.b ? `${p.a}${p.aHalf}${p.bHalf}` : `${a}-${b}`;
     out += (out ? ", " : "") + (p.ch !== lastCh ? `${p.ch}:` : "") + body;
     lastCh = p.chEnd || p.ch;
   }

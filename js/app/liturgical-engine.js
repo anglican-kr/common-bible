@@ -36,6 +36,7 @@
 /** @typedef {import("../types").LiturgicalColor} LiturgicalColor */
 /** @typedef {import("../types").LiturgicalColorAlt} LiturgicalColorAlt */
 /** @typedef {import("../types").LiturgicalFast} LiturgicalFast */
+/** @typedef {import("../types").HalfVerse} HalfVerse */
 /** @typedef {import("../types").WeekdayCode} WeekdayCode */
 /** @typedef {import("../types").Observance} Observance */
 /** @typedef {import("../types").Candidate} Candidate */
@@ -81,6 +82,7 @@
  * @typedef {{
  *   readings: TextIndex, collects: TextIndex,
  *   commons: Record<string, CommonClass>, canticles: Record<string, unknown>,
+ *   halfVerses: Map<string, HalfVerse>,
  * }} LectionaryIndex
  */
 
@@ -1819,20 +1821,31 @@ function coordKey(/** @type {unknown} */ season, /** @type {unknown} */ week, /*
 }
 
 /**
- * 독서 묶음 네 표 → 인덱스. `commons.classes` 는 배열이 아니라 **맵**이고, `canticles` 는 래퍼조차
- * 없는 id → 객체 맵이다(§5.2).
- * @param {{readings?: any, collects?: any, commons?: any, canticles?: any} | null} tables
+ * 독서 묶음 다섯 표 → 인덱스. `commons.classes` 는 배열이 아니라 **맵**이고, `canticles` 는 래퍼조차
+ * 없는 id → 객체 맵이다(§5.2). 반절 경계 표는 「bookId:장:절+a|b」 키로 찾는다(`halfVerseKey`).
+ * @param {{readings?: any, collects?: any, commons?: any, canticles?: any, halfVerses?: any} | null} tables
  * @returns {LectionaryIndex}
  */
 function buildLectionaryIndex(tables) {
   const t = tables || {};
   const classes = t.commons && typeof t.commons === "object" ? t.commons.classes : null;
+  /** @type {Map<string, HalfVerse>} */
+  const halfVerses = new Map();
+  for (const e of (t.halfVerses && Array.isArray(t.halfVerses.entries) ? t.halfVerses.entries : [])) {
+    halfVerses.set(halfVerseKey(e.bookId, e.chapter, e.verse, e.half), e);
+  }
   return {
     readings: buildTextIndex(t.readings),
     collects: buildTextIndex(t.collects),
     commons: classes && typeof classes === "object" && !Array.isArray(classes) ? classes : {},
     canticles: t.canticles && typeof t.canticles === "object" ? t.canticles : {},
+    halfVerses,
   };
+}
+
+/** @param {string} bookId @param {number} chapter @param {number} verse @param {string} half @returns {string} */
+function halfVerseKey(bookId, chapter, verse, half) {
+  return `${bookId}:${chapter}:${verse}${half}`;
 }
 
 /**
@@ -2065,8 +2078,8 @@ function findCollectsIn(lix, cal, resolved) {
 
 /** 캘린더 묶음(§3.5) — 소형 표 다섯, 캘린더 진입 · `resolveDate` 전에. */
 const CALENDAR_FILES = ["sanctoral", "temporal-feasts", "periods", "ordinal-weeks", "kasi-lunar"];
-/** 독서 묶음(§3.5) — 대형 표 넷, 독서 뷰 진입 · `findReadings`/`findCollects` 전에. */
-const LECTIONARY_FILES = ["eucharist-readings", "eucharist-collects", "commons", "canticles"];
+/** 독서 묶음(§3.5) — 대형 표 넷과 반절 경계 표, 독서 뷰 진입 · `findReadings`/`findCollects`/`findHalfVerse` 전에. */
+const LECTIONARY_FILES = ["eucharist-readings", "eucharist-collects", "commons", "canticles", "half-verses"];
 
 /** @param {string} name @returns {Promise<any>} */
 function fetchLectionaryJson(name) {
@@ -2097,8 +2110,8 @@ function preloadCalendar() {
  */
 function preloadLectionary() {
   return (lectionaryPromise ??= Promise.all(LECTIONARY_FILES.map(fetchLectionaryJson))
-    .then(([readings, collects, commons, canticles]) =>
-      (lectionaryIndex = buildLectionaryIndex({ readings, collects, commons, canticles })))
+    .then(([readings, collects, commons, canticles, halfVerses]) =>
+      (lectionaryIndex = buildLectionaryIndex({ readings, collects, commons, canticles, halfVerses })))
     .catch((e) => { lectionaryPromise = null; throw e; }));
 }
 
@@ -2138,6 +2151,16 @@ function findCollects(resolved) {
   if (!calendarIndex) throw new Error("preloadCalendar() must be awaited before findCollects()");
   return findCollectsIn(lectionaryIndex, calendarIndex, resolved);
 }
+
+/**
+ * 반절 하나의 경계(표 행) — 표에 없으면 null(절 전체를 그린다). 프리로드 규칙은 `findReadings` 와 같다.
+ * @param {string} bookId @param {number} chapter @param {number} verse @param {"a" | "b"} half
+ * @returns {HalfVerse | null}
+ */
+function findHalfVerse(bookId, chapter, verse, half) {
+  if (!lectionaryIndex) throw new Error("preloadLectionary() must be awaited before findHalfVerse()");
+  return lectionaryIndex.halfVerses.get(halfVerseKey(bookId, chapter, verse, half)) || null;
+}
 // ── END LITURGICAL_PRELOAD ──
 
 export {
@@ -2147,7 +2170,7 @@ export {
   easterDate, advent1Date, baptismDate, liturgicalYearOf, yearAnchors,
   seasonOf, sundayCycle, weekdayCycle, evalRule,
   buildOrdinalIndex, ordinalWeekOf, lunarDatesOf, spansOf, inSpan,
-  preloadCalendar, preloadLectionary, resolveDate, findReadings, findCollects, fastOf,
+  preloadCalendar, preloadLectionary, resolveDate, findReadings, findCollects, findHalfVerse, fastOf,
   setActivatedOptionals,
   // 선택 봉헌의 목적지 주일(§6.2) — 독서 뷰(ADR-038 §3)가 「오는/지난 주일(날짜)로 옮겨 지키는 경우」
   // 문구를 엔진과 같은 계산으로 만들기 위해 쓴다. 규칙은 그대로다 — 노출만 더했다.

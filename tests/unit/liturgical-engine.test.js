@@ -765,6 +765,12 @@ const LEC_TABLES = {
     anniversary: { label: "설립일", collect: { text: "{name}", ending: "A" }, readings: [] },
   } },
   canticles: { magnificat: { name: "성모송가" } },
+  // 반절 경계 표(데이터 lectionary/half-verses.json) — 줄 경계 · 줄 안 문구 · 「전체」
+  halfVerses: { _meta: {}, entries: [
+    { bookId: "lps", chapter: 104, verse: 35, half: "b", line: 2, text: null },
+    { bookId: "gen", chapter: 12, verse: 4, half: "a", line: 1, text: "길을 떠났다." },
+    { bookId: "rom", chapter: 3, verse: 22, half: "b", whole: true },
+  ] },
 };
 
 const CAL = ctx.buildCalendarIndex(CAL_TABLES);
@@ -1935,7 +1941,7 @@ const FILES = {
   sanctoral: CAL_TABLES.sanctoral, "temporal-feasts": CAL_TABLES.temporal, periods: CAL_TABLES.periods,
   "ordinal-weeks": CAL_TABLES.ordinalWeeks, "kasi-lunar": CAL_TABLES.kasi,
   "eucharist-readings": LEC_TABLES.readings, "eucharist-collects": LEC_TABLES.collects,
-  commons: LEC_TABLES.commons, canticles: LEC_TABLES.canticles,
+  commons: LEC_TABLES.commons, canticles: LEC_TABLES.canticles, "half-verses": LEC_TABLES.halfVerses,
 };
 /** fetch 가짜 — 부른 URL 을 적고, `fail` 에 든 파일은 500 으로 답한다. */
 function fakeFetch(calls, fail = new Set()) {
@@ -1951,6 +1957,19 @@ test("C-3.4-1 프리로드 전 동기 API 는 명확한 메시지로 throw", () 
   assert.throws(() => e.resolveDate("2026-01-25"), /preloadCalendar\(\) must be awaited before resolveDate\(\)/);
   assert.throws(() => e.findReadings({}, {}), /preloadLectionary\(\) must be awaited before findReadings\(\)/);
   assert.throws(() => e.findCollects({}), /preloadLectionary\(\) must be awaited before findCollects\(\)/);
+  assert.throws(() => e.findHalfVerse("lps", 104, 35, "b"), /preloadLectionary\(\) must be awaited before findHalfVerse\(\)/);
+});
+
+test("C-3.5 반절 경계 표는 독서 묶음과 함께 실리고 「책:장:절+상하」로 찾는다 — 없으면 null(절 전체를 그린다, 사용자 결정 2026-10-22)", async () => {
+  const e = loadEngine(fakeFetch([]));
+  await e.preloadLectionary();
+  same(plain(e.findHalfVerse("lps", 104, 35, "b")), { bookId: "lps", chapter: 104, verse: 35, half: "b", line: 2, text: null });
+  assert.strictEqual(e.findHalfVerse("gen", 12, 4, "a").text, "길을 떠났다.");
+  assert.strictEqual(e.findHalfVerse("rom", 3, 22, "b").whole, true);
+  assert.strictEqual(e.findHalfVerse("lps", 104, 35, "a"), null);    // 상은 표에 없다
+  assert.strictEqual(e.findHalfVerse("gen", 12, 40, "a"), null);
+  // 표가 비어 있거나 형식이 깨져도 인덱스는 선다 — 조회는 null
+  assert.strictEqual(e.buildLectionaryIndex({ ...LEC_TABLES, halfVerses: null }).halfVerses.size, 0);
 });
 
 test("C-3.4-2 동시 프리로드는 파일당 fetch 1회 · 실패한 프리로드는 캐시되지 않고 재시도가 다시 fetch", async () => {
