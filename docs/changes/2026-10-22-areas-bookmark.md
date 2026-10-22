@@ -1,4 +1,5 @@
 ---
+pr: 370
 date: 2026-10-22
 branch: docs/areas-bookmark
 title: "docs: 북마크 영역 문서 시범"
