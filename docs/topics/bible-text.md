@@ -2,7 +2,7 @@
 
 소유 코드: `js/app/citations.js`, `js/app/parallels.js`, `js/app/data-fetch.js`
 
-장 JSON을 받아 오는 일, 인용 칩과 주석, 병행 본문 마커, 원본 마크업(`common-bible-data`의 `source/*.md`)을 다룬다. 장 화면을 그리는 일은 라우팅 주제(`views.js`)가 맡는다.
+장 JSON을 받아 오는 일, 인용 칩과 주석, 병행 본문 마커, 원본 마크업(`common-bible-data`의 `source/*.md`)을 다룬다. 장 화면을 그리는 코드(`views.js`)는 라우팅 주제 문서(`topics/routing.md`)가 다룬다.
 
 ## 지금 동작
 

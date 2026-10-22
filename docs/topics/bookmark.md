@@ -2,7 +2,7 @@
 
 소유 코드: `js/app/bookmark*.js`, `js/app/verse-spec.js`
 
-북마크 저장과 폴더, 가져오기와 내보내기, 합치기, 절 선택 모드, 폴더 모아 읽기(`/read/<folderId>`)를 다룬다. Drive 동기화는 동기화 주제(`topics/sync.md`)가, 주소의 절 범위는 라우팅 주제(`topics/routing.md`)가 맡는다.
+북마크 저장과 폴더, 가져오기와 내보내기, 합치기, 절 선택 모드, 폴더 모아 읽기(`/read/<folderId>`)를 다룬다. Drive 동기화는 동기화 주제 문서(`topics/sync.md`)가, 주소의 절 범위는 라우팅 주제 문서(`topics/routing.md`)가 다룬다.
 
 ## 지금 동작
 
