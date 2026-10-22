@@ -36,6 +36,7 @@
 /** @typedef {import("../types").LiturgicalColor} LiturgicalColor */
 /** @typedef {import("../types").LiturgicalColorAlt} LiturgicalColorAlt */
 /** @typedef {import("../types").LiturgicalFast} LiturgicalFast */
+/** @typedef {import("../types").HalfVerse} HalfVerse */
 /** @typedef {import("../types").WeekdayCode} WeekdayCode */
 /** @typedef {import("../types").Observance} Observance */
 /** @typedef {import("../types").Candidate} Candidate */
@@ -81,6 +82,7 @@
  * @typedef {{
  *   readings: TextIndex, collects: TextIndex,
  *   commons: Record<string, CommonClass>, canticles: Record<string, unknown>,
+ *   halfVerses: Map<string, HalfVerse>,
  * }} LectionaryIndex
  */
 
@@ -133,6 +135,10 @@ let calendarPromise = null;
 let lectionaryIndex = null;
 /** @type {Promise<LectionaryIndex> | null} */
 let lectionaryPromise = null;
+// 반절 경계 표를 받았는가 · 다시 받는 중인가(§3.5) — 못 받았으면 다음 진입마다 이 표만 뒤에서 다시 받는다.
+let halfVersesLoaded = false;
+/** @type {Promise<void> | null} */
+let halfVersesRetry = null;
 
 // ── BEGIN LITURGICAL_CORE ──
 // 날짜 산술 · computus · 오프셋 전개 · 절기 스팬 · 연중 주차 · 주기 산정 · 기간 축.
@@ -1819,9 +1825,9 @@ function coordKey(/** @type {unknown} */ season, /** @type {unknown} */ week, /*
 }
 
 /**
- * 독서 묶음 네 표 → 인덱스. `commons.classes` 는 배열이 아니라 **맵**이고, `canticles` 는 래퍼조차
- * 없는 id → 객체 맵이다(§5.2).
- * @param {{readings?: any, collects?: any, commons?: any, canticles?: any} | null} tables
+ * 독서 묶음 다섯 표 → 인덱스. `commons.classes`는 배열이 아니라 **맵**이고, `canticles`는 래퍼조차
+ * 없는 id → 객체 맵이다(§5.2). 반절 경계 표는 「bookId:장:절+a|b」 키로 찾는다(`halfVerseKey`).
+ * @param {{readings?: any, collects?: any, commons?: any, canticles?: any, halfVerses?: any} | null} tables
  * @returns {LectionaryIndex}
  */
 function buildLectionaryIndex(tables) {
@@ -1832,7 +1838,23 @@ function buildLectionaryIndex(tables) {
     collects: buildTextIndex(t.collects),
     commons: classes && typeof classes === "object" && !Array.isArray(classes) ? classes : {},
     canticles: t.canticles && typeof t.canticles === "object" ? t.canticles : {},
+    halfVerses: buildHalfVerseIndex(t.halfVerses),
   };
+}
+
+/** 반절 경계 표 → 「bookId:장:절+a|b」 키의 Map. 표가 없거나 형식이 깨졌으면 빈 Map이다. @param {any} table */
+function buildHalfVerseIndex(table) {
+  /** @type {Map<string, HalfVerse>} */
+  const map = new Map();
+  for (const e of (table && Array.isArray(table.entries) ? table.entries : [])) {
+    map.set(halfVerseKey(e.bookId, e.chapter, e.verse, e.half), e);
+  }
+  return map;
+}
+
+/** @param {string} bookId @param {number} chapter @param {number} verse @param {string} half @returns {string} */
+function halfVerseKey(bookId, chapter, verse, half) {
+  return `${bookId}:${chapter}:${verse}${half}`;
 }
 
 /**
@@ -2067,6 +2089,11 @@ function findCollectsIn(lix, cal, resolved) {
 const CALENDAR_FILES = ["sanctoral", "temporal-feasts", "periods", "ordinal-weeks", "kasi-lunar"];
 /** 독서 묶음(§3.5) — 대형 표 넷, 독서 뷰 진입 · `findReadings`/`findCollects` 전에. */
 const LECTIONARY_FILES = ["eucharist-readings", "eucharist-collects", "commons", "canticles"];
+/**
+ * 반절 경계 표(§3.5) — 독서 묶음과 함께 싣되, 받지 못해도 묶음을 막지 않는다. 업데이트 뒤 처음 오프라인으로 열면
+ * 데이터 캐시에 이 표만 없을 수 있다(PR #365 리뷰). 그때는 반절 대신 절 전체를 그린다.
+ */
+const HALF_VERSE_FILE = "half-verses";
 
 /** @param {string} name @returns {Promise<any>} */
 function fetchLectionaryJson(name) {
@@ -2092,14 +2119,36 @@ function preloadCalendar() {
 }
 
 /**
- * 독서 묶음을 싣는다 — 캐시 규칙은 `preloadCalendar` 와 같다(한쪽만 고치면 증상이 절반만 사라진다).
+ * 독서 묶음을 싣는다. 캐시 규칙은 `preloadCalendar`와 같다(한쪽만 고치면 증상이 절반만 사라진다). 반절 경계 표는
+ * 함께 받되 실패를 받아들여, 인덱스를 빈 표로 세운다. 묶음 promise는 그대로 캐시하고, 다음 진입마다 반절 표만 뒤에서
+ * 다시 받는다(`retryHalfVerses`). 큰 표 넷을 다시 받지 않고, 다시 그리기도 기다리게 하지 않는다(PR #365 리뷰 2회차).
  * @returns {Promise<LectionaryIndex>}
  */
 function preloadLectionary() {
-  return (lectionaryPromise ??= Promise.all(LECTIONARY_FILES.map(fetchLectionaryJson))
-    .then(([readings, collects, commons, canticles]) =>
-      (lectionaryIndex = buildLectionaryIndex({ readings, collects, commons, canticles })))
+  if (lectionaryPromise) {
+    if (lectionaryIndex && !halfVersesLoaded) retryHalfVerses();
+    return lectionaryPromise;
+  }
+  return (lectionaryPromise = Promise.all([
+    ...LECTIONARY_FILES.map(fetchLectionaryJson),
+    fetchLectionaryJson(HALF_VERSE_FILE).catch(() => null),
+  ])
+    .then(([readings, collects, commons, canticles, halfVerses]) => {
+      halfVersesLoaded = halfVerses !== null;
+      return (lectionaryIndex = buildLectionaryIndex({ readings, collects, commons, canticles, halfVerses }));
+    })
     .catch((e) => { lectionaryPromise = null; throw e; }));
+}
+
+/** 받지 못한 반절 경계 표를 뒤에서 다시 받는다. 받으면 그다음 그리기부터 반절을 그린다. 동시에는 한 번만 낸다. */
+function retryHalfVerses() {
+  halfVersesRetry ??= fetchLectionaryJson(HALF_VERSE_FILE)
+    .then((table) => {
+      if (lectionaryIndex) lectionaryIndex.halfVerses = buildHalfVerseIndex(table);
+      halfVersesLoaded = true;
+    })
+    .catch(() => {})
+    .finally(() => { halfVersesRetry = null; });
 }
 
 /**
@@ -2138,6 +2187,16 @@ function findCollects(resolved) {
   if (!calendarIndex) throw new Error("preloadCalendar() must be awaited before findCollects()");
   return findCollectsIn(lectionaryIndex, calendarIndex, resolved);
 }
+
+/**
+ * 반절 하나의 경계(표 행) — 표에 없으면 null(절 전체를 그린다). 프리로드 규칙은 `findReadings`와 같다.
+ * @param {string} bookId @param {number} chapter @param {number} verse @param {"a" | "b"} half
+ * @returns {HalfVerse | null}
+ */
+function findHalfVerse(bookId, chapter, verse, half) {
+  if (!lectionaryIndex) throw new Error("preloadLectionary() must be awaited before findHalfVerse()");
+  return lectionaryIndex.halfVerses.get(halfVerseKey(bookId, chapter, verse, half)) || null;
+}
 // ── END LITURGICAL_PRELOAD ──
 
 export {
@@ -2147,7 +2206,7 @@ export {
   easterDate, advent1Date, baptismDate, liturgicalYearOf, yearAnchors,
   seasonOf, sundayCycle, weekdayCycle, evalRule,
   buildOrdinalIndex, ordinalWeekOf, lunarDatesOf, spansOf, inSpan,
-  preloadCalendar, preloadLectionary, resolveDate, findReadings, findCollects, fastOf,
+  preloadCalendar, preloadLectionary, resolveDate, findReadings, findCollects, findHalfVerse, fastOf,
   setActivatedOptionals,
   // 선택 봉헌의 목적지 주일(§6.2) — 독서 뷰(ADR-038 §3)가 「오는/지난 주일(날짜)로 옮겨 지키는 경우」
   // 문구를 엔진과 같은 계산으로 만들기 위해 쓴다. 규칙은 그대로다 — 노출만 더했다.

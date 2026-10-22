@@ -425,3 +425,39 @@ test("A3 데이터 전수 — 괄호 선택 구절 세트는 모두 바탕에 �
   same(bad, []);
   assert.strictEqual(merged, 34);   // pitfalls §21 실측(2026-10-12) — 데이터가 바뀌면 여기서 다시 센다
 });
+
+// ── 반절 경계 표 ↔ 앱이 그리는 줄(사용자 결정 2026-10-22, 데이터 liturgical/half-verses.md) ──
+
+test("반절 경계 표 — 전례독서 · 성인 공통의 반절 참조마다 행이 있고, 앱이 그리는 줄에서 그 절을 나눈다", { skip: SKIP }, () => {
+  const table = read("half-verses.json").entries;
+  const byKey = new Map(table.map((e) => [`${e.bookId}:${e.chapter}:${e.verse}${e.half}`, e]));
+  /** @type {Set<string>} */
+  const refs = new Set();
+  const walk = (/** @type {any} */ x) => {
+    if (Array.isArray(x)) { x.forEach(walk); return; }
+    if (!x || typeof x !== "object") return;
+    if (typeof x.bookId === "string" && Array.isArray(x.refs)) {
+      for (const ref of x.refs) for (const tok of String(ref.verseSpec).split(",")) {
+        const m = /^(\d+)([ab])$/.exec(tok.trim());
+        if (m) refs.add(`${x.bookId}:${ref.chapter}:${m[1]}${m[2]}`);
+      }
+    }
+    Object.values(x).forEach(walk);
+  };
+  for (const f of ["eucharist-readings.json", "commons.json"]) walk(read(f));
+  same([...refs].filter((k) => !byKey.has(k)), [], "표에 없는 반절 참조 — 데이터 저장소 liturgical/half-verses.md 에 더한다");
+  assert.strictEqual(refs.size, table.length, "쓰이지 않는 행");
+  for (const e of table) {
+    const k = `${e.bookId} ${e.chapter}:${e.verse}${e.half === "a" ? "상" : "하"}`;
+    const data = JSON.parse(fs.readFileSync(path.join(ROOT, "data", "bible", `${e.bookId}-${e.chapter}.json`), "utf8"));
+    const v = data.verses.find((x) => x.number === e.verse && !x.part && !x.lxx_only && x.chapter_ref == null && x.alt_ref == null && !x.versicle);
+    assert.ok(v, k);
+    // appendVerses 의 줄 — segments 를 줄바꿈으로 나누고 빈 줄(연 구분)은 빼며, 줄 머리의 ¶ 는 표지로 떼어 그린다
+    const lines = (v.segments || [{ text: v.text || "" }]).flatMap((/** @type {any} */ s) => s.text.split("\n"))
+      .filter((/** @type {string} */ l) => l !== "").map((/** @type {string} */ l) => l.replace(/^¶\s*/, ""));
+    const keep = ctx.halfVerseLines(lines.length, e);
+    if (e.whole) { assert.strictEqual(keep, null, k); continue; }
+    assert.ok(keep, `${k} — 경계가 절을 나누지 않는다`);
+    if (keep.text) assert.strictEqual(lines[keep.cut].split(keep.text).length, 2, `${k} — 「${keep.text}」가 ${keep.cut + 1}줄에 한 번 나와야 한다`);
+  }
+});

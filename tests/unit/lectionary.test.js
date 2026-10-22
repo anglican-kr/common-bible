@@ -719,3 +719,46 @@ test("상수: 송영 셋 · 영광송 계응 둘 · 슬롯 순서 넷 · 선택 
   same(plain(K("OPTIONAL_TRANSFER_KINDS")).sort(), [...K("OPTIONAL_KINDS")].sort());   // 엔진의 넷과 같다 — 한쪽만 바뀌면 깨진다
   assert.strictEqual(K("BRACKET_NOTE"), "괄호 선택 구절 포함");
 });
+
+// ── 반절(상 · 하) — 경계 표의 행을 그 절의 줄에 적용한다(사용자 결정 2026-10-22, 데이터 liturgical/half-verses.md) ──
+
+test("halfVerseLines: 줄 경계 — 상은 처음부터 그 줄까지, 하는 그 줄부터 끝까지", () => {
+  // 집회 51:20상 — 네 줄 가운데 앞의 두 줄(게시글 20007)
+  same(plain(ctx.halfVerseLines(4, { half: "a", line: 2, text: null })), { first: 0, last: 1, cut: null, text: null });
+  // 토비 13:6하 — 열다섯 줄 가운데 다섯째 줄부터
+  same(plain(ctx.halfVerseLines(15, { half: "b", line: 5, text: null })), { first: 4, last: 14, cut: null, text: null });
+});
+
+test("halfVerseLines: 줄 안의 경계 — 한 줄 절도 문구에서 나눈다", () => {
+  same(plain(ctx.halfVerseLines(1, { half: "a", line: 1, text: "길을 떠났다." })), { first: 0, last: 0, cut: 0, text: "길을 떠났다." });
+  same(plain(ctx.halfVerseLines(1, { half: "b", line: 1, text: "하느님과 화해하십시오." })), { first: 0, last: 0, cut: 0, text: "하느님과 화해하십시오." });
+  same(plain(ctx.halfVerseLines(3, { half: "b", line: 2, text: "그러나" })), { first: 1, last: 2, cut: 1, text: "그러나" });
+});
+
+test("halfVerseLines: 나누지 않는 경우는 null — 절 전체를 그린다", () => {
+  assert.strictEqual(ctx.halfVerseLines(2, null), null);                                   // 표에 없다
+  assert.strictEqual(ctx.halfVerseLines(1, { half: "b", whole: true }), null);             // 「전체」(로마 3:22하)
+  assert.strictEqual(ctx.halfVerseLines(2, { half: "a", line: 3, text: null }), null);     // 그려진 줄보다 많다 — 데이터 어긋남
+  assert.strictEqual(ctx.halfVerseLines(2, { half: "a", line: 2, text: null }), null);     // 상이 끝 줄까지 — 절 전체
+  assert.strictEqual(ctx.halfVerseLines(2, { half: "b", line: 1, text: null }), null);     // 하가 첫 줄부터 — 절 전체
+});
+
+test("halfVerseRanges: 하로 자른 절은 구간을 열고, 상으로 자른 절은 구간을 닫는다", () => {
+  const H = (o) => new Map(Object.entries(o).map(([k, v]) => [Number(k), v]));
+  // 성령강림 「시편 104:24-34, 35하」 — 종전 출처는 「24-35」로 35절 전체를 가리켰다
+  same(plain(ctx.halfVerseRanges([[24, 35]], H({ 35: "b" }))), [
+    { a: 24, b: 34, aHalf: "", bHalf: "" }, { a: 35, b: 35, aHalf: "하", bHalf: "" }]);
+  // 「집회 51:12하-20상」 — 한 구간 그대로, 양 끝에 하 · 상
+  same(plain(ctx.halfVerseRanges([[12, 20]], H({ 12: "b", 20: "a" }))), [{ a: 12, b: 20, aHalf: "하", bHalf: "상" }]);
+  // 「사도 2:14상, 22-32」 · 「여호 24:1-3상, 14-18」
+  same(plain(ctx.halfVerseRanges([[14, 14], [22, 32]], H({ 14: "a" }))), [
+    { a: 14, b: 14, aHalf: "", bHalf: "상" }, { a: 22, b: 32, aHalf: "", bHalf: "" }]);
+  same(plain(ctx.halfVerseRanges([[1, 3], [14, 18]], H({ 3: "a" }))), [
+    { a: 1, b: 3, aHalf: "", bHalf: "상" }, { a: 14, b: 18, aHalf: "", bHalf: "" }]);
+  // 구간 가운데의 반절 — 상은 그 자리에서 닫고 다음 절부터 새 구간, 하는 앞을 닫고 그 절부터
+  same(plain(ctx.halfVerseRanges([[10, 20]], H({ 14: "a" }))), [
+    { a: 10, b: 14, aHalf: "", bHalf: "상" }, { a: 15, b: 20, aHalf: "", bHalf: "" }]);
+  same(plain(ctx.halfVerseRanges([[10, 20]], H({ 14: "b" }))), [
+    { a: 10, b: 13, aHalf: "", bHalf: "" }, { a: 14, b: 20, aHalf: "하", bHalf: "" }]);
+  same(plain(ctx.halfVerseRanges([[1, 9]], H({}))), [{ a: 1, b: 9, aHalf: "", bHalf: "" }]);
+});

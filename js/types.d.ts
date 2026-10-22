@@ -766,6 +766,22 @@ export interface ReadingSlot {
 }
 
 /**
+ * 반절(상 `a` · 하 `b`) 하나의 경계 — 데이터 `lectionary/half-verses.json`(사용자 결정 2026-10-22, 원료는 데이터
+ * 저장소 `liturgical/half-verses.md`). `line`은 그 절이 그려진 줄(1부터 — views.js appendVerses 의 줄)이다. `text`가
+ * 있으면 그 줄 안의 경계 문구다 — 상은 문구까지(포함), 하는 문구부터. 없으면 줄 경계다 — 상은 그 줄까지, 하는 그
+ * 줄부터. `whole`이면 나누지 않는다(로마 3:22하).
+ */
+export interface HalfVerse {
+  bookId: string;
+  chapter: number;
+  verse: number;
+  half: "a" | "b";
+  line?: number;
+  text?: string | null;
+  whole?: boolean;
+}
+
+/**
  * `findReadings` 의 그룹 — 세트 하나가 그룹 하나. 고유는 본문 레코드에서, 성인 공통은
  * `commons.json` 에서 만든다(`common` 이 분류 키, id `common:<class>-s<set>`) — 설계서 §5.6.
  */
