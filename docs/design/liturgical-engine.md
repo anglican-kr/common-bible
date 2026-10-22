@@ -154,7 +154,7 @@ let calendarPromise = null;
 export { … };
 ```
 
-공유 타입(`LiturgicalCoord`·`Observance`·`Candidate`·`ResolvedDate` · 본문 조회의 반환 `ReadingGroup`·`CollectOption`·`CandidateCollects`)은 뷰·검색과 함께 쓰므로 `js/types.d.ts` 에 둔다(`BibleChapter` 선례). 엔진 내부 shape(`YearAnchors`·`TransferPass`·`CalendarIndex`·`LectionaryIndex`·본문 레코드)은 파일 안 `@typedef`.
+공유 타입(`LiturgicalCoord`·`Observance`·`Candidate`·`ResolvedDate` · 본문 조회의 반환 `ReadingGroup`·`CollectOption`·`CandidateCollects`·`HalfVerse`)은 뷰·검색과 함께 쓰므로 `js/types.d.ts` 에 둔다(`BibleChapter` 선례). 엔진 내부 shape(`YearAnchors`·`TransferPass`·`CalendarIndex`·`LectionaryIndex`·본문 레코드)은 파일 안 `@typedef`.
 
 ### 3.3 마커 블록을 둘로 나눈다 (§6 에서 벗어나는 점 ①)
 
@@ -216,6 +216,8 @@ function preloadCalendar() {
 **근거**: 캘린더는 "그날이 무슨 날인가 + 무슨 색인가"만 필요하고 그건 정의 표에서 나온다. 1.2MB 짜리 독서 파일을 달력 열 때마다 받게 하면 첫 진입이 느려지고, 오프라인 캐시 예열도 필요 이상으로 커진다. 독서 뷰로 들어가는 순간에만 큰 묶음을 싣는다.
 
 `local-observances.json` 은 B2 전까지 아예 싣지 않는다 — 본당·교구 오버레이가 없으면 쓸 데가 없다.
+
+`half-verses`(반절 경계 표, 2026-10-22)는 독서 묶음과 함께 받지만, 받지 못해도 묶음을 막지 않는다. 빈 표로 세워 반절 대신 절 전체를 그리고(종전 화면), 프리로드 promise 를 비워 다음 진입이 다시 받는다. §3.4의 「조용히 빈 값을 주지 않는다」에서 벗어나는 유일한 표다. 업데이트 뒤 처음 오프라인으로 열면 데이터 캐시에 이 표만 없을 수 있기 때문이다(PR #365 리뷰).
 
 ### 3.6 등록 세 곳 (빠뜨리면 런타임에서 깨진다)
 
