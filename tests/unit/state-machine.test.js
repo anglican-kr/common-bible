@@ -1830,3 +1830,67 @@ test("69. 사이클이 도는 사이 다시 SYNCING이 되면 두 번째 사이�
   assert.equal(machine.getState(), "IDLE", "돌던 사이클이 다시 SYNCING이 된 상태를 마무리했다");
 });
 
+
+// ── Group 17: 옛 판의 북마크 절 범위 — 병합 결과를 저장하기 전에 지금 표기로 옮긴다 ─────────────
+// 옮기기는 수정 시각(_u)을 올리지 않는다(사용자 결정 2026-10-22, coding-pitfalls §38). 그래서 드라이브에 옛 표기가 남아
+// 있으면 같은 시각의 두 사본 가운데 하나를 기기 id 순서로 고르는 병합이 옛 표기를 되돌려 놓았다. 병합 결과를 저장하기
+// 전에 옮긴다(bookmark-core.js migrateLegacyBookmarkDoc).
+
+test("70. 병합 결과는 옛 판의 절 범위를 옮긴 뒤 저장되고, 옛 키에도 그대로 쓰인다", async () => {
+  const saved = [];
+  const legacyApplied = [];
+  const order = [];
+  const { machine, drain, ctx } = loadMachine({
+    initialRefreshToken: "rt-x",
+    initialStorage: {
+      [CACHE_FILE_ID_KEY]: "fid-cached",
+      [CACHE_ETAG_KEY]: '"e-cached"',
+      [CACHE_SYNCED_U_KEY]: "0",
+    },
+    overrideStubs: {
+      T: {
+        downloadSyncFile: async () => ({ doc: { ...localDoc("remote"), schemaVersion: 2, deviceId: "remote" }, etag: '"e-remote"', status: 200 }),
+      },
+      V2: {
+        mergeDocs: () => {
+          const merged = localDoc("merged");
+          merged.bookmarks.items.a = { id: "a", type: "bookmark", verseSpec: "16aa", parentId: null, _order: 0, _u: 7 };
+          return merged;
+        },
+        saveLocal: (doc) => { order.push("save"); saved.push(JSON.parse(JSON.stringify(doc))); },
+        applyToLegacyKeys: (doc) => { legacyApplied.push(doc.bookmarks.items.a.verseSpec); },
+      },
+    },
+  });
+  ctx.migrateLegacyBookmarkDoc = (doc) => {
+    order.push("migrate");
+    doc.bookmarks.items.a.verseSpec = "16";
+  };
+  machine.enable();
+  await drain(8);
+  assert.deepEqual(order.slice(0, 2), ["migrate", "save"], "옮긴 뒤 저장한다");
+  assert.equal(saved[0].bookmarks.items.a.verseSpec, "16");
+  assert.equal(saved[0].bookmarks.items.a._u, 7, "수정 시각은 그대로");
+  assert.deepEqual(legacyApplied, ["16"]);
+});
+
+test("71. 옮기는 함수가 없어도(유닛 하네스 · 북마크 모듈 전) 병합 결과는 저장된다", async () => {
+  let saves = 0;
+  const { machine, drain } = loadMachine({
+    initialRefreshToken: "rt-x",
+    initialStorage: {
+      [CACHE_FILE_ID_KEY]: "fid-cached",
+      [CACHE_ETAG_KEY]: '"e-cached"',
+      [CACHE_SYNCED_U_KEY]: "0",
+    },
+    overrideStubs: {
+      T: {
+        downloadSyncFile: async () => ({ doc: { ...localDoc("remote"), schemaVersion: 2, deviceId: "remote" }, etag: '"e-remote"', status: 200 }),
+      },
+      V2: { saveLocal: () => { saves++; } },
+    },
+  });
+  machine.enable();
+  await drain(8);
+  assert.equal(saves, 1);
+});

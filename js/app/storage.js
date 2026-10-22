@@ -26,6 +26,8 @@ window.appStorage = (/** @returns {AppStorage} */ () => {
   /** @typedef {import("../types").ThemeMode} ThemeMode */
   /** @typedef {import("../types").BookOrderKind} BookOrderKind */
   /** @typedef {import("../types").BookmarkTreeNode} BookmarkTreeNode */
+  /** @typedef {import("../types").BookmarkTreeBookmark} BookmarkTreeBookmark */
+  /** @typedef {import("../types").SyncFlatItem} SyncFlatItem */
   /** @typedef {import("../types").InstallNudgeState} InstallNudgeState */
   // ── Storage keys (private to this module) ──
   const STORAGE_KEY = "bible-last-read";
@@ -380,6 +382,37 @@ window.appStorage = (/** @returns {AppStorage} */ () => {
     } catch (_) {}
   }
 
+  // Rewrite stored bookmarks in place, both copies, keeping the sync store's per-item time (_u) — saveBookmarks would
+  // give every changed item a new one, and a new time wins the sync over another device's edit. Nothing to upload, so
+  // the sync is not woken. Used for the move of pre-#205 verse ranges (bookmark-core.js migrateStoredBookmarks).
+  /** @param {(bm: BookmarkTreeBookmark | SyncFlatItem) => boolean} patch  changes a bookmark in place, true when it did */
+  function rewriteBookmarks(patch) {
+    /** @param {BookmarkTreeNode[]} nodes @returns {boolean} */
+    const patchTree = (nodes) => {
+      let changed = false;
+      for (const node of nodes) {
+        if (node?.type === "bookmark") changed = patch(node) || changed;
+        else if (node?.type === "folder" && Array.isArray(node.children)) changed = patchTree(node.children) || changed;
+      }
+      return changed;
+    };
+    try {
+      const raw = localStorage.getItem(BOOKMARK_KEY);
+      const tree = raw ? JSON.parse(raw) : null;
+      if (Array.isArray(tree) && patchTree(tree)) localStorage.setItem(BOOKMARK_KEY, JSON.stringify(tree));
+    } catch (_) {}
+    try {
+      const V2 = window.syncStoreV2;
+      if (!V2) return;
+      const doc = V2.loadLocal();
+      let changed = false;
+      for (const item of Object.values(doc.bookmarks.items)) {
+        if (item?.type === "bookmark") changed = patch(item) || changed;
+      }
+      if (changed) V2.saveLocal(doc);
+    } catch (_) {}
+  }
+
   // Every character localStorage would hold once saveBookmarks(store) ran — keys and values: the list's two copies (the
   // legacy key, and the sync store's entry measured from the very document it writes) in place of the current ones,
   // every other key as it is. saveBookmarks swallows a save past the quota, so the bookmark import checks this first
@@ -470,7 +503,7 @@ window.appStorage = (/** @returns {AppStorage} */ () => {
     loadColorScheme, saveColorScheme,
     loadTheme, saveTheme,
     loadBookOrder, saveBookOrder,
-    generateId, loadBookmarks, saveBookmarks, projectedStorageChars,
+    generateId, loadBookmarks, saveBookmarks, rewriteBookmarks, projectedStorageChars,
     loadLectionaryTrack, saveLectionaryTrack,
     _loadNudgeState, _saveNudgeState,
     _maybeRequestPersist,

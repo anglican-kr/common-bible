@@ -945,3 +945,30 @@ def test_export_then_import_roundtrip(browser, tmp_path):
     assert ids == {"bm-a", "bm-b"}
 
     ctx.close()
+
+
+def test_import_moves_pre205_verse_ranges(browser, tmp_path):
+    """옛 판(#205 전)이 내보낸 줄 글자 「16aa」 · 「20a,20c」는 들이면서 지금 표기로 옮긴다(ADR-040 「절 범위」,
+    coding-pitfalls §38). 옛 기본 이름도 따라 바뀌고, 사용자가 지은 이름은 그대로다. 뺀 항목은 없다."""
+    old = {"_version": 1, "exportedAt": 1_747_000_000_000, "bookmarks": [
+        {"type": "bookmark", "id": "o-isa", "bookId": "isa", "chapter": 10, "verseSpec": "16aa", "label": "이사 10:16aa"},
+        {"type": "bookmark", "id": "o-gen", "bookId": "gen", "chapter": 27, "verseSpec": "20a,20c", "label": "야곱의 속임수"},
+    ]}
+    import_file = tmp_path / "old.json"
+    import_file.write_text(json.dumps(old, ensure_ascii=False), encoding="utf-8")
+
+    ctx = browser.new_context()
+    page = ctx.new_page()
+    page.add_init_script("localStorage.removeItem('bible-bookmarks');")
+    _open_bookmark_drawer(page)
+    page.locator("#bm-import-input").set_input_files(str(import_file))
+    page.wait_for_selector("#bm-import-modal:not([hidden])")
+    assert "올바르지 않은" not in page.locator("#bm-import-modal").inner_text()
+    page.locator("#bm-import-overwrite").click()
+    page.wait_for_selector("#bm-import-modal", state="hidden")
+
+    store = {bm["id"]: (bm["verseSpec"], bm["label"]) for bm in _get_bookmarks(page)}
+    assert store == {"o-isa": ("16", "이사 10:16"), "o-gen": ("20", "야곱의 속임수")}
+    refs = page.locator(".bm-bookmark-ref").all_inner_texts()
+    assert sorted(refs) == ["이사 10:16", "창세 27:20"]
+    ctx.close()

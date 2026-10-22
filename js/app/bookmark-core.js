@@ -4,15 +4,18 @@
 // Bookmark core — extracted from bookmark.js (ADR-034 후속 PR2~4). DOM-free
 // bookmark logic: query/tree ops (QUERY block, loadBookmarks-backed), href/share
 // builders (HREF), sort/last-viewed helpers (SORT, localStorage), active-route
-// highlight predicates (ACTIVE, _renderPathname set by UI via setRenderPathname).
-// bookmark.js (UI) and bookmark-modals.js import these via ESM. Deps: appStorage,
-// localStorage.
+// highlight predicates (ACTIVE, _renderPathname set by UI via setRenderPathname),
+// the move of pre-#205 verse ranges to today's form (LEGACY — at startup, on import
+// and on a sync merge). bookmark.js (UI) and bookmark-modals.js import these via
+// ESM. Deps: appStorage, localStorage, verse-spec.js, window.getBooksCache.
 
 /** @typedef {import("../types").BookmarkTreeNode} BookmarkTreeNode */
 /** @typedef {import("../types").BookmarkTreeBookmark} BookmarkTreeBookmark */
 /** @typedef {import("../types").BookmarkTreeFolder} BookmarkTreeFolder */
 
-const { loadBookmarks } = window.appStorage;
+import { wholeVerseSpec } from "./verse-spec.js";
+
+const { loadBookmarks, rewriteBookmarks } = window.appStorage;
 
 // Shared guidance copy for "how bookmarks are created" — used by the empty-state
 // placeholder (drawer + full view) and the ⋯ menu's 🛈 info popover (bookmark.js /
@@ -393,6 +396,80 @@ function _hasActiveDescendant(folder, pathname = _renderPathname) {
 }
 // ── END BOOKMARK_ACTIVE ──
 
+// ── BEGIN BOOKMARK_LEGACY ──
+// Exercised by tests/unit/bookmark.test.js — with the VERSE_SPEC block for wholeVerseSpec, and stubs for the store
+// (`loadBookmarks` · `rewriteBookmarks`) and `window` (`loadBooks` · `getBooksCache`).
+/**
+ * 옛 판(2026-04-25부터 06-06 #205까지)이 저장한 절 범위의 줄 글자를 떼어 지금 표기로 옮긴다(사용자 결정 2026-10-22,
+ * coding-pitfalls §38 — 「16aa」 → 「16」). 이름이 그 북마크의 옛 기본 이름(「책 장:옛 저장값」 — 저장 대화상자와
+ * 합치기가 짓는 이름)과 정확히 같을 때만 새 기본 이름으로 바꾼다. 사용자가 고친 이름은 그대로 둔다. Works on a tree
+ * node and on a sync store's flat item alike — both carry these fields.
+ * @param {{ bookId?: string, chapter?: number, verseSpec?: string, label?: string }} bm  changed in place
+ * @param {import("../types").BooksData} books
+ * @returns {boolean} whether it changed
+ */
+function migrateLegacyBookmark(bm, books) {
+  const spec = bm.verseSpec;
+  if (typeof spec !== "string") return false;
+  const next = wholeVerseSpec(spec);
+  if (next === spec) return false;
+  const book = books.find((b) => b.id === bm.bookId);
+  const prefix = `${book ? (book.short_name_ko || book.name_ko) : bm.bookId} ${bm.chapter}:`;
+  if (bm.label === prefix + spec) bm.label = prefix + next;
+  bm.verseSpec = next;
+  return true;
+}
+
+/** @param {BookmarkTreeNode[] | undefined} nodes @returns {boolean} */
+function _hasLegacyVerseSpec(nodes) {
+  for (const node of nodes || []) {
+    if (node?.type === "bookmark" && typeof node.verseSpec === "string" && wholeVerseSpec(node.verseSpec) !== node.verseSpec) {
+      return true;
+    }
+    if (node?.type === "folder" && _hasLegacyVerseSpec(node.children)) return true;
+  }
+  return false;
+}
+
+/**
+ * The stored list, both copies, before the first view draws (app.js, through bookmark.js's window facade). The sync
+ * store's per-item time (_u) stays as it was: this runs before the sync reads Drive, and a newer time would let this
+ * device's copy win over an edit another device made since (사용자 결정 2026-10-22). The default-name rule needs the
+ * book list, so only a start with something to move waits for it. The others — every start after the move — draw at
+ * once: the calendar, 전례독서 and mobile 설정 views do not load the book list (PR #367 review). If the list does not
+ * load, nothing moves and the next start tries again.
+ * @returns {Promise<void>}
+ */
+function migrateStoredBookmarks() {
+  let pending = false;
+  try {
+    pending = _hasLegacyVerseSpec(loadBookmarks());
+  } catch (_) { /* a list the store cannot read — nothing to move */ }
+  if (!pending) return Promise.resolve();
+  return window.loadBooks().then((books) => { rewriteBookmarks((bm) => migrateLegacyBookmark(bm, books)); }, () => {});
+}
+
+/**
+ * A merged sync document, in place, before it is saved (state-machine.js _applyMergedDoc). Without this the old form
+ * came back: the per-item time did not change, so the merge picks between the two copies by device id. The document
+ * came from Drive, and a throw here would stop the save — so an item that is not an object is passed over. The book
+ * list is usually loaded by then (search.js preloads it at boot), but a start on a view that does not need it can
+ * merge first (PR #367 review). Then the document is saved as it came, and the stored list moves once the list loads
+ * — the startup move, a microtask after this save.
+ * @param {import("../types").SyncDoc} doc
+ */
+function migrateLegacyBookmarkDoc(doc) {
+  const books = window.getBooksCache();
+  if (!books) {
+    Promise.resolve().then(migrateStoredBookmarks).then(() => window.rerenderActiveBookmarkTree?.());
+    return;
+  }
+  for (const item of Object.values(doc?.bookmarks?.items ?? {})) {
+    if (item?.type === "bookmark") migrateLegacyBookmark(item, books);
+  }
+}
+// ── END BOOKMARK_LEGACY ──
+
 export {
   BOOKMARK_ADD_HELP,
   _bookmarkHref, _buildSharePayload,
@@ -404,4 +481,5 @@ export {
   _findParentFolderId, removeItemById, insertItem, collectFolderOptions,
   _selectAllState, _bmSelectCountLabel, _descendantIds,
   _isActiveBookmark, _hasActiveDescendant, setRenderPathname,
+  migrateLegacyBookmark, migrateStoredBookmarks, migrateLegacyBookmarkDoc,
 };

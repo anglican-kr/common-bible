@@ -985,6 +985,8 @@ export interface AppStorage {
   generateId: () => string;
   loadBookmarks: () => BookmarkTreeNode[];
   saveBookmarks: (store: BookmarkTreeNode[]) => void;
+  /** Rewrite stored bookmarks in place, both copies, keeping the sync store's per-item time (`_u`) — the move of pre-#205 verse ranges. */
+  rewriteBookmarks: (patch: (bm: BookmarkTreeBookmark | SyncFlatItem) => boolean) => void;
   /** Every character localStorage would hold once saveBookmarks(store) ran — the bookmark import's size check (ADR-040). */
   projectedStorageChars: (store: BookmarkTreeNode[]) => number;
 
@@ -1263,6 +1265,10 @@ declare global {
     closeDriveDisconnectModal?: () => void;
     renderBookmarkTree?: () => void;
     rerenderActiveBookmarkTree?: () => void;
+    // bookmark-core.js — the move of pre-#205 verse ranges (coding-pitfalls §38): the stored list before the first
+    // view (app.js), a merged sync document before it is saved (state-machine.js, optional for its unit harness).
+    migrateStoredBookmarks: () => Promise<void>;
+    migrateLegacyBookmarkDoc?: (doc: SyncDoc) => void;
     // route() calls these on every navigation (routing.js). bookmark.js re-exposes the
     // select-mode exit from bookmark-select.js; search.js owns the in-field book tokens.
     exitBookmarkSelectMode?: () => void;

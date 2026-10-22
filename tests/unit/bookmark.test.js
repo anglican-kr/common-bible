@@ -11,10 +11,13 @@
 //
 // Coverage:
 //   - VERSE_SPEC block — verse spec parse / compare / serialize / merge
-//     (+ collapseSegmentedVerses, with a tiny `article.querySelectorAll`
-//     stub so the rendered-spans lookup resolves) + isWellFormedSpec, the
-//     check a spec from outside (import file · address) must pass. The
-//     verse-select citation (selectionCitation) is in verse-spec.test.js
+//     + isWellFormedSpec, the check a spec from outside (import file ·
+//     address) must pass, over specs written with a tiny
+//     `article.querySelectorAll` stub (selectedSpanVrefs · selectionCitation).
+//     The save serializer (verseNumberSpec), the move of the pre-#205 forms
+//     (wholeVerseSpec) and the verse-select citation are in verse-spec.test.js
+//   - BOOKMARK_LEGACY block (with VERSE_SPEC) — migrateLegacyBookmark, the
+//     move of a pre-#205 bookmark's verse range and old default name
 //   - BOOKMARK_QUERY block — _isDescendant / _walkBookmarks / findExistingChapterBookmarks
 //     / _findItemInStore / _findParentFolderId / removeItemById / insertItem
 //     / collectFolderOptions. `loadBookmarks` provided as stub.
@@ -105,9 +108,9 @@ function sampleStore() {
 }
 
 // ── VERSE_SPEC loader ────────────────────────────────────────────────────────
-// `collapseSegmentedVerses` calls `article.querySelectorAll(".verse[data-vref]")`
-// and reads `.getAttribute("data-vref")`. We pass either `null` (early
-// return) or a tiny stub article — no full DOM needed for this slice.
+// `selectedSpanVrefs` · `selectionCitation` call `article.querySelectorAll`
+// and read `.getAttribute("data-vref")` · `("data-vkey")`. We pass a tiny stub
+// article — no full DOM needed for this slice.
 
 function loadVerseSpec() {
   const ctx = {
@@ -119,7 +122,8 @@ function loadVerseSpec() {
   return {
     parseVerseSpec: ctx.parseVerseSpec,
     isWellFormedSpec: ctx.isWellFormedSpec,
-    collapseSegmentedVerses: ctx.collapseSegmentedVerses,
+    verseNumberSpec: ctx.verseNumberSpec,
+    wholeVerseSpec: ctx.wholeVerseSpec,
     selectedSpanVrefs: ctx.selectedSpanVrefs,
     selectionCitation: ctx.selectionCitation,
     _compareRefs: ctx._compareRefs,
@@ -129,11 +133,10 @@ function loadVerseSpec() {
 }
 
 /**
- * Tiny article stub for `collapseSegmentedVerses`. Each ref string in
- * `verseSpans` becomes one element with a `.getAttribute("data-vref")` that
- * returns the string. `querySelectorAll(".verse[data-vref]")` returns them
- * all, regardless of selector specifics — that selector is the only one
- * the function uses.
+ * Tiny article stub for `selectedSpanVrefs` · `selectionCitation`. Each ref
+ * string in `verseSpans` becomes one element with a `.getAttribute("data-vref")`
+ * that returns the string. `querySelectorAll(...)` returns them all, regardless
+ * of selector specifics — every selector those functions use matches all spans.
  */
 function makeStubArticle(verseSpans) {
   // `data-vkey` is "<i>/<ref>" — one key per span, as views.js appendVerses gives (selectionCitation reads it).
@@ -454,52 +457,25 @@ test('mergeVerseSpecs: alpha ref dropped when integer covers same number', () =>
   assert.equal(h.mergeVerseSpecs("3", "3a"), "3");
 });
 
-test('mergeVerseSpecs: alpha-only union sorts and keeps each part', () => {
+test('mergeVerseSpecs: part letters go — the result is in verse numbers, as a bookmark stores them', () => {
   const h = loadVerseSpec();
-  assert.equal(h.mergeVerseSpecs("3a", "3b"), "3a,3b");
+  assert.equal(h.mergeVerseSpecs("3a", "3b"), "3");
+  assert.equal(h.mergeVerseSpecs("7-8", "9"), "7-9");
 });
 
-// ── collapseSegmentedVerses (bookmark-only whole-verse promotion) ─────────────
-
-test('collapseSegmentedVerses: null article → returns refs unchanged', () => {
+test('mergeVerseSpecs: a pre-#205 spec keeps its verses — 「16aa」에 1절을 합치면 16절이 빠졌다(2026-10-22 재현)', () => {
   const h = loadVerseSpec();
-  const refs = ["3a", "3b"];
-  assert.deepEqual(h.collapseSegmentedVerses(refs, null), refs);
+  assert.equal(h.mergeVerseSpecs("16aa", "1"), "1,16");          // 이사 10 — main은 「1」
+  assert.equal(h.mergeVerseSpecs("7-8a", "1"), "1,7-8");         // 나훔 1 — main은 「1」
+  assert.equal(h.mergeVerseSpecs("20a,20c", "1"), "1,20");       // 창세 27 — main은 「1,20a,20c」
+  assert.equal(h.mergeVerseSpecs("16-17a", "16-17b"), "16-17");   // 아모 5 — main은 「all」(장 전체). 옛 판끼리만 닿는다
 });
 
-test('collapseSegmentedVerses: partial selection of multi-part verse → promoted to whole verse', () => {
+test('mergeVerseSpecs: a range from an unchecked import is not walked verse by verse (known-issues §15)', () => {
   const h = loadVerseSpec();
-  // Article shows verse 23 split into 23a/23b/23c; user selected only 23a + 23c
-  const article = makeStubArticle(["23a", "23b", "23c"]);
-  assert.deepEqual(h.collapseSegmentedVerses(["23a", "23c"], article), ["23"]);
-});
-
-test('collapseSegmentedVerses: single part of multi-part verse → still whole verse', () => {
-  const h = loadVerseSpec();
-  const article = makeStubArticle(["23a", "23b", "23c"]);
-  assert.deepEqual(h.collapseSegmentedVerses(["23b"], article), ["23"]);
-});
-
-test('collapseSegmentedVerses: all parts selected → whole verse (parity with full-collapse)', () => {
-  const h = loadVerseSpec();
-  const article = makeStubArticle(["3a", "3b"]);
-  assert.deepEqual(h.collapseSegmentedVerses(["3a", "3b"], article), ["3"]);
-});
-
-test('collapseSegmentedVerses: single-part verse (no alpha) unchanged', () => {
-  const h = loadVerseSpec();
-  const article = makeStubArticle(["5"]);
-  assert.deepEqual(h.collapseSegmentedVerses(["5"], article), ["5"]);
-});
-
-test('collapseSegmentedVerses: mixes multi-part and single-part verses, dedups, first-seen order', () => {
-  const h = loadVerseSpec();
-  // 23 is split (a/b/c), 24 is single; select 23a + 23c + 24 → "23" once + "24"
-  const article = makeStubArticle(["23a", "23b", "23c", "24"]);
-  assert.deepEqual(
-    h.collapseSegmentedVerses(["23a", "23c", "24"], article),
-    ["23", "24"],
-  );
+  const t0 = Date.now();
+  assert.equal(h.mergeVerseSpecs("1-20000000", "5"), "1-20000000");   // main은 4-5초 뒤 「Set maximum size exceeded」
+  assert.ok(Date.now() - t0 < 50, `${Date.now() - t0}ms`);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1235,6 +1211,45 @@ function loadBookmarkHref() {
   return { _bookmarkHref: ctx._bookmarkHref, _buildSharePayload: ctx._buildSharePayload };
 }
 
+const LEGACY_BOOKS = [
+  { id: "isa", name_ko: "이사야", short_name_ko: "이사", chapter_count: 66 },
+  { id: "gen", name_ko: "창세기", short_name_ko: "창세", chapter_count: 50 },
+  { id: "nah", name_ko: "나훔", short_name_ko: "나훔", chapter_count: 3 },
+];
+
+// ── BOOKMARK_LEGACY loader ───────────────────────────────────────────────────
+// The block calls wholeVerseSpec (an import of bookmark-core.js) — the VERSE_SPEC block stands in for it — and the
+// store's loadBookmarks · rewriteBookmarks (window.appStorage) and window.loadBooks · getBooksCache, stubbed here.
+// `calls` records what the startup move asked for.
+
+function loadBookmarkLegacy({ stored = [], books = LEGACY_BOOKS, booksCached = true, booksFail = false, storeThrows = false } = {}) {
+  const calls = { loadBooks: 0, rewrites: [], rerenders: 0 };
+  // The book list arrives a task later, as a fetch does — so a test that awaits the move sees whether it waited.
+  const later = (settle) => new Promise((resolve, reject) => setTimeout(() => settle(resolve, reject), 0));
+  const ctx = {
+    Object, Array, Set, String, Math, Number, JSON, console, Error, parseInt, Promise,
+    loadBookmarks: () => { if (storeThrows) throw new TypeError("unreadable"); return stored; },
+    rewriteBookmarks: (patch) => { calls.rewrites.push(patch); },
+    window: {
+      loadBooks: () => {
+        calls.loadBooks += 1;
+        return later((resolve, reject) => (booksFail ? reject(new Error("offline")) : resolve(books)));
+      },
+      getBooksCache: () => (booksCached ? books : null),
+      rerenderActiveBookmarkTree: () => { calls.rerenders += 1; },
+    },
+  };
+  vm.createContext(ctx);
+  vm.runInContext(extractBlock("VERSE_SPEC", VERSE_SPEC_SOURCE), ctx, { filename: "verse-spec.js" });
+  vm.runInContext(extractBlock("BOOKMARK_LEGACY", BOOKMARK_CORE_SOURCE), ctx, { filename: "bookmark-core.js" });
+  return {
+    migrateLegacyBookmark: ctx.migrateLegacyBookmark,
+    migrateStoredBookmarks: ctx.migrateStoredBookmarks,
+    migrateLegacyBookmarkDoc: ctx.migrateLegacyBookmarkDoc,
+    calls,
+  };
+}
+
 // ── BOOKMARK_ACTIVE loader ───────────────────────────────────────────────────
 // ACTIVE block calls `_bookmarkHref`, so the loader concatenates the HREF
 // block first to satisfy that dependency in the same vm context.
@@ -1323,6 +1338,115 @@ test("_buildSharePayload: multiple → {title, text} list of label + absolute ur
     p.text,
     "창세기 1장\nhttps://bible.anglican.kr/gen/1\n\n요한 3장\nhttps://bible.anglican.kr/john/3/16",
   );
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BOOKMARK_LEGACY tests — 옛 판(2026-04-25부터 06-06 #205까지)의 절 범위를 지금 표기로 옮긴다(사용자 결정 2026-10-22,
+// coding-pitfalls §38)
+// ─────────────────────────────────────────────────────────────────────────────
+
+test("migrateLegacyBookmark: the range moves, and an old default name with it", () => {
+  const h = loadBookmarkLegacy();
+  const bm = { type: "bookmark", id: "a", bookId: "isa", chapter: 10, verseSpec: "16aa", label: "이사 10:16aa", note: "" };
+  assert.equal(h.migrateLegacyBookmark(bm, LEGACY_BOOKS), true);
+  assert.deepEqual({ ...bm }, { type: "bookmark", id: "a", bookId: "isa", chapter: 10, verseSpec: "16", label: "이사 10:16", note: "" });
+  // 합치기가 지은 이름도 같은 형식이다 — 창세 27 「20a,20c」에 1절을 합친 결과
+  const merged = { bookId: "gen", chapter: 27, verseSpec: "1,20a,20c", label: "창세 27:1,20a,20c" };
+  h.migrateLegacyBookmark(merged, LEGACY_BOOKS);
+  assert.deepEqual({ ...merged }, { bookId: "gen", chapter: 27, verseSpec: "1,20", label: "창세 27:1,20" });
+  const nah = { bookId: "nah", chapter: 1, verseSpec: "7-8a", label: "나훔 1:7-8a" };
+  h.migrateLegacyBookmark(nah, LEGACY_BOOKS);
+  assert.deepEqual({ ...nah }, { bookId: "nah", chapter: 1, verseSpec: "7-8", label: "나훔 1:7-8" });
+});
+
+test("migrateLegacyBookmark: a name the user wrote stays — only the exact old default name changes", () => {
+  const h = loadBookmarkLegacy();
+  for (const label of ["아하스에게 주신 징조", "이사 10:16aa ", "이사야 10:16aa", "이사 10:16", ""]) {
+    const bm = { bookId: "isa", chapter: 10, verseSpec: "16aa", label };
+    assert.equal(h.migrateLegacyBookmark(bm, LEGACY_BOOKS), true);
+    assert.equal(bm.verseSpec, "16");
+    assert.equal(bm.label, label, JSON.stringify(label));
+  }
+  // 성서 목록에 없는 책 — 저장 대화상자처럼 책 id로 지은 이름
+  const unknown = { bookId: "xyz", chapter: 2, verseSpec: "3a", label: "xyz 2:3a" };
+  h.migrateLegacyBookmark(unknown, LEGACY_BOOKS);
+  assert.deepEqual({ ...unknown }, { bookId: "xyz", chapter: 2, verseSpec: "3", label: "xyz 2:3" });
+});
+
+test("migrateLegacyBookmark: today's ranges and the forms the app never wrote are left alone", () => {
+  const h = loadBookmarkLegacy();
+  for (const verseSpec of ["all", "16", "1-5,10-15", "6,7-8,9", "16aa,3", " 16a", undefined]) {
+    const bm = { bookId: "isa", chapter: 10, verseSpec, label: `이사 10:${verseSpec}` };
+    const before = JSON.stringify(bm);
+    assert.equal(h.migrateLegacyBookmark(bm, LEGACY_BOOKS), false, String(verseSpec));
+    assert.equal(JSON.stringify(bm), before);
+  }
+});
+
+test("migrateStoredBookmarks: nothing to move — resolves at once, without waiting for the book list (PR #367 review)", async () => {
+  const stored = [
+    { type: "bookmark", id: "a", bookId: "john", chapter: 3, verseSpec: "16", label: "요한 3:16" },
+    { type: "folder", id: "f", name: "", children: [{ type: "bookmark", id: "b", bookId: "gen", chapter: 1, verseSpec: "all", label: "" }] },
+  ];
+  const h = loadBookmarkLegacy({ stored });
+  await h.migrateStoredBookmarks();
+  assert.deepEqual({ loadBooks: h.calls.loadBooks, rewrites: h.calls.rewrites.length }, { loadBooks: 0, rewrites: 0 });
+});
+
+test("migrateStoredBookmarks: a pre-#205 range in a folder — waits for the book list, then rewrites with the move", async () => {
+  // A bookmark without a verse range (the type allows it) must not stop the check (PR #367 review, 2회차).
+  const stored = [{ type: "folder", id: "f", name: "", children: [
+    { type: "bookmark", id: "z", bookId: "gen", chapter: 1, label: "" },
+    { type: "bookmark", id: "a", bookId: "isa", chapter: 10, verseSpec: "16aa", label: "이사 10:16aa" },
+  ] }];
+  const h = loadBookmarkLegacy({ stored });
+  await h.migrateStoredBookmarks();
+  assert.equal(h.calls.loadBooks, 1);
+  assert.equal(h.calls.rewrites.length, 1);
+  // The patch handed to rewriteBookmarks is the move itself — the store applies it to both copies (storage.test.js).
+  const item = { bookId: "isa", chapter: 10, verseSpec: "16aa", label: "이사 10:16aa", _u: 5 };
+  assert.equal(h.calls.rewrites[0](item), true);
+  assert.deepEqual({ ...item }, { bookId: "isa", chapter: 10, verseSpec: "16", label: "이사 10:16", _u: 5 });
+});
+
+test("migrateStoredBookmarks: the book list fails or the store cannot be read — nothing moves, and it still resolves", async () => {
+  const stored = [{ type: "bookmark", id: "a", bookId: "isa", chapter: 10, verseSpec: "16aa", label: "" }];
+  const offline = loadBookmarkLegacy({ stored, booksFail: true });
+  await offline.migrateStoredBookmarks();
+  assert.deepEqual({ loadBooks: offline.calls.loadBooks, rewrites: offline.calls.rewrites.length }, { loadBooks: 1, rewrites: 0 });
+  const broken = loadBookmarkLegacy({ storeThrows: true });
+  await broken.migrateStoredBookmarks();
+  assert.deepEqual({ loadBooks: broken.calls.loadBooks, rewrites: broken.calls.rewrites.length }, { loadBooks: 0, rewrites: 0 });
+});
+
+test("migrateLegacyBookmarkDoc: a merged sync document's bookmarks move in place, per-item times kept, odd items passed over", () => {
+  const h = loadBookmarkLegacy();
+  const doc = { bookmarks: { tombstones: {}, items: {
+    a: { id: "a", type: "bookmark", bookId: "isa", chapter: 10, verseSpec: "16aa", label: "이사 10:16aa", parentId: "f", _order: 0, _u: 7 },
+    b: { id: "b", type: "bookmark", bookId: "gen", chapter: 27, verseSpec: "20a,20c", label: "야곱의 속임수", parentId: null, _order: 1, _u: 9 },
+    c: { id: "c", type: "bookmark", bookId: "gen", chapter: 1, verseSpec: "1-3", label: "창세 1:1-3", parentId: null, _order: 2, _u: 3 },
+    f: { id: "f", type: "folder", name: "옛 북마크", parentId: null, _order: 3, _u: 1 },
+    n: null, s: "x",
+  } } };
+  assert.doesNotThrow(() => h.migrateLegacyBookmarkDoc(doc));
+  const it = doc.bookmarks.items;
+  assert.deepEqual([it.a.verseSpec, it.a.label, it.a._u], ["16", "이사 10:16", 7]);
+  assert.deepEqual([it.b.verseSpec, it.b.label, it.b._u], ["20", "야곱의 속임수", 9]);
+  assert.deepEqual([it.c.verseSpec, it.c._u], ["1-3", 3]);
+  assert.deepEqual([it.n, it.s], [null, "x"]);
+  assert.doesNotThrow(() => h.migrateLegacyBookmarkDoc(undefined));
+});
+
+test("migrateLegacyBookmarkDoc: without the book list the document is saved as it came, and the stored list moves once the list loads", async () => {
+  // 캘린더로 시작하면 첫 화면이 성서 목록을 받지 않아, 드라이브 왕복이 더 빠르면 병합이 먼저 온다(PR #367 리뷰 2회차).
+  const stored = [{ type: "bookmark", id: "a", bookId: "isa", chapter: 10, verseSpec: "16aa", label: "", _u: 1 }];
+  const h = loadBookmarkLegacy({ stored, booksCached: false });
+  const doc = { bookmarks: { tombstones: {}, items: { a: { id: "a", type: "bookmark", bookId: "isa", chapter: 10, verseSpec: "16aa", label: "", _u: 1 } } } };
+  h.migrateLegacyBookmarkDoc(doc);
+  assert.equal(doc.bookmarks.items.a.verseSpec, "16aa");
+  await new Promise((r) => setTimeout(r, 10));
+  assert.deepEqual({ loadBooks: h.calls.loadBooks, rewrites: h.calls.rewrites.length, rerenders: h.calls.rerenders },
+    { loadBooks: 1, rewrites: 1, rerenders: 1 });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1866,9 +1990,8 @@ test("isWellFormedSpec: what got through before is rejected (PR #359 review)", (
   assert.deepEqual(rejected.filter((spec) => h.isWellFormedSpec(spec)).map((spec) => spec.slice(0, 24)), []);
 });
 
-// Every spec the app writes passes: today's 저장 (collapseSegmentedVerses → selectedVersesToSpec) and 합치기
-// (mergeVerseSpecs), and the per-line form the verse-select citation keeps (selectionCitation — what the pre-#205 저장
-// wrote). Synthetic
+// Every spec the app writes passes: today's 저장 (verseNumberSpec) and 합치기 (mergeVerseSpecs), and the half-verse
+// form the verse-select citation keeps (selectionCitation). Synthetic
 // chapters shaped like the data — half verses ("3a" "3b"), merged verses ("7-8"), verses drawn in lines ("9a" … up to
 // "p"), and both at once ("8aa", "7-8a") — from a fixed seed, so no real data is needed (the public CI has none).
 // Checked once against the real data too: 34,003 specs today's app writes, 60,384 the pre-#205 app wrote — all pass.
@@ -1883,7 +2006,7 @@ test("isWellFormedSpec: every spec the app writes over synthetic chapters is acc
   let checked = 0;
   for (let c = 0; c < 120; c++) {
     const refs = [];
-    // Mostly short chapters (the collapse helpers scan the whole chapter per verse); every tenth up to 176 (Psalm 119)
+    // Mostly short chapters (selectionCitation scans the whole chapter for each pick); every tenth up to 176 (Psalm 119)
     const last = 5 + Math.floor(rnd() * (c % 10 === 0 ? 172 : 30));
     for (let n = 1; n <= last;) {
       const kind = rnd();
@@ -1911,7 +2034,7 @@ test("isWellFormedSpec: every spec the app writes over synthetic chapters is acc
         pick = keys.filter(() => rnd() < (t % 3 === 1 ? 0.15 : 0.5));
       }
       if (!pick.length) continue;
-      written.push(v.selectedVersesToSpec(v.collapseSegmentedVerses(v.selectedSpanVrefs(new Set(pick), article), article)));
+      written.push(v.verseNumberSpec(v.selectedSpanVrefs(new Set(pick), article)));
       written.push(v.selectedVersesToSpec(v.selectionCitation(new Set(pick), article).refs));
     }
     const saved = written.length;
@@ -1923,6 +2046,87 @@ test("isWellFormedSpec: every spec the app writes over synthetic chapters is acc
   }
   assert.ok(checked > 3000, `${checked} specs`);
   assert.ok(failures.length === 0, `rejected: ${failures.slice(0, 5).join(" | ")}`);
+});
+
+// The pre-#205 save, as it was (`git show 0789632^:js/app/bookmark.js` — collapseFullVerseRefs, then the same
+// selectedVersesToSpec): a verse drawn in lines stored its number only when every line was picked, otherwise the lines
+// themselves. Every such spec moves (wholeVerseSpec) to what today's 저장 writes for the same lines, and passes the
+// check (사용자 결정 2026-10-22, coding-pitfalls §38). One loss stays: with every line of a merged verse drawn in lines
+// picked, that app stored the first number ("7" for 나훔 1:7-8 — known-issues §17), and without the chapter the move
+// cannot tell it from verse 7. The real data — every chapter — is checked in the PR (ledger).
+function pre205Save(refs, article) {
+  const selected = new Set(refs);
+  const byVerse = {};
+  for (const ref of refs) {
+    const n = parseInt(ref, 10);
+    if (!byVerse[n]) byVerse[n] = [];
+    byVerse[n].push(ref);
+  }
+  const result = [];
+  for (const [n, verseRefs] of Object.entries(byVerse)) {
+    const allSpanRefs = [...article.querySelectorAll(".verse[data-vref]")]
+      .map((s) => s.getAttribute("data-vref") ?? "")
+      .filter((r) => r && parseInt(r, 10) === Number(n));
+    const hasAlpha = allSpanRefs.some((r) => /[a-z]$/.test(r));
+    const allSelected = allSpanRefs.length > 0 && allSpanRefs.every((r) => selected.has(r));
+    if (hasAlpha && allSelected) result.push(`${n}`);
+    else result.push(...verseRefs);
+  }
+  return result;
+}
+
+test("wholeVerseSpec: what the pre-#205 app saved over synthetic chapters moves to what today's app saves", () => {
+  const v = loadVerseSpec();
+  let seed = 20261022;
+  const rnd = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+  const LINE = "abcdefghijklmnop";
+  const lines = (label, k) => (k === 1 ? [label] : Array.from({ length: k }, (_, i) => `${label}${LINE[i]}`));
+  const lineCount = () => (rnd() < 0.3 ? 2 + Math.floor(rnd() * 4) : 1);
+  const failures = [];
+  let moved = 0;
+  for (let c = 0; c < 80; c++) {
+    const refs = [];
+    const last = 5 + Math.floor(rnd() * 30);
+    for (let n = 1; n <= last;) {
+      const kind = rnd();
+      if (kind < 0.1 && n < last) {                    // a merged verse
+        const end = n + 1 + Math.floor(rnd() * 2);
+        refs.push(...lines(`${n}-${end}`, lineCount()));
+        n = end + 1;
+      } else if (kind < 0.2) {                         // half verses from the data
+        refs.push(...lines(`${n}a`, lineCount()), ...lines(`${n}b`, lineCount()));
+        n += 1;
+      } else {
+        refs.push(...lines(`${n}`, lineCount()));
+        n += 1;
+      }
+    }
+    const article = makeStubArticle(refs);
+    for (let t = 0; t < 12; t++) {
+      // The pre-#205 selection was any set of lines (it keyed by data-vref).
+      const pick = t % 2 ? [refs[Math.floor(rnd() * refs.length)]] : refs.filter(() => rnd() < 0.3);
+      if (!pick.length) continue;
+      const legacy = v.selectedVersesToSpec(pre205Save(pick, article));
+      // Today's 저장 of the same lines, but with the merged verses that app stored by their first number.
+      const lineLabel = (r) => r.replace(/[a-p]+$/, "");
+      const lossy = pick.map((r) => {
+        const merged = /^(\d+)-\d+$/.exec(lineLabel(r));
+        if (!merged || lineLabel(r) === r) return r;
+        const all = refs.filter((x) => lineLabel(x) === lineLabel(r));
+        return all.every((x) => pick.includes(x)) ? merged[1] : r;
+      });
+      const today = v.verseNumberSpec(lossy);
+      const now = v.wholeVerseSpec(legacy);
+      if (/[a-z]/.test(legacy)) moved += 1;
+      // A spec without part letters is not a pre-#205 form and stays as it is; it already covers the same verses.
+      const expected = /[a-z]/.test(legacy) ? today : legacy;
+      if (now !== expected || !v.isWellFormedSpec(now) || v.verseNumberSpec(now.split(",")) !== today) {
+        failures.push(`${legacy} → ${now} (today ${today})`);
+      }
+    }
+  }
+  assert.ok(moved > 300, `${moved} moved`);
+  assert.deepEqual(failures.slice(0, 5), []);
 });
 
 /** `depth` folders, each inside the one before, with a bookmark at the bottom. */

@@ -305,3 +305,68 @@ test("selectedSpanVrefs: 고른 줄의 data-vref 를 문서 순서로 — 북마
   assert.deepStrictEqual(plain(ctx.selectedSpanVrefs(new Set(["20/20a", "6_c41/6a", "19/19a"]), a)), ["19a", "6a", "20a"]);
   assert.deepStrictEqual(plain(ctx.selectedSpanVrefs(new Set(["19/19a"]), null)), []);
 });
+
+// ── verseNumberSpec · wholeVerseSpec ──
+// 북마크는 절 번호 단위로 저장한다(ADR-010). 옛 판(2026-04-25부터 06-06 #205까지)이 저장한 줄 글자는 지금 표기로
+// 옮긴다(사용자 결정 2026-10-22, coding-pitfalls §38). 표본은 화면에서 재현한 것이다(이사 10 · 나훔 1 · 마태 10 · 창세 27 ·
+// 1사무 24 · 이사 7).
+
+test("verseNumberSpec: 고른 줄의 글자를 모두 떼고 번호를 구간으로 잇는다 — 북마크 저장(ADR-010)", () => {
+  assert.strictEqual(ctx.verseNumberSpec(["23a", "23c"]), "23");
+  assert.strictEqual(ctx.verseNumberSpec(["23b"]), "23");
+  assert.strictEqual(ctx.verseNumberSpec(["3a", "3b"]), "3");
+  assert.strictEqual(ctx.verseNumberSpec(["5"]), "5");
+  assert.strictEqual(ctx.verseNumberSpec(["23a", "23c", "24"]), "23-24");
+  assert.strictEqual(ctx.verseNumberSpec(["1", "3", "4", "5", "9"]), "1,3-5,9");
+  assert.strictEqual(ctx.verseNumberSpec(["9", "3"]), "3,9");
+  assert.strictEqual(ctx.verseNumberSpec([]), "all");
+  // 데이터의 반쪽 절은 그 번호로 — 「8ㄱ」만 골라도 8(이사 7은 반쪽 절이 다시 두 줄이다)
+  assert.strictEqual(ctx.verseNumberSpec(["8aa", "8ab"]), "8");
+  assert.strictEqual(ctx.verseNumberSpec(["5a"]), "5");
+});
+
+test("verseNumberSpec: 여러 줄인 병합 절은 범위로, 앞뒤 절과 잇는다 — 첫 번호로 저장되던 것(known-issues §17)", () => {
+  const nah7 = ["7-8a", "7-8b", "7-8c", "7-8d", "7-8e", "7-8f", "7-8g"];
+  assert.strictEqual(ctx.verseNumberSpec(nah7), "7-8");
+  assert.strictEqual(ctx.verseNumberSpec(["6", ...nah7, "9"]), "6-9");
+  assert.strictEqual(ctx.verseNumberSpec(["1", ...nah7]), "1,7-8");
+  // 한 줄인 병합 절도 같다 — 그전에는 「16,17-18,19」였다
+  assert.strictEqual(ctx.verseNumberSpec(["16", "17-18", "19"]), "16-19");
+});
+
+test("verseNumberSpec: 범위를 절마다 펼치지 않는다 — 검사 없이 들어온 큰 범위(known-issues §15)도 바로 끝난다", () => {
+  const t0 = Date.now();
+  assert.strictEqual(ctx.verseNumberSpec(["1-4294967296", "5"]), "1-4294967296");
+  assert.strictEqual(ctx.verseNumberSpec(["5-1"]), "1-5");
+  assert.ok(Date.now() - t0 < 50, `${Date.now() - t0}ms`);
+});
+
+test("wholeVerseSpec: 옛 판이 저장한 줄 글자를 떼어 지금 저장 표기로 옮긴다", () => {
+  const moved = {
+    "16aa": "16",          // 이사 10:16ㄱ의 첫 줄
+    "16-17a": "16-17",     // 병합 절의 한 줄
+    "7-8a": "7-8",         // 나훔 1:7-8의 첫 줄
+    "35a": "35",           // 마태 10:35의 첫 줄(인용 칩 자리에서 나뉜 산문 절)
+    "20a,20c": "20",       // 창세 27:20의 두 줄
+    "5a": "5",             // 1사무 24:5ㄱ(한 줄짜리 반쪽 절)
+    "8a": "8",             // 이사 7
+    "3a,5-7": "3,5-7",
+    "16,16aa": "16",
+    "1,20a,20c": "1,20",   // 지금 앱의 합치기가 남기던 것
+    "34,35a": "34-35",
+    "16-17b,16-17a": "16-17",
+    "8ba,8ab": "8",
+    "3a,3bb": "3",
+  };
+  for (const [legacy, now] of Object.entries(moved)) {
+    assert.strictEqual(ctx.wholeVerseSpec(legacy), now, legacy);
+    assert.ok(ctx.isWellFormedSpec(now), now);
+    assert.strictEqual(ctx.wholeVerseSpec(now), now, `${now} — 다시 옮겨도 그대로`);
+  }
+});
+
+test("wholeVerseSpec: 글자가 없는 범위 · 「all」 · 앱이 쓴 적 없는 표기는 그대로 둔다", () => {
+  for (const spec of ["all", "16", "1-5,10-15", "6,7-8,9", "1-2000000"]) assert.strictEqual(ctx.wholeVerseSpec(spec), spec);
+  // 순서가 어긋나거나 겹치거나 공백이 든 것 — 검사 없이 들어온 북마크(known-issues §15)는 고쳐 쓰지 않는다
+  for (const spec of ["16aa,3", "5a,3", "1-5,3a", " 16a", "3z", "abc", ""]) assert.strictEqual(ctx.wholeVerseSpec(spec), spec);
+});

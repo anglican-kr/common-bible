@@ -11,8 +11,8 @@
 // ── Verse spec utilities ──
 // ── BEGIN VERSE_SPEC ──
 // Exercised by tests/unit/bookmark.test.js · verse-spec.test.js. The functions below operate on plain strings and
-// arrays; the ones that read the chapter article (selectedSpanVrefs · selectionCitation · collapseSegmentedVerses) take
-// it as a parameter so the test loader provides a minimal DOM stub.
+// arrays; the ones that read the chapter article (selectedSpanVrefs · selectionCitation) take it as a parameter so the
+// test loader provides a minimal DOM stub.
 
 // "1-5,10-15,3a,3b" → [{start:1,end:5},{start:10,end:15},{start:3,end:3,part:"a"},...]
 /**
@@ -41,10 +41,11 @@ function parseVerseSpec(spec) {
   }, init);
 }
 
-// A verse-spec segment: "16", "1-5", "3a" as the app writes them (selectedVersesToSpec · mergeVerseSpecs), and two forms
-// the app wrote before 2026-06-06 (#205) for one line of a half verse or of a merged verse — "16aa", "16-17a" — kept as
-// they are (사용자 결정 2026-10-19 — 지금 앱도 그 구간은 강조하지 않고 장만 연다. 그 상태 그대로 돌아온다). Numbers
-// 1-999 without a leading 0 (the highest verse number is 176), part letters a-p (views.js appendVerses).
+// A verse-spec segment: "16", "1-5" as a bookmark stores them (verseNumberSpec), "3a" for one span of a verse — an
+// address can still name it (routing.js parsePath highlights that span) — and two forms the app wrote before 2026-06-06
+// (#205) for one line of a half verse or of a merged verse, "16aa" and "16-17a". Bookmarks saved before #205 carry the
+// part letters; the import takes them and moves them to today's form (wholeVerseSpec — 사용자 결정 2026-10-19 · 10-22).
+// Numbers 1-999 without a leading 0 (the highest verse number is 176), part letters a-p (views.js appendVerses).
 const SPEC_SEGMENT = /^([1-9]\d{0,2})(?:-([1-9]\d{0,2})([a-p])?|([a-p]{1,2}))?$/;
 // More segments than any chapter can yield — Psalm 119 renders 357 selectable units. A flood of segments froze every
 // scroll for seconds on its page (the tab bar parses the address on every scroll frame — tabbar.js `collapseEnabled`).
@@ -184,9 +185,10 @@ function selectionCitation(selected, article) {
 
 /**
  * The citation a person reads — the verse-select bar's 「…절 선택됨」 and the 복사 citation, from selectionCitation's
- * `refs`. The numbers are those selectedVersesToSpec writes in the spec grammar of addresses and bookmarks, written two
- * ways it does not: a merged verse joins the run around it (나훔 1:1-9 — 「1-6,7-8,9」 before), and a data half verse
- * takes the printed letter (「9a」 → 「9ㄱ」).
+ * `refs`. The numbers are those selectedVersesToSpec writes in the spec grammar of addresses, written two ways it does
+ * not: a merged verse joins the run around it (나훔 1:1-9 — 「1-6,7-8,9」 before), and a data half verse takes the
+ * printed letter (「9a」 → 「9ㄱ」). A bookmark stores the same selection in verse numbers alone (verseNumberSpec — it
+ * joins the runs too, and drops the half verse's letter).
  * @param {string[]} refs
  * @returns {string}
  */
@@ -201,52 +203,53 @@ function citationVerseSpec(refs) {
 }
 
 // 데이터의 반쪽 절(`part`)을 사람이 읽는 표기로 — 인쇄본은 「이사 7:8ㄱ」 「8ㄴ」이다(사용자 결정 2026-10-22). 화면의 절
-// 번호와 절 선택 출처가 쓴다. 주소와 저장 표기의 반쪽 절 글자는 「a」 · 「b」 그대로다(ADR-010 · 040). 데이터의 `part`는
-// a · b뿐이다.
+// 번호와 절 선택 출처가 쓴다. 주소의 반쪽 절 글자는 「a」 · 「b」 그대로다(ADR-040). 북마크는 반쪽 절도 번호로 저장한다
+// (ADR-010). 데이터의 `part`는 a · b뿐이다.
 /** @param {string} part @returns {string} */
 function halfVerseMark(part) {
   return "ㄱㄴㄷㄹㅁㅂㅅㅇㅈㅊㅋㅌㅍㅎ".charAt(part.charCodeAt(0) - 97) || part;
 }
 
-// Bookmark-only (ADR-010): a prose verse split into a/b/c line-spans by an
-// inline citation is conceptually one verse, so bookmarks ignore the sub-verse
-// segmentation — selecting *any* span of a multi-part verse stores the whole
-// verse number, even on a partial selection. Verse select picks whole verses
-// (views.js _verseSelectionUnit), so a partial selection here is one half of a
-// data half verse — saved as the number too ("8aa,8ab" → "8"), while the bar
-// and the copy cite it as 「8ㄱ」 (selectionCitation).
-// Single-part verses pass through unchanged.
 /**
- * @param {string[]} refs
- * @param {Element | null | undefined} article
- * @returns {string[]}
+ * The spec a bookmark stores (ADR-010 「북마크 저장」) — verse numbers only. Every part letter goes: a line of a verse
+ * drawn in lines, a data half verse and a line of a merged verse all store the number they belong to ("23a,23c" → "23",
+ * "8aa,8ab" → "8", "7-8a" → "7-8"), and the numbers join into runs ("6,7-8a,…,7-8g,9" → "6-9" — the verse-select bar's
+ * 「6-9절」, citationVerseSpec). 합치기 reads both specs the same way (mergeVerseSpecs), and so does the move of the
+ * pre-#205 forms (wholeVerseSpec). A range stays a range — one from an unchecked import (known-issues §15) is never
+ * walked verse by verse.
+ * @param {string[]} refs `data-vref` values or spec segments
+ * @returns {string} "all" when none names a verse
  */
-function collapseSegmentedVerses(refs, article) {
-  if (!article) return refs;
-  // Group by integer verse number, preserving first-seen order.
-  /** @type {Record<string, string[]>} */
-  const byVerse = {};
-  /** @type {string[]} */
-  const order = [];
+function verseNumberSpec(refs) {
+  /** @type {Array<[number, number]>} */
+  const ranges = [];
   for (const ref of refs) {
-    const n = parseInt(ref, 10);
-    if (!byVerse[n]) { byVerse[n] = []; order.push(`${n}`); }
-    byVerse[n].push(ref);
+    const m = /^(\d+)(?:-(\d+))?[a-z]*$/.exec(ref.trim());
+    if (!m) continue;
+    const s = parseInt(m[1], 10);
+    const e = m[2] ? parseInt(m[2], 10) : s;
+    if (s > 0) ranges.push([Math.min(s, e), Math.max(s, e)]);
   }
-  const result = [];
-  for (const n of order) {
-    // All spans rendered for this verse number
-    const allSpanRefs = [...article.querySelectorAll(".verse[data-vref]")]
-      .map((s) => s.getAttribute("data-vref") ?? "")
-      .filter((r) => r && parseInt(r, 10) === Number(n));
-    const hasAlpha = allSpanRefs.some((r) => /[a-z]$/.test(r));
-    if (hasAlpha) {
-      result.push(`${n}`);
-    } else {
-      result.push(...byVerse[n]);
-    }
+  if (!ranges.length) return "all";
+  ranges.sort((a, b) => a[0] - b[0]);
+  const out = [];
+  let [start, end] = ranges[0];
+  for (const [s, e] of ranges) {
+    if (s <= end + 1) { end = Math.max(end, e); continue; }
+    out.push(start === end ? `${start}` : `${start}-${end}`);
+    [start, end] = [s, e];
   }
-  return result;
+  out.push(start === end ? `${start}` : `${start}-${end}`);
+  return out.join(",");
+}
+
+// 옛 판(2026-04-25부터 06-06 #205까지)이 저장한 줄 글자를 떼어 지금 저장 표기로 옮긴다(사용자 결정 2026-10-22,
+// coding-pitfalls §38): 「16aa」 → 「16」, 「7-8a」 → 「7-8」, 「20a,20c」 → 「20」, 「3a,5-7」 → 「3,5-7」. 줄 단위 범위는
+// 절 전체가 된다. 글자가 없는 범위와 「all」, 앱이 쓴 적 없는 표기(검사 없이 들어온 것 — known-issues §15)는 그대로 둔다.
+/** @param {string} spec @returns {string} */
+function wholeVerseSpec(spec) {
+  if (spec === "all" || !/[a-z]/.test(spec) || !isWellFormedSpec(spec)) return spec;
+  return verseNumberSpec(spec.split(","));
 }
 
 // Compare verse refs: "3" < "3a" < "3b" < "4"
@@ -363,27 +366,14 @@ function verseInstanceKeys(verses) {
   });
 }
 
-// Union of two verse spec strings
+// Union of two verse spec strings, in verse numbers as a bookmark stores them (verseNumberSpec). A part letter goes
+// with the rest. Before 2026-10-22 a part of one letter after a number stayed ("23a,23c" + "1" → "1,23a,23c"), and the
+// pre-#205 forms parseVerseSpec does not read ("16aa", "7-8a") were dropped with their verses ("16aa" + "1" → "1" —
+// 16절이 빠졌다).
 /** @param {string} specA @param {string} specB @returns {string} */
 function mergeVerseSpecs(specA, specB) {
   if (specA === "all" || specB === "all") return "all";
-  /** @type {Set<number>} */
-  const intRefs = new Set();
-  /** @type {Set<string>} */
-  const partRefs = new Set();
-  for (const seg of [...parseVerseSpec(specA), ...parseVerseSpec(specB)]) {
-    if (seg.part) {
-      partRefs.add(`${seg.start}${seg.part}`);
-    } else {
-      for (let n = seg.start; n <= seg.end; n++) intRefs.add(n);
-    }
-  }
-  /** @type {string[]} */
-  const refs = [...intRefs].map(String);
-  for (const pr of partRefs) {
-    if (!intRefs.has(parseInt(pr, 10))) refs.push(pr);
-  }
-  return selectedVersesToSpec(refs);
+  return verseNumberSpec([...specA.split(","), ...specB.split(",")]);
 }
 // ── END VERSE_SPEC ──
 
@@ -461,6 +451,6 @@ window.verseInstanceKeys = verseInstanceKeys;
 
 export {
   parseVerseSpec, isWellFormedSpec, selectedSpanVrefs, selectionCitation, citationVerseSpec, halfVerseMark,
-  collapseSegmentedVerses, selectedVersesToSpec, mergeVerseSpecs, serializeVerseRange, citationSource,
+  verseNumberSpec, wholeVerseSpec, selectedVersesToSpec, mergeVerseSpecs, serializeVerseRange, citationSource,
   specCoversVerse, chapterMaxVerse, verseInstanceKey, verseInstanceKeys,
 };

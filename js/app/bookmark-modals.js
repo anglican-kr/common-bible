@@ -19,9 +19,9 @@
 import {
   _selectAllState, _forgetViewed, removeItemById,
   collectFolderOptions, insertItem, _findItemInStore,
-  findExistingChapterBookmarks, _findParentFolderId, _walkBookmarks,
+  findExistingChapterBookmarks, _findParentFolderId, _walkBookmarks, migrateLegacyBookmark,
 } from "./bookmark-core.js";
-import { collapseSegmentedVerses, selectedSpanVrefs, selectedVersesToSpec, mergeVerseSpecs, isWellFormedSpec } from "./verse-spec.js";
+import { verseNumberSpec, selectedSpanVrefs, mergeVerseSpecs, isWellFormedSpec } from "./verse-spec.js";
 
 const { _$, el, clearNode, chUnit } = window.appHelpers;
 const { createOverlay } = window.appOverlay;
@@ -410,11 +410,9 @@ function openSaveModal(mode, opts = {}) {
 
   if (mode === "verses") {
     const article = document.querySelector("article.chapter-text");
-    // Bookmarks treat a cite-split prose verse as one whole verse, so a partial
-    // span selection (e.g. 23a but not 23b/23c) is promoted to 23. The selection holds span keys (`data-vkey`); the
-    // stored spec is by number (ADR-010), so it goes through the spans' `data-vref`.
-    const refs = collapseSegmentedVerses(selectedSpanVrefs(readingContext.selectedVerses, article), article);
-    verseSpec = refs.length ? selectedVersesToSpec(refs) : "all";
+    // The selection holds span keys (`data-vkey`); the stored spec is by verse number (ADR-010), so it goes through
+    // the spans' `data-vref` — a line or a half verse stores its number, a merged verse its range ("7-8").
+    verseSpec = verseNumberSpec(selectedSpanVrefs(readingContext.selectedVerses, article));
   } else if (existing) {
     verseSpec = existing.verseSpec ?? "all";
   }
@@ -984,11 +982,12 @@ $bmImportInput.addEventListener("change", () => {
       _importStopped("북마크 파일 형식이 올바르지 않습니다.");
       return;
     }
-    // The item check needs each book's chapter count (an unknown book or a chapter past the end is left out).
-    /** @type {Map<string, number>} */
-    let chapterCounts;
+    // The item check needs each book's chapter count (an unknown book or a chapter past the end is left out), and
+    // the move of the pre-#205 verse ranges each book's name (an old default name follows its range).
+    /** @type {import("../types").BooksData} */
+    let books;
     try {
-      chapterCounts = new Map((await window.loadBooks()).map((b) => [b.id, b.chapter_count]));
+      books = await window.loadBooks();
     } catch (_) {
       _importStopped("성서 목록을 불러오지 못해 가져오지 않았습니다. 연결을 확인한 뒤 「가져오기」를 다시 눌러 주세요.");
       return;
@@ -1000,11 +999,15 @@ $bmImportInput.addEventListener("change", () => {
     try {
       _walkBookmarks(loadBookmarks(), (item) => { existingTypes.set(item.id, item.type); });
     } catch (_) { /* nothing to compare */ }
+    const chapterCounts = new Map(books.map((b) => [b.id, b.chapter_count]));
     const { nodes, skipped } = _sanitizeImportItems(
       data.bookmarks,
       (id) => chapterCounts.get(id) ?? null,
       (id) => existingTypes.get(id) ?? null,
     );
+    // 옛 판의 절 범위는 들이면서 지금 표기로 옮긴다(ADR-040 「절 범위」, coding-pitfalls §38) — before the size check,
+    // which measures what gets stored.
+    _walkBookmarks(nodes, (item) => { if (item.type === "bookmark") migrateLegacyBookmark(item, books); });
     if (!nodes.length && skipped > 0) {
       _importStopped(`가져올 수 있는 항목이 없습니다. 파일에는 올바르지 않은 항목 ${skipped}개만 들어 있습니다.`);
       return;

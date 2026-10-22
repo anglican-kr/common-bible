@@ -32,7 +32,7 @@ import {
 // rendering round most core helpers are consumed by bookmark-tree.js / -menu / -select
 // directly; the orchestrator only needs findExistingChapterBookmarks (header button
 // "is this chapter bookmarked?" check).
-import { findExistingChapterBookmarks } from "./bookmark-core.js";
+import { findExistingChapterBookmarks, migrateStoredBookmarks, migrateLegacyBookmarkDoc } from "./bookmark-core.js";
 
 // Modal dialogs split out to bookmark-modals.js (ADR-034 후속 PR5). They own
 // their overlays + DOM refs + Escape stack (closeTopmostModal); bookmark.js
@@ -554,6 +554,10 @@ window.closeDriveDisconnectModal = closeDriveDisconnectModal;
 // Phase 8: drawer drag/resize handle init — called from app.js bootstrap.
 window.initBookmarkSheetDrag = initBookmarkSheetDrag;
 window.initBookmarkDrawerResize = initBookmarkDrawerResize;
+// The move of pre-#205 verse ranges (bookmark-core.js, coding-pitfalls §38) — app.js runs it before the first view,
+// the sync layer on a merged document before saving it.
+window.migrateStoredBookmarks = migrateStoredBookmarks;
+window.migrateLegacyBookmarkDoc = migrateLegacyBookmarkDoc;
 
 export {
   moveBookmarkItem, closeSwipedRow, _setupDragHandle,

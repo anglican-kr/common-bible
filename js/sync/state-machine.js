@@ -586,6 +586,9 @@ function createSyncMachine({ onStateChange } = {}) {
    * @param {boolean} hadRemoteChanges
    */
   function _applyMergedDoc(merged, hadRemoteChanges) {
+    // 옛 판의 북마크 절 범위(2026-06-06 #205 전의 줄 글자)는 지금 표기로 옮겨 저장한다 — per-item times unchanged,
+    // so the merge's pick between two copies of one time cannot bring the old form back (coding-pitfalls §38).
+    if (typeof window.migrateLegacyBookmarkDoc === "function") window.migrateLegacyBookmarkDoc(merged);
     V2.saveLocal(merged);
     V2.applyToLegacyKeys(merged);
     // Refresh the visible bookmark surface (drawer or /bookmarks full view).
