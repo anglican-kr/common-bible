@@ -22,11 +22,31 @@ C-/X-/I-/Q/R id · 픽스처 id · PR 번호를 뽑아 문서별·합집합으�
   - 카운트 감소는 정상이다(중복 제거가 목적) — 보고만 한다.
 
 리비전은 git rev(`main`, `HEAD`, 해시) 또는 `WORKTREE`(작업 트리 파일 그대로). stdlib 만 쓴다.
+
+교회력 밖의 문서(정리 층 · 영역 문서 · ADR · CLAUDE.md)를 옮기거나 고쳐 쓸 때는 옵션을 더한다
+(2026-10-22 docs 재구성). 옵션이 없으면 위의 동작 그대로다.
+
+    python3 scripts/docs_facts_snapshot.py --diff main WORKTREE --docs 'docs/*.md' --docs CLAUDE.md --kinds general
+    python3 scripts/docs_facts_snapshot.py --diff main WORKTREE --docs 'docs/*.md' --kinds general --strict-counts \\
+        --from docs/status.md --from docs/known-issues.md --into 'docs/*.md'
+
+  - `--docs GLOB`(여러 번): 대상 문서를 리비전마다 glob 으로 펼친다(fnmatch — `*` 는 `/` 도 넘는다). 양쪽을
+    같은 glob 으로 보므로 파일 사이로 옮긴 토큰은 사라짐이 아니다. glob 이 양쪽 모두에서 아무것도 못 고르면 멈춘다.
+  - `--kinds general`: 날짜 · PR 번호 · 건수 + ADR 번호 · 옛 번호 참조(「pitfalls §N」 「known-issues §N」) ·
+    파일 경로 · 인라인 코드 · 「」 인용 · 사용자 확정 날짜를 센다. 문장을 고쳐 써도 이것들은 그대로여야 한다.
+    새 토큰은 판정하지 않는다(고쳐 쓰면 생기는 게 정상이다).
+  - `--strict-counts`: 토큰 수가 줄어도 실패로 본다 — 여러 파일로 나눠 옮길 때 흔한 토큰(`ADR-010`)이 한 군데라도
+    남으면 사라짐이 0 이 되는 맹점을 막는다.
+  - `--from GLOB --into GLOB`(여러 번): 줄 비교. A 의 `--from` 파일의 줄이 B 의 `--into` 파일에 모두(개수까지)
+    있어야 한다 — 글자 그대로 옮기는 커밋의 검증. 빈 줄 · `---` 는 건너뛰고, 제목은 `#` 과 앞 번호를, 목록 줄은
+    앞에 붙인 옛 번호 표지(`**known-issues §N.m**`)를 떼고 견준다. 일부러 뺀 줄은 `--drop-file` 에 적고
+    원장 「의도적 삭제」에도 적는다.
 """
 
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import json
 import re
 import subprocess
@@ -77,6 +97,17 @@ PATTERNS: list[tuple[str, re.Pattern[str]]] = [
 
 ALLOWED_NEW_DEFAULT = [r"^R-\d+(?:\.\d+)?-[a-z0-9-]+$", r"^[TOAW]-\d{4}-\d{2}-\d{2}-[a-z0-9-]+$"]
 
+# --kinds general — 교회력 밖의 문서에서 사실의 표지가 되는 토큰. 날짜 · 건수 · PR 번호는 위와 같은 정규식을 쓴다.
+GENERAL_PATTERNS: list[tuple[str, re.Pattern[str]]] = [p for p in PATTERNS if p[0] in ("date", "count", "pr")] + [
+    ("adr", re.compile(r"\bADR[- ]?0*(\d{1,3})\b")),
+    ("legacy", re.compile(r"\b((?:coding-)?pitfalls|known-issues)(?:\.md)?`?\s*§\s*(\d+(?:\.\d+)?)")),
+    ("path", re.compile(r"(?<![\w/.:-])((?:js|css|docs|scripts|tests|tools|assets|\.github|\.claude)/[\w./-]*[\w/-])")),
+    ("code", re.compile(r"`([^`\n]+)`")),
+    ("quote", re.compile(r"「([^「」\n]+)」")),
+    ("provenance", re.compile(r"사용자\s*(확인|결정|교정|확정|허용)[^\n]{0,24}?((?:19|20)\d{2}-\d{2}-\d{2})")),
+]
+KINDS = {"liturgical": PATTERNS, "general": GENERAL_PATTERNS}
+
 
 def read_at(rev: str, path: str) -> str:
     """rev 의 path 내용. WORKTREE 면 파일 시스템. **없으면 멈춘다** — 조용히 빠뜨리면 그 문서의
@@ -106,6 +137,21 @@ def list_dir(rev: str, directory: str, keep) -> list[str]:
     return sorted(p for p in r.stdout.split() if keep(Path(p).name))
 
 
+def list_globs(rev: str, globs: list[str]) -> list[str]:
+    """--docs · --from · --into 의 glob 을 리비전마다 펼친다(fnmatch — `*` 는 `/` 도 넘는다).
+    WORKTREE 는 git 이 아는 파일(추적 중 + 무시되지 않은 새 파일) 가운데 디스크에 있는 것이다."""
+    if rev == "WORKTREE":
+        r = subprocess.run(["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
+                           cwd=ROOT, capture_output=True, text=True)
+        names = [p for p in r.stdout.split("\0") if p and (ROOT / p).is_file()]
+    else:
+        r = subprocess.run(["git", "ls-tree", "-r", "-z", "--name-only", rev], cwd=ROOT, capture_output=True, text=True)
+        names = [p for p in r.stdout.split("\0") if p]
+    if r.returncode != 0:
+        sys.exit(f"{rev}: 파일 목록을 구하지 못했다 — {r.stderr.strip()}")
+    return sorted({p for p in names if any(fnmatch.fnmatchcase(p, g) for g in globs)})
+
+
 def list_fixtures(rev: str) -> list[str]:
     return list_dir(rev, FIXTURE_DIR, lambda n: n.endswith(".json"))
 
@@ -128,15 +174,25 @@ def json_strings(node) -> list[str]:
     return out
 
 
-def tokenize(text: str) -> dict[str, Counter]:
+def tokenize(text: str, patterns: list[tuple[str, re.Pattern[str]]] = PATTERNS) -> dict[str, Counter]:
     # 굵게 표시는 표현이지 사실이 아니다 — 지우지 않으면 `grid:christmas-**1**-sunday` 가
     # `grid:christmas-` 로 잘리고, `**96**건` 처럼 건수도 통째로 놓친다.
     text = text.replace("**", "")
     out: dict[str, Counter] = defaultdict(Counter)
-    for kind, pat in PATTERNS:
+    for kind, pat in patterns:
         for m in pat.finditer(text):
             tok = m.group(1) if m.groups() else m.group(0)
-            if kind == "prec":
+            if kind == "adr":
+                tok = f"ADR-{int(tok):03d}"   # `ADR 010` · `ADR-10` · `ADR-010` 을 같은 토큰으로
+            elif kind == "legacy":
+                tok = f"{'pitfalls' if 'pitfalls' in m.group(1) else 'known-issues'} §{m.group(2)}"
+            elif kind == "path":
+                tok = tok.rstrip(".")
+            elif kind in ("code", "quote"):
+                tok = tok.strip()
+            elif kind == "provenance":
+                tok = f"사용자 {m.group(1)} {m.group(2)}"
+            elif kind == "prec":
                 tok = f"prec {tok}"
             elif kind == "count":
                 tok = f"{m.group(1)}{m.group(2)}"
@@ -151,21 +207,30 @@ def tokenize(text: str) -> dict[str, Counter]:
     return out
 
 
-def snapshot(rev: str) -> dict:
+def snapshot(rev: str, globs: list[str] | None = None,
+             patterns: list[tuple[str, re.Pattern[str]]] = PATTERNS) -> dict:
+    """globs 가 없으면 교회력 문서 다섯 + 보관 문서 + 픽스처(기본). 있으면 그 glob 이 고른 파일 —
+    `.json` 은 픽스처처럼 문자열 값만 센다."""
+    if globs:
+        picked = list_globs(rev, globs)
+        doc_paths = [p for p in picked if not p.endswith(".json")]
+        json_paths = [p for p in picked if p.endswith(".json")]
+    else:
+        doc_paths, json_paths = DOCS + list_archives(rev), list_fixtures(rev)
     files: dict[str, dict[str, dict[str, int]]] = {}
     union: dict[str, Counter] = defaultdict(Counter)
-    for path in DOCS + list_archives(rev):
-        toks = tokenize(read_at(rev, path))
+    for path in doc_paths:
+        toks = tokenize(read_at(rev, path), patterns)
         files[path] = {k: dict(sorted(v.items())) for k, v in toks.items()}
         for k, v in toks.items():
             union[k].update(v)
-    for path in list_fixtures(rev):
+    for path in json_paths:
         text = read_at(rev, path)
         try:
             strings = json_strings(json.loads(text))
         except json.JSONDecodeError as e:
             sys.exit(f"{rev}:{path} JSON 파싱 실패 — {e}")
-        toks = tokenize("\n".join(strings))
+        toks = tokenize("\n".join(strings), patterns)
         files[path] = {k: dict(sorted(v.items())) for k, v in toks.items()}
         for k, v in toks.items():
             union[k].update(v)
@@ -181,7 +246,7 @@ def is_fixture(path: str) -> bool:
 
 
 def diff(a: dict, b: dict, ignore: set[str], allow_new: list[re.Pattern[str]],
-         moved: dict[str, str], verbose: bool) -> int:
+         moved: dict[str, str], verbose: bool, strict_counts: bool = False, judge_new: bool = True) -> int:
     """합집합 비교. 판정 규칙:
     - 사라진 토큰 = 실패. 단 `월.일` 토큰을 `--moved 04.28=2025-04-28` 로 **명시해 픽스처 ISO 날짜에 묶으면**
       「형태 변환」으로 보고 통과한다(§7 의 「→ 04.28」이 픽스처 「2025-04-28」로 옮겨 가는 경우). 조건은
@@ -215,6 +280,7 @@ def diff(a: dict, b: dict, ignore: set[str], allow_new: list[re.Pattern[str]],
     new_docs: list[tuple[str, str, int, bool]] = []
     new_fixture_only: list[tuple[str, str, int]] = []
     decreased = 0
+    decreased_list: list[tuple[str, str, int, int]] = []
     for k in kinds:
         ta, tb = ua.get(k, {}), ub.get(k, {})
         for tok, n in ta.items():
@@ -235,6 +301,8 @@ def diff(a: dict, b: dict, ignore: set[str], allow_new: list[re.Pattern[str]],
                 vanished.append((k, tok, n, where))
             elif tb[tok] < n:
                 decreased += 1
+                if tok not in ignore:
+                    decreased_list.append((k, tok, n, tb[tok]))
         for tok, n in tb.items():
             if tok not in ta:
                 if tok in b_doc_tokens.get(k, set()):
@@ -259,11 +327,22 @@ def diff(a: dict, b: dict, ignore: set[str], allow_new: list[re.Pattern[str]],
         print(f"## 형태 변환(--moved 로 명시 · 월.일 → 이번에 픽스처에 적힌 ISO 날짜) — {len(converted)}")
         for tok, iso in converted:
             print(f"- {tok} → {iso}")
-    bad_new = [x for x in new_docs if not x[3]]
+    if strict_counts:
+        print()
+        print(f"## 줄어든 토큰(--strict-counts) — {len(decreased_list)}")
+        for k, tok, n_a, n_b in decreased_list:
+            print(f"- [{k}] {tok} ×{n_a} → ×{n_b}")
+    bad_new = [x for x in new_docs if not x[3]] if judge_new else []
     print()
-    print(f"## 문서에 생긴 새 토큰 — {len(new_docs)} (허용 밖 {len(bad_new)})")
-    for k, tok, n, ok in new_docs:
-        print(f"- [{k}] {tok} ×{n}{'' if ok else '  ← 허용 밖'}")
+    if judge_new:
+        print(f"## 문서에 생긴 새 토큰 — {len(new_docs)} (허용 밖 {len(bad_new)})")
+        for k, tok, n, ok in new_docs:
+            print(f"- [{k}] {tok} ×{n}{'' if ok else '  ← 허용 밖'}")
+    else:
+        print(f"## 문서에 생긴 새 토큰 — {len(new_docs)} (--kinds general 은 판정하지 않는다)")
+        if verbose:
+            for k, tok, n, _ in new_docs:
+                print(f"- [{k}] {tok} ×{n}")
     by_kind = Counter(k for k, _, _ in new_fixture_only)
     print()
     print(f"## 픽스처에만 생긴 새 토큰(전사) — {len(new_fixture_only)}: "
@@ -271,7 +350,66 @@ def diff(a: dict, b: dict, ignore: set[str], allow_new: list[re.Pattern[str]],
     if verbose:
         for k, tok, n in new_fixture_only:
             print(f"- [{k}] {tok} ×{n}")
-    return 1 if vanished or bad_new else 0
+    return 1 if vanished or bad_new or (strict_counts and decreased_list) else 0
+
+
+# 옛 번호 표지 — 영역 문서로 옮긴 항목의 제목(`### pitfalls §38 — 제목`)과 목록 줄(`- **known-issues §N.m** …`) 앞에 붙는다.
+ID_PREFIX = r"(?:(?:coding-)?pitfalls|known-issues)\s*§[\d.]+"
+
+
+def norm_line(line: str) -> str | None:
+    """줄 비교용 정규화 — 글자 그대로 옮긴 줄이 옮긴 곳의 형식 차이 때문에 「빠짐」이 되지 않게 한다.
+    빈 줄과 `---` 는 None. 제목은 `#` 과 앞 번호(`38.` · `4.10` · `pitfalls §38 —`)를 뗀다.
+    목록 줄은 앞에 붙인 옛 번호 표지(`**known-issues §N.m**`)를 뗀다."""
+    s = line.strip()
+    if not s or re.fullmatch(r"-{3,}", s):
+        return None
+    if s.startswith("#"):
+        s = re.sub(r"^#+\s*", "", s)
+        s = re.sub(rf"^(?:{ID_PREFIX}|\d+(?:\.\d+)*\.?)\s*(?:—\s*)?", "", s)
+    else:
+        s = re.sub(rf"^([-*]|\d+\.)\s+\*\*{ID_PREFIX}\*\*\s*", r"\1 ", s)
+    return s or None
+
+
+def check_lines(a_rev: str, b_rev: str, from_globs: list[str], into_globs: list[str],
+                drop_file: str | None) -> int:
+    """A 의 --from 파일 줄이 B 의 --into 파일에 개수까지 모두 있는가. 빠진 줄은 `파일:줄` 로 낸다."""
+    src, dst = list_globs(a_rev, from_globs), list_globs(b_rev, into_globs)
+    if not src:
+        sys.exit(f"--from 이 {a_rev} 에서 아무 파일도 고르지 않았다: {' '.join(from_globs)}")
+    if not dst:
+        sys.exit(f"--into 가 {b_rev} 에서 아무 파일도 고르지 않았다: {' '.join(into_globs)}")
+    pool: Counter = Counter()
+    for p in dst:
+        for line in read_at(b_rev, p).split("\n"):
+            n = norm_line(line)
+            if n:
+                pool[n] += 1
+    drops: set[str] = set()
+    if drop_file:
+        drops = {n for line in Path(drop_file).read_text(encoding="utf-8").split("\n") if (n := norm_line(line))}
+    missing: list[str] = []
+    total = dropped = 0
+    for p in src:
+        for i, line in enumerate(read_at(a_rev, p).split("\n"), 1):
+            n = norm_line(line)
+            if not n:
+                continue
+            total += 1
+            if pool[n] > 0:
+                pool[n] -= 1
+            elif n in drops:
+                dropped += 1
+            else:
+                missing.append(f"{p}:{i}: {line.strip()}")
+    print()
+    print(f"# 줄 비교 {a_rev} {' '.join(src)} → {b_rev} 파일 {len(dst)}개")
+    print(f"옛 줄 {total} · 옮겨진 줄 {total - dropped - len(missing)} · 일부러 뺀 줄(--drop-file) {dropped}")
+    print(f"## 빠진 줄 — {len(missing)}")
+    for m in missing:
+        print(f"- {m}")
+    return 1 if missing else 0
 
 
 def main() -> int:
@@ -287,7 +425,23 @@ def main() -> int:
     ap.add_argument("--moved", action="append", default=[], metavar="MM.DD=YYYY-MM-DD",
                     help="문서의 월.일 토큰이 픽스처의 이 ISO 날짜로 옮겨 갔다(형태 변환) — 원장에 열거")
     ap.add_argument("-v", "--verbose", action="store_true", help="픽스처 전용 새 토큰도 전부 나열")
+    ap.add_argument("--docs", action="append", default=[], metavar="GLOB",
+                    help="대상 문서 glob(여러 번) — 없으면 교회력 문서 다섯 · 보관 문서 · 픽스처")
+    ap.add_argument("--kinds", choices=sorted(KINDS), default="liturgical",
+                    help="셀 토큰 종류(기본 liturgical). general 은 새 토큰을 판정하지 않는다")
+    ap.add_argument("--strict-counts", action="store_true", help="토큰 수가 줄어도 실패로 본다")
+    ap.add_argument("--from", dest="from_globs", action="append", default=[], metavar="GLOB",
+                    help="줄 비교 — A 쪽 옛 파일 glob(여러 번, --into 와 함께)")
+    ap.add_argument("--into", dest="into_globs", action="append", default=[], metavar="GLOB",
+                    help="줄 비교 — B 쪽에서 옛 줄을 찾을 파일 glob(여러 번)")
+    ap.add_argument("--drop-file", metavar="PATH", help="줄 비교 — 일부러 뺀 줄 목록(한 줄에 하나)")
     args = ap.parse_args()
+    if bool(args.from_globs) != bool(args.into_globs):
+        ap.error("--from 과 --into 는 함께 쓴다")
+    if args.from_globs and not args.diff:
+        ap.error("--from/--into 는 --diff A B 와 함께 쓴다")
+    patterns = KINDS[args.kinds]
+    globs = args.docs or None
     moved: dict[str, str] = {}
     for m in args.moved:
         if not re.fullmatch(r"\d{1,2}\.\d{1,2}=\d{4}-\d{2}-\d{2}", m):
@@ -296,7 +450,7 @@ def main() -> int:
         moved[tok] = iso
 
     if args.rev:
-        snap = snapshot(args.rev)
+        snap = snapshot(args.rev, globs, patterns)
         text = json.dumps(snap, ensure_ascii=False, indent=1)
         if args.out:
             Path(args.out).write_text(text + "\n", encoding="utf-8")
@@ -305,9 +459,18 @@ def main() -> int:
             print(text)
         return 0
 
-    a, b = (snapshot(r) for r in args.diff)
+    if globs:
+        # glob 하나가 양쪽 모두에서 아무것도 못 고르면 오타다 — 조용히 넘기면 그 문서들의 토큰이 시야에서 빠진다.
+        for g in globs:
+            if not any(list_globs(r, [g]) for r in args.diff):
+                sys.exit(f"--docs {g}: 양쪽 리비전 모두에서 고른 파일이 없다")
+    a, b = (snapshot(r, globs, patterns) for r in args.diff)
     allow = [re.compile(p) for p in ALLOWED_NEW_DEFAULT + args.allow_new]
-    return diff(a, b, set(args.ignore), allow, moved, args.verbose)
+    code = diff(a, b, set(args.ignore), allow, moved, args.verbose,
+                strict_counts=args.strict_counts, judge_new=args.kinds == "liturgical")
+    if args.from_globs:
+        code |= check_lines(args.diff[0], args.diff[1], args.from_globs, args.into_globs, args.drop_file)
+    return code
 
 
 if __name__ == "__main__":
