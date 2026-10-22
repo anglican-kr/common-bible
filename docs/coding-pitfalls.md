@@ -158,7 +158,7 @@ ADR-021 이후 캐시 무효화는 두 경로로 갈린다:
 DATA_CACHE/AUDIO_CACHE 이름 자체는 더 이상 bump하지 않음 (`"data"`, `"audio"` 로 고정). `--bump-data`·`--bump-audio` 플래그는 제거됨.
 
 **사례:**
-- `docs/changes/2026-04-30-worklog.md` — `privacy.html` 추가 시 `SHELL_FILES` 등록 + navigation 예외 처리 + 셸 bump가 한 묶음으로 진행되어야 했음 (셸 영역은 매니페스트 적용 후에도 같음).
+- 옛 worklog의 2026-04-30 항목(`git show 243bf83^:docs/worklog.md`) — `privacy.html` 추가 시 `SHELL_FILES` 등록 + navigation 예외 처리 + 셸 bump가 한 묶음으로 진행되어야 했음 (셸 영역은 매니페스트 적용 후에도 같음).
 
 **SW 변경 체크리스트:**
 
@@ -340,6 +340,8 @@ Cache API는 access-time / byte-size 메타데이터를 노출하지 않으므�
 - 서사·근거·검증의 원본은 저장소 안 파일이고, PR 본문·릴리스 노트는 거기서 파생한다. 반대 방향은 두지 않는다.
 - 기록 습관이 무너지면 "더 열심히 쓰자" 가 아니라 역할이 어디로 옮겨 갔는지 먼저 본다. 같은 내용을 두 곳에 쓰게 하는 훅은 소음이 된다(`doc-reminder.sh` 제거 사유).
 - 강제는 매 Stop 이 아니라 PR 생성 시점 1회(`pre-pr-ledger.sh`) + CI(`Change ledger`) 로 건다.
+
+**소급 사본 삭제 (사용자 결정, 2026-10-22):** #331은 이 규칙을 세우면서 옛 PR 본문 308개와 worklog 블록 32개를 `docs/changes/`에 소급해 들여왔다. 2026-10-22에 사용자가 이 사본 340개를 지우기로 했다. 이 파일들에만 있는 정보는 없었고, 작업에서 읽히지 않았다. 2026-09-20 이전 PR 본문의 원본은 GitHub에만 있고, worklog는 git 이력에 있다(`git show 243bf83^:docs/worklog.md`). 위 규칙은 2026-09-20 이후의 원장에 그대로 적용한다.
 
 ## 18. 교회력 조회의 도메인 확정 — 주일과 겹치면 주일 본문 · 성주간과 재의 수요일 주간은 지정 독서 · 여성선교주일은 기념일 (2026-10-10)
 

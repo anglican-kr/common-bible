@@ -8,7 +8,7 @@ PR 본문은 여기 파일에서 파생한다 (`gh pr create --body-file docs/ch
 
 `YYYY-MM-DD-<slug>.md` — 날짜는 작성일(머지일 아님), slug 는 브랜치 이름에서 타입 접두어를 뗀 것. PR 번호는 생성 직후 훅이 frontmatter 에 적는다.
 
-- 소급 기록(2026-09-20 에 빠져 있던 과거 기록을 한꺼번에 채워 넣은 것) 파일은 예외 — `…-worklog[-N].md` 는 옛 `docs/worklog.md` 를 날짜 블록별로 그대로 옮긴 것(`source: worklog`), `…-prNNN-<slug>.md` 는 머지된 PR 본문을 GitHub 에서 받아 저장한 것(날짜 = KST 머지일). 내용은 손대지 않았다.
+- 이 디렉터리의 원장은 2026-09-20부터다. 그 전의 기록은 여기 없다. PR 본문은 GitHub에, 옛 `docs/worklog.md`는 git 이력에 있다(`git show 243bf83^:docs/worklog.md`). #331이 이 둘을 소급해 들여왔던 사본 340개(`…-worklog[-N].md`, `…-prNNN-<slug>.md`)는 2026-10-22에 지웠다(사용자 결정, coding-pitfalls §17). `2026-10-10-pr339-review-followup.md`는 이름이 비슷하지만 이 형식으로 쓴 원장이다.
 
 ## 형식
 
@@ -51,3 +51,4 @@ title: "feat: 한 줄 제목 (커밋 메시지 규칙과 동일)"
 - 머지 후에는 고치지 않는다. 사실이 바뀌면 새 변경의 원장에 적고, 정리 층 문서를 갱신한다.
 - **머지된 PR을 되돌릴 때도 원장은 남긴다.** `git revert`는 그 PR의 원장까지 지우므로 아래 게이트에 걸린다 — 되돌림 커밋에서 원장 파일을 제외하고(`git revert -n <sha>` — 그 PR의 squash 커밋 하나 — 뒤 `git restore --staged --worktree -- docs/changes/`), 무엇을 왜 되돌렸는지 **새 원장**에 적는다. 되돌렸다는 사실도 기록이다.
 - 위 규칙은 세 장치가 강제한다 — CI `.github/workflows/ledger.yml` 이 base 에 이미 있는 원장을 PR 이 건드리면(추가 `A`·복사 `C` 를 뺀 모든 상태 — 수정·삭제·이름변경은 물론 심볼릭 링크로 바꿔치기까지) 실패시키고, `.claude/hooks/pre-commit-ledger.sh` 가 `git commit` 단계에서 같은 판정으로 deny 하며, `scripts/lock_merged_ledgers.sh` 가 로컬에서 머지된 원장을 읽기 전용(`chmod a-w`)으로 잠근다. 잠금은 손으로 고치는 것만 막는 보조 수단이다 — `npm test` 앞(`pretest`)과 `gh pr create` 뒤(`post-pr-ledger.sh`)에 자동으로 돌지만, git 이 파일 모드를 저장하지 않으므로 클론마다 사라지고 `git checkout`·`merge`·`apply` 는 잠금을 조용히 푼다(`--unlock` 으로도 푼다). 이 `README.md` 자체는 세 장치 모두 예외라 계속 고칠 수 있다.
+- **일회성 예외 (2026-10-22).** CI와 커밋 훅은 #331(`243bf83`)이 들여온 소급 사본 340개의 **삭제만** 허용한다. 고치기와 이름 바꾸기는 막는다. 삭제가 머지되면 base에 그 파일들이 없어 예외가 하는 일이 없으므로 다음 정리 PR에서 지운다.
