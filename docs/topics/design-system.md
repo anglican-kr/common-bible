@@ -23,6 +23,14 @@
 - ADR-023 「설정 패널 상위 4개 옵션」
 - ADR-025 「읽기 헤더 스크롤 elevation 그림자」
 
+## 확정 사실
+
+- **`DESIGN.md`를 고친 PR에서는 디자인 시스템 아티팩트도 맞춘다**(사용자 결정 2026-10-23). 아티팩트는 `DESIGN.md`와 `css/style.css`를 손으로 옮긴 사본이고, 자동으로 맞춰 주는 도구가 없다. Claude Code의 `/design-sync`는 React용이라 이 앱(Vanilla JS)에는 쓸 수 없다. 아티팩트 주소는 아래 known-issues §22에 있다. 바뀐 내용에 따라 고칠 아티팩트 파일이 다르다.
+  - 토큰 값(색, 간격 등): `project/tokens.json`과 미리보기용 스타일 `project/components/bundle.css`
+  - 컴포넌트 규약: 그 컴포넌트의 `README.md`와 `preview.html`. 미리보기는 앱 화면을 떠낸 사본이라, 앱 코드를 고친 뒤 화면을 다시 떠서 바꾼다.
+  - 브랜드 설명: `project/README.md`
+  - 마지막에 `project/design-system.json`의 변경 기록(`lastChange`)을 고친다.
+
 ## 함정
 
 ### pitfalls §8 — 글꼴을 불러오는 방식을 잘못 알면, 캐시를 비운 뒤 첫 실행에서만 글꼴이 틀린다
