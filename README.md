@@ -238,7 +238,7 @@ docs/
   known-issues.md       ← 이슈 번호 대장 (본문은 주제 문서)
   coding-pitfalls.md    ← 공통 함정 · 작업 방식 교정 · 함정 번호 대장
   design/               ← 진행 중인 구현 설계서 (완료되면 archive/design/ 으로)
-  reference/            ← 기도서 등 외부 원문 전사
+  reference/            ← 기도서 등 외부 원문을 옮겨 적은 문서
   archive/              ← 완료·점-시점 기록 (design 설계 변천 · audit 보안 감사)
   index.md              ← 진입점: 작업 유형 → 먼저 읽을 문서
   changes/              ← 변경 원장 (변경 하나에 파일 하나, PR 본문의 원본)

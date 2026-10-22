@@ -256,8 +256,8 @@ def diff(a: dict, b: dict, ignore: set[str], allow_new: list[re.Pattern[str]],
       픽스처에 적었다는 뜻이다. 자동 추정은 하지 않는다: 같은 월·일로 끝나는 무관한 케이스가 하나만 있어도
       그 사실의 삭제가 조용히(그리고 그 뒤 모든 PR 에서 영구히) 용서되기 때문이다.
     - 새 토큰 중 **문서**에 나타난 것은 허용 목록(R- · 픽스처 id · --allow-new)에 들어야 한다.
-      픽스처 파일에만 나타난 새 토큰은 전사(문서의 부분 날짜 · 이름 → ISO 날짜 · 정확한 id)이므로 통과시키되 따로 센다
-      — 전사 오류는 liturgical-fixtures.data.test.js(id 실재) 와 PR 본문의 대응표로 잡는다.
+      픽스처 파일에만 나타난 새 토큰은 옮겨 적은 것(문서의 부분 날짜 · 이름 → ISO 날짜 · 정확한 id)이므로 통과시키되 따로 센다
+      — 옮겨 적기 오류는 liturgical-fixtures.data.test.js(id 실재) 와 PR 본문의 대응표로 잡는다.
     """
     ua, ub = a["union"], b["union"]
     kinds = sorted(set(ua) | set(ub))
@@ -347,7 +347,7 @@ def diff(a: dict, b: dict, ignore: set[str], allow_new: list[re.Pattern[str]],
                 print(f"- [{k}] {tok} ×{n}")
     by_kind = Counter(k for k, _, _ in new_fixture_only)
     print()
-    print(f"## 픽스처에만 생긴 새 토큰(전사) — {len(new_fixture_only)}: "
+    print(f"## 픽스처에만 생긴 새 토큰(옮겨 적기) — {len(new_fixture_only)}: "
           + " · ".join(f"{k} {n}" for k, n in sorted(by_kind.items())))
     if verbose:
         for k, tok, n in new_fixture_only:

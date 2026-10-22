@@ -659,7 +659,7 @@ function spansOf(y) {
     holyWeek: [{ from: off(-7), to: off(-1) }],
     easterOctave: [{ from: off(0), to: off(7) }],
     transferGuard: [{ from: off(-7), to: off(7) }],
-    // 승천일(E+39)은 **제외** — 전사 「승천일 이후 성령강림주일 전까지」(§4.10).
+    // 승천일(E+39)은 **제외** — 기도서 원문 「승천일 이후 성령강림주일 전까지」(§4.10).
     ascensionToPentecost: [{ from: off(40), to: off(48) }],
     dec17to24: [{ from: toKey(y, 12, 17), to: toKey(y, 12, 24) }],
     // 조각 ① 은 전년 12.25 에 시작한 기간의 올해 몫, ② 는 올해 시작분.
@@ -1626,7 +1626,7 @@ function dayColorsOf(dateStr, grid, official, cands) {
 }
 
 /**
- * 그날이 재일인가(§6.3 · 전사 「재일」) — `"major"` 대재일(재의 수요일 · 성 금요일), `"minor"` 소재일(사순
+ * 그날이 재일인가(§6.3 · 기도서 원문 「재일」) — `"major"` 대재일(재의 수요일 · 성 금요일), `"minor"` 소재일(사순
  * 절기 중 주간 40일 · 사계재일 · 성탄절기를 제외한 모든 금요일), 아니면 null. **승자와 무관하다** — 그날
  * 남아 있는 후보(`proper` · `transferred_in`)와 날짜로 판정한다: 사계재가 지향이어도 그날은 소재일이다.
  * 금요일의 성탄절기는 `spansOf().christmasToBaptism`(§4.10)으로 보고 날짜를 따로 비교하지 않는다

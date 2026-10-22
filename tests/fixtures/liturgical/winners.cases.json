@@ -243,7 +243,7 @@
       "status": "confirmed",
       "canon": ["R-6.1-ladder"],
       "checks": ["C-6.5-14"],
-      "source": ["전사 주요축일 가-3"],
+      "source": ["기도서 원문 주요축일 가-3"],
       "assertions": [
         { "date": "2027-08-15", "expect": { "official": "d0815-성모안식", "grid": { "status": "proper" } } },
         { "date": "2027-08-15", "expect": { "id": "d0815-성모안식", "status": "proper", "notInDepartures": true } }
@@ -257,7 +257,7 @@
       "status": "confirmed",
       "canon": ["R-6.1-ladder"],
       "checks": ["C-6.5-14"],
-      "source": ["전사 주요축일 다-1"],
+      "source": ["기도서 원문 주요축일 다-1"],
       "assertions": [
         { "date": "2027-09-26", "expect": { "official": "d0926-모든-한국인-순교자들", "grid": { "status": "proper" } } },
         { "date": "2027-09-26", "expect": { "id": "d0926-모든-한국인-순교자들", "status": "proper", "notInDepartures": true } }

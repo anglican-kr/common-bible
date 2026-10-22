@@ -3,7 +3,7 @@
 //
 // tests/fixtures/liturgical/*.cases.json 의 `expect.id` · `displacedBy` · `official` · `neverDeparts` ·
 // `activated`(+ `ifIssueFlips.expect`)가 sanctoral.json · temporal-feasts.json 의 id 로 실재하는지 본다 —
-// 전사 오류(`d0325-성모수태고지` 를 `d0325-성모-수태고지` 로 적는 류)를 잡는 **유일한 기계 검사**다.
+// 옮겨 적기 오류(`d0325-성모수태고지` 를 `d0325-성모-수태고지` 로 적는 류)를 잡는 **유일한 기계 검사**다.
 // 형식 검사(liturgical-fixtures.test.js)는 `d\d{4}-…` 모양만 보므로 오타를 통과시킨다.
 //
 // **공개 저장소의 필수 `Unit tests` 잡에서는 돌지 않는다.** 그 잡은 actions/checkout 을 서브모듈 없이
