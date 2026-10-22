@@ -8,7 +8,7 @@
 
 | 겹 | 도구 | 무엇을 보나 | 어디서 도나 | 규모 |
 |---|---|---|---|---|
-| **유닛** | `node --test` (의존성 0) | 순수 로직 — 함수 입출력·상태 계산 + 문서·픽스처 정합성 | **CI 자동** (PR마다) | 36파일 · 1362케이스 |
+| **유닛** | `node --test` (의존성 0) | 순수 로직 — 함수 입출력·상태 계산 + 문서·픽스처 정합성 | **CI 자동** (PR마다) | 36파일 · 1365케이스 |
 | **타입 검사** | `tsc --noEmit` (JSDoc, `js/` 전체 — `checkJs`) | 타입 불일치·오타 | **CI 자동**(「Unit tests」 잡) + 로컬 훅 | 설정 2종(앱·검색 워커) |
 | **E2E** | Playwright (실제 브라우저) | 화면·상호작용·모듈 간 배선 | **로컬 전용**(수동) | 30파일 · 378케이스 |
 | **데이터** | pytest (`common-bible-data` 서브모듈) | 성경 본문·검색 인덱스 정합성 | 그 저장소 CI | 별도 저장소 |
@@ -63,7 +63,7 @@ node --test tests/unit/storage.test.js    # 개별 파일
 | `sw.test.js` | 서비스 워커 정적 검증 — `SHELL_FILES` 존재·`index.html` 패리티·import 닫힘(정적 + 지정자가 글자 그대로인 동적 `import()` — 주석 · 문자열을 걷은 코드에서 읽는다, 그 파서의 엣지 케이스 포함)과 거꾸로(프리캐시한 스크립트는 Worker · importScripts 대상만 빼고 import로 닿는다)·지연 로드(`js/`의 `import()`는 모두 글자 그대로 · import()로 부르는 모듈은 부팅 그래프 밖 · `routing.js`의 한꺼번에 묶음 = 그 화면 모듈의 정적 import − 부팅 그래프 — ADR-038 §2)·`cacheNameFor` 라우팅·매니페스트 대조(`data/` 없으면 skip, `sync-data.yml`에서 실행) | 12 |
 | `docs-data-consistency.test.js` | 설계서 `facts` 블록 ↔ `data/lectionary` 실측 대조(`data/` 없으면 skip, `sync-data.yml`에서 실행) | 2 |
 | `docs-crossref.test.js` | 교회력 설계 문서 5종(설계서·검토 문서·ADR-036/037/038) + status/architecture 의 교차 참조 — `§n.m`·`미결n`·`C-/X-/I-`·`R-` 정본 마커·픽스처 id 가 실재하는 앵커를 가리키는지(참조원 둘도 같은 검사 — 폐지된 `Qn` 은 검토 문서 §6 의 Q→미결 대응표로 풀고 Q1~Q14 를 전부 덮는지 본다), 설계서 § 헤딩 목록·§9 항목(§9.1 열림 + §9.2 닫힘 = 1..N, 각 목록 번호순, §9.1 은 일곱 필드 전부, §9.2 는 한 줄 + 닫힘 날짜)·ADR 미결 번호가 문서 순서대로 1..n(재부여 · 건너뜀 · 순서 바꿈 금지) · ADR 「미결 사항」 각 항목이 닫힘 또는 「→ 설계서 미결n」 승계(그 목록이 옛 ADR 미결 번호의 대응표), R- 마커 1회 정의, 검토 문서 §6 이 설계서 §9.1 의 「확인 주체 = 사제」 뷰와 같은지(미결 집합 · 상태 첫 낱말). 표기 금지 게이트는 인라인 코드를 뺀 산문만 보며 **문서 단위로** 켠다 — ②(2026-10-09)에서 센티널(전 문서) · 동그라미 참조 · Qn · 편집 원칙(설계서)을 켰고 ③(2026-10-10)이 검토 문서를, ④(2026-10-10)가 ADR 셋을 더하며 ADR 미결 번호 참조 게이트를 켰다(면제 줄 없음 — 다섯 문서 모두) | 14 |
-| `docs-wiki.test.js` | 저장소 문서의 참조(docs 재구성, 2026-10-22) — 「pitfalls §N」 「known-issues §N」 참조가 지금 문서의 절로 풀리는지, 본문의 `docs/…` 경로(glob 포함)와 마크다운 상대 링크가 실재하는지, `docs/index.md`가 인용한 파일과 ADR이 실재하는지. 범위는 git이 아는 텍스트 파일에서 `docs/changes/`(머지된 원장) · `docs/archive/` · `data/` · `tests/fixtures/`를 뺀 것. 일부러 지운 파일의 이력 언급은 테스트의 `RETIRED` 목록으로 허용한다 | 4 |
+| `docs-wiki.test.js` | 저장소 문서의 참조(docs 재구성, 2026-10-22) — 「pitfalls §N」 「known-issues §N」 참조가 지금 문서의 절로 풀리는지, 본문의 `docs/…` 경로(glob 포함)와 마크다운 상대 링크가 실재하는지, `docs/index.md`가 인용한 파일과 ADR이 실재하는지. 영역 문서(`docs/areas/`)는 대장 줄과 정의가 하나씩 맞는지, 정한 틀(`## ` 제목의 종류와 순서, 「소유 코드:」)을 지키는지, 두 영역이 같은 `js/` 파일을 소유하지 않는지도 본다. 범위는 git이 아는 텍스트 파일에서 `docs/changes/`(머지된 원장) · `docs/archive/` · `data/` · `tests/fixtures/`를 뺀 것. 일부러 지운 파일의 이력 언급은 테스트의 `RETIRED` 목록으로 허용한다 | 7 |
 | `liturgical-fixtures.test.js` | `tests/fixtures/liturgical/*.cases.json` 형식 — id 유일·규칙, 날짜 실재, 관측일 id 생략부호 금지(`ifIssueFlips.expect` 포함), status/kind 도메인(provisional·skip 은 `issue` 필수), `readings`/`officialReadings` 키 분리, 빈 `expect` 금지, `alsoYears` 요일 동일, `canon`·`checks`·`issue` 앵커 실재, 검토 문서 §5 항목이 인용한 케이스는 `checks` 에 그 항목을 단다(역참조) | 8 |
 | `liturgical-fixtures.data.test.js` | 픽스처 관측일 id(`id`·`displacedBy`·`official`·`neverDeparts`·`activated`) ↔ `data/lectionary` 실재 — 전사 오류를 잡는 유일한 기계 검사(`data/` 없으면 skip, `engine-data.yml`·`sync-data.yml`에서 실행) | 2 |
 | `debug-log.test.js` | 동기화 진단 로그 — 복사하는 「동기화 진단 정보」에 멈춘 자리(`at`) · 결과(`ok`) · 상태 0(네트워크 실패)이 찍힌다 | 2 |
