@@ -1,4 +1,5 @@
 ---
+pr: 367
 date: 2026-10-22
 branch: fix/bookmark-legacy-spec
 title: "fix: 옛 판이 저장한 북마크 절 범위를 지금 표기로 옮긴다"
