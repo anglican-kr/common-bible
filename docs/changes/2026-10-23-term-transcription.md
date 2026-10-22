@@ -1,4 +1,5 @@
 ---
+pr: 375
 date: 2026-10-23
 branch: docs/term-transcription
 title: "docs: 「전사」를 쉬운 말로 바꿈"
