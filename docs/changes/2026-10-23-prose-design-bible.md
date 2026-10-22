@@ -1,4 +1,5 @@
 ---
+pr: 374
 date: 2026-10-23
 branch: docs/prose-design-bible
 title: "docs: 디자인 시스템과 본문 데이터 문서의 문장 정리"
