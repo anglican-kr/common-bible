@@ -116,7 +116,7 @@ src/liturgical_psalter.py ← 전례시편 · 송가 — liturgical/psalter · c
         │  books.json에 lps · cant 추가 (→ 75권, division "liturgical")
         ▼
 liturgical/*.py           ← 전례독서 · 연중 주간 · 본기도 · 교회력 정의 표 · 설·추석 · 성인 공통 (ADR-036 · 037)
-        │  lectionary/*.json (11개 — 캘린더 묶음 다섯 · 전례독서 묶음 넷 · 지역 축일 · 전례독서 검색 색인)
+        │  lectionary/*.json (12개 — 캘린더 묶음 다섯 · 전례독서 묶음 다섯 · 지역 축일 · 전례독서 검색 색인)
         ▼
 scripts/gen_manifests.py  ← 콘텐츠 해시 매니페스트 (ADR-021)
            bible-manifest.json (bible/ · 검색 청크 셋 · lectionary/)
