@@ -49,13 +49,16 @@ const KI_TEXT = fs.readFileSync(rel("docs/known-issues.md"), "utf8");
 const AREAS = fs.readdirSync(rel("docs/areas")).filter((f) => f.endsWith(".md") && f !== "README.md").sort();
 const AREA_TEXT = Object.fromEntries(AREAS.map((f) => [`areas/${f}`, fs.readFileSync(rel(`docs/areas/${f}`), "utf8")]));
 
-// 정의 — 영역 문서의 `### pitfalls §N — 제목` · `- **known-issues §N.m** …`, 그리고 known-issues.md 에 남은 번호 붙은 항목.
+// 정의 — 영역 문서의 `### pitfalls §N — 제목`, 이슈는 항목 `- **known-issues §N.m** …` 이나 여러 문단이면
+// 제목 `### known-issues §N.m — 제목`(절 통째로면 `§N`). known-issues.md 에 남은 번호 붙은 항목도 정의다.
+const ISSUE_ID = String.raw`\d+(?:\.\d+)?`;
 const DEFS = [];
 for (const [file, t] of Object.entries(AREA_TEXT)) {
   for (const m of t.matchAll(/^### pitfalls §(\d+) — /gm)) DEFS.push({ kind: "pitfalls", id: m[1], file });
-  for (const m of t.matchAll(/^- \*\*known-issues §(\d+\.\d+)\*\* /gm)) DEFS.push({ kind: "known-issues", id: m[1], file });
+  for (const m of t.matchAll(new RegExp(String.raw`^(?:- \*\*known-issues §(${ISSUE_ID})\*\* |### known-issues §(${ISSUE_ID}) — )`, "gm")))
+    DEFS.push({ kind: "known-issues", id: m[1] ?? m[2], file });
 }
-for (const m of KI_TEXT.matchAll(/^- \*\*known-issues §(\d+\.\d+)\*\* /gm))
+for (const m of KI_TEXT.matchAll(new RegExp(String.raw`^- \*\*known-issues §(${ISSUE_ID})\*\* `, "gm")))
   DEFS.push({ kind: "known-issues", id: m[1], file: "known-issues.md" });
 
 // 대장 — coding-pitfalls.md 는 절 제목 아래 「→ [areas/x.md](areas/x.md)」 한 줄, known-issues.md 는 「- §15.1 · §15.3 → [areas/x.md](…)」.
@@ -66,8 +69,10 @@ cpHeads.forEach((h, i) => {
   const ptr = /^→ \[(areas\/[\w-]+\.md)\]/m.exec(body);
   if (ptr) REGISTRY.pitfalls.set(h[1], ptr[1]);
 });
-for (const m of KI_TEXT.matchAll(/^- (§\d+\.\d+(?:\s*·\s*§\d+\.\d+)*)\s*→\s*\[(areas\/[\w-]+\.md)\]/gm))
-  for (const id of m[1].match(/\d+\.\d+/g)) REGISTRY["known-issues"].set(id, m[2]);
+for (const m of KI_TEXT.matchAll(
+  new RegExp(String.raw`^- (§${ISSUE_ID}(?:\s*·\s*§${ISSUE_ID})*)\s*→\s*\[(areas\/[\w-]+\.md)\]`, "gm"),
+))
+  for (const id of m[1].match(/\d+(?:\.\d+)?/g)) REGISTRY["known-issues"].set(id, m[2]);
 
 // ── 1. 옛 번호 참조 ──
 
@@ -95,6 +100,7 @@ test("「pitfalls §N」 「known-issues §N」 참조가 지금 문서의 절�
 const RETIRED = new Map([
   ["docs/worklog.md", "2026-09-20 은퇴(#331) — pitfalls §17 · §7 이 이력으로 언급"],
   ["docs/prd.md", "2026-10-22 삭제(#368) — architecture.md §1 이 출처로 언급"],
+  ["docs/status.md", "2026-10-23 영역 문서로 나뉘어 삭제 — 완료된 ADR · 검토 문서의 점검 목록 · 도구 예시가 이력으로 언급"],
 ]);
 // 날짜 · 번호 자리표시(`docs/archive/audit/YYYY-MM-DD-hhmmss.md`)는 실제 경로가 아니다.
 const PLACEHOLDER = /YYYY|hhmmss|NNN/;
@@ -200,7 +206,7 @@ const globRe = (g) =>
   new RegExp(`^${g.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*\*/g, "\0").replace(/\*/g, "[^/]*").replace(/\0/g, ".*")}$`);
 const JS_FILES = FILES.filter((f) => f.startsWith("js/"));
 
-test("영역 문서의 「소유 코드:」 glob 이 파일을 고르고, 두 영역이 같은 파일을 소유하지 않는다", () => {
+test("모든 js/ 파일을 정확히 한 영역 문서가 소유한다 — 「소유 코드:」 glob 은 파일을 고르고, 두 영역이 겹치지 않는다", () => {
   const bad = [];
   const owners = new Map();
   for (const [file, t] of Object.entries(AREA_TEXT)) {
@@ -212,6 +218,7 @@ test("영역 문서의 「소유 코드:」 glob 이 파일을 고르고, 두 �
     }
   }
   for (const [f, areas] of owners) if (areas.length > 1) bad.push(`${f}: ${areas.join(" · ")} 가 함께 소유한다`);
+  for (const f of JS_FILES) if (!owners.has(f)) bad.push(`${f}: 어느 영역 문서도 소유하지 않는다 — 알맞은 영역의 「소유 코드:」에 더한다`);
   assert.ok(JS_FILES.length > 30, "js/ 파일 목록을 읽지 못했다");
   assert.deepEqual(bad, [], bad.join("\n"));
 });

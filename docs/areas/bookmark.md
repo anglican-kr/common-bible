@@ -96,3 +96,7 @@
   - 기본 이름을 만드는 식이 세 곳에 따로 있다(`bookmark-modals.js openSaveModal` · `openMergeDialog`, `bookmark-core.js migrateLegacyBookmark`). 고칠 때 함수 하나로 모으는 편이 pitfalls §38의 규칙(옮기는 함수는 하나)과 맞다.
   - 고치면 ADR-010 「저장 · 병합 · 확인 모달」이 지금 동작으로 적은 「사용자가 고친 제목도 다시 짓는다」와, 「검토한 대안 — 옛 기본 이름은 그대로 둔다」의 근거(「합치기도 이미 제목을 다시 짓는다」)도 함께 고친다.
   - 사용자가 고친 제목에 합치는 경우의 테스트가 없다. `tests/e2e/test_bookmark.py`의 `test_merge_into_pre205_bookmark_keeps_its_verses`는 기본 이름이 합친 범위(「이사 10:1,16」)로 바뀌는 경우만 본다.
+
+### known-issues §21 — 모바일 북마크 드로어의 바텀시트 코드 정리 (2026-10-22)
+
+- **북마크 드로어의 바텀시트 형태가 거의 쓰이지 않는다.** ADR-032 이행(2026-06-06, #210) 때 이 형태를 데스크톱에서 화면을 줄였을 때만 쓰는 코드로 보고, 지울지는 제품 결정으로 미뤘다. `js/app/bookmark.js`가 `attachSheetDrag`로 끌기 핸들을 붙인다. 사용자가 2026-10-22에 정리하기로 했다. **고치는 법**: 휴대폰과 좁은 데스크톱 화면에서 드로어가 실제로 어떤 형태로 열리는지 먼저 확인하고, 쓰이지 않는 경로와 CSS를 지운다. 인용 시트도 `attachSheetDrag`를 쓰므로 팩토리(`js/app/overlay.js`)는 남긴다.
