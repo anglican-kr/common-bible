@@ -1,24 +1,8 @@
 # 공동번역성서 PWA
 
-## 프로젝트 개요
+대한성공회를 위한 공동번역성서 PWA다. 장기적으로 성공회 교회력, 성무일과, 기도서까지 담는 전례 앱으로 넓힌다(Phase 1 성경 읽기 → 2 기도서 → 3 교회력 → 4 성무일과, `docs/architecture.md` §11). 프레임워크 없이 Vanilla JS로 만든 SPA이고, 브라우저가 장별 JSON을 직접 읽어 그리며, 서비스 워커로 오프라인에서도 돈다(ADR-001).
 
-대한성공회를 위한 공동번역성서 PWA. 장기적으로 성공회 교회력, 성무일과, 기도서까지 통합하는 전례 앱으로 확장 예정.
-
-## 아키텍처 결정
-
-- **SPA 방식** (프론트엔드 중심) — ADR: `docs/decisions/001-spa-architecture.md`
-- 프레임워크 없이 Vanilla JS
-- 브라우저가 JSON을 직접 읽어 렌더링
-- 4분할 저장소 — ADR-020 (앱·데이터·오디오·서버)
-
-## 기술 스택
-
-- Frontend: HTML, CSS, Vanilla JavaScript
-- Data: JSON (장별 분리) — `common-bible-data` 서브모듈에서 제공
-- Audio: mp3 (LFS) — `common-bible-audio` nested 서브모듈에서 제공
-- Offline: Service Worker
-
-## 저장소 토폴로지 (ADR-020)
+## 저장소 (ADR-020)
 
 | 저장소                                 | 가시성 | 역할                                                               |
 | -------------------------------------- | ------ | ------------------------------------------------------------------ |
@@ -27,128 +11,58 @@
 | `anglican-kr/common-bible-audio`       | 비공개 | 장별 mp3 (Git LFS)                                                 |
 | `anglican-kr/common-bible-server`      | 비공개 | nginx 설정(BFF·보안 헤더) + 배포 스크립트                          |
 
-서브모듈 토폴로지:
+- 본 저장소의 `data/`에 data 저장소가, 그 안의 `audio/`에 audio 저장소가 서브모듈로 붙는다. clone은 `git clone --recurse-submodules`, 이미 받았으면 `git submodule update --init --recursive`. 서브모듈 운영은 README 「git 서브모듈 운영」.
+- 본 저장소는 공개다. 비밀값과 서버의 약점은 server 저장소에만 적는다.
 
-- 본 저장소가 `data/`에 `common-bible-data` 마운트
-- `common-bible-data` 안의 `audio/`에 `common-bible-audio` nested 마운트
-- clone 시 `git clone --recurse-submodules` 또는 `git submodule update --init --recursive`
+## 문서
 
-## 프로젝트 구조
+작업을 시작하면 [`docs/index.md`](docs/index.md)를 읽고, 맞는 주제 문서(`docs/topics/`)를 코드보다 먼저 연다. 주제 문서에 그 주제의 지금 동작, 결정, 함정, 남은 일이 모여 있다.
 
-최상위 레이아웃만 — **모듈별 역할·라인 수 등 상세 지도는 [`docs/architecture.md`](docs/architecture.md) §4 + 부록 B**.
+| 무엇 | 어디 |
+| --- | --- |
+| 모듈 지도, 영속 데이터, 보안 모델, ADR 인덱스, 파일 빠른 참조 | `docs/architecture.md`(§4 · §5 · §9, 부록 A · B) |
+| 디렉터리 구조, 데이터 파이프라인 그림 | `README.md` |
+| 테스트 규약(명명, 실데이터 · 문서 검사의 예외, e2e 준비) | `tests/README.md` |
+| 문체와 용어, 릴리스 노트의 문체 | `docs/writing.md` |
+| 커밋 · PR · 리뷰 · 릴리스의 세부, 스크립트 · 도구 · 훅 · CI | `docs/workflow.md` |
+| 디자인의 권위 | `DESIGN.md` |
 
-- 루트 — `index.html` / `privacy.html` / `sw.js` / `sw-version.js` / `manifest.webmanifest` / `version.json` / `tsconfig.json` + `tsconfig.worker.json` (ADR-012). `sw-version.js`는 `release.py`가 갱신하며 sw.js가 importScripts로 가져와 SHELL_CACHE 이름을 파생 (ADR-021).
-- `js/` — 클라이언트 JS. 최상위(app/audio-cache/manifest-sync/search-worker/drive-sync/types.d.ts) + `js/app/` 28개 도메인 모듈 (ADR-018 · ADR-034 · ADR-038 — 목록은 architecture.md §4) + `js/sync/` 5개 동기화 레이어 (ADR-011)
-- `css/style.css` — 메인 스타일
-- `data/` — **서브모듈 `common-bible-data`** 마운트 위치 (73권 JSON `bible/`, 검색 인덱스 4종 `search-{meta,ot,nt,dc}.json`, 콘텐츠 해시 매니페스트 `bible-manifest.json`·`audio-manifest.json` (ADR-021), 오디오 nested 서브모듈 `audio/`, 마크다운 원본 `source/`, Python 파이프라인 `src/`, 데이터 검증 테스트 `tests/`)
-- `scripts/` — `release.py`(version.json + sw-version.js bump + 자동 commit), `changelog.py`(릴리스 노트용 변경 목록 — 앱 git log + data 서브모듈 compare, `--generate-notes` 대체), `serve.py`(SPA-aware 로컬 서버), `generate_splash.py`(iOS 스플래시, ADR-007), `lock_merged_ledgers.sh`(머지된 원장을 로컬에서 읽기 전용으로 잠금 — `npm test` 앞·PR 생성 후 자동, 클론마다 다시), `pr_body.sh`(원장에서 frontmatter를 뺀 PR 본문), `docs_facts_snapshot.py`(교회력 설계 문서 5종 + 보관 문서 + 픽스처의 사실 토큰을 리비전 간 비교 — 문서 리팩터링 PR 의 「사실 변경 0」 증명, `--diff main HEAD`. 다른 문서는 `--docs` · `--kinds general`, 글자 그대로 옮긴 줄은 `--from` · `--into`로 검증)
-- `tools/` — 개발자용 보조 도구(앱이 쓰지 않는다). `booklet/`(「전례독서」 책자 PDF ↔ 엔진 대조 — pypdf 추출 · 2027년 책자 형식의 파서 · 엔진 덤프 · 대조 보고서, README 참조) · `csp/`(CSP 위반 점검 — 릴리스 전에 주요 화면을 실제 브라우저로 돌며 콘솔의 CSP 위반을 모은다, README 참조)
-- `tests/` — e2e(`e2e/`, Playwright, 로컬 전용) + JS 유닛(`unit/`, ADR-013, CI 자동)
-- `docs/` — `architecture.md`(아키텍처 개요·ADR 인덱스), `topics/`(**주제 문서** — 주제마다 지금 동작 · 결정 · 함정 · 남은 일), `known-issues.md`(이슈 번호 대장), `decisions/`(ADR), `design/`(진행 중인 구현 설계서 — 완료되면 `archive/design/` 으로 옮긴다), `reference/`(기도서 등 외부 원문 전사), `archive/`(완료·점-시점 기록 — `design/` 설계 변천 · `audit/` 보안 감사), `index.md`(**진입점** — 작업 유형 → 먼저 읽을 문서), `changes/`(**변경 원장** — 변경 하나에 파일 하나, PR 본문의 원본), `coding-pitfalls.md`(공통 함정 · 작업 방식 교정 · 함정 번호 대장)
-- `assets/` — 아이콘(`icons/`), 스플래시(`splash/`, ADR-007), 설치 안내 3컷(`install-guide/`, ADR-008)
-- `.github/workflows/test.yml` — CI (Node 24 + `node --test`, ADR-013 · 같은 잡에서 타입 검사 `npm run typecheck`, ADR-012 · pull_request 트리거)
-- `.github/workflows/ledger.yml` — CI `Change ledger` (PR 에 `docs/changes/` 원장 파일이 있는지 검사 + 머지된 원장 변경 차단, `sync/` 자동 PR 면제)
-- `.claude/hooks/` — Claude Code 훅: `typecheck-js.sh`(편집 후 tsc) · `verify-on-stop.sh`(Stop 시 유닛) · `e2e-reminder.sh`(Stop 시 e2e 알림) · `pre-pr-ledger.sh`/`post-pr-ledger.sh`(PR 생성 전 원장 게이트 / 생성 후 pr 번호 기입) · `pre-commit-ledger.sh`(머지된 원장 변경 커밋 차단)
+## 지식 베이스 루프
 
-배포·nginx 설정은 `common-bible-server` 저장소(별도 clone).
-데이터 파이프라인은 `common-bible-data` 저장소 내부(서브모듈).
+`docs/`는 작업을 거듭할수록 쌓이는 지식 베이스다. 원자료(`docs/changes/` 변경 원장)와 정리 층(주제 문서, ADR, `known-issues.md`와 `coding-pitfalls.md`의 번호 대장, `writing.md`, `workflow.md`, `index.md`)으로 나뉜다.
 
-## 데이터 파이프라인
-
-마크다운 원본·Python 파이프라인·검증 테스트는 `common-bible-data` 저장소에 있다. 본 저장소에서는 서브모듈 포인터로 잠금된 빌드 산출물(`data/bible/`, `data/search-*.json`, `data/books.json`)을 그대로 사용한다.
-
-```
-data/source/*.md (73권, common-bible-data 서브모듈)
-  → src/parser.py → output/parsed_bible.json
-  → src/split_bible.py → data/bible/{book_id}-{chapter}.json + books.json
-  → src/search_indexer.py → search-{meta,ot,nt,dc}.json
-```
-
-빌드·검증 절차 상세는 `common-bible-data/README.md` 참조.
-
-마크다운 수정 흐름 (ADR-021 이후, 2026-05-23 개정):
-
-1. `common-bible-data` 저장소에서 `source/*.md` 편집 → PR → main 머지
-2. main의 `build.yml` CI 가 자동으로 파이프라인 + 매니페스트 생성 + 자동 커밋백 (validate.yml 가 빌드된 산출물에 대해 재검증)
-3. 앱 저장소의 `sync-data.yml` webhook 이 자동으로 서브모듈 포인터 + `sitemap.xml` 갱신 commit·push (버전 bump 없음)
-4. 사용자가 적절한 시점에 직접 `python scripts/release.py patch` → push + tag + GitHub Release → `deploy.sh dev` → `deploy.sh promote`
-
-## 테스트
-
-### 클라이언트 JS 유닛 테스트 (ADR-013)
-
-Node 자체 테스트 러너 + 자체 vm 하네스. 의존성 0, CI 자동 실행. **1365 케이스 — 1364 통과 · 실데이터 1 skip(데이터 대기 픽스처 — 미결13)** (2026-10-22). 파일 명명 컨벤션: `tests/unit/<source-basename>.test.js`, 한 모듈 = 한 테스트 파일 — **예외 둘**이다(tests/README §1과 같은 규칙). ① **실데이터 의존 케이스** — 공개 CI의 `Unit tests` 잡이 비공개 `data/` 서브모듈을 받지 않으므로, 그 표를 읽어야 하는 케이스는 `tests/unit/<source-basename>.data.test.js`로 갈라 `haveData` skip 가드를 달고 `engine-data.yml`·`sync-data.yml`에서 돌린다(선례 `liturgical-engine.data.test.js` · `lectionary.data.test.js`, 설계서 §7). ② **소스 모듈이 없는 테스트** — 문서·픽스처의 정합성을 보는 `docs-*.test.js` · `liturgical-fixtures.test.js`(픽스처의 관측일 id 실재는 ① 규칙대로 `liturgical-fixtures.data.test.js`로 갈라 두 워크플로에서 돈다). 이들이 함께 쓰는 문서 앵커 추출기는 `tests/unit/docs-anchors.js` — 테스트 파일이 아니라 `harness.js`와 같은 자리의 공용 모듈이다(`*.test.js` 글롭 밖). 내부 영역은 `// ── <영역> ──` 섹션. 상세는 ADR-013.
-
-```bash
-node --test tests/unit/*.test.js                 # 전체 (CI와 동일)
-node --test tests/unit/storage.test.js           # 개별 파일 (소스 basename과 1:1)
-```
-
-### 데이터 파이프라인 테스트 (Level 1-3, ADR-004)
-
-`common-bible-data` 저장소로 이전. 본 저장소 CI에서는 실행하지 않음 — 그 저장소의 `validate.yml` 워크플로우가 push 시 자동 실행한다. 로컬에서 검증 시:
-
-```bash
-cd data && pytest tests/   # 서브모듈 디렉토리에서
-```
-
-### E2E 테스트 (브라우저, 로컬 전용)
-
-```bash
-# 1. 의존성 설치 (최초 1회)
-pip install pytest-playwright
-playwright install chromium
-
-# 2. 개발 서버 실행 (별도 터미널)
-#    SPA-aware 서버를 사용해야 Ctrl+Shift+R(강제 새로고침)이 정상 동작함.
-#    python -m http.server는 /gen/1 같은 History API 경로를 404로 반환하므로 사용하지 말 것.
-python3 scripts/serve.py 8080
-
-# 3. 테스트 실행
-pytest tests/e2e/ -v
-```
-
-e2e 테스트는 서버가 `http://localhost:8080`에 실행 중이어야 합니다.
-CI에서는 실행하지 않으며 로컬에서 기능 개발 후 수동으로 확인합니다.
-
-## 장기 로드맵
-
-Phase 1(성경 읽기) → Phase 2(기도서) → Phase 3(교회력 계산기) → Phase 4(성무일과 자동 생성). 각 단계가 독립 추가 가능하도록 데이터·라우트·검색 인덱스를 책 단위로 분리. 상세는 [`docs/architecture.md`](docs/architecture.md) §11.
+1. **읽기 — 작업을 시작할 때.** index.md에서 주제 문서로 간다. 구현하거나 결정을 바꾸기 전에는 주제 문서의 「결정」이 가리키는 ADR을 확인한다(아래 「ADR 워크플로우」 1). 같은 곳을 건드린 이전 변경은 `git log --format='%h %s' -- <파일>`이나 `grep -ril <키워드> docs/changes/`로 찾는다. 사용자가 이미 확정한 사실을 다시 묻거나 뒤집지 않으려는 단계다.
+2. **쓰기 — PR을 열기 직전.** 원장 하나를 쓰고(요약, 확정 · 근거, 검증, 갱신한 문서; 형식은 `docs/changes/README.md`), 그 파일을 쓰면서 정리 층(주제 문서의 지금 동작, 확정 사실, 함정, 남은 일과 ADR, 번호 대장, `writing.md`, `workflow.md`, index.md) 가운데 갱신할 것이 있는지 판단해 같은 PR에 넣는다. 사용자 교정과 도메인 확정은 PR을 기다리지 말고 **그 자리에서** 날짜 · 근거와 함께 적는다. 한 주제면 그 주제 문서, 여럿이면 `coding-pitfalls.md`, 글쓰기는 `writing.md`, 작업 방식은 `workflow.md`다(`docs/topics/README.md`). `pre-pr-ledger.sh`와 CI `Change ledger`가 원장 없는 PR을 막고, 머지된 원장의 수정은 `pre-commit-ledger.sh`와 같은 CI가 막는다.
+3. **검사와 정리.** `tests/unit/docs-*.test.js`가 번호 대장, 경로, 링크, 주제 문서의 틀, 코드 파일의 소유를 CI에서 본다. 릴리스마다 마지막 정리 이후의 원장을 훑어, index.md가 실제 파일과 맞는지, 완료된 `design/` 문서를 `archive/`로 옮겼는지, 정리 층끼리 모순이 없는지, 200줄을 넘긴 문서를 나눌지 본다. 쌓이기만 하는 문서는 읽히지 않는다.
 
 ## ADR 워크플로우
 
-기능을 구현하거나 수정할 때 다음 순서를 따른다:
+1. **구현 전**: 관련 ADR(`docs/decisions/`, 주제 문서의 「결정」이 가리킨다)을 먼저 확인한다. 기존 결정(채택 이유, 검토한 대안, 데이터 스키마, UI 컴포넌트)과 충돌하지 않게 맥락을 파악한다.
+2. **구현 후**: 구현이 ADR과 달라졌으면 ADR을 갱신한다.
+   - 새로운 결정이면 새 ADR 파일을 만든다(`NNN-이름.md`, 다음 번호).
+   - 기존 결정이 바뀌면 본문을 현재 결론으로 제자리 갱신하고, 버린 선택지는 「검토한 대안」에 날짜 · 이유 · 재검토 조건과 함께 남긴다. 개정 블록 · 취소선 · 「해소/재개/정정」 꼬리표는 쓰지 않는다. 시점 이력은 git과 원장이 맡는다(2026-10-10, 설계서 `docs/design/liturgical-engine.md` §1.4). ADR-001-035의 옛 개정 블록에는 소급하지 않고 그 파일을 손댈 때 따른다.
+3. **구현 PR을 머지할 때**: ADR 상단 `상태` 필드와 주제 문서의 「지금 동작」을 함께 갱신한다. ADR 상태는 `승인됨 — 구현 대기` → `승인됨 — 구현 완료`(날짜 병기 권장)다. 새 ADR을 채택했으면 `docs/architecture.md` 부록 A의 ADR 인덱스에 한 줄을 더한다.
 
-1. **구현 전**: `docs/decisions/` 에서 관련 ADR을 먼저 확인한다.
-   기존 결정(채택 이유, 검토한 대안, 데이터 스키마, UI 컴포넌트 등)과 충돌하지 않도록 맥락을 파악한다.
-2. **구현 후**: ADR에 기술된 내용과 실제 구현이 달라진 부분이 있으면 해당 ADR을 갱신한다.
-   — 새로운 결정 항목이면 새 ADR 파일 생성(`NNN-이름.md`, 다음 번호 이어서)
-   — 기존 결정이 바뀌면 해당 파일의 본문을 현재 결론으로 제자리 갱신하고, 버린 선택지는 「검토한 대안」 절에 날짜·이유·재검토 조건과 함께 남긴다. 개정 블록·취소선·「해소/재개/정정」 꼬리표는 쓰지 않는다 — 시점 이력은 git 과 `docs/changes/` 원장이 맡는다(2026-10-10, 설계서 `docs/design/liturgical-engine.md` §1.4). ADR-001~035 의 옛 개정 블록에는 소급하지 않고 그 파일을 손댈 때 따른다
-3. **구현 PR 머지 시점**: ADR 상단 `상태` 필드와 그 주제 문서(`docs/topics/`)의 「지금 동작」을 함께 갱신한다.
-   — ADR 상태: `승인됨 — 구현 대기` → `승인됨 — 구현 완료` (날짜 병기 권장)
-   — 주제 문서 「지금 동작」에 한 줄 추가 또는 갱신 — "지금 무엇이 동작하는가" 의 권위 출처.
-   — 새 ADR 채택이라면 `docs/architecture.md` 부록 A 의 ADR 인덱스에도 한 줄 추가.
-
-데이터 도메인 ADR(002·003·006)은 분할 후 `common-bible-data` 저장소로 이전 검토 대상 (ADR-020 후속).
+데이터 도메인 ADR(002 · 003 · 006)은 `common-bible-data` 저장소로 옮겨 갔다(2026-05-12). 앱 저장소의 `docs/decisions/`에는 옮긴 곳을 알리는 짧은 문서만 남아 있다.
 
 ## 컨벤션
 
-- 문서: 한국어 기본
-- 영어 · 한국어가 섞인 문장: 영어 단어 뒤의 조사 · 용언은 붙여 쓴다(「`sync.json`을」, 「push되면」) — 뒤가 명사면 띄운다(「HTTP 실패」). 사용자 교정 2026-10-17, coding-pitfalls §31
-- 숫자 구간은 물결표(~) 대신 하이픈: 「44-50」, 「ADR 001-038」 — GitHub 마크다운이 물결표 쌍을 취소선으로 읽는다. 날짜 구간은 「2026-05-10부터 10-17까지」. 사용자 교정 2026-10-17, coding-pitfalls §32
-- 「꼴」을 쓰지 않는다 — 한 낱말이 표기 · 형식 · 구조 · 경우를 함께 맡아 읽기 어렵다. 그 자리의 뜻을 쓴다(문자열을 적는 방식은 「표기」, 값의 모양은 「형식」, 저장소의 모양은 「저장 구조」, 예는 「경우」). 사용자 교정 2026-10-20, coding-pitfalls §36
-- 한국어 문장은 완결된 형태로, 간결하게, 그 분야의 용어로 쓴다. 명사를 가운뎃점(·)과 줄표(—)로 이어 붙이지 않고, 용어를 긴 설명으로 풀지도 않는다. 사용자 교정 2026-10-21, coding-pitfalls §37
-- 코드 주석: **영어·한국어 모두 허용** — 언어는 규칙이 아니라 내용이 정한다.
-  - 코드가 왜 그렇게 도는지(경계·자료구조·성능)는 **영어**가 자연스럽다 — 주변 식별자와
-    같은 어휘를 쓴다.
-  - 도메인의 **근거와 결정 이력**은 **한국어**로 적는다 — 전례 용어가 한국어고, 기도서·
-    사용자 확인 날짜를 남기는 자리라 문서 언어를 따라야 읽힌다.
-  - 규칙에 맞추려고 번역하지 말 것 — 번역하면 근거가 흐려진다.
-- 접근성: WCAG 2.1 AA 준수
+자세한 사례와 용어 목록은 `docs/writing.md`에 있다.
+
+- 문서는 한국어로 쓴다. 한국어 문장은 완결된 형태로, 간결하게, 그 분야의 용어로 쓴다. 명사를 가운뎃점(·)과 줄표(—)로 이어 붙이지 않고, 용어를 긴 설명으로 풀지도 않는다. 사용자 교정 2026-10-21, pitfalls §37
+- 영어 · 한국어가 섞인 문장: 영어 단어 뒤의 조사 · 용언은 붙여 쓴다(「`sync.json`을」, 「push되면」). 뒤가 명사면 띄운다(「HTTP 실패」). 사용자 교정 2026-10-17, pitfalls §31
+- 숫자 구간은 물결표(~) 대신 하이픈으로 쓴다(「44-50」, 「ADR 001-038」). GitHub 마크다운이 물결표 쌍을 취소선으로 읽는다. 날짜 구간은 「2026-05-10부터 10-17까지」. 사용자 교정 2026-10-17, pitfalls §32
+- 「꼴」을 쓰지 않는다. 한 낱말이 표기 · 형식 · 구조 · 경우를 함께 맡아 읽기 어렵다. 그 자리의 뜻을 쓴다(문자열을 적는 방식은 「표기」, 값의 모양은 「형식」, 저장소의 모양은 「저장 구조」, 예는 「경우」). 사용자 교정 2026-10-20, pitfalls §36
+- 직역과 낯선 번역어를 쓰지 않는다(「살아있는 문서」, 「발화」, 「저본」 등). 목록은 `docs/writing.md` 「용어」.
+- 코드 주석은 영어 · 한국어 모두 허용한다. 언어는 규칙이 아니라 내용이 정한다.
+  - 코드가 왜 그렇게 도는지(경계 · 자료구조 · 성능)는 **영어**가 자연스럽다. 주변 식별자와 같은 어휘를 쓴다.
+  - 도메인의 **근거와 결정 이력**은 **한국어**로 적는다. 전례 용어가 한국어고, 기도서 · 사용자 확인 날짜를 남기는 자리라 문서 언어를 따라야 읽힌다.
+  - 규칙에 맞추려고 번역하지 않는다. 번역하면 근거가 흐려진다.
+- 접근성은 WCAG 2.1 AA를 지킨다.
 
 ## 커밋 메시지 규칙
 
-타입은 영어, 내용은 한국어. 예: `feat: 장 내비게이션 드롭다운 구현`
+타입은 영어, 내용은 한국어의 짧은 문구로 쓴다. 예: `feat: 장 내비게이션 드롭다운 구현`. 무엇을 바꿨는지로 쓰고 휘발성 맥락(「리뷰 반영」)은 넣지 않는다(`docs/workflow.md` 「커밋과 PR」).
 
 | 타입       | 언제                               |
 | ---------- | ---------------------------------- |
@@ -164,12 +78,13 @@ Phase 1(성경 읽기) → Phase 2(기도서) → Phase 3(교회력 계산기) �
 
 ## 브랜치 보호 / 작업 흐름
 
-`main` 은 보호 브랜치다 (2026-05-29 적용). 모든 변경은 feature 브랜치 → PR → 머지 흐름을 따른다.
+`main`은 보호 브랜치다(2026-05-29 적용). 모든 변경은 토픽 브랜치 → PR → 머지 흐름을 따른다.
 
-- **직접 push 금지** — 관리자(저장소 소유자) 포함 누구도 검사를 거치지 않은 커밋을 `main`에 push할 수 없다 (`enforce_admins: true`). PR에서 필수 검사를 통과한 head를 그대로 FF push하는 것은 받아들여지지만(#354 · data#33에서 실측) 사용자가 따로 말할 때만 쓴다.
-- **PR 필수** — 필수 검사 `Unit tests`(유닛 `node --test tests/unit/*.test.js` + 타입 검사 `npm run typecheck`)와 `Change ledger`(원장)를 통과해야 머지 가능. 승인자 수는 0이라 솔로 환경에서는 본인 PR 셀프 머지 OK.
-- **머지 방법** — **squash**(사용자 결정 2026-10-17 — 「이제부터는 브랜치를 따서 작업한 건 스쿼시 머지를 하기로 하자」, [[project_merge_policy]]). 저장소 설정이 squash 커밋의 제목을 PR 제목으로(커밋이 하나면 그 커밋 제목), 본문을 커밋 메시지 목록으로 만들고 머지된 브랜치를 지운다. 머지 커밋은 저장소 설정이 막는다. rebase 머지는 쓰지 않는다 — GitHub가 SHA를 새로 쓰고 서명을 벗긴다.
-- **force push / 브랜치 삭제 금지**, PR 리뷰 코멘트 미해결 시 머지 차단.
+- **직접 push 금지.** 관리자(저장소 소유자)를 포함해 누구도 검사를 거치지 않은 커밋을 `main`에 push할 수 없다(`enforce_admins: true`). PR에서 필수 검사를 통과한 head를 그대로 FF push하는 것은 받아들여지지만(#354 · data#33에서 실측) 사용자가 따로 말할 때만 쓴다. `main`에 직접 커밋해 push하면 `protected branch hook declined`로 거부된다. 핫픽스도 짧은 브랜치와 PR로 한다.
+- **PR 필수.** 필수 검사 `Unit tests`(유닛 `node --test tests/unit/*.test.js` + 타입 검사 `npm run typecheck`)와 `Change ledger`(원장)를 통과해야 머지된다. 승인자 수는 0이라 본인 PR을 머지할 수 있다. **머지는 CI가 통과해도 사용자에게 묻고 한다.**
+- **머지 방법은 squash다**(사용자 결정 2026-10-17 — 「이제부터는 브랜치를 따서 작업한 건 스쿼시 머지를 하기로 하자」). 저장소 설정이 squash 커밋의 제목을 PR 제목으로(커밋이 하나면 그 커밋 제목), 본문을 커밋 메시지 목록으로 만들고 머지된 브랜치를 지운다. 머지 커밋은 저장소 설정이 막는다. rebase 머지는 쓰지 않는다. GitHub가 SHA를 새로 쓰고 서명을 벗긴다.
+- **force push와 브랜치 삭제는 금지다.** PR 리뷰 코멘트가 미해결이면 머지가 막힌다.
+- PR 제목은 짧은 문구로 쓰고, PR 본문에는 frontmatter와 제목을 넣지 않는다(pitfalls §30).
 
 작업 표준 흐름:
 
@@ -188,16 +103,17 @@ git diff <topic-branch> main --stat -- $(git diff --name-only main...<topic-bran
 git branch -D <topic-branch>   # squash 커밋은 브랜치 커밋과 이어지지 않는다 — -d는 원격 브랜치가 정리됐으면 거절하고, 남아 있으면 경고만 낸다
 ```
 
-`main` 에 직접 commit 후 push 하면 `protected branch hook declined` 로 거부된다. 핫픽스도 동일 — 짧은 브랜치 + PR 로 통과.
+## 테스트
 
-## 지식 베이스 루프
+- **유닛**(ADR-013, CI 자동): `node --test tests/unit/*.test.js`(CI와 같다), 한 파일은 `node --test tests/unit/<소스 basename>.test.js`. 한 모듈에 테스트 파일 하나이고, 실데이터 의존 케이스와 문서 검사의 예외는 `tests/README.md` §1. 타입 검사는 `npm run typecheck`.
+- **e2e**(Playwright, 로컬 전용): `python3 scripts/serve.py 8080`을 띄우고 `pytest tests/e2e/ -v`. `python -m http.server`는 `/gen/1` 같은 History API 경로를 404로 돌려주고 강제 새로고침도 깨지므로 쓰지 않는다. 처음 한 번 `pip install pytest-playwright`, `playwright install chromium`. 기능을 구현한 뒤에는 유닛과 e2e를 모두 돌려 보고한다.
+- **데이터 파이프라인**(Level 1-3, ADR-004): data 저장소의 `validate.yml`이 push 때 돌린다. 로컬은 `cd data && pytest tests/`.
 
-`docs/` 는 작업을 거듭할수록 쌓이는 지식 베이스다. 원자료 층(`docs/changes/` 변경 원장)과 정리 층(주제 문서 `docs/topics/` · ADR · `known-issues.md` 대장 · `coding-pitfalls.md` · `index.md`)으로 나뉘고, 세 루프가 돌아야 살아 있다.
+## 데이터 수정과 릴리스
 
-1. **읽기 — 작업 시작 시.** [`docs/index.md`](docs/index.md) 를 읽고 표에서 작업 유형에 맞는 문서를 코드보다 먼저 연다. 같은 곳을 건드린 이전 변경은 `grep -ril <키워드> docs/changes/` 로 찾는다. 사용자가 이미 확정한 사실을 다시 묻거나 뒤집지 않기 위한 단계다.
-2. **쓰기 — PR 을 열기 직전.** 원장 파일 하나를 쓰고(요약 · 확정·근거 · 검증 · 갱신한 문서) 커밋한 뒤 `gh pr create --body-file` 로 연다. 그 파일을 쓰면서 정리 층 다섯 곳 중 갱신할 것이 있는지 판단해 같은 PR 에 넣는다. 사용자 교정과 도메인 확정은 PR 을 기다리지 말고 **그 자리에서** 함정으로 날짜·근거와 함께 적는다 — 한 주제면 그 주제 문서, 여럿이면 `coding-pitfalls.md`(`docs/topics/README.md`). `.claude/hooks/pre-pr-ledger.sh` 와 CI `Change ledger` 가 원장 없는 PR 을 막고, 머지된 원장의 수정은 `pre-commit-ledger.sh`·같은 CI 가 막는다.
-3. **정리 — 릴리스마다.** 마지막 정리 이후의 원장 파일을 훑어 `index.md` 행·훅이 실제 파일과 맞는지, 완료된 `design/` 문서를 `archive/` 로 옮겼는지, 정리 층끼리 모순이 없는지, 200줄을 넘긴 페이지를 나눌지 점검한다. 쌓이기만 하는 문서는 읽히지 않는다.
+마크다운 원본, Python 파이프라인, 데이터 검증 테스트는 `common-bible-data` 저장소에 있고, 본 저장소는 서브모듈 포인터로 잠근 빌드 산출물을 그대로 쓴다. 배포와 nginx 설정은 `common-bible-server` 저장소에 있다.
 
-## 현재 상태
-
-"지금 무엇이 동작하는가"의 권위 출처는 주제 문서([`docs/topics/`](docs/topics/))의 「지금 동작」이다. 구현 PR 머지 시 그 주제 문서를 갱신한다(위 ADR 워크플로우 §3). 상세 결정은 각 ADR + [`docs/architecture.md`](docs/architecture.md) 부록 A 인덱스, 변경 단위 기록은 `docs/changes/`(변경 원장), 미해결 이슈는 주제 문서의 「남은 일」(번호 대장은 `docs/known-issues.md`).
+1. data 저장소에서 `source/*.md`를 고치고 PR로 main에 머지한다.
+2. main의 `build.yml`이 파이프라인과 매니페스트를 다시 만들고, 같은 실행 안에서 산출물을 검증(ADR-004)한 뒤 자동으로 커밋한다.
+3. 앱 저장소의 `sync-data.yml`이 서브모듈 포인터와 `sitemap.xml`을 자동으로 올린다(버전 bump 없음).
+4. 사용자가 정한 때 `python scripts/release.py patch` → push + tag + GitHub Release → `deploy.sh dev` → `deploy.sh promote`(태그와 릴리스 노트의 규칙은 `docs/workflow.md` 「릴리스」).

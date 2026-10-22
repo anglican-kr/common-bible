@@ -23,7 +23,7 @@
 
 ## 1. 유닛 테스트 — `tests/unit/`
 
-순수 JS 로직을 Node 자체 테스트 러너 + 자체 `vm` 하네스로 검증한다. 의존성 0, CI가 PR마다 자동 실행. 한 모듈 = 한 테스트 파일(`<소스이름>.test.js`). 상세 규약은 [ADR-013](../docs/decisions/013-client-js-unit-tests.md). 예외 둘 — 문서를 읽는 테스트(`docs-*.test.js`: 설계서 facts 블록 ↔ 실데이터, 설계 문서 교차 참조, 저장소 문서의 참조 검사)와 픽스처 테스트(`liturgical-fixtures.test.js`: `tests/fixtures/liturgical/` — 교회력 엔진 실제 연도 기대값의 **정본**, 스키마는 그 README · 설계서 §1.4). 이들이 함께 쓰는 문서 앵커 추출기는 `unit/docs-anchors.js` 에 한 벌만 둔다(`harness.js` 처럼 `*.test.js` 글롭 밖의 공용 모듈) — 사본을 두면 곧 어긋난다. 픽스처의 관측일 id 가 실데이터에 실재하는지는 `liturgical-fixtures.data.test.js` 가 `engine-data.yml`·`sync-data.yml` 에서 본다.
+순수 JS 로직을 Node 자체 테스트 러너 + 자체 `vm` 하네스로 검증한다. 의존성 0, CI가 PR마다 자동 실행. 한 모듈 = 한 테스트 파일(`<소스이름>.test.js`). 실데이터(`data/`의 표)를 읽어야 하는 케이스는 `<소스이름>.data.test.js`로 갈라 `haveData` skip 가드를 달고, `engine-data.yml`과 `sync-data.yml`에서 돌린다. 공개 CI의 `Unit tests` 잡은 비공개 `data/` 서브모듈을 받지 않기 때문이다(선례 `liturgical-engine.data.test.js` · `lectionary.data.test.js`, 설계서 §7). 테스트 파일 안은 `// ── <영역> ──` 주석으로 구역을 나눈다(ADR-013). 상세 규약은 [ADR-013](../docs/decisions/013-client-js-unit-tests.md). 예외 둘 — 문서를 읽는 테스트(`docs-*.test.js`: 설계서 facts 블록 ↔ 실데이터, 설계 문서 교차 참조, 저장소 문서의 참조 검사)와 픽스처 테스트(`liturgical-fixtures.test.js`: `tests/fixtures/liturgical/` — 교회력 엔진 실제 연도 기대값의 **정본**, 스키마는 그 README · 설계서 §1.4). 이들이 함께 쓰는 문서 앵커 추출기는 `unit/docs-anchors.js` 에 한 벌만 둔다(`harness.js` 처럼 `*.test.js` 글롭 밖의 공용 모듈) — 사본을 두면 곧 어긋난다. 픽스처의 관측일 id 가 실데이터에 실재하는지는 `liturgical-fixtures.data.test.js` 가 `engine-data.yml`·`sync-data.yml` 에서 본다.
 
 ```bash
 node --test tests/unit/*.test.js          # 전체 (CI와 동일)

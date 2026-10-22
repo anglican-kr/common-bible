@@ -10,7 +10,7 @@
 // 문서 앵커가 실제로 있다. 전사 오류 — 가장 큰 위험 — 를 기계가 잡을 수 있는 만큼 잡는다.
 //
 // 관측일 id 가 실데이터에 실재하는지는 **liturgical-fixtures.data.test.js** 가 본다 — data/ 는
-// 비공개 서브모듈이라 공개 CI 에 없고, 그 검사는 engine-data.yml·sync-data.yml 에서 돈다(CLAUDE.md 「테스트」).
+// 비공개 서브모듈이라 공개 CI 에 없고, 그 검사는 engine-data.yml·sync-data.yml 에서 돈다(tests/README.md §1).
 
 import test from "node:test";
 import assert from "node:assert/strict";

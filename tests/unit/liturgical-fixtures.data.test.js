@@ -7,7 +7,7 @@
 // 형식 검사(liturgical-fixtures.test.js)는 `d\d{4}-…` 모양만 보므로 오타를 통과시킨다.
 //
 // **공개 저장소의 필수 `Unit tests` 잡에서는 돌지 않는다.** 그 잡은 actions/checkout 을 서브모듈 없이
-// 돌려 `data/` 가 없다(설계서 §7 · CLAUDE.md 「테스트」 예외 ①). 서브모듈을 받는 자리는 둘이다 —
+// 돌려 `data/` 가 없다(설계서 §7 · tests/README.md §1 실데이터 케이스). 서브모듈을 받는 자리는 둘이다 —
 // 엔진 전용 engine-data.yml(머지 직후 main push · workflow_dispatch — `tests/fixtures/liturgical/**` 도
 // 트리거 경로다)과 데이터 동기화 sync-data.yml — 이 파일은 **양쪽에** 등록돼 돈다.
 // 픽스처 로더는 liturgical-fixtures.test.js 와 같은 열 줄을 갖는다(각 테스트 파일이 자기 안에
