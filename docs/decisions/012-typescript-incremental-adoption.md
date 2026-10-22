@@ -52,7 +52,7 @@ ADR-001은 "프레임워크 없는 Vanilla JS"를 선언하고 있고 ADR-005·0
 
 검사에서 빼야 하는 파일만 첫 줄에 `// @ts-nocheck`를 두고, 같은 줄에 이유와 고칠 곳을 적는다(2026-10-17부터 10-18까지 쓴 형식 — `// @ts-nocheck — 타입 오류가 남아 검사에서 뺐다(docs/known-issues.md §7 묶음 ③). …`). 지시문은 파일의 **어떤 문(statement)보다도 앞**에 있어야 TypeScript가 읽는다 — 앞에 주석만 있는 것은 괜찮다. `"use strict";` 뒤에 둔 `// @ts-nocheck`는 무시돼 그 파일이 검사되고 오류가 드러난다(2026-10-17 확인 — `bookmark.js` 11건). 빼는 쪽의 실수가 조용하지 않다.
 
-창 객체 꾸러미(`window.appX = (() => { … return { … }; })()`)는 IIFE에 `@returns {AppX}`(`js/types.d.ts`의 인터페이스)를 단다 — 반환 객체에 인터페이스에 없는 멤버가 있으면, 그것을 구조 분해하는 다른 모듈이 아니라 정의한 자리에서 오류가 난다(helpers · storage · settings-ui · citations · parallels · overlay). 꾸러미가 IIFE가 아니라 객체 리터럴이면 `@type {AppX}`를 단다(bookmark — 2026-10-18, 선언이 실제 객체와 어긋나 있었다).
+`window`에 거는 네임스페이스 객체(`window.appX = (() => { … return { … }; })()`)는 IIFE에 `@returns {AppX}`(`js/types.d.ts`의 인터페이스)를 단다 — 반환 객체에 인터페이스에 없는 멤버가 있으면, 그것을 구조 분해하는 다른 모듈이 아니라 정의한 자리에서 오류가 난다(helpers · storage · settings-ui · citations · parallels · overlay). 네임스페이스 객체가 IIFE가 아니라 객체 리터럴이면 `@type {AppX}`를 단다(bookmark — 2026-10-18, 선언이 실제 객체와 어긋나 있었다).
 
 ### 도메인 타입 단일 출처
 
@@ -65,7 +65,7 @@ ADR-001은 "프레임워크 없는 Vanilla JS"를 선언하고 있고 ADR-005·0
 - GIS 응답: `TokenResponse`, `IdCredentialResponse`(부분 응답 허용 케이스 명시)
 - 읽기 · 데이터: `ReadingPosition`(`chapter` 는 `number | "prologue"`), `BookEntry` · `BooksData` · `BibleChapter` · `BibleVerse` · `BibleVerseSegment` · `BiblePrologue` — 데이터 모양을 바꿀 때는 파이프라인(`data/src/parser.py` 등)의 필드 타입과 실제 JSON 을 함께 대조한다
 - 라우트: `Route`(`parsePath()` 의 반환 — 뷰마다 하나인 판별 유니온)
-- 창 객체 꾸러미의 인터페이스(`AppHelpers` · `AppStorage` · `AppCitations` …)와 `declare global` 의 전역 함수 · `interface Window`
+- 네임스페이스 객체의 인터페이스(`AppHelpers` · `AppStorage` · `AppCitations` …)와 `declare global` 의 전역 함수 · `interface Window`
 
 다른 모듈은 JSDoc `@typedef {import("../types").Foo} Foo` 로 가져와 사용한다.
 
@@ -88,7 +88,7 @@ ADR-001은 "프레임워크 없는 Vanilla JS"를 선언하고 있고 ADR-005·0
 ## 검증
 
 - `npm run typecheck` — `tsc -p tsconfig.json --noEmit` + `tsc -p tsconfig.worker.json --noEmit`, 0 error. CI 「Unit tests」 잡(`.github/workflows/test.yml`)과 로컬 편집 훅이 돌린다.
-- 설정 · 꾸러미 반환 타입을 바꿀 때는 타입 오류를 일부러 하나 넣어 `npm run typecheck` 가 그 파일에서 잡는지 본다.
+- 설정이나 네임스페이스 객체의 반환 타입을 바꿀 때는 타입 오류를 일부러 하나 넣어 `npm run typecheck` 가 그 파일에서 잡는지 본다.
 - 브라우저 동작: 변경 없음 (원본 `.js` 로드, JSDoc은 주석)
 - 사각지대: 모듈에서 `import` 를 빠뜨려도 그 이름이 전역으로 선언돼 있으면 통과한다 — 로드 스모크 · e2e 의 몫이다(`tests/README.md` §2, ADR-019).
 

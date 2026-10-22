@@ -438,7 +438,7 @@ npx tsc -p tsconfig.worker.json --noEmit
 
 | 종류                                                                         | 위치                                         | 원본 필요?                               | CI?              | 무엇을 보호하는가                                                                                                                            |
 | ---------------------------------------------------------------------------- | -------------------------------------------- | ---------------------------------------- | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| **클라이언트 JS 유닛** ([ADR-013](decisions/013-client-js-unit-tests.md))    | `tests/unit/*.test.js`                       | ❌                                       | ✅ (앱 저장소)   | sync 레이어(상태 머신·PKCE 등) + app 레이어(storage·helpers·install·search·bookmark·views 순수 영역) + 교회력 엔진 · 전례독서 뷰 모델 — 케이스 수는 CLAUDE.md 「테스트」가 정본. DOM-heavy 영역은 e2e가 책임 |
+| **클라이언트 JS 유닛** ([ADR-013](decisions/013-client-js-unit-tests.md))    | `tests/unit/*.test.js`                       | ❌                                       | ✅ (앱 저장소)   | sync 레이어(상태 머신·PKCE 등) + app 레이어(storage·helpers·install·search·bookmark·views 순수 영역) + 교회력 엔진 · 전례독서 뷰 모델 — 케이스 수는 `tests/README.md`가 정본. DOM-heavy 영역은 e2e가 책임 |
 | **Level 1 완전성** ([ADR-004](decisions/004-data-pipeline-test-strategy.md)) | `data/tests/test_completeness.py` (서브모듈) | ❌                                       | ✅ (data 저장소) | 1328개 장 파일·구조 누락                                                                                                                     |
 | **Level 2 절 순서**                                                          | `data/tests/test_ordering.py`                | ❌ (`fixtures/verse_sequence.json` 사용) | ✅ (data 저장소) | 파이프라인 변경 시 절 순서 회귀                                                                                                              |
 | **Level 3 스냅샷**                                                           | `data/tests/test_snapshots.py`               | ❌                                       | ✅ (data 저장소) | cross-chapter 재배치 등 특수 케이스                                                                                                          |
@@ -474,7 +474,7 @@ python scripts/release.py patch                       # 또는 minor / major / X
 
 매 swap·promote·rollback 직후 자동 검증 9종(`/version.json` 버전 일치·`/sw.js` 200+Content-Type·`/index.html` 200+ETag·`/data/books.json` · `/sw-version.js` · 매니페스트 2종 · 교회력 · 전례독서 묶음 하나씩(`lectionary/sanctoral.json` · `lectionary/eucharist-readings.json`) 200)이 실행되고, 실패 시 manual rollback 안내 출력. zip에 넣을 경로는 `scripts/deploy-manifest.txt`가 정하고, 목록의 항목이 없으면 `build-deploy.sh`가 멈춘다 — 목록에 없는 새 경로는 검사되지 않으므로 데이터 디렉터리를 더하면 목록도 고친다. 4개 보호 심볼릭(dev·bible·dev-previous·bible-previous) + `BUILD_RETENTION`(기본 3)개를 넘는 옛 빌드 디렉터리는 자동/확인 후 정리. 자세한 흐름은 `common-bible-server/scripts/deploy.sh` 헤더 주석.
 
-릴리스 순서의 정본은 `CLAUDE.md` 「데이터 파이프라인」 4번(`release.py patch` → push + 태그 + GitHub Release → `deploy.sh dev` → `deploy.sh promote`)이다. main이 보호 브랜치라 버전 커밋은 `release/X.Y.Z` 브랜치에서 PR로 들어가고(예: #286 — 원장이 릴리스 노트 초안), 변경 목록은 `scripts/changelog.py`가 만든다(`--generate-notes` 대체).
+릴리스 순서의 정본은 `CLAUDE.md` 「데이터 수정과 릴리스」 4번(`release.py patch` → push + 태그 + GitHub Release → `deploy.sh dev` → `deploy.sh promote`)이다. main이 보호 브랜치라 버전 커밋은 `release/X.Y.Z` 브랜치에서 PR로 들어가고(예: #286 — 원장이 릴리스 노트 초안), 변경 목록은 `scripts/changelog.py`가 만든다(`--generate-notes` 대체).
 
 업데이트 토스트 흐름:
 

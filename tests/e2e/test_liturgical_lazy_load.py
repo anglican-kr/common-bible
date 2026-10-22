@@ -16,7 +16,7 @@
 
 서비스 워커는 막는다 — 설치가 SHELL_FILES(셋 포함)를 미리 받아 요청 기록을 흐리고, page.route는 서비스 워커가
 처리한 요청을 가로채지 못한다(conftest의 공용 컨텍스트는 막지 않아 따로 둔다). 실데이터(data/ 서브모듈)가 필요하다 —
-로컬 전용(CLAUDE.md 「E2E 테스트」).
+로컬 전용(CLAUDE.md 「테스트」).
 """
 import urllib.parse
 import urllib.request
