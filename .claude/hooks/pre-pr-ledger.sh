@@ -43,6 +43,6 @@ grep -qE '^## 요약' "$f" || deny "원장에 '## 요약' 절이 없습니다: $
 # 4. 코드가 바뀐 PR 이면 '## 갱신한 문서' 절에 항목이 하나 이상 있어야 한다.
 if git diff --name-only "$base...HEAD" | grep -qE '^(js/|css/|index\.html|sw\.js)'; then
   awk '/^## 갱신한 문서/{s=1;next} /^## /{s=0} s && /^- /{found=1} END{exit !found}' "$f" \
-    || deny "코드가 바뀐 PR 입니다. 원장 '## 갱신한 문서' 절에 갱신한 문서(status.md · ADR · known-issues · coding-pitfalls · index.md)를 적거나 '- 없음 — 이유' 를 적으세요: $f"
+    || deny "코드가 바뀐 PR 입니다. 원장 '## 갱신한 문서' 절에 갱신한 문서(영역 문서 docs/areas/ · ADR · known-issues · coding-pitfalls · index.md)를 적거나 '- 없음 — 이유' 를 적으세요: $f"
 fi
 exit 0

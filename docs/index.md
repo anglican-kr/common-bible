@@ -1,35 +1,34 @@
 # docs/ 진입점 — 무엇을 먼저 읽을지
 
-작업을 시작하면 이 파일을 읽고, 아래 표에서 맞는 행의 문서를 **코드보다 먼저** 연다. 이 파일은 60줄 안에 유지한다 — 페이지가 늘면 한 줄 훅만 보태고, 낡은 행은 지운다(정리 루프는 CLAUDE.md「지식 베이스 루프」).
+작업을 시작하면 이 파일을 읽고, 아래 표에서 맞는 영역 문서를 **코드보다 먼저** 연다. 영역 문서 하나에 그 영역의 지금 동작, 결정, 함정, 남은 일이 모여 있다. 결정을 바꿀 때만 영역 문서가 가리키는 ADR을 연다. 이 파일은 60줄 안에 유지한다(정리 루프는 CLAUDE.md 「지식 베이스 루프」).
 
-## 작업 유형 → 먼저 읽을 것
+## 작업 영역 → 영역 문서
 
-| 작업                              | 먼저 읽을 것                                                                                                                                                                   |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 어떤 작업이든                     | 아래 행이 영역 문서(`areas/`)를 가리키면 그 문서부터 읽는다. 아직 옮기지 않은 영역은 `status.md`(지금 동작하는 것) · `known-issues.md`(남은 것) · `coding-pitfalls.md` 의 관련 절 · `grep -ril <키워드> docs/changes/`(같은 곳을 건드린 이전 변경)                  |
-| 라우팅 · 뷰 · 탭 바 · 오버레이    | ADR-009 · 029 · 030 · 031(§5 다시 그린 뒤 포커스) · 032 · 034 · `architecture.md` §4.1 · pitfalls §2 · §5 · §16 · §33(다시 그리는 길에서 `import()`를 기다리지 않는다) · §34(WebKit의 `modulepreload`는 새로 고쳐도 다시 받지 않는다) · §35(주소도 바깥 입력 — 여러 구간의 절 범위는 가져오기와 같은 검사, ADR-040) |
-| Service Worker · 캐시 · 릴리스    | ADR-021 · `architecture.md` §4.6 · §8 · pitfalls §7 · §15 · `scripts/release.py` 헤더 · `tools/csp/README.md`(릴리스 전 CSP 점검)                                                                                            |
-| 검색                              | ADR-005 · 014 · 033 · `architecture.md` §4.2 · `js/search-worker.js` 헤더 주석                                                                                                  |
-| 북마크 · 절 선택 · 모아 읽기      | `areas/bookmark.md` 하나(지금 동작, 결정, 함정, 남은 일이 다 있다). 결정을 바꿀 때만 그 문서가 가리키는 ADR-010 · 035 · 040을 연다                                                                                   |
-| Drive 동기화 · OAuth              | ADR-011 · 017 · `architecture.md` §4.3 · §9 · pitfalls §11 · §12 · §28 · §5 · §29(알림 · 상시 안내 · 문구) · `archive/audit/`                                                    |
-| 설정 · 디자인 시스템 · CSS        | `DESIGN.md`(루트) · ADR-028 · 023 · 025 · pitfalls §8 · §14                                                                                                                      |
-| 오디오                            | ADR-016 · `js/app/audio-player.js` · pitfalls §15                                                                                                                                |
-| 교회력 · 전례독서 · 캘린더        | `reference/liturgical-calendar-rules.md`(기도서 원문 — 알고리즘의 권위) · `design/liturgical-engine.md`(설계 + 미결 목록 — §1.4 정본 지도부터) · ADR-036 · 037 · 038 · `design/liturgical-engine-review.md` · `tests/fixtures/liturgical/README.md`(실제 연도 기대값 정본) · `archive/design/liturgical-engine-booklet-comparison-2026-09.md`(2024~2026 책자·달력 대조 원문 — 점-시점) · 뷰는 ADR-038 §3 「구현」 + `js/app/lectionary.js` 머리 주석 · 캘린더는 ADR-038 §2 「구현」 + `js/app/calendar.js` 머리 주석 |
-| 본문 데이터 · 마크업 · 인용·주석  | ADR-022 · 027 · `common-bible-data` 저장소 README (서브모듈 `data/`)                                                                                                            |
-| 유닛 테스트 · 타입 · 모듈 구조    | ADR-013 · 012(「파일 헤더」 — `js/` 는 기본 검사, 빼는 파일만 첫 줄 `// @ts-nocheck`) · 018 · 019 · `architecture.md` §4 · §6 · §7 · pitfalls §27                                        |
-| 설치 · 스플래시 · 접근성          | ADR-007 · 008 · pitfalls §5 · §10                                                                                                                                                |
-| 문서만                            | 해당 ADR + `archive/README.md`(무엇을 언제 archive 로 옮기나)                                                                                                                   |
-| 작업 방식 · 훅 · CI               | CLAUDE.md「브랜치 보호」「지식 베이스 루프」 · `changes/README.md` · `.claude/hooks/*.sh` 헤더 주석 · pitfalls §17 · §26 · §30 · §31 · §32(작업 방식 교정 — §31 한영 혼용 띄어쓰기 · §32 숫자 구간은 하이픈)                                   |
+| 작업 | 영역 문서 | 함께 볼 것 |
+| --- | --- | --- |
+| 북마크, 절 선택, 모아 읽기 | `areas/bookmark.md` | |
+| Drive 동기화, OAuth | `areas/sync.md` | `archive/audit/`(보안 감사) |
+| 라우팅, 뷰, 탭 바, 오버레이 | `areas/routing.md` | |
+| 서비스 워커, 캐시, 릴리스 | `areas/cache-release.md` | `scripts/release.py` 머리 주석, `tools/csp/README.md`(릴리스 전 CSP 점검) |
+| 검색 | `areas/search.md` | |
+| 오디오 | `areas/audio.md` | |
+| 설정, 디자인 시스템, CSS | `areas/design-system.md` | `DESIGN.md`(루트, 디자인의 권위) |
+| 본문 데이터, 마크업, 인용과 주석 | `areas/bible-text.md` | `common-bible-data` 저장소 README(서브모듈 `data/`) |
+| 교회력, 전례독서, 캘린더 | `areas/liturgical.md` | `design/liturgical-engine.md`(§1.4 정본 지도부터), `reference/liturgical-calendar-rules.md`(기도서 원문, 알고리즘의 권위), `tests/fixtures/liturgical/README.md`(실제 연도 기대값) |
+| 앱 뼈대, 모듈, 타입, 테스트 | `areas/platform.md` | `tests/README.md` |
+| 설치, 런치 스크린, 접근성 | `areas/install-a11y.md` | |
+| 작업 방식, 훅, CI | CLAUDE.md 「브랜치 보호」 「지식 베이스 루프」 | `changes/README.md`, `.claude/hooks/*.sh` 머리 주석, pitfalls §17 · §26 · §29 · §30 · §31 · §32 · §36 · §37 |
+
+여러 영역에 걸치는 함정은 `coding-pitfalls.md`에 전문이 있다(pitfalls §1 · §3 · §4 · §5 · §9 · §10 · §11 · §35, 부록 A · B). 같은 곳을 건드린 이전 변경은 `git log --format='%h %s' -- <파일>`이나 `grep -ril <키워드> docs/changes/`로 찾는다.
 
 ## 페이지 한 줄 훅
 
-- `areas/` — 영역 문서. 작업 영역마다 한 장에 지금 동작, 결정, 함정, 남은 일을 모은다. 틀과 규칙은 `areas/README.md`. 지금은 북마크 영역만 옮겼고(2026-10-22), 나머지 영역은 아직 아래 문서들에 있다.
-- `status.md` — 기능 단위 "지금 무엇이 동작하는가". 구현 PR 머지 시 갱신. 권위 출처.
-- `known-issues.md` — 미해결 이슈·후속 백로그. 해결되면 지우고 원장에 남긴다 — 절이 통째로 비면 그 자리에 노트(왜 지웠나 · 어느 원장)를 두고 번호는 당기지 않는다(pitfalls §26).
-- `coding-pitfalls.md` — 반복된 실수 패턴 38절 + 부록. 코드 실수뿐 아니라 사용자 교정·도메인 확정도 여기에 쌓는다.
+- `areas/` — 영역 문서. 틀과 규칙은 `areas/README.md`. 구현 PR을 머지할 때 그 영역의 「지금 동작」을 갱신한다.
+- `known-issues.md` — 이슈 번호 대장. 번호마다 어느 영역 문서로 옮겼는지, 해소됐는지 적는다. 열린 이슈의 본문은 영역 문서의 「남은 일」에 있다. 절을 비워도 번호는 당기지 않는다(pitfalls §26).
+- `coding-pitfalls.md` — 여러 영역에 걸치는 함정과 작업 방식 교정의 전문, 그리고 영역 문서로 옮긴 함정의 번호 대장.
 - `architecture.md` — 제약 4가지 · 빌드/런타임 모듈 지도 · 영속 데이터 · 보안 모델 · **부록 A ADR 인덱스** · 부록 B 파일 빠른 참조.
-- `decisions/NNN-*.md` — ADR. 상태 필드 + 본문은 현재 결론 — 결정이 바뀌면 제자리를 고치고 버린 선택지는 「검토한 대안」에 날짜·이유·재검토 조건과 함께 남긴다(개정 블록은 001~035 에 남은 옛 형식). 새 결정은 다음 번호.
+- `decisions/NNN-*.md` — ADR. 상태 필드 + 본문은 현재 결론 — 결정이 바뀌면 제자리를 고치고 버린 선택지는 「검토한 대안」에 날짜·이유·재검토 조건과 함께 남긴다(개정 블록은 001-035 에 남은 옛 형식). 새 결정은 다음 번호.
 - `design/` — 진행 중인 구현 설계서(현재: 교회력 엔진 2종). 완료되면 `archive/design/` 으로.
 - `reference/` — 기도서 등 외부 원문 전사. 해석하지 않고 옮긴 것이라 알고리즘 분쟁의 최종 심급.
-- `changes/` — 변경 원장, 변경 하나에 파일 하나(2025-08 이후 전부). PR 본문의 원본. 형식은 `changes/README.md`.
+- `changes/` — 변경 원장. 변경 하나에 파일 하나이고, 2026-09-20부터 있다. PR 본문의 원본이다. 형식은 `changes/README.md`.
 - `archive/` — 완료·점-시점 기록(design 변천 · audit 보안 감사). 현행 정보 아님.

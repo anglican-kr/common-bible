@@ -518,7 +518,7 @@ OAuth 측면 (가장 큰 공격 표면):
 
 ## 11. 장기 로드맵과의 관계
 
-Phase 1(성경 읽기 PWA)은 완성됐고, Phase 3(교회력)은 일부 구현됐다 — 엔진([ADR-037](decisions/037-eucharist-lectionary-data-and-engine.md)) · 전례독서 화면 `/lectionary` · 캘린더 월간 표 `/calendar`([ADR-038](decisions/038-calendar-lectionary-ui.md)). 남은 것은 [`status.md`](status.md)와 ADR-038. 단계들은 **컨텐츠 추가에 가까운 확장**으로 설계되어 있다:
+Phase 1(성경 읽기 PWA)은 완성됐고, Phase 3(교회력)은 일부 구현됐다 — 엔진([ADR-037](decisions/037-eucharist-lectionary-data-and-engine.md)) · 전례독서 화면 `/lectionary` · 캘린더 월간 표 `/calendar`([ADR-038](decisions/038-calendar-lectionary-ui.md)). 남은 것은 [`areas/liturgical.md`](areas/liturgical.md)의 「남은 일」과 ADR-038. 단계들은 **컨텐츠 추가에 가까운 확장**으로 설계되어 있다:
 
 - Phase 2 — **기도서**: 첫 기도서 본문(전례시편 · 송가)은 `source/`가 아니라 `liturgical/psalter` · `liturgical/canticles`의 마크다운과 별도 파서(`src/liturgical_psalter.py` — 계응 구조, data 저장소 ADR-039)로 들어왔다. 두 책은 division `liturgical`로 성서 목록의 구분 탭 밖에 있고, 전례독서 화면이 읽는다. 남은 기도서 본문도 같은 길(별도 원료 · 파서 → 책 단위 JSON)을 따를 수 있다.
 - Phase 3 — **교회력**: 날짜 계산(computus · 절기 · 연중 주차)은 순수 함수지만, 그날이 무슨 날인지 · 품계 · 전례색 · 독서 · 본기도는 data 저장소의 표(`lectionary/` — 캘린더 묶음 다섯 · 전례독서 묶음 다섯)를 읽는다([ADR-036](decisions/036-liturgical-calendar-data-model.md) · 037). 라우트는 `/calendar` · `/lectionary`.
