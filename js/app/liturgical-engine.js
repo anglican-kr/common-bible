@@ -2078,8 +2078,13 @@ function findCollectsIn(lix, cal, resolved) {
 
 /** 캘린더 묶음(§3.5) — 소형 표 다섯, 캘린더 진입 · `resolveDate` 전에. */
 const CALENDAR_FILES = ["sanctoral", "temporal-feasts", "periods", "ordinal-weeks", "kasi-lunar"];
-/** 독서 묶음(§3.5) — 대형 표 넷과 반절 경계 표, 독서 뷰 진입 · `findReadings`/`findCollects`/`findHalfVerse` 전에. */
-const LECTIONARY_FILES = ["eucharist-readings", "eucharist-collects", "commons", "canticles", "half-verses"];
+/** 독서 묶음(§3.5) — 대형 표 넷, 독서 뷰 진입 · `findReadings`/`findCollects` 전에. */
+const LECTIONARY_FILES = ["eucharist-readings", "eucharist-collects", "commons", "canticles"];
+/**
+ * 반절 경계 표(§3.5) — 독서 묶음과 함께 싣되, 받지 못해도 묶음을 막지 않는다. 반절 대신 절 전체를 그리는 것은
+ * 종전 화면이고, 업데이트 뒤 처음 오프라인으로 열면 데이터 캐시에 이 표만 없을 수 있다(리뷰 2026-10-22).
+ */
+const HALF_VERSE_FILE = "half-verses";
 
 /** @param {string} name @returns {Promise<any>} */
 function fetchLectionaryJson(name) {
@@ -2105,13 +2110,19 @@ function preloadCalendar() {
 }
 
 /**
- * 독서 묶음을 싣는다 — 캐시 규칙은 `preloadCalendar` 와 같다(한쪽만 고치면 증상이 절반만 사라진다).
+ * 독서 묶음을 싣는다 — 캐시 규칙은 `preloadCalendar` 와 같다(한쪽만 고치면 증상이 절반만 사라진다). 반절 경계 표만
+ * 실패를 받아들여 빈 표로 세운다. 그때는 promise 를 비워 다음 진입이 다시 받는다 — 지금 화면은 절 전체로 그린다.
  * @returns {Promise<LectionaryIndex>}
  */
 function preloadLectionary() {
-  return (lectionaryPromise ??= Promise.all(LECTIONARY_FILES.map(fetchLectionaryJson))
-    .then(([readings, collects, commons, canticles, halfVerses]) =>
-      (lectionaryIndex = buildLectionaryIndex({ readings, collects, commons, canticles, halfVerses })))
+  return (lectionaryPromise ??= Promise.all([
+    ...LECTIONARY_FILES.map(fetchLectionaryJson),
+    fetchLectionaryJson(HALF_VERSE_FILE).catch(() => null),
+  ])
+    .then(([readings, collects, commons, canticles, halfVerses]) => {
+      if (halfVerses === null) lectionaryPromise = null;
+      return (lectionaryIndex = buildLectionaryIndex({ readings, collects, commons, canticles, halfVerses }));
+    })
     .catch((e) => { lectionaryPromise = null; throw e; }));
 }
 

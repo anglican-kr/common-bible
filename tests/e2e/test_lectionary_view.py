@@ -596,6 +596,134 @@ def test_half_verses_follow_the_boundary_table(desktop_context):
     # 구간 사이의 상 — 「사도 2:14상, 22-32」: 출처는 「2:14상, 22-32」
     _open(page, "lectionary/2026-04-12")
     assert page.evaluate(_LECT_COPY_SLOT, "first").endswith("\n\n— 사도행전 2:14상, 22-32 (공동번역성서)")
+    # 줄 안에서 자른 상 뒤에 다음 절이 같은 문단으로 이어지면 한 칸을 둔다 — 「사무하 7:18-20상, 24-29」(리뷰 2026-10-22)
+    _open(page, "lectionary/2026-01-29")
+    text = page.locator(".lect-reading[data-slot='first'] article.chapter-text").inner_text().replace("\u2060", "")
+    assert "헤아릴 수 없습니다. 하느님께서는" in text and "종 다윗의 심정을" not in text, text[:200]
+
+
+def test_missing_half_verse_table_draws_whole_verses(browser):
+    """반절 경계 표를 받지 못해도 화면은 열리고, 반절 대신 절 전체를 그린다(리뷰 2026-10-22 — 업데이트 뒤 처음 오프라인으로
+    열면 데이터 캐시에 이 표만 없을 수 있다). 종전에는 표 하나 때문에 전례독서 화면 전체가 실패 화면이 됐다."""
+    ctx = browser.new_context(service_workers="block")
+    page = ctx.new_page()
+    page.route("**/data/lectionary/half-verses.json", lambda route: route.abort())
+    _open(page, "lectionary/2026-03-01")
+    first = page.locator(".lect-reading[data-slot='first'] article.chapter-text")
+    text = first.inner_text().replace("\u2060", "")
+    assert "롯도 함께 떠났다" in text and text.rstrip().endswith("칠십오 세였다."), text[-120:]
+    assert first.locator(".verse-num").evaluate_all(_VERSE_NUMS)[-1] == "4"
+    ctx.close()
+
+
+# 반절 60곳 전부 — 엔진으로 찾은 화면(날짜, 칩 · 세트 · 트랙을 바꾼 쿼리, 슬롯)에서 확인한다. 데이터의 독서가 바뀌면
+# 이 목록도 다시 만든다(그 화면에 반절이 없으면 「verse not drawn」으로 실패한다).
+_HALF_VERSE_VIEWS = [  # (표 키 「책:장:절+a|b」, 날짜, 쿼리, 슬롯)
+    ("1cor:12:31a", "2025-01-26", "", "second"),
+    ("1cor:12:31b", "2026-09-16", "", "first"),
+    ("1cor:2:10b", "2026-09-01", "", "first"),
+    ("1kgs:21:21a", "2025-06-15", "obs=grid%3Aordinary-11-sunday", "first"),
+    ("1sam:24:23a", "2026-01-23", "", "first"),
+    ("2cor:11:21b", "2025-06-20", "", "first"),
+    ("2cor:5:20b", "2025-03-05", "", "second"),
+    ("2kgs:19:21a", "2026-06-23", "", "first"),
+    ("2pet:3:15a", "2026-06-02", "", "first"),
+    ("2sam:7:14a", "2027-07-18", "", "first"),
+    ("2sam:7:20a", "2026-01-29", "", "first"),
+    ("2thess:2:3a", "2026-08-25", "", "first"),
+    ("acts:13:14b", "2025-06-24", "", "second"),
+    ("acts:15:22a", "2025-10-23", "", "first"),
+    ("acts:2:14a", "2026-04-12", "", "first"),
+    ("acts:2:47a", "2025-01-17", "obs=d0117-%EC%95%88%ED%86%A0%EB%8B%88%EC%98%A4&set=3", "first"),
+    ("acts:8:1a", "2025-05-06", "obs=grid%3Aeaster-3-weekday-tue", "first"),
+    ("acts:8:1b", "2025-05-07", "", "first"),
+    ("amos:6:1a", "2025-09-28", "track=2", "first"),
+    ("exod:19:8a", "2026-06-14", "track=2", "first"),
+    ("gen:12:4a", "2026-03-01", "", "first"),
+    ("gen:27:5a", "2025-07-05", "", "first"),
+    ("gen:28:19a", "2026-07-19", "", "first"),
+    ("gen:2:4a", "2025-02-11", "", "first"),
+    ("gen:2:4b", "2025-02-12", "", "first"),
+    ("hag:1:15b", "2025-11-09", "", "first"),
+    ("isa:25:10a", "2025-12-03", "", "first"),
+    ("isa:45:21b", "2026-12-16", "", "first"),
+    ("isa:45:6b", "2026-12-16", "", "first"),
+    ("isa:50:9a", "2025-04-13", "", "first"),
+    ("isa:56:3a", "2033-12-16", "", "first"),
+    ("isa:58:9a", "2025-03-07", "", "first"),
+    ("isa:58:9b", "2025-03-08", "", "first"),
+    ("isa:63:19b", "2026-11-29", "", "first"),
+    ("jas:4:8a", "2027-09-19", "", "second"),
+    ("jer:32:3a", "2025-09-28", "", "first"),
+    ("job:19:27a", "2025-11-09", "track=2", "first"),
+    ("john:13:31b", "2025-04-17", "", "gospel"),
+    ("john:16:4b", "2027-05-16", "", "gospel"),
+    ("john:19:16b", "2025-04-18", "set=2", "gospel"),
+    ("john:21:19b", "2025-12-27", "", "gospel"),
+    ("josh:24:2a", "2027-08-22", "track=2", "first"),
+    ("josh:24:3a", "2026-11-08", "", "first"),
+    ("lps:104:35b", "2025-06-08", "", "psalm"),
+    ("luke:15:11b", "2025-03-22", "", "gospel"),
+    ("mal:3:20a", "2025-10-09", "", "first"),
+    ("mark:6:6a", "2025-02-05", "", "gospel"),
+    ("mic:5:4a", "2027-12-19", "", "first"),
+    ("num:14:1a", "2025-08-06", "obs=grid%3Aordinary-18-weekday-wed", "first"),
+    ("num:21:4b", "2025-09-14", "obs=d0914-%EC%84%B1-%EC%8B%AD%EC%9E%90%EA%B0%80%EC%9D%98-%EB%82%A0", "first"),
+    ("phil:3:4b", "2025-04-06", "", "second"),
+    ("rev:1:4b", "2027-11-21", "", "second"),
+    ("rev:21:6a", "2027-10-31", "obs=d1101-%EB%AA%A8%EB%93%A0-%EC%84%B1%EC%9D%B8%EC%9D%98-%EB%82%A0", "second"),
+    ("rom:11:2a", "2026-08-16", "", "second"),
+    ("rom:3:22b", "2026-05-31", "obs=grid%3Aordinary-9-sunday", "second"),
+    ("rom:7:25a", "2026-07-05", "", "second"),
+    ("sir:51:12b", "2027-05-29", "", "first"),
+    ("sir:51:20a", "2027-05-29", "", "first"),
+    ("tob:13:3b", "2025-09-24", "", "psalm"),
+    ("tob:13:6b", "2025-09-24", "", "psalm"),
+]
+
+_HALF_CHECK = """
+async ([key, slot]) => {
+  const [, book, ch, v, half] = /^(\\w+):(\\d+):(\\d+)([ab])$/.exec(key);
+  const table = await (await fetch('/data/lectionary/half-verses.json')).json();
+  const e = table.entries.find((x) => x.bookId === book && x.chapter === +ch && x.verse === +v && x.half === half);
+  const data = await (await fetch(`/data/bible/${book}-${ch}.json`)).json();
+  const verse = data.verses.find((x) => x.number === +v && !x.part && !x.lxx_only && x.chapter_ref == null && x.alt_ref == null && !x.versicle);
+  const lines = (verse.segments || [{ text: verse.text || '' }]).flatMap((s) => s.text.split('\\n')).filter((l) => l !== '');
+  let want = lines.join('');
+  if (!e.whole) {
+    const i = e.line - 1;
+    if (!e.text) want = (half === 'a' ? lines.slice(0, e.line) : lines.slice(i)).join('');
+    else {
+      const p = lines[i].indexOf(e.text);
+      want = half === 'a' ? lines.slice(0, i).join('') + lines[i].slice(0, p + e.text.length) : lines[i].slice(p) + lines.slice(i + 1).join('');
+    }
+  }
+  const norm = (s) => s.replace(/[\\s\\u2060¶◯]/g, '');
+  for (const a of document.querySelectorAll(`.lect-reading[data-slot='${slot}'] article.chapter-text[data-chapter='${ch}']`)) {
+    const spans = [...a.querySelectorAll(`.verse[data-vkey^="${v}/"]`)];
+    if (!spans.length) continue;
+    const num = spans[0].querySelector('.verse-num')?.getAttribute('data-v') || '';
+    const label = e.whole ? '' : (half === 'a' ? '상' : '하');
+    return { ok: norm(spans.map((s) => s.textContent).join('')) === norm(want) && num === `${v}${label}`, num };
+  }
+  return { ok: false, num: 'verse not drawn' };
+}
+"""
+
+
+def test_every_half_verse_follows_the_table(desktop_context):
+    """반절 참조 60곳(전례독서 59 · 성인 공통 1)을 모두 화면에서 그려, 그린 글자가 데이터의 경계 표대로인지와 절 번호의
+    「상」 · 「하」를 본다(사용자 결정 2026-10-22). 로마 3:22하는 「전체」라 번호가 「22」다."""
+    assert len(_HALF_VERSE_VIEWS) == 60
+    page = desktop_context.new_page()
+    bad = []
+    for key, date, query, slot in _HALF_VERSE_VIEWS:
+        _open(page, f"lectionary/{date}" + (f"?{query}" if query else ""))
+        page.wait_for_selector(f".lect-reading[data-slot='{slot}'] article.chapter-text .verse", timeout=20_000)
+        r = page.evaluate(_HALF_CHECK, [key, slot])
+        if not r["ok"]:
+            bad.append((key, date, query, r))
+    assert not bad, bad
 
 
 def test_data_half_verse_numbers_show_printed_letters(desktop_context):

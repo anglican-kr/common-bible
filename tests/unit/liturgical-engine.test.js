@@ -1960,7 +1960,7 @@ test("C-3.4-1 프리로드 전 동기 API 는 명확한 메시지로 throw", () 
   assert.throws(() => e.findHalfVerse("lps", 104, 35, "b"), /preloadLectionary\(\) must be awaited before findHalfVerse\(\)/);
 });
 
-test("C-3.5 반절 경계 표는 독서 묶음과 함께 실리고 「책:장:절+상하」로 찾는다 — 없으면 null(절 전체를 그린다, 사용자 결정 2026-10-22)", async () => {
+test("C-3.5-1 반절 경계 표는 독서 묶음과 함께 실리고 「책:장:절+상하」로 찾는다 — 없으면 null(절 전체를 그린다, 사용자 결정 2026-10-22)", async () => {
   const e = loadEngine(fakeFetch([]));
   await e.preloadLectionary();
   same(plain(e.findHalfVerse("lps", 104, 35, "b")), { bookId: "lps", chapter: 104, verse: 35, half: "b", line: 2, text: null });
@@ -1970,6 +1970,26 @@ test("C-3.5 반절 경계 표는 독서 묶음과 함께 실리고 「책:장:�
   assert.strictEqual(e.findHalfVerse("gen", 12, 40, "a"), null);
   // 표가 비어 있거나 형식이 깨져도 인덱스는 선다 — 조회는 null
   assert.strictEqual(e.buildLectionaryIndex({ ...LEC_TABLES, halfVerses: null }).halfVerses.size, 0);
+});
+
+test("C-3.5-2 반절 경계 표를 받지 못해도 독서 묶음은 선다 — 절 전체로 그리고, 다음 진입에서 다시 받는다(리뷰 2026-10-22 — 업데이트 뒤 처음 오프라인)", async () => {
+  const calls = [];
+  const fail = new Set(["half-verses"]);
+  const e = loadEngine(fakeFetch(calls, fail));
+  await e.preloadCalendar();
+  await e.preloadLectionary();                                   // 거부하지 않는다
+  assert.strictEqual(e.findHalfVerse("lps", 104, 35, "b"), null);  // 빈 표 — 반절 대신 절 전체
+  const r = e.resolveDate("2026-01-25");
+  assert.ok(Array.isArray(e.findReadings(r, r.candidates[0])));    // 독서는 그대로 찾는다
+  assert.strictEqual(vm.runInContext("lectionaryPromise", e), null);  // 다음 진입이 다시 받는다
+  fail.clear();
+  calls.length = 0;
+  await e.preloadLectionary();
+  assert.ok(calls.includes("/data/lectionary/half-verses.json"));
+  assert.strictEqual(e.findHalfVerse("lps", 104, 35, "b").line, 2);
+  calls.length = 0;
+  await e.preloadLectionary();                                   // 다 받았으면 promise 를 캐시한다
+  assert.strictEqual(calls.length, 0);
 });
 
 test("C-3.4-2 동시 프리로드는 파일당 fetch 1회 · 실패한 프리로드는 캐시되지 않고 재시도가 다시 fetch", async () => {
