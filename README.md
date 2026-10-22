@@ -216,6 +216,7 @@ scripts/
   csp_hashes.py         ← index.html CSP 인라인 해시 검사 · 갱신
   generate_splash.py    ← iOS 스플래시 PNG 생성 (cairosvg + Pillow)
   lock_merged_ledgers.sh ← 머지된 변경 원장을 로컬에서 읽기 전용으로
+  pr_body.sh            ← 변경 원장에서 PR 본문 생성 (frontmatter 제외)
   docs_facts_snapshot.py ← 교회력 설계 문서의 사실 토큰을 리비전 간 비교
 tests/
   unit/                 ← 클라이언트 JS 유닛 테스트 (Node --test, ADR-013)

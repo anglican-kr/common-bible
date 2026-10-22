@@ -2,10 +2,8 @@
 pr: 368
 date: 2026-10-22
 branch: docs/cleanup-unused-records
-title: "docs: 쓰지 않는 기록을 정리한다"
+title: "docs: 사용하지 않는 기록 정리"
 ---
-
-# docs: 쓰지 않는 기록을 정리한다
 
 ## 요약
 
@@ -24,6 +22,7 @@ docs 재구성 시리즈의 첫 PR이다. 사용자가 2026-10-22에 「읽지�
 - 즈가리야 2장의 절 번호 의심은 계획과 달리 설계서 미결16이 아니라 known-issues §25에 두었다. 미결16은 축일 이동 날짜의 대조라 주제가 다르고, 설계서는 구조를 테스트가 검사한다.
 - data PR #14 리뷰 후속 여덟 가운데 `_review` 발행은 없어졌고, 추수감사주일의 `commemorate_only`는 엔진이 처리한다. 나머지 여섯과 도미닉 날짜는 data 저장소(`cbae51a`)에 그대로 있음을 확인했다.
 - 절 번호 중복 다섯 곳(욥 32:9 등)이 지금 데이터에도 그대로 있음을 확인했다.
+- 사용자 교정(2026-10-22): 이 PR의 제목과 본문을 사용자가 직접 고쳤다. 「제목은 "문장"이 아닌 간결한 "문구"로, PR 본문에는 frontmatter 사용 금지, 제목을 다시 사용하지 않는게 좋아.」 coding-pitfalls §30에 규칙을 더하고, 원장에서 frontmatter를 뺀 본문을 만드는 `scripts/pr_body.sh`를 두었다. 원장 형식에서도 `# 제목` 줄을 뺐다.
 
 ## 검증
 
@@ -38,8 +37,9 @@ docs 재구성 시리즈의 첫 PR이다. 사용자가 2026-10-22에 「읽지�
 
 - `docs/architecture.md` §1: PRD에서 대상 사용자, 핵심 가치, 제품 원칙을 옮겼다.
 - `docs/known-issues.md`: §20-§25 새 항목, §6, §11, §12에 항목 추가, 지운 문서를 가리키던 §1과 §12의 참조 수정.
-- `docs/coding-pitfalls.md`: §17에 소급 사본 삭제 결정을 적고, §7 사례의 worklog 경로를 고쳤다.
-- `docs/changes/README.md`: 소급 기록 설명과 게이트의 일회성 예외.
+- `docs/coding-pitfalls.md`: §17에 소급 사본 삭제 결정을 적고, §7 사례의 worklog 경로를 고쳤다. §30에 제목은 문구로, PR 본문에는 frontmatter와 제목을 넣지 않는다는 교정을 더했다.
+- `docs/changes/README.md`: 소급 기록 설명, 게이트의 일회성 예외, 원장 형식에서 `# 제목` 줄 삭제, PR 본문을 `scripts/pr_body.sh`로 맞추는 절차.
+- `CLAUDE.md` 「작업 표준 흐름」, `README.md`: `scripts/pr_body.sh` 단계와 목록.
 - `docs/index.md`, `docs/archive/README.md`, `CLAUDE.md`, `README.md`: prd.md와 qa 참조 삭제.
 - ADR-005, 010, 013, 021, 022: 지운 문서를 가리키던 줄만 고쳤다. 옛 개정 블록을 본문에 반영하는 정리는 이 PR에서 하지 않았다(known-issues §24).
 - `docs/archive/design/liturgical-engine-booklet-comparison-2026-09.md`: 지운 원장 대신 PR #327과 #329를 가리킨다.

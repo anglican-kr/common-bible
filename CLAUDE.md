@@ -41,7 +41,7 @@
 - `js/` — 클라이언트 JS. 최상위(app/audio-cache/manifest-sync/search-worker/drive-sync/types.d.ts) + `js/app/` 28개 도메인 모듈 (ADR-018 · ADR-034 · ADR-038 — 목록은 architecture.md §4) + `js/sync/` 5개 동기화 레이어 (ADR-011)
 - `css/style.css` — 메인 스타일
 - `data/` — **서브모듈 `common-bible-data`** 마운트 위치 (73권 JSON `bible/`, 검색 인덱스 4종 `search-{meta,ot,nt,dc}.json`, 콘텐츠 해시 매니페스트 `bible-manifest.json`·`audio-manifest.json` (ADR-021), 오디오 nested 서브모듈 `audio/`, 마크다운 원본 `source/`, Python 파이프라인 `src/`, 데이터 검증 테스트 `tests/`)
-- `scripts/` — `release.py`(version.json + sw-version.js bump + 자동 commit), `changelog.py`(릴리스 노트용 변경 목록 — 앱 git log + data 서브모듈 compare, `--generate-notes` 대체), `serve.py`(SPA-aware 로컬 서버), `generate_splash.py`(iOS 스플래시, ADR-007), `lock_merged_ledgers.sh`(머지된 원장을 로컬에서 읽기 전용으로 잠금 — `npm test` 앞·PR 생성 후 자동, 클론마다 다시), `docs_facts_snapshot.py`(교회력 설계 문서 5종 + 보관 문서 + 픽스처의 사실 토큰을 리비전 간 비교 — 문서 리팩터링 PR 의 「사실 변경 0」 증명, `--diff main HEAD`)
+- `scripts/` — `release.py`(version.json + sw-version.js bump + 자동 commit), `changelog.py`(릴리스 노트용 변경 목록 — 앱 git log + data 서브모듈 compare, `--generate-notes` 대체), `serve.py`(SPA-aware 로컬 서버), `generate_splash.py`(iOS 스플래시, ADR-007), `lock_merged_ledgers.sh`(머지된 원장을 로컬에서 읽기 전용으로 잠금 — `npm test` 앞·PR 생성 후 자동, 클론마다 다시), `pr_body.sh`(원장에서 frontmatter를 뺀 PR 본문), `docs_facts_snapshot.py`(교회력 설계 문서 5종 + 보관 문서 + 픽스처의 사실 토큰을 리비전 간 비교 — 문서 리팩터링 PR 의 「사실 변경 0」 증명, `--diff main HEAD`)
 - `tools/` — 개발자용 보조 도구(앱이 쓰지 않는다). `booklet/`(「전례독서」 책자 PDF ↔ 엔진 대조 — pypdf 추출 · 2027년 책자 형식의 파서 · 엔진 덤프 · 대조 보고서, README 참조) · `csp/`(CSP 위반 점검 — 릴리스 전에 주요 화면을 실제 브라우저로 돌며 콘솔의 CSP 위반을 모은다, README 참조)
 - `tests/` — e2e(`e2e/`, Playwright, 로컬 전용) + JS 유닛(`unit/`, ADR-013, CI 자동)
 - `docs/` — `architecture.md`(아키텍처 개요·ADR 인덱스), `status.md`(구현 현황 — "지금 무엇이 동작하는가"), `known-issues.md`(미해결 이슈·후속 백로그), `decisions/`(ADR), `design/`(진행 중인 구현 설계서 — 완료되면 `archive/design/` 으로 옮긴다), `reference/`(기도서 등 외부 원문 전사), `archive/`(완료·점-시점 기록 — `design/` 설계 변천 · `audit/` 보안 감사), `index.md`(**진입점** — 작업 유형 → 먼저 읽을 문서), `changes/`(**변경 원장** — 변경 하나에 파일 하나, PR 본문의 원본), `coding-pitfalls.md`
@@ -178,8 +178,9 @@ git checkout -b <topic-branch>
 # 작업 + 커밋
 # 원장 작성: docs/changes/<YYYY-MM-DD>-<slug>.md (형식은 docs/changes/README.md) + 커밋
 git push -u origin <topic-branch>
-gh pr create --title "..." --body-file docs/changes/<YYYY-MM-DD>-<slug>.md
+gh pr create --title "..." --body-file docs/changes/<YYYY-MM-DD>-<slug>.md   # 제목은 짧은 문구(pitfalls §30)
 # 훅이 원장에 pr: N 을 적어 준다 → 커밋·push
+bash scripts/pr_body.sh docs/changes/<YYYY-MM-DD>-<slug>.md | gh api -X PATCH repos/anglican-kr/common-bible/pulls/<N> -F body=@-   # 본문에서 frontmatter를 뺀다
 # CI(Unit tests + Change ledger) 통과 · 사용자 확인 후 squash — 제목은 PR 제목 + 번호(REST)
 gh api -X PUT repos/anglican-kr/common-bible/pulls/<N>/merge -f merge_method=squash -f commit_title="<PR 제목> (#<N>)"
 git switch main && git pull --ff-only
