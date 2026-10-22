@@ -154,7 +154,7 @@ let calendarPromise = null;
 export { … };
 ```
 
-공유 타입(`LiturgicalCoord`·`Observance`·`Candidate`·`ResolvedDate` · 본문 조회의 반환 `ReadingGroup`·`CollectOption`·`CandidateCollects`·`HalfVerse`)은 뷰·검색과 함께 쓰므로 `js/types.d.ts` 에 둔다(`BibleChapter` 선례). 엔진 내부 shape(`YearAnchors`·`TransferPass`·`CalendarIndex`·`LectionaryIndex`·본문 레코드)은 파일 안 `@typedef`.
+공유 타입(`LiturgicalCoord`·`Observance`·`Candidate`·`ResolvedDate` · 본문 조회의 반환 `ReadingGroup`·`CollectOption`·`CandidateCollects`·`HalfVerse`)은 뷰·검색과 함께 쓰므로 `js/types.d.ts`에 둔다(`BibleChapter` 선례). 엔진 내부 shape(`YearAnchors`·`TransferPass`·`CalendarIndex`·`LectionaryIndex`·본문 레코드)은 파일 안 `@typedef`.
 
 ### 3.3 마커 블록을 둘로 나눈다 (§6 에서 벗어나는 점 ①)
 
@@ -162,7 +162,7 @@ ADR-037 §6 은 `LITURGICAL_CORE` 블록 하나를 지정했다. 둘로 나눈�
 
 - **`LITURGICAL_CORE`** — 날짜 산술, computus, 오프셋 전개, 절기 스팬, 연중 주차, 주기 산정, 기간 축(§4.10). 외부 입력이 `ordinal-weeks`·`kasi-lunar` 두 표뿐이라 prelude 스텁이 가볍다.
 - **`LITURGICAL_LOOKUP`** — 좌표 폴백 매칭, 후보 집합 조립·정렬, 품계·이동·색 판정. 여기는 표(프리로드가 만든 인덱스)를 전부 인자로 받는다.
-- **`LITURGICAL_PRELOAD`** — fetch · 두 묶음 프리로드(§3.4 · §3.5) · 공개 래퍼(`resolveDate` · `findReadings` · `findCollects` · `findHalfVerse`). 모듈 상태(프리로드 promise · 인덱스)를 읽는 코드라 위 두 블록에 섞지 않는다. 그래도 블록으로 감싸는 이유는 C-3.4-1 · C-3.4-2(프리로드 전 throw · 실패한 promise 비우기 · 동시 진입 fetch 1회)를 vm 하네스로 검증하려면 슬라이스가 있어야 해서다 — `data-fetch.js` 의 `DATA_FETCHING` 블록(fetch 래퍼 + 블록 밖 상태 + 테스트 prelude)이 선례다.
+- **`LITURGICAL_PRELOAD`** — fetch · 두 묶음 프리로드(§3.4 · §3.5) · 공개 래퍼(`resolveDate` · `findReadings` · `findCollects` · `findHalfVerse`). 모듈 상태(프리로드 promise · 인덱스)를 읽는 코드라 위 두 블록에 섞지 않는다. 그래도 블록으로 감싸는 이유는 C-3.4-1 · C-3.4-2(프리로드 전 throw · 실패한 promise 비우기 · 동시 진입 fetch 1회)를 vm 하네스로 검증하려면 슬라이스가 있어야 해서다 — `data-fetch.js`의 `DATA_FETCHING` 블록(fetch 래퍼 + 블록 밖 상태 + 테스트 prelude)이 선례다.
 
 **근거**: 한 블록에 다 넣으면 700줄짜리 슬라이스가 되고, 계산만 검증하고 싶은 테스트도 조회용 표 스텁을 전부 만들어야 한다. `verse-spec.js` 가 이미 `VERSE_SPEC` + `VERSE_SERIALIZE` 두 블록으로 같은 일을 한다. 두 블록은 같은 vm 컨텍스트에 차례로 실행할 수 있어(`bookmark-read.test.js` 가 `VERSE_SPEC` 을 먼저 실행하는 선례) 조회 테스트에서 계산 함수를 진짜로 쓸 수 있다.
 
@@ -217,7 +217,7 @@ function preloadCalendar() {
 
 `local-observances.json` 은 B2 전까지 아예 싣지 않는다 — 본당·교구 오버레이가 없으면 쓸 데가 없다.
 
-`half-verses`(반절 경계 표, 2026-10-22)는 독서 묶음과 함께 받지만, 받지 못해도 묶음을 막지 않는다. 빈 표로 세워 반절 대신 절 전체를 그리고(종전 화면), 프리로드 promise 를 비워 다음 진입이 다시 받는다. §3.4의 「조용히 빈 값을 주지 않는다」에서 벗어나는 유일한 표다. 업데이트 뒤 처음 오프라인으로 열면 데이터 캐시에 이 표만 없을 수 있기 때문이다(PR #365 리뷰).
+`half-verses`(반절 경계 표, 2026-10-22)는 독서 묶음과 함께 받지만, 받지 못해도 묶음을 막지 않는다. 인덱스를 빈 표로 세워 반절 대신 절 전체를 그린다. 묶음 promise는 그대로 캐시하고, 다음 진입마다 이 표만 뒤에서 다시 받는다. 받으면 그다음 그리기부터 반절을 그린다. 큰 표 넷을 다시 받지 않으므로 다시 그리기가 「불러오는 중…」을 비치지 않는다. §3.4의 「조용히 빈 값을 주지 않는다」에서 벗어나는 유일한 표다. 업데이트 뒤 처음 오프라인으로 열면 데이터 캐시에 이 표만 없을 수 있기 때문이다(PR #365 리뷰).
 
 ### 3.6 등록 세 곳 (빠뜨리면 런타임에서 깨진다)
 
