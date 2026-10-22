@@ -99,9 +99,11 @@ ALLOWED_NEW_DEFAULT = [r"^R-\d+(?:\.\d+)?-[a-z0-9-]+$", r"^[TOAW]-\d{4}-\d{2}-\d
 
 # --kinds general — 교회력 밖의 문서에서 사실의 표지가 되는 토큰. 날짜 · 건수 · PR 번호는 위와 같은 정규식을 쓴다.
 GENERAL_PATTERNS: list[tuple[str, re.Pattern[str]]] = [p for p in PATTERNS if p[0] in ("date", "count", "pr")] + [
-    ("adr", re.compile(r"\bADR[- ]?0*(\d{1,3})\b")),
-    ("legacy", re.compile(r"\b((?:coding-)?pitfalls|known-issues)(?:\.md)?`?\s*§\s*(\d+(?:\.\d+)?)")),
-    ("path", re.compile(r"(?<![\w/.:-])((?:js|css|docs|scripts|tests|tools|assets|\.github|\.claude)/[\w./-]*[\w/-])")),
+    # 경계는 `\b` 대신 ASCII 로 판정한다 — 한글은 단어 글자라서 「ADR-035에」의 `\b` 가 맞지 않고,
+    # 경로 끝에 붙은 조사(「docs/status.md에서」)가 경로로 읽혀 조사만 바꿔도 토큰이 바뀐다.
+    ("adr", re.compile(r"(?<![A-Za-z0-9_-])ADR[- ]?0*(\d{1,3})(?!\d)")),
+    ("legacy", re.compile(r"(?<![A-Za-z0-9_-])((?:coding-)?pitfalls|known-issues)(?:\.md)?`?\s*§\s*(\d+(?:\.\d+)?)")),
+    ("path", re.compile(r"(?<![A-Za-z0-9_/.:-])((?:js|css|docs|scripts|tests|tools|assets|\.github|\.claude)/[A-Za-z0-9_./-]*[A-Za-z0-9_/-])")),
     ("code", re.compile(r"`([^`\n]+)`")),
     ("quote", re.compile(r"「([^「」\n]+)」")),
     ("provenance", re.compile(r"사용자\s*(확인|결정|교정|확정|허용)[^\n]{0,24}?((?:19|20)\d{2}-\d{2}-\d{2})")),
