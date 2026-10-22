@@ -173,7 +173,7 @@ PR/push 모두에서 실행. `node --test`는 TAP 출력을 GitHub Actions가 �
 > 3. 남은 미커버 영역(`settings-ui.js` 전체 / `views-routing.js`의 Pull-to-refresh·Audio Player·startScrollTracking / `install.js`의 모달 열기·닫기·슬라이더·buildInstallBody / `bookmark.js`의 drawer·save modal·tree render·drag handle·sheet drag / `search.js`의 시트 드래그·결과 렌더)은 **`tests/e2e/` 시나리오로 보완**한다
 > 4. 유닛 테스트는 향후에도 `node:vm` + 수동 스텁 패턴만 사용. 새 의존성 추가 시 본 ADR을 다시 개정
 >
-> **의제 분리**: e2e 시나리오 추가는 별도 의제(`docs/archive/qa/` 보고서와 함께 `tests/e2e/test_*.py` 신설). 본 ADR은 유닛 테스트 범위에 한정.
+> **의제 분리**: e2e 시나리오 추가는 별도 의제(`tests/e2e/test_*.py` 신설). 본 ADR은 유닛 테스트 범위에 한정.
 
 ## 관련 ADR
 

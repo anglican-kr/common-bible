@@ -178,7 +178,6 @@ in:요한                    → 키워드 없음 → 검색 차단 (안내 표�
 
 ## 참고
 
-- PRD §3.3 검색 기능
 - `src/search_indexer.py` — 인덱스 생성 스크립트 (4개 파일 출력)
 - `search-worker.js` — Web Worker 검색 엔진 (청크 로딩 + progressive search + `in:` 연산자)
 - ADR-001 SPA 아키텍처 (검색 UI 진입 방식: 컴팩트 모달 → 결과 시트 트랜지션)

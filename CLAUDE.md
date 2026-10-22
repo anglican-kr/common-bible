@@ -44,7 +44,7 @@
 - `scripts/` — `release.py`(version.json + sw-version.js bump + 자동 commit), `changelog.py`(릴리스 노트용 변경 목록 — 앱 git log + data 서브모듈 compare, `--generate-notes` 대체), `serve.py`(SPA-aware 로컬 서버), `generate_splash.py`(iOS 스플래시, ADR-007), `lock_merged_ledgers.sh`(머지된 원장을 로컬에서 읽기 전용으로 잠금 — `npm test` 앞·PR 생성 후 자동, 클론마다 다시), `docs_facts_snapshot.py`(교회력 설계 문서 5종 + 보관 문서 + 픽스처의 사실 토큰을 리비전 간 비교 — 문서 리팩터링 PR 의 「사실 변경 0」 증명, `--diff main HEAD`)
 - `tools/` — 개발자용 보조 도구(앱이 쓰지 않는다). `booklet/`(「전례독서」 책자 PDF ↔ 엔진 대조 — pypdf 추출 · 2027년 책자 형식의 파서 · 엔진 덤프 · 대조 보고서, README 참조) · `csp/`(CSP 위반 점검 — 릴리스 전에 주요 화면을 실제 브라우저로 돌며 콘솔의 CSP 위반을 모은다, README 참조)
 - `tests/` — e2e(`e2e/`, Playwright, 로컬 전용) + JS 유닛(`unit/`, ADR-013, CI 자동)
-- `docs/` — `architecture.md`(아키텍처 개요·ADR 인덱스), `status.md`(구현 현황 — "지금 무엇이 동작하는가"), `known-issues.md`(미해결 이슈·후속 백로그), `decisions/`(ADR), `design/`(진행 중인 구현 설계서 — 완료되면 `archive/design/` 으로 옮긴다), `reference/`(기도서 등 외부 원문 전사), `archive/`(완료·점-시점 기록 — `design/` 설계 변천 · `audit/` 보안 감사 · `qa/` e2e 회귀 보고서), `index.md`(**진입점** — 작업 유형 → 먼저 읽을 문서), `changes/`(**변경 원장** — 변경 하나에 파일 하나, PR 본문의 원본), `coding-pitfalls.md`, `prd.md`
+- `docs/` — `architecture.md`(아키텍처 개요·ADR 인덱스), `status.md`(구현 현황 — "지금 무엇이 동작하는가"), `known-issues.md`(미해결 이슈·후속 백로그), `decisions/`(ADR), `design/`(진행 중인 구현 설계서 — 완료되면 `archive/design/` 으로 옮긴다), `reference/`(기도서 등 외부 원문 전사), `archive/`(완료·점-시점 기록 — `design/` 설계 변천 · `audit/` 보안 감사), `index.md`(**진입점** — 작업 유형 → 먼저 읽을 문서), `changes/`(**변경 원장** — 변경 하나에 파일 하나, PR 본문의 원본), `coding-pitfalls.md`
 - `assets/` — 아이콘(`icons/`), 스플래시(`splash/`, ADR-007), 설치 안내 3컷(`install-guide/`, ADR-008)
 - `.github/workflows/test.yml` — CI (Node 24 + `node --test`, ADR-013 · 같은 잡에서 타입 검사 `npm run typecheck`, ADR-012 · pull_request 트리거)
 - `.github/workflows/ledger.yml` — CI `Change ledger` (PR 에 `docs/changes/` 원장 파일이 있는지 검사 + 머지된 원장 변경 차단, `sync/` 자동 PR 면제)
@@ -154,7 +154,7 @@ Phase 1(성경 읽기) → Phase 2(기도서) → Phase 3(교회력 계산기) �
 | ---------- | ---------------------------------- |
 | `feat`     | 새 기능 추가                       |
 | `fix`      | 버그 수정                          |
-| `docs`     | 문서만 변경 (PRD, 원장, ADR 등)    |
+| `docs`     | 문서만 변경 (원장, ADR 등)         |
 | `chore`    | 빌드, 설정, 파일 정리 등           |
 | `data`     | 데이터 서브모듈 포인터 bump        |
 | `style`    | CSS, UI 스타일만 변경              |

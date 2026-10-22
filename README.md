@@ -238,8 +238,7 @@ docs/
   coding-pitfalls.md    ← 반복된 실수 패턴 · 사용자 교정 · 도메인 확정
   design/               ← 진행 중인 구현 설계서 (완료되면 archive/design/ 으로)
   reference/            ← 기도서 등 외부 원문 전사
-  archive/              ← 완료·점-시점 기록 (design 설계 변천 · audit 보안 감사 · qa e2e 회귀 보고서)
-  prd.md                ← 제품 요구사항 문서
+  archive/              ← 완료·점-시점 기록 (design 설계 변천 · audit 보안 감사)
   index.md              ← 진입점: 작업 유형 → 먼저 읽을 문서
   changes/              ← 변경 원장 (변경 하나에 파일 하나, PR 본문의 원본)
 ```
@@ -306,5 +305,4 @@ npm run typecheck   # tsc -p tsconfig.json --noEmit && tsc -p tsconfig.worker.js
 - [아키텍처 개요](docs/architecture.md) — 전체 구조 한눈에
 - [아키텍처 결정 기록](docs/decisions/) — ADR 001-038
 - [구현 현황](docs/status.md) · [알려진 이슈](docs/known-issues.md) · [자주 하는 실수](docs/coding-pitfalls.md) · [디자인 시스템](DESIGN.md)
-- [제품 요구사항](docs/prd.md)
 - [변경 원장](docs/changes/) — 변경 하나에 파일 하나, PR 본문의 원본

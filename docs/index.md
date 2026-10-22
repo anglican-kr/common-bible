@@ -31,5 +31,4 @@
 - `design/` — 진행 중인 구현 설계서(현재: 교회력 엔진 2종). 완료되면 `archive/design/` 으로.
 - `reference/` — 기도서 등 외부 원문 전사. 해석하지 않고 옮긴 것이라 알고리즘 분쟁의 최종 심급.
 - `changes/` — 변경 원장, 변경 하나에 파일 하나(2025-08 이후 전부). PR 본문의 원본. 형식은 `changes/README.md`.
-- `archive/` — 완료·점-시점 기록(design 변천 · audit 보안 감사 · qa 회귀 보고서). 현행 정보 아님.
-- `prd.md` — 제품 요구사항. 로드맵 Phase 1~4 의 출처.
+- `archive/` — 완료·점-시점 기록(design 변천 · audit 보안 감사). 현행 정보 아님.
