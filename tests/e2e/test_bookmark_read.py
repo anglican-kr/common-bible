@@ -63,3 +63,48 @@ def test_broken_escape_in_read_path_shows_empty_view(desktop_context):
     assert fonts and all("Noto Sans KR" in f and "Serif" not in f for f in fonts), fonts
     page.wait_for_selector("#launch-screen", state="detached", timeout=5_000)
     assert not [e for e in errors if "URI" in e], errors
+
+
+# 옛 판(2026-04-25부터 06-06 #205까지)이 저장한 줄 글자 — 앱을 시작할 때 지금 표기로 옮긴다(사용자 결정 2026-10-22,
+# coding-pitfalls §38). main에서는 글자가 둘인 「16aa」 · 「7-8a」 북마크가 모아 읽기에서 사라졌다.
+_PRE205_FOLDER = {
+    "type": "folder", "id": "f-old", "name": "옛 북마크", "expanded": True,
+    "children": [
+        {"type": "bookmark", "id": "bm-isa", "bookId": "isa", "chapter": 10, "verseSpec": "16aa", "label": "이사 10:16aa"},
+        {"type": "bookmark", "id": "bm-nah", "bookId": "nah", "chapter": 1, "verseSpec": "7-8a", "label": "내 묵상"},
+        {"type": "bookmark", "id": "bm-matt", "bookId": "matt", "chapter": 10, "verseSpec": "35a", "label": "마태 10:35a"},
+    ],
+}
+
+
+def _v2_items(page) -> dict:
+    return page.evaluate("() => JSON.parse(localStorage.getItem('bible-bookmarks-v2')).bookmarks.items")
+
+
+def test_pre205_bookmarks_move_at_startup_and_read_in_full(browser):
+    """옛 표기 북마크는 다음 시작 때 지금 표기로 옮겨지고(두 사본 · 수정 시각 그대로), 모아 읽기가 모두 그린다."""
+    ctx = browser.new_context()   # no storage-clearing init script — the reload must keep what was stored
+    page = ctx.new_page()
+    _open_chapter(page, "gen/1")
+    page.evaluate(f"() => window.appStorage.saveBookmarks({json.dumps([_PRE205_FOLDER])})")
+    before = _v2_items(page)
+
+    page.reload()
+    page.wait_for_selector("article.chapter-text .verse")
+    after = _v2_items(page)
+    assert {i: after[i].get("verseSpec") for i in ("bm-isa", "bm-nah", "bm-matt")} == {"bm-isa": "16", "bm-nah": "7-8", "bm-matt": "35"}
+    assert {i: after[i]["label"] for i in ("bm-isa", "bm-nah", "bm-matt")} == {"bm-isa": "이사 10:16", "bm-nah": "내 묵상", "bm-matt": "마태 10:35"}
+    assert {i: n["_u"] for i, n in after.items()} == {i: n["_u"] for i, n in before.items()}, "수정 시각은 그대로"
+    legacy = page.evaluate("() => JSON.parse(localStorage.getItem('bible-bookmarks'))")
+    assert [c["verseSpec"] for c in legacy[0]["children"]] == ["16", "7-8", "35"]
+
+    page.goto(f"{BASE}/read/f-old")
+    page.wait_for_selector(".bookmark-read .reading-passage")
+    page.wait_for_function("() => document.querySelectorAll('.bookmark-read .reading-passage').length === 3")
+    sections = page.evaluate("""() => [...document.querySelectorAll('.bookmark-read .reading-passage')].map((s) => ({
+        ref: s.querySelector('.reading-ref').textContent,
+        vrefs: [...s.querySelectorAll('.verse')].map((v) => v.dataset.vref)}))""")
+    assert [s["ref"] for s in sections] == ["이사 10:16", "나훔 1:7–8", "마태 10:35"]
+    assert sections[0]["vrefs"] == ["16aa", "16ab", "16ba", "16bb"]   # 16ㄱ과 16ㄴ
+    assert sections[1]["vrefs"][0] == "7-8a" and len(sections[1]["vrefs"]) == 7
+    ctx.close()

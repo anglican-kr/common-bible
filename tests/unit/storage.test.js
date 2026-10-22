@@ -865,6 +865,66 @@ test("saveBookmarks: swallows localStorage errors", () => {
   assert.doesNotThrow(() => h.appStorage.saveBookmarks([{ id: "1" }]));
 });
 
+// rewriteBookmarks — 옛 판의 절 범위를 지금 표기로 옮길 때(coding-pitfalls §38). The real sync store
+// (js/sync/store-v2.js) runs in the same context, so the per-item time (_u) is the one it keeps.
+const STORE_V2_SOURCE = fs.readFileSync(path.resolve(__dirname, "../../js/sync/store-v2.js"), "utf8")
+  .replace(/\nexport\s*\{\s*\}\s*;?\s*$/, "");
+function loadStorageWithSyncStore() {
+  const h = loadStorage({ withSyncStoreV2: false });
+  vm.runInContext(STORE_V2_SOURCE, h.ctx, { filename: "store-v2.js" });
+  return h;
+}
+const LEGACY_TREE = [
+  { type: "folder", id: "f", name: "옛 북마크", children: [
+    { type: "bookmark", id: "a", bookId: "isa", chapter: 10, verseSpec: "16aa", label: "이사 10:16aa" },
+    { type: "bookmark", id: "b", bookId: "john", chapter: 3, verseSpec: "16", label: "요한 3:16" },
+  ] },
+  { type: "bookmark", id: "c", bookId: "matt", chapter: 10, verseSpec: "35a", label: "마태 10:35a" },
+];
+const toWholeVerses = (bm) => {
+  if (!/[a-z]/.test(bm.verseSpec ?? "")) return false;
+  bm.verseSpec = bm.verseSpec.replace(/[a-z]+/g, "");
+  return true;
+};
+
+test("rewriteBookmarks: both copies change in place, and the sync store keeps every per-item time (_u)", async () => {
+  const h = loadStorageWithSyncStore();
+  h.appStorage.saveBookmarks(LEGACY_TREE);
+  const before = JSON.parse(h.localStorage._raw["bible-bookmarks-v2"]).bookmarks.items;
+  await new Promise((r) => setTimeout(r, 5));   // a save now would stamp a later time
+  h.appStorage.rewriteBookmarks(toWholeVerses);
+  const legacy = JSON.parse(h.localStorage._raw["bible-bookmarks"]);
+  assert.equal(legacy[0].children[0].verseSpec, "16");
+  assert.equal(legacy[1].verseSpec, "35");
+  const after = JSON.parse(h.localStorage._raw["bible-bookmarks-v2"]).bookmarks.items;
+  assert.deepEqual(Object.fromEntries(Object.entries(after).map(([id, n]) => [id, n.verseSpec])), { f: undefined, a: "16", b: "16", c: "35" });
+  for (const id of Object.keys(before)) assert.equal(after[id]._u, before[id]._u, id);
+  assert.equal(h.driveSync._calls.scheduleUpload, 1, "only the first save woke the sync");
+  // The next ordinary save of the same list finds nothing changed — no new times then either.
+  h.appStorage.saveBookmarks(h.appStorage.loadBookmarks());
+  const resaved = JSON.parse(h.localStorage._raw["bible-bookmarks-v2"]).bookmarks.items;
+  for (const id of Object.keys(before)) assert.equal(resaved[id]._u, before[id]._u, id);
+});
+
+test("rewriteBookmarks: nothing to change writes nothing", () => {
+  const h = loadStorageWithSyncStore();
+  h.appStorage.saveBookmarks(LEGACY_TREE);
+  const raw = { ...h.localStorage._raw };
+  const writes = [];
+  const setItem = h.localStorage.setItem;
+  h.localStorage.setItem = (k, v) => { writes.push(k); setItem.call(h.localStorage, k, v); };
+  h.appStorage.rewriteBookmarks(() => false);
+  assert.deepEqual(writes, []);
+  assert.deepEqual({ ...h.localStorage._raw }, raw);
+});
+
+test("rewriteBookmarks: a broken legacy copy or a store that throws does not escape", () => {
+  const h = loadStorage({ localStorageInit: { "bible-bookmarks": "{not json" } });
+  h.syncStoreV2.loadLocal = () => { throw new Error("boom"); };
+  assert.doesNotThrow(() => h.appStorage.rewriteBookmarks(toWholeVerses));
+  assert.equal(h.localStorage._raw["bible-bookmarks"], "{not json");
+});
+
 test("projectedStorageChars: the list's two copies in place of the current ones, every other key as it is (ADR-040)", () => {
   const h = loadStorage({
     localStorageInit: {

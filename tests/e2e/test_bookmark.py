@@ -256,3 +256,44 @@ def test_drawer_tree_keyboard_navigation(browser):
     )
     assert focused_id == "c1"
     ctx.close()
+
+
+def test_merged_verse_drawn_in_lines_saves_its_range(browser):
+    """여러 줄인 병합 절(나훔 1:7-8, 일곱 줄)은 「7-8」로 저장되고 이름도 「나훔 1:7-8」이다 — main은 첫 번호 「7」로
+    저장했다(known-issues §17)."""
+    ctx = browser.new_context()
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    page = ctx.new_page()
+    _open_chapter_and_wait(page, "nah/1")
+    page.evaluate("() => enterVerseSelectMode('nah', 1)")
+    page.wait_for_selector("#verse-select-bar:not([hidden])")
+    page.locator('.verse[data-vkey="7/7-8c"]').click()
+    page.click("#verse-select-bookmark-btn")
+    page.wait_for_selector("#bm-save-modal:not([hidden])")
+    assert page.locator("#bm-label-input").input_value() == "나훔 1:7-8"
+    page.locator("#bm-save-modal .bm-btn-primary").click()
+    page.wait_for_selector("#bm-save-modal", state="hidden")
+    store = page.evaluate("() => window.syncStoreV2.loadBookmarks()")
+    assert [(b["verseSpec"], b["label"]) for b in store] == [("7-8", "나훔 1:7-8")]
+    ctx.close()
+
+
+def test_merge_into_pre205_bookmark_keeps_its_verses(browser):
+    """옛 표기 「16aa」 북마크(옮기기 전 — 이 페이지를 연 뒤 들어온 경우)에 1절을 합치면 「1,16」 — main은 「1」이 되어
+    16절이 빠졌다(2026-10-22 재현)."""
+    ctx = browser.new_context()
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    page = ctx.new_page()
+    _open_chapter_and_wait(page, "isa/10")
+    seed = [{"type": "bookmark", "id": "bm-old", "bookId": "isa", "chapter": 10, "verseSpec": "16aa", "label": "이사 10:16aa"}]
+    page.evaluate(f"() => window.syncStoreV2.saveBookmarks({json.dumps(seed)})")
+    page.evaluate("() => enterVerseSelectMode('isa', 10)")
+    page.wait_for_selector("#verse-select-bar:not([hidden])")
+    page.click("#v1")
+    page.click("#verse-select-bookmark-btn")
+    page.wait_for_selector("#bm-merge-modal:not([hidden])")
+    page.click("#bm-merge-yes")
+    page.wait_for_selector("#bm-merge-modal", state="hidden")
+    store = page.evaluate("() => window.syncStoreV2.loadBookmarks()")
+    assert [(b["verseSpec"], b["label"]) for b in store] == [("1,16", "이사 10:1,16")]
+    ctx.close()

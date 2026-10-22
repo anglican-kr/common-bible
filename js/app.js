@@ -301,8 +301,9 @@ window.addEventListener("DOMContentLoaded", () => {
     history.replaceState(null, "", location.hash.slice(1));
   }
 
-  // 1. Prioritize UI rendering
-  route().finally(() => {
+  // 1. Prioritize UI rendering — once the stored bookmarks' pre-#205 verse ranges are in today's form, so the first
+  //    view already reads them (coding-pitfalls §38). That move needs the book list, which the first view loads anyway.
+  window.loadBooks().then(() => window.migrateStoredBookmarks()).catch(() => {}).finally(() => route().finally(() => {
     // 2. Load non-critical work after first paint. Each item targets a surface
     //    the user cannot interact with until they explicitly open it (drawers)
     //    or that has no first-paint impact (version label, compact-header
@@ -323,7 +324,7 @@ window.addEventListener("DOMContentLoaded", () => {
       maybeShowInstallNudge();
       if (window.driveSync) window.driveSync.initDriveSync();
     });
-  });
+  }));
 });
 
 // ESM module marker (ADR-019). No runtime effect; signals TypeScript that
