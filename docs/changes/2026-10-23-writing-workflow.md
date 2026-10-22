@@ -1,4 +1,5 @@
 ---
+pr: 372
 date: 2026-10-23
 branch: docs/writing-workflow
 title: "docs: CLAUDE.md 줄이기와 작업 방식 문서"
