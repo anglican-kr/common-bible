@@ -63,7 +63,7 @@ nginx   → POST https://oauth2.googleapis.com/token
 
 각 vhost(`bible.anglican.kr`, `dev.anglican.kr`)가 자기 OAuth 클라이언트의 secret을 nginx 설정에 보관. SPA 번들·git 이력·CDN 어디에도 secret 노출 없음.
 
-예시 설정: [`nginx/oauth-proxy.example.conf`](../../nginx/oauth-proxy.example.conf).
+예시 설정: `common-bible-server` 저장소의 `nginx/oauth-proxy.example.conf`(비공개 저장소라 링크하지 않는다).
 
 ## 검토한 대안
 

@@ -1201,7 +1201,7 @@ declare global {
     // loadBooks() awaits this when present rather than re-issuing the fetch.
     booksPromise?: Promise<BooksData>;
 
-    // App-layer module facades (ADR-018, see docs/design/app-modularization.md).
+    // App-layer module facades (ADR-018, see docs/archive/design/app-modularization.md).
     appHelpers: AppHelpers;
     appOverlay: AppOverlay;
     appStorage: AppStorage;
