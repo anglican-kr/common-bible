@@ -2,12 +2,20 @@
 
 소유 코드: `js/app/settings-ui.js`
 
-설정 화면과, 화면 전체의 토큰 · 글꼴 · 색 · 간격 규칙을 다룬다. 디자인의 권위는 루트의 `DESIGN.md`와 `css/style.css`다.
+설정 화면과, 화면 전체에 쓰는 디자인 규칙(토큰, 글꼴, 색, 간격)을 다룬다. 디자인의 권위는 루트의 `DESIGN.md`와 `css/style.css`다.
 
 ## 지금 동작
 
-- **디자인 시스템 완료** — ADR-028, 2026-06-02. 단일 권위 출처 `DESIGN.md`(루트) + `css/style.css` `:root` 토큰 사다리(색상·반경·elevation·간격 8pt·타이포 rem·컨트롤·모션)에 ad-hoc 값 전면 스냅. 본문 Serif·frosted glass 적용 범위는 의도적 HIG 이탈로 명문화. 테마색(`--theme`)은 절 번호·단락 기호·내비 시그니처(활성 탭/검색 인디케이터)로 한정, 나머지 chrome 은 중립 차콜 동결. 상세·개정 이력은 ADR-028 §7·§9.
-- **읽기 헤더 스크롤 elevation 그림자 완료** — ADR-025, 2026-05-30. `#scroll-sentinel` IntersectionObserver 가 최상단 이탈을 감지해 `#sticky-group` 그림자 페이드 인 + 1px hairline 경계 유지. frosted glass 는 iOS 26 status bar 회피로 의도적 미적용. 상세는 ADR-025.
+- **디자인 시스템** (2026-06-02, ADR-028).
+  - 디자인 값의 권위는 `DESIGN.md`(루트) 하나다. 색, 모서리 반경, 그림자 깊이(elevation), 간격, 글자 크기, 컨트롤 크기, 움직임의 값을 단계마다 이름을 붙여(토큰) `css/style.css`의 `:root`에 두었다. 이 단계 목록을 토큰 사다리라고 부른다. 화면마다 그때그때 적었던 값(ad-hoc 값)은 모두 가장 가까운 토큰으로 맞췄다.
+  - 간격은 8pt 단위로 잡는다. 글자 크기는 rem 단위로 잡아, 설정에서 글자 크기를 바꾸면 함께 커지고 작아진다.
+  - Apple의 디자인 지침(HIG)과 일부러 다르게 한 곳이 둘 있고, 그 이유를 문서에 적어 두었다. 본문은 성경을 읽기 좋도록 Serif 글꼴을 쓴다. 반투명하게 흐린 배경(frosted glass)은 화면 아래쪽에 떠 있는 막대(탭 바, 오디오 바, 절 선택 바)와 검색할 때 본문을 덮는 막(스크림)에만 쓰고, 헤더에는 쓰지 않는다.
+  - 설정에서 고른 테마색(`--theme`)은 절 번호, 단락 기호, 내비게이션에서 지금 고른 탭과 검색을 알리는 표시에만 칠한다. 나머지 단추와 막대(chrome)는 중립적인 차콜색으로 고정했다.
+  - 자세한 내용과 개정 이력은 ADR-028 §7과 §9에 있다.
+- **읽기 화면 헤더의 스크롤 그림자** (2026-05-30, ADR-025).
+  - 본문을 스크롤해 맨 위를 벗어나면 헤더 아래에 그림자가 서서히 나타난다. 헤더 아래의 1px 경계선(hairline)은 그대로 둔다.
+  - 맨 위를 벗어났는지는 IntersectionObserver(요소가 화면에 보이는지 알려 주는 브라우저 기능)가 `#scroll-sentinel`을 지켜보아 알아낸다. 그림자는 `#sticky-group`에 그린다.
+  - 헤더에는 frosted glass를 일부러 쓰지 않았다. iOS 26에서 헤더가 반투명하면 화면 맨 위의 상태 표시줄(status bar) 색이 본문과 어긋나기 때문이다. 자세한 내용은 ADR-025에 있다.
 
 ## 결정
 
@@ -17,46 +25,46 @@
 
 ## 함정
 
-### pitfalls §8 — 폰트/렌더링 특성 오해 — 회귀 사례
+### pitfalls §8 — 글꼴을 불러오는 방식을 잘못 알면, 캐시를 비운 뒤 첫 실행에서만 글꼴이 틀린다
 
-브라우저 폰트 로딩 동작을 잘못 이해해, 캐시 무효화 직후 첫 실행에서만 회귀가 보이는 까다로운 패턴.
+앱은 웹 글꼴을 내려받아 쓴다. 브라우저가 글꼴을 언제 불러오고, 늦게 도착하면 어떻게 하는지를 잘못 알면 회귀가 생긴다. 이런 회귀는 캐시를 비운 직후의 첫 실행에서만 보여서 찾기 어렵다.
 
 **사례:**
-- `351deef` — `font-display: optional`은 폰트가 100ms 안에 도착하지 않으면 그 세션 동안 시스템 폰트로 락인됨. 캐시 미적중 직후 첫 실행에서 의도한 폰트가 보이지 않다가 앱 재시작 후에야 나타나는 회귀. `swap`으로 변경 (런치 스크린이 FOUT 구간을 가림).
-- `d61f879` — `media="print" onload` 트릭으로 @font-face를 동적 삽입하면 first paint 이후에 로드되어 FOUT 발생. blocking `preload as="style"`로 변경.
+- `351deef` — `font-display: optional`은 글꼴이 100ms 안에 도착하지 않으면 그 세션 내내 시스템 글꼴을 쓰게 하는 설정이다. 그래서 캐시에 글꼴이 없는 첫 실행에서는 의도한 글꼴이 보이지 않다가, 앱을 다시 시작해야 나타났다. 늦게 도착해도 도착하면 바꿔 그리는 `swap`으로 바꿨다. 글꼴이 바뀌는 순간 글자가 한 번 바뀌어 보이는데(FOUT), 런치 스크린이 그 구간을 가린다.
+- `d61f879` — 글꼴 규칙(@font-face)을 `media="print" onload` 방식으로 나중에 끼워 넣었더니, 화면이 처음 그려진 뒤(first paint)에 글꼴이 적용돼 FOUT이 생겼다. 화면을 그리기 전에 글꼴 규칙을 먼저 받는 blocking `preload as="style"`로 바꿨다.
 
 **규칙:**
-- 폰트 규칙은 **first paint 전에 DOM에 있어야** FOUT이 없다.
-- 폰트 전략은 **(빠른 네트워크 / 느린 네트워크) × (캐시 적중 / 미적중)** 4가지 조합으로 검증한다. DevTools의 throttling + "캐시 비우고 강력 새로고침"으로 재현.
-- 관련 ADR: `007-launch-screen-optimization.md` (개정 블록 참고).
+- 글꼴 규칙은 **화면이 처음 그려지기 전(first paint)에 문서에 있어야** FOUT이 없다.
+- 글꼴 전략은 **네트워크가 빠를 때와 느릴 때, 캐시에 글꼴이 있을 때와 없을 때**를 곱한 네 가지 조합으로 확인한다. DevTools의 네트워크 속도 제한(throttling)과 「캐시 비우고 강력 새로고침」으로 재현한다.
+- 관련 ADR은 `007-launch-screen-optimization.md`다(개정 블록 참고).
 
-### pitfalls §14 — CSS `display` 속성이 `[hidden]` 무력화
+### pitfalls §14 — CSS에서 `display`를 지정하면 `[hidden]`으로 숨긴 요소가 다시 보인다
 
-`<button hidden>` 같은 HTML5 `hidden` 속성은 user-agent 스타일시트에서 `[hidden] { display: none }`로 처리된다. 그런데 author CSS에서 ID 셀렉터로 `display: flex`(또는 block, grid 등)를 명시하면 specificity가 더 높아 `[hidden]` 규칙을 덮어쓴다 — JS에서 `el.hidden = true`로 설정해도 시각적으로 안 사라지는 회귀.
+HTML 요소에 `hidden` 속성을 붙이면(`<button hidden>`) 화면에서 숨겨진다. 브라우저 기본 스타일에 `[hidden] { display: none }` 규칙이 있기 때문이다. 그런데 우리 CSS가 ID 셀렉터로 `display: flex`(또는 block, grid 등)를 지정하면, 그 규칙이 더 구체적이어서(specificity가 높아서) 기본 규칙(`[hidden]`)을 덮어쓴다. 그러면 JS에서 `el.hidden = true`로 숨겨도 화면에서 사라지지 않는다.
 
 **사례 (Phase 2h 단계 6):**
 
-- 검색 액션 버튼(`#search-clear`, `#search-history-toggle`)에 `display: flex`가 적용돼 있어, JS의 `$searchClear.hidden = true`가 무력화. 빈 입력 상태에서도 X 버튼이 계속 보였고, 동시에 `dataset.clearHidden="true"` 트리거 규칙이 history toggle을 clear의 위치로 옮겨 두 버튼이 정확히 같은 좌표에 스택. DOM 순서상 clear가 후순위라 사용자에겐 X만 보이고 ▾는 X 뒤에 가려져 "버튼 모양이 이상"한 외양.
-- 수정: `#search-clear[hidden], #search-history-toggle[hidden] { display: none; }` 명시 규칙 추가. specificity 동률 이상으로 끌어올려 `[hidden]` 의도 복구.
+- 검색창의 지우기 단추(X, `#search-clear`)와 검색 기록 단추(▾, `#search-history-toggle`)에 `display: flex`가 지정돼 있었다. 그래서 JS의 `$searchClear.hidden = true`가 단추를 숨기지 못해, 검색어가 비어 있어도 X 단추가 계속 보였다. 게다가 `dataset.clearHidden="true"`일 때 기록 단추를 지우기 단추 자리로 옮기는 규칙이 있어서, 두 단추가 정확히 같은 자리에 겹쳤다. 문서 순서상 지우기 단추가 뒤에 있어 위에 그려지므로, 사용자에게는 X만 보이고 ▾는 그 뒤에 가려져 "버튼 모양이 이상"하게 보였다.
+- 수정: `#search-clear[hidden], #search-history-toggle[hidden] { display: none; }` 규칙을 따로 더했다. 같은 셀렉터에 `[hidden]`을 붙여 구체성을 같거나 높게 만들었더니, 숨기려는 뜻이 다시 적용됐다.
 
 **규칙:**
 
-- ID 또는 specificity 높은 셀렉터로 `display: ...`를 설정한 요소가 `hidden` 속성을 통해 가려질 수 있다면, **반드시 같은 셀렉터에 `[hidden] { display: none }` 규칙을 명시**한다.
-- 점검: `el.hidden = true` 후 DevTools에서 `getComputedStyle(el).display`를 확인해 `none`이 나오는지 검증.
-- 전역 회귀 방지가 필요하면 `:where([hidden]) { display: none !important; }` 같은 광역 규칙도 가능하지만 `!important`는 다른 의도된 override를 깨뜨릴 수 있어 피하는 게 좋음. 셀렉터별 `[hidden]` 보강이 더 안전.
+- ID처럼 구체성이 높은 셀렉터로 `display: ...`를 지정한 요소를 `hidden` 속성으로 숨길 수 있다면, **같은 셀렉터에 `[hidden] { display: none }` 규칙을 반드시 함께 둔다**.
+- 점검: `el.hidden = true`로 숨긴 뒤 DevTools에서 `getComputedStyle(el).display`가 `none`인지 본다.
+- 앱 전체에서 한 번에 막으려면 `:where([hidden]) { display: none !important; }` 같은 규칙도 쓸 수 있다. 하지만 `!important`는 일부러 덮어쓴 다른 규칙까지 깨뜨릴 수 있어 피한다. 셀렉터마다 `[hidden]`을 보강하는 편이 안전하다.
 
 ## 남은 일
 
 ### known-issues §22 — 디자인 시스템 아티팩트 (2026-10-22)
 
-2026-10-18에 지금 앱 모양으로 디자인 시스템 아티팩트(Claude Design의 「Design System」, 비공개)를 만들었다. 토큰, 컴포넌트 34개, 브랜드 README를 담았다. 권위는 저장소의 `DESIGN.md`와 `css/style.css`이고 아티팩트는 사본이다. 아티팩트 주소와 도구는 Claude의 비공개 메모에 있다. 사용자가 2026-10-22에 이 작업을 계속하기로 했다.
+2026-10-18에 지금 앱의 모양을 그대로 담은 디자인 시스템 아티팩트(Claude Design의 「Design System」, 비공개)를 만들었다. 토큰, 컴포넌트 34개, 브랜드 README를 담았다. 권위는 저장소의 `DESIGN.md`와 `css/style.css`이고, 아티팩트는 사본이다. 아티팩트 주소와 도구는 Claude의 비공개 메모에 있다. 사용자가 2026-10-22에 이 작업을 계속하기로 했다.
 
 - **초안 검토**: 사용자가 아직 초안을 보지 않았다. 검토 의견을 반영해 다듬는다.
-- **캘린더 2단계를 디자인부터**: 주간과 목록 보기(ADR-038 §2)를 코드보다 먼저 이 시스템으로 그려 본다.
+- **캘린더 2단계를 디자인부터**: 주간 보기와 목록 보기(ADR-038 §2)를 코드보다 먼저 이 시스템으로 그려 본다.
 
 ### known-issues §23 — 디자인 시스템 초안에서 찾은 CSS 어긋남 셋 (2026-10-18)
 
-- **동기화 스낵바가 토큰 대신 리터럴을 쓴다.** `js/drive-sync.js` `_showSyncSnackbar`가 그림자(rgba .15), 글자 크기 14px, 반경 8px를 인라인 스타일로 적는다.
+- **동기화 스낵바가 토큰 대신 값을 직접 적는다.** `js/drive-sync.js` `_showSyncSnackbar`가 그림자(rgba .15), 글자 크기 14px, 반경 8px를 인라인 스타일로 적는다.
 - **`.settings-about`이 일반 `sans-serif`를 쓴다**(`css/style.css`). DESIGN.md의 Sans 스택이 아니다.
-- **`.bm-select-allbtn`에 글꼴 지정이 없다**(`css/style.css`). 단추라 브라우저 기본 글꼴로 보인다.
+- **`.bm-select-allbtn`에 글꼴 지정이 없다**(`css/style.css`). 단추라서 브라우저 기본 글꼴로 보인다.
 - **고치는 법**: 셋 모두 DESIGN.md의 토큰과 글꼴 스택으로 바꾼다. 아티팩트에는 어긋난 그대로 옮기고 컴포넌트 설명에 적어 두었으므로, 고친 뒤 아티팩트도 맞춘다.
