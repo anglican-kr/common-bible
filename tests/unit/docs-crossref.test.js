@@ -98,7 +98,7 @@ for (const f of fs.readdirSync(rel(FIXTURE_DIR)).filter((f) => f.endsWith(".json
  *  끝에 닿아 있기만 하면 길이는 보지 않는다 — `liturgical-engine-review.md` 처럼 긴 파일명도 한정어다. 파일명은
  *  역따옴표 · 마크다운 링크의 닫는 괄호에 싸여 있어도 된다. */
 const RUN_RE = /(?:(?:§\d+(?:\.\d+|-\d+)?|미결\d+|[①-⑳])[\s·,~]*)+$/;
-const QUAL_RE = /(설계서|설계 문서|검토 문서|본 문서|본 ADR|본 설계|이 문서|ADR-\d{3}|[\w./-]+\.md|pitfalls|README|전사|기도서)[`)\]]*\s*[()（）]?\s*$/;
+const QUAL_RE = /(설계서|설계 문서|검토 문서|본 문서|본 ADR|본 설계|이 문서|ADR-\d{3}|[\w./-]+\.md|pitfalls|known-issues|README|전사|기도서)[`)\]]*\s*[()（）]?\s*$/;
 function qualifierBefore(line, idx) {
   const before = line.slice(0, idx);
   const run = RUN_RE.exec(before);
@@ -108,7 +108,8 @@ function qualifierBefore(line, idx) {
   const q = m[1];
   // 파일명 한정어는 추적 대상 5문서면 그 문서로 푼다 — `liturgical-engine.md §3.4` 는 외부 참조가 아니다.
   if (/\.md$/.test(q)) return BY_BASENAME[path.basename(q)] ?? "external";
-  if (/pitfalls|README|전사|기도서/.test(q)) return "external";
+  // known-issues 는 docs-wiki.test.js 가 검사한다 — 여기서 설계서 §n 으로 풀면 「known-issues §7」이 설계서 §7 로 잘못 통과한다.
+  if (/pitfalls|known-issues|README|전사|기도서/.test(q)) return "external";
   if (q.startsWith("ADR-")) return DOCS[q] ? q : "external";
   if (q === "설계서" || q === "설계 문서") return "설계서";
   if (q === "검토 문서") return "검토 문서";

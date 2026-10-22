@@ -843,7 +843,7 @@ Google Cloud Console dev/prod OAuth 클라이언트의 Authorized redirect URIs�
 
 ### 동기
 
-Phase 2i 도입 후 실측 디버그 로그(`docs/archive/audit/2026-05-11-sync-perf.md` 의 첨부)에서:
+Phase 2i 도입 후 실측 디버그 로그에서 확인한 것(로그 원문을 담기로 한 `2026-05-11-sync-perf.md`는 저장소에 들어온 적이 없다, 2026-10-22 확인):
 
 ```
 [+103.460s] SYNC_REQUEST state:IDLE   ← LOCAL_CHANGE 없음
