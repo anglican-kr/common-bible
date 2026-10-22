@@ -48,11 +48,15 @@ const CP_TEXT = fs.readFileSync(rel("docs/coding-pitfalls.md"), "utf8");
 const KI_TEXT = fs.readFileSync(rel("docs/known-issues.md"), "utf8");
 const TOPICS = fs.readdirSync(rel("docs/topics")).filter((f) => f.endsWith(".md") && f !== "README.md").sort();
 const TOPIC_TEXT = Object.fromEntries(TOPICS.map((f) => [`topics/${f}`, fs.readFileSync(rel(`docs/topics/${f}`), "utf8")]));
+// 글쓰기 · 작업 방식 교정의 함정도 옮겨 간 곳이다(주제 문서가 아니라 틀 검사 · 소유 검사는 받지 않는다).
+const GUIDE_TEXT = Object.fromEntries(["writing.md", "workflow.md"].map((f) => [f, fs.readFileSync(rel(`docs/${f}`), "utf8")]));
 
-// 정의 — 주제 문서의 `### pitfalls §N — 제목`, 이슈는 항목 `- **known-issues §N.m** …` 이나 여러 문단이면
-// 제목 `### known-issues §N.m — 제목`(절 통째로면 `§N`). known-issues.md 에 남은 번호 붙은 항목도 정의다.
+// 정의 — 주제 문서와 글쓰기 · 작업 방식 문서의 `### pitfalls §N — 제목`, 이슈는 항목 `- **known-issues §N.m** …` 이나
+// 여러 문단이면 제목 `### known-issues §N.m — 제목`(절 통째로면 `§N`). known-issues.md 에 남은 번호 붙은 항목도 정의다.
 const ISSUE_ID = String.raw`\d+(?:\.\d+)?`;
 const DEFS = [];
+for (const [file, t] of Object.entries(GUIDE_TEXT))
+  for (const m of t.matchAll(/^### pitfalls §(\d+) — /gm)) DEFS.push({ kind: "pitfalls", id: m[1], file });
 for (const [file, t] of Object.entries(TOPIC_TEXT)) {
   for (const m of t.matchAll(/^### pitfalls §(\d+) — /gm)) DEFS.push({ kind: "pitfalls", id: m[1], file });
   for (const m of t.matchAll(new RegExp(String.raw`^(?:- \*\*known-issues §(${ISSUE_ID})\*\* |### known-issues §(${ISSUE_ID}) — )`, "gm")))
@@ -66,7 +70,7 @@ const REGISTRY = { pitfalls: new Map(), "known-issues": new Map() };
 const cpHeads = [...CP_TEXT.matchAll(/^## (\d+)\. /gm)];
 cpHeads.forEach((h, i) => {
   const body = CP_TEXT.slice(h.index, cpHeads[i + 1]?.index ?? CP_TEXT.length);
-  const ptr = /^→ \[(topics\/[\w-]+\.md)\]/m.exec(body);
+  const ptr = /^→ \[((?:topics\/[\w-]+|writing|workflow)\.md)\]/m.exec(body);
   if (ptr) REGISTRY.pitfalls.set(h[1], ptr[1]);
 });
 for (const m of KI_TEXT.matchAll(
