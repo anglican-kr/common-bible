@@ -1,4 +1,5 @@
 ---
+pr: 365
 date: 2026-10-22
 branch: fix/lectionary-half-verses
 title: "fix: 전례독서의 반절을 경계 표대로 그린다"
