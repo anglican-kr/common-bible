@@ -1,4 +1,5 @@
 ---
+pr: 368
 date: 2026-10-22
 branch: docs/cleanup-unused-records
 title: "docs: 쓰지 않는 기록을 정리한다"
