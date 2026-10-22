@@ -4,9 +4,9 @@ ADR이 "왜 이 결정을 했는가"를 다룬다면, 이 문서는 **"무엇을
 
 ## 사용법
 
-- 한 영역에만 걸리는 함정은 그 영역 문서(`docs/areas/`)의 「함정」에 있다. 여기에는 절 제목과 대장 줄(「→ areas/…」)만 남는다. 여러 영역에 걸치는 함정과 작업 방식 교정은 여기에 전문을 둔다(2026-10-23부터).
-- 새 기능을 구현하기 전에 영역 문서의 함정과 여기의 공통 함정을 훑어본다. 코드 리뷰 때 같은 패턴이 되풀이되지 않는지 본다.
-- 새 함정은 다음 번호(§39부터)를 받는다. 한 영역에만 걸리면 그 영역 문서에, 여럿에 걸치면 여기에 쓴다. 코드 실수뿐 아니라 **사용자 교정**(작업 방식·판단을 바로잡은 것)과 **도메인 확정**(책자·기도서 대조로 굳어진 규칙)도 함정으로 적는다. 항목마다 날짜와 근거(원장 파일·커밋·PR)를 남긴다.
+- 한 주제에만 걸리는 함정은 그 주제 문서(`docs/topics/`)의 「함정」에 있다. 여기에는 절 제목과 대장 줄(「→ topics/…」)만 남는다. 여러 주제에 걸치는 함정과 작업 방식 교정은 여기에 전문을 둔다(2026-10-23부터).
+- 새 기능을 구현하기 전에 주제 문서의 함정과 여기의 공통 함정을 훑어본다. 코드 리뷰 때 같은 패턴이 되풀이되지 않는지 본다.
+- 새 함정은 다음 번호(§39부터)를 받는다. 한 주제에만 걸리면 그 주제 문서에, 여럿에 걸치면 여기에 쓴다. 코드 실수뿐 아니라 **사용자 교정**(작업 방식·판단을 바로잡은 것)과 **도메인 확정**(책자·기도서 대조로 굳어진 규칙)도 함정으로 적는다. 항목마다 날짜와 근거(원장 파일·커밋·PR)를 남긴다.
 - 코드 주석과 머지된 원장이 「pitfalls §N」으로 가리키므로 번호는 다시 쓰지도 당기지도 않는다.
 
 ---
@@ -36,7 +36,7 @@ ADR이 "왜 이 결정을 했는가"를 다룬다면, 이 문서는 **"무엇을
 
 ## 2. SPA 경로 해석 오류 — 2회 반복 재발
 
-→ [areas/routing.md](areas/routing.md) 「함정」으로 옮겼다(2026-10-23).
+→ [topics/routing.md](topics/routing.md) 「함정」으로 옮겼다(2026-10-23).
 
 ---
 
@@ -114,19 +114,19 @@ CRUD 작업 후 의존하는 UI 컴포넌트의 갱신 함수를 호출하지 �
 
 ## 6. 복합 객체 비교 / 범위 병합
 
-→ [areas/bookmark.md](areas/bookmark.md) 「함정」으로 옮겼다(2026-10-22).
+→ [topics/bookmark.md](topics/bookmark.md) 「함정」으로 옮겼다(2026-10-22).
 
 ---
 
 ## 7. PWA 캐시 무효화 — 셸 bump vs 콘텐츠 매니페스트
 
-→ [areas/cache-release.md](areas/cache-release.md) 「함정」으로 옮겼다(2026-10-23).
+→ [topics/cache-release.md](topics/cache-release.md) 「함정」으로 옮겼다(2026-10-23).
 
 ---
 
 ## 8. 폰트/렌더링 특성 오해 — 회귀 사례
 
-→ [areas/design-system.md](areas/design-system.md) 「함정」으로 옮겼다(2026-10-23).
+→ [topics/design-system.md](topics/design-system.md) 「함정」으로 옮겼다(2026-10-23).
 
 ---
 
@@ -190,31 +190,31 @@ CRUD 작업 후 의존하는 UI 컴포넌트의 갱신 함수를 호출하지 �
 
 ## 12. 콜백 URL 데이터 leak — flow별 transport 격차
 
-→ [areas/sync.md](areas/sync.md) 「함정」으로 옮겼다(2026-10-23).
+→ [topics/sync.md](topics/sync.md) 「함정」으로 옮겼다(2026-10-23).
 
 ---
 
 ## 13. 마이그레이션 시점의 sessionStorage / localStorage 키 격리
 
-→ [areas/sync.md](areas/sync.md) 「함정」으로 옮겼다(2026-10-23).
+→ [topics/sync.md](topics/sync.md) 「함정」으로 옮겼다(2026-10-23).
 
 ---
 
 ## 14. CSS `display` 속성이 `[hidden]` 무력화
 
-→ [areas/design-system.md](areas/design-system.md) 「함정」으로 옮겼다(2026-10-23).
+→ [topics/design-system.md](topics/design-system.md) 「함정」으로 옮겼다(2026-10-23).
 
 ---
 
 ## 15. Cache API ↔ IDB sidecar 불일치 + Content-Length 의존
 
-→ [areas/audio.md](areas/audio.md) 「함정」으로 옮겼다(2026-10-23).
+→ [topics/audio.md](topics/audio.md) 「함정」으로 옮겼다(2026-10-23).
 
 ---
 
 ## 16. 모듈 init 시점 `window.X` facade 미정의 — 로드 순서 race
 
-→ [areas/platform.md](areas/platform.md) 「함정」으로 옮겼다(2026-10-23).
+→ [topics/platform.md](topics/platform.md) 「함정」으로 옮겼다(2026-10-23).
 
 ---
 
@@ -234,49 +234,49 @@ CRUD 작업 후 의존하는 UI 컴포넌트의 갱신 함수를 호출하지 �
 
 ## 18. 교회력 조회의 도메인 확정 — 주일과 겹치면 주일 본문 · 성주간과 재의 수요일 주간은 지정 독서 · 여성선교주일은 기념일 (2026-10-10)
 
-→ [areas/liturgical.md](areas/liturgical.md) 「함정」으로 옮겼다(2026-10-23).
+→ [topics/liturgical.md](topics/liturgical.md) 「함정」으로 옮겼다(2026-10-23).
 
 ---
 
 ## 19. 교회력 품계 · 색의 도메인 확정 — 사계재 날은 자 · 재의 수요일 주간의 축일 · 3.01 은 삼일절 (2026-10-10)
 
-→ [areas/liturgical.md](areas/liturgical.md) 「함정」으로 옮겼다(2026-10-23).
+→ [topics/liturgical.md](topics/liturgical.md) 「함정」으로 옮겼다(2026-10-23).
 
 ---
 
 ## 20. 교회력 이동의 도메인 확정 — 본당 축일 · 교구 설립일 · 성주간과 부활 8일의 주요축일 (2026-10-11)
 
-→ [areas/liturgical.md](areas/liturgical.md) 「함정」으로 옮겼다(2026-10-23).
+→ [topics/liturgical.md](topics/liturgical.md) 「함정」으로 옮겼다(2026-10-23).
 
 ---
 
 ## 21. 교회력 전례독서 뷰의 도메인 확정 — 영광송 · 초기 독서 · 색 · 본기도 · 라벨 · 트랙 · 복사 (2026-10-12 · 10-13)
 
-→ [areas/liturgical.md](areas/liturgical.md) 「함정」으로 옮겼다(2026-10-23).
+→ [topics/liturgical.md](topics/liturgical.md) 「함정」으로 옮겼다(2026-10-23).
 
 ---
 
 ## 22. 2027 책자 대조의 도메인 확정 — 보호 기간 목적지 · 연쇄 범위 · 초안의 오류 (2026-10-13)
 
-→ [areas/liturgical.md](areas/liturgical.md) 「함정」으로 옮겼다(2026-10-23).
+→ [topics/liturgical.md](topics/liturgical.md) 「함정」으로 옮겼다(2026-10-23).
 
 ---
 
 ## 23. 머지 전 코드 리뷰의 도메인 확정 — 보호 기간에서 밀린 축일끼리의 순서 · 연쇄 범위가 닿는 곳 (2026-10-14)
 
-→ [areas/liturgical.md](areas/liturgical.md) 「함정」으로 옮겼다(2026-10-23).
+→ [topics/liturgical.md](topics/liturgical.md) 「함정」으로 옮겼다(2026-10-23).
 
 ---
 
 ## 24. 캘린더 탭의 화면 결정 — 칸 이름 하나 · 선택 봉헌 · 전례년 경계 · 독서 성구 · 목록 범위 · 데스크톱 입구 · 모듈 로드 · 탭 이름 (2026-10-15)
 
-→ [areas/liturgical.md](areas/liturgical.md) 「함정」으로 옮겼다(2026-10-23).
+→ [topics/liturgical.md](topics/liturgical.md) 「함정」으로 옮겼다(2026-10-23).
 
 ---
 
 ## 25. 저녁 전례의 도메인 확정 — 성 토요일의 대표는 성 토요일 · 부활밤과 성탄 밤은 저녁 전례 (2026-10-15)
 
-→ [areas/liturgical.md](areas/liturgical.md) 「함정」으로 옮겼다(2026-10-23).
+→ [topics/liturgical.md](topics/liturgical.md) 「함정」으로 옮겼다(2026-10-23).
 
 ---
 
@@ -295,13 +295,13 @@ CRUD 작업 후 의존하는 UI 컴포넌트의 갱신 함수를 호출하지 �
 
 ## 27. 타입 검사가 조용히 꺼져 있었다 — `// @ts-check` 가 문 뒤에 있던 파일들, 선언이 데이터 · 코드와 어긋난 채 쌓였다 (2026-10-17)
 
-→ [areas/platform.md](areas/platform.md) 「함정」으로 옮겼다(2026-10-23).
+→ [topics/platform.md](topics/platform.md) 「함정」으로 옮겼다(2026-10-23).
 
 ---
 
 ## 28. 실패를 「없음」 · 「성공」과 같은 값으로 돌려주지 않는다 — 동기화가 오류를 성공으로 쳤다 (2026-10-17)
 
-→ [areas/sync.md](areas/sync.md) 「함정」으로 옮겼다(2026-10-23).
+→ [topics/sync.md](topics/sync.md) 「함정」으로 옮겼다(2026-10-23).
 
 ---
 
@@ -367,13 +367,13 @@ GitHub 마크다운(GFM)은 물결표 하나짜리 쌍(`~…~`)도 취소선으�
 
 ## 33. 이미 받은 모듈도 `import()`는 한 태스크 뒤에 풀린다 — 다시 그리는 길에서 기다리지 않는다 (리뷰, 2026-10-18)
 
-→ [areas/routing.md](areas/routing.md) 「함정」으로 옮겼다(2026-10-23).
+→ [topics/routing.md](topics/routing.md) 「함정」으로 옮겼다(2026-10-23).
 
 ---
 
 ## 34. WebKit의 `modulepreload`는 새로 고쳐도 다시 받지 않는다 — 실패한 미리 받기가 그 탭을 막는다 (리뷰, 2026-10-18)
 
-→ [areas/routing.md](areas/routing.md) 「함정」으로 옮겼다(2026-10-23).
+→ [topics/routing.md](topics/routing.md) 「함정」으로 옮겼다(2026-10-23).
 
 ---
 
@@ -438,7 +438,7 @@ GitHub 마크다운(GFM)은 물결표 하나짜리 쌍(`~…~`)도 취소선으�
 
 ## 38. 옛 판이 저장한 절 범위는 지금 표기로 옮긴다 — 수정 시각은 올리지 않는다 (사용자 결정, 2026-10-22)
 
-→ [areas/bookmark.md](areas/bookmark.md) 「함정」으로 옮겼다(2026-10-22).
+→ [topics/bookmark.md](topics/bookmark.md) 「함정」으로 옮겼다(2026-10-22).
 
 ---
 

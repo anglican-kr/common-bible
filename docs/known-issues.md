@@ -1,9 +1,9 @@
 # 알려진 이슈 — 번호 대장
 
-열린 이슈의 본문은 그 영역 문서(`docs/areas/`)의 「남은 일」에 있다. 이 파일은 번호마다 어디로 옮겼는지, 언제 해소했는지를 적는 대장이다. 코드 주석과 머지된 원장이 「known-issues §N」으로 가리키므로 번호는 다시 쓰지도 당기지도 않는다(pitfalls §26).
+열린 이슈의 본문은 그 주제 문서(`docs/topics/`)의 「남은 일」에 있다. 이 파일은 번호마다 어디로 옮겼는지, 언제 해소했는지를 적는 대장이다. 코드 주석과 머지된 원장이 「known-issues §N」으로 가리키므로 번호는 다시 쓰지도 당기지도 않는다(pitfalls §26).
 
-- 새 이슈는 다음 번호(§26부터)를 받고, 이슈 하나에 번호 하나를 준다. 본문은 영역 문서에 쓰고, 여기에는 절 제목과 대장 줄만 둔다.
-- 절마다 남은 소개 문단과 해소 기록은 그 번호의 이력이다. 이 파일은 2026-06-08에 ADR-034(뷰·라우팅 2차 분할) 작업 중 찾은 항목 모음으로 시작했고, 2026-10-23에 열린 이슈를 영역 문서로 옮겼다.
+- 새 이슈는 다음 번호(§26부터)를 받고, 이슈 하나에 번호 하나를 준다. 본문은 주제 문서에 쓰고, 여기에는 절 제목과 대장 줄만 둔다.
+- 절마다 남은 소개 문단과 해소 기록은 그 번호의 이력이다. 이 파일은 2026-06-08에 ADR-034(뷰·라우팅 2차 분할) 작업 중 찾은 항목 모음으로 시작했고, 2026-10-23에 열린 이슈를 주제 문서로 옮겼다.
 
 ---
 
@@ -36,7 +36,7 @@
 - ~~audio `applyAudioShow` → `window.parsePath` facade edge~~ **조사 완료 → 현 설계 유지 (§2.2)** — 없애려던 항목이나 검토 결과 facade가 정답(명시 import는 사이클, readingContext는 stale, state-machine 호출자는 컨텍스트 못 줌). 조치 없음.
 - ~~**`bookmark.js` 분할**~~ **완료 (2026-06-11)** — 3,578 → **589줄**(−84%). 모듈별 점진 분리. 완료: 순수 로직 `bookmark-core.js`(query/href/sort/active) · 절 스펙 `verse-spec.js` · 모달 `bookmark-modals.js` · 폴더 모아 읽기 `bookmark-read.js` · 제스처 엔진 `bookmark-gestures.js`(드래그 reorder + 스와이프 액션 + 포인터 핸들러) · 선택 삭제 모드 `bookmark-select.js`(상태 + 캐스케이드 수학 + 삭제·공유·이동 액션 + #bm-select-bar dock — 트리렌더↔select 양방향은 import(상태/핸들러)+주입(재렌더/헤더)으로 차단) · **절 선택 모드 `bookmark-verse-select.js`(in-reading 절 선택 → 북마크/복사 + #verse-select-bar dock, near-leaf라 DI 불필요) · **⋯ 메뉴 `bookmark-menu.js`(탭 뷰 title-row 액션: 정렬·새 폴더·내보내기·가져오기·선택 + 🛈 안내 + 전체 선택 + exportBookmarks) · **트리 렌더링 `bookmark-tree.js`(per-row 빌더 + renderBookmarkTree + _rerenderActiveBookmarkTree 허브 + renderBookmarksView + 드로어 키보드 내비, ADR-034 후속, 마지막 라운드 — 드로어/헤더 콜백 3개 주입)**. **분할 완료**: bookmark.js 2,432→589줄(−76%), 드로어/헤더 오케스트레이터로 수렴(헤더 버튼·드로어 lifecycle·init 배선·facade·keydown).
 
-- §2.1 → [areas/platform.md](areas/platform.md)
+- §2.1 → [topics/platform.md](topics/platform.md)
 
 ### 2.2 audio `applyAudioShow` → `window.parsePath` (2026-06-08 검토 → 현 설계 유지)
 
@@ -58,11 +58,11 @@
 
 한 줄 안에서 여닫이를 번갈아 매기는 방식도, 문서 전체에서 번갈아 매기는 방식도 **쓰면 안 된다.** 인용이 줄을 넘나들고(`source/` 는 따옴표가 있는 7,901줄 중 4,438줄이 홀수 개), 원본에 짝 없는 따옴표가 하나라도 있으면 그 뒤로 파일 끝까지 위상이 뒤집힌다.
 
-- §3.1 → [areas/bible-text.md](areas/bible-text.md)
+- §3.1 → [topics/bible-text.md](topics/bible-text.md)
 
-- §3.2 → [areas/bible-text.md](areas/bible-text.md)
+- §3.2 → [topics/bible-text.md](topics/bible-text.md)
 
-- §3.3 → [areas/bible-text.md](areas/bible-text.md)
+- §3.3 → [topics/bible-text.md](topics/bible-text.md)
 
 ---
 
@@ -94,14 +94,14 @@ ADR-038 §3 렌더 기반이 복원하는 전례 표기 — 계응 ◯(`.respons
 
 머지 전에 서브에이전트 둘(기존 앱 회귀 · 자체 리뷰 이후 변경)이 다시 본 뒤, 고친 것을 빼고 남긴 것. 「전례독서 · 캘린더 모듈을 모든 화면에서 내려받는다」는 2026-10-17에 고쳐 지웠다 — 세 모듈(엔진 포함)을 그 화면에 처음 갈 때 불러온다(원장 `docs/changes/2026-10-17-lazy-liturgical-modules.md`). 「반절이 절 전체로 보이는 47곳」은 2026-10-22에 고쳐 지웠다. 데이터의 경계 표대로 반절을 그린다(ADR-038 §3 「구현」, 원장 `docs/changes/2026-10-22-lectionary-half-verses.md`).
 
-- §6.1 → [areas/cache-release.md](areas/cache-release.md)
-- §6.2 → [areas/liturgical.md](areas/liturgical.md)
+- §6.1 → [topics/cache-release.md](topics/cache-release.md)
+- §6.2 → [topics/liturgical.md](topics/liturgical.md)
 
 ---
 
 ## 7. A2(캘린더 탭) 작업 중 찾은 후속 (2026-10-15)
 
-- §7.1 → [areas/platform.md](areas/platform.md)
+- §7.1 → [topics/platform.md](topics/platform.md)
 
 ---
 
@@ -121,7 +121,7 @@ ADR-038 §3 렌더 기반이 복원하는 전례 표기 — 계응 ◯(`.respons
 
 #350(§8 셋)을 `/code-review` 로 본 것 가운데 그 PR 에서 고치지 않고 넘긴 것. 고친 것과 각 건의 조치는 원장 `docs/changes/2026-10-17-known-issues-8.md` 「리뷰 반영」. 넘긴 일곱 가운데 셋(계산 범위 판정 하나로 · 날짜 이동 줄 하나로 · 인용 시트 꺾쇠)은 2026-10-17 에 고쳐 지웠다 — 원장 `docs/changes/2026-10-17-known-issues-10-part1.md`. 둘(라우터 수준 포커스 복원 · 화면마다 잇던 네 걸음)도 같은 날 고쳐 지웠다 — 원장 `docs/changes/2026-10-17-router-focus-restore.md`. 남은 둘은 기기 확인 대기와 기록만 두기로 한 것이다.
 
-- §10.1 · §10.2 → [areas/routing.md](areas/routing.md)
+- §10.1 · §10.2 → [topics/routing.md](topics/routing.md)
 
 ---
 
@@ -129,7 +129,7 @@ ADR-038 §3 렌더 기반이 복원하는 전례 표기 — 계응 ◯(`.respons
 
 #353의 e2e 검증 · 리뷰에서 찾았지만 그 PR 범위 밖이라 넘긴 것. 첫 항목이던 「로그아웃 직후, 진행 중이던 동기화가 토큰 없이 업로드를 한 번 더 보낸다」(e2e `test_sign_out_clears_sync`가 가끔 실패한 원인)는 2026-10-17에 고쳐 지웠다 — 사이클이 대기마다 상태가 아직 SYNCING 인지 본다(원장 `docs/changes/2026-10-17-sync-signout-inflight.md`).
 
-- §11.1 · §11.2 → [areas/bible-text.md](areas/bible-text.md)
+- §11.1 · §11.2 → [topics/bible-text.md](topics/bible-text.md)
 
 ---
 
@@ -137,17 +137,17 @@ ADR-038 §3 렌더 기반이 복원하는 전례 표기 — 계응 ◯(`.respons
 
 #354에서 `architecture.md` · README와 data 저장소 README를 현행화하며 찾았지만 그 PR 범위 밖이라 넘긴 것. 고친 것은 원장 `docs/changes/2026-10-17-sync-signout-inflight.md` 「갱신한 문서」와 data 저장소 PR #33.
 
-- §12.1 · §12.4 · §12.5 → [areas/platform.md](areas/platform.md)
-- §12.2 → [areas/bible-text.md](areas/bible-text.md)
-- §12.3 → [areas/liturgical.md](areas/liturgical.md)
+- §12.1 · §12.4 · §12.5 → [topics/platform.md](topics/platform.md)
+- §12.2 → [topics/bible-text.md](topics/bible-text.md)
+- §12.3 → [topics/liturgical.md](topics/liturgical.md)
 
 ---
 
 ## 13. PR #355(지연 로드) 리뷰에서 넘긴 후속 (2026-10-18)
 
-- §13.1 → [areas/routing.md](areas/routing.md)
-- §13.2 · §13.3 · §13.4 → [areas/liturgical.md](areas/liturgical.md)
-- §13.5 → [areas/platform.md](areas/platform.md)
+- §13.1 → [topics/routing.md](topics/routing.md)
+- §13.2 · §13.3 · §13.4 → [topics/liturgical.md](topics/liturgical.md)
+- §13.5 → [topics/platform.md](topics/platform.md)
 
 ---
 
@@ -161,14 +161,14 @@ ADR-038 §3 렌더 기반이 복원하는 전례 표기 — 계응 ◯(`.respons
 
 2회차 리뷰(Copilot 2회차 + 자체 리뷰어 셋)가 찾은 것 가운데 이 PR 전부터 있었거나 가져오기와 상관없는 것들이다. 가져오기 검사가 막는 것은 그 PR에서 고쳤다(ADR-040). 첫 항목이던 「공유 링크의 절 범위가 앱을 멈춘다」는 2026-10-21에 고쳐 지웠다 — 주소의 여러 구간도 가져오기 검사와 같은 표기만 강조하고(앞뒤 쉼표는 걷고 본다), 나머지는 장만 연다(ADR-040 · 원장 `docs/changes/2026-10-21-verse-range-link.md`). 그 항목이 예로 든 `/john/3/1-4294967296`은 구간이 하나라 펼치지 않아 멀쩡했다(장의 마지막 절로 잘린다). 멈춘 것은 `1-4294967296,5`처럼 구간이 둘 이상인 주소였다.
 
-- §15.1 · §15.3 · §15.4 · §15.6 · §15.7 · §15.8 → [areas/bookmark.md](areas/bookmark.md)
-- §15.2 · §15.5 → [areas/sync.md](areas/sync.md)
+- §15.1 · §15.3 · §15.4 · §15.6 · §15.7 · §15.8 → [topics/bookmark.md](topics/bookmark.md)
+- §15.2 · §15.5 → [topics/sync.md](topics/sync.md)
 
 ---
 
 ## 16. 절 선택 복사 수정(§5) 중 찾은 후속 (2026-10-21)
 
-- §16.1 · §16.2 → [areas/bookmark.md](areas/bookmark.md)
+- §16.1 · §16.2 → [topics/bookmark.md](topics/bookmark.md)
 
 ---
 
@@ -176,7 +176,7 @@ ADR-038 §3 렌더 기반이 복원하는 전례 표기 — 계응 ◯(`.respons
 
 첫 항목이던 「여러 줄로 된 병합 절은 북마크에 첫 번호로 저장된다」는 2026-10-22에 고쳐 지웠다. 병합 절은 범위(「7-8」)로 저장하고 앞뒤 절과 잇는다(ADR-010 「북마크 저장」, 원장 `docs/changes/2026-10-22-bookmark-legacy-spec.md`). 이미 저장된 첫 번호(「7」)는 그대로 둔다(사용자 결정 2026-10-22).
 
-- §17.1 → [areas/bookmark.md](areas/bookmark.md)
+- §17.1 → [topics/bookmark.md](topics/bookmark.md)
 
 ---
 
@@ -184,46 +184,46 @@ ADR-038 §3 렌더 기반이 복원하는 전례 표기 — 계응 ◯(`.respons
 
 첫 항목이던 「이전 버전 북마크와의 하위 호환성」은 2026-10-22에 고쳐 지웠다. 옛 판이 저장한 줄 글자를 앱을 시작할 때, 가져올 때, 동기화 결과를 적용할 때 지금 표기로 옮긴다(ADR-010 「옛 저장값」, coding-pitfalls §38, 원장 `docs/changes/2026-10-22-bookmark-legacy-spec.md`).
 
-- §18.1 → [areas/liturgical.md](areas/liturgical.md)
+- §18.1 → [topics/liturgical.md](topics/liturgical.md)
 
 ---
 
 ## 19. 옛 북마크 하위 호환성 작업 중 찾은 후속 (2026-10-22)
 
-- §19.1 → [areas/bookmark.md](areas/bookmark.md)
+- §19.1 → [topics/bookmark.md](topics/bookmark.md)
 
 ---
 
 ## 20. 노트 탭(ADR-026) 재개 (2026-10-22)
 
-- §20 → [areas/routing.md](areas/routing.md)
+- §20 → [topics/routing.md](topics/routing.md)
 
 ---
 
 ## 21. 모바일 북마크 드로어의 바텀시트 코드 정리 (2026-10-22)
 
-- §21 → [areas/bookmark.md](areas/bookmark.md)
+- §21 → [topics/bookmark.md](topics/bookmark.md)
 
 ---
 
 ## 22. 디자인 시스템 아티팩트 (2026-10-22)
 
-- §22 → [areas/design-system.md](areas/design-system.md)
+- §22 → [topics/design-system.md](topics/design-system.md)
 
 ---
 
 ## 23. 디자인 시스템 초안에서 찾은 CSS 어긋남 셋 (2026-10-18)
 
-- §23 → [areas/design-system.md](areas/design-system.md)
+- §23 → [topics/design-system.md](topics/design-system.md)
 
 ---
 
 ## 24. ADR과 설계서 문체 정리 (2026-10-22)
 
-- §24 → [areas/platform.md](areas/platform.md)
+- §24 → [topics/platform.md](topics/platform.md)
 
 ---
 
 ## 25. 2027 책자 대조에서 넘긴 데이터 절 번호 의심 (2026-10-13)
 
-- §25 → [areas/liturgical.md](areas/liturgical.md)
+- §25 → [topics/liturgical.md](topics/liturgical.md)

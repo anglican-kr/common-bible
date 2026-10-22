@@ -2,7 +2,7 @@
 
 소유 코드: `js/drive-sync.js`, `js/sync/*.js`
 
-북마크와 설정을 사용자의 Google Drive(appdata)에 동기화하는 일과, 로그인(OAuth PKCE)과 토큰 교환(nginx BFF)을 다룬다. 동기화 저장소의 형식과 병합 규칙은 이 영역이, 북마크 자체는 북마크 영역(`areas/bookmark.md`)이 맡는다.
+북마크와 설정을 사용자의 Google Drive(appdata)에 동기화하는 일과, 로그인(OAuth PKCE)과 토큰 교환(nginx BFF)을 다룬다. 동기화 저장소의 형식과 병합 규칙은 이 주제가, 북마크 자체는 북마크 주제(`topics/bookmark.md`)가 맡는다.
 
 ## 지금 동작
 

@@ -1,7 +1,7 @@
 // ── 교회력 설계 문서의 교차 참조 검사 ────────────────────────────────────────
 // Run with: node --test tests/unit/docs-crossref.test.js
 //
-// 대상: 설계서 · 검토 문서 · ADR-036/037/038(앵커를 내고 참조도 한다) + architecture.md · docs/areas/*.md
+// 대상: 설계서 · 검토 문서 · ADR-036/037/038(앵커를 내고 참조도 한다) + architecture.md · docs/topics/*.md
 // (참조만 한다 — 읽기 전용 참조원이지만 **같은 참조 검사를 전부 받는다**). 번호 부여 규약은 설계서 §1.4 가 정본이다.
 //
 // 무엇을 잡나 —
@@ -54,10 +54,10 @@ const DOCS = {
   "ADR-038": "docs/decisions/038-calendar-lectionary-ui.md",
 };
 const SOURCES = { "architecture.md": "docs/architecture.md" };
-// 영역 문서(docs/areas/*.md, README 제외)도 참조만 하는 문서다 — 옛 status.md(2026-10-23 영역 문서로 나뉘어 삭제)에서
+// 주제 문서(docs/topics/*.md, README 제외)도 참조만 하는 문서다 — 옛 status.md(2026-10-23 주제 문서로 나뉘어 삭제)에서
 // 옮겨 간 줄이 같은 검사를 계속 받게 한다.
-for (const f of fs.readdirSync(rel("docs/areas")).filter((f) => f.endsWith(".md") && f !== "README.md").sort())
-  SOURCES[`areas/${f}`] = `docs/areas/${f}`;
+for (const f of fs.readdirSync(rel("docs/topics")).filter((f) => f.endsWith(".md") && f !== "README.md").sort())
+  SOURCES[`topics/${f}`] = `docs/topics/${f}`;
 // 파일명 한정어(`liturgical-engine.md §3.4` · `(docs/design/liturgical-engine-review.md) §5.11`)를 추적 대상 문서로 되돌리는 역인덱스.
 const BY_BASENAME = Object.fromEntries(Object.entries(DOCS).map(([k, p]) => [path.basename(p), k]));
 const FIXTURE_DIR = "tests/fixtures/liturgical";
@@ -178,7 +178,7 @@ function resolveIssue(doc, ln, line, m) {
   note("미결", doc, ln, `미결${n}`, self ?? "설계서");
 }
 
-// 참조원(architecture.md · 영역 문서)도 같은 검사를 전부 받는다 — 앵커를 내지 않을 뿐, 잘못 가리키면 잡힌다.
+// 참조원(architecture.md · 주제 문서)도 같은 검사를 전부 받는다 — 앵커를 내지 않을 뿐, 잘못 가리키면 잡힌다.
 for (const doc of Object.keys({ ...DOCS, ...SOURCES })) {
   lines[doc].forEach((line, i) => {
     const ln = i + 1;

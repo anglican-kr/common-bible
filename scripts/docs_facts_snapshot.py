@@ -23,7 +23,7 @@ C-/X-/I-/Q/R id · 픽스처 id · PR 번호를 뽑아 문서별·합집합으�
 
 리비전은 git rev(`main`, `HEAD`, 해시) 또는 `WORKTREE`(작업 트리 파일 그대로). stdlib 만 쓴다.
 
-교회력 밖의 문서(정리 층 · 영역 문서 · ADR · CLAUDE.md)를 옮기거나 고쳐 쓸 때는 옵션을 더한다
+교회력 밖의 문서(정리 층 · 주제 문서 · ADR · CLAUDE.md)를 옮기거나 고쳐 쓸 때는 옵션을 더한다
 (2026-10-22 docs 재구성). 옵션이 없으면 위의 동작 그대로다.
 
     python3 scripts/docs_facts_snapshot.py --diff main WORKTREE --docs 'docs/*.md' --docs CLAUDE.md --kinds general
@@ -355,7 +355,7 @@ def diff(a: dict, b: dict, ignore: set[str], allow_new: list[re.Pattern[str]],
     return 1 if vanished or bad_new or (strict_counts and decreased_list) else 0
 
 
-# 옛 번호 표지 — 영역 문서로 옮긴 항목의 제목(`### pitfalls §38 — 제목`)과 목록 줄(`- **known-issues §N.m** …`) 앞에 붙는다.
+# 옛 번호 표지 — 주제 문서로 옮긴 항목의 제목(`### pitfalls §38 — 제목`)과 목록 줄(`- **known-issues §N.m** …`) 앞에 붙는다.
 ID_PREFIX = r"(?:(?:coding-)?pitfalls|known-issues)\s*§[\d.]+"
 
 

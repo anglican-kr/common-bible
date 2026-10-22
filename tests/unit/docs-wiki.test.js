@@ -8,8 +8,8 @@
 //   2. 본문에 적은 `docs/…` 경로가 실재한다. glob(`liturgical-engine-*.md`)은 무엇이든 하나 고르면 된다.
 //   3. 마크다운 상대 링크가 실재하는 파일을 가리킨다.
 //   4. docs/index.md 가 인용한 파일과 ADR 이 실재한다.
-//   5. 영역 문서(docs/areas/, 규칙은 그 README) — 옛 파일의 대장 줄과 영역 문서의 정의가 하나씩 맞고, `## ` 제목이
-//      정한 순서를 지키고, 「소유 코드:」의 glob 이 파일을 고르되 두 영역이 같은 파일을 소유하지 않는다.
+//   5. 주제 문서(docs/topics/, 규칙은 그 README) — 옛 파일의 대장 줄과 주제 문서의 정의가 하나씩 맞고, `## ` 제목이
+//      정한 순서를 지키고, 「소유 코드:」의 glob 이 파일을 고르되 두 주제가 같은 파일을 소유하지 않는다.
 // 범위: git 이 아는 텍스트 파일(추적 중 + 무시되지 않은 새 파일) 가운데 아래 SKIP 을 뺀 것.
 
 import test from "node:test";
@@ -42,18 +42,18 @@ function* matches(files, re) {
       for (const m of line.matchAll(re)) yield { at: `${f}:${i + 1}`, m };
 }
 
-// ── 영역 문서와 대장 — 아래 1 · 5 가 함께 쓴다 ──
+// ── 주제 문서와 대장 — 아래 1 · 5 가 함께 쓴다 ──
 
 const CP_TEXT = fs.readFileSync(rel("docs/coding-pitfalls.md"), "utf8");
 const KI_TEXT = fs.readFileSync(rel("docs/known-issues.md"), "utf8");
-const AREAS = fs.readdirSync(rel("docs/areas")).filter((f) => f.endsWith(".md") && f !== "README.md").sort();
-const AREA_TEXT = Object.fromEntries(AREAS.map((f) => [`areas/${f}`, fs.readFileSync(rel(`docs/areas/${f}`), "utf8")]));
+const TOPICS = fs.readdirSync(rel("docs/topics")).filter((f) => f.endsWith(".md") && f !== "README.md").sort();
+const TOPIC_TEXT = Object.fromEntries(TOPICS.map((f) => [`topics/${f}`, fs.readFileSync(rel(`docs/topics/${f}`), "utf8")]));
 
-// 정의 — 영역 문서의 `### pitfalls §N — 제목`, 이슈는 항목 `- **known-issues §N.m** …` 이나 여러 문단이면
+// 정의 — 주제 문서의 `### pitfalls §N — 제목`, 이슈는 항목 `- **known-issues §N.m** …` 이나 여러 문단이면
 // 제목 `### known-issues §N.m — 제목`(절 통째로면 `§N`). known-issues.md 에 남은 번호 붙은 항목도 정의다.
 const ISSUE_ID = String.raw`\d+(?:\.\d+)?`;
 const DEFS = [];
-for (const [file, t] of Object.entries(AREA_TEXT)) {
+for (const [file, t] of Object.entries(TOPIC_TEXT)) {
   for (const m of t.matchAll(/^### pitfalls §(\d+) — /gm)) DEFS.push({ kind: "pitfalls", id: m[1], file });
   for (const m of t.matchAll(new RegExp(String.raw`^(?:- \*\*known-issues §(${ISSUE_ID})\*\* |### known-issues §(${ISSUE_ID}) — )`, "gm")))
     DEFS.push({ kind: "known-issues", id: m[1] ?? m[2], file });
@@ -61,16 +61,16 @@ for (const [file, t] of Object.entries(AREA_TEXT)) {
 for (const m of KI_TEXT.matchAll(new RegExp(String.raw`^- \*\*known-issues §(${ISSUE_ID})\*\* `, "gm")))
   DEFS.push({ kind: "known-issues", id: m[1], file: "known-issues.md" });
 
-// 대장 — coding-pitfalls.md 는 절 제목 아래 「→ [areas/x.md](areas/x.md)」 한 줄, known-issues.md 는 「- §15.1 · §15.3 → [areas/x.md](…)」.
+// 대장 — coding-pitfalls.md 는 절 제목 아래 「→ [topics/x.md](topics/x.md)」 한 줄, known-issues.md 는 「- §15.1 · §15.3 → [topics/x.md](…)」.
 const REGISTRY = { pitfalls: new Map(), "known-issues": new Map() };
 const cpHeads = [...CP_TEXT.matchAll(/^## (\d+)\. /gm)];
 cpHeads.forEach((h, i) => {
   const body = CP_TEXT.slice(h.index, cpHeads[i + 1]?.index ?? CP_TEXT.length);
-  const ptr = /^→ \[(areas\/[\w-]+\.md)\]/m.exec(body);
+  const ptr = /^→ \[(topics\/[\w-]+\.md)\]/m.exec(body);
   if (ptr) REGISTRY.pitfalls.set(h[1], ptr[1]);
 });
 for (const m of KI_TEXT.matchAll(
-  new RegExp(String.raw`^- (§${ISSUE_ID}(?:\s*·\s*§${ISSUE_ID})*)\s*→\s*\[(areas\/[\w-]+\.md)\]`, "gm"),
+  new RegExp(String.raw`^- (§${ISSUE_ID}(?:\s*·\s*§${ISSUE_ID})*)\s*→\s*\[(topics\/[\w-]+\.md)\]`, "gm"),
 ))
   for (const id of m[1].match(/\d+(?:\.\d+)?/g)) REGISTRY["known-issues"].set(id, m[2]);
 
@@ -100,7 +100,7 @@ test("「pitfalls §N」 「known-issues §N」 참조가 지금 문서의 절�
 const RETIRED = new Map([
   ["docs/worklog.md", "2026-09-20 은퇴(#331) — pitfalls §17 · §7 이 이력으로 언급"],
   ["docs/prd.md", "2026-10-22 삭제(#368) — architecture.md §1 이 출처로 언급"],
-  ["docs/status.md", "2026-10-23 영역 문서로 나뉘어 삭제 — 완료된 ADR · 검토 문서의 점검 목록 · 도구 예시가 이력으로 언급"],
+  ["docs/status.md", "2026-10-23 주제 문서로 나뉘어 삭제 — 완료된 ADR · 검토 문서의 점검 목록 · 도구 예시가 이력으로 언급"],
 ]);
 // 날짜 · 번호 자리표시(`docs/archive/audit/YYYY-MM-DD-hhmmss.md`)는 실제 경로가 아니다.
 const PLACEHOLDER = /YYYY|hhmmss|NNN/;
@@ -164,9 +164,9 @@ test("docs/index.md 가 인용한 파일과 ADR 이 실재한다", () => {
   assert.deepEqual(bad, [], `index.md 가 없는 파일을 가리킨다:\n${bad.join("\n")}`);
 });
 
-// ── 5. 영역 문서 ──
+// ── 5. 주제 문서 ──
 
-test("대장 줄과 영역 문서의 정의가 하나씩 맞는다", () => {
+test("대장 줄과 주제 문서의 정의가 하나씩 맞는다", () => {
   const bad = [];
   const seen = new Map();
   for (const d of DEFS) {
@@ -180,24 +180,24 @@ test("대장 줄과 영역 문서의 정의가 하나씩 맞는다", () => {
   for (const [kind, map] of Object.entries(REGISTRY))
     for (const [id, file] of map)
       if (seen.get(`${kind} §${id}`) !== file) bad.push(`${kind} §${id}: 대장은 ${file} 를 가리키지만 거기에 정의가 없다`);
-  assert.deepEqual(bad, [], `대장과 정의가 어긋난다(규칙: docs/areas/README.md 「번호와 대장」):\n${bad.join("\n")}`);
+  assert.deepEqual(bad, [], `대장과 정의가 어긋난다(규칙: docs/topics/README.md 「번호와 대장」):\n${bad.join("\n")}`);
 });
 
-const AREA_HEADINGS = ["지금 동작", "결정", "확정 사실", "함정", "남은 일"];
+const TOPIC_HEADINGS = ["지금 동작", "결정", "확정 사실", "함정", "남은 일"];
 const REQUIRED_HEADINGS = ["지금 동작", "남은 일"];
 
-test("영역 문서는 정한 틀을 지킨다 — 제목, 「소유 코드:」 줄, `## ` 제목의 종류와 순서", () => {
+test("주제 문서는 정한 틀을 지킨다 — 제목, 「소유 코드:」 줄, `## ` 제목의 종류와 순서", () => {
   const bad = [];
-  for (const [file, t] of Object.entries(AREA_TEXT)) {
+  for (const [file, t] of Object.entries(TOPIC_TEXT)) {
     if (!/^# \S/.test(t)) bad.push(`${file}: 첫 줄이 \`# 제목\`이 아니다`);
     if (!/^소유 코드: `/m.test(t)) bad.push(`${file}: 「소유 코드:」 줄이 없다`);
     const hs = [...t.matchAll(/^## (.+)$/gm)].map((m) => m[1].trim());
-    for (const h of hs) if (!AREA_HEADINGS.includes(h)) bad.push(`${file}: 정하지 않은 제목 「${h}」`);
+    for (const h of hs) if (!TOPIC_HEADINGS.includes(h)) bad.push(`${file}: 정하지 않은 제목 「${h}」`);
     for (const h of REQUIRED_HEADINGS) if (!hs.includes(h)) bad.push(`${file}: 「${h}」이 없다`);
-    const order = hs.filter((h) => AREA_HEADINGS.includes(h)).map((h) => AREA_HEADINGS.indexOf(h));
-    if (order.some((v, i) => i > 0 && v <= order[i - 1])) bad.push(`${file}: 제목 순서가 ${AREA_HEADINGS.join(" → ")} 가 아니다`);
+    const order = hs.filter((h) => TOPIC_HEADINGS.includes(h)).map((h) => TOPIC_HEADINGS.indexOf(h));
+    if (order.some((v, i) => i > 0 && v <= order[i - 1])) bad.push(`${file}: 제목 순서가 ${TOPIC_HEADINGS.join(" → ")} 가 아니다`);
   }
-  assert.ok(AREAS.length > 0, "docs/areas/ 에 영역 문서가 없다");
+  assert.ok(TOPICS.length > 0, "docs/topics/ 에 주제 문서가 없다");
   assert.deepEqual(bad, [], bad.join("\n"));
 });
 
@@ -206,10 +206,10 @@ const globRe = (g) =>
   new RegExp(`^${g.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*\*/g, "\0").replace(/\*/g, "[^/]*").replace(/\0/g, ".*")}$`);
 const JS_FILES = FILES.filter((f) => f.startsWith("js/"));
 
-test("모든 js/ 파일을 정확히 한 영역 문서가 소유한다 — 「소유 코드:」 glob 은 파일을 고르고, 두 영역이 겹치지 않는다", () => {
+test("모든 js/ 파일을 정확히 한 주제 문서가 소유한다 — 「소유 코드:」 glob 은 파일을 고르고, 두 주제가 겹치지 않는다", () => {
   const bad = [];
   const owners = new Map();
-  for (const [file, t] of Object.entries(AREA_TEXT)) {
+  for (const [file, t] of Object.entries(TOPIC_TEXT)) {
     const line = /^소유 코드: (.+)$/m.exec(t)?.[1] ?? "";
     for (const [, g] of line.matchAll(/`([^`]+)`/g)) {
       const hit = JS_FILES.filter((f) => globRe(g).test(f));
@@ -217,8 +217,8 @@ test("모든 js/ 파일을 정확히 한 영역 문서가 소유한다 — 「�
       for (const f of hit) owners.set(f, [...(owners.get(f) ?? []), file]);
     }
   }
-  for (const [f, areas] of owners) if (areas.length > 1) bad.push(`${f}: ${areas.join(" · ")} 가 함께 소유한다`);
-  for (const f of JS_FILES) if (!owners.has(f)) bad.push(`${f}: 어느 영역 문서도 소유하지 않는다 — 알맞은 영역의 「소유 코드:」에 더한다`);
+  for (const [f, topics] of owners) if (topics.length > 1) bad.push(`${f}: ${topics.join(" · ")} 가 함께 소유한다`);
+  for (const f of JS_FILES) if (!owners.has(f)) bad.push(`${f}: 어느 주제 문서도 소유하지 않는다 — 알맞은 주제의 「소유 코드:」에 더한다`);
   assert.ok(JS_FILES.length > 30, "js/ 파일 목록을 읽지 못했다");
   assert.deepEqual(bad, [], bad.join("\n"));
 });

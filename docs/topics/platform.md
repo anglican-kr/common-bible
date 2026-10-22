@@ -2,7 +2,7 @@
 
 소유 코드: `js/app.js`, `js/app/helpers.js`, `js/app/storage.js`, `js/types.d.ts`, `js/gtag-init.js`, `js/pre-fetch.js`
 
-부팅과 모듈 구조(ESM), 여러 영역이 함께 쓰는 도우미와 저장소 모듈, 타입 검사, 유닛과 e2e 테스트, 네 저장소의 구성, 보안 헤더를 다룬다.
+부팅과 모듈 구조(ESM), 여러 주제가 함께 쓰는 도우미와 저장소 모듈, 타입 검사, 유닛과 e2e 테스트, 네 저장소의 구성, 보안 헤더를 다룬다.
 
 ## 지금 동작
 

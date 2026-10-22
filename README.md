@@ -234,8 +234,8 @@ tools/
 docs/
   architecture.md       ← 아키텍처 개요 · ADR 인덱스
   decisions/            ← 아키텍처 결정 기록 (ADR)
-  areas/                ← 영역 문서 (영역마다 지금 동작 · 결정 · 함정 · 남은 일)
-  known-issues.md       ← 이슈 번호 대장 (본문은 영역 문서)
+  topics/                ← 주제 문서 (주제마다 지금 동작 · 결정 · 함정 · 남은 일)
+  known-issues.md       ← 이슈 번호 대장 (본문은 주제 문서)
   coding-pitfalls.md    ← 공통 함정 · 작업 방식 교정 · 함정 번호 대장
   design/               ← 진행 중인 구현 설계서 (완료되면 archive/design/ 으로)
   reference/            ← 기도서 등 외부 원문 전사
@@ -297,7 +297,7 @@ npm run typecheck   # tsc -p tsconfig.json --noEmit && tsc -p tsconfig.worker.js
 
 1. Phase 1: 성경 읽기 PWA — 완료
 2. Phase 2: 기도서 콘텐츠 추가
-3. Phase 3: 교회력 계산기 — 엔진 · 전례독서 화면 · 캘린더 월간 표 구현(ADR-036 · 037 · 038), 남은 것은 [`docs/areas/liturgical.md`](docs/areas/liturgical.md)
+3. Phase 3: 교회력 계산기 — 엔진 · 전례독서 화면 · 캘린더 월간 표 구현(ADR-036 · 037 · 038), 남은 것은 [`docs/topics/liturgical.md`](docs/topics/liturgical.md)
 4. Phase 4: 성무일과 자동 생성
 
 ## 문서
@@ -305,5 +305,5 @@ npm run typecheck   # tsc -p tsconfig.json --noEmit && tsc -p tsconfig.worker.js
 - [문서 진입점](docs/index.md) — 작업 유형 → 먼저 읽을 문서
 - [아키텍처 개요](docs/architecture.md) — 전체 구조 한눈에
 - [아키텍처 결정 기록](docs/decisions/) — ADR 001-038
-- [영역 문서](docs/areas/) · [알려진 이슈 대장](docs/known-issues.md) · [자주 하는 실수](docs/coding-pitfalls.md) · [디자인 시스템](DESIGN.md)
+- [주제 문서](docs/topics/) · [알려진 이슈 대장](docs/known-issues.md) · [자주 하는 실수](docs/coding-pitfalls.md) · [디자인 시스템](DESIGN.md)
 - [변경 원장](docs/changes/) — 변경 하나에 파일 하나, PR 본문의 원본
