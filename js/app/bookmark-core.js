@@ -436,8 +436,8 @@ function _hasLegacyVerseSpec(nodes) {
  * store's per-item time (_u) stays as it was: this runs before the sync reads Drive, and a newer time would let this
  * device's copy win over an edit another device made since (사용자 결정 2026-10-22). The default-name rule needs the
  * book list, so only a start with something to move waits for it. The others — every start after the move — draw at
- * once: the calendar, 전례독서 and 설정 views do not load the book list (PR #367 review). If the list does not load,
- * nothing moves and the next start tries again.
+ * once: the calendar, 전례독서 and mobile 설정 views do not load the book list (PR #367 review). If the list does not
+ * load, nothing moves and the next start tries again.
  * @returns {Promise<void>}
  */
 function migrateStoredBookmarks() {
@@ -452,13 +452,18 @@ function migrateStoredBookmarks() {
 /**
  * A merged sync document, in place, before it is saved (state-machine.js _applyMergedDoc). Without this the old form
  * came back: the per-item time did not change, so the merge picks between the two copies by device id. The document
- * came from Drive, and a throw here would stop the save — so an item that is not an object is passed over. The sync
- * starts after the first view, so the book list is there; without it nothing moves.
+ * came from Drive, and a throw here would stop the save — so an item that is not an object is passed over. The book
+ * list is usually loaded by then (search.js preloads it at boot), but a start on a view that does not need it can
+ * merge first (PR #367 review). Then the document is saved as it came, and the stored list moves once the list loads
+ * — the startup move, a microtask after this save.
  * @param {import("../types").SyncDoc} doc
  */
 function migrateLegacyBookmarkDoc(doc) {
   const books = window.getBooksCache();
-  if (!books) return;
+  if (!books) {
+    Promise.resolve().then(migrateStoredBookmarks).then(() => window.rerenderActiveBookmarkTree?.());
+    return;
+  }
   for (const item of Object.values(doc?.bookmarks?.items ?? {})) {
     if (item?.type === "bookmark") migrateLegacyBookmark(item, books);
   }

@@ -1222,15 +1222,21 @@ const LEGACY_BOOKS = [
 // store's loadBookmarks · rewriteBookmarks (window.appStorage) and window.loadBooks · getBooksCache, stubbed here.
 // `calls` records what the startup move asked for.
 
-function loadBookmarkLegacy({ stored = [], books = LEGACY_BOOKS, booksFail = false, storeThrows = false } = {}) {
-  const calls = { loadBooks: 0, rewrites: [] };
+function loadBookmarkLegacy({ stored = [], books = LEGACY_BOOKS, booksCached = true, booksFail = false, storeThrows = false } = {}) {
+  const calls = { loadBooks: 0, rewrites: [], rerenders: 0 };
+  // The book list arrives a task later, as a fetch does — so a test that awaits the move sees whether it waited.
+  const later = (settle) => new Promise((resolve, reject) => setTimeout(() => settle(resolve, reject), 0));
   const ctx = {
     Object, Array, Set, String, Math, Number, JSON, console, Error, parseInt, Promise,
     loadBookmarks: () => { if (storeThrows) throw new TypeError("unreadable"); return stored; },
     rewriteBookmarks: (patch) => { calls.rewrites.push(patch); },
     window: {
-      loadBooks: () => { calls.loadBooks += 1; return booksFail ? Promise.reject(new Error("offline")) : Promise.resolve(books); },
-      getBooksCache: () => books,
+      loadBooks: () => {
+        calls.loadBooks += 1;
+        return later((resolve, reject) => (booksFail ? reject(new Error("offline")) : resolve(books)));
+      },
+      getBooksCache: () => (booksCached ? books : null),
+      rerenderActiveBookmarkTree: () => { calls.rerenders += 1; },
     },
   };
   vm.createContext(ctx);
@@ -1388,7 +1394,9 @@ test("migrateStoredBookmarks: nothing to move — resolves at once, without wait
 });
 
 test("migrateStoredBookmarks: a pre-#205 range in a folder — waits for the book list, then rewrites with the move", async () => {
+  // A bookmark without a verse range (the type allows it) must not stop the check (PR #367 review, 2회차).
   const stored = [{ type: "folder", id: "f", name: "", children: [
+    { type: "bookmark", id: "z", bookId: "gen", chapter: 1, label: "" },
     { type: "bookmark", id: "a", bookId: "isa", chapter: 10, verseSpec: "16aa", label: "이사 10:16aa" },
   ] }];
   const h = loadBookmarkLegacy({ stored });
@@ -1429,11 +1437,16 @@ test("migrateLegacyBookmarkDoc: a merged sync document's bookmarks move in place
   assert.doesNotThrow(() => h.migrateLegacyBookmarkDoc(undefined));
 });
 
-test("migrateLegacyBookmarkDoc: without the book list nothing moves", () => {
-  const h = loadBookmarkLegacy({ books: null });
+test("migrateLegacyBookmarkDoc: without the book list the document is saved as it came, and the stored list moves once the list loads", async () => {
+  // 캘린더로 시작하면 첫 화면이 성서 목록을 받지 않아, 드라이브 왕복이 더 빠르면 병합이 먼저 온다(PR #367 리뷰 2회차).
+  const stored = [{ type: "bookmark", id: "a", bookId: "isa", chapter: 10, verseSpec: "16aa", label: "", _u: 1 }];
+  const h = loadBookmarkLegacy({ stored, booksCached: false });
   const doc = { bookmarks: { tombstones: {}, items: { a: { id: "a", type: "bookmark", bookId: "isa", chapter: 10, verseSpec: "16aa", label: "", _u: 1 } } } };
   h.migrateLegacyBookmarkDoc(doc);
   assert.equal(doc.bookmarks.items.a.verseSpec, "16aa");
+  await new Promise((r) => setTimeout(r, 10));
+  assert.deepEqual({ loadBooks: h.calls.loadBooks, rewrites: h.calls.rewrites.length, rerenders: h.calls.rerenders },
+    { loadBooks: 1, rewrites: 1, rerenders: 1 });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

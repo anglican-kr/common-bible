@@ -185,9 +185,10 @@ function selectionCitation(selected, article) {
 
 /**
  * The citation a person reads — the verse-select bar's 「…절 선택됨」 and the 복사 citation, from selectionCitation's
- * `refs`. The numbers are those selectedVersesToSpec writes in the spec grammar of addresses and bookmarks, written two
- * ways it does not: a merged verse joins the run around it (나훔 1:1-9 — 「1-6,7-8,9」 before), and a data half verse
- * takes the printed letter (「9a」 → 「9ㄱ」).
+ * `refs`. The numbers are those selectedVersesToSpec writes in the spec grammar of addresses, written two ways it does
+ * not: a merged verse joins the run around it (나훔 1:1-9 — 「1-6,7-8,9」 before), and a data half verse takes the
+ * printed letter (「9a」 → 「9ㄱ」). A bookmark stores the same selection in verse numbers alone (verseNumberSpec — it
+ * joins the runs too, and drops the half verse's letter).
  * @param {string[]} refs
  * @returns {string}
  */
