@@ -14,22 +14,22 @@
 
 ## 함정
 
-### pitfalls §15 — Cache API ↔ IDB sidecar 불일치 + Content-Length 의존
+### pitfalls §15 — Cache API와 IDB 사이드카가 어긋나고, 크기를 Content-Length에 기댄다
 
-Cache API는 access-time / byte-size 메타데이터를 노출하지 않으므로 LRU·쿼터 추적은 IndexedDB sidecar에 별도 보관하는 패턴이 자연스럽다 (ADR-016). 그러나 두 store가 독립 존재이므로 한쪽만 갱신·소실되면 추적이 영구 어긋난다. 또 Content-Length 헤더에 의존해 byteSize를 기록하면 chunked transfer / gzip / Range 응답에서 0이 들어가 LRU cap이 사실상 무력화된다.
+Cache API는 접근 시각과 바이트 크기를 알려 주지 않는다. 그래서 LRU와 쿼터 추적은 IndexedDB 사이드카에 따로 둔다(ADR-016). 그런데 두 저장소가 따로 있어서, 한쪽만 갱신되거나 사라지면 추적이 영영 어긋난다. 또 byteSize를 Content-Length 헤더로 적으면 chunked 전송, gzip, Range 응답에서 0이 들어가 LRU 상한이 사실상 듣지 않는다.
 
-**사례 (2차 보안 감사 — `docs/archive/audit/2026-05-08-second-comprehensive.md` H1·H2·H3):**
+**사례**(2차 보안 감사 `docs/archive/audit/2026-05-08-second-comprehensive.md`의 H1, H2, H3):
 
-- **H1** — `sw.js:139` `byteSize = cl ? Number(cl) : 0`. Content-Length 누락 시 0 기록 → totalSize 합산에서 빠짐 → HARD_CAP 도달 신호 못 받음 → Cache API 무한 누적 → origin-단위 quota 초과 시 DATA_CACHE까지 evict.
-- **H2** — `_putAudioAndEnforceCap`이 두 fetch에서 동시 진행되면 `pickEvictions` 결과가 방금 put된 url을 evict 대상에 포함시켜 재생 중 mp3 삭제.
-- **H3** — `cache.put` 성공 후 `recordEntry` 실패하면 Cache에 mp3는 있고 IDB 메타는 없는 상태로 영구 누적. DevTools에서 한쪽만 비워도 같은 결과.
+- **H1**: `sw.js:139`가 `byteSize = cl ? Number(cl) : 0`로 적었다. Content-Length가 없으면 0을 적어 totalSize 합에서 빠진다. 그러면 HARD_CAP에 닿았다는 신호를 받지 못해 Cache API에 끝없이 쌓이고, origin 단위 쿼터를 넘으면 DATA_CACHE까지 밀려난다.
+- **H2**: `_putAudioAndEnforceCap`이 두 fetch에서 동시에 돌면, `pickEvictions`가 방금 넣은 url을 지울 대상에 넣어 재생 중인 mp3를 지운다.
+- **H3**: `cache.put`이 성공한 뒤 `recordEntry`가 실패하면, Cache에는 mp3가 있고 IDB에는 메타가 없는 항목이 영영 쌓인다. DevTools에서 한쪽만 비워도 같다.
 
 **규칙:**
 
-- **byteSize는 Content-Length를 우선하되 무효 시 `response.clone().blob().size`로 폴백한다.** 추가 read 1회 비용을 받아들이는 것이 LRU 정확성 손실보다 항상 낫다. clone()은 `cache.put` 전에 (body 소비 전에) 해야 한다.
-- **동시 in-flight URL 추적**: 모듈 레벨 `Set`에 진입 시 add, 종료 시 finally에서 delete. eviction은 이 Set을 filter out — 진행 중 항목이 다른 호출의 cap 정리에 휘말리지 않게.
-- **양 store reconcile**: SW `activate` 핸들러에서 `cache.keys()`와 IDB entries 양방향 비교. (a) Cache에 있고 IDB에 없는 항목 → recordEntry로 채움 (byteSize는 blob.size로). (b) IDB에 있고 Cache에 없는 항목 → orphan removeEntries. 비용은 mismatch 수에 비례하며 healthy 상태에선 microsecond.
-- **회귀 방어**: 단순 throughput 테스트 외에 (i) Content-Length 누락 응답 (ii) 동시 cap 초과 fetch (iii) IDB·Cache 한쪽 비움 시나리오를 명시적으로 다루는 테스트 케이스 필요.
+- **byteSize는 Content-Length를 먼저 쓰고, 값이 없거나 잘못되면 `response.clone().blob().size`로 대신한다.** 1회 더 읽는 비용이 LRU가 틀리는 손실보다 언제나 작다. clone()은 본문을 읽기 전, 곧 `cache.put` 전에 한다.
+- **받고 있는 URL을 추적한다.** 모듈 수준의 `Set`에 시작할 때 넣고, 끝날 때 finally에서 뺀다. 지울 대상을 고를 때 이 Set에 든 것은 뺀다. 받고 있는 항목이 다른 호출의 상한 정리에 휘말리지 않게 하려는 것이다.
+- **두 저장소를 맞춘다.** SW `activate` 핸들러에서 `cache.keys()`와 IDB 항목을 양쪽으로 견준다. Cache에 있고 IDB에 없는 항목은 recordEntry로 채운다(byteSize는 blob.size). IDB에 있고 Cache에 없는 항목은 남은 기록이므로 removeEntries로 지운다. 비용은 어긋난 수에 비례하고, 어긋남이 없으면 마이크로초 수준이다.
+- **회귀를 막는 테스트**: 처리량 테스트만으로는 부족하다. (i) Content-Length가 없는 응답, (ii) 상한을 넘는 fetch가 동시에 도는 경우, (iii) IDB와 Cache 가운데 한쪽을 비운 경우를 따로 다루는 케이스가 필요하다.
 
 ## 남은 일
 
