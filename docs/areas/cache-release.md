@@ -12,7 +12,7 @@
 
 - ADR-021 「PWA 버전 식별자를 콘텐츠 해시 매니페스트로」
 - ADR-001 「SPA 아키텍처 선택」(오프라인 우선)
-- 캐시 전략은 `architecture.md` §4.6, 빌드와 배포는 §8에 있다. 릴리스 전 CSP 점검은 `tools/csp/README.md`.
+- 캐시 전략은 `architecture.md` §4.6, 빌드와 배포는 `architecture.md` §8에 있다. 릴리스 전 CSP 점검은 `tools/csp/README.md`.
 
 ## 함정
 
