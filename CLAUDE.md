@@ -44,7 +44,7 @@
 - `scripts/` — `release.py`(version.json + sw-version.js bump + 자동 commit), `changelog.py`(릴리스 노트용 변경 목록 — 앱 git log + data 서브모듈 compare, `--generate-notes` 대체), `serve.py`(SPA-aware 로컬 서버), `generate_splash.py`(iOS 스플래시, ADR-007), `lock_merged_ledgers.sh`(머지된 원장을 로컬에서 읽기 전용으로 잠금 — `npm test` 앞·PR 생성 후 자동, 클론마다 다시), `pr_body.sh`(원장에서 frontmatter를 뺀 PR 본문), `docs_facts_snapshot.py`(교회력 설계 문서 5종 + 보관 문서 + 픽스처의 사실 토큰을 리비전 간 비교 — 문서 리팩터링 PR 의 「사실 변경 0」 증명, `--diff main HEAD`. 다른 문서는 `--docs` · `--kinds general`, 글자 그대로 옮긴 줄은 `--from` · `--into`로 검증)
 - `tools/` — 개발자용 보조 도구(앱이 쓰지 않는다). `booklet/`(「전례독서」 책자 PDF ↔ 엔진 대조 — pypdf 추출 · 2027년 책자 형식의 파서 · 엔진 덤프 · 대조 보고서, README 참조) · `csp/`(CSP 위반 점검 — 릴리스 전에 주요 화면을 실제 브라우저로 돌며 콘솔의 CSP 위반을 모은다, README 참조)
 - `tests/` — e2e(`e2e/`, Playwright, 로컬 전용) + JS 유닛(`unit/`, ADR-013, CI 자동)
-- `docs/` — `architecture.md`(아키텍처 개요·ADR 인덱스), `status.md`(구현 현황 — "지금 무엇이 동작하는가"), `known-issues.md`(미해결 이슈·후속 백로그), `decisions/`(ADR), `design/`(진행 중인 구현 설계서 — 완료되면 `archive/design/` 으로 옮긴다), `reference/`(기도서 등 외부 원문 전사), `archive/`(완료·점-시점 기록 — `design/` 설계 변천 · `audit/` 보안 감사), `index.md`(**진입점** — 작업 유형 → 먼저 읽을 문서), `changes/`(**변경 원장** — 변경 하나에 파일 하나, PR 본문의 원본), `coding-pitfalls.md`
+- `docs/` — `architecture.md`(아키텍처 개요·ADR 인덱스), `topics/`(**주제 문서** — 주제마다 지금 동작 · 결정 · 함정 · 남은 일), `known-issues.md`(이슈 번호 대장), `decisions/`(ADR), `design/`(진행 중인 구현 설계서 — 완료되면 `archive/design/` 으로 옮긴다), `reference/`(기도서 등 외부 원문 전사), `archive/`(완료·점-시점 기록 — `design/` 설계 변천 · `audit/` 보안 감사), `index.md`(**진입점** — 작업 유형 → 먼저 읽을 문서), `changes/`(**변경 원장** — 변경 하나에 파일 하나, PR 본문의 원본), `coding-pitfalls.md`(공통 함정 · 작업 방식 교정 · 함정 번호 대장)
 - `assets/` — 아이콘(`icons/`), 스플래시(`splash/`, ADR-007), 설치 안내 3컷(`install-guide/`, ADR-008)
 - `.github/workflows/test.yml` — CI (Node 24 + `node --test`, ADR-013 · 같은 잡에서 타입 검사 `npm run typecheck`, ADR-012 · pull_request 트리거)
 - `.github/workflows/ledger.yml` — CI `Change ledger` (PR 에 `docs/changes/` 원장 파일이 있는지 검사 + 머지된 원장 변경 차단, `sync/` 자동 PR 면제)
@@ -124,9 +124,9 @@ Phase 1(성경 읽기) → Phase 2(기도서) → Phase 3(교회력 계산기) �
 2. **구현 후**: ADR에 기술된 내용과 실제 구현이 달라진 부분이 있으면 해당 ADR을 갱신한다.
    — 새로운 결정 항목이면 새 ADR 파일 생성(`NNN-이름.md`, 다음 번호 이어서)
    — 기존 결정이 바뀌면 해당 파일의 본문을 현재 결론으로 제자리 갱신하고, 버린 선택지는 「검토한 대안」 절에 날짜·이유·재검토 조건과 함께 남긴다. 개정 블록·취소선·「해소/재개/정정」 꼬리표는 쓰지 않는다 — 시점 이력은 git 과 `docs/changes/` 원장이 맡는다(2026-10-10, 설계서 `docs/design/liturgical-engine.md` §1.4). ADR-001~035 의 옛 개정 블록에는 소급하지 않고 그 파일을 손댈 때 따른다
-3. **구현 PR 머지 시점**: ADR 상단 `상태` 필드와 `docs/status.md`(구현 현황)를 함께 갱신한다.
+3. **구현 PR 머지 시점**: ADR 상단 `상태` 필드와 그 주제 문서(`docs/topics/`)의 「지금 동작」을 함께 갱신한다.
    — ADR 상태: `승인됨 — 구현 대기` → `승인됨 — 구현 완료` (날짜 병기 권장)
-   — `docs/status.md` 에 한 줄 추가 또는 갱신 — "지금 무엇이 동작하는가" 의 권위 출처.
+   — 주제 문서 「지금 동작」에 한 줄 추가 또는 갱신 — "지금 무엇이 동작하는가" 의 권위 출처.
    — 새 ADR 채택이라면 `docs/architecture.md` 부록 A 의 ADR 인덱스에도 한 줄 추가.
 
 데이터 도메인 ADR(002·003·006)은 분할 후 `common-bible-data` 저장소로 이전 검토 대상 (ADR-020 후속).
@@ -192,12 +192,12 @@ git branch -D <topic-branch>   # squash 커밋은 브랜치 커밋과 이어지�
 
 ## 지식 베이스 루프
 
-`docs/` 는 작업을 거듭할수록 쌓이는 지식 베이스다. 원자료 층(`docs/changes/` 변경 원장)과 정리 층(`status.md` · ADR · `known-issues.md` · `coding-pitfalls.md` · `index.md`)으로 나뉘고, 세 루프가 돌아야 살아 있다.
+`docs/` 는 작업을 거듭할수록 쌓이는 지식 베이스다. 원자료 층(`docs/changes/` 변경 원장)과 정리 층(주제 문서 `docs/topics/` · ADR · `known-issues.md` 대장 · `coding-pitfalls.md` · `index.md`)으로 나뉘고, 세 루프가 돌아야 살아 있다.
 
 1. **읽기 — 작업 시작 시.** [`docs/index.md`](docs/index.md) 를 읽고 표에서 작업 유형에 맞는 문서를 코드보다 먼저 연다. 같은 곳을 건드린 이전 변경은 `grep -ril <키워드> docs/changes/` 로 찾는다. 사용자가 이미 확정한 사실을 다시 묻거나 뒤집지 않기 위한 단계다.
-2. **쓰기 — PR 을 열기 직전.** 원장 파일 하나를 쓰고(요약 · 확정·근거 · 검증 · 갱신한 문서) 커밋한 뒤 `gh pr create --body-file` 로 연다. 그 파일을 쓰면서 정리 층 다섯 곳 중 갱신할 것이 있는지 판단해 같은 PR 에 넣는다. 사용자 교정과 도메인 확정은 PR 을 기다리지 말고 **그 자리에서** `coding-pitfalls.md` 에 날짜·근거와 함께 적는다. `.claude/hooks/pre-pr-ledger.sh` 와 CI `Change ledger` 가 원장 없는 PR 을 막고, 머지된 원장의 수정은 `pre-commit-ledger.sh`·같은 CI 가 막는다.
+2. **쓰기 — PR 을 열기 직전.** 원장 파일 하나를 쓰고(요약 · 확정·근거 · 검증 · 갱신한 문서) 커밋한 뒤 `gh pr create --body-file` 로 연다. 그 파일을 쓰면서 정리 층 다섯 곳 중 갱신할 것이 있는지 판단해 같은 PR 에 넣는다. 사용자 교정과 도메인 확정은 PR 을 기다리지 말고 **그 자리에서** 함정으로 날짜·근거와 함께 적는다 — 한 주제면 그 주제 문서, 여럿이면 `coding-pitfalls.md`(`docs/topics/README.md`). `.claude/hooks/pre-pr-ledger.sh` 와 CI `Change ledger` 가 원장 없는 PR 을 막고, 머지된 원장의 수정은 `pre-commit-ledger.sh`·같은 CI 가 막는다.
 3. **정리 — 릴리스마다.** 마지막 정리 이후의 원장 파일을 훑어 `index.md` 행·훅이 실제 파일과 맞는지, 완료된 `design/` 문서를 `archive/` 로 옮겼는지, 정리 층끼리 모순이 없는지, 200줄을 넘긴 페이지를 나눌지 점검한다. 쌓이기만 하는 문서는 읽히지 않는다.
 
 ## 현재 상태
 
-"지금 무엇이 동작하는가"의 권위 출처는 [`docs/status.md`](docs/status.md) — 기능 단위 구현 현황. 구현 PR 머지 시 그 문서를 갱신한다(위 ADR 워크플로우 §3). 상세 결정은 각 ADR + [`docs/architecture.md`](docs/architecture.md) 부록 A 인덱스, 변경 단위 기록은 `docs/changes/`(변경 원장), 미해결 이슈·후속 백로그는 `docs/known-issues.md`.
+"지금 무엇이 동작하는가"의 권위 출처는 주제 문서([`docs/topics/`](docs/topics/))의 「지금 동작」이다. 구현 PR 머지 시 그 주제 문서를 갱신한다(위 ADR 워크플로우 §3). 상세 결정은 각 ADR + [`docs/architecture.md`](docs/architecture.md) 부록 A 인덱스, 변경 단위 기록은 `docs/changes/`(변경 원장), 미해결 이슈는 주제 문서의 「남은 일」(번호 대장은 `docs/known-issues.md`).

@@ -1,6 +1,6 @@
 # docs/changes — 변경 원장
 
-**변경 하나에 파일 하나.** 이 디렉터리는 지식 베이스의 **원자료 층**이다 — 여기서 추려 낸 정리 층이 `status.md`(지금 동작하는 것) · `decisions/`(왜 그렇게 정했나) · `known-issues.md`(남은 것) · `coding-pitfalls.md`(조심할 것) · `index.md`(무엇을 먼저 읽나)다.
+**변경 하나에 파일 하나.** 이 디렉터리는 지식 베이스의 **원자료 층**이다 — 여기서 추려 낸 정리 층이 주제 문서 `topics/`(지금 동작하는 것 · 남은 것 · 그 주제의 함정) · `decisions/`(왜 그렇게 정했나) · `known-issues.md`(이슈 번호 대장) · `coding-pitfalls.md`(공통 함정) · `index.md`(무엇을 먼저 읽나)다.
 
 PR 본문은 여기 파일에서 파생한다. frontmatter를 뺀 나머지가 본문이다(`scripts/pr_body.sh`). 같은 글을 두 번 쓰지 않고, 원본은 항상 저장소 안에 남는다. 흐름을 보려면 GitHub 가 아니라 이 디렉터리를 `ls`·`grep` 한다.
 
@@ -33,7 +33,7 @@ title: "feat: 짧은 문구 제목 (커밋 메시지 규칙과 동일)"
 
 ## 갱신한 문서
 
-코드(`js/` `css/` `index.html` `sw.js`)가 바뀐 PR 은 이 절이 **필수**(훅·CI 가 검사). status.md · ADR · known-issues · coding-pitfalls · index.md 중 손댄 것을 적고, 갱신할 것이 없으면 `- 없음 — 이유` 한 줄.
+코드(`js/` `css/` `index.html` `sw.js`)가 바뀐 PR 은 이 절이 **필수**(훅·CI 가 검사). 주제 문서 · ADR · known-issues · coding-pitfalls · index.md 중 손댄 것을 적고, 갱신할 것이 없으면 `- 없음 — 이유` 한 줄.
 
 ## 리뷰 반영
 

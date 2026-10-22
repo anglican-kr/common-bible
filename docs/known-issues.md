@@ -1,7 +1,9 @@
-# 알려진 이슈 / 후속 과제
+# 알려진 이슈 — 번호 대장
 
-ADR-034(뷰·라우팅 2차 분할) 작업 중 발견·확인한 항목 모음. "나중에 대응" 대상.
-최초 작성 2026-06-08.
+열린 이슈의 본문은 그 주제 문서(`docs/topics/`)의 「남은 일」에 있다. 이 파일은 번호마다 어디로 옮겼는지, 언제 해소했는지를 적는 대장이다. 코드 주석과 머지된 원장이 「known-issues §N」으로 가리키므로 번호는 다시 쓰지도 당기지도 않는다(pitfalls §26).
+
+- 새 이슈는 다음 번호(§26부터)를 받고, 이슈 하나에 번호 하나를 준다. 본문은 주제 문서에 쓰고, 여기에는 절 제목과 대장 줄만 둔다.
+- 절마다 남은 소개 문단과 해소 기록은 그 번호의 이력이다. 이 파일은 2026-06-08에 ADR-034(뷰·라우팅 2차 분할) 작업 중 찾은 항목 모음으로 시작했고, 2026-10-23에 열린 이슈를 주제 문서로 옮겼다.
 
 ---
 
@@ -34,26 +36,7 @@ ADR-034(뷰·라우팅 2차 분할) 작업 중 발견·확인한 항목 모음. 
 - ~~audio `applyAudioShow` → `window.parsePath` facade edge~~ **조사 완료 → 현 설계 유지 (§2.2)** — 없애려던 항목이나 검토 결과 facade가 정답(명시 import는 사이클, readingContext는 stale, state-machine 호출자는 컨텍스트 못 줌). 조치 없음.
 - ~~**`bookmark.js` 분할**~~ **완료 (2026-06-11)** — 3,578 → **589줄**(−84%). 모듈별 점진 분리. 완료: 순수 로직 `bookmark-core.js`(query/href/sort/active) · 절 스펙 `verse-spec.js` · 모달 `bookmark-modals.js` · 폴더 모아 읽기 `bookmark-read.js` · 제스처 엔진 `bookmark-gestures.js`(드래그 reorder + 스와이프 액션 + 포인터 핸들러) · 선택 삭제 모드 `bookmark-select.js`(상태 + 캐스케이드 수학 + 삭제·공유·이동 액션 + #bm-select-bar dock — 트리렌더↔select 양방향은 import(상태/핸들러)+주입(재렌더/헤더)으로 차단) · **절 선택 모드 `bookmark-verse-select.js`(in-reading 절 선택 → 북마크/복사 + #verse-select-bar dock, near-leaf라 DI 불필요) · **⋯ 메뉴 `bookmark-menu.js`(탭 뷰 title-row 액션: 정렬·새 폴더·내보내기·가져오기·선택 + 🛈 안내 + 전체 선택 + exportBookmarks) · **트리 렌더링 `bookmark-tree.js`(per-row 빌더 + renderBookmarkTree + _rerenderActiveBookmarkTree 허브 + renderBookmarksView + 드로어 키보드 내비, ADR-034 후속, 마지막 라운드 — 드로어/헤더 콜백 3개 주입)**. **분할 완료**: bookmark.js 2,432→589줄(−76%), 드로어/헤더 오케스트레이터로 수렴(헤더 버튼·드로어 lifecycle·init 배선·facade·keydown).
 
-### 2.1 PR5c — `registerView` dispatch 역전 트레이드오프 (2026-06-08 검토)
-
-결론: **단독 투기성 PR로는 하지 말고, Phase 2 라우트 추가 또는 설정 화면 재구성에 얹어서 진행.**
-
-**전제 (실측)**
-- PR5a 이후 routing.js는 search/bookmark/settings를 ESM import하지 않고 `window` facade로 호출 → **구조적 import 사이클은 이미 없다.** registerView가 고칠 구조적 문제(순환 import·로드 순서·tsc 에러)는 없고, 남은 건 전역 네임스페이스 경유의 *논리적* 결합뿐.
-- routing→타모듈 호출 9개 = 뷰 렌더러 3~4(`renderSearchResults`·`renderSearchView`·`renderBookmarksView`·`renderSettingsView`) + 오케스트레이션 헬퍼 5(`consumeSearchAutoNavigate`·`isMobile`·`openBookmarkDrawer`·`exitVerseSelectMode`·`exitBookmarkSelectMode`). registry는 렌더러만 대상; 헬퍼·분기 로직은 잔존.
-- 역방향: **search→routing 21회**, bookmark 5, settings 3 — 결과 클릭→`navigate()`, 재렌더→`route()`, 가드→`parsePath`/`routeSeq`처럼 본질적.
-
-**핵심 반론 — registerView는 사이클을 못 끊는다.** routing→search 한 방향만 뒤집을 뿐, search→routing 21회는 검색의 본질(결과가 라우팅을 일으킴)이라 잔존. "순환 끊기" 명분이 성립 안 함.
-
-**두 변형**
-- **얕은** (`window.renderXView()` → `registry[view]()` 치환): 비용 낮음 / 효용 거의 0 (facade→registry lookup뿐; 헬퍼·분기·역방향 그대로). → **하지 말 것.**
-- **깊은** (각 뷰 모듈이 route 핸들러 전체 등록, route는 `await registry[view](parsed, ctx)`): 비용 큼 — 검색 분기(query/빈쿼리/autoNav/filter/desktop·mobile + `_routeSeq` 가드 + recordPath) 이관 + 공유 `context` 객체 설계 + bible 코어 뷰 처리 + meta/launch/analytics 분산. 위험 높음(중앙 오케스트레이션 분산 → 일관성·검색 auto-nav 흐름 취약). 효용 = **로드맵 확장성**(Phase 2~4 새 라우트가 self-register → route() 불변), 단 미래 뷰가 단순 핸들러일 때만 큼. 현재 뷰는 안 단순 → 지금 3표본으로 추상화 확정은 YAGNI.
-
-**권고 (언제·어떻게)**
-1. 얕은 registry 금지(효용 없음).
-2. 깊은 registry 단독 PR 보류(현 3뷰엔 premature, 위험>효용).
-3. **트리거에 묶기**: (a) **Phase 2(기도서) 라우트 추가 시** — 4번째 뷰가 추상화를 정당화하는 자연 트리거; (b) **설정 화면 재구성 시** — settings 분기가 어차피 바뀌니 그 PR에서 settings를 registry 핸들러로 점진 도입.
-4. **0-위험 사전 작업(지금 가능, registerView와 무관)**: route() 각 분기의 `dismissLaunchScreen()`·`updatePageMeta()`·`trackPageView()` 보일러플레이트를 route() 내부 finalize 헬퍼로 추출(각 분기는 `{title, description}`만 반환). 모듈 경계 불변 = 0 위험, 깊은 registry의 context 설계 토대.
+- §2.1 → [topics/platform.md](topics/platform.md)
 
 ### 2.2 audio `applyAudioShow` → `window.parsePath` (2026-06-08 검토 → 현 설계 유지)
 
@@ -75,55 +58,11 @@ ADR-034(뷰·라우팅 2차 분할) 작업 중 발견·확인한 항목 모음. 
 
 한 줄 안에서 여닫이를 번갈아 매기는 방식도, 문서 전체에서 번갈아 매기는 방식도 **쓰면 안 된다.** 인용이 줄을 넘나들고(`source/` 는 따옴표가 있는 7,901줄 중 4,438줄이 홀수 개), 원본에 짝 없는 따옴표가 하나라도 있으면 그 뒤로 파일 끝까지 위상이 뒤집힌다.
 
-### 3.1 전례시편 본문 편집
+- §3.1 → [topics/bible-text.md](topics/bible-text.md)
 
-> **부분 해소 (2026-07-12 · 2026-08-29 재판정).** 150편 전편 편집 완료. 51~77편(`55d8d65`) → 78~103편(`e0138d8`) → 104~148편(`2b36905`)을 차례로 편집해 절을 채우고 교정했고, 마지막에 병합 절 표기를 정규화하며 절 누락 3곳을 보완했다(`cb06fd7`). 확인 시점(2026-08-08) `liturgical/psalter/*.md` 150편에 곧은 따옴표는 0곳이다. 아래 "재확인 필요"로 적어 둔 여섯 편(**81 · 87 · 89 · 91 · 124 · 132**)도 모두 이후 편집 범위(78~103 · 104~148)에 들어갔다.
->
-> **다만 그 편집이 인쇄본 대조였는지는 커밋 기록만으로 단정할 수 없다.** 원래 미결 조건은 「편집 범위에 포함」이 아니라 **인쇄본 대조**였으므로, 그 증거가 없는 채로 완전 해소로 닫지 않는다. 따옴표 정규화는 끝났고(곧은 따옴표 0곳), **여섯 편의 인쇄본 대조만 남은 작업으로 유지한다.**
+- §3.2 → [topics/bible-text.md](topics/bible-text.md)
 
-원래 문제:
-
-1~50편은 편집 완료(2026-07-10)였고, **51편부터는 편집 과정에서 따옴표·본문 오류를 함께 잡기로** 했다.
-
-편집 전에 따옴표 짝만 먼저 맞춰 둔 편이 있었다 — **81 · 87 · 89 · 91 · 124 · 132**. 인쇄본과 본문을 대조한 것은 아니어서 편집 시 재확인 대상으로 남겼다. 특히:
-
-- **91편** — 14절 본문이 6절·13절 뒤에 중복으로 붙어 있었다. 군더더기 4줄과 붙이다 만 ` 14“` 흔적을 지우고 진짜 14절을 `“` 로 열었다.
-- **132편** — 잉여 닫는 따옴표 2개(10행·34행)와 줄 끝 `]` 를 제거했다. 인용은 3~5절, 14~18절이 각각 한 덩어리라는 판단.
-- **89 · 124편** — 편 끝까지 이어지는 화자의 말에 닫는 따옴표가 없어 마지막 행에 `”` 를 붙였다.
-
-### 3.2 앱 코드가 곧은 따옴표를 하드코딩한다
-
-> **해소됨 (2026-07-10, PR #302).** 판정을 [`js/app/helpers.js`](../js/app/helpers.js) 의 순수 함수 `hangingQuoteClass()` 한 곳으로 모으고, 곧은·곱슬, 여는·닫는 6종을 모두 인식하도록 넓혔다. 곱슬 겹따옴표는 곧은 것보다 넓어(Noto Serif KR 기준 0.444em 대 0.389em) `.hanging-quote--curly` 전용 오프셋을 신설했다. 브라우저에서 `/1chr/16` 의 JSON 응답을 곱슬 따옴표로 바꿔치기해 확인 — 수정 전 내어쓰기 0개, 수정 후 3개, 첫 글자와 운문 기준선 차이 +0.02px(오프셋 신설 전이라면 +0.79px). 유닛 798 · e2e 215 통과. ADR-006 은 데이터 저장소에서 v2.4 로 갱신했다.
-
-원래 문제:
-
-`views.js` 와 `citations.js` 가 각자 `line[0] === '"'` 로 운문 행의 내어쓰기(hanging punctuation, ADR-006) 클래스를 판정해 `“` 나 `‘` 로 시작하는 행을 못 알아봤다.
-
-- **ADR-039 시편 렌더링이 붙는 시점**: 전례시편 본문은 이미 `“` 로 시작하므로 그때 바로 이 판정이 실패했을 것이다.
-- **`source/` 전환 시**: 데이터만 바꾸면 운문 첫 행 따옴표 내어쓰기가 전부 사라졌을 것이다.
-
-> **교훈**: 데이터 표기를 바꾸기 전에, 그 표기를 문자 단위로 읽는 코드가 있는지 먼저 찾는다. 이 결합은 `tsc` 도 유닛 테스트도 못 잡았고 — 해당 코드는 유닛 테스트 사각지대였다 — 브라우저에서 바뀐 데이터로 실제 렌더해 봐야 드러났다.
-
-### 3.3 `source/` 성서 본문 73권 미전환
-
-변환 대상은 코드·HTML 을 뺀 **11,766곳**. 위 규칙으로 97.6% 가 고확신 판정이고, 나머지도 규칙 자체는 결정적이다. 다만 착수 전에 다음을 알고 있어야 한다.
-
-**(a) 사람이 판단해야 하는 17곳** — 알고리즘 한계가 아니라 원본 전사(轉寫) 자체에 짝 없는 따옴표가 있다. 인쇄본 대조가 필요하다.
-
-| 파일 | 위치 |
-|---|---|
-| 짝 없는 닫는 따옴표 | `1chr.md:690` · `2cor.md:142` · `gen.md:905` · `job.md:1863` · `luke.md:187` · `luke.md:250` · `rev.md:122` · `tob.md:309` |
-| 닫히지 않은 여는 따옴표 | `1pet.md`(2) · `2pet.md` · `exod.md` · `ezek.md` · `gen.md` · `jdt.md` · `matt.md` · `ps.md` · `rev.md` |
-
-**(b) `<cite src="…">` · `<note>` 속성 따옴표 510개는 반드시 보호** — 곱슬로 바꾸면 ADR-022 인용·주석 파서가 태그를 못 읽는다.
-
-**(c) 홑따옴표도 함께 해야 한다** — `source/` 에 `'` 가 2,271개, 그중 549건이 `"… '…' …"` 중첩 인용이다. 겹따옴표만 바꾸면 `“… '…' …”` 처럼 섞여 오히려 어색해진다. 아포스트로피(단어 사이의 `'`)는 제외할 것.
-
-**(d) 검색이 따옴표를 정규화하지 않는다** — `common-bible-data/src/search_indexer.py` 는 ¶ 와 공백만 처리하고 [`js/search-worker.js`](../js/search-worker.js) 는 소문자화만 한다. 전환 후에는 사용자가 `"` 를 입력해 검색하면 매치되지 않는다. 인덱싱·질의 양쪽에서 따옴표를 정규화할지 결정이 필요하다.
-
-**(e) 파급 범위** — 73권 JSON + 검색 인덱스 4종이 재생성되고 `tests/test_snapshots.py` 픽스처가 통째로 갱신된다. `source/` 만 커밋하고 산출물은 `build.yml` 이 자동 커밋백하도록 둘 것 — 산출물을 직접 커밋하면 빌드가 no-op 이 되어 앱 저장소 자동 동기화가 끊긴다.
-
-앱 쪽 준비는 끝나 있다(§3.2). 내어쓰기는 곧은·곱슬을 모두 인식하고 ADR-006 도 v2.4 로 갱신됐으므로, `source/` 전환은 데이터 저장소 안에서 독립적으로 진행할 수 있다.
+- §3.3 → [topics/bible-text.md](topics/bible-text.md)
 
 ---
 
@@ -155,14 +94,14 @@ ADR-038 §3 렌더 기반이 복원하는 전례 표기 — 계응 ◯(`.respons
 
 머지 전에 서브에이전트 둘(기존 앱 회귀 · 자체 리뷰 이후 변경)이 다시 본 뒤, 고친 것을 빼고 남긴 것. 「전례독서 · 캘린더 모듈을 모든 화면에서 내려받는다」는 2026-10-17에 고쳐 지웠다 — 세 모듈(엔진 포함)을 그 화면에 처음 갈 때 불러온다(원장 `docs/changes/2026-10-17-lazy-liturgical-modules.md`). 「반절이 절 전체로 보이는 47곳」은 2026-10-22에 고쳐 지웠다. 데이터의 경계 표대로 반절을 그린다(ADR-038 §3 「구현」, 원장 `docs/changes/2026-10-22-lectionary-half-verses.md`).
 
-- **서비스 워커 설치와 오프라인 동작은 확인하지 못했다** — 헤드리스 Chromium에서는 동시에 10개 넘게 받는 설치가 멈춰(main의 `sw.js`도 같다) 브라우저로 볼 수 없었다. `SHELL_FILES` 54개가 모두 200으로 응답하는 것만 curl로 확인했다. 배포 전 실기기에서 한 번 확인한다. 2026-10-17부터는 캘린더 · 전례독서 화면이 오프라인에서 **다시** 열리는지도 여기에 든다 — 온라인에서 한 번 연 뒤 연결을 끊고 연다. 그 화면의 모듈 셋은 서비스 워커가 설치 때 미리 받아 두지만(`SHELL_FILES` — `tests/unit/sw.test.js`가 지킨다), 교회력 표(`/data/lectionary/*`)는 처음 쓸 때 캐시하므로 온라인에서 한 번도 열지 않은 캘린더가 오프라인에서 「교회력 자료를 불러오지 못했습니다」가 되는 것은 정상이다(PR #355 리뷰 — 원장의 「오프라인에서도 그 화면이 처음 열리도록」은 틀렸다).
-- **아이폰 인앱 브라우저에서 공유 링크를 처음 여는 경우를 확인하지 못했다**(2026-10-18, PR #355 머지 뒤). 카카오톡 같은 인앱 브라우저로 `/lectionary/<날짜>` 링크를 처음 열고, 연결을 끊었다가 「다시 불러오기」로 회복하는지 dev 배포 때 실기기에서 확인한다. 「다시 불러오기」는 #355의 지연 로드가 만든 화면이다(원장 `docs/changes/2026-10-17-lazy-liturgical-modules.md`).
+- §6.1 → [topics/cache-release.md](topics/cache-release.md)
+- §6.2 → [topics/liturgical.md](topics/liturgical.md)
 
 ---
 
 ## 7. A2(캘린더 탭) 작업 중 찾은 후속 (2026-10-15)
 
-- **`sw.js`(서비스 워커)는 어느 tsconfig 에도 들지 않는다**(2026-10-17 발견 — main 부터). `tsconfig.json` 의 `include` 는 `js/**` 이고 `tsconfig.worker.json` 은 `js/search-worker.js` 하나라, 루트의 `sw.js`(396줄)는 검사 밖이다(`checkJs: true` 도 `include` 밖의 파일에는 닿지 않는다). WebWorker lib 설정으로 재 보면 40건 — 이벤트가 `FetchEvent` · `ExtendableEvent` · `ExtendableMessageEvent` 가 아니라 `Event` 로 잡히는 것 23(`request` · `waitUntil` · `respondWith` · `data` · `ports`), `self` 가 `ServiceWorkerGlobalScope` 가 아니라 `WorkerGlobalScope` 로 잡히는 것 6(`skipWaiting` · `clients` · `importScripts` 로 실은 `APP_VERSION` · `bibleAudioCache`), 매개변수 타입 11. **고치는 법**: 서비스 워커 전용 설정(`include: ["sw.js"]`, WebWorker lib)을 두어 `npm run typecheck` 에 한 줄을 더하고, `self` 와 리스너 이벤트의 타입을 JSDoc 으로 적는다 — 캐시 · 업데이트의 중심이라 §6 의 실기기 오프라인 확인과 함께 본다.
+- §7.1 → [topics/platform.md](topics/platform.md)
 
 ---
 
@@ -182,8 +121,7 @@ ADR-038 §3 렌더 기반이 복원하는 전례 표기 — 계응 ◯(`.respons
 
 #350(§8 셋)을 `/code-review` 로 본 것 가운데 그 PR 에서 고치지 않고 넘긴 것. 고친 것과 각 건의 조치는 원장 `docs/changes/2026-10-17-known-issues-8.md` 「리뷰 반영」. 넘긴 일곱 가운데 셋(계산 범위 판정 하나로 · 날짜 이동 줄 하나로 · 인용 시트 꺾쇠)은 2026-10-17 에 고쳐 지웠다 — 원장 `docs/changes/2026-10-17-known-issues-10-part1.md`. 둘(라우터 수준 포커스 복원 · 화면마다 잇던 네 걸음)도 같은 날 고쳐 지웠다 — 원장 `docs/changes/2026-10-17-router-focus-restore.md`. 남은 둘은 기기 확인 대기와 기록만 두기로 한 것이다.
 
-- **iOS 18.4 미만에서는 탭한 뒤 다시 그린 화면에 포커스 링이 남을 수 있다 — 기기 확인 대기.** WebKit 은 탭으로 링크에 포커스를 주지 않아, 복원의 스크립트 포커스를 `:focus-visible` 로 쳐 링을 그린다(WebKit 소스 · 성서 목록 책 카드의 같은 일 `43db624`). #350 리뷰에서 포인터로 누른 복원은 `focus({ focusVisible: false })` 로 링 없이 두게 했는데, 그 옵션은 Safari 18.4 부터다. 실제 아이폰(18.4 이상 · 미만)에서 전례독서의 칩 · 세그먼트 · 카드 · ‹ › , 캘린더의 달 이동, 성서 목록의 구분 탭, 검색의 쪽 링크를 눌러 보고, 18.4 미만이 의미 있으면 책 카드처럼 표지로 막는다(키보드 · VoiceOver 의 포커스 복원은 남긴다).
-- **Safari 26 이하 데스크톱 — 다시 그린 뒤 위치의 남은 경우.** 머리가 접힌 채 위로 되돌아온 자리(스크롤 10 ~ 60px — 이력 구간)에서 새 장을 받는 다시 그리기를 누르면, 돌아온 뒤에도 머리의 검색 줄이 펼친 채 남아 누른 컨트롤이 그 줄 높이(약 46px)만큼 아래에 선다. 스크롤 고정(scroll anchoring)이 있는 브라우저(Chrome · Edge · Firefox · Safari 27+)는 화면 위치 그대로다(`helpers.js restoreFocusSpot` — ADR-031 §5). 근본은 같은 뷰를 다시 그릴 때 스켈레톤이 문서를 줄여 스크롤을 누르지 않게 하는 것(라우터)이지만, **고치지 않고 기록만 둔다**(사용자 결정 2026-10-17 — Safari 27(2026-09) 보급으로 줄어드는 좁은 경우라 스켈레톤 동작을 바꾸는 비용 · 위험에 못 미친다).
+- §10.1 · §10.2 → [topics/routing.md](topics/routing.md)
 
 ---
 
@@ -191,8 +129,7 @@ ADR-038 §3 렌더 기반이 복원하는 전례 표기 — 계응 ◯(`.respons
 
 #353의 e2e 검증 · 리뷰에서 찾았지만 그 PR 범위 밖이라 넘긴 것. 첫 항목이던 「로그아웃 직후, 진행 중이던 동기화가 토큰 없이 업로드를 한 번 더 보낸다」(e2e `test_sign_out_clears_sync`가 가끔 실패한 원인)는 2026-10-17에 고쳐 지웠다 — 사이클이 대기마다 상태가 아직 SYNCING 인지 본다(원장 `docs/changes/2026-10-17-sync-signout-inflight.md`).
 
-- **「다른 장에 옮겨 실린 절」 목록이 문서와 데이터에서 다르다**(2026-10-17, PR #353 리뷰 중 발견 — 문서). ADR-003(데이터 저장소 `docs/decisions/003-physical-chapter-ordering.md`)과 ADR-022(인용 · 주석)는 여섯 곳을 적는데, 데이터(`data/bible/*.json` 의 `chapter_ref`)에는 네 곳이다 — 이사 40 ← 41:6-7 · 잠언 5 ← 6:22 · 호세 14 ← 13:14 · 욥기 27 ← 24:18-24. 나머지 둘 가운데 욥기 26:5 는 제 장(26장)에 있고, 1역대 9:33 은 어디에도 없다 — 데이터 저장소의 `tests/test_verse_gaps.py` 가 「인쇄본 대조 대기」 결번으로 못박은 절이다(ADR-003 은 1역대 6장에 실렸다고 적었다). ADR-003 의 「욥기 27장 ← 176:18절」은 데이터에서 24:18-24 다. 앱은 데이터를 따르므로 동작에는 영향이 없다 — 인용 시트의 탐색 범위(앞뒤 3장)는 데이터에서 잰 값이고 `tests/unit/citations.data.test.js` 가 지킨다. **고치는 법**: 1역대 9:33 을 결번 대조(데이터 저장소)와 함께 인쇄본으로 확인해 자리를 정한 뒤, 두 ADR 의 목록을 데이터에 맞추거나 목록 대신 그 테스트를 가리킨다. ADR-022 는 옛 개정 블록이 있어 손댈 때 본문을 현재 결론으로 다시 쓴다(`CLAUDE.md` 「ADR 워크플로우」).
-- **한 장에 같은 절 번호가 두 번 있는 곳이 다섯이다**(데이터, 2026-07-27 data 저장소 작업 중 발견, 2026-10-22 다시 확인). 욥 32:9, 1역대 6:33, 집회 29:15, 애가 1:10, 토비 11:15다. 반절, `alt_ref`, `versicle`, `chapter_ref`로도 갈리지 않는다. 집회 29:15는 두 본문이 글자까지 같아 단락이 중복된 것으로 보이고, 1역대 6:33은 한쪽이 `¶`로 시작한다. **고치는 법**: 위 항목의 1역대 9:33과 함께 인쇄본과 대조해 원본 마커를 고친다. 데이터 저장소 `tests/test_verse_gaps.py`의 결번 대조와 같은 과제다.
+- §11.1 · §11.2 → [topics/bible-text.md](topics/bible-text.md)
 
 ---
 
@@ -200,28 +137,17 @@ ADR-038 §3 렌더 기반이 복원하는 전례 표기 — 계응 ◯(`.respons
 
 #354에서 `architecture.md` · README와 data 저장소 README를 현행화하며 찾았지만 그 PR 범위 밖이라 넘긴 것. 고친 것은 원장 `docs/changes/2026-10-17-sync-signout-inflight.md` 「갱신한 문서」와 data 저장소 PR #33.
 
-- **ADR에 낡은 사실이 남아 있다**(문서). ADR-022 머리(7행)는 주석을 「※ 위첨자」 · 인쇄 footnote · 칩과 주석의 따로 토글(`bible-note-show`)로 적는다 — 지금은 anchor 어절의 툴팁(어절이 없으면 ※), 인쇄 전용 표현 없음, 토글 하나(`bible-cite-show`)다. ADR-013 상태는 「473 케이스」, ADR-036 13행은 「B1 남음」이지만 상태 줄은 완료다. **고치는 법**: ADR은 손대면 옛 개정 블록을 본문에 녹여야 하므로(CLAUDE.md 「ADR 워크플로우」 §2) 그 ADR을 다른 이유로 손댈 때 함께 고친다.
-- **data 저장소의 후속 넷**(data#33 본문). `build.yml` 머리 주석의 「자가 commit이 `validate.yml`을 다시 발화」는 사실이 아니다(GITHUB_TOKEN push — 실행 0건). `liturgical/psalter/TEMPLATE.md`는 송가를 151번부터의 부록 장으로 설명한다(지금은 따로 `cant` 책). `src/split_bible.py` 독스트링의 「1382」는 1328의 오타. ADR-002는 머리말이 검색에 들어간다는 줄과 빠진다는 줄이 다르다(실제로는 빠진다). 앞의 셋은 `build.yml`의 입력 경로라, 고친 커밋이 main에 들어가면 빌드와 앱 디스패치(`sync-data.yml` — 자동 포인터 PR)가 돈다 — 앱 PR을 FF로 머지할 계획이 있으면 그 뒤에.
-- **data PR #14 리뷰에서 넘긴 후속 여섯과 데이터 확인 하나**(data 저장소, 2026-08-03 리뷰, 2026-10-22 다시 확인). 교회력 정의 표 파서를 리뷰하며 찾았지만 그 PR에 넣지 않은 것이다. `_review` 발행은 그 뒤 없어졌다. 추수감사주일의 `transferable`과 `transfer_to: "commemorate_only"`가 함께 있는 것은 그대로지만, 엔진은 `commemorate_only`이면 옮기지 않고 `commemorated`로 낸다(설계서 §5.5).
-  - `lectionary/eucharist-collects.json`에 내부 필드 `_sources`가 아직 발행된다(327건). 다른 파서처럼 `_`로 시작하는 키를 빼야 한다. 스크랩 출처가 드러나고 파일도 커진다.
-  - `_vocab.transfer_to` 라벨을 `normalize.py`만 정의한다. `calendar_common.VOCAB`으로 옮겨 단일 출처로 만든다.
-  - `normalize.py`는 표에 `[오류]`가 있어도 종료 코드 0으로 끝난다.
-  - `classification.date_index`는 이름이 같은 성인을 먼저 나온 쪽으로만 잡고 충돌을 알리지 않는다(마가렛 07.20과 11.16).
-  - `easter`와 `advent1` 오프셋에 범위 제한이 없다(`easter+9999`도 통과). ±70 안으로 제한하기를 권한다.
-  - `pipeline.yml`의 PR 트리거 `paths`에 리포트 파일이 없다.
-  - 데이터 확인 하나: 도미닉이 08.05에 있다. RC와 CoE 달력은 8.8이고 2027 책자도 8.8이다. 기도서와 대조한다.
-- **§31(영어 뒤 조사 붙여 쓰기) 전에 쓴 문서에 띄어 쓴 곳이 많다**(문서). #354는 그 PR에서 쓰거나 고친 줄만 붙였다. 머지된 원장은 고칠 수 없으므로 나머지(정리 층 문서 · 코드 주석)는 따로 일괄 정리할지 정한다.
-- **`architecture.md` §4.3 아래쪽 그림**(상태 머신 · 전송 · 저장 상자)의 테두리가 한글 폭 때문에 어긋나 있다(내용은 맞다 — 오래된 것).
+- §12.1 · §12.4 · §12.5 → [topics/platform.md](topics/platform.md)
+- §12.2 → [topics/bible-text.md](topics/bible-text.md)
+- §12.3 → [topics/liturgical.md](topics/liturgical.md)
 
 ---
 
 ## 13. PR #355(지연 로드) 리뷰에서 넘긴 후속 (2026-10-18)
 
-- **성서 화면의 잘못된 주소는 아직 `.error` 한 줄이다**(main부터). `/john/99`(없는 장) · `/xyz`(없는 경로)는 공용 `renderError`가 본문만 바꿔, 앞 화면의 머리(「요한의 복음서 3장」) · 장 선택 · 오디오 바가 남는다. DESIGN.md §6 「전체 화면 실패」는 같은 PR에서 범위를 캘린더 · 전례독서로 좁혀 두었다 — 그 규칙을 처음 적을 때는 「잘못된 주소」를 한정 없이 넣어 이 화면과 어긋났다. **고치는 법**: 성서 뷰에도 전체 화면 실패(그 화면의 제목 · 머리 + 다음 행동 하나 — 예: 「성서 목록」)를 두고 「해당 장을 찾을 수 없습니다.」 · 없는 경로를 거기로 옮긴다. 문구와 다음 행동은 사용자 확인.
-- **캘린더 탭이 전례독서 뷰 전체를 받는다**(main부터). `calendar.js`는 이름 · 날짜 · 색 함수 몇 개(`shortName` · `statusSuffix` · `isGrid` · `todayKey` · `buildDateNav` · 표 셋)만 쓰는데, 그것이 `lectionary.js`(gzip 약 25KB — 대부분 쓰지 않는다)에 있어 캘린더 탭의 첫 방문이 그만큼 더 받는다. **고치는 법**: 둘이 함께 쓰는 것을 작은 모듈로 떼어 캘린더의 한꺼번에 묶음에서 `lectionary.js`를 뺀다 — 묶음 · `pre-fetch.js` 목록이 맞는지는 `tests/unit/sw.test.js`가 본다.
-- **WebKit은 앱 안에서 처음 갈 때 한꺼번에 묶음의 의존 모듈을 두 번 요청한다**(이 PR의 「한꺼번에 요청」에서). 요한 3장에서 캘린더로 가면 다섯 요청(`lectionary.js` · 엔진이 두 번씩), 전례독서로 가면 셋 — 응답이 `no-store`면 다시 받고, 운영 헤더면 304 왕복이 하나 는다(2회차 리뷰, Playwright WebKit 26.4). Chromium은 URL마다 한 번이고, 화면은 같다. **고치는 법**: WebKit에서 묶음을 첫 모듈 하나로 줄일지를 Chromium의 왕복 이득(캘린더 탭 → 표 느린 4G −149ms)과 견줘 정한다 — 실기기 Safari로 다시 재 본다.
-- **e2e에 Chromium 전용 가정이 있다** — `test_liturgical_lazy_load.py`가 콘솔 문구(「dynamically imported module」 · 「Failed to fetch」 — WebKit은 「Importing a module script failed.」 · 「Load failed」)와 테스트 안의 `import()`(WebKit은 같은 모듈을 한 번 더 요청해, 붙잡아 둔 요청에 걸려 멈춘다)에 기댄다. 프로젝트 e2e는 Chromium만 돈다(CLAUDE.md 「E2E 테스트」) — WebKit으로도 돌리려면 그 줄들을 엔진에 맞게 고친다(띄우는 법은 coding-pitfalls §34).
-- **WebKit이 `books.json`을 두 번 받는다**(main부터). `index.html`의 `<link rel="preload" … as="fetch" crossorigin>`을 `pre-fetch.js`의 `fetch()`가 쓰지 못해 「preloaded but not used」 경고가 난다. **고치는 법**: preload 링크의 요청 방식(credentials 등)을 `fetch()`와 맞추거나 둘 중 하나만 둔다 — WebKit · Chromium 둘 다에서 요청 수로 확인.
+- §13.1 → [topics/routing.md](topics/routing.md)
+- §13.2 · §13.3 · §13.4 → [topics/liturgical.md](topics/liturgical.md)
+- §13.5 → [topics/platform.md](topics/platform.md)
 
 ---
 
@@ -235,15 +161,14 @@ ADR-038 §3 렌더 기반이 복원하는 전례 표기 — 계응 ◯(`.respons
 
 2회차 리뷰(Copilot 2회차 + 자체 리뷰어 셋)가 찾은 것 가운데 이 PR 전부터 있었거나 가져오기와 상관없는 것들이다. 가져오기 검사가 막는 것은 그 PR에서 고쳤다(ADR-040). 첫 항목이던 「공유 링크의 절 범위가 앱을 멈춘다」는 2026-10-21에 고쳐 지웠다 — 주소의 여러 구간도 가져오기 검사와 같은 표기만 강조하고(앞뒤 쉼표는 걷고 본다), 나머지는 장만 연다(ADR-040 · 원장 `docs/changes/2026-10-21-verse-range-link.md`). 그 항목이 예로 든 `/john/3/1-4294967296`은 구간이 하나라 펼치지 않아 멀쩡했다(장의 마지막 절로 잘린다). 멈춘 것은 `1-4294967296,5`처럼 구간이 둘 이상인 주소였다.
 
-- §15.1 · §15.3 · §15.4 · §15.6 · §15.7 · §15.8 → [areas/bookmark.md](areas/bookmark.md)
-- **known-issues §15.2** **동기화 저장소는 기본 속성 이름의 id 하나에 앱 전체가 멈춘다**(main부터). `store-v2.js bookmarkTreeFromFlat`은 부모 id별 목록을 일반 객체(`byParent`)에 모은다. 그래서 `toString` id가 저장소에 있으면 목록 읽기가 예외를 내고, 새로 고친 뒤 장 화면부터 그려지지 않는다(2026-10-19 실측). 이 PR의 가져오기 검사가 그 id를 막지만, 검사가 없는 판(1.6.4 이하)에서 가져온 기록은 동기화로 들어올 수 있다. **고치는 법**: 저장소의 맵을 `Object.create(null)`이나 `Map`으로 바꿔 저장소가 스스로 견디게 한다.
-- **known-issues §15.5** **모르는 필드만 바뀐 항목은 동기화되지 않는다**(main부터). 가져오기는 모르는 필드를 그대로 두지만(다음 판 앱이 더한 필드가 살아남도록), 동기화 저장소의 내용 키(`store-v2.js _contentKey`)는 아는 필드만 비교한다. 그래서 그 필드만 바뀐 항목은 `_u`가 오르지 않아 다른 기기로 가지 않는다. 다음 판 앱이 필드를 더할 때 함께 본다.
+- §15.1 · §15.3 · §15.4 · §15.6 · §15.7 · §15.8 → [topics/bookmark.md](topics/bookmark.md)
+- §15.2 · §15.5 → [topics/sync.md](topics/sync.md)
 
 ---
 
 ## 16. 절 선택 복사 수정(§5) 중 찾은 후속 (2026-10-21)
 
-- §16.1 · §16.2 → [areas/bookmark.md](areas/bookmark.md)
+- §16.1 · §16.2 → [topics/bookmark.md](topics/bookmark.md)
 
 ---
 
@@ -251,7 +176,7 @@ ADR-038 §3 렌더 기반이 복원하는 전례 표기 — 계응 ◯(`.respons
 
 첫 항목이던 「여러 줄로 된 병합 절은 북마크에 첫 번호로 저장된다」는 2026-10-22에 고쳐 지웠다. 병합 절은 범위(「7-8」)로 저장하고 앞뒤 절과 잇는다(ADR-010 「북마크 저장」, 원장 `docs/changes/2026-10-22-bookmark-legacy-spec.md`). 이미 저장된 첫 번호(「7」)는 그대로 둔다(사용자 결정 2026-10-22).
 
-- §17.1 → [areas/bookmark.md](areas/bookmark.md)
+- §17.1 → [topics/bookmark.md](topics/bookmark.md)
 
 ---
 
@@ -259,54 +184,46 @@ ADR-038 §3 렌더 기반이 복원하는 전례 표기 — 계응 ◯(`.respons
 
 첫 항목이던 「이전 버전 북마크와의 하위 호환성」은 2026-10-22에 고쳐 지웠다. 옛 판이 저장한 줄 글자를 앱을 시작할 때, 가져올 때, 동기화 결과를 적용할 때 지금 표기로 옮긴다(ADR-010 「옛 저장값」, coding-pitfalls §38, 원장 `docs/changes/2026-10-22-bookmark-legacy-spec.md`).
 
-- **¶ 구절이 붙은 절을 상으로 자르면 ¶ 구절이 남는다**(PR #365 리뷰, 지금 데이터에는 없다). 전례시편의 ¶ 구절(`N_v`)은 인쇄 번호로 N절의 뒷부분인데, `trimHalfVerses`는 본절(`data-vkey^="N/"`)만 자른다. 반절 참조 60곳의 장에는 같은 번호의 ¶ 구절이 없고, 데이터 파서는 이런 행에 [주의]만 낸다. **고치는 법**: 그런 반절이 생기면 상은 ¶ 구절까지 버리고, 데이터 파서의 [주의]를 [오류]로 올려 표를 쓸 때 정하게 한다.
+- §18.1 → [topics/liturgical.md](topics/liturgical.md)
 
 ---
 
 ## 19. 옛 북마크 하위 호환성 작업 중 찾은 후속 (2026-10-22)
 
-- §19.1 → [areas/bookmark.md](areas/bookmark.md)
+- §19.1 → [topics/bookmark.md](topics/bookmark.md)
 
 ---
 
 ## 20. 노트 탭(ADR-026) 재개 (2026-10-22)
 
-2026-06-03에 1.6.0 계획(ADR-026의 메뉴 라우팅, 노트, 하단 내비, 캘린더)을 멈추고 디자인을 먼저 손보기로 했다. 노트 작업은 원격 브랜치 `release/1.6.0`(`2cda731`)에 main에 없는 커밋 여섯으로 남아 있다. ADR-026 Stage 0, 1a-①, 1a-②, 1b, 동기화 멈춤 수정, 토큰 정렬이며 PR #168과 #174-#177, 약 2,600줄이다. ADR-026 문서도 그 브랜치에만 있다. 캘린더는 ADR-038(#348)로 새로 구현했으므로 그 브랜치의 캘린더는 낡았다. 사용자가 2026-10-22에 노트 탭을 계속하기로 했다.
-
-- **이어 갈 때**: 브랜치를 지우지 않는다. main과 많이 갈라져 있으므로 노트 부분을 main 위로 옮기는 방법부터 정한다. 그 전에 ADR-026을 지금 구조(ADR-030 탭 바, ADR-038 캘린더)에 맞게 다시 검토한다.
+- §20 → [topics/routing.md](topics/routing.md)
 
 ---
 
 ## 21. 모바일 북마크 드로어의 바텀시트 코드 정리 (2026-10-22)
 
-- **북마크 드로어의 바텀시트 형태가 거의 쓰이지 않는다.** ADR-032 이행(2026-06-06, #210) 때 이 형태를 데스크톱에서 화면을 줄였을 때만 쓰는 코드로 보고, 지울지는 제품 결정으로 미뤘다. `js/app/bookmark.js`가 `attachSheetDrag`로 끌기 핸들을 붙인다. 사용자가 2026-10-22에 정리하기로 했다. **고치는 법**: 휴대폰과 좁은 데스크톱 화면에서 드로어가 실제로 어떤 형태로 열리는지 먼저 확인하고, 쓰이지 않는 경로와 CSS를 지운다. 인용 시트도 `attachSheetDrag`를 쓰므로 팩토리(`js/app/overlay.js`)는 남긴다.
+- §21 → [topics/bookmark.md](topics/bookmark.md)
 
 ---
 
 ## 22. 디자인 시스템 아티팩트 (2026-10-22)
 
-2026-10-18에 지금 앱 모양으로 디자인 시스템 아티팩트(Claude Design의 「Design System」, 비공개)를 만들었다. 토큰, 컴포넌트 34개, 브랜드 README를 담았다. 권위는 저장소의 `DESIGN.md`와 `css/style.css`이고 아티팩트는 사본이다. 아티팩트 주소와 도구는 Claude의 비공개 메모에 있다. 사용자가 2026-10-22에 이 작업을 계속하기로 했다.
-
-- **초안 검토**: 사용자가 아직 초안을 보지 않았다. 검토 의견을 반영해 다듬는다.
-- **캘린더 2단계를 디자인부터**: 주간과 목록 보기(ADR-038 §2)를 코드보다 먼저 이 시스템으로 그려 본다.
+- §22 → [topics/design-system.md](topics/design-system.md)
 
 ---
 
 ## 23. 디자인 시스템 초안에서 찾은 CSS 어긋남 셋 (2026-10-18)
 
-- **동기화 스낵바가 토큰 대신 리터럴을 쓴다.** `js/drive-sync.js` `_showSyncSnackbar`가 그림자(rgba .15), 글자 크기 14px, 반경 8px를 인라인 스타일로 적는다.
-- **`.settings-about`이 일반 `sans-serif`를 쓴다**(`css/style.css`). DESIGN.md의 Sans 스택이 아니다.
-- **`.bm-select-allbtn`에 글꼴 지정이 없다**(`css/style.css`). 단추라 브라우저 기본 글꼴로 보인다.
-- **고치는 법**: 셋 모두 DESIGN.md의 토큰과 글꼴 스택으로 바꾼다. 아티팩트에는 어긋난 그대로 옮기고 컴포넌트 설명에 적어 두었으므로, 고친 뒤 아티팩트도 맞춘다.
+- §23 → [topics/design-system.md](topics/design-system.md)
 
 ---
 
 ## 24. ADR과 설계서 문체 정리 (2026-10-22)
 
-- **ADR 001-040과 교회력 설계서 둘을 한국어답게 고쳐 쓴다.** 2026-10-21에 사용자가 정리 층 문서 전체를 고쳐 쓰기로 했다(coding-pitfalls §37). 2026-10-22에 시작한 docs 재구성 작업이 나머지 문서를 맡고, 이 둘이 남는다. ADR 001-035의 옛 개정 블록은 문장을 고쳐 쓰면서 그 내용을 본문의 해당 자리에 반영하고 블록을 삭제한다(사용자 결정 2026-10-21). 버린 선택지는 「검토한 대안」에 날짜, 이유, 재검토 조건과 함께 남긴다. 블록이 긴 곳은 ADR-021, 033, 024, 028, 011, 030, 013, 009다. **검증**: `scripts/docs_facts_snapshot.py`의 사실 토큰 비교에서 사라진 토큰이 0이어야 한다. 사실을 바꾸지 않고 문장만 고친다.
+- §24 → [topics/platform.md](topics/platform.md)
 
 ---
 
 ## 25. 2027 책자 대조에서 넘긴 데이터 절 번호 의심 (2026-10-13)
 
-- **데이터의 독서 절 번호가 2027 책자와 다른 곳이 있다**(데이터). 2027 「전례독서」 책자(검토용)와 엔진을 대조하며 찾았다. 예를 들어 즈가 2장 독서가 데이터에는 2:1-5, 10-11이고 책자에는 2:5-9, 14-15다. 공동번역 즈가 2장은 히브리 성경의 절 번호를 따르므로 데이터 쪽이 틀린 것으로 보인다. 사용자는 2027 확정판이 나오면 함께 다시 대조하기로 했다(설계서 미결16). 목록은 원장 `docs/changes/2026-10-13-liturgical-engine-booklet-2027.md` 「반영하지 않은 것」에 있다.
+- §25 → [topics/liturgical.md](topics/liturgical.md)
