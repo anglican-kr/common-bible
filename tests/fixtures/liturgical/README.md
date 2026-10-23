@@ -2,7 +2,7 @@
 
 **실제 연도의 기대값(날짜 · 관측일 id · 상태 · 승자 · 전례색)은 여기가 정본이다**(설계서 §1.4 정본 지도). 설계서 §7 · 검토 문서 §5 는 케이스를 **id 로 가리키기만** 하고 값을 되풀이하지 않는다. 규칙(왜 그렇게 되는가)은 설계서 §4·§6 의 `R-` 정본 문장이 맡고, 각 케이스는 `canon` 으로 그 문장을 가리킨다.
 
-검토 문서 부록 B 의 제안 스키마(LiturgicalCalendarAPI `LitCalTest.json` 계열)를 채택하고 `kind` · `group` · `canon` · `checks` · `source` · `status` 를 더했다. 2026-09-20 에 설계서 §7 이동 패스 행 ①~⑩ · B1 행 · 사계재 행 ④ · §9 미결16·26·29·30·31 · 검토 문서 §5.11~5.13 에서 전사했다(원장 `docs/changes/2026-09-20-engine-canon-1.md` 에 대응표).
+검토 문서 부록 B 의 제안 스키마(LiturgicalCalendarAPI `LitCalTest.json` 계열)를 채택하고 `kind` · `group` · `canon` · `checks` · `source` · `status` 를 더했다. 2026-09-20 에 설계서 §7 이동 패스 행 ①~⑩ · B1 행 · 사계재 행 ④ · §9 미결16·26·29·30·31 · 검토 문서 §5.11-5.13 에서 옮겨 적었다(원장 `docs/changes/2026-09-20-engine-canon-1.md` 에 대응표).
 
 ## 파일
 
@@ -89,7 +89,7 @@
 
 ## 소비 방법
 
-- **지금(PR 2 전)**: `tests/unit/liturgical-fixtures.test.js` 가 스키마 · id 유일성·형식 · 날짜 유효성 · 관측일 id(`id`·`displacedBy`·`official`·`neverDeparts`) 생략부호 금지 · `status`/`kind` 도메인(provisional·skip 은 `issue` 필수) · `ifIssueFlips.expect` 도 같은 검사 · 빈 `expect` 금지 · `alsoYears` 요일 동일 · `canon`·`checks`·`issue` 가 문서에 존재하는지를 검사한다(공개 CI). **관측일 id 가 실데이터에 실재하는지**는 `tests/unit/liturgical-fixtures.data.test.js` 가 `data/` 서브모듈이 있는 `engine-data.yml`(픽스처 변경도 트리거)·`sync-data.yml` 에서 검사한다 — 전사 오류를 잡는 유일한 기계 검사라 공개 CI 의 skip 만 믿지 않는다.
+- **지금(PR 2 전)**: `tests/unit/liturgical-fixtures.test.js` 가 스키마 · id 유일성·형식 · 날짜 유효성 · 관측일 id(`id`·`displacedBy`·`official`·`neverDeparts`) 생략부호 금지 · `status`/`kind` 도메인(provisional·skip 은 `issue` 필수) · `ifIssueFlips.expect` 도 같은 검사 · 빈 `expect` 금지 · `alsoYears` 요일 동일 · `canon`·`checks`·`issue` 가 문서에 존재하는지를 검사한다(공개 CI). **관측일 id 가 실데이터에 실재하는지**는 `tests/unit/liturgical-fixtures.data.test.js` 가 `data/` 서브모듈이 있는 `engine-data.yml`(픽스처 변경도 트리거)·`sync-data.yml` 에서 검사한다 — 옮겨 적기 오류를 잡는 유일한 기계 검사라 공개 CI 의 skip 만 믿지 않는다.
 - **PR 3**: `tests/unit/liturgical-engine.data.test.js` 가 세 파일을 읽어 `status !== "skip"` 인 케이스마다 `resolveDate(date)` 결과에 `expect` 를 부분집합 비교한다 — 케이스 하나가 테스트 하나다. `provisional` 은 「잠정」 표시로 돌리되 실패하면 실패다 — 뒤집힌 미결은 픽스처를 고쳐 닫는다. `expect` 의 모르는 키는 실패로 다룬다(조용히 무시하면 그 단언이 아무것도 지키지 못한다). activation 케이스는 그 케이스의 `activated` 로 이동 패스 캐시를 새로 만들고(엔진 `setActivatedOptionals` — 집합이 바뀌면 캐시를 비운다) 끝나면 빈 집합으로 되돌린다. `alsoYears` 는 날짜 단언의 연도만 바꿔(`from` · `to` 같은 날짜 값도 함께) 되풀이한다. 연도 범위 단언은 `neverDeparts` 하나만 받는다. PR 3 은 둘로 나눠 냈다 — 첫째(#341)가 `winners.cases.json` 을, 둘째(#343)가 이동 패스와 함께 `transfers` · `optionals` · 연도 범위 단언 · `activated` 와 첫째가 건너뛴 둘(W-2026-05-15-matthias-color · W-2025-12-29-holy-innocents-color)을 켰다.
 - **미결이 닫히면**: 그 PR 에서 `status` 를 `confirmed` 로 바꾸고 `source` 에 근거를 더한다. `ifIssueFlips` 대로 닫혔으면 `expect` 를 그 값으로 바꾸고 `ifIssueFlips` 를 지운다. id 는 그대로.
 - **사실 변경 0 증명**: `python3 scripts/docs_facts_snapshot.py --diff main HEAD` 가 문서와 픽스처(JSON 문자열 값)를 합쳐 토큰을 세므로, 문서에서 값을 지우고 픽스처로 옮겨도 「사라진 토큰」에 잡히지 않는다.

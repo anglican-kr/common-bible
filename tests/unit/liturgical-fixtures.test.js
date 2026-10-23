@@ -7,7 +7,7 @@
 // 실재하고, 관측일 id(`id`·`displacedBy`·`official`·`neverDeparts`)에 생략부호가 없고,
 // status/kind 가 도메인 안이고(`ifIssueFlips.expect` 도 같은 검사를 받는다), `alsoYears` 의
 // 해가 연도만 바꿔 되풀이할 수 있는 해(요일 동일)이고, `canon`·`checks`·`issue` 가 가리키는
-// 문서 앵커가 실제로 있다. 전사 오류 — 가장 큰 위험 — 를 기계가 잡을 수 있는 만큼 잡는다.
+// 문서 앵커가 실제로 있다. 옮겨 적기 오류 — 가장 큰 위험 — 를 기계가 잡을 수 있는 만큼 잡는다.
 //
 // 관측일 id 가 실데이터에 실재하는지는 **liturgical-fixtures.data.test.js** 가 본다 — data/ 는
 // 비공개 서브모듈이라 공개 CI 에 없고, 그 검사는 engine-data.yml·sync-data.yml 에서 돈다(tests/README.md §1).
