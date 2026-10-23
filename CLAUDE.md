@@ -32,7 +32,7 @@
 `docs/`는 작업을 거듭할수록 쌓이는 지식 베이스다. 원자료(`docs/changes/` 변경 원장)와 정리 층(주제 문서, ADR, `known-issues.md`와 `coding-pitfalls.md`의 번호 대장, `writing.md`, `workflow.md`, `index.md`)으로 나뉜다.
 
 1. **읽기 — 작업을 시작할 때.** index.md에서 주제 문서로 간다. 구현하거나 결정을 바꾸기 전에는 주제 문서의 「결정」이 가리키는 ADR을 확인한다(아래 「ADR 워크플로우」 1). 같은 곳을 건드린 이전 변경은 `git log --format='%h %s' -- <파일>`이나 `grep -ril <키워드> docs/changes/`로 찾는다. 사용자가 이미 확정한 사실을 다시 묻거나 뒤집지 않으려는 단계다.
-2. **쓰기 — PR을 열기 직전.** 원장 하나를 쓰고(요약, 확정 · 근거, 검증, 갱신한 문서; 형식은 `docs/changes/README.md`), 그 파일을 쓰면서 정리 층(주제 문서의 지금 동작, 확정 사실, 함정, 남은 일과 ADR, 번호 대장, `writing.md`, `workflow.md`, index.md) 가운데 갱신할 것이 있는지 판단해 같은 PR에 넣는다. 사용자 교정과 도메인 확정은 PR을 기다리지 말고 **그 자리에서** 적는다. 정리 층에는 규칙과 날짜만 짧게 쓰고, 사용자의 말이나 경위는 원장에 남긴다. 한 주제면 그 주제 문서, 여럿이면 `coding-pitfalls.md`, 글쓰기는 `writing.md`, 작업 방식은 `workflow.md`다(`docs/topics/README.md`). `pre-pr-ledger.sh`와 CI `Change ledger`가 원장 없는 PR을 막고, 머지된 원장의 수정은 `pre-commit-ledger.sh`와 같은 CI가 막는다.
+2. **쓰기 — PR을 열기 직전.** 원장 하나를 쓰고(요약, 확정 · 근거, 검증, 갱신한 문서; 형식은 `docs/changes/README.md`), 그 파일을 쓰면서 정리 층(주제 문서의 지금 동작, 확정 사실, 함정, 남은 일과 ADR, 번호 대장, `writing.md`, `workflow.md`, index.md) 가운데 갱신할 것이 있는지 판단해 같은 PR에 넣는다. 사용자 교정과 도메인 확정은 PR을 기다리지 말고 **그 자리에서** 적는다. 정리 층에는 규칙과 날짜만 짧게 쓴다. 원장에는 무엇을 왜 바꿨는지 적되, 사용자의 말은 그대로 옮기지 않고 뜻을 요약한다. 한 주제면 그 주제 문서, 여럿이면 `coding-pitfalls.md`, 글쓰기는 `writing.md`, 작업 방식은 `workflow.md`다(`docs/topics/README.md`). `pre-pr-ledger.sh`와 CI `Change ledger`가 원장 없는 PR을 막고, 머지된 원장의 수정은 `pre-commit-ledger.sh`와 같은 CI가 막는다.
 3. **검사와 정리.** `tests/unit/docs-*.test.js`가 번호 대장, 경로, 링크, 주제 문서의 틀, 코드 파일의 소유를 CI에서 본다. 릴리스마다 마지막 정리 이후의 원장을 훑어, index.md가 실제 파일과 맞는지, 완료된 `design/` 문서를 `archive/`로 옮겼는지, 정리 층끼리 모순이 없는지, 200줄을 넘긴 문서를 나눌지 본다. 쌓이기만 하는 문서는 읽히지 않는다.
 
 ## ADR 워크플로우
