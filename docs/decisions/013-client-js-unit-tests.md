@@ -27,9 +27,9 @@
 
 ADR-004는 **데이터 파이프라인**의 테스트 전략을 다루고, 그 밖의 클라이언트 JS는 e2e 테스트(Playwright, 로컬 전용)로만 검증해 왔다. e2e는 통합 동작은 잘 잡지만 다음과 같은 회귀에는 약하다.
 
-- 상태 머신의 분기 회귀(예: iOS ENABLE에서 자동 리디렉션이 트리거된다. 사용자 제스처 밖에서 OAuth가 시작된다.)
-- 카운터와 상한의 회귀(예: redirect attempts 상한을 넘으면 NEEDS_CONSENT → ERROR로 두 번 전이한다.)
-- 일부만 온 응답 처리(GIS Token Client의 빈 응답을 IDENTITY_FAIL로 받아 넘긴다.)
+- 상태 머신의 분기 회귀. 예를 들어 iOS에서 동기화를 켜면(ENABLE) 자동 리디렉션이 일어나, 사용자가 누르지 않았는데 OAuth가 시작된다.
+- 카운터와 상한의 회귀. 예를 들어 리디렉션 시도 횟수(redirect attempts)가 상한을 넘으면, 「동의 필요」(NEEDS_CONSENT)에서 「오류」(ERROR)로 두 번 넘어간다.
+- 일부만 온 응답 처리. 예를 들어 GIS Token Client가 빈 응답을 주면, 로그인 실패(IDENTITY_FAIL)로 받아 넘겨야 한다.
 
 이런 회귀는 e2e에서는 외부 네트워크와 UI를 거쳐야 재현되는데, 결과가 그때그때 다르고 느리다. 또 ADR-011의 동기화 코드는 검수를 받은 뒤 함부로 손대기 어려워 회귀 비용이 매우 높다.
 
@@ -95,19 +95,25 @@ const machine = sandbox.window.createSyncMachine();
 - `fireAllTimers()` 도우미로 쌓인 타이머를 명시적으로 실행한다.
 - `drain()`(1× `setImmediate`)으로 `_syncCycle`의 마이크로태스크가 끝나기를 기다린다.
 
-실제 시계(wall-clock)에 기대지 않아 결과가 늘 같다.
+가상의 시간 정보를 참조하므로 결과가 늘 같다.
 
 ### 1차 검증 시나리오 (PR #42, 30+ 케이스)
 
+괄호 안의 영어는 동기화 상태 머신의 상태 이름과 이벤트 이름이다. 테스트는 이 이름으로, 어떤 일이 생기면 어느 상태로 넘어가는지를 확인한다. 이 목록은 PR #42(2026-05-06) 때의 시나리오다. 그 뒤 로그인을 PKCE로 바꾸면서(Phase 2h 단계 4, 2026-05-08) GIS에 묶였던 상태(INITIALIZING, AUTHENTICATING)와 이벤트(TOKEN_OK, IDENTITY_FAIL)는 코드에서 없어졌다. 지금의 이름은 `js/types.d.ts`의 `SyncState`, `SyncEvent`에 있다.
+
 다음 묶음으로 나뉜다.
 
-1. **ENABLE 분기**: iOS가 아니고 GIS가 준비되지 않았으면 INITIALIZING / iOS ENABLE이면 NEEDS_CONSENT(자동 리디렉션 금지)
-2. **Identity와 Token 흐름**: silent fail → NEEDS_CONSENT, consent click → AUTHENTICATING, TOKEN_OK → IDLE
-3. **SYNC_FAIL의 이유**: `"401"`은 다시 identify, `"412"`는 ETag 재시도(최대 3), `"no_token"`/`"exception"`은 확정 ERROR, 나머지는 backoff(1/2/4/8/16s)를 하고, 5회 넘게 실패하면 OFFLINE
-4. **NET_RECOVERED**: OFFLINE에서 복구한다. iOS 분기에서는 자동 토큰 재요청을 피한다.
-5. **redirect attempts**: localStorage 키를 하나로 모았고, 상한을 넘으면 ERROR로 한 번만 전이한다.
-6. **GIS 빈 응답**: error와 access_token이 모두 없으면 IDENTITY_FAIL로 받는다.
-7. **컨텍스트 리셋 계약**: `_transition`은 기본으로 모든 카운터를 리셋하고, 명시한 ctxPatch만 남긴다.
+1. **동기화 켜기(ENABLE)의 분기**: iOS가 아닌 기기에서 GIS가 아직 준비되지 않았으면 「준비 중」(INITIALIZING) 상태로 간다. iOS에서 켜면 「동의 필요」(NEEDS_CONSENT) 상태로 가고, 로그인 화면으로 자동으로 넘기지 않는다(자동 리디렉션 금지).
+2. **로그인과 토큰의 흐름(Identity, Token)**: 조용한 로그인이 실패하면(silent fail) 「동의 필요」(NEEDS_CONSENT)로, 사용자가 동의를 누르면(consent click) 「인증 중」(AUTHENTICATING)으로, 토큰을 받으면(TOKEN_OK) 「대기」(IDLE)로 간다.
+3. **동기화 실패(SYNC_FAIL)의 이유별 처리**:
+   - `"401"`(인증 실패)이면 로그인 상태를 다시 확인한다(re-identify).
+   - `"412"`(다른 기기가 먼저 저장해 ETag가 맞지 않음)이면 다시 시도한다(ETag 재시도, 최대 3).
+   - `"no_token"`(토큰 없음)이나 `"exception"`(예외)이면 바로 「오류」(ERROR)로 간다.
+   - 나머지는 간격을 늘려 가며 다시 시도하고(backoff 1/2/4/8/16s), 5회 넘게 실패하면 「오프라인」(OFFLINE)으로 간다.
+4. **네트워크 복구(NET_RECOVERED)**: 「오프라인」(OFFLINE)에서 되살아난다. iOS 분기에서는 토큰을 자동으로 다시 요청하지 않는다.
+5. **리디렉션 시도 횟수(redirect attempts)**: localStorage 키를 하나로 모았다. 상한을 넘으면 「오류」(ERROR)로 한 번만 넘어간다.
+6. **GIS의 빈 응답**: 응답에 오류(error)도 토큰(access_token)도 없으면 로그인 실패(IDENTITY_FAIL)로 처리한다.
+7. **컨텍스트 리셋 약속**: 상태를 바꾸는 함수(`_transition`)는 기본으로 모든 카운터를 처음 값으로 되돌리고, 명시한 값(ctxPatch)만 남긴다.
 
 ### CI 통합
 
@@ -130,7 +136,7 @@ jobs:
 ## 채택 이유 요약
 
 - **0 의존성**: Node에 들어 있는 것만 쓴다. 2026-05-06 당시에는 `package.json` 자체가 없었다(`dependencies`/`devDependencies`를 빈 채로 두는 원칙). 지금 `package.json`의 `devDependencies`에는 타입 검사용 `typescript` 하나뿐이고(ADR-012), 유닛 테스트가 쓰는 패키지는 없다.
-- **결과가 늘 같다**: vm 컨텍스트와 가짜 타이머로 실제 시계(wall-clock), DOM, 네트워크를 모두 떼어 낸다.
+- **결과가 늘 같다**: vm 컨텍스트 안에서 가상의 시간 정보를 참조하고, DOM과 네트워크도 스텁으로 바꿔 떼어 낸다.
 - **빠르다**: PR #42의 30+ 케이스가 200ms 안에 끝났다.
 - **타입 검사와 함께 쓰기 좋다**: ADR-012의 JSDoc 타입을 그대로 가져올 수 있다(`@typedef {import("../../js/types")...}`). 테스트가 도메인 타입을 그대로 쓴다.
 - **리팩터링 안전망**: 앞으로 동기화 레이어를 고칠 때, 회귀 시나리오를 재현할 수 있는 형태로 쌓아 갈 수 있다.

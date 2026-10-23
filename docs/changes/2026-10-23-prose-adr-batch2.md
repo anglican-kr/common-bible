@@ -26,6 +26,13 @@ ADR과 설계서 문체 정리(known-issues §24)의 둘째 PR이다. ADR 012, 0
   - ADR-015의 캐시 이름: `sw.js`는 `"shell-" + self.APP_VERSION`, `"data"`, `"audio"`, `"fonts"`를 쓴다. 옛 표(`shell-49`, `data-1`, `audio-1`, `fonts-v1`)는 「검토한 대안」으로 옮겼다.
   - ADR-015의 `bible-search-history` 형식: ADR-014의 2026-06-07 변경에 맞춰 `{q, ts}[]`로 고치고, 그 전의 `string[]`을 함께 적었다.
 - **확인되지 않은 것은 원문대로 두었다.** ADR-015의 「`docs/architecture.md` 「스토리지」 절에서 이 ADR을 가리킨다(다음 사이클)」는 지금 architecture.md에서 찾을 수 없었다. 부록 A의 ADR 인덱스에만 있다. 그래서 「그렇게 하기로 했다」와 「지금은 인덱스에 있다」를 나눠 적었다.
+- **사용자 교정(2026-10-23, PR을 연 뒤의 검토).**
+  - ADR-013의 「다음 같은」은 「다음과 같은」으로 고쳤다. 사용자가 「수정 전이 더 정확하잖아?」라고 했다. 제가 줄이다가 조사를 빠뜨린 것이다.
+  - ADR-013 「시간 제어」의 「실제 시계(wall-clock)에 기대지 않아」는 사용자가 준 문장 「가상의 시간 정보를 참조하므로 결과가 늘 같다」로 바꿨다. 「채택 이유」의 같은 내용도 사용자가 「일관성있게 고쳐줘」라고 해 같은 말로 맞췄다.
+  - ADR-013의 1차 검증 시나리오와 「맥락」의 예시는 술어에 영어 이름을 그대로 써서 바로 이해하기 어려웠다. 사용자가 「술어를 한국어로 치환하고, 영어 표현은 괄호 안에 담자」고 했다. 술어를 한국어로 쓰고, 상태와 이벤트 이름은 괄호에 넣었다.
+  - 사용자가 그 영어 이름이 왜 있는지 물었다. 동기화 상태 머신의 상태와 이벤트 이름이고, 테스트가 그 이름으로 전이를 확인한다. 확인해 보니 그 가운데 GIS에 묶였던 이름(INITIALIZING, AUTHENTICATING, TOKEN_OK, IDENTITY_FAIL)은 PKCE로 바꾼 Phase 2h 단계 4(2026-05-08)에서 코드에서 없어졌다(`js/types.d.ts`의 주석 「GIS와 묶여있던 INITIALIZING/IDENTIFYING/AUTHENTICATING 제거」). 목록은 PR #42(2026-05-06) 때의 기록으로 두고, 머리에 이 사정을 밝혔다.
+  - 사용자가 「다른 문서들에서도 영어 단어나 기술용어를 술어처럼 쓰지 않았으면 해」라고 했다. 이 규칙을 `writing.md`의 pitfalls §40 규칙과 CLAUDE.md 「컨벤션」에 올렸다. 앞으로의 ADR 묶음에 적용하고, 이미 고친 문서는 따로 훑는다.
+  - 사용자가 「커밋하지 말라니까... 더 보고 한꺼번에 커밋하려 했는데」라고 했다. 검토 중 교정은 모아 두었다가 사용자가 말할 때 커밋한다는 작업 방식을 `workflow.md` 「커밋과 PR」에 올렸다.
 - 그 밖의 사실은 바꾸지 않았다.
 
 ## 검증
@@ -38,3 +45,5 @@ ADR과 설계서 문체 정리(known-issues §24)의 둘째 PR이다. ADR 012, 0
 
 - `docs/decisions/012-typescript-incremental-adoption.md`, `013-client-js-unit-tests.md`, `014-search-history.md`, `015-storage-strategy.md`: 문장 정리와 개정 블록 반영.
 - `docs/topics/platform.md`: known-issues §12.1에서 ADR-013 부분을 해소로.
+- `docs/workflow.md` 「커밋과 PR」: 검토 중 교정은 사용자가 말할 때 한꺼번에 커밋한다.
+- `docs/writing.md` pitfalls §40, `CLAUDE.md` 「컨벤션」: 영어 단어나 기술 용어를 술어처럼 쓰지 않는다.
