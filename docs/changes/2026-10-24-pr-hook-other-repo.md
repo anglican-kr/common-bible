@@ -22,7 +22,7 @@ PR을 열기 전에 원장을 검사하는 훅(`.claude/hooks/pre-pr-ledger.sh`)
   - data 저장소, `-R`: 검사하지 않고 통과
   - 저장소 지정 없음, 원장 없음: 막힘
   - `--repo anglican-kr/common-bible`, 원장 없음: 막힘
-- `node --test tests/unit/docs-*.test.js`를 돌렸다.
+- `node --test tests/unit/docs-*.test.js`는 23개가 모두 통과했다.
 
 ## 갱신한 문서
 
