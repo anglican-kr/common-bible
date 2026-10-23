@@ -2,11 +2,14 @@
 
 소유 코드: `js/drive-sync.js`, `js/sync/*.js`
 
-북마크와 설정을 사용자의 Google Drive(appdata)에 동기화하는 일과, 로그인(OAuth PKCE)과 토큰 교환(nginx BFF)을 다룬다. 동기화 저장소의 형식과 병합 규칙은 이 문서가, 북마크 자체는 북마크 주제 문서(`topics/bookmark.md`)가 다룬다.
+북마크와 설정을 사용자의 Google Drive(앱 전용 숨은 폴더 appdata)에 동기화하는 일과, 로그인(OAuth PKCE)과 토큰 교환을 다룬다. 토큰 교환은 서버의 nginx가 대신 해 준다(BFF). 동기화 저장소의 형식과 병합 규칙은 이 문서가, 북마크 자체는 북마크 주제 문서(`topics/bookmark.md`)가 다룬다.
 
 ## 지금 동작
 
-- **북마크 + Google Drive 동기화 완료** — ADR-011, PKCE 단일 경로(2026-05-08). 상세는 `docs/archive/design/pkce-migration.md`, ADR-017(nginx BFF), `docs/archive/audit/2026-05-07-pkce-refresh-token.md`. Google OAuth 앱 검수 통과(2026-05-19) — refresh token TTL 영구, 코드 변경 0
+- **북마크의 Google Drive 동기화** (ADR-011).
+  - 로그인은 PKCE 방식 하나만 쓴다(2026-05-08). 토큰을 교환하는 요청은 nginx BFF가 대신 보낸다(ADR-017).
+  - Google OAuth 앱 검수를 통과했다(2026-05-19). 그래서 로그인을 유지하는 토큰(refresh token)의 유효 기간(TTL)이 영구가 됐다. 코드 변경 0.
+  - 자세한 내용은 `docs/archive/design/pkce-migration.md`, ADR-017, `docs/archive/audit/2026-05-07-pkce-refresh-token.md`에 있다.
 
 ## 결정
 
@@ -17,55 +20,61 @@
 
 ## 함정
 
-### pitfalls §12 — 콜백 URL 데이터 leak — flow별 transport 격차
+### pitfalls §12 — 로그인 방식을 바꾸면, 주소에서 인증 정보를 지우는 코드가 새 자리를 놓친다
 
-OAuth callback이 query string(`?code=...`)으로 오느냐 fragment(`#access_token=...`)으로 오느냐는 flow마다 다르다. URL을 strip하는 코드가 한 flow의 가정 위에 작성됐다면, flow 전환 시점에 새 flow의 callback이 URL bar / 브라우저 히스토리 / 로그에 leak될 수 있다.
+Google 로그인을 마치면 브라우저는 앱 주소로 돌아오면서 인증 정보를 주소 뒤에 붙여 온다(OAuth callback). 정보가 붙는 자리는 로그인 방식(flow)마다 다르다. 옛 방식(Implicit Flow)은 `#` 뒤(fragment, `#access_token=...`)에, 지금 방식(PKCE)은 `?` 뒤(query string, `?code=...`)에 붙인다. 앱은 정보를 읽은 뒤 주소에서 지워야 한다. 지우는 코드가 한 방식의 자리만 생각하고 짜였다면, 방식을 바꾼 뒤 새 자리의 인증 정보가 주소창, 브라우저 기록, 로그에 남아 새어 나갈(leak) 수 있다.
 
 **사례 (Phase 2h PKCE 마이그레이션 — Bugbot PR #54-2):**
 
-- `3a7c8ab` — Implicit Flow 시절 IIFE는 `bad_state` / `no_state` / `state_mismatch` fallback에서 `history.replaceState(null, "", location.pathname + location.search)`로 search를 보존했음. Implicit callback은 fragment에 오므로 search는 안전했음. PKCE 도입 후 callback은 query string(`?code=...&state=...`)으로 오므로 같은 fallback이 auth code를 URL bar에 leak.
+- `3a7c8ab` — Implicit Flow 시절, 페이지를 열 때 한 번 도는 로그인 처리 코드(IIFE)는 확인에 실패한 경우(`bad_state`, `no_state`, `state_mismatch`)에 주소를 `history.replaceState(null, "", location.pathname + location.search)`로 고쳤다. `#` 뒤만 지우고 `?` 뒤(search)는 남기는 코드다. 그때는 인증 정보가 `#` 뒤에 왔으므로 안전했다. PKCE로 바꾼 뒤에는 정보가 `?code=...&state=...`로 오므로, 같은 코드가 인증 코드(auth code)를 주소창에 남겼다.
 
 **규칙:**
 
-- 새 flow로 전환할 때, 기존의 URL strip 로직이 새 flow의 callback shape을 반영하는지 명시적으로 검증한다.
-- 기본 원칙: 본인 앱이 query 또는 fragment 기반 라우팅을 안 쓴다면, OAuth fallback에서 `location.pathname`만 남기고 search/hash를 둘 다 폐기하는 게 가장 안전.
-- 회귀 방어: callback URL의 `?code=`, `#access_token=` 등이 IIFE 종료 후 `location.search`/`location.hash`에 잔존하지 않는지 e2e 테스트로 직접 검증.
+- 로그인 방식을 바꿀 때는, 주소를 지우는 코드가 새 방식이 정보를 붙이는 자리까지 지우는지 따로 확인한다.
+- 기본 원칙: 앱이 주소의 `?` 뒤나 `#` 뒤를 라우팅에 쓰지 않는다면, 로그인 확인에 실패한 경우에는 `location.pathname`만 남기고 search와 hash를 둘 다 지우는 것이 가장 안전하다.
+- 회귀 방어: 로그인 처리 코드(IIFE)가 끝난 뒤 `location.search`/`location.hash`에 `?code=`, `#access_token=` 같은 값이 남지 않는지 e2e 테스트로 직접 확인한다.
 
-### pitfalls §13 — 마이그레이션 시점의 sessionStorage / localStorage 키 격리
+### pitfalls §13 — 로그인 방식을 옮길 때는 방식마다 저장소 키를 따로 쓴다
 
-기존 흐름과 새 흐름이 같은 storage 키를 공유하면, 마이그레이션 PR 머지 시점에 진행 중이던 callback이 잘못된 흐름으로 라우팅되거나 완전히 떨어진다. flow별로 별도 키를 사용해 절대 교차 처리되지 않게 격리해야 한다.
+로그인을 시작할 때 앱은, 돌아왔을 때 확인할 값을 브라우저 저장소(sessionStorage, localStorage)에 적어 둔다. 옛 방식과 새 방식이 같은 키를 쓰면, 새 코드를 머지해 배포하는 순간 로그인 도중이던 사용자의 콜백이 엉뚱한 방식으로 처리되거나 아예 처리되지 않는다. 방식마다 다른 키를 써서, 서로의 값을 절대 읽지 않게 해야 한다.
 
 **사례 (Phase 2h PKCE 마이그레이션):**
 
-- 단계 2~4 — Implicit Flow는 `bible-drive-redirect-state`, PKCE는 `bible-drive-redirect-state-pkce`로 분리. 단계 4 머지 시점에 진행 중이던 PKCE callback은 새 코드도 같은 `-pkce` 키로 매칭되어 정상 처리됐고, 진행 중이던 Implicit callback은 신코드가 안 봐서 자연 만료(sessionStorage 휘발).
-- 단계 4의 함수 rename(`beginRedirectAuthPKCE` → `beginRedirectAuth`)에서 **변수명만 canonical로 인계하고 storage 키 값은 의도적으로 `-pkce` 접미사 유지** — 변수명과 키 값을 동시에 바꾸면 in-flight callback이 떨어짐.
+- 단계 2-4에서 Implicit Flow는 `bible-drive-redirect-state`, PKCE는 `bible-drive-redirect-state-pkce` 키를 썼다. 단계 4를 머지한 순간 로그인 도중이던 PKCE 콜백은 새 코드도 같은 `-pkce` 키를 읽어 정상으로 처리됐다. 로그인 도중이던 Implicit 콜백은 새 코드가 읽지 않았고, sessionStorage는 탭을 닫으면 지워지므로 저절로 사라졌다.
+- 단계 4에서 함수 이름을 `beginRedirectAuthPKCE`에서 `beginRedirectAuth`로 바꿀 때, **변수 이름만 새 이름으로 바꾸고 저장소 키 값은 일부러 `-pkce` 접미사를 그대로 두었다.** 둘을 함께 바꾸면 로그인 도중이던(in-flight) 콜백이 처리되지 않는다.
 
 **규칙:**
 
-- 서로 다른 인증 / 라우팅 flow에는 처음부터 다른 storage 키를 부여한다.
-- 키 이름을 바꾸는 마이그레이션은 두 단계로: (1) 새 키 사용 시작, 옛 키는 read-only로 유지 → (2) 옛 키 cleanup. 한 PR에 같이 넣지 말 것.
-- localStorage 폐기 키는 단계 5처럼 별도 정리 단계에서 `localStorage.removeItem(...)`을 IIFE에 추가해 기존 사용자 디바이스에서 청소한다 (몇 릴리스 후 cleanup 코드 자체도 제거).
+- 서로 다른 로그인 방식이나 라우팅 방식에는 처음부터 다른 저장소 키를 준다.
+- 키 이름을 바꾸는 이행은 두 단계로 한다. (1) 새 키를 쓰기 시작하고, 옛 키는 읽기만 한다. (2) 옛 키를 지운다. 한 PR에 함께 넣지 않는다.
+- 더 쓰지 않는 localStorage 키는 단계 5처럼 따로 정리하는 단계에서 지운다. 로그인 처리 코드(IIFE)에 `localStorage.removeItem(...)`을 더해, 기존 사용자의 기기에서 지우는 것이다. 몇 릴리스 뒤에는 이 정리 코드도 없앤다.
 
-### pitfalls §28 — 실패를 「없음」 · 「성공」과 같은 값으로 돌려주지 않는다 — 동기화가 오류를 성공으로 쳤다 (2026-10-17)
+### pitfalls §28 — 실패를 「없음」이나 「성공」과 같은 값으로 돌려주면, 동기화가 오류를 성공으로 친다 (2026-10-17)
 
-전송 함수가 실패를 정상 결과와 같은 값(`null` · `doc: null`)으로 돌려주면, 호출부는 그 값의 정상 갈래(「파일 없음」 · 「원격 없음」)로 간다 — 실패가 성공이 되어 재시도도 알림도 없다. 같은 함수 안에서 한 갈래만 실패 검사를 빠뜨려도 같은 일이 난다.
+Drive와 주고받는 함수(전송 함수)가 실패를 정상 결과와 같은 값(`null`, `doc: null`)으로 돌려주면, 그 값을 받은 코드는 정상적인 경우(「파일 없음」, 「원격 없음」)로 처리한다. 실패가 성공이 되어, 다시 시도하지도 사용자에게 알리지도 않는다. 같은 함수 안에서 한 경우만 실패 검사를 빠뜨려도 같은 일이 생긴다.
 
-**사례** (원장 `docs/changes/2026-10-17-sync-signout-inflight.md` — 머지 전 검토 1 · 3번, 사용자 `/code-review` 3 · 4 · 5 · 6번):
-- `findSyncFileId`(`js/sync/transport.js`)는 어떤 실패든 `null`(「파일 없음」)이었다 — 캐시에 fileId가 없는 사이클에서 목록 요청이 잠깐 실패하면 새 파일을 만들어, 이미 있는 sync.json 옆에 하나가 더 생길 수 있었다. 이제 `{ fileId, fileIds, status }`를 돌려주고 사이클은 실패를 먼저 가른다.
-- 내려받기의 403 · 429 · 400은 `doc: null`이라 「원격 없음」으로 읽혀 SYNC_DONE — 재시도가 없고 redirect 시도 횟수까지 0으로 돌렸다.
-- v1 문서를 v2로 올리는 업로드만 `!ok` 검사가 없어 5xx도 「동기화됨」(캐시 기록 · SYNC_DONE)이었다 — 다른 업로드 갈래는 모두 있었다.
-- 본문을 읽지 못한 2xx 내려받기(받는 도중 연결이 끊겨 `res.json()`이 reject)는 `{ doc: null, status: 200 }`이라 「원격 없음」 성공으로 끝났다 — 찾기에서 고친 결함이 내려받기에 남아 있었다(main부터). 하네스의 기본 스텁이 바로 그 응답을 정상으로 써서 유닛이 보지 못했다. 이제 status 0(실패).
-- 실패를 백오프 다섯 번 뒤 OFFLINE으로 보냈는데, OFFLINE은 브라우저 `online` 이벤트로만 빠져나온다 — 연결된 기기에서 HTTP 실패(429 · 5xx)가 이어지면 그 이벤트는 오지 않아 그 세션 내내 동기화가 멈췄다.
-- 「파일도 삭제」의 결과가 `true` · `false` 둘뿐이라, 연결돼 있지 않아 아무것도 하지 않은 경우도 `false` — 「삭제하지 못했습니다」라는 거짓 안내가 떴다. `true`는 목록의 첫 파일만 지운 경우에도 나와, 겹친 sync.json이 남아도 「지웠다」였다.
+**사례**(원장 `docs/changes/2026-10-17-sync-signout-inflight.md`의 머지 전 검토 1번과 3번, 사용자가 돌린 `/code-review`의 3-6번):
+- `findSyncFileId`(`js/sync/transport.js`)는 Drive에서 동기화 파일을 찾는 함수다. 어떤 실패든 `null`(「파일 없음」)을 돌려줬다. 그래서 파일 id를 기억해 두지 않은 상태에서 목록 요청이 잠깐 실패하면, 앱이 파일이 없다고 보고 새로 만들었다. 이미 있는 sync.json 옆에 하나가 더 생길 수 있었다. 이제 `{ fileId, fileIds, status }`를 돌려주고, 동기화 한 번(사이클)은 실패인지를 먼저 가른다.
+- 내려받기가 403, 429, 400으로 실패해도 `doc: null`을 돌려줘 「원격 없음」으로 읽혔고, 동기화가 끝난 것(SYNC_DONE)으로 처리됐다. 다시 시도하지 않았고, redirect 시도 횟수까지 0으로 돌렸다.
+- v1 문서를 v2로 올리는 업로드에만 `!ok` 검사가 없었다. 그래서 서버 오류(5xx)가 나도 「동기화됨」으로 처리했다(캐시를 기록하고 SYNC_DONE). 다른 업로드 경우에는 모두 검사가 있었다.
+- 내려받는 도중 연결이 끊겨 응답 본문을 읽지 못하면(`res.json()`이 reject), 상태 코드는 2xx인데 결과가 `{ doc: null, status: 200 }`이라 「원격 없음」 성공으로 끝났다. 찾기에서 고친 결함이 내려받기에 남아 있던 것이다(main부터). 테스트 하네스의 기본 스텁이 바로 그 응답을 정상으로 써서 유닛 테스트가 잡지 못했다. 이제 status 0(실패)이다.
+- 실패하면 백오프(간격을 늘려 가며 다시 시도) 다섯 번 뒤 OFFLINE 상태로 보냈다. 그런데 OFFLINE은 브라우저의 `online` 이벤트로만 빠져나온다. 인터넷에 연결된 기기에서 HTTP 실패(429, 5xx)가 이어지면 그 이벤트가 오지 않아, 그 세션 내내 동기화가 멈췄다.
+- 「파일도 삭제」의 결과는 `true`와 `false` 둘뿐이었다. 그래서 연결돼 있지 않아 아무것도 하지 않은 경우도 `false`가 되어, 「삭제하지 못했습니다」라는 거짓 안내가 떴다. 반대로 목록의 첫 파일만 지운 경우에도 `true`가 나와, 겹친 sync.json이 남아도 「지웠다」고 했다.
 
 **규칙:**
-- 「없음」과 「실패」는 다른 값으로 돌려준다 — 상태 코드를 함께. 호출부는 실패를 먼저 가른 뒤에 「없음」을 읽는다. 본문을 읽지 못한 2xx도 실패다.
-- 한 함수의 갈래들이 같은 실패 분류를 쓰는지 나란히 놓고 본다 — 한 갈래만 빠뜨리기 쉽다. 테스트 하네스의 기본 스텁이 「실패 같은 성공」(`doc: null` · 200)이면 그 응답이 정상으로 굳는다.
-- 되돌릴 수 없는 작업의 결과는 됨 · 확인 못 함 · 할 일 없음으로 가른다(`true` · `false` · `null`) — 사용자에게는 「확인 못 함」만 알린다. 「됨」은 확인한 만큼만 말한다(목록의 모든 항목 · 캐시된 id · 이 페이지가 만든 id — 목록이 방금 만든 파일을 늦게 보일 수 있다).
-- 재시도 분류는 서비스의 안내를 따른다 — Drive는 403 rate limit · 429 · 5xx를 지수 백오프로 다시 시도하라고 한다([오류 처리 안내](https://developers.google.com/workspace/drive/api/guides/handle-errors), 2026-10-17 확인). 이 앱은 상태 코드로만 갈라 실패를 모두 백오프(최대 다섯 번)하고, 그래도 실패하면 네트워크 실패만 OFFLINE, HTTP 실패는 IDLE로 돌아가 다음 요청이 다시 시도한다 — 다시 해도 소용없는 400 · 다른 403은 다섯 번에서 멈춘다(403의 이유를 읽어 가르지는 않는다).
-- 실패로 들어가는 상태마다 빠져나오는 길을 적고, 그 길이 오지 않는 경우가 없는지 본다(온라인인 채로 `online` 이벤트를 기다리는 OFFLINE).
+- 「없음」과 「실패」는 다른 값으로, 상태 코드와 함께 돌려준다. 받는 코드는 실패인지를 먼저 가른 뒤에 「없음」을 읽는다. 본문을 읽지 못한 2xx도 실패다.
+- 한 함수 안의 여러 경우가 같은 실패 분류를 쓰는지 나란히 놓고 본다. 한 경우만 빠뜨리기 쉽다. 테스트 하네스의 기본 스텁이 「실패 같은 성공」(`doc: null`, 200)이면 그 응답이 정상으로 굳는다.
+- 되돌릴 수 없는 작업의 결과는 셋으로 가른다. 됨(`true`), 확인 못 함(`false`), 할 일 없음(`null`)이다. 사용자에게는 「확인 못 함」만 알린다. 「됨」은 확인한 만큼만 말한다. 그 범위는 목록의 모든 항목, 기억해 둔 id, 이 페이지가 만든 id다. 목록에는 방금 만든 파일이 늦게 보일 수 있다.
+- 다시 시도할지는 서비스의 안내를 따른다. Drive는 403 rate limit, 429, 5xx를 지수 백오프로 다시 시도하라고 안내한다([오류 처리 안내](https://developers.google.com/workspace/drive/api/guides/handle-errors), 2026-10-17 확인). 이 앱은 상태 코드로만 갈라 실패를 모두 백오프(최대 다섯 번)한다. 그래도 실패하면 네트워크 실패만 OFFLINE으로 보내고, HTTP 실패는 IDLE로 돌아가 다음 요청 때 다시 시도한다. 다시 해도 소용없는 400과 그 밖의 403은 다섯 번에서 멈춘다. 403의 이유를 읽어 가르지는 않는다.
+- 실패로 들어가는 상태마다 빠져나오는 길을 적고, 그 길이 오지 않는 경우가 없는지 본다. 온라인인 채로 `online` 이벤트를 기다리는 OFFLINE이 그런 경우다.
 
 ## 남은 일
 
-- **known-issues §15.2** **동기화 저장소는 기본 속성 이름의 id 하나에 앱 전체가 멈춘다**(main부터). `store-v2.js bookmarkTreeFromFlat`은 부모 id별 목록을 일반 객체(`byParent`)에 모은다. 그래서 `toString` id가 저장소에 있으면 목록 읽기가 예외를 내고, 새로 고친 뒤 장 화면부터 그려지지 않는다(2026-10-19 실측). 이 PR의 가져오기 검사가 그 id를 막지만, 검사가 없는 판(1.6.4 이하)에서 가져온 기록은 동기화로 들어올 수 있다. **고치는 법**: 저장소의 맵을 `Object.create(null)`이나 `Map`으로 바꿔 저장소가 스스로 견디게 한다.
-- **known-issues §15.5** **모르는 필드만 바뀐 항목은 동기화되지 않는다**(main부터). 가져오기는 모르는 필드를 그대로 두지만(다음 판 앱이 더한 필드가 살아남도록), 동기화 저장소의 내용 키(`store-v2.js _contentKey`)는 아는 필드만 비교한다. 그래서 그 필드만 바뀐 항목은 `_u`가 오르지 않아 다른 기기로 가지 않는다. 다음 판 앱이 필드를 더할 때 함께 본다.
+- **known-issues §15.2** **동기화 저장소에 특정 이름의 id가 하나라도 있으면 앱 전체가 멈춘다**(main부터).
+  - 동기화 저장소(`store-v2.js bookmarkTreeFromFlat`)는 북마크를 부모 id별로 묶을 때 일반 객체(`byParent`)를 쓴다. 일반 객체는 `toString` 같은 기본 속성 이름을 이미 갖고 있다. 그래서 id가 `toString`인 북마크가 저장소에 있으면 목록을 읽다가 예외가 나고, 새로 고친 뒤 장 화면부터 그려지지 않는다(2026-10-19 실측).
+  - #359의 가져오기 검사가 그런 id를 막는다. 하지만 검사가 없는 버전(1.6.4 이하)에서 가져온 기록은 동기화로 들어올 수 있다.
+  - **고치는 법**: 저장소의 맵을 `Object.create(null)`이나 `Map`으로 바꿔, 저장소가 그런 id에도 멈추지 않게 한다.
+- **known-issues §15.5** **앱이 모르는 필드만 바뀐 항목은 동기화되지 않는다**(main부터).
+  - 가져오기는 앱이 모르는 필드를 지우지 않고 그대로 둔다. 다음 버전의 앱이 더한 필드가 살아남게 하려는 것이다.
+  - 그런데 동기화 저장소가 항목이 바뀌었는지 볼 때 쓰는 내용 키(`store-v2.js _contentKey`)는 아는 필드만 비교한다. 그래서 모르는 필드만 바뀐 항목은 수정 표시(`_u`)가 오르지 않아 다른 기기로 가지 않는다.
+  - 다음 버전의 앱이 필드를 더할 때 함께 본다.
