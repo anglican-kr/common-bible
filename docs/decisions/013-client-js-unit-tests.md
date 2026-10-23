@@ -44,14 +44,14 @@ ADR-004는 **데이터 파이프라인**의 테스트 전략을 다루고, 그 �
 
 Node 22부터 `node --test`는 안정 기능이고, `--watch`, `--test-name-pattern`, `--test-only` 등을 모두 지원한다. CI는 이미 `actions/setup-node@v4 node-version: 24`를 쓴다.
 
-### jsdom이나 happy-dom을 함께 쓰기 (2026-05-11에 허용했다가 같은 날 채택하지 않음)
+### jsdom이나 happy-dom을 함께 쓰기 (2026-05-11에 허용했다가 같은 날 채택 안 함)
 
 - ADR-018 모듈 분할을 마친(2026-05-10) 뒤 앱 레이어의 다루지 않던 영역으로 유닛 테스트를 넓히다가, vm과 손으로 만든 스텁만으로는 모든 영역에 맞지 않는다는 것이 드러났다. 살펴보니(Claude 메모 `project_unit_test_expansion.md`의 계기에 닿은 때) `js/app/`의 다루지 않던 영역 가운데 약 70%(1500줄+)는 기존 방식으로 다룰 수 있었다. 나머지는 jsdom 정도가 필요해 보였다.
   - `js/app/views-routing.js`의 `startScrollTracking`: `Element.getBoundingClientRect()`로 레이아웃을 계산한다.
   - `js/app/views-routing.js`의 Pull-to-refresh: `touchstart`/`touchmove`/`touchend` 시퀀스와 `transform`/`opacity` 트랜지션.
   - `js/app/settings-ui.js`의 아이콘 색 바꾸기: Canvas 2D context(`getImageData`/`putImageData`)와 Font Loading API(`document.fonts.ready`).
 - 그래서 `node:vm`과 손으로 만든 스텁을 기본으로 두되, 이 영역에 한해 `jsdom`(가벼운 쪽이 낫다면 `happy-dom`)을 devDependency로 들이도록 허용했다. 「0 의존성」 원칙을 「Node 말고는 0 의존성」으로 완화하고, 첫 jsdom PR이 저장소 루트의 `package.json` 신설(`devDependencies`만, `dependencies`는 빈 채로), `package-lock.json` 커밋, `.gitignore`에 `node_modules/` 추가, `.github/workflows/test.yml`의 `unit` job에 `npm ci` 단계 삽입을 함께 하기로 했다. 기본은 `harness.js`의 vm과 손으로 만든 스텁이고, jsdom은 레이아웃, Canvas, 터치 제스처가 본질인 함수에만 쓰며, jsdom을 쓰는 테스트 파일은 머리 주석에 이유를 적기로 했다.
-- 채택하지 않음 2026-05-11 · 이유: 앱 레이어에서 jsdom 없이 할 수 있는 유닛 테스트 확장 1차(PR #106·#108·#109·#110·#112·#113)를 마치고 실제로 도입할지 다시 검토하다가, 결정적인 사실을 찾았다. **jsdom과 happy-dom 모두 진짜 레이아웃 계산을 하지 않는다.** `Element.getBoundingClientRect()`는 `{x:0, y:0, width:0, height:0}`을 돌려준다. CSS 엔진을 구현하지 않았기 때문이다. Canvas 2D context는 jsdom에서는 별도의 `canvas` npm 패키지(네이티브 C++ 컴파일)를 설치해야 하고, happy-dom은 지원하지 않는다.
+- 채택 안 함 2026-05-11 · 이유: 앱 레이어에서 jsdom 없이 할 수 있는 유닛 테스트 확장 1차(PR #106·#108·#109·#110·#112·#113)를 마치고 실제로 도입할지 다시 검토하다가, 결정적인 사실을 찾았다. **jsdom과 happy-dom 모두 진짜 레이아웃 계산을 하지 않는다.** `Element.getBoundingClientRect()`는 `{x:0, y:0, width:0, height:0}`을 돌려준다. CSS 엔진을 구현하지 않았기 때문이다. Canvas 2D context는 jsdom에서는 별도의 `canvas` npm 패키지(네이티브 C++ 컴파일)를 설치해야 하고, happy-dom은 지원하지 않는다.
   - `startScrollTracking`의 `getBoundingClientRect`: jsdom도 0을 돌려주므로 **해결할 수 없다**.
   - Pull-to-refresh의 터치 제스처와 transform 트랜지션: 흉내는 낼 수 있지만, 레이아웃에 기대는 부분이 약하다.
   - settings-ui의 Canvas 아이콘 색칠: 별도 네이티브 패키지와 Font API 처리가 따로 필요해 도입 비용이 크다.

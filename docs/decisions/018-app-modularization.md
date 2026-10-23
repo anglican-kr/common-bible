@@ -14,7 +14,7 @@
 
 계획한 분할 단계(PR 8개)는 다음과 같다. 실제와 달라진 것은 항목 끝에 적었다.
 
-1. `helpers.js` (약 70줄): `el`, `clearNode`, `_$`, `announce`, `trapFocus`, `chUnit`. 뒤의 모든 모듈이 이 모듈에 기댄다.
+1. `helpers.js` (약 70줄): `el`, `clearNode`, `_$`, `announce`, `trapFocus`, `chUnit`. 뒤의 모든 모듈이 이 모듈에 의존한다.
 2. `storage.js` (약 250줄): localStorage 헬퍼 묶음.
 3. `settings-ui.js` (약 600줄): 설정 팝오버와 외관 적용.
 4. `install.js` (약 430줄): PWA 감지와 설치 안내 모달.
@@ -40,11 +40,11 @@ ADR-012 1라운드(PR-1-7, 2026-05-09 머지)에서 `js/app.js`에 JSDoc과 null
 
 | 방식 | 빌드 변화 | 시작 비용 | 채택 여부 |
 | --- | --- | --- | --- |
-| PR 하나로 한꺼번에 (`// @ts-check` + implicit any 약 262건 일괄 정리) | 없음 | 매우 크고 리뷰가 어렵다 | 채택하지 않음 |
+| PR 하나로 한꺼번에 (`// @ts-check` + implicit any 약 262건 일괄 정리) | 없음 | 매우 크고 리뷰가 어렵다 | 채택 안 함 |
 | Multi-script + `defer`로 모듈 분할 | 없음 | 단계별로 나눌 수 있다 | Phase 1-3에서 썼다. 2026-05-09에 ADR-019로 ESM으로 바꿨다(아래) |
 | **ESM (`<script type="module">`)** | 없음 | module scope가 typedef와 함수를 서로 가리고, 빌드 단계 0을 유지한다 | **채택** (Phase 4부터, ADR-019) |
-| `.ts` + tsc 빌드 | 크다 | ADR-001의 SPA 단순성과 어긋난다 | 채택하지 않음 |
-| 그대로 둔다 (`// @ts-check`를 계속 켜 두는 일을 미룬다) | 없음 | 0 | 채택하지 않음 — 1라운드의 검증이 임시 인프라(`tsconfig.app.json`)에 계속 기대게 된다 |
+| `.ts` + tsc 빌드 | 크다 | ADR-001의 SPA 단순성과 어긋난다 | 채택 안 함 |
+| 그대로 둔다 (`// @ts-check`를 계속 켜 두는 일을 미룬다) | 없음 | 0 | 채택 안 함 — 1라운드의 검증이 임시 인프라(`tsconfig.app.json`)에 계속 의존하게 된다 |
 
 ### IIFE + `<script defer>` + `window.appXxx`와 module-vs-script 예외 (2026-05-09까지)
 
@@ -63,7 +63,7 @@ ADR-012 1라운드(PR-1-7, 2026-05-09 머지)에서 `js/app.js`에 JSDoc과 null
 
   부르는 쪽은 `window.appHelpers._$()`로 부르거나, IIFE 바로 뒤에 `const { _$ } = window.appHelpers;`로 받았다.
 - Phase 2(`storage.js`)에서 전역 함수 이름이 `js/sync/store-v2.js`와 겹쳐, 충돌한 모듈만 ESM으로 옮기는 예외(module-vs-script 예외)를 두었다.
-- 채택하지 않음 2026-05-09 · 이유: Phase 2와 Phase 3의 사용자 검토 결과, 모든 모듈을 ESM으로 한꺼번에 옮기기로 했다. 충돌이 날 때마다 모듈별로 정하면 두 방식이 섞이고, 뒤의 모듈도 비슷한 충돌을 겪을 가능성이 높다. 근거는 ADR-019 본문과 ADR-001 「단순성의 범위」(2026-05-09)에 있다. Phase 1-3에서 머지한 PR(#88·#89·#90)은 multi-script + `defer` 방식이었지만, 뒤의 일괄 전환 PR에서 ESM으로 맞췄다.
+- 채택 안 함 2026-05-09 · 이유: Phase 2와 Phase 3의 사용자 검토 결과, 모든 모듈을 ESM으로 한꺼번에 옮기기로 했다. 충돌이 날 때마다 모듈별로 정하면 두 방식이 섞이고, 뒤의 모듈도 비슷한 충돌을 겪을 가능성이 높다. 근거는 ADR-019 본문과 ADR-001 「단순성의 범위」(2026-05-09)에 있다. Phase 1-3에서 머지한 PR(#88·#89·#90)은 multi-script + `defer` 방식이었지만, 뒤의 일괄 전환 PR에서 ESM으로 맞췄다.
 
 ## 채택 방식
 

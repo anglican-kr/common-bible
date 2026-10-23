@@ -73,7 +73,7 @@ Google이 발급하는 OAuth 클라이언트 가운데 「Desktop app」이나 �
 ### D. njs로 요청 본문을 검사한다 (M6, 2026-06-09까지)
 
 - 채택한 뒤 `/oauth/token`에 보안 강화를 둘 더했다(그때 ADR 본문에는 적지 않았다). 하나는 요청 빈도 제한(M5, `limit_req zone=oauth_token`)으로, 지금도 쓴다(위 「결정」). 다른 하나가 njs 본문 가드(M6)다. `js_content`(njs)로 요청 본문을 읽어, 클라이언트가 `client_secret=`을 끼워 넣은 요청을 400으로 미리 거절했다. 파라미터가 겹치므로 RFC 6749 §3.2를 어기는 요청이다. 구조는 `location = /oauth/token`(가드)과 내부 `@oauth_token_upstream`(proxy)의 2단이었다.
-- 채택하지 않음 2026-06-09 · 이유: 이 njs 가드가 **`libnginx-mod-http-js` 0.8.2에서 세그폴트(SIGSEGV)를 일으켰다**. `/oauth/token`으로 오는 **모든 POST**에서 `js_content` 핸들러가 워커를 죽였고(`worker exited on signal 11`), 연결은 `ERR_CONNECTION_RESET`으로 끊겼다. 이 기록은 kernel/journald에만 남고 access 로그와 error 로그에는 남지 않았다. 그 결과 prod와 dev 모두에서 조용한 토큰 갱신(silent refresh)과 새 로그인이 전부 실패해 **Drive 동기화가 완전히 멈췄다**. 앱 코드 `transport.js`는 1.5.12 이후 바뀌지 않아 원인과 무관했다.
+- 채택 안 함 2026-06-09 · 이유: 이 njs 가드가 **`libnginx-mod-http-js` 0.8.2에서 세그폴트(SIGSEGV)를 일으켰다**. `/oauth/token`으로 오는 **모든 POST**에서 `js_content` 핸들러가 워커를 죽였고(`worker exited on signal 11`), 연결은 `ERR_CONNECTION_RESET`으로 끊겼다. 이 기록은 kernel/journald에만 남고 access 로그와 error 로그에는 남지 않았다. 그 결과 prod와 dev 모두에서 조용한 토큰 갱신(silent refresh)과 새 로그인이 전부 실패해 **Drive 동기화가 완전히 멈췄다**. 앱 코드 `transport.js`는 1.5.12 이후 바뀌지 않아 원인과 무관했다.
   - 조치: njs 가드(M6)와 `@oauth_token_upstream` 블록을 지우고, secret을 넣어 Google로 바로 전달하는 일을 **`location = /oauth/token` 하나**로 되돌렸다. 처음 「구현 노트」의 형태에 `limit_req`를 더한 것이다. `proxy_pass`에는 `https://oauth2.googleapis.com/token`을 그대로 적는다. 서버 쪽 변경은 `common-bible-server` 저장소(`nginx/oauth-proxy.example.conf` 등, commit `2f4cbac`)에 있다.
   - 보안 영향은 없다. M6는 방어를 덧대는 장치였다. 클라이언트가 본문에 `client_secret`을 끼워 넣어도 nginx가 서버 쪽 secret을 더 붙이므로 파라미터가 겹치고, Google이 RFC 6749 §3.2 위반으로 400을 돌려준다. 그래서 응답으로 secret을 알아낼 수 없다. secret은 서버 쪽에서 넣으므로 클라이언트에 드러나지 않는다.
   - 다시 검토할 조건: njs를 다시 들이려면 그 버전에서 세그폴트가 고쳐졌는지 먼저 확인한다.
@@ -107,7 +107,7 @@ Google이 발급하는 OAuth 클라이언트 가운데 「Desktop app」이나 �
 
 ## 받아들인 트레이드오프
 
-- **운영에 기댄다**: secret이 nginx 설정에 있으므로 코드만 고쳐서는 secret을 바꿀 수 없다. 서버에서 바꿔야 한다. 운영 자동화 스크립트가 필요할 수 있다(지금은 손으로 한다).
+- **secret은 서버에서만 바꿀 수 있다**: secret이 nginx 설정에 있으므로 코드만 고쳐서는 바꿀 수 없다. 운영 자동화 스크립트가 필요할 수 있다(지금은 손으로 한다).
 - **서비스 워커가 캐시할 수 없다**: `/oauth/token`은 POST이고 서비스 워커가 GET이 아닌 요청을 통과시키므로 오프라인 캐시가 안 된다. OAuth 자체가 온라인에서만 되므로 영향은 없다.
 - **요청이 nginx를 거친다**: 모든 토큰 교환과 silent refresh가 nginx를 지난다. 사용자 행동 빈도(분 단위 동기화)에서는 무시할 만하다.
 - **장애 지점이 하나다**: nginx가 멈추면 새 access token을 받을 수 없다. 정적 콘텐츠도 같은 nginx가 서비스하므로 멈추는 범위는 같다.
