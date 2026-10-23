@@ -20,6 +20,7 @@ ADR과 설계서 문체 정리(known-issues §24)의 넷째 PR이다. ADR 021, 0
 
 - **squash 머지 메시지 규칙을 바로잡았다.** #384에서 「Co-Authored-By 줄을 넣지 않는다」로 적고 그 PR의 머지 메시지에서 그 줄을 모두 뺐다. 사용자의 뜻은 GitHub가 맨 끝에 한 번 더 붙이는 줄만 빼는 것이었다(2026-10-23 사용자 교정). 머지할 때 커밋 목록만 `commit_message`로 넘기면 커밋마다 붙은 줄은 남고, 겹친 마지막 줄만 빠진다. `CLAUDE.md`의 머지 명령과 `docs/workflow.md`를 고쳤다. #384의 머지 커밋은 force push가 금지라 그대로 둔다.
 - **known-issues §26을 기록했다.** ADR-016은 캐시에서 지운 장을 오프라인에서 재생할 때 따로 안내하기로 했지만, 지금 앱은 이유와 상관없이 「오디오 파일을 준비 중입니다.」를 보인다. 사용자가 나중에 고치도록 기록해 두기로 했다(2026-10-23). 오디오 주제 문서의 「남은 일」에 적고, 번호 대장과 ADR-016 D4에서 가리킨다.
+- **known-issues §27을 기록했다.** ADR-024를 코드와 견주다 찾았다. 제목 헤더의 설정 버튼(`.title-settings-btn`)은 데스크톱 규칙(ADR-024)과 모바일 규칙(ADR-029)에 모두 숨겨져 어느 폭에서도 보이지 않는데, 화면을 그릴 때마다 계속 만들어진다. 사용자가 조사해 해결하도록 기록해 두기로 했다(2026-10-23). 버튼을 넣는 `views.js`를 맡고 ADR-024와 ADR-029를 「결정」에 둔 라우팅 주제 문서의 「남은 일」에 적었다.
 
 ## 확정 · 근거
 
@@ -45,6 +46,7 @@ ADR과 설계서 문체 정리(known-issues §24)의 넷째 PR이다. ADR 021, 0
 
 ## 갱신한 문서
 
-- `docs/decisions/021-pwa-versioning-content-hash.md`, `023-settings-toggle-switches.md`, `024-book-list-tabs-and-header-nav.md`, `025-header-scroll-elevation.md`: 문장 정리와 개정 블록 반영.
+- `docs/decisions/021-pwa-versioning-content-hash.md`, `023-settings-toggle-switches.md`, `024-book-list-tabs-and-header-nav.md`, `025-header-scroll-elevation.md`: 문장 정리와 개정 블록 반영. ADR-024 「결정」 4에서 known-issues §27을 가리킨다.
 - `CLAUDE.md` 「브랜치 보호 / 작업 흐름」의 머지 명령, `docs/workflow.md` 「커밋과 PR」: squash 머지 메시지는 커밋 목록만 넘겨 겹친 마지막 줄을 뺀다.
-- `docs/topics/audio.md` 「남은 일」, `docs/known-issues.md`(§26, 다음 번호 §27), `docs/decisions/016-audio-cache-lru.md` D4: 지운 장을 오프라인에서 재생할 때의 안내.
+- `docs/topics/audio.md` 「남은 일」, `docs/known-issues.md`(§26), `docs/decisions/016-audio-cache-lru.md` D4: 지운 장을 오프라인에서 재생할 때의 안내.
+- `docs/topics/routing.md` 「남은 일」, `docs/known-issues.md`(§27, 다음 번호 §28): 보이지 않는 제목 헤더의 설정 버튼.
