@@ -18,7 +18,7 @@
   - 서비스 워커 `sw.js`만 아직 어느 설정에도 들지 않는다(`known-issues.md` §7, 아래 「남은 일」의 known-issues §7.1).
 - **app.js 모듈 분할** (2026-05-10, ADR-018). `js/app.js`를 6,082줄에서 283줄로 줄이고 아홉 개 도메인 모듈로 나눴다. 모듈은 ESM이다(ADR-019). 자세한 내용은 `docs/archive/design/app-modularization.md`에 있다.
 - **2차 모듈 분할** (2026-06-08부터 06-11까지, ADR-034, PR5c는 보류).
-  - ADR-018 뒤에도 너무 컸던 모듈(`views-routing.js` 2,389줄, `bookmark.js` 3,578줄)을 하는 일별로 다시 나눴다. 서로 돌지 않는 facade(`window.X`로 함수를 내놓아 다른 모듈이 부르게 하던 것)는 명시적 import로 바꿨다. 서로 부르는 호출은 registry 역전으로 풀었다. 부르는 쪽이 상대를 아는 대신, 불리는 쪽이 목록에 자신을 등록하는 방식이다.
+  - ADR-018 뒤에도 너무 컸던 모듈(`views-routing.js` 2,389줄, `bookmark.js` 3,578줄)을 하는 일별로 다시 나눴다. 서로 돌지 않는 facade(`window.X`로 함수를 내놓아 다른 모듈이 부르게 하던 것)는 명시적 import로 바꿨다. 서로 부르는 호출은 registry 역전으로 해결했다. 부르는 쪽이 상대를 아는 대신, 불리는 쪽이 목록에 자신을 등록하는 방식이다.
   - PR1: 오디오 플레이어를 `js/app/audio-player.js`로 떼어 냈다(views-routing 2,389→2,195줄). `route` 쪽 호출은 명시적 import로 바꾸고, 바깥 호출자를 위한 `window.{hideAudioBar,applyAudioShow,getCurrentAudio}` facade는 남겼다.
   - PR4: 모바일의 "당겨서 새로고침"(손으로 Drive 동기화를 시작하던 동작)을 **없앴다**. 백그라운드 동기화(자동 확인, 편집 뒤 업로드, 화면이 다시 보일 때의 visibilitychange)는 그대로다. views-routing 2,195→2,011줄.
   - PR2: 데이터를 받는 함수(loadBooks, Version, Chapter, Prologue)와 booksCache, appVersion 캐시를 `js/app/data-fetch.js`로 떼어 냈다. 다른 모듈에 기대지 않는 모듈(leaf)이다. 내부 호출은 명시적 import로 바꾸고, 바깥 호출자를 위한 facade는 남겼다. views-routing 2,011→1,942줄.
