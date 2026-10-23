@@ -11,7 +11,7 @@ ADR이 "왜 이 결정을 했는가"를 다룬다면, 이 문서는 **"무엇을
 
 ---
 
-## 1. 비동기 타이밍 경합 — 가장 빈번
+## 1. 비동기 타이밍의 경쟁 상태 — 가장 빈번
 
 여러 비동기 작업이 동시에 진행될 때, 늦게 도착한 stale 콜백이 최신 상태를 덮어쓰는 패턴.
 
@@ -19,7 +19,7 @@ ADR이 "왜 이 결정을 했는가"를 다룬다면, 이 문서는 **"무엇을
 - `21540a0` — `updateAppIcons`: 테마를 빠르게 바꾸면 이전 컬러스킴의 `requestIdleCallback` + `loadOrigIcon` 체인이 뒤늦게 실행되어 새 navy 아이콘을 덮어씀.
 - `5c41797` — 북마크 드로어 `open→close→open` 반복 시, 닫힘 애니메이션의 `finalize` 콜백이 새로 열린 드로어를 숨김.
 - `fc6d374` — Drive 동기화에서 여러 요청이 동시에 401을 받으면 각자 `_silentSignIn()`을 호출, 재인증 콜백이 다중 실행되어 `_downloadAndMerge` → `_upload`가 중복되며 마지막 요청이 이전 기록을 덮어씀. `_isRefreshing` 플래그로 단일 진행 보장.
-- e2e(2026-10-15, #348 리뷰 반영 중 확인) — `html { scroll-behavior: smooth }` 라 테스트의 `window.scrollTo(0, 600)` 은 애니메이트된다. 스크롤 도중 64px 를 넘는 순간 탭 바가 접히고, 그 상태를 보자마자 홈 탭을 누르면 남은 아래쪽 스크롤이 펼친 바를 다시 접는다 — `test_scroll_collapse_and_home_expands_without_nav` 가 누르는 시점에 따라 갈렸다(같은 코드로 통과하던 것이 이날은 매번 실패). 스크롤로 만든 상태를 바로 이어 조작하는 테스트는 `scrollTo({ top, behavior: 'instant' })` 로 경합을 없앤다.
+- e2e(2026-10-15, #348 리뷰 반영 중 확인) — `html { scroll-behavior: smooth }` 라 테스트의 `window.scrollTo(0, 600)` 은 애니메이트된다. 스크롤 도중 64px 를 넘는 순간 탭 바가 접히고, 그 상태를 보자마자 홈 탭을 누르면 남은 아래쪽 스크롤이 펼친 바를 다시 접는다 — `test_scroll_collapse_and_home_expands_without_nav` 가 누르는 시점에 따라 갈렸다(같은 코드로 통과하던 것이 이날은 매번 실패). 스크롤로 만든 상태를 바로 이어 조작하는 테스트는 `scrollTo({ top, behavior: 'instant' })` 로 경쟁 상태를 없앤다.
 
 **방어 전략 (상황에 따라 선택):**
 
