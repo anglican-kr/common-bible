@@ -6,61 +6,75 @@
 
 ## 결정
 
-브라우저가 제공하는 스토리지 메커니즘을 **목적별로 분리해 사용**한다. 메커니즘마다 두는 데이터 종류와 두지 않는 데이터 종류를 명문화하고, 모든 키는 `bible-*` 접두사 컨벤션을 따른다.
+브라우저가 주는 스토리지 메커니즘을 **목적별로 나눠 쓴다**. 메커니즘마다 두는 데이터와 두지 않는 데이터를 문서에 적고, 모든 키는 `bible-*` 접두사 컨벤션을 따른다.
 
 | 메커니즘 | 용도 | 두지 않는 것 |
 | --- | --- | --- |
 | **localStorage** | 사용자 설정, 동기화 메타·세션 플래그, 동기 접근이 필요한 작은 KV (북마크 v2 doc 포함) | 자격 증명(access/refresh token), 암호 키, 대용량 바이너리 |
 | **sessionStorage** | OAuth PKCE 콜백의 일회성 상태 (탭 수명 + 단일 사용 후 즉시 폐기) | 영구 데이터, 설정, 사용자 콘텐츠 |
 | **IndexedDB** | 비공개 자격 증명과 그 암호 키 (`extractable: false` AES-GCM CryptoKey + 암호화된 OAuth refresh token) | 사용자 설정, 북마크, 검색 히스토리 같은 평범한 KV |
-| **Cache API (Service Worker)** | 정적 자산·콘텐츠 (앱 셸, 성경 JSON, 오디오, 폰트). `shell-*` / `data-*` / `audio-*` / `fonts-*` 4개 캐시로 분리, 식별자별 독립 bump | 사용자 데이터·자격 증명 |
+| **Cache API (Service Worker)** | 정적 자산·콘텐츠 (앱 셸, 성경 JSON, 오디오, 폰트). 셸 · 데이터 · 오디오 · 폰트 4개 캐시로 분리 (D4) | 사용자 데이터·자격 증명 |
 | **Cookies** | 사용 안 함 | — |
 
 ## 맥락
 
-Phase 1에서는 모든 클라이언트 상태를 `localStorage`에만 두었다. ADR-010(북마크 v1)·ADR-014(검색 히스토리)가 그 가정 위에서 결정되었고, 사용자 콘텐츠·설정·UI 플래그가 모두 같은 KV에 섞여 있었다.
+Phase 1에서는 모든 클라이언트 상태를 `localStorage`에만 두었다. ADR-010(북마크 v1)과 ADR-014(검색 히스토리)가 그 전제 위에서 정해졌고, 사용자 콘텐츠와 설정과 UI 플래그가 모두 같은 KV에 섞여 있었다.
 
-Phase 2 진행 중 두 번 그 가정이 깨졌다.
+Phase 2를 진행하며 그 전제가 두 번 깨졌다.
 
-1. **Phase 2c**: 북마크를 per-record mtime + tombstone 머지 모델(`store-v2.js`)로 옮기면서 단일 키(`bible-bookmarks-v2`)에 도큐먼트 형태(JSON blob)를 통째로 직렬화. 양은 늘었지만 여전히 동기 접근이 필요해 `localStorage` 안에 머물렀다.
-2. **Phase 2h (PKCE 마이그레이션)**: refresh token을 디스크에 영구 저장해야 cold-start silent refresh가 가능한데, 평문 KV(localStorage)에 두는 것은 받아들일 수 없다. AES-GCM `CryptoKey`(`extractable: false`)는 직렬화 자체가 불가능하므로 KV에 둘 수도 없다. 결과적으로 `js/sync/refresh-store.js`가 IndexedDB(`bible-drive-sync` DB, `keys`/`tokens` store)를 도입했다 — 이 프로젝트 최초의 IDB 사용처.
+1. **Phase 2c**: 북마크를 레코드마다 수정 시각과 tombstone을 두는 병합 모델(`store-v2.js`)로 옮기면서, 키 하나(`bible-bookmarks-v2`)에 문서 전체(JSON blob)를 통째로 직렬화했다. 양은 늘었지만 여전히 동기 접근이 필요해 `localStorage`에 머물렀다.
+2. **Phase 2h (PKCE 마이그레이션)**: 앱을 처음 열 때 조용히 토큰을 새로 받으려면(cold-start silent refresh) refresh token을 디스크에 영구 저장해야 한다. 그런데 평문 KV(localStorage)에 두는 것은 받아들일 수 없다. AES-GCM `CryptoKey`(`extractable: false`)는 직렬화 자체가 안 되므로 KV에 둘 수도 없다. 그래서 `js/sync/refresh-store.js`가 IndexedDB(`bible-drive-sync` DB, `keys`/`tokens` store)를 도입했다. 이 프로젝트에서 처음 쓴 IDB다.
 
-이 시점에서 우리가 사용하는 클라이언트 스토리지 메커니즘이 **4종 + 쿠키 미사용**으로 늘었지만, 어떤 데이터를 어디에 둘지에 대한 단일 기준 문서가 없었다. 새로운 키를 추가할 때마다 임의 결정이 누적되면 (a) 보안 등급이 다른 데이터가 같은 메커니즘에 섞이고, (b) 같은 데이터가 두 곳에 중복 저장되는 회귀가 생긴다. 이 ADR은 이미 내려진 결정을 사후 명문화하면서 앞으로의 추가에 적용할 분류 기준을 정한다.
+이때 쓰는 클라이언트 스토리지 메커니즘이 **넷에 쿠키 미사용**으로 늘었지만, 어떤 데이터를 어디에 둘지를 정한 기준 문서는 없었다. 새 키를 더할 때마다 그때그때 정하면, (a) 보안 등급이 다른 데이터가 같은 메커니즘에 섞이고, (b) 같은 데이터가 두 곳에 겹쳐 저장되는 회귀가 생긴다. 이 ADR은 이미 내린 결정을 뒤늦게 문서에 적으면서, 앞으로 더할 키에 적용할 분류 기준을 정한다.
 
 ## 검토한 대안
 
-### A. 모두 localStorage로 통일 (기각)
+### A. 모두 localStorage로 통일 (채택하지 않음)
 
-- 장점: 단일 동기 API, 추가 의존성 없음
+- 장점: 동기 API 하나, 추가 의존성 없음
 - 단점:
-  - **OAuth refresh token을 평문으로 두게 됨.** 임의 스크립트(서드파티 분석 도구, 향후 추가될 라이브러리, 또는 XSS 시) `localStorage.getItem('bible-drive-refresh')` 한 줄로 추출 가능. 침해 시 토큰을 무효화할 방법은 사용자가 Google에서 직접 revoke하는 것뿐
-  - **AES-GCM `CryptoKey`(`extractable: false`)는 직렬화 자체가 불가능**. localStorage는 string KV이므로 키를 풀어 평문화하지 않는 한 저장할 수 없는데, 그건 위 문제의 정의를 부정하는 것
-  - 5–10 MB origin 한도. 향후 절 노트·하이라이트가 늘면 한도 부족
+  - **OAuth refresh token을 평문으로 두게 된다.** 아무 스크립트(서드파티 분석 도구, 앞으로 더할 라이브러리, XSS가 생겼을 때)나 `localStorage.getItem('bible-drive-refresh')` 한 줄로 빼낼 수 있다. 침해되면 토큰을 무효화할 방법은 사용자가 Google에서 직접 revoke하는 것뿐이다.
+  - **AES-GCM `CryptoKey`(`extractable: false`)는 직렬화 자체가 안 된다**. localStorage는 문자열 KV라서 키를 풀어 평문으로 만들지 않는 한 저장할 수 없는데, 그것은 위 문제의 정의를 부정하는 것이다.
+  - origin 한도가 5–10 MB다. 앞으로 절 노트와 하이라이트가 늘면 모자란다.
 
-### B. 모두 IndexedDB로 통일 (기각)
+### B. 모두 IndexedDB로 통일 (채택하지 않음)
 
-- 장점: 트랜잭션, 인덱스, 한도 큼, 구조화 클론으로 `CryptoKey`까지 자연 저장
+- 장점: 트랜잭션, 인덱스, 큰 한도. 구조화 클론으로 `CryptoKey`까지 자연스럽게 저장한다.
 - 단점:
-  - **모든 접근이 비동기**. 현재 `app.js`는 첫 페인트 직전에 `getLastRead()`/`getStartupBehavior()`/색상 스킴 등을 동기적으로 읽어 라우팅·테마를 결정한다. IDB로 옮기면 이 경로가 모두 비동기화되어 첫 페인트가 한 틱 늦어지거나, 비동기 hydrate를 위한 로딩 스플래시 단계가 새로 필요해진다 — ADR-007(스플래시) 가정 변경
-  - **ADR-013 vm 하네스 부담 증가**. `localStorage` 모킹은 `Map` 한 줄이면 끝나지만, IDB를 vm에서 모킹하려면 `fake-indexeddb` 같은 패키지 의존성이 필요해 ADR-013의 "의존성 0" 원칙과 충돌
-  - 작은 KV(`bible-startup`, `bible-font-size`)에는 과도한 복잡도
+  - **모든 접근이 비동기다**. 지금 `app.js`는 첫 페인트 직전에 `getLastRead()`/`getStartupBehavior()`/색상 스킴 등을 동기로 읽어 라우팅과 테마를 정한다. IDB로 옮기면 이 경로가 모두 비동기가 되어, 첫 페인트가 한 틱 늦어지거나 비동기로 값을 채우는 로딩 단계가 새로 필요해진다. ADR-007(스플래시)의 전제가 바뀐다.
+  - **ADR-013 vm 하네스의 부담이 늘어난다**. `localStorage` 모킹은 `Map` 한 줄이면 되지만, IDB를 vm에서 모킹하려면 `fake-indexeddb` 같은 패키지가 필요해 ADR-013의 「의존성 0」 원칙과 부딪친다.
+  - 작은 KV(`bible-startup`, `bible-font-size`)에는 지나치게 복잡하다.
 
 ### C. 메커니즘별 책임 분리 (채택)
 
-- 보안 등급(자격 증명 vs 일반)과 접근 패턴(동기 KV vs 비동기 구조화)을 축으로 분리
-- 이미 Phase 2h에서 사실상 이 형태로 정착했으므로 새 코드 변경은 없고 기준만 명문화
+- 보안 등급(자격 증명과 일반 데이터)과 접근 방식(동기 KV와 비동기 구조화)을 축으로 나눈다.
+- Phase 2h에서 이미 사실상 이 형태로 자리 잡았으므로, 새로 바꿀 코드는 없고 기준만 문서에 적는다.
 
 ### 보조 결정 — 쿠키 미사용
 
-- OAuth는 **PKCE redirect + 토큰 응답 본문**으로 끝나며 서드파티 쿠키에 의존하지 않는다 (Phase 2h 단계 4 결정).
-- 자체 백엔드가 없어 세션 쿠키도 불필요.
-- 즉, `document.cookie` 사용은 ADR-015 위반으로 간주한다.
+- OAuth는 **PKCE redirect와 토큰 응답 본문**으로 끝나며, 서드파티 쿠키에 기대지 않는다(Phase 2h 단계 4 결정).
+- 자체 백엔드가 없어 세션 쿠키도 필요 없다.
+- 그래서 `document.cookie`를 쓰면 ADR-015 위반으로 본다.
+
+### 캐시 이름에 rev를 붙여 따로 올리기 (2026-05-13까지)
+
+- 처음 Cache API는 캐시 넷의 이름에 rev를 붙이고, 내용이 바뀌면 그 캐시만 따로 올렸다(`scripts/release.py`).
+
+| 캐시 이름 (그때) | 내용 | bump 트리거 |
+| --- | --- | --- |
+| `shell-49` | `index.html`, `js/`, `css/`, 아이콘, 매니페스트 | UI/로직 변경 |
+| `data-1` | `data/bible/*.json`, `data/search-*.json` | 데이터 포맷 변경 |
+| `audio-1` | `data/audio/*.mp3` | 재인코딩 |
+| `fonts-v1` | Google Font 콘텐츠 어드레스 파일 | 사실상 영구 (해시 주소) |
+
+- 결정 표에도 「`shell-*` / `data-*` / `audio-*` / `fonts-*` 4개 캐시로 분리, 식별자별 독립 bump」로 적었다.
+- 채택하지 않음 2026-05-13 · 이유: ADR-021이 데이터와 오디오는 콘텐츠 해시 매니페스트로 바뀐 항목만 무효화하고, 셸 캐시 이름은 앱 버전에서 만들도록 바꿨다(아래 D4).
 
 ## 결정 상세
 
-### D1. localStorage 카탈로그
+### D1. localStorage 목록
 
-키 네이밍: `bible-*` 접두사 필수. 같은 origin에 다른 PWA가 등장해도 충돌 없게.
+키 이름은 `bible-*` 접두사를 반드시 붙인다. 같은 origin에 다른 PWA가 생겨도 부딪치지 않게 하려는 것이다. 아래 「정의 위치」의 `js/app.js`는 2026-05-10 모듈 분할(ADR-018) 뒤 `js/app/storage.js`로 옮겨 갔다.
 
 **그룹 1 — 설정 (Drive 동기화 대상, `syncStoreV2.saveSetting` 경유)**
 
@@ -78,14 +92,14 @@ Phase 2 진행 중 두 번 그 가정이 깨졌다.
 | --- | --- | --- |
 | `bible-last-read` | JSON `{bookId, chapter, articleId}` | 이어읽기 배너 (디바이스별 행동) |
 | `bible-audio-pos` | JSON `{bookId, chapter, time}` | 오디오 재생 위치 (디바이스별·휘발성) |
-| `bible-search-history` | JSON `string[]` (LRU 30) | ADR-014 — 행동 데이터 프라이버시 |
+| `bible-search-history` | JSON `{q, ts}[]` (LRU 30) | ADR-014 — 행동 데이터 개인 정보. 2026-06-07 전에는 `string[]` |
 | `bible-install-nudge` | JSON `{dismissed?, timestamp?}` | PWA 설치 안내 (디바이스별) |
 
-**그룹 3 — 북마크 v2 도큐먼트**
+**그룹 3 — 북마크 v2 문서**
 
 | 키 | 형식 | 비고 |
 | --- | --- | --- |
-| `bible-bookmarks-v2` | JSON `SyncDoc` (per-record mtime + tombstone) | ADR-011 Phase 2c. 동기 접근 필요(드로어 첫 렌더), 머지 단위로 직렬화 |
+| `bible-bookmarks-v2` | JSON `SyncDoc` (per-record mtime + tombstone) | ADR-011 Phase 2c. 동기 접근 필요(드로어 첫 렌더), 병합 단위로 직렬화 |
 | `bible-bookmarks` | (legacy v1) | ADR-010 시점 키. `store-v2.js`가 v1 → v2 일회 마이그레이션 후 그대로 둠 (롤백 안전망) |
 
 **그룹 4 — 동기화 메타·세션 플래그**
@@ -98,17 +112,17 @@ Phase 2 진행 중 두 번 그 가정이 깨졌다.
 | `bible-drive-redirect-attempts` | `"0"`–`"3"` | 리디렉션 루프 차단 카운터 |
 
 > **주의 — `bible-drive-silent-blocked` 정리**
-> Phase 2g(Implicit Flow) 시기의 silent-redirect 차단 플래그. Phase 2h 단계 4에서 silent reauth 자체가 IDB refresh token으로 대체되어 의미 없음. Phase 2h 단계 5에서 부팅 시 1회 `localStorage.removeItem` 클린업 추가. 새 코드는 이 키를 읽거나 쓰지 않는다.
+> Phase 2g(Implicit Flow) 때 조용한 리디렉션을 막던 플래그다. Phase 2h 단계 4에서 조용한 재인증 자체를 IDB의 refresh token이 맡게 되어 쓸모가 없어졌다. Phase 2h 단계 5에서 부팅할 때 1회 `localStorage.removeItem`으로 지우는 정리 코드를 더했다. 새 코드는 이 키를 읽거나 쓰지 않는다.
 
-### D2. sessionStorage 카탈로그
+### D2. sessionStorage 목록
 
 | 키 | 형식 | 비고 |
 | --- | --- | --- |
 | `bible-drive-redirect-state-pkce` | JSON `{nonce, verifier, returnTo, ts, flow: "pkce-v1"}` | OAuth 리디렉션 콜백 검증용. `beginRedirectAuth`에서 set, `consumeRedirectCallback`에서 nonce 검증 + 즉시 삭제. 10분 TTL. **단일 사용**(검증 성공·실패 상관없이 폐기)
 
-sessionStorage를 쓰는 이유: 탭 수명 동안만 살아 있으면 충분하고, 다른 탭/창에 새는 것을 원하지 않는 짧은 일회성 상태이기 때문. `localStorage`였다면 동시 OAuth가 진행 중인 다른 탭이 nonce를 덮어써 race가 발생할 수 있다.
+sessionStorage를 쓰는 이유: 탭이 살아 있는 동안만 있으면 충분하고, 다른 탭이나 창으로 새면 안 되는 짧은 일회성 상태이기 때문이다. `localStorage`였다면 OAuth를 동시에 진행하는 다른 탭이 nonce를 덮어써 경쟁 상태(race)가 생길 수 있다.
 
-### D3. IndexedDB 카탈로그
+### D3. IndexedDB 목록
 
 | DB 이름 | 버전 | Object Store | 내용 | 정의 위치 |
 | --- | --- | --- | --- | --- |
@@ -117,31 +131,31 @@ sessionStorage를 쓰는 이유: 탭 수명 동안만 살아 있으면 충분하
 
 **원칙**:
 
-- IDB는 **자격 증명·암호 키 전용**으로 한정. 새로운 일반 데이터(예: 노트, 하이라이트)가 추가되더라도 우선 localStorage(또는 store-v2 안에 통합)을 검토하고, 5 MB 한도에 닿거나 트랜잭션이 필요해질 때만 IDB로 승격한다. 승격 시 새 DB(`bible-bookmarks-store` 등)로 분리하고 `bible-drive-sync` DB는 자격 증명 전용을 유지한다.
-- 키는 `extractable: false`로 생성해 `crypto.subtle.exportKey()`나 구조화 클론 추출을 막는다. 따라서 다른 origin·다른 IDB로 옮길 수 없고, 이 origin이 데이터 삭제되면 함께 사라진다 — 그 경우 PKCE 리디렉션으로 새 토큰을 받는 것이 정상 복구 경로다.
-- 복호 실패 시 `tokens.refresh` 레코드를 자동 삭제해 stale ciphertext가 영구 잔존하지 않도록 한다 (Phase 2h 단계 1 결정).
+- IDB는 **자격 증명과 암호 키 전용**으로 한정한다. 새 일반 데이터(예: 노트, 하이라이트)가 생겨도 먼저 localStorage(또는 store-v2 안에 합치기)를 검토하고, 5 MB 한도에 닿거나 트랜잭션이 필요해질 때만 IDB로 올린다. 올릴 때는 새 DB(`bible-bookmarks-store` 등)로 나누고, `bible-drive-sync` DB는 자격 증명 전용으로 둔다.
+- 키는 `extractable: false`로 만들어 `crypto.subtle.exportKey()`나 구조화 클론으로 빼내지 못하게 한다. 그래서 다른 origin이나 다른 IDB로 옮길 수 없고, 이 origin의 데이터가 지워지면 함께 사라진다. 그때는 PKCE 리디렉션으로 새 토큰을 받는 것이 정상 복구 경로다.
+- 복호화에 실패하면 `tokens.refresh` 레코드를 저절로 지워, 낡은 ciphertext가 영영 남지 않게 한다(Phase 2h 단계 1 결정).
 
 ### D4. Cache API (Service Worker)
 
-`sw.js`의 4개 캐시를 **콘텐츠 종류별로 분리**해 독립 bump한다 (`scripts/release.py`).
+`sw.js`의 캐시 넷을 **콘텐츠 종류별로 나눈다**(2026-05-13부터의 이름과 무효화 방식, ADR-021).
 
-| 캐시 이름 (현재) | 내용 | bump 트리거 |
+| 캐시 이름 | 내용 | 무효화 |
 | --- | --- | --- |
-| `shell-49` | `index.html`, `js/`, `css/`, 아이콘, 매니페스트 | UI/로직 변경 |
-| `data-1` | `data/bible/*.json`, `data/search-*.json` | 데이터 포맷 변경 |
-| `audio-1` | `data/audio/*.mp3` | 재인코딩 |
-| `fonts-v1` | Google Font 콘텐츠 어드레스 파일 | 사실상 영구 (해시 주소) |
+| `shell-<앱 버전>` | `index.html`, `js/`, `css/`, 아이콘, 매니페스트 | 앱 버전이 바뀌면 이름이 바뀐다(`scripts/release.py`가 `version.json`과 `sw-version.js`를 올린다) |
+| `data` | `data/bible/*.json`, `data/search-*.json` | 이름은 고정. 콘텐츠 해시 매니페스트로 바뀐 항목만 지운다 |
+| `audio` | `data/audio/*.mp3` | 이름은 고정. 콘텐츠 해시 매니페스트로 바뀐 항목만 지운다 |
+| `fonts` | Google Font 콘텐츠 어드레스 파일 | 사실상 영구 (해시 주소) |
 
-전략(요약): 폰트·data·audio는 cache-first, shell은 navigate 시 network-first 폴백. 활성화 시 `KNOWN_CACHES`에 없는 캐시는 삭제. 자세한 동작은 `sw.js` 본문 및 `docs/architecture.md`의 오프라인 절 참조.
+전략(요약): 폰트, data, audio는 cache-first이고, shell은 navigate할 때 network-first로 폴백한다. 활성화할 때 `KNOWN_CACHES`에 없는 캐시는 지운다. 자세한 동작은 `sw.js` 본문과 `docs/architecture.md`의 오프라인 절을 본다.
 
-### D5. 키 네이밍 컨벤션
+### D5. 키 이름 컨벤션
 
-- **접두사**: 모든 origin 스토리지 키와 IDB DB 이름은 `bible-`로 시작.
-- **단어 구분**: 케밥 케이스 (`bible-color-scheme`).
-- **버저닝**: 스키마가 호환 깨짐으로 바뀌면 키에 `-v2`, `-v3`을 붙이고 마이그레이션 코드를 같은 모듈에 둔다 (예: `bible-bookmarks` → `bible-bookmarks-v2`).
-- **세션 한정**: 일회성 OAuth 상태는 sessionStorage에 두고 키 이름에 `redirect-state-pkce`처럼 흐름 정체성을 포함한다.
+- **접두사**: 모든 origin 스토리지 키와 IDB DB 이름은 `bible-`로 시작한다.
+- **낱말 구분**: 케밥 케이스(`bible-color-scheme`).
+- **버전 붙이기**: 스키마가 호환되지 않게 바뀌면 키에 `-v2`, `-v3`을 붙이고, 마이그레이션 코드를 같은 모듈에 둔다(예: `bible-bookmarks` → `bible-bookmarks-v2`).
+- **세션 한정**: 일회성 OAuth 상태는 sessionStorage에 두고, 키 이름에 `redirect-state-pkce`처럼 흐름의 정체를 넣는다.
 
-### D6. 새 데이터 추가 시 결정 트리
+### D6. 새 데이터를 더할 때의 결정 트리
 
 ```
 저장할 데이터를 분류한다.
@@ -160,34 +174,34 @@ sessionStorage를 쓰는 이유: 탭 수명 동안만 살아 있으면 충분하
 
 ## 근거
 
-1. **보안 등급 분리**: refresh token은 침해 시 사용자 Drive `appDataFolder`에 대한 지속적 접근을 의미한다. 평문 KV에 두지 않는다는 결정은 협상 불가능하며, 이는 자연스럽게 IDB + AES-GCM + non-extractable 키로 귀결된다.
-2. **동기 vs 비동기 접근 패턴**: 첫 페인트 경로의 결정(테마, 라우트, 시작 동작)은 동기 KV로 읽혀야 ADR-007(스플래시) 가정과 일관된다. 이 동기성을 위해 작은 설정·플래그는 localStorage에 둔다.
-3. **메커니즘별 격리는 사후 명문화**: 이미 코드가 이 형태로 자리잡았다. ADR-015는 새 코드 작성을 강제하지 않고, 앞으로의 추가가 같은 분류 안에 들어오도록 기준만 박는다.
-4. **쿠키 미사용은 단순화 효과**: 자체 백엔드가 없어 세션 쿠키 불필요, OAuth가 PKCE 본문 응답으로 완결되어 서드파티 쿠키 의존 없음, CSP가 `accounts.google.com` 자체를 허용하지 않는 Phase 2h 단계 4 결정과 정합.
-5. **Cache API 카테고리 분리**: `shell-*` / `data-*` / `audio-*` / `fonts-*` 독립 bump가 가능해 UI 변경이 250 MB 분량 오디오를 무효화하지 않는다 — 모바일 데이터 절약.
+1. **보안 등급을 나눈다**: refresh token이 침해되면 사용자 Drive `appDataFolder`에 계속 접근할 수 있다는 뜻이다. 평문 KV에 두지 않는다는 결정은 양보할 수 없고, 그러면 자연스럽게 IDB와 AES-GCM, non-extractable 키라는 결론에 이른다.
+2. **동기 접근과 비동기 접근**: 첫 페인트 경로의 결정(테마, 라우트, 시작 동작)은 동기 KV로 읽어야 ADR-007(스플래시)의 전제와 맞는다. 이 동기성을 위해 작은 설정과 플래그는 localStorage에 둔다.
+3. **메커니즘별 격리는 뒤늦게 문서에 적은 것이다**: 코드는 이미 이 형태로 자리 잡았다. ADR-015는 새 코드를 강제하지 않고, 앞으로 더할 것이 같은 분류 안에 들어오도록 기준만 정한다.
+4. **쿠키를 쓰지 않아 단순하다**: 자체 백엔드가 없어 세션 쿠키가 필요 없고, OAuth가 PKCE 응답 본문으로 끝나 서드파티 쿠키에 기대지 않는다. CSP가 `accounts.google.com` 자체를 허용하지 않는다는 Phase 2h 단계 4 결정과도 맞다.
+5. **Cache API를 종류별로 나눈다**: 셸 캐시를 바꿔도 본문과 오디오 캐시는 그대로 남아, UI를 바꾼 릴리스가 250 MB 분량의 오디오를 무효화하지 않는다. 모바일 데이터를 아낀다. 처음에는 `shell-*` / `data-*` / `audio-*` / `fonts-*`를 이름의 rev로 따로 올렸고, 2026-05-13부터는 ADR-021의 방식을 쓴다(D4).
 
 ## 영향 범위
 
-ADR-015는 **사후 명문화**라 신규 코드 변경 없음. 다만 다음을 동반한다.
+ADR-015는 **이미 내린 결정을 뒤늦게 문서에 적은 것**이라 새로 바꾼 코드가 없다. 다만 다음을 함께 했다.
 
 | 항목 | 변경 |
 | --- | --- |
-| `docs/decisions/015-storage-strategy.md` | 본 ADR 신규 |
-| `docs/architecture.md` | "스토리지" 절에서 본 ADR을 인덱스 추가 (다음 사이클) |
-| `CLAUDE.md` | "ADR-015"를 ADR 인덱스 라인에 추가 (다음 사이클) |
-| 신규 키 추가 PR | D6 결정 트리에 따라 메커니즘 선택했음을 PR 설명에 1줄 명시 |
+| `docs/decisions/015-storage-strategy.md` | 이 ADR 신규 |
+| `docs/architecture.md` | 그때는 「스토리지」 절에서 이 ADR을 가리키기로 했다(다음 사이클). 지금 이 ADR은 부록 A의 ADR 인덱스에 있다 |
+| `CLAUDE.md` | 그때는 ADR 인덱스 줄에 「ADR-015」를 더했다. 지금 ADR 인덱스는 `docs/architecture.md` 부록 A에만 있다 |
+| 신규 키 추가 PR | D6 결정 트리에 따라 메커니즘을 골랐다는 것을 PR 설명에 한 줄로 적는다 |
 
 ## 미결 사항
 
-- **북마크 v2 → IDB 승격 시점**: `bible-bookmarks-v2`가 단일 KV에 JSON blob으로 직렬화되어 있어, 사용자 북마크 수가 늘면 매 변경마다 전체 doc을 다시 직렬화·기록한다. 수천 건 규모에서 한도/성능 문제가 보이면 IDB로 승격(자격 증명 DB와 분리). 현재는 동기 접근 단순함 + ADR-013 테스트 가벼움이 더 큰 가치라 미루어둠.
-- **Storage Persistence API**: `navigator.storage.persist()`로 IDB의 refresh token이 저장 압박 시 evict되지 않도록 요청하는 것을 검토. 현재는 미신청 — 사용자 Drive 재인증으로 항상 복구 가능하므로 priority 낮음.
-- **Quota 모니터링**: `navigator.storage.estimate()`로 한도 근접 알림. data·audio 캐시가 합쳐 250 MB+가 되면 의미 있어짐. 현재는 미구현.
+- **북마크 v2를 IDB로 올리는 시점**: `bible-bookmarks-v2`가 KV 하나에 JSON blob으로 직렬화되어 있어, 북마크가 늘면 바꿀 때마다 문서 전체를 다시 직렬화하고 기록한다. 수천 건 규모에서 한도나 성능 문제가 보이면 IDB로 올린다(자격 증명 DB와 분리). 지금은 동기 접근의 단순함과 ADR-013 테스트의 가벼움이 더 큰 가치라 미루어 둔다.
+- **Storage Persistence API**: `navigator.storage.persist()`로, 저장 공간이 모자랄 때 IDB의 refresh token이 지워지지 않게 요청하는 것을 검토한다. 지금은 요청하지 않는다. 사용자가 Drive에 다시 인증하면 언제나 복구되므로 우선순위가 낮다.
+- **Quota 모니터링**: `navigator.storage.estimate()`로 한도에 가까워지면 알린다. data와 audio 캐시를 합쳐 250 MB를 넘기면 의미가 생긴다. 지금은 구현하지 않았다.
 
 ## 참고
 
-- ADR-010 북마크 (localStorage 채택 근거)
-- ADR-011 북마크 동기화 (Phase 2c store-v2, Phase 2h PKCE + IDB 도입)
+- ADR-010 북마크 (localStorage를 고른 근거)
+- ADR-011 북마크 동기화 (Phase 2c store-v2, Phase 2h PKCE와 IDB 도입)
 - ADR-014 검색 히스토리 (로컬 전용 행동 데이터)
 - `docs/archive/audit/2026-05-07-pkce-refresh-token.md` — refresh token 암호화 모델 보안 감사
-- `docs/archive/design/pkce-migration.md` — Phase 2h 살아있는 설계 문서
+- `docs/archive/design/pkce-migration.md` — Phase 2h 설계 문서(보관)
 - MDN: Web Crypto API `CryptoKey.extractable`, IndexedDB structured clone
