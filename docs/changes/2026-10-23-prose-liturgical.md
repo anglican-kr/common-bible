@@ -1,4 +1,5 @@
 ---
+pr: 379
 date: 2026-10-23
 branch: docs/prose-liturgical
 title: "docs: 교회력 문서의 지금 동작과 남은 일 정리"
