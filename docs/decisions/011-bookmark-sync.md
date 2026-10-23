@@ -1,29 +1,33 @@
 # ADR-011: 북마크 디바이스 간 동기화
 
 - 일시: 2026-04-26
-- 개정: 2026-04-28 (Google Drive 동기화 기술 결정 확정)
-- 개정: 2026-04-30 (Phase 2a 구현 완료)
-- 개정: 2026-05-02 (Phase 2b 구현 완료, 보안 감사 완료)
-- 개정: 2026-05-04 (Phase 2c 구현 완료)
-- 개정: 2026-05-05 (Phase 2d — iOS FedCM/One Tap 적용)
-- 개정: 2026-05-05 (Phase 2e — FedCM-mandatory deprecation 마이그레이션)
-- 개정: 2026-05-05 (Phase 2f — iOS OAuth 풀페이지 리디렉션)
-- 개정: 2026-05-06 (Phase 2f 머지 — Cursor Bugbot 6차 리뷰 정제 + GIS 토큰 빈 응답 stuck fix)
-- 개정: 2026-05-06 (Phase 2g — iOS 앱 재실행 시 silent prompt=none 자동 리디렉션)
-- 개정: 2026-05-08 (Phase 2h 완료 — PKCE + refresh token 마이그레이션, desktop·Android·iOS 단일 경로 통일)
-- 개정: 2026-05-08 (Phase 2i 완료 — sync 사이클 캐시, 라운드트립 단축)
-- 개정: 2026-05-11 (Phase 2j — visibilitychange 폴 throttle + ETag 관측성 보강)
-- 개정: 2026-05-11 (ADR-020 분할에 따라 BFF nginx 설정은 `common-bible-server/nginx/oauth-proxy.example.conf`로 이전. 클라이언트 측 동기화 흐름·refresh token 보관 위치는 변경 없음.)
-- 개정: 2026-05-19 (Google OAuth 앱 검수 통과 — `In production` 전환, refresh token TTL 영구, 코드 변경 없음)
-- 상태: 승인됨 (Phase 2a~2j 완료, PKCE 단일 경로 운영 중. Google OAuth 검수 통과 2026-05-19)
+- 상태: 승인됨 (Phase 2a-2j 완료, PKCE 단일 경로로 운영 중. Google OAuth 검수 통과 2026-05-19)
 
 ## 결정
 
-- **Phase 2a**: 내보내기/가져오기 (JSON 파일, 서버 불필요) — 즉시 착수
-- **Phase 2b**: Google Drive `appdata` 폴더를 이용한 자동 동기화
-  - 인증: Authorization Code Flow + PKCE
-  - 플랫폼별 로그인 UX: Android(GIS 무음), iOS 17+(FedCM), iOS 16↓(One Tap)
-  - 동기화: Opt-in, 변경 즉시 업로드
+- **Phase 2a**: 내보내기와 가져오기(JSON 파일, 서버가 필요 없다). 바로 시작했다.
+- **Phase 2b**: Google Drive `appdata` 폴더를 이용한 자동 동기화.
+  - 인증: Authorization Code Flow + PKCE. refresh token을 받아 IndexedDB에 암호화해 둔다(Phase 2h, 2026-05-08). `/token` 요청은 nginx BFF가 `client_secret`을 붙여 넘긴다(ADR-017).
+  - 처음 정한 플랫폼별 로그인 UX(Android(GIS 무음), iOS 17+(FedCM), iOS 16↓(One Tap))는 Phase 2b-2g에서 구현했다가, Phase 2h에서 PKCE 리디렉션 하나로 모았다(아래 「검토한 대안」).
+  - 동기화: 사용자가 켤 때만(Opt-in) 하고, 바뀌면 바로 올린다. 병합은 항목 단위다(Phase 2c).
+
+## 진행
+
+- 2026-04-28: Google Drive 동기화 기술 결정 확정.
+- 2026-04-30: Phase 2a 구현 완료.
+- 2026-05-02: Phase 2b 구현 완료, 보안 감사 완료.
+- 2026-05-04: Phase 2c 구현 완료.
+- 2026-05-05: Phase 2d(iOS FedCM/One Tap 적용).
+- 2026-05-05: Phase 2e(FedCM-mandatory deprecation 마이그레이션).
+- 2026-05-05: Phase 2f(iOS OAuth 풀페이지 리디렉션).
+- 2026-05-06: Phase 2f 머지(Cursor Bugbot 6차 리뷰 정제와 GIS 토큰 빈 응답에서 멈추는 문제 수정).
+- 2026-05-06: Phase 2g(iOS 앱을 다시 열 때 silent prompt=none 자동 리디렉션).
+- 2026-05-08: Phase 2h 완료(PKCE와 refresh token으로 옮기고, desktop·Android·iOS를 한 경로로 모았다), Phase 2i 완료(sync 사이클 캐시로 라운드트립을 줄였다).
+- 2026-05-11: Phase 2j(visibilitychange 폴 throttle과 ETag 관측성 보강).
+- 2026-05-11: ADR-020 분할에 따라 BFF nginx 설정은 `common-bible-server/nginx/oauth-proxy.example.conf`로 옮겼다. 클라이언트 쪽 동기화 흐름과 refresh token 보관 위치는 바뀌지 않았다.
+- 2026-05-19: Google OAuth 앱 검수 통과. `In production`으로 바꿔 refresh token TTL이 영구가 되었다. 코드 변경은 없다.
+- 2026-08-01: 설정 병합 전방 호환(PR #309, 아래).
+- 2026-10-22: 옛 버전의 북마크 절 범위를 병합 결과를 저장하기 전에 옮긴다(아래).
 
 ## 맥락
 
@@ -57,6 +61,8 @@ Phase 2의 목표:
 | Implicit Flow             | Deprecated(RFC 9700)                     | ❌      |
 | Client Secret 포함        | 프론트엔드 코드에 비밀 노출              | ❌      |
 
+Phase 2b-2g의 실제 구현은 GIS Token Client 기반 Implicit Flow였다. 2026-05-08 Phase 2h에서 이 표대로 PKCE로 되돌렸다. Google 「웹 애플리케이션」 클라이언트는 PKCE를 써도 `client_secret`을 요구해, 비밀 값은 nginx BFF가 서버 쪽에서 붙인다(ADR-017, 아래 Phase 2h).
+
 ### Drive Scope (Phase 2b)
 
 | Scope           | 접근 범위                         | 결정    |
@@ -77,6 +83,8 @@ Phase 2의 목표:
 Android는 OS 수준에서 Google 계정이 연결되어 있어 Chrome 세션이 거의 항상 유효.
 iOS는 Safari WebKit 세션 기반이지만 FedCM이 브라우저 신원 저장소를 사용해 세션 만료 빈도를 줄임.
 
+채택 안 함 2026-05-08 · 이유: 플랫폼마다 다른 경로가 iOS 팝업 차단과 데스크톱 cold start 팝업을 되풀이해 낳았다(Phase 2d-2g). Phase 2h에서 PKCE 리디렉션과 refresh token 하나로 모았다 · 재검토: 없음.
+
 ### 토큰 저장 (Phase 2b)
 
 | 방식           | XSS 위험       | 재시작 후 재로그인       | 결정    |
@@ -87,6 +95,8 @@ iOS는 Safari WebKit 세션 기반이지만 FedCM이 브라우저 신원 저장�
 
 Access Token 수명은 1시간. 만료 시 GIS가 브라우저 세션을 이용해 무음 재발급.
 localStorage 저장 시 XSS 공격으로 Google 계정 접근권 탈취 가능 — 북마크 유출보다 피해 범위가 크므로 채택 불가.
+
+Phase 2h(2026-05-08)부터는 access token은 그대로 메모리에 두고, refresh token을 IndexedDB에 비추출 AES-GCM 키로 암호화해 둔다(아래 「Refresh Token 저장 전략」). 메모리만 쓰던 처음 방식은 refresh token이 없어 데스크톱에서 앱을 열 때마다 팝업이 떴다.
 
 ### 동기화 트리거 (Phase 2b)
 
@@ -114,7 +124,7 @@ localStorage 저장 시 XSS 공격으로 Google 계정 접근권 탈취 가능 �
 
 - 북마크 드로어 툴바에 내보내기(`download`) / 가져오기(`upload`) 버튼 추가
 - 내보내기: `bible-bookmarks-{날짜}.json` 파일 다운로드 (`_version`, `exportedAt`, `bookmarks` 필드)
-- 가져오기: JSON 파일 선택 → `_validateImportData()` 검증 → 병합 또는 덮어쓰기 선택. 항목마다 검사해 어긋난 항목은 뺀다(ADR-040). 2026-06-06 전 판이 저장한 절 범위의 줄 글자는 들이면서 지금 표기로 옮긴다(ADR-010 「옛 저장값」)
+- 가져오기: JSON 파일 선택 → `_validateImportData()` 검증 → 병합 또는 덮어쓰기 선택. 항목마다 검사해 어긋난 항목은 뺀다(ADR-040). 2026-06-06 전 버전이 저장한 절 범위의 줄 글자는 들이면서 지금 표기로 옮긴다(ADR-010 「옛 저장값」)
 - 병합: `id` 기준 중복 제거 — 동일 ID 항목은 기존 유지, 새 항목만 추가 (폴더 `children` 재귀 처리)
 - 스키마 버전 필드(`_version: 1`) 추가로 향후 마이그레이션 대비
 
@@ -122,14 +132,14 @@ localStorage 저장 시 XSS 공격으로 Google 계정 접근권 탈취 가능 �
 
 ## Phase 2b — Google Drive 자동 동기화 (구현 완료 2026-05-02)
 
-> **개정 (2026-05-02):** Phase 2b 구현 완료. 주요 구현 사항:
->
-> - **`js/drive-sync.js` 신규**: GIS Implicit Token Flow 기반 인증, 업로드/다운로드/머지 구현
-> - **토큰 전략**: `_accessToken` 메모리 전용, GIS `prompt:""` 백그라운드 재발급
-> - **레이스 컨디션 방지**: `_isRefreshing` 플래그로 동시 401 응답 시 중복 `_silentSignIn()` 차단
-> - **파싱 방어**: `res.json()` try-catch로 HTML 유지보수 페이지 등 예상치 못한 응답 처리
-> - **충돌 해결 스낵바**: "다른 기기에서 변경된 데이터를 불러왔습니다." 알림 구현
-> - **보안 감사**: `docs/archive/audit/2026-05-02-171111.md` — Critical·High 0건, Medium 2건 수정, Info 2건 수용
+(2026-05-02) Phase 2b 구현 완료. 주요 구현 사항:
+
+- **`js/drive-sync.js` 신규**: GIS Implicit Token Flow 기반 인증, 업로드/다운로드/머지 구현
+- **토큰 전략**: `_accessToken` 메모리 전용, GIS `prompt:""` 백그라운드 재발급
+- **레이스 컨디션 방지**: `_isRefreshing` 플래그로 동시 401 응답 시 중복 `_silentSignIn()` 차단
+- **파싱 방어**: `res.json()` try-catch로 HTML 유지보수 페이지 등 예상치 못한 응답 처리
+- **충돌 해결 스낵바**: "다른 기기에서 변경된 데이터를 불러왔습니다." 알림 구현
+- **보안 감사**: `docs/archive/audit/2026-05-02-171111.md` — Critical·High 0건, Medium 2건 수정, Info 2건 수용
 
 ### 앱 사용자 관점 흐름
 
@@ -282,25 +292,25 @@ connect-src: 현재 + https://oauth2.googleapis.com
 
 ## Phase 2c — 동기화 엔진 재설계 (구현 완료 2026-05-04)
 
-> **개정 (2026-05-04):** Phase 2b 이후 버그봇 연속 발견(PR #20 18건, PR #26 6건)의 근본 원인을 해소하기 위해 동기화 엔진을 전면 재설계.
->
-> - **데이터 모델 v2** (`js/sync/store-v2.js`): 문서 단위 LWW → 항목 단위 per-record mtime(`_u`) + tombstone. flat-map 북마크 + `mergeDocs()`.
-> - **인증 FSM** (`js/sync/state-machine.js`): 6개 클로저 변수 → `_ctx = { netFails, conflictFails, reAuthFails, backoffTimer }` 명시적 컨텍스트. `_transition(nextState, ctxPatch)` 단일 진입점으로 "리셋 누락" 구조적 차단.
-> - **ETag 낙관적 동시성** (`js/sync/transport.js`): `If-Match` 헤더로 동시 업로드 충돌 감지. 412 수신 시 최대 3회 재머지 재시도.
-> - **Exponential backoff + OFFLINE**: 네트워크 오류 1s/2s/4s/8s/16s 재시도, 5회 초과 시 OFFLINE 상태. `online` 이벤트로 자동 복구.
-> - **디버그 로그** (`js/sync/debug-log.js`): 메모리 ring buffer(recent 200, errors 20), 마스킹, `localhost` 전용 `console.debug`. 설정 팝오버에 "진단 정보 복사" 버튼.
-> - **e2e 테스트** (`tests/e2e/test_drive_sync.py`): FakeDrive + GIS 스텁으로 5가지 시나리오 자동 검증.
-> - **tombstone GC** (`sweepTombstones(ageDays=30)`): 앱 시작 시 30일 이상 경과한 tombstone 자동 제거.
+(2026-05-04) Phase 2b 이후 버그봇 연속 발견(PR #20 18건, PR #26 6건)의 근본 원인을 해소하기 위해 동기화 엔진을 전면 재설계.
+
+- **데이터 모델 v2** (`js/sync/store-v2.js`): 문서 단위 LWW → 항목 단위 per-record mtime(`_u`) + tombstone. flat-map 북마크 + `mergeDocs()`.
+- **인증 FSM** (`js/sync/state-machine.js`): 6개 클로저 변수 → `_ctx = { netFails, conflictFails, reAuthFails, backoffTimer }` 명시적 컨텍스트. `_transition(nextState, ctxPatch)` 단일 진입점으로 "리셋 누락" 구조적 차단.
+- **ETag 낙관적 동시성** (`js/sync/transport.js`): `If-Match` 헤더로 동시 업로드 충돌 감지. 412 수신 시 최대 3회 재머지 재시도.
+- **Exponential backoff + OFFLINE**: 네트워크 오류 1s/2s/4s/8s/16s 재시도, 5회 초과 시 OFFLINE 상태. `online` 이벤트로 자동 복구.
+- **디버그 로그** (`js/sync/debug-log.js`): 메모리 ring buffer(recent 200, errors 20), 마스킹, `localhost` 전용 `console.debug`. 설정 팝오버에 "진단 정보 복사" 버튼.
+- **e2e 테스트** (`tests/e2e/test_drive_sync.py`): FakeDrive + GIS 스텁으로 5가지 시나리오 자동 검증.
+- **tombstone GC** (`sweepTombstones(ageDays=30)`): 앱 시작 시 30일 이상 경과한 tombstone 자동 제거.
 
 ## Phase 2d — iOS FedCM/One Tap 적용 (구현 완료 2026-05-05)
 
-> **개정 (2026-05-05):** iOS Safari에서 앱을 열 때마다 "이 사이트에서 팝업 윈도우를 열려고 시도 중입니다." 차단 안내가 뜨는 문제 해결. Phase 2b는 GIS Token Client 단일 경로로, 페이지 로드 시 자동 `requestAccessToken({prompt:""})` 호출이 사용자 제스처 밖에서 `window.open()`을 트리거해 iOS가 팝업으로 인식했다. ADR-011 원안의 "iOS 17+ FedCM, iOS 16↓ One Tap" 인증 분기를 실제로 구현해 정합화.
->
-> - **Identity Client 추가** (`js/sync/transport.js`): `initIdentityClient`/`promptIdentity`/`parseIdToken` 함수 신규. `google.accounts.id.initialize({use_fedcm_for_prompt: true, auto_select: true, itp_support: true})` + `prompt()` 사용. iOS 17+은 FedCM (브라우저 mediated UI), iOS 16↓은 One Tap (인라인 UI)으로 자동 폴백 — 둘 다 `window.open()` 미사용이라 iOS 팝업 차단 안내가 발생하지 않음.
-> - **상태 머신 분리** (`js/sync/state-machine.js`): `AUTHENTICATING` 단일 상태를 `IDENTIFYING` → `AUTHENTICATING` 두 단계로 나눔. 페이지 로드 자동 흐름은 ID Client만 사용하므로 popup-blocker 다이얼로그가 발생하지 않음. `NEEDS_CONSENT` 상태 신설 — silent identity 실패 시 ERROR 대신 부드러운 상태에 머물고, 사용자가 "연결" 버튼을 클릭하면 그 사용자 제스처 안에서 `requestAccessToken({prompt:"consent"})`을 호출해 iOS가 팝업을 정상 허용.
-> - **이벤트 추가**: `IDENTITY_OK { email, credential }` / `IDENTITY_FAIL { reason }` / `USER_CONSENT_REQUEST`. 401 재인증도 IDENTIFYING 단계를 거쳐 silent FedCM 갱신을 먼저 시도.
-> - **email hint 자동 시드**: ID 토큰에서 추출한 email을 즉시 `bible-drive-sync-email`에 저장 → 후속 `requestAccessToken({prompt:"", hint:email})` 성공률 향상.
-> - **테스트 스텁 확장** (`tests/e2e/test_drive_sync.py`): GIS 스텁이 `accounts.id.initialize`/`prompt`도 시뮬레이션하도록 확장. `__gisForceIdentityFail` 토글로 FedCM 미지원 환경 회귀 시나리오 시뮬레이션 가능.
+(2026-05-05) iOS Safari에서 앱을 열 때마다 "이 사이트에서 팝업 윈도우를 열려고 시도 중입니다." 차단 안내가 뜨는 문제 해결. Phase 2b는 GIS Token Client 단일 경로로, 페이지 로드 시 자동 `requestAccessToken({prompt:""})` 호출이 사용자 제스처 밖에서 `window.open()`을 트리거해 iOS가 팝업으로 인식했다. ADR-011 원안의 "iOS 17+ FedCM, iOS 16↓ One Tap" 인증 분기를 실제로 구현해 정합화.
+
+- **Identity Client 추가** (`js/sync/transport.js`): `initIdentityClient`/`promptIdentity`/`parseIdToken` 함수 신규. `google.accounts.id.initialize({use_fedcm_for_prompt: true, auto_select: true, itp_support: true})` + `prompt()` 사용. iOS 17+은 FedCM (브라우저 mediated UI), iOS 16↓은 One Tap (인라인 UI)으로 자동 폴백 — 둘 다 `window.open()` 미사용이라 iOS 팝업 차단 안내가 발생하지 않음.
+- **상태 머신 분리** (`js/sync/state-machine.js`): `AUTHENTICATING` 단일 상태를 `IDENTIFYING` → `AUTHENTICATING` 두 단계로 나눔. 페이지 로드 자동 흐름은 ID Client만 사용하므로 popup-blocker 다이얼로그가 발생하지 않음. `NEEDS_CONSENT` 상태 신설 — silent identity 실패 시 ERROR 대신 부드러운 상태에 머물고, 사용자가 "연결" 버튼을 클릭하면 그 사용자 제스처 안에서 `requestAccessToken({prompt:"consent"})`을 호출해 iOS가 팝업을 정상 허용.
+- **이벤트 추가**: `IDENTITY_OK { email, credential }` / `IDENTITY_FAIL { reason }` / `USER_CONSENT_REQUEST`. 401 재인증도 IDENTIFYING 단계를 거쳐 silent FedCM 갱신을 먼저 시도.
+- **email hint 자동 시드**: ID 토큰에서 추출한 email을 즉시 `bible-drive-sync-email`에 저장 → 후속 `requestAccessToken({prompt:"", hint:email})` 성공률 향상.
+- **테스트 스텁 확장** (`tests/e2e/test_drive_sync.py`): GIS 스텁이 `accounts.id.initialize`/`prompt`도 시뮬레이션하도록 확장. `__gisForceIdentityFail` 토글로 FedCM 미지원 환경 회귀 시나리오 시뮬레이션 가능.
 
 ### Phase 2d 동작 매트릭스
 
@@ -313,13 +323,13 @@ connect-src: 현재 + https://oauth2.googleapis.com
 
 ## Phase 2e — FedCM-mandatory deprecation 마이그레이션 (구현 완료 2026-05-05)
 
-> **개정 (2026-05-05):** 클린 환경에서 콘솔에 반복 출력되던 GSI deprecation 경고 (`Your client application uses one of the Google One Tap prompt UI status methods that may stop functioning when FedCM becomes mandatory`)와 `[GSI_LOGGER]: FedCM get() rejects with AbortError` 로그 제거. Phase 2d는 `prompt()` 콜백에서 `isNotDisplayed`/`isSkippedMoment`/`isDismissedMoment` 트리오로 prompt 결과를 분기했는데, FedCM 마이그레이션 가이드는 앞 두 메서드를 deprecated로 표시한다. 추가로 검증해보니 **`prompt()`에 콜백을 등록한다는 사실 자체**가 deprecation 경고의 트리거였다 (`isDismissedMoment`만 호출해도 경고 유지).
->
-> 핵심 변경:
-> - **`prompt()` 콜백 제거** (`js/sync/transport.js`): `promptIdentity()`가 `google.accounts.id.prompt()`를 인자 없이 호출. 성공은 `initIdentityClient`의 credential 콜백에서 수신하고, 실패(dismiss/suppression)는 사용자가 명시적으로 "연결" 버튼을 다시 누를 때까지 대기.
-> - **wall-clock timeout 폴백 도입 후 폐기**: 처음엔 `IDENTITY_TIMEOUT_MS = 10000` 안전망을 추가했으나, 다계정 사용자가 FedCM 다이얼로그에서 결정하는 동안(>10s) `cancelIdentityPrompt()`가 발화돼 다이얼로그가 강제 종료되는 회귀가 발생. Google FedCM 가이드는 *앱이 FedCM UI 수명을 통제하지 말 것*을 권고하므로 timeout 자체를 제거하고 사용자 escape hatch(설정의 항시 노출되는 "연결" 버튼)에 의존하도록 변경.
-> - **deprecated notification 메서드 호출 0건**: `isNotDisplayed`/`isSkippedMoment`/`isDismissedMoment`/`getNotDisplayedReason`/`getSkippedReason`/`getDismissedReason`/`getMomentType` 모두 코드에서 제거.
-> - **테스트 스텁 정리** (`tests/e2e/test_drive_sync.py`): GIS_STUB의 `prompt`가 새 무인자 시그니처에 맞춰지고, dead-code였던 `__gisForceIdentityFail` 경로(deprecated 메서드를 시뮬레이션)를 삭제. 8개 e2e 시나리오 모두 정상 통과.
+(2026-05-05) 클린 환경에서 콘솔에 반복 출력되던 GSI deprecation 경고 (`Your client application uses one of the Google One Tap prompt UI status methods that may stop functioning when FedCM becomes mandatory`)와 `[GSI_LOGGER]: FedCM get() rejects with AbortError` 로그 제거. Phase 2d는 `prompt()` 콜백에서 `isNotDisplayed`/`isSkippedMoment`/`isDismissedMoment` 트리오로 prompt 결과를 분기했는데, FedCM 마이그레이션 가이드는 앞 두 메서드를 deprecated로 표시한다. 추가로 검증해보니 **`prompt()`에 콜백을 등록한다는 사실 자체**가 deprecation 경고의 트리거였다 (`isDismissedMoment`만 호출해도 경고 유지).
+
+핵심 변경:
+- **`prompt()` 콜백 제거** (`js/sync/transport.js`): `promptIdentity()`가 `google.accounts.id.prompt()`를 인자 없이 호출. 성공은 `initIdentityClient`의 credential 콜백에서 수신하고, 실패(dismiss/suppression)는 사용자가 명시적으로 "연결" 버튼을 다시 누를 때까지 대기.
+- **wall-clock timeout 폴백 도입 후 폐기**: 처음엔 `IDENTITY_TIMEOUT_MS = 10000` 안전망을 추가했으나, 다계정 사용자가 FedCM 다이얼로그에서 결정하는 동안(>10s) `cancelIdentityPrompt()`가 발화돼 다이얼로그가 강제 종료되는 회귀가 발생. Google FedCM 가이드는 *앱이 FedCM UI 수명을 통제하지 말 것*을 권고하므로 timeout 자체를 제거하고 사용자 escape hatch(설정의 항시 노출되는 "연결" 버튼)에 의존하도록 변경.
+- **deprecated notification 메서드 호출 0건**: `isNotDisplayed`/`isSkippedMoment`/`isDismissedMoment`/`getNotDisplayedReason`/`getSkippedReason`/`getDismissedReason`/`getMomentType` 모두 코드에서 제거.
+- **테스트 스텁 정리** (`tests/e2e/test_drive_sync.py`): GIS_STUB의 `prompt`가 새 무인자 시그니처에 맞춰지고, dead-code였던 `__gisForceIdentityFail` 경로(deprecated 메서드를 시뮬레이션)를 삭제. 8개 e2e 시나리오 모두 정상 통과.
 
 ### Phase 2e 후 동작 매트릭스
 
@@ -337,12 +347,12 @@ connect-src: 현재 + https://oauth2.googleapis.com
 
 ## Phase 2f — iOS OAuth 풀페이지 리디렉션 (구현 완료 2026-05-05)
 
-> **개정 (2026-05-05):** Phase 2d/2e 적용 후에도 iPhone(iOS 26.X)에서 "팝업 윈도우를 열려고 시도" 안내가 재발 보고됨. 추가 조사 결과 Phase 2d 전제가 두 가지 점에서 잘못됐음이 확인됨.
->
-> 1. **Safari는 FedCM을 영구 미지원**. Apple은 passkey에 집중하기로 결정했고 WebKit standards-positions에서 FedCM을 부정적으로 평가. `use_fedcm_for_prompt: true`는 iOS Safari에서 no-op이며, ID Client는 Phase 2d에서 가정한 "iOS 17+은 FedCM"으로 결코 동작하지 않음.
-> 2. **GIS Token Client `requestAccessToken`은 popup-only**. Google 공식 token 모델 가이드: "Due to security concerns, only the popup UX is supported." 사용자 제스처 안에서 호출해도 iOS PWA standalone 모드에서는 popup 자체가 차단됨. iOS 26부터 홈 화면 추가 사이트가 기본 PWA 모드로 열리면서 영향 사용자 급증.
->
-> 결론: GIS Token Client 경로로는 iOS 팝업 차단을 우회할 수 없음. iOS 한정으로 OAuth 2.0 Implicit Flow의 풀페이지 리디렉션을 수동 구현해야 함.
+(2026-05-05) Phase 2d/2e 적용 후에도 iPhone(iOS 26.X)에서 "팝업 윈도우를 열려고 시도" 안내가 재발 보고됨. 추가 조사 결과 Phase 2d 전제가 두 가지 점에서 잘못됐음이 확인됨.
+
+1. **Safari는 FedCM을 영구 미지원**. Apple은 passkey에 집중하기로 결정했고 WebKit standards-positions에서 FedCM을 부정적으로 평가. `use_fedcm_for_prompt: true`는 iOS Safari에서 no-op이며, ID Client는 Phase 2d에서 가정한 "iOS 17+은 FedCM"으로 결코 동작하지 않음.
+2. **GIS Token Client `requestAccessToken`은 popup-only**. Google 공식 token 모델 가이드: "Due to security concerns, only the popup UX is supported." 사용자 제스처 안에서 호출해도 iOS PWA standalone 모드에서는 popup 자체가 차단됨. iOS 26부터 홈 화면 추가 사이트가 기본 PWA 모드로 열리면서 영향 사용자 급증.
+
+결론: GIS Token Client 경로로는 iOS 팝업 차단을 우회할 수 없음. iOS 한정으로 OAuth 2.0 Implicit Flow의 풀페이지 리디렉션을 수동 구현해야 함.
 
 ### 핵심 변경
 
@@ -407,7 +417,7 @@ Authorized JavaScript origins / scope 설정 변경 없음 → OAuth 검수 재�
 
 ## Phase 2f 후속 정제 (2026-05-06)
 
-> **개정 (2026-05-06):** PR #37 머지 직전·직후 Cursor Bugbot 6차 리뷰와 PR #40 추가 리뷰가 누적되며 Phase 2f의 보안·견고성 면을 후속 정제했다. 새로운 결정 사항은 없으나 동작 계약(contract)을 명시화한다.
+(2026-05-06) PR #37 머지 직전·직후 Cursor Bugbot 6차 리뷰와 PR #40 추가 리뷰가 누적되며 Phase 2f의 보안·견고성 면을 후속 정제했다. 새로운 결정 사항은 없으나 동작 계약(contract)을 명시화한다.
 
 ### 보안 강화 (CSRF·재시도 통제)
 
@@ -445,7 +455,7 @@ ADR-013 (클라이언트 JS 유닛 테스트 전략) 참고. 위 6차 리뷰 정
 
 ## Phase 2g — iOS 앱 재실행 시 silent prompt=none 자동 리디렉션 (구현 완료 2026-05-06)
 
-> **개정 (2026-05-06):** Phase 2f 배포 후 사용자 보고 — iOS PWA에서 한 번 연결한 뒤 앱을 종료하고 다시 열면 동기화가 해제된 것처럼 보인다(설정 화면에 "연결" 버튼 다시 노출). Phase 2f 구현은 부팅 시 hash callback이 없으면 `DISABLED → ENABLE` 분기에서 무조건 `NEEDS_CONSENT`로 파킹해, 매 앱 오픈마다 사용자가 "연결" 버튼을 다시 눌러야 했음. ADR-011 Phase 2f 동작 매트릭스의 "iOS PWA standalone | 페이지 로드 동작: 풀페이지 리디렉션" 항목과 실제 구현이 어긋나 있었음.
+(2026-05-06) Phase 2f 배포 후 사용자 보고 — iOS PWA에서 한 번 연결한 뒤 앱을 종료하고 다시 열면 동기화가 해제된 것처럼 보인다(설정 화면에 "연결" 버튼 다시 노출). Phase 2f 구현은 부팅 시 hash callback이 없으면 `DISABLED → ENABLE` 분기에서 무조건 `NEEDS_CONSENT`로 파킹해, 매 앱 오픈마다 사용자가 "연결" 버튼을 다시 눌러야 했음. ADR-011 Phase 2f 동작 매트릭스의 "iOS PWA standalone | 페이지 로드 동작: 풀페이지 리디렉션" 항목과 실제 구현이 어긋나 있었음.
 
 ### 핵심 변경
 
@@ -485,7 +495,7 @@ ADR-013 (클라이언트 JS 유닛 테스트 전략) 참고. 위 6차 리뷰 정
 
 ### 알려진 트레이드오프
 
-- **앱 오픈 깜박임**: 매 cold start마다 accounts.google.com으로의 짧은 round-trip 발생. 빠른 망에서 < 1초, 느린 모바일 망에서 1~3초. `prompt=none`은 UI를 표시하지 않으므로 도메인 플래시만 보임.
+- **앱 오픈 깜박임**: 매 cold start마다 accounts.google.com으로의 짧은 round-trip 발생. 빠른 망에서 < 1초, 느린 모바일 망에서 1-3초. `prompt=none`은 UI를 표시하지 않으므로 도메인 플래시만 보임.
 - **Google 자체 세션 만료**: Google OAuth 세션은 서버 측에서 일정 기간(약 2주) 비활성 시 만료된다. 이 경우 silent 시도는 `login_required`를 반환 → silent-blocked=1로 떨어져 사용자가 "연결"을 다시 눌러야 한다. 첫 실패는 묵묵히 NEEDS_CONSENT, 이후 자동 시도 없음. (※ iOS Safari 탭 7일 ITP storage cap은 **홈 화면 PWA에는 적용되지 않으므로** 설치 사용자에겐 무관 — ADR-011 §맥락 참고.)
 - **외부 revoke 감지**: 사용자가 Google 계정 설정에서 권한을 끊으면 silent 시도는 `consent_required`를 반환 → silent-blocked=1. 이는 의도된 동작 — 다음 사용자 제스처 시점에 명시적 consent로 복구.
 
@@ -494,9 +504,9 @@ ADR-013 (클라이언트 JS 유닛 테스트 전략) 참고. 위 6차 리뷰 정
 - **Consent 거부 후 자동 silent 재시도 차단**: `signIn()`은 명시적 재연결 진입에서 silent-blocked 플래그를 비우는데, Google에서 사용자가 consent를 거부하고 돌아오면 (`__pendingRedirectError`) `initDriveSync()`이 토스트만 띄우고 `_machine.enable()`을 호출 → DISABLED+ENABLE iOS 분기가 (email 있음 + silent-blocked 없음) prompt=none을 즉시 발사 → 토스트 파괴 + 무용한 round-trip. iOS 분기에서 `__pendingRedirectError` 처리 시 silent-blocked=1을 설정해 `enable()`이 NEEDS_CONSENT에 정착하도록 정정.
 - **silent-blocked 키 단일화**: `signIn()`은 `window._syncSilentBlockedKey` 상수를 사용했지만 IIFE 2곳과 `signOut()`은 리터럴 `"bible-drive-silent-blocked"`을 하드코딩 → Phase 2f에서 `REDIRECT_ATTEMPTS_KEY`로 잡았던 것과 동일한 패턴. 모두 상수 참조로 통일.
 
-## Phase 2h — PKCE + Refresh Token 마이그레이션 (완료 2026-05-06~08)
+## Phase 2h — PKCE + Refresh Token 마이그레이션 (완료 2026-05-06부터 05-08까지)
 
-> **개정 (2026-05-07):** 본 ADR 상단 line 51 "OAuth Flow" 결정표에서 **Authorization Code + PKCE를 채택, Implicit Flow는 deprecated로 거부**라고 명시했음에도, Phase 2b 실제 구현은 GIS Token Client 기반 Implicit Flow로 진행되어 ADR-구현 정합성이 깨졌다. 이후 Phase 2c~2g가 그 어긋난 토대 위에서 iOS·desktop UX를 누적 보정해 왔으나, 데스크탑 cold start마다 GIS OAuth 팝업창이 뜨는 사용자 보고(2026-05-06)가 들어오면서 근본 원인이 Implicit Flow의 refresh token 부재임이 드러남. 본 Phase 2h는 ADR이 처음부터 지시했던 PKCE 흐름으로 회귀하면서 desktop·iOS 모두 단일 경로로 통일한다.
+(2026-05-07) 이 ADR 「검토한 대안」의 "OAuth Flow" 결정표에서 **Authorization Code + PKCE를 채택, Implicit Flow는 deprecated로 거부**라고 명시했음에도, Phase 2b 실제 구현은 GIS Token Client 기반 Implicit Flow로 진행되어 ADR-구현 정합성이 깨졌다. 이후 Phase 2c-2g가 그 어긋난 토대 위에서 iOS·desktop UX를 누적 보정해 왔으나, 데스크탑 cold start마다 GIS OAuth 팝업창이 뜨는 사용자 보고(2026-05-06)가 들어오면서 근본 원인이 Implicit Flow의 refresh token 부재임이 드러남. 본 Phase 2h는 ADR이 처음부터 지시했던 PKCE 흐름으로 회귀하면서 desktop·iOS 모두 단일 경로로 통일한다.
 
 ### 동기
 
@@ -508,7 +518,7 @@ ADR-013 (클라이언트 JS 유닛 테스트 전략) 참고. 위 6차 리뷰 정
 
 1. **Refresh token 영속 저장**: AES-GCM 암호화 IndexedDB. 키는 `extractable: false`로 생성해 `subtle.exportKey()`로도 raw 바이트 추출 불가.
 2. **PKCE Authorization Code Flow**: GIS Token Client 사용 중단, 모든 플랫폼이 redirect-기반 단일 경로.
-3. **Refresh token rotation**: Google이 새 refresh_token을 surface하면 즉시 IDB 갱신. Sentinel detection 자동 작동.
+3. **Refresh token rotation**: Google이 새 refresh_token을 돌려주면(surface) 즉시 IDB 갱신. Sentinel detection 자동 작동.
 4. **GIS 의존 제거**: `<script src="accounts.google.com/gsi/client">` 제거, CSP `script-src`/`frame-src`에서 `accounts.google.com` 정리.
 
 ### 보안 모델
@@ -528,7 +538,7 @@ ADR-013 (클라이언트 JS 유닛 테스트 전략) 참고. 위 6차 리뷰 정
 | 4 | GIS 제거 + 모든 흐름 PKCE로 일원화 (사용자 가시 변경) | ✅ 머지 (2026-05-07) | #57 |
 | 5 | 정리 (silent-blocked 키 cleanup, pitfalls 문서, 보안 감사) | 🟡 PR open (2026-05-07) | #__ |
 
-단계 1~3은 신규 코드를 옆에 깔기만 하므로 사용자 영향 0. 단계 4 머지 시점에 모든 기존 사용자가 cold start 1회 NEEDS_CONSENT 통과 후 신규 흐름 진입 (sync 데이터 손실 없음 — 별도 store).
+단계 1-3은 신규 코드를 옆에 깔기만 하므로 사용자 영향 0. 단계 4 머지 시점에 모든 기존 사용자가 cold start 1회 NEEDS_CONSENT 통과 후 신규 흐름 진입 (sync 데이터 손실 없음 — 별도 store).
 
 ### 단계 1 결과 (PR #52, 머지)
 
@@ -549,7 +559,7 @@ ADR-013 (클라이언트 JS 유닛 테스트 전략) 참고. 위 6차 리뷰 정
   - `refreshAccessToken()`: POST `/token`, `grant_type=refresh_token`. **rotation** 시 새 token surface, 없으면 `null`로 반환 → 호출자가 기존 값 보존
 - 단위 테스트 23건. **RFC 7636 §4.2 부록 B 테스트 벡터 정합성 검증** 포함 (`dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk` → `E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM`).
 
-### 단계 3 결과 (PR #__)
+### 단계 3 결과 (PR #54)
 
 `state-machine.js`와 `drive-sync.js`에 PKCE silent refresh 흐름 결합. 기존 GIS / Implicit 흐름은 그대로 살아있어 사용자 영향 0 — IDB에 refresh token이 없으면 기존 경로로 폴백.
 
@@ -692,15 +702,15 @@ PKCE Authorization Code + refresh token 단일 경로로 통일. ADR이 처음�
 machine GIS 가정이 동시에 사라졌으므로 부분 revert 불가. IDB에 저장된 refresh
 token은 무해 (구 코드는 IDB 안 봄). 회귀 발견 시 PR 전체 revert만 가능.
 
-### 단계 5 결과 (PR #__, 2026-05-07)
+### 단계 5 결과 (PR #58, 2026-05-07)
 
 마이그레이션을 마무리하는 정리 단계. 코드 기능 변경 없음.
 
-- **`bible-drive-silent-blocked` localStorage one-shot cleanup**: `js/drive-sync.js` 모듈 로드 시 `localStorage.removeItem("bible-drive-silent-blocked")`. 단계 4에서 키를 read/write하는 코드는 모두 사라졌으나 기존 사용자 디바이스에 stale value가 남아있을 수 있어 정리. removeItem이 missing key에 대해 no-op이므로 안전. 몇 릴리스 후 cleanup 호출 자체도 제거 가능.
+- **`bible-drive-silent-blocked` localStorage one-shot cleanup**: `js/drive-sync.js` 모듈 로드 시 `localStorage.removeItem("bible-drive-silent-blocked")`. 단계 4에서 키를 read/쓰는(write) 코드는 모두 사라졌으나 기존 사용자 디바이스에 stale value가 남아있을 수 있어 정리. removeItem이 missing key에 대해 no-op이므로 안전. 몇 릴리스 후 cleanup 호출 자체도 제거 가능.
 - **`docs/coding-pitfalls.md` 신규 섹션 3개** (Phase 2h에서 학습한 패턴):
   - §11 비동기 race 가드 — 단일 체크포인트의 함정 (Bugbot PR #54·#57 사례)
   - §12 콜백 URL 데이터 leak — flow별 transport 격차 (Bugbot PR #54-2 사례)
-  - §13 마이그레이션 시점의 sessionStorage / localStorage 키 격리 (단계 2~4 sessionStorage 키 분리·인계 패턴)
+  - §13 마이그레이션 시점의 sessionStorage / localStorage 키 격리 (단계 2-4 sessionStorage 키 분리·인계 패턴)
 - **`docs/archive/audit/2026-05-07-pkce-refresh-token.md` 신규**: PKCE 마이그레이션 시점의 보안 감사. Critical/High/Medium 0건. 위협 모델 매트릭스 + 모니터링 권고 4건 (e2e 정기 실행, Cloud Console URI 검증, OAuth 검수 모니터링, silent-blocked cleanup 코드 제거 시점).
 - **README.md**: Phase 2g 시점의 GIS/Implicit/silent-blocked 표·설명 갱신, Phase 2h 단일 PKCE 경로 표로 교체.
 - **ADR-011 / pkce-migration.md / CLAUDE.md**: 단계 4·5 완료 마크.
@@ -741,21 +751,21 @@ Google Cloud Console dev/prod OAuth 클라이언트의 Authorized redirect URIs�
 
 `response_type=code` + PKCE는 client secret 불요 → 신규 검수 재제출 불필요. Implicit Flow에서 PKCE로 전환되더라도 OAuth 검수 결과(`drive.appdata` scope 승인)는 그대로 유효.
 
-> **개정 (2026-05-08):** "client secret 불요"는 RFC 7636 기준으로는 맞지만 **Google "웹 애플리케이션" OAuth 클라이언트는 PKCE를 써도 `/token` 요청에 `client_secret`을 강제**한다(known RFC 일탈, 다수 라이브러리 issue tracker에서 확인). Phase 2h 시운전 중 `{"error":"invalid_request","error_description":"client_secret is missing."}` 400 응답으로 발견.
->
-> SPA에 secret을 임베드하면 (1) git 이력 영구 잔존, (2) GitHub 자동 secret 스캔이 `GOCSPX-` 패턴 감지 시 Google이 secret을 자동 무효화 → 운영 동기화 즉시 중단, (3) OAuth 2.1 / RFC 8252의 public client 정신 위배. 이 위험을 모두 회피하려고 **same-origin nginx 프록시 BFF 패턴**으로 전환:
-> - 브라우저 → `https://{host}/oauth/token` (POST, body: `grant_type, code, code_verifier, client_id, redirect_uri`)
-> - nginx (`location = /oauth/token`) → `proxy_set_body "$request_body&client_secret=..."` → `https://oauth2.googleapis.com/token`
-> - secret은 nginx 설정 파일에만 존재 (브라우저·git·CDN 어디에도 없음)
-> - 예시 설정: `nginx/oauth-proxy.example.conf`
->
-> 검수 영향: 클라이언트 ID 자체는 변경 없음 → `drive.appdata` 검수 결과 그대로 유효.
+(2026-05-08) "client secret 불요"는 RFC 7636 기준으로는 맞지만 **Google "웹 애플리케이션" OAuth 클라이언트는 PKCE를 써도 `/token` 요청에 `client_secret`을 강제**한다(known RFC 일탈, 다수 라이브러리 issue tracker에서 확인). Phase 2h 시운전 중 `{"error":"invalid_request","error_description":"client_secret is missing."}` 400 응답으로 발견.
+
+SPA에 secret을 임베드하면 (1) git 이력 영구 잔존, (2) GitHub 자동 secret 스캔이 `GOCSPX-` 패턴 감지 시 Google이 secret을 자동 무효화 → 운영 동기화 즉시 중단, (3) OAuth 2.1 / RFC 8252의 public client 정신 위배. 이 위험을 모두 회피하려고 **same-origin nginx 프록시 BFF 패턴**으로 전환:
+- 브라우저 → `https://{host}/oauth/token` (POST, body: `grant_type, code, code_verifier, client_id, redirect_uri`)
+- nginx (`location = /oauth/token`) → `proxy_set_body "$request_body&client_secret=..."` → `https://oauth2.googleapis.com/token`
+- secret은 nginx 설정 파일에만 존재 (브라우저·git·CDN 어디에도 없음)
+- 예시 설정: `nginx/oauth-proxy.example.conf`
+
+검수 영향: 클라이언트 ID 자체는 변경 없음 → `drive.appdata` 검수 결과 그대로 유효.
 
 ## Phase 2i — Sync 사이클 캐시로 라운드트립 단축 (구현 완료 2026-05-08)
 
 ### 동기
 
-운영 환경 디버그 로그에서 단일 sync가 ~3.4초 걸리는 것이 관측됨 (한국 → Google 서버 RTT ~250ms × 직렬 호출 3회 + 페이로드 전송). 분해:
+운영 환경 디버그 로그에서 단일 sync가 약 3.4초 걸리는 것이 관측됨 (한국 → Google 서버 RTT 약 250ms × 직렬 호출 3회 + 페이로드 전송). 분해:
 
 | 단계 | API | 소요 |
 |---|---|---|
@@ -835,7 +845,7 @@ Google Cloud Console dev/prod OAuth 클라이언트의 Authorized redirect URIs�
 
 ### 트레이드오프
 
-- **첫 sync는 그대로**: 캐시가 비었을 때만 옛 경로. 사용자가 앱을 처음 켰을 때 한 번만 ~3s, 이후 ~0.2~2s.
+- **첫 sync는 그대로**: 캐시가 비었을 때만 옛 경로. 사용자가 앱을 처음 켰을 때 한 번만 약 3s, 이후 약 0.2-2s.
 - **localStorage 의존**: Safari private 모드 등 storage 제한 환경에선 매번 slow path로 빠진다 (correctness는 유지). Phase 2h IDB 패턴과 다르게 평문 저장이지만 fileId/etag/maxU는 민감 정보 아님.
 - **로깅**: Quota 실패만 `CACHE_SAVE_FAIL`로 ring buffer에 남긴다 (만성화 패턴 추적용). load/clear 실패는 silent — too noisy on Safari private mode.
 
@@ -859,7 +869,7 @@ Phase 2i 도입 후 실측 디버그 로그에서 확인한 것(로그 원문을
 두 가지 사실:
 
 1. **`If-None-Match` 304 fast path가 실제로 발화하지 않는다.** Drive `?alt=media` GET의 ETag 헤더가 캐시에 잡히지 않거나(가설 A: CORS `Access-Control-Expose-Headers`에 ETag 누락), 업로드 응답의 ETag와 미디어 GET의 ETag가 다른 네임스페이스라(가설 B) 매번 mismatch — 둘 다 실측 없이는 단정 불가.
-2. **visibilitychange 트리거 폴이 짧은 시간에 다발한다.** 탭 전환 4회에 4회 사이클, 각 ~1.1s. Phase 2i 의 304 가정이 깨진 상태에서 비싼 round-trip이 그대로 누적.
+2. **visibilitychange 트리거 폴이 짧은 시간에 다발한다.** 탭 전환 4회에 4회 사이클, 각 약 1.1s. Phase 2i 의 304 가정이 깨진 상태에서 비싼 round-trip이 그대로 누적.
 
 ### 결정
 
@@ -894,18 +904,18 @@ Phase 2i 도입 후 실측 디버그 로그에서 확인한 것(로그 원문을
 
 ## 설정 병합 전방 호환 (PR #309, 2026-08-01)
 
-> **개정 (2026-08-01):** 교회력 기능(ADR-036/038)이 설정 키 4종을 추가하기에 앞서, 구 빌드가 새 빌드의 설정 키를 동기화 중 조용히 떨어뜨리는 문제를 수리하고 설정 키의 수명 주기 규약을 정립했다.
->
-> - **모르는 키 보존** (`mergeDocs`): 설정 병합이 `_emptyDoc()`의 아는 키만 돌던 것을 로컬·원격 키의 **합집합** 순회로 변경. 이 빌드가 모르는 키도 같은 LWW(`_u` 큰 쪽) 규칙으로 병합 결과에 실린다. `applyToLegacyKeys`는 그대로 아는 키만 localStorage에 반영 — 모르는 키는 문서에 보존만 되면 된다. `SyncSettings`에 문자열 인덱스 시그니처를 더해 타입으로도 성립.
-> - **`__proto__` 가드** (`mergeDocs`): JSON.parse 산출 문서는 `"__proto__"`를 own key로 가질 수 있고, 그대로 대입하면 병합 결과 객체의 프로토타입이 바뀐다(키 탈락 + 오염). 북마크 id·설정 키 두 순회 모두에서 이 키를 무시한다.
-> - **설정 키 은퇴 규약 + GC** (`sweepTombstones`): 키를 없앨 때는 `{ v: null, _u: now }`를 쓴다. 앱 시작 시 sweep이 30일 지난 null 항목을 걷어내, 이름을 바꾸거나 폐기한 키가 동기화 문서에 영원히 남지 않는다. `_u === 0` 기본값 항목은 매 병합이 재생성하므로 sweep 대상에서 제외.
-> - **회귀 방어**: `tests/unit/store-v2.test.js` 신설(17 케이스) — store-v2 첫 직접 유닛 커버리지. 모르는 키 보존 왕복·LWW·`__proto__` 가드·설정 GC·저장/업로드 페이로드 통과를 잠근다.
+(2026-08-01) 교회력 기능(ADR-036/038)이 설정 키 4종을 추가하기에 앞서, 구 빌드가 새 빌드의 설정 키를 동기화 중 조용히 떨어뜨리는 문제를 수리하고 설정 키의 수명 주기 규약을 정립했다.
 
-## 옛 판의 북마크 절 범위 — 병합 결과를 저장하기 전에 옮긴다 (2026-10-22)
+- **모르는 키 보존** (`mergeDocs`): 설정 병합이 `_emptyDoc()`의 아는 키만 돌던 것을 로컬·원격 키의 **합집합** 순회로 변경. 이 빌드가 모르는 키도 같은 LWW(`_u` 큰 쪽) 규칙으로 병합 결과에 실린다. `applyToLegacyKeys`는 그대로 아는 키만 localStorage에 반영 — 모르는 키는 문서에 보존만 되면 된다. `SyncSettings`에 문자열 인덱스 시그니처를 더해 타입으로도 성립.
+- **`__proto__` 가드** (`mergeDocs`): JSON.parse 산출 문서는 `"__proto__"`를 own key로 가질 수 있고, 그대로 대입하면 병합 결과 객체의 프로토타입이 바뀐다(키 탈락 + 오염). 북마크 id·설정 키 두 순회 모두에서 이 키를 무시한다.
+- **설정 키 은퇴 규약 + GC** (`sweepTombstones`): 키를 없앨 때는 `{ v: null, _u: now }`를 쓴다. 앱 시작 시 sweep이 30일 지난 null 항목을 걷어내, 이름을 바꾸거나 폐기한 키가 동기화 문서에 영원히 남지 않는다. `_u === 0` 기본값 항목은 매 병합이 재생성하므로 sweep 대상에서 제외.
+- **회귀 방어**: `tests/unit/store-v2.test.js` 신설(17 케이스) — store-v2 첫 직접 유닛 커버리지. 모르는 키 보존 왕복·LWW·`__proto__` 가드·설정 GC·저장/업로드 페이로드 통과를 잠근다.
 
-2026-06-06(#205) 전의 앱이 저장한 북마크 절 범위의 줄 글자(「16aa」 · 「20a,20c」)는 지금 표기로 옮긴다(ADR-010 「옛 저장값」, coding-pitfalls §38). 옮길 때 항목의 수정 시각(`_u`)은 올리지 않는다(사용자 결정 2026-10-22). 앱을 시작할 때의 옮기기는 동기화가 드라이브를 받기 전에 돈다. 그래서 시각을 올리면, 다른 기기에서 그 북마크를 고친 내용이 이 기기의 옮긴 사본에 밀려 사라질 수 있다.
+## 옛 버전의 북마크 절 범위 — 병합 결과를 저장하기 전에 옮긴다 (2026-10-22)
 
-시각이 같은 두 사본은 `mergeDocs`가 기기 id 순서로 하나를 고른다. 드라이브에 옛 표기가 남아 있으면 기기에 따라 병합이 옛 표기를 되돌려 놓으므로, `state-machine.js _applyMergedDoc`이 병합 결과를 저장하기 전에 `window.migrateLegacyBookmarkDoc`(`js/app/bookmark-core.js`, 창 객체는 `bookmark.js`가 건다)으로 옮긴다. 옮긴 뒤에도 시각은 그대로라 올릴 것이 생기지 않는다. 성서 목록은 대개 이때 받아져 있다(`search.js`가 시작할 때 미리 받는다). 그러나 성서 목록이 필요 없는 화면(캘린더 등)으로 시작하면 병합이 먼저 올 수 있다. 그때는 받은 대로 저장하고, 목록을 받은 뒤 저장된 목록을 옮긴다(시작할 때와 같은 `migrateStoredBookmarks`). 드라이브의 사본은 다른 까닭으로 올릴 때 옮긴 값으로 바뀐다. 동기화 계층에는 앱 쪽 함수가 없을 수 있으므로(유닛 하네스) 함수가 있을 때만 부른다. 동기화 계층이 그 함수를 부르는 자리는 `tests/unit/state-machine.test.js` 70 · 71번이 보고, 옮기는 함수는 `tests/unit/bookmark.test.js`가 본다.
+2026-06-06(#205) 전의 앱이 저장한 북마크 절 범위의 줄 글자(「16aa」, 「20a,20c」)는 지금 표기로 옮긴다(ADR-010 「옛 저장값」, coding-pitfalls §38). 옮길 때 항목의 수정 시각(`_u`)은 올리지 않는다(사용자 결정 2026-10-22). 앱을 시작할 때의 옮기기는 동기화가 드라이브를 받기 전에 돈다. 그래서 시각을 올리면, 다른 기기에서 그 북마크를 고친 내용이 이 기기의 옮긴 사본에 밀려 사라질 수 있다.
+
+시각이 같은 두 사본은 `mergeDocs`가 기기 id 순서로 하나를 고른다. 드라이브에 옛 표기가 남아 있으면 기기에 따라 병합이 옛 표기를 되돌려 놓으므로, `state-machine.js _applyMergedDoc`이 병합 결과를 저장하기 전에 `window.migrateLegacyBookmarkDoc`(`js/app/bookmark-core.js`, 창 객체는 `bookmark.js`가 건다)으로 옮긴다. 옮긴 뒤에도 시각은 그대로라 올릴 것이 생기지 않는다. 성서 목록은 대개 이때 받아져 있다(`search.js`가 시작할 때 미리 받는다). 그러나 성서 목록이 필요 없는 화면(캘린더 등)으로 시작하면 병합이 먼저 올 수 있다. 그때는 받은 대로 저장하고, 목록을 받은 뒤 저장된 목록을 옮긴다(시작할 때와 같은 `migrateStoredBookmarks`). 드라이브의 사본은 다른 까닭으로 올릴 때 옮긴 값으로 바뀐다. 동기화 계층에는 앱 쪽 함수가 없을 수 있으므로(유닛 하네스) 함수가 있을 때만 부른다. 동기화 계층이 그 함수를 부르는 자리는 `tests/unit/state-machine.test.js` 70, 71번이 보고, 옮기는 함수는 `tests/unit/bookmark.test.js`가 본다.
 
 ## 미결 사항
 
