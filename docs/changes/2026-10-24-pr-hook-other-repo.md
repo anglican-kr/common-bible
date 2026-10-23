@@ -1,4 +1,5 @@
 ---
+pr: 401
 date: 2026-10-24
 branch: chore/pr-hook-other-repo
 title: "chore: 다른 저장소에 여는 PR은 원장 훅이 검사하지 않음"
