@@ -44,7 +44,7 @@
 **규칙:**
 - 글꼴 규칙은 **화면이 처음 그려지기 전(first paint)에 문서에 있어야** FOUT이 없다.
 - 글꼴 전략은 **네트워크가 빠를 때와 느릴 때, 캐시에 글꼴이 있을 때와 없을 때**를 곱한 네 가지 조합으로 확인한다. DevTools의 네트워크 속도 제한(throttling)과 「캐시 비우고 강력 새로고침」으로 재현한다.
-- 관련 ADR은 `007-launch-screen-optimization.md`다(개정 블록 참고).
+- 관련 ADR은 `007-launch-screen-optimization.md`다(결정 5와 「검토한 대안」의 `display=optional`).
 
 ### pitfalls §14 — CSS에서 `display`를 지정하면 `[hidden]`으로 숨긴 요소가 다시 보인다
 
