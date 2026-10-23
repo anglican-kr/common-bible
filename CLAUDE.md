@@ -98,7 +98,8 @@ gh pr create --title "..." --body-file docs/changes/<YYYY-MM-DD>-<slug>.md   # �
 # 훅이 원장에 pr: N 을 적어 준다 → 커밋·push
 bash scripts/pr_body.sh docs/changes/<YYYY-MM-DD>-<slug>.md | gh api -X PATCH repos/anglican-kr/common-bible/pulls/<N> -F body=@-   # 본문에서 frontmatter를 뺀다
 # CI(Unit tests + Change ledger) 통과 · 사용자 확인 후 squash — 제목은 PR 제목 + 번호(REST)
-gh api -X PUT repos/anglican-kr/common-bible/pulls/<N>/merge -f merge_method=squash -f commit_title="<PR 제목> (#<N>)"
+gh api -X PUT repos/anglican-kr/common-bible/pulls/<N>/merge -f merge_method=squash -f commit_title="<PR 제목> (#<N>)" \
+  -f commit_message="$(git log --reverse --format='* %s%n%n%b' main..<topic-branch> | grep -v '^Co-Authored-By:')"   # squash 메시지에는 Co-Authored-By 줄을 넣지 않는다
 git switch main && git pull --ff-only
 git diff <topic-branch> main --stat -- $(git diff --name-only main...<topic-branch>)   # PR이 바꾼 파일만 — 비었으면 squash가 다 담았다(그사이 main에 들어온 데이터 자동 PR은 보지 않는다)
 git branch -D <topic-branch>   # squash 커밋은 브랜치 커밋과 이어지지 않는다 — -d는 원격 브랜치가 정리됐으면 거절하고, 남아 있으면 경고만 낸다
