@@ -1,4 +1,5 @@
 ---
+pr: 391
 date: 2026-10-23
 branch: docs/prose-adr-batch10
 title: "docs: ADR 040의 문장 정리"
