@@ -1,91 +1,119 @@
 # ADR-029: 적응형 내비게이션 Phase 1 — 모바일 하단 탭 바
 
 - 일시: 2026-06-03
-- 상태: 승인됨 — 구현 완료(모바일, 2026-06-03). 데스크탑 사이드바는 후속.
-- 관련 ADR: ADR-028(디자인 시스템 §7 적응형 내비 — 본 ADR 이 그 구현), ADR-024(헤더 내비), ADR-025(헤더 elevation·frosted glass 규칙), ADR-011(북마크), ADR-005(검색)
+- 상태: 승인됨 — 구현 완료(모바일, 2026-06-03). 데스크톱 사이드바는 뒤의 일이다.
+- 관련 ADR: ADR-028(디자인 시스템 §7 적응형 내비. 이 ADR이 그 구현이다), ADR-024(헤더 내비), ADR-025(헤더 elevation과 frosted glass 규칙), ADR-011(북마크), ADR-005(검색), ADR-030(모핑 탭 바), ADR-010(북마크 화면의 세부)
 - 권위 문서: 루트 [`DESIGN.md`](../../DESIGN.md) §7
-
-> **개정 (2026-06-04, [ADR-030](030-morphing-tab-bar.md)):** Apple Music 벤치마크로 §1(검색=4탭 중 하나)을 **분리된 검색 원형 버튼 → 입력 모핑**으로, §3(frosted glass 를 `::before` 레이어에)을 **요소에 직접**으로 개정. 스크롤 축소(미채택)도 ADR-030 에서 채택(후속 구현). 모바일 검색 바텀 시트는 ADR-030 에서 제거.
-
-> **개정 (2026-06-09): 모바일/데스크탑 분기를 너비 단독 → 포인터 인식으로.**
-> 본 ADR 은 "모바일=≤768px / 데스크탑=≥769px" 너비 단일선을 썼다. 그런데 **전면 화면 iPhone 을 가로로 들면 너비가 768px 을 넘어**(예: iPhone 14 가로 = 844px) 데스크탑 티어로 잘못 분류돼, 폰인데 탭 바가 사라지고 마우스용 오버레이(사이드 패널)를 받았다. 회전만으로 내비 모델이 바뀌어 어색했다.
-> - **새 규칙(정확한 여집합):**
->   - 모바일/터치 티어 = `(max-width: 768px), (pointer: coarse)` — 좁은 창 **또는** 터치
->   - 데스크탑 티어 = `(min-width: 769px) and (pointer: fine)` — 넓은 창 **그리고** 마우스
-> - **효과:** 폰은 세로·가로 모두 모바일 티어, **태블릿(아이패드 포함)도 모바일 티어**(터치=coarse), 데스크탑은 넓은 창+마우스에서만. 좁은 데스크탑 창(<769px·마우스)은 종전대로 모바일(좁은 창). `pointer:coarse`+`hover:none` 은 터치 기기를 안정적으로 식별한다(플랫폼 조사). **트레이드오프:** 터치 노트북(coarse+마우스)·아이패드+트랙패드는 모바일 티어로 잡힘 — 수용(이미 `settings-ui` 의 색 구성 판정이 같은 `pointer:fine` 선례).
-> - **적용 범위:** §1 의 "≤768/≥769" 분기 전부 — CSS 티어 미디어 쿼리 17개(`@media (min-width:769px)` → `and (pointer:fine)`, `@media (max-width:768px)` → `, (pointer:coarse)`) + JS 판정(`isMobile`·`_isMobileViewport`·`overlay.js` 시트↔사이드패널·`tabbar.js` 모핑 정리 리스너). 보임/숨김이 미디어 쿼리라 회전·마우스 연결에 자동 대응(JS resize 리스너 불필요).
-> - **§6 데스크탑 사이드바와 호환:** 사이드바 단계(≥~1024px)는 `(min-width:1024px) and (pointer:fine)` 로 자연히 이어진다. 태블릿 전용 2-pane 레이아웃은 Phase 2+ 콘텐츠 밀도가 생길 때 별도 검토.
 
 ## 맥락
 
-내비게이션 진입점이 제각기 다르게 구현돼 있었다 — 홈(헤더 `buildHomeBtn` 라우트), 검색(모바일 `#search-fab`→시트 / 데스크탑 인라인 바+`/search`), 북마크(`.title-bookmark-btn`→드로어), 설정(`.title-settings-btn`→팝오버). ADR-028 §7 은 이를 HIG 적응형 내비(모바일 하단 탭 바 / 데스크탑 사이드바)로 통합하기로 "결정 — 구현 대기"였다. 본 ADR 이 그 **모바일 1단계**를 구현한다.
+내비게이션으로 들어가는 길이 저마다 다르게 구현되어 있었다. 홈(헤더 `buildHomeBtn` 라우트), 검색(모바일 `#search-fab`에서 시트 / 데스크톱 인라인 바와 `/search`), 북마크(`.title-bookmark-btn`에서 드로어), 설정(`.title-settings-btn`에서 팝오버)이다. ADR-028 §7은 이것을 HIG 적응형 내비(모바일 하단 탭 바 / 데스크톱 사이드바)로 모으기로 「결정 — 구현 대기」였다. 이 ADR이 그 **모바일 1단계**를 구현한다.
 
 ## 결정
 
-### 1. 모바일(≤768px) 하단 탭 바 — 4탭, 노트 후속
+### 1. 모바일 하단 탭 바
 
-좌→우 **홈·검색·북마크·설정** 4탭. `노트`(신규 기능)는 후속 슬롯으로 레이아웃만 예약(flex 균등 분배라 5번째 자동 수용). 데스크탑(≥769px)은 탭 바 미표시 — 기존 헤더/오버레이 유지. 데스크탑 사이드바는 별도 단계(아래 §6).
+처음에는 왼쪽부터 **홈, 검색, 북마크, 설정**의 4탭으로 두었다. `노트`(새 기능)는 뒤에 들어올 자리로 레이아웃만 남겼다(flex로 고르게 나누므로 다섯째 탭이 저절로 들어간다). 데스크톱에서는 탭 바를 보이지 않고 기존 헤더와 오버레이를 쓴다. 데스크톱 사이드바는 따로 단계를 둔다(아래 §6).
 
-### 2. 모델 — 각 탭 = 전체화면 라우트 뷰
+그 뒤 바뀐 것:
+- ADR-030(2026-06-04)이 검색을 탭에서 빼, **탭 바 오른쪽의 따로 떨어진 원형 버튼**으로 두고 누르면 입력창으로 바뀌게(모핑) 했다. 모바일 검색 바텀 시트도 ADR-030에서 없앴다.
+- 지금 탭은 홈, 캘린더(ADR-038), 북마크, 설정이고, 노트 탭은 자리만 두고 숨겨 두었다(`index.html`).
 
-오버레이 트리거가 아니라 **각 탭이 전체화면 뷰**다(진짜 iOS 탭바 의미론 + 앱의 History API 라우팅과 정합). 흩어진 구현을 성격대로 재배치:
+**모바일과 데스크톱을 나누는 기준은 폭과 포인터를 함께 본다(2026-06-09).**
+- 모바일/터치 쪽 = `(max-width: 768px), (pointer: coarse)`: 좁은 창 **또는** 터치다.
+- 데스크톱 쪽 = `(min-width: 769px) and (pointer: fine)`: 넓은 창 **그리고** 마우스다. 두 조건은 정확히 서로를 뺀 나머지다.
+- 효과: 폰은 세로와 가로 모두 모바일 쪽이다. **태블릿(아이패드 포함)도 모바일 쪽**이다(터치는 coarse). 데스크톱은 넓은 창과 마우스일 때만이다. 좁은 데스크톱 창(769px 미만, 마우스)은 전처럼 모바일(좁은 창)이다. `pointer:coarse`와 `hover:none`은 터치 기기를 안정적으로 가려낸다(플랫폼 조사).
+- 받아들인 대가: 터치 노트북(coarse와 마우스)과 아이패드에 트랙패드를 단 경우는 모바일 쪽으로 잡힌다. 받아들인다. `settings-ui`의 색 구성 판정이 같은 `pointer:fine`을 이미 쓰고 있었다.
+- 적용 범위: §1의 「≤768/≥769」 분기 전부다. CSS의 나눔 미디어 쿼리 17개(`@media (min-width:769px)`에 `and (pointer:fine)`을 더하고, `@media (max-width:768px)`에 `, (pointer:coarse)`를 더했다)와 JS 판정(`isMobile`·`_isMobileViewport`·`overlay.js`의 시트와 사이드 패널 전환·`tabbar.js`의 모핑 정리 리스너)이다. 보이고 숨기는 것이 미디어 쿼리라, 회전하거나 마우스를 연결해도 저절로 맞춰진다(JS resize 리스너가 필요 없다).
+- §6 데스크톱 사이드바와 맞는다: 사이드바 단계(약 1024px 이상)는 `(min-width:1024px) and (pointer:fine)`로 자연스럽게 이어진다. 태블릿 전용 2단 레이아웃은 Phase 2 이후 콘텐츠가 많아지면 따로 검토한다.
 
-- **홈** → `/`·`/<division>` 책 목록(기존 `renderBookList`).
-- **검색** → 모바일 `/search` 전체화면(인페이지 입력 + `renderSearchResults`). 시트는 모바일 탭 경로에서 은퇴(헤더 입력 포커스 경로로는 잔존).
-- **북마크** → 신규 `/bookmarks` 전체화면(`renderBookmarksView`). `renderBookmarkTree(target)` 인자화로 드로어 트리 빌더를 #app 에 재사용. **읽기-문맥 액션(이 장 저장·절 선택)은 가져오지 않음** — 읽기 화면(드로어)에 남긴다. 전역 관리(새 폴더·내보내기·가져오기)만 탭 뷰 헤더 우상단에 배치.
-  > **개정 (2026-06-05):** 헤더 어포던스를 Apple Music 패턴으로 단일화 — 별도 "+" 버튼을 없애고 **"⋯"(더 보기) 한 개**로 통일, 전역 관리 3종(새 폴더·내보내기·가져오기)을 모두 그 팝업 메뉴 안에 넣었다(`buildBmViewActions`). 메뉴는 **iOS 26 풍 큰 곡률**(`--radius-xl` 16px + `corner-shape: superellipse(2)` squircle)·full-bleed 행·**그룹 사이 hairline 1줄만**(항목 사이 가로선 제거)·행마다 **선행 라벨 + 후행 SF 스타일 글리프**(folder.badge.plus / square.and.arrow.up·down)·리퀴드 글라스 sheen/inset 질감(ADR-030 후속⁵ 공유)·`--shadow-4` elevation·`reduced-transparency`/`reduced-motion` 폴백을 갖춘 HIG 메뉴. 각 행 `min-height: --touch-target`(44px). 함께 **북마크 목록 행 여백 확대**(데스크탑 `padding --space-3/--space-4`·`min-height 4rem`, 모바일 콘텐츠 `min-height 3.5rem`, 라벨 `--font-sm→--font-md`·참조 `--font-2xs→--font-xs`·아이콘 1.4→1.6rem)로 스캔·탭 여유 확보.
-  > **개정 (2026-06-06) — 북마크 정렬:** ⋯ 메뉴에 **정렬 그룹**(`role="group"`)을 추가 — **제목·직접 정렬(수동)·추가된 날짜·최근에 본 날짜·수정한 날짜** 5개 `menuitemradio`(현재 선택에 선행 체크 글리프, Apple Music 정렬 그룹 패턴). 메뉴 순서는 **액션 그룹(새 폴더·내보내기·가져오기) → hairline 1줄 → 정렬 그룹**(위에서 아래). 정렬은 **표시 전용**(`sortBookmarkNodes` 가 store 를 건드리지 않고 셸로 카피 반환) — `renderBookmarkTree`·`_buildFolderItem` 가 렌더 직전 적용. **`manual` 은 저장 순서(드래그) 보존, 나머지는 폴더 먼저·각 그룹을 키로 정렬**(제목=ko 로케일, 날짜=최신순). **정렬 설정은 기기별 `localStorage`(`bible-bookmark-sort`)** — Drive 동기화 제외(ADR-011 은 북마크 객체만 동기화). **"최근에 본 날짜"도 기기별 `localStorage` 맵(`bible-bookmark-viewed`)** — 동기화 객체에 두면 "열기만 해도" 재동기화·수정시각 오염되므로 분리(북마크 링크 클릭 시 `markBookmarkViewed`, 삭제 시 `_forgetViewed`). **"수정한 날짜"는 동기화 객체에 `updatedAt`**(북마크/폴더 편집·이름변경 시 기록, 없으면 `createdAt` 폴백; 폴더 생성에 `createdAt` 추가). 자동 정렬 모드에서는 드롭이 재정렬돼 무의미하므로 **드래그 핸들 비활성**(`manual` 일 때만 `_setupDragHandle`). 순수 정렬 로직은 유닛(`BOOKMARK_SORT` 블록, `bookmark.test.js` 14 케이스), 메뉴 상호작용·재렌더는 e2e 책임.
-  > **개정 (2026-06-06) — 추가 아이콘 + 빈 상태:** 읽기 헤더 북마크 버튼은 **미저장 장에서 아웃라인 책갈피 + 가운데 "+" 배지**(2-path 합성 `BOOKMARK_ICON_ADD_PLUS`)로 '이 장 추가' 어포던스를 명확히 하고, **이미 북마크된 장은 기존 채워진 아이콘 유지**(`_setBookmarkBtnIcon` 가 상태별 path 재구성, build/refresh 공용). 북마크 목록 **빈 상태**는 단순 "없습니다" 한 줄에서 **아이콘 + 제목 + 추가 방법 안내**(`_buildEmptyState`, 드로어·전체뷰 공용)로 교체.
-  > **개정 (2026-06-06) — ⋯ 메뉴 아이콘 열 통일 + 스와이프 회복:** 위 2026-06-05 개정의 "선행 라벨 + 후행 글리프"를 폐기하고, 액션 행을 **선행 글리프 + 후행 라벨**로 뒤집되 글리프를 **정렬 그룹 체크마크와 동일한 맨 왼쪽 열**에 놓는다 — 두 그룹이 하나의 아이콘 열·라벨 열을 공유해 한 리듬으로 정렬된다(`title-action-menu-icon`/`title-action-menu-check` 가 `--menu-lead` 폭 공유, `--action` 추가 들여쓰기 제거). **의도적 HIG 이탈** — Apple Files 메뉴가 체크마크 열과 아이콘 열을 분리하는 이유는 **한 행에 아이콘과 체크마크가 동시에** 올 수 있어 두 슬롯이 공존해야 하기 때문이다. 본 앱의 ⋯ 메뉴에는 그런 행이 없다(액션 행엔 아이콘만, 정렬 행엔 체크마크만). 두 슬롯이 한 행에서 겹칠 일이 없으므로 열을 합쳐도 모호함이 없고, 합치면 시각 일관성이 올라간다. 또한 28행의 "`manual` 일 때만 `_setupDragHandle`" 은 폐기 — `_setupDragHandle` 이 모바일 **스와이프-투-리빌(수정/삭제)** 제스처도 소유하므로 자동 정렬에서도 항상 연결하고, **드래그 재정렬만** 핸들러 내부 `canDrag`(=`manual`)로 게이트한다(자동 정렬 시 스와이프 수정/삭제가 막히던 회귀 수정).
-  > **개정 (2026-06-06) — ⋯ 메뉴 일괄 삭제:** ⋯ 메뉴 맨 아래(정렬 그룹 위, hairline 1줄로 분리)에 **파괴색 "삭제"(휴지통 글리프, `title-action-menu-item--danger`)** 항목 추가 — 기존 스와이프/행 액션이 한 항목만 지우는 것과 달리, **북마크·폴더를 한 번에 골라 지우는 다중 선택 흐름**을 연다. 클릭 시 `openBulkDeleteModal()` 이 **트리 전체를 pre-order(폴더 → 자식, depth 들여쓰기)로 체크박스 목록**(`#bm-bulk-delete-modal`)으로 펼친다: tri-state "전체 선택"(`_selectAllState`)·행마다 타입 글리프(폴더/책갈피)·**폴더 cascade**(폴더를 체크하면 그 하위 행이 체크+비활성 — 삭제 시 함께 빠짐). "삭제 (N)"(`_deleteBtnLabel`, N = 제거될 노드 수) 는 곧장 지우지 않고 **공유 파괴 확인 알림(`bm-confirm`)** 을 스택해 최종 확인을 받은 뒤 `removeItemById`(폴더는 splice 로 subtree cascade)·`_forgetViewed`(중첩 북마크 viewed 맵 정리)·재렌더·헤더 갱신을 수행한다. 모달은 chapter-delete 패턴 재사용(`createOverlay`, ADR-032)이며 z-index 74/75 로 confirm(76/77) 아래에 둬 알림이 위로 뜨고, Escape 라우터에 confirm > **bulk-delete** > … 순으로 삽입. 목록이 비면 메뉴의 삭제 항목은 비활성(`refreshDeleteEnabled`, 열 때마다 동기화). 순수 헬퍼 `_flattenBookmarkTree`·`_descendantIds` 는 유닛(`bookmark.test.js`), 선택·cascade·확인 상호작용은 e2e(`test_bookmark_bulk_delete.py`) 책임.
-  > **개정 (2026-06-06) — 삭제 항목을 메뉴 맨 끝으로:** 위 결정에서 삭제를 정렬 그룹 *위*(액션 그룹 바로 아래)에 뒀으나, **애플 메뉴 관례는 파괴적 액션을 맨 아래에 두고 그 뒤에 비파괴 항목을 두지 않는 것**(액션 시트는 반대로 상단이지만 이건 풀다운 메뉴). 최종 순서를 **액션 그룹 → hairline → 정렬 그룹 → hairline → 삭제(맨 끝)** 로 변경(헤어라인 분리·파괴색은 유지). 의미상 "관리 액션 묶음"보다 "가장 위험한 건 끝" 관례를 우선.
-  > **개정 (2026-06-06) — 🛈 북마크 추가 방법 안내:** 26행 결정대로 추가는 읽기 화면 전용이라 `/bookmarks` 전체뷰에는 '추가' 버튼이 없다. 그 결과 **이미 북마크가 있는** 사용자는 추가 방법 단서를 못 본다(빈 상태 안내는 29행대로 목록이 빌 때만 보임). 이를 메우려 제목줄 ⋯ **왼쪽에 정보 버튼 🛈**(`title-action-btn` 재사용, Material Symbols info)를 두고, 탭하면 빈 상태와 **같은 문구**(`BOOKMARK_ADD_HELP` 단일 출처)를 담은 작은 안내 팝오버(`.title-action-popover`, `role="dialog"`)를 연다. **색은 ⋯ 와 동일한 중립 차콜(`--accent`)** — HIG라면 ⓘ를 틴트하지만 ADR-028이 chrome 을 중립 고정·`--theme` 를 내비 시그니처로 한정하므로 의도적으로 따르지 않음. **HIG 부합도:** 정보 버튼→도움 팝오버는 인정 패턴이고 바깥 클릭·Escape 로 닫힘은 권고와 일치하나, 아이폰(compact)에서 애플 기본은 팝오버를 시트로 적응(adapt)하는 것 — 한 문장 도움말에 시트는 과해 팝오버를 유지하되, "팝오버는 트리거를 덮지 말 것" 권고에 맞춰 ⋯ 메뉴와 달리 **버튼 *아래*로** 떨군다(`top: calc(100% + --space-2)`). ⋯ 메뉴와 상호배타(한쪽 열면 다른쪽 닫힘), 리스너는 ⋯ 메뉴와 같은 self-cleaning(SPA 내비 시 detach) 패턴. 상호작용은 e2e(`test_bookmark_add_help.py`) 책임. **(2026-06-07 후속)** ① **빈 목록에선 🛈 숨김** — 빈 상태 안내가 이미 같은 문구를 보여주므로 중복(`renderBookmarkTree` 가 전체뷰에서 store 비면 `aria-haspopup="dialog"` 버튼을 `hidden`). ② 색을 위 "중립 차콜(`--accent`)" → **`--text-tertiary`**(⋯ 보다 한 단 물러난 약화 어포던스, ≡ 핸들과 동일 위계)로 낮춰 덜 눈에 띄게. ③ 팝오버 본문(`.title-action-popover-text`)이 `#page-title` `<h1>`(font-weight 700)을 상속해 굵게 나오던 것을 **`font-weight: 400`** 으로 리셋(제목 600 보다 본문이 더 굵던 역전 해소).
-  > **개정 (2026-06-07) — 재정렬 ≡ 핸들 + 스와이프 방향:** 28행의 "자동 정렬 시 드래그 핸들 비활성"을 시각 어포던스로 보강 — **직접 정렬(manual) 모드에서만** 각 행 trailing 에 ≡ 재정렬 핸들을 노출해(드래그 가능 + 현재 직접정렬 모드를 함께 신호) 롱프레스-드래그의 낮은 발견성을 해소. 또 행 스와이프 방향을 iOS 관례(← 삭제 / → 수정)로 교체. 상세·근거는 [ADR-010](010-bookmark-feature.md) 개정 2026-06-07. **(2026-06-07 후속)** ≡ 핸들 색을 `--text-secondary` → 신규 **`--text-tertiary`**(보조보다 한 단 연한 약화 어포던스 색, DESIGN.md §2)로 낮춰 과한 진함을 완화 — 핸들은 "있되 물러난" 표식이라는 위계 반영.
-  > **개정 (2026-06-07) — 일괄 관리: 모달 → in-place 멀티-액션 선택 모드:** 31~32행의 다중 선택 삭제를 **별도 체크박스 모달(`#bm-bulk-delete-modal`)에서 화면 내 선택 모드로** 전환(DOM·CSS·JS·`_flattenBookmarkTree` 헬퍼 전량 제거). 트리를 평평한 목록으로 다시 그리던 모달과 달리, **실제 트리 위에서 직접 고른다** — iOS 파일·메일·사진의 "선택" 모드. **진입점은 ⋯ 메뉴의 중립 "선택"**(체크원 글리프; 액션 그룹의 새 폴더·내보내기·가져오기 **아래**에 배치 — 파괴색이 아니라 모드 진입이므로 "destructive-last" 가 아님; 정렬 그룹과는 단일 hairline 으로 구분). `enterBookmarkSelectMode()` 가 `body.bm-select-active` 를 켜면 ① 각 행에 **선행 선택 원**(`.bm-select-circle`, 콘텐츠를 오른쪽으로 밀고 ○→✓ 슬라이드인; **타입 아이콘 유지**로 폴더/책갈피 구분 보존) ② **탭 dock 을 숨기고 그 자리에 `#bm-select-bar`** (절 선택 바와 동일 형식·글래스 자산 공유: **공유·이동·삭제 글래스 pill[내용폭 snug — 취소까지 늘리지 않음, iOS 관례] + 취소 글래스 원형**; 카운트는 캡슐 위 부유 칩; 삭제만 파괴색) ③ **제목줄 ⋯/🛈 → "전체 선택" 토글**(iOS Mail/Files 위치; "전체 삭제"는 전체 선택 → 삭제라 별도 원터치 일괄 삭제 없음). 행 탭 = 선택 토글(링크 내비 가로채기), 선택 모드 중 스와이프·드래그 핸들 비활성. **세 액션**: **공유** = 선택을 북마크 leaf 로 펼쳐(`_collectSelectedBookmarks`) **절대 `SITE_BASE`(`https://bible.anglican.kr`) 링크**를 만들고(`_buildSharePayload`: 1개 `{title,url}`/여러개 `{title,text}`) `navigator.share` 로 — 공유시트 "복사"는 OS 가 이 payload(=링크)를 복사하며 앱의 본문 복사(`serializeVerseRange`)와 무관; Web Share 미지원 시 클립보드 폴백. **이동** = 폴더 목록 모달(`#bm-move-modal`: 새 폴더·최상위·폴더들, 선택 폴더·그 하위는 목적지에서 제외; 탭 즉시 이동 — 확인 버튼 없음, iOS "앨범으로 이동")로 `_moveSelectedToFolder` 가 top-most 선택을 splice→insert(목적지 폴더 자동 펼침). **삭제** = 공유 파괴 확인(`bm-confirm`)→`removeItemById`+`_forgetViewed` cascade. **폴더 체크는 cascade**(하위가 covered=✓+비활성, 카운트는 제거될 노드 수) — 스와이프·행 폴더 삭제와 동일하게 "삭제 = 내용까지"로 통일(폴더 삭제 의미 일관, ADR-010 개정 2026-06-07). 공유는 성공 시·이동/삭제는 실행 후 모드 종료. **모바일 전용**(전체뷰가 모바일 한정이라 자연히 충족; 데스크탑 `/bookmarks` 는 책목록+드로어 폴백이라 애초에 진입점 없어 회귀 없음). `SITE_BASE` 는 도메인 변경(예: 통합 `bok.anglican.kr`) 대비 단일 상수. 순수 헬퍼(`_bmBuildParentMap`/`_bmAncestorSelected`/`_bmCountMarked`/`_bmEffectiveTargets`/`_collectSelectedBookmarks`/`_bmSelectCountLabel`/`_buildSharePayload`)는 유닛(`BOOKMARK_SELECT`·`BOOKMARK_HREF` 블록), 모핑·공유·이동은 e2e(`test_bookmark_select_delete.py`).
-  > **개정 (2026-06-07 후속) — 이동 모달 재정비 + 상위 폴더 지정 새 폴더:** 35행의 이동 모달(`#bm-move-modal`)을 저장 모달과 형식이 어긋나던 점(상단 "새 폴더…" 행 혼재)을 정리해 **① 최상위 먼저 ② 폴더들 목록 ③ 목록 하단 "새 폴더" 버튼**(hairline 으로 분리, `--accent` 틴트로 목적지가 아닌 액션임을 신호) 순서로 재배치. **새 폴더 모달(`#bm-new-folder-modal`)에 "상위 폴더" 필드 신설** — 저장 모달과 **동일한 폴더 콤보박스**(`_buildFolderCombobox`)를 재사용하되 `idPrefix`(id 충돌 회피)·`allowNewFolder:false`(자기 자신 재귀 호출 방지)로 파라미터화. 미지정 = 최상위(`insertItem(store, null, …)`), 지정 시 그 폴더 하위에 생성 후 자동 펼침. 이동 흐름의 "새 폴더"는 이 모달을 열고, 생성된 폴더로 선택 항목을 이동(`_moveSelectedToFolder(newId)`). 사용자 요청대로 **본격 트리 위젯은 채택 안 함**(목록 + 들여쓰기로 충분, 저장 모달과 일관). e2e `test_move_new_folder_with_parent` 추가.
-- **설정** → 신규 `/settings` 전체화면(`renderSettingsView`). `buildSettingsSections(target,{rerender,dismiss})` 추출로 팝오버(데스크탑)·전체뷰(모바일)가 동일 섹션 공유.
+### 2. 모델 — 탭마다 전체 화면 라우트 뷰
 
-데스크탑 딥링크 폴백: `/bookmarks`·`/settings` 는 책 목록 + 기존 드로어/팝오버.
+탭은 오버레이를 여는 버튼이 아니라 **각각 전체 화면 뷰**다(진짜 iOS 탭 바의 의미이고, 앱의 History API 라우팅과도 맞는다). 흩어져 있던 구현을 성격대로 다시 배치했다.
 
-SPA 전환은 기존 전역 `<a>` 클릭 인터셉터(`views-routing.js`)가 처리하므로 탭 링크가 자동으로 `navigate()` 된다. 활성 탭은 `route()` 마다 `syncTabBarActive()` 가 현재 라우트로 동기화(읽기 라우트는 홈 탭).
+- **홈**: `/`·`/<division>` 책 목록(기존 `renderBookList`).
+- **검색**: 모바일 `/search` 전체 화면(페이지 안의 입력과 `renderSearchResults`). 모바일 탭 경로에서는 시트를 쓰지 않는다(헤더 입력에 포커스를 두는 경로에는 남았다).
+- **북마크**: 새 `/bookmarks` 전체 화면(`renderBookmarksView`). `renderBookmarkTree(target)`에 인자를 받게 해 드로어의 트리 빌더를 #app에 다시 쓴다. **읽기 문맥의 동작(이 장 저장, 절 선택)은 가져오지 않고** 읽기 화면(드로어)에 남긴다. 전체 관리(새 폴더, 내보내기, 가져오기)만 탭 뷰의 제목줄 오른쪽 위에 둔다. 이 화면의 세부는 아래 「북마크 화면」에 적었다.
+- **설정**: 새 `/settings` 전체 화면(`renderSettingsView`). `buildSettingsSections(target,{rerender,dismiss})`로 떼어 내어, 팝오버(데스크톱)와 전체 뷰(모바일)가 같은 섹션을 함께 쓴다.
 
-### 3. iOS 2026 Liquid Glass 외형
+데스크톱에서 딥링크로 들어오면: `/bookmarks`·`/settings`는 책 목록과 기존 드로어/팝오버로 대신한다.
 
-- 플로팅 캡슐: `position:fixed`, 좌우 `--space-4`(16px) 전폭, 하단 `calc(--space-1 + safe-area*0.75)`(홈 인디케이터 위 여백 축소). 둥근 사각 `border-radius:26px` + `corner-shape:squircle`.
-- **frosted glass 는 `::before`(absolute) 레이어에**, fixed 부모는 투명 — Safari 26 이 하단 fixed 요소를 home-indicator 틴팅에 샘플링하는 것을 회피. `-webkit-backdrop-filter` 는 리터럴 값(Safari 가 var() 미지원). 가독성 위해 약간 더 불투명(iOS 26.1 'Tinted' 방향).
-- 아이콘은 **iOS/SF Symbols idiom** stroke SVG 직접 제작(Material 아님). 활성 탭 = 아이콘 색 `--theme` + **56px 정원 인디케이터**(테마색 14% 틴트, 스킴 추종 — ADR-030 후속⁴ 2026-06-05; 초기 `--accent` 캡슐 pill → 후속³ 인디케이터 제거(아이콘색만) → 후속⁴ 56px 정원 인디케이터를 테마색 틴트로 복원).
-- 폴백: `prefers-reduced-transparency`/`@supports not (backdrop-filter)` → 불투명 표면. `prefers-reduced-motion` → pill 애니메이션 생략.
+SPA 전환은 기존 전역 `<a>` 클릭 인터셉터(`views-routing.js`)가 맡으므로, 탭 링크를 누르면 저절로 `navigate()`로 이동한다. 활성 탭은 `route()`마다 `syncTabBarActive()`가 지금 라우트에 맞춘다(읽기 라우트는 홈 탭).
 
-### 4. 헤더 정리 + FAB 제거(모바일)
+#### 북마크 화면
 
-탭 바가 진입점을 통합하므로 모바일에서 헤더 **홈(`.title-home-btn`)·설정(`.title-settings-btn`) 버튼 숨김**, **검색 FAB 전면 제거**(요소·CSS·`views-routing` fab-lift 옵저버 시스템 일체). 읽기 화면 **뒤로·챕터 북마크 추가** 버튼은 보존. 데스크탑은 탭 바가 없어 헤더 그대로.
+북마크 화면의 동작은 ADR-010(북마크)과 함께 바뀌어 왔다. 여기에는 탭 바와 함께 들인 제목줄과 ⋯ 메뉴를 적는다.
 
-### 5. 하단 공존
+- **제목줄은 「⋯」(더 보기) 하나로 모은다(2026-06-05).** Apple Music 방식이다. 전체 관리 동작은 모두 그 팝업 메뉴 안에 둔다(`buildBmViewActions`, 지금 `js/app/bookmark-menu.js`).
+- **⋯ 메뉴의 순서**: 관리 묶음(새 폴더, 내보내기, 가져오기, 선택), hairline 한 줄, 정렬 기준 묶음, hairline 한 줄, 정렬 방향 묶음이다. 「무엇을 할지, 무엇으로 정렬할지, 어느 방향으로 정렬할지」의 순서다. 정렬 방향(오름/내림)과 기준마다의 설명 문구(「가나다순」, 「최신 순」 등)는 2026-06-10에 더했다(ADR-010).
+- **메뉴 모양**: **iOS 26풍 큰 곡률**(`--radius-xl` 16px와 `corner-shape: superellipse(2)` squircle), 가장자리까지 닿는 행, **묶음 사이에만 hairline 한 줄**(항목 사이 가로선은 없다), 리퀴드 글라스의 sheen/inset 질감(ADR-030 후속⁵과 같다), `--shadow-4` elevation, `reduced-transparency`/`reduced-motion` 대체를 갖춘 HIG 메뉴다. 행마다 `min-height: --touch-target`(44px)이다.
+- **아이콘 열을 하나로 맞춘다(2026-06-06).** 관리 행은 **앞에 글리프, 뒤에 라벨**이고, 글리프를 **정렬 묶음의 체크 표시와 같은 맨 왼쪽 열**에 둔다. 두 묶음이 아이콘 열과 라벨 열을 함께 써서 한 리듬으로 정렬된다(`title-action-menu-icon`/`title-action-menu-check`가 `--menu-lead` 폭을 함께 쓰고, `--action`의 추가 들여쓰기는 없앴다). **HIG에서 일부러 벗어난 것이다.** Apple Files 메뉴가 체크 열과 아이콘 열을 나누는 것은 **한 행에 아이콘과 체크가 함께** 올 수 있어 두 자리가 같이 있어야 하기 때문이다. 이 앱의 ⋯ 메뉴에는 그런 행이 없다(관리 행에는 아이콘만, 정렬 행에는 체크만 있다). 한 행에서 두 자리가 겹칠 일이 없으니 열을 합쳐도 헷갈리지 않고, 합치면 보기가 더 고르다. 글리프는 SF 스타일(folder.badge.plus / square.and.arrow.up·down)이다.
+- **정렬(2026-06-06).** 정렬 묶음(`role="group"`)에 **제목, 직접 정렬(수동), 추가된 날짜, 최근에 본 날짜, 수정한 날짜**의 `menuitemradio` 다섯이 있다(지금 고른 것에 앞쪽 체크 글리프, Apple Music의 정렬 묶음 방식).
+  - 정렬은 **보여 주기만 한다**(`sortBookmarkNodes`가 store를 건드리지 않고 겉을 복사해 돌려준다). `renderBookmarkTree`·`_buildFolderItem`이 그리기 직전에 적용한다.
+  - **`manual`은 저장한 순서(끌어서 바꾼 순서)를 지키고, 나머지는 폴더를 먼저 두고 묶음마다 키로 정렬한다**(제목은 ko 로케일, 날짜는 최신순).
+  - **정렬 설정은 기기마다 `localStorage`(`bible-bookmark-sort`)에 둔다.** Drive 동기화에서 뺀다(ADR-011은 북마크 객체만 동기화한다).
+  - **「최근에 본 날짜」도 기기마다 `localStorage` 맵(`bible-bookmark-viewed`)이다.** 동기화 객체에 두면 열기만 해도 다시 동기화되고 수정 시각이 흐려지므로 따로 둔다(북마크 링크를 누를 때 `markBookmarkViewed`, 지울 때 `_forgetViewed`).
+  - **「수정한 날짜」는 동기화 객체의 `updatedAt`이다**(북마크와 폴더를 편집하거나 이름을 바꿀 때 적고, 없으면 `createdAt`을 쓴다. 폴더를 만들 때도 `createdAt`을 더했다).
+  - 순수 정렬 로직은 유닛(`BOOKMARK_SORT` 블록, `bookmark.test.js` 14 케이스)이, 메뉴 동작과 다시 그리기는 e2e가 맡는다.
+- **끌기와 스와이프.** 자동 정렬 모드에서는 끌어 놓아도 다시 정렬되어 뜻이 없으므로 **끌어서 순서 바꾸기는 막는다.** 다만 `_setupDragHandle`이 모바일의 **스와이프로 드러내기(수정/삭제)**도 맡으므로 늘 연결하고(`_setupDragHandle`), **끌어서 순서 바꾸기만** 핸들러 안의 `canDrag`(=`manual`)로 거른다(2026-06-06). **직접 정렬(`manual`) 모드에서만** 각 행 뒤쪽에 ≡ 순서 바꾸기 핸들을 보여, 끌 수 있다는 것과 지금이 직접 정렬 모드라는 것을 함께 알린다. 길게 눌러 끄는 동작을 잘 찾지 못하던 문제를 푼다. ≡ 핸들은 2026-06-07에 더했고, 색은 처음의 `--text-secondary`가 너무 진해 `--text-tertiary`(보조보다 한 단 옅은 색, DESIGN.md §2)로 낮췄다. 행 스와이프 방향은 iOS 관례(← 삭제 / → 수정)다. 자세한 근거는 [ADR-010](010-bookmark-feature.md)(2026-06-07)에 있다.
+- **추가 아이콘과 빈 상태(2026-06-06).** 읽기 헤더의 북마크 버튼은 **아직 저장하지 않은 장에서 윤곽선 책갈피에 가운데 「+」 배지**(두 path를 합친 `BOOKMARK_ICON_ADD_PLUS`)로 「이 장 추가」를 분명히 보이고, **이미 북마크된 장은 채워진 아이콘을 그대로 쓴다**(`_setBookmarkBtnIcon`이 상태마다 path를 다시 만들고, 만들 때와 고칠 때 함께 쓴다). 북마크 목록의 **빈 상태**는 「없습니다」 한 줄에서 **아이콘, 제목, 추가 방법 안내**(`_buildEmptyState`, 드로어와 전체 뷰가 함께 쓴다)로 바꿨다.
+- **🛈 북마크 추가 방법 안내(2026-06-06).** 추가는 읽기 화면에서만 하므로 `/bookmarks` 전체 뷰에는 「추가」 버튼이 없다. 그래서 **이미 북마크가 있는** 사용자는 추가 방법을 알 단서를 보지 못한다(빈 상태 안내는 목록이 빌 때만 보인다). 그래서 제목줄 ⋯ **왼쪽에 정보 버튼 🛈**(`title-action-btn`을 다시 쓰고, Material Symbols info)을 두고, 누르면 빈 상태와 **같은 문구**(`BOOKMARK_ADD_HELP` 한 곳에서 가져온다)를 담은 작은 안내 팝오버(`.title-action-popover`, `role="dialog"`)를 연다.
+  - HIG에 맞는 정도: 정보 버튼에서 도움말 팝오버를 여는 것은 인정된 방식이고, 바깥을 누르거나 Escape로 닫는 것도 권고와 같다. 다만 아이폰(compact)에서 Apple의 기본은 팝오버를 시트로 바꾸는 것이다. 한 문장 도움말에 시트는 지나쳐 팝오버를 두되, 「팝오버는 트리거를 덮지 말라」는 권고에 맞춰 ⋯ 메뉴와 달리 **버튼 *아래*로** 내린다(`top: calc(100% + --space-2)`). ⋯ 메뉴와 서로 배타적이고(한쪽을 열면 다른 쪽이 닫힌다), 리스너는 ⋯ 메뉴와 같이 스스로 정리한다(SPA 내비 때 떼어 낸다). 동작은 e2e(`test_bookmark_add_help.py`)가 맡는다.
+  - 2026-06-07에 다듬은 것: ① **빈 목록에서는 🛈를 숨긴다.** 빈 상태 안내가 이미 같은 문구를 보여 주므로 겹친다(`renderBookmarkTree`가 전체 뷰에서 store가 비면 `aria-haspopup="dialog"` 버튼을 `hidden`으로 둔다). ② 색은 처음에 ⋯와 같은 중립 차콜(`--accent`)이었다가 **`--text-tertiary`**(⋯(`--accent`)보다 한 단 물러난 약한 어포던스, ≡ 핸들과 같은 위계)로 낮췄다. HIG라면 ⓘ에 틴트를 주지만, ADR-028이 chrome을 중립으로 고정하고 `--theme`를 내비 시그니처로 한정하므로 일부러 따르지 않는다. ③ 팝오버 본문(`.title-action-popover-text`)이 `#page-title` `<h1>`(font-weight 700)을 물려받아 굵게 나오던 것을 **`font-weight: 400`**으로 되돌렸다(제목 600보다 본문이 더 굵던 역전을 없앴다).
+- **화면 안 선택 모드(2026-06-07).** 북마크와 폴더를 여럿 골라 한꺼번에 다루는 일은 **실제 트리 위에서 바로 고르는** 선택 모드로 한다. iOS 파일, 메일, 사진의 「선택」 모드다.
+  - **들어가는 길은 ⋯ 메뉴의 중립 「선택」**이다(체크 원 글리프. 관리 묶음의 새 폴더, 내보내기, 가져오기 **아래**에 둔다. 파괴색이 아니라 모드로 들어가는 것이므로 「파괴 동작은 맨 끝」에 해당하지 않는다).
+  - `enterBookmarkSelectMode()`가 `body.bm-select-active`를 켜면 ① 각 행 앞에 **선택 원**(`.bm-select-circle`)이 생긴다. 내용을 오른쪽으로 밀고 ○에서 ✓로 미끄러져 들어온다. **타입 아이콘은 그대로** 두어 폴더와 책갈피를 구분한다. ② **탭 dock을 숨기고 그 자리에 `#bm-select-bar`**를 둔다. 절 선택 바와 같은 형식이고 글래스 자산을 함께 쓴다. **공유, 이동, 삭제 글래스 pill**(내용 폭에 맞춘다. 취소까지 늘이지 않는 iOS 관례)과 **취소 글래스 원형**이다. 선택 수는 캡슐 위에 뜬 칩이다. 삭제만 파괴색이다. ③ **제목줄의 ⋯/🛈가 「전체 선택」 토글로 바뀐다**(iOS Mail/Files의 자리. 「전체 삭제」는 전체 선택 뒤의 삭제이므로 따로 한 번에 지우는 버튼은 없다).
+  - 행을 누르면 선택을 바꾼다(링크 이동을 가로챈다). 선택 모드에서는 스와이프와 끌기 핸들이 작동하지 않는다.
+  - **공유**: 선택을 북마크 하나하나로 펼쳐(`_collectSelectedBookmarks`) **절대 주소 `SITE_BASE`(`https://bible.anglican.kr`) 링크**를 만들고(`_buildSharePayload`: 하나면 `{title,url}`, 여럿이면 `{title,text}`) `navigator.share`로 보낸다. 공유 시트의 「복사」는 OS가 이 링크를 복사하는 것으로, 앱의 본문 복사(`serializeVerseRange`)와 상관없다. Web Share가 없으면 클립보드에 넣는다.
+  - **이동**: 폴더 목록 모달(`#bm-move-modal`)에서 고른다. 고른 폴더와 그 아래 폴더는 목적지에서 뺀다. 누르면 바로 옮기고 확인 버튼은 없다(iOS 「앨범으로 이동」). `_moveSelectedToFolder`가 가장 위에 있는 선택 항목을 떼어 넣는다(목적지 폴더는 저절로 펼친다).
+  - **삭제**: 공유 파괴 확인(`bm-confirm`) 뒤에 `removeItemById`와 `_forgetViewed`로 하위까지 지운다.
+  - **폴더를 고르면 하위가 함께 따라간다**(하위는 covered로 ✓와 비활성이 되고, 수는 지워질 노드 수다). 스와이프나 행에서 폴더를 지울 때와 같이 「삭제는 내용까지」로 맞췄다(폴더 삭제의 뜻을 일관되게 한다, ADR-010 2026-06-07).
+  - 공유는 성공하면, 이동과 삭제는 실행한 뒤 모드를 끝낸다.
+  - **모바일 전용**이다(전체 뷰가 모바일에만 있으므로 저절로 그렇다. 데스크톱 `/bookmarks`는 책 목록과 드로어로 대신하므로 처음부터 들어갈 길이 없어 회귀가 없다).
+  - `SITE_BASE`는 도메인이 바뀔 때(예: 통합 `bok.anglican.kr`)에 대비한 상수 하나다.
+  - 순수 도우미(`_bmBuildParentMap`/`_bmAncestorSelected`/`_bmCountMarked`/`_bmEffectiveTargets`/`_collectSelectedBookmarks`/`_bmSelectCountLabel`/`_buildSharePayload`)는 유닛(`BOOKMARK_SELECT`·`BOOKMARK_HREF` 블록)이, 모핑, 공유, 이동은 e2e(`test_bookmark_select_delete.py`)가 맡는다.
+- **이동 모달과 상위 폴더를 고르는 새 폴더(2026-06-07).** 이동 모달(`#bm-move-modal`)은 저장 모달과 형식을 맞춰 **① 최상위 ② 폴더 목록 ③ 목록 아래 「새 폴더」 버튼**(hairline으로 나누고, `--accent` 틴트로 목적지가 아니라 동작임을 알린다) 순서로 둔다. **새 폴더 모달(`#bm-new-folder-modal`)에 「상위 폴더」 필드를 새로 두었다.** 저장 모달과 **같은 폴더 콤보박스**(`_buildFolderCombobox`)를 다시 쓰되, `idPrefix`(id가 겹치지 않게)와 `allowNewFolder:false`(자기 자신을 다시 부르지 않게)를 인자로 받는다. 고르지 않으면 최상위(`insertItem(store, null, …)`)이고, 고르면 그 폴더 아래에 만들고 저절로 펼친다. 이동 흐름의 「새 폴더」는 이 모달을 열고, 만든 폴더로 선택 항목을 옮긴다(`_moveSelectedToFolder(newId)`). 사용자 요청대로 **제대로 된 트리 위젯은 채택하지 않았다**(목록과 들여쓰기로 충분하고, 저장 모달과 맞는다). e2e `test_move_new_folder_with_parent`를 더했다.
+- **목록 행 여백을 늘렸다(2026-06-05).** 데스크톱은 `padding --space-3/--space-4`·`min-height 4rem`, 모바일 내용은 `min-height 3.5rem`이고, 라벨은 `--font-sm→--font-md`, 참조는 `--font-2xs→--font-xs`, 아이콘은 1.4→1.6rem이다. 훑어보고 누를 여유를 둔다.
 
-- **오디오 미니플레이어 = 탭 바 위 스택**(iOS Music 식). 탭 바와 동일한 플로팅 둥근 글래스 바로 통일(좌우 여백·squircle·테두리·그림자). 재생 버튼 HIG 44px 고정, 내부 여백 12px 통일. *잠정 — dev 확인 후 조정.*
-- **절 선택 모드 = 탭 바 숨김**(전용 하단 바가 차지).
-- `--tabbar-reserve` 토큰으로 모든 뷰 `#app` 하단 패딩을 줘 콘텐츠가 탭 바에 가리지 않게. 오디오 표시 중엔 오디오 바 높이만큼 추가.
+### 3. iOS 2026 Liquid Glass 모양
 
-### 6. 브레이크포인트 근거
+- 떠 있는 캡슐: `position:fixed`, 좌우 `--space-4`(16px)를 둔 전체 폭, 아래는 `calc(--space-1 + safe-area*0.75)`(홈 인디케이터 위 여백을 줄였다). 둥근 사각 `border-radius:26px`와 `corner-shape:squircle`.
+- frosted glass는 처음에 `::before`(absolute) 층에 두고 fixed 부모를 투명하게 했다. Safari 26이 아래쪽 fixed 요소를 홈 인디케이터 색에 쓰는 것을 피하려는 것이었다. ADR-030(2026-06-04)에서는 fixed 요소가 투명한 `#tab-dock` 하나뿐이라 그 걱정이 없어져, **요소에 직접** 적용한다(`::before` 우회는 지웠다). `-webkit-backdrop-filter`에는 값을 그대로 적는다(Safari가 var()를 지원하지 않는다). 읽기 쉽도록 조금 더 불투명하다(iOS 26.1 「Tinted」 방향).
+- 아이콘은 **iOS/SF Symbols 방식**의 선 SVG를 직접 만들었다(Material 아님). 활성 탭은 아이콘 색 `--theme`와 **56px 원형 인디케이터**(테마색 14% 틴트, 스킴을 따른다. ADR-030 후속⁴, 2026-06-05)다. 처음의 `--accent` 캡슐 pill에서 후속³ 인디케이터 제거(아이콘 색만)를 거쳐, 후속⁴에서 56px 원형 인디케이터를 테마색 틴트로 되살렸다.
+- 대체: `prefers-reduced-transparency`/`@supports not (backdrop-filter)`이면 불투명 표면. `prefers-reduced-motion`이면 pill 애니메이션을 생략한다.
 
-탭 바는 앱의 기존 분기 `≤768 / ≥769`(검색 바↔FAB 전환 등 15곳)를 재사용. **데스크탑 사이드바는 다른 분기가 필요** — 콘텐츠 `--max-width:720px` + `--sidebar-w:260px` 공존에 ≥~1024px 필요(769px 에선 사이드바가 본문을 밀어냄). 그래서 사이드바는 ≥~1024px 신설 + 콘텐츠 시프트로 별도 단계.
+### 4. 헤더 정리와 FAB 제거(모바일)
 
-## 스크롤 축소를 하지 않는 이유 (2026 현행 iOS)
+탭 바가 들어가는 길을 모으므로, 모바일에서 헤더의 **홈(`.title-home-btn`)과 설정(`.title-settings-btn`) 버튼을 숨기고**, **검색 FAB를 모두 지웠다**(요소, CSS, `views-routing`의 fab-lift 옵저버 시스템 전부). 읽기 화면의 **뒤로, 장 북마크 추가** 버튼은 남긴다. 데스크톱은 탭 바가 없어 헤더가 그대로다.
 
-iOS 26 출시본의 "스크롤 시 코너 아이콘으로 접힘 + 검색 별도 버튼"은 가독성·사용성 불만으로 iOS 26.1(Clear/Tinted 토글)→**iOS 27 에서 상시 풀 탭바 복원 + 검색 재통합**으로 되돌려졌다. 따라서 **상시 표시 풀 탭바 + 검색=일반 탭**이 2026 현행이며, 스크롤 축소는 구현하지 않는다.
+### 5. 아래쪽에 함께 있는 것
+
+- **오디오 미니 플레이어는 탭 바 위에 쌓는다**(iOS Music 방식). 탭 바와 같은 떠 있는 둥근 글래스 바로 맞췄다(좌우 여백, squircle, 테두리, 그림자). 재생 버튼은 HIG 44px 고정, 안쪽 여백은 12px로 맞췄다. *잠정이다. dev에서 확인한 뒤 고친다.*
+- **절 선택 모드에서는 탭 바를 숨긴다**(전용 하단 바가 자리를 쓴다).
+- `--tabbar-reserve` 토큰으로 모든 뷰의 `#app` 아래에 여백을 주어, 내용이 탭 바에 가리지 않게 한다. 오디오가 보이는 동안은 오디오 바 높이만큼 더한다.
+
+### 6. 나누는 폭의 근거
+
+탭 바는 처음에 앱의 기존 분기 `≤768 / ≥769`(검색 바와 FAB 전환 등 15곳)를 다시 썼다. 지금은 폭과 포인터를 함께 본다(§1). **데스크톱 사이드바에는 다른 분기가 필요하다.** 내용 `--max-width:720px`와 `--sidebar-w:260px`가 함께 있으려면 약 1024px 이상이 필요하다(769px에서는 사이드바가 본문을 밀어낸다). 그래서 사이드바는 약 1024px 이상을 새로 두고 내용을 옮기는 별도 단계로 한다.
 
 ## 검토한 대안
 
-- **오버레이 트리거 모델**(탭이 기존 시트/드로어/팝오버를 엶) — 변경 최소이나 "각 탭=화면" iOS 의미론과 어긋남. 사용자가 전체화면 뷰를 선택.
-- **진짜 squircle(clip-path/SVG, Safari 포함)** — `corner-shape` 가 Safari 미지원이라 iPhone 에서 squircle 을 강제하려면 clip-path 뿐인데, 플로팅 드롭섀도가 잘리고 glass 테두리가 깨져 보류. `corner-shape` 점진 향상 + `border-radius` 폴백 채택.
-- **스크롤 축소(iOS 26 출시본)** — 위 사유로 보류.
+- **오버레이를 여는 탭**(탭이 기존 시트, 드로어, 팝오버를 연다): 바꿀 것이 가장 적지만 「탭마다 화면」이라는 iOS의 뜻과 어긋난다. 사용자가 전체 화면 뷰를 골랐다.
+- **진짜 squircle(clip-path/SVG, Safari 포함)**: `corner-shape`를 Safari가 지원하지 않아, iPhone에서 squircle을 강제하려면 clip-path뿐이다. 그러면 떠 있는 그림자가 잘리고 글래스 테두리가 깨져 보여 미뤘다. `corner-shape`로 점진 향상하고 `border-radius`로 대신하는 쪽을 채택했다.
+- **스크롤하면 탭 바 줄이기(iOS 26 출시본)**: ADR-029는 채택하지 않았다. iOS 26 출시본의 「스크롤하면 모서리 아이콘으로 접히고 검색은 따로 버튼」은 읽기 어렵고 쓰기 불편하다는 불만으로, iOS 26.1(Clear/Tinted 토글)을 거쳐 **iOS 27에서 늘 보이는 전체 탭 바와 검색의 재통합**으로 되돌려졌다. 그래서 **늘 보이는 전체 탭 바와 검색을 일반 탭으로**가 2026년 현재의 방식이라고 보았다. 그 뒤 ADR-030(2026-06-04)이 Apple Music을 기준으로 스크롤 축소를 채택해 구현했다(P3, #200). 지금 방식은 ADR-030에 있다.
+- **검색을 4탭 가운데 하나로 (2026-06-04까지)**: 채택 안 함 2026-06-04 · 이유: ADR-030이 Apple Music을 기준으로, 탭 바 오른쪽의 따로 떨어진 원형 버튼을 누르면 입력창으로 바뀌는 방식(모핑)으로 바꿨다(§1).
+- **폭 하나로 모바일과 데스크톱 나누기 (2026-06-09까지)**: 처음에는 「모바일=≤768px / 데스크톱=≥769px」의 폭 한 선을 썼다. 채택 안 함 2026-06-09 · 이유: **화면이 꽉 찬 iPhone을 가로로 들면 폭이 768px을 넘어**(예: iPhone 14 가로 = 844px) 데스크톱으로 잘못 나뉘었다. 폰인데 탭 바가 사라지고 마우스용 오버레이(사이드 패널)가 떴다. 돌리기만 해도 내비 방식이 바뀌어 어색했다. 폭과 포인터를 함께 보게 바꿨다(§1).
+- **북마크 화면의 따로 된 「+」 버튼 (2026-06-05까지)**: 처음에는 전체 관리 가운데 새 폴더를 「+」 버튼으로 따로 두었다. 채택 안 함 2026-06-05 · 이유: Apple Music처럼 「⋯」 하나로 모았다(§2 「북마크 화면」).
+- **⋯ 메뉴의 앞쪽 라벨과 뒤쪽 글리프 (2026-06-05부터 06-06까지)**: 처음에는 행마다 앞에 라벨, 뒤에 SF 스타일 글리프를 두었다. 채택 안 함 2026-06-06 · 이유: 관리 행의 글리프를 정렬 묶음의 체크 표시와 같은 열에 두어 한 리듬으로 맞췄다(§2 「북마크 화면」).
+- **자동 정렬에서 끌기 핸들을 아예 달지 않기 (2026-06-06, 같은 날까지)**: 처음에는 `manual`일 때만 `_setupDragHandle`을 불렀다. 채택 안 함 2026-06-06 · 이유: 이 함수가 스와이프로 드러내기(수정/삭제)도 맡아, 자동 정렬에서 스와이프 수정과 삭제가 막히는 회귀가 생겼다. 늘 연결하고 끌기만 `canDrag`로 거른다.
+- **⋯ 메뉴의 「삭제」와 일괄 삭제 모달 (2026-06-06부터 06-07까지)**: ⋯ 메뉴에 파괴색 「삭제」(휴지통 글리프, `title-action-menu-item--danger`)를 두었다. 처음에는 정렬 묶음 위에 두었다가, Apple의 풀다운 메뉴 관례(파괴 동작은 맨 아래에 두고 그 뒤에 비파괴 항목을 두지 않는다. 액션 시트는 반대로 위)에 따라 「관리 묶음, hairline, 정렬 묶음, hairline, 삭제(맨 끝)」로 옮겼다. 누르면 `openBulkDeleteModal()`이 **트리 전체를 앞 순서(폴더 다음 자식, 깊이만큼 들여쓰기)의 체크박스 목록**(`#bm-bulk-delete-modal`)으로 펼쳤다. 세 상태 「전체 선택」(`_selectAllState`), 행마다 타입 글리프, 폴더를 고르면 하위가 체크와 비활성이 되는 따라감이 있었고, 「삭제 (N)」(`_deleteBtnLabel`)은 공유 파괴 확인(`bm-confirm`)을 띄운 뒤 `removeItemById`(폴더는 splice로 하위까지)와 `_forgetViewed`(안의 북마크의 viewed 맵 정리)로 지웠다. 목록이 비면 메뉴의 삭제 항목을 비활성으로 했다(`refreshDeleteEnabled`). 순수 도우미 `_flattenBookmarkTree`·`_descendantIds`는 유닛(`bookmark.test.js`)이, 고르기와 따라감과 확인 동작은 e2e(`test_bookmark_bulk_delete.py`)가 맡았다. 모달은 장 삭제 방식을 다시 써(`createOverlay`, ADR-032) z-index 74/75로 확인(76/77) 아래에 두었다. 채택 안 함 2026-06-07 · 이유: 트리를 평평한 목록으로 다시 그리는 모달 대신, 실제 트리 위에서 고르는 화면 안 선택 모드로 바꿨다(§2 「북마크 화면」). 모달(`#bm-bulk-delete-modal`)의 DOM, CSS, JS와 `_flattenBookmarkTree` 도우미를 모두 지웠다.
 
 ## 영향
 
-- `index.html`(탭 바 `<nav>`), `css/style.css`(탭 바·플로팅 오디오·하단 패딩), `js/app/views-routing.js`(라우트·활성 동기화·FAB 제거), `js/app/bookmark.js`/`search.js`/`settings-ui.js`(전체화면 뷰 + 빌더 재사용), `js/app/install.js`(inert 목록).
-- 유닛 영향 없음(566 통과, 라우팅/내비는 e2e 책임 — ADR-013). tsc 0.
-- DESIGN.md §7 갱신, ADR-028 §7 상태 갱신, CLAUDE.md·architecture.md 인덱스 갱신.
+- `index.html`(탭 바 `<nav>`), `css/style.css`(탭 바, 떠 있는 오디오, 아래 여백), `js/app/views-routing.js`(라우트, 활성 맞추기, FAB 제거), `js/app/bookmark.js`/`search.js`/`settings-ui.js`(전체 화면 뷰와 빌더 다시 쓰기), `js/app/install.js`(inert 목록).
+- 유닛에는 영향이 없다(566 통과, 그때 수. 라우팅과 내비는 e2e가 맡는다, ADR-013). tsc 0.
+- DESIGN.md §7 갱신, ADR-028 §7 상태 갱신, CLAUDE.md와 architecture.md 인덱스 갱신.
 
 ## 후속
 
-데스크탑 사이드바(≥~1024px), `노트` 기능 본체, 북마크 뷰 "+"·"⋯" 배열 다듬기, 오디오 스택 위치 최종 튜닝, 인앱 reduce-transparency 토글, 데스크탑 오버레이의 전체화면 전환 여부.
+데스크톱 사이드바(약 1024px 이상), `노트` 기능 본체, 북마크 뷰 「+」와 「⋯」 배열 다듬기, 오디오 쌓는 위치 마지막 조정, 앱 안의 reduce-transparency 토글, 데스크톱 오버레이를 전체 화면으로 바꿀지.
