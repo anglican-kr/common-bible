@@ -28,7 +28,7 @@ ADR-001에서 SPA를 채택할 때 "SEO 불리 — PWA이므로 수용 가능"�
 - 단점: Vanilla JS SPA 구조를 처음부터 다시 설계해야 한다. 1,328개 장 × 빌드 비용이 든다. ADR-001의 결정과 부딪친다.
 
 ### C. History API 라우팅 전환 (채택)
-- 장점: 서버 설정 한 줄(`try_files $uri /index.html`)로 풀린다. SEO와 PWA 오프라인을 모두 채운다. 기존 SPA 구조를 그대로 둔다.
+- 장점: 서버 설정 한 줄(`try_files $uri /index.html`)로 해결된다. SEO와 PWA 오프라인을 모두 만족한다. 기존 SPA 구조를 그대로 둔다.
 - 단점: 서버 설정이 꼭 필요하다. 기존 해시 북마크 URL과의 호환을 처리해야 한다.
 
 ### sitemap의 모든 URL에 같은 `<lastmod>` (2026-05-23 1차)
@@ -37,7 +37,7 @@ ADR-001에서 SPA를 채택할 때 "SEO 불리 — PWA이므로 수용 가능"�
 
 ## 채택 이유
 
-- 서버를 직접 관리하고 nginx 설정을 바꿀 수 있으므로, C안의 유일한 전제 조건을 채운다.
+- 서버를 직접 관리하고 nginx 설정을 바꿀 수 있으므로, C안의 유일한 전제 조건을 만족한다.
 - 구조를 바꾸지 않고 `parseHash()` → `parsePath()`, `hashchange` → `popstate`, `location.hash` → `history.pushState`의 국소적 수정으로 전환을 마쳤다.
 - 기존 해시 URL(`#/gen/1`) 북마크는 `DOMContentLoaded` 시점에 `replaceState`로 저절로 옮겨, 하위 호환성을 지킨다.
 

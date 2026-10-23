@@ -100,7 +100,7 @@ HTML 파싱이 `<body>` 태그까지 왔지만 `<div id="launch-screen">` 마크
 
 - Google Fonts 스타일시트: `preload as="style"`과 일반 stylesheet 링크로 `@font-face` 규칙을 first paint 전에 확보한다(`d61f879`). `display=swap`을 써서 폰트를 다 받는 즉시 본문에 적용한다. launch-screen 오버레이가 다운로드 구간을 가려 FOUT은 보이지 않는다(2026-05-01, `display=optional`을 되돌림. 「검토한 대안」).
 - 폰트가 도착하기를 기다려 런치 스크린을 닫는다(2026-05-01). 페이드아웃 시간(2.4s)은 보통 네트워크에서는 폰트 다운로드를 충분히 덮는다. 그러나 느린 LTE나 3G의 콜드 캐시에서 폰트가 페이드아웃이 끝난 뒤에 오면, 본문이 다 보인 상태에서 swap이 일어나 FOUT(레이아웃 시프트 포함)이 보일 수 있다. 그래서 `dismissLaunchScreen()`을 `Promise.race([document.fonts.ready, timeout(1500ms)])`의 결과를 기다린 뒤 부른다(`js/app.js`).
-  - 캐시에 있으면 `document.fonts.ready`가 바로 풀려 지연이 없다.
+  - 캐시에 있으면 `document.fonts.ready`가 바로 끝나 지연이 없다.
   - 콜드 캐시에서는 폰트가 올 때까지 launch-screen이 본문을 가린 채 기다리다가 페이드아웃을 시작한다.
   - 1.5s 타임아웃은 아주 느린 네트워크에서 끝없이 기다리지 않게 하는 안전망이다. 이 경우에는 swap이 본문에 보이지만, 기존 동작과 같은 정도의 회귀로 그친다.
 - `app.js`, `gtag-init.js`: `defer` 속성을 단다.
