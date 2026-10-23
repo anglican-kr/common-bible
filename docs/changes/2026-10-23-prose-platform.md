@@ -1,4 +1,5 @@
 ---
+pr: 378
 date: 2026-10-23
 branch: docs/prose-platform
 title: "docs: 플랫폼 문서의 문장 정리"
