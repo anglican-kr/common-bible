@@ -1,21 +1,37 @@
 # ADR-013: 클라이언트 JS 유닛 테스트 전략
 
 - 일시: 2026-05-06
-- 상태: 승인됨 (473 케이스 통과, 2026-05-11. sync 92 + app 381. app 레이어 no-jsdom 영역 1차 완료, jsdom dual-track은 2026-05-11 재정정으로 보류 — 본문 §"개정 (2026-05-11)" 두 블록 참조)
+- 상태: 승인됨 — 구현 완료. 2026-05-11에 473 케이스 통과(sync 92 + app 381)로 앱 레이어에서 jsdom 없이 시험할 수 있는 영역의 1차를 마쳤다. 지금의 건수는 `tests/README.md`에 있다.
 
 ## 결정
 
-브라우저 클래식 스크립트로 로드되는 `js/sync/state-machine.js`를 **Node 자체 테스트 러너 (`node --test`)** 위에서 검증한다. 테스트 러너 의존성(jest, mocha, vitest 등)을 추가하지 않고, 자체 하네스가 `node:vm`으로 모듈을 격리 컨텍스트에 로드한 뒤 브라우저 글로벌(`window`, `localStorage`, `navigator`, `document`, `setTimeout`)을 스텁한다.
+브라우저의 클래식 스크립트로 불러오는 `js/sync/state-machine.js`를 **Node 자체 테스트 러너(`node --test`)** 위에서 검증한다. 테스트 러너 의존성(jest, mocha, vitest 등)을 더하지 않는다. 자체 하네스가 `node:vm`으로 모듈을 격리된 컨텍스트에 불러온 뒤, 브라우저 전역(`window`, `localStorage`, `navigator`, `document`, `setTimeout`)을 스텁으로 바꿔 둔다.
+
+이 방식을 모든 클라이언트 JS 유닛 테스트에 쓴다(2026-05-11).
+
+- 유닛 테스트는 `node:vm`과 손으로 만든 스텁만 쓴다. 새 의존성을 더하려면 이 ADR을 고친다.
+- 실제 브라우저가 있어야 하는 동작(레이아웃 계산, Canvas, 터치 제스처)은 유닛이 아니라 e2e(`tests/e2e/`)가 맡는다(2026-05-11). 그런 영역은 `settings-ui.js` 전체, `views-routing.js`의 Pull-to-refresh, Audio Player, startScrollTracking, `install.js`의 모달 열기와 닫기, 슬라이더, buildInstallBody, `bookmark.js`의 drawer, save modal, tree render, drag handle, sheet drag, `search.js`의 시트 드래그와 결과 렌더였다. e2e 시나리오를 더하는 일(`tests/e2e/test_*.py` 신설)은 따로 다룬다. 이 ADR은 유닛 테스트의 범위만 다룬다.
+
+### 테스트 파일 이름 (2026-05-09)
+
+테스트 파일 이름이 들쭉날쭉 쌓여 모듈과 테스트를 짝짓기 헷갈렸다. `search-history.test.js`는 `js/app/storage.js`의 일부를, `search.test.js`는 `js/app/search.js` 전체를 가리켰다. `transport-pkce.test.js`는 `js/sync/transport.js`의 PKCE 영역을 앞세워 모듈 이름이 보이지 않았다. 그래서 다음 규칙을 정했다.
+
+- **규칙 1(기본)**: `tests/unit/<source-basename>.test.js` 형식이다. 소스 파일 이름과 1:1로 짝짓는다. 한 모듈에 테스트 파일 하나다.
+- **규칙 2(영역 구분)**: 모듈 안의 영역(예: PKCE primitives와 Drive REST, search history와 settings storage)은 테스트 파일 안에서 `// ── <영역> ──` 주석 구역으로 나눈다. `search.test.js`가 이미 이 방식을 쓰고 있었다.
+- **규칙 3(모듈이 너무 커질 때)**: `tests/unit/<basename>/<concern>.test.js`처럼 디렉터리로 나눈다. 지금은 그런 경우가 없다.
+- 적용: `search-history.test.js` → `storage.test.js`(storage.js의 다른 부분도 나중에 같은 파일에 합친다), `transport-pkce.test.js` → `transport.test.js`.
+- CI 워크플로(`tests/unit/*.test.js` glob)가 새 파일 이름을 저절로 집어, workflow YAML을 바꾸지 않았다.
+- 실데이터에 기대는 테스트와 문서 검사의 예외 둘은 `tests/README.md` §1에 있다.
 
 ## 맥락
 
-ADR-004는 **데이터 파이프라인** 테스트 전략을 다루며, 그 외 클라이언트 JS는 e2e 테스트(Playwright, 로컬 전용)로만 검증돼 왔다. e2e는 통합 동작은 잘 잡지만 다음과 같은 회귀에 취약하다.
+ADR-004는 **데이터 파이프라인**의 테스트 전략을 다루고, 그 밖의 클라이언트 JS는 e2e 테스트(Playwright, 로컬 전용)로만 검증해 왔다. e2e는 통합 동작은 잘 잡지만 다음과 같은 회귀에는 약하다.
 
-- 상태 머신의 분기 회귀 (예: iOS ENABLE 시 자동 리디렉션 트리거 — 사용자 제스처 밖에서 OAuth 시작)
-- 카운터·캡 회귀 (예: redirect attempts cap 초과 시 NEEDS_CONSENT → ERROR 이중 전이)
-- 부분 응답 처리 (GIS Token Client 빈 응답 → IDENTITY_FAIL 흡수)
+- 상태 머신의 분기 회귀. 예를 들어 iOS에서 동기화를 켜면(ENABLE) 자동 리디렉션이 일어나, 사용자가 누르지 않았는데 OAuth가 시작된다.
+- 카운터와 상한의 회귀. 예를 들어 리디렉션 시도 횟수(redirect attempts)가 상한을 넘으면, 「동의 필요」(NEEDS_CONSENT)에서 「오류」(ERROR)로 두 번 넘어간다.
+- 일부만 온 응답 처리. 예를 들어 GIS Token Client가 빈 응답을 주면, 로그인 실패(IDENTITY_FAIL)로 받아 넘겨야 한다.
 
-이런 회귀는 e2e에선 외부 네트워크/UI를 거쳐야 재현되는데 비결정적이고 느리다. 동시에 ADR-011의 동기화 코드는 검수 후 함부로 손대기 어려워 회귀 비용이 매우 높다.
+이런 회귀는 e2e에서는 외부 네트워크와 UI를 거쳐야 재현되는데, 결과가 그때그때 다르고 느리다. 또 ADR-011의 동기화 코드는 검수를 받은 뒤 함부로 손대기 어려워 회귀 비용이 매우 높다.
 
 ## 검토한 대안
 
@@ -26,15 +42,29 @@ ADR-004는 **데이터 파이프라인** 테스트 전략을 다루며, 그 외 
 | Playwright unit 모드 | playwright (이미 e2e용 존재) | 실제 브라우저 | ❌ — 단위 테스트로 너무 무거움 |
 | **Node `--test` + 자체 vm 하네스** | 없음 (Node 24 내장) | `node:vm` per-test 컨텍스트 | ✅ |
 
-Node 22부터 `node --test`는 안정 기능이며 `--watch` / `--test-name-pattern` / `--test-only` 등을 모두 지원한다. CI는 이미 `actions/setup-node@v4 node-version: 24`를 쓴다.
+Node 22부터 `node --test`는 안정 기능이고, `--watch`, `--test-name-pattern`, `--test-only` 등을 모두 지원한다. CI는 이미 `actions/setup-node@v4 node-version: 24`를 쓴다.
+
+### jsdom이나 happy-dom을 함께 쓰기 (2026-05-11에 허용했다가 같은 날 채택하지 않음)
+
+- ADR-018 모듈 분할을 마친(2026-05-10) 뒤 앱 레이어의 다루지 않던 영역으로 유닛 테스트를 넓히다가, vm과 손으로 만든 스텁만으로는 모든 영역에 맞지 않는다는 것이 드러났다. 살펴보니(Claude 메모 `project_unit_test_expansion.md`의 계기에 닿은 때) `js/app/`의 다루지 않던 영역 가운데 약 70%(1500줄+)는 기존 방식으로 다룰 수 있었다. 나머지는 jsdom 정도가 필요해 보였다.
+  - `js/app/views-routing.js`의 `startScrollTracking`: `Element.getBoundingClientRect()`로 레이아웃을 계산한다.
+  - `js/app/views-routing.js`의 Pull-to-refresh: `touchstart`/`touchmove`/`touchend` 시퀀스와 `transform`/`opacity` 트랜지션.
+  - `js/app/settings-ui.js`의 아이콘 색 바꾸기: Canvas 2D context(`getImageData`/`putImageData`)와 Font Loading API(`document.fonts.ready`).
+- 그래서 `node:vm`과 손으로 만든 스텁을 기본으로 두되, 이 영역에 한해 `jsdom`(가벼운 쪽이 낫다면 `happy-dom`)을 devDependency로 들이도록 허용했다. 「0 의존성」 원칙을 「Node 말고는 0 의존성」으로 완화하고, 첫 jsdom PR이 저장소 루트의 `package.json` 신설(`devDependencies`만, `dependencies`는 빈 채로), `package-lock.json` 커밋, `.gitignore`에 `node_modules/` 추가, `.github/workflows/test.yml`의 `unit` job에 `npm ci` 단계 삽입을 함께 하기로 했다. 기본은 `harness.js`의 vm과 손으로 만든 스텁이고, jsdom은 레이아웃, Canvas, 터치 제스처가 본질인 함수에만 쓰며, jsdom을 쓰는 테스트 파일은 머리 주석에 이유를 적기로 했다.
+- 채택하지 않음 2026-05-11 · 이유: 앱 레이어에서 jsdom 없이 할 수 있는 유닛 테스트 확장 1차(PR #106·#108·#109·#110·#112·#113)를 마치고 실제로 도입할지 다시 검토하다가, 결정적인 사실을 찾았다. **jsdom과 happy-dom 모두 진짜 레이아웃 계산을 하지 않는다.** `Element.getBoundingClientRect()`는 `{x:0, y:0, width:0, height:0}`을 돌려준다. CSS 엔진을 구현하지 않았기 때문이다. Canvas 2D context는 jsdom에서는 별도의 `canvas` npm 패키지(네이티브 C++ 컴파일)를 설치해야 하고, happy-dom은 지원하지 않는다.
+  - `startScrollTracking`의 `getBoundingClientRect`: jsdom도 0을 돌려주므로 **해결할 수 없다**.
+  - Pull-to-refresh의 터치 제스처와 transform 트랜지션: 흉내는 낼 수 있지만, 레이아웃에 기대는 부분이 약하다.
+  - settings-ui의 Canvas 아이콘 색칠: 별도 네이티브 패키지와 Font API 처리가 따로 필요해 도입 비용이 크다.
+  - 이 영역들은 **본질적으로 실제 브라우저가 있어야 하는 통합 동작**이다. e2e(Playwright)가 더 정확하고 알맞은 책임 경계다. 그래서 jsdom과 happy-dom은 들이지 않고, 원래의 「0 의존성」(Node 내장만) 원칙으로 돌아갔다(위 「결정」).
+  - 재검토: 유닛 테스트에 새 의존성이 필요해지면 이 ADR을 다시 고친다.
 
 ## 적용 방식
 
 ### 모듈 로딩 전략
 
-`js/sync/state-machine.js`는 브라우저에서 클래식 `<script>` 로드를 가정해 `window.syncTransport` 등 글로벌에 의존하고, 자기 자신은 `window.createSyncMachine`에 팩토리를 export한다. ESM이 아니므로 `import` 불가.
+`js/sync/state-machine.js`는 브라우저에서 클래식 `<script>`로 불러오는 것을 전제로 `window.syncTransport` 같은 전역에 기대고, 자신은 `window.createSyncMachine`에 팩토리를 내놓는다. ESM이 아니므로 `import`할 수 없다.
 
-`tests/unit/harness.js`가 이 패턴을 그대로 재현한다.
+`tests/unit/harness.js`가 이 방식을 그대로 재현한다.
 
 ```js
 import vm from "node:vm";
@@ -57,31 +87,37 @@ vm.runInContext(SOURCE, sandbox);
 const machine = sandbox.window.createSyncMachine();
 ```
 
-테스트마다 `loadMachine(opts)`로 **새 컨텍스트**를 만들어 클로저(`_state`, `_ctx`, `_token`)가 케이스 간에 새지 않도록 한다.
+테스트마다 `loadMachine(opts)`로 **새 컨텍스트**를 만들어, 클로저(`_state`, `_ctx`, `_token`)가 케이스 사이에 새지 않게 한다.
 
 ### 시간 제어
 
-- `setTimeout`/`clearTimeout`을 큐에 적재
-- `fireAllTimers()` 헬퍼로 명시적 발화
-- `drain()` (1× `setImmediate`) 으로 `_syncCycle` 마이크로태스크 settle
+- `setTimeout`/`clearTimeout`을 큐에 쌓는다.
+- `fireAllTimers()` 도우미로 쌓인 타이머를 명시적으로 실행한다.
+- `drain()`(1× `setImmediate`)으로 `_syncCycle`의 마이크로태스크가 끝나기를 기다린다.
 
-월-clock 의존이 없어 결정적이다.
+가상의 시간 정보를 참조하므로 결과가 늘 같다.
 
 ### 1차 검증 시나리오 (PR #42, 30+ 케이스)
 
-다음 그룹으로 묶여 있다:
+괄호 안의 영어는 동기화 상태 머신의 상태 이름과 이벤트 이름이다. 테스트는 이 이름으로, 어떤 일이 생기면 어느 상태로 넘어가는지를 확인한다. 이 목록은 PR #42(2026-05-06) 때의 시나리오다. 그 뒤 로그인을 PKCE로 바꾸면서(Phase 2h 단계 4, 2026-05-08) GIS에 묶였던 상태(INITIALIZING, AUTHENTICATING)와 이벤트(TOKEN_OK, IDENTITY_FAIL)는 코드에서 없어졌다. 지금의 이름은 `js/types.d.ts`의 `SyncState`, `SyncEvent`에 있다.
 
-1. **ENABLE 분기**: non-iOS GIS 미준비 → INITIALIZING / iOS ENABLE → NEEDS_CONSENT (자동 리디렉션 금지)
-2. **Identity / Token 흐름**: silent fail → NEEDS_CONSENT, consent click → AUTHENTICATING, TOKEN_OK → IDLE
-3. **SYNC_FAIL reasons**: `"401"` re-identify, `"412"` ETag 재시도(max 3), `"no_token"`/`"exception"` deterministic ERROR, 기타 backoff(1/2/4/8/16s) → 5회 초과 OFFLINE
-4. **NET_RECOVERED**: OFFLINE 복구, iOS 분기에서는 자동 토큰 재요청 회피
-5. **redirect attempts**: localStorage 키 단일화, cap 초과 시 단일 ERROR 전이
-6. **GIS 빈 응답**: error / access_token 모두 미존재 → IDENTITY_FAIL 흡수
-7. **컨텍스트 리셋 계약**: `_transition` 기본 동작이 모든 카운터를 리셋, 명시적 ctxPatch만 보존
+다음 묶음으로 나뉜다.
+
+1. **동기화 켜기(ENABLE)의 분기**: iOS가 아닌 기기에서 GIS가 아직 준비되지 않았으면 「준비 중」(INITIALIZING) 상태로 간다. iOS에서 켜면 「동의 필요」(NEEDS_CONSENT) 상태로 가고, 로그인 화면으로 자동으로 넘기지 않는다(자동 리디렉션 금지).
+2. **로그인과 토큰의 흐름(Identity, Token)**: 조용한 로그인이 실패하면(silent fail) 「동의 필요」(NEEDS_CONSENT)로, 사용자가 동의를 누르면(consent click) 「인증 중」(AUTHENTICATING)으로, 토큰을 받으면(TOKEN_OK) 「대기」(IDLE)로 간다.
+3. **동기화 실패(SYNC_FAIL)의 이유별 처리**:
+   - `"401"`(인증 실패)이면 로그인 상태를 다시 확인한다(re-identify).
+   - `"412"`(다른 기기가 먼저 저장해 ETag가 맞지 않음)이면 다시 시도한다(ETag 재시도, 최대 3).
+   - `"no_token"`(토큰 없음)이나 `"exception"`(예외)이면 바로 「오류」(ERROR)로 간다.
+   - 나머지는 간격을 늘려 가며 다시 시도하고(backoff 1/2/4/8/16s), 5회 넘게 실패하면 「오프라인」(OFFLINE)으로 간다.
+4. **네트워크 복구(NET_RECOVERED)**: 「오프라인」(OFFLINE)에서 되살아난다. iOS 분기에서는 토큰을 자동으로 다시 요청하지 않는다.
+5. **리디렉션 시도 횟수(redirect attempts)**: localStorage 키를 하나로 모았다. 상한을 넘으면 「오류」(ERROR)로 한 번만 넘어간다.
+6. **GIS의 빈 응답**: 응답에 오류(error)도 토큰(access_token)도 없으면 로그인 실패(IDENTITY_FAIL)로 처리한다.
+7. **컨텍스트 리셋 약속**: 상태를 바꾸는 함수(`_transition`)는 기본으로 모든 카운터를 처음 값으로 되돌리고, 명시한 값(ctxPatch)만 남긴다.
 
 ### CI 통합
 
-`.github/workflows/test.yml`:
+처음(PR #42) `.github/workflows/test.yml`은 아래와 같았다. 지금은 `node --test tests/unit/*.test.js` 전체와 `npm run typecheck`를 돌린다(ADR-012).
 
 ```yaml
 jobs:
@@ -95,88 +131,24 @@ jobs:
       - run: node --test tests/unit/state-machine.test.js
 ```
 
-PR/push 모두에서 실행. `node --test`는 TAP 출력을 GitHub Actions가 자동 인식.
+처음에는 PR과 push 모두에서 돌았다. `node --test`의 TAP 출력은 GitHub Actions가 저절로 알아본다.
 
 ## 채택 이유 요약
 
-- **0 의존성**: Node 내장 — `package.json` `dependencies`/`devDependencies` 빈 채로 유지(현재 저장소에 `package.json` 자체가 없음)
-- **결정적**: vm 컨텍스트 + 가짜 타이머로 wall-clock·DOM·네트워크 모두 격리
-- **빠름**: PR #42 30+ 케이스가 200ms 미만에 완료
-- **타입 검사와 시너지**: ADR-012의 JSDoc 타입이 그대로 import 가능 (`@typedef {import("../../js/types")...}`) — 테스트가 도메인 타입을 first-class로 다룸
-- **리팩터링 안전망**: 앞으로 동기화 레이어를 만질 때 회귀 시나리오를 재현 가능한 형태로 누적 가능
+- **0 의존성**: Node에 들어 있는 것만 쓴다. 2026-05-06 당시에는 `package.json` 자체가 없었다(`dependencies`/`devDependencies`를 빈 채로 두는 원칙). 지금 `package.json`의 `devDependencies`에는 타입 검사용 `typescript` 하나뿐이고(ADR-012), 유닛 테스트가 쓰는 패키지는 없다.
+- **결과가 늘 같다**: vm 컨텍스트 안에서 가상의 시간 정보를 참조하고, DOM과 네트워크도 스텁으로 바꿔 떼어 낸다.
+- **빠르다**: PR #42의 30+ 케이스가 200ms 안에 끝났다.
+- **타입 검사와 함께 쓰기 좋다**: ADR-012의 JSDoc 타입을 그대로 가져올 수 있다(`@typedef {import("../../js/types")...}`). 테스트가 도메인 타입을 그대로 쓴다.
+- **리팩터링 안전망**: 앞으로 동기화 레이어를 고칠 때, 회귀 시나리오를 재현할 수 있는 형태로 쌓아 갈 수 있다.
 
 ## 결과
 
-- Phase 2f Bugbot 6차 리뷰의 핵심 회귀 시나리오가 결정적 테스트로 고정됨 (ADR-011 Phase 2f 후속 정제 절 참고)
-- e2e (`tests/e2e/`)는 그대로 유지 — 통합 흐름·UI·접근성 검증 책임. 유닛은 분기·계약을 책임.
-- 다음 단계: `js/sync/store-v2.js` (mergeDocs, sweepTombstones), `js/sync/transport.js` (consumeRedirectCallback nonce 검증) 적용
-
-> **개정 (2026-05-09): 명명 컨벤션**
->
-> 테스트 파일 이름이 비일관적으로 누적되어 모듈-테스트 매핑이 헷갈리는 상황이 발생했다 — `search-history.test.js`가 `js/app/storage.js`의 일부를 가리키고 `search.test.js`가 `js/app/search.js` 전체를 가리키며, `transport-pkce.test.js`가 `js/sync/transport.js`의 PKCE 영역을 강조해 모듈명이 보이지 않는다. 다음 컨벤션을 도입한다.
->
-> **규칙 1 (기본)**: `tests/unit/<source-basename>.test.js` 형식. 소스 파일 이름과 1:1 매핑. 한 모듈 = 한 테스트 파일.
->
-> **규칙 2 (영역 구분)**: 모듈 내부의 영역(예: PKCE primitives vs Drive REST, search history vs settings storage)은 테스트 파일 안에서 `// ── <영역> ──` 코멘트 섹션으로 분리한다. `search.test.js`가 이 패턴을 이미 사용 중.
->
-> **규칙 3 (모듈이 너무 커질 때)**: `tests/unit/<basename>/<concern>.test.js` 디렉토리 분할로 처리한다 — 현재 해당 사례 없음.
->
-> 적용:
->
-> - `search-history.test.js` → `storage.test.js` (storage.js의 다른 부분도 차후 같은 파일에 합류 예정)
-> - `transport-pkce.test.js` → `transport.test.js`
->
-> CI 워크플로(`tests/unit/*.test.js` glob)는 자동으로 새 파일명을 픽업 — workflow YAML 변경 0.
-
-> **개정 (2026-05-11): jsdom dual-track 허용**
->
-> ADR-018 모듈 분할 종료(2026-05-10) 이후 app 레이어 미커버 영역으로 유닛 테스트를 확장하면서, 기존 vm + 수동 스텁 패턴이 모든 영역에 적합하지 않음이 드러났다. 탐색 결과(메모리 `project_unit_test_expansion.md` 트리거 도달 시점) `js/app/` 미커버 영역의 약 70%(1500줄+)는 현 패턴으로 커버 가능하지만, 다음 영역들은 jsdom 정도가 필요하다.
->
-> - `js/app/views-routing.js`의 `startScrollTracking` — `Element.getBoundingClientRect()`로 layout 계산
-> - `js/app/views-routing.js`의 Pull-to-refresh — `touchstart`/`touchmove`/`touchend` 시퀀스 + `transform`/`opacity` 트랜지션
-> - `js/app/settings-ui.js`의 아이콘 recoloring — Canvas 2D context (`getImageData`/`putImageData`) + Font Loading API (`document.fonts.ready`)
->
-> **결정**: `node:vm` + 수동 스텁을 **기본 패턴**으로 유지하되, 위 영역에 한해 `jsdom`(또는 가벼움 우선 시 `happy-dom`)을 devDependency로 도입할 수 있다.
->
-> **0 의존성 원칙 완화**: "Node 외 0 의존성"으로. 첫 jsdom 사용 PR이 다음을 동반한다.
->
-> - 저장소 루트에 `package.json` 신설 — `devDependencies`만, `dependencies` 빈 채로
-> - `package-lock.json` 커밋
-> - `.gitignore`에 `node_modules/` 추가
-> - `.github/workflows/test.yml`의 `unit` job에 `npm ci` 단계 삽입
->
-> **사용 가이드**:
->
-> - 기본은 `harness.js`의 vm + 수동 스텁 — 순수 함수, 상태 머신, localStorage IO, 단순 DOM 조작
-> - jsdom은 layout/Canvas/touch gesture가 본질인 함수에 한해 사용. 한 모듈 안에서도 영역별로 다른 로더를 써도 무방
-> - jsdom 사용 테스트 파일은 파일 상단 코멘트에 그 이유를 명시(어떤 브라우저 API가 manual stub으로 흉내 불가능한지)
-> - happy-dom vs jsdom 선택은 첫 도입 PR에서 벤치/유지보수 비용을 비교 후 결정 — 둘 다 같은 컨벤션에 부합
-
-> **재정정 (2026-05-11): jsdom 도입 보류, 미커버 영역은 e2e가 책임**
->
-> 위 개정 직후 app 레이어 no-jsdom 유닛 테스트 확장 1차 의제(PR #106·#108·#109·#110·#112·#113)를 모두 마치고, 남은 미커버 영역에 jsdom을 실제로 도입할지 재검토하던 중 결정적 사실이 드러났다.
->
-> **jsdom과 happy-dom 모두 진짜 layout 계산을 하지 않는다.** `Element.getBoundingClientRect()`는 `{x:0, y:0, width:0, height:0}`을 돌려준다 — CSS 엔진을 구현하지 않았기 때문. Canvas 2D context는 jsdom의 경우 별도의 `canvas` npm 패키지(네이티브 C++ 컴파일) 설치가 필요하고, happy-dom은 지원하지 않는다.
->
-> 따라서 본 개정에서 "jsdom이 필요하다"고 적었던 세 영역 중:
->
-> - `startScrollTracking`의 `getBoundingClientRect` → jsdom도 zero를 돌려주므로 **해결 불가**
-> - Pull-to-refresh의 touch gesture + transform 트랜지션 → 시뮬레이션은 가능하지만 layout 의존 부분이 약함
-> - settings-ui의 Canvas 아이콘 채색 → 별도 네이티브 패키지 + Font API 별도 처리, 도입 비용 큼
->
-> 이 영역들은 **본질적으로 실제 브라우저가 필요한 통합 동작**이라는 결론. e2e(Playwright)가 더 정확하고 적합한 책임 경계.
->
-> **결정**:
->
-> 1. jsdom / happy-dom 도입 보류 — package.json 신설 안 함
-> 2. 위 개정의 "0 의존성 원칙 완화"를 취소 — **원래의 "0 의존성"(Node 내장만)** 원칙 복원
-> 3. 남은 미커버 영역(`settings-ui.js` 전체 / `views-routing.js`의 Pull-to-refresh·Audio Player·startScrollTracking / `install.js`의 모달 열기·닫기·슬라이더·buildInstallBody / `bookmark.js`의 drawer·save modal·tree render·drag handle·sheet drag / `search.js`의 시트 드래그·결과 렌더)은 **`tests/e2e/` 시나리오로 보완**한다
-> 4. 유닛 테스트는 향후에도 `node:vm` + 수동 스텁 패턴만 사용. 새 의존성 추가 시 본 ADR을 다시 개정
->
-> **의제 분리**: e2e 시나리오 추가는 별도 의제(`tests/e2e/test_*.py` 신설). 본 ADR은 유닛 테스트 범위에 한정.
+- Phase 2f Bugbot 6차 리뷰의 핵심 회귀 시나리오를, 결과가 늘 같은 테스트로 고정했다(ADR-011 Phase 2f 후속 정제 절 참고).
+- e2e(`tests/e2e/`)는 그대로 둔다. 통합 흐름, UI, 접근성 검증은 e2e가 맡고, 유닛은 분기와 계약을 맡는다.
+- 다음 단계였던 `js/sync/store-v2.js`(mergeDocs, sweepTombstones)와 `js/sync/transport.js`(consumeRedirectCallback nonce 검증)에도 그 뒤 적용했다.
 
 ## 관련 ADR
 
-- ADR-004: 데이터 파이프라인 테스트 전략 — Level 1-3 (Python). 본 ADR은 클라이언트 JS 영역.
-- ADR-011: 북마크 동기화 — 본 테스트의 주요 검증 대상
-- ADR-012: TypeScript 점진 도입 — 같은 사이클에 도입, JSDoc 타입을 테스트가 공유
+- ADR-004: 데이터 파이프라인 테스트 전략. Level 1-3(Python)이다. 이 ADR은 클라이언트 JS를 다룬다.
+- ADR-011: 북마크 동기화. 이 테스트가 가장 많이 검증하는 대상이다.
+- ADR-012: TypeScript 점진 도입. 같은 시기에 도입했고, JSDoc 타입을 테스트와 함께 쓴다.
