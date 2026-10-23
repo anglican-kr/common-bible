@@ -1,4 +1,5 @@
 ---
+pr: 397
 date: 2026-10-23
 branch: docs/prose-design-engine
 title: "docs: 교회력 설계서의 낱말과 이음표 정리"
