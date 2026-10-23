@@ -1,4 +1,5 @@
 ---
+pr: 400
 date: 2026-10-24
 branch: docs/prayer-book-rules-sync
 title: "docs: 기도서 원문 보충과 참조 갱신"
