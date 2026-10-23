@@ -1,4 +1,5 @@
 ---
+pr: 380
 date: 2026-10-23
 branch: docs/prose-liturgical-traps
 title: "docs: 교회력 문서의 함정 절 정리"
