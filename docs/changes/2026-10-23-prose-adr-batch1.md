@@ -28,6 +28,7 @@ ADR과 설계서 문체 정리(known-issues §24)의 첫 PR이다. ADR 38개를 
 - **ADR-001의 캐시 식별자 운영.** 본문은 `DATA_CACHE`와 `AUDIO_CACHE`의 rev를 `--bump-data`, `--bump-audio`로 올린다고 적고 있었다. ADR-021(2026-05-13)이 콘텐츠 해시 매니페스트로 바꿔, 두 캐시의 이름은 고정되고 플래그는 없어졌다(캐시와 릴리스 주제 문서의 pitfalls §7과 같다). 본문을 지금 결론으로 고치고, 옛 방식은 「검토한 대안」으로 옮겼다.
 - **ADR-009의 GSC 후속.** 「GSC URL 검사로 핵심 URL 5~10개 수동 시드」는 하지 않기로 한 사용자 결정(2026-10-22, 원장 `docs/changes/2026-10-22-cleanup-unused-records.md` 「Google Search Console 수동 크롤링 요청은 지운다」)을 함께 적었다.
 - **ADR-008의 파일 위치.** 「`js/app.js`의 `install` IIFE」는 2026-05-10 모듈 분할(ADR-018) 뒤 `js/app/install.js`로 옮겨 갔다. 옛 개정 블록이 적은 위치를 본문에 반영했다.
+- **사용자 교정(2026-10-23): 「코퍼스」를 쓰지 않는다.** PR을 연 뒤 사용자가 「"코퍼스"도 적절한 한국어로 대체 바람」이라고 했다. ADR-005의 세 곳을 「검색할 본문」으로 고치고, `writing.md` 「용어」에 올렸다. 저장소의 다른 곳에는 이 낱말이 없다.
 - 그 밖의 사실은 바꾸지 않았다. 커밋 해시, 날짜, 건수, 인라인 코드, 「」 인용을 모두 그대로 두었다.
 
 ## 검증
@@ -40,3 +41,4 @@ ADR과 설계서 문체 정리(known-issues §24)의 첫 PR이다. ADR 38개를 
 
 - `docs/decisions/001-spa-architecture.md`, `004-data-pipeline-test-strategy.md`, `005-search-indexing-strategy.md`, `007-launch-screen-optimization.md`, `008-pwa-install-guide.md`, `009-history-api-routing.md`: 문장 정리와 개정 블록 반영.
 - `docs/topics/design-system.md`: pitfalls §8의 ADR-007 가리킴.
+- `docs/writing.md` 「용어」: 「코퍼스」.
