@@ -2,7 +2,7 @@
   "_meta": {
     "kind": "winner",
     "schema": "tests/fixtures/liturgical/README.md",
-    "canon": "설계서 §1.4 정본 지도 — 실제 연도의 승자(official)·전례색·승자 자격 기대값은 이 파일이 정본이다",
+    "canon": "설계서 §1.4 기준 지도 — 실제 연도의 승자(official)·전례색·승자 자격 기대값은 이 파일이 기준이다",
     "transcribedFrom": "설계서 §7 B1 행 · 사계재 행 ④ · 이동 패스 행 ⑩ 승자 · 주의 세례 행 · §9 미결16·25·26·29·30 · 검토 문서 §5.10·§5.13·§5.15 (main 243bf83, 2026-09-20)",
     "groupLegend": "group 은 리팩터링 전 §7 행의 묶음 표시일 뿐이다 — 참조 대상이 아니다"
   },

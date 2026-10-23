@@ -14,7 +14,7 @@
 | 오디오 | `topics/audio.md` | |
 | 설정, 디자인 시스템, CSS | `topics/design-system.md` | `DESIGN.md`(루트, 디자인의 권위) |
 | 본문 데이터, 마크업, 인용과 주석 | `topics/bible-text.md` | `common-bible-data` 저장소 README(서브모듈 `data/`) |
-| 교회력, 전례독서, 캘린더 | `topics/liturgical.md` | `design/liturgical-engine.md`(§1.4 정본 지도부터), `reference/liturgical-calendar-rules.md`(기도서 원문, 알고리즘의 권위), `tests/fixtures/liturgical/README.md`(실제 연도 기대값) |
+| 교회력, 전례독서, 캘린더 | `topics/liturgical.md` | `design/liturgical-engine.md`(§1.4 기준 지도부터), `reference/liturgical-calendar-rules.md`(기도서 원문, 알고리즘의 권위), `tests/fixtures/liturgical/README.md`(실제 연도 기대값) |
 | 앱 뼈대, 모듈, 타입, 테스트 | `topics/platform.md` | `tests/README.md` |
 | 설치, 런치 스크린, 접근성 | `topics/install-a11y.md` | |
 | 작업 방식, 훅, CI | `workflow.md` | CLAUDE.md 「브랜치 보호」 「지식 베이스 루프」, `changes/README.md`(원장 형식), `.claude/hooks/*.sh` 머리 주석 |
