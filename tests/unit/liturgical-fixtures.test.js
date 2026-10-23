@@ -1,9 +1,9 @@
 // ── tests/fixtures/liturgical/*.cases.json 의 형식·참조 검사 ──────────────────
 // Run with: node --test tests/unit/liturgical-fixtures.test.js
 //
-// 픽스처는 실제 연도 기대값의 **정본**이다(설계서 §1.4 정본 지도 · 픽스처 README).
+// 픽스처는 실제 연도 기대값의 **기준**이다(설계서 §1.4 기준 지도 · 픽스처 README).
 // 엔진이 값을 맞히는지는 PR 3 의 liturgical-engine.data.test.js 가 본다 — 여기서는
-// 정본이 정본답게 생겼는지만 본다: JSON 이 읽히고, id 가 유일하고 규칙대로이며, 날짜가
+// 픽스처 자체가 제대로 생겼는지만 본다: JSON 이 읽히고, id 가 유일하고 규칙대로이며, 날짜가
 // 실재하고, 관측일 id(`id`·`displacedBy`·`official`·`neverDeparts`)에 생략부호가 없고,
 // status/kind 가 도메인 안이고(`ifIssueFlips.expect` 도 같은 검사를 받는다), `alsoYears` 의
 // 해가 연도만 바꿔 되풀이할 수 있는 해(요일 동일)이고, `canon`·`checks`·`issue` 가 가리키는
@@ -71,7 +71,7 @@ const ELLIPSIS_RE = /…|\.{2,}|\*/;
  *  반대로 닫히는 순간 `expect` 로 승격되는데, 그때는 아무도 다시 읽지 않는다. */
 function assertExpect(e, where, ctx) {
   assert.ok(e && typeof e === "object" && !Array.isArray(e), `${where}: expect`);
-  assert.ok(Object.keys(e).length > 0, `${where}: expect 가 비어 있다 — 아무것도 단언하지 않는 케이스는 정본이 아니다`);
+  assert.ok(Object.keys(e).length > 0, `${where}: expect 가 비어 있다 — 아무것도 단언하지 않는 케이스는 기준이 아니다`);
   for (const k of Object.keys(e)) assert.ok(EXPECT_KEYS.has(k), `${where}: 모르는 expect 키 ${k}`);
   const assertId = (v, key) => {
     assert.match(v, OBS_ID_RE, `${where}: ${key} 형식 — ${v}`);
@@ -175,7 +175,7 @@ test("alsoYears 의 해는 날짜 단언을 연도만 바꿔 되풀이할 수 �
 
 // ── 문서 앵커 참조 ──
 
-// 추출 문법은 docs-anchors.js 가 정본이다 — docs-crossref.test.js 와 사본을 두지 않는다.
+// 추출 문법은 docs-anchors.js 가 기준이다 — docs-crossref.test.js 와 사본을 두지 않는다.
 // (특히 §9 는 **다음 `## ` 헤딩에서 끊는다** — 「절은 말미 추가만」이라 뒤에 §10 이 붙으면
 //  경계 없는 슬라이스는 그 안의 번호 목록까지 미결로 센다.)
 const R_DEFINED = new Set(rMarkerDefs({ 설계서: DESIGN }).keys());
@@ -187,7 +187,7 @@ const ISSUES = new Set(ISSUE_LIST.map((n) => `미결${n}`));
 test("canon 은 설계서의 R- 마커 또는 실재하는 절(설계서 §x.y)을 가리킨다", () => {
   assert.ok(R_DEFINED.size >= 10, `설계서에 R- 마커가 너무 적다: ${R_DEFINED.size}`);
   for (const c of cases) for (const ref of c.canon) {
-    if (ref.startsWith("R-")) assert.ok(R_DEFINED.has(ref), `${c.id}: 정본 마커 없음 — ${ref}`);
+    if (ref.startsWith("R-")) assert.ok(R_DEFINED.has(ref), `${c.id}: 규칙 마커 없음 — ${ref}`);
     else {
       const m = /^설계서 §(\d+(?:\.\d+)?)$/.exec(ref);
       assert.ok(m, `${c.id}: canon 형식 — ${ref} (R-… 또는 「설계서 §x.y」)`);

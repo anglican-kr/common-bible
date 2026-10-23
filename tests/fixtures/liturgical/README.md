@@ -1,6 +1,6 @@
 # tests/fixtures/liturgical — 교회력 엔진 기대값 픽스처
 
-**실제 연도의 기대값(날짜 · 관측일 id · 상태 · 승자 · 전례색)은 여기가 정본이다**(설계서 §1.4 정본 지도). 설계서 §7 · 검토 문서 §5 는 케이스를 **id 로 가리키기만** 하고 값을 되풀이하지 않는다. 규칙(왜 그렇게 되는가)은 설계서 §4·§6 의 `R-` 정본 문장이 맡고, 각 케이스는 `canon` 으로 그 문장을 가리킨다.
+**실제 연도의 기대값(날짜 · 관측일 id · 상태 · 승자 · 전례색)은 여기가 기준이다**(설계서 §1.4 기준 지도). 설계서 §7 · 검토 문서 §5 는 케이스를 **id 로 가리키기만** 하고 값을 되풀이하지 않는다. 규칙(왜 그렇게 되는가)은 설계서 §4·§6 의 `R-` 기준 문장이 맡고, 각 케이스는 `canon` 으로 그 문장을 가리킨다.
 
 검토 문서 부록 B 의 제안 스키마(LiturgicalCalendarAPI `LitCalTest.json` 계열)를 채택하고 `kind` · `group` · `canon` · `checks` · `source` · `status` 를 더했다. 2026-09-20 에 설계서 §7 이동 패스 행 ①~⑩ · B1 행 · 사계재 행 ④ · §9 미결16·26·29·30·31 · 검토 문서 §5.11-5.13 에서 옮겨 적었다(원장 `docs/changes/2026-09-20-engine-canon-1.md` 에 대응표).
 
@@ -11,7 +11,7 @@
 | `transfers.cases.json` | `transfer` | 충돌 이동(실제 연도) — 도착·출발·연쇄·보호 기간·명절·동률 |
 | `optionals.cases.json` | `optional` · `activation` | 선택 봉헌 `optional` 후보와 활성화(`activated`) 계약 |
 | `winners.cases.json` | `winner` | 승자(`official`)·전례색·승자 자격(사계재·기념일)·생략(`omitted`) |
-| `transfers-1900-2100.golden.txt` | — | **골든 덤프**(검토 문서 부록 A · I-10) — 1900~2100 이동 전부를 한 줄씩(`activated = ∅`). 손으로 쓰는 기대값이 아니라 엔진이 만든 회귀 기준이다 — `UPDATE_GOLDEN=1 node --test tests/unit/liturgical-engine.data.test.js` 로 다시 만들고 diff 를 PR 에서 읽는다. 머리줄의 data sha 는 기록용이라 비교하지 않는다. 기대값의 정본은 위 세 파일이다 |
+| `transfers-1900-2100.golden.txt` | — | **골든 덤프**(검토 문서 부록 A · I-10) — 1900~2100 이동 전부를 한 줄씩(`activated = ∅`). 손으로 쓰는 기대값이 아니라 엔진이 만든 회귀 기준이다 — `UPDATE_GOLDEN=1 node --test tests/unit/liturgical-engine.data.test.js` 로 다시 만들고 diff 를 PR 에서 읽는다. 머리줄의 data sha 는 기록용이라 비교하지 않는다. 기대값의 기준은 위 세 파일이다 |
 
 합성 표 케이스(연도 경계 · 해를 넘긴 선착순 · 이동 상한 · 좌석 경합 · 떠난 패자 제외 · 켜진 출발이 비운 자리 · 도착 재이동 금지)와 1900~2100 불변식(검토 문서 `I-n`)은 **케이스로 넣지 않는다** — 합성 표는 코드가 만들므로 설계서 §7 본문과 `liturgical-engine.test.js` 에, 불변식은 `liturgical-engine.data.test.js` 에 둔다. 이 디렉터리에 두는 것은 I-10 의 골든 덤프(위 표)뿐이다.
 
@@ -56,7 +56,7 @@
 | `issue` | provisional·skip 이면 ✓ | 관련 미결 번호(설계서 §9). 닫힌 미결을 근거로 적어도 된다 |
 | `skip` | skip 이면 ✓ | 무엇을 기다리는가 |
 | `activated` | activation 이면 ✓ | `computeTransfers(year, seed, activated)` 에 넘길 관측일 id 집합 |
-| `canon` | ✓ | 규칙의 정본 — `R-<§>-<slug>` 마커(설계서 §4·§6) 또는 `설계서 §x.y`. 존재를 테스트가 검사한다 |
+| `canon` | ✓ | 규칙의 기준 — `R-<§>-<slug>` 마커(설계서 §4·§6) 또는 `설계서 §x.y`. 존재를 테스트가 검사한다 |
 | `checks` | | 검토 문서 §5 의 `C-`/`X-`/`I-` id. 존재를 테스트가 검사한다 |
 | `source` | ✓ | 외부 근거(책자 쪽 · 달력 면 · lectionarypage · 사용자 확정 날짜) |
 | `alsoYears` | | 같은 모양이 되풀이되는 다른 연도 — 소비자가 날짜 단언의 **연도만 바꿔** 되풀이해도 된다. 그러려면 같은 월·일이 그 해에도 같은 요일이어야 한다(테스트가 검사) — 주님의 세례처럼 날짜가 해마다 다른 관측일은 해마다 단언을 따로 적는다 |

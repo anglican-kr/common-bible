@@ -16,7 +16,7 @@ source/*.md  (data 저장소 안, 73권 마크다운)
   → parser.py → output/parsed_bible.json
   → split_bible.py → bible/{book_id}-{chapter}.json (1328) + books.json
   → search_indexer.py → search-{meta,ot,nt,dc}.json
-liturgical/  (data 저장소 안 — 전례시편 · 송가 정본, 교회력 표, 전례독서 원료)
+liturgical/  (data 저장소 안 — 전례시편 · 송가 기준, 교회력 표, 전례독서 원료)
   → liturgical_psalter.py → bible/lps-{n}.json (150) · cant-{n}.json (13) + books.json에 2권 추가 (→ 75권)
   → liturgical/parse_*.py · normalize.py → lectionary/*.json (교회력 · 전례독서 · 본기도)
 ```
@@ -202,7 +202,7 @@ data/                   ← 서브모듈: common-bible-data
   source/               ← 73권 마크다운 원본
   src/                  ← parser·split_bible·search_indexer
   tests/                ← Level 1-3 데이터 검증 (ADR-004)
-  liturgical/           ← 전례시편 · 송가 정본, 교회력 표, 전례독서 원료와 그 파서
+  liturgical/           ← 전례시편 · 송가 기준, 교회력 표, 전례독서 원료와 그 파서
   bible/                ← 빌드 산출: 장별 JSON (전례시편 · 송가 포함)
   audio/                ← nested 서브모듈: common-bible-audio (mp3, LFS)
   lectionary/           ← 빌드 산출: 교회력 · 전례독서 자료 (ADR-036 · 037)
@@ -263,7 +263,7 @@ python src/liturgical_psalter.py      # 전례시편 · 송가 — 73권 파이�
 # 그 뒤 교회력 · 전례독서 표(liturgical/parse_*.py · normalize.py)와 매니페스트(scripts/gen_manifests.py)
 ```
 
-전체 명령과 표 파서끼리의 순서는 `data/CLAUDE.md` 「파이프라인 명령」이 정본이다(`build.yml`이 같은 순서로 돈다). 검증 절차는 `data/README.md`.
+전체 명령과 표 파서끼리의 순서는 `data/CLAUDE.md` 「파이프라인 명령」이 기준이다(`build.yml`이 같은 순서로 돈다). 검증 절차는 `data/README.md`.
 
 ## 테스트
 

@@ -32,7 +32,7 @@ export function checkIds(text) {
   return new Set([...text.matchAll(/\*\*((?:C-(?:P|\d+(?:\.\d+)?)|X|I)-\d+[a-z]?)\*\*/g)].map((m) => m[1]));
 }
 
-/** 설계서가 발급한 정본 마커 `**[R-6.4-ember-color]**` — 문서별 목록을 Map 으로. */
+/** 설계서가 발급한 규칙 마커 `**[R-6.4-ember-color]**` — 문서별 목록을 Map 으로. */
 export function rMarkerDefs(byDoc) {
   const out = new Map();
   for (const [doc, t] of Object.entries(byDoc))
