@@ -19,7 +19,7 @@
 
 진단 중 발견·수정한 **낡은 테스트 12건**(설계가 바뀌었는데 e2e 미갱신 — e2e가 CI 미실행이라 드리프트가 조용히 쌓임):
 
-- **`test_book_name_swap.py` 4건** — 복음서(마태오/마르코/루가/요한)에도 모바일 짧은 명칭이 추가(`NT_MOBILE_NAME`)됐는데 테스트는 "복음서는 정식명 유지" 옛 규칙을 단언. + 터치 기기는 `.compact` 클래스가 아니라 `pointer:coarse` 미디어쿼리로 전환 + 반응형 책 그리드가 폰트 따라 칼럼을 넓혀 32px로는 더 이상 안 넘침(좁은 창에서 측정). 모두 현행 동작에 맞게 수정 + 복음서 전환 양성 케이스 추가.
+- **`test_book_name_swap.py` 4건** — 복음서(마태오/마르코/루가/요한)에도 모바일 짧은 명칭이 추가(`NT_MOBILE_NAME`)됐는데 테스트는 "복음서는 정식명 유지" 옛 규칙을 그대로 확인하고 있었다. + 터치 기기는 `.compact` 클래스가 아니라 `pointer:coarse` 미디어쿼리로 전환 + 반응형 책 그리드가 폰트 따라 칼럼을 넓혀 32px로는 더 이상 안 넘침(좁은 창에서 측정). 모두 현행 동작에 맞게 수정 + 복음서 전환 양성 케이스 추가.
 - **`test_features.py` 롱프레스 1건** — 절 선택 진입 임계값 300→**500ms** 변경(커밋 a506958)인데 테스트는 350ms만 눌러 진입 실패. 650ms로 수정.
 - **`test_install_guide.py` 7건** — 첫 방문 너지 노출이 **의도적으로 제거**(기본 `nextShow` 2 — 검색 유입·크롤러 배려, 돌아온 2번째 방문 노출)됐는데 테스트는 첫 방문 노출을 기대. 2번째 방문 상태(`{visits:1, nextShow:2}`)로 수정 + 첫 방문 미노출 양성 케이스 추가.
 
@@ -34,7 +34,7 @@
 - **PR5b `closeAllOverlays` ✅ 완료** — `route()` 의 14개 오버레이 teardown(12 `closeIfOpen` + settings/chapter popover)을 `overlay.js` 의 `closeAllOverlays()` 하나로 축약. createOverlay가 모든 인스턴스를 registry에 등록, closeAllOverlays가 열린 것만 close + detached panel prune. routing→6개 모듈 close fn 하드코딩 의존 제거.
 - **PR5c `registerView` dispatch 역전 (보류 — 상세 §2.1)** — 단독 PR로는 보류, Phase 2 라우트 추가 또는 설정 화면 재구성에 얹어서.
 - ~~audio `applyAudioShow` → `window.parsePath` facade edge~~ **조사 완료 → 현 설계 유지 (§2.2)** — 없애려던 항목이나 검토 결과 facade가 정답(명시 import는 사이클, readingContext는 stale, state-machine 호출자는 컨텍스트 못 줌). 조치 없음.
-- ~~**`bookmark.js` 분할**~~ **완료 (2026-06-11)** — 3,578 → **589줄**(−84%). 모듈별 점진 분리. 완료: 순수 로직 `bookmark-core.js`(query/href/sort/active) · 절 스펙 `verse-spec.js` · 모달 `bookmark-modals.js` · 폴더 모아 읽기 `bookmark-read.js` · 제스처 엔진 `bookmark-gestures.js`(드래그 reorder + 스와이프 액션 + 포인터 핸들러) · 선택 삭제 모드 `bookmark-select.js`(상태 + 캐스케이드 수학 + 삭제·공유·이동 액션 + #bm-select-bar dock — 트리렌더↔select 양방향은 import(상태/핸들러)+주입(재렌더/헤더)으로 차단) · **절 선택 모드 `bookmark-verse-select.js`(in-reading 절 선택 → 북마크/복사 + #verse-select-bar dock, near-leaf라 DI 불필요) · **⋯ 메뉴 `bookmark-menu.js`(탭 뷰 title-row 액션: 정렬·새 폴더·내보내기·가져오기·선택 + 🛈 안내 + 전체 선택 + exportBookmarks) · **트리 렌더링 `bookmark-tree.js`(per-row 빌더 + renderBookmarkTree + _rerenderActiveBookmarkTree 허브 + renderBookmarksView + 드로어 키보드 내비, ADR-034 후속, 마지막 라운드 — 드로어/헤더 콜백 3개 주입)**. **분할 완료**: bookmark.js 2,432→589줄(−76%), 드로어/헤더 오케스트레이터로 수렴(헤더 버튼·드로어 lifecycle·init 배선·facade·keydown).
+- ~~**`bookmark.js` 분할**~~ **완료 (2026-06-11)** — 3,578 → **589줄**(−84%). 모듈별 점진 분리. 완료: 순수 로직 `bookmark-core.js`(query/href/sort/active) · 절 스펙 `verse-spec.js` · 모달 `bookmark-modals.js` · 폴더 모아 읽기 `bookmark-read.js` · 제스처 엔진 `bookmark-gestures.js`(드래그 reorder + 스와이프 액션 + 포인터 핸들러) · 선택 삭제 모드 `bookmark-select.js`(상태 + 캐스케이드 수학 + 삭제·공유·이동 액션 + #bm-select-bar dock — 트리렌더↔select 양방향은 import(상태/핸들러)+주입(재렌더/헤더)으로 차단) · **절 선택 모드 `bookmark-verse-select.js`(in-reading 절 선택 → 북마크/복사 + #verse-select-bar dock, near-leaf라 DI 불필요) · **⋯ 메뉴 `bookmark-menu.js`(탭 뷰 title-row 액션: 정렬·새 폴더·내보내기·가져오기·선택 + 🛈 안내 + 전체 선택 + exportBookmarks) · **트리 렌더링 `bookmark-tree.js`(per-row 빌더 + renderBookmarkTree + _rerenderActiveBookmarkTree 허브 + renderBookmarksView + 드로어 키보드 내비, ADR-034 후속, 마지막 라운드 — 드로어/헤더 콜백 3개 주입)**. **분할 완료**: bookmark.js 2,432→589줄(−76%), 드로어/헤더 오케스트레이터만 남았다(헤더 버튼·드로어 lifecycle·init 배선·facade·keydown).
 
 - §2.1 → [topics/platform.md](topics/platform.md)
 
