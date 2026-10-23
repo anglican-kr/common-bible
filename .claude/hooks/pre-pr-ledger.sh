@@ -13,6 +13,11 @@ case "$cmd" in
   *"gh pr create"*) ;;
   *) exit 0 ;;
 esac
+
+# 다른 저장소(--repo / -R)에 여는 PR 은 이 저장소의 원장 규칙 밖이다 — data 저장소에는 원장이 없다(docs/workflow.md).
+repo=$(printf '%s' "$cmd" | grep -oE -- '(--repo|-R)(=| +)"?[^ "]+' | head -1 | sed -E 's/^(--repo|-R)(=| +)"?//')
+if [ -n "$repo" ] && [ "$repo" != "anglican-kr/common-bible" ]; then exit 0; fi
+
 cd "$PROJECT" || exit 0
 
 deny() {
