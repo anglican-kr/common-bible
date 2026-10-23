@@ -1,4 +1,5 @@
 ---
+pr: 386
 date: 2026-10-23
 branch: docs/prose-adr-batch5
 title: "docs: ADR 022 027의 문장 정리"
