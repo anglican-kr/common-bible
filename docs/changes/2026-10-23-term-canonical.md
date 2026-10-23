@@ -1,4 +1,5 @@
 ---
+pr: 376
 date: 2026-10-23
 branch: docs/term-canonical
 title: "docs: 「정본」을 쉬운 말로 바꿈"
