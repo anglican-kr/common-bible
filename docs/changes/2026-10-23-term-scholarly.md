@@ -1,4 +1,5 @@
 ---
+pr: 381
 date: 2026-10-23
 branch: docs/term-scholarly
 title: "docs: 학술 문체 낱말을 일상어로 바꿈"
