@@ -48,7 +48,7 @@
 ### iOS 비Safari는 모두 「Safari에서 열어 주세요」 (2026-05-11까지)
 
 - iOS의 Chrome, Firefox, Edge, Opera 등은 모두 `ios-other`로 묶어 「Safari에서 열어 주세요」와 주소 복사 버튼만 보였다.
-- 채택하지 않음 2026-05-11 · 이유: iOS 17부터 Chrome, Firefox, Edge, Opera 등의 공유 시트에도 「홈 화면에 추가」가 보이고, 그렇게 추가한 아이콘은 standalone WebKit 컨테이너에서 실행된다. 「iOS는 Safari에서만 설치할 수 있다」는 전제가 더 이상 사실이 아니다. 그래서 iOS 버전으로 나눴다(아래 「1. 플랫폼과 설치 상태 감지」).
+- 채택 안 함 2026-05-11 · 이유: iOS 17부터 Chrome, Firefox, Edge, Opera 등의 공유 시트에도 「홈 화면에 추가」가 보이고, 그렇게 추가한 아이콘은 standalone WebKit 컨테이너에서 실행된다. 「iOS는 Safari에서만 설치할 수 있다」는 전제가 더 이상 사실이 아니다. 그래서 iOS 버전으로 나눴다(아래 「1. 플랫폼과 설치 상태 감지」).
 
 ## 결정
 
