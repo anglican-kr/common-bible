@@ -1,4 +1,5 @@
 ---
+pr: 398
 date: 2026-10-23
 branch: docs/prose-design-review
 title: "docs: 교회력 검토 문서의 낱말과 이음표 정리"
