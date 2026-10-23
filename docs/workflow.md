@@ -43,7 +43,7 @@
   - `typecheck-js.sh`: JS를 고친 뒤 tsc를 돌린다. 여러 파일을 고치는 도중의 오류 보고는 정상이니, 끝에서 `npm run typecheck`를 다시 본다.
   - `verify-on-stop.sh`: 턴을 끝낼 때 유닛 테스트를 돌린다. JS가 바뀌지 않았으면 돌지 않는다.
   - `e2e-reminder.sh`: 턴을 끝낼 때 e2e를 알린다.
-  - `pre-pr-ledger.sh`, `post-pr-ledger.sh`: PR 생성 전 원장 게이트와, 생성 뒤 원장에 `pr: N` 기입.
+  - `pre-pr-ledger.sh`, `post-pr-ledger.sh`: PR 생성 전 원장 게이트와, 생성 뒤 원장에 `pr: N` 기입. 다른 저장소에 여는 PR(`--repo`, `-R`로 이 저장소가 아닌 곳을 가리킴)은 검사하지 않는다(2026-10-24). data 저장소에는 원장이 없다.
   - `pre-commit-ledger.sh`: 머지된 원장을 고치는 커밋을 막는다.
 
 ## 작업 중 함정
