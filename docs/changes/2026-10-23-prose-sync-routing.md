@@ -1,4 +1,5 @@
 ---
+pr: 377
 date: 2026-10-23
 branch: docs/prose-sync-routing
 title: "docs: 동기화와 라우팅 문서의 문장 정리"
