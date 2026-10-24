@@ -87,19 +87,19 @@ prefetch나 preload로 들어왔지만 실제로 듣지 않은 파일은 남겨 
 | 캐시에 넣을 때마다 서비스 워커가 정리 | fetch 핸들러 안에서 IDB 트랜잭션이 돌아 첫 재생이 늦어질 수 있다 |
 | **페이지가 한가할 때 클라이언트가 정리 (두 단계 상한)** | 상한을 조금 넘는 것을 허용하고, 한가할 때 한꺼번에 정리한다 |
 
-**채택**: 정리 목표인 상한(soft cap)은 300 MB, 바로 정리하는 상한(hard cap)은 360 MB로 둔다. 서비스 워커의 fetch 핸들러는 360 MB만 확인한다. 300 MB 아래로 줄이는 정리는 `requestIdleCallback`이 부를 때나 `visibilitychange`('hidden') 때 한꺼번에 하기로 했다. 지금 구현은 페이지가 가려질 때(`visibilitychange`가 'hidden'일 때)만 정리한다(`js/app.js`의 `_enforceAudioSoftCap`).
+**채택**: 정리 목표인 상한(soft cap)은 300 MB, 바로 정리하는 상한(hard cap)은 360 MB로 둔다. 서비스 워커의 fetch 핸들러는 360 MB만 확인한다. 300 MB 아래로 줄이는 정리는 `requestIdleCallback`이 호출할 때나 `visibilitychange`('hidden') 때 한꺼번에 하기로 했다. 지금 구현은 페이지가 가려질 때(`visibilitychange`가 'hidden'일 때)만 정리한다(`js/app.js`의 `_enforceAudioSoftCap`).
 
-### F. `navigator.storage.persist()`를 부르는 때
+### F. `navigator.storage.persist()`를 호출하는 때
 
-origin 전체에 persist를 얻으면 브라우저가 저장소를 비우지 않는다. 특히 iOS의 7일 규칙을 피할 수 있다. 다만 사용자에게 묻는 창이 뜰 수 있어 부르는 때가 중요하다.
+origin 전체에 persist를 얻으면 브라우저가 저장소를 비우지 않는다. 특히 iOS의 7일 규칙을 피할 수 있다. 다만 사용자에게 묻는 창이 뜰 수 있어 호출하는 때가 중요하다.
 
-| 부르는 때 | 채택 여부 |
+| 호출하는 때 | 채택 여부 |
 | --- | --- |
 | 앱을 처음 열 때 바로 | 채택 안 함 — 사용자가 앱의 쓸모를 알기 전이다 |
 | **북마크 추가, Drive 첫 로그인, 첫 오프라인 재생** | **채택** |
-| 부르지 않는다 | 채택 안 함 — iOS가 7일 뒤 캐시를 비우는 데 그대로 노출된다 |
+| 호출하지 않는다 | 채택 안 함 — iOS가 7일 뒤 캐시를 비우는 데 그대로 노출된다 |
 
-쓸모를 느낀 때에 부르면 사용자가 허락할 가능성이 높다. 거부돼도 LRU는 그대로 작동한다. 지금 구현은 처음 재생할 때와 북마크를 저장할 때 한 번만 요청한다(`js/app/storage.js`의 `_maybeRequestPersist`). Drive 첫 로그인에서는 부르지 않는다.
+쓸모를 느낀 때에 호출하면 사용자가 허락할 가능성이 높다. 거부돼도 LRU는 그대로 작동한다. 지금 구현은 처음 재생할 때와 북마크를 저장할 때 한 번만 요청한다(`js/app/storage.js`의 `_maybeRequestPersist`). Drive 첫 로그인에서는 호출하지 않는다.
 
 ### G. 캐시 이름을 올려 오디오를 무효화 (2026-05-13까지)
 
@@ -134,9 +134,9 @@ const AUDIO_CACHE_HARD_CAP = 360 * 1024 * 1024; // 360 MB
 
 1. **받기**: 서비스 워커가 `/data/audio/*.mp3`를 받으면 `AUDIO_CACHE`에 넣고, `entries`에 `{url, byteSize, lastPlayedAt: null, addedAt: now}`를 넣거나 고친다. byteSize는 응답 헤더나 blob에서 얻는다.
 2. **재생**: 메인 스레드의 `<audio>`에서 `play` 이벤트가 일어나면 핸들러가 `entries`의 `lastPlayedAt`을 `Date.now()`로 고친다.
-3. **300 MB 정리**: `requestIdleCallback`(없으면 `setTimeout(_, 1000)`)이 부를 때나 `visibilitychange`('hidden') 때, 클라이언트가 `byteSize`를 모두 더한다. `> 300 MB`이면 `lastPlayedAt` 오름차순(null 먼저)으로 지워 `≤ 300 MB`까지 줄인다. 지금 구현은 'hidden' 때만 정리한다(위 E).
+3. **300 MB 정리**: `requestIdleCallback`(없으면 `setTimeout(_, 1000)`)이 호출할 때나 `visibilitychange`('hidden') 때, 클라이언트가 `byteSize`를 모두 더한다. `> 300 MB`이면 `lastPlayedAt` 오름차순(null 먼저)으로 지워 `≤ 300 MB`까지 줄인다. 지금 구현은 'hidden' 때만 정리한다(위 E).
 4. **360 MB 차단**: 서비스 워커의 fetch 핸들러가 새 오디오를 넣은 뒤 합계를 낸다. `> 360 MB`이면 같은 순서로 바로 정리한다(트랜잭션 1회).
-5. **persist 요청**: 북마크 추가, Drive 첫 로그인, 첫 오프라인 재생 가운데 가장 이른 때에 `navigator.storage.persist()`를 부른다. 결과는 디버그 로그에만 적고, 오류는 무시한다. 지금 구현이 부르는 때는 위 F에 적었다.
+5. **persist 요청**: 북마크 추가, Drive 첫 로그인, 첫 오프라인 재생 가운데 가장 이른 때에 `navigator.storage.persist()`를 호출한다. 결과는 디버그 로그에만 적고, 오류는 무시한다. 지금 구현이 호출하는 때는 위 F에 적었다.
 
 ### D4. 지운 장을 오프라인에서 재생할 때
 
@@ -153,7 +153,7 @@ LRU로 지운 장을 오프라인에서 재생하려 하면 받기가 실패한�
 3. **두 단계 상한**: 서비스 워커의 fetch 핸들러를 가볍게 둔다(360 MB만 확인한다). 평소 정리는 페이지가 한가할 때 한꺼번에 한다.
 4. **null `lastPlayedAt`을 먼저 지운다**: prefetch를 적극적으로 더해도 LRU가 안전하다.
 5. **IDB에 메타를 따로 둔다**: Cache API는 마지막으로 읽은 때를 알려 주지 않으므로 바깥에 메타가 있어야 한다. 서비스 워커와 페이지가 모두 접근할 수 있다.
-6. **쓸모를 느낀 때 persist를 부른다**: 처음 열 때 묻는 창은 거부되기 쉽다. 사용자가 앱의 쓸모를 느낀 때에 허락할 가능성이 가장 높다.
+6. **쓸모를 느낀 때 persist를 호출한다**: 처음 열 때 묻는 창은 거부되기 쉽다. 사용자가 앱의 쓸모를 느낀 때에 허락할 가능성이 가장 높다.
 
 ## 영향 범위
 
@@ -162,7 +162,7 @@ LRU로 지운 장을 오프라인에서 재생하려 하면 받기가 실패한�
 | 파일 | 변경 |
 | --- | --- |
 | `sw.js` | `/data/audio/*` fetch 핸들러에서 360 MB를 확인하고 메타를 IDB에 넣는다 |
-| `js/app.js` | `<audio>` `play` 이벤트에서 `lastPlayedAt`을 고치고, 한가할 때 300 MB로 정리하고, persist를 부른다 |
+| `js/app.js` | `<audio>` `play` 이벤트에서 `lastPlayedAt`을 고치고, 한가할 때 300 MB로 정리하고, persist를 호출한다 |
 | `js/audio-cache.js` (신규) | IDB 열기, 넣기, 지울 파일 고르기, 훑기. 서비스 워커와 페이지가 함께 쓴다 |
 | `js/types.d.ts` | `AudioCacheEntry` 타입 추가 |
 | `tests/unit/audio-cache.test.js` (신규) | LRU 정렬, null 먼저, 두 상한, 크기 합산의 회귀 테스트 |

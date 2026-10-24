@@ -16,7 +16,7 @@
 
 ### 1. 다시 쓰는 컴포넌트 — `makeToggleRow`
 
-`js/app/settings-ui.js`에 라벨, 캡션, 상태를 인자로 받는 팩토리 하나 `makeToggleRow({ labelText, checked, onToggle, getCaption? })`를 두고, 네 옵션이 이것을 부른다. 돌려주는 구조는 다음과 같다.
+`js/app/settings-ui.js`에 라벨, 캡션, 상태를 인자로 받는 팩토리 하나 `makeToggleRow({ labelText, checked, onToggle, getCaption? })`를 두고, 네 옵션이 이것을 호출한다. 돌려주는 구조는 다음과 같다.
 
 ```
 <div class="settings-row settings-toggle-row">
@@ -33,7 +33,7 @@
 </div>
 ```
 
-- 토글은 상태를 **제자리에서** 고친다. 세그먼트 컨트롤처럼 `rebuild()`로 전체를 다시 그리지 않으므로 포커스가 스위치에 남는다. 외경 토글만 본문을 다시 그려야 해서 `route()`를 그대로 부르지만, 팝오버는 다시 만들지 않는다.
+- 토글은 상태를 **제자리에서** 고친다. 세그먼트 컨트롤처럼 `rebuild()`로 전체를 다시 그리지 않으므로 포커스가 스위치에 남는다. 외경 토글만 본문을 다시 그려야 해서 `route()`를 그대로 호출하지만, 팝오버는 다시 만들지 않는다.
 - 모바일에서는 설정 탭 화면(ADR-029)도 같은 행을 그린다(`renderSettingsView`).
 
 ### 2. 라벨과 상태의 대응 (하위 호환)

@@ -84,7 +84,7 @@ Google이 발급하는 OAuth 클라이언트 가운데 「Desktop app」이나 �
 2. **인프라 비용이 들지 않는다**: 이미 nginx로 정적 파일을 서비스하고 있어 location 블록 하나를 더하면 된다. 새 서버나 런타임이 필요 없다.
 3. **운영이 단순하다**: secret을 바꿀 때는 nginx 설정을 고치고 `nginx -s reload` 한 줄이면 된다. 코드 빌드나 배포와 상관없다.
 4. **검수에 영향이 없다**: 클라이언트 ID가 그대로이므로 `drive.appdata` 검수 결과도 그대로 유효하다.
-5. **공격 표면이 작다**: `/oauth/token`은 누구나 부를 수 있지만, Google은 유효한 `code` + `code_verifier`나 `refresh_token`이 없으면 아무 권한도 주지 않는다. nginx는 요청을 전달하기만 하고 스스로 권한을 줄 수 없다.
+5. **공격 표면이 작다**: `/oauth/token`은 누구나 호출할 수 있지만, Google은 유효한 `code` + `code_verifier`나 `refresh_token`이 없으면 아무 권한도 주지 않는다. nginx는 요청을 전달하기만 하고 스스로 권한을 줄 수 없다.
 
 ## 보안 모델
 

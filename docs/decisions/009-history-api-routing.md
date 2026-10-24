@@ -45,7 +45,7 @@ ADR-001에서 SPA를 채택할 때 "SEO 불리 — PWA이므로 수용 가능"�
 
 ### js/app.js
 - `parseHash()` → `parsePath()`: `location.pathname + location.search`를 바탕으로 다시 썼다.
-- `navigate(path)` 도우미: `history.pushState`와 `route()`를 함께 부른다.
+- `navigate(path)` 도우미: `history.pushState`와 `route()`를 함께 호출한다.
 - `hashchange` → `popstate` 이벤트 리스너로 바꿨다.
 - 전역 클릭 가로채기: 내부 링크 `<a href="/...">`를 누르면 `navigate()`로 처리한다(modifier key — Cmd/Ctrl/Shift — 와 기본이 아닌 마우스 버튼은 브라우저 기본 동작을 둔다).
 - `updatePageMeta()`: 라우트마다 `<title>`, `<meta name="description">`, `og:title`, `og:description`, `og:url`, `<link rel="canonical">`을 동적으로 갱신한다.
@@ -65,7 +65,7 @@ ADR-001에서 SPA를 채택할 때 "SEO 불리 — PWA이므로 수용 가능"�
 2026-05-23에 손으로 쓰던 sitemap.xml을 스크립트로 바꿨다. Google Search Console을 점검하니, 사이트맵은 「성공」으로 파싱되는데 1,404개 URL 가운데 하나도 색인 대기열에 들어가지 않았다. 옛 URL 형식(`/genesis-N.html`, 4개)만 옛 크롤 기록으로 남아 「크롤링됨 - 색인 안 됨」으로 분류돼 있었다. 원인은 sitemap의 `<url>` 항목마다 `<lastmod>`가 없어, Google이 다시 크롤할 우선순위를 매기지 못한 것이다.
 
 - `scripts/build_sitemap.py`를 새로 만들었다. `data/books.json`과 데이터 서브모듈의 커밋 기록을 출처로 sitemap.xml을 만든다.
-- `scripts/release.py`에 넣었다. 릴리스마다 build_sitemap을 부르고, stage_and_commit 대상에 `sitemap.xml`을 넣는다.
+- `scripts/release.py`에 넣었다. 릴리스마다 build_sitemap을 실행하고, stage_and_commit 대상에 `sitemap.xml`을 넣는다.
 - `<lastmod>`는 장 단위로 정한다(2026-05-23 2차). 출처는 다음과 같다.
   - `/{book}/{chapter}` → `data/bible/{book}-{chapter}.json`의 git 마지막 커밋
   - `/{book}/prologue` → `data/bible/{book}-prologue.json`의 git 마지막 커밋
@@ -73,7 +73,7 @@ ADR-001에서 SPA를 채택할 때 "SEO 불리 — PWA이므로 수용 가능"�
   - `/privacy.html` → 앱 저장소의 `privacy.html` 마지막 커밋
   - `/` → 전체 sitemap에서 가장 늦은 lastmod
 - 전제: 데이터 빌드 파이프라인은 같은 원본이면 같은 출력을 내야 한다(deterministic). `common-bible-data`의 최근 빌드 커밋을 확인해 보니, 원본이 바뀐 만큼의 `bible/*.json`만 실제 커밋으로 남는다. 가정이 맞는다.
-- 효율: 데이터 서브모듈에서 `git log --name-only --diff-filter=ACMR -- bible/`를 한 번 불러 전체 기록을 읽고, 파일마다 마지막 커밋 시각을 정한다. 1,328개 파일 × 1 subprocess가 아니라 1 subprocess로 끝난다.
+- 효율: 데이터 서브모듈에서 `git log --name-only --diff-filter=ACMR -- bible/`를 한 번 실행해 전체 기록을 읽고, 파일마다 마지막 커밋 시각을 정한다. 1,328개 파일 × 1 subprocess가 아니라 1 subprocess로 끝난다.
 - 효과: 1,404개 URL이 저절로 몇 개의 lastmod 무리로 나뉜다. 바뀌지 않은 페이지의 lastmod는 그대로 유지되어, Google의 크롤 예산이 실제로 바뀐 페이지에 모인다.
 - 후속: GSC URL 검사로 핵심 URL 5-10개를 손으로 시드하고 다시 크롤되는 추이를 보려 했다. 이 후속은 하지 않기로 했다(사용자 결정 2026-10-22). SPA 셸의 본문 렌더링 문제(`/gen/1` 등 모든 라우트가 같은 HTML을 돌려준다)는 prerender나 SSG 도입 여부와 함께 따로 정할 일로 남긴다.
 

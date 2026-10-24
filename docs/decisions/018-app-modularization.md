@@ -61,7 +61,7 @@ ADR-012 1라운드(PR-1-7, 2026-05-09 머지)에서 `js/app.js`에 JSDoc과 null
   })();
   ```
 
-  부르는 쪽은 `window.appHelpers._$()`로 부르거나, IIFE 바로 뒤에 `const { _$ } = window.appHelpers;`로 받았다.
+  호출하는 쪽은 `window.appHelpers._$()`로 부르거나, IIFE 바로 뒤에 `const { _$ } = window.appHelpers;`로 받았다.
 - Phase 2(`storage.js`)에서 전역 함수 이름이 `js/sync/store-v2.js`와 겹쳐, 충돌한 모듈만 ESM으로 옮기는 예외(module-vs-script 예외)를 두었다.
 - 채택 안 함 2026-05-09 · 이유: Phase 2와 Phase 3의 사용자 검토 결과, 모든 모듈을 ESM으로 한꺼번에 옮기기로 했다. 충돌이 날 때마다 모듈별로 정하면 두 방식이 섞이고, 뒤의 모듈도 비슷한 충돌을 겪을 가능성이 높다. 근거는 ADR-019 본문과 ADR-001 「단순성의 범위」(2026-05-09)에 있다. Phase 1-3에서 머지한 PR(#88·#89·#90)은 multi-script + `defer` 방식이었지만, 뒤의 일괄 전환 PR에서 ESM으로 맞췄다.
 
@@ -75,7 +75,7 @@ Phase 4부터 이 ADR의 모듈 방식은 ESM이다. `<script type="module">`과
 
 `_currentBookId` / `_currentChapter` / `_verseSelectMode` / `_selectedVerseRefs`는 4-6개 섹션이 읽고 쓴다. 이 상태를 별도 모듈이 맡고 getter/setter를 내놓기로 했다(설계 문서 §5.1 Option A, 모듈 이름 `js/app/state.js`).
 
-실제로는 2026-05-10에 `js/app/reading-context.js`로 나눴다. 사용자 검토에서 `state.js`라는 이름이 너무 추상적이라는 지적이 있었다. 함수로 된 getter/setter 대신 `readingContext` 객체 하나를 내놓고, 부르는 쪽이 필드를 직접 고친다(`readingContext.bookId = "gen"`). 스크롤을 따라 장마다 `chapter`를 쓰는 등 자주 도는 경로라, 객체 속성에 바로 접근하는 편이 가장 단순하다.
+실제로는 2026-05-10에 `js/app/reading-context.js`로 나눴다. 사용자 검토에서 `state.js`라는 이름이 너무 추상적이라는 지적이 있었다. 함수로 된 getter/setter 대신 `readingContext` 객체 하나를 내놓고, 호출하는 쪽이 필드를 직접 고친다(`readingContext.bookId = "gen"`). 스크롤을 따라 장마다 `chapter`를 쓰는 등 자주 도는 경로라, 객체 속성에 바로 접근하는 편이 가장 단순하다.
 
 ### 임시 인프라 처리
 

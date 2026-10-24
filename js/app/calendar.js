@@ -228,8 +228,8 @@ function gridDate(from, n) {
 
 /**
  * 월간 표(ADR-038 §2): 그달 1일이 든 주의 일요일부터 6주 42칸. 앞뒤 달의 칸도 같은 링크다(흐리게 · 이름 없이 —
- * DOM 이 가린다). 계산 범위(1583~9999) 밖의 칸은 날짜만 있고 링크가 없다 — 그 날짜는 `resolve` 를 부르지 않는다.
- * `resolve` 는 엔진 `resolveDate`(프리로드 뒤 동기)다 — 연도 캐시가 있어 42번 불러도 부활절 계산은 해마다 한 번이다
+ * DOM 이 가린다). 계산 범위(1583~9999) 밖의 칸은 날짜만 있고 링크가 없다 — 그 날짜는 `resolve` 를 호출하지 않는다.
+ * `resolve` 는 엔진 `resolveDate`(프리로드 뒤 동기)다 — 연도 캐시가 있어 42번 호출해도 부활절 계산은 해마다 한 번이다
  * (설계서 §4.9 「computus 최대 세 번」).
  * @param {number} y @param {number} m  1~12
  * @param {string} today  "YYYY-MM-DD" — 오늘 칸 표시

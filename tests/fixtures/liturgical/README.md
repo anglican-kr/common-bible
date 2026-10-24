@@ -83,7 +83,7 @@
 | `penitential` · `fast` | 후보의 `penitential` / 그날의 소재일 여부(엔진 `fastOf(resolved) === "minor"` — 대재일은 `"major"` 라 `fast` 가 아니다) |
 | `coord` | `ResolvedDate.coord` 부분집합 `{season, week, type}` |
 | `grid` | 그날 격자 합성 후보의 `{status}` |
-| `readings` | 그 후보로 `findReadings` 를 부른 결과 — `origin`(색인 날짜 `MM.DD`) · `record`(본문 레코드 id) · `common`(공통 분류) · `sets`(세트 수) · `slots`(4슬롯 성구 — 인쇄 순) · `empty: true` |
+| `readings` | 그 후보로 `findReadings` 를 호출한 결과 — `origin`(색인 날짜 `MM.DD`) · `record`(본문 레코드 id) · `common`(공통 분류) · `sets`(세트 수) · `slots`(4슬롯 성구 — 인쇄 순) · `empty: true` |
 | `officialReadings` | `official` 후보의 독서 — 위와 같은 키 + `cycle`(A/B/C) |
 | `collects` | `findCollects` 결과 — `origin` · `count` |
 

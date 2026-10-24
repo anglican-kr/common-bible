@@ -33,7 +33,7 @@
       "canon": ["R-6.1-ineligible", "설계서 §5.6", "설계서 §6.3"],
       "checks": ["C-6.1-11", "C-6.1-12", "C-6.3-1"],
       "source": ["사용자 확정 2026-09-17(미결23·24 해소)", "2026 책자 — 5.27 하계재는 평일 독서 + 「기도서 참조」, 이천환 서품일은 이름 줄"],
-      "note": "사계재 후보로 findReadings 를 부르면 성직자 2세트(시편 99 / 27:1-9), findCollects 는 성직자 본기도. 소재일 여부는 지정 전례일과 무관 — official 이 격자여도 소재일 참. 그날의 색은 W-2026-05-27-ember-color(잠정).",
+      "note": "사계재 후보로 findReadings 를 호출하면 성직자 2세트(시편 99 / 27:1-9), findCollects 는 성직자 본기도. 소재일 여부는 지정 전례일과 무관 — official 이 격자여도 소재일 참. 그날의 색은 W-2026-05-27-ember-color(잠정).",
       "assertions": [
         { "date": "2026-05-27", "expect": { "official": "grid:ordinary-8-weekday-wed" } },
         { "date": "2026-05-27", "expect": { "id": "t-하계재", "status": "proper", "displacedBy": null, "observanceColor": "violet", "penitential": true } },

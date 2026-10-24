@@ -194,7 +194,7 @@ def test_drawer_bookmark_link_navigates_and_closes_drawer(browser):
     """드로어에서 북마크 행을 누르면 그 장으로 이동하고 드로어가 닫힌다.
 
     회귀 가드: tree.js 의 링크 클릭 핸들러가 주입된 closeBookmarkDrawer() + navigate()
-    + markBookmarkViewed/_bookmarkHref(core) 를 부르는 모듈 간 경로. 다른 e2e 는 링크의
+    + markBookmarkViewed/_bookmarkHref(core) 를 호출하는 모듈 간 경로. 다른 e2e 는 링크의
     *존재*만 확인하고 클릭→내비를 구동하지 않는다.
     """
     ctx = browser.new_context()

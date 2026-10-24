@@ -730,7 +730,7 @@ document.addEventListener("click", (e) => {
   if (a.target === "_blank") return;
   if (isModifiedClick(e)) return;   // 새 탭 · 새 창 — 브라우저에 맡긴다(helpers.js)
   e.preventDefault();
-  // 페이지 안 링크는 라우트가 아니다 — 대상으로 포커스를 옮긴다(known-issues §5). 그전엔 여기서 route() 를 불러 같은 화면을
+  // 페이지 안 링크는 라우트가 아니다 — 대상으로 포커스를 옮긴다(known-issues §5). 그전엔 여기서 route() 를 호출해 같은 화면을
   // 다시 그리기만 하고 포커스는 본문으로 가지 않았다. 브라우저에 맡기면 주소에 「#app」이 붙어 기록 항목이 하나 더 생긴다.
   const targetId = inPageTargetId(url, location);
   if (targetId !== null) {

@@ -381,7 +381,7 @@ test("buildMonthGrid: 칸에 보이는 이름은 늘 그 칸의 링크 이름 �
   for (const c of named) assert.ok(c.label.includes(c.cellName), `${c.date}: 「${c.cellName}」 ⊄ 「${c.label}」`);
 });
 
-test("calendarDay: 전례년 경계는 주일에만 견준다 — 평일 칸은 liturgicalYearOf 를 부르지 않는다(PR #348 리뷰 — 42칸마다 두 번씩 셈하던 것)", () => {
+test("calendarDay: 전례년 경계는 주일에만 견준다 — 평일 칸은 liturgicalYearOf 를 호출하지 않는다(PR #348 리뷰 — 42칸마다 두 번씩 셈하던 것)", () => {
   const original = ctx.liturgicalYearOf;
   let calls = 0;
   ctx.liturgicalYearOf = (d) => { calls++; return original(d); };

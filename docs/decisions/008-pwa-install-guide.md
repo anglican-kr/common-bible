@@ -80,7 +80,7 @@ unsupported / Firefox/Safari 데스크톱 등
 - iOS의 메이저 버전은 `OS X_Y` 토큰을 먼저 본다. iPad가 데스크톱급 UA로 가릴 때(`MacIntel + maxTouchPoints>1`)는 `Version/X.Y`를 보거나, 없으면 17로 가정한다(`getIOSMajor()`).
 - 나머지는 UA에 `Android` 토큰이 있으면 `android`, 없으면 Chromium 데스크톱인지 판정한다.
 
-`beforeinstallprompt` 이벤트는 받아서 저장해 두고, 사용자가 CTA를 누를 때 `prompt()`를 부른다. `appinstalled`와 `display-mode` 변경은 구독자에게 다시 알린다.
+`beforeinstallprompt` 이벤트는 받아서 저장해 두고, 사용자가 CTA를 누를 때 `prompt()`를 호출한다. `appinstalled`와 `display-mode` 변경은 구독자에게 다시 알린다.
 
 ### 2. 플랫폼별 모달 내용
 

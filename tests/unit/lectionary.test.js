@@ -202,7 +202,7 @@ test("setsOf · readingOptions · pickSet: 고른 트랙의 세트만 — 괄호
   assert.strictEqual(ctx.pickSet(opts, 2), 0);
   assert.strictEqual(ctx.pickSet(opts, null), 0);
   assert.strictEqual(ctx.pickSet([], 1), -1);
-  assert.strictEqual(ctx.setsOf(TRACKED, null).length, 4);   // 트랙 없이 부르면 전부
+  assert.strictEqual(ctx.setsOf(TRACKED, null).length, 4);   // 트랙 없이 호출하면 전부
 });
 
 test("readingOptions: 「또는」 대안(완전한 세트 둘)은 「독서 1」「독서 2」 — 원본 세트 표지든 표지 없음이든", () => {

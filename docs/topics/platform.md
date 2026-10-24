@@ -18,19 +18,19 @@
   - 서비스 워커 `sw.js`만 아직 어느 설정에도 들지 않는다(`known-issues.md` §7, 아래 「남은 일」의 known-issues §7.1).
 - **app.js 모듈 분할** (2026-05-10, ADR-018). `js/app.js`를 6,082줄에서 283줄로 줄이고 아홉 개 도메인 모듈로 나눴다. 모듈은 ESM이다(ADR-019). 자세한 내용은 `docs/archive/design/app-modularization.md`에 있다.
 - **2차 모듈 분할** (2026-06-08부터 06-11까지, ADR-034, PR5c는 보류).
-  - ADR-018 뒤에도 너무 컸던 모듈(`views-routing.js` 2,389줄, `bookmark.js` 3,578줄)을 하는 일별로 다시 나눴다. 서로 돌지 않는 facade(`window.X`로 함수를 내놓아 다른 모듈이 부르게 하던 것)는 명시적 import로 바꿨다. 서로 부르는 호출은 registry 역전으로 해결했다. 부르는 쪽이 상대를 아는 대신, 불리는 쪽이 목록에 자신을 등록하는 방식이다.
+  - ADR-018 뒤에도 너무 컸던 모듈(`views-routing.js` 2,389줄, `bookmark.js` 3,578줄)을 하는 일별로 다시 나눴다. 서로 돌지 않는 facade(`window.X`로 함수를 내놓아 다른 모듈이 호출하게 하던 것)는 명시적 import로 바꿨다. 서로 호출하는 관계는 registry 역전으로 해결했다. 호출하는 쪽이 상대를 아는 대신, 호출되는 쪽이 목록에 자신을 등록하는 방식이다.
   - PR1: 오디오 플레이어를 `js/app/audio-player.js`로 떼어 냈다(views-routing 2,389→2,195줄). `route` 쪽 호출은 명시적 import로 바꾸고, 바깥 호출자를 위한 `window.{hideAudioBar,applyAudioShow,getCurrentAudio}` facade는 남겼다.
   - PR4: 모바일의 "당겨서 새로고침"(손으로 Drive 동기화를 시작하던 동작)을 **없앴다**. 백그라운드 동기화(자동 확인, 편집 뒤 업로드, 화면이 다시 보일 때의 visibilitychange)는 그대로다. views-routing 2,195→2,011줄.
-  - PR2: 데이터를 받는 함수(loadBooks, Version, Chapter, Prologue)와 booksCache, appVersion 캐시를 `js/app/data-fetch.js`로 떼어 냈다. 다른 모듈에 기대지 않는 모듈(leaf)이다. 내부 호출은 명시적 import로 바꾸고, 바깥 호출자를 위한 facade는 남겼다. views-routing 2,011→1,942줄.
-  - PR3: 탭의 활성 상태와 미끄러지는 표시(`syncTabBarActive`, `positionTabIndicator`)를 `js/app/tabbar.js`로 합쳐 탭 바 코드를 한곳에 모았다. route()는 `window.syncTabBarActive` facade로 부른다. tabbar와 views가 서로를 부르기 때문이다. views-routing 1,942→1,831줄.
-  - PR5a: 라우팅(parsePath, navigate, route, 페이지 메타, 스크롤 추적, 링크 클릭과 popstate 리스너)을 `js/app/routing.js`로 떼어 냈다. route()가 부르는 화면 그리기 함수 여덟은 views-routing에서 명시적으로 import한다(한 방향). search, bookmark, settings, citations는 서로 부르므로 facade를 남겼다. views-routing 1,831→1,354줄(2,389에서 −43%).
+  - PR2: 데이터를 받는 함수(loadBooks, Version, Chapter, Prologue)와 booksCache, appVersion 캐시를 `js/app/data-fetch.js`로 떼어 냈다. 다른 모듈에 의존하지 않는 모듈(leaf)이다. 내부 호출은 명시적 import로 바꾸고, 바깥 호출자를 위한 facade는 남겼다. views-routing 2,011→1,942줄.
+  - PR3: 탭의 활성 상태와 미끄러지는 표시(`syncTabBarActive`, `positionTabIndicator`)를 `js/app/tabbar.js`로 합쳐 탭 바 코드를 한곳에 모았다. route()는 `window.syncTabBarActive` facade로 호출한다. tabbar와 views가 서로를 호출하기 때문이다. views-routing 1,942→1,831줄.
+  - PR5a: 라우팅(parsePath, navigate, route, 페이지 메타, 스크롤 추적, 링크 클릭과 popstate 리스너)을 `js/app/routing.js`로 떼어 냈다. route()가 호출하는 화면 그리기 함수 여덟은 views-routing에서 명시적으로 import한다(한 방향). search, bookmark, settings, citations는 서로 부르므로 facade를 남겼다. views-routing 1,831→1,354줄(2,389에서 −43%).
   - PR5b: route()가 오버레이 열네 개를 닫던 코드(12 `closeIfOpen`과 설정, 장 팝오버)를 `js/app/overlay.js`의 `closeAllOverlays()` 하나로 줄였다. createOverlay가 만든 오버레이를 목록(registry)에 올려 두고, 열린 것만 닫으며 화면에서 떨어진 것은 목록에서 지운다. 그래서 routing이 여섯 모듈의 닫기 함수를 직접 알 필요가 없어졌다.
   - 남은 PR5c(registerView 역전)는 **비용이 효용보다 커서 보류를 권한다**. 자세한 것은 아래 「남은 일」의 known-issues §2.1에 있다.
   - **bookmark.js 분할(따로 진행, 완료)**: 3,578줄을 네 모듈로 나눴다.
-    - 모달 7종(확인, 장 삭제, 새 폴더, 콤보박스, 저장과 편집, 합치기, 가져오기, 이동 picker)을 `bookmark-modals.js`로 옮겼다. 그리기 함수를 밖에서 넘겨받게 해(의존성 주입) 모달과 그리기가 서로를 부르지 않게 했다. Escape는 `closeTopmostModal` 하나가 맨 위 모달부터 닫는다.
-    - DOM을 쓰지 않는 로직은 `bookmark-core.js`로, 절 표기는 `verse-spec.js`(다른 모듈을 쓰지 않는 모듈)로 옮겼다. 그래서 `bookmark.js`는 **2,198줄(−38%)**이 됐다.
+    - 모달 7종(확인, 장 삭제, 새 폴더, 콤보박스, 저장과 편집, 합치기, 가져오기, 이동 picker)을 `bookmark-modals.js`로 옮겼다. 그리기 함수를 밖에서 넘겨받게 해(의존성 주입) 모달과 그리기가 서로를 호출하지 않게 했다. Escape는 `closeTopmostModal` 하나가 맨 위 모달부터 닫는다.
+    - DOM을 쓰지 않는 로직은 `bookmark-core.js`로, 절 표기는 `verse-spec.js`(다른 모듈에 의존하지 않는 모듈)로 옮겼다. 그래서 `bookmark.js`는 **2,198줄(−38%)**이 됐다.
     - 이동 모달은 선택 상태(`_bmSelected`)를 직접 읽던 것을 `openMoveModal({excludeFolder,onPick})`처럼 값을 넘겨받게 바꿨다. 선택 로직은 원래 자리에 남겼다.
-    - 마지막으로, 아무도 부르지 않게 된 `window.close*Modal`과 QUERY facade, 쓰지 않는 import를 grep과 로드 검사로 확인한 뒤 지웠다.
+    - 마지막으로, 아무도 호출하지 않게 된 `window.close*Modal`과 QUERY facade, 쓰지 않는 import를 grep과 로드 검사로 확인한 뒤 지웠다.
   - **2라운드(2026-06-11)에서 마저 나눴다.** 제스처, 선택 삭제, 절 선택, ⋯ 메뉴, 트리 그리기를 `bookmark-{gestures,select,verse-select,menu,tree}.js`로 떼어 냈다. 그래서 `bookmark.js`가 **589줄**(처음 3,578줄보다 −84%)이 되고, 드로어와 헤더를 조율하는 일만 남았다. 이 과정에서 `views-routing.js`는 없어지고 `routing.js`, `views.js` 등으로 나뉘었다.
   - 남은 것은 PR5c 하나이고, 그것만 따로 진행하는 것은 보류한다. 자세한 것은 [ADR-034](../decisions/034-views-routing-second-split.md)의 개정에 있다.
 - **보안 헤더 6종 통합** (2026-05-08). nginx의 server 수준 설정 조각(snippet)으로, dev와 prod 두 vhost에 모두 적용했다. `common-bible-server/nginx/security-headers.example.conf`를 본다.
@@ -97,7 +97,7 @@ index.html은 모듈(`<script type="module">`)을 적힌 순서대로 실행한�
 **사례:**
 - 2026-06-08 verse-spec 분리: 옮긴 함수가 `export {}`에 남았다. 그 이름이 `types.d.ts`에 전역으로 선언돼 있어 tsc는 통과했다. 하지만 브라우저의 ESM은 `export {name}`에 모듈 안의 바인딩을 요구해서, `Uncaught SyntaxError: Export 'name' is not defined in module`로 모듈을 만들지 못했다. 앱 전체가 뜨지 않았고, e2e는 모두 시간 초과로만 보여 원인이 드러나지 않았다.
 - 2026-06-11 bookmark-tree 분리(PR5): 새 모듈에서 import 8개(`setRenderPathname`, `saveBookmarks`, `openSaveModal` 등)를 통째로 빠뜨렸는데, tsc와 worker tsc가 모두 통과했다. 이 이름들이 전역으로 선언돼 있어 tsc는 전역으로 읽었지만, 실행하면 `ReferenceError`가 났다.
-- 2026-06-11 bookmark-gestures 분리(#275, #276에서 고침): 옮긴 모듈에서 export하지 않은 헬퍼(`_isDescendant`)를 원래 파일의 `_moveSelectedToFolder`가 그대로 불렀다. tsc, 유닛, 로드 스모크 모두 잡지 못했다. 폴더를 폴더로 옮기는 경로가 실행되지 않았기 때문이다.
+- 2026-06-11 bookmark-gestures 분리(#275, #276에서 고침): 옮긴 모듈에서 export하지 않은 헬퍼(`_isDescendant`)를 원래 파일의 `_moveSelectedToFolder`가 그대로 호출했다. tsc, 유닛, 로드 스모크 모두 잡지 못했다. 폴더를 폴더로 옮기는 경로가 실행되지 않았기 때문이다.
 
 **규칙:**
 - tsc 통과는 import가 빠짐없다는 뜻이 아니다. 모듈을 나누는 PR은 두 가지로 검증한다. 하나는 playwright 로드 스모크다. 페이지를 연 뒤 `pageerror`를 모으고 `#app`이 그려졌는지 확인한다. 다른 하나는 조건 경로를 실제로 밟는 상호작용 e2e(편집, 삭제, 모달, 폴더 이동)다.
@@ -108,14 +108,14 @@ index.html은 모듈(`<script type="module">`)을 적힌 순서대로 실행한�
 
 ### known-issues §2.1 — PR5c, 화면 등록 방식(`registerView`)으로 바꿀지 (2026-06-08 검토)
 
-`registerView`는 라우터가 화면 모듈을 직접 부르는 대신, 각 화면 모듈이 자기 화면을 그리는 함수를 라우터의 목록(registry)에 등록하게 하는 방식이다. 부르는 방향이 뒤집히므로 dispatch 역전이라고 불렀다.
+`registerView`는 라우터가 화면 모듈을 직접 호출하는 대신, 각 화면 모듈이 자기 화면을 그리는 함수를 라우터의 목록(registry)에 등록하게 하는 방식이다. 호출하는 방향이 뒤집히므로 dispatch 역전이라고 불렀다.
 
 결론: **그것만 하는 PR로는 하지 않는다. Phase 2 라우트를 더하거나 설정 화면을 다시 짤 때 함께 한다.**
 
 **전제 (실측)**
-- PR5a 이후 routing.js는 search, bookmark, settings를 ESM import하지 않고 `window` facade로 부른다. 그래서 **모듈끼리 import가 도는 문제(사이클)는 이미 없다.** registerView가 고칠 구조 문제(순환 import, 로드 순서, tsc 오류)는 없고, 남은 것은 전역 이름을 거치는 *논리적* 결합뿐이다.
-- routing이 다른 모듈을 부르는 곳은 9개다. 화면을 그리는 함수 3-4개(`renderSearchResults`, `renderSearchView`, `renderBookmarksView`, `renderSettingsView`)와 흐름을 조율하는 도우미 5개(`consumeSearchAutoNavigate`, `isMobile`, `openBookmarkDrawer`, `exitVerseSelectMode`, `exitBookmarkSelectMode`)다. registry는 화면을 그리는 함수만 대상이고, 도우미와 분기 로직은 그대로 남는다.
-- 반대 방향 호출은 **search→routing 21회**, bookmark 5, settings 3이다. 결과를 누르면 `navigate()`, 다시 그릴 때 `route()`, 확인할 때 `parsePath`/`routeSeq`를 부르는 것이라 없앨 수 없다.
+- PR5a 이후 routing.js는 search, bookmark, settings를 ESM import하지 않고 `window` facade로 호출한다. 그래서 **모듈끼리 import가 도는 문제(사이클)는 이미 없다.** registerView가 고칠 구조 문제(순환 import, 로드 순서, tsc 오류)는 없고, 남은 것은 전역 이름을 거치는 *논리적* 결합뿐이다.
+- routing이 다른 모듈을 호출하는 곳은 9개다. 화면을 그리는 함수 3-4개(`renderSearchResults`, `renderSearchView`, `renderBookmarksView`, `renderSettingsView`)와 흐름을 조율하는 도우미 5개(`consumeSearchAutoNavigate`, `isMobile`, `openBookmarkDrawer`, `exitVerseSelectMode`, `exitBookmarkSelectMode`)다. registry는 화면을 그리는 함수만 대상이고, 도우미와 분기 로직은 그대로 남는다.
+- 반대 방향 호출은 **search→routing 21회**, bookmark 5, settings 3이다. 결과를 누르면 `navigate()`, 다시 그릴 때 `route()`, 확인할 때 `parsePath`/`routeSeq`를 호출하는 것이라 없앨 수 없다.
 
 **핵심 반론: registerView는 순환을 끊지 못한다.** routing→search 한 방향만 뒤집을 뿐이다. search→routing 21회는 검색의 본질(결과가 라우팅을 일으킨다)이라 그대로 남는다. 그래서 「순환을 끊는다」는 이유가 서지 않는다.
 
@@ -152,3 +152,11 @@ index.html은 모듈(`<script type="module">`)을 적힌 순서대로 실행한�
   - **검증**: `scripts/docs_facts_snapshot.py`의 사실 토큰 비교에서 사라진 토큰이 0이어야 한다. 사실을 바꾸지 않고 문장만 고친다.
   - **진행(2026-10-23)**: ADR은 모두 마쳤다(#382부터 열다섯 묶음). 옛 개정 블록은 모두 본문에 반영했고, 코드와 견주며 찾은 낡은 사실은 고치거나 known-issues §26-29로 기록했다. 남은 것은 교회력 설계서 둘(`docs/design/liturgical-engine.md`, `docs/design/liturgical-engine-review.md`)이다. 설계서는 시작 전에 계획을 사용자에게 먼저 보인다.
   - **설계서 둘의 순서(사용자 결정 2026-10-23)**: 먼저 낱말과 이음표를 가볍게 정리한다(ADR 036-038과 같은 방식). 그다음 절마다 문장을 읽기 쉽게 고쳐 쓰면서 **내용 오류도 검증한다.** 사실은 코드, 데이터, 기도서 원문, 테스트와 견주어 확인하고, 틀린 것은 고치거나 미결로 올린다.
+
+### known-issues §30 — `coding-pitfalls.md`와 주제 문서의 긴 사례 고쳐 쓰기 (2026-10-24)
+
+- **한 줄에 여러 문제를 몰아 쓴 사례를 나누고, 개발을 모르는 독자도 읽을 수 있게 고쳐 쓴다.** 사용자가 `coding-pitfalls.md` §5의 2026-10-17 사례(한 줄 559자)를 보고 정했다(2026-10-24).
+  - 사례 하나에 문제가 여럿이면 하위 항목으로 나누고 항목마다 굵은 이름을 단다(pitfalls §37). 코드 이름 앞에 그 코드가 하는 일을 쓰고, 「(main부터)」 같은 개발자끼리의 말은 풀어 쓴다(pitfalls §40).
+  - **범위**: 300자를 넘는 줄이 `coding-pitfalls.md`에 16개, 주제 문서에 41개 있다(2026-10-24). 이 줄들을 먼저 보고, 문제가 하나뿐인 줄은 그대로 둔다. 「(main부터)」는 정리 층 문서에 23번 나온다.
+  - **순서**: 교회력 설계서와 검토 문서의 고쳐 쓰기(known-issues §24)가 끝난 뒤에 한다.
+  - **검증**: 사실 토큰 비교(`scripts/docs_facts_snapshot.py --kinds general --strict-counts`)에서 사라진 토큰이 0이어야 한다. 문장과 구조만 고치고 사실은 바꾸지 않는다.

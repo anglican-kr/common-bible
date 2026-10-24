@@ -701,7 +701,7 @@ function canticleTitleOf(/** @type {BibleChapter | null | undefined} */ chapter)
 }
 
 /**
- * 뷰 모델 전부(순수). `groupsOf` 는 `findReadings(resolved, c)` 를 감싼 것 — 후보마다 한 번 부른다.
+ * 뷰 모델 전부(순수). `groupsOf` 는 `findReadings(resolved, c)` 를 감싼 것 — 후보마다 한 번 호출한다.
  * @param {ResolvedDate} resolved @param {LectionaryQuery} query
  * @param {(c: Candidate) => ReadingGroup[]} groupsOf @param {CandidateCollects[]} collectEntries
  * @param {1 | 2 | null} storedTrack  기억된 트랙 — 마지막으로 고른 것(해를 넘어 유지)
