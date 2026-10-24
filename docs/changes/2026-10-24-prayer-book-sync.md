@@ -46,7 +46,8 @@ title: "feat: 기도서 대조 반영과 밀린 축일의 기념"
 - 문서 검사 `node --test tests/unit/docs-*.test.js tests/unit/liturgical-fixtures.test.js` 31개 통과.
 - 교회력 사실 토큰 비교 `python3 scripts/docs_facts_snapshot.py --diff main WORKTREE`: 사라진 토큰은 위 「11행」 하나다. 새 토큰은 미결45-51, 4쌍, 날짜와 쪽 번호처럼 이 PR이 더한 사실이다.
 - 엔진을 실데이터로 직접 불러 확인했다: 2026-07-26 안나와 요아킴 `commemorated`, 2027-09-27 한국 순교자 `transferred_in`(홍), 2026-02-11 병자를 위한 기도일이 `official`, 2027-04-05 마틴 루터 킹 `proper`(이름 줄), 2027-03-21 성지주일의 토마스 크랜머 `omitted`.
-- e2e `pytest tests/e2e/`: (결과는 아래에 덧붙인다)
+- e2e `pytest tests/e2e/`: 378개 가운데 377개가 통과했다. 실패한 하나는 기념일 칩의 빈 화면 문구를 1.1 세계평화 기도일로 검사하던 테스트다. 세계평화 기도일이 축일이 되어 문구가 「고유 본문 없음」으로 바뀐 것이라, 기념일 검사는 2026-04-05 마틴 루터 킹으로 옮기고 세계평화 기도일의 새 문구도 검사하게 고쳤다(`test_lectionary_view.py`). 고친 테스트는 통과한다.
+- 첫 e2e 실행에서는 Google Drive 동기화 테스트(`test_drive_mobile_settings_view_redraws_after_delete`)가 한 번 실패했다. 그 테스트만 세 번 다시 돌려 모두 통과했고, 두 번째 전체 실행에서도 통과해 이번 변경과 무관한 일시적 실패로 본다.
 
 ## 갱신한 문서
 
