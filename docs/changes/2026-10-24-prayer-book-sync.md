@@ -1,4 +1,5 @@
 ---
+pr: 402
 date: 2026-10-24
 branch: feat/prayer-book-sync
 title: "feat: 기도서 대조 반영과 밀린 축일의 기념"
