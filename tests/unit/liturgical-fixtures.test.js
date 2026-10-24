@@ -4,12 +4,12 @@
 // 픽스처는 실제 연도 기대값의 **기준**이다(설계서 §1.4 기준 지도 · 픽스처 README).
 // 엔진이 값을 맞히는지는 PR 3 의 liturgical-engine.data.test.js 가 본다 — 여기서는
 // 픽스처 자체가 제대로 생겼는지만 본다: JSON 이 읽히고, id 가 유일하고 규칙대로이며, 날짜가
-// 실재하고, 관측일 id(`id`·`displacedBy`·`official`·`neverDeparts`)에 생략부호가 없고,
+// 실재하고, 전례일 id(`id`·`displacedBy`·`official`·`neverDeparts`)에 생략부호가 없고,
 // status/kind 가 도메인 안이고(`ifIssueFlips.expect` 도 같은 검사를 받는다), `alsoYears` 의
 // 해가 연도만 바꿔 되풀이할 수 있는 해(요일 동일)이고, `canon`·`checks`·`issue` 가 가리키는
 // 문서 앵커가 실제로 있다. 옮겨 적기 오류 — 가장 큰 위험 — 를 기계가 잡을 수 있는 만큼 잡는다.
 //
-// 관측일 id 가 실데이터에 실재하는지는 **liturgical-fixtures.data.test.js** 가 본다 — data/ 는
+// 전례일 id 가 실데이터에 실재하는지는 **liturgical-fixtures.data.test.js** 가 본다 — data/ 는
 // 비공개 서브모듈이라 공개 CI 에 없고, 그 검사는 engine-data.yml·sync-data.yml 에서 돈다(tests/README.md §1).
 
 import test from "node:test";
@@ -144,7 +144,7 @@ test("status/kind 도메인 · provisional·skip 은 issue · skip 은 skip 이�
 
 // ── 단언 ──
 
-test("단언은 date 또는 years 를 가지며 expect 의 키·값이 도메인 안이고 관측일 id 에 생략부호가 없다", () => {
+test("단언은 date 또는 years 를 가지며 expect 의 키·값이 도메인 안이고 전례일 id 에 생략부호가 없다", () => {
   for (const c of cases) {
     assert.ok(Array.isArray(c.assertions) && c.assertions.length > 0, `${c.id}: assertions`);
     for (const a of c.assertions) {

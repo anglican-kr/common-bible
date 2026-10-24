@@ -1,4 +1,4 @@
-// ── 픽스처 관측일 id ↔ data/lectionary 실재 — data/ 서브모듈이 있어야 돈다 ────────
+// ── 픽스처 전례일 id ↔ data/lectionary 실재 — data/ 서브모듈이 있어야 돈다 ────────
 // Run with: node --test tests/unit/liturgical-fixtures.data.test.js
 //
 // tests/fixtures/liturgical/*.cases.json 의 `expect.id` · `displacedBy` · `official` · `neverDeparts` ·
@@ -34,17 +34,17 @@ const cases = FILES.flatMap((f) => {
   return Array.isArray(data?.cases) ? data.cases.map((c) => ({ ...c, _file: f })) : [];
 });
 
-/** 그 `expect` 가 가리키는 실데이터 관측일 id 전부(`grid:*` 와 합성 id 는 호출자가 거른다). */
+/** 그 `expect` 가 가리키는 실데이터 전례일 id 전부(`grid:*` 와 합성 id 는 호출자가 거른다). */
 const observanceIds = (e) => [e?.id, e?.neverDeparts, e?.displacedBy, e?.official !== "grid:*" ? e?.official : null];
 
 test("픽스처가 케이스를 하나 이상 싣는다(로더 자체 검사)", () => {
   assert.ok(cases.length > 0, "픽스처 케이스가 없다 — 파일이 옮겨졌으면 FILES 를 고칠 것");
 });
 
-test("expect 의 관측일 id 가 data/lectionary 에 실재한다 (grid:/guard: 합성 id 제외)", { skip: SKIP }, () => {
+test("expect 의 전례일 id 가 data/lectionary 에 실재한다 (grid:/guard: 합성 id 제외)", { skip: SKIP }, () => {
   const read = (f) => JSON.parse(fs.readFileSync(path.join(LECTIONARY, f), "utf8")).entries;
   const known = new Set([...read("sanctoral.json"), ...read("temporal-feasts.json")].map((e) => e.id));
-  assert.ok(known.size > 100, `실데이터 관측일이 너무 적다: ${known.size}`);
+  assert.ok(known.size > 100, `실데이터 전례일이 너무 적다: ${known.size}`);
   const missing = new Set();
   const check = (id) => { if (id && !/^(grid|guard):/.test(id) && !known.has(id)) missing.add(id); };
   for (const c of cases) {
@@ -52,5 +52,5 @@ test("expect 의 관측일 id 가 data/lectionary 에 실재한다 (grid:/guard:
     for (const a of c.assertions ?? []) for (const id of observanceIds(a.expect)) check(id);
     if (c.ifIssueFlips) for (const id of observanceIds(c.ifIssueFlips.expect)) check(id);
   }
-  assert.deepEqual([...missing].sort(), [], `실데이터에 없는 관측일 id:\n  ${[...missing].join("\n  ")}`);
+  assert.deepEqual([...missing].sort(), [], `실데이터에 없는 전례일 id:\n  ${[...missing].join("\n  ")}`);
 });

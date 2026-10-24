@@ -5,7 +5,7 @@
 유닛이 못 보는 화면 동작(링크 클릭 · URL 상태 · localStorage 트랙 기억 · 탭 바)을 검증한다.
 
   ① 본문 순서 — 본기도 → 제1독서 → 시편(영광송 1회) → 제2독서 → 복음, 송영 1회
-  ② 관측일 스위처 — 칩 전부 노출, 고르면 ?obs= 와 본문 · 색이 바뀐다
+  ② 전례일 스위처 — 칩 전부 노출, 고르면 ?obs= 와 본문 · 색이 바뀐다
   ③ 두 독서 나란히 — 선택 봉헌 당일 · 목적지 주일 · 도착일 카드 둘
   ④ 대안 세트 · 트랙 — 세그먼트, 트랙은 마지막 선택을 날짜 · 해와 무관하게 기억
   ⑤ 기념일 칩 — 「기념일 — 본문 없음」
@@ -85,7 +85,7 @@ def test_collect_alternative_segment_switches_text_and_url(desktop_context):
     assert page.inner_text(".lect-collect-text") != first
 
 
-# ── ② 관측일 스위처 ──
+# ── ② 전례일 스위처 ──
 
 def test_switcher_shows_every_candidate_and_changes_body_and_color(desktop_context):
     """9.16 니니안 ∧ 추계재 — 초기 독서는 격자(미결25), 색 [자, 백]; 추계재 칩 → ?obs=, 색 [자], 그 독서."""
@@ -849,7 +849,7 @@ def test_long_segment_labels_wrap_at_320px(browser):
 
 
 def test_day_change_announces_date_and_observance(desktop_context):
-    """화면 안에서 다음날로 가면 라이브 영역이 「전례독서」가 아니라 그날(날짜 — 관측일)을 읽는다(자체 리뷰 2026-10-13)."""
+    """화면 안에서 다음날로 가면 라이브 영역이 「전례독서」가 아니라 그날(날짜 — 전례일)을 읽는다(자체 리뷰 2026-10-13)."""
     page = desktop_context.new_page()
     _open(page, "lectionary/2026-09-15")
     page.locator(".lect-datenav-btn[aria-label='다음날']").click()
@@ -1007,7 +1007,7 @@ def _enter_on(page, selector):
 
 
 def test_redraws_keep_keyboard_focus_on_the_pressed_control(desktop_context):
-    """키보드로 날짜 이동(다음날 · 전날 · 오늘) · 관측일 칩 · 두 독서 카드 · 세그먼트(트랙 · 세트 · 본기도)를 눌러 #app 을 다시
+    """키보드로 날짜 이동(다음날 · 전날 · 오늘) · 전례일 칩 · 두 독서 카드 · 세그먼트(트랙 · 세트 · 본기도)를 눌러 #app 을 다시
     그려도 포커스가 새 화면의 같은 컨트롤에 있고(:focus-visible) 화면 안이다 — Enter 만 거듭 눌러 날을 넘긴다(WCAG 2.4.3 ·
     2.4.7 — PR #348 리뷰에서 넘긴 것: 그전엔 누른 링크가 사라져 포커스가 body 로 빠졌다; 캘린더의 달 이동과 같은 도우미).
     계산 범위 끝(9999-12-31)에서는 「다음날」이 자리만 남아 「오늘」로."""
@@ -1023,7 +1023,7 @@ def test_redraws_keep_keyboard_focus_on_the_pressed_control(desktop_context):
     _enter_on(page, ".lect-datenav-btn[aria-label='전날']")
     page.wait_for_selector(".lect-date time[datetime='2026-09-16']")
     assert _focused(page) == {"key": "prev", **ok}
-    # 칩 — 관측일 id 의 한글 · 콜론이 든 키
+    # 칩 — 전례일 id 의 한글 · 콜론이 든 키
     _enter_on(page, ".lect-chip:has-text('추계재')")
     page.wait_for_selector(".lect-chip[aria-current]:has-text('추계재')")
     assert _focused(page) == {"key": "obs:t-추계재", **ok}

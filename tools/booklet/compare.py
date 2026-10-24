@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """책자(parse_booklet_*.py 산출) ↔ 엔진 덤프(engine-dump.mjs 산출) 대조 → 보고서. 인자: <booklet.json> <engine.json> <report.md> <detail.json>
 
-슬롯(제1독서 · 시편 · 제2독서 · 복음)별로 책자의 「또는」 대안과 엔진 대안(초기 선택 관측일의 트랙 · 세트에 걸친 라벨 하나하나)을
+슬롯(제1독서 · 시편 · 제2독서 · 복음)별로 책자의 「또는」 대안과 엔진 대안(초기 선택 전례일의 트랙 · 세트에 걸친 라벨 하나하나)을
 하나씩 짝짓는다 — 라벨의 변형을 한데 모은 합집합과 비교하면 송가 이름이 붙은 라벨 하나도 대안 여럿처럼 보여 ⊂ 가 된다.
 판정: = 같음 · ⊂/⊃ 대안 수 차이 · ≈ 표기만(절 집합 동치 포함) · other 책자가 다른 후보(평일 등)의 독서 · partial/≠ 실질 불일치.
 이름(별칭 포함) · 이동 표기 · 색은 보조 표로 낸다(축성일 · 사계재 · 공휴일은 엔진 범위 밖이라 잡음이 섞인다)."""
@@ -178,7 +178,7 @@ for d in sorted(booklet):
         detail.append({"date": d, "weekday": b["weekday"], "names": b["names"], "status": "engine-missing", "error": (e or {}).get("error", "missing"), "flags": b["flags"]})
         continue
     alts = engine_alts(e)
-    sel = e["view"]["initial"] if e.get("view") else (e["official"]["id"] if e["official"] else None)   # 뷰가 없으면 승자로(README)
+    sel = e["view"]["initial"] if e.get("view") else (e["official"]["id"] if e["official"] else None)   # 뷰가 없으면 지정 전례일로(README)
     engine_colors[e["color"]] += 1
     rec = {"date": d, "weekday": b["weekday"], "names": b["names"], "sel": sel, "official": e["official"]["id"] if e["official"] else None,
            "candidates": [(c["id"], c["status"], c.get("from"), c.get("to")) for c in e["candidates"]], "slots": {}, "flags": b["flags"]}
@@ -231,7 +231,7 @@ for d in sorted(booklet):
             moved[key] = f"{d[:4]}-{int(m.group(1)):02d}-{int(m.group(2)):02d}"
         prev = re.sub(r"\(.*?\)", "", n).strip() or prev
     ecands = [c for c in e["candidates"] if not c["id"].startswith("grid:") and not re.match(r"^t-(동|춘|하|추)계재$", c["id"])]
-    # 관측일의 이름은 name + aliases 다(엔진 namesOfRow) — 책자의 「고난주일」 · 「승천일」 은 성지주일 · 승천대축일의 별칭으로 맞는다
+    # 전례일의 이름은 name + aliases 다(엔진 namesOfRow) — 책자의 「고난주일」 · 「승천일」 은 성지주일 · 승천대축일의 별칭으로 맞는다
     enames = {c["id"]: [x for x in map(short, [c["name"], *(c.get("aliases") or [])]) if x] for c in e["candidates"]}
     unmatched_b = []
     for n in b["names"]:
@@ -255,18 +255,18 @@ L.append(f"# 2027 전례독서 책자(검토용) ↔ 엔진 대조\n")
 L.append(f"범위 {min(booklet)} ~ {max(booklet)} — {len(booklet)}일. 엔진 색 어휘: {dict(engine_colors)}\n")
 no_view = sum(1 for d in booklet if engine.get(d) and not engine[d].get("error") and not engine[d].get("view"))
 if no_view:   # engine-dump.mjs 가 js/app/lectionary.js 없이 돌았다 — 집계가 뷰 대조와 크게 다르다(README)
-    L.append(f"> **뷰 없음 {no_view}일** — 엔진 덤프에 전례독서 뷰 모델이 없어(`js/app/lectionary.js` 없음) 그날은 승자(`official`)로 비교했다. 뷰의 초기 선택 대조가 아니다.\n")
+    L.append(f"> **뷰 없음 {no_view}일** — 엔진 덤프에 전례독서 뷰 모델이 없어(`js/app/lectionary.js` 없음) 그날은 지정 전례일(`official`)로 비교했다. 뷰의 초기 선택 대조가 아니다.\n")
 L.append("## 집계 (감사성찬례 독서, 날짜별 최악 슬롯)\n")
 for k, v in sorted(counts.items(), key=lambda x: -x[1]): L.append(f"- {k}: {v}")
 L.append("\n## 독서 불일치 (≠ · partial)\n")
-L.append("| 날짜 | 요일 | 책자 관측일 | 엔진 초기 선택 | 슬롯 | 책자 | 비고 |\n|---|---|---|---|---|---|---|")
+L.append("| 날짜 | 요일 | 책자 전례일 | 엔진 초기 선택 | 슬롯 | 책자 | 비고 |\n|---|---|---|---|---|---|---|")
 for r in rows:
     if r["status"] not in ("≠", "partial"): continue
     for k in SLOTS:
         st, why, bv = r["slots"][k]
         if st in ("≠", "partial"): L.append(f"| {r['date']} | {r['weekday']} | {' · '.join(r['names'][:3])} | {r['sel']} | {k} | {' 또는 '.join(bv)} | {st} {why} |")
 L.append("\n## 책자가 다른 후보의 독서를 실은 날 (other)\n")
-L.append("| 날짜 | 요일 | 책자 관측일 | 엔진 초기 선택 | 슬롯 | 일치한 후보 |\n|---|---|---|---|---|---|")
+L.append("| 날짜 | 요일 | 책자 전례일 | 엔진 초기 선택 | 슬롯 | 일치한 후보 |\n|---|---|---|---|---|---|")
 for r in rows:
     if r["status"] != "other": continue
     ks = [k for k in SLOTS if r["slots"][k][0] == "other"]
@@ -274,7 +274,7 @@ for r in rows:
     prec = next((c["precedence"] for c in engine[r["date"]]["candidates"] if c["id"] == r["sel"]), None)
     L.append(f"| {r['date']} | {r['weekday']} | {' · '.join(r['names'][:3])} | {r['sel']} (prec {prec}) | {','.join(ks)} | {oc} |")
 L.append("\n## 표기 차이 · 대안 수 차이 (≈ · ⊃ · ⊂ · 책자 생략)\n")
-L.append("| 날짜 | 요일 | 책자 관측일 | 슬롯 | 책자 | 비고 |\n|---|---|---|---|---|---|")
+L.append("| 날짜 | 요일 | 책자 전례일 | 슬롯 | 책자 | 비고 |\n|---|---|---|---|---|---|")
 for r in rows:
     if r["status"] not in ("≈", "⊃", "⊂", "책자 생략"): continue
     for k in SLOTS:
@@ -288,9 +288,9 @@ for d, note, best, sl in xmas_rows: L.append(f"- {d} {note}: {'일치 — ' + st
 L.append("\n## 이동 표기\n")
 for d, msg, extra in transfer_rows: L.append(f"- {d}: {msg} {extra}")
 L.append("\n## 색\n")
-L.append("| 날짜 | 요일 | 책자 색 | 엔진 대표색 | 엔진 색 집합 | 책자 관측일 |\n|---|---|---|---|---|---|")
+L.append("| 날짜 | 요일 | 책자 색 | 엔진 대표색 | 엔진 색 집합 | 책자 전례일 |\n|---|---|---|---|---|---|")
 for d, wd, bc, ec, ecs, nm in color_rows: L.append(f"| {d} | {wd} | {','.join(bc)} | {ec} | {','.join(ecs)} | {' · '.join(nm)} |")
-L.append("\n## 관측일 이름 (책자에만 / 엔진에만)\n")
+L.append("\n## 전례일 이름 (책자에만 / 엔진에만)\n")
 for d, wd, ub, ue, cands in name_rows: L.append(f"- {d} {wd}: 책자만 {ub} · 엔진만 {ue}")
 open(OUT, "w", encoding="utf8").write("\n".join(L) + "\n")
 print("\n".join(L[:12]))

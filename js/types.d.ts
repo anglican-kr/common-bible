@@ -660,9 +660,9 @@ export interface LiturgicalRule {
 }
 
 /**
- * 관측일 — 정의 표(sanctoral · temporal-feasts)의 행을 **그대로** 담는다. 표의 행에 엔진이 합성한
+ * 전례일 — 정의 표(sanctoral · temporal-feasts)의 행을 **그대로** 담는다. 표의 행에 엔진이 합성한
  * 값(옮겨 온 날짜 등)은 얹지 않고 `Candidate` 가 싣는다(설계서 §1.3 · §5.5).
- * 격자(`grid:`) · 보호 기간(`guard:`)은 표에 없는 합성 관측일이고 id 접두사로 가린다 — 격자는 엔진이 통째로
+ * 격자(`grid:`) · 보호 기간(`guard:`)은 표에 없는 합성 전례일이고 id 접두사로 가린다 — 격자는 엔진이 통째로
  * 만들므로 `name` 처럼 「무엇인가」를 말하는 표지(`properWeekday`)를 단다. 「어디서 왔나」는 여기에도 싣지 않는다.
  */
 export interface Observance {
@@ -696,7 +696,7 @@ export interface Observance {
   // `null | 스칼라 | 배열` 3형(ADR-036 §4 · 설계서 §5.2) — 대림 3주일은 ["rose", "blue"] 둘 다 허용한다.
   color_alt?: CodeField<LiturgicalColorAlt>;
   /**
-   * 고유명 평일(성주간 월~수 · 재의 수요일 후 목~토)의 격자 관측일에만 `true` — 그 밖에는 키가 없다. 좌표가
+   * 고유명 평일(성주간 월~수 · 재의 수요일 후 목~토)의 격자 전례일에만 `true` — 그 밖에는 키가 없다. 좌표가
    * `(lent, null, weekday)` 로 같은 날 가운데 이름이 그날의 고유 이름인 여섯 날의 표지라, 뷰가 좌표 의미를
    * 따로 들고 있지 않고 이것을 읽는다(설계서 §5.5). 정의 표의 행에는 없다 — 엔진이 격자를 합성하며 단다.
    */
@@ -711,7 +711,7 @@ export type CandidateStatus =
   | "proper" | "transferred_in" | "transferred_out"
   | "optional" | "commemorated" | "omitted";
 
-/** 관측일을 감싸는 래퍼 — 「어디서 왔나」·「왜 왔나」를 싣는다(설계서 §5.5). */
+/** 전례일을 감싸는 래퍼 — 「어디서 왔나」·「왜 왔나」를 싣는다(설계서 §5.5). */
 export interface Candidate {
   observance: Observance;
   status: CandidateStatus;
@@ -738,7 +738,7 @@ export interface LiturgicalPeriod {
 }
 
 /**
- * `resolveDate` 의 반환. `official` 은 엔진이 정한 승자 — 뷰의 초기 선택이고, 후보는 전부
+ * `resolveDate` 의 반환. `official` 은 엔진이 정한 지정 전례일 — 뷰의 초기 선택이고, 후보는 전부
  * `candidates` 에 남는다(설계서 §5.5). 색 필드 셋(2026-10-10 사용자 결정 — 설계서 R-6.4-color-order ·
  * R-6.4-ember-color): `color` 는 그날의 대표색 하나, `colors` 는 병기 목록(책자의 [자/백] — 사계재 날
  * 축일이 이기면 둘, 그 밖은 `[color]`), `colorAlt` 는 선택 대체색(장미색 · 청색) 전용이고 데이터
@@ -796,7 +796,7 @@ export interface ReadingGroup {
   common: string | null;
 }
 
-/** 본기도 하나 — 같은 관측일의 자유선택 대체안이 `collect_no` 로 갈린다. 송영은 코드만(ADR-036 §3). */
+/** 본기도 하나 — 같은 전례일의 자유선택 대체안이 `collect_no` 로 갈린다. 송영은 코드만(ADR-036 §3). */
 export interface CollectOption {
   id: number | string;
   title: string;
@@ -807,7 +807,7 @@ export interface CollectOption {
   common: string | null;
 }
 
-/** `findCollects` 의 원소 — 관측일별로 키잉한다(순서는 `candidates` 순, 설계서 §5.6). */
+/** `findCollects` 의 원소 — 전례일별로 키잉한다(순서는 `candidates` 순, 설계서 §5.6). */
 export interface CandidateCollects {
   candidate: Candidate;
   collects: CollectOption[];

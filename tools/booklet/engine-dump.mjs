@@ -25,9 +25,9 @@ if (!ctx.parseDate(from) || !ctx.parseDate(to) || from > to || !out) {
   process.exit(1);
 }
 // 전례독서 뷰(ADR-038 A3)가 있으면 뷰 모델(초기 선택 · 세트 라벨)도 덤프한다 — 없으면(#346 이전 체크아웃) view: null 이고
-// compare.py 는 승자(official)로 비교한다. 뷰의 초기 선택과 달라 집계가 크게 바뀌므로 소리 내어 알린다.
+// compare.py 는 지정 전례일(official)로 비교한다. 뷰의 초기 선택과 달라 집계가 크게 바뀌므로 소리 내어 알린다.
 const LECT = fs.existsSync(path.join(ROOT, "js/app/lectionary.js")) ? src("js/app/lectionary.js") : null;
-if (!LECT) console.warn("경고: js/app/lectionary.js 가 없다 — view: null 로 덤프한다. compare.py 는 승자(official)로 비교하므로 뷰의 초기 선택 대조가 아니다(tools/booklet/README.md).");
+if (!LECT) console.warn("경고: js/app/lectionary.js 가 없다 — view: null 로 덤프한다. compare.py 는 지정 전례일(official)로 비교하므로 뷰의 초기 선택 대조가 아니다(tools/booklet/README.md).");
 vm.runInContext(extractBlock("LITURGICAL_LOOKUP", ENGINE), ctx, { filename: "engine-lookup" });
 vm.runInContext(extractBlock("VERSE_SPEC", VS), ctx, { filename: "verse-spec" });
 if (LECT) vm.runInContext(extractBlock("LECTIONARY_MODEL", LECT), ctx, { filename: "lectionary-model" });
