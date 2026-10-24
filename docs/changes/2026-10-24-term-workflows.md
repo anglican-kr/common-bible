@@ -1,4 +1,5 @@
 ---
+pr: 410
 date: 2026-10-24
 branch: chore/term-workflows
 title: "chore: CI 단계 이름의 관측일을 전례일로 바꿈"
