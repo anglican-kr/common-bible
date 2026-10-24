@@ -312,7 +312,7 @@ test("C-5.6-1 트랙은 연중 주일에만 — 재의 수요일 · 성 금요�
   assert.ok(seen > 0);
 });
 
-test("C-5.6-4 성인 공통 독서 폴백 — 양성 · 음성 · 불변식 82 / 13 / 16", { skip: SKIP }, () => {
+test("C-5.6-4 성인 공통 독서 폴백 — 양성 · 음성 · 불변식 79 / 13 / 17", { skip: SKIP }, () => {
   const ids = (d, p) => groupsAt(d, p).map((g) => g.id);
   // 양성 — 사베리오(has_proper 참 · 독서 0)는 missionary 세 세트, 그룹 형태는 고유와 같다
   const xav = groupsAt("2025-12-03", "d1203");
@@ -341,17 +341,19 @@ test("C-5.6-4 성인 공통 독서 폴백 — 양성 · 음성 · 불변식 82 /
     if (gs.length > 0 && gs.every((g) => g.common !== null)) fallback++;
     else if (row.sanctoral_class in commons && gs.length > 0 && gs.every((g) => g.common === null)) properWithCommon++;
   }
-  same([fallback, properWithCommon, memorialEmpty], [82, 13, 16]);
+  same([fallback, properWithCommon, memorialEmpty], [79, 13, 17]);
 });
 
-test("§5.6 본기도 폴백은 빈틈 없이 닫힌다 — has_proper 참은 고유, 거짓은 공통 하나({name} 치환), 기념일은 없음", { skip: SKIP }, () => {
+test("§5.6 본기도 폴백은 빈틈 없이 닫힌다 — has_proper 참은 고유, 거짓은 공통 하나({name} 치환), 기념일과 성인 분류 없는 기도일은 없음", { skip: SKIP }, () => {
   const kasi = read("kasi-lunar.json");
   const bad = [];
   for (const row of read("sanctoral.json").entries) {
     const d = heldOn(row.id, row.date ? `2028-${row.date.replace(".", "-")}` : ctx.lunarDatesOf(kasi, 2028)[row.lunar]);
     const cs = collectsAt(d, row.id);
+    // 성인 분류가 없는 축일(세계평화 · 병자를 위한 기도일 — 기도서에 본기도가 없다, 미결51)은 공통도 없다
     const ok = row.rank === "commemoration" ? cs.length === 0
       : row.has_proper ? cs.length > 0 && cs.every((c) => c.common === null)
+        : row.sanctoral_class === null ? cs.length === 0
         : cs.length === 1 && cs[0].common === row.sanctoral_class && !cs[0].text.includes("{name}");
     if (!ok) bad.push(`${row.id} ${cs.map((c) => c.id)}`);
   }
@@ -545,13 +547,13 @@ test("C-6.1-7 · C-2-1 precedence null 인 temporal 행은 후보로 있되 승�
   assert.ok(groupsAt("2026-02-15", "t-주의-변모-주일").length > 0);
 });
 
-test("C-6.1-9 prec 7 축일 ∧ 축일 다섯 쌍 — 결정적이고 둘 다 proper, 3.01 은 고유 본기도가 있는 삼일절이 승자", { skip: SKIP }, () => {
+test("C-6.1-9 prec 7 축일 ∧ 축일 네 쌍 — 결정적이고 둘 다 proper, 3.01 은 고유 본기도가 있는 삼일절이 승자", { skip: SKIP }, () => {
   const byDate = new Map();
   for (const e of read("sanctoral.json").entries) {
     if (e.rank === "minor_feast" && e.date) (byDate.get(e.date) || byDate.set(e.date, []).get(e.date)).push(e);
   }
   const pairs = [...byDate].filter(([, es]) => es.length === 2).map(([md]) => md).sort();
-  same(pairs, ["02.14", "03.01", "06.09", "08.05", "12.31"]);
+  same(pairs, ["02.14", "03.01", "06.09", "12.31"]);   // 08.05 는 도미닉이 기도서대로 08.08 로 가며 빠졌다(2026-10-24)
   for (const md of pairs) {
     // 그 날짜가 평일인 해마다 — 승자는 둘 중 하나로 늘 같고, 진 쪽은 proper(고정일끼리 — 동시 봉헌)
     const winners = new Set();
@@ -591,7 +593,7 @@ test("C-6.1-11 하계재 후보의 본문 — 2026-05-27 성직자 2세트(시�
 test("C-6.1-12 기념일은 이름 줄 — 같은 날짜에 다른 행이 없는 성인력 기념일과 temporal 기념일은 해마다 승자가 격자 · 주일 (2025~2050)", { skip: SKIP }, () => {
   const s = read("sanctoral.json").entries;
   const lonely = s.filter((e) => e.rank === "commemoration" && e.date && s.filter((x) => x.date === e.date).length === 1);
-  same(lonely.length, 11);
+  same(lonely.length, 13);
   const bad = [];
   for (let y = 2025; y <= 2050; y++) {
     for (const e of lonely) {

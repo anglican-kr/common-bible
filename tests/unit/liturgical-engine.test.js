@@ -789,7 +789,7 @@ test("C-5.5-1 후보 출처 다섯 — 격자 · 날짜 · 음력 · 규칙 파�
   same(r.candidates.map((c) => c.observance.id).sort(),
     ["d0217-feast", "grid:ordinary-x-weekday-tue", "lunar11-seol", "t-shrove"]);
   // 빈 패스에서는 옮겨 온 것도 떠난 것도 없다 — 재분류(B1)는 아래 5.10 이 본다
-  assert.ok(r.candidates.every((c) => c.status === "proper" || c.status === "omitted"));
+  assert.ok(r.candidates.every((c) => c.status === "proper" || c.status === "commemorated"));
   assert.ok(r.candidates.every((c) => !("from" in c) && !("to" in c)));
   // 빈 패스는 **네 필드 전부** — §5.5 가 optionals 까지 읽는다
   const pass = ctx.EMPTY_PASS();
@@ -1346,12 +1346,12 @@ test("C-6.1-5 A > C > B (잠정 — ADR-036 §6) · 고정일끼리는 동시 �
   same(fate(m, "d0929-founding"), ["proper", null]);
 });
 
-test("C-6.1-6 prec 7 축일은 생략 — 가변인 상위에 밀리면 omitted(departures 와 무관) · 고정일 상위에는 동시 봉헌", () => {
+test("C-6.1-6 prec 7 축일은 그날 기념 — 가변인 상위에 밀리면 commemorated(departures 와 무관) · 고정일 상위에는 동시 봉헌", () => {
   // 주일에 밀린다 — 격자 주일이 displacedBy
   const sun = rb("2026-06-14");
   same(officialId(sun), "grid:ordinary-x-sunday");
-  same(fate(sun, "d0614-minor"), ["omitted", "grid:ordinary-x-sunday"]);
-  same(sun.color, "green");   // omitted 후보는 색에 기여하지 않는다
+  same(fate(sun, "d0614-minor"), ["commemorated", "grid:ordinary-x-sunday"]);
+  same(sun.color, "green");   // commemorated 후보는 색에 기여하지 않는다
   // 평일에서는 축일(7)이 격자 평일(8)을 이긴다
   same(officialId(rb("2027-06-14")), "d0614-minor");
   // 이동 축일 셋과 같은 종류(transferable)는 생략하지 않는다 — 옮기는 것은 패스(§6.5)
@@ -1361,7 +1361,7 @@ test("C-6.1-6 prec 7 축일은 생략 — 가변인 상위에 밀리면 omitted(
   same(officialId(rb("2026-08-15")), "d0815-a");
   const sun815 = rb("2027-08-15");
   same(officialId(sun815), "d0815-a");
-  same(fate(sun815, "d0815-minor"), ["omitted", "grid:ordinary-x-sunday"]);
+  same(fate(sun815, "d0815-minor"), ["commemorated", "grid:ordinary-x-sunday"]);
   same(gridOf(sun815).status, "proper");
   // 도착에 밀린다 — 같은 날 도착(prec 6)이 displacedBy(12.7 암브로스와 같은 경우)
   const andrew = CAL.sanctoralByDate.get("11.30")[0];
@@ -1369,7 +1369,7 @@ test("C-6.1-6 prec 7 축일은 생략 — 가변인 상위에 밀리면 omitted(
   pass.arrivals.set("2026-06-17", [{ observance: andrew, status: "transferred_in", from: "2026-06-16", displacedBy: "x" }]);
   const arr = rb("2026-06-17", pass);
   same(officialId(arr), "d1130-andrew");
-  same(fate(arr, "d0617-martyr"), ["omitted", "d1130-andrew"]);
+  same(fate(arr, "d0617-martyr"), ["commemorated", "d1130-andrew"]);
 });
 
 test("R-6.3-holy-week-guard 보호 기간의 prec 7 은 생략 — guard 는 실제 후보가 없을 때만 displacedBy, 승자는 되지 않는다", () => {
@@ -1702,12 +1702,12 @@ test("C-6.5-20 연쇄 범위 — 도착에 밀린 고유 축일은 사도 · 복
     same(fate(t.at("2026-06-17"), "d0617-s"), ["commemorated", "d0615-a"], String(cls));
     assert.strictEqual(officialId(t.at("2026-06-17")), "d0615-a", String(cls));
   }
-  // prec 7 — 옮길 수 있는 축일(성모 탄신 같은 축일)은 도착에 밀리면 기념, 옮길 수 없는 축일은 종전대로 생략(→ R-6.1-prec7-omit)
+  // prec 7 — 옮길 수 있는 축일(성모 탄신 같은 축일)도 옮길 수 없는 축일도 도착에 밀리면 그날 기념(→ R-6.1-prec7-omit)
   const minor = (extra) => passEngine(passTables([MOV("d0615-a", "06.15", { sanctoral_class: "apostle" }), SAN("d0617-m", "06.17", "합성 축일", { sanctoral_class: "lord", ...extra })], TWO_WALLS));
   const movableMinor = minor({ transferable: true, transfer_to: "next_day" });
   same(seats(movableMinor.pass(2026).departures), { "2026-06-15": ["d0615-a->2026-06-17"] });   // 6.17 의 출발은 없다
   same(fate(movableMinor.at("2026-06-17"), "d0617-m"), ["commemorated", "d0615-a"]);
-  same(fate(minor({}).at("2026-06-17"), "d0617-m"), ["omitted", "d0615-a"]);
+  same(fate(minor({}).at("2026-06-17"), "d0617-m"), ["commemorated", "d0615-a"]);
   for (const cls of ["apostle", "evangelist"]) {   // 연쇄 대상은 하루 더 밀린다(→ R-6.2-chain-model)
     const t = run(cls);
     same(seats(t.pass(2026).arrivals), { "2026-06-17": ["d0615-a<-2026-06-15"], "2026-06-18": ["d0617-s<-2026-06-17"] }, cls);

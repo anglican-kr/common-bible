@@ -102,7 +102,7 @@ test("A3 주기 · 색 라벨이 데이터 _vocab 과 같다(ADR-036 §4 단일 
 
 // ── 실제 날짜 — ADR-038 §3 규칙 ──
 
-test("A3 2026-04-05 부활대축일 — 본기도 대체안 셋이 세그먼트, 세트 둘(원본 세트 표지는 숨김), 슬롯 넷, 생략된 성인은 흐린 칩", { skip: SKIP }, () => {
+test("A3 2026-04-05 부활대축일 — 본기도 대체안 셋이 세그먼트, 세트 둘(원본 세트 표지는 숨김), 슬롯 넷, 기념일은 흐린 칩", { skip: SKIP }, () => {
   const m = model("2026-04-05");
   assert.strictEqual(id(m.selected), "t-부활대축일");
   assert.strictEqual(m.collects.length, 3);   // 부활대축일의 자유선택 대체안 셋 — 고른 관측일의 것만
@@ -110,7 +110,7 @@ test("A3 2026-04-05 부활대축일 — 본기도 대체안 셋이 세그먼트,
   same(m.options.map((o) => [o.label, o.short]), [["독서 1", null], ["독서 2", null]]);   // 원본 세트 둘 = 「또는」 대안
   same(m.slots.map((s) => s.slot), ["first", "psalm", "second", "gospel"]);
   same(m.chips.map((c) => [c.label, c.muted]),
-    [["부활대축일", false], ["마틴 루터 킹 · 생략", true], ["부활 1주일 (가해)", false]]);
+    [["부활대축일", false], ["마틴 루터 킹 · 기념일", true], ["부활 1주일 (가해)", false]]);
   same(plain(m.colors), ["white"]);
   assert.strictEqual(m.pair, null);
   const third = model("2026-04-05", { collect: 3 });
@@ -259,10 +259,10 @@ test("A3 2025-01-29 설날 — 명절 카드 둘", { skip: SKIP }, () => {
   assert.strictEqual(id(m.pair.b), "grid:ordinary-3-weekday-wed");
 });
 
-test("A3 2026-01-01 세계평화 기도일 칩 — 기념일은 empty, 거룩한 이름 예수는 세트 둘", { skip: SKIP }, () => {
+test("A3 2026-01-01 세계평화 기도일 칩 — 본문 없는 축일은 empty, 거룩한 이름 예수는 세트 둘", { skip: SKIP }, () => {
   const m = model("2026-01-01", { obs: "d0101-세계평화를-위한-기도일" });
-  assert.strictEqual(m.empty, true);
-  assert.ok(m.chips.find((c) => c.active).label.endsWith("· 기념일"));
+  assert.strictEqual(m.empty, true);   // 기도서에 본기도와 독서가 없다(미결51)
+  assert.strictEqual(m.chips.find((c) => c.active).label, "세계평화를 위한 기도일");
   const feast = model("2026-01-01");
   assert.strictEqual(id(feast.selected), "d0101-거룩한-이름-예수");
   assert.strictEqual(feast.options.length, 2);
@@ -294,11 +294,11 @@ test("A3 2026-12-25 · 12-24 — 12.25 는 성탄 낮(초기 · 미결12) · 새
   same(eve.chips.map((c) => c.label), ["대림 4주 목요일 (나해)", "성탄 밤 · 저녁"]);
   const night = model("2026-12-24", { obs: "d1225-성탄-밤" });
   same(plain(night.colors), ["white"]);
-  // 성탄 밤의 본문 · 본기도 — 12.24 에서 12.25 키로 좁힌다. 새벽(이사 62 · 루가 2:1-7, 8-20 · 본기도 279)과 가르는 값으로 고정한다
+  // 성탄 밤의 본문 · 본기도 — 12.24 에서 12.25 키로 좁힌다. 새벽(이사 62 · 루가 2:1-7, 8-20 · 본기도 276)과 가르는 값으로 고정한다
   // (「루가 2:1」 로 시작하는지만 보면 새벽 본문도 통과했다 — PR #349 리뷰)
   assert.strictEqual(night.group.title, "성탄 밤");
   same(night.slots.map((sl) => sl.label), ["이사 9:1-6", "시편 96", "디도 2:11-14", "루가 2:1-14, 15-20"]);
-  same(night.collects.map((c) => c.id), [278]);
+  same(night.collects.map((c) => c.id), [275]);
 });
 
 test("A3 2026-06-14 연중 11주일 — 트랙 기억이 기본, URL 이 이기고, 괄호 선택 구절 세트는 바탕에 합쳐져 긴 본문 + 선택 구절", { skip: SKIP }, () => {
@@ -349,7 +349,7 @@ test("A3 2026-03-01 사순 2주일 — 조건부 세트는 조건이 라벨 「�
   const m = model("2026-03-01", { set: 2 });
   same(m.options.map((o) => o.label), ["사순 2주일", "주의 변모 주일로 지킬 때"]);   // 「…로 지키는 경우」 → 「…로 지킬 때」
   assert.strictEqual(m.group.set_no, 2);
-  same(m.chips.map((c) => c.muted), [true, true, false]);   // 삼일절 · 데이빗 생략
+  same(m.chips.map((c) => c.muted), [false, false, false]);   // 삼일절 · 데이빗은 주일에 밀려 「· 기념만」(사용자 결정 2026-10-24)
 });
 
 test("A3 송가 — 즈가리야 송가는 영광송을 붙이고 창조송가(gloria:false)는 붙이지 않는다(실제 cant 장 JSON)", { skip: SKIP }, () => {
