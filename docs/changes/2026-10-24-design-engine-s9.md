@@ -20,7 +20,9 @@ title: "docs: 교회력 설계서 §9 고쳐 쓰기와 긴 표 풀기"
 어긋난 것은 모두 문서가 데이터나 엔진을 설명하다 낡은 경우였다. 사용자 결정이나 기도서 규칙과 코드가 어긋난 곳은 없었다.
 
 - **표를 푼 뒤 참조를 맞췄다.** 지금의 표를 「행」이나 「표」로 가리키던 곳을 「항목」, 「목록」으로 고쳤다. 「§7 B1 행」 같은 참조 8곳(설계서, 검토 문서, `winners.cases.json`의 설명, 엔진 테스트 주석), 「§2 결손 표」 10곳(§9 항목들과 `docs-data-consistency.test.js` 주석), 「§5.4 조인 키 표」 등 5곳, 「§5.5 상태 표」 4곳(엔진 주석 하나 포함)이다. 「2026-09-20에 §7 행에서 옮겨 적었다」, 「리팩터링 전 §7 행의 묶음」, 「검토 당시엔 §7 행에」처럼 그때의 사실을 적은 곳은 그대로 두었다.
-- **「leaf 모듈」을 풀어 썼다**(사용자 교정, 2026-10-24). 개발을 모르는 독자에게 어렵다는 지적이다. 「다른 모듈을 하나도 가져다 쓰지 않는 모듈」처럼 뜻을 쓰고, 문서마다 처음 나오는 곳에만 (leaf)를 괄호로 남겨 ADR-034와 이었다. 「near-leaf」, 「거의 leaf」는 「조정 모듈을 다시 부르지 않는」으로 썼다. 설계서 §1, §3.1(모듈을 셋으로 나눈 그림의 이름도 「혼자 도는 모듈, 화면 모듈, 조정 모듈」로), 검토 문서, `docs/architecture.md`, ADR-034, 037, 038, 플랫폼 주제 문서, known-issues의 22곳이다. 코드의 영어 주석은 개발자가 읽는 자리라 그대로 두었다. `docs/writing.md` 「용어」에 한 줄을 더했다.
+- **「leaf 모듈」을 풀어 썼다**(사용자 교정, 2026-10-24). 개발을 모르는 독자에게 어렵다는 지적이다. 「다른 모듈에 의존하지 않는 모듈」처럼 뜻을 쓰고(「가져다 쓰지 않는」으로 썼다가, 「쓰다」가 「작성하다」로도 읽혀 사용자 제안대로 「의존」으로 맞췄다), 문서마다 처음 나오는 곳에만 (leaf)를 괄호로 남겨 ADR-034와 이었다. 「near-leaf」, 「거의 leaf」는 「조정 모듈을 다시 호출하지 않는」으로 썼다. 설계서 §1, §3.1(모듈을 셋으로 나눈 그림의 이름도 「혼자 도는 모듈, 화면 모듈, 조정 모듈」로), 검토 문서, `docs/architecture.md`, ADR-034, 037, 038, 플랫폼 주제 문서, known-issues의 22곳이다. 코드의 영어 주석은 개발자가 읽는 자리라 그대로 두었다. `docs/writing.md` 「용어」에 한 줄을 더했다.
+- **「부르다」를 「호출하다」로 바꿨다**(사용자 교정, 2026-10-24). 함수나 모듈을 실행시키는 뜻의 「부르다」, 「불리다」는 「호출하다」, 「호출되다」로 바꿨다. 스크립트, 명령, 워크플로를 돌리는 뜻은 「실행하다」로 썼다(`sync-data.yml`을 실행한다, `release.py`를 실행해). 동적 `import()`로 모듈을 받는 곳은 호출이 아니어서 「불러오는」으로 썼다(`sw.test.js`의 테스트 이름과 `tests/README.md`의 요약). 이름을 붙이는 뜻(「LRU라고 부른다」, 「「지정 전례일」이라 부른다」), 성경 절을 번호로 가리키는 뜻(「번호로 부를 수 없어」), 데이터를 받는 「불러오다」는 그대로 두었다. ADR 22개, 설계서와 검토 문서, 주제 문서 셋, `architecture.md`, `coding-pitfalls.md`, `known-issues.md`, `DESIGN.md`, `tests/README.md`와 픽스처 README의 137곳이다. 코드의 한국어 주석과 테스트 이름, 확인 메시지 30곳도 같이 바꿨다. 같은 줄에 있던 「throw한다」(`docs/topics/liturgical.md`)는 「예외를 던진다」로 고쳤다. `docs/writing.md` 「용어」에 한 줄을 더했다.
+- **긴 사례를 하위 항목으로 나누는 규칙을 더하고, 고쳐 쓰기를 할 일로 적었다**(사용자 교정, 2026-10-24). 사용자가 `coding-pitfalls.md` §5의 한 사례(한 줄 559자)를 보고, 한 항목에 뜻이 많으니 하위 목록으로 나누자고 했다. 서술에 함수와 모듈 이름을 쓰는지도 물었다. 그 사례에는 세 문제가 섞여 있었다. 코드 이름은 하는 일 없이 쓰였고, 「(main부터)」, 「먹어」, 「갈라」처럼 개발자끼리 쓰는 말도 있었다. `docs/writing.md` pitfalls §37에 「항목 하나에 문제 하나」 규칙을, §40에 개발자 말을 풀어 쓰는 규칙을 더했다. 이 규칙대로 `coding-pitfalls.md`와 주제 문서의 긴 사례를 고쳐 쓰는 일은 known-issues §30으로 적었다. 설계서 작업(§24)이 끝난 뒤에 한다.
 - **설계서를 장마다 파일로 나누기로 했다**(사용자 결정, 2026-10-24). 1,640줄, 약 300KB라 읽기 어렵다. 절 번호, 규칙 마커, 미결 번호는 그대로 두고 `docs/design/liturgical-engine/` 아래 장별 파일로 옮긴다. 이 PR이 머지된 뒤 글자를 그대로 옮기는 PR로 따로 낸다. 문서 검사 테스트와 사실 토큰 도구가 여러 파일을 「설계서」로 읽게 고치는 일이 함께 들어간다.
 
 - **미결5: 사계재 본문 레코드의 `season`.** 「본문 레코드도 `season: null`」이라 했는데, 춘계재 본문 5건은 전례 절기 `lent`, 1주다(하계재, 추계재, 동계재 15건만 `null`). §4는 이미 맞게 적고 있었다. 계절이 한국어 `name` 안에만 있다는 결론은 그대로다.
@@ -45,12 +47,16 @@ title: "docs: 교회력 설계서 §9 고쳐 쓰기와 긴 표 풀기"
 
 - 교회력 사실 토큰 비교 `python3 scripts/docs_facts_snapshot.py --diff main WORKTREE --strict-counts --allow-new '^(17행|909건)$'`에서 사라진 토큰과 줄어든 토큰이 0이다. 새 토큰 둘은 위에서 더한 지금의 수다.
 - `python3 scripts/docs_facts_snapshot.py --diff main WORKTREE --docs 'docs/design/liturgical-engine.md' --kinds general --strict-counts`에서 사라진 토큰 둘은 의도한 것이다. 닫힌 항목의 형식 문자열(「기각한 갈래와 이유」를 「채택 안 함(버린 갈래와 이유)」으로)과, 원장의 절 이름 인용 「확정·근거」를 실제 절 이름 「확정 · 근거」로 맞춘 것이다.
-- 표를 푼 뒤에도 사실 토큰 비교의 결과는 같다. 일반 토큰 비교에서 줄어든 「1행」은 「B1 행」을 「B1 항목」으로 바꾸며 검사 도구가 숫자로 잘못 읽던 것이 줄어든 것이다. `status` 하나는 §5.5 표 머리의 칸 이름 `status`가 목록 머리말로 바뀐 것이다.
+- 표를 푼 뒤에는 교회력 사실 토큰 비교와 일반 토큰 비교 둘 다에서 「1행」이 하나 줄었다(3에서 2로). 「B1 행」을 「B1 항목」으로 바꾸면서, 검사 도구가 숫자로 잘못 읽던 것이 하나 없어진 것이다. `status` 하나는 §5.5 표 머리의 칸 이름 `status`가 목록 머리말로 바뀐 것이다.
+- 「의존」과 「호출하다」로 바꾼 뒤 `--docs 'docs/**/*.md' --docs '*.md' --kinds general --strict-counts`로 직전 커밋과 비교했다. 사라진 토큰 넷은 바꾼 인용(「다른 모듈을 하나도 가져다 쓰지 않는 모듈」, 「조정 모듈을 다시 부르지 않는」, 「구조와 토큰만, 배선은 부르는 쪽」)이고, 줄어든 토큰은 0이다. 코드 주석과 테스트 이름도 바꿔서 유닛 전체(1,366개, 1개는 원래 건너뜀)와 `npm run typecheck`를 돌려 통과했다. 고친 e2e 파일 셋은 문법만 확인했다(주석, docstring, 확인 메시지만 바뀌었다).
 - `node --test tests/unit/docs-*.test.js tests/unit/liturgical-fixtures.test.js` 31개가 모두 통과했다(§9.1 일곱 필드, §9.2 한 줄 형식, 번호 1..N, 사제 질문지와의 대응 포함). 픽스처 JSON도 다시 읽어 보았다.
 
 ## 갱신한 문서
 
 - `docs/design/liturgical-engine.md`: §9를 고쳐 쓰고 낡은 내용을 고쳤다. §2, §5.4, §5.5, §5.6, §7, §8의 긴 표를 목록으로 풀었다.
-- `docs/writing.md`: pitfalls §37에 표 칸 규칙 한 줄과 사례 하나, 「용어」에 leaf 모듈 한 줄.
+- `docs/writing.md`: pitfalls §37에 표 칸 규칙과 「항목 하나에 문제 하나」 규칙, 사례 둘. pitfalls §40에 개발자 말을 풀어 쓰는 규칙과 사례 하나. 「용어」에 leaf 모듈 한 줄.
+- `docs/known-issues.md`, `docs/topics/platform.md`: known-issues §30(긴 사례 고쳐 쓰기)을 새로 적음.
 - `docs/architecture.md`, `docs/topics/platform.md`, `docs/known-issues.md`, ADR-034, 037, 038: 「leaf」를 풀어 씀.
+- ADR 22개, `docs/architecture.md`, `docs/coding-pitfalls.md`, `docs/known-issues.md`, `DESIGN.md`, 주제 문서 셋(bookmark, liturgical, platform), 설계서와 검토 문서, `tests/README.md`, `tests/fixtures/liturgical/README.md`: 「부르다」를 「호출하다」, 「실행하다」로. `docs/writing.md` 「용어」에 한 줄.
+- 코드 주석과 테스트 이름: `js/app/` 다섯 파일(calendar, lectionary, liturgical-engine, routing, tabbar), 유닛 테스트 다섯, e2e 셋, `winners.cases.json`의 설명.
 - `docs/design/liturgical-engine-review.md`, `tests/fixtures/liturgical/winners.cases.json`, `tests/unit/liturgical-engine.test.js`, `tests/unit/docs-data-consistency.test.js`, `js/app/liturgical-engine.js`: 표를 가리키던 말(주석과 설명 문구만).
