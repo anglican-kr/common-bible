@@ -3,6 +3,8 @@
 //
 // 대상: 설계서 · 검토 문서 · ADR-036/037/038(앵커를 내고 참조도 한다) + architecture.md · docs/topics/*.md
 // (참조만 한다 — 읽기 전용 참조원이지만 **같은 참조 검사를 전부 받는다**). 번호 부여 규약은 설계서 §1.4 가 기준이다.
+// 설계서는 목차(docs/design/liturgical-engine.md)와 장 파일(docs/design/liturgical-engine/*.md)을 이어 붙인
+// 한 문서로 읽고, 실패 위치는 장 파일의 줄로 보인다(2026-10-24 장마다 나눔).
 //
 // 무엇을 잡나 —
 //   1. 참조가 실재하는 앵커를 가리키는가: `§n.m`(문서 한정어 우선 → 자기 문서 → 설계서 → 검토 문서 → ADR),
@@ -27,7 +29,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { checkIds, issueNumbers, rMarkerDefs, sectionList, stripInlineCode } from "./docs-anchors.js";
+import { checkIds, designFiles, issueNumbers, readJoined, rMarkerDefs, sectionList, stripInlineCode } from "./docs-anchors.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "../..");
@@ -46,20 +48,22 @@ const GATES = {
 };
 const gateDocs = (names) => (names.length ? names : "다음 PR 에서 켠다");
 
+// 문서 하나가 파일 여럿일 수 있다 — 설계서는 목차와 장 파일들을 이어 붙여 읽는다(docs-anchors.js `designFiles`).
 const DOCS = {
-  설계서: "docs/design/liturgical-engine.md",
-  "검토 문서": "docs/design/liturgical-engine-review.md",
-  "ADR-036": "docs/decisions/036-liturgical-calendar-data-model.md",
-  "ADR-037": "docs/decisions/037-eucharist-lectionary-data-and-engine.md",
-  "ADR-038": "docs/decisions/038-calendar-lectionary-ui.md",
+  설계서: designFiles(ROOT),
+  "검토 문서": ["docs/design/liturgical-engine-review.md"],
+  "ADR-036": ["docs/decisions/036-liturgical-calendar-data-model.md"],
+  "ADR-037": ["docs/decisions/037-eucharist-lectionary-data-and-engine.md"],
+  "ADR-038": ["docs/decisions/038-calendar-lectionary-ui.md"],
 };
-const SOURCES = { "architecture.md": "docs/architecture.md" };
+const SOURCES = { "architecture.md": ["docs/architecture.md"] };
 // 주제 문서(docs/topics/*.md, README 제외)도 참조만 하는 문서다 — 옛 status.md(2026-10-23 주제 문서로 나뉘어 삭제)에서
 // 옮겨 간 줄이 같은 검사를 계속 받게 한다.
 for (const f of fs.readdirSync(rel("docs/topics")).filter((f) => f.endsWith(".md") && f !== "README.md").sort())
-  SOURCES[`topics/${f}`] = `docs/topics/${f}`;
+  SOURCES[`topics/${f}`] = [`docs/topics/${f}`];
 // 파일명 한정어(`liturgical-engine.md §3.4` · `(docs/design/liturgical-engine-review.md) §5.11`)를 추적 대상 문서로 되돌리는 역인덱스.
-const BY_BASENAME = Object.fromEntries(Object.entries(DOCS).map(([k, p]) => [path.basename(p), k]));
+// 설계서의 장 파일 이름(`05-lookup-layer.md §5.2`)도 설계서로 푼다.
+const BY_BASENAME = Object.fromEntries(Object.entries(DOCS).flatMap(([k, ps]) => ps.map((p) => [path.basename(p), k])));
 const FIXTURE_DIR = "tests/fixtures/liturgical";
 
 // 번호 불변 상수 — 절을 말미에 더하거나 미결을 발급하면 여기도 함께 고친다(그게 규약이다).
@@ -71,9 +75,10 @@ const DESIGN_SECTIONS = [
 const DESIGN_ISSUE_MAX = 43; // ④ 에서 ADR 「미결 사항」의 열린 항목을 승계해 34~42 를 발급했다 · #347 이 43(도착에만 밀린 비연쇄 주요축일)
 const ADR_ISSUE_COUNT = { "ADR-036": 13, "ADR-037": 8, "ADR-038": 3 };
 
-const text = Object.fromEntries(
-  Object.entries({ ...DOCS, ...SOURCES }).map(([k, p]) => [k, fs.readFileSync(rel(p), "utf8")]),
-);
+const joined = Object.fromEntries(Object.entries({ ...DOCS, ...SOURCES }).map(([k, ps]) => [k, readJoined(ROOT, ps)]));
+const text = Object.fromEntries(Object.entries(joined).map(([k, j]) => [k, j.text]));
+/** 문서의 줄 번호(1부터)를 실패 메시지에 쓸 `파일:줄` 로 — 설계서는 이은 글의 줄이 아니라 장 파일의 줄이다. */
+const at = (doc, ln) => joined[doc].where(ln);
 const lines = Object.fromEntries(Object.entries(text).map(([k, t]) => [k, t.split("\n")]));
 // 표기 금지 게이트가 보는 본문 — 인라인 코드를 뺀 산문(줄 단위, 줄 번호 보존).
 const prose = Object.fromEntries(Object.entries(lines).map(([k, ls]) => [k, ls.map(stripInlineCode)]));
@@ -122,8 +127,7 @@ function qualifierBefore(line, idx) {
 
 const unresolved = [];
 const warnings = [];
-const fileOf = (doc) => DOCS[doc] ?? SOURCES[doc];
-function note(kind, doc, ln, ref, target) { unresolved.push(`${fileOf(doc)}:${ln}: ${ref} → ${target} (${kind})`); }
+function note(kind, doc, ln, ref, target) { unresolved.push(`${at(doc, ln)}: ${ref} → ${target} (${kind})`); }
 function warn(msg) { warnings.push(msg); }
 
 function resolveSection(doc, ln, line, m) {
@@ -138,7 +142,7 @@ function resolveSection(doc, ln, line, m) {
   if (q === "self" || (q === null && self)) {
     if (self && SECTIONS[self].has(sec)) {
       if (q === null && self !== "설계서" && SECTIONS["설계서"].has(sec))
-        warn(`${fileOf(doc)}:${ln}: 한정어 없는 §${sec} — ${self} 와 설계서 양쪽에 있다`);
+        warn(`${at(doc, ln)}: 한정어 없는 §${sec} — ${self} 와 설계서 양쪽에 있다`);
       return;
     }
     if (q === "self") { note("절", doc, ln, `§${sec}`, self); return; }
@@ -147,7 +151,7 @@ function resolveSection(doc, ln, line, m) {
   // (ADR-037 §1 의 「§10 "잠정 순번 id 금지"」처럼 남의 절을 한정어 없이 가리키던 곳은 ④ 에서 「ADR-036 §10」으로 보강했다)
   for (const other of ["설계서", "검토 문서", "ADR-036", "ADR-037", "ADR-038"]) {
     if (other === self || !SECTIONS[other].has(sec)) continue;
-    if (self || other !== "설계서") warn(`${fileOf(doc)}:${ln}: 한정어 없는 §${sec} — 자기 문서에 없어 ${other}로 풀었다`);
+    if (self || other !== "설계서") warn(`${at(doc, ln)}: 한정어 없는 §${sec} — 자기 문서에 없어 ${other}로 풀었다`);
     return;
   }
   note("절", doc, ln, `§${sec}`, self ?? "설계서");
@@ -166,13 +170,13 @@ function resolveIssue(doc, ln, line, m) {
   if (self && ISSUES[self]) {
     if (has(self)) {
       if (q === null && self !== "설계서" && has("설계서"))
-        warn(`${fileOf(doc)}:${ln}: 한정어 없는 미결${n} — ${self} 와 설계서 양쪽에 있다`);
+        warn(`${at(doc, ln)}: 한정어 없는 미결${n} — ${self} 와 설계서 양쪽에 있다`);
       return;
     }
     if (q === "self") { note("미결", doc, ln, `미결${n}`, self); return; }
   }
   if (has("설계서")) {
-    if (self && self !== "설계서" && ISSUES[self]) warn(`${fileOf(doc)}:${ln}: 한정어 없는 미결${n} — ${self} 에 없어 설계서로 풀었다`);
+    if (self && self !== "설계서" && ISSUES[self]) warn(`${at(doc, ln)}: 한정어 없는 미결${n} — ${self} 에 없어 설계서로 풀었다`);
     return;
   }
   note("미결", doc, ln, `미결${n}`, self ?? "설계서");
@@ -356,7 +360,7 @@ test("동그라미 숫자 참조 형식이 없다", { skip: GATES.circledRefs.le
   const bad = [];
   for (const doc of GATES.circledRefs)
     prose[doc].forEach((line, i) => {
-      for (const m of line.matchAll(/(§\d+(?:\.\d+)? [①-⑳]|X-\d+ [①-⑳]|미결\d+ [①-⑳])/g)) bad.push(`${DOCS[doc]}:${i + 1}: ${m[1]}`);
+      for (const m of line.matchAll(/(§\d+(?:\.\d+)? [①-⑳]|X-\d+ [①-⑳]|미결\d+ [①-⑳])/g)) bad.push(`${at(doc, i + 1)}: ${m[1]}`);
     });
   assert.deepEqual(bad, [], `동그라미 참조 ${bad.length}건 — R- 마커 · 픽스처 id · 항목 이름으로 바꿀 것:\n  ${bad.join("\n  ")}`);
 });
@@ -364,13 +368,13 @@ test("동그라미 숫자 참조 형식이 없다", { skip: GATES.circledRefs.le
 test("Qn 참조는 Q→미결 대응표 줄을 빼고 없다", { skip: GATES.qRefs.length ? false : gateDocs(GATES.qRefs) }, () => {
   const bad = [];
   // 대응표는 한 곳(검토 문서 §6)에 한 줄이다(설계서 §1.4) — 표시 문구가 다른 줄에도 있으면 어느 줄이 대응표인지 모호하다.
-  const markers = Object.keys(DOCS).flatMap((d) => lines[d].flatMap((l, i) => (/Q→미결 대응/.test(l) ? [`${DOCS[d]}:${i + 1}`] : [])));
-  assert.deepEqual(markers, [`${DOCS["검토 문서"]}:${Q_DECODE_IDX + 1}`], "「Q→미결 대응」 줄은 검토 문서 §6 의 한 줄뿐이어야 한다");
+  const markers = Object.keys(DOCS).flatMap((d) => lines[d].flatMap((l, i) => (/Q→미결 대응/.test(l) ? [at(d, i + 1)] : [])));
+  assert.deepEqual(markers, [at("검토 문서", Q_DECODE_IDX + 1)], "「Q→미결 대응」 줄은 검토 문서 §6 의 한 줄뿐이어야 한다");
   for (const doc of GATES.qRefs)
     prose[doc].forEach((line, i) => {
       // 면제는 대응표 그 줄 하나 — 문구가 들어간 산문까지 건너뛰면 「대응표 줄만 뺀다」가 무너진다.
       if (doc === "검토 문서" && i === Q_DECODE_IDX) return;
-      if (/(?<![\w-])Q\d+(?![\w-])/.test(line)) bad.push(`${DOCS[doc]}:${i + 1}`);
+      if (/(?<![\w-])Q\d+(?![\w-])/.test(line)) bad.push(at(doc, i + 1));
     });
   assert.deepEqual(bad, [], `Qn 참조 ${bad.length}건 — 미결n 으로:\n  ${bad.join("\n  ")}`);
 });
@@ -382,7 +386,7 @@ test("ADR 미결 번호로 가리키는 참조가 없다 — 옛 번호는 그 A
   const bad = [];
   for (const doc of GATES.adrIssueRefs)
     prose[doc].forEach((line, i) => {
-      for (const m of line.matchAll(/ADR-03[678] ?(?:「미결 사항」 ?|미결 ?)\d+/g)) bad.push(`${DOCS[doc]}:${i + 1}: ${m[0]}`);
+      for (const m of line.matchAll(/ADR-03[678] ?(?:「미결 사항」 ?|미결 ?)\d+/g)) bad.push(`${at(doc, i + 1)}: ${m[0]}`);
     });
   assert.deepEqual(bad, [], `ADR 미결 번호 참조 ${bad.length}건 — 설계서 미결n 으로:\n  ${bad.join("\n  ")}`);
 });
@@ -391,7 +395,7 @@ test("편집 원칙 — 개정 블록 · 취소선 · 해소/재개/정정 꼬�
   const bad = [];
   for (const doc of GATES.editingPrinciple)
     prose[doc].forEach((line, i) => {
-      if (/^> \*\*개정 \(|~~|\*\*(해소|재개|정정|재해소) (\d{4}-\d{2}-\d{2}|\()/.test(line)) bad.push(`${DOCS[doc]}:${i + 1}`);
+      if (/^> \*\*개정 \(|~~|\*\*(해소|재개|정정|재해소) (\d{4}-\d{2}-\d{2}|\()/.test(line)) bad.push(at(doc, i + 1));
     });
   assert.deepEqual(bad, [], `편집 원칙 위반 ${bad.length}건 — 본문을 현재 결론으로 고치고 버린 선택지는 §9.2 · ADR 「검토한 대안」으로:\n  ${bad.join("\n  ")}`);
 });

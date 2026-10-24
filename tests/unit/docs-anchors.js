@@ -1,9 +1,45 @@
 // ── 설계 문서의 앵커 추출 — 번호 부여 규약(설계서 §1.4)의 유일한 JS 구현 ─────────
-// docs-crossref.test.js · liturgical-fixtures.test.js · liturgical-fixtures.data.test.js 가 함께 쓴다.
+// docs-crossref.test.js · liturgical-fixtures.test.js · liturgical-fixtures.data.test.js 가 함께 쓰고,
+// 설계서를 읽는 곳(docs-data-consistency.test.js 포함)은 아래 `designFiles` · `readJoined` 로 읽는다.
 // 규약이 바뀌면 여기만 고친다. 테스트 파일이 아니라 `*.test.js` 글롭 밖이다 — 같은 자리의 `harness.js`
 // (state-machine 계열 테스트의 공용 하네스)와 같은 관례.
 // (같은 문법의 Python 사본이 scripts/docs_facts_snapshot.py 에 있다 — 그쪽은 토큰 세기 전용이라
 //  앵커 해석을 하지 않는다. 해석이 필요한 곳은 전부 이 파일을 쓴다.)
+
+import fs from "node:fs";
+import path from "node:path";
+
+// 설계서는 목차 파일 하나와 장 파일들로 나뉘어 있다(2026-10-24). 검사는 목차부터 장 번호순으로 이어 붙여
+// 설계서 하나로 읽는다 — 절 번호 · 미결 번호 · 센티널이 파일 경계와 상관없이 한 문서 안에서 풀린다.
+export const DESIGN_TOC = "docs/design/liturgical-engine.md";
+const DESIGN_DIR = "docs/design/liturgical-engine";
+
+/** 설계서를 이루는 파일(저장소 기준 경로) — 목차, 그다음 `NN-이름.md` 장 파일을 번호순으로. */
+export function designFiles(root) {
+  const chapters = fs.readdirSync(path.join(root, DESIGN_DIR)).filter((f) => /^\d{2}-[a-z0-9-]+\.md$/.test(f)).sort();
+  return [DESIGN_TOC, ...chapters.map((f) => `${DESIGN_DIR}/${f}`)];
+}
+
+/** 파일들을 차례로 이어 붙여 한 문서로 읽는다. `where(ln)` 은 이은 글의 줄 번호(1부터)를 `파일:줄` 로 되돌린다 —
+ *  검사가 실패 위치를 이은 글이 아니라 실제 파일의 줄로 보여 주게. 파일 하나면 그 파일을 그대로 읽은 것과 같다. */
+export function readJoined(root, files) {
+  const parts = files.map((f) => {
+    const t = fs.readFileSync(path.join(root, f), "utf8");
+    return t.endsWith("\n") ? t : `${t}\n`;
+  });
+  const starts = [];
+  let n = 0;
+  for (const t of parts) {
+    starts.push(n);
+    n += t.split("\n").length - 1;
+  }
+  const where = (ln) => {
+    let i = starts.length - 1;
+    while (i > 0 && starts[i] >= ln) i--;
+    return `${files[i]}:${ln - starts[i]}`;
+  };
+  return { text: parts.join(""), where };
+}
 
 /** `## 4.10 제목` · `### 1.4 제목` 의 절 번호를 **나온 순서대로**. 중복도 그대로 낸다 —
  *  「번호 재부여 금지」를 검사하려면 집합이 아니라 목록이어야 한다. */

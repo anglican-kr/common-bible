@@ -1,5 +1,5 @@
 // ── 설계서의 실측 수치가 data/ 서브모듈과 맞는지 검증 ──────────────────────────
-// docs/design/liturgical-engine.md §5.2 의 ```facts 블록이 문서 쪽 「현재 실측」의
+// 설계서 §5.2(docs/design/liturgical-engine/05-lookup-layer.md)의 ```facts 블록이 문서 쪽 「현재 실측」의
 // 단일 기준이다. 같은 수치가 ADR·설계서·status 에 흩어져 서로 어긋나던 것이
 // 2026-08-29 정합성 점검의 주된 원인이었다 — 기준을 한 곳에 두고 여기서 데이터와
 // 기계적으로 견준다.
@@ -14,11 +14,11 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { designFiles, readJoined } from "./docs-anchors.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "../..");
 const LECTIONARY = path.join(ROOT, "data", "lectionary");
-const DESIGN = path.join(ROOT, "docs", "design", "liturgical-engine.md");
 
 // 체크아웃 여부만 본다. 개별 파일의 존재로 판별하면 그 파일이 지워지거나 이름이
 // 바뀐 데이터 커밋에서 검증 전체가 조용히 skip 된다 — 없어진 것이야말로 잡아야 할
@@ -29,7 +29,8 @@ const count = (arr, pred) => arr.reduce((n, e) => n + (pred(e) ? 1 : 0), 0);
 
 /** 설계서 §5.2 의 ```facts 블록 → {키: 수} */
 function parseClaims() {
-  const md = fs.readFileSync(DESIGN, "utf8");
+  // 장 파일 사이로 절을 옮겨도 블록을 찾게, 설계서 전체(목차와 장 파일)를 이어 읽는다.
+  const md = readJoined(ROOT, designFiles(ROOT)).text;
   const m = md.match(/```facts\n([\s\S]*?)```/);
   assert.ok(m, "설계서에 ```facts 블록이 없다 — 옮겼거나 지웠으면 이 테스트도 함께 고칠 것");
   const out = {};
