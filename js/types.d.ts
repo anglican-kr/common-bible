@@ -728,7 +728,7 @@ export interface Candidate {
   evening?: true;
 }
 
-/** `periods.json` 의 겹침 표시 행(배너용 — 품계 비교에 참여하지 않는다). */
+/** `periods.json` 의 겹침 표시 행(배너용 — 우선순위 비교에 참여하지 않는다). */
 export interface LiturgicalPeriod {
   id: string;
   from: string;
