@@ -152,7 +152,7 @@ test("항목이 삭제 표식보다 새로우면 되살아난다", () => {
   assert.equal(merged.bookmarks.items.b1.bookId, "gen");
 });
 
-test("_u 동률이면 deviceId 사전순으로 이긴다", () => {
+test("_u 시각이 같으면 deviceId 사전순으로 앞선다", () => {
   const { store } = load();
   const local  = doc({ items: { b1: { id: "b1", type: "bookmark", name: "L", _u: 100 } } });
   const remote = doc({ items: { b1: { id: "b1", type: "bookmark", name: "R", _u: 100 } },

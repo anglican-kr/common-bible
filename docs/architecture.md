@@ -155,7 +155,7 @@ scripts/gen_manifests.py  ← 콘텐츠 해시 매니페스트 (ADR-021)
 - **물리적 장 순서**: 시락 머리말, 다니엘 추가본 등 본래 장 번호가 어그러지는 부분은 "원전이 있는 그대로의 물리 순서"를 따른다 ([ADR-003](decisions/003-physical-chapter-ordering.md)).
 - **검색 인덱스 분할 (구약/신약/외경)**: 5.8 MB 단일 파일을 3개로 쪼개 첫 검색 응답 속도를 우선 ([ADR-005](decisions/005-search-indexing-strategy.md)). 워커는 신약 청크만 받으면 검색을 시작한다(§4.2).
 - **운문 본문 포맷**: 마크다운 블록인용(`>`)으로 표기. 절 내 산문/운문 구분은 `segments` 배열(`type: "prose"|"poetry"`), 스탠자 구분은 절 간 `stanza_break: true` 또는 절 내 텍스트의 `\n\n`, 단락 구분은 segment 레벨 `paragraph_break: true`. 자세히 [ADR-006](decisions/006-poetry-source-format.md).
-- **교회력 데이터**: 교회력 정의 표가 「그날이 어떤 전례일인가」의 권위이고(품계 · 전례색), 전례독서 · 본기도는 이름 · 좌표로 그 표에 조인되는 본문 표다 — 독서와 본기도 파서는 좌표 계산을 함께 쓴다 ([ADR-036](decisions/036-liturgical-calendar-data-model.md) · [ADR-037](decisions/037-eucharist-lectionary-data-and-engine.md)). 이동 축일 규칙 문자열(`easter-46` 등)은 파서가 빌드 때 구조화해 두므로 앱 엔진은 다시 파싱하지 않는다.
+- **교회력 데이터**: 교회력 정의 표가 「그날이 어떤 전례일인가」의 권위이고(등급 · 전례색), 전례독서 · 본기도는 이름 · 좌표로 그 표에 조인되는 본문 표다 — 독서와 본기도 파서는 좌표 계산을 함께 쓴다 ([ADR-036](decisions/036-liturgical-calendar-data-model.md) · [ADR-037](decisions/037-eucharist-lectionary-data-and-engine.md)). 이동 축일 규칙 문자열(`easter-46` 등)은 파서가 빌드 때 구조화해 두므로 앱 엔진은 다시 파싱하지 않는다.
 
 **자동화**: data 저장소 main에 파이프라인 입력이 푸시되면 `build.yml`이 파이프라인 · 매니페스트 · 전체 pytest를 돌려 산출물을 main에 커밋하고, 앱 저장소의 `sync-data.yml`을 디스패치한다. `sync-data.yml`은 서브모듈 포인터와 `sitemap.xml`을 올리고 실데이터 테스트를 돌린 뒤, 통과하면 `sync/data-<run_id>` PR을 열어 Unit tests 뒤 자동으로 스쿼시 머지한다(버전 범프 없음). 실데이터 테스트에는 교회력 설계서의 사실 블록 대조가 들어 있어, 데이터가 문서의 실측치를 바꾸면 이 자동 PR은 만들어지지 않는다 — 문서를 함께 고친 앱 PR이 포인터를 올린다.
 
@@ -206,7 +206,7 @@ ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` 약 6,000줄이 8개 �
 | `js/app/search.js`                 | 검색 워커 wire-up + 결과 렌더 + 이력 패널 + sheet ([ADR-033](decisions/033-search-options.md)). 쪽 링크는 포커스 키를 달고(라우터가 돌려준다 — ADR-031 §5) 쪽은 라이브 영역이 말로 알린다, 결과 건수 줄은 `h2` | ~1,595  |
 | `js/app/reading-context.js`        | 현재 책/장 + 절 선택 모드 공유 상태                                                                                                                                        | ~35     |
 | `js/app/verse-spec.js`             | 절 스펙 파싱·비교·직렬화·병합 + 북마크 저장 표기 `verseNumberSpec` · 옛 판 표기 옮기기 `wholeVerseSpec`(ADR-010 「옛 저장값」) + `verseInstanceKey` + 바깥에서 들어온 절 범위의 검사 `isWellFormedSpec`(가져오기 파일 · 주소가 함께 쓴다 — ADR-040) (다른 모듈에 의존하지 않음. ADR-034의 leaf, ADR-038 §3 렌더 기반)            | ~455    |
-| `js/app/liturgical-engine.js`      | 교회력 엔진 (다른 모듈에 의존하지 않음, ADR-037 §6) — 계산(A1-a, 설계서 §4: computus·절기 스팬·연중 주차·주기·기간 축) + 조회(A1-b, 설계서 §5: 두 묶음 프리로드·`resolveDate` 후보 집합·`findReadings`·`findCollects`·`findHalfVerse`) + 품계·지정 전례일·전례색·재일·이동(B1, 설계서 §6: 범주 사다리·재분류·`fastOf`·연도 단위 이동 계산 `computeTransfers`·선택 봉헌 `setActivatedOptionals`). 교회력을 계산하는 범위(1583-9999 — `MIN_YEAR` · `MAX_YEAR` · `isComputableYear` · `isComputableDate`)의 기준이고 `resolveDate`는 범위 밖에 null. 부팅 때 싣지 않는다 — 전례독서 · 캘린더가 import하고, 그 둘을 `routing.js`가 그 화면에 처음 갈 때 `import()`로 불러온다 | ~2,180 |
+| `js/app/liturgical-engine.js`      | 교회력 엔진 (다른 모듈에 의존하지 않음, ADR-037 §6) — 계산(A1-a, 설계서 §4: computus·절기 스팬·연중 주차·주기·기간 축) + 조회(A1-b, 설계서 §5: 두 묶음 프리로드·`resolveDate` 후보 집합·`findReadings`·`findCollects`·`findHalfVerse`) + 우선순위·지정 전례일·전례색·재일·이동(B1, 설계서 §6: 범주 사다리·재분류·`fastOf`·연도 단위 이동 계산 `computeTransfers`·선택 봉헌 `setActivatedOptionals`). 교회력을 계산하는 범위(1583-9999 — `MIN_YEAR` · `MAX_YEAR` · `isComputableYear` · `isComputableDate`)의 기준이고 `resolveDate`는 범위 밖에 null. 부팅 때 싣지 않는다 — 전례독서 · 캘린더가 import하고, 그 둘을 `routing.js`가 그 화면에 처음 갈 때 `import()`로 불러온다 | ~2,180 |
 | `js/app/lectionary.js`             | 전례독서 뷰 — `/lectionary[/YYYY-MM-DD]`: 순수 모델 `buildLectionaryModel`(초기 선택 · 트랙 · 대안 세트 세 갈래(「또는」·조건부·괄호 선택 구절 합침) · 본기도 · 칩 라벨 · 두 독서 카드 · 헤더 색 · URL 상태, `LECTIONARY_MODEL` 마커 블록) + DOM(본기도 → 독서 네 슬롯 — `appendVerses` 계응 시편 + 영광송 1회 + 선택 구절 〔 〕, 전례일 칩, 세그먼트, 날짜 이동 줄 `buildDateNav` — 캘린더와 공유; 다시 그리는 링크는 포커스 키만 단다 — 라우터가 돌려준다). 엔진의 첫 소비자 ([ADR-038](decisions/038-calendar-lectionary-ui.md) §3). 머리 · 실패 화면은 `views.js`의 것을 쓴다. 부팅 때 싣지 않는다 — `/lectionary`(또는 캘린더 탭)에 처음 갈 때 `routing.js`가 `import()`로 불러온다 | ~1,380 |
 | `js/app/calendar.js`               | 캘린더 탭 — `/calendar[/YYYY-MM]` 월간 표: 순수 모델 `buildMonthGrid` · `calendarDay`(6주 × 7일 · 칸 이름 하나 — 대표, 격자 평일이면 사계재 · 기념일 · 번호 주일 「연중29주」 · 그날의 전례색 `colors` · 전례년 첫날 표지 · 링크 이름, `CALENDAR_MODEL` 마커 블록) + DOM(`<table>` 7열 · 이전/다음/오늘 링크). 캘린더 묶음만 프리로드, 이름 · 날짜 · 색 함수와 날짜 이동 줄은 `lectionary.js`에서, 계산 범위 판정은 엔진에서, 머리 · 실패 화면은 `views.js`에서 import ([ADR-038](decisions/038-calendar-lectionary-ui.md) §1 · §2). 부팅 때 싣지 않는다 — `/calendar`에 처음 갈 때 `routing.js`가 `import()`로 불러온다 | ~390 |
 | `js/app/bookmark-core.js`          | DOM-free 북마크 로직 (트리 query/insert/remove·href/share·정렬/최근본·active-route 술어·옛 판 절 범위 옮기기 `migrateLegacyBookmark`) — 창 객체(facade) 없이 다른 모듈이 `import`로 쓴다(자기 `<script>` 태그는 있다, ADR-034) | ~455    |
@@ -412,7 +412,7 @@ ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` 약 6,000줄이 8개 �
 | Cache Storage | `fonts` (FONT_CACHE) | Google Font 파일 | (영구) |
 | Google Drive (`appDataFolder`) | `sync.json` | 동기화 페이로드 (v2 문서 + `schemaVersion` · `deviceId`) + ETag | ☁️ 원격 |
 
-동기화 대상이 아닌 항목(오디오 위치, 정렬, 캐시 등)은 의도적으로 기기 로컬에 머문다. 디바이스 ID는 다른 기기가 가져가지 않지만 올리는 페이로드에 실려 병합에서 동점을 가르는 데 쓰인다. 옛 키(`bible-drive-sync-updated` · `bible-drive-silent-blocked`)는 지우기만 한다. 첫 북마크 저장 · 첫 오디오 재생 때 `navigator.storage.persist()`를 한 번 청한다(저장소 정리 대비 — 아래 「알려진 한계」의 ITP). 동기화 페이로드 스키마는 `js/types.d.ts`의 `SyncDoc` 타입과 `js/sync/store-v2.js:1` 헤더 주석에서 정의된다.
+동기화 대상이 아닌 항목(오디오 위치, 정렬, 캐시 등)은 의도적으로 기기 로컬에 머문다. 디바이스 ID는 다른 기기가 가져가지 않지만 올리는 페이로드에 실려 병합에서 시각이 같을 때 순서를 정하는 데 쓰인다. 옛 키(`bible-drive-sync-updated` · `bible-drive-silent-blocked`)는 지우기만 한다. 첫 북마크 저장 · 첫 오디오 재생 때 `navigator.storage.persist()`를 한 번 청한다(저장소 정리 대비 — 아래 「알려진 한계」의 ITP). 동기화 페이로드 스키마는 `js/types.d.ts`의 `SyncDoc` 타입과 `js/sync/store-v2.js:1` 헤더 주석에서 정의된다.
 
 ## 6. 정적 타입 검사 — JSDoc + `tsc --noEmit`
 
@@ -521,7 +521,7 @@ OAuth 측면 (가장 큰 공격 표면):
 Phase 1(성경 읽기 PWA)은 완성됐고, Phase 3(교회력)은 일부 구현됐다 — 엔진([ADR-037](decisions/037-eucharist-lectionary-data-and-engine.md)) · 전례독서 화면 `/lectionary` · 캘린더 월간 표 `/calendar`([ADR-038](decisions/038-calendar-lectionary-ui.md)). 남은 것은 [`topics/liturgical.md`](topics/liturgical.md)의 「남은 일」과 ADR-038. 단계들은 **컨텐츠 추가에 가까운 확장**으로 설계되어 있다:
 
 - Phase 2 — **기도서**: 첫 기도서 본문(전례시편 · 송가)은 `source/`가 아니라 `liturgical/psalter` · `liturgical/canticles`의 마크다운과 별도 파서(`src/liturgical_psalter.py` — 계응 구조, data 저장소 ADR-039)로 들어왔다. 두 책은 division `liturgical`로 성서 목록의 구분 탭 밖에 있고, 전례독서 화면이 읽는다. 남은 기도서 본문도 같은 길(별도 원료 · 파서 → 책 단위 JSON)을 따를 수 있다.
-- Phase 3 — **교회력**: 날짜 계산(computus · 절기 · 연중 주차)은 순수 함수지만, 그날이 어떤 전례일인지 · 품계 · 전례색 · 독서 · 본기도는 data 저장소의 표(`lectionary/` — 캘린더 묶음 다섯 · 전례독서 묶음 다섯)를 읽는다([ADR-036](decisions/036-liturgical-calendar-data-model.md) · 037). 라우트는 `/calendar` · `/lectionary`.
+- Phase 3 — **교회력**: 날짜 계산(computus · 절기 · 연중 주차)은 순수 함수지만, 그날이 어떤 전례일인지 · 등급 · 전례색 · 독서 · 본기도는 data 저장소의 표(`lectionary/` — 캘린더 묶음 다섯 · 전례독서 묶음 다섯)를 읽는다([ADR-036](decisions/036-liturgical-calendar-data-model.md) · 037). 라우트는 `/calendar` · `/lectionary`.
 - Phase 4 — **성무일과 자동 생성**: 교회력(Phase 3) + 성경(Phase 1) + 기도서(Phase 2) 조합 → 매일 자동 페이지 생성. `/lectionary/YYYY-MM-DD`가 이미 엔진 · 성서 · 기도서 본문(본기도 · 전례시편)을 감사성찬례 하루치로 엮는다 — 그 앞선 모습이다.
 
 각 단계가 **독립적으로 추가 가능**하도록 데이터 디렉토리·라우트·검색 인덱스를 책 단위로 분리해 둔 것이 핵심이다. 동기화 페이로드도 `settings`/`bookmarks`/`lastRead` 키별로 머지하므로 새 키 추가가 안전하다.
@@ -566,8 +566,8 @@ Phase 1(성경 읽기 PWA)은 완성됐고, Phase 3(교회력)은 일부 구현�
 | [033](decisions/033-search-options.md)                       | 검색 옵션 — 책 picker(필터 시트)·결과 내 검색(AND)·진입 시 최근 검색 목록(개별/전체 삭제), URL 인코딩 필터 상태, 노트 검색 범위 확장 대비 (구현 완료)                                                                                                         |
 | [034](decisions/034-views-routing-second-split.md)           | 뷰·라우팅·북마크 2차 분할 — 관심사별 모듈화 + 비순환 facade→명시 import 전환 + 순환 dispatch는 registry 역전 (ADR-018 후속. `views-routing.js` 2,389줄은 audio-player·data-fetch·tabbar·routing·overlay 로 분해돼 소멸, `bookmark.js` 3,578→589줄. PR5c registerView 역전만 보류)                                                                                                             |
 | [035](decisions/035-bookmark-reading-view.md)                | 북마크 모아 읽기 — 폴더 단위 연속 읽기 화면(`/read/<id>`, 홈 탭 분류), 폴더 행 `읽기`(auto_stories) 진입, 인접·연속 본문 병합, 네스팅 폴더는 소제목. `renderChapter` 절 루프를 `appendVerses`로 추출(전례독서 페이지 기반 기술) (구현 완료 — 모바일, 2026-06-09)                     |
-| [036](decisions/036-liturgical-calendar-data-model.md)       | 교회력(전례력) 데이터 모델 — 본기도 평면 배열(자기 좌표)·explode/병합 규칙·영어 값+`_vocab`·temporal/sanctoral·품계 8단계(2차)·전례색 4색·computus 기준·맺음구 분리 (데이터 구현 완료 2026-07-27 · 앱 엔진 B1 2026-10-11)                                                                               |
-| [037](decisions/037-eucharist-lectionary-data-and-engine.md) | 감사성찬례 전례독서 데이터·엔진 — `eucharist-readings.json` 좌표 스키마(refs=장 경계, verseSpec 재사용, 대안 세트 explode), 전례시편 별도 책 `lps`(계응 DSL, 숨김), 연중 주간 구간표·KASI 음력, `liturgical-engine.js`(computus·후보 전례일 보존) **(A1-a 계산 계층 구현 2026-09-13 · A1-b 조회 계층 구현 2026-10-10 · B1 품계·지정 전례일·전례색·재일·이동 계산 구현 2026-10-11 — 구현 완료)** |
+| [036](decisions/036-liturgical-calendar-data-model.md)       | 교회력(전례력) 데이터 모델 — 본기도 평면 배열(자기 좌표)·explode/병합 규칙·영어 값+`_vocab`·temporal/sanctoral·우선순위 8단계(2차)·전례색 4색·computus 기준·맺음구 분리 (데이터 구현 완료 2026-07-27 · 앱 엔진 B1 2026-10-11)                                                                               |
+| [037](decisions/037-eucharist-lectionary-data-and-engine.md) | 감사성찬례 전례독서 데이터·엔진 — `eucharist-readings.json` 좌표 스키마(refs=장 경계, verseSpec 재사용, 대안 세트 explode), 전례시편 별도 책 `lps`(계응 DSL, 숨김), 연중 주간 구간표·KASI 음력, `liturgical-engine.js`(computus·후보 전례일 보존) **(A1-a 계산 계층 구현 2026-09-13 · A1-b 조회 계층 구현 2026-10-10 · B1 우선순위·지정 전례일·전례색·재일·이동 계산 구현 2026-10-11 — 구현 완료)** |
 | [038](decisions/038-calendar-lectionary-ui.md)               | 교회력 캘린더·전례독서 뷰·검색 이원화 — 캘린더 탭(홈 옆, 월간·주간·목록 3뷰), `/lectionary/YYYY-MM-DD`(고른 전례일의 본기도만 — 대체안 탭 · 송영 상수 · 계응 시편 · 세트/트랙 전환), 검색 상단 탭(성서 본문/전례독서) **(구현 중 — 렌더 기반 2026-07-27 · A3 독서 뷰 2026-10-12 · A2 캘린더 탭 1단계(탭 · 월간) 2026-10-15; A2 2단계(주간 · 목록) · A4 남음)** |
 | [040](decisions/040-bookmark-import-items.md)                | 북마크 가져오기의 항목 검사 — 어긋난 항목만 빼고 들이고 뺀 개수를 병합 · 덮어쓰기 전에 알린다, 기준은 앱이 써 온 모양(ADR-010) · 멈출 때의 안내는 스낵바 **(구현 완료 2026-10-18)** |
 
@@ -579,7 +579,7 @@ Phase 1(성경 읽기 PWA)은 완성됐고, Phase 3(교회력)은 일부 구현�
 - 라우팅 (parsePath·route·navigate·popstate · 교회력 모듈을 그 화면에 처음 갈 때 `import()`): `js/app/routing.js`
 - 본문 렌더 + Views + 렌더 헬퍼 · 캘린더 · 전례독서의 머리 · 실패 화면: `js/app/views.js`
 - 데이터 패칭 (books/version/chapter/prologue + 캐시): `js/app/data-fetch.js`
-- 교회력 계산·조회·품계·이동 (computus·절기 스팬·연중 주차·주기·기간 축 / 프리로드·`resolveDate`·`findReadings`·`findCollects`·`findHalfVerse` / 지정 전례일·재분류·전례색·`fastOf` / 이동 계산·선택 봉헌): `js/app/liturgical-engine.js`
+- 교회력 계산·조회·우선순위·이동 (computus·절기 스팬·연중 주차·주기·기간 축 / 프리로드·`resolveDate`·`findReadings`·`findCollects`·`findHalfVerse` / 지정 전례일·재분류·전례색·`fastOf` / 이동 계산·선택 봉헌): `js/app/liturgical-engine.js`
 - 전례독서 뷰 (`/lectionary` — 전례일 칩·본기도·독서 네 슬롯·영광송·세트/트랙·두 독서 카드): `js/app/lectionary.js`
 - 캘린더 탭 (`/calendar` — 월간 표·칸 이름·전례색 점·전례년 표지·링크 이름): `js/app/calendar.js`
 - 오디오 플레이어 (장별 mp3 UI·재생 상태·#audio-bar): `js/app/audio-player.js`
