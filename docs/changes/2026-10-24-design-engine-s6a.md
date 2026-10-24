@@ -1,5 +1,4 @@
 ---
-pr:
 pr: 408
 date: 2026-10-24
 branch: docs/design-engine-s6a
