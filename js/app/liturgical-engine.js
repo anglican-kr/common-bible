@@ -87,10 +87,10 @@
  */
 
 /**
- * 캘린더 묶음의 인덱스(설계서 §5.4 권장 인덱스 1 · 2 · 4). `movable` 은 규칙 파생 관측일의
+ * 캘린더 묶음의 인덱스(설계서 §5.4 권장 인덱스 1 · 2 · 4). `movable` 은 규칙 파생 전례일의
  * 연도 메모다 — 표에 의존하므로 `anchorCache` 처럼 순수 파생값이 아니라 인덱스에 붙는다.
  * `eveningTomorrowDays` 는 내일로 정의돼 오늘 저녁에 드리는 저녁 전례(→ R-6.1-evening)의 정의 월일 — `resolveDateIn`
- * 이 그 전날에만 내일의 관측일을 본다. null(규칙 · 음력 행이 끼어 미리 모른다) · 없음(손으로 만든 인덱스)이면 날마다 본다.
+ * 이 그 전날에만 내일의 전례일을 본다. null(규칙 · 음력 행이 끼어 미리 모른다) · 없음(손으로 만든 인덱스)이면 날마다 본다.
  * @typedef {{
  *   sanctoralByDate: Map<string, Observance[]>, sanctoralByLunar: Map<string, Observance[]>,
  *   temporal: Observance[], periods: Array<{period: LiturgicalPeriod, from: string, to: string}>,
@@ -102,7 +102,7 @@
  */
 
 /**
- * 이동 패스(설계서 §6.5) — 한 해의 도착 · 출발 · 선택 봉헌 색인. 네 필드를 **모두** 갖는다.
+ * 이동 계산(설계서 §6.5) — 한 해의 도착 · 출발 · 선택 봉헌 색인. 네 필드를 **모두** 갖는다.
  * @typedef {{
  *   arrivals: Map<string, Candidate[]>, departures: Map<string, Candidate[]>,
  *   optionals: Map<string, Candidate[]>, defects: string[],
@@ -115,12 +115,12 @@
 const anchorCache = new Map();
 /** @type {Map<number, Record<string, Span[]>>} */
 const spansCache = new Map();
-// 이동 패스 캐시(§4.9) — **완전한(seed 받은) 패스만** 들어간다. 키는 연도이고 캘린더 인덱스 하나를 위한
+// 이동 계산 캐시(§4.9) — **완전한(seed 받은) 계산 결과만** 들어간다. 키는 연도이고 캘린더 인덱스 하나를 위한
 // 캐시다 — 인덱스가 새로 서면(`preloadCalendar`) · 활성화 집합이 바뀌면(`setActivatedOptionals`) 통째로 비운다.
 /** @type {Map<number, TransferPass>} */
 const transferCache = new Map();
 // 선택 봉헌 활성화 집합(§6.2 활성화 계약) — v1 은 빈 집합이다(설계서 미결15 — 채우는 설정 UI 는 아직 없다).
-// 이동 패스가 표 말고 의존하는 유일한 입력이라, 바뀌면 `transferCache` 를 비운다(§4.9).
+// 이동 계산이 표 말고 의존하는 유일한 입력이라, 바뀌면 `transferCache` 를 비운다(§4.9).
 /** @type {Set<string>} */
 const activatedOptionals = new Set();
 
@@ -698,8 +698,8 @@ function inSpan(dateStr, name) {
 // ── END LITURGICAL_CORE ──
 
 // ── BEGIN LITURGICAL_LOOKUP ──
-// 표 인덱스 · 격자 좌표 · 후보 조립 · 폴백 매칭 · 독서/본기도 조회 · 품계와 이동 패스(B1). **순수하다** —
-// 읽는 인덱스를 전부 인자로 받는다(설계서 §3.3). 모듈 상태는 이동 패스 캐시 `transferCache` 와 선택 봉헌
+// 표 인덱스 · 격자 좌표 · 후보 조립 · 폴백 매칭 · 독서/본기도 조회 · 품계와 이동 계산(B1). **순수하다** —
+// 읽는 인덱스를 전부 인자로 받는다(설계서 §3.3). 모듈 상태는 이동 계산 캐시 `transferCache` 와 선택 봉헌
 // 활성화 집합 `activatedOptionals` 둘만 만지고(`transfersOf` · `setActivatedOptionals`), 둘 다 블록 밖에 둬
 // 테스트가 prelude 로 재선언한다. LITURGICAL_CORE 를 먼저 실행한 컨텍스트에서 돈다.
 
@@ -712,14 +712,14 @@ const COMMON_PREFIX = "common:";
 /** @type {Array<WeekdayCode | null>} */
 const WEEKDAY_CODES = [null, "mon", "tue", "wed", "thu", "fri", "sat"];
 
-/** 격자 관측일의 표시명 재료. 표시는 뷰의 몫이고 이 이름은 기본값이다. */
+/** 격자 전례일의 표시명 재료. 표시는 뷰의 몫이고 이 이름은 기본값이다. */
 const SEASON_LABEL = { advent: "대림", christmas: "성탄", ordinary: "연중", lent: "사순", easter: "부활" };
 const WEEKDAY_LABEL = { mon: "월요일", tue: "화요일", wed: "수요일", thu: "목요일", fri: "금요일", sat: "토요일" };
 
 /**
  * **고유명 평일** — 데이터가 좌표가 아니라 이름으로만 가르는 앵커 파생 평일(ADR-036 §2 「고유명
  * 평일은 제외」). 재의 수요일 주간과 성주간은 좌표가 똑같이 `(lent, null, weekday, 요일)` 이라
- * 좌표로는 「재의 수요일 후 토요일」과 「성 토요일」을 가를 수 없다 — 그래서 그날의 격자 관측일이
+ * 좌표로는 「재의 수요일 후 토요일」과 「성 토요일」을 가를 수 없다 — 그래서 그날의 격자 전례일이
  * 이 이름을 달고, 본문은 그 이름으로 찾는다(§5.6 격자 경로 ②). 키는 부활절 기준 오프셋.
  */
 /** @type {Record<string, string>} */
@@ -731,7 +731,7 @@ const PROPER_WEEKDAY_NAMES = {
 /**
  * **저녁 전례**(→ R-6.1-evening — 설계서 미결20 닫힘, 사용자 결정 2026-10-15): 그날 저녁에 드리는 감사성찬례라
  * **어떤 판정에도 참여하지 않는다** — 그날의 대표(`official`) · 색 · 재분류(`settle`)에도, 축일을 다른 날로 옮기는
- * 이동 패스(§6.5 `computeTransfers`)에도. 후보 목록 맨 끝에 `evening: true` 로 실려 독서 화면에서 칩으로 고른다.
+ * 이동 계산(§6.5 `computeTransfers`)에도. 후보 목록 맨 끝에 `evening: true` 로 실려 독서 화면에서 칩으로 고른다.
  * 성 토요일에 걸린 주요축일을 미는 것은 성 토요일 행 자신이다(데이터 등급 「대축일」 · prec 1 — 사용자 결정
  * 2026-10-15 「성 토요일은 부활밤에 밀리지 않아」, → R-6.3-holy-week-guard).
  * 값은 데이터의 정의 날짜에서 실제로 드리는 날까지의 날 수다: 부활밤은 정의 날짜(성 토요일 — `easter_offset: -1`)
@@ -742,7 +742,7 @@ const PROPER_WEEKDAY_NAMES = {
  */
 const EVENING_LITURGIES = Object.freeze({ "t-부활밤": 0, "d1225-성탄-밤": -1 });
 
-/** 저녁 전례인가(→ R-6.1-evening) — 그날의 판정 · 이동 패스가 이 행을 빼고 센다. @param {Observance} obs */
+/** 저녁 전례인가(→ R-6.1-evening) — 그날의 판정 · 이동 계산이 이 행을 빼고 센다. @param {Observance} obs */
 function isEveningLiturgy(obs) {
   return Object.prototype.hasOwnProperty.call(EVENING_LITURGIES, obs.id);
 }
@@ -831,7 +831,7 @@ function namesMeet(/** @type {any} */ a, /** @type {any} */ b) {
 
 /**
  * 캘린더 묶음 다섯 표 → 조회 인덱스(§5.4 권장 인덱스 1 · 2 · 4). 프리로드 때 한 번 만든다.
- * 표의 행은 **복사하지 않고 그대로** 관측일로 쓴다 — `Observance` 는 정의 표의 행이다(§1.3).
+ * 표의 행은 **복사하지 않고 그대로** 전례일로 쓴다 — `Observance` 는 정의 표의 행이다(§1.3).
  * 날짜 · 음력 인덱스는 **1:N** 이다(같은 날짜에 성인이 둘 이상 — §5.2).
  * @param {{sanctoral?: any, temporal?: any, periods?: any, ordinalWeeks?: any, kasi?: any} | null} tables
  * @returns {CalendarIndex}
@@ -887,7 +887,7 @@ function eveningTomorrowDaysOf(sanctoralByDate) {
 }
 
 /**
- * 규칙 파생 관측일(§5.5 출처 ④) — 그해 temporal 규칙을 **한 번** 평가해 날짜 → 행 색인으로 둔다.
+ * 규칙 파생 전례일(§5.5 출처 ④) — 그해 temporal 규칙을 **한 번** 평가해 날짜 → 행 색인으로 둔다.
  * 규칙 일곱 종류는 전부 자기 달력년 안에 떨어진다(사계재 12.13 앵커 → 늦어도 12.23, 1.6 이후 첫
  * 주일 → 늦어도 1.13) — 해를 넘기는 결과는 그 해의 날짜 조회가 닿지 않으므로 실데이터 테스트가
  * 1900~2100 에서 단언한다. 같은 날짜에 두 행(성 토요일 · 부활밤 — easter −1)이면 둘 다 오른다(1:N).
@@ -906,7 +906,7 @@ function movableOf(index, y) {
   return out;
 }
 
-// ── §5.1 · §5.5 격자 좌표와 격자 관측일 ──
+// ── §5.1 · §5.5 격자 좌표와 격자 전례일 ──
 
 /**
  * 절기 주차 — 데이터의 격자 레코드가 쓰는 번호와 같다. 연중은 표(§4.6), 절기는 앵커에서 센다:
@@ -970,7 +970,7 @@ function properWeekdayNameOf(dateStr, coord) {
 }
 
 /**
- * 격자 관측일의 표시명. 고유명 평일(위 표)은 그 이름을 쓰고, 그 밖은 좌표에서 만든다(「연중 3주일」 ·
+ * 격자 전례일의 표시명. 고유명 평일(위 표)은 그 이름을 쓰고, 그 밖은 좌표에서 만든다(「연중 3주일」 ·
  * 「사순 2주 화요일」). 성 목 · 금 · 토는 temporal 행이 따로 있으므로 격자는 「성주간 X요일」이다 —
  * temporal 행의 이름을 빌리면 같은 본문이 후보 둘에 붙는다.
  * @param {string} dateStr @param {LiturgicalCoord} coord
@@ -993,11 +993,11 @@ function gridName(dateStr, coord, proper) {
 const SEASON_COLOR = { advent: "violet", christmas: "white", ordinary: "green", lent: "violet", easter: "white" };
 
 /**
- * 그 날의 **절기 기본색**과 선택 대체색(§6.4 결정 순서의 첫 단계 — 승자가 덮기 전의 바탕). 성주간
+ * 그 날의 **절기 기본색**과 선택 대체색(§6.4 결정 순서의 첫 단계 — 지정 전례일이 덮기 전의 바탕). 성주간
  * (성지주일 ~ 성 토요일)은 전체 홍이다 — 경계는 `spansOf` 의 `holyWeek` 이고 날짜를 따로 비교하지
  * 않는다(§4.10). 대체색은 데이터 `color_alt` 와 같은 뜻 · 같은 3형이다: 대림은 청(대림 3주일은 장미 ·
  * 청 둘 다), 사순 4주일은 장미. 성령강림 · 삼위일체 · 왕이신 그리스도의 색은 그 날의 temporal 행이
- * 승자로 덮는다 — 바탕은 절기만 안다.
+ * 지정 전례일로 덮는다 — 바탕은 절기만 안다.
  * @param {string} dateStr @param {LiturgicalCoord} coord
  * @returns {{color: LiturgicalColor, alt: import("../types").CodeField<LiturgicalColorAlt>}}
  */
@@ -1012,10 +1012,10 @@ function seasonColorOf(dateStr, coord) {
 }
 
 /**
- * ① 격자 관측일 — 정의 표에 행이 없어 좌표에서 **합성**한다(§5.5). id 는
+ * ① 격자 전례일 — 정의 표에 행이 없어 좌표에서 **합성**한다(§5.5). id 는
  * `grid:<season>-<week|x>-<type>[-<weekday>]`, precedence 는 §6.1 사다리(절기 주일 2 · 연중 주일 5 ·
  * 평일 8). 색은 절기 기본색이다(§6.4 — ADR-036 §8 「격자일 레코드의 color 는 좌표에서 파생한 절기
- * 기본색」). 그날의 색은 이 바탕 위에 승자가 덮는다(`dayColorsOf`).
+ * 기본색」). 그날의 색은 이 바탕 위에 지정 전례일이 덮는다(`dayColorsOf`).
  *
  * 고유명 평일(위 표의 여섯 날)에는 `properWeekday: true` 를 단다 — 그 밖의 날에는 키가 없다. 좌표가 `(lent, null,
  * weekday)` 로 같은 날 가운데 어느 날이 고유한 이름을 가졌는지는 엔진만 안다(같은 좌표의 성 목 · 금 · 토 격자는 「성주간
@@ -1046,10 +1046,10 @@ function gridObservance(dateStr, coord) {
   return obs;
 }
 
-// ── §4.9 · §6.5 이동 패스 캐시 ──
+// ── §4.9 · §6.5 이동 계산 캐시 ──
 
 /**
- * 빈 이동 패스 — 네 필드를 **모두** 갖는다. §5.5 가 `optionals` 까지 읽으므로 둘만 있으면
+ * 빈 이동 계산 — 네 필드를 **모두** 갖는다. §5.5 가 `optionals` 까지 읽으므로 둘만 있으면
  * `undefined` 접근이다(§6.5 마지막 단락).
  * @returns {TransferPass}
  */
@@ -1058,10 +1058,10 @@ function EMPTY_PASS() {
 }
 
 /**
- * 연도 `y` 의 이동 패스(§4.9 `transferCache` · §6.5 연도 경계). 캐시에는 **완전한** 패스만 들어간다 —
- * `y−1` 의 seed 없는 **임시** 패스를 돌려 `y` 로 넘어온 도착(spill)을 얻고, 그것을 seed 로 `y` 의 패스를
- * 만든다. 임시 패스는 캐시에 넣지 않는다(`y−1` 을 조회하면 그때 `y−2` 의 spill 로 따로 완전하게 만든다).
- * 두 패스에 **같은** 활성화 집합을 넘긴다 — 다른 집합을 보면 12월 결과가 어긋난다. 깊이 1 로 충분한지는
+ * 연도 `y` 의 이동 계산(§4.9 `transferCache` · §6.5 연도 경계). 캐시에는 **완전한** 계산 결과만 들어간다 —
+ * `y−1` 의 seed 없는 **임시** 계산을 돌려 `y` 로 넘어온 도착(spill)을 얻고, 그것을 seed 로 `y` 의 이동 계산을
+ * 만든다. 임시 계산은 캐시에 넣지 않는다(`y−1` 을 조회하면 그때 `y−2` 의 spill 로 따로 완전하게 만든다).
+ * 두 계산에 **같은** 활성화 집합을 넘긴다 — 다른 집합을 보면 12월 결과가 어긋난다. 깊이 1 로 충분한지는
  * 실데이터 불변식(검토 문서 I-7a)이 1900~2100 에서 지킨다.
  * @param {CalendarIndex} index @param {number} y
  * @returns {TransferPass}
@@ -1076,8 +1076,8 @@ function transfersOf(index, y) {
 }
 
 /**
- * 전년도 패스가 `y` 로 넘긴 도착 — 날짜가 `y` 이고 `from` 이 전년도인 것(§6.5 연도 경계). `from` 거름은
- * 이중 안전장치다 — 다음 해 좌석(`nextYearSeats`)은 별도 맵이라 애초에 패스의 도착에 섞이지 않는다.
+ * 전년도 계산이 `y` 로 넘긴 도착 — 날짜가 `y` 이고 `from` 이 전년도인 것(§6.5 연도 경계). `from` 거름은
+ * 이중 안전장치다 — 다음 해 좌석(`nextYearSeats`)은 별도 맵이라 애초에 이동 계산의 도착에 섞이지 않는다.
  * @param {TransferPass} prev @param {number} y
  * @returns {Map<string, Candidate[]>}
  */
@@ -1096,9 +1096,9 @@ function spillOf(prev, y) {
 
 /**
  * 선택 봉헌 활성화 집합을 바꾼다(§6.2 활성화 계약 — 켜진 축일은 원래 날짜를 떠나 목적지 주일의 도착이
- * 된다). **집합이 실제로 바뀔 때만** 이동 패스 캐시를 비운다(§4.9) — 같은 집합을 다시 넣으면 패스를 다시
+ * 된다). **집합이 실제로 바뀔 때만** 이동 계산 캐시를 비운다(§4.9) — 같은 집합을 다시 넣으면 이동 계산을 다시
  * 계산하지 않는다. v1 은 부르는 곳이 없다 — 빈 집합이다(설계서 미결15).
- * @param {Iterable<string>} ids 켤 관측일 id
+ * @param {Iterable<string>} ids 켤 전례일 id
  * @returns {boolean} 바뀌었으면 참
  */
 function setActivatedOptionals(ids) {
@@ -1129,8 +1129,8 @@ function periodsOn(index, md) {
 }
 
 /**
- * 그 날짜의 **고유** 관측일 — §5.5 출처 ② 날짜(성인력) · ③ 음력 · ④ 규칙 파생(① 격자는 따로 합성한다).
- * 같은 행이 두 출처에서 오면 한 번만 낸다. 순서는 뜻이 없다 — 표시 · 승자 순서는 품계가 정한다
+ * 그 날짜의 **고유** 전례일 — §5.5 출처 ② 날짜(성인력) · ③ 음력 · ④ 규칙 파생(① 격자는 따로 합성한다).
+ * 같은 행이 두 출처에서 오면 한 번만 낸다. 순서는 뜻이 없다 — 표시 순서와 지정 전례일은 품계가 정한다
  * (`compareCandidates`). 음력 표 범위 밖 연도는 ③ 이 빈다(§2).
  * @param {CalendarIndex} index @param {string} dateStr
  * @returns {Observance[]}
@@ -1156,16 +1156,16 @@ function ownObservancesOn(index, dateStr) {
   return out;
 }
 
-// ── §6.1 · §6.2 품계 사다리 · 승자 · 재분류 (B1) ──
+// ── §6.1 · §6.2 품계 사다리 · 지정 전례일 · 재분류 (B1) ──
 
 /** 성주간의 합성 점유자 id(§6.5 `guard`) — 표에 없고 후보로 내지 않는다. */
 const GUARD_ID = GUARD_PREFIX + "holy-week";
 
 /**
  * 성주간(성지주일 ~ 성 토요일 — `spansOf().holyWeek`, §4.10)의 가상 점유자. 그 안의 날에는 유효
- * precedence 1 · `transferable: false` 인 합성 후보 하나, 밖의 날에는 빈 배열이다. 승자 · 재분류
+ * precedence 1 · `transferable: false` 인 합성 후보 하나, 밖의 날에는 빈 배열이다. 지정 전례일 · 재분류
  * (`settle`)의 순위에만 들어가 성주간의 prec 7 축일을 생략시킨다 — 부활 8일의 평일 축일은 그날 지킨다(책자,
- * 사용자 결정 2026-10-24 → R-6.3-holy-week-guard). 이동 패스는 이것을 보지 않는다(주요축일은 그날 지키고
+ * 사용자 결정 2026-10-24 → R-6.3-holy-week-guard). 이동 계산은 이것을 보지 않는다(주요축일은 그날 지키고
  * 그날의 대축일 · 주일에 질 때만 옮긴다). 그날의 후보(§5.5 출처 ①~⑤)로는 내지 않는다 — 뷰에 보이지 않는다.
  * @param {string} dateStr
  * @returns {Candidate[]}
@@ -1182,7 +1182,7 @@ function guardCandidates(dateStr) {
 }
 
 /**
- * 승자 자격이 없는 지향 · 이름 줄 — 사계재(규칙 종류)와 기념일(`rank`). 이름이 아니라 구조 필드로
+ * 지정 자격이 없는 지향 · 이름 줄 — 사계재(규칙 종류)와 기념일(`rank`). 이름이 아니라 구조 필드로
  * 판별하고, 표(`kind`)를 보지 않는다 — 기념일은 성인력과 temporal 양쪽에 있다(→ R-6.1-ineligible).
  * @param {Observance} obs
  */
@@ -1191,7 +1191,7 @@ function isIneligible(obs) {
 }
 
 /**
- * 승자 판정의 **유효 precedence**(→ R-6.1-ladder) — 낮을수록 우선. `precedence: null` 은 정렬 최하위
+ * 지정 판정의 **유효 precedence**(→ R-6.1-ladder) — 낮을수록 우선. `precedence: null` 은 정렬 최하위
  * (등급이 없다), 지향 · 이름 줄은 9(등급은 있지만 그날의 독서를 정하지 않는다 — → R-6.1-ineligible),
  * A 특례(`outranks_sunday`)는 1 과 2 사이라 1.5, 그 밖은 데이터 값 그대로다. **`rank` 로 비교하지
  * 않는다** — `major_feast` 가 3 · 4 · 6 으로 갈린다.
@@ -1216,7 +1216,7 @@ function ladderOf(/** @type {Candidate} */ c) {
 }
 
 /**
- * 순위 비교 — 키는 `(유효 precedence, 범주 사다리, 고유 본기도, id)` 이고 앞이 이긴다(→ R-6.2-tie-ladder).
+ * 순위 비교 — 키는 `(유효 precedence, 범주 사다리, 고유 본기도, id)` 이고 앞이 선순위다(→ R-6.2-tie-ladder).
  * 고유 본기도(`has_proper`)가 있는 쪽이 먼저인 키는 같은 범주 안의 동률을 가른다 — prec 7 축일 다섯
  * 쌍 가운데 한쪽만 고유 본기도를 가진 것은 3.01 뿐이라 삼일절이 데이빗 앞에 선다(→ R-6.1-prec7-tie-pairs).
  * 마지막 `id` 사전순은 결정성만 지키는 안전망이다(§5.3 과 같은 안정 정렬).
@@ -1259,10 +1259,10 @@ function variesByYear(c) {
  * 쪽도 밀린 것이 아니다(9.29 설립 기념일 · 8.15 광복절 — §6.5 · 미결18). 같은 값의 도착이 고유 후보를
  * 앞서는 것(→ R-6.2-chain-model)과 규칙일이 고정일을 앞서는 것(→ R-6.2-rule-day-stays)은 순위가 이미 담고 있다.
  *
- * **그날에 남아 있는 것만 센다**(`staying`). 이동 패스는 그날의 패자를 순위대로 떠나보내며 `staying` 을
+ * **그날에 남아 있는 것만 센다**(`staying`). 이동 계산은 그날의 후순위 후보를 순위대로 떠나보내며 `staying` 을
  * 줄여 넘긴다 — 고정일 W · 가변 V · 더 낮은 고정일 C 가 함께 있으면 V 가 떠난 뒤 C 에게 남은 상대는 W
  * 뿐이라 C 는 밀린 것이 아니다(떠난 V 를 세면 고정일끼리인 W · C 가 충돌로 둔갑한다, §6.5). `settle` 은
- * 떠난 것을 이미 뺀 순위를 넘기므로 `staying` 이 없다 — 승자 · 재분류의 「밀렸다」와 패스의 「밀렸다」가
+ * 떠난 것을 이미 뺀 순위를 넘기므로 `staying` 이 없다 — 지정 전례일 · 재분류의 「밀렸다」와 이동 계산의 「밀렸다」가
  * 이 한 함수다(`displacerOf` 가 이것을 읽는다).
  * @param {Candidate[]} ranked @param {Candidate} c
  * @param {Set<Candidate>} [staying] 그날 남아 있는 후보 — 없으면 `ranked` 전부
@@ -1289,23 +1289,23 @@ function displacerOf(ranked, c, staying) {
 }
 
 /**
- * 승자와 재분류(§5.5 status 표 · R-6.2-conflict-steps). 그날 남아 있는 후보(`proper` · `transferred_in` —
+ * 지정 전례일과 재분류(§5.5 status 표 · R-6.2-conflict-steps). 그날 남아 있는 후보(`proper` · `transferred_in` —
  * 떠난 것과 선택 봉헌은 순위에 들지 않는다)와 보호 기간의 guard 를 순위대로 세우고, 밀린(`displacerOf`)
  * 고유 후보 가운데
  *  - prec 7 **축일**(`minor_feast` · `transferable` 아님)은 옮기지 않고 그날 `commemorated`(→ R-6.1-prec7-omit —
  *    기도서 「지켜야 한다면 기념한다」와 책자가 그 주일에 이름을 적는 관행, 사용자 결정 2026-10-24). 성주간에서만
  *    `omitted` 다 — guard 도 밀어낸다(→ R-6.3-holy-week-guard). 부활 8일의 평일에는 밀리지 않아 그날의 대표다(책자는
  *    그 성인의 색, 독서는 그날 평일 것 — 사용자 결정 2026-10-24). `transferable` 인 축일 셋도 성주간에 그날 남았으면
- *    `omitted` 다 — guard 에만 밀려 이동 패스가 옮기지 않았어도(패스는 guard 를 보지 않는다) 성주간의 prec 7 은
+ *    `omitted` 다 — guard 에만 밀려 이동 계산이 옮기지 않았어도(이동 계산은 guard 를 보지 않는다) 성주간의 prec 7 은
  *    생략이다(그 셋의 날짜는 성주간에 들지 않아 실데이터에는 없다),
  *  - `commemorate_only`(추수감사주일)는 `commemorated` — 둘 다 `displacedBy` 를 싣는다.
  * 나머지는 그대로다 — 격자, 지향 · 이름 줄, `precedence: null`, `transferable: false` 인 상위 축일, 동시
- * 봉헌에서 진 쪽, 이동 상한을 넘겨 옮기지 못한 축일(`defects` — §6.5). 옮겨진 축일은 이동 패스가 이미
+ * 봉헌에서 후순위인 쪽, 이동 상한을 넘겨 옮기지 못한 축일(`defects` — §6.5). 옮겨진 축일은 이동 계산이 이미
  * `transferred_out` 으로 냈다.
  *
- * `official` 은 순위에서 처음 오는 **실제** 후보 가운데 승자 자격이 있고(유효 precedence ≤ 8) 재분류 뒤에도
- * `proper` · `transferred_in` 인 것이다 — guard 는 후보가 아니라 승자가 되지 않는다(성주간 평일의 승자는
- * 격자다). 격자가 언제나 있으므로 유효한 날짜에는 승자가 있다.
+ * `official` 은 순위에서 처음 오는 **실제** 후보 가운데 지정 자격이 있고(유효 precedence ≤ 8) 재분류 뒤에도
+ * `proper` · `transferred_in` 인 것이다 — guard 는 후보가 아니라 지정 전례일이 되지 않는다(성주간 평일의 지정 전례일은
+ * 격자다). 격자가 언제나 있으므로 유효한 날짜에는 지정 전례일이 있다.
  * @param {string} dateStr @param {Candidate[]} cands 그날의 후보 전부(출발 · 선택 봉헌 포함)
  * @returns {{candidates: Candidate[], official: Candidate | null}} candidates 는 입력과 같은 순서 — 재분류된 것만 새 객체
  */
@@ -1319,10 +1319,10 @@ function settle(dateStr, cands) {
     const o = c.observance;
     const minor = o.rank === "minor_feast";
     const commemorate = o.transfer_to === "commemorate_only";
-    if (!minor && !commemorate) continue;   // 옮길 수 있는 주요축일은 밀리면 이동 패스가 이미 옮겼다
+    if (!minor && !commemorate) continue;   // 옮길 수 있는 주요축일은 밀리면 이동 계산이 이미 옮겼다
     const by = displacerOf(ranked, c);
     if (!by) continue;
-    // 옮길 수 있는 축일이 proper 로 남았으면 패스가 옮기지 않은 것이다 — 성주간이면 guard 에만 밀린 것이라 생략(성주간의
+    // 옮길 수 있는 축일이 proper 로 남았으면 이동 계산이 옮기지 않은 것이다 — 성주간이면 guard 에만 밀린 것이라 생략(성주간의
     // prec 7 은 생략), 밖에서는 이동 상한(`defects`)이다
     const omit = minor && inSpan(dateStr, "holyWeek");
     // 성주간 밖에서 밀린 축일(옮길 수 없는 prec 7)은 그날 기념한다(→ R-6.1-prec7-omit) — 부활대축일 · 부활 2주일에 걸린 것도
@@ -1337,7 +1337,7 @@ function settle(dateStr, cands) {
   return { candidates: cands.map(after), official };
 }
 
-// ── §6.2 · §6.5 이동 패스 (B1) ──
+// ── §6.2 · §6.5 이동 계산 (B1) ──
 
 /** 이동 상한(날, §6.5) — 실측 최장 16(부활 3.26 인 해 성지주일의 요셉 → 부활 2주 화요일 — 수태고지가 월요일에 먼저 앉는다, → R-6.3-guard-order). 넘으면 옮기지 않고 `defects` 에 적는다. */
 const MAX_SHIFT = 30;
@@ -1365,7 +1365,7 @@ function optionalDestOf(kind, origin, y) {
 }
 
 /**
- * 그해의 선택 봉헌(§6.2) — 0단계 선색인의 재료. 순위와 무관하고 그해 앵커와 표만 본다 — 패스를 요구하지
+ * 그해의 선택 봉헌(§6.2) — 0단계 선색인의 재료. 순위와 무관하고 그해 앵커와 표만 본다 — 이동 계산을 요구하지
  * 않으므로 다음 해 좌석(`nextYearSeats`)이 재귀 없이 부른다. 목적지가 그날 자신이면(그날이 주일) 없다.
  * 순서는 기원 날짜 → id 다(표의 행 순서에 기대지 않는다).
  * @param {CalendarIndex} index @param {number} y
@@ -1392,7 +1392,7 @@ function optionalObservancesOf(index, y) {
 
 /**
  * 다음 해 좌석(§6.5) — 켜진 선택 봉헌이 `year + 1` 에 **앉은 자리**(막는다)와 **비운 기원**(연다). 목적지
- * 탐색이 실제로 해를 넘길 때만 부른다(§4.9 — 다음 해 computus 를 미리 돌리지 않는다). 별도 맵이라 패스의
+ * 탐색이 실제로 해를 넘길 때만 부른다(§4.9 — 다음 해 computus 를 미리 돌리지 않는다). 별도 맵이라 이동 계산의
  * 도착 · 출발에 섞이지 않는다 — 캐시에도 spill 에도 불변식의 셈에도 들어가지 않는다.
  * @param {CalendarIndex} index @param {number} year @param {Set<string>} activated
  * @returns {NextYearSeats}
@@ -1418,17 +1418,17 @@ function movesOnConflict(o) {
 }
 
 /**
- * 연도 `year` 의 이동 패스(→ R-6.5-year-pass) — 연도 캐시를 채울 때 한 번 돈다(`transfersOf`).
+ * 연도 `year` 의 이동 계산(→ R-6.5-year-pass) — 연도 캐시를 채울 때 한 번 돈다(`transfersOf`).
  *
  * **0단계 — 선택 봉헌 선색인.** 목적지가 기원보다 앞일 수 있어(2028 주의 봉헌 2.2 → 1.30) 날짜 루프 전에 한
  * 해를 깐다. 켜진 것은 실제로 옮기고(원래 날짜 `transferred_out` · 목적지 `transferred_in` — 밀린 것이 아니라
  * 택한 것이라 `displacedBy` 가 없다), 꺼진 것은 목적지 주일에 `optional` 로만 얹는다(§6.2 활성화 계약).
  *
- * **1단계 — 날짜 순 충돌 이동.** 그날의 후보(고유 관측일 — 켜진 선택 봉헌의 출발은 뺀다 — · 격자 · 도착)를
- * 승자 판정과 같은 순위(`rankCandidates`)로 세우고, 옮길 수 있는 고유 후보가 밀렸으면(`displacerOf` —
+ * **1단계 — 날짜 순 충돌 이동.** 그날의 후보(고유 전례일 — 켜진 선택 봉헌의 출발은 뺀다 — · 격자 · 도착)를
+ * 지정 판정과 같은 순위(`rankCandidates`)로 세우고, 옮길 수 있는 고유 후보가 밀렸으면(`displacerOf` —
  * `settle` 의 「밀렸다」와 같은 판정) 다음 빈 날로 보낸다. 보호 기간의 guard 는 여기 넣지 않는다 — 성주간 ·
  * 부활 8일의 주요축일은 그날 지키고 그날의 대축일 · 주일(실제 후보)에 질 때만 옮긴다(→ R-6.3-holy-week-guard).
- * 떠난 것은 그날의 남은 패자를 밀지 못한다(`staying`). 도착은 다시 옮기지 않는다(→ R-6.2-first-come). 이동이
+ * 떠난 것은 그날의 남은 후순위 후보를 밀지 못한다(`staying`). 도착은 다시 옮기지 않는다(→ R-6.2-first-come). 이동이
  * `MAX_SHIFT` 를 넘으면 옮기지 않고 `defects` 에 적는다 — 그 축일은 기원 날짜에 `proper` 로 남는다.
  *
  * 빈 날은 「`c` 보다 높은 고유 후보가 없고(같은 값은 `c` 가 민다 — → R-6.2-chain-model), 도착한 후보가
@@ -1437,11 +1437,11 @@ function movesOnConflict(o) {
  * 원래 날짜 순)으로 부활 2주 월요일부터 빈 날을 찾는다(→ R-6.3-guard-destination — 2027 책자: 성 목요일의
  * 수태고지 → 4.5; → R-6.3-guard-order — 부활 3.26 인 해: 수태고지 4.3 · 요셉 4.4). 도착에 밀린 옮길 수 있는
  * 축일도 다른 충돌과 같이 다음 빈 날로 옮긴다(연쇄 — → R-6.2-chain-model; 옮길 수 없는 축일은 `settle` 이 그날
- * 기념으로 낸다). 해를 넘긴 날짜에서는 이 패스가
+ * 기념으로 낸다). 해를 넘긴 날짜에서는 이 계산이
  * 이미 그리로 넘긴 도착과 다음 해 좌석(`nextYearSeats`)을 **함께** 본다 — 한쪽만 보면 12월 축일 둘이 같은
  * 1월 날에 앉는다.
  *
- * 순수 함수다 — 본당 설정을 보지 않고(지역 축일은 이동에 영향을 주지 않는다 — §4.9), `seed`(전년도 패스가
+ * 순수 함수다 — 본당 설정을 보지 않고(지역 축일은 이동에 영향을 주지 않는다 — §4.9), `seed`(전년도 이동 계산이
  * 넘긴 도착)의 배열은 복제해서 쓰며 인자를 바꾸지 않는다.
  * @param {CalendarIndex} index @param {number} year
  * @param {Map<string, Candidate[]>} seed @param {Set<string>} activated 호출자가 반드시 넘긴다(기본값 없음)
@@ -1468,7 +1468,7 @@ function computeTransfers(index, year, seed, activated) {
   }
 
   /**
-   * 그날 순위에 드는 고유 후보 — 고유 관측일(`ownObservancesOn`)과 격자에서 켜진 선택 봉헌의 출발을 뺀 것. 저녁 전례는
+   * 그날 순위에 드는 고유 후보 — 고유 전례일(`ownObservancesOn`)과 격자에서 켜진 선택 봉헌의 출발을 뺀 것. 저녁 전례는
    * 순위에 들지 않는다(→ R-6.1-evening) — 성 토요일의 주요축일을 미는 것은 부활밤이 아니라 성 토요일 행(prec 1)이다.
    */
   const ownAt = (/** @type {string} */ d, /** @type {Map<string, Candidate[]>} */ gone) => {
@@ -1484,7 +1484,7 @@ function computeTransfers(index, year, seed, activated) {
 
   /** @type {NextYearSeats | null} */
   let seats = null;   // 지연 — 목적지 탐색이 해를 넘길 때만 다음 해 앵커를 계산한다(§4.9)
-  /** `c` 가 `dest` 에서 이길 수 있으면 빈 날이다(§6.5 `isFree`). */
+  /** `c` 가 `dest` 에서 앞설 수 있으면 빈 날이다(§6.5 `isFree`). */
   const isFree = (/** @type {string} */ dest, /** @type {Candidate} */ c) => {
     const next = dest.startsWith(head) ? null : (seats ??= nextYearSeats(index, year, activated));
     // 도착이 하나라도 있으면 품계와 무관하게 찬 날(→ R-6.2-first-come)
@@ -1523,18 +1523,18 @@ function computeTransfers(index, year, seed, activated) {
       });
       for (const h of held) seat(h.c, h.from, afterGuard, h.displacedBy);
     }
-    // 옮길 수 있는 고유 관측일이 없는 날은 출발이 생기지 않는다(도착은 다시 옮기지 않는다) — 순위를 세우지 않는다
+    // 옮길 수 있는 고유 전례일이 없는 날은 출발이 생기지 않는다(도착은 다시 옮기지 않는다) — 순위를 세우지 않는다
     if (!ownObservancesOn(index, d).some(movesOnConflict)) continue;
     // guard 는 넣지 않는다 — 보호 기간이 주요축일을 밀지 않는다(→ R-6.3-holy-week-guard)
     const ranked = rankCandidates([...ownAt(d, departures), ...(arrivals.get(d) || [])]);
-    const staying = new Set(ranked);   // 떠난 것은 남은 패자를 밀어낼 수 없다
+    const staying = new Set(ranked);   // 떠난 것은 남은 후순위 후보를 밀어낼 수 없다
     for (const c of ranked.slice(1)) {   // 순위 순 — 같은 기원이면 정렬 키 순으로 먼저 앉는다(→ R-6.2-first-come)
       if (c.status !== "proper" || !movesOnConflict(c.observance)) continue;   // 도착 · 격자는 옮기지 않는다
       const by = displacerOf(ranked, c, staying);
       if (!by) continue;   // 앞선 것이 전부 고정일이면 동시 봉헌 — 충돌이 아니다
       const displacedBy = by.observance.id;   // 실제로 밀어낸 것의 최상위 — ranked[0] 이 아닐 수 있다
       if (inSpan(d, "transferGuard")) {
-        // 보호 기간(성지주일 ~ 부활 2주일) 안에서 밀렸다 — 그 기간을 다 돈 뒤 서열 순으로 앉힌다(위). 그날의 남은 패자에게는
+        // 보호 기간(성지주일 ~ 부활 2주일) 안에서 밀렸다 — 그 기간을 다 돈 뒤 서열 순으로 앉힌다(위). 그날의 남은 후순위 후보에게는
         // 이미 떠난 것이다(목적지가 상한을 넘는 것은 합성 표에서만 — 실측 최장 16일)
         held.push({ c, from: d, displacedBy });
         staying.delete(c);
@@ -1554,12 +1554,12 @@ function isEmber(/** @type {Observance} */ obs) {
 }
 
 /**
- * 그날의 색(→ R-6.4-color-order): 절기 기본색(격자 관측일의 색)을 깔고 → 승자 관측일의 색이 덮고 →
- * 성주간 · 부활 8일(`holyWeek` ∪ `easterOctave`, §4.10)에는 temporal 승자가 덮지 못한다(E−1 의 승자는 성 토요일
+ * 그날의 색(→ R-6.4-color-order): 절기 기본색(격자 전례일의 색)을 깔고 → 지정 전례일의 색이 덮고 →
+ * 성주간 · 부활 8일(`holyWeek` ∪ `easterOctave`, §4.10)에는 temporal 지정 전례일이 덮지 못한다(E−1 의 지정 전례일은 성 토요일
  * 행 — 부활밤은 저녁 전례라 색에 참여하지 않는다, → R-6.1-evening). 그날 지키는 성인력 축일(주요축일 — 제자리든 도착이든,
- * 부활 8일 평일의 축일)이 이기면 그 축일 색이다(→ R-6.3-holy-week-guard — 성주간의 prec 7 축일은 생략되어 승자가 되지 않는다). 승자의 색이 비었으면
+ * 부활 8일 평일의 축일)이 지정 전례일이면 그 축일 색이다(→ R-6.3-holy-week-guard — 성주간의 prec 7 축일은 생략되어 지정 전례일이 되지 않는다). 지정 전례일의 색이 비었으면
  * (추수감사주일) 바탕이 남는다. 사계재 날은 **자**다(→ R-6.4-ember-color):
- * 바탕이 남으면(승자가 격자) 그날 색이 자이고, 축일이 덮으면 그 색이 대표로 남고 `colors` 에 자를 앞세워
+ * 바탕이 남으면(지정 전례일이 격자) 그날 색이 자이고, 축일이 덮으면 그 색이 대표로 남고 `colors` 에 자를 앞세워
  * 병기한다(책자의 [자/백] 순). `colors` 는 병기 목록이라 병기가 없는 날은 `[color]` 다. `omitted` ·
  * `commemorated` 후보와 기념일은 색에 기여하지 않는다.
  * @param {string} dateStr @param {Candidate} grid @param {Candidate | null} official @param {Candidate[]} cands
@@ -1581,7 +1581,7 @@ function dayColorsOf(dateStr, grid, official, cands) {
 
 /**
  * 그날이 재일인가(§6.3 · 기도서 원문 「재일」) — `"major"` 대재일(재의 수요일 · 성 금요일), `"minor"` 소재일(사순
- * 절기 중 주간 40일 · 사계재일 · 성탄절기를 제외한 모든 금요일), 아니면 null. **승자와 무관하다** — 그날
+ * 절기 중 주간 40일 · 사계재일 · 성탄절기를 제외한 모든 금요일), 아니면 null. **지정 전례일과 무관하다** — 그날
  * 남아 있는 후보(`proper` · `transferred_in`)와 날짜로 판정한다: 사계재가 지향이어도 그날은 소재일이다.
  * 금요일의 성탄절기는 `spansOf().christmasToBaptism`(§4.10)으로 보고 날짜를 따로 비교하지 않는다
  * (→ R-6.3-friday-fast). 성 목요일은 대축일이고 재일이 아니다(ADR-036 §6) — 사순절기의 대축일 행이 그날
@@ -1611,12 +1611,12 @@ function fastOf(resolved) {
  * ①~④ 가 그 날짜의 고유 후보(`proper`)이고 ⑤ 만 다른 날짜에서 온다 — 다만 저녁 전례(→ R-6.1-evening)는
  * 자리를 옮긴다: 그 날짜로 정의돼 그날 저녁에 드리는 것(부활밤)은 고유 후보에서 빼 끝에 저녁 후보로, 다음 날짜로
  * 정의돼 그날 저녁에 드리는 것(성탄 밤)은 그날의 저녁 후보로 가져온다(`evening: true` · `proper` — 판정에 넣지 않는다).
- * 패스의 출발 색인에 있는 고유 후보는 `transferred_out` 으로, 선택 봉헌은 `optional` 로 덧붙는다. 그 위에서
- * B1 이 승자를 정하고 밀린 고유 후보를 재분류하며(`settle`) 그날의 색을 낸다(`dayColorsOf`). 후보는 하나도
+ * 이동 계산의 출발 색인에 있는 고유 후보는 `transferred_out` 으로, 선택 봉헌은 `optional` 로 덧붙는다. 그 위에서
+ * B1 이 지정 전례일을 정하고 밀린 고유 후보를 재분류하며(`settle`) 그날의 색을 낸다(`dayColorsOf`). 후보는 하나도
  * 버리지 않는다(ADR-036 §7 「밀린 독서 보존」).
  *
  * 표시 순서(ADR-037 §6): ① 교회력에 따른 축일 · 재일(품계 순 — `compareCandidates`) → ② 이동 축일
- * (도착 → 선택 봉헌, 패스의 순서) → ③ 나머지(격자) → ④ 저녁 전례(하루의 순서대로 낮 다음 저녁).
+ * (도착 → 선택 봉헌, 이동 계산의 순서) → ③ 나머지(격자) → ④ 저녁 전례(하루의 순서대로 낮 다음 저녁).
  * @param {CalendarIndex} index @param {string} dateStr @param {TransferPass} pass
  * @returns {ResolvedDate | null} 잘못된 날짜면 null
  */
@@ -1627,9 +1627,9 @@ function resolveDateIn(index, dateStr, pass) {
   /** @type {Map<string, Candidate>} */
   const departed = new Map();
   for (const c of pass.departures.get(dateStr) || []) departed.set(c.observance.id, c);
-  // 저녁 전례(→ R-6.1-evening)는 어떤 판정(승자 · 색 · 재분류 — `settle`)에도 넣지 않는다. 오늘로 정의돼 오늘 저녁에
+  // 저녁 전례(→ R-6.1-evening)는 어떤 판정(지정 전례일 · 색 · 재분류 — `settle`)에도 넣지 않는다. 오늘로 정의돼 오늘 저녁에
   // 드리는 것(부활밤)과 내일로 정의돼 오늘 저녁에 드리는 것(성탄 밤 — 12.24 저녁)이 오늘의 저녁 후보이고, 오늘로
-  // 정의됐지만 전날 저녁에 드리는 것(12.25 의 성탄 밤)은 오늘의 후보가 아니다. 내일의 관측일은 내일로 정의된 저녁
+  // 정의됐지만 전날 저녁에 드리는 것(12.25 의 성탄 밤)은 오늘의 후보가 아니다. 내일의 전례일은 내일로 정의된 저녁
   // 전례가 있는 날에만 모은다 — 날마다 모으면 조회가 한 번 더 돈다(PR #349 리뷰 — 12.31 엔 다음 해 표까지 만든다).
   const ownRows = ownObservancesOn(index, dateStr);
   const tomorrow = shift(dateStr, 1);
@@ -1714,7 +1714,7 @@ function matchScore(record, req) {
 }
 
 /**
- * 최고점 **층** 전부(§5.3) — 한 건이 아니라 한 층이 이긴다. 같은 좌표에 의도적으로 공존하는 대체
+ * 최고점 **층** 전부(§5.3) — 한 건이 아니라 한 층이 앞선다. 같은 좌표에 의도적으로 공존하는 대체
  * 본기도(`collect_no`) · 독서 세트(`set_no` · `reading_track`)는 점수가 같아 함께 남는다.
  * @param {TextRecord[]} records @param {MatchRequest} req
  * @returns {TextRecord[]}
@@ -1812,9 +1812,9 @@ function halfVerseKey(bookId, chapter, verse, half) {
 }
 
 /**
- * 한 관측일의 **고유** 본문 레코드(독서 또는 본기도 표) — 최고점 층(§5.3), 정렬 전.
+ * 한 전례일의 **고유** 본문 레코드(독서 또는 본기도 표) — 최고점 층(§5.3), 정렬 전.
  *
- * **어느 키로 인덱스를 치는가는 관측일의 출처가 정한다**(§5.6 — 키의 존재 여부가 아니라 id 접두사):
+ * **어느 키로 인덱스를 치는가는 전례일의 출처가 정한다**(§5.6 — 키의 존재 여부가 아니라 id 접두사):
  *
  * - **격자**(`grid:`) — ① 물어본 날짜(`resolved.date`)의 **날짜 전용 본문**: 그날 좌표와 `type` ·
  *   `season` 이 같은 것만(좁히기 규칙 ① — 주의 세례 뒤의 성탄주간 레코드는 버린다. 성인의 축일
@@ -1823,10 +1823,10 @@ function halfVerseKey(bookId, chapter, verse, half) {
  *   비어야 다음 단계로 간다 — 행이 있는지가 아니라 요일 · 주기 점수를 매긴 결과로 가른다.
  * - **규칙 행**(temporal) — `coord_name` · 별칭으로 이름 조인 / 사계재는 이름 부분문자열 + 요일
  *   (§5.4 · 미결5) / 조인 이름이 없고 좌표가 있는 행(대림1주일)은 그 좌표로.
- * - **성인력 · 음력 행** — 관측일 **자신의** `date` · `lunar`(옮겨 온 축일도 기원 날짜에 색인돼
+ * - **성인력 · 음력 행** — 전례일 **자신의** `date` · `lunar`(옮겨 온 축일도 기원 날짜에 색인돼
  *   있다). 날짜 인덱스는 1:N 이라 좁힌다(미결12 잠정): 날짜 전용 평일 본문(`type: weekday` — 격자
- *   후보의 것)은 언제나 걷어내고, 그 날짜에 성인력 행이 둘 이상이면 같은 날짜의 **다른** 관측일
- *   이름에 정확히 맞는 본문을 걷어낸 뒤 이 관측일의 이름 · 별칭에 정확히 맞는 것으로 좁힌다 —
+ *   후보의 것)은 언제나 걷어내고, 그 날짜에 성인력 행이 둘 이상이면 같은 날짜의 **다른** 전례일
+ *   이름에 정확히 맞는 본문을 걷어낸 뒤 이 전례일의 이름 · 별칭에 정확히 맞는 것으로 좁힌다 —
  *   좁히기가 실패하면 조용히 하나를 고르지 않고 **남은 것 전부**를 낸다. 행이 하나뿐인 날짜는
  *   이름을 묻지 않는다(06.24 의 띄어쓰기 드리프트가 「고유 없음」으로 새지 않게).
  * @param {TextIndex} tix @param {CalendarIndex} cal @param {ResolvedDate} resolved @param {Observance} obs
@@ -1862,7 +1862,7 @@ function properRecords(tix, cal, resolved, obs) {
     return topLayer(mine, req);
   }
 
-  if (obs.kind !== "temporal" || obs.id.includes(":")) return [];   // guard: 등 다른 합성 관측일
+  if (obs.kind !== "temporal" || obs.id.includes(":")) return [];   // guard: 등 다른 합성 전례일
   if (typeof obs.coord_name === "string" && obs.coord_name !== "") {
     const keys = [obs.coord_name, ...(Array.isArray(obs.aliases) ? obs.aliases : [])];
     return topLayer(keys.flatMap((k) => tix.byName.get(k) || []), req);
@@ -1912,7 +1912,7 @@ function commonClassOf(/** @type {LectionaryIndex} */ lix, /** @type {unknown} *
 /**
  * **성인 공통 독서 폴백**(§5.6 · 미결11). 호출자가 「좁힌 고유 독서 0건」을 확인한 뒤 부른다 —
  * 트리거는 날짜 인덱스가 비었는가가 아니다. 자격: 분류가 공통에 있고 · 기념일이 아니고 · 세트가
- * 있다. 후보의 `status` 는 보지 않는다(관측일로 판정). 반환은 고유와 같은 그룹 형태 + `common`
+ * 있다. 후보의 `status` 는 보지 않는다(전례일로 판정). 반환은 고유와 같은 그룹 형태 + `common`
  * 표지 + id `common:<class>-s<set>` — 세트를 전부 낸다(기도서가 「다음 중 하나」로 인쇄한 것).
  * @param {LectionaryIndex} lix @param {Observance} obs
  * @returns {ReadingGroup[]}
@@ -1989,7 +1989,7 @@ function collectOptionOf(/** @type {TextRecord} */ r) {
 }
 
 /**
- * 한 관측일의 본기도 — 같은 관측일의 자유선택 대체안(`collect_no`)이 여럿일 수 있다. 트리거가
+ * 한 전례일의 본기도 — 같은 전례일의 자유선택 대체안(`collect_no`)이 여럿일 수 있다. 트리거가
  * 독서와 다르다: **`has_proper: false` 이면 공통**이다(본기도 축의 사실 — 파서가 실매칭으로 정한다,
  * §5.6). 공통은 `{name}` 을 성인 이름으로 채운 하나이고 id 는 `common:<class>-c1`.
  * @param {LectionaryIndex} lix @param {CalendarIndex} cal @param {ResolvedDate} resolved @param {Observance} obs
@@ -2019,8 +2019,8 @@ function collectsOf(lix, cal, resolved, obs) {
 }
 
 /**
- * 그날의 본기도(§5.6 · ADR-038 §3) — **두 축을 구분한다**: 원소 하나가 관측일 하나(`{candidate,
- * collects}`, 순서는 `candidates` 순)이고 그 안의 `collects` 가 같은 관측일의 대체안이다. 뷰는
+ * 그날의 본기도(§5.6 · ADR-038 §3) — **두 축을 구분한다**: 원소 하나가 전례일 하나(`{candidate,
+ * collects}`, 순서는 `candidates` 순)이고 그 안의 `collects` 가 같은 전례일의 대체안이다. 뷰는
  * 고른 후보의 것을 앞에 두고 나머지를 열거한다 — 재배열만 하고 재조회하지 않는다. 기념일 후보의
  * 원소는 빈 `collects` 다.
  * @param {LectionaryIndex} lix @param {CalendarIndex} cal @param {ResolvedDate} resolved
@@ -2060,7 +2060,7 @@ function fetchLectionaryJson(name) {
 /**
  * 캘린더 묶음을 싣는다. **promise 를 캐시**하므로 동시에 불러도 fetch 는 파일당 한 번이고, 거부된
  * promise 는 비워 다음 호출이 다시 시도한다 — 오프라인에서 한 번 실패해도 달력이 영영 깨지지 않게(§3.4).
- * 인덱스가 새로 서면 이동 패스 캐시를 비운다(패스는 표에 의존한다 — §4.9).
+ * 인덱스가 새로 서면 이동 계산 캐시를 비운다(이동 계산은 표에 의존한다 — §4.9).
  * @returns {Promise<CalendarIndex>}
  */
 function preloadCalendar() {
@@ -2108,7 +2108,7 @@ function retryHalfVerses() {
 /**
  * 그 날이 교회력에서 무슨 날인가(§5.5) — **동기 · 순수**. 프리로드 전에 부르면 throw 한다: 조용히
  * 빈 값을 주면 뷰가 「아무 날도 아님」으로 잘못 그린다(§3.4). 잘못된 날짜 문자열과 교회력을 계산하는 연도
- * (`isComputableYear` — 1583~9999) 밖의 날짜는 null — 범위 밖은 이동 패스(`transfersOf`)에 닿기 전에 돌려보낸다.
+ * (`isComputableYear` — 1583~9999) 밖의 날짜는 null — 범위 밖은 이동 계산(`transfersOf`)에 닿기 전에 돌려보낸다.
  * @param {string} dateStr "YYYY-MM-DD"
  * @returns {ResolvedDate | null}
  */
@@ -2132,7 +2132,7 @@ function findReadings(resolved, candidate) {
 }
 
 /**
- * 그날의 본기도 — 관측일별 원소(§5.6). 프리로드 규칙은 `findReadings` 와 같다.
+ * 그날의 본기도 — 전례일별 원소(§5.6). 프리로드 규칙은 `findReadings` 와 같다.
  * @param {ResolvedDate} resolved
  * @returns {CandidateCollects[]}
  */

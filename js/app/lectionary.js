@@ -18,7 +18,7 @@
 //
 // 뷰가 처음 부딪힌 설계서 §9 미결 — 사용자가 하나씩 확정했다(2026-10-12, coding-pitfalls §21 · 원장
 // docs/changes/2026-10-12-lectionary-view.md):
-//   미결25 고유 독서 없는 축일의 초기 독서 = 격자(그날의 주일 · 평일) 독서 — 책자대로. 헤더 제목은 승자, 색은 고른
+//   미결25 고유 독서 없는 축일의 초기 독서 = 격자(그날의 주일 · 평일) 독서 — 책자대로. 헤더 제목은 지정 전례일, 색은 고른
 //          본문의 색(headerColors — 격자면 그날의 병기 colors + 대체색), 본기도는 고른 칩의 것. (닫힘)
 //   미결20 성 토요일 · 성탄 밤: 저녁 전례 — 엔진이 부활밤(성 토요일 저녁) · 성탄 밤(12.24 저녁)을 그날의 대표에서 빼고
 //          후보 끝에 `evening` 으로 싣는다(사용자 결정 2026-10-15, 닫힘). 칩 꼬리말 「· 저녁」, 헤더 색은 「고른 본문의 색」
@@ -106,7 +106,7 @@ const BRACKET_NOTE = "괄호 선택 구절 포함";
 const OPTIONAL_TRANSFER_KINDS = ["nearby_sunday", "sunday_0102_0108", "sunday_1030_1105", "easter7_sunday"];
 
 // 송영 3종 — 고른 본기도(대체안은 세그먼트로 택1) 끝에 **1회**, 그 본기도의 `ending` 코드로(ADR-036 §3 ·
-// ADR-038 §3 「구현」 — 다른 관측일의 본기도는 열거하지 않는다). 데이터 eucharist-collects.json
+// ADR-038 §3 「구현」 — 다른 전례일의 본기도는 열거하지 않는다). 데이터 eucharist-collects.json
 // `_meta.endings` 와 글자까지 같아야 한다(실데이터 테스트가 대조). A · B 의 선택 규정은 설계서
 // 미결37 — 데이터가 B 를 배정하지 않으므로 레코드의 코드를 그대로 받고, 코드가 없으면 A 다.
 /** @type {Record<"A" | "B" | "C", string>} */
@@ -139,7 +139,7 @@ function monthDayLabel(/** @type {string} */ dateStr) {
   return p ? `${p.m}월 ${p.d}일` : dateStr;
 }
 
-/** 격자 합성 관측일인가(설계서 §5.5 예약 접두사). URL 쿼리 → 상태는 routing.js `parsePath` 가 맡는다. */
+/** 격자 합성 전례일인가(설계서 §5.5 예약 접두사). URL 쿼리 → 상태는 routing.js `parsePath` 가 맡는다. */
 function isGrid(/** @type {Candidate} */ c) {
   return c.observance.id.startsWith(GRID_ID_PREFIX);
 }
@@ -156,7 +156,7 @@ function shortName(name) {
 }
 
 /**
- * 후보의 상태를 칩 꼬리말로 — 밀린 · 옮긴 · 선택 봉헌 · 기념 · 기념일 · 저녁 전례. 승자(그날 지키는 고유 후보)는 꼬리가 없다.
+ * 후보의 상태를 칩 꼬리말로 — 밀린 · 옮긴 · 선택 봉헌 · 기념 · 기념일 · 저녁 전례. 지정 전례일(그날 지키는 고유 후보)은 꼬리가 없다.
  * @param {Candidate} c
  */
 function statusSuffix(c) {
@@ -173,13 +173,13 @@ function statusSuffix(c) {
   }
 }
 
-/** 생략된 · 옮겨 간 후보와 기념일 — 칩을 흐리게 그린다(사계재는 승자 자격이 없어도 고를 독서가 있어 흐리지 않는다). */
+/** 생략된 · 옮겨 간 후보와 기념일 — 칩을 흐리게 그린다(사계재는 지정 자격이 없어도 고를 독서가 있어 흐리지 않는다). */
 function isMutedCandidate(/** @type {Candidate} */ c) {
   return c.status === "omitted" || c.status === "transferred_out" || c.observance.rank === "commemoration";
 }
 
 /**
- * 관측일 스위처 칩 라벨(ADR-038 §3-1): 이름 (+ 주기 라벨) (+ 독서 N) + 상태 꼬리. 주기는 격자(그날의
+ * 전례일 스위처 칩 라벨(ADR-038 §3-1): 이름 (+ 주기 라벨) (+ 독서 N) + 상태 꼬리. 주기는 격자(그날의
  * 주일 · 평일) 후보에만 — 성인 축일은 주기로 갈리지 않는다. 트랙은 그 후보의 독서가 트랙을 가질 때만.
  * @param {Candidate} c @param {ResolvedDate} resolved @param {1 | 2 | null} track  이 후보에 적용되는 트랙
  */
@@ -196,8 +196,8 @@ function hasProperReadings(/** @type {ReadingGroup[]} */ groups) {
 }
 
 /**
- * 초기 선택(ADR-038 §3 — `official` 이 초기 선택). 단 하나의 예외가 미결25(사용자 확정 2026-10-12, 닫힘)다: 승자의 독서가
- * 공통뿐이면(고유 독서 없는 축일) 책자대로 그날의 격자 독서를 먼저 보인다 — 헤더 제목은 여전히 승자이고 색은 고른
+ * 초기 선택(ADR-038 §3 — `official` 이 초기 선택). 단 하나의 예외가 미결25(사용자 확정 2026-10-12, 닫힘)다: 지정 전례일의 독서가
+ * 공통뿐이면(고유 독서 없는 축일) 책자대로 그날의 격자 독서를 먼저 보인다 — 헤더 제목은 여전히 지정 전례일이고 색은 고른
  * 본문의 색(`headerColors` — 격자면 그날의 병기 `colors` + 대체색), 본기도는 고른 칩의 것이다.
  * @param {ResolvedDate} resolved @param {(c: Candidate) => ReadingGroup[]} groupsOf
  * @returns {Candidate | null}
@@ -293,7 +293,7 @@ function findBracketBase(options, g) {
  * - 괄호 선택 구절 세트(`BRACKET_NOTE`)는 자기 바탕 세트에 **합친다** — 긴 본문을 그리고 짧은 본문과의 차이를
  *   〔 〕 로 표시한다(`short` 가 그 바탕). 세그먼트에 오르지 않는다.
  * - 남는 선택지가 둘 이상이면 「또는」 대안이다 — 대안이 있는 슬롯만 바꾼 **완전한 세트**를 통째로 고른다(ADR-037
- *   §1): 「독서 1」「독서 2」. 조건부 세트는 조건(「…로 지킬 때」)이 라벨이고 그 바탕 세트는 관측일 이름이다.
+ *   §1): 「독서 1」「독서 2」. 조건부 세트는 조건(「…로 지킬 때」)이 라벨이고 그 바탕 세트는 전례일 이름이다.
  * - 제목이 갈리는 세트들(미결12 — 좁히기에 실패해 남은 것 전부가 온 날)은 제목으로 가른다.
  * @param {ReadingGroup[]} sets @param {string} baseName
  * @returns {ReadingOption[]}
@@ -309,7 +309,7 @@ function readingOptions(sets, baseName) {
     out.push({ group: g, short: null, label: "" });
   }
   const titles = new Set(out.map((o) => o.group.title));
-  // 제목이 갈리면(한 날짜에 둘 — 5.1 사도 성 필립보와 성 야고보 ∧ 노동자의 날) 고른 관측일의 제목을 앞세운다 — 엔진은
+  // 제목이 갈리면(한 날짜에 둘 — 5.1 사도 성 필립보와 성 야고보 ∧ 노동자의 날) 고른 전례일의 제목을 앞세운다 — 엔진은
   // id 순이라 「노」가 먼저 와 사도 축일의 기본 독서가 노동자의 날 것이었다(자체 리뷰 2026-10-13). 안정 정렬.
   if (titles.size > 1) out.sort((a, b) => Number(!sameName(a.group.title, baseName)) - Number(!sameName(b.group.title, baseName)));
   const conditional = out.some((o) => setCondition(o.group) !== null);
@@ -355,8 +355,8 @@ function slotsInOrder(/** @type {ReadingGroup | null} */ group) {
 }
 
 /**
- * 본기도 — **고른 관측일의 것만**(사용자 결정 2026-10-12, pitfalls §21 · ADR-038 §3 「구현」). 같은 날의 다른
- * 관측일 본기도는 그 칩을 골라야 보인다. 재조회 없이 `findCollects` 반환(관측일별 키잉)에서 고른 후보의 원소를
+ * 본기도 — **고른 전례일의 것만**(사용자 결정 2026-10-12, pitfalls §21 · ADR-038 §3 「구현」). 같은 날의 다른
+ * 전례일 본기도는 그 칩을 골라야 보인다. 재조회 없이 `findCollects` 반환(전례일별 키잉)에서 고른 후보의 원소를
  * 찾는다 — 본기도가 없는 후보(기념일 · 이름 줄)는 빈 배열.
  * @param {CandidateCollects[]} entries @param {Candidate} selected
  * @returns {CollectOption[]}
@@ -365,18 +365,18 @@ function collectsFor(entries, selected) {
   const sel = entries.find((e) => e.candidate === selected)
     || entries.find((e) => e.candidate.observance.id === selected.observance.id) || null;
   if (!sel) return [];
-  // 같은 날짜에 정의된 다른 관측일의 본기도가 섞여 오면(5.1 노동자의 날 — 미결18 · 35) 고른 관측일 이름의 것을 앞세운다(안정 정렬)
+  // 같은 날짜에 정의된 다른 전례일의 본기도가 섞여 오면(5.1 노동자의 날 — 미결18 · 35) 고른 전례일 이름의 것을 앞세운다(안정 정렬)
   const name = selected.observance.name;
   return [...sel.collects].sort((a, b) => Number(!sameName(a.title, name)) - Number(!sameName(b.title, name)));
 }
 
-/** 괄호 설명을 뗀 이름이 같은가 — 세트 · 본기도의 제목과 관측일 이름 대조. */
+/** 괄호 설명을 뗀 이름이 같은가 — 세트 · 본기도의 제목과 전례일 이름 대조. */
 function sameName(/** @type {string | null | undefined} */ a, /** @type {string | null | undefined} */ b) {
   return !!a && !!b && shortName(a) === shortName(b);
 }
 
 /**
- * `?collect=` 는 본기도 목록의 몇 번째인가(1부터 — `?set=` 과 같은 규칙). 종전에는 `collect_no` 였는데, 한 관측일에
+ * `?collect=` 는 본기도 목록의 몇 번째인가(1부터 — `?set=` 과 같은 규칙). 종전에는 `collect_no` 였는데, 한 전례일에
  * 서로 다른 레코드 둘이 모두 `collect_no: 1` 인 날(사계재 금요일 성직후보자 · 수도자, 5.1)에 둘째에 닿을 수 없었다
  * (자체 리뷰 2026-10-13). 범위 밖이면 첫 대체안.
  */
@@ -523,7 +523,7 @@ function altList(/** @type {unknown} */ v) {
  * 헤더 색(ADR-038 §3 · 설계서 R-6.4-color-order) — **고른 본문의 색을 따른다**(사용자 결정 2026-10-12,
  * pitfalls §21): 고른 칩이 자기 색을 가진 **비격자** 후보이고 그 색이 그날의 대표색과 다르면 그 색 하나
  * (사계재 자 · 성 토요일 저녁의 부활밤 백 · 생략된 성인). 그 밖은 그날의 `colors`(병기) + `colorAlt`
- * 그대로 — 승자를 고르거나 색이 같은 후보를 고르면 사계재 날의 [자, 백] 병기가 남는다. 격자 후보는 자기
+ * 그대로 — 지정 전례일을 고르거나 색이 같은 후보를 고르면 사계재 날의 [자, 백] 병기가 남는다. 격자 후보는 자기
  * 색이 아니라 절기 바탕색을 들고 있어 제외. 「재일 독서를 읽을 때만 자색, 어차피 선택 독서」(2026-09-17)의 일반화.
  * @param {ResolvedDate} resolved @param {Candidate | null} selected
  * @returns {{ colors: string[], colorAlt: string[], ownColor: boolean }}
@@ -1251,7 +1251,7 @@ function withTrack(search, track) {
 }
 
 /**
- * 화면 안에서 날짜 · 관측일이 바뀌면 고정 문구 「전례독서」(setTitle) 대신 그날을 읽힌다 — 장 이동이 「창세기 2장」을
+ * 화면 안에서 날짜 · 전례일이 바뀌면 고정 문구 「전례독서」(setTitle) 대신 그날을 읽힌다 — 장 이동이 「창세기 2장」을
  * 읽는 것과 같은 몫(자체 리뷰 2026-10-13).
  * @param {LectionaryModel} m
  */
@@ -1270,7 +1270,7 @@ function commit(m, chapters) {
   clearNode($app);
 
   const root = el("div", { className: "lectionary" });
-  // 붙이기 · 알리기 — 빈 관측일 화면도 같은 끝이다. 누른 컨트롤로 포커스를 돌려주는 것은 그 뒤 라우터의 몫이다(routing.js).
+  // 붙이기 · 알리기 — 빈 전례일 화면도 같은 끝이다. 누른 컨트롤로 포커스를 돌려주는 것은 그 뒤 라우터의 몫이다(routing.js).
   const finish = () => {
     $app.appendChild(root);
     announceDay(m);

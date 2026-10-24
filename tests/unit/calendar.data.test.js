@@ -206,6 +206,6 @@ test("42칸 월간 표가 엔진 연도 캐시를 지킨다 — 해를 걸친 20
   vm.runInContext("anchorCache.clear(); spansCache.clear(); transferCache.clear();", ctx);
   ctx.buildMonthGrid(2026, 6, "2026-10-15", (d) => ctx.resolveDateIn(june, d, ctx.transfersOf(june, Number(d.slice(0, 4)))));
   same([...vm.runInContext("anchorCache", ctx).keys()].sort(), [2025, 2026]);
-  // 연도 키 캐시는 인덱스 하나용이다 — 뒤의 조회가 남의 인덱스로 만든 패스를 읽지 않게
+  // 연도 키 캐시는 인덱스 하나용이다 — 뒤의 조회가 남의 인덱스로 만든 이동 계산을 읽지 않게
   vm.runInContext("transferCache.clear();", ctx);
 });

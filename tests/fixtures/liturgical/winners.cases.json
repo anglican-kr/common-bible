@@ -2,8 +2,8 @@
   "_meta": {
     "kind": "winner",
     "schema": "tests/fixtures/liturgical/README.md",
-    "canon": "설계서 §1.4 기준 지도 — 실제 연도의 승자(official)·전례색·승자 자격 기대값은 이 파일이 기준이다",
-    "transcribedFrom": "설계서 §7 B1 행 · 사계재 행 ④ · 이동 패스 행 ⑩ 승자 · 주의 세례 행 · §9 미결16·25·26·29·30 · 검토 문서 §5.10·§5.13·§5.15 (main 243bf83, 2026-09-20)",
+    "canon": "설계서 §1.4 기준 지도 — 실제 연도의 지정 전례일(official)·전례색·지정 자격 기대값은 이 파일이 기준이다",
+    "transcribedFrom": "설계서 §7 B1 행 · 사계재 행 ④ · 이동 계산 행 ⑩ 지정 전례일 · 주의 세례 행 · §9 미결16·25·26·29·30 · 검토 문서 §5.10·§5.13·§5.15 (main 243bf83, 2026-09-20)",
     "groupLegend": "group 은 리팩터링 전 §7 행의 묶음 표시일 뿐이다 — 참조 대상이 아니다"
   },
   "cases": [
@@ -16,7 +16,7 @@
       "canon": ["R-4.5-baptism-ordinary-1"],
       "checks": ["C-4.5-4", "C-4.5-5", "X-10"],
       "source": ["2026 책자 일러두기 — 「성탄절기 … 주님의 세례 축일(1월 11일) 전일까지」 · 「연중시기 — 2026년 1월 11일(주님의 세례 축일, 연중 1주일)부터」"],
-      "note": "격자를 christmas 주일로 합성하면 절기 주일(prec 2)이 이겨 뒤집힌다. 2027 은 1.10 — 날짜가 해마다 달라 alsoYears 로 되풀이할 수 없어 따로 적는다. 색은 어느 쪽으로 읽어도 백.",
+      "note": "격자를 christmas 주일로 합성하면 절기 주일(prec 2)이 앞서 뒤집힌다. 2027 은 1.10 — 날짜가 해마다 달라 alsoYears 로 되풀이할 수 없어 따로 적는다. 색은 어느 쪽으로 읽어도 백.",
       "assertions": [
         { "date": "2026-01-11", "expect": { "official": "t-주님의-세례", "coord": { "season": "ordinary", "week": 1, "type": "sunday" }, "color": "white" } },
         { "date": "2026-01-10", "expect": { "coord": { "season": "christmas" } } },
@@ -28,12 +28,12 @@
       "id": "W-2026-05-27-ember-ordination",
       "kind": "winner",
       "group": "B1 · 사계재 ④",
-      "title": "사계재·기념일은 승자가 아니다 — 이천환 서품일 ∧ 하계재 ∧ 연중 8주 수: official 격자, 둘 다 proper",
+      "title": "사계재·기념일은 지정 전례일이 아니다 — 이천환 서품일 ∧ 하계재 ∧ 연중 8주 수: official 격자, 둘 다 proper",
       "status": "confirmed",
       "canon": ["R-6.1-ineligible", "설계서 §5.6", "설계서 §6.3"],
       "checks": ["C-6.1-11", "C-6.1-12", "C-6.3-1"],
       "source": ["사용자 확정 2026-09-17(미결23·24 해소)", "2026 책자 — 5.27 하계재는 평일 독서 + 「기도서 참조」, 이천환 서품일은 이름 줄"],
-      "note": "사계재 후보로 findReadings 를 부르면 성직자 2세트(시편 99 / 27:1-9), findCollects 는 성직자 본기도. 소재일 여부는 승자와 무관 — official 이 격자여도 소재일 참. 그날의 색은 W-2026-05-27-ember-color(잠정).",
+      "note": "사계재 후보로 findReadings 를 부르면 성직자 2세트(시편 99 / 27:1-9), findCollects 는 성직자 본기도. 소재일 여부는 지정 전례일과 무관 — official 이 격자여도 소재일 참. 그날의 색은 W-2026-05-27-ember-color(잠정).",
       "assertions": [
         { "date": "2026-05-27", "expect": { "official": "grid:ordinary-8-weekday-wed" } },
         { "date": "2026-05-27", "expect": { "id": "t-하계재", "status": "proper", "displacedBy": null, "observanceColor": "violet", "penitential": true } },
@@ -46,12 +46,12 @@
       "id": "W-2026-05-27-ember-color",
       "kind": "winner",
       "group": "사계재 색",
-      "title": "하계재 수요일의 색 — 승자는 격자 평일이어도 그날은 자(책자대로)",
+      "title": "하계재 수요일의 색 — 지정 전례일은 격자 평일이어도 그날은 자(책자대로)",
       "status": "confirmed",
       "issue": "미결26",
       "canon": ["R-6.4-ember-color"],
       "checks": ["C-6.4-3", "X-10"],
-      "source": ["2026 책자 — 5.27 [백/자](백은 그 주 전체가 [백] 인 편집 — 미결30 ③) · 5.29 [자] · 5.30 [자]", "사용자 결정 2026-10-10 — 미결26 모델 (b): 사계재 날은 책자대로 자(그날 승자가 격자면 자, 축일이면 축일 색 + 자 병기)"],
+      "source": ["2026 책자 — 5.27 [백/자](백은 그 주 전체가 [백] 인 편집 — 미결30 ③) · 5.29 [자] · 5.30 [자]", "사용자 결정 2026-10-10 — 미결26 모델 (b): 사계재 날은 책자대로 자(그날 지정 전례일이 격자면 자, 축일이면 축일 색 + 자 병기)"],
       "assertions": [
         { "date": "2026-05-27", "expect": { "official": "grid:*", "color": "violet", "colors": ["violet"] } }
       ]
@@ -65,7 +65,7 @@
       "issue": "미결26",
       "canon": ["R-6.4-ember-color"],
       "checks": ["C-6.4-3", "X-8"],
-      "source": ["서울교구 2026 달력 9월 면 — 9.18 은 격자 독서인데도 [자]", "사용자 결정 2026-10-10 — 미결26 모델 (b): 사계재 날은 책자대로 자(그날 승자가 격자면 자, 축일이면 축일 색 + 자 병기)"],
+      "source": ["서울교구 2026 달력 9월 면 — 9.18 은 격자 독서인데도 [자]", "사용자 결정 2026-10-10 — 미결26 모델 (b): 사계재 날은 책자대로 자(그날 지정 전례일이 격자면 자, 축일이면 축일 색 + 자 병기)"],
       "assertions": [
         { "date": "2026-09-18", "expect": { "official": "grid:*", "color": "violet", "colors": ["violet"] } },
         { "date": "2026-09-18", "expect": { "id": "t-추계재", "status": "proper", "observanceColor": "violet" } }
@@ -104,12 +104,12 @@
       "id": "W-2026-09-16-ninian-ember",
       "kind": "winner",
       "group": "사계재 ④",
-      "title": "축일이 이기는 사계재 날 — 니니안(prec 7) official, 추계재·격자 proper, 색은 니니안 백 + 자 병기",
+      "title": "축일이 지정 전례일인 사계재 날 — 니니안(prec 7) official, 추계재·격자 proper, 색은 니니안 백 + 자 병기",
       "status": "confirmed",
       "issue": "미결26",
       "canon": ["R-6.1-ineligible", "R-6.4-ember-color"],
       "checks": ["C-6.1-11", "C-6.4-3", "X-8"],
-      "source": ["서울교구 2026 달력 9월 면 — 9.16 니니안 [자/백] 병기, 독서는 연중 24주 평일 II 격자 것(미결25)", "사용자 결정 2026-10-10 — 미결26 모델 (b): 사계재 날은 책자대로 자(그날 승자가 격자면 자, 축일이면 축일 색 + 자 병기)"],
+      "source": ["서울교구 2026 달력 9월 면 — 9.16 니니안 [자/백] 병기, 독서는 연중 24주 평일 II 격자 것(미결25)", "사용자 결정 2026-10-10 — 미결26 모델 (b): 사계재 날은 책자대로 자(그날 지정 전례일이 격자면 자, 축일이면 축일 색 + 자 병기)"],
       "assertions": [
         { "date": "2026-09-16", "expect": { "official": "d0916-니니안", "color": "white", "colors": ["violet", "white"] } },
         { "date": "2026-09-16", "expect": { "id": "t-추계재", "status": "proper" } },
@@ -120,12 +120,12 @@
       "id": "W-2026-09-19-theodore-ember",
       "kind": "winner",
       "group": "사계재 ④",
-      "title": "축일이 이기는 사계재 날 — 데오도르(prec 7) official, 색은 데오도르 백 + 자 병기",
+      "title": "축일이 지정 전례일인 사계재 날 — 데오도르(prec 7) official, 색은 데오도르 백 + 자 병기",
       "status": "confirmed",
       "issue": "미결26",
       "canon": ["R-6.1-ineligible", "R-6.4-ember-color"],
       "checks": ["C-6.4-3", "X-8"],
-      "source": ["서울교구 2026 달력 9월 면 — 9.19 데오도르 [자/백] 병기", "사용자 결정 2026-10-10 — 미결26 모델 (b): 사계재 날은 책자대로 자(그날 승자가 격자면 자, 축일이면 축일 색 + 자 병기)"],
+      "source": ["서울교구 2026 달력 9월 면 — 9.19 데오도르 [자/백] 병기", "사용자 결정 2026-10-10 — 미결26 모델 (b): 사계재 날은 책자대로 자(그날 지정 전례일이 격자면 자, 축일이면 축일 색 + 자 병기)"],
       "assertions": [
         { "date": "2026-09-19", "expect": { "official": "d0919-탈수스의-데오도르", "color": "white", "colors": ["violet", "white"] } },
         { "date": "2026-09-19", "expect": { "id": "t-추계재", "status": "proper" } }
@@ -135,7 +135,7 @@
       "id": "W-2024-12-21-ember-ordination-kim",
       "kind": "winner",
       "group": "B1",
-      "title": "기념일은 승자가 아니다 — 김희준 서품일 ∧ 동계재: official 격자(본문 d1221-성탄-4일-전)",
+      "title": "기념일은 지정 전례일이 아니다 — 김희준 서품일 ∧ 동계재: official 격자(본문 d1221-성탄-4일-전)",
       "status": "confirmed",
       "canon": ["R-6.1-ineligible", "설계서 §5.6"],
       "checks": ["C-6.1-12", "X-7"],
@@ -168,7 +168,7 @@
       "canon": ["설계서 §6.5", "R-6.1-ineligible"],
       "checks": ["C-6.1-5", "C-6.1-12", "X-10"],
       "source": ["2026 책자 — 기념일 전부 이름 줄 · 독서 없음 · 색 없음", "기도서 31쪽 월별 축일 — 바탕체(축일), 사용자 결정 2026-10-24"],
-      "note": "id 의 「commemoration」은 그대로다. 기념일이던 때는 승자 자격이 없어 proper 였고(R-6.1-ineligible), 축일이 된 지금은 거룩한 이름 예수와 해마다 같은 날이라 밀린 것이 아니어서 proper 다(§6.5 동시 봉헌). 본기도와 독서가 없는 것은 같다(미결51).",
+      "note": "id 의 「commemoration」은 그대로다. 기념일이던 때는 지정 자격이 없어 proper 였고(R-6.1-ineligible), 축일이 된 지금은 거룩한 이름 예수와 해마다 같은 날이라 밀린 것이 아니어서 proper 다(§6.5 동시 봉헌). 본기도와 독서가 없는 것은 같다(미결51).",
       "assertions": [
         { "date": "2026-01-01", "expect": { "id": "d0101-세계평화를-위한-기도일", "status": "proper", "displacedBy": null } },
         { "date": "2026-01-01", "expect": { "id": "d0101-세계평화를-위한-기도일", "readings": { "empty": true } } }
@@ -178,12 +178,12 @@
       "id": "W-2026-09-06-womens-mission-commemoration",
       "kind": "winner",
       "group": "B1",
-      "title": "temporal 기념일도 승자가 아니다 — 여성선교주일(9월 첫 주일)은 proper 이름 줄, official 은 격자 연중 주일",
+      "title": "temporal 기념일도 지정 전례일이 아니다 — 여성선교주일(9월 첫 주일)은 proper 이름 줄, official 은 격자 연중 주일",
       "status": "confirmed",
       "canon": ["R-6.1-ineligible"],
       "checks": ["C-6.1-12", "X-10"],
       "source": ["사용자 확정 2026-10-10 — 해마다 본기도·독서가 새로 정해져 고정 본문이 없다(ADR-036 §6 · data#27)", "2026 책자 — 9.6 여성선교주일은 연중 23주일 위의 안내 줄(X-10)"],
-      "note": "실데이터의 첫 temporal 기념일 — official 격자 · proper 이름 줄 · 빈 본문을 지킨다. 다만 여성선교주일은 언제나 주일이라 데이터 값 7 로도 격자 주일 5 에 지므로, 승자 자격 판별을 kind(성인력 행)로 잘못 좁힌 구현도 이 케이스를 통과한다 — rank 판별을 가르는 것은 temporal 기념일 ∧ 평일 격자(prec 8)이고 실데이터에 없어 설계서 §7 B1 행의 합성 케이스가 맡는다. 9월 첫 주일은 해마다 날짜가 달라 alsoYears 로 되풀이할 수 없어 2027 을 따로 적는다(2028 은 연중 22주일).",
+      "note": "실데이터의 첫 temporal 기념일 — official 격자 · proper 이름 줄 · 빈 본문을 지킨다. 다만 여성선교주일은 언제나 주일이라 데이터 값 7 로도 격자 주일 5 에 지므로, 지정 자격 판별을 kind(성인력 행)로 잘못 좁힌 구현도 이 케이스를 통과한다 — rank 판별을 가르는 것은 temporal 기념일 ∧ 평일 격자(prec 8)이고 실데이터에 없어 설계서 §7 B1 행의 합성 케이스가 맡는다. 9월 첫 주일은 해마다 날짜가 달라 alsoYears 로 되풀이할 수 없어 2027 을 따로 적는다(2028 은 연중 22주일).",
       "assertions": [
         { "date": "2026-09-06", "expect": { "official": "grid:ordinary-23-sunday", "color": "green" } },
         { "date": "2026-09-06", "expect": { "id": "t-여성선교주일", "status": "proper", "displacedBy": null } },
@@ -200,7 +200,7 @@
       "status": "confirmed",
       "canon": ["R-6.1-ladder", "R-6.4-color-order"],
       "checks": ["X-11"],
-      "source": ["2025 책자 — 2.2 주님의 봉헌(주일)이 연중 4주일을 이기고 [백]"],
+      "source": ["2025 책자 — 2.2 주님의 봉헌(주일)이 연중 4주일보다 앞서고 [백]"],
       "assertions": [
         { "date": "2025-02-02", "expect": { "official": "d0202-주의-봉헌", "color": "white" } },
         { "date": "2025-02-02", "expect": { "id": "grid:ordinary-4-sunday", "status": "proper" } }
@@ -214,8 +214,8 @@
       "status": "confirmed",
       "canon": ["R-6.1-ladder", "R-6.5-year-pass"],
       "checks": ["X-12", "C-6.1-2", "C-6.1-5"],
-      "source": ["2024 책자 — 9.29 성 미카엘(연중 26주일)이 이기고 [백] 고유 독서, 설립 기념일은 이름 줄"],
-      "note": "같은 고정 날짜의 두 관측일은 충돌이 아니라 동시 봉헌 — 옮기지 않고 높은 쪽 official, 낮은 쪽 proper(둘 다 본기도·독서를 만들고 독자가 고른다, 미결18).",
+      "source": ["2024 책자 — 9.29 성 미카엘(연중 26주일)이 앞서고 [백] 고유 독서, 설립 기념일은 이름 줄"],
+      "note": "같은 고정 날짜의 두 전례일은 충돌이 아니라 동시 봉헌 — 옮기지 않고 높은 쪽 official, 낮은 쪽 proper(둘 다 본기도·독서를 만들고 독자가 고른다, 미결18).",
       "assertions": [
         { "date": "2024-09-29", "expect": { "official": "d0929-성-미카엘과-모든-천사들", "color": "white" } },
         { "date": "2024-09-29", "expect": { "id": "d0929-대한성공회-설립-기념일", "status": "proper" } },
@@ -226,7 +226,7 @@
       "id": "W-2025-03-25-annunciation-lent-tuesday",
       "kind": "winner",
       "group": "⑩",
-      "title": "수태고지(사순 3주 화) 제자리 승자 — [백]",
+      "title": "수태고지(사순 3주 화) 제자리 지정 전례일 — [백]",
       "status": "confirmed",
       "canon": ["R-6.1-ladder", "R-6.4-color-order"],
       "checks": ["X-11"],
@@ -240,7 +240,7 @@
       "id": "W-2027-08-15-assumption-on-sunday",
       "kind": "winner",
       "group": "⑩",
-      "title": "무이동 — 성모안식(A, 연중 주일) 승자, 격자 주일 proper",
+      "title": "무이동 — 성모안식(A, 연중 주일) 지정 전례일, 격자 주일 proper",
       "status": "confirmed",
       "canon": ["R-6.1-ladder"],
       "checks": ["C-6.5-14"],
@@ -260,7 +260,7 @@
       "canon": ["R-6.1-ladder", "R-6.2-destinations"],
       "checks": ["C-6.5-14"],
       "source": ["기도서 35쪽 월별 축일 — 검정 고딕(주요축일 나), 사용자 결정 2026-10-24", "기도서 원문 주요축일 다-1 — 교회력 규정은 (다)로 적는다 — 이 케이스와 다르다"],
-      "note": "id 의 「on-sunday」는 그대로다. (다)였을 때는 연중 주일(prec 5)을 이겨 그날 승자였다(옛 기대값 — 미결48 이 교회력 규정 쪽으로 닫히면 돌아간다).",
+      "note": "id 의 「on-sunday」는 그대로다. (다)였을 때는 연중 주일(prec 5)보다 앞서 그날 지정 전례일이었다(옛 기대값 — 미결48 이 교회력 규정 쪽으로 닫히면 돌아간다).",
       "assertions": [
         { "date": "2027-09-26", "expect": { "official": "grid:ordinary-26-sunday", "grid": { "status": "proper" } } },
         { "date": "2027-09-26", "expect": { "id": "d0926-모든-한국인-순교자들", "status": "transferred_out", "to": "2027-09-27" } },
@@ -303,12 +303,12 @@
       "id": "W-2025-07-06-thomas-more-on-sunday",
       "kind": "winner",
       "group": "⑩",
-      "title": "기념일이 주일이면 이름 줄 — 토마스 모어 proper(승자 자격 없음), official 연중 14주일, [녹]",
+      "title": "기념일이 주일이면 이름 줄 — 토마스 모어 proper(지정 자격 없음), official 연중 14주일, [녹]",
       "status": "confirmed",
       "canon": ["R-6.1-ineligible"],
       "checks": ["C-6.1-12", "X-11"],
       "source": ["2025 책자 — 7.6 토마스 모어(연중 14주일) 이름 줄", "기도서 34쪽 월별 축일 · 88쪽 축일 본기도 — 이탤릭(기념일), 사용자 결정 2026-10-24"],
-      "note": "축일이던 때는 주일에 밀려 생략(옛 기대값)이었다. 기념일은 승자 자격이 없어 밀리지 않고 이름 줄로 남는다. 책자의 [홍]은 미결30.",
+      "note": "축일이던 때는 주일에 밀려 생략(옛 기대값)이었다. 기념일은 지정 자격이 없어 밀리지 않고 이름 줄로 남는다. 책자의 [홍]은 미결30.",
       "assertions": [
         { "date": "2025-07-06", "expect": { "official": "grid:ordinary-14-sunday", "color": "green" } },
         { "date": "2025-07-06", "expect": { "id": "d0706-토마스-모어", "status": "proper", "displacedBy": null } }
@@ -366,13 +366,13 @@
       "id": "W-2025-01-29-seollal",
       "kind": "winner",
       "group": "⑩",
-      "title": "명절 승자 — 설날(수) official, [백], 격자 평일은 proper 로 남아 선택지",
+      "title": "명절 지정 전례일 — 설날(수) official, [백], 격자 평일은 proper 로 남아 선택지",
       "status": "confirmed",
       "issue": "미결29",
       "canon": ["R-6.1-ladder", "R-6.4-color-order"],
       "checks": ["X-11"],
       "source": ["2025 책자 — 1.29 설날 [백] 고유 독서(민수 6:22-27 …) 위 + 「평일 감사성찬례」 아래 · 평일 I(히브 10:11-18 · 마르 4:1-20)"],
-      "note": "미결29 확정(2026-09-19): 명절 prec 0 승자 유지(초기 독서 = 고유), 그날의 격자 평일 후보를 나란히 선택지로(ADR-038 §3 ④ 뷰 규칙) — 엔진·데이터 변경 없음.",
+      "note": "미결29 확정(2026-09-19): 명절(prec 0)이 지정 전례일로 남음(초기 독서 = 고유), 그날의 격자 평일 후보를 나란히 선택지로(ADR-038 §3 ④ 뷰 규칙) — 엔진·데이터 변경 없음.",
       "assertions": [
         { "date": "2025-01-29", "expect": { "official": "lunar11-설날", "color": "white", "grid": { "status": "proper" } } }
       ]
@@ -381,13 +381,13 @@
       "id": "W-2025-10-06-chuseok",
       "kind": "winner",
       "group": "⑩",
-      "title": "명절 승자 — 추석(월) official, 피데스(prec 7)는 commemorated 이름 줄",
+      "title": "명절 지정 전례일 — 추석(월) official, 피데스(prec 7)는 commemorated 이름 줄",
       "status": "confirmed",
       "issue": "미결29",
       "canon": ["R-6.1-ladder", "R-6.1-prec7-omit"],
       "checks": ["X-11"],
       "source": ["2025 책자 — 10.6 추석 [백/홍] 고유 독서 + 피데스 이름 줄", "사용자 결정 2026-10-24 — 밀린 축일은 그날 기념한다(보호 기간에서만 생략)"],
-      "note": "책자 색은 [백/홍] 병기 — 사계재 밖 평일의 병기는 세우지 않으므로(→ R-6.4-ember-color) 승자 색만 단언한다.",
+      "note": "책자 색은 [백/홍] 병기 — 사계재 밖 평일의 병기는 세우지 않으므로(→ R-6.4-ember-color) 지정 전례일의 색만 단언한다.",
       "assertions": [
         { "date": "2025-10-06", "expect": { "official": "lunar815-추석-명절", "color": "white" } },
         { "date": "2025-10-06", "expect": { "id": "d1006-피데스", "status": "commemorated", "displacedBy": "lunar815-추석-명절" } }
@@ -397,7 +397,7 @@
       "id": "W-2026-09-25-chuseok-not-in-booklet",
       "kind": "winner",
       "group": "⑩",
-      "title": "명절 승자 — 2026 추석(금)은 책자가 [녹] 평일로 두었으나 엔진은 추석을 낸다(편집 편차, 미결29 확정)",
+      "title": "명절 지정 전례일 — 2026 추석(금)은 책자가 [녹] 평일로 두었으나 엔진은 추석을 낸다(편집 편차, 미결29 확정)",
       "status": "confirmed",
       "issue": "미결29",
       "canon": ["R-6.1-ladder"],

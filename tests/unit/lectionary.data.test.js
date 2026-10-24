@@ -105,7 +105,7 @@ test("A3 주기 · 색 라벨이 데이터 _vocab 과 같다(ADR-036 §4 단일 
 test("A3 2026-04-05 부활대축일 — 본기도 대체안 셋이 세그먼트, 세트 둘(원본 세트 표지는 숨김), 슬롯 넷, 기념일은 흐린 칩", { skip: SKIP }, () => {
   const m = model("2026-04-05");
   assert.strictEqual(id(m.selected), "t-부활대축일");
-  assert.strictEqual(m.collects.length, 3);   // 부활대축일의 자유선택 대체안 셋 — 고른 관측일의 것만
+  assert.strictEqual(m.collects.length, 3);   // 부활대축일의 자유선택 대체안 셋 — 고른 전례일의 것만
   assert.strictEqual(m.collectIndex, 0);
   same(m.options.map((o) => [o.label, o.short]), [["독서 1", null], ["독서 2", null]]);   // 원본 세트 둘 = 「또는」 대안
   same(m.slots.map((s) => s.slot), ["first", "psalm", "second", "gospel"]);
@@ -132,7 +132,7 @@ test("A3 2026-09-16 니니안 ∧ 추계재 — 초기 독서는 격자(미결25
   const saint = model("2026-09-16", { obs: "d0916-니니안" });
   assert.strictEqual(saint.group.common, "missionary");
   assert.strictEqual(saint.group.title, "선교사");   // 캡션 라벨 = commons.classes[분류].label
-  same(plain(saint.colors), ["violet", "white"]);   // 승자를 고르면 그날 색 그대로
+  same(plain(saint.colors), ["violet", "white"]);   // 지정 전례일을 고르면 그날 색 그대로
 });
 
 test("A3 2026-08-06 주의 변모(목) — 당일 카드 둘, 격자 카드는 「오는 주일(8월 9일)」", { skip: SKIP }, () => {
@@ -165,7 +165,7 @@ test("A3 2026-08-09 연중 19주일 — 목적지 카드 둘(주일 · 변모 op
   same(plain(moved.colors), ["white"]);   // 변모를 고르면 그 축일의 백
 });
 
-test("A3 5.1 · 사계재 금요일 — 독서 세트와 본기도가 같은 제목으로 짝지어져 단추 하나(?set=)로 함께 바뀌고, 고른 관측일의 것이 먼저다(사용자 결정 2026-10-13)", { skip: SKIP }, () => {
+test("A3 5.1 · 사계재 금요일 — 독서 세트와 본기도가 같은 제목으로 짝지어져 단추 하나(?set=)로 함께 바뀌고, 고른 전례일의 것이 먼저다(사용자 결정 2026-10-13)", { skip: SKIP }, () => {
   const m = model("2026-05-01");
   assert.strictEqual(m.collectsLinked, true);
   same(m.options.map((o) => o.label), ["사도 성 필립보와 성 야고보", "노동자의 날"]);
@@ -301,7 +301,7 @@ test("A3 2026-12-25 · 12-24 — 12.25 는 성탄 낮(초기 · 미결12) · 새
   same(night.collects.map((c) => c.id), [275]);
 });
 
-test("A3 2026-06-14 연중 11주일 — 트랙 기억이 기본, URL 이 이기고, 괄호 선택 구절 세트는 바탕에 합쳐져 긴 본문 + 선택 구절", { skip: SKIP }, () => {
+test("A3 2026-06-14 연중 11주일 — 트랙 기억이 기본, URL 이 앞서고, 괄호 선택 구절 세트는 바탕에 합쳐져 긴 본문 + 선택 구절", { skip: SKIP }, () => {
   const remembered = model("2026-06-14", NONE, 2);
   assert.strictEqual(remembered.track, 2);
   assert.strictEqual(remembered.group.reading_track, 2);
@@ -345,7 +345,7 @@ test("A3 2024-12-24 성탄 1일 전 — 날짜 전용 본문, 본기도 대체�
   same(plain(m.colorAlt), ["blue"]);
 });
 
-test("A3 2026-03-01 사순 2주일 — 조건부 세트는 조건이 라벨 「주의 변모 주일로 지킬 때」, 바탕은 관측일 이름(미결38)", { skip: SKIP }, () => {
+test("A3 2026-03-01 사순 2주일 — 조건부 세트는 조건이 라벨 「주의 변모 주일로 지킬 때」, 바탕은 전례일 이름(미결38)", { skip: SKIP }, () => {
   const m = model("2026-03-01", { set: 2 });
   same(m.options.map((o) => o.label), ["사순 2주일", "주의 변모 주일로 지킬 때"]);   // 「…로 지키는 경우」 → 「…로 지킬 때」
   assert.strictEqual(m.group.set_no, 2);

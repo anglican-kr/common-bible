@@ -3,7 +3,7 @@
 
 대상: 설계서 · 검토 문서 · ADR-036/037/038 + docs/archive/design/liturgical-engine-*.md(점-시점 보관 문서 —
 설계서에서 옮겨 간 관찰 서술) + tests/fixtures/liturgical/*.json (JSON 문자열 값).
-문서에서 날짜 · 월일 · 건수 · 관측일 id · precedence · transfer_to 값 · 전례색 · 미결 번호 · §번호 ·
+문서에서 날짜 · 월일 · 건수 · 전례일 id · precedence · transfer_to 값 · 전례색 · 미결 번호 · §번호 ·
 C-/X-/I-/Q/R id · 픽스처 id · PR 번호를 뽑아 문서별·합집합으로 센다. 보관 문서와 픽스처는 리비전마다 목록을
 구해(`git ls-tree`) 아직 없는 리비전에서는 비어 있는 것으로 본다 — 사실을 그리로 **옮기는** 변경이 사라짐으로
 잡히지 않게.

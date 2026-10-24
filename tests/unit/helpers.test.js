@@ -891,7 +891,7 @@ test("focusSpotOf: data-focus-key 가 없는 링크는 자리가 없고, 루트 
     { key: "div:new_testament", fallback: null, y: 0, top: 40, offset: null, pointer: false });
 });
 
-test("restoreFocusSpot: 새 화면에서 같은 키를 값으로 찾는다 — 콜론 · 한글이 든 관측일 id 도, 없으면 대체 키(범위 끝의 「오늘」 · 마지막 쪽의 「← 이전」), 그것도 없으면 null", () => {
+test("restoreFocusSpot: 새 화면에서 같은 키를 값으로 찾는다 — 콜론 · 한글이 든 전례일 id 도, 없으면 대체 키(범위 끝의 「오늘」 · 마지막 쪽의 「← 이전」), 그것도 없으면 null", () => {
   const h = loadHelpers();
   const keys = ["prev", "today", "obs:grid:lent-2-weekday-tue", "obs:d0916-니니안", "page:prev"];
   const { root, byKey } = viewWith(h.helpers, 0, keys.map((k, i) => [k, 40 * i]));

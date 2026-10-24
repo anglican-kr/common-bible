@@ -3,7 +3,7 @@
     "kind": "optional | activation",
     "schema": "tests/fixtures/liturgical/README.md",
     "canon": "설계서 §1.4 기준 지도 — 선택 봉헌(optional)과 활성화(activated) 기대값은 이 파일이 기준이다",
-    "transcribedFrom": "설계서 §7 이동 패스 행 ⑦·⑩ 선택 · 검토 문서 §5.12 (main 243bf83, 2026-09-20)",
+    "transcribedFrom": "설계서 §7 이동 계산 행 ⑦·⑩ 선택 · 검토 문서 §5.12 (main 243bf83, 2026-09-20)",
     "groupLegend": "group 은 리팩터링 전 §7 행의 묶음 표시일 뿐이다 — 참조 대상이 아니다"
   },
   "cases": [
@@ -303,14 +303,14 @@
       "id": "A-2030-02-03-presentation-vs-seollal",
       "kind": "activation",
       "group": "⑦",
-      "title": "활성화 — 2030 주의 봉헌(토) 목적지 2.3 이 설이다: 도착은 얹되 승자가 아니고 다시 옮기지 않는다",
+      "title": "활성화 — 2030 주의 봉헌(토) 목적지 2.3 이 설이다: 도착은 얹되 지정 전례일이 아니고 다시 옮기지 않는다",
       "status": "provisional",
       "issue": "미결19",
       "activated": ["d0202-주의-봉헌"],
       "canon": ["R-6.2-destinations", "R-6.5-year-pass"],
       "checks": ["C-6.2-8", "I-2"],
       "source": ["KASI 2030 1-1 = 02-03 — 2025~2050 에 이 배치는 이 한 해뿐"],
-      "note": "잠정 「켠 대로 둔다」(목회 판단 — 사제 확인 대상). 이 케이스만 I-2 「떠나지 않은 도착은 승자」에서 제외된다.",
+      "note": "잠정 「켠 대로 둔다」(목회 판단 — 사제 확인 대상). 이 케이스만 I-2 「떠나지 않은 도착은 지정 전례일」에서 제외된다.",
       "assertions": [
         { "date": "2030-02-03", "expect": { "official": "lunar11-설날" } },
         { "date": "2030-02-03", "expect": { "id": "d0202-주의-봉헌", "status": "transferred_in", "from": "2030-02-02", "notInDepartures": true } }
