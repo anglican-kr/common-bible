@@ -148,7 +148,7 @@ let halfVersesRetry = null;
 // ── §4.1 날짜 유틸 ──
 
 /**
- * "YYYY-MM-DD" → {y, m, d}. 형식이 틀리면 null (throw 아님 — search.js:199 선례).
+ * "YYYY-MM-DD" → {y, m, d}. 형식이 틀리면 null (throw 아님 — search.js `formatSearchDate` 선례).
  * @param {string} s
  * @returns {{y: number, m: number, d: number} | null}
  */
