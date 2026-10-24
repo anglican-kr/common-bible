@@ -27,7 +27,7 @@ ADR-018은 6,082줄 `app.js`를 PR 8개로 나누면서, Phase 7에서 「Routin
 |---|---|---|---|
 | 탭 바 활성/미끄러지는 인디케이터 | 44–163 | 약 120 | `tabbar.js`와 짝 |
 | Pull-to-refresh 제스처 | 164–342 | 약 180 | 독립 |
-| 데이터 받기(`loadBooks/Version/Chapter/Prologue`) | 343–396 | 약 55 | leaf, 의존 0 |
+| 데이터 받기(`loadBooks/Version/Chapter/Prologue`) | 343–396 | 약 55 | 다른 모듈을 쓰지 않음(leaf, 의존 0) |
 | 렌더 도우미(title, chapter picker, division, book-list, compact, elevation) | 398–931 | 약 530 | |
 | Views(`renderChapter` 하나만 약 470줄 포함) | 932–1713 | 약 780 | data에 의존 |
 | Routing(`parsePath`·`navigate`·`route`) | 1714–2131 | 약 420 | 모든 것을 부르는 조정자 |
@@ -37,7 +37,7 @@ ADR-018은 6,082줄 `app.js`를 PR 8개로 나누면서, Phase 7에서 「Routin
 
 ### 결합도로 본 목표 모양
 
-- `data-fetch`: 밖으로의 의존이 0이고 많은 모듈이 기대는, 안정된 leaf다(들어오는 의존↑/나가는 의존 0). 이상적이다.
+- `data-fetch`: 다른 모듈을 하나도 가져다 쓰지 않고(나가는 의존 0) 많은 모듈이 가져다 쓰는(들어오는 의존이 많은) 안정된 모듈이다. 이상적이다.
 - `audio-player`: helpers, storage, audio-cache에만 의존하고, 들어오는 길은 `showAudioPlayer`/`hideAudioBar` 몇 개다. 결합이 낮다.
 - `routing`: 여러 뷰를 가져오는 조정자다(나가는 의존↑). 한 방향이고 명시적이면 건강한 결합이다(군더더기가 아니라 책임이다).
 
@@ -54,12 +54,12 @@ ADR-018은 6,082줄 `app.js`를 PR 8개로 나누면서, Phase 7에서 「Routin
 
 ## 목표 구조와 PR 순서 (views-routing)
 
-의존 방향을 따라 위험이 낮은 leaf부터 PR 하나에 모듈 하나씩 뺀다. 기능 PR과 절대 섞지 않는다(아래 「테스트 하네스의 제약」).
+의존 방향을 따라, 다른 모듈을 쓰지 않아 위험이 낮은 모듈부터 PR 하나에 모듈 하나씩 뺀다. 기능 PR과 절대 섞지 않는다(아래 「테스트 하네스의 제약」).
 
 | PR | 작업 | 뺄 영역 → 대상 파일 | 결합 처리 |
 |---|---|---|---|
 | 1 | **오디오 플레이어** | 2132–2324와 오디오 상태 → `js/app/audio-player.js` | `route` 쪽 호출을 명시 import로. 바깥 호출자(search, settings, bookmark, app, sync)를 위한 `window.{hideAudioBar,applyAudioShow,getCurrentAudio}` facade 유지. `applyAudioShow→parsePath` 위로 가는 엣지는 `window.parsePath`로 잠시 거침(PR5에서 해결) |
-| 2 | **데이터 받기** ✅ | `loadBooks/Version/Chapter/Prologue`와 `booksCache`/`appVersion`/`DATA_DIR`/`getBooksCache` → `js/app/data-fetch.js` | leaf(의존 0). views-routing 안의 호출(loadBooks/Chapter/Prologue)은 명시 import, 바깥 소비자(search, app, bookmark, settings)의 facade는 data-fetch가 맡는다. `DATA_FETCHING` 마커와 유닛 테스트 슬라이스 경로를 함께 옮긴다 |
+| 2 | **데이터 받기** ✅ | `loadBooks/Version/Chapter/Prologue`와 `booksCache`/`appVersion`/`DATA_DIR`/`getBooksCache` → `js/app/data-fetch.js` | 다른 모듈을 쓰지 않는다(의존 0). views-routing 안의 호출(loadBooks/Chapter/Prologue)은 명시 import, 바깥 소비자(search, app, bookmark, settings)의 facade는 data-fetch가 맡는다. `DATA_FETCHING` 마커와 유닛 테스트 슬라이스 경로를 함께 옮긴다 |
 | 3 | **탭 인디케이터** ✅ | `syncTabBarActive`·`positionTabIndicator`·미끄러지는 인디케이터 상태·리사이즈/transitionend 리스너 → `js/app/tabbar.js`에 합침(탭 바 로직을 한곳에) | route()의 `window.syncTabBarActive?.()` facade 유지(tabbar↔views-routing 순환). tabbar의 `$searchBtn`·`exitSearch` 다시 쓰기, `$tabBar` 신규. 탭 인디케이터에는 마커 테스트가 없어 테스트 변경 0 |
 | 4 | **Pull-to-refresh 제거(폐기)** | 164–342 `setupPullToRefresh` IIFE와 CSS `#pull-refresh-*` 삭제 | 사용자 결정(2026-06-08): 모바일의 「당겨서 새로 고침」은 Drive 동기화를 손으로 부르는 것이므로 없앤다. `driveSync.requestSync` API, 상태 기계, visibilitychange 자동 동기화, 편집할 때 자동 올리기 등 **백그라운드 동기화 로직은 모두 남긴다**(`requestSync`는 다른 경로도 부른다) |
 | 5a | **라우팅 파일 분리** ✅ | parsePath·navigate·route·updatePageMeta·trackPageView·startScrollTracking과 링크 클릭/popstate 리스너 → `js/app/routing.js` | route()가 부르는 view 렌더러 8개(renderBookList/ChapterList/Chapter/Prologue/Loading/Error·divisionOrder·DIVISION_LABELS)는 views-routing에서 **명시 import**(routing→views 한 방향, 확인). search/bookmark/settings/citations 뷰와 오버레이는 facade 유지(순환). app.js와 search 등의 `window.route/navigate/parsePath`는 남는다 |
@@ -104,7 +104,7 @@ PR5까지 마치면 남은 `views.js`는 약 1,300줄이다. 써 본 뒤 선택�
 | `js/app/bookmark.js` | 북마크 UI — 트리 렌더, 끌어 놓기, 선택 모드, 드로어, export | 약 2,200 |
 | `js/app/bookmark-modals.js` | 모달 7종과 렌더 콜백 DI, 하나의 Escape 스택 | 약 1,010 |
 | `js/app/bookmark-core.js` | DOM 없는 로직(QUERY, HREF/SHARE, SORT, ACTIVE) | 약 360 |
-| `js/app/verse-spec.js` | 절 스펙 해석, 비교, 직렬화, 합치기(leaf) | 약 240 |
+| `js/app/verse-spec.js` | 절 스펙 해석, 비교, 직렬화, 합치기(다른 모듈을 쓰지 않음) | 약 240 |
 
 **핵심 결정 — 모달과 렌더의 순환을 의존성 주입으로 끊는다.** 모달은 확정할 때 트리와 헤더를 다시 그려야 한다(`bookmark.js → 모달 열기`, `모달 → 렌더 갱신`의 양방향 고리). 순환 import는 ADR-019 「ESM 평가 시점 ReferenceError 함정」의 부류라 tsc가 잡지 못하는 실행 오류 위험이 있다. 세 후보(① 의존성 주입 ② 순환 import 허용 ③ 이벤트 버스) 가운데 **①**을 골랐다. bookmark.js가 시작할 때 `initBookmarkModals({ rerenderActiveBookmarkTree, refreshBookmarkHeaderBtn, exitVerseSelectMode })`로 콜백을 넣어 주고, 모달은 bookmark.js를 가져오지 않아 고리가 구조적으로 끊긴다(약속은 tsc가 검증한다).
 
@@ -128,7 +128,7 @@ PR5까지 마치면 남은 `views.js`는 약 1,300줄이다. 써 본 뒤 선택�
 |---|---|---|
 | `js/app/bookmark-gestures.js` | 제스처 엔진 — 끌어서 순서 바꾸기(DRAG_CORE와 인디케이터), 모바일 스와이프 동작 상태(SWIPED_ROW), 스와이프를 놓을 때의 계산(SWIPE_GESTURE), 통합 포인터 핸들러(`_setupDragHandle`) | 541 |
 
-**핵심 결정 — 조정자 쪽으로 가는 반대 방향 의존 둘을 의존성 주입으로 끊는다.** 제스처 핸들러는 (a) 순서를 바꾼 뒤 붙어 있는 북마크 화면 다시 그리기, (b) 선택 모드인지 읽기가 필요하다. 둘 다 bookmark.js(조정자)가 맡는다. bookmark.js가 `_setupDragHandle`을 import하므로, 제스처가 bookmark.js를 되받아 가져오면 순환이 된다. 모달 라운드의 `initBookmarkModals` 선례대로 `initBookmarkGestures({ rerenderTree, isSelectMode })`로 두 고리를 시작할 때 넣어 준다. 제스처는 leaf로 남고(의존: appStorage, bookmark-core뿐), 고리가 구조적으로 끊긴다.
+**핵심 결정 — 조정자 쪽으로 가는 반대 방향 의존 둘을 의존성 주입으로 끊는다.** 제스처 핸들러는 (a) 순서를 바꾼 뒤 붙어 있는 북마크 화면 다시 그리기, (b) 선택 모드인지 읽기가 필요하다. 둘 다 bookmark.js(조정자)가 맡는다. bookmark.js가 `_setupDragHandle`을 import하므로, 제스처가 bookmark.js를 되받아 가져오면 순환이 된다. 모달 라운드의 `initBookmarkModals` 선례대로 `initBookmarkGestures({ rerenderTree, isSelectMode })`로 두 고리를 시작할 때 넣어 준다. 제스처 모듈은 조정 모듈을 부르지 않고(쓰는 것은 appStorage, bookmark-core뿐), 고리가 구조적으로 끊긴다.
 
 **select 상태(`_bmSelectMode`/`_bmSelected`)는 이때 bookmark.js에 남겼다.** SWIPED_ROW 마커 안에 끼어 있었지만 실제로는 선택 모드의 상태다(제스처는 읽기만 하고, 쓰기는 enter/exit가 한다). 다음 라운드(`bookmark-select.js`)가 맡을 예정이라, 이번에는 조정자에 두고 `isSelectMode` 게터로만 내놓았다.
 
@@ -162,7 +162,7 @@ PR5까지 마치면 남은 `views.js`는 약 1,300줄이다. 써 본 뒤 선택�
 
 ### 4라운드 — bookmark-verse-select.js (2026-06-11)
 
-읽기 화면의 절 선택 모드(절을 누르면 강조하고 북마크나 복사)를 나눈다. 앞의 두 라운드와 달리 **조정자를 다시 부르지 않는 거의 leaf**라 가장 단순하다.
+읽기 화면의 절 선택 모드(절을 누르면 강조하고 북마크나 복사)를 나눈다. 앞의 두 라운드와 달리 **조정자를 다시 부르지 않아** 다른 모듈을 거의 쓰지 않으므로 가장 단순하다.
 
 **결과 (1,652 → bookmark.js 1,546줄, −6%):**
 
@@ -188,9 +188,9 @@ PR5까지 마치면 남은 `views.js`는 약 1,300줄이다. 써 본 뒤 선택�
 
 **핵심 — 넣어 주는 고리 하나로 충분하다.** 메뉴가 조정자에게서 필요한 것은 정렬을 바꾸거나 새 폴더를 만든 뒤의 트리 다시 그리기(`_rerenderActiveBookmarkTree`)뿐이다. 그래서 `initBookmarkMenu({ rerenderTree })` 하나를 넣어 준다. 나머지는 모두 아래로 가져온다. bookmark-core(정렬 설정), bookmark-modals(새 폴더, 가져오기), bookmark-select(선택 진입, 전체 선택)다. `renderBookmarksView`(이때는 bookmark.js)가 `buildBmViewActions()`를 가져와 제목줄에 붙인다.
 
-**`exportBookmarks`는 menu로 옮겼다.** 메뉴의 내보내기와 드로어의 `#bm-export-btn` 양쪽이 쓰는 leaf 도구다(조정자 의존 0). menu가 맡고, bookmark.js가 `#bm-export-btn` 리스너를 위해 거꾸로 가져온다(한 방향, 순환 없음).
+**`exportBookmarks`는 menu로 옮겼다.** 메뉴의 내보내기와 드로어의 `#bm-export-btn` 양쪽이 쓰는 도구이고, 조정 모듈을 부르지 않는다(조정자 의존 0). menu가 맡고, bookmark.js가 `#bm-export-btn` 리스너를 위해 거꾸로 가져온다(한 방향, 순환 없음).
 
-**`BOOKMARK_ADD_HELP`는 bookmark-core로 옮겼다.** 빈 상태 자리 표시(트리, 이때는 bookmark.js)와 메뉴의 🛈 팝오버가 함께 쓰는 DOM 없는 문자열 상수라, 중립 leaf인 core가 맡고 양쪽이 가져온다(다음 트리 라운드와도 맞는다). 정리하면서 아무도 부르지 않게 된 core import 3종(`setBookmarkSort`·`getBookmarkSortDir`·`setBookmarkSortDir`)과 select의 `_bmToggleSelectAll`을 지웠다.
+**`BOOKMARK_ADD_HELP`는 bookmark-core로 옮겼다.** 빈 상태 자리 표시(트리, 이때는 bookmark.js)와 메뉴의 🛈 팝오버가 함께 쓰는 DOM 없는 문자열 상수라, 어느 쪽도 부르지 않는 core가 맡고 양쪽이 가져온다(다음 트리 라운드와도 맞는다). 정리하면서 아무도 부르지 않게 된 core import 3종(`setBookmarkSort`·`getBookmarkSortDir`·`setBookmarkSortDir`)과 select의 `_bmToggleSelectAll`을 지웠다.
 
 **테스트.** 마커 블록이 없어 `bookmark.test.js`는 바뀌지 않았다. tsc(main과 worker), 유닛 728, 로드 스모크(⋯와 🛈 그리기), e2e(select-delete의 ⋯ 진입, add-help 🛈, export-import, bookmark, folders. 전부터 실패한 2건 빼고 모두)를 통과했다.
 

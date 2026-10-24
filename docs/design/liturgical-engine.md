@@ -11,7 +11,7 @@
   - B1 이동 계산, 선택 봉헌: PR 3 둘째(#343)
 - 남은 일: §9의 열린 물음이 남았다. 엔진을 쓰는 화면(ADR-038)은 독서 화면과 캘린더 월간 화면이 나왔고, 캘린더의 주간과 목록 화면, 검색 이원화가 남았다.
 - 구현 파일
-  - 엔진: `js/app/liturgical-engine.js`. 다른 모듈을 가져오지 않는 leaf 모듈이다(§3.1).
+  - 엔진: `js/app/liturgical-engine.js`. 다른 모듈을 하나도 가져다 쓰지 않는다(§3.1).
   - 공유 타입: `js/types.d.ts`
   - 합성 표로 검사하는 유닛 테스트: `tests/unit/liturgical-engine.test.js`
   - 실데이터로 검사하는 유닛 테스트: `tests/unit/liturgical-engine.data.test.js`(§7)
@@ -184,12 +184,12 @@ ADR-037 §6이 이 모듈의 계약을 정해 두었다. 이 설계가 §6과 �
 
 ### 3.1 모듈 위치
 
-엔진은 `js/app/liturgical-engine.js` 한 파일이고 **leaf** 모듈이다. ADR-034의 leaf 정의는 "밖으로 나가는 의존 0"이다. `data-fetch.js`, `verse-spec.js`가 같은 자리에 있다.
+엔진은 `js/app/liturgical-engine.js` 한 파일이고, **다른 모듈을 하나도 가져다 쓰지 않는다**(ADR-034의 leaf. 그 정의는 「밖으로 나가는 의존 0」이다). `data-fetch.js`, `verse-spec.js`도 그렇다. ADR-034는 앱의 모듈을 셋으로 나눈다. 혼자 도는 모듈은 다른 모듈을 가져다 쓰지 않고, 화면 모듈은 한 화면을 그리며, 조정 모듈은 화면 사이를 오가며 여러 모듈을 부른다.
 
 ```
-leaf     : verse-spec.js · data-fetch.js · overlay.js · [liturgical-engine.js]
-view     : views.js · bookmark-read.js · [lectionary.js] · [calendar.js]
-orch     : routing.js · bookmark.js
+혼자 도는 모듈 : verse-spec.js · data-fetch.js · overlay.js · [liturgical-engine.js]
+화면 모듈      : views.js · bookmark-read.js · [lectionary.js] · [calendar.js]
+조정 모듈      : routing.js · bookmark.js
 ```
 
 - **허용하는 의존**: 없다. 계산과 조회 모두 엔진 안에서 끝난다. 독서 본문을 그리는 것은 화면의 일이므로, 장을 받는 `loadChapter`와 절 범위를 다루는 `verse-spec.js`의 함수도 엔진이 아니라 `lectionary.js`가 부른다.
