@@ -20,6 +20,7 @@ title: "docs: 교회력 설계서 §9 고쳐 쓰기와 긴 표 풀기"
 어긋난 것은 모두 문서가 데이터나 엔진을 설명하다 낡은 경우였다. 사용자 결정이나 기도서 규칙과 코드가 어긋난 곳은 없었다.
 
 - **표를 푼 뒤 참조를 맞췄다.** 지금의 표를 「행」이나 「표」로 가리키던 곳을 「항목」, 「목록」으로 고쳤다. 「§7 B1 행」 같은 참조 8곳(설계서, 검토 문서, `winners.cases.json`의 설명, 엔진 테스트 주석), 「§2 결손 표」 10곳(§9 항목들과 `docs-data-consistency.test.js` 주석), 「§5.4 조인 키 표」 등 5곳, 「§5.5 상태 표」 4곳(엔진 주석 하나 포함)이다. 「2026-09-20에 §7 행에서 옮겨 적었다」, 「리팩터링 전 §7 행의 묶음」, 「검토 당시엔 §7 행에」처럼 그때의 사실을 적은 곳은 그대로 두었다.
+- **「leaf 모듈」을 풀어 썼다**(사용자 교정, 2026-10-24). 개발을 모르는 독자에게 어렵다는 지적이다. 「다른 모듈을 하나도 가져다 쓰지 않는 모듈」처럼 뜻을 쓰고, 문서마다 처음 나오는 곳에만 (leaf)를 괄호로 남겨 ADR-034와 이었다. 「near-leaf」, 「거의 leaf」는 「조정 모듈을 다시 부르지 않는」으로 썼다. 설계서 §1, §3.1(모듈을 셋으로 나눈 그림의 이름도 「혼자 도는 모듈, 화면 모듈, 조정 모듈」로), 검토 문서, `docs/architecture.md`, ADR-034, 037, 038, 플랫폼 주제 문서, known-issues의 22곳이다. 코드의 영어 주석은 개발자가 읽는 자리라 그대로 두었다. `docs/writing.md` 「용어」에 한 줄을 더했다.
 - **설계서를 장마다 파일로 나누기로 했다**(사용자 결정, 2026-10-24). 1,640줄, 약 300KB라 읽기 어렵다. 절 번호, 규칙 마커, 미결 번호는 그대로 두고 `docs/design/liturgical-engine/` 아래 장별 파일로 옮긴다. 이 PR이 머지된 뒤 글자를 그대로 옮기는 PR로 따로 낸다. 문서 검사 테스트와 사실 토큰 도구가 여러 파일을 「설계서」로 읽게 고치는 일이 함께 들어간다.
 
 - **미결5: 사계재 본문 레코드의 `season`.** 「본문 레코드도 `season: null`」이라 했는데, 춘계재 본문 5건은 전례 절기 `lent`, 1주다(하계재, 추계재, 동계재 15건만 `null`). §4는 이미 맞게 적고 있었다. 계절이 한국어 `name` 안에만 있다는 결론은 그대로다.
@@ -50,5 +51,6 @@ title: "docs: 교회력 설계서 §9 고쳐 쓰기와 긴 표 풀기"
 ## 갱신한 문서
 
 - `docs/design/liturgical-engine.md`: §9를 고쳐 쓰고 낡은 내용을 고쳤다. §2, §5.4, §5.5, §5.6, §7, §8의 긴 표를 목록으로 풀었다.
-- `docs/writing.md`: pitfalls §37에 표 칸 규칙 한 줄과 사례 하나.
+- `docs/writing.md`: pitfalls §37에 표 칸 규칙 한 줄과 사례 하나, 「용어」에 leaf 모듈 한 줄.
+- `docs/architecture.md`, `docs/topics/platform.md`, `docs/known-issues.md`, ADR-034, 037, 038: 「leaf」를 풀어 씀.
 - `docs/design/liturgical-engine-review.md`, `tests/fixtures/liturgical/winners.cases.json`, `tests/unit/liturgical-engine.test.js`, `tests/unit/docs-data-consistency.test.js`, `js/app/liturgical-engine.js`: 표를 가리키던 말(주석과 설명 문구만).
