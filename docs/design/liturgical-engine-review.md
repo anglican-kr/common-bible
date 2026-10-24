@@ -20,7 +20,13 @@
 
 ## 1. 범위와 읽는 법
 
-**왜 비교하나.** 대한성공회 기도서(2004)의 교회력 규칙을 코드로 옮긴 공개 구현은 없다. GitHub 안팎에서 찾은 것은 로마가톨릭(romcal, calendarium-romanum, LiturgicalCalendarAPI), 미국과 북미 성공회(dailyoffice2019, lectionarypage), 영국 성공회(Almanac for Common Worship), RCL 도구, 국내 감리회 연표뿐이다. RCL은 여러 교단이 함께 쓰는 개정 공동 성서일과(Revised Common Lectionary)다. 그래서 이 문서는 **규칙의 내용이 아니라 방식**을 견준다. 날짜를 어떻게 계산하는지, 후보를 어떻게 모으는지, 동률을 어떻게 가르는지, 이동을 어떻게 추적하는지, 그 모두를 어떻게 검증하는지다.
+**왜 비교하나.** 대한성공회 기도서(2004)의 교회력 규칙을 코드로 옮긴 공개 구현은 없다. GitHub 안팎에서 찾은 것은 로마가톨릭(romcal, calendarium-romanum, LiturgicalCalendarAPI), 미국과 북미 성공회(dailyoffice2019, lectionarypage), 영국 성공회(Almanac for Common Worship), RCL 도구, 국내 감리회 연표뿐이다. RCL은 여러 교단이 함께 쓰는 개정 공동 성서일과(Revised Common Lectionary)다. 그래서 이 문서는 **규칙의 내용이 아니라 방식**을 대조한다. 대조하는 것은 다음과 같다.
+
+- 교회력의 날짜(부활절, 대림 1주일)와 연중시기의 주차를 어떻게 계산하는지
+- 그날의 전례일 후보를 어떻게 모으는지
+- 우선순위가 같을 때 어느 쪽을 앞세우고, 밀린 축일을 어느 날로 옮기는지
+- 전례색과 재일을 어떻게 정하는지
+- 이 모두를 어떻게 검증하는지
 
 **판정 어휘 넷.**
 
