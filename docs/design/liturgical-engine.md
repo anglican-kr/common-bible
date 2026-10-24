@@ -1175,75 +1175,85 @@ B1은 A1 다음의 PR 3에서 구현했다(품계, 지정 전례일, 전례색, 
 
 ### 6.5 이동 계산 — 연도 단위로 한 번, 날짜 순으로 (§9 미결9 해소, 2026-09-05)
 
-**[R-6.5-year-pass]** 옮겨온 축일을 목적지 날짜에서 찾으려면 그해의 이동을 **전부 먼저** 계산해 둬야 한다. 12.29 가 스테파노를 받는지는 12.26 이 주일인지에, 그리고 12.27·12.28 이 이미 차 있는지에 달렸다 — 한 날짜만 보고는 답이 없다. 그래서 이동은 `resolveDate` 안에서 판정하지 않고, **연도 캐시를 채울 때 한 번** 돌리는 이동 계산으로 만든다(§4.9 `transfers`). `resolveDate` 는 색인을 읽기만 한다.
+**[R-6.5-year-pass]** 옮겨 온 축일을 목적지 날짜에서 찾으려면 그해의 이동을 **전부 먼저** 계산해 둬야 한다. 12.29가 스테파노를 받는지는 12.26이 주일인지, 그리고 12.27과 12.28이 이미 차 있는지에 달렸다. 한 날짜만 보고는 답이 없다. 그래서 이동은 `resolveDate` 안에서 판정하지 않고, **연도 캐시를 채울 때 한 번** 돌리는 이동 계산으로 만든다(§4.9 `transfers`). `resolveDate`는 색인을 읽기만 한다.
+
+아래는 실제 함수(`js/app/liturgical-engine.js`의 `computeTransfers`)를 줄인 것이다. 타입 주석과 연도 인자 검사는 뺐다. 2026-10-24에 실제 코드에 맞췄다. 저녁 전례를 순위에서 빼는 것, 옮길 것이 없는 날을 건너뛰는 것, 날짜 함수 이름(`shift`, `dayDiff`, `pushTo`)이다.
 
 ```js
-/** @returns {TransferPass} */
 const MAX_SHIFT = 30;   // 이동 상한(날). 실측 최장 16 — 부활 3.26 인 해 성지주일의 요셉 → 부활 2주 화요일(→ R-6.3-guard-order)
 
-/** @param {Set<string>} activated — §6.2 활성화 계약. 호출자가 반드시 넘긴다(연도 경계의 임시 계산도 같은 집합) */
-function computeTransfers(index, year, seed /* Y−1 에서 넘어온 arrivals */, activated) {   // index 는 캘린더 인덱스(§3.3 — 조회 블록은 읽는 인덱스를 인자로 받는다)
-  // seed 는 호출자(전년도 계산)의 것이다. new Map(seed) 는 Map 만 복제하고 Candidate[] 는 공유하므로
-  // 0단계나 루프가 seed 에 이미 있는 날짜에 push 하면 **호출자의 배열이 변형된다** — 캐시 내용과
-  // seed 도착 수가 평가 순서에 의존하게 된다(15차 리뷰). 배열까지 복제한다.
-  const arrivals   = new Map([...seed].map(([d, cs]) => [d, [...cs]]));  // "YYYY-MM-DD" → Candidate[] (transferred_in)
-  const departures = new Map();            // "YYYY-MM-DD" → Candidate[] (status transferred_out)
-  const optionals  = new Map();            // "YYYY-MM-DD" → Candidate[] (status optional) — §6.2
-  const defects    = [];
+/** @param {Set<string>} activated — §6.2 활성화 계약. 호출자가 반드시 넘긴다(연도 경계의 임시 계산도 같은 집합)
+ *  @returns {TransferPass} */
+function computeTransfers(index, year, seed /* Y−1 에서 넘어온 도착(spill) */, activated) {   // index 는 캘린더 인덱스(§3.3)
+  const head = String(year).padStart(4, "0") + "-";
+  const pass = EMPTY_PASS();
+  const { arrivals, departures, optionals, defects } = pass;   // 도착 · 출발 · 선택 봉헌(status optional — §6.2) 색인, 이동 상한을 넘긴 id
+  // seed 는 호출자(전년도 계산)의 것이다. Map 만 복제하고 Candidate[] 를 공유하면 0단계나 루프의 push 가
+  // **호출자의 배열을 바꿔**, 캐시 내용과 seed 도착 수가 평가 순서에 기대게 된다(15차 리뷰). 배열까지 복제한다.
+  for (const [d, cs] of seed) arrivals.set(d, [...cs]);
 
   // ── 0단계: 선택 봉헌 선색인 — 순위와 무관하고 목적지가 기원보다 **앞**일 수 있어(nearby_sunday 2028: 2.2 → 1.30)
   //    날짜 루프 안에서 처리하면 목적지를 이미 지나친 뒤라 늦는다. 루프 전에 한 해 전체를 먼저 깐다.
   for (const o of optionalObservancesOf(index, year)) {       // { observance, origin, dest } — §6.2 표의 네 종류
     if (activated.has(o.observance.id)) {                     // 켜진 것은 실제로 옮긴다 — optionals 가 아니라 도착. displacedBy 없음(택한 것)
-      push(arrivals,   o.dest,   { observance: o.observance, status: "transferred_in",  from: o.origin });
-      push(departures, o.origin, { observance: o.observance, status: "transferred_out", to: o.dest });
-    } else push(optionals, o.dest, { observance: o.observance, status: "optional", from: o.origin });
+      pushTo(arrivals,   o.dest,   { observance: o.observance, status: "transferred_in",  from: o.origin });
+      pushTo(departures, o.origin, { observance: o.observance, status: "transferred_out", to: o.dest });
+    } else pushTo(optionals, o.dest, { observance: o.observance, status: "optional", from: o.origin });
   }
+
+  // 그날 순위에 드는 고유 후보 — 고유 전례일(§5.5 출처 — 날짜 · 음력 · 규칙 파생)과 격자에서, 그날 떠난 것(켜진 선택 봉헌의
+  // 출발)과 저녁 전례(→ R-6.1-evening)를 뺀다. 성 토요일의 주요축일을 미는 것은 부활밤이 아니라 성 토요일 행이다
+  const ownAt = (d, gone) => [...ownObservancesOn(index, d), gridObservance(d)]
+    .filter((o) => !gone.get(d)?.some((x) => x.observance.id === o.id) && !isEveningLiturgy(o))
+    .map((o) => ({ observance: o, status: "proper" }));
+
+  let seats = null;                                          // 다음 해 좌석 — 목적지가 해를 넘길 때만 계산한다(§4.9)
+  const isFree = (dest, c) => { … };                         // 아래 「isFree」 — arrivals · departures · seats 를 함께 본다
 
   // ── 1단계: 충돌 이동 — 날짜 순 단일 루프
   const guard = spansOf(year).transferGuard[0];             // 성지주일 ~ 부활 2주일(§4.10)
-  const afterGuard = nextDay(guard.to);                      // 부활 2주 월요일 — 그 안에서 밀린 축일의 목적지 하한(→ R-6.3-guard-destination)
-  const held = [];                                           // 보호 기간 안에서 밀려 자리를 기다리는 { c, from, by } — 밀린 순서대로
-  const next = () => nextYearSeats(index, year, activated);  // 지연 — dest 가 해를 넘길 때만 계산된다 (§4.9)
-  const seat = (c, from, start, by) => {                     // start 부터 첫 빈 날로. 상한을 넘으면 옮기지 않고 proper 로 남긴다 (§5.5 status 표 — 이동 상한)
+  const afterGuard = shift(guard.to, 1);                     // 부활 2주 월요일 — 그 안에서 밀린 축일의 목적지 하한(→ R-6.3-guard-destination)
+  const held = [];                                           // 보호 기간 안에서 밀려 자리를 기다리는 { c, from, displacedBy } — 밀린 순서대로
+  const seat = (c, from, start, displacedBy) => {            // start 부터 첫 빈 날로. 상한을 넘으면 옮기지 않고 proper 로 남긴다(§5.5 status 표 — 이동 상한)
     let dest = start;
-    while (daysBetween(from, dest) <= MAX_SHIFT && !isFree(dest, c, arrivals, departures, next)) dest = nextDay(dest);
-    if (daysBetween(from, dest) > MAX_SHIFT) { defects.push(c.observance.id); return false; }
-    push(arrivals,   dest, { ...c, status: "transferred_in",  from,     displacedBy: by });
-    push(departures, from, { ...c, status: "transferred_out", to: dest, displacedBy: by });
+    while (dayDiff(from, dest) <= MAX_SHIFT && !isFree(dest, c)) dest = shift(dest, 1);
+    if (dayDiff(from, dest) > MAX_SHIFT) { defects.push(c.observance.id); return false; }
+    pushTo(arrivals,   dest, { observance: c.observance, status: "transferred_in",  from,     displacedBy });
+    pushTo(departures, from, { observance: c.observance, status: "transferred_out", to: dest, displacedBy });
     return true;
   };
-  for (const d of daysOf(year)) {          // 1.1 → 12.31, 날짜 순 — 순서가 결과를 정한다(옮길 고유 전례일이 없는 날은 출발이 없어 건너뛴다)
+  for (let d = toKey(year, 1, 1); d.startsWith(head); d = shift(d, 1)) {   // 1.1 → 12.31, 날짜 순 — 순서가 결과를 정한다
     if (d === afterGuard) {                // 보호 기간을 다 돌았다 — 그 안에서 밀린 축일을 서열 순(같으면 밀린 순서)으로 앉힌다(→ R-6.3-guard-order)
-      held.sort((a, b) => effectivePrecedence(a.c.observance) - effectivePrecedence(b.c.observance));   // 안정 정렬
-      for (const h of held) seat(h.c, h.from, afterGuard, h.by);
+      held.sort((a, b) => {                // 안정 정렬. 뺄셈은 ∞ − ∞ 가 NaN 이라 쓰지 않는다
+        const pa = effectivePrecedence(a.c.observance), pb = effectivePrecedence(b.c.observance);
+        return pa === pb ? 0 : pa < pb ? -1 : 1;
+      });
+      for (const h of held) seat(h.c, h.from, afterGuard, h.displacedBy);
     }
-    const proper  = [...ownObservancesOn(index, d), gridObservance(d)]   // §5.5 고유 후보 출처(날짜 · 음력 · 규칙 파생 + 격자), 이동 없음
-      .filter((c) => !departures.get(d)?.some((x) => x.observance.id === c.observance.id));  // 켜진 선택 봉헌은 원래 날짜에 없다
-    const arrived = arrivals.get(d) ?? [];
-    const ranked  = rankCandidates([...proper, ...arrived]);  // 지정 판정과 같은 정렬 키(→ R-6.2-tie-ladder — compareCandidates). guard 는 넣지 않는다(→ R-6.3-holy-week-guard)
+    if (!ownObservancesOn(index, d).some(movesOnConflict)) continue;   // 옮길 고유 전례일이 없는 날은 출발이 없다
+    const ranked  = rankCandidates([...ownAt(d, departures), ...(arrivals.get(d) ?? [])]);  // 지정 판정과 같은 정렬 키(→ R-6.2-tie-ladder — compareCandidates). guard 는 넣지 않는다(→ R-6.3-holy-week-guard)
     const staying = new Set(ranked);       // 이 날에 남아 있는 후보 — 떠난 것은 남을 밀어낼 수 없다
     for (const c of ranked.slice(1)) {     // 지정 전례일을 뺀 나머지, ranked 순 = R-6.2-first-come 「같은 기원이면 ranked 순서(R-6.2-tie-ladder 정렬 키)」
-      if (c.status === "transferred_in") continue;   // 도착은 다시 옮기지 않는다 — R-6.2-first-come (0단계 도착 포함)
-      if (!movesOnConflict(c)) continue;   // transferable ∧ precedence≠null ∧ ≠commemorate_only
+      // 도착은 다시 옮기지 않는다(R-6.2-first-come — 0단계 도착 포함). movesOnConflict = transferable ∧ precedence≠null ∧ ≠commemorate_only
+      if (c.status !== "proper" || !movesOnConflict(c.observance)) continue;
       // 앞선 것 가운데 staying ∧ (variesByYear(w) || variesByYear(c)) 인 것의 최상위(격자(grid:)도 실제 후보다). 실제 후보를
-      // guard 보다 앞세우는 갈래는 지정 전례일 · 재분류(§6.1)에서만 쓰인다 — 이동 계산의 순위에는 guard 가 없다(예약 접두사로 판정, §5.5).
+      // guard 보다 앞세우는 갈래는 지정 판정 · 재분류(§6.1)에서만 쓰인다 — 이동 계산의 순위에는 guard 가 없다(예약 접두사로 판정, §5.5).
       // §6.1 「지정 전례일과 재분류의 판정」의 「밀렸다」와 같은 함수다 — 그쪽은 떠난 것을 이미 뺀 순위를 넘겨 staying 이 없다
-      const displacer = displacerOf(ranked, c, staying);
-      if (!displacer) continue;            // 남아 있는 것이 고정일뿐이면 충돌이 아니다 (아래)
-      const by = displacer.observance.id;  // 실제로 밀어낸 것의 최상위 — ranked[0] 이 아닐 수 있다. Candidate 는 래퍼라 id 는 observance 아래
+      const by = displacerOf(ranked, c, staying);
+      if (!by) continue;                   // 남아 있는 것이 고정일뿐이면 충돌이 아니다(아래)
+      const displacedBy = by.observance.id;   // 실제로 밀어낸 것의 최상위 — ranked[0] 이 아닐 수 있다. Candidate 는 래퍼라 id 는 observance 아래
       if (inSpan(d, "transferGuard")) {    // 보호 기간 안에서 밀렸다 — 그 기간이 끝난 뒤 서열 순으로 앉힌다(위, → R-6.3-guard-destination)
-        held.push({ c, from: d, by });
+        held.push({ c, from: d, displacedBy });
         staying.delete(c);                 // 그날의 남은 후순위 후보에게는 이미 떠난 것이다
         continue;
       }
-      if (seat(c, d, nextDay(d), by)) staying.delete(c);   // 떠났다 — 뒤의 후순위 후보를 가를 때 빠진다
+      if (seat(c, d, shift(d, 1), displacedBy)) staying.delete(c);   // 떠났다 — 뒤의 후순위 후보를 가를 때 빠진다
     }
   }
-  return { arrivals, departures, optionals, defects };
+  return pass;
 }
 
-// ── 다음 해 좌석 예약 — **모든** 계산이 쓰되 **목적지 탐색이 실제로 해를 넘길 때 지연 계산**한다(§4.9 computus). 12월 이동은 어느 계산에서든 다음 해
+// ── 다음 해 좌석 예약 — **모든** 계산이 쓰되 **목적지 탐색이 실제로 해를 넘길 때 늦게 계산**한다(§4.9 부활절 계산). 12월 이동은 어느 계산에서든 다음 해
 //    1월을 목적지로 고를 수 있으므로, 켜진 선택 봉헌이 이미 앉은 자리(막기)와 비운 기원(열기)을
 //    isFree 가 알아야 한다. 별도 맵이라 arrivals·departures 에 섞이지 않는다 — 캐시에도 들어가지
 //    않고 spill 로도 새지 않으며 검토 문서 §5.14 불변식의 셈에도 참여하지 않는다.
@@ -1251,8 +1261,8 @@ function nextYearSeats(index, year, activated) {
   const nextArrivals = new Map(), nextDepartures = new Map();
   for (const o of optionalObservancesOf(index, year + 1)) {
     if (!activated.has(o.observance.id)) continue;            // 꺼진 것은 좌석을 차지하지 않는다 (§6.2)
-    push(nextArrivals,   o.dest,   { observance: o.observance, status: "transferred_in",  from: o.origin });
-    push(nextDepartures, o.origin, { observance: o.observance, status: "transferred_out", to: o.dest });
+    pushTo(nextArrivals,   o.dest,   { observance: o.observance, status: "transferred_in",  from: o.origin });
+    pushTo(nextDepartures, o.origin, { observance: o.observance, status: "transferred_out", to: o.dest });
   }
   return { nextArrivals, nextDepartures };                    // isFree 가 year+1 날짜에서만 본다 — 이 계산의 도착에 더해서
 }
@@ -1261,33 +1271,107 @@ function nextYearSeats(index, year, activated) {
 const EMPTY_PASS = () => ({ arrivals: new Map(), departures: new Map(), optionals: new Map(), defects: [] });
 ```
 
-**고정일끼리는 충돌이 아니다 — 동시 봉헌.** `c` 가 옮겨지는 조건은 「지정 전례일이 아니다」가 아니라 **「`c` 보다 선순위인 것 중에 겹침이 해마다 달라지는 것이 있다」**다. `variesByYear` 는 격자 주일, temporal 규칙일, 음력 명절, 도착, `guard` 에 참이고, sanctoral 의 고정 `date` 행에는 거짓이다. 조건은 **`w` 또는 `c` 어느 한쪽**이 가변이면 성립한다 — 제외하려는 것은 양쪽 다 고정일인 겹침뿐이다(가변인 `c` 가 고정일 `w` 보다 후순위가 되는 일은 현재 표에서 없지만 — 성체일이 6.24 세례 요한과 만나는 2038 은 R-6.2-rule-day-stays 로 성체일이 남는다 — 규칙은 데이터 우연에 기대지 않는다). `displacedBy` 는 이 조건을 만족하는 후보 중 **그 날에 남아 있는 것**(`staying`) 가운데 **실제 후보를 우선한 최상위**다 — `ranked[0]` 이 고정일이고 그 아래 격자 주일이 `c` 보다 선순위인 경우 `ranked[0]` 이 아니라 그 주일이 실제 원인이다. **남아 있는 것만 센다**: 지정 전례일인 고정일 W, 가변 V, 더 낮은 고정일 C 가 함께 있으면 V 가 먼저 떠난 뒤 C 에게 남은 상대는 W 뿐이라 C 는 옮기지 않는다(떠난 V 를 세면 고정일끼리인 W·C 가 충돌로 둔갑한다). **실제 후보 우선**: `guard` 는 유효 prec 1 이라 정렬에서 성지주일(prec 2)보다 앞이지만, `displacedBy` 는 실제 후보 중 조건을 만족하는 것이 있으면 그것이다. `guard` 는 이동 계산의 순위에 들지 않으므로(→ R-6.3-holy-week-guard) 이 갈래는 지정 전례일, 재분류(§6.1)에서만 쓰인다 — 성지주일에 걸린 prec 7 축일의 `displacedBy` 는 성지주일이고, `guard:holy-week` 가 기록되는 것은 그날 고유 후보가 feria 뿐인 성주간 평일(월요일부터 수요일까지)에 생략된 prec 7 축일이다. 이 조건이 없으면 **9.29 대한성공회 설립 기념일(prec 4)이 성 미카엘과 모든 천사들(prec 3)에 밀려 매년 9.30 으로 옮겨진다**: 시뮬레이션(2025-2050)으로 드러난 결함. 두 행은 정의상 매년 같은 날이고 본기도 데이터도 한 레코드(`성 미카엘과 모든 천사들 / 대한성공회 설립 기념일`, §5.4)로 합쳐 두었다 — 함께 지키는 날이지 밀린 것이 아니다. 같은 이치로 8.15 광복절 ∧ 성모안식, 9.14 성가수도회 ∧ 성 십자가, 11.1 고요한 주교 ∧ 모든 성인, 1.1 세계평화 기도일 ∧ 거룩한 이름 예수도 이동 대상이 아니다(어차피 낮은 쪽이 `transferable: false` 지만, 규칙은 데이터 우연에 기대지 않는다). 이 다섯 쌍의 `official` 은 높은 쪽이고 낮은 쪽은 `proper` 로 남는다 — 후보 둘을 다 노출하고 독자가 고르되, 한쪽이 기념일인 쌍(9.14, 11.1)과 본문 없는 축일인 1.1 세계평화 기도일(미결51)은 그쪽 본문이 빈 결과라 본문 하나 + 이름 줄이다(§5.6, §9 미결18 — 남은 것은 9.29 합성 레코드의 귀속뿐).
+**고정일끼리는 충돌이 아니다(동시 봉헌).** `c`가 옮겨지는 조건은 「지정 전례일이 아니다」가 아니라 **「`c` 보다 선순위인 것 중에 겹침이 해마다 달라지는 것이 있다」**다.
 
-**`guard(d)`**: 성주간의 가상 점유자. 스팬은 **`spansOf(year).holyWeek`**(§4.10 — 성지주일부터 성 토요일까지, easter−7부터 −1까지) 하나이고 여기서 날짜를 다시 비교하지 않는다. 2026-10-24 까지는 부활 2주일까지(`transferGuard`)였다 — 부활 8일 평일의 축일을 책자대로 지키며 줄였다(→ R-6.3-holy-week-guard). 그 안의 날에는 유효 precedence 1, `transferable: false` 인 합성 후보 하나를 낸다. **지정 전례일, 재분류(§6.1 — 엔진 `settle`)의 순위에만 들어간다**: 성주간의 prec 7 축일을 생략시키는 것이 이 점유자의 유일한 일이다(→ R-6.3-holy-week-guard — 그 밖에서 밀린 축일은 기념이다, → R-6.1-prec7-omit). **이동 계산은 이것을 보지 않는다**: 기원 날짜의 순위에도 목적지 검사(`isFree`)에도 넣지 않으므로 보호 기간의 주요축일은 그날 지키고, 옮기는 것은 그날의 실제 후보(대축일, 주일)에 질 때뿐이다(→ R-6.3-holy-week-guard). 옮길 수 있는 축일 셋(미결31)이 `guard` 에만 밀렸으면 이동 계산이 옮기지 않았으므로 지정 전례일, 재분류에서 `omitted` 다(§6.1). **동률에서는 실제 후보 뒤에 선다**: 정렬 키(→ R-6.2-tie-ladder — 엔진 `compareCandidates`)에서 범주 사다리의 **마지막 칸이 합성 `guard`** 라, 성 목요일, 부활대축일처럼 실제 prec 1 후보가 있는 날은 그것이 앞이고, `displacedBy` 도 실제 후보를 우선한다(위 「실제 후보 우선」). 그 `observance` 는 표에 없는 합성 객체로 **`id: "guard:holy-week"`, `name: "성주간"`** 을 가진다(2026-10-24 까지 `guard:easter-octave` · 「성주간·부활 8일」) — 성주간 평일에 생략된 prec 7 축일의 `displacedBy` 가 이 id 다. `guard:` 접두사는 정의 표의 id 에 나타나지 않는 예약 접두사이고, 뷰는 이 접두사를 보면 표를 찾지 않는다. 그 밖의 날에는 빈 배열. 뷰에는 내지 않는다 — `resolveDate` 의 후보 출처 ①-⑤에 없다.
+- `variesByYear`는 격자, temporal 규칙일, 음력 명절, 도착, `guard`에 참이고, sanctoral의 고정 `date` 행에는 거짓이다. 조건은 **`w`와 `c` 가운데 어느 한쪽**이 가변이면 성립한다. 빼려는 것은 양쪽 다 고정일인 겹침뿐이다.
+- 가변인 `c`가 고정일 `w`보다 후순위가 되는 일은 지금 표에 없다(1900-2100, 2026-10-24 확인). 성체일이 6.24 세례 요한과 만나는 2038년은 R-6.2-rule-day-stays에 따라 성체일이 남는다. 그래도 규칙은 데이터 우연에 기대지 않는다.
+- `displacedBy`는 이 조건을 만족하는 후보 가운데 **그날 남아 있는 것**(`staying`)에서, **실제 후보를 먼저 보고 고른 최상위**다. `ranked[0]`이 고정일이고 그 아래 격자 주일이 `c`보다 선순위이면, 실제 원인은 `ranked[0]`이 아니라 그 주일이다.
+- **남아 있는 것만 센다.** 지정 전례일인 고정일 W, 가변 V, 더 낮은 고정일 C가 함께 있으면, V가 먼저 떠난 뒤 C에게 남은 상대는 W뿐이라 C는 옮기지 않는다. 떠난 V를 세면 고정일끼리인 W와 C가 충돌로 둔갑한다.
+- **실제 후보를 먼저 본다.** `guard`는 유효 prec 1이라 정렬에서 성지주일(prec 2)보다 앞이지만, 조건을 만족하는 실제 후보가 있으면 `displacedBy`는 그것이다. `guard`는 이동 계산의 순위에 들지 않으므로(→ R-6.3-holy-week-guard) 이 갈래는 지정 판정과 재분류(§6.1)에서만 쓰인다. 성지주일에 걸린 prec 7 축일의 `displacedBy`는 성지주일이고, `guard:holy-week`가 기록되는 것은 그날 고유 후보가 feria뿐인 성주간 평일(월요일부터 수요일까지)에 생략된 prec 7 축일이다(2025-2050에서는 2035년과 2046년 3.21의 토마스 크랜머, 2038년 4.21의 안셀름).
+- **이 조건이 없으면 9.29 대한성공회 설립 기념일(prec 4)이 성 미카엘과 모든 천사들(prec 3)에 밀려 해마다 9.30으로 옮겨진다.** 2025-2050 시뮬레이션에서 드러난 결함이다. 두 행은 정의상 해마다 같은 날이고, 본기도 데이터도 한 레코드(`성 미카엘과 모든 천사들 / 대한성공회 설립 기념일`, §5.4)로 합쳐 두었다. 함께 지키는 날이지 밀린 것이 아니다.
+- 같은 이치로 8.15 광복절과 성모안식, 9.14 성가수도회와 성 십자가, 11.1 고요한 주교와 모든 성인, 1.1 세계평화 기도일과 거룩한 이름 예수도 이동 대상이 아니다. 어차피 낮은 쪽이 `transferable: false`지만, 규칙은 데이터 우연에 기대지 않는다.
+- 이 다섯 쌍이 평일에 오면 `official`은 높은 쪽이고 낮은 쪽은 `proper`로 남는다(주일이면 낮은 축일은 주일 격자에 밀려 기념한다. 2027-08-15 광복절이 그렇다). 후보 둘을 다 보이고 독자가 고른다. 한쪽이 기념일인 쌍(9.14, 11.1)과 본문 없는 축일인 1.1 세계평화 기도일(미결51)은 그쪽 본문이 빈 결과라, 본문 하나와 이름 줄이다(§5.6, §9 미결18. 남은 것은 9.29 합성 레코드의 귀속뿐이다).
 
-**`isFree(dest, c, arrivals, departures, next)`**: `c` 가 그 날짜에서 **앞설 수 있으면** 빈 날이다. `next` 는 **지연 thunk** 다(§4.9 — 해를 넘기지 않으면 부르지 않아 다음 해 computus 가 돌지 않는다). **`dest` 가 해를 넘겼으면 `departures` 대신 `next()` 의 `nextDepartures` 를 보고, `arrivals` 에는 `next()` 의 `nextArrivals` 를 더해서 본다**(`nextYearSeats(index, year, activated)` — 위). 이 계산이 이미 그 1월 날로 넘긴 도착(먼저 밀린 12월 축일)도 그 날을 막아야 하기 때문이다 — `arrivals` **대신** 다음 해 좌석만 보면 12월 축일 둘이 같은 1월 날에 앉는다(2026-10-11 정정, 사용자 결정 — 합성 케이스 C-6.5-18; 13차 리뷰가 다음 해 좌석을 들일 때는 「대신」이었다). 그 밖은 같다. 여기서 「고유 후보」는 본 루프와 **같은 집합**이다 — 그 날짜의 고유 전례일(`ownObservancesOn`)과 격자에서 `departures.get(dest)`(해를 넘겼으면 `next.nextDepartures.get(dest)`)에 있는 활성화된 선택 봉헌을 뺀 것(켜진 승천은 목요일에 없으므로 그 목요일을 노리는 다른 이동을 막지 않는다). 구체적으로 ① 그 고유 후보 중 `c` 보다 **높은**(유효값이 작은) 것이 없고 — 같은 값의 고유 후보는 도착 우선(→ R-6.2-chain-model)으로 `c` 가 밀어내므로 막지 않는다 — ② **이미 도착해 있는 후보가 하나도 없다**: 품계를 보지 않는다(→ R-6.2-first-come — 합성 C-6.5-7). 같은 날 기원의 둘은 그날 순위대로 먼저 처리된 쪽이 먼저 도착한다(→ R-6.2-first-come). `precedence: null` 후보와 `optional` 은 막지 않는다. **보호 기간은 막지 않는다**(→ R-6.3-holy-week-guard) — 막는 것은 실제 후보다(성 토요일은 성 토요일 행 — 데이터 prec 1, data#32 — 이 막는다; 부활밤은 저녁 전례라 이동 계산의 순위에 없다, → R-6.1-evening). 다만 **보호 기간 안에서 밀린** 축일은 `isFree` 를 묻기 전에 탐색 시작점을 보호 기간 다음 날(부활 2주 월요일 = `transferGuard.to + 1`)로 옮긴다(→ R-6.3-guard-destination): 2027 수태고지(3.25 성 목요일)는 3.26-4.4를 보지 않고 4.5 부활 2주 월요일에 앉는다(픽스처 T-2027-04-05-annunciation-maundy-thursday — 2027 책자). 보호 기간에서 밀린 축일은 기간을 다 돈 뒤 서열 순으로 앉으므로 그 시작점을 먼저 차지하는 것은 서열이 높은 쪽이다 — 2062 는 수태고지(3.25 성 토요일, prec 3)가 4.3 에, 먼저 밀린 요셉(3.19 성지주일, prec 6)이 그다음 날 4.4 에 앉는다(→ R-6.3-guard-order, 픽스처 T-2062-03-27-annunciation-holy-saturday). 도착한 축일이 그 날짜의 prec 7 후보를 생략시키는 것(절차 ⑤)은 B1 의 `official` 판정에서 다룬다 — 이동 계산은 좌석만 정한다.
+**`guard(d)`: 성주간의 가상 점유자.**
 
-**재이동은 없다.** 루프가 `transferred_in` 을 먼저 걸러내므로 도착은 다시 옮겨지지 않는다(아래 「이동 상한」 — `isFree` ① 논증만으로는 0단계 도착에 구멍이 있다). 충돌 도착은 `isFree` ① 로 그날의 어떤 고유 후보보다 높은 자리에만 앉고, ② 로 뒤의 도착에는 밀리지 않는다. 따라서 한 축일은 많아야 한 번 옮기고, **같은 날짜 `D` 에 도착한 축일이 그 `D` 의 출발에 다시 나타나지 않는다**(검토 문서 I-6 — 기원 `d` 의 출발과 목적지 `dest` 의 도착은 당연히 같은 축일이다. 검사는 날짜별이다). 먼저 앉은 도착은 뒤에 밀려온 더 높은 축일에도 **그대로 있다**: 2008 의 미국 성공회 배치(요셉 3.31, 수태고지 4.1)와 같은 모양이다. 보호 기간에서 밀린 축일끼리는 앉기 전에 서열 순으로 줄을 세우므로(→ R-6.3-guard-order) 그 모양이 생기지 않고, 그 밖의 1900-2100 실데이터에는 사례가 없어 합성 C-6.5-7 이 지킨다. 종전 초안은 높은 도착이 낮은 도착을 다시 밀게 해 「도착·재출발」 상태와 누적 상한이 필요했는데, 실제 관행이 그렇지 않아 둘 다 뺐다.
+- 기간은 **`spansOf(year).holyWeek`**(§4.10. 성지주일부터 성 토요일까지, easter−7부터 −1까지) 하나이고, 여기서 날짜를 다시 비교하지 않는다. 2026-10-24까지는 부활 2주일까지(`transferGuard`)였다. 부활 8일 평일의 축일을 책자대로 지키며 줄였다(→ R-6.3-holy-week-guard).
+- 그 안의 날에는 유효 precedence 1, `transferable: false`인 합성 후보 하나를 낸다. 그 밖의 날에는 빈 배열이다(엔진 `guardCandidates`).
+- **지정 판정과 재분류(§6.1, 엔진 `settle`)의 순위에만 들어간다.** 성주간의 prec 7 축일을 생략시키는 것이 이 점유자의 유일한 일이다(→ R-6.3-holy-week-guard. 그 밖에서 밀린 축일은 기념이다, → R-6.1-prec7-omit).
+- **이동 계산은 이것을 보지 않는다.** 기원 날짜의 순위에도, 목적지 검사(`isFree`)에도 넣지 않는다. 그래서 보호 기간의 주요축일은 그날 지키고, 옮기는 것은 그날의 실제 후보(대축일, 주일)보다 후순위일 때뿐이다(→ R-6.3-holy-week-guard). 옮길 수 있는 축일 셋(미결31)이 `guard`에만 밀렸으면 이동 계산이 옮기지 않았으므로, 지정 판정과 재분류에서 `omitted`다(§6.1).
+- **동률에서는 실제 후보 뒤에 선다.** 정렬 키(→ R-6.2-tie-ladder, 엔진 `compareCandidates`)에서 범주 사다리의 **마지막 칸이 합성 `guard`**다. 그래서 성 목요일, 성 금요일, 성 토요일처럼 실제 prec 1 후보가 있는 날은 그것이 앞이고, `displacedBy`도 실제 후보를 먼저 본다(위 「실제 후보를 먼저 본다」).
+- 그 `observance`는 표에 없는 합성 객체로 **`id: "guard:holy-week"`, `name: "성주간"`**을 가진다(2026-10-24까지 `guard:easter-octave`, 「성주간·부활 8일」). 성주간 평일에 생략된 prec 7 축일의 `displacedBy`가 이 id다. `guard:` 접두사는 정의 표의 id에 나타나지 않는 예약 접두사이고, 화면은 이 접두사를 보면 표를 찾지 않는다.
+- 화면에는 내지 않는다. `resolveDate`의 후보 출처 ①-⑤에 없다.
 
-**이동 계산이 결정적인 이유 셋.** ① 날짜를 오름차순으로 훑고, `next_day` 는 언제나 **앞으로만** 가므로 어떤 날짜 `d` 에 이르렀을 때 `arrivals.get(d)` 는 완성돼 있다 — 그 뒤에 도착할 것이 없다(보호 기간에서 밀린 축일은 기간을 다 돈 뒤 한꺼번에 앉히지만 목적지가 모두 그 뒤라 이 성질은 그대로다). ② 연쇄는 이 루프 자체다 — 도착이 그 날짜의 같은 값·낮은 값 **고유** 후보를 밀어내고(→ R-6.2-chain-model), 밀린 것이 `transferable` 이면 루프가 `d` 에 이르렀을 때 `ranked` 에서 지정 전례일이 아니므로 다음날로 간다. 성탄 3축일이 하루씩 밀리는 것이 정확히 이 경로다(어린이들의 `from` 은 12.28, `displacedBy` 는 요한). 밀리는 것은 언제나 고유 후보다 — 도착은 밀리지 않는다(→ R-6.2-first-come). 같은 날을 노리는 도착 둘은 **기원이 이른 쪽**이 먼저 앉고 다음은 그다음 빈 날이다 — `id` 순이 아니다(2011 미국 성공회와 같은 배치; 1900-2100 실데이터에는 사례가 없어 합성 C-6.5-9 가 지킨다). 보호 기간에서 밀린 축일끼리는 서열이 먼저다(→ R-6.3-guard-order). ③ 순서는 §6.2 tie-break 로 완전히 정해지고 배열 순서에 기대는 곳이 없다.
+**`isFree(dest, c)`: `c`가 그 날짜에서 앞설 수 있으면 빈 날이다.** 이동 계산 안의 함수라 그 계산의 `arrivals`, `departures`와 다음 해 좌석을 함께 본다.
 
-**연도 경계.** `next_day` 는 해를 넘길 수 있다 — 12월 말에 밀린 축일이 1월 초에 닿는 경우. 현재 데이터로는 일어나지 않지만(12.26-28 은 늦어도 12.29 에 앉고, 12.31 실베스터·위클리프는 prec 7 이라 옮기지 않는다), 표가 바뀌면 조용히 깨질 자리라 규칙을 못박는다. 캐시에 넣는 `Y` 의 이동 계산은 `computeTransfers(index, Y, spill(Y−1), activated)` 이고, `spill(Y−1)` 은 `computeTransfers(index, Y−1, ∅, activated)` 의 arrivals 중 **날짜가 `Y` 이면서 `from` 이 `Y−1` 인 것**이다 — 임시 계산에도 **같은** `activated` 를 넘긴다(인자는 필수, 기본값 없음. 두 계산이 다른 집합을 보면 12월 결과가 어긋난다).
+- 여기서 「고유 후보」는 본 루프와 **같은 집합**이다. 그 날짜의 고유 전례일(`ownObservancesOn`)과 격자에서, 그날 떠난 활성화된 선택 봉헌과 저녁 전례를 뺀 것이다(위 코드의 `ownAt`). 켜진 승천은 목요일에 없으므로 그 목요일을 노리는 다른 이동을 막지 않는다.
+- 빈 날의 조건은 둘이다.
+  - ① 그 고유 후보 가운데 `c`보다 **높은**(유효값이 작은) 것이 없다. 같은 값의 고유 후보는 도착 우선(→ R-6.2-chain-model)에 따라 `c`가 밀어내므로 막지 않는다.
+  - ② **이미 도착한 후보가 하나도 없다.** 품계를 보지 않는다(→ R-6.2-first-come, 합성 C-6.5-7). 같은 날 기원의 둘은 그날 순위대로 먼저 처리된 쪽이 먼저 도착한다(→ R-6.2-first-come).
+- `precedence: null` 후보와 `optional`은 막지 않는다.
+- **해를 넘긴 날짜.** 다음 해 좌석(`nextYearSeats(index, year, activated)`, 위)은 늦게 계산한다. 목적지가 해를 넘길 때만 부르므로, 해를 넘기지 않으면 다음 해의 부활절 계산이 돌지 않는다(§4.9). **`dest`가 해를 넘겼으면 `departures` 대신 `nextDepartures`를 보고, `arrivals`에는 `nextArrivals`를 더해서 본다.** 이 계산이 이미 그 1월 날로 넘긴 도착(먼저 밀린 12월 축일)도 그 날을 막아야 하기 때문이다. `arrivals` **대신** 다음 해 좌석만 보면 12월 축일 둘이 같은 1월 날에 앉는다(2026-10-11 정정, 사용자 결정, 합성 케이스 C-6.5-18. 13차 리뷰가 다음 해 좌석을 들일 때는 「대신」이었다).
+- **보호 기간은 막지 않는다**(→ R-6.3-holy-week-guard). 막는 것은 실제 후보다. 성 토요일은 성 토요일 행(데이터 prec 1, data#32)이 막는다. 부활밤은 저녁 전례라 이동 계산의 순위에 없다(→ R-6.1-evening).
+- 다만 **보호 기간 안에서 밀린** 축일은 `isFree`를 묻기 전에 탐색 시작점을 보호 기간 다음 날(부활 2주 월요일, `transferGuard.to + 1`)로 옮긴다(→ R-6.3-guard-destination). 2027 수태고지(3.25 성 목요일)는 3.26-4.4를 보지 않고 4.5 부활 2주 월요일에 앉는다(픽스처 T-2027-04-05-annunciation-maundy-thursday, 2027 책자).
+- 보호 기간에서 밀린 축일은 기간을 다 돈 뒤 서열 순으로 앉으므로, 그 시작점을 먼저 차지하는 것은 서열이 높은 쪽이다. 2062년에는 수태고지(3.25 성 토요일, prec 3)가 4.3에, 먼저 밀린 요셉(3.19 성지주일, prec 6)이 그다음 날 4.4에 앉는다(→ R-6.3-guard-order, 픽스처 T-2062-03-27-annunciation-holy-saturday).
+- 도착한 축일이 그 날짜의 prec 7 후보를 기념으로 돌리는 것(절차 ⑤)은 B1의 `official` 판정에서 다룬다. 이동 계산은 좌석만 정한다.
 
-**다음 해 좌석은 모든 계산이 본다**(10·11·13차 리뷰를 거쳐 정리). 12월 이동의 목적지 탐색은 **다음 해 1월까지 넘어간다**: 그때 `isFree` 가 그 해의 켜진 선택 봉헌이 **앉은 자리**(막아야 한다)와 **비운 기원**(열어야 한다)을 알아야 한다. 켜진 공현(`sunday_0102_0108`, 목적지 1.2-1.8)이 1월 초에 앉거나, 켠 주의 봉헌이 기원 2.2 를 비우고 1월 말 주일에 앉는 경우가 그렇다(2028 은 1.30).
+**재이동은 없다.**
 
-이것을 **임시 계산에만** 두면 틀린다(13차 리뷰). 정식 `Y` 계산도 12월 이동의 목적지를 `Y+1` 1월에서 고르므로, `Y+1` 좌석을 모르면 `departures[d].to` 가 이미 차 있는 날짜를 가리키고 **`Y+1` 캐시의 도착과 어긋난다**. 그래서 `nextYearSeats(index, year, activated)` 를 **모든 계산**이 쓴다 — 경계 계산 경로가 하나다.
+- 루프가 `transferred_in`을 먼저 걸러내므로(`status !== "proper"`) 도착은 다시 옮겨지지 않는다. `isFree` ① 논증만으로는 0단계 도착에 구멍이 있다(아래 「이동 상한」).
+- 충돌 도착은 `isFree` ①로 그날의 어떤 고유 후보보다 높은 자리에만 앉고, ②로 뒤의 도착에 밀리지 않는다. 따라서 한 축일은 많아야 한 번 옮기고, **같은 날짜 `D`에 도착한 축일이 그 `D`의 출발에 다시 나타나지 않는다**(검토 문서 I-6. 기원 `d`의 출발과 목적지 `dest`의 도착은 당연히 같은 축일이고, 검사는 날짜별이다).
+- 먼저 앉은 도착은 뒤에 밀려온 더 높은 축일에도 **그대로 있다.** 2008년 미국 성공회의 배치(요셉 3.31, 수태고지 4.1)와 같은 모양이다. 보호 기간에서 밀린 축일끼리는 앉기 전에 서열 순으로 줄을 세우므로(→ R-6.3-guard-order) 그 모양이 생기지 않는다. 그 밖의 1900-2100 실데이터에는 사례가 없어(2026-10-24 다시 확인) 합성 C-6.5-7 케이스가 지킨다.
+- 처음 초안은 높은 도착이 낮은 도착을 다시 밀게 해 「도착·재출발」 상태와 누적 상한이 필요했는데, 실제 관행이 그렇지 않아 둘 다 뺐다.
 
-**별도 맵인 이유**: 같은 `arrivals`·`departures` 에 넣으면 그것들이 캐시 항목에 섞이고 spill 로 새어 **도착이 둘**이 된다(11차 리뷰에서 실제로 그랬다). `nextArrivals`·`nextDepartures` 는 `isFree` 만 보고, 캐시에 들어가지 않으며, I-1 의 셈에도 참여하지 않는다. `spill` 의 `from` 필터는 그 위의 이중 안전장치로 남긴다. 재귀는 늘지 않는다 — `optionalObservancesOf` 는 그해 앵커와 표만 보는 순수 함수라 이동 계산을 요구하지 않는다(다만 `Y+1` 앵커는 필요하다, §4.9).
+**이동 계산이 결정적인 이유 셋.**
 
-이 seed 없는 `Y−1` 계산은 **임시**다 — 12월 결과만 쓰고 버리며 캐시에 넣지 않는다(§4.9). `Y−1` 자체를 조회하게 되면 그때 `spill(Y−2)` 로 완전한 계산을 따로 만든다.
+- ① 날짜를 오름차순으로 훑고 `next_day`는 언제나 **앞으로만** 가므로, 어떤 날짜 `d`에 이르렀을 때 `arrivals.get(d)`는 완성돼 있다. 그 뒤에 도착할 것이 없다. 보호 기간에서 밀린 축일은 기간을 다 돈 뒤 한꺼번에 앉히지만, 목적지가 모두 그 뒤라 이 성질은 그대로다.
+- ② 연쇄는 이 루프 자체다. 도착이 그 날짜의 같은 값이나 낮은 값의 **고유** 후보를 밀어내고(→ R-6.2-chain-model), 밀린 것이 `transferable`이면 루프가 `d`에 이르렀을 때 `ranked`에서 지정 전례일이 아니므로 다음날로 간다. 성탄 3축일이 하루씩 밀리는 것이 정확히 이 경로다(어린이들의 `from`은 12.28, `displacedBy`는 요한).
+  - 밀리는 것은 언제나 고유 후보다. 도착은 밀리지 않는다(→ R-6.2-first-come).
+  - 같은 날을 노리는 도착 둘은 **기원이 이른 쪽**이 먼저 앉고, 다음은 그다음 빈 날이다. `id` 순이 아니다(2011년 미국 성공회와 같은 배치. 1900-2100 실데이터에는 사례가 없어 합성 C-6.5-9 케이스가 지킨다).
+  - 보호 기간에서 밀린 축일끼리는 서열이 먼저다(→ R-6.3-guard-order).
+- ③ 순서는 §6.2 「동률을 가르는 순서」로 완전히 정해지고, 배열 순서에 기대는 곳이 없다.
 
-`Y−2` 없이 계산한 `Y−1` 의 12월이 완전한 계산의 12월과 같아야 재귀가 깊이 1 에서 끊긴다. **이것은 상한만으로 증명되지 않는다**: `MAX_SHIFT` 는 한 축일의 이동을 막지만, seed 가 밀어낸 고유 축일은 새 이동을 시작하고 그것이 또 다른 축일을 밀 수 있어 원리상 전파에 상한이 없다. 실제로는 전파가 **이동 가능한 축일이 연달아 놓인 날들**을 타고서만 이어지고, 도착이 아무것도 밀어내지 않는 첫 날(고유 후보가 `feria` 뿐인 날)에서 끊긴다 — 성인력에서 이동 가능 축일은 36건(2026-09-19, 데이터 #26)이 1년에 흩어져 있어 그런 사슬은 며칠을 넘지 못한다. 그래서 「깊이 1」은 **데이터에 대해 검증하는 불변식**으로 둔다. 단언은 **`spill` 자체의 동등성**이다(13차 리뷰 정정): 1900-2100 전 연도에서 **임시 `Y−1` 계산(seed 없음)이 내는 `Y` 행 spill** 과 **`spill(Y−2)` 를 받은 완전한 `Y−1` 계산이 내는 `Y` 행 spill** 이 같다. 종전에는 「`computeTransfers(Y, spill(Y−1), A)` 과 `computeTransfers(Y, ∅, A)` 가 2월 1일부터 같다」로 적었는데 **그것은 다른 성질을 잰다**: seed 의 영향이 1월에 갇힌다는 뜻이지 깊이 1 이 옳다는 뜻이 아니다. `Y−2` seed 가 `Y−1` 의 12월 배치와 넘어오는 spill 을 바꾸어도 두 `Y` 계산이 **1월 안에 다시 합류하면** 그 단언은 통과하면서 `resolveDate` 의 1월 결과는 틀릴 수 있다. 둘 다 둔다 — spill 동등성이 **깊이 1** 의 근거이고, 「2월 1일부터 같다」는 **seed 영향 범위**의 근거다(검토 문서 I-7a, I-7b). 표가 바뀌어 이 단언이 깨지면 그때 깊이를 늘리거나 완전한 전년도 계산을 재귀로 만드는 것이 답이고, 지금 코드는 검증된 가정 위에 서 있다. 이 단언이 성립하는 한 캐시 항목의 내용은 어느 해를 먼저 열었는지에 의존하지 않는다. 이 규칙은 **선택 봉헌 목적지에는 적용하지 않는다**: 그것들은 원래 날짜의 ±7일 안이고 해를 넘기는 날짜(1.6·2.2·11.1·승천)가 없다.
+**연도 경계.**
 
-**이동 상한.** 한 번의 이동이 `MAX_SHIFT`(30일)를 넘으면 그 축일은 **옮기지 않고 `proper` 로 남기며** `defects` 에 id 를 적는다 — throw 하지 않는다. 이 분기에 이르는 `c` 는 언제나 고유 후보다 — 루프가 `status === "transferred_in"` 을 **먼저 걸러내기** 때문이다. 종전에는 이것을 `isFree` 로 논증했으나(도착은 모든 고유 후보보다 높은 ① 자리에, 다른 도착이 없는 ② 날에만 앉으므로 항상 `ranked[0]`) **그 논증은 0단계 도착에 구멍이 있다**(9차 리뷰) — 활성화된 선택 봉헌은 `isFree` 를 거치지 않고 목적지에 얹히므로 그 자리의 더 높은 고유 후보에게 질 수 있다. 2030-02-02(토) 주의 봉헌을 켜면 목적지가 02-03(일)인데 그날이 **설**(prec 0)이라 봉헌이 `ranked[0]` 이 아니다. 그래서 「도착은 다시 옮기지 않는다」를 논증이 아니라 **루프의 명시 분기**로 둔다. 그 결과 I-2 의 단언도 「도착은 그 날의 지정 전례일」이 아니라 **「그 날짜를 떠나지 않은 도착은 그 날의 지정 전례일」**다(이미 그렇게 적혀 있다 — 0단계 도착만 예외이고 그것도 떠나지 않으므로, 아래 미결19 가 닫힐 때까지 이 케이스는 `I-2` 에서 뺀다). §2 의 설계 원칙(데이터 결손은 빈 결과 + 계속 진행 — throw 는 §2 의 세 경우뿐)을 지키는 것이고, 이론상 무한 루프는 없지만(연중 평일은 언제나 비어 있다) 상한이 없으면 표 결함이 조용히 먼 날짜로 번지기 때문에 둔다. `defects` 는 §9 미결1 이 말한 「개발 빌드에서 드러낼 데이터 결함 신호」의 첫 사례다 — 앱에서 어떻게 알릴지는 그 미결에 얹는다. 실측(1900-2100, 2026-10-14 — 골든 881건)으로 가장 긴 이동은 **16일**이다 — 부활 3.26 인 해 성지주일의 요셉(1967, 1978, 1989, 2062, 2073, 2084) 6건이 보호 기간을 건너, 수태고지가 먼저 앉은 부활 2주 월요일의 다음 날로 간다(→ R-6.3-guard-order, 픽스처 T-2062-03-27-annunciation-holy-saturday). 그다음은 15일(성지주일의 수태고지 → 부활 2주 월요일 — 1923, 1934, 1945, 1956, 2018, 2029, 2040, → R-6.3-guard-destination, 픽스처 T-2029-04-09-annunciation-palm-sunday), 11일(성 목요일의 수태고지 — 1937, 1948, 2027, 2032, 2100, 픽스처 T-2027-04-05-annunciation-maundy-thursday), 10일(성 금요일의 수태고지 — 1910, 1921, 1932, 2005, 2016), 9일(부활밤에 밀린 성 토요일의 수태고지 → 부활 2주 월요일 — 1967, 1978, 1989, 2062, 2073, 2084), 8일(부활대축일의 수태고지, 마르코 → 부활 2주 월요일 — 1943, 1951, 2035, 2038, 2046, 픽스처 T-2038-05-03-mark-easter-day)이고 나머지 847건은 하루다. 한 축일은 한 번만 옮기므로(→ R-6.2-first-come) 누적 상한은 필요 없다. 유닛이 1900-2100 전 연도에서 이동 ≤ 16 을 단언한다(I-5) — 상한 30 은 표 결함이 먼 날짜로 번지는 것을 막는 안전망이다.
+- `next_day`는 해를 넘길 수 있다. 12월 말에 밀린 축일이 1월 초에 닿는 경우다. 지금 데이터로는 일어나지 않는다. 1900-2100에서 12월에 밀린 축일(12.26-28)은 늦어도 12.29에 앉고, 12.31 실베스터와 위클리프는 prec 7이라 옮기지 않는다(2026-10-24 확인). 그래도 표가 바뀌면 조용히 깨질 자리라 규칙을 정해 둔다.
+- 캐시에 넣는 `Y`의 이동 계산은 `computeTransfers(index, Y, spill(Y−1), activated)`다. `spill(Y−1)`은 `computeTransfers(index, Y−1, ∅, activated)`의 도착 가운데 **날짜가 `Y`이면서 `from`이 `Y−1`인 것**이다(엔진 `transfersOf`, `spillOf`).
+- 임시 계산에도 **같은** `activated`를 넘긴다. 인자는 필수이고 기본값이 없다. 두 계산이 다른 집합을 보면 12월 결과가 어긋난다.
 
-**선택 봉헌**(§6.2)은 날짜 루프 **전에** 0단계로 한 해 전체를 선색인한다 — 순위에 의존하지 않고, `nearby_sunday` 의 목적지는 기원보다 **앞**일 수 있어(2028 주의 봉헌 2.2 → 1.30) 루프 안에서 처리하면 목적지를 이미 지나친 뒤다. 꺼진 것은 **별도 색인 `optionals`** 에 얹고 원래 날짜의 고유 후보를 옮기지 않는다 — 목적지 주일에 `status: "optional"` 을 **더한다**. `arrivals` 에 섞지 않는 이유: 도착·출발 색인은 「출발 수 = 도착 수 − seed 도착 수」·「도착은 그 날의 지정 전례일」 불변식(I-1, I-2)을 지는데, 선택 봉헌은 출발이 없고 지정 전례일도 아니라 섞이면 그 불변식이 매년(승천) 깨진다. `isFree` 는 `optionals` 를 보지 않는다(설정이 켜기 전에는 좌석을 차지하지 않는다).
+**다음 해 좌석은 모든 계산이 본다**(10, 11, 13차 리뷰를 거쳐 정리).
 
-**이동 계산이 B1 소속인 이유와 PR 2 의 몫.** 이동 계산은 지정 판정과 같은 순위(`rankCandidates` — 정렬 키 `compareCandidates`)와 같은 「밀렸다」 판정(`displacerOf`)을 쓰므로 품계 비교(§6.1)가 있어야 돌아간다 — PR 3 이다. 그러나 `resolveDate` 의 반환 형태(`Candidate[]`·`official`)와 ⑤ 조회 경로는 PR 2 가 만든다. PR 2 의 `transfers` 는 `EMPTY_PASS()` — **네 필드를 모두 갖는** 빈 계산 결과(`arrivals`·`departures`·`optionals` 빈 Map, `defects` 빈 배열)이고 모든 후보가 `proper` 다. §5.5 가 `optionals` 까지 읽으므로 둘만 만들면 PR 2 에서 `undefined` 접근이 난다. 이렇게 갈라야 PR 2 의 뷰·테스트가 PR 3 에서 형태 변경 없이 그대로 산다. **PR 3 은 GitHub PR 둘로 냈다**(2026-10-10 사용자 결정) — 첫째(#341)가 품계, 지정 전례일, 재분류, 전례색, 재일을 이 빈 계산 결과 위에 세우고, 둘째(#343)가 이동 계산을 채웠다. 지정 전례일, 재분류는 이동 계산을 읽기만 하므로(도착은 사다리 첫 칸에 서고, 떠난 것과 선택 봉헌은 순위에 들지 않는다) 둘째도 반환 형태를 바꾸지 않았다.
+- 12월 이동의 목적지 탐색은 **다음 해 1월까지 넘어간다.** 그때 `isFree`가 다음 해의 켜진 선택 봉헌이 **앉은 자리**(막아야 한다)와 **비운 기원**(열어야 한다)을 알아야 한다. 켜진 공현(`sunday_0102_0108`, 목적지 1.2-1.8)이 1월 초에 앉거나, 켠 주의 봉헌이 기원 2.2를 비우고 1월 말 주일에 앉는 경우가 그렇다(2028년은 1.30).
+- 이것을 **임시 계산에만** 두면 틀린다(13차 리뷰). 정식 `Y` 계산도 12월 이동의 목적지를 `Y+1` 1월에서 고르므로, `Y+1` 좌석을 모르면 `departures[d].to`가 이미 차 있는 날짜를 가리키고 **`Y+1` 캐시의 도착과 어긋난다.** 그래서 `nextYearSeats(index, year, activated)`를 **모든 계산**이 쓴다. 경계 계산 경로가 하나다.
+- **별도 맵인 이유.** 같은 `arrivals`, `departures`에 넣으면 그것들이 캐시 항목에 섞이고 spill로 새어 **도착이 둘**이 된다(11차 리뷰에서 실제로 그랬다). `nextArrivals`, `nextDepartures`는 `isFree`만 보고, 캐시에 들어가지 않으며, 불변식 I-1(검토 문서)의 셈에도 참여하지 않는다. `spill`의 `from` 필터는 그 위의 이중 안전장치로 남긴다.
+- 재귀는 늘지 않는다. `optionalObservancesOf`는 그해 앵커와 표만 보는 순수 함수라 이동 계산을 요구하지 않는다(다만 `Y+1` 앵커는 필요하다, §4.9).
+
+**임시 계산과 깊이 1.**
+
+- 이 seed 없는 `Y−1` 계산은 **임시**다. 12월 결과만 쓰고 버리며 캐시에 넣지 않는다(§4.9). `Y−1` 자체를 조회하게 되면 그때 `spill(Y−2)`로 완전한 계산을 따로 만든다.
+- `Y−2` 없이 계산한 `Y−1`의 12월이 완전한 계산의 12월과 같아야 재귀가 깊이 1에서 끊긴다. **이것은 상한만으로 증명되지 않는다.** `MAX_SHIFT`는 한 축일의 이동을 막지만, seed가 밀어낸 고유 축일은 새 이동을 시작하고 그것이 또 다른 축일을 밀 수 있어 원리상 전파에 상한이 없다.
+- 실제로는 전파가 **이동 가능한 축일이 연달아 놓인 날들**을 타고서만 이어지고, 도착이 아무것도 밀어내지 않는 첫 날(고유 후보가 `feria`뿐인 날)에서 끊긴다. 성인력에서 이동 가능한 축일(36건, 2026-09-19 데이터 #26. 2026-10-24 data#37 뒤에도 36건)이 한 해에 흩어져 있어 그런 사슬은 며칠을 넘지 못한다.
+- 그래서 「깊이 1」은 **데이터에 대해 검증하는 불변식**으로 둔다. 확인하는 것은 **`spill` 자체의 동등성**이다(13차 리뷰 정정). 1900-2100 전 연도에서 **임시 `Y−1` 계산(seed 없음)이 내는 `Y` 행 spill**과 **`spill(Y−2)` 를 받은 완전한 `Y−1` 계산이 내는 `Y` 행 spill**이 같다.
+- 처음에는 「`computeTransfers(Y, spill(Y−1), A)` 과 `computeTransfers(Y, ∅, A)` 가 2월 1일부터 같다」로 적었는데, **그것은 다른 성질을 잰다.** seed의 영향이 1월에 갇힌다는 뜻이지 깊이 1이 옳다는 뜻이 아니다. `Y−2` seed가 `Y−1`의 12월 배치와 넘어오는 spill을 바꾸어도 두 `Y` 계산이 **1월 안에 다시 합류하면**, 그 확인은 통과하면서 `resolveDate`의 1월 결과는 틀릴 수 있다.
+- 둘 다 둔다. spill 동등성이 **깊이 1**의 근거이고, 「2월 1일부터 같다」는 **seed 영향 범위**의 근거다(검토 문서 I-7a, I-7b). 표가 바뀌어 이 확인이 깨지면 그때 깊이를 늘리거나 완전한 전년도 계산을 재귀로 만드는 것이 답이다. 지금 코드는 검증된 가정 위에 서 있다. 이 확인이 성립하는 한, 캐시 항목의 내용은 어느 해를 먼저 열었는지에 기대지 않는다.
+- 이 규칙은 **선택 봉헌 목적지에는 적용하지 않는다.** 그것들은 원래 날짜의 앞뒤 7일 안이고, 해를 넘기는 날짜(1.6, 2.2, 11.1, 승천)가 없다.
+
+**이동 상한.**
+
+- 한 번의 이동이 `MAX_SHIFT`(30일)를 넘으면 그 축일은 **옮기지 않고 `proper`로 남기며** `defects`에 id를 적는다. 예외를 던지지 않는다.
+- 이 분기에 이르는 `c`는 언제나 고유 후보다. 루프가 `transferred_in`을 **먼저 걸러내기** 때문이다. 처음에는 이것을 `isFree`로 논증했다(도착은 모든 고유 후보보다 높은 ① 자리에, 다른 도착이 없는 ② 날에만 앉으므로 언제나 `ranked[0]`이다). 그러나 **그 논증은 0단계 도착에 구멍이 있다**(9차 리뷰). 활성화된 선택 봉헌은 `isFree`를 거치지 않고 목적지에 얹히므로, 그 자리의 더 높은 고유 후보보다 후순위일 수 있다. 2030-02-02(토) 주의 봉헌을 켜면 목적지가 02-03(일)인데 그날이 **설**(prec 0)이라 봉헌이 `ranked[0]`이 아니다.
+- 그래서 「도착은 다시 옮기지 않는다」를 논증이 아니라 **루프의 명시 분기**로 둔다. 그 결과 불변식 I-2(검토 문서)의 확인도 「도착은 그 날의 지정 전례일」이 아니라 **「그 날짜를 떠나지 않은 도착은 그 날의 지정 전례일」**이다. 0단계 도착만 예외이고 그것도 떠나지 않으므로, 미결19가 닫힐 때까지 이 케이스는 I-2 확인에서 뺀다.
+- §2의 설계 원칙(데이터 결손은 빈 결과와 계속 진행. 예외를 던지는 것은 §2의 세 경우뿐)을 지키는 것이다. 이론상 무한 루프는 없지만(연중 평일은 언제나 비어 있다), 상한이 없으면 표 결함이 조용히 먼 날짜로 번지기 때문에 둔다. `defects`는 §9 미결1이 말한 「개발 빌드에서 드러낼 데이터 결함 신호」의 첫 사례다. 앱에서 어떻게 알릴지는 그 미결에 얹는다.
+- **실측.** 1900-2100의 충돌 이동은 909건이다(2026-10-24, 골든 덤프. 2026-10-14 실측: 골든 881건, 하루 이동 847건. data#37에서 모든 한국인 순교자들과 예루살렘의 성 야고보가 주요축일(나)가 되고 안나와 요아킴이 축일이 되었다. 그래서 모든 한국인 순교자들 29건, 예루살렘의 성 야고보 28건 이동이 늘고, 안나와 요아킴 29건 이동이 줄었다). 가장 긴 이동은 **16일**이고, 긴 이동 34건은 모두 보호 기간에 걸린 주요축일이다.
+  - 16일: 부활이 3.26인 해(1967, 1978, 1989, 2062, 2073, 2084) 성지주일의 요셉 6건. 보호 기간을 건너, 수태고지가 먼저 앉은 부활 2주 월요일의 다음 날로 간다(→ R-6.3-guard-order, 픽스처 T-2062-03-27-annunciation-holy-saturday).
+  - 15일: 성지주일의 수태고지가 부활 2주 월요일로(1923, 1934, 1945, 1956, 2018, 2029, 2040, → R-6.3-guard-destination, 픽스처 T-2029-04-09-annunciation-palm-sunday).
+  - 11일: 성 목요일의 수태고지(1937, 1948, 2027, 2032, 2100, 픽스처 T-2027-04-05-annunciation-maundy-thursday).
+  - 10일: 성 금요일의 수태고지(1910, 1921, 1932, 2005, 2016).
+  - 9일: 성 토요일 행에 밀린 수태고지가 부활 2주 월요일로(1967, 1978, 1989, 2062, 2073, 2084).
+  - 8일: 부활대축일의 수태고지와 마르코가 부활 2주 월요일로(1943, 1951, 2035, 2038, 2046, 픽스처 T-2038-05-03-mark-easter-day).
+  - 나머지 875건은 하루다.
+- 한 축일은 한 번만 옮기므로(→ R-6.2-first-come) 누적 상한은 필요 없다. 유닛이 1900-2100 전 연도에서 이동이 16일 이하인지 확인한다(I-5). 상한 30은 표 결함이 먼 날짜로 번지는 것을 막는 안전망이다.
+
+**선택 봉헌**(§6.2)
+
+- 날짜 루프 **전에** 0단계로 한 해 전체를 선색인한다. 순위에 기대지 않고, `nearby_sunday`의 목적지는 기원보다 **앞**일 수 있어(2028년 주의 봉헌 2.2의 목적지는 1.30) 루프 안에서 처리하면 목적지를 이미 지나친 뒤다.
+- 꺼진 것은 **별도 색인 `optionals`**에 얹고, 원래 날짜의 고유 후보를 옮기지 않는다. 목적지 주일에 `status: "optional"`을 **더한다.**
+- `arrivals`에 섞지 않는 이유가 있다. 도착과 출발 색인은 「출발 수 = 도착 수 − seed 도착 수」와 「도착은 그 날의 지정 전례일」 불변식(I-1, I-2)을 지는데, 선택 봉헌은 출발이 없고 지정 전례일도 아니라 섞이면 그 불변식이 해마다(승천) 깨진다.
+- `isFree`는 `optionals`를 보지 않는다. 설정이 켜기 전에는 좌석을 차지하지 않는다.
+
+**이동 계산이 B1 소속인 이유와 PR 2의 몫.**
+
+- 이동 계산은 지정 판정과 같은 순위(`rankCandidates`, 정렬 키 `compareCandidates`)와 같은 「밀렸다」 판정(`displacerOf`)을 쓰므로, 품계 비교(§6.1)가 있어야 돈다. 그래서 PR 3이다.
+- 그러나 `resolveDate`의 반환 형태(`Candidate[]`, `official`)와 ⑤ 조회 경로는 PR 2가 만든다. PR 2의 `transfers`는 `EMPTY_PASS()`, 곧 **네 필드를 모두 갖는** 빈 계산 결과(`arrivals`, `departures`, `optionals`는 빈 Map, `defects`는 빈 배열)이고, 모든 후보가 `proper`다. §5.5가 `optionals`까지 읽으므로 둘만 만들면 PR 2에서 `undefined` 접근이 난다. 이렇게 갈라야 PR 2의 화면과 테스트가 PR 3에서 형태 변경 없이 그대로 산다.
+- **PR 3은 GitHub PR 둘로 냈다**(2026-10-10 사용자 결정). 첫째(#341)가 품계, 지정 전례일, 재분류, 전례색, 재일을 이 빈 계산 결과 위에 세우고, 둘째(#343)가 이동 계산을 채웠다. 지정 전례일과 재분류는 이동 계산을 읽기만 하므로(도착은 사다리 첫 칸에 서고, 떠난 것과 선택 봉헌은 순위에 들지 않는다) 둘째도 반환 형태를 바꾸지 않았다.
 
 ---
 
