@@ -70,7 +70,7 @@
 
 | `expect` 키 | 뜻 |
 |---|---|
-| `id` | 이 단언이 보는 후보의 `observance.id`. 정확한 id(`d0325-성모수태고지` · `t-대림1주일` · `lunar11-설날` · `grid:advent-2-weekday-mon` · `guard:easter-octave`) — **생략부호 금지** |
+| `id` | 이 단언이 보는 후보의 `observance.id`. 정확한 id(`d0325-성모수태고지` · `t-대림1주일` · `lunar11-설날` · `grid:advent-2-weekday-mon` · `guard:holy-week`) — **생략부호 금지** |
 | `status` | `proper` · `transferred_in` · `transferred_out` · `optional` · `commemorated` · `omitted`(설계서 §5.5) |
 | `from` · `to` | `transferred_in`/`optional` 의 기원 날짜 · `transferred_out` 의 목적지 날짜 |
 | `displacedBy` | 밀어낸 것의 정확한 id. **`null` 이면 「필드가 없어야 한다」**(활성화된 선택 봉헌 — 밀린 것이 아니라 택한 것) |
