@@ -155,7 +155,7 @@ scripts/gen_manifests.py  ← 콘텐츠 해시 매니페스트 (ADR-021)
 - **물리적 장 순서**: 시락 머리말, 다니엘 추가본 등 본래 장 번호가 어그러지는 부분은 "원전이 있는 그대로의 물리 순서"를 따른다 ([ADR-003](decisions/003-physical-chapter-ordering.md)).
 - **검색 인덱스 분할 (구약/신약/외경)**: 5.8 MB 단일 파일을 3개로 쪼개 첫 검색 응답 속도를 우선 ([ADR-005](decisions/005-search-indexing-strategy.md)). 워커는 신약 청크만 받으면 검색을 시작한다(§4.2).
 - **운문 본문 포맷**: 마크다운 블록인용(`>`)으로 표기. 절 내 산문/운문 구분은 `segments` 배열(`type: "prose"|"poetry"`), 스탠자 구분은 절 간 `stanza_break: true` 또는 절 내 텍스트의 `\n\n`, 단락 구분은 segment 레벨 `paragraph_break: true`. 자세히 [ADR-006](decisions/006-poetry-source-format.md).
-- **교회력 데이터**: 교회력 정의 표가 「그날이 무슨 날인가」의 권위이고(품계 · 전례색), 전례독서 · 본기도는 이름 · 좌표로 그 표에 조인되는 본문 표다 — 독서와 본기도 파서는 좌표 계산을 함께 쓴다 ([ADR-036](decisions/036-liturgical-calendar-data-model.md) · [ADR-037](decisions/037-eucharist-lectionary-data-and-engine.md)). 이동 축일 규칙 문자열(`easter-46` 등)은 파서가 빌드 때 구조화해 두므로 앱 엔진은 다시 파싱하지 않는다.
+- **교회력 데이터**: 교회력 정의 표가 「그날이 어떤 전례일인가」의 권위이고(품계 · 전례색), 전례독서 · 본기도는 이름 · 좌표로 그 표에 조인되는 본문 표다 — 독서와 본기도 파서는 좌표 계산을 함께 쓴다 ([ADR-036](decisions/036-liturgical-calendar-data-model.md) · [ADR-037](decisions/037-eucharist-lectionary-data-and-engine.md)). 이동 축일 규칙 문자열(`easter-46` 등)은 파서가 빌드 때 구조화해 두므로 앱 엔진은 다시 파싱하지 않는다.
 
 **자동화**: data 저장소 main에 파이프라인 입력이 푸시되면 `build.yml`이 파이프라인 · 매니페스트 · 전체 pytest를 돌려 산출물을 main에 커밋하고, 앱 저장소의 `sync-data.yml`을 디스패치한다. `sync-data.yml`은 서브모듈 포인터와 `sitemap.xml`을 올리고 실데이터 테스트를 돌린 뒤, 통과하면 `sync/data-<run_id>` PR을 열어 Unit tests 뒤 자동으로 스쿼시 머지한다(버전 범프 없음). 실데이터 테스트에는 교회력 설계서의 사실 블록 대조가 들어 있어, 데이터가 문서의 실측치를 바꾸면 이 자동 PR은 만들어지지 않는다 — 문서를 함께 고친 앱 PR이 포인터를 올린다.
 
@@ -521,7 +521,7 @@ OAuth 측면 (가장 큰 공격 표면):
 Phase 1(성경 읽기 PWA)은 완성됐고, Phase 3(교회력)은 일부 구현됐다 — 엔진([ADR-037](decisions/037-eucharist-lectionary-data-and-engine.md)) · 전례독서 화면 `/lectionary` · 캘린더 월간 표 `/calendar`([ADR-038](decisions/038-calendar-lectionary-ui.md)). 남은 것은 [`topics/liturgical.md`](topics/liturgical.md)의 「남은 일」과 ADR-038. 단계들은 **컨텐츠 추가에 가까운 확장**으로 설계되어 있다:
 
 - Phase 2 — **기도서**: 첫 기도서 본문(전례시편 · 송가)은 `source/`가 아니라 `liturgical/psalter` · `liturgical/canticles`의 마크다운과 별도 파서(`src/liturgical_psalter.py` — 계응 구조, data 저장소 ADR-039)로 들어왔다. 두 책은 division `liturgical`로 성서 목록의 구분 탭 밖에 있고, 전례독서 화면이 읽는다. 남은 기도서 본문도 같은 길(별도 원료 · 파서 → 책 단위 JSON)을 따를 수 있다.
-- Phase 3 — **교회력**: 날짜 계산(computus · 절기 · 연중 주차)은 순수 함수지만, 그날이 무슨 날인지 · 품계 · 전례색 · 독서 · 본기도는 data 저장소의 표(`lectionary/` — 캘린더 묶음 다섯 · 전례독서 묶음 다섯)를 읽는다([ADR-036](decisions/036-liturgical-calendar-data-model.md) · 037). 라우트는 `/calendar` · `/lectionary`.
+- Phase 3 — **교회력**: 날짜 계산(computus · 절기 · 연중 주차)은 순수 함수지만, 그날이 어떤 전례일인지 · 품계 · 전례색 · 독서 · 본기도는 data 저장소의 표(`lectionary/` — 캘린더 묶음 다섯 · 전례독서 묶음 다섯)를 읽는다([ADR-036](decisions/036-liturgical-calendar-data-model.md) · 037). 라우트는 `/calendar` · `/lectionary`.
 - Phase 4 — **성무일과 자동 생성**: 교회력(Phase 3) + 성경(Phase 1) + 기도서(Phase 2) 조합 → 매일 자동 페이지 생성. `/lectionary/YYYY-MM-DD`가 이미 엔진 · 성서 · 기도서 본문(본기도 · 전례시편)을 감사성찬례 하루치로 엮는다 — 그 앞선 모습이다.
 
 각 단계가 **독립적으로 추가 가능**하도록 데이터 디렉토리·라우트·검색 인덱스를 책 단위로 분리해 둔 것이 핵심이다. 동기화 페이로드도 `settings`/`bookmarks`/`lastRead` 키별로 머지하므로 새 키 추가가 안전하다.

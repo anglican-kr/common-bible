@@ -117,7 +117,7 @@ function preloadCalendar() {
 | **독서** | `eucharist-readings`, `eucharist-collects`, `commons`, `canticles`, `half-verses` | 약 1.6MB | 독서 화면에 들어갈 때, `findReadings`, `findCollects`, `findHalfVerse` 전에 |
 | **지역** | `local-observances` | 약 88KB | ADR-036 B2 `scope` 오버레이(이번 범위 밖) |
 
-**근거**: 캘린더는 "그날이 무슨 날인가 + 무슨 색인가"만 알면 되고, 그것은 정의 표에서 나온다. 1.2MB짜리 독서 파일을 달력을 열 때마다 받게 하면 첫 진입이 느려지고, 오프라인 캐시에 미리 받아 둘 양도 필요 이상으로 커진다. 큰 묶음은 독서 화면으로 들어가는 순간에만 싣는다.
+**근거**: 캘린더는 "그날이 어떤 전례일인가 + 무슨 색인가"만 알면 되고, 그것은 정의 표에서 나온다. 1.2MB짜리 독서 파일을 달력을 열 때마다 받게 하면 첫 진입이 느려지고, 오프라인 캐시에 미리 받아 둘 양도 필요 이상으로 커진다. 큰 묶음은 독서 화면으로 들어가는 순간에만 싣는다.
 
 `local-observances.json`은 B2 전까지 아예 싣지 않는다. 본당과 교구 오버레이가 없으면 쓸 데가 없다.
 
