@@ -1692,46 +1692,29 @@ const DEC_WALLS = [
   TMP("t-wall-d2", "합성 가변 대축일 12.27", { kind: "easter_offset", days: 266 }, { season: "christmas", type: "feast" }),
 ];
 
-test("C-6.5-20 연쇄 범위 — 도착에 밀린 고유 축일은 사도 · 복음사가 · 성탄 8일의 순교 축일만 옮기고, 그 밖의 성인 · 순교 축일은 그날 기념한다(→ R-6.2-chain-scope)", () => {
-  // 6.15 의 A(사도)가 wall-1(6.15) · wall-2(6.16)를 건너 6.17 에 도착한다 — 6.17 의 고유 축일 S 가 밀린다
+test("C-6.5-20 연쇄 — 도착에 밀린 옮길 수 있는 축일은 성인 분류와 무관하게 다음 날로 연쇄하고, 옮길 수 없는 축일은 그날 기념한다(→ R-6.2-chain-model)", () => {
+  // 6.15 의 A(사도)가 wall-1(6.15) · wall-2(6.16)를 건너 6.17 에 도착한다 — 6.17 의 고유 축일 S 가 밀린다.
+  // 연쇄 범위(사도 · 복음사가 · 성탄 8일 순교만 연쇄 — R-6.2-chain-scope)는 2026-10-24 폐기했다(사용자 결정 — 유일한 실데이터
+  // 근거였던 안나와 요아킴이 기도서대로 축일이 되어, 그날의 기념은 R-6.1-prec7-omit 이 설명한다)
   const run = (cls) => passEngine(passTables([MOV("d0615-a", "06.15", { sanctoral_class: "apostle" }), MOV("d0617-s", "06.17", { sanctoral_class: cls })], TWO_WALLS));
-  for (const cls of ["saint", "martyr", "lord", null]) {   // 성탄 8일 밖의 순교 축일도 기념이다
+  for (const cls of ["apostle", "evangelist", "saint", "martyr", "lord", null]) {
     const t = run(cls);
-    same(seats(t.pass(2026).arrivals), { "2026-06-17": ["d0615-a<-2026-06-15"] }, String(cls));   // S 는 옮기지 않는다
-    same(seats(t.pass(2026).departures), { "2026-06-15": ["d0615-a->2026-06-17"] }, String(cls));
-    same(fate(t.at("2026-06-17"), "d0617-s"), ["commemorated", "d0615-a"], String(cls));
-    assert.strictEqual(officialId(t.at("2026-06-17")), "d0615-a", String(cls));
+    same(seats(t.pass(2026).arrivals), { "2026-06-17": ["d0615-a<-2026-06-15"], "2026-06-18": ["d0617-s<-2026-06-17"] }, String(cls));
+    same(fate(t.at("2026-06-17"), "d0617-s"), ["transferred_out", "d0615-a"], String(cls));
+    same(fate(t.at("2026-06-18"), "d0617-s"), ["transferred_in", "d0615-a"], String(cls));
   }
-  // prec 7 — 옮길 수 있는 축일(성모 탄신 같은 축일)도 옮길 수 없는 축일도 도착에 밀리면 그날 기념(→ R-6.1-prec7-omit)
+  // prec 7 — 옮길 수 있는 축일(성모 탄신 같은 축일)은 함께 연쇄하고, 옮길 수 없는 축일은 그날 기념(→ R-6.1-prec7-omit)
   const minor = (extra) => passEngine(passTables([MOV("d0615-a", "06.15", { sanctoral_class: "apostle" }), SAN("d0617-m", "06.17", "합성 축일", { sanctoral_class: "lord", ...extra })], TWO_WALLS));
   const movableMinor = minor({ transferable: true, transfer_to: "next_day" });
-  same(seats(movableMinor.pass(2026).departures), { "2026-06-15": ["d0615-a->2026-06-17"] });   // 6.17 의 출발은 없다
-  same(fate(movableMinor.at("2026-06-17"), "d0617-m"), ["commemorated", "d0615-a"]);
+  same(seats(movableMinor.pass(2026).departures), { "2026-06-15": ["d0615-a->2026-06-17"], "2026-06-17": ["d0617-m->2026-06-18"] });
   same(fate(minor({}).at("2026-06-17"), "d0617-m"), ["commemorated", "d0615-a"]);
-  for (const cls of ["apostle", "evangelist"]) {   // 연쇄 대상은 하루 더 밀린다(→ R-6.2-chain-model)
-    const t = run(cls);
-    same(seats(t.pass(2026).arrivals), { "2026-06-17": ["d0615-a<-2026-06-15"], "2026-06-18": ["d0617-s<-2026-06-17"] }, cls);
-    same(fate(t.at("2026-06-18"), "d0617-s"), ["transferred_in", "d0615-a"], cls);
-  }
-  // 성탄 8일의 순교 축일은 연쇄한다 — 12.26 의 A(사도)가 wall(12.26 · 12.27)을 건너 12.28 에 도착하면 그날의 순교 축일 S 가 12.29 로
+  // 성탄 3축일 — 12.26 의 A(사도)가 wall(12.26 · 12.27)을 건너 12.28 에 도착하면 그날의 순교 축일 S 가 12.29 로
   const xmas = passEngine(passTables([MOV("d1226-a", "12.26", { sanctoral_class: "apostle" }), MOV("d1228-s", "12.28", { sanctoral_class: "martyr" })], DEC_WALLS));
   same(seats(xmas.pass(2026).arrivals), { "2026-12-28": ["d1226-a<-2026-12-26"], "2026-12-29": ["d1228-s<-2026-12-28"] });
   same(fate(xmas.at("2026-12-29"), "d1228-s"), ["transferred_in", "d1226-a"]);
-  // 고정 날짜는 색인과 같은 정규화로 판정한다(§5.2) — 「12-28」 로 적힌 성탄 8일 순교 축일도 연쇄하고
-  const dashed = passEngine(passTables([MOV("d1226-a", "12.26", { sanctoral_class: "apostle" }), MOV("d1228-s", "12-28", { sanctoral_class: "martyr" })], DEC_WALLS));
-  same(seats(dashed.pass(2026).arrivals), { "2026-12-28": ["d1226-a<-2026-12-26"], "2026-12-29": ["d1228-s<-2026-12-28"] });
-  // 「12.3」(12월 3일)은 성탄 8일 밖이라 기념이다 — 원문 문자열 비교면 "12.3" 이 "12.25" ~ "12.31" 사이로 잡힌다.
-  // 12.1 의 A(사도)가 합성 대축일 12.1 · 12.2(E+240 · E+241)를 건너 12.3 에 도착한다
-  const early = [
-    TMP("t-wall-e1", "합성 가변 대축일 12.1", { kind: "easter_offset", days: 240 }, { season: "advent", type: "feast" }),
-    TMP("t-wall-e2", "합성 가변 대축일 12.2", { kind: "easter_offset", days: 241 }, { season: "advent", type: "feast" }),
-  ];
-  const dec3 = passEngine(passTables([MOV("d1201-a", "12.01", { sanctoral_class: "apostle" }), MOV("d1203-s", "12.3", { sanctoral_class: "martyr" })], early));
-  same(seats(dec3.pass(2026).arrivals), { "2026-12-03": ["d1201-a<-2026-12-01"] });
-  same(fate(dec3.at("2026-12-03"), "d1203-s"), ["commemorated", "d1201-a"]);
 });
 
-test("C-6.5-21 연쇄 범위는 도착에만 밀린 축일에 — 주일도 밀어내면 도착이 함께 있어도 종전대로 옮긴다(→ R-6.2-chain-scope)", () => {
+test("C-6.5-21 옮겨 온 축일과 주일에 함께 밀린 축일은 다음 날로 옮긴다 — 밀어낸 것은 최상위(→ R-6.2-chain-model)", () => {
   // 2026-06-19(금) · 06-20(토, E+75 · E+76) 가변 대축일이 A(prec 3)를 6.21 연중 주일로 보낸다(연중 주일 5 는 A 를 막지 못한다).
   // 그 주일의 성인 축일 S(prec 6)는 A 와 주일 격자에 함께 밀린다 — 도착이 없었어도 주일이 옮겼을 것이므로 기념이 아니라 6.22 로
   const walls = [
@@ -1761,19 +1744,20 @@ test("C-6.5-22 보호 기간 안에서 밀린 축일끼리는 서열 순 — 뒤
   same(fate(t.at("2026-03-29"), "d0329-j"), ["transferred_out", "t-palm"]);
 });
 
-test("C-6.5-23 보호 기간은 막지 않는다 — 성지주일 전날 밀린 축일은 성주간 월요일에 앉아 그날 축일 색이고, 그날의 옮길 수 있는 prec 7 은 도착에 밀려도 생략이다", () => {
+test("C-6.5-23 보호 기간은 막지 않는다 — 성지주일 전날 밀린 축일은 성주간 월요일에 앉아 그날 축일 색이고, 그날의 옮길 수 있는 prec 7 은 도착에 밀려 보호 기간 뒤로 간다", () => {
   // 2026 — 3.28(토, E−8 — 보호 기간 밖)의 가변 대축일이 X(prec 3)를 민다. 3.29 성지주일(절기 주일 2)은 X 를 막고, 보호 기간 안의
   // 3.30 성주간 월요일(격자 평일 8)은 막지 않는다(→ R-6.3-holy-week-guard · R-6.3-guard-destination). 막는 구현이면 4.13 으로 간다
   const t = passEngine(passTables([
     MOV("d0328-x", "03.28", { precedence: 3, priority_group: "A" }),                                    // 백
     SAN("d0330-m", "03.30", "합성 이동 축일(prec 7)", { transferable: true, transfer_to: "next_day" }),
   ], [TMP("t-wall-sat", "합성 가변 대축일", { kind: "easter_offset", days: -8 }, { season: "lent", type: "feast" })]));
-  same(seats(t.pass(2026).arrivals), { "2026-03-30": ["d0328-x<-2026-03-28"] });
+  same(seats(t.pass(2026).arrivals), { "2026-03-30": ["d0328-x<-2026-03-28"], "2026-04-13": ["d0330-m<-2026-03-30"] });
   const mon = t.at("2026-03-30");
   // 성주간 평일을 이긴 성인력 축일은 그 축일 색이다 — 제자리든 도착이든(→ R-6.4-color-order)
   same([officialId(mon), fate(mon, "d0328-x"), mon.color], ["d0328-x", ["transferred_in", "t-wall-sat"], "white"]);
-  // 보호 기간의 prec 7 은 생략이다 — 밀어낸 것이 도착이어도(guard 에만 밀린 경우는 위 R-6.3-holy-week-guard 테스트)
-  same(fate(mon, "d0330-m"), ["omitted", "d0328-x"]);
+  // 옮길 수 있는 prec 7 은 도착에 밀리면 주일에 밀릴 때처럼 보호 기간 뒤 첫 빈 날로 간다(→ R-6.2-chain-model · R-6.3-guard-destination —
+  // 2026-10-24 까지는 연쇄 범위 규칙 때문에 생략이었다). guard 에만 밀리면 생략이다(위 R-6.3-holy-week-guard 테스트)
+  same(fate(mon, "d0330-m"), ["transferred_out", "d0328-x"]);
   assert.strictEqual(cand(t.at("2026-04-13"), "d0328-x"), undefined);
 });
 
