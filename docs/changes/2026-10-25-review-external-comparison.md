@@ -1,4 +1,5 @@
 ---
+pr: 416
 date: 2026-10-25
 branch: docs/review-external-comparison
 title: "docs: 교회력 검토 문서 §1-§4 고쳐 쓰기와 내용 검증"
