@@ -136,6 +136,6 @@ test("설계서 facts 블록이 data/lectionary 와 일치한다", { skip: haveD
   assert.deepEqual(
     wrong, [],
     `설계서 §5.2 facts 블록이 데이터와 어긋난다 — 데이터가 바뀌었으면 블록을 갱신하고,\n` +
-      `같은 수치를 되풀이하는 산문(§5.2·§5.6·§2 결손 표)도 함께 보라:\n  ${wrong.join("\n  ")}`,
+      `같은 수치를 되풀이하는 산문(§5.2·§5.6·§2 결손 목록)도 함께 보라:\n  ${wrong.join("\n  ")}`,
   );
 });

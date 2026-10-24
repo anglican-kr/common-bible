@@ -47,7 +47,7 @@ def test_update_toast_appears_when_waiting_sw(browser):
 
 
 def test_update_toast_single_when_checked_while_version_pending(browser):
-    """버전을 묻는 동안(가짜 SW 는 답하지 않아 1.5초 시한까지) 「업데이트 지금 확인」이 또 불러도 토스트는 하나.
+    """버전을 묻는 동안(가짜 SW 는 답하지 않아 1.5초 시한까지) 「업데이트 지금 확인」이 또 호출해도 토스트는 하나.
 
     그전엔 중복 확인이 기다리기 전에만 있어 두 호출이 다 지나 같은 id 의 토스트가 둘 붙었다
     (PR #353 리뷰, 2026-10-17 — app.js showUpdateToast 가 기다린 뒤 한 번 더 본다)."""

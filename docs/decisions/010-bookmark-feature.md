@@ -70,7 +70,7 @@ type BookmarkStore = Array<Bookmark | Folder>
 - `"3a"` → `{ start: 3, end: 3, part: "a" }`
 - `"5-7"` → `{ start: 5, end: 7 }` (part 없음)
 
-장 본문을 그리는 `views.js appendVerses`(`renderChapter`가 부른다)가 span마다 강조를 판정한다 — `vref`를 `classes`보다 먼저 계산해 쓴다:
+장 본문을 그리는 `views.js appendVerses`(`renderChapter`가 호출한다)가 span마다 강조를 판정한다 — `vref`를 `classes`보다 먼저 계산해 쓴다:
 
 ```js
 const isHighlightedSpan = hlSegments
@@ -188,7 +188,7 @@ const isHighlightedSpan = hlSegments
 - 순수 판정 로직은 `SWIPE_GESTURE` 마커 블록(`_classifySwipeAxis`, `_swipeReleaseVelocity`, `_resolveSwipeRelease`)이고, 유닛 `tests/unit/bookmark.test.js`의 `SWIPE_GESTURE` 섹션 13케이스가 직접 구동한다(ADR-013 패턴). 제스처 통합은 e2e(`tests/e2e/test_bookmark_swipe.py`).
 - **상태**: `bm-swiped`(열림) + 방향 클래스 `bm-swiped-edit` / `bm-swiped-delete`, 드래그 중 `bm-swiping-delete` / `bm-swiping-edit`. `_openSwipedRow(row, dir)`, `_resetRowSwipe(row)`, 열린 행 하나를 `_swipedRow`가 추적한다(`SWIPED_ROW` 블록 — 유닛).
 - **자동 닫기**: 다른 행 스와이프 시 이전 행이 닫힌다. 드로어 빈 영역 탭(`#bookmark-drawer-body` pointerdown), 드로어 닫힘(`closeBookmarkDrawer`), `renderBookmarkTree()` 재실행 시 닫힌다. 스와이프된 행의 link/folder 영역 탭 = 이동/펼치기 대신 닫기(iOS 메일과 동일).
-- **삭제를 탭하면 행부터 닫는다**: 행 액션 `deleteAction`(북마크, 폴더 공통)이 `closeSwipedRow(null)`을 `openConfirmModal` *앞*에서 부른다. 확인은 실제 삭제만 담당해, 확인을 취소해도 행이 제자리로 돌아온다(수정 `editAction`도 탭 즉시 닫는다). e2e `test_bookmark_swipe.py::test_cancel_delete_confirm_closes_swipe`.
+- **삭제를 탭하면 행부터 닫는다**: 행 액션 `deleteAction`(북마크, 폴더 공통)이 `closeSwipedRow(null)`을 `openConfirmModal` *앞*에서 호출한다. 확인은 실제 삭제만 담당해, 확인을 취소해도 행이 제자리로 돌아온다(수정 `editAction`도 탭 즉시 닫는다). e2e `test_bookmark_swipe.py::test_cancel_delete_confirm_closes_swipe`.
 
 DOM:
 

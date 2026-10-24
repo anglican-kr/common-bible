@@ -79,7 +79,7 @@ ADR-021(2026-05-13)로 아래 흐름이 자동으로 돈다.
 
 - **데이터 변경**: `common-bible-data/.github/workflows/build.yml`이 main의 `source/**` 변경을 보고 파이프라인을 돌리고 매니페스트를 만들어 자동으로 커밋해 올린다. 사람은 .md만 고쳐 PR을 열면 된다.
 - **오디오 변경**: audio 저장소에 올리고 data 저장소의 audio 서브모듈 포인터를 올리면, data CI가 `audio-manifest.json`을 자동으로 고친다.
-- **앱 서브모듈 포인터 올리기**: data 저장소의 `build.yml`이 산출물을 올린 뒤 `gh api`로 앱 저장소의 `sync-data.yml`을 부른다(workflow_dispatch). ADR-021은 repository_dispatch 대신 이 방식을 골랐다. `sync-data.yml`은 포인터와 `sitemap.xml`을 올리는 PR을 만들고, 유닛 테스트가 통과하면 자동으로 머지한다.
+- **앱 서브모듈 포인터 올리기**: data 저장소의 `build.yml`이 산출물을 올린 뒤 `gh api`로 앱 저장소의 `sync-data.yml`을 실행한다(workflow_dispatch). ADR-021은 repository_dispatch 대신 이 방식을 골랐다. `sync-data.yml`은 포인터와 `sitemap.xml`을 올리는 PR을 만들고, 유닛 테스트가 통과하면 자동으로 머지한다.
 - **release.py**: `--bump-data`와 `--bump-audio`를 없애고, `version.json`과 `sw-version.js`를 함께 올리는 일로 좁혔다. 커밋도 스스로 한다.
 - **nginx와 secret 변경**: server 저장소에만 올리고, 서버가 스스로 받아 둔다(checkout).
 

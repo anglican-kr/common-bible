@@ -166,7 +166,7 @@ function openSearch() {
   // 키보드는 검색 버튼 탭으로 떠야 한다. iOS Safari 는 프로그래밍 focus() 가 사용자
   // 제스처(탭 핸들러)와 같은 동기 실행 안에서 호출될 때만 소프트 키보드를 띄운다 —
   // rAF 로 미루면 제스처 체인이 끊겨 입력엔 포커스가 가도 키보드가 안 뜬다. openSearch
-  // 는 $searchBtn 클릭 핸들러에서 동기로 불리므로(그 위 navigate 도 동기), 여기서 바로
+  // 는 $searchBtn 클릭 핸들러에서 동기로 호출되므로(그 위 navigate 도 동기), 여기서 바로
   // focus 하면 같은 제스처 턴에 머문다. preventScroll: iOS 가 포커스 입력을 키보드 위로
   // 보이려 페이지를 pan 하는 걸 막는다(dock 은 --kb-overlap 으로 별도로 올라간다).
   $searchInput.focus({ preventScroll: true });
@@ -389,7 +389,7 @@ function applyCollapsed(v) {
   // body 클래스 — 오디오 바(별도 요소)가 축소 시 dock 행으로 들어오는 CSS 트리거.
   document.body.classList.toggle("tabbar-collapsed", collapsed);
   // 축소 진입·해제로 .tab-item 폭이 바뀌면 슬라이딩 인디케이터 위치가 달라진다.
-  // 라우트 변경이 없어 syncTabBarActive 가 안 불리고, reduced-motion 에선 max-width
+  // 라우트 변경이 없어 syncTabBarActive 가 호출되지 않고, reduced-motion 에선 max-width
   // transitionend 도 안 떠(트랜지션 없음) 인디케이터가 stale 위치에 남는다 → 명시적
   // 재배치(축소 중엔 CSS 가 인디케이터를 숨기므로 해제 프레임의 재배치가 실효).
   W.syncTabIndicator?.();
@@ -484,7 +484,7 @@ const _tabIndicMQL = typeof window !== "undefined" && window.matchMedia
 
 // 인디케이터 지름 = 탭 슬롯의 활성 원(.tab-icon-wrap — 56px, 좁은 폭에서 슬롯이 줄면 그만큼 작다 — DESIGN.md §7).
 // 탭 바가 쉬고 있을 때만 잰다: 축소 · 검색 모핑과 그 복귀 중엔 슬롯이 애니메이트되어, 그 폭을 따라가면 펼칠 때
-// 작은 원이 커지며 나타난다(CSS 가 「탭 바 폭 / 탭 수」를 따라가던 때 — PR #348 리뷰). 그래서 라우트마다 부르는
+// 작은 원이 커지며 나타난다(CSS 가 「탭 바 폭 / 탭 수」를 따라가던 때 — PR #348 리뷰). 그래서 라우트마다 호출하는
 // syncTabBarActive 는 재지 않고, 처음 로드와 reposition(리사이즈 · 회전 · 모핑 끝의 max-width transitionend)만 잰다.
 function sizeTabIndicator() {
   if (!$tabBar || !$dock) return;
@@ -530,7 +530,7 @@ function positionTabIndicator(active) {
 }
 
 // space-between 슬롯 위치는 폭 의존 → 리사이즈/회전 시 재배치(스냅, 디바운스).
-// 라우트 변경이 아니므로 syncTabBarActive 가 안 불린다.
+// 라우트 변경이 아니므로 syncTabBarActive 가 호출되지 않는다.
 if (typeof window !== "undefined" && window.addEventListener) {
   /** @type {ReturnType<typeof setTimeout> | null} */
   let _tabIndicTimer = null;

@@ -77,7 +77,7 @@ window.appStorage.saveReadingPosition(...);
 
 ### `window.X`에 명시적으로 내놓기
 
-ESM 모듈의 `const` 바인딩은 `window`에 저절로 등록되지 않는다. sync 레이어가 `typeof window.applyFontSize === "function"` 같은 가드로 부르는 함수는 `window.X = X;` 줄을 따로 넣어 내놓는다(Phase 3 PR #90에서 이미 쓴 방식).
+ESM 모듈의 `const` 바인딩은 `window`에 저절로 등록되지 않는다. sync 레이어가 `typeof window.applyFontSize === "function"` 같은 가드로 호출하는 함수는 `window.X = X;` 줄을 따로 넣어 내놓는다(Phase 3 PR #90에서 이미 쓴 방식).
 
 ### 예외 (script 모드 유지)
 
@@ -92,14 +92,14 @@ ESM 모듈의 `const` 바인딩은 `window`에 저절로 등록되지 않는다.
 
 ### 테스트 하네스 호환
 
-`tests/unit/harness.js`는 sync 파일들(`state-machine.js`/`refresh-store.js`/`transport.js`)을 `vm.runInContext`로 불러 유닛 테스트를 돌린다. 이것은 classic script로 평가하므로 `export {};`가 `SyntaxError`를 낸다. 그래서 하네스가 source를 `readFileSync`한 바로 뒤 ESM 표시만 지우는 한 줄 정규식(`stripEsmMarker`)을 둔다. 테스트에만 쓰는 맞춤이라 운영 실행에는 영향이 없다.
+`tests/unit/harness.js`는 sync 파일들(`state-machine.js`/`refresh-store.js`/`transport.js`)을 `vm.runInContext`로 실행해 유닛 테스트를 돌린다. 이것은 classic script로 평가하므로 `export {};`가 `SyntaxError`를 낸다. 그래서 하네스가 source를 `readFileSync`한 바로 뒤 ESM 표시만 지우는 한 줄 정규식(`stripEsmMarker`)을 둔다. 테스트에만 쓰는 맞춤이라 운영 실행에는 영향이 없다.
 
 ## 검증
 
 - 단계별 PR마다 `tsc -p tsconfig.app.json/json/worker.json --noEmit`이 모두 0 error였다.
 - 회귀: `node --test tests/unit/*.test.js` 111건 통과(그때 건수).
 - 브라우저 동작 확인: PR마다 머지하기 전에 사용자가 직접 확인했다(SW 캐시를 무효화하고 콘솔 오류 0).
-- 특히 Drive 동기화를 봤다. 1차 sync 레이어는 ESM으로 바꾼 뒤에도 `window.driveSync` 등으로 불려야 정상이다.
+- 특히 Drive 동기화를 봤다. 1차 sync 레이어는 ESM으로 바꾼 뒤에도 `window.driveSync` 등으로 호출돼야 정상이다.
 
 ## 채택 이유 요약
 

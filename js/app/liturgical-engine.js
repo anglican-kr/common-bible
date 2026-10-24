@@ -974,7 +974,7 @@ function properWeekdayNameOf(dateStr, coord) {
  * 「사순 2주 화요일」). 성 목 · 금 · 토는 temporal 행이 따로 있으므로 격자는 「성주간 X요일」이다 —
  * temporal 행의 이름을 빌리면 같은 본문이 후보 둘에 붙는다.
  * @param {string} dateStr @param {LiturgicalCoord} coord
- * @param {string | undefined} proper  `properWeekdayNameOf(dateStr, coord)` — 부르는 쪽(gridObservance)이 표지에도 쓰므로 한 번 센 값을 받는다
+ * @param {string | undefined} proper  `properWeekdayNameOf(dateStr, coord)` — 호출하는 쪽(gridObservance)이 표지에도 쓰므로 한 번 센 값을 받는다
  * @returns {string}
  */
 function gridName(dateStr, coord, proper) {
@@ -1097,7 +1097,7 @@ function spillOf(prev, y) {
 /**
  * 선택 봉헌 활성화 집합을 바꾼다(§6.2 활성화 계약 — 켜진 축일은 원래 날짜를 떠나 목적지 주일의 도착이
  * 된다). **집합이 실제로 바뀔 때만** 이동 계산 캐시를 비운다(§4.9) — 같은 집합을 다시 넣으면 이동 계산을 다시
- * 계산하지 않는다. v1 은 부르는 곳이 없다 — 빈 집합이다(설계서 미결15).
+ * 계산하지 않는다. v1 은 호출하는 곳이 없다 — 빈 집합이다(설계서 미결15).
  * @param {Iterable<string>} ids 켤 전례일 id
  * @returns {boolean} 바뀌었으면 참
  */
@@ -1289,7 +1289,7 @@ function displacerOf(ranked, c, staying) {
 }
 
 /**
- * 지정 전례일과 재분류(§5.5 status 표 · R-6.2-conflict-steps). 그날 남아 있는 후보(`proper` · `transferred_in` —
+ * 지정 전례일과 재분류(§5.5 상태 목록 · R-6.2-conflict-steps). 그날 남아 있는 후보(`proper` · `transferred_in` —
  * 떠난 것과 선택 봉헌은 순위에 들지 않는다)와 보호 기간의 guard 를 순위대로 세우고, 밀린(`displacerOf`)
  * 고유 후보 가운데
  *  - prec 7 **축일**(`minor_feast` · `transferable` 아님)은 옮기지 않고 그날 `commemorated`(→ R-6.1-prec7-omit —
@@ -1350,7 +1350,7 @@ const OPTIONAL_KINDS = new Set(["nearby_sunday", "sunday_0102_0108", "sunday_103
 
 /**
  * 선택 봉헌의 목적지 주일(→ R-6.2-destinations · R-6.2-nearby-sunday). 기원이 주일이면 `nearby_sunday` 는
- * 그날 자신을 내고, 공현 · 모든 성인도 그날이 창 안의 주일이라 같은 날을 낸다 — 부르는 쪽이 「목적지 없음」으로 거른다.
+ * 그날 자신을 내고, 공현 · 모든 성인도 그날이 창 안의 주일이라 같은 날을 낸다 — 호출하는 쪽이 「목적지 없음」으로 거른다.
  * @param {string | null | undefined} kind @param {string} origin @param {number} y
  * @returns {string | null}
  */
@@ -1366,7 +1366,7 @@ function optionalDestOf(kind, origin, y) {
 
 /**
  * 그해의 선택 봉헌(§6.2) — 0단계 선색인의 재료. 순위와 무관하고 그해 앵커와 표만 본다 — 이동 계산을 요구하지
- * 않으므로 다음 해 좌석(`nextYearSeats`)이 재귀 없이 부른다. 목적지가 그날 자신이면(그날이 주일) 없다.
+ * 않으므로 다음 해 좌석(`nextYearSeats`)이 재귀 없이 호출한다. 목적지가 그날 자신이면(그날이 주일) 없다.
  * 순서는 기원 날짜 → id 다(표의 행 순서에 기대지 않는다).
  * @param {CalendarIndex} index @param {number} y
  * @returns {OptionalObservance[]}
@@ -1392,7 +1392,7 @@ function optionalObservancesOf(index, y) {
 
 /**
  * 다음 해 좌석(§6.5) — 켜진 선택 봉헌이 `year + 1` 에 **앉은 자리**(막는다)와 **비운 기원**(연다). 목적지
- * 탐색이 실제로 해를 넘길 때만 부른다(§4.9 — 다음 해 computus 를 미리 돌리지 않는다). 별도 맵이라 이동 계산의
+ * 탐색이 실제로 해를 넘길 때만 호출한다(§4.9 — 다음 해 computus 를 미리 돌리지 않는다). 별도 맵이라 이동 계산의
  * 도착 · 출발에 섞이지 않는다 — 캐시에도 spill 에도 불변식의 셈에도 들어가지 않는다.
  * @param {CalendarIndex} index @param {number} year @param {Set<string>} activated
  * @returns {NextYearSeats}
@@ -1910,7 +1910,7 @@ function commonClassOf(/** @type {LectionaryIndex} */ lix, /** @type {unknown} *
 }
 
 /**
- * **성인 공통 독서 폴백**(§5.6 · 미결11). 호출자가 「좁힌 고유 독서 0건」을 확인한 뒤 부른다 —
+ * **성인 공통 독서 폴백**(§5.6 · 미결11). 호출자가 「좁힌 고유 독서 0건」을 확인한 뒤 호출한다 —
  * 트리거는 날짜 인덱스가 비었는가가 아니다. 자격: 분류가 공통에 있고 · 기념일이 아니고 · 세트가
  * 있다. 후보의 `status` 는 보지 않는다(전례일로 판정). 반환은 고유와 같은 그룹 형태 + `common`
  * 표지 + id `common:<class>-s<set>` — 세트를 전부 낸다(기도서가 「다음 중 하나」로 인쇄한 것).
@@ -2058,7 +2058,7 @@ function fetchLectionaryJson(name) {
 }
 
 /**
- * 캘린더 묶음을 싣는다. **promise 를 캐시**하므로 동시에 불러도 fetch 는 파일당 한 번이고, 거부된
+ * 캘린더 묶음을 싣는다. **promise 를 캐시**하므로 동시에 호출해도 fetch 는 파일당 한 번이고, 거부된
  * promise 는 비워 다음 호출이 다시 시도한다 — 오프라인에서 한 번 실패해도 달력이 영영 깨지지 않게(§3.4).
  * 인덱스가 새로 서면 이동 계산 캐시를 비운다(이동 계산은 표에 의존한다 — §4.9).
  * @returns {Promise<CalendarIndex>}
@@ -2106,7 +2106,7 @@ function retryHalfVerses() {
 }
 
 /**
- * 그 날이 교회력에서 무슨 날인가(§5.5) — **동기 · 순수**. 프리로드 전에 부르면 throw 한다: 조용히
+ * 그 날이 교회력에서 무슨 날인가(§5.5) — **동기 · 순수**. 프리로드 전에 호출하면 throw 한다: 조용히
  * 빈 값을 주면 뷰가 「아무 날도 아님」으로 잘못 그린다(§3.4). 잘못된 날짜 문자열과 교회력을 계산하는 연도
  * (`isComputableYear` — 1583~9999) 밖의 날짜는 null — 범위 밖은 이동 계산(`transfersOf`)에 닿기 전에 돌려보낸다.
  * @param {string} dateStr "YYYY-MM-DD"

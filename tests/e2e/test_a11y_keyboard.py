@@ -214,7 +214,7 @@ def test_search_page_links_keep_keyboard_focus_on_the_pressed_link(browser):
 
 def test_skip_link_moves_focus_into_main_without_redrawing(browser):
     """「본문 바로가기」(#app)는 라우트가 아니다 — 포커스가 본문(<main id=app>)으로 가고 주소 · 화면은 그대로다(known-issues §5 —
-    그전엔 전역 <a> 인터셉터가 route()를 불러 같은 화면을 다시 그리기만 하고 포커스는 본문으로 가지 않았다). 다음 Tab은 본문 안.
+    그전엔 전역 <a> 인터셉터가 route()를 호출해 같은 화면을 다시 그리기만 하고 포커스는 본문으로 가지 않았다). 다음 Tab은 본문 안.
     본문 영역은 이름이 없다 — 하나뿐인 main 랜드마크라 역할로 충분하고, 「성경 본문」이 모든 화면에서 읽혔다(DESIGN.md §10, 2026-10-17)."""
     ctx, page = _open(browser, "john/3")
     try:
@@ -229,8 +229,8 @@ def test_skip_link_moves_focus_into_main_without_redrawing(browser):
         page.locator(".skip-link").focus()
         page.keyboard.press("Enter")
         assert page.evaluate("() => document.activeElement.id") == "app"
-        page.wait_for_timeout(300)   # route() 가 불렸다면 그사이 다시 그렸을 것
-        assert page.evaluate("() => window.routeSeq()") == seq_before, "route() 를 부르지 않는다"
+        page.wait_for_timeout(300)   # route() 가 호출됐다면 그사이 다시 그렸을 것
+        assert page.evaluate("() => window.routeSeq()") == seq_before, "route() 를 호출하지 않는다"
         assert page.url == url_before, "주소에 #app 이 붙지 않는다"
         page.keyboard.press("Tab")
         assert page.evaluate("""() => { const a = document.activeElement;

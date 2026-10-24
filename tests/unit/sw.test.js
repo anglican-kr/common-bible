@@ -334,7 +334,7 @@ test("SHELL_FILES의 스크립트는 (Worker · importScripts 대상을 빼면) 
 // 캘린더 · 전례독서 · 교회력 엔진(원본 약 210KB)은 index.html의 태그나 정적 import로 싣지 않고, routing.js가
 // /calendar · /lectionary에 처음 갈 때 import()로 불러온다(ADR-038 §2 「구현」, known-issues §6 — 2026-10-17).
 // 태그나 정적 import가 하나라도 다시 생기면 앱은 그대로 돌아 다른 검사로는 드러나지 않고, 첫 방문의 부팅이 셋을
-// 다시 받는다(느린 4G DOMContentLoaded +390ms). 그래서 이름을 적어 두는 대신 규칙으로 본다 — import()로 부르는
+// 다시 받는다(느린 4G DOMContentLoaded +390ms). 그래서 이름을 적어 두는 대신 규칙으로 본다 — import()로 불러오는
 // 모듈은 무엇이든 부팅 그래프 밖에 있어야 하고, 지정자는 글자 그대로여야 한다.
 
 const ROUTING = "/js/app/routing.js";
@@ -360,7 +360,7 @@ test("js/의 import()는 모두 지정자가 글자 그대로다 — 오프라�
     "import()의 지정자가 계산식이거나 상대 .js 경로가 아니다 — 닫힘 · 지연 검사가 그 모듈을 볼 수 없다");
 });
 
-test("import()로 부르는 모듈은 부팅 그래프(태그 + 정적 import) 밖에 있다", () => {
+test("import()로 불러오는 모듈은 부팅 그래프(태그 + 정적 import) 밖에 있다", () => {
   assert.ok(BOOT_GRAPH.staticEdges > 0, "정적 import 간선을 하나도 못 찾았다 — 파서가 깨졌을 가능성");
   const targets = dynamicTargets();
   // 닻 — routing.js의 import()를 파서가 읽었는지. 이것이 없으면 아래 규칙은 아무것도 보지 않고 통과한다.
@@ -368,7 +368,7 @@ test("import()로 부르는 모듈은 부팅 그래프(태그 + 정적 import) �
     assert.ok(targets.has(view), `${view}가 import() 대상에 없다 — routing.js의 import()를 파서가 못 읽었다`);
   }
   assert.deepEqual([...targets].filter((t) => BOOT_GRAPH.reachable.has(t)), [],
-    "import()로 부르는 모듈이 부팅 때 싣는 그래프에 들어왔다 — 첫 방문의 부팅이 그것을 다시 받는다");
+    "import()로 불러오는 모듈이 부팅 때 싣는 그래프에 들어왔다 — 첫 방문의 부팅이 그것을 다시 받는다");
 });
 
 // routing.js의 `Promise.all([import(a), import(b), …])` 묶음 — 묶음마다 해석한 경로 목록(첫 원소가 그 화면의 모듈).

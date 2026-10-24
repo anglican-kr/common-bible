@@ -152,7 +152,7 @@ const plain = (v) => (v === undefined ? undefined : JSON.parse(JSON.stringify(v)
 const same = (a, b, msg) => assert.deepStrictEqual(plain(a), plain(b), msg);
 
 let built = null;
-/** 실제 표 아홉으로 두 인덱스를 한 번 만든다 — data/ 가 없으면 부르지 않는다(skip). */
+/** 실제 표 아홉으로 두 인덱스를 한 번 만든다 — data/ 가 없으면 호출하지 않는다(skip). */
 function ix() {
   if (built) return built;
   const cal = ctx.buildCalendarIndex({

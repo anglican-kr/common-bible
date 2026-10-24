@@ -81,7 +81,7 @@ ADR-029는 Safari 26의 홈 인디케이터 색 문제를 피하려고 글래스
   - 기존 `/search?q=…`에서 모핑을 열면 지금 쿼리를 dock 입력으로 옮긴다.
   - popstate(뒤로/앞으로) 등으로 `/search?q=`가 바뀌면 `syncTabSearchQuery`가 dock 입력을 URL 쿼리에 맞춘다(입력에 포커스가 있으면 덮어쓰지 않는다).
   - **Esc**는 document capture 단계에서 가로채, 결과 링크나 body 어디에 포커스가 있어도 검색 모드 전체를 닫는다(app.js 전역 Esc보다 먼저).
-  - 홈 탭 같은 검색 밖 라우트로 가면 `views-routing`의 `syncTabBarActive`가 `window.exitTabSearch`를 불러 되돌린다.
+  - 홈 탭 같은 검색 밖 라우트로 가면 `views-routing`의 `syncTabBarActive`가 `window.exitTabSearch`를 호출해 되돌린다.
 - **빈 상태**: 결과 0건, 빈 검색어 뷰의 가운데에 빈 상태(돋보기, 제목, 부제)를 둔다.
 - **빈 검색 뷰는 「검색 방법」 예시 안내다(2026-06-07).** 제목 「찾고 싶은 말씀을 검색해 보세요」, 한 줄 부제, `이렇게 검색해 보세요` 안내(`사랑`=낱말 / `사랑 in:요한`=책 범위 / `창세 1:3`=장과 절 펼치기)다. 세 형식을 한 문장에 몰지 않고 **예시마다 안내 카드**로 풀었다(북마크 빈 목록 BOOKMARK_ADD_HELP의 설명형 빈 상태를 참고했다). 카드를 누르면 그 예시로 바로 검색한다(`commitTopSearch`). `js/app/search.js` `SEARCH_EXAMPLES`/`buildSearchExamples`, `.search-examples*` CSS(중립 `--accent`. ADR-028의 테마색 범위를 지킨다). 결과 0건 화면의 부제도 다시 해 볼 것을 권하도록 보탰다. 처음에는 부제가 예시 문자열 한 줄(`예: 사랑, 사랑 in:요한, 창세 1:3`)뿐이라 무엇을 넣을 수 있는지 알기 어려웠다.
 
@@ -116,7 +116,7 @@ ADR-029는 Safari 26의 홈 인디케이터 색 문제를 피하려고 글래스
 
 - **줄어든 상태를 되돌리는 것은 맨 위에서 저절로, 그리고 홈 탭(펼치기)이다.** 처음 안은 「홈 탭으로만」이었는데, dev에서 확인한 뒤 바꿨다. 맨 위에 닿으면 저절로 되돌리는 것이 자연스럽고, 홈 탭은 홈 이동이 아니라 펼치기로 하나로 모았다. iOS Safari 식의 「위로 스크롤하면 바로 되돌리기」는 끝에서 깜빡일 수 있어, **맨 위에서만** 저절로 되돌리고 중간에서 위로 스크롤할 때는 그대로 두는 것으로 절충했다.
 - **검색 입력은 하단 입력창에서 바로 검색하고, visualViewport로 키보드 위에 띄운다.** iOS가 포커스를 받은 입력을 키보드 위로 올리려고 페이지를 미는 문제는 **포커스를 줄 때(focus) `scrollTo(0,0)`과 `preventScroll`**로 상쇄하고, **X(키보드 내리기)를 보이고 홈을 숨기는 것은 입력의 focus/blur**에 묶어(visualViewport 높이 감지가 불안정한 것을 피한다) 안정시켰다.
-- **검색 버튼을 누르면 키보드가 바로 뜬다(2026-06-07).** 검색 원형 버튼을 눌러 모핑에 들어갈 때 dock 입력의 `focus()`를 `requestAnimationFrame` 안에서 부르고 있었다. 그런데 iOS Safari는 프로그램으로 부른 `focus()`가 **사용자 동작(탭 핸들러)과 같은 동기 실행 턴** 안에서 불릴 때만 소프트 키보드를 띄운다. rAF로 미루면 동작의 연결이 끊겨, 입력에 포커스는 가도 키보드가 뜨지 않았다(검색 화면만 열리고, 키보드는 입력을 한 번 더 눌러야 나왔다). `openSearch()`는 `#tab-search` 클릭 핸들러에서 동기로 불리고(그 안의 `navigate`도 동기), 입력은 `hidden=false` 뒤 같은 함수 안에서 다루므로, rAF를 지우고 **`$searchInput.focus({ preventScroll: true })`를 동기로** 불러 같은 동작 턴에 머물게 했다. `renderSearchView`는 `body.tabbar-searching`(navigate 전에 켠다)일 때 페이지 안 입력의 autofocus를 끄므로 dock 포커스를 빼앗지 않는다. 이미 검색 중일 때 다시 들어오는 분기도 같은 동기 focus라 일관된다. 키보드 위치 보정(`liftForKeyboard`/`--kb-overlap`)과 X 표시 조건은 그대로다.
+- **검색 버튼을 누르면 키보드가 바로 뜬다(2026-06-07).** 검색 원형 버튼을 눌러 모핑에 들어갈 때 dock 입력의 `focus()`를 `requestAnimationFrame` 안에서 호출하고 있었다. 그런데 iOS Safari는 프로그램으로 호출한 `focus()`가 **사용자 동작(탭 핸들러)과 같은 동기 실행 턴** 안에서 호출될 때만 소프트 키보드를 띄운다. rAF로 미루면 동작의 연결이 끊겨, 입력에 포커스는 가도 키보드가 뜨지 않았다(검색 화면만 열리고, 키보드는 입력을 한 번 더 눌러야 나왔다). `openSearch()`는 `#tab-search` 클릭 핸들러에서 동기로 호출되고(그 안의 `navigate`도 동기), 입력은 `hidden=false` 뒤 같은 함수 안에서 다루므로, rAF를 지우고 **`$searchInput.focus({ preventScroll: true })`를 동기로** 호출해 같은 동작 턴에 머물게 했다. `renderSearchView`는 `body.tabbar-searching`(navigate 전에 켠다)일 때 페이지 안 입력의 autofocus를 끄므로 dock 포커스를 빼앗지 않는다. 이미 검색 중일 때 다시 들어오는 분기도 같은 동기 focus라 일관된다. 키보드 위치 보정(`liftForKeyboard`/`--kb-overlap`)과 X 표시 조건은 그대로다.
 
 ## 검토한 대안
 

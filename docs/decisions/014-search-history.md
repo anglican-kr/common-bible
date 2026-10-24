@@ -93,7 +93,7 @@ Apple HIG는 44 × 44 pt, Material은 48 × 48 dp, WCAG 2.5.5 AAA는 44 × 44 CS
 - **기본 표시 한도**: `SEARCH_HISTORY_VISIBLE = 10`. 11번째부터는 「더 보기」 토글로 펼친다.
 - **기간 만료 없음**: 타임스탬프는 보여 주기 위한 것이다. 보존은 여전히 개수(30) LRU 한도만 따른다.
 - **저장 시점**: 키워드 검색이 실제로 시작되는 단 하나의 진입점에서 저장한다. 절 참조 매칭(`refMatch`)이나 빈 쿼리는 저장하지 않는다.
-- **Drive 비동기화**: `syncStoreV2.saveSetting`을 부르지 않는다. 다른 설정 저장 경로와 다르다는 점을 코드 주석으로 적는다.
+- **Drive 비동기화**: `syncStoreV2.saveSetting`을 호출하지 않는다. 다른 설정 저장 경로와 다르다는 점을 코드 주석으로 적는다.
 - **유닛**(2026-06-07): `storage.test.js`(마이그레이션과 타임스탬프 회귀 +5), `search.test.js`(`formatSearchDate` +3).
 
 ### D2. UI / UX

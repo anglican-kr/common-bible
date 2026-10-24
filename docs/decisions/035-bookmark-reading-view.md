@@ -75,7 +75,7 @@ ADR-010 이후 북마크는 「어제 읽던 곳을 빨리 찾는」 한 건짜�
 #### A. `renderChapter`의 절 루프를 떼어 `appendVerses`로 함께 쓰기 (채택)
 - 시(운문), 산문, 인용 칩, 절 번호, 단락과 연 구분 등 복잡한 절 렌더 로직(약 180줄)을 **한 곳**에 둔다.
 - `renderChapter`는 `appendVerses(article, data.verses, {…})` 한 줄로 맡긴다. 동작은 같다(유닛 683개 모두 통과).
-- 주석 앵커(`wrapNoteAnchorsInArticle`)는 **정수 절 번호로 맞춰 보므로** 장이 섞이면 부딪친다. 그래서 읽기 뷰에서도 **장 하나 = `<article>` 하나**로 범위를 나누고, article마다 부른다.
+- 주석 앵커(`wrapNoteAnchorsInArticle`)는 **정수 절 번호로 맞춰 보므로** 장이 섞이면 부딪친다. 그래서 읽기 뷰에서도 **장 하나 = `<article>` 하나**로 범위를 나누고, article마다 호출한다.
 
 #### B. 읽기 뷰에 절 렌더 로직을 복제
 - 180줄이 겹쳐 운문과 인용 규칙이 갈라지고, 유지보수가 무너진다.
@@ -98,9 +98,9 @@ ADR-010 이후 북마크는 「어제 읽던 곳을 빨리 찾는」 한 건짜�
 - UI: `renderBookmarkReadView(folderId)`.
   - 헤더(뒤로 버튼, 제목=폴더 이름)를 두고, 필요한 장 JSON을 불러(중복을 지운 캐시), 폴더 소제목과 합친 묶음마다의 제목과 장마다의 `<article>`(`appendVerses`)을 그린다.
   - **데이터를 먼저 불러오고, 낡았는지 확인한 뒤, 동기로 DOM을 커밋**하는 순서다(떠날 때 빈 화면이나 덮어쓰기를 막는다).
-  - **깔끔한 봉독**: 학습 보조 표시를 모두 감춘다. 주석(`wrapNoteAnchorsInArticle`을 부르지 않는다), 병행 구절 ※(`parallels`를 넘기지 않는다), 인용 칩(`hideCites:true`)이다.
+  - **깔끔한 봉독**: 학습 보조 표시를 모두 감춘다. 주석(`wrapNoteAnchorsInArticle`을 호출하지 않는다), 병행 구절 ※(`parallels`를 넘기지 않는다), 인용 칩(`hideCites:true`)이다.
   - 빈 상태는 둘이다(북마크 없음 / 모든 장 불러오기 실패). 불러오지 못한 장의 북마크는 합치기, 제목, 그리기에서 뺀다.
-- `window.renderBookmarkReadView`를 등록한다(라우터가 facade로 부른다).
+- `window.renderBookmarkReadView`를 등록한다(라우터가 facade로 호출한다).
 
 ### `js/app/routing.js`
 - `parsePath`: 처음에는 `if (pathname === "bookmarks/read") return { view: "bookmark-read" }`였다. 지금은 `read`와 `read/<folderId>`를 받는다(위 「결정」).

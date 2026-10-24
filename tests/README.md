@@ -60,7 +60,7 @@ node --test tests/unit/storage.test.js    # 개별 파일
 | `verse-spec.test.js` | 절 스펙(ADR-038 §3) — `specCoversVerse`·`chapterMaxVerse`·`verseInstanceKey` 절 인스턴스 식별 · 절 선택의 출처(`selectionCitation` — 이사 40 · 다니 3 · 에스 4 의 실제 키, 토비 11:15, ADR-010) · 데이터의 반쪽 절(이사 7 · 10, 1사무 24, 욥 31, 나훔 1, 판관 17) · 사람이 읽는 출처(`citationVerseSpec` · `halfVerseMark`) · 북마크 저장 표기(`verseNumberSpec`) · 옛 판 표기 옮기기(`wholeVerseSpec`) | 33 |
 | `tabbar.test.js` | 모바일 탭 바 — 활성 표시·인디케이터 | 12 |
 | `tab-history.test.js` | 탭별 히스토리 복원(ADR-031) — `tabOf` 분류(`/lectionary`·`/calendar` 는 캘린더 탭) | 12 |
-| `sw.test.js` | 서비스 워커 정적 검증 — `SHELL_FILES` 존재·`index.html` 패리티·import 닫힘(정적 + 지정자가 글자 그대로인 동적 `import()` — 주석 · 문자열을 걷은 코드에서 읽는다, 그 파서의 엣지 케이스 포함)과 거꾸로(프리캐시한 스크립트는 Worker · importScripts 대상만 빼고 import로 닿는다)·지연 로드(`js/`의 `import()`는 모두 글자 그대로 · import()로 부르는 모듈은 부팅 그래프 밖 · `routing.js`의 한꺼번에 묶음 = 그 화면 모듈의 정적 import − 부팅 그래프 — ADR-038 §2)·`cacheNameFor` 라우팅·매니페스트 대조(`data/` 없으면 skip, `sync-data.yml`에서 실행) | 12 |
+| `sw.test.js` | 서비스 워커 정적 검증 — `SHELL_FILES` 존재·`index.html` 패리티·import 닫힘(정적 + 지정자가 글자 그대로인 동적 `import()` — 주석 · 문자열을 걷은 코드에서 읽는다, 그 파서의 엣지 케이스 포함)과 거꾸로(프리캐시한 스크립트는 Worker · importScripts 대상만 빼고 import로 닿는다)·지연 로드(`js/`의 `import()`는 모두 글자 그대로 · import()로 불러오는 모듈은 부팅 그래프 밖 · `routing.js`의 한꺼번에 묶음 = 그 화면 모듈의 정적 import − 부팅 그래프 — ADR-038 §2)·`cacheNameFor` 라우팅·매니페스트 대조(`data/` 없으면 skip, `sync-data.yml`에서 실행) | 12 |
 | `docs-data-consistency.test.js` | 설계서 `facts` 블록 ↔ `data/lectionary` 실측 대조(`data/` 없으면 skip, `sync-data.yml`에서 실행) | 2 |
 | `docs-crossref.test.js` | 교회력 설계 문서 5종(설계서·검토 문서·ADR-036/037/038) + status/architecture 의 교차 참조 — `§n.m`·`미결n`·`C-/X-/I-`·`R-` 규칙 마커·픽스처 id 가 실재하는 앵커를 가리키는지(참조원 둘도 같은 검사 — 폐지된 `Qn` 은 검토 문서 §6 의 Q→미결 대응표로 풀고 Q1~Q14 를 전부 덮는지 본다), 설계서 § 헤딩 목록·§9 항목(§9.1 열림 + §9.2 닫힘 = 1..N, 각 목록 번호순, §9.1 은 일곱 필드 전부, §9.2 는 한 줄 + 닫힘 날짜)·ADR 미결 번호가 문서 순서대로 1..n(재부여 · 건너뜀 · 순서 바꿈 금지) · ADR 「미결 사항」 각 항목이 닫힘 또는 「→ 설계서 미결n」로 이어받음(그 목록이 옛 ADR 미결 번호의 대응표), R- 마커 1회 정의, 검토 문서 §6 이 설계서 §9.1 의 「확인 주체 = 사제」 뷰와 같은지(미결 집합 · 상태 첫 낱말). 표기 금지 게이트는 인라인 코드를 뺀 산문만 보며 **문서 단위로** 켠다 — ②(2026-10-09)에서 센티널(전 문서) · 동그라미 참조 · Qn · 편집 원칙(설계서)을 켰고 ③(2026-10-10)이 검토 문서를, ④(2026-10-10)가 ADR 셋을 더하며 ADR 미결 번호 참조 게이트를 켰다(면제 줄 없음 — 다섯 문서 모두) | 14 |
 | `docs-wiki.test.js` | 저장소 문서의 참조(docs 재구성, 2026-10-22) — 「pitfalls §N」 「known-issues §N」 참조가 지금 문서의 절로 풀리는지, 본문의 `docs/…` 경로(glob 포함)와 마크다운 상대 링크가 실재하는지, `docs/index.md`가 인용한 파일과 ADR이 실재하는지. 주제 문서(`docs/topics/`)는 대장 줄과 정의가 하나씩 맞는지, 정한 틀(`## ` 제목의 종류와 순서, 「소유 코드:」)을 지키는지, 모든 `js/` 파일을 정확히 한 주제가 소유하는지도 본다. 범위는 git이 아는 텍스트 파일에서 `docs/changes/`(머지된 원장) · `docs/archive/` · `data/` · `tests/fixtures/`를 뺀 것. 일부러 지운 파일의 이력 언급은 테스트의 `RETIRED` 목록으로 허용한다 | 7 |
@@ -139,7 +139,7 @@ pytest tests/e2e/test_bookmark_sort.py -q   # 개별 파일
 | `test_settings.py` | 설정 팝오버 — 시작화면·책순서·글자크기·테마·색상·캐시 | 13 |
 | `test_install_guide.py` | 설치 안내 모달 — 플랫폼별 콘텐츠·진입점, 넛지 방문 횟수 규칙, 「다시 보지 않기」 | 20 |
 | `test_tabbar.py` | 모바일 모핑 탭 바(ADR-029/030) — 탭 다섯(보이는 것 넷 — 홈 · 캘린더 · 북마크 · 설정, 노트 숨김) · 인디케이터 크기(축소에서 펼칠 때 그대로 · 320px 슬롯) · 수정 키 탭 클릭은 스크롤 복원 요청을 남기지 않음 · 구분 탭 밖의 책(전례시편)에서 홈 탭 → 성서 목록 첫 화면 | 15 |
-| `test_update_toast.py` | SW 업데이트 토스트 — 버전을 기다리는 동안 다시 불러도 하나 | 7 |
+| `test_update_toast.py` | SW 업데이트 토스트 — 버전을 기다리는 동안 다시 호출해도 하나 | 7 |
 
 ### 접근성
 

@@ -30,7 +30,7 @@ const AUDIO_CACHE = "audio-1";    // mp3 — 오디오 저장소가 소유해야
 - main 브랜치에 `source/**`나 audio submodule pointer 변경이 들어오면 자동으로 돈다. 지금은 교회력 데이터를 포함한 파이프라인 입력 전체를 본다.
 - 기존 파이프라인(parser, split_bible, search_indexer)을 돌린 뒤, 새로 만든 `scripts/gen_manifests.py`가 두 매니페스트를 만든다.
 - 바뀐 산출물(`bible/`, `books.json`, `search-*.json`, `bible-manifest.json`, `audio-manifest.json`)을 `github-actions[bot]`이 main에 커밋하고 올린다(push). 커밋 메시지에 `[skip ci]`를 붙이지 않는다(2026-05-23, data#1). 그래야 validate.yml이 이 커밋에서 다시 돌아, 빌드된 산출물을 검증한다. 그래서 main의 마지막 validate가 늘 실제 산출물 상태를 반영한다.
-- 무한 루프는 생기지 않는다. `paths:` 필터에 산출물 경로(bible/, search-*.json 등)가 없으므로, 자기가 올린 커밋이 build.yml을 다시 부르지 않는다.
+- 무한 루프는 생기지 않는다. `paths:` 필터에 산출물 경로(bible/, search-*.json 등)가 없으므로, 자기가 올린 커밋이 build.yml을 다시 실행시키지 않는다.
 - 기존 `pipeline.yml`은 PR에서 산출물이 어긋났는지(drift) 확인하는 용도로 좁힌다.
 
 ### 2. 콘텐츠 해시 매니페스트와 처음 쓸 때 무효화(lazy)
@@ -51,7 +51,7 @@ const AUDIO_CACHE = "audio-1";    // mp3 — 오디오 저장소가 소유해야
 `bible-manifest.json`은 1329 장 JSON과 3 검색 인덱스(약 133 KB), `audio-manifest.json`은 1314 mp3(약 130 KB)를 담는다(도입 때 수). 오디오 해시는 git LFS pointer 파일의 `oid sha256:...`를 그대로 쓴다. 그래서 CI가 LFS의 실제 바이너리를 받지 않아도 된다(`GIT_LFS_SKIP_SMUDGE=1`).
 
 앱 쪽에 새로 만든 `js/manifest-sync.js`가 하는 일은 다음과 같다.
-- 부팅 직후 `syncManifests()`를 1회 부른다.
+- 부팅 직후 `syncManifests()`를 1회 호출한다.
 - 두 매니페스트를 받는다. sw.js는 이 요청을 네트워크 우선으로 보내고, 실패하면 SHELL_CACHE에 미리 넣어 둔 사본을 쓴다.
 - IDB store `bible-manifest-sync/snapshots`에 저장한 직전 스냅샷과 견준다. 해시가 바뀌었거나 사라진 키를 낡은 항목(stale)으로 모은다.
 - `data`와 `audio` 캐시에서 그 URL만 `cache.delete`로 지운다. 새로 받지는 않는다.
@@ -77,16 +77,16 @@ DATA_CACHE와 AUDIO_CACHE는 이제 rev 없는 고정 이름(`"data"`, `"audio"`
 
 ### 4. 데이터 동기화와 릴리스를 나눈다 (2026-05-23)
 
-데이터 저장소의 build.yml이 산출물을 올린 뒤 `gh api ... /dispatches`로 앱 저장소의 `.github/workflows/sync-data.yml`을 부른다(Phase 3). `sync-data.yml`은 서브모듈 포인터를 갱신하고, sitemap.xml을 다시 만들어 커밋 하나로 올린다. version은 건드리지 않는다(`release.py patch`를 부르지 않는다).
+데이터 저장소의 build.yml이 산출물을 올린 뒤 `gh api ... /dispatches`로 앱 저장소의 `.github/workflows/sync-data.yml`을 실행한다(Phase 3). `sync-data.yml`은 서브모듈 포인터를 갱신하고, sitemap.xml을 다시 만들어 커밋 하나로 올린다. version은 건드리지 않는다(`release.py patch`를 실행하지 않는다).
 
-- **릴리스를 낼지는 사람이 정한다.** 사용자가 알맞은 때에 직접 `python scripts/release.py`를 불러 버전을 올린다(patch / minor / major 가운데 무엇인지도 사람이 판단한다). 데이터가 자주 바뀔수록, 자동으로 버전을 올리면 사용자에게 의미 없는 서비스 워커 업데이트 알림(토스트)이 쌓였기 때문이다.
-- **sitemap은 릴리스와 나눈다.** `release.py`가 담는 파일(paths)에서 sitemap.xml을 뺐다. sitemap은 SHELL_CACHE에 들어가지 않아 사용자 클라이언트가 받지 않으므로, 바뀌어도 서비스 워커를 업데이트할 이유가 없다. webhook이 데이터를 동기화할 때마다 build_sitemap.py를 불러 갱신하고, 커밋해 올린다.
+- **릴리스를 낼지는 사람이 정한다.** 사용자가 알맞은 때에 직접 `python scripts/release.py`를 실행해 버전을 올린다(patch / minor / major 가운데 무엇인지도 사람이 판단한다). 데이터가 자주 바뀔수록, 자동으로 버전을 올리면 사용자에게 의미 없는 서비스 워커 업데이트 알림(토스트)이 쌓였기 때문이다.
+- **sitemap은 릴리스와 나눈다.** `release.py`가 담는 파일(paths)에서 sitemap.xml을 뺐다. sitemap은 SHELL_CACHE에 들어가지 않아 사용자 클라이언트가 받지 않으므로, 바뀌어도 서비스 워커를 업데이트할 이유가 없다. webhook이 데이터를 동기화할 때마다 build_sitemap.py를 실행해 갱신하고, 커밋해 올린다.
 - 결과: 데이터가 바뀔 때마다 main에 커밋이 쌓이지만 사용자의 서비스 워커와는 상관없다. 사용자가 릴리스를 낼 때까지 운영(prod)에서 사용자가 보는 동작은 그대로다. Google 봇은 바뀐 직후의 sitemap을 바로 볼 수 있다(릴리스와 무관하다).
 
 `sync-data.yml`은 main에 직접 올리지 않고 PR로 올린다(2026-05-30). 2026-05-29에 main 브랜치 보호를 적용한 뒤, 직접 올리기가 `Required status check "Unit tests" is expected`로 거부되어 webhook 자동화가 깨졌다(5월 30일 두 차례 동기화 실패로 드러났다). 브랜치 보호는 유지하고 자동화를 PR 흐름에 맞췄다.
 
 1. **sync/data-<run_id> 토픽 브랜치 + PR + auto-merge.** `sync-data.yml`이 토픽 브랜치로 올린 뒤 `gh pr create`로 PR을 만들고, `gh pr merge --auto --squash --delete-branch`로 자동 머지를 켠다. Unit tests가 통과하면 저절로 squash 머지하고 브랜치를 지운다. 여전히 사람 손이 들어가지 않는다.
-2. **PAT를 나눈다.** 토픽 브랜치 push와 PR 생성에는 common-bible의 Contents:Write와 Pull requests:Write만 가진 `SYNC_DATA_PR_PAT`를 쓴다. `GITHUB_TOKEN`으로 만든 PR은 pull_request 이벤트를 일으키지 않아 Unit tests가 돌지 않으므로 PAT가 꼭 필요하다. 서브모듈은 저장소마다 둔 **읽기 전용 배포 키**(`DATA_DEPLOY_KEY`·`AUDIO_DEPLOY_KEY`)로 받는다(2026-08-29). 만료가 없고 GitHub이 읽기 전용을 강제한다. data 저장소의 `build.yml`은 앱 워크플로를 부르는 데 `Actions:Write`가 필요해 PAT를 계속 쓴다.
+2. **PAT를 나눈다.** 토픽 브랜치 push와 PR 생성에는 common-bible의 Contents:Write와 Pull requests:Write만 가진 `SYNC_DATA_PR_PAT`를 쓴다. `GITHUB_TOKEN`으로 만든 PR은 pull_request 이벤트를 일으키지 않아 Unit tests가 돌지 않으므로 PAT가 꼭 필요하다. 서브모듈은 저장소마다 둔 **읽기 전용 배포 키**(`DATA_DEPLOY_KEY`·`AUDIO_DEPLOY_KEY`)로 받는다(2026-08-29). 만료가 없고 GitHub이 읽기 전용을 강제한다. data 저장소의 `build.yml`은 앱 워크플로를 실행하는 데 `Actions:Write`가 필요해 PAT를 계속 쓴다.
 3. **저장소 설정 `allow_auto_merge: true`.** `gh pr merge --auto`가 동작하는 조건이다.
 4. **워크플로 이름을 맞춘다.** `Sync data submodule and release`를 `Sync data submodule`로 바꿨다. 2026-05-23의 변경으로 release.py 호출이 이미 없어져, 「and release」가 실제와 어긋나 있었다.
 
@@ -110,7 +110,7 @@ DATA_CACHE와 AUDIO_CACHE는 이제 rev 없는 고정 이름(`"data"`, `"audio"`
 | 매니페스트를 SHELL_CACHE에 미리 넣어 두고 서비스 워커 업데이트 때만 견주기 | 데이터가 바뀌어도 앱 서비스 워커가 업데이트되지 않으면 사용자는 낡은 콘텐츠를 그대로 쓴다. 매니페스트는 최신이어야 하므로 네트워크 우선이 자연스럽다. |
 | 캐시된 mp3의 실제 바이너리를 매번 SHA-256으로 다시 계산해 매니페스트와 견주기 | 1314 mp3 × ~3 MB, 곧 부팅마다 약 4 GB를 해싱한다. CPU 비용이 크다. 직전 스냅샷과 견주는 방식은 비용이 0이다. |
 | `peter-evans/repository-dispatch` 액션으로 webhook 보내기 | StepSecurity 6/10, 취약점 6건, 개인 메인테이너다. 1st-party `gh api` 한 줄로 대신한다(Phase 3). |
-| `repository_dispatch` 이벤트 보내기 | Fine-grained PAT의 Contents:Write가 필요하다. common-bible이 공개 저장소라 PAT가 새면 공개 push 위험이 있다. `workflow_dispatch`를 채택한다(Actions:Write만 필요하고, 부를 수 있는 대상이 sync-data.yml 하나로 한정된다). |
+| `repository_dispatch` 이벤트 보내기 | Fine-grained PAT의 Contents:Write가 필요하다. common-bible이 공개 저장소라 PAT가 새면 공개 push 위험이 있다. `workflow_dispatch`를 채택한다(Actions:Write만 필요하고, 실행할 수 있는 대상이 sync-data.yml 하나로 한정된다). |
 
 ### 데이터가 올라오면 자동으로 release.py patch 실행 (2026-05-23까지)
 
@@ -120,7 +120,7 @@ DATA_CACHE와 AUDIO_CACHE는 이제 rev 없는 고정 이름(`"data"`, `"audio"`
 ### build 자동 커밋에 `[skip ci]` 붙이기 (2026-05-23까지)
 
 - 처음에는 위 1의 자동 커밋 메시지에 `[skip ci]`를 넣어 `[skip ci]` 커밋으로 올렸다.
-- 채택 안 함 2026-05-23 (data#1) · 이유: 이 표시가 validate.yml까지 막았다. 마크다운만 올린 push로 절 구조가 바뀌면, validate가 옛 artifacts로 실패하고 build 뒤에는 다시 돌지 않는 경쟁 상태가 있었다(fe254de `fix: 아모스서 절 번호 수정` 때 드러났다). build.yml은 paths 필터가 산출물 경로를 빼므로 `[skip ci]` 없이도 자기를 다시 부르지 않는다.
+- 채택 안 함 2026-05-23 (data#1) · 이유: 이 표시가 validate.yml까지 막았다. 마크다운만 올린 push로 절 구조가 바뀌면, validate가 옛 artifacts로 실패하고 build 뒤에는 다시 돌지 않는 경쟁 상태가 있었다(fe254de `fix: 아모스서 절 번호 수정` 때 드러났다). build.yml은 paths 필터가 산출물 경로를 빼므로 `[skip ci]` 없이도 자기를 다시 실행시키지 않는다.
 
 ### sync-data.yml이 main에 바로 올리기 (2026-05-30까지)
 

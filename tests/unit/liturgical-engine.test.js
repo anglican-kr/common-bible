@@ -134,7 +134,7 @@ test("C-4.3-2 승천 목요일 · 성령강림 주일 · 삼위일체 주일 · 
 });
 
 test("§4.3 easter_offset −1 은 성 토요일·부활밤이 공유하는 날짜다", () => {
-  // 종전 이 테스트는 같은 인자로 evalRule 을 두 번 불러 결과가 같다고 단언했다 —
+  // 종전 이 테스트는 같은 인자로 evalRule 을 두 번 호출해 결과가 같다고 단언했다 —
   // 순수 함수라 어떤 구현에서도 통과하는 **동어반복**이었다. 체크리스트 C-4.3-3 이
   // 요구하는 「인덱스가 1:N」은 레코드 **둘**이 한 날짜로 모이는 것이고, 그 인덱스는
   // §5.4 권장 인덱스의 몫이라 계산 계층에서는 잡히지 않는다 — 아래 조회 계층의 C-4.3-3 이 잡는다.
@@ -1261,7 +1261,7 @@ const B1_TABLES = {
         transfer_to: "commemorate_only", color: null }),
     TMP("t-family", "가정주일", { kind: "nth_sunday", month: 5, nth: 2 }, { coord_name: null, type: "sunday", rank: null, precedence: null, color: null }),
     // temporal 기념일 — 평일에 떨어지는 합성 행(E+17 = 부활 3주 수요일, 보호 기간 밖). 지정 자격 판별을
-    // kind(성인력 행)로 좁히면 7 이 격자 평일 8 보다 앞서 실패한다(설계서 §7 B1 행 · C-6.1-12 — #340)
+    // kind(성인력 행)로 좁히면 7 이 격자 평일 8 보다 앞서 실패한다(설계서 §7 B1 항목 · C-6.1-12 — #340)
     TMP("t-memorial", "합성 temporal 기념일", { kind: "easter_offset", days: 17 },
       { coord_name: null, season: "easter", type: "feast", rank: "commemoration", precedence: 7, color: null }),
     TMP("t-ember-summer", "하계재", { kind: "ember_wfs", anchor: { kind: "easter_offset", days: 49 } },
@@ -1930,7 +1930,7 @@ const FILES = {
   "eucharist-readings": LEC_TABLES.readings, "eucharist-collects": LEC_TABLES.collects,
   commons: LEC_TABLES.commons, canticles: LEC_TABLES.canticles, "half-verses": LEC_TABLES.halfVerses,
 };
-/** fetch 가짜 — 부른 URL 을 적고, `fail` 에 든 파일은 500 으로 답한다. */
+/** fetch 가짜 — 요청한 URL 을 적고, `fail` 에 든 파일은 500 으로 답한다. */
 function fakeFetch(calls, fail = new Set()) {
   return (url) => {
     calls.push(url);
