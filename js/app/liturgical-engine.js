@@ -1289,7 +1289,7 @@ function displacerOf(ranked, c, staying) {
 }
 
 /**
- * 지정 전례일과 재분류(§5.5 status 표 · R-6.2-conflict-steps). 그날 남아 있는 후보(`proper` · `transferred_in` —
+ * 지정 전례일과 재분류(§5.5 상태 목록 · R-6.2-conflict-steps). 그날 남아 있는 후보(`proper` · `transferred_in` —
  * 떠난 것과 선택 봉헌은 순위에 들지 않는다)와 보호 기간의 guard 를 순위대로 세우고, 밀린(`displacerOf`)
  * 고유 후보 가운데
  *  - prec 7 **축일**(`minor_feast` · `transferable` 아님)은 옮기지 않고 그날 `commemorated`(→ R-6.1-prec7-omit —

@@ -1261,7 +1261,7 @@ const B1_TABLES = {
         transfer_to: "commemorate_only", color: null }),
     TMP("t-family", "가정주일", { kind: "nth_sunday", month: 5, nth: 2 }, { coord_name: null, type: "sunday", rank: null, precedence: null, color: null }),
     // temporal 기념일 — 평일에 떨어지는 합성 행(E+17 = 부활 3주 수요일, 보호 기간 밖). 지정 자격 판별을
-    // kind(성인력 행)로 좁히면 7 이 격자 평일 8 보다 앞서 실패한다(설계서 §7 B1 행 · C-6.1-12 — #340)
+    // kind(성인력 행)로 좁히면 7 이 격자 평일 8 보다 앞서 실패한다(설계서 §7 B1 항목 · C-6.1-12 — #340)
     TMP("t-memorial", "합성 temporal 기념일", { kind: "easter_offset", days: 17 },
       { coord_name: null, season: "easter", type: "feast", rank: "commemoration", precedence: 7, color: null }),
     TMP("t-ember-summer", "하계재", { kind: "ember_wfs", anchor: { kind: "easter_offset", days: 49 } },
