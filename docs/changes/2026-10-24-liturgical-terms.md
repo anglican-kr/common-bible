@@ -1,4 +1,5 @@
 ---
+pr: 409
 date: 2026-10-24
 branch: docs/liturgical-terms
 title: "docs: 교회력 용어를 전례일, 지정 전례일, 이동 계산으로 바꿈"
