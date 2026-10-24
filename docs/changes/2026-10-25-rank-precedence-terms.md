@@ -1,4 +1,5 @@
 ---
+pr: 417
 date: 2026-10-25
 branch: docs/rank-precedence-terms
 title: "docs: 품계와 동률을 등급, 우선순위, 같은 순위로 바꿈"
