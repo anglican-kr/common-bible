@@ -1,4 +1,5 @@
 ---
+pr: 415
 date: 2026-10-24
 branch: docs/split-engine-design
 title: "docs: 교회력 설계서를 장마다 파일로 나눔"
