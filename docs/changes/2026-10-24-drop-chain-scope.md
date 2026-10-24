@@ -1,4 +1,5 @@
 ---
+pr: 403
 date: 2026-10-24
 branch: refactor/drop-chain-scope
 title: "refactor: 연쇄 범위 규칙을 뺌"
