@@ -144,7 +144,7 @@ jobs:
 ## 결과
 
 - Phase 2f Bugbot 6차 리뷰의 핵심 회귀 시나리오를, 결과가 늘 같은 테스트로 고정했다(ADR-011 Phase 2f 후속 정제 절 참고).
-- e2e(`tests/e2e/`)는 그대로 둔다. 통합 흐름, UI, 접근성 검증은 e2e가 맡고, 유닛은 분기와 계약을 맡는다.
+- e2e(`tests/e2e/`)는 그대로 둔다. 통합 흐름, UI, 접근성 검증은 e2e가 맡고, 유닛은 분기와 계약(함수가 호출하는 쪽에 지키기로 한 약속. 무엇을 받아 무엇을 돌려주는지)을 맡는다.
 - 다음 단계였던 `js/sync/store-v2.js`(mergeDocs, sweepTombstones)와 `js/sync/transport.js`(consumeRedirectCallback nonce 검증)에도 그 뒤 적용했다.
 
 ## 관련 ADR

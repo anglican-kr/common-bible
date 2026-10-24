@@ -17,12 +17,12 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { checkIds, issueNumbers, rMarkerDefs, sectionList } from "./docs-anchors.js";
+import { checkIds, designFiles, issueNumbers, readJoined, rMarkerDefs, sectionList } from "./docs-anchors.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "../..");
 const FIX = path.join(ROOT, "tests", "fixtures", "liturgical");
-const DESIGN = fs.readFileSync(path.join(ROOT, "docs/design/liturgical-engine.md"), "utf8");
+const DESIGN = readJoined(ROOT, designFiles(ROOT)).text; // 목차와 장 파일을 이은 설계서 전체
 const REVIEW = fs.readFileSync(path.join(ROOT, "docs/design/liturgical-engine-review.md"), "utf8");
 
 const FILES = {

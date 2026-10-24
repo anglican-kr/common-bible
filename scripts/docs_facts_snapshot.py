@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """교회력 설계 문서의 「사실 토큰」 스냅샷 · 비교 — 리팩터링이 사실을 지우지 않았음을 증명한다.
 
-대상: 설계서 · 검토 문서 · ADR-036/037/038 + docs/archive/design/liturgical-engine-*.md(점-시점 보관 문서 —
-설계서에서 옮겨 간 관찰 서술) + tests/fixtures/liturgical/*.json (JSON 문자열 값).
+대상: 설계서(목차 docs/design/liturgical-engine.md + 장 파일 docs/design/liturgical-engine/*.md) · 검토 문서 ·
+ADR-036/037/038 + docs/archive/design/liturgical-engine-*.md(점-시점 보관 문서 — 설계서에서 옮겨 간 관찰 서술) +
+tests/fixtures/liturgical/*.json (JSON 문자열 값).
 문서에서 날짜 · 월일 · 건수 · 전례일 id · precedence · transfer_to 값 · 전례색 · 미결 번호 · §번호 ·
-C-/X-/I-/Q/R id · 픽스처 id · PR 번호를 뽑아 문서별·합집합으로 센다. 보관 문서와 픽스처는 리비전마다 목록을
+C-/X-/I-/Q/R id · 픽스처 id · PR 번호를 뽑아 문서별·합집합으로 센다. 설계서의 장 파일, 보관 문서, 픽스처는 리비전마다 목록을
 구해(`git ls-tree`) 아직 없는 리비전에서는 비어 있는 것으로 본다 — 사실을 그리로 **옮기는** 변경이 사라짐으로
 잡히지 않게.
 
@@ -64,6 +65,8 @@ DOCS = [
     "docs/decisions/038-calendar-lectionary-ui.md",
 ]
 FIXTURE_DIR = "tests/fixtures/liturgical"
+# 설계서의 장 파일(2026-10-24 장마다 나눔). 목차는 위 DOCS 의 첫 줄이다. 장 파일이 없는 옛 리비전은 빈 목록이다.
+DESIGN_DIR = "docs/design/liturgical-engine"
 # 설계서 §9 에서 옮겨 간 책자·달력 대조 서술의 보관처(점-시점 기록). 사실 토큰은 여기서도 센다 — 문서로 취급(픽스처 아님).
 ARCHIVE_DIR, ARCHIVE_PREFIX = "docs/archive/design", "liturgical-engine-"
 
@@ -162,6 +165,10 @@ def list_archives(rev: str) -> list[str]:
     return list_dir(rev, ARCHIVE_DIR, lambda n: n.startswith(ARCHIVE_PREFIX) and n.endswith(".md"))
 
 
+def list_design_chapters(rev: str) -> list[str]:
+    return list_dir(rev, DESIGN_DIR, lambda n: re.fullmatch(r"\d{2}-[a-z0-9-]+\.md", n) is not None)
+
+
 def json_strings(node) -> list[str]:
     """JSON 트리의 문자열 값 전부(키 제외)."""
     out: list[str] = []
@@ -218,7 +225,7 @@ def snapshot(rev: str, globs: list[str] | None = None,
         doc_paths = [p for p in picked if not p.endswith(".json")]
         json_paths = [p for p in picked if p.endswith(".json")]
     else:
-        doc_paths, json_paths = DOCS + list_archives(rev), list_fixtures(rev)
+        doc_paths, json_paths = DOCS + list_design_chapters(rev) + list_archives(rev), list_fixtures(rev)
     files: dict[str, dict[str, dict[str, int]]] = {}
     union: dict[str, Counter] = defaultdict(Counter)
     for path in doc_paths:

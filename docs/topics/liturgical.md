@@ -2,7 +2,7 @@
 
 소유 코드: `js/app/calendar.js`, `js/app/lectionary.js`, `js/app/liturgical-engine.js`
 
-교회력 엔진, 전례독서 화면(`/lectionary`), 캘린더 탭(`/calendar`)을 다룬다. 알고리즘과 도메인 규칙의 기준은 설계서 `docs/design/liturgical-engine.md`(§1.4 기준 지도부터 읽는다)다. 기도서 원문은 `docs/reference/liturgical-calendar-rules.md`, 실제 연도의 기대값은 `tests/fixtures/liturgical/`에 있다. 이 문서는 지금 동작, 사용자 결정의 기록, 남은 일을 모은다.
+교회력 엔진, 전례독서 화면(`/lectionary`), 캘린더 탭(`/calendar`)을 다룬다. 알고리즘과 도메인 규칙의 기준은 설계서다. 설계서는 장마다 파일을 두었고(`docs/design/liturgical-engine/`), 목차는 `docs/design/liturgical-engine.md`다. §1.4 기준 지도가 있는 `01-overview.md`부터 읽는다. 기도서 원문은 `docs/reference/liturgical-calendar-rules.md`, 실제 연도의 기대값은 `tests/fixtures/liturgical/`에 있다. 이 문서는 지금 동작, 사용자 결정의 기록, 남은 일을 모은다.
 
 이 문서에 자주 나오는 엔진 용어는 다음과 같다. 자세한 정의는 설계서에 있다.
 
@@ -158,7 +158,7 @@
   - **이 단계에서는 아직 앱에서 쓰지 않았다.** 이 표를 읽는 교회력 엔진(A1)이 다음 단계였다.
 - **교회력 정의 표와 분류(품계, 전례색)** (2026-07-27, ADR-036 D4·D5).
   - 손입력 표 6종(`calendar/*.md`: 성인력 149행, 이동 축일 24행, 기간, 성인 공통 8분류, 본당 156, 교구 3)을 파서 5종이 `lectionary/{sanctoral,temporal-feasts,periods,local-observances,kasi-lunar}.json`으로 만든다.
-  - **이 표가 엔진이 "그날이 무슨 날인가"를 정하는 권위다.** 본기도와 독서는 이름이나 좌표로 조인하는 본문 테이블이다.
+  - **이 표가 엔진이 "그날이 어떤 전례일인가"를 정하는 권위다.** 본기도와 독서는 이름이나 좌표로 조인하는 본문 테이블이다.
   - 이동 축일의 규칙 문자열(`easter-46`, `nearest_sunday 11.30`)은 **빌드할 때 1회** 구조화 객체로 풀어, 앱 엔진이 문법을 다시 파싱하지 않는다.
   - **본기도 분류 필드 7종을 채웠다**(ADR-036 §6·§8 2차). **당시** 334건 가운데 품계 미해소 5와 전례색 미해소 2만 사용자 확인 대상으로 남겼고, **2026-09-01 현재 327건 가운데 3과 1**이다(아래 세 항목).
     - 이름일은 표가 기준이고, 격자일만 좌표에서 파생한다. 품계와 전례색은 서로 다른 축으로 다룬다. 등급 칸이 비어도 색은 채워질 수 있다(성 목요일).

@@ -8,7 +8,7 @@
 - 검토 기준: 설계서 커밋 `216b0bc`(7차 리뷰 — 떠난 후순위 후보 제외, displacer 실제 후보 우선, `isFree` 활성화 출발 제외, 좌석 경합 우선순위), data 서브모듈 `47734d3`
 - **채택 반영**: 본 문서 §3.1 의 기간 축은 설계서 §4.10 으로, 본 문서 §3.3 의 범주 사다리는 R-6.2-tie-ladder 로 2026-09-13 에 반영됐다(각 표의 「반영 위치」 열), 부록 B 의 픽스처는 2026-09-20 `tests/fixtures/liturgical/` 로
 - 대상: [`liturgical-engine.md`](liturgical-engine.md) §4·§5·§6·§7·§9
-- 관련 ADR: ADR-036(품계·이동·전례색 규칙표), ADR-037 §6(엔진 계약), ADR-038(소비 UI), ADR-013(유닛 하네스)
+- 관련 ADR: ADR-036(품계·이동·전례색 규칙표), ADR-037 §6(엔진 계약. 엔진이 호출하는 쪽에 지키기로 한 약속으로, 무엇을 받아 무엇을 돌려주는지 정한다), ADR-038(소비 UI), ADR-013(유닛 하네스)
 - 기도서 원문: [`../reference/liturgical-calendar-rules.md`](../reference/liturgical-calendar-rules.md)
 
 ---
