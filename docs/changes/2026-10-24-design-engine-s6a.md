@@ -1,5 +1,6 @@
 ---
 pr:
+pr: 408
 date: 2026-10-24
 branch: docs/design-engine-s6a
 title: "docs: 교회력 설계서 §6.1-§6.4 고쳐 쓰기와 내용 검증"
