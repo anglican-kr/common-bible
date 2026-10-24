@@ -372,7 +372,7 @@
       "id": "A-2071-06-01-visitation-ascension-activated",
       "kind": "activation",
       "group": "⑦",
-      "title": "활성화 — 승천을 켠 해 5.31 성모 방문이 부활 7주일이면 승천과 주일에 함께 밀려 6.1 로 간다 — 그날 저스틴은 생략",
+      "title": "활성화 — 승천을 켠 해 5.31 성모 방문이 부활 7주일이면 승천과 주일에 함께 밀려 6.1 로 간다 — 그날 저스틴은 기념",
       "status": "confirmed",
       "activated": ["t-승천대축일"],
       "canon": ["R-6.2-chain-scope", "R-6.2-destinations"],
@@ -383,7 +383,7 @@
       "assertions": [
         { "date": "2071-06-01", "expect": { "id": "d0531-성모-방문", "status": "transferred_in", "from": "2071-05-31", "displacedBy": "t-승천대축일" } },
         { "date": "2071-06-01", "expect": { "official": "d0531-성모-방문", "color": "white" } },
-        { "date": "2071-06-01", "expect": { "id": "d0601-저스틴", "status": "omitted", "displacedBy": "d0531-성모-방문" } },
+        { "date": "2071-06-01", "expect": { "id": "d0601-저스틴", "status": "commemorated", "displacedBy": "d0531-성모-방문" } },
         { "date": "2071-05-31", "expect": { "official": "t-승천대축일" } },
         { "date": "2071-05-31", "expect": { "id": "d0531-성모-방문", "status": "transferred_out", "to": "2071-06-01" } }
       ]

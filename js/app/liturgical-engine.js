@@ -1292,10 +1292,12 @@ function displacerOf(ranked, c, staying) {
  * 승자와 재분류(§5.5 status 표 · R-6.2-conflict-steps). 그날 남아 있는 후보(`proper` · `transferred_in` —
  * 떠난 것과 선택 봉헌은 순위에 들지 않는다)와 보호 기간의 guard 를 순위대로 세우고, 밀린(`displacerOf`)
  * 고유 후보 가운데
- *  - prec 7 **축일**(`minor_feast` · `transferable` 아님)은 `omitted`(→ R-6.1-prec7-omit — guard 도 밀어낸다:
- *    성주간 · 부활 8일의 prec 7 은 생략, → R-6.3-holy-week-guard). `transferable` 인 축일 셋도 보호 기간 안에서
- *    그날에 남았으면 `omitted` 다 — guard 에만 밀렸거나(이동 패스는 guard 를 보지 않는다) 도착에만 밀려 패스가
- *    옮기지 않았어도 그 기간의 prec 7 은 생략이다(그 셋의 날짜는 보호 기간에 들지 않아 실데이터에는 없다),
+ *  - prec 7 **축일**(`minor_feast` · `transferable` 아님)은 옮기지 않고 그날 `commemorated`(→ R-6.1-prec7-omit —
+ *    기도서 「지켜야 한다면 기념한다」와 책자가 그 주일에 이름을 적는 관행, 사용자 결정 2026-10-24). 보호 기간
+ *    (성주간 · 부활 8일)에서만 `omitted` 다 — guard 도 밀어낸다(→ R-6.3-holy-week-guard). `transferable` 인 축일
+ *    셋도 보호 기간 안에서 그날에 남았으면 `omitted` 다 — guard 에만 밀렸거나(이동 패스는 guard 를 보지 않는다)
+ *    도착에만 밀려 패스가 옮기지 않았어도 그 기간의 prec 7 은 생략이다(그 셋의 날짜는 보호 기간에 들지 않아
+ *    실데이터에는 없다),
  *  - `commemorate_only`(추수감사주일)는 `commemorated`,
  *  - 도착에**만** 밀렸고 연쇄 대상이 아닌 옮길 수 있는 축일(안나와 요아킴 ← 야고보, → R-6.2-chain-scope —
  *    `staysOnArrival`)도 `commemorated` — 셋 다 `displacedBy` 를 싣는다.
@@ -1325,11 +1327,13 @@ function settle(dateStr, cands) {
     if (!by) continue;
     // 옮길 수 있는 축일이 proper 로 남았으면 패스가 옮기지 않은 것이다 — 보호 기간 안이면 무엇에 밀렸든 생략(그
     // 기간의 prec 7 은 생략 — 밀어낸 것이 도착이어도), 밖에서는 도착에만 밀렸거나(아래 stayed) 이동 상한(`defects`)이다
-    const omit = minor && (o.transferable !== true || inSpan(dateStr, "transferGuard"));
+    const omit = minor && inSpan(dateStr, "transferGuard");
+    // 보호 기간 밖에서 밀린 축일(옮길 수 없는 prec 7)은 그날 기념한다(→ R-6.1-prec7-omit)
+    const kept = minor && !omit && o.transferable !== true;
     // 도착에만 밀렸고 연쇄 대상이 아닌 옮길 수 있는 축일(주요축일 · transferable 인 prec 7) — 패스가 일부러 옮기지
-    // 않았다(→ R-6.2-chain-scope): 그날 기념. 패스와 같은 함수로 판정한다. 옮길 수 없는 prec 7 은 위 omit 대로 생략이다
+    // 않았다(→ R-6.2-chain-scope): 그날 기념. 패스와 같은 함수로 판정한다. 옮길 수 없는 prec 7 은 위 kept 대로 기념이다
     const stayed = movable && staysOnArrival(ranked, c);
-    if (omit || commemorate || stayed) reclassified.set(c, { observance: o, status: omit ? "omitted" : "commemorated", displacedBy: by.observance.id });
+    if (omit || kept || commemorate || stayed) reclassified.set(c, { observance: o, status: omit ? "omitted" : "commemorated", displacedBy: by.observance.id });
   }
   const after = (/** @type {Candidate} */ c) => reclassified.get(c) || c;
   const official = ranked.map(after).find((c) =>

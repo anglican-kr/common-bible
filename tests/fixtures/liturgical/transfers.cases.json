@@ -48,13 +48,13 @@
       "issue": "미결16",
       "canon": ["R-6.1-prec7-omit", "R-6.2-destinations", "R-6.5-year-pass", "R-6.4-color-order", "설계서 §5.6"],
       "checks": ["C-6.5-4b", "C-6.5-4", "C-6.1-6", "X-5", "X-10"],
-      "source": ["서울교구 2026 달력 12월 면(사용자 제공 2026-09-17) — 12.7(월) [백] · 니콜라 · 암브로스 · 이사 58:8-12 · 시편 27 · 2고린 4:5-6 · 요한 12:35-47", "2026 책자"],
-      "note": "대림 2주일은 temporal 행이 없어 displacedBy 는 격자. 목적지 12.7 의 고유 후보는 암브로스(prec 7)·격자 평일(8)뿐이라 isFree ① 로 빈 날. 암브로스는 transferable: false 라 절차 ⑤ 로 옮기지 않고 omitted 로 후보에 남으며 departures 에 없다(뒤로 밀리지 않는다). 색은 대림 자색 위에 승자 백이 덮고 가드 밖. 이 한 날이 §6.1 C ∧ 절기 주일 · §6.2 next_day · §6.5 isFree ① · 절차 ⑤ 무이동 · §6.4 승자 색 · §5.6 기원 색인 여섯을 한꺼번에 확증한다. 달력이 암브로스 이름을 남긴 것은 「omitted 도 후보에 남는다」와 맞다.",
+      "source": ["서울교구 2026 달력 12월 면(사용자 제공 2026-09-17) — 12.7(월) [백] · 니콜라 · 암브로스 · 이사 58:8-12 · 시편 27 · 2고린 4:5-6 · 요한 12:35-47", "2026 책자", "기도서 31-37쪽 월별 축일 — 니콜라는 검정 고딕(주요축일 나), 사용자 결정 2026-10-24", "사용자 결정 2026-10-24 — 밀린 축일은 그날 기념한다(보호 기간에서만 생략)"],
+      "note": "대림 2주일은 temporal 행이 없어 displacedBy 는 격자. 목적지 12.7 의 고유 후보는 암브로스(prec 7)·격자 평일(8)뿐이라 isFree ① 로 빈 날. 암브로스는 transferable: false 라 절차 ⑤ 로 옮기지 않고 그날 commemorated 로 남으며 departures 에 없다(뒤로 밀리지 않는다). 색은 대림 자색 위에 승자 백이 덮고 가드 밖. 이 한 날이 §6.1 주요축일 ∧ 절기 주일 · §6.2 next_day · §6.5 isFree ① · 절차 ⑤ 무이동 · §6.4 승자 색 · §5.6 기원 색인 여섯을 한꺼번에 확증한다. 달력이 암브로스 이름을 남긴 것과 맞다. 니콜라의 등급은 C 에서 B 로 바뀌었지만(미결48) 둘 다 절기 주일에 밀려 옮기므로 결과는 같다.",
       "assertions": [
         { "date": "2026-12-07", "expect": { "official": "d1206-성-니콜라", "color": "white" } },
         { "date": "2026-12-07", "expect": { "id": "d1206-성-니콜라", "status": "transferred_in", "from": "2026-12-06", "displacedBy": "grid:advent-2-sunday" } },
         { "date": "2026-12-06", "expect": { "id": "d1206-성-니콜라", "status": "transferred_out", "to": "2026-12-07" } },
-        { "date": "2026-12-07", "expect": { "id": "d1207-암브로스", "status": "omitted", "displacedBy": "d1206-성-니콜라", "notInDepartures": true } },
+        { "date": "2026-12-07", "expect": { "id": "d1207-암브로스", "status": "commemorated", "displacedBy": "d1206-성-니콜라", "notInDepartures": true } },
         { "date": "2026-12-07", "expect": { "id": "grid:advent-2-weekday-mon", "status": "proper" } },
         { "date": "2026-12-07", "expect": { "id": "d1206-성-니콜라", "readings": { "origin": "12.06", "slots": ["이사 58:8-12", "시편 27", "2고린 4:5-6", "요한 12:35-47"] } } },
         { "date": "2026-12-07", "expect": { "id": "d1207-암브로스", "readings": { "common": "pastor" } } }
@@ -64,16 +64,16 @@
       "id": "T-2025-12-29-holy-innocents",
       "kind": "transfer",
       "group": "②",
-      "title": "성탄 3축일 연쇄 — 12.28 이 주일인 해: 어린이들 → 12.29, 토마스 베켓 생략",
+      "title": "성탄 3축일 연쇄 — 12.28 이 주일인 해: 어린이들 → 12.29, 토마스 베켓은 그날 기념",
       "status": "confirmed",
       "canon": ["R-6.2-chain-model", "R-6.1-prec7-omit"],
       "checks": ["C-6.5-2", "C-6.1-6", "X-2", "X-10"],
-      "source": ["lectionarypage 2025", "2026 책자 — 12.29 「죄 없는 아기들의 순교 / 토마스 베켓」: 어린이들 고유 독서, 베켓 이름 줄"],
+      "source": ["lectionarypage 2025", "2026 책자 — 12.29 「죄 없는 아기들의 순교 / 토마스 베켓」: 어린이들 고유 독서, 베켓 이름 줄", "사용자 결정 2026-10-24 — 밀린 축일은 그날 기념한다(보호 기간에서만 생략)"],
       "assertions": [
         { "date": "2025-12-29", "expect": { "id": "d1228-죄-없는-어린이들의-순교", "status": "transferred_in", "from": "2025-12-28", "displacedBy": "grid:christmas-1-sunday" } },
         { "date": "2025-12-28", "expect": { "id": "d1228-죄-없는-어린이들의-순교", "status": "transferred_out", "to": "2025-12-29" } },
         { "date": "2025-12-29", "expect": { "official": "d1228-죄-없는-어린이들의-순교" } },
-        { "date": "2025-12-29", "expect": { "id": "d1229-토마스-베켓", "status": "omitted", "displacedBy": "d1228-죄-없는-어린이들의-순교" } }
+        { "date": "2025-12-29", "expect": { "id": "d1229-토마스-베켓", "status": "commemorated", "displacedBy": "d1228-죄-없는-어린이들의-순교" } }
       ]
     },
     {
@@ -94,7 +94,7 @@
         { "date": "2026-12-29", "expect": { "id": "d1228-죄-없는-어린이들의-순교", "status": "transferred_in", "from": "2026-12-28", "displacedBy": "d1227-사도-성-요한" } },
         { "date": "2026-12-28", "expect": { "id": "d1228-죄-없는-어린이들의-순교", "status": "transferred_out", "to": "2026-12-29" } },
         { "date": "2026-12-29", "expect": { "official": "d1228-죄-없는-어린이들의-순교" } },
-        { "date": "2026-12-29", "expect": { "id": "d1229-토마스-베켓", "status": "omitted", "displacedBy": "d1228-죄-없는-어린이들의-순교" } }
+        { "date": "2026-12-29", "expect": { "id": "d1229-토마스-베켓", "status": "commemorated", "displacedBy": "d1228-죄-없는-어린이들의-순교" } }
       ]
     },
     {
@@ -113,7 +113,7 @@
         { "date": "2027-12-27", "expect": { "id": "d1226-성-스테파노", "status": "transferred_in", "from": "2027-12-26", "displacedBy": "grid:christmas-1-sunday" } },
         { "date": "2027-12-28", "expect": { "id": "d1227-사도-성-요한", "status": "transferred_in", "from": "2027-12-27", "displacedBy": "d1226-성-스테파노" } },
         { "date": "2027-12-29", "expect": { "id": "d1228-죄-없는-어린이들의-순교", "status": "transferred_in", "from": "2027-12-28", "displacedBy": "d1227-사도-성-요한" } },
-        { "date": "2027-12-29", "expect": { "id": "d1229-토마스-베켓", "status": "omitted", "displacedBy": "d1228-죄-없는-어린이들의-순교" } },
+        { "date": "2027-12-29", "expect": { "id": "d1229-토마스-베켓", "status": "commemorated", "displacedBy": "d1228-죄-없는-어린이들의-순교" } },
         { "date": "2027-12-29", "expect": { "official": "d1228-죄-없는-어린이들의-순교" } },
         { "date": "2027-12-29", "expect": { "id": "d1226-성-스테파노", "absent": true } }
       ]
@@ -150,32 +150,32 @@
       "id": "T-2026-07-27-anna-joachim",
       "kind": "transfer",
       "group": "③",
-      "title": "안나와 요아킴 7.26 → 7.27 — 연중 17주일에 밀림 (B 승격, 미결27)",
-      "status": "confirmed",
+      "title": "안나와 요아킴 7.26 = 연중 17주일 — 축일이라 옮기지 않고 그날 기념한다(2026 책자는 7.27 로 옮겼다, 미결27)",
+      "status": "provisional",
       "issue": "미결27",
-      "canon": ["R-6.2-destinations", "설계서 §5.6"],
-      "checks": ["C-6.5-4", "X-5", "X-10"],
-      "source": ["2026 책자 p.40 — 7.27(월) 「안나와 요아킴 (성모 마리아의 양친, 7월 26일에서 이동)」 + 고유 독서"],
-      "note": "2026-09-19 사용자 확정으로 데이터 등급을 축일 → 주요축일B(prec 6 · transferable · next_day)로 고쳐 이동 목록에 들었다(minor_feast 96 → 95).",
+      "canon": ["R-6.1-prec7-omit", "설계서 §5.6"],
+      "checks": ["C-6.1-6", "X-5", "X-10"],
+      "source": ["기도서 34쪽 월별 축일 — 안나와 요아킴은 검정 바탕체(축일), 사용자 결정 2026-10-24", "2026 책자 p.40 — 7.27(월) 「안나와 요아킴 (성모 마리아의 양친, 7월 26일에서 이동)」 + 고유 독서 — 이 케이스와 다르다"],
+      "note": "2026-09-19 에 책자를 따라 주요축일B 로 올렸던 등급을 2026-10-24 기도서 월별 축일대로 축일로 되돌렸다(사용자 결정, 사제 확인 대기 — 미결27). 축일은 주일에 밀려도 옮기지 않고 그날 기념하므로 7.27 은 평일이다. 미결27 이 책자 쪽으로 닫히면 등급을 다시 주요축일B 로 올리고, 이 케이스는 7.27 transferred_in · 7.26 transferred_out(옛 기대값)으로 돌아간다.",
       "assertions": [
-        { "date": "2026-07-27", "expect": { "official": "d0726-안나와-요아킴" } },
-        { "date": "2026-07-27", "expect": { "id": "d0726-안나와-요아킴", "status": "transferred_in", "from": "2026-07-26", "displacedBy": "grid:ordinary-17-sunday" } },
-        { "date": "2026-07-26", "expect": { "id": "d0726-안나와-요아킴", "status": "transferred_out", "to": "2026-07-27" } },
-        { "date": "2026-07-27", "expect": { "id": "d0726-안나와-요아킴", "readings": { "origin": "07.26", "slots": ["즈가 2:10-13", "시편 127", "로마 8:28-30", "마태 13:16-17"] } } }
+        { "date": "2026-07-27", "expect": { "id": "d0726-안나와-요아킴", "absent": true } },
+        { "date": "2026-07-26", "expect": { "official": "grid:ordinary-17-sunday" } },
+        { "date": "2026-07-26", "expect": { "id": "d0726-안나와-요아킴", "status": "commemorated", "displacedBy": "grid:ordinary-17-sunday", "notInDepartures": true } },
+        { "date": "2026-07-26", "expect": { "id": "d0726-안나와-요아킴", "readings": { "origin": "07.26", "slots": ["즈가 2:10-13", "시편 127", "로마 8:28-30", "마태 13:16-17"] } } }
       ]
     },
     {
       "id": "T-2027-07-26-anna-joachim-commemorated",
       "kind": "transfer",
       "group": "②",
-      "title": "야고보 7.25(연중 17주일) → 7.26 에 도착하면 안나와 요아킴은 옮기지 않고 그날 기념한다 — 연쇄는 사도 · 복음사가 · 성탄 8일의 순교 축일만(→ R-6.2-chain-scope)",
+      "title": "야고보 7.25(연중 17주일) → 7.26 에 도착하면 안나와 요아킴은 옮기지 않고 그날 기념한다 — 축일은 밀리면 기념(→ R-6.1-prec7-omit)",
       "status": "confirmed",
       "issue": "미결17",
-      "canon": ["R-6.2-chain-scope", "R-6.2-chain-model"],
-      "checks": ["C-6.5-20", "X-13"],
+      "canon": ["R-6.1-prec7-omit", "R-6.2-chain-scope", "R-6.2-chain-model"],
+      "checks": ["C-6.1-6", "C-6.5-20", "X-13"],
       "source": ["2027 책자(검토용) p.36 — 7.26(월) 「사도 장 야고보 (7/25에서 이동) · 안나와 요아킴」 홍, 독서는 야고보(예레 45:1-5 / 시편 126 / 사도 11:27-12:2 / 마태 20:20-28); 7.27 은 평일", "사용자 확정 2026-10-13 — 「그 자리에 다른 성인 축일이 있더라도 옮기지 않는다 … 그냥 기념하고 넘어가는 것처럼」"],
       "alsoYears": [2032, 2038, 2049],
-      "note": "T-2026-07-27-anna-joachim 과 짝 — 주일에 밀리면 월요일로 옮기지만(책자 2026) 도착에 밀리면 기념이다(책자 2027). 7.25 가 주일인 해는 12.26 도 주일이라 성탄 3축일 연쇄(T-2027-12-27-christmas-triad)와 같은 해에 온다.",
+      "note": "T-2026-07-27-anna-joachim 과 짝 — 안나와 요아킴은 기도서대로 축일이라(미결27) 주일에 밀려도 도착에 밀려도 그날 기념이다. 주요축일B 였을 때(2026-09-19 부터 10-24 까지)는 이 케이스가 R-6.2-chain-scope 의 유일한 실데이터 근거였다 — 지금은 축일 규칙으로 같은 결과가 나온다. 7.25 가 주일인 해는 12.26 도 주일이라 성탄 3축일 연쇄(T-2027-12-27-christmas-triad)와 같은 해에 온다.",
       "assertions": [
         { "date": "2027-07-26", "expect": { "id": "d0725-사도-성-장-야고보", "status": "transferred_in", "from": "2027-07-25", "displacedBy": "grid:ordinary-17-sunday" } },
         { "date": "2027-07-26", "expect": { "id": "d0726-안나와-요아킴", "status": "commemorated", "displacedBy": "d0725-사도-성-장-야고보" } },
@@ -226,13 +226,13 @@
       "checks": ["C-6.5-6", "C-6.5-8", "C-6.5-19", "I-5", "X-13"],
       "source": ["2027 책자(검토용) p.20 — 4.5(월) 「성모수태고지 (3/25에서 이동)」 백 + 고유 독서(이사 7:10-14 / 시편 40:5-10 / 히브 10:4-10 / 루가 1:26-38); 3.29 부활 월요일은 평일 독서", "사용자 결정 2026-10-13 — 책자대로(미결32 닫힘)"],
       "alsoYears": [2032],
-      "note": "3.26 성 금(prec 1) · 3.27 부활밤 · 3.28 부활대축일 · 4.4 부활 2주일까지 보호 기간이라 탐색은 4.5 부터다(11일 — 2032 도 같은 배치, 부활 3.28). 종전 잠정(다음 빈 날 = 3.29 부활 월요일, 사용자 결정 2026-10-11)은 2027 책자가 뒤집었다. 4.5 의 마틴 루터 킹(prec 7)은 도착에 밀려 생략 — 책자는 이름을 남긴다.",
+      "note": "3.26 성 금(prec 1) · 3.27 부활밤 · 3.28 부활대축일 · 4.4 부활 2주일까지 보호 기간이라 탐색은 4.5 부터다(11일 — 2032 도 같은 배치, 부활 3.28). 종전 잠정(다음 빈 날 = 3.29 부활 월요일, 사용자 결정 2026-10-11)은 2027 책자가 뒤집었다. 4.5 의 마틴 루터 킹은 기념일(기도서 월별 축일 이탤릭, 사용자 결정 2026-10-24)이라 밀리지 않고 이름 줄로 남는다 — 책자도 이름을 남긴다.",
       "assertions": [
         { "date": "2027-04-05", "expect": { "id": "d0325-성모수태고지", "status": "transferred_in", "from": "2027-03-25", "displacedBy": "t-성-목요일" } },
         { "date": "2027-03-29", "expect": { "id": "d0325-성모수태고지", "absent": true } },
         { "date": "2027-03-25", "expect": { "id": "d0325-성모수태고지", "status": "transferred_out", "to": "2027-04-05", "displacedBy": "t-성-목요일" } },
         { "date": "2027-04-05", "expect": { "official": "d0325-성모수태고지", "color": "white" } },
-        { "date": "2027-04-05", "expect": { "id": "d0405-마틴-루터-킹", "status": "omitted", "displacedBy": "d0325-성모수태고지" } },
+        { "date": "2027-04-05", "expect": { "id": "d0405-마틴-루터-킹", "status": "proper", "displacedBy": null } },
         { "date": "2027-04-05", "expect": { "id": "d0325-성모수태고지", "readings": { "origin": "03.25", "slots": ["이사 7:10-14", "시편 40:5-10", "히브 10:4-10", "루가 1:26-38"] } } }
       ]
     },
@@ -299,12 +299,12 @@
       "canon": ["R-6.3-holy-week-guard", "R-6.3-guard-destination", "R-6.5-year-pass"],
       "checks": ["C-6.5-5", "C-6.5-19"],
       "source": ["사용자 결정 2026-10-11 — 그날 지킨다(필립보와 야고보)", "사용자 결정 2026-10-13 — 보호 기간 안에서 밀리면 부활 2주 월요일부터(2027 책자)"],
-      "note": "id 의 5.3 은 미국 성공회 2011 과 같은 목적지가 됐다 — 다만 필립보와 야고보는 그날 지킨다(5.4 로 가지 않는다). 5.3 의 성 십자가 발견(prec 7)은 도착에 밀려 생략.",
+      "note": "id 의 5.3 은 미국 성공회 2011 과 같은 목적지가 됐다 — 다만 필립보와 야고보는 그날 지킨다(5.4 로 가지 않는다). 5.3 의 성 십자가 발견(prec 7)은 도착에 밀려 그날 기념한다(부활 2주 월요일은 보호 기간 밖).",
       "assertions": [
         { "date": "2038-05-03", "expect": { "id": "d0425-성-마르코", "status": "transferred_in", "from": "2038-04-25", "displacedBy": "t-부활대축일" } },
         { "date": "2038-04-26", "expect": { "id": "d0425-성-마르코", "absent": true } },
         { "date": "2038-05-03", "expect": { "official": "d0425-성-마르코", "color": "red" } },
-        { "date": "2038-05-03", "expect": { "id": "d0503-성-십자가-발견", "status": "omitted", "displacedBy": "d0425-성-마르코" } },
+        { "date": "2038-05-03", "expect": { "id": "d0503-성-십자가-발견", "status": "commemorated", "displacedBy": "d0425-성-마르코" } },
         { "date": "2038-05-01", "expect": { "id": "d0501-사도-성-필립보와-성-야고보", "status": "proper" } },
         { "date": "2038-05-01", "expect": { "official": "d0501-사도-성-필립보와-성-야고보", "color": "red" } },
         { "date": "2038-05-04", "expect": { "id": "d0501-사도-성-필립보와-성-야고보", "absent": true } }
@@ -433,16 +433,16 @@
       "id": "T-2025-09-15-holy-cross",
       "kind": "transfer",
       "group": "⑩",
-      "title": "성 십자가 9.14 → 9.15 — 연중 24주일; 같은 날 키프리안은 omitted (①b 암브로스와 같은 모양)",
+      "title": "성 십자가 9.14 → 9.15 — 연중 24주일; 같은 날 키프리안은 그날 기념 (①b 암브로스와 같은 모양)",
       "status": "confirmed",
       "issue": "미결16",
       "canon": ["R-6.2-destinations", "R-6.1-prec7-omit"],
       "checks": ["X-11", "C-6.5-4b"],
-      "source": ["2025 책자 — 9.15 [백/홍] + 키프리안 이름 줄"],
+      "source": ["2025 책자 — 9.15 [백/홍] + 키프리안 이름 줄", "사용자 결정 2026-10-24 — 밀린 축일은 그날 기념한다(보호 기간에서만 생략)"],
       "note": "책자 색은 [백/홍] 병기 — 사계재 밖 평일의 병기는 세우지 않으므로(→ R-6.4-ember-color) 색은 단언하지 않는다.",
       "assertions": [
         { "date": "2025-09-15", "expect": { "id": "d0914-성-십자가의-날", "status": "transferred_in", "from": "2025-09-14", "displacedBy": "grid:ordinary-24-sunday" } },
-        { "date": "2025-09-15", "expect": { "id": "d0915-키프리안", "status": "omitted", "displacedBy": "d0914-성-십자가의-날" } }
+        { "date": "2025-09-15", "expect": { "id": "d0915-키프리안", "status": "commemorated", "displacedBy": "d0914-성-십자가의-날" } }
       ]
     },
     {
