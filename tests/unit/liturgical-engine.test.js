@@ -1226,7 +1226,7 @@ const B1_TABLES = {
     SAN("d0815-minor", "08.15", "합성 광복절"),
     SAN("d0330-minor", "03.30", "합성 성주간 축일"),
     SAN("d0402-minor", "04.02", "합성 성 목요일 축일"),
-    SAN("d0408-minor", "04.08", "합성 부활 8일 축일"),
+    SAN("d0408-minor", "04.08", "합성 부활 8일 순교 축일", { color: "red" }),
     // prec 7 동률 — 고유 본기도가 있는 쪽 먼저, 같으면 id(C-6.1-9)
     SAN("d0301-samil", "03.01", "삼일절", { has_proper: true, color: "red" }),
     SAN("d0301-david", "03.01", "데이빗", { has_proper: false }),
@@ -1372,17 +1372,19 @@ test("C-6.1-6 prec 7 축일은 그날 기념 — 가변인 상위에 밀리면 c
   same(fate(arr, "d0617-martyr"), ["commemorated", "d1130-andrew"]);
 });
 
-test("R-6.3-holy-week-guard 보호 기간의 prec 7 은 생략 — guard 는 실제 후보가 없을 때만 displacedBy, 승자는 되지 않는다", () => {
+test("R-6.3-holy-week-guard 성주간의 prec 7 은 생략 — guard 는 실제 후보가 없을 때만 displacedBy, 승자는 되지 않는다 · 부활 8일 평일의 축일은 그날의 대표", () => {
   const mon = rb("2026-03-30");   // 성주간 월요일
-  same(fate(mon, "d0330-minor"), ["omitted", "guard:easter-octave"]);
+  same(fate(mon, "d0330-minor"), ["omitted", "guard:holy-week"]);
   same(officialId(mon), "grid:lent-x-weekday-mon");
   assert.ok(!mon.candidates.some((c) => c.observance.id.startsWith("guard:")));   // 후보로 내지 않는다
   const thu = rb("2026-04-02");   // 성 목요일 — 실제 후보가 guard 보다 앞
   same(fate(thu, "d0402-minor"), ["omitted", "t-maundy"]);
   same(officialId(thu), "t-maundy");
-  same(fate(rb("2026-04-08"), "d0408-minor"), ["omitted", "guard:easter-octave"]);   // 부활 8일
-  same(ctx.guardCandidates("2026-04-13").length, 0);   // 부활 2주일 다음 날부터 밖
-  same(ctx.guardCandidates("2026-04-12").map((c) => c.observance.id), ["guard:easter-octave"]);
+  // 부활 8일 평일의 축일은 생략하지 않는다 — 그날의 대표이고 그 성인의 색이다(책자 2025-04-23 조오지 [홍], 사용자 결정 2026-10-24)
+  const wed = rb("2026-04-08");
+  same([fate(wed, "d0408-minor"), officialId(wed), wed.color], [["proper", null], "d0408-minor", "red"]);
+  same(ctx.guardCandidates("2026-04-05").length, 0);   // 부활대축일부터 밖 — guard 는 성주간(성지주일 ~ 성 토요일)뿐이다
+  same(ctx.guardCandidates("2026-04-04").map((c) => c.observance.id), ["guard:holy-week"]);
 });
 
 test("C-6.1-7 · C-2-1 precedence null 은 정렬 최하위 · 승자가 아니다 — 주일 이름 줄(가정주일)은 그날 주일이 대표, 성 토요일은 prec 1 로 그날의 대표(부활밤은 저녁 전례)", () => {
@@ -1645,7 +1647,7 @@ test("R-6.3-holy-week-guard 이동 패스 — 보호 기간은 주요축일을 �
   }
   // 옮길 수 있는 축일(prec 7)은 패스가 옮기지 않고 guard 가 생략시킨다(→ R-6.1-prec7-omit)
   const tue = t.at("2026-03-31");
-  same([fate(tue, "d0331-movable-minor"), officialId(tue), tue.color], [["omitted", "guard:easter-octave"], "grid:lent-x-weekday-tue", "red"]);
+  same([fate(tue, "d0331-movable-minor"), officialId(tue), tue.color], [["omitted", "guard:holy-week"], "grid:lent-x-weekday-tue", "red"]);
   // 성 토요일은 성 토요일 행(prec 1)이 민다 — 부활밤은 저녁 전례라 이동 판정에 들지 않는다(사용자 결정 2026-10-15 「성 토요일은
   // 부활밤에 밀리지 않아」, R-6.1-evening). 목적지는 역시 보호 기간 뒤 4.13
   const sat = passEngine(passTables([MOV("d0404-x", "04.04")], HOLY_WEEK_ROWS));

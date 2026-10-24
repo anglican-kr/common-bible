@@ -1158,23 +1158,23 @@ function ownObservancesOn(index, dateStr) {
 
 // ── §6.1 · §6.2 품계 사다리 · 승자 · 재분류 (B1) ──
 
-/** 보호 기간의 합성 점유자 id(§6.5 `guard`) — 표에 없고 후보로 내지 않는다. */
-const GUARD_ID = GUARD_PREFIX + "easter-octave";
+/** 성주간의 합성 점유자 id(§6.5 `guard`) — 표에 없고 후보로 내지 않는다. */
+const GUARD_ID = GUARD_PREFIX + "holy-week";
 
 /**
- * 보호 기간(성지주일 ~ 부활 2주일 — `spansOf().transferGuard`, §4.10)의 가상 점유자. 그 안의 날에는
- * 유효 precedence 1 · `transferable: false` 인 합성 후보 하나, 밖의 날에는 빈 배열이다. 승자 · 재분류
- * (`settle`)의 순위에만 들어가 그 기간의 prec 7 축일을 생략시킨다 — 이동 패스는 보지 않는다(주요축일은
- * 그날 지키고 그날의 대축일 · 주일에 질 때만 옮긴다, → R-6.3-holy-week-guard). 그날의 후보(§5.5 출처
- * ①~⑤)로는 내지 않는다 — 뷰에 보이지 않는다.
+ * 성주간(성지주일 ~ 성 토요일 — `spansOf().holyWeek`, §4.10)의 가상 점유자. 그 안의 날에는 유효
+ * precedence 1 · `transferable: false` 인 합성 후보 하나, 밖의 날에는 빈 배열이다. 승자 · 재분류
+ * (`settle`)의 순위에만 들어가 성주간의 prec 7 축일을 생략시킨다 — 부활 8일의 평일 축일은 그날 지킨다(책자,
+ * 사용자 결정 2026-10-24 → R-6.3-holy-week-guard). 이동 패스는 이것을 보지 않는다(주요축일은 그날 지키고
+ * 그날의 대축일 · 주일에 질 때만 옮긴다). 그날의 후보(§5.5 출처 ①~⑤)로는 내지 않는다 — 뷰에 보이지 않는다.
  * @param {string} dateStr
  * @returns {Candidate[]}
  */
 function guardCandidates(dateStr) {
-  if (!inSpan(dateStr, "transferGuard")) return [];
+  if (!inSpan(dateStr, "holyWeek")) return [];
   return [{
     observance: {
-      id: GUARD_ID, kind: "temporal", name: "성주간·부활 8일", aliases: null,
+      id: GUARD_ID, kind: "temporal", name: "성주간", aliases: null,
       rank: null, precedence: 1, transferable: false, transfer_to: null, color: null, color_alt: null,
     },
     status: "proper",
@@ -1293,10 +1293,11 @@ function displacerOf(ranked, c, staying) {
  * 떠난 것과 선택 봉헌은 순위에 들지 않는다)와 보호 기간의 guard 를 순위대로 세우고, 밀린(`displacerOf`)
  * 고유 후보 가운데
  *  - prec 7 **축일**(`minor_feast` · `transferable` 아님)은 옮기지 않고 그날 `commemorated`(→ R-6.1-prec7-omit —
- *    기도서 「지켜야 한다면 기념한다」와 책자가 그 주일에 이름을 적는 관행, 사용자 결정 2026-10-24). 보호 기간
- *    (성주간 · 부활 8일)에서만 `omitted` 다 — guard 도 밀어낸다(→ R-6.3-holy-week-guard). `transferable` 인 축일
- *    셋도 보호 기간 안에서 그날에 남았으면 `omitted` 다 — guard 에만 밀려 이동 패스가 옮기지 않았어도(패스는
- *    guard 를 보지 않는다) 그 기간의 prec 7 은 생략이다(그 셋의 날짜는 보호 기간에 들지 않아 실데이터에는 없다),
+ *    기도서 「지켜야 한다면 기념한다」와 책자가 그 주일에 이름을 적는 관행, 사용자 결정 2026-10-24). 성주간에서만
+ *    `omitted` 다 — guard 도 밀어낸다(→ R-6.3-holy-week-guard). 부활 8일의 평일에는 밀리지 않아 그날의 대표다(책자는
+ *    그 성인의 색, 독서는 그날 평일 것 — 사용자 결정 2026-10-24). `transferable` 인 축일 셋도 성주간에 그날 남았으면
+ *    `omitted` 다 — guard 에만 밀려 이동 패스가 옮기지 않았어도(패스는 guard 를 보지 않는다) 성주간의 prec 7 은
+ *    생략이다(그 셋의 날짜는 성주간에 들지 않아 실데이터에는 없다),
  *  - `commemorate_only`(추수감사주일)는 `commemorated` — 둘 다 `displacedBy` 를 싣는다.
  * 나머지는 그대로다 — 격자, 지향 · 이름 줄, `precedence: null`, `transferable: false` 인 상위 축일, 동시
  * 봉헌에서 진 쪽, 이동 상한을 넘겨 옮기지 못한 축일(`defects` — §6.5). 옮겨진 축일은 이동 패스가 이미
@@ -1321,10 +1322,10 @@ function settle(dateStr, cands) {
     if (!minor && !commemorate) continue;   // 옮길 수 있는 주요축일은 밀리면 이동 패스가 이미 옮겼다
     const by = displacerOf(ranked, c);
     if (!by) continue;
-    // 옮길 수 있는 축일이 proper 로 남았으면 패스가 옮기지 않은 것이다 — 보호 기간 안이면 guard 에만 밀린 것이라 생략(그
-    // 기간의 prec 7 은 생략), 밖에서는 이동 상한(`defects`)이다
-    const omit = minor && inSpan(dateStr, "transferGuard");
-    // 보호 기간 밖에서 밀린 축일(옮길 수 없는 prec 7)은 그날 기념한다(→ R-6.1-prec7-omit)
+    // 옮길 수 있는 축일이 proper 로 남았으면 패스가 옮기지 않은 것이다 — 성주간이면 guard 에만 밀린 것이라 생략(성주간의
+    // prec 7 은 생략), 밖에서는 이동 상한(`defects`)이다
+    const omit = minor && inSpan(dateStr, "holyWeek");
+    // 성주간 밖에서 밀린 축일(옮길 수 없는 prec 7)은 그날 기념한다(→ R-6.1-prec7-omit) — 부활대축일 · 부활 2주일에 걸린 것도
     const kept = minor && !omit && o.transferable !== true;
     if (omit || kept || commemorate) reclassified.set(c, { observance: o, status: omit ? "omitted" : "commemorated", displacedBy: by.observance.id });
   }
@@ -1554,8 +1555,8 @@ function isEmber(/** @type {Observance} */ obs) {
 /**
  * 그날의 색(→ R-6.4-color-order): 절기 기본색(격자 관측일의 색)을 깔고 → 승자 관측일의 색이 덮고 →
  * 성주간 · 부활 8일(`holyWeek` ∪ `easterOctave`, §4.10)에는 temporal 승자가 덮지 못한다(E−1 의 승자는 성 토요일
- * 행 — 부활밤은 저녁 전례라 색에 참여하지 않는다, → R-6.1-evening). 그날 지키는 성인력 축일(주요축일 — 제자리든 도착이든)이 이기면 그 축일 색이다
- * (→ R-6.3-holy-week-guard — 그 기간의 prec 7 축일은 생략되어 승자가 되지 않는다). 승자의 색이 비었으면
+ * 행 — 부활밤은 저녁 전례라 색에 참여하지 않는다, → R-6.1-evening). 그날 지키는 성인력 축일(주요축일 — 제자리든 도착이든,
+ * 부활 8일 평일의 축일)이 이기면 그 축일 색이다(→ R-6.3-holy-week-guard — 성주간의 prec 7 축일은 생략되어 승자가 되지 않는다). 승자의 색이 비었으면
  * (추수감사주일) 바탕이 남는다. 사계재 날은 **자**다(→ R-6.4-ember-color):
  * 바탕이 남으면(승자가 격자) 그날 색이 자이고, 축일이 덮으면 그 색이 대표로 남고 `colors` 에 자를 앞세워
  * 병기한다(책자의 [자/백] 순). `colors` 는 병기 목록이라 병기가 없는 날은 `[color]` 다. `omitted` ·

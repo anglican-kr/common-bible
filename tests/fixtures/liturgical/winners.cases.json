@@ -315,6 +315,24 @@
       ]
     },
     {
+      "id": "W-2025-04-23-george-easter-octave",
+      "kind": "winner",
+      "group": "⑩",
+      "title": "부활 8일 평일의 축일은 생략하지 않는다 — 조오지(부활 1주 수) official, 그 성인의 색 [홍], 격자 평일은 proper 로 남아 초기 독서(미결25)",
+      "status": "confirmed",
+      "issue": "미결46",
+      "canon": ["R-6.3-holy-week-guard", "R-6.4-color-order"],
+      "checks": ["C-6.1-6", "X-11"],
+      "source": ["2025 책자 — 4.23(수) [홍] 조오지 이름, 독서는 부활 1주 수요일(사도 3:1-10 / 시편 105:1-9 / 루가 24:13-35)", "2025 책자 — 4.21(월) [백] 안셀름 이름, 독서는 부활 1주 월요일", "사용자 결정 2026-10-24 — 부활 8일 평일의 축일 색은 책자대로"],
+      "note": "2026-10-24 까지는 부활 8일의 축일도 guard 가 생략시켜 그날 색이 백이었다. 지금 guard 는 성주간(성지주일 ~ 성 토요일)뿐이다 — 2027 책자는 성지주일의 토마스 크랜머를 싣지 않았다. 조오지와 안셀름은 고유 독서가 없어 화면은 그날 평일 독서를 먼저 보인다(뷰의 초기 선택 — 미결25).",
+      "assertions": [
+        { "date": "2025-04-23", "expect": { "official": "d0423-조오지", "color": "red", "grid": { "status": "proper" } } },
+        { "date": "2025-04-23", "expect": { "id": "d0423-조오지", "status": "proper", "displacedBy": null } },
+        { "date": "2025-04-21", "expect": { "official": "d0421-안셀름", "color": "white" } },
+        { "date": "2027-03-21", "expect": { "id": "d0321-토마스-크랜머", "status": "omitted", "displacedBy": "t-성지주일" } }
+      ]
+    },
+    {
       "id": "W-2026-05-03-finding-of-cross-on-sunday",
       "kind": "winner",
       "group": "⑩",

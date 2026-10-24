@@ -259,7 +259,7 @@ test("calendarDay: 옮겨 간 · 생략된 후보는 칸 이름이 되지 않고
   same(d.others, [{ name: "성 루가", title: "성 루가(복음사가)", suffix: " · → 10월 19일", away: true }]);
 
   const weekday = grid("ordinary-29-weekday-tue", "연중 29주 화요일");
-  const omitted = cand(obs("d1020-x", "어떤 성인(주교)", { rank: "minor_feast" }), "omitted", { displacedBy: "guard:easter-octave" });
+  const omitted = cand(obs("d1020-x", "어떤 성인(주교)", { rank: "minor_feast" }), "omitted", { displacedBy: "guard:holy-week" });
   const e = ctx.calendarDay("2026-10-20", resolvedOf("2026-10-20", [weekday, omitted]));
   assert.strictEqual(e.cellName, "");   // 생략된 축일은 그날의 이름이 아니다
   same(e.others.map((o) => [o.name, o.suffix, o.away]), [["어떤 성인", " · 생략", true]]);
