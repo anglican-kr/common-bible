@@ -9,7 +9,7 @@
 | 파일 | `kind` | 내용 |
 |---|---|---|
 | `transfers.cases.json` | `transfer` | 충돌 이동(실제 연도) — 도착·출발·연쇄·보호 기간·명절·동률 |
-| `optionals.cases.json` | `optional` · `activation` | 선택 봉헌 `optional` 후보와 활성화(`activated`) 계약 |
+| `optionals.cases.json` | `optional` · `activation` | 선택 봉헌 `optional` 후보와 활성화 계약(설정이 켠 축일을 엔진이 옮긴다는 약속, `activated`) |
 | `winners.cases.json` | `winner` | 지정 전례일(`official`)·전례색·지정 자격(사계재·기념일)·생략(`omitted`) |
 | `transfers-1900-2100.golden.txt` | — | **골든 덤프**(검토 문서 부록 A · I-10) — 1900~2100 이동 전부를 한 줄씩(`activated = ∅`). 손으로 쓰는 기대값이 아니라 엔진이 만든 회귀 기준이다 — `UPDATE_GOLDEN=1 node --test tests/unit/liturgical-engine.data.test.js` 로 다시 만들고 diff 를 PR 에서 읽는다. 머리줄의 data sha 는 기록용이라 비교하지 않는다. 기대값의 기준은 위 세 파일이다 |
 

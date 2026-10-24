@@ -417,7 +417,7 @@ Authorized JavaScript origins / scope 설정 변경 없음 → OAuth 검수 재�
 
 ## Phase 2f 후속 정제 (2026-05-06)
 
-(2026-05-06) PR #37 머지 직전·직후 Cursor Bugbot 6차 리뷰와 PR #40 추가 리뷰가 누적되며 Phase 2f의 보안·견고성 면을 후속 정제했다. 새로운 결정 사항은 없으나 동작 계약(contract)을 명시화한다.
+(2026-05-06) PR #37 머지 직전·직후 Cursor Bugbot 6차 리뷰와 PR #40 추가 리뷰가 누적되며 Phase 2f의 보안·견고성 면을 후속 정제했다. 새로운 결정 사항은 없으나 동작 계약(contract. 코드가 그것을 쓰는 쪽에 지키기로 한 동작의 약속)을 명시화한다.
 
 ### 보안 강화 (CSRF·재시도 통제)
 
