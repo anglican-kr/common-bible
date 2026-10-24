@@ -328,16 +328,16 @@ test("센티널 문자열은 기준 파일 한 곳에만 있다", { skip: GATES.
   // 기준 문장(R- 마커가 붙은 문장)에만 있어야 하는 조각 — 다른 곳에 또 나오면 사실이 두 번 적힌 것이다.
   // 인라인 코드 안의 인용(§1.4 의 ``` ```facts ```)은 세지 않는다. 조각을 고치면 기준 문장도 함께 고친다.
   const SENTINELS = [
-    { text: "02.14 발렌틴 ∧ 키릴", allow: ["설계서"], once: true },             // R-6.1-prec7-tie-pairs — 5쌍 목록의 첫 쌍
+    { text: "02.14 발렌틴과 키릴과 메토디우스", allow: ["설계서"], once: true }, // R-6.1-prec7-tie-pairs — 4쌍 목록의 첫 쌍
     { text: "유효 precedence 9", allow: ["설계서"], once: true },                // R-6.1-ineligible
     { text: "주의 세례 주일은 연중시기의 첫날이다", allow: ["설계서"], once: true }, // R-4.5-baptism-ordinary-1
     { text: "한 열에 담고 있다", allow: ["설계서"], once: true },               // R-6.2-destinations
     { text: "수요일까지 직전, 목요일부터 다음", allow: ["설계서"], once: true },  // R-6.2-nearby-sunday — 경계
-    { text: "lectionarypage.net 2025~2027", allow: ["설계서"], once: true },     // R-6.2-chain-model — 연쇄 모델의 근거
+    { text: "lectionarypage.net 2025-2027", allow: ["설계서"], once: true },     // R-6.2-chain-model — 연쇄 모델의 근거
     { text: "도착한 축일은 품계와 무관하게 자리를 지킨다", allow: ["설계서"], once: true }, // R-6.2-first-come
-    { text: "규칙일 유지 · 고정일 이동", allow: ["설계서"], once: true },        // R-6.2-rule-day-stays
+    { text: "규칙일은 남고 고정일이 옮긴다", allow: ["설계서"], once: true },    // R-6.2-rule-day-stays
     { text: "보호 기간은 주요축일을 밀지도 막지도 않는다", allow: ["설계서"], once: true }, // R-6.3-holy-week-guard(2026-10-11 책자대로)
-    { text: "절기 기본색을 깔고", allow: ["설계서"], once: true },               // R-6.4-color-order
+    { text: "절기 기본색을 깐다", allow: ["설계서"], once: true },               // R-6.4-color-order
     { text: "사계재 날의 색은 자다", allow: ["설계서"], once: true },            // R-6.4-ember-color(2026-10-10 미결26 닫힘 — 모델 (b))
     { text: "연도 캐시를 채울 때 한 번", allow: ["설계서"], once: true },        // R-6.5-year-pass
     { text: "```facts", allow: ["설계서"], once: true },                         // §5.2 실측 블록

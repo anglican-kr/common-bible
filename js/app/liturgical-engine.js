@@ -1490,7 +1490,8 @@ function computeTransfers(index, year, seed, activated) {
     // 도착이 하나라도 있으면 품계와 무관하게 찬 날(→ R-6.2-first-come)
     if ((arrivals.get(dest) || []).length || (next && (next.nextArrivals.get(dest) || []).length)) return false;
     // 그날의 고유 후보 가운데 c 보다 높은 것이 없다 — 같은 값은 c 가 민다(→ R-6.2-chain-model). 보호 기간은
-    // 막지 않는다 — 성 금요일 · 부활대축일 같은 실제 후보가 막고, 성 토요일은 부활밤(prec 1)이 막는다
+    // 막지 않는다 — 성 금요일 · 부활대축일 같은 실제 후보가 막고, 성 토요일은 성 토요일 행(prec 1)이 막는다(부활밤은
+    // 저녁 전례라 순위에 없다, → R-6.1-evening)
     const mine = effectivePrecedence(c.observance);
     return !ownAt(dest, next ? next.nextDepartures : departures).some((w) => effectivePrecedence(w.observance) < mine);
   };
@@ -1513,7 +1514,7 @@ function computeTransfers(index, year, seed, activated) {
   };
   for (let d = toKey(year, 1, 1); d.startsWith(head); d = shift(d, 1)) {
     if (d === afterGuard) {
-      // 서열 순(유효 precedence) — 같으면 밀린 순서 그대로(안정 정렬). 부활 3.26 인 해는 부활밤에 밀린 수태고지(prec 3)가
+      // 서열 순(유효 precedence) — 같으면 밀린 순서 그대로(안정 정렬). 부활 3.26 인 해는 성 토요일에 밀린 수태고지(prec 3)가
       // 먼저 밀린 요셉(prec 6)보다 먼저 4.3 에 앉는다(→ R-6.3-guard-order — 영국 Common Worship 의 요셉 규칙과 같다)
       held.sort((a, b) => {
         const pa = effectivePrecedence(a.c.observance);
