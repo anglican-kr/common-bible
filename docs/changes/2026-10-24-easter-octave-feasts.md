@@ -1,4 +1,5 @@
 ---
+pr: 404
 date: 2026-10-24
 branch: feat/easter-octave-feasts
 title: "feat: 부활 8일 평일의 축일을 책자대로 지킴"
