@@ -1,4 +1,5 @@
 ---
+pr: 407
 date: 2026-10-24
 branch: docs/design-engine-s5b
 title: "docs: 교회력 설계서 §5.4-§5.6 고쳐 쓰기와 내용 검증"
