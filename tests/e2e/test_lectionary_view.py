@@ -953,14 +953,20 @@ def test_bracket_set_merges_into_long_text_with_markers(desktop_context):
 # ── ⑤ 기념일 ──
 
 def test_commemoration_chip_renders_empty_state(desktop_context):
-    """1.1 세계평화 기도일 칩 — 「기념일 — 본문 없음」, 독서 · 본기도 없음."""
+    """4.5 마틴 루터 킹(기념일) 칩 — 「기념일 — 본문 없음」, 독서 · 본기도 없음. 본문 없는 축일(1.1 세계평화 기도일)은 「고유 본문 없음」."""
     page = desktop_context.new_page()
-    _open(page, "lectionary/2026-01-01")
-    page.locator(".lect-chip", has_text="세계평화").click()
+    _open(page, "lectionary/2026-04-05")
+    page.locator(".lect-chip", has_text="마틴 루터 킹").click()
     page.wait_for_selector(".empty-state-title")
     assert page.inner_text(".empty-state-title") == "기념일 — 본문 없음"
     assert page.locator(".lect-reading").count() == 0
     assert page.locator(".lect-collects").count() == 0
+    # 세계평화 기도일은 2026-10-24 기도서 「월별 축일」대로 축일이 되었다 — 기념일 문구가 아니다(설계서 미결51)
+    _open(page, "lectionary/2026-01-01")
+    page.locator(".lect-chip", has_text="세계평화").click()
+    page.wait_for_selector(".empty-state-title")
+    assert page.inner_text(".empty-state-title") == "고유 본문 없음"
+    assert page.locator(".lect-reading").count() == 0
 
 
 # ── ⑥ 날짜 ──
