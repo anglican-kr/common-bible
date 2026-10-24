@@ -61,7 +61,7 @@ export { … };
 마커 블록은 `// ── BEGIN 이름 ──`과 `// ── END 이름 ──` 사이의 코드다. 유닛 테스트가 이 구간만 잘라 vm에서 실행한다(ADR-013). ADR-037 §6은 `LITURGICAL_CORE` 블록 하나를 정했는데, 이 설계는 셋으로 나눈다.
 
 - **`LITURGICAL_CORE`**(A1-a 계산): 날짜 산술, 부활절 계산, 규칙 평가와 오프셋 전개, 절기 구간, 연중 주차, 주기 산정, 음력 조회, 기간 축(§4.10). 밖에서 받는 표가 `ordinal-weeks`, `kasi-lunar` 둘뿐이라 테스트의 prelude 스텁이 가볍다.
-- **`LITURGICAL_LOOKUP`**(A1-b 조회와 B1 판정): 표 인덱스 만들기, 격자 좌표, 후보 집합 조립과 정렬, 좌표 폴백 매칭, 독서와 본기도 찾기, 품계와 이동과 색 판정, 재일, 연도 단위 이동 계산(§6.5). 함수마다 읽을 인덱스를 인자로 받는다. 이 블록이 건드리는 모듈 상태는 이동 계산 캐시(`transferCache`)와 선택 봉헌 활성화 집합(`activatedOptionals`) 둘뿐이다.
+- **`LITURGICAL_LOOKUP`**(A1-b 조회와 B1 판정): 표 인덱스 만들기, 격자 좌표, 후보 집합 조립과 정렬, 좌표 폴백 매칭, 독서와 본기도 찾기, 우선순위와 이동과 색 판정, 재일, 연도 단위 이동 계산(§6.5). 함수마다 읽을 인덱스를 인자로 받는다. 이 블록이 건드리는 모듈 상태는 이동 계산 캐시(`transferCache`)와 선택 봉헌 활성화 집합(`activatedOptionals`) 둘뿐이다.
 - **`LITURGICAL_PRELOAD`**: fetch, 두 묶음 프리로드(§3.4, §3.5), 공개 래퍼(`resolveDate`, `findReadings`, `findCollects`, `findHalfVerse`). 모듈 상태(프리로드 promise, 인덱스)를 읽는 코드라 위 두 블록에 섞지 않는다. 그래도 블록으로 감싸는 이유는 C-3.4-1, C-3.4-2(프리로드 전 예외, 실패한 promise 비우기, 동시 진입에도 fetch 1회)를 vm 하네스로 검증하려면 잘라 낼 구간이 있어야 하기 때문이다. `data-fetch.js`의 `DATA_FETCHING` 블록(fetch 래퍼, 블록 밖 상태, 테스트 prelude)이 선례다.
 
 **근거**: 한 블록에 다 넣으면, 계산만 검증하려는 테스트도 조회용 표 스텁을 모두 만들어야 한다. 지금 두 블록을 합치면 약 1,900줄이다. `verse-spec.js`가 이미 `VERSE_SPEC`과 `VERSE_SERIALIZE` 두 블록으로 같은 일을 한다. 블록 둘은 같은 vm 컨텍스트에서 차례로 실행할 수 있다(`bookmark-read.test.js`가 `VERSE_SPEC`을 먼저 실행하는 선례). 그래서 조회 테스트에서 계산 함수를 진짜로 쓸 수 있다.
