@@ -966,6 +966,7 @@ def test_commemoration_chip_renders_empty_state(desktop_context):
     page.locator(".lect-chip", has_text="세계평화").click()
     page.wait_for_selector(".empty-state-title")
     assert page.inner_text(".empty-state-title") == "고유 본문 없음"
+    assert "독서 본문 없이 기념하는 축일입니다" in page.inner_text(".empty-state")   # 사용자 결정 2026-10-24
     assert page.locator(".lect-reading").count() == 0
 
 

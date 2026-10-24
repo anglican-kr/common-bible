@@ -912,7 +912,7 @@ function buildHeader(m) {
 
 /** @param {LectionaryModel} m */
 function buildChips(m) {
-  const nav = el("nav", { className: "lect-chips", "aria-label": "관측일" });
+  const nav = el("nav", { className: "lect-chips", "aria-label": "독서" });
   for (const chip of m.chips) {
     const a = el("a", {
       className: chip.muted ? "lect-chip lect-chip--muted" : "lect-chip",
@@ -1280,13 +1280,18 @@ function commit(m, chapters) {
   if (m.pair) root.appendChild(buildPair(m));
 
   if (m.empty) {
-    const isCommemoration = m.selected.observance.rank === "commemoration";
+    const rank = m.selected.observance.rank;
+    const isCommemoration = rank === "commemoration";
     root.appendChild(emptyState({
       icon: null,
       title: isCommemoration ? "기념일 — 본문 없음" : "고유 본문 없음",
+      // 본문 없는 축일(세계평화 · 병자를 위한 기도일 — 기도서에 본기도가 없다, 설계서 미결51). 그 밖은 그날 본문이 다른
+      // 후보에 있는 격자(부활대축일의 부활 1주일 등)와 이름 줄 주일(가정주일). 화면 글에 「관측일」을 쓰지 않는다(사용자 결정 2026-10-24)
       subtitle: isCommemoration
-        ? "기념일은 고유 본기도와 독서를 두지 않습니다. 그날의 본문은 다른 관측일을 고르세요."
-        : "이 관측일은 그날의 주일 · 평일 본문을 씁니다. 다른 관측일을 고르세요.",
+        ? "기념일은 고유 본기도와 독서를 두지 않습니다. 다른 독서를 선택하세요."
+        : rank === "minor_feast"
+          ? "독서 본문 없이 기념하는 축일입니다. 다른 독서를 선택하세요."
+          : "따로 정한 독서가 없습니다. 다른 독서를 선택하세요.",
     }));
     finish();
     return;
@@ -1311,7 +1316,7 @@ function commit(m, chapters) {
       tail: { selector: ".lect-gloria", text: gloriaCopyText },
     });
   } else {
-    root.appendChild(emptyState({ icon: null, title: "독서 없음", subtitle: "이 관측일에는 독서가 없습니다 — 본기도만 있습니다." }));
+    root.appendChild(emptyState({ icon: null, title: "독서 없음", subtitle: "독서는 없고 본기도만 있습니다." }));
   }
   finish();
 }
