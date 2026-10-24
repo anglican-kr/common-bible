@@ -63,12 +63,12 @@ jobs:
             "git@github.com:anglican-kr/common-bible-data"
           git submodule update --init data
 
-      # 픽스처(실제 연도 기대값의 기준)의 관측일 id 가 실데이터에 실재하는지도 여기서만 본다 —
+      # 픽스처(실제 연도 기대값의 기준)의 전례일 id 가 실데이터에 실재하는지도 여기서만 본다 —
       # 공개 Unit tests 잡은 data/ 가 없어 그 검사를 skip 한다(설계서 §1.4 · 픽스처 README).
       # 전례독서 뷰 모델(ADR-038 §3)의 실데이터 대조도 같은 자리다 — 뷰 상수 ↔ _meta/_vocab,
       # 실제 날짜의 초기 선택 · 색 · 두 독서 나란히, 2025~2027 전수. 교회력 월간 표 모델(ADR-038 §2 A2)도 —
       # 실제 날짜의 칸 이름 · 색 · 전례년 표지, 2025~2027 모든 달, 42칸의 연도 캐시.
       # 엔진 밖이지만 실데이터가 있어야 도는 것도 이 자리다 — 인용 시트가 옮겨 실린 절(ADR-003)을 모두
       # 탐색 범위 안에서 찾는지(citations.data.test.js).
-      - name: 엔진 실데이터 테스트 + 픽스처 관측일 id 실재 + 독서 · 교회력 뷰 모델 실데이터 + 인용 시트의 옮겨 실린 절
+      - name: 엔진 실데이터 테스트 + 픽스처 전례일 id 실재 + 독서 · 교회력 뷰 모델 실데이터 + 인용 시트의 옮겨 실린 절
         run: node --test tests/unit/liturgical-engine.data.test.js tests/unit/liturgical-fixtures.data.test.js tests/unit/lectionary.data.test.js tests/unit/calendar.data.test.js tests/unit/citations.data.test.js
