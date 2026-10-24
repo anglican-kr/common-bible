@@ -2,7 +2,7 @@
 
 소유 코드: `js/app/calendar.js`, `js/app/lectionary.js`, `js/app/liturgical-engine.js`
 
-교회력 엔진, 전례독서 화면(`/lectionary`), 캘린더 탭(`/calendar`)을 다룬다. 알고리즘과 도메인 규칙의 기준은 설계서 `docs/design/liturgical-engine.md`(§1.4 기준 지도부터 읽는다)다. 기도서 원문은 `docs/reference/liturgical-calendar-rules.md`, 실제 연도의 기대값은 `tests/fixtures/liturgical/`에 있다. 이 문서는 지금 동작, 사용자 결정의 기록, 남은 일을 모은다.
+교회력 엔진, 전례독서 화면(`/lectionary`), 캘린더 탭(`/calendar`)을 다룬다. 알고리즘과 도메인 규칙의 기준은 설계서다. 설계서는 장마다 파일을 두었고(`docs/design/liturgical-engine/`), 목차는 `docs/design/liturgical-engine.md`다. §1.4 기준 지도가 있는 `01-overview.md`부터 읽는다. 기도서 원문은 `docs/reference/liturgical-calendar-rules.md`, 실제 연도의 기대값은 `tests/fixtures/liturgical/`에 있다. 이 문서는 지금 동작, 사용자 결정의 기록, 남은 일을 모은다.
 
 이 문서에 자주 나오는 엔진 용어는 다음과 같다. 자세한 정의는 설계서에 있다.
 
