@@ -1298,7 +1298,7 @@ function displacerOf(ranked, c, staying) {
  *    그 성인의 색, 독서는 그날 평일 것 — 사용자 결정 2026-10-24). `transferable` 인 축일 셋도 성주간에 그날 남았으면
  *    `omitted` 다 — guard 에만 밀려 옮김 계산이 옮기지 않았어도(옮김 계산은 guard 를 보지 않는다) 성주간의 prec 7 은
  *    생략이다(그 셋의 날짜는 성주간에 들지 않아 실데이터에는 없다),
- *  - `commemorate_only`(교구 설립일 — 지역 축일 표라 아직 싣지 않아 실데이터에는 없다)는 `commemorated` — 둘 다
+ *  - `commemorate_only`(교구 설립일. 지역 축일 표라 아직 싣지 않아 실데이터에는 없다)는 `commemorated` — 둘 다
  *    `displacedBy` 를 싣는다.
  * 나머지는 그대로다 — 격자, 지향 · 이름 줄, `precedence: null`, `transferable: false` 인 상위 축일, 동시
  * 봉헌에서 후순위인 쪽, 옮길 날 수의 상한을 넘겨 옮기지 못한 축일(`defects` — §6.5). 옮겨진 축일은 옮김 계산이 이미

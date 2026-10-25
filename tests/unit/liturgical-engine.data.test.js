@@ -543,7 +543,8 @@ test("C-6.1-7 · C-2-1 precedence null 인 이동 축일 행은 후보로 있되
   const feb15 = resolve("2026-02-15");
   same([offId(feb15), feb15.color], ["grid:ordinary-6-sunday", "green"]);
   assert.ok(groupsAt("2026-02-15", "t-주의-변모-주일").length > 0);
-  // 2026-11-15 — 추수감사주일은 지킬 수 있는 날(data#45): 그날 지정 전례일은 연중 33주일 격자 · 녹, 추수감사주일 독서는 후보로 닿는다(X-10)
+  // 2026-11-15 — 추수감사주일은 지킬 수 있는 날이다(data#45). 그날 지정 전례일은 연중 33주일 격자이고 색은 녹이며,
+  // 추수감사주일 독서는 후보로 닿는다(X-10)
   const nov15 = resolve("2026-11-15");
   same([offId(nov15), nov15.color], ["grid:ordinary-33-sunday", "green"]);
   assert.ok(groupsAt("2026-11-15", "t-추수감사주일").length > 0);
