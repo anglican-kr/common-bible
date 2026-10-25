@@ -3,7 +3,7 @@
     "kind": "winner",
     "schema": "tests/fixtures/liturgical/README.md",
     "canon": "설계서 §1.4 기준 지도 — 실제 연도의 지정 전례일(official)·전례색·지정 자격 기대값은 이 파일이 기준이다",
-    "transcribedFrom": "설계서 §7 B1 행 · 사계재 행 ④ · 이동 계산 행 ⑩ 지정 전례일 · 주의 세례 행 · §9 미결16·25·26·29·30 · 검토 문서 §5.10·§5.13·§5.15 (main 243bf83, 2026-09-20)",
+    "transcribedFrom": "설계서 §7 B1 행 · 사계재 행 ④ · 옮김 계산 행 ⑩ 지정 전례일 · 주의 세례 행 · §9 미결16·25·26·29·30 · 검토 문서 §5.10·§5.13·§5.15 (main 243bf83, 2026-09-20)",
     "groupLegend": "group 은 리팩터링 전 §7 행의 묶음 표시일 뿐이다 — 참조 대상이 아니다"
   },
   "cases": [
@@ -240,7 +240,7 @@
       "id": "W-2027-08-15-assumption-on-sunday",
       "kind": "winner",
       "group": "⑩",
-      "title": "무이동 — 성모안식(A, 연중 주일) 지정 전례일, 격자 주일 proper",
+      "title": "옮기지 않음 — 성모안식(A, 연중 주일) 지정 전례일, 격자 주일 proper",
       "status": "confirmed",
       "canon": ["R-6.1-ladder"],
       "checks": ["C-6.5-14"],
@@ -278,7 +278,7 @@
       "canon": ["R-6.1-prec7-omit", "R-6.4-color-order"],
       "checks": ["C-6.1-6", "X-5", "C-4.7-1"],
       "source": ["서울교구 2026 달력 12월 면 — 12.13(대림 3주일 [자]) 루시아 이름 줄, 독서 이사 61:1-4, 8-11 · 시편 126 · 1데살 5:16-24 · 요한 1:6-8, 19-28(나해 — 나해 시작 2026-11-29)", "사용자 결정 2026-10-24 — 밀린 축일은 그날 기념한다(보호 기간에서만 생략)"],
-      "note": "루시아는 minor_feast prec 7 · transferable: false · has_proper: false 라 절차 ⑤ 로 옮기지 않고 그날 commemorated 로 남는다(대림 3주일은 temporal 행이 없다). 니콜라(주요축일, 이동)와 나란히 「주요축일은 옮기고 축일은 그날 기념한다」의 양쪽이 한 면에서 확증된다. commemorated 후보는 색에 기여하지 않는다.",
+      "note": "루시아는 minor_feast prec 7 · transferable: false · has_proper: false 라 절차 ⑤ 로 옮기지 않고 그날 commemorated 로 남는다(대림 3주일은 temporal 행이 없다). 니콜라(주요축일, 옮김)와 나란히 「주요축일은 옮기고 축일은 그날 기념한다」의 양쪽이 한 면에서 확증된다. commemorated 후보는 색에 기여하지 않는다.",
       "assertions": [
         { "date": "2026-12-13", "expect": { "official": "grid:advent-3-sunday", "color": "violet" } },
         { "date": "2026-12-13", "expect": { "id": "d1213-루시아", "status": "commemorated", "displacedBy": "grid:advent-3-sunday", "notInDepartures": true } },

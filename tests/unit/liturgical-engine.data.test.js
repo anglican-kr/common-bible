@@ -167,7 +167,7 @@ function ix() {
   const col = new Map(read("eucharist-collects.json").entries.map((e) => [e.id, e]));
   return (built = { cal, lec, rec, col });
 }
-/** 이동 계산(연도 캐시)을 거치는 조회 — 공개 래퍼와 같은 길이다(날짜를 먼저 검사한다). */
+/** 옮김 계산(연도 캐시)을 거치는 조회 — 공개 래퍼와 같은 길이다(날짜를 먼저 검사한다). */
 const passOf = (y) => ctx.transfersOf(ix().cal, y);
 const resolve = (d) => ctx.resolveDateIn(ix().cal, d, ctx.parseDate(d) ? passOf(Number(d.slice(0, 4))) : ctx.EMPTY_PASS());
 const pick = (r, prefix) => r.candidates.find((c) => c.observance.id.startsWith(prefix));
@@ -476,7 +476,7 @@ test("B1 불변식 — 2025~2050 모든 날에 지정 전례일이 하나 있고
         bad.push(`${d} 색 ${r.color} / ${JSON.stringify(r.colors)}`);
       }
       for (const c of r.candidates) {
-        // 밀린 것 — 재분류(omitted · commemorated)와 충돌 이동(transferred_in · out — activated = ∅ 라 전부 충돌)만 displacedBy 를 싣는다
+        // 밀린 것 — 재분류(omitted · commemorated)와 밀려 옮김(transferred_in · out — activated = ∅ 라 전부 충돌)만 displacedBy 를 싣는다
         const displaced = ["omitted", "commemorated", "transferred_in", "transferred_out"].includes(c.status);
         if (displaced !== ("displacedBy" in c)) bad.push(`${d} ${c.observance.id} ${c.status} displacedBy`);
         if (c.status === "omitted" && c.observance.rank !== "minor_feast") bad.push(`${d} omitted ${c.observance.rank}`);
@@ -690,7 +690,7 @@ test("C-6.3-1 재일 — 대재일 둘 · 사순 주간 40일(성 목요일은 �
 // ── 픽스처 소비 (tests/fixtures/liturgical/README.md 「소비 방법」) ──
 // 케이스마다 테스트 하나 — `status: "skip"` 은 건너뛰고 `provisional` 은 「잠정」 표시로 돌린다(실패하면 실패).
 // `expect` 는 부분집합 비교다: 적은 키만 본다. 모르는 키는 실패로 다룬다 — 소비자가 조용히 무시하면 그 단언은
-// 아무것도 지키지 못한다. activation 케이스는 그 케이스의 `activated` 로 이동 계산 캐시를 새로 만들고 끝나면 ∅ 로
+// 아무것도 지키지 못한다. activation 케이스는 그 케이스의 `activated` 로 옮김 계산 캐시를 새로 만들고 끝나면 ∅ 로
 // 되돌린다(`setActivatedOptionals` — 집합이 바뀌면 캐시를 비운다). `alsoYears` 는 날짜 단언의 연도만 바꿔
 // 되풀이한다(README — 같은 월 · 일이 같은 요일인 해만 적는다). 연도 범위 단언은 `neverDeparts` 하나다.
 
@@ -791,7 +791,7 @@ function checkAssertion(date, exp) {
 const shiftYear = (v, dy) => (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v)
   ? String(Number(v.slice(0, 4)) + dy).padStart(4, "0") + v.slice(4) : v);
 
-/** 연도 범위 단언 — 그 id 가 범위 안 어느 해의 출발 색인에도 없다(동시 봉헌 무이동). */
+/** 연도 범위 단언 — 그 id 가 범위 안 어느 해의 출발 색인에도 없다(동시 봉헌은 옮기지 않는다). */
 function checkRange(a) {
   const bad = [];
   for (const k of Object.keys(a.expect)) if (!RANGE_KEYS.has(k)) bad.push(`${k}: 연도 범위 단언에서 모르는 키`);
@@ -832,9 +832,9 @@ for (const file of ["transfers.cases.json", "optionals.cases.json", "winners.cas
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// B1 이동 계산 — 1900~2100 불변식 · 골든 덤프 (설계서 §6.5 · §7 · 검토 문서 §5.14 · 부록 A)
+// B1 옮김 계산 — 1900~2100 불변식 · 골든 덤프 (설계서 §6.5 · §7 · 검토 문서 §5.14 · 부록 A)
 // ════════════════════════════════════════════════════════════════════════════
-// 실제 연도의 이동 기대값은 위 픽스처가 기준이다. 여기는 전 연도에 걸친 성질과 결과 전체의 회귀만 본다.
+// 실제 연도의 옮김 기대값은 위 픽스처가 기준이다. 여기는 전 연도에 걸친 성질과 결과 전체의 회귀만 본다.
 // 활성화 집합은 ∅(v1 — 설계서 미결15)다. I-9(범위 · 절기 분할)는 공개 스위트의 C-4.2-2 · C-4.3-1 · C-4.5-1 이
 // 같은 1900~2100 에서 본다.
 
@@ -846,7 +846,7 @@ const candKey = (c) => [c.observance.id, c.status, c.from, c.to, c.displacedBy].
 const mapKey = (m, from = "") => [...m].filter(([d]) => d >= from).sort(([a], [b]) => (a < b ? -1 : 1)).map(([d, cs]) => [d, cs.map(candKey)]);
 const passKey = (p, from = "") => JSON.stringify([mapKey(p.arrivals, from), mapKey(p.departures, from), mapKey(p.optionals, from), p.defects]);
 
-test("I-1~I-8 · I-11 이동 계산 불변식 — 1900~2100 (activated = ∅)", { skip: SKIP }, () => {
+test("I-1~I-8 · I-11 옮김 계산 불변식 — 1900~2100 (activated = ∅)", { skip: SKIP }, () => {
   ctx.setActivatedOptionals([]);
   const bad = [];
   const forward = new Map();
@@ -892,11 +892,11 @@ test("I-1~I-8 · I-11 이동 계산 불변식 — 1900~2100 (activated = ∅)", 
   same(bad, []);
 });
 
-// 골든 덤프(검토 문서 부록 A · I-10) — 한 줄이 이동 하나, 기원 날짜 순. 머리줄의 data sha 는 기록용이고 비교는 본문만
-// 한다. 이동 결과가 바뀌면(엔진 · 데이터) 이 테스트가 깨진다 — `UPDATE_GOLDEN=1` 로 다시 만들고 diff 를 PR 에서 읽는다.
+// 골든 덤프(검토 문서 부록 A · I-10) — 한 줄에 옮긴 축일 하나, 기원 날짜 순. 머리줄의 data sha 는 기록용이고 비교는 본문만
+// 한다. 옮김 결과가 바뀌면(엔진 · 데이터) 이 테스트가 깨진다 — `UPDATE_GOLDEN=1` 로 다시 만들고 diff 를 PR 에서 읽는다.
 const GOLDEN = path.join(FIXTURES, "transfers-1900-2100.golden.txt");
 
-test("I-10 이동 골든 덤프 — 1900~2100 본문 문자열 동등 (UPDATE_GOLDEN=1 로 다시 만든다)", { skip: SKIP }, () => {
+test("I-10 옮김 골든 덤프 — 1900~2100 본문 문자열 동등 (UPDATE_GOLDEN=1 로 다시 만든다)", { skip: SKIP }, () => {
   ctx.setActivatedOptionals([]);
   const lines = [];
   for (let y = YEAR_FROM; y <= YEAR_TO; y++) {
