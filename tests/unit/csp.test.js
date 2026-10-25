@@ -4,7 +4,7 @@
 // 인라인 <style>/<script> 블록을 수정하면 CSP의 sha256 해시도 갱신해야 한다.
 // 잊으면 브라우저가 그 블록을 차단한다(스타일은 pre-paint CSS 미적용→FOUC,
 // 스크립트는 미실행). 이 테스트는 index.html의 정적 인라인 블록 해시가 CSP
-// style-src/script-src에 모두 존재하는지 단언해 갱신 누락을 CI에서 잡는다.
+// style-src/script-src에 모두 존재하는지 확인해 갱신 누락을 CI에서 잡는다.
 // (2026-06-09 인라인 <style> 해시 드리프트 사고 재발 방지 — scripts/csp_hashes.py
 //  --fix로 자동 수정 가능.)
 //

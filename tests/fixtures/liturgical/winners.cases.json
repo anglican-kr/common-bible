@@ -183,7 +183,7 @@
       "canon": ["R-6.1-ineligible"],
       "checks": ["C-6.1-12", "X-10"],
       "source": ["사용자 확정 2026-10-10 — 해마다 본기도·독서가 새로 정해져 고정 본문이 없다(ADR-036 §6 · data#27)", "2026 책자 — 9.6 여성선교주일은 연중 23주일 위의 안내 줄(X-10)"],
-      "note": "실데이터에서 이동 축일 표의 첫 기념일 — official 격자 · proper 이름 줄 · 빈 본문을 지킨다. 다만 여성선교주일은 언제나 주일이라 데이터 값 7 로도 격자 주일 5 에 지므로, 지정 자격 판별을 kind(월별 축일 행)로 잘못 좁힌 구현도 이 케이스를 통과한다 — rank 판별을 가르는 것은 이동 축일 표의 기념일 ∧ 평일 격자(prec 8)이고 실데이터에 없어 설계서 §7 B1 항목의 합성 케이스가 맡는다. 9월 첫 주일은 해마다 날짜가 달라 alsoYears 로 되풀이할 수 없어 2027 을 따로 적는다(2028 은 연중 22주일).",
+      "note": "실데이터에서 이동 축일 표의 첫 기념일 — official 격자 · proper 이름 줄 · 빈 본문을 지킨다. 다만 여성선교주일은 언제나 주일이라 데이터 값 7 로도 격자 주일 5 보다 후순위라, 지정 자격 판별을 kind(월별 축일 행)로 잘못 좁힌 구현도 이 케이스를 통과한다 — rank 판별을 가르는 것은 이동 축일 표의 기념일 ∧ 평일 격자(prec 8)이고 실데이터에 없어 설계서 §7 B1 항목의 합성 케이스가 맡는다. 9월 첫 주일은 해마다 날짜가 달라 alsoYears 로 되풀이할 수 없어 2027 을 따로 적는다(2028 은 연중 22주일).",
       "assertions": [
         { "date": "2026-09-06", "expect": { "official": "grid:ordinary-23-sunday", "color": "green" } },
         { "date": "2026-09-06", "expect": { "id": "t-여성선교주일", "status": "proper", "displacedBy": null } },
@@ -278,7 +278,7 @@
       "canon": ["R-6.1-prec7-omit", "R-6.4-color-order"],
       "checks": ["C-6.1-6", "X-5", "C-4.7-1"],
       "source": ["서울교구 2026 달력 12월 면 — 12.13(대림 3주일 [자]) 루시아 이름 줄, 독서 이사 61:1-4, 8-11 · 시편 126 · 1데살 5:16-24 · 요한 1:6-8, 19-28(나해 — 나해 시작 2026-11-29)", "사용자 결정 2026-10-24 — 밀린 축일은 그날 기념한다(보호 기간에서만 생략)"],
-      "note": "루시아는 minor_feast prec 7 · transferable: false · has_proper: false 라 절차 ⑤ 로 옮기지 않고 그날 commemorated 로 남는다(대림 3주일은 이동 축일 행이 없다). 니콜라(주요축일, 옮김)와 나란히 「주요축일은 옮기고 축일은 그날 기념한다」의 양쪽이 한 면에서 확증된다. commemorated 후보는 색에 기여하지 않는다.",
+      "note": "루시아는 minor_feast prec 7 · transferable: false · has_proper: false 라 절차 ⑤ 로 옮기지 않고 그날 commemorated 로 남는다(대림 3주일은 이동 축일 행이 없다). 니콜라(주요축일, 옮김)와 나란히 「주요축일은 옮기고 축일은 그날 기념한다」의 양쪽이 한 면에서 확인된다. commemorated 후보는 색에 기여하지 않는다.",
       "assertions": [
         { "date": "2026-12-13", "expect": { "official": "grid:advent-3-sunday", "color": "violet" } },
         { "date": "2026-12-13", "expect": { "id": "d1213-루시아", "status": "commemorated", "displacedBy": "grid:advent-3-sunday", "notInDepartures": true } },
@@ -387,7 +387,7 @@
       "canon": ["R-6.1-ladder", "R-6.1-prec7-omit"],
       "checks": ["X-11"],
       "source": ["2025 책자 — 10.6 추석 [백/홍] 고유 독서 + 피데스 이름 줄", "사용자 결정 2026-10-24 — 밀린 축일은 그날 기념한다(보호 기간에서만 생략)"],
-      "note": "책자 색은 [백/홍] 병기 — 사계재 밖 평일의 병기는 세우지 않으므로(→ R-6.4-ember-color) 지정 전례일의 색만 단언한다.",
+      "note": "책자 색은 [백/홍] 병기 — 사계재 밖 평일의 병기는 세우지 않으므로(→ R-6.4-ember-color) 지정 전례일의 색만 확인한다.",
       "assertions": [
         { "date": "2025-10-06", "expect": { "official": "lunar815-추석-명절", "color": "white" } },
         { "date": "2025-10-06", "expect": { "id": "d1006-피데스", "status": "commemorated", "displacedBy": "lunar815-추석-명절" } }

@@ -33,7 +33,7 @@ const FILES = {
 const PREFIX = { transfer: "T", optional: "O", activation: "A", winner: "W" };
 const STATUS = new Set(["confirmed", "provisional", "skip"]);
 const CANDIDATE_STATUS = new Set(["proper", "transferred_in", "transferred_out", "optional", "commemorated", "omitted"]);
-// 정식 전례색만(설계서 §6.4 · ADR-036 §8 · README 「단언」 표). `rose`·`blue` 는 `color_alt` 값이라
+// 정식 전례색만(설계서 §6.4 · ADR-036 §8 · README 「확인 항목」 표). `rose`·`blue` 는 `color_alt` 값이라
 // `color`·`colors`·`observanceColor` 에 오면 오타다 — 통과시키면 엔진의 다른 필드와 비교하게 된다.
 const COLORS = new Set(["white", "red", "green", "violet"]);
 const EXPECT_KEYS = new Set([
@@ -41,7 +41,7 @@ const EXPECT_KEYS = new Set([
   "official", "color", "colors", "observanceColor", "penitential", "fast", "coord", "grid",
   "readings", "officialReadings", "collects",
 ]);
-// README 「단언」 표의 키 목록 그대로 — `cycle` 은 officialReadings 에만, `note` 는 어디에도 없다(단언 수준 note 로).
+// README 「확인 항목」 표의 키 목록 그대로 — `cycle` 은 officialReadings 에만, `note` 는 어디에도 없다(확인 항목 수준 note 로).
 const READINGS_KEYS = ["origin", "record", "common", "sets", "slots", "empty"];
 const OFFICIAL_READINGS_KEYS = [...READINGS_KEYS, "cycle"];
 const ID_RE = /^([TOAW])-(\d{4}-\d{2}-\d{2})-([a-z0-9]+(?:-[a-z0-9]+)*)$/;
@@ -66,12 +66,12 @@ const weekday = (y, m, d) => new Date(Date.UTC(y, m, d)).getUTCDay();
 /** 자리표시자 — 홑 `…` 도 자리표시자다(`[…\.]{2,}` 만 보면 `t-…` 가 샌다). `grid:*` 는 호출 전에 거른다. */
 const ELLIPSIS_RE = /…|\.{2,}|\*/;
 
-/** `expect` 블록 하나의 키·값이 도메인 안인가. `ctx.years` 는 연도 범위 단언에서만 참.
- *  단언의 `expect` 와 `ifIssueFlips.expect` 가 **같은** 검사를 받는다 — 후자는 미결이
+/** `expect` 블록 하나의 키·값이 도메인 안인가. `ctx.years` 는 연도 범위 확인 항목에서만 참.
+ *  확인 항목의 `expect` 와 `ifIssueFlips.expect` 가 **같은** 검사를 받는다 — 후자는 미결이
  *  반대로 닫히는 순간 `expect` 로 승격되는데, 그때는 아무도 다시 읽지 않는다. */
 function assertExpect(e, where, ctx) {
   assert.ok(e && typeof e === "object" && !Array.isArray(e), `${where}: expect`);
-  assert.ok(Object.keys(e).length > 0, `${where}: expect 가 비어 있다 — 아무것도 단언하지 않는 케이스는 기준이 아니다`);
+  assert.ok(Object.keys(e).length > 0, `${where}: expect 가 비어 있다 — 아무것도 확인하지 않는 케이스는 기준이 아니다`);
   for (const k of Object.keys(e)) assert.ok(EXPECT_KEYS.has(k), `${where}: 모르는 expect 키 ${k}`);
   const assertId = (v, key) => {
     assert.match(v, OBS_ID_RE, `${where}: ${key} 형식 — ${v}`);
@@ -86,7 +86,7 @@ function assertExpect(e, where, ctx) {
   if (e.colors !== undefined) assert.ok(Array.isArray(e.colors) && e.colors.every((x) => COLORS.has(x)), `${where}: colors`);
   if (e.observanceColor !== undefined) assert.ok(COLORS.has(e.observanceColor), `${where}: observanceColor`);
   if (e.neverDeparts !== undefined) {
-    assert.ok(ctx.years, `${where}: neverDeparts 는 years 단언에서만`);
+    assert.ok(ctx.years, `${where}: neverDeparts 는 years 확인 항목에서만`);
     assertId(e.neverDeparts, "neverDeparts");
   }
   if (e.absent || e.notInDepartures) assert.ok(e.id, `${where}: absent/notInDepartures 는 id 가 필요`);
@@ -108,7 +108,7 @@ test("세 파일이 읽히고 _meta.kind 와 cases 배열을 가진다", () => {
   }
 });
 
-test("id 가 유일하고 규칙(접두-날짜-ascii-slug)대로이며 접두가 kind 와 맞고 날짜가 첫 단언의 날짜다", () => {
+test("id 가 유일하고 규칙(접두-날짜-ascii-slug)대로이며 접두가 kind 와 맞고 날짜가 첫 확인 항목의 날짜다", () => {
   const seen = new Map();
   for (const c of cases) {
     const m = ID_RE.exec(c.id);
@@ -118,8 +118,8 @@ test("id 가 유일하고 규칙(접두-날짜-ascii-slug)대로이며 접두가
     assert.ok(FILES[c._file].includes(c.kind), `${c.id}: kind ${c.kind} 는 ${c._file} 에 올 수 없다`);
     assert.equal(m[1], PREFIX[c.kind], `${c.id}: 접두 ${m[1]} ≠ kind ${c.kind}`);
     assert.ok(validDate(m[2]), `${c.id}: id 의 날짜가 실재하지 않는다`);
-    const first = Array.isArray(c.assertions) ? c.assertions[0] : undefined;   // 단언 유무는 아래 「단언」 테스트가 판정한다
-    if (first?.date) assert.equal(first.date, m[2], `${c.id}: id 날짜 ≠ 첫 단언 날짜 ${first.date}`);
+    const first = Array.isArray(c.assertions) ? c.assertions[0] : undefined;   // 확인 항목 유무는 아래 「확인 항목」 테스트가 판정한다
+    if (first?.date) assert.equal(first.date, m[2], `${c.id}: id 날짜 ≠ 첫 확인 항목 날짜 ${first.date}`);
   }
 });
 
@@ -142,9 +142,9 @@ test("status/kind 도메인 · provisional·skip 은 issue · skip 은 skip 이�
   }
 });
 
-// ── 단언 ──
+// ── 확인 항목 ──
 
-test("단언은 date 또는 years 를 가지며 expect 의 키·값이 도메인 안이고 전례일 id 에 생략부호가 없다", () => {
+test("확인 항목은 date 또는 years 를 가지며 expect 의 키·값이 도메인 안이고 전례일 id 에 생략부호가 없다", () => {
   for (const c of cases) {
     assert.ok(Array.isArray(c.assertions) && c.assertions.length > 0, `${c.id}: assertions`);
     for (const a of c.assertions) {
@@ -153,15 +153,15 @@ test("단언은 date 또는 years 를 가지며 expect 의 키·값이 도메인
         assert.ok(Array.isArray(a.years) && a.years.length === 2 && a.years[0] <= a.years[1], `${where}: years`);
         assert.equal(a.date, undefined, `${where}: date 와 years 를 함께 쓸 수 없다`);
       } else assert.ok(validDate(a.date), `${where}: 날짜가 실재하지 않는다`);
-      // 단언의 `note` 는 **서술 전용** — 비교 대상이 아니다(픽스처 README 「단언」).
+      // 확인 항목의 `note` 는 **서술 전용** — 비교 대상이 아니다(픽스처 README 「확인 항목」).
       if (a.note !== undefined) assert.ok(typeof a.note === "string" && a.note.length > 0, `${where}: note 가 비어 있다`);
       assertExpect(a.expect, where, { years: !!a.years });
     }
   }
 });
 
-test("alsoYears 의 해는 날짜 단언을 연도만 바꿔 되풀이할 수 있다 — 같은 월·일이 실재하고 요일이 같다", () => {
-  // README: 「단언은 첫 연도만 — 소비자가 연도만 바꿔 되풀이해도 된다」. 주일·목요일 같은 요일 조건이
+test("alsoYears 의 해는 날짜 확인 항목을 연도만 바꿔 되풀이할 수 있다 — 같은 월·일이 실재하고 요일이 같다", () => {
+  // README: 「테스트가 날짜 확인 항목의 연도만 바꿔 되풀이해도 된다」. 주일·목요일 같은 요일 조건이
   // 케이스의 전제이므로 요일이 다르면 그 해는 같은 모양이 아니다(주님의 세례 2026-01-11 → 2027 은 1.10).
   for (const c of cases) for (const y of c.alsoYears ?? []) for (const a of c.assertions ?? []) {
     if (!a.date) continue;
@@ -169,7 +169,7 @@ test("alsoYears 의 해는 날짜 단언을 연도만 바꿔 되풀이할 수 �
     const swapped = `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
     assert.ok(validDate(swapped), `${c.id}: ${a.date} 를 ${y} 로 바꾸면 실재하지 않는 날짜 ${swapped}`);
     assert.equal(weekday(y, m - 1, d), weekday(y0, m - 1, d),
-      `${c.id}: ${a.date} 를 ${y} 로 바꾸면 요일이 다르다 — alsoYears 에서 빼고 그 해의 단언을 따로 적을 것`);
+      `${c.id}: ${a.date} 를 ${y} 로 바꾸면 요일이 다르다 — alsoYears 에서 빼고 그 해의 확인 항목을 따로 적을 것`);
   }
 });
 
