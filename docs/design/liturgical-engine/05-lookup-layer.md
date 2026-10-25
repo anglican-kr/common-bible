@@ -28,7 +28,7 @@ collects.ending.B              = 0
 collects.ending.C              = 10
 collects.review                = 0
 collects.note                  = 1
-collects.rank_null             = 2
+collects.rank_null             = 3
 collects.color_null            = 1
 collects.collect_total_gt1     = 31
 readings.total                 = 929
@@ -51,7 +51,7 @@ temporal.rule_kinds            = 7
 temporal.easter_offset         = 12
 temporal.ember_wfs             = 4
 temporal.rule_null             = 0
-temporal.precedence_null       = 4
+temporal.precedence_null       = 5
 temporal.commemoration         = 1
 commons.classes                = 8
 commons.reading_sets           = 22
@@ -252,7 +252,7 @@ function resolveDate(dateStr) → {
 - **`transferred_in`**(PR 3, §6.5). 다른 날짜에서 옮겨 와 **이날 지키는** 축일. `from`을 갖고, 충돌로 옮겨졌으면 `displacedBy`도 갖는다(활성화된 선택 봉헌은 `displacedBy`가 없다). ADR-037 §6 표시 순서의 ② 「옮겨 지키는 축일」이 정확히 이 집합이다.
 - **`transferred_out`**(PR 3, §6.5). 이 날짜의 고유 후보였으나 **다른 날로 간** 축일. 충돌로 밀렸으면 `to`와 `displacedBy`를, 활성화된 선택 봉헌이면 `to`만 갖는다. 지정 전례일이 될 수 없고, 화면은 「→ 12.29」로 안내한다. 도착한 축일은 다시 밀리지 않으므로(→ R-6.2-first-come) 옮겨 온 것이 이 상태가 되는 일은 없다.
 - **`optional`**(PR 3, §6.2). 「옮겨 지킬 수 있다」는 선택 주일 봉헌(§6.2)의 목적지 주일에 얹히는 후보. `from`은 그 축일의 **원래 날짜**이고 목적지보다 뒤일 수 있다(주의 봉헌 2028: 2.2에서 1.30으로). 설정에서 켜기 전에는 지정 판정에 참여하지 않는다. 별도 색인 `optionals`에서 오고, 도착과 출발 색인과 섞지 않는다.
-- **`commemorated`**(PR 3의 B1, 밀린 축일은 2026-10-24). 밀렸으나 옮기지 않고 기념만 하는 축일. 성주간 밖에서 밀린 prec 7 **축일**(→ R-6.1-prec7-omit, 2026-10-24. 2026-12-13 루시아, 12.29 토마스 베켓, 2026-07-26 안나와 요아킴), `transfer_to: commemorate_only`(추수감사주일), C 그룹의 「옮기기 어려우면」(→ R-6.2-conflict-steps)이다. `displacedBy`를 갖는다.
+- **`commemorated`**(PR 3의 B1, 밀린 축일은 2026-10-24). 밀렸으나 옮기지 않고 기념만 하는 축일. 성주간 밖에서 밀린 prec 7 **축일**(→ R-6.1-prec7-omit, 2026-10-24. 2026-12-13 루시아, 12.29 토마스 베켓, 2026-07-26 안나와 요아킴), `transfer_to: commemorate_only`(교구 설립일. 지역 축일 표라 아직 싣지 않는다), C 그룹의 「옮기기 어려우면」(→ R-6.2-conflict-steps)이다. `displacedBy`를 갖는다.
 - **`omitted`**(PR 3의 B1). 성주간에 걸려 그해 생략하는 prec 7 **축일**(`minor_feast`. → R-6.3-holy-week-guard, 기도서 「축일 … 성주간, 부활1주간과 겹치면 생략한다」).
   - 부활 8일 평일의 축일은 책자대로 그날 지킨다(2026-10-24). 그 밖에서 밀린 축일은 `commemorated`다(→ R-6.1-prec7-omit).
   - **기념일은 아니다**(기념일은 언제나 `proper`인 이름 줄 후보라 생략 상태가 없다, → R-6.1-ineligible).

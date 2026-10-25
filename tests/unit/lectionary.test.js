@@ -117,7 +117,7 @@ test("chipLabel · statusSuffix: 밀림 · 옮김 · 선택 봉헌 · 기념 · 
   assert.strictEqual(ctx.chipLabel(cand(obs("d0806-주의-변모", "주의 변모"), "optional", { from: "2026-08-06" }), r, null),
     "주의 변모 · 8월 6일에서 옮겨 지킬 수 있음");
   assert.strictEqual(ctx.chipLabel(cand(obs("d1207-암브로스", "암브로스(주교)"), "omitted"), r, null), "암브로스 · 생략");
-  assert.strictEqual(ctx.chipLabel(cand(obs("t-추수감사주일", "추수감사주일"), "commemorated"), r, null), "추수감사주일 · 기념만");
+  assert.strictEqual(ctx.chipLabel(cand(obs("d1213-루시아", "루시아(시라쿠스의 순교자, 304년)"), "commemorated"), r, null), "루시아 · 기념만");
   assert.strictEqual(ctx.chipLabel(cand(obs("d0101-세계평화", "세계평화를 위한 기도일", { rank: "commemoration" })), r, null),
     "세계평화를 위한 기도일 · 기념일");
   // 저녁 전례(설계서 R-6.1-evening) — 「· 저녁」. 필수 CI 가 이 꼬리를 지키는 유일한 자리다(실데이터 테스트는 data 워크플로에서만
