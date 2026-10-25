@@ -155,7 +155,7 @@ scripts/gen_manifests.py  ← 콘텐츠 해시 매니페스트 (ADR-021)
 - **물리적 장 순서**: 시락 머리말, 다니엘 추가본 등 본래 장 번호가 어그러지는 부분은 "원전이 있는 그대로의 물리 순서"를 따른다 ([ADR-003](decisions/003-physical-chapter-ordering.md)).
 - **검색 인덱스 분할 (구약/신약/외경)**: 5.8 MB 단일 파일을 3개로 쪼개 첫 검색 응답 속도를 우선 ([ADR-005](decisions/005-search-indexing-strategy.md)). 워커는 신약 청크만 받으면 검색을 시작한다(§4.2).
 - **운문 본문 포맷**: 마크다운 블록인용(`>`)으로 표기. 절 내 산문/운문 구분은 `segments` 배열(`type: "prose"|"poetry"`), 스탠자 구분은 절 간 `stanza_break: true` 또는 절 내 텍스트의 `\n\n`, 단락 구분은 segment 레벨 `paragraph_break: true`. 자세히 [ADR-006](decisions/006-poetry-source-format.md).
-- **교회력 데이터**: 교회력 정의 표가 「그날이 어떤 전례일인가」의 권위이고(등급 · 전례색), 전례독서 · 본기도는 이름 · 절기 위치로 그 표에 조인되는 본문 표다 — 독서와 본기도 파서는 전례일 키를 읽는 코드를 함께 쓴다 ([ADR-036](decisions/036-liturgical-calendar-data-model.md) · [ADR-037](decisions/037-eucharist-lectionary-data-and-engine.md)). 이동 축일 규칙 문자열(`easter-46` 등)은 파서가 빌드 때 구조화해 두므로 앱 엔진은 다시 파싱하지 않는다.
+- **교회력 데이터**: 교회력 정의 표가 「그날이 어떤 전례일인가」의 권위이고(등급 · 전례색), 전례독서 · 본기도는 이름, 날짜, 절기 위치로 그 표에 조인되는 본문 표다 — 독서와 본기도 파서는 전례일 키를 읽는 코드를 함께 쓴다 ([ADR-036](decisions/036-liturgical-calendar-data-model.md) · [ADR-037](decisions/037-eucharist-lectionary-data-and-engine.md)). 이동 축일 규칙 문자열(`easter-46` 등)은 파서가 빌드 때 구조화해 두므로 앱 엔진은 다시 파싱하지 않는다.
 
 **자동화**: data 저장소 main에 파이프라인 입력이 푸시되면 `build.yml`이 파이프라인 · 매니페스트 · 전체 pytest를 돌려 산출물을 main에 커밋하고, 앱 저장소의 `sync-data.yml`을 디스패치한다. `sync-data.yml`은 서브모듈 포인터와 `sitemap.xml`을 올리고 실데이터 테스트를 돌린 뒤, 통과하면 `sync/data-<run_id>` PR을 열어 Unit tests 뒤 자동으로 스쿼시 머지한다(버전 범프 없음). 실데이터 테스트에는 교회력 설계서의 사실 블록 대조가 들어 있어, 데이터가 문서의 실측치를 바꾸면 이 자동 PR은 만들어지지 않는다 — 문서를 함께 고친 앱 PR이 포인터를 올린다.
 
