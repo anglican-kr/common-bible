@@ -1,4 +1,5 @@
 ---
+pr: 420
 date: 2026-10-25
 branch: docs/review-checklist-rank-transfer
 title: "docs: 교회력 검토 문서 §5.10-§5.16 고쳐 쓰기와 내용 검증"
