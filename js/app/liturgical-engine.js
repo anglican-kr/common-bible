@@ -115,7 +115,7 @@
 const anchorCache = new Map();
 /** @type {Map<number, Record<string, Span[]>>} */
 const spansCache = new Map();
-// 옮김 계산 캐시(§4.9) — **완전한(seed 받은) 계산 결과만** 들어간다. 키는 연도이고 캘린더 인덱스 하나를 위한
+// 옮김 계산 캐시(§4.9) — **완전한(이월을 받은) 계산 결과만** 들어간다. 키는 연도이고 캘린더 인덱스 하나를 위한
 // 캐시다 — 인덱스가 새로 서면(`preloadCalendar`) · 활성화 집합이 바뀌면(`setActivatedOptionals`) 통째로 비운다.
 /** @type {Map<number, TransferPass>} */
 const transferCache = new Map();
@@ -141,7 +141,7 @@ let halfVersesLoaded = false;
 let halfVersesRetry = null;
 
 // ── BEGIN LITURGICAL_CORE ──
-// 날짜 산술 · computus · 오프셋 전개 · 절기 스팬 · 연중 주차 · 주기 산정 · 기간 축.
+// 날짜 산술 · computus · 오프셋 전개 · 절기 구간 · 연중 주차 · 주기 산정 · 기간 축.
 // 외부 입력은 `ordinal-weeks` · `kasi-lunar` 두 표뿐이고 둘 다 인자로 받는다 — 그래서
 // 계산만 검증하는 테스트가 조회용 표 스텁을 만들 필요가 없다(설계서 §3.3).
 
@@ -398,10 +398,10 @@ function yearAnchors(y) {
   return a;
 }
 
-// ── §4.5 절기 스팬 ──
+// ── §4.5 절기 구간 ──
 
 /**
- * 절기 스팬을 **먼저 확정**하고 남는 자리가 연중이다. 도메인 다섯 — `epiphany` 는
+ * 절기 구간을 **먼저 확정**하고 남는 자리가 연중이다. 도메인 다섯 — `epiphany` 는
  * 없다(ADR-036 §4). 주의 세례 주일은 **연중시기의 첫날**이라 성탄절기는 그
  * 전날 끝난다(§4.5).
  * @param {string} dateStr
@@ -585,7 +585,7 @@ function buildOrdinalIndex(table) {
  * 연중 주차. **평일은 자기 날짜로 찾지 않고 그 주의 주일로 조회**한다(§4.6).
  * 공현 후(재의 수요일 전)는 `doy` 앵커 — 날짜는 2/29 를 세고 표는 세지 않으므로
  * 윤년에 3월이 한 칸 밀린다(2052-03-03 = 9주). 성령강림 후는 `date` 앵커.
- * **연중 스팬 밖에서는 표를 보지 않는다.**
+ * **연중 구간 밖에서는 표를 보지 않는다.**
  * @param {string} dateStr
  * @param {ReturnType<typeof buildOrdinalIndex>} index
  * @returns {number | null} 1~34
@@ -641,8 +641,8 @@ function lunarDatesOf(table, y) {
 
 /**
  * 절기(§4.5)와 **독립된 축**. 앵커만으로 순수 계산하고 데이터가 필요 없다.
- * 스팬마다 **그 달력년으로 자른** `[from, to]` 구간의 배열을 낸다 — 부활절 기준
- * 스팬은 한 해 안에 들지만 **성탄 기간 둘은 해를 넘어** 한 해에 두 조각이 된다.
+ * 이름마다 **그 달력년으로 자른** `[from, to]` 구간의 배열을 낸다 — 부활절 기준
+ * 구간은 한 해 안에 들지만 **성탄 기간 둘은 해를 넘어** 한 해에 두 조각이 된다.
  * @param {number} y
  * @returns {Record<string, Span[]>}
  */
@@ -674,14 +674,14 @@ function spansOf(y) {
  * 구간 중 하나에 들면 참. 부르는 쪽은 범위를 직접 비교하지 않고 이것으로 묻는다 —
  * 성주간·부활 8일 보호를 §6.3 ① · §6.4 · §6.5 셋이 각자 비교하던 것을 없앤다.
  *
- * **표를 인자로 받지 않는다.** 스팬은 달력년으로 잘려 있으므로(§4.10) 어느 해의 표인지가
+ * **표를 인자로 받지 않는다.** 구간은 달력년으로 잘려 있으므로(§4.10) 어느 해의 표인지가
  * 답을 바꾼다 — 호출부가 루프 밖에서 `spansOf(Y)` 를 뽑아 들고 다니면 이웃 해의 날짜에
  * 조용히 틀린 답이 나온다(성탄 기간의 1월 조각이 통째로 거짓이 된다). 연도는 **날짜가**
  * 정하고, 반복 비용은 `spansCache` 가 줄인다.
  *
- * **모르는 이름은 throw 한다.** 스팬 이름은 데이터가 아니라 **코드**라 오타는 누락이
+ * **모르는 이름은 throw 한다.** 구간 이름은 데이터가 아니라 **코드**라 오타는 누락이
  * 아니라 결함이다 — §2 의 「빈 결과 + 계속 진행」은 데이터 누락에 대한 규칙이고, 여기서
- * 조용히 `false` 를 내면 가드가 꺼진 채로 돈다(§4.10 이 없애려던 바로 그 어긋남이다).
+ * 조용히 `false` 를 내면 보호가 꺼진 채로 돈다(§4.10 이 없애려던 바로 그 어긋남이다).
  * @param {string} dateStr @param {string} name
  * @returns {boolean}
  */
@@ -1059,8 +1059,8 @@ function EMPTY_PASS() {
 
 /**
  * 연도 `y` 의 옮김 계산(§4.9 `transferCache` · §6.5 연도 경계). 캐시에는 **완전한** 계산 결과만 들어간다 —
- * `y−1` 의 seed 없는 **임시** 계산을 돌려 `y` 로 넘어온 도착(spill)을 얻고, 그것을 seed 로 `y` 의 옮김 계산을
- * 만든다. 임시 계산은 캐시에 넣지 않는다(`y−1` 을 조회하면 그때 `y−2` 의 spill 로 따로 완전하게 만든다).
+ * `y−1` 의 이월 없는 **임시** 계산을 돌려 `y` 로 넘어온 도착(해 넘김)을 얻고, 그것을 이월로 `y` 의 옮김 계산을
+ * 만든다. 임시 계산은 캐시에 넣지 않는다(`y−1` 을 조회하면 그때 `y−2` 의 해 넘김으로 따로 완전하게 만든다).
  * 두 계산에 **같은** 활성화 집합을 넘긴다 — 다른 집합을 보면 12월 결과가 어긋난다. 깊이 1 로 충분한지는
  * 실데이터 불변식(검토 문서 I-7a)이 1900~2100 에서 지킨다.
  * @param {CalendarIndex} index @param {number} y
@@ -1158,11 +1158,11 @@ function ownObservancesOn(index, dateStr) {
 
 // ── §6.1 · §6.2 우선순위표 · 지정 전례일 · 재분류 (B1) ──
 
-/** 성주간의 가드 후보 id(§6.5 `guard`) — 표에 없고 후보로 내지 않는다. */
+/** 성주간의 가상 후보 id(§6.5 `guard`) — 표에 없고 후보로 내지 않는다. */
 const GUARD_ID = GUARD_PREFIX + "holy-week";
 
 /**
- * 성주간(성지주일 ~ 성 토요일 — `spansOf().holyWeek`, §4.10)의 가드 후보. 그 안의 날에는 유효
+ * 성주간(성지주일 ~ 성 토요일 — `spansOf().holyWeek`, §4.10)의 가상 후보. 그 안의 날에는 유효
  * precedence 1 · `transferable: false` 인 합성 후보 하나, 밖의 날에는 빈 배열이다. 지정 전례일 · 재분류
  * (`settle`)의 순위에만 들어가 성주간의 prec 7 축일을 생략시킨다 — 부활 8일의 평일 축일은 그날 지킨다(책자,
  * 사용자 결정 2026-10-24 → R-6.3-holy-week-guard). 옮김 계산은 이것을 보지 않는다(주요축일은 그날 지키고
@@ -1394,7 +1394,7 @@ function optionalObservancesOf(index, y) {
 /**
  * 다음 해 배정(§6.5) — 켜진 선택 봉헌이 `year + 1` 에 **배정된 날**(막는다)과 **비운 기원**(연다). 목적지
  * 탐색이 실제로 해를 넘길 때만 호출한다(§4.9 — 다음 해 computus 를 미리 돌리지 않는다). 별도 맵이라 옮김 계산의
- * 도착 · 출발에 섞이지 않는다 — 캐시에도 spill 에도 불변식의 셈에도 들어가지 않는다.
+ * 도착 · 출발에 섞이지 않는다 — 캐시에도 해 넘김에도 불변식의 셈에도 들어가지 않는다.
  * @param {CalendarIndex} index @param {number} year @param {Set<string>} activated
  * @returns {NextYearSeats}
  */
@@ -1829,7 +1829,7 @@ function halfVerseKey(bookId, chapter, verse, half) {
  *   후보의 것)은 언제나 걷어내고, 그 날짜에 월별 축일 행이 둘 이상이면 같은 날짜의 **다른** 전례일
  *   이름에 정확히 맞는 본문을 걷어낸 뒤 이 전례일의 이름 · 별칭에 정확히 맞는 것으로 좁힌다 —
  *   좁히기가 실패하면 조용히 하나를 고르지 않고 **남은 것 전부**를 낸다. 행이 하나뿐인 날짜는
- *   이름을 묻지 않는다(06.24 의 띄어쓰기 드리프트가 「고유 없음」으로 새지 않게).
+ *   이름을 묻지 않는다(06.24 의 띄어쓰기 어긋남이 「고유 없음」으로 빠지지 않게).
  * @param {TextIndex} tix @param {CalendarIndex} cal @param {ResolvedDate} resolved @param {Observance} obs
  * @returns {TextRecord[]}
  */

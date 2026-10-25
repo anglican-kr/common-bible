@@ -837,7 +837,7 @@ for (const file of ["transfers.cases.json", "optionals.cases.json", "winners.cas
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// B1 옮김 계산 — 1900~2100 불변식 · 골든 덤프 (설계서 §6.5 · §7 · 검토 문서 §5.14 · 부록 A)
+// B1 옮김 계산 — 1900~2100 불변식 · 기준 결과 파일 (설계서 §6.5 · §7 · 검토 문서 §5.14 · 부록 A)
 // ════════════════════════════════════════════════════════════════════════════
 // 실제 연도의 옮김 기대값은 위 픽스처가 기준이다. 여기는 전 연도에 걸친 성질과 결과 전체의 회귀만 본다.
 // 활성화 집합은 ∅(v1 — 설계서 미결15)다. I-9(범위 · 절기 분할)는 공개 스위트의 C-4.2-2 · C-4.3-1 · C-4.5-1 이
@@ -869,7 +869,7 @@ test("I-1~I-8 · I-11 옮김 계산 불변식 — 1900~2100 (activated = ∅)", 
       }
     }
     for (const [D, cs] of p.arrivals) {
-      if (!inYear(D, y)) continue;   // 다음 해로 넘긴 도착은 그해 계산의 seed 로 본다
+      if (!inYear(D, y)) continue;   // 다음 해로 넘긴 도착은 그해 계산의 이월로 본다
       const deps = p.departures.get(D) || [];
       if (cs.some((c) => deps.some((x) => x.observance.id === c.observance.id))) bad.push(`I-6 ${D}`);
       // I-11 — 도착 날짜는 주일이 아니고 그날 유효 precedence ≤ 2 인 고유 후보(명절 · 대축일 · 대재일 · A 특례 · 절기
@@ -884,10 +884,10 @@ test("I-1~I-8 · I-11 옮김 계산 불변식 — 1900~2100 (activated = ∅)", 
     }
   }
   for (let y = YEAR_FROM + 1; y <= YEAR_TO; y++) {
-    // I-7a — 깊이 1: 임시 Y−1 계산(seed 없음)의 Y 행 spill = spill(Y−2) 를 받은 완전한 Y−1 계산의 Y 행 spill
+    // I-7a — 깊이 1: 임시 Y−1 계산(이월 없음)의 Y 행 해 넘김 = spill(Y−2) 를 받은 완전한 Y−1 계산의 Y 행 해 넘김
     const temp = ctx.computeTransfers(ix().cal, y - 1, new Map(), new Set());
     if (JSON.stringify(mapKey(ctx.spillOf(temp, y))) !== JSON.stringify(mapKey(ctx.spillOf(passOf(y - 1), y)))) bad.push(`I-7a ${y}`);
-    // I-7b — seed 영향 범위: seed 있는 Y 계산과 없는 Y 계산이 2월 1일부터 같다
+    // I-7b — 이월 영향 범위: 이월이 있는 Y 계산과 없는 Y 계산이 2월 1일부터 같다
     const bare = ctx.computeTransfers(ix().cal, y, new Map(), new Set());
     if (passKey(passOf(y), `${y}-02-01`) !== passKey(bare, `${y}-02-01`)) bad.push(`I-7b ${y}`);
   }
@@ -897,11 +897,11 @@ test("I-1~I-8 · I-11 옮김 계산 불변식 — 1900~2100 (activated = ∅)", 
   same(bad, []);
 });
 
-// 골든 덤프(검토 문서 부록 A · I-10) — 한 줄에 옮긴 축일 하나, 기원 날짜 순. 머리줄의 data sha 는 기록용이고 비교는 본문만
+// 기준 결과 파일(검토 문서 부록 A · I-10) — 한 줄에 옮긴 축일 하나, 기원 날짜 순. 머리줄의 data sha 는 기록용이고 비교는 본문만
 // 한다. 옮김 결과가 바뀌면(엔진 · 데이터) 이 테스트가 깨진다 — `UPDATE_GOLDEN=1` 로 다시 만들고 diff 를 PR 에서 읽는다.
 const GOLDEN = path.join(FIXTURES, "transfers-1900-2100.golden.txt");
 
-test("I-10 옮김 골든 덤프 — 1900~2100 본문 문자열 동등 (UPDATE_GOLDEN=1 로 다시 만든다)", { skip: SKIP }, () => {
+test("I-10 옮김 기준 결과 파일 — 1900~2100 본문 문자열 동등 (UPDATE_GOLDEN=1 로 다시 만든다)", { skip: SKIP }, () => {
   ctx.setActivatedOptionals([]);
   const lines = [];
   for (let y = YEAR_FROM; y <= YEAR_TO; y++) {

@@ -230,7 +230,7 @@ test("calendarDay: 저녁 전례(evening)는 칸 이름이 되지 않는다 — 
 });
 
 test("calendarDay: 고유명 평일(성주간 월~수 · 재의 수요일 후 목~토)은 격자여도 이름을 단다 — 엔진 표지 properWeekday 로 가린다", () => {
-  // 절기 위치를 일부러 번호 있는 형식으로 둔다 — 엔진이 주 번호를 매겨도 표지만 있으면 칸 이름은 그대로다(PR #348 리뷰가 짚은 드리프트)
+  // 절기 위치를 일부러 번호 있는 형식으로 둔다 — 엔진이 주 번호를 매겨도 표지만 있으면 칸 이름은 그대로다(PR #348 리뷰가 짚은 어긋남)
   const holyMon = cand(obs("grid:lent-6-weekday-mon", "성주간 월요일", { properWeekday: true }));
   const d = ctx.calendarDay("2026-03-30", resolvedOf("2026-03-30", [holyMon],
     { coord: { season: "lent", week: 6, type: "weekday", weekday: "mon", year: "A" }, color: "red", colors: ["red"] }));

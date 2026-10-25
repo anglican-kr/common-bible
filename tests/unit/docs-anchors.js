@@ -10,7 +10,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 // 설계서는 목차 파일 하나와 장 파일들로 나뉘어 있다(2026-10-24). 검사는 목차부터 장 번호순으로 이어 붙여
-// 설계서 하나로 읽는다 — 절 번호 · 미결 번호 · 센티널이 파일 경계와 상관없이 한 문서 안에서 풀린다.
+// 설계서 하나로 읽는다 — 절 번호 · 미결 번호 · 기준 문장이 파일 경계와 상관없이 한 문서 안에서 풀린다.
 export const DESIGN_TOC = "docs/design/liturgical-engine.md";
 const DESIGN_DIR = "docs/design/liturgical-engine";
 
@@ -78,10 +78,10 @@ export function rMarkerDefs(byDoc) {
 }
 
 /** 한 줄에서 마크다운 인라인 코드(같은 길이의 역따옴표 묶음으로 닫힌 것)를 지운다.
- *  표기 금지 게이트(센티널 · 동그라미 참조 · Qn · ADR 미결 참조)는 **산문**의 표기만 본다 —
+ *  표기 금지 게이트(기준 문장 · 동그라미 참조 · Qn · ADR 미결 참조)는 **산문**의 표기만 본다 —
  *  설계서 §1.4 가 규약을 정의하면서 금지 표기를 코드로 인용하고(``` ```facts ``` · ❌ `X-10 ②`),
  *  §6.5 의 정렬 키 `(유효 precedence, §6.2 ④ …)` 처럼 코드 표현 안의 것은 참조가 아니다.
- *  닫히지 않은 묶음(코드 펜스 `` ```facts `` 여는 줄)은 그대로 둔다 — 펜스 자체가 센티널이다. */
+ *  닫히지 않은 묶음(코드 펜스 `` ```facts `` 여는 줄)은 그대로 둔다 — 펜스 여는 줄 자체가 기준 문장 목록에 든다. */
 export function stripInlineCode(line) {
   return line.replace(/(`+)(?:(?!\1)[\s\S])+?\1(?!`)/g, "");
 }
