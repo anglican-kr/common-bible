@@ -21,7 +21,7 @@
 //   미결25 고유 독서 없는 축일의 초기 독서 = 격자(그날의 주일 · 평일) 독서 — 책자대로. 헤더 제목은 지정 전례일, 색은 고른
 //          본문의 색(headerColors — 격자면 그날의 병기 colors + 대체색), 본기도는 고른 칩의 것. (닫힘)
 //   미결20 성 토요일 · 성탄 밤: 저녁 전례 — 엔진이 부활밤(성 토요일 저녁) · 성탄 밤(12.24 저녁)을 그날의 대표에서 빼고
-//          후보 끝에 `evening` 으로 싣는다(사용자 결정 2026-10-15, 닫힘). 칩 꼬리말 「· 저녁」, 헤더 색은 「고른 본문의 색」
+//          후보 끝에 `evening` 으로 싣는다(사용자 결정 2026-10-15, 닫힘). 칩 상태 표시 「· 저녁」, 헤더 색은 「고른 본문의 색」
 //          — 성 토요일(그날의 대표)은 홍, 부활밤 칩을 고르면 백.
 //   미결38 대안 세트: 「또는」 대안은 「독서 1 · 독서 2」(완전한 세트를 통째로 바꾼다), 조건부는 「…로 지킬 때」가
 //          라벨, 괄호 선택 구절 세트는 바탕 세트에 합쳐 긴 본문 + 〔 〕 표시. (닫힘)
@@ -156,7 +156,7 @@ function shortName(name) {
 }
 
 /**
- * 후보의 상태를 칩 꼬리말로 — 밀린 · 옮긴 · 선택 봉헌 · 기념 · 기념일 · 저녁 전례. 지정 전례일(그날 지키는 고유 후보)은 꼬리가 없다.
+ * 후보의 상태를 칩 상태 표시로 — 밀린 · 옮긴 · 선택 봉헌 · 기념 · 기념일 · 저녁 전례. 지정 전례일(그날 지키는 고유 후보)은 상태 표시가 없다.
  * @param {Candidate} c
  */
 function statusSuffix(c) {
@@ -179,7 +179,7 @@ function isMutedCandidate(/** @type {Candidate} */ c) {
 }
 
 /**
- * 전례일 스위처 칩 라벨(ADR-038 §3-1): 이름 (+ 주기 라벨) (+ 독서 N) + 상태 꼬리. 주기는 격자(그날의
+ * 전례일 스위처 칩 라벨(ADR-038 §3-1): 이름 (+ 주기 라벨) (+ 독서 N) + 상태 표시. 주기는 격자(그날의
  * 주일 · 평일) 후보에만 — 성인 축일은 주기로 갈리지 않는다. 트랙은 그 후보의 독서가 트랙을 가질 때만.
  * @param {Candidate} c @param {ResolvedDate} resolved @param {1 | 2 | null} track  이 후보에 적용되는 트랙
  */
@@ -387,7 +387,7 @@ function pickCollect(/** @type {CollectOption[]} */ options, /** @type {number |
 }
 
 /**
- * 본기도 세그먼트 라벨 — `collect_no` 가 서로 다르면 「본기도 N」, 겹치면 제목에서 낱말 단위로 공통 머리 · 꼬리를 뗀
+ * 본기도 세그먼트 라벨 — `collect_no` 가 서로 다르면 「본기도 N」, 겹치면 제목에서 낱말 단위로 공통 앞부분 · 뒷부분을 뗀
  * 부분(「성직후보자」 · 「수도자」 — 「…의 성소를 위한 추계재 금요일」; 모두 소유격 「의」로 끝나면 그것도 뗀다), 그래도
  * 가를 수 없으면 제목 전체, 그것도 같으면 「본기도 N」(위치).
  * @param {CollectOption[]} options @returns {string[]}
@@ -400,7 +400,7 @@ function collectLabels(options) {
 }
 
 /**
- * 제목들을 가르는 짧은 이름 — 낱말 단위로 공통 머리 · 꼬리를 뗀 부분(모두 소유격 「의」로 끝나면 그것도 뗀다), 그래도
+ * 제목들을 가르는 짧은 이름 — 낱말 단위로 공통 앞부분 · 뒷부분을 뗀 부분(모두 소유격 「의」로 끝나면 그것도 뗀다), 그래도
  * 가를 수 없으면 제목 전체, 그것도 같으면 null. 본기도 라벨(`collectLabels`)과 독서 · 본기도 짝 단추가 함께 쓴다.
  * @param {string[]} raw @returns {string[] | null}
  */
@@ -855,7 +855,7 @@ function buildDateStep(dir, href, label) {
 /**
  * 날짜 이동 줄(DESIGN.md §6 「날짜 이동 줄」) — ‹ · 가운데(제목 + 「오늘」) · ›. 전례독서의 날짜 이동과 캘린더의 달 이동이
  * 같은 줄이고(ADR-038 2단계의 주간 화면도 이것을 쓴다), 화면마다 다른 것은 가운데 제목 요소(날짜 `<time>` · 달 `<h2>`)와
- * 이름표뿐이다. 「오늘」의 `data-focus-key` 는 `today` — 앞뒤 단추가 자리만 남는 범위 끝에서 포커스가 돌아갈 대체 자리다.
+ * 라벨뿐이다. 「오늘」의 `data-focus-key` 는 `today` — 앞뒤 단추가 자리만 남는 범위 끝에서 포커스가 돌아갈 대체 자리다.
  * @param {{ ariaLabel: string, title: HTMLElement, todayHref: string,
  *   prev: { href: string | null, label: string }, next: { href: string | null, label: string } }} o
  * @returns {HTMLElement}
@@ -976,7 +976,7 @@ function buildControls(m) {
   if (m.options.length > 1) {
     // 「또는」 대안 · 조건부 세트 — 조건 · 종류가 라벨이다(사용자 결정 2026-10-12). 괄호 선택 구절 세트는
     // 바탕에 합쳐져 여기 오르지 않는다(본문의 〔 〕 가 맡는다). 세트와 본기도가 제목으로 짝지어진 날(5.1 · 사계재 금요일)은
-    // 이 단추 하나가 둘을 함께 고른다 — 이름표도 「독서 · 본기도」(사용자 결정 2026-10-13).
+    // 이 단추 하나가 둘을 함께 고른다 — 라벨도 「독서 · 본기도」(사용자 결정 2026-10-13).
     const name = m.collectsLinked ? "독서 · 본기도" : "대안 독서";
     const ctl = el("div", { className: "lect-control lect-sets" });
     ctl.appendChild(el("span", { className: "lect-control-label" }, name));

@@ -63,7 +63,7 @@ const K = (name) => vm.runInContext(name, ctx);
 
 // ── 합성 재료 ─────────────────────────────────────────────────────────────────
 
-/** 정의 표의 행 형식으로 만든 전례일. `extra`로 rank · color · transfer_to 등을 얹는다. */
+/** 정의 표의 행 형식으로 만든 전례일. `extra`로 rank · color · transfer_to 등을 더한다. */
 const obs = (id, name, extra = {}) => ({
   id, kind: id.startsWith("t-") || id.startsWith("grid:") ? "temporal" : "sanctoral", name,
   rank: null, precedence: null, color: null, color_alt: null, transferable: false, transfer_to: null, ...extra,
@@ -109,7 +109,7 @@ test("chipLabel: 격자 후보에만 주기를 붙이고, 트랙은 그 후보�
   assert.strictEqual(ctx.chipLabel(saint, r, null), "주의 변모");   // 성인 축일은 주기로 갈리지 않는다
 });
 
-test("chipLabel · statusSuffix: 밀림 · 옮김 · 선택 봉헌 · 기념 · 기념일 · 저녁 꼬리", () => {
+test("chipLabel · statusSuffix: 밀림 · 옮김 · 선택 봉헌 · 기념 · 기념일 · 저녁 상태 표시", () => {
   const r = resolvedOf("2026-12-07", [], null);
   assert.strictEqual(ctx.chipLabel(cand(obs("d1206-성-니콜라", "성 니콜라(미라의 주교)"), "transferred_in", { from: "2026-12-06" }), r, null),
     "성 니콜라 · 12월 6일에서 옮겨 옴");
@@ -120,7 +120,7 @@ test("chipLabel · statusSuffix: 밀림 · 옮김 · 선택 봉헌 · 기념 · 
   assert.strictEqual(ctx.chipLabel(cand(obs("d1213-루시아", "루시아(시라쿠스의 순교자, 304년)"), "commemorated"), r, null), "루시아 · 기념만");
   assert.strictEqual(ctx.chipLabel(cand(obs("d0101-세계평화", "세계평화를 위한 기도일", { rank: "commemoration" })), r, null),
     "세계평화를 위한 기도일 · 기념일");
-  // 저녁 전례(설계서 R-6.1-evening) — 「· 저녁」. 필수 CI 가 이 꼬리를 지키는 유일한 자리다(실데이터 테스트는 data 워크플로에서만
+  // 저녁 전례(설계서 R-6.1-evening) — 「· 저녁」. 필수 CI 가 이 상태 표시를 지키는 유일한 자리다(실데이터 테스트는 data 워크플로에서만
   // 돈다 — PR #349 리뷰)
   assert.strictEqual(ctx.chipLabel(cand(obs("t-부활밤", "부활밤", { color: "white" }), "proper", { evening: true }), r, null), "부활밤 · 저녁");
 });
@@ -700,7 +700,7 @@ test("buildLectionaryModel: 후보가 없으면 null", () => {
   assert.strictEqual(ctx.buildLectionaryModel(r, { obs: null, track: null, set: null, collect: null }, () => [], [], null), null);
 });
 
-test("칩: 라벨은 괄호를 뗀 짧은 이름, title 은 전체 이름 + 상태 꼬리(ADR-038 §3-1 — 사용자 확정 2026-10-12)", () => {
+test("칩: 라벨은 괄호를 뗀 짧은 이름, title 은 전체 이름 + 상태 표시(ADR-038 §3-1 — 사용자 확정 2026-10-12)", () => {
   const saint = cand(obs("d0321-토마스-크랜머", "토마스 크랜머(캔터베리 대주교, 전례개혁자, 순교자, 1556년)", { rank: "minor_feast", precedence: 7 }));
   const grid = cand(obs("grid:lent-4-weekday-sat", "사순 4주 토요일"));
   const r = resolvedOf("2026-03-21", [saint, grid], saint, { coord: { season: "lent", week: 4, type: "weekday", weekday: "sat", year: "II" } });

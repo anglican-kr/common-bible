@@ -504,7 +504,7 @@ test("§4.10 inSpan 은 연도를 날짜에서 정한다 — 표를 인자로 �
 test("§4.10 모르는 스팬 이름은 throw — 이름은 데이터가 아니라 코드다", () => {
   assert.throws(() => ctx.inSpan("2026-04-01", "transferguard"), /unknown span/);
   assert.throws(() => ctx.inSpan("2026-04-01", "toString"), /unknown span/);
-  assert.strictEqual(ctx.inSpan("bad-date", "transferGuard"), false);   // 날짜 결손은 false
+  assert.strictEqual(ctx.inSpan("bad-date", "transferGuard"), false);   // 날짜 누락은 false
 });
 
 test("§4.10 spansOf 는 연도 캐시를 쓴다", () => {
@@ -512,7 +512,7 @@ test("§4.10 spansOf 는 연도 캐시를 쓴다", () => {
   assert.notStrictEqual(ctx.spansOf(2026), ctx.spansOf(2027));
 });
 
-test("§4.6 표 결손은 건너뛴다 — throw 아님 (§2)", () => {
+test("§4.6 표 누락은 건너뛴다 — throw 아님 (§2)", () => {
   // from/to 가 없는 창, week 이 없는 행, 원시 표를 그대로 넘긴 경우
   assert.deepStrictEqual(plain(ctx.buildOrdinalIndex({ weeks: [{ week: 3, windows: [{ anchor: "doy", to: "01-20" }] }] })),
     { doy: [], date: [] });
@@ -569,7 +569,7 @@ test("§4.8 음력 표기 이탈은 건너뛴다 — 그럴듯한 오답을 내�
   assert.deepStrictEqual(plain(ctx.lunarDatesOf(one("02.17"), 2026)), { "1-1": "2026-02-17" });
 });
 
-// ── 날짜 유틸 결손 내성 (§4.1 · §2) ──
+// ── 날짜 유틸 누락 처리 (§4.1 · §2) ──
 
 test("§4.1 잘못된 입력은 null — throw 아님", () => {
   for (const bad of ["", "2026-1-1", "26-01-01", "2026/01/01", "2026-02-30", "2026-13-01", null, 42]) {
@@ -705,7 +705,7 @@ const LEC_TABLES = {
     REC("advent-1-sun-B", { season: "advent", week: 1, type: "sunday", year: "B" }),
     REC("advent-4-sun-B", { season: "advent", week: 4, type: "sunday", year: "B" }),
     REC("lent-2-tue", { season: "lent", week: 2, type: "weekday", weekday: "tue" }),
-    // 고유명 평일 · 이름일 — 절기 위치 폴백을 타지 않는다(§5.3 판정 규칙)
+    // 고유명 평일 · 이름일 — 절기 위치 폴백을 쓰지 않는다(§5.3 판정 규칙)
     REC("holy-sat-s1", { season: "lent", type: "weekday", name: "성 토요일", set_no: 1, set_total: 2 }),
     REC("holy-sat-s2", { season: "lent", type: "weekday", name: "성 토요일", set_no: 2, set_total: 2 }),
     REC("holy-mon", { season: "lent", type: "weekday", weekday: "mon", name: "성주간 월요일" }),
@@ -800,7 +800,7 @@ test("C-5.5-1 후보 출처 다섯 — 격자 · 날짜 · 음력 · 규칙 파�
 });
 
 test("C-5.5-1 · C-5.5-5 ⑤ 도착 · 출발 · 선택 봉헌 경로와 표시 순서 — 옮김 계산 결과를 채우면 형태 변경 없이 읽힌다", () => {
-  // PR 3 의 옮김 계산을 흉내 낸다: 01.25 바울로가 다음 날로 떠나고, 11.30 안드레아가 도착하고, 선택 봉헌이 하나 얹힌다
+  // PR 3 의 옮김 계산을 흉내 낸다: 01.25 바울로가 다음 날로 떠나고, 11.30 안드레아가 도착하고, 선택 봉헌이 하나 더해진다
   const paul = CAL.sanctoralByDate.get("01.25")[0];
   const andrew = CAL.sanctoralByDate.get("11.30")[0];
   const pass = ctx.EMPTY_PASS();
@@ -839,7 +839,7 @@ test("C-4.3-3 easter_offset −1 인덱스가 1:N — 성 토요일과 부활밤
   same(r.candidates.map((c) => c.evening === true), [false, false, true]);
 });
 
-test("C-5.5-3 격자 ∧ 이동 축일(temporal) 행은 공존한다 — 대체가 아니다 · 우선순위가 같으면 사다리로 이동 축일이 앞선다", () => {
+test("C-5.5-3 격자 ∧ 이동 축일(temporal) 행은 공존한다 — 대체가 아니다 · 우선순위가 같으면 범주 순서로 이동 축일이 앞선다", () => {
   const advent1 = resolve("2026-11-29");
   same(advent1.candidates.map((c) => c.observance.id), ["t-advent1", "grid:advent-1-sunday"]);
   // 대림1주일 행은 조인 이름이 없다 — 자기 절기 위치로 격자 레코드에 닿는다(§5.4). 2026-11-29 는 나해
@@ -848,7 +848,7 @@ test("C-5.5-3 격자 ∧ 이동 축일(temporal) 행은 공존한다 — 대체�
   const palm = resolve("2026-03-29");
   same(palm.candidates.map((c) => c.observance.id), ["t-palm", "grid:lent-x-sunday"]);
   same(readingIds(palm, cand(palm, "t-palm")), ["palm-A"]);   // 별칭(고난주일)도 조인 키
-  // prec 2로 같다 — 범주 사다리(이동 축일 > 격자)로 행이 앞서고 격자는 proper 로 남는다(→ R-6.2-tie-ladder)
+  // prec 2로 같다 — 범주 순서(이동 축일 > 격자)로 행이 앞서고 격자는 proper 로 남는다(→ R-6.2-tie-ladder)
   for (const r of [advent1, palm]) {
     assert.strictEqual(r.official.observance.kind, "temporal", r.date);
     assert.ok(!r.official.observance.id.startsWith("grid:"), r.date);
@@ -1135,7 +1135,7 @@ test("C-5.6-4 성인 공통 독서 폴백 — 트리거는 「좁힌 고유 독�
   const bap = resolve("2026-06-24");
   assert.ok(LEC_TABLES.commons.classes.saint.readings.length > 0);
   assert.ok(ctx.findReadingsIn(LEC, CAL, bap, cand(bap, "d0624-baptist")).every((x) => x.common === null));
-  // status 무관: 고유 독서 없는 순교자를 옮겨 온 후보도 공통을 탄다
+  // status 무관: 고유 독서 없는 순교자를 옮겨 온 후보도 공통을 쓴다
   const moved = { observance: CAL.sanctoralByDate.get("06.11")[0], status: "transferred_in", from: "2026-06-11", displacedBy: "x" };
   same(ctx.findReadingsIn(LEC, CAL, resolve("2026-06-12"), moved).map((x) => x.common), ["martyr", "martyr"]);
   // 프로토타입 키를 분류로 읽지 않는다
@@ -1180,14 +1180,14 @@ test("미결12 잠정 — 1:N 좁히기: 12.25 세 갈래 · 09.29 합성 레코
   same(readingIds(ny, cand(ny, "d0101-peace")), []);
 });
 
-test("C-2-1 기념일은 독서 · 본기도 빈 결과 — 날짜에 남의 본문이 있어도, 분류가 있어도 공통을 타지 않는다", () => {
+test("C-2-1 기념일은 독서 · 본기도 빈 결과 — 날짜에 남의 본문이 있어도, 분류가 있어도 공통을 쓰지 않는다", () => {
   const r = resolve("2026-05-03");   // 합성 기념일(martyr 분류) 하나뿐인 날짜에 「남의 축일」 본문이 있다
   const c = cand(r, "d0503-memorial");
   same(ctx.findReadingsIn(LEC, CAL, r, c), []);
   same(collectsFor(r, "d0503-memorial"), []);
 });
 
-test("§2 표 결손은 흡수한다 — 래퍼 · 배열 · 행 모양이 틀려도 throw 하지 않는다", () => {
+test("§2 표 누락은 빈 결과로 처리한다 — 래퍼 · 배열 · 행 모양이 틀려도 throw 하지 않는다", () => {
   for (const bad of [null, {}, { entries: 5 }, { entries: [null, 3, "x"] }]) {
     const cal = ctx.buildCalendarIndex({ sanctoral: bad, temporal: bad, periods: bad, ordinalWeeks: bad, kasi: bad });
     const r = ctx.resolveDateIn(cal, "2026-06-10", ctx.EMPTY_PASS());
@@ -1555,7 +1555,7 @@ test("C-6.3-1 재일 — 대재일 둘 · 사순 주간 40일(성 목요일은 �
 // ── 5.11 · 5.12 옮김 계산 — 합성 표 (§6.2 · §6.5) ──
 // 실제 연도의 옮김은 픽스처(transfers · optionals)가 기준이라 실데이터 파일이 소비한다(설계서 §7). 여기는 실제
 // 연도로는 만들 수 없는 경로 — 연도 경계 · 옮길 날 수의 상한 · 선착순 · 도착끼리 기원 순 · 해를 넘긴 선착순 · 떠난 후순위 후보 ·
-// 좌석 경합 · 켜진 출발이 비운 자리 · 경계 × 활성화 · 활성화 캐시 — 와 보호 기간이 옮김 계산에 끼어들지 않는다는 것
+// 목적지 충돌 · 켜진 출발이 비운 자리 · 경계 × 활성화 · 활성화 캐시 — 와 보호 기간이 옮김 계산에 끼어들지 않는다는 것
 // (공개 스위트에서도 잡히게)을 잡는다. 1900~2100 에서 선착순이 서열 순과 갈리는 실제 사례는 보호 기간의 6해(부활 3.26 —
 // 요셉 · 수태고지)뿐이고 그것은 서열 순이다(→ R-6.3-guard-order, 픽스처 T-2062-03-27) — 그 밖의 선착순은 여기 합성 표가 지킨다.
 
@@ -1585,7 +1585,7 @@ const seats = (m, prefix = "") => Object.fromEntries([...m].filter(([d]) => d.st
 const count = (m) => [...m.values()].flat().length;
 
 test("C-6.5-15 연도 경계 — 12.31 이 밀려 1.1 에 도착하고, Y+1 캐시만 먼저 만들어도 같다(seed 경로)", () => {
-  // 고정일끼리는 충돌이 아니므로(동시 봉헌) 점유자는 해마다 달라지는 것이어야 한다 — 2028-12-31 은 성탄 1주일(prec 2)
+  // 고정일끼리는 충돌이 아니므로(동시 봉헌) 그날을 차지하는 후보는 해마다 달라지는 것이어야 한다 — 2028-12-31 은 성탄 1주일(prec 2)
   const tables = passTables([MOV("d1231-x", "12.31")]);
   const only = passEngine(tables);
   const jan1 = only.at("2029-01-01");   // Y+1 을 먼저 — 2028 은 seed 를 얻는 임시 계산으로만 돈다
@@ -1602,7 +1602,7 @@ test("C-6.5-15 연도 경계 — 12.31 이 밀려 1.1 에 도착하고, Y+1 캐�
   same(seats(both.pass(2028).arrivals), { "2029-01-01": ["d1231-x<-2028-12-31"] });   // 정식 2028 옮김 계산의 spill
 });
 
-test("C-6.5-18 해를 넘긴 선착순 — 12월 축일 둘이 같은 1월 날을 노리면 먼저 밀린 쪽이 앉는다(이 옮김 계산의 도착과 다음 해 좌석을 함께 본다)", () => {
+test("C-6.5-18 해를 넘긴 선착순 — 12월 축일 둘이 같은 1월 날을 노리면 먼저 밀린 쪽이 배정된다(이 옮김 계산의 도착과 다음 해 배정을 함께 본다)", () => {
   // 2029-12-30 주일에 X 가 밀리고 12.31 은 명절(prec 0)이 막아 X 는 1.1 로, 12.31 의 Z 는 명절에 밀려 1.1 을 노린다
   const t = passEngine(passTables(
     [MOV("d1230-x", "12.30"), MOV("d1231-z", "12.31"), SAN("lunar11-seol", null, "설날", { lunar: "1-1", rank: "regional_festival", precedence: 0 })],
@@ -1612,14 +1612,14 @@ test("C-6.5-18 해를 넘긴 선착순 — 12월 축일 둘이 같은 1월 날�
   same(fate(t.at("2030-01-02"), "d1231-z"), ["transferred_in", "lunar11-seol"]);
 });
 
-test("C-6.5-16 옮길 날 수의 상한 30일 — 넘으면 옮기지 않고 proper 로 남기며 defects 에 적는다 · 30일째는 앉는다", () => {
+test("C-6.5-16 옮길 날 수의 상한 30일 — 넘으면 옮기지 않고 proper 로 남기며 defects 에 적는다 · 30일째는 배정된다", () => {
   // 2025-11-30 은 대림 1주일 — X 가 밀리고 12.1~12.30 을 대축일이 막는다. 12.31(31일째)은 비워 두어 상한에서 멈추는지 가른다
   const walls = (n) => Array.from({ length: n }, (_, i) => WALL(`d12${String(i + 1).padStart(2, "0")}-wall`, `12.${String(i + 1).padStart(2, "0")}`));
   const over = passEngine(passTables([MOV("d1130-x", "11.30"), ...walls(30)]));
   const p = over.pass(2025);
   same([p.defects, count(p.arrivals), count(p.departures)], [["d1130-x"], 0, 0]);
   same(fate(over.at("2025-11-30"), "d1130-x"), ["proper", null]);
-  // 29일만 막으면 30일째(12.30)에 앉는다 — 상한이 30 보다 작아도, 31 이상이어도 이 둘 중 하나가 틀린다
+  // 29일만 막으면 30일째(12.30)에 배정된다 — 상한이 30 보다 작아도, 31 이상이어도 이 둘 중 하나가 틀린다
   const edge = passEngine(passTables([MOV("d1130-x", "11.30"), ...walls(29)]));
   same([edge.pass(2025).defects, seats(edge.pass(2025).arrivals)], [[], { "2025-12-30": ["d1130-x<-2025-11-30"] }]);
 });
@@ -1663,7 +1663,7 @@ const TWO_WALLS = [
   TMP("t-wall-2", "합성 가변 대축일 2", { kind: "easter_offset", days: 72 }, { season: "ordinary", type: "feast" }),
 ];
 
-test("C-6.5-7 선착순 — 먼저 밀려 앉은 도착을 우선순위가 높은 뒤의 도착이 밀어내지 않는다(→ R-6.2-first-come)", () => {
+test("C-6.5-7 선착순 — 먼저 밀려 배정된 도착을 우선순위가 높은 뒤의 도착이 밀어내지 않는다(→ R-6.2-first-come)", () => {
   const t = passEngine(passTables([MOV("d0615-b", "06.15"), MOV("d0616-a", "06.16", { precedence: 3, priority_group: "A" })], TWO_WALLS));
   same(seats(t.pass(2026).arrivals), { "2026-06-17": ["d0615-b<-2026-06-15"], "2026-06-18": ["d0616-a<-2026-06-16"] });
   same([officialId(t.at("2026-06-17")), officialId(t.at("2026-06-18"))], ["d0615-b", "d0616-a"]);
@@ -1672,7 +1672,7 @@ test("C-6.5-7 선착순 — 먼저 밀려 앉은 도착을 우선순위가 높�
 
 test("C-6.5-19 보호 기간 목적지 — 성주간 · 부활 8일 안에서 밀린 축일은 그 기간 다음 날(부활 2주 월요일)부터 빈 날을 찾는다(→ R-6.3-guard-destination)", () => {
   // 2026 부활 4.5 — 성지주일 3.29 · 성 목요일 4.2 · 부활 2주일 4.12 · 부활 2주 월요일 4.13. 둘 다 4.13 부터 찾고, 같은 서열(prec 6)
-  // 이라 원래 날짜 순으로 앉는다(→ R-6.3-guard-order — 서열이 다르면 C-6.5-22)
+  // 이라 원래 날짜 순으로 배정된다(→ R-6.3-guard-order — 서열이 다르면 C-6.5-22)
   const walls = [
     TMP("t-palm", "합성 성지주일", { kind: "easter_offset", days: -7 }, { rank: "privileged_sunday", precedence: 2 }),
     TMP("t-thu", "합성 성 목요일", { kind: "easter_offset", days: -3 }),
@@ -1735,7 +1735,7 @@ test("C-6.5-21 옮겨 온 축일과 주일에 함께 밀린 축일은 다음 날
   same(seats(passEngine(passTables([S], walls)).pass(2026).arrivals), { "2026-06-22": ["d0621-s<-2026-06-21"] });
 });
 
-test("C-6.5-22 보호 기간 안에서 밀린 축일끼리는 서열 순 — 뒤에 밀린 높은 쪽이 부활 2주 월요일에 먼저 앉는다(→ R-6.3-guard-order)", () => {
+test("C-6.5-22 보호 기간 안에서 밀린 축일끼리는 서열 순 — 뒤에 밀린 높은 쪽이 부활 2주 월요일에 먼저 배정된다(→ R-6.3-guard-order)", () => {
   // 2026 부활 4.5 — 성지주일 3.29 에 밀린 J(prec 6)가 먼저, 성 토요일 4.4 에 밀린 A(prec 3)가 나중이다. 선착순이면 J 4.13 ·
   // A 4.14 — 서열 순이라 A 4.13 · J 4.14(부활 3.26인 해의 요셉 · 수태고지와 같은 경우 — 픽스처 T-2062-03-27)
   const t = passEngine(passTables([MOV("d0329-j", "03.29"), MOV("d0404-a", "04.04", { precedence: 3, priority_group: "A" })], [
@@ -1748,7 +1748,7 @@ test("C-6.5-22 보호 기간 안에서 밀린 축일끼리는 서열 순 — 뒤
   same(fate(t.at("2026-03-29"), "d0329-j"), ["transferred_out", "t-palm"]);
 });
 
-test("C-6.5-23 보호 기간은 막지 않는다 — 성지주일 전날 밀린 축일은 성주간 월요일에 앉아 그날 축일 색이고, 그날의 옮길 수 있는 prec 7 은 도착에 밀려 보호 기간 뒤로 간다", () => {
+test("C-6.5-23 보호 기간은 막지 않는다 — 성지주일 전날 밀린 축일은 성주간 월요일에 배정되어 그날 축일 색이고, 그날의 옮길 수 있는 prec 7 은 도착에 밀려 보호 기간 뒤로 간다", () => {
   // 2026 — 3.28(토, E−8 — 보호 기간 밖)의 가변 대축일이 X(prec 3)를 민다. 3.29 성지주일(절기 주일 2)은 X 를 막고, 보호 기간 안의
   // 3.30 성주간 월요일(격자 평일 8)은 막지 않는다(→ R-6.3-holy-week-guard · R-6.3-guard-destination). 막는 구현이면 4.13 으로 간다
   const t = passEngine(passTables([
@@ -1765,7 +1765,7 @@ test("C-6.5-23 보호 기간은 막지 않는다 — 성지주일 전날 밀린 
   assert.strictEqual(cand(t.at("2026-04-13"), "d0328-x"), undefined);
 });
 
-test("C-6.5-9 도착끼리 기원 순 — 우선순위가 같으면 기원 날짜가 이른 쪽이 먼저 앉는다(id 순이 아니다)", () => {
+test("C-6.5-9 도착끼리 기원 순 — 우선순위가 같으면 기원 날짜가 이른 쪽이 먼저 배정된다(id 순이 아니다)", () => {
   // id 사전순은 aa-late 가 먼저다 — 기원 순(6.15 → 6.16)이 앞선다
   const t = passEngine(passTables([MOV("zz-early", "06.15"), MOV("aa-late", "06.16")], TWO_WALLS));
   same(seats(t.pass(2026).arrivals), { "2026-06-17": ["zz-early<-2026-06-15"], "2026-06-18": ["aa-late<-2026-06-16"] });
@@ -1781,7 +1781,7 @@ test("C-6.5-17 떠난 후순위 후보는 밀어내지 않는다 — 고정일 W
   same([officialId(r), fate(r, "t-v"), fate(r, "d0610-c")], ["d0610-w", ["transferred_out", "d0610-w"], ["proper", null]]);
 });
 
-test("C-6.2-4 · C-6.2-11 좌석 경합 — 꺼진 선택 봉헌은 좌석을 차지하지 않고, 켜진 것은 충돌 도착보다 먼저 앉는다", () => {
+test("C-6.2-4 · C-6.2-11 목적지 충돌 — 꺼진 선택 봉헌은 날짜를 차지하지 않고, 켜진 것은 충돌 도착보다 먼저 배정된다", () => {
   // 2026-08-08(토) 명절이 A 축일을 민다 → 8.9 주일. 선택 봉헌 O 는 8.11(화) → 가까운 주일 8.9 — 기원이 충돌보다 **뒤**라
   // 날짜 루프 안에서 깔면 늦는다(0단계 선색인)
   const tables = passTables([
@@ -1795,7 +1795,7 @@ test("C-6.2-4 · C-6.2-11 좌석 경합 — 꺼진 선택 봉헌은 좌석을 �
   same(seats(off.pass(2026).optionals), { "2026-08-09": ["d0811-o<-2026-08-11"] });   // 도착 · 출발 색인 밖
   assert.ok(!off.pass(2026).arrivals.get("2026-08-09").some((c) => c.observance.id === "d0811-o"));
   same(cand(off.at("2026-08-11"), "d0811-o").status, "proper");
-  // 켜면 O 가 0단계에서 8.9 에 먼저 앉고, A 는 선착순에 막혀 월요일로 간다
+  // 켜면 O 가 0단계에서 8.9 에 먼저 배정되고, A 는 선착순에 막혀 월요일로 간다
   const on = passEngine(tables);
   on.e.setActivatedOptionals(["d0811-o"]);
   same(seats(on.pass(2026).arrivals), { "2026-08-09": ["d0811-o<-2026-08-11"], "2026-08-10": ["d0808-a<-2026-08-08"] });
@@ -1818,7 +1818,7 @@ test("C-6.2-8 켜진 선택 봉헌이 목적지에서 져도 다시 옮기지 �
   same([officialId(sun), fate(sun, "d0811-o"), fate(sun, "d0809-m")], ["lunar815-chuseok", ["transferred_in", null], ["transferred_out", "lunar815-chuseok"]]);
 });
 
-test("C-6.2-12 켜진 출발이 비운 자리 — 승천을 켜면 그 목요일로 옮겨 가는 축일이 목요일에 앉는다", () => {
+test("C-6.2-12 켜진 출발이 비운 자리 — 승천을 켜면 그 목요일로 옮겨 가는 축일이 목요일에 배정된다", () => {
   // 2026-05-13(수, E+38) 합성 대축일이 F 를 민다 → 5.14 목(E+39 승천). 꺼져 있으면 승천이 막아 금요일
   const tables = passTables([MOV("d0513-f", "05.13")], [
     TMP("t-asc", "합성 승천", { kind: "easter_offset", days: 39 }, { season: "easter", type: "feast", transferable: true, transfer_to: "easter7_sunday" }),
@@ -1833,7 +1833,7 @@ test("C-6.2-12 켜진 출발이 비운 자리 — 승천을 켜면 그 목요일
   same(officialId(on.at("2026-05-14")), "d0513-f");
 });
 
-test("C-6.2-9 · C-6.2-6 연도 경계 × 활성화 — 다음 해 좌석은 별도 맵이고, 임시 계산도 같은 활성화 집합을 본다", () => {
+test("C-6.2-9 · C-6.2-6 연도 경계 × 활성화 — 다음 해 배정은 별도 맵이고, 임시 계산도 같은 활성화 집합을 본다", () => {
   // 2028-12-31(성탄 1주일)에 A 축일 X 가 밀린다. 2029-01-01~01.06 은 대축일이 막고, 공현(1.6 토)의 목적지는 1.7 주일이다
   const tables = (extra) => passTables([
     MOV("d1231-x", "12.31", { precedence: 3, priority_group: "A" }),
@@ -1841,24 +1841,24 @@ test("C-6.2-9 · C-6.2-6 연도 경계 × 활성화 — 다음 해 좌석은 별
     SAN("d0106-epiphany", "01.06", "합성 공현", { rank: "principal", precedence: 1, transferable: true, transfer_to: "sunday_0102_0108" }),
     ...extra,
   ]);
-  // 꺼져 있으면 1.7 주일(연중 주일 5 — A 를 막지 못한다)에 앉는다 — 꺼진 공현 optional 은 좌석이 아니다
+  // 꺼져 있으면 1.7 주일(연중 주일 5 — A 를 막지 못한다)에 배정된다 — 꺼진 공현 optional 은 날짜를 차지하지 않는다
   same(seats(passEngine(tables([])).pass(2028).arrivals, "2029-"), { "2029-01-07": ["d1231-x<-2028-12-31"] });
-  // 켜면 공현이 1.6 을 비운다 — 다음 해 좌석의 「비운 기원」이 열린다
+  // 켜면 공현이 1.6 을 비운다 — 다음 해 배정의 「비운 기원」이 열린다
   const open = passEngine(tables([]));
   open.e.setActivatedOptionals(["d0106-epiphany"]);
   same(seats(open.pass(2028).arrivals, "2029-"), { "2029-01-06": ["d1231-x<-2028-12-31"] });
-  // 1.6 을 다른 대축일이 막으면 1.7 은 켜진 공현이 앉은 자리 — 「앉은 자리」가 막아 1.8 로 간다
+  // 1.6 을 다른 대축일이 막으면 1.7 은 켜진 공현이 배정된 날 — 「배정된 날」이 막아 1.8 로 간다
   const t = passEngine(tables([WALL("d0106-wall", "01.06")]));
   t.e.setActivatedOptionals(["d0106-epiphany"]);
   const y = t.pass(2029);
   const temp = t.e.computeTransfers(t.index, 2028, new Map(), vm.runInContext("activatedOptionals", t.e));
   const seed = t.e.spillOf(temp, 2029);
   same(seats(seed), { "2029-01-08": ["d1231-x<-2028-12-31"] });                     // ③ seed 에 공현이 없다
-  same(seats(y.arrivals, "2029-01"), { "2029-01-07": ["d0106-epiphany<-2029-01-06"], "2029-01-08": ["d1231-x<-2028-12-31"] });   // ① 좌석이 같다
+  same(seats(y.arrivals, "2029-01"), { "2029-01-07": ["d0106-epiphany<-2029-01-06"], "2029-01-08": ["d1231-x<-2028-12-31"] });   // ① 배정이 같다
   same([...y.arrivals.values()].flat().filter((c) => c.observance.id === "d0106-epiphany").length, 1);        // ② 공현 도착은 한 건
   same(t.pass(2028).departures.get("2028-12-31")[0].to, "2029-01-08");                // ④ 기원 연도 캐시의 to = 다음 해 seed 도착
   same([count(y.departures), count(y.arrivals) - seed.size], [1, 1]);                 // I-1 — 출발 = 도착 − seed 도착
-  assert.ok(![...t.pass(2028).arrivals.keys()].includes("2029-01-07"));               // 다음 해 좌석은 2028 옮김 계산의 도착에 섞이지 않는다
+  assert.ok(![...t.pass(2028).arrivals.keys()].includes("2029-01-07"));               // 다음 해 배정은 2028 옮김 계산의 도착에 섞이지 않는다
 });
 
 test("C-6.2-7 활성화 집합이 실제로 바뀔 때만 옮김 계산 캐시를 비운다 — 같은 연도의 결과가 바뀐다", () => {
@@ -1882,11 +1882,11 @@ test("§6.5 옮김 계산은 순수하다 — seed 배열을 바꾸지 않고, �
   const arrived = [{ observance: { id: "d1231-y", kind: "sanctoral", name: "y", rank: "major_feast", precedence: 6, color: "white" }, status: "transferred_in", from: "2028-12-31" }];
   const seed = new Map([["2029-01-01", arrived]]);
   t.e.computeTransfers(t.index, 2029, seed, new Set());
-  same(arrived.length, 1);   // 2029-01-01 에 다른 도착이 얹혀도 호출자의 배열은 그대로
+  same(arrived.length, 1);   // 2029-01-01 에 다른 도착이 더해져도 호출자의 배열은 그대로
   assert.throws(() => t.e.computeTransfers(t.index, NaN, new Map(), new Set()), /year must be an integer/);
 });
 
-// ── 5.7 프리로드 · 캐시 · 결손 (§3.4 · §4.9) ──
+// ── 5.7 프리로드 · 캐시 · 누락 (§3.4 · §4.9) ──
 
 test("C-4.9-1 anchorCache / transferCache 분리 · 42칸 월간 뷰의 computus ≤ 3 · 캐시에는 seed 받은 완전한 계산 결과만", () => {
   // 규칙 파생 메모(`movableOf`)는 인덱스에 붙어 앵커 계산을 건너뛰게 하므로 새 인덱스로 센다 — 프리로드 직후와 같은 처지

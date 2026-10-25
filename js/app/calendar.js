@@ -125,7 +125,7 @@ function cellCandidateOf(resolved) {
   if (resolved.coord && resolved.coord.type === "sunday") return official;
   if (official.observance.properWeekday === true) return official;
   // 저녁 전례(성탄 밤 — 12.24 저녁)는 그날의 이름이 아니다(→ 설계서 R-6.1-evening — 그날 낮의 대표 · 색에 참여하지 않는다) —
-  // 칸에 실으면 「성탄 밤」 이름에 그날 색(자) 점이 붙는다(PR #349 리뷰). 주간 · 목록 줄에는 「· 저녁」 꼬리로 남는다.
+  // 칸에 실으면 「성탄 밤」 이름에 그날 색(자) 점이 붙는다(PR #349 리뷰). 주간 · 목록 줄에는 「· 저녁」 상태 표시로 남는다.
   return resolved.candidates.find((c) => !isGrid(c) && !isAwayCandidate(c) && c.status !== "optional" && !c.evening) || null;
 }
 
@@ -148,9 +148,9 @@ function nameOfCandidate(c) {
 /**
  * 하루의 표시 단위(순수). `resolved` 가 null 이면(계산 범위 밖 · 잘못된 날짜) 날짜만 있는 빈 하루 — 링크도 없다.
  * - 칸 이름: `cellCandidateOf` 하나 — 괄호 설명을 뗀 이름(칩과 같은 `shortName`), 전체 이름은 `cellTitle`, 그 후보의
- *   상태 꼬리(「· 10월 18일에서 옮겨 옴」 · 「· 기념일」)는 `cellSuffix` — 칸에는 보이지 않고 링크 이름에 붙는다.
+ *   상태 표시(「· 10월 18일에서 옮겨 옴」 · 「· 기념일」)는 `cellSuffix` — 칸에는 보이지 않고 링크 이름에 붙는다.
  * - 줄: 첫 이름은 그날의 대표(격자 평일도 이름이 있다 — 「연중 28주 금요일」), 그 밖의 이름 있는 후보(격자 제외)를
- *   후보 순서대로 — 상태 꼬리(「· 10월 18일에서 옮겨 옴」 · 「· 기념만」 · 「· 옮겨 지킬 수 있음」)를 칩과 같은 말로.
+ *   후보 순서대로 — 상태 표시(「· 10월 18일에서 옮겨 옴」 · 「· 기념만」 · 「· 옮겨 지킬 수 있음」)를 칩과 같은 말로.
  * - 색: 그날의 정식 색(`colors` — 사계재 날 축일이면 [자, 백] 병기). 선택 대체색(장미 · 청)은 싣지 않는다(DESIGN.md §2).
  * - 주기: 주일만(「가해」) — 평일 주기(홀수해 · 짝수해)는 싣지 않는다.
  * - 전례년 첫날: 대림 1주일 — 그날부터 새 주기(「나해 시작」, 미결3).

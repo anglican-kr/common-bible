@@ -250,7 +250,7 @@ test("calendarDay: 절기 위치가 고유명 평일과 같아도(lent, null, we
   assert.strictEqual(ctx.dayAriaLabel(d, false), "4월 2일 목요일, 성주간 목요일, 적색");   // 이름 없는 평일 칸 — 링크 이름은 대표 이름
 });
 
-test("calendarDay: 옮겨 간 · 생략된 후보는 칸 이름이 되지 않고 줄에서 흐리게(away) — 꼬리말은 칩과 같은 말", () => {
+test("calendarDay: 옮겨 간 · 생략된 후보는 칸 이름이 되지 않고 줄에서 흐리게(away) — 상태 표시는 칩과 같은 말", () => {
   const sunday = grid("ordinary-29-sunday", "연중 29주일");
   const luke = cand(obs("d1018-성-루가", "성 루가(복음사가)", { rank: "major_feast", color: "red" }), "transferred_out",
     { to: "2026-10-19", displacedBy: sunday.observance.id });
@@ -339,7 +339,7 @@ test("dayAriaLabel: 「오늘, 10월 15일 목요일, 아빌라의 데레사, �
   assert.strictEqual(ctx.dayAriaLabel(blank, false), "12월 31일 금요일");
 });
 
-test("dayAriaLabel: 이름은 칸에 보이는 그대로(WCAG 2.5.3) — 사계재 칸 「추계재」 · 주일 「연중29주」 · 꼬리말은 붙고, 이름 없는 평일만 대표 이름", () => {
+test("dayAriaLabel: 이름은 칸에 보이는 그대로(WCAG 2.5.3) — 사계재 칸 「추계재」 · 주일 「연중29주」 · 상태 표시는 붙고, 이름 없는 평일만 대표 이름", () => {
   // 대표가 격자 평일인 사계재 날 — 칸은 「추계재」를 보이므로 링크 이름도 「추계재」(대표 「연중 24주 금요일」이 아니라 — PR #348 리뷰)
   const ember = ctx.calendarDay("2026-09-18", resolvedOf("2026-09-18",
     [grid("ordinary-24-weekday-fri", "연중 24주 금요일"), cand(obs("t-추계재", "추계재", { rank: "feria", color: "violet" }))],
@@ -349,14 +349,14 @@ test("dayAriaLabel: 이름은 칸에 보이는 그대로(WCAG 2.5.3) — 사계�
   // 주일 — 보이는 「연중29주」 그대로(앞의 「일요일」이 「주일」을 대신 말한다)
   const sunday = ctx.calendarDay("2026-10-18", resolvedOf("2026-10-18", [grid("ordinary-29-sunday", "연중 29주일")], { coord: SUNDAY(29) }));
   assert.strictEqual(ctx.dayAriaLabel(sunday, false), "10월 18일 일요일, 연중29주, 녹색");
-  // 격자 평일 칸의 기념일 — 칸 이름 + 칩과 같은 꼬리 「· 기념일」
+  // 격자 평일 칸의 기념일 — 칸 이름 + 칩과 같은 상태 표시 「· 기념일」
   const wesley = ctx.calendarDay("2025-05-24", resolvedOf("2025-05-24",
     [grid("easter-5-weekday-sat", "부활 5주 토요일"), cand(obs("d0524-존-웨슬리", "존 웨슬리(사제)", { rank: "commemoration" }))],
     { color: "white", colors: ["white"] }));
   assert.strictEqual(wesley.cellName, "존 웨슬리");
   assert.strictEqual(wesley.cellSuffix, " · 기념일");
   assert.strictEqual(ctx.dayAriaLabel(wesley, false), "5월 24일 토요일, 존 웨슬리 · 기념일, 백색");
-  // 옮겨 온 대표 — 꼬리 「· 7월 25일에서 옮겨 옴」은 칸에 안 보이고 링크 이름에 붙는다
+  // 옮겨 온 대표 — 상태 표시 「· 7월 25일에서 옮겨 옴」은 칸에 안 보이고 링크 이름에 붙는다
   const james = cand(obs("d0725-사도-성-장-야고보", "사도 성 장 야고보", { rank: "major_feast", color: "red" }), "transferred_in", { from: "2027-07-25" });
   const moved = ctx.calendarDay("2027-07-26", resolvedOf("2027-07-26", [james], { color: "red", colors: ["red"] }));
   assert.strictEqual(ctx.dayAriaLabel(moved, false), "7월 26일 월요일, 사도 성 장 야고보 · 7월 25일에서 옮겨 옴, 적색");
