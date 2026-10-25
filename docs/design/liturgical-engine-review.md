@@ -165,7 +165,7 @@ GitHub 토픽 [lectionary](https://github.com/topics/lectionary), [liturgical-ca
 ### 3.3 우선순위와 옮김
 
 - **같은 순위의 범주 순서**
-  - 외부 구현: romcal `rites/roman1969/src/constants/precedences.ts`는 전례주년 일반 규범(UNLY) 59항의 13등급을 `GENERAL_SOLEMNITY_3` 같은 문자열로 두고, **`PRECEDENCES` 배열의 순서**로 숫자가 같을 때의 순서를 정한다. 2등급 안에서는 주님의 대축일, 절기 주일, 재의 수요일, 성주간 평일, 부활 8일 순이다.
+  - 외부 구현: romcal `packages/generator/src/constants/precedences.ts`는 전례주년 일반 규범(UNLY) 59항의 13등급을 `GENERAL_SOLEMNITY_3` 같은 문자열로 두고, **`PRECEDENCES` 배열의 순서**로 숫자가 같을 때의 순서를 정한다. 2등급 안에서는 주님의 대축일, 절기 주일, 재의 수요일, 성주간 평일, 부활 8일 순이다.
   - 이 설계: `precedence` 정수와 A 특례 1.5에, 우선순위가 같을 때의 규칙이 넷 있었다. 도착 우선(→ R-6.2-chain-model), 선착순(→ R-6.2-first-come), 규칙일 유지(→ R-6.2-rule-day-stays), 마지막은 `id` 사전순이다.
   - 판정: **채택**. 마지막 규칙(`id` 사전순) 앞에 범주 사다리를 두었다(→ R-6.2-tie-ladder). 기존의 같은 순위 규칙과의 관계, `synthetic` 표지를 사다리에 넣은 것, `variesByYear`와의 구분도 거기 있다. `id`는 마지막 안전장치로 남았다.
   - 실측: 격자와 이동 축일(temporal) 행이 같은 값으로 겹치는 것은 둘뿐이다(`temporal-feasts.json` 24행 대조).
@@ -976,6 +976,7 @@ GitHub 토픽 [lectionary](https://github.com/topics/lectionary), [liturgical-ca
 - [x] **C-6.2-3** 주의 봉헌의 `nearby_sunday`는 경계가 맞다(→ R-6.2-nearby-sunday). 2.2가 수요일이면 직전 주일, 목요일이면 다음 주일이고, 주일이면 목적지가 없다.
   - **픽스처**: O-2028-01-30-presentation(수요일), O-2034-02-05-presentation(목요일), O-2031-02-02-presentation-on-sunday(주일, 목적지 없음), O-2026-02-01-presentation
   - **기도서 원문과 갈리는 해**: 기도서 원문 80행은 「1월 28일과 2월 3일 사이의 주일」로 적는다. 2.2가 목요일이나 금요일인 해에 엔진의 가까운 주일과 갈린다. O-2034-02-05-presentation(목)이 그 경우이고, 원문대로면 1.29다(미결44, 열림).
+  - **책자도 해마다 다르다**: 2023 책자(2.2 목)는 원문대로 1.29에 「주님의 봉헌 축일로 지킬 수 있다」를 달아 엔진(2.5)과 다르다. 2024 책자(2.2 금)는 엔진대로 2.4다(미결44).
   - **검증**: 유닛(실데이터 픽스처 넷)
   - **기준**: R-6.2-nearby-sunday, 미결44
   - **체크**: PR #343 (2026-10-11)
@@ -1303,77 +1304,84 @@ GitHub 토픽 [lectionary](https://github.com/topics/lectionary), [liturgical-ca
 
 ## 6. 사제 확인 질문지
 
-**설계서 §9.1(열림 · 잠정 · 대기)에서 확인 주체에 사제가 든 미결의 뷰다.** 질문 · 구체 예 · 잠정 답 · 뒤집히면 바뀌는 곳은 설계서 §9 의 그 항목이 기준이라 여기에 되풀이하지 않는다 — 사제에게 보낼 때는 그 항목의 「질문 · 구체 예 · 잠정 답」을 옮겨 적는다. 항목이 닫혀 설계서 §9.2 로 가면 이 표에서도 뺀다(`tests/unit/docs-crossref.test.js` 가 두 목록과 상태의 첫 낱말이 같은지 검사한다).
+**설계서 §9.1(열림, 잠정, 대기)에서 확인 주체에 사제가 든 미결을 모은 표다.** 질문, 구체 예, 잠정 답, 뒤집히면 바뀌는 곳은 설계서 §9의 그 항목이 기준이라 여기에 다시 적지 않는다. 사제에게 보낼 때는 그 항목의 질문, 구체 예, 잠정 답을 옮겨 적는다. 항목이 닫혀 설계서 §9.2로 가면 이 표에서도 뺀다. 문서 검사(`tests/unit/docs-crossref.test.js`)가 두 목록과 상태의 첫 낱말이 같은지 본다.
 
 | 미결 | 묻는 것 | 상태 |
 |---|---|---|
-| 미결1 | 범주 사다리로도 정하지 못하는, 같은 범주 안 같은 순위의 순서 — 12.25 두 행(낮 · 새벽) · prec 7 축일 ∧ 축일 4쌍 | 잠정 |
-| 미결6 | 같은 날의 축일 둘(prec 7)의 기본 선택 순서 — 둘 다 본문을 내는 것은 확정 | 잠정 |
+| 미결1 | 범주 사다리로도 순서를 정하지 못하는 같은 범주, 같은 우선순위의 전례일(12.25 낮과 새벽, 같은 날의 prec 7 축일 4쌍)은 어떤 순서로 두나 | 잠정 |
+| 미결6 | 같은 날의 축일 둘(prec 7)은 어느 쪽을 먼저 보이나(둘 다 본문을 내는 것은 정했다) | 잠정 |
 | 미결13 | 재의 수요일이 설과 겹칠 때 「옮겨 지킬 수 있다」는 선택인가 의무인가 | 대기(데이터 수정) |
-| 미결14 | 그리스도의 성체일과 고정일 주요축일 A 가 겹치면 어느 쪽이 옮기나 | 잠정 |
-| 미결19 | 켠 선택 봉헌의 목적지 주일이 이미 명절이면 | 잠정 |
-| 미결27 | 안나와 요아킴은 축일인가 주요축일(나)인가 — 주일과 겹치면 그날 기념하나, 다음 날로 옮기나 | 잠정 |
-| 미결30 | 책자와 기도서의 색 표기가 데이터와 다른 자리 — 죄 없는 어린이들, 기념일인 순교자(킹, 본회퍼, 모어)의 색 | 열림 |
-| 미결35 | 데이터가 비워 둔 분류 — 맥추감사주일의 등급, 노동자의 날의 층위 · 색 | 열림 |
-| 미결44 | 주의 봉헌을 옮겨 지키는 주일 — 기도서 원문의 1.28-2.3 주일인가, 책자의 가까운 주일인가 | 열림 |
-| 미결45 | 성주간과 부활 8일의 평일에 걸린 주요축일 — 책자대로 그날 지키나, 기도서 85쪽 안내대로 옮기나 | 잠정 |
-| 미결46 | 부활 8일의 평일에 걸린 성인 축일 — 생략하나, 책자대로 그날 성인의 색으로 지키나 | 잠정 |
-| 미결47 | 주일과 겹친 성인 축일 — 82쪽 안내의 「이동」은 주요축일만 가리키나 | 잠정 |
-| 미결48 | 모든 한국의 순교자들과 성 니콜라의 등급 — 「월별 축일」의 (나)인가, 교회력 규정의 (다)인가 | 잠정 |
-| 미결49 | 기도서 두 곳이 같은 날을 다르게 적은 것 — 9.29 설립기념일을 따로 지키나, 이름 표기 | 열림 |
-| 미결50 | 기도서 독서 표기가 의심스러운 곳 — 맥추감사 서신, 12.27 복음, 근로자의 날의 「상」 | 열림 |
-| 미결51 | 본문 없는 축일(병자를 위한 기도일, 세계평화를 위한 기도일)을 어떻게 지키나 | 잠정 |
+| 미결14 | 그리스도의 성체일과 고정일 주요축일 A가 겹치면 어느 쪽을 옮기나 | 잠정 |
+| 미결19 | 켠 선택 봉헌의 목적지 주일이 이미 명절이면 어떻게 하나 | 잠정 |
+| 미결27 | 안나와 요아킴은 축일인가 주요축일(나)인가, 주일과 겹치면 그날 기념하나 다음 날로 옮기나 | 잠정 |
+| 미결30 | 책자와 기도서의 색 표기가 데이터와 다른 자리(죄 없는 어린이들, 기념일인 순교자 킹, 본회퍼, 모어)는 어느 쪽을 따르나 | 열림 |
+| 미결35 | 데이터가 비워 둔 분류인 맥추감사주일의 등급과 노동자의 날의 층위와 색은 무엇인가 | 열림 |
+| 미결44 | 주의 봉헌을 옮겨 지키는 주일은 기도서 원문의 1.28-2.3 사이 주일인가, 책자의 가까운 주일인가 | 열림 |
+| 미결45 | 성주간과 부활 8일의 평일에 걸린 주요축일은 책자대로 그날 지키나, 기도서 85쪽 안내대로 옮기나 | 잠정 |
+| 미결46 | 부활 8일의 평일에 걸린 성인 축일은 생략하나, 책자대로 그날 성인의 색으로 지키나 | 잠정 |
+| 미결47 | 주일과 겹친 성인 축일도 옮기나, 기도서 82쪽 안내의 「이동」은 주요축일만 가리키나 | 잠정 |
+| 미결48 | 모든 한국의 순교자들과 성 니콜라는 「월별 축일」의 (나)인가, 교회력 규정의 (다)인가 | 잠정 |
+| 미결49 | 기도서 두 곳이 같은 날을 다르게 적은 곳에서, 9.29 설립기념일은 따로 지키나, 이름은 어느 표기를 쓰나 | 열림 |
+| 미결50 | 기도서 독서 표기가 의심스러운 곳(맥추감사 서신, 12.27 복음, 근로자의 날의 「상」)은 어느 쪽을 쓰나 | 열림 |
+| 미결51 | 본문 없는 축일(병자를 위한 기도일, 세계평화를 위한 기도일)은 어떻게 지키나 | 잠정 |
 
-**옛 `Qn` 해독**(2026-09-20 폐지 — 설계서 §1.4). 이 질문지는 2026-09-05 부터 `Q1`~`Q14` 번호를 썼다. 원장 · PR 본문 · 보관 문서 · ADR 에 남은 `Qn` 은 이 Q→미결 대응표로 읽는다 — Q1→미결17 · Q1 부속→미결17(부속 — 도착끼리의 순서) · Q2→미결14 · Q3→미결13 · Q4→미결18 · Q5→미결6 · Q6→미결26 · Q7→미결16 · Q8→미결8 · Q9→미결19 · Q10→미결20 · Q11→미결10 · Q12→미결28 · Q13→미결31 · Q14→미결32 · 미결33. 그중 미결18 · 미결16 · 미결33 은 확인 주체가 데이터 · 책자라 위 표에 없고, 미결8 · 미결10 · 미결26 · 미결28 · 미결31 은 닫혔다(설계서 §9.2).
+**옛 `Qn` 번호 읽는 법**(2026-09-20 폐지, 설계서 §1.4). 이 질문지는 2026-09-05부터 `Q1`-`Q14` 번호를 썼다. 원장, PR 본문, 보관 문서, ADR에 남은 `Qn`은 다음 Q→미결 대응으로 읽는다. Q1→미결17, Q1 부속→미결17(부속: 도착끼리의 순서), Q2→미결14, Q3→미결13, Q4→미결18, Q5→미결6, Q6→미결26, Q7→미결16, Q8→미결8, Q9→미결19, Q10→미결20, Q11→미결10, Q12→미결28, Q13→미결31, Q14→미결32와 미결33. 그 가운데 미결16, 미결18, 미결33은 확인 주체가 데이터나 책자라 위 표에 없고, 미결8, 미결10, 미결17, 미결20, 미결26, 미결28, 미결31, 미결32는 닫혔다(설계서 §9.2).
 
-**부수 확인** — 질문지에 번호 없이 싣던 셋과, 사계재 색 물음(미결26)의 옛 행에 함께 있던 물음 하나.
+**부수 확인**: 질문지에 번호 없이 싣던 셋과, 사계재 색 물음(미결26)의 옛 행에 함께 있던 물음 하나다.
 
-- 주의 변모 주일(E−49, `precedence: null`)의 지위 — 닫힘(2026-09-18): 선택 독서이고 지정 전례일이 아니다(본 문서 §4.3 공백 4 · C-6.1-7 · X-10).
-- 12.25 낮 · 새벽 중 날짜 뷰의 기본(성탄 밤은 12.24 저녁 전례 — R-6.1-evening) — 미결12(확인 주체: 사용자) · 미결1.
-- 분류 미해소(맥추감사 · 노동자의 날) — ADR 「미결 사항」을 설계서 §9 로 승계하며 미결35 로 발급했고(2026-10-10), 확인 주체에 사제가 들어 위 표에 올렸다.
-- 사계재 본문을 감사성찬례에서 실제로 쓰는가(2024 면은 썼고 2025 · 2026 면은 참조만) — 미결23 이 닫히며 정해졌다: 사계재는 `proper` 후보로 본문을 제공하고 고르는 것은 독자다(→ R-6.1-ineligible). 2024 편집은 근거로 삼지 않는다(사용자 결정 2026-09-19 — X-12).
+- **주의 변모 주일**(E−49, `precedence: null`)의 지위는 닫혔다(2026-09-18). 선택 독서이고 지정 전례일이 아니다(본 문서 §4.3 공백 4, C-6.1-7, X-10).
+- **12.25 낮과 새벽 가운데 날짜 화면의 기본**은 사용자가 정했다(2026-10-12, 미결12의 잠정 답). 지정 전례일인 성탄 낮이 기본이고, 새벽은 따로 고르는 칩이다. 성탄 밤은 12.24의 저녁 전례다(→ R-6.1-evening). 같은 범주 안의 순서는 미결1이 묻는다.
+- **맥추감사주일과 노동자의 날의 분류**는 ADR 「미결 사항」을 설계서 §9로 이어받을 때 미결35 번호를 받았고(2026-10-10), 확인 주체에 사제가 들어 위 표에 올렸다.
+- **사계재 본문을 감사성찬례에서 실제로 쓰는가**(2024 책자는 썼고 2025, 2026 책자는 참조만 했다)는 미결23이 닫히며 정해졌다. 사계재는 `proper` 후보로 본문을 내고, 고르는 것은 독자다(→ R-6.1-ineligible). 2024 편집은 근거로 삼지 않는다(사용자 결정 2026-09-19, X-12).
 
 ---
 
 ## 7. 갱신 규칙과 수명
 
-- **누가 체크하나**: 각 PR 작성자가 그 PR 범위의 항목을 `- [x] … — PR #NNN (날짜)` 로 닫는다. 🔴 항목은 해당 미결이 닫힌 뒤에만.
-- **골든 덤프가 사제 산출물이 되는 시점**: 부록 A 덤프(PR #343)에서 발췌를 뽑아 §6 질문지의 미결을 사제에게 묻고, 미결16 의 책자 대조(확인 주체: 책자)는 `tools/booklet/`(PR #347)로 해마다의 책자를 전수 대조한다 — 미결17 은 2027 책자(X-13)로 닫혀 사제 발송이 필요 없어졌다(2026-10-13). 사제의 답이나 책자 대조 결과가 오면 설계서 §9 머리의 「해결되면 같은 PR 에서 넷을 한다」대로 그 항목을 닫는다 — 본 문서 §6 은 뷰라 행을 빼기만 한다.
-- **아카이브**: ADR-037 상태가 「구현 완료」가 되면 이 문서를 설계서와 함께 `docs/archive/design/` 으로 옮긴다. 체크되지 않은 항목이 남아 있으면 `docs/known-issues.md` 로 넘긴다.
+- **누가 체크하나**: PR마다 작성자가 그 PR이 다룬 항목을 닫는다. 상자를 `[x]`로 바꾸고, 하위 항목 「체크」에 `PR #NNN (YYYY-MM-DD)`를 적는다. 날짜는 그 PR을 머지한 날이다(본 문서 §5.0). 🔴 항목은 그 미결이 닫힌 뒤에만 닫는다.
+- **골든 덤프로 사제에게 묻는 법**: 부록 A의 덤프(PR #343)에서 발췌를 뽑아 본 문서 §6 질문지의 미결을 사제에게 묻는다. 미결16의 책자 대조(확인 주체: 책자)는 `tools/booklet/`(PR #347)로 해마다 책자 전체를 대조한다. 미결17은 2027 책자(X-13)로 닫혀 사제에게 보낼 필요가 없어졌다(2026-10-13). 사제의 답이나 책자 대조 결과가 오면, 설계서 §9 머리의 「해결되면 같은 PR에서 넷을 한다」대로 그 항목을 닫는다. 본 문서 §6은 모아 보이는 표라 그 행을 빼기만 한다.
+- **보관**: 설계서는 교회력 규칙의 기준으로 쓰이는 동안 `docs/design/`에 둔다. 이 문서는 체크하지 않은 항목(2026-10-25에 12개)이 모두 닫히면 `docs/archive/design/`으로 옮긴다. 그때 이 문서에만 남은 일이 있으면 교회력 주제 문서의 「남은 일」로 넘긴다(사용자 결정 2026-10-25).
 
 ---
 
-## 부록 A — 옮김 골든 덤프 형식 (채택 — PR 3 둘째에서 만들었다)
+## 부록 A — 옮김 골든 덤프 형식 (채택, PR 3 둘째 #343)
 
-- 위치, 범위: `tests/fixtures/liturgical/transfers-1900-2100.golden.txt` — 1900-2100(불변식(I-1-I-8)과 같은 범위), `activated = ∅`(PR 3 둘째가 정했다, 2026-10-11 — 원장 `docs/changes/2026-10-11-liturgical-engine-b1-transfers.md`). 제안 당시의 `tests/unit/fixtures/liturgical-transfers-1900-2100.txt` 는 기대값 픽스처 디렉터리가 생기기 전의 안이다.
-- 머리줄: `# data <서브모듈 sha> · activated=∅ · MAX_SHIFT=30` — 기록용이고 비교는 본문만 한다.
-- 한 줄 = 옮긴 축일 하나, 기원 날짜 순(같으면 목적지, id 순), 칸 사이는 두 칸:
+- **위치와 범위**: `tests/fixtures/liturgical/transfers-1900-2100.golden.txt`. 범위는 불변식(I-1-I-8)과 같은 1900-2100이고, 켠 선택 봉헌은 없다(`activated = ∅`). PR 3 둘째가 정했다(2026-10-11, 원장 `docs/changes/2026-10-11-liturgical-engine-b1-transfers.md`). 제안할 때의 경로 `tests/unit/fixtures/liturgical-transfers-1900-2100.txt`는 기대값 픽스처 폴더가 생기기 전의 안이다.
+- **머리줄**: `# data <서브모듈 sha> · activated=∅ · MAX_SHIFT=30`. 기록용이고, 비교는 본문만 한다.
+- **본문**: 한 줄에 옮긴 축일 하나다. 기원 날짜 순으로 쓰고(같으면 목적지, 그다음 id 순), 칸 사이는 두 칸이다.
 
 ```
 2025-11-30 → 2025-12-01  d1130-사도-성-안드레아  by:t-대림1주일  shift:1
 2027-03-25 → 2027-04-05  d0325-성모수태고지  by:t-성-목요일  shift:11
-2062-03-25 → 2062-04-03  d0325-성모수태고지  by:t-부활밤  shift:9
+2062-03-25 → 2062-04-03  d0325-성모수태고지  by:t-성-토요일  shift:9
 ```
 
-- 테스트는 본문 **문자열 동등**이다(calendarium-romanum `regression_spec.rb` 선례 — `liturgical-engine.data.test.js` 「I-10」). `UPDATE_GOLDEN=1` 로 재생성하고 diff 를 PR 리뷰에서 읽는다. 데이터가 옮김 결과를 바꾸면 `sync-data.yml` 이 동기화 PR 을 열기 전에 멈춘다 — 앱 저장소에서 골든을 다시 만든 PR 이 데이터 포인터를 올린다.
-- 사제용 발췌: 2025-2035 를 잘라 이름을 한국어 표기로 바꾼 표 — 처음 표는 PR #343 원장(`docs/changes/2026-10-11-liturgical-engine-b1-transfers.md`) 「리뷰 반영 1회차」, 보호 기간에서 옮기는 경우가 없어진 뒤의 표는 PR #345 원장(`docs/changes/2026-10-11-liturgical-engine-booklet-holy-week.md`)에 실었다. 점-시점 표다 — 골든 덤프가 바뀌면 다시 뽑는다.
+- **테스트**는 본문 문자열이 같은지 본다(`liturgical-engine.data.test.js`의 「I-10」. calendarium-romanum의 `regression_spec.rb`를 본떴다). `UPDATE_GOLDEN=1`로 다시 만들고, 바뀐 줄을 PR 리뷰에서 읽는다. 데이터가 옮김 결과를 바꾸면 `sync-data.yml`이 동기화 PR을 열기 전에 멈춘다. 그때는 앱 저장소에서 골든 덤프를 다시 만든 PR이 데이터 포인터를 올린다.
+- **사제용 발췌**: 2025-2035를 잘라 이름을 한국어 표기로 바꾼 표다. 처음 표는 PR #343 원장(`docs/changes/2026-10-11-liturgical-engine-b1-transfers.md`)의 「리뷰 반영 1회차」에 있다. 보호 기간에서 옮기는 경우가 없어진 뒤의 표는 PR #345 원장(`docs/changes/2026-10-11-liturgical-engine-booklet-holy-week.md`)에 있다. 둘 다 그때의 표다. 골든 덤프는 그 뒤 #347, #349, #402에서 바뀌었으므로, 사제에게 보내기 전에 다시 뽑는다.
 
-## 부록 B — 옮김 케이스 픽스처 스키마 (채택 — 기준은 `tests/fixtures/liturgical/README.md`)
+## 부록 B — 옮김 케이스 픽스처 스키마 (채택, 기준은 `tests/fixtures/liturgical/README.md`)
 
-2026-09-20 채택. 케이스는 `tests/fixtures/liturgical/{transfers,optionals,winners}.cases.json` 에 있고 스키마, id 규칙, 소비 방법의 기준은 [그 README](../../tests/fixtures/liturgical/README.md)다 — 이 부록이 제안한 모양(LiturgicalCalendarAPI `LitCalTest.json` 계열, 예: `christmas-triad-chain-2027` 의 2027-12-26 연쇄)에 `kind`, `group`, `canon`, `checks`, `source`, `status` 를 더했다. 제안에서 바뀐 것:
+2026-09-20에 채택했다. 케이스는 `tests/fixtures/liturgical/{transfers,optionals,winners}.cases.json`에 있고, 스키마, id 규칙, 쓰는 방법의 기준은 [그 README](../../tests/fixtures/liturgical/README.md)다. 이 부록이 제안한 모양(LiturgicalCalendarAPI `LitCalTest.json` 계열. 예: `christmas-triad-chain-2027`의 2027-12-26 연쇄)에 `kind`, `group`, `canon`, `checks`, `source`, `status`를 더했다. 제안에서 바뀐 것은 다음과 같다.
 
-- id — 자유 문자열 대신 `T-2027-12-27-christmas-triad` 형식(README 「id 규칙」).
-- `rule`(기도서 원문의 위치 — 「주요축일 나-1」) — `canon`(R- 규칙 마커, 설계서 절)과 `source`(외부 근거)로 나눴다.
-- `applies.since/until`(기도서 개정이나 사제 확인으로 규칙이 바뀐 **발효 연도**) — README 스키마에 없다. 필요해지면 README 에 더한다.
+- id는 자유 문자열 대신 `T-2027-12-27-christmas-triad` 형식이다(README 「id 규칙」).
+- `rule`(기도서 원문의 위치. 예: 「주요축일 나-1」)은 `canon`(R- 규칙 마커, 설계서 절)과 `source`(외부 근거)로 나눴다.
+- `applies.since/until`(기도서 개정이나 사제 확인으로 규칙이 바뀐 **발효 연도**)은 README 스키마에 없다. 필요해지면 README에 더한다.
 
-제안의 두 원칙은 그대로 계약이 됐다 — `displacedBy` 는 **정확한 id** 로 쓴다(생략부호 금지 — 그러면 픽스처가 계약을 검증하지 못한다), `skip` 은 데이터, 책자 대기에만 쓴다(미결13). 격자 id 규칙은 설계서 §5.5 다 — 성탄절기 주일은 데이터에 주차가 있어 2027-12-26 은 성탄 후 첫 주일 `grid:christmas-1-sunday` 이고(실측: `christmas/1/sunday`, `christmas/2/sunday` 가 독서·본기도 양쪽에 있다), `week: null` 일 때만 `x` 를 쓴다(성주간 평일 등).
+제안의 두 원칙은 그대로 규칙이 됐다.
+
+- `displacedBy`는 **정확한 id**로 쓴다. 생략부호를 쓰면 픽스처가 엔진의 결과를 검증하지 못한다.
+- `skip`은 데이터나 책자를 기다릴 때만 쓴다. 지금은 미결13의 케이스 하나다.
+
+격자 id 규칙은 설계서 §5.5다. 성탄절기 주일은 데이터에 주차가 있어 2027-12-26은 성탄 후 첫 주일 `grid:christmas-1-sunday`이다(실측: `christmas/1/sunday`, `christmas/2/sunday`가 독서와 본기도 양쪽에 있다). `week: null`일 때만 `x`를 쓴다(성주간 평일 등).
 
 ## 부록 C — 외부 출처
 
-| 출처 | 참조한 파일·페이지 |
+romcal은 2026-10-24에 엔진 파일을 `packages/generator/`로 옮겼다. 아래 경로는 2026-10-25에 확인했다.
+
+| 출처 | 참조한 파일과 페이지 |
 |---|---|
-| calendarium-romanum | [`spec/regression_dumps/`](https://github.com/igneus/calendarium-romanum/tree/master/spec/regression_dumps) · `transfers_2000_2100.txt` · [`spec/regression_spec.rb`](https://github.com/igneus/calendarium-romanum/blob/master/spec/regression_spec.rb) · [`lib/calendarium-romanum/transfers.rb`](https://github.com/igneus/calendarium-romanum/blob/master/lib/calendarium-romanum/transfers.rb) · [`liturgical_law/`](https://github.com/igneus/calendarium-romanum/tree/master/liturgical_law) · `spec/liturgical_law_spec.rb` |
-| romcal (dev) | [`rites/roman1969/src/constants/precedences.ts`](https://github.com/romcal/romcal/blob/dev/rites/roman1969/src/constants/precedences.ts) · `src/constants/ranks.ts` · `src/types/liturgical-day.ts`(`dateExceptions` · `allowSimilarRankItems`) · `__tests__/calendar-builder.test.ts` · `__tests__/dates.test.ts` · [`packages/lunar-new-year`](https://github.com/romcal/romcal/tree/dev/packages/lunar-new-year) · `packages/easter/src/easter.dates.spec.ts` |
-| dailyoffice2019 | [`site/churchcal/calculations.py`](https://github.com/blocher/dailyoffice2019/blob/master/site/churchcal/calculations.py) · `models.py` · `utils.py` · `tests.py` · `management/commands/generate_ics_calendars.py` |
-| LiturgicalCalendarAPI | [`jsondata/tests/roman/`](https://github.com/Liturgical-Calendar/LiturgicalCalendarAPI/tree/development/jsondata/tests/roman) · `jsondata/schemas/LitCalTest.json` |
-| 골든 소스 | [lectionarypage.net](https://www.lectionarypage.net/CalndrsIndexes/Calendar2026.html) · [Almanac for Common Worship](https://almanac.oremus.org/) · [lectio-api](https://github.com/asachs01/lectio-api) · [awesome-church-calendar](https://github.com/calendarium-romanum/awesome-church-calendar) |
+| calendarium-romanum | [`spec/regression_dumps/`](https://github.com/igneus/calendarium-romanum/tree/master/spec/regression_dumps), `transfers_2000_2100.txt`, [`spec/regression_spec.rb`](https://github.com/igneus/calendarium-romanum/blob/master/spec/regression_spec.rb), [`lib/calendarium-romanum/transfers.rb`](https://github.com/igneus/calendarium-romanum/blob/master/lib/calendarium-romanum/transfers.rb), [`liturgical_law/`](https://github.com/igneus/calendarium-romanum/tree/master/liturgical_law), `spec/liturgical_law_spec.rb` |
+| romcal (dev) | [`packages/generator/src/constants/precedences.ts`](https://github.com/romcal/romcal/blob/dev/packages/generator/src/constants/precedences.ts), `packages/generator/src/constants/ranks.ts`, `packages/generator/src/types/liturgical-day.ts`(`dateExceptions`, `allowSimilarRankItems`), `rites/roman1969/__tests__/calendar-builder.test.ts`, `rites/roman1969/__tests__/dates.test.ts`, [`packages/lunar-new-year`](https://github.com/romcal/romcal/tree/dev/packages/lunar-new-year), `packages/easter/src/easter.dates.spec.ts` |
+| dailyoffice2019 | [`site/churchcal/calculations.py`](https://github.com/blocher/dailyoffice2019/blob/master/site/churchcal/calculations.py), `models.py`, `utils.py`, `tests.py`, `management/commands/generate_ics_calendars.py` |
+| LiturgicalCalendarAPI | [`jsondata/tests/roman/`](https://github.com/Liturgical-Calendar/LiturgicalCalendarAPI/tree/development/jsondata/tests/roman), `jsondata/schemas/LitCalTest.json` |
+| 골든 소스 | [lectionarypage.net](https://www.lectionarypage.net/CalndrsIndexes/Calendar2026.html), [Almanac for Common Worship](https://almanac.oremus.org/), [lectio-api](https://github.com/asachs01/lectio-api), [awesome-church-calendar](https://github.com/calendarium-romanum/awesome-church-calendar) |
