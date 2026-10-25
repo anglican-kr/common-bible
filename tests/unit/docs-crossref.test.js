@@ -339,7 +339,7 @@ test("센티널 문자열은 기준 파일 한 곳에만 있다", { skip: GATES.
     { text: "수요일까지 직전, 목요일부터 다음", allow: ["설계서"], once: true },  // R-6.2-nearby-sunday — 경계
     { text: "lectionarypage.net 2025-2027", allow: ["설계서"], once: true },     // R-6.2-chain-model — 연쇄 모델의 근거
     { text: "도착한 축일은 우선순위와 무관하게 자리를 지킨다", allow: ["설계서"], once: true }, // R-6.2-first-come
-    { text: "규칙일은 남고 고정일이 옮긴다", allow: ["설계서"], once: true },    // R-6.2-rule-day-stays
+    { text: "규칙일은 남고 고정일이 옮겨 간다", allow: ["설계서"], once: true },    // R-6.2-rule-day-stays
     { text: "보호 기간은 주요축일을 밀지도 막지도 않는다", allow: ["설계서"], once: true }, // R-6.3-holy-week-guard(2026-10-11 책자대로)
     { text: "절기 기본색을 깐다", allow: ["설계서"], once: true },               // R-6.4-color-order
     { text: "사계재 날의 색은 자다", allow: ["설계서"], once: true },            // R-6.4-ember-color(2026-10-10 미결26 닫힘 — 모델 (b))

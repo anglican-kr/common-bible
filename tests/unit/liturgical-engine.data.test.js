@@ -66,7 +66,7 @@ test("C-4.6-2 모든 연중 주일이 정확히 한 주차 · 공현 후 1주부
       d = ctx.addDays(d, 1);
     }
     // 두 묶음이 각각 **한 칸씩 오른다** — 2·3 을 바꿔 달거나 2 에서 4 로 건너뛰면 잡힌다.
-    // 중복·결측만 보던 종전 단언은 그 둘을 놓쳤다(3차 리뷰). 묶음 사이의 빈 번호는 정상이다
+    // 중복·결측만 보던 종전 확인은 그 둘을 놓쳤다(3차 리뷰). 묶음 사이의 빈 번호는 정상이다
     // (부활절이 이르면 공현 후가 짧고 성령강림 후가 앞 번호를 되쓰지 않는다).
     if (pre[0] !== 1 || !consecutive(pre)) misses.push(`${y} 공현 후 ${pre.join(",")}`);
     if (post[post.length - 1] !== 34 || !consecutive(post)) misses.push(`${y} 성령강림 후 ${post.join(",")}`);
@@ -145,7 +145,7 @@ test("§4.3 temporal-feasts 의 rule 이 전부 날짜를 낸다 (rule: null 제
 // A1-b 조회 계층 — 실데이터 (설계서 §5 · 검토 문서 §5.8 · §5.9 · PR 2)
 // ════════════════════════════════════════════════════════════════════════════
 // 합성 표가 규칙 하나씩을 가른다면, 여기는 실제 표가 그 규칙 위에서 **빈틈 없이** 닫히는지 본다.
-// 레코드 id 는 표의 잠정 순번일 수 있어(ADR-036 §10) 단언은 id 대신 레코드의 필드로 한다.
+// 레코드 id 는 표의 잠정 순번일 수 있어(ADR-036 §10) 확인은 id 대신 레코드의 필드로 한다.
 
 // vm 이 만든 값은 realm 이 달라 구조가 같아도 deepStrictEqual 이 틀린다 — 양쪽을 정규화한다.
 const plain = (v) => (v === undefined ? undefined : JSON.parse(JSON.stringify(v)));
@@ -453,7 +453,7 @@ test("§5.4 · §5.6 도달 범위 — 2025~2050 모든 날의 모든 후보를 
 // B1 우선순위 · 지정 전례일 · 전례색 · 재일 — 실데이터 (설계서 §6 · 검토 문서 §5.10 · §5.13 · PR 3)
 // ════════════════════════════════════════════════════════════════════════════
 // 실제 연도의 기대값은 픽스처가 기준이다(설계서 §1.4) — 아래 「픽스처 소비」가 winners.cases.json 을 그대로
-// 돌린다. 여기 단언은 픽스처에 없는 것(연도 범위 · 데이터 전체에 걸친 성질)만이다.
+// 돌린다. 여기서 확인하는 것은 픽스처에 없는 것(연도 범위 · 데이터 전체에 걸친 성질)뿐이다.
 
 const offId = (r) => (r.official ? r.official.observance.id : null);
 const gridIn = (r) => r.candidates.find((c) => c.observance.id.startsWith("grid:"));
@@ -689,10 +689,10 @@ test("C-6.3-1 재일 — 대재일 둘 · 사순 주간 40일(성 목요일은 �
 
 // ── 픽스처 소비 (tests/fixtures/liturgical/README.md 「소비 방법」) ──
 // 케이스마다 테스트 하나 — `status: "skip"` 은 건너뛰고 `provisional` 은 「잠정」 표시로 돌린다(실패하면 실패).
-// `expect` 는 부분집합 비교다: 적은 키만 본다. 모르는 키는 실패로 다룬다 — 소비자가 조용히 무시하면 그 단언은
+// `expect` 는 부분집합 비교다: 적은 키만 본다. 모르는 키는 실패로 다룬다 — 테스트가 조용히 무시하면 그 확인 항목은
 // 아무것도 지키지 못한다. activation 케이스는 그 케이스의 `activated` 로 옮김 계산 캐시를 새로 만들고 끝나면 ∅ 로
-// 되돌린다(`setActivatedOptionals` — 집합이 바뀌면 캐시를 비운다). `alsoYears` 는 날짜 단언의 연도만 바꿔
-// 되풀이한다(README — 같은 월 · 일이 같은 요일인 해만 적는다). 연도 범위 단언은 `neverDeparts` 하나다.
+// 되돌린다(`setActivatedOptionals` — 집합이 바뀌면 캐시를 비운다). `alsoYears` 는 날짜 확인 항목의 연도만 바꿔
+// 되풀이한다(README — 같은 월 · 일이 같은 요일인 해만 적는다). 연도 범위 확인 항목은 `neverDeparts` 하나다.
 
 const FIXTURES = path.join(ROOT, "tests", "fixtures", "liturgical");
 const fixtureCases = (file) => JSON.parse(fs.readFileSync(path.join(FIXTURES, file), "utf8")).cases;
@@ -712,7 +712,7 @@ function originOf(record) {
   return `${m.padStart(2, "0")}.${d.padStart(2, "0")}`;
 }
 
-/** 독서 단언 — `readings`(그 후보) · `officialReadings`(지정 전례일) 공통. */
+/** 독서 확인 항목 — `readings`(그 후보) · `officialReadings`(지정 전례일) 공통. */
 function checkReadings(r, c, want, label, bad) {
   for (const k of Object.keys(want)) if (!READING_KEYS.has(k)) bad.push(`${label}.${k}: 모르는 키`);
   const groups = ctx.findReadingsIn(ix().lec, ix().cal, r, c);
@@ -736,7 +736,7 @@ function checkReadings(r, c, want, label, bad) {
   }
 }
 
-/** 날짜 단언 하나 — 어긋난 것을 문자열로 모은다. */
+/** 날짜 확인 항목 하나 — 어긋난 것을 문자열로 모은다. */
 function checkAssertion(date, exp) {
   const bad = [];
   for (const k of Object.keys(exp)) if (!EXPECT_KEYS.has(k)) bad.push(`${k}: 모르는 키`);
@@ -791,10 +791,10 @@ function checkAssertion(date, exp) {
 const shiftYear = (v, dy) => (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v)
   ? String(Number(v.slice(0, 4)) + dy).padStart(4, "0") + v.slice(4) : v);
 
-/** 연도 범위 단언 — 그 id 가 범위 안 어느 해의 출발 색인에도 없다(동시 봉헌은 옮기지 않는다). */
+/** 연도 범위 확인 항목 — 그 id 가 범위 안 어느 해의 출발 색인에도 없다(동시 봉헌은 옮기지 않는다). */
 function checkRange(a) {
   const bad = [];
-  for (const k of Object.keys(a.expect)) if (!RANGE_KEYS.has(k)) bad.push(`${k}: 연도 범위 단언에서 모르는 키`);
+  for (const k of Object.keys(a.expect)) if (!RANGE_KEYS.has(k)) bad.push(`${k}: 연도 범위 확인 항목에서 모르는 키`);
   for (let y = a.years[0]; y <= a.years[1]; y++) {
     if ([...passOf(y).departures.values()].flat().some((c) => c.observance.id === a.expect.neverDeparts)) bad.push(`${y}: ${a.expect.neverDeparts} 가 떠났다`);
   }

@@ -134,7 +134,7 @@ test("C-4.3-2 승천 목요일 · 성령강림 주일 · 삼위일체 주일 · 
 });
 
 test("§4.3 easter_offset −1 은 성 토요일·부활밤이 공유하는 날짜다", () => {
-  // 종전 이 테스트는 같은 인자로 evalRule 을 두 번 호출해 결과가 같다고 단언했다 —
+  // 종전 이 테스트는 같은 인자로 evalRule 을 두 번 호출해 결과가 같다고 확인했다 —
   // 순수 함수라 어떤 구현에서도 통과하는 **동어반복**이었다. 체크리스트 C-4.3-3 이
   // 요구하는 「인덱스가 1:N」은 레코드 **둘**이 한 날짜로 모이는 것이고, 그 인덱스는
   // §5.4 권장 인덱스의 몫이라 계산 계층에서는 잡히지 않는다 — 아래 조회 계층의 C-4.3-3 이 잡는다.
@@ -1163,7 +1163,7 @@ test("C-5.6-3 findCollects — 전례일별 원소 · candidates 순 · 대체�
 });
 
 test("미결12 잠정 — 1:N 좁히기: 12.25 세 갈래 · 09.29 합성 레코드는 둘 다 · 12.31 성탄주간은 성인 것이 아니다", () => {
-  // C-5.6-5(🔴)는 미결12 가 닫힐 때까지 열려 있다 — 이 테스트는 잠정 구현이 그 단언을 지키는지 본다
+  // C-5.6-5(🔴)는 미결12 가 닫힐 때까지 열려 있다 — 이 테스트는 잠정 구현이 그 항목을 지키는지 본다
   const xmas = resolve("2026-12-25");
   for (const id of ["d1225-day", "d1225-dawn"]) same(readingIds(xmas, cand(xmas, id)), [id]);
   // 성탄 밤은 12.24 저녁의 후보(R-6.1-evening) — 본문은 여전히 정의 날짜 12.25 키로 좁힌다
@@ -1417,7 +1417,7 @@ test("C-6.1-9 prec 7로 같은 순위 — 고유 본기도가 있는 쪽 먼저(
   same(ctx.resolveDateIn(rev, "2027-03-01", ctx.EMPTY_PASS()).official.observance.id, "d0301-samil");
 });
 
-test("R-6.2-tie-ladder 같은 값이면 도착 > 이동 축일(규칙일) > 월별 축일(고정일) > 격자", () => {
+test("R-6.2-tie-ladder 같은 값이면 도착 > 이동 축일 > 월별 축일 > 격자", () => {
   const corpus = rb("2029-05-31");   // 성체일(이동 축일, prec 3) ∧ 성모 방문(월별 축일, prec 3) — 규칙일이 남는다
   same(officialId(corpus), "t-corpus");
   same(fate(corpus, "d0531-visitation"), ["proper", null]);   // 옮기는 것은 옮김 계산(§6.5)
@@ -1513,12 +1513,12 @@ test("C-6.1-13 저녁 전례(R-6.1-evening) — 성탄 밤은 12.24 후보 끝 �
   same(officialId(xmasEve), "grid:advent-4-weekday-thu");   // 12.24 의 대표는 낮(대림 평일) — 저녁 후보는 판정 밖
   const xmas = resolve("2026-12-25");
   assert.ok(!xmas.candidates.some((c) => c.observance.id === "d1225-성탄-밤"), "12.25 에는 성탄 밤이 없다");
-  same(officialId(xmas), "d1225-dawn");   // 12.25 의 대표는 낮 · 새벽 가운데 id 순(C-6.1-8) — 항상 참이던 단언을 id 로(PR #349 리뷰)
+  same(officialId(xmas), "d1225-dawn");   // 12.25 의 대표는 낮 · 새벽 가운데 id 순(C-6.1-8) — 항상 참이던 확인을 id 로(PR #349 리뷰)
   const sat = rb("2026-04-04");
   same(sat.candidates.filter((c) => c.evening).map((c) => c.observance.id), ["t-부활밤"]);
   same([officialId(sat), sat.color], ["t-holy-sat", "red"]);
   for (const d of ["2026-04-05", "2026-12-23", "2026-12-26"]) assert.ok(!resolve(d).candidates.some((c) => c.evening), d);
-  // 상수는 두 id 뿐 — 늘면 이 단언과 설계서 R-6.1-evening 을 함께 고친다
+  // 상수는 두 id 뿐 — 늘면 이 확인과 설계서 R-6.1-evening 을 함께 고친다
   same(Object.entries(vm.runInContext("EVENING_LITURGIES", ctx)), [["t-부활밤", 0], ["d1225-성탄-밤", -1]]);
 });
 

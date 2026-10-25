@@ -671,7 +671,7 @@ function spansOf(y) {
 }
 
 /**
- * 구간 중 하나에 들면 참. 소비자는 범위를 직접 비교하지 않고 이것으로 묻는다 —
+ * 구간 중 하나에 들면 참. 부르는 쪽은 범위를 직접 비교하지 않고 이것으로 묻는다 —
  * 성주간·부활 8일 보호를 §6.3 ① · §6.4 · §6.5 셋이 각자 비교하던 것을 없앤다.
  *
  * **표를 인자로 받지 않는다.** 스팬은 달력년으로 잘려 있으므로(§4.10) 어느 해의 표인지가
@@ -698,7 +698,7 @@ function inSpan(dateStr, name) {
 // ── END LITURGICAL_CORE ──
 
 // ── BEGIN LITURGICAL_LOOKUP ──
-// 표 인덱스 · 격자의 절기 위치 · 후보 조립 · 폴백 매칭 · 독서/본기도 조회 · 우선순위와 옮김 계산(B1). **순수하다** —
+// 표 인덱스 · 격자의 절기 위치 계산 · 후보 조립 · 폴백 매칭 · 독서/본기도 조회 · 우선순위와 옮김 계산(B1). **순수하다** —
 // 읽는 인덱스를 전부 인자로 받는다(설계서 §3.3). 모듈 상태는 옮김 계산 캐시 `transferCache` 와 선택 봉헌
 // 활성화 집합 `activatedOptionals` 둘만 만지고(`transfersOf` · `setActivatedOptionals`), 둘 다 블록 밖에 둬
 // 테스트가 prelude 로 재선언한다. LITURGICAL_CORE 를 먼저 실행한 컨텍스트에서 돈다.
@@ -890,7 +890,7 @@ function eveningTomorrowDaysOf(sanctoralByDate) {
  * 규칙 파생 전례일(§5.5 출처 ④) — 그해 이동 축일(temporal) 규칙을 **한 번** 평가해 날짜 → 행 색인으로 둔다.
  * 규칙 일곱 종류는 전부 자기 달력년 안에 떨어진다(사계재 12.13 앵커 → 늦어도 12.23, 1.6 이후 첫
  * 주일 → 늦어도 1.13) — 해를 넘기는 결과는 그 해의 날짜 조회가 닿지 않으므로 실데이터 테스트가
- * 1900~2100 에서 단언한다. 같은 날짜에 두 행(성 토요일 · 부활밤 — easter −1)이면 둘 다 오른다(1:N).
+ * 1900~2100 에서 확인한다. 같은 날짜에 두 행(성 토요일 · 부활밤 — easter −1)이면 둘 다 오른다(1:N).
  * @param {CalendarIndex} index @param {number} y
  * @returns {Map<string, Observance[]>}
  */
@@ -1206,7 +1206,7 @@ function effectivePrecedence(obs) {
   return p;
 }
 
-/** 범주 사다리의 칸(→ R-6.2-tie-ladder) — 도착 0 > 이동 축일(규칙일) 1 > 월별 축일(고정일) 2 > 격자 3 > 합성 guard 4. */
+/** 범주 사다리의 칸(→ R-6.2-tie-ladder) — 도착 0 > 이동 축일 1 > 월별 축일 2 > 격자 3 > 합성 guard 4. */
 function ladderOf(/** @type {Candidate} */ c) {
   const id = c.observance.id;
   if (id.startsWith(GUARD_PREFIX)) return 4;
