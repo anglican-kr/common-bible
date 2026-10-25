@@ -1180,7 +1180,7 @@ test("미결12 잠정 — 1:N 좁히기: 12.25 세 갈래 · 09.29 합성 레코
   same(readingIds(ny, cand(ny, "d0101-peace")), []);
 });
 
-test("C-2-1 ◐ 기념일은 독서 · 본기도 빈 결과 — 날짜에 남의 본문이 있어도, 분류가 있어도 공통을 타지 않는다", () => {
+test("C-2-1 기념일은 독서 · 본기도 빈 결과 — 날짜에 남의 본문이 있어도, 분류가 있어도 공통을 타지 않는다", () => {
   const r = resolve("2026-05-03");   // 합성 기념일(martyr 분류) 하나뿐인 날짜에 「남의 축일」 본문이 있다
   const c = cand(r, "d0503-memorial");
   same(ctx.findReadingsIn(LEC, CAL, r, c), []);

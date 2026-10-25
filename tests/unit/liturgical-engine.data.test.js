@@ -324,7 +324,7 @@ test("C-5.6-4 성인 공통 독서 폴백 — 양성 · 음성 · 불변식 79 /
     const got = ids(d, p);
     assert.ok(got.length > 0 && got.every((id) => id.startsWith(`common:${cls}-s`)), `${p} ${got}`);
   }
-  // 음성 — 06.24 는 띄어쓰기로 이름 조인이 빠져도 고유, 스테파노는 고유, 기념일은 빈 배열
+  // 음성 — 06.24 는 띄어쓰기로 이름 조인이 빠져도 고유, 스테파노는 고유, 분류 없는 축일(세계평화 — 미결51)은 빈 배열
   for (const [d, p] of [["2026-06-24", "d0624"], ["2026-12-26", "d1226"]]) {
     const got = groupsAt(d, p);
     assert.ok(got.length > 0 && got.every((g) => g.common === null), p);
@@ -375,7 +375,7 @@ test("C-5.6-6 날짜 선택 순서 — 격자는 resolved.date(12.19 · 12.17), 
   assert.ok(cs[0].collects.length > 0 && cs[0].collects.every((c) => colOf(c).date === "11.30"));
 });
 
-test("C-5.5-3 ◐ 격자 ∧ temporal 공존 — 2026-03-29 성지주일 · 2026-11-29 대림1주일 (지정 전례일은 PR 3)", { skip: SKIP }, () => {
+test("C-5.5-3 격자 ∧ temporal 공존 — 2026-03-29 성지주일 · 2026-11-29 대림1주일 (지정 전례일은 C-6.1-10 테스트)", { skip: SKIP }, () => {
   same(resolve("2026-03-29").candidates.map((c) => c.observance.id), ["t-성지주일", "grid:lent-x-sunday"]);
   same(resolve("2026-11-29").candidates.map((c) => c.observance.id), ["t-대림1주일", "grid:advent-1-sunday"]);
   // 대림1주일 행은 조인 이름이 없어 자기 좌표로 격자 레코드에 닿는다(§5.4) — 나해
@@ -518,7 +518,7 @@ test("C-6.1-4 명절 ∧ 연중 주일 — 설 2027 · 2030 · 2034 · 2037 · 2
   same(all.sort(), days.map(([d]) => d).sort());
 });
 
-test("C-6.1-7 · C-2-1 precedence null 인 temporal 행은 후보로 있되 지정 전례일이 아니다 — 성 토요일만 예외: 부활밤이 저녁 전례로 빠져 그날의 대표다 (2025~2050)", { skip: SKIP }, () => {
+test("C-6.1-7 · C-2-1 precedence null 인 temporal 행은 후보로 있되 지정 전례일이 아니다 (2025~2050)", { skip: SKIP }, () => {
   const nullRows = read("temporal-feasts.json").entries.filter((e) => e.precedence === null).map((e) => e.id);
   assert.ok(nullRows.length > 0);
   const bad = [];
@@ -530,11 +530,9 @@ test("C-6.1-7 · C-2-1 precedence null 인 temporal 행은 후보로 있되 지�
         const r = resolve(d);
         const c = pick(r, row.id);
         if (!c || c.status !== "proper") bad.push(`${d} ${row.id} 후보 ${c && c.status}`);
-        // 성 토요일(등급 칸이 빈 유일한 평일 행 — 평일 8 로 격자와 우선순위가 같아 사다리로 temporal)은 그날의 대표다(→ R-6.1-evening)
-        if (row.id === "t-성-토요일") { if (offId(r) !== "t-성-토요일") bad.push(`${d} 성 토요일 지정 전례일 ${offId(r)}`); continue; }
         if (offId(r) === row.id) bad.push(`${d} ${row.id} 지정 전례일`);
         // 주의 변모 주일 · 가정 · 평화통일 · 맥추감사 — 그날 지정 전례일은 격자거나 그 주일보다 선순위인 축일(2.2 주의 봉헌 등)
-        if (row.id !== "t-성-토요일" && !offId(r).startsWith("grid:") && ctx.effectivePrecedence(r.official.observance) >= gridIn(r).observance.precedence) {
+        if (!offId(r).startsWith("grid:") && ctx.effectivePrecedence(r.official.observance) >= gridIn(r).observance.precedence) {
           bad.push(`${d} ${row.id} 지정 전례일 ${offId(r)}`);
         }
       }

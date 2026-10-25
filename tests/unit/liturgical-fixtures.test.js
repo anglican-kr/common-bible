@@ -204,14 +204,18 @@ test("검토 문서 §5 항목이 「픽스처 …」 로 인용한 케이스는
   assert.ok(s >= 0 && e > s, "검토 문서 §5 · §6 헤딩을 못 찾았다");
   const bad = [];
   let cited = 0;
+  let id = null;
   for (const line of REVIEW.slice(s, e).split("\n")) {
+    // 항목은 첫 줄과 그 아래 들여 쓴 하위 목록까지다 — 들여 쓰지 않은 줄(빈 줄 포함)에서 끝난다.
     const m = /^- \[[ x]\] \*\*((?:C-(?:P|\d+(?:\.\d+)?)|X|I)-\d+[a-z]?)\*\*/.exec(line);
-    if (!m) continue;
+    if (m) id = m[1];
+    else if (!/^\s+\S/.test(line)) id = null;
+    if (!id) continue;
     for (const [, fx] of line.matchAll(/(?<![\w-])([TOAW]-\d{4}-\d{2}-\d{2}-[a-z0-9-]+)/g)) {
       cited++;
       const c = byId.get(fx);
-      if (!c) bad.push(`${m[1]}: 픽스처 ${fx} 없음`);
-      else if (!(c.checks ?? []).includes(m[1])) bad.push(`${m[1]}: ${fx} 의 checks 에 ${m[1]} 없음`);
+      if (!c) bad.push(`${id}: 픽스처 ${fx} 없음`);
+      else if (!(c.checks ?? []).includes(id)) bad.push(`${id}: ${fx} 의 checks 에 ${id} 없음`);
     }
   }
   assert.ok(cited >= 50, `검토 문서 §5 의 픽스처 인용이 너무 적다: ${cited}`);
