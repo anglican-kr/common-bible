@@ -889,9 +889,9 @@ def test_canticle_copy_cites_canticle_name(desktop_context):
 def test_psalm_copy_keeps_liturgical_marks_and_section_headings(desktop_context):
     """대림 4주일(2026-12-20) 시편 89:1-4, 19-27 을 통째로 복사하면 ◯ · ¶ · 부 소제목이 다 실린다 — 「(1)」 · 「(2)」는 제 줄,
     ¶ 뒤 한 칸, 출처는 「(대한성공회 기도서)」(사용자 결정 2026-10-13 — known-issues §4). 종전엔 「(1)」이 빠지고 「(2)그 옛날」로
-    붙어 절 번호처럼 읽혔다."""
+    붙어 절 번호처럼 읽혔다. 시편 89는 둘째 세트다(data#42가 성모송가를 첫 세트로 두었다)."""
     page = desktop_context.new_page()
-    _open(page, "lectionary/2026-12-20")
+    _open(page, "lectionary/2026-12-20?set=2")
     verses = ".lect-reading[data-slot='psalm'] article.chapter-text .verse[data-vref]"
     text = page.evaluate(_LECT_COPY_ACROSS, [verses, f"{verses}:last-of-type"])
     assert text.startswith("(1)\n주여, 내가 당신의 사랑을 영원히 노래하리이다. ◯\n"), text[:120]
@@ -1219,9 +1219,9 @@ def test_mobile_tab_bar_marks_calendar_tab_on_lectionary(mobile_context):
 
 def test_psalm_copy_carries_gloria_when_selected(desktop_context):
     """대림 4주일(2026-12-20) — 시편 끝 절에서 영광송까지 고르면 영광송이 시편 블록에 실리고(◯ 포함) 출처는 그 뒤 — 종전엔 빠졌다
-    (머지 전 검토 2026-10-14)."""
+    (머지 전 검토 2026-10-14). 시편 89는 둘째 세트다(data#42가 성모송가를 첫 세트로 두었다)."""
     page = desktop_context.new_page()
-    _open(page, "lectionary/2026-12-20")
+    _open(page, "lectionary/2026-12-20?set=2")
     text = page.evaluate("""() => {
       const sec = document.querySelector(".lect-reading[data-slot='psalm']");
       const vs = sec.querySelectorAll('.verse[data-vref]');
