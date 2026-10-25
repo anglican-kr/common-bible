@@ -1,4 +1,5 @@
 ---
+pr: 432
 date: 2026-10-25
 branch: docs/design-plain-terms
 title: "docs: 교회력 문서의 비유 용어를 정한 말로 바꿈"
