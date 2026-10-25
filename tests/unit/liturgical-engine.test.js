@@ -1522,7 +1522,7 @@ test("C-6.1-13 저녁 전례(R-6.1-evening) — 성탄 밤은 12.24 후보 끝 �
   same(Object.entries(vm.runInContext("EVENING_LITURGIES", ctx)), [["t-부활밤", 0], ["d1225-성탄-밤", -1]]);
 });
 
-test("C-6.3-1b 재일 판정에 저녁 후보는 들지 않는다 — 저녁 전례가 사순의 대축일이어도 그날 낮의 소재일은 그대로(→ R-6.1-evening)", () => {
+test("C-6.3-2 재일 판정에 저녁 후보는 들지 않는다 — 저녁 전례가 사순의 대축일이어도 그날 낮의 소재일은 그대로(→ R-6.1-evening)", () => {
   // 실데이터의 부활밤은 부활 시기라 지금은 결과가 같다 — 저녁 후보를 낮 후보로 세던 잠재 결함을 합성으로 지킨다(PR #349 리뷰)
   const coord = { season: "lent", week: null, type: "weekday", weekday: "sat", year: "A" };
   const day = { observance: { id: "t-holy-sat", kind: "temporal", rank: "principal", precedence: 1, type: "weekday", season: "lent" }, status: "proper" };

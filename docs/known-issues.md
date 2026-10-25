@@ -255,3 +255,9 @@ ADR-038 §3 렌더 기반이 복원하는 전례 표기 — 계응 ◯(`.respons
 ## 30. `coding-pitfalls.md`와 주제 문서의 긴 사례 고쳐 쓰기 (2026-10-24)
 
 - §30 → [topics/platform.md](topics/platform.md)
+
+---
+
+## 31. 추수감사주일을 지킬 수 있는 날로 고친다 (2026-10-25)
+
+- §31 → [topics/liturgical.md](topics/liturgical.md)
