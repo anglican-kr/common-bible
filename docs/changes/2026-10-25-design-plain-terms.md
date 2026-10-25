@@ -56,3 +56,7 @@ title: "docs: 교회력 문서의 비유 용어와 음차 용어를 정한 말�
 - `docs/decisions/036-liturgical-calendar-data-model.md`, `037-eucharist-lectionary-data-and-engine.md`, `038-calendar-lectionary-ui.md`: 용어.
 - `docs/design/liturgical-engine/` 장 파일 일곱(01, 02, 04, 05, 06, 07, 09장)과 `docs/design/liturgical-engine-review.md`: 용어.
 - `tests/README.md`, `tests/fixtures/liturgical/README.md`, `docs/architecture.md`: 용어.
+
+## 리뷰 반영
+
+1회차(Copilot). ADR-036 §6의 「앞서는 우선순위」 뒤 조사를 「이라」에서 「라」로 고쳤다. 「강한 점유권」을 바꾸며 받침이 없어졌는데 조사를 맞추지 않았다. 다른 바꾼 말은 받침이 같거나 조사를 따로 맞췄다.
