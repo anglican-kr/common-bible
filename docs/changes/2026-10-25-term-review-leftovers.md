@@ -1,4 +1,5 @@
 ---
+pr: 428
 date: 2026-10-25
 branch: docs/term-review-leftovers
 title: "docs: 낱말 PR 리뷰에서 미룬 문장과 사실을 고침"
