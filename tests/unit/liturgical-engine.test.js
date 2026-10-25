@@ -944,7 +944,7 @@ test("§5.5 고유명 평일 표지 — 해마다 여섯 날(E−45~−43 · E�
   }
 });
 
-test("§5.1 주기(year) — 연중 평일은 I/II, 그 밖은 A/B/C · 주일은 weekday null", () => {
+test("§5.1 절기 위치와 주기 — 연중 평일의 주기는 I/II, 그 밖은 A/B/C · 주일은 weekday null", () => {
   same(plain(resolve("2026-01-26").coord), { season: "ordinary", week: 3, type: "weekday", weekday: "mon", year: "II" });
   same(plain(resolve("2026-01-25").coord), { season: "ordinary", week: 3, type: "sunday", weekday: null, year: "A" });
   assert.strictEqual(resolve("2026-03-03").coord.year, "A");     // 절기 평일 — 주일 주기

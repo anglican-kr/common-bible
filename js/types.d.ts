@@ -697,7 +697,7 @@ export interface Observance {
   color_alt?: CodeField<LiturgicalColorAlt>;
   /**
    * 고유명 평일(성주간 월~수 · 재의 수요일 후 목~토)의 격자 전례일에만 `true` — 그 밖에는 키가 없다. 절기 위치가
-   * `(lent, null, weekday)` 로 같은 날 가운데 이름이 그날의 고유 이름인 여섯 날의 표지라, 뷰가 절기 위치 의미를
+   * `(lent, null, weekday)` 로 같은 날 가운데 이름이 그날의 고유 이름인 여섯 날의 표지라, 뷰가 절기 위치의 뜻을
    * 따로 들고 있지 않고 이것을 읽는다(설계서 §5.5). 정의 표의 행에는 없다 — 엔진이 격자를 합성하며 단다.
    */
   properWeekday?: true;

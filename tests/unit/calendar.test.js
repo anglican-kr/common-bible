@@ -242,7 +242,7 @@ test("calendarDay: 고유명 평일(성주간 월~수 · 재의 수요일 후 �
 });
 
 test("calendarDay: 절기 위치가 고유명 평일과 같아도(lent, null, weekday) 표지가 없는 격자는 이름 없는 평일 — 뷰는 절기 위치를 읽지 않는다", () => {
-  // 성 목 · 금 · 토의 격자(「성주간 X요일」)가 이 절기 위치다 — 그날의 대표는 temporal 행이지만, 격자가 대표로 와도 칸은 비어야 한다
+  // 성 목 · 금 · 토의 격자(「성주간 X요일」)가 이 절기 위치에 있다 — 그날의 대표는 temporal 행이지만, 격자가 대표로 와도 칸은 비어야 한다
   const holyThu = grid("lent-x-weekday-thu", "성주간 목요일");
   const d = ctx.calendarDay("2026-04-02", resolvedOf("2026-04-02", [holyThu],
     { coord: { season: "lent", week: null, type: "weekday", weekday: "thu", year: "A" }, color: "red", colors: ["red"] }));
