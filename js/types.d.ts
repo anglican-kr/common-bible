@@ -633,7 +633,7 @@ export type LiturgicalFast = "major" | "minor";
 export type LiturgicalRank =
   | "principal" | "privileged_sunday" | "major_feast" | "sunday"
   | "minor_feast" | "commemoration" | "feria" | "regional_festival";
-// 여섯 값 — 충돌 이동과 선택 봉헌을 한 열에 담는다(설계서 R-6.2-destinations).
+// 여섯 값 — 밀려 옮김과 선택 봉헌을 한 열에 담는다(설계서 R-6.2-destinations).
 export type TransferTo =
   | "next_day" | "commemorate_only" | "nearby_sunday"
   | "sunday_0102_0108" | "sunday_1030_1105" | "easter7_sunday";

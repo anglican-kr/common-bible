@@ -775,7 +775,7 @@ const LEC_TABLES = {
 
 const CAL = ctx.buildCalendarIndex(CAL_TABLES);
 const LEC = ctx.buildLectionaryIndex(LEC_TABLES);
-/** 공개 래퍼와 같은 길 — 날짜를 먼저 검사하고 연도 캐시의 계산을 넘긴다(CAL 에는 옮길 수 있는 행이 없어 이동 계산이 비어 있다). */
+/** 공개 래퍼와 같은 길 — 날짜를 먼저 검사하고 연도 캐시의 계산을 넘긴다(CAL 에는 옮길 수 있는 행이 없어 옮김 계산의 결과가 비어 있다). */
 const resolve = (d) => ctx.resolveDateIn(CAL, d, ctx.parseDate(d) ? ctx.transfersOf(CAL, Number(d.slice(0, 4))) : ctx.EMPTY_PASS());
 const cand = (r, id) => r.candidates.find((c) => c.observance.id === id);
 const gridOf = (r) => r.candidates.find((c) => c.observance.id.startsWith("grid:"));
@@ -799,8 +799,8 @@ test("C-5.5-1 후보 출처 다섯 — 격자 · 날짜 · 음력 · 규칙 파�
   assert.notStrictEqual(ctx.EMPTY_PASS().arrivals, pass.arrivals);   // 호출마다 새 계산
 });
 
-test("C-5.5-1 · C-5.5-5 ⑤ 도착 · 출발 · 선택 봉헌 경로와 표시 순서 — 이동 계산을 채우면 형태 변경 없이 읽힌다", () => {
-  // PR 3 의 이동 계산을 흉내 낸다: 01.25 바울로가 다음 날로 떠나고, 11.30 안드레아가 도착하고, 선택 봉헌이 하나 얹힌다
+test("C-5.5-1 · C-5.5-5 ⑤ 도착 · 출발 · 선택 봉헌 경로와 표시 순서 — 옮김 계산 결과를 채우면 형태 변경 없이 읽힌다", () => {
+  // PR 3 의 옮김 계산을 흉내 낸다: 01.25 바울로가 다음 날로 떠나고, 11.30 안드레아가 도착하고, 선택 봉헌이 하나 얹힌다
   const paul = CAL.sanctoralByDate.get("01.25")[0];
   const andrew = CAL.sanctoralByDate.get("11.30")[0];
   const pass = ctx.EMPTY_PASS();
@@ -810,7 +810,7 @@ test("C-5.5-1 · C-5.5-5 ⑤ 도착 · 출발 · 선택 봉헌 경로와 표시 
   const r = ctx.resolveDateIn(CAL, "2026-01-25", pass);
   same(r.candidates.map((c) => `${c.observance.id}:${c.status}`), [
     "d0125-paul:transferred_out",        // ① 교회력에 따른 축일 — 떠난 것도 자기 자리에 남아 안내된다
-    "d1130-andrew:transferred_in",       // ② 이동 축일
+    "d1130-andrew:transferred_in",       // ② 옮겨 지키는 축일
     "d1130-andrew:optional",
     "grid:ordinary-3-sunday:proper",     // ③ 나머지
   ]);
@@ -1204,7 +1204,7 @@ test("§2 표 결손은 흡수한다 — 래퍼 · 배열 · 행 모양이 틀�
 });
 
 // ── 5.10 우선순위 · 5.13 전례색 · 재일 — B1 (§6.1 · §6.3 · §6.4) ──
-// 지정 전례일 · 재분류 · 색은 이동 계산과 무관하게 그날의 후보로 정해진다 — 빈 계산 결과(또는 손으로 채운 계산 결과)로 본다.
+// 지정 전례일 · 재분류 · 색은 옮김 계산과 무관하게 그날의 후보로 정해진다 — 빈 계산 결과(또는 손으로 채운 계산 결과)로 본다.
 // 실제 연도의 기대값은 픽스처(winners.cases.json)가 기준이라 실데이터 파일이 소비한다(설계서 §7).
 
 const B1_TABLES = {
@@ -1219,9 +1219,9 @@ const B1_TABLES = {
     SAN("d0612-a", "06.12", "합성 A", { rank: "major_feast", precedence: 3, priority_group: "A" }),
     SAN("d0612-c", "06.12", "합성 C", { rank: "major_feast", precedence: 4, priority_group: "C" }),
     SAN("d0612-b", "06.12", "합성 B", { rank: "major_feast", precedence: 6, priority_group: "B" }),
-    // prec 7 축일 — 주일에 생략 · 이동 축일 셋과 같은 종류는 생략하지 않는다 · 동시 봉헌 · 보호 기간(C-6.1-6)
+    // prec 7 축일 — 주일에 생략 · 옮길 수 있는 축일 셋과 같은 종류는 생략하지 않는다 · 동시 봉헌 · 보호 기간(C-6.1-6)
     SAN("d0614-minor", "06.14", "합성 축일"),
-    SAN("d0621-movable", "06.21", "합성 이동 축일", { transferable: true, transfer_to: "next_day" }),
+    SAN("d0621-movable", "06.21", "합성 옮길 수 있는 축일", { transferable: true, transfer_to: "next_day" }),
     SAN("d0815-a", "08.15", "합성 성모안식", { rank: "major_feast", precedence: 3, priority_group: "A" }),
     SAN("d0815-minor", "08.15", "합성 광복절"),
     SAN("d0330-minor", "03.30", "합성 성주간 축일"),
@@ -1241,7 +1241,7 @@ const B1_TABLES = {
     SAN("d0529-feast", "05.29", "합성 니니안"),
     // 성인력 기념일 — 이름 줄
     SAN("d0611-memorial", "06.11", "합성 기념일", { rank: "commemoration", has_proper: false, color: null }),
-    // 우선순위가 같으면 규칙일이 남는다(→ R-6.2-rule-day-stays — 이동은 이동 계산의 몫이고 여기서는 지정 전례일만)
+    // 우선순위가 같으면 규칙일이 남는다(→ R-6.2-rule-day-stays — 옮기는 것은 옮김 계산의 몫이고 여기서는 지정 전례일만)
     SAN("d0531-visitation", "05.31", "합성 성모 방문", { rank: "major_feast", precedence: 3, transferable: true, transfer_to: "next_day" }),
     SAN("lunar11-seol", null, "설날", { lunar: "1-1", rank: "regional_festival", precedence: 0 }),
   ] },
@@ -1308,7 +1308,7 @@ test("C-6.1-1 유효 precedence — 비교는 precedence 로만(rank 아님) · 
   // 같은 rank(major_feast)가 연중 주일(5)에 대해 갈린다 — A(3)는 선순위이고 B(6)는 후순위다
   same(officialId(rb("2026-06-28")), "d0628-a-sunday");
   same(officialId(rb("2026-06-07")), "grid:ordinary-x-sunday");
-  same(fate(rb("2026-06-07"), "d0607-b-sunday"), ["proper", null]);   // 옮기는 것은 이동 계산의 몫(§6.5)
+  same(fate(rb("2026-06-07"), "d0607-b-sunday"), ["proper", null]);   // 옮기는 것은 옮김 계산의 몫(§6.5)
 });
 
 test("C-6.1-2 A 특례 1.5 — 절기 주일(2)보다도 선순위다, 특례 없는 A(3)는 절기 주일보다 후순위다", () => {
@@ -1354,7 +1354,7 @@ test("C-6.1-6 prec 7 축일은 그날 기념 — 가변인 상위에 밀리면 c
   same(sun.color, "green");   // commemorated 후보는 색에 기여하지 않는다
   // 평일에서는 축일(7)이 격자 평일(8)보다 선순위다
   same(officialId(rb("2027-06-14")), "d0614-minor");
-  // 이동 축일 셋과 같은 종류(transferable)는 생략하지 않는다 — 옮기는 것은 이동 계산(§6.5)
+  // 옮길 수 있는 축일 셋과 같은 종류(transferable)는 생략하지 않는다 — 옮기는 것은 옮김 계산(§6.5)
   same(fate(rb("2026-06-21"), "d0621-movable"), ["proper", null]);
   // 고정일 상위(8.15 성모안식)에는 밀린 것이 아니다 — 평일에는 proper, 주일에는 주일 격자에 밀린다
   same(fate(rb("2026-08-15"), "d0815-minor"), ["proper", null]);
@@ -1420,7 +1420,7 @@ test("C-6.1-9 prec 7로 같은 순위 — 고유 본기도가 있는 쪽 먼저(
 test("R-6.2-tie-ladder 같은 값이면 도착 > temporal 규칙일 > sanctoral 고정일 > 격자", () => {
   const corpus = rb("2029-05-31");   // 성체일(temporal 3) ∧ 성모 방문(sanctoral 3) — 규칙일이 남는다
   same(officialId(corpus), "t-corpus");
-  same(fate(corpus, "d0531-visitation"), ["proper", null]);   // 옮기는 것은 이동 계산(§6.5)
+  same(fate(corpus, "d0531-visitation"), ["proper", null]);   // 옮기는 것은 옮김 계산(§6.5)
   // 도착(prec 3) ∧ 같은 값 고유 후보 — 도착이 앞선다(→ R-6.2-chain-model)
   const visit = B1_CAL.sanctoralByDate.get("05.31")[0];
   const pass = ctx.EMPTY_PASS();
@@ -1550,15 +1550,15 @@ test("C-6.3-1 재일 — 대재일 둘 · 사순 주간 40일(성 목요일은 �
   same(ctx.fastOf(null), null);
 });
 
-// ── 5.11 · 5.12 이동 계산 — 합성 표 (§6.2 · §6.5) ──
-// 실제 연도의 이동은 픽스처(transfers · optionals)가 기준이라 실데이터 파일이 소비한다(설계서 §7). 여기는 실제
-// 연도로는 만들 수 없는 경로 — 연도 경계 · 이동 상한 · 선착순 · 도착끼리 기원 순 · 해를 넘긴 선착순 · 떠난 후순위 후보 ·
-// 좌석 경합 · 켜진 출발이 비운 자리 · 경계 × 활성화 · 활성화 캐시 — 와 보호 기간이 이동 계산에 끼어들지 않는다는 것
+// ── 5.11 · 5.12 옮김 계산 — 합성 표 (§6.2 · §6.5) ──
+// 실제 연도의 옮김은 픽스처(transfers · optionals)가 기준이라 실데이터 파일이 소비한다(설계서 §7). 여기는 실제
+// 연도로는 만들 수 없는 경로 — 연도 경계 · 옮길 날 수의 상한 · 선착순 · 도착끼리 기원 순 · 해를 넘긴 선착순 · 떠난 후순위 후보 ·
+// 좌석 경합 · 켜진 출발이 비운 자리 · 경계 × 활성화 · 활성화 캐시 — 와 보호 기간이 옮김 계산에 끼어들지 않는다는 것
 // (공개 스위트에서도 잡히게)을 잡는다. 1900~2100 에서 선착순이 서열 순과 갈리는 실제 사례는 보호 기간의 6해(부활 3.26 —
 // 요셉 · 수태고지)뿐이고 그것은 서열 순이다(→ R-6.3-guard-order, 픽스처 T-2062-03-27) — 그 밖의 선착순은 여기 합성 표가 지킨다.
 
 /**
- * 이동 계산용 새 엔진 — 이동 계산 캐시(연도 키 · 인덱스 하나용)와 활성화 집합이 표마다 새로 선다.
+ * 옮김 계산용 새 엔진 — 옮김 계산 캐시(연도 키 · 인덱스 하나용)와 활성화 집합이 표마다 새로 선다.
  * @returns {{e: any, index: any, pass: (y: number) => any, at: (d: string) => any, cache: () => Map<number, any>}}
  */
 function passEngine(tables) {
@@ -1577,7 +1577,7 @@ const WALL = (id, date) => SAN(id, date, id, { rank: "principal", precedence: 1 
 const passTables = (sanctoral, temporal = [], kasi = null) => ({
   sanctoral: { entries: sanctoral }, temporal: { entries: temporal }, periods: { entries: [] }, ordinalWeeks: { weeks: [] }, kasi,
 });
-/** 이동 계산의 색인 하나를 `날짜 → [id<-from ...]` 형식으로 — 비교하기 쉽게. `prefix`를 주면 그 날짜들만(seed · 이웃 해 0단계를 거른다). */
+/** 옮김 계산의 색인 하나를 `날짜 → [id<-from ...]` 형식으로 — 비교하기 쉽게. `prefix`를 주면 그 날짜들만(seed · 이웃 해 0단계를 거른다). */
 const seats = (m, prefix = "") => Object.fromEntries([...m].filter(([d]) => d.startsWith(prefix)).sort()
   .map(([d, cs]) => [d, cs.map((c) => c.observance.id + (c.from ? "<-" + c.from : c.to ? "->" + c.to : ""))]));
 const count = (m) => [...m.values()].flat().length;
@@ -1597,10 +1597,10 @@ test("C-6.5-15 연도 경계 — 12.31 이 밀려 1.1 에 도착하고, Y+1 캐�
   const dec31 = both.at("2028-12-31");
   same([fate(dec31, "d1231-x"), cand(dec31, "d1231-x").to], [["transferred_out", "grid:christmas-1-sunday"], "2029-01-01"]);
   same(plain(both.pass(2029)), plain(only.pass(2029)));
-  same(seats(both.pass(2028).arrivals), { "2029-01-01": ["d1231-x<-2028-12-31"] });   // 정식 2028 이동 계산의 spill
+  same(seats(both.pass(2028).arrivals), { "2029-01-01": ["d1231-x<-2028-12-31"] });   // 정식 2028 옮김 계산의 spill
 });
 
-test("C-6.5-18 해를 넘긴 선착순 — 12월 축일 둘이 같은 1월 날을 노리면 먼저 밀린 쪽이 앉는다(이 이동 계산의 도착과 다음 해 좌석을 함께 본다)", () => {
+test("C-6.5-18 해를 넘긴 선착순 — 12월 축일 둘이 같은 1월 날을 노리면 먼저 밀린 쪽이 앉는다(이 옮김 계산의 도착과 다음 해 좌석을 함께 본다)", () => {
   // 2029-12-30 주일에 X 가 밀리고 12.31 은 명절(prec 0)이 막아 X 는 1.1 로, 12.31 의 Z 는 명절에 밀려 1.1 을 노린다
   const t = passEngine(passTables(
     [MOV("d1230-x", "12.30"), MOV("d1231-z", "12.31"), SAN("lunar11-seol", null, "설날", { lunar: "1-1", rank: "regional_festival", precedence: 0 })],
@@ -1610,7 +1610,7 @@ test("C-6.5-18 해를 넘긴 선착순 — 12월 축일 둘이 같은 1월 날�
   same(fate(t.at("2030-01-02"), "d1231-z"), ["transferred_in", "lunar11-seol"]);
 });
 
-test("C-6.5-16 이동 상한 30일 — 넘으면 옮기지 않고 proper 로 남기며 defects 에 적는다 · 30일째는 앉는다", () => {
+test("C-6.5-16 옮길 날 수의 상한 30일 — 넘으면 옮기지 않고 proper 로 남기며 defects 에 적는다 · 30일째는 앉는다", () => {
   // 2025-11-30 은 대림 1주일 — X 가 밀리고 12.1~12.30 을 대축일이 막는다. 12.31(31일째)은 비워 두어 상한에서 멈추는지 가른다
   const walls = (n) => Array.from({ length: n }, (_, i) => WALL(`d12${String(i + 1).padStart(2, "0")}-wall`, `12.${String(i + 1).padStart(2, "0")}`));
   const over = passEngine(passTables([MOV("d1130-x", "11.30"), ...walls(30)]));
@@ -1631,12 +1631,12 @@ const HOLY_WEEK_ROWS = [
   TMP("t-easter", "부활대축일", { kind: "easter_offset", days: 0 }, { season: "easter", type: "feast" }),
 ];
 
-test("R-6.3-holy-week-guard 이동 계산 — 보호 기간은 주요축일을 밀지도 막지도 않는다 · 그날의 대축일 · 주일에 질 때만 보호 기간 뒤 첫 빈 날로", () => {
+test("R-6.3-holy-week-guard 옮김 계산 — 보호 기간은 주요축일을 밀지도 막지도 않는다 · 그날의 대축일 · 주일에 질 때만 보호 기간 뒤 첫 빈 날로", () => {
   const t = passEngine(passTables([
     MOV("d0330-b", "03.30"),                                           // 성주간 월 — 그날 지킨다
     MOV("d0402-a", "04.02", { precedence: 3, priority_group: "A" }),   // 성 목요일에 밀린다
     MOV("d0409-red", "04.09", { color: "red" }),                       // 부활 1주 목 — 그날 지킨다
-    SAN("d0331-movable-minor", "03.31", "합성 이동 축일(prec 7)", { transferable: true, transfer_to: "next_day" }),
+    SAN("d0331-movable-minor", "03.31", "합성 옮길 수 있는 축일(prec 7)", { transferable: true, transfer_to: "next_day" }),
   ], HOLY_WEEK_ROWS));
   // 성 목요일의 A 는 보호 기간(~ 부활 2주일 4.12)이 끝난 뒤 첫 빈 날 4.13 부활 2주 월요일로(→ R-6.3-guard-destination — 2027 책자)
   same(seats(t.pass(2026).departures), { "2026-04-02": ["d0402-a->2026-04-13"] });
@@ -1645,10 +1645,10 @@ test("R-6.3-holy-week-guard 이동 계산 — 보호 기간은 주요축일을 �
     const r = t.at(d);
     same([fate(r, id), officialId(r), r.color], [["proper", null], id, color], d);   // 축일 색이 기간 색(홍 · 백)을 넘는다
   }
-  // 옮길 수 있는 축일(prec 7)은 이동 계산이 옮기지 않고 guard 가 생략시킨다(→ R-6.1-prec7-omit)
+  // 옮길 수 있는 축일(prec 7)은 옮김 계산이 옮기지 않고 guard 가 생략시킨다(→ R-6.1-prec7-omit)
   const tue = t.at("2026-03-31");
   same([fate(tue, "d0331-movable-minor"), officialId(tue), tue.color], [["omitted", "guard:holy-week"], "grid:lent-x-weekday-tue", "red"]);
-  // 성 토요일은 성 토요일 행(prec 1)이 민다 — 부활밤은 저녁 전례라 이동 판정에 들지 않는다(사용자 결정 2026-10-15 「성 토요일은
+  // 성 토요일은 성 토요일 행(prec 1)이 민다 — 부활밤은 저녁 전례라 옮김 판정에 들지 않는다(사용자 결정 2026-10-15 「성 토요일은
   // 부활밤에 밀리지 않아」, R-6.1-evening). 목적지는 역시 보호 기간 뒤 4.13
   const sat = passEngine(passTables([MOV("d0404-x", "04.04")], HOLY_WEEK_ROWS));
   same(seats(sat.pass(2026).arrivals), { "2026-04-13": ["d0404-x<-2026-04-04"] });
@@ -1751,7 +1751,7 @@ test("C-6.5-23 보호 기간은 막지 않는다 — 성지주일 전날 밀린 
   // 3.30 성주간 월요일(격자 평일 8)은 막지 않는다(→ R-6.3-holy-week-guard · R-6.3-guard-destination). 막는 구현이면 4.13 으로 간다
   const t = passEngine(passTables([
     MOV("d0328-x", "03.28", { precedence: 3, priority_group: "A" }),                                    // 백
-    SAN("d0330-m", "03.30", "합성 이동 축일(prec 7)", { transferable: true, transfer_to: "next_day" }),
+    SAN("d0330-m", "03.30", "합성 옮길 수 있는 축일(prec 7)", { transferable: true, transfer_to: "next_day" }),
   ], [TMP("t-wall-sat", "합성 가변 대축일", { kind: "easter_offset", days: -8 }, { season: "lent", type: "feast" })]));
   same(seats(t.pass(2026).arrivals), { "2026-03-30": ["d0328-x<-2026-03-28"], "2026-04-13": ["d0330-m<-2026-03-30"] });
   const mon = t.at("2026-03-30");
@@ -1802,9 +1802,9 @@ test("C-6.2-4 · C-6.2-11 좌석 경합 — 꺼진 선택 봉헌은 좌석을 �
   same([fate(on.at("2026-08-11"), "d0811-o"), cand(on.at("2026-08-11"), "d0811-o").to], [["transferred_out", null], "2026-08-09"]);
 });
 
-test("C-6.2-8 켜진 선택 봉헌이 목적지에서 져도 다시 옮기지 않는다 — 그날 옮길 고유 축일이 함께 있어도(도착 재이동 금지는 명시 분기)", () => {
+test("C-6.2-8 켜진 선택 봉헌이 목적지에서 져도 다시 옮기지 않는다 — 그날 옮길 고유 축일이 함께 있어도(도착을 다시 옮기지 않는 것은 명시 분기)", () => {
   // 2026-08-09 주일 = 명절(prec 0). 켜진 O(8.11 → 8.9)는 명절에 지지만 도착이라 남고, 같은 날의 고유 축일 M 만 옮겨진다.
-  // 실데이터 A-2030-02-03(설)은 그날 옮길 고유 축일이 없어 이동 계산이 그날을 건너뛰므로 이 분기를 가르지 못한다
+  // 실데이터 A-2030-02-03(설)은 그날 옮길 고유 축일이 없어 옮김 계산이 그날을 건너뛰므로 이 분기를 가르지 못한다
   const t = passEngine(passTables([
     SAN("d0811-o", "08.11", "합성 선택 봉헌", { rank: "major_feast", precedence: 3, transferable: true, transfer_to: "nearby_sunday" }),
     MOV("d0809-m", "08.09"),
@@ -1816,7 +1816,7 @@ test("C-6.2-8 켜진 선택 봉헌이 목적지에서 져도 다시 옮기지 �
   same([officialId(sun), fate(sun, "d0811-o"), fate(sun, "d0809-m")], ["lunar815-chuseok", ["transferred_in", null], ["transferred_out", "lunar815-chuseok"]]);
 });
 
-test("C-6.2-12 켜진 출발이 비운 자리 — 승천을 켜면 그 목요일을 노리는 이동이 목요일에 앉는다", () => {
+test("C-6.2-12 켜진 출발이 비운 자리 — 승천을 켜면 그 목요일로 옮겨 가는 축일이 목요일에 앉는다", () => {
   // 2026-05-13(수, E+38) 합성 대축일이 F 를 민다 → 5.14 목(E+39 승천). 꺼져 있으면 승천이 막아 금요일
   const tables = passTables([MOV("d0513-f", "05.13")], [
     TMP("t-asc", "합성 승천", { kind: "easter_offset", days: 39 }, { season: "easter", type: "feast", transferable: true, transfer_to: "easter7_sunday" }),
@@ -1856,10 +1856,10 @@ test("C-6.2-9 · C-6.2-6 연도 경계 × 활성화 — 다음 해 좌석은 별
   same([...y.arrivals.values()].flat().filter((c) => c.observance.id === "d0106-epiphany").length, 1);        // ② 공현 도착은 한 건
   same(t.pass(2028).departures.get("2028-12-31")[0].to, "2029-01-08");                // ④ 기원 연도 캐시의 to = 다음 해 seed 도착
   same([count(y.departures), count(y.arrivals) - seed.size], [1, 1]);                 // I-1 — 출발 = 도착 − seed 도착
-  assert.ok(![...t.pass(2028).arrivals.keys()].includes("2029-01-07"));               // 다음 해 좌석은 2028 이동 계산의 도착에 섞이지 않는다
+  assert.ok(![...t.pass(2028).arrivals.keys()].includes("2029-01-07"));               // 다음 해 좌석은 2028 옮김 계산의 도착에 섞이지 않는다
 });
 
-test("C-6.2-7 활성화 집합이 실제로 바뀔 때만 이동 계산 캐시를 비운다 — 같은 연도의 결과가 바뀐다", () => {
+test("C-6.2-7 활성화 집합이 실제로 바뀔 때만 옮김 계산 캐시를 비운다 — 같은 연도의 결과가 바뀐다", () => {
   const t = passEngine(passTables([], [
     TMP("t-asc", "합성 승천", { kind: "easter_offset", days: 39 }, { season: "easter", type: "feast", transferable: true, transfer_to: "easter7_sunday" }),
   ]));
@@ -1875,7 +1875,7 @@ test("C-6.2-7 활성화 집합이 실제로 바뀔 때만 이동 계산 캐시�
   same(cand(t.at("2026-05-17"), "t-asc").status, "optional");
 });
 
-test("§6.5 이동 계산은 순수하다 — seed 배열을 바꾸지 않고, 정수가 아닌 연도는 throw(§2 ③ — 날짜 루프가 끝나지 않는다)", () => {
+test("§6.5 옮김 계산은 순수하다 — seed 배열을 바꾸지 않고, 정수가 아닌 연도는 throw(§2 ③ — 날짜 루프가 끝나지 않는다)", () => {
   const t = passEngine(passTables([MOV("d0101-x", "01.01")]));
   const arrived = [{ observance: { id: "d1231-y", kind: "sanctoral", name: "y", rank: "major_feast", precedence: 6, color: "white" }, status: "transferred_in", from: "2028-12-31" }];
   const seed = new Map([["2029-01-01", arrived]]);
@@ -2029,16 +2029,16 @@ test("C-2-2 「빈 결과」와 「아직 안 불러옴」을 뷰가 구별할 �
   assert.strictEqual(e.resolveDate("2026-13-01"), null);                         // 잘못된 날짜는 null(throw 아님)
 });
 
-test("C-2-3 resolveDate 는 계산 범위(1583~9999) 밖에 null — 이동 계산에 닿기 전에 돌려보낸다(0100년대에서 탭이 멈췄다)", async () => {
+test("C-2-3 resolveDate 는 계산 범위(1583~9999) 밖에 null — 옮김 계산에 닿기 전에 돌려보낸다(0100년대에서 탭이 멈췄다)", async () => {
   const e = loadEngine(fakeFetch([]));
   await e.preloadCalendar();
   for (const d of ["1582-12-31", "0100-06-01", "0101-01-01", "1000-03-01"]) assert.strictEqual(e.resolveDate(d), null, d);
-  assert.strictEqual(vm.runInContext("transferCache.size", e), 0, "범위 밖 날짜는 이동 계산을 계산하지 않는다");
+  assert.strictEqual(vm.runInContext("transferCache.size", e), 0, "범위 밖 날짜는 옮김 계산을 하지 않는다");
   // 범위 끝은 푼다 — 앞뒤 해(1582 · 10000)의 앵커에 기대는 날도 shift 가 실패하지 않는다
   for (const d of ["1583-01-01", "9999-12-31"]) assert.ok(e.resolveDate(d)?.official, d);
 });
 
-test("§4.9 캘린더 인덱스가 새로 서면 이동 계산 캐시를 비운다", async () => {
+test("§4.9 캘린더 인덱스가 새로 서면 옮김 계산 캐시를 비운다", async () => {
   const e = loadEngine(fakeFetch([]));
   vm.runInContext("transferCache.set(1999, null)", e);
   await e.preloadCalendar();

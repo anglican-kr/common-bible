@@ -8,7 +8,7 @@
   - A1-a 계산 계층: PR 1(#325)
   - A1-b 조회 계층: PR 2(#338)
   - B1 우선순위, 지정 전례일, 전례색, 재일: PR 3 첫째(#341)
-  - B1 이동 계산, 선택 봉헌: PR 3 둘째(#343)
+  - B1 옮김 계산, 선택 봉헌: PR 3 둘째(#343)
 - 남은 일: §9의 열린 물음이 남았다. 엔진을 쓰는 화면(ADR-038)은 독서 화면과 캘린더 월간 화면이 나왔고, 캘린더의 주간과 목록 화면, 검색 이원화가 남았다.
 - 구현 파일
   - 엔진: `js/app/liturgical-engine.js`. 다른 모듈에 의존하지 않는다(§3.1).
@@ -16,13 +16,13 @@
   - 합성 표로 검사하는 유닛 테스트: `tests/unit/liturgical-engine.test.js`
   - 실데이터로 검사하는 유닛 테스트: `tests/unit/liturgical-engine.data.test.js`(§7)
 - 관련 ADR
-  - ADR-036: 교회력 데이터 모델. 좌표, 등급과 우선순위, 이동, 전례색은 이 ADR이 근거다.
+  - ADR-036: 교회력 데이터 모델. 좌표, 등급과 우선순위, 옮김, 전례색은 이 ADR이 근거다.
   - ADR-037 §6: 엔진 명세. 이 설계의 상위 문서다.
   - ADR-038: 엔진을 쓰는 화면
   - ADR-039: 전례시편 `lps`(data 저장소에 있다)
   - ADR-013(유닛 테스트 하네스), ADR-012(JSDoc 타입), ADR-018 · 019 · 034(모듈 계층과 ESM), ADR-021(캐시 무효화), ADR-035(절 일부만 그리기)
 - 기도서 원문: [`docs/reference/liturgical-calendar-rules.md`](../reference/liturgical-calendar-rules.md). 기도서의 교회력 규칙을 해석하지 않고 옮겨 적은 문서다. 「기도서 원문 143행」처럼 적은 행 번호는 이 파일의 줄 번호다.
-- 기대값 픽스처: [`tests/fixtures/liturgical/`](../../tests/fixtures/liturgical/README.md). 실제 연도의 이동, 선택 봉헌, 지정 전례일, 색 기대값은 이 파일들이 기준이다(§1.4, §7).
+- 기대값 픽스처: [`tests/fixtures/liturgical/`](../../tests/fixtures/liturgical/README.md). 실제 연도의 옮김, 선택 봉헌, 지정 전례일, 색 기대값은 이 파일들이 기준이다(§1.4, §7).
 - 검토 문서: [`docs/design/liturgical-engine-review.md`](liturgical-engine-review.md). 외부 구현과 견준 판정(§3, §4), PR 1-3 검증 체크리스트(§5), 사제 확인 질문지(§6)가 있다.
 
 ---
@@ -36,7 +36,7 @@
 - [3. 배치와 계층](liturgical-engine/03-placement-layers.md)
 - [4. A1-a 계산 계층](liturgical-engine/04-compute-layer.md)
 - [5. A1-b 조회 계층](liturgical-engine/05-lookup-layer.md)
-- [6. B1 우선순위 · 이동 · 전례색](liturgical-engine/06-rank-transfer-color.md)
+- [6. B1 우선순위 · 옮김 · 전례색](liturgical-engine/06-rank-transfer-color.md)
 - [7. 테스트 계획](liturgical-engine/07-test-plan.md)
 - [8. 구현 단계](liturgical-engine/08-phases.md)
 - [9. 미결](liturgical-engine/09-open-items.md)

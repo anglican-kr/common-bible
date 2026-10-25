@@ -4,7 +4,7 @@
 슬롯(제1독서 · 시편 · 제2독서 · 복음)별로 책자의 「또는」 대안과 엔진 대안(초기 선택 전례일의 트랙 · 세트에 걸친 라벨 하나하나)을
 하나씩 짝짓는다 — 라벨의 변형을 한데 모은 합집합과 비교하면 송가 이름이 붙은 라벨 하나도 대안 여럿처럼 보여 ⊂ 가 된다.
 판정: = 같음 · ⊂/⊃ 대안 수 차이 · ≈ 표기만(절 집합 동치 포함) · other 책자가 다른 후보(평일 등)의 독서 · partial/≠ 실질 불일치.
-이름(별칭 포함) · 이동 표기 · 색은 보조 표로 낸다(축성일 · 사계재 · 공휴일은 엔진 범위 밖이라 잡음이 섞인다)."""
+이름(별칭 포함) · 책자의 「…에서 이동」 표기 · 색은 보조 표로 낸다(축성일 · 사계재 · 공휴일은 엔진 범위 밖이라 잡음이 섞인다)."""
 import json, re, sys, collections, datetime
 BK, EN, OUT, DET = sys.argv[1:5]
 booklet = {x["date"]: x for x in json.load(open(BK, encoding="utf8"))}
@@ -221,7 +221,7 @@ for d in sorted(booklet):
         alt = e["colorAlt"]; ec |= set(alt if isinstance(alt, list) else [alt])
     if bc and (not bc <= ec or e["color"] not in bc):
         color_rows.append((d, b["weekday"], sorted(bc), e["color"], sorted(ec - {None}), b["names"][:3]))
-    # 이름 · 이동
+    # 이름 · 「…에서 이동」 표기
     moved = {}
     prev = None
     for n in b["names"]:

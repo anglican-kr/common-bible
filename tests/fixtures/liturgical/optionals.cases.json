@@ -3,7 +3,7 @@
     "kind": "optional | activation",
     "schema": "tests/fixtures/liturgical/README.md",
     "canon": "설계서 §1.4 기준 지도 — 선택 봉헌(optional)과 활성화(activated) 기대값은 이 파일이 기준이다",
-    "transcribedFrom": "설계서 §7 이동 계산 행 ⑦·⑩ 선택 · 검토 문서 §5.12 (main 243bf83, 2026-09-20)",
+    "transcribedFrom": "설계서 §7 옮김 계산 행 ⑦·⑩ 선택 · 검토 문서 §5.12 (main 243bf83, 2026-09-20)",
     "groupLegend": "group 은 리팩터링 전 §7 행의 묶음 표시일 뿐이다 — 참조 대상이 아니다"
   },
   "cases": [
@@ -172,7 +172,7 @@
       "id": "O-2049-01-31-presentation",
       "kind": "optional",
       "group": "④",
-      "title": "주의 봉헌 2049 — 2.2(화, 설과 겹침) → 직전 주일 1.31 optional; 충돌 이동 2.3 은 T-2049-02-03-presentation-seollal",
+      "title": "주의 봉헌 2049 — 2.2(화, 설과 겹침) → 직전 주일 1.31 optional; 밀려 옮김(2.3)은 T-2049-02-03-presentation-seollal",
       "status": "confirmed",
       "canon": ["R-6.2-nearby-sunday"],
       "checks": ["C-6.5-10"],
@@ -287,7 +287,7 @@
       "id": "A-2049-01-31-presentation-activated",
       "kind": "activation",
       "group": "⑦",
-      "title": "활성화 — 2049 주의 봉헌을 켜면 1.31 도착 하나만 있고 2.3 충돌 이동은 생기지 않는다",
+      "title": "활성화 — 2049 주의 봉헌을 켜면 1.31 도착 하나만 있고 2.3 으로 밀려 옮김은 생기지 않는다",
       "status": "confirmed",
       "activated": ["d0202-주의-봉헌"],
       "canon": ["R-6.2-destinations"],
