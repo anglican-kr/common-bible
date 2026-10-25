@@ -238,7 +238,7 @@ function dayOfYear(s) {
 }
 
 /**
- * 가장 가까운 주일. 정확히 3.5일 떨어지는 경우는 없으므로 동률이 없다.
+ * 가장 가까운 주일. 정확히 3.5일 떨어지는 경우는 없으므로 거리가 같은 경우가 없다.
  * @param {string} s
  * @returns {string | null}
  */
@@ -698,7 +698,7 @@ function inSpan(dateStr, name) {
 // ── END LITURGICAL_CORE ──
 
 // ── BEGIN LITURGICAL_LOOKUP ──
-// 표 인덱스 · 격자 좌표 · 후보 조립 · 폴백 매칭 · 독서/본기도 조회 · 품계와 이동 계산(B1). **순수하다** —
+// 표 인덱스 · 격자 좌표 · 후보 조립 · 폴백 매칭 · 독서/본기도 조회 · 우선순위와 이동 계산(B1). **순수하다** —
 // 읽는 인덱스를 전부 인자로 받는다(설계서 §3.3). 모듈 상태는 이동 계산 캐시 `transferCache` 와 선택 봉헌
 // 활성화 집합 `activatedOptionals` 둘만 만지고(`transfersOf` · `setActivatedOptionals`), 둘 다 블록 밖에 둬
 // 테스트가 prelude 로 재선언한다. LITURGICAL_CORE 를 먼저 실행한 컨텍스트에서 돈다.
@@ -1113,7 +1113,7 @@ function setActivatedOptionals(ids) {
 // ── §5.5 resolveDate — 후보 집합 ──
 
 /**
- * 그 날짜에 걸린 `periods` 행(배너용 겹침 표시) — 품계에 참여하지 않으므로 후보가 아니다.
+ * 그 날짜에 걸린 `periods` 행(배너용 겹침 표시) — 우선순위 비교에 참여하지 않으므로 후보가 아니다.
  * 해를 넘기는 기간(예: `12.25 ~ 01.05`)도 받는다.
  * @param {CalendarIndex} index @param {string} md "MM.DD"
  * @returns {LiturgicalPeriod[]}
@@ -1130,7 +1130,7 @@ function periodsOn(index, md) {
 
 /**
  * 그 날짜의 **고유** 전례일 — §5.5 출처 ② 날짜(성인력) · ③ 음력 · ④ 규칙 파생(① 격자는 따로 합성한다).
- * 같은 행이 두 출처에서 오면 한 번만 낸다. 순서는 뜻이 없다 — 표시 순서와 지정 전례일은 품계가 정한다
+ * 같은 행이 두 출처에서 오면 한 번만 낸다. 순서는 뜻이 없다 — 표시 순서와 지정 전례일은 우선순위가 정한다
  * (`compareCandidates`). 음력 표 범위 밖 연도는 ③ 이 빈다(§2).
  * @param {CalendarIndex} index @param {string} dateStr
  * @returns {Observance[]}
@@ -1156,7 +1156,7 @@ function ownObservancesOn(index, dateStr) {
   return out;
 }
 
-// ── §6.1 · §6.2 품계 사다리 · 지정 전례일 · 재분류 (B1) ──
+// ── §6.1 · §6.2 우선순위표 · 지정 전례일 · 재분류 (B1) ──
 
 /** 성주간의 합성 점유자 id(§6.5 `guard`) — 표에 없고 후보로 내지 않는다. */
 const GUARD_ID = GUARD_PREFIX + "holy-week";
@@ -1217,7 +1217,7 @@ function ladderOf(/** @type {Candidate} */ c) {
 
 /**
  * 순위 비교 — 키는 `(유효 precedence, 범주 사다리, 고유 본기도, id)` 이고 앞이 선순위다(→ R-6.2-tie-ladder).
- * 고유 본기도(`has_proper`)가 있는 쪽이 먼저인 키는 같은 범주 안의 동률을 가른다 — prec 7 축일 다섯
+ * 고유 본기도(`has_proper`)가 있는 쪽이 먼저인 키는 같은 범주 안에서 우선순위가 같을 때의 순서를 정한다 — prec 7 축일 다섯
  * 쌍 가운데 한쪽만 고유 본기도를 가진 것은 3.01 뿐이라 삼일절이 데이빗 앞에 선다(→ R-6.1-prec7-tie-pairs).
  * 마지막 `id` 사전순은 결정성만 지키는 안전망이다(§5.3 과 같은 안정 정렬).
  * @param {Candidate} a @param {Candidate} b
@@ -1409,7 +1409,7 @@ function nextYearSeats(index, year, activated) {
 }
 
 /**
- * 충돌 이동에 참여하는가 — `transferable` ∧ 품계가 있고 ∧ 「기념만」이 아니다(§6.2). 목적지는 `transfer_to`
+ * 충돌 이동에 참여하는가 — `transferable` ∧ 우선순위가 있고 ∧ 「기념만」이 아니다(§6.2). 목적지는 `transfer_to`
  * 값과 무관하게 언제나 다음 빈 날이다 — 선택 봉헌 종류도 충돌로는 다음날로 간다(2049 주의 봉헌).
  * @param {Observance} o
  */
@@ -1432,7 +1432,7 @@ function movesOnConflict(o) {
  * `MAX_SHIFT` 를 넘으면 옮기지 않고 `defects` 에 적는다 — 그 축일은 기원 날짜에 `proper` 로 남는다.
  *
  * 빈 날은 「`c` 보다 높은 고유 후보가 없고(같은 값은 `c` 가 민다 — → R-6.2-chain-model), 도착한 후보가
- * 없다(품계 무관 — → R-6.2-first-come)」이다 — 보호 기간은 막지 않는다. 다만 **보호 기간 안에서 밀린** 축일은
+ * 없다(우선순위 무관 — → R-6.2-first-come)」이다 — 보호 기간은 막지 않는다. 다만 **보호 기간 안에서 밀린** 축일은
  * 그 자리에서 앉히지 않고 모아 두었다가, 그 기간을 다 돈 뒤 **서열 순**(유효 precedence — 같으면 밀린 순서, 곧
  * 원래 날짜 순)으로 부활 2주 월요일부터 빈 날을 찾는다(→ R-6.3-guard-destination — 2027 책자: 성 목요일의
  * 수태고지 → 4.5; → R-6.3-guard-order — 부활 3.26 인 해: 수태고지 4.3 · 요셉 4.4). 도착에 밀린 옮길 수 있는
@@ -1487,7 +1487,7 @@ function computeTransfers(index, year, seed, activated) {
   /** `c` 가 `dest` 에서 앞설 수 있으면 빈 날이다(§6.5 `isFree`). */
   const isFree = (/** @type {string} */ dest, /** @type {Candidate} */ c) => {
     const next = dest.startsWith(head) ? null : (seats ??= nextYearSeats(index, year, activated));
-    // 도착이 하나라도 있으면 품계와 무관하게 찬 날(→ R-6.2-first-come)
+    // 도착이 하나라도 있으면 우선순위와 무관하게 찬 날(→ R-6.2-first-come)
     if ((arrivals.get(dest) || []).length || (next && (next.nextArrivals.get(dest) || []).length)) return false;
     // 그날의 고유 후보 가운데 c 보다 높은 것이 없다 — 같은 값은 c 가 민다(→ R-6.2-chain-model). 보호 기간은
     // 막지 않는다 — 성 금요일 · 부활대축일 같은 실제 후보가 막고, 성 토요일은 성 토요일 행(prec 1)이 막는다(부활밤은
@@ -1615,7 +1615,7 @@ function fastOf(resolved) {
  * B1 이 지정 전례일을 정하고 밀린 고유 후보를 재분류하며(`settle`) 그날의 색을 낸다(`dayColorsOf`). 후보는 하나도
  * 버리지 않는다(ADR-036 §7 「밀린 독서 보존」).
  *
- * 표시 순서(ADR-037 §6): ① 교회력에 따른 축일 · 재일(품계 순 — `compareCandidates`) → ② 이동 축일
+ * 표시 순서(ADR-037 §6): ① 교회력에 따른 축일 · 재일(우선순위 순 — `compareCandidates`) → ② 이동 축일
  * (도착 → 선택 봉헌, 이동 계산의 순서) → ③ 나머지(격자) → ④ 저녁 전례(하루의 순서대로 낮 다음 저녁).
  * @param {CalendarIndex} index @param {string} dateStr @param {TransferPass} pass
  * @returns {ResolvedDate | null} 잘못된 날짜면 null

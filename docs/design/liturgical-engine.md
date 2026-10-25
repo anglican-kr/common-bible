@@ -7,7 +7,7 @@
 - 상태: **A1과 B1을 모두 구현했다.** 단계별 PR은 다음과 같다. 그 뒤 #345에서 성주간과 부활 8일에 든 주요축일을 책자대로 그날 지키게 고쳤다.
   - A1-a 계산 계층: PR 1(#325)
   - A1-b 조회 계층: PR 2(#338)
-  - B1 품계, 지정 전례일, 전례색, 재일: PR 3 첫째(#341)
+  - B1 우선순위, 지정 전례일, 전례색, 재일: PR 3 첫째(#341)
   - B1 이동 계산, 선택 봉헌: PR 3 둘째(#343)
 - 남은 일: §9의 열린 물음이 남았다. 엔진을 쓰는 화면(ADR-038)은 독서 화면과 캘린더 월간 화면이 나왔고, 캘린더의 주간과 목록 화면, 검색 이원화가 남았다.
 - 구현 파일
@@ -16,7 +16,7 @@
   - 합성 표로 검사하는 유닛 테스트: `tests/unit/liturgical-engine.test.js`
   - 실데이터로 검사하는 유닛 테스트: `tests/unit/liturgical-engine.data.test.js`(§7)
 - 관련 ADR
-  - ADR-036: 교회력 데이터 모델. 좌표, 품계, 이동, 전례색은 이 ADR이 근거다.
+  - ADR-036: 교회력 데이터 모델. 좌표, 등급과 우선순위, 이동, 전례색은 이 ADR이 근거다.
   - ADR-037 §6: 엔진 명세. 이 설계의 상위 문서다.
   - ADR-038: 엔진을 쓰는 화면
   - ADR-039: 전례시편 `lps`(data 저장소에 있다)
@@ -36,7 +36,7 @@
 - [3. 배치와 계층](liturgical-engine/03-placement-layers.md)
 - [4. A1-a 계산 계층](liturgical-engine/04-compute-layer.md)
 - [5. A1-b 조회 계층](liturgical-engine/05-lookup-layer.md)
-- [6. B1 품계 · 이동 · 전례색](liturgical-engine/06-rank-transfer-color.md)
+- [6. B1 우선순위 · 이동 · 전례색](liturgical-engine/06-rank-transfer-color.md)
 - [7. 테스트 계획](liturgical-engine/07-test-plan.md)
 - [8. 구현 단계](liturgical-engine/08-phases.md)
 - [9. 미결](liturgical-engine/09-open-items.md)
