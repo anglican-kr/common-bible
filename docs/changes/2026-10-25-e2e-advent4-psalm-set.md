@@ -1,4 +1,5 @@
 ---
+pr: 430
 date: 2026-10-25
 branch: fix/e2e-advent4-psalm-set
 title: "test: 대림 4주일 시편 복사 e2e가 둘째 세트를 연다"
