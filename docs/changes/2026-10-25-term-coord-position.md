@@ -1,4 +1,5 @@
 ---
+pr: 425
 date: 2026-10-25
 branch: docs/term-coord-position
 title: "docs: 「좌표」를 「절기 위치」와 「전례일 키」로 바꿈"
