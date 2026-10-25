@@ -1,4 +1,5 @@
 ---
+pr: 427
 date: 2026-10-25
 branch: docs/term-movable-monthly
 title: "docs: temporal, sanctoral, 성인력을 「이동 축일」과 「월별 축일」로 바꿈"
