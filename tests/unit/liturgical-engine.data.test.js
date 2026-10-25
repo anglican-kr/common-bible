@@ -330,7 +330,7 @@ test("C-5.6-4 성인 공통 독서 폴백 — 양성 · 음성 · 불변식 79 /
     assert.ok(got.length > 0 && got.every((g) => g.common === null), p);
   }
   same(ids("2026-01-01", "d0101-세계평화"), []);
-  // 불변식 — 성인력 전 행
+  // 불변식 — 월별 축일(sanctoral) 전 행
   const commons = read("commons.json").classes;
   const kasi = read("kasi-lunar.json");
   let fallback = 0, properWithCommon = 0, memorialEmpty = 0;
@@ -375,7 +375,7 @@ test("C-5.6-6 날짜 선택 순서 — 격자는 resolved.date(12.19 · 12.17), 
   assert.ok(cs[0].collects.length > 0 && cs[0].collects.every((c) => colOf(c).date === "11.30"));
 });
 
-test("C-5.5-3 격자 ∧ temporal 공존 — 2026-03-29 성지주일 · 2026-11-29 대림1주일 (지정 전례일은 C-6.1-10 테스트)", { skip: SKIP }, () => {
+test("C-5.5-3 격자 ∧ 이동 축일(temporal) 공존 — 2026-03-29 성지주일 · 2026-11-29 대림1주일 (지정 전례일은 C-6.1-10 테스트)", { skip: SKIP }, () => {
   same(resolve("2026-03-29").candidates.map((c) => c.observance.id), ["t-성지주일", "grid:lent-x-sunday"]);
   same(resolve("2026-11-29").candidates.map((c) => c.observance.id), ["t-대림1주일", "grid:advent-1-sunday"]);
   // 대림1주일 행은 조인 이름이 없어 자기 절기 위치로 격자 레코드에 닿는다(§5.4) — 나해
@@ -518,7 +518,7 @@ test("C-6.1-4 명절 ∧ 연중 주일 — 설 2027 · 2030 · 2034 · 2037 · 2
   same(all.sort(), days.map(([d]) => d).sort());
 });
 
-test("C-6.1-7 · C-2-1 precedence null 인 temporal 행은 후보로 있되 지정 전례일이 아니다 (2025~2050)", { skip: SKIP }, () => {
+test("C-6.1-7 · C-2-1 precedence null 인 이동 축일 행은 후보로 있되 지정 전례일이 아니다 (2025~2050)", { skip: SKIP }, () => {
   const nullRows = read("temporal-feasts.json").entries.filter((e) => e.precedence === null).map((e) => e.id);
   assert.ok(nullRows.length > 0);
   const bad = [];
@@ -573,7 +573,7 @@ test("C-6.1-9 prec 7 축일 ∧ 축일 네 쌍 — 결정적이고 둘 다 prope
   same(pick(resolve("2031-03-01"), "grid:").observance.name, "재의 수요일 후 토요일");   // 그 평일에 정한 독서는 격자 후보로 남는다
 });
 
-test("C-6.1-10 · C-5.5-3 우선순위가 같으면 temporal 이 격자보다 선순위다 — 2026-03-29 성지주일(홍) · 2026-11-29 대림1주일", { skip: SKIP }, () => {
+test("C-6.1-10 · C-5.5-3 우선순위가 같으면 이동 축일이 격자보다 선순위다 — 2026-03-29 성지주일(홍) · 2026-11-29 대림1주일", { skip: SKIP }, () => {
   const palm = resolve("2026-03-29");
   same([offId(palm), palm.color, gridIn(palm).status], ["t-성지주일", "red", "proper"]);
   const advent1 = resolve("2026-11-29");
@@ -588,7 +588,7 @@ test("C-6.1-11 하계재 후보의 본문 — 2026-05-27 성직자 2세트(시�
   same(offId(resolve("2026-05-27")).startsWith("grid:"), true);
 });
 
-test("C-6.1-12 기념일은 이름 줄 — 같은 날짜에 다른 행이 없는 성인력 기념일은 해마다 지정 전례일이 아니고(다른 후보가 없으면 격자), temporal 기념일 날의 지정 전례일은 격자 (2025~2050)", { skip: SKIP }, () => {
+test("C-6.1-12 기념일은 이름 줄 — 같은 날짜에 다른 행이 없는 월별 축일 표의 기념일은 해마다 지정 전례일이 아니고(다른 후보가 없으면 격자), 이동 축일 표의 기념일 날의 지정 전례일은 격자 (2025~2050)", { skip: SKIP }, () => {
   const s = read("sanctoral.json").entries;
   const lonely = s.filter((e) => e.rank === "commemoration" && e.date && s.filter((x) => x.date === e.date).length === 1);
   same(lonely.length, 13);
@@ -634,9 +634,9 @@ test("C-6.1-13 저녁 전례(R-6.1-evening) 2025~2050 — 성 토요일은 지�
   same(evenings, ["2026-04-04:t-부활밤", "2026-12-24:d1225-성탄-밤"]);
 });
 
-test("C-6.4-1 절기 기본색 · 지정 전례일의 색 — 성주간 전체 홍(성 목 · 금 · 토 — 그날 지키는 성인력 축일만 축일 색) · 성령강림 홍 · 삼위일체 · 왕이신 그리스도 백 · 대림 3주일 장미 · 청 · 사순 4주일 장미 (2025~2050)", { skip: SKIP }, () => {
+test("C-6.4-1 절기 기본색 · 지정 전례일의 색 — 성주간 전체 홍(성 목 · 금 · 토 — 그날 지키는 월별 축일만 축일 색) · 성령강림 홍 · 삼위일체 · 왕이신 그리스도 백 · 대림 3주일 장미 · 청 · 사순 4주일 장미 (2025~2050)", { skip: SKIP }, () => {
   const bad = [];
-  const feastDays = [];   // 성주간에 성인력 축일이 지정 전례일인 날 — 그날은 축일 색(→ R-6.3-holy-week-guard). 성지주일의 수태고지(2029 · 2040)는 보호 기간 뒤로 가 여기 없다(→ R-6.3-guard-destination)
+  const feastDays = [];   // 성주간에 월별 축일이 지정 전례일인 날 — 그날은 축일 색(→ R-6.3-holy-week-guard). 성지주일의 수태고지(2029 · 2040)는 보호 기간 뒤로 가 여기 없다(→ R-6.3-guard-destination)
   for (let y = 2025; y <= 2050; y++) {
     const E = ctx.easterDate(y);
     const at = (n) => resolve(ctx.addDays(E, n));
@@ -663,7 +663,7 @@ test("C-6.4-1 절기 기본색 · 지정 전례일의 색 — 성주간 전체 �
   same(feastDays, ["2035 E-6", "2043 E-4", "2046 E-6"]);
 });
 
-test("C-6.4-2 성주간 · 부활 8일에도 그날 지키는 성인력 축일은 축일 색 — 2035-03-19 요셉(성주간 월) 백 · 2025-04-25 마르코(부활 금) 홍 · 성 토요일 홍 · 순교자 평일 홍", { skip: SKIP }, () => {
+test("C-6.4-2 성주간 · 부활 8일에도 그날 지키는 월별 축일은 축일 색 — 2035-03-19 요셉(성주간 월) 백 · 2025-04-25 마르코(부활 금) 홍 · 성 토요일 홍 · 순교자 평일 홍", { skip: SKIP }, () => {
   same(resolve("2035-03-19").color, "white");
   same(resolve("2025-04-25").color, "red");
   same([offId(resolve("2025-04-19")), resolve("2025-04-19").color], ["t-성-토요일", "red"]);   // E−1 — 대표는 성 토요일(부활밤은 저녁 전례 — R-6.1-evening)

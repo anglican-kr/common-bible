@@ -724,7 +724,7 @@ const LEC_TABLES = {
     REC("d1231-xmas-week", { kind: "sanctoral", season: "christmas", type: "weekday", date: "12.31", name: "성탄주간" }),
     REC("d1219-o", { kind: "sanctoral", season: "advent", type: "weekday", date: "12.19", name: "성탄 6일 전" }),
     REC("d1220-o", { kind: "sanctoral", season: "advent", type: "weekday", date: "12.20", name: "성탄 5일 전" }),
-    // 성인력 — 날짜(+음력)로 닿는다
+    // 월별 축일(sanctoral) — 날짜(+음력)로 닿는다
     feastRec("d0125-paul-s1", "01.25", "사도 성 바울로의 회심", { set_no: 1, set_total: 2 }),
     feastRec("d0125-paul-s2", "01.25", "사도 성 바울로의 회심", { set_no: 2, set_total: 2 }),
     feastRec("d0217-feast", "02.17", "합성 축일"),
@@ -839,7 +839,7 @@ test("C-4.3-3 easter_offset −1 인덱스가 1:N — 성 토요일과 부활밤
   same(r.candidates.map((c) => c.evening === true), [false, false, true]);
 });
 
-test("C-5.5-3 격자 ∧ temporal 행은 공존한다 — 대체가 아니다 · 우선순위가 같으면 사다리로 temporal 이 앞선다", () => {
+test("C-5.5-3 격자 ∧ 이동 축일 행은 공존한다 — 대체가 아니다 · 우선순위가 같으면 사다리로 이동 축일이 앞선다", () => {
   const advent1 = resolve("2026-11-29");
   same(advent1.candidates.map((c) => c.observance.id), ["t-advent1", "grid:advent-1-sunday"]);
   // 대림1주일 행은 조인 이름이 없다 — 자기 절기 위치로 격자 레코드에 닿는다(§5.4). 2026-11-29 는 나해
@@ -848,7 +848,7 @@ test("C-5.5-3 격자 ∧ temporal 행은 공존한다 — 대체가 아니다 ·
   const palm = resolve("2026-03-29");
   same(palm.candidates.map((c) => c.observance.id), ["t-palm", "grid:lent-x-sunday"]);
   same(readingIds(palm, cand(palm, "t-palm")), ["palm-A"]);   // 별칭(고난주일)도 조인 키
-  // prec 2로 같다 — 범주 사다리(temporal > 격자)로 행이 앞서고 격자는 proper 로 남는다(→ R-6.2-tie-ladder)
+  // prec 2로 같다 — 범주 사다리(이동 축일 > 격자)로 행이 앞서고 격자는 proper 로 남는다(→ R-6.2-tie-ladder)
   for (const r of [advent1, palm]) {
     assert.strictEqual(r.official.observance.kind, "temporal", r.date);
     assert.ok(!r.official.observance.id.startsWith("grid:"), r.date);
@@ -892,7 +892,7 @@ test("§5.5 격자 전례일 id · 이름 · precedence — 절기 위치에서 
     ["2026-02-22", "grid:lent-1-sunday", "사순 1주일", 2],
     ["2026-03-30", "grid:lent-x-weekday-mon", "성주간 월요일", 8],             // 고유명 평일
     ["2026-02-19", "grid:lent-x-weekday-thu", "재의 수요일 후 목요일", 8],
-    ["2026-04-02", "grid:lent-x-weekday-thu", "성주간 목요일", 8],             // temporal 행의 이름을 빌리지 않는다
+    ["2026-04-02", "grid:lent-x-weekday-thu", "성주간 목요일", 8],             // 이동 축일(temporal) 행의 이름을 빌리지 않는다
     ["2026-04-06", "grid:easter-1-weekday-mon", "부활 1주 월요일", 8],
     ["2026-04-12", "grid:easter-2-sunday", "부활 2주일", 2],
     ["2026-05-24", "grid:easter-x-sunday", "부활 주일", 2],                    // 성령강림은 주차가 없다
@@ -935,7 +935,7 @@ test("§5.5 고유명 평일 표지 — 해마다 여섯 날(E−45~−43 · E�
     ["2026-04-02", "grid:lent-x-weekday-thu", "성주간 목요일"],     // 재의 수요일 후 목요일(2.19)과 같은 id
     ["2026-04-03", "grid:lent-x-weekday-fri", "성주간 금요일"],
     ["2026-04-04", "grid:lent-x-weekday-sat", "성주간 토요일"],
-    ["2026-02-18", "grid:lent-x-weekday-wed", "사순 수요일"],       // 재의 수요일 — 대표는 temporal 행
+    ["2026-02-18", "grid:lent-x-weekday-wed", "사순 수요일"],       // 재의 수요일 — 대표는 이동 축일 행
     ["2026-03-03", "grid:lent-2-weekday-tue", "사순 2주 화요일"],
     ["2026-03-29", "grid:lent-x-sunday", "사순 주일"],              // 성지주일
   ]) {
@@ -1011,7 +1011,7 @@ test("C-5.3-4 이름 · 날짜가 있는 레코드는 폴백 해석 없음 — �
   }
   const ashThu = resolve("2026-02-19");
   same(readingIds(ashThu, gridOf(ashThu)), ["ash-thu"]);
-  // 성 토요일 본문은 자기 temporal 행으로만 — 세트 둘
+  // 성 토요일 본문은 자기 이동 축일 행으로만 — 세트 둘
   const holySat = resolve("2026-04-04");
   same(readingIds(holySat, cand(holySat, "t-holy-sat")), ["holy-sat-s1", "holy-sat-s2"]);
   same(readingIds(holySat, gridOf(holySat)), []);
@@ -1199,7 +1199,7 @@ test("§2 표 결손은 흡수한다 — 래퍼 · 배열 · 행 모양이 틀�
   same(ctx.buildCalendarIndex(null).temporal, []);
   same(ctx.findReadingsIn(LEC, CAL, resolve("2026-06-10"), null), []);
   same(ctx.findCollectsIn(LEC, CAL, null), []);
-  // rule: null 인 temporal 행은 후보에 오르지 않는다(C-4.3-5 와 같은 규칙)
+  // rule: null 인 이동 축일 행은 후보에 오르지 않는다(C-4.3-5 와 같은 규칙)
   assert.ok(!CAL.temporal.every((t) => t.rule) && [...ctx.movableOf(CAL, 2026).values()].flat().every((t) => t.rule));
 });
 
@@ -1239,7 +1239,7 @@ const B1_TABLES = {
     SAN("d0409-red", "04.09", "합성 사도", { rank: "major_feast", precedence: 6, color: "red" }),
     // 사계재 날 축일이 지정 전례일이면 병기(C-6.4-3)
     SAN("d0529-feast", "05.29", "합성 니니안"),
-    // 성인력 기념일 — 이름 줄
+    // 월별 축일 표의 기념일 — 이름 줄
     SAN("d0611-memorial", "06.11", "합성 기념일", { rank: "commemoration", has_proper: false, color: null }),
     // 우선순위가 같으면 규칙일이 남는다(→ R-6.2-rule-day-stays — 옮기는 것은 옮김 계산의 몫이고 여기서는 지정 전례일만)
     SAN("d0531-visitation", "05.31", "합성 성모 방문", { rank: "major_feast", precedence: 3, transferable: true, transfer_to: "next_day" }),
@@ -1260,8 +1260,8 @@ const B1_TABLES = {
       { season: "ordinary", type: "feast", rank: "major_feast", precedence: 4, priority_group: "C", transferable: true,
         transfer_to: "commemorate_only", color: null }),
     TMP("t-family", "가정주일", { kind: "nth_sunday", month: 5, nth: 2 }, { coord_name: null, type: "sunday", rank: null, precedence: null, color: null }),
-    // temporal 기념일 — 평일에 떨어지는 합성 행(E+17 = 부활 3주 수요일, 보호 기간 밖). 지정 자격 판별을
-    // kind(성인력 행)로 좁히면 7 이 격자 평일 8 보다 앞서 실패한다(설계서 §7 B1 항목 · C-6.1-12 — #340)
+    // 이동 축일 표의 기념일 — 평일에 떨어지는 합성 행(E+17 = 부활 3주 수요일, 보호 기간 밖). 지정 자격 판별을
+    // kind(월별 축일 행)로 좁히면 7 이 격자 평일 8 보다 앞서 실패한다(설계서 §7 B1 항목 · C-6.1-12 — #340)
     TMP("t-memorial", "합성 temporal 기념일", { kind: "easter_offset", days: 17 },
       { coord_name: null, season: "easter", type: "feast", rank: "commemoration", precedence: 7, color: null }),
     TMP("t-ember-summer", "하계재", { kind: "ember_wfs", anchor: { kind: "easter_offset", days: 49 } },
@@ -1284,7 +1284,7 @@ const fate = (r, id) => {
 };
 const officialId = (r) => (r.official ? r.official.observance.id : null);
 
-test("§5.5 고유명 평일 표지는 엔진이 합성한 격자에만 — 같은 절기 위치에 대표로 서는 temporal 행(재의 수요일 · 성 목 · 금 · 토)에는 없다", () => {
+test("§5.5 고유명 평일 표지는 엔진이 합성한 격자에만 — 같은 절기 위치에 대표로 서는 이동 축일 행(재의 수요일 · 성 목 · 금 · 토)에는 없다", () => {
   for (const [d, id] of [["2026-02-18", "t-ash"], ["2026-04-02", "t-maundy"], ["2026-04-03", "t-good-friday"], ["2026-04-04", "t-holy-sat"]]) {
     const r = rb(d);
     assert.strictEqual(officialId(r), id, d);
@@ -1393,7 +1393,7 @@ test("C-6.1-7 · C-2-1 precedence null 은 정렬 최하위 · 지정 전례일�
   same(sat.candidates.map((c) => c.observance.id), ["t-holy-sat", "grid:lent-x-weekday-sat", "t-부활밤"]);
   same(fate(sat, "t-holy-sat"), ["proper", null]);
   same(fate(sat, "t-부활밤"), ["proper", null]);   // 저녁 전례 — 재분류 밖
-  // 유효 precedence: null 은 표 · 종류와 무관하게 ∞ — 등급 없는 temporal 평일 행을 8 로 읽던 예외는 성 토요일이 데이터에서
+  // 유효 precedence: null 은 표 · 종류와 무관하게 ∞ — 등급 없는 이동 축일 평일 행을 8 로 읽던 예외는 성 토요일이 데이터에서
   // prec 1 이 되며 지웠다(data#32). same() 은 JSON 왕복이라 Infinity 가 null 이 되므로 하나씩 strictEqual 로 본다(PR #349 리뷰)
   for (const obs of [{ kind: "temporal", type: "weekday", precedence: null }, { kind: "temporal", type: "sunday", precedence: null },
     { kind: "sanctoral", precedence: null }]) {
@@ -1417,8 +1417,8 @@ test("C-6.1-9 prec 7로 같은 순위 — 고유 본기도가 있는 쪽 먼저(
   same(ctx.resolveDateIn(rev, "2027-03-01", ctx.EMPTY_PASS()).official.observance.id, "d0301-samil");
 });
 
-test("R-6.2-tie-ladder 같은 값이면 도착 > temporal 규칙일 > sanctoral 고정일 > 격자", () => {
-  const corpus = rb("2029-05-31");   // 성체일(temporal 3) ∧ 성모 방문(sanctoral 3) — 규칙일이 남는다
+test("R-6.2-tie-ladder 같은 값이면 도착 > 이동 축일(규칙일) > 월별 축일(고정일) > 격자", () => {
+  const corpus = rb("2029-05-31");   // 성체일(이동 축일 3) ∧ 성모 방문(월별 축일 3) — 규칙일이 남는다
   same(officialId(corpus), "t-corpus");
   same(fate(corpus, "d0531-visitation"), ["proper", null]);   // 옮기는 것은 옮김 계산(§6.5)
   // 도착(prec 3) ∧ 같은 값 고유 후보 — 도착이 앞선다(→ R-6.2-chain-model)
@@ -1430,14 +1430,14 @@ test("R-6.2-tie-ladder 같은 값이면 도착 > temporal 규칙일 > sanctoral 
   same(ctx.ladderOf({ observance: visit, status: "proper" }), 2);
 });
 
-test("C-6.1-11 · C-6.1-12 사계재 · 기념일은 지정 전례일이 아니다 — temporal 기념일 ∧ 평일 격자도(kind 가 아니라 rank)", () => {
+test("C-6.1-11 · C-6.1-12 사계재 · 기념일은 지정 전례일이 아니다 — 이동 축일 표의 기념일 ∧ 평일 격자도(kind 가 아니라 rank)", () => {
   const ember = rb("2026-05-27");   // 하계재 수요일
   same(officialId(ember), "grid:ordinary-x-weekday-wed");
   same(fate(ember, "t-ember-summer"), ["proper", null]);
   const memorial = rb("2026-06-11");
   same(officialId(memorial), "grid:ordinary-x-weekday-thu");
   same(fate(memorial, "d0611-memorial"), ["proper", null]);
-  // 합성 temporal 기념일 — 부활 3주 수요일(격자 prec 8)
+  // 합성 이동 축일 표의 기념일 — 부활 3주 수요일(격자 prec 8)
   const tm = rb("2026-04-22");
   same(officialId(tm), "grid:easter-3-weekday-wed");
   same(fate(tm, "t-memorial"), ["proper", null]);
@@ -1473,7 +1473,7 @@ test("C-6.4-1 절기 기본색 — 대림 자 · 청(3주일 장미 · 청) · �
   same(rb("2026-04-03").color, "red");   // 성 금요일
 });
 
-test("C-6.4-2 지정 전례일의 색이 덮는다 — 순교자 홍 · 성모 청 대체색, 성주간 · 부활 8일에도 그날 지키는 성인력 축일은 축일 색 · temporal 지정 전례일은 가드", () => {
+test("C-6.4-2 지정 전례일의 색이 덮는다 — 순교자 홍 · 성모 청 대체색, 성주간 · 부활 8일에도 그날 지키는 월별 축일은 축일 색 · 이동 축일인 지정 전례일은 가드", () => {
   same([rb("2026-06-17").color, rb("2026-06-17").colorAlt], ["red", null]);
   const mary = rb("2026-06-16");
   same([officialId(mary), mary.color, mary.colorAlt], ["d0616-mary", "white", "blue"]);
@@ -1680,7 +1680,7 @@ test("C-6.5-19 보호 기간 목적지 — 성주간 · 부활 8일 안에서 �
   same(fate(t.at("2026-04-13"), "d0329-palm"), ["transferred_in", "t-palm"]);
   same(fate(t.at("2026-04-14"), "d0402-thu"), ["transferred_in", "t-thu"]);
   same(fate(t.at("2026-04-02"), "d0402-thu"), ["transferred_out", "t-thu"]);
-  // 색 가드(→ R-6.4-color-order): 흰 temporal 지정 전례일(합성 성지주일 · 성 목요일)도 성주간에는 그날 색이 기간 색(홍)이다. 실데이터에서는
+  // 색 가드(→ R-6.4-color-order): 이동 축일인 흰 지정 전례일(합성 성지주일 · 성 목요일)도 성주간에는 그날 색이 기간 색(홍)이다. 실데이터에서는
   // 이 가드가 색을 바꾸는 날이 없어져(유일한 실사례가 부활밤이 지정 전례일이던 날이었다) 합성으로 지킨다(PR #349 리뷰 — 설계서 §7 B1 「성주간 색 가드」)
   for (const [d, id] of [["2026-03-29", "t-palm"], ["2026-04-02", "t-thu"]]) {
     const r = t.at(d);
@@ -1755,7 +1755,7 @@ test("C-6.5-23 보호 기간은 막지 않는다 — 성지주일 전날 밀린 
   ], [TMP("t-wall-sat", "합성 가변 대축일", { kind: "easter_offset", days: -8 }, { season: "lent", type: "feast" })]));
   same(seats(t.pass(2026).arrivals), { "2026-03-30": ["d0328-x<-2026-03-28"], "2026-04-13": ["d0330-m<-2026-03-30"] });
   const mon = t.at("2026-03-30");
-  // 성주간 평일보다 선순위인 성인력 축일은 그 축일 색이다 — 제자리든 도착이든(→ R-6.4-color-order)
+  // 성주간 평일보다 선순위인 월별 축일은 그 축일 색이다 — 제자리든 도착이든(→ R-6.4-color-order)
   same([officialId(mon), fate(mon, "d0328-x"), mon.color], ["d0328-x", ["transferred_in", "t-wall-sat"], "white"]);
   // 옮길 수 있는 prec 7 은 도착에 밀리면 주일에 밀릴 때처럼 보호 기간 뒤 첫 빈 날로 간다(→ R-6.2-chain-model · R-6.3-guard-destination —
   // 2026-10-24 까지는 연쇄 범위 규칙 때문에 생략이었다). guard 에만 밀리면 생략이다(위 R-6.3-holy-week-guard 테스트)
