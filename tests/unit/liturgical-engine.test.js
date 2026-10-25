@@ -1256,7 +1256,9 @@ const B1_TABLES = {
       { season: "ordinary", type: "feast", rank: "major_feast", precedence: 3, priority_group: "A", transferable: true, transfer_to: "next_day" }),
     TMP("t-kingship", "왕이신 그리스도 주일", { kind: "advent1_offset", days: -7 },
       { season: "ordinary", week: 34, type: "sunday", rank: "major_feast", precedence: 3, priority_group: "A" }),
-    TMP("t-thanks", "추수감사주일", { kind: "nth_sunday", month: 11, nth: 3 },
+    // 주일로 정한 C 그룹 — 실데이터에는 없다(추수감사주일은 2026-10-25부터 등급이 없다, data#45). 데이터 파서가
+    // 이런 행에 commemorate_only 를 주므로 그 경로를 합성 행으로 본다.
+    TMP("t-c-sunday", "주일로 정한 C 그룹", { kind: "nth_sunday", month: 11, nth: 3 },
       { season: "ordinary", type: "feast", rank: "major_feast", precedence: 4, priority_group: "C", transferable: true,
         transfer_to: "commemorate_only", color: null }),
     TMP("t-family", "가정주일", { kind: "nth_sunday", month: 5, nth: 2 }, { coord_name: null, type: "sunday", rank: null, precedence: null, color: null }),
@@ -1444,13 +1446,13 @@ test("C-6.1-11 · C-6.1-12 사계재 · 기념일은 지정 전례일이 아니�
   same(tm.color, "white");
 });
 
-test("commemorate_only — 밀린 추수감사주일은 commemorated(displacedBy), 지정 전례일이면 색이 비어 절기 바탕", () => {
+test("commemorate_only — 밀린 주일 C 그룹(합성)은 commemorated(displacedBy), 지정 전례일이면 색이 비어 절기 바탕", () => {
   const r = rb("2022-11-20");   // 11월 셋째 주일 = 왕이신 그리스도 주일(대림1 2022-11-27)
   same(officialId(r), "t-kingship");
-  same(fate(r, "t-thanks"), ["commemorated", "t-kingship"]);
+  same(fate(r, "t-c-sunday"), ["commemorated", "t-kingship"]);
   same(r.color, "white");
   const won = rb("2026-11-15");
-  same(officialId(won), "t-thanks");
+  same(officialId(won), "t-c-sunday");
   same([won.color, plain(won.colors)], ["green", ["green"]]);
 });
 

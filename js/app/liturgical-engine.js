@@ -1298,7 +1298,8 @@ function displacerOf(ranked, c, staying) {
  *    그 성인의 색, 독서는 그날 평일 것 — 사용자 결정 2026-10-24). `transferable` 인 축일 셋도 성주간에 그날 남았으면
  *    `omitted` 다 — guard 에만 밀려 옮김 계산이 옮기지 않았어도(옮김 계산은 guard 를 보지 않는다) 성주간의 prec 7 은
  *    생략이다(그 셋의 날짜는 성주간에 들지 않아 실데이터에는 없다),
- *  - `commemorate_only`(추수감사주일)는 `commemorated` — 둘 다 `displacedBy` 를 싣는다.
+ *  - `commemorate_only`(교구 설립일 — 지역 축일 표라 아직 싣지 않아 실데이터에는 없다)는 `commemorated` — 둘 다
+ *    `displacedBy` 를 싣는다.
  * 나머지는 그대로다 — 격자, 지향 · 이름 줄, `precedence: null`, `transferable: false` 인 상위 축일, 동시
  * 봉헌에서 후순위인 쪽, 옮길 날 수의 상한을 넘겨 옮기지 못한 축일(`defects` — §6.5). 옮겨진 축일은 옮김 계산이 이미
  * `transferred_out` 으로 냈다.
@@ -1558,7 +1559,7 @@ function isEmber(/** @type {Observance} */ obs) {
  * 성주간 · 부활 8일(`holyWeek` ∪ `easterOctave`, §4.10)에는 이동 축일인 지정 전례일이 덮지 못한다(E−1 의 지정 전례일은 성 토요일
  * 행 — 부활밤은 저녁 전례라 색에 참여하지 않는다, → R-6.1-evening). 그날 지키는 월별 축일(주요축일 — 제자리든 도착이든,
  * 부활 8일 평일의 축일)이 지정 전례일이면 그 축일 색이다(→ R-6.3-holy-week-guard — 성주간의 prec 7 축일은 생략되어 지정 전례일이 되지 않는다). 지정 전례일의 색이 비었으면
- * (추수감사주일) 바탕이 남는다. 사계재 날은 **자**다(→ R-6.4-ember-color):
+ * (2.11 병자를 위한 기도일) 바탕이 남는다. 사계재 날은 **자**다(→ R-6.4-ember-color):
  * 바탕이 남으면(지정 전례일이 격자) 그날 색이 자이고, 축일이 덮으면 그 색이 대표로 남고 `colors` 에 자를 앞세워
  * 병기한다(책자의 [자/백] 순). `colors` 는 병기 목록이라 병기가 없는 날은 `[color]` 다. `omitted` ·
  * `commemorated` 후보와 기념일은 색에 기여하지 않는다.

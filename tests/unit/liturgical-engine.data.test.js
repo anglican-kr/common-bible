@@ -531,7 +531,7 @@ test("C-6.1-7 · C-2-1 precedence null 인 이동 축일 행은 후보로 있되
         const c = pick(r, row.id);
         if (!c || c.status !== "proper") bad.push(`${d} ${row.id} 후보 ${c && c.status}`);
         if (offId(r) === row.id) bad.push(`${d} ${row.id} 지정 전례일`);
-        // 주의 변모 주일 · 가정 · 평화통일 · 맥추감사 — 그날 지정 전례일은 격자거나 그 주일보다 선순위인 축일(2.2 주의 봉헌 등)
+        // 주의 변모 주일 · 가정 · 평화통일 · 맥추감사 · 추수감사 — 그날 지정 전례일은 격자거나 그 주일보다 선순위인 축일(2.2 주의 봉헌, 왕이신 그리스도 주일 등)
         if (!offId(r).startsWith("grid:") && ctx.effectivePrecedence(r.official.observance) >= gridIn(r).observance.precedence) {
           bad.push(`${d} ${row.id} 지정 전례일 ${offId(r)}`);
         }
@@ -543,6 +543,10 @@ test("C-6.1-7 · C-2-1 precedence null 인 이동 축일 행은 후보로 있되
   const feb15 = resolve("2026-02-15");
   same([offId(feb15), feb15.color], ["grid:ordinary-6-sunday", "green"]);
   assert.ok(groupsAt("2026-02-15", "t-주의-변모-주일").length > 0);
+  // 2026-11-15 — 추수감사주일은 지킬 수 있는 날(data#45): 그날 지정 전례일은 연중 33주일 격자 · 녹, 추수감사주일 독서는 후보로 닿는다(X-10)
+  const nov15 = resolve("2026-11-15");
+  same([offId(nov15), nov15.color], ["grid:ordinary-33-sunday", "green"]);
+  assert.ok(groupsAt("2026-11-15", "t-추수감사주일").length > 0);
 });
 
 test("C-6.1-9 prec 7 축일 ∧ 축일 네 쌍 — 결정적이고 둘 다 proper, 3.01 은 고유 본기도가 있는 삼일절이 지정 전례일", { skip: SKIP }, () => {
