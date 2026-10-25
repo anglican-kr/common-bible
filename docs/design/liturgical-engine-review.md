@@ -59,7 +59,7 @@
 | [calendarium-romanum](https://github.com/igneus/calendarium-romanum) | Ruby, 로마(1969) | **연도별 골든 덤프와 한 세기의 옮김 덤프**, 규범 원문에 묶은 테스트(spec), 옮김 계산을 따로 둔 클래스 | 양쪽으로 「가장 가까운 빈 날」 찾기(기도서의 「다음날」과 다르다) | 활발 |
 | [LiturgicalCalendarAPI](https://github.com/Liturgical-Calendar/LiturgicalCalendarAPI) | PHP, 로마 | **축일마다 둔 JSON 테스트 픽스처**(연도 배열과 since/until), JSON 스키마 | 규칙 내용 | 활발 |
 | [dailyoffice2019](https://github.com/blocher/dailyoffice2019) | Python/Django, ACNA BCP 2019와 미국 성공회 | **날짜 순으로 앞으로 이어지는 연쇄 옮김**(두 번째 성공회 구현), `Proper`의 날짜 창, 밀린 주일 남기기(`ALTERNATE_SUNDAY`), ICS 피드 | 절기 판정(축일 이름 문자열로 한다), 달력 로직 테스트가 없다 | 활발 |
-| [venite](https://github.com/gbj/venite) | TypeScript, 미국 성공회 | 좌표로 전례문 조립(LDF). ADR-038 뒤에 참고한다 | 교회력 계산 | 활발 |
+| [venite](https://github.com/gbj/venite) | TypeScript, 미국 성공회 | 전례일에 맞춰 전례문 조립(LDF). ADR-038 뒤에 참고한다 | 교회력 계산 | 활발 |
 | [Date-Lectionary](https://github.com/marmanold/Date-Lectionary), [LectServe](http://www.lectserve.com) | Perl, ACNA/RCL | 날짜에서 주일 이름, 가나다해, 독서를 낸다 | 2020년 뒤로 멈췄다 | 정체 |
 | [DateTime-Calendar-Liturgical-Christian](https://github.com/gitpan/DateTime-Calendar-Liturgical-Christian) | Perl, 미국 성공회 | 이름, 절기, 주차, 전례색 계산의 작은 참고 | 미완성 보관본 | 방치 |
 | [lectio-api](https://github.com/asachs01/lectio-api) | Express, RCL/로마/성공회 | 주일 이름과 주기(A/B/C)를 기계로 대조할 외부 출처 | 규칙 | 활발 |
@@ -292,7 +292,7 @@ GitHub 토픽 [lectionary](https://github.com/topics/lectionary), [liturgical-ca
 
 공백마다 체크리스트(본 문서 §5), 설계서 §9의 미결, 갱신 규칙(본 문서 §7)에 잇는다. 여섯 모두 그 뒤에 정해졌거나 미결로 넘어갔다. 항목마다 조사 당시의 관찰을 먼저 적고 **현재 결론**을 잇는다. 버린 판정은 「채택 안 함」으로 남긴다.
 
-1. **격자와 같은 좌표에 temporal 행이 겹친다.**
+1. **격자와 같은 절기 위치에 temporal 행이 겹친다.**
    - 조사 당시: temporal 표의 행 대부분이 `season/week/type`을 가졌다(2026-09-05 실측 18행). 그 가운데 **성지주일과 대림1주일은 격자의 절기 주일과 prec 2로 같고**, **사계재 4행은 격자 평일(feria)과 prec 8로 같았다**(성지주일 `lent/sunday` 2와 격자 사순 주일 2, 하계재 `fast` 8과 격자 연중 평일 8). 지정 전례일이 이름과 색을 정하므로 결과가 갈린다. 하계재는 자이고 격자는 녹이다. 성지주일은 격자도 성주간의 홍이라 색은 같다. 그때 설계서 §5.5는 격자와 규칙에서 나온 후보를 둘 다 올리고, `id` 사전순이 지정 전례일을 정했다.
    - 현재 결론: 둘은 **함께 있다**(후보 둘이고 서로 대신하지 않는다, 설계서 §5.5, C-5.5-3). 성지주일과 대림1주일은 범주 사다리로 temporal이 앞선다(→ R-6.2-tie-ladder, 본 문서 §3.3 채택, C-6.1-10). 사계재 4행은 **지정 자격이 없는 후보**다(→ R-6.1-ineligible, 사용자 확정 2026-09-17, 미결23 닫힘, C-6.1-11). 근거는 서울교구 2024, 2025, 2026 달력의 12월 면이다(X-5, X-6, X-7). 기념일도 같은 자리다(미결24 닫힘 2026-09-17, C-6.1-12).
    - 사계재 날의 색: 책자대로 **자**다(→ R-6.4-ember-color, 2026-10-10 사용자 결정, 미결26 닫힘, C-6.4-3). 2026-09-17에는 「그날은 절기색(녹), 사계재 본문을 읽을 때만 자색」(사용자 확정 2026-09-17)으로, 본 문서 §3.4 「사계재 색」 항목의 맞지 않는 데를 풀었다. 그러나 2026, 2025 책자가 사계재 날을 [자], [자/백]으로 인쇄해(X-8, X-11) 그 판정이 뒤집혔다. 지정 자격 결정은 그대로다.
@@ -443,7 +443,7 @@ GitHub 토픽 [lectionary](https://github.com/topics/lectionary), [liturgical-ca
   - **검증**: 유닛
   - **기준**: ADR-036 §4
   - **체크**: PR #325 (2026-09-17)
-- [x] **C-4.5-4** 주님의 세례 주일의 좌표는 **하나**이고 `ordinary`, 1, `sunday`다(→ R-4.5-baptism-ordinary-1, 미결10 닫힘). 그날의 지정 전례일(`official`)은 격자 주일이 아니라 `t-주님의-세례`(prec 3)다.
+- [x] **C-4.5-4** 주님의 세례 주일의 절기 위치는 **하나**이고 `ordinary`, 1, `sunday`다(→ R-4.5-baptism-ordinary-1, 미결10 닫힘). 그날의 지정 전례일(`official`)은 격자 주일이 아니라 `t-주님의-세례`(prec 3)다.
   - **격자를 성탄절기로 두면**: 격자를 `christmas`로 합성하면 절기 주일(2)이 앞서 결과가 뒤집힌다.
   - **절기 스팬**: `christmas`는 12.25부터 **세례 주일 전날**까지다. 픽스처 W-2026-01-11-baptism-of-the-lord.
   - **검증**: 유닛
@@ -604,7 +604,7 @@ GitHub 토픽 [lectionary](https://github.com/topics/lectionary), [liturgical-ca
   - **기준**: 설계서 §5.4, §7의 사계재 항목(조인). 픽스처 W-2024-12-20-ember-friday-two-sets
   - **체크**: PR #338 (2026-10-10)
   - **◐ 외부 근거**: 2024-12-20 교구 달력이 성직후보자와 수도자 두 세트를 나란히 인쇄했고, 12.18과 12.21 세트도 데이터와 같다(X-7).
-- [x] **C-5.4-4** **좁히기 규칙 ①**: 날짜 전용 본문은 레코드의 `season`(과 `type`)이 그날의 계산 좌표와 같은 것만 남긴다.
+- [x] **C-5.4-4** **좁히기 규칙 ①**: 날짜 전용 본문은 레코드의 `season`(과 `type`)이 그날 계산한 절기 위치와 같은 것만 남긴다.
   - 세례 주일이 **1/7인 해**에는 공현 후 평일이 0일(하루도 없다)이고, 1/8이 곧장 `ordinary-1` 평일이다.
   - 세례 주일이 **1/13인 해**에는 1/7-1/12 엿새가 성탄주간이고, `01.13`에는 성탄주간 레코드가 없다.
   - **검증**: 유닛(실데이터 2024, 2030)
@@ -630,7 +630,7 @@ GitHub 토픽 [lectionary](https://github.com/topics/lectionary), [liturgical-ca
   - **검증**: 유닛
   - **기준**: 설계서 §5.6
   - **체크**: PR #338 (2026-10-10)
-  - **◐ 외부 실례**: 2025-12-17(대림 3주 수요일)의 교구 달력 독서는 `d1217-성탄-8일-전`이지 `advent-3-wed`가 아니다. 격자 후보가 좌표 폴백보다 날짜 인덱스를 먼저 본다는 근거다(X-6, 픽스처 W-2025-12-17-ember-color).
+  - **◐ 외부 실례**: 2025-12-17(대림 3주 수요일)의 교구 달력 독서는 `d1217-성탄-8일-전`이지 `advent-3-wed`가 아니다. 격자 후보가 절기 위치 폴백보다 날짜 인덱스를 먼저 본다는 근거다(X-6, 픽스처 W-2025-12-17-ember-color).
 - [x] **C-5.6-4** (미결11 닫힘 2026-09-17) `findReadings`의 **성인 공통 독서 폴백**이 맞다. 폴백이 걸리는 조건은 「좁힌 고유 독서 0건」이지 「날짜 인덱스가 비었다」가 아니다.
   - **공통으로 가는 경우**: 사베리오 12.03(`has_proper: true`, 독서 0)은 `missionary` 3세트에 닿는다. 루시안 01.08, 실베스터와 위클리프 12.31은 `성탄주간` 대신, 데이빗 03.01은 `삼일절` 대신 각자 분류의 공통으로 간다.
   - **공통으로 가지 않는 경우**: 세례 요한 탄생 06.24는 고유 독서를 낸다. 이름 조인은 띄어쓰기 때문에 빠지지만, 행이 하나뿐인 날짜는 이름을 묻지 않는다. 기념일과 `anniversary`는 빈 배열이다.
@@ -661,7 +661,7 @@ GitHub 토픽 [lectionary](https://github.com/topics/lectionary), [liturgical-ca
   - **검증**: 유닛
   - **기준**: 설계서 §5.5, R-6.2-tie-ladder
   - **체크**:
-    - PR #338 (2026-10-10): 함께 남는 것과 좌표 조인
+    - PR #338 (2026-10-10): 함께 남는 것과 전례일 키 조인
     - PR #341 (2026-10-11): 사다리로 정한 지정 전례일(성지주일 홍, 대림 1주일. 합성 표와 실데이터)
 - [x] **C-5.5-4** 2026-01-20에는 그리스도인 일치 기도 주간이 `periods`에 있고, `candidates`에는 없다.
   - **검증**: 유닛
@@ -791,7 +791,7 @@ GitHub 토픽 [lectionary](https://github.com/topics/lectionary), [liturgical-ca
 이 절과 §5.12의 실제 연도 항목은 실데이터를 읽는 테스트(`liturgical-engine.data.test.js`)가 본다(15차 리뷰). 실제 달력 표와 실제 id(`d1130-사도-성-안드레아` 등)로 확인하므로, main에 push된 뒤 `engine-data.yml`에서, 데이터가 바뀔 때 `sync-data.yml`에서 돈다(설계서 §7). 합성 표로 보는 항목만 공개 스위트(`liturgical-engine.test.js`)에 있다. 항목마다 「검증」에 어느 쪽인지 적었다. 실제 연도의 날짜, id, 상태는 픽스처(`checks`에 그 항목 id를 단 케이스)가 기준이고, 항목에는 무엇을 왜 보는지와 픽스처에 없는 확인만 적는다.
 
 - [x] **C-6.5-1** 옮겨진 축일은 기원 날짜에 `transferred_out`, 목적지에 `transferred_in`으로 한 쌍을 남긴다. 옛 미결9가 다시 생기지 않는지 보는 항목이다(픽스처 T-2025-12-01-andrew).
-  - **밀어낸 것**: `displacedBy`는 격자 `grid:advent-1-sunday`가 **아니라** 같은 좌표의 temporal 행이다. 둘 다 prec 2라 우선순위가 같고, 사다리로 temporal이 앞선다.
+  - **밀어낸 것**: `displacedBy`는 격자 `grid:advent-1-sunday`가 **아니라** 같은 절기 위치의 temporal 행이다. 둘 다 prec 2라 우선순위가 같고, 사다리로 temporal이 앞선다.
   - **검증**: 유닛(실데이터 픽스처)
   - **기준**: R-6.5-year-pass, R-6.2-tie-ladder, lectionarypage 2025
   - **체크**: PR #343 (2026-10-11)
