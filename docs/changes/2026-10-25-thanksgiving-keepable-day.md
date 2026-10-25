@@ -1,4 +1,5 @@
 ---
+pr: 429
 date: 2026-10-25
 branch: docs/thanksgiving-keepable-day
 title: "data: 추수감사주일을 지킬 수 있는 날로"
