@@ -363,7 +363,7 @@ test("§5.6 본기도 폴백은 빈틈 없이 닫힌다 — has_proper 참은 �
 
 test("C-5.6-6 날짜 선택 순서 — 격자는 resolved.date(12.19 · 12.17), 옮겨 온 안드레아는 기원 11.30", { skip: SKIP }, () => {
   for (const d of ["2026-12-19", "2025-12-17"]) {
-    const gs = groupsAt(d, "grid:advent-3-weekday");   // 대림 3주 평일인데 좌표 레코드가 아니라 날짜 전용 본문
+    const gs = groupsAt(d, "grid:advent-3-weekday");   // 대림 3주 평일인데 절기 위치로 찾는 레코드가 아니라 날짜 전용 본문
     assert.ok(gs.length > 0 && gs.every((g) => recOf(g).date === d.slice(5).replace("-", ".")), d);
   }
   const dest = resolve("2025-12-01");
@@ -378,7 +378,7 @@ test("C-5.6-6 날짜 선택 순서 — 격자는 resolved.date(12.19 · 12.17), 
 test("C-5.5-3 격자 ∧ temporal 공존 — 2026-03-29 성지주일 · 2026-11-29 대림1주일 (지정 전례일은 C-6.1-10 테스트)", { skip: SKIP }, () => {
   same(resolve("2026-03-29").candidates.map((c) => c.observance.id), ["t-성지주일", "grid:lent-x-sunday"]);
   same(resolve("2026-11-29").candidates.map((c) => c.observance.id), ["t-대림1주일", "grid:advent-1-sunday"]);
-  // 대림1주일 행은 조인 이름이 없어 자기 좌표로 격자 레코드에 닿는다(§5.4) — 나해
+  // 대림1주일 행은 조인 이름이 없어 자기 절기 위치로 격자 레코드에 닿는다(§5.4) — 나해
   const t = groupsAt("2026-11-29", "t-대림1주일");
   assert.ok(t.length > 0 && t.every((g) => recOf(g).season === "advent" && recOf(g).week === 1 && recOf(g).year === "B"));
   same(t.map((g) => g.id), groupsAt("2026-11-29", "grid:").map((g) => g.id));
@@ -434,7 +434,7 @@ test("여성선교주일은 기념일 — 이름 줄로만 오르고 본문이 �
 });
 
 test("§5.4 · §5.6 도달 범위 — 2025~2050 모든 날의 모든 후보를 조회하면 독서 · 본기도 레코드가 하나도 빠지지 않는다", { skip: SKIP }, () => {
-  // 조인 경로(격자 날짜 · 고유명 평일 · 좌표 · 이름 · 사계재 · 날짜 · 음력) 중 하나가 끊기면 그 경로의 레코드가
+  // 조인 경로(격자 날짜 · 고유명 평일 · 절기 위치 · 이름 · 사계재 · 날짜 · 음력) 중 하나가 끊기면 그 경로의 레코드가
   // 어디에서도 안 나온다 — 개별 사례로는 놓치는 것을 전수로 잡는다(성주간 월~수 · 재의 수요일 후 목 · 금 · 토가 그 예다).
   const seenR = new Set();
   const seenC = new Set();

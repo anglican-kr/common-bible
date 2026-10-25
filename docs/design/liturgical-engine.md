@@ -16,7 +16,7 @@
   - 합성 표로 검사하는 유닛 테스트: `tests/unit/liturgical-engine.test.js`
   - 실데이터로 검사하는 유닛 테스트: `tests/unit/liturgical-engine.data.test.js`(§7)
 - 관련 ADR
-  - ADR-036: 교회력 데이터 모델. 좌표, 등급과 우선순위, 옮김, 전례색은 이 ADR이 근거다.
+  - ADR-036: 교회력 데이터 모델. 전례일 키, 등급과 우선순위, 옮김, 전례색은 이 ADR이 근거다.
   - ADR-037 §6: 엔진 명세. 이 설계의 상위 문서다.
   - ADR-038: 엔진을 쓰는 화면
   - ADR-039: 전례시편 `lps`(data 저장소에 있다)

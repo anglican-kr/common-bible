@@ -76,7 +76,7 @@ const group = (id, readings, extra = {}) => ({
 const collect = (id, text, extra = {}) => ({ id, title: "", collect_no: 1, collect_total: 1, text, ending: "A", common: null, ...extra });
 const FOUR = [slot("first", "gen", 12, "1-9", "창세 12:1-9"), slot("psalm", "lps", 33, "1-12", "시편 33:1-12"),
   slot("second", "rom", 4, "13-25", "로마 4:13-25"), slot("gospel", "matt", 9, "9-13,18-26", "마태 9:9-13, 18-26")];
-/** `ResolvedDate` 형식 — 연중 평일(짝수해)이 기본 좌표. */
+/** `ResolvedDate` 형식 — 연중 평일(짝수해)이 기본 절기 위치. */
 const resolvedOf = (date, candidates, official, extra = {}) => ({
   date, coord: { season: "ordinary", week: 18, type: "weekday", weekday: "thu", year: "II" },
   candidates, official, periods: [], color: "green", colors: ["green"], colorAlt: null, ...extra,

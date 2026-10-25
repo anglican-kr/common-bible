@@ -401,7 +401,7 @@ test("A3 2025~2027 모든 날 — 모델이 서고, 초기 선택에 복음까�
   same(bad, []);
 });
 
-test("A3 데이터 전수 — 괄호 선택 구절 세트는 모두 바탕에 합쳐지고, 「또는」 대안과 트랙이 한 좌표에 겹치지 않는다(pitfalls §21 실측의 지킴이 — 자체 리뷰 2026-10-13)", { skip: SKIP }, () => {
+test("A3 데이터 전수 — 괄호 선택 구절 세트는 모두 바탕에 합쳐지고, 「또는」 대안과 트랙이 한 전례일 키에 겹치지 않는다(pitfalls §21 실측의 지킴이 — 자체 리뷰 2026-10-13)", { skip: SKIP }, () => {
   const COORD = ["kind", "season", "week", "type", "weekday", "year", "date", "lunar", "name", "title"];
   /** @type {Map<string, any[]>} */
   const byCoord = new Map();
