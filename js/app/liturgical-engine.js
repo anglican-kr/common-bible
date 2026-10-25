@@ -870,7 +870,7 @@ function buildCalendarIndex(tables) {
 
 /**
  * 내일로 정의돼 오늘 저녁에 드리는 저녁 전례(`EVENING_LITURGIES` 값 −1)의 정의 월일(→ R-6.1-evening — 성탄 밤 12.25).
- * 날짜로 정의된 성인력 행만 미리 알 수 있다 — 그 밖(규칙 · 음력 행이거나 표에 없음)이면 null 이라 날마다 내일을 본다.
+ * 날짜로 정의된 월별 축일(sanctoral) 행만 미리 알 수 있다 — 그 밖(규칙 · 음력 행이거나 표에 없음)이면 null 이라 날마다 내일을 본다.
  * @param {Map<string, Observance[]>} sanctoralByDate
  * @returns {Set<string> | null}
  */
@@ -887,7 +887,7 @@ function eveningTomorrowDaysOf(sanctoralByDate) {
 }
 
 /**
- * 규칙 파생 전례일(§5.5 출처 ④) — 그해 temporal 규칙을 **한 번** 평가해 날짜 → 행 색인으로 둔다.
+ * 규칙 파생 전례일(§5.5 출처 ④) — 그해 이동 축일(temporal) 규칙을 **한 번** 평가해 날짜 → 행 색인으로 둔다.
  * 규칙 일곱 종류는 전부 자기 달력년 안에 떨어진다(사계재 12.13 앵커 → 늦어도 12.23, 1.6 이후 첫
  * 주일 → 늦어도 1.13) — 해를 넘기는 결과는 그 해의 날짜 조회가 닿지 않으므로 실데이터 테스트가
  * 1900~2100 에서 단언한다. 같은 날짜에 두 행(성 토요일 · 부활밤 — easter −1)이면 둘 다 오른다(1:N).
@@ -971,8 +971,8 @@ function properWeekdayNameOf(dateStr, coord) {
 
 /**
  * 격자 전례일의 표시명. 고유명 평일(위 표)은 그 이름을 쓰고, 그 밖은 절기 위치에서 만든다(「연중 3주일」 ·
- * 「사순 2주 화요일」). 성 목 · 금 · 토는 temporal 행이 따로 있으므로 격자는 「성주간 X요일」이다 —
- * temporal 행의 이름을 빌리면 같은 본문이 후보 둘에 붙는다.
+ * 「사순 2주 화요일」). 성 목 · 금 · 토는 이동 축일 행이 따로 있으므로 격자는 「성주간 X요일」이다 —
+ * 이동 축일 행의 이름을 빌리면 같은 본문이 후보 둘에 붙는다.
  * @param {string} dateStr @param {LiturgicalCoord} coord
  * @param {string | undefined} proper  `properWeekdayNameOf(dateStr, coord)` — 호출하는 쪽(gridObservance)이 표지에도 쓰므로 한 번 센 값을 받는다
  * @returns {string}
@@ -996,7 +996,7 @@ const SEASON_COLOR = { advent: "violet", christmas: "white", ordinary: "green", 
  * 그 날의 **절기 기본색**과 선택 대체색(§6.4 결정 순서의 첫 단계 — 지정 전례일이 덮기 전의 바탕). 성주간
  * (성지주일 ~ 성 토요일)은 전체 홍이다 — 경계는 `spansOf` 의 `holyWeek` 이고 날짜를 따로 비교하지
  * 않는다(§4.10). 대체색은 데이터 `color_alt` 와 같은 뜻 · 같은 3형이다: 대림은 청(대림 3주일은 장미 ·
- * 청 둘 다), 사순 4주일은 장미. 성령강림 · 삼위일체 · 왕이신 그리스도의 색은 그 날의 temporal 행이
+ * 청 둘 다), 사순 4주일은 장미. 성령강림 · 삼위일체 · 왕이신 그리스도의 색은 그 날의 이동 축일 행이
  * 지정 전례일로 덮는다 — 바탕은 절기만 안다.
  * @param {string} dateStr @param {LiturgicalCoord} coord
  * @returns {{color: LiturgicalColor, alt: import("../types").CodeField<LiturgicalColorAlt>}}
@@ -1129,7 +1129,7 @@ function periodsOn(index, md) {
 }
 
 /**
- * 그 날짜의 **고유** 전례일 — §5.5 출처 ② 날짜(성인력) · ③ 음력 · ④ 규칙 파생(① 격자는 따로 합성한다).
+ * 그 날짜의 **고유** 전례일 — §5.5 출처 ② 양력 날짜 · ③ 음력(둘 다 월별 축일) · ④ 규칙 파생(① 격자는 따로 합성한다).
  * 같은 행이 두 출처에서 오면 한 번만 낸다. 순서는 뜻이 없다 — 표시 순서와 지정 전례일은 우선순위가 정한다
  * (`compareCandidates`). 음력 표 범위 밖 연도는 ③ 이 빈다(§2).
  * @param {CalendarIndex} index @param {string} dateStr
@@ -1183,7 +1183,7 @@ function guardCandidates(dateStr) {
 
 /**
  * 지정 자격이 없는 지향 · 이름 줄 — 사계재(규칙 종류)와 기념일(`rank`). 이름이 아니라 구조 필드로
- * 판별하고, 표(`kind`)를 보지 않는다 — 기념일은 성인력과 temporal 양쪽에 있다(→ R-6.1-ineligible).
+ * 판별하고, 표(`kind`)를 보지 않는다 — 기념일은 월별 축일 표와 이동 축일 표 양쪽에 있다(→ R-6.1-ineligible).
  * @param {Observance} obs
  */
 function isIneligible(obs) {
@@ -1206,7 +1206,7 @@ function effectivePrecedence(obs) {
   return p;
 }
 
-/** 범주 사다리의 칸(→ R-6.2-tie-ladder) — 도착 0 > temporal 규칙일 1 > sanctoral 고정일 2 > 격자 3 > 합성 guard 4. */
+/** 범주 사다리의 칸(→ R-6.2-tie-ladder) — 도착 0 > 이동 축일(규칙일) 1 > 월별 축일(고정일) 2 > 격자 3 > 합성 guard 4. */
 function ladderOf(/** @type {Candidate} */ c) {
   const id = c.observance.id;
   if (id.startsWith(GUARD_PREFIX)) return 4;
@@ -1242,8 +1242,8 @@ function rankCandidates(/** @type {Candidate[]} */ cands) {
 }
 
 /**
- * 겹침이 해마다 달라지는가(§6.5 「고정일끼리는 충돌이 아니다」) — 격자 · temporal 규칙일 · 음력 명절 ·
- * 도착 · guard 는 참(격자 · guard 도 `kind: "temporal"` 이다), sanctoral 의 고정 `date` 행은 거짓이다.
+ * 겹침이 해마다 달라지는가(§6.5 「고정일끼리는 충돌이 아니다」) — 격자 · 이동 축일 · 음력 명절 ·
+ * 도착 · guard 는 참(격자 · guard 도 `kind: "temporal"` 이다), 월별 축일의 고정 `date` 행은 거짓이다.
  * @param {Candidate} c
  */
 function variesByYear(c) {
@@ -1555,8 +1555,8 @@ function isEmber(/** @type {Observance} */ obs) {
 
 /**
  * 그날의 색(→ R-6.4-color-order): 절기 기본색(격자 전례일의 색)을 깔고 → 지정 전례일의 색이 덮고 →
- * 성주간 · 부활 8일(`holyWeek` ∪ `easterOctave`, §4.10)에는 temporal 지정 전례일이 덮지 못한다(E−1 의 지정 전례일은 성 토요일
- * 행 — 부활밤은 저녁 전례라 색에 참여하지 않는다, → R-6.1-evening). 그날 지키는 성인력 축일(주요축일 — 제자리든 도착이든,
+ * 성주간 · 부활 8일(`holyWeek` ∪ `easterOctave`, §4.10)에는 이동 축일인 지정 전례일이 덮지 못한다(E−1 의 지정 전례일은 성 토요일
+ * 행 — 부활밤은 저녁 전례라 색에 참여하지 않는다, → R-6.1-evening). 그날 지키는 월별 축일(주요축일 — 제자리든 도착이든,
  * 부활 8일 평일의 축일)이 지정 전례일이면 그 축일 색이다(→ R-6.3-holy-week-guard — 성주간의 prec 7 축일은 생략되어 지정 전례일이 되지 않는다). 지정 전례일의 색이 비었으면
  * (추수감사주일) 바탕이 남는다. 사계재 날은 **자**다(→ R-6.4-ember-color):
  * 바탕이 남으면(지정 전례일이 격자) 그날 색이 자이고, 축일이 덮으면 그 색이 대표로 남고 `colors` 에 자를 앞세워
@@ -1607,7 +1607,7 @@ function fastOf(resolved) {
 // ── §5.5 resolveDate ──
 
 /**
- * 그 날의 후보 **전부**(§5.5) — 출처 다섯: ① 격자 ② 날짜(성인력) ③ 음력 ④ 규칙 파생 ⑤ 도착.
+ * 그 날의 후보 **전부**(§5.5) — 출처 다섯: ① 격자 ② 양력 날짜 ③ 음력(②, ③은 월별 축일) ④ 규칙 파생 ⑤ 도착.
  * ①~④ 가 그 날짜의 고유 후보(`proper`)이고 ⑤ 만 다른 날짜에서 온다 — 다만 저녁 전례(→ R-6.1-evening)는
  * 자리를 옮긴다: 그 날짜로 정의돼 그날 저녁에 드리는 것(부활밤)은 고유 후보에서 빼 끝에 저녁 후보로, 다음 날짜로
  * 정의돼 그날 저녁에 드리는 것(성탄 밤)은 그날의 저녁 후보로 가져온다(`evening: true` · `proper` — 판정에 넣지 않는다).
@@ -1821,11 +1821,11 @@ function halfVerseKey(bookId, chapter, verse, half) {
  *   레코드는 `type: feast` 라 여기 오지 않는다) ② **고유명 평일**의 이름(성주간 월 ~ 수 · 재의
  *   수요일 후 목 ~ 토) ③ 절기 위치 폴백(§5.3 — 이름 · 날짜 없는 레코드만). 앞 단계의 **최고점 층**이
  *   비어야 다음 단계로 간다 — 행이 있는지가 아니라 요일 · 주기 점수를 매긴 결과로 가른다.
- * - **규칙 행**(temporal) — `coord_name` · 별칭으로 이름 조인 / 사계재는 이름 부분문자열 + 요일
+ * - **규칙 행**(이동 축일) — `coord_name` · 별칭으로 이름 조인 / 사계재는 이름 부분문자열 + 요일
  *   (§5.4 · 미결5) / 조인 이름이 없고 절기 위치가 있는 행(대림1주일)은 그 절기 위치로.
- * - **성인력 · 음력 행** — 전례일 **자신의** `date` · `lunar`(옮겨 온 축일도 기원 날짜에 색인돼
+ * - **월별 축일 행**(양력 날짜 · 음력) — 전례일 **자신의** `date` · `lunar`(옮겨 온 축일도 기원 날짜에 색인돼
  *   있다). 날짜 인덱스는 1:N 이라 좁힌다(미결12 잠정): 날짜 전용 평일 본문(`type: weekday` — 격자
- *   후보의 것)은 언제나 걷어내고, 그 날짜에 성인력 행이 둘 이상이면 같은 날짜의 **다른** 전례일
+ *   후보의 것)은 언제나 걷어내고, 그 날짜에 월별 축일 행이 둘 이상이면 같은 날짜의 **다른** 전례일
  *   이름에 정확히 맞는 본문을 걷어낸 뒤 이 전례일의 이름 · 별칭에 정확히 맞는 것으로 좁힌다 —
  *   좁히기가 실패하면 조용히 하나를 고르지 않고 **남은 것 전부**를 낸다. 행이 하나뿐인 날짜는
  *   이름을 묻지 않는다(06.24 의 띄어쓰기 드리프트가 「고유 없음」으로 새지 않게).
@@ -2121,7 +2121,7 @@ function resolveDate(dateStr) {
 
 /**
  * 고른 후보 하나의 독서 그룹(§5.6). 프리로드 전이면 throw — 「아직 안 불러옴」과 「빈 결과」(`[]`)를
- * 뷰가 구별할 수 있게(§2). 1:N 좁히기가 같은 날짜의 성인력 행을 보므로 캘린더 묶음도 필요하다.
+ * 뷰가 구별할 수 있게(§2). 1:N 좁히기가 같은 날짜의 월별 축일 행을 보므로 캘린더 묶음도 필요하다.
  * @param {ResolvedDate} resolved @param {Candidate} candidate
  * @returns {ReadingGroup[]}
  */
