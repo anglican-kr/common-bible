@@ -588,7 +588,7 @@ test("C-6.1-11 하계재 후보의 본문 — 2026-05-27 성직자 2세트(시�
   same(offId(resolve("2026-05-27")).startsWith("grid:"), true);
 });
 
-test("C-6.1-12 기념일은 이름 줄 — 같은 날짜에 다른 행이 없는 성인력 기념일과 temporal 기념일은 해마다 지정 전례일이 격자 · 주일 (2025~2050)", { skip: SKIP }, () => {
+test("C-6.1-12 기념일은 이름 줄 — 같은 날짜에 다른 행이 없는 성인력 기념일은 해마다 지정 전례일이 아니고(다른 후보가 없으면 격자), temporal 기념일 날의 지정 전례일은 격자 (2025~2050)", { skip: SKIP }, () => {
   const s = read("sanctoral.json").entries;
   const lonely = s.filter((e) => e.rank === "commemoration" && e.date && s.filter((x) => x.date === e.date).length === 1);
   same(lonely.length, 13);
