@@ -223,7 +223,7 @@ function resolveDate(dateStr) → {
  *   from?: string,          // 이 후보가 정의된 원래 날짜 "YYYY-MM-DD" — transferred_in·optional 에만. 계보가 아니라 기원.
  *                           //   optional 은 목적지가 원래 날짜보다 앞일 수 있어(2028-02-02 → 1.30) 미래 날짜가 온다
  *   to?: string,            // 이 날짜를 떠나 도착한 날짜 "YYYY-MM-DD" — transferred_out 에만
- *   displacedBy?: string,   // 밀어낸 것의 id — Observance.id 또는 §6.5 의 합성 id "guard:holy-week"(성주간에 생략된 prec 7 — 옮김 계산에는 실리지 않는다).
+ *   displacedBy?: string,   // 밀어낸 것의 id — Observance.id 또는 §6.5 의 합성 id "guard:holy-week"(성주간에 생략된 prec 7 — 옮김 계산 결과에는 실리지 않는다).
  *                           //   **충돌**로 밀린 transferred_in·transferred_out·commemorated·omitted 에는 필수.
  *                           //   활성화된 선택 봉헌의 transferred_in·transferred_out 에는 **없다**(밀린 것이 아니라 택한 것 — §6.2).
  *                           //   소비자는 없음을 결함으로 보지 말고 「택해서 옮김」으로 읽는다.
@@ -263,7 +263,7 @@ function resolveDate(dateStr) → {
 
 **핵심 계약(ADR-036 §7).** `precedence`는 그날의 **공식 축일 하나**를 정하지만, 엔진은 **밀려난 축일, 기념만 하는 축일, 연중 평일 독서를 버리지 않는다.** **지정 전례일은 엔진이 정해 `official`로 낸다**(B1, §6.1). 화면이 우선순위를 다시 계산하지 않는다. 화면이 고르는 것은 「**어느 후보를 볼지**」다. 전례일 스위처의 칩은 `candidates`를 **언제나 모두 보이고**, `official`은 **처음 고른 칩**일 뿐이다(지정 전례일의 독서가 공통뿐이면 처음 보이는 독서는 그날의 격자다, 미결25; ADR-038 §3, 사용자 확정 2026-09-17). 낮은 등급을 숨기거나 합쳐 내지 않는다. 「기본은 `official`만, 고급은 `candidates` 모두」 같은 설정을 두지 않는 이유는 ADR-036 §7에 있다. 기본에서 숨기면 사용자가 「축일에 밀린 기본 독서」를 놓치는데, 그것이 바로 이 계약이 막으려던 결과다. 본문은 고른 후보 하나의 것만 그린다(후보마다 `findReadings`를 호출한다). 기념일 후보는 칩에는 남되 본문이 빈 결과다(§2, §5.6 자격 ②).
 
-**후보를 모으는 곳은 다섯이다.** ① 격자 좌표(temporal) ② `date` 매치(sanctoral) ③ `lunar` 매치(KASI) ④ 규칙 파생(temporal-feasts의 `rule` 평가) ⑤ **옮겨 온 도착** `transfers.arrivals.get(date)`(§6.5).
+**후보를 모으는 곳은 다섯이다.** ① 격자 좌표(temporal) ② `date` 매치(sanctoral) ③ `lunar` 매치(KASI) ④ 규칙 파생(temporal-feasts의 `rule` 평가) ⑤ **도착**(옮겨 온 축일) `transfers.arrivals.get(date)`(§6.5).
 
 - **①의 `Observance`는 합성이다.** 격자(연중 주일, 절기 평일)는 정의 표에 행이 없어 엔진이 좌표에서 만든다.
   - `id`는 **`grid:<season>-<week|x>-<type>[-<weekday>]`**다(예: 2026-01-25는 `grid:ordinary-3-sunday`, 사순 2주 화요일은 `grid:lent-2-weekday-tue`, 성주간 평일처럼 `week: null`이면 `x`).

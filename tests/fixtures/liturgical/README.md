@@ -75,7 +75,7 @@
 | `from` · `to` | `transferred_in`/`optional` 의 기원 날짜 · `transferred_out` 의 목적지 날짜 |
 | `displacedBy` | 밀어낸 것의 정확한 id. **`null` 이면 「필드가 없어야 한다」**(활성화된 선택 봉헌 — 밀린 것이 아니라 택한 것) |
 | `absent: true` | `id`(+ `status`)에 맞는 후보가 **없어야** 한다(반대 모델 회귀 · 「optional 없음」) |
-| `notInDepartures: true` | `departures.get(date)` 에 `id` 가 없다(도착을 다시 옮기지 않음 · 절차 ⑤ 로 옮기지 않음 · 동시 봉헌) |
+| `notInDepartures: true` | `departures.get(date)` 에 `id` 가 없다(도착을 다시 옮기지 않음 · 절차 ⑤에 따라 옮기지 않음 · 동시 봉헌) |
 | `neverDeparts` | 연도 범위 단언 — 그 id 가 어느 해에도 `departures` 에 나타나지 않는다 |
 | `official` | 그날 `official` 의 id. `"grid:*"` 는 「격자 합성 후보이면 된다」(주간 번호를 문서가 적지 않은 경우) |
 | `color` · `colors` | `ResolvedDate.color`(정식 전례색 `white` `red` `green` `violet`) · `ResolvedDate.colors`(병기 목록 — 사계재 날 축일이 지정 전례일이면 [자, 축일 색], 그 밖은 `[color]`, → R-6.4-ember-color) |
