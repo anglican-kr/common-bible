@@ -1,4 +1,5 @@
 ---
+pr: 424
 date: 2026-10-25
 branch: docs/term-transfer-omgim
 title: "docs: 축일을 옮기는 뜻의 「이동」을 「옮김」으로 바꿈"
