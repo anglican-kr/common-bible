@@ -1,4 +1,5 @@
 ---
+pr: 431
 date: 2026-10-25
 branch: docs/review-questionnaire-appendix
 title: "docs: 교회력 검토 문서 §6, §7, 부록 고쳐 쓰기와 내용 검증"
