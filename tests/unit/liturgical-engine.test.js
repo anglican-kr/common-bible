@@ -705,7 +705,7 @@ const LEC_TABLES = {
     REC("advent-1-sun-B", { season: "advent", week: 1, type: "sunday", year: "B" }),
     REC("advent-4-sun-B", { season: "advent", week: 4, type: "sunday", year: "B" }),
     REC("lent-2-tue", { season: "lent", week: 2, type: "weekday", weekday: "tue" }),
-    // 고유명 평일 · 이름일 — 좌표 폴백을 타지 않는다(§5.3 판정 규칙)
+    // 고유명 평일 · 이름일 — 절기 위치 폴백을 타지 않는다(§5.3 판정 규칙)
     REC("holy-sat-s1", { season: "lent", type: "weekday", name: "성 토요일", set_no: 1, set_total: 2 }),
     REC("holy-sat-s2", { season: "lent", type: "weekday", name: "성 토요일", set_no: 2, set_total: 2 }),
     REC("holy-mon", { season: "lent", type: "weekday", weekday: "mon", name: "성주간 월요일" }),
@@ -842,7 +842,7 @@ test("C-4.3-3 easter_offset −1 인덱스가 1:N — 성 토요일과 부활밤
 test("C-5.5-3 격자 ∧ temporal 행은 공존한다 — 대체가 아니다 · 우선순위가 같으면 사다리로 temporal 이 앞선다", () => {
   const advent1 = resolve("2026-11-29");
   same(advent1.candidates.map((c) => c.observance.id), ["t-advent1", "grid:advent-1-sunday"]);
-  // 대림1주일 행은 조인 이름이 없다 — 자기 좌표로 격자 레코드에 닿는다(§5.4). 2026-11-29 는 나해
+  // 대림1주일 행은 조인 이름이 없다 — 자기 절기 위치로 격자 레코드에 닿는다(§5.4). 2026-11-29 는 나해
   same(readingIds(advent1, cand(advent1, "t-advent1")), ["advent-1-sun-B"]);
   same(readingIds(advent1, gridOf(advent1)), ["advent-1-sun-B"]);
   const palm = resolve("2026-03-29");
@@ -882,9 +882,9 @@ test("C-5.5-2 Candidate 래퍼 · status 여섯 값 · 색 필드 셋(colorAlt �
   assert.match(types, /export interface Candidate \{[^}]*observance: Observance;[^}]*status: CandidateStatus;/);
 });
 
-// ── 격자 좌표 · 격자 전례일 (§5.1 · §5.5) ──
+// ── 격자의 절기 위치 · 격자 전례일 (§5.1 · §5.5) ──
 
-test("§5.5 격자 전례일 id · 이름 · precedence — 좌표에서 합성한다", () => {
+test("§5.5 격자 전례일 id · 이름 · precedence — 절기 위치에서 합성한다", () => {
   const cases = [
     ["2026-01-25", "grid:ordinary-3-sunday", "연중 3주일", 5],
     ["2026-01-26", "grid:ordinary-3-weekday-mon", "연중 3주 월요일", 8],
@@ -914,8 +914,8 @@ test("§5.5 격자 전례일 id · 이름 · precedence — 좌표에서 합성�
 });
 
 test("§5.5 고유명 평일 표지 — 해마다 여섯 날(E−45~−43 · E−6~−4)의 격자에만 properWeekday: true, 그 밖의 격자에는 키가 없다", () => {
-  // 같은 좌표 (lent, null, weekday) 의 성 목 · 금 · 토 격자(「성주간 X요일」)와 재의 수요일 격자, 번호 있는 사순 평일에는
-  // 없다 — 뷰(캘린더 칸 이름)가 좌표로 다시 가려내지 않고 이 표지를 읽는다(PR #348 리뷰).
+  // 같은 절기 위치 (lent, null, weekday) 의 성 목 · 금 · 토 격자(「성주간 X요일」)와 재의 수요일 격자, 번호 있는 사순 평일에는
+  // 없다 — 뷰(캘린더 칸 이름)가 절기 위치로 다시 가려내지 않고 이 표지를 읽는다(PR #348 리뷰).
   const NAMES = ["재의 수요일 후 목요일", "재의 수요일 후 금요일", "재의 수요일 후 토요일", "성주간 월요일", "성주간 화요일", "성주간 수요일"];
   for (let y = 2025; y <= 2030; y++) {
     const E = ctx.easterDate(y);
@@ -930,7 +930,7 @@ test("§5.5 고유명 평일 표지 — 해마다 여섯 날(E−45~−43 · E�
     }
     same(marked, want.map((d, i) => [d, NAMES[i]]), String(y));
   }
-  // 2026 의 표지 없는 이웃 — 좌표가 같거나 비슷한 날
+  // 2026 의 표지 없는 이웃 — 절기 위치가 같거나 비슷한 날
   for (const [d, id, name] of [
     ["2026-04-02", "grid:lent-x-weekday-thu", "성주간 목요일"],     // 재의 수요일 후 목요일(2.19)과 같은 id
     ["2026-04-03", "grid:lent-x-weekday-fri", "성주간 금요일"],
@@ -944,7 +944,7 @@ test("§5.5 고유명 평일 표지 — 해마다 여섯 날(E−45~−43 · E�
   }
 });
 
-test("§5.1 좌표의 year — 연중 평일은 I/II, 그 밖은 A/B/C · 주일은 weekday null", () => {
+test("§5.1 주기(year) — 연중 평일은 I/II, 그 밖은 A/B/C · 주일은 weekday null", () => {
   same(plain(resolve("2026-01-26").coord), { season: "ordinary", week: 3, type: "weekday", weekday: "mon", year: "II" });
   same(plain(resolve("2026-01-25").coord), { season: "ordinary", week: 3, type: "sunday", weekday: null, year: "A" });
   assert.strictEqual(resolve("2026-03-03").coord.year, "A");     // 절기 평일 — 주일 주기
@@ -1071,9 +1071,9 @@ test("§5.6 격자 경로는 단계마다 점수를 매긴 뒤 넘어간다 — 
   ] } });
   const ids = (d) => { const r = resolve(d); return ctx.findReadingsIn(lix, CAL, r, gridOf(r)).map((g) => g.id); };
   same(ids("2025-12-18"), ["d1218-A-only"]);   // 가해 — ① 날짜 전용 본문이 앞선다
-  same(ids("2026-12-18"), ["advent-3-fri"]);   // 나해 — ① 의 층이 비어 ③ 좌표로
+  same(ids("2026-12-18"), ["advent-3-fri"]);   // 나해 — ① 의 층이 비어 ③ 절기 위치로
   same(ids("2026-03-30"), ["holy-mon-A-only"]); // 가해 — ② 고유명 평일
-  same(ids("2027-03-22"), ["lent-x-weekday"]);  // 나해 — ② 의 층이 비어 ③ 좌표로
+  same(ids("2027-03-22"), ["lent-x-weekday"]);  // 나해 — ② 의 층이 비어 ③ 절기 위치로
 });
 
 test("C-5.6-6 날짜 선택 순서 — grid: 는 resolved.date, 그 밖은 전례일 자신의 date (키의 존재가 아니라 출처)", () => {
@@ -1284,7 +1284,7 @@ const fate = (r, id) => {
 };
 const officialId = (r) => (r.official ? r.official.observance.id : null);
 
-test("§5.5 고유명 평일 표지는 엔진이 합성한 격자에만 — 같은 좌표에 대표로 서는 temporal 행(재의 수요일 · 성 목 · 금 · 토)에는 없다", () => {
+test("§5.5 고유명 평일 표지는 엔진이 합성한 격자에만 — 같은 절기 위치에 대표로 서는 temporal 행(재의 수요일 · 성 목 · 금 · 토)에는 없다", () => {
   for (const [d, id] of [["2026-02-18", "t-ash"], ["2026-04-02", "t-maundy"], ["2026-04-03", "t-good-friday"], ["2026-04-04", "t-holy-sat"]]) {
     const r = rb(d);
     assert.strictEqual(officialId(r), id, d);

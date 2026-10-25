@@ -48,7 +48,7 @@
 /** @typedef {import("../types").CandidateCollects} CandidateCollects */
 
 /**
- * 본문 레코드 — eucharist-readings · eucharist-collects 가 공유하는 좌표 필드와 각자의 본문 필드.
+ * 본문 레코드 — eucharist-readings · eucharist-collects 가 공유하는 전례일 키 필드와 각자의 본문 필드.
  * `weekday` · `year` 는 `null | 코드 | 코드 배열` 3형이다(설계서 §5.2).
  * @typedef {{
  *   id: string | number, kind?: string, season?: string | null, week?: number | null,
@@ -698,7 +698,7 @@ function inSpan(dateStr, name) {
 // ── END LITURGICAL_CORE ──
 
 // ── BEGIN LITURGICAL_LOOKUP ──
-// 표 인덱스 · 격자 좌표 · 후보 조립 · 폴백 매칭 · 독서/본기도 조회 · 우선순위와 옮김 계산(B1). **순수하다** —
+// 표 인덱스 · 격자의 절기 위치 · 후보 조립 · 폴백 매칭 · 독서/본기도 조회 · 우선순위와 옮김 계산(B1). **순수하다** —
 // 읽는 인덱스를 전부 인자로 받는다(설계서 §3.3). 모듈 상태는 옮김 계산 캐시 `transferCache` 와 선택 봉헌
 // 활성화 집합 `activatedOptionals` 둘만 만지고(`transfersOf` · `setActivatedOptionals`), 둘 다 블록 밖에 둬
 // 테스트가 prelude 로 재선언한다. LITURGICAL_CORE 를 먼저 실행한 컨텍스트에서 돈다.
@@ -717,9 +717,9 @@ const SEASON_LABEL = { advent: "대림", christmas: "성탄", ordinary: "연중"
 const WEEKDAY_LABEL = { mon: "월요일", tue: "화요일", wed: "수요일", thu: "목요일", fri: "금요일", sat: "토요일" };
 
 /**
- * **고유명 평일** — 데이터가 좌표가 아니라 이름으로만 가르는 앵커 파생 평일(ADR-036 §2 「고유명
- * 평일은 제외」). 재의 수요일 주간과 성주간은 좌표가 똑같이 `(lent, null, weekday, 요일)` 이라
- * 좌표로는 「재의 수요일 후 토요일」과 「성 토요일」을 가를 수 없다 — 그래서 그날의 격자 전례일이
+ * **고유명 평일** — 데이터가 절기 위치가 아니라 이름으로만 가르는 앵커 파생 평일(ADR-036 §2 「고유명
+ * 평일은 제외」). 재의 수요일 주간과 성주간은 절기 위치가 똑같이 `(lent, null, weekday, 요일)` 이라
+ * 절기 위치로는 「재의 수요일 후 토요일」과 「성 토요일」을 가를 수 없다 — 그래서 그날의 격자 전례일이
  * 이 이름을 달고, 본문은 그 이름으로 찾는다(§5.6 격자 경로 ②). 키는 부활절 기준 오프셋.
  */
 /** @type {Record<string, string>} */
@@ -906,7 +906,7 @@ function movableOf(index, y) {
   return out;
 }
 
-// ── §5.1 · §5.5 격자 좌표와 격자 전례일 ──
+// ── §5.1 · §5.5 격자의 절기 위치와 격자 전례일 ──
 
 /**
  * 절기 주차 — 데이터의 격자 레코드가 쓰는 번호와 같다. 연중은 표(§4.6), 절기는 앵커에서 센다:
@@ -940,7 +940,7 @@ function seasonWeekOf(dateStr, season, ordinal) {
 }
 
 /**
- * 그 날의 격자 좌표(§5.1). 잘못된 날짜면 null. `year` 는 연중 평일이면 I/II, 그 밖은 A/B/C 다 —
+ * 그 날의 절기 위치와 주기(§5.1). 잘못된 날짜면 null. `year` 는 연중 평일이면 I/II, 그 밖은 A/B/C 다 —
  * 본문을 고를 때는 레코드 코드가 어느 축인지 보고 두 주기를 따로 대조한다(`matchScore`).
  * @param {string} dateStr @param {ReturnType<typeof buildOrdinalIndex>} ordinal
  * @returns {LiturgicalCoord | null}
@@ -970,7 +970,7 @@ function properWeekdayNameOf(dateStr, coord) {
 }
 
 /**
- * 격자 전례일의 표시명. 고유명 평일(위 표)은 그 이름을 쓰고, 그 밖은 좌표에서 만든다(「연중 3주일」 ·
+ * 격자 전례일의 표시명. 고유명 평일(위 표)은 그 이름을 쓰고, 그 밖은 절기 위치에서 만든다(「연중 3주일」 ·
  * 「사순 2주 화요일」). 성 목 · 금 · 토는 temporal 행이 따로 있으므로 격자는 「성주간 X요일」이다 —
  * temporal 행의 이름을 빌리면 같은 본문이 후보 둘에 붙는다.
  * @param {string} dateStr @param {LiturgicalCoord} coord
@@ -1012,14 +1012,14 @@ function seasonColorOf(dateStr, coord) {
 }
 
 /**
- * ① 격자 전례일 — 정의 표에 행이 없어 좌표에서 **합성**한다(§5.5). id 는
+ * ① 격자 전례일 — 정의 표에 행이 없어 절기 위치에서 **합성**한다(§5.5). id 는
  * `grid:<season>-<week|x>-<type>[-<weekday>]`, precedence 는 §6.1 사다리(절기 주일 2 · 연중 주일 5 ·
- * 평일 8). 색은 절기 기본색이다(§6.4 — ADR-036 §8 「격자일 레코드의 color 는 좌표에서 파생한 절기
+ * 평일 8). 색은 절기 기본색이다(§6.4 — ADR-036 §8 「격자일 레코드의 color 는 절기 위치에서 파생한 절기
  * 기본색」). 그날의 색은 이 바탕 위에 지정 전례일이 덮는다(`dayColorsOf`).
  *
- * 고유명 평일(위 표의 여섯 날)에는 `properWeekday: true` 를 단다 — 그 밖의 날에는 키가 없다. 좌표가 `(lent, null,
- * weekday)` 로 같은 날 가운데 어느 날이 고유한 이름을 가졌는지는 엔진만 안다(같은 좌표의 성 목 · 금 · 토 격자는 「성주간
- * X요일」이라 표지가 없다). 뷰가 좌표로 다시 가려내지 않고 이 표지를 읽는다 — 캘린더 칸 이름(PR #348 리뷰).
+ * 고유명 평일(위 표의 여섯 날)에는 `properWeekday: true` 를 단다 — 그 밖의 날에는 키가 없다. 절기 위치가 `(lent, null,
+ * weekday)` 로 같은 날 가운데 어느 날이 고유한 이름을 가졌는지는 엔진만 안다(같은 절기 위치의 성 목 · 금 · 토 격자는 「성주간
+ * X요일」이라 표지가 없다). 뷰가 절기 위치로 다시 가려내지 않고 이 표지를 읽는다 — 캘린더 칸 이름(PR #348 리뷰).
  * @param {string} dateStr @param {LiturgicalCoord} coord
  * @returns {Observance}
  */
@@ -1696,7 +1696,7 @@ function cycleMatches(code, req) {
 
 /**
  * 구체성 점수(§5.3) — `weekday` · `year` 두 축의 합, 어느 축이든 불일치면 -1. `axes` 를 주면
- * `season` · `week` · `type` 은 **정확히** 맞아야 한다(폴백 없음 — 좌표 경로). 이름 · 날짜 경로는
+ * `season` · `week` · `type` 은 **정확히** 맞아야 한다(폴백 없음 — 절기 위치 경로). 이름 · 날짜 경로는
  * 그 셋을 보지 않는다(레코드가 자기 이름 · 날짜로 이미 정해져 있다).
  * @param {TextRecord} record @param {MatchRequest} req
  * @returns {number}
@@ -1714,7 +1714,7 @@ function matchScore(record, req) {
 }
 
 /**
- * 최고점 **층** 전부(§5.3) — 한 건이 아니라 한 층이 앞선다. 같은 좌표에 의도적으로 공존하는 대체
+ * 최고점 **층** 전부(§5.3) — 한 건이 아니라 한 층이 앞선다. 같은 전례일 키에 의도적으로 공존하는 대체
  * 본기도(`collect_no`) · 독서 세트(`set_no` · `reading_track`)는 점수가 같아 함께 남는다.
  * @param {TextRecord[]} records @param {MatchRequest} req
  * @returns {TextRecord[]}
@@ -1773,7 +1773,7 @@ function buildTextIndex(table) {
   return ix;
 }
 
-/** 좌표 인덱스 키. `week: null` 은 `x`. */
+/** 절기 위치 인덱스 키. `week: null` 은 `x`. */
 function coordKey(/** @type {unknown} */ season, /** @type {unknown} */ week, /** @type {unknown} */ type) {
   return String(season) + "|" + (week === null || week === undefined ? "x" : String(week)) + "|" + String(type);
 }
@@ -1816,13 +1816,13 @@ function halfVerseKey(bookId, chapter, verse, half) {
  *
  * **어느 키로 인덱스를 치는가는 전례일의 출처가 정한다**(§5.6 — 키의 존재 여부가 아니라 id 접두사):
  *
- * - **격자**(`grid:`) — ① 물어본 날짜(`resolved.date`)의 **날짜 전용 본문**: 그날 좌표와 `type` ·
+ * - **격자**(`grid:`) — ① 물어본 날짜(`resolved.date`)의 **날짜 전용 본문**: 그날의 절기 위치와 `type` ·
  *   `season` 이 같은 것만(좁히기 규칙 ① — 주의 세례 뒤의 성탄주간 레코드는 버린다. 성인의 축일
  *   레코드는 `type: feast` 라 여기 오지 않는다) ② **고유명 평일**의 이름(성주간 월 ~ 수 · 재의
- *   수요일 후 목 ~ 토) ③ 좌표 폴백(§5.3 — 이름 · 날짜 없는 레코드만). 앞 단계의 **최고점 층**이
+ *   수요일 후 목 ~ 토) ③ 절기 위치 폴백(§5.3 — 이름 · 날짜 없는 레코드만). 앞 단계의 **최고점 층**이
  *   비어야 다음 단계로 간다 — 행이 있는지가 아니라 요일 · 주기 점수를 매긴 결과로 가른다.
  * - **규칙 행**(temporal) — `coord_name` · 별칭으로 이름 조인 / 사계재는 이름 부분문자열 + 요일
- *   (§5.4 · 미결5) / 조인 이름이 없고 좌표가 있는 행(대림1주일)은 그 좌표로.
+ *   (§5.4 · 미결5) / 조인 이름이 없고 절기 위치가 있는 행(대림1주일)은 그 절기 위치로.
  * - **성인력 · 음력 행** — 전례일 **자신의** `date` · `lunar`(옮겨 온 축일도 기원 날짜에 색인돼
  *   있다). 날짜 인덱스는 1:N 이라 좁힌다(미결12 잠정): 날짜 전용 평일 본문(`type: weekday` — 격자
  *   후보의 것)은 언제나 걷어내고, 그 날짜에 성인력 행이 둘 이상이면 같은 날짜의 **다른** 전례일
@@ -1837,7 +1837,7 @@ function properRecords(tix, cal, resolved, obs) {
   const coord = resolved.coord;
   if (obs.id.startsWith(GRID_PREFIX)) {
     // 단계마다 **점수를 매긴 뒤** 비었는지 본다 — 행이 있어도 요일 · 주기가 맞지 않아 최고점 층이
-    // 비면 다음 단계로 간다. 주기 한정 날짜 본문이 다른 해의 좌표 본문을 막으면 안 된다(2026-10-10 리뷰).
+    // 비면 다음 단계로 간다. 주기 한정 날짜 본문이, 절기 위치로 찾는 다른 해의 본문을 막으면 안 된다(2026-10-10 리뷰).
     const same = (/** @type {TextRecord} */ r) => r.type === coord.type && r.season === coord.season;
     const dated = topLayer((tix.byDate.get(monthDayOf(resolved.date)) || []).filter(same), req);
     if (dated.length) return dated;
