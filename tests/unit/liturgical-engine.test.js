@@ -839,7 +839,7 @@ test("C-4.3-3 easter_offset −1 인덱스가 1:N — 성 토요일과 부활밤
   same(r.candidates.map((c) => c.evening === true), [false, false, true]);
 });
 
-test("C-5.5-3 격자 ∧ 이동 축일 행은 공존한다 — 대체가 아니다 · 우선순위가 같으면 사다리로 이동 축일이 앞선다", () => {
+test("C-5.5-3 격자 ∧ 이동 축일(temporal) 행은 공존한다 — 대체가 아니다 · 우선순위가 같으면 사다리로 이동 축일이 앞선다", () => {
   const advent1 = resolve("2026-11-29");
   same(advent1.candidates.map((c) => c.observance.id), ["t-advent1", "grid:advent-1-sunday"]);
   // 대림1주일 행은 조인 이름이 없다 — 자기 절기 위치로 격자 레코드에 닿는다(§5.4). 2026-11-29 는 나해
@@ -892,7 +892,7 @@ test("§5.5 격자 전례일 id · 이름 · precedence — 절기 위치에서 
     ["2026-02-22", "grid:lent-1-sunday", "사순 1주일", 2],
     ["2026-03-30", "grid:lent-x-weekday-mon", "성주간 월요일", 8],             // 고유명 평일
     ["2026-02-19", "grid:lent-x-weekday-thu", "재의 수요일 후 목요일", 8],
-    ["2026-04-02", "grid:lent-x-weekday-thu", "성주간 목요일", 8],             // 이동 축일(temporal) 행의 이름을 빌리지 않는다
+    ["2026-04-02", "grid:lent-x-weekday-thu", "성주간 목요일", 8],             // 이동 축일 행의 이름을 빌리지 않는다
     ["2026-04-06", "grid:easter-1-weekday-mon", "부활 1주 월요일", 8],
     ["2026-04-12", "grid:easter-2-sunday", "부활 2주일", 2],
     ["2026-05-24", "grid:easter-x-sunday", "부활 주일", 2],                    // 성령강림은 주차가 없다
@@ -1393,7 +1393,7 @@ test("C-6.1-7 · C-2-1 precedence null 은 정렬 최하위 · 지정 전례일�
   same(sat.candidates.map((c) => c.observance.id), ["t-holy-sat", "grid:lent-x-weekday-sat", "t-부활밤"]);
   same(fate(sat, "t-holy-sat"), ["proper", null]);
   same(fate(sat, "t-부활밤"), ["proper", null]);   // 저녁 전례 — 재분류 밖
-  // 유효 precedence: null 은 표 · 종류와 무관하게 ∞ — 등급 없는 이동 축일 평일 행을 8 로 읽던 예외는 성 토요일이 데이터에서
+  // 유효 precedence: null 은 표 · 종류와 무관하게 ∞ — 등급 없는 이동 축일 표의 평일 행을 8 로 읽던 예외는 성 토요일이 데이터에서
   // prec 1 이 되며 지웠다(data#32). same() 은 JSON 왕복이라 Infinity 가 null 이 되므로 하나씩 strictEqual 로 본다(PR #349 리뷰)
   for (const obs of [{ kind: "temporal", type: "weekday", precedence: null }, { kind: "temporal", type: "sunday", precedence: null },
     { kind: "sanctoral", precedence: null }]) {
@@ -1418,7 +1418,7 @@ test("C-6.1-9 prec 7로 같은 순위 — 고유 본기도가 있는 쪽 먼저(
 });
 
 test("R-6.2-tie-ladder 같은 값이면 도착 > 이동 축일(규칙일) > 월별 축일(고정일) > 격자", () => {
-  const corpus = rb("2029-05-31");   // 성체일(이동 축일 3) ∧ 성모 방문(월별 축일 3) — 규칙일이 남는다
+  const corpus = rb("2029-05-31");   // 성체일(이동 축일, prec 3) ∧ 성모 방문(월별 축일, prec 3) — 규칙일이 남는다
   same(officialId(corpus), "t-corpus");
   same(fate(corpus, "d0531-visitation"), ["proper", null]);   // 옮기는 것은 옮김 계산(§6.5)
   // 도착(prec 3) ∧ 같은 값 고유 후보 — 도착이 앞선다(→ R-6.2-chain-model)
@@ -1437,7 +1437,7 @@ test("C-6.1-11 · C-6.1-12 사계재 · 기념일은 지정 전례일이 아니�
   const memorial = rb("2026-06-11");
   same(officialId(memorial), "grid:ordinary-x-weekday-thu");
   same(fate(memorial, "d0611-memorial"), ["proper", null]);
-  // 합성 이동 축일 표의 기념일 — 부활 3주 수요일(격자 prec 8)
+  // 이동 축일 표의 합성 기념일 — 부활 3주 수요일(격자 prec 8)
   const tm = rb("2026-04-22");
   same(officialId(tm), "grid:easter-3-weekday-wed");
   same(fate(tm, "t-memorial"), ["proper", null]);
