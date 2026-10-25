@@ -1,4 +1,5 @@
 ---
+pr: 422
 date: 2026-10-25
 branch: data/sunday-readings-pointer
 title: "data: 서브모듈 포인터와 설계서 데이터 수치 갱신"
