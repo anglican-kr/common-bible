@@ -117,10 +117,7 @@ function bookmarkTreeFromFlat(items) {
   /** @type {Map<string, SyncFlatItem[]>} */
   const byParent = new Map();
   for (const node of Object.values(items)) {
-    // No item has the id "__proto__" (_flattenTree), but an older build saved what such a folder held under it as the
-    // parent. Read at the top level, those items show and are saved there; left under it, nothing reached them and the
-    // next save tombstoned them on every device (PR #438 review).
-    const p = node.parentId == null || node.parentId === "__proto__" ? "" : node.parentId;
+    const p = node.parentId ?? "";
     const siblings = byParent.get(p);
     if (siblings) siblings.push(node);
     else byParent.set(p, [node]);
@@ -140,7 +137,11 @@ function bookmarkTreeFromFlat(items) {
         return /** @type {BookmarkTreeNode} */ (rest);
       });
   }
-  return build("");
+  // No item has the id "__proto__" (_flattenTree), but an older build saved what such a folder held under it as the
+  // parent: nothing reached those items, and the next save tombstoned them on every device (PR #438 review). They are
+  // read after the top level — their _order was counted inside the lost folder, so mixed in they would reorder the
+  // untouched top-level items, whose new times would then beat other devices' edits (2nd review).
+  return [...build(""), ...build("__proto__")];
 }
 
 // ── Empty document ────────────────────────────────────────────────────────────

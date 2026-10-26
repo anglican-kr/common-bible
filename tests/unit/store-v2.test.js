@@ -345,20 +345,25 @@ test("__proto__ id의 폴더가 없으면 순서 값은 전과 같다 — 다시
   assert.deepEqual(plain(store.loadLocal().bookmarks.items), before);
 });
 
-test("고치기 전 판이 남긴, 부모가 __proto__인 항목은 맨 위에서 읽고 다음 저장에서 지우지 않는다", () => {
+test("고치기 전 판이 남긴, 부모가 __proto__인 항목은 맨 위 항목 뒤에서 읽고 다음 저장에서 지우지 않는다", () => {
   // 옛 판의 저장은 폴더만 잃고 자식은 부모 id "__proto__"로 남겼다. 그 부모는 어떤 항목의 id도 아니어서, 맨 위부터
-  // 그리면 그 자식이 보이지 않았고 다음 저장이 그 자식을 삭제 기록으로 바꿨다(PR #438 리뷰).
+  // 그리면 그 자식이 보이지 않았고 다음 저장이 그 자식을 삭제 기록으로 바꿨다(PR #438 리뷰). 그 자식의 순서 값은
+  // 옛 폴더 안에서 매긴 것이라 맨 위 항목과 겹친다. 맨 위 항목 사이에 섞으면 손대지 않은 맨 위 항목의 순서가 바뀌어
+  // 수정 시각이 오르고, 다른 기기의 수정을 이긴다(2차 리뷰).
   const { store } = load({
     "bible-bookmarks-v2": JSON.stringify(doc({ items: {
-      a: { ...flatBm("a"), parentId: "__proto__" },
+      x: { ...flatBm("x"), parentId: "__proto__", _order: 0 },
+      a: { ...flatBm("a"), _order: 0 },
       b: { ...flatBm("b"), _order: 1 },
+      y: { ...flatBm("y"), parentId: "__proto__", _order: 1 },
     } })),
   });
-  assert.deepEqual(plain(store.loadBookmarks()).map((n) => n.id), ["a", "b"]);
+  assert.deepEqual(plain(store.loadBookmarks()).map((n) => n.id), ["a", "b", "x", "y"]);
   store.saveBookmarks(store.loadBookmarks());
   const { items, tombstones } = store.loadLocal().bookmarks;
-  assert.equal(Object.hasOwn(tombstones, "a"), false);
-  assert.equal(items.a.parentId, null);
+  assert.deepEqual(Object.keys(tombstones), []);
+  assert.deepEqual([items.a._u, items.b._u], [5, 5]);     // the top level kept its order, so its times stand
+  assert.deepEqual([items.x.parentId, items.x._order, items.y._order], [null, 2, 3]);
 });
 
 // ── 설정 GC ──
