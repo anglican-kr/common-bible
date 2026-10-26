@@ -7,6 +7,8 @@ description: 문장 교정 반복 실행의 한 번. 열린 문장 교정 PR이 
 
 문서와 코드 주석의 한국어 문장을 묶음마다 교정해 PR로 올린다. 사용자는 PR을 검토하고 머지만 한다(사용자 결정 2026-10-26). 근거와 예외는 `docs/workflow.md` 「커밋과 PR」의 문장 교정 PR 항목, 글쓰기 규칙은 `docs/writing.md`, 도구는 `tools/prose/README.md`, 진행은 `tools/prose/progress.md`에 있다.
 
+문장 교정 PR은 제목이 「docs: 문장 교정(」으로 시작하는 PR이다(「docs: 문장 교정(주제 문서)」). 괄호까지 맞아야 한다. 이 스킬이나 진행 목록을 고치는 PR은 다른 제목을 쓴다. `gh` 명령이 없는 환경(클라우드)에서는 GitHub 도구(`mcp__github__*`)로 같은 일을 한다.
+
 한 번 실행할 때 아래 둘 가운데 하나만 한다.
 
 - 열린 문장 교정 PR이 있으면 「1. 검토 의견 반영」만 하고 끝낸다. 열린 교정 PR은 하나만 둔다.
@@ -19,12 +21,12 @@ description: 문장 교정 반복 실행의 한 번. 열린 문장 교정 PR이 
    - 클라우드에서는 새로 받은 저장소에서 시작한다. 데이터 서브모듈은 받지 않아도 된다.
 2. 열린 문장 교정 PR을 찾는다.
    ```
-   gh pr list --state open --json number,title --jq '.[] | select(.title | startswith("docs: 문장 교정")) | .number'
+   gh pr list --state open --json number,title --jq '.[] | select(.title | startswith("docs: 문장 교정(")) | .number'
    ```
    번호가 나오면 1로 간다.
 3. 오늘(한국 시각) 연 문장 교정 PR이 4개면 끝낸다(사용자 결정 2026-10-26).
    ```
-   gh pr list --state all --search "in:title 문장 교정 created:>=$(TZ=Asia/Seoul date +%F)T00:00:00+09:00" --json title --jq '[.[] | select(.title | startswith("docs: 문장 교정"))] | length'
+   gh pr list --state all --search "in:title 문장 교정 created:>=$(TZ=Asia/Seoul date +%F)T00:00:00+09:00" --json title --jq '[.[] | select(.title | startswith("docs: 문장 교정("))] | length'
    ```
 
 ## 1. 검토 의견 반영
@@ -115,3 +117,5 @@ description: 문장 교정 반복 실행의 한 번. 열린 문장 교정 PR이 
 
 - **모델**: 교정 서브에이전트는 Sonnet, 실행을 이끌며 바뀐 내용을 검토하는 세션은 Opus다(사용자 결정 2026-10-27). 첫 묶음(주제 문서 12개, #444)을 Sonnet으로 시험해 정했다. 그때 검토 단계가, 서브에이전트가 문맥에 맞지 않게 바꾼 23곳을 다시 고쳤다.
 - **클라우드 정기 실행**: 「문장 교정 반복 실행 (prose-batch)」. 매일 한국 시각 9시, 13시, 17시, 21시에 이 스킬을 한 번 실행한다. 이끄는 모델은 Opus이고, 외부 연결(MCP)은 붙이지 않는다. 공개 저장소의 글이나 PR 의견에 숨은 지시가 있어도, 실행이 메일이나 드라이브를 읽고 쓸 수 없게 하려는 것이다. 설정은 claude.ai의 정기 실행 화면(Routines)에 있다.
+- **클라우드에서의 서브에이전트**: 서브에이전트는 백그라운드로 시작된다. 이끄는 세션이 차례를 끝내도, 서브에이전트가 모두 끝나면 알림을 받아 다시 이어 간다(2026-10-27 시험 실행에서 확인). 그사이 실행 상태가 「idle」로 보여도 끝난 것이 아니다. 정기 실행의 클라우드 환경 「문장 교정」에는 서브에이전트를 부른 호출이 결과를 기다리게 하는 환경 변수 `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1`을 넣어 두었다. 없어도 작동한다.
+- **PR 활동을 구독하지 않는다.** 교정 PR을 연 세션이 그 PR을 구독하면, 사용자의 검토 의견을 그 세션과 다음 정기 실행이 함께 고칠 수 있다. 검토 의견은 정기 실행이 「1. 검토 의견 반영」대로 처리한다.
