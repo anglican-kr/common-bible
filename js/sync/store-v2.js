@@ -56,6 +56,19 @@ function getDeviceId() { return _getOrCreateMeta().deviceId; }
 
 // ── Flat-map helpers ──────────────────────────────────────────────────────────
 
+// An id-keyed map's own entry, or undefined. Items and tombstones are plain objects keyed by id, and a plain object
+// answers every name it inherits from Object.prototype (toString, constructor, …) with a function — an id the
+// import check (ADR-040) leaves out, but one a pre-check import (1.6.4 and before) still brings in through sync.
+/**
+ * @template T
+ * @param {{ [id: string]: T } | undefined} map
+ * @param {string} id
+ * @returns {T | undefined}
+ */
+function _own(map, id) {
+  return map != null && Object.hasOwn(map, id) ? map[id] : undefined;
+}
+
 // Recursively walk a bookmark tree and produce a flat {[id]: node} map.
 // Each node gets parentId and _order; _u is preserved if already set.
 /**
@@ -66,19 +79,29 @@ function getDeviceId() { return _getOrCreateMeta().deviceId; }
  * @returns {{ [id: string]: SyncFlatItem }}
  */
 function _flattenTree(nodes, parentId, out, now) {
-  nodes.forEach((node, idx) => {
+  let order = 0;
+  /** @param {BookmarkTreeNode[]} level */
+  const place = (level) => level.forEach((node) => {
+    // Assigning "__proto__" would rewrite `out`'s prototype instead of adding an entry, so the store does not hold
+    // this id (mergeDocs skips it too). A folder of that id gives its place to what it holds: dropped with it, they
+    // would turn into tombstones on the next save and vanish from every device (PR #438 review).
+    if (node.id === "__proto__") {
+      if (Array.isArray(node.children)) place(node.children);
+      return;
+    }
     // `children` and `_u` are stripped/overridden; everything else is spread as-is.
     const { children, ...rest } = /** @type {BookmarkTreeNode & { _u?: number }} */ (node);
     out[node.id] = /** @type {SyncFlatItem} */ ({
       ...rest,
       parentId: parentId ?? null,
-      _order:   idx,
+      _order:   order++,
       _u:       rest._u ?? now,
     });
     if (Array.isArray(children) && children.length) {
       _flattenTree(children, node.id, out, now);
     }
   });
+  place(nodes);
   return out;
 }
 
@@ -89,19 +112,25 @@ function _flattenTree(nodes, parentId, out, now) {
  * @returns {BookmarkTreeNode[]}
  */
 function bookmarkTreeFromFlat(items) {
-  /** @type {{ [parentId: string]: SyncFlatItem[] }} */
-  const byParent = {};
+  // A Map, not a plain object: every id is looked up here as a parent, and a plain object's inherited names
+  // (toString …) made the whole list fail to load (known-issues §15.2).
+  /** @type {Map<string, SyncFlatItem[]>} */
+  const byParent = new Map();
   for (const node of Object.values(items)) {
     const p = node.parentId ?? "";
-    (byParent[p] ??= []).push(node);
+    const siblings = byParent.get(p);
+    if (siblings) siblings.push(node);
+    else byParent.set(p, [node]);
   }
   /**
    * @param {string} parentId
    * @returns {BookmarkTreeNode[]}
    */
   function build(parentId) {
-    return (byParent[parentId] ?? [])
-      .sort((a, b) => (a._order ?? 0) - (b._order ?? 0))
+    return (byParent.get(parentId) ?? [])
+      // Equal values break on id: two devices that each move an item to the front give both the same value, and the
+      // document's key order (each merge puts its own keys first) showed them differently per device (4th review).
+      .sort((a, b) => (a._order ?? 0) - (b._order ?? 0) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
       .map((flat) => {
         const { parentId: _p, _order: _o, _u: _t, ...rest } = flat;
         const kids = build(rest.id);
@@ -110,7 +139,11 @@ function bookmarkTreeFromFlat(items) {
         return /** @type {BookmarkTreeNode} */ (rest);
       });
   }
-  return build("");
+  // No item has the id "__proto__" (_flattenTree), but an older build saved what such a folder held under it as the
+  // parent: nothing reached those items, and the next save tombstoned them on every device (PR #438 review). They are
+  // read after the top level — their _order was counted inside the lost folder, so mixed in they would reorder the
+  // untouched top-level items, whose new times would then beat other devices' edits (2nd review).
+  return [...build(""), ...build("__proto__")];
 }
 
 // ── Empty document ────────────────────────────────────────────────────────────
@@ -163,6 +196,47 @@ function _contentKey(node) {
   return JSON.stringify({ id, type, name, bookId, chapter, vref, verseSpec, color, label, note, createdAt, updatedAt });
 }
 
+// The _order values for one list of siblings, in display order. `stored[i]` is that sibling's stored _order if it sat
+// under the same parent before, else undefined. The longest run of stored values that still increases keeps them;
+// the rest (moved or new) get values between their kept neighbours: steps of 1 from the left neighbour when they fit
+// below the right one, else even fractions. When the numbers can no longer be told apart, the list is renumbered from 0.
+/** @param {Array<number | undefined>} stored @returns {number[]} */
+function _keepOrders(stored) {
+  const n = stored.length;
+  /** @type {number[]} */
+  const tails = [];   // tails[k]: index ending the best increasing run of length k + 1
+  const prev = new Array(n).fill(-1);
+  for (let i = 0; i < n; i++) {
+    const v = stored[i];
+    if (typeof v !== "number" || !Number.isFinite(v)) continue;
+    let lo = 0, hi = tails.length;
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (/** @type {number} */ (stored[tails[mid]]) < v) lo = mid + 1; else hi = mid; }
+    prev[i] = lo > 0 ? tails[lo - 1] : -1;
+    tails[lo] = i;
+  }
+  const keep = new Array(n).fill(false);
+  for (let i = tails.length ? tails[tails.length - 1] : -1; i !== -1; i = prev[i]) keep[i] = true;
+
+  /** @type {number[]} */
+  const out = new Array(n);
+  for (let i = 0; i < n; ) {
+    if (keep[i]) { out[i] = /** @type {number} */ (stored[i]); i++; continue; }
+    let j = i;
+    while (j < n && !keep[j]) j++;
+    const k = j - i, lo = i > 0 ? out[i - 1] : -Infinity, hi = j < n ? /** @type {number} */ (stored[j]) : Infinity;
+    for (let t = 0; t < k; t++) {
+      out[i + t] = lo === -Infinity && hi === Infinity ? t
+        : hi === Infinity ? lo + 1 + t
+        : lo === -Infinity ? hi - k + t
+        : hi - lo > k ? lo + 1 + t
+        : lo + ((hi - lo) * (t + 1)) / (k + 1);
+    }
+    i = j;
+  }
+  for (let i = 1; i < n; i++) if (!(out[i] > out[i - 1])) return out.map((_, idx) => idx);
+  return out;
+}
+
 // The document saveBookmarks(tree) writes — the stored one with `tree` flattened in, _u preserved for unchanged
 // items and tombstones added for removed ones — built without writing it.
 /** @param {BookmarkTreeNode[]} tree @returns {SyncDoc} */
@@ -172,10 +246,29 @@ function _docWithBookmarks(tree) {
   const oldItems = doc.bookmarks.items;
   const newFlat  = _flattenTree(tree, null, {}, now);
 
+  // An item whose place among its siblings is unchanged keeps its stored _order, so a removal or a move re-times only
+  // what moved. Renumbered from 0, every later sibling took a new _u and beat other devices' edits of it
+  // (PR #438 review, 사용자 결정 2026-10-26).
+  /** @type {Map<string | null, SyncFlatItem[]>} */
+  const siblings = new Map();
+  for (const node of Object.values(newFlat)) {
+    const list = siblings.get(node.parentId);
+    if (list) list.push(node);
+    else siblings.set(node.parentId, [node]);
+  }
+  for (const [parentId, list] of siblings) {
+    list.sort((a, b) => a._order - b._order);   // _flattenTree's 0, 1, 2 …: Object.values lists numeric-looking ids first
+    const stored = list.map((node) => {
+      const old = _own(oldItems, node.id);
+      return old && (old.parentId ?? null) === parentId ? old._order : undefined;
+    });
+    _keepOrders(stored).forEach((order, i) => { list[i]._order = order; });
+  }
+
   /** @type {{ [id: string]: SyncFlatItem }} */
   const nextItems = {};
   for (const [id, node] of Object.entries(newFlat)) {
-    const old = oldItems[id];
+    const old = _own(oldItems, id);
     const sameContent  = old && _contentKey(old)  === _contentKey(node);
     const samePosition = old && old._order         === node._order
                               && old.parentId       === node.parentId;
@@ -184,7 +277,7 @@ function _docWithBookmarks(tree) {
 
   // Items removed → tombstone (only if not already tombstoned with a newer time).
   for (const id of Object.keys(oldItems)) {
-    if (!nextItems[id] && !(doc.bookmarks.tombstones[id] > now)) {
+    if (!Object.hasOwn(nextItems, id) && !((_own(doc.bookmarks.tombstones, id) ?? -Infinity) > now)) {
       doc.bookmarks.tombstones[id] = now;
     }
   }
@@ -217,7 +310,7 @@ function loadBookmarks() {
   /** @type {{ [id: string]: SyncFlatItem }} */
   const alive = {};
   for (const [id, node] of Object.entries(items)) {
-    if (!(tombstones[id] > node._u)) alive[id] = node;
+    if (!((_own(tombstones, id) ?? -Infinity) > node._u)) alive[id] = node;
   }
   return bookmarkTreeFromFlat(alive);
 }
@@ -321,10 +414,12 @@ function mergeDocs(local, remote, deviceId) {
     // A parsed doc can carry "__proto__" as an own key; assigning it would
     // rewrite the merged object's prototype instead of adding an entry.
     if (id === "__proto__") continue;
-    const L  = local.bookmarks?.items?.[id];
-    const R  = remote.bookmarks?.items?.[id];
-    const LT = local.bookmarks?.tombstones?.[id]  ?? -Infinity;
-    const RT = remote.bookmarks?.tombstones?.[id] ?? -Infinity;
+    // Own entries only: an id one side lacks read an inherited function there, the death time became NaN, and
+    // the item was dropped as dead on both sides (known-issues §15.2).
+    const L  = _own(local.bookmarks?.items, id);
+    const R  = _own(remote.bookmarks?.items, id);
+    const LT = _own(local.bookmarks?.tombstones, id)  ?? -Infinity;
+    const RT = _own(remote.bookmarks?.tombstones, id) ?? -Infinity;
     const death = Math.max(LT, RT);
     const aliveL = L && L._u > death;
     const aliveR = R && R._u > death;
@@ -420,7 +515,7 @@ function applyToLegacyKeys(doc) {
   /** @type {{ [id: string]: SyncFlatItem }} */
   const alive = {};
   for (const [id, node] of Object.entries(items)) {
-    if (!(tombstones?.[id] > node._u)) alive[id] = node;
+    if (!((_own(tombstones, id) ?? -Infinity) > node._u)) alive[id] = node;
   }
   const tree = bookmarkTreeFromFlat(alive);
   localStorage.setItem("bible-bookmarks", JSON.stringify(tree));

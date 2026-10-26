@@ -250,6 +250,194 @@ test("원격 북마크의 __proto__ id 는 병합에서 무시된다", () => {
   assert.equal(merged.bookmarks.items.id, undefined);
 });
 
+// ── 기본 속성 이름의 id (known-issues §15.2) ──
+// 저장소는 id를 일반 객체의 키로 쓴다. 일반 객체는 toString · constructor 같은 이름에 Object.prototype에서
+// 물려받은 함수로 답하므로, 그 이름의 id가 하나만 있어도 목록 전체를 읽지 못했다(2026-10-19 실측). 가져오기
+// 검사(ADR-040)가 없던 판(1.6.4 이하)에서 들인 기록은 동기화로 지금 판에도 들어온다.
+
+/** @param {string} id @param {number} [_u] */
+const flatBm = (id, _u = 5) =>
+  ({ type: "bookmark", id, bookId: "gen", chapter: 1, verseSpec: "all", parentId: null, _order: 0, _u });
+
+test("기본 속성 이름의 id도 저장했다 다시 읽으면 그대로다 — 폴더와 그 안의 항목까지", () => {
+  const { store } = load();
+  const tree = [
+    { type: "folder", id: "toString", name: "가", children: [
+      { type: "bookmark", id: "constructor", bookId: "gen", chapter: 1, verseSpec: "all" },
+      { type: "folder", id: "hasOwnProperty", name: "나", children: [] },
+    ] },
+    { type: "bookmark", id: "valueOf", bookId: "exo", chapter: 2, verseSpec: "all" },
+  ];
+  store.saveBookmarks(tree);
+  assert.deepEqual(plain(store.loadBookmarks()), tree);
+});
+
+test("applyToLegacyKeys도 기본 속성 이름의 id에서 멈추지 않고 옛 키에 트리를 쓴다", () => {
+  const { store, localStorage } = load();
+  store.applyToLegacyKeys(doc({ items: {
+    toString:    { type: "folder", id: "toString", name: "가", parentId: null, _order: 0, _u: 5 },
+    constructor: { ...flatBm("constructor"), parentId: "toString" },
+  } }));
+  assert.deepEqual(JSON.parse(localStorage.getItem("bible-bookmarks")), [
+    { type: "folder", id: "toString", name: "가", children: [
+      { type: "bookmark", id: "constructor", bookId: "gen", chapter: 1, verseSpec: "all" },
+    ] },
+  ]);
+});
+
+test("한쪽에만 있는 기본 속성 이름의 id도 병합 결과에 남는다", () => {
+  // 없는 쪽에서 찾으면 물려받은 함수가 나와 삭제 시각이 NaN이 되고, 살아 있는 항목이 양쪽 모두 죽은 것으로 빠졌다.
+  const { store } = load();
+  const merged = store.mergeDocs(
+    doc({ items: { constructor: flatBm("constructor") } }),
+    doc({ items: { toString: flatBm("toString") } }),
+    "device-a",
+  );
+  assert.deepEqual(Object.keys(merged.bookmarks.items).sort(), ["constructor", "toString"]);
+});
+
+test("기본 속성 이름의 id에도 더 새로운 삭제 표식이 이기고, 표식은 병합 결과에 남는다", () => {
+  const { store } = load();
+  const merged = store.mergeDocs(
+    doc({ tombstones: { toString: 10 } }),
+    doc({ items: { toString: flatBm("toString", 5) } }),
+    "device-a",
+  );
+  assert.equal(Object.hasOwn(merged.bookmarks.items, "toString"), false);
+  assert.equal(merged.bookmarks.tombstones.toString, 10);
+});
+
+test("기본 속성 이름의 id를 지우면 삭제 표식이 남는다 — 다른 기기에서도 지워진다", () => {
+  const { store } = load();
+  const bm = (id) => ({ type: "bookmark", id, bookId: "gen", chapter: 1, verseSpec: "all" });
+  store.saveBookmarks([bm("toString"), bm("b")]);
+  store.saveBookmarks([bm("b")]);
+  const { items, tombstones } = store.loadLocal().bookmarks;
+  assert.deepEqual(Object.keys(items), ["b"]);
+  assert.equal(typeof tombstones.toString, "number");
+  assert.equal(Object.hasOwn(tombstones, "toString"), true);
+});
+
+test("__proto__ id의 폴더는 저장하지 않고, 안의 항목은 그 폴더의 자리로 올려 저장한다", () => {
+  // 이 id는 일반 객체에 넣으면 키가 되지 않고 객체의 프로토타입을 바꾼다. 병합처럼 저장소에 두지 않는다. 안의 항목까지
+  // 버리면 다음 저장이 그 항목을 삭제 기록으로 바꿔 모든 기기에서 지운다(PR #438 리뷰).
+  const { store } = load();
+  const bm = (id) => ({ type: "bookmark", id, bookId: "gen", chapter: 1, verseSpec: "all" });
+  store.saveBookmarks([
+    bm("a"),
+    { type: "folder", id: "__proto__", name: "가", children: [bm("b"), bm("c")] },
+    { type: "folder", id: "f", name: "나", children: [{ type: "folder", id: "__proto__", name: "다", children: [bm("d")] }] },
+  ]);
+  assert.deepEqual(plain(store.loadBookmarks()), [
+    bm("a"), bm("b"), bm("c"),
+    { type: "folder", id: "f", name: "나", children: [bm("d")] },
+  ]);
+  assert.deepEqual(Object.keys(store.loadLocal().bookmarks.items).sort(), ["a", "b", "c", "d", "f"]);
+});
+
+test("__proto__ id의 폴더가 없으면 순서 값은 전과 같다 — 다시 저장해도 수정 시각이 오르지 않는다", () => {
+  const { store } = load();
+  const bm = (id) => ({ type: "bookmark", id, bookId: "gen", chapter: 1, verseSpec: "all" });
+  store.saveBookmarks([bm("a"), { type: "folder", id: "f", name: "가", children: [bm("b")] }, bm("c")]);
+  const before = plain(store.loadLocal().bookmarks.items);
+  assert.deepEqual([before.a._order, before.f._order, before.c._order, before.b._order], [0, 1, 2, 0]);
+  store.saveBookmarks(store.loadBookmarks());
+  assert.deepEqual(plain(store.loadLocal().bookmarks.items), before);
+});
+
+test("고치기 전 판이 남긴, 부모가 __proto__인 항목은 맨 위 항목 뒤에서 읽고 다음 저장에서 지우지 않는다", () => {
+  // 옛 판의 저장은 폴더만 잃고 자식은 부모 id "__proto__"로 남겼다. 그 부모는 어떤 항목의 id도 아니어서, 맨 위부터
+  // 그리면 그 자식이 보이지 않았고 다음 저장이 그 자식을 삭제 기록으로 바꿨다(PR #438 리뷰). 그 자식의 순서 값은
+  // 옛 폴더 안에서 매긴 것이라 맨 위 항목과 겹친다. 맨 위 항목 사이에 섞으면 손대지 않은 맨 위 항목의 순서가 바뀌어
+  // 수정 시각이 오르고, 다른 기기의 수정을 이긴다(2차 리뷰).
+  const { store } = load({
+    "bible-bookmarks-v2": JSON.stringify(doc({ items: {
+      x: { ...flatBm("x"), parentId: "__proto__", _order: 0 },
+      a: { ...flatBm("a"), _order: 0 },
+      b: { ...flatBm("b"), _order: 1 },
+      y: { ...flatBm("y"), parentId: "__proto__", _order: 1 },
+    } })),
+  });
+  assert.deepEqual(plain(store.loadBookmarks()).map((n) => n.id), ["a", "b", "x", "y"]);
+  store.saveBookmarks(store.loadBookmarks());
+  const { items, tombstones } = store.loadLocal().bookmarks;
+  assert.deepEqual(Object.keys(tombstones), []);
+  assert.deepEqual([items.a._u, items.b._u], [5, 5]);     // the top level kept its order, so its times stand
+  assert.deepEqual([items.x.parentId, items.x._order, items.y._order], [null, 2, 3]);
+});
+
+// ── 순서 값 (PR #438 리뷰, 사용자 결정 2026-10-26) ──
+// 저장은 목록을 통째로 다시 펼친다. 순서 값을 0부터 다시 매기면, 지우거나 옮긴 항목 뒤의 손대지 않은 항목까지 값이
+// 바뀌어 수정 시각이 오르고, 다른 기기에서 그 항목을 고친 것을 이긴다. 앞뒤 순서가 그대로인 항목은 값을 그대로 둔다.
+
+/** @param {Record<string, [number, string | null]>} spec  id → [_order, parentId] */
+function seeded(spec) {
+  const items = {};
+  for (const [id, [order, parentId]] of Object.entries(spec)) {
+    items[id] = id.startsWith("f")
+      ? { type: "folder", id, name: id, parentId, _order: order, _u: 5 }
+      : { ...flatBm(id), parentId, _order: order };
+  }
+  return load({ "bible-bookmarks-v2": JSON.stringify(doc({ items })) }).store;
+}
+const treeBm = (id) => ({ type: "bookmark", id, bookId: "gen", chapter: 1, verseSpec: "all" });
+/** @param {any} store @param {string[]} ids */
+const ordersOf = (store, ids) => ids.map((id) => store.loadLocal().bookmarks.items[id]._order);
+/** @param {any} store @param {string[]} ids */
+const keptOf = (store, ids) => ids.map((id) => store.loadLocal().bookmarks.items[id]._u === 5);
+
+test("하나를 지우면 뒤의 항목은 순서 값도 수정 시각도 그대로다", () => {
+  const store = seeded({ a: [0, null], b: [1, null], c: [2, null] });
+  store.saveBookmarks([treeBm("a"), treeBm("c")]);
+  assert.deepEqual(ordersOf(store, ["a", "c"]), [0, 2]);
+  assert.deepEqual(keptOf(store, ["a", "c"]), [true, true]);
+});
+
+test("하나를 맨 앞으로 옮기면 그 항목만 새 값과 새 수정 시각을 받는다", () => {
+  const store = seeded({ a: [0, null], b: [1, null], c: [2, null] });
+  store.saveBookmarks([treeBm("c"), treeBm("a"), treeBm("b")]);
+  assert.deepEqual(ordersOf(store, ["c", "a", "b"]), [-1, 0, 1]);
+  assert.deepEqual(keptOf(store, ["c", "a", "b"]), [false, true, true]);
+  assert.deepEqual(plain(store.loadBookmarks()).map((n) => n.id), ["c", "a", "b"]);
+});
+
+test("빈 번호가 없는 사이에 넣으면 소수를 쓰고, 끝에 더하면 다음 정수를 쓴다", () => {
+  const store = seeded({ a: [0, null], b: [1, null] });
+  store.saveBookmarks([treeBm("a"), treeBm("x"), treeBm("b"), treeBm("y")]);
+  assert.deepEqual(ordersOf(store, ["a", "x", "b", "y"]), [0, 0.5, 1, 2]);
+  assert.deepEqual(keptOf(store, ["a", "b"]), [true, true]);
+  assert.deepEqual(plain(store.loadBookmarks()).map((n) => n.id), ["a", "x", "b", "y"]);
+});
+
+test("빈 번호가 있는 목록을 다시 저장해도 아무것도 바뀌지 않는다 — 병합 뒤 처음 저장할 때", () => {
+  const store = seeded({ a: [0, null], c: [3, null], f1: [5, null], d: [0, "f1"], e: [4, "f1"] });
+  const before = plain(store.loadLocal().bookmarks.items);
+  store.saveBookmarks(store.loadBookmarks());
+  assert.deepEqual(plain(store.loadLocal().bookmarks.items), before);
+});
+
+test("다른 폴더로 옮긴 항목은 그 폴더의 끝 값을 받고, 원래 폴더의 다른 항목은 그대로다", () => {
+  const store = seeded({ a: [0, null], b: [1, null], f1: [2, null], d: [0, "f1"] });
+  store.saveBookmarks([treeBm("b"), { type: "folder", id: "f1", name: "f1", children: [treeBm("d"), treeBm("a")] }]);
+  const items = store.loadLocal().bookmarks.items;
+  assert.deepEqual([items.a.parentId, items.a._order], ["f1", 1]);
+  assert.deepEqual(keptOf(store, ["b", "f1", "d", "a"]), [true, true, true, false]);
+});
+
+test("순서 값이 같으면 id 순서로 놓는다 — 두 기기가 동시에 맨 앞으로 옮겨도 어느 기기에서나 같은 순서다", () => {
+  // 두 기기가 서로 다른 항목을 맨 앞으로 옮기면 둘 다 같은 값(-1)을 받는다. 값이 같을 때 문서의 키 순서를 따르면,
+  // 병합은 자기 기기의 키를 먼저 넣으므로 기기마다 순서가 달랐다(4차 리뷰).
+  const store = seeded({ y: [-1, null], x: [-1, null], a: [0, null] });
+  assert.deepEqual(plain(store.loadBookmarks()).map((n) => n.id), ["x", "y", "a"]);
+});
+
+test("값을 더 나눌 수 없으면 그 폴더만 0부터 다시 매긴다", () => {
+  const store = seeded({ a: [1, null], b: [1 + Number.EPSILON, null] });
+  store.saveBookmarks([treeBm("a"), treeBm("x"), treeBm("b")]);
+  assert.deepEqual(ordersOf(store, ["a", "x", "b"]), [0, 1, 2]);
+  assert.deepEqual(plain(store.loadBookmarks()).map((n) => n.id), ["a", "x", "b"]);
+});
+
 // ── 설정 GC ──
 
 test("오래된 null 설정 항목은 sweepTombstones 가 걷어낸다", () => {

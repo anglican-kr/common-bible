@@ -770,14 +770,18 @@ function createSyncMachine({ onStateChange } = {}) {
       const merged     = V2.mergeDocs(local, remote, _deviceId);
       const mergedMaxU = V2.maxU(merged);
 
+      // Local bookmark entries are read as own entries only: an id like `toString` read an inherited function
+      // there, and a tombstone received for it counted as no change (known-issues §15.2).
+      const localItems      = local.bookmarks?.items      ?? {};
+      const localTombstones = local.bookmarks?.tombstones ?? {};
       const hadRemoteChanges = (
         Object.keys(merged.settings).some(k =>
           (merged.settings[k]?._u ?? 0) > (local.settings?.[k]?._u ?? 0)) ||
         (merged.lastRead?._u ?? 0) > (local.lastRead?._u ?? 0) ||
         Object.keys(merged.bookmarks?.items ?? {}).some(id =>
-          (merged.bookmarks.items[id]?._u ?? 0) > (local.bookmarks?.items?.[id]?._u ?? 0)) ||
+          (merged.bookmarks.items[id]?._u ?? 0) > ((Object.hasOwn(localItems, id) ? localItems[id]._u : 0) ?? 0)) ||
         Object.keys(merged.bookmarks?.tombstones ?? {}).some(id =>
-          (merged.bookmarks.tombstones[id] ?? 0) > (local.bookmarks?.tombstones?.[id] ?? 0))
+          (merged.bookmarks.tombstones[id] ?? 0) > (Object.hasOwn(localTombstones, id) ? localTombstones[id] : 0))
       );
 
       L.log({ kind: "ACTION", event: "MERGE", localMaxU, remoteMaxU, mergedMaxU, hadRemoteChanges });

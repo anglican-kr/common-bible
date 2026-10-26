@@ -1271,7 +1271,7 @@ function loadBookmarkActive() {
 // ── IMPORT_EXPORT loader ────────────────────────────────────────────────────
 
 function loadImportExport() {
-  const ctx = { Object, Array, Set, String, JSON, console, Error };
+  const ctx = { Object, Array, Set, Map, String, JSON, console, Error };
   vm.createContext(ctx);
   // The verse-spec check (isWellFormedSpec) is an import of bookmark-modals.js — the VERSE_SPEC block stands in for it.
   vm.runInContext(extractBlock("VERSE_SPEC", VERSE_SPEC_SOURCE), ctx, { filename: "verse-spec.js" });
@@ -1667,21 +1667,143 @@ test("_mergeBookmarkStores: folder with new id keeps its children (filtered by i
   assert.equal(folder.children[0].id, "child-2");
 });
 
-test("_mergeBookmarkStores: duplicate folder id → entire folder dropped (children too)", () => {
+// 같은 id의 폴더는 그 안으로 들어가 새 항목만 더한다. 폴더의 자리와 이름은 지금 목록을 따른다(ADR-011 Phase 2a
+// 「폴더 children 재귀 처리」, known-issues §15.1). 전에는 폴더를 안의 것까지 건너뛰어 백업의 새 북마크가 빠졌다.
+
+test("_mergeBookmarkStores: duplicate folder id → its new children join the existing folder, name kept", () => {
   const h = loadImportExport();
-  const existing = [{ type: "folder", id: "fld-1", children: [] }];
+  const existing = [{ type: "folder", id: "fld-1", name: "지금", children: [{ type: "bookmark", id: "old" }] }];
   const incoming = [
     {
       type: "folder",
       id: "fld-1",  // duplicate
-      children: [{ type: "bookmark", id: "would-be-new" }],
+      name: "백업",
+      children: [{ type: "bookmark", id: "old" }, { type: "bookmark", id: "new" }],
     },
   ];
   const merged = h._mergeBookmarkStores(existing, incoming);
   assert.equal(merged.length, 1);
   assert.equal(merged[0].id, "fld-1");
-  // Incoming folder's children are NOT merged in — the whole folder is skipped.
-  assert.equal(merged[0].children.length, 0);
+  assert.equal(merged[0].name, "지금");
+  assert.deepEqual(merged[0].children.map((c) => c.id), ["old", "new"]);
+});
+
+test("_mergeBookmarkStores: a duplicate folder elsewhere in the file fills the existing one where it stands", () => {
+  const h = loadImportExport();
+  const existing = [
+    { type: "bookmark", id: "a" },
+    { type: "folder", id: "fld-1", name: "지금", children: [] },
+  ];
+  const incoming = [
+    { type: "folder", id: "outer", name: "새 폴더", children: [
+      { type: "folder", id: "fld-1", name: "백업", children: [{ type: "bookmark", id: "new" }] },
+    ] },
+  ];
+  const merged = h._mergeBookmarkStores(existing, incoming);
+  assert.deepEqual(merged.map((n) => n.id), ["a", "fld-1", "outer"]);
+  assert.deepEqual(merged[1].children.map((c) => c.id), ["new"]);
+  assert.deepEqual(merged[2].children, []);   // the new folder comes in; the folder it held stays where it is
+});
+
+test("_mergeBookmarkStores: duplicate folders nest — new items reach the inner existing folder", () => {
+  const h = loadImportExport();
+  const existing = [
+    { type: "folder", id: "f", children: [{ type: "folder", id: "g", children: [{ type: "bookmark", id: "x" }] }] },
+  ];
+  const incoming = [
+    { type: "folder", id: "f", children: [
+      { type: "folder", id: "g", children: [{ type: "bookmark", id: "x" }, { type: "bookmark", id: "y" }] },
+      { type: "bookmark", id: "z" },
+    ] },
+  ];
+  const merged = h._mergeBookmarkStores(existing, incoming);
+  assert.equal(merged.length, 1);
+  const f = merged[0];
+  assert.deepEqual(f.children.map((c) => c.id), ["g", "z"]);
+  assert.deepEqual(f.children[0].children.map((c) => c.id), ["x", "y"]);
+});
+
+test("_mergeBookmarkStores: a folder whose id is an existing bookmark is skipped with its children", () => {
+  // The import check leaves these out first (ADR-040 — an id of the other kind); merge does not fold them in either.
+  const h = loadImportExport();
+  const existing = [{ type: "bookmark", id: "dup" }];
+  const incoming = [{ type: "folder", id: "dup", children: [{ type: "bookmark", id: "inner" }] }];
+  const merged = h._mergeBookmarkStores(existing, incoming);
+  assert.deepEqual(JSON.parse(JSON.stringify(merged)), [{ type: "bookmark", id: "dup" }]);
+});
+
+test("_mergeBookmarkStores: the merged list stays within 64 levels — a folder that would go deeper is left out with its contents", () => {
+  // A folder the list has is filled where it stands, so the file's depth adds to the list's (PR #438 review): the
+  // import check's 64-level limit (ADR-040) holds for the merged list too.
+  const h = loadImportExport();
+  /** @param {string} prefix @param {number} n */
+  const chain = (prefix, n) => {
+    let node = null;
+    for (let i = n; i >= 1; i--) node = { type: "folder", id: `${prefix}${i}`, name: "", children: node ? [node] : [] };
+    return node;
+  };
+  const depthOf = (nodes) => Math.max(0, ...nodes.map((n) => (n.type === "folder" ? 1 + depthOf(n.children) : 0)));
+  const existing = [chain("a", 64)];
+  const incoming = [
+    { type: "folder", id: "a64", name: "", children: [chain("b", 3), { type: "bookmark", id: "x" }] },
+    { type: "folder", id: "a10", name: "", children: [chain("c", 3)] },
+  ];
+  const merged = h._mergeBookmarkStores(existing, incoming);
+  assert.equal(depthOf(merged), 64);
+  const at = (level) => { let f = merged[0]; for (let i = 1; i < level; i++) f = f.children[0]; return f; };
+  assert.deepEqual(at(64).children.map((c) => c.id), ["x"]);          // the bookmark joins; the folder would be 65th
+  assert.deepEqual(at(10).children.map((c) => c.id), ["a11", "c1"]);  // 13 levels fit
+});
+
+test("_mergeBookmarkStores: a folder the list has, inside a new folder left out for depth, still gets its new items", () => {
+  // The new folder would sit 65th and is left out with what it holds — but a folder the list already has is filled
+  // where it stands wherever it shows up in the file, so its new bookmark has no depth problem (2nd review of PR #438).
+  const h = loadImportExport();
+  let deep = null;
+  for (let i = 64; i >= 1; i--) deep = { type: "folder", id: `a${i}`, name: "", children: deep ? [deep] : [] };
+  const existing = [deep, { type: "folder", id: "e", name: "얕은 폴더", children: [] }];
+  const incoming = [
+    { type: "folder", id: "a64", name: "", children: [
+      { type: "folder", id: "n", name: "", children: [
+        { type: "folder", id: "e", name: "", children: [{ type: "bookmark", id: "z" }] },
+        { type: "bookmark", id: "w" },
+      ] },
+    ] },
+  ];
+  const merged = h._mergeBookmarkStores(existing, incoming);
+  let f = merged[0];
+  for (let i = 1; i < 64; i++) f = f.children[0];
+  assert.deepEqual(f.children, []);                                   // n would be the 65th level: left out, w with it
+  assert.equal(merged.length, 2);                                      // …and not put anywhere else
+  assert.deepEqual(merged[1].children.map((c) => c.id), ["z"]);
+});
+
+test("_mergeBookmarkStores: inside a folder left out for depth, a folder whose id is a bookmark is skipped with its contents", () => {
+  // As addNew does at any depth — the import check leaves these out first (ADR-040), so this only keeps the two
+  // paths alike (3rd review of PR #438).
+  const h = loadImportExport();
+  let deep = null;
+  for (let i = 64; i >= 1; i--) deep = { type: "folder", id: `a${i}`, name: "", children: deep ? [deep] : [] };
+  const existing = [deep, { type: "bookmark", id: "e" }, { type: "folder", id: "g", name: "", children: [] }];
+  const incoming = [
+    { type: "folder", id: "a64", name: "", children: [
+      { type: "folder", id: "n", name: "", children: [
+        { type: "folder", id: "e", name: "", children: [
+          { type: "folder", id: "g", name: "", children: [{ type: "bookmark", id: "z" }] },
+        ] },
+      ] },
+    ] },
+  ];
+  const merged = h._mergeBookmarkStores(existing, incoming);
+  assert.deepEqual(merged[2].children, []);
+});
+
+test("_mergeBookmarkStores: the existing tree passed in is left as it was", () => {
+  const h = loadImportExport();
+  const existing = [{ type: "folder", id: "f", children: [{ type: "bookmark", id: "x" }] }];
+  const before = JSON.stringify(existing);
+  h._mergeBookmarkStores(existing, [{ type: "folder", id: "f", children: [{ type: "bookmark", id: "y" }] }]);
+  assert.equal(JSON.stringify(existing), before);
 });
 
 test("_mergeBookmarkStores: deeply nested folder filters at each level", () => {
@@ -1912,8 +2034,9 @@ test("_sanitizeImportItems: a bookmark carrying children is left out with them �
 });
 
 // Round trip through the real sync store (js/sync/store-v2.js — saveBookmarks · loadBookmarks go through it once
-// sync is loaded): what the import check keeps must survive a save and a read. The raw file breaks the store in
-// three ways, so these tests do exercise the hazards the check guards against (PR #359 review).
+// sync is loaded): what the import check keeps must survive a save and a read. The raw file broke the store in
+// three ways, so these tests do exercise the hazards the check guards against (PR #359 review). The store reads a
+// toString id since known-issues §15.2, but a device on an older build still fails on one that sync brings it.
 const STORE_V2_SOURCE = stripEsmMarker(fs.readFileSync(path.resolve(__dirname, "../../js/sync/store-v2.js"), "utf8"));
 function loadSyncStore(localStorage = makeLocalStorage({})) {
   const win = {};
@@ -1927,13 +2050,14 @@ function loadSyncStore(localStorage = makeLocalStorage({})) {
   return win.syncStoreV2;
 }
 
-test("_sanitizeImportItems: the raw file breaks the sync store — a null child, a toString id, a __proto__ id", () => {
+test("_sanitizeImportItems: the raw file trips the sync store — a null child, a __proto__ id (a toString id until §15.2)", () => {
   // Throws while flattening — storage.js saveBookmarks swallows it, so 「덮어썼습니다」 stood over an unchanged list.
   assert.throws(() => loadSyncStore().saveBookmarks([appBookmark({ id: "b-kid", children: [null] })]), { name: "TypeError" });
-  // Saves, then the next read calls .sort() on the inherited toString — the whole list fails to load.
+  // The next read called .sort() on the inherited toString and the whole list failed to load — read since
+  // known-issues §15.2.
   const s1 = loadSyncStore();
   s1.saveBookmarks([appBookmark({ id: "toString" }), appBookmark({ id: "b" })]);
-  assert.throws(() => s1.loadBookmarks(), { name: "TypeError" });   // the vm realm's TypeError — match by name
+  assert.deepEqual(s1.loadBookmarks().map((n) => n.id), ["toString", "b"]);
   // Vanishes without a sound.
   const s2 = loadSyncStore();
   s2.saveBookmarks([appBookmark({ id: "__proto__" }), appBookmark({ id: "b" })]);
@@ -2384,6 +2508,12 @@ test("_forgetViewed: removes a single id, leaves others", () => {
   assert.deepEqual(map, { b: 20 });
 });
 
+test("_forgetViewed: an id named like an Object.prototype member that was never viewed writes nothing (PR #438 review)", () => {
+  const h = loadBookmarkSort();
+  h._forgetViewed("toString");
+  assert.equal(h._ls.getItem("bible-bookmark-viewed"), null);
+});
+
 // ── sortBookmarkNodes ──
 
 test("sortBookmarkNodes: 'manual' preserves stored order (shallow copy)", () => {
@@ -2442,6 +2572,21 @@ test("sortBookmarkNodes: 'viewed' uses the local viewed map, newest-first", () =
   ];
   // viewed: c(30), a(10), then b(createdAt 5)
   assert.deepEqual(idsOf(h.sortBookmarkNodes(nodes)), ["c", "a", "b"]);
+});
+
+test("sortBookmarkNodes: 'viewed' — a never-viewed id named like an Object.prototype member falls back to createdAt", () => {
+  // The viewed map is a plain object: toString read the inherited function and the sort key became NaN, so the item
+  // kept whatever place it had (PR #438 review — the sync store reads such ids since known-issues §15.2).
+  const h = loadBookmarkSort({
+    "bible-bookmark-sort": "viewed",
+    "bible-bookmark-viewed": JSON.stringify({ a: 10 }),
+  });
+  const nodes = [
+    { type: "bookmark", id: "toString", createdAt: 1 },
+    { type: "bookmark", id: "a", createdAt: 999 },
+    { type: "bookmark", id: "b", createdAt: 5 },
+  ];
+  assert.deepEqual(idsOf(h.sortBookmarkNodes(nodes)), ["a", "b", "toString"]);
 });
 
 test("sortBookmarkNodes: non-array input → empty array", () => {
