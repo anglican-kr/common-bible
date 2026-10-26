@@ -6,9 +6,15 @@
 # 이 훅은 Claude Code 안에서만 돌고, CI 는 어디서 만든 PR 이든 잡는다.
 # 형식·규칙: docs/changes/README.md
 set -u
-PROJECT="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
+# 명령을 실행한 폴더의 저장소를 검사한다. 작업 폴더(git worktree)에서는 `CLAUDE_PROJECT_DIR`가
+# 세션을 시작한 폴더에 그대로 있고, 훅 입력의 `cwd`가 작업 폴더를 가리킨다(Claude Code 훅 문서).
+# `CLAUDE_PROJECT_DIR`를 쓰면 다른 세션이 쓰는 폴더의 브랜치와 파일을 검사하게 된다(2026-10-26).
+input=$(cat)
+cwd=$(printf '%s' "$input" | jq -r '.cwd // empty')
+PROJECT=$(git -C "${cwd:-.}" rev-parse --show-toplevel 2>/dev/null) \
+  || PROJECT="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 
-cmd=$(jq -r '.tool_input.command // empty')
+cmd=$(printf '%s' "$input" | jq -r '.tool_input.command // empty')
 case "$cmd" in
   *"gh pr create"*) ;;
   *) exit 0 ;;
