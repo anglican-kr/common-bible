@@ -710,7 +710,7 @@ function _mergeBookmarkStores(existing, incoming) {
         const same = folders.get(item.id);
         if (same) { addNew(item.children || [], same.folder.children, same.depth + 1); continue; }
         if (ids.has(item.id)) continue;   // a bookmark has this id — the import check leaves these out first (ADR-040)
-        if (depth > IMPORT_MAX_FOLDER_DEPTH) continue;
+        if (depth > IMPORT_MAX_FOLDER_DEPTH) { fillListFolders(item.children || []); continue; }
         const folder = { ...item, children: [] };
         ids.add(item.id);
         folders.set(item.id, { folder, depth });
@@ -720,6 +720,17 @@ function _mergeBookmarkStores(existing, incoming) {
         ids.add(item.id);
         into.push(item);
       }
+    }
+  }
+  // What a folder left out for depth holds is left out too, except the folders the list has: those are filled where
+  // they stand, as anywhere else in the file (2nd review of PR #438).
+  /** @param {BookmarkTreeNode[]} items */
+  function fillListFolders(items) {
+    for (const item of items) {
+      if (item.type !== "folder") continue;
+      const same = folders.get(item.id);
+      if (same) addNew(item.children || [], same.folder.children, same.depth + 1);
+      else fillListFolders(item.children || []);
     }
   }
   addNew(incoming, result, 1);

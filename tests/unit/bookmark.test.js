@@ -1755,6 +1755,28 @@ test("_mergeBookmarkStores: the merged list stays within 64 levels — a folder 
   assert.deepEqual(at(10).children.map((c) => c.id), ["a11", "c1"]);  // 13 levels fit
 });
 
+test("_mergeBookmarkStores: a folder the list has, inside a new folder left out for depth, still gets its new items", () => {
+  // The new folder would sit 65th and is left out with what it holds — but a folder the list already has is filled
+  // where it stands wherever it shows up in the file, so its new bookmark has no depth problem (2nd review of PR #438).
+  const h = loadImportExport();
+  let deep = null;
+  for (let i = 64; i >= 1; i--) deep = { type: "folder", id: `a${i}`, name: "", children: deep ? [deep] : [] };
+  const existing = [deep, { type: "folder", id: "e", name: "얕은 폴더", children: [] }];
+  const incoming = [
+    { type: "folder", id: "a64", name: "", children: [
+      { type: "folder", id: "n", name: "", children: [
+        { type: "folder", id: "e", name: "", children: [{ type: "bookmark", id: "z" }] },
+        { type: "bookmark", id: "w" },
+      ] },
+    ] },
+  ];
+  const merged = h._mergeBookmarkStores(existing, incoming);
+  let f = merged[0];
+  for (let i = 1; i < 64; i++) f = f.children[0];
+  assert.deepEqual(f.children, []);                                   // n would be the 65th level: left out, w with it
+  assert.deepEqual(merged[1].children.map((c) => c.id), ["z"]);
+});
+
 test("_mergeBookmarkStores: the existing tree passed in is left as it was", () => {
   const h = loadImportExport();
   const existing = [{ type: "folder", id: "f", children: [{ type: "bookmark", id: "x" }] }];
