@@ -36,10 +36,12 @@ jobs:
     name: 엔진 ↔ 실데이터
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: "24"
+          # 패키지 캐시를 켜지 않는다. v5부터 `package.json`의 `packageManager` 칸이 npm이면 저절로 켜진다.
+          package-manager-cache: false
 
       # 클론 절차는 sync-data.yml 과 같다(읽기 전용 배포 키 + 호스트 별칭).
       # audio 는 필요 없어 data 만 받는다.

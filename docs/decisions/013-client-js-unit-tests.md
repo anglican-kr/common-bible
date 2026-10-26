@@ -42,7 +42,7 @@ ADR-004는 **데이터 파이프라인**의 테스트 전략을 다루고, 그 �
 | Playwright unit 모드 | playwright (이미 e2e용 존재) | 실제 브라우저 | ❌ — 단위 테스트로 너무 무거움 |
 | **Node `--test` + 자체 vm 하네스** | 없음 (Node 24 내장) | `node:vm` per-test 컨텍스트 | ✅ |
 
-Node 22부터 `node --test`는 안정 기능이고, `--watch`, `--test-name-pattern`, `--test-only` 등을 모두 지원한다. CI는 이미 `actions/setup-node@v4 node-version: 24`를 쓴다.
+Node 22부터 `node --test`는 안정 기능이고, `--watch`, `--test-name-pattern`, `--test-only` 등을 모두 지원한다. CI는 이미 `actions/setup-node`로 Node 24를 쓴다.
 
 ### jsdom이나 happy-dom을 함께 쓰기 (2026-05-11에 허용했다가 같은 날 채택 안 함)
 
