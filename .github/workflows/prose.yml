@@ -1,0 +1,25 @@
+name: Prose lint
+
+# 문장 검사(tools/prose/README.md). PR이 더하거나 고친 줄만 보고 경고만 낸다.
+# 필수 검사가 아니고 실패하지 않는다. 시크릿을 쓰지 않으므로 포크 PR에서도 그대로 실행된다.
+# 데이터 포인터를 올리는 자동 PR(sync/ 브랜치)은 문장을 바꾸지 않으므로 건너뛴다.
+on:
+  pull_request:
+    branches: ["**"]
+
+permissions:
+  contents: read
+
+jobs:
+  prose:
+    name: Prose lint
+    if: ${{ !startsWith(github.head_ref, 'sync/') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: 고친 줄의 문장 검사
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: python3 tools/prose/prose.py lint --changed "origin/$BASE_REF" --github
