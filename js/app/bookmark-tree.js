@@ -341,7 +341,8 @@ function _buildFolderItem(folder, depth) {
     toggle.replaceChildren(_buildFolderToggleIcon(newExpanded));
     // Persist expanded state so it survives re-render. A refused save leaves the folder as clicked on screen, so the
     // list can still be browsed while storage is full; the snackbar says the state was not kept. A full storage refuses
-    // the fold, not the unfold: `"expanded":false` is one character longer.
+    // the fold (`"expanded":false` is one character longer) and the first unfold of a folder stored without the field
+    // (an imported file may leave it out).
     const store = loadBookmarks();
     const found = _findItemInStore(store, folder.id);
     if (found && found.item.type === "folder") { found.item.expanded = newExpanded; commitBookmarks(store); }
