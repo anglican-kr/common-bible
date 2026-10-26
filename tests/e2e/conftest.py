@@ -39,6 +39,36 @@ CLEAR_APP_STORAGE = """
 """
 
 
+# Init script for a device whose storage is full (known-issues §15.4): `Storage.prototype.setItem` throws
+# `QuotaExceededError` on the chosen localStorage keys, every write or (growOnly) only one that makes the value longer —
+# as a full storage does, so a delete still saves. The keys live in sessionStorage, so a reload or the OAuth redirect
+# keeps them. Set them with `fill_storage(page, keys)`; nothing is refused until then.
+FULL_STORAGE = """
+(() => {
+  const setItem = Storage.prototype.setItem;
+  Storage.prototype.setItem = function (key, value) {
+    let full = {};
+    try { full = JSON.parse(sessionStorage.getItem('__e2eFull') || '{}'); } catch (_) {}
+    if (this === window.localStorage && Array.isArray(full.keys) && full.keys.includes(key)) {
+      const before = this.getItem(key);
+      if (!full.growOnly || before === null || String(value).length > before.length) {
+        throw new DOMException('The quota has been exceeded.', 'QuotaExceededError');
+      }
+    }
+    return setItem.call(this, key, value);
+  };
+})();
+"""
+
+
+def fill_storage(page, keys, grow_only=False) -> None:
+    """From now on, refuse writes to these localStorage keys (FULL_STORAGE); an empty list makes room again."""
+    page.evaluate(
+        "([keys, growOnly]) => sessionStorage.setItem('__e2eFull', JSON.stringify({ keys, growOnly }))",
+        [keys, grow_only],
+    )
+
+
 @pytest.fixture(scope="session")
 def base_url() -> str:
     return BASE_URL

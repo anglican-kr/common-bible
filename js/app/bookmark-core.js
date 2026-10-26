@@ -6,8 +6,10 @@
 // builders (HREF), sort/last-viewed helpers (SORT, localStorage), active-route
 // highlight predicates (ACTIVE, _renderPathname set by UI via setRenderPathname),
 // the move of pre-#205 verse ranges to today's form (LEGACY — at startup, on import
-// and on a sync merge). bookmark.js (UI) and bookmark-modals.js import these via
-// ESM. Deps: appStorage, localStorage, verse-spec.js, window.getBooksCache.
+// and on a sync merge), and the one save every bookmark screen goes through (COMMIT —
+// a refused save is said through window._showSyncSnackbar). bookmark.js (UI) and
+// bookmark-modals.js import these via ESM. Deps: appStorage, localStorage,
+// verse-spec.js, window.getBooksCache.
 
 /** @typedef {import("../types").BookmarkTreeNode} BookmarkTreeNode */
 /** @typedef {import("../types").BookmarkTreeBookmark} BookmarkTreeBookmark */
@@ -15,7 +17,7 @@
 
 import { wholeVerseSpec } from "./verse-spec.js";
 
-const { loadBookmarks, rewriteBookmarks } = window.appStorage;
+const { loadBookmarks, saveBookmarks, rewriteBookmarks } = window.appStorage;
 
 // Shared guidance copy for "how bookmarks are created" — used by the empty-state
 // placeholder (drawer + full view) and the ⋯ menu's 🛈 info popover (bookmark.js /
@@ -471,6 +473,23 @@ function migrateLegacyBookmarkDoc(doc) {
 }
 // ── END BOOKMARK_LEGACY ──
 
+// ── BEGIN BOOKMARK_COMMIT ──
+// Every bookmark screen saves the list through this. A save the device refuses changes nothing in storage, and the next
+// draw of the list from storage drops the change — so it is said on screen, with what to do (사용자 결정 2026-10-26,
+// known-issues §15.4). Dialogs the user typed into stay open when this returns false; the rest redraw or do nothing.
+/** @param {BookmarkTreeNode[]} store @returns {boolean} true when the list was saved */
+function commitBookmarks(store) {
+  const outcome = saveBookmarks(store);
+  if (outcome === "saved") return true;
+  const msg = outcome === "full"
+    ? "저장 공간이 가득 차 바꾼 내용을 저장하지 못했습니다. 쓰지 않는 북마크를 지운 뒤 다시 시도해 주세요."
+    : "북마크를 저장하지 못했습니다.";
+  if (window._showSyncSnackbar) window._showSyncSnackbar(msg);
+  else window.announce?.(msg);
+  return false;
+}
+// ── END BOOKMARK_COMMIT ──
+
 export {
   BOOKMARK_ADD_HELP,
   _bookmarkHref, _buildSharePayload,
@@ -483,4 +502,5 @@ export {
   _selectAllState, _bmSelectCountLabel, _descendantIds,
   _isActiveBookmark, _hasActiveDescendant, setRenderPathname,
   migrateLegacyBookmark, migrateStoredBookmarks, migrateLegacyBookmarkDoc,
+  commitBookmarks,
 };

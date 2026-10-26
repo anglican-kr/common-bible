@@ -203,6 +203,44 @@ test("applyToLegacyKeys 는 아는 키만 localStorage 에 쓴다", () => {
   );
 });
 
+// ── 저장 결과 (known-issues §15.4, 실패를 성공과 같은 값으로 돌려주지 않는다) ──
+
+test("applyToLegacyKeys는 브라우저가 거절한 키를 돌려주고, 나머지 키는 그대로 쓴다", () => {
+  const { store, localStorage } = load();
+  const setItem = localStorage.setItem;
+  localStorage.setItem = (k, v) => {
+    if (k === "bible-theme") throw Object.assign(new Error("refused"), { name: "QuotaExceededError" });
+    setItem(k, v);
+  };
+  const refused = store.applyToLegacyKeys(doc({
+    settings: { theme: { v: "dark", _u: 1 }, bookOrder: { v: "vulgate", _u: 1 } },
+    lastRead: { v: { bookId: "john", chapter: 3 }, _u: 1 },
+    items: { a: { id: "a", type: "folder", name: "가", parentId: null, _order: 0, _u: 1 } },
+  }));
+  assert.deepEqual(plain(refused), ["bible-theme"]);
+  assert.equal(localStorage.getItem("bible-book-order"), "vulgate", "거절된 키 뒤의 설정도 쓴다");
+  assert.equal(JSON.parse(localStorage.getItem("bible-last-read")).bookId, "john");
+  assert.deepEqual(JSON.parse(localStorage.getItem("bible-bookmarks")).map((n) => n.id), ["a"]);
+});
+
+test("saveLocal과 saveBookmarks는 저장했으면 saved를 돌려준다", () => {
+  const { store } = load();
+  assert.equal(store.saveLocal(doc()), "saved");
+  assert.equal(store.saveBookmarks([{ type: "folder", id: "f", name: "가", children: [] }]), "saved");
+  assert.deepEqual(plain(store.loadBookmarks()).map((n) => n.id), ["f"]);
+});
+
+test("브라우저가 쓰기를 거절하면 저장 공간이 찼을 때는 full, 그 밖에는 failed를 돌려주고 이전 문서는 그대로다", () => {
+  for (const [name, outcome] of [["QuotaExceededError", "full"], ["SecurityError", "failed"]]) {
+    const { store, localStorage } = load();
+    store.saveBookmarks([{ type: "folder", id: "before", name: "가", children: [] }]);
+    localStorage.setItem = () => { throw Object.assign(new Error("refused"), { name }); };
+    assert.equal(store.saveLocal(doc()), outcome, name);
+    assert.equal(store.saveBookmarks([{ type: "folder", id: "after", name: "나", children: [] }]), outcome, name);
+    assert.deepEqual(plain(store.loadBookmarks()).map((n) => n.id), ["before"], name);
+  }
+});
+
 // ── 저장 전 크기 계산 (ADR-040 — 북마크 가져오기의 크기 검사) ──
 
 test("projectedBookmarksEntry는 saveBookmarks가 쓸 항목의 글자 수 그대로다 — 쓰지는 않는다", () => {

@@ -121,10 +121,10 @@ function makeStoreV2Stub() {
   return {
     getDeviceId: () => "test-device",
     loadLocal: () => emptyDoc(),
-    saveLocal: () => {},
+    saveLocal: () => "saved",
     sweepTombstones: () => {},
     loadBookmarks: () => [],
-    saveBookmarks: () => {},
+    saveBookmarks: () => "saved",
     saveSetting: () => {},
     saveLastRead: () => {},
     migrateLegacyIfNeeded: () => {},
@@ -133,7 +133,7 @@ function makeStoreV2Stub() {
     buildSyncPayload: (deviceId) => ({ schemaVersion: 2, deviceId, ...emptyDoc() }),
     validateRemote: () => true,
     bookmarkTreeFromFlat: () => [],
-    applyToLegacyKeys: () => {},
+    applyToLegacyKeys: () => [],
   };
 }
 

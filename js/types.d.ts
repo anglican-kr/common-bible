@@ -118,6 +118,11 @@ export interface SyncPayload extends SyncDoc {
   deviceId: string;
 }
 
+// What a write to localStorage came to: "saved"; "full" when the browser refused it for its storage quota
+// (QuotaExceededError); "failed" for any other refusal. Bookmark saves and the sync's merge result report it
+// (known-issues §15.4).
+export type SaveOutcome = "saved" | "full" | "failed";
+
 // ── State machine ────────────────────────────────────────────────────────────
 // Phase 2h 단계 4: GIS와 묶여있던 INITIALIZING/IDENTIFYING/AUTHENTICATING 제거.
 
@@ -345,10 +350,10 @@ export interface ManifestSync {
 export interface SyncStoreV2 {
   getDeviceId: () => string;
   loadLocal: () => SyncDoc;
-  saveLocal: (doc: SyncDoc) => void;
+  saveLocal: (doc: SyncDoc) => SaveOutcome;
   sweepTombstones: (ageDays?: number) => void;
   loadBookmarks: () => BookmarkTreeNode[];
-  saveBookmarks: (tree: BookmarkTreeNode[]) => void;
+  saveBookmarks: (tree: BookmarkTreeNode[]) => SaveOutcome;
   /** This store's entry once saveBookmarks(tree) ran — its key, and the characters of key and value. */
   projectedBookmarksEntry: (tree: BookmarkTreeNode[]) => { key: string; chars: number };
   saveSetting: (key: SettingKey, value: unknown) => void;
@@ -359,7 +364,8 @@ export interface SyncStoreV2 {
   buildSyncPayload: (deviceId: string) => SyncPayload;
   validateRemote: (data: unknown) => boolean;
   bookmarkTreeFromFlat: (items: { [id: string]: SyncFlatItem }) => BookmarkTreeNode[];
-  applyToLegacyKeys: (doc: SyncDoc) => void;
+  /** Writes the merged doc to the keys app.js reads; returns the keys the browser refused. */
+  applyToLegacyKeys: (doc: SyncDoc) => string[];
 }
 
 // ── Debug log ────────────────────────────────────────────────────────────────
@@ -984,10 +990,11 @@ export interface AppStorage {
   // Bookmarks
   generateId: () => string;
   loadBookmarks: () => BookmarkTreeNode[];
-  saveBookmarks: (store: BookmarkTreeNode[]) => void;
+  /** Saves the list — the sync store first, then the legacy key; the outcome is the sync store's (ADR-015 D7). */
+  saveBookmarks: (store: BookmarkTreeNode[]) => SaveOutcome;
   /** Rewrite stored bookmarks in place, both copies, keeping the sync store's per-item time (`_u`) — the move of pre-#205 verse ranges. */
   rewriteBookmarks: (patch: (bm: BookmarkTreeBookmark | SyncFlatItem) => boolean) => void;
-  /** Every character localStorage would hold once saveBookmarks(store) ran — the bookmark import's size check (ADR-040). */
+  /** The most characters localStorage holds while saveBookmarks(store) runs — the bookmark import's size check (ADR-040). */
   projectedStorageChars: (store: BookmarkTreeNode[]) => number;
 
   // Lectionary track (ADR-038 §3 — 독서 1/2 선택). 마지막으로 고른 트랙 하나를 날짜 · 해와 무관하게 기억한다

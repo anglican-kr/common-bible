@@ -23,12 +23,12 @@
 /** @typedef {import("../types").BookmarkTreeBookmark} BookmarkTreeBookmark */
 
 const { _$ } = window.appHelpers;
-const { loadBookmarks, saveBookmarks } = window.appStorage;
+const { loadBookmarks } = window.appStorage;
 
 import {
   _findItemInStore, _descendantIds, _selectAllState, _bmSelectCountLabel,
   _walkBookmarks, _forgetViewed, removeItemById, insertItem, _buildSharePayload,
-  _isDescendant,
+  _isDescendant, commitBookmarks,
 } from "./bookmark-core.js";
 import { openConfirmModal, openMoveModal } from "./bookmark-modals.js";
 import { closeSwipedRow } from "./bookmark-gestures.js";
@@ -260,17 +260,20 @@ function _runBookmarkSelectDelete() {
     confirmLabel: "삭제",
     onConfirm: () => {
       const live = loadBookmarks();
+      /** @type {string[]} */
+      const removedBookmarks = [];
       for (const id of targets) {
         const found = _findItemInStore(live, id);
         if (!found) continue;
         if (found.item.type === "folder") {
-          _walkBookmarks(found.item.children, (it) => { if (it.type === "bookmark") _forgetViewed(it.id); });
+          _walkBookmarks(found.item.children, (it) => { if (it.type === "bookmark") removedBookmarks.push(it.id); });
         } else {
-          _forgetViewed(id);
+          removedBookmarks.push(id);
         }
         removeItemById(live, id);
       }
-      saveBookmarks(live);
+      if (!commitBookmarks(live)) return;   // refused: nothing changed, and the selection stays for another try
+      for (const id of removedBookmarks) _forgetViewed(id);
       announce(removed === 1 ? "1개 항목을 삭제했습니다." : `${removed}개 항목을 삭제했습니다.`);
       exitBookmarkSelectMode();
       _rerenderTree();
@@ -331,7 +334,7 @@ function _moveSelectedToFolder(targetFolderId) {
     const dest = _findItemInStore(live, targetFolderId);
     if (dest && dest.item.type === "folder") dest.item.expanded = true;
   }
-  saveBookmarks(live);
+  if (!commitBookmarks(live)) return;   // refused: nothing moved, and the selection stays for another try
   // The picker self-closes before invoking this (onPick), so no close here.
   announce(moved === 1 ? "1개 항목을 이동했습니다." : `${moved}개 항목을 이동했습니다.`);
   exitBookmarkSelectMode();

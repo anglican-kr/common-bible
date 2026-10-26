@@ -24,6 +24,8 @@ import urllib.parse
 import pytest
 from playwright.sync_api import Page, BrowserContext, Route
 
+from .conftest import FULL_STORAGE, fill_storage
+
 
 BASE_URL = "http://localhost:8080"
 
@@ -529,6 +531,57 @@ def test_v0_migration_syncs_correctly(browser, fake_drive, fake_oauth):
         assert "Legacy BM" in drive_names, f"Legacy bookmark not on Drive: {drive_names}"
     finally:
         page.context.close()
+
+
+def _drive_names(fake_drive) -> list[str]:
+    with fake_drive._lock:
+        items = (fake_drive._file or {}).get("bookmarks", {}).get("items", {})
+        return sorted(v.get("name") for v in items.values())
+
+
+def test_merge_refused_by_full_storage_keeps_drive_as_it_was(browser, fake_drive, fake_oauth):
+    """저장 공간이 차 다른 기기의 변경을 저장하지 못하면 알리고, 드라이브의 파일을 기기에 남은 옛 문서로 덮어쓰지 않는다.
+
+    known-issues §15.4: 올릴 자료는 기기에 저장된 문서에서 만든다. 병합 결과를 저장하지 못했는데 올리면, 다른 기기가
+    올린 북마크가 드라이브에서 사라진다. 저장 공간이 다시 생기면 다음 동기화가 병합해 올린다.
+    """
+    fake_drive.reset()
+    page_a = _make_page(browser, fake_drive, fake_oauth)
+    page_b = _make_page(browser, fake_drive, fake_oauth)
+    page_b.context.add_init_script(FULL_STORAGE)
+    try:
+        _load(page_b)
+        _enable_sync(page_b)
+        _add_bookmark(page_b, "Bookmark-B")
+        _sync_now(page_b)
+
+        _load(page_a)
+        _enable_sync(page_a)
+        _wait_idle(page_a)
+        _add_bookmark(page_a, "Bookmark-A")
+        _sync_now(page_a)
+        assert _drive_names(fake_drive) == ["Bookmark-A", "Bookmark-B"]
+
+        _add_bookmark(page_b, "Bookmark-B2")            # saved on B, not uploaded yet
+        fill_storage(page_b, ["bible-bookmarks-v2"], grow_only=True)
+        _sync_now(page_b)
+
+        page_b.locator(
+            "body > div:not(#a11y-announce)",
+            has_text="저장 공간이 가득 차 다른 기기에서 변경된 데이터를 불러오지 못했습니다.",
+        ).wait_for(state="visible")
+        _wait_idle(page_b)                               # the cycle has ended — an upload would have landed by now
+        assert _drive_names(fake_drive) == ["Bookmark-A", "Bookmark-B"], "B's old doc must not overwrite Drive"
+        assert sorted(_bookmark_names(page_b)) == ["Bookmark-B", "Bookmark-B2"]
+        assert page_b.evaluate("window.driveSync.getStatus()") == "IDLE"
+
+        fill_storage(page_b, [])                         # room again
+        _sync_now(page_b)
+        assert sorted(_bookmark_names(page_b)) == ["Bookmark-A", "Bookmark-B", "Bookmark-B2"]
+        assert _drive_names(fake_drive) == ["Bookmark-A", "Bookmark-B", "Bookmark-B2"]
+    finally:
+        page_a.context.close()
+        page_b.context.close()
 
 
 # ── v1.3.0: Drive 연결 해제 모달 ─────────────────────────────────────────────

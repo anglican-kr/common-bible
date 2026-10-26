@@ -215,7 +215,7 @@ def test_import_invalid_json_shows_error(browser, tmp_path):
     page.wait_for_function(
         "() => document.getElementById('a11y-announce')?.textContent.includes('읽을 수 없습니다')"
     )
-    # 눈에도 보인다 — 예전엔 화면 읽기 영역에만 들어가 아무 일도 없는 것처럼 보였다(2026-10-18).
+    # 눈에도 보인다 — 예전엔 라이브 영역에만 들어가 아무 일도 없는 것처럼 보였다(2026-10-18).
     _wait_visible_notice(page, "파일을 읽을 수 없습니다. 올바른 JSON 파일인지 확인해 주세요.")
     assert page.locator("#bm-import-modal").get_attribute("hidden") is not None
 

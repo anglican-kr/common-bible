@@ -207,8 +207,10 @@ function loadBookmarkSelect() {
 
 // ── DRAG_CORE loader ─────────────────────────────────────────────────────────
 // Concatenates BOOKMARK_QUERY (so `_findItemInStore` resolves) + DRAG_CORE.
-// Provides `loadBookmarks` / `saveBookmarks` stubs and a fake
-// `window.renderBookmarkTree` so the post-move hook is observable.
+// Provides `loadBookmarks` / `commitBookmarks` stubs and a fake
+// `window.renderBookmarkTree` so the post-move hook is observable. loadBookmarks
+// hands out a copy, as the real one reads storage, so a refused save leaves the
+// stored list as it was.
 
 function loadDragCore() {
   let currentStore = [];
@@ -223,12 +225,13 @@ function loadDragCore() {
   // gesture module's hook into the orchestrator, which re-renders whichever
   // bookmark surface is mounted — drawer or /bookmarks full view). The DRAG_CORE
   // marker block doesn't include that hook, so the prelude stubs it (plus
-  // loadBookmarks/saveBookmarks) to bump the observable counter.
+  // loadBookmarks/commitBookmarks) to bump the observable counter.
   const prelude = `
-    function loadBookmarks() { return _store; }
-    function saveBookmarks(s) { _saveCalls.push(JSON.parse(JSON.stringify(s))); _store = s; }
+    function loadBookmarks() { return JSON.parse(JSON.stringify(_store)); }
+    function commitBookmarks(s) { _saveCalls.push(JSON.parse(JSON.stringify(s))); if (_refuse) return false; _store = s; return true; }
     function _rerenderTree() { _renderCalls.count += 1; }
   `;
+  ctx._refuse = false;
   ctx._renderCalls = renderCalls;
   ctx._store = currentStore;
   ctx._saveCalls = saveCalls;
@@ -241,6 +244,7 @@ function loadDragCore() {
     ctx,
     setStore: (s) => { ctx._store = s; },
     getStore: () => ctx._store,
+    refuseSaves: () => { ctx._refuse = true; },
     saveCalls,
     renderCalls,
     moveBookmarkItem: ctx.moveBookmarkItem,
@@ -935,6 +939,64 @@ test('moveBookmarkItem: dropping folder before/after its own descendant is rejec
   h.setStore(sampleStore());
   h.moveBookmarkItem("fld-old", "bm-pent1", "before");
   assert.equal(h.saveCalls.length, 0);
+});
+
+test("moveBookmarkItem: a save the device refuses still redraws the list — it shows the order that is stored (known-issues §15.4)", () => {
+  const h = loadDragCore();
+  h.setStore(sampleStore());
+  h.refuseSaves();
+  h.moveBookmarkItem("bm-root2", "bm-root1", "before");
+  assert.equal(h.saveCalls.length, 1);
+  assert.deepEqual(h.getStore().map((n) => n.id), ["bm-root1", "fld-old", "bm-root2"]);
+  assert.equal(h.renderCalls.count, 1);
+});
+
+// ── commitBookmarks (known-issues §15.4) ────────────────────────────────────
+// The one way the bookmark screens save the list: a save the device refuses is said on screen.
+
+function loadBookmarkCommit(outcome) {
+  const calls = { saves: [], snackbar: [], announce: [] };
+  const ctx = {
+    Object, Array, String, JSON, console, Error,
+    saveBookmarks: (s) => { calls.saves.push(s); return outcome; },
+    window: {
+      _showSyncSnackbar: (msg) => { calls.snackbar.push(msg); },
+      announce: (msg) => { calls.announce.push(msg); },
+    },
+  };
+  vm.createContext(ctx);
+  vm.runInContext(extractBlock("BOOKMARK_COMMIT", BOOKMARK_CORE_SOURCE), ctx, { filename: "bookmark-core.js" });
+  return { ctx, calls, commitBookmarks: ctx.commitBookmarks };
+}
+
+test("commitBookmarks: a saved list returns true and says nothing", () => {
+  const h = loadBookmarkCommit("saved");
+  const list = [{ type: "folder", id: "f", name: "가", children: [] }];
+  assert.equal(h.commitBookmarks(list), true);
+  assert.equal(h.calls.saves[0], list);
+  assert.deepEqual(h.calls.snackbar, []);
+  assert.deepEqual(h.calls.announce, [], "the caller says the success line, not this");
+});
+
+test("commitBookmarks: storage full — false, and the snackbar says what to do (사용자 결정 2026-10-26)", () => {
+  const h = loadBookmarkCommit("full");
+  assert.equal(h.commitBookmarks([]), false);
+  assert.deepEqual(h.calls.snackbar, ["저장 공간이 가득 차 바꾼 내용을 저장하지 못했습니다. 쓰지 않는 북마크를 지운 뒤 다시 시도해 주세요."]);
+  assert.deepEqual(h.calls.announce, [], "the snackbar reads it to the live region itself — announcing again reads it twice");
+});
+
+test("commitBookmarks: any other refusal — false, and the snackbar says the list was not saved", () => {
+  const h = loadBookmarkCommit("failed");
+  assert.equal(h.commitBookmarks([]), false);
+  assert.deepEqual(h.calls.snackbar, ["북마크를 저장하지 못했습니다."]);
+  assert.deepEqual(h.calls.announce, []);
+});
+
+test("commitBookmarks: without the snackbar (sync not loaded), the screen reader still hears it", () => {
+  const h = loadBookmarkCommit("full");
+  delete h.ctx.window._showSyncSnackbar;
+  assert.equal(h.commitBookmarks([]), false);
+  assert.equal(h.calls.announce.length, 1);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2359,11 +2421,12 @@ function makeWebKitLocalStorage() {
     removeItem(k) { if (map.has(k)) { used -= bytes(k) + bytes(map.get(k)); map.delete(k); } },
     key: (i) => [...map.keys()][i] ?? null,
     get length() { return map.size; },
+    get used() { return used; },
   };
 }
 
 // The app's two storage layers in one realm — storage.js over the real sync store — on the given localStorage, so a
-// save takes the app's own path (storage.js saveBookmarks: the legacy key, then store-v2.js).
+// save takes the app's own path (storage.js saveBookmarks: store-v2.js, then the legacy key).
 const STORAGE_SOURCE = stripEsmMarker(fs.readFileSync(path.resolve(__dirname, "../../js/app/storage.js"), "utf8"));
 function loadAppStorage(localStorage) {
   const ctx = {
@@ -2394,10 +2457,51 @@ test("_fitsStorage over projectedStorageChars: a backup of notes comes in, a 1,0
   const longId = "f".repeat(1000);
   const tree = [{ type: "folder", id: longId, name: "x", children: Array.from({ length: 3000 }, (_, i) => bm(i)) }];
   assert.ok(JSON.stringify(tree).length < 600_000);
-  const b = loadAppStorage(makeWebKitLocalStorage());
+  const webKit = makeWebKitLocalStorage();
+  const b = loadAppStorage(webKit);
   assert.equal(h._fitsStorage(b.appStorage.projectedStorageChars(tree)), false);
-  b.appStorage.saveBookmarks(tree);                  // saved anyway: the legacy key takes it, the sync store does not
+  // Saved anyway, this list does not fit: the sync store refuses it, and the legacy key is left alone — until
+  // known-issues §15.4 the legacy key took it and the two copies parted.
+  assert.equal(b.appStorage.saveBookmarks(tree), "full");
   assert.equal(b.syncStore.loadBookmarks().length, 0);
+  assert.equal(webKit.getItem("bible-bookmarks"), null);
+});
+
+test("_fitsStorage over projectedStorageChars: the largest overwrite it lets in over a large legacy copy, WebKit stores in full (ADR-015 D7)", () => {
+  // The sync store is written before the legacy key, so while it is written the legacy key still holds the old list.
+  // A list of long notes keeps its legacy copy large; counting that copy as already replaced let in an overwrite the
+  // sync store then refused (PR review, 2026-10-26).
+  const h = loadImportExport();
+  const notes = Array.from({ length: 800 }, (_, i) => appBookmark({ id: `n${i.toString(36)}`, note: "메".repeat(1200) }));
+  // One Korean name, as in a real list: WebKit then counts the whole value at 2 bytes a character.
+  const folders = (n) => Array.from({ length: n }, (_, i) => ({ type: "folder", id: `f${i.toString(36)}`, name: i ? "" : "가", children: [] }));
+  const { appStorage, syncStore } = loadAppStorage(makeWebKitLocalStorage());
+  assert.equal(appStorage.saveBookmarks(notes), "saved");
+  const fits = (n) => h._fitsStorage(appStorage.projectedStorageChars(folders(n)));
+  let lo = 0, hi = 40000;
+  assert.ok(fits(lo) && !fits(hi));
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >> 1;
+    if (fits(mid)) lo = mid; else hi = mid;
+  }
+  assert.equal(appStorage.saveBookmarks(folders(lo)), "saved");
+  assert.equal(syncStore.loadBookmarks().length, lo);
+});
+
+test("storage full: a save that does not fit is refused as full and both copies keep the list — a delete still saves (known-issues §15.4)", () => {
+  const webKit = makeWebKitLocalStorage();
+  const { appStorage, syncStore } = loadAppStorage(webKit);
+  const list = Array.from({ length: 20 }, (_, i) => appBookmark({ id: `b${i}`, chapter: i + 1, label: `요한 ${i + 1}장` }));
+  assert.equal(appStorage.saveBookmarks(list), "saved");
+  webKit.setItem("bible-filler", "x".repeat(5 * 1024 * 1024 - webKit.used - "bible-filler".length - 100));   // 100 bytes left
+  const legacy = webKit.getItem("bible-bookmarks");
+  assert.equal(appStorage.saveBookmarks([...list, appBookmark({ id: "new", label: "요한 21장" })]), "full");
+  assert.equal(webKit.getItem("bible-bookmarks"), legacy);
+  assert.deepEqual(syncStore.loadBookmarks().map((n) => n.id), list.map((n) => n.id));
+  // 「쓰지 않는 북마크를 지운 뒤 다시 시도해 주세요」 — a delete shrinks both copies, so it fits.
+  assert.equal(appStorage.saveBookmarks(list.slice(1)), "saved");
+  assert.deepEqual(appStorage.loadBookmarks().map((n) => n.id), list.slice(1).map((n) => n.id));
+  assert.deepEqual(JSON.parse(webKit.getItem("bible-bookmarks")).map((n) => n.id), list.slice(1).map((n) => n.id));
 });
 
 test("_fitsStorage over projectedStorageChars: the largest overwrite it lets in, WebKit stores in full", () => {

@@ -21,12 +21,13 @@ import {
   _selectAllState, _forgetViewed, removeItemById,
   collectFolderOptions, insertItem, _findItemInStore,
   findExistingChapterBookmarks, _findParentFolderId, _walkBookmarks, migrateLegacyBookmark,
+  commitBookmarks,
 } from "./bookmark-core.js";
 import { verseNumberSpec, selectedSpanVrefs, mergeVerseSpecs, isWellFormedSpec } from "./verse-spec.js";
 
 const { _$, el, clearNode, chUnit } = window.appHelpers;
 const { createOverlay } = window.appOverlay;
-const { loadBookmarks, saveBookmarks, generateId, projectedStorageChars } = window.appStorage;
+const { loadBookmarks, generateId, projectedStorageChars } = window.appStorage;
 const { readingContext } = window;
 
 // ── Dependency injection ──
@@ -384,7 +385,7 @@ function _commitNewFolder() {
     const dest = _findItemInStore(store, parentId);
     if (dest && dest.item.type === "folder") dest.item.expanded = true;
   }
-  saveBookmarks(store);
+  if (!commitBookmarks(store)) return;   // refused: the dialog stays open with the typed name, and no folder to pick
   _deps.rerenderActiveBookmarkTree();
   const cb = _bmNewFolderCallback;
   closeNewFolderModal();
@@ -497,7 +498,7 @@ function _showSaveModal(mode, bookId, chapter, verseSpec, existing) {
     labelInput.removeAttribute("aria-invalid");
     const note = noteInput.value.trim();
     const folderId = folderCombo.getValue();
-    commitSaveBookmark(existing ? existing.id : null, label, note, folderId, bookId, chapter, verseSpec);
+    if (!commitSaveBookmark(existing ? existing.id : null, label, note, folderId, bookId, chapter, verseSpec)) return;
     closeSaveModal();
     if (mode === "verses") _deps.exitVerseSelectMode();
   });
@@ -532,6 +533,8 @@ function closeSaveModal() { saveOverlay.close(); }
  * @param {string | null} existingId  set when editing — the item keeps its own book and chapter
  * @param {string} label @param {string} note @param {string | null} folderId  null = 최상위
  * @param {string | null} bookId @param {number | null} chapter @param {string} verseSpec
+ * @returns {boolean} false when the device refused the save — the dialog stays open with what was typed (사용자 결정
+ *   2026-10-26), so the note can still be copied
  */
 function commitSaveBookmark(existingId, label, note, folderId, bookId, chapter, verseSpec) {
   const store = loadBookmarks();
@@ -549,7 +552,7 @@ function commitSaveBookmark(existingId, label, note, folderId, bookId, chapter, 
   } else {
     // A new bookmark needs its chapter. Every create path (이 장 저장 · 절 선택 저장) runs in a chapter
     // view, so this does not trip — it keeps an item with a null book or chapter out of the store if one ever did.
-    if (!bookId || chapter == null) return;
+    if (!bookId || chapter == null) return true;   // nothing to save; the dialog closes as before
     /** @type {BookmarkTreeBookmark} */
     const bm = {
       type: "bookmark",
@@ -563,10 +566,11 @@ function commitSaveBookmark(existingId, label, note, folderId, bookId, chapter, 
     };
     insertItem(store, folderId, bm);
   }
-  saveBookmarks(store);
+  if (!commitBookmarks(store)) return false;
   _deps.rerenderActiveBookmarkTree();
   _deps.refreshBookmarkHeaderBtn();
   announce(existingId ? "북마크를 수정했습니다." : "북마크를 저장했습니다.");
+  return true;
 }
 // ── END BOOKMARK_SAVE ──
 
@@ -647,7 +651,7 @@ function openMergeDialog(candidates, incomingSpec, mode, fallbackContext = null)
         ? `${bookName} ${target.chapter}${unit}`
         : `${bookName} ${target.chapter}:${merged}`;
     }
-    saveBookmarks(store);
+    if (!commitBookmarks(store)) { cleanup(); return; }   // nothing typed to keep; the verse selection stays
     _deps.rerenderActiveBookmarkTree();
     _deps.refreshBookmarkHeaderBtn();
 
@@ -805,7 +809,7 @@ function _isUsableId(id) {
  * A bookmark the app can draw and open: a known book, a chapter inside it, a readable verse spec and a label
  * (the tree link reads `/<book>/<chapter>/<spec>` — a missing spec made it `/gen/1/undefined`). It has no
  * `children`: that field is structure, not an unknown extra — the sync store walks any node's children while
- * flattening, so `[null]` threw inside `saveBookmarks` (which swallows it — 「덮어썼습니다」 over an unchanged
+ * flattening, so `[null]` threw inside `saveBookmarks` (which swallowed it then — 「덮어썼습니다」 over an unchanged
  * list) and a child reusing an existing id overwrote that item on 병합 (PR #359 review). In the app's own data a
  * bookmark never has children, so it never carries the field (`bookmarkTreeFromFlat` adds `children` to folders
  * and to any node that has children).
@@ -885,8 +889,8 @@ function _sanitizeImportItems(items, chapterCountOf, existingTypeOf = () => null
 // The quota an import is checked against: Safari's — 5 MiB per origin counted in bytes, 2 bytes a character once any
 // Korean is in the text (WebKit `localStorageQuotaInBytes` · `String::sizeInBytes`; WebKit 26.4 measures the same), the
 // strictest engine. Chromium counts characters (5,242,880), so this is half its room; kept for every engine, as sync
-// carries the list to the user's other devices. Past the quota, saving failed silently (saveBookmarks swallows it):
-// 「덮어썼습니다」 over the old list, later edits lost, another device's sync stopped (PR #359 review).
+// carries the list to the user's other devices. Past the quota, saving failed silently (saveBookmarks swallowed it until
+// known-issues §15.4): 「덮어썼습니다」 over the old list, later edits lost, another device's sync stopped (PR #359 review).
 const STORAGE_QUOTA_BYTES = 5 * 1024 * 1024;
 // Left free after an import, for what the app saves next — about 90 bookmarks (714 bytes each, both copies).
 const STORAGE_HEADROOM_BYTES = 64 * 1024;
@@ -962,16 +966,18 @@ function openImportModal(items, skipped) {
       announce(msg);
       return;
     }
-    saveBookmarks(merged);
-    _deps.rerenderActiveBookmarkTree();
-    announce("북마크를 병합했습니다.");
+    if (commitBookmarks(merged)) {
+      _deps.rerenderActiveBookmarkTree();
+      announce("북마크를 병합했습니다.");
+    }
     cleanup();
   };
 
   $bmImportOverwrite.onclick = () => {
-    saveBookmarks(items);
-    _deps.rerenderActiveBookmarkTree();
-    announce("북마크를 덮어썼습니다.");
+    if (commitBookmarks(items)) {
+      _deps.rerenderActiveBookmarkTree();
+      announce("북마크를 덮어썼습니다.");
+    }
     cleanup();
   };
 
