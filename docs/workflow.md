@@ -45,8 +45,10 @@
 - `tools/`: 개발자용 보조 도구다. 앱은 쓰지 않는다.
   - `booklet/`: 「전례독서」 책자 PDF와 엔진을 대조한다. pypdf 추출, 2027년 책자 형식의 파서, 엔진 덤프, 대조 보고서가 있다(README).
   - `csp/`: 릴리스 전에 주요 화면을 실제 브라우저로 돌며 콘솔의 CSP 위반을 모은다(README).
+  - `prose/`: 문장 교정 도구다. `prose.py lint`는 문서와 코드 주석에서 기계로 찾을 수 있는 글쓰기 규칙 위반을 세고, `prose.py same-code`는 주석과 문서 말고 바뀐 코드가 없는지 본다(README).
 - CI(`.github/workflows/`)
   - `test.yml`: 필수 검사 「Unit tests」. Node 24로 `node --test tests/unit/*.test.js`와 `npm run typecheck`를 돌린다(ADR-012, 013). pull_request로 돈다.
+  - `prose.yml`: 문장 검사. PR이 고친 줄만 보고 경고만 낸다. 필수 검사가 아니다(`tools/prose/README.md`).
   - `ledger.yml`: 필수 검사 「Change ledger」. PR에 새 원장이 있는지 보고, 머지된 원장의 변경을 막는다. `sync/` 자동 PR은 면제한다.
 - Claude Code 훅(`.claude/hooks/`)
   - `typecheck-js.sh`: JS를 고친 뒤 tsc를 돌린다. 여러 파일을 고치는 도중의 오류 보고는 정상이니, 끝에서 `npm run typecheck`를 다시 본다.
