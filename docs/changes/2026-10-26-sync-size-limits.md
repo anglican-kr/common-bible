@@ -1,4 +1,6 @@
 ---
+pr: 441
+pr: 441
 date: 2026-10-26
 branch: docs/sync-size-limits
 title: "docs: 동기화 자료의 크기 한도를 남은 일에 적음"
