@@ -61,7 +61,7 @@
 
 /* ─────────────────────────────────────────────────────────────────────────
    Design tokens — 단일 권위 출처는 루트의 `DESIGN.md`. 새 UI 는 아래 토큰을
-   참조하고, 하드코딩 값을 두지 않는다. 토큰 사다리(간격·타이포·반경·elevation·
+   참조하고, 하드코딩 값을 두지 않는다. 토큰 단계(간격·타이포·반경·elevation·
    컨트롤·모션·내비)는 Apple HIG 를 chrome UI 에 맞춘 것 (본문 serif 는 의도적
    유지 — ADR-028). 색상은 :root / [data-theme="dark"] / [data-color-scheme]
    3중 구조로 분리.
@@ -102,7 +102,7 @@
   --lit-blue: #3b6fb6;
   --lit-swatch-border: rgba(0, 0, 0, 0.25);
 
-  /* ── Radius (HIG 곡률 사다리 — 기존 사용 값에 매핑, --radius 는 하위호환 유지) ── */
+  /* ── Radius (HIG 곡률 단계 — 기존 사용 값에 매핑, --radius는 하위호환 유지) ── */
   --radius-xs: 4px;
   --radius-sm: 6px;
   --radius: 8px;
@@ -121,7 +121,7 @@
   --shadow-2: 0 4px 12px rgba(0, 0, 0, 0.12);
   --shadow-3: 0 4px 16px rgba(0, 0, 0, 0.12);   /* 헤더 스크롤 elevation (ADR-025) */
   --shadow-sheet: 0 -4px 24px rgba(0, 0, 0, 0.18); /* 바텀 시트 (위로 뜨는 그림자) */
-  --shadow-drawer: -4px 0 24px rgba(0, 0, 0, 0.15); /* 데스크탑 사이드 패널 (수평 그림자 — 5단 사다리에 없는 축, DESIGN.md §5) */
+  --shadow-drawer: -4px 0 24px rgba(0, 0, 0, 0.15); /* 데스크탑 사이드 패널 (수평 그림자 — 다섯 단계에 없는 축, DESIGN.md §5) */
   --shadow-4: 0 12px 32px rgba(0, 0, 0, 0.25);  /* 모달 */
 
   /* ── Liquid-glass 질감 (절제) — 하단 floating chrome(탭 바·검색·오디오·인디케이터)
