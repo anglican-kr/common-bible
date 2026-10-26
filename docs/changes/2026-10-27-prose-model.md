@@ -1,4 +1,5 @@
 ---
+pr: 446
 date: 2026-10-27
 branch: docs/prose-model
 title: "docs: 문장 교정의 모델과 클라우드 정기 실행을 적음"
