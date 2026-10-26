@@ -1,4 +1,5 @@
 ---
+pr: 444
 date: 2026-10-26
 branch: docs/prose-topics
 title: "docs: 문장 교정(주제 문서)"

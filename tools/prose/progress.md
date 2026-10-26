@@ -8,18 +8,18 @@
 
 | 파일 | 한글 줄 | 상태 |
 | --- | --- | --- |
-| `docs/topics/README.md` | 25 | 진행 |
-| `docs/topics/audio.md` | 27 | 진행 |
-| `docs/topics/bible-text.md` | 75 | 진행 |
-| `docs/topics/bookmark.md` | 80 | 진행 |
-| `docs/topics/cache-release.md` | 31 | 진행 |
-| `docs/topics/design-system.md` | 64 | 진행 |
-| `docs/topics/install-a11y.md` | 10 | 진행 |
-| `docs/topics/liturgical.md` | 398 | 진행 |
-| `docs/topics/platform.md` | 124 | 진행 |
-| `docs/topics/routing.md` | 99 | 진행 |
-| `docs/topics/search.md` | 19 | 진행 |
-| `docs/topics/sync.md` | 78 | 진행 |
+| `docs/topics/README.md` | 25 | #444 |
+| `docs/topics/audio.md` | 27 | #444 |
+| `docs/topics/bible-text.md` | 75 | #444 |
+| `docs/topics/bookmark.md` | 80 | #444 |
+| `docs/topics/cache-release.md` | 31 | #444 |
+| `docs/topics/design-system.md` | 64 | #444 |
+| `docs/topics/install-a11y.md` | 10 | #444 |
+| `docs/topics/liturgical.md` | 398 | #444 |
+| `docs/topics/platform.md` | 124 | #444 |
+| `docs/topics/routing.md` | 99 | #444 |
+| `docs/topics/search.md` | 19 | #444 |
+| `docs/topics/sync.md` | 78 | #444 |
 
 ## 2. 루트 문서와 `docs/`의 나머지
 
