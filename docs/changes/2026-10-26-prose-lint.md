@@ -1,4 +1,5 @@
 ---
+pr: 436
 date: 2026-10-26
 branch: chore/prose-lint
 title: "chore: 문장 검사 도구와 CI 경고를 더함"
