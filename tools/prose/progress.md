@@ -25,16 +25,16 @@
 
 | 파일 | 한글 줄 | 상태 |
 | --- | --- | --- |
-| `.claude/commands/security-audit.md` | 70 | 대기 |
-| `CLAUDE.md` | 75 | 대기 |
+| `.claude/commands/security-audit.md` | 70 | 진행 |
+| `CLAUDE.md` | 75 | 진행 |
 | `DESIGN.md` | 453 | 대기 |
-| `README.md` | 82 | 대기 |
+| `README.md` | 82 | 진행 |
 | `docs/architecture.md` | 322 | 대기 |
-| `docs/changes/README.md` | 18 | 대기 |
+| `docs/changes/README.md` | 18 | 진행 |
 | `docs/coding-pitfalls.md` | 197 | 대기 |
-| `docs/index.md` | 30 | 대기 |
-| `docs/known-issues.md` | 82 | 대기 |
-| `docs/workflow.md` | 87 | 대기 |
+| `docs/index.md` | 30 | 진행 |
+| `docs/known-issues.md` | 82 | 진행 |
+| `docs/workflow.md` | 87 | 진행 |
 | `docs/writing.md` | 197 | 대기 |
 | `tests/README.md` | 99 | 대기 |
 | `tests/fixtures/liturgical/README.md` | 54 | 대기 |
