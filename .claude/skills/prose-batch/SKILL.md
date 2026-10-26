@@ -84,7 +84,7 @@ description: 문장 교정 반복 실행의 한 번. 열린 문장 교정 PR이 
 
 하나라도 실패하면 원인이 된 고침을 되돌리고 다시 검증한다. 그래도 실패하면 PR을 열지 않고, 무엇이 왜 실패했는지 실행 기록에 남기고 끝낸다.
 
-- `python3 tools/prose/prose.py same-code origin/main`: 주석과 문서 말고 바뀐 파일이 없어야 한다.
+- `python3 tools/prose/prose.py same-code origin/main`: 주석과 문서 말고 바뀐 파일이 없어야 한다. 「1. 검토 의견 반영」에서 검사 목록을 고쳤으면 `--allow tools/prose/`를 붙이고, 대신 `python3 -m unittest tools/prose/test_prose.py`가 통과해야 한다. 그 밖의 경로에는 `--allow`를 쓰지 않는다.
 - JS 파일을 고쳤으면 `npm ci --ignore-scripts && npm run typecheck`와 `node --test tests/unit/*.test.js`: JSDoc과 표시 주석을 건드리지 않았는지 본다.
 - `node --test tests/unit/docs-*.test.js tests/unit/liturgical-fixtures.test.js`: 통과해야 한다. 데이터 서브모듈이 없으면 `facts` 블록 검사 하나는 건너뛴다.
 - `python3 scripts/docs_facts_snapshot.py --diff origin/main WORKTREE --strict-counts`와, 묶음의 문서를 `--docs`로 준 `--kinds general --strict-counts`: 사라진 토큰과 줄어든 토큰이 없어야 한다. 있으면 그 고침이 사실, 인용, 코드를 바꾼 것이다.
