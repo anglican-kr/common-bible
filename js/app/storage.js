@@ -28,6 +28,7 @@ window.appStorage = (/** @returns {AppStorage} */ () => {
   /** @typedef {import("../types").BookmarkTreeNode} BookmarkTreeNode */
   /** @typedef {import("../types").BookmarkTreeBookmark} BookmarkTreeBookmark */
   /** @typedef {import("../types").SyncFlatItem} SyncFlatItem */
+  /** @typedef {import("../types").SaveOutcome} SaveOutcome */
   /** @typedef {import("../types").InstallNudgeState} InstallNudgeState */
   // ── Storage keys (private to this module) ──
   const STORAGE_KEY = "bible-last-read";
@@ -372,14 +373,29 @@ window.appStorage = (/** @returns {AppStorage} */ () => {
     } catch (_) { return []; }
   }
 
-  /** @param {BookmarkTreeNode[]} store */
+  // The sync store goes first: it is the copy loadBookmarks reads, so when it refuses the list, the legacy key is left
+  // as it was and the two copies still agree. The legacy key refusing alone does not fail the save — the next save or
+  // the sync's merge result (applyToLegacyKeys) writes it again. The bookmark screens tell the user of a refused save
+  // (bookmark-core.js commitBookmarks, ADR-015 D7, known-issues §15.4).
+  /** @param {BookmarkTreeNode[]} store @returns {SaveOutcome} */
   function saveBookmarks(store) {
+    const V2 = window.syncStoreV2;
+    /** @type {SaveOutcome} */
+    let outcome;
     try {
-      localStorage.setItem(BOOKMARK_KEY, JSON.stringify(store));
-      window.syncStoreV2?.saveBookmarks(store);
+      if (V2) outcome = V2.saveBookmarks(store);
+      else { localStorage.setItem(BOOKMARK_KEY, JSON.stringify(store)); outcome = "saved"; }
+    } catch (err) {
+      // Same reading as store-v2.js saveLocal; a sync store that throws while flattening the tree is "failed".
+      outcome = !V2 && /** @type {{ name?: unknown } | null} */ (err)?.name === "QuotaExceededError" ? "full" : "failed";
+    }
+    if (outcome !== "saved") return outcome;
+    try { if (V2) localStorage.setItem(BOOKMARK_KEY, JSON.stringify(store)); } catch (_) {}
+    try {
       if (window.driveSync) window.driveSync.scheduleUpload();
       _maybeRequestPersist();
     } catch (_) {}
+    return "saved";
   }
 
   // Rewrite stored bookmarks in place, both copies, keeping the sync store's per-item time (_u) — saveBookmarks would
@@ -413,14 +429,16 @@ window.appStorage = (/** @returns {AppStorage} */ () => {
     } catch (_) {}
   }
 
-  // Every character localStorage would hold once saveBookmarks(store) ran — keys and values: the list's two copies (the
-  // legacy key, and the sync store's entry measured from the very document it writes) in place of the current ones,
-  // every other key as it is. saveBookmarks swallows a save past the quota, so the bookmark import checks this first
-  // (ADR-040).
+  // The most characters localStorage holds while saveBookmarks(store) runs — keys and values: the sync store's entry
+  // measured from the very document it writes, and the legacy key at the larger of the list and what it holds now (it
+  // still holds the old list when the sync store is written first, ADR-015 D7), every other key as it is. The bookmark
+  // import checks this first, against Safari's quota on every browser — sync carries the list to every device (ADR-040).
   /** @param {BookmarkTreeNode[]} store @returns {number} */
   function projectedStorageChars(store) {
     const entry = window.syncStoreV2?.projectedBookmarksEntry(store);
-    let chars = BOOKMARK_KEY.length + JSON.stringify(store).length + (entry ? entry.chars : 0);
+    const list = JSON.stringify(store).length;
+    const legacy = entry ? Math.max(list, (localStorage.getItem(BOOKMARK_KEY) ?? "").length) : list;
+    let chars = BOOKMARK_KEY.length + legacy + (entry ? entry.chars : 0);
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
       if (key === null || key === BOOKMARK_KEY || key === entry?.key) continue;

@@ -584,13 +584,33 @@ function createSyncMachine({ onStateChange } = {}) {
   /**
    * @param {import("../types").SyncDoc} merged
    * @param {boolean} hadRemoteChanges
+   * @returns {import("../types").SaveOutcome} the merged doc's save — anything but "saved" leaves this device as it was
    */
   function _applyMergedDoc(merged, hadRemoteChanges) {
     // 옛 판의 북마크 절 범위(2026-06-06 #205 전의 줄 글자)는 지금 표기로 옮겨 저장한다 — per-item times unchanged,
     // so the merge's pick between two copies of one time cannot bring the old form back (coding-pitfalls §38).
     if (typeof window.migrateLegacyBookmarkDoc === "function") window.migrateLegacyBookmarkDoc(merged);
-    V2.saveLocal(merged);
-    V2.applyToLegacyKeys(merged);
+    const outcome = V2.saveLocal(merged);
+    if (outcome !== "saved") {
+      L.log({ kind: "ERROR", event: "MERGE_SAVE_FAIL", reason: hadRemoteChanges ? outcome : `${outcome}, no remote changes` });
+      // Said only when something came from the other devices — the same turn as the success line below (사용자 결정
+      // 2026-10-26, known-issues §15.4). Deleting a bookmark frees room and wakes the sync (scheduleUpload).
+      if (hadRemoteChanges) {
+        _snackbar(outcome === "full"
+          ? "저장 공간이 가득 차 다른 기기에서 변경된 데이터를 불러오지 못했습니다. 쓰지 않는 북마크를 지우면 다시 동기화합니다."
+          : "다른 기기에서 변경된 데이터를 불러오지 못했습니다.");
+      }
+      return outcome;
+    }
+    // The doc above is saved, so a key the browser refuses here must not end the cycle in the "reconnect" error
+    // (ADR-015 D7). A refused bookmark key is a stale second copy; a refused setting or reading-position key leaves
+    // its old value for the next start until a later merge writes it (known-issues §35).
+    try {
+      const refused = V2.applyToLegacyKeys(merged);
+      if (refused?.length) L.log({ kind: "ERROR", event: "LEGACY_KEYS_FAIL", reason: refused.join(", ") });
+    } catch (err) {
+      L.log({ kind: "ERROR", event: "LEGACY_KEYS_FAIL", reason: err instanceof Error ? err.message : String(err) });
+    }
     // Refresh the visible bookmark surface (drawer or /bookmarks full view).
     if (typeof window.rerenderActiveBookmarkTree === "function") window.rerenderActiveBookmarkTree();
     else if (typeof window.renderBookmarkTree === "function") window.renderBookmarkTree();
@@ -606,6 +626,7 @@ function createSyncMachine({ onStateChange } = {}) {
       if (s.audioShow?.v   != null && typeof window.applyAudioShow   === "function") window.applyAudioShow(/** @type {boolean} */ (s.audioShow.v));
       _snackbar("다른 기기에서 변경된 데이터를 불러왔습니다.");
     }
+    return outcome;
   }
 
   /** @param {number | undefined} status */
@@ -785,7 +806,14 @@ function createSyncMachine({ onStateChange } = {}) {
       );
 
       L.log({ kind: "ACTION", event: "MERGE", localMaxU, remoteMaxU, mergedMaxU, hadRemoteChanges });
-      _applyMergedDoc(merged, hadRemoteChanges);
+      if (_applyMergedDoc(merged, hadRemoteChanges) !== "saved" && hadRemoteChanges) {
+        // The payload is read back from local storage (buildSyncPayload), which still holds the doc from before the
+        // merge — uploading it would put Drive back to it and drop the other devices' edits for every device. No upload
+        // and no cache either: the next cycle downloads and merges again. Without remote changes the stored doc already
+        // is the merge, so the cycle goes on and uploads it (known-issues §15.4).
+        dispatch({ type: "SYNC_DONE" });
+        return;
+      }
 
       const remoteCount = Object.keys(remote.bookmarks?.items ?? {}).length
                         + Object.keys(remote.bookmarks?.tombstones ?? {}).length;

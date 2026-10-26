@@ -72,7 +72,7 @@ function makeSyncStoreV2Spy(opts = {}) {
   return {
     saveLastRead: (val) => { calls.saveLastRead.push(val); },
     saveSetting: (key, val) => { calls.saveSetting.push({ key, val }); },
-    saveBookmarks: (val) => { calls.saveBookmarks.push(val); },
+    saveBookmarks: (val) => { calls.saveBookmarks.push(val); return "saved"; },
     loadBookmarks: () => { calls.loadBookmarks++; return bookmarksReturn; },
     // A fixed entry — store-v2.test.js checks the real one against what saveBookmarks writes.
     projectedBookmarksEntry: () => ({ key: "bible-bookmarks-v2", chars: 1234 }),
@@ -837,7 +837,7 @@ test("loadBookmarks: returns [] in fallback on malformed JSON", () => {
 test("saveBookmarks: writes JSON and notifies syncStoreV2 + driveSync", () => {
   const h = loadStorage();
   const items = [{ id: "1", title: "test" }];
-  h.appStorage.saveBookmarks(items);
+  assert.equal(h.appStorage.saveBookmarks(items), "saved");
   assert.deepEqual(JSON.parse(h.localStorage._raw["bible-bookmarks"]), items);
   assert.equal(h.syncStoreV2._calls.saveBookmarks.length, 1);
   assert.deepEqual(rehydrate(h.syncStoreV2._calls.saveBookmarks[0]), items);
@@ -860,9 +860,50 @@ test("saveBookmarks: _maybeRequestPersist guards against double-call", async () 
   assert.equal(h.persistCalls.count, 1);
 });
 
-test("saveBookmarks: swallows localStorage errors", () => {
-  const h = loadStorage({ localStorageThrowOn: "all" });
-  assert.doesNotThrow(() => h.appStorage.saveBookmarks([{ id: "1" }]));
+// A save the device refuses is reported, not swallowed — the bookmark screens say so (known-issues §15.4).
+test("saveBookmarks: the sync store first, then the legacy key", () => {
+  const h = loadStorage();
+  const order = [];
+  h.syncStoreV2.saveBookmarks = () => { order.push("sync store"); return "saved"; };
+  const setItem = h.localStorage.setItem;
+  h.localStorage.setItem = (k, v) => { if (k === "bible-bookmarks") order.push("legacy key"); setItem.call(h.localStorage, k, v); };
+  assert.equal(h.appStorage.saveBookmarks([{ id: "1" }]), "saved");
+  assert.deepEqual(order, ["sync store", "legacy key"]);
+});
+
+test("saveBookmarks: the sync store refuses — the legacy key keeps the list as it was, and nothing is uploaded", async () => {
+  for (const outcome of ["full", "failed"]) {
+    const h = loadStorage({ localStorageInit: { "bible-bookmarks": "[\"before\"]" } });
+    h.syncStoreV2.saveBookmarks = () => outcome;
+    assert.equal(h.appStorage.saveBookmarks([{ id: "1" }]), outcome);
+    assert.equal(h.localStorage._raw["bible-bookmarks"], "[\"before\"]", outcome);
+    assert.equal(h.driveSync._calls.scheduleUpload, 0, outcome);
+    await drain();
+    assert.equal(h.persistCalls.count, 0, outcome);
+  }
+});
+
+test("saveBookmarks: the legacy key refusing alone does not fail the save — the sync store holds the list", () => {
+  const h = loadStorage({ localStorageThrowOn: new Set(["bible-bookmarks"]) });
+  assert.equal(h.appStorage.saveBookmarks([{ id: "1" }]), "saved");
+  assert.equal(h.syncStoreV2._calls.saveBookmarks.length, 1);
+  assert.equal(h.driveSync._calls.scheduleUpload, 1);
+});
+
+test("saveBookmarks: a sync store that throws is a failed save, not an escaped exception", () => {
+  const h = loadStorage({ localStorageInit: { "bible-bookmarks": "[]" } });
+  h.syncStoreV2.saveBookmarks = () => { throw new TypeError("boom"); };
+  assert.equal(h.appStorage.saveBookmarks([{ id: "1" }]), "failed");
+  assert.equal(h.localStorage._raw["bible-bookmarks"], "[]");
+});
+
+test("saveBookmarks: without the sync store, the legacy key's refusal — full for the quota, failed for anything else", () => {
+  const full = loadStorage({ withSyncStoreV2: false, localStorageThrowOn: "all" });
+  assert.equal(full.appStorage.saveBookmarks([{ id: "1" }]), "full");
+  const off = loadStorage({ withSyncStoreV2: false });
+  off.localStorage.setItem = () => { throw Object.assign(new Error("denied"), { name: "SecurityError" }); };
+  assert.equal(off.appStorage.saveBookmarks([{ id: "1" }]), "failed");
+  assert.equal(off.driveSync._calls.scheduleUpload, 0);
 });
 
 // rewriteBookmarks — 옛 판의 절 범위를 지금 표기로 옮길 때(coding-pitfalls §38). The real sync store
@@ -925,19 +966,21 @@ test("rewriteBookmarks: a broken legacy copy or a store that throws does not esc
   assert.equal(h.localStorage._raw["bible-bookmarks"], "{not json");
 });
 
-test("projectedStorageChars: the list's two copies in place of the current ones, every other key as it is (ADR-040)", () => {
-  const h = loadStorage({
-    localStorageInit: {
-      "bible-bookmarks": "x".repeat(500),        // replaced by the list
-      "bible-bookmarks-v2": "y".repeat(900),     // replaced by the sync store's projected entry
-      "bible-theme": "dark",
-      "bible-search-history": "[\"사랑\"]",
-    },
-  });
-  const list = [{ type: "bookmark", id: "a", bookId: "john", chapter: 3, verseSpec: "16", label: "요한 3:16" }];
-  const expected = "bible-bookmarks".length + JSON.stringify(list).length + 1234
-    + "bible-theme".length + "dark".length + "bible-search-history".length + "[\"사랑\"]".length;
-  assert.equal(h.appStorage.projectedStorageChars(list), expected);
+test("projectedStorageChars: the sync store's projected entry, the legacy key at the larger of the list and what it holds now, every other key as it is (ADR-040)", () => {
+  // The sync store is written first, so for a moment the legacy key still holds the old list (ADR-015 D7).
+  const init = {
+    "bible-bookmarks": "x".repeat(500),
+    "bible-bookmarks-v2": "y".repeat(900),     // replaced by the sync store's projected entry
+    "bible-theme": "dark",
+    "bible-search-history": "[\"사랑\"]",
+  };
+  const others = "bible-theme".length + "dark".length + "bible-search-history".length + "[\"사랑\"]".length;
+  const h = loadStorage({ localStorageInit: init });
+  const small = [{ type: "bookmark", id: "a", bookId: "john", chapter: 3, verseSpec: "16", label: "요한 3:16" }];
+  assert.equal(h.appStorage.projectedStorageChars(small), "bible-bookmarks".length + 500 + 1234 + others);
+  const large = Array.from({ length: 20 }, (_, i) => ({ ...small[0], id: `b${i}` }));
+  assert.ok(JSON.stringify(large).length > 500);
+  assert.equal(h.appStorage.projectedStorageChars(large), "bible-bookmarks".length + JSON.stringify(large).length + 1234 + others);
   assert.equal(h.localStorage._raw["bible-bookmarks"], "x".repeat(500));   // nothing written
 });
 

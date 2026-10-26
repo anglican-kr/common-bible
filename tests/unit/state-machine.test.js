@@ -1127,7 +1127,7 @@ test("45. 내려받기 대기 중 disable() → 원격 자료를 로컬에 쓰�
     },
     overrideStubs: {
       T: { downloadSyncFile: () => dlPromise },
-      V2: { saveLocal: (doc) => { saved.push(doc); } },
+      V2: { saveLocal: (doc) => { saved.push(doc); return "saved"; } },
     },
   });
   machine.enable();
@@ -1637,7 +1637,7 @@ test("58. 내려받기 대기 중 저장한 편집이 병합에 들어간다 —
       T: { downloadSyncFile: () => dlPromise },
       V2: {
         loadLocal: () => current,
-        saveLocal: (doc) => { current = doc; },
+        saveLocal: (doc) => { current = doc; return "saved"; },
         mergeDocs: (local) => { mergeInputs.push(local.tag); return local; },
       },
     },
@@ -1857,7 +1857,7 @@ test("70. 병합 결과는 옛 판의 절 범위를 옮긴 뒤 저장되고, 옛
           merged.bookmarks.items.a = { id: "a", type: "bookmark", verseSpec: "16aa", parentId: null, _order: 0, _u: 7 };
           return merged;
         },
-        saveLocal: (doc) => { order.push("save"); saved.push(JSON.parse(JSON.stringify(doc))); },
+        saveLocal: (doc) => { order.push("save"); saved.push(JSON.parse(JSON.stringify(doc))); return "saved"; },
         applyToLegacyKeys: (doc) => { legacyApplied.push(doc.bookmarks.items.a.verseSpec); },
       },
     },
@@ -1887,7 +1887,7 @@ test("71. 옮기는 함수가 없어도(유닛 하네스 · 북마크 모듈 전
       T: {
         downloadSyncFile: async () => ({ doc: { ...localDoc("remote"), schemaVersion: 2, deviceId: "remote" }, etag: '"e-remote"', status: 200 }),
       },
-      V2: { saveLocal: () => { saves++; } },
+      V2: { saveLocal: () => { saves++; return "saved"; } },
     },
   });
   machine.enable();
@@ -1918,4 +1918,105 @@ test("72. 기본 속성 이름의 id에 새로 받은 삭제 기록도 다른 �
   await drain(8);
   const merge = logEntries.find((e) => e.kind === "ACTION" && e.event === "MERGE");
   assert.equal(merge?.hadRemoteChanges, true);
+});
+
+// ── Group 19: 병합 결과를 이 기기에 저장하지 못할 때 (known-issues §15.4) ─────────────────────────
+// 올릴 자료(buildSyncPayload)는 기기에 저장된 문서에서 만든다. 병합 결과를 저장하지 못했는데 올리면, 다른 기기에서 받은
+// 변경이 빠진 옛 문서로 드라이브의 파일을 덮어쓴다. 그래서 다른 기기의 변경이 있었으면 올리지도 캐시를 쓰지도 않고 사이클을
+// 마친다. 병합 결과를 저장한 뒤 옛 키 쓰기가 거절되면 그 키만 기록하고 사이클을 멈추지 않는다(ADR-015 D7).
+
+function remoteChangeMerge() {
+  const merged = localDoc("merged");
+  merged.bookmarks.items.a = { id: "a", type: "bookmark", parentId: null, _order: 0, _u: 7 };
+  return merged;
+}
+
+function mergeSaveMachine({ outcome = "saved", v2 = {}, applyToLegacyKeys } = {}) {
+  const uploads = [];
+  const snackbar = [];
+  const legacy = [];
+  const rerenders = { count: 0 };
+  const h = loadMachine({
+    initialRefreshToken: "rt-x",
+    initialStorage: {
+      [CACHE_FILE_ID_KEY]: "fid-cached",
+      [CACHE_ETAG_KEY]: '"e-cached"',
+      [CACHE_SYNCED_U_KEY]: "0",
+    },
+    overrideStubs: {
+      T: {
+        downloadSyncFile: async () => ({ doc: { ...localDoc("remote"), schemaVersion: 2, deviceId: "remote" }, etag: '"e-remote"', status: 200 }),
+        uploadSyncFile: async (_token, payload) => { uploads.push(payload); return { ok: true, status: 200, etag: '"e-new"' }; },
+      },
+      V2: {
+        mergeDocs: remoteChangeMerge,
+        saveLocal: () => outcome,
+        applyToLegacyKeys: applyToLegacyKeys ?? ((doc) => { legacy.push(doc); }),
+        ...v2,
+      },
+    },
+  });
+  h.ctx._showSyncSnackbar = (msg) => { snackbar.push(msg); };
+  h.ctx.renderBookmarkTree = () => { rerenders.count++; };
+  return { ...h, uploads, snackbar, legacy, rerenders };
+}
+
+test("73. 다른 기기의 변경을 저장 공간이 차서 저장하지 못하면 올리지 않고, 캐시도 쓰지 않고, 실패를 알린다", async () => {
+  const h = mergeSaveMachine({ outcome: "full" });
+  h.machine.enable();
+  await h.drain(8);
+  assert.deepEqual(h.uploads, [], "기기에 남은 옛 문서로 드라이브의 파일을 덮어쓰지 않는다");
+  assert.equal(h.localStorage.getItem(CACHE_ETAG_KEY), '"e-cached"', "다음 사이클이 다시 내려받아 병합한다");
+  assert.equal(h.localStorage.getItem(CACHE_SYNCED_U_KEY), "0");
+  assert.deepEqual(h.legacy, [], "옛 키에도 쓰지 않는다");
+  assert.equal(h.rerenders.count, 0, "바뀐 것이 없으니 다시 그리지 않는다");
+  assert.deepEqual(h.snackbar, ["저장 공간이 가득 차 다른 기기에서 변경된 데이터를 불러오지 못했습니다. 쓰지 않는 북마크를 지우면 다시 동기화합니다."]);
+  assert.equal(h.machine.getState(), "IDLE", "다시 연결하라는 오류 상태로 가지 않는다");
+  // `reason` is the field a copied diagnostic log prints (debug-log.js _format).
+  assert.ok(h.logEntries.some((e) => e.kind === "ERROR" && e.event === "MERGE_SAVE_FAIL" && e.reason === "full"));
+});
+
+test("74. 저장 공간이 아닌 다른 까닭으로 저장하지 못해도 올리지 않고, 불러오지 못했다고만 알린다", async () => {
+  const h = mergeSaveMachine({ outcome: "failed" });
+  h.machine.enable();
+  await h.drain(8);
+  assert.deepEqual(h.uploads, []);
+  assert.deepEqual(h.snackbar, ["다른 기기에서 변경된 데이터를 불러오지 못했습니다."]);
+  assert.equal(h.machine.getState(), "IDLE");
+});
+
+test("75. 다른 기기의 변경이 없으면 병합 결과를 저장하지 못해도 기기에 저장된 문서를 올린다 — 알리지 않는다", async () => {
+  // 병합 결과가 로컬 문서와 같은 내용이면, 기기에 저장된 문서를 올려도 잃는 것이 없다. 멈추면 저장 공간이 찬 동안 이 기기의
+  // 편집이 드라이브에 올라가지 못한다.
+  const local = localDoc("local");
+  local.bookmarks.items.a = { id: "a", type: "bookmark", parentId: null, _order: 0, _u: 7 };
+  const h = mergeSaveMachine({ outcome: "full", v2: { loadLocal: () => local, mergeDocs: (l) => l } });
+  h.machine.enable();
+  await h.drain(8);
+  assert.equal(h.uploads.length, 1, "로컬에만 있는 항목은 올린다");
+  assert.deepEqual(h.snackbar, []);
+  assert.equal(h.localStorage.getItem(CACHE_ETAG_KEY), '"e-new"');
+  assert.equal(h.machine.getState(), "IDLE");
+});
+
+test("77. 병합 결과를 저장한 뒤 브라우저가 옛 키 몇 개의 쓰기를 거절하면 그 키를 기록하고 사이클을 마친다", async () => {
+  const h = mergeSaveMachine({ applyToLegacyKeys: () => ["bible-theme", "bible-bookmarks"] });
+  h.machine.enable();
+  await h.drain(8);
+  assert.equal(h.uploads.length, 1);
+  assert.ok(h.logEntries.some((e) => e.event === "LEGACY_KEYS_FAIL" && e.reason === "bible-theme, bible-bookmarks"));
+  assert.deepEqual(h.snackbar, ["다른 기기에서 변경된 데이터를 불러왔습니다."]);
+  assert.equal(h.machine.getState(), "IDLE");
+});
+
+test("76. 병합 결과를 저장한 뒤 옛 키 쓰기에서 예외가 나도 사이클을 마치고 올린다 — 다시 연결하라는 오류로 가지 않는다", async () => {
+  const h = mergeSaveMachine({
+    applyToLegacyKeys: () => { throw Object.assign(new Error("The quota has been exceeded."), { name: "QuotaExceededError" }); },
+  });
+  h.machine.enable();
+  await h.drain(8);
+  assert.equal(h.uploads.length, 1);
+  assert.equal(h.rerenders.count, 1);
+  assert.deepEqual(h.snackbar, ["다른 기기에서 변경된 데이터를 불러왔습니다."]);
+  assert.equal(h.machine.getState(), "IDLE");
 });

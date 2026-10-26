@@ -13,6 +13,7 @@
 /** @typedef {import("../types").BookmarkTreeNode}   BookmarkTreeNode */
 /** @typedef {import("../types").SettingKey}         SettingKey */
 /** @typedef {import("../types").LastReadValue}      LastReadValue */
+/** @typedef {import("../types").SaveOutcome}        SaveOutcome */
 
 const _META_KEY  = "bible-sync-meta";
 const _STORE_KEY = "bible-bookmarks-v2";
@@ -176,9 +177,16 @@ function loadLocal() {
   return _emptyDoc();
 }
 
-/** @param {SyncDoc} doc */
+// Says what the write came to rather than swallowing a refusal: bookmark saves and the sync's merge result tell the
+// user (known-issues §15.4). Settings and the reading position still ignore it.
+/** @param {SyncDoc} doc @returns {SaveOutcome} */
 function saveLocal(doc) {
-  try { localStorage.setItem(_STORE_KEY, JSON.stringify(doc)); } catch {}
+  try {
+    localStorage.setItem(_STORE_KEY, JSON.stringify(doc));
+    return "saved";
+  } catch (err) {
+    return /** @type {{ name?: unknown } | null} */ (err)?.name === "QuotaExceededError" ? "full" : "failed";
+  }
 }
 
 // ── Bookmark CRUD (tree ↔ flat-map) ──────────────────────────────────────────
@@ -288,9 +296,9 @@ function _docWithBookmarks(tree) {
 
 // Save a bookmark tree into v2 flat-map, preserving _u for unchanged items
 // and adding tombstones for removed items.
-/** @param {BookmarkTreeNode[]} tree */
+/** @param {BookmarkTreeNode[]} tree @returns {SaveOutcome} */
 function saveBookmarks(tree) {
-  saveLocal(_docWithBookmarks(tree));
+  return saveLocal(_docWithBookmarks(tree));
 }
 
 // This store's localStorage entry once saveBookmarks(tree) ran — its key, and the characters of key and value. The
@@ -502,15 +510,23 @@ function sweepTombstones(ageDays = 30) {
 }
 
 // ── Apply remote doc to localStorage legacy keys ──────────────────────────────
-// Keeps existing app.js helpers (loadFontSize, loadTheme, etc.) working.
+// Keeps existing app.js helpers (loadFontSize, loadTheme, etc.) working — the settings and reading-position keys are
+// what they read at startup; the bookmark key is a second copy (the list is read from this store, ADR-015 D7). Each
+// key is written on its own, so one the browser refuses does not keep the others from being written.
 
-/** @param {SyncDoc} doc */
+/** @param {SyncDoc} doc @returns {string[]} the keys the browser refused */
 function applyToLegacyKeys(doc) {
+  /** @type {string[]} */
+  const refused = [];
+  /** @param {string} lsKey @param {string} value */
+  const write = (lsKey, value) => {
+    try { localStorage.setItem(lsKey, value); } catch { refused.push(lsKey); }
+  };
   for (const [key, lsKey] of Object.entries(_SETTING_LS_KEYS)) {
     const s = doc.settings?.[/** @type {SettingKey} */ (key)];
-    if (s?.v != null) localStorage.setItem(lsKey, typeof s.v === "string" ? s.v : JSON.stringify(s.v));
+    if (s?.v != null) write(lsKey, typeof s.v === "string" ? s.v : JSON.stringify(s.v));
   }
-  if (doc.lastRead?.v != null) localStorage.setItem(_LR_KEY, JSON.stringify(doc.lastRead.v));
+  if (doc.lastRead?.v != null) write(_LR_KEY, JSON.stringify(doc.lastRead.v));
   const { items, tombstones } = doc.bookmarks ?? { items: {}, tombstones: {} };
   /** @type {{ [id: string]: SyncFlatItem }} */
   const alive = {};
@@ -518,7 +534,8 @@ function applyToLegacyKeys(doc) {
     if (!((_own(tombstones, id) ?? -Infinity) > node._u)) alive[id] = node;
   }
   const tree = bookmarkTreeFromFlat(alive);
-  localStorage.setItem("bible-bookmarks", JSON.stringify(tree));
+  write("bible-bookmarks", JSON.stringify(tree));
+  return refused;
 }
 
 window.syncStoreV2 = {
