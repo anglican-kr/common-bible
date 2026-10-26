@@ -29,14 +29,14 @@
 
 | 변경 대상 | 무효화 방식 | 호출/자동화 |
 |-----------|------------|-------------|
-| 셸 (JS/CSS/HTML/icons + `books.json`·`search-meta.json`·매니페스트 2종) | `SHELL_CACHE` 이름 bump (= `"shell-" + APP_VERSION`) | `release.py patch` — `version.json` + `sw-version.js` 한 줄 갱신 |
-| 본문 (`/data/bible/*`) 또는 검색 인덱스 (`search-{ot,nt,dc}.json`) | 항목별 lazy 무효화 (콘텐츠 해시 매니페스트 diff) | `common-bible-data` CI 가 `bible-manifest.json` 자동 갱신, 앱은 `js/manifest-sync.js` 가 부팅 시 처리 |
-| 오디오 mp3 | 항목별 lazy 무효화 | 같음 (`audio-manifest.json`) |
+| 셸 (JS/CSS/HTML/icons + `books.json`·`search-meta.json`·매니페스트 2종) | `SHELL_CACHE` 이름 bump (= `"shell-" + APP_VERSION`) | `release.py patch`가 `version.json`과 `sw-version.js`를 한 줄씩 갱신 |
+| 본문 (`/data/bible/*`) 또는 검색 인덱스 (`search-{ot,nt,dc}.json`) | 항목마다 처음 쓸 때 무효화 (콘텐츠 해시 매니페스트 비교) | `common-bible-data` CI가 `bible-manifest.json`을 자동으로 갱신하고, 앱이 시작할 때 `js/manifest-sync.js`가 처리 |
+| 오디오 mp3 | 항목마다 처음 쓸 때 무효화 | 위와 같다 (`audio-manifest.json`) |
 
 DATA_CACHE와 AUDIO_CACHE의 이름은 더 이상 올리지 않는다(`"data"`, `"audio"`로 고정). `--bump-data`와 `--bump-audio` 플래그는 없앴다.
 
 **사례:**
-- 옛 worklog의 2026-04-30 항목(`git show 243bf83^:docs/worklog.md`): 개인정보 처리방침 페이지(`privacy.html`)를 더할 때 세 가지를 한 번에 해야 했다. 설치 때 미리 받을 파일 목록(`SHELL_FILES`)에 넣었다. 이 앱은 모든 페이지 주소에 앱 화면(`index.html`)을 내주는데, 이 페이지는 따로 열리도록 예외를 두었다(navigation 예외 처리). 그리고 버전을 올렸다(셸 bump). 셸 쪽은 매니페스트를 도입한 뒤에도 같다.
+- 옛 작업 기록(worklog)의 2026-04-30 항목(`git show 243bf83^:docs/worklog.md`): 개인정보 처리방침 페이지(`privacy.html`)를 더할 때 세 가지를 한 번에 해야 했다. 설치 때 미리 받을 파일 목록(`SHELL_FILES`)에 넣었다. 이 앱은 모든 페이지 주소에 앱 화면(`index.html`)을 내주는데, 이 페이지는 따로 열리도록 예외를 두었다(navigation 예외 처리). 그리고 버전을 올렸다(셸 bump). 셸 쪽은 매니페스트를 도입한 뒤에도 같다.
 
 **SW 변경 체크리스트:** 서비스 워커(`sw.js`)를 고칠 때 빠뜨리기 쉬운 것들이다.
 
@@ -54,4 +54,4 @@ DATA_CACHE와 AUDIO_CACHE의 이름은 더 이상 올리지 않는다(`"data"`, 
 
 - **known-issues §6.1** **서비스 워커 설치와 오프라인 동작은 확인하지 못했다.** 화면 없이 돌리는 테스트용 브라우저(헤드리스 Chromium)에서는 파일을 동시에 10개 넘게 받는 설치 단계가 멈춰서(main의 `sw.js`도 같다) 브라우저로 볼 수 없었다. 설치 때 받을 파일(`SHELL_FILES`) 54개가 모두 정상(200)으로 응답하는 것만 curl로 확인했다. 배포 전에 실기기에서 한 번 확인한다.
   - 2026-10-17부터는 캘린더와 전례독서 화면이 오프라인에서 **다시** 열리는지도 확인한다. 온라인에서 한 번 연 뒤 연결을 끊고 연다.
-  - 그 화면의 모듈 셋은 서비스 워커가 설치 때 미리 받아 둔다(`SHELL_FILES`, `tests/unit/sw.test.js`가 지킨다). 교회력 표(`/data/lectionary/*`)는 처음 쓸 때 캐시한다. 그래서 온라인에서 한 번도 열지 않은 캘린더가 오프라인에서 「교회력 자료를 불러오지 못했습니다」가 되는 것은 정상이다. PR #355 리뷰에서 원장의 「오프라인에서도 그 화면이 처음 열리도록」이 틀렸다고 확인했다.
+  - 그 화면의 모듈 묶음은 서비스 워커가 설치 때 미리 받아 둔다(`SHELL_FILES`, `tests/unit/sw.test.js`가 지킨다). 교회력 표(`/data/lectionary/*`)는 처음 쓸 때 캐시한다. 그래서 온라인에서 한 번도 열지 않은 캘린더가 오프라인에서 「교회력 자료를 불러오지 못했습니다」가 되는 것은 정상이다. PR #355 리뷰에서 원장의 「오프라인에서도 그 화면이 처음 열리도록」이 틀렸다고 확인했다.
