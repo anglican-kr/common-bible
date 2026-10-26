@@ -60,8 +60,8 @@ ADR-010 이후 북마크는 「어제 읽던 곳을 빨리 찾는」 한 건짜�
 
 ### 이어 붙이는 범위
 
-#### A. 옆에 있고 이어질 때만 합치기 (채택)
-- 「바로 옆에 있고(목록에서 이웃) 글이 이어지는(같은 책의 이어진 절이나 장)」 경우에만 한 덩어리로 묶는다.
+#### A. 목록에서 바로 앞뒤에 있고 이어질 때만 합치기 (채택)
+- 「목록에서 바로 앞뒤에 있고 글이 이어지는(같은 책의 이어진 절이나 장)」 경우에만 한 덩어리로 묶는다.
 - 이어짐 판정: 같은 `bookId`이고
   - `다음.시작장 == 이전.끝장`이고 `다음.시작절 == 이전.끝절 + 1`, 또는
   - `다음.시작장 == 이전.끝장 + 1`이고 `다음.시작절 == 1`이며 `이전`이 그 장의 마지막 절까지 담는다.
@@ -91,7 +91,7 @@ ADR-010 이후 북마크는 「어제 읽던 곳을 빨리 찾는」 한 건짜�
 ### `js/app/bookmark-read.js` (새 모듈)
 - 순수 로직(유닛 대상, `// ── BEGIN/END ──` 블록):
   - `_bmRange(bm, maxVerse)`: 북마크를 `{startCh,startV,endCh,endV,endDisplay,coversChapterEnd}`로 바꾼다.
-  - `_isContinuous(prev, cur)`: 옆에 있고 이어지는지 판정한다(위 규칙).
+  - `_isContinuous(prev, cur)`: 목록에서 바로 앞뒤에 있는 두 항목의 글이 이어지는지 판정한다(위 규칙).
   - `_combinedRef(book, group)`: 합친 참조 문자열(`창세 1:1–2:4a`, 한 장 전체는 `창세 1장`).
   - `_specCoversVerse(spec, n)`: 절이 spec에 드는지(부분 `4a`는 절 4 전체로 올려 읽는다. ADR-010의 산문 통합과 같은 생각). 2026-07-27에 `verse-spec.js`로 옮겼다(위).
   - `buildReadingSequence(nodes)`: 트리를 `{type:'folder',name,depth}` / `{type:'bookmark',bm,depth}`로 평평하게 편다(`sortBookmarkNodes` 적용).

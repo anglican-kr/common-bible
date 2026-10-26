@@ -1894,3 +1894,28 @@ test("71. 옮기는 함수가 없어도(유닛 하네스 · 북마크 모듈 전
   await drain(8);
   assert.equal(saves, 1);
 });
+
+// ── Group 18: 기본 속성 이름의 북마크 id (known-issues §15.2) ─────────────────────
+// 「다른 기기에서 바뀐 것이 있는가」는 로컬 문서를 id로 찾는다. 일반 객체는 toString 같은 이름에 물려받은 함수로
+// 답해, 그 id의 삭제 기록만 새로 받은 병합을 바뀐 것이 없다고 보았다(안내가 뜨지 않았다).
+
+test("72. 기본 속성 이름의 id에 새로 받은 삭제 기록도 다른 기기의 변경으로 친다", async () => {
+  const { machine, drain, logEntries } = loadMachine({
+    initialRefreshToken: "rt-x",
+    initialStorage: {
+      [CACHE_FILE_ID_KEY]: "fid-cached",
+      [CACHE_ETAG_KEY]: '"e-cached"',
+      [CACHE_SYNCED_U_KEY]: "0",
+    },
+    overrideStubs: {
+      T: {
+        downloadSyncFile: async () => ({ doc: { ...localDoc("remote"), schemaVersion: 2, deviceId: "remote" }, etag: '"e-remote"', status: 200 }),
+      },
+      V2: { mergeDocs: (l) => ({ ...l, bookmarks: { items: {}, tombstones: { toString: 10 } } }) },
+    },
+  });
+  machine.enable();
+  await drain(8);
+  const merge = logEntries.find((e) => e.kind === "ACTION" && e.event === "MERGE");
+  assert.equal(merge?.hadRemoteChanges, true);
+});

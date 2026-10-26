@@ -319,7 +319,7 @@ function markBookmarkViewed(id) {
 function _forgetViewed(id) {
   try {
     const m = _loadViewedMap();
-    if (m[id] != null) { delete m[id]; localStorage.setItem(_BM_VIEWED_KEY, JSON.stringify(m)); }
+    if (Object.hasOwn(m, id)) { delete m[id]; localStorage.setItem(_BM_VIEWED_KEY, JSON.stringify(m)); }
   } catch { /* private mode */ }
 }
 
@@ -342,7 +342,8 @@ function _bookmarkAscComparator(mode) {
   const keyOf = (n) => {
     if (mode === "created")  return n.createdAt || 0;
     if (mode === "modified") return n.updatedAt || n.createdAt || 0;
-    if (mode === "viewed")   return (viewed && viewed[n.id]) || n.createdAt || 0;
+    // Own entries only: the map is a plain object, and an id like `toString` read an inherited function (NaN key).
+    if (mode === "viewed")   return (viewed && Object.hasOwn(viewed, n.id) && viewed[n.id]) || n.createdAt || 0;
     return 0;
   };
   return (a, b) => keyOf(a) - keyOf(b);

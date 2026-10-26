@@ -13,6 +13,7 @@
 // appStorage, bookmark-core, window.{announce, getBooksCache}.
 
 /** @typedef {import("../types").BookmarkTreeBookmark} BookmarkTreeBookmark */
+/** @typedef {import("../types").BookmarkTreeFolder} BookmarkTreeFolder */
 /** @typedef {import("../types").BookmarkTreeNode} BookmarkTreeNode */
 /** @typedef {"chapter" | "verses" | "edit"} SaveMode  이 장 저장 · 절 선택 저장 · 북마크 수정 */
 
@@ -677,41 +678,63 @@ function _validateImportData(data) {
   return true;
 }
 
+// 병합 adds, by id, what the file has and the list lacks; an item the list has stays as it is. A folder the list
+// already has is entered, not skipped: the file's new items join it there, and it keeps its own name and place
+// (ADR-011 Phase 2a, known-issues §15.1 — skipping it left the backup's new bookmarks in that folder behind). Filled
+// where it stands, such a folder adds the list's depth to the file's, so a new folder that would sit deeper than
+// IMPORT_MAX_FOLDER_DEPTH is left out with what it holds, as the import check does (PR #438 review).
 /** @param {BookmarkTreeNode[]} existing @param {BookmarkTreeNode[]} incoming @returns {BookmarkTreeNode[]} */
 function _mergeBookmarkStores(existing, incoming) {
   /** @type {Set<string>} */
-  const existingIds = new Set();
-  /** @param {BookmarkTreeNode[]} items */
-  function collectIds(items) {
-    for (const item of items) {
-      existingIds.add(item.id);
-      if (item.type === "folder" && Array.isArray(item.children)) {
-        collectIds(item.children);
-      }
-    }
+  const ids = new Set();
+  /** @type {Map<string, { folder: BookmarkTreeFolder, depth: number }>} */
+  const folders = new Map();
+  // Every folder is copied, so new items can join one without touching the tree the caller passed in. A top-level
+  // folder is at depth 1, as in _sanitizeImportItems.
+  /** @param {BookmarkTreeNode[]} items @param {number} depth @returns {BookmarkTreeNode[]} */
+  function copyExisting(items, depth) {
+    return items.map((item) => {
+      ids.add(item.id);
+      if (item.type !== "folder") return item;
+      const folder = { ...item, children: copyExisting(Array.isArray(item.children) ? item.children : [], depth + 1) };
+      folders.set(item.id, { folder, depth });
+      return folder;
+    });
   }
-  collectIds(existing);
+  const result = copyExisting(existing, 1);
 
-  /** @param {BookmarkTreeNode[]} items @returns {BookmarkTreeNode[]} */
-  function filterNew(items) {
-    /** @type {BookmarkTreeNode[]} */
-    const result = [];
+  /** @param {BookmarkTreeNode[]} items @param {BookmarkTreeNode[]} into @param {number} depth  of a folder put into `into` */
+  function addNew(items, into, depth) {
     for (const item of items) {
       if (item.type === "folder") {
-        if (!existingIds.has(item.id)) {
-          const mergedChildren = filterNew(item.children || []);
-          result.push({ ...item, children: mergedChildren });
-        }
-      } else {
-        if (!existingIds.has(item.id)) {
-          result.push(item);
-        }
+        const same = folders.get(item.id);
+        if (same) { addNew(item.children || [], same.folder.children, same.depth + 1); continue; }
+        if (ids.has(item.id)) continue;   // a bookmark has this id — the import check leaves these out first (ADR-040)
+        if (depth > IMPORT_MAX_FOLDER_DEPTH) { fillListFolders(item.children || []); continue; }
+        const folder = { ...item, children: [] };
+        ids.add(item.id);
+        folders.set(item.id, { folder, depth });
+        into.push(folder);
+        addNew(item.children || [], folder.children, depth + 1);
+      } else if (!ids.has(item.id)) {
+        ids.add(item.id);
+        into.push(item);
       }
     }
-    return result;
   }
-
-  return [...existing, ...filterNew(incoming)];
+  // What a folder left out for depth holds is left out too, except the folders the list has: those are filled where
+  // they stand, as anywhere else in the file (2nd review of PR #438).
+  /** @param {BookmarkTreeNode[]} items */
+  function fillListFolders(items) {
+    for (const item of items) {
+      if (item.type !== "folder") continue;
+      const same = folders.get(item.id);
+      if (same) addNew(item.children || [], same.folder.children, same.depth + 1);
+      else if (!ids.has(item.id)) fillListFolders(item.children || []);   // skipped with its contents, as in addNew
+    }
+  }
+  addNew(incoming, result, 1);
+  return result;
 }
 
 /** @param {BookmarkTreeNode[]} items @returns {number} */
@@ -992,8 +1015,9 @@ $bmImportInput.addEventListener("change", () => {
       _importStopped("성서 목록을 불러오지 못해 가져오지 않았습니다. 연결을 확인한 뒤 「가져오기」를 다시 눌러 주세요.");
       return;
     }
-    // The kind each id has in the current list. A list the sync store cannot read (a `toString` id from an unchecked
-    // import) has nothing to compare against — and 덮어쓰기 is how it gets fixed, so the import goes on.
+    // The kind each id has in the current list. A list the sync store cannot read (a broken entry in the stored
+    // document — a `toString` id did this until known-issues §15.2) has nothing to compare against — and 덮어쓰기 is
+    // how it gets fixed, so the import goes on.
     /** @type {Map<string, string>} */
     const existingTypes = new Map();
     try {
