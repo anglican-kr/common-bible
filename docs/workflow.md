@@ -45,7 +45,7 @@
 - `tools/`: 개발자용 보조 도구다. 앱은 쓰지 않는다.
   - `booklet/`: 「전례독서」 책자 PDF와 엔진을 대조한다. pypdf 추출, 2027년 책자 형식의 파서, 엔진 덤프, 대조 보고서가 있다(README).
   - `csp/`: 릴리스 전에 주요 화면을 실제 브라우저로 돌며 콘솔의 CSP 위반을 모은다(README).
-  - `prose/`: 문장 교정 도구다. `prose.py lint`는 문서와 코드 주석에서 기계로 찾을 수 있는 글쓰기 규칙 위반을 세고, `prose.py same-code`는 주석과 문서 말고 바뀐 코드가 없는지 본다(README).
+  - `prose/`: 문장 교정 도구다. `prose.py lint`는 문서와 코드 주석에서 기계로 찾을 수 있는 글쓰기 규칙 위반을 세고, `prose.py same-code`는 주석과 문서 말고 바뀐 코드가 없는지 본다(README). 교정할 파일의 순서와 상태는 `progress.md`에 있다.
 - CI(`.github/workflows/`)
   - `test.yml`: 필수 검사 「Unit tests」. Node 24로 `node --test tests/unit/*.test.js`와 `npm run typecheck`를 돌린다(ADR-012, 013). pull_request로 돈다.
   - `prose.yml`: 문장 검사. PR이 고친 줄만 보고 경고만 낸다. 필수 검사가 아니다(`tools/prose/README.md`).
@@ -56,6 +56,8 @@
   - `e2e-reminder.sh`: 턴을 끝낼 때 e2e를 알린다.
   - `pre-pr-ledger.sh`, `post-pr-ledger.sh`: PR 생성 전 원장 게이트와, 생성 뒤 원장에 `pr: N` 기입. 다른 저장소에 여는 PR(`--repo`, `-R`로 이 저장소가 아닌 곳을 가리킴)은 검사하지 않는다(2026-10-24). data 저장소에는 원장이 없다.
   - `pre-commit-ledger.sh`: 머지된 원장을 고치는 커밋을 막는다.
+- Claude Code 스킬(`.claude/skills/`)
+  - `prose-batch/`: 문장 교정 반복 실행의 한 번. 열린 교정 PR의 검토 의견을 반영하거나, 진행 목록의 다음 묶음을 교정해 PR을 연다.
   - 원장 훅 셋은 훅 입력의 `cwd`로 저장소를 찾는다. 그래서 작업 폴더(git worktree)에서는 그 폴더를 검사한다. 훅 파일 자체는 세션을 시작한 폴더의 것이 실행되므로, 훅을 고치면 그 폴더가 새 main을 받은 뒤에 적용된다(2026-10-26).
 
 ## 작업 중 함정
