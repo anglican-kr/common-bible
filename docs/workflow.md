@@ -16,6 +16,7 @@
 - 원장은 짧게 쓴다. 다른 문서나 git에서 볼 수 있는 것은 다시 적지 않고, 그곳에 없는 것(왜 바꿨는지, 사용자가 정한 것, 일부러 바꾸지 않은 것, 검증 결과)만 쓴다. 형식은 `docs/changes/README.md`(사용자 결정, 2026-10-24).
 - 브랜치 이름은 타입 접두어 뒤를 무엇을 바꾸는지 담는 영어 낱말로 짓는다(예: `engine-open-items`). 원장의 파일 이름이 브랜치 이름을 따르기 때문이다(`docs/changes/README.md` 「파일 이름」, 사용자 결정 2026-10-24).
 - 커밋 제목에 휘발성 맥락(「Bugbot 지적 반영」, 「N차 수정」, 「리뷰 코멘트 반영」)을 넣지 않는다. 그 커밋이 무엇을 바꿨는지로 쓴다.
+- 원장 커밋의 제목에도 무엇의 원장인지 쓴다. 「docs: 저장 실패 안내 원장」은 제목만으로 내용을 알 수 없다. 해소한 이슈 번호를 넣어 「docs: known-issues §15.4 해소 기록과 원장」처럼 쓰고, 원장에 적은 것을 본문에 목록으로 붙인다(사용자 교정, 2026-10-26).
 - 진행 중인 작업이 GitHub 이슈와 이어져 있으면 커밋 제목 끝에 `(#NNN)`을 붙인다. 다른 저장소의 이슈는 `anglican-kr/common-bible#134`처럼 쓴다. 이슈를 닫는 `Closes #134`는 본문에 따로 적는다.
 - GitHub 작업은 REST(`gh api repos/...`)로 한다. GraphQL을 쓰는 `gh pr edit`가 projectCards 오류를 냈다(2026-07-06 PR #301, 사용자 지시). PR 생성 명령은 원장 훅이 검사하는 표준 절차라 그대로 쓰고, 오류가 나면 REST로 바꾼다.
 - 필수 검사가 「Expected」로 멈춰 머지가 막히면, CI를 다시 돌리기 전에 PR이 main과 충돌하는지 본다. 충돌이면 GitHub가 머지 ref(`refs/pull/<N>/merge`)를 만들지 못해 워크플로가 아예 돌지 않는다. `gh api repos/anglican-kr/common-bible/pulls/<N> --jq .mergeable_state`가 `dirty`이거나 head에 `github-actions` check-suite가 없으면 이 경우다. 해법은 충돌을 푸는 것이다. 예전에는 `git rebase origin/main` 뒤 force push로 풀었는데, force push는 CLAUDE.md가 금지하므로 실행 전에 사용자에게 묻는다. squash 머지라면 `git merge origin/main`으로 풀어도 결과는 같다.
