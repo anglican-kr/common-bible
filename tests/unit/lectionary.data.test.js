@@ -204,7 +204,7 @@ test("A3 데이터 전수 — 독서 세트가 제목으로 갈리는 날은 본
 test("A3 두 독서 카드 — 본문 없는 격자로는 내지 않고(12.28 · 1.6), 명절이 주일이면 「이날의 주일 독서」(자체 리뷰 2026-10-13)", { skip: SKIP }, () => {
   assert.strictEqual(model("2026-12-28").pair, null);
   assert.strictEqual(model("2026-01-06").pair, null);
-  assert.strictEqual(model("2026-12-07").pair.kind, "arrival");   // 본문이 있는 도착일은 그대로
+  assert.strictEqual(model("2026-12-07").pair.kind, "arrival");   // 본문이 있는 옮겨 온 날은 그대로
   assert.strictEqual(model("2027-02-07").pair.bText.note, "이날의 주일 독서");
 });
 
@@ -240,7 +240,7 @@ test("A3 데이터의 다니 3 참조는 RCL(NRSV) 계열 독서표와 같은 �
   for (const [spec, keys] of Object.entries(RCL_EQUIVALENT)) same(plain(ctx.selectVerses(dan3, spec).keys), keys, spec);
 });
 
-test("A3 2026-12-07 성 니콜라 도착 — 도착 카드 둘, 칩에 「12월 6일에서 옮겨 옴」, 본기도는 고른 칩(니콜라)의 것만", { skip: SKIP }, () => {
+test("A3 2026-12-07 옮겨 온 성 니콜라 — 옮겨 온 날의 카드 둘, 칩에 「12월 6일에서 옮겨 옴」, 본기도는 고른 칩(니콜라)의 것만", { skip: SKIP }, () => {
   const m = model("2026-12-07");
   assert.ok(m.pair);
   assert.strictEqual(m.pair.kind, "arrival");
@@ -248,7 +248,7 @@ test("A3 2026-12-07 성 니콜라 도착 — 도착 카드 둘, 칩에 「12월 
   assert.strictEqual(m.pair.aText.note, "12월 6일에서 옮겨 옴");
   assert.ok(m.chips.some((c) => c.label === "성 니콜라 · 12월 6일에서 옮겨 옴" && c.active));
   assert.strictEqual(m.collects.length, 1);   // 니콜라 본기도만(기원 날짜에 색인된 것 — §5.6)
-  assert.strictEqual(m.slots.length, 4);   // 기원 날짜에 색인된 독서가 도착일에서 나온다(§5.6)
+  assert.strictEqual(m.slots.length, 4);   // 기원 날짜에 색인된 독서가 옮겨 온 날에서 나온다(§5.6)
 });
 
 test("A3 2025-01-29 설날 — 명절 카드 둘", { skip: SKIP }, () => {

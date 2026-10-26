@@ -222,7 +222,7 @@ function resolveDate(dateStr) → {
  *   status: "proper" | "transferred_in" | "transferred_out" | "optional" | "commemorated" | "omitted",
  *   from?: string,          // 이 후보가 정의된 원래 날짜 "YYYY-MM-DD" — transferred_in·optional 에만. 계보가 아니라 기원.
  *                           //   optional 은 목적지가 원래 날짜보다 앞일 수 있어(2028-02-02 → 1.30) 미래 날짜가 온다
- *   to?: string,            // 이 날짜를 떠나 도착한 날짜 "YYYY-MM-DD" — transferred_out 에만
+ *   to?: string,            // 이 날짜에서 옮겨 간 날짜 "YYYY-MM-DD" — transferred_out 에만
  *   displacedBy?: string,   // 밀어낸 것의 id — Observance.id 또는 §6.5 의 합성 id "guard:holy-week"(성주간에 생략된 prec 7 — 옮김 계산 결과에는 실리지 않는다).
  *                           //   **충돌**로 밀린 transferred_in·transferred_out·commemorated·omitted 에는 필수.
  *                           //   활성화된 선택 봉헌의 transferred_in·transferred_out 에는 **없다**(밀린 것이 아니라 택한 것 — §6.2).
@@ -250,8 +250,8 @@ function resolveDate(dateStr) → {
     - ⑥ **지향과 이름 줄 후보인 사계재와 기념일**(→ R-6.1-ineligible). 언제나 `proper`이고 지정 전례일이 아니다. 밀린 것이 아니므로 `displacedBy`도 없고 `omitted`도 되지 않는다.
     - ⑦ **저녁 전례 후보**(`evening: true`. 부활밤과 성탄 밤, → R-6.1-evening). 그날의 어떤 판정에도 들지 않아 다시 분류되지 않는다.
 - **`transferred_in`**(PR 3, §6.5). 다른 날짜에서 옮겨 와 **이날 지키는** 축일. `from`을 갖고, 충돌로 옮겨졌으면 `displacedBy`도 갖는다(활성화된 선택 봉헌은 `displacedBy`가 없다). ADR-037 §6 표시 순서의 ② 「옮겨 지키는 축일」이 정확히 이 집합이다.
-- **`transferred_out`**(PR 3, §6.5). 이 날짜의 고유 후보였으나 **다른 날로 간** 축일. 충돌로 밀렸으면 `to`와 `displacedBy`를, 활성화된 선택 봉헌이면 `to`만 갖는다. 지정 전례일이 될 수 없고, 화면은 「→ 12.29」로 안내한다. 도착한 축일은 다시 밀리지 않으므로(→ R-6.2-first-come) 옮겨 온 것이 이 상태가 되는 일은 없다.
-- **`optional`**(PR 3, §6.2). 「옮겨 지킬 수 있다」는 선택 주일 봉헌(§6.2)의 목적지 주일에 더해지는 후보. `from`은 그 축일의 **원래 날짜**이고 목적지보다 뒤일 수 있다(주의 봉헌 2028: 2.2에서 1.30으로). 설정에서 켜기 전에는 지정 판정에 참여하지 않는다. 별도 색인 `optionals`에서 오고, 도착과 출발 색인과 섞지 않는다.
+- **`transferred_out`**(PR 3, §6.5). 이 날짜의 고유 후보였으나 **다른 날로 간** 축일. 충돌로 밀렸으면 `to`와 `displacedBy`를, 활성화된 선택 봉헌이면 `to`만 갖는다. 지정 전례일이 될 수 없고, 화면은 「→ 12.29」로 안내한다. 옮겨 온 축일은 다시 밀리지 않으므로(→ R-6.2-first-come) 옮겨 온 것이 이 상태가 되는 일은 없다.
+- **`optional`**(PR 3, §6.2). 「옮겨 지킬 수 있다」는 선택 주일 봉헌(§6.2)의 목적지 주일에 더해지는 후보. `from`은 그 축일의 **원래 날짜**이고 목적지보다 뒤일 수 있다(주의 봉헌 2028: 2.2에서 1.30으로). 옮겨 지키기로 하기 전에는 지정 판정에 참여하지 않는다. 별도 색인 `optionals`에서 오고, 옮겨 온 축일과 옮겨 간 축일의 색인과 섞지 않는다.
 - **`commemorated`**(PR 3의 B1, 밀린 축일은 2026-10-24). 밀렸으나 옮기지 않고 기념만 하는 축일. 성주간 밖에서 밀린 prec 7 **축일**(→ R-6.1-prec7-omit, 2026-10-24. 2026-12-13 루시아, 12.29 토마스 베켓, 2026-07-26 안나와 요아킴), `transfer_to: commemorate_only`(교구 설립일. 지역 축일 표라 아직 싣지 않는다), C 그룹의 「옮기기 어려우면」(→ R-6.2-conflict-steps)이다. `displacedBy`를 갖는다.
 - **`omitted`**(PR 3의 B1). 성주간에 걸려 그해 생략하는 prec 7 **축일**(`minor_feast`. → R-6.3-holy-week-guard, 기도서 「축일 … 성주간, 부활1주간과 겹치면 생략한다」).
   - 부활 8일 평일의 축일은 책자대로 그날 지킨다(2026-10-24). 그 밖에서 밀린 축일은 `commemorated`다(→ R-6.1-prec7-omit).
@@ -263,7 +263,7 @@ function resolveDate(dateStr) → {
 
 **핵심 계약(ADR-036 §7).** `precedence`는 그날의 **공식 축일 하나**를 정하지만, 엔진은 **밀려난 축일, 기념만 하는 축일, 연중 평일 독서를 버리지 않는다.** **지정 전례일은 엔진이 정해 `official`로 낸다**(B1, §6.1). 화면이 우선순위를 다시 계산하지 않는다. 화면이 고르는 것은 「**어느 후보를 볼지**」다. 전례일 스위처의 칩은 `candidates`를 **언제나 모두 보이고**, `official`은 **처음 고른 칩**일 뿐이다(지정 전례일의 독서가 공통뿐이면 처음 보이는 독서는 그날의 격자다, 미결25; ADR-038 §3, 사용자 확정 2026-09-17). 낮은 등급을 숨기거나 합쳐 내지 않는다. 「기본은 `official`만, 고급은 `candidates` 모두」 같은 설정을 두지 않는 이유는 ADR-036 §7에 있다. 기본에서 숨기면 사용자가 「축일에 밀린 기본 독서」를 놓치는데, 그것이 바로 이 계약이 막으려던 결과다. 본문은 고른 후보 하나의 것만 그린다(후보마다 `findReadings`를 호출한다). 기념일 후보는 칩에는 남되 본문이 빈 결과다(§2, §5.6 자격 ②).
 
-**후보를 모으는 곳은 다섯이다.** ① 격자의 절기 위치 ② `date` 매치(월별 축일의 양력 날짜) ③ `lunar` 매치(월별 축일의 음력 날짜, KASI) ④ 규칙 파생(temporal-feasts의 `rule` 평가) ⑤ **도착**(옮겨 온 축일) `transfers.arrivals.get(date)`(§6.5).
+**후보를 모으는 곳은 다섯이다.** ① 격자의 절기 위치 ② `date` 매치(월별 축일의 양력 날짜) ③ `lunar` 매치(월별 축일의 음력 날짜, KASI) ④ 규칙 파생(temporal-feasts의 `rule` 평가) ⑤ **옮겨 온 축일** `transfers.arrivals.get(date)`(§6.5).
 
 - **①의 `Observance`는 합성이다.** 격자(연중 주일, 절기 평일)는 정의 표에 행이 없어 엔진이 절기 위치에서 만든다.
   - `id`는 **`grid:<season>-<week|x>-<type>[-<weekday>]`**다(예: 2026-01-25는 `grid:ordinary-3-sunday`, 사순 2주 화요일은 `grid:lent-2-weekday-tue`, 성주간 평일처럼 `week: null`이면 `x`).
@@ -297,7 +297,7 @@ function resolveDate(dateStr) → {
 **후보 표시 순서(ADR-037 §6)**는 다음과 같다.
 
 1. 교회력에 따른 축일과 재일. 우선순위 순이다(R-6.2-tie-ladder의 정렬 키. 출처 순이 아니다).
-2. 옮겨 지키는 축일. 도착한 것, 그다음 선택 봉헌이다.
+2. 옮겨 지키는 축일. 옮겨 온 것, 그다음 선택 봉헌이다.
 3. 나머지(연중 평일, 연속 독서).
 4. 저녁 전례(→ R-6.1-evening. 하루의 순서대로 낮 다음에 저녁이다).
 

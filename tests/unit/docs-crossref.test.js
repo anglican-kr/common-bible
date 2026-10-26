@@ -72,7 +72,7 @@ const DESIGN_SECTIONS = [
   "4", "4.1", "4.2", "4.3", "4.4", "4.5", "4.6", "4.7", "4.8", "4.9", "4.10",
   "5", "5.1", "5.2", "5.3", "5.4", "5.5", "5.6", "6", "6.1", "6.2", "6.3", "6.4", "6.5", "7", "8", "9", "9.1", "9.2",
 ];
-const DESIGN_ISSUE_MAX = 43; // ④ 에서 ADR 「미결 사항」의 열린 항목을 승계해 34~42 를 발급했다 · #347 이 43(도착에만 밀린 비연쇄 주요축일)
+const DESIGN_ISSUE_MAX = 43; // ④ 에서 ADR 「미결 사항」의 열린 항목을 승계해 34~42 를 발급했다 · #347 이 43(옮겨 온 축일에만 밀린 비연쇄 주요축일)
 const ADR_ISSUE_COUNT = { "ADR-036": 13, "ADR-037": 8, "ADR-038": 3 };
 
 const joined = Object.fromEntries(Object.entries({ ...DOCS, ...SOURCES }).map(([k, ps]) => [k, readJoined(ROOT, ps)]));
@@ -338,7 +338,7 @@ test("기준 문장은 설계서 한 곳에만 있다", { skip: GATES.sentinels 
     { text: "한 열에 담고 있다", allow: ["설계서"], once: true },               // R-6.2-destinations
     { text: "수요일까지 직전, 목요일부터 다음", allow: ["설계서"], once: true },  // R-6.2-nearby-sunday — 경계
     { text: "lectionarypage.net 2025-2027", allow: ["설계서"], once: true },     // R-6.2-chain-model — 연쇄 모델의 근거
-    { text: "도착한 축일은 우선순위와 무관하게 자리를 지킨다", allow: ["설계서"], once: true }, // R-6.2-first-come
+    { text: "옮겨 온 축일은 우선순위와 무관하게 자리를 지킨다", allow: ["설계서"], once: true }, // R-6.2-first-come
     { text: "규칙일은 남고 고정일이 옮겨 간다", allow: ["설계서"], once: true },    // R-6.2-rule-day-stays
     { text: "보호 기간은 주요축일을 밀지도 막지도 않는다", allow: ["설계서"], once: true }, // R-6.3-holy-week-guard(2026-10-11 책자대로)
     { text: "절기 기본색을 깐다", allow: ["설계서"], once: true },               // R-6.4-color-order

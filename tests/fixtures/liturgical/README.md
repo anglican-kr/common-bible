@@ -8,12 +8,12 @@
 
 | 파일 | `kind` | 내용 |
 |---|---|---|
-| `transfers.cases.json` | `transfer` | 밀려 옮김(실제 연도) — 도착·출발·연쇄·보호 기간·명절·같은 순위 |
-| `optionals.cases.json` | `optional` · `activation` | 선택 봉헌 `optional` 후보와 활성화 계약(설정이 켠 축일을 엔진이 옮긴다는 약속, `activated`) |
+| `transfers.cases.json` | `transfer` | 밀려 옮김(실제 연도) — 옮겨 온 축일·옮겨 간 축일·연쇄·보호 기간·명절·같은 순위 |
+| `optionals.cases.json` | `optional` · `activation` | 선택 봉헌 `optional` 후보와 활성화 계약(옮겨 지키기로 한 축일을 엔진이 옮긴다는 약속, `activated`) |
 | `winners.cases.json` | `winner` | 지정 전례일(`official`)·전례색·지정 자격(사계재·기념일)·생략(`omitted`) |
 | `transfers-1900-2100.golden.txt` | — | **기준 결과 파일**(검토 문서 부록 A · I-10) — 1900~2100에 옮기는 축일 전부를 한 줄씩(`activated = ∅`). 손으로 쓰는 기대값이 아니라 엔진이 만든 회귀 기준이다 — `UPDATE_GOLDEN=1 node --test tests/unit/liturgical-engine.data.test.js` 로 다시 만들고 diff 를 PR 에서 읽는다. 머리줄의 data sha 는 기록용이라 비교하지 않는다. 기대값의 기준은 위 세 파일이다 |
 
-합성 표 케이스(연도 경계 · 해를 넘긴 선착순 · 옮길 날 수의 상한 · 목적지 충돌 · 떠난 후순위 후보 제외 · 켜진 출발이 비운 자리 · 도착을 다시 옮기지 않음)와 1900~2100 불변식(검토 문서 `I-n`)은 **케이스로 넣지 않는다** — 합성 표는 코드가 만들므로 설계서 §7 본문과 `liturgical-engine.test.js` 에, 불변식은 `liturgical-engine.data.test.js` 에 둔다. 이 디렉터리에 두는 것은 I-10 의 기준 결과 파일(위 표)뿐이다.
+합성 표 케이스(연도 경계 · 해를 넘긴 선착순 · 옮길 날 수의 상한 · 목적지 충돌 · 옮겨 간 후순위 후보 제외 · 옮겨 지키기로 한 선택 봉헌이 비운 원래 날리 · 옮겨 온 축일을 다시 옮기지 않음)와 1900~2100 불변식(검토 문서 `I-n`)은 **케이스로 넣지 않는다** — 합성 표는 코드가 만들므로 설계서 §7 본문과 `liturgical-engine.test.js` 에, 불변식은 `liturgical-engine.data.test.js` 에 둔다. 이 디렉터리에 두는 것은 I-10 의 기준 결과 파일(위 표)뿐이다.
 
 ## id 규칙
 
@@ -75,7 +75,7 @@
 | `from` · `to` | `transferred_in`/`optional` 의 기원 날짜 · `transferred_out` 의 목적지 날짜 |
 | `displacedBy` | 밀어낸 것의 정확한 id. **`null` 이면 「필드가 없어야 한다」**(활성화된 선택 봉헌 — 밀린 것이 아니라 택한 것) |
 | `absent: true` | `id`(+ `status`)에 맞는 후보가 **없어야** 한다(반대 모델 회귀 · 「optional 없음」) |
-| `notInDepartures: true` | `departures.get(date)` 에 `id` 가 없다(도착을 다시 옮기지 않음 · 절차 ⑤에 따라 옮기지 않음 · 동시 봉헌) |
+| `notInDepartures: true` | `departures.get(date)` 에 `id` 가 없다(옮겨 온 축일을 다시 옮기지 않음 · 절차 ⑤에 따라 옮기지 않음 · 동시 봉헌) |
 | `neverDeparts` | 연도 범위 확인 항목 — 그 id 가 어느 해에도 `departures` 에 나타나지 않는다 |
 | `official` | 그날 `official` 의 id. `"grid:*"` 는 「격자 합성 후보이면 된다」(주간 번호를 문서가 적지 않은 경우) |
 | `color` · `colors` | `ResolvedDate.color`(정식 전례색 `white` `red` `green` `violet`) · `ResolvedDate.colors`(병기 목록 — 사계재 날 축일이 지정 전례일이면 [자, 축일 색], 그 밖은 `[color]`, → R-6.4-ember-color) |

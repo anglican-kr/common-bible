@@ -323,7 +323,7 @@ test("pairOf: 당일이 주일이면(2028-08-06) 목적지가 그날 자신이�
   assert.strictEqual(ctx.pairOf(resolvedOf("2028-08-06", [feast, grid], feast)), null);
 });
 
-test("pairOf: 독서가 없는 쪽이 있으면 카드를 내지 않는다 — 성탄 8일 도착일의 빈 격자(자체 리뷰 2026-10-13)", () => {
+test("pairOf: 독서가 없는 쪽이 있으면 카드를 내지 않는다 — 성탄 8일 옮겨 온 날의 빈 격자(자체 리뷰 2026-10-13)", () => {
   const john = cand(obs("d1227-사도-성-요한", "사도 성 요한"), "transferred_in", { from: "2026-12-27", displacedBy: "grid:christmas-1-sunday" });
   const grid = cand(obs("grid:christmas-x-weekday-mon", "성탄 월요일"));
   const r = resolvedOf("2026-12-28", [john, grid], john);
@@ -353,7 +353,7 @@ test("pairOf: 목적지 주일 — 지정 전례일(격자 주일)과 optional �
   assert.strictEqual(p.aText.official, true);
 });
 
-test("pairOf: 옮겨 온 축일의 도착일 — 도착 축일과 격자", () => {
+test("pairOf: 축일을 옮겨 온 날 — 옮겨 온 축일과 격자", () => {
   const nic = cand(obs("d1206-성-니콜라", "성 니콜라"), "transferred_in", { from: "2026-12-06", displacedBy: "grid:advent-2-sunday" });
   const grid = cand(obs("grid:advent-2-weekday-mon", "대림 2주 월요일"));
   const omitted = cand(obs("d1207-암브로스", "암브로스"), "omitted");
