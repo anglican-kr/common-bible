@@ -463,7 +463,7 @@ const lunarDay = (y, key) => {
   return `${y}-${v}`;
 };
 
-test("B1 불변식 — 2025~2050 모든 날에 지정 전례일이 하나 있고(선택 봉헌 · 떠난 것은 지정 전례일이 아니다) 후보 가운데 하나이며, 색은 정식 4색 · colors 는 color 를 담는다 · 밀린 후보만 displacedBy", { skip: SKIP }, () => {
+test("B1 불변식 — 2025~2050 모든 날에 지정 전례일이 하나 있고(선택 봉헌 · 옮겨 간 것은 지정 전례일이 아니다) 후보 가운데 하나이며, 색은 정식 4색 · colors 는 color 를 담는다 · 밀린 후보만 displacedBy", { skip: SKIP }, () => {
   const bad = [];
   for (let y = 2025; y <= 2050; y++) {
     for (let d = `${y}-01-01`; d.startsWith(`${y}-`); d = ctx.addDays(d, 1)) {
@@ -663,8 +663,8 @@ test("C-6.4-1 절기 기본색 · 지정 전례일의 색 — 성주간 전체 �
     if (lent4.colorAlt !== "rose" && offId(lent4).startsWith("grid:")) bad.push(`${y} 사순 4주일 ${lent4.colorAlt}`);
   }
   same(bad, []);
-  // 축일 색 예외가 실제로 돈다 — 그날 지킨 요셉(2035 · 2046 성 월) · 수태고지(2043 성 수). 성주간에 도착이 지정 전례일인 날은 실데이터에
-  // 없다(보호 기간 안의 도착 0 — 도착이 지정 전례일인 날의 축일 색은 합성 C-6.5-23)
+  // 축일 색 예외가 실제로 돈다 — 그날 지킨 요셉(2035 · 2046 성 월) · 수태고지(2043 성 수). 성주간에 옮겨 온 축일이 지정 전례일인 날은 실데이터에
+  // 없다(보호 기간 안의 옮겨 온 축일 0 — 옮겨 온 축일이 지정 전례일인 날의 축일 색은 합성 C-6.5-23)
   same(feastDays, ["2035 E-6", "2043 E-4", "2046 E-6"]);
 });
 
@@ -796,12 +796,12 @@ function checkAssertion(date, exp) {
 const shiftYear = (v, dy) => (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v)
   ? String(Number(v.slice(0, 4)) + dy).padStart(4, "0") + v.slice(4) : v);
 
-/** 연도 범위 확인 항목 — 그 id 가 범위 안 어느 해의 출발 색인에도 없다(동시 봉헌은 옮기지 않는다). */
+/** 연도 범위 확인 항목 — 그 id 가 범위 안 어느 해의 옮겨 간 축일 색인에도 없다(동시 봉헌은 옮기지 않는다). */
 function checkRange(a) {
   const bad = [];
   for (const k of Object.keys(a.expect)) if (!RANGE_KEYS.has(k)) bad.push(`${k}: 연도 범위 확인 항목에서 모르는 키`);
   for (let y = a.years[0]; y <= a.years[1]; y++) {
-    if ([...passOf(y).departures.values()].flat().some((c) => c.observance.id === a.expect.neverDeparts)) bad.push(`${y}: ${a.expect.neverDeparts} 가 떠났다`);
+    if ([...passOf(y).departures.values()].flat().some((c) => c.observance.id === a.expect.neverDeparts)) bad.push(`${y}: ${a.expect.neverDeparts} 가 옮겨 갔다`);
   }
   return bad;
 }
@@ -869,14 +869,14 @@ test("I-1~I-8 · I-11 옮김 계산 불변식 — 1900~2100 (activated = ∅)", 
       }
     }
     for (const [D, cs] of p.arrivals) {
-      if (!inYear(D, y)) continue;   // 다음 해로 넘긴 도착은 그해 계산의 이월로 본다
+      if (!inYear(D, y)) continue;   // 다음 해로 넘긴 옮겨 온 축일은 그해 계산의 이월로 본다
       const deps = p.departures.get(D) || [];
       if (cs.some((c) => deps.some((x) => x.observance.id === c.observance.id))) bad.push(`I-6 ${D}`);
-      // I-11 — 도착 날짜는 주일이 아니고 그날 유효 precedence ≤ 2 인 고유 후보(명절 · 대축일 · 대재일 · A 특례 · 절기
-      // 주일)가 없다. I-3(도착 ∉ 보호 기간)은 폐기 — 보호 기간이 막지 않는다(→ R-6.3-holy-week-guard)
+      // I-11 — 옮겨 온 날짜는 주일이 아니고 그날 유효 precedence ≤ 2 인 고유 후보(명절 · 대축일 · 대재일 · A 특례 · 절기
+      // 주일)가 없다. I-3(옮겨 온 축일 ∉ 보호 기간)은 폐기 — 보호 기간이 막지 않는다(→ R-6.3-holy-week-guard)
       const own = ctx.ownObservancesOn(ix().cal, D);
       if (ctx.dayOfWeek(D) === 0 || own.some((o) => ctx.effectivePrecedence(o) <= 2)) bad.push(`I-11 ${D} ${cs.map((c) => c.observance.id)}`);
-      // I-2 — 도착은 떠나지 않으므로(I-6) 그날의 지정 전례일이다. 한 날에 도착은 하나다(선착순)
+      // I-2 — 옮겨 온 축일은 옮겨 가지 않으므로(I-6) 그날의 지정 전례일이다. 한 날에 옮겨 온 축일은 하나다(선착순)
       const r = resolve(D);
       if (cs.length !== 1 || !r.official || r.official.status !== "transferred_in" || r.official.observance.id !== cs[0].observance.id) {
         bad.push(`I-2 ${D} ${cs.map((c) => c.observance.id)} official ${r.official && r.official.observance.id}`);
