@@ -2465,6 +2465,12 @@ test("_forgetViewed: removes a single id, leaves others", () => {
   assert.deepEqual(map, { b: 20 });
 });
 
+test("_forgetViewed: an id named like an Object.prototype member that was never viewed writes nothing (PR #438 review)", () => {
+  const h = loadBookmarkSort();
+  h._forgetViewed("toString");
+  assert.equal(h._ls.getItem("bible-bookmark-viewed"), null);
+});
+
 // ── sortBookmarkNodes ──
 
 test("sortBookmarkNodes: 'manual' preserves stored order (shallow copy)", () => {
@@ -2523,6 +2529,21 @@ test("sortBookmarkNodes: 'viewed' uses the local viewed map, newest-first", () =
   ];
   // viewed: c(30), a(10), then b(createdAt 5)
   assert.deepEqual(idsOf(h.sortBookmarkNodes(nodes)), ["c", "a", "b"]);
+});
+
+test("sortBookmarkNodes: 'viewed' — a never-viewed id named like an Object.prototype member falls back to createdAt", () => {
+  // The viewed map is a plain object: toString read the inherited function and the sort key became NaN, so the item
+  // kept whatever place it had (PR #438 review — the sync store reads such ids since known-issues §15.2).
+  const h = loadBookmarkSort({
+    "bible-bookmark-sort": "viewed",
+    "bible-bookmark-viewed": JSON.stringify({ a: 10 }),
+  });
+  const nodes = [
+    { type: "bookmark", id: "toString", createdAt: 1 },
+    { type: "bookmark", id: "a", createdAt: 999 },
+    { type: "bookmark", id: "b", createdAt: 5 },
+  ];
+  assert.deepEqual(idsOf(h.sortBookmarkNodes(nodes)), ["a", "b", "toString"]);
 });
 
 test("sortBookmarkNodes: non-array input → empty array", () => {
