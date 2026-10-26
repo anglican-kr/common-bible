@@ -461,7 +461,7 @@ ADR-013 (클라이언트 JS 유닛 테스트 전략) 참고. 위 6차 리뷰 정
 
 - **silent 자동 리디렉션 진입** (`js/sync/state-machine.js`):
   - `DISABLED + ENABLE` iOS 분기에서 `bible-drive-sync-email`이 저장돼 있으면 `_beginRedirect("none")`을 호출. Implicit Flow는 refresh token이 없어 in-memory 토큰이 앱 종료와 함께 사라지지만, Google 측 세션이 유효하면 `prompt=none`이 즉시 토큰을 재발급한다. 페이지 깜박임 ≤ 1초.
-  - 진입 가드 두 단계: (1) 저장된 email이 없으면 NEEDS_CONSENT (첫 연결 흐름), (2) `bible-drive-silent-blocked` 플래그가 1이면 NEEDS_CONSENT (이전 silent 시도 실패).
+  - 진입 검사 두 단계: (1) 저장된 email이 없으면 NEEDS_CONSENT (첫 연결 흐름), (2) `bible-drive-silent-blocked` 플래그가 1이면 NEEDS_CONSENT (이전 silent 시도 실패).
 
 - **silent-blocked 플래그** (`localStorage["bible-drive-silent-blocked"]`):
   - silent 리디렉션이 `interaction_required` / `consent_required` / `login_required`로 실패하면 IIFE가 1로 설정. 다음 앱 오픈에 의미 없는 깜박임 반복을 차단.
@@ -566,7 +566,7 @@ ADR-013 (클라이언트 JS 유닛 테스트 전략) 참고. 위 6차 리뷰 정
 **state-machine.js**:
 - 신규 `_attemptSilentRefresh(ctxPatch?)`: IDB의 refresh token으로 access token 갱신. 4가지 결말 — 토큰 없음(false 반환, 폴백) / 성공(IDLE) / invalid_grant(IDB clear + NEEDS_CONSENT, 스낵바 없음) / 5xx·네트워크(OFFLINE)
 - 신규 `acceptRedirectCode(code, verifier)`: PKCE 콜백에서 받은 code를 access+refresh token 쌍으로 교환 → IDB 저장 → IDLE
-- `enable()`: 동기 dispatch 유지 + silent refresh fire-and-forget. race 가드(IDLE/ERROR이면 결과 폐기)로 legacy 경로와 충돌 방지
+- `enable()`: 동기 dispatch 유지 + silent refresh fire-and-forget. 경쟁 상태 검사(IDLE/ERROR이면 결과 폐기)로 legacy 경로와 충돌 방지
 - `_handleSyncFail("401")`: MAX_REAUTH cap 체크를 silent refresh 진입 전에 수행 (만성 401 무한 루프 방지). 401 reauth는 `reAuthFails` 카운터를 IDLE 전이 시 carry forward — successful sync로 SYNC_DONE 전까지 누적
 
 **drive-sync.js**:
@@ -581,7 +581,7 @@ ADR-013 (클라이언트 JS 유닛 테스트 전략) 참고. 위 6차 리뷰 정
 
 ### Bugbot 리뷰 정제 (PR #54)
 
-**1차 — 사용자 disconnect 감지**: `_attemptSilentRefresh`의 race 가드가 `_state === IDLE/ERROR`만 체크 → 사용자가 silent refresh 진행 중 `signOut()`/`disable()`을 호출하면 결과가 무시되지 않고 DISABLED 상태를 IDLE로 끌어올림 (사용자 의도 무시). 동일 race 표면이 `acceptRedirectCode`에도 존재 — `state=DISABLED`에서 진입하므로 state로는 user-action을 구분 불가.
+**1차 — 사용자 disconnect 감지**: `_attemptSilentRefresh`의 경쟁 상태 검사가 `_state === IDLE/ERROR`만 체크 → 사용자가 silent refresh 진행 중 `signOut()`/`disable()`을 호출하면 결과가 무시되지 않고 DISABLED 상태를 IDLE로 끌어올림 (사용자 의도 무시). 동일 race 표면이 `acceptRedirectCode`에도 존재 — `state=DISABLED`에서 진입하므로 state로는 user-action을 구분 불가.
 
 수정: `localStorage["bible-drive-sync"] === "0"` 검사 추가. 이 플래그는 `_transition`이 DISABLED/ERROR 진입 시 `enabled = next !== DISABLED && next !== ERROR`로 설정하므로 "사용자/시스템이 sync를 명시적으로 중단했는가"를 가장 신뢰성 있게 신호함. 회귀 방어 tests `29.`, `30.`.
 
@@ -589,7 +589,7 @@ ADR-013 (클라이언트 JS 유닛 테스트 전략) 참고. 위 6차 리뷰 정
 
 수정: fallback에서 `location.pathname`만 사용 (search 폐기). 우리 앱은 query 기반 라우팅을 안 쓰므로 이 경로에서 search는 100% OAuth 산출물.
 
-**2차 — SYNCING race 가드 (조건부 적용)**: Bugbot이 `_state === SYNCING`을 무조건 폐기 리스트에 추가하라고 제안했으나, 그대로 적용하면 401 reauth 경로가 깨짐 (`_kickoff401Reauth`가 SYNCING 상태에서 호출돼 SYNCING을 빠져나오는 게 책임인데 가드가 막으면 영원히 갇힘).
+**2차 — SYNCING 경쟁 상태 검사 (조건부 적용)**: Bugbot이 `_state === SYNCING`을 무조건 폐기 리스트에 추가하라고 제안했으나, 그대로 적용하면 401 reauth 경로가 깨짐 (`_kickoff401Reauth`가 SYNCING 상태에서 호출돼 SYNCING을 빠져나오는 게 책임인데 검사가 막으면 영원히 갇힘).
 
 분기 처리: `_attemptSilentRefresh(ctxPatch, fromReauth)` 두 번째 인자 `fromReauth: boolean` 도입. cold-start 경로(`enable()`)는 기본 `false` → SYNCING 폐기 (legacy GIS가 이미 settled). 401 reauth 경로(`_kickoff401Reauth`)는 `true` 명시 → SYNCING 우회 허용.
 
@@ -632,7 +632,7 @@ PKCE Authorization Code + refresh token 단일 경로로 통일. ADR이 처음�
 - `acceptRedirectToken` (Implicit Flow 진입점) 제거. `acceptRedirectCode`만 유지
 - `disable()`이 `localStorage["bible-drive-sync"] = "0"`을 _transition 외부에서도
   defensively 설정 → 사용자가 silent refresh / code 교환 race window에서
-  disconnect 클릭한 경우에도 race 가드 동작 보장
+  disconnect 클릭한 경우에도 경쟁 상태 검사 동작 보장
 
 **transport.js**:
 - GIS wrapper 7종 (`initTokenClient` / `requestSilentToken` /
@@ -696,7 +696,7 @@ PKCE Authorization Code + refresh token 단일 경로로 통일. ADR이 처음�
   round-trip·콜백 보안 회귀(state_mismatch / error / returnTo)만 유지
 - 합계 62 unit pass + tsc 두 config 모두 0 error
 
-**Bugbot 단계 4 검토 결과**: 1차 — `_attemptSilentRefresh` IDB rotation save 갭과 `acceptRedirectCode` IDB save 갭에서 `SYNC_ENABLED_KEY` 재확인 누락. 사용자가 IDB write 중 `disable()` 호출 시 후속 `_transition`이 flag를 "1"로 덮어써 의도 무시. 같은 갭이 4xx 분기 `clearRefreshToken` await 후에도 존재. PR #57 추가 commit `f090c83`에서 매 IDB await 직후 race 가드 재검사 추가 + 회귀 방어 단위 테스트 3건 (26a/b/c). 단계 4 후 `enable()`이 동기적으로 DISABLED를 빠져나가지 않으므로 state-based 가드만으로 cold-start 경로 보호 불가능 — flag-based 가드가 필수임을 정정.
+**Bugbot 단계 4 검토 결과**: 1차 — `_attemptSilentRefresh` IDB rotation save 갭과 `acceptRedirectCode` IDB save 갭에서 `SYNC_ENABLED_KEY` 재확인 누락. 사용자가 IDB write 중 `disable()` 호출 시 후속 `_transition`이 flag를 "1"로 덮어써 의도 무시. 같은 갭이 4xx 분기 `clearRefreshToken` await 후에도 존재. PR #57 추가 commit `f090c83`에서 매 IDB await 직후 경쟁 상태 검사 재검사 추가 + 회귀 방어 단위 테스트 3건 (26a/b/c). 단계 4 후 `enable()`이 동기적으로 DISABLED를 빠져나가지 않으므로 상태 기반 검사만으로 cold-start 경로 보호 불가능 — 플래그 기반 검사가 필수임을 정정.
 
 **롤백 전략**: 단계 4 PR은 원자 머지. 단계 4-only revert는 GIS 제거와 state
 machine GIS 가정이 동시에 사라졌으므로 부분 revert 불가. IDB에 저장된 refresh
@@ -708,7 +708,7 @@ token은 무해 (구 코드는 IDB 안 봄). 회귀 발견 시 PR 전체 revert�
 
 - **`bible-drive-silent-blocked` localStorage one-shot cleanup**: `js/drive-sync.js` 모듈 로드 시 `localStorage.removeItem("bible-drive-silent-blocked")`. 단계 4에서 키를 read/쓰는(write) 코드는 모두 사라졌으나 기존 사용자 디바이스에 stale value가 남아있을 수 있어 정리. removeItem이 missing key에 대해 no-op이므로 안전. 몇 릴리스 후 cleanup 호출 자체도 제거 가능.
 - **`docs/coding-pitfalls.md` 신규 섹션 3개** (Phase 2h에서 학습한 패턴):
-  - §11 비동기 race 가드 — 단일 체크포인트의 함정 (Bugbot PR #54·#57 사례)
+  - §11 비동기 경쟁 상태 검사 — 단일 체크포인트의 함정 (Bugbot PR #54·#57 사례)
   - §12 콜백 URL 데이터 leak — flow별 transport 격차 (Bugbot PR #54-2 사례)
   - §13 마이그레이션 시점의 sessionStorage / localStorage 키 격리 (단계 2-4 sessionStorage 키 분리·인계 패턴)
 - **`docs/archive/audit/2026-05-07-pkce-refresh-token.md` 신규**: PKCE 마이그레이션 시점의 보안 감사. Critical/High/Medium 0건. 위협 모델 매트릭스 + 모니터링 권고 4건 (e2e 정기 실행, Cloud Console URI 검증, OAuth 검수 모니터링, silent-blocked cleanup 코드 제거 시점).
@@ -814,7 +814,7 @@ SPA에 secret을 임베드하면 (1) git 이력 영구 잔존, (2) GitHub 자동
 | Storage 비활성 | `getItem` → `SecurityError` (쿠키 차단 등) | `_loadCache`가 catch → 빈 캐시 반환 → slow path |
 | Storage 비활성 | `removeItem` throw | `_clearCache` catch → `disable()` 진행. stale 캐시는 다음 404/412에서 재시도 |
 | ITP 7일 eviction | 캐시 키만 사라짐 | `_loadCache` null 반환 → slow path → 자동 재생성 |
-| 부분 손상 | 외부 코드가 `synced-u`를 비숫자로 변형 | `parseInt` NaN → `Number.isFinite` 가드 → -1로 대체 |
+| 부분 손상 | 외부 코드가 `synced-u`를 비숫자로 변형 | `parseInt` NaN → `Number.isFinite` 검사 → -1로 대체 |
 | 크로스 탭 race | 두 탭 동시 sync | 한 쪽 upload 후 다른 쪽 etag stale → 412 → 캐시 무효화 → 정상 회복 |
 | 사용자 site data clear | 모든 캐시 키 사라짐 | cache miss → slow path. refresh token IDB도 같이 사라지면 NEEDS_CONSENT (Phase 2h 처리) |
 
@@ -894,7 +894,7 @@ Phase 2i 도입 후 실측 디버그 로그에서 확인한 것(로그 원문을
 - 첫 호출은 `_lastSyncEndAt=0`이라 throttle 미적용
 - window 안의 후속 폴 3건 모두 drop + `SYNC_THROTTLED` 로그
 - `throttleMs` 미지정 사용자 액션은 영향 없음
-- SYNCING 중 폴은 IDLE 가드에서 끊겨 throttle 분기 진입 안 함
+- SYNCING 중 폴은 IDLE 검사에서 끊겨 throttle 분기 진입 안 함
 
 전체 unit 78 → 479 케이스 중 sync 관련 46 케이스 0 fail (다른 모듈 테스트 포함 전체 통과).
 
@@ -907,9 +907,9 @@ Phase 2i 도입 후 실측 디버그 로그에서 확인한 것(로그 원문을
 (2026-08-01) 교회력 기능(ADR-036/038)이 설정 키 4종을 추가하기에 앞서, 구 빌드가 새 빌드의 설정 키를 동기화 중 조용히 떨어뜨리는 문제를 수리하고 설정 키의 수명 주기 규약을 정립했다.
 
 - **모르는 키 보존** (`mergeDocs`): 설정 병합이 `_emptyDoc()`의 아는 키만 돌던 것을 로컬·원격 키의 **합집합** 순회로 변경. 이 빌드가 모르는 키도 같은 LWW(`_u` 큰 쪽) 규칙으로 병합 결과에 실린다. `applyToLegacyKeys`는 그대로 아는 키만 localStorage에 반영 — 모르는 키는 문서에 보존만 되면 된다. `SyncSettings`에 문자열 인덱스 시그니처를 더해 타입으로도 성립.
-- **`__proto__` 가드** (`mergeDocs`): JSON.parse 산출 문서는 `"__proto__"`를 own key로 가질 수 있고, 그대로 대입하면 병합 결과 객체의 프로토타입이 바뀐다(키 탈락 + 오염). 북마크 id·설정 키 두 순회 모두에서 이 키를 무시한다.
+- **`__proto__` 검사** (`mergeDocs`): JSON.parse 산출 문서는 `"__proto__"`를 own key로 가질 수 있고, 그대로 대입하면 병합 결과 객체의 프로토타입이 바뀐다(키 탈락 + 오염). 북마크 id·설정 키 두 순회 모두에서 이 키를 무시한다.
 - **설정 키 은퇴 규약 + GC** (`sweepTombstones`): 키를 없앨 때는 `{ v: null, _u: now }`를 쓴다. 앱 시작 시 sweep이 30일 지난 null 항목을 걷어내, 이름을 바꾸거나 폐기한 키가 동기화 문서에 영원히 남지 않는다. `_u === 0` 기본값 항목은 매 병합이 재생성하므로 sweep 대상에서 제외.
-- **회귀 방어**: `tests/unit/store-v2.test.js` 신설(17 케이스) — store-v2 첫 직접 유닛 커버리지. 모르는 키 보존 왕복·LWW·`__proto__` 가드·설정 GC·저장/업로드 페이로드 통과를 잠근다.
+- **회귀 방어**: `tests/unit/store-v2.test.js` 신설(17 케이스) — store-v2 첫 직접 유닛 커버리지. 모르는 키 보존 왕복·LWW·`__proto__` 검사·설정 GC·저장/업로드 페이로드 통과를 잠근다.
 
 ## 옛 버전의 북마크 절 범위 — 병합 결과를 저장하기 전에 옮긴다 (2026-10-22)
 

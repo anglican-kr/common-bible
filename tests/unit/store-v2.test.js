@@ -225,7 +225,7 @@ test("projectedBookmarksEntry는 saveBookmarks가 쓸 항목의 글자 수 그�
   }
 });
 
-// ── __proto__ 가드 ──
+// ── __proto__ 검사 ──
 // JSON.parse 는 "__proto__" 를 own key 로 만들 수 있고, 그 키를 그대로 대입하면
 // 병합 결과 객체의 프로토타입이 바뀐다(키 탈락 + 오염). 병합은 이 키를 무시한다.
 

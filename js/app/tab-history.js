@@ -81,7 +81,7 @@ window.tabHistory = (() => {
     scrollMemory.set(currentPath, window.scrollY || 0);
   }
 
-  // route() 가 새 경로 렌더를 마친 직후 호출(중복/리다이렉트는 route 의 시퀀스 가드가
+  // route()가 새 경로 렌더를 마친 직후 호출(중복/리다이렉트는 route의 시퀀스 검사가
   // 거른다) — 새 경로를 해당 탭의 마지막 경로로 기록하고, **복원이 요청된 경우에만**
   // 기억된 스크롤을 복원한다. 일반 링크 이동(PUSH)에선 복원하지 않아 뷰가 정한
   // 스크롤(renderChapter 의 최상단/하이라이트·resume scrollIntoView)을 보존한다.
@@ -111,7 +111,7 @@ window.tabHistory = (() => {
 
   /**
    * 경로를 해당 탭의 마지막 경로로 즉시 기록한다. 보통은 onRouteEnd 가 처리하지만,
-   * onRouteEnd 가 `_routeSeq` 가드로 스킵되는 경우 — 검색 verse-ref 자동 이동
+   * `_routeSeq` 검사 때문에 onRouteEnd가 실행되지 않는 경우 — 검색 verse-ref 자동 이동
    * (renderSearchResults 가 replaceState 로 챕터로 빠지며 route 재진입) — 에는 바깥
    * route 의 onRouteEnd 가 건너뛰어 `/search?q=…` 가 기록되지 않는다. 그 분기에서
    * renderSearchResults 호출 전에 미리 호출해 search 탭이 마지막 검색을 기억하게 한다.

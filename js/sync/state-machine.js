@@ -239,7 +239,7 @@ function createSyncMachine({ onStateChange } = {}) {
    *   IDLE 전이 시에만 적용 (실패 경로는 reset이 자연스러움).
    * @param {boolean} [fromReauth]
    *   true면 401 reauth 경로 — SYNCING 상태에서 호출됐고 그 상태를 빠져나오는
-   *   것이 우리 책임이므로 SYNCING race 가드를 우회.
+   *   것이 우리 책임이므로 SYNCING 경쟁 상태 검사를 우회.
    * @returns {Promise<boolean>}
    */
   async function _attemptSilentRefresh(ctxPatch = {}, fromReauth = false) {

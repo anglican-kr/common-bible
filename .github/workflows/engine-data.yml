@@ -1,15 +1,18 @@
 name: Engine data tests
 
 # 엔진이 **실데이터**와 맞는지 검증한다. 공개 저장소의 필수 `Unit tests` 잡은
-# 서브모듈 없이 돌아(actions/checkout 기본값) `data/` 가 없고, 그래서
-# liturgical-engine.data.test.js 는 거기서 skip 가드로 넘어간다.
+# 서브모듈 없이 돌아(actions/checkout 기본값) `data/`가 없고, 그래서
+# liturgical-engine.data.test.js는 거기서 데이터가 없어 건너뛴다(`haveData`).
 #
-# **왜 pull_request 가 아니라 push 인가.** 배포 키를 `pull_request` 트리거에 걸면
-# 공개 저장소의 포크 PR 이 시크릿 경로에 닿는 문제가 생긴다 — sync-data.yml 이
-# 「workflow_dispatch 전용이라 포크 PR 이 시크릿에 닿지 못한다」로 피해 둔 그 결정을
-# 되돌리게 된다. 그래서 **머지 직후 main push** 에서 돈다: 사전 차단은 못 하지만
-# 깨진 엔진이 며칠 뒤 엉뚱한 sync/data-<run_id> PR 의 빨간불로 나타나는 것은 막는다.
-# 사전 검증까지 가려면 시크릿 정책을 함께 정해야 한다 — 설계서 §9 미결22.
+# **왜 pull_request가 아니라 push인가.** 이 잡은 비공개 데이터 저장소를 받으려고
+# 배포 키(시크릿)를 쓴다. GitHub는 포크에서 온 PR의 `pull_request` 실행에 시크릿을
+# 주지 않으므로, 포크 PR에서는 데이터를 받지 못해 실패한다. 포크 PR에서도 실행하려면
+# `pull_request_target`을 써야 하는데, 이 이벤트는 시크릿을 가진 채 실행되어 포크의
+# 코드를 실행하면 시크릿이 유출될 수 있다. sync-data.yml이 `workflow_dispatch`로만
+# 실행하는 것도 같은 까닭이다. 그래서 이 잡은 **머지 직후 main push**에서 실행한다.
+# 머지 전에 막지는 못하지만, 깨진 엔진이 며칠 뒤 상관없는 sync/data-<run_id> PR의
+# 실패로 드러나는 것은 막는다. 머지 전에 검증하려면 시크릿 정책을 함께 정해야 한다
+# (설계서 §9 미결22).
 on:
   push:
     branches: [main]

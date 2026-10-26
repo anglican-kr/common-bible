@@ -172,7 +172,7 @@ const isHighlightedSpan = hlSegments
     - **모바일:** 끝 절을 **롱프레스**(300ms — `RANGE_EXTEND_MS`, 모바일의 「Shift」 역할). 선택 모드 안에서는 `pointerdown`이 per-pointer 타이머를 걸고, 10px 넘는 드리프트(스크롤)나 빠른 lift(= 탭)면 타이머를 취소한다(`_activePointers` 맵). 손가락을 끝까지 물고 있을 필요가 없어 스크롤 경합이 없다. 이미 모드에 들어와 의도적으로 조작 중인 사용자의 제스처라 진입(500ms)보다 짧게 둔다.
   - 두 경로 모두 순수 헬퍼 `_verseRangeKeys(allKeys, anchor, target, unitFn)`(`views.js` `VERSE_SELECTION` 블록 — 양방향, 절 단위 경계 확장)로 범위를 계산한다. 키가 줄마다 고유하므로 41:6에서 시작한 범위는 41:6에서 시작한다. 번호로 찾던 때는 앞쪽의 40:6에서 시작했다.
   - 선택 모드에서는 `pointerdown`에 `preventDefault`를 걸지 않아 자유 스크롤이 된다(텍스트 선택은 `body.verse-select-active { user-select: none }`으로 차단).
-  - **수명 가드:** 포인터는 `setPointerCapture`로 잡아, 손가락이 article 밖에서 떼지거나 드리프트해도 pointermove/up/cancel이 article로 다시 보내져(retarget) 타이머, `_activePointers`가 확실히 정리된다(캡처는 스크롤을 막지 않는다 — 팬이 시작되면 브라우저가 `pointercancel`로 캡처를 해제하고, 핸들러는 이를 abort로 처리한다). 롱프레스 타이머 콜백과 pointerup 토글 모두 `readingContext.verseSelectMode`(타이머는 `article.isConnected`도)를 확인해, 모드 종료, 네비게이션 뒤 늦게 도는 것이 상태를 되살리지 않게 한다.
+  - **수명 검사:** 포인터는 `setPointerCapture`로 잡아, 손가락이 article 밖에서 떼지거나 드리프트해도 pointermove/up/cancel이 article로 다시 보내져(retarget) 타이머, `_activePointers`가 확실히 정리된다(캡처는 스크롤을 막지 않는다 — 팬이 시작되면 브라우저가 `pointercancel`로 캡처를 해제하고, 핸들러는 이를 abort로 처리한다). 롱프레스 타이머 콜백과 pointerup 토글 모두 `readingContext.verseSelectMode`(타이머는 `article.isConnected`도)를 확인해, 모드 종료, 네비게이션 뒤 늦게 도는 것이 상태를 되살리지 않게 한다.
   - 선택 모드 진입(읽기 화면 롱프레스 / 드로어 「절 선택」 버튼) 시 앵커를 초기화하고, 롱프레스 진입 절을 첫 앵커로 둔다.
   - 유닛 테스트는 `tests/unit/views.test.js`의 `_verseRangeKeys` 8건과 `_verseSelectionUnit` 8건, `tests/unit/verse-spec.test.js`의 `selectionCitation`, `citationVerseSpec`, `selectedSpanVrefs`다(실제 장의 키 사용). e2e는 `tests/e2e/test_copy.py`의 「번호가 같은 다른 절」 6건과 「여러 줄 절과 반쪽 절」 4건이다.
 

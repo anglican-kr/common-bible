@@ -280,7 +280,7 @@ def test_move_into_folder(browser):
 def test_move_folder_into_folder(browser):
     """이동 → 선택한 폴더를 다른 폴더로 옮긴다 (자기/하위 드롭 방지에 _isDescendant 사용).
 
-    회귀 가드: 선택 항목이 폴더일 때만 _moveSelectedToFolder 가 _isDescendant 를 호출한다.
+    회귀 검사: 선택 항목이 폴더일 때만 _moveSelectedToFolder가 _isDescendant를 호출한다.
     제스처 모듈 분리(ADR-034 후속) 때 _isDescendant 가 bookmark-gestures.js 로 옮겨졌는데
     export 누락으로 이 경로가 ReferenceError 로 깨졌었다(북마크만 옮기던 기존 테스트는 폴더
     분기를 안 밟아 못 잡음). pageerror 가 0 이어야 하고 이동이 실제로 일어나야 한다.

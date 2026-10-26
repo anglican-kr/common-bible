@@ -36,7 +36,7 @@ nginx   → POST https://oauth2.googleapis.com/token
 
 vhost마다(`bible.anglican.kr`, `dev.anglican.kr`) 자기 OAuth 클라이언트의 secret을 nginx 설정에 둔다. SPA 번들, git 이력, CDN 어디에도 secret이 없다.
 
-요청 빈도 제한(rate limit, M5)도 둔다. nginx의 `limit_req` 디렉티브(`limit_req zone=oauth_token`)가 `/oauth/token` 요청 수를 제한한다(아래 「구현 노트」). 2026-06-09에 njs 가드(M6)를 지울 때도 M5는 그대로 두었다.
+요청 빈도 제한(rate limit, M5)도 둔다. nginx의 `limit_req` 디렉티브(`limit_req zone=oauth_token`)가 `/oauth/token` 요청 수를 제한한다(아래 「구현 노트」). 2026-06-09에 njs 검사(M6)를 지울 때도 M5는 그대로 두었다.
 
 nginx 설정 예시는 `common-bible-server` 저장소의 `nginx/oauth-proxy.example.conf`에 있다(비공개 저장소라 링크하지 않는다). 처음에는 이 저장소에 있던 nginx 설정 예시 파일들(`oauth-proxy.example.conf`, `oauth-bff-shared.example.conf`, `oauth-bff-guard.example.js`, `security-headers.example.conf`)을 ADR-020의 저장소 분할 때(2026-05-11) `common-bible-server/nginx/`로 옮겼다. BFF 구조는 그대로다. 그 가운데 `oauth-bff-guard.example.js`는 아래 대안 D(M6)를 채택하지 않으면서(2026-06-09) 없어졌다.
 
@@ -72,9 +72,9 @@ Google이 발급하는 OAuth 클라이언트 가운데 「Desktop app」이나 �
 
 ### D. njs로 요청 본문을 검사한다 (M6, 2026-06-09까지)
 
-- 채택한 뒤 `/oauth/token`에 보안 강화를 둘 더했다(그때 ADR 본문에는 적지 않았다). 하나는 요청 빈도 제한(M5, `limit_req zone=oauth_token`)으로, 지금도 쓴다(위 「결정」). 다른 하나가 njs 본문 가드(M6)다. `js_content`(njs)로 요청 본문을 읽어, 클라이언트가 `client_secret=`을 끼워 넣은 요청을 400으로 미리 거절했다. 파라미터가 겹치므로 RFC 6749 §3.2를 어기는 요청이다. 구조는 `location = /oauth/token`(가드)과 내부 `@oauth_token_upstream`(proxy)의 2단이었다.
-- 채택 안 함 2026-06-09 · 이유: 이 njs 가드가 **`libnginx-mod-http-js` 0.8.2에서 세그폴트(SIGSEGV)를 일으켰다**. `/oauth/token`으로 오는 **모든 POST**에서 `js_content` 핸들러가 워커를 죽였고(`worker exited on signal 11`), 연결은 `ERR_CONNECTION_RESET`으로 끊겼다. 이 기록은 kernel/journald에만 남고 access 로그와 error 로그에는 남지 않았다. 그 결과 prod와 dev 모두에서 조용한 토큰 갱신(silent refresh)과 새 로그인이 전부 실패해 **Drive 동기화가 완전히 멈췄다**. 앱 코드 `transport.js`는 1.5.12 이후 바뀌지 않아 원인과 무관했다.
-  - 조치: njs 가드(M6)와 `@oauth_token_upstream` 블록을 지우고, secret을 넣어 Google로 바로 전달하는 일을 **`location = /oauth/token` 하나**로 되돌렸다. 처음 「구현 노트」의 형태에 `limit_req`를 더한 것이다. `proxy_pass`에는 `https://oauth2.googleapis.com/token`을 그대로 적는다. 서버 쪽 변경은 `common-bible-server` 저장소(`nginx/oauth-proxy.example.conf` 등, commit `2f4cbac`)에 있다.
+- 채택한 뒤 `/oauth/token`에 보안 강화를 둘 더했다(그때 ADR 본문에는 적지 않았다). 하나는 요청 빈도 제한(M5, `limit_req zone=oauth_token`)으로, 지금도 쓴다(위 「결정」). 다른 하나가 njs 본문 검사(M6)다. `js_content`(njs)로 요청 본문을 읽어, 클라이언트가 `client_secret=`을 끼워 넣은 요청을 400으로 미리 거절했다. 파라미터가 겹치므로 RFC 6749 §3.2를 어기는 요청이다. 구조는 `location = /oauth/token`(검사)과 내부 `@oauth_token_upstream`(proxy)의 2단이었다.
+- 채택 안 함 2026-06-09 · 이유: 이 njs 검사가 **`libnginx-mod-http-js` 0.8.2에서 세그폴트(SIGSEGV)를 일으켰다**. `/oauth/token`으로 오는 **모든 POST**에서 `js_content` 핸들러가 워커를 죽였고(`worker exited on signal 11`), 연결은 `ERR_CONNECTION_RESET`으로 끊겼다. 이 기록은 kernel/journald에만 남고 access 로그와 error 로그에는 남지 않았다. 그 결과 prod와 dev 모두에서 조용한 토큰 갱신(silent refresh)과 새 로그인이 전부 실패해 **Drive 동기화가 완전히 멈췄다**. 앱 코드 `transport.js`는 1.5.12 이후 바뀌지 않아 원인과 무관했다.
+  - 조치: njs 검사(M6)와 `@oauth_token_upstream` 블록을 지우고, secret을 넣어 Google로 바로 전달하는 일을 **`location = /oauth/token` 하나**로 되돌렸다. 처음 「구현 노트」의 형태에 `limit_req`를 더한 것이다. `proxy_pass`에는 `https://oauth2.googleapis.com/token`을 그대로 적는다. 서버 쪽 변경은 `common-bible-server` 저장소(`nginx/oauth-proxy.example.conf` 등, commit `2f4cbac`)에 있다.
   - 보안 영향은 없다. M6는 방어를 덧대는 장치였다. 클라이언트가 본문에 `client_secret`을 끼워 넣어도 nginx가 서버 쪽 secret을 더 붙이므로 파라미터가 겹치고, Google이 RFC 6749 §3.2 위반으로 400을 돌려준다. 그래서 응답으로 secret을 알아낼 수 없다. secret은 서버 쪽에서 넣으므로 클라이언트에 드러나지 않는다.
   - 다시 검토할 조건: njs를 다시 들이려면 그 버전에서 세그폴트가 고쳐졌는지 먼저 확인한다.
 
@@ -98,12 +98,12 @@ Google이 발급하는 OAuth 클라이언트 가운데 「Desktop app」이나 �
 | nginx 설정 파일이 새어 나간다 | 서버 root 권한을 빼앗긴 경우다. 그때는 secret 말고도 모든 데이터가 위험하다. 이 ADR이 지키는 범위 밖이다 |
 | GitHub 저장소가 공개된다 | nginx 설정 예시(`nginx/oauth-proxy.example.conf`)는 자리 표시 값(placeholder)만 담고, 실제 secret은 `.gitignore`된 서버 쪽 설정에만 있다. 예시 파일도 지금은 비공개 `common-bible-server` 저장소에 있다(ADR-020) |
 
-### 2. 추가 가드
+### 2. 추가 검사
 
 - **POST만 받는다**: `if ($request_method != POST) { return 405; }`로 스크래퍼와 preflight 요청을 막는다.
 - **브라우저 헤더를 비운다**: nginx가 `Cookie`, `Authorization` 헤더를 비우고 upstream으로 보낸다. 우리 도메인의 쿠키가 Google로 새지 않는다.
 - **SNI를 적는다**: `proxy_ssl_server_name on; proxy_ssl_name oauth2.googleapis.com;`로 TLS handshake에서 올바른 서버 인증서를 검증한다.
-- **Cache API를 거치지 않는다**: 서비스 워커는 GET이 아닌 요청을 그냥 통과시킨다(`method !== "GET"` 가드). POST 응답을 캐시에 넣으려다(cache.put) TypeError가 나던 회귀도 함께 막는다.
+- **Cache API를 거치지 않는다**: 서비스 워커는 GET이 아닌 요청을 그냥 통과시킨다(`method !== "GET"` 검사). POST 응답을 캐시에 넣으려다(cache.put) TypeError가 나던 회귀도 함께 막는다.
 
 ## 받아들인 트레이드오프
 

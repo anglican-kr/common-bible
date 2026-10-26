@@ -264,7 +264,7 @@ def test_back_after_track_change_from_malformed_track_url(desktop_context):
 def test_stale_lectionary_preload_failure_does_not_overwrite_new_route(browser):
     """전례독서 데이터 프리로드가 끝나기 전에 다른 화면으로 가고, 그 뒤 프리로드가 실패해도 새 화면이 남는다 —
     낡은 실패가 공용 renderError로 화면을 덮지 않는다(Copilot 5회차). 탭 제목도 새 화면의 것이다 — 라우터가 낡은 뷰의
-    제목으로 페이지 메타를 고치지 않는다(routing.js openLazyView의 그린 뒤 가드 — PR #355 2회차 리뷰). 서비스 워커는 막아
+    제목으로 페이지 메타를 고치지 않는다(routing.js openLazyView의 그린 뒤 검사 — PR #355 2회차 리뷰). 서비스 워커는 막아
     fetch가 page.route에 잡히게."""
     ctx = browser.new_context(service_workers="block")
     page = ctx.new_page()
@@ -1167,8 +1167,8 @@ def test_malformed_percent_escape_shows_notice(desktop_context):
 
 
 def test_modified_click_on_track_opens_new_page_without_touching_current(browser):
-    """Ctrl/Cmd+클릭(새 탭)은 지금 탭의 주소 · 트랙 기억을 건드리지 않는다 — 라우터와 같은 기본 클릭 가드(Copilot 3회차).
-    앱 저장소를 지우는 init script 가 없는 컨텍스트에서 본다 — 새 탭이 열리며 기억을 지우면 가드 없이도 통과하므로."""
+    """Ctrl/Cmd+클릭(새 탭)은 지금 탭의 주소 · 트랙 기억을 건드리지 않는다 — 라우터와 같은 기본 클릭 검사(Copilot 3회차).
+    앱 저장소를 지우는 init script가 없는 컨텍스트에서 본다 — 새 탭이 열리며 기억을 지우면 검사 없이도 통과하므로."""
     ctx = browser.new_context()
     page = ctx.new_page()
     try:
@@ -1182,7 +1182,7 @@ def test_modified_click_on_track_opens_new_page_without_touching_current(browser
         new_page.wait_for_url("**/lectionary/2026-06-14?track=2")   # 새 탭이 링크 href 로 간다
         assert page.url.endswith("/lectionary/2026-06-14?track=1")   # 지금 탭은 그대로
         assert page.locator(".lect-track .division-tab.active").inner_text() == "독서 1"
-        # 가드가 없으면 클릭 리스너가 기억을 2 로 바꾼다
+        # 검사가 없으면 클릭 리스너가 기억을 2로 바꾼다
         assert page.evaluate("() => localStorage.getItem('bible-lectionary-track')") is None
         new_page.close()
     finally:

@@ -104,7 +104,7 @@ ADR-010 이후 북마크는 「어제 읽던 곳을 빨리 찾는」 한 건짜�
 
 ### `js/app/routing.js`
 - `parsePath`: 처음에는 `if (pathname === "bookmarks/read") return { view: "bookmark-read" }`였다. 지금은 `read`와 `read/<folderId>`를 받는다(위 「결정」).
-- `route()`: `view === "bookmark-read"` 분기. `loadBooks()` 뒤에 `await window.renderBookmarkReadView()`, `updatePageMeta({title:"북마크 읽기"})`, `isStale` 가드.
+- `route()`: `view === "bookmark-read"` 분기. `loadBooks()` 뒤에 `await window.renderBookmarkReadView()`, `updatePageMeta({title:"북마크 읽기"})`, `isStale` 검사.
 
 ### `js/app/bookmark.js`
 - `buildBmViewActions`: 처음에는 `⋯` 왼쪽에 `읽기` 아이콘 버튼을 더했다(`navigate("/bookmarks/read")`). 북마크가 0건이면 `disabled`였다(메뉴를 열 때 `refreshSelectEnabled`와 함께 상태를 맞출 필요는 없었다. 그릴 때 1회 판정하고, 빈 상태에서는 목록이 비어 들어갈 뜻이 없었다). 2026-06-09에 폴더 행 버튼으로 바꾸며 없앴다.

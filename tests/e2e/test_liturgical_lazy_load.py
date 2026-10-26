@@ -11,7 +11,7 @@
      「불러오는 중…」을 한 프레임도 그리지 않는다
   ③ 모듈을 받지 못하거나 그리다 던지면 그 뷰의 제목 · 머리와 「다시 불러오기」(DESIGN.md §6 「전체 화면 실패」) —
      누르면 새로 고쳐 열린다
-  ④ 늦게 끝난 실패 · 늦게 도착한 모듈 · 늦게 던진 오류는 그사이 연 화면을 덮지 않는다(route()의 isStale 가드 —
+  ④ 늦게 끝난 실패 · 늦게 도착한 모듈 · 늦게 던진 오류는 그사이 연 화면을 덮지 않는다(route()의 isStale 검사 —
      openLazyView의 받은 뒤 · catch, 공용 catch까지)
 
 서비스 워커는 막는다 — 설치가 SHELL_FILES(셋 포함)를 미리 받아 요청 기록을 흐리고, page.route는 서비스 워커가
@@ -290,7 +290,7 @@ def test_late_module_failure_does_not_paint_over_newer_screen(browser):
 
 def test_late_module_arrival_does_not_paint_over_newer_screen(browser):
     """lectionary.js 요청이 걸려 있는 사이 다른 화면(요한 4장)으로 가면, 늦게 도착한 모듈은 그 화면을 덮지 않는다 — 받은 뒤의
-    isStale 가드(routing.js openLazyView). 전례독서 분기의 이 가드를 덮는 테스트가 없었다(PR #355 리뷰)."""
+    isStale 검사(routing.js openLazyView). 전례독서 분기의 이 검사를 덮는 테스트가 없었다(PR #355 리뷰)."""
     ctx = _context(browser)
     page = ctx.new_page()
     held = []
@@ -305,7 +305,7 @@ def test_late_module_arrival_does_not_paint_over_newer_screen(browser):
         page.wait_for_function(
             "() => location.pathname === '/john/4' && !!document.querySelector('article.chapter-text .verse')")
         # 낡은 route가 뷰를 그리기 시작하면 곧바로 교회력 자료를 요청한다 — 그 화면은 자료(1.6MB)를 받은 뒤에야 그려져
-        # 화면만 보면 가드가 없어도 늦게 드러난다. 요청이 하나도 나가지 않았는지를 본다.
+        # 화면만 보면 검사가 없어도 늦게 드러난다. 요청이 하나도 나가지 않았는지를 본다.
         page.on("request", lambda r: "/data/lectionary/" in r.url and data_requests.append(r.url))
         held[0].continue_()
         # 같은 모듈 맵 항목을 기다린다 — 모듈이 받아져 평가되면 라우터의 import()도 함께 풀린다
@@ -322,7 +322,7 @@ def test_late_module_arrival_does_not_paint_over_newer_screen(browser):
 
 def test_late_render_error_does_not_paint_over_newer_screen(browser):
     """전례독서 뷰가 그리는 사이 다른 화면(요한 4장)으로 가고 그 뒤 뷰가 던져도, 늦은 오류는 그 화면을 덮지 않는다 —
-    routing.js openLazyView의 catch 가드(PR #355 2회차 리뷰 — 덮는 테스트가 없었다). 그린 뒤의 가드는
+    routing.js openLazyView의 catch 검사(PR #355 2회차 리뷰 — 덮는 테스트가 없었다). 그린 뒤의 검사는
     test_lectionary_view.py의 낡은 프리로드 실패 테스트가 본다(탭 제목이 바뀌지 않는다)."""
     original = urllib.request.urlopen(f"{BASE}{LECTIONARY}").read().decode("utf-8")
     target = "async function renderLectionaryView(parsed) {"

@@ -61,7 +61,7 @@
 
 /* ─────────────────────────────────────────────────────────────────────────
    Design tokens — 단일 권위 출처는 루트의 `DESIGN.md`. 새 UI 는 아래 토큰을
-   참조하고, 하드코딩 값을 두지 않는다. 토큰 사다리(간격·타이포·반경·elevation·
+   참조하고, 하드코딩 값을 두지 않는다. 토큰 단계(간격·타이포·반경·elevation·
    컨트롤·모션·내비)는 Apple HIG 를 chrome UI 에 맞춘 것 (본문 serif 는 의도적
    유지 — ADR-028). 색상은 :root / [data-theme="dark"] / [data-color-scheme]
    3중 구조로 분리.
@@ -102,7 +102,7 @@
   --lit-blue: #3b6fb6;
   --lit-swatch-border: rgba(0, 0, 0, 0.25);
 
-  /* ── Radius (HIG 곡률 사다리 — 기존 사용 값에 매핑, --radius 는 하위호환 유지) ── */
+  /* ── Radius (HIG 곡률 단계 — 기존 사용 값에 매핑, --radius는 하위호환 유지) ── */
   --radius-xs: 4px;
   --radius-sm: 6px;
   --radius: 8px;
@@ -121,7 +121,7 @@
   --shadow-2: 0 4px 12px rgba(0, 0, 0, 0.12);
   --shadow-3: 0 4px 16px rgba(0, 0, 0, 0.12);   /* 헤더 스크롤 elevation (ADR-025) */
   --shadow-sheet: 0 -4px 24px rgba(0, 0, 0, 0.18); /* 바텀 시트 (위로 뜨는 그림자) */
-  --shadow-drawer: -4px 0 24px rgba(0, 0, 0, 0.15); /* 데스크탑 사이드 패널 (수평 그림자 — 5단 사다리에 없는 축, DESIGN.md §5) */
+  --shadow-drawer: -4px 0 24px rgba(0, 0, 0, 0.15); /* 데스크탑 사이드 패널 (수평 그림자 — 다섯 단계에 없는 축, DESIGN.md §5) */
   --shadow-4: 0 12px 32px rgba(0, 0, 0, 0.25);  /* 모달 */
 
   /* ── Liquid-glass 질감 (절제) — 하단 floating chrome(탭 바·검색·오디오·인디케이터)
@@ -3042,11 +3042,14 @@ mark.search-highlight {
     z-index: var(--nav-z);
   }
   body.tabbar-searching .resume-banner { display: none; }
-  /* 투명 레이아웃 레이어인 #tab-dock 가 빈 가운데 클릭을 먹어 그 아래 이어읽기 pill(링크·×)이
-     안 눌렸다(#tab-dock 가 DOM 상 배너보다 뒤·동일 z + #resume-banner-slot z-index:10 스택
-     컨텍스트가 pill z 를 가둠). → pill 이 실제로 dock 에 있을 때만(배너 존재 + 검색 아님)
-     #tab-dock pointer-events 를 끄고 실제 컨트롤만 되살린다. 배너 없는 책 목록·다른 뷰에선
-     dock 가 빈 가운데 탭을 그대로 흡수해야 하므로 :has() 로 가드(Bugbot Low). 미니 오디오는 별도 요소. */
+  /* 배치만 맡는 투명한 `#tab-dock` 요소가 가운데 빈 영역의 클릭을 가로채, 그 아래의 이어 읽기
+     알약 단추(링크와 ×)가 눌리지 않았다. `#tab-dock` 요소는 DOM 순서로 배너보다 뒤에 있고 쌓임
+     순서(`z-index` 속성)가 같다. 또 `#resume-banner-slot` 요소의 `z-index: 10`이 쌓임 맥락을
+     만들어, 알약 단추의 쌓임 순서는 그 안에서만 비교된다. 그래서 알약 단추가 실제로 `#tab-dock`
+     요소와 같은 줄에 보일 때만(배너가 있고 검색 중이 아닐 때) `#tab-dock` 요소가 클릭을 받지 않게 하고
+     (`pointer-events: none`) 실제 컨트롤만 다시 받게 한다. 배너가 없는 책 목록과 다른 화면에서는
+     `#tab-dock` 요소가 가운데 빈 영역의 클릭을 그대로 받아야 하므로, `:has()` 선택자로 배너가
+     있을 때만 이 규칙을 적용한다(Bugbot 지적, 낮음). 미니 오디오 플레이어는 별도 요소다. */
   body:has(#resume-banner-slot .resume-banner):not(.tabbar-searching) #tab-dock { pointer-events: none; }
   body:has(#resume-banner-slot .resume-banner):not(.tabbar-searching) #tab-bar,
   body:has(#resume-banner-slot .resume-banner):not(.tabbar-searching) #tab-search-dock,
