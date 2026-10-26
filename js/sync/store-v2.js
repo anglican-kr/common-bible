@@ -79,22 +79,29 @@ function _own(map, id) {
  * @returns {{ [id: string]: SyncFlatItem }}
  */
 function _flattenTree(nodes, parentId, out, now) {
-  nodes.forEach((node, idx) => {
-    // Assigning "__proto__" would rewrite `out`'s prototype instead of adding an entry: the store does not hold
-    // this id (mergeDocs skips it too), nor what a folder of that id holds — its children would be unreachable.
-    if (node.id === "__proto__") return;
+  let order = 0;
+  /** @param {BookmarkTreeNode[]} level */
+  const place = (level) => level.forEach((node) => {
+    // Assigning "__proto__" would rewrite `out`'s prototype instead of adding an entry, so the store does not hold
+    // this id (mergeDocs skips it too). A folder of that id gives its place to what it holds: dropped with it, they
+    // would turn into tombstones on the next save and vanish from every device (PR #438 review).
+    if (node.id === "__proto__") {
+      if (Array.isArray(node.children)) place(node.children);
+      return;
+    }
     // `children` and `_u` are stripped/overridden; everything else is spread as-is.
     const { children, ...rest } = /** @type {BookmarkTreeNode & { _u?: number }} */ (node);
     out[node.id] = /** @type {SyncFlatItem} */ ({
       ...rest,
       parentId: parentId ?? null,
-      _order:   idx,
+      _order:   order++,
       _u:       rest._u ?? now,
     });
     if (Array.isArray(children) && children.length) {
       _flattenTree(children, node.id, out, now);
     }
   });
+  place(nodes);
   return out;
 }
 
@@ -110,7 +117,10 @@ function bookmarkTreeFromFlat(items) {
   /** @type {Map<string, SyncFlatItem[]>} */
   const byParent = new Map();
   for (const node of Object.values(items)) {
-    const p = node.parentId ?? "";
+    // No item has the id "__proto__" (_flattenTree), but an older build saved what such a folder held under it as the
+    // parent. Read at the top level, those items show and are saved there; left under it, nothing reached them and the
+    // next save tombstoned them on every device (PR #438 review).
+    const p = node.parentId == null || node.parentId === "__proto__" ? "" : node.parentId;
     const siblings = byParent.get(p);
     if (siblings) siblings.push(node);
     else byParent.set(p, [node]);

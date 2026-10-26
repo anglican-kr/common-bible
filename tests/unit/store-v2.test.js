@@ -318,24 +318,47 @@ test("기본 속성 이름의 id를 지우면 삭제 표식이 남는다 — 다
   assert.equal(Object.hasOwn(tombstones, "toString"), true);
 });
 
-test("__proto__ id의 폴더는 안의 항목과 함께 저장되지 않고, 목록의 나머지는 읽힌다", () => {
-  // 이 id는 일반 객체에 넣으면 키가 되지 않고 객체의 프로토타입을 바꾼다. 병합처럼 저장소에 두지 않는다.
+test("__proto__ id의 폴더는 저장하지 않고, 안의 항목은 그 폴더의 자리로 올려 저장한다", () => {
+  // 이 id는 일반 객체에 넣으면 키가 되지 않고 객체의 프로토타입을 바꾼다. 병합처럼 저장소에 두지 않는다. 안의 항목까지
+  // 버리면 다음 저장이 그 항목을 삭제 기록으로 바꿔 모든 기기에서 지운다(PR #438 리뷰).
   const { store } = load();
   const bm = (id) => ({ type: "bookmark", id, bookId: "gen", chapter: 1, verseSpec: "all" });
-  store.saveBookmarks([{ type: "folder", id: "__proto__", name: "가", children: [bm("a")] }, bm("b")]);
-  assert.deepEqual(plain(store.loadBookmarks()).map((n) => n.id), ["b"]);
-  assert.deepEqual(Object.keys(store.loadLocal().bookmarks.items), ["b"]);
+  store.saveBookmarks([
+    bm("a"),
+    { type: "folder", id: "__proto__", name: "가", children: [bm("b"), bm("c")] },
+    { type: "folder", id: "f", name: "나", children: [{ type: "folder", id: "__proto__", name: "다", children: [bm("d")] }] },
+  ]);
+  assert.deepEqual(plain(store.loadBookmarks()), [
+    bm("a"), bm("b"), bm("c"),
+    { type: "folder", id: "f", name: "나", children: [bm("d")] },
+  ]);
+  assert.deepEqual(Object.keys(store.loadLocal().bookmarks.items).sort(), ["a", "b", "c", "d", "f"]);
 });
 
-test("고치기 전 판이 남긴 __proto__ 폴더의 자식이 있어도 목록의 나머지는 읽힌다", () => {
-  // 옛 판의 저장은 폴더만 잃고 자식은 부모 id "__proto__"로 남겼다. 목록을 맨 위부터 그려도 그 부모는 나오지 않는다.
+test("__proto__ id의 폴더가 없으면 순서 값은 전과 같다 — 다시 저장해도 수정 시각이 오르지 않는다", () => {
+  const { store } = load();
+  const bm = (id) => ({ type: "bookmark", id, bookId: "gen", chapter: 1, verseSpec: "all" });
+  store.saveBookmarks([bm("a"), { type: "folder", id: "f", name: "가", children: [bm("b")] }, bm("c")]);
+  const before = plain(store.loadLocal().bookmarks.items);
+  assert.deepEqual([before.a._order, before.f._order, before.c._order, before.b._order], [0, 1, 2, 0]);
+  store.saveBookmarks(store.loadBookmarks());
+  assert.deepEqual(plain(store.loadLocal().bookmarks.items), before);
+});
+
+test("고치기 전 판이 남긴, 부모가 __proto__인 항목은 맨 위에서 읽고 다음 저장에서 지우지 않는다", () => {
+  // 옛 판의 저장은 폴더만 잃고 자식은 부모 id "__proto__"로 남겼다. 그 부모는 어떤 항목의 id도 아니어서, 맨 위부터
+  // 그리면 그 자식이 보이지 않았고 다음 저장이 그 자식을 삭제 기록으로 바꿨다(PR #438 리뷰).
   const { store } = load({
     "bible-bookmarks-v2": JSON.stringify(doc({ items: {
       a: { ...flatBm("a"), parentId: "__proto__" },
       b: { ...flatBm("b"), _order: 1 },
     } })),
   });
-  assert.deepEqual(plain(store.loadBookmarks()).map((n) => n.id), ["b"]);
+  assert.deepEqual(plain(store.loadBookmarks()).map((n) => n.id), ["a", "b"]);
+  store.saveBookmarks(store.loadBookmarks());
+  const { items, tombstones } = store.loadLocal().bookmarks;
+  assert.equal(Object.hasOwn(tombstones, "a"), false);
+  assert.equal(items.a.parentId, null);
 });
 
 // ── 설정 GC ──
