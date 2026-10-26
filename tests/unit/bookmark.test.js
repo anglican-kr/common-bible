@@ -1912,8 +1912,9 @@ test("_sanitizeImportItems: a bookmark carrying children is left out with them �
 });
 
 // Round trip through the real sync store (js/sync/store-v2.js — saveBookmarks · loadBookmarks go through it once
-// sync is loaded): what the import check keeps must survive a save and a read. The raw file breaks the store in
-// three ways, so these tests do exercise the hazards the check guards against (PR #359 review).
+// sync is loaded): what the import check keeps must survive a save and a read. The raw file broke the store in
+// three ways, so these tests do exercise the hazards the check guards against (PR #359 review). The store reads a
+// toString id since known-issues §15.2, but a device on an older build still fails on one that sync brings it.
 const STORE_V2_SOURCE = stripEsmMarker(fs.readFileSync(path.resolve(__dirname, "../../js/sync/store-v2.js"), "utf8"));
 function loadSyncStore(localStorage = makeLocalStorage({})) {
   const win = {};
@@ -1927,13 +1928,14 @@ function loadSyncStore(localStorage = makeLocalStorage({})) {
   return win.syncStoreV2;
 }
 
-test("_sanitizeImportItems: the raw file breaks the sync store — a null child, a toString id, a __proto__ id", () => {
+test("_sanitizeImportItems: the raw file trips the sync store — a null child, a __proto__ id (a toString id until §15.2)", () => {
   // Throws while flattening — storage.js saveBookmarks swallows it, so 「덮어썼습니다」 stood over an unchanged list.
   assert.throws(() => loadSyncStore().saveBookmarks([appBookmark({ id: "b-kid", children: [null] })]), { name: "TypeError" });
-  // Saves, then the next read calls .sort() on the inherited toString — the whole list fails to load.
+  // The next read called .sort() on the inherited toString and the whole list failed to load — read since
+  // known-issues §15.2.
   const s1 = loadSyncStore();
   s1.saveBookmarks([appBookmark({ id: "toString" }), appBookmark({ id: "b" })]);
-  assert.throws(() => s1.loadBookmarks(), { name: "TypeError" });   // the vm realm's TypeError — match by name
+  assert.deepEqual(s1.loadBookmarks().map((n) => n.id), ["toString", "b"]);
   // Vanishes without a sound.
   const s2 = loadSyncStore();
   s2.saveBookmarks([appBookmark({ id: "__proto__" }), appBookmark({ id: "b" })]);

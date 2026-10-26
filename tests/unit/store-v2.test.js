@@ -250,6 +250,94 @@ test("원격 북마크의 __proto__ id 는 병합에서 무시된다", () => {
   assert.equal(merged.bookmarks.items.id, undefined);
 });
 
+// ── 기본 속성 이름의 id (known-issues §15.2) ──
+// 저장소는 id를 일반 객체의 키로 쓴다. 일반 객체는 toString · constructor 같은 이름에 Object.prototype에서
+// 물려받은 함수로 답하므로, 그 이름의 id가 하나만 있어도 목록 전체를 읽지 못했다(2026-10-19 실측). 가져오기
+// 검사(ADR-040)가 없던 판(1.6.4 이하)에서 들인 기록은 동기화로 지금 판에도 들어온다.
+
+/** @param {string} id @param {number} [_u] */
+const flatBm = (id, _u = 5) =>
+  ({ type: "bookmark", id, bookId: "gen", chapter: 1, verseSpec: "all", parentId: null, _order: 0, _u });
+
+test("기본 속성 이름의 id도 저장했다 다시 읽으면 그대로다 — 폴더와 그 안의 항목까지", () => {
+  const { store } = load();
+  const tree = [
+    { type: "folder", id: "toString", name: "가", children: [
+      { type: "bookmark", id: "constructor", bookId: "gen", chapter: 1, verseSpec: "all" },
+      { type: "folder", id: "hasOwnProperty", name: "나", children: [] },
+    ] },
+    { type: "bookmark", id: "valueOf", bookId: "exo", chapter: 2, verseSpec: "all" },
+  ];
+  store.saveBookmarks(tree);
+  assert.deepEqual(plain(store.loadBookmarks()), tree);
+});
+
+test("applyToLegacyKeys도 기본 속성 이름의 id에서 멈추지 않고 옛 키에 트리를 쓴다", () => {
+  const { store, localStorage } = load();
+  store.applyToLegacyKeys(doc({ items: {
+    toString:    { type: "folder", id: "toString", name: "가", parentId: null, _order: 0, _u: 5 },
+    constructor: { ...flatBm("constructor"), parentId: "toString" },
+  } }));
+  assert.deepEqual(JSON.parse(localStorage.getItem("bible-bookmarks")), [
+    { type: "folder", id: "toString", name: "가", children: [
+      { type: "bookmark", id: "constructor", bookId: "gen", chapter: 1, verseSpec: "all" },
+    ] },
+  ]);
+});
+
+test("한쪽에만 있는 기본 속성 이름의 id도 병합 결과에 남는다", () => {
+  // 없는 쪽에서 찾으면 물려받은 함수가 나와 삭제 시각이 NaN이 되고, 살아 있는 항목이 양쪽 모두 죽은 것으로 빠졌다.
+  const { store } = load();
+  const merged = store.mergeDocs(
+    doc({ items: { constructor: flatBm("constructor") } }),
+    doc({ items: { toString: flatBm("toString") } }),
+    "device-a",
+  );
+  assert.deepEqual(Object.keys(merged.bookmarks.items).sort(), ["constructor", "toString"]);
+});
+
+test("기본 속성 이름의 id에도 더 새로운 삭제 표식이 이기고, 표식은 병합 결과에 남는다", () => {
+  const { store } = load();
+  const merged = store.mergeDocs(
+    doc({ tombstones: { toString: 10 } }),
+    doc({ items: { toString: flatBm("toString", 5) } }),
+    "device-a",
+  );
+  assert.equal(Object.hasOwn(merged.bookmarks.items, "toString"), false);
+  assert.equal(merged.bookmarks.tombstones.toString, 10);
+});
+
+test("기본 속성 이름의 id를 지우면 삭제 표식이 남는다 — 다른 기기에서도 지워진다", () => {
+  const { store } = load();
+  const bm = (id) => ({ type: "bookmark", id, bookId: "gen", chapter: 1, verseSpec: "all" });
+  store.saveBookmarks([bm("toString"), bm("b")]);
+  store.saveBookmarks([bm("b")]);
+  const { items, tombstones } = store.loadLocal().bookmarks;
+  assert.deepEqual(Object.keys(items), ["b"]);
+  assert.equal(typeof tombstones.toString, "number");
+  assert.equal(Object.hasOwn(tombstones, "toString"), true);
+});
+
+test("__proto__ id의 폴더는 안의 항목과 함께 저장되지 않고, 목록의 나머지는 읽힌다", () => {
+  // 이 id는 일반 객체에 넣으면 키가 되지 않고 객체의 프로토타입을 바꾼다. 병합처럼 저장소에 두지 않는다.
+  const { store } = load();
+  const bm = (id) => ({ type: "bookmark", id, bookId: "gen", chapter: 1, verseSpec: "all" });
+  store.saveBookmarks([{ type: "folder", id: "__proto__", name: "가", children: [bm("a")] }, bm("b")]);
+  assert.deepEqual(plain(store.loadBookmarks()).map((n) => n.id), ["b"]);
+  assert.deepEqual(Object.keys(store.loadLocal().bookmarks.items), ["b"]);
+});
+
+test("고치기 전 판이 남긴 __proto__ 폴더의 자식이 있어도 목록의 나머지는 읽힌다", () => {
+  // 옛 판의 저장은 폴더만 잃고 자식은 부모 id "__proto__"로 남겼다. 목록을 맨 위부터 그려도 그 부모는 나오지 않는다.
+  const { store } = load({
+    "bible-bookmarks-v2": JSON.stringify(doc({ items: {
+      a: { ...flatBm("a"), parentId: "__proto__" },
+      b: { ...flatBm("b"), _order: 1 },
+    } })),
+  });
+  assert.deepEqual(plain(store.loadBookmarks()).map((n) => n.id), ["b"]);
+});
+
 // ── 설정 GC ──
 
 test("오래된 null 설정 항목은 sweepTombstones 가 걷어낸다", () => {

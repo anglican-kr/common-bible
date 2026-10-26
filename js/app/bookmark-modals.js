@@ -992,8 +992,9 @@ $bmImportInput.addEventListener("change", () => {
       _importStopped("성서 목록을 불러오지 못해 가져오지 않았습니다. 연결을 확인한 뒤 「가져오기」를 다시 눌러 주세요.");
       return;
     }
-    // The kind each id has in the current list. A list the sync store cannot read (a `toString` id from an unchecked
-    // import) has nothing to compare against — and 덮어쓰기 is how it gets fixed, so the import goes on.
+    // The kind each id has in the current list. A list the sync store cannot read (a broken entry in the stored
+    // document — a `toString` id did this until known-issues §15.2) has nothing to compare against — and 덮어쓰기 is
+    // how it gets fixed, so the import goes on.
     /** @type {Map<string, string>} */
     const existingTypes = new Map();
     try {

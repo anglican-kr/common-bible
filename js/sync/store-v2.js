@@ -56,6 +56,19 @@ function getDeviceId() { return _getOrCreateMeta().deviceId; }
 
 // ── Flat-map helpers ──────────────────────────────────────────────────────────
 
+// An id-keyed map's own entry, or undefined. Items and tombstones are plain objects keyed by id, and a plain object
+// answers every name it inherits from Object.prototype (toString, constructor, …) with a function — an id the
+// import check (ADR-040) leaves out, but one a pre-check import (1.6.4 and before) still brings in through sync.
+/**
+ * @template T
+ * @param {{ [id: string]: T } | undefined} map
+ * @param {string} id
+ * @returns {T | undefined}
+ */
+function _own(map, id) {
+  return map != null && Object.hasOwn(map, id) ? map[id] : undefined;
+}
+
 // Recursively walk a bookmark tree and produce a flat {[id]: node} map.
 // Each node gets parentId and _order; _u is preserved if already set.
 /**
@@ -67,6 +80,9 @@ function getDeviceId() { return _getOrCreateMeta().deviceId; }
  */
 function _flattenTree(nodes, parentId, out, now) {
   nodes.forEach((node, idx) => {
+    // Assigning "__proto__" would rewrite `out`'s prototype instead of adding an entry: the store does not hold
+    // this id (mergeDocs skips it too), nor what a folder of that id holds — its children would be unreachable.
+    if (node.id === "__proto__") return;
     // `children` and `_u` are stripped/overridden; everything else is spread as-is.
     const { children, ...rest } = /** @type {BookmarkTreeNode & { _u?: number }} */ (node);
     out[node.id] = /** @type {SyncFlatItem} */ ({
@@ -89,18 +105,22 @@ function _flattenTree(nodes, parentId, out, now) {
  * @returns {BookmarkTreeNode[]}
  */
 function bookmarkTreeFromFlat(items) {
-  /** @type {{ [parentId: string]: SyncFlatItem[] }} */
-  const byParent = {};
+  // A Map, not a plain object: every id is looked up here as a parent, and a plain object's inherited names
+  // (toString …) made the whole list fail to load (known-issues §15.2).
+  /** @type {Map<string, SyncFlatItem[]>} */
+  const byParent = new Map();
   for (const node of Object.values(items)) {
     const p = node.parentId ?? "";
-    (byParent[p] ??= []).push(node);
+    const siblings = byParent.get(p);
+    if (siblings) siblings.push(node);
+    else byParent.set(p, [node]);
   }
   /**
    * @param {string} parentId
    * @returns {BookmarkTreeNode[]}
    */
   function build(parentId) {
-    return (byParent[parentId] ?? [])
+    return (byParent.get(parentId) ?? [])
       .sort((a, b) => (a._order ?? 0) - (b._order ?? 0))
       .map((flat) => {
         const { parentId: _p, _order: _o, _u: _t, ...rest } = flat;
@@ -175,7 +195,7 @@ function _docWithBookmarks(tree) {
   /** @type {{ [id: string]: SyncFlatItem }} */
   const nextItems = {};
   for (const [id, node] of Object.entries(newFlat)) {
-    const old = oldItems[id];
+    const old = _own(oldItems, id);
     const sameContent  = old && _contentKey(old)  === _contentKey(node);
     const samePosition = old && old._order         === node._order
                               && old.parentId       === node.parentId;
@@ -184,7 +204,7 @@ function _docWithBookmarks(tree) {
 
   // Items removed → tombstone (only if not already tombstoned with a newer time).
   for (const id of Object.keys(oldItems)) {
-    if (!nextItems[id] && !(doc.bookmarks.tombstones[id] > now)) {
+    if (!Object.hasOwn(nextItems, id) && !((_own(doc.bookmarks.tombstones, id) ?? -Infinity) > now)) {
       doc.bookmarks.tombstones[id] = now;
     }
   }
@@ -217,7 +237,7 @@ function loadBookmarks() {
   /** @type {{ [id: string]: SyncFlatItem }} */
   const alive = {};
   for (const [id, node] of Object.entries(items)) {
-    if (!(tombstones[id] > node._u)) alive[id] = node;
+    if (!((_own(tombstones, id) ?? -Infinity) > node._u)) alive[id] = node;
   }
   return bookmarkTreeFromFlat(alive);
 }
@@ -321,10 +341,12 @@ function mergeDocs(local, remote, deviceId) {
     // A parsed doc can carry "__proto__" as an own key; assigning it would
     // rewrite the merged object's prototype instead of adding an entry.
     if (id === "__proto__") continue;
-    const L  = local.bookmarks?.items?.[id];
-    const R  = remote.bookmarks?.items?.[id];
-    const LT = local.bookmarks?.tombstones?.[id]  ?? -Infinity;
-    const RT = remote.bookmarks?.tombstones?.[id] ?? -Infinity;
+    // Own entries only: an id one side lacks read an inherited function there, the death time became NaN, and
+    // the item was dropped as dead on both sides (known-issues §15.2).
+    const L  = _own(local.bookmarks?.items, id);
+    const R  = _own(remote.bookmarks?.items, id);
+    const LT = _own(local.bookmarks?.tombstones, id)  ?? -Infinity;
+    const RT = _own(remote.bookmarks?.tombstones, id) ?? -Infinity;
     const death = Math.max(LT, RT);
     const aliveL = L && L._u > death;
     const aliveR = R && R._u > death;
@@ -420,7 +442,7 @@ function applyToLegacyKeys(doc) {
   /** @type {{ [id: string]: SyncFlatItem }} */
   const alive = {};
   for (const [id, node] of Object.entries(items)) {
-    if (!(tombstones?.[id] > node._u)) alive[id] = node;
+    if (!((_own(tombstones, id) ?? -Infinity) > node._u)) alive[id] = node;
   }
   const tree = bookmarkTreeFromFlat(alive);
   localStorage.setItem("bible-bookmarks", JSON.stringify(tree));

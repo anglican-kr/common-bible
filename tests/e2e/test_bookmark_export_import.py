@@ -443,9 +443,32 @@ def test_import_skips_an_id_the_list_uses_for_the_other_kind(browser, tmp_path):
     ctx.close()
 
 
+def test_a_list_with_an_inherited_name_id_still_loads(browser):
+    """검사 없이 들어간 `toString`, `constructor` 같은 id(1.6.4 이하의 가져오기, 동기화로도 온다)가 있어도 새로 고친
+    뒤 장 화면과 북마크 목록이 그려진다. 동기화 저장소가 id를 일반 객체에서 찾다가 목록 전체를 읽지 못하던 결함이다
+    (known-issues §15.2)."""
+    ctx = browser.new_context()
+    page = ctx.new_page()
+    _open_bookmark_drawer(page)
+    page.evaluate(
+        """() => window.syncStoreV2.saveBookmarks([
+            { type: "folder", id: "toString", name: "기본 속성 이름", expanded: true, children: [
+                { type: "bookmark", id: "constructor", bookId: "gen", chapter: 1, verseSpec: "all", label: "창세기 1장" }] },
+            { type: "bookmark", id: "bm-a", bookId: "john", chapter: 3, verseSpec: "all", label: "요한 3장" }])"""
+    )
+    _open_bookmark_drawer(page)
+    assert [n["id"] for n in _get_bookmarks(page)] == ["toString", "bm-a"]
+    page.wait_for_selector("#bookmark-drawer >> text=기본 속성 이름")
+    page.wait_for_selector("#bookmark-drawer >> text=창세기 1장")
+    page.wait_for_selector("#bookmark-drawer >> text=요한 3장")
+
+    ctx.close()
+
+
 def test_import_overwrite_mends_a_list_the_store_cannot_read(browser, tmp_path):
-    """목록을 읽을 수 없게 된 뒤에도(검사 없이 들어간 `toString` id) 가져오기는 대화상자까지 가고, 덮어쓰면
-    목록이 되살아난다 — 종류 검사가 지금 목록을 읽다 멈추지 않는다."""
+    """목록을 읽을 수 없게 된 뒤에도(저장된 문서에 깨진 항목) 가져오기는 대화상자까지 가고, 덮어쓰면 목록이
+    되살아난다. 종류 검사가 지금 목록을 읽다가 멈추지 않기 때문이다. 검사 없이 들어간 `toString` id가 이런 목록을
+    만들었으나, 저장소가 그 id를 읽게 된 뒤(known-issues §15.2)에는 깨진 항목으로 재현한다."""
     import_file = tmp_path / "mend.json"
     import_file.write_text(json.dumps(_VALID_EXPORT), encoding="utf-8")
 
@@ -453,10 +476,10 @@ def test_import_overwrite_mends_a_list_the_store_cannot_read(browser, tmp_path):
     page = ctx.new_page()
     _open_bookmark_drawer(page)
     page.evaluate(
-        """() => window.syncStoreV2.saveBookmarks([
-            { type: "bookmark", id: "toString", bookId: "gen", chapter: 1, verseSpec: "all", label: "x" }])"""
+        """() => localStorage.setItem('bible-bookmarks-v2', JSON.stringify({
+            bookmarks: { items: { broken: null }, tombstones: {} }, settings: {}, lastRead: { v: null, _u: 0 } }))"""
     )
-    with pytest.raises(Exception, match="is not a function"):
+    with pytest.raises(Exception, match="null"):
         _get_bookmarks(page)
 
     page.locator("#bm-import-input").set_input_files(str(import_file))
