@@ -31,7 +31,7 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # PR 흐름용 PAT 로 체크아웃 — 이후 토픽 브랜치 push 가 pull_request
           # 트리거를 발화시켜 Unit tests CI 가 PR 에서 실행되도록 한다.
@@ -39,7 +39,7 @@ jobs:
           submodules: false
           fetch-depth: 0
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
@@ -107,9 +107,11 @@ jobs:
       # 체크아웃되는 자리가 여기뿐이라(공개 저장소의 Unit tests 잡은 비공개 서브모듈을
       # 못 받는다) 문서↔데이터 대조를 여기서 돌린다. 어긋나면 PR 을 열기 전에 멈춘다 —
       # 낡은 수치가 적힌 채로 포인터만 올라가는 것을 막는다.
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "24"
+          # 패키지 캐시를 켜지 않는다. v5부터 `package.json`의 `packageManager` 칸이 npm이면 저절로 켜진다.
+          package-manager-cache: false
 
       # 서브모듈이 실제로 체크아웃되는 자리는 여기뿐이라(공개 저장소의 Unit tests 잡은
       # 비공개 서브모듈을 못 받는다) data/ 를 필요로 하는 테스트를 여기서 돌린다.

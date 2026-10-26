@@ -15,10 +15,12 @@ jobs:
     name: Unit tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: "24"
+          # 패키지 캐시를 켜지 않는다. v5부터 `package.json`의 `packageManager` 칸이 npm이면 저절로 켜진다.
+          package-manager-cache: false
       - run: node --test tests/unit/*.test.js
       # 타입 검사(ADR-012)도 이 잡에서 돈다 — 브랜치 보호의 필수 검사가 이 잡(「Unit tests」)이라, 여기 두어야
       # 타입 오류가 머지를 막는다. checkJs: true 라 js/ 의 모든 파일을 보고, 아직 고치지 못한 파일만 첫 줄

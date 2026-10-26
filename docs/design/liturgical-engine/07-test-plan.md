@@ -1,6 +1,6 @@
 ## 7. 테스트 계획
 
-**파일을 둘로 가른다. 공개 CI가 서브모듈을 받지 못하기 때문이다**(14차 리뷰). `.github/workflows/test.yml`의 필수 `Unit tests` 잡은 `actions/checkout@v4`를 **서브모듈 없이** 돌리므로 `data/`가 없다. 그래서 `docs-data-consistency.test.js`, `sw.test.js`는 `sync-data.yml`에서 돈다. 서브모듈을 받는 자리는 그것과 엔진 전용 `engine-data.yml`(머지 직후 main push, §9 미결22) 둘이다. 엔진 테스트도 같은 규칙을 따른다.
+**파일을 둘로 가른다. 공개 CI가 서브모듈을 받지 못하기 때문이다**(14차 리뷰). `.github/workflows/test.yml`의 필수 `Unit tests` 잡은 `actions/checkout`을 **서브모듈 없이** 돌리므로 `data/`가 없다. 그래서 `docs-data-consistency.test.js`, `sw.test.js`는 `sync-data.yml`에서 돈다. 서브모듈을 받는 자리는 그것과 엔진 전용 `engine-data.yml`(머지 직후 main push, §9 미결22) 둘이다. 엔진 테스트도 같은 규칙을 따른다.
 
 | 파일 | 입력 | 어디서 도나 |
 |---|---|---|
