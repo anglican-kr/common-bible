@@ -1,4 +1,5 @@
 ---
+pr: 435
 date: 2026-10-26
 branch: docs/guard-ladder-terms
 title: "docs: 가드와 사다리를 정한 말로 바꾸고 글쓰기 규칙 둘을 더함"
