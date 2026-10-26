@@ -128,7 +128,9 @@ function bookmarkTreeFromFlat(items) {
    */
   function build(parentId) {
     return (byParent.get(parentId) ?? [])
-      .sort((a, b) => (a._order ?? 0) - (b._order ?? 0))
+      // Equal values break on id: two devices that each move an item to the front give both the same value, and the
+      // document's key order (each merge puts its own keys first) showed them differently per device (4th review).
+      .sort((a, b) => (a._order ?? 0) - (b._order ?? 0) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
       .map((flat) => {
         const { parentId: _p, _order: _o, _u: _t, ...rest } = flat;
         const kids = build(rest.id);
@@ -194,6 +196,47 @@ function _contentKey(node) {
   return JSON.stringify({ id, type, name, bookId, chapter, vref, verseSpec, color, label, note, createdAt, updatedAt });
 }
 
+// The _order values for one list of siblings, in display order. `stored[i]` is that sibling's stored _order if it sat
+// under the same parent before, else undefined. The longest run of stored values that still increases keeps them;
+// the rest (moved or new) get values between their kept neighbours: steps of 1 from the left neighbour when they fit
+// below the right one, else even fractions. When the numbers can no longer be told apart, the list is renumbered from 0.
+/** @param {Array<number | undefined>} stored @returns {number[]} */
+function _keepOrders(stored) {
+  const n = stored.length;
+  /** @type {number[]} */
+  const tails = [];   // tails[k]: index ending the best increasing run of length k + 1
+  const prev = new Array(n).fill(-1);
+  for (let i = 0; i < n; i++) {
+    const v = stored[i];
+    if (typeof v !== "number" || !Number.isFinite(v)) continue;
+    let lo = 0, hi = tails.length;
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (/** @type {number} */ (stored[tails[mid]]) < v) lo = mid + 1; else hi = mid; }
+    prev[i] = lo > 0 ? tails[lo - 1] : -1;
+    tails[lo] = i;
+  }
+  const keep = new Array(n).fill(false);
+  for (let i = tails.length ? tails[tails.length - 1] : -1; i !== -1; i = prev[i]) keep[i] = true;
+
+  /** @type {number[]} */
+  const out = new Array(n);
+  for (let i = 0; i < n; ) {
+    if (keep[i]) { out[i] = /** @type {number} */ (stored[i]); i++; continue; }
+    let j = i;
+    while (j < n && !keep[j]) j++;
+    const k = j - i, lo = i > 0 ? out[i - 1] : -Infinity, hi = j < n ? /** @type {number} */ (stored[j]) : Infinity;
+    for (let t = 0; t < k; t++) {
+      out[i + t] = lo === -Infinity && hi === Infinity ? t
+        : hi === Infinity ? lo + 1 + t
+        : lo === -Infinity ? hi - k + t
+        : hi - lo > k ? lo + 1 + t
+        : lo + ((hi - lo) * (t + 1)) / (k + 1);
+    }
+    i = j;
+  }
+  for (let i = 1; i < n; i++) if (!(out[i] > out[i - 1])) return out.map((_, idx) => idx);
+  return out;
+}
+
 // The document saveBookmarks(tree) writes — the stored one with `tree` flattened in, _u preserved for unchanged
 // items and tombstones added for removed ones — built without writing it.
 /** @param {BookmarkTreeNode[]} tree @returns {SyncDoc} */
@@ -202,6 +245,25 @@ function _docWithBookmarks(tree) {
   const doc = loadLocal();
   const oldItems = doc.bookmarks.items;
   const newFlat  = _flattenTree(tree, null, {}, now);
+
+  // An item whose place among its siblings is unchanged keeps its stored _order, so a removal or a move re-times only
+  // what moved. Renumbered from 0, every later sibling took a new _u and beat other devices' edits of it
+  // (PR #438 review, 사용자 결정 2026-10-26).
+  /** @type {Map<string | null, SyncFlatItem[]>} */
+  const siblings = new Map();
+  for (const node of Object.values(newFlat)) {
+    const list = siblings.get(node.parentId);
+    if (list) list.push(node);
+    else siblings.set(node.parentId, [node]);
+  }
+  for (const [parentId, list] of siblings) {
+    list.sort((a, b) => a._order - b._order);   // _flattenTree's 0, 1, 2 …: Object.values lists numeric-looking ids first
+    const stored = list.map((node) => {
+      const old = _own(oldItems, node.id);
+      return old && (old.parentId ?? null) === parentId ? old._order : undefined;
+    });
+    _keepOrders(stored).forEach((order, i) => { list[i]._order = order; });
+  }
 
   /** @type {{ [id: string]: SyncFlatItem }} */
   const nextItems = {};
