@@ -283,7 +283,7 @@ test("16. SYNCING 중 401 + silent refresh invalid → NEEDS_CONSENT", async () 
   assert.equal(stubs.refreshStore._calls.clear, 1, "IDB clear 호출됨");
 });
 
-test("17. 401 reauth 진행 중 disable() → DISABLED 유지 (Bugbot PR #54 race 가드)", async () => {
+test("17. 401 reauth 진행 중 disable() → DISABLED 유지 (Bugbot PR #54 경쟁 상태 검사)", async () => {
   // 시나리오: SYNCING에서 401 발생 → _kickoff401Reauth가 _attemptSilentRefresh
   // await 중 사용자가 disable() 호출 → silent 경로가 false 반환했을 때
   // NEEDS_CONSENT로 전이하면 안 됨 (사용자 의도 무시).
@@ -312,7 +312,7 @@ test("17. 401 reauth 진행 중 disable() → DISABLED 유지 (Bugbot PR #54 rac
   assert.equal(machine.getState(), "DISABLED", "disable() 즉시 DISABLED");
   resolveLoad(null);
   await drain(5);
-  assert.equal(machine.getState(), "DISABLED", "race 가드: DISABLED 유지");
+  assert.equal(machine.getState(), "DISABLED", "경쟁 상태 검사: DISABLED 유지");
 });
 
 // ── Group 6: OFFLINE + NET_RECOVERED ─────────────────────────────────────────
@@ -431,7 +431,7 @@ test("22. acceptRedirectCode 교환 실패 → NEEDS_CONSENT + 스낵바", async
 test("23. acceptRedirectCode 진행 중 signOut() → DISABLED 유지 (Bugbot #54)", async () => {
   // Production에선 signOut()이 localStorage["bible-drive-sync"]를 "0"으로 설정한 뒤
   // _machine.disable()을 호출함. acceptRedirectCode는 state=DISABLED에서 시작하므로
-  // 가드는 _state가 아니라 localStorage flag로 사용자 의도를 판별한다.
+  // 검사는 _state가 아니라 localStorage flag로 사용자 의도를 판별한다.
   let resolveExchange;
   const exchangePromise = new Promise((r) => { resolveExchange = r; });
   const { machine, drain, refreshStore, localStorage } = loadMachine({
@@ -470,7 +470,7 @@ test("24. ERROR 상태에서 ENABLE → cap 리셋 + redirect 시도", () => {
   assert.equal(beginCalls[0]?.prompt, "consent");
 });
 
-// ── Group 9: race lost 가드 ──────────────────────────────────────────────────
+// ── Group 9: 경쟁에서 밀린 흐름의 검사 ──────────────────────────────────────────────────
 
 test("25. silent refresh race lost (이미 IDLE) → 결과 폐기", async () => {
   // 시나리오: enable() → silent refresh fire (네트워크 hold) → 그 사이
@@ -526,10 +526,10 @@ test("26a. silent refresh 성공 + rotation IDB save 중 disable() → DISABLED 
   // 사용자가 disconnect 클릭 — disable()이 SYNC_ENABLED_KEY를 "0"으로 설정
   machine.disable();
   assert.equal(machine.getState(), "DISABLED");
-  // 이제 IDB save resolve → 가드가 SYNC_ENABLED_KEY="0"을 잡아야 함
+  // 이제 IDB save resolve → 검사가 SYNC_ENABLED_KEY="0"을 잡아야 함
   resolveSave();
   await drain(3);
-  assert.equal(machine.getState(), "DISABLED", "IDB save 갭 race 가드: DISABLED 유지");
+  assert.equal(machine.getState(), "DISABLED", "IDB save 갭 경쟁 상태 검사: DISABLED 유지");
   assert.equal(localStorage.getItem(SYNC_ENABLED_KEY), "0", "사용자 의도 보존");
 });
 
@@ -553,7 +553,7 @@ test("26b. silent refresh invalid_grant + IDB clear 중 disable() → DISABLED �
   assert.equal(machine.getState(), "DISABLED");
   resolveClear();
   await drain(3);
-  assert.equal(machine.getState(), "DISABLED", "IDB clear 갭 race 가드: DISABLED 유지");
+  assert.equal(machine.getState(), "DISABLED", "IDB clear 갭 경쟁 상태 검사: DISABLED 유지");
   assert.equal(localStorage.getItem(SYNC_ENABLED_KEY), "0");
 });
 
@@ -582,13 +582,13 @@ test("26c. acceptRedirectCode 성공 후 IDB save 중 disable() → DISABLED 유
   assert.equal(machine.getState(), "DISABLED");
   resolveSave();
   await drain(3);
-  assert.equal(machine.getState(), "DISABLED", "code exchange + IDB save 갭 race 가드");
+  assert.equal(machine.getState(), "DISABLED", "code exchange + IDB save 갭 경쟁 상태 검사");
   assert.equal(localStorage.getItem(SYNC_ENABLED_KEY), "0");
 });
 
 test("26. 401 reauth 경로의 silent refresh는 SYNCING에서도 override (fromReauth=true)", async () => {
   // 시나리오: SYNCING에서 401 도달 → _kickoff401Reauth → silent refresh
-  //   → SYNCING에서 SYNCING으로 다시 들어가는 흐름을 가드가 막으면 갇힘.
+  //   → SYNCING에서 SYNCING으로 다시 들어가는 흐름을 검사가 막으면 갇힘.
   let downloadCalls = 0;
   const { machine, drain } = loadMachine({
     initialRefreshToken: "rt-stored",
@@ -606,7 +606,7 @@ test("26. 401 reauth 경로의 silent refresh는 SYNCING에서도 override (from
   });
   machine.enable();
   await drain(10);
-  assert.equal(machine.getState(), "IDLE", "fromReauth=true 덕분에 SYNCING 가드 우회, 회복 성공");
+  assert.equal(machine.getState(), "IDLE", "fromReauth=true 덕분에 SYNCING 검사 우회, 회복 성공");
   assert.equal(downloadCalls, 2, "두 번째 사이클에서 200, 무한 루프 없음");
 });
 
@@ -1028,8 +1028,8 @@ test("42. requestSync() (throttle 미지정) — 사용자 액션은 window 안�
   assert.equal(downloadCalls.length, 2, "사용자 액션은 throttle 영향 없이 진행");
 });
 
-test("43. requestSync({throttleMs}) — SYNCING 중 폴은 throttle 분기 전에 IDLE 가드로 drop", async () => {
-  // throttle 로직에 도달하기 전에 _state !== IDLE 가드에서 끊긴다.
+test("43. requestSync({throttleMs}) — SYNCING 중 폴은 throttle 분기 전에 IDLE 검사로 drop", async () => {
+  // throttle 로직에 도달하기 전에 _state !== IDLE 검사에서 끊긴다.
   // SYNC_THROTTLED 로그가 찍히지 않는 것으로 분기 순서를 확인.
   const log = [];
   let resolveDownload;
@@ -1051,7 +1051,7 @@ test("43. requestSync({throttleMs}) — SYNCING 중 폴은 throttle 분기 전�
   assert.equal(machine.getState(), "SYNCING", "다운로드 hold 중 SYNCING");
   machine.requestSync({ throttleMs: 30_000 });
   const throttled = log.filter((e) => e.event === "SYNC_THROTTLED");
-  assert.equal(throttled.length, 0, "SYNCING 중 폴은 IDLE 가드에서 drop, throttle 진입 없음");
+  assert.equal(throttled.length, 0, "SYNCING 중 폴은 IDLE 검사에서 drop, throttle 진입 없음");
   resolveDownload({ doc: null, etag: null, status: 304 });
   await drain(5);
 });
@@ -1796,7 +1796,7 @@ test("63. 네트워크 실패(status 0)로 OFFLINE이 된 뒤에도 온라인이
 
 test("69. 사이클이 도는 사이 다시 SYNCING이 되면 두 번째 사이클을 띄우지 않는다 — 돌던 사이클이 마무리한다", async () => {
   // 같은 페이지에서 disable() 뒤 다시 켜지는 길은 실제로는 없다(켬 표지 "0"이 조용한 갱신을 물린다) — 표지를
-  // 직접 "1"로 돌려 그 경우를 만든다. _startCycle의 가드가 없으면 사이클 둘이 겹쳐 돈다.
+  // 직접 "1"로 돌려 그 경우를 만든다. _startCycle의 검사가 없으면 사이클 둘이 겹쳐 돈다.
   let downloads = 0;
   let resolveFirst;
   const { machine, drain, localStorage } = loadMachine({

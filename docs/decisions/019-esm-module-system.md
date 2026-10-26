@@ -77,7 +77,7 @@ window.appStorage.saveReadingPosition(...);
 
 ### `window.X`에 명시적으로 내놓기
 
-ESM 모듈의 `const` 바인딩은 `window`에 저절로 등록되지 않는다. sync 레이어가 `typeof window.applyFontSize === "function"` 같은 가드로 호출하는 함수는 `window.X = X;` 줄을 따로 넣어 내놓는다(Phase 3 PR #90에서 이미 쓴 방식).
+ESM 모듈의 `const` 바인딩은 `window`에 저절로 등록되지 않는다. sync 레이어가 `typeof window.applyFontSize === "function"` 같은 검사로 호출하는 함수는 `window.X = X;` 줄을 따로 넣어 내놓는다(Phase 3 PR #90에서 이미 쓴 방식).
 
 ### 예외 (script 모드 유지)
 

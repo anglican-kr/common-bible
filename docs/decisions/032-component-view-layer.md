@@ -103,7 +103,7 @@ ctl.open(); ctl.close(); ctl.isOpen;
 1. **오버레이 컨트롤러** `js/app/overlay.js`(`window.appOverlay.createOverlay`): 결정 (1) 그대로다. `closeOnEsc` 기본값은 **꺼 두었다**. 막 옮긴 오버레이가, 모두 옮길 때까지 기존의 쌓인 Escape 라우터(bookmark.js, app.js)에 계속 맡기기 위해서다. 지금도 기본은 꺼짐이고, 북마크, 설치, 검색의 일부 오버레이가 켠다. **모달 9종**(북마크 새 폴더, 확인, 저장, 병합, 가져오기, 장 삭제, 드라이브 해제, 설치)과 **드로어**, **인용 시트**, **팝오버 2종**(설정, 장 선택)까지 흩어진 12곳을 모두 받아들였다.
 2. **Escape를 한 곳으로**: 팝오버는 app.js의 중앙 조정자가 `window.close{Settings,ChapterPopover}`에 맡기고(직접 hidden으로 바꾸지 않는다), 모달은 모듈마다의 쌓인 라우터가 컨트롤러의 close를 호출한다.
 3. **sheet 팩토리**: `attachSheetDrag`/`attachSheetResize`(드래그와 리사이즈 pointer 배관에 `dragReleaseAction`을 묶음). 드로어와 인용 시트가 함께 쓴다(겹치던 약 105줄을 지웠다).
-4. **비동기(애니메이션) 닫기 — 처음 안보다 넓혔다**. 처음에는 드로어의 수명 관리를 「비동기로 숨기므로 따로 둔다」고 하려 했다. 사용자가 부드러운 전환을 선호해 방향을 바꿨다. `createOverlay`에 `closeTransition(panel, finalizeHide)`와 다시 열기 순서 가드를 더해 **드로어를 완전히 받아들였고**, **인용 시트에도 같은 슬라이드 in/out**을 적용했다. 이제 애니메이션 시트가 한 방식을 함께 쓴다(노트, 캘린더 같은 뒤의 기능도 다시 쓴다).
+4. **비동기(애니메이션) 닫기 — 처음 안보다 넓혔다**. 처음에는 드로어의 수명 관리를 「비동기로 숨기므로 따로 둔다」고 하려 했다. 사용자가 부드러운 전환을 선호해 방향을 바꿨다. `createOverlay`에 `closeTransition(panel, finalizeHide)`와 다시 열기 순서 검사를 더해 **드로어를 완전히 받아들였고**, **인용 시트에도 같은 슬라이드 in/out**을 적용했다. 이제 애니메이션 시트가 한 방식을 함께 쓴다(노트, 캘린더 같은 뒤의 기능도 다시 쓴다).
 5. **화면 조각 빌더 — 일부만 채택했다**. `emptyState({icon,title,subtitle,tag,role})`(helpers.js)로 북마크와 검색의 빈 상태를 하나의 `.empty-state` 컴포넌트로 맞췄다(DESIGN.md §6). **button/iconButton은 미뤘다.** gear/home/back/bookmark 버튼이 저마다 글리프, 클래스, 동작이 달라, `el()` 위의 빌더가 실제 중복을 줄이지 못하고 지나친 추상화가 되었다(§3 평가 결과). 목록 행 빌더도 같은 이유로 미뤘다.
 
 검증: 유닛 644 통과(overlay 23과 emptyState 3 등 신규 포함, 그때 수), `tsc` 0 error(두 설정 모두), e2e는 오버레이, 시트, 팝오버, 빈 상태 흐름이 통과했다(신규 `tests/e2e/test_cite_sheet.py` 포함).

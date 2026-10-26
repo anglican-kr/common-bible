@@ -3042,11 +3042,14 @@ mark.search-highlight {
     z-index: var(--nav-z);
   }
   body.tabbar-searching .resume-banner { display: none; }
-  /* 투명 레이아웃 레이어인 #tab-dock 가 빈 가운데 클릭을 먹어 그 아래 이어읽기 pill(링크·×)이
-     안 눌렸다(#tab-dock 가 DOM 상 배너보다 뒤·동일 z + #resume-banner-slot z-index:10 스택
-     컨텍스트가 pill z 를 가둠). → pill 이 실제로 dock 에 있을 때만(배너 존재 + 검색 아님)
-     #tab-dock pointer-events 를 끄고 실제 컨트롤만 되살린다. 배너 없는 책 목록·다른 뷰에선
-     dock 가 빈 가운데 탭을 그대로 흡수해야 하므로 :has() 로 가드(Bugbot Low). 미니 오디오는 별도 요소. */
+  /* 배치만 맡는 투명한 `#tab-dock` 요소가 가운데 빈 영역의 클릭을 가로채, 그 아래의 이어 읽기
+     알약 단추(링크와 ×)가 눌리지 않았다. `#tab-dock` 요소는 DOM 순서로 배너보다 뒤에 있고 쌓임
+     순서(`z-index` 속성)가 같다. 또 `#resume-banner-slot` 요소의 `z-index: 10`이 쌓임 맥락을
+     만들어, 알약 단추의 쌓임 순서는 그 안에서만 비교된다. 그래서 알약 단추가 실제로 `#tab-dock`
+     요소와 같은 줄에 보일 때만(배너가 있고 검색 중이 아닐 때) `#tab-dock` 요소가 클릭을 받지 않게 하고
+     (`pointer-events: none`) 실제 컨트롤만 다시 받게 한다. 배너가 없는 책 목록과 다른 화면에서는
+     `#tab-dock` 요소가 가운데 빈 영역의 클릭을 그대로 받아야 하므로, `:has()` 선택자로 배너가
+     있을 때만 이 규칙을 적용한다(Bugbot 지적, 낮음). 미니 오디오 플레이어는 별도 요소다. */
   body:has(#resume-banner-slot .resume-banner):not(.tabbar-searching) #tab-dock { pointer-events: none; }
   body:has(#resume-banner-slot .resume-banner):not(.tabbar-searching) #tab-bar,
   body:has(#resume-banner-slot .resume-banner):not(.tabbar-searching) #tab-search-dock,

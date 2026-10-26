@@ -108,7 +108,7 @@ Google Drive 동기화·OAuth는 외부 의존이지만 단 한 군데 — `/oau
 1. **저작권** — 원본 텍스트는 비공개 저장소(`common-bible-data`, ADR-020)의 `source/` 하위 마크다운으로 관리된다. 본 앱 저장소가 그 저장소를 `data/`에 서브모듈로 마운트하므로 docroot URL은 그대로 `/data/...`. 빌드 산출물(`bible/` · `books.json` · `search-*.json` · `lectionary/` · 매니페스트 2종)도 data 저장소에 commit 되므로(main에 push되면 CI가 다시 만들어 커밋한다) 앱은 서브모듈 포인터로 잠금만 한다. 파이프라인 실행은 권한 있는 사용자만 가능 (data 저장소 접근권 필요).
 2. **비상업·비영리** — 백엔드를 운영할 인력·예산이 없다. 모든 상태는 클라이언트 또는 사용자의 Google Drive(appdata)에 산다.
 3. **오프라인 우선** — 교회·예배 환경의 불안정한 네트워크를 가정. PWA + Service Worker가 설치 때 셸(JS · CSS · HTML · 아이콘 · `books.json` · `search-meta.json` · 매니페스트 2종)을 받아 두고, 본문 장 · 검색 청크 · 교회력 표 · mp3는 처음 쓸 때 캐시해 그 뒤로는 오프라인에서도 열린다 — 미리 전부 받지는 않는다(§4.6).
-4. **장기 유지보수성** — 1인 개발이 가능해야 한다. 프레임워크/번들러 부재, 의존성 최소, 테스트 자동화 — 이 셋이 핵심 가드다.
+4. **장기 유지보수성** — 1인 개발이 가능해야 한다. 프레임워크/번들러 부재, 의존성 최소, 테스트 자동화 — 이 셋이 핵심 안전장치다.
 
 이 4개가 SPA·Vanilla JS·Python 일회성 전처리·Drive appdata·정적 호스팅이라는 선택을 거의 단일 결론으로 강제했다. 자세히는 [ADR-001](decisions/001-spa-architecture.md).
 
@@ -311,8 +311,8 @@ ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` 약 6,000줄이 8개 �
               │  NEEDS_CONSENT/   │                       │ - flat-map ↔ tree│
               │  ERROR            │ ┌───────────────────┐ └─────────────────┘
               │                   │ │ sync/refresh-     │
-              │ 모든 race 가드와    │ │ store.js          │ ┌─────────────────┐
-              │ 카운터 캡 보유       │ │ - AES-GCM 암호화   │ │ sync/debug-     │
+              │ 경쟁 상태 검사와  │ │ store.js          │ ┌─────────────────┐
+              │ 카운터 캡 보유    │ │ - AES-GCM 암호화   │ │ sync/debug-     │
               └───────────────────┘ │   IndexedDB        │ │ log.js          │
                                     │ - 256-bit key      │ │ - ring buffer   │
                                     │   webcrypto 비추출  │ │ - 토큰 마스킹    │
@@ -325,7 +325,7 @@ ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` 약 6,000줄이 8개 �
 - **OAuth `/token` BFF**. `transport.js`는 `https://oauth2.googleapis.com/token`이 아니라 같은 출처(same-origin) `/oauth/token`으로 보낸다. 웹 서버(nginx)가 비밀 키(`client_secret`)를 서버 쪽에서 주입한 뒤 Google로 전달 — Google "Web application" 클라이언트가 PKCE에서도 비밀 키를 요구하는 RFC 7636(PKCE 표준) 일탈을 회피 (자세히 [ADR-017](decisions/017-oauth-bff-proxy.md)).
 - **탭 복귀 폴**. 사용자가 탭으로 돌아올 때(`visibilitychange`의 visible 분기) `pollSync()`(= `requestSync({ throttleMs: 15000 })`)를 한 번 호출한다 — 다른 디바이스의 변경분을 새로고침 없이 가져온다. 사이클이 끝난 지 15초 안이면 건너뛰고, 도는 중이면 버린다(도는 사이클이 그 폴이다). OFFLINE이고 기기가 온라인이면 다시 시도한다.
 - **상태 머신의 모든 변이는 `_transition()` 한 곳을 거친다.** 카운터(`{netFails, conflictFails, reAuthFails, backoffTimer}`)도 같이 리셋된다. 다음 상태로 이어가야 할 값은 명시적으로 넘겨야만 보존됨 (`state-machine.js` 머리 주석).
-- **동시 실행 가드**: 상태(`_state`) 검사 + `localStorage["bible-drive-sync"]` 켬 표지 검사 + 모든 비동기 대기(`await`) 직후 재검사 — 백그라운드 토큰 갱신 · code 교환 · 동기화 사이클(대기 여섯 곳마다 `_leftSyncing`) 도중에 연결을 끊어도 의도가 지켜진다. 사이클은 하나만 돈다(`_startCycle`의 `_syncPending`). 확인은 대기마다 한 줄이고, 진행 중 요청을 취소하는 구조(`AbortController`)로 바꾸지 않는다 — 결정과 재검토 조건은 [coding-pitfalls.md](coding-pitfalls.md) §11.
+- **동시 실행 검사**: 상태(`_state`) 검사 + `localStorage["bible-drive-sync"]` 켬 표지 검사 + 모든 비동기 대기(`await`) 직후 재검사 — 백그라운드 토큰 갱신 · code 교환 · 동기화 사이클(대기 여섯 곳마다 `_leftSyncing`) 도중에 연결을 끊어도 의도가 지켜진다. 사이클은 하나만 돈다(`_startCycle`의 `_syncPending`). 확인은 대기마다 한 줄이고, 진행 중 요청을 취소하는 구조(`AbortController`)로 바꾸지 않는다 — 결정과 재검토 조건은 [coding-pitfalls.md](coding-pitfalls.md) §11.
 - **끄는 길은 하나**: `_stopSync` — 켬 표지 "0" · 동기화 캐시 · 토큰 · DISABLED 전이 · 설정 다시 그리기. `disable()`(어느 상태에서든)과 「파일도 삭제」가 함께 쓴다. 다른 탭은 켬 표지의 `storage` 이벤트로 멈춘다.
 - **사이클 도중의 편집**: 병합 직전(내려받기 뒤)에 로컬을 다시 읽어 대기 중 저장한 북마크 · 설정을 덮지 않고, 도는 동안 들어온 사용자 요청은 끝난 뒤 한 번 더 돈다(`_resyncRequested` — 다음 마이크로태스크).
 - **캐시와 304**: fileId · ETag · 마지막으로 올린 본문의 maxU를 캐시해(`bible-drive-cache-*`) 목록 요청을 건너뛰고, 조건부 GET(`If-None-Match`)이 304면 내려받지 않는다 — 로컬에 새 편집이 있으면 올리기만 한다.
@@ -561,7 +561,7 @@ Phase 1(성경 읽기 PWA)은 완성됐고, Phase 3(교회력)은 일부 구현�
 | [028](decisions/028-design-system.md)                        | 디자인 시스템 — 토큰 사다리(간격·타이포·반경·elevation·컨트롤·모션) + HIG 정렬 (권위 문서 `DESIGN.md`)                                                                                                                                                        |
 | [029](decisions/029-mobile-tab-bar.md)                       | 적응형 내비 Phase 1 — 모바일 하단 탭 바(전체화면 라우트 뷰, iOS 2026 Liquid Glass). 첫 결정의 4탭(홈·검색·북마크·설정) 가운데 검색은 ADR-030에서 따로 떨어진 원형으로, 캘린더 탭은 ADR-038에서 더해졌다                                                                                                                                                   |
 | [030](decisions/030-morphing-tab-bar.md)                     | 모핑 탭 바 — 라벨 없는 아이콘 + 분리 검색 원형 → 입력 모핑(ADR-029 개정), 옛 검색 시트 제거, 스크롤 축소+오디오 미니(P3 완료)                                                                                                                                    |
-| [031](decisions/031-tab-history-restore.md)                  | 탭 히스토리 — 탭별 마지막 라우트+스크롤 복원(홈=읽던 위치, 검색=마지막 검색), `scrollRestoration:"manual"` + route() 시퀀스 가드 · 다시 그린 뒤 포커스는 라우터가(2026-10-17)                                                                                                                              |
+| [031](decisions/031-tab-history-restore.md)                  | 탭 히스토리 — 탭별 마지막 라우트+스크롤 복원(홈=읽던 위치, 검색=마지막 검색), `scrollRestoration:"manual"` + route() 시퀀스 검사 · 다시 그린 뒤 포커스는 라우터가(2026-10-17)                                                                                                                              |
 | [032](decisions/032-component-view-layer.md)                 | 컴포넌트·뷰 층 모듈화 — `el()` 위 무의존성 컴포넌트 층(`createOverlay` 단일 컨트롤러 + 시트 팩토리 + 비동기 `closeTransition` + `emptyState` 빌더)으로 오버레이 12곳·빈 상태 통일, 점진 교체 (구현 완료)                                                      |
 | [033](decisions/033-search-options.md)                       | 검색 옵션 — 책 picker(필터 시트)·결과 내 검색(AND)·진입 시 최근 검색 목록(개별/전체 삭제), URL 인코딩 필터 상태, 노트 검색 범위 확장 대비 (구현 완료)                                                                                                         |
 | [034](decisions/034-views-routing-second-split.md)           | 뷰·라우팅·북마크 2차 분할 — 관심사별 모듈화 + 비순환 facade→명시 import 전환 + 순환 dispatch는 registry 역전 (ADR-018 후속. `views-routing.js` 2,389줄은 audio-player·data-fetch·tabbar·routing·overlay 로 분해돼 소멸, `bookmark.js` 3,578→589줄. PR5c registerView 역전만 보류)                                                                                                             |

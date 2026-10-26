@@ -73,7 +73,7 @@ CRUD 작업 후 의존하는 UI 컴포넌트의 갱신 함수를 호출하지 �
 - 부모-자식 관계 검사 헬퍼는 인자 순서가 헷갈리지 않게 시그니처 위에 한 줄 주석:
   `// _isDescendant(ancestor, candidateId) — candidate가 ancestor의 후손인가?`
 - 분기로 갈라진 동일 의도 검증이 있는지 확인. "이 검증이 다른 분기에도 필요한가?"를 한 번 더 묻는다.
-- 가드 절은 가능한 한 **분기 시작 시점**에 두고, 분기 내부에 두면 의도하지 않은 패스가 생기지 않는지 확인.
+- 검사 구문(guard clause)은 가능한 한 **분기 시작 시점**에 두고, 분기 내부에 두면 의도하지 않은 패스가 생기지 않는지 확인.
 - URL · 저장소에서 온 수는 범위 비교만으로 거르지 않는다 — `NaN` 은 모든 비교에서 false 다. `Number.isInteger`(또는 정규식으로 통째 검사 — `routing.js` 전례독서 쿼리의 `positive`)를 먼저.
 - 바깥에서 온 문자열을 일반 객체의 키로 찾을 때는 `Object.hasOwn`(또는 `Map`) — `constructor` · `toString` · `__proto__` 도 참이다.
 
@@ -161,14 +161,14 @@ CRUD 작업 후 의존하는 UI 컴포넌트의 갱신 함수를 호출하지 �
 
 ---
 
-## 11. 비동기 race 가드 — 단일 체크포인트의 함정
+## 11. 비동기 경쟁 상태 검사 — 단일 체크포인트의 함정
 
-`async` 함수가 여러 `await` 지점을 거치면, 각 await 사이마다 외부 상태(사용자 의도, 다른 흐름의 결과 등)가 바뀔 수 있다. race 가드를 함수 진입 시점이나 첫 번째 await 직후에만 두면, 그 다음 await가 끝난 시점에 이미 stale한 결정에 따라 상태를 덮어쓰는 패턴.
+`async` 함수가 여러 `await` 지점을 거치면, 각 await 사이마다 외부 상태(사용자 의도, 다른 흐름의 결과 등)가 바뀔 수 있다. 경쟁 상태 검사를 함수 진입 시점이나 첫 번째 await 직후에만 두면, 그 다음 await가 끝난 시점에 이미 stale한 결정에 따라 상태를 덮어쓰는 패턴.
 
 **사례 (Phase 2h PKCE 마이그레이션 — Bugbot PR #54·#57):**
 
-- `c4d0c72` — `_attemptSilentRefresh`가 `_state` 기반 race 가드만 가짐. 사용자가 silent refresh 진행 중 `signOut()`/`disable()`을 호출하면 `_state`는 그대로(혹은 정상 진행 중인 값)이지만 `localStorage["bible-drive-sync"]`는 `"0"`으로 바뀜 → state 가드만 통과시켜 IDLE/NEEDS_CONSENT로 전이하면 사용자가 끊은 sync를 다시 살림. 해결: `localStorage.getItem(SYNC_ENABLED_KEY) === "0"` 검사 추가.
-- `f090c83` — 같은 함수에 race 가드를 진입 시점에만 둠. 그러나 `await refreshAccessToken(...)` 직후 race 가드를 통과한 뒤에도 `await refreshStore.saveRefreshToken(...)` (rotation) 또는 `await refreshStore.clearRefreshToken()` (invalid_grant) 같은 IDB await가 남아있음. 그 IDB await 동안 사용자가 `disable()`을 호출하면 후속 `_transition(IDLE/NEEDS_CONSENT)`이 다시 `SYNC_ENABLED_KEY = "1"`로 덮어씀. 해결: 매 `await` 직후마다 race 가드를 다시 검사. 단계 4 후 `enable()`이 동기적으로 DISABLED를 빠져나가지 않으므로 state-based 가드만으로 cold-start 경로 보호 불가능 — flag-based 가드가 필수.
+- `c4d0c72` — `_attemptSilentRefresh`가 `_state` 기반 경쟁 상태 검사만 가짐. 사용자가 silent refresh 진행 중 `signOut()`/`disable()`을 호출하면 `_state`는 그대로(혹은 정상 진행 중인 값)이지만 `localStorage["bible-drive-sync"]`는 `"0"`으로 바뀜 → 상태 검사만 통과시켜 IDLE/NEEDS_CONSENT로 전이하면 사용자가 끊은 sync를 다시 살림. 해결: `localStorage.getItem(SYNC_ENABLED_KEY) === "0"` 검사 추가.
+- `f090c83` — 같은 함수에 경쟁 상태 검사를 진입 시점에만 둠. 그러나 `await refreshAccessToken(...)` 직후 경쟁 상태 검사를 통과한 뒤에도 `await refreshStore.saveRefreshToken(...)` (rotation) 또는 `await refreshStore.clearRefreshToken()` (invalid_grant) 같은 IDB await가 남아있음. 그 IDB await 동안 사용자가 `disable()`을 호출하면 후속 `_transition(IDLE/NEEDS_CONSENT)`이 다시 `SYNC_ENABLED_KEY = "1"`로 덮어씀. 해결: 매 `await` 직후마다 경쟁 상태 검사를 다시 검사. 단계 4 후 `enable()`이 동기적으로 DISABLED를 빠져나가지 않으므로 상태 기반 검사만으로 cold-start 경로 보호 불가능 — 플래그 기반 검사가 필수.
 - (2026-10-17, PR #353 리뷰 — `docs/changes/2026-10-17-typecheck-batch-1.md`) — 업데이트 토스트 `showUpdateToast`의 「이미 떴나」 검사가 대기 SW에 버전을 묻는 `await`(최대 1.5초) 앞에만 있어, 그 사이 설정의 「업데이트 지금 확인」이 또 호출하면 둘 다 검사를 지나 같은 id의 토스트가 둘 붙었다. 해결: `await` 뒤에 한 번 더 본다. 동기화 레이어 밖에서도 같은 경우가 나온다.
 - (2026-10-17, `docs/changes/2026-10-17-sync-signout-inflight.md`) — 동기화 사이클 `_syncCycle()`에는 같은 규칙이 빠져 있었다. 파일 찾기 · 내려받기 · 올리기 대기 중에 `signOut()`이 오면, 대기 뒤에 만든 업로드가 로그아웃 뒤에 더한 북마크까지 담아 `Bearer null`로 나갔다(실제 Drive는 401 — 내려받기 대기였다면 원격 자료를 로컬에 쓰고, 올리기 대기였다면 비운 캐시를 다시 채웠다). e2e는 가짜 Drive가 토큰 없는 요청을 받아 주어 가끔 실패하는 테스트로만 보였다. 해결: 대기마다 `_leftSyncing(at)` — 상태가 SYNCING이 아니면 멈춘다. 여기서는 state-based가 맞다(DISABLE은 SYNCING에서 동기적으로 DISABLED로 전이한다).
 - (2026-10-17, 같은 원장 — 머지 전 검토 4번) — 연결 해제의 「파일도 삭제」는 `deleteRemoteFile()`을 기다린 뒤 `signOut()`을 호출해, 지우는 동안 동기화가 그대로 돌았다. 진행 중 사이클의 새 파일 올리기가 지우기 뒤에 도착하면 방금 지운 파일이 되살아났다. 해결: 지우기 전에 사이클을 멈추고, 진행 중 사이클이 이미 보낸 요청이 끝나기를 기다린 뒤(`_cycleDone`) 찾아 지운다.
@@ -177,9 +177,9 @@ CRUD 작업 후 의존하는 UI 컴포넌트의 갱신 함수를 호출하지 �
 
 **규칙:**
 
-- 비동기 함수에서 race 가드는 **모든 await 직후에 재검사**한다. 진입 시점 한 번만으로 충분하다고 가정하지 말 것.
-- 사용자 의도를 신뢰성 있게 신호하는 단일 출처(여기서는 `localStorage["bible-drive-sync"]`)를 정해 모든 race 가드가 같은 출처를 참조하게 한다.
-- state machine을 단순화하면서 동기 dispatch가 사라졌다면, 기존 state-based race 가드가 더 이상 작동하지 않는지 의심하라. flag-based 가드로 대체하거나 보강해야 할 수 있다.
+- 비동기 함수에서 경쟁 상태 검사는 **모든 await 직후에 재검사**한다. 진입 시점 한 번만으로 충분하다고 가정하지 말 것.
+- 사용자 의도를 신뢰성 있게 신호하는 단일 출처(여기서는 `localStorage["bible-drive-sync"]`)를 정해 모든 경쟁 상태 검사가 같은 출처를 참조하게 한다.
+- state machine을 단순화하면서 동기 dispatch가 사라졌다면, 기존 상태 기반의 경쟁 상태 검사가 더 이상 작동하지 않는지 의심하라. 플래그 기반 검사로 대체하거나 보강해야 할 수 있다.
 - 회귀 방어 테스트: 외부 제어 가능한 `Promise`로 await를 hold한 채 `disable()`을 끼워 넣어, 각 await 시점의 race window를 명시적으로 시뮬레이션한다 (`tests/unit/state-machine.test.js` 26a/b/c · 44-46 참고). e2e에서는 가짜 서버의 응답을 쥐고 있다가 푼다(`test_drive_sync.py` `FakeDrive.hold_list`).
 - e2e의 가짜 서버는 토큰 · 권한 검사도 실제처럼 한다 — 다 받아 주는 가짜는 클라이언트의 결함을 가리거나 가끔 실패하는 테스트로 보이게 한다.
 - 대기 뒤에 낡는 것은 상태만이 아니다 — 대기 전에 읽은 **자료**(로컬 사본 · 토큰 · 캐시 값)도 낡는다. 덮어쓰는 쓰기는 대기 없이 바로 앞에서 읽은 값으로 한다. 도중에 들어온 요청은 버리지 말고 한 번으로 모아 끝난 뒤 다시 돈다 — 다시 시작은 다음 마이크로태스크에(끝나는 사이클의 `finally` 앞이면 새 사이클이 「아직 도는 중」을 보고 시작되지 못한다).

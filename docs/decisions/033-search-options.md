@@ -25,7 +25,7 @@ Apple HIG의 검색 방식(필터/범위 바, 토큰, 최근 항목 목록, 시�
 - **책 범위**: 필드 왼쪽의 **깔때기 버튼**(`.token-funnel`, 책 선택 시트로 들어간다. 시트는 그대로다)과, 고른 책마다 지울 수 있는 **칩**(`.field-token`)이다.
 - **Backspace**(커서가 0이고 필드가 비었을 때)로 마지막 토큰을 지우고, 칩의 ×를 눌러 하나씩 지운다.
 - 모핑 pill의 토큰은 `body.tabbar-searching`일 때만 그린다(접힌 dock에는 칩이 없다).
-- **`in:<별칭>`을 칩으로 옮긴다**: `commitTopSearch`가 커밋할 때 쿼리의 `in:` 연산자를 풀어 book id로 바꾸고 `filterBooks`(칩)로 옮긴 뒤, `q`에는 낱말만 남긴다(예제, 최근 검색, 직접 입력 모두 같다). 토큰 UI에서 연산자가 입력창에 그대로 보이지 않게 하려는 것이다. 풀지 못한 별칭은 `q`에 남아 워커가 그대로 처리한다(문제없이 넘어간다). 별칭 맵은 books의 `short_name_ko`/`name_ko`로 만들고 **부팅할 때 미리 불러 둔다**(`ensureAliasMap` 시작). 그래서 `commitTopSearch`는 **동기**로 둔다. async로 두면 await 경쟁 상태(낡은 값 적용, 플래그 남음)를 매번 routeSeq 가드로 막아야 해서, 그럴 자리 자체를 없앴다.
+- **`in:<별칭>`을 칩으로 옮긴다**: `commitTopSearch`가 커밋할 때 쿼리의 `in:` 연산자를 풀어 book id로 바꾸고 `filterBooks`(칩)로 옮긴 뒤, `q`에는 낱말만 남긴다(예제, 최근 검색, 직접 입력 모두 같다). 토큰 UI에서 연산자가 입력창에 그대로 보이지 않게 하려는 것이다. 풀지 못한 별칭은 `q`에 남아 워커가 그대로 처리한다(문제없이 넘어간다). 별칭 맵은 books의 `short_name_ko`/`name_ko`로 만들고 **부팅할 때 미리 불러 둔다**(`ensureAliasMap` 시작). 그래서 `commitTopSearch`는 **동기**로 둔다. async로 두면 await 경쟁 상태(낡은 값 적용, 플래그 남음)를 매번 routeSeq 검사로 막아야 해서, 그럴 자리 자체를 없앴다.
 - **넘칠 때**: 토큰이 많으면 `.token-zone`(깔때기, 칩)이 **가로로 스크롤**되고, 메인 입력과 지우기 버튼은 zone 밖이라 늘 닿는다. 누를 자리(깔때기, 칩 ×)는 투명 `::after` 44px 덮개로 `--touch-target`을 확보한다(보이는 크기는 그대로). 책 칩 라벨은 `short_name_ko`(줄인 이름)다.
 
 `buildSearchFilterBar`/`buildFilterChip`과 별도 필터 바는 지웠다. **워커와 URL(`in=`/`and=`) 스키마는 바꾸지 않았다.** 필터가 *어떻게 보이는지*만 바뀌었다. `css/style.css`의 옛 `.search-filters`/`.search-scope-*`/`.search-refine-*`/`.search-chip*` 규칙은 쓰는 곳이 없어져 뒤에 정리하기로 했고, 지금은 없다. 라우팅, 시트, 모핑의 DOM 동작은 e2e가 맡고(ADR-013), 순수 로직(URL, 쪽 넘김) 유닛은 회귀가 없었다(678 통과, tsc 0, 그때 수). **모바일 pill 레이아웃은 기기에서 눈으로 확인해야 한다.**

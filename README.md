@@ -151,10 +151,10 @@ git submodule update --init --recursive
 
 **OAuth /token BFF**: `/oauth/token`은 nginx가 같은 origin에서 받은 요청에 `client_secret`을 server-side로 주입한 뒤 `oauth2.googleapis.com/token`으로 forward한다. Google "Web application" 클라이언트 타입의 RFC 7636 일탈(PKCE에서도 secret 강제) + GitHub secret scanner 자동 무효화 위험을 회피하기 위함이다 ([ADR-017](docs/decisions/017-oauth-bff-proxy.md), `common-bible-server/nginx/oauth-proxy.example.conf`).
 
-운영 가드:
+운영 안전장치:
 - **무한 리디렉션 cap**: localStorage 카운터(상한 3회) 초과 시 ERROR 강제 전이. SYNC_DONE으로만 리셋.
 - **만성 401 cap (`MAX_REAUTH=3`)**: 새 access token도 Drive가 거절하면 4번째 401에서 ERROR + snackbar.
-- **race 가드**: state-based + `localStorage["bible-drive-sync"]` flag-based + 매 async await 직후 재검사 — 사용자가 조용한 refresh / code 교환 · 동기화 사이클 진행 중 disconnect 시 의도 보존.
+- **경쟁 상태 검사**: state-based + `localStorage["bible-drive-sync"]` flag-based + 매 async await 직후 재검사 — 사용자가 조용한 refresh / code 교환 · 동기화 사이클 진행 중 disconnect 시 의도 보존.
 - **사이클 도중의 편집 보존**: 병합 직전에 로컬을 다시 읽고(기다리는 동안 저장한 북마크 · 설정을 덮지 않는다), 도는 동안 들어온 사용자 요청은 끝난 뒤 한 번 더 돈다.
 
 ### 알려진 한계

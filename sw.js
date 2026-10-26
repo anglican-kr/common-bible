@@ -101,7 +101,7 @@ const SHELL_FILES = [
 //
 // 여기 빠진 데이터 경로는 SHELL_CACHE 로 떨어지는데, 그러면 **콘텐츠 해시
 // 무효화를 못 받는다** — `manifest-sync.js` 는 낡은 항목을 DATA_CACHE 에서만
-// 지우므로(`_invalidateCache(DATA_CACHE, stale)`) SHELL_CACHE 에 앉은 바이트는
+// 지우므로(`_invalidateCache(DATA_CACHE, stale)`) SHELL_CACHE에 들어간 바이트는
 // 해시가 바뀌어도 살아남고, 다음 릴리스가 셸을 통째로 갈 때까지 남는다.
 // bible-manifest 가 추적하는 접두사는 반드시 여기에도 있어야 한다
 // (`tests/unit/sw.test.js` 가 대조한다).

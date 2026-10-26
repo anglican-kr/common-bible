@@ -60,7 +60,7 @@ const $searchBar = _$("search-bar");
 let _scrollTrackCleanup = null;
 let _isInitialLoad = true;
 // ADR-031: route() 호출마다 증가. 리다이렉트(books→resume 등)로 route 가 재진입하면
-// 바깥 호출의 finally(onRouteEnd 스크롤 복원)가 이미 낡았음을 알도록 시퀀스로 가드한다.
+// 바깥 호출의 finally(onRouteEnd 스크롤 복원)가 이미 낡았음을 알도록 시퀀스로 검사한다.
 let _routeSeq = 0;
 // 같은 화면을 다시 그리는 링크(`data-focus-key` — 전례독서의 날짜 이동 · 칩 · 카드 · 세그먼트, 캘린더의 달 이동, 구분 탭,
 // 검색의 페이지 이동)를 누른 자리(WCAG 2.4.3, ADR-031 §5). 아래 클릭 인터셉터가 이동 직전에 재고(helpers.js focusSpotOf),
@@ -374,15 +374,15 @@ async function route() {
   // 이 route 를 시작한 누름의 자리(위 `_pendingFocusSpot`) — await 앞에서 꺼내 비운다.
   const focusSpot = _pendingFocusSpot;
   _pendingFocusSpot = null;
-  // ADR-031: 떠나는 경로의 스크롤을 기억(DOM 변경 전) + 재진입 가드 시퀀스 발급.
+  // ADR-031: 떠나는 경로의 스크롤을 기억(DOM 변경 전) + 재진입 검사용 시퀀스 발급.
   const routeSeq = ++_routeSeq;
   // route() 는 재진입형 async 함수다. 아래의 모든 await 뒤 continuation 은 공유 상태
   // (#app 렌더 · updatePageMeta · trackPageView · 오버레이 · 이어읽기 위치)를 만지기
-  // 전에 이 가드로 자신이 여전히 최신 route() 호출인지 확인한다. 리다이렉트(navigate)나
+  // 전에 이 검사로 자신이 여전히 최신 route() 호출인지 확인한다. 리다이렉트(navigate)나
   // 사용자의 다른 네비게이션이 그 사이 _routeSeq 를 올렸으면, 늦게 끝난 fetch 가 이미
   // 떠 있는 새 뷰를 덮어쓰지 않도록 곧장 빠져나간다. (검색 분기는 예전엔 parsePath().view
-  // 로 확인했으나 같은 축이라 이 가드로 통일했다 — auto-nav 의 inner route() 가 _routeSeq
-  // 를 동기적으로 올리므로 동치이고, 진행 중 다른 검색어로 이동한 경우까지 더 넓게 잡는다.)
+  // 로 확인했으나 같은 축이라 이 검사로 통일했다 — auto-nav의 inner route()가 _routeSeq를
+  // 동기적으로 올리므로 동치이고, 진행 중 다른 검색어로 이동한 경우까지 더 넓게 잡는다.)
   const isStale = () => routeSeq !== _routeSeq;
   window.tabHistory?.onRouteStart();
   // Tab-bar active state + sliding indicator moved to tabbar.js (ADR-034 PR3).
@@ -430,7 +430,7 @@ async function route() {
         const autoNav = consumeSearchAutoNavigate();
         // ADR-031: search 탭의 마지막 경로를 미리 기록한다. verse-ref 검색이면
         // renderSearchResults 가 챕터로 auto-nav(replaceState+route 재진입)하며 바깥
-        // onRouteEnd 가 _routeSeq 가드로 스킵돼, 안 하면 lastPathForTab.search 가
+        // onRouteEnd가 _routeSeq 검사로 건너뛰어, 안 하면 lastPathForTab.search가
         // 이전 검색에 머문다. 복원 시엔 autoNavigate=false 라 refMatch 가 클릭 카드로
         // 떠 바운스 없이 마지막 검색이 그대로 복원된다.
         window.tabHistory?.recordPath(location.pathname + location.search);
@@ -438,7 +438,7 @@ async function route() {
           filterBooks: parsed.filterBooks,
         });
         // renderSearchResults 가 verse-ref auto-nav 으로 inner route() 를 호출했으면
-        // _routeSeq 가 올라가 이 가드가 잡는다 — inner route() 가 챕터의 meta·분석을 이미
+        // _routeSeq가 올라가므로 이 검사로 알 수 있다 — inner route()가 챕터의 meta·분석을 이미
         // 처리했으니 여기서 덮어쓰지 않는다. (예전 parsePath().view 체크와 동치.)
         if (isStale()) return;
         updatePageMeta({

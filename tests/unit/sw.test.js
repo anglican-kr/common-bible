@@ -419,9 +419,9 @@ test("codeView: 주석 · 문자열 · 정규식 속의 import는 간선이 아�
 });
 
 // ── cacheNameFor ↔ bible-manifest 라우팅 ─────────────────────────────────────
-// `cacheNameFor` 에서 빠진 데이터 경로는 SHELL_CACHE 로 떨어지고, 거기 앉은
-// 바이트는 콘텐츠 해시 무효화를 못 받는다 — manifest-sync 가 낡은 항목을
-// DATA_CACHE 에서만 지우기 때문이다. 실제로 `lectionary/*.json` 11건이
+// `cacheNameFor`에서 빠진 데이터 경로는 SHELL_CACHE로 들어가고, 거기 남은
+// 바이트는 콘텐츠 해시 무효화를 못 받는다 — manifest-sync가 낡은 항목을
+// DATA_CACHE에서만 지우기 때문이다. 실제로 `lectionary/*.json` 11건이
 // bible-manifest 에 편입된 뒤에도 SHELL_CACHE 로 가고 있었다(ADR-037 §7 미이행).
 //
 // 그래서 개별 경로를 나열해 확인하는 대신, **매니페스트가 추적하는 접두사 전부**가
