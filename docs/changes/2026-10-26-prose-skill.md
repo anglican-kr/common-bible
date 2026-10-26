@@ -1,4 +1,5 @@
 ---
+pr: 443
 date: 2026-10-26
 branch: chore/prose-skill
 title: "chore: 문장 교정 한 묶음을 처리하는 스킬과 진행 목록을 더함"
