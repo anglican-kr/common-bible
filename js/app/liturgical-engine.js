@@ -115,7 +115,7 @@
 const anchorCache = new Map();
 /** @type {Map<number, Record<string, Span[]>>} */
 const spansCache = new Map();
-// 옮김 계산 캐시(§4.9) — **완전한(seed 받은) 계산 결과만** 들어간다. 키는 연도이고 캘린더 인덱스 하나를 위한
+// 옮김 계산 캐시(§4.9) — **완전한(이월을 받은) 계산 결과만** 들어간다. 키는 연도이고 캘린더 인덱스 하나를 위한
 // 캐시다 — 인덱스가 새로 서면(`preloadCalendar`) · 활성화 집합이 바뀌면(`setActivatedOptionals`) 통째로 비운다.
 /** @type {Map<number, TransferPass>} */
 const transferCache = new Map();
@@ -141,7 +141,7 @@ let halfVersesLoaded = false;
 let halfVersesRetry = null;
 
 // ── BEGIN LITURGICAL_CORE ──
-// 날짜 산술 · computus · 오프셋 전개 · 절기 스팬 · 연중 주차 · 주기 산정 · 기간 축.
+// 날짜 산술 · computus · 오프셋 전개 · 절기 구간 · 연중 주차 · 주기 산정 · 기간 축.
 // 외부 입력은 `ordinal-weeks` · `kasi-lunar` 두 표뿐이고 둘 다 인자로 받는다 — 그래서
 // 계산만 검증하는 테스트가 조회용 표 스텁을 만들 필요가 없다(설계서 §3.3).
 
@@ -398,10 +398,10 @@ function yearAnchors(y) {
   return a;
 }
 
-// ── §4.5 절기 스팬 ──
+// ── §4.5 절기 구간 ──
 
 /**
- * 절기 스팬을 **먼저 확정**하고 남는 자리가 연중이다. 도메인 다섯 — `epiphany` 는
+ * 절기 구간을 **먼저 확정**하고 남는 자리가 연중이다. 도메인 다섯 — `epiphany` 는
  * 없다(ADR-036 §4). 주의 세례 주일은 **연중시기의 첫날**이라 성탄절기는 그
  * 전날 끝난다(§4.5).
  * @param {string} dateStr
@@ -475,7 +475,7 @@ function evalRule(rule, y) {
   const a = yearAnchors(y);
   const one = (/** @type {string | null} */ v) => (v === null || v === undefined ? [] : [v]);
   // JSON 의 숫자는 NaN·소수일 수 있다 — `days: 0.5` 는 Date 가 잘라 부활절 당일을, NaN 은
-  // `0NaN-NaN-NaN` 을 냈다. §2 의 결손은 빈 결과지 그럴듯한 오답이 아니다: 정수만 받는다.
+  // `0NaN-NaN-NaN` 을 냈다. §2 의 누락은 빈 결과지 그럴듯한 오답이 아니다: 정수만 받는다.
   /** @type {(v: unknown) => v is number} */
   const int = (v) => Number.isInteger(v);
   switch (rule.kind) {
@@ -526,8 +526,8 @@ const ORDINAL_WEEKS = 34;
 
 /**
  * 표의 "MM-DD" → {m, d}. 형식이 틀리거나 없는 날이면 null. `01-32` 를 32 로 읽으면 2월
- * 1일 주일이 **그럴듯한 오답**을 낸다 — §2 는 결손을 「빈 결과」로 흡수하라는 것이지
- * 오답으로 흡수하라는 것이 아니다. 2/29 는 `date` 앵커에서만 실재한다(`doy` 표는
+ * 1일 주일이 **그럴듯한 오답**을 낸다 — §2 는 누락을 「빈 결과」로 처리하라는 것이지
+ * 오답으로 처리하라는 것이 아니다. 2/29 는 `date` 앵커에서만 실재한다(`doy` 표는
  * 비윤년을 전제하므로 거기서는 없는 날이다).
  * @param {unknown} s @param {boolean} leapOk
  * @returns {{m: number, d: number} | null}
@@ -561,7 +561,7 @@ function buildOrdinalIndex(table) {
   const idx = { doy: [], date: [] };
   const weeks = table && Array.isArray(table.weeks) ? table.weeks : [];
   // 행·창의 **모양**부터 검사한다 — `windows: 5` 같은 값은 `for…of` 가 throw 하고, 주차
-  // 없는 행은 ordinalWeekOf 가 undefined 를 낸다. 결손은 건너뛴다(§2) — 오답을 내지 않는다.
+  // 없는 행은 ordinalWeekOf 가 undefined 를 낸다. 누락은 건너뛴다(§2) — 오답을 내지 않는다.
   for (const w of weeks) {
     if (!w || typeof w !== "object") continue;
     if (!Number.isInteger(w.week) || w.week < 1 || w.week > ORDINAL_WEEKS) continue;   // 0 · 2.5 · 35 · NaN
@@ -585,7 +585,7 @@ function buildOrdinalIndex(table) {
  * 연중 주차. **평일은 자기 날짜로 찾지 않고 그 주의 주일로 조회**한다(§4.6).
  * 공현 후(재의 수요일 전)는 `doy` 앵커 — 날짜는 2/29 를 세고 표는 세지 않으므로
  * 윤년에 3월이 한 칸 밀린다(2052-03-03 = 9주). 성령강림 후는 `date` 앵커.
- * **연중 스팬 밖에서는 표를 보지 않는다.**
+ * **연중 구간 밖에서는 표를 보지 않는다.**
  * @param {string} dateStr
  * @param {ReturnType<typeof buildOrdinalIndex>} index
  * @returns {number | null} 1~34
@@ -641,8 +641,8 @@ function lunarDatesOf(table, y) {
 
 /**
  * 절기(§4.5)와 **독립된 축**. 앵커만으로 순수 계산하고 데이터가 필요 없다.
- * 스팬마다 **그 달력년으로 자른** `[from, to]` 구간의 배열을 낸다 — 부활절 기준
- * 스팬은 한 해 안에 들지만 **성탄 기간 둘은 해를 넘어** 한 해에 두 조각이 된다.
+ * 이름마다 **그 달력년으로 자른** `[from, to]` 구간의 배열을 낸다 — 부활절 기준
+ * 구간은 한 해 안에 들지만 **성탄 기간 둘은 해를 넘어** 한 해에 두 조각이 된다.
  * @param {number} y
  * @returns {Record<string, Span[]>}
  */
@@ -674,14 +674,14 @@ function spansOf(y) {
  * 구간 중 하나에 들면 참. 부르는 쪽은 범위를 직접 비교하지 않고 이것으로 묻는다 —
  * 성주간·부활 8일 보호를 §6.3 ① · §6.4 · §6.5 셋이 각자 비교하던 것을 없앤다.
  *
- * **표를 인자로 받지 않는다.** 스팬은 달력년으로 잘려 있으므로(§4.10) 어느 해의 표인지가
+ * **표를 인자로 받지 않는다.** 구간은 달력년으로 잘려 있으므로(§4.10) 어느 해의 표인지가
  * 답을 바꾼다 — 호출부가 루프 밖에서 `spansOf(Y)` 를 뽑아 들고 다니면 이웃 해의 날짜에
  * 조용히 틀린 답이 나온다(성탄 기간의 1월 조각이 통째로 거짓이 된다). 연도는 **날짜가**
- * 정하고, 반복 비용은 `spansCache` 가 흡수한다.
+ * 정하고, 반복 비용은 `spansCache` 가 줄인다.
  *
- * **모르는 이름은 throw 한다.** 스팬 이름은 데이터가 아니라 **코드**라 오타는 결손이
- * 아니라 결함이다 — §2 의 「빈 결과 + 계속 진행」은 데이터 결손에 대한 규칙이고, 여기서
- * 조용히 `false` 를 내면 가드가 꺼진 채로 돈다(§4.10 이 없애려던 바로 그 어긋남이다).
+ * **모르는 이름은 throw 한다.** 구간 이름은 데이터가 아니라 **코드**라 오타는 누락이
+ * 아니라 결함이다 — §2 의 「빈 결과 + 계속 진행」은 데이터 누락에 대한 규칙이고, 여기서
+ * 조용히 `false` 를 내면 보호가 꺼진 채로 돈다(§4.10 이 없애려던 바로 그 어긋남이다).
  * @param {string} dateStr @param {string} name
  * @returns {boolean}
  */
@@ -781,7 +781,7 @@ function dayDiff(/** @type {string} */ from, /** @type {string} */ to) {
 
 /**
  * 래퍼 객체에서 행 배열을 꺼낸다(§5.2 — 모든 파일이 객체 래퍼다). 래퍼나 배열이 없으면 빈 배열,
- * 객체가 아닌 행은 건너뛴다 — 모양 이탈은 결손이다(§2).
+ * 객체가 아닌 행은 건너뛴다 — 모양 이탈도 누락처럼 건너뛴다(§2).
  * @param {any} table @param {string} key
  * @returns {any[]}
  */
@@ -1013,7 +1013,7 @@ function seasonColorOf(dateStr, coord) {
 
 /**
  * ① 격자 전례일 — 정의 표에 행이 없어 절기 위치에서 **합성**한다(§5.5). id 는
- * `grid:<season>-<week|x>-<type>[-<weekday>]`, precedence 는 §6.1 사다리(절기 주일 2 · 연중 주일 5 ·
+ * `grid:<season>-<week|x>-<type>[-<weekday>]`, precedence 는 §6.1 우선순위표(절기 주일 2 · 연중 주일 5 ·
  * 평일 8). 색은 절기 기본색이다(§6.4 — ADR-036 §8 「격자일 레코드의 color 는 절기 위치에서 파생한 절기
  * 기본색」). 그날의 색은 이 바탕 위에 지정 전례일이 덮는다(`dayColorsOf`).
  *
@@ -1059,8 +1059,8 @@ function EMPTY_PASS() {
 
 /**
  * 연도 `y` 의 옮김 계산(§4.9 `transferCache` · §6.5 연도 경계). 캐시에는 **완전한** 계산 결과만 들어간다 —
- * `y−1` 의 seed 없는 **임시** 계산을 돌려 `y` 로 넘어온 도착(spill)을 얻고, 그것을 seed 로 `y` 의 옮김 계산을
- * 만든다. 임시 계산은 캐시에 넣지 않는다(`y−1` 을 조회하면 그때 `y−2` 의 spill 로 따로 완전하게 만든다).
+ * `y−1` 의 이월 없는 **임시** 계산을 돌려 `y` 로 넘어온 도착(해 넘김)을 얻고, 그것을 이월로 `y` 의 옮김 계산을
+ * 만든다. 임시 계산은 캐시에 넣지 않는다(`y−1` 을 조회하면 그때 `y−2` 의 해 넘김으로 따로 완전하게 만든다).
  * 두 계산에 **같은** 활성화 집합을 넘긴다 — 다른 집합을 보면 12월 결과가 어긋난다. 깊이 1 로 충분한지는
  * 실데이터 불변식(검토 문서 I-7a)이 1900~2100 에서 지킨다.
  * @param {CalendarIndex} index @param {number} y
@@ -1077,7 +1077,7 @@ function transfersOf(index, y) {
 
 /**
  * 전년도 계산이 `y` 로 넘긴 도착 — 날짜가 `y` 이고 `from` 이 전년도인 것(§6.5 연도 경계). `from` 거름은
- * 이중 안전장치다 — 다음 해 좌석(`nextYearSeats`)은 별도 맵이라 애초에 옮김 계산의 도착에 섞이지 않는다.
+ * 이중 안전장치다 — 다음 해 배정(`nextYearSeats`)은 별도 맵이라 애초에 옮김 계산의 도착에 섞이지 않는다.
  * @param {TransferPass} prev @param {number} y
  * @returns {Map<string, Candidate[]>}
  */
@@ -1158,11 +1158,11 @@ function ownObservancesOn(index, dateStr) {
 
 // ── §6.1 · §6.2 우선순위표 · 지정 전례일 · 재분류 (B1) ──
 
-/** 성주간의 합성 점유자 id(§6.5 `guard`) — 표에 없고 후보로 내지 않는다. */
+/** 성주간의 가상 후보 id(§6.5 `guard`) — 표에 없고 후보로 내지 않는다. */
 const GUARD_ID = GUARD_PREFIX + "holy-week";
 
 /**
- * 성주간(성지주일 ~ 성 토요일 — `spansOf().holyWeek`, §4.10)의 가상 점유자. 그 안의 날에는 유효
+ * 성주간(성지주일 ~ 성 토요일 — `spansOf().holyWeek`, §4.10)의 가상 후보. 그 안의 날에는 유효
  * precedence 1 · `transferable: false` 인 합성 후보 하나, 밖의 날에는 빈 배열이다. 지정 전례일 · 재분류
  * (`settle`)의 순위에만 들어가 성주간의 prec 7 축일을 생략시킨다 — 부활 8일의 평일 축일은 그날 지킨다(책자,
  * 사용자 결정 2026-10-24 → R-6.3-holy-week-guard). 옮김 계산은 이것을 보지 않는다(주요축일은 그날 지키고
@@ -1206,7 +1206,7 @@ function effectivePrecedence(obs) {
   return p;
 }
 
-/** 범주 사다리의 칸(→ R-6.2-tie-ladder) — 도착 0 > 이동 축일 1 > 월별 축일 2 > 격자 3 > 합성 guard 4. */
+/** 범주 순서의 칸(→ R-6.2-tie-ladder) — 도착 0 > 이동 축일 1 > 월별 축일 2 > 격자 3 > 합성 guard 4. */
 function ladderOf(/** @type {Candidate} */ c) {
   const id = c.observance.id;
   if (id.startsWith(GUARD_PREFIX)) return 4;
@@ -1216,7 +1216,7 @@ function ladderOf(/** @type {Candidate} */ c) {
 }
 
 /**
- * 순위 비교 — 키는 `(유효 precedence, 범주 사다리, 고유 본기도, id)` 이고 앞이 선순위다(→ R-6.2-tie-ladder).
+ * 순위 비교 — 키는 `(유효 precedence, 범주 순서, 고유 본기도, id)` 이고 앞이 선순위다(→ R-6.2-tie-ladder).
  * 고유 본기도(`has_proper`)가 있는 쪽이 먼저인 키는 같은 범주 안에서 우선순위가 같을 때의 순서를 정한다 — prec 7 축일 다섯
  * 쌍 가운데 한쪽만 고유 본기도를 가진 것은 3.01 뿐이라 삼일절이 데이빗 앞에 선다(→ R-6.1-prec7-tie-pairs).
  * 마지막 `id` 사전순은 결정성만 지키는 안전망이다(§5.3 과 같은 안정 정렬).
@@ -1340,7 +1340,7 @@ function settle(dateStr, cands) {
 
 // ── §6.2 · §6.5 옮김 계산 (B1) ──
 
-/** 옮길 날 수의 상한(§6.5) — 실측으로 가장 멀리 옮긴 축일은 16일 뒤로 간다(부활 3.26 인 해 성지주일의 요셉 → 부활 2주 화요일 — 수태고지가 월요일에 먼저 앉는다, → R-6.3-guard-order). 넘으면 옮기지 않고 `defects` 에 적는다. */
+/** 옮길 날 수의 상한(§6.5) — 실측으로 가장 멀리 옮긴 축일은 16일 뒤로 간다(부활 3.26 인 해 성지주일의 요셉 → 부활 2주 화요일 — 수태고지가 월요일에 먼저 배정된다, → R-6.3-guard-order). 넘으면 옮기지 않고 `defects` 에 적는다. */
 const MAX_SHIFT = 30;
 
 /** 선택 봉헌 목적지 — `transfer_to` 여섯 값 가운데 밀려 옮김이 아닌 넷(→ R-6.2-destinations). */
@@ -1367,7 +1367,7 @@ function optionalDestOf(kind, origin, y) {
 
 /**
  * 그해의 선택 봉헌(§6.2) — 0단계 선색인의 재료. 순위와 무관하고 그해 앵커와 표만 본다 — 옮김 계산을 요구하지
- * 않으므로 다음 해 좌석(`nextYearSeats`)이 재귀 없이 호출한다. 목적지가 그날 자신이면(그날이 주일) 없다.
+ * 않으므로 다음 해 배정(`nextYearSeats`)이 재귀 없이 호출한다. 목적지가 그날 자신이면(그날이 주일) 없다.
  * 순서는 기원 날짜 → id 다(표의 행 순서에 기대지 않는다).
  * @param {CalendarIndex} index @param {number} y
  * @returns {OptionalObservance[]}
@@ -1392,9 +1392,9 @@ function optionalObservancesOf(index, y) {
 }
 
 /**
- * 다음 해 좌석(§6.5) — 켜진 선택 봉헌이 `year + 1` 에 **앉은 자리**(막는다)와 **비운 기원**(연다). 목적지
+ * 다음 해 배정(§6.5) — 켜진 선택 봉헌이 `year + 1` 에 **배정된 날**(막는다)과 **비운 기원**(연다). 목적지
  * 탐색이 실제로 해를 넘길 때만 호출한다(§4.9 — 다음 해 computus 를 미리 돌리지 않는다). 별도 맵이라 옮김 계산의
- * 도착 · 출발에 섞이지 않는다 — 캐시에도 spill 에도 불변식의 셈에도 들어가지 않는다.
+ * 도착 · 출발에 섞이지 않는다 — 캐시에도 해 넘김에도 불변식의 셈에도 들어가지 않는다.
  * @param {CalendarIndex} index @param {number} year @param {Set<string>} activated
  * @returns {NextYearSeats}
  */
@@ -1402,7 +1402,7 @@ function nextYearSeats(index, year, activated) {
   /** @type {NextYearSeats} */
   const seats = { nextArrivals: new Map(), nextDepartures: new Map() };
   for (const o of optionalObservancesOf(index, year + 1)) {
-    if (!activated.has(o.observance.id)) continue;   // 꺼진 것은 좌석을 차지하지 않는다(§6.2)
+    if (!activated.has(o.observance.id)) continue;   // 꺼진 것은 날짜를 차지하지 않는다(§6.2)
     pushTo(seats.nextArrivals, o.dest, /** @type {Candidate} */ ({ observance: o.observance, status: "transferred_in", from: o.origin }));
     pushTo(seats.nextDepartures, o.origin, /** @type {Candidate} */ ({ observance: o.observance, status: "transferred_out", to: o.dest }));
   }
@@ -1423,7 +1423,7 @@ function movesOnConflict(o) {
  *
  * **0단계 — 선택 봉헌 선색인.** 목적지가 기원보다 앞일 수 있어(2028 주의 봉헌 2.2 → 1.30) 날짜 루프 전에 한
  * 해를 깐다. 켜진 것은 실제로 옮기고(원래 날짜 `transferred_out` · 목적지 `transferred_in` — 밀린 것이 아니라
- * 택한 것이라 `displacedBy` 가 없다), 꺼진 것은 목적지 주일에 `optional` 로만 얹는다(§6.2 활성화 계약).
+ * 택한 것이라 `displacedBy` 가 없다), 꺼진 것은 목적지 주일에 `optional` 로만 넣는다(§6.2 활성화 계약).
  *
  * **1단계 — 날짜 순 밀려 옮김.** 그날의 후보(고유 전례일 — 켜진 선택 봉헌의 출발은 뺀다 — · 격자 · 도착)를
  * 지정 판정과 같은 순위(`rankCandidates`)로 세우고, 옮길 수 있는 고유 후보가 밀렸으면(`displacerOf` —
@@ -1434,13 +1434,13 @@ function movesOnConflict(o) {
  *
  * 빈 날은 「`c` 보다 높은 고유 후보가 없고(같은 값은 `c` 가 민다 — → R-6.2-chain-model), 도착한 후보가
  * 없다(우선순위 무관 — → R-6.2-first-come)」이다 — 보호 기간은 막지 않는다. 다만 **보호 기간 안에서 밀린** 축일은
- * 그 자리에서 앉히지 않고 모아 두었다가, 그 기간을 다 돈 뒤 **서열 순**(유효 precedence — 같으면 밀린 순서, 곧
+ * 그 자리에서 배정하지 않고 모아 두었다가, 그 기간을 다 돈 뒤 **서열 순**(유효 precedence — 같으면 밀린 순서, 곧
  * 원래 날짜 순)으로 부활 2주 월요일부터 빈 날을 찾는다(→ R-6.3-guard-destination — 2027 책자: 성 목요일의
  * 수태고지 → 4.5; → R-6.3-guard-order — 부활 3.26 인 해: 수태고지 4.3 · 요셉 4.4). 도착에 밀린 옮길 수 있는
  * 축일도 다른 충돌과 같이 다음 빈 날로 옮긴다(연쇄 — → R-6.2-chain-model; 옮길 수 없는 축일은 `settle` 이 그날
  * 기념으로 낸다). 해를 넘긴 날짜에서는 이 계산이
- * 이미 그리로 넘긴 도착과 다음 해 좌석(`nextYearSeats`)을 **함께** 본다 — 한쪽만 보면 12월 축일 둘이 같은
- * 1월 날에 앉는다.
+ * 이미 그리로 넘긴 도착과 다음 해 배정(`nextYearSeats`)을 **함께** 본다 — 한쪽만 보면 12월 축일 둘이 같은
+ * 1월 날에 배정된다.
  *
  * 순수 함수다 — 본당 설정을 보지 않고(지역 축일은 옮김에 영향을 주지 않는다 — §4.9), `seed`(전년도 옮김 계산이
  * 넘긴 도착)의 배열은 복제해서 쓰며 인자를 바꾸지 않는다.
@@ -1450,7 +1450,7 @@ function movesOnConflict(o) {
  */
 function computeTransfers(index, year, seed, activated) {
   // 연도는 데이터가 아니라 코드가 넘긴다(공개 래퍼가 날짜를 먼저 검사한다) — 정수가 아니면 날짜 루프가
-  // 끝나지 않으므로(`NaN` 이면 접두사가 「0NaN-」으로 맞물린다) 조용히 흡수하지 않고 크게 실패한다(§2 ③)
+  // 끝나지 않으므로(`NaN` 이면 접두사가 「0NaN-」으로 맞물린다) 조용히 넘기지 않고 크게 실패한다(§2 ③)
   if (!Number.isInteger(year)) throw new Error(`computeTransfers: year must be an integer, got ${year}`);
   const head = String(year).padStart(4, "0") + "-";
   /** @type {TransferPass} */
@@ -1498,7 +1498,7 @@ function computeTransfers(index, year, seed, activated) {
   };
 
   // ── 1단계: 밀려 옮김 — 1.1 → 12.31 날짜 순. next_day 는 앞으로만 가므로 d 에 이르면 arrivals.get(d) 는 완성돼 있다
-  // (보호 기간에서 밀린 축일은 그 기간 뒤에만 앉으므로, 기간을 다 돌 때까지 미뤄 앉혀도 이 성질은 그대로다)
+  // (보호 기간에서 밀린 축일은 그 기간 뒤에만 배정되므로, 기간을 다 돌 때까지 미뤄 배정해도 이 성질은 그대로다)
   const guard = spansOf(year).transferGuard[0];   // 성지주일 ~ 부활 2주일(§4.10)
   const afterGuard = shift(guard.to, 1);           // 부활 2주 월요일 — 그 안에서 밀린 축일의 목적지 하한(→ R-6.3-guard-destination)
   /** 보호 기간 안에서 밀려 자리를 기다리는 축일 — 밀린 순서(날짜 → 그날 순위)대로 쌓인다(→ R-6.3-guard-order). */
@@ -1516,7 +1516,7 @@ function computeTransfers(index, year, seed, activated) {
   for (let d = toKey(year, 1, 1); d.startsWith(head); d = shift(d, 1)) {
     if (d === afterGuard) {
       // 서열 순(유효 precedence) — 같으면 밀린 순서 그대로(안정 정렬). 부활 3.26 인 해는 성 토요일에 밀린 수태고지(prec 3)가
-      // 먼저 밀린 요셉(prec 6)보다 먼저 4.3 에 앉는다(→ R-6.3-guard-order — 영국 Common Worship 의 요셉 규칙과 같다)
+      // 먼저 밀린 요셉(prec 6)보다 먼저 4.3 에 배정된다(→ R-6.3-guard-order — 영국 Common Worship 의 요셉 규칙과 같다)
       held.sort((a, b) => {
         const pa = effectivePrecedence(a.c.observance);
         const pb = effectivePrecedence(b.c.observance);
@@ -1529,13 +1529,13 @@ function computeTransfers(index, year, seed, activated) {
     // guard 는 넣지 않는다 — 보호 기간이 주요축일을 밀지 않는다(→ R-6.3-holy-week-guard)
     const ranked = rankCandidates([...ownAt(d, departures), ...(arrivals.get(d) || [])]);
     const staying = new Set(ranked);   // 떠난 것은 남은 후순위 후보를 밀어낼 수 없다
-    for (const c of ranked.slice(1)) {   // 순위 순 — 같은 기원이면 정렬 키 순으로 먼저 앉는다(→ R-6.2-first-come)
+    for (const c of ranked.slice(1)) {   // 순위 순 — 같은 기원이면 정렬 키 순으로 먼저 배정된다(→ R-6.2-first-come)
       if (c.status !== "proper" || !movesOnConflict(c.observance)) continue;   // 도착 · 격자는 옮기지 않는다
       const by = displacerOf(ranked, c, staying);
       if (!by) continue;   // 앞선 것이 전부 고정일이면 동시 봉헌 — 충돌이 아니다
       const displacedBy = by.observance.id;   // 실제로 밀어낸 것의 최상위 — ranked[0] 이 아닐 수 있다
       if (inSpan(d, "transferGuard")) {
-        // 보호 기간(성지주일 ~ 부활 2주일) 안에서 밀렸다 — 그 기간을 다 돈 뒤 서열 순으로 앉힌다(위). 그날의 남은 후순위 후보에게는
+        // 보호 기간(성지주일 ~ 부활 2주일) 안에서 밀렸다 — 그 기간을 다 돈 뒤 서열 순으로 배정한다(위). 그날의 남은 후순위 후보에게는
         // 이미 떠난 것이다(목적지가 상한을 넘는 것은 합성 표에서만 — 실측 최장 16일)
         held.push({ c, from: d, displacedBy });
         staying.delete(c);
@@ -1829,7 +1829,7 @@ function halfVerseKey(bookId, chapter, verse, half) {
  *   후보의 것)은 언제나 걷어내고, 그 날짜에 월별 축일 행이 둘 이상이면 같은 날짜의 **다른** 전례일
  *   이름에 정확히 맞는 본문을 걷어낸 뒤 이 전례일의 이름 · 별칭에 정확히 맞는 것으로 좁힌다 —
  *   좁히기가 실패하면 조용히 하나를 고르지 않고 **남은 것 전부**를 낸다. 행이 하나뿐인 날짜는
- *   이름을 묻지 않는다(06.24 의 띄어쓰기 드리프트가 「고유 없음」으로 새지 않게).
+ *   이름을 묻지 않는다(06.24 의 띄어쓰기 어긋남이 「고유 없음」으로 빠지지 않게).
  * @param {TextIndex} tix @param {CalendarIndex} cal @param {ResolvedDate} resolved @param {Observance} obs
  * @returns {TextRecord[]}
  */
