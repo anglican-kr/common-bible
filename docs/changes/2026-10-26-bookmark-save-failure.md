@@ -1,4 +1,5 @@
 ---
+pr: 445
 date: 2026-10-26
 branch: fix/bookmark-save-failure
 title: "fix: 저장 공간이 찼을 때의 저장 실패를 알림"
