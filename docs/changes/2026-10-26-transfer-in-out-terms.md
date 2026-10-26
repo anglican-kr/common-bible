@@ -1,4 +1,5 @@
 ---
+pr: 434
 date: 2026-10-26
 branch: docs/transfer-in-out-terms
 title: "docs: 교회력의 도착과 출발, 켜다와 끄다를 정한 말로 바꿈"
