@@ -17,9 +17,13 @@
 #       `git commit -- <path>` 패스스펙 커밋과, 이미 브랜치의 커밋에 들어간 변경(`--amend` 로 고쳐도
 #       --cached 에는 안 보인다)은 못 잡는다. 그 경우는 CI 가 잡는다.
 set -u
-PROJECT="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
+# 명령을 실행한 폴더의 저장소를 검사한다(`pre-pr-ledger.sh`의 같은 줄 참고).
+input=$(cat)
+cwd=$(printf '%s' "$input" | jq -r '.cwd // empty')
+PROJECT=$(git -C "${cwd:-.}" rev-parse --show-toplevel 2>/dev/null) \
+  || PROJECT="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 
-cmd=$(jq -r '.tool_input.command // empty')
+cmd=$(printf '%s' "$input" | jq -r '.tool_input.command // empty')
 case "$cmd" in
   *git*commit*) ;;
   *) exit 0 ;;

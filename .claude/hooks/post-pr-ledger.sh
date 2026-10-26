@@ -4,9 +4,12 @@
 # 파일은 수정만 하고 커밋은 하지 않는다 — systemMessage 로 커밋·push 를 알린다.
 # 짝: pre-pr-ledger.sh (생성 전 게이트). 형식: docs/changes/README.md
 set -u
-PROJECT="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
-
+# 명령을 실행한 폴더의 저장소에 적는다(`pre-pr-ledger.sh`의 같은 줄 참고).
 input=$(cat)
+cwd=$(printf '%s' "$input" | jq -r '.cwd // empty')
+PROJECT=$(git -C "${cwd:-.}" rev-parse --show-toplevel 2>/dev/null) \
+  || PROJECT="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
+
 cmd=$(printf '%s' "$input" | jq -r '.tool_input.command // empty')
 case "$cmd" in
   *"gh pr create"*) ;;

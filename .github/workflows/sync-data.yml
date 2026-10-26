@@ -26,6 +26,15 @@ on:
 
 permissions:
   contents: read
+  # 같은 포인터로 올리는 자동 PR이 이미 열려 있는지 본다(아래 「변경 여부 확인」).
+  pull-requests: read
+
+# 실행이 겹치면 앞 실행이 끝날 때까지 기다린다. 기다리던 실행이 이미 있으면 GitHub가 그것을
+# 취소하고 새 실행을 남긴다. 남은 실행이 최신 데이터로 동기화하므로 잃는 것은 없다.
+# 2026-10-26에 겹친 두 실행이 같은 포인터로 자동 PR을 둘(#439, #440) 만들었다.
+concurrency:
+  group: sync-data
+  cancel-in-progress: false
 
 jobs:
   sync:
@@ -127,15 +136,31 @@ jobs:
                       tests/unit/calendar.data.test.js \
                       tests/unit/citations.data.test.js
 
+      # 앞 실행이 만든 자동 PR은 테스트를 기다리느라 아직 머지되지 않았을 수 있다. 그때 main은
+      # 옛 포인터라 바뀐 것이 있는 것처럼 보인다. 그래서 같은 포인터로 올리는 자동 PR이 이미
+      # 열려 있으면 새로 만들지 않는다. 위의 동시 실행 제한과 함께 두어야, 두 실행이 동시에
+      # 확인하다 둘 다 「없음」으로 보는 일이 없다. 포크에서 온 PR은 보지 않는다.
       - name: 변경 여부 확인
         id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           if git diff --quiet data sitemap.xml; then
             echo "변경 없음 — 워크플로 종료"
             echo "changed=false" >> $GITHUB_OUTPUT
-          else
-            echo "changed=true" >> $GITHUB_OUTPUT
+            exit 0
           fi
+          NEW=$(git -C data rev-parse HEAD)
+          for ref in $(gh pr list --state open --json headRefName,isCrossRepository \
+                         --jq '.[] | select(.isCrossRepository | not) | .headRefName | select(startswith("sync/"))'); do
+            OPEN=$(gh api "repos/$GITHUB_REPOSITORY/contents/data?ref=$ref" --jq .sha 2>/dev/null || true)
+            if [ "$OPEN" = "$NEW" ]; then
+              echo "같은 포인터($NEW)로 올리는 자동 PR이 이미 열려 있음($ref) — 워크플로 종료"
+              echo "changed=false" >> $GITHUB_OUTPUT
+              exit 0
+            fi
+          done
+          echo "changed=true" >> $GITHUB_OUTPUT
 
       - name: 토픽 브랜치 생성 + commit + push
         if: steps.check.outputs.changed == 'true'
