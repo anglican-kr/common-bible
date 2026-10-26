@@ -730,7 +730,7 @@ function _mergeBookmarkStores(existing, incoming) {
       if (item.type !== "folder") continue;
       const same = folders.get(item.id);
       if (same) addNew(item.children || [], same.folder.children, same.depth + 1);
-      else fillListFolders(item.children || []);
+      else if (!ids.has(item.id)) fillListFolders(item.children || []);   // skipped with its contents, as in addNew
     }
   }
   addNew(incoming, result, 1);

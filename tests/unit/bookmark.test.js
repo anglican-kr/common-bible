@@ -1774,7 +1774,28 @@ test("_mergeBookmarkStores: a folder the list has, inside a new folder left out 
   let f = merged[0];
   for (let i = 1; i < 64; i++) f = f.children[0];
   assert.deepEqual(f.children, []);                                   // n would be the 65th level: left out, w with it
+  assert.equal(merged.length, 2);                                      // …and not put anywhere else
   assert.deepEqual(merged[1].children.map((c) => c.id), ["z"]);
+});
+
+test("_mergeBookmarkStores: inside a folder left out for depth, a folder whose id is a bookmark is skipped with its contents", () => {
+  // As addNew does at any depth — the import check leaves these out first (ADR-040), so this only keeps the two
+  // paths alike (3rd review of PR #438).
+  const h = loadImportExport();
+  let deep = null;
+  for (let i = 64; i >= 1; i--) deep = { type: "folder", id: `a${i}`, name: "", children: deep ? [deep] : [] };
+  const existing = [deep, { type: "bookmark", id: "e" }, { type: "folder", id: "g", name: "", children: [] }];
+  const incoming = [
+    { type: "folder", id: "a64", name: "", children: [
+      { type: "folder", id: "n", name: "", children: [
+        { type: "folder", id: "e", name: "", children: [
+          { type: "folder", id: "g", name: "", children: [{ type: "bookmark", id: "z" }] },
+        ] },
+      ] },
+    ] },
+  ];
+  const merged = h._mergeBookmarkStores(existing, incoming);
+  assert.deepEqual(merged[2].children, []);
 });
 
 test("_mergeBookmarkStores: the existing tree passed in is left as it was", () => {
