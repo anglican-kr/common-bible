@@ -13,6 +13,7 @@
 // appStorage, bookmark-core, window.{announce, getBooksCache}.
 
 /** @typedef {import("../types").BookmarkTreeBookmark} BookmarkTreeBookmark */
+/** @typedef {import("../types").BookmarkTreeFolder} BookmarkTreeFolder */
 /** @typedef {import("../types").BookmarkTreeNode} BookmarkTreeNode */
 /** @typedef {"chapter" | "verses" | "edit"} SaveMode  이 장 저장 · 절 선택 저장 · 북마크 수정 */
 
@@ -677,41 +678,48 @@ function _validateImportData(data) {
   return true;
 }
 
+// 병합 adds, by id, what the file has and the list lacks; an item the list has stays as it is. A folder the list
+// already has is entered, not skipped: the file's new items join it there, and it keeps its own name and place
+// (ADR-011 Phase 2a, known-issues §15.1 — skipping it left the backup's new bookmarks in that folder behind).
 /** @param {BookmarkTreeNode[]} existing @param {BookmarkTreeNode[]} incoming @returns {BookmarkTreeNode[]} */
 function _mergeBookmarkStores(existing, incoming) {
   /** @type {Set<string>} */
-  const existingIds = new Set();
-  /** @param {BookmarkTreeNode[]} items */
-  function collectIds(items) {
-    for (const item of items) {
-      existingIds.add(item.id);
-      if (item.type === "folder" && Array.isArray(item.children)) {
-        collectIds(item.children);
-      }
-    }
-  }
-  collectIds(existing);
-
+  const ids = new Set();
+  /** @type {Map<string, BookmarkTreeFolder>} */
+  const folders = new Map();
+  // Every folder is copied, so new items can join one without touching the tree the caller passed in.
   /** @param {BookmarkTreeNode[]} items @returns {BookmarkTreeNode[]} */
-  function filterNew(items) {
-    /** @type {BookmarkTreeNode[]} */
-    const result = [];
+  function copyExisting(items) {
+    return items.map((item) => {
+      ids.add(item.id);
+      if (item.type !== "folder") return item;
+      const folder = { ...item, children: copyExisting(Array.isArray(item.children) ? item.children : []) };
+      folders.set(item.id, folder);
+      return folder;
+    });
+  }
+  const result = copyExisting(existing);
+
+  /** @param {BookmarkTreeNode[]} items @param {BookmarkTreeNode[]} into */
+  function addNew(items, into) {
     for (const item of items) {
       if (item.type === "folder") {
-        if (!existingIds.has(item.id)) {
-          const mergedChildren = filterNew(item.children || []);
-          result.push({ ...item, children: mergedChildren });
-        }
-      } else {
-        if (!existingIds.has(item.id)) {
-          result.push(item);
-        }
+        const same = folders.get(item.id);
+        if (same) { addNew(item.children || [], same.children); continue; }
+        if (ids.has(item.id)) continue;   // a bookmark has this id — the import check leaves these out first (ADR-040)
+        const folder = { ...item, children: [] };
+        ids.add(item.id);
+        folders.set(item.id, folder);
+        into.push(folder);
+        addNew(item.children || [], folder.children);
+      } else if (!ids.has(item.id)) {
+        ids.add(item.id);
+        into.push(item);
       }
     }
-    return result;
   }
-
-  return [...existing, ...filterNew(incoming)];
+  addNew(incoming, result);
+  return result;
 }
 
 /** @param {BookmarkTreeNode[]} items @returns {number} */

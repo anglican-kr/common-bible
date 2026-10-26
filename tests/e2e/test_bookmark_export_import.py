@@ -788,12 +788,13 @@ def test_import_scrim_click_closes_modal(browser, tmp_path):
 
 
 def test_import_merge_does_not_duplicate_folder_by_id(browser, tmp_path):
-    """이미 존재하는 폴더 ID는 병합 시 중복 추가되지 않아야 한다."""
+    """이미 존재하는 폴더 ID는 병합 시 중복 추가되지 않고, 그 폴더에 새 북마크만 더해진다. 이름은 지금 목록의
+    것이다. 전에는 폴더를 안의 것까지 건너뛰어 백업의 새 북마크가 빠졌다(known-issues §15.1)."""
     existing_folder = {**_FOLDER_WITH_CHILD, "name": "기존 폴더명"}
     incoming = {
         "_version": 1,
         "exportedAt": 0,
-        "bookmarks": [{**_FOLDER_WITH_CHILD, "name": "새 폴더명"}],
+        "bookmarks": [{**_FOLDER_WITH_CHILD, "name": "새 폴더명", "children": [_BM_C, _BM_B]}],
     }
     import_file = tmp_path / "folder.json"
     import_file.write_text(json.dumps(incoming), encoding="utf-8")
@@ -813,6 +814,7 @@ def test_import_merge_does_not_duplicate_folder_by_id(browser, tmp_path):
     folders = [item for item in store if item["type"] == "folder" and item["id"] == "folder-1"]
     assert len(folders) == 1
     assert folders[0]["name"] == "기존 폴더명"
+    assert [c["id"] for c in folders[0]["children"]] == ["bm-c", "bm-b"]
 
     ctx.close()
 

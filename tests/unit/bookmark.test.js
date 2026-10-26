@@ -1271,7 +1271,7 @@ function loadBookmarkActive() {
 // ── IMPORT_EXPORT loader ────────────────────────────────────────────────────
 
 function loadImportExport() {
-  const ctx = { Object, Array, Set, String, JSON, console, Error };
+  const ctx = { Object, Array, Set, Map, String, JSON, console, Error };
   vm.createContext(ctx);
   // The verse-spec check (isWellFormedSpec) is an import of bookmark-modals.js — the VERSE_SPEC block stands in for it.
   vm.runInContext(extractBlock("VERSE_SPEC", VERSE_SPEC_SOURCE), ctx, { filename: "verse-spec.js" });
@@ -1667,21 +1667,77 @@ test("_mergeBookmarkStores: folder with new id keeps its children (filtered by i
   assert.equal(folder.children[0].id, "child-2");
 });
 
-test("_mergeBookmarkStores: duplicate folder id → entire folder dropped (children too)", () => {
+// 같은 id의 폴더는 그 안으로 들어가 새 항목만 더한다. 폴더의 자리와 이름은 지금 목록을 따른다(ADR-011 Phase 2a
+// 「폴더 children 재귀 처리」, known-issues §15.1). 전에는 폴더를 안의 것까지 건너뛰어 백업의 새 북마크가 빠졌다.
+
+test("_mergeBookmarkStores: duplicate folder id → its new children join the existing folder, name kept", () => {
   const h = loadImportExport();
-  const existing = [{ type: "folder", id: "fld-1", children: [] }];
+  const existing = [{ type: "folder", id: "fld-1", name: "지금", children: [{ type: "bookmark", id: "old" }] }];
   const incoming = [
     {
       type: "folder",
       id: "fld-1",  // duplicate
-      children: [{ type: "bookmark", id: "would-be-new" }],
+      name: "백업",
+      children: [{ type: "bookmark", id: "old" }, { type: "bookmark", id: "new" }],
     },
   ];
   const merged = h._mergeBookmarkStores(existing, incoming);
   assert.equal(merged.length, 1);
   assert.equal(merged[0].id, "fld-1");
-  // Incoming folder's children are NOT merged in — the whole folder is skipped.
-  assert.equal(merged[0].children.length, 0);
+  assert.equal(merged[0].name, "지금");
+  assert.deepEqual(merged[0].children.map((c) => c.id), ["old", "new"]);
+});
+
+test("_mergeBookmarkStores: a duplicate folder elsewhere in the file fills the existing one where it stands", () => {
+  const h = loadImportExport();
+  const existing = [
+    { type: "bookmark", id: "a" },
+    { type: "folder", id: "fld-1", name: "지금", children: [] },
+  ];
+  const incoming = [
+    { type: "folder", id: "outer", name: "새 폴더", children: [
+      { type: "folder", id: "fld-1", name: "백업", children: [{ type: "bookmark", id: "new" }] },
+    ] },
+  ];
+  const merged = h._mergeBookmarkStores(existing, incoming);
+  assert.deepEqual(merged.map((n) => n.id), ["a", "fld-1", "outer"]);
+  assert.deepEqual(merged[1].children.map((c) => c.id), ["new"]);
+  assert.deepEqual(merged[2].children, []);   // the new folder comes in; the folder it held stays where it is
+});
+
+test("_mergeBookmarkStores: duplicate folders nest — new items reach the inner existing folder", () => {
+  const h = loadImportExport();
+  const existing = [
+    { type: "folder", id: "f", children: [{ type: "folder", id: "g", children: [{ type: "bookmark", id: "x" }] }] },
+  ];
+  const incoming = [
+    { type: "folder", id: "f", children: [
+      { type: "folder", id: "g", children: [{ type: "bookmark", id: "x" }, { type: "bookmark", id: "y" }] },
+      { type: "bookmark", id: "z" },
+    ] },
+  ];
+  const merged = h._mergeBookmarkStores(existing, incoming);
+  assert.equal(merged.length, 1);
+  const f = merged[0];
+  assert.deepEqual(f.children.map((c) => c.id), ["g", "z"]);
+  assert.deepEqual(f.children[0].children.map((c) => c.id), ["x", "y"]);
+});
+
+test("_mergeBookmarkStores: a folder whose id is an existing bookmark is skipped with its children", () => {
+  // The import check leaves these out first (ADR-040 — an id of the other kind); merge does not fold them in either.
+  const h = loadImportExport();
+  const existing = [{ type: "bookmark", id: "dup" }];
+  const incoming = [{ type: "folder", id: "dup", children: [{ type: "bookmark", id: "inner" }] }];
+  const merged = h._mergeBookmarkStores(existing, incoming);
+  assert.deepEqual(JSON.parse(JSON.stringify(merged)), [{ type: "bookmark", id: "dup" }]);
+});
+
+test("_mergeBookmarkStores: the existing tree passed in is left as it was", () => {
+  const h = loadImportExport();
+  const existing = [{ type: "folder", id: "f", children: [{ type: "bookmark", id: "x" }] }];
+  const before = JSON.stringify(existing);
+  h._mergeBookmarkStores(existing, [{ type: "folder", id: "f", children: [{ type: "bookmark", id: "y" }] }]);
+  assert.equal(JSON.stringify(existing), before);
 });
 
 test("_mergeBookmarkStores: deeply nested folder filters at each level", () => {
