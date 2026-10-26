@@ -161,7 +161,7 @@ ADR-038 §3 렌더 기반이 복원하는 전례 표기 — 계응 ◯(`.respons
 
 - **known-issues §15.1** 병합이 같은 id의 폴더를 통째로 건너뛰던 것은 2026-10-26에 고쳤다. 이제 그 폴더 안으로 들어가 새 항목만 더한다(ADR-011 Phase 2a, 원장 `docs/changes/2026-10-26-bookmark-merge-sync-ids.md`).
 - **known-issues §15.2** 동기화 저장소에 특정 이름의 id가 하나라도 있으면 앱 전체가 멈추던 것은 2026-10-26에 고쳤다. 저장소가 `toString` 같은 기본 속성 이름의 id도 읽는다(`topics/sync.md` 「지금 동작」, 같은 원장).
-- **known-issues §15.4** 저장 공간이 차서 저장이 거절돼도 성공처럼 처리하던 것은 2026-10-26에 고쳤다. 북마크 화면이 거절을 알리고, 북마크 목록은 동기화 저장소에 먼저 쓴다. 동기화는 다른 기기에서 받은 변경을 저장하지 못하면 알리고 드라이브에 올리지 않는다(ADR-015 D7, 원장 `docs/changes/2026-10-26-bookmark-save-failure.md`).
+- **known-issues §15.4** 저장 공간이 차서 저장이 거절돼도 성공처럼 처리하던 것은 2026-10-26에 고쳤다. 북마크 화면이 거절을 알리고, 북마크 목록은 동기화 저장소에 먼저 쓴다. 동기화는 병합 결과를 저장하지 못하면 드라이브에 올리지 않고, 다른 기기의 변경이 있었으면 알린다(ADR-015 D7, 원장 `docs/changes/2026-10-26-bookmark-save-failure.md`).
 - §15.3 · §15.6 · §15.7 · §15.8 → [topics/bookmark.md](topics/bookmark.md)
 - §15.5 → [topics/sync.md](topics/sync.md)
 

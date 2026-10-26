@@ -1985,17 +1985,29 @@ test("74. 저장 공간이 아닌 다른 까닭으로 저장하지 못해도 올
   assert.equal(h.machine.getState(), "IDLE");
 });
 
-test("75. 다른 기기의 변경이 없으면 병합 결과를 저장하지 못해도 기기에 저장된 문서를 올린다 — 알리지 않는다", async () => {
-  // 병합 결과가 로컬 문서와 같은 내용이면, 기기에 저장된 문서를 올려도 잃는 것이 없다. 멈추면 저장 공간이 찬 동안 이 기기의
-  // 편집이 드라이브에 올라가지 못한다. 고치기 전 코드에서도 통과한다. 필요 없이 막도록 고치는 것을 막는 테스트다.
+test("75. 수정 시각이 같은 원격 사본을 고른 병합도, 저장하지 못하면 올리지 않는다 — 다른 기기의 변경이 없다고 판단돼도", async () => {
+  // 「다른 기기의 변경」은 수정 시각이 커졌는지로 판단한다. 같은 시각의 두 사본(옛 절 범위를 옮기면 시각을 올리지 않는다,
+  // pitfalls §38)은 병합이 기기 id 순서로 원격 쪽을 고를 수 있어, 기기에 저장된 문서가 병합 결과와 다르다. 그 문서를 올리면
+  // 드라이브의 사본이 이 기기의 것으로 바뀐다(PR #445 리뷰). 다른 기기의 변경은 없으므로 알리지는 않는다.
   const local = localDoc("local");
-  local.bookmarks.items.a = { id: "a", type: "bookmark", parentId: null, _order: 0, _u: 7 };
-  const h = mergeSaveMachine({ outcome: "full", v2: { loadLocal: () => local, mergeDocs: (l) => l } });
+  local.bookmarks.items.a = { id: "a", type: "bookmark", verseSpec: "16aa", parentId: null, _order: 0, _u: 5 };
+  local.bookmarks.items.b = { id: "b", type: "bookmark", verseSpec: "1", parentId: null, _order: 1, _u: 6 };   // not on Drive yet
+  const remote = { ...localDoc("remote"), schemaVersion: 2, deviceId: "remote" };
+  remote.bookmarks.items.a = { ...local.bookmarks.items.a, verseSpec: "16" };
+  const merged = localDoc("merged");
+  merged.bookmarks.items = { a: remote.bookmarks.items.a, b: local.bookmarks.items.b };
+  const h = mergeSaveMachine({
+    outcome: "full",
+    v2: { loadLocal: () => local, mergeDocs: () => merged, maxU: (d) => Math.max(0, ...Object.values(d.bookmarks.items).map((i) => i._u)) },
+  });
+  h.ctx.syncTransport.downloadSyncFile = async () => ({ doc: remote, etag: '"e-remote"', status: 200 });
   h.machine.enable();
   await h.drain(8);
-  assert.equal(h.uploads.length, 1, "로컬에만 있는 항목은 올린다");
+  const merge = h.logEntries.find((e) => e.kind === "ACTION" && e.event === "MERGE");
+  assert.equal(merge?.hadRemoteChanges, false, "no newer time came from Drive");
+  assert.deepEqual(h.uploads, [], "the stored doc is not the merge — uploading it would change Drive's copy of a");
+  assert.equal(h.localStorage.getItem(CACHE_ETAG_KEY), '"e-cached"');
   assert.deepEqual(h.snackbar, []);
-  assert.equal(h.localStorage.getItem(CACHE_ETAG_KEY), '"e-new"');
   assert.equal(h.machine.getState(), "IDLE");
 });
 

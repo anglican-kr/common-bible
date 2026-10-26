@@ -806,11 +806,12 @@ function createSyncMachine({ onStateChange } = {}) {
       );
 
       L.log({ kind: "ACTION", event: "MERGE", localMaxU, remoteMaxU, mergedMaxU, hadRemoteChanges });
-      if (_applyMergedDoc(merged, hadRemoteChanges) !== "saved" && hadRemoteChanges) {
+      if (_applyMergedDoc(merged, hadRemoteChanges) !== "saved") {
         // The payload is read back from local storage (buildSyncPayload), which still holds the doc from before the
-        // merge — uploading it would put Drive back to it and drop the other devices' edits for every device. No upload
-        // and no cache either: the next cycle downloads and merges again. Without remote changes the stored doc already
-        // is the merge, so the cycle goes on and uploads it (known-issues §15.4).
+        // merge — uploading it would put Drive back to it and drop the other devices' edits for every device. That holds
+        // even when no newer time came in: of two copies with the same time the merge may keep Drive's (device-id
+        // order), so the stored doc is not the merge (PR #445 review). No upload and no cache: the next cycle downloads
+        // and merges again; this device's own edits wait for room (known-issues §15.4, ADR-015 D7).
         dispatch({ type: "SYNC_DONE" });
         return;
       }
