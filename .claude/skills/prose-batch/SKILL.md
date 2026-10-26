@@ -111,6 +111,7 @@ description: 문장 교정 반복 실행의 한 번. 열린 문장 교정 PR이 
 4. push하고 `gh pr create --title "docs: 문장 교정(<묶음 설명>)" --body-file <원장>`으로 연다. 훅이 원장에 `pr: N`을 적으면, `tools/prose/progress.md`에 이번에 적은 「진행」만 「#N」으로 바꿔 함께 커밋한다(`docs: 문장 교정 원장에 PR 번호`). 그리고 PR 본문에서 머리말(frontmatter)을 뺀다(`bash scripts/pr_body.sh <원장> | gh api -X PATCH repos/anglican-kr/common-bible/pulls/<N> -F body=@-`).
 5. CI(`Unit tests`, `Change ledger`, `Prose lint`)가 통과하는지 본다. 머지는 하지 않는다.
 
-## 시험 묶음
+## 모델과 정기 실행
 
-첫 묶음은 시험이다. 주제 문서 12개(`## 1. 주제 문서` 전체)를 한 묶음으로 한다. 교정 수준을 보고 교정 단계의 모델(지금 Sonnet)을 정한다(사용자 결정 2026-10-26).
+- **모델**: 교정 서브에이전트는 Sonnet, 실행을 이끌며 바뀐 내용을 검토하는 세션은 Opus다(사용자 결정 2026-10-27). 첫 묶음(주제 문서 12개, #444)을 Sonnet으로 시험해 정했다. 그때 검토 단계가, 서브에이전트가 문맥에 맞지 않게 바꾼 23곳을 다시 고쳤다.
+- **클라우드 정기 실행**: 「문장 교정 반복 실행 (prose-batch)」. 매일 한국 시각 9시, 13시, 17시, 21시에 이 스킬을 한 번 실행한다. 이끄는 모델은 Opus이고, 외부 연결(MCP)은 붙이지 않는다. 공개 저장소의 글이나 PR 의견에 숨은 지시가 있어도, 실행이 메일이나 드라이브를 읽고 쓸 수 없게 하려는 것이다. 설정은 claude.ai의 정기 실행 화면(Routines)에 있다.
