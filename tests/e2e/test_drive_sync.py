@@ -570,6 +570,7 @@ def test_merge_refused_by_full_storage_keeps_drive_as_it_was(browser, fake_drive
             "body > div:not(#a11y-announce)",
             has_text="저장 공간이 가득 차 다른 기기에서 변경된 데이터를 불러오지 못했습니다.",
         ).wait_for(state="visible")
+        _wait_idle(page_b)                               # the cycle has ended — an upload would have landed by now
         assert _drive_names(fake_drive) == ["Bookmark-A", "Bookmark-B"], "B's old doc must not overwrite Drive"
         assert sorted(_bookmark_names(page_b)) == ["Bookmark-B", "Bookmark-B2"]
         assert page_b.evaluate("window.driveSync.getStatus()") == "IDLE"

@@ -92,6 +92,19 @@ def _ids(nodes):
     return [n["id"] for n in nodes]
 
 
+def _legacy(page):
+    return json.loads(page.evaluate(f"localStorage.getItem('{LEGACY_KEY}')"))
+
+
+def _viewed(page):
+    """The per-device viewed times (the 「최근 본 순」 sort) — kept when a delete is refused."""
+    return json.loads(page.evaluate("localStorage.getItem('bible-bookmark-viewed') || '{}'"))
+
+
+def _set_viewed(page, viewed):
+    page.evaluate(f"localStorage.setItem('bible-bookmark-viewed', {json.dumps(json.dumps(viewed))})")
+
+
 def _open_save_modal(page, label, note):
     page.locator("#bm-save-chapter-btn").click()
     page.wait_for_selector("#bm-save-modal:not([hidden])")
@@ -137,7 +150,7 @@ def test_refused_save_says_so_and_keeps_the_dialog_with_what_was_typed(browser):
 
 
 def test_refused_sync_store_write_leaves_the_legacy_copy_as_it_was(browser):
-    """브라우저가 동기화 저장소 쓰기만 거절해도 옛 키에는 쓰지 않는다. 다시 열어도 두 사본이 같다."""
+    """브라우저가 동기화 저장소 쓰기만 거절해도 옛 키에는 쓰지 않는다. 두 사본 모두 거절 전 그대로다."""
     ctx = _context(browser)
     page = ctx.new_page()
     try:
@@ -148,11 +161,8 @@ def test_refused_sync_store_write_leaves_the_legacy_copy_as_it_was(browser):
         page.locator("#bm-save-modal .bm-btn-primary").click()
         _snackbar(page).wait_for(state="visible")
 
-        legacy = json.loads(page.evaluate(f"localStorage.getItem('{LEGACY_KEY}')"))
-        assert _ids(legacy) == ["bm-b"]
-        page.reload()
-        page.wait_for_selector("article.chapter-text .verse")
-        assert _ids(page.evaluate("window.appStorage.loadBookmarks()")) == ["bm-b"]
+        assert _ids(_legacy(page)) == ["bm-b"]
+        assert _stored_ids(page) == ["bm-b"]
     finally:
         ctx.close()
 
@@ -211,6 +221,7 @@ def test_refused_inline_new_folder_keeps_the_form_with_the_name(browser):
         page.locator(".bm-new-folder-form input").press("Enter")
 
         _snackbar(page).wait_for(state="visible")
+        assert page.locator(".bm-new-folder-form").is_visible(), "the form is still there"
         assert page.locator(".bm-new-folder-form input").input_value() == "대림시기"
         assert _stored_ids(page) == []
     finally:
@@ -240,9 +251,9 @@ def test_refused_move_says_so_and_redraws_the_stored_order(browser):
 
 
 def test_refused_fold_keeps_the_folder_as_clicked_and_says_so(browser):
-    """저장 공간이 차면 폴더 접기가 거절된다(접힘 값이 한 글자 길다). 화면은 누른 대로 두고 알린다.
+    """저장 공간이 차면 펼쳐 둔 폴더의 접기가 거절된다(접힘 값이 한 글자 길다). 화면은 누른 대로 두고 알린다.
 
-    다시 열면 저장된 대로 펼쳐져 있다.
+    두 사본에는 펼친 상태가 그대로 남아, 다시 열면 펼쳐져 있다.
     """
     ctx = _context(browser)
     page = ctx.new_page()
@@ -256,12 +267,8 @@ def test_refused_fold_keeps_the_folder_as_clicked_and_says_so(browser):
 
         _snackbar(page).wait_for(state="visible")
         assert folder.get_attribute("aria-expanded") == "false"
-
-        page.reload()
-        page.wait_for_selector("article.chapter-text .verse")
-        page.locator(".title-bookmark-btn").click()
-        page.wait_for_selector("#bookmark-drawer:not([hidden])")
-        assert page.locator("li.bm-folder[data-id='folder-1']").get_attribute("aria-expanded") == "true"
+        assert page.evaluate("window.syncStoreV2.loadBookmarks()")[0]["expanded"] is True
+        assert _legacy(page)[0]["expanded"] is True
     finally:
         ctx.close()
 
@@ -300,11 +307,13 @@ def test_refused_delete_says_so_and_keeps_the_selection(browser):
     try:
         _open_bookmarks_view(page)
         _set_store(page, [_BM_A, _BM_B])
+        _set_viewed(page, {"bm-a": 123})
         fill_storage(page, [LEGACY_KEY, SYNC_KEY])
         _enter_select_mode(page, "bm-a")
         _delete_selected(page)
 
         _snackbar(page).wait_for(state="visible")
+        assert _viewed(page) == {"bm-a": 123}, "the bookmark stays, and so does its viewed time"
         assert page.locator("#bm-select-bar").is_visible()
         assert page.locator("li.bm-bookmark[data-id='bm-a'] .bm-select-circle.is-selected").count() == 1
         assert _stored_ids(page) == ["bm-a", "bm-b"]
@@ -330,5 +339,159 @@ def test_refused_move_to_folder_says_so_and_keeps_the_selection(browser):
         assert page.locator("li.bm-bookmark[data-id='bm-b'] .bm-select-circle.is-selected").count() == 1
         assert _stored_ids(page) == ["folder-2", "bm-b"]
         assert page.evaluate("window.syncStoreV2.loadBookmarks()")[0]["children"] == []
+    finally:
+        ctx.close()
+
+
+# ── 수정, 합치기, 가져오기 ────────────────────────────────────────────────────
+
+_BM_J = {"type": "bookmark", "id": "bm-j", "bookId": "john", "chapter": 3,
+         "label": "요한 3:16", "verseSpec": "16"}
+
+
+def test_refused_edit_keeps_the_dialog_with_what_was_typed(browser):
+    """북마크 수정도 저장이 거절되면 대화상자가 고친 글과 함께 남고, 저장된 제목은 그대로다."""
+    ctx = _context(browser)
+    page = ctx.new_page()
+    try:
+        _open_drawer(page, "gen/2")
+        _set_store(page, [_BM_B])
+        fill_storage(page, [LEGACY_KEY, SYNC_KEY])
+        row = page.locator("#bookmark-drawer-body li.bm-bookmark[data-id='bm-b']")
+        row.hover()
+        row.locator(".bm-edit-btn").click()
+        page.wait_for_selector("#bm-save-modal:not([hidden])")
+        page.locator("#bm-label-input").fill("고친 제목")
+        _count_announcements(page)
+        page.locator("#bm-save-modal .bm-btn-primary").click()
+
+        _snackbar(page).wait_for(state="visible")
+        assert page.locator("#bm-save-modal").is_visible()
+        assert page.locator("#bm-label-input").input_value() == "고친 제목"
+        assert "북마크를 수정했습니다." not in _announced(page)
+        assert page.evaluate("window.syncStoreV2.loadBookmarks()")[0]["label"] == "요한 3장"
+    finally:
+        ctx.close()
+
+
+def test_refused_merge_says_so_and_keeps_the_verse_selection(browser):
+    """고른 절을 기존 북마크에 합치는 저장이 거절되면 대화상자는 닫고, 절 선택은 그대로 둔다."""
+    ctx = _context(browser)
+    page = ctx.new_page()
+    try:
+        page.goto(f"{BASE}/john/3")
+        page.wait_for_selector("article.chapter-text .verse")
+        _set_store(page, [_BM_J])
+        fill_storage(page, [LEGACY_KEY, SYNC_KEY])
+        page.evaluate("() => enterVerseSelectMode('john', 3)")
+        page.wait_for_selector("#verse-select-bar:not([hidden])")
+        page.click("#v1")
+        page.click("#verse-select-bookmark-btn")
+        page.wait_for_selector("#bm-merge-modal:not([hidden])")
+        _count_announcements(page)
+        page.click("#bm-merge-yes")
+
+        _snackbar(page).wait_for(state="visible")
+        page.locator("#bm-merge-modal").wait_for(state="hidden")
+        assert page.locator("#verse-select-bar").is_visible(), "the verses stay selected for another try"
+        assert "북마크를 합쳤습니다." not in _announced(page)
+        assert page.evaluate("window.syncStoreV2.loadBookmarks()")[0]["verseSpec"] == "16"
+    finally:
+        ctx.close()
+
+
+def _import(page, tmp_path, bookmarks):
+    backup = tmp_path / "bookmarks.json"
+    backup.write_text(json.dumps({"_version": 1, "exportedAt": 0, "bookmarks": bookmarks}), encoding="utf-8")
+    page.locator("#bm-import-input").set_input_files(str(backup))
+    page.wait_for_selector("#bm-import-modal:not([hidden])")
+
+
+def test_refused_import_says_so_and_announces_no_success(browser, tmp_path):
+    """가져오기의 병합과 덮어쓰기는 크기 검사를 통과해도 저장이 거절될 수 있다. 그때 「병합했습니다」, 「덮어썼습니다」를
+    알리지 않고, 목록은 그대로다(PR #359에서 고친 증상이 다시 생기지 않는다)."""
+    for button, success in (("#bm-import-merge", "북마크를 병합했습니다."), ("#bm-import-overwrite", "북마크를 덮어썼습니다.")):
+        ctx = _context(browser)
+        page = ctx.new_page()
+        try:
+            _open_drawer(page)
+            _set_store(page, [_BM_B])
+            fill_storage(page, [LEGACY_KEY, SYNC_KEY])
+            _import(page, tmp_path, [_BM_A, _BM_B])
+            _count_announcements(page)
+            page.locator(button).click()
+
+            _snackbar(page).wait_for(state="visible")
+            page.locator("#bm-import-modal").wait_for(state="hidden")
+            assert success not in _announced(page), button
+            assert _stored_ids(page) == ["bm-b"], button
+        finally:
+            ctx.close()
+
+
+# ── 드로어의 지우기와 이름 바꾸기 ─────────────────────────────────────────────
+
+def test_refused_bookmark_delete_keeps_it_and_its_viewed_time(browser):
+    """북마크 하나 지우기가 거절되면 알리고, 목록과 「최근 본 시각」을 그대로 둔다."""
+    ctx = _context(browser)
+    page = ctx.new_page()
+    try:
+        _open_drawer(page, "gen/2")
+        _set_store(page, [_BM_A, _BM_B])
+        _set_viewed(page, {"bm-b": 123})
+        fill_storage(page, [LEGACY_KEY, SYNC_KEY])
+        row = page.locator("#bookmark-drawer-body li.bm-bookmark[data-id='bm-b']")
+        row.hover()
+        row.locator(".bm-delete-btn").click()
+        page.wait_for_selector("#bm-confirm-modal:not([hidden])")
+        page.locator("#bm-confirm-ok").click()
+
+        _snackbar(page).wait_for(state="visible")
+        assert _stored_ids(page) == ["bm-a", "bm-b"]
+        assert page.locator("#bookmark-drawer-body li.bm-bookmark[data-id='bm-b']").count() == 1
+        assert _viewed(page) == {"bm-b": 123}
+    finally:
+        ctx.close()
+
+
+def test_refused_folder_delete_keeps_it_and_the_viewed_times_inside(browser):
+    """폴더 지우기가 거절되면 알리고, 폴더와 안의 북마크, 그 북마크의 「최근 본 시각」을 그대로 둔다."""
+    ctx = _context(browser)
+    page = ctx.new_page()
+    try:
+        _open_drawer(page, "gen/2")
+        _set_store(page, [_FOLDER, _BM_B])
+        _set_viewed(page, {"bm-a": 77})
+        fill_storage(page, [LEGACY_KEY, SYNC_KEY])
+        folder = page.locator("#bookmark-drawer-body li.bm-folder[data-id='folder-1']")
+        folder.locator(".bm-folder-name").hover()
+        folder.locator(".bm-delete-btn").first.click()
+        page.wait_for_selector("#bm-confirm-modal:not([hidden])")
+        page.locator("#bm-confirm-ok").click()
+
+        _snackbar(page).wait_for(state="visible")
+        assert _stored_ids(page) == ["folder-1", "bm-b"]
+        assert page.locator("#bookmark-drawer-body li.bm-folder[data-id='folder-1']").count() == 1
+        assert _viewed(page) == {"bm-a": 77}
+    finally:
+        ctx.close()
+
+
+def test_refused_folder_rename_says_so_and_redraws_the_stored_name(browser):
+    """폴더 이름 바꾸기가 거절되면 알리고, 저장된 이름으로 다시 그린다."""
+    ctx = _context(browser)
+    page = ctx.new_page()
+    try:
+        _open_drawer(page, "gen/2")
+        _set_store(page, [_FOLDER])
+        fill_storage(page, [LEGACY_KEY, SYNC_KEY])
+        folder = page.locator("#bookmark-drawer-body li.bm-folder[data-id='folder-1']")
+        folder.locator(".bm-folder-name").hover()
+        page.once("dialog", lambda dialog: dialog.accept("성탄시기"))
+        folder.locator(".bm-action-btn", has_text="수정").first.click()
+
+        _snackbar(page).wait_for(state="visible")
+        assert page.evaluate("window.syncStoreV2.loadBookmarks()")[0]["name"] == "대림시기"
+        expect(page.locator("#bookmark-drawer-body li.bm-folder[data-id='folder-1'] .bm-folder-name")).to_have_text("대림시기")
     finally:
         ctx.close()

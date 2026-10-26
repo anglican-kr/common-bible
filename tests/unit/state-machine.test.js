@@ -1987,7 +1987,7 @@ test("74. 저장 공간이 아닌 다른 까닭으로 저장하지 못해도 올
 
 test("75. 다른 기기의 변경이 없으면 병합 결과를 저장하지 못해도 기기에 저장된 문서를 올린다 — 알리지 않는다", async () => {
   // 병합 결과가 로컬 문서와 같은 내용이면, 기기에 저장된 문서를 올려도 잃는 것이 없다. 멈추면 저장 공간이 찬 동안 이 기기의
-  // 편집이 드라이브에 올라가지 못한다.
+  // 편집이 드라이브에 올라가지 못한다. 고치기 전 코드에서도 통과한다. 필요 없이 막도록 고치는 것을 막는 테스트다.
   const local = localDoc("local");
   local.bookmarks.items.a = { id: "a", type: "bookmark", parentId: null, _order: 0, _u: 7 };
   const h = mergeSaveMachine({ outcome: "full", v2: { loadLocal: () => local, mergeDocs: (l) => l } });
@@ -1999,16 +1999,6 @@ test("75. 다른 기기의 변경이 없으면 병합 결과를 저장하지 못
   assert.equal(h.machine.getState(), "IDLE");
 });
 
-test("77. 병합 결과를 저장한 뒤 브라우저가 옛 키 몇 개의 쓰기를 거절하면 그 키를 기록하고 사이클을 마친다", async () => {
-  const h = mergeSaveMachine({ applyToLegacyKeys: () => ["bible-theme", "bible-bookmarks"] });
-  h.machine.enable();
-  await h.drain(8);
-  assert.equal(h.uploads.length, 1);
-  assert.ok(h.logEntries.some((e) => e.event === "LEGACY_KEYS_FAIL" && e.reason === "bible-theme, bible-bookmarks"));
-  assert.deepEqual(h.snackbar, ["다른 기기에서 변경된 데이터를 불러왔습니다."]);
-  assert.equal(h.machine.getState(), "IDLE");
-});
-
 test("76. 병합 결과를 저장한 뒤 옛 키 쓰기에서 예외가 나도 사이클을 마치고 올린다 — 다시 연결하라는 오류로 가지 않는다", async () => {
   const h = mergeSaveMachine({
     applyToLegacyKeys: () => { throw Object.assign(new Error("The quota has been exceeded."), { name: "QuotaExceededError" }); },
@@ -2017,6 +2007,16 @@ test("76. 병합 결과를 저장한 뒤 옛 키 쓰기에서 예외가 나도 �
   await h.drain(8);
   assert.equal(h.uploads.length, 1);
   assert.equal(h.rerenders.count, 1);
+  assert.deepEqual(h.snackbar, ["다른 기기에서 변경된 데이터를 불러왔습니다."]);
+  assert.equal(h.machine.getState(), "IDLE");
+});
+
+test("77. 병합 결과를 저장한 뒤 브라우저가 옛 키 몇 개의 쓰기를 거절하면 그 키를 기록하고 사이클을 마친다", async () => {
+  const h = mergeSaveMachine({ applyToLegacyKeys: () => ["bible-theme", "bible-bookmarks"] });
+  h.machine.enable();
+  await h.drain(8);
+  assert.equal(h.uploads.length, 1);
+  assert.ok(h.logEntries.some((e) => e.event === "LEGACY_KEYS_FAIL" && e.reason === "bible-theme, bible-bookmarks"));
   assert.deepEqual(h.snackbar, ["다른 기기에서 변경된 데이터를 불러왔습니다."]);
   assert.equal(h.machine.getState(), "IDLE");
 });

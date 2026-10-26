@@ -975,18 +975,21 @@ test("commitBookmarks: a saved list returns true and says nothing", () => {
   assert.equal(h.commitBookmarks(list), true);
   assert.equal(h.calls.saves[0], list);
   assert.deepEqual(h.calls.snackbar, []);
+  assert.deepEqual(h.calls.announce, [], "the caller says the success line, not this");
 });
 
 test("commitBookmarks: storage full — false, and the snackbar says what to do (사용자 결정 2026-10-26)", () => {
   const h = loadBookmarkCommit("full");
   assert.equal(h.commitBookmarks([]), false);
   assert.deepEqual(h.calls.snackbar, ["저장 공간이 가득 차 바꾼 내용을 저장하지 못했습니다. 쓰지 않는 북마크를 지운 뒤 다시 시도해 주세요."]);
+  assert.deepEqual(h.calls.announce, [], "the snackbar reads it to the live region itself — announcing again reads it twice");
 });
 
 test("commitBookmarks: any other refusal — false, and the snackbar says the list was not saved", () => {
   const h = loadBookmarkCommit("failed");
   assert.equal(h.commitBookmarks([]), false);
   assert.deepEqual(h.calls.snackbar, ["북마크를 저장하지 못했습니다."]);
+  assert.deepEqual(h.calls.announce, []);
 });
 
 test("commitBookmarks: without the snackbar (sync not loaded), the screen reader still hears it", () => {
