@@ -680,45 +680,49 @@ function _validateImportData(data) {
 
 // 병합 adds, by id, what the file has and the list lacks; an item the list has stays as it is. A folder the list
 // already has is entered, not skipped: the file's new items join it there, and it keeps its own name and place
-// (ADR-011 Phase 2a, known-issues §15.1 — skipping it left the backup's new bookmarks in that folder behind).
+// (ADR-011 Phase 2a, known-issues §15.1 — skipping it left the backup's new bookmarks in that folder behind). Filled
+// where it stands, such a folder adds the list's depth to the file's, so a new folder that would sit deeper than
+// IMPORT_MAX_FOLDER_DEPTH is left out with what it holds, as the import check does (PR #438 review).
 /** @param {BookmarkTreeNode[]} existing @param {BookmarkTreeNode[]} incoming @returns {BookmarkTreeNode[]} */
 function _mergeBookmarkStores(existing, incoming) {
   /** @type {Set<string>} */
   const ids = new Set();
-  /** @type {Map<string, BookmarkTreeFolder>} */
+  /** @type {Map<string, { folder: BookmarkTreeFolder, depth: number }>} */
   const folders = new Map();
-  // Every folder is copied, so new items can join one without touching the tree the caller passed in.
-  /** @param {BookmarkTreeNode[]} items @returns {BookmarkTreeNode[]} */
-  function copyExisting(items) {
+  // Every folder is copied, so new items can join one without touching the tree the caller passed in. A top-level
+  // folder is at depth 1, as in _sanitizeImportItems.
+  /** @param {BookmarkTreeNode[]} items @param {number} depth @returns {BookmarkTreeNode[]} */
+  function copyExisting(items, depth) {
     return items.map((item) => {
       ids.add(item.id);
       if (item.type !== "folder") return item;
-      const folder = { ...item, children: copyExisting(Array.isArray(item.children) ? item.children : []) };
-      folders.set(item.id, folder);
+      const folder = { ...item, children: copyExisting(Array.isArray(item.children) ? item.children : [], depth + 1) };
+      folders.set(item.id, { folder, depth });
       return folder;
     });
   }
-  const result = copyExisting(existing);
+  const result = copyExisting(existing, 1);
 
-  /** @param {BookmarkTreeNode[]} items @param {BookmarkTreeNode[]} into */
-  function addNew(items, into) {
+  /** @param {BookmarkTreeNode[]} items @param {BookmarkTreeNode[]} into @param {number} depth  of a folder put into `into` */
+  function addNew(items, into, depth) {
     for (const item of items) {
       if (item.type === "folder") {
         const same = folders.get(item.id);
-        if (same) { addNew(item.children || [], same.children); continue; }
+        if (same) { addNew(item.children || [], same.folder.children, same.depth + 1); continue; }
         if (ids.has(item.id)) continue;   // a bookmark has this id — the import check leaves these out first (ADR-040)
+        if (depth > IMPORT_MAX_FOLDER_DEPTH) continue;
         const folder = { ...item, children: [] };
         ids.add(item.id);
-        folders.set(item.id, folder);
+        folders.set(item.id, { folder, depth });
         into.push(folder);
-        addNew(item.children || [], folder.children);
+        addNew(item.children || [], folder.children, depth + 1);
       } else if (!ids.has(item.id)) {
         ids.add(item.id);
         into.push(item);
       }
     }
   }
-  addNew(incoming, result);
+  addNew(incoming, result, 1);
   return result;
 }
 

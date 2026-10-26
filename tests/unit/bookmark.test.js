@@ -1732,6 +1732,29 @@ test("_mergeBookmarkStores: a folder whose id is an existing bookmark is skipped
   assert.deepEqual(JSON.parse(JSON.stringify(merged)), [{ type: "bookmark", id: "dup" }]);
 });
 
+test("_mergeBookmarkStores: the merged list stays within 64 levels — a folder that would go deeper is left out with its contents", () => {
+  // A folder the list has is filled where it stands, so the file's depth adds to the list's (PR #438 review): the
+  // import check's 64-level limit (ADR-040) holds for the merged list too.
+  const h = loadImportExport();
+  /** @param {string} prefix @param {number} n */
+  const chain = (prefix, n) => {
+    let node = null;
+    for (let i = n; i >= 1; i--) node = { type: "folder", id: `${prefix}${i}`, name: "", children: node ? [node] : [] };
+    return node;
+  };
+  const depthOf = (nodes) => Math.max(0, ...nodes.map((n) => (n.type === "folder" ? 1 + depthOf(n.children) : 0)));
+  const existing = [chain("a", 64)];
+  const incoming = [
+    { type: "folder", id: "a64", name: "", children: [chain("b", 3), { type: "bookmark", id: "x" }] },
+    { type: "folder", id: "a10", name: "", children: [chain("c", 3)] },
+  ];
+  const merged = h._mergeBookmarkStores(existing, incoming);
+  assert.equal(depthOf(merged), 64);
+  const at = (level) => { let f = merged[0]; for (let i = 1; i < level; i++) f = f.children[0]; return f; };
+  assert.deepEqual(at(64).children.map((c) => c.id), ["x"]);          // the bookmark joins; the folder would be 65th
+  assert.deepEqual(at(10).children.map((c) => c.id), ["a11", "c1"]);  // 13 levels fit
+});
+
 test("_mergeBookmarkStores: the existing tree passed in is left as it was", () => {
   const h = loadImportExport();
   const existing = [{ type: "folder", id: "f", children: [{ type: "bookmark", id: "x" }] }];
