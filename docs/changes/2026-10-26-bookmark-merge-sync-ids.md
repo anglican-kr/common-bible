@@ -1,4 +1,5 @@
 ---
+pr: 438
 date: 2026-10-26
 branch: fix/bookmark-merge-sync-ids
 title: "fix: 같은 id 폴더 병합과 기본 속성 이름 id 처리"
