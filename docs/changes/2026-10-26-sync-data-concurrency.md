@@ -1,4 +1,5 @@
 ---
+pr: 442
 date: 2026-10-26
 branch: chore/sync-data-concurrency
 title: "chore: 데이터 동기화 워크플로의 겹친 실행을 하나로 줄임"
