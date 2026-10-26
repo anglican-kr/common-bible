@@ -1,4 +1,5 @@
 ---
+pr: 447
 date: 2026-10-27
 branch: docs/prose-root-docs
 title: "docs: 문장 교정(루트 문서와 docs 대장)"
