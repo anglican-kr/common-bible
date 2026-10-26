@@ -242,7 +242,7 @@ $home?.addEventListener("click", (e) => {
   }
   // ADR-031 개정: 이미 홈 스택이면 성서 목록으로 — iOS pop-to-root. 읽던 화면(장·
   // 머리말·장 목록)에서 눌렀다면 그 책의 구분 탭으로 가서 읽던 책 카드에 포커스를
-  // 맞춘다(헤더 홈 버튼 buildHomeBtn 과 동일 UX — 키보드/스크린리더 사용자가 맥락에
+  // 맞춘다(헤더 홈 버튼 buildHomeBtn과 동일 UX — 키보드/스크린 리더 사용자가 맥락에
   // 착지). 구분 탭이 없는 책(전례시편 · 송가)은 성서 목록 첫 화면으로(views.js bookListPath).
   // 목록·구분 화면(bookId 없음)에선 기본 href="/" 로 진행해 최상단.
   const p = W.parsePath?.();
@@ -365,7 +365,7 @@ $searchClear?.addEventListener("click", () => {
 // X 를 접고 body.tabbar-keyboard 를 푼다. 다시 입력을 탭하면 키보드·X 가 복귀.
 // 검색 종료(→홈)는 홈 버튼 담당(X 와 역할 분리).
 $searchClose?.addEventListener("click", () => {
-  // 키보드·스크린리더 사용자는 X 자체에 포커스가 있다. 키보드가 내려가면 X 가
+  // 키보드·스크린 리더 사용자는 X 자체에 포커스가 있다. 키보드가 내려가면 X가
   // 곧 a11y 트리에서 제외(aria-hidden·tabindex -1)되므로, 포커스가 숨은 컨트롤에
   // 갇히지 않게 검색 버튼으로 옮긴다(closeSearchToHome 과 동일한 복귀 타깃 —
   // grounded dock 에서도 보이는 컨트롤). 입력에 주면 키보드가 다시 떠 제외.

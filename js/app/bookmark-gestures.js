@@ -23,9 +23,9 @@
 /** @typedef {import("../types").BookmarkTreeFolder} BookmarkTreeFolder */
 /** @typedef {import("../types").DragState} DragState */
 
-const { loadBookmarks, saveBookmarks } = window.appStorage;
+const { loadBookmarks } = window.appStorage;
 
-import { _findItemInStore, getBookmarkSort, _isDescendant } from "./bookmark-core.js";
+import { _findItemInStore, getBookmarkSort, _isDescendant, commitBookmarks } from "./bookmark-core.js";
 
 // ── Dependency injection ──
 // bookmark.js injects these at startup (initBookmarkGestures). Defaults are
@@ -42,7 +42,7 @@ function initBookmarkGestures(deps) {
 // Exercised by tests/unit/bookmark.test.js. The test loader concatenates
 // this block AFTER the BOOKMARK_QUERY block (since `moveBookmarkItem` calls
 // `_findItemInStore` from there) and provides `loadBookmarks` /
-// `saveBookmarks` / `_rerenderTree` stubs in the prelude.
+// `commitBookmarks` / `_rerenderTree` stubs in the prelude.
 // ── Drag & drop helpers ──
 // (_isDescendant moved to bookmark-core.js as a shared tree predicate, ADR-034 후속;
 // imported above. The DRAG_CORE test loader concatenates BOOKMARK_QUERY first, so
@@ -83,9 +83,10 @@ function moveBookmarkItem(draggedId, targetId, position) {
     }
   }
 
-  saveBookmarks(store);
+  commitBookmarks(store);
   // Re-render whichever bookmark surface is mounted (drawer or /bookmarks full
   // view); the orchestrator owns that dispatch and injects it (initBookmarkGestures).
+  // A refused save redraws too: the list then shows the order that is stored.
   _rerenderTree();
 }
 // ── END DRAG_CORE ──

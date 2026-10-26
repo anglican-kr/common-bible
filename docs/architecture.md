@@ -387,7 +387,7 @@ ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` 약 6,000줄이 8개 �
 | 위치 | 키/파일 | 내용 | 동기화? |
 | --- | --- | --- | --- |
 | `localStorage` | `bible-bookmarks-v2` | 동기화 문서 v2 — 북마크(`items` · `tombstones`) · 설정 · 이어읽기, 레코드마다 수정 시각 | ✅ |
-| `localStorage` | `bible-bookmarks` | 옛 트리 사본 — 저장할 때마다 함께 쓰고, v0/v1 이전의 원본으로 읽는다 | (호환) |
+| `localStorage` | `bible-bookmarks` | 옛 트리 사본. 저장할 때마다 동기화 문서 다음에 쓰고(ADR-015 D7), v0/v1 이전의 원본으로 읽는다 | (호환) |
 | `localStorage` | `bible-font-size`, `bible-theme`, `bible-color-scheme`, `bible-book-order`, `bible-startup`, `bible-cite-show`, `bible-audio-show` | 설정 7종 (v2 문서의 설정과 같은 값) | ✅ |
 | `localStorage` | `bible-last-read` | 마지막 읽기 위치 (이어읽기 배너) | ✅ |
 | `localStorage` | `bible-sync-meta` | `{schemaVersion, deviceId}` | (메타) |

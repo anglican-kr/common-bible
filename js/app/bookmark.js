@@ -19,7 +19,7 @@
 
 const { _$, el, headerIcon, HEADER_ICON_PATHS } = window.appHelpers;
 const { createOverlay, attachSheetDrag, attachSheetResize } = window.appOverlay;
-const { loadBookmarks, saveBookmarks, generateId } = window.appStorage;
+const { loadBookmarks, generateId } = window.appStorage;
 const { readingContext } = window;
 
 // Verse-spec utilities split out to verse-spec.js (ADR-034 후속). Imported for
@@ -32,7 +32,7 @@ import {
 // rendering round most core helpers are consumed by bookmark-tree.js / -menu / -select
 // directly; the orchestrator only needs findExistingChapterBookmarks (header button
 // "is this chapter bookmarked?" check).
-import { findExistingChapterBookmarks, migrateStoredBookmarks, migrateLegacyBookmarkDoc } from "./bookmark-core.js";
+import { findExistingChapterBookmarks, migrateStoredBookmarks, migrateLegacyBookmarkDoc, commitBookmarks } from "./bookmark-core.js";
 
 // Modal dialogs split out to bookmark-modals.js (ADR-034 후속 PR5). They own
 // their overlays + DOM refs + Escape stack (closeTopmostModal); bookmark.js
@@ -426,7 +426,7 @@ $bmAddFolderBtn.addEventListener("click", () => {
     if (!name) { cleanup(); return; }
     const store = loadBookmarks();
     store.push({ type: "folder", id: generateId(), name, children: [], expanded: false, createdAt: Date.now() });
-    saveBookmarks(store);
+    if (!commitBookmarks(store)) return;   // refused: the form stays with the typed name
     _rerenderActiveBookmarkTree();
     cleanup();
   }

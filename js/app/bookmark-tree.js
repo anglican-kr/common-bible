@@ -22,12 +22,12 @@
 /** @typedef {import("../types").BookmarkTreeFolder} BookmarkTreeFolder */
 
 const { _$, el, clearNode, chUnit, emptyState } = window.appHelpers;
-const { loadBookmarks, saveBookmarks } = window.appStorage;
+const { loadBookmarks } = window.appStorage;
 
 import {
   sortBookmarkNodes, getBookmarkSort, markBookmarkViewed, _forgetViewed,
   _isActiveBookmark, _hasActiveDescendant, _bookmarkHref, BOOKMARK_ADD_HELP,
-  _walkBookmarks, _findItemInStore, removeItemById, setRenderPathname,
+  _walkBookmarks, _findItemInStore, removeItemById, setRenderPathname, commitBookmarks,
 } from "./bookmark-core.js";
 import {
   _setupDragHandle, closeSwipedRow, resetSwipedRow, closeSwipedRowIfOutside,
@@ -185,10 +185,9 @@ function _buildBookmarkItem(bm, depth) {
       message: `"${bm.label}" 북마크를 삭제할까요?`,
       confirmLabel: "삭제",
       onConfirm: () => {
-        _forgetViewed(bm.id);
         const store = loadBookmarks();
         removeItemById(store, bm.id);
-        saveBookmarks(store);
+        if (commitBookmarks(store)) _forgetViewed(bm.id);   // refused: the bookmark stays, and so does its viewed time
         _rerenderActiveBookmarkTree();
         refreshBookmarkHeaderBtn();
       },
@@ -340,10 +339,13 @@ function _buildFolderItem(folder, depth) {
     const newExpanded = li.getAttribute("aria-expanded") !== "true";
     li.setAttribute("aria-expanded", String(newExpanded));
     toggle.replaceChildren(_buildFolderToggleIcon(newExpanded));
-    // Persist expanded state so it survives re-render
+    // Persist expanded state so it survives re-render. A refused save leaves the folder as clicked on screen, so the
+    // list can still be browsed while storage is full; the snackbar says the state was not kept. A full storage refuses
+    // the fold (`"expanded":false` is one character longer) and the first unfold of a folder stored without the field
+    // (an imported file may leave it out).
     const store = loadBookmarks();
     const found = _findItemInStore(store, folder.id);
-    if (found && found.item.type === "folder") { found.item.expanded = newExpanded; saveBookmarks(store); }
+    if (found && found.item.type === "folder") { found.item.expanded = newExpanded; commitBookmarks(store); }
   });
 
   const renameAction = () => {
@@ -353,7 +355,7 @@ function _buildFolderItem(folder, depth) {
     const store = loadBookmarks();
     const found = _findItemInStore(store, folder.id);
     if (found) { found.item.name = newName.trim(); found.item.updatedAt = Date.now(); }
-    saveBookmarks(store);
+    commitBookmarks(store);
     _rerenderActiveBookmarkTree();
   };
   const deleteAction = () => {
@@ -374,15 +376,18 @@ function _buildFolderItem(folder, depth) {
       onConfirm: () => {
         const store = loadBookmarks();
         // Cascade: forget per-device viewed timestamps for every nested bookmark,
-        // mirroring single-bookmark delete, so the map doesn't accrue stale ids.
+        // mirroring single-bookmark delete, so the map doesn't accrue stale ids —
+        // once the delete is saved.
+        /** @type {string[]} */
+        const nested = [];
         const found = _findItemInStore(store, folder.id);
         if (found && found.item.type === "folder") {
           _walkBookmarks(found.item.children, (it) => {
-            if (it.type === "bookmark") _forgetViewed(it.id);
+            if (it.type === "bookmark") nested.push(it.id);
           });
         }
         removeItemById(store, folder.id);
-        saveBookmarks(store);
+        if (commitBookmarks(store)) for (const id of nested) _forgetViewed(id);
         _rerenderActiveBookmarkTree();
       },
     });
