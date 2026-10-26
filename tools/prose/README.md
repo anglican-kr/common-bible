@@ -7,7 +7,7 @@
 - `python3 tools/prose/prose.py lint`: 저장소 전체를 검사해, 검사마다 건수를 세고 문제가 많은 파일을 보인다.
   - 파일을 주면 그 파일만 본다. `--detail`은 찾은 곳을 하나씩 적고, `--json`은 JSON으로 낸다.
   - `--changed origin/main`은 그 브랜치에서 갈라진 뒤 더하거나 고친 줄만 본다.
-- `python3 tools/prose/prose.py same-code main`: main과 작업 트리를 견줘, 주석과 문서 말고도 바뀐 파일을 적는다. 그런 파일이 하나라도 있으면 종료 코드 1로 끝난다. 두 리비전을 견주려면 `same-code A B`로 쓴다.
+- `python3 tools/prose/prose.py same-code main`: main과 작업 트리를 견줘, 주석과 문서 말고도 바뀐 파일을 적는다. 그런 파일이 하나라도 있으면 종료 코드 1로 끝난다. 두 리비전을 견주려면 `same-code A B`로 쓴다. `--allow <경로>`를 주면 그 파일이나 폴더는 일부러 바꾼 것으로 보고 견주지 않는다. 문장 교정 PR에서 검사 목록(`tools/prose/`)을 고쳤을 때만 쓰고, 그때는 이 도구의 테스트로 따로 확인한다.
 - 테스트: `python3 -m unittest tools/prose/test_prose.py`
 
 ## 검사하는 것
@@ -46,6 +46,10 @@
 ## CI
 
 `.github/workflows/prose.yml`이 모든 PR에서 그 PR이 고친 줄만 검사한다. 경고만 내고 실패하지 않으며, 필수 검사도 아니다. 경고는 처음 10건만 PR의 바뀐 줄에 표시하고, 전체 목록은 실행 결과의 작업 요약(Summary)에 적는다. GitHub가 한 단계에서 표시하는 경고 수를 제한한다고 알고 있지만 문서에서 확인하지 못해서 10건으로 정했다.
+
+## 진행 목록
+
+`progress.md`는 교정할 파일을 순서대로 적은 목록이다. 문장 교정 반복 실행(`.claude/skills/prose-batch/SKILL.md`)이 위에서부터 묶음을 고르고, 교정 PR마다 상태를 「대기」에서 PR 번호로 바꾼다. 나눠 고치는 파일은 끝낸 범위를 이어 적고, 다 끝나면 「(끝)」을 붙인다. 파일이 새로 생기면 그 절의 알맞은 자리에 「대기」로 더한다.
 
 ## 한계
 

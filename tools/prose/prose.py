@@ -515,6 +515,11 @@ def read_rev(rev, path):
     return p.read_bytes().decode("utf-8", errors="replace") if p.is_file() else None
 
 
+def allowed(path, prefixes):
+    """True if the path is under one of the --allow prefixes (changed on purpose, checked another way)."""
+    return any(path == p.rstrip("/") or path.startswith(p.rstrip("/") + "/") for p in prefixes)
+
+
 def cmd_same_code(args):
     head = args.head
     diff_args = ["git", "diff", "--name-only", args.base] + ([head] if head != "WORKTREE" else [])
@@ -522,6 +527,9 @@ def cmd_same_code(args):
     bad = []
     for f in changed:
         if f.endswith(".md"):
+            continue
+        if allowed(f, args.allow):
+            print(f"{f}: 허용(--allow)")
             continue
         old, new = read_rev(args.base, f), read_rev(head, f)
         if old is None or new is None:
@@ -548,6 +556,8 @@ def main(argv=None):
     same = sub.add_parser("same-code", help="주석과 문서 말고 바뀐 것이 없는지 본다")
     same.add_argument("base")
     same.add_argument("head", nargs="?", default="WORKTREE")
+    same.add_argument("--allow", action="append", default=[], metavar="PATH",
+                      help="이 경로(파일이나 폴더)는 일부러 바꾼 것으로 보고 견주지 않는다(예: tools/prose/)")
     args = p.parse_args(argv)
     return cmd_lint(args) if args.cmd == "lint" else cmd_same_code(args)
 

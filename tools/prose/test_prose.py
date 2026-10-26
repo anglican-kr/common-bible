@@ -117,6 +117,17 @@ class SameCodeTest(unittest.TestCase):
         self.assertIsNone(prose.strip_comments("a.md", "아무 글"))
 
 
+class AllowTest(unittest.TestCase):
+    def test_folder_prefix(self):
+        self.assertTrue(prose.allowed("tools/prose/prose.py", ["tools/prose/"]))
+        self.assertTrue(prose.allowed("tools/prose/prose.py", ["tools/prose"]))
+
+    def test_exact_file_and_lookalike(self):
+        self.assertTrue(prose.allowed("tools/prose/prose.py", ["tools/prose/prose.py"]))
+        self.assertFalse(prose.allowed("tools/prose-old/x.py", ["tools/prose"]))
+        self.assertFalse(prose.allowed("js/app.js", []))
+
+
 class GithubEscapeTest(unittest.TestCase):
     def test_file_name_cannot_start_another_command(self):
         self.assertEqual(prose.gh_prop("a,b::c\n::x"), "a%2Cb%3A%3Ac%0A%3A%3Ax")
