@@ -17,6 +17,7 @@
 
 const _META_KEY  = "bible-sync-meta";
 const _STORE_KEY = "bible-bookmarks-v2";
+const _LEGACY_BM_KEY = "bible-bookmarks";
 
 /** @type {Record<SettingKey, string>} */
 const _SETTING_LS_KEYS = {
@@ -168,11 +169,18 @@ function _emptyDoc() {
 
 // ── Load / Save ───────────────────────────────────────────────────────────────
 
+// A store not written yet reads as the one migrateLegacyIfNeeded writes, and a store with no bookmark record takes the
+// legacy key's list: a move the browser refused left no store, the reading position then wrote one with an empty
+// list, and the next bookmark save put that list over the legacy one (known-issues §34). Every save writes the whole
+// document, so until one fits the list stays in the legacy key and shows from there.
 /** @returns {SyncDoc} */
 function loadLocal() {
   try {
     const raw = localStorage.getItem(_STORE_KEY);
-    if (raw) return JSON.parse(raw);
+    if (!raw) return _docFromLegacyKeys();
+    const doc = JSON.parse(raw);
+    if (_holdsNoBookmarks(doc)) _flattenTree(_legacyTree(), null, doc.bookmarks.items, _legacyU());
+    return doc;
   } catch {}
   return _emptyDoc();
 }
@@ -346,23 +354,34 @@ function saveLastRead(value) {
 
 // ── Migration v0/v1 → v2 ─────────────────────────────────────────────────────
 
-function migrateLegacyIfNeeded() {
-  if (localStorage.getItem(_STORE_KEY)) return; // already migrated
+// One time for the items read from the legacy key in a page load, so that two reads give the same document.
+let _legacyAt = 0;
+/** @returns {number} */
+function _legacyU() { return _legacyAt ||= Date.now(); }
 
-  const now = Date.now();
-  const doc = _emptyDoc();
+/** @param {SyncDoc} doc @returns {boolean} */
+function _holdsNoBookmarks(doc) {
+  return !Object.keys(doc.bookmarks.items).length && !Object.keys(doc.bookmarks.tombstones).length;
+}
 
-  // Bookmarks: detect v0 (bare array) or v1 ({ _version:1, items:[...] }).
+// The legacy key's list: v0 (bare array) or v1 ({ _version:1, items:[...] }); [] when there is none.
+/** @returns {BookmarkTreeNode[]} */
+function _legacyTree() {
   try {
-    const raw = localStorage.getItem("bible-bookmarks");
+    const raw = localStorage.getItem(_LEGACY_BM_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      const tree = Array.isArray(parsed)
-        ? parsed
-        : (parsed?._version === 1 && Array.isArray(parsed.items) ? parsed.items : []);
-      _flattenTree(tree, null, doc.bookmarks.items, now);
+      if (Array.isArray(parsed)) return parsed;
+      if (parsed?._version === 1 && Array.isArray(parsed.items)) return parsed.items;
     }
   } catch {}
+  return [];
+}
+
+/** @returns {SyncDoc} */
+function _docFromLegacyKeys() {
+  const doc = _emptyDoc();
+  _flattenTree(_legacyTree(), null, doc.bookmarks.items, _legacyU());
 
   // Settings: _u = 0 so that any remote data wins on first sync.
   for (const [key, lsKey] of Object.entries(_SETTING_LS_KEYS)) {
@@ -379,8 +398,19 @@ function migrateLegacyIfNeeded() {
     if (raw) doc.lastRead = { v: JSON.parse(raw), _u: 0 };
   } catch {}
 
-  saveLocal(doc);
-  _getOrCreateMeta();
+  return doc;
+}
+
+// Done once the store holds a bookmark record or the legacy key holds no list — not once the store's key exists
+// (known-issues §34). Until then it is tried at every start.
+function migrateLegacyIfNeeded() {
+  const raw = localStorage.getItem(_STORE_KEY);
+  if (raw) {
+    try { if (!_holdsNoBookmarks(JSON.parse(raw)) || !_legacyTree().length) return; } catch { return; }
+  }
+  saveLocal(loadLocal());
+  // A full storage refuses this write too, and a throw here stops the rest of app.js's startup.
+  try { _getOrCreateMeta(); } catch {}
 }
 
 // ── Merge ─────────────────────────────────────────────────────────────────────
@@ -534,7 +564,7 @@ function applyToLegacyKeys(doc) {
     if (!((_own(tombstones, id) ?? -Infinity) > node._u)) alive[id] = node;
   }
   const tree = bookmarkTreeFromFlat(alive);
-  write("bible-bookmarks", JSON.stringify(tree));
+  write(_LEGACY_BM_KEY, JSON.stringify(tree));
   return refused;
 }
 

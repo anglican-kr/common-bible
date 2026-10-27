@@ -51,7 +51,10 @@ FULL_STORAGE = """
     try { full = JSON.parse(sessionStorage.getItem('__e2eFull') || '{}'); } catch (_) {}
     if (this === window.localStorage && Array.isArray(full.keys) && full.keys.includes(key)) {
       const before = this.getItem(key);
-      if (!full.growOnly || before === null || String(value).length > before.length) {
+      const refused = typeof full.longerThan === 'number'
+        ? String(value).length > full.longerThan
+        : !full.growOnly || before === null || String(value).length > before.length;
+      if (refused) {
         throw new DOMException('The quota has been exceeded.', 'QuotaExceededError');
       }
     }
@@ -61,11 +64,14 @@ FULL_STORAGE = """
 """
 
 
-def fill_storage(page, keys, grow_only=False) -> None:
-    """From now on, refuse writes to these localStorage keys (FULL_STORAGE); an empty list makes room again."""
+def fill_storage(page, keys, grow_only=False, longer_than=None) -> None:
+    """From now on, refuse writes to these localStorage keys (FULL_STORAGE); an empty list makes room again.
+
+    ``longer_than`` refuses only values longer than that many characters — room for a small write, not a large one.
+    """
     page.evaluate(
-        "([keys, growOnly]) => sessionStorage.setItem('__e2eFull', JSON.stringify({ keys, growOnly }))",
-        [keys, grow_only],
+        "([keys, growOnly, longerThan]) => sessionStorage.setItem('__e2eFull', JSON.stringify({ keys, growOnly, longerThan }))",
+        [keys, grow_only, longer_than],
     )
 
 

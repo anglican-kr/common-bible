@@ -241,6 +241,126 @@ test("브라우저가 쓰기를 거절하면 저장 공간이 찼을 때는 full
   }
 });
 
+// ── 옛 키의 목록 옮기기 (known-issues §34) ──
+// 2026-05-04 전의 판은 북마크를 옛 키(bible-bookmarks)에만 두었다. 옮기는 저장이 거절되면 동기화 저장소 키가 없는 채로
+// 남았고, 읽던 위치의 저장이 빈 목록의 문서를 만든 뒤로는 옮기기를 다시 하지 않아 다음 북마크 저장이 옛 목록을 지웠다.
+
+const legacyBm = (i) => ({ type: "bookmark", id: `b${i}`, bookId: "john", chapter: 3, verseSpec: String(i + 1), label: `요한 3:${i + 1}` });
+const LEGACY_LIST = [
+  { type: "folder", id: "f", name: "폴더", children: [legacyBm(100)] },
+  ...Array.from({ length: 50 }, (_, i) => legacyBm(i)),
+];
+const treeIds = (tree) => tree.flatMap((n) => [n.id, ...treeIds(n.children ?? [])]);
+const LEGACY_IDS = treeIds(LEGACY_LIST);
+
+// 키와 값을 합쳐 지금보다 `room`자를 넘게 늘리는 쓰기를 거절한다 — 저장 공간이 찬 브라우저처럼.
+function fillStorage(localStorage, room) {
+  const raw = localStorage._raw;
+  const size = () => Object.entries(raw).reduce((n, [k, v]) => n + k.length + v.length, 0);
+  const limit = size() + room;
+  localStorage.setItem = (k, v) => {
+    const value = String(v);
+    if (size() - (k in raw ? k.length + raw[k].length : 0) + k.length + value.length > limit) {
+      throw Object.assign(new Error("full"), { name: "QuotaExceededError" });
+    }
+    raw[k] = value;
+  };
+}
+
+test("옛 키에만 있는 목록은 시작할 때 동기화 저장소로 옮기고 옛 키는 그대로 둔다 — 배열과 _version 1 형식 모두", () => {
+  for (const legacy of [LEGACY_LIST, { _version: 1, items: LEGACY_LIST }]) {
+    const raw = JSON.stringify(legacy);
+    const { store, localStorage } = load({ "bible-bookmarks": raw, "bible-theme": "dark" });
+    store.migrateLegacyIfNeeded();
+    const saved = JSON.parse(localStorage.getItem("bible-bookmarks-v2"));
+    assert.deepEqual(Object.keys(saved.bookmarks.items).sort(), [...LEGACY_IDS].sort());
+    assert.deepEqual(saved.settings.theme, { v: "dark", _u: 0 });
+    assert.equal(localStorage.getItem("bible-bookmarks"), raw);
+    assert.ok(localStorage.getItem("bible-sync-meta"));
+  }
+});
+
+test("옮기는 저장이 거절되면 옛 키의 목록을 보이고, 읽던 위치를 저장해도 빈 목록의 문서를 만들지 않는다", () => {
+  const { store, localStorage } = load({ "bible-bookmarks": JSON.stringify(LEGACY_LIST) });
+  fillStorage(localStorage, 1000);   // 빈 문서와 기기 id는 들어가고, 목록을 옮긴 문서는 들어가지 않는다
+  store.migrateLegacyIfNeeded();
+  assert.equal(localStorage.getItem("bible-bookmarks-v2"), null);
+  assert.deepEqual(treeIds(plain(store.loadBookmarks())), LEGACY_IDS);
+  // 고치기 전에는 이 저장이 빈 목록의 문서를 만들었고, 그 뒤로 옮기기를 다시 하지 않았다.
+  store.saveLastRead({ bookId: "john", chapter: 3 });
+  assert.equal(localStorage.getItem("bible-bookmarks-v2"), null);
+  store.migrateLegacyIfNeeded();
+  assert.deepEqual(treeIds(plain(store.loadBookmarks())), LEGACY_IDS);
+  // 북마크를 더해도, 하나를 지워도 저장 공간이 차 거절된다 — storage.js saveBookmarks는 그때 옛 키를 쓰지 않는다
+  // (ADR-015 D7). 옛 키가 자리를 그대로 차지하고 지운 항목마다 삭제 기록이 남아, 한 번에 많이 지워야 저장된다.
+  assert.equal(store.saveBookmarks([...store.loadBookmarks(), legacyBm(999)]), "full");
+  assert.equal(store.saveBookmarks(store.loadBookmarks().slice(1)), "full");
+  assert.deepEqual(treeIds(plain(store.loadBookmarks())), LEGACY_IDS);
+});
+
+test("옮기지 못한 뒤 저장 공간이 생기면 다음 시작 때 옮기고, 그 전에 들어간 저장도 옛 목록과 함께 저장한다", () => {
+  for (const next of ["start", "save"]) {
+    const lastRead = { bookId: "john", chapter: 3 };
+    const { store, localStorage } = load({
+      "bible-bookmarks": JSON.stringify(LEGACY_LIST), "bible-last-read": JSON.stringify(lastRead),
+    });
+    const setItem = localStorage.setItem;
+    fillStorage(localStorage, 1000);
+    store.migrateLegacyIfNeeded();
+    localStorage.setItem = setItem;
+    if (next === "start") store.migrateLegacyIfNeeded();
+    else assert.equal(store.saveBookmarks([...store.loadBookmarks(), legacyBm(999)]), "saved");
+    const saved = JSON.parse(localStorage.getItem("bible-bookmarks-v2"));
+    const expected = next === "start" ? LEGACY_IDS : [...LEGACY_IDS, "b999"];
+    assert.deepEqual(Object.keys(saved.bookmarks.items).sort(), [...expected].sort(), next);
+    assert.deepEqual(saved.lastRead, { v: lastRead, _u: 0 }, next);
+  }
+});
+
+test("고치기 전 판이 빈 목록으로 만든 동기화 저장소도 옛 키의 목록을 읽고, 다음 시작 때 옮긴다", () => {
+  const lastRead = { v: { bookId: "john", chapter: 3 }, _u: 500 };
+  const { store, localStorage } = load({
+    "bible-bookmarks": JSON.stringify(LEGACY_LIST),
+    "bible-bookmarks-v2": JSON.stringify(doc({ lastRead })),
+  });
+  assert.deepEqual(treeIds(plain(store.loadBookmarks())), LEGACY_IDS);
+  store.migrateLegacyIfNeeded();
+  const saved = JSON.parse(localStorage.getItem("bible-bookmarks-v2"));
+  assert.deepEqual(Object.keys(saved.bookmarks.items).sort(), [...LEGACY_IDS].sort());
+  assert.deepEqual(saved.lastRead, lastRead);
+});
+
+test("북마크 기록이 하나라도 있거나 옛 키에 목록이 없으면 옛 키를 읽지 않고, 시작할 때 다시 저장하지도 않는다", () => {
+  const stale = JSON.stringify([legacyBm(7)]);   // 옛 키는 두 번째 사본이라 늦을 수 있다(ADR-015 D7)
+  const item = { ...legacyBm(1), id: "a", parentId: null, _order: 0, _u: 100 };
+  for (const [v2, legacy, expected] of [
+    [doc({ items: { a: item } }), stale, ["a"]],
+    [doc({ tombstones: { b7: 100 } }), stale, []],
+    [doc(), "[]", []],
+    [doc(), null, []],
+  ]) {
+    const raw = JSON.stringify(v2);
+    const { store, localStorage } = load({ "bible-bookmarks-v2": raw, ...(legacy ? { "bible-bookmarks": legacy } : {}) });
+    assert.deepEqual(treeIds(plain(store.loadBookmarks())), expected);
+    store.migrateLegacyIfNeeded();
+    assert.equal(localStorage.getItem("bible-bookmarks-v2"), raw);
+  }
+});
+
+test("저장 공간이 꽉 차 기기 id를 저장하지 못해도 시작을 멈추지 않는다", () => {
+  const { store, localStorage } = load({ "bible-bookmarks": JSON.stringify(LEGACY_LIST) });
+  localStorage.setItem = () => { throw Object.assign(new Error("full"), { name: "QuotaExceededError" }); };
+  assert.doesNotThrow(() => store.migrateLegacyIfNeeded());
+  assert.deepEqual(treeIds(plain(store.loadBookmarks())), LEGACY_IDS);
+});
+
+test("옛 키에서 읽은 항목은 한 번 연 동안 몇 번을 읽어도 수정 시각이 같다", () => {
+  const { store, ctx } = load({ "bible-bookmarks": JSON.stringify(LEGACY_LIST) });
+  let t = 1000;
+  ctx.Date = { now: () => ++t };
+  assert.equal(store.maxU(store.loadLocal()), store.maxU(store.loadLocal()));
+});
+
 // ── 저장 전 크기 계산 (ADR-040 — 북마크 가져오기의 크기 검사) ──
 
 test("projectedBookmarksEntry는 saveBookmarks가 쓸 항목의 글자 수 그대로다 — 쓰지는 않는다", () => {
