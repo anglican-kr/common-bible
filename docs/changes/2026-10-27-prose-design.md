@@ -1,4 +1,5 @@
 ---
+pr: 448
 date: 2026-10-27
 branch: docs/prose-design
 title: "docs: 문장 교정(디자인 문서)"

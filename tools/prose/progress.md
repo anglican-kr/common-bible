@@ -27,7 +27,7 @@
 | --- | --- | --- |
 | `.claude/commands/security-audit.md` | 70 | #447 |
 | `CLAUDE.md` | 75 | #447 |
-| `DESIGN.md` | 453 | 진행 |
+| `DESIGN.md` | 453 | #448 |
 | `README.md` | 82 | #447 |
 | `docs/architecture.md` | 322 | 대기 |
 | `docs/changes/README.md` | 18 | #447 |
