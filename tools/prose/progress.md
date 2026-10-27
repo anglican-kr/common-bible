@@ -29,9 +29,9 @@
 | `CLAUDE.md` | 75 | #447 |
 | `DESIGN.md` | 453 | #448 |
 | `README.md` | 82 | #447 |
-| `docs/architecture.md` | 322 | 진행 |
+| `docs/architecture.md` | 322 | #450 |
 | `docs/changes/README.md` | 18 | #447 |
-| `docs/coding-pitfalls.md` | 197 | 진행 |
+| `docs/coding-pitfalls.md` | 197 | #450 |
 | `docs/index.md` | 30 | #447 |
 | `docs/known-issues.md` | 82 | #447 |
 | `docs/workflow.md` | 87 | #447 |
