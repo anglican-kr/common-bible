@@ -28,14 +28,10 @@ title: "docs: 문장 교정(디자인 문서)"
 
 정해야 할 낱말이라 고치지 않고 두었다. 권장안은 교정한 에이전트와 검토한 Claude의 의견이다.
 
-- **「chrome」**(약 25곳, 예: 29행 「chrome은 절제하고」): 후보는 「주변 UI」, 「크롬」, 그대로다. 권장은 「주변 UI」(본문 밖의 UI)다. 「크롬」은 브라우저 이름과 헷갈린다.
-- **「pill」, 「dock」, 「floating」, 「picker」, 「scrim」, 「hairline」**: 권장은 「알약 단추」(반경 표에 이미 「알약」이 있다), 「하단 막대」, 「떠 있는」, 「선택기」, 「덮개 막」, 「가는 선」이다. 컴포넌트 표와 CSS 이름(`#tab-dock`, `.bm-select-bar`)이 함께 쓰는 말이라 한꺼번에 정한다.
-- **「frosted glass」, 「liquid-glass」**(32, 287행 등): 후보는 「반투명 유리」, 「흐림 효과」, 그대로다.
-- **「focus trap」, 「hover」, 「hit-area」, 「safe-area」**: 권장은 「포커스 가두기」, 「마우스 올림」, 「누름 영역」, 「안전 영역」이다. CSS와 HIG의 용어라 그대로 두는 것도 후보다.
-- **「어포던스 글리프」**(61행 `--text-tertiary`): 낯선 음차어다. 권장은 「조작 단서 기호」다.
-- **「그래버 핸들」**(시트의 위쪽 손잡이): 후보는 「끌기 손잡이」, 그대로다.
+- **「scrim」**(308, 377행. 「검색 스크림」으로 쓴 곳도 있다): 「덮개 막」은 어색하다는 의견이라 다른 말을 찾는다. 후보는 「가림막」, 「배경 가림」, 「어두운 배경」이다. 권장은 「가림막」이다. 모달 뒤를 어둡게 하는 것과 검색 때 본문을 흐리게 덮는 것을 함께 가리킬 수 있다.
+- **「어포던스 글리프」**(61행 `--text-tertiary`): 낯선 음차어다. 권장은 「조작 단서 기호」다. 사용자가 보류했다(2026-10-27).
 - **「Apple Music 식 히어로」, 「Dynamic Type」, 「toolbar tinting」**: 제품과 기능의 이름으로 보고 두었다.
-- **제목 줄의 낱말**: `## 5. 반경(Radius) & Elevation`, `### 그림자 단계 (elevation)`, `### 타입 스케일 (rem — 폰트 크기 설정과 함께 스케일)`, `### 상태바 색상 (theme-color / PWA chrome)`, `## 12. PWA 실행 컨텍스트 & 상태`. 본문의 「elevation」은 「그림자 단계」로 바꿨으니 제목도 맞추기를 권한다. 제목을 가리키는 곳도 함께 바꿔야 한다.
+- **제목 줄의 낱말**: `## 5. 반경(Radius) & Elevation`, `### 그림자 단계 (elevation)`, `### 타입 스케일 (rem — 폰트 크기 설정과 함께 스케일)`, `## 12. PWA 실행 컨텍스트 & 상태`. 본문의 「elevation」은 「그림자 단계」로 바꿨으니 제목도 맞추기를 권한다. 제목을 가리키는 곳도 함께 바꿔야 한다.
 
 ## 요약
 
@@ -59,6 +55,20 @@ title: "docs: 문장 교정(디자인 문서)"
 - `python3 tools/prose/prose.py lint DESIGN.md`: `particle`, `tilde`, `term` 0.
 - JS 파일을 고치지 않아 타입 검사와 유닛 전체는 돌리지 않았다.
 
+## 리뷰 반영
+
+사용자가 「결정 대기」의 낱말을 정했다(2026-10-27). 정한 대로 `DESIGN.md`의 본문을 고치고, `docs/writing.md` 「용어」 표에 네 줄을 더했다. 역따옴표 안의 코드 이름(`--radius-pill`, `#tab-dock`, `--dock-control`, `env(safe-area-inset-*)`, `@media (hover: none)`)과 §15 토큰 목록의 코드 표기는 그대로 두었다.
+
+- chrome은 UI로 썼다(「중립 UI」, 「시스템 UI」, 「브라우저 UI」). 「chrome UI」는 「UI」로 줄였다. 제목 `### 상태바 색상 (theme-color / PWA chrome)`도 「PWA UI」로 바꿨다. 이 제목을 가리키는 링크는 없다.
+- focus trap은 「포커스 트랩」, hover는 「호버」, 그래버 핸들은 「핸들」로 썼다.
+- pill은 「알약 버튼」, dock은 「독」, floating과 「플로팅」은 「떠 있는」, picker는 「선택기」, hairline은 「가는 선」으로 썼다. 입력창이 알약 모양으로 바뀌는 두 곳(386, 408행)은 단추가 아니라서 「알약 모양 입력창」으로 썼다. 「floating glass」는 「떠 있는 반투명 유리」로 썼다.
+- frosted glass는 「반투명 유리」, liquid-glass는 「리퀴드 글래스」로 썼다.
+- hit-area는 「클릭 영역」, safe-area는 「안전 영역」으로 썼다. 「safe-area inset」은 「안전 영역 여백」으로 썼다.
+- 이미 머지된 묶음(#444)의 같은 쓰임도 고쳤다. `docs/topics/design-system.md`의 frosted glass, chrome, hairline, `docs/topics/platform.md`와 `docs/topics/search.md`의 picker다. `docs/topics/routing.md`의 「Liquid Glass」는 Apple의 제품 이름이라 두었다.
+- scrim은 사용자가 다른 말을 찾자고 해 고치지 않았다(「결정 대기」에 후보를 적었다). 「어포던스 글리프」는 보류다.
+- 열린 PR #449가 `docs/writing.md`에 「CSS와 HIG의 용어는 그대로 쓴다」는 규칙과 picker를 그 예로 더한다. 이번 결정은 picker를 「선택기」로 쓰므로, #449의 그 예를 고쳐야 두 문서가 맞는다. 문장 검사(`tools/prose/prose.py`)의 금지어 목록도 #449가 고치는 줄이라 이 PR에서는 더하지 않았다.
+- 다시 검증했다. `same-code`는 주석과 문서 말고 바뀐 파일 0개, 문서 검사는 30개 통과와 1개 건너뜀, 교회력 사실 토큰 비교와 고친 다섯 문서의 일반 토큰 비교는 사라진 토큰과 줄어든 토큰 0, `prose.py lint`는 `particle`, `tilde`, `term` 0이다.
+
 ## 갱신한 문서
 
-- 없음 — 문장만 고쳤다
+- `docs/writing.md` 「용어」: 표 네 줄(focus trap, hover, 그래버 핸들 / pill, dock, floating, picker, hairline / frosted glass, liquid-glass / hit-area, safe-area)
