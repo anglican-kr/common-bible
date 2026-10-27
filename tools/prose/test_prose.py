@@ -79,6 +79,10 @@ class CheckLineTest(unittest.TestCase):
         self.assertIn("term", checks("같은 꼴로 쓴다"))
         self.assertNotIn("term", checks("꼴찌가 아니다"))
 
+    def test_chrome_means_ui_but_not_the_browser(self):
+        self.assertIn("term", checks("하단 chrome을 숨긴다"))
+        self.assertNotIn("term", checks("Android Chrome과 chromium에서 확인한다"))
+
     def test_borrowed_verb(self):
         self.assertIn("verb?", checks("시크릿에 닿지 못한다"))
 
