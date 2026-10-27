@@ -1,4 +1,5 @@
 ---
+pr: 449
 date: 2026-10-27
 branch: docs/term-chrome
 title: "docs: chrome을 UI로 쓰는 용어 결정"
