@@ -1,4 +1,4 @@
-# docs/topics — 주제 문서
+# docs/topics: 주제 문서
 
 주제마다 한 장이다. 그 주제의 일을 하기 전에 이 문서 하나를 읽으면 지금 동작하는 것, 결정, 조심할 것, 남은 일을 알 수 있게 한다. docs 재구성(2026-10-22와 10-23)에서 옛 `status.md`, `known-issues.md`, `coding-pitfalls.md`의 내용을 주제마다 옮겨 만들었다. 주제 목록은 `docs/index.md`에 있다.
 

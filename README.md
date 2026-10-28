@@ -44,7 +44,7 @@ git submodule update --init --recursive
 
 본 저장소는 서브모듈이 두 단계로 중첩된다(앱, data, audio 순). 일상 작업에서 자주 쓰는 명령어를 모았다.
 
-### data 변경 반영 (마크다운·파이프라인·빌드 산출물)
+### data 변경 반영 (마크다운, 파이프라인, 빌드 산출물)
 
 ```bash
 # 1. common-bible-data 저장소에서 작업 후 push
@@ -132,7 +132,7 @@ git submodule update --init --recursive
 - **iOS Safari 탭 사용 시 7일 ITP**: 홈 화면에 설치하지 않고 Safari 탭에서 직접 여는 경우, 7일 동안 쓰지 않으면 ITP가 저장 공간(쿠키, localStorage, IndexedDB 포함)을 정리한다. 그러면 모든 로컬 상태(북마크, 설정, 동기화 인증)를 다시 만들어야 한다. **홈 화면에 설치한 PWA(iOS 17 이상의 HSWA)는 저장 공간이 계속 남아 ITP 대상이 아니다.** 자세한 내용은 ADR-011 §맥락에 있다.
 - **iOS Chrome / Firefox / Edge (WebKit 래퍼)**: iOS 17 이상은 공유 메뉴로 홈 화면에 추가할 수 있고, iOS 16 이하는 설치할 수 없어 "Safari에서 열기" 안내로 끝난다. Drive 동기화에서 PWA 격리 컨텍스트를 보장하지 않는다.
 
-## Google Drive 동기화 (북마크·설정·읽기 위치)
+## Google Drive 동기화 (북마크, 설정, 읽기 위치)
 
 데스크톱, Android, iOS가 모두 OAuth 2.0 Authorization Code, PKCE, refresh token을 쓰는 하나의 경로로 동기화한다([ADR-011 Phase 2h](docs/decisions/011-bookmark-sync.md), [`docs/archive/design/pkce-migration.md`](docs/archive/design/pkce-migration.md)). Phase 2h 이전에 있던 GIS Token Client, Implicit Flow, FedCM 분기는 모두 제거했다. Google OAuth 앱 검수는 2026-05-19에 통과해(「In production」) refresh token에 만료 기간이 없다.
 

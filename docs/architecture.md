@@ -112,7 +112,7 @@ Google Drive 동기화와 OAuth는 외부 서비스에 의존한다. 서버가 �
 
 이 네 제약이 SPA, Vanilla JS, Python 일회성 전처리, Drive 앱 전용 폴더, 정적 호스팅이라는 선택을 사실상 하나의 결론으로 정했다. 자세한 내용은 [ADR-001](decisions/001-spa-architecture.md).
 
-## 3. 빌드 타임 — 데이터 파이프라인
+## 3. 빌드 타임: 데이터 파이프라인
 
 원본 마크다운(73권)을 장별 JSON 1328장(시락 머리말 포함)과 검색 인덱스(별칭 메타 파일, 구약 청크, 신약 청크, 외경 청크)로 변환한다. 전례 원료(전례시편과 송가의 기준, 교회력 정의 표, 전례독서와 본기도 기사)는 전례 책의 장 JSON과 교회력 표, 전례독서 표로 변환한다. 빌드는 의도적으로 **일회성 스크립트의 조합**이고, make, just, poetry 같은 빌드 시스템에 묶지 않는다. 각 스크립트는 같은 입력에 같은 출력을 낸다. 다만 **순서는 지킨다**. `split_bible.py`가 `books.json`을 73권으로 새로 쓰므로, 전례시편 파서가 그 뒤에 돌아야 두 권의 등록이 남는다. 전례 표 파서끼리도 서로의 산출물을 읽는다. 명령과 순서의 기준은 데이터 저장소 `CLAUDE.md`의 「파이프라인 명령」이다(`build.yml`이 같은 순서로 돈다).
 
@@ -161,7 +161,7 @@ scripts/gen_manifests.py  ← 콘텐츠 해시 매니페스트 (ADR-021)
 
 자세한 실행 명령은 [README §데이터 파이프라인 실행](../README.md#데이터-파이프라인-실행).
 
-## 4. 런타임 — 클라이언트 모듈 지도
+## 4. 런타임: 클라이언트 모듈 지도
 
 런타임 코드는 자바스크립트 파일 40개로 나뉜다(`js/` 7개, `js/app/` 28개, `js/sync/` 5개). 메인 스레드에서 쓰는 파일이 39개이고, 그 안에 `index.html`의 `<script src>` 31개, `import`로만 불러오는 `bookmark-*` 5개, 그 화면에 처음 갈 때 `import()`로 받는 교회력 모듈 3개가 든다. 나머지 1개는 Web Worker인 `search-worker.js`다. 서비스 워커 쪽(`sw.js`, `sw-version.js`)과 TypeScript 전용 `js/types.d.ts`는 이 수에 넣지 않는다.
 
@@ -260,7 +260,7 @@ ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` 약 6,000줄이 도메�
 
 로컬 개발 서버(`scripts/serve.py`)는 같은 폴백을 흉내 내어 강제 새로 고침이 깨지지 않게 한다. **`python -m http.server`는 쓰면 안 된다.** `/gen/1` 같은 라우트에 404를 돌려준다.
 
-### 4.2 검색 (Web Worker + 청크 인덱스)
+### 4.2 검색 (Web Worker와 청크 인덱스)
 
 `js/app/search.js`는 메인 스레드에서 검색 UI와 결과 시트만 다루고, 실제 텍스트 검색은 `js/search-worker.js`가 전담한다.
 
@@ -277,7 +277,7 @@ ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` 약 6,000줄이 도메�
 
 워커 프로토콜은 `search-worker.js:1`의 상단 주석에 정의되어 있다. 워커는 검색마다 부여한 `searchId`로, 사용자가 새 검색어를 친 뒤 뒤늦게 도착한 옛 결과를 무시한다. 책 인덱스는 청크 JSON에 RLE(같은 값이 이어지는 구간을 `[값, 개수]`로 묶는 방식)로 줄여 두고 워커가 펼쳐 `Uint16Array`에 담는다. 장 인덱스와 절 인덱스도 `Uint16Array`로 보관해 메모리를 줄였다. 별칭(요한, 요, 요한복음 등)은 `data/search-meta.json`에 있다. 검색 범위는 책 필터 `in:<책 별칭>`(예: `사랑 in:요한`)이나 책 고르기(URL의 `in=`. [ADR-033](decisions/033-search-options.md))로 좁힌다([ADR-005](decisions/005-search-indexing-strategy.md)).
 
-### 4.3 동기화 (Drive appdata + PKCE)
+### 4.3 동기화 (Drive appdata와 PKCE)
 
 가장 복잡한 하위 시스템이다. 파사드 `drive-sync.js`와 `js/sync/`의 다섯 파일이 역할을 나눈다:
 
@@ -321,7 +321,7 @@ ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` 약 6,000줄이 도메�
 
 핵심 설계:
 
-- **PKCE 단일 경로**: 데스크톱, Android, iOS가 같은 흐름을 쓴다. 앱을 다시 켰을 때(콜드 스타트) IndexedDB에 저장된 갱신 토큰(refresh token)으로 사용자 모르게 `/token`을 호출해 새 접근 토큰을 받는다. 갱신 토큰이 없으면 `NEEDS_CONSENT`로 바뀌고 사용자에게 다시 로그인을 요청한다([ADR-011](decisions/011-bookmark-sync.md), `docs/archive/design/pkce-migration.md`).
+- **PKCE 단일 경로**: 데스크톱, Android, iOS가 같은 흐름을 쓴다. 앱을 다시 켰을 때 IndexedDB에 저장된 갱신 토큰(refresh token)으로 사용자 모르게 `/token`을 호출해 새 접근 토큰을 받는다. 갱신 토큰이 없으면 `NEEDS_CONSENT`로 바뀌고 사용자에게 다시 로그인을 요청한다([ADR-011](decisions/011-bookmark-sync.md), `docs/archive/design/pkce-migration.md`).
 - **OAuth `/token` BFF**: `transport.js`는 `https://oauth2.googleapis.com/token`이 아니라 같은 출처(same-origin)의 `/oauth/token`으로 요청을 보낸다. 웹 서버(nginx)가 비밀 키(`client_secret`)를 서버 쪽에서 넣은 뒤 Google로 전달한다. Google의 "Web application" 클라이언트는 PKCE에서도 비밀 키를 요구해 RFC 7636(PKCE 표준)에서 벗어나는데, 이 방식으로 그 문제가 생기지 않게 한다(자세한 내용은 [ADR-017](decisions/017-oauth-bff-proxy.md)).
 - **탭 복귀 폴**: 사용자가 탭으로 돌아올 때(`visibilitychange`의 visible 분기) `pollSync()`(`requestSync({ throttleMs: 15000 })`와 같다)를 한 번 호출한다. 다른 기기의 변경분을 새로 고침 없이 가져온다. 사이클이 끝난 지 15초 안이면 건너뛰고, 사이클이 도는 중이면 호출을 버린다(도는 사이클이 그 폴을 대신한다). OFFLINE이고 기기가 온라인이면 다시 시도한다.
 - **상태 머신의 모든 변경은 `_transition()` 한 곳을 거친다.** 카운터(`{netFails, conflictFails, reAuthFails, backoffTimer}`)도 이때 함께 초기화된다. 다음 상태로 이어 가야 할 값은 명시적으로 넘겨야만 보존된다(`state-machine.js`의 머리 주석).
@@ -334,9 +334,9 @@ ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` 약 6,000줄이 도메�
 - **연결 해제**: 「파일 유지」는 토큰을 폐기하고(Google `/revoke`), IndexedDB의 갱신 토큰과 계정 키를 지우고, 켬 표지를 "0"으로 쓴 뒤 `_stopSync`를 호출한다. 「파일도 삭제」는 페이지가 닫혀도 남으면 안 되는 것을 먼저 지운다. IndexedDB의 갱신 토큰(한 번 갱신할 몫은 메모리에만 둔다), 켬 표지, 계정 키가 그것이다. 그다음 토큰을 상태 머신에서 곧바로 지워 동기화를 멈추고, 진행 중인 사이클이 이미 보낸 요청을 10초까지 기다린 뒤 appDataFolder의 `sync.json`을 모두 지운다(목록, 캐시된 id, 이 페이지가 만든 id를 대상으로 하며, 404는 이미 없는 것으로 보고, 401이면 한 번 갱신하고, 기다림 시간을 넘겼으면 한 번 더 기다렸다가 다시 시도한다). 끝나면 토큰을 폐기한다. 결과는 `true`, `false`, `null`이고, 삭제를 확인하지 못하면 스낵바와 설정의 안내를 남긴다(`bible-drive-delete-pending`. 다시 연결할 때까지 남는다).
 - **병합 정책**: 항목마다 마지막 수정 시각(`_u`, 밀리초)과 삭제 표시(툼스톤)를 함께 저장한다. 항목 단위로 나중에 수정한 쪽을 남기고, 파일 전체를 단위로 하지 않는다. 그래서 서로 다른 기기에서 다른 북마크를 추가해도 둘 다 보존된다.
 
-진입과 복귀 시나리오는 [README §Google Drive 동기화](../README.md#google-drive-동기화-북마크설정읽기-위치)의 표를 본다.
+진입과 복귀 시나리오는 [README §Google Drive 동기화](../README.md#google-drive-동기화-북마크-설정-읽기-위치)의 표를 본다.
 
-### 4.4 인용·주석 (`<cite>` + `[^id]`)
+### 4.4 인용과 주석 (`<cite>`와 `[^id]`)
 
 `js/app/citations.js`가 본문 그리기 분기를 받아 두 종류의 추가 콘텐츠를 그린다([ADR-022](decisions/022-citations-and-annotations.md)).
 
@@ -347,7 +347,7 @@ ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` 약 6,000줄이 도메�
 
 데이터 파이프라인(`common-bible-data/src/parser.py`)이 마크다운에서 `<cite>`와 `[^id]`를 추출해 절 JSON의 `segments`와 `notes` 필드에 담아 두므로, 시트는 인용한 장마다 `/data/bible/{book}-{ch}.json`을 받아(서비스 워커 캐시) 그린다. 다른 장에 옮겨 실린 절은 앞뒤 3장까지 찾아본다(`RELOCATION_MAX_DISTANCE`).
 
-### 4.5 책 이름·헤더 자동 짧게 표시
+### 4.5 책 이름과 헤더 자동 짧게 표시
 
 신약 책 이름은 정식 명칭이 길어("고린토인들에게 보낸 첫째 편지"), 좁은 화면이나 큰 글자에서 책 목록 버튼과 장 보기 헤더가 두 줄로 늘어나 읽기 흐름을 깬다. `js/app/views.js`의 `NT_MOBILE_NAME` 매핑이 짧은 명칭을 제공한다(신약 26권 중 사도행전만 빠진다). 두 곳에서 같은 방식으로 정식 명칭과 짧은 명칭을 바꿔 그린다:
 
@@ -358,7 +358,7 @@ ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` 약 6,000줄이 도메�
 
 사도행전은 매핑이 없다(이미 짧다). 접근성: 책 목록 링크와 헤더 제목의 `aria-label`은 화면이 짧은 명칭을 보여도 늘 정식 명칭이다. 장 보기의 선택기 단추 이름은 「장 선택」(시편은 「편 선택」)이고, 정식 명칭은 문서 제목과 화면 전환 안내(라이브 영역)로 전한다.
 
-### 4.6 오프라인 — Service Worker 캐시 전략
+### 4.6 오프라인: Service Worker 캐시 전략
 
 `sw.js`는 도메인과 요청 종류에 따라 전략을 나눈다(`fetch` 리스너와 `cacheNameFor`). "캐시 우선(cache-first)"은 한 번 받아 둔 자료가 있으면 그것을 먼저 보여 주고, 없을 때만 네트워크로 가져오는 방식이다.
 
@@ -382,7 +382,7 @@ ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` 약 6,000줄이 도메�
 
 `scripts/release.py`가 `version.json`과 `sw-version.js`를 한 번에 갱신하고 자동으로 커밋한다. `--bump-data`와 `--bump-audio` 같은 콘텐츠 캐시 버전 올림 플래그는 ADR-021 이후 사라졌다. 콘텐츠 무효화는 `common-bible-data` 저장소 CI가 만든 `bible-manifest.json`과 `audio-manifest.json`의 변화를 앱이 부팅할 때 비교해 항목 단위로 처리한다. 새 서비스 워커가 활성화되면 `KNOWN_CACHES`에 없는 옛 캐시만 삭제하므로, 셸만 갱신된 릴리스에서 사용자가 이미 받은 본문과 오디오는 보존된다. 사용자 동의 없이 즉시 활성화하는 `skipWaiting()`은 호출하지 않는다. 사용자가 "업데이트" 버튼을 눌러 클라이언트가 `SKIP_WAITING` 메시지를 보낼 때만 새 서비스 워커가 곧바로 활성화된다. 설치할 때 셸 파일은 `?v=<APP_VERSION>`과 `cache: "reload"`로 HTTP 캐시를 건너뛰어 받아 원래 URL로 저장하고, 활성화할 때 오디오 캐시와 그 LRU 기록(IndexedDB)을 맞춘다.
 
-## 5. 영속 데이터 — 어디에 무엇이 저장되는가
+## 5. 영속 데이터: 어디에 무엇이 저장되는가
 
 | 위치 | 키/파일 | 내용 | 동기화? |
 | --- | --- | --- | --- |
@@ -414,7 +414,7 @@ ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` 약 6,000줄이 도메�
 
 동기화 대상이 아닌 항목(오디오 위치, 정렬, 캐시 등)은 의도적으로 기기에만 둔다. 기기 ID는 다른 기기가 가져가지 않지만, 올리는 페이로드에 실려 병합에서 시각이 같을 때 순서를 정하는 데 쓰인다. 옛 키(`bible-drive-sync-updated`와 `bible-drive-silent-blocked`)는 지우기만 한다. 첫 북마크를 저장할 때와 첫 오디오를 재생할 때 `navigator.storage.persist()`를 한 번 요청한다(저장소 정리에 대비한 것이다. 아래 「알려진 한계」의 ITP). 동기화 페이로드 스키마는 `js/types.d.ts`의 `SyncDoc` 타입과 `js/sync/store-v2.js:1`의 헤더 주석에 정의되어 있다.
 
-## 6. 정적 타입 검사 — JSDoc + `tsc --noEmit`
+## 6. 정적 타입 검사: JSDoc과 `tsc --noEmit`
 
 빌드 산출물 0개를 유지하면서도 타입 안전성을 얻기 위해 **TypeScript를 컴파일러로만 사용**한다 ([ADR-012](decisions/012-typescript-incremental-adoption.md)).
 
@@ -432,7 +432,7 @@ npx tsc -p tsconfig.worker.json --noEmit
 
 두 명령(`npm run typecheck`)을 CI의 필수 검사 「Unit tests」 잡이 PR마다 실행한다. 오류가 0건이어야 머지할 수 있다(2026-10-17부터. 그전에는 로컬 훅뿐이었다).
 
-## 7. 테스트 — 3계층 + 유닛
+## 7. 테스트: 3계층과 유닛
 
 테스트는 비용, 실행 빈도, 원본 텍스트 의존성에 따라 다음과 같이 나뉜다.
 
@@ -449,7 +449,7 @@ npx tsc -p tsconfig.worker.json --noEmit
 
 E2E는 의도적으로 CI에서 제외한다. 본문 텍스트가 있는 환경에서만 의미가 있고, 시각 회귀는 사람이 봐야 가장 정확하기 때문이다.
 
-## 8. 빌드·배포·릴리스
+## 8. 빌드, 배포, 릴리스
 
 배포 대상은 운영 도메인 `bible.anglican.kr`과 개발 도메인 `dev.anglican.kr` 둘이고, 같은 nginx 호스트에서 가상 호스트로 나뉜다. 각 문서 루트는 `/var/www/{bible,dev}` 심볼릭 링크가 가리키는 버전 디렉터리이고, 배포와 롤백은 심볼릭 링크 교체 한 번으로 끝난다(원자적).
 
