@@ -27,7 +27,7 @@
   - PR5b: route()가 오버레이 열네 개를 닫던 코드(12 `closeIfOpen`과 설정, 장 팝오버)를 `js/app/overlay.js`의 `closeAllOverlays()` 하나로 줄였다. createOverlay가 만든 오버레이를 목록(registry)에 등록해 두고, 열린 것만 닫으며 화면에서 제거된 것은 목록에서 지운다. 그래서 routing이 여섯 모듈의 닫기 함수를 직접 알 필요가 없어졌다.
   - 남은 PR5c(registerView 역전)는 **비용이 효용보다 커서 보류를 권한다**. 자세한 것은 아래 「남은 일」의 known-issues §2.1에 있다.
   - **bookmark.js 분할(따로 진행, 완료)**: 3,578줄을 네 모듈로 나눴다.
-    - 모달 7종(확인, 장 삭제, 새 폴더, 콤보박스, 저장과 편집, 합치기, 가져오기, 이동 picker)을 `bookmark-modals.js`로 옮겼다. 그리기 함수를 밖에서 넘겨받게 해(의존성 주입) 모달과 그리기가 서로를 호출하지 않게 했다. Escape는 `closeTopmostModal` 하나가 맨 위 모달부터 닫는다.
+    - 모달 7종(확인, 장 삭제, 새 폴더, 콤보박스, 저장과 편집, 합치기, 가져오기, 이동 선택기)을 `bookmark-modals.js`로 옮겼다. 그리기 함수를 밖에서 넘겨받게 해(의존성 주입) 모달과 그리기가 서로를 호출하지 않게 했다. Escape는 `closeTopmostModal` 하나가 맨 위 모달부터 닫는다.
     - DOM을 쓰지 않는 로직은 `bookmark-core.js`로, 절 표기는 `verse-spec.js`(다른 모듈에 의존하지 않는 모듈)로 옮겼다. 그래서 `bookmark.js`는 **2,198줄(−38%)**이 됐다.
     - 이동 모달은 선택 상태(`_bmSelected`)를 직접 읽던 것을 `openMoveModal({excludeFolder,onPick})`처럼 값을 넘겨받게 바꿨다. 선택 로직은 원래 자리에 남겼다.
     - 마지막으로, 아무도 호출하지 않게 된 `window.close*Modal`과 QUERY facade, 쓰지 않는 import를 grep과 로드 검사로 확인한 뒤 지웠다.
