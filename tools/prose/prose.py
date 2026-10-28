@@ -279,7 +279,7 @@ TERMS = """
 |귀속|귀결|자명|판본|재진술|반증|기제|화면 낭독기|화면 읽기 프로그램|스크린리더|chrome
 """.replace("\n", "")
 # Words that are wrong only in one sense (the table says which); a person or agent decides.
-TERMS_CONTEXT = "도착|출발|떠난|켜다|켜진|꺼진|이동|좌표|temporal|sanctoral|무음|풀린다|풀었다|채운다|걷는다|걷기|듣지 않는다|소비자|지정 독서|부른다|불린다|불리는|불렸다|불려|지나친|옆 항목|이웃"
+TERMS_CONTEXT = "도착|출발|떠난|켜다|켜진|꺼진|이동|좌표|temporal|sanctoral|무음|풀린다|풀었다|채운다|걷는다|걷기|듣지 않는다|소비자|지정 독서|부른다|불린다|불리는|불렸다|불려|지나친|옆 항목|이웃|이긴다|이겼다|이기는|이기고|이길"
 RE_TERM = re.compile(r"(?<![가-힣])(?:" + TERMS + r")")
 RE_TERM_CONTEXT = re.compile(r"(?<![가-힣A-Za-z])(?:" + TERMS_CONTEXT + r")")
 RE_KKOL = re.compile(r"(?<![가-힣])꼴(?:[을이은로의에도만]|(?![가-힣]))")

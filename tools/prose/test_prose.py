@@ -83,6 +83,11 @@ class CheckLineTest(unittest.TestCase):
         self.assertIn("term", checks("하단 chrome을 숨긴다"))
         self.assertNotIn("term", checks("Android Chrome과 chromium에서 확인한다"))
 
+    def test_winning_needs_judgement(self):
+        self.assertIn("term?", checks("다른 기기의 수정이 병합에서 이긴다"))
+        self.assertNotIn("term?", checks("줄이기는 채택하지 않았다"))
+        self.assertNotIn("term?", checks("1차 방어이긴 하지만"))
+
     def test_borrowed_verb(self):
         self.assertIn("verb?", checks("시크릿에 닿지 못한다"))
 

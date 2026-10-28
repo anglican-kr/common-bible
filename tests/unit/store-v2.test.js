@@ -50,7 +50,7 @@ function doc({ settings = {}, items = {}, tombstones = {}, lastRead, deviceId } 
 
 // ── 설정 병합 (LWW) ──
 
-test("설정은 _u 가 큰 쪽이 이긴다", () => {
+test("설정은 병합하면 _u 가 큰 쪽이 남는다", () => {
   const { store } = load();
   const merged = store.mergeDocs(
     doc({ settings: { theme: { v: "dark", _u: 200 } } }),
@@ -60,7 +60,7 @@ test("설정은 _u 가 큰 쪽이 이긴다", () => {
   assert.deepEqual(plain(merged.settings.theme), { v: "dark", _u: 200 });
 });
 
-test("설정 _u 가 같으면 원격이 이긴다", () => {
+test("설정 _u 가 같으면 병합할 때 원격이 남는다", () => {
   const { store } = load();
   const merged = store.mergeDocs(
     doc({ settings: { theme: { v: "dark", _u: 100 } } }),
@@ -396,7 +396,7 @@ test("저장소를 읽을 수 없거나 꽉 차 기기 id를 저장하지 못해
   assert.doesNotThrow(() => blocked.store.migrateLegacyIfNeeded());
 });
 
-test("옛 키에서 읽은 항목은 수정 시각이 0이라, 다른 기기의 수정과 삭제가 병합에서 이긴다", () => {
+test("옛 키에서 읽은 항목은 수정 시각이 0이라, 병합하면 다른 기기의 수정과 삭제가 남는다", () => {
   const { store } = load({ "bible-bookmarks": JSON.stringify(LEGACY_LIST) });
   const local = store.loadLocal();
   assert.deepEqual([...new Set(Object.values(local.bookmarks.items).map((n) => n._u))], [0]);
@@ -500,7 +500,7 @@ test("한쪽에만 있는 기본 속성 이름의 id도 병합 결과에 남는�
   assert.deepEqual(Object.keys(merged.bookmarks.items).sort(), ["constructor", "toString"]);
 });
 
-test("기본 속성 이름의 id에도 더 새로운 삭제 표식이 이기고, 표식은 병합 결과에 남는다", () => {
+test("기본 속성 이름의 id에도 더 새로운 삭제 표식이 항목을 지우고, 표식은 병합 결과에 남는다", () => {
   const { store } = load();
   const merged = store.mergeDocs(
     doc({ tombstones: { toString: 10 } }),
@@ -553,7 +553,7 @@ test("고치기 전 판이 남긴, 부모가 __proto__인 항목은 맨 위 항�
   // 옛 판의 저장은 폴더만 잃고 자식은 부모 id "__proto__"로 남겼다. 그 부모는 어떤 항목의 id도 아니어서, 맨 위부터
   // 그리면 그 자식이 보이지 않았고 다음 저장이 그 자식을 삭제 기록으로 바꿨다(PR #438 리뷰). 그 자식의 순서 값은
   // 옛 폴더 안에서 매긴 것이라 맨 위 항목과 겹친다. 맨 위 항목 사이에 섞으면 손대지 않은 맨 위 항목의 순서가 바뀌어
-  // 수정 시각이 오르고, 다른 기기의 수정을 이긴다(2차 리뷰).
+  // 수정 시각이 오르고, 다른 기기의 수정을 덮어쓴다(2차 리뷰).
   const { store } = load({
     "bible-bookmarks-v2": JSON.stringify(doc({ items: {
       x: { ...flatBm("x"), parentId: "__proto__", _order: 0 },
@@ -572,7 +572,7 @@ test("고치기 전 판이 남긴, 부모가 __proto__인 항목은 맨 위 항�
 
 // ── 순서 값 (PR #438 리뷰, 사용자 결정 2026-10-26) ──
 // 저장은 목록을 통째로 다시 펼친다. 순서 값을 0부터 다시 매기면, 지우거나 옮긴 항목 뒤의 손대지 않은 항목까지 값이
-// 바뀌어 수정 시각이 오르고, 다른 기기에서 그 항목을 고친 것을 이긴다. 앞뒤 순서가 그대로인 항목은 값을 그대로 둔다.
+// 바뀌어 수정 시각이 오르고, 다른 기기에서 그 항목을 고친 것을 덮어쓴다. 앞뒤 순서가 그대로인 항목은 값을 그대로 둔다.
 
 /** @param {Record<string, [number, string | null]>} spec  id → [_order, parentId] */
 function seeded(spec) {
