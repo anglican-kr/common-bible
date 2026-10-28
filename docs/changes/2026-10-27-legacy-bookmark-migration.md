@@ -1,4 +1,5 @@
 ---
+pr: 451
 date: 2026-10-27
 branch: fix/legacy-bookmark-migration
 title: "fix: 옛 버전의 북마크 목록을 옮기지 못하면 옛 키에서 읽음"
