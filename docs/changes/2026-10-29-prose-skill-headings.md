@@ -1,4 +1,5 @@
 ---
+pr: 452
 date: 2026-10-29
 branch: chore/prose-skill-headings
 title: "chore: 문장 교정 스킬에 제목 줄 고치는 절차를 더함"
