@@ -2011,6 +2011,27 @@ test("75. 수정 시각이 같은 원격 사본을 고른 병합도, 저장하�
   assert.equal(h.machine.getState(), "IDLE");
 });
 
+test("75a. 이 기기에 없던 항목이 들어오면 수정 시각이 0이어도 다른 기기의 변경으로 본다 — 저장하지 못하면 알린다", async () => {
+  // 옛 버전의 목록에서 옮긴 항목은 수정 시각이 0이다(store-v2.js, known-issues §34). 그 목록을 처음 받는 기기에서 시각을
+  // 0과 견주면 변경으로 보지 않아, 저장이 거절돼도 알리지 않았다(PR #451 리뷰).
+  const oldItemMerge = () => {
+    const merged = localDoc("merged");
+    merged.bookmarks.items.old = { id: "old", type: "bookmark", parentId: null, _order: 0, _u: 0 };
+    return merged;
+  };
+  for (const [outcome, said] of [
+    ["full", "저장 공간이 가득 차 다른 기기에서 변경된 데이터를 불러오지 못했습니다. 쓰지 않는 북마크를 지우면 다시 동기화합니다."],
+    ["saved", "다른 기기에서 변경된 데이터를 불러왔습니다."],
+  ]) {
+    const h = mergeSaveMachine({ outcome, v2: { mergeDocs: oldItemMerge } });
+    h.machine.enable();
+    await h.drain(8);
+    const merge = h.logEntries.find((e) => e.kind === "ACTION" && e.event === "MERGE");
+    assert.equal(merge?.hadRemoteChanges, true, outcome);
+    assert.deepEqual(h.snackbar, [said], outcome);
+  }
+});
+
 test("76. 병합 결과를 저장한 뒤 옛 키 쓰기에서 예외가 나도 사이클을 마치고 올린다 — 다시 연결하라는 오류로 가지 않는다", async () => {
   const h = mergeSaveMachine({
     applyToLegacyKeys: () => { throw Object.assign(new Error("The quota has been exceeded."), { name: "QuotaExceededError" }); },

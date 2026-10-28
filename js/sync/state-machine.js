@@ -799,8 +799,10 @@ function createSyncMachine({ onStateChange } = {}) {
         Object.keys(merged.settings).some(k =>
           (merged.settings[k]?._u ?? 0) > (local.settings?.[k]?._u ?? 0)) ||
         (merged.lastRead?._u ?? 0) > (local.lastRead?._u ?? 0) ||
+        // An item this device lacks came from Drive whatever its time: one moved from an old build's list has time 0
+        // (store-v2.js _LEGACY_U), and read against 0 it went unseen — a refused save then said nothing (PR #451 review).
         Object.keys(merged.bookmarks?.items ?? {}).some(id =>
-          (merged.bookmarks.items[id]?._u ?? 0) > ((Object.hasOwn(localItems, id) ? localItems[id]._u : 0) ?? 0)) ||
+          !Object.hasOwn(localItems, id) || (merged.bookmarks.items[id]?._u ?? 0) > (localItems[id]._u ?? 0)) ||
         Object.keys(merged.bookmarks?.tombstones ?? {}).some(id =>
           (merged.bookmarks.tombstones[id] ?? 0) > (Object.hasOwn(localTombstones, id) ? localTombstones[id] : 0))
       );
