@@ -87,6 +87,7 @@ class CheckLineTest(unittest.TestCase):
         self.assertIn("term?", checks("다른 기기의 수정이 병합에서 이긴다"))
         self.assertNotIn("term?", checks("줄이기는 채택하지 않았다"))
         self.assertNotIn("term?", checks("1차 방어이긴 하지만"))
+        self.assertIn("term?", checks("두 사본은 병합이 원격 쪽을 고를 수 있다"))
 
     def test_borrowed_verb(self):
         self.assertIn("verb?", checks("시크릿에 닿지 못한다"))
