@@ -1,4 +1,4 @@
-# docs/changes — 변경 원장
+# docs/changes: 변경 원장
 
 **변경 하나에 파일 하나.** 이 디렉터리는 지식 베이스의 **원자료 층**이다. 여기서 추려 낸 정리 층은 주제 문서 `topics/`(지금 동작하는 것, 남은 것, 그 주제의 함정), `decisions/`(왜 그렇게 정했는지), `known-issues.md`(이슈 번호 대장), `coding-pitfalls.md`(공통 함정), `index.md`(무엇을 먼저 읽는지)다.
 
