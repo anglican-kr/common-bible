@@ -242,8 +242,8 @@ test("브라우저가 쓰기를 거절하면 저장 공간이 찼을 때는 full
 });
 
 // ── 옛 키의 목록 옮기기 (known-issues §34) ──
-// 2026-05-04 전의 판은 북마크를 옛 키(bible-bookmarks)에만 두었다. 옮기는 저장이 거절되면 동기화 저장소 키가 없는 채로
-// 남았고, 읽던 위치의 저장이 빈 목록의 문서를 만든 뒤로는 옮기기를 다시 하지 않아 다음 북마크 저장이 옛 목록을 지웠다.
+// 2026-05-04 전의 버전은 북마크를 옛 키(bible-bookmarks)에만 두었다. 옮기는 저장이 거절되면 동기화 저장소 키가 없는 채로
+// 남아 빈 목록이 보였고, 읽던 위치의 저장이 그 키를 만든 뒤로는 옮기기를 다시 하지 않아 다음 북마크 저장이 옛 목록을 지웠다.
 
 const legacyBm = (i) => ({ type: "bookmark", id: `b${i}`, bookId: "john", chapter: 3, verseSpec: String(i + 1), label: `요한 3:${i + 1}` });
 const LEGACY_LIST = [
@@ -252,6 +252,7 @@ const LEGACY_LIST = [
 ];
 const treeIds = (tree) => tree.flatMap((n) => [n.id, ...treeIds(n.children ?? [])]);
 const LEGACY_IDS = treeIds(LEGACY_LIST);
+const storedDoc = (localStorage) => JSON.parse(localStorage.getItem("bible-bookmarks-v2"));
 
 // 키와 값을 합쳐 지금보다 `room`자를 넘게 늘리는 쓰기를 거절한다 — 저장 공간이 찬 브라우저처럼.
 function fillStorage(localStorage, room) {
@@ -272,7 +273,7 @@ test("옛 키에만 있는 목록은 시작할 때 동기화 저장소로 옮기
     const raw = JSON.stringify(legacy);
     const { store, localStorage } = load({ "bible-bookmarks": raw, "bible-theme": "dark" });
     store.migrateLegacyIfNeeded();
-    const saved = JSON.parse(localStorage.getItem("bible-bookmarks-v2"));
+    const saved = storedDoc(localStorage);
     assert.deepEqual(Object.keys(saved.bookmarks.items).sort(), [...LEGACY_IDS].sort());
     assert.deepEqual(saved.settings.theme, { v: "dark", _u: 0 });
     assert.equal(localStorage.getItem("bible-bookmarks"), raw);
@@ -280,15 +281,16 @@ test("옛 키에만 있는 목록은 시작할 때 동기화 저장소로 옮기
   }
 });
 
-test("옮기는 저장이 거절되면 옛 키의 목록을 보이고, 읽던 위치를 저장해도 빈 목록의 문서를 만들지 않는다", () => {
+test("옮기는 저장이 거절되면 옛 키의 목록을 보이고, 읽던 위치는 옛 목록 없이 저장해 옮기기가 남는다", () => {
   const { store, localStorage } = load({ "bible-bookmarks": JSON.stringify(LEGACY_LIST) });
-  fillStorage(localStorage, 1000);   // 빈 문서와 기기 id는 들어가고, 목록을 옮긴 문서는 들어가지 않는다
+  fillStorage(localStorage, 1000);   // 옛 목록 없는 문서와 기기 id는 들어가고, 목록을 옮긴 문서는 들어가지 않는다
   store.migrateLegacyIfNeeded();
   assert.equal(localStorage.getItem("bible-bookmarks-v2"), null);
   assert.deepEqual(treeIds(plain(store.loadBookmarks())), LEGACY_IDS);
-  // 고치기 전에는 이 저장이 빈 목록의 문서를 만들었고, 그 뒤로 옮기기를 다시 하지 않았다.
+  // 고치기 전에는 이 저장이 만든 키를 보고 옮겼다고 판단해, 그 뒤로 옮기기를 다시 하지 않았다.
   store.saveLastRead({ bookId: "john", chapter: 3 });
-  assert.equal(localStorage.getItem("bible-bookmarks-v2"), null);
+  assert.deepEqual(Object.keys(storedDoc(localStorage).bookmarks.items), []);
+  assert.equal(storedDoc(localStorage).lastRead.v.bookId, "john");
   store.migrateLegacyIfNeeded();
   assert.deepEqual(treeIds(plain(store.loadBookmarks())), LEGACY_IDS);
   // 북마크를 더해도, 하나를 지워도 저장 공간이 차 거절된다 — storage.js saveBookmarks는 그때 옛 키를 쓰지 않는다
@@ -298,7 +300,7 @@ test("옮기는 저장이 거절되면 옛 키의 목록을 보이고, 읽던 �
   assert.deepEqual(treeIds(plain(store.loadBookmarks())), LEGACY_IDS);
 });
 
-test("옮기지 못한 뒤 저장 공간이 생기면 다음 시작 때 옮기고, 그 전에 들어간 저장도 옛 목록과 함께 저장한다", () => {
+test("옮기지 못한 뒤 저장 공간이 생기면 다음 시작 때 옮기고, 그 전에 들어간 북마크 저장도 옛 목록과 함께 저장한다", () => {
   for (const next of ["start", "save"]) {
     const lastRead = { bookId: "john", chapter: 3 };
     const { store, localStorage } = load({
@@ -310,14 +312,32 @@ test("옮기지 못한 뒤 저장 공간이 생기면 다음 시작 때 옮기�
     localStorage.setItem = setItem;
     if (next === "start") store.migrateLegacyIfNeeded();
     else assert.equal(store.saveBookmarks([...store.loadBookmarks(), legacyBm(999)]), "saved");
-    const saved = JSON.parse(localStorage.getItem("bible-bookmarks-v2"));
+    const saved = storedDoc(localStorage);
     const expected = next === "start" ? LEGACY_IDS : [...LEGACY_IDS, "b999"];
     assert.deepEqual(Object.keys(saved.bookmarks.items).sort(), [...expected].sort(), next);
     assert.deepEqual(saved.lastRead, { v: lastRead, _u: 0 }, next);
   }
 });
 
-test("고치기 전 판이 빈 목록으로 만든 동기화 저장소도 옛 키의 목록을 읽고, 다음 시작 때 옮긴다", () => {
+test("옮기지 못한 동안 바꾼 설정과 읽던 위치는 옮긴 뒤에도 남는다", () => {
+  // 고치기 전 버전이 빈 목록으로 만든 동기화 저장소. 옛 목록을 담아 저장하면 거절되어, 옮긴 뒤 저장된 옛 값으로 돌아갔다.
+  const { store, localStorage } = load({
+    "bible-bookmarks": JSON.stringify(LEGACY_LIST),
+    "bible-bookmarks-v2": JSON.stringify(doc({ settings: { theme: { v: "light", _u: 100 } }, lastRead: { v: { bookId: "gen", chapter: 1 }, _u: 100 } })),
+  });
+  const setItem = localStorage.setItem;
+  fillStorage(localStorage, 1000);
+  store.saveSetting("theme", "dark");
+  store.saveLastRead({ bookId: "rev", chapter: 22 });
+  localStorage.setItem = setItem;
+  store.migrateLegacyIfNeeded();
+  const saved = storedDoc(localStorage);
+  assert.equal(Object.keys(saved.bookmarks.items).length, LEGACY_IDS.length);
+  assert.equal(saved.settings.theme.v, "dark");
+  assert.equal(saved.lastRead.v.bookId, "rev");
+});
+
+test("고치기 전 버전이 빈 목록으로 만든 동기화 저장소도 옛 키의 목록을 읽고, 다음 시작 때 옮긴다", () => {
   const lastRead = { v: { bookId: "john", chapter: 3 }, _u: 500 };
   const { store, localStorage } = load({
     "bible-bookmarks": JSON.stringify(LEGACY_LIST),
@@ -325,7 +345,7 @@ test("고치기 전 판이 빈 목록으로 만든 동기화 저장소도 옛 �
   });
   assert.deepEqual(treeIds(plain(store.loadBookmarks())), LEGACY_IDS);
   store.migrateLegacyIfNeeded();
-  const saved = JSON.parse(localStorage.getItem("bible-bookmarks-v2"));
+  const saved = storedDoc(localStorage);
   assert.deepEqual(Object.keys(saved.bookmarks.items).sort(), [...LEGACY_IDS].sort());
   assert.deepEqual(saved.lastRead, lastRead);
 });
@@ -338,27 +358,53 @@ test("북마크 기록이 하나라도 있거나 옛 키에 목록이 없으면 
     [doc({ tombstones: { b7: 100 } }), stale, []],
     [doc(), "[]", []],
     [doc(), null, []],
+    [doc(), "[null]", []],   // 북마크로 읽히는 것이 없다
   ]) {
-    const raw = JSON.stringify(v2);
-    const { store, localStorage } = load({ "bible-bookmarks-v2": raw, ...(legacy ? { "bible-bookmarks": legacy } : {}) });
-    assert.deepEqual(treeIds(plain(store.loadBookmarks())), expected);
+    const { store, localStorage } = load({ "bible-bookmarks-v2": JSON.stringify(v2), ...(legacy ? { "bible-bookmarks": legacy } : {}) });
+    assert.deepEqual(treeIds(plain(store.loadBookmarks())), expected, legacy);
+    let writes = 0;
+    const setItem = localStorage.setItem;
+    localStorage.setItem = (k, v) => { if (k === "bible-bookmarks-v2") writes++; setItem(k, v); };
     store.migrateLegacyIfNeeded();
-    assert.equal(localStorage.getItem("bible-bookmarks-v2"), raw);
+    assert.equal(writes, 0, legacy);
   }
 });
 
-test("저장 공간이 꽉 차 기기 id를 저장하지 못해도 시작을 멈추지 않는다", () => {
+test("옛 목록에 북마크가 아닌 항목이 있어도 앞의 항목은 옮기고, 저장된 설정과 읽던 위치를 지우지 않는다", () => {
+  const settings = { theme: { v: "dark", _u: 100 } };
+  const lastRead = { v: { bookId: "rev", chapter: 22 }, _u: 100 };
+  const { store, localStorage } = load({
+    "bible-bookmarks": JSON.stringify([legacyBm(1), null, legacyBm(2)]),
+    "bible-bookmarks-v2": JSON.stringify(doc({ settings, lastRead })),
+  });
+  assert.deepEqual(treeIds(plain(store.loadBookmarks())), ["b1"]);
+  store.migrateLegacyIfNeeded();
+  const saved = storedDoc(localStorage);
+  assert.deepEqual(Object.keys(saved.bookmarks.items), ["b1"]);
+  assert.deepEqual(saved.settings.theme, settings.theme);
+  assert.deepEqual(saved.lastRead, lastRead);
+});
+
+test("저장소를 읽을 수 없거나 꽉 차 기기 id를 저장하지 못해도 시작을 멈추지 않고, 한 번 연 동안 기기 id가 같다", () => {
   const { store, localStorage } = load({ "bible-bookmarks": JSON.stringify(LEGACY_LIST) });
   localStorage.setItem = () => { throw Object.assign(new Error("full"), { name: "QuotaExceededError" }); };
   assert.doesNotThrow(() => store.migrateLegacyIfNeeded());
   assert.deepEqual(treeIds(plain(store.loadBookmarks())), LEGACY_IDS);
+  assert.equal(store.getDeviceId(), store.getDeviceId());
+  const blocked = load();
+  blocked.localStorage.getItem = () => { throw Object.assign(new Error("blocked"), { name: "SecurityError" }); };
+  assert.doesNotThrow(() => blocked.store.migrateLegacyIfNeeded());
 });
 
-test("옛 키에서 읽은 항목은 한 번 연 동안 몇 번을 읽어도 수정 시각이 같다", () => {
-  const { store, ctx } = load({ "bible-bookmarks": JSON.stringify(LEGACY_LIST) });
-  let t = 1000;
-  ctx.Date = { now: () => ++t };
-  assert.equal(store.maxU(store.loadLocal()), store.maxU(store.loadLocal()));
+test("옛 키에서 읽은 항목은 수정 시각이 0이라, 다른 기기의 수정과 삭제가 병합에서 이긴다", () => {
+  const { store } = load({ "bible-bookmarks": JSON.stringify(LEGACY_LIST) });
+  const local = store.loadLocal();
+  assert.deepEqual([...new Set(Object.values(local.bookmarks.items).map((n) => n._u))], [0]);
+  const edited = { ...local.bookmarks.items.b1, label: "다른 기기에서 고침", _u: 2000 };
+  const merged = store.mergeDocs(local, doc({ items: { b1: edited }, tombstones: { b2: 2000 } }), "device-a");
+  assert.equal(merged.bookmarks.items.b1.label, "다른 기기에서 고침");
+  assert.equal("b2" in merged.bookmarks.items, false);
+  assert.equal(merged.bookmarks.tombstones.b2, 2000);
 });
 
 // ── 저장 전 크기 계산 (ADR-040 — 북마크 가져오기의 크기 검사) ──

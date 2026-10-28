@@ -497,11 +497,11 @@ def test_refused_folder_rename_says_so_and_redraws_the_stored_name(browser):
         ctx.close()
 
 
-# ── 옛 판의 목록을 처음 옮길 때 (known-issues §34) ──
+# ── 옛 버전의 목록을 처음 옮길 때 (known-issues §34) ──
 
 def test_refused_first_move_of_an_old_list_keeps_it_showing_and_moves_it_once_there_is_room(browser):
-    """2026-05-04 전의 판은 목록을 옛 키에만 두었다. 옮기는 저장이 거절되면 옛 키의 목록을 보이고, 읽던 위치를
-    저장해도 빈 목록의 문서를 만들지 않는다. 저장 공간이 생긴 뒤 시작할 때 옮긴다."""
+    """2026-05-04 전의 버전은 목록을 옛 키에만 두었다. 옮기는 저장이 거절되면 옛 키의 목록을 보이고, 읽던 위치는
+    옛 목록 없이 저장한다. 저장 공간이 생긴 뒤 시작할 때 옮긴다."""
     ctx = _mobile(browser)
     page = ctx.new_page()
     try:
@@ -513,17 +513,21 @@ def test_refused_first_move_of_an_old_list_keeps_it_showing_and_moves_it_once_th
           for (const k of ['bible-bookmarks-v2', 'bible-sync-meta']) localStorage.removeItem(k);
           localStorage.setItem('bible-bookmarks', old);
         }""", old)
-        # 빈 문서는 들어가고, 목록을 옮긴 문서(옛 목록보다 길다)는 들어가지 않는다.
+        # 옛 목록이 없는 문서는 들어가고, 목록을 옮긴 문서(옛 목록보다 길다)는 들어가지 않는다.
         fill_storage(page, [SYNC_KEY], longer_than=len(old))
         links = page.locator("#bookmarks-view-tree .bm-bookmark-link")
+        stored = f"JSON.parse(localStorage.getItem('{SYNC_KEY}'))"
 
+        # 고치기 전에는 여기서부터 빈 목록이 보였다.
         _open_bookmarks_view(page)
         expect(links).to_have_count(30)
         assert page.evaluate(f"localStorage.getItem('{SYNC_KEY}')") is None
 
-        # 장을 열면 읽던 위치를 저장한다. 고치기 전에는 이 저장이 빈 목록의 문서를 만들어, 그 뒤로 목록이 비어 보였다.
+        # 장을 열면 읽던 위치를 저장한다. 고치기 전에는 이 저장이 만든 키를 보고 옮겼다고 판단해, 옮기기를 다시 하지 않았다.
         page.goto(f"{BASE}/john/3")
         page.wait_for_selector("article.chapter-text .verse")
+        page.wait_for_function(f"() => {stored}?.lastRead?.v?.bookId === 'john'")
+        assert page.evaluate(f"{stored}.bookmarks.items") == {}
         _open_bookmarks_view(page)
         expect(links).to_have_count(30)
         assert page.evaluate(f"localStorage.getItem('{LEGACY_KEY}')") == old
@@ -532,6 +536,7 @@ def test_refused_first_move_of_an_old_list_keeps_it_showing_and_moves_it_once_th
         page.reload()
         page.wait_for_selector("#bookmarks-view-tree", timeout=5_000)
         expect(links).to_have_count(30)
-        assert len(page.evaluate(f"JSON.parse(localStorage.getItem('{SYNC_KEY}')).bookmarks.items")) == 30
+        assert len(page.evaluate(f"{stored}.bookmarks.items")) == 30
+        assert page.evaluate(f"{stored}.lastRead.v.bookId") == "john"
     finally:
         ctx.close()
