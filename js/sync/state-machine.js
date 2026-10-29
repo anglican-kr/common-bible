@@ -823,7 +823,23 @@ function createSyncMachine({ onStateChange } = {}) {
       const mergedCount = Object.keys(merged.bookmarks?.items ?? {}).length
                         + Object.keys(merged.bookmarks?.tombstones ?? {}).length;
 
-      if (mergedMaxU > remoteMaxU || mergedCount > remoteCount) {
+      // Also uploaded when the merge holds a record Drive lacks or one newer than Drive's — the count and the largest
+      // time can both stay put: an item moved from an old build's list has time 0 (store-v2.js _LEGACY_U), and when a
+      // tombstone Drive kept beside a restored item drops out in the same merge, the item never went up (PR #451
+      // review). A setting newer than Drive's but older than Drive's newest record did not go up either.
+      const remoteItems      = remote.bookmarks?.items      ?? {};
+      const remoteTombstones = remote.bookmarks?.tombstones ?? {};
+      const addsToRemote = (
+        Object.keys(merged.settings).some(k =>
+          (merged.settings[k]?._u ?? 0) > (remote.settings?.[k]?._u ?? 0)) ||
+        (merged.lastRead?._u ?? 0) > (remote.lastRead?._u ?? 0) ||
+        Object.keys(merged.bookmarks?.items ?? {}).some(id =>
+          !Object.hasOwn(remoteItems, id) || (merged.bookmarks.items[id]?._u ?? 0) > (remoteItems[id]._u ?? 0)) ||
+        Object.keys(merged.bookmarks?.tombstones ?? {}).some(id =>
+          !Object.hasOwn(remoteTombstones, id) || (merged.bookmarks.tombstones[id] ?? 0) > remoteTombstones[id])
+      );
+
+      if (mergedMaxU > remoteMaxU || mergedCount > remoteCount || addsToRemote) {
         const payload = V2.buildSyncPayload(_deviceId);
         const { ok, status, etag: newEtag } = await T.uploadSyncFile(_token, payload, { fileId, ifMatch: etag });
         L.log({ kind: "NETWORK", event: "UPLOAD_UPDATE", ok, status });

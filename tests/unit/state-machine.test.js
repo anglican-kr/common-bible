@@ -2032,6 +2032,47 @@ test("75a. 이 기기에 없던 항목이 들어오면 수정 시각이 0이어�
   }
 });
 
+test("75b. 드라이브에 없거나 드라이브보다 새로운 기록이 병합 결과에 있으면 올린다 — 기록 수와 가장 큰 수정 시각이 그대로여도", async () => {
+  // 되살린 북마크 a와 a의 옛 삭제 기록이 드라이브에 함께 있으면 병합에서 삭제 기록이 빠져 기록 수가 하나 준다. 같은 병합에
+  // 옛 버전의 목록에서 옮긴 b(수정 시각 0)가 들어오면 기록 수도 가장 큰 수정 시각도 그대로라 b를 올리지 않았다(PR #451 리뷰).
+  // 드라이브보다 새롭지만 드라이브의 가장 새 기록보다 오래된 설정도 올리지 않았다(main부터).
+  const maxU = (d) => Math.max(0, ...Object.values(d.bookmarks.items).map((i) => i._u),
+    ...Object.values(d.bookmarks.tombstones), ...Object.values(d.settings).map((s) => s._u));
+  const cases = [];
+  {
+    const a = { id: "a", type: "bookmark", parentId: null, _order: 0, _u: 5 };
+    const b = { id: "b", type: "bookmark", parentId: null, _order: 1, _u: 0 };
+    const local = localDoc("local");
+    local.bookmarks.items.b = b;
+    const remote = { ...localDoc("remote"), schemaVersion: 2, deviceId: "remote" };
+    remote.bookmarks.items.a = a;
+    remote.bookmarks.tombstones.a = 3;
+    const merged = localDoc("merged");
+    merged.bookmarks.items = { a, b };
+    cases.push(["old-list item", local, remote, merged]);
+  }
+  {
+    const x = { id: "x", type: "bookmark", parentId: null, _order: 0, _u: 9 };
+    const local = localDoc("local");
+    local.settings.theme = { v: "dark", _u: 5 };
+    const remote = { ...localDoc("remote"), schemaVersion: 2, deviceId: "remote" };
+    remote.bookmarks.items.x = x;
+    remote.settings.theme = { v: "light", _u: 1 };
+    const merged = localDoc("merged");
+    merged.bookmarks.items.x = x;
+    merged.settings.theme = local.settings.theme;
+    cases.push(["setting", local, remote, merged]);
+  }
+  for (const [name, local, remote, merged] of cases) {
+    assert.equal(maxU(merged), maxU(remote), name);
+    const h = mergeSaveMachine({ v2: { loadLocal: () => local, mergeDocs: () => merged, maxU } });
+    h.ctx.syncTransport.downloadSyncFile = async () => ({ doc: remote, etag: '"e-remote"', status: 200 });
+    h.machine.enable();
+    await h.drain(8);
+    assert.equal(h.uploads.length, 1, name);
+  }
+});
+
 test("76. 병합 결과를 저장한 뒤 옛 키 쓰기에서 예외가 나도 사이클을 마치고 올린다 — 다시 연결하라는 오류로 가지 않는다", async () => {
   const h = mergeSaveMachine({
     applyToLegacyKeys: () => { throw Object.assign(new Error("The quota has been exceeded."), { name: "QuotaExceededError" }); },
