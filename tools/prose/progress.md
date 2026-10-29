@@ -37,10 +37,10 @@
 | `docs/workflow.md` | 87 | #447 |
 | `docs/writing.md` | 197 | 대기 |
 | `tests/README.md` | 99 | 대기 |
-| `tests/fixtures/liturgical/README.md` | 54 | 진행 |
-| `tools/booklet/README.md` | 12 | 진행 |
-| `tools/csp/README.md` | 5 | 진행 |
-| `tools/prose/README.md` | 36 | 진행 |
+| `tests/fixtures/liturgical/README.md` | 54 | #453 |
+| `tools/booklet/README.md` | 12 | #453 |
+| `tools/csp/README.md` | 5 | #453 |
+| `tools/prose/README.md` | 36 | #453 |
 
 ## 3. ADR
 

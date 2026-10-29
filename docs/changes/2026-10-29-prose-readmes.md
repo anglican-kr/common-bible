@@ -1,4 +1,5 @@
 ---
+pr: 453
 date: 2026-10-29
 branch: docs/prose-readmes
 title: "docs: 문장 교정(테스트 픽스처와 도구 설명서)"
@@ -33,7 +34,7 @@ title: "docs: 문장 교정(테스트 픽스처와 도구 설명서)"
 
 - 기계 검사 밖에서 고친 곳은 약 30곳이다. 실행을 「돌다」, 「뜨다」, 「켜다」로 쓴 곳, 「여기로 간다」, 「잡히지 않는다」 같은 비유 동사, 술어가 빠진 명사 나열, 역따옴표 없이 쓴 코드 이름(`pypdf`, `vm`, `AssertionError`, `parseDate`)이 그렇다.
 - `tools/prose/README.md`는 처음부터 끝까지 읽었으나 고칠 곳이 없었다.
-- 남긴 판단 항목: `tests/fixtures/liturgical/README.md`의 `english?` 17건은 모두 「id」다. `docs/writing.md` 「용어」 표도 「전례일 id」로 쓴다, `dash?` 1건은 표의 빈 칸 표시(—)다. `tools/csp/README.md`의 `term?` 1건은 「페이지를 떠난다」라 「용어」 표의 옮김 계산 용어와 상관없다.
+- 남긴 판단 항목: `tests/fixtures/liturgical/README.md`의 `english?` 17건은 모두 「id」다. `docs/writing.md` 「용어」 표도 「전례일 id」로 쓴다. `dash?` 1건은 표의 빈 칸 표시(—)다. `tools/csp/README.md`의 `term?` 1건은 「페이지를 떠난다」라 「용어」 표의 옮김 계산 용어와 상관없다.
 - 제목 줄 3개의 줄표를 쌍점으로 바꿨다(`docs/writing.md` §37). `tests/fixtures/liturgical/README.md`는 「tests/fixtures/liturgical: 교회력 엔진 기대값 픽스처」, `tools/csp/README.md`는 「tools/csp: CSP 위반 점검」, `tools/booklet/README.md`는 「tools/booklet: 「전례독서」 책자와 엔진 대조」다. 세 제목으로 오는 링크 앵커와 제목 인용은 저장소에 없었다. `tools/csp/csp_sweep.py`의 도움말 문자열과 `tools/booklet/compare.py`의 보고서 제목 문자열은 코드라 그대로 두었다.
 
 ## 검증
