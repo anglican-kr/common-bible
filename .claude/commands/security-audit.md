@@ -18,7 +18,7 @@
 - **CSS 인젝션**: `element.style` 속성에 외부 데이터를 직접 대입하는 패턴 확인 (`${value}px` 등)
 - **URL 인젝션**: `location.href`, `src`, `href`에 외부 값이 삽입되는지 확인 (`javascript:` 프로토콜 포함)
 
-### 2. Google OAuth / GIS 취약점
+### 2. Google OAuth와 GIS 취약점
 - **Client ID 노출**: 소스에 하드코딩된 클라이언트 ID가 있으면 Google Cloud Console의 Authorized Origins 제한 여부를 확인하도록 권고
 - **액세스 토큰 저장 위치**: `localStorage`/`sessionStorage`/`cookie`에 토큰을 저장하는지 확인 (메모리 보관이 원칙)
 - **리프레시 토큰 저장**: 리프레시 토큰을 영속 스토리지에 저장하는 경우 지적
@@ -50,7 +50,7 @@
 - **프로토타입 오염(prototype pollution)**: 객체 병합(`Object.assign`, 전개 구문) 시 `__proto__`, `constructor` 키 필터링 여부
 - **JSON.parse 미보호**: `try-catch` 없이 `JSON.parse`를 호출하는 경우
 
-### 7. 인증/권한
+### 7. 인증과 권한
 - **클라이언트 사이드 권한 체크만 존재**: UI에서만 권한을 제한하고 API 요청에는 권한 검증이 없는 패턴
 - **토큰/세션 미해제**: 로그아웃 시 토큰 철회와 로컬 스토리지 정리가 누락된 경우
 - **민감 정보 로깅**: `console.log`에 토큰, 이메일, 개인정보가 출력되는 경우
