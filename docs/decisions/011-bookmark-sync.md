@@ -718,9 +718,9 @@ token은 무해 (구 코드는 IDB 안 봄). 회귀 발견 시 PR 전체 revert�
 
 - **`bible-drive-silent-blocked` localStorage one-shot cleanup**: `js/drive-sync.js` 모듈 로드 시 `localStorage.removeItem("bible-drive-silent-blocked")`. 단계 4에서 키를 read/쓰는(write) 코드는 모두 사라졌으나 기존 사용자 디바이스에 stale value가 남아있을 수 있어 정리. removeItem이 missing key에 대해 no-op이므로 안전. 몇 릴리스 후 cleanup 호출 자체도 제거 가능.
 - **`docs/coding-pitfalls.md` 신규 섹션 3개** (Phase 2h에서 학습한 패턴):
-  - §11 비동기 경쟁 상태 검사 — 단일 체크포인트의 함정 (Bugbot PR #54·#57 사례)
-  - §12 콜백 URL 데이터 leak — flow별 transport 격차 (Bugbot PR #54-2 사례)
-  - §13 마이그레이션 시점의 sessionStorage / localStorage 키 격리 (단계 2-4 sessionStorage 키 분리·인계 패턴)
+  - §11 비동기 경쟁 상태 검사: 단일 체크포인트의 함정 (Bugbot PR #54·#57 사례)
+  - §12 로그인 방식을 바꾸면, 주소에서 인증 정보를 지우는 코드가 새 자리를 놓친다 (Bugbot PR #54-2 사례)
+  - §13 로그인 방식을 옮길 때는 방식마다 저장소 키를 따로 쓴다 (단계 2-4 sessionStorage 키 분리·인계 패턴)
 - **`docs/archive/audit/2026-05-07-pkce-refresh-token.md` 신규**: PKCE 마이그레이션 시점의 보안 감사. Critical/High/Medium 0건. 위협 모델 매트릭스 + 모니터링 권고 4건 (e2e 정기 실행, Cloud Console URI 검증, OAuth 검수 모니터링, silent-blocked cleanup 코드 제거 시점).
 - **README.md**: Phase 2g 시점의 GIS/Implicit/silent-blocked 표·설명 갱신, Phase 2h 단일 PKCE 경로 표로 교체.
 - **ADR-011 / pkce-migration.md / CLAUDE.md**: 단계 4·5 완료 마크.
