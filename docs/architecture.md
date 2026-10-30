@@ -277,7 +277,7 @@ ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` 약 6,000줄이 도메�
 
 워커 프로토콜은 `search-worker.js:1`의 상단 주석에 정의되어 있다. 워커는 검색마다 부여한 `searchId`로, 사용자가 새 검색어를 친 뒤 뒤늦게 도착한 옛 결과를 무시한다. 책 인덱스는 청크 JSON에 RLE(같은 값이 이어지는 구간을 `[값, 개수]`로 묶는 방식)로 줄여 두고 워커가 펼쳐 `Uint16Array`에 담는다. 장 인덱스와 절 인덱스도 `Uint16Array`로 보관해 메모리를 줄였다. 별칭(요한, 요, 요한복음 등)은 `data/search-meta.json`에 있다. 검색 범위는 책 필터 `in:<책 별칭>`(예: `사랑 in:요한`)이나 책 고르기(URL의 `in=`. [ADR-033](decisions/033-search-options.md))로 좁힌다([ADR-005](decisions/005-search-indexing-strategy.md)).
 
-### 4.3 동기화 (Drive appdata와 PKCE)
+### 4.3 동기화 (Drive 앱 전용 폴더와 PKCE)
 
 가장 복잡한 하위 시스템이다. 파사드 `drive-sync.js`와 `js/sync/`의 다섯 파일이 역할을 나눈다:
 
