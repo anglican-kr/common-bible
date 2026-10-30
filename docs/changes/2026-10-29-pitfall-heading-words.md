@@ -1,4 +1,5 @@
 ---
+pr: 454
 date: 2026-10-29
 branch: docs/pitfall-heading-words
 title: "docs: 함정 제목의 영어 낱말과 동기 전이 정리"
