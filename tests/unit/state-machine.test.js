@@ -1985,9 +1985,9 @@ test("74. 저장 공간이 아닌 다른 까닭으로 저장하지 못해도 올
   assert.equal(h.machine.getState(), "IDLE");
 });
 
-test("75. 수정 시각이 같은 원격 사본을 고른 병합도, 저장하지 못하면 올리지 않는다 — 다른 기기의 변경이 없다고 판단돼도", async () => {
+test("75. 수정 시각이 같아 원격 사본이 남은 병합 결과도, 저장하지 못하면 올리지 않는다 — 다른 기기의 변경이 없다고 판단돼도", async () => {
   // 「다른 기기의 변경」은 수정 시각이 커졌는지로 판단한다. 같은 시각의 두 사본(옛 절 범위를 옮기면 시각을 올리지 않는다,
-  // pitfalls §38)은 병합이 기기 id 순서로 원격 쪽을 고를 수 있어, 기기에 저장된 문서가 병합 결과와 다르다. 그 문서를 올리면
+  // pitfalls §38)은 병합하면 기기 id 순서에 따라 원격 쪽이 남을 수 있어, 기기에 저장된 문서가 병합 결과와 다르다. 그 문서를 올리면
   // 드라이브의 사본이 이 기기의 것으로 바뀐다(PR #445 리뷰). 다른 기기의 변경은 없으므로 알리지는 않는다.
   const local = localDoc("local");
   local.bookmarks.items.a = { id: "a", type: "bookmark", verseSpec: "16aa", parentId: null, _order: 0, _u: 5 };
@@ -2009,6 +2009,68 @@ test("75. 수정 시각이 같은 원격 사본을 고른 병합도, 저장하�
   assert.equal(h.localStorage.getItem(CACHE_ETAG_KEY), '"e-cached"');
   assert.deepEqual(h.snackbar, []);
   assert.equal(h.machine.getState(), "IDLE");
+});
+
+test("75a. 이 기기에 없던 항목이 들어오면 수정 시각이 0이어도 다른 기기의 변경으로 본다 — 저장하지 못하면 알린다", async () => {
+  // 옛 버전의 목록에서 옮긴 항목은 수정 시각이 0이다(store-v2.js, known-issues §34). 그 목록을 처음 받는 기기에서 시각을
+  // 0과 견주면 변경으로 보지 않아, 저장이 거절돼도 알리지 않았다(PR #451 리뷰).
+  const oldItemMerge = () => {
+    const merged = localDoc("merged");
+    merged.bookmarks.items.old = { id: "old", type: "bookmark", parentId: null, _order: 0, _u: 0 };
+    return merged;
+  };
+  for (const [outcome, said] of [
+    ["full", "저장 공간이 가득 차 다른 기기에서 변경된 데이터를 불러오지 못했습니다. 쓰지 않는 북마크를 지우면 다시 동기화합니다."],
+    ["saved", "다른 기기에서 변경된 데이터를 불러왔습니다."],
+  ]) {
+    const h = mergeSaveMachine({ outcome, v2: { mergeDocs: oldItemMerge } });
+    h.machine.enable();
+    await h.drain(8);
+    const merge = h.logEntries.find((e) => e.kind === "ACTION" && e.event === "MERGE");
+    assert.equal(merge?.hadRemoteChanges, true, outcome);
+    assert.deepEqual(h.snackbar, [said], outcome);
+  }
+});
+
+test("75b. 드라이브에 없거나 드라이브보다 새로운 기록이 병합 결과에 있으면 올린다 — 기록 수와 가장 큰 수정 시각이 그대로여도", async () => {
+  // 되살린 북마크 a와 a의 옛 삭제 기록이 드라이브에 함께 있으면 병합에서 삭제 기록이 빠져 기록 수가 하나 준다. 같은 병합에
+  // 옛 버전의 목록에서 옮긴 b(수정 시각 0)가 들어오면 기록 수도 가장 큰 수정 시각도 그대로라 b를 올리지 않았다(PR #451 리뷰).
+  // 드라이브보다 새롭지만 드라이브의 가장 새 기록보다 오래된 설정도 올리지 않았다(main부터).
+  const maxU = (d) => Math.max(0, ...Object.values(d.bookmarks.items).map((i) => i._u),
+    ...Object.values(d.bookmarks.tombstones), ...Object.values(d.settings).map((s) => s._u));
+  const cases = [];
+  {
+    const a = { id: "a", type: "bookmark", parentId: null, _order: 0, _u: 5 };
+    const b = { id: "b", type: "bookmark", parentId: null, _order: 1, _u: 0 };
+    const local = localDoc("local");
+    local.bookmarks.items.b = b;
+    const remote = { ...localDoc("remote"), schemaVersion: 2, deviceId: "remote" };
+    remote.bookmarks.items.a = a;
+    remote.bookmarks.tombstones.a = 3;
+    const merged = localDoc("merged");
+    merged.bookmarks.items = { a, b };
+    cases.push(["old-list item", local, remote, merged]);
+  }
+  {
+    const x = { id: "x", type: "bookmark", parentId: null, _order: 0, _u: 9 };
+    const local = localDoc("local");
+    local.settings.theme = { v: "dark", _u: 5 };
+    const remote = { ...localDoc("remote"), schemaVersion: 2, deviceId: "remote" };
+    remote.bookmarks.items.x = x;
+    remote.settings.theme = { v: "light", _u: 1 };
+    const merged = localDoc("merged");
+    merged.bookmarks.items.x = x;
+    merged.settings.theme = local.settings.theme;
+    cases.push(["setting", local, remote, merged]);
+  }
+  for (const [name, local, remote, merged] of cases) {
+    assert.equal(maxU(merged), maxU(remote), name);
+    const h = mergeSaveMachine({ v2: { loadLocal: () => local, mergeDocs: () => merged, maxU } });
+    h.ctx.syncTransport.downloadSyncFile = async () => ({ doc: remote, etag: '"e-remote"', status: 200 });
+    h.machine.enable();
+    await h.drain(8);
+    assert.equal(h.uploads.length, 1, name);
+  }
 });
 
 test("76. 병합 결과를 저장한 뒤 옛 키 쓰기에서 예외가 나도 사이클을 마치고 올린다 — 다시 연결하라는 오류로 가지 않는다", async () => {

@@ -17,6 +17,7 @@
 
 const _META_KEY  = "bible-sync-meta";
 const _STORE_KEY = "bible-bookmarks-v2";
+const _LEGACY_BM_KEY = "bible-bookmarks";
 
 /** @type {Record<SettingKey, string>} */
 const _SETTING_LS_KEYS = {
@@ -40,6 +41,11 @@ function _uuid() {
   });
 }
 
+/** @type {{ schemaVersion: 2; deviceId: string } | null} */
+let _unsavedMeta = null;
+
+// A full storage refuses even this small write. The id then lasts for the page load instead of throwing: drive-sync.js
+// reads it as it loads (createSyncMachine), before app.js, and a throw there left the page without sync.
 /** @returns {{ schemaVersion: 2; deviceId: string }} */
 function _getOrCreateMeta() {
   try {
@@ -47,8 +53,8 @@ function _getOrCreateMeta() {
     if (m?.schemaVersion === 2 && m.deviceId) return m;
   } catch {}
   /** @type {{ schemaVersion: 2; deviceId: string }} */
-  const meta = { schemaVersion: 2, deviceId: _uuid() };
-  localStorage.setItem(_META_KEY, JSON.stringify(meta));
+  const meta = _unsavedMeta ?? { schemaVersion: 2, deviceId: _uuid() };
+  try { localStorage.setItem(_META_KEY, JSON.stringify(meta)); _unsavedMeta = null; } catch { _unsavedMeta = meta; }
   return meta;
 }
 
@@ -168,14 +174,27 @@ function _emptyDoc() {
 
 // ── Load / Save ───────────────────────────────────────────────────────────────
 
-/** @returns {SyncDoc} */
-function loadLocal() {
+// A store not written yet reads as the one migrateLegacyIfNeeded writes, and a store with no bookmark record takes the
+// legacy key's list: a move the browser refused left no store, the reading position then wrote one with an empty
+// list, migration took the key for done, and the next bookmark save put that list over the legacy one (known-issues
+// §34). A bookmark save writes the whole document, so until one fits the list stays in the legacy key and shows from
+// there. Settings and the reading position are saved without it (_load(false)) — a document with no bookmark record
+// leaves the move to be done, and saved with it they were refused, then lost to the stored values once the move went
+// through (pre-PR review).
+/** @param {boolean} withLegacyList @returns {SyncDoc} */
+function _load(withLegacyList) {
   try {
     const raw = localStorage.getItem(_STORE_KEY);
-    if (raw) return JSON.parse(raw);
+    if (!raw) return _docFromLegacyKeys(withLegacyList);
+    const doc = JSON.parse(raw);
+    if (withLegacyList && _holdsNoBookmarks(doc)) _addLegacyItems(doc.bookmarks.items);
+    return doc;
   } catch {}
   return _emptyDoc();
 }
+
+/** @returns {SyncDoc} */
+function loadLocal() { return _load(true); }
 
 // Says what the write came to rather than swallowing a refusal: bookmark saves and the sync's merge result tell the
 // user (known-issues §15.4). Settings and the reading position still ignore it.
@@ -330,7 +349,7 @@ function loadBookmarks() {
  * @param {unknown} value
  */
 function saveSetting(key, value) {
-  const doc = loadLocal();
+  const doc = _load(false);
   // Settings store wraps every value in MTimed<T>; the per-key value type
   // is intentionally permissive (number for fontSize, string for the rest).
   doc.settings[key] = /** @type {SyncDoc["settings"][SettingKey]} */ ({ v: value, _u: Date.now() });
@@ -339,30 +358,49 @@ function saveSetting(key, value) {
 
 /** @param {LastReadValue} value */
 function saveLastRead(value) {
-  const doc = loadLocal();
+  const doc = _load(false);
   doc.lastRead = { v: value, _u: Date.now() };
   saveLocal(doc);
 }
 
 // ── Migration v0/v1 → v2 ─────────────────────────────────────────────────────
 
-function migrateLegacyIfNeeded() {
-  if (localStorage.getItem(_STORE_KEY)) return; // already migrated
+// Items read from the legacy key take time 0, as the moved settings do: an edit or a deletion made on another device
+// wins the merge over them. A time of their own beat those — read again at each start, it was a new one each time,
+// and the list it had sent to Drive came back over the other devices' edits (pre-PR review).
+const _LEGACY_U = 0;
 
-  const now = Date.now();
-  const doc = _emptyDoc();
+/** @param {SyncDoc} doc @returns {boolean} */
+function _holdsNoBookmarks(doc) {
+  return !Object.keys(doc.bookmarks.items).length && !Object.keys(doc.bookmarks.tombstones).length;
+}
 
-  // Bookmarks: detect v0 (bare array) or v1 ({ _version:1, items:[...] }).
+// The legacy key's list: v0 (bare array) or v1 ({ _version:1, items:[...] }); [] when there is none.
+/** @returns {BookmarkTreeNode[]} */
+function _legacyTree() {
   try {
-    const raw = localStorage.getItem("bible-bookmarks");
+    const raw = localStorage.getItem(_LEGACY_BM_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      const tree = Array.isArray(parsed)
-        ? parsed
-        : (parsed?._version === 1 && Array.isArray(parsed.items) ? parsed.items : []);
-      _flattenTree(tree, null, doc.bookmarks.items, now);
+      if (Array.isArray(parsed)) return parsed;
+      if (parsed?._version === 1 && Array.isArray(parsed.items)) return parsed.items;
     }
   } catch {}
+  return [];
+}
+
+// What of the legacy list reads as bookmarks: an entry that is not one (null …) ends the walk there, as the move
+// always did, rather than failing the read — loadLocal then gave an empty document, and the move saved it over the
+// stored settings and reading position at every start (pre-PR review).
+/** @param {{ [id: string]: SyncFlatItem }} items */
+function _addLegacyItems(items) {
+  try { _flattenTree(_legacyTree(), null, items, _LEGACY_U); } catch {}
+}
+
+/** @param {boolean} withList @returns {SyncDoc} */
+function _docFromLegacyKeys(withList) {
+  const doc = _emptyDoc();
+  if (withList) _addLegacyItems(doc.bookmarks.items);
 
   // Settings: _u = 0 so that any remote data wins on first sync.
   for (const [key, lsKey] of Object.entries(_SETTING_LS_KEYS)) {
@@ -379,8 +417,21 @@ function migrateLegacyIfNeeded() {
     if (raw) doc.lastRead = { v: JSON.parse(raw), _u: 0 };
   } catch {}
 
-  saveLocal(doc);
-  _getOrCreateMeta();
+  return doc;
+}
+
+// Done once the store holds a bookmark record or the legacy key holds no list — not once the store's key exists
+// (known-issues §34). Until then it is tried at every start. Nothing here may throw: it runs at the top of app.js's
+// startup, and a throw stops the rest of it (a storage the browser blocks throws on reading).
+function migrateLegacyIfNeeded() {
+  try {
+    const raw = localStorage.getItem(_STORE_KEY);
+    if (raw && !_holdsNoBookmarks(JSON.parse(raw))) return;
+    const doc = loadLocal();
+    if (raw && _holdsNoBookmarks(doc)) return;   // the legacy key holds no list either
+    saveLocal(doc);
+    _getOrCreateMeta();
+  } catch {}
 }
 
 // ── Merge ─────────────────────────────────────────────────────────────────────
@@ -534,7 +585,7 @@ function applyToLegacyKeys(doc) {
     if (!((_own(tombstones, id) ?? -Infinity) > node._u)) alive[id] = node;
   }
   const tree = bookmarkTreeFromFlat(alive);
-  write("bible-bookmarks", JSON.stringify(tree));
+  write(_LEGACY_BM_KEY, JSON.stringify(tree));
   return refused;
 }
 

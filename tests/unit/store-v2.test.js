@@ -50,7 +50,7 @@ function doc({ settings = {}, items = {}, tombstones = {}, lastRead, deviceId } 
 
 // ── 설정 병합 (LWW) ──
 
-test("설정은 _u 가 큰 쪽이 이긴다", () => {
+test("설정은 병합하면 _u 가 큰 쪽이 남는다", () => {
   const { store } = load();
   const merged = store.mergeDocs(
     doc({ settings: { theme: { v: "dark", _u: 200 } } }),
@@ -60,7 +60,7 @@ test("설정은 _u 가 큰 쪽이 이긴다", () => {
   assert.deepEqual(plain(merged.settings.theme), { v: "dark", _u: 200 });
 });
 
-test("설정 _u 가 같으면 원격이 이긴다", () => {
+test("설정 _u 가 같으면 병합할 때 원격이 남는다", () => {
   const { store } = load();
   const merged = store.mergeDocs(
     doc({ settings: { theme: { v: "dark", _u: 100 } } }),
@@ -241,6 +241,172 @@ test("브라우저가 쓰기를 거절하면 저장 공간이 찼을 때는 full
   }
 });
 
+// ── 옛 키의 목록 옮기기 (known-issues §34) ──
+// 2026-05-04 전의 버전은 북마크를 옛 키(bible-bookmarks)에만 두었다. 옮기는 저장이 거절되면 동기화 저장소 키가 없는 채로
+// 남아 빈 목록이 보였고, 읽던 위치의 저장이 그 키를 만든 뒤로는 옮기기를 다시 하지 않아 다음 북마크 저장이 옛 목록을 지웠다.
+
+const legacyBm = (i) => ({ type: "bookmark", id: `b${i}`, bookId: "john", chapter: 3, verseSpec: String(i + 1), label: `요한 3:${i + 1}` });
+const LEGACY_LIST = [
+  { type: "folder", id: "f", name: "폴더", children: [legacyBm(100)] },
+  ...Array.from({ length: 50 }, (_, i) => legacyBm(i)),
+];
+const treeIds = (tree) => tree.flatMap((n) => [n.id, ...treeIds(n.children ?? [])]);
+const LEGACY_IDS = treeIds(LEGACY_LIST);
+const storedDoc = (localStorage) => JSON.parse(localStorage.getItem("bible-bookmarks-v2"));
+
+// 키와 값을 합쳐 지금보다 `room`자를 넘게 늘리는 쓰기를 거절한다 — 저장 공간이 찬 브라우저처럼.
+function fillStorage(localStorage, room) {
+  const raw = localStorage._raw;
+  const size = () => Object.entries(raw).reduce((n, [k, v]) => n + k.length + v.length, 0);
+  const limit = size() + room;
+  localStorage.setItem = (k, v) => {
+    const value = String(v);
+    if (size() - (k in raw ? k.length + raw[k].length : 0) + k.length + value.length > limit) {
+      throw Object.assign(new Error("full"), { name: "QuotaExceededError" });
+    }
+    raw[k] = value;
+  };
+}
+
+test("옛 키에만 있는 목록은 시작할 때 동기화 저장소로 옮기고 옛 키는 그대로 둔다 — 배열과 _version 1 형식 모두", () => {
+  for (const legacy of [LEGACY_LIST, { _version: 1, items: LEGACY_LIST }]) {
+    const raw = JSON.stringify(legacy);
+    const { store, localStorage } = load({ "bible-bookmarks": raw, "bible-theme": "dark" });
+    store.migrateLegacyIfNeeded();
+    const saved = storedDoc(localStorage);
+    assert.deepEqual(Object.keys(saved.bookmarks.items).sort(), [...LEGACY_IDS].sort());
+    assert.deepEqual(saved.settings.theme, { v: "dark", _u: 0 });
+    assert.equal(localStorage.getItem("bible-bookmarks"), raw);
+    assert.ok(localStorage.getItem("bible-sync-meta"));
+  }
+});
+
+test("옮기는 저장이 거절되면 옛 키의 목록을 보이고, 읽던 위치는 옛 목록 없이 저장해 옮기기가 남는다", () => {
+  const { store, localStorage } = load({ "bible-bookmarks": JSON.stringify(LEGACY_LIST) });
+  fillStorage(localStorage, 1000);   // 옛 목록 없는 문서와 기기 id는 들어가고, 목록을 옮긴 문서는 들어가지 않는다
+  store.migrateLegacyIfNeeded();
+  assert.equal(localStorage.getItem("bible-bookmarks-v2"), null);
+  assert.deepEqual(treeIds(plain(store.loadBookmarks())), LEGACY_IDS);
+  // 고치기 전에는 이 저장이 만든 키를 보고 옮겼다고 판단해, 그 뒤로 옮기기를 다시 하지 않았다.
+  store.saveLastRead({ bookId: "john", chapter: 3 });
+  assert.deepEqual(Object.keys(storedDoc(localStorage).bookmarks.items), []);
+  assert.equal(storedDoc(localStorage).lastRead.v.bookId, "john");
+  store.migrateLegacyIfNeeded();
+  assert.deepEqual(treeIds(plain(store.loadBookmarks())), LEGACY_IDS);
+  // 북마크를 더해도, 하나를 지워도 저장 공간이 차 거절된다 — storage.js saveBookmarks는 그때 옛 키를 쓰지 않는다
+  // (ADR-015 D7). 옛 키가 자리를 그대로 차지하고 지운 항목마다 삭제 기록이 남아, 한 번에 많이 지워야 저장된다.
+  assert.equal(store.saveBookmarks([...store.loadBookmarks(), legacyBm(999)]), "full");
+  assert.equal(store.saveBookmarks(store.loadBookmarks().slice(1)), "full");
+  assert.deepEqual(treeIds(plain(store.loadBookmarks())), LEGACY_IDS);
+});
+
+test("옮기지 못한 뒤 저장 공간이 생기면 다음 시작 때 옮기고, 그 전에 들어간 북마크 저장도 옛 목록과 함께 저장한다", () => {
+  for (const next of ["start", "save"]) {
+    const lastRead = { bookId: "john", chapter: 3 };
+    const { store, localStorage } = load({
+      "bible-bookmarks": JSON.stringify(LEGACY_LIST), "bible-last-read": JSON.stringify(lastRead),
+    });
+    const setItem = localStorage.setItem;
+    fillStorage(localStorage, 1000);
+    store.migrateLegacyIfNeeded();
+    localStorage.setItem = setItem;
+    if (next === "start") store.migrateLegacyIfNeeded();
+    else assert.equal(store.saveBookmarks([...store.loadBookmarks(), legacyBm(999)]), "saved");
+    const saved = storedDoc(localStorage);
+    const expected = next === "start" ? LEGACY_IDS : [...LEGACY_IDS, "b999"];
+    assert.deepEqual(Object.keys(saved.bookmarks.items).sort(), [...expected].sort(), next);
+    assert.deepEqual(saved.lastRead, { v: lastRead, _u: 0 }, next);
+  }
+});
+
+test("옮기지 못한 동안 바꾼 설정과 읽던 위치는 옮긴 뒤에도 남는다", () => {
+  // 고치기 전 버전이 빈 목록으로 만든 동기화 저장소. 옛 목록을 담아 저장하면 거절되어, 옮긴 뒤 저장된 옛 값으로 돌아갔다.
+  const { store, localStorage } = load({
+    "bible-bookmarks": JSON.stringify(LEGACY_LIST),
+    "bible-bookmarks-v2": JSON.stringify(doc({ settings: { theme: { v: "light", _u: 100 } }, lastRead: { v: { bookId: "gen", chapter: 1 }, _u: 100 } })),
+  });
+  const setItem = localStorage.setItem;
+  fillStorage(localStorage, 1000);
+  store.saveSetting("theme", "dark");
+  store.saveLastRead({ bookId: "rev", chapter: 22 });
+  localStorage.setItem = setItem;
+  store.migrateLegacyIfNeeded();
+  const saved = storedDoc(localStorage);
+  assert.equal(Object.keys(saved.bookmarks.items).length, LEGACY_IDS.length);
+  assert.equal(saved.settings.theme.v, "dark");
+  assert.equal(saved.lastRead.v.bookId, "rev");
+});
+
+test("고치기 전 버전이 빈 목록으로 만든 동기화 저장소도 옛 키의 목록을 읽고, 다음 시작 때 옮긴다", () => {
+  const lastRead = { v: { bookId: "john", chapter: 3 }, _u: 500 };
+  const { store, localStorage } = load({
+    "bible-bookmarks": JSON.stringify(LEGACY_LIST),
+    "bible-bookmarks-v2": JSON.stringify(doc({ lastRead })),
+  });
+  assert.deepEqual(treeIds(plain(store.loadBookmarks())), LEGACY_IDS);
+  store.migrateLegacyIfNeeded();
+  const saved = storedDoc(localStorage);
+  assert.deepEqual(Object.keys(saved.bookmarks.items).sort(), [...LEGACY_IDS].sort());
+  assert.deepEqual(saved.lastRead, lastRead);
+});
+
+test("북마크 기록이 하나라도 있거나 옛 키에 목록이 없으면 옛 키를 읽지 않고, 시작할 때 다시 저장하지도 않는다", () => {
+  const stale = JSON.stringify([legacyBm(7)]);   // 옛 키는 두 번째 사본이라 늦을 수 있다(ADR-015 D7)
+  const item = { ...legacyBm(1), id: "a", parentId: null, _order: 0, _u: 100 };
+  for (const [v2, legacy, expected] of [
+    [doc({ items: { a: item } }), stale, ["a"]],
+    [doc({ tombstones: { b7: 100 } }), stale, []],
+    [doc(), "[]", []],
+    [doc(), null, []],
+    [doc(), "[null]", []],   // 북마크로 읽히는 것이 없다
+  ]) {
+    const { store, localStorage } = load({ "bible-bookmarks-v2": JSON.stringify(v2), ...(legacy ? { "bible-bookmarks": legacy } : {}) });
+    assert.deepEqual(treeIds(plain(store.loadBookmarks())), expected, legacy);
+    let writes = 0;
+    const setItem = localStorage.setItem;
+    localStorage.setItem = (k, v) => { if (k === "bible-bookmarks-v2") writes++; setItem(k, v); };
+    store.migrateLegacyIfNeeded();
+    assert.equal(writes, 0, legacy);
+  }
+});
+
+test("옛 목록에 북마크가 아닌 항목이 있어도 앞의 항목은 옮기고, 저장된 설정과 읽던 위치를 지우지 않는다", () => {
+  const settings = { theme: { v: "dark", _u: 100 } };
+  const lastRead = { v: { bookId: "rev", chapter: 22 }, _u: 100 };
+  const { store, localStorage } = load({
+    "bible-bookmarks": JSON.stringify([legacyBm(1), null, legacyBm(2)]),
+    "bible-bookmarks-v2": JSON.stringify(doc({ settings, lastRead })),
+  });
+  assert.deepEqual(treeIds(plain(store.loadBookmarks())), ["b1"]);
+  store.migrateLegacyIfNeeded();
+  const saved = storedDoc(localStorage);
+  assert.deepEqual(Object.keys(saved.bookmarks.items), ["b1"]);
+  assert.deepEqual(saved.settings.theme, settings.theme);
+  assert.deepEqual(saved.lastRead, lastRead);
+});
+
+test("저장소를 읽을 수 없거나 꽉 차 기기 id를 저장하지 못해도 시작을 멈추지 않고, 한 번 연 동안 기기 id가 같다", () => {
+  const { store, localStorage } = load({ "bible-bookmarks": JSON.stringify(LEGACY_LIST) });
+  localStorage.setItem = () => { throw Object.assign(new Error("full"), { name: "QuotaExceededError" }); };
+  assert.doesNotThrow(() => store.migrateLegacyIfNeeded());
+  assert.deepEqual(treeIds(plain(store.loadBookmarks())), LEGACY_IDS);
+  assert.equal(store.getDeviceId(), store.getDeviceId());
+  const blocked = load();
+  blocked.localStorage.getItem = () => { throw Object.assign(new Error("blocked"), { name: "SecurityError" }); };
+  assert.doesNotThrow(() => blocked.store.migrateLegacyIfNeeded());
+});
+
+test("옛 키에서 읽은 항목은 수정 시각이 0이라, 병합하면 다른 기기의 수정과 삭제가 남는다", () => {
+  const { store } = load({ "bible-bookmarks": JSON.stringify(LEGACY_LIST) });
+  const local = store.loadLocal();
+  assert.deepEqual([...new Set(Object.values(local.bookmarks.items).map((n) => n._u))], [0]);
+  const edited = { ...local.bookmarks.items.b1, label: "다른 기기에서 고침", _u: 2000 };
+  const merged = store.mergeDocs(local, doc({ items: { b1: edited }, tombstones: { b2: 2000 } }), "device-a");
+  assert.equal(merged.bookmarks.items.b1.label, "다른 기기에서 고침");
+  assert.equal("b2" in merged.bookmarks.items, false);
+  assert.equal(merged.bookmarks.tombstones.b2, 2000);
+});
+
 // ── 저장 전 크기 계산 (ADR-040 — 북마크 가져오기의 크기 검사) ──
 
 test("projectedBookmarksEntry는 saveBookmarks가 쓸 항목의 글자 수 그대로다 — 쓰지는 않는다", () => {
@@ -334,7 +500,7 @@ test("한쪽에만 있는 기본 속성 이름의 id도 병합 결과에 남는�
   assert.deepEqual(Object.keys(merged.bookmarks.items).sort(), ["constructor", "toString"]);
 });
 
-test("기본 속성 이름의 id에도 더 새로운 삭제 표식이 이기고, 표식은 병합 결과에 남는다", () => {
+test("기본 속성 이름의 id에도 더 새로운 삭제 표식이 항목을 지우고, 표식은 병합 결과에 남는다", () => {
   const { store } = load();
   const merged = store.mergeDocs(
     doc({ tombstones: { toString: 10 } }),
@@ -387,7 +553,7 @@ test("고치기 전 판이 남긴, 부모가 __proto__인 항목은 맨 위 항�
   // 옛 판의 저장은 폴더만 잃고 자식은 부모 id "__proto__"로 남겼다. 그 부모는 어떤 항목의 id도 아니어서, 맨 위부터
   // 그리면 그 자식이 보이지 않았고 다음 저장이 그 자식을 삭제 기록으로 바꿨다(PR #438 리뷰). 그 자식의 순서 값은
   // 옛 폴더 안에서 매긴 것이라 맨 위 항목과 겹친다. 맨 위 항목 사이에 섞으면 손대지 않은 맨 위 항목의 순서가 바뀌어
-  // 수정 시각이 오르고, 다른 기기의 수정을 이긴다(2차 리뷰).
+  // 수정 시각이 오르고, 다른 기기의 수정을 덮어쓴다(2차 리뷰).
   const { store } = load({
     "bible-bookmarks-v2": JSON.stringify(doc({ items: {
       x: { ...flatBm("x"), parentId: "__proto__", _order: 0 },
@@ -406,7 +572,7 @@ test("고치기 전 판이 남긴, 부모가 __proto__인 항목은 맨 위 항�
 
 // ── 순서 값 (PR #438 리뷰, 사용자 결정 2026-10-26) ──
 // 저장은 목록을 통째로 다시 펼친다. 순서 값을 0부터 다시 매기면, 지우거나 옮긴 항목 뒤의 손대지 않은 항목까지 값이
-// 바뀌어 수정 시각이 오르고, 다른 기기에서 그 항목을 고친 것을 이긴다. 앞뒤 순서가 그대로인 항목은 값을 그대로 둔다.
+// 바뀌어 수정 시각이 오르고, 다른 기기에서 그 항목을 고친 것을 덮어쓴다. 앞뒤 순서가 그대로인 항목은 값을 그대로 둔다.
 
 /** @param {Record<string, [number, string | null]>} spec  id → [_order, parentId] */
 function seeded(spec) {
