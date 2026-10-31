@@ -21,6 +21,7 @@ import {
   CACHE_ETAG_KEY,
   CACHE_SYNCED_HASH_KEY,
   LEGACY_CACHE_SYNCED_U_KEY,
+  loadStoreV2,
 } from "./harness.js";
 
 // ── Group 1: 초기 상태 + ENABLE 분기 ─────────────────────────────────────────
@@ -2335,4 +2336,236 @@ test("77. 병합 결과를 저장한 뒤 브라우저가 옛 키 몇 개의 쓰�
   assert.ok(h.logEntries.some((e) => e.event === "LEGACY_KEYS_FAIL" && e.reason === "bible-theme, bible-bookmarks"));
   assert.deepEqual(h.snackbar, ["다른 기기에서 변경된 데이터를 불러왔습니다."]);
   assert.equal(h.machine.getState(), "IDLE");
+});
+
+// ── Group 20: 기준 목록 1단계 (사용자 결정 2026-10-31) ─────────────────────────────────────────────
+// 기준 목록은 마지막으로 내려받아 병합한 드라이브 파일에 살아 있던 북마크 id다(store-v2.js saveBaseIds). 병합 결과를 저장한
+// 뒤, 올리기 전에 내려받은 파일로 쓴다. 올린 문서로 만들면, 쓰기 보호가 없어(known-issues §42) 그 파일을 덮어쓴 기기와 겹칠
+// 때 이 기기만 올린 북마크가 목록에 들어간다. 1단계는 저장만 하고 병합 판단에는 쓰지 않으며, 2단계 규칙(규칙 다)이 지웠을
+// 북마크 수만 병합 기록에 남긴다.
+
+function baseMachine({ v2 = {}, t = {} } = {}) {
+  const order = [];
+  const baseWrites = [];
+  const remoteDoc = { ...localDoc("remote"), schemaVersion: 2, deviceId: "remote" };
+  const h = loadMachine({
+    initialRefreshToken: "rt-x",
+    initialStorage: {
+      [CACHE_FILE_ID_KEY]: "fid-cached",
+      [CACHE_ETAG_KEY]: '"e-cached"',
+      [CACHE_SYNCED_HASH_KEY]: "0",
+    },
+    overrideStubs: {
+      T: {
+        downloadSyncFile: async () => ({ doc: remoteDoc, etag: '"e-remote"', status: 200 }),
+        uploadSyncFile: async () => { order.push("upload"); return { ok: true, status: 200, etag: '"e-new"' }; },
+        ...t,
+      },
+      V2: {
+        mergeDocs: remoteChangeMerge,
+        saveLocal: () => { order.push("save"); return "saved"; },
+        applyToLegacyKeys: () => { order.push("legacy"); return []; },
+        saveBaseIds: (fileId, doc) => { order.push("base"); baseWrites.push({ fileId, doc }); return true; },
+        ...v2,
+      },
+    },
+  });
+  const setItem = h.localStorage.setItem;
+  h.localStorage.setItem = (k, v) => { if (k === CACHE_SYNCED_HASH_KEY) order.push("cache"); setItem(k, v); };
+  return { ...h, order, baseWrites, remoteDoc };
+}
+
+test("78. 병합 결과를 저장한 뒤, 올리기 전에 내려받은 파일로 기준 목록을 쓴다 — 병합 결과, 옛 키, 목록, 올리기, 캐시의 차례로", async () => {
+  const h = baseMachine();
+  h.machine.enable();
+  await h.drain(8);
+  assert.deepEqual(h.order, ["save", "legacy", "base", "upload", "cache"]);
+  assert.equal(h.baseWrites.length, 1);
+  assert.equal(h.baseWrites[0].fileId, "fid-cached");
+  assert.equal(h.baseWrites[0].doc, h.remoteDoc, "올린 문서가 아니라 내려받은 파일");
+});
+
+test("79. 올리기가 실패해도, 올릴 것이 없어도 기준 목록은 쓴다 — 목록은 내려받은 파일을 가리킨다", async () => {
+  const failed = baseMachine({ t: { uploadSyncFile: async () => ({ ok: false, status: 503, etag: null }) } });
+  failed.machine.enable();
+  await failed.drain(8);
+  assert.equal(failed.baseWrites.length, 1, "올리기 503");
+  assert.equal(failed.localStorage.getItem(CACHE_SYNCED_HASH_KEY), "0", "캐시는 그대로다");
+
+  const same = baseMachine({ v2: { mergeDocs: (l) => l } });
+  same.machine.enable();
+  await same.drain(8);
+  assert.deepEqual(same.order, ["save", "legacy", "base", "cache"], "드라이브와 같아 올리지 않는다");
+  assert.equal(same.baseWrites[0].doc, same.remoteDoc);
+});
+
+test("80. 304, 새 파일 만들기, v1 파일 올리기, 병합 결과 저장 거절, 사이클 중단에서는 기준 목록을 쓰지 않는다", async () => {
+  const cases = {
+    "304": { t: { downloadSyncFile: async () => ({ doc: null, etag: null, status: 304 }) }, v2: { maxU: () => 9 } },
+    "v1 파일": { v2: { validateRemote: () => false } },
+    "저장 거절": { v2: { saveLocal: () => "full" } },
+  };
+  for (const [name, opts] of Object.entries(cases)) {
+    const h = baseMachine(opts);
+    h.machine.enable();
+    await h.drain(8);
+    assert.equal(h.baseWrites.length, 0, name);
+    assert.equal(h.machine.getState(), "IDLE", name);
+  }
+
+  // 새 파일 만들기: 드라이브에 파일이 없다.
+  const writes = [];
+  const created = loadMachine({
+    initialRefreshToken: "rt-x",
+    findFileId: null,
+    overrideStubs: { V2: { saveBaseIds: (...a) => { writes.push(a); return true; } } },
+  });
+  created.machine.enable();
+  await created.drain(8);
+  assert.equal(created.machine.getState(), "IDLE");
+  assert.deepEqual(writes, [], "새 파일");
+
+  // 사이클 중단: 내려받는 동안 로그아웃했다.
+  let resolveDownload;
+  const dlPromise = new Promise((r) => { resolveDownload = r; });
+  const h = baseMachine({ t: { downloadSyncFile: () => dlPromise } });
+  h.machine.enable();
+  await h.drain(3);
+  assert.equal(h.machine.getState(), "SYNCING");
+  h.machine.disable();
+  resolveDownload({ doc: h.remoteDoc, etag: '"e-remote"', status: 200 });
+  await h.drain(5);
+  assert.equal(h.baseWrites.length, 0, "사이클 중단");
+});
+
+test("81. 「파일도 삭제」가 확인되면 기준 목록을 지우고, 확인하지 못하거나 파일을 두고 끄면 남긴다", async () => {
+  const run = async (finds) => {
+    let clears = 0;
+    const h = loadMachine({
+      initialRefreshToken: "rt-x",
+      overrideStubs: {
+        T: { findSyncFileId: async () => finds.shift() ?? { fileId: "fid-1", fileIds: ["fid-1"], status: 200 } },
+        V2: { clearBaseIds: () => { clears++; } },
+      },
+    });
+    h.machine.enable();
+    await h.drain(6);
+    assert.equal(h.machine.getState(), "IDLE");
+    return { h, clears: () => clears };
+  };
+  const ok = await run([]);
+  assert.equal(await ok.h.machine.deleteRemoteFile(), true);
+  assert.equal(ok.clears(), 1, "지운 파일을 가리키는 목록은 지운다");
+
+  const unconfirmed = await run([{ fileId: "fid-1", fileIds: ["fid-1"], status: 200 }, { fileId: null, fileIds: [], status: 503 }]);
+  assert.equal(await unconfirmed.h.machine.deleteRemoteFile(), false);
+  assert.equal(unconfirmed.clears(), 0, "파일이 남았을 수 있다");
+
+  const off = await run([]);
+  off.h.machine.disable();
+  assert.equal(off.clears(), 0, "「파일 유지」로 끄면 남긴다 — 다시 켜면 같은 파일을 읽는다");
+});
+
+test("82. 병합 기록에 규칙 다가 지웠을 북마크 수를 남긴다 — 저장 공간이 차 병합 결과를 저장하지 못해도", async () => {
+  for (const saveOutcome of ["saved", "full"]) {
+    const seen = [];
+    const h = baseMachine({
+      v2: {
+        saveLocal: () => saveOutcome,
+        goneFromDrive: (fileId, local, remote) => { seen.push({ fileId, remote }); return ["x", "y"]; },
+      },
+    });
+    h.machine.enable();
+    await h.drain(8);
+    const merge = h.logEntries.find((e) => e.kind === "ACTION" && e.event === "MERGE");
+    assert.equal(merge?.baseWouldDrop, 2, saveOutcome);
+    assert.equal(seen[0].fileId, "fid-cached");
+    assert.equal(seen[0].remote, h.remoteDoc);
+  }
+});
+
+// 실제 store-v2.js 두 벌(두 기기)과 가짜 드라이브 하나. 드라이브는 운영처럼 ETag를 주지 않고 올리기를 조건 없이 받는다.
+function fakeDrive() {
+  const clone = (v) => JSON.parse(JSON.stringify(v));
+  const drive = { id: null, doc: null };
+  drive.T = {
+    findSyncFileId: async () => ({ fileId: drive.id, fileIds: drive.id ? [drive.id] : [], status: 200 }),
+    downloadSyncFile: async (_t, id) => (drive.doc && id === drive.id
+      ? { doc: clone(drive.doc), etag: null, status: 200 }
+      : { doc: null, etag: null, status: 404 }),
+    uploadSyncFile: async (_t, payload, opts = {}) => {
+      drive.doc = clone(payload);
+      if (opts.fileId) return { ok: true, status: 200, etag: null };
+      drive.id = "file-1";
+      return { ok: true, status: 200, etag: null, fileId: drive.id };
+    },
+  };
+  drive.alive = () => {
+    const { items, tombstones } = drive.doc.bookmarks;
+    return Object.keys(items).filter((id) => !((tombstones[id] ?? -Infinity) >= items[id]._u)).sort();
+  };
+  return drive;
+}
+
+/** One device: the real store on its own storage and clock. `open()` is an app start with sync on. */
+function realDevice(drive, clock) {
+  const { store, localStorage } = loadStoreV2({ clock });
+  const dev = { store, localStorage, h: null };
+  dev.open = async () => {
+    store.migrateLegacyIfNeeded();
+    store.sweepRetiredSettings();
+    dev.h = loadMachine({ initialRefreshToken: "rt-x", overrideStubs: { T: drive.T, V2: store } });
+    dev.h.machine.enable();
+    await dev.h.drain(12);
+  };
+  dev.sync = async () => { dev.h.machine.requestSync(); await dev.h.drain(12); };
+  dev.off = () => { dev.h.machine.disable(); dev.h = null; };
+  dev.ids = () => {
+    const walk = (ns) => ns.flatMap((n) => [n.id, ...walk(n.children ?? [])]);
+    return walk(JSON.parse(JSON.stringify(store.loadBookmarks()))).sort();
+  };
+  return dev;
+}
+
+const DAY = 864e5;
+const bmNode = (id) => ({ type: "bookmark", id, bookId: "gen", chapter: 1, verseSpec: "1", label: id });
+
+test("83. 동기화를 40일 끈 동안 지운 북마크는 다시 켜도 돌아오지 않는다 — 다른 기기에서도 지워진다", async () => {
+  const clock = { now: Date.UTC(2026, 9, 1) };
+  const drive = fakeDrive();
+  const A = realDevice(drive, clock), B = realDevice(drive, clock);
+  A.store.saveBookmarks([bmNode("a1"), bmNode("a2")]);
+  await A.open();
+  await B.open();
+  assert.deepEqual(B.ids(), ["a1", "a2"]);
+
+  A.off();                                          // 「파일 유지」로 끈다
+  clock.now += DAY;
+  A.store.saveBookmarks([bmNode("a2")]);           // 끈 동안 지운다
+  clock.now += 40 * DAY;
+  await A.open();                                   // 앱을 열고 다시 켠다
+  assert.deepEqual(A.ids(), ["a2"]);
+  assert.deepEqual(drive.alive(), ["a2"]);
+  await B.sync();
+  assert.deepEqual(B.ids(), ["a2"]);
+});
+
+test("84. 규칙 다의 조건이면 병합 기록에 세기만 하고, 북마크는 지우지 않고 드라이브에 다시 올린다", async () => {
+  const clock = { now: Date.UTC(2026, 9, 1) };
+  const drive = fakeDrive();
+  const A = realDevice(drive, clock);
+  A.store.saveBookmarks([bmNode("x"), bmNode("y")]);
+  await A.open();
+  await A.sync();                                   // 드라이브 파일을 내려받아 기준 목록을 쓴다
+  const base = JSON.parse(A.localStorage.getItem("bible-drive-base-ids"));
+  assert.equal(base.fileId, "file-1");
+  assert.deepEqual(Object.values(base.days).flat().sort(), ["x", "y"]);
+
+  delete drive.doc.bookmarks.items.x;               // 삭제 기록 없이 드라이브에서 사라졌다
+  clock.now += 31 * DAY;
+  await A.sync();
+  const merge = A.h.logEntries.filter((e) => e.kind === "ACTION" && e.event === "MERGE").at(-1);
+  assert.equal(merge.baseWouldDrop, 1);
+  assert.deepEqual(A.ids(), ["x", "y"], "지우지 않는다");
+  assert.deepEqual(drive.alive(), ["x", "y"], "지금처럼 드라이브에 다시 올린다");
 });

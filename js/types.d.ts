@@ -123,6 +123,15 @@ export interface SyncPayload extends SyncDoc {
 // (known-issues §15.4).
 export type SaveOutcome = "saved" | "full" | "failed";
 
+// The base list in localStorage "bible-drive-base-ids" (store-v2.js), kept on this device only: the bookmark ids alive
+// in the Drive file last downloaded and merged, grouped under the day this device first saw them in that file
+// (whole days of this device's clock since 1970-01-01 UTC). `at` is this device's time of the last write.
+export interface DriveBaseIds {
+  fileId: string;
+  at: number;
+  days: { [day: string]: string[] };
+}
+
 // ── State machine ────────────────────────────────────────────────────────────
 // Phase 2h 단계 4: GIS와 묶여있던 INITIALIZING/IDENTIFYING/AUTHENTICATING 제거.
 
@@ -351,7 +360,13 @@ export interface SyncStoreV2 {
   getDeviceId: () => string;
   loadLocal: () => SyncDoc;
   saveLocal: (doc: SyncDoc) => SaveOutcome;
-  sweepTombstones: (ageDays?: number) => void;
+  /** Drops retired settings entries ({ v: null }) older than ageDays; bookmark tombstones are kept. */
+  sweepRetiredSettings: (ageDays?: number) => void;
+  /** Saves the base list from the downloaded file; false (and no list) when the browser refused the write. */
+  saveBaseIds: (fileId: string, remote: SyncDoc) => boolean;
+  clearBaseIds: () => void;
+  /** Bookmarks the planned rule 다 would drop in a merge with `remote` — only counted for now. */
+  goneFromDrive: (fileId: string, local: SyncDoc, remote: SyncDoc) => string[];
   loadBookmarks: () => BookmarkTreeNode[];
   saveBookmarks: (tree: BookmarkTreeNode[]) => SaveOutcome;
   /** This store's entry once saveBookmarks(tree) ran — its key, and the characters of key and value. */

@@ -394,6 +394,7 @@ ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` 약 6,000줄이 도메�
 | `localStorage` | `bible-drive-sync` | 켬 표지("0", "1"). 다른 탭은 이 키의 `storage` 이벤트로 로그아웃을 안다 | (메타) |
 | `localStorage` | `bible-drive-sync-email` | 마지막 인증 이메일 (OAuth `login_hint`) | (메타) |
 | `localStorage` | `bible-drive-cache-file-id`, `bible-drive-cache-etag`, `bible-drive-cache-synced-hash` | 동기화 캐시. fileId, ETag, 마지막으로 맞춘 문서의 지문을 담고, 목록 요청과 내려받기를 건너뛰는 데 쓴다. 구글이 ETag를 보내지 않아 운영에서는 ETag가 비어 있다 | (메타) |
+| `localStorage` | `bible-drive-base-ids` | 기준 목록. 마지막으로 내려받아 병합한 드라이브 파일에 살아 있던 북마크 id를 이 기기가 처음 본 날별로 묶어 파일 id와 함께 두고, 아직 병합 판단에는 쓰지 않는다(ADR-011 Phase 2c) | (메타) |
 | `localStorage` | `bible-drive-redirect-attempts` | 끝없는 리디렉션을 막는 카운터(상한 3) | (메타) |
 | `localStorage` | `bible-drive-delete-pending` | 끝나지 않은 「파일도 삭제」. 설정에 남는 안내이며 다시 연결하면 지운다 | 로컬 전용 |
 | `localStorage` | `bible-audio-pos` | 오디오 재생 위치 | 로컬 전용 |

@@ -144,7 +144,7 @@ async function clearAllCaches() {
 
 // Apply saved settings on load
 window.syncStoreV2?.migrateLegacyIfNeeded();
-window.syncStoreV2?.sweepTombstones();
+window.syncStoreV2?.sweepRetiredSettings();
 applyFontSize(loadFontSize());
 applyTheme(loadTheme());
 applyColorScheme(loadColorScheme());
