@@ -830,14 +830,17 @@ function createSyncMachine({ onStateChange } = {}) {
         Object.keys(merged.bookmarks?.items ?? {}).some(id =>
           !Object.hasOwn(localItems, id) || (merged.bookmarks.items[id]?._u ?? 0) > (localItems[id]._u ?? 0)) ||
         // A tombstone counts only when it removes an item this device shows. Counting every tombstone newer than this
-        // device's showed 「다른 기기에서 변경된 데이터를 불러왔습니다.」 at every start: the 30-day cleanup
-        // (sweepTombstones) drops old tombstones here and the merge brings them back from Drive (2026-10-31 리뷰).
+        // device's showed 「다른 기기에서 변경된 데이터를 불러왔습니다.」 at every start: the 30-day cleanup of builds
+        // before 2026-10-31 dropped old tombstones here and the merge brought them back from Drive (2026-10-31 리뷰).
         Object.keys(localItems).some(id =>
           !Object.hasOwn(merged.bookmarks?.items ?? {}, id)
           && !((Object.hasOwn(localTombstones, id) ? localTombstones[id] : -Infinity) > (localItems[id]?._u ?? 0)))
       );
 
-      L.log({ kind: "ACTION", event: "MERGE", localMaxU, remoteMaxU, mergedMaxU, hadRemoteChanges });
+      // 기준 목록 1단계(사용자 결정 2026-10-31): the merge does not read the list. What rule 다 would have dropped is
+      // only counted, so a copied diagnostic shows whether stage 2 would ever drop anything.
+      const baseWouldDrop = V2.goneFromDrive(fileId, local, remote).length;
+      L.log({ kind: "ACTION", event: "MERGE", localMaxU, remoteMaxU, mergedMaxU, hadRemoteChanges, baseWouldDrop });
       if (_applyMergedDoc(merged, hadRemoteChanges) !== "saved") {
         // The payload is read back from local storage (buildSyncPayload), which still holds the doc from before the
         // merge — uploading it would put Drive back to it and drop the other devices' edits for every device. That holds
@@ -847,6 +850,11 @@ function createSyncMachine({ onStateChange } = {}) {
         dispatch({ type: "SYNC_DONE" });
         return;
       }
+
+      // The base list goes with the merge just saved, and before the upload, which may fail: it describes the file
+      // downloaded, so it is written from `remote` — an id this device only uploads is not one Drive held (store-v2.js
+      // saveBaseIds). No await separates it from the save above, so a cycle stopped by sign-out never writes it.
+      if (!V2.saveBaseIds(fileId, remote)) L.log({ kind: "ERROR", event: "BASE_IDS_SAVE_FAIL" });
 
       const remoteCount = Object.keys(remote.bookmarks?.items ?? {}).length
                         + Object.keys(remote.bookmarks?.tombstones ?? {}).length;
@@ -1215,6 +1223,9 @@ function createSyncMachine({ onStateChange } = {}) {
       deleted = settled && await deleteAll();
     }
     if (!deleted) L.log({ kind: "ERROR", event: "DELETE_UNCONFIRMED", reason: unconfirmed ?? "unknown" });
+    // The file the base list describes is gone. Turning sync off with the file kept leaves the list (_stopSync): a
+    // new sign-in reads Drive's file again, and a list of another file is not read.
+    else V2.clearBaseIds();
     T.revokeToken(token);
     return deleted;
   }

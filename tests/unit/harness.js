@@ -123,7 +123,10 @@ function makeStoreV2Stub() {
     getDeviceId: () => "test-device",
     loadLocal: () => emptyDoc(),
     saveLocal: () => "saved",
-    sweepTombstones: () => {},
+    sweepRetiredSettings: () => {},
+    saveBaseIds: () => true,
+    clearBaseIds: () => {},
+    goneFromDrive: () => [],
     loadBookmarks: () => [],
     saveBookmarks: () => "saved",
     saveSetting: () => {},
@@ -295,6 +298,28 @@ export function loadRefreshStore() {
     peek: _peek,
     reset: _reset,
   };
+}
+
+// ── store-v2 loader (state-machine tests that run the real store) ─────────────
+// One device's store in its own vm context, on its own localStorage. `clock.now` is that device's clock (Date.now),
+// read at every call so a test can move it forward. Pass the store as `overrideStubs.V2` to loadMachine.
+
+const STORE_V2_PATH = path.resolve(__dirname, "../../js/sync/store-v2.js");
+const STORE_V2_SOURCE = stripEsmMarker(fs.readFileSync(STORE_V2_PATH, "utf8"));
+
+/** @param {{ initialStorage?: Record<string, string>, clock?: { now: number } }} [opts] */
+export function loadStoreV2({ initialStorage = {}, clock } = {}) {
+  const localStorage = makeLocalStorage(initialStorage);
+  const ClockDate = clock ? class extends Date { static now() { return clock.now; } } : Date;
+  const ctx = {
+    localStorage,
+    JSON, Object, Array, Set, Map, String, Number, Boolean, Math, Date: ClockDate,
+    console, Error, isNaN, parseInt,
+  };
+  vm.createContext(ctx);
+  ctx.window = ctx;
+  vm.runInContext(STORE_V2_SOURCE, ctx, { filename: "store-v2.js" });
+  return { store: ctx.syncStoreV2, localStorage };
 }
 
 // ── transport loader (for PKCE function tests) ───────────────────────────────
