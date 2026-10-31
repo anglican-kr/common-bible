@@ -67,7 +67,7 @@ CRUD 작업 후 의존하는 UI 컴포넌트의 갱신 함수를 호출하지 �
 - `16b70ae`: 폴더를 끌어다 놓을 때 순환 참조를 검사하는 코드에서 `_isDescendant`의 인자 순서가 반대였다. 실제로는 "드래그 대상이 드롭 위치의 조상인가"를 봐야 하는데 반대로 검사했다.
 - `f154a56`: 같은 순환 참조 검사가 `position === "into"` 분기에만 있고 `before`와 `after` 분기에는 빠져 있었다. 폴더를 자기 조상의 형제로 놓으면 검사를 통과했다.
 - `3b9727f`: 단일 절 범위 초과 검사가 `hlVerseEnd != null` 블록 **안**에만 있어, 정작 필요한 경우에 작동하지 않았다. 검사를 블록 밖으로 옮겼다.
-- 2026-10-17(PR #353 리뷰, 원장 `docs/changes/2026-10-17-typecheck-batch-1.md`): URL에서 온 값을 검사하는 곳 둘이 문제였다. 하나는 장 번호다. `/john/abc`의 장 번호를 `parseInt`가 `NaN`으로 내는데, `chapter < 1 || chapter > count`가 둘 다 거짓이라 `john-NaN.json`을 요청했다(`Number.isInteger`를 더했다). 다른 하나는 구분 이름이다. `/constructor`는 구분 표 `DIVISION_LABELS[name]`의 참거짓으로 가르다가 일반 객체가 물려받은 이름까지 구분으로 인정됐다(`Object.hasOwn`을 썼다).
+- 2026-10-17(PR #353 리뷰, 원장 `docs/changes/2026-10-17-typecheck-batch-1.md`): URL에서 온 값을 검사하는 곳 둘이 문제였다. 하나는 장 번호다. `/john/abc`의 장 번호를 `parseInt`가 `NaN`으로 내는데, `chapter < 1 || chapter > count`가 둘 다 거짓이라 `john-NaN.json`을 요청했다(`Number.isInteger`를 더했다). 다른 하나는 구분 이름이다. `/constructor`는 구분 표 `DIVISION_LABELS[name]`의 참거짓으로 판단하다가 일반 객체가 물려받은 이름까지 구분으로 인정됐다(`Object.hasOwn`을 썼다).
 - 2026-10-26(known-issues §15.2, 원장 `docs/changes/2026-10-26-bookmark-merge-sync-ids.md`): 동기화 저장소(`store-v2.js`)가 북마크를 일반 객체에 부모 id별로 묶었다. 그래서 `toString` id가 하나만 있어도 목록 전체를 읽지 못했다. 처음 적어 둔 고치는 법은 이 한 곳만 가리켰다. 그러나 같은 객체를 id로 찾는 병합과 삭제 기록에도 같은 결함이 있었다. 병합에서는 한쪽에만 있는 그 id의 북마크가 빠졌고, 그 북마크를 지우면 삭제 기록이 남지 않았다. 같은 PR의 리뷰는 같은 id를 키로 쓰는 다른 객체에서도 같은 조회를 찾았다. 「최근 본 순」 정렬이 읽는 본 기록(`bookmark-core.js`)이다. 묶을 때는 `Map`을, 찾을 때는 `Object.hasOwn`을 쓰도록 고쳤다.
 
 **규칙:**

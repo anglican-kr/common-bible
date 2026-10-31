@@ -568,7 +568,7 @@ def test_merge_refused_by_full_storage_keeps_drive_as_it_was(browser, fake_drive
 
         page_b.locator(
             "body > div:not(#a11y-announce)",
-            has_text="저장 공간이 가득 차 다른 기기에서 변경된 데이터를 불러오지 못했습니다.",
+            has_text="저장 공간이 부족합니다. 불필요한 북마크를 지워야 동기화할 수 있습니다.",
         ).wait_for(state="visible")
         _wait_idle(page_b)                               # the cycle has ended — an upload would have landed by now
         assert _drive_names(fake_drive) == ["Bookmark-A", "Bookmark-B"], "B's old doc must not overwrite Drive"

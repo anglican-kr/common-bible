@@ -45,7 +45,8 @@ export const MAX_REDIRECT_ATTEMPTS = 3;
 // Sync cache keys (mirrored from state-machine.js).
 export const CACHE_FILE_ID_KEY  = "bible-drive-cache-file-id";
 export const CACHE_ETAG_KEY     = "bible-drive-cache-etag";
-export const CACHE_SYNCED_U_KEY = "bible-drive-cache-synced-u";
+export const CACHE_SYNCED_HASH_KEY = "bible-drive-cache-synced-hash";
+export const LEGACY_CACHE_SYNCED_U_KEY = "bible-drive-cache-synced-u";
 
 // ── In-memory localStorage ───────────────────────────────────────────────────
 
@@ -130,6 +131,10 @@ function makeStoreV2Stub() {
     migrateLegacyIfNeeded: () => {},
     mergeDocs: (local) => local,
     maxU: () => 0,
+    // Follows the test's maxU, so a test that marks a local change by raising maxU also changes the fingerprint.
+    // Tests about the fingerprint itself replace it with a content-based one.
+    /** @this {{ maxU: (doc: unknown) => number }} @param {unknown} doc */
+    fingerprint(doc) { return String(this.maxU(doc)); },
     buildSyncPayload: (deviceId) => ({ schemaVersion: 2, deviceId, ...emptyDoc() }),
     validateRemote: () => true,
     bookmarkTreeFromFlat: () => [],
