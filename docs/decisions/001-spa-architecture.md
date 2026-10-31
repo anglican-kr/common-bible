@@ -14,13 +14,13 @@
 | 축 | 결정 |
 | --- | --- |
 | **빌드 단계 0**(브라우저가 원본 `.js`를 그대로 불러온다) | 유지한다. 배포는 정적 파일 서빙과 서비스 워커 캐시로 한다. 번들러 도입은 별도 의제로 보류한다 |
-| **모듈 namespace 패턴**(여러 스크립트와 전역 `window.X`) | 버렸다(ESM 채택). ADR-019를 본다 |
+| **모듈 네임스페이스 패턴**(여러 스크립트와 전역 `window.X`) | 버렸다(ESM 채택). ADR-019를 본다 |
 
 단순성은 모듈성, 의존 그래프의 명시, 패턴의 일관성과 함께 평가한다. 앞으로 `lazy load`나 `tree-shaking`이 꼭 필요해지면 번들러 도입 ADR을 따로 검토한다(지금은 아니다).
 
 ### 저장소 토폴로지 (2026-05-11, ADR-020)
 
-ADR-020에 따라 저장소를 넷으로 나눴다. 앱은 공개이고, data, audio, server는 비공개다. 마크다운 원본과 Python 파이프라인은 `common-bible-data` 저장소에, 오디오는 `common-bible-audio` LFS 저장소(nested)에, nginx와 배포는 `common-bible-server`에 있다. 앱 쪽 URL `/data/...`는 서브모듈을 붙인 자리로 그대로 남는다. 그래서 SPA, 정적 호스팅, 프레임워크 없음이라는 이 ADR의 결론은 그대로다.
+ADR-020에 따라 저장소를 넷으로 나눴다. 앱은 공개이고, 데이터, 오디오, 서버 저장소는 비공개다. 마크다운 원본과 Python 파이프라인은 `common-bible-data` 저장소에, 오디오는 `common-bible-audio` LFS 저장소(데이터 저장소 안)에, nginx와 배포는 `common-bible-server`에 있다. 앱 쪽 URL `/data/...`는 서브모듈을 붙인 자리로 그대로 남는다. 그래서 SPA, 정적 호스팅, 프레임워크 없음이라는 이 ADR의 결론은 그대로다.
 
 ## 맥락
 
@@ -44,15 +44,15 @@ ADR-020에 따라 저장소를 넷으로 나눴다. 앱은 공개이고, data, a
 
 ### C. 프론트엔드 중심 SPA (채택)
 - 장점: 동적 콘텐츠 조합에 가장 알맞다. UI를 바꿔도 다시 빌드할 필요가 없고, 여러 콘텐츠가 데이터를 함께 쓸 수 있다.
-- 단점: JS가 꼭 필요하고 SEO에 불리하다. SEO는 ADR-009에서 History API로 바꾸고 동적 메타태그를 달아 해결했다.
+- 단점: JS가 꼭 필요하고 SEO에 불리하다. SEO는 ADR-009에서 History API로 바꾸고 동적 메타태그를 넣어 해결했다.
 
 ### 단일 캐시 `CACHE_NAME` (2026-05-07까지)
 - 하나의 `CACHE_NAME`이 셸, 본문, 오디오를 한꺼번에 관리했다.
-- 채택 안 함 2026-05-07 · 이유: 셸을 릴리스할 때마다 사용자가 쌓아 둔 본문과 오디오 캐시가 통째로 비워졌다. 그래서 `SHELL_CACHE`, `DATA_CACHE`, `AUDIO_CACHE` 셋으로 나눴다.
+- 채택 안 함(2026-05-07). 이유: 셸을 릴리스할 때마다 사용자가 쌓아 둔 본문과 오디오 캐시가 통째로 비워졌다. 그래서 `SHELL_CACHE`, `DATA_CACHE`, `AUDIO_CACHE` 셋으로 나눴다.
 
 ### 캐시 이름에 rev를 붙여 본문과 오디오를 무효화 (2026-05-07부터 05-13까지)
-- `DATA_CACHE`(예: `data-1`)와 `AUDIO_CACHE`(예: `audio-1`)의 이름에 rev를 붙였다. 형식이나 인코딩이 실제로 바뀐 릴리스에서만 `scripts/release.py`의 `--bump-data`, `--bump-audio` 플래그로 올렸다. 오디오는 인코딩이 바뀔 때만 따로 올렸다.
-- 채택 안 함 2026-05-13 · 이유: ADR-021이 콘텐츠 해시 매니페스트로 바뀐 항목만 무효화하도록 바꿨다. 두 캐시의 이름은 고정됐고, 두 플래그는 없어졌다.
+- `DATA_CACHE`(예: `data-1`)와 `AUDIO_CACHE`(예: `audio-1`)의 이름에 개정 번호(rev)를 붙였다. 형식이나 인코딩이 실제로 바뀐 릴리스에서만 `scripts/release.py`의 `--bump-data`, `--bump-audio` 플래그로 올렸다. 오디오는 인코딩이 바뀔 때만 따로 올렸다.
+- 채택 안 함(2026-05-13). 이유: ADR-021이 콘텐츠 해시 매니페스트로 바뀐 항목만 무효화하도록 바꿨다. 두 캐시의 이름은 고정됐고, 두 플래그는 없어졌다.
 
 ## 채택 이유
 
@@ -74,27 +74,27 @@ SPA의 오프라인 지원은 `sw.js`의 서비스 워커가 맡는다. 리소�
 
 ### 앱 셸 (Shell) — `SHELL_CACHE`
 
-설치할 때 `SHELL_FILES` 목록 전체를 `SHELL_CACHE`(예: `shell-49`)에 미리 캐시한다. `{ cache: "reload" }` 옵션으로 브라우저 HTTP 캐시를 거치지 않아, 이전 릴리스의 장기 캐시 헤더가 새 서비스 워커 캐시를 더럽히지 않게 한다. 2026-05-13부터 캐시 이름은 `version.json`의 버전에서 만든다(ADR-021).
+설치할 때 `SHELL_FILES` 목록 전체를 `SHELL_CACHE`(예: `shell-49`)에 미리 캐시한다. `{ cache: "reload" }` 옵션으로 브라우저 HTTP 캐시를 거치지 않아, 이전 릴리스의 장기 캐시 헤더 때문에 새 서비스 워커 캐시에 이전 파일이 들어가지 않게 한다. 2026-05-13부터 캐시 이름은 `version.json`의 버전에서 만든다(ADR-021).
 
-`books.json`과 `search-meta.json`도 코드와 단단히 묶여 있어 셸과 함께 갱신해야 하므로 `SHELL_CACHE`에 넣는다.
+`books.json`과 `search-meta.json`도 코드가 두 파일의 형식에 의존해 셸과 함께 갱신해야 하므로 `SHELL_CACHE`에 넣는다.
 
-History API SPA 라우팅에서는 모든 navigation 요청(`/bible/gen/1` 등)에 캐시된 `/index.html`로 응답한다.
+History API SPA 라우팅에서는 모든 탐색 요청(`/bible/gen/1` 등)에 캐시된 `/index.html`로 응답한다.
 
 ### 성경과 검색 데이터 — `DATA_CACHE`
 
-`/data/bible/*.json`과 `/data/search-{ot,nt,dc}.json`은 따로 `DATA_CACHE`에 쌓인다. **Cache-first** 전략으로, 캐시에 있으면 바로 돌려주고 없으면 네트워크에서 받아 저장한다.
+`/data/bible/*.json`과 `/data/search-{ot,nt,dc}.json`은 따로 `DATA_CACHE`에 쌓인다. **캐시 우선**(cache-first) 전략으로, 캐시에 있으면 바로 돌려주고 없으면 네트워크에서 받아 저장한다.
 
-처음에는 stale-while-revalidate를 썼으나, 다음 문제가 확인돼 cache-first로 바꿨다.
+처음에는 stale-while-revalidate를 썼으나, 다음 문제가 확인돼 캐시 우선으로 바꿨다.
 - 백그라운드 재검증 요청이 대량으로 생겨 쓸데없는 네트워크 트래픽을 일으켰다.
 - 성경 데이터는 릴리스 단위로만 바뀌므로 방문할 때마다 재검증할 이유가 없다.
 
-`DATA_CACHE`의 데이터 갱신은 재검증 대신 셸과 따로 처리한다. 셸만 바뀐 릴리스에서는 사용자가 이미 받은 본문 캐시가 남으므로, 1.3 GB 규모를 다시 받지 않는다. 바뀐 항목은 콘텐츠 해시 매니페스트로 골라 무효화한다(2026-05-13부터, ADR-021. 그 전의 rev 방식은 「검토한 대안」에 있다).
+`DATA_CACHE`의 데이터 갱신은 재검증 대신 셸과 따로 처리한다. 셸만 바뀐 릴리스에서는 사용자가 이미 받은 본문 캐시가 남으므로, 1.3 GB 규모를 다시 받지 않는다. 바뀐 항목은 콘텐츠 해시 매니페스트로 골라 무효화한다(2026-05-13부터, ADR-021. 그 전의 개정 번호 방식은 「검토한 대안」에 있다).
 
 ### 오디오 — `AUDIO_CACHE`
 
 `/data/audio/*.mp3`는 따로 `AUDIO_CACHE`에 둔다. 오디오는 사용자가 재생을 요청할 때만 받고, 텍스트 데이터와 수명이 달라 나눠 두었다.
 
-오디오는 73권 전체가 약 6.5 GB라 origin quota를 크게 차지할 수 있다. 그래서 **300 MB hard cap과 마지막 재생 시점 기준 LRU**로 스스로 정리한다. 자세한 내용은 ADR-016에 있다.
+오디오는 73권 전체가 약 6.5 GB라 출처(origin)별 저장 용량 한도(quota)를 크게 차지할 수 있다. 그래서 **300 MB 상한과 마지막 재생 시점 기준 LRU**로 스스로 정리한다. 자세한 내용은 ADR-016에 있다.
 
 ### Google Fonts — `FONT_CACHE`
 
@@ -102,8 +102,8 @@ History API SPA 라우팅에서는 모든 navigation 요청(`/bible/gen/1` 등)�
 
 ### 캐시 식별자 운영
 
-`scripts/release.py`는 `version.json`과 `sw-version.js`를 올리고, 서비스 워커는 그 버전으로 `SHELL_CACHE` 이름을 정한다(ADR-021). activate 단계에서 활성 집합(`SHELL_CACHE`/`DATA_CACHE`/`AUDIO_CACHE`/`FONT_CACHE`)에 없는 캐시는 모두 지운다.
+`scripts/release.py`는 `version.json`과 `sw-version.js`를 올리고, 서비스 워커는 그 버전으로 `SHELL_CACHE` 이름을 정한다(ADR-021). 활성화(activate) 단계에서 활성 집합(`SHELL_CACHE`/`DATA_CACHE`/`AUDIO_CACHE`/`FONT_CACHE`)에 없는 캐시는 모두 지운다.
 
 ### 업데이트 흐름
 
-새 서비스 워커가 설치돼도 기존 탭이 열려 있으면 자동으로 활성화되지 않는다. 앱이 사용자에게 업데이트 알림을 보이고, 사용자가 확인하면 `SKIP_WAITING` 메시지를 서비스 워커로 보내 전환한다.
+새 서비스 워커가 설치돼도 기존 탭이 열려 있으면 자동으로 활성화되지 않는다. 앱이 사용자에게 업데이트 알림을 보여 주고, 사용자가 확인하면 `SKIP_WAITING` 메시지를 서비스 워커로 보내 전환한다.
