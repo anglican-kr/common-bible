@@ -125,6 +125,10 @@ function createSyncMachine({ onStateChange } = {}) {
   // full 1+s round-trip even when nothing has changed. 0 means no cycle has
   // completed yet, so the first request always proceeds.
   let _lastSyncEndAt = 0;
+  // Set when a merged doc was refused for lack of room and the notice was shown. While storage stays full every cycle
+  // is refused again — and cycles run on each scroll stop and chapter change — so the notice is shown once until a
+  // merged doc saves (사용자 결정 2026-10-31).
+  let _storageFullNoticed = false;
 
   // ── Context (all "hidden state" in one place) ─────────────────────────────
   // Mutated only by _transition().
@@ -554,7 +558,8 @@ function createSyncMachine({ onStateChange } = {}) {
 
   /**
    * @param {{ fileId?: string | null; etag?: string | null; syncedHash?: string }} patch
-   *   Only non-null fields are written. Null etag (e.g. server omitted ETag
+   *   Only non-null fields are written, except that `syncedHash: ""` (a fingerprint that could not be computed)
+   *   removes the cached one. Null etag (e.g. server omitted ETag
    *   header) leaves the cached value alone — better to keep a stale etag and
    *   discover divergence on next cycle than to drop into the slow path.
    */
@@ -562,8 +567,10 @@ function createSyncMachine({ onStateChange } = {}) {
     try {
       // The fingerprint goes before the etag: when storage refuses the second write, an old etag beside a new
       // fingerprint only downloads once more, where a new etag beside an old fingerprint uploads once more.
-      if (syncedHash) {
-        localStorage.setItem(CACHE_SYNCED_HASH_KEY, syncedHash);
+      if (typeof syncedHash === "string") {
+        // "" is a fingerprint that could not be computed: it is removed, not kept, so no older one is left to match.
+        if (syncedHash) localStorage.setItem(CACHE_SYNCED_HASH_KEY, syncedHash);
+        else            localStorage.removeItem(CACHE_SYNCED_HASH_KEY);
         localStorage.removeItem(LEGACY_CACHE_SYNCED_U_KEY);
       }
       if (fileId)                      localStorage.setItem(CACHE_FILE_ID_KEY, fileId);
@@ -596,21 +603,27 @@ function createSyncMachine({ onStateChange } = {}) {
    * @returns {import("../types").SaveOutcome} the merged doc's save — anything but "saved" leaves this device as it was
    */
   function _applyMergedDoc(merged, hadRemoteChanges) {
-    // 옛 판의 북마크 절 범위(2026-06-06 #205 전의 줄 글자)는 지금 표기로 옮겨 저장한다 — per-item times unchanged,
+    // 옛 버전의 북마크 절 범위(2026-06-06 #205 전의 줄 글자)는 지금 표기로 옮겨 저장한다 — per-item times unchanged,
     // so the merge's pick between two copies of one time cannot bring the old form back (coding-pitfalls §38).
     if (typeof window.migrateLegacyBookmarkDoc === "function") window.migrateLegacyBookmarkDoc(merged);
     const outcome = V2.saveLocal(merged);
     if (outcome !== "saved") {
       L.log({ kind: "ERROR", event: "MERGE_SAVE_FAIL", reason: hadRemoteChanges ? outcome : `${outcome}, no remote changes` });
-      // Said only when something came from the other devices — the same turn as the success line below (사용자 결정
+      // 저장 공간이 차서 거절됐으면 다른 기기의 변경이 없어도 알린다. 이 기기의 편집도 올라가지 못하므로, 알리지 않으면 동기화가
+      // 말없이 멈춘다. 이 안내는 저장하지 못하는 상태가 처음 생길 때 한 번만 띄운다(사용자 결정 2026-10-31). Any other refusal
+      // is said only when something came from the other devices — the same turn as the success line below (사용자 결정
       // 2026-10-26, known-issues §15.4). Deleting a bookmark frees room and wakes the sync (scheduleUpload).
-      if (hadRemoteChanges) {
-        _snackbar(outcome === "full"
-          ? "저장 공간이 가득 차 다른 기기에서 변경된 데이터를 불러오지 못했습니다. 쓰지 않는 북마크를 지우면 다시 동기화합니다."
-          : "다른 기기에서 변경된 데이터를 불러오지 못했습니다.");
+      if (outcome === "full") {
+        if (!_storageFullNoticed) {
+          _snackbar("저장 공간이 부족합니다. 불필요한 북마크를 지워야 동기화할 수 있습니다.");
+          _storageFullNoticed = true;
+        }
+      } else if (hadRemoteChanges) {
+        _snackbar("다른 기기에서 변경된 데이터를 불러오지 못했습니다.");
       }
       return outcome;
     }
+    _storageFullNoticed = false;
     // The doc above is saved, so a key the browser refuses here must not end the cycle in the "reconnect" error
     // (ADR-015 D7). A refused bookmark key is a stale second copy; a refused setting or reading-position key leaves
     // its old value for the next start until a later merge writes it (known-issues §35).

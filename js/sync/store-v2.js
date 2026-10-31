@@ -80,7 +80,8 @@ function _own(map, id) {
 // The merge keeps the copy with the later time, so an edit made after receiving another device's copy stays even when
 // this device's clock is behind (known-issues §39). 기록마다 그 기록의 이전 시각만 본다(사용자 결정 2026-10-30): 문서
 // 전체의 가장 늦은 시각을 보면, 시각이 빠른 기기 하나가 모든 기록의 새 시각을 그 시각보다 늦게 만든다.
-// A value that is not a finite number counts as 0 — a bad value in a file must not make the record's new time NaN.
+// A value that is not a finite number counts as 0: a numeric string from a damaged file would concatenate
+// ("9999999999999" + 1) and push the new time thousands of years ahead.
 /** @param {number} now @param {...unknown} prev @returns {number} */
 function _after(now, ...prev) {
   let m = 0;
@@ -507,8 +508,21 @@ function fingerprint(doc) {
   return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
 }
 
+// Drive's copy with this device's expand state: its value, or no value when this device holds none. Leaving the key
+// out (rather than setting it to undefined) keeps the fingerprint of the merge equal to that of the stored doc.
+/**
+ * @param {SyncFlatItem} remote
+ * @param {SyncFlatItem} local
+ * @returns {SyncFlatItem}
+ */
+function _withLocalExpand(remote, local) {
+  const { expanded: _drop, ...rest } = remote;
+  return Object.hasOwn(local, "expanded") ? { ...rest, expanded: local.expanded } : rest;
+}
+
 // Per-record merge: the copy with the later time stays. Equal times keep Drive's copy, as settings do, so every device
-// ends with the copy Drive holds. 시각이 같을 때 기기 id 순서로 고르던 때는 비교 상대가 마지막으로 올린 기기라, 한 기기는
+// on this version ends with the copy Drive holds — but for a folder's expand state, which stays this device's
+// (_withLocalExpand). 시각이 같을 때 기기 id 순서에 따라 한쪽을 남기던 때는 비교 상대가 마지막으로 올린 기기라, 한 기기는
 // 자기 사본을 남기고 시각이 같아 올리지도 않았다. 드라이브와 다른 기기는 다른 사본을 보였다(2026-10-31 리뷰, 사용자
 // 결정).
 /**
@@ -545,7 +559,12 @@ function mergeDocs(local, remote, _deviceId) {
     if (!aliveL && !aliveR) {
       if (isFinite(death)) merged.bookmarks.tombstones[id] = death;
     } else if (aliveL && aliveR) {
-      merged.bookmarks.items[id] = L._u > R._u ? L : R;
+      // A folder keeps this device's expand state at equal times: it is no content (_contentKey leaves it out, so
+      // opening a folder keeps its time), and taken from Drive it closed the folder the user had just opened (2026-10-31
+      // 리뷰, 사용자 결정). A folder with no stored state keeps none, so it stays closed here too.
+      merged.bookmarks.items[id] = L._u > R._u ? L
+        : L._u === R._u && L.type === "folder" && L.expanded !== R.expanded ? _withLocalExpand(R, L)
+        : R;
     } else {
       merged.bookmarks.items[id] = /** @type {SyncFlatItem} */ (aliveL ? L : R);
     }

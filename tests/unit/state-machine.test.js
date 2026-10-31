@@ -728,7 +728,7 @@ test("29b. 캐시 hit + 304 + 가장 늦은 수정 시각은 그대로이고 내
       [CACHE_FILE_ID_KEY]: "fid-cached",
       [CACHE_ETAG_KEY]: '"e-cached"',
       [CACHE_SYNCED_HASH_KEY]: fp(synced),
-      [LEGACY_CACHE_SYNCED_U_KEY]: "100",   // 고치기 전 판이 남긴 캐시(지난번 동기화의 가장 큰 시각)
+      [LEGACY_CACHE_SYNCED_U_KEY]: "100",   // 고치기 전 버전이 남긴 캐시(지난번 동기화의 가장 늦은 시각)
     },
     overrideStubs: {
       V2: { loadLocal: () => local, buildSyncPayload: () => local, maxU: () => 100, fingerprint: fp },
@@ -782,9 +782,9 @@ test("29c. 304 + 올리는 동안 고친 것은 다음 사이클의 304에서 �
   assert.ok(uploads[1].bookmarks.items.b);
 });
 
-test("29d. 304 + 지문이 빈 값이면(계산하지 못한 문서) 올리고 오류 없이 마친다", async () => {
+test("29d. 304 + 지문이 빈 값이면(계산하지 못한 문서) 올리고 오류 없이 마친다 — 캐시의 지문은 지운다", async () => {
   const uploads = [];
-  const { machine, drain } = loadMachine({
+  const { machine, drain, localStorage } = loadMachine({
     initialRefreshToken: "rt-x",
     initialStorage: {
       [CACHE_FILE_ID_KEY]: "fid-cached",
@@ -803,6 +803,49 @@ test("29d. 304 + 지문이 빈 값이면(계산하지 못한 문서) 올리고 �
   await drain(8);
   assert.equal(machine.getState(), "IDLE");
   assert.equal(uploads.length, 1);
+  assert.equal(localStorage.getItem(CACHE_SYNCED_HASH_KEY), null, "빈 지문은 저장하지 않고 지난번 지문도 지운다");
+});
+
+// 병합한 뒤 올리는 경로도 올린 문서의 지문을 캐시한다. 올린 뒤의 문서로 만들면, 올리는 동안 고친 것을 맞춘 것으로 보고
+// 304가 이어지는 동안 올리지 않는다(2026-10-31 리뷰).
+test("29e. 내려받아 병합한 뒤 올리면 올린 문서의 지문을 캐시한다 — 올리는 동안 고친 것은 다음 사이클의 304에서 올라간다", async () => {
+  const uploads = [];
+  let local = localDoc("local");
+  local.bookmarks.items.a = { id: "a", type: "bookmark", parentId: null, _order: 0, _u: 5 };
+  let downloads = 0;
+  const fp = (/** @type {any} */ d) => JSON.stringify(d.bookmarks);
+  const { machine, drain, localStorage } = loadMachine({
+    initialRefreshToken: "rt-x",
+    initialStorage: {
+      [CACHE_FILE_ID_KEY]: "fid-cached",
+      [CACHE_ETAG_KEY]: '"e-cached"',
+      [CACHE_SYNCED_HASH_KEY]: "지난번",
+    },
+    overrideStubs: {
+      V2: { loadLocal: () => local, buildSyncPayload: () => local, fingerprint: fp },
+      T: {
+        downloadSyncFile: async () => (++downloads === 1
+          ? { doc: { ...localDoc("remote"), schemaVersion: 2, deviceId: "remote" }, etag: '"e-remote"', status: 200 }
+          : { doc: null, etag: null, status: 304 }),
+        uploadSyncFile: async (_t, body) => {
+          uploads.push(body);
+          if (uploads.length === 1) {
+            local = { ...local, bookmarks: { items: { ...local.bookmarks.items, b: { id: "b", type: "bookmark", parentId: null, _order: 1, _u: 6 } }, tombstones: {} } };
+          }
+          return { ok: true, status: 200, etag: '"e-after"' };
+        },
+      },
+    },
+  });
+  machine.enable();
+  await drain(8);
+  assert.equal(uploads.length, 1, "드라이브에 없는 북마크가 있어 올린다");
+  assert.equal(localStorage.getItem(CACHE_SYNCED_HASH_KEY), fp(uploads[0]), "올린 문서의 지문을 캐시한다");
+  machine.requestSync();
+  await drain(8);
+  assert.equal(downloads, 2);
+  assert.equal(uploads.length, 2, "올리는 동안 더한 b가 다음 사이클에 올라간다");
+  assert.ok(uploads[1].bookmarks.items.b);
 });
 
 test("30. 캐시 hit + 다운로드 404 → 캐시 무효화 + SYNC_FAIL", async () => {
@@ -1924,12 +1967,12 @@ test("69. 사이클이 도는 사이 다시 SYNCING이 되면 두 번째 사이�
 });
 
 
-// ── Group 17: 옛 판의 북마크 절 범위 — 병합 결과를 저장하기 전에 지금 표기로 옮긴다 ─────────────
+// ── Group 17: 옛 버전의 북마크 절 범위 — 병합 결과를 저장하기 전에 지금 표기로 옮긴다 ─────────────
 // 옮기기는 수정 시각(_u)을 올리지 않는다(사용자 결정 2026-10-22, coding-pitfalls §38). 그래서 드라이브에 옛 표기가 남아
-// 있으면 같은 시각의 두 사본 가운데 하나를 고르는 병합(그때는 기기 id 순서, 지금은 드라이브의 사본)이 옛 표기를 되돌려 놓았다. 병합 결과를 저장하기
-// 전에 옮긴다(bookmark-core.js migrateLegacyBookmarkDoc).
+// 있으면, 같은 시각의 두 사본은 병합하면 한쪽이 남아(그때는 기기 id 순서, 지금은 드라이브의 사본) 옛 표기가 돌아왔다. 병합 결과를
+// 저장하기 전에 옮긴다(bookmark-core.js migrateLegacyBookmarkDoc).
 
-test("70. 병합 결과는 옛 판의 절 범위를 옮긴 뒤 저장되고, 옛 키에도 그대로 쓰인다", async () => {
+test("70. 병합 결과는 옛 버전의 절 범위를 옮긴 뒤 저장되고, 옛 키에도 그대로 쓰인다", async () => {
   const saved = [];
   const legacyApplied = [];
   const order = [];
@@ -2041,10 +2084,40 @@ test("72b. 이 기기에 없는 북마크의 삭제 기록은 다른 기기의 �
   assert.deepEqual(snackbar, [], "안내가 뜨지 않는다");
 });
 
+// 옛 버전은 삭제 기록보다 이른 북마크를 문서에 남겼다. 그 북마크는 이 기기에서도 보이지 않으므로, 병합이 지워도 바뀐 것이
+// 아니다.
+test("72c. 이 기기에서 이미 삭제 기록에 가려진 북마크가 병합에서 빠져도 다른 기기의 변경으로 치지 않는다", async () => {
+  const snackbar = [];
+  const local = localDoc("local");
+  local.bookmarks.items.hidden = { id: "hidden", type: "bookmark", parentId: null, _order: 0, _u: 5 };
+  local.bookmarks.tombstones.hidden = 10;
+  const { machine, drain, logEntries, ctx } = loadMachine({
+    initialRefreshToken: "rt-x",
+    initialStorage: {
+      [CACHE_FILE_ID_KEY]: "fid-cached",
+      [CACHE_ETAG_KEY]: '"e-cached"',
+      [CACHE_SYNCED_HASH_KEY]: "0",
+    },
+    overrideStubs: {
+      T: {
+        downloadSyncFile: async () => ({ doc: { ...localDoc("remote"), schemaVersion: 2, deviceId: "remote" }, etag: '"e-remote"', status: 200 }),
+      },
+      V2: { loadLocal: () => local, mergeDocs: (l) => ({ ...l, bookmarks: { items: {}, tombstones: { hidden: 10 } } }) },
+    },
+  });
+  ctx._showSyncSnackbar = (msg) => { snackbar.push(msg); };
+  machine.enable();
+  await drain(8);
+  const merge = logEntries.find((e) => e.kind === "ACTION" && e.event === "MERGE");
+  assert.equal(merge?.hadRemoteChanges, false);
+  assert.deepEqual(snackbar, []);
+});
+
 // ── Group 19: 병합 결과를 이 기기에 저장하지 못할 때 (known-issues §15.4) ─────────────────────────
 // 올릴 자료(buildSyncPayload)는 기기에 저장된 문서에서 만든다. 병합 결과를 저장하지 못했는데 올리면, 다른 기기에서 받은
-// 변경이 빠진 옛 문서로 드라이브의 파일을 덮어쓴다. 그래서 다른 기기의 변경이 있었으면 올리지도 캐시를 쓰지도 않고 사이클을
-// 마친다. 병합 결과를 저장한 뒤 옛 키 쓰기가 거절되면 그 키만 기록하고 사이클을 멈추지 않는다(ADR-015 D7).
+// 변경이 빠진 옛 문서로 드라이브의 파일을 덮어쓴다. 그래서 병합 결과를 저장하지 못하면 다른 기기의 변경이 없어도 올리지도
+// 캐시를 쓰지도 않고 사이클을 마친다. 저장 공간이 차서 거절됐으면 다른 기기의 변경이 없어도 알린다. 병합 결과를 저장한 뒤
+// 옛 키 쓰기가 거절되면 그 키만 기록하고 사이클을 멈추지 않는다(ADR-015 D7).
 
 function remoteChangeMerge() {
   const merged = localDoc("merged");
@@ -2091,25 +2164,29 @@ test("73. 다른 기기의 변경을 저장 공간이 차서 저장하지 못하
   assert.equal(h.localStorage.getItem(CACHE_SYNCED_HASH_KEY), "0");
   assert.deepEqual(h.legacy, [], "옛 키에도 쓰지 않는다");
   assert.equal(h.rerenders.count, 0, "바뀐 것이 없으니 다시 그리지 않는다");
-  assert.deepEqual(h.snackbar, ["저장 공간이 가득 차 다른 기기에서 변경된 데이터를 불러오지 못했습니다. 쓰지 않는 북마크를 지우면 다시 동기화합니다."]);
+  assert.deepEqual(h.snackbar, ["저장 공간이 부족합니다. 불필요한 북마크를 지워야 동기화할 수 있습니다."]);
   assert.equal(h.machine.getState(), "IDLE", "다시 연결하라는 오류 상태로 가지 않는다");
   // `reason` is the field a copied diagnostic log prints (debug-log.js _format).
   assert.ok(h.logEntries.some((e) => e.kind === "ERROR" && e.event === "MERGE_SAVE_FAIL" && e.reason === "full"));
 });
 
-test("74. 저장 공간이 아닌 다른 까닭으로 저장하지 못해도 올리지 않고, 불러오지 못했다고만 알린다", async () => {
+test("74. 저장 공간이 아닌 다른 까닭으로 저장하지 못해도 올리지 않고, 불러오지 못했다고만 알린다 — 실패할 때마다", async () => {
   const h = mergeSaveMachine({ outcome: "failed" });
   h.machine.enable();
   await h.drain(8);
+  h.machine.requestSync();
+  await h.drain(8);
   assert.deepEqual(h.uploads, []);
-  assert.deepEqual(h.snackbar, ["다른 기기에서 변경된 데이터를 불러오지 못했습니다."]);
+  assert.deepEqual(h.snackbar, ["다른 기기에서 변경된 데이터를 불러오지 못했습니다.", "다른 기기에서 변경된 데이터를 불러오지 못했습니다."],
+    "저장 공간 안내와 달리 한 번만 띄우지 않는다");
   assert.equal(h.machine.getState(), "IDLE");
 });
 
-test("75. 수정 시각이 같아 원격 사본이 남은 병합 결과도, 저장하지 못하면 올리지 않는다 — 다른 기기의 변경이 없다고 판단돼도", async () => {
+test("75. 수정 시각이 같아 원격 사본이 남은 병합 결과도, 저장하지 못하면 올리지 않는다 — 다른 기기의 변경이 없어도 저장 공간이 찼으면 알린다", async () => {
   // 「다른 기기의 변경」은 수정 시각이 커졌는지로 판단한다. 같은 시각의 두 사본(옛 절 범위를 옮기면 시각을 올리지 않는다,
   // pitfalls §38)은 병합하면 드라이브의 사본이 남아, 기기에 저장된 문서가 병합 결과와 다르다. 그 문서를 올리면
-  // 드라이브의 사본이 이 기기의 것으로 바뀐다(PR #445 리뷰). 다른 기기의 변경은 없으므로 알리지는 않는다.
+  // 드라이브의 사본이 이 기기의 것으로 바뀐다(PR #445 리뷰). 다른 기기의 변경은 없지만, 저장 공간이 차서 거절됐으므로
+  // 동기화가 멈췄다고 알린다(사용자 결정 2026-10-31. 그전에는 알리지 않았다).
   const local = localDoc("local");
   local.bookmarks.items.a = { id: "a", type: "bookmark", verseSpec: "16aa", parentId: null, _order: 0, _u: 5 };
   local.bookmarks.items.b = { id: "b", type: "bookmark", verseSpec: "1", parentId: null, _order: 1, _u: 6 };   // not on Drive yet
@@ -2128,8 +2205,52 @@ test("75. 수정 시각이 같아 원격 사본이 남은 병합 결과도, 저�
   assert.equal(merge?.hadRemoteChanges, false, "no newer time came from Drive");
   assert.deepEqual(h.uploads, [], "the stored doc is not the merge — uploading it would change Drive's copy of a");
   assert.equal(h.localStorage.getItem(CACHE_ETAG_KEY), '"e-cached"');
+  assert.deepEqual(h.snackbar, ["저장 공간이 부족합니다. 불필요한 북마크를 지워야 동기화할 수 있습니다."]);
+  assert.equal(h.machine.getState(), "IDLE");
+});
+
+test("74a. 저장 공간이 아닌 다른 까닭으로 저장하지 못하고 다른 기기의 변경도 없으면 올리지도 알리지도 않는다", async () => {
+  const h = mergeSaveMachine({ outcome: "failed", v2: { mergeDocs: (l) => l } });
+  h.machine.enable();
+  await h.drain(8);
+  const merge = h.logEntries.find((e) => e.kind === "ACTION" && e.event === "MERGE");
+  assert.equal(merge?.hadRemoteChanges, false);
+  assert.deepEqual(h.uploads, []);
   assert.deepEqual(h.snackbar, []);
   assert.equal(h.machine.getState(), "IDLE");
+});
+
+// 저장 공간이 찬 동안은 동기화할 때마다 저장이 거절되고, 동기화는 스크롤을 멈추거나 장을 옮길 때도 실행된다. 그때마다
+// 안내가 떴다(PR #456 리뷰에서 실행해 확인). 저장하지 못하는 상태가 처음 생길 때 한 번만 띄우고, 병합 결과를 저장하면
+// 다시 띄울 수 있다(사용자 결정 2026-10-31).
+test("75c. 저장 공간 안내는 저장하지 못하는 동안 한 번만 뜨고, 병합 결과를 저장한 뒤 다시 거절되면 다시 뜬다", async () => {
+  const outcomes = ["full", "full", "saved", "full"];
+  const h = mergeSaveMachine({ v2: { saveLocal: () => outcomes.shift() } });
+  h.machine.enable();
+  await h.drain(8);
+  for (let i = 0; i < 3; i++) {
+    h.machine.requestSync();
+    await h.drain(8);
+  }
+  assert.equal(outcomes.length, 0, "네 번 동기화했다");
+  assert.deepEqual(h.snackbar, [
+    "저장 공간이 부족합니다. 불필요한 북마크를 지워야 동기화할 수 있습니다.",
+    "다른 기기에서 변경된 데이터를 불러왔습니다.",
+    "저장 공간이 부족합니다. 불필요한 북마크를 지워야 동기화할 수 있습니다.",
+  ]);
+  assert.equal(h.uploads.length, 1, "저장한 사이클만 올린다");
+
+  // 다시 띄울 수 있게 되는 것은 병합 결과를 저장했을 때뿐이다. 다른 까닭의 실패가 끼어도 다시 띄우지 않는다.
+  const mixed = ["full", "failed", "full"];
+  const m = mergeSaveMachine({ v2: { saveLocal: () => mixed.shift() } });
+  m.machine.enable();
+  await m.drain(8);
+  for (let i = 0; i < 2; i++) {
+    m.machine.requestSync();
+    await m.drain(8);
+  }
+  assert.equal(mixed.length, 0);
+  assert.deepEqual(m.snackbar, ["저장 공간이 부족합니다. 불필요한 북마크를 지워야 동기화할 수 있습니다.", "다른 기기에서 변경된 데이터를 불러오지 못했습니다."]);
 });
 
 test("75a. 이 기기에 없던 항목이 들어오면 수정 시각이 0이어도 다른 기기의 변경으로 본다 — 저장하지 못하면 알린다", async () => {
@@ -2141,7 +2262,7 @@ test("75a. 이 기기에 없던 항목이 들어오면 수정 시각이 0이어�
     return merged;
   };
   for (const [outcome, said] of [
-    ["full", "저장 공간이 가득 차 다른 기기에서 변경된 데이터를 불러오지 못했습니다. 쓰지 않는 북마크를 지우면 다시 동기화합니다."],
+    ["full", "저장 공간이 부족합니다. 불필요한 북마크를 지워야 동기화할 수 있습니다."],
     ["saved", "다른 기기에서 변경된 데이터를 불러왔습니다."],
   ]) {
     const h = mergeSaveMachine({ outcome, v2: { mergeDocs: oldItemMerge } });

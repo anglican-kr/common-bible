@@ -483,7 +483,7 @@ function commitBookmarks(store) {
   const outcome = saveBookmarks(store);
   if (outcome === "saved") return true;
   const msg = outcome === "full"
-    ? "저장 공간이 가득 차 바꾼 내용을 저장하지 못했습니다. 쓰지 않는 북마크를 지운 뒤 다시 시도해 주세요."
+    ? "저장 공간이 부족합니다. 불필요한 북마크를 지운 뒤 다시 시도해 주세요."
     : "북마크를 저장하지 못했습니다.";
   if (window._showSyncSnackbar) window._showSyncSnackbar(msg);
   else window.announce?.(msg);

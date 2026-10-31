@@ -14,7 +14,7 @@ from .conftest import FULL_STORAGE, MOBILE_VIEWPORT, IPHONE_UA, fill_storage
 
 BASE = "http://localhost:8080"
 
-FULL_MSG = "저장 공간이 가득 차 바꾼 내용을 저장하지 못했습니다. 쓰지 않는 북마크를 지운 뒤 다시 시도해 주세요."
+FULL_MSG = "저장 공간이 부족합니다. 불필요한 북마크를 지운 뒤 다시 시도해 주세요."
 LEGACY_KEY = "bible-bookmarks"
 SYNC_KEY = "bible-bookmarks-v2"
 
@@ -282,7 +282,7 @@ def _delete_selected(page):
 
 
 def test_delete_still_saves_when_storage_is_full(browser):
-    """안내의 「쓰지 않는 북마크를 지운 뒤」: 저장 공간이 차도 지우기는 목록을 줄이므로 저장된다."""
+    """안내의 「불필요한 북마크를 지운 뒤」: 저장 공간이 차도 지우기는 목록을 줄이므로 저장된다."""
     ctx = _mobile(browser)
     page = ctx.new_page()
     try:

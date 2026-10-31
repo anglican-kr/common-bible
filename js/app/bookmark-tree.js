@@ -340,7 +340,7 @@ function _buildFolderItem(folder, depth) {
     li.setAttribute("aria-expanded", String(newExpanded));
     toggle.replaceChildren(_buildFolderToggleIcon(newExpanded));
     // Persist expanded state so it survives re-render. A refused save leaves the folder as clicked on screen, so the
-    // list can still be browsed while storage is full; the snackbar says the state was not kept. A full storage refuses
+    // list can still be browsed while storage is full; the snackbar says storage is full and to try again. A full storage refuses
     // the fold (`"expanded":false` is one character longer) and the first unfold of a folder stored without the field
     // (an imported file may leave it out).
     const store = loadBookmarks();

@@ -154,7 +154,7 @@ test("항목이 삭제 표식보다 새로우면 되살아난다", () => {
   assert.equal(merged.bookmarks.items.b1.bookId, "gen");
 });
 
-// 기기 id 순서로 고르던 때는 비교 상대가 마지막으로 올린 기기라, 한 기기는 자기 사본을 남기고 올리지도 않아 기기마다
+// 기기 id 순서에 따라 한쪽을 남기던 때는 비교 상대가 마지막으로 올린 기기라, 한 기기는 자기 사본을 남기고 올리지도 않아 기기마다
 // 다른 사본이 남았다(2026-10-31 리뷰, 사용자 결정).
 test("수정 시각이 같으면 기기 id와 상관없이 드라이브의 사본이 남는다", () => {
   const { store } = load();
@@ -163,6 +163,42 @@ test("수정 시각이 같으면 기기 id와 상관없이 드라이브의 사�
                        deviceId: "device-z" });
   assert.equal(store.mergeDocs(local, remote, "device-a").bookmarks.items.b1.name, "R");
   assert.equal(store.mergeDocs(local, remote, "device-zz").bookmarks.items.b1.name, "R");
+});
+
+// 펼침 상태는 내용이 아니라서(_contentKey) 폴더를 열어도 수정 시각이 그대로다. 드라이브의 사본을 그대로 남기면 방금 연
+// 폴더가 동기화 뒤에 닫혔다(2026-10-31 리뷰, 사용자 결정).
+test("수정 시각이 같으면 폴더의 펼침 상태는 이 기기의 것이 남는다 — 이름은 드라이브의 것", () => {
+  const { store } = load();
+  const folder = (extra) => ({ id: "f", type: "folder", parentId: null, _order: 0, _u: 100, ...extra });
+  const tie = store.mergeDocs(
+    doc({ items: { f: folder({ name: "L", expanded: true }) } }),
+    doc({ items: { f: folder({ name: "R", expanded: false }) } }),
+    "device-a",
+  );
+  assert.deepEqual(plain(tie.bookmarks.items.f), folder({ name: "R", expanded: true }));
+  const remoteNewer = store.mergeDocs(
+    doc({ items: { f: folder({ name: "L", expanded: true }) } }),
+    doc({ items: { f: folder({ name: "R", expanded: false, _u: 200 }) } }),
+    "device-a",
+  );
+  assert.equal(remoteNewer.bookmarks.items.f.expanded, false, "드라이브의 사본이 더 늦으면 그 펼침 상태가 남는다");
+  const remoteLacks = store.mergeDocs(
+    doc({ items: { f: folder({ name: "L", expanded: true }) } }),
+    doc({ items: { f: folder({ name: "R" }) } }),
+    "device-a",
+  );
+  assert.equal(remoteLacks.bookmarks.items.f.expanded, true, "드라이브의 사본에 펼침 값이 없어도 이 기기의 값이 남는다");
+});
+
+// 펼침 값 없이 가져온 폴더는 닫혀 보인다. 시각이 같은 드라이브의 사본에서 펼침 값을 받으면, 이 기기에서 손대지 않은 폴더가
+// 열렸다(PR #456 리뷰에서 실행해 확인, 사용자 결정 2026-10-31).
+test("수정 시각이 같으면 이 기기에 펼침 값이 없는 폴더는 드라이브의 펼침 값도 받지 않는다", () => {
+  const { store } = load();
+  const folder = (extra) => ({ id: "f", type: "folder", name: "폴더", parentId: null, _order: 0, _u: 100, ...extra });
+  const local = doc({ items: { f: folder() } });
+  const merged = store.mergeDocs(local, doc({ items: { f: folder({ expanded: true }) } }), "device-a");
+  assert.equal(Object.hasOwn(merged.bookmarks.items.f, "expanded"), false);
+  assert.equal(store.fingerprint(merged), store.fingerprint(plain(merged)), "저장했다 다시 읽은 문서와 지문이 같다");
 });
 
 // ── maxU ──
@@ -461,7 +497,7 @@ test("원격 북마크의 __proto__ id 는 병합에서 무시된다", () => {
 // ── 기본 속성 이름의 id (known-issues §15.2) ──
 // 저장소는 id를 일반 객체의 키로 쓴다. 일반 객체는 toString · constructor 같은 이름에 Object.prototype에서
 // 물려받은 함수로 답하므로, 그 이름의 id가 하나만 있어도 목록 전체를 읽지 못했다(2026-10-19 실측). 가져오기
-// 검사(ADR-040)가 없던 판(1.6.4 이하)에서 들인 기록은 동기화로 지금 판에도 들어온다.
+// 검사(ADR-040)가 없던 버전(1.6.4 이하)에서 들인 기록은 동기화로 지금 버전에도 들어온다.
 
 /** @param {string} id @param {number} [_u] */
 const flatBm = (id, _u = 5) =>
@@ -553,8 +589,8 @@ test("__proto__ id의 폴더가 없으면 순서 값은 전과 같다 — 다시
   assert.deepEqual(plain(store.loadLocal().bookmarks.items), before);
 });
 
-test("고치기 전 판이 남긴, 부모가 __proto__인 항목은 맨 위 항목 뒤에서 읽고 다음 저장에서 지우지 않는다", () => {
-  // 옛 판의 저장은 폴더만 잃고 자식은 부모 id "__proto__"로 남겼다. 그 부모는 어떤 항목의 id도 아니어서, 맨 위부터
+test("고치기 전 버전이 남긴, 부모가 __proto__인 항목은 맨 위 항목 뒤에서 읽고 다음 저장에서 지우지 않는다", () => {
+  // 옛 버전의 저장은 폴더만 잃고 자식은 부모 id "__proto__"로 남겼다. 그 부모는 어떤 항목의 id도 아니어서, 맨 위부터
   // 그리면 그 자식이 보이지 않았고 다음 저장이 그 자식을 삭제 기록으로 바꿨다(PR #438 리뷰). 그 자식의 순서 값은
   // 옛 폴더 안에서 매긴 것이라 맨 위 항목과 겹친다. 맨 위 항목 사이에 섞으면 손대지 않은 맨 위 항목의 순서가 바뀌어
   // 수정 시각이 오르고, 다른 기기의 수정을 덮어쓴다(2차 리뷰).
@@ -727,15 +763,23 @@ test("시계가 맞으면 기기 시각을 그대로 기록한다", () => {
   assert.equal(local.settings.theme._u, T + 5000);
 });
 
-test("숫자가 아닌 이전 시각은 0으로 본다 — 새 시각이 숫자가 아닌 값이 되지 않는다", () => {
-  const { store } = load(stored(doc({ items: { a: bm({ _u: "bad" }) }, settings: { theme: { v: "dark", _u: null } } })), { now: T });
+test("숫자가 아닌 이전 시각은 0으로 본다 — 숫자 문자열 시각이 새 시각을 수천 년 뒤로 밀지 않는다", () => {
+  // 숫자로 읽히는 글자("9999999999999")도 숫자가 아니다. 글자에 1을 더하면 글자가 이어 붙는다.
+  const big = "9999999999999";
+  const { store } = load(stored(doc({
+    items: { a: bm({ _u: "bad" }), b: bm({ id: "b", _order: 1, _u: big }) },
+    settings: { theme: { v: "dark", _u: null }, fontSize: { v: 16, _u: big } },
+  })), { now: T });
   const tree = store.loadBookmarks();
-  tree[0].note = "고침";
+  for (const n of tree) n.note = "고침";
   store.saveBookmarks(tree);
   store.saveSetting("theme", "light");
+  store.saveSetting("fontSize", 18);
   const local = plain(store.loadLocal());
   assert.equal(local.bookmarks.items.a._u, T);
+  assert.equal(local.bookmarks.items.b._u, T);
   assert.equal(local.settings.theme._u, T);
+  assert.equal(local.settings.fontSize._u, T);
 });
 
 // ── 문서 지문 (known-issues §38, 사용자 결정 2026-10-31) ──
