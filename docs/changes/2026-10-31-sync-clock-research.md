@@ -1,4 +1,5 @@
 ---
+pr: 457
 date: 2026-10-31
 branch: docs/sync-clock-research
 title: "docs: 기기 시계와 동기화 조사 기록을 보관함"
