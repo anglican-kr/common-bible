@@ -1,4 +1,5 @@
 ---
+pr: 455
 date: 2026-10-31
 branch: docs/prose-writing-tests
 title: "docs: 문장 교정(글쓰기 규칙과 테스트 안내)"
