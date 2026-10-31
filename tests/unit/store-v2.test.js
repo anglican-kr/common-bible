@@ -683,18 +683,18 @@ test("값을 더 나눌 수 없으면 그 폴더만 0부터 다시 매긴다", (
   assert.deepEqual(plain(store.loadBookmarks()).map((n) => n.id), ["a", "x", "b"]);
 });
 
-// ── 은퇴한 설정 정리와 북마크 삭제 기록 (사용자 결정 2026-10-31, known-issues §39) ──
-// 앱을 시작할 때의 정리(sweepRetiredSettings)는 30일 지난 은퇴 설정만 지운다. 북마크 삭제 기록도 지우던 때는(sweepTombstones)
+// ── 값을 null로 바꿔 둔 설정 키의 정리와 북마크 삭제 기록 (사용자 결정 2026-10-31, known-issues §39) ──
+// 앱을 시작할 때의 정리(sweepRetiredSettings)는 값을 null로 바꿔 둔 지 30일이 지난 설정 키만 지운다. 북마크 삭제 기록도 지우던 때는(sweepTombstones)
 // 다음 병합이 드라이브에서 그 기록을 다시 넣어 아무것도 줄지 않았고, 동기화를 30일 넘게 끈 동안 지운 북마크는 다시 켜면
 // 드라이브에서 되살아났다.
 
 const DAY = 864e5;
 
-test("오래된 null 설정 항목은 sweepRetiredSettings가 걷어낸다", () => {
-  // 은퇴 규약: 키를 없앨 때 `{ v: null, _u: now }`를 쓰고, 30일 뒤 정리가 걷어낸다.
+test("값을 null로 바꿔 둔 지 오래된 설정 키는 sweepRetiredSettings가 지운다", () => {
+  // 설정 키를 없앨 때는 `{ v: null, _u: now }`를 쓰고, 30일 뒤 정리가 지운다.
   const { store } = load();
   store.saveLocal(doc({ settings: {
-    "retired-setting": { v: null,   _u: 1 },          // 은퇴 표식, 30일 경과 → 제거
+    "retired-setting": { v: null,   _u: 1 },          // 없앤 키의 표시, 30일이 지나 지운다
     theme:             { v: "dark", _u: 1 },          // 값이 있으면 나이와 무관하게 유지
     fontSize:          { v: null,   _u: 0 },          // _emptyDoc 기본값은 유지
     "fresh-null":      { v: null,   _u: Date.now() }, // 아직 30일 안 지난 `null`은 유지
@@ -717,7 +717,7 @@ test("sweepRetiredSettings는 북마크 삭제 기록을 지우지 않는다 —
   store.sweepRetiredSettings();
   const saved = plain(store.loadLocal());
   assert.deepEqual(saved.bookmarks.tombstones, { gone: t0 });
-  assert.equal("retired-setting" in saved.settings, false, "은퇴한 설정은 그대로 지운다");
+  assert.equal("retired-setting" in saved.settings, false, "값을 null로 바꿔 둔 설정 키는 그대로 지운다");
 });
 
 test("동기화를 끈 채 지운 북마크는 40일 뒤 앱을 열고 다시 켜 병합해도 돌아오지 않는다", () => {
