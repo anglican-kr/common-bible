@@ -126,7 +126,7 @@ description: 문장 교정 반복 실행의 한 번. 열린 문장 교정 PR이 
    - `## 요약`: 묶음과 파일, 기계 검사 항목의 전후 건수, 그 밖에 고친 곳의 수
    - `## 검증`: 4의 명령과 결과
    - `## 갱신한 문서`: 규칙을 더했으면 그 문서. 코드 파일의 주석을 고쳤으면 `- 없음 — 주석만 고쳤다`(코드가 바뀐 PR은 이 절이 있어야 한다).
-4. push하고 `gh pr create --title "docs: 문장 교정(<묶음 설명>)" --body-file <원장>`으로 연다. 훅이 원장에 `pr: N`을 적으면, `tools/prose/progress.md`에 이번에 적은 「진행」만 「#N」으로 바꿔 함께 커밋한다(`docs: 문장 교정 원장에 PR 번호`). 그리고 PR 본문에서 머리말(frontmatter)을 뺀다(`bash scripts/pr_body.sh <원장> | gh api -X PATCH repos/anglican-kr/common-bible/pulls/<N> -F body=@-`).
+4. push하고 `gh pr create --title "docs: 문장 교정(<묶음 설명>)" --body-file <원장>`으로 연다. 초안(draft)이 아닌 PR로 연다. GitHub 도구로 열면 `draft: false`를 넘긴다. 초안이면 머지 API가 거절해, 머지할 때마다 상태를 바꿔야 했다(사용자 결정 2026-10-31). 훅이 원장에 `pr: N`을 적으면, `tools/prose/progress.md`에 이번에 적은 「진행」만 「#N」으로 바꿔 함께 커밋한다(`docs: 문장 교정 원장에 PR 번호`). 그리고 PR 본문에서 머리말(frontmatter)을 뺀다(`bash scripts/pr_body.sh <원장> | gh api -X PATCH repos/anglican-kr/common-bible/pulls/<N> -F body=@-`).
 5. CI(`Unit tests`, `Change ledger`, `Prose lint`)가 통과하는지 본다. 머지는 하지 않는다.
 
 ## 모델과 정기 실행

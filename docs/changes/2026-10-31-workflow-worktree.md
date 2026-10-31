@@ -17,7 +17,7 @@ title: "docs: 작업 폴더 흐름 변경 및 초안 PR 함정 기록"
 - **작업 폴더를 지울 때 `--force`는 확인한 뒤에만 붙인다.** git은 서브모듈을 받은 작업 폴더를 강제 옵션 없이 지우지 않는다(임시 저장소로 확인했다. 「working trees containing submodules cannot be moved or removed」). 그래서 명령은 강제 옵션 없이 적고, `git status --short --ignored`로 남길 것이 없음을 본 뒤에 붙이라고 주석에 적었다.
 - **작업 폴더에서 e2e를 돌리는 요령을 저장소로 옮겼다.** 서브모듈을 원래 폴더의 것을 참조해 받는 법, 다른 포트에 Python 3.14로 서버를 띄우는 법, e2e 사본의 포트를 바꾸는 법이다. 그동안 저장소 밖 메모에만 있었다.
 - **초안 PR은 머지되지 않는다.** 클라우드 정기 실행이 연 #455가 초안이라, 머지 API가 「Pull Request is still a draft」(405)로 거절했다. PR 타임라인을 보면 사용자 계정이 검토할 수 있는 상태로 바꾸고 8초 뒤에 머지했다. #448, #450, #453도 초안이었다.
-  - 스킬(`.claude/skills/prose-batch/SKILL.md`)의 PR 여는 명령에는 `--draft`가 없고, 스킬은 머지하지 않는다고 적혀 있다. 그래서 스킬의 PR 단계는 고치지 않았다. 초안으로 열린 까닭은 확인하지 못했다. 클라우드에서 쓰는 GitHub 도구의 PR 생성에는 `draft` 인자가 있다.
+  - 스킬(`.claude/skills/prose-batch/SKILL.md`)의 PR 여는 명령에는 `--draft`가 없다. 초안으로 열린 까닭은 확인하지 못했는데, 클라우드에서 쓰는 GitHub 도구의 PR 생성에 `draft` 인자가 있다. 그래서 스킬의 PR 단계에 「초안이 아닌 PR로 연다(GitHub 도구로 열면 `draft: false`)」를 적었다(사용자 결정 2026-10-31).
 - **「가르다」를 판단이 필요한 낱말 목록(`term?`)에 더했다.** 「용어」 표에 이미 있는 낱말이다(사용자 교정 2026-10-31, #457). 정규식은 「가르치다」, 「갈라지다」, 「갈라티아」, 「갈라디아」를 잡지 않는다. 「갈래」, 「가리다」, 「가려내다」는 처음부터 맞지 않는다.
   - 저장소 전체에서 새로 잡히는 곳은 49건이다. 문서가 10건(`docs/design/liturgical-engine/09-open-items.md` 3건, ADR-036 2건, `docs/index.md`, `docs/coding-pitfalls.md` 등), 코드 주석과 테스트가 39건이다. #457이 고친 낱말 가운데 「갈려」, 「갈렸」, 「갈릴」 같은 활용과 코드 주석이 남은 것이다. 문서 10곳(낱말 11곳)은 이 PR에서 고쳤다. #457에서 문서의 「가르다」는 그 PR에서 모두 고치기로 했는데(사용자 결정) 이 활용형을 놓쳤기 때문이다. 고친 줄의 띄어 쓴 조사 6곳과 「상이」 하나도 함께 고쳤다. 코드 주석과 테스트 39건은 문서가 아니라서, 문장 교정 반복 실행이 파일 차례에 본다.
 
@@ -34,5 +34,5 @@ title: "docs: 작업 폴더 흐름 변경 및 초안 PR 함정 기록"
 
 - `CLAUDE.md` 「브랜치 보호와 작업 흐름」: 작업 폴더 규칙과 「작업 표준 흐름」. 「테스트」: 작업 폴더의 e2e는 다른 포트로
 - `docs/workflow.md` 「커밋과 PR」: 초안 PR. 「작업 중 함정」: 작업 폴더와 e2e 요령
-- `.claude/skills/prose-batch/SKILL.md` 「0. 시작」: 작업 폴더의 자리
+- `.claude/skills/prose-batch/SKILL.md` 「0. 시작」: 작업 폴더의 자리. 「5. 커밋, 원장, PR」: 초안이 아닌 PR로 열기
 - 「가르다」의 활용형: `docs/coding-pitfalls.md`, ADR-036, `docs/design/liturgical-engine-review.md`, `docs/design/liturgical-engine/04-compute-layer.md`, `05-lookup-layer.md`, `09-open-items.md`, `docs/index.md`

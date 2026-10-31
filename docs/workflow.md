@@ -20,7 +20,7 @@
 - 진행 중인 작업이 GitHub 이슈와 이어져 있으면 커밋 제목 끝에 `(#NNN)`을 붙인다. 다른 저장소의 이슈는 `anglican-kr/common-bible#134`처럼 쓴다. 이슈를 닫는 `Closes #134`는 본문에 따로 적는다.
 - GitHub 작업은 REST(`gh api repos/...`)로 한다. GraphQL을 쓰는 `gh pr edit`가 projectCards 오류를 냈다(2026-07-06 PR #301, 사용자 지시). PR 생성 명령은 원장 훅이 검사하는 표준 절차라 그대로 쓰고, 오류가 나면 REST로 바꾼다.
 - 필수 검사가 「Expected」로 멈춰 머지가 막히면, CI를 다시 돌리기 전에 PR이 main과 충돌하는지 본다. 충돌이면 GitHub가 머지 ref(`refs/pull/<N>/merge`)를 만들지 못해 워크플로가 아예 돌지 않는다. `gh api repos/anglican-kr/common-bible/pulls/<N> --jq .mergeable_state`가 `dirty`이거나 head에 `github-actions` check-suite가 없으면 이 경우다. 해법은 충돌을 해결하는 것이다. 예전에는 `git rebase origin/main` 뒤 force push로 해결했는데, force push는 CLAUDE.md가 금지하므로 실행 전에 사용자에게 묻는다. squash 머지라면 `git merge origin/main`으로 해결해도 결과는 같다.
-- **초안(draft) PR은 머지되지 않는다.** 머지 API가 「Pull Request is still a draft」(405)로 거절하면 그 PR은 초안이다. `gh pr ready <N>`으로 검토할 수 있는 상태로 바꾼 뒤 다시 머지한다. 문장 교정 PR이 초안으로 열린 적이 여러 번 있다(#448, #450, #453, #455). 스킬(`.claude/skills/prose-batch/SKILL.md`)에는 초안으로 열라는 지시가 없다(2026-10-31, #455).
+- **초안(draft) PR은 머지되지 않는다.** 머지 API가 「Pull Request is still a draft」(405)로 거절하면 그 PR은 초안이다. `gh pr ready <N>`으로 검토할 수 있는 상태로 바꾼 뒤 다시 머지한다. 문장 교정 PR이 초안으로 열린 적이 여러 번 있다(#448, #450, #453, #455). 그래서 스킬(`.claude/skills/prose-batch/SKILL.md`)에 초안이 아닌 PR로 열라고 적었다(사용자 결정 2026-10-31, #455).
 
 ## 리뷰
 
