@@ -1,4 +1,5 @@
 ---
+pr: 460
 date: 2026-10-31
 branch: fix/sync-base-ids
 title: "fix: 북마크 삭제 기록 보존 및 동기화 기준 목록 저장"
