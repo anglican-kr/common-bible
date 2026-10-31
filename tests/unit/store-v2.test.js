@@ -21,13 +21,15 @@ const SOURCE = stripEsmMarker(
   fs.readFileSync(path.resolve(__dirname, "../../js/sync/store-v2.js"), "utf8"),
 );
 
-function load(initialStorage = {}) {
+// `now` fixes this device's clock (Date.now) for the loaded store — a slow-clock device is one whose `now` is behind.
+function load(initialStorage = {}, { now } = {}) {
   const localStorage = makeLocalStorage(initialStorage);
   const win = {};
+  const ClockDate = now === undefined ? Date : class extends Date { static now() { return now; } };
   const ctx = {
     localStorage,
     window: win,
-    JSON, Object, Array, Set, Map, String, Number, Boolean, Math, Date,
+    JSON, Object, Array, Set, Map, String, Number, Boolean, Math, Date: ClockDate,
     console, Error, isNaN, parseInt,
   };
   ctx.globalThis = ctx;
@@ -152,12 +154,14 @@ test("항목이 삭제 표식보다 새로우면 되살아난다", () => {
   assert.equal(merged.bookmarks.items.b1.bookId, "gen");
 });
 
-test("_u 시각이 같으면 deviceId 사전순으로 앞선다", () => {
+// 기기 id 순서로 고르던 때는 비교 상대가 마지막으로 올린 기기라, 한 기기는 자기 사본을 남기고 올리지도 않아 기기마다
+// 다른 사본이 남았다(2026-10-31 리뷰, 사용자 결정).
+test("수정 시각이 같으면 기기 id와 상관없이 드라이브의 사본이 남는다", () => {
   const { store } = load();
   const local  = doc({ items: { b1: { id: "b1", type: "bookmark", name: "L", _u: 100 } } });
   const remote = doc({ items: { b1: { id: "b1", type: "bookmark", name: "R", _u: 100 } },
                        deviceId: "device-z" });
-  assert.equal(store.mergeDocs(local, remote, "device-a").bookmarks.items.b1.name, "L");
+  assert.equal(store.mergeDocs(local, remote, "device-a").bookmarks.items.b1.name, "R");
   assert.equal(store.mergeDocs(local, remote, "device-zz").bookmarks.items.b1.name, "R");
 });
 
@@ -659,4 +663,144 @@ test("오래된 null 설정 항목은 sweepTombstones 가 걷어낸다", () => {
   assert.equal(s.theme.v, "dark");
   assert.deepEqual(plain(s.fontSize), { v: null, _u: 0 });
   assert.equal(s["fresh-null"].v, null);
+});
+
+// ── 이전 수정 시각보다 늦은 시각으로 기록하기 (known-issues §39, 사용자 결정 2026-10-30) ──
+// 새 수정 시각은 기기 시각과 「그 기록의 이전 수정 시각보다 1밀리초 늦은 시각」 가운데 늦은 쪽이다. 기기 시각만 기록하던 때는 시계가 느린 기기에서 받은 뒤
+// 고친 내용이 먼저 고친 사본에 덮어써졌다.
+
+const T = Date.UTC(2026, 9, 30, 12);          // 시계가 맞는 기기가 고친 시각
+const SLOW = T - 10 * 60e3 + 60e3;            // 시계가 10분 느린 기기에서 1분 뒤
+const bm = (extra = {}) => ({ id: "a", type: "bookmark", bookId: "gen", chapter: 1, note: "", parentId: null, _order: 0, _u: T, ...extra });
+const stored = (d) => ({ "bible-bookmarks-v2": JSON.stringify(d) });
+const remoteWith = (d) => ({ ...d, schemaVersion: 2, deviceId: "other" });
+
+test("시계가 느린 기기가 받은 북마크를 고치면 이전 수정 시각보다 늦은 시각으로 기록하고, 병합하면 그 편집이 남는다", () => {
+  const received = doc({ items: { a: bm() } });
+  const { store } = load(stored(received), { now: SLOW });
+  const tree = store.loadBookmarks();
+  tree[0].note = "느린 기기가 나중에 고침";
+  store.saveBookmarks(tree);
+  const local = plain(store.loadLocal());
+  assert.equal(local.bookmarks.items.a._u, T + 1);
+  const merged = plain(store.mergeDocs(local, remoteWith(received), "slow"));
+  assert.equal(merged.bookmarks.items.a.note, "느린 기기가 나중에 고침");
+});
+
+test("시계가 느린 기기가 방금 받은 북마크를 지우면 삭제 기록이 그 북마크보다 늦어서, 다음 병합에서 되살아나지 않는다", () => {
+  const received = doc({ items: { a: bm() } });
+  const { store } = load(stored(received), { now: SLOW });
+  store.saveBookmarks([]);
+  const local = plain(store.loadLocal());
+  assert.equal(local.bookmarks.tombstones.a, T + 1);
+  const merged = plain(store.mergeDocs(local, remoteWith(received), "slow"));
+  assert.equal("a" in merged.bookmarks.items, false);
+  assert.equal(merged.bookmarks.tombstones.a, T + 1);
+});
+
+test("같은 id의 삭제 기록이 기기 시각보다 늦은 시각이어도, 다시 넣은 북마크는 보인다 — 백업에서 되살릴 때", () => {
+  const ahead = T + 3600e3;                     // 시각이 빠른 기기가 남긴 삭제 기록
+  const { store } = load(stored(doc({ tombstones: { a: ahead } })), { now: T });
+  store.saveBookmarks([{ id: "a", type: "bookmark", bookId: "gen", chapter: 1, note: "" }]);
+  assert.equal(plain(store.loadLocal()).bookmarks.items.a._u, ahead + 1);
+  assert.deepEqual(plain(store.loadBookmarks()).map((n) => n.id), ["a"]);
+});
+
+test("설정과 읽던 위치도 그 값의 이전 수정 시각보다 늦은 시각으로 기록한다", () => {
+  const received = doc({ settings: { theme: { v: "dark", _u: T } }, lastRead: { v: { bookId: "gen", chapter: 1 }, _u: T } });
+  const { store } = load(stored(received), { now: SLOW });
+  store.saveSetting("theme", "light");
+  store.saveLastRead({ bookId: "john", chapter: 3 });
+  const local = plain(store.loadLocal());
+  assert.deepEqual(local.settings.theme, { v: "light", _u: T + 1 });
+  assert.deepEqual(local.lastRead, { v: { bookId: "john", chapter: 3 }, _u: T + 1 });
+});
+
+test("시계가 맞으면 기기 시각을 그대로 기록한다", () => {
+  const { store } = load(stored(doc({ items: { a: bm() }, settings: { theme: { v: "dark", _u: T } } })), { now: T + 5000 });
+  const tree = store.loadBookmarks();
+  tree[0].note = "고침";
+  store.saveBookmarks(tree);
+  store.saveSetting("theme", "light");
+  const local = plain(store.loadLocal());
+  assert.equal(local.bookmarks.items.a._u, T + 5000);
+  assert.equal(local.settings.theme._u, T + 5000);
+});
+
+test("숫자가 아닌 이전 시각은 0으로 본다 — 새 시각이 숫자가 아닌 값이 되지 않는다", () => {
+  const { store } = load(stored(doc({ items: { a: bm({ _u: "bad" }) }, settings: { theme: { v: "dark", _u: null } } })), { now: T });
+  const tree = store.loadBookmarks();
+  tree[0].note = "고침";
+  store.saveBookmarks(tree);
+  store.saveSetting("theme", "light");
+  const local = plain(store.loadLocal());
+  assert.equal(local.bookmarks.items.a._u, T);
+  assert.equal(local.settings.theme._u, T);
+});
+
+// ── 문서 지문 (known-issues §38, 사용자 결정 2026-10-31) ──
+
+test("지문은 키 순서와 문서 맨 위의 다른 필드에 상관없고, 내용이 바뀌면 달라진다", () => {
+  const { store } = load();
+  const a = doc({ items: { a: bm(), b: bm({ id: "b", _order: 1 }) }, settings: { theme: { v: "dark", _u: T } } });
+  const reordered = {
+    lastRead: a.lastRead, settings: { theme: { _u: T, v: "dark" } },
+    bookmarks: { tombstones: {}, items: { b: bm({ id: "b", _order: 1 }), a: { ...bm(), _u: T } } },
+    schemaVersion: 2, deviceId: "x",
+  };
+  assert.equal(store.fingerprint(reordered), store.fingerprint(a));
+  assert.notEqual(store.fingerprint(doc({ items: { a: bm({ note: "고침" }), b: bm({ id: "b", _order: 1 }) }, settings: a.settings })), store.fingerprint(a));
+});
+
+test("가장 늦은 수정 시각이 같아도 북마크가 늘면 지문이 달라진다 — 시계가 느린 기기의 새 북마크", () => {
+  const { store } = load();
+  const synced = doc({ items: { a: bm() } });
+  const withNew = doc({ items: { a: bm(), b: bm({ id: "b", _order: 1, _u: SLOW }) } });
+  assert.equal(store.maxU(withNew), store.maxU(synced));
+  assert.notEqual(store.fingerprint(withNew), store.fingerprint(synced));
+});
+
+test("시계가 느린 기기가 받은 북마크를 다른 폴더로 옮기면 이전 수정 시각보다 늦은 시각으로 기록한다", () => {
+  const received = doc({ items: {
+    f: { id: "f", type: "folder", name: "폴더", parentId: null, _order: 0, _u: T },
+    a: bm({ _order: 1 }),
+  } });
+  const { store } = load(stored(received), { now: SLOW });
+  const tree = plain(store.loadBookmarks());
+  const a = tree.find((n) => n.id === "a");
+  const folder = tree.find((n) => n.id === "f");
+  folder.children = [a];
+  store.saveBookmarks([folder]);
+  const local = plain(store.loadLocal());
+  assert.equal(local.bookmarks.items.a.parentId, "f");
+  assert.equal(local.bookmarks.items.a._u, T + 1);
+  assert.equal(local.bookmarks.items.f._u, T, "자리와 내용이 그대로인 폴더는 시각을 그대로 둔다");
+});
+
+test("저장된 삭제 기록에 가려진 북마크를 같은 내용으로 다시 넣어도 보인다 — 옛 버전이 남긴 상태", () => {
+  const ahead = T + 3600e3;
+  const { store } = load(stored(doc({ items: { a: bm() }, tombstones: { a: ahead } })), { now: T });
+  assert.deepEqual(plain(store.loadBookmarks()), [], "삭제 기록이 더 늦어 가려져 있다");
+  const { _u, parentId, _order, ...node } = bm();
+  store.saveBookmarks([node]);
+  assert.equal(plain(store.loadLocal()).bookmarks.items.a._u, ahead + 1);
+  assert.deepEqual(plain(store.loadBookmarks()).map((n) => n.id), ["a"]);
+});
+
+test("지문은 설정과 읽던 위치가 바뀌어도 달라진다", () => {
+  const { store } = load();
+  const base = doc({ settings: { theme: { v: "dark", _u: T } }, lastRead: { v: { bookId: "gen", chapter: 1 }, _u: T } });
+  const setting = doc({ settings: { theme: { v: "light", _u: T } }, lastRead: base.lastRead });
+  const reading = doc({ settings: base.settings, lastRead: { v: { bookId: "gen", chapter: 2 }, _u: T } });
+  assert.notEqual(store.fingerprint(setting), store.fingerprint(base));
+  assert.notEqual(store.fingerprint(reading), store.fingerprint(base));
+});
+
+test("아주 깊게 중첩된 필드가 있어도 지문 계산이 멈추지 않고 빈 값을 돌려준다", () => {
+  // 가져오기는 모르는 필드를 그대로 두므로 이런 북마크도 저장되고 올라간다. 지문 계산이 예외를 내면 동기화 전체가
+  // 오류로 끝났다(2026-10-31 리뷰). 빈 값은 저장된 어느 지문과도 같지 않아 304 경로가 올린다.
+  const { store } = load();
+  let deep = {};
+  for (let i = 0; i < 20000; i++) deep = { x: deep };
+  assert.equal(store.fingerprint(doc({ items: { a: bm({ extra: deep }) } })), "");
 });

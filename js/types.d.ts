@@ -361,6 +361,8 @@ export interface SyncStoreV2 {
   migrateLegacyIfNeeded: () => void;
   mergeDocs: (local: SyncDoc, remote: SyncDoc, deviceId: string) => SyncDoc;
   maxU: (doc: SyncDoc) => number;
+  /** A short value that changes whenever the doc's bookmarks, settings or reading position do. */
+  fingerprint: (doc: SyncDoc) => string;
   buildSyncPayload: (deviceId: string) => SyncPayload;
   validateRemote: (data: unknown) => boolean;
   bookmarkTreeFromFlat: (items: { [id: string]: SyncFlatItem }) => BookmarkTreeNode[];

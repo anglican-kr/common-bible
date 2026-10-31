@@ -19,7 +19,8 @@ import {
   MAX_REDIRECT_ATTEMPTS,
   CACHE_FILE_ID_KEY,
   CACHE_ETAG_KEY,
-  CACHE_SYNCED_U_KEY,
+  CACHE_SYNCED_HASH_KEY,
+  LEGACY_CACHE_SYNCED_U_KEY,
 } from "./harness.js";
 
 // ── Group 1: 초기 상태 + ENABLE 분기 ─────────────────────────────────────────
@@ -610,13 +611,13 @@ test("26. 401 reauth 경로의 silent refresh는 SYNCING에서도 override (from
   assert.equal(downloadCalls, 2, "두 번째 사이클에서 200, 무한 루프 없음");
 });
 
-// ── Group 10: Sync 캐시 (fileId / etag / syncedMaxU 라운드트립 단축) ─────────
+// ── Group 10: Sync 캐시 (fileId / etag / 지문 라운드트립 단축) ─────────
 // _syncCycle은 매 사이클 직렬로 3 round trip(findSyncFileId + download +
 // upload)을 발생시켰다. 캐시는 (a) 안정적인 fileId를 재사용해 files.list를
 // 생략, (b) If-None-Match로 304를 받아 다운로드 본문 전송을 차단, (c)
-// localMaxU == syncedMaxU 일 때 merge·upload 자체를 생략한다.
+// 로컬 문서의 지문이 마지막 동기화의 지문과 같을 때 merge·upload 자체를 생략한다.
 
-test("27. 첫 sync 후 fileId·etag·syncedMaxU가 localStorage에 캐시됨", async () => {
+test("27. 첫 sync 후 fileId·etag·지문이 localStorage에 캐시됨", async () => {
   const findFileCalls = [];
   const remoteDoc = {
     schemaVersion: 2,
@@ -644,7 +645,7 @@ test("27. 첫 sync 후 fileId·etag·syncedMaxU가 localStorage에 캐시됨", a
   assert.equal(findFileCalls.length, 1, "첫 사이클은 findSyncFileId 1회");
   assert.equal(localStorage.getItem(CACHE_FILE_ID_KEY), "fid-1", "fileId 캐시됨");
   assert.equal(localStorage.getItem(CACHE_ETAG_KEY), '"e1"', "etag 캐시됨");
-  assert.equal(localStorage.getItem(CACHE_SYNCED_U_KEY), "0", "syncedMaxU 캐시됨");
+  assert.equal(localStorage.getItem(CACHE_SYNCED_HASH_KEY), "0", "지문 캐시됨");
 });
 
 test("28. 캐시 hit + 304 + 로컬 변화 없음 → upload·findSyncFileId 모두 생략", async () => {
@@ -656,7 +657,7 @@ test("28. 캐시 hit + 304 + 로컬 변화 없음 → upload·findSyncFileId 모
     initialStorage: {
       [CACHE_FILE_ID_KEY]: "fid-cached",
       [CACHE_ETAG_KEY]: '"e-cached"',
-      [CACHE_SYNCED_U_KEY]: "0",
+      [CACHE_SYNCED_HASH_KEY]: "0",
     },
     overrideStubs: {
       T: {
@@ -679,7 +680,7 @@ test("28. 캐시 hit + 304 + 로컬 변화 없음 → upload·findSyncFileId 모
 });
 
 test("29. 캐시 hit + 304 + 로컬만 변경 → merge 건너뛰고 upload-only", async () => {
-  // V2.maxU stub만 1로 바꿔 localMaxU > syncedMaxU 시나리오를 만든다.
+  // V2.maxU stub만 20으로 바꿔(하네스의 지문은 maxU를 따른다) 로컬 지문이 캐시와 다른 시나리오를 만든다.
   const uploadCalls = [];
   const mergeCalls = [];
   const { machine, drain, localStorage } = loadMachine({
@@ -687,7 +688,7 @@ test("29. 캐시 hit + 304 + 로컬만 변경 → merge 건너뛰고 upload-only
     initialStorage: {
       [CACHE_FILE_ID_KEY]: "fid-cached",
       [CACHE_ETAG_KEY]: '"e-cached"',
-      [CACHE_SYNCED_U_KEY]: "10",
+      [CACHE_SYNCED_HASH_KEY]: "10",
     },
     overrideStubs: {
       V2: {
@@ -711,7 +712,97 @@ test("29. 캐시 hit + 304 + 로컬만 변경 → merge 건너뛰고 upload-only
   assert.equal(uploadCalls[0].fileId, "fid-cached", "캐시된 fileId 사용");
   assert.equal(uploadCalls[0].ifMatch, '"e-cached"', "캐시 etag로 If-Match");
   assert.equal(localStorage.getItem(CACHE_ETAG_KEY), '"e-after-upload"', "새 etag 캐시 반영");
-  assert.equal(localStorage.getItem(CACHE_SYNCED_U_KEY), "20", "syncedMaxU 갱신");
+  assert.equal(localStorage.getItem(CACHE_SYNCED_HASH_KEY), "20", "지문 갱신");
+});
+
+// known-issues §38: 시계가 느린 기기에서 새로 만든 북마크는 수정 시각이 지난번 동기화의 가장 늦은 시각보다 이르다. 가장 늦은
+// 시각만 보면 바뀐 것이 없어 보여, 드라이브가 그대로인(304) 동안 그 북마크가 올라가지 않았다. 지문은 내용으로 판단한다.
+test("29b. 캐시 hit + 304 + 가장 늦은 수정 시각은 그대로이고 내용만 바뀐 로컬 → 올린다", async () => {
+  const uploadCalls = [];
+  const synced = { bookmarks: { items: { a: { id: "a", _u: 100 } }, tombstones: {} } };
+  const local = { bookmarks: { items: { a: { id: "a", _u: 100 }, b: { id: "b", _u: 40 } }, tombstones: {} } };
+  const fp = (/** @type {any} */ d) => JSON.stringify(d.bookmarks);
+  const { machine, drain, localStorage } = loadMachine({
+    initialRefreshToken: "rt-x",
+    initialStorage: {
+      [CACHE_FILE_ID_KEY]: "fid-cached",
+      [CACHE_ETAG_KEY]: '"e-cached"',
+      [CACHE_SYNCED_HASH_KEY]: fp(synced),
+      [LEGACY_CACHE_SYNCED_U_KEY]: "100",   // 고치기 전 판이 남긴 캐시(지난번 동기화의 가장 큰 시각)
+    },
+    overrideStubs: {
+      V2: { loadLocal: () => local, buildSyncPayload: () => local, maxU: () => 100, fingerprint: fp },
+      T: {
+        downloadSyncFile: async () => ({ doc: null, etag: null, status: 304 }),
+        uploadSyncFile: async (_t, body) => { uploadCalls.push(body); return { ok: true, status: 200, etag: '"e-after"' }; },
+      },
+    },
+  });
+  machine.enable();
+  await drain(8);
+  assert.equal(machine.getState(), "IDLE");
+  assert.equal(uploadCalls.length, 1, "내용이 바뀌었으니 올린다");
+  assert.ok(uploadCalls[0].bookmarks.items.b, "시계가 느린 기기의 새 북마크가 올라간다");
+  assert.equal(localStorage.getItem(CACHE_SYNCED_HASH_KEY), fp(local), "올린 문서의 지문을 캐시한다");
+  assert.equal(localStorage.getItem(LEGACY_CACHE_SYNCED_U_KEY), null, "옛 캐시 키는 지운다");
+});
+
+// 올린 문서의 지문을 캐시해야 올리는 동안 고친 것이 다음 사이클에 올라간다. 올리기가 끝난 뒤의 문서로 지문을 만들면
+// 그 편집을 맞춘 것으로 보고 영영 올리지 않는다(2026-10-31 리뷰).
+test("29c. 304 + 올리는 동안 고친 것은 다음 사이클의 304에서 올라간다", async () => {
+  const uploads = [];
+  let local = { bookmarks: { items: { a: { id: "a", _u: 1 } }, tombstones: {} } };
+  const fp = (/** @type {any} */ d) => JSON.stringify(d.bookmarks);
+  const { machine, drain, localStorage } = loadMachine({
+    initialRefreshToken: "rt-x",
+    initialStorage: {
+      [CACHE_FILE_ID_KEY]: "fid-cached",
+      [CACHE_ETAG_KEY]: '"e-cached"',
+      [CACHE_SYNCED_HASH_KEY]: "지난번",
+    },
+    overrideStubs: {
+      V2: { loadLocal: () => local, buildSyncPayload: () => local, fingerprint: fp },
+      T: {
+        downloadSyncFile: async () => ({ doc: null, etag: null, status: 304 }),
+        uploadSyncFile: async (_t, body) => {
+          uploads.push(body);
+          if (uploads.length === 1) local = { bookmarks: { items: { ...local.bookmarks.items, b: { id: "b", _u: 2 } }, tombstones: {} } };
+          return { ok: true, status: 200, etag: '"e-cached"' };
+        },
+      },
+    },
+  });
+  machine.enable();
+  await drain(8);
+  assert.equal(uploads.length, 1);
+  assert.equal(localStorage.getItem(CACHE_SYNCED_HASH_KEY), fp(uploads[0]), "올린 문서의 지문을 캐시한다");
+  machine.requestSync();
+  await drain(8);
+  assert.equal(uploads.length, 2, "올리는 동안 더한 b가 다음 사이클에 올라간다");
+  assert.ok(uploads[1].bookmarks.items.b);
+});
+
+test("29d. 304 + 지문이 빈 값이면(계산하지 못한 문서) 올리고 오류 없이 마친다", async () => {
+  const uploads = [];
+  const { machine, drain } = loadMachine({
+    initialRefreshToken: "rt-x",
+    initialStorage: {
+      [CACHE_FILE_ID_KEY]: "fid-cached",
+      [CACHE_ETAG_KEY]: '"e-cached"',
+      [CACHE_SYNCED_HASH_KEY]: "지난번",
+    },
+    overrideStubs: {
+      V2: { fingerprint: () => "" },
+      T: {
+        downloadSyncFile: async () => ({ doc: null, etag: null, status: 304 }),
+        uploadSyncFile: async (_t, body) => { uploads.push(body); return { ok: true, status: 200, etag: '"e-after"' }; },
+      },
+    },
+  });
+  machine.enable();
+  await drain(8);
+  assert.equal(machine.getState(), "IDLE");
+  assert.equal(uploads.length, 1);
 });
 
 test("30. 캐시 hit + 다운로드 404 → 캐시 무효화 + SYNC_FAIL", async () => {
@@ -720,7 +811,7 @@ test("30. 캐시 hit + 다운로드 404 → 캐시 무효화 + SYNC_FAIL", async
     initialStorage: {
       [CACHE_FILE_ID_KEY]: "fid-stale",
       [CACHE_ETAG_KEY]: '"e-stale"',
-      [CACHE_SYNCED_U_KEY]: "5",
+      [CACHE_SYNCED_HASH_KEY]: "5",
     },
     overrideStubs: {
       T: {
@@ -732,7 +823,7 @@ test("30. 캐시 hit + 다운로드 404 → 캐시 무효화 + SYNC_FAIL", async
   await drain(8);
   assert.equal(localStorage.getItem(CACHE_FILE_ID_KEY), null, "fileId 캐시 클리어");
   assert.equal(localStorage.getItem(CACHE_ETAG_KEY), null, "etag 캐시 클리어");
-  assert.equal(localStorage.getItem(CACHE_SYNCED_U_KEY), null, "syncedMaxU 캐시 클리어");
+  assert.equal(localStorage.getItem(CACHE_SYNCED_HASH_KEY), null, "지문 캐시 클리어");
 });
 
 test("31. 캐시 hit + 304 + upload 412 → 캐시 무효화 (다음 사이클 재머지)", async () => {
@@ -741,7 +832,7 @@ test("31. 캐시 hit + 304 + upload 412 → 캐시 무효화 (다음 사이클 �
     initialStorage: {
       [CACHE_FILE_ID_KEY]: "fid-c",
       [CACHE_ETAG_KEY]: '"e-c"',
-      [CACHE_SYNCED_U_KEY]: "1",
+      [CACHE_SYNCED_HASH_KEY]: "1",
     },
     overrideStubs: {
       V2: { maxU: () => 2 },
@@ -763,13 +854,15 @@ test("32. disable() → 캐시 클리어 (다른 계정 로그인 보호)", () =
     initialStorage: {
       [CACHE_FILE_ID_KEY]: "fid-c",
       [CACHE_ETAG_KEY]: '"e-c"',
-      [CACHE_SYNCED_U_KEY]: "5",
+      [CACHE_SYNCED_HASH_KEY]: "5",
+      [LEGACY_CACHE_SYNCED_U_KEY]: "5",
     },
   });
   machine.disable();
   assert.equal(localStorage.getItem(CACHE_FILE_ID_KEY), null);
   assert.equal(localStorage.getItem(CACHE_ETAG_KEY), null);
-  assert.equal(localStorage.getItem(CACHE_SYNCED_U_KEY), null);
+  assert.equal(localStorage.getItem(CACHE_SYNCED_HASH_KEY), null);
+  assert.equal(localStorage.getItem(LEGACY_CACHE_SYNCED_U_KEY), null, "옛 캐시 키도 지운다");
 });
 
 test("33. 캐시 hit + 200 (원격 변경됨) → 일반 merge 경로 + 새 etag 캐시", async () => {
@@ -788,7 +881,7 @@ test("33. 캐시 hit + 200 (원격 변경됨) → 일반 merge 경로 + 새 etag
     initialStorage: {
       [CACHE_FILE_ID_KEY]: "fid-c",
       [CACHE_ETAG_KEY]: '"e-old"',
-      [CACHE_SYNCED_U_KEY]: "0",
+      [CACHE_SYNCED_HASH_KEY]: "0",
     },
     overrideStubs: {
       T: {
@@ -879,7 +972,7 @@ test("36. _loadCache의 getItem이 SecurityError throw → slow path graceful fa
     initialStorage: {
       [CACHE_FILE_ID_KEY]: "fid-cached",
       [CACHE_ETAG_KEY]: '"e-cached"',
-      [CACHE_SYNCED_U_KEY]: "0",
+      [CACHE_SYNCED_HASH_KEY]: "0",
     },
     overrideStubs: {
       T: {
@@ -934,7 +1027,7 @@ test("38. silent refresh invalid_grant → 캐시도 함께 클리어", async ()
     initialStorage: {
       [CACHE_FILE_ID_KEY]: "fid-prev-user",
       [CACHE_ETAG_KEY]: '"e-prev"',
-      [CACHE_SYNCED_U_KEY]: "5",
+      [CACHE_SYNCED_HASH_KEY]: "5",
     },
   });
   machine.enable();
@@ -943,7 +1036,7 @@ test("38. silent refresh invalid_grant → 캐시도 함께 클리어", async ()
   assert.equal(stubs.refreshStore._calls.clear, 1, "refresh token IDB clear");
   assert.equal(localStorage.getItem(CACHE_FILE_ID_KEY), null, "fileId 캐시 클리어");
   assert.equal(localStorage.getItem(CACHE_ETAG_KEY), null, "etag 캐시 클리어");
-  assert.equal(localStorage.getItem(CACHE_SYNCED_U_KEY), null, "syncedMaxU 캐시 클리어");
+  assert.equal(localStorage.getItem(CACHE_SYNCED_HASH_KEY), null, "지문 캐시 클리어");
 });
 
 // ── Group 13: requestSync 폴 throttle ────────────────────────────────────────
@@ -959,7 +1052,7 @@ test("40. requestSync({throttleMs}) — 첫 호출은 _lastSyncEndAt=0이라 thr
     initialStorage: {
       [CACHE_FILE_ID_KEY]: "fid-cached",
       [CACHE_ETAG_KEY]: '"e-cached"',
-      [CACHE_SYNCED_U_KEY]: "0",
+      [CACHE_SYNCED_HASH_KEY]: "0",
     },
     overrideStubs: {
       T: {
@@ -984,7 +1077,7 @@ test("41. requestSync({throttleMs}) — 마지막 사이클 종료 후 throttle 
     initialStorage: {
       [CACHE_FILE_ID_KEY]: "fid-cached",
       [CACHE_ETAG_KEY]: '"e-cached"',
-      [CACHE_SYNCED_U_KEY]: "0",
+      [CACHE_SYNCED_HASH_KEY]: "0",
     },
     overrideStubs: {
       T: {
@@ -1012,7 +1105,7 @@ test("42. requestSync() (throttle 미지정) — 사용자 액션은 window 안�
     initialStorage: {
       [CACHE_FILE_ID_KEY]: "fid-cached",
       [CACHE_ETAG_KEY]: '"e-cached"',
-      [CACHE_SYNCED_U_KEY]: "0",
+      [CACHE_SYNCED_HASH_KEY]: "0",
     },
     overrideStubs: {
       T: {
@@ -1039,7 +1132,7 @@ test("43. requestSync({throttleMs}) — SYNCING 중 폴은 throttle 분기 전�
     initialStorage: {
       [CACHE_FILE_ID_KEY]: "fid-cached",
       [CACHE_ETAG_KEY]: '"e-cached"',
-      [CACHE_SYNCED_U_KEY]: "0",
+      [CACHE_SYNCED_HASH_KEY]: "0",
     },
     overrideStubs: {
       T: { downloadSyncFile: () => dlPromise },
@@ -1065,7 +1158,7 @@ test("39. 401 + IDB 비어있음 → NEEDS_CONSENT + 캐시 클리어", async ()
     initialStorage: {
       [CACHE_FILE_ID_KEY]: "fid-prev",
       [CACHE_ETAG_KEY]: '"e-prev"',
-      [CACHE_SYNCED_U_KEY]: "5",
+      [CACHE_SYNCED_HASH_KEY]: "5",
     },
     downloadResult: { doc: null, etag: null, status: 401 },
     exchangeResult: {
@@ -1123,7 +1216,7 @@ test("45. 내려받기 대기 중 disable() → 원격 자료를 로컬에 쓰�
     initialStorage: {
       [CACHE_FILE_ID_KEY]: "fid-cached",
       [CACHE_ETAG_KEY]: '"e-cached"',
-      [CACHE_SYNCED_U_KEY]: "0",
+      [CACHE_SYNCED_HASH_KEY]: "0",
     },
     overrideStubs: {
       T: { downloadSyncFile: () => dlPromise },
@@ -1152,7 +1245,7 @@ test("46. 올리기 대기 중 disable() → 업로드가 끝나도 캐시를 �
     initialStorage: {
       [CACHE_FILE_ID_KEY]: "fid-cached",
       [CACHE_ETAG_KEY]: '"e-cached"',
-      [CACHE_SYNCED_U_KEY]: "0",
+      [CACHE_SYNCED_HASH_KEY]: "0",
     },
     downloadResult: { doc: null, etag: null, status: 304 },
     overrideStubs: {
@@ -1170,7 +1263,7 @@ test("46. 올리기 대기 중 disable() → 업로드가 끝나도 캐시를 �
   assert.equal(machine.getState(), "DISABLED");
   assert.equal(localStorage.getItem(CACHE_FILE_ID_KEY), null, "fileId 캐시가 다시 차지 않음");
   assert.equal(localStorage.getItem(CACHE_ETAG_KEY), null, "etag 캐시가 다시 차지 않음");
-  assert.equal(localStorage.getItem(CACHE_SYNCED_U_KEY), null, "syncedMaxU 캐시가 다시 차지 않음");
+  assert.equal(localStorage.getItem(CACHE_SYNCED_HASH_KEY), null, "지문 캐시가 다시 차지 않음");
 });
 
 test("47. 새 파일 올리기 대기 중 disable() → 끝난 업로드로 SYNC_DONE을 내지 않는다", async () => {
@@ -1207,7 +1300,7 @@ test("48. v1 문서 올리기 대기 중 disable() → 업로드가 끝나도 �
     initialStorage: {
       [CACHE_FILE_ID_KEY]: "fid-cached",
       [CACHE_ETAG_KEY]: '"e-cached"',
-      [CACHE_SYNCED_U_KEY]: "0",
+      [CACHE_SYNCED_HASH_KEY]: "0",
     },
     downloadResult: { doc: { schemaVersion: 1, bookmarks: [] }, etag: '"e-v1"', status: 200 },
     overrideStubs: {
@@ -1225,7 +1318,7 @@ test("48. v1 문서 올리기 대기 중 disable() → 업로드가 끝나도 �
   assert.equal(machine.getState(), "DISABLED");
   assert.equal(localStorage.getItem(CACHE_FILE_ID_KEY), null, "fileId 캐시가 다시 차지 않음");
   assert.equal(localStorage.getItem(CACHE_ETAG_KEY), null, "etag 캐시가 다시 차지 않음");
-  assert.equal(localStorage.getItem(CACHE_SYNCED_U_KEY), null, "syncedMaxU 캐시가 다시 차지 않음");
+  assert.equal(localStorage.getItem(CACHE_SYNCED_HASH_KEY), null, "지문 캐시가 다시 차지 않음");
 });
 
 test("49. 합친 뒤 올리기 대기 중 disable() → 업로드가 끝나도 캐시를 다시 채우지 않는다", async () => {
@@ -1238,7 +1331,7 @@ test("49. 합친 뒤 올리기 대기 중 disable() → 업로드가 끝나도 �
     initialStorage: {
       [CACHE_FILE_ID_KEY]: "fid-cached",
       [CACHE_ETAG_KEY]: '"e-cached"',
-      [CACHE_SYNCED_U_KEY]: "0",
+      [CACHE_SYNCED_HASH_KEY]: "0",
     },
     downloadResult: { doc: remoteDoc, etag: '"e-remote"', status: 200 },
     overrideStubs: {
@@ -1257,7 +1350,7 @@ test("49. 합친 뒤 올리기 대기 중 disable() → 업로드가 끝나도 �
   assert.equal(machine.getState(), "DISABLED");
   assert.equal(localStorage.getItem(CACHE_FILE_ID_KEY), null, "fileId 캐시가 다시 차지 않음");
   assert.equal(localStorage.getItem(CACHE_ETAG_KEY), null, "etag 캐시가 다시 차지 않음");
-  assert.equal(localStorage.getItem(CACHE_SYNCED_U_KEY), null, "syncedMaxU 캐시가 다시 차지 않음");
+  assert.equal(localStorage.getItem(CACHE_SYNCED_HASH_KEY), null, "지문 캐시가 다시 차지 않음");
 });
 
 test("50. 대기 중 disable() 뒤 그 대기가 예외로 끝나면 — 사유는 SYNC_EXCEPTION으로 남기되 SYNC_FAIL은 내지 않는다", async () => {
@@ -1269,7 +1362,7 @@ test("50. 대기 중 disable() 뒤 그 대기가 예외로 끝나면 — 사유�
     initialStorage: {
       [CACHE_FILE_ID_KEY]: "fid-cached",
       [CACHE_ETAG_KEY]: '"e-cached"',
-      [CACHE_SYNCED_U_KEY]: "0",
+      [CACHE_SYNCED_HASH_KEY]: "0",
     },
     overrideStubs: { T: { downloadSyncFile: () => dlPromise } },
   });
@@ -1338,7 +1431,7 @@ test("53. 내려받기 403 → SYNC_DONE이 아니라 SYNC_FAIL — 백오프로
     initialStorage: {
       [CACHE_FILE_ID_KEY]: "fid-cached",
       [CACHE_ETAG_KEY]: '"e-cached"',
-      [CACHE_SYNCED_U_KEY]: "0",
+      [CACHE_SYNCED_HASH_KEY]: "0",
       [REDIRECT_ATTEMPTS_KEY]: "2",
     },
     downloadResult: { doc: null, etag: null, status: 403 },
@@ -1358,7 +1451,7 @@ test("54. v1 문서 올리기가 실패(503)하면 캐시를 「동기화됨」�
     initialStorage: {
       [CACHE_FILE_ID_KEY]: "fid-cached",
       [CACHE_ETAG_KEY]: '"e-cached"',
-      [CACHE_SYNCED_U_KEY]: "0",
+      [CACHE_SYNCED_HASH_KEY]: "0",
     },
     downloadResult: { doc: { schemaVersion: 1, bookmarks: [] }, etag: '"e-v1"', status: 200 },
     uploadResult: { ok: false, status: 503, etag: null },
@@ -1368,7 +1461,7 @@ test("54. v1 문서 올리기가 실패(503)하면 캐시를 「동기화됨」�
   });
   machine.enable();
   await drain(6);
-  assert.equal(localStorage.getItem(CACHE_SYNCED_U_KEY), "0", "syncedMaxU를 올리지 않음 — 다음 사이클이 다시 올린다");
+  assert.equal(localStorage.getItem(CACHE_SYNCED_HASH_KEY), "0", "지문을 바꾸지 않음 — 다음 사이클이 다시 올린다");
   assert.ok(!logEntries.some((e) => e.kind === "ACTION" && e.event === "SYNC_DONE"), "SYNC_DONE 없음");
   assert.ok(logEntries.some((e) => e.kind === "ACTION" && e.event === "SYNC_FAIL"), "SYNC_FAIL");
 });
@@ -1467,7 +1560,7 @@ test("64. 「파일도 삭제」는 목록의 모든 sync.json과 캐시된 파�
     initialStorage: {
       [CACHE_FILE_ID_KEY]: "fid-C",
       [CACHE_ETAG_KEY]: '"e-cached"',
-      [CACHE_SYNCED_U_KEY]: "0",
+      [CACHE_SYNCED_HASH_KEY]: "0",
     },
     downloadResult: { doc: null, etag: null, status: 304 },
     overrideStubs: {
@@ -1631,7 +1724,7 @@ test("58. 내려받기 대기 중 저장한 편집이 병합에 들어간다 —
     initialStorage: {
       [CACHE_FILE_ID_KEY]: "fid-cached",
       [CACHE_ETAG_KEY]: '"e-cached"',
-      [CACHE_SYNCED_U_KEY]: "0",
+      [CACHE_SYNCED_HASH_KEY]: "0",
     },
     overrideStubs: {
       T: { downloadSyncFile: () => dlPromise },
@@ -1662,7 +1755,7 @@ test("59. 304 — 내려받기 대기 중 편집이 있으면 올린다", async 
     initialStorage: {
       [CACHE_FILE_ID_KEY]: "fid-cached",
       [CACHE_ETAG_KEY]: '"e-cached"',
-      [CACHE_SYNCED_U_KEY]: "0",
+      [CACHE_SYNCED_HASH_KEY]: "0",
     },
     overrideStubs: {
       T: {
@@ -1689,7 +1782,7 @@ test("60. 사이클 도중의 사용자 요청(requestSync)은 버리지 않고 
     initialStorage: {
       [CACHE_FILE_ID_KEY]: "fid-cached",
       [CACHE_ETAG_KEY]: '"e-cached"',
-      [CACHE_SYNCED_U_KEY]: "0",
+      [CACHE_SYNCED_HASH_KEY]: "0",
     },
     overrideStubs: {
       T: {
@@ -1719,7 +1812,7 @@ test("61. 사이클 도중의 폴(requestSync({throttleMs}))은 쌓지 않는다
     initialStorage: {
       [CACHE_FILE_ID_KEY]: "fid-cached",
       [CACHE_ETAG_KEY]: '"e-cached"',
-      [CACHE_SYNCED_U_KEY]: "0",
+      [CACHE_SYNCED_HASH_KEY]: "0",
     },
     overrideStubs: {
       T: {
@@ -1759,7 +1852,7 @@ test("62. HTTP 실패(429)가 다섯 번 넘게 이어지면 OFFLINE이 아니�
     initialStorage: {
       [CACHE_FILE_ID_KEY]: "fid-cached",
       [CACHE_ETAG_KEY]: '"e-cached"',
-      [CACHE_SYNCED_U_KEY]: "0",
+      [CACHE_SYNCED_HASH_KEY]: "0",
     },
     overrideStubs: { T: { downloadSyncFile: async () => { downloads++; return { doc: null, etag: null, status: 429 }; } } },
   });
@@ -1781,7 +1874,7 @@ test("63. 네트워크 실패(status 0)로 OFFLINE이 된 뒤에도 온라인이
     initialStorage: {
       [CACHE_FILE_ID_KEY]: "fid-cached",
       [CACHE_ETAG_KEY]: '"e-cached"',
-      [CACHE_SYNCED_U_KEY]: "0",
+      [CACHE_SYNCED_HASH_KEY]: "0",
     },
     overrideStubs: { T: { downloadSyncFile: async () => { downloads++; return { doc: null, etag: null, status: 0 }; } } },
   });
@@ -1804,7 +1897,7 @@ test("69. 사이클이 도는 사이 다시 SYNCING이 되면 두 번째 사이�
     initialStorage: {
       [CACHE_FILE_ID_KEY]: "fid-cached",
       [CACHE_ETAG_KEY]: '"e-cached"',
-      [CACHE_SYNCED_U_KEY]: "0",
+      [CACHE_SYNCED_HASH_KEY]: "0",
     },
     overrideStubs: {
       T: {
@@ -1833,7 +1926,7 @@ test("69. 사이클이 도는 사이 다시 SYNCING이 되면 두 번째 사이�
 
 // ── Group 17: 옛 판의 북마크 절 범위 — 병합 결과를 저장하기 전에 지금 표기로 옮긴다 ─────────────
 // 옮기기는 수정 시각(_u)을 올리지 않는다(사용자 결정 2026-10-22, coding-pitfalls §38). 그래서 드라이브에 옛 표기가 남아
-// 있으면 같은 시각의 두 사본 가운데 하나를 기기 id 순서로 고르는 병합이 옛 표기를 되돌려 놓았다. 병합 결과를 저장하기
+// 있으면 같은 시각의 두 사본 가운데 하나를 고르는 병합(그때는 기기 id 순서, 지금은 드라이브의 사본)이 옛 표기를 되돌려 놓았다. 병합 결과를 저장하기
 // 전에 옮긴다(bookmark-core.js migrateLegacyBookmarkDoc).
 
 test("70. 병합 결과는 옛 판의 절 범위를 옮긴 뒤 저장되고, 옛 키에도 그대로 쓰인다", async () => {
@@ -1845,7 +1938,7 @@ test("70. 병합 결과는 옛 판의 절 범위를 옮긴 뒤 저장되고, 옛
     initialStorage: {
       [CACHE_FILE_ID_KEY]: "fid-cached",
       [CACHE_ETAG_KEY]: '"e-cached"',
-      [CACHE_SYNCED_U_KEY]: "0",
+      [CACHE_SYNCED_HASH_KEY]: "0",
     },
     overrideStubs: {
       T: {
@@ -1881,7 +1974,7 @@ test("71. 옮기는 함수가 없어도(유닛 하네스 · 북마크 모듈 전
     initialStorage: {
       [CACHE_FILE_ID_KEY]: "fid-cached",
       [CACHE_ETAG_KEY]: '"e-cached"',
-      [CACHE_SYNCED_U_KEY]: "0",
+      [CACHE_SYNCED_HASH_KEY]: "0",
     },
     overrideStubs: {
       T: {
@@ -1899,25 +1992,53 @@ test("71. 옮기는 함수가 없어도(유닛 하네스 · 북마크 모듈 전
 // 「다른 기기에서 바뀐 것이 있는가」는 로컬 문서를 id로 찾는다. 일반 객체는 toString 같은 이름에 물려받은 함수로
 // 답해, 그 id의 삭제 기록만 새로 받은 병합을 바뀐 것이 없다고 보았다(안내가 뜨지 않았다).
 
-test("72. 기본 속성 이름의 id에 새로 받은 삭제 기록도 다른 기기의 변경으로 친다", async () => {
+test("72. 기본 속성 이름의 id라도, 이 기기에 보이는 북마크를 지운 삭제 기록은 다른 기기의 변경으로 친다", async () => {
+  const local = localDoc("local");
+  local.bookmarks.items.toString = { id: "toString", type: "bookmark", parentId: null, _order: 0, _u: 5 };
   const { machine, drain, logEntries } = loadMachine({
     initialRefreshToken: "rt-x",
     initialStorage: {
       [CACHE_FILE_ID_KEY]: "fid-cached",
       [CACHE_ETAG_KEY]: '"e-cached"',
-      [CACHE_SYNCED_U_KEY]: "0",
+      [CACHE_SYNCED_HASH_KEY]: "0",
     },
     overrideStubs: {
       T: {
         downloadSyncFile: async () => ({ doc: { ...localDoc("remote"), schemaVersion: 2, deviceId: "remote" }, etag: '"e-remote"', status: 200 }),
       },
-      V2: { mergeDocs: (l) => ({ ...l, bookmarks: { items: {}, tombstones: { toString: 10 } } }) },
+      V2: { loadLocal: () => local, mergeDocs: (l) => ({ ...l, bookmarks: { items: {}, tombstones: { toString: 10 } } }) },
     },
   });
   machine.enable();
   await drain(8);
   const merge = logEntries.find((e) => e.kind === "ACTION" && e.event === "MERGE");
   assert.equal(merge?.hadRemoteChanges, true);
+});
+
+// 앱을 시작할 때 30일 지난 삭제 기록을 기기에서 지우고(sweepTombstones), 첫 병합이 드라이브에서 그 기록을 다시 넣는다.
+// 그 기록을 다른 기기의 변경으로 세어, 그런 기록이 있는 사용자는 앱을 열 때마다 안내를 보았다(2026-10-31 리뷰).
+test("72b. 이 기기에 없는 북마크의 삭제 기록은 다른 기기의 변경으로 치지 않는다 — 다시 들어온 옛 삭제 기록에 안내하지 않는다", async () => {
+  const snackbar = [];
+  const { machine, drain, logEntries, ctx } = loadMachine({
+    initialRefreshToken: "rt-x",
+    initialStorage: {
+      [CACHE_FILE_ID_KEY]: "fid-cached",
+      [CACHE_ETAG_KEY]: '"e-cached"',
+      [CACHE_SYNCED_HASH_KEY]: "0",
+    },
+    overrideStubs: {
+      T: {
+        downloadSyncFile: async () => ({ doc: { ...localDoc("remote"), schemaVersion: 2, deviceId: "remote" }, etag: '"e-remote"', status: 200 }),
+      },
+      V2: { mergeDocs: (l) => ({ ...l, bookmarks: { items: {}, tombstones: { gone: 10 } } }) },
+    },
+  });
+  ctx._showSyncSnackbar = (msg) => { snackbar.push(msg); };
+  machine.enable();
+  await drain(8);
+  const merge = logEntries.find((e) => e.kind === "ACTION" && e.event === "MERGE");
+  assert.equal(merge?.hadRemoteChanges, false);
+  assert.deepEqual(snackbar, [], "안내가 뜨지 않는다");
 });
 
 // ── Group 19: 병합 결과를 이 기기에 저장하지 못할 때 (known-issues §15.4) ─────────────────────────
@@ -1941,7 +2062,7 @@ function mergeSaveMachine({ outcome = "saved", v2 = {}, applyToLegacyKeys } = {}
     initialStorage: {
       [CACHE_FILE_ID_KEY]: "fid-cached",
       [CACHE_ETAG_KEY]: '"e-cached"',
-      [CACHE_SYNCED_U_KEY]: "0",
+      [CACHE_SYNCED_HASH_KEY]: "0",
     },
     overrideStubs: {
       T: {
@@ -1967,7 +2088,7 @@ test("73. 다른 기기의 변경을 저장 공간이 차서 저장하지 못하
   await h.drain(8);
   assert.deepEqual(h.uploads, [], "기기에 남은 옛 문서로 드라이브의 파일을 덮어쓰지 않는다");
   assert.equal(h.localStorage.getItem(CACHE_ETAG_KEY), '"e-cached"', "다음 사이클이 다시 내려받아 병합한다");
-  assert.equal(h.localStorage.getItem(CACHE_SYNCED_U_KEY), "0");
+  assert.equal(h.localStorage.getItem(CACHE_SYNCED_HASH_KEY), "0");
   assert.deepEqual(h.legacy, [], "옛 키에도 쓰지 않는다");
   assert.equal(h.rerenders.count, 0, "바뀐 것이 없으니 다시 그리지 않는다");
   assert.deepEqual(h.snackbar, ["저장 공간이 가득 차 다른 기기에서 변경된 데이터를 불러오지 못했습니다. 쓰지 않는 북마크를 지우면 다시 동기화합니다."]);
@@ -1987,7 +2108,7 @@ test("74. 저장 공간이 아닌 다른 까닭으로 저장하지 못해도 올
 
 test("75. 수정 시각이 같아 원격 사본이 남은 병합 결과도, 저장하지 못하면 올리지 않는다 — 다른 기기의 변경이 없다고 판단돼도", async () => {
   // 「다른 기기의 변경」은 수정 시각이 커졌는지로 판단한다. 같은 시각의 두 사본(옛 절 범위를 옮기면 시각을 올리지 않는다,
-  // pitfalls §38)은 병합하면 기기 id 순서에 따라 원격 쪽이 남을 수 있어, 기기에 저장된 문서가 병합 결과와 다르다. 그 문서를 올리면
+  // pitfalls §38)은 병합하면 드라이브의 사본이 남아, 기기에 저장된 문서가 병합 결과와 다르다. 그 문서를 올리면
   // 드라이브의 사본이 이 기기의 것으로 바뀐다(PR #445 리뷰). 다른 기기의 변경은 없으므로 알리지는 않는다.
   const local = localDoc("local");
   local.bookmarks.items.a = { id: "a", type: "bookmark", verseSpec: "16aa", parentId: null, _order: 0, _u: 5 };

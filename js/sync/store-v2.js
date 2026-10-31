@@ -76,6 +76,18 @@ function _own(map, id) {
   return map != null && Object.hasOwn(map, id) ? map[id] : undefined;
 }
 
+// The time an edit records: this device's clock, or one past the times the record already holds, whichever is larger.
+// The merge keeps the copy with the later time, so an edit made after receiving another device's copy stays even when
+// this device's clock is behind (known-issues §39). 기록마다 그 기록의 이전 시각만 본다(사용자 결정 2026-10-30): 문서
+// 전체의 가장 늦은 시각을 보면, 시각이 빠른 기기 하나가 모든 기록의 새 시각을 그 시각보다 늦게 만든다.
+// A value that is not a finite number counts as 0 — a bad value in a file must not make the record's new time NaN.
+/** @param {number} now @param {...unknown} prev @returns {number} */
+function _after(now, ...prev) {
+  let m = 0;
+  for (const p of prev) if (typeof p === "number" && Number.isFinite(p) && p > m) m = p;
+  return Math.max(now, m + 1);
+}
+
 // Recursively walk a bookmark tree and produce a flat {[id]: node} map.
 // Each node gets parentId and _order; _u is preserved if already set.
 /**
@@ -299,14 +311,24 @@ function _docWithBookmarks(tree) {
     const sameContent  = old && _contentKey(old)  === _contentKey(node);
     const samePosition = old && old._order         === node._order
                               && old.parentId       === node.parentId;
-    nextItems[id] = { ...node, _u: (sameContent && samePosition) ? (old._u ?? now) : now };
+    // A changed item goes past its own time, and a new one past a tombstone of its id: a bookmark brought back from a
+    // backup keeps its id, and a tombstone a slow-clock device wrote can be ahead of this clock. An unchanged item a
+    // stored tombstone already hides (a state an older build could leave) goes past it too — kept at its time, a
+    // bookmark brought back from a backup stayed hidden.
+    const tomb = _own(doc.bookmarks.tombstones, id);
+    const hidden = typeof tomb === "number" && tomb >= (old?._u ?? 0);
+    nextItems[id] = { ...node, _u: (sameContent && samePosition && !hidden)
+      ? (old._u ?? now)
+      : _after(now, old?._u, tomb) };
   }
 
-  // Items removed → tombstone (only if not already tombstoned with a newer time).
+  // Items removed → tombstone past the item's own time (only if not already tombstoned with a newer time). At `now`
+  // alone, a slow-clock device's tombstone for an item it had just received was older than the item, and the next
+  // merge brought the item back.
   for (const id of Object.keys(oldItems)) {
-    if (!Object.hasOwn(nextItems, id) && !((_own(doc.bookmarks.tombstones, id) ?? -Infinity) > now)) {
-      doc.bookmarks.tombstones[id] = now;
-    }
+    if (Object.hasOwn(nextItems, id)) continue;
+    const t = _after(now, _own(oldItems, id)?._u);
+    if (!((_own(doc.bookmarks.tombstones, id) ?? -Infinity) > t)) doc.bookmarks.tombstones[id] = t;
   }
 
   doc.bookmarks.items = nextItems;
@@ -352,14 +374,14 @@ function saveSetting(key, value) {
   const doc = _load(false);
   // Settings store wraps every value in MTimed<T>; the per-key value type
   // is intentionally permissive (number for fontSize, string for the rest).
-  doc.settings[key] = /** @type {SyncDoc["settings"][SettingKey]} */ ({ v: value, _u: Date.now() });
+  doc.settings[key] = /** @type {SyncDoc["settings"][SettingKey]} */ ({ v: value, _u: _after(Date.now(), doc.settings?.[key]?._u) });
   saveLocal(doc);
 }
 
 /** @param {LastReadValue} value */
 function saveLastRead(value) {
   const doc = _load(false);
-  doc.lastRead = { v: value, _u: Date.now() };
+  doc.lastRead = { v: value, _u: _after(Date.now(), doc.lastRead?._u) };
   saveLocal(doc);
 }
 
@@ -450,16 +472,53 @@ function maxU(doc) {
   return m;
 }
 
-// Per-record LWW merge. Conflict policy: higher _u wins; tie → deviceId sort.
+// JSON with every object's keys in sorted order, so the same content always gives the same text.
+/** @param {unknown} v @returns {string} */
+function _stableJson(v) {
+  if (Array.isArray(v)) return `[${v.map(_stableJson).join(",")}]`;
+  if (v !== null && typeof v === "object") {
+    const o = /** @type {Record<string, unknown>} */ (v);
+    return `{${Object.keys(o).sort().map((k) => `${JSON.stringify(k)}:${_stableJson(o[k])}`).join(",")}}`;
+  }
+  return JSON.stringify(v) ?? "null";
+}
+
+// A short value that changes whenever the synced part of a document does (bookmarks, settings, reading position) —
+// cyrb53 (53-bit) over the sorted JSON. The 304 path compares it with the value saved at the last sync to tell whether
+// this device has anything to upload (known-issues §38). The largest time could not tell: a bookmark made on a
+// slow-clock device, or one moved from an old build's list (time 0), keeps the largest time where it was.
+/** @param {SyncDoc} doc @returns {string} */
+function fingerprint(doc) {
+  let s;
+  // A value nested a few thousand levels deep (an import keeps unknown fields) overflows this walk before it would
+  // overflow JSON.stringify, so such a doc was stored and uploaded and then failed the whole sync cycle here. "" matches
+  // no saved fingerprint: the 304 path uploads instead.
+  try {
+    s = _stableJson({ bookmarks: doc?.bookmarks ?? null, settings: doc?.settings ?? null, lastRead: doc?.lastRead ?? null });
+  } catch { return ""; }
+  let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    h1 = Math.imul(h1 ^ c, 2654435761);
+    h2 = Math.imul(h2 ^ c, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
+}
+
+// Per-record merge: the copy with the later time stays. Equal times keep Drive's copy, as settings do, so every device
+// ends with the copy Drive holds. 시각이 같을 때 기기 id 순서로 고르던 때는 비교 상대가 마지막으로 올린 기기라, 한 기기는
+// 자기 사본을 남기고 시각이 같아 올리지도 않았다. 드라이브와 다른 기기는 다른 사본을 보였다(2026-10-31 리뷰, 사용자
+// 결정).
 /**
  * @param {SyncDoc} local
  * @param {SyncDoc} remote
- * @param {string} deviceId
+ * @param {string} _deviceId  no longer used — ties keep Drive's copy; kept so the callers need not change
  * @returns {SyncDoc}
  */
-function mergeDocs(local, remote, deviceId) {
+function mergeDocs(local, remote, _deviceId) {
   const merged = _emptyDoc();
-  const remoteDeviceId = remote.deviceId ?? "";
 
   // Bookmarks
   const allIds = new Set([
@@ -486,8 +545,7 @@ function mergeDocs(local, remote, deviceId) {
     if (!aliveL && !aliveR) {
       if (isFinite(death)) merged.bookmarks.tombstones[id] = death;
     } else if (aliveL && aliveR) {
-      if (L._u !== R._u)         merged.bookmarks.items[id] = L._u > R._u ? L : R;
-      else                       merged.bookmarks.items[id] = deviceId <= remoteDeviceId ? L : R;
+      merged.bookmarks.items[id] = L._u > R._u ? L : R;
     } else {
       merged.bookmarks.items[id] = /** @type {SyncFlatItem} */ (aliveL ? L : R);
     }
@@ -596,7 +654,7 @@ window.syncStoreV2 = {
   loadBookmarks, saveBookmarks, projectedBookmarksEntry,
   saveSetting, saveLastRead,
   migrateLegacyIfNeeded,
-  mergeDocs, maxU,
+  mergeDocs, maxU, fingerprint,
   buildSyncPayload, validateRemote,
   bookmarkTreeFromFlat, applyToLegacyKeys,
 };
