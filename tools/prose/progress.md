@@ -35,8 +35,8 @@
 | `docs/index.md` | 30 | #447 |
 | `docs/known-issues.md` | 82 | #447 |
 | `docs/workflow.md` | 87 | #447 |
-| `docs/writing.md` | 197 | 대기 |
-| `tests/README.md` | 99 | 대기 |
+| `docs/writing.md` | 197 | 진행 |
+| `tests/README.md` | 99 | 진행 |
 | `tests/fixtures/liturgical/README.md` | 54 | #453 |
 | `tools/booklet/README.md` | 12 | #453 |
 | `tools/csp/README.md` | 5 | #453 |
