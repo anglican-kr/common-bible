@@ -1,4 +1,5 @@
 ---
+pr: 456
 date: 2026-10-31
 branch: fix/sync-clock
 title: "fix: 시계가 느린 기기의 편집이 덮어써지지 않게 함"
