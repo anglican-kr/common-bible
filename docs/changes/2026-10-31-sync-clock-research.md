@@ -2,7 +2,7 @@
 pr: 457
 date: 2026-10-31
 branch: docs/sync-clock-research
-title: "docs: 동기화 조사 기록을 보관하고 「가르다」를 정리함"
+title: "docs: 동기화 조사 기록 보관 및 용어 수정"
 ---
 
 ## 요약
@@ -18,10 +18,13 @@ PR #456을 만들기 전에 한 조사(기기 시계에 기대지 않는 동기�
 
 - **「가르다」를 쓰지 않는다**(`docs/writing.md` 「용어」, 사용자 교정 2026-10-31). 옮긴 노트의 「지운 파일을 가를 수 없다」가 어색하다는 교정이다. 노트에서 14곳을 고쳤고, 문서 수정을 이 PR에서 함께 하기로 해(사용자 결정) 다른 문서 20개에서 같은 쓰임 114곳을 고쳤다. 뜻에 따라 구별하거나 판단하는 뜻은 「구별한다」, 「판단한다」, 「정한다」로, 나누는 뜻은 「나눈다」, 「나뉜다」로, 서로 다르다는 뜻의 「갈린다」는 「달라진다」, 「다르다」로 썼다. 덮는다는 뜻의 「가리다」, 「가려내다」, 「갈라지다」, 성경 이름 「갈라티아서」, 인용과 규칙 문장, 옛 기록(`docs/archive/`)과 머지된 원장은 그대로 두었다. `tests/README.md`의 한 곳은 PR #455가 같은 줄을 이미 다른 말로 고쳐 여기서 건드리지 않았다.
 
+- **PR 제목은 명사로 맺고, 일이 둘이면 「및」으로 잇는다**(`docs/workflow.md` pitfalls §30, 사용자 교정 2026-10-31). 사용자가 이 PR의 제목을 고쳐 보였다.
+
 ## 검증
 
 - `node --test tests/unit/docs-*.test.js tests/unit/liturgical-fixtures.test.js`: 31개 모두 통과(데이터 서브모듈의 사실 블록 검사 포함).
-- `python3 scripts/docs_facts_snapshot.py --diff origin/main WORKTREE --strict-counts`: 사라지거나 줄어든 토큰 0, 새 토큰 0.
+- `python3 scripts/docs_facts_snapshot.py --diff origin/main WORKTREE --strict-counts`: 사라진 토큰 0, 새 토큰 0. 줄어든 토큰으로 「X-12」 하나가 나오지만, 조사를 붙인 「X-12와」를 도구가 토큰으로 읽지 않은 것이다. 원문의 「X-12」는 고치기 전과 후 모두 10번이다.
+- 「가르다」를 고친 줄에 이 PR 전부터 있던 확정 위반(띄어 쓴 조사 60곳, 「용어」 표의 낱말 다섯 곳)을 함께 고쳤다(CLAUDE.md 「고치는 줄에 띄어 쓴 조사가 있으면 함께 붙인다」). 처음에는 커밋하기 전에 `prose.py lint --changed`를 돌려 이 줄들이 검사에 들지 않았고, 위반이 없다고 잘못 보고했다.
 - `python3 tools/prose/prose.py same-code origin/main`: 주석과 문서 말고 바뀐 파일 0개.
 
 ## 갱신한 문서
@@ -30,4 +33,6 @@ PR #456을 만들기 전에 한 조사(기기 시계에 기대지 않는 동기�
 - `docs/index.md`: Drive 동기화 줄의 「더 볼 곳」, `archive/`의 한 줄
 - ADR-011 「검토한 대안 — 수정 시각」: 조사 보고서의 자리
 - `docs/writing.md` 「용어」: 「가르다」
+- `docs/workflow.md` pitfalls §30: PR 제목의 끝맺음과 잇는 말
+- `tools/prose/README.md`: `--changed`는 커밋한 줄만 본다
 - 「가르다」를 고친 문서: `docs/architecture.md`, `docs/coding-pitfalls.md`, `docs/decisions/008-pwa-install-guide.md`, `docs/decisions/010-bookmark-feature.md`, `docs/decisions/012-typescript-incremental-adoption.md`, `docs/decisions/031-tab-history-restore.md`, `docs/decisions/036-liturgical-calendar-data-model.md`, `docs/decisions/037-eucharist-lectionary-data-and-engine.md`, `docs/decisions/038-calendar-lectionary-ui.md`, `docs/design/liturgical-engine-review.md`, `docs/design/liturgical-engine/02-data-reality.md`, `docs/design/liturgical-engine/04-compute-layer.md`, `docs/design/liturgical-engine/05-lookup-layer.md`, `docs/design/liturgical-engine/06-rank-transfer-color.md`, `docs/design/liturgical-engine/07-test-plan.md`, `docs/design/liturgical-engine/09-open-items.md`, `docs/topics/bookmark.md`, `docs/topics/liturgical.md`, `docs/topics/sync.md`, `tools/csp/README.md`

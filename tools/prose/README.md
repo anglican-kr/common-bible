@@ -6,7 +6,7 @@
 
 - `python3 tools/prose/prose.py lint`: 저장소 전체를 검사해, 검사마다 건수를 세고 문제가 많은 파일을 보인다.
   - 파일을 주면 그 파일만 본다. `--detail`은 찾은 곳을 하나씩 적고, `--json`은 JSON으로 낸다.
-  - `--changed origin/main`은 그 브랜치에서 갈라진 뒤 더하거나 고친 줄만 본다.
+  - `--changed origin/main`은 그 브랜치에서 갈라진 뒤 더하거나 고친 줄만 본다. 커밋한 줄만 보므로(`git diff origin/main...HEAD`), 커밋하기 전에는 고친 파일을 지정해 돌린다(`lint <파일>`). 커밋 전에 돌려 고친 줄의 위반을 놓친 적이 있다(PR #457, 2026-10-31).
 - `python3 tools/prose/prose.py same-code main`: main과 작업 트리를 견줘, 주석과 문서 말고도 바뀐 파일을 적는다. 그런 파일이 하나라도 있으면 종료 코드 1로 끝난다. 두 리비전을 견주려면 `same-code A B`로 쓴다. `--allow <경로>`를 주면 그 파일이나 폴더는 일부러 바꾼 것으로 보고 견주지 않는다. 문장 교정 PR에서 검사 목록(`tools/prose/`)을 고쳤을 때만 쓰고, 그때는 이 도구의 테스트로 따로 확인한다.
 - 테스트: `python3 -m unittest tools/prose/test_prose.py`
 
