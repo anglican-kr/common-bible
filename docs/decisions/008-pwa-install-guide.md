@@ -75,8 +75,8 @@ unsupported / Firefox/Safari 데스크톱 등
 핵심 판정:
 
 - `matchMedia('(display-mode: standalone)').matches || navigator.standalone === true`면 `installed`다.
-- `/iPad|iPhone|iPod/`와 iPadOS 13+ 판정법(`MacIntel` + `maxTouchPoints > 1`)으로 iOS 계열을 가른다.
-- iOS에서 `CriOS|FxiOS|EdgiOS|OPiOS|GSA`가 들어 있는지로 Safari와 다른 브라우저를 가른다.
+- `/iPad|iPhone|iPod/`와 iPadOS 13+ 판정법(`MacIntel` + `maxTouchPoints > 1`)으로 iOS 계열을 구별한다.
+- iOS에서 `CriOS|FxiOS|EdgiOS|OPiOS|GSA`가 들어 있는지로 Safari와 다른 브라우저를 구별한다.
 - iOS의 메이저 버전은 `OS X_Y` 토큰을 먼저 본다. iPad가 데스크톱급 UA로 가릴 때(`MacIntel + maxTouchPoints>1`)는 `Version/X.Y`를 보거나, 없으면 17로 가정한다(`getIOSMajor()`).
 - 나머지는 UA에 `Android` 토큰이 있으면 `android`, 없으면 Chromium 데스크톱인지 판정한다.
 
