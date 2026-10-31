@@ -46,14 +46,14 @@
 
 | 파일 | 한글 줄 | 상태 |
 | --- | --- | --- |
-| `docs/decisions/001-spa-architecture.md` | 66 | 대기 |
-| `docs/decisions/002-sirach-prologue-handling.md` | 5 | 대기 |
-| `docs/decisions/003-physical-chapter-ordering.md` | 4 | 대기 |
-| `docs/decisions/004-data-pipeline-test-strategy.md` | 42 | 대기 |
-| `docs/decisions/005-search-indexing-strategy.md` | 95 | 대기 |
-| `docs/decisions/006-poetry-source-format.md` | 4 | 대기 |
-| `docs/decisions/007-launch-screen-optimization.md` | 99 | 대기 |
-| `docs/decisions/008-pwa-install-guide.md` | 92 | 대기 |
+| `docs/decisions/001-spa-architecture.md` | 66 | #459 |
+| `docs/decisions/002-sirach-prologue-handling.md` | 5 | #459 |
+| `docs/decisions/003-physical-chapter-ordering.md` | 4 | #459 |
+| `docs/decisions/004-data-pipeline-test-strategy.md` | 42 | #459 |
+| `docs/decisions/005-search-indexing-strategy.md` | 95 | #459 |
+| `docs/decisions/006-poetry-source-format.md` | 4 | #459 |
+| `docs/decisions/007-launch-screen-optimization.md` | 99 | #459 |
+| `docs/decisions/008-pwa-install-guide.md` | 92 | #459 |
 | `docs/decisions/009-history-api-routing.md` | 59 | 대기 |
 | `docs/decisions/010-bookmark-feature.md` | 291 | 대기 |
 | `docs/decisions/011-bookmark-sync.md` | 583 | 대기 |
