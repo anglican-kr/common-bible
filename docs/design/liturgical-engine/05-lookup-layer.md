@@ -147,7 +147,7 @@ d1230-성탄주간-t1-s1             name="성탄주간"     weekday=null  date=
 
 **본기도는 필드로 참조하지 않고 전례일 키로 조인한다.** readings 레코드에는 collect를 가리키는 필드가 없다. 같은 전례일 키로 `eucharist-collects`를 §5.3의 규칙대로 따로 조회한다(ADR-037 §1). 두 파일의 `id`는 서로 관계가 없고(문자열과 정수), collects의 `reading_track`은 모두 `null`이다. 그래서 **트랙 축은 readings에서만 정해진다.**
 
-정의 표(sanctoral, temporal-feasts)와 본문 표(readings, collects)를 잇는 키는 실측으로 갈렸다.
+정의 표(sanctoral, temporal-feasts)와 본문 표(readings, collects)를 잇는 키는 실측으로 정했다.
 
 - **sanctoral ↔ readings/collects**. 키: **`date`(`MM.DD`)와 `lunar`**. 고유 본기도가 있는 50건에서 날짜 조인은 **본기도 50/50, 독서 49/50이 성공**하고(`date` 48, `lunar` 2), 이름 조인은 35건만 성공한다(2026-10-24 실측). 독서에서 빠지는 하나는 프란시스 사베리오(12.03)다. **고유 본기도와 공통 독서**라 고유 독서가 없는 것이 맞다(articles-supplement의 `readings: null` 경우). **다만 그것만으로는 이날 독서를 찾지 못한다.** `commons.json`이 분류별 독서를 갖고 있고(7분류 22세트, 사베리오의 `missionary`는 3세트), §5.6의 **성인 공통 독서 폴백**이 이날을 맡는다(§9 미결11, 2026-09-17 확정). `lunar`를 빼고 `date`만으로 맞추면 설날과 추석이 떨어져 나간다.
 - **temporal-feasts ↔ readings/collects**. 키: **`coord_name` ↔ `name`**(`aliases`도 키). 정의 표가 조인용 이름 필드를 따로 갖고 있다. 24건 가운데 `coord_name: null` 7건(대림1주일, 가정주일, 평화통일주일, 사계재 4)은 이름 조인 대상이 아니다. 대림1주일은 격자의 절기 위치(`advent-1-sun-*`)로만 조회된다.

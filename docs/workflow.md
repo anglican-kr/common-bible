@@ -20,6 +20,7 @@
 - 진행 중인 작업이 GitHub 이슈와 이어져 있으면 커밋 제목 끝에 `(#NNN)`을 붙인다. 다른 저장소의 이슈는 `anglican-kr/common-bible#134`처럼 쓴다. 이슈를 닫는 `Closes #134`는 본문에 따로 적는다.
 - GitHub 작업은 REST(`gh api repos/...`)로 한다. GraphQL을 쓰는 `gh pr edit`가 projectCards 오류를 냈다(2026-07-06 PR #301, 사용자 지시). PR 생성 명령은 원장 훅이 검사하는 표준 절차라 그대로 쓰고, 오류가 나면 REST로 바꾼다.
 - 필수 검사가 「Expected」로 멈춰 머지가 막히면, CI를 다시 돌리기 전에 PR이 main과 충돌하는지 본다. 충돌이면 GitHub가 머지 ref(`refs/pull/<N>/merge`)를 만들지 못해 워크플로가 아예 돌지 않는다. `gh api repos/anglican-kr/common-bible/pulls/<N> --jq .mergeable_state`가 `dirty`이거나 head에 `github-actions` check-suite가 없으면 이 경우다. 해법은 충돌을 해결하는 것이다. 예전에는 `git rebase origin/main` 뒤 force push로 해결했는데, force push는 CLAUDE.md가 금지하므로 실행 전에 사용자에게 묻는다. squash 머지라면 `git merge origin/main`으로 해결해도 결과는 같다.
+- **초안(draft) PR은 머지되지 않는다.** 머지 API가 「Pull Request is still a draft」(405)로 거절하면 그 PR은 초안이다. `gh pr ready <N>`으로 검토할 수 있는 상태로 바꾼 뒤 다시 머지한다. 문장 교정 PR이 초안으로 열린 적이 여러 번 있다(#448, #450, #453, #455). 스킬(`.claude/skills/prose-batch/SKILL.md`)에는 초안으로 열라는 지시가 없다(2026-10-31, #455).
 
 ## 리뷰
 
@@ -69,7 +70,10 @@
 - **섞인 변경을 항목별로 커밋할 때**는 최종 파일에서 뒤 항목의 변경을 뺀 중간 상태의 파일을 `git add`하고, 다시 최종 파일로 되돌린다.
 - **유닛 하네스**: 뷰와 엔진 테스트는 마커 블록(`// ── BEGIN X ──`)을 vm 하나에 차례로 불러온다. 블록 최상위의 `const` 이름이 겹치면 재선언 오류로 불러오기가 실패한다.
 - **문서 현행화**는 읽기 전용 에이전트에게 문서 구간별로 나눠 대조시키면 빠르다. 받은 주장은 다시 확인한 뒤 반영한다.
-- **세션을 여럿 띄울 때는 세션마다 작업 폴더(git worktree)를 쓴다**(2026-10-26). 같은 폴더에서 다른 세션이 브랜치를 바꾸면, 커밋하지 않은 변경이 그 브랜치로 따라가 섞인다. 작업 폴더는 `.claude/worktrees/<이름>`에 만든다.
+- **작업 폴더(git worktree)**: 작업은 늘 작업 폴더에서 하고, 작업 폴더는 `~/projects/worktrees/<이름>`에 만든다(사용자 결정 2026-10-31, 순서는 CLAUDE.md 「작업 표준 흐름」). 같은 폴더에서 다른 세션이 브랜치를 바꾸면, 커밋하지 않은 변경이 그 브랜치로 따라가 섞인다(2026-10-26). 2026-10-31 전에는 작업 폴더를 `.claude/worktrees/<이름>`에 만들었다.
+  - **데이터 서브모듈**: 원래 폴더(`~/projects/common-bible`)의 것을 참조해 받는다(`git -c protocol.file.allow=always submodule update --init --reference ~/projects/common-bible/.git/modules/data data`). 받지 않으면 실데이터 유닛 테스트는 건너뛰고(CI와 같다), e2e는 장 본문을 불러오지 못한다.
+  - **e2e 서버**: 8080에서는 원래 폴더의 서버가 실행 중일 수 있다(`readlink /proc/<pid>/cwd`로 어느 폴더의 서버인지 본다). 작업 폴더의 서버는 다른 포트에 pyenv의 Python 3.14로 띄운다(`~/.pyenv/versions/3.14.6/bin/python scripts/serve.py 8091`). 시스템 `python3`(3.13)은 255자가 넘는 경로에서 `Path.exists()`가 예외를 내서, 긴 주소를 여는 e2e가 실패한다.
+  - **e2e 사본**: e2e 테스트는 파일마다 주소 `localhost:8080`을 적어 두었다. 그래서 `tests/e2e`를 임시 폴더에 복사하고 포트만 바꿔 돌린다(`sed -i 's/localhost:8080/localhost:8091/' <임시>/x/e2e/*.py`). 반절 표(`half-verses.json`)를 읽는 `test_lectionary_view.py`는 테스트 파일에서 두 단계 위 폴더의 `data/`를 읽는다. 그래서 그 자리에 작업 폴더의 `data`로 가는 링크를 둔다(`<임시>/x/e2e/`에 복사했으면 `<임시>/data`).
 - **data 저장소** 작업은 별도 클론(`~/projects/common-bible-data`)에서 한다. 앱의 `data/` 서브모듈 안에서 커밋하지 않는다. 그 저장소에는 원장이 없고 main이 보호되지 않는다. 서브모듈 운영은 README 「git 서브모듈 운영」.
 - **앱 `sync-data.yml`의 실패**는 대개 설계서의 사실 블록 대조 때문이다. 데이터가 문서의 실측치를 바꾸면 실패한다(2026-10-12, 10-13, 10-15).
 - **데이터 저장소의 `build.yml`을 고치는 PR**은 머지만으로 빌드가 실행된다. 그 워크플로의 `paths`에 자기 파일이 있기 때문이다. 손으로 다시 실행하면 동기화도 두 번 실행된다(2026-10-26, #439와 #440). 겹쳐 실행되어도 `sync-data.yml`의 동시 실행 제한과 같은 포인터 PR 확인이 자동 PR을 하나로 줄인다.
@@ -82,7 +86,7 @@
 `docs/worklog.md`는 main 직접 커밋 시절의 서사 기록이었는데, 2026-05-29 브랜치 보호(PR 필수) 이후 그 역할이 PR 본문으로 옮겨 가면서 4개월간 갱신되지 않았다. 그 사이 PR 본문 175건은 GitHub에만 있어 로컬에서 흐름을 볼 수 없었고, rebase 머지는 본문을 git에 남기지도 않는다.
 
 **사례:**
-- `docs/changes/2026-09-20-knowledge-base-loop.md`에서 사용자가 교정했다. "PR 에 기록하는 게 아니라 로컬에서 해결 가능하면 좋겠다". worklog를 폐기하고 `docs/changes/` 변경 원장(변경 하나에 파일 하나)을 도입했으며, PR 본문은 `--body-file`로 원장에서 만든다.
+- `docs/changes/2026-09-20-knowledge-base-loop.md`에서 사용자가 교정했다. 「PR 에 기록하는 게 아니라 로컬에서 해결 가능하면 좋겠다」. worklog를 폐기하고 `docs/changes/` 변경 원장(변경 하나에 파일 하나)을 도입했으며, PR 본문은 `--body-file`로 원장에서 만든다.
 
 **규칙:**
 - 서사, 근거, 검증의 원본은 저장소 안 파일이고, PR 본문과 릴리스 노트는 거기서 파생한다. 반대 방향은 두지 않는다.

@@ -17,7 +17,7 @@ description: 문장 교정 반복 실행의 한 번. 열린 문장 교정 PR이 
 ## 0. 시작
 
 1. 최신 main에서 시작한다.
-   - 로컬에서는 다른 세션과 섞이지 않게 작업 폴더를 쓴다: `git worktree add .claude/worktrees/prose origin/main`(이미 있으면 그 폴더에서 `git fetch origin && git switch --detach origin/main`).
+   - 로컬에서는 다른 세션과 섞이지 않게 작업 폴더를 쓴다: `git worktree add ~/projects/worktrees/prose origin/main`(이미 있으면 그 폴더에서 `git fetch origin && git switch --detach origin/main`).
    - 클라우드에서는 새로 받은 저장소에서 시작한다. 데이터 서브모듈은 받지 않아도 된다.
 2. 열린 문장 교정 PR을 찾는다.
    ```
