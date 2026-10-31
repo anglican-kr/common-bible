@@ -328,7 +328,7 @@ ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` 약 6,000줄이 도메�
 - **동시 실행 검사**: 상태(`_state`)를 검사하고, `localStorage["bible-drive-sync"]`의 켬 표지를 검사하고, 비동기 대기(`await`) 직후마다 다시 검사한다. 그래서 백그라운드 토큰 갱신, `code` 교환, 동기화 사이클(대기 여섯 곳마다 `_leftSyncing`) 도중에 연결을 끊어도 사용자의 의도가 지켜진다. 사이클은 하나만 돈다(`_startCycle`의 `_syncPending`). 확인은 대기마다 한 줄이며, 진행 중인 요청을 취소하는 구조(`AbortController`)로 바꾸지 않는다. 결정과 재검토 조건은 [coding-pitfalls.md](coding-pitfalls.md) §11에 있다.
 - **끄는 길은 하나**: `_stopSync`다. 이 함수가 켬 표지를 "0"으로 쓰고, 동기화 캐시와 토큰을 지우고, DISABLED로 전환하고, 설정을 다시 그린다. `disable()`(어느 상태에서든)과 「파일도 삭제」가 함께 쓴다. 다른 탭은 켬 표지의 `storage` 이벤트로 멈춘다.
 - **사이클 도중의 편집**: 병합 직전(내려받기 뒤)에 로컬을 다시 읽어서, 대기하는 동안 저장한 북마크와 설정을 덮어쓰지 않는다. 사이클이 도는 동안 들어온 사용자 요청은 사이클이 끝난 뒤 한 번 더 돈다(`_resyncRequested`, 다음 마이크로태스크).
-- **캐시와 304**: fileId, ETag, 마지막으로 올린 본문의 maxU를 캐시해 두고(`bible-drive-cache-*`) 목록 요청을 건너뛴다. 조건부 GET(`If-None-Match`)이 304를 돌려주면 내려받지 않고, 로컬에 새 편집이 있으면 올리기만 한다.
+- **캐시와 304**: fileId, ETag, 마지막으로 맞춘 문서의 지문을 캐시해 두고(`bible-drive-cache-*`) 목록 요청을 건너뛴다. 조건부 GET(`If-None-Match`)이 304를 돌려주면 내려받지 않고, 로컬 문서의 지문이 다르면 올리기만 한다. 구글이 앱에 ETag를 주지 않아 운영에서는 304가 오지 않는다(2026-10-30 확인, known-issues §42).
 - **실패 처리**: 응답에 따라 다르게 처리한다. 401은 조용한 갱신으로 처리한다(갱신 토큰이 없으면 NEEDS_CONSENT, 새 토큰도 거절되면 상한에서 ERROR). 412는 다시 병합한다(세 번까지, 그 뒤에는 스낵바와 IDLE). 코드 오류(`no_token`, 예외)는 ERROR다. 그 밖의 실패(`http_<status>`. 네트워크 0, 403, 429, 5xx 등)는 1, 2, 4, 8, 16초로 백오프하고, 그래도 실패하면 네트워크 실패만 OFFLINE으로, HTTP 실패는 IDLE로 둔다(다음 요청이 다시 시도한다). 기기가 오프라인이면 곧바로 OFFLINE이다. 전송 함수는 실패를 「없음」과 다른 값(상태 코드)으로 돌려주고, 본문을 읽지 못한 2xx도 실패로 본다([coding-pitfalls.md](coding-pitfalls.md) §28).
 - **카운터 상한**: `MAX_REAUTH=3`(반복되는 401), `MAX_CONFLICTS=3`(412 ETag), `MAX_NET_RETRIES=5`(1, 2, 4, 8, 16초로 점점 늘리는 대기), `MAX_REDIRECT_ATTEMPTS=3`(끝없는 리디렉션 방지).
 - **연결 해제**: 「파일 유지」는 토큰을 폐기하고(Google `/revoke`), IndexedDB의 갱신 토큰과 계정 키를 지우고, 켬 표지를 "0"으로 쓴 뒤 `_stopSync`를 호출한다. 「파일도 삭제」는 페이지가 닫혀도 남으면 안 되는 것을 먼저 지운다. IndexedDB의 갱신 토큰(한 번 갱신할 몫은 메모리에만 둔다), 켬 표지, 계정 키가 그것이다. 그다음 토큰을 상태 머신에서 곧바로 지워 동기화를 멈추고, 진행 중인 사이클이 이미 보낸 요청을 10초까지 기다린 뒤 appDataFolder의 `sync.json`을 모두 지운다(목록, 캐시된 id, 이 페이지가 만든 id를 대상으로 하며, 404는 이미 없는 것으로 보고, 401이면 한 번 갱신하고, 기다림 시간을 넘겼으면 한 번 더 기다렸다가 다시 시도한다). 끝나면 토큰을 폐기한다. 결과는 `true`, `false`, `null`이고, 삭제를 확인하지 못하면 스낵바와 설정의 안내를 남긴다(`bible-drive-delete-pending`. 다시 연결할 때까지 남는다).
@@ -393,7 +393,7 @@ ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` 약 6,000줄이 도메�
 | `localStorage` | `bible-sync-meta` | `{schemaVersion, deviceId}` | (메타) |
 | `localStorage` | `bible-drive-sync` | 켬 표지("0", "1"). 다른 탭은 이 키의 `storage` 이벤트로 로그아웃을 안다 | (메타) |
 | `localStorage` | `bible-drive-sync-email` | 마지막 인증 이메일 (OAuth `login_hint`) | (메타) |
-| `localStorage` | `bible-drive-cache-file-id`, `bible-drive-cache-etag`, `bible-drive-cache-synced-u` | 동기화 캐시. fileId, ETag, 마지막으로 올린 본문의 maxU를 담고, 목록 요청과 내려받기를 건너뛰는 데 쓴다 | (메타) |
+| `localStorage` | `bible-drive-cache-file-id`, `bible-drive-cache-etag`, `bible-drive-cache-synced-hash` | 동기화 캐시. fileId, ETag, 마지막으로 맞춘 문서의 지문을 담고, 목록 요청과 내려받기를 건너뛰는 데 쓴다. 구글이 ETag를 보내지 않아 운영에서는 ETag가 비어 있다 | (메타) |
 | `localStorage` | `bible-drive-redirect-attempts` | 끝없는 리디렉션을 막는 카운터(상한 3) | (메타) |
 | `localStorage` | `bible-drive-delete-pending` | 끝나지 않은 「파일도 삭제」. 설정에 남는 안내이며 다시 연결하면 지운다 | 로컬 전용 |
 | `localStorage` | `bible-audio-pos` | 오디오 재생 위치 | 로컬 전용 |
