@@ -7,7 +7,7 @@
 | 작업 | 주제 문서 | 함께 볼 것 |
 | --- | --- | --- |
 | 북마크, 절 선택, 모아 읽기 | `topics/bookmark.md` | |
-| Drive 동기화, OAuth | `topics/sync.md` | `archive/audit/`(보안 감사) |
+| Drive 동기화, OAuth | `topics/sync.md` | `archive/audit/`(보안 감사), `archive/research/2026-10-device-clock-sync/`(기기 시계와 동기화 조사, 2026-10) |
 | 라우팅, 뷰, 탭 바, 오버레이 | `topics/routing.md` | |
 | 서비스 워커, 캐시, 릴리스 | `topics/cache-release.md` | `scripts/release.py` 머리 주석, `tools/csp/README.md`(릴리스 전 CSP 점검) |
 | 검색 | `topics/search.md` | |
@@ -34,4 +34,4 @@
 - `design/`: 구현 설계서(현재 교회력 엔진 2종). 교회력 설계서는 장마다 파일을 두고(`design/liturgical-engine/`), `design/liturgical-engine.md`가 목차다. 교회력 설계서는 규칙의 기준이라 여기에 두고, 검토 문서는 체크하지 않은 항목이 모두 닫히면 `archive/design/`으로 옮긴다(검토 문서 §7).
 - `reference/`: 기도서 등 외부 원문을 옮겨 적은 문서. 해석하지 않고 옮긴 것이라, 알고리즘을 두고 판단이 갈릴 때 마지막 기준이 된다. 교회력 문서가 「기도서 원문 143행」처럼 적는 행 번호는 `reference/liturgical-calendar-rules.md` 파일의 줄 번호다.
 - `changes/`: 변경 원장. 변경 하나에 파일 하나이고, 2026-09-20부터 있다. PR 본문의 원본이다. 형식은 `changes/README.md`.
-- `archive/`: 완료된 기록과 특정 시점의 기록(design 변천 기록, audit 보안 감사 기록). 현행 정보가 아니다.
+- `archive/`: 완료된 기록과 특정 시점의 기록(design 변천 기록, audit 보안 감사 기록, research 조사 기록). 현행 정보가 아니다.
