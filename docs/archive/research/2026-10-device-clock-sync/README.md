@@ -10,7 +10,7 @@
 | `notes/logical-clocks.md` | 논리 시계, 하이브리드 논리 시계, 버전 벡터로 기기 시각 없이 순서를 정하는 방법 |
 | `notes/products-protocols.md` | 실제 동기화 제품과 프로토콜(Evernote 등)이 남길 사본을 정하는 방법 |
 | `notes/google-drive-api.md` | Drive API v3에서 서버가 정한 순서, 버전, 시각을 얻는 방법(`version`, `modifiedTime`, ETag, `Date` 헤더) |
-| `notes/base-copy-merge.md` | 기준 사본으로 하는 세 방향 병합과 이 기기의 변경을 알아내는 방법(영어로 쓴 노트) |
+| `notes/base-copy-merge.md` | 기준 사본으로 하는 세 방향 병합과 이 기기의 변경을 알아내는 방법 |
 | `notes/tombstone-gc.md` | 삭제 기록을 기기 시계에 기대지 않고 안전하게 지우는 방법 |
 
 노트마다 출처 등급(1차 출처, 2차 출처, 직접 확인, 미확인)을 적는 표시가 조금씩 다르다. 각 노트의 첫머리에 그 노트의 표시 규칙이 있다. 낱말도 조사할 때 쓴 그대로 두었다(「시각을 크게」 등, 지금 쓰는 말은 `docs/writing.md` 「용어」).
