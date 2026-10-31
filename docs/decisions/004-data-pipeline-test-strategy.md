@@ -23,7 +23,7 @@ parser.py나 split_bible.py를 고쳤을 때 절 순서가 깨져도, 눈으로 
 
 ## 테스트 구성
 
-### Level 1 — 완전성 (Completeness)
+### Level 1: 완전성 (Completeness)
 
 원본 없이 돌릴 수 있다. `data/` 디렉터리와 `books.json`만으로 검증한다.
 
@@ -36,7 +36,7 @@ parser.py나 split_bible.py를 고쳤을 때 절 순서가 깨져도, 눈으로 
 | sir-prologue.json | 있고, `paragraphs`가 2개이며, `type == "prologue"` |
 | OSIS book_id | 73권 모두 OSIS 소문자 기준과 같다 |
 
-### Level 2 — 순서 보존 (Ordering)
+### Level 2: 순서 보존 (Ordering)
 
 픽스처 파일(`tests/fixtures/verse_sequence.json`)을 쓴다. CI에서 돌릴 수 있다.
 
@@ -57,16 +57,16 @@ parser.py나 split_bible.py를 고쳤을 때 절 순서가 깨져도, 눈으로 
 python tests/generate_fixtures.py
 ```
 
-### Level 3 — 특수 케이스 스냅샷 (Snapshot)
+### Level 3: 특수 케이스 스냅샷 (Snapshot)
 
 원본 없이 돌릴 수 있다. 알려진 경우를 고정값으로 검증한다.
 
 | 항목 | 기준 |
 |------|------|
-| cross-chapter 6곳 | 위치(장 파일)와 `chapter_ref` 값이 정확한지 고정값으로 검증 |
-| 아모스 5·6장 절 순서 | 재배치 구간의 절 번호 시퀀스 고정 |
-| 이사야 40·41장 절 순서 | 위와 같다 |
-| 호세아 13·14장 절 순서 | 위와 같다 |
+| 다른 장으로 옮겨 실린 절 6곳 | 위치(장 파일)와 `chapter_ref` 값이 정확한지 고정값으로 검증 |
+| 아모스 5장과 6장의 절 순서 | 재배치 구간의 절 번호 시퀀스 고정 |
+| 이사야 40장과 41장의 절 순서 | 위와 같다 |
+| 호세아 13장과 14장의 절 순서 | 위와 같다 |
 
 ## 파일 구조
 
@@ -98,5 +98,5 @@ CI: tests/ 전체 실행 (원본 없이)
 
 ## 관련 ADR
 
-- ADR-003: 물리적 장 처리 방식. Level 2·3 테스트가 검증하는 대상이다.
+- ADR-003: 물리적 장 처리 방식. Level 2와 3 테스트가 검증하는 대상이다.
 - ADR-002: 집회서 머리말 처리. Level 1의 `sir-prologue.json` 검증이 여기에 대응한다.
