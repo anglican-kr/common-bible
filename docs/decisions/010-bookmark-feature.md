@@ -2,25 +2,25 @@
 
 - 일시: 2026-04-25
 - 상태: 승인됨 — 구현 완료 (2026-04-25, 모바일 행 제스처는 2026-05-03부터 06-11까지 다듬었다, 절 선택 막대 2026-06-06, 범위 선택 2026-06-13, 주소의 절 범위 검사 2026-10-21 — ADR-040, 절 선택을 줄 키로 2026-10-21, 여러 줄 절은 절 전체로, 반쪽 절은 「ㄱ · ㄴ」 2026-10-22, 옛 버전의 저장값 옮기기와 병합 절의 범위 저장 2026-10-22)
-- 관련: ADR-011(기기 사이 동기화, 내보내기, 가져오기), ADR-022(인용 — 산문 절의 분절), ADR-029(하단 탭 바, 북마크 탭, 선택 모드), ADR-030(모핑 탭 바, 글래스), ADR-032(오버레이 컨트롤러), ADR-034(모듈 분할), ADR-035(모아 읽기), ADR-040(가져오기 항목 검사, 절 범위 검사)
+- 관련: ADR-011(기기 사이 동기화, 내보내기, 가져오기), ADR-022(인용, 산문 절의 분절), ADR-029(하단 탭 바, 북마크 탭, 선택 모드), ADR-030(모핑 탭 바, 글래스), ADR-032(오버레이 컨트롤러), ADR-034(모듈 분할), ADR-035(모아 읽기), ADR-040(가져오기 항목 검사, 절 범위 검사)
 
 ## 결정
 
-`localStorage` 기반 클라이언트 전용 북마크 저장소를 구현한다. 사용자는 현재 장 전체 또는 선택한 절을 저장하고, 폴더로 분류, 관리할 수 있다.
+`localStorage` 기반 클라이언트 전용 북마크 저장소를 구현한다. 사용자는 현재 장 전체 또는 선택한 절을 저장하고, 폴더로 분류하고 관리할 수 있다.
 
-- **절 범위는 URL path에 spec 문자열로 인코딩한다**(`/john/3/1-5,10-15`, `/ps/23/3a,5-7`). 장 화면이 이를 해석해 해당 span만 하이라이트한다. 여러 구간은 앱이 쓰는 표기일 때만 강조한다(검사는 ADR-040 — 아래 「절 범위와 주소」).
-- **세그먼트는 `data-vref` 문자열로 적는다**: 단일 행 절은 `"3"`, 다중 행 절은 `"3a"`, `"3b"`, `"3c"` …. 북마크를 저장할 때는 인용으로 분절된 산문 절을 절 전체로 올린다. **절 선택은 줄마다 고유한 `data-vkey`로 한다.** 한 장에 번호가 같은 다른 절이 있어 `data-vref`로는 줄을 구별할 수 없기 때문이다(다니 3장의 그리스어 (24)와 히브리 본문 24절, 이사 40장의 41:6과 40:6, 에스 4:17의 추가 본문). 고르는 단위는 절이다. 여러 줄로 된 절은 한 줄을 눌러도 절 전체를 고르고, 절보다 작은 단위는 데이터의 반쪽 절뿐이다. 반쪽 절은 화면과 출처에 인쇄본대로 「8ㄱ」으로 적는다. 저장하는 spec은 번호 단위 그대로다. 2026-06-06 전의 앱이 저장한 줄 글자(「16aa」)는 앱을 시작할 때, 가져올 때, 동기화 결과를 적용할 때 지금 표기로 옮긴다.
-- **모바일 행**: 탭은 이동, 왼쪽으로 밀면 삭제, 오른쪽으로 밀면 수정(iOS 관례), 끝까지 밀면 바로 실행한다. 재정렬은 직접 정렬일 때 보이는 ≡ 핸들에서만 시작한다.
-- **헤더 북마크**: 모바일(탭 바가 있는 화면)은 「이 장 추가」만, 데스크톱은 상태 표시와 북마크 드로어 진입점이다. 관리는 북마크 탭(ADR-029)이 맡는다.
+- **절 범위는 URL 경로에 문자열 표기로 인코딩한다**(`/john/3/1-5,10-15`, `/ps/23/3a,5-7`). 장 화면이 이를 해석해 해당 줄(`<span>` 요소)만 강조한다. 여러 구간은 앱이 쓰는 표기일 때만 강조한다(검사는 ADR-040과 아래 「절 범위와 주소」에 있다).
+- **세그먼트는 `data-vref` 문자열로 적는다**: 한 줄 절은 `"3"`, 여러 줄 절은 `"3a"`, `"3b"`, `"3c"` …. 북마크를 저장할 때는 인용으로 분절된 산문 절을 절 전체로 바꾼다. **절 선택은 줄마다 고유한 `data-vkey`로 한다.** 한 장에 번호가 같은 다른 절이 있어 `data-vref`로는 줄을 구별할 수 없기 때문이다(다니 3장의 그리스어 (24)와 히브리 본문 24절, 이사 40장의 41:6과 40:6, 에스 4:17의 추가 본문). 고르는 단위는 절이다. 여러 줄로 된 절은 한 줄을 눌러도 절 전체를 고르고, 절보다 작은 단위는 데이터의 반쪽 절뿐이다. 반쪽 절은 화면과 출처에 인쇄본대로 「8ㄱ」으로 적는다. 저장하는 절 범위 표기는 번호 단위 그대로다. 2026-06-06 전의 앱이 저장한 줄 글자(「16aa」)는 앱을 시작할 때, 가져올 때, 동기화 결과를 적용할 때 지금 표기로 옮긴다.
+- **모바일 행**: 탭하면 이동하고, 왼쪽으로 밀면 삭제하고, 오른쪽으로 밀면 수정한다(iOS 관례). 끝까지 밀면 바로 실행한다. 재정렬은 직접 정렬일 때 보이는 ≡ 핸들에서만 시작한다.
+- **헤더 북마크**: 모바일(탭 바가 있는 화면)에는 「이 장 추가」만 있고, 데스크톱에서는 상태를 표시하며 북마크 드로어를 여는 진입점이다. 관리는 북마크 탭(ADR-029)이 맡는다.
 - **절 선택 모드**: 읽기 화면을 길게 눌러(500ms) 들어가고, 앵커 방식으로 범위를 고른다. 하단 글래스 막대에 북마크, 복사가 있다.
-- 목록은 옛 키(`bible-bookmarks`)와 동기화 저장소(`bible-bookmarks-v2` — ADR-011)에 두 벌로 저장된다.
+- 목록은 옛 키(`bible-bookmarks`)와 동기화 저장소(`bible-bookmarks-v2`, ADR-011)에 두 벌로 저장된다.
 
 ## 맥락
 
-Phase 1 완료 후 "어제 읽던 곳을 빠르게 찾는" 사용 패턴이 주요 요구사항으로 부상했다.
+Phase 1 완료 후 "어제 읽던 곳을 빠르게 찾는" 사용 패턴이 주요 요구사항이 되었다.
 성경 앱에서 북마크는 필수 기능이지만, 서버 없이 PWA 오프라인 완전 지원을 유지해야 한다는
-아키텍처 제약이 있었다. 또한 시편·욥기 등 운문에서 **헤미스티치(반행)** 단위로
-절이 렌더링되므로, "3절 전체"뿐 아니라 "3절 첫 번째 행(3a)"만 저장하는 세밀한
+아키텍처 제약이 있었다. 또한 시편, 욥기 같은 운문에서 **헤미스티치(반행)** 단위로
+절이 그려지므로, "3절 전체"뿐 아니라 "3절 첫 번째 행(3a)"만 저장하는 세밀한
 선택이 필요했다.
 
 ## 구현
@@ -57,20 +57,20 @@ type Folder = {
 type BookmarkStore = Array<Bookmark | Folder>
 ```
 
-정렬 기준, 방향과 「최근에 본」 시각은 이 트리 밖, 기기마다의 `localStorage`에 둔다 — `bible-bookmark-sort`, `bible-bookmark-sort-dir`, `bible-bookmark-viewed`(아래 「정렬」).
+정렬 기준, 방향, 「최근에 본」 시각은 이 트리에 넣지 않고 기기마다 `localStorage`에 둔다(`bible-bookmark-sort`, `bible-bookmark-sort-dir`, `bible-bookmark-viewed`. 아래 「정렬」).
 
 ### 절 범위와 주소 (`js/app/routing.js`, `js/app/views.js`)
 
 `parsePath()`가 장 주소의 셋째 조각을 절 범위로 읽고, 반환값의 `highlightVerse`, `highlightVerseEnd`(구간 하나) 또는 `highlightVerseSpec`(여러 구간)으로 넘긴다.
 
-- **구간 하나**(`/john/3/16`, `/john/3/16-20`)는 펼치지 않는다. 거꾸로 된 범위는 바로 세운다(`20-16` → 16-20). 장을 넘는 끝은 `renderChapter`가 그 장의 마지막 절로 자르고, 바로 세운 범위로 주소를 고친다(`16-200` → `16-36`, `40-10` → `10-36`). 시작이 장을 넘으면 강조 없이 장만 연다.
-- **여러 구간**(`/john/3/1-5,10-15`, `/ps/23/3a,5-7`)은 앞뒤 쉼표를 뗀 뒤, 앱이 쓰는 표기인지 `isWellFormedSpec`(`js/app/verse-spec.js`)으로 본다. 기준은 ADR-040 「절 범위」다 — 오름차순, 겹침 없음, 숫자 1-999, 부분 글자 a-p, 1,000구간까지. 통과하면 `parseVerseSpec()`으로 읽어 정규형(`selectedVersesToSpec`)으로 넘기고, 통과하지 못하면 강조 없이 장만 연다. 이 갈래는 구간을 절 하나하나로 펼치므로, 검사 없이는 큰 범위가 시작 화면을 멈추고 탭을 죽였다(known-issues §15).
+- **구간 하나**(`/john/3/16`, `/john/3/16-20`)는 펼치지 않는다. 거꾸로 된 범위는 순서를 바로잡는다(`20-16`은 16-20이 된다). 장을 넘는 끝은 `renderChapter`가 그 장의 마지막 절로 자르고, 바로잡은 범위로 주소를 고친다(`16-200`은 `16-36`, `40-10`은 `10-36`이 된다). 시작이 장을 넘으면 강조 없이 장만 연다.
+- **여러 구간**(`/john/3/1-5,10-15`, `/ps/23/3a,5-7`)은 앞뒤 쉼표를 뗀 뒤, 앱이 쓰는 표기인지 `isWellFormedSpec`(`js/app/verse-spec.js`)으로 본다. 기준은 ADR-040 「절 범위」에 있다. 오름차순이어야 하고, 겹치지 않아야 하며, 숫자는 1-999, 부분 글자는 a-p, 구간은 1,000개까지다. 통과하면 `parseVerseSpec()`으로 읽어 정규형(`selectedVersesToSpec`)으로 넘기고, 통과하지 못하면 강조 없이 장만 연다. 이 경로는 구간을 절 하나하나로 펼치므로, 검사 없이는 큰 범위 때문에 시작 화면이 멈추고 탭이 종료됐다(known-issues §15).
 
 `parseVerseSpec()` 반환 항목에는 `part` 필드가 있다:
-- `"3a"` → `{ start: 3, end: 3, part: "a" }`
-- `"5-7"` → `{ start: 5, end: 7 }` (part 없음)
+- `"3a"`는 `{ start: 3, end: 3, part: "a" }`로 읽힌다.
+- `"5-7"`은 `{ start: 5, end: 7 }`로 읽힌다(`part`는 없다).
 
-장 본문을 그리는 `views.js appendVerses`(`renderChapter`가 호출한다)가 span마다 강조를 판정한다 — `vref`를 `classes`보다 먼저 계산해 쓴다:
+장 본문을 그리는 `views.js appendVerses`(`renderChapter`가 호출한다)가 `<span>` 요소마다 강조할지 판정한다. `vref`는 `classes`보다 먼저 계산해 쓴다:
 
 ```js
 const isHighlightedSpan = hlSegments
@@ -81,21 +81,21 @@ const isHighlightedSpan = hlSegments
 
 ### 세그먼트와 저장 표기
 
-다중 행 절은 여러 span으로 나뉘어 렌더링된다. 선택 상태는 span마다 고유한 `data-vkey`를 모은다(`readingContext.selectedVerses: Set<string>`). 고르는 단위는 아래 「절 단위」와 「반쪽 절」을 따른다. `data-vkey`는 절 인스턴스 키와 `data-vref`를 「/」로 이은 값이다(`views.js appendVerses`). 절 인스턴스 키는 DOM id와 같은 `verse-spec.js verseInstanceKeys`다(PR #310, ADR-038 §3).
+여러 줄 절은 여러 `<span>` 요소로 나뉘어 그려진다. 선택 상태는 `<span>`마다 고유한 `data-vkey`를 모은 것이다(`readingContext.selectedVerses: Set<string>`). 고르는 단위는 아래 「절 단위」와 「반쪽 절」을 따른다. `data-vkey`는 절 인스턴스 키와 `data-vref`를 「/」로 이은 값이다(`views.js appendVerses`). 절 인스턴스 키는 DOM id와 같은 `verse-spec.js verseInstanceKeys`다(PR #310, ADR-038 §3).
 
 번호만으로는 절을 구별할 수 없다. 옮겨 실린 절(`chapter_ref`), 그리스어 추가 본문(`lxx_only`), 에스델 추가 본문(`alt_ref`), 전례시편의 ¶ 구절(`versicle`)은 같은 장의 다른 절과 번호를 함께 쓴다. `data-vref`로 선택하던 때(2026-10-20까지)는 이런 절 하나를 누르면 `data-vref`가 같은 줄이 모두 선택됐다. 이사 40장의 41:6을 누르면 40:6도, 에스 4:17의 추가 본문 하나를 누르면 25개 절이 선택됐다.
 
 - **절 단위**: 여러 줄로 된 절은 운문이든 산문이든 섞였든 한 줄을 눌러도 절 전체를 고른다(`_verseSelectionUnit`, 사용자 결정 2026-10-22). 산문 절의 줄은 대부분 인용 칩 자리 때문에 생긴 화면상의 분절이다(산문만으로 여러 줄인 절 380곳 중 258곳). 마태 10:35처럼 문장 중간에서 끊기기도 한다. 같은 절인지는 절 인스턴스 키에서 ¶ 표시를 떼고 판단한다. 따라서 ¶ 구절은 그 번호의 절과 한 단위가 된다. 그 밖의 절은 번호가 같아도 따로 고른다. 범위 선택(`_verseRangeKeys`)도 양 끝을 이 단위로 넓힌다.
-- **반쪽 절**: 데이터의 반쪽 절은 번역자가 한 절을 나눠 다른 절 사이에 실은 것이다(이사 7장은 8ㄱ, 9ㄱ, 8ㄴ, 9ㄴ 순서). 절보다 작은 단위는 이것뿐이고, 반쪽마다 따로 고른다(사용자 결정 2026-10-22). 범위 끝이 반쪽 절에 닿으면 그 반쪽 절에서 멈춘다. 나훔 1장은 2ㄱ을 1절 뒤에, 2ㄴ을 9절 뒤에 싣는다. 1절부터 2ㄱ까지 고르면 출처는 「1,2ㄱ」이다. 화면의 절 번호와 출처는 인쇄본대로 「8ㄱ」 「8ㄴ」으로 적는다(`halfVerseMark`). 장 화면, 모아 읽기, 전례독서의 절 번호가 모두 그렇다. 주소의 반쪽 절 글자는 「a」, 「b」 그대로다(ADR-040). 북마크는 반쪽 절도 번호로 저장한다(「북마크 저장」).
+- **반쪽 절**: 데이터의 반쪽 절은 번역자가 한 절을 나눠 다른 절 사이에 실은 것이다(이사 7장은 8ㄱ, 9ㄱ, 8ㄴ, 9ㄴ 순서). 절보다 작은 단위는 이것뿐이고, 반쪽마다 따로 고른다(사용자 결정 2026-10-22). 범위 끝이 반쪽 절이면 그 반쪽 절에서 멈춘다. 나훔 1장은 2ㄱ을 1절 뒤에, 2ㄴ을 9절 뒤에 싣는다. 1절부터 2ㄱ까지 고르면 출처는 「1,2ㄱ」이다. 화면의 절 번호와 출처는 인쇄본대로 「8ㄱ」 「8ㄴ」으로 적는다(`halfVerseMark`). 장 화면, 모아 읽기, 전례독서의 절 번호가 모두 그렇다. 주소의 반쪽 절 글자는 「a」, 「b」 그대로다(ADR-040). 북마크는 반쪽 절도 번호로 저장한다(「북마크 저장」).
 - **선택 막대, 복사**: `selectionCitation(selected, article)`가 고른 줄로 출처의 절 번호(`refs`)를 정하고, `citationVerseSpec(refs)`가 사람이 읽는 표기로 적는다. 출처에 줄 글자를 쓰지 않는다. 반쪽 절은 하나만 고르면 「8ㄱ」, 둘 다 고르면 「8」이다. 병합 절(「7-8」)은 앞뒤 구간에 이어 적는다. 나훔 1장에서 1절부터 2ㄴ까지 고르면 「1-9」다(종전 「1-6,7-8,9」). 출처에 넣을 절은 장 본문 복사(`views.js bindCopyAttribution`, ADR-038 §3 「구현」)와 같은 규칙으로 고른다. 구간 표기는 세 군데 다르다(known-issues §16).
   - 옮겨 실린 절(`verse-cross-ref`)과 그리스어 추가 본문(`verse-lxx`)은 그 절만 골랐을 때만 출처에 넣는다. 이사 40:19-20을 고르면 사이의 41:6-7도 선택되지만 출처는 「40:19-20」이다.
   - 옮겨 실린 절만 고르면 본래 장으로 적는다. 출처는 「이사야 41:6-7」, 막대는 「41:6-7절 선택됨」이다(사용자 결정 2026-10-21, 채택하지 않은 안은 ADR-038 「검토한 대안」).
   - 한 번호를 여러 절이 함께 쓰면 번호만 적는다(에스 4:17과 추가 본문, ¶ 구절과 앞 절, 토비 11:15의 중복 절 표시). 여러 절인지는 반쪽 절 글자를 뗀 절 인스턴스 키의 수로 판단한다. 데이터의 반쪽 절(8ㄱ, 8ㄴ)은 한 절의 부분이므로 여러 절로 세지 않는다.
-- **북마크 저장**: `verseNumberSpec(selectedSpanVrefs(selected, article))`. 고른 줄의 `data-vref`에서 글자를 모두 떼고 절 번호를 구간으로 잇는다. 인용(`<cite>`)이 박힌 산문 절은 인용 위치에서 a/b/c 라인-스팬으로 분절되는데(ADR-022), 개념상 한 절이므로 저장되는 spec은 `23`이다. 절 선택이 절 단위라 일부만 고른 경우는 반쪽 절 하나뿐이다. 「8ㄱ」만 골라도 저장값은 `8`이다.
+- **북마크 저장**: `verseNumberSpec(selectedSpanVrefs(selected, article))`. 고른 줄의 `data-vref`에서 글자를 모두 떼고 절 번호를 구간으로 잇는다. 인용(`<cite>`)이 들어간 산문 절은 인용 위치에서 a, b, c 줄로 분절되지만(ADR-022), 개념상 한 절이므로 저장하는 절 범위 표기는 `23`이다. 절 선택이 절 단위라 일부만 고른 경우는 반쪽 절 하나뿐이다. 「8ㄱ」만 골라도 저장값은 `8`이다.
   - 병합 절은 범위로 저장하고 앞뒤 절과 잇는다. 나훔 1장에서 7-8절만 고르면 `7-8`이고, 1절부터 2ㄴ까지 고르면 선택 막대처럼 `1-9`다. 2026-10-22까지는 여러 줄인 병합 절을 첫 번호(`7`)로 저장했고(known-issues §17), 한 줄인 병합 절은 앞뒤 절과 따로 적었다(`16,17-18,19`).
   - 합치기(`mergeVerseSpecs`)도 같은 함수로 적는다. 범위를 절마다 펼치지 않으므로, 검사 없이 들어온 큰 범위(known-issues §15)에 합쳐도 멈추지 않는다.
 - **옛 저장값**: 2026-04-25부터 06-06(#205)까지의 앱은 여러 줄인 절의 일부 줄을 고르면 줄 글자를 그대로 저장했다. 인용 칩 자리에서 나뉜 산문 절의 줄(「35a」, 「20a,20c」), 데이터 반쪽 절의 한 줄(「16aa」), 병합 절의 한 줄(「7-8a」)이다. 그 글자는 북마크 목록과 합치기 대화상자에 그대로 보였다. `parseVerseSpec`이 읽지 못하는 표기(「16aa」, 「7-8a」)는 모아 읽기에서 그려지지 않았고, 합치면 그 절이 빠졌다(이사 10 「16aa」에 1절을 합치면 「1」). 이제는 `wholeVerseSpec`이 글자를 떼어 지금 저장 표기로 옮긴다(사용자 결정 2026-10-22, coding-pitfalls §38). 줄 단위 범위는 절 전체가 된다. 글자가 없는 범위와 앱이 쓴 적 없는 표기(검사 없이 들어온 것)는 그대로 둔다.
-  - 옮기는 때는 셋이다. 앱을 시작할 때 첫 화면을 그리기 전에 두 사본을 옮긴다(`app.js` → `bookmark-core.js migrateStoredBookmarks` → `storage.js rewriteBookmarks`). 이름 규칙에 성서 목록이 필요하므로, 옮길 것이 있는 시작만 성서 목록을 기다린다. 옮긴 뒤의 시작은 기다리지 않는다. 캘린더, 전례독서, 모바일의 설정 화면은 성서 목록 없이 그리기 때문이다. 가져오기는 들이면서 옮긴다(ADR-040). 동기화 결과는 저장하기 전에 옮긴다(ADR-011). 그때 성서 목록이 아직 없으면 받은 대로 저장하고, 목록을 받은 뒤 저장된 목록을 옮긴다. 합치기도 같은 규칙으로 읽는다.
+  - 옮기는 때는 셋이다. 앱을 시작할 때 첫 화면을 그리기 전에 두 사본을 옮긴다(`app.js`가 `bookmark-core.js migrateStoredBookmarks`를 호출하고, 그 함수가 `storage.js rewriteBookmarks`를 호출한다). 이름 규칙에 성서 목록이 필요하므로, 옮길 것이 있는 시작만 성서 목록을 기다린다. 옮긴 뒤의 시작은 기다리지 않는다. 캘린더, 전례독서, 모바일의 설정 화면은 성서 목록 없이 그리기 때문이다. 가져오기는 들이면서 옮긴다(ADR-040). 동기화 결과는 저장하기 전에 옮긴다(ADR-011). 그때 성서 목록이 아직 없으면 받은 대로 저장하고, 목록을 받은 뒤 저장된 목록을 옮긴다. 합치기도 같은 규칙으로 읽는다.
   - 수정 시각(`_u`)은 올리지 않는다. 시작할 때의 옮기기는 동기화가 드라이브를 받기 전에 돌아, 시각을 올리면 다른 기기에서 고친 내용을 덮을 수 있다.
   - 이름은 그 북마크의 옛 기본 이름(「책 장:옛 저장값」)과 정확히 같을 때만 새 기본 이름으로 바꾼다(`migrateLegacyBookmark`). 사용자가 고친 이름은 그대로 둔다.
   - 옛 버전도 여러 줄인 병합 절의 줄을 모두 고르면 첫 번호(「7」)를 저장했다. 이 값은 장 데이터 없이는 병합 절인지 알 수 없어 그대로 둔다. 「7」로도 병합 절 전체가 그려진다.
@@ -105,90 +105,90 @@ const isHighlightedSpan = hlSegments
 
 | 함수 | 모듈 | 역할 |
 |------|------|------|
-| `parseVerseSpec(spec)` | `verse-spec.js` | spec 문자열 → `{start,end,part?}[]` |
-| `isWellFormedSpec(spec)` | `verse-spec.js` | 앱이 쓰는 표기인가 — 가져오기와 주소가 함께 쓴다(ADR-040) |
-| `selectedVersesToSpec(refs)` | `verse-spec.js` | `string[]` → spec 문자열. 정수 연속 구간만 범위 압축 |
-| `_compareRefs(a, b)` | `verse-spec.js` | `"3" < "3a" < "3b" < "4"` 정렬 |
-| `selectionCitation(selected, article)` | `verse-spec.js` | 고른 줄(`data-vkey`)의 출처 `{ chapter, refs }`. `refs`는 절 번호다(`"3a,3b"` → `"3"`, 병합 절 `"7-8"`). 반쪽 절 하나만 고르면 `"8a"`. 옮겨 실린 절과 그리스어 절은 그 절만 골랐을 때만 넣고, 옮겨 실린 절의 `chapter`는 본래 장이다. 선택 막대 · 복사 경로 |
-| `citationVerseSpec(refs)` | `verse-spec.js` | `selectionCitation`의 `refs` → 사람이 읽는 출처. 병합 절을 앞뒤 구간에 잇고(`["6","7-8","9"]` → `"6-9"`), 반쪽 절은 `"9a"` → `"9ㄱ"`으로 적는다 |
-| `halfVerseMark(part)` | `verse-spec.js` | 반쪽 절 글자 `a` → `ㄱ`, `b` → `ㄴ`. 화면의 절 번호(`views.js formatVerseNumber`)와 출처가 쓴다 |
-| `selectedSpanVrefs(selected, article)` | `verse-spec.js` | 고른 줄의 `data-vref`, 문서 순서 (북마크 저장 경로) |
-| `verseNumberSpec(refs)` | `verse-spec.js` | 북마크 저장과 합치기. 글자를 떼고 절 번호를 구간으로 잇는다(`["23a","23c"]` → `"23"`, `["6","7-8a","9"]` → `"6-9"`) |
-| `wholeVerseSpec(spec)` | `verse-spec.js` | 옛 버전의 줄 글자를 지금 표기로 옮긴다(`"16aa"` → `"16"`). 글자가 없거나 앱이 쓴 적 없는 표기는 그대로 둔다 |
-| `mergeVerseSpecs(specA, specB)` | `verse-spec.js` | 두 spec의 합집합(합치기). 절 번호 단위로 적는다 |
+| `parseVerseSpec(spec)` | `verse-spec.js` | 절 범위 문자열을 `{start,end,part?}[]`로 읽는다 |
+| `isWellFormedSpec(spec)` | `verse-spec.js` | 앱이 쓰는 표기인지 검사한다. 가져오기와 주소가 함께 쓴다(ADR-040) |
+| `selectedVersesToSpec(refs)` | `verse-spec.js` | `string[]`을 절 범위 문자열로 바꾼다. 정수가 이어진 구간만 범위로 줄인다 |
+| `_compareRefs(a, b)` | `verse-spec.js` | `"3" < "3a" < "3b" < "4"` 순으로 정렬한다 |
+| `selectionCitation(selected, article)` | `verse-spec.js` | 고른 줄(`data-vkey`)의 출처 `{ chapter, refs }`를 만든다. `refs`는 절 번호다(`"3a,3b"`는 `"3"`, 병합 절은 `"7-8"`). 반쪽 절 하나만 고르면 `"8a"`다. 옮겨 실린 절과 그리스어 절은 그 절만 골랐을 때만 넣고, 옮겨 실린 절의 `chapter`는 본래 장이다. 선택 막대와 복사가 쓴다 |
+| `citationVerseSpec(refs)` | `verse-spec.js` | `selectionCitation`의 `refs`를 사람이 읽는 출처로 적는다. 병합 절을 앞뒤 구간에 잇고(`["6","7-8","9"]`는 `"6-9"`), 반쪽 절은 `"9a"`를 `"9ㄱ"`으로 적는다 |
+| `halfVerseMark(part)` | `verse-spec.js` | 반쪽 절 글자 `a`는 `ㄱ`으로, `b`는 `ㄴ`으로 바꾼다. 화면의 절 번호(`views.js formatVerseNumber`)와 출처가 쓴다 |
+| `selectedSpanVrefs(selected, article)` | `verse-spec.js` | 고른 줄의 `data-vref`를 문서 순서로 모은다(북마크 저장이 쓴다) |
+| `verseNumberSpec(refs)` | `verse-spec.js` | 북마크 저장과 합치기가 쓴다. 글자를 떼고 절 번호를 구간으로 잇는다(`["23a","23c"]`는 `"23"`, `["6","7-8a","9"]`는 `"6-9"`) |
+| `wholeVerseSpec(spec)` | `verse-spec.js` | 옛 버전의 줄 글자를 지금 표기로 옮긴다(`"16aa"`는 `"16"`). 글자가 없거나 앱이 쓴 적 없는 표기는 그대로 둔다 |
+| `mergeVerseSpecs(specA, specB)` | `verse-spec.js` | 두 절 범위의 합집합을 만든다(합치기). 절 번호 단위로 적는다 |
 | `migrateLegacyBookmark(bm, books)` | `bookmark-core.js` | 북마크 하나의 옛 절 범위와 옛 기본 이름을 옮긴다(「옛 저장값」) |
 | `rewriteBookmarks(patch)` | `storage.js` | 저장된 두 사본을 수정 시각(`_u`)을 올리지 않고 고쳐 쓴다 |
-| `_findParentFolderId(store, id)` | `bookmark-core.js` | 북마크가 속한 폴더 ID 반환 (root = null) |
+| `_findParentFolderId(store, id)` | `bookmark-core.js` | 북마크가 속한 폴더 ID를 돌려준다(최상위는 null) |
 | `_isActiveBookmark(bm)` | `bookmark-core.js` | `window.location.pathname === _bookmarkHref(bm)` |
-| `_hasActiveDescendant(folder)` | `bookmark-core.js` | 재귀적으로 활성 북마크 포함 여부 확인 |
+| `_hasActiveDescendant(folder)` | `bookmark-core.js` | 활성 북마크를 품고 있는지 재귀로 확인한다 |
 | `generateId()` | `storage.js` | `Date.now().toString(36) + random` |
-| `_buildFolderToggleIcon(open, size)` | `bookmark-tree.js` | Material Icons `folder`/`folder_open` SVG 반환 |
-| `_buildBookmarkTypeIcon(active, size)` | `bookmark-tree.js` | outlined/filled `bookmark` SVG 반환 |
+| `_buildFolderToggleIcon(open, size)` | `bookmark-tree.js` | Material Icons `folder`/`folder_open` SVG를 돌려준다 |
+| `_buildBookmarkTypeIcon(active, size)` | `bookmark-tree.js` | outlined/filled `bookmark` SVG를 돌려준다 |
 
 ### 북마크 드로어 (`#bookmark-drawer`)
 
-데스크톱에서 헤더 북마크로 여는 패널이다. 모바일의 북마크 탭(ADR-029)도 같은 트리 빌더(`bookmark-tree.js`)로 그린다. ARIA tree widget(`role="tree"`, `role="treeitem"`, `role="group"`).
+데스크톱에서 헤더 북마크로 여는 패널이다. 모바일의 북마크 탭(ADR-029)도 같은 트리 빌더(`bookmark-tree.js`)로 그린다. ARIA 트리 위젯(`role="tree"`, `role="treeitem"`, `role="group"`)으로 만든다.
 
-- **툴바**: 아이콘 전용 버튼, 우측 정렬. 순서: 새 폴더(`create_new_folder`) → 이 장 저장(`bookmark_add`) → 절 선택(`text_select_move_forward_character`) → 더 보기(⋯ — 내보내기, 가져오기, ADR-011).
-- **폴더 행**: `_buildFolderToggleIcon(open)`의 `folder` / `folder_open` SVG가 열림을 보이고, 폴더 행 전체 클릭/터치로 펼치기, 접기.
-- **북마크 행**: `_buildBookmarkTypeIcon(active)`: 비활성 시 outlined `bookmark`, 활성 시 filled `bookmark`. 활성 북마크(`_isActiveBookmark(bm)`)는 `.bm-active` 클래스로 배경 강조 + 아이콘, 레이블에 accent 색상을 적용한다.
-- **열 때 폴더는 접혀 있다**: `expanded` 필드는 localStorage에 계속 저장되지만, 드로어를 열 때 항상 `false`(접힌 상태)로 렌더링한다. `_hasActiveDescendant(folder)`가 true인 폴더만 자동으로 펼친다. 스키마 하위 호환성을 위해 필드는 유지한다.
-- **키보드**: WAI-ARIA Tree Pattern(`↑↓` 포커스 이동, `→←` 폴더 열기/닫기, 부모 이동, `Enter`/`Space` 활성화, `Home`/`End` 처음, 끝). 버튼, 링크에서는 트리 키를 무시한다. roving tabindex.
+- **툴바**: 아이콘만 있는 버튼을 오른쪽에 정렬한다. 순서는 새 폴더(`create_new_folder`), 이 장 저장(`bookmark_add`), 절 선택(`text_select_move_forward_character`), 더 보기(⋯. 내보내기와 가져오기, ADR-011)다.
+- **폴더 행**: `_buildFolderToggleIcon(open)`의 `folder`와 `folder_open` SVG가 열림 상태를 보이고, 폴더 행 전체를 클릭하거나 터치하면 펼치고 접는다.
+- **북마크 행**: `_buildBookmarkTypeIcon(active)`의 아이콘은 비활성이면 윤곽선 `bookmark`, 활성이면 채워진 `bookmark`이다. 활성 북마크(`_isActiveBookmark(bm)`)는 `.bm-active` 클래스로 배경을 강조하고, 아이콘과 라벨에 강조색(accent)을 적용한다.
+- **열 때 폴더는 접혀 있다**: `expanded` 필드는 `localStorage`에 계속 저장되지만, 드로어를 열 때는 항상 `false`(접힌 상태)로 그린다. `_hasActiveDescendant(folder)`가 `true`인 폴더만 자동으로 펼친다. 스키마 하위 호환성을 위해 필드는 유지한다.
+- **키보드**: WAI-ARIA 트리 패턴을 따른다(`↑↓`는 포커스 이동, `→←`는 폴더 열기와 닫기 및 부모로 이동, `Enter`와 `Space`는 활성화, `Home`과 `End`는 처음과 끝으로 이동). 버튼과 링크에서는 트리 키를 무시한다. 탭 포커스는 한 항목에만 두는 roving `tabindex`를 쓴다.
 
 ### 저장, 병합, 확인 모달
 
-- **저장 모달**(`#bm-save-modal`, `openSaveModal`) — 제목, 메모, 저장 위치 입력. 저장 위치는 `_findParentFolderId()`로 현재 위치를 미리 고른다(pre-select). `overflow: visible`로 폴더 선택 콤보박스(최상위, 폴더 목록, 새 폴더) 드롭다운이 모달 밖으로 열린다.
-- **병합 다이얼로그**(`#bm-merge-modal`) — 동일 장에 북마크가 이미 있으면 「합치기 / 따로 저장 / 취소」. 합치기는 `mergeVerseSpecs`이고, 북마크 제목을 「책 장:합친 범위」로 다시 짓는다. 사용자가 고친 제목도 다시 짓는다(known-issues §19).
-- **확인 모달**(`#bm-confirm-modal`, `openConfirmModal()`) — 파괴적 동작(행 스와이프 삭제, 폴더 삭제, 선택 모드 삭제)이 함께 쓴다. 확인 버튼은 파괴색 `#c0392b`, 기본 포커스는 안전한 「취소」. 테마와 포커스 트랩이 적용된다.
-- **폴더 삭제는 폴더 + 내용물 cascade다**(스와이프, 행, 드로어, 선택 모드 모두 동일). 확인창이 개수(「…폴더와 안의 항목 N개를 모두 삭제할까요?」)를 명시해 범위를 분명히 한다. 그룹만 풀고 싶으면 항목을 먼저 밖으로 드래그한다.
+- **저장 모달**(`#bm-save-modal`, `openSaveModal`)에서 제목, 메모, 저장 위치를 입력한다. 저장 위치는 `_findParentFolderId()`로 현재 위치를 미리 골라 둔다. `overflow: visible`이라 폴더 선택 콤보박스(최상위, 폴더 목록, 새 폴더)의 드롭다운이 모달 밖으로 열린다.
+- **합치기 대화상자**(`#bm-merge-modal`): 같은 장에 북마크가 이미 있으면 「합치기 / 따로 저장 / 취소」를 묻는다. 합치기는 `mergeVerseSpecs`로 합치고, 북마크 제목을 「책 장:합친 범위」로 다시 짓는다. 사용자가 고친 제목도 다시 짓는다(known-issues §19).
+- **확인 모달**(`#bm-confirm-modal`, `openConfirmModal()`): 삭제하는 동작(행 스와이프 삭제, 폴더 삭제, 선택 모드 삭제)이 함께 쓴다. 확인 버튼은 삭제색 `#c0392b`이고, 기본 포커스는 안전한 「취소」에 있다. 테마와 포커스 트랩이 적용된다.
+- **폴더를 삭제하면 안의 내용물도 함께 삭제된다**(스와이프, 행, 드로어, 선택 모드가 모두 같다). 확인창이 개수(「…폴더와 안의 항목 N개를 모두 삭제할까요?」)를 적어 범위를 분명히 한다. 폴더만 없애고 싶으면 항목을 먼저 밖으로 드래그한다.
 
-모달, 드로어는 공용 오버레이 컨트롤러(`overlay.js createOverlay` — ADR-032)로 포커스 트랩, inert 배경, Escape 닫기를 얻는다.
+모달과 드로어는 공용 오버레이 컨트롤러(`overlay.js createOverlay`, ADR-032)가 포커스 트랩, `inert` 배경, Escape 닫기를 맡는다.
 
 ### 헤더 북마크 (`.title-bookmark-btn`)
 
-`buildBookmarkHeaderBtn()`(`bookmark.js`) — 아이콘은 Material Icons `bookmarks`. **책 읽기 화면(장, 머리말) 헤더에서만** 노출한다. 성서 목록 화면(`renderBookList`) 헤더에는 없다 — 장 맥락이 없어 「이 장 저장」이 의미가 없고, 북마크 전체 관리는 하단 탭 바의 북마크 탭(ADR-029)이 담당한다.
+`buildBookmarkHeaderBtn()`(`bookmark.js`)이 만든다. 아이콘은 Material Icons `bookmarks`다. **책 읽기 화면(장, 머리말) 헤더에서만** 보인다. 성서 목록 화면(`renderBookList`) 헤더에는 없다. 장 맥락이 없어 「이 장 저장」이 의미가 없고, 북마크 전체 관리는 하단 탭 바의 북마크 탭(ADR-029)이 맡기 때문이다.
 
-탭 바에 북마크 탭이 있으니 **네비, 관리는 탭 바로 통일**하고, 헤더는 탭 바가 못 하는 **맥락 동작(「지금 이 장 추가」)**만 맡는다.
+탭 바에 북마크 탭이 있으니 **탐색과 관리는 탭 바로 통일**하고, 헤더는 탭 바가 하지 못하는 **맥락 동작(「지금 이 장 추가」)**만 맡는다.
 
-- **모바일과 터치 — 탭 바가 있는 화면(`(max-width: 768px), (pointer: coarse)`)**
-  - 저장되지 않은 장 → 헤더에 「추가」(아웃라인 + `+`) 아이콘. 탭하면 **폴더 위치를 고르는 저장 모달**(`openSaveModal("chapter")`)을 연다.
-  - 이미 북마크된 장, 그리고 책 장-목록 화면(추가할 장 맥락 없음 — `.is-list`, chapter == null) → 헤더 북마크를 **숨긴다**. 관리, 해제는 탭 바 → 북마크 탭(행 스와이프, 선택 모드)이 담당한다.
-- **데스크톱(`(min-width: 769px) and (pointer: fine)`)**: 헤더 북마크가 **유일한 진입점**이라 상태(채워짐/빈 — `.has-bookmark`)를 표시하고, 탭하면 북마크 드로어를 연다.
-- **구현**: 보임/숨김은 JS 일회성 체크가 아니라 **CSS 미디어 쿼리**다(`.title-bookmark-btn.has-bookmark, .title-bookmark-btn.is-list { display: none }`). 클릭 분기만 `_isMobileViewport()`(같은 쿼리)로 판정한다(저장 모달 vs 드로어). 미디어 쿼리라 화면이 바뀌면 JS resize 리스너 없이 따라간다. 폭만이 아니라 포인터로도 구별하므로, 가로로 든 폰, 태블릿도 탭 바와 「추가」를 유지한다(ADR-029).
+- **모바일과 터치: 탭 바가 있는 화면(`(max-width: 768px), (pointer: coarse)`)**
+  - 저장되지 않은 장에서는 헤더에 「추가」 아이콘(윤곽선과 `+`)이 보인다. 탭하면 **폴더 위치를 고르는 저장 모달**(`openSaveModal("chapter")`)을 연다.
+  - 이미 북마크된 장과 책의 장 목록 화면(추가할 장 맥락이 없다. `.is-list`, `chapter == null`)에서는 헤더 북마크를 **숨긴다**. 관리와 해제는 탭 바의 북마크 탭(행 스와이프, 선택 모드)이 맡는다.
+- **데스크톱(`(min-width: 769px) and (pointer: fine)`)**: 헤더 북마크가 **유일한 진입점**이라 상태(채워짐 또는 빔, `.has-bookmark`)를 표시하고, 탭하면 북마크 드로어를 연다.
+- **구현**: 보이고 숨기는 일은 JS가 한 번 검사해서 하는 것이 아니라 **CSS 미디어 쿼리**가 한다(`.title-bookmark-btn.has-bookmark, .title-bookmark-btn.is-list { display: none }`). 클릭 분기만 `_isMobileViewport()`(같은 쿼리)로 판정한다(저장 모달이냐 드로어냐). 미디어 쿼리라 화면이 바뀌어도 JS의 `resize` 리스너 없이 자동으로 적용된다. 폭만이 아니라 포인터로도 구별하므로, 가로로 든 폰과 태블릿도 탭 바와 「추가」를 유지한다(ADR-029).
 
 ### 절 선택 모드 (`#verse-select-bar`)
 
-- **진입**: 읽기 화면 롱프레스 500ms(`ENTER_SELECT_MS`) 또는 드로어 「절 선택」 버튼. 10px 넘게 움직이면 취소한다(터치 드리프트 허용). 진입은 「정지한 손가락」과 「의도적 누름」을 지속 시간으로만 구분하므로 임계 시간이 유일한 레버이고, iOS, Android 표준 롱프레스에 맞췄다.
-- **막대**: 탭 dock 형식의 floating glass + 아이콘 전용(ADR-030 형식 통일). 구조는 탭 dock 미러: 투명 flex dock = `[아이콘 글래스 pill] + [취소 글래스 원형]`. 선택 카운트는 캡슐 위 중앙에 부유하는 글래스 칩(`#verse-select-count`, `aria-live`)이다. pill(`.verse-action-pill`) 안에 **북마크, 복사 + 노트 슬롯** 3개 아이콘(stroke, round cap/join — 탭 아이콘 언어).
-  - 북마크, 복사는 선택 0일 때 `disabled`(흐림). **노트는 후속 기능 placeholder**라 `aria-disabled`이고, 탭하면 「준비 중」을 알린다(announce)(탭 dock 노트 탭과 동일 패턴).
-  - 글래스 레시피는 탭 dock과 동일 토큰을 공유한다 — `--glass-sheen` + `--bg 50%` 틴트 + `blur(12px)` + 1px 테두리 + `--shadow-2` + `--glass-inset`, `--radius-pill`(캡슐 양 끝 반원), 60px 높이(`--dock-control`). CSS는 `#tab-dock`, `#tab-bar`, `.tab-item`, `#tab-search` 패턴을 미러한다. 등장 시 페이드/슬라이드 인(reduced-motion이면 스냅).
-  - 다중 절 선택 모델이라 팝오버 대신 영속 하단 액션 바를 둔다(iOS 26 다중 선택 컨텍스트 툴바 idiom — 선택 시 등장, 해제 시 사라짐, 아이콘 contained 버튼).
-  - 기존 ID(`#verse-select-bar`, `#verse-select-{count,bookmark-btn,copy-btn,cancel-btn}`)는 e2e, inert 셀렉터 호환을 위해 모두 보존하고, pill 래퍼(`.verse-action-pill`)와 노트 버튼(`#verse-select-note-btn`)만 따로 있다.
-  - 절 선택 막대가 하단 chrome을 대체하므로 모드 동안 탭 dock(홈, 검색), 미니 오디오 바를 모두 숨기고, 끝나면 되돌린다(tabbar scrim도 숨겼으나 2026-06-06에 scrim을 없앴다, ADR-030)(`body.verse-select-active`). 미니 오디오는 스크롤 축소 규칙(`body.tabbar-collapsed #audio-bar:not([hidden])`, 특이도 1,2,1)이 절 선택 숨김(1,1,1)을 이겨, 축소 중에 들어가면 액션 바 뒤로 비쳤다 — `display: none !important`로 숨긴다.
+- **진입**: 읽기 화면을 길게 누르거나(500ms, `ENTER_SELECT_MS`) 드로어의 「절 선택」 버튼을 누른다. 10px 넘게 움직이면 취소한다(손가락이 조금 흔들리는 것은 허용한다). 진입은 「정지한 손가락」과 「의도적 누름」을 누른 시간으로만 구별하므로 임계 시간이 유일한 조절 수단이고, 그 시간은 iOS와 Android의 표준 롱프레스에 맞췄다.
+- **막대**: 탭 독과 같은 형식으로, 떠 있는 글래스에 아이콘만 둔다(ADR-030에서 형식을 통일했다). 구조도 탭 독을 따른다. 투명한 `flex` 독 안에 `[아이콘 글래스 pill] + [취소 글래스 원형]`을 둔다. 선택 개수는 알약 버튼 위 중앙에 떠 있는 글래스 칩(`#verse-select-count`, `aria-live`)이다. 알약 버튼(`.verse-action-pill`) 안에는 **북마크, 복사, 노트 자리**의 아이콘 3개가 있다(선 아이콘이고 끝과 이음이 둥글다. 탭 아이콘과 같은 방식이다).
+  - 북마크와 복사는 선택이 0일 때 `disabled`(흐리게 보임)다. **노트는 나중에 만들 기능의 자리**라 `aria-disabled`이고, 탭하면 「준비 중」을 스크린 리더로 알린다(`announce`. 탭 독의 노트 탭과 같은 방식이다).
+  - 글래스 효과는 탭 독과 같은 토큰을 쓴다. `--glass-sheen`, `--bg 50%` 틴트, `blur(12px)`, 1px 테두리, `--shadow-2`, `--glass-inset`을 겹치고, 모서리는 `--radius-pill`(양 끝이 반원), 높이는 60px(`--dock-control`)이다. CSS는 `#tab-dock`, `#tab-bar`, `.tab-item`, `#tab-search`의 패턴을 따른다. 나타날 때는 서서히 나타나며 미끄러져 들어오고, 움직임 줄이기 설정(`reduced-motion`)이면 바로 나타난다.
+  - 여러 절을 고르는 방식이라 팝오버 대신 계속 떠 있는 하단 액션 막대를 둔다(iOS 26의 다중 선택 컨텍스트 툴바 방식으로, 선택하면 나타나고 해제하면 사라지며 아이콘 버튼이 막대에 담긴다).
+  - 기존 ID(`#verse-select-bar`, `#verse-select-{count,bookmark-btn,copy-btn,cancel-btn}`)는 e2e와 `inert` 선택자와 맞추려고 모두 그대로 두었고, 알약 버튼 래퍼(`.verse-action-pill`)와 노트 버튼(`#verse-select-note-btn`)만 새로 더했다.
+  - 절 선택 막대가 하단 UI를 대체하므로, 선택 모드 동안 탭 독(홈, 검색)과 미니 오디오 바를 모두 숨기고 끝나면 되돌린다(`body.verse-select-active`). tabbar scrim도 숨겼으나 2026-06-06에 scrim을 없앴다(ADR-030). 미니 오디오는 스크롤 축소 규칙(`body.tabbar-collapsed #audio-bar:not([hidden])`, 특이도 1,2,1)이 절 선택 숨김(1,1,1)보다 우선해, 축소 중에 들어가면 액션 막대 뒤로 비쳤다. 그래서 `display: none !important`로 숨긴다.
 - **범위 선택 — 기억된 앵커 기반**
-  - **상태:** `readingContext.selectAnchor`(`string | null`) — 마지막으로 개별 토글된 절의 `data-vkey`. 일반 탭/클릭은 그 절을 토글하고 앵커를 그리로 옮긴다(해제면 null). 반복 탭으로 **비연속 절**을 모은다.
-  - **범위 확장(앵커 → 타깃, additive):** 앵커가 기억돼 있어 두 끝점이 한 화면에 같이 보일 필요가 없다 — 시작 절을 탭하고 임의 거리만큼 스크롤한 뒤 끝 절을 지정한다.
-    - **데스크톱:** 끝 절을 **Shift+클릭**. `pointerdown`의 `e.shiftKey` 분기에서 즉시 확장한다.
-    - **모바일:** 끝 절을 **롱프레스**(300ms — `RANGE_EXTEND_MS`, 모바일의 「Shift」 역할). 선택 모드 안에서는 `pointerdown`이 per-pointer 타이머를 걸고, 10px 넘는 드리프트(스크롤)나 빠른 lift(= 탭)면 타이머를 취소한다(`_activePointers` 맵). 손가락을 끝까지 물고 있을 필요가 없어 스크롤 경합이 없다. 이미 모드에 들어와 의도적으로 조작 중인 사용자의 제스처라 진입(500ms)보다 짧게 둔다.
-  - 두 경로 모두 순수 헬퍼 `_verseRangeKeys(allKeys, anchor, target, unitFn)`(`views.js` `VERSE_SELECTION` 블록 — 양방향, 절 단위 경계 확장)로 범위를 계산한다. 키가 줄마다 고유하므로 41:6에서 시작한 범위는 41:6에서 시작한다. 번호로 찾던 때는 앞쪽의 40:6에서 시작했다.
-  - 선택 모드에서는 `pointerdown`에 `preventDefault`를 걸지 않아 자유 스크롤이 된다(텍스트 선택은 `body.verse-select-active { user-select: none }`으로 차단).
-  - **수명 검사:** 포인터는 `setPointerCapture`로 잡아, 손가락이 article 밖에서 떼지거나 드리프트해도 pointermove/up/cancel이 article로 다시 보내져(retarget) 타이머, `_activePointers`가 확실히 정리된다(캡처는 스크롤을 막지 않는다 — 팬이 시작되면 브라우저가 `pointercancel`로 캡처를 해제하고, 핸들러는 이를 abort로 처리한다). 롱프레스 타이머 콜백과 pointerup 토글 모두 `readingContext.verseSelectMode`(타이머는 `article.isConnected`도)를 확인해, 모드 종료, 네비게이션 뒤 늦게 도는 것이 상태를 되살리지 않게 한다.
-  - 선택 모드 진입(읽기 화면 롱프레스 / 드로어 「절 선택」 버튼) 시 앵커를 초기화하고, 롱프레스 진입 절을 첫 앵커로 둔다.
-  - 유닛 테스트는 `tests/unit/views.test.js`의 `_verseRangeKeys` 8건과 `_verseSelectionUnit` 8건, `tests/unit/verse-spec.test.js`의 `selectionCitation`, `citationVerseSpec`, `selectedSpanVrefs`다(실제 장의 키 사용). e2e는 `tests/e2e/test_copy.py`의 「번호가 같은 다른 절」 6건과 「여러 줄 절과 반쪽 절」 4건이다.
+  - **상태:** `readingContext.selectAnchor`(`string | null`)에는 마지막으로 개별 토글한 절의 `data-vkey`가 들어 있다. 일반 탭이나 클릭은 그 절을 토글하고 앵커를 그 절로 옮긴다(해제하면 `null`). 반복해서 탭하면 **비연속 절**을 모을 수 있다.
+  - **범위 확장(앵커에서 대상 절까지, 기존 선택에 더한다):** 앵커를 기억하므로 두 끝점이 한 화면에 함께 보일 필요가 없다. 시작 절을 탭하고 얼마든지 스크롤한 뒤 끝 절을 지정한다.
+    - **데스크톱:** 끝 절을 **Shift+클릭**한다. `pointerdown`의 `e.shiftKey` 분기에서 바로 확장한다.
+    - **모바일:** 끝 절을 **롱프레스**한다(300ms, `RANGE_EXTEND_MS`. 모바일에서 「Shift」를 대신한다). 선택 모드 안에서는 `pointerdown`이 포인터마다 타이머를 시작하고, 손가락이 10px 넘게 움직이거나(스크롤) 빨리 떼면(탭) 타이머를 취소한다(`_activePointers` 맵). 손가락을 끝까지 누르고 있을 필요가 없어 스크롤과 충돌하지 않는다. 이미 선택 모드에 들어와 의도적으로 조작 중인 사용자의 동작이라 진입(500ms)보다 짧게 둔다.
+  - 두 경로 모두 순수 함수 `_verseRangeKeys(allKeys, anchor, target, unitFn)`로 범위를 계산한다(`views.js`의 `VERSE_SELECTION` 블록. 양방향이고 경계를 절 단위로 넓힌다). 키가 줄마다 고유하므로 41:6에서 시작한 범위는 41:6에서 시작한다. 번호로 찾던 때는 앞쪽의 40:6에서 시작했다.
+  - 선택 모드에서는 `pointerdown`에서 `preventDefault`를 호출하지 않아 자유롭게 스크롤할 수 있다(텍스트 선택은 `body.verse-select-active { user-select: none }`으로 막는다).
+  - **수명 검사:** 포인터를 `setPointerCapture`로 캡처해, 손가락이 `article` 밖에서 떨어지거나 움직여도 `pointermove`, `pointerup`, `pointercancel` 이벤트가 `article`로 다시 전달된다. 그래서 타이머와 `_activePointers`가 확실히 정리된다(캡처는 스크롤을 막지 않는다. 팬이 시작되면 브라우저가 `pointercancel`로 캡처를 해제하고, 핸들러는 이를 `abort`로 처리한다). 롱프레스 타이머 콜백과 `pointerup` 토글은 모두 `readingContext.verseSelectMode`(타이머는 `article.isConnected`도)를 확인한다. 그래서 선택 모드가 끝나거나 다른 화면으로 넘어간 뒤 늦게 실행된 것이 상태를 되살리지 않는다.
+  - 선택 모드에 들어갈 때(읽기 화면 롱프레스 또는 드로어 「절 선택」 버튼) 앵커를 초기화하고, 롱프레스로 들어간 절을 첫 앵커로 둔다.
+  - 유닛 테스트는 `tests/unit/views.test.js`의 `_verseRangeKeys` 8건과 `_verseSelectionUnit` 8건, `tests/unit/verse-spec.test.js`의 `selectionCitation`, `citationVerseSpec`, `selectedSpanVrefs`다(실제 장의 키를 쓴다). e2e는 `tests/e2e/test_copy.py`의 「번호가 같은 다른 절」 6건과 「여러 줄 절과 반쪽 절」 4건이다.
 
-### 모바일 행 — 스와이프 (`js/app/bookmark-gestures.js`, `js/app/bookmark-tree.js`)
+### 모바일 행의 스와이프 (`js/app/bookmark-gestures.js`, `js/app/bookmark-tree.js`)
 
-모바일과 터치 화면에서만이다(`_isMobileViewport()` — 위 헤더 북마크와 같은 쿼리). 데스크톱은 `:hover` / `:focus-within`으로 노출되는 `.bm-item-actions`(수정/삭제 버튼)를 그대로 쓴다. iOS Safari는 첫 탭을 hover로 처리하기 때문에, 그 방식으로는 모바일에서 북마크 항목으로 이동하려면 **두 번 탭**이 필요했다(첫 탭은 액션 버튼을 노출만 시키고, 두 번째 탭에서야 이동). 그래서 모바일 행은 아래 제스처로 나눈다.
+모바일과 터치 화면에서만이다(`_isMobileViewport()`, 위 헤더 북마크와 같은 쿼리). 데스크톱은 `:hover`나 `:focus-within`으로 나타나는 `.bm-item-actions`(수정과 삭제 버튼)를 그대로 쓴다. iOS Safari는 첫 탭을 호버로 처리하기 때문에, 그 방식으로는 모바일에서 북마크 항목으로 이동하려면 **두 번 탭**이 필요했다(첫 탭은 액션 버튼을 나타나게만 하고, 두 번째 탭에서야 이동). 그래서 모바일 행은 아래 제스처로 동작을 나눈다.
 
-- **단일 탭** = 즉시 이동(또는 폴더 펼치기).
-- **왼쪽으로 스와이프** → 콘텐츠가 왼쪽으로 → 우측(trailing) 가장자리 **삭제**(`.bm-swipe-delete`, 빨강). **오른쪽으로 스와이프** → 좌측(leading) 가장자리 **수정**(`.bm-swipe-edit`, accent). 파괴적 액션을 trailing에 두는 iOS 관례(Mail, 메시지, 메모의 「왼쪽으로 밀어 삭제」)다.
-- **full-swipe**: 제스처 자체의 Δx가 commitPx(행폭 × 0.45, 최소 reveal + 40)를 넘고, 절대 오프셋이 reveal을 지났으면(반대 패널에서 중앙만 갓 넘긴 긴 당김의 오발 방지) 그 액션을 즉시 실행한다. 실행은 노출된 버튼의 `.click()` 위임이라 확인 다이얼로그, 핸들러를 재사용한다. 열림 상태와 무관하게 같은 손동작 거리를 요구한다.
-- **놓을 때**: 절대 오프셋이 `SWIPE_REVEAL_PX / 2` 이상이면 버튼을 고정(reveal)하고, 미만이면 닫는다. 빠른 플릭도 먹도록 release 시 최근 100ms(`SWIPE_VELOCITY_WINDOW_MS`) 표본으로 속도를 구해 **80ms 투영**(`SWIPE_FLICK_PROJECTION_MS`)한 위치에 그 임계를 적용한다. 단 **플릭은 커밋(full-swipe 실행)으로 승격되지 않는다**: 삭제 실행은 거리 게이트를 유지한다(트위치로 삭제 방지). 드래그 끝에 멈췄다 놓으면 표본 창이 비어 v ≈ 0, 순수 위치 스냅이다.
-- **분류**: 8px(`SWIPE_SLOP_PX`, `Math.hypot`) 미만의 움직임은 미분류다. 수평이 수직의 1.2배(`SWIPE_ANGLE_BIAS`)를 넘어야 스와이프, 수직 우세면 즉시 스크롤에 양보, **애매한 대각 콘 안이면 미분류로 다음 샘플을 기다린다**. 좌/우 방향별 임계 차등은 두지 않는다 — 비대칭 체감의 실체는 재그랩 베이스 오프셋이었다(「검토한 대안」).
-- 순수 판정 로직은 `SWIPE_GESTURE` 마커 블록(`_classifySwipeAxis`, `_swipeReleaseVelocity`, `_resolveSwipeRelease`)이고, 유닛 `tests/unit/bookmark.test.js`의 `SWIPE_GESTURE` 섹션 13케이스가 직접 구동한다(ADR-013 패턴). 제스처 통합은 e2e(`tests/e2e/test_bookmark_swipe.py`).
-- **상태**: `bm-swiped`(열림) + 방향 클래스 `bm-swiped-edit` / `bm-swiped-delete`, 드래그 중 `bm-swiping-delete` / `bm-swiping-edit`. `_openSwipedRow(row, dir)`, `_resetRowSwipe(row)`, 열린 행 하나를 `_swipedRow`가 추적한다(`SWIPED_ROW` 블록 — 유닛).
-- **자동 닫기**: 다른 행 스와이프 시 이전 행이 닫힌다. 드로어 빈 영역 탭(`#bookmark-drawer-body` pointerdown), 드로어 닫힘(`closeBookmarkDrawer`), `renderBookmarkTree()` 재실행 시 닫힌다. 스와이프된 행의 link/folder 영역 탭 = 이동/펼치기 대신 닫기(iOS 메일과 동일).
-- **삭제를 탭하면 행부터 닫는다**: 행 액션 `deleteAction`(북마크, 폴더 공통)이 `closeSwipedRow(null)`을 `openConfirmModal` *앞*에서 호출한다. 확인은 실제 삭제만 담당해, 확인을 취소해도 행이 제자리로 돌아온다(수정 `editAction`도 탭 즉시 닫는다). e2e `test_bookmark_swipe.py::test_cancel_delete_confirm_closes_swipe`.
+- **한 번 탭하면** 바로 이동한다(폴더는 펼친다).
+- **왼쪽으로 스와이프하면** 콘텐츠가 왼쪽으로 밀리며 오른쪽 끝(trailing)에 **삭제**(`.bm-swipe-delete`, 빨강)가 나타난다. **오른쪽으로 스와이프하면** 왼쪽 끝(leading)에 **수정**(`.bm-swipe-edit`, 강조색)이 나타난다. 삭제 동작을 오른쪽 끝에 두는 것은 iOS 관례다(Mail, 메시지, 메모의 「왼쪽으로 밀어 삭제」).
+- **끝까지 밀기(full-swipe)**: 제스처 자체의 Δx가 `commitPx`(행 너비 × 0.45, 최소 `reveal` + 40)를 넘고 절대 오프셋이 `reveal`을 넘었으면 그 동작을 바로 실행한다(반대쪽 패널에서 중앙만 갓 넘긴 긴 당김이 잘못 실행되는 것을 막는다). 실행은 나타난 버튼의 `.click()`을 호출하므로 확인 대화상자와 핸들러를 그대로 쓴다. 행이 열려 있든 아니든 같은 거리를 밀어야 한다.
+- **놓을 때**: 절대 오프셋이 `SWIPE_REVEAL_PX / 2` 이상이면 버튼을 고정해 드러내고(reveal), 미만이면 닫는다. 빠르게 튕기는 동작(플릭)도 인식하도록, 놓을 때 최근 100ms(`SWIPE_VELOCITY_WINDOW_MS`) 표본으로 속도를 구해 **80ms 뒤의 위치를 예측한**(`SWIPE_FLICK_PROJECTION_MS`) 값에 그 임계를 적용한다. 단 **플릭으로는 끝까지 밀어 실행하지 않는다.** 삭제 실행은 거리 조건을 유지한다(손이 잠깐 튄 것으로 삭제되지 않게 한다). 드래그 끝에서 멈췄다 놓으면 표본이 비어 속도가 거의 0이고, 위치만으로 고정 여부가 정해진다.
+- **분류**: 8px(`SWIPE_SLOP_PX`, `Math.hypot`) 미만의 움직임은 분류하지 않는다. 수평 움직임이 수직의 1.2배(`SWIPE_ANGLE_BIAS`)를 넘어야 스와이프로 보고, 수직이 더 크면 즉시 스크롤에 맡기며, **애매한 대각선 범위 안이면 분류하지 않고 다음 표본을 기다린다**. 왼쪽과 오른쪽의 임계를 달리하지 않는다. 좌우가 다르게 느껴진 실제 원인은 이미 열린 행을 다시 끌 때의 기준 오프셋이었다(「검토한 대안」).
+- 순수 판정 로직은 `SWIPE_GESTURE` 마커 블록(`_classifySwipeAxis`, `_swipeReleaseVelocity`, `_resolveSwipeRelease`)이고, 유닛 테스트 `tests/unit/bookmark.test.js`의 `SWIPE_GESTURE` 부분 13건이 직접 실행한다(ADR-013 방식). 제스처 전체는 e2e(`tests/e2e/test_bookmark_swipe.py`)가 확인한다.
+- **상태**: 열린 행에는 `bm-swiped`와 방향 클래스 `bm-swiped-edit` 또는 `bm-swiped-delete`가 붙고, 드래그 중에는 `bm-swiping-delete` 또는 `bm-swiping-edit`이 붙는다. 열린 행 하나를 `_swipedRow`가 추적하고, `_openSwipedRow(row, dir)`와 `_resetRowSwipe(row)`가 행을 열고 되돌린다(`SWIPED_ROW` 블록은 유닛 테스트가 확인한다).
+- **자동 닫기**: 다른 행을 스와이프하면 이전 행이 닫힌다. 드로어의 빈 영역을 탭할 때(`#bookmark-drawer-body`의 `pointerdown`), 드로어를 닫을 때(`closeBookmarkDrawer`), `renderBookmarkTree()`를 다시 실행할 때도 닫힌다. 스와이프된 행의 링크나 폴더 영역을 탭하면 이동하거나 펼치지 않고 행을 닫는다(iOS 메일과 같다).
+- **삭제를 탭하면 행부터 닫는다**: 행 액션 `deleteAction`(북마크와 폴더 공통)이 `closeSwipedRow(null)`을 `openConfirmModal` *앞*에서 호출한다. 확인 모달은 실제 삭제만 맡으므로 확인을 취소해도 행이 제자리로 돌아온다(수정 `editAction`도 탭하면 바로 닫는다). e2e `test_bookmark_swipe.py::test_cancel_delete_confirm_closes_swipe`.
 
 DOM:
 
@@ -207,32 +207,32 @@ li.bm-bookmark                       (role="treeitem", data-id)
 
 폴더 행도 동일 구조다(`.bm-folder-row` > 스와이프 액션 + `.bm-row-content`).
 
-- **모양**: 액션을 **full-bleed**(좌우 0)로 깔고, 방향 클래스로 해당 방향만 `opacity:1` 노출한다 — 평상시(닫힘) 액션이 안 보이고, 노출 시 **컬러가 화면 가장자리 끝까지** 채워진다(양방향). **콘텐츠 카드**에만 `border-radius`(스와이프/열림 시)를 줘 카드 모서리만 둥글고 액션은 가장자리에 직각으로 닿는다. 라벨은 `--swipe-reveal` 폭 고정 span을 가장자리에 핀(`flex-start`/`flex-end`)해, **full-swipe로 액션이 넓어져도 글자가 중앙으로 밀리지 않는다**. 토큰 `--swipe-reveal: 88px`이 JS `SWIPE_REVEAL_PX`(88 — 단일 버튼 폭)와 동기화돼 있다.
-- **탭 판정**: 두 액션이 `position:absolute; inset:0`으로 겹쳐 깔리므로, `pointer-events`는 기본 `none`이고 노출된 방향만 `auto`다. DOM 상 뒤에 추가된 버튼이 위에 올라가 다른 방향의 탭을 가로채지 않게 한다(full-swipe의 프로그램적 `.click()`은 무관). e2e는 노출 스트립 좌표를 실제로 클릭한다(실 hit-test).
-- **행 높이**: 표준 토큰 `--list-row-h`(3.5rem ≈ 63px). 세로 패딩을 `--space-1`로 줄여 토큰(min-height)이 곧 행 높이가 되고(폴더 1줄, 북마크 2줄 동일 높이), rem 스케일이다. 북마크 전용 하드코딩(데스크톱 4rem / 모바일 콘텐츠 4.4rem ≈ 79px)은 2줄 콘텐츠(≈52px) 대비 과하게 떠 보여 이 토큰으로 바꿨다(79px → 63px, -20%). 노트, 캘린더 같은 후속 목록, 혼합 항목도 같은 토큰을 쓴다.
-- **행 채우기**: `.bm-row-content`에 `line-height: --leading-snug` + 공유 `min-height` + `align-self: stretch` — 본문 1.8 leading 상속으로 2줄 북마크가 1줄 폴더보다 커지지 않게 하고, 콘텐츠가 행을 꽉 채워 짧은 폴더 뒤로 액션이 비치지 않게 한다.
-- **중첩 행 full-bleed**: 모바일에서 **들여쓰기를 UL 패딩 → 콘텐츠 패딩으로** 준다 — `.bm-folder-children { padding-left: 0 }`(행 full-bleed) + `.bm-row-content` `padding-left: calc(var(--space-4) + var(--bm-indent))`, 깊이별 `--bm-indent`(= `--space-8 × depth`)를 아이템 빌더(`_buildBookmarkItem`, `_buildFolderItem` — `bookmark-tree.js`)가 콘텐츠에 인라인으로 설정한다. 본문 위치는 같고(루트 16px, depth1 48px…) 행은 가장자리까지 차 액션 컬러가 화면 끝에 닿는다. 데스크톱은 스와이프가 없어 UL 패딩을 쓴다.
-- **행 아이콘**: 토큰 **`--bm-row-icon`(1.6rem)**: 슬롯과 SVG가 같은 토큰을 써 아이콘이 슬롯을 꽉 채우고(고정 20px SVG → 약 29px) 본문 폰트와 함께 rem 스케일한다(Dynamic Type).
-- **시각, 접근성**: 액션 버튼 최소 44×44(WCAG AA 터치 타깃). 스와이프 액션은 제목을 담은 `aria-label`의 버튼이다. 수정 `var(--accent)`, 삭제 `#c0392b`(데스크톱 `.bm-delete-btn:hover` 색상과 일관). `prefers-reduced-motion`에서는 `.bm-row-content { transition: none }`.
+- **모양**: 액션을 좌우 끝까지 꽉 차게(**full-bleed**, 좌우 0) 깔고, 방향 클래스가 붙은 쪽만 `opacity:1`로 나타낸다. 평상시(닫힘)에는 액션이 보이지 않고, 나타나면 **색이 화면 가장자리 끝까지** 채워진다(양방향). **콘텐츠 카드**에만 `border-radius`를 주어(스와이프하거나 열렸을 때) 카드 모서리만 둥글고 액션은 가장자리에서 직각이다. 라벨은 폭이 `--swipe-reveal`로 고정된 `<span>`을 가장자리에 붙여(`flex-start`, `flex-end`), **끝까지 밀어 액션이 넓어져도 글자가 중앙으로 밀리지 않는다**. 토큰 `--swipe-reveal: 88px`은 JS의 `SWIPE_REVEAL_PX`(88, 버튼 하나의 폭)와 같은 값으로 맞춰 둔다.
+- **탭 판정**: 두 액션이 `position:absolute; inset:0`으로 겹쳐 깔리므로, `pointer-events`는 기본 `none`이고 나타난 방향만 `auto`다. DOM에서 뒤에 추가된 버튼이 위에 올라와 다른 방향의 탭을 가로채는 일을 막는다(끝까지 밀 때 코드로 호출하는 `.click()`은 상관없다). e2e는 나타난 띠의 좌표를 실제로 클릭한다(실제 클릭 영역 판정, hit-test).
+- **행 높이**: 표준 토큰 `--list-row-h`(3.5rem ≈ 63px). 세로 패딩을 `--space-1`로 줄여 토큰(`min-height`)이 곧 행 높이가 되며(폴더 1줄, 북마크 2줄이 같은 높이), `rem` 단위다. 북마크 전용으로 고정한 값(데스크톱 4rem / 모바일 콘텐츠 4.4rem ≈ 79px)은 2줄 콘텐츠(≈52px)보다 지나치게 커 보여 이 토큰으로 바꿨다(79px에서 63px으로, 20% 줄었다). 노트, 캘린더처럼 나중에 만들 목록과, 여러 종류가 섞인 항목도 같은 토큰을 쓴다.
+- **행 채우기**: `.bm-row-content`에 `line-height: --leading-snug`, 공유 `min-height`, `align-self: stretch`를 준다. 본문의 줄 간격(leading) 1.8을 물려받아 2줄 북마크가 1줄 폴더보다 커지는 일을 막고, 콘텐츠가 행을 꽉 채워 짧은 폴더 뒤로 액션이 비치지 않게 한다.
+- **중첩 행도 끝까지 채우기(full-bleed)**: 모바일에서는 **들여쓰기를 `<ul>` 패딩이 아니라 콘텐츠 패딩으로** 준다. `.bm-folder-children { padding-left: 0 }`로 행이 가장자리까지 차게 하고, `.bm-row-content`에 `padding-left: calc(var(--space-4) + var(--bm-indent))`를 준다. 깊이별 `--bm-indent`(값은 `--space-8 × depth`)는 항목을 만드는 코드(`_buildBookmarkItem`, `_buildFolderItem`, `bookmark-tree.js`)가 콘텐츠에 인라인으로 설정한다. 본문 위치는 같고(루트 16px, 깊이 1은 48px…) 행은 가장자리까지 차서 액션 색이 화면 끝까지 이어진다. 데스크톱은 스와이프가 없어 `<ul>` 패딩을 쓴다.
+- **행 아이콘**: 토큰 **`--bm-row-icon`(1.6rem)**을 쓴다. 슬롯과 SVG가 같은 토큰을 써서 아이콘이 슬롯을 꽉 채우고(20px로 고정한 SVG는 약 29px이 된다), 본문 글꼴과 함께 `rem` 단위로 커지고 작아진다(Dynamic Type).
+- **시각과 접근성**: 액션 버튼은 최소 44×44다(WCAG AA 터치 대상). 스와이프 액션은 제목을 넣은 `aria-label`이 있는 버튼이다. 수정은 `var(--accent)`, 삭제는 `#c0392b`이고(데스크톱의 `.bm-delete-btn:hover` 색과 같다), `prefers-reduced-motion`이면 `.bm-row-content { transition: none }`을 적용한다.
 
-### 재정렬 — ≡ 핸들 (`js/app/bookmark-gestures.js`)
+### 재정렬과 ≡ 핸들 (`js/app/bookmark-gestures.js`)
 
-- **진입은 ≡ 핸들 한 곳**: 각 행 trailing에 ≡ 핸들(`_buildDragHandle`, 가로줄 3개)을 두되, **정렬이 `manual`(직접 정렬)일 때만 노출**한다 — `renderBookmarkTree`가 트리에 `bm-sortable`을 토글하고, CSS `.bm-drag-handle { display:none } .bm-sortable .bm-drag-handle { … }`. 자동 정렬에선 드롭이 다시 정렬돼 무의미하므로 핸들도 숨는다 → 핸들이 「재정렬 가능 + 현재 직접 정렬 모드」를 함께 신호한다(iOS 편집모드의 재정렬 컨트롤 ≡). 핸들에서 시작한 포인터는 **8px(`SWIPE_SLOP_PX`)을 넘으면 스와이프 분류를 건너뛰고 즉시 드래그**한다(`onHandle` 분기, 터치, 마우스 공통). 핸들 밖에서 시작한 포인터는 스와이프 분류를 제외하면 모두 스크롤/클릭으로 양보한다(`abort`). 핸들은 `aria-hidden`(포인터 전용, 키보드 재정렬 미지원).
-- **Pointer Events API**: 마우스, 터치 단일 코드. `pointermove`/`pointerup`/`pointercancel` 리스너를 `document`에 걸어 포인터가 row 밖으로 나가도 ghost가 남지 않게 하고, `pointerId` 필터링으로 멀티터치 오작동을 막는다. 드래그가 시작되면 `setPointerCapture`. Ghost 요소(`.bm-drag-ghost`)는 `fixed` 포지션, `pointer-events:none`이라 `elementFromPoint`가 아래 행을 맞춘다. `<a>` 태그에는 `draggable="false"`를 달아 브라우저 기본 링크 드래그 ghost를 억제한다.
-- **드롭 대상**: 폴더 행이면 높이의 가운데 30-70% → into, 그 밖은 위쪽 절반 → before, 아래쪽 절반 → after(`_updateDragIndicators`). 순환 참조는 `_isDescendant()` 검사 후 드롭 거부, 이동은 `moveBookmarkItem`.
-- **드롭 위치 지시자**: `_updateDragIndicators`가 대상 `<li>`에 `.drag-over-*`을 붙이고, 표시는 **보이는 콘텐츠 층**에 그린다: before/after = `.bm-row-content::after`의 **3px accent 삽입선**(대상 행 상/하단, = 드롭 갭), into = 콘텐츠에 accent 14% 틴트 + 2px outline. `.bm-row-content`에 `position: relative`(::after 기준). 행(`.bm-…-row`)의 `inset box-shadow`로 그리면 모바일의 불투명 `.bm-row-content`(z-index 1)가 덮어 가렸다. e2e `test_bookmark_dnd.py::test_drop_indicator_renders_on_content`(클래스를 직접 적용해 ::after, outline 검증 — 실제 포인터 드래그는 타이밍이 불안정하다).
-- e2e `test_bookmark_swipe.py` — `test_longpress_does_not_start_drag`(롱프레스가 드래그를 시작하지 않음), `test_handle_drag_starts_reorder`(핸들에서 즉시 드래그 진입). dnd e2e는 `moveBookmarkItem` 직접 호출이다.
+- **재정렬은 ≡ 핸들 한 곳에서만 시작한다**: 각 행의 오른쪽 끝에 ≡ 핸들(`_buildDragHandle`, 가로줄 3개)을 두고, **정렬이 `manual`(직접 정렬)일 때만 보인다**. `renderBookmarkTree`가 트리에 `bm-sortable` 클래스를 토글하고, CSS가 `.bm-drag-handle { display:none } .bm-sortable .bm-drag-handle { … }`로 보이고 숨긴다. 자동 정렬에서는 놓은 항목이 다시 정렬되어 의미가 없으므로 핸들도 숨는다. 그래서 핸들은 「재정렬 가능 + 현재 직접 정렬 모드」를 함께 알린다(iOS 편집 모드의 재정렬 컨트롤 ≡). 핸들에서 시작한 포인터가 **8px(`SWIPE_SLOP_PX`)을 넘으면 스와이프 분류를 건너뛰고 바로 드래그한다**(`onHandle` 분기, 터치와 마우스 공통). 핸들 밖에서 시작한 포인터는 스와이프가 아니면 모두 스크롤이나 클릭에 맡긴다(`abort`). 핸들은 `aria-hidden`이다(포인터 전용이고, 키보드 재정렬은 지원하지 않는다).
+- **Pointer Events API**: 마우스와 터치가 한 코드를 쓴다. `pointermove`, `pointerup`, `pointercancel` 리스너를 `document`에 등록해 포인터가 행 밖으로 나가도 고스트가 남지 않게 하고, `pointerId`를 걸러 멀티터치 오작동을 막는다. 드래그가 시작되면 `setPointerCapture`를 호출한다. 고스트 요소(`.bm-drag-ghost`)는 `fixed`로 배치되고 `pointer-events:none`이라 `elementFromPoint`가 아래 행을 찾는다. `<a>` 태그에는 `draggable="false"`를 붙여 브라우저 기본 링크 드래그 고스트를 막는다.
+- **드롭 대상**: 폴더 행에서는 높이의 가운데 30-70%에 놓으면 폴더 안으로(`into`), 그 밖에서는 위쪽 절반이면 앞에(`before`), 아래쪽 절반이면 뒤에(`after`) 놓인다(`_updateDragIndicators`). 순환 참조는 `_isDescendant()`로 검사해 놓기를 거부하고, 항목을 옮기는 일은 `moveBookmarkItem`이 한다.
+- **드롭 위치 표시**: `_updateDragIndicators`가 대상 `<li>`에 `.drag-over-*` 클래스를 붙이고, 표시는 **보이는 콘텐츠 층**에 그린다. `before`와 `after`는 `.bm-row-content::after`의 **3px 강조색 삽입선**(대상 행의 위쪽이나 아래쪽 끝, 놓을 틈)이고, `into`는 콘텐츠에 강조색 14% 틴트와 2px 윤곽선을 준다. `::after`의 기준이 되도록 `.bm-row-content`에 `position: relative`를 둔다. 행(`.bm-…-row`)의 `inset box-shadow`로 그리면 모바일에서 불투명한 `.bm-row-content`(z-index 1)가 덮어 가렸다. e2e `test_bookmark_dnd.py::test_drop_indicator_renders_on_content`(클래스를 직접 적용해 `::after`와 윤곽선을 검증한다. 실제 포인터 드래그는 타이밍이 불안정하다).
+- e2e `test_bookmark_swipe.py`에는 `test_longpress_does_not_start_drag`(롱프레스가 드래그를 시작하지 않는다)와 `test_handle_drag_starts_reorder`(핸들에서 바로 드래그가 시작된다)가 있다. 드래그 앤 드롭 e2e는 `moveBookmarkItem`을 직접 호출한다.
 
 ### 정렬 (`js/app/bookmark-core.js`, `js/app/bookmark-menu.js`)
 
 ⋯ 더 보기 메뉴에 정렬 기준 그룹(제목, 직접 정렬, 추가된 날짜, 최근에 본 날짜, 수정한 날짜)이 있고, 그 **아래에 「오름차순/내림차순」 두 번째 라디오 그룹**이 있다(Apple Music 패턴).
 
 - 방향은 활성 기준에 적용되고 **기준별로 방향을 따로 기억**한다. `직접 정렬(manual)`은 방향 개념이 없어 두 행을 **비활성(흐리게)** 처리한다.
-- 기준과 방향은 기기마다의 보기 설정이다 — `localStorage`의 `bible-bookmark-sort`, `bible-bookmark-sort-dir`(`{mode: "asc"|"desc"}` 맵)이고 Drive로 동기화하지 않는다(ADR-011 범위 밖). 「최근에 본」 시각은 `bible-bookmark-viewed`(id → 시각)에 둔다.
-- 기준별 **자연 기본값**(제목 `asc`, created/modified/viewed `desc`)을 둬, 방향을 한 번도 안 건드린 사용자는 방향 선택이 생기기 전과 같은 순서를 본다.
-- **구현:** **오름차순 기준 비교자** `_bookmarkAscComparator`, `sortBookmarkNodes`가 `desc`일 때 부호를 뒤집는다(폴더-우선 클러스터링은 그대로). `getBookmarkSortDir`/`setBookmarkSortDir`(manual, 잘못된 값 거부). 메뉴는 `오름/내림` 라디오 2행 + 구분선(가로 모드에서 11행이 되지만 ADR-030 후속⁷ 스크롤로 모두 도달).
-- **기준별 설명 문구(혼동 방지):** 「오름/내림」은 추상적이고 그 뜻이 기준마다 뒤집힌다(제목 오름 = 가나다, 추가된 날짜 오름 = 오래된 순). 그래서 각 방향 행에 **활성 기준에 맞는 설명을 라벨 뒤에 muted로** 단다(제목 `가나다순`/`ㅎ→ㄱ`, 날짜류 `오래된 순`/`최신·최근 순`, 최근에 본 `오래전 본 순`/`최근 본 순`). `syncDirChecks`가 메뉴를 열 때 갱신한다 — 정적 문구가 아니라 기준 따라 바뀐다. 괄호는 **CSS-only**(`::before`/`::after`)라 스크린 리더는 단어만 읽고, 직접 정렬일 땐 설명이 없어 `:empty`로 괄호째 숨긴다. HIG: 선행 체크열 + 라벨 형태 유지.
-- 유닛 `tests/unit/bookmark.test.js` 정렬 방향 7케이스(기본값, per-mode 영속, 부호 반전), UI 상태는 e2e.
+- 기준과 방향은 기기마다 따로 두는 보기 설정이다. `localStorage`의 `bible-bookmark-sort`, `bible-bookmark-sort-dir`(`{mode: "asc"|"desc"}` 맵)에 저장하며 Drive로 동기화하지 않는다(ADR-011의 범위 밖). 「최근에 본」 시각은 `bible-bookmark-viewed`(id → 시각)에 둔다.
+- 기준별 **자연 기본값**(제목 `asc`, created/modified/viewed `desc`)을 두어, 방향을 한 번도 바꾸지 않은 사용자는 방향 선택이 생기기 전과 같은 순서를 본다.
+- **구현:** **오름차순 기준 비교 함수** `_bookmarkAscComparator`를 쓰고, `sortBookmarkNodes`가 `desc`일 때 부호를 뒤집는다(폴더를 앞에 모으는 방식은 그대로다). `getBookmarkSortDir`와 `setBookmarkSortDir`는 `manual`과 잘못된 값을 거부한다. 메뉴는 `오름/내림` 라디오 2행과 구분선을 둔다(가로 모드에서는 11행이 되지만 ADR-030 후속⁷의 스크롤로 모두 볼 수 있다).
+- **기준별 설명 문구(혼동 방지):** 「오름/내림」은 추상적이고, 그 뜻이 기준마다 뒤집힌다(제목은 오름차순이 가나다순이고, 추가된 날짜는 오름차순이 오래된 순이다). 그래서 각 방향 행의 라벨 뒤에 **활성 기준에 맞는 설명을 흐린 색으로** 붙인다(제목은 `가나다순`/`ㅎ→ㄱ`, 날짜류는 `오래된 순`/`최신·최근 순`, 최근에 본은 `오래전 본 순`/`최근 본 순`). `syncDirChecks`가 메뉴를 열 때 갱신하므로, 문구는 고정이 아니라 기준에 따라 바뀐다. 괄호는 **CSS만으로**(`::before`, `::after`) 그리므로 스크린 리더는 단어만 읽고, 직접 정렬일 때는 설명이 없어 `:empty`로 괄호까지 숨긴다. HIG를 따라 앞쪽 체크 열과 라벨 형식을 유지한다.
+- 유닛 테스트 `tests/unit/bookmark.test.js`에 정렬 방향 7건(기본값, 기준별 저장, 부호 반전)이 있고, 화면 상태는 e2e가 확인한다.
 
 ### z-index 레이어
 
@@ -249,16 +249,16 @@ li.bm-bookmark                       (role="treeitem", data-id)
 ## 채택 이유
 
 - PWA 오프라인 원칙 유지: 서버 의존성 없이 `localStorage`로 완결
-- 기존 라우팅 패턴 확장: `parsePath()` 반환 구조에 `highlightVerseSpec` 필드를 더하고, 장 본문 렌더 루프에서 per-span 하이라이트로 확장 — 기존 코드 최소 변경
-- 접근성 패턴 재사용: 처음에는 `openInstallModal()` 패턴(포커스 트랩, inert 배경, Escape 닫기)을 드로어, 모달 모두에 그대로 적용했고, 지금은 공용 오버레이 컨트롤러(ADR-032)가 같은 일을 한다
+- 기존 라우팅 패턴 확장: `parsePath()` 반환 구조에 `highlightVerseSpec` 필드를 더하고, 장 본문을 그리는 반복문에서 `<span>`마다 강조하는 방식으로 넓힌다. 기존 코드를 최소로 바꾼다
+- 접근성 패턴 재사용: 처음에는 `openInstallModal()` 패턴(포커스 트랩, `inert` 배경, Escape 닫기)을 드로어와 모달 모두에 그대로 적용했고, 지금은 공용 오버레이 컨트롤러(ADR-032)가 같은 일을 한다
 
 ## 결과
 
-- 서버 없이 오프라인에서 북마크 완전 동작
+- 서버 없이 오프라인에서 북마크가 완전히 동작한다
 - 여러 줄로 된 절은 절 전체로 고르고, 데이터의 반쪽 절은 반쪽마다 고른다(2026-10-22)
-- 비연속 절 범위가 URL에 인코딩되어 공유·색인 가능 (`/ps/23/3a,5-7`)
-- ≡ 핸들 드래그 앤 드롭(직접 정렬일 때)으로 마우스·터치 모두에서 순서 변경 및 폴더 이동 가능
-- 기존 라우팅·렌더링·접근성 패턴 재사용으로 코드 증가 최소화
+- 떨어져 있는 절 범위를 URL에 인코딩하므로 공유하고 색인할 수 있다(`/ps/23/3a,5-7`)
+- 직접 정렬일 때 ≡ 핸들을 드래그 앤 드롭해 마우스와 터치 모두에서 순서를 바꾸고 폴더로 옮길 수 있다
+- 기존 라우팅, 렌더링, 접근성 패턴을 재사용해 코드 증가를 최소로 줄였다
 - 기기 사이 동기화는 ADR-011(Google Drive)이 맡고, e2e는 `tests/e2e/test_bookmark_*.py`가 다룬다
 
 ## 검토한 대안
@@ -266,204 +266,204 @@ li.bm-bookmark                       (role="treeitem", data-id)
 ### 저장소
 
 #### A. 서버 API (사용자 계정 연동)
-- 장점: 디바이스 간 동기화
-- 단점: 계정 시스템, 서버 인프라 필요. PWA 오프라인 원칙과 충돌. Phase 1 범위 초과
-- 채택 안 함 2026-04-25 · 재검토: 없음 — 기기 사이 동기화는 자체 계정 시스템 없이 사용자 자신의 Google Drive로 한다(ADR-011)
+- 장점: 기기 사이 동기화가 된다
+- 단점: 계정 시스템과 서버 인프라가 필요하다. PWA 오프라인 원칙과 충돌하고 Phase 1 범위를 넘는다
+- 채택 안 함(2026-04-25). 재검토: 없음(기기 사이 동기화는 자체 계정 시스템 없이 사용자 자신의 Google Drive로 한다. ADR-011)
 
 #### B. localStorage (채택)
-- 장점: 서버 없음, 오프라인 완전 지원, 즉각 구현 가능
-- 단점: 디바이스 간 동기화 불가, 브라우저 스토리지 삭제 시 소실
-- 결론: Phase 1 제약(서버 없음)과 일치. 동기화는 별도 Phase에서 고려 — ADR-011
+- 장점: 서버가 필요 없고, 오프라인을 완전히 지원하며, 바로 구현할 수 있다
+- 단점: 기기 사이 동기화가 안 되고, 브라우저 저장소를 지우면 사라진다
+- 결론: Phase 1 제약(서버 없음)에 맞는다. 동기화는 별도 Phase에서 다룬다(ADR-011)
 
 #### C. IndexedDB
-- 장점: 대용량, 트랜잭션 지원
-- 단점: 북마크 데이터는 수십에서 수백 건 수준이므로 과도한 복잡도
-- 채택 안 함 2026-04-25 · 재검토: 북마크 수가 `localStorage` 한도에 닿을 때 — 가져오기 한도가 이미 크롬이 담는 양의 절반이다(known-issues §15)
+- 장점: 큰 용량을 담을 수 있고 트랜잭션을 지원한다
+- 단점: 북마크는 수십에서 수백 건 수준이므로 복잡도가 지나치다
+- 채택 안 함(2026-04-25). 재검토: 북마크 수가 `localStorage` 한도에 이를 때(가져오기 한도가 이미 크롬이 담는 양의 절반이다. known-issues §15)
 
 ### 절 범위 URL 인코딩
 
-#### A. query string (`?v=1-5,10-15`)
-- 단점: 기존 `?hl=` 검색 쿼리와 혼재. 공유 링크가 직관적이지 않음
-- 채택 안 함 2026-04-25 · 재검토: 없음
+#### A. 쿼리 문자열 (`?v=1-5,10-15`)
+- 단점: 기존 `?hl=` 검색 쿼리와 섞이고, 공유 링크가 직관적이지 않다
+- 채택 안 함(2026-04-25). 재검토: 없음
 
-#### B. path segment (채택): `/john/3/1-5,10-15`
-- 장점: 기존 `parsePath()` 패턴과 일관성. 클린 URL. 공유·색인 친화적
-- `highlightVerseSpec` 필드를 `parsePath()` 반환값에 추가하여 기존 단순 범위와 병행
+#### B. 경로 조각 (채택): `/john/3/1-5,10-15`
+- 장점: 기존 `parsePath()` 패턴과 일관되고, URL이 깔끔하며, 공유하고 색인하기 쉽다
+- `highlightVerseSpec` 필드를 `parsePath()` 반환값에 추가해 기존 단순 범위와 함께 쓴다
 
-#### C. hash fragment (`#v=1-5`)
-- 단점: 서버에 전달되지 않음. ADR-009에서 해시 라우팅을 이미 포기한 방향과 역행
-- 채택 안 함 2026-04-25 · 재검토: 없음
+#### C. 해시 조각 (`#v=1-5`)
+- 단점: 서버에 전달되지 않고, ADR-009에서 해시 라우팅을 이미 포기한 방향과 맞지 않는다
+- 채택 안 함(2026-04-25). 재검토: 없음
 
-#### 여러 구간은 문자 집합만 본다 — `parsePath()`의 다중 구간 정규식 `^[\d,\-a-z]+$`
-- 2026-04-25부터 2026-10-21까지 쓴 방식. 알파 접미사 포함 spec(`"3a,3b,5-7"`)을 받았지만, 그 갈래는 구간을 절 하나하나로 펼쳐 정렬했다. 그래서 큰 범위(`1-4294967296,5`)는 예외로 시작 화면을 멈췄고, 같은 구간을 되풀이한 주소는 탭 바가 스크롤 프레임마다 다시 펼쳤다(known-issues §15).
-- 채택 안 함 2026-10-21 · 이유: 가져오기와 같은 표기 검사(`isWellFormedSpec` — ADR-040)로 바꿨다. 순서가 뒤섞인 주소도 정렬해 받는 안은 ADR-040 「검토한 대안」에 있다 · 재검토: 없음
+#### 여러 구간은 문자 집합만 본다: `parsePath()`의 다중 구간 정규식 `^[\d,\-a-z]+$`
+- 2026-04-25부터 2026-10-21까지 쓴 방식이다. 글자 접미사가 붙은 절 범위 표기(`"3a,3b,5-7"`)를 받았지만, 그 경로는 구간을 절 하나하나로 펼쳐 정렬했다. 그래서 큰 범위(`1-4294967296,5`)는 예외가 나 시작 화면이 멈췄고, 같은 구간을 되풀이한 주소는 탭 바가 스크롤 프레임마다 다시 펼쳤다(known-issues §15).
+- 채택 안 함(2026-10-21). 이유: 가져오기와 같은 표기 검사(`isWellFormedSpec`, ADR-040)로 바꿨다. 순서가 뒤섞인 주소도 정렬해 받는 안은 ADR-040 「검토한 대안」에 있다. 재검토: 없음
 
 ### 절 세그먼트 식별자
 
 #### A. 정수 기반 (`_selectedVerseNums: Set<number>`)
-- 기존 구현. `parseInt("3a", 10) === 3`으로 바뀌어(coerce) "3a"와 "3b"를 구분 불가
-- 채택 안 함 2026-04-25 · 재검토: 없음
+- 기존 구현. `parseInt("3a", 10) === 3`으로 숫자로 바뀌어 "3a"와 "3b"를 구별할 수 없다
+- 채택 안 함(2026-04-25). 재검토: 없음
 
 #### B. vref 문자열 기반 (`_selectedVerseRefs: Set<string>`)
-- `data-vref` 원문을 그대로 추적. "3a"와 "3b"를 독립적으로 선택 가능
-- 채택 안 함 2026-10-21 · 이유: 번호가 같은 다른 절은 `data-vref`도 같아, 하나를 누르면 같은 값의 줄이 모두 선택되고 출처에도 그 번호가 섞였다. 이사 40:19-20의 출처가 「40:6a,6b,7,19-20」이었고, 에스 4:17의 추가 본문 하나에 25개 절이 선택됐다(known-issues §5, 2026-04-25부터) · 재검토: 없음
+- `data-vref` 원문을 그대로 추적한다. "3a"와 "3b"를 따로 선택할 수 있다
+- 채택 안 함(2026-10-21). 이유: 번호가 같은 다른 절은 `data-vref`도 같아, 하나를 누르면 같은 값의 줄이 모두 선택되고 출처에도 그 번호가 섞였다. 이사 40:19-20의 출처가 「40:6a,6b,7,19-20」이었고, 에스 4:17의 추가 본문 하나에 25개 절이 선택됐다(known-issues §5, 2026-04-25부터). 재검토: 없음
 
-#### C. 줄 키 기반 (`data-vkey` — `<절 인스턴스 키>/<data-vref>`) (채택)
+#### C. 줄 키 기반 (`data-vkey`, `<절 인스턴스 키>/<data-vref>`) (채택)
 - 2026-10-21. 선택 상태는 `readingContext.selectedVerses`에 둔다(모듈 분할, ADR-018, 034). 키는 선택에 쓴다. 출처는 한 번호를 여러 절이 함께 쓰는지 셀 때 키의 인스턴스 부분을 읽는다. 2026-10-22부터는 출처와 스크린 리더 안내가 반쪽 절도 이 부분으로 구별한다. 저장과 주소는 `data-vref`로 적는다
 
 #### 절 인스턴스를 저장, 주소 문법에도 넣기(`17_12-16` 같은 하위 절 표기)
-- 보류 2026-10-21 · 이유: 저장 데이터, 공유 주소, `routing.js`의 주소 검사가 함께 바뀌는 일이라 절 선택 수정과 분리했다. 따라서 옮겨 실린 절, 그리스어 추가 본문, 에스델 추가 본문은 지금도 번호로 저장된다 · 재검토: 전례독서의 하위 절 인용을 다룰 때(ADR-037 「에스델 하위 절」, 설계서 미결39)
+- 보류 2026-10-21. 이유: 저장 데이터, 공유 주소, `routing.js`의 주소 검사가 함께 바뀌는 일이라 절 선택 수정과 분리했다. 따라서 옮겨 실린 절, 그리스어 추가 본문, 에스델 추가 본문은 지금도 번호로 저장된다. 재검토: 전례독서의 하위 절 인용을 다룰 때(ADR-037 「에스델 하위 절」, 설계서 미결39)
 
 #### 분절된 산문 절을 span 단위로 저장(`"23a,23c"`)
-- 채택 안 함 2026-06-06 · 이유: 인용(`<cite>`) 위치에서 나뉜 줄은 개념상 한 절이다. 저장할 때 절 전체로 올린다. 선택 막대와 복사도 2026-10-22부터 절 단위다(「세그먼트와 저장 표기」의 「절 단위」) · 재검토: 없음
+- 채택 안 함(2026-06-06). 이유: 인용(`<cite>`) 위치에서 나뉜 줄은 개념상 한 절이다. 저장할 때 절 전체로 바꾼다. 선택 막대와 복사도 2026-10-22부터 절 단위다(「세그먼트와 저장 표기」의 「절 단위」). 재검토: 없음
 
 #### 여러 줄인 병합 절을 첫 번호로 저장(`collapseSegmentedVerses`)
 - 2026-06-06부터 10-22까지 이 방식을 썼다. `data-vref`를 `parseInt`로 읽어 첫 번호만 남겼으므로, 나훔 1:7-8이 `7`로 저장됐다.
-- 채택 안 함 2026-10-22(사용자 결정) · 이유: 선택 막대는 「7-8절 선택됨」인데 제목과 저장값은 「7」이었다(known-issues §17) · 재검토: 없음
+- 채택 안 함(2026-10-22, 사용자 결정). 이유: 선택 막대는 「7-8절 선택됨」인데 제목과 저장값은 「7」이었다(known-issues §17). 재검토: 없음
 
 #### 병합 절을 앞뒤 절과 따로 적는다(`16,17-18,19`)
 - 2026-10-22까지 한 줄인 병합 절의 저장값이었다.
-- 채택 안 함 2026-10-22(구현 중) · 이유: 선택 막대와 합치기는 이어 적었다(`16-19`). 저장과 합치기와 옛 저장값 옮기기가 한 표기를 쓴다. 덮는 절은 같다 · 재검토: 없음
+- 채택 안 함(2026-10-22, 구현 중). 이유: 선택 막대와 합치기는 이어 적었다(`16-19`). 저장과 합치기와 옛 저장값 옮기기가 한 표기를 쓴다. 덮는 절은 같다. 재검토: 없음
 
 ### 옛 저장값
 
 #### 저장값은 두고 읽는 쪽만 고친다
-- 채택 안 함 2026-10-22(사용자 결정 — 재현 뒤 권장안을 골랐다) · 이유: 데이터 반쪽 절 「5a」와 산문 절의 줄 「35a」는 표기가 같아, 가리려면 장 데이터가 필요하다. 목록, 합치기 대화상자, 모아 읽기, 강조, 합치기를 따로 고쳐야 한다 · 재검토: 줄 단위로 저장하는 북마크를 다시 들일 때
+- 채택 안 함(2026-10-22, 사용자 결정, 재현 뒤 권장안을 골랐다). 이유: 데이터 반쪽 절 「5a」와 산문 절의 줄 「35a」는 표기가 같아, 구별하려면 장 데이터가 필요하다. 목록, 합치기 대화상자, 모아 읽기, 강조, 합치기를 따로 고쳐야 한다. 재검토: 줄 단위로 저장하는 북마크를 다시 들일 때
 
 #### 옮길 때 수정 시각(`_u`)을 올린다
-- 채택 안 함 2026-10-22(사용자 결정) · 이유: 옮긴 값이 동기화로 바로 퍼지지만, 시작할 때의 옮기기가 동기화보다 먼저 돌아 다른 기기에서 고친 내용을 덮을 수 있다 · 재검토: 없음
+- 채택 안 함(2026-10-22, 사용자 결정). 이유: 옮긴 값이 동기화로 바로 퍼지지만, 시작할 때의 옮기기가 동기화보다 먼저 돌아 다른 기기에서 고친 내용을 덮을 수 있다. 재검토: 없음
 
 #### 시작할 때만 옮긴다(동기화로 받은 것은 다음 시작 때)
-- 채택 안 함 2026-10-22(구현 중) · 이유: 시각이 같은 두 사본은 병합하면 한쪽이 남는다(그때는 기기 id 순서, 2026-10-31부터 드라이브의 사본). 드라이브에 옛 표기가 남아 있으면 동기화할 때마다 옛 표기가 돌아온다(실제 `mergeDocs`로 확인, ADR-011) · 재검토: 없음
+- 채택 안 함(2026-10-22, 구현 중). 이유: 시각이 같은 두 사본은 병합하면 한쪽이 남는다(그때는 기기 id 순서, 2026-10-31부터 드라이브의 사본). 드라이브에 옛 표기가 남아 있으면 동기화할 때마다 옛 표기가 돌아온다(실제 `mergeDocs`로 확인, ADR-011). 재검토: 없음
 
 #### 옛 기본 이름은 그대로 둔다
-- 채택 안 함 2026-10-22(사용자 결정) · 이유: 목록의 한 행에 이름 「이사 10:16aa」와 참조 「이사 10:16」이 함께 보인다. 합치기도 이미 제목을 다시 짓는다 · 재검토: 없음
+- 채택 안 함(2026-10-22, 사용자 결정). 이유: 목록의 한 행에 이름 「이사 10:16aa」와 참조 「이사 10:16」이 함께 보인다. 합치기도 이미 제목을 다시 짓는다. 재검토: 없음
 
 #### 이미 저장된 병합 절의 첫 번호(`7`)를 장 데이터로 옮긴다
-- 보류 2026-10-22(사용자 결정) · 이유: 번호만으로는 병합 절인지 알 수 없어 장 데이터를 받아야 한다. 「7」로도 병합 절 전체가 그려져 본문이 빠지지 않는다 · 재검토: 「7」이 병합 절의 일부만 그리게 될 때
+- 보류 2026-10-22(사용자 결정). 이유: 번호만으로는 병합 절인지 알 수 없어 장 데이터를 받아야 한다. 「7」로도 병합 절 전체가 그려져 본문이 빠지지 않는다. 재검토: 「7」이 병합 절의 일부만 그리게 될 때
 
 ### 드래그 앤 드롭
 
 #### A. HTML5 Drag and Drop API
-- 단점: 터치 이벤트 미지원. 별도 터치 폴리필 필요
-- 채택 안 함 2026-04-25 · 재검토: 없음
+- 단점: 터치 이벤트를 지원하지 않아 별도 터치 폴리필이 필요하다
+- 채택 안 함(2026-04-25). 재검토: 없음
 
 #### B. Pointer Events API (채택)
-- 장점: 마우스·터치 단일 코드. `document` 레벨 리스너로 포인터 이탈 추적
+- 장점: 마우스와 터치가 한 코드를 쓴다. `document`에 등록한 리스너로 포인터가 벗어난 것도 추적한다
 
-#### 전용 6-dot 핸들
-- 2026-04-25 첫 구현. 채택 안 함 2026-04-26 · 이유: 전용 드래그 핸들의 UX — row 전체를 드래그 영역으로 쓰고, 5px 이동 임계값(`Math.hypot`)으로 클릭과 드래그를 구분하는 것으로 대체했다(`setPointerCapture`는 임계값 초과 후에만) · 재검토: 2026-06-07에 ≡ 핸들을 직접 정렬 모드 한정으로 다시 들였다(아래)
+#### 전용 6점 핸들
+- 2026-04-25 첫 구현. 채택 안 함(2026-04-26). 이유: 전용 드래그 핸들의 사용성. 행 전체를 드래그 영역으로 쓰고, 5px 이동 임계값(`Math.hypot`)으로 클릭과 드래그를 구별하는 방식으로 대체했다(`setPointerCapture`는 임계값을 넘은 뒤에만). 재검토: 2026-06-07에 ≡ 핸들을 직접 정렬 모드 한정으로 다시 들였다(아래)
 
 #### 행 본문 드래그(터치 롱프레스, 마우스 즉시 드래그)
-- 2026-04-26부터 2026-06-11까지. 모바일은 처음에 롱프레스를 액션 노출에 썼다가(아래 「모바일 행 UX」), 2026-05-08부터 롱프레스(500ms — `LONG_PRESS_MS`, 햅틱 `navigator.vibrate(10)`)가 드래그 진입이었다. 2026-06-07에 ≡ 핸들을 들이면서도 이 진입을 **나란히** 남겨, 행 어디를 잡아도 재정렬이 시작됐다.
-- 채택 안 함 2026-06-11 · 이유: (1) 스크롤하려고 길게 누르면 의도치 않게 드래그가 걸리고, (2) 핸들이라는 명시적 어포던스가 있는데도 본문 드래그가 공존해 「여기를 잡으면 이동」이라는 신호가 흐려졌다. 롱프레스-드래그는 상시 어포던스가 없어 「재정렬 가능」이 보이지 않았다(HIG의 두 패턴 중 발견성이 낮은 쪽). `_setupDragHandle`에서 롱프레스 타이머와 마우스 본문 즉시 드래그 분기를 지웠다 · 재검토: 없음
+- 2026-04-26부터 2026-06-11까지. 모바일은 처음에 롱프레스를 액션을 나타내는 데 썼다가(아래 「모바일 행 UX」), 2026-05-08부터 롱프레스(500ms, `LONG_PRESS_MS`, 햅틱 `navigator.vibrate(10)`)가 드래그 진입이었다. 2026-06-07에 ≡ 핸들을 들이면서도 이 진입을 **함께** 남겨, 행 어디를 잡아도 재정렬이 시작됐다.
+- 채택 안 함(2026-06-11). 이유: (1) 스크롤하려고 길게 누르면 의도치 않게 드래그가 시작되고, (2) 핸들이라는 명시적 어포던스가 있는데도 본문 드래그가 함께 있어 「여기를 잡으면 이동」이라는 신호가 흐려졌다. 롱프레스-드래그는 상시 어포던스가 없어 「재정렬 가능」이 보이지 않았다(HIG의 두 패턴 중 발견성이 낮은 쪽). `_setupDragHandle`에서 롱프레스 타이머와 마우스 본문 즉시 드래그 분기를 지웠다. 재검토: 없음
 
-#### 리스너를 row에 걸기
-- 채택 안 함 2026-04-26(버그 수정) · 이유: row 밖으로 포인터가 나가면 `pointermove`/`pointerup`/`pointercancel`을 놓쳐 ghost가 남았다 — `document`로 옮겼다 · 재검토: 없음
+#### 리스너를 행에 등록하기
+- 채택 안 함(2026-04-26, 버그 수정). 이유: 행 밖으로 포인터가 나가면 `pointermove`/`pointerup`/`pointercancel`을 놓쳐 고스트가 남았다. 리스너를 `document`로 옮겼다. 재검토: 없음
 
 ### 모바일 행 UX (2026-05-03)
 
 #### A. 케밥(⋯) 버튼 행마다 추가
-- 장점: 발견성 최고
-- 단점: 시각적 노이즈 큼, 모바일/데스크톱 패턴 분리 필요
-- 채택 안 함 2026-05-03 · 재검토: 없음 — 여러 항목을 다루는 일은 북마크 탭의 ⋯ 「선택」 모드(ADR-029)가 한다
+- 장점: 발견하기 가장 쉽다
+- 단점: 화면이 어수선해지고, 모바일과 데스크톱의 패턴을 나눠야 한다
+- 채택 안 함(2026-05-03). 재검토: 없음(여러 항목을 다루는 일은 북마크 탭의 ⋯ 「선택」 모드가 한다. ADR-029)
 
 #### B. 스와이프-투-리빌만 (롱프레스 없음)
-- 장점: iOS 표준, 단순
-- 단점: Android는 보통 롱프레스 → 다중 선택 모드. 발견성 낮음
-- 2026-05-03에는 채택하지 않았지만, 2026-05-08 롱프레스를 드래그 진입으로 돌리면서 액션 노출은 가로 스와이프 하나로 모였다. 지금 동작이다. 다중 선택은 ⋯ 「선택」 모드(ADR-029)가 맡는다
+- 장점: iOS 표준이고 단순하다
+- 단점: Android는 보통 롱프레스로 다중 선택 모드에 들어가고, 이 방식은 발견하기 어렵다
+- 2026-05-03에는 채택하지 않았지만, 2026-05-08 롱프레스를 드래그 진입으로 돌리면서 액션을 나타내는 방법은 가로 스와이프 하나로 모였다. 지금 동작이다. 다중 선택은 ⋯ 「선택」 모드(ADR-029)가 맡는다
 
-#### C. 스와이프 + 롱프레스 (2026-05-03 채택)
-- iOS·Android 양 플랫폼 사용자가 자기 OS 습관대로 발견·사용. 두 제스처가 같은 결과(액션 노출)를 만들어 모델이 단순했다 — 롱프레스 500ms(`LONG_PRESS_MS = 500`), 햅틱 `navigator.vibrate(10)`
-- 채택 안 함 2026-05-08 · 이유: 모바일 드래그-재정렬을 되살리려고 롱프레스를 「드래그 모드 시작」으로 돌렸다(그 롱프레스도 2026-06-11에 지웠다 — 위) · 재검토: 없음
+#### C. 스와이프와 롱프레스 (2026-05-03 채택)
+- iOS와 Android 사용자가 자기 OS 습관대로 기능을 발견하고 썼다. 두 제스처가 같은 결과(액션이 나타남)를 만들어 모델이 단순했다. 롱프레스는 500ms(`LONG_PRESS_MS = 500`)이고 햅틱은 `navigator.vibrate(10)`이다
+- 채택 안 함(2026-05-08). 이유: 모바일 드래그-재정렬을 되살리려고 롱프레스를 「드래그 모드 시작」으로 돌렸다(그 롱프레스도 2026-06-11에 지웠다. 위 참조). 재검토: 없음
 
-#### 콘텐츠를 밀어 오른쪽 2버튼 패널(수정, 삭제) 노출 — `.bm-row-actions-mobile`
-- 2026-05-03. 스와이프 종료 임계값은 `-SWIPE_REVEAL_PX / 2`(70px — `SWIPE_REVEAL_PX = 140`)였다.
-- 2026-05-06 행 텍스트가 좌측으로 밀려 사라져, 콘텐츠를 고정하고 패널이 우측에서 `translateX(100% → 0)`으로 슬라이드 인해 행의 우측을 **오버레이**(z-index:1)하게 바꿨다. 그때 `.bm-row-content`에 `min-height: 44px`를 줘 폴더, 북마크 행 높이를 맞췄다(지금은 `--list-row-h`), 모바일 액션 패널은 `aria-hidden="true"`였다.
-- 채택 안 함 2026-06-06 · 이유: 패널 오버레이는 긴 제목을 가렸고 한 방향에 버튼 둘이었다 — iOS Files/Mail을 기준으로 삼아 **양방향 edge-flush 스와이프 액션 + full-swipe**로 재구성했다. 불투명한 `.bm-row-content`(z-index:1)가 슬라이더가 되어 행 양 끝에 깔린 단일 액션(`.bm-swipe-action`)을 노출한다. `SWIPE_REVEAL_PX`는 140 → **88**(단일 버튼 폭) · 재검토: 없음
+#### 콘텐츠를 밀어 오른쪽 2버튼 패널(수정, 삭제) 노출(`.bm-row-actions-mobile`)
+- 2026-05-03. 스와이프 종료 임계값은 `-SWIPE_REVEAL_PX / 2`(70px. `SWIPE_REVEAL_PX = 140`)였다.
+- 2026-05-06에 행 텍스트가 왼쪽으로 밀려 사라지자, 콘텐츠를 고정하고 패널이 오른쪽에서 `translateX(100% → 0)`으로 미끄러져 들어와 행의 오른쪽을 **덮도록**(z-index:1) 바꿨다. 그때 `.bm-row-content`에 `min-height: 44px`를 주어 폴더와 북마크 행의 높이를 맞췄다(지금은 `--list-row-h`). 모바일 액션 패널은 `aria-hidden="true"`였다.
+- 채택 안 함(2026-06-06). 이유: 패널이 덮는 방식은 긴 제목을 가렸고 한 방향에 버튼이 둘이었다. iOS Files와 Mail을 기준으로 삼아 **양방향으로 가장자리까지 채우는(edge-flush) 스와이프 액션과 끝까지 밀기(full-swipe)**로 다시 만들었다. 불투명한 `.bm-row-content`(z-index:1)가 슬라이더가 되어, 행 양 끝에 깔린 단일 액션(`.bm-swipe-action`)을 드러낸다. `SWIPE_REVEAL_PX`는 140에서 **88**(버튼 하나의 폭)로 줄였다. 재검토: 없음
 
-#### 스와이프 방향 — 왼쪽 = 수정, 오른쪽 = 삭제
-- 2026-06-06 양방향 모델의 첫 방향. 채택 안 함 2026-06-07 · 이유: iOS 관례(Mail, 메시지, 메모의 「왼쪽으로 밀어 삭제」)와 정반대였다 — 파괴적 액션을 trailing, 비파괴(수정)를 leading으로 바꿨다(JS `onMove` 토글, `finish` full/partial, re-grab `baseOffset`, CSS 엣지 앵커 `justify`, 스냅 `translateX` 부호를 일괄 swap) · 재검토: 없음
+#### 스와이프 방향: 왼쪽은 수정, 오른쪽은 삭제
+- 2026-06-06에 만든 양방향 모델의 첫 방향이다. 채택 안 함(2026-06-07). 이유: iOS 관례(Mail, 메시지, 메모의 「왼쪽으로 밀어 삭제」)와 정반대였다. 삭제를 trailing(오른쪽 끝)으로, 수정을 leading(왼쪽 끝)으로 바꿨다(JS의 `onMove` 토글, `finish`의 full과 partial, 다시 잡을 때의 `baseOffset`, CSS의 가장자리 기준 `justify`, 스냅의 `translateX` 부호를 한꺼번에 서로 바꿨다). 재검토: 없음
 
-#### 스와이프 판정 — 첫 5px 단판 분류, 거리만, 절대 오프셋 커밋
-- 2026-06-10까지. 첫 5px 이동에서 `|Δx| > |Δy|` 단판 분류라, 1px 차이로 모드가 영구 확정돼 엄지 접촉 노이즈가 스크롤을 스와이프로 가로채거나(과민) 첫 5px이 살짝 수직이면 이후 수평 100px도 무시됐다(둔감). 커밋, 스냅이 거리만 봐서 빠른 플릭이 안 먹혔다. full-swipe 커밋을 절대 오프셋(`baseOffset + Δx`)으로 판정해, 이미 열린 행(±88px)을 재그랩하면 같은 방향 약 40px에 삭제가 실행되고(과민) 반대 방향은 132px이 필요했다(둔감).
-- 채택 안 함 2026-06-10 · 이유: 슬롭 5 → 8px과 각도 편향 ×1.2, 애매한 대각은 다음 샘플로, 플릭 속도 투영, 제스처 자체 Δx로 커밋 판정으로 바꿨다(위 「모바일 행」) · 재검토: 없음
+#### 스와이프 판정: 첫 5px에서 한 번에 분류, 거리만 보기, 절대 오프셋으로 실행
+- 2026-06-10까지 쓴 방식이다. 첫 5px 이동에서 `|Δx| > |Δy|`로 한 번에 분류했다. 그래서 1px 차이로 모드가 영구히 정해져, 엄지 접촉 노이즈가 스크롤을 스와이프로 가로채거나(과민) 첫 5px이 살짝 수직이면 이후의 수평 100px도 무시했다(둔감). 실행과 고정이 거리만 봐서 빠른 플릭이 작동하지 않았다. 끝까지 밀기를 절대 오프셋(`baseOffset + Δx`)으로 판정했기 때문에, 이미 열린 행(±88px)을 다시 잡으면 같은 방향으로 약 40px만 밀어도 삭제가 실행되고(과민) 반대 방향은 132px이 필요했다(둔감).
+- 채택 안 함(2026-06-10). 이유: 슬롭을 5px에서 8px로 늘리고, 각도 편향 ×1.2를 두고, 애매한 대각선은 다음 표본으로 미루고, 플릭 속도를 투영하고, 제스처 자체의 Δx로 실행을 판정하도록 바꿨다(위 「모바일 행」). 재검토: 없음
 
 #### 좌/우 방향별 임계 차등
-- 채택 안 함 2026-06-10 · 이유: 비대칭 체감의 실체는 재그랩 베이스 오프셋이었다 — 커밋을 제스처 Δx로 보면서 사라졌다 · 재검토: 없음
+- 채택 안 함(2026-06-10). 이유: 좌우가 다르게 느껴진 실제 원인은 다시 잡을 때의 기준 오프셋이었고, 실행을 제스처의 Δx로 판정하면서 사라졌다. 재검토: 없음
 
 ### 헤더 북마크
 
 #### 헤더 아이콘에서 장 북마크 여부를 빼기(`.has-bookmark` 클래스 및 관련 CSS 삭제)
-- 2026-04-26 — 헤더 장 북마크 표시가 실제와 어긋나 표시 기능을 빼고 `bookmarks` 아이콘으로 단순화했다. 상태 표시(`.has-bookmark`)는 곧 다시 쓰였고(2026-04-30 상태 미갱신 버그 수정), 지금은 데스크톱이 상태(채워짐/빈)를 보이고 모바일은 저장된 장에서 헤더 북마크를 숨긴다
+- 2026-04-26에 헤더의 장 북마크 표시가 실제와 어긋나 표시 기능을 빼고 `bookmarks` 아이콘으로 단순하게 만들었다. 상태 표시(`.has-bookmark`)는 곧 다시 쓰였고(2026-04-30에 상태가 갱신되지 않는 버그를 고쳤다), 지금은 데스크톱이 상태(채워진 아이콘 또는 빈 아이콘)를 보이고 모바일은 저장된 장에서 헤더 북마크를 숨긴다
 
 #### 성서 목록 화면에도 헤더 북마크
-- 채택 안 함 2026-06-05 · 이유: 장 맥락이 없어 「이 장 저장」이 의미가 없고, 북마크 전체 관리는 하단 탭 바의 북마크 탭(ADR-029)이 담당해 목록 헤더의 북마크 진입점은 중복이었다 · 재검토: 없음
+- 채택 안 함(2026-06-05). 이유: 장 맥락이 없어 「이 장 저장」이 의미가 없고, 북마크 전체 관리는 하단 탭 바의 북마크 탭(ADR-029)이 맡아 목록 헤더의 북마크 진입점은 중복이었다. 재검토: 없음
 
-#### 모바일 헤더 북마크 = 토글(저장 / 삭제)
-- 2026-06-06 — 장이 북마크돼 있지 않으면 「이 장 저장」 모달, 이미 북마크된 장이면 삭제 확인 모달(`#bm-confirm-modal`)로 그 장의 북마크를 모두 지웠다(채워진 아이콘은 장 단위 토글 — 한 장에 장 전체 + 절 범위처럼 여럿이면 함께 삭제). 클릭 핸들러는 렌더 시점 상태가 아니라 `findExistingChapterBookmarks()`로 클릭 시점에 재확인했고, 확인 메시지 문안은 순수 함수 `_chapterDeleteMessage()`였다.
-- 채택 안 함 2026-06-09 · 이유: 탭 바에 북마크 탭이 있으니 네비, 관리는 탭 바로 통일하고, 헤더는 탭 바가 못 하는 맥락 동작(「지금 이 장 추가」)만 맡는다 · 재검토: 없음
+#### 모바일 헤더 북마크를 토글로(저장과 삭제)
+- 2026-06-06에 장이 북마크돼 있지 않으면 「이 장 저장」 모달을, 이미 북마크된 장이면 삭제 확인 모달(`#bm-confirm-modal`)을 열어 그 장의 북마크를 모두 지웠다(채워진 아이콘은 장 단위 토글이라, 한 장에 장 전체와 절 범위처럼 북마크가 여럿이면 함께 삭제했다). 클릭 핸들러는 그려질 때의 상태가 아니라 클릭할 때 `findExistingChapterBookmarks()`로 다시 확인했고, 확인 메시지 문구는 순수 함수 `_chapterDeleteMessage()`가 만들었다.
+- 채택 안 함(2026-06-09). 이유: 탭 바에 북마크 탭이 있으니 탐색과 관리는 탭 바로 통일하고, 헤더는 탭 바가 하지 못하는 맥락 동작(「지금 이 장 추가」)만 맡는다. 재검토: 없음
 
-#### 장 북마크 선택 삭제 picker(`#bm-chapter-delete-modal`)
+#### 장 북마크 선택 삭제 선택기(`#bm-chapter-delete-modal`)
 - 2026-06-06 — 헤더 토글-오프의 단일 「이 장 전부 삭제」 확인을, 장 안의 북마크를 체크박스 목록(라벨 + 참조 `창세 1:1-3`)으로 골라 지우는 모달로 바꿨다. 「전체 선택」(`#bm-chapter-delete-all`)은 tri-state 토글(순수 함수 `_selectAllState(sel, total)`), 기본은 미선택, 삭제 버튼은 선택 0이면 `disabled`, 선택 시 `삭제 (N)`(순수 함수 `_deleteBtnLabel(count)`) — 목록 선택이 곧 확인이라 중첩 확인 없음(iOS 다중 선택 삭제 idiom). `openChapterDeleteModal(candidates)` / `closeChapterDeleteModal()` — 삭제색 `#c0392b` 확인 버튼, 체크박스 `accent-color`, 기본 포커스는 안전한 「취소」, `trapFocus` + Escape + scrim 탭 닫기 + `route()`가 네비 시 dismiss(`window.closeChapterDeleteModal`). 모바일 전용이었고, 구 `confirmRemoveChapterBookmarks()`, `_chapterDeleteMessage()`를 대체했다. e2e는 토글-삭제(전체 선택), 취소, 선택 삭제 3종.
-- 채택 안 함 2026-06-10(제거) · 이유: 2026-06-09 헤더 토글이 폐지되며 진입점을 잃었다 — 모달 DOM(index.html), CSS, `open/closeChapterDeleteModal`, `_deleteBtnLabel`, 관련 유닛/e2e를 일괄 삭제했다. tri-state 헬퍼 `_selectAllState`는 벌크 선택 모드(ADR-029)가 계속 써 보존 · 재검토: 없음
+- 채택 안 함(2026-06-10, 제거). 이유: 2026-06-09 헤더 토글이 폐지되며 진입점을 잃었다 — 모달 DOM(index.html), CSS, `open/closeChapterDeleteModal`, `_deleteBtnLabel`, 관련 유닛/e2e를 일괄 삭제했다. tri-state 헬퍼 `_selectAllState`는 벌크 선택 모드(ADR-029)가 계속 써 보존. 재검토: 없음
 
 #### 네이티브 `window.confirm()`
-- 채택 안 함 2026-06-06 · 이유: 테마, 포커스 트랩이 없다 — 공용 확인 모달(`openConfirmModal()`)로 통일했다(스와이프 행 북마크 삭제, 폴더 삭제도 같은 모달) · 재검토: 없음
+- 채택 안 함(2026-06-06). 이유: 테마와 포커스 트랩이 없다. 공용 확인 모달(`openConfirmModal()`)로 통일했다(스와이프 행 북마크 삭제, 폴더 삭제도 같은 모달). 재검토: 없음
 
 #### 모바일 판정을 폭만으로(`@media (max-width:768px)`)
-- 2026-06-09 헤더 「추가」 전용을 들일 때의 쿼리 — 그때는 폰을 가로로 돌려 탭 바가 사라지면 헤더 북마크가 다시 나타났다. 같은 날 ADR-029가 판정을 포인터를 함께 보는 쿼리(`(max-width: 768px), (pointer: coarse)`)로 바꿔, 가로 폰, 태블릿도 탭 바를 유지한다 · 재검토: ADR-029를 따른다
+- 2026-06-09에 헤더 「추가」 전용을 들일 때의 쿼리다. 그때는 폰을 가로로 돌려 탭 바가 사라지면 헤더 북마크가 다시 나타났다. 같은 날 ADR-029가 판정을 포인터를 함께 보는 쿼리(`(max-width: 768px), (pointer: coarse)`)로 바꿔, 가로 폰과 태블릿도 탭 바를 유지한다. 재검토: ADR-029를 따른다
 
 ### 절 선택
 
 #### 진입 롱프레스 300ms(`LONG_PRESS_MS=300` 하나)
-- 채택 안 함 2026-06-13 · 이유: 읽기 중 손가락을 텍스트 위에 잠깐 얹거나 스크롤 직전 멈칫하는 0.3초가 의도치 않게 절 선택 모드로 진입했다 — 진입을 500ms로 올리고, `views.js`의 단일 상수를 두 경로로 나눴다: `ENTER_SELECT_MS=500`(진입), `RANGE_EXTEND_MS=300`(범위 확장) · 재검토: 없음
+- 채택 안 함(2026-06-13). 이유: 읽기 중 손가락을 텍스트에 잠깐 대고 있거나 스크롤 직전 멈칫하는 0.3초가 의도치 않게 절 선택 모드로 진입했다. 진입을 500ms로 올리고, `views.js`의 상수 하나를 둘로 나눴다. `ENTER_SELECT_MS=500`(진입)과 `RANGE_EXTEND_MS=300`(범위 확장)이다. 재검토: 없음
 
 #### 텍스트 라벨 버튼 막대
-- 채택 안 함 2026-06-06 · 이유: 탭 dock(ADR-030)과 형식을 맞춰 floating glass + 아이콘 전용으로 개편했다 · 재검토: 없음
+- 채택 안 함(2026-06-06). 이유: 탭 독(ADR-030)과 형식을 맞춰 떠 있는 글래스에 아이콘만 두는 막대로 바꿨다. 재검토: 없음
 
 #### 팝오버
-- 채택 안 함 2026-06-06 · 이유: 다중 절 선택 모델이라 영속 하단 액션 바가 맞다(iOS 26 다중 선택 컨텍스트 툴바) · 재검토: 없음
+- 채택 안 함(2026-06-06). 이유: 여러 절을 고르는 방식이라 계속 떠 있는 하단 액션 막대가 맞다(iOS 26 다중 선택 컨텍스트 툴바). 재검토: 없음
 
 #### 순수 운문 절만 절 전체로 고르기(#122)
 - 2026-05-12. 운문으로만 된 여러 줄 절은 절 전체로, 산문 절과 섞인 절은 줄마다 골랐다.
-- 채택 안 함 2026-10-22 · 이유: 산문 절의 줄은 대부분 인용 칩 자리 때문에 생긴 화면상의 분절이고(380곳 중 258곳), 마태 10:35처럼 문장 중간에서 끊기기도 한다. 출처에 나오던 줄 글자(「35b」)는 인쇄본 표기가 아니다. #122 QA 보고서(2026-10-22 삭제, git 이력에 있다)가 「다음 의제」로 적어 둔 「여러 줄로 나뉜 모든 절은 통째로」 단순화를 실행했다. 받아들인 대가: 섞인 절의 인용 구절만 복사하는 경우(1고린 15:54 「승리가 죽음을 삼켜버렸다」)는 데스크톱의 끌어 선택으로만 할 수 있다. 휴대폰은 #122부터 본문 끌어 선택이 막혀 있어 절 전체를 복사한 뒤 지워야 한다 · 재검토: 휴대폰에서 줄 일부를 복사하고 싶다는 요청이 있을 때
+- 채택 안 함(2026-10-22). 이유: 산문 절의 줄은 대부분 인용 칩 자리 때문에 생긴 화면상의 분절이고(380곳 중 258곳), 마태 10:35처럼 문장 중간에서 끊기기도 한다. 출처에 나오던 줄 글자(「35b」)는 인쇄본 표기가 아니다. #122 QA 보고서(2026-10-22 삭제, git 이력에 있다)가 「다음 의제」로 적어 둔 「여러 줄로 나뉜 모든 절은 통째로」 단순화를 실행했다. 받아들인 대가: 섞인 절의 인용 구절만 복사하는 경우(1고린 15:54 「승리가 죽음을 삼켜버렸다」)는 데스크톱의 끌어 선택으로만 할 수 있다. 휴대폰은 #122부터 본문 끌어 선택이 막혀 있어 절 전체를 복사한 뒤 지워야 한다. 재검토: 휴대폰에서 줄 일부를 복사하고 싶다는 요청이 있을 때
 
 #### 데이터의 반쪽 절 둘을 한 단위로 고르기
 - #122부터 운문 반쪽 절(이사 7, 10, 33, 욥 38, 시편 22, 나훔 1)은 한쪽을 누르면 떨어진 다른 쪽도 골랐다. 그 밖의 반쪽 절은 누른 줄만 골랐다.
-- 채택 안 함 2026-10-22 · 이유: 범위 끝을 단위 전체로 넓히는 규칙 때문에 범위가 떨어진 반쪽까지 늘어났다. 나훔 1장에서 1절부터 2ㄱ까지 고르면 9절 뒤의 2ㄴ까지 넓어져 출처가 「1-6,7-8,9」였다. 이 규칙을 모든 반쪽 절에 적용하면 욥 31:40ㄱ을 누를 때 장 끝의 40ㄴ까지 칠해진다. 인쇄본도 반쪽마다 「8ㄱ」 「8ㄴ」으로 따로 적는다 · 재검토: 없음
+- 채택 안 함(2026-10-22). 이유: 범위 끝을 단위 전체로 넓히는 규칙 때문에 범위가 떨어진 반쪽까지 늘어났다. 나훔 1장에서 1절부터 2ㄱ까지 고르면 9절 뒤의 2ㄴ까지 넓어져 출처가 「1-6,7-8,9」였다. 이 규칙을 모든 반쪽 절에 적용하면 욥 31:40ㄱ을 누를 때 장 끝의 40ㄴ까지 칠해진다. 인쇄본도 반쪽마다 「8ㄱ」 「8ㄴ」으로 따로 적는다. 재검토: 없음
 
 #### 한 손가락 슬라이드 범위 선택
-- 한 절을 누른 채 손가락을 끌면(`pointermove` + `document.elementFromPoint`) 시작 절부터 현재 절까지 실시간으로 칠해지는 **슬라이드 드래그**(`VerseSelectDrag` 타입).
-- 채택 안 함 2026-06-13 · 이유: 모바일에서 패닝하는 손가락이 페이지 스크롤과 경합해 사실상 동작하지 않았다(끌면 화면만 스크롤) — 기억된 앵커 기반으로 바꾸고 슬라이드 드래그 코드와 타입을 제거했다 · 재검토: 없음
+- 한 절을 누른 채 손가락을 끌면(`pointermove`와 `document.elementFromPoint`) 시작 절부터 현재 절까지 실시간으로 칠해지는 **슬라이드 드래그**(`VerseSelectDrag` 타입)이다.
+- 채택 안 함(2026-06-13). 이유: 모바일에서 패닝하는 손가락이 페이지 스크롤과 충돌해 사실상 동작하지 않았다(끌면 화면만 스크롤). 기억된 앵커 기반으로 바꾸고 슬라이드 드래그 코드와 타입을 제거했다. 재검토: 없음
 
-#### pill, 원형 버튼의 squircle(`corner-shape: superellipse(2)`)
-- 2026-06-06. 채택 안 함 2026-06-08 · 이유: 캡슐 양 끝 반원으로 통일했다(`--radius-pill`) · 재검토: 없음
+#### 알약 버튼과 원형 버튼의 squircle(`corner-shape: superellipse(2)`)
+- 2026-06-06. 채택 안 함(2026-06-08). 이유: 알약 모양(양 끝이 반원)으로 통일했다(`--radius-pill`). 재검토: 없음
 
 ### 정렬
 
-#### 기준마다 방향을 고정(제목 = 가나다순, 날짜 3종 = 최신순 — `_bookmarkComparator`)
-- 채택 안 함 2026-06-10 · 이유: 방향을 고를 수 없었다 — 기준별로 방향을 기억하는 두 번째 라디오 그룹을 들이고, 비교자를 오름차순 기준(`_bookmarkAscComparator`)으로 바꿔 `desc`면 부호를 뒤집는다. 자연 기본값으로, 방향을 건드리지 않은 사용자는 순서가 그대로다 · 재검토: 없음
+#### 기준마다 방향을 고정(제목은 가나다순, 날짜 3종은 최신순, `_bookmarkComparator`)
+- 채택 안 함(2026-06-10). 이유: 방향을 고를 수 없었다. 기준별로 방향을 기억하는 두 번째 라디오 그룹을 들이고, 비교 함수를 오름차순 기준(`_bookmarkAscComparator`)으로 바꿔 `desc`면 부호를 뒤집는다. 자연 기본값을 두어, 방향을 바꾸지 않은 사용자의 순서는 그대로다. 재검토: 없음
 
 ### 드로어, 표현
 
 #### 툴바 텍스트 버튼
-- 채택 안 함 2026-04-26 · 이유: 가독성 — 아이콘 전용 버튼으로 교체 · 재검토: 없음
+- 채택 안 함(2026-04-26). 이유: 가독성 때문에 아이콘 전용 버튼으로 바꿨다. 재검토: 없음
 
 #### 폴더 ▶ 토글 아이콘
-- 채택 안 함 2026-04-26 · 이유: Material Icons `folder` / `folder_open` SVG로 대체하고 행 전체 클릭으로 펼친다 · 재검토: 없음
+- 채택 안 함(2026-04-26). 이유: Material Icons `folder` / `folder_open` SVG로 대체하고 행 전체 클릭으로 펼친다. 재검토: 없음
 
 #### 폴더 기본값이 열린 상태, 저장된 `expanded`로 복원
-- 채택 안 함 2026-04-26 · 이유: 드로어를 열 때 항상 접힌 상태로 초기화하고 활성 북마크를 품은 폴더만 펼친다(필드는 하위 호환으로 유지) · 재검토: 없음
+- 채택 안 함(2026-04-26). 이유: 드로어를 열 때 항상 접힌 상태로 초기화하고 활성 북마크를 포함한 폴더만 펼친다(필드는 하위 호환으로 유지). 재검토: 없음
 
 #### 행 아이콘을 고정 20px SVG로
-- 채택 안 함 2026-06-07 · 이유: 1.6rem 슬롯 안에서 작아 보이고 Dynamic Type도 따르지 않았다 — `--bm-row-icon` · 재검토: 없음
+- 채택 안 함(2026-06-07). 이유: 1.6rem 슬롯 안에서 작아 보이고 Dynamic Type도 따르지 않았다. 대신 `--bm-row-icon`을 쓴다. 재검토: 없음
 
 #### 검색 드로어(`#search-sheet`)와 그 닫기 버튼(`#search-sheet-close`)
-- 2026-04-26 북마크 드로어와 같은 패턴(WCAG 일관성)으로 닫기 버튼을 더했다. 2026-06-05 모핑 탭 바(ADR-030)가 검색을 탭 dock으로 옮기며 검색 시트가 없어졌다
+- 2026-04-26 북마크 드로어와 같은 패턴(WCAG 일관성)으로 닫기 버튼을 더했다. 2026-06-05 모핑 탭 바(ADR-030)가 검색을 탭 독으로 옮기며 검색 시트가 없어졌다
 
-### 폴더 삭제 = 그룹만 해제(내용 보존)
-- 채택 안 함 2026-06-07(검토 후 현행 유지) · 이유: 「삭제는 곧 삭제」라는 보편 기대 + 진입점 간 일관성(선택-삭제 모드의 폴더 cascade — ADR-029). 확인창이 개수를 명시해 범위를 분명히 한다 · 재검토: 없음
+### 폴더 삭제는 그룹만 해제(내용 보존)
+- 채택 안 함(2026-06-07, 검토 후 현행 유지). 이유: 「삭제는 곧 삭제」라는 보편적 기대가 있고, 진입점마다 동작이 같아야 한다(선택 삭제 모드도 폴더를 삭제하면 내용물까지 함께 삭제한다. ADR-029). 확인창이 개수를 적어 범위를 분명히 한다. 재검토: 없음
 
 ## 미결 사항
 

@@ -54,10 +54,10 @@
 | `docs/decisions/006-poetry-source-format.md` | 4 | #459 |
 | `docs/decisions/007-launch-screen-optimization.md` | 99 | #459 |
 | `docs/decisions/008-pwa-install-guide.md` | 92 | #459 |
-| `docs/decisions/009-history-api-routing.md` | 59 | 대기 |
-| `docs/decisions/010-bookmark-feature.md` | 291 | 대기 |
+| `docs/decisions/009-history-api-routing.md` | 59 | #461 |
+| `docs/decisions/010-bookmark-feature.md` | 291 | #461 |
 | `docs/decisions/011-bookmark-sync.md` | 583 | 대기 |
-| `docs/decisions/012-typescript-incremental-adoption.md` | 72 | 대기 |
+| `docs/decisions/012-typescript-incremental-adoption.md` | 72 | #461 |
 | `docs/decisions/013-client-js-unit-tests.md` | 82 | 대기 |
 | `docs/decisions/014-search-history.md` | 100 | 대기 |
 | `docs/decisions/015-storage-strategy.md` | 117 | 대기 |
