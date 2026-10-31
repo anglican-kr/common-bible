@@ -88,29 +88,37 @@
 - **머지 방법은 squash다**(사용자 결정 2026-10-17: 「이제부터는 브랜치를 따서 작업한 건 스쿼시 머지를 하기로 하자」). 저장소 설정이 squash 커밋의 제목을 PR 제목으로(커밋이 하나면 그 커밋 제목), 본문을 커밋 메시지 목록으로 만들고 머지된 브랜치를 지운다. 머지 커밋은 저장소 설정이 막는다. rebase 머지는 쓰지 않는다. GitHub가 SHA를 새로 만들고 서명을 없앤다.
 - **force push와 브랜치 삭제는 금지다.** PR 리뷰 코멘트가 미해결이면 머지가 막힌다.
 - PR 제목은 짧은 문구로 쓰고, PR 본문에는 맨 위의 메타데이터(frontmatter)와 제목을 넣지 않는다(pitfalls §30).
+- **작업은 늘 작업 폴더(git worktree)에서 한다**(사용자 결정 2026-10-31). 작업 폴더는 저장소 안이 아니라 `~/projects/worktrees/<이름>`에 만든다. PR을 머지하면 바로 그 작업 폴더와 로컬 브랜치를 지운다. 지우기 전에 커밋하지 않은 변경과 git이 무시하는 파일 가운데 남길 것이 있는지 본다. 작업 폴더에서 e2e를 돌리는 요령은 `docs/workflow.md` 「작업 중 함정」에 있다.
 
 작업 표준 흐름:
 
 ```bash
-git checkout -b <topic-branch>
-# 작업 + 커밋
-# 원장 작성: docs/changes/<YYYY-MM-DD>-<slug>.md (형식은 docs/changes/README.md) + 커밋
+# 원래 폴더(~/projects/common-bible)에서 작업 폴더를 만든다. 원래 폴더의 main은 다른 세션이 쓸 수 있으므로 git pull로 받지 않는다
+git fetch origin
+git worktree add ~/projects/worktrees/<이름> -b <topic-branch> origin/main
+cd ~/projects/worktrees/<이름>
+git -c protocol.file.allow=always submodule update --init --reference ~/projects/common-bible/.git/modules/data data   # 데이터 서브모듈은 원래 폴더의 것을 참조해 받는다(실데이터 유닛과 e2e에 필요하다)
+# 작업하고 커밋한다
+# 원장 docs/changes/<YYYY-MM-DD>-<slug>.md를 쓰고 커밋한다(형식은 docs/changes/README.md)
 git push -u origin <topic-branch>
 gh pr create --title "..." --body-file docs/changes/<YYYY-MM-DD>-<slug>.md   # 제목은 짧은 문구(pitfalls §30)
-# 훅이 원장에 pr: N 을 적어 준다 → 커밋·push
+# 훅이 원장에 pr: N을 적는다. 그 변경을 커밋하고 push한다
 bash scripts/pr_body.sh docs/changes/<YYYY-MM-DD>-<slug>.md | gh api -X PATCH repos/anglican-kr/common-bible/pulls/<N> -F body=@-   # 본문에서 frontmatter를 뺀다
-# CI(Unit tests + Change ledger) 통과 · 사용자 확인 후 squash — 제목은 PR 제목 + 번호(REST)
+# CI(Unit tests, Change ledger)가 통과하고 사용자가 확인하면 squash로 머지한다. 제목은 PR 제목에 번호를 붙인다(REST)
 gh api -X PUT repos/anglican-kr/common-bible/pulls/<N>/merge -f merge_method=squash -f commit_title="<PR 제목> (#<N>)" \
-  -f commit_message="$(git log --reverse --format='* %s%n%n%b' main..<topic-branch> | cat -s)"   # 커밋 목록만 넘긴다 — GitHub 기본 메시지는 맨 끝에 Co-authored-by 줄을 한 번 더 붙인다
-git switch main && git pull --ff-only
-git diff <topic-branch> main --stat -- $(git diff --name-only main...<topic-branch>)   # PR이 바꾼 파일만 — 비었으면 squash가 다 담았다(그사이 main에 들어온 데이터 자동 PR은 보지 않는다)
-git branch -D <topic-branch>   # squash 커밋은 브랜치 커밋과 이어지지 않는다 — -d는 원격 브랜치가 정리됐으면 거절하고, 남아 있으면 경고만 낸다
+  -f commit_message="$(git log --reverse --no-merges --format='* %s%n%n%b' origin/main..<topic-branch> | cat -s)"   # 커밋 목록만 넘긴다(main을 합친 커밋은 뺀다). GitHub 기본 메시지는 맨 끝에 Co-authored-by 줄을 한 번 더 붙인다
+git fetch origin
+git diff <topic-branch> origin/main --stat -- $(git diff --name-only origin/main...<topic-branch>)   # PR이 바꾼 파일만 본다. 비었으면 squash가 다 담았다(그사이 main에 들어온 데이터 자동 PR은 보지 않는다)
+git status --short --ignored   # 커밋하지 않은 변경과 git이 무시하는 파일 가운데 남길 것이 있는지 본다
+cd ~/projects/common-bible
+git worktree remove ~/projects/worktrees/<이름>   # 데이터 서브모듈을 받은 폴더는 거절한다. 바로 위에서 남길 것이 없음을 확인했으면 --force를 붙인다
+git branch -D <topic-branch>   # squash 커밋은 브랜치 커밋과 이어지지 않는다. -d는 원격 브랜치가 정리됐으면 거절하고, 남아 있으면 경고만 낸다
 ```
 
 ## 테스트
 
 - **유닛**(ADR-013, CI 자동): `node --test tests/unit/*.test.js`(CI와 같다), 한 파일은 `node --test tests/unit/<소스 basename>.test.js`. 한 모듈에 테스트 파일 하나이고, 실데이터 의존 케이스와 문서 검사의 예외는 `tests/README.md` §1. 타입 검사는 `npm run typecheck`.
-- **e2e**(Playwright, 로컬 전용): `python3 scripts/serve.py 8080`을 띄우고 `pytest tests/e2e/ -v`. `python -m http.server`는 `/gen/1` 같은 History API 경로를 404로 돌려주고 강제 새로고침도 깨지므로 쓰지 않는다. 처음 한 번 `pip install pytest-playwright`, `playwright install chromium`. 기능을 구현한 뒤에는 유닛과 e2e를 모두 실행하고 결과를 보고한다.
+- **e2e**(Playwright, 로컬 전용): `python3 scripts/serve.py 8080`을 띄우고 `pytest tests/e2e/ -v`. `python -m http.server`는 `/gen/1` 같은 History API 경로를 404로 돌려주고 강제 새로고침도 깨지므로 쓰지 않는다. 처음 한 번 `pip install pytest-playwright`, `playwright install chromium`. 작업 폴더에서는 다른 포트로 띄운다(`docs/workflow.md` 「작업 중 함정」). 기능을 구현한 뒤에는 유닛과 e2e를 모두 실행하고 결과를 보고한다.
 - **데이터 파이프라인**(Level 1-3, ADR-004): 데이터 저장소의 `validate.yml`이 push 때 실행한다. 로컬은 `cd data && pytest tests/`.
 
 ## 데이터 수정과 릴리스

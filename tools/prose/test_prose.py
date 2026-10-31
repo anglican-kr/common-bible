@@ -89,6 +89,12 @@ class CheckLineTest(unittest.TestCase):
         self.assertNotIn("term?", checks("1차 방어이긴 하지만"))
         self.assertIn("term?", checks("두 사본은 병합이 원격 쪽을 고를 수 있다"))
 
+    def test_gareuda_needs_judgement(self):
+        for s in ("지운 파일을 가를 수 없다", "두 경우를 가른다", "결과가 갈린다", "따로 갈라 처리한다", "판단이 갈렸다"):
+            self.assertIn("term?", checks(s), s)
+        for s in ("길이 둘로 갈라진다", "갈라티아서 3장", "틀린 값을 가려낸다", "화면을 가린다", "규칙을 가르친다", "갈래별로 맡긴다"):
+            self.assertNotIn("term?", checks(s), s)
+
     def test_borrowed_verb(self):
         self.assertIn("verb?", checks("시크릿에 닿지 못한다"))
 
