@@ -981,7 +981,7 @@ test("commitBookmarks: a saved list returns true and says nothing", () => {
 test("commitBookmarks: storage full — false, and the snackbar says what to do (사용자 결정 2026-10-26)", () => {
   const h = loadBookmarkCommit("full");
   assert.equal(h.commitBookmarks([]), false);
-  assert.deepEqual(h.calls.snackbar, ["저장 공간이 가득 차 바꾼 내용을 저장하지 못했습니다. 쓰지 않는 북마크를 지운 뒤 다시 시도해 주세요."]);
+  assert.deepEqual(h.calls.snackbar, ["저장 공간이 부족합니다. 불필요한 북마크를 지운 뒤 다시 시도해 주세요."]);
   assert.deepEqual(h.calls.announce, [], "the snackbar reads it to the live region itself — announcing again reads it twice");
 });
 
@@ -2498,7 +2498,7 @@ test("storage full: a save that does not fit is refused as full and both copies 
   assert.equal(appStorage.saveBookmarks([...list, appBookmark({ id: "new", label: "요한 21장" })]), "full");
   assert.equal(webKit.getItem("bible-bookmarks"), legacy);
   assert.deepEqual(syncStore.loadBookmarks().map((n) => n.id), list.map((n) => n.id));
-  // 「쓰지 않는 북마크를 지운 뒤 다시 시도해 주세요」 — a delete shrinks both copies, so it fits.
+  // 「불필요한 북마크를 지운 뒤 다시 시도해 주세요」 — a delete shrinks both copies, so it fits.
   assert.equal(appStorage.saveBookmarks(list.slice(1)), "saved");
   assert.deepEqual(appStorage.loadBookmarks().map((n) => n.id), list.slice(1).map((n) => n.id));
   assert.deepEqual(JSON.parse(webKit.getItem("bible-bookmarks")).map((n) => n.id), list.slice(1).map((n) => n.id));

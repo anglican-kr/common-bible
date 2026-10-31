@@ -62,23 +62,30 @@ const SCOPE = "https://www.googleapis.com/auth/drive.appdata email";
 
 // ── Sync cache (per-cycle round-trip elimination) ────────────────────────────
 // localStorage cache populated after every successful sync. Survives reloads
-// so the *next* cycle starts with a fileId, ETag, and the maxU snapshot from
-// the last sync. Three cooperating outcomes in _syncCycle:
+// so the *next* cycle starts with a fileId, ETag, and the fingerprint of the
+// doc as last synced. Three cooperating outcomes in _syncCycle:
 //   - cached fileId → skip files.list lookup unconditionally.
 //   - cached etag   → conditional GET with If-None-Match. 304 means remote
 //                     is byte-identical to last sync, so the JSON body is
 //                     never transferred or merged.
-//   - cached _u     → if localMaxU == cached _u, local is also unchanged.
-//                     304 + matching maxU = the entire cycle is a no-op
-//                     (visibilitychange / focus polling case). 304 + diverged
-//                     maxU = upload-only (skip merge — remote == cached state
-//                     == base of local edits, so local IS the merge result).
+//   - cached hash   → if the local doc's fingerprint matches, local is also
+//                     unchanged. 304 + matching fingerprint = the entire cycle
+//                     is a no-op (visibilitychange / focus polling case).
+//                     304 + diverged fingerprint = upload-only (skip merge —
+//                     remote == cached state == base of local edits, so local
+//                     IS the merge result).
+//
+// Drive sends no ETag the app can read, on the download or the upload (2026-10-30 dev 시험, ADR-011 Phase 2j,
+// known-issues §42), so in production the etag stays uncached and every cycle downloads and merges; the 304 branch
+// runs only where an ETag arrives (the unit harness).
 //
 // Invalidated by 404/412 (file deleted or etag conflict), explicit disable()
 // (user disconnect), and deleteRemoteFile().
-const CACHE_FILE_ID_KEY  = "bible-drive-cache-file-id";
-const CACHE_ETAG_KEY     = "bible-drive-cache-etag";
-const CACHE_SYNCED_U_KEY = "bible-drive-cache-synced-u";
+const CACHE_FILE_ID_KEY     = "bible-drive-cache-file-id";
+const CACHE_ETAG_KEY        = "bible-drive-cache-etag";
+const CACHE_SYNCED_HASH_KEY = "bible-drive-cache-synced-hash";
+// Held the largest record time of the last sync until 2026-10-31; removed when the cache is written or cleared.
+const LEGACY_CACHE_SYNCED_U_KEY = "bible-drive-cache-synced-u";
 
 // ── Factory ───────────────────────────────────────────────────────────────────
 
@@ -118,6 +125,10 @@ function createSyncMachine({ onStateChange } = {}) {
   // full 1+s round-trip even when nothing has changed. 0 means no cycle has
   // completed yet, so the first request always proceeds.
   let _lastSyncEndAt = 0;
+  // Set when a merged doc was refused for lack of room and the notice was shown. While storage stays full every cycle
+  // is refused again — and cycles run on each scroll stop and chapter change — so the notice is shown once until a
+  // merged doc saves (사용자 결정 2026-10-31).
+  let _storageFullNoticed = false;
 
   // ── Context (all "hidden state" in one place) ─────────────────────────────
   // Mutated only by _transition().
@@ -530,36 +541,40 @@ function createSyncMachine({ onStateChange } = {}) {
   // _syncCycle's catch block — a quota error during _saveCache would otherwise
   // knock the user into the ERROR state when sync itself was healthy.
 
-  /** @returns {{ fileId: string | null; etag: string | null; syncedMaxU: number }} */
+  /** @returns {{ fileId: string | null; etag: string | null; syncedHash: string | null }} */
   function _loadCache() {
     try {
-      const rawU = localStorage.getItem(CACHE_SYNCED_U_KEY);
-      const u = rawU !== null ? parseInt(rawU, 10) : NaN;
       return {
-        fileId: localStorage.getItem(CACHE_FILE_ID_KEY),
-        etag:   localStorage.getItem(CACHE_ETAG_KEY),
-        syncedMaxU: Number.isFinite(u) ? u : -1,
+        fileId:     localStorage.getItem(CACHE_FILE_ID_KEY),
+        etag:       localStorage.getItem(CACHE_ETAG_KEY),
+        syncedHash: localStorage.getItem(CACHE_SYNCED_HASH_KEY),
       };
     } catch {
       // localStorage access threw (e.g. SecurityError when cookies disabled).
       // Return empty cache — _syncCycle treats this as cache miss.
-      return { fileId: null, etag: null, syncedMaxU: -1 };
+      return { fileId: null, etag: null, syncedHash: null };
     }
   }
 
   /**
-   * @param {{ fileId?: string | null; etag?: string | null; syncedMaxU?: number }} patch
-   *   Only non-null fields are written. Null etag (e.g. server omitted ETag
+   * @param {{ fileId?: string | null; etag?: string | null; syncedHash?: string }} patch
+   *   Only non-null fields are written, except that `syncedHash: ""` (a fingerprint that could not be computed)
+   *   removes the cached one. Null etag (e.g. server omitted ETag
    *   header) leaves the cached value alone — better to keep a stale etag and
    *   discover divergence on next cycle than to drop into the slow path.
    */
-  function _saveCache({ fileId, etag, syncedMaxU } = {}) {
+  function _saveCache({ fileId, etag, syncedHash } = {}) {
     try {
+      // The fingerprint goes before the etag: when storage refuses the second write, an old etag beside a new
+      // fingerprint only downloads once more, where a new etag beside an old fingerprint uploads once more.
+      if (typeof syncedHash === "string") {
+        // "" is a fingerprint that could not be computed: it is removed, not kept, so no older one is left to match.
+        if (syncedHash) localStorage.setItem(CACHE_SYNCED_HASH_KEY, syncedHash);
+        else            localStorage.removeItem(CACHE_SYNCED_HASH_KEY);
+        localStorage.removeItem(LEGACY_CACHE_SYNCED_U_KEY);
+      }
       if (fileId)                      localStorage.setItem(CACHE_FILE_ID_KEY, fileId);
       if (etag)                        localStorage.setItem(CACHE_ETAG_KEY, etag);
-      if (typeof syncedMaxU === "number" && Number.isFinite(syncedMaxU)) {
-        localStorage.setItem(CACHE_SYNCED_U_KEY, String(syncedMaxU));
-      }
     } catch (err) {
       // Most likely QuotaExceededError. Cache write failure is non-fatal — the
       // next cycle just takes the slow path and retries the write. Log so the
@@ -572,7 +587,8 @@ function createSyncMachine({ onStateChange } = {}) {
     try {
       localStorage.removeItem(CACHE_FILE_ID_KEY);
       localStorage.removeItem(CACHE_ETAG_KEY);
-      localStorage.removeItem(CACHE_SYNCED_U_KEY);
+      localStorage.removeItem(CACHE_SYNCED_HASH_KEY);
+      localStorage.removeItem(LEGACY_CACHE_SYNCED_U_KEY);
     } catch {
       // Same rationale as _saveCache — silent. Stale cache that can't be
       // cleared still safely degrades: 404/412 paths re-clear next cycle.
@@ -587,21 +603,27 @@ function createSyncMachine({ onStateChange } = {}) {
    * @returns {import("../types").SaveOutcome} the merged doc's save — anything but "saved" leaves this device as it was
    */
   function _applyMergedDoc(merged, hadRemoteChanges) {
-    // 옛 판의 북마크 절 범위(2026-06-06 #205 전의 줄 글자)는 지금 표기로 옮겨 저장한다 — per-item times unchanged,
+    // 옛 버전의 북마크 절 범위(2026-06-06 #205 전의 줄 글자)는 지금 표기로 옮겨 저장한다 — per-item times unchanged,
     // so the merge's pick between two copies of one time cannot bring the old form back (coding-pitfalls §38).
     if (typeof window.migrateLegacyBookmarkDoc === "function") window.migrateLegacyBookmarkDoc(merged);
     const outcome = V2.saveLocal(merged);
     if (outcome !== "saved") {
       L.log({ kind: "ERROR", event: "MERGE_SAVE_FAIL", reason: hadRemoteChanges ? outcome : `${outcome}, no remote changes` });
-      // Said only when something came from the other devices — the same turn as the success line below (사용자 결정
+      // 저장 공간이 차서 거절됐으면 다른 기기의 변경이 없어도 알린다. 이 기기의 편집도 올라가지 못하므로, 알리지 않으면 동기화가
+      // 말없이 멈춘다. 이 안내는 저장하지 못하는 상태가 처음 생길 때 한 번만 띄운다(사용자 결정 2026-10-31). Any other refusal
+      // is said only when something came from the other devices — the same turn as the success line below (사용자 결정
       // 2026-10-26, known-issues §15.4). Deleting a bookmark frees room and wakes the sync (scheduleUpload).
-      if (hadRemoteChanges) {
-        _snackbar(outcome === "full"
-          ? "저장 공간이 가득 차 다른 기기에서 변경된 데이터를 불러오지 못했습니다. 쓰지 않는 북마크를 지우면 다시 동기화합니다."
-          : "다른 기기에서 변경된 데이터를 불러오지 못했습니다.");
+      if (outcome === "full") {
+        if (!_storageFullNoticed) {
+          _snackbar("저장 공간이 부족합니다. 불필요한 북마크를 지워야 동기화할 수 있습니다.");
+          _storageFullNoticed = true;
+        }
+      } else if (hadRemoteChanges) {
+        _snackbar("다른 기기에서 변경된 데이터를 불러오지 못했습니다.");
       }
       return outcome;
     }
+    _storageFullNoticed = false;
     // The doc above is saved, so a key the browser refuses here must not end the cycle in the "reconnect" error
     // (ADR-015 D7). A refused bookmark key is a stale second copy; a refused setting or reading-position key leaves
     // its old value for the next start until a later merge writes it (known-issues §35).
@@ -746,14 +768,16 @@ function createSyncMachine({ onStateChange } = {}) {
 
       // ── 304 Not Modified: remote == cached snapshot. Skip merge entirely. ──
       // Two sub-cases by local divergence:
-      //   localMaxU == cache.syncedMaxU → nothing changed on either side,
+      //   fingerprint == cache.syncedHash → nothing changed on either side,
       //     full no-op (typical visibilitychange/focus poll case).
-      //   localMaxU >  cache.syncedMaxU → local edits since last sync but
+      //   fingerprint != cache.syncedHash → local edits since last sync but
       //     remote untouched. Upload-only is correct: the cached state IS
       //     remote IS the base our local edits sit on, so local already
       //     equals merge(local, remote).
+      // The largest time could not tell these apart: a bookmark made on a slow-clock device kept it where it was, and
+      // the edit never went up while Drive stayed the same (known-issues §38).
       if (dlStatus === 304) {
-        if (localMaxU === cache.syncedMaxU) {
+        if (V2.fingerprint(local) === cache.syncedHash) {
           dispatch({ type: "SYNC_DONE" });
           return;
         }
@@ -766,7 +790,7 @@ function createSyncMachine({ onStateChange } = {}) {
         if (_leftSyncing("upload_update")) return;
         if (_uploadFailed(ok, status)) return;   // 412: another device wrote between our 304 and our PATCH
         // What was uploaded — an edit saved during the PATCH is newer and goes up next cycle.
-        _saveCache({ fileId, etag: newEtag, syncedMaxU: V2.maxU(payload) });
+        _saveCache({ fileId, etag: newEtag, syncedHash: V2.fingerprint(payload) });
         dispatch({ type: "SYNC_DONE" });
         return;
       }
@@ -781,7 +805,7 @@ function createSyncMachine({ onStateChange } = {}) {
         L.log({ kind: "NETWORK", event: "UPLOAD_UPDATE", ok, status });
         if (_leftSyncing("upload_upgrade")) return;
         if (_uploadFailed(ok, status)) return;
-        _saveCache({ fileId, etag: newEtag, syncedMaxU: V2.maxU(payload) });
+        _saveCache({ fileId, etag: newEtag, syncedHash: V2.fingerprint(payload) });
         dispatch({ type: "SYNC_DONE" });
         return;
       }
@@ -801,18 +825,24 @@ function createSyncMachine({ onStateChange } = {}) {
         (merged.lastRead?._u ?? 0) > (local.lastRead?._u ?? 0) ||
         // An item this device lacks came from Drive whatever its time: one moved from an old build's list has time 0
         // (store-v2.js _LEGACY_U), and read against 0 it went unseen — a refused save then said nothing (PR #451 review).
+        // Equal times keep Drive's copy (store-v2.js mergeDocs) but do not count here: the list is redrawn after every
+        // merge anyway, and an old verse range meeting its moved form at the same time is no change to tell about.
         Object.keys(merged.bookmarks?.items ?? {}).some(id =>
           !Object.hasOwn(localItems, id) || (merged.bookmarks.items[id]?._u ?? 0) > (localItems[id]._u ?? 0)) ||
-        Object.keys(merged.bookmarks?.tombstones ?? {}).some(id =>
-          (merged.bookmarks.tombstones[id] ?? 0) > (Object.hasOwn(localTombstones, id) ? localTombstones[id] : 0))
+        // A tombstone counts only when it removes an item this device shows. Counting every tombstone newer than this
+        // device's showed 「다른 기기에서 변경된 데이터를 불러왔습니다.」 at every start: the 30-day cleanup
+        // (sweepTombstones) drops old tombstones here and the merge brings them back from Drive (2026-10-31 리뷰).
+        Object.keys(localItems).some(id =>
+          !Object.hasOwn(merged.bookmarks?.items ?? {}, id)
+          && !((Object.hasOwn(localTombstones, id) ? localTombstones[id] : -Infinity) > (localItems[id]?._u ?? 0)))
       );
 
       L.log({ kind: "ACTION", event: "MERGE", localMaxU, remoteMaxU, mergedMaxU, hadRemoteChanges });
       if (_applyMergedDoc(merged, hadRemoteChanges) !== "saved") {
         // The payload is read back from local storage (buildSyncPayload), which still holds the doc from before the
         // merge — uploading it would put Drive back to it and drop the other devices' edits for every device. That holds
-        // even when no newer time came in: of two copies with the same time the merge may keep Drive's (device-id
-        // order), so the stored doc is not the merge (PR #445 review). No upload and no cache: the next cycle downloads
+        // even when no newer time came in: of two copies with the same time the merge keeps Drive's, so the stored doc
+        // is not the merge (PR #445 review). No upload and no cache: the next cycle downloads
         // and merges again; this device's own edits wait for room (known-issues §15.4, ADR-015 D7).
         dispatch({ type: "SYNC_DONE" });
         return;
@@ -845,11 +875,12 @@ function createSyncMachine({ onStateChange } = {}) {
         L.log({ kind: "NETWORK", event: "UPLOAD_UPDATE", ok, status });
         if (_leftSyncing("upload_merged")) return;
         if (_uploadFailed(ok, status)) return;
-        _saveCache({ fileId, etag: newEtag, syncedMaxU: V2.maxU(payload) });
+        _saveCache({ fileId, etag: newEtag, syncedHash: V2.fingerprint(payload) });
       } else {
         // No upload needed — local now matches remote post-merge. Cache the
-        // remote etag so the next cycle's conditional GET can hit 304.
-        _saveCache({ fileId, etag, syncedMaxU: mergedMaxU });
+        // remote etag so the next cycle's conditional GET can hit 304. `merged` is what was just saved (old verse
+        // ranges are moved in it before the save, ADR-011).
+        _saveCache({ fileId, etag, syncedHash: V2.fingerprint(merged) });
       }
 
       dispatch({ type: "SYNC_DONE" });
