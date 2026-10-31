@@ -454,7 +454,8 @@ function migrateStoredBookmarks() {
 
 /**
  * A merged sync document, in place, before it is saved (state-machine.js _applyMergedDoc). Without this the old form
- * came back: the per-item time did not change, so the merge picks between the two copies by device id. The document
+ * came back: the per-item time did not change, so the merge keeps Drive's copy of the two (equal times keep Drive's,
+ * store-v2.js mergeDocs), and Drive may still hold the old form. The document
  * came from Drive, and a throw here would stop the save — so an item that is not an object is passed over. The book
  * list is usually loaded by then (search.js preloads it at boot), but a start on a view that does not need it can
  * merge first (PR #367 review). Then the document is saved as it came, and the stored list moves once the list loads
