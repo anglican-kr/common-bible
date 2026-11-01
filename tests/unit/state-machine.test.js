@@ -2059,8 +2059,9 @@ test("72. 기본 속성 이름의 id라도, 이 기기에 보이는 북마크를
   assert.equal(merge?.hadRemoteChanges, true);
 });
 
-// 앱을 시작할 때 30일 지난 삭제 기록을 기기에서 지우고(sweepTombstones), 첫 병합이 드라이브에서 그 기록을 다시 넣는다.
-// 그 기록을 다른 기기의 변경으로 세어, 그런 기록이 있는 사용자는 앱을 열 때마다 안내를 보았다(2026-10-31 리뷰).
+// 2026-10-31 전의 버전은 앱을 시작할 때 30일 지난 삭제 기록을 기기에서 지웠고(sweepTombstones), 첫 병합이 드라이브에서 그
+// 기록을 다시 넣었다. 그 기록을 다른 기기의 변경으로 세어, 그런 기록이 있는 사용자는 앱을 열 때마다 안내를 보았다(2026-10-31
+// 리뷰). 지금 버전은 북마크 삭제 기록을 지우지 않지만, 옛 버전이 지운 기록은 업데이트한 뒤 첫 병합에서 다시 들어온다.
 test("72b. 이 기기에 없는 북마크의 삭제 기록은 다른 기기의 변경으로 치지 않는다 — 다시 들어온 옛 삭제 기록에 안내하지 않는다", async () => {
   const snackbar = [];
   const { machine, drain, logEntries, ctx } = loadMachine({
@@ -2341,8 +2342,8 @@ test("77. 병합 결과를 저장한 뒤 브라우저가 옛 키 몇 개의 쓰�
 // ── Group 20: 기준 목록 1단계 (사용자 결정 2026-10-31) ─────────────────────────────────────────────
 // 기준 목록은 마지막으로 내려받아 병합한 드라이브 파일에 살아 있던 북마크 id다(store-v2.js saveBaseIds). 병합 결과를 저장한
 // 뒤, 올리기 전에 내려받은 파일로 쓴다. 올린 문서로 만들면, 쓰기 보호가 없어(known-issues §42) 그 파일을 덮어쓴 기기와 겹칠
-// 때 이 기기만 올린 북마크가 목록에 들어간다. 1단계는 저장만 하고 병합 판단에는 쓰지 않으며, 2단계 규칙(규칙 다)이 지웠을
-// 북마크 수만 병합 기록에 남긴다.
+// 때 이 기기만 올린 북마크가 목록에 들어간다. 1단계는 저장만 하고 병합 판단에는 쓰지 않으며, 2단계 규칙(처음 본 지 30일
+// 규칙)이 지웠을 북마크 수만 병합 기록에 남긴다.
 
 function baseMachine({ v2 = {}, t = {} } = {}) {
   const order = [];
@@ -2413,16 +2414,18 @@ test("80. 304, 새 파일 만들기, v1 파일 올리기, 병합 결과 저장 �
     assert.equal(h.machine.getState(), "IDLE", name);
   }
 
-  // 새 파일 만들기: 드라이브에 파일이 없다.
+  // 새 파일 만들기: 드라이브에 파일이 없다. 구글은 만든 파일의 id를 돌려준다(운영 경로, 캐시에 쓴다).
   const writes = [];
   const created = loadMachine({
     initialRefreshToken: "rt-x",
     findFileId: null,
+    uploadResult: { ok: true, status: 200, etag: null, fileId: "fid-new" },
     overrideStubs: { V2: { saveBaseIds: (...a) => { writes.push(a); return true; } } },
   });
   created.machine.enable();
   await created.drain(8);
   assert.equal(created.machine.getState(), "IDLE");
+  assert.equal(created.localStorage.getItem(CACHE_FILE_ID_KEY), "fid-new", "만든 파일의 id를 캐시에 썼다");
   assert.deepEqual(writes, [], "새 파일");
 
   // 사이클 중단: 내려받는 동안 로그아웃했다.
@@ -2436,6 +2439,35 @@ test("80. 304, 새 파일 만들기, v1 파일 올리기, 병합 결과 저장 �
   resolveDownload({ doc: h.remoteDoc, etag: '"e-remote"', status: 200 });
   await h.drain(5);
   assert.equal(h.baseWrites.length, 0, "사이클 중단");
+});
+
+// 저장 공간이 거의 찬 기기에서는 병합 결과를 저장할 때마다 목록 저장이 거절된다. 그때마다 오류를 남기면 진단 정보의 오류
+// 칸(20줄)에서 앞선 오류(DELETE_UNCONFIRMED 등)가 밀려났다(PR #460 리뷰). 처음 한 번만 남기고, 목록을 저장하면 다시 남길 수
+// 있다(사용자 결정 2026-10-31).
+test("80a. 목록 저장이 거절돼도 올리고 IDLE로 끝나며, 오류는 거절되는 동안 한 번만 남긴다 — 목록을 저장한 뒤 다시 거절되면 다시 남긴다", async () => {
+  const results = [false, false, false, true, false];
+  const h = baseMachine({ v2: { saveBaseIds: () => results.shift() } });
+  const uploads = () => h.order.filter((o) => o === "upload").length;
+  const fails = () => h.logEntries.filter((e) => e.kind === "ERROR" && e.event === "BASE_IDS_SAVE_FAIL").length;
+  h.machine.enable();
+  await h.drain(8);
+  assert.equal(uploads(), 1);
+  assert.equal(h.machine.getState(), "IDLE");
+  assert.equal(fails(), 1);
+  for (let i = 0; i < 2; i++) {
+    h.machine.requestSync();
+    await h.drain(8);
+  }
+  assert.equal(uploads(), 3, "거절돼도 올린다");
+  assert.equal(h.machine.getState(), "IDLE");
+  assert.equal(fails(), 1, "거절되는 동안 한 번만");
+  for (let i = 0; i < 2; i++) {
+    h.machine.requestSync();
+    await h.drain(8);
+  }
+  assert.equal(results.length, 0, "다섯 번 동기화했다");
+  assert.equal(fails(), 2, "목록을 저장한 뒤 다시 거절되면 다시 남긴다");
+  assert.equal(h.machine.getState(), "IDLE");
 });
 
 test("81. 「파일도 삭제」가 확인되면 기준 목록을 지우고, 확인하지 못하거나 파일을 두고 끄면 남긴다", async () => {
@@ -2466,7 +2498,7 @@ test("81. 「파일도 삭제」가 확인되면 기준 목록을 지우고, 확
   assert.equal(off.clears(), 0, "「파일 유지」로 끄면 남긴다 — 다시 켜면 같은 파일을 읽는다");
 });
 
-test("82. 병합 기록에 규칙 다가 지웠을 북마크 수를 남긴다 — 저장 공간이 차 병합 결과를 저장하지 못해도", async () => {
+test("82. 병합 기록에 30일 규칙이 지웠을 북마크 수를 남긴다 — 저장 공간이 차 병합 결과를 저장하지 못해도", async () => {
   for (const saveOutcome of ["saved", "full"]) {
     const seen = [];
     const h = baseMachine({
@@ -2550,7 +2582,7 @@ test("83. 동기화를 40일 끈 동안 지운 북마크는 다시 켜도 돌아
   assert.deepEqual(B.ids(), ["a2"]);
 });
 
-test("84. 규칙 다의 조건이면 병합 기록에 세기만 하고, 북마크는 지우지 않고 드라이브에 다시 올린다", async () => {
+test("84. 30일 규칙의 조건이면 병합 기록에 세기만 하고, 북마크는 지우지 않고 드라이브에 다시 올린다", async () => {
   const clock = { now: Date.UTC(2026, 9, 1) };
   const drive = fakeDrive();
   const A = realDevice(drive, clock);

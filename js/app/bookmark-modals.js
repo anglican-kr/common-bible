@@ -905,6 +905,18 @@ const STORAGE_HEADROOM_BYTES = 64 * 1024;
 function _fitsStorage(chars) {
   return 2 * chars <= STORAGE_QUOTA_BYTES - STORAGE_HEADROOM_BYTES;
 }
+
+// An import let in only with the base list left out (projectedStorageChars) gives the list up before it is saved. The
+// save gives it up only when storage is full, so the list would otherwise sit in the headroom kept for what the app
+// saves next (기준 목록을 먼저 지운다, 사용자 결정 2026-11-01). The next sync writes the list again.
+/**
+ * @param {BookmarkTreeNode[]} store  the list about to be saved
+ * @param {(store: BookmarkTreeNode[], withGivenUp: boolean) => number} measure  storage.js projectedStorageChars
+ * @param {() => unknown} giveUp  removes the base list (store-v2.js clearBaseIds)
+ */
+function _makeRoomForImport(store, measure, giveUp) {
+  if (!_fitsStorage(measure(store, true))) giveUp();
+}
 // ── END IMPORT_EXPORT ──
 
 // ── BEGIN BOOKMARK_IMPORT ──
@@ -928,6 +940,8 @@ const importOverlay = createOverlay({
 });
 
 function closeImportModal() { importOverlay.close(); }
+
+const _giveUpBaseList = () => window.syncStoreV2?.clearBaseIds();
 
 // Open the OS file picker (called from bookmark.js's ⋯ menu). Resetting value
 // first lets the same file be picked twice in a row and still fire change.
@@ -966,6 +980,7 @@ function openImportModal(items, skipped) {
       announce(msg);
       return;
     }
+    _makeRoomForImport(merged, projectedStorageChars, _giveUpBaseList);
     if (commitBookmarks(merged)) {
       _deps.rerenderActiveBookmarkTree();
       announce("북마크를 병합했습니다.");
@@ -974,6 +989,7 @@ function openImportModal(items, skipped) {
   };
 
   $bmImportOverwrite.onclick = () => {
+    _makeRoomForImport(items, projectedStorageChars, _giveUpBaseList);
     if (commitBookmarks(items)) {
       _deps.rerenderActiveBookmarkTree();
       announce("북마크를 덮어썼습니다.");

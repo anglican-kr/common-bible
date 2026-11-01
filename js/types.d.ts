@@ -125,7 +125,8 @@ export type SaveOutcome = "saved" | "full" | "failed";
 
 // The base list in localStorage "bible-drive-base-ids" (store-v2.js), kept on this device only: the bookmark ids alive
 // in the Drive file last downloaded and merged, grouped under the day this device first saw them in that file
-// (whole days of this device's clock since 1970-01-01 UTC). `at` is this device's time of the last write.
+// (whole days of this device's clock since 1970-01-01 UTC). `at` is this device's time of the last write, never below
+// the previous list's.
 export interface DriveBaseIds {
   fileId: string;
   at: number;
@@ -364,13 +365,14 @@ export interface SyncStoreV2 {
   sweepRetiredSettings: (ageDays?: number) => void;
   /** Saves the base list from the downloaded file; false (and no list) when the browser refused the write. */
   saveBaseIds: (fileId: string, remote: SyncDoc) => boolean;
-  clearBaseIds: () => void;
-  /** Bookmarks the planned rule 다 would drop in a merge with `remote` — only counted for now. */
+  /** Removes the base list; true when there was one. */
+  clearBaseIds: () => boolean;
+  /** Bookmarks the planned first-seen-30-days rule would drop in a merge with `remote` — only counted for now. */
   goneFromDrive: (fileId: string, local: SyncDoc, remote: SyncDoc) => string[];
   loadBookmarks: () => BookmarkTreeNode[];
   saveBookmarks: (tree: BookmarkTreeNode[]) => SaveOutcome;
-  /** This store's entry once saveBookmarks(tree) ran — its key, and the characters of key and value. */
-  projectedBookmarksEntry: (tree: BookmarkTreeNode[]) => { key: string; chars: number };
+  /** This store's entry once saveBookmarks(tree) ran — its key, the characters of key and value, and the keys the save removes when storage is full. */
+  projectedBookmarksEntry: (tree: BookmarkTreeNode[]) => { key: string; chars: number; givesUp: string[] };
   saveSetting: (key: SettingKey, value: unknown) => void;
   saveLastRead: (value: LastReadValue) => void;
   migrateLegacyIfNeeded: () => void;
@@ -1012,7 +1014,7 @@ export interface AppStorage {
   /** Rewrite stored bookmarks in place, both copies, keeping the sync store's per-item time (`_u`) — the move of pre-#205 verse ranges. */
   rewriteBookmarks: (patch: (bm: BookmarkTreeBookmark | SyncFlatItem) => boolean) => void;
   /** The most characters localStorage holds while saveBookmarks(store) runs — the bookmark import's size check (ADR-040). */
-  projectedStorageChars: (store: BookmarkTreeNode[]) => number;
+  projectedStorageChars: (store: BookmarkTreeNode[], withGivenUp?: boolean) => number;
 
   // Lectionary track (ADR-038 §3 — 독서 1/2 선택). 마지막으로 고른 트랙 하나를 날짜 · 해와 무관하게 기억한다
   // (사용자 결정 2026-10-13). 로컬 전용(Drive 동기화 없음).

@@ -125,7 +125,7 @@ function makeStoreV2Stub() {
     saveLocal: () => "saved",
     sweepRetiredSettings: () => {},
     saveBaseIds: () => true,
-    clearBaseIds: () => {},
+    clearBaseIds: () => false,
     goneFromDrive: () => [],
     loadBookmarks: () => [],
     saveBookmarks: () => "saved",

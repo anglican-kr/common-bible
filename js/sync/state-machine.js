@@ -129,6 +129,10 @@ function createSyncMachine({ onStateChange } = {}) {
   // is refused again — and cycles run on each scroll stop and chapter change — so the notice is shown once until a
   // merged doc saves (사용자 결정 2026-10-31).
   let _storageFullNoticed = false;
+  // Set when a refused base list write was logged. On a nearly full storage the list is refused at every saved merge,
+  // and those errors pushed earlier ones (DELETE_UNCONFIRMED and the like) out of the diagnostic's 20 lines — so it is
+  // logged once until a list saves (사용자 결정 2026-10-31).
+  let _baseIdsFailLogged = false;
 
   // ── Context (all "hidden state" in one place) ─────────────────────────────
   // Mutated only by _transition().
@@ -837,8 +841,8 @@ function createSyncMachine({ onStateChange } = {}) {
           && !((Object.hasOwn(localTombstones, id) ? localTombstones[id] : -Infinity) > (localItems[id]?._u ?? 0)))
       );
 
-      // 기준 목록 1단계(사용자 결정 2026-10-31): the merge does not read the list. What rule 다 would have dropped is
-      // only counted, so a copied diagnostic shows whether stage 2 would ever drop anything.
+      // 기준 목록 1단계(사용자 결정 2026-10-31): the merge does not read the list. What the first-seen-30-days rule
+      // would have dropped is only counted, so a copied diagnostic shows whether stage 2 would ever drop anything.
       const baseWouldDrop = V2.goneFromDrive(fileId, local, remote).length;
       L.log({ kind: "ACTION", event: "MERGE", localMaxU, remoteMaxU, mergedMaxU, hadRemoteChanges, baseWouldDrop });
       if (_applyMergedDoc(merged, hadRemoteChanges) !== "saved") {
@@ -854,7 +858,11 @@ function createSyncMachine({ onStateChange } = {}) {
       // The base list goes with the merge just saved, and before the upload, which may fail: it describes the file
       // downloaded, so it is written from `remote` — an id this device only uploads is not one Drive held (store-v2.js
       // saveBaseIds). No await separates it from the save above, so a cycle stopped by sign-out never writes it.
-      if (!V2.saveBaseIds(fileId, remote)) L.log({ kind: "ERROR", event: "BASE_IDS_SAVE_FAIL" });
+      if (V2.saveBaseIds(fileId, remote)) _baseIdsFailLogged = false;
+      else if (!_baseIdsFailLogged) {
+        L.log({ kind: "ERROR", event: "BASE_IDS_SAVE_FAIL" });
+        _baseIdsFailLogged = true;
+      }
 
       const remoteCount = Object.keys(remote.bookmarks?.items ?? {}).length
                         + Object.keys(remote.bookmarks?.tombstones ?? {}).length;

@@ -1346,6 +1346,7 @@ function loadImportExport() {
     _countBookmarks: ctx._countBookmarks,
     _sanitizeImportItems: ctx._sanitizeImportItems,
     _fitsStorage: ctx._fitsStorage,
+    _makeRoomForImport: ctx._makeRoomForImport,
     IMPORT_MAX_FOLDER_DEPTH: constant("IMPORT_MAX_FOLDER_DEPTH"),
     STORAGE_QUOTA_BYTES: constant("STORAGE_QUOTA_BYTES"),
     STORAGE_HEADROOM_BYTES: constant("STORAGE_HEADROOM_BYTES"),
@@ -2506,7 +2507,7 @@ test("storage full: a save that does not fit is refused as full and both copies 
 
 test("_fitsStorage over projectedStorageChars: the largest overwrite it lets in, WebKit stores in full", () => {
   // The smallest items (empty folders — the sync store's per-record fields weigh most against them), one Korean name,
-  // over another list whose ids then stay as tombstones for 30 days.
+  // over another list whose ids then stay as tombstones (kept for good since 2026-10-31).
   const h = loadImportExport();
   const folders = (prefix, n) => Array.from({ length: n }, (_, i) => ({ type: "folder", id: `${prefix}${i.toString(36)}`, name: i ? "" : "가", children: [] }));
   const { appStorage, syncStore } = loadAppStorage(makeWebKitLocalStorage());
@@ -2523,6 +2524,78 @@ test("_fitsStorage over projectedStorageChars: the largest overwrite it lets in,
   appStorage.saveBookmarks(largest);
   assert.equal(syncStore.loadBookmarks().length, lo);
   assert.equal(appStorage.loadBookmarks().length, lo);
+});
+
+// The check leaves the base list (bible-drive-base-ids) out — counted, it refused overwrites the save takes (PR #460
+// review, 사용자 결정 2026-10-31). An import let in only that way gives the list up before it is saved: the save gives it
+// up only when storage is full, so the list would otherwise sit in the headroom (사용자 결정 2026-11-01).
+test("_makeRoomForImport: over a base list, the largest overwrite the check lets in gives the list up first, is stored in full and leaves the headroom", () => {
+  const h = loadImportExport();
+  const folders = (prefix, n) => Array.from({ length: n }, (_, i) => ({ type: "folder", id: `${prefix}${i.toString(36).padStart(30, "0")}`, name: i ? "" : "가", children: [] }));
+  const webKit = makeWebKitLocalStorage();
+  const { appStorage, syncStore } = loadAppStorage(webKit);
+  assert.equal(appStorage.saveBookmarks(folders("a", 6000)), "saved");
+  assert.equal(syncStore.saveBaseIds("F1", syncStore.buildSyncPayload("device-a")), true);
+  const baseChars = "bible-drive-base-ids".length + webKit.getItem("bible-drive-base-ids").length;
+  assert.ok(baseChars > 64 * 1024, "more than the 64 KiB the check leaves");
+  const fits = (n) => h._fitsStorage(appStorage.projectedStorageChars(folders("b", n)));
+  let lo = 0, hi = 20000;
+  assert.ok(fits(lo) && !fits(hi));
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >> 1;
+    if (fits(mid)) lo = mid; else hi = mid;
+  }
+  const store = folders("b", lo);
+  assert.equal(h._fitsStorage(appStorage.projectedStorageChars(store, true)), false, "counting the list would have refused it");
+  h._makeRoomForImport(store, appStorage.projectedStorageChars, () => syncStore.clearBaseIds());
+  assert.equal(webKit.getItem("bible-drive-base-ids"), null);
+  assert.equal(appStorage.saveBookmarks(store), "saved");
+  assert.equal(syncStore.loadBookmarks().length, lo);
+  assert.equal(JSON.parse(webKit.getItem("bible-bookmarks")).length, lo, "the legacy copy too");
+  let stored = 0;
+  for (let i = 0; i < webKit.length; i++) stored += webKit.key(i).length + webKit.getItem(webKit.key(i)).length;
+  assert.ok(2 * stored <= h.STORAGE_QUOTA_BYTES - h.STORAGE_HEADROOM_BYTES, "the headroom is left after the save");
+});
+
+test("_makeRoomForImport: an import that fits with the base list counted keeps the list", () => {
+  const h = loadImportExport();
+  const folders = (prefix, n) => Array.from({ length: n }, (_, i) => ({ type: "folder", id: `${prefix}${i.toString(36)}`, name: "", children: [] }));
+  const webKit = makeWebKitLocalStorage();
+  const { appStorage, syncStore } = loadAppStorage(webKit);
+  assert.equal(appStorage.saveBookmarks(folders("a", 100)), "saved");
+  assert.equal(syncStore.saveBaseIds("F1", syncStore.buildSyncPayload("device-a")), true);
+  const list = webKit.getItem("bible-drive-base-ids");
+  let calls = 0;
+  h._makeRoomForImport(folders("b", 100), appStorage.projectedStorageChars, () => { calls++; return syncStore.clearBaseIds(); });
+  assert.equal(calls, 0);
+  assert.equal(webKit.getItem("bible-drive-base-ids"), list);
+});
+
+// A save at full storage over a large legacy copy (notes): the sync store is written while the legacy key still holds
+// the old list, so it is the sync store's write that gives up the base list (store-v2.js saveLocal), and the legacy
+// key is written after it (PR #460 재리뷰).
+test("saveBookmarks at full storage over a large legacy copy: the sync store gives up the base list and both copies are stored", () => {
+  const h = loadImportExport();
+  const folders = (prefix, n) => Array.from({ length: n }, (_, i) => ({ type: "folder", id: `${prefix}${i.toString(36).padStart(30, "0")}`, name: i ? "" : "가", children: [] }));
+  const notes = Array.from({ length: 800 }, (_, i) => ({ type: "bookmark", id: `n${i.toString(36).padStart(18, "0")}`, bookId: "john", chapter: 3, verseSpec: "16", label: "요한 3:16", note: "메".repeat(1200), createdAt: 1, updatedAt: 1 }));
+  const webKit = makeWebKitLocalStorage();
+  const { appStorage, syncStore } = loadAppStorage(webKit);
+  assert.equal(appStorage.saveBookmarks(notes), "saved");
+  const remote = syncStore.buildSyncPayload("device-a");
+  for (let i = 0; i < 6000; i++) remote.bookmarks.items[`r${i.toString(36).padStart(29, "0")}`] = { type: "folder", _u: 1 };
+  assert.equal(syncStore.saveBaseIds("F1", remote), true);
+  // A list near the edge: the largest the import's check lets in with the base list left out.
+  const fits = (n) => h._fitsStorage(appStorage.projectedStorageChars(folders("b", n)));
+  let lo = 0, hi = 40000;
+  assert.ok(fits(lo) && !fits(hi));
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >> 1;
+    if (fits(mid)) lo = mid; else hi = mid;
+  }
+  assert.equal(appStorage.saveBookmarks(folders("b", lo)), "saved");
+  assert.equal(syncStore.loadBookmarks().length, lo);
+  assert.equal(JSON.parse(webKit.getItem("bible-bookmarks")).length, lo, "the legacy copy too");
+  assert.equal(webKit.getItem("bible-drive-base-ids"), null);
 });
 
 // ── BOOKMARK_SORT loader ─────────────────────────────────────────────────────

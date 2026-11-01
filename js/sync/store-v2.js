@@ -244,12 +244,13 @@ function saveLocal(doc) {
 // again after 「파일도 삭제」, or another account's) starts a new list.
 // 1단계(사용자 결정 2026-10-31): 목록을 저장만 하고 병합 판단에는 쓰지 않는다. 2단계에서는 이 기기에는 살아 있는데
 // 드라이브에는 항목도 삭제 기록도 없는 북마크를, 목록에 있고 처음 본 지 30일이 넘었으면 다른 기기에서 지운 것으로 볼
-// 계획이다(규칙 다). 그때까지는 그런 북마크의 수만 센다(goneFromDrive).
+// 계획이다(30일 규칙). 그때까지는 그런 북마크의 수만 센다(goneFromDrive).
 // Days are whole days of this device's clock since 1970-01-01 (UTC), grouped so an id costs its own characters only.
 const _BASE_KEY = "bible-drive-base-ids";
 const _DAY_MS = 864e5;
-// The age past which rule 다 would read a missing bookmark as deleted elsewhere: more than this many whole days
-// between the day it was first seen and today, so at least 30 days have passed (a day key covers the whole day).
+// The age past which the first-seen-30-days rule would read a missing bookmark as deleted elsewhere: more than this
+// many whole days between the day it was first seen and today, so at least 30 days have passed (a day key covers the
+// whole day).
 const _BASE_AGE_DAYS = 30;
 
 /** @returns {number} */
@@ -264,15 +265,23 @@ function _dropBaseIds() {
   } catch { return false; }
 }
 
-function clearBaseIds() { _dropBaseIds(); }
+/** @returns {boolean} true when there was a list and it is gone */
+function clearBaseIds() { return _dropBaseIds(); }
+
+/** @returns {Partial<DriveBaseIds> | null} the stored record as parsed, or null when there is none or it is not JSON */
+function _readBase() {
+  try {
+    const rec = JSON.parse(localStorage.getItem(_BASE_KEY) ?? "null");
+    return rec && typeof rec === "object" ? rec : null;
+  } catch { return null; }
+}
 
 // The stored list as id → day first seen, or null when there is none for `fileId`. A malformed list reads as none.
 // An id under two days keeps the earlier one.
-/** @param {string} fileId @returns {Map<string, number> | null} */
-function _loadBaseIds(fileId) {
+/** @param {string} fileId @param {Partial<DriveBaseIds> | null} [rec] @returns {Map<string, number> | null} */
+function _loadBaseIds(fileId, rec = _readBase()) {
   try {
-    const rec = JSON.parse(localStorage.getItem(_BASE_KEY) ?? "null");
-    if (!rec || typeof rec !== "object" || rec.fileId !== fileId) return null;
+    if (!rec || rec.fileId !== fileId) return null;
     const days = rec.days;
     if (!days || typeof days !== "object") return null;
     /** @type {Map<string, number>} */
@@ -309,13 +318,21 @@ function _aliveIds(doc) {
 // writes (known-issues §42), so an upload can be overwritten by a device that never saw it, and an id this device
 // only sent must not read as one Drive held. An id the previous list (same file) held keeps its day, a new one gets
 // today, and one the file no longer holds drops out. A refused write leaves no list rather than an old one.
+// 기록하는 날은 뒤로 가지 않는다(사용자 결정 2026-10-31). `at` never goes below the previous list's (whatever file it
+// names), and a new id gets the day of that time when the clock reads earlier: an id first seen while the clock was
+// set back (a phone whose clock fell to 1970 on a flat battery) would otherwise read as long seen once the clock is
+// fixed, and stage 2 would drop it without its 30 days. The guard goes with the list (a full storage or 「파일도 삭제」
+// removes it); stage 2 settles the device clock as a whole (사용자 결정 2026-11-01).
 /** @param {string} fileId @param {SyncDoc} remote @returns {boolean} whether the list is saved */
 function saveBaseIds(fileId, remote) {
   try {
-    const prev = _loadBaseIds(fileId);
-    const today = _today();
+    const stored = _readBase();
+    const prev = _loadBaseIds(fileId, stored);
+    const prevAt = typeof stored?.at === "number" && Number.isFinite(stored.at) ? stored.at : 0;
+    const at = Math.max(Date.now(), prevAt);
+    const today = Math.floor(at / _DAY_MS);
     /** @type {DriveBaseIds} */
-    const rec = { fileId, at: Date.now(), days: {} };
+    const rec = { fileId, at, days: {} };
     for (const id of _aliveIds(remote)) {
       const day = prev?.get(id) ?? today;
       (rec.days[day] ??= []).push(id);
@@ -328,9 +345,9 @@ function saveBaseIds(fileId, remote) {
   }
 }
 
-// The bookmarks rule 다 would drop in this merge: shown on this device, held by `remote` neither as an item nor as a
-// tombstone, and in the list of this same file for more than _BASE_AGE_DAYS days. Stage 1 only counts them; the merge
-// keeps them as before.
+// The bookmarks the first-seen-30-days rule would drop in this merge: shown on this device, held by `remote` neither as
+// an item nor as a tombstone, and in the list of this same file for more than _BASE_AGE_DAYS days. Stage 1 only counts
+// them; the merge keeps them as before.
 /** @param {string} fileId @param {SyncDoc} local @param {SyncDoc} remote @returns {string[]} */
 function goneFromDrive(fileId, local, remote) {
   try {
@@ -472,10 +489,15 @@ function saveBookmarks(tree) {
 // This store's localStorage entry once saveBookmarks(tree) ran — its key, and the characters of key and value. The
 // bookmark import adds it up with the rest before saving (storage.js projectedStorageChars, ADR-040): measured from
 // the very document saveBookmarks writes, so a parentId repeated under every child and the tombstones an overwrite
-// leaves are counted as they will be stored.
-/** @param {BookmarkTreeNode[]} tree @returns {{ key: string, chars: number }} */
+// leaves are counted as they will be stored. `givesUp` names the keys the save removes when storage is full (saveLocal):
+// they are not counted.
+/** @param {BookmarkTreeNode[]} tree @returns {{ key: string, chars: number, givesUp: string[] }} */
 function projectedBookmarksEntry(tree) {
-  return { key: _STORE_KEY, chars: _STORE_KEY.length + JSON.stringify(_docWithBookmarks(tree)).length };
+  return {
+    key: _STORE_KEY,
+    chars: _STORE_KEY.length + JSON.stringify(_docWithBookmarks(tree)).length,
+    givesUp: [_BASE_KEY],
+  };
 }
 
 // Load and reconstruct the bookmark tree, filtering out tombstoned items.
@@ -750,9 +772,9 @@ function validateRemote(data) {
 // defaults — every merge regenerates them, so sweeping them would only churn
 // saveLocal. Safe to call anytime; only persists on removal.
 // 북마크 삭제 기록은 지우지 않는다(사용자 결정 2026-10-31, known-issues §39). Swept on this device only, a tombstone
-// came back from Drive at the next merge, so the sweep freed nothing while sync was on; with sync off for more than
-// 30 days it was gone before that merge, and a bookmark deleted meanwhile came back from Drive. Their cleanup waits
-// for stage 2 of the base list.
+// came back from Drive at the next merge, so the sweep freed nothing while sync was on; a bookmark deleted with sync
+// off lost its tombstone once 30 days had passed since the delete, and turning sync on after that brought it back
+// from Drive. Their cleanup waits for stage 2 of the base list.
 /** @param {number} [ageDays] */
 function sweepRetiredSettings(ageDays = 30) {
   const cutoff = Date.now() - ageDays * _DAY_MS;
