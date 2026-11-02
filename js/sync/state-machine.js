@@ -129,6 +129,10 @@ function createSyncMachine({ onStateChange } = {}) {
   // is refused again — and cycles run on each scroll stop and chapter change — so the notice is shown once until a
   // merged doc saves (사용자 결정 2026-10-31).
   let _storageFullNoticed = false;
+  // Set when an unsaved base list was logged. On a nearly full storage the list is left out at every saved merge, and
+  // those errors pushed earlier ones (DELETE_UNCONFIRMED and the like) out of the diagnostic's 20 lines — so it is
+  // logged once until a list saves (사용자 결정 2026-10-31), with the first failure's reason.
+  let _baseIdsFailLogged = false;
 
   // ── Context (all "hidden state" in one place) ─────────────────────────────
   // Mutated only by _transition().
@@ -830,14 +834,17 @@ function createSyncMachine({ onStateChange } = {}) {
         Object.keys(merged.bookmarks?.items ?? {}).some(id =>
           !Object.hasOwn(localItems, id) || (merged.bookmarks.items[id]?._u ?? 0) > (localItems[id]._u ?? 0)) ||
         // A tombstone counts only when it removes an item this device shows. Counting every tombstone newer than this
-        // device's showed 「다른 기기에서 변경된 데이터를 불러왔습니다.」 at every start: the 30-day cleanup
-        // (sweepTombstones) drops old tombstones here and the merge brings them back from Drive (2026-10-31 리뷰).
+        // device's showed 「다른 기기에서 변경된 데이터를 불러왔습니다.」 at every start: the 30-day cleanup of builds
+        // before 2026-10-31 dropped old tombstones here and the merge brought them back from Drive (2026-10-31 리뷰).
         Object.keys(localItems).some(id =>
           !Object.hasOwn(merged.bookmarks?.items ?? {}, id)
           && !((Object.hasOwn(localTombstones, id) ? localTombstones[id] : -Infinity) > (localItems[id]?._u ?? 0)))
       );
 
-      L.log({ kind: "ACTION", event: "MERGE", localMaxU, remoteMaxU, mergedMaxU, hadRemoteChanges });
+      // 기준 목록 1단계(사용자 결정 2026-10-31): the merge does not read the list. What the first-seen-30-days rule
+      // would have dropped is only counted, so a copied diagnostic shows whether stage 2 would ever drop anything.
+      const baseWouldDrop = V2.goneFromDrive(fileId, local, remote).length;
+      L.log({ kind: "ACTION", event: "MERGE", localMaxU, remoteMaxU, mergedMaxU, hadRemoteChanges, baseWouldDrop });
       if (_applyMergedDoc(merged, hadRemoteChanges) !== "saved") {
         // The payload is read back from local storage (buildSyncPayload), which still holds the doc from before the
         // merge — uploading it would put Drive back to it and drop the other devices' edits for every device. That holds
@@ -846,6 +853,18 @@ function createSyncMachine({ onStateChange } = {}) {
         // and merges again; this device's own edits wait for room (known-issues §15.4, ADR-015 D7).
         dispatch({ type: "SYNC_DONE" });
         return;
+      }
+
+      // The base list goes with the merge just saved, and before the upload, which may fail: it describes the file
+      // downloaded, so it is written from `remote` — an id this device only uploads is not one Drive held (store-v2.js
+      // saveBaseIds). No await separates it from the save above, so a cycle stopped by sign-out never writes it.
+      // The log says why it is not saved: `reason:headroom` — left out to keep the 64 KiB the import keeps free — or
+      // `reason:refused` — the write failed (여유 때문인지 거절인지 구별한다, 사용자 결정 2026-11-01).
+      const baseIds = V2.saveBaseIds(fileId, remote);
+      if (baseIds === "saved") _baseIdsFailLogged = false;
+      else if (!_baseIdsFailLogged) {
+        L.log({ kind: "ERROR", event: "BASE_IDS_SAVE_FAIL", reason: baseIds });
+        _baseIdsFailLogged = true;
       }
 
       const remoteCount = Object.keys(remote.bookmarks?.items ?? {}).length
@@ -1215,6 +1234,9 @@ function createSyncMachine({ onStateChange } = {}) {
       deleted = settled && await deleteAll();
     }
     if (!deleted) L.log({ kind: "ERROR", event: "DELETE_UNCONFIRMED", reason: unconfirmed ?? "unknown" });
+    // The file the base list describes is gone. Turning sync off with the file kept leaves the list (_stopSync): a
+    // new sign-in reads Drive's file again, and a list of another file is not read.
+    else V2.clearBaseIds();
     T.revokeToken(token);
     return deleted;
   }

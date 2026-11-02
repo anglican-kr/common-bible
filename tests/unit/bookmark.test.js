@@ -30,7 +30,7 @@
 //     + _hasActiveDescendant. Tests pass the pathname explicitly via the
 //     optional parameter rather than driving the renderer.
 //   - IMPORT_EXPORT block — _validateImportData / _mergeBookmarkStores /
-//     _countBookmarks / _sanitizeImportItems / _fitsStorage
+//     _countBookmarks / _sanitizeImportItems / _fitsStorage / _importRefusal
 //     (pure helpers, no DOM — loaded after VERSE_SPEC, whose isWellFormedSpec
 //     the item check imports), with the real sync store (js/sync/store-v2.js)
 //     for the save-and-read round trips.
@@ -68,6 +68,23 @@ const BOOKMARK_GESTURES_SOURCE = fs.readFileSync(BOOKMARK_GESTURES_PATH, "utf8")
 // the BOOKMARK_SELECT marker block now lives there.
 const BOOKMARK_SELECT_PATH = path.resolve(__dirname, "../../js/app/bookmark-select.js");
 const BOOKMARK_SELECT_SOURCE = fs.readFileSync(BOOKMARK_SELECT_PATH, "utf8");
+// The sync store (js/sync/store-v2.js): the import's size check asks it (fitsStorage), and the round-trip and storage
+// tests save through it.
+const STORE_V2_SOURCE = stripEsmMarker(fs.readFileSync(path.resolve(__dirname, "../../js/sync/store-v2.js"), "utf8"));
+
+// The sync store in its own realm, as the page loads it before the app modules: its window.syncStoreV2, and its
+// top-level constants read as expressions.
+function loadSyncStoreRealm(localStorage = makeLocalStorage({})) {
+  const win = {};
+  const ctx = {
+    localStorage, window: win,
+    JSON, Object, Array, Set, Map, String, Number, Boolean, Math, Date, console, Error, isNaN, parseInt,
+  };
+  ctx.globalThis = ctx;
+  vm.createContext(ctx);
+  vm.runInContext(STORE_V2_SOURCE, ctx, { filename: "store-v2.js" });
+  return { syncStoreV2: win.syncStoreV2, constant: (name) => vm.runInContext(name, ctx) };
+}
 
 function extractBlock(name, source = BOOKMARK_SOURCE) {
   const begin = `// ── BEGIN ${name} ──`;
@@ -1332,8 +1349,11 @@ function loadBookmarkActive() {
 
 // ── IMPORT_EXPORT loader ────────────────────────────────────────────────────
 
-function loadImportExport() {
-  const ctx = { Object, Array, Set, Map, String, JSON, console, Error };
+// `syncStore: false` leaves window.syncStoreV2 out, as a page whose store-v2.js failed to load.
+function loadImportExport({ syncStore = true } = {}) {
+  // The size check (_fitsStorage) asks the sync store's rule (store-v2.js fitsStorage), which the page loads first.
+  const sync = loadSyncStoreRealm();
+  const ctx = { Object, Array, Set, Map, String, JSON, console, Error, window: syncStore ? { syncStoreV2: sync.syncStoreV2 } : {} };
   vm.createContext(ctx);
   // The verse-spec check (isWellFormedSpec) is an import of bookmark-modals.js — the VERSE_SPEC block stands in for it.
   vm.runInContext(extractBlock("VERSE_SPEC", VERSE_SPEC_SOURCE), ctx, { filename: "verse-spec.js" });
@@ -1346,9 +1366,17 @@ function loadImportExport() {
     _countBookmarks: ctx._countBookmarks,
     _sanitizeImportItems: ctx._sanitizeImportItems,
     _fitsStorage: ctx._fitsStorage,
+    _makeRoomForImport: ctx._makeRoomForImport,
+    _importRefusal: ctx._importRefusal,
+    _importWays: ctx._importWays,
+    _importOpens: ctx._importOpens,
+    IMPORT_NO_ROOM_REFUSAL: constant("IMPORT_NO_ROOM_REFUSAL"),
+    IMPORT_MERGE_REFUSAL: constant("IMPORT_MERGE_REFUSAL"),
+    IMPORT_OVERWRITE_REFUSAL: constant("IMPORT_OVERWRITE_REFUSAL"),
+    IMPORT_NO_SYNC_STORE: constant("IMPORT_NO_SYNC_STORE"),
     IMPORT_MAX_FOLDER_DEPTH: constant("IMPORT_MAX_FOLDER_DEPTH"),
-    STORAGE_QUOTA_BYTES: constant("STORAGE_QUOTA_BYTES"),
-    STORAGE_HEADROOM_BYTES: constant("STORAGE_HEADROOM_BYTES"),
+    STORAGE_QUOTA_BYTES: sync.constant("_STORAGE_QUOTA_BYTES"),
+    STORAGE_HEADROOM_BYTES: sync.constant("_STORAGE_HEADROOM_BYTES"),
   };
 }
 
@@ -2099,17 +2127,8 @@ test("_sanitizeImportItems: a bookmark carrying children is left out with them �
 // sync is loaded): what the import check keeps must survive a save and a read. The raw file broke the store in
 // three ways, so these tests do exercise the hazards the check guards against (PR #359 review). The store reads a
 // toString id since known-issues §15.2, but a device on an older build still fails on one that sync brings it.
-const STORE_V2_SOURCE = stripEsmMarker(fs.readFileSync(path.resolve(__dirname, "../../js/sync/store-v2.js"), "utf8"));
 function loadSyncStore(localStorage = makeLocalStorage({})) {
-  const win = {};
-  const ctx = {
-    localStorage, window: win,
-    JSON, Object, Array, Set, Map, String, Number, Boolean, Math, Date, console, Error, isNaN, parseInt,
-  };
-  ctx.globalThis = ctx;
-  vm.createContext(ctx);
-  vm.runInContext(STORE_V2_SOURCE, ctx, { filename: "store-v2.js" });
-  return win.syncStoreV2;
+  return loadSyncStoreRealm(localStorage).syncStoreV2;
 }
 
 test("_sanitizeImportItems: the raw file trips the sync store — a null child, a __proto__ id (a toString id until §15.2)", () => {
@@ -2393,7 +2412,7 @@ test("_sanitizeImportItems: an id the current list uses for the other kind is le
   assert.equal(skipped, 2 + 1);
 });
 
-test("_fitsStorage: the save's characters at 2 bytes each must leave 64 KiB of Safari's 5 MiB", () => {
+test("_fitsStorage: the sync store's rule (store-v2.js fitsStorage) — the save's characters at 2 bytes each must leave 64 KiB of Safari's 5 MiB", () => {
   const h = loadImportExport();
   assert.equal(h.STORAGE_QUOTA_BYTES, 5 * 1024 * 1024);
   assert.equal(h.STORAGE_HEADROOM_BYTES, 64 * 1024);
@@ -2426,9 +2445,10 @@ function makeWebKitLocalStorage() {
 }
 
 // The app's two storage layers in one realm — storage.js over the real sync store — on the given localStorage, so a
-// save takes the app's own path (storage.js saveBookmarks: store-v2.js, then the legacy key).
+// save takes the app's own path (storage.js saveBookmarks: store-v2.js, then the legacy key). `syncStore: false` loads
+// storage.js alone, as a page whose store-v2.js failed to load.
 const STORAGE_SOURCE = stripEsmMarker(fs.readFileSync(path.resolve(__dirname, "../../js/app/storage.js"), "utf8"));
-function loadAppStorage(localStorage) {
+function loadAppStorage(localStorage, { syncStore = true } = {}) {
   const ctx = {
     localStorage, navigator: {},
     JSON, Object, Array, Set, Map, String, Number, Boolean, Math, Date, console, Error, isNaN, parseInt,
@@ -2436,7 +2456,7 @@ function loadAppStorage(localStorage) {
   ctx.window = ctx;
   ctx.globalThis = ctx;
   vm.createContext(ctx);
-  vm.runInContext(STORE_V2_SOURCE, ctx, { filename: "store-v2.js" });
+  if (syncStore) vm.runInContext(STORE_V2_SOURCE, ctx, { filename: "store-v2.js" });
   vm.runInContext(STORAGE_SOURCE, ctx, { filename: "storage.js" });
   return { appStorage: ctx.appStorage, syncStore: ctx.syncStoreV2 };
 }
@@ -2506,7 +2526,7 @@ test("storage full: a save that does not fit is refused as full and both copies 
 
 test("_fitsStorage over projectedStorageChars: the largest overwrite it lets in, WebKit stores in full", () => {
   // The smallest items (empty folders — the sync store's per-record fields weigh most against them), one Korean name,
-  // over another list whose ids then stay as tombstones for 30 days.
+  // over another list whose ids then stay as tombstones (kept for good since 2026-10-31).
   const h = loadImportExport();
   const folders = (prefix, n) => Array.from({ length: n }, (_, i) => ({ type: "folder", id: `${prefix}${i.toString(36)}`, name: i ? "" : "가", children: [] }));
   const { appStorage, syncStore } = loadAppStorage(makeWebKitLocalStorage());
@@ -2523,6 +2543,239 @@ test("_fitsStorage over projectedStorageChars: the largest overwrite it lets in,
   appStorage.saveBookmarks(largest);
   assert.equal(syncStore.loadBookmarks().length, lo);
   assert.equal(appStorage.loadBookmarks().length, lo);
+});
+
+/** Every character the storage holds, keys and values — what the import's check counts. */
+function storedChars(storage) {
+  let chars = 0;
+  for (let i = 0; i < storage.length; i++) chars += storage.key(i).length + storage.getItem(storage.key(i)).length;
+  return chars;
+}
+
+// The check leaves the base list (bible-drive-base-ids) out — counted, it refused overwrites the save takes (PR #460
+// review, 사용자 결정 2026-10-31). An import let in only that way gives the list up before it is saved: the save gives it
+// up only when storage is full, so the list would otherwise sit in the headroom (사용자 결정 2026-11-01).
+test("_makeRoomForImport: over a base list, the largest overwrite the check lets in gives the list up first, is stored in full and leaves the headroom", () => {
+  const h = loadImportExport();
+  const folders = (prefix, n) => Array.from({ length: n }, (_, i) => ({ type: "folder", id: `${prefix}${i.toString(36).padStart(30, "0")}`, name: i ? "" : "가", children: [] }));
+  const webKit = makeWebKitLocalStorage();
+  const { appStorage, syncStore } = loadAppStorage(webKit);
+  assert.equal(appStorage.saveBookmarks(folders("a", 6000)), "saved");
+  assert.equal(syncStore.saveBaseIds("F1", syncStore.buildSyncPayload("device-a")), "saved");
+  const baseChars = "bible-drive-base-ids".length + webKit.getItem("bible-drive-base-ids").length;
+  assert.ok(baseChars > 64 * 1024, "more than the 64 KiB the check leaves");
+  const fits = (n) => h._fitsStorage(appStorage.projectedStorageChars(folders("b", n)));
+  let lo = 0, hi = 20000;
+  assert.ok(fits(lo) && !fits(hi));
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >> 1;
+    if (fits(mid)) lo = mid; else hi = mid;
+  }
+  const store = folders("b", lo);
+  assert.equal(h._fitsStorage(appStorage.projectedStorageChars(store, true)), false, "counting the list would have refused it");
+  h._makeRoomForImport(store, appStorage.projectedStorageChars, () => syncStore.clearBaseIds());
+  assert.equal(webKit.getItem("bible-drive-base-ids"), null);
+  assert.equal(appStorage.saveBookmarks(store), "saved");
+  assert.equal(syncStore.loadBookmarks().length, lo);
+  assert.equal(JSON.parse(webKit.getItem("bible-bookmarks")).length, lo, "the legacy copy too");
+  assert.ok(2 * storedChars(webKit) <= h.STORAGE_QUOTA_BYTES - h.STORAGE_HEADROOM_BYTES, "the headroom is left after the save");
+  // The sync the import asks for writes the list again from the file it merges — it is left out, as the import left it
+  // out, and the headroom stays free (기준 목록도 64 KiB 여유를 지킨다, 사용자 결정 2026-11-01).
+  assert.equal(syncStore.saveBaseIds("F1", syncStore.buildSyncPayload("device-a")), "headroom");
+  assert.equal(webKit.getItem("bible-drive-base-ids"), null);
+  assert.ok(2 * storedChars(webKit) <= h.STORAGE_QUOTA_BYTES - h.STORAGE_HEADROOM_BYTES, "the headroom is still left");
+});
+
+test("_makeRoomForImport: an import that fits with the base list counted keeps the list", () => {
+  const h = loadImportExport();
+  const folders = (prefix, n) => Array.from({ length: n }, (_, i) => ({ type: "folder", id: `${prefix}${i.toString(36)}`, name: "", children: [] }));
+  const webKit = makeWebKitLocalStorage();
+  const { appStorage, syncStore } = loadAppStorage(webKit);
+  assert.equal(appStorage.saveBookmarks(folders("a", 100)), "saved");
+  assert.equal(syncStore.saveBaseIds("F1", syncStore.buildSyncPayload("device-a")), "saved");
+  const list = webKit.getItem("bible-drive-base-ids");
+  let calls = 0;
+  h._makeRoomForImport(folders("b", 100), appStorage.projectedStorageChars, () => { calls++; return syncStore.clearBaseIds(); });
+  assert.equal(calls, 0);
+  assert.equal(webKit.getItem("bible-drive-base-ids"), list);
+});
+
+// A list well under the edge keeps the base list whatever the measure; at the edge, only a check that counts the list
+// keeps it there and gives it up one folder later (PR #460 3회차 리뷰).
+test("_makeRoomForImport: the largest import that fits with the base list counted keeps the list and the headroom — one folder more gives it up", () => {
+  const h = loadImportExport();
+  const folders = (prefix, n) => Array.from({ length: n }, (_, i) => ({ type: "folder", id: `${prefix}${i.toString(36).padStart(30, "0")}`, name: i ? "" : "가", children: [] }));
+  const webKit = makeWebKitLocalStorage();
+  const { appStorage, syncStore } = loadAppStorage(webKit);
+  assert.equal(appStorage.saveBookmarks(folders("a", 6000)), "saved");
+  assert.equal(syncStore.saveBaseIds("F1", syncStore.buildSyncPayload("device-a")), "saved");
+  const list = webKit.getItem("bible-drive-base-ids");
+  const fitsWithList = (n) => h._fitsStorage(appStorage.projectedStorageChars(folders("b", n), true));
+  let lo = 0, hi = 20000;
+  assert.ok(fitsWithList(lo) && !fitsWithList(hi));
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >> 1;
+    if (fitsWithList(mid)) lo = mid; else hi = mid;
+  }
+  let calls = 0;
+  const count = () => { calls++; };
+  h._makeRoomForImport(folders("b", lo + 1), appStorage.projectedStorageChars, count);
+  assert.equal(calls, 1, "one folder more fits only without the list");
+  h._makeRoomForImport(folders("b", lo), appStorage.projectedStorageChars, () => { calls++; return syncStore.clearBaseIds(); });
+  assert.equal(calls, 1, "the list is kept at the edge");
+  assert.equal(appStorage.saveBookmarks(folders("b", lo)), "saved");
+  assert.equal(webKit.getItem("bible-drive-base-ids"), list);
+  assert.equal(syncStore.loadBookmarks().length, lo);
+  assert.ok(2 * storedChars(webKit) <= h.STORAGE_QUOTA_BYTES - h.STORAGE_HEADROOM_BYTES, "the headroom is left with the list kept");
+});
+
+// A save at full storage over a large legacy copy (notes): the sync store is written while the legacy key still holds
+// the old list, so it is the sync store's write that gives up the base list (store-v2.js saveLocal), and the legacy
+// key is written after it (PR #460 재리뷰).
+test("saveBookmarks at full storage over a large legacy copy: the sync store gives up the base list and both copies are stored", () => {
+  const h = loadImportExport();
+  const folders = (prefix, n) => Array.from({ length: n }, (_, i) => ({ type: "folder", id: `${prefix}${i.toString(36).padStart(30, "0")}`, name: i ? "" : "가", children: [] }));
+  const notes = Array.from({ length: 800 }, (_, i) => ({ type: "bookmark", id: `n${i.toString(36).padStart(18, "0")}`, bookId: "john", chapter: 3, verseSpec: "16", label: "요한 3:16", note: "메".repeat(1200), createdAt: 1, updatedAt: 1 }));
+  const webKit = makeWebKitLocalStorage();
+  const { appStorage, syncStore } = loadAppStorage(webKit);
+  assert.equal(appStorage.saveBookmarks(notes), "saved");
+  const remote = syncStore.buildSyncPayload("device-a");
+  for (let i = 0; i < 6000; i++) remote.bookmarks.items[`r${i.toString(36).padStart(29, "0")}`] = { type: "folder", _u: 1 };
+  assert.equal(syncStore.saveBaseIds("F1", remote), "saved");
+  // A list near the edge: the largest the import's check lets in with the base list left out.
+  const fits = (n) => h._fitsStorage(appStorage.projectedStorageChars(folders("b", n)));
+  let lo = 0, hi = 40000;
+  assert.ok(fits(lo) && !fits(hi));
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >> 1;
+    if (fits(mid)) lo = mid; else hi = mid;
+  }
+  assert.equal(appStorage.saveBookmarks(folders("b", lo)), "saved");
+  assert.equal(syncStore.loadBookmarks().length, lo);
+  assert.equal(JSON.parse(webKit.getItem("bible-bookmarks")).length, lo, "the legacy copy too");
+  assert.equal(webKit.getItem("bible-drive-base-ids"), null);
+});
+
+// What a press of 병합 or 덮어쓰기 says when it does not fit (사용자 결정 2026-11-02). Neither way is always the larger, so a
+// refused press measures the other way to say which button is left; the words are a stand-in for now.
+test("_importRefusal: the pressed way that fits is saved, and the other way is not measured", () => {
+  const h = loadImportExport();
+  for (const pressed of ["merge", "overwrite"]) {
+    for (const otherFits of [true, false]) {
+      const asked = [];
+      const fits = (way) => { asked.push(way); return way === pressed || otherFits; };
+      assert.equal(h._importRefusal(pressed, fits), null, `${pressed}, the other ${otherFits ? "fits" : "does not"}`);
+      assert.deepEqual(asked, [pressed]);
+    }
+  }
+});
+
+test("_importRefusal: a refused press names the way that fits, or only 「취소」 when neither does", () => {
+  const h = loadImportExport();
+  const cases = [
+    // pressed, 병합 fits, 덮어쓰기 fits, what the dialog says
+    ["merge", false, true, h.IMPORT_MERGE_REFUSAL],
+    ["merge", false, false, h.IMPORT_NO_ROOM_REFUSAL],
+    ["overwrite", true, false, h.IMPORT_OVERWRITE_REFUSAL],
+    ["overwrite", false, false, h.IMPORT_NO_ROOM_REFUSAL],
+  ];
+  for (const [pressed, mergeFits, overwriteFits, said] of cases) {
+    const asked = [];
+    const fits = (way) => { asked.push(way); return way === "merge" ? mergeFits : overwriteFits; };
+    assert.equal(h._importRefusal(pressed, fits), said, `${pressed}, 병합 ${mergeFits}, 덮어쓰기 ${overwriteFits}`);
+    assert.deepEqual(asked, [pressed, pressed === "merge" ? "overwrite" : "merge"], "the pressed way first");
+  }
+  // Three refusals, each asking for a button that is left: 덮어쓰기 after 병합, 병합 after 덮어쓰기, else only 취소.
+  assert.equal(new Set([h.IMPORT_NO_ROOM_REFUSAL, h.IMPORT_MERGE_REFUSAL, h.IMPORT_OVERWRITE_REFUSAL]).size, 3);
+  assert.match(h.IMPORT_MERGE_REFUSAL, /「덮어쓰기」/);
+  assert.doesNotMatch(h.IMPORT_MERGE_REFUSAL, /「병합」/);
+  assert.match(h.IMPORT_OVERWRITE_REFUSAL, /「병합」/);
+  assert.doesNotMatch(h.IMPORT_NO_ROOM_REFUSAL, /「병합」|「덮어쓰기」/);
+  for (const said of [h.IMPORT_NO_ROOM_REFUSAL, h.IMPORT_MERGE_REFUSAL, h.IMPORT_OVERWRITE_REFUSAL]) assert.match(said, /「취소」/);
+});
+
+// The case the review found (PR #460 4회차 리뷰): a file holding this device's ids with longer notes passes the budget on
+// 덮어쓰기, while 병합 keeps this device's copies of those ids and fits. The import's check used to measure 덮어쓰기 alone.
+test("_importRefusal over the real stores: a file with this device's ids and longer notes — 덮어쓰기 is refused naming 병합, and 병합 is saved", () => {
+  const h = loadImportExport();
+  const bm = (i, over = {}) => appBookmark({ id: `b${i.toString(36)}`, ...over });
+  const existing = Array.from({ length: 300 }, (_, i) => bm(i));
+  const items = [
+    ...Array.from({ length: 300 }, (_, i) => bm(i, { note: "메".repeat(2000) })),
+    ...Array.from({ length: 5 }, (_, i) => bm(1000 + i)),
+  ];
+  const webKit = makeWebKitLocalStorage();
+  const { appStorage } = loadAppStorage(webKit);
+  assert.equal(appStorage.saveBookmarks(existing), "saved");
+  // What else is stored grows (a sync, the app's other keys — a filler stands in) until 덮어쓰기 passes the budget by
+  // 100 characters.
+  const budget = (h.STORAGE_QUOTA_BYTES - h.STORAGE_HEADROOM_BYTES) / 2;
+  webKit.setItem("filler", "");
+  webKit.setItem("filler", "x".repeat(budget + 100 - appStorage.projectedStorageChars(items)));
+  // The dialog's own measure (_importWays over the real stores), not one made up here: a 병합 measured on the file's list,
+  // or a check of 덮어쓰기 alone, fails this.
+  const { listOf, fits } = h._importWays(items, appStorage.loadBookmarks, appStorage.projectedStorageChars);
+  const merged = listOf("merge");
+  assert.equal(appStorage.projectedStorageChars(items), budget + 100);
+  assert.equal(fits("overwrite"), false);
+  assert.equal(fits("merge"), true);
+  assert.equal(h._importRefusal("overwrite", fits), h.IMPORT_OVERWRITE_REFUSAL);
+  assert.equal(h._importRefusal("merge", fits), null);
+  assert.equal(h._importOpens(fits), true, "the file read opens the dialog");
+  assert.equal(appStorage.saveBookmarks(merged), "saved");
+  const saved = appStorage.loadBookmarks();
+  assert.equal(saved.length, 305);
+  assert.ok(saved.slice(0, 300).every((n) => n.note === ""), "병합 keeps this device's copies of the same ids");
+  assert.ok(2 * storedChars(webKit) <= h.STORAGE_QUOTA_BYTES - h.STORAGE_HEADROOM_BYTES, "the headroom is left");
+});
+
+// A page whose store-v2.js alone failed to load: the import stops before measuring (IMPORT_NO_SYNC_STORE, PR #460
+// 5회차 리뷰, 사용자 결정 2026-11-02) — saved to the legacy key alone, it was gone at the next start. Asking the missing
+// store threw, and the import stopped without a word (4회차 리뷰); the size check still must not throw.
+test("_fitsStorage without the sync store: it does not throw", () => {
+  const h = loadImportExport({ syncStore: false });
+  assert.equal(h._fitsStorage(0), true);
+  assert.equal(h._fitsStorage(10 * 1024 * 1024), true, "past the budget too");
+  let gaveUp = 0;
+  h._makeRoomForImport([], () => 10 * 1024 * 1024, () => { gaveUp++; });
+  assert.equal(gaveUp, 0, "no base list to give up");
+  assert.match(h.IMPORT_NO_SYNC_STORE, /가져올 수 없습니다/);
+});
+
+// The current list is read when 병합 is first measured, not when the ways are made: the dialog makes them on each press,
+// so a bookmark a sync added while it was open is kept — a list read at opening would leave it out, and the save would
+// delete it on every device (PR #460 5회차 리뷰). A list that cannot be read cannot be merged (4회차 리뷰).
+test("_importWays: 병합 reads the current list when first measured, once, and a list that cannot be read does not fit", () => {
+  const h = loadImportExport();
+  const bmA = appBookmark({ id: "bm-a" });
+  const bmB = appBookmark({ id: "bm-b" });
+  const bmC = appBookmark({ id: "bm-c" });
+  let current = [bmA];
+  let reads = 0;
+  const ways = h._importWays([bmC], () => { reads++; return current; }, () => 0);
+  current = [bmA, bmB];   // a sync adds bm-b after the ways are made
+  assert.equal(reads, 0, "nothing read until measured");
+  assert.deepEqual(ways.listOf("merge").map((n) => n.id), ["bm-a", "bm-b", "bm-c"]);
+  assert.equal(ways.fits("merge"), true);
+  assert.equal(reads, 1, "read once");
+  const items = [bmC];
+  assert.equal(h._importWays(items, () => { throw new Error("broken"); }, () => 0).listOf("overwrite"), items);
+  const broken = h._importWays(items, () => { throw new Error("broken"); }, () => 0);
+  assert.equal(broken.listOf("merge"), null);
+  assert.equal(broken.fits("merge"), false);
+  assert.equal(broken.fits("overwrite"), true, "덮어쓰기 still mends it");
+  const budget = (h.STORAGE_QUOTA_BYTES - h.STORAGE_HEADROOM_BYTES) / 2;
+  const sized = h._importWays(items, () => [bmA], (list) => (list === items ? budget + 1 : budget));
+  assert.equal(sized.fits("overwrite"), false, "measured with the given measure");
+  assert.equal(sized.fits("merge"), true);
+});
+
+test("_importOpens: a file read opens the dialog when either way fits", () => {
+  const h = loadImportExport();
+  for (const [mergeFits, overwriteFits, opens] of [[true, true, true], [true, false, true], [false, true, true], [false, false, false]]) {
+    const fits = (way) => (way === "merge" ? mergeFits : overwriteFits);
+    assert.equal(h._importOpens(fits), opens, `병합 ${mergeFits}, 덮어쓰기 ${overwriteFits}`);
+  }
 });
 
 // ── BOOKMARK_SORT loader ─────────────────────────────────────────────────────

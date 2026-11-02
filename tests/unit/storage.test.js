@@ -75,7 +75,7 @@ function makeSyncStoreV2Spy(opts = {}) {
     saveBookmarks: (val) => { calls.saveBookmarks.push(val); return "saved"; },
     loadBookmarks: () => { calls.loadBookmarks++; return bookmarksReturn; },
     // A fixed entry — store-v2.test.js checks the real one against what saveBookmarks writes.
-    projectedBookmarksEntry: () => ({ key: "bible-bookmarks-v2", chars: 1234 }),
+    projectedBookmarksEntry: () => ({ key: "bible-bookmarks-v2", chars: 1234, givesUp: ["bible-drive-base-ids"] }),
     _calls: calls,
     _setBookmarks: (b) => { bookmarksReturn = b; },
   };
@@ -890,6 +890,26 @@ test("saveBookmarks: the legacy key refusing alone does not fail the save — th
   assert.equal(h.driveSync._calls.scheduleUpload, 1);
 });
 
+// The import's check leaves the base list out (projectedStorageChars), so the legacy key gives it up when storage is
+// full, as the sync store's own write does (store-v2.js saveLocal, 사용자 결정 2026-10-31).
+test("saveBookmarks: the legacy key refused for room gives up the base list and is written again — only for the quota", () => {
+  const run = (name, hadList) => {
+    const h = loadStorage({ localStorageInit: { "bible-bookmarks": "[\"before\"]" } });
+    let clears = 0, legacyWrites = 0;
+    h.syncStoreV2.clearBaseIds = () => { clears++; return hadList; };
+    const setItem = h.localStorage.setItem;
+    h.localStorage.setItem = (k, v) => {
+      if (k === "bible-bookmarks" && ++legacyWrites === 1) throw Object.assign(new Error("refused"), { name });
+      setItem.call(h.localStorage, k, v);
+    };
+    assert.equal(h.appStorage.saveBookmarks([{ id: "1" }]), "saved");
+    return { clears, legacyWrites, legacy: h.localStorage._raw["bible-bookmarks"] };
+  };
+  assert.deepEqual(run("QuotaExceededError", true), { clears: 1, legacyWrites: 2, legacy: JSON.stringify([{ id: "1" }]) });
+  assert.deepEqual(run("QuotaExceededError", false), { clears: 1, legacyWrites: 1, legacy: "[\"before\"]" }, "no list to give up");
+  assert.deepEqual(run("SecurityError", true), { clears: 0, legacyWrites: 1, legacy: "[\"before\"]" }, "not for room");
+});
+
 test("saveBookmarks: a sync store that throws is a failed save, not an escaped exception", () => {
   const h = loadStorage({ localStorageInit: { "bible-bookmarks": "[]" } });
   h.syncStoreV2.saveBookmarks = () => { throw new TypeError("boom"); };
@@ -982,6 +1002,29 @@ test("projectedStorageChars: the sync store's projected entry, the legacy key at
   assert.ok(JSON.stringify(large).length > 500);
   assert.equal(h.appStorage.projectedStorageChars(large), "bible-bookmarks".length + JSON.stringify(large).length + 1234 + others);
   assert.equal(h.localStorage._raw["bible-bookmarks"], "x".repeat(500));   // nothing written
+});
+
+// The sync store gives up the base list when storage is full and saves again (store-v2.js saveLocal). Counting the
+// list refused imports the save takes: on a device with 3,000 bookmarks, 182 bookmarks' worth (PR #460 review,
+// 사용자 결정 2026-10-31). Asked to (`withGivenUp`), it counts the list, for the import to give it up first
+// (bookmark-modals.js _makeRoomForImport, 사용자 결정 2026-11-01).
+test("projectedStorageChars: a key the sync store gives up when storage is full (the base list) is not counted unless asked", () => {
+  const init = {
+    "bible-bookmarks": "x".repeat(500),
+    "bible-theme": "dark",
+    "bible-drive-base-ids": "z".repeat(40_000),
+  };
+  const h = loadStorage({ localStorageInit: init });
+  const list = [{ type: "bookmark", id: "a", bookId: "john", chapter: 3, verseSpec: "16", label: "요한 3:16" }];
+  assert.equal(h.appStorage.projectedStorageChars(list),
+    "bible-bookmarks".length + 500 + 1234 + "bible-theme".length + "dark".length);
+  assert.equal(h.appStorage.projectedStorageChars(list, true),
+    "bible-bookmarks".length + 500 + 1234 + "bible-theme".length + "dark".length + "bible-drive-base-ids".length + 40_000);
+  // Without the sync store nothing gives the list up: it is counted as any other key.
+  const bare = loadStorage({ withSyncStoreV2: false, localStorageInit: init });
+  assert.equal(bare.appStorage.projectedStorageChars(list),
+    "bible-bookmarks".length + JSON.stringify(list).length + "bible-theme".length + "dark".length
+    + "bible-drive-base-ids".length + 40_000);
 });
 
 test("projectedStorageChars: without the sync store, the legacy copy and every other key", () => {

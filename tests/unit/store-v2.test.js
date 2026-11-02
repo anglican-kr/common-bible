@@ -22,8 +22,9 @@ const SOURCE = stripEsmMarker(
 );
 
 // `now` fixes this device's clock (Date.now) for the loaded store — a slow-clock device is one whose `now` is behind.
-function load(initialStorage = {}, { now } = {}) {
-  const localStorage = makeLocalStorage(initialStorage);
+// `localStorage` loads the store again on a storage already in use: the same device on a later day.
+function load(initialStorage = {}, { now, localStorage: inUse } = {}) {
+  const localStorage = inUse ?? makeLocalStorage(initialStorage);
   const win = {};
   const ClockDate = now === undefined ? Date : class extends Date { static now() { return now; } };
   const ctx = {
@@ -464,6 +465,7 @@ test("projectedBookmarksEntry는 saveBookmarks가 쓸 항목의 글자 수 그�
     store.saveBookmarks(tree);
     assert.equal(entry.key, "bible-bookmarks-v2");
     assert.equal(entry.chars, entry.key.length + localStorage.getItem(entry.key).length);
+    assert.deepEqual(plain(entry.givesUp), ["bible-drive-base-ids"], "저장 공간이 차면 저장이 먼저 지우는 기준 목록");
     // 폴더의 키 · id, 자식 둘의 parentId — 덮어쓴 뒤에는 삭제 기록의 키 하나
     assert.equal(occurrences(longId), longIds);
   }
@@ -682,23 +684,58 @@ test("값을 더 나눌 수 없으면 그 폴더만 0부터 다시 매긴다", (
   assert.deepEqual(plain(store.loadBookmarks()).map((n) => n.id), ["a", "x", "b"]);
 });
 
-// ── 설정 GC ──
+// ── 값을 null로 바꿔 둔 설정 키의 정리와 북마크 삭제 기록 (사용자 결정 2026-10-31, known-issues §39) ──
+// 앱을 시작할 때의 정리(sweepRetiredSettings)는 값을 null로 바꿔 둔 지 30일이 지난 설정 키만 지운다. 북마크 삭제 기록도 지우던 때는(sweepTombstones)
+// 다음 병합이 드라이브에서 그 기록을 다시 넣어 아무것도 줄어들지 않았고, 동기화를 끈 채 지운 북마크는, 지운 지 30일이 지난 뒤
+// 동기화를 다시 켜면 드라이브에서 되살아났다.
 
-test("오래된 null 설정 항목은 sweepTombstones 가 걷어낸다", () => {
-  // 은퇴 규약: 키를 없앨 때 { v: null, _u: now } 를 쓰고, 30일 뒤 sweep 이 걷어낸다.
+const DAY = 864e5;
+
+test("값을 null로 바꿔 둔 지 오래된 설정 키는 sweepRetiredSettings가 지운다", () => {
+  // 설정 키를 없앨 때는 `{ v: null, _u: now }`를 쓰고, 30일 뒤 정리가 지운다.
   const { store } = load();
   store.saveLocal(doc({ settings: {
-    "retired-setting": { v: null,   _u: 1 },          // 은퇴 표식, 30일 경과 → 제거
+    "retired-setting": { v: null,   _u: 1 },          // 없앤 키의 표시, 30일이 지나 지운다
     theme:             { v: "dark", _u: 1 },          // 값이 있으면 나이와 무관하게 유지
     fontSize:          { v: null,   _u: 0 },          // _emptyDoc 기본값은 유지
-    "fresh-null":      { v: null,   _u: Date.now() }, // 아직 30일 안 지난 null 은 유지
+    "fresh-null":      { v: null,   _u: Date.now() }, // 아직 30일 안 지난 `null`은 유지
   } }));
-  store.sweepTombstones();
+  store.sweepRetiredSettings();
   const s = store.loadLocal().settings;
   assert.equal("retired-setting" in s, false);
   assert.equal(s.theme.v, "dark");
   assert.deepEqual(plain(s.fontSize), { v: null, _u: 0 });
   assert.equal(s["fresh-null"].v, null);
+});
+
+test("sweepRetiredSettings는 북마크 삭제 기록을 지우지 않는다 — 40일이 지나도, 365일이 지나도", () => {
+  const t0 = Date.UTC(2026, 9, 1);
+  for (const days of [40, 365, 366]) {
+    const { localStorage } = load({ "bible-bookmarks-v2": JSON.stringify(doc({
+      tombstones: { gone: t0 },
+      settings: { "retired-setting": { v: null, _u: t0 } },
+    })) });
+    const { store } = load({}, { localStorage, now: t0 + days * DAY });
+    store.sweepRetiredSettings();
+    const saved = plain(store.loadLocal());
+    assert.deepEqual(saved.bookmarks.tombstones, { gone: t0 }, `${days}일`);
+    assert.equal("retired-setting" in saved.settings, false, "값을 null로 바꿔 둔 설정 키는 그대로 지운다");
+  }
+});
+
+test("동기화를 끈 채 지운 북마크는 40일 뒤 앱을 열고 다시 켜 병합해도 돌아오지 않는다", () => {
+  const t0 = Date.UTC(2026, 9, 1);
+  const tree = [treeBm("a1"), treeBm("a2")];
+  const { store: before, localStorage } = load({}, { now: t0 });
+  before.saveBookmarks(tree);
+  const drive = plain(before.buildSyncPayload("device-a"));            // 끄기 전 마지막으로 올린 파일
+  const { store: off } = load({}, { localStorage, now: t0 + DAY });
+  off.saveBookmarks([treeBm("a2")]);                                    // 끈 동안 지운다
+  const { store: back } = load({}, { localStorage, now: t0 + 41 * DAY });
+  back.sweepRetiredSettings();                                          // 앱을 연다
+  const merged = plain(back.mergeDocs(back.loadLocal(), drive, "device-a"));   // 다시 켠 뒤 첫 병합
+  assert.deepEqual(Object.keys(merged.bookmarks.items), ["a2"]);
+  assert.equal(typeof merged.bookmarks.tombstones.a1, "number", "삭제 기록이 드라이브로 올라가 다른 기기에서도 지운다");
 });
 
 // ── 이전 수정 시각보다 늦은 시각으로 기록하기 (known-issues §39, 사용자 결정 2026-10-30) ──
@@ -847,4 +884,230 @@ test("아주 깊게 중첩된 필드가 있어도 지문 계산이 멈추지 않
   let deep = {};
   for (let i = 0; i < 20000; i++) deep = { x: deep };
   assert.equal(store.fingerprint(doc({ items: { a: bm({ extra: deep }) } })), "");
+});
+
+// ── 기준 목록 1단계 (사용자 결정 2026-10-31) ──
+// 마지막으로 내려받아 병합한 드라이브 파일에 살아 있던 북마크 id를, 이 기기가 그 파일에서 처음 본 날별로 묶어 둔다
+// (bible-drive-base-ids). 1단계는 저장만 하고 병합 판단에는 쓰지 않으며, 2단계 규칙(30일 규칙)이 지웠을 북마크
+// 수만 센다.
+
+const BASE_KEY = "bible-drive-base-ids";
+const T0 = Date.UTC(2026, 9, 1, 9);
+const DAY0 = Math.floor(T0 / DAY);
+const baseOf = (localStorage) => JSON.parse(localStorage.getItem(BASE_KEY));
+const sortedDays = (days) => Object.fromEntries(Object.entries(days).map(([d, ids]) => [d, [...ids].sort()]));
+const item = (id, _u, extra = {}) => ({ id, type: "bookmark", bookId: "gen", chapter: 1, parentId: null, _order: 0, _u, ...extra });
+
+test("기준 목록은 내려받은 파일에 살아 있는 id만, 파일 id와 함께 오늘 날짜에 묶어 저장한다 — 폴더도 든다", () => {
+  const { store, localStorage } = load({}, { now: T0 });
+  const remote = remoteWith(doc({
+    items: {
+      a: item("a", 5),
+      f: { id: "f", type: "folder", name: "가", parentId: null, _order: 1, _u: 6 },
+      dead: item("dead", 3),        // 더 늦은 삭제 기록에 가려졌다
+      same: item("same", 4),        // 삭제 기록과 시각이 같다. 병합은 지운 것으로 본다
+    },
+    tombstones: { dead: 4, same: 4, gone: 9 },
+  }));
+  assert.equal(store.saveBaseIds("F1", remote), "saved");
+  const base = baseOf(localStorage);
+  assert.equal(base.fileId, "F1");
+  assert.equal(base.at, T0, "마지막으로 저장한 기기 시각");
+  assert.deepEqual(sortedDays(base.days), { [DAY0]: ["a", "f"] });
+});
+
+test("같은 파일의 목록에 있던 id는 처음 본 날을 그대로 두고, 새 id는 오늘로, 파일에서 사라진 id는 뺀다", () => {
+  const { store: first, localStorage } = load({}, { now: T0 });
+  first.saveBaseIds("F1", remoteWith(doc({ items: { a: item("a", 1), b: item("b", 1) } })));
+  const { store: later } = load({}, { localStorage, now: T0 + 3 * DAY });
+  later.saveBaseIds("F1", remoteWith(doc({ items: { a: item("a", 1), c: item("c", 2) } })));
+  const base = baseOf(localStorage);
+  assert.equal(base.at, T0 + 3 * DAY);
+  assert.deepEqual(sortedDays(base.days), { [DAY0]: ["a"], [DAY0 + 3]: ["c"] });
+});
+
+test("파일 id가 다르면 목록을 새로 시작한다 — 다시 만든 파일이나 다른 계정의 파일", () => {
+  const { store: first, localStorage } = load({}, { now: T0 });
+  first.saveBaseIds("F1", remoteWith(doc({ items: { a: item("a", 1) } })));
+  const { store: later } = load({}, { localStorage, now: T0 + 3 * DAY });
+  later.saveBaseIds("F2", remoteWith(doc({ items: { a: item("a", 1) } })));
+  const base = baseOf(localStorage);
+  assert.equal(base.fileId, "F2");
+  assert.deepEqual(sortedDays(base.days), { [DAY0 + 3]: ["a"] });
+});
+
+test("목록에서 같은 id가 두 날에 있으면 이른 날을 처음 본 날로 남긴다", () => {
+  const { store, localStorage } = load({ [BASE_KEY]: JSON.stringify({
+    fileId: "F1", at: T0, days: { [DAY0]: ["a"], [DAY0 - 5]: ["a"] },
+  }) }, { now: T0 });
+  const local = doc({ items: { a: item("a", 1) } });
+  const at = (days) => load({}, { localStorage, now: T0 + days * DAY }).store;
+  assert.deepEqual(plain(at(26).goneFromDrive("F1", local, remoteWith(doc()))), ["a"], "이른 날부터 31일");
+  store.saveBaseIds("F1", remoteWith(doc({ items: { a: item("a", 1) } })));
+  assert.deepEqual(sortedDays(baseOf(localStorage).days), { [DAY0 - 5]: ["a"] });
+});
+
+// 기기 시각이 실제보다 이른 동안(배터리가 다 닳은 뒤 시계가 1970년으로 돌아간 휴대폰) 처음 본 id에 그날을 적으면, 시계를 고친 뒤 실제보다 오래된
+// 것으로 세어 2단계에서 30일 보호가 작동하지 않는다. 새 id의 날은 오늘과 마지막 저장 시각(at)의 날 가운데 늦은 쪽이고,
+// at도 줄어들지 않는다(사용자 결정 2026-10-31).
+test("기록하는 날은 뒤로 가지 않는다 — 기기 시각이 실제보다 이른 동안 처음 본 id는 마지막 저장의 날로 적고, at도 줄어들지 않는다", () => {
+  const { store: first, localStorage } = load({}, { now: T0 });
+  first.saveBaseIds("F1", remoteWith(doc({ items: { a: item("a", 1) } })));
+
+  const { store: dead } = load({}, { localStorage, now: 5 * DAY });           // 시계가 1970년으로 돌아갔다
+  dead.saveBaseIds("F1", remoteWith(doc({ items: { a: item("a", 1), b: item("b", 2) } })));
+  let base = baseOf(localStorage);
+  assert.equal(base.at, T0);
+  assert.deepEqual(sortedDays(base.days), { [DAY0]: ["a", "b"] });
+
+  const { store: fixed } = load({}, { localStorage, now: T0 + 3 * DAY });    // 시계를 고쳤다
+  fixed.saveBaseIds("F1", remoteWith(doc({ items: { a: item("a", 1), b: item("b", 2), c: item("c", 3) } })));
+  base = baseOf(localStorage);
+  assert.equal(base.at, T0 + 3 * DAY);
+  assert.deepEqual(sortedDays(base.days), { [DAY0]: ["a", "b"], [DAY0 + 3]: ["c"] });
+  const local = doc({ items: { a: item("a", 1), b: item("b", 2), c: item("c", 3) } });
+  const withoutB = remoteWith(doc({ items: { a: item("a", 1), c: item("c", 3) } }));
+  assert.deepEqual(plain(fixed.goneFromDrive("F1", local, withoutB)), [], "b는 처음 본 지 3일이다");
+
+  // 시계를 다시 뒤로 돌려도 at은 그대로이고, 다른 파일의 목록도 그 시각부터 적는다.
+  const { store: slow } = load({}, { localStorage, now: T0 + DAY });
+  slow.saveBaseIds("F2", remoteWith(doc({ items: { d: item("d", 4) } })));
+  base = baseOf(localStorage);
+  assert.equal(base.at, T0 + 3 * DAY);
+  assert.deepEqual(sortedDays(base.days), { [DAY0 + 3]: ["d"] });
+});
+
+test("기준 목록 저장이 거절되면 옛 목록을 남기지 않고 지운다", () => {
+  const { store, localStorage } = load({}, { now: T0 });
+  store.saveBaseIds("F1", remoteWith(doc({ items: { a: item("a", 1) } })));
+  const setItem = localStorage.setItem;
+  localStorage.setItem = (k, v) => {
+    if (k === BASE_KEY) throw Object.assign(new Error("full"), { name: "QuotaExceededError" });
+    setItem(k, v);
+  };
+  assert.equal(store.saveBaseIds("F1", remoteWith(doc({ items: { a: item("a", 1), b: item("b", 2) } }))), "refused");
+  assert.equal(localStorage.getItem(BASE_KEY), null);
+});
+
+// ── 저장 공간의 예산 (가져오기와 기준 목록이 함께 쓰는 규칙, 사용자 결정 2026-11-01) ──
+// Safari 한도 5 MiB에서 64 KiB를 남긴다. 글자 하나를 2바이트로 센다. 가져오기의 크기 검사(bookmark-modals.js
+// _fitsStorage)도 이 함수를 쓴다.
+
+const BUDGET_CHARS = (5 * 1024 * 1024 - 64 * 1024) / 2;   // 2,588,672자
+
+test("fitsStorage: 키와 값의 글자를 2바이트로 세어 Safari의 5 MiB에서 64 KiB를 남길 때만 들어간다", () => {
+  const { store, ctx } = load();
+  assert.equal(vm.runInContext("_STORAGE_QUOTA_BYTES", ctx), 5 * 1024 * 1024);
+  assert.equal(vm.runInContext("_STORAGE_HEADROOM_BYTES", ctx), 64 * 1024);
+  assert.equal(store.fitsStorage(BUDGET_CHARS), true);
+  assert.equal(store.fitsStorage(BUDGET_CHARS + 1), false);
+});
+
+// 동기화는 병합 결과를 저장할 때마다 목록을 다시 쓴다. 저장 공간이 거의 찬 기기에서는 그 목록이 가져오기가 남긴 64 KiB
+// 여유를 써서, 거절을 알리지 않는 작은 저장(검색 기록, 오디오 위치)이 거절될 수 있었다(PR #460 3회차 리뷰).
+test("기준 목록은 저장하면 localStorage 전체가 64 KiB 여유를 넘을 때 저장하지 않고, 있던 목록도 지운다 — 경계에서는 저장한다", () => {
+  const { store, localStorage } = load({}, { now: T0 });
+  const remote = remoteWith(doc({ items: { a: item("a", 1), b: item("b", 2) } }));
+  assert.equal(store.saveBaseIds("F1", remote), "saved");
+  const text = localStorage.getItem(BASE_KEY);   // 같은 파일, 같은 시각이면 다음 저장도 이 글자다
+  const others = () => Object.entries(localStorage._raw)
+    .filter(([k]) => k !== BASE_KEY).reduce((n, [k, v]) => n + k.length + v.length, 0);
+  const fill = (chars) => { localStorage.setItem("bible-filler", ""); localStorage.setItem("bible-filler", "x".repeat(chars - others())); };
+  let written = 0;
+  const setItem = localStorage.setItem;
+  localStorage.setItem = (k, v) => { if (k === BASE_KEY) written++; setItem(k, v); };
+
+  // 목록을 넣어 꼭 예산만큼이면 저장한다. 지금 있는 목록은 바뀔 목록이라 세지 않는다.
+  fill(BUDGET_CHARS - BASE_KEY.length - text.length);
+  assert.equal(store.saveBaseIds("F1", remote), "saved");
+  assert.equal(localStorage.getItem(BASE_KEY), text);
+  assert.equal(written, 1);
+
+  // 한 글자 넘으면 쓰지 않고, 있던 목록도 지운다.
+  fill(BUDGET_CHARS - BASE_KEY.length - text.length + 1);
+  assert.equal(store.saveBaseIds("F1", remote), "headroom");
+  assert.equal(localStorage.getItem(BASE_KEY), null, "이 PR 전처럼 목록이 없다");
+  assert.equal(written, 1, "목록을 써 보지 않는다");
+
+  // 목록이 없을 때도 같다. 자리가 나면 다음 저장이 다시 만든다.
+  assert.equal(store.saveBaseIds("F1", remote), "headroom");
+  assert.equal(localStorage.getItem(BASE_KEY), null);
+  fill(BUDGET_CHARS - BASE_KEY.length - text.length);
+  assert.equal(store.saveBaseIds("F1", remote), "saved");
+  assert.equal(localStorage.getItem(BASE_KEY), text);
+});
+
+test("동기화 저장소 저장이 저장 공간 부족으로 거절되면 기준 목록을 지우고 한 번 더 저장한다", () => {
+  const ids = Array.from({ length: 40 }, (_, i) => `bookmark-${i}`);
+  const remote = remoteWith(doc({ items: Object.fromEntries(ids.map((id) => [id, item(id, 1)])) }));
+
+  // 목록을 지우면 들어간다.
+  {
+    const { store, localStorage } = load({}, { now: T0 });
+    store.saveBaseIds("F1", remote);
+    const big = doc({ items: { x: item("x", 1, { note: "가".repeat(200) }) } });
+    const docChars = "bible-bookmarks-v2".length + JSON.stringify(big).length;
+    assert.ok(BASE_KEY.length + localStorage.getItem(BASE_KEY).length > 100);
+    fillStorage(localStorage, docChars - 100);       // 목록이 있으면 모자라고, 지우면 남는다
+    assert.equal(store.saveLocal(big), "saved");
+    assert.equal(localStorage.getItem(BASE_KEY), null, "목록을 먼저 내준다");
+    assert.equal(storedDoc(localStorage).bookmarks.items.x.note.length, 200);
+  }
+  // 목록을 지워도 모자라면 "full"이고, 목록은 지운 채로 남는다.
+  {
+    const { store, localStorage } = load({}, { now: T0 });
+    store.saveBaseIds("F1", remote);
+    fillStorage(localStorage, 0);
+    const huge = doc({ items: { x: item("x", 1, { note: "가".repeat(5000) }) } });
+    assert.equal(store.saveLocal(huge), "full");
+    assert.equal(localStorage.getItem(BASE_KEY), null);
+  }
+  // 저장 공간이 아닌 까닭의 거절은 목록을 지우지 않는다.
+  {
+    const { store, localStorage } = load({}, { now: T0 });
+    store.saveBaseIds("F1", remote);
+    const setItem = localStorage.setItem;
+    localStorage.setItem = (k, v) => {
+      if (k === "bible-bookmarks-v2") throw Object.assign(new Error("blocked"), { name: "SecurityError" });
+      setItem(k, v);
+    };
+    assert.equal(store.saveLocal(doc()), "failed");
+    assert.notEqual(localStorage.getItem(BASE_KEY), null);
+  }
+});
+
+test("30일 규칙의 조건을 모두 만족하는 북마크만 센다 — 병합 결과는 그대로다", () => {
+  // 목록: 첫날 a, b, c, d를 보고, 20일째 y를 처음 본다.
+  const { store: day0, localStorage } = load({}, { now: T0 });
+  day0.saveBaseIds("F1", remoteWith(doc({ items: { a: item("a", 1), b: item("b", 1), c: item("c", 1), d: item("d", 1) } })));
+  const { store: day20 } = load({}, { localStorage, now: T0 + 20 * DAY });
+  day20.saveBaseIds("F1", remoteWith(doc({ items: {
+    a: item("a", 1), b: item("b", 1), c: item("c", 1), d: item("d", 1), y: item("y", 2),
+  } })));
+
+  const local = doc({
+    items: { a: item("a", 1), b: item("b", 1), c: item("c", 1), d: item("d", 1), y: item("y", 2), z: item("z", 3) },
+    tombstones: { d: 5 },                       // d: 이 기기에서 이미 지웠다
+  });
+  const remote = remoteWith(doc({
+    items: { b: item("b", 1) },                 // b: 드라이브에 있다
+    tombstones: { c: 4 },                       // c: 드라이브에 삭제 기록이 있다
+  }));                                          // a: 항목도 삭제 기록도 없다, y: 처음 본 지 11일, z: 목록에 없다
+  const at = (days) => load({}, { localStorage, now: T0 + days * DAY }).store;
+  assert.deepEqual(plain(at(31).goneFromDrive("F1", local, remote)), ["a"]);
+  assert.deepEqual(plain(at(30).goneFromDrive("F1", local, remote)), [], "처음 본 날부터 30일이 넘어야 센다");
+  assert.deepEqual(plain(at(31).goneFromDrive("F2", local, remote)), [], "다른 파일의 목록은 읽지 않는다");
+  const merged = plain(at(31).mergeDocs(local, remote, "device-a"));
+  assert.deepEqual(Object.keys(merged.bookmarks.items).sort(), ["a", "b", "y", "z"], "세기만 하고 지우지 않는다");
+});
+
+test("기준 목록이 없거나 깨졌으면 세지 않고, 다음 저장이 목록을 새로 만든다", () => {
+  const local = doc({ items: { a: item("a", 1) } });
+  const remote = remoteWith(doc());
+  for (const raw of [undefined, "not json", JSON.stringify({ fileId: "F1", days: [] }), JSON.stringify({ fileId: "F1", at: 1, days: { x: ["a"], 1: "a" } })]) {
+    const { store, localStorage } = load(raw === undefined ? {} : { [BASE_KEY]: raw }, { now: T0 + 60 * DAY });
+    assert.deepEqual(plain(store.goneFromDrive("F1", local, remote)), [], String(raw));
+    store.saveBaseIds("F1", remoteWith(doc({ items: { a: item("a", 1) } })));
+    assert.deepEqual(sortedDays(baseOf(localStorage).days), { [DAY0 + 60]: ["a"] }, String(raw));
+  }
 });

@@ -124,6 +124,8 @@ function _format(e, baseTs) {
   if (e.etag !== undefined) parts.push(`etag:${e.etag ?? "null"}`);
   if (e.elapsedMs != null) parts.push(`elapsed:${e.elapsedMs}ms`);
   if (e.throttleMs != null) parts.push(`throttle:${e.throttleMs}ms`);
+  // MERGE: bookmarks the base list's planned rule (stage 2) would have dropped — counted only (store-v2.js goneFromDrive).
+  if (e.baseWouldDrop) parts.push(`baseWouldDrop:${e.baseWouldDrop}`);
   if (e.changeKind) parts.push(`kind:${e.changeKind}`);
   if (e.changeId)   parts.push(`id:${e.changeId}`);
   if (e._count)     parts.push(`(×${e._count} in ${(e._lastTs ?? e.ts) - e.ts}ms)`);

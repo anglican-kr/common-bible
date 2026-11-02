@@ -41,3 +41,13 @@ test("2. 확인하지 못한 「파일도 삭제」는 오류 칸에 남는다",
   const errors = L.dump().split("--- Errors ---")[1];
   assert.match(errors, /DELETE_UNCONFIRMED reason:lookup_http_503/);
 });
+
+test("3. 병합 기록의 baseWouldDrop(기준 목록 2단계 규칙이 지웠을 북마크 수)은 0이 아닐 때 찍는다", () => {
+  const L = loadDebugLog();
+  L.log({ kind: "ACTION", event: "MERGE", hadRemoteChanges: false, baseWouldDrop: 0 });
+  L.log({ kind: "ACTION", event: "MERGE", hadRemoteChanges: true, baseWouldDrop: 3 });
+  const lines = L.dump().split("\n").filter((l) => l.includes("MERGE"));
+  assert.equal(lines.length, 2);
+  assert.doesNotMatch(lines[0], /baseWouldDrop/);
+  assert.match(lines[1], /MERGE baseWouldDrop:3/);
+});

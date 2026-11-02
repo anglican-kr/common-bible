@@ -376,7 +376,9 @@ window.appStorage = (/** @returns {AppStorage} */ () => {
   // The sync store goes first: it is the copy loadBookmarks reads, so when it refuses the list, the legacy key is left
   // as it was and the two copies still agree. The legacy key refusing alone does not fail the save — the next save or
   // the sync's merge result (applyToLegacyKeys) writes it again. The bookmark screens tell the user of a refused save
-  // (bookmark-core.js commitBookmarks, ADR-015 D7, known-issues §15.4).
+  // (bookmark-core.js commitBookmarks, ADR-015 D7, known-issues §15.4). A full storage gives up the base list for the
+  // legacy key too, as it does for the sync store (store-v2.js saveLocal), so both copies hold the list whenever giving
+  // the base list up makes room.
   /** @param {BookmarkTreeNode[]} store @returns {SaveOutcome} */
   function saveBookmarks(store) {
     const V2 = window.syncStoreV2;
@@ -390,7 +392,17 @@ window.appStorage = (/** @returns {AppStorage} */ () => {
       outcome = !V2 && /** @type {{ name?: unknown } | null} */ (err)?.name === "QuotaExceededError" ? "full" : "failed";
     }
     if (outcome !== "saved") return outcome;
-    try { if (V2) localStorage.setItem(BOOKMARK_KEY, JSON.stringify(store)); } catch (_) {}
+    if (V2) {
+      try {
+        const text = JSON.stringify(store);
+        try { localStorage.setItem(BOOKMARK_KEY, text); }
+        catch (err) {
+          if (/** @type {{ name?: unknown } | null} */ (err)?.name === "QuotaExceededError" && V2.clearBaseIds()) {
+            localStorage.setItem(BOOKMARK_KEY, text);
+          }
+        }
+      } catch (_) {}
+    }
     try {
       if (window.driveSync) window.driveSync.scheduleUpload();
       _maybeRequestPersist();
@@ -433,15 +445,19 @@ window.appStorage = (/** @returns {AppStorage} */ () => {
   // measured from the very document it writes, and the legacy key at the larger of the list and what it holds now (it
   // still holds the old list when the sync store is written first, ADR-015 D7), every other key as it is. The bookmark
   // import checks this first, against Safari's quota on every browser — sync carries the list to every device (ADR-040).
-  /** @param {BookmarkTreeNode[]} store @returns {number} */
-  function projectedStorageChars(store) {
+  // A key the sync store gives up when storage is full (the base list, store-v2.js saveLocal) is not counted: counted,
+  // it refused an import the save would take (기준 목록을 빼고 센다, 사용자 결정 2026-10-31). `withGivenUp` counts it,
+  // for an import that fits only without it to give the list up first (bookmark-modals.js _makeRoomForImport).
+  /** @param {BookmarkTreeNode[]} store @param {boolean} [withGivenUp] @returns {number} */
+  function projectedStorageChars(store, withGivenUp = false) {
     const entry = window.syncStoreV2?.projectedBookmarksEntry(store);
     const list = JSON.stringify(store).length;
     const legacy = entry ? Math.max(list, (localStorage.getItem(BOOKMARK_KEY) ?? "").length) : list;
     let chars = BOOKMARK_KEY.length + legacy + (entry ? entry.chars : 0);
+    const skip = new Set([BOOKMARK_KEY, entry?.key, ...(withGivenUp ? [] : entry?.givesUp ?? [])]);
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
-      if (key === null || key === BOOKMARK_KEY || key === entry?.key) continue;
+      if (key === null || skip.has(key)) continue;
       chars += key.length + (localStorage.getItem(key) ?? "").length;
     }
     return chars;

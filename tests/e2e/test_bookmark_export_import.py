@@ -492,7 +492,8 @@ def test_import_overwrite_mends_a_list_the_store_cannot_read(browser, tmp_path):
 
 
 # 크기 검사는 들인 뒤 저장될 크기(옛 키 + 동기화 저장소 + 다른 키)를 한 글자 2바이트로 세어, Safari 한도 5 MiB에서
-# 64 KiB를 남기는지 본다 — 약 2,588,672자(bookmark-modals.js `_fitsStorage`). 아래 크기는 그 값에 맞춘 것이다.
+# 64 KiB를 남기는지 본다 — 약 2,588,672자(규칙은 store-v2.js `fitsStorage`, 가져오기는 bookmark-modals.js `_fitsStorage`로
+# 그 규칙을 쓴다). 아래 크기는 그 값에 맞춘 것이다.
 
 
 def _bookmarks(n: int, **over) -> list:
@@ -581,7 +582,7 @@ def test_import_merge_too_big_says_so_in_the_dialog(browser, tmp_path):
     incoming = {"_version": 1, "exportedAt": 0, "bookmarks": [{**_BM_B, "note": "x" * 700_000}]}
     import_file = tmp_path / "big.json"
     import_file.write_text(json.dumps(incoming), encoding="utf-8")
-    refusal = "합친 목록이 너무 커서 병합할 수 없습니다. 「덮어쓰기」나 「취소」를 눌러 주세요."
+    refusal = _MERGE_REFUSAL   # 덮어쓰기는 들어가므로 「덮어쓰기」를 안내한다
 
     ctx = browser.new_context(service_workers="block", viewport={"width": 844, "height": 390})   # 새로 고침 · 가로 화면
     page = ctx.new_page()
@@ -615,6 +616,348 @@ def test_import_merge_too_big_says_so_in_the_dialog(browser, tmp_path):
     assert [n["id"] for n in store] == ["bm-b"]
     assert len(store[0]["note"]) == 700_000
 
+    ctx.close()
+
+
+# ── 기준 목록과 저장 공간의 예산 (사용자 결정 2026-11-01) ─────────────────────
+#
+# 기준 목록(`bible-drive-base-ids`)은 동기화가 병합할 때마다 다시 쓴다. 가져오기의 크기 검사는 그 목록을 세지 않고, 목록을
+# 빼야만 들어가는 가져오기는 저장하기 전에 목록을 지운다(`_makeRoomForImport`). 크롬은 localStorage 한도를 글자 수
+# (5,242,880자)로 세고 예산은 한 글자를 2바이트로 세므로, 큰 임시 키로 예산 근처를 만든다. 동기화는 꺼져 있다.
+
+_BASE_KEY = "bible-drive-base-ids"
+_BUDGET_CHARS = (5 * 1024 * 1024 - 64 * 1024) // 2   # 2,588,672자
+_FILLER_KEY = "e2e-filler"
+# 누른 쪽이 넘을 때 대화상자의 안내(bookmark-modals.js `_importRefusal`). 둘 다 넘음, 병합만 넘음, 덮어쓰기만 넘음의 차례다.
+# 표현은 단추 이름과 함께 나중에 정한다(사용자 결정 2026-11-02, known-issues §44). 그때 앱의 상수와 함께 고친다.
+_NO_ROOM_REFUSAL = "저장 공간이 부족해 북마크를 가져올 수 없습니다. 「취소」를 눌러 주세요."
+_MERGE_REFUSAL = "합친 목록이 너무 커서 병합할 수 없습니다. 「덮어쓰기」나 「취소」를 눌러 주세요."
+_OVERWRITE_REFUSAL = "저장 공간이 부족해 「덮어쓰기」로는 가져올 수 없습니다. 「병합」이나 「취소」를 눌러 주세요."
+# 동기화 저장소(store-v2.js)가 실리지 않았을 때 가져오기를 멈추며 하는 안내(`IMPORT_NO_SYNC_STORE`). 이것도 임시 표현이다.
+_NO_SYNC_STORE = "북마크를 가져올 수 없습니다. 앱을 다시 열어 주세요."
+# 동기화 저장소가 읽지 못하는 목록(깨진 항목, known-issues §15.2와 같은 경우).
+_BROKEN_STORE_JS = """() => localStorage.setItem('bible-bookmarks-v2', JSON.stringify({
+    bookmarks: { items: { broken: null }, tombstones: {} }, settings: {}, lastRead: { v: null, _u: 0 } }))"""
+
+
+def _save_both_copies(page, store: list) -> None:
+    """앱의 저장 경로로 두 사본(동기화 저장소, 옛 키)에 저장한다."""
+    assert page.evaluate("(s) => window.appStorage.saveBookmarks(s)", store) == "saved"
+
+
+def _save_base_list(page) -> str:
+    """지금 목록을 내려받은 드라이브 파일로 보고 기준 목록을 저장한다 — 동기화가 병합 결과를 저장한 뒤 하는 일."""
+    assert page.evaluate(
+        "() => window.syncStoreV2.saveBaseIds('F1', window.syncStoreV2.buildSyncPayload('device-e2e'))"
+    ) == "saved"
+    return page.evaluate("(k) => localStorage.getItem(k)", _BASE_KEY)
+
+
+def _fill_storage(page, store: list, over: int) -> None:
+    """임시 키의 길이를 맞춰, `store`를 저장할 때의 크기(기준 목록을 빼고 센 값)를 예산보다 `over`자 많게 한다."""
+    page.evaluate(
+        """([store, budget, over, key]) => {
+            localStorage.setItem(key, "");
+            const chars = window.appStorage.projectedStorageChars(store);
+            localStorage.setItem(key, "x".repeat(budget + over - chars));
+        }""",
+        [store, _BUDGET_CHARS, over, _FILLER_KEY],
+    )
+
+
+def _stored(page) -> dict:
+    """두 사본과 기준 목록, 그리고 localStorage의 키와 값을 합한 글자 수."""
+    return page.evaluate(
+        """(baseKey) => {
+            let chars = 0;
+            for (let i = 0; i < localStorage.length; i++) {
+                const k = localStorage.key(i);
+                chars += k.length + localStorage.getItem(k).length;
+            }
+            return {
+                v2: localStorage.getItem('bible-bookmarks-v2'),
+                legacy: localStorage.getItem('bible-bookmarks'),
+                base: localStorage.getItem(baseKey),
+                chars,
+            };
+        }""",
+        _BASE_KEY,
+    )
+
+
+def _write_import(tmp_path, name: str, items: list):
+    path = tmp_path / name
+    path.write_text(json.dumps({"_version": 1, "exportedAt": 0, "bookmarks": items}, ensure_ascii=False), encoding="utf-8")
+    return path
+
+
+def _saved(page) -> dict:
+    """두 사본과 기준 목록. 앱의 다른 작은 저장은 보지 않는다."""
+    return {k: v for k, v in _stored(page).items() if k != "chars"}
+
+
+def _press_and_wait_refusal(page, button: str, text: str) -> None:
+    """단추를 누르고, 대화상자의 거절 문단과 라이브 영역에 `text`가 나오기를 기다린다. 앞서 같은 문구가 있었어도 이번
+    누름이 쓴 것인지 보려고, 누르기 전에 문단을 비운다."""
+    page.evaluate(
+        "() => { const p = document.querySelector('#bm-import-body .bm-import-refusal'); if (p) p.textContent = ''; }"
+    )
+    page.locator(button).click()
+    page.wait_for_function(
+        "(t) => document.querySelector('#bm-import-body .bm-import-refusal')?.textContent === t", arg=text
+    )
+    page.wait_for_function("(t) => document.getElementById('a11y-announce')?.textContent === t", arg=text)
+    assert page.locator("#bm-import-body .bm-import-refusal").count() == 1, "거절 문단은 하나다"
+    assert page.locator("#bm-import-modal").get_attribute("hidden") is None, "대화상자는 열려 있다"
+
+
+def test_import_overwrite_that_fits_only_without_the_base_list_gives_the_list_up(browser, tmp_path):
+    """기준 목록을 빼야만 예산에 드는 덮어쓰기는 저장하기 전에 목록을 지우고 저장된다. 그래서 64 KiB가 남는다.
+    동기화가 꺼져 있어도 같다."""
+    items = [_BM_A, _BM_B]
+    import_file = _write_import(tmp_path, "two.json", items)
+
+    ctx = browser.new_context(service_workers="block")
+    page = ctx.new_page()
+    _open_bookmark_drawer(page)
+    _save_both_copies(page, _bookmarks(300))
+    base = _save_base_list(page)
+    list_chars = len(_BASE_KEY) + len(base)
+    _fill_storage(page, items, -(list_chars // 2))   # 목록을 빼면 들고, 세면 넘는다
+
+    page.locator("#bm-import-input").set_input_files(str(import_file))
+    page.wait_for_selector("#bm-import-modal:not([hidden])")
+    page.locator("#bm-import-overwrite").click()
+    page.wait_for_selector("#bm-import-modal", state="hidden")
+
+    stored = _stored(page)
+    assert [n["id"] for n in _get_bookmarks(page)] == ["bm-a", "bm-b"]
+    assert [n["id"] for n in json.loads(stored["legacy"])] == ["bm-a", "bm-b"]
+    assert stored["base"] is None
+    assert stored["chars"] <= _BUDGET_CHARS, "64 KiB가 남는다"
+
+    ctx.close()
+
+
+def test_import_merge_that_fits_only_without_the_base_list_gives_the_list_up(browser, tmp_path):
+    """병합도 같다. 합친 목록이 기준 목록을 빼야만 예산에 들면 저장하기 전에 목록을 지운다."""
+    import_file = _write_import(tmp_path, "one.json", [_BM_C])
+
+    ctx = browser.new_context(service_workers="block")
+    page = ctx.new_page()
+    _open_bookmark_drawer(page)
+    _save_both_copies(page, _bookmarks(300))
+    base = _save_base_list(page)
+    list_chars = len(_BASE_KEY) + len(base)
+    merged = page.evaluate("(items) => [...window.appStorage.loadBookmarks(), ...items]", [_BM_C])
+    _fill_storage(page, merged, -(list_chars // 2))
+
+    page.locator("#bm-import-input").set_input_files(str(import_file))
+    page.wait_for_selector("#bm-import-modal:not([hidden])")
+    page.locator("#bm-import-merge").click()
+    page.wait_for_selector("#bm-import-modal", state="hidden")
+
+    stored = _stored(page)
+    ids = [n["id"] for n in _get_bookmarks(page)]
+    assert len(ids) == 301 and ids[-1] == "bm-c"
+    assert stored["base"] is None
+    assert stored["chars"] <= _BUDGET_CHARS, "64 KiB가 남는다"
+
+    ctx.close()
+
+
+def test_import_small_keeps_the_base_list(browser, tmp_path):
+    """기준 목록까지 세어도 예산에 드는 가져오기는 목록을 남긴다."""
+    import_file = _write_import(tmp_path, "two.json", [_BM_A, _BM_B])
+
+    ctx = browser.new_context(service_workers="block")
+    page = ctx.new_page()
+    _open_bookmark_drawer(page)
+    _save_both_copies(page, _bookmarks(300))
+    base = _save_base_list(page)
+
+    page.locator("#bm-import-input").set_input_files(str(import_file))
+    page.wait_for_selector("#bm-import-modal:not([hidden])")
+    page.locator("#bm-import-overwrite").click()
+    page.wait_for_selector("#bm-import-modal", state="hidden")
+
+    assert [n["id"] for n in _get_bookmarks(page)] == ["bm-a", "bm-b"]
+    assert _stored(page)["base"] == base
+
+    ctx.close()
+
+
+def test_import_overwrite_measures_again_on_the_press(browser, tmp_path):
+    """파일을 읽은 뒤 저장된 값이 커지면(대화상자가 열린 동안 동기화가 더 큰 목록을 저장한 경우) 누를 때 다시 잰다
+    (사용자 결정 2026-11-01). 둘 다 넘으면 어느 단추를 눌러도 「취소」만 안내하고 아무것도 저장하지 않는다(사용자 결정
+    2026-11-02). 대화상자는 까닭을 적은 채 열려 있고, 거절 문단은 하나이며 마지막 거절의 문구를 보인다."""
+    items = [_BM_A, _BM_B]
+    import_file = _write_import(tmp_path, "two.json", items)
+
+    ctx = browser.new_context(service_workers="block")
+    page = ctx.new_page()
+    _open_bookmark_drawer(page)
+    _save_both_copies(page, [{**_BM_C, "note": "가" * 2000}])   # 병합이 덮어쓰기보다 이 메모만큼 크다
+    _save_base_list(page)
+
+    page.locator("#bm-import-input").set_input_files(str(import_file))
+    page.wait_for_selector("#bm-import-modal:not([hidden])")
+    before = _saved(page)
+
+    # 먼저 병합만 넘는다. 덮어쓰기는 들어가므로 「덮어쓰기」를 안내한다.
+    merged = page.evaluate("(items) => [...window.appStorage.loadBookmarks(), ...items]", items)
+    _fill_storage(page, merged, 1000)
+    _press_and_wait_refusal(page, "#bm-import-merge", _MERGE_REFUSAL)
+    assert _saved(page) == before
+
+    # 이제 파일의 목록만으로도 넘는다. 어느 단추든 「취소」만 안내하고, 문단 하나에 마지막 문구를 보인다.
+    _fill_storage(page, items, 100)
+    for button in ("#bm-import-overwrite", "#bm-import-merge"):
+        _press_and_wait_refusal(page, button, _NO_ROOM_REFUSAL)
+        assert _saved(page) == before, "두 사본도 기준 목록도 그대로다"
+
+    page.locator("#bm-import-cancel").click()
+    page.wait_for_selector("#bm-import-modal", state="hidden")
+    assert [n["id"] for n in _get_bookmarks(page)] == ["bm-c"]
+
+    ctx.close()
+
+
+@pytest.mark.parametrize("grows", ["before_read", "while_open"])
+def test_import_same_ids_with_longer_notes_merge_when_overwrite_does_not_fit(browser, tmp_path, grows):
+    """파일에 이 기기와 같은 id가 있고 메모가 더 길면, 덮어쓰기는 예산을 넘어도 병합은 들어간다. 병합은 같은 id에서 이
+    기기의 것을 남기기 때문이다(PR #460 4회차 리뷰, 사용자 결정 2026-11-02).
+
+    - `before_read`: 파일을 읽을 때 이미 그렇다. 덮어쓰기만 재던 검사는 여기서 멈췄다. 이제 대화상자를 연다.
+    - `while_open`: 대화상자가 열린 동안 저장된 값이 커져 그렇게 된다.
+
+    어느 쪽이든 「덮어쓰기」를 누르면 저장하지 않고 「병합」을 안내하며, 「병합」은 저장된다."""
+    device = _bookmarks(20)
+    items = _bookmarks(20, note="메" * 2000) + [_BM_C]
+    import_file = _write_import(tmp_path, "notes.json", items)
+
+    ctx = browser.new_context(service_workers="block")
+    page = ctx.new_page()
+    _open_bookmark_drawer(page)
+    _save_both_copies(page, device)
+    # 덮어쓰기는 예산을 1,000자 넘는다. 병합은 메모 20개(4만 자)의 두 사본만큼 작아 들어간다.
+    if grows == "before_read":
+        _fill_storage(page, items, 1000)
+
+    page.locator("#bm-import-input").set_input_files(str(import_file))
+    page.wait_for_selector("#bm-import-modal:not([hidden])")
+    if grows == "while_open":
+        _fill_storage(page, items, 1000)
+    before = _saved(page)
+
+    _press_and_wait_refusal(page, "#bm-import-overwrite", _OVERWRITE_REFUSAL)
+    assert _saved(page) == before, "덮어쓰지 않았다"
+
+    page.locator("#bm-import-merge").click()
+    page.wait_for_selector("#bm-import-modal", state="hidden")
+    store = _get_bookmarks(page)
+    assert [n["id"] for n in store] == [n["id"] for n in device] + ["bm-c"]
+    assert not any(n.get("note") for n in store), "같은 id는 이 기기의 것을 남긴다"
+    assert _stored(page)["chars"] <= _BUDGET_CHARS, "64 KiB가 남는다"
+
+    ctx.close()
+
+
+def test_import_a_list_the_store_cannot_read_stops_when_overwrite_does_not_fit(browser, tmp_path):
+    """저장된 목록을 읽지 못하면 병합은 들어가지 않는 것으로 본다. 그래서 덮어쓰기도 넘는 파일은 읽을 때 안내하고 멈춘다.
+    목록을 읽다 난 오류를 잡지 않으면 아무 안내 없이 멈췄다(PR #460 5회차 리뷰)."""
+    items = _bookmarks(20, note="메" * 2000)
+    import_file = _write_import(tmp_path, "big.json", items)
+    ctx = browser.new_context(service_workers="block")
+    page = ctx.new_page()
+    errors = []
+    page.on("pageerror", lambda e: errors.append(str(e)))
+    _open_bookmark_drawer(page)
+    page.evaluate(_BROKEN_STORE_JS)
+    _fill_storage(page, items, 1000)
+    page.locator("#bm-import-input").set_input_files(str(import_file))
+    _wait_visible_notice(page, "북마크를 가져오지 않았습니다. 목록이 너무 커서 저장할 수 없습니다.")
+    assert page.locator("#bm-import-modal").get_attribute("hidden") is not None
+    assert not errors, errors
+    ctx.close()
+
+
+def test_import_a_list_the_store_cannot_read_names_overwrite_on_merge(browser, tmp_path):
+    """저장된 목록을 읽지 못하면 「병합」은 거절하며 「덮어쓰기」를 안내하고, 덮어쓰기가 그 목록을 고친다
+    (PR #460 5회차 리뷰)."""
+    import_file = _write_import(tmp_path, "two.json", [_BM_A, _BM_B])
+    ctx = browser.new_context(service_workers="block")
+    page = ctx.new_page()
+    errors = []
+    page.on("pageerror", lambda e: errors.append(str(e)))
+    _open_bookmark_drawer(page)
+    page.evaluate(_BROKEN_STORE_JS)
+    page.locator("#bm-import-input").set_input_files(str(import_file))
+    page.wait_for_selector("#bm-import-modal:not([hidden])")
+    _press_and_wait_refusal(page, "#bm-import-merge", _MERGE_REFUSAL)
+    page.locator("#bm-import-overwrite").click()
+    page.wait_for_selector("#bm-import-modal", state="hidden")
+    assert [n["id"] for n in _get_bookmarks(page)] == ["bm-a", "bm-b"]
+    assert not errors, errors
+    ctx.close()
+
+
+def test_import_merge_keeps_what_a_sync_added_while_the_dialog_was_open(browser, tmp_path):
+    """병합은 누를 때의 목록으로 합친다. 대화상자를 열 때 읽은 목록으로 합치면 그사이 동기화가 더한 북마크가 빠지고,
+    저장이 그 북마크를 지워 다른 기기에서도 지워진다(PR #460 5회차 리뷰)."""
+    import_file = _write_import(tmp_path, "one.json", [_BM_C])
+    ctx = browser.new_context(service_workers="block")
+    page = ctx.new_page()
+    _open_bookmark_drawer(page)
+    _save_both_copies(page, [_BM_A])
+    page.locator("#bm-import-input").set_input_files(str(import_file))
+    page.wait_for_selector("#bm-import-modal:not([hidden])")
+    _save_both_copies(page, [_BM_A, _BM_B])   # 대화상자가 열린 동안 동기화가 bm-b를 더한다
+    page.locator("#bm-import-merge").click()
+    page.wait_for_selector("#bm-import-modal", state="hidden")
+    assert [n["id"] for n in _get_bookmarks(page)] == ["bm-a", "bm-b", "bm-c"]
+    ctx.close()
+
+
+def test_import_merge_pressed_again_after_the_list_grows_between_presses(browser, tmp_path):
+    """한 번 거절된 뒤 목록이 바뀌고 「병합」을 다시 누르면, 다시 누를 때의 목록으로 합친다. 처음 누를 때 만든 합친 목록을
+    다시 쓰면 그사이 동기화가 더한 북마크가 빠진다(PR #460 5회차 리뷰)."""
+    items = [_BM_C]
+    import_file = _write_import(tmp_path, "one.json", items)
+    ctx = browser.new_context(service_workers="block")
+    page = ctx.new_page()
+    _open_bookmark_drawer(page)
+    _save_both_copies(page, [{**_BM_A, "note": "가" * 2000}])
+    page.locator("#bm-import-input").set_input_files(str(import_file))
+    page.wait_for_selector("#bm-import-modal:not([hidden])")
+    merged = page.evaluate("(items) => [...window.appStorage.loadBookmarks(), ...items]", items)
+    _fill_storage(page, merged, 1000)   # 병합만 넘는다
+    _press_and_wait_refusal(page, "#bm-import-merge", _MERGE_REFUSAL)
+    page.evaluate("(k) => localStorage.removeItem(k)", _FILLER_KEY)
+    _save_both_copies(page, [{**_BM_A, "note": "가" * 2000}, _BM_B])   # 그사이 동기화가 bm-b를 더한다
+    page.locator("#bm-import-merge").click()
+    page.wait_for_selector("#bm-import-modal", state="hidden")
+    assert [n["id"] for n in _get_bookmarks(page)] == ["bm-a", "bm-b", "bm-c"]
+    ctx.close()
+
+
+def test_import_without_the_sync_store_stops_with_a_visible_notice(browser, tmp_path):
+    """동기화 저장소(store-v2.js)만 실리지 않은 화면에서는 가져오기를 멈추고 화면에 안내한다. 그대로 저장하면 옛 키에만
+    들어가, 다음에 정상으로 연 앱이 동기화 저장소의 이전 목록을 보였다(PR #460 5회차 리뷰, 사용자 결정 2026-11-02).
+    스낵바는 실패하는 동기화 상태 기계보다 먼저 만들어 이 화면에서도 보인다."""
+    import_file = _write_import(tmp_path, "two.json", [_BM_A, _BM_B])
+    ctx = browser.new_context(service_workers="block")
+    page = ctx.new_page()
+    _open_bookmark_drawer(page)
+    _save_both_copies(page, [_BM_C])
+    page.route("**/js/sync/store-v2.js", lambda route: route.abort())
+    _open_bookmark_drawer(page)
+    assert page.evaluate("() => typeof window.syncStoreV2") == "undefined"
+    before = _saved(page)
+    page.locator("#bm-import-input").set_input_files(str(import_file))
+    _wait_visible_notice(page, _NO_SYNC_STORE)
+    assert page.locator("#bm-import-modal").get_attribute("hidden") is not None, "대화상자를 열지 않는다"
+    assert _saved(page) == before, "아무것도 저장하지 않는다"
     ctx.close()
 
 

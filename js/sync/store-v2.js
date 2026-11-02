@@ -2,11 +2,13 @@
 // ── Sync Store v2 ─────────────────────────────────────────────────────────────
 // Per-record mtime (_u) + tombstones + flat-map bookmark storage.
 // Provides: loadLocal, saveLocal, loadBookmarks, saveBookmarks, save*/lastRead,
-//           migrateLegacyIfNeeded, mergeDocs, buildSyncPayload, applyToLegacyKeys.
+//           migrateLegacyIfNeeded, mergeDocs, buildSyncPayload, applyToLegacyKeys,
+//           saveBaseIds/clearBaseIds/goneFromDrive (the base list), fitsStorage (the storage budget).
 //
 // v2 layout in localStorage:
 //   "bible-sync-meta"       { schemaVersion: 2, deviceId }
 //   "bible-bookmarks-v2"    { bookmarks: {items, tombstones}, settings, lastRead }
+//   "bible-drive-base-ids"  { fileId, at, days: { [day]: [id, …] } } — this device only, never uploaded
 
 /** @typedef {import("../types").SyncDoc}            SyncDoc */
 /** @typedef {import("../types").SyncFlatItem}       SyncFlatItem */
@@ -14,6 +16,8 @@
 /** @typedef {import("../types").SettingKey}         SettingKey */
 /** @typedef {import("../types").LastReadValue}      LastReadValue */
 /** @typedef {import("../types").SaveOutcome}        SaveOutcome */
+/** @typedef {import("../types").DriveBaseIds}       DriveBaseIds */
+/** @typedef {import("../types").BaseIdsOutcome}     BaseIdsOutcome */
 
 const _META_KEY  = "bible-sync-meta";
 const _STORE_KEY = "bible-bookmarks-v2";
@@ -209,16 +213,204 @@ function _load(withLegacyList) {
 /** @returns {SyncDoc} */
 function loadLocal() { return _load(true); }
 
+/** @param {unknown} err @returns {boolean} */
+function _isQuotaError(err) {
+  return /** @type {{ name?: unknown } | null} */ (err)?.name === "QuotaExceededError";
+}
+
 // Says what the write came to rather than swallowing a refusal: bookmark saves and the sync's merge result tell the
 // user (known-issues §15.4). Settings and the reading position still ignore it.
+// A full storage gives up the base list first and tries once more: nothing decides on the list yet, and the next
+// saved merge writes it again when it fits the budget (saveBaseIds; 저장 공간이 부족하면 목록을 지운다, 사용자 결정
+// 2026-10-31).
 /** @param {SyncDoc} doc @returns {SaveOutcome} */
 function saveLocal(doc) {
-  try {
-    localStorage.setItem(_STORE_KEY, JSON.stringify(doc));
-    return "saved";
-  } catch (err) {
-    return /** @type {{ name?: unknown } | null} */ (err)?.name === "QuotaExceededError" ? "full" : "failed";
+  let text;
+  try { text = JSON.stringify(doc); } catch { return "failed"; }
+  /** @returns {SaveOutcome} */
+  const write = () => {
+    try {
+      localStorage.setItem(_STORE_KEY, text);
+      return "saved";
+    } catch (err) {
+      return _isQuotaError(err) ? "full" : "failed";
+    }
+  };
+  const outcome = write();
+  return outcome === "full" && _dropBaseIds() ? write() : outcome;
+}
+
+// ── Storage budget ────────────────────────────────────────────────────────────
+// What the app checks a save against before writing it: Safari's quota — 5 MiB per origin counted in bytes, 2 bytes a
+// character once any Korean is in the text (WebKit `localStorageQuotaInBytes` · `String::sizeInBytes`; WebKit 26.4
+// measures the same), the strictest engine. Chromium counts characters (5,242,880), so this is half its room; kept for
+// every engine, as sync carries the list to the user's other devices. Past the quota, saving failed silently
+// (saveBookmarks swallowed it until known-issues §15.4): 「덮어썼습니다」 over the old list, later edits lost, another
+// device's sync stopped (PR #359 review).
+const _STORAGE_QUOTA_BYTES = 5 * 1024 * 1024;
+// Left free for what the app saves next without checking — about 90 bookmarks (714 bytes each, both copies), and the
+// small values written straight to localStorage whose refusal is dropped silently (search history, audio position,
+// sort state).
+const _STORAGE_HEADROOM_BYTES = 64 * 1024;
+
+// Whether localStorage holding `chars` characters, keys and values, stays within the budget. The bookmark import
+// (bookmark-modals.js _fitsStorage, ADR-040) and the base list (saveBaseIds) both ask here, so the two cannot drift
+// apart (사용자 결정 2026-11-01).
+/** @param {number} chars @returns {boolean} */
+function fitsStorage(chars) {
+  return 2 * chars <= _STORAGE_QUOTA_BYTES - _STORAGE_HEADROOM_BYTES;
+}
+
+// The characters localStorage holds, keys and values, leaving out the key `except`.
+/** @param {string} except @returns {number} */
+function _storedChars(except) {
+  let chars = 0;
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key === null || key === except) continue;
+    chars += key.length + (localStorage.getItem(key) ?? "").length;
   }
+  return chars;
+}
+
+// ── Base list ─────────────────────────────────────────────────────────────────
+// The bookmark ids alive in the Drive file this device last downloaded and merged, each under the day this device
+// first saw it in that file. It lives on this device only and names the file it was read from: another file (made
+// again after 「파일도 삭제」, or another account's) starts a new list.
+// 1단계(사용자 결정 2026-10-31): 목록을 저장만 하고 병합 판단에는 쓰지 않는다. 2단계에서는 이 기기에는 살아 있는데
+// 드라이브에는 항목도 삭제 기록도 없는 북마크를, 목록에 있고 처음 본 지 30일이 넘었으면 다른 기기에서 지운 것으로 볼
+// 계획이다(30일 규칙). 그때까지는 그런 북마크의 수만 센다(goneFromDrive).
+// Days are whole days of this device's clock since 1970-01-01 (UTC), grouped so an id costs its own characters only.
+const _BASE_KEY = "bible-drive-base-ids";
+const _DAY_MS = 864e5;
+// The age past which the first-seen-30-days rule would read a missing bookmark as deleted elsewhere: more than this
+// many whole days between the day it was first seen and today, so at least 30 days have passed (a day key covers the
+// whole day).
+const _BASE_AGE_DAYS = 30;
+
+/** @returns {number} */
+function _today() { return Math.floor(Date.now() / _DAY_MS); }
+
+/** @returns {boolean} true when there was a list and it is gone */
+function _dropBaseIds() {
+  try {
+    if (localStorage.getItem(_BASE_KEY) === null) return false;
+    localStorage.removeItem(_BASE_KEY);
+    return true;
+  } catch { return false; }
+}
+
+/** @returns {boolean} true when there was a list and it is gone */
+function clearBaseIds() { return _dropBaseIds(); }
+
+/** @returns {Partial<DriveBaseIds> | null} the stored record as parsed, or null when there is none or it is not JSON */
+function _readBase() {
+  try {
+    const rec = JSON.parse(localStorage.getItem(_BASE_KEY) ?? "null");
+    return rec && typeof rec === "object" ? rec : null;
+  } catch { return null; }
+}
+
+// The stored list as id → day first seen, or null when there is none for `fileId`. A malformed list reads as none.
+// An id under two days keeps the earlier one.
+/** @param {string} fileId @param {Partial<DriveBaseIds> | null} [rec] @returns {Map<string, number> | null} */
+function _loadBaseIds(fileId, rec = _readBase()) {
+  try {
+    if (!rec || rec.fileId !== fileId) return null;
+    const days = rec.days;
+    if (!days || typeof days !== "object") return null;
+    /** @type {Map<string, number>} */
+    const seen = new Map();
+    for (const [key, ids] of Object.entries(days)) {
+      const day = Number(key);
+      if (!Number.isInteger(day) || !Array.isArray(ids)) continue;
+      for (const id of ids) {
+        if (typeof id !== "string") continue;
+        const prev = seen.get(id);
+        if (prev === undefined || day < prev) seen.set(id, day);
+      }
+    }
+    return seen;
+  } catch { return null; }
+}
+
+// Ids of the bookmark items (folders too) a document holds alive: its time is later than its id's tombstone, the
+// same test mergeDocs makes. "__proto__" is left out, as the merge leaves it out.
+/** @param {SyncDoc} doc @returns {string[]} */
+function _aliveIds(doc) {
+  const items = doc?.bookmarks?.items ?? {};
+  const tombs = doc?.bookmarks?.tombstones ?? {};
+  /** @type {string[]} */
+  const out = [];
+  for (const [id, node] of Object.entries(items)) {
+    if (id === "__proto__" || !node) continue;
+    if (node._u > (_own(tombs, id) ?? -Infinity)) out.push(id);
+  }
+  return out;
+}
+
+// Writes the list from `remote`, the file just downloaded — not from what is uploaded next: Drive does not guard
+// writes (known-issues §42), so an upload can be overwritten by a device that never saw it, and an id this device
+// only sent must not read as one Drive held. An id the previous list (same file) held keeps its day, a new one gets
+// today, and one the file no longer holds drops out. A refused write leaves no list rather than an old one.
+// 기준 목록도 64 KiB 여유를 지킨다(사용자 결정 2026-11-01): a list that would leave localStorage past the budget the
+// import keeps (fitsStorage) is not saved, and the one stored is removed too, as before the list existed. Every saved
+// merge writes the list again, so on a nearly full device it took the headroom an import had left, and the small
+// writes that drop a refusal silently were refused.
+// 기록하는 날은 뒤로 가지 않는다(사용자 결정 2026-10-31). `at` never goes below the previous list's (whatever file it
+// names), and a new id gets the day of that time when the clock reads earlier: an id first seen while the clock was
+// set back (a phone whose clock fell to 1970 on a flat battery) would otherwise read as long seen once the clock is
+// fixed, and stage 2 would drop it without its 30 days. The guard goes with the list (a full storage, an import that
+// fits only without the list, the budget above or 「파일도 삭제」 removes it); stage 2 settles the device clock as a whole
+// (사용자 결정 2026-11-01).
+/**
+ * @param {string} fileId @param {SyncDoc} remote
+ * @returns {BaseIdsOutcome} "saved"; "headroom" when the list was left out for the budget; "refused" when localStorage
+ *   threw (the write refused, or storage blocked). Both leave no list.
+ */
+function saveBaseIds(fileId, remote) {
+  try {
+    const stored = _readBase();
+    const prev = _loadBaseIds(fileId, stored);
+    const prevAt = typeof stored?.at === "number" && Number.isFinite(stored.at) ? stored.at : 0;
+    const at = Math.max(Date.now(), prevAt);
+    const today = Math.floor(at / _DAY_MS);
+    /** @type {DriveBaseIds} */
+    const rec = { fileId, at, days: {} };
+    for (const id of _aliveIds(remote)) {
+      const day = prev?.get(id) ?? today;
+      (rec.days[day] ??= []).push(id);
+    }
+    const text = JSON.stringify(rec);
+    if (!fitsStorage(_storedChars(_BASE_KEY) + _BASE_KEY.length + text.length)) {
+      _dropBaseIds();
+      return "headroom";
+    }
+    localStorage.setItem(_BASE_KEY, text);
+    return "saved";
+  } catch {
+    _dropBaseIds();
+    return "refused";
+  }
+}
+
+// The bookmarks the first-seen-30-days rule would drop in this merge: shown on this device, held by `remote` neither as
+// an item nor as a tombstone, and in the list of this same file for more than _BASE_AGE_DAYS days. Stage 1 only counts
+// them; the merge keeps them as before.
+/** @param {string} fileId @param {SyncDoc} local @param {SyncDoc} remote @returns {string[]} */
+function goneFromDrive(fileId, local, remote) {
+  try {
+    const seen = _loadBaseIds(fileId);
+    if (!seen?.size) return [];
+    const today = _today();
+    const rItems = remote?.bookmarks?.items ?? {};
+    const rTombs = remote?.bookmarks?.tombstones ?? {};
+    return _aliveIds(local).filter((id) => {
+      if (Object.hasOwn(rItems, id) || Object.hasOwn(rTombs, id)) return false;
+      const day = seen.get(id);
+      return day !== undefined && today - day > _BASE_AGE_DAYS;
+    });
+  } catch { return []; }
 }
 
 // ── Bookmark CRUD (tree ↔ flat-map) ──────────────────────────────────────────
@@ -346,10 +538,15 @@ function saveBookmarks(tree) {
 // This store's localStorage entry once saveBookmarks(tree) ran — its key, and the characters of key and value. The
 // bookmark import adds it up with the rest before saving (storage.js projectedStorageChars, ADR-040): measured from
 // the very document saveBookmarks writes, so a parentId repeated under every child and the tombstones an overwrite
-// leaves are counted as they will be stored.
-/** @param {BookmarkTreeNode[]} tree @returns {{ key: string, chars: number }} */
+// leaves are counted as they will be stored. `givesUp` names the keys the save removes when storage is full (saveLocal):
+// they are not counted.
+/** @param {BookmarkTreeNode[]} tree @returns {{ key: string, chars: number, givesUp: string[] }} */
 function projectedBookmarksEntry(tree) {
-  return { key: _STORE_KEY, chars: _STORE_KEY.length + JSON.stringify(_docWithBookmarks(tree)).length };
+  return {
+    key: _STORE_KEY,
+    chars: _STORE_KEY.length + JSON.stringify(_docWithBookmarks(tree)).length,
+    givesUp: [_BASE_KEY],
+  };
 }
 
 // Load and reconstruct the bookmark tree, filtering out tombstoned items.
@@ -616,21 +813,22 @@ function validateRemote(data) {
   return d.schemaVersion === 2 && typeof d.bookmarks?.items === "object";
 }
 
-// ── Tombstone GC ──────────────────────────────────────────────────────────────
-// Remove bookmark tombstones and retired settings entries older than ageDays
-// (default 30). Retiring a setting key = writing { v: null, _u: now }; once
-// the null has had time to propagate to every device, the entry is dropped so
-// renamed/removed keys don't ride the sync doc forever. Entries with _u === 0
-// are the _emptyDoc defaults — every merge regenerates them, so sweeping them
-// would only churn saveLocal. Safe to call anytime; only persists on removal.
+// ── Retired settings GC ───────────────────────────────────────────────────────
+// Remove retired settings entries older than ageDays (default 30). Retiring a
+// setting key = writing { v: null, _u: now }; once the null has had time to
+// propagate to every device, the entry is dropped so renamed/removed keys
+// don't ride the sync doc forever. Entries with _u === 0 are the _emptyDoc
+// defaults — every merge regenerates them, so sweeping them would only churn
+// saveLocal. Safe to call anytime; only persists on removal.
+// 북마크 삭제 기록은 지우지 않는다(사용자 결정 2026-10-31, known-issues §39). Swept on this device only, a tombstone
+// came back from Drive at the next merge, so the sweep freed nothing while sync was on; a bookmark deleted with sync
+// off lost its tombstone once 30 days had passed since the delete, and turning sync on after that brought it back
+// from Drive. Their cleanup waits for stage 2 of the base list.
 /** @param {number} [ageDays] */
-function sweepTombstones(ageDays = 30) {
-  const cutoff = Date.now() - ageDays * 864e5;
+function sweepRetiredSettings(ageDays = 30) {
+  const cutoff = Date.now() - ageDays * _DAY_MS;
   const doc = loadLocal();
   let removed = 0;
-  for (const [id, ts] of Object.entries(doc.bookmarks.tombstones)) {
-    if (ts < cutoff) { delete doc.bookmarks.tombstones[id]; removed++; }
-  }
   for (const [key, s] of Object.entries(doc.settings ?? {})) {
     if (s?.v === null && s._u > 0 && s._u < cutoff) { delete doc.settings[key]; removed++; }
   }
@@ -669,7 +867,9 @@ function applyToLegacyKeys(doc) {
 window.syncStoreV2 = {
   getDeviceId,
   loadLocal, saveLocal,
-  sweepTombstones,
+  sweepRetiredSettings,
+  saveBaseIds, clearBaseIds, goneFromDrive,
+  fitsStorage,
   loadBookmarks, saveBookmarks, projectedBookmarksEntry,
   saveSetting, saveLastRead,
   migrateLegacyIfNeeded,
