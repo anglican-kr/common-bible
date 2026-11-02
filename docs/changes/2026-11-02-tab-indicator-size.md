@@ -1,4 +1,5 @@
 ---
+pr: 462
 date: 2026-11-02
 branch: fix/tab-indicator-size
 title: "fix: 아이폰에서 탭 바의 선택 원이 화면만큼 커지지 않게 함"
