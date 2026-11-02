@@ -395,7 +395,7 @@ CRUD 작업 후 의존하는 UI 컴포넌트의 갱신 함수를 호출하지 �
 브라우저는 `defer` 스크립트와 모듈 스크립트를 문서를 다 읽은 뒤에 실행한다. Chromium은 이때 `<link rel="stylesheet">`의 스타일시트가 올 때까지 기다린다. WebKit(Safari)은 스크립트를 다 받았으면 바로 실행한다. WebKit 소스의 `HTMLScriptRunner::executeScriptsWaitingForParsing`은 스크립트를 받았는지만 본다. 그래서 스크립트가 스타일시트보다 먼저 오면, 모듈이 처음 실행될 때 CSS가 아직 적용되지 않았을 수 있다. 그때 요소의 크기를 재면 CSS가 없는 배치의 값이 나온다.
 
 **사례:**
-- 2026-11-02(아이폰): 탭 바의 선택 원이 화면만 한 회색 원으로 탭 바 뒤에 그려졌다. `tabbar.js`는 모듈을 불러올 때 선택 원의 지름을 재어(`sizeTabIndicator`) 원의 너비로 넣는다. CSS가 없으면 너비가 정해지지 않은 아이콘 SVG가 줄 너비만큼 커져서, 화면 너비가 지름이 되었다. 지름은 화면 크기가 바뀌거나 돌릴 때만 다시 재므로 탭을 옮겨도 큰 원이 남았다. Chromium으로 도는 e2e에서는 보이지 않았다.
+- 2026-11-02(아이폰): 탭 바의 선택 원이 화면만 한 회색 원으로 탭 바 뒤에 그려졌다. `tabbar.js`는 모듈을 불러올 때 선택 원의 지름을 재어(`sizeTabIndicator`) 원의 너비로 넣는다. CSS가 없으면 너비가 정해지지 않은 아이콘 SVG가 줄 너비만큼 커져서, 화면 너비가 지름이 되었다. 지름은 화면 크기가 바뀌거나 돌릴 때만 다시 재므로 탭을 옮겨도 큰 원이 남았다. Chromium으로 도는 e2e에서는 보이지 않았다. 고친 뒤 dev 배포에서 아이폰으로 확인했고 증상이 사라졌다(2026-11-02).
 
 **규칙:**
 - 처음 로드 때 레이아웃을 재는 코드는 CSS가 적용됐는지 먼저 본다. 그 요소에 CSS가 주는 값을 읽으면 된다(`tabbar.js tabIndicatorStyled`는 `getComputedStyle(el).position`을 본다). 적용되지 않았으면 재지 않고, 스타일시트를 다 받은 뒤(`load` 이벤트)나 크기가 바뀔 때(`ResizeObserver`) 다시 잰다. 책 이름 줄이기(`views.js applyBookListCompactness`)는 `ResizeObserver`로 다시 재므로 이 문제가 없다.
