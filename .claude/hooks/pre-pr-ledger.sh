@@ -6,9 +6,10 @@
 # 이 훅은 Claude Code 안에서만 돌고, CI 는 어디서 만든 PR 이든 잡는다.
 # 형식·규칙: docs/changes/README.md
 set -u
-# 명령을 실행한 폴더의 저장소를 검사한다. 작업 폴더(git worktree)에서는 `CLAUDE_PROJECT_DIR`가
-# 세션을 시작한 폴더에 그대로 있고, 훅 입력의 `cwd`가 작업 폴더를 가리킨다(Claude Code 훅 문서).
-# `CLAUDE_PROJECT_DIR`를 쓰면 다른 세션이 쓰는 폴더의 브랜치와 파일을 검사하게 된다(2026-10-26).
+# 세션의 셸 위치(훅 입력의 `cwd`)에 있는 저장소를 검사한다. `CLAUDE_PROJECT_DIR`는 세션을 시작한 폴더에
+# 그대로 있어서, 그것을 쓰면 다른 세션이 쓰는 폴더의 브랜치와 파일을 검사하게 된다(2026-10-26).
+# 셸 위치는 세션 폴더 안에서만 `cd`를 따라간다. 세션 폴더 밖의 작업 폴더(`~/projects/worktrees/`)에서는
+# 명령마다 원래 폴더로 돌아가므로, 이 훅은 원래 폴더를 검사한다(docs/workflow.md 「Claude Code 훅」, 2026-11-02).
 input=$(cat)
 cwd=$(printf '%s' "$input" | jq -r '.cwd // empty')
 PROJECT=$(git -C "${cwd:-.}" rev-parse --show-toplevel 2>/dev/null) \

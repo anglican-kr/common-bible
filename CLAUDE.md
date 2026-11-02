@@ -101,8 +101,8 @@ git -c protocol.file.allow=always submodule update --init --reference ~/projects
 # 작업하고 커밋한다
 # 원장 docs/changes/<YYYY-MM-DD>-<slug>.md를 쓰고 커밋한다(형식은 docs/changes/README.md)
 git push -u origin <topic-branch>
-gh pr create --title "..." --body-file docs/changes/<YYYY-MM-DD>-<slug>.md   # 제목은 짧은 문구(pitfalls §30)
-# 훅이 원장에 pr: N을 적는다. 그 변경을 커밋하고 push한다
+gh pr create --title "..." --body-file docs/changes/<YYYY-MM-DD>-<slug>.md   # 제목은 짧은 문구(pitfalls §30). 세션 폴더 밖의 작업 폴더에서는 원장 훅이 막으므로 REST로 연다(docs/workflow.md 「작업 중 함정」)
+# 훅이 원장에 pr: N을 적는다(REST로 열었으면 직접 적는다). 그 변경을 커밋하고 push한다
 bash scripts/pr_body.sh docs/changes/<YYYY-MM-DD>-<slug>.md | gh api -X PATCH repos/anglican-kr/common-bible/pulls/<N> -F body=@-   # 본문에서 frontmatter를 뺀다
 # CI(Unit tests, Change ledger)가 통과하고 사용자가 확인하면 squash로 머지한다. 제목은 PR 제목에 번호를 붙인다(REST)
 gh api -X PUT repos/anglican-kr/common-bible/pulls/<N>/merge -f merge_method=squash -f commit_title="<PR 제목> (#<N>)" \
