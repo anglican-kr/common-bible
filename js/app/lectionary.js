@@ -894,7 +894,7 @@ const TITLE_YEAR_STEPS = [
 /**
  * 전례독서의 머리 — 제목 자리에 날짜 이동 줄을 그린다(사용자 결정 2026-11-03: 스크롤해도 날짜와 「오늘」이 보이고 하루씩 옮길
  * 수 있게. 그전엔 본문 맨 위 줄이었고, 머리에는 「전례독서」와 캘린더로 가는 꺾쇠가 있었다). 「전례독서」는 문서 제목(setTitle)에
- * 남는다. 보이는 날짜의 연도는 자리에 맞게 줄이고(`fitTitleYear`), 스크린 리더는 숨긴 전체 날짜를 읽는다.
+ * 남는다. 보이는 날짜는 자리에 맞게 줄이고(`fitTitleDate`), 스크린 리더는 숨긴 전체 날짜를 읽는다.
  * @param {LectionaryModel} m
  */
 function commitTitleDateNav(m) {
@@ -912,38 +912,45 @@ function commitTitleDateNav(m) {
     prev: { href: m.hrefs.prev, label: "전날" },
     next: { href: m.hrefs.next, label: "다음날" },
   })) $title.appendChild(part);
-  watchTitleYear();
-  fitTitleYear();
+  watchTitleDate();
+  fitTitleDate();
 }
 
 /**
  * 머리 날짜가 넘치면 연도를 한 단계씩 줄인다. 날짜 칸(`.lect-date-label`)은 줄바꿈 없이 넘친 만큼을 숨기므로, 그 칸의 글자
- * 폭이 칸보다 넓은지로 넘침을 잰다. 스타일시트가 오기 전(Safari — coding-pitfalls §41)에는 칸이 줄지 않아 연도를 그대로
- * 두고, 스타일이 들어와 머리 크기가 바뀌면 `watchTitleYear`가 다시 잰다.
+ * 폭이 칸보다 넓은지로 넘침을 잰다. 연도를 빼도 넘치면(320px에 글자 크기 24px — PR #463 리뷰) 「오늘」을 날짜 아래 줄로
+ * 내리고(`.lect-date--stack`), 그래도 넘치면 날짜를 줄바꿈한다(`.lect-date--wrap`) — 큰 글자를 쓰는 사람도 날짜를 다 읽는다.
+ * 스타일시트가 오기 전(Safari — coding-pitfalls §41)에는 칸이 줄지 않아 연도를 그대로 두고, 스타일이 들어와 머리 크기가
+ * 바뀌면 `watchTitleDate`가 다시 잰다.
  */
-function fitTitleYear() {
+function fitTitleDate() {
   const label = /** @type {HTMLElement | null} */ ($title.querySelector(".lect-date-label"));
   const year = label && /** @type {HTMLElement | null} */ (label.querySelector(".lect-date-year"));
-  if (!label || !year) return;
+  const mid = label && label.parentElement;
+  if (!label || !year || !mid) return;
+  const overflows = () => label.scrollWidth > label.clientWidth;
+  mid.classList.remove("lect-date--stack", "lect-date--wrap");
   const y = Number(year.dataset.year);
   for (const step of TITLE_YEAR_STEPS) {
     year.textContent = step(y);
-    if (label.scrollWidth <= label.clientWidth) return;
+    if (!overflows()) return;
   }
+  mid.classList.add("lect-date--stack");
+  if (overflows()) mid.classList.add("lect-date--wrap");
 }
 
 /** @type {ResizeObserver | null} */
-let titleYearObserver = null;
+let titleDateObserver = null;
 /**
  * 화면 폭 · 글자 크기가 바뀌거나 글꼴이 들어오면 다시 잰다(머리는 화면이 바뀌어도 그대로라 한 번만 단다). 웹 글꼴(Noto Sans KR)은
  * 글자 묶음별로 늦게 들어와 머리 크기는 그대로인 채 날짜 폭만 넓힌다 — 360px에서 연도를 줄인 날짜가 2px 넘쳤다(2026-11-03 실측).
  * 다른 화면에서는 날짜 칸이 없어 바로 끝난다.
  */
-function watchTitleYear() {
-  if (titleYearObserver || typeof ResizeObserver === "undefined") return;
-  titleYearObserver = new ResizeObserver(() => fitTitleYear());
-  titleYearObserver.observe($title);
-  if (document.fonts) document.fonts.addEventListener("loadingdone", () => fitTitleYear());
+function watchTitleDate() {
+  if (titleDateObserver || typeof ResizeObserver === "undefined") return;
+  titleDateObserver = new ResizeObserver(() => fitTitleDate());
+  titleDateObserver.observe($title);
+  if (document.fonts) document.fonts.addEventListener("loadingdone", () => fitTitleDate());
 }
 
 /** 색 점 + 라벨 하나. */
@@ -958,11 +965,14 @@ function buildColorMark(/** @type {string} */ color, /** @type {boolean} */ alt)
 function buildHeader(m) {
   const head = el("header", { className: "lect-head" });
 
-  const official = m.resolved.official;
-  const dayName = official ? String(official.observance.name || "") : "";
+  // 이름은 그날의 기본 독서(처음 선택 — initialCandidate)의 전례일이고, 칩을 눌러도 그대로다. 고유 독서가 없는 축일의 날은
+  // 처음에 그날 평일 독서를 보이므로 평일 이름이다(11.6 레오나드 날은 「연중 31주 금요일」). 성인 칩을 눌러야 독서가 공통 독서로
+  // 바뀐다(사용자 결정 2026-11-03 — 그전엔 지정 전례일 이름이라 성인 이름 아래 평일 독서가 보였다). 색은 그대로 headerColors.
+  const shown = m.initial;
+  const dayName = String(shown.observance.name || "");
   head.appendChild(el("h2", { className: "lect-day" }, dayName || "—"));
-  if (official && official.status === "transferred_in" && official.from) {
-    head.appendChild(el("p", { className: "lect-day-note" }, `${monthDayLabel(official.from)}에서 옮겨 지킵니다`));
+  if (shown.status === "transferred_in" && shown.from) {
+    head.appendChild(el("p", { className: "lect-day-note" }, `${monthDayLabel(shown.from)}에서 옮겨 지킵니다`));
   }
 
   const meta = el("p", { className: "lect-meta" });
@@ -977,8 +987,13 @@ function buildHeader(m) {
   return head;
 }
 
-/** @param {LectionaryModel} m */
+/**
+ * 전례일 칩 줄 — 후보가 여럿인 날만 그린다. 하나뿐이면 고를 것이 없고 머리의 전례일 이름이 같아 그리지 않는다(사용자 결정
+ * 2026-11-03, ADR-038 §3 「후보 전례일이 여럿이면」).
+ * @param {LectionaryModel} m @returns {HTMLElement | null}
+ */
 function buildChips(m) {
+  if (m.chips.length < 2) return null;
   const nav = el("nav", { className: "lect-chips", "aria-label": "독서" });
   for (const chip of m.chips) {
     const a = el("a", {
@@ -1018,8 +1033,9 @@ function buildPair(m) {
 function buildControls(m) {
   const wrap = el("div", { className: "lect-controls" });
   if (m.tracks.length > 1) {
+    // 위에 「독서」 글자를 달지 않는다 — 단추 이름이 「독서 1」 「독서 2」다(사용자 결정 2026-11-03). 세그먼트의 접근 가능한
+    // 이름은 「독서 트랙」 그대로다.
     const ctl = el("div", { className: "lect-control lect-track" });
-    ctl.appendChild(el("span", { className: "lect-control-label" }, "독서"));
     const seg = buildSegmentTabs(
       m.hrefs.tracks.map((t) => ({ label: `독서 ${t.track}`, href: t.href, active: t.active, focusKey: `track:${t.track}` })),
       { ariaLabel: "독서 트랙", className: "division-tabs--compact" },
@@ -1348,7 +1364,8 @@ function commit(m, chapters) {
     announceDay(m);
   };
   root.appendChild(buildHeader(m));
-  root.appendChild(buildChips(m));
+  const chips = buildChips(m);
+  if (chips) root.appendChild(chips);
   if (m.pair) root.appendChild(buildPair(m));
 
   if (m.empty) {
@@ -1443,8 +1460,8 @@ async function renderLectionaryView(parsed) {
     const search = withTrack(location.search, model.track);
     if (search !== location.search) history.replaceState(history.state, "", location.pathname + search);
   }
-  const official = resolved.official;
-  return official ? `${shortName(official.observance.name)} ${PAGE_TITLE}` : PAGE_TITLE;
+  // 문서 제목도 머리처럼 그날의 기본 독서의 전례일 이름이다(2026-11-03, buildHeader).
+  return `${shortName(model.initial.observance.name)} ${PAGE_TITLE}`;
 }
 
 // 캘린더 탭(calendar.js — ADR-038 §2 A2)이 같은 이름 · 날짜 · 색 규칙을 쓴다(복제 금지 — 칸 · 줄의 이름이 칩과 같아야 한다).
