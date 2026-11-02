@@ -909,7 +909,7 @@ test("기준 목록은 내려받은 파일에 살아 있는 id만, 파일 id와 
     },
     tombstones: { dead: 4, same: 4, gone: 9 },
   }));
-  assert.equal(store.saveBaseIds("F1", remote), true);
+  assert.equal(store.saveBaseIds("F1", remote), "saved");
   const base = baseOf(localStorage);
   assert.equal(base.fileId, "F1");
   assert.equal(base.at, T0, "마지막으로 저장한 기기 시각");
@@ -985,8 +985,56 @@ test("기준 목록 저장이 거절되면 옛 목록을 남기지 않고 지운
     if (k === BASE_KEY) throw Object.assign(new Error("full"), { name: "QuotaExceededError" });
     setItem(k, v);
   };
-  assert.equal(store.saveBaseIds("F1", remoteWith(doc({ items: { a: item("a", 1), b: item("b", 2) } }))), false);
+  assert.equal(store.saveBaseIds("F1", remoteWith(doc({ items: { a: item("a", 1), b: item("b", 2) } }))), "refused");
   assert.equal(localStorage.getItem(BASE_KEY), null);
+});
+
+// ── 저장 공간의 예산 (가져오기와 기준 목록이 함께 쓰는 규칙, 사용자 결정 2026-11-01) ──
+// Safari 한도 5 MiB에서 64 KiB를 남긴다. 글자 하나를 2바이트로 센다. 가져오기의 크기 검사(bookmark-modals.js
+// _fitsStorage)도 이 함수를 쓴다.
+
+const BUDGET_CHARS = (5 * 1024 * 1024 - 64 * 1024) / 2;   // 2,588,672자
+
+test("fitsStorage: 키와 값의 글자를 2바이트로 세어 Safari의 5 MiB에서 64 KiB를 남길 때만 들어간다", () => {
+  const { store, ctx } = load();
+  assert.equal(vm.runInContext("_STORAGE_QUOTA_BYTES", ctx), 5 * 1024 * 1024);
+  assert.equal(vm.runInContext("_STORAGE_HEADROOM_BYTES", ctx), 64 * 1024);
+  assert.equal(store.fitsStorage(BUDGET_CHARS), true);
+  assert.equal(store.fitsStorage(BUDGET_CHARS + 1), false);
+});
+
+// 동기화는 병합 결과를 저장할 때마다 목록을 다시 쓴다. 저장 공간이 거의 찬 기기에서는 그 목록이 가져오기가 남긴 64 KiB
+// 여유를 써서, 거절을 알리지 않는 작은 저장(검색 기록, 오디오 위치)이 거절될 수 있었다(PR #460 3회차 리뷰).
+test("기준 목록은 저장하면 localStorage 전체가 64 KiB 여유를 넘을 때 저장하지 않고, 있던 목록도 지운다 — 경계에서는 저장한다", () => {
+  const { store, localStorage } = load({}, { now: T0 });
+  const remote = remoteWith(doc({ items: { a: item("a", 1), b: item("b", 2) } }));
+  assert.equal(store.saveBaseIds("F1", remote), "saved");
+  const text = localStorage.getItem(BASE_KEY);   // 같은 파일, 같은 시각이면 다음 저장도 이 글자다
+  const others = () => Object.entries(localStorage._raw)
+    .filter(([k]) => k !== BASE_KEY).reduce((n, [k, v]) => n + k.length + v.length, 0);
+  const fill = (chars) => { localStorage.setItem("bible-filler", ""); localStorage.setItem("bible-filler", "x".repeat(chars - others())); };
+  let written = 0;
+  const setItem = localStorage.setItem;
+  localStorage.setItem = (k, v) => { if (k === BASE_KEY) written++; setItem(k, v); };
+
+  // 목록을 넣어 꼭 예산만큼이면 저장한다. 지금 있는 목록은 바뀔 목록이라 세지 않는다.
+  fill(BUDGET_CHARS - BASE_KEY.length - text.length);
+  assert.equal(store.saveBaseIds("F1", remote), "saved");
+  assert.equal(localStorage.getItem(BASE_KEY), text);
+  assert.equal(written, 1);
+
+  // 한 글자 넘으면 쓰지 않고, 있던 목록도 지운다.
+  fill(BUDGET_CHARS - BASE_KEY.length - text.length + 1);
+  assert.equal(store.saveBaseIds("F1", remote), "headroom");
+  assert.equal(localStorage.getItem(BASE_KEY), null, "이 PR 전처럼 목록이 없다");
+  assert.equal(written, 1, "목록을 써 보지 않는다");
+
+  // 목록이 없을 때도 같다. 자리가 나면 다음 저장이 다시 만든다.
+  assert.equal(store.saveBaseIds("F1", remote), "headroom");
+  assert.equal(localStorage.getItem(BASE_KEY), null);
+  fill(BUDGET_CHARS - BASE_KEY.length - text.length);
+  assert.equal(store.saveBaseIds("F1", remote), "saved");
+  assert.equal(localStorage.getItem(BASE_KEY), text);
 });
 
 test("동기화 저장소 저장이 저장 공간 부족으로 거절되면 기준 목록을 지우고 한 번 더 저장한다", () => {

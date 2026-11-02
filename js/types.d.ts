@@ -133,6 +133,10 @@ export interface DriveBaseIds {
   days: { [day: string]: string[] };
 }
 
+// What saving the base list came to (store-v2.js saveBaseIds): "saved"; "headroom" when it was left out because
+// localStorage would pass the storage budget (fitsStorage); "refused" when the write failed. Both leave no list.
+export type BaseIdsOutcome = "saved" | "headroom" | "refused";
+
 // ── State machine ────────────────────────────────────────────────────────────
 // Phase 2h 단계 4: GIS와 묶여있던 INITIALIZING/IDENTIFYING/AUTHENTICATING 제거.
 
@@ -363,12 +367,14 @@ export interface SyncStoreV2 {
   saveLocal: (doc: SyncDoc) => SaveOutcome;
   /** Drops retired settings entries ({ v: null }) older than ageDays; bookmark tombstones are kept. */
   sweepRetiredSettings: (ageDays?: number) => void;
-  /** Saves the base list from the downloaded file; false (and no list) when the browser refused the write. */
-  saveBaseIds: (fileId: string, remote: SyncDoc) => boolean;
+  /** Saves the base list from the downloaded file; "headroom" or "refused" (and no list) when it is not saved. */
+  saveBaseIds: (fileId: string, remote: SyncDoc) => BaseIdsOutcome;
   /** Removes the base list; true when there was one. */
   clearBaseIds: () => boolean;
   /** Bookmarks the planned first-seen-30-days rule would drop in a merge with `remote` — only counted for now. */
   goneFromDrive: (fileId: string, local: SyncDoc, remote: SyncDoc) => string[];
+  /** Whether localStorage holding this many characters (keys and values) leaves 64 KiB of Safari's 5 MiB, 2 bytes a character. */
+  fitsStorage: (chars: number) => boolean;
   loadBookmarks: () => BookmarkTreeNode[];
   saveBookmarks: (tree: BookmarkTreeNode[]) => SaveOutcome;
   /** This store's entry once saveBookmarks(tree) ran — its key, the characters of key and value, and the keys the save removes when storage is full. */

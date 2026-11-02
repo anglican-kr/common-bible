@@ -3,7 +3,7 @@
 // Per-record mtime (_u) + tombstones + flat-map bookmark storage.
 // Provides: loadLocal, saveLocal, loadBookmarks, saveBookmarks, save*/lastRead,
 //           migrateLegacyIfNeeded, mergeDocs, buildSyncPayload, applyToLegacyKeys,
-//           saveBaseIds/clearBaseIds/goneFromDrive (the base list).
+//           saveBaseIds/clearBaseIds/goneFromDrive (the base list), fitsStorage (the storage budget).
 //
 // v2 layout in localStorage:
 //   "bible-sync-meta"       { schemaVersion: 2, deviceId }
@@ -17,6 +17,7 @@
 /** @typedef {import("../types").LastReadValue}      LastReadValue */
 /** @typedef {import("../types").SaveOutcome}        SaveOutcome */
 /** @typedef {import("../types").DriveBaseIds}       DriveBaseIds */
+/** @typedef {import("../types").BaseIdsOutcome}     BaseIdsOutcome */
 
 const _META_KEY  = "bible-sync-meta";
 const _STORE_KEY = "bible-bookmarks-v2";
@@ -220,7 +221,8 @@ function _isQuotaError(err) {
 // Says what the write came to rather than swallowing a refusal: bookmark saves and the sync's merge result tell the
 // user (known-issues §15.4). Settings and the reading position still ignore it.
 // A full storage gives up the base list first and tries once more: nothing decides on the list yet, and the next
-// saved merge writes it again (저장 공간이 부족하면 목록을 지운다, 사용자 결정 2026-10-31).
+// saved merge writes it again when it fits the budget (saveBaseIds; 저장 공간이 부족하면 목록을 지운다, 사용자 결정
+// 2026-10-31).
 /** @param {SyncDoc} doc @returns {SaveOutcome} */
 function saveLocal(doc) {
   let text;
@@ -236,6 +238,39 @@ function saveLocal(doc) {
   };
   const outcome = write();
   return outcome === "full" && _dropBaseIds() ? write() : outcome;
+}
+
+// ── Storage budget ────────────────────────────────────────────────────────────
+// What the app checks a save against before writing it: Safari's quota — 5 MiB per origin counted in bytes, 2 bytes a
+// character once any Korean is in the text (WebKit `localStorageQuotaInBytes` · `String::sizeInBytes`; WebKit 26.4
+// measures the same), the strictest engine. Chromium counts characters (5,242,880), so this is half its room; kept for
+// every engine, as sync carries the list to the user's other devices. Past the quota, saving failed silently
+// (saveBookmarks swallowed it until known-issues §15.4): 「덮어썼습니다」 over the old list, later edits lost, another
+// device's sync stopped (PR #359 review).
+const _STORAGE_QUOTA_BYTES = 5 * 1024 * 1024;
+// Left free for what the app saves next without checking — about 90 bookmarks (714 bytes each, both copies), and the
+// small values written straight to localStorage whose refusal is dropped silently (search history, audio position,
+// sort state).
+const _STORAGE_HEADROOM_BYTES = 64 * 1024;
+
+// Whether localStorage holding `chars` characters, keys and values, stays within the budget. The bookmark import
+// (bookmark-modals.js _fitsStorage, ADR-040) and the base list (saveBaseIds) both ask here, so the two cannot drift
+// apart (사용자 결정 2026-11-01).
+/** @param {number} chars @returns {boolean} */
+function fitsStorage(chars) {
+  return 2 * chars <= _STORAGE_QUOTA_BYTES - _STORAGE_HEADROOM_BYTES;
+}
+
+// The characters localStorage holds, keys and values, leaving out the key `except`.
+/** @param {string} except @returns {number} */
+function _storedChars(except) {
+  let chars = 0;
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key === null || key === except) continue;
+    chars += key.length + (localStorage.getItem(key) ?? "").length;
+  }
+  return chars;
 }
 
 // ── Base list ─────────────────────────────────────────────────────────────────
@@ -318,12 +353,21 @@ function _aliveIds(doc) {
 // writes (known-issues §42), so an upload can be overwritten by a device that never saw it, and an id this device
 // only sent must not read as one Drive held. An id the previous list (same file) held keeps its day, a new one gets
 // today, and one the file no longer holds drops out. A refused write leaves no list rather than an old one.
+// 기준 목록도 64 KiB 여유를 지킨다(사용자 결정 2026-11-01): a list that would leave localStorage past the budget the
+// import keeps (fitsStorage) is not saved, and the one stored is removed too, as before the list existed. Every saved
+// merge writes the list again, so on a nearly full device it took the headroom an import had left, and the small
+// writes that drop a refusal silently were refused.
 // 기록하는 날은 뒤로 가지 않는다(사용자 결정 2026-10-31). `at` never goes below the previous list's (whatever file it
 // names), and a new id gets the day of that time when the clock reads earlier: an id first seen while the clock was
 // set back (a phone whose clock fell to 1970 on a flat battery) would otherwise read as long seen once the clock is
-// fixed, and stage 2 would drop it without its 30 days. The guard goes with the list (a full storage or 「파일도 삭제」
-// removes it); stage 2 settles the device clock as a whole (사용자 결정 2026-11-01).
-/** @param {string} fileId @param {SyncDoc} remote @returns {boolean} whether the list is saved */
+// fixed, and stage 2 would drop it without its 30 days. The guard goes with the list (a full storage, an import that
+// fits only without the list, the budget above or 「파일도 삭제」 removes it); stage 2 settles the device clock as a whole
+// (사용자 결정 2026-11-01).
+/**
+ * @param {string} fileId @param {SyncDoc} remote
+ * @returns {BaseIdsOutcome} "saved"; "headroom" when the list was left out for the budget; "refused" when localStorage
+ *   threw (the write refused, or storage blocked). Both leave no list.
+ */
 function saveBaseIds(fileId, remote) {
   try {
     const stored = _readBase();
@@ -337,11 +381,16 @@ function saveBaseIds(fileId, remote) {
       const day = prev?.get(id) ?? today;
       (rec.days[day] ??= []).push(id);
     }
-    localStorage.setItem(_BASE_KEY, JSON.stringify(rec));
-    return true;
+    const text = JSON.stringify(rec);
+    if (!fitsStorage(_storedChars(_BASE_KEY) + _BASE_KEY.length + text.length)) {
+      _dropBaseIds();
+      return "headroom";
+    }
+    localStorage.setItem(_BASE_KEY, text);
+    return "saved";
   } catch {
     _dropBaseIds();
-    return false;
+    return "refused";
   }
 }
 
@@ -820,6 +869,7 @@ window.syncStoreV2 = {
   loadLocal, saveLocal,
   sweepRetiredSettings,
   saveBaseIds, clearBaseIds, goneFromDrive,
+  fitsStorage,
   loadBookmarks, saveBookmarks, projectedBookmarksEntry,
   saveSetting, saveLastRead,
   migrateLegacyIfNeeded,

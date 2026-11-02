@@ -129,9 +129,9 @@ function createSyncMachine({ onStateChange } = {}) {
   // is refused again — and cycles run on each scroll stop and chapter change — so the notice is shown once until a
   // merged doc saves (사용자 결정 2026-10-31).
   let _storageFullNoticed = false;
-  // Set when a refused base list write was logged. On a nearly full storage the list is refused at every saved merge,
-  // and those errors pushed earlier ones (DELETE_UNCONFIRMED and the like) out of the diagnostic's 20 lines — so it is
-  // logged once until a list saves (사용자 결정 2026-10-31).
+  // Set when an unsaved base list was logged. On a nearly full storage the list is left out at every saved merge, and
+  // those errors pushed earlier ones (DELETE_UNCONFIRMED and the like) out of the diagnostic's 20 lines — so it is
+  // logged once until a list saves (사용자 결정 2026-10-31), with the first failure's reason.
   let _baseIdsFailLogged = false;
 
   // ── Context (all "hidden state" in one place) ─────────────────────────────
@@ -858,9 +858,12 @@ function createSyncMachine({ onStateChange } = {}) {
       // The base list goes with the merge just saved, and before the upload, which may fail: it describes the file
       // downloaded, so it is written from `remote` — an id this device only uploads is not one Drive held (store-v2.js
       // saveBaseIds). No await separates it from the save above, so a cycle stopped by sign-out never writes it.
-      if (V2.saveBaseIds(fileId, remote)) _baseIdsFailLogged = false;
+      // The log says why it is not saved: `reason:headroom` — left out to keep the 64 KiB the import keeps free — or
+      // `reason:refused` — the write failed (여유 때문인지 거절인지 구별한다, 사용자 결정 2026-11-01).
+      const baseIds = V2.saveBaseIds(fileId, remote);
+      if (baseIds === "saved") _baseIdsFailLogged = false;
       else if (!_baseIdsFailLogged) {
-        L.log({ kind: "ERROR", event: "BASE_IDS_SAVE_FAIL" });
+        L.log({ kind: "ERROR", event: "BASE_IDS_SAVE_FAIL", reason: baseIds });
         _baseIdsFailLogged = true;
       }
 

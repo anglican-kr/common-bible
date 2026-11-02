@@ -2366,7 +2366,7 @@ function baseMachine({ v2 = {}, t = {} } = {}) {
         mergeDocs: remoteChangeMerge,
         saveLocal: () => { order.push("save"); return "saved"; },
         applyToLegacyKeys: () => { order.push("legacy"); return []; },
-        saveBaseIds: (fileId, doc) => { order.push("base"); baseWrites.push({ fileId, doc }); return true; },
+        saveBaseIds: (fileId, doc) => { order.push("base"); baseWrites.push({ fileId, doc }); return "saved"; },
         ...v2,
       },
     },
@@ -2420,7 +2420,7 @@ test("80. 304, 새 파일 만들기, v1 파일 올리기, 병합 결과 저장 �
     initialRefreshToken: "rt-x",
     findFileId: null,
     uploadResult: { ok: true, status: 200, etag: null, fileId: "fid-new" },
-    overrideStubs: { V2: { saveBaseIds: (...a) => { writes.push(a); return true; } } },
+    overrideStubs: { V2: { saveBaseIds: (...a) => { writes.push(a); return "saved"; } } },
   });
   created.machine.enable();
   await created.drain(8);
@@ -2441,32 +2441,33 @@ test("80. 304, 새 파일 만들기, v1 파일 올리기, 병합 결과 저장 �
   assert.equal(h.baseWrites.length, 0, "사이클 중단");
 });
 
-// 저장 공간이 거의 찬 기기에서는 병합 결과를 저장할 때마다 목록 저장이 거절된다. 그때마다 오류를 남기면 진단 정보의 오류
+// 저장 공간이 거의 찬 기기에서는 병합 결과를 저장할 때마다 목록이 저장되지 않는다. 그때마다 오류를 남기면 진단 정보의 오류
 // 칸(20줄)에서 앞선 오류(DELETE_UNCONFIRMED 등)가 밀려났다(PR #460 리뷰). 처음 한 번만 남기고, 목록을 저장하면 다시 남길 수
-// 있다(사용자 결정 2026-10-31).
-test("80a. 목록 저장이 거절돼도 올리고 IDLE로 끝나며, 오류는 거절되는 동안 한 번만 남긴다 — 목록을 저장한 뒤 다시 거절되면 다시 남긴다", async () => {
-  const results = [false, false, false, true, false];
+// 있다(사용자 결정 2026-10-31). 기록은 64 KiB 여유 때문에 저장하지 않은 것(headroom)과 저장이 거절된 것(refused)을
+// 구별한다(사용자 결정 2026-11-01). 저장하지 못하는 동안 까닭이 바뀌어도 처음 까닭 하나만 남긴다.
+test("80a. 목록을 저장하지 못해도 올리고 IDLE로 끝나며, 오류는 그동안 한 번만 까닭과 함께 남긴다 — 목록을 저장한 뒤 다시 실패하면 다시 남긴다", async () => {
+  const results = ["headroom", "refused", "headroom", "saved", "refused"];
   const h = baseMachine({ v2: { saveBaseIds: () => results.shift() } });
   const uploads = () => h.order.filter((o) => o === "upload").length;
-  const fails = () => h.logEntries.filter((e) => e.kind === "ERROR" && e.event === "BASE_IDS_SAVE_FAIL").length;
+  const fails = () => h.logEntries.filter((e) => e.kind === "ERROR" && e.event === "BASE_IDS_SAVE_FAIL");
   h.machine.enable();
   await h.drain(8);
   assert.equal(uploads(), 1);
   assert.equal(h.machine.getState(), "IDLE");
-  assert.equal(fails(), 1);
+  assert.deepEqual(fails().map((e) => e.reason), ["headroom"]);
   for (let i = 0; i < 2; i++) {
     h.machine.requestSync();
     await h.drain(8);
   }
-  assert.equal(uploads(), 3, "거절돼도 올린다");
+  assert.equal(uploads(), 3, "저장하지 못해도 올린다");
   assert.equal(h.machine.getState(), "IDLE");
-  assert.equal(fails(), 1, "거절되는 동안 한 번만");
+  assert.deepEqual(fails().map((e) => e.reason), ["headroom"], "저장하지 못하는 동안 한 번만");
   for (let i = 0; i < 2; i++) {
     h.machine.requestSync();
     await h.drain(8);
   }
   assert.equal(results.length, 0, "다섯 번 동기화했다");
-  assert.equal(fails(), 2, "목록을 저장한 뒤 다시 거절되면 다시 남긴다");
+  assert.deepEqual(fails().map((e) => e.reason), ["headroom", "refused"], "목록을 저장한 뒤 다시 실패하면 그 까닭으로 다시 남긴다");
   assert.equal(h.machine.getState(), "IDLE");
 });
 

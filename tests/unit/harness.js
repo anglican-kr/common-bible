@@ -57,6 +57,9 @@ export function makeLocalStorage(initial = {}) {
     setItem: (k, v) => { store[k] = String(v); },
     removeItem: (k) => { delete store[k]; },
     clear: () => { for (const k of Object.keys(store)) delete store[k]; },
+    // Walked by code that measures what is stored (store-v2.js saveBaseIds), as the browser's localStorage is.
+    key: (i) => Object.keys(store)[i] ?? null,
+    get length() { return Object.keys(store).length; },
     _raw: store,
   };
 }
@@ -124,7 +127,7 @@ function makeStoreV2Stub() {
     loadLocal: () => emptyDoc(),
     saveLocal: () => "saved",
     sweepRetiredSettings: () => {},
-    saveBaseIds: () => true,
+    saveBaseIds: () => "saved",
     clearBaseIds: () => false,
     goneFromDrive: () => [],
     loadBookmarks: () => [],

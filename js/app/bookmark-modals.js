@@ -672,7 +672,9 @@ function openMergeDialog(candidates, incomingSpec, mode, fallbackContext = null)
 // ── BEGIN IMPORT_EXPORT ──
 // Exercised by tests/unit/bookmark.test.js. Pure helpers for the import
 // pipeline: validation (structural), merge (id-deduped union with existing
-// taking precedence), and recursive count.
+// taking precedence), recursive count, and what a press of 병합 or 덮어쓰기
+// says when it does not fit. The size check asks the sync store
+// (window.syncStoreV2.fitsStorage), which the test loads beside this block.
 // Structural only — the envelope, not the items (bookmark.test.js pins `{ bookmarks: [{}] }` → true),
 // so the predicate promises `unknown[]`; openImportModal is where the items are taken as nodes.
 /** @param {unknown} data @returns {data is { bookmarks: unknown[] }} */
@@ -886,29 +888,27 @@ function _sanitizeImportItems(items, chapterCountOf, existingTypeOf = () => null
   return { nodes: walk(items, 1), skipped };
 }
 
-// The quota an import is checked against: Safari's — 5 MiB per origin counted in bytes, 2 bytes a character once any
-// Korean is in the text (WebKit `localStorageQuotaInBytes` · `String::sizeInBytes`; WebKit 26.4 measures the same), the
-// strictest engine. Chromium counts characters (5,242,880), so this is half its room; kept for every engine, as sync
-// carries the list to the user's other devices. Past the quota, saving failed silently (saveBookmarks swallowed it until
-// known-issues §15.4): 「덮어썼습니다」 over the old list, later edits lost, another device's sync stopped (PR #359 review).
-const STORAGE_QUOTA_BYTES = 5 * 1024 * 1024;
-// Left free after an import, for what the app saves next — about 90 bookmarks (714 bytes each, both copies).
-const STORAGE_HEADROOM_BYTES = 64 * 1024;
-
 /**
- * Whether the device takes a save, counted the strictest way. The measure is what will actually be stored, not the
- * list: a fixed budget on the list's JSON (600,000 characters) let a 1,000-character folder id through — the sync store
- * repeats it under every child, 21 times the list — yet turned away the app's own backup of notes, about twice the list
- * (PR #359 review).
+ * Whether the device takes a save, counted the strictest way: Safari's 5 MiB, 2 bytes a character, 64 KiB left free.
+ * The rule is the sync store's (store-v2.js fitsStorage, loaded before this module), which keeps its base list within
+ * it too — one rule, so the import and the list cannot drift apart (사용자 결정 2026-11-01). The measure is what will
+ * actually be stored, not the list: a fixed budget on the list's JSON (600,000 characters) let a 1,000-character folder
+ * id through — the sync store repeats it under every child, 21 times the list — yet turned away the app's own backup of
+ * notes, about twice the list (PR #359 review).
  * @param {number} chars  every character localStorage would hold after the save (storage.js projectedStorageChars)
+ * @returns {boolean}
  */
 function _fitsStorage(chars) {
-  return 2 * chars <= STORAGE_QUOTA_BYTES - STORAGE_HEADROOM_BYTES;
+  // The import stops before measuring when the sync store is missing (IMPORT_NO_SYNC_STORE); this only keeps a missing
+  // store from throwing — asking it threw, and the import stopped without a word (PR #460 4회차 리뷰).
+  const store = window.syncStoreV2;
+  return store ? store.fitsStorage(chars) : true;
 }
 
 // An import let in only with the base list left out (projectedStorageChars) gives the list up before it is saved. The
 // save gives it up only when storage is full, so the list would otherwise sit in the headroom kept for what the app
-// saves next (기준 목록을 먼저 지운다, 사용자 결정 2026-11-01). The next sync writes the list again.
+// saves next (기준 목록을 먼저 지운다, 사용자 결정 2026-11-01). The next sync writes the list again once it fits the same
+// budget (store-v2.js saveBaseIds); this keeps the headroom while sync is off or offline.
 /**
  * @param {BookmarkTreeNode[]} store  the list about to be saved
  * @param {(store: BookmarkTreeNode[], withGivenUp: boolean) => number} measure  storage.js projectedStorageChars
@@ -916,6 +916,68 @@ function _fitsStorage(chars) {
  */
 function _makeRoomForImport(store, measure, giveUp) {
   if (!_fitsStorage(measure(store, true))) giveUp();
+}
+
+// What the dialog says when the pressed way does not fit — one for each case, kept here together. The words are a
+// stand-in: they are to be settled later with the button names, the dialog's sentences and the notices after a save
+// (사용자 결정 2026-11-02, known-issues §44).
+const IMPORT_NO_ROOM_REFUSAL = "저장 공간이 부족해 북마크를 가져올 수 없습니다. 「취소」를 눌러 주세요.";
+const IMPORT_MERGE_REFUSAL = "합친 목록이 너무 커서 병합할 수 없습니다. 「덮어쓰기」나 「취소」를 눌러 주세요.";
+const IMPORT_OVERWRITE_REFUSAL = "저장 공간이 부족해 「덮어쓰기」로는 가져올 수 없습니다. 「병합」이나 「취소」를 눌러 주세요.";
+// Said when the sync store did not load (store-v2.js alone failed): the import would be saved to the legacy key alone,
+// and the next start, reading the sync store's list, would show the list from before it (PR #460 5회차 리뷰, 사용자
+// 결정 2026-11-02).
+const IMPORT_NO_SYNC_STORE = "북마크를 가져올 수 없습니다. 앱을 다시 열어 주세요.";
+
+/**
+ * Whether a press of 병합 or 덮어쓰기 saves, and what the dialog says when it does not. Neither way is always the
+ * larger: 덮어쓰기 stores the file's list, 병합 the current list with the file's new ids. So a file holding this device's
+ * ids with longer notes passes the budget on 덮어쓰기 and fits on 병합, and a device holding ids the file lacks goes the
+ * other way (PR #460 4회차 리뷰). The pressed way is measured first and saved when it fits; the other is measured only
+ * to say which button is left (사용자 결정 2026-11-02).
+ * @param {"merge" | "overwrite"} pressed
+ * @param {(way: "merge" | "overwrite") => boolean} fits  whether that way's save fits the budget (_fitsStorage)
+ * @returns {string | null}  null when the pressed way is saved, else what the dialog says
+ */
+function _importRefusal(pressed, fits) {
+  if (fits(pressed)) return null;
+  if (!fits(pressed === "merge" ? "overwrite" : "merge")) return IMPORT_NO_ROOM_REFUSAL;
+  return pressed === "merge" ? IMPORT_MERGE_REFUSAL : IMPORT_OVERWRITE_REFUSAL;
+}
+
+/**
+ * The list each way saves and whether it fits the budget, both worked out when first asked for: 덮어쓰기 the file's
+ * list, 병합 the current list with the file's new ids. A current list that cannot be read (a broken entry in the stored
+ * document) cannot be merged, so 병합 does not fit — 덮어쓰기 is how such a list gets fixed. Made again on each press:
+ * a current list read when the dialog opened would leave out what a sync added since, and saving it would delete that.
+ * @param {BookmarkTreeNode[]} items  the import's items
+ * @param {() => BookmarkTreeNode[]} loadList  the current list (storage.js loadBookmarks)
+ * @param {(store: BookmarkTreeNode[]) => number} measure  storage.js projectedStorageChars
+ */
+function _importWays(items, loadList, measure) {
+  /** @type {BookmarkTreeNode[] | null | undefined} */
+  let merged;
+  /** @param {"merge" | "overwrite"} way @returns {BookmarkTreeNode[] | null} */
+  const listOf = (way) => {
+    if (way === "overwrite") return items;
+    if (merged === undefined) {
+      try { merged = _mergeBookmarkStores(loadList(), items); } catch (_) { merged = null; }
+    }
+    return merged;
+  };
+  /** @param {"merge" | "overwrite"} way @returns {boolean} */
+  const fits = (way) => {
+    const list = listOf(way);
+    return list !== null && _fitsStorage(measure(list));
+  };
+  return { listOf, fits };
+}
+
+// Whether a file read opens the dialog: when either way fits. A file holding this device's ids with longer notes
+// passes the budget on 덮어쓰기 yet fits on 병합 (PR #460 4회차 리뷰, 사용자 결정 2026-11-02).
+/** @param {(way: "merge" | "overwrite") => boolean} fits @returns {boolean} */
+function _importOpens(fits) {
+  return fits("overwrite") || fits("merge");
 }
 // ── END IMPORT_EXPORT ──
 
@@ -943,6 +1005,17 @@ function closeImportModal() { importOverlay.close(); }
 
 const _giveUpBaseList = () => window.syncStoreV2?.clearBaseIds();
 
+// Said in the dialog, which stays open, and to the live region — a snackbar sat over the dialog's buttons on a phone
+// held sideways (PR #359 review). One paragraph holds the latest refusal: 병합 refused after 덮어쓰기 (or the other way)
+// replaces the words rather than adding a second paragraph.
+/** @param {string} msg */
+function _refuseImport(msg) {
+  const shown = $bmImportBody.querySelector(".bm-import-refusal");
+  if (shown) shown.textContent = msg;
+  else $bmImportBody.appendChild(el("p", { className: "bm-import-refusal" }, msg));
+  announce(msg);
+}
+
 // Open the OS file picker (called from bookmark.js's ⋯ menu). Resetting value
 // first lets the same file be picked twice in a row and still fire change.
 function openImportFilePicker() {
@@ -967,35 +1040,27 @@ function openImportModal(items, skipped) {
   importOverlay.open();
   const cleanup = closeImportModal;
 
-  $bmImportMerge.onclick = () => {
-    const existing = loadBookmarks();
-    const merged = _mergeBookmarkStores(existing, items);
-    if (!_fitsStorage(projectedStorageChars(merged))) {
-      // Said in the dialog, which stays open — 덮어쓰기 was checked to fit when the file was read. A snackbar sat over
-      // the dialog's buttons on a phone held sideways (PR #359 review).
-      const msg = "합친 목록이 너무 커서 병합할 수 없습니다. 「덮어쓰기」나 「취소」를 눌러 주세요.";
-      if (!$bmImportBody.querySelector(".bm-import-refusal")) {
-        $bmImportBody.appendChild(el("p", { className: "bm-import-refusal" }, msg));
-      }
-      announce(msg);
+  // Both ways are measured again on the press: the file was measured when it was read, and what else is stored can grow
+  // while the dialog is open — a sync saving a larger list let an overwrite past the budget be stored (PR #460 3회차
+  // 리뷰, 사용자 결정 2026-11-01). What a refused press says depends on whether the other way fits (_importRefusal).
+  /** @param {"merge" | "overwrite"} pressed */
+  const press = (pressed) => {
+    const { listOf, fits } = _importWays(items, loadBookmarks, projectedStorageChars);
+    const refusal = _importRefusal(pressed, fits);
+    if (refusal !== null) {
+      _refuseImport(refusal);
       return;
     }
-    _makeRoomForImport(merged, projectedStorageChars, _giveUpBaseList);
-    if (commitBookmarks(merged)) {
+    const store = /** @type {BookmarkTreeNode[]} */ (listOf(pressed));   // it fits, so it was made
+    _makeRoomForImport(store, projectedStorageChars, _giveUpBaseList);
+    if (commitBookmarks(store)) {
       _deps.rerenderActiveBookmarkTree();
-      announce("북마크를 병합했습니다.");
+      announce(pressed === "merge" ? "북마크를 병합했습니다." : "북마크를 덮어썼습니다.");
     }
     cleanup();
   };
-
-  $bmImportOverwrite.onclick = () => {
-    _makeRoomForImport(items, projectedStorageChars, _giveUpBaseList);
-    if (commitBookmarks(items)) {
-      _deps.rerenderActiveBookmarkTree();
-      announce("북마크를 덮어썼습니다.");
-    }
-    cleanup();
-  };
+  $bmImportMerge.onclick = () => press("merge");
+  $bmImportOverwrite.onclick = () => press("overwrite");
 
   $bmImportCancel.onclick = cleanup;
 }
@@ -1013,6 +1078,10 @@ $bmImportBtn.addEventListener("click", openImportFilePicker);
 $bmImportInput.addEventListener("change", () => {
   const file = $bmImportInput.files?.[0];
   if (!file) return;
+  if (!window.syncStoreV2) {
+    _importStopped(IMPORT_NO_SYNC_STORE);
+    return;
+  }
   const reader = new FileReader();
   reader.onload = async (e) => {
     let data;
@@ -1058,7 +1127,8 @@ $bmImportInput.addEventListener("change", () => {
       _importStopped(`가져올 수 있는 항목이 없습니다. 파일에는 올바르지 않은 항목 ${skipped}개만 들어 있습니다.`);
       return;
     }
-    if (!_fitsStorage(projectedStorageChars(nodes))) {
+    // Stopped here only when neither way fits (_importOpens).
+    if (!_importOpens(_importWays(nodes, loadBookmarks, projectedStorageChars).fits)) {
       _importStopped("북마크를 가져오지 않았습니다. 목록이 너무 커서 저장할 수 없습니다.");
       return;
     }
