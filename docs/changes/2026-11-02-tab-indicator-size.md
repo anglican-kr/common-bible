@@ -1,0 +1,28 @@
+---
+date: 2026-11-02
+branch: fix/tab-indicator-size
+title: "fix: 아이폰에서 탭 바의 선택 원이 화면만큼 커지지 않게 함"
+---
+
+## 요약
+
+아이폰에서 하단 탭 바의 선택 원(슬라이딩 인디케이터, ADR-030 후속⁵)이 화면 너비만 한 회색 원으로 그려져 탭 바 뒤의 화면을 덮었다. 탭을 옮겨도 그 크기 그대로 따라다녔다. 원의 크기와 위치를 CSS가 적용된 뒤에만 재게 하고, 처음 로드에서 건너뛴 측정은 페이지를 다 받은 뒤(`load` 이벤트) 다시 하게 했다.
+
+## 확정 · 근거
+
+- **원인.** `tabbar.js`는 모듈을 불러올 때 선택 원의 지름을 한 번 재어(`sizeTabIndicator`) 인라인 너비로 넣는다. 그 뒤로는 화면 크기가 바뀌거나 돌릴 때, 축소와 검색 모핑이 끝날 때만 다시 잰다. WebKit(Safari)은 `defer`와 모듈 스크립트를 스타일시트가 오기 전에도 실행한다. WebKit 소스의 `HTMLScriptRunner::executeScriptsWaitingForParsing`은 스크립트를 다 받았는지만 본다. Chromium은 스타일시트를 기다린다. CSS가 없으면 너비가 정해지지 않은 아이콘 SVG가 줄 너비만큼 커지므로, 측정값이 화면 너비가 된다.
+- **근거.** 사용자 스크린샷의 원 지름이 화면 너비와 거의 같고, 중심은 선택한 탭에 있었다. Chromium에서 스타일시트를 스크립트 실행 뒤에 넣었더니 같은 화면이 재현됐다(지름 390px, 화면 너비 390px). 실제 아이폰(Safari)이나 WebKit에서 이 순서를 재 보지는 않았다. 이 컴퓨터에는 Playwright WebKit에 필요한 라이브러리가 없다(`topics/routing.md` pitfalls §34의 규칙과 같은 사정이다).
+- **고친 방법.** `.tab-indicator`는 `style.css`가 적용돼야 `position:absolute`가 되므로, 이 값으로 CSS가 적용됐는지 본다. 적용 전에는 재지도 놓지도 않는다. 그동안 원은 보이지 않고 CSS 기본값(56px)을 쓴다. `load`는 문서의 스타일시트를 모두 받은 뒤에 일어나므로 거기서 다시 재고 놓는다.
+- **일부러 하지 않은 것.** CSS에 `max-width`를 더해 원이 56px을 넘지 못하게 막는 방법도 있었다. 원인을 고쳤으므로 더하지 않았다. 처음 로드 때 레이아웃을 재는 다른 코드도 살폈다. 구약과 신약 사이를 미끄러지는 표시는 비율(%)로 옮기고, 책 이름 줄이기(`applyBookListCompactness`)는 크기 변화 감시(`ResizeObserver`)로 다시 재므로 그대로 두었다.
+
+## 검증
+
+- e2e 새 테스트 둘(`test_tabbar.py`): 문서에서 `style.css` 링크를 빼고 `DOMContentLoaded`에 넣어 WebKit의 순서를 Chromium에서 만든다. 390px에서 원이 56px이고 홈 탭과 중심이 같은지, 320px에서 줄어든 슬롯의 원(55px)에 맞는지 본다. 고치기 전 코드에서는 둘 다 실패했다(390px과 320px, 중심이 360px과 293px 벗어남). 고친 코드에서는 통과했다.
+- 유닛 `node --test tests/unit/*.test.js`: 1443개 가운데 1442개 통과, 1개 건너뜀(실패 0). `npm run typecheck` 통과.
+- e2e 전체(`pytest tests/e2e/`, 작업 폴더 서버 8093): 399개 모두 통과(12분 35초). 그 뒤 `tabbar.js`와 `test_tabbar.py`는 주석과 설명만 고쳤고, `test_tabbar.py` 17개를 다시 돌려 모두 통과했다.
+
+## 갱신한 문서
+
+- `coding-pitfalls.md`: §41 「Safari는 스타일시트가 오기 전에 모듈 스크립트를 실행할 수 있다」를 더하고, 다음 번호를 §42로 고쳤다.
+- `topics/routing.md` 「함정」: 탭 바 사례가 있는 공통 함정(pitfalls §1, §41)을 가리키는 줄을 더했다.
+- `DESIGN.md` §7: 슬라이딩 인디케이터의 크기를 CSS가 적용된 뒤에 잰다는 것을 더했다.
