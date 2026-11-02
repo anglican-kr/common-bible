@@ -275,6 +275,61 @@ def test_indicator_fits_the_shrunk_slot_at_320px(browser):
         ctx.close()
 
 
+# Safari(WebKit)는 모듈 스크립트를 스타일시트가 오기 전에 실행할 수 있다(Chromium은 기다린다. pitfalls §41).
+# 그 순서를 Chromium에서 만든다. 문서에서 `style.css` 링크를 빼고, 모듈 스크립트가 다 실행된 뒤
+# (`DOMContentLoaded` 이벤트) 넣는다. 늦게 넣은 스타일시트도 `load` 이벤트를 늦춘다.
+_CSS_LINK = '<link rel="stylesheet" href="/css/style.css">'
+_LATE_CSS = """document.addEventListener('DOMContentLoaded', () => {
+    const l = document.createElement('link');
+    l.rel = 'stylesheet';
+    l.href = '/css/style.css';
+    document.head.appendChild(l);
+});"""
+# [인디케이터 폭, 홈 활성 원 폭, 두 중심의 거리(px, 반올림)]. 폭은 `sizeTabIndicator`처럼 `offsetWidth`(정수)로 잰다.
+_IND_VS_HOME = """() => {
+    const ind = document.querySelector('#tab-bar .tab-indicator');
+    const wrap = document.querySelector("#tab-bar [data-tab='home'] .tab-icon-wrap");
+    const a = ind.getBoundingClientRect(), b = wrap.getBoundingClientRect();
+    return [ind.offsetWidth, wrap.offsetWidth, Math.round(Math.abs(a.left + a.width / 2 - (b.left + b.width / 2)))];
+}"""
+
+
+def _open_with_late_css(ctx, path):
+    def strip_css(route):
+        res = route.fetch()
+        body = res.text()
+        assert _CSS_LINK in body
+        route.fulfill(response=res, body=body.replace(_CSS_LINK, ""))
+    ctx.add_init_script(_LATE_CSS)
+    page = ctx.new_page()
+    page.route(lambda url: url.startswith(BASE_URL) and "." not in url.rsplit("/", 1)[-1], strip_css)
+    page.goto(f"{BASE_URL}{path}")   # `load` 이벤트까지 기다린다(늦게 넣은 `style.css` 포함)
+    page.wait_for_selector("#tab-bar .tab-indicator.is-shown", timeout=5_000)
+    page.wait_for_timeout(300)
+    return page
+
+
+def test_indicator_ignores_a_measure_taken_before_the_stylesheet(mobile_context):
+    """CSS가 적용되기 전에는 아이콘 SVG가 줄 너비만큼 커져, 활성 원을 재면 화면 너비가 나온다. 그 값을 쓰면 화면만 한
+    회색 원이 탭 바 뒤에 남았다(아이폰, 2026-11-02). 인디케이터는 56px이고 홈 탭의 활성 원과 중심이 같다."""
+    page = _open_with_late_css(mobile_context, "/")
+    ind, wrap, offset = page.evaluate(_IND_VS_HOME)
+    assert (ind, wrap, offset) == (56, 56, 0), (ind, wrap, offset)
+
+
+def test_indicator_measures_again_once_the_stylesheet_arrives_at_320px(browser):
+    """320px처럼 슬롯이 줄어드는 폭에서는 CSS 기본값(56px)이 아니라 줄어든 활성 원에 맞춰야 한다. 처음 로드의 측정을
+    건너뛰었으면 스타일시트까지 받은 뒤 다시 잰다."""
+    ctx = browser.new_context(viewport={"width": 320, "height": 640}, user_agent=IPHONE_UA)
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    try:
+        page = _open_with_late_css(ctx, "/")
+        ind, wrap, offset = page.evaluate(_IND_VS_HOME)
+        assert wrap < 56 and ind == wrap and offset == 0, (ind, wrap, offset)
+    finally:
+        ctx.close()
+
+
 # ── 수정 키 클릭 (PR #348 리뷰) ──
 
 def test_modifier_click_on_tab_leaves_no_scroll_restore_behind(mobile_context):

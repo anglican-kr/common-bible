@@ -485,15 +485,25 @@ const _tabIndicMQL = typeof window !== "undefined" && window.matchMedia
 // 인디케이터 지름 = 탭 슬롯의 활성 원(.tab-icon-wrap — 56px, 좁은 폭에서 슬롯이 줄면 그만큼 작다 — DESIGN.md §7).
 // 탭 바가 쉬고 있을 때만 잰다: 축소 · 검색 모핑과 그 복귀 중엔 슬롯이 애니메이트되어, 그 폭을 따라가면 펼칠 때
 // 작은 원이 커지며 나타난다(CSS 가 「탭 바 폭 / 탭 수」를 따라가던 때 — PR #348 리뷰). 그래서 라우트마다 호출하는
-// syncTabBarActive 는 재지 않고, 처음 로드와 reposition(리사이즈 · 회전 · 모핑 끝의 max-width transitionend)만 잰다.
+// `syncTabBarActive`는 재지 않고, 처음 로드와 `reposition`(리사이즈, 회전, 모핑 끝의 max-width `transitionend`, `load`)만 잰다.
 function sizeTabIndicator() {
   if (!$tabBar || !$dock) return;
   if ($dock.classList.contains("collapsed") || $dock.classList.contains("searching")) return;
   const ind = $tabBar.querySelector(".tab-indicator");
   const wrap = $tabBar.querySelector(".tab-item:not([hidden]) .tab-icon-wrap");
   if (!(ind instanceof HTMLElement) || !(wrap instanceof HTMLElement)) return;
+  if (!tabIndicatorStyled(ind)) return;
   const d = wrap.offsetWidth;
   if (d > 0) ind.style.width = `${d}px`;   // 0 = 숨은 dock(데스크톱) — CSS 기본 56px 그대로
+}
+
+// `style.css`가 적용됐는지 본다(`.tab-indicator`는 `style.css`가 적용돼야 `position:absolute`다).
+// Safari(WebKit)는 `defer` 스크립트와 모듈 스크립트를 스타일시트가 오기 전에도 실행한다(Chromium은 기다린다). CSS가
+// 없으면 아이콘 SVG가 줄 너비만큼 커져 활성 원을 재면 화면 너비가 나오고, 그 값을 쓰면 화면만 한 원이 리사이즈 전까지
+// 탭 바 뒤에 남았다(2026-11-02, pitfalls §41). 그동안은 크기를 재지도 위치를 정하지도 않고, 아래 `load` 이벤트에서 다시 한다.
+/** @param {HTMLElement} ind */
+function tabIndicatorStyled(ind) {
+  return getComputedStyle(ind).position === "absolute";
 }
 
 /** @param {string} active */
@@ -510,6 +520,7 @@ function positionTabIndicator(active) {
     return;
   }
   const apply = () => {
+    if (!tabIndicatorStyled(ind)) return;   // CSS 전의 배치로 위치를 정하지 않는다. `load` 이벤트에서 다시 정한다.
     const left = activeEl.offsetLeft + (activeEl.offsetWidth - ind.offsetWidth) / 2;
     const slide = _prevTabIndic !== null && _prevTabIndic !== active && !(_tabIndicMQL && _tabIndicMQL.matches);
     if (slide) {
@@ -544,6 +555,9 @@ if (typeof window !== "undefined" && window.addEventListener) {
     _tabIndicTimer = setTimeout(reposition, 120);
   });
   window.addEventListener("orientationchange", reposition);
+  // 스타일시트가 오기 전에 건너뛴 처음 로드의 측정과 배치를 페이지를 다 받은 뒤 다시 한다(`tabIndicatorStyled`).
+  // `load` 이벤트는 문서의 스타일시트를 모두 받은 뒤에 일어난다.
+  if (document.readyState !== "complete") window.addEventListener("load", reposition, { once: true });
   // 모핑(검색/축소) 복귀 시 .tab-item max-width 가 ~0.25s 동안 애니메이트되므로,
   // syncTabBarActive 의 즉시 rAF 측정은 중간값(좁은 폭)을 읽어 인디케이터가 어긋난다.
   // → max-width transitionend 에서 활성 탭 실측으로 재배치(같은 탭이라 스냅). 한 번의
