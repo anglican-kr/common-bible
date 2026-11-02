@@ -102,7 +102,7 @@ def test_switcher_shows_every_candidate_and_changes_body_and_color(desktop_conte
     assert _colors(page) == ["자색"]
     assert page.locator(".lect-sets .division-tab").count() == 2
 
-    # 성인 칩 → 공통 독서. 본문 제목(「○○ 독서」)과 공통 분류 라벨은 두지 않는다 — 고른 칩이 어느 독서인지 보인다(사용자 결정
+    # 성인 칩을 고르면 공통 독서다. 본문 제목(「○○ 독서」)과 공통 분류 라벨은 두지 않는다 — 고른 칩이 어느 독서인지 보인다(사용자 결정
     # 2026-11-03).
     page.locator(".lect-chip", has_text="니니안").click()
     page.wait_for_selector(".lect-chip[aria-current]:has-text('니니안')")
@@ -1276,7 +1276,7 @@ def _title_year(page):
 
 def test_title_row_is_the_date_nav_and_the_year_shrinks_to_fit(mobile_context):
     """머리의 제목 자리가 날짜 이동 줄(‹ 날짜 오늘 ›)이고 본문 맨 위의 날짜 줄은 없다. 위 단계 꺾쇠도 없다. 보이는 연도는 자리에
-    맞게 「2026년」 → 「26년」 → 생략으로 줄고, 넓어지면 돌아온다(화면 폭이 바뀌면 다시 잰다). 화면 낭독기는 늘 전체 날짜를 읽는다.
+    맞게 「2026년」, 「26년」, 생략의 차례로 줄고, 넓어지면 돌아온다(화면 폭이 바뀌면 다시 잰다). 스크린 리더는 늘 전체 날짜를 읽는다.
     12월 30일은 가장 긴 날짜의 하나다."""
     page = mobile_context.new_page()
     _open(page, "lectionary/2026-12-30")

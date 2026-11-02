@@ -857,7 +857,7 @@ function buildDateStep(dir, href, label) {
 }
 
 /**
- * 날짜 이동 줄의 세 칸 — ‹ · 가운데(제목 + 「오늘」) · ›. 「오늘」의 `data-focus-key` 는 `today` — 앞뒤 단추가 자리만 남는 범위
+ * 날짜 이동 줄의 세 칸 — ‹ · 가운데(제목 + 「오늘」) · ›. 「오늘」의 `data-focus-key`는 `today` — 앞뒤 단추가 자리만 남는 범위
  * 끝에서 포커스가 돌아갈 대체 자리다. 셋 다 문장 안 요소(`<a>` · `<span>`)라 머리의 `<h1>` 안에도 넣을 수 있다(전례독서).
  * @param {{ title: HTMLElement, todayHref: string,
  *   prev: { href: string | null, label: string }, next: { href: string | null, label: string } }} o
@@ -884,7 +884,7 @@ function buildDateNav(o) {
   return nav;
 }
 
-/** 머리 날짜의 연도 — 자리에 맞는 첫 단계를 쓴다(「2026년」 → 「26년」 → 생략, 사용자 결정 2026-11-03). */
+/** 머리 날짜의 연도 — 「2026년」, 「26년」, 생략 가운데 자리에 맞는 첫 단계를 쓴다(사용자 결정 2026-11-03). */
 const TITLE_YEAR_STEPS = [
   (/** @type {number} */ y) => `${y}년 `,
   (/** @type {number} */ y) => `${String(y % 100).padStart(2, "0")}년 `,
@@ -894,7 +894,7 @@ const TITLE_YEAR_STEPS = [
 /**
  * 전례독서의 머리 — 제목 자리에 날짜 이동 줄을 그린다(사용자 결정 2026-11-03: 스크롤해도 날짜와 「오늘」이 보이고 하루씩 옮길
  * 수 있게. 그전엔 본문 맨 위 줄이었고, 머리에는 「전례독서」와 캘린더로 가는 꺾쇠가 있었다). 「전례독서」는 문서 제목(setTitle)에
- * 남는다. 보이는 날짜의 연도는 자리에 맞게 줄이고(`fitTitleYear`), 화면 낭독기는 숨긴 전체 날짜를 읽는다.
+ * 남는다. 보이는 날짜의 연도는 자리에 맞게 줄이고(`fitTitleYear`), 스크린 리더는 숨긴 전체 날짜를 읽는다.
  * @param {LectionaryModel} m
  */
 function commitTitleDateNav(m) {
@@ -919,7 +919,7 @@ function commitTitleDateNav(m) {
 /**
  * 머리 날짜가 넘치면 연도를 한 단계씩 줄인다. 날짜 칸(`.lect-date-label`)은 줄바꿈 없이 넘친 만큼을 숨기므로, 그 칸의 글자
  * 폭이 칸보다 넓은지로 넘침을 잰다. 스타일시트가 오기 전(Safari — coding-pitfalls §41)에는 칸이 줄지 않아 연도를 그대로
- * 두고, 스타일이 들어와 머리 크기가 바뀌면 `watchTitleYear` 가 다시 잰다.
+ * 두고, 스타일이 들어와 머리 크기가 바뀌면 `watchTitleYear`가 다시 잰다.
  */
 function fitTitleYear() {
   const label = /** @type {HTMLElement | null} */ ($title.querySelector(".lect-date-label"));

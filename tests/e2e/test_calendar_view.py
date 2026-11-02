@@ -100,7 +100,7 @@ def test_grid_is_six_weeks_from_sunday(desktop_context):
 # ── ③ 칸 → 전례독서 → 위 단계 ──
 
 def test_cell_opens_lectionary_and_the_tab_returns_to_this_month(mobile_context):
-    """12월 25일 칸 → /lectionary/2026-12-25(성탄 낮). 머리의 제목 자리는 그날의 날짜 이동 줄이고 위 단계 꺾쇠는 없다 — 캘린더로는
+    """12월 25일 칸을 누르면 /lectionary/2026-12-25(성탄 낮)다. 머리의 제목 자리는 그날의 날짜 이동 줄이고 위 단계 꺾쇠는 없다 — 캘린더로는
     탭 바의 캘린더 탭이 간다(사용자 결정 2026-11-03). 독서 화면도 캘린더 화면이라 탭은 이번 달로 간다(탭의 pop-to-root)."""
     page = mobile_context.new_page()
     _open(page, "calendar/2026-12")
@@ -297,7 +297,7 @@ def test_desktop_header_calendar_entry_goes_where_the_tab_goes(desktop_context):
     page.locator("#header-calendar").click()
     page.wait_for_url(f"{BASE}/calendar")
     page.wait_for_selector(f".cal-month:has-text('{_this_month()[1]}')")
-    # 다른 달 → 집 단추로 성서 목록 → 헤더 단추면 그 달로
+    # 다른 달을 연 뒤 집 단추로 성서 목록에 가고, 헤더 단추를 누르면 그 달로 돌아온다
     page.evaluate("navigate('/calendar/2026-12')")
     page.wait_for_selector(".cal-month:has-text('2026년 12월')")
     page.locator("#page-title .title-home-btn").click()
