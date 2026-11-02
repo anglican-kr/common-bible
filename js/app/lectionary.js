@@ -50,6 +50,10 @@ const { _$, el, clearNode, emptyState, isModifiedClick } = window.appHelpers;
 const { loadLectionaryTrack, saveLectionaryTrack } = window.appStorage;
 
 const $app = _$("app");
+// 머리의 제목(<h1>) — 이 화면은 그 자리에 날짜 이동 줄을 그린다(commitTitleDateNav).
+const $title = _$("page-title");
+/** 마지막으로 그린 날짜 — 날짜가 바뀐 다시 그리기만 맨 위에서 시작한다(commit). @type {string | null} */
+let committedDate = null;
 // 이름은 views.js에 있다 — 이 모듈을 받지 못했을 때 라우터가 같은 제목으로 실패 화면을 그린다.
 const PAGE_TITLE = LITURGICAL_VIEWS.lectionary.title;
 // 이 화면의 링크(날짜 이동 · 칩 · 카드 · 세그먼트)는 #app 을 통째로 다시 그린다 — 그 링크들은 `data-focus-key` 만 달고, 라우터가
@@ -853,22 +857,93 @@ function buildDateStep(dir, href, label) {
 }
 
 /**
- * 날짜 이동 줄(DESIGN.md §6 「날짜 이동 줄」) — ‹ · 가운데(제목 + 「오늘」) · ›. 전례독서의 날짜 이동과 캘린더의 달 이동이
- * 같은 줄이고(ADR-038 2단계의 주간 화면도 이것을 쓴다), 화면마다 다른 것은 가운데 제목 요소(날짜 `<time>` · 달 `<h2>`)와
- * 라벨뿐이다. 「오늘」의 `data-focus-key` 는 `today` — 앞뒤 단추가 자리만 남는 범위 끝에서 포커스가 돌아갈 대체 자리다.
+ * 날짜 이동 줄의 세 칸 — ‹ · 가운데(제목 + 「오늘」) · ›. 「오늘」의 `data-focus-key` 는 `today` — 앞뒤 단추가 자리만 남는 범위
+ * 끝에서 포커스가 돌아갈 대체 자리다. 셋 다 문장 안 요소(`<a>` · `<span>`)라 머리의 `<h1>` 안에도 넣을 수 있다(전례독서).
+ * @param {{ title: HTMLElement, todayHref: string,
+ *   prev: { href: string | null, label: string }, next: { href: string | null, label: string } }} o
+ * @returns {HTMLElement[]}
+ */
+function dateNavParts(o) {
+  const mid = el("span", { className: "lect-date" });
+  mid.appendChild(o.title);
+  mid.appendChild(el("a", { className: "lect-today", href: o.todayHref, "data-focus-key": "today" }, "오늘"));
+  return [buildDateStep("prev", o.prev.href, o.prev.label), mid, buildDateStep("next", o.next.href, o.next.label)];
+}
+
+/**
+ * 날짜 이동 줄(DESIGN.md §6 「날짜 이동 줄」). 캘린더의 달 이동이 본문 맨 위에 쓴다(ADR-038 2단계의 주간 화면도 이것을 쓴다).
+ * 전례독서는 같은 세 칸을 머리의 제목 자리에 그린다(`commitTitleDateNav`). 화면마다 다른 것은 가운데 제목 요소(날짜
+ * `<time>` · 달 `<h2>`)와 라벨뿐이다.
  * @param {{ ariaLabel: string, title: HTMLElement, todayHref: string,
  *   prev: { href: string | null, label: string }, next: { href: string | null, label: string } }} o
  * @returns {HTMLElement}
  */
 function buildDateNav(o) {
   const nav = el("nav", { className: "lect-datenav", "aria-label": o.ariaLabel });
-  nav.appendChild(buildDateStep("prev", o.prev.href, o.prev.label));
-  const mid = el("div", { className: "lect-date" });
-  mid.appendChild(o.title);
-  mid.appendChild(el("a", { className: "lect-today", href: o.todayHref, "data-focus-key": "today" }, "오늘"));
-  nav.appendChild(mid);
-  nav.appendChild(buildDateStep("next", o.next.href, o.next.label));
+  for (const part of dateNavParts(o)) nav.appendChild(part);
   return nav;
+}
+
+/** 머리 날짜의 연도 — 자리에 맞는 첫 단계를 쓴다(「2026년」 → 「26년」 → 생략, 사용자 결정 2026-11-03). */
+const TITLE_YEAR_STEPS = [
+  (/** @type {number} */ y) => `${y}년 `,
+  (/** @type {number} */ y) => `${String(y % 100).padStart(2, "0")}년 `,
+  () => "",
+];
+
+/**
+ * 전례독서의 머리 — 제목 자리에 날짜 이동 줄을 그린다(사용자 결정 2026-11-03: 스크롤해도 날짜와 「오늘」이 보이고 하루씩 옮길
+ * 수 있게. 그전엔 본문 맨 위 줄이었고, 머리에는 「전례독서」와 캘린더로 가는 꺾쇠가 있었다). 「전례독서」는 문서 제목(setTitle)에
+ * 남는다. 보이는 날짜의 연도는 자리에 맞게 줄이고(`fitTitleYear`), 화면 낭독기는 숨긴 전체 날짜를 읽는다.
+ * @param {LectionaryModel} m
+ */
+function commitTitleDateNav(m) {
+  const p = /** @type {{ y: number, m: number, d: number }} */ (parseDate(m.date));
+  const label = el("time", { className: "lect-date-label", datetime: m.date });
+  label.appendChild(el("span", { className: "sr-only" }, dateLabel(m.date)));
+  const shown = el("span", { "aria-hidden": "true" });
+  shown.appendChild(el("span", { className: "lect-date-year", "data-year": String(p.y) }, TITLE_YEAR_STEPS[0](p.y)));
+  shown.appendChild(document.createTextNode(`${p.m}월 ${p.d}일 (${WEEKDAY_KO[dayOfWeek(m.date)]})`));
+  label.appendChild(shown);
+  clearNode($title);
+  for (const part of dateNavParts({
+    title: label,
+    todayHref: m.hrefs.today,
+    prev: { href: m.hrefs.prev, label: "전날" },
+    next: { href: m.hrefs.next, label: "다음날" },
+  })) $title.appendChild(part);
+  watchTitleYear();
+  fitTitleYear();
+}
+
+/**
+ * 머리 날짜가 넘치면 연도를 한 단계씩 줄인다. 날짜 칸(`.lect-date-label`)은 줄바꿈 없이 넘친 만큼을 숨기므로, 그 칸의 글자
+ * 폭이 칸보다 넓은지로 넘침을 잰다. 스타일시트가 오기 전(Safari — coding-pitfalls §41)에는 칸이 줄지 않아 연도를 그대로
+ * 두고, 스타일이 들어와 머리 크기가 바뀌면 `watchTitleYear` 가 다시 잰다.
+ */
+function fitTitleYear() {
+  const label = /** @type {HTMLElement | null} */ ($title.querySelector(".lect-date-label"));
+  const year = label && /** @type {HTMLElement | null} */ (label.querySelector(".lect-date-year"));
+  if (!label || !year) return;
+  const y = Number(year.dataset.year);
+  for (const step of TITLE_YEAR_STEPS) {
+    year.textContent = step(y);
+    if (label.scrollWidth <= label.clientWidth) return;
+  }
+}
+
+/** @type {ResizeObserver | null} */
+let titleYearObserver = null;
+/**
+ * 화면 폭 · 글자 크기가 바뀌거나 글꼴이 들어오면 다시 잰다(머리는 화면이 바뀌어도 그대로라 한 번만 단다). 웹 글꼴(Noto Sans KR)은
+ * 글자 묶음별로 늦게 들어와 머리 크기는 그대로인 채 날짜 폭만 넓힌다 — 360px에서 연도를 줄인 날짜가 2px 넘쳤다(2026-11-03 실측).
+ * 다른 화면에서는 날짜 칸이 없어 바로 끝난다.
+ */
+function watchTitleYear() {
+  if (titleYearObserver || typeof ResizeObserver === "undefined") return;
+  titleYearObserver = new ResizeObserver(() => fitTitleYear());
+  titleYearObserver.observe($title);
+  if (document.fonts) document.fonts.addEventListener("loadingdone", () => fitTitleYear());
 }
 
 /** 색 점 + 라벨 하나. */
@@ -882,14 +957,6 @@ function buildColorMark(/** @type {string} */ color, /** @type {boolean} */ alt)
 /** @param {LectionaryModel} m */
 function buildHeader(m) {
   const head = el("header", { className: "lect-head" });
-
-  head.appendChild(buildDateNav({
-    ariaLabel: "날짜 이동",
-    title: el("time", { datetime: m.date }, dateLabel(m.date)),
-    todayHref: m.hrefs.today,
-    prev: { href: m.hrefs.prev, label: "전날" },
-    next: { href: m.hrefs.next, label: "다음날" },
-  }));
 
   const official = m.resolved.official;
   const dayName = official ? String(official.observance.name || "") : "";
@@ -984,9 +1051,8 @@ function buildControls(m) {
       m.options.map((o, i) => ({ label: o.label, href: m.hrefs.options[i], active: i === m.setIndex, focusKey: `set:${i + 1}` })),
       { ariaLabel: name, className: "division-tabs--compact" },
     ));
-    // 공통 독서는 세그먼트에도 분류 라벨을 병기한다(ADR-038 §3 — 성인의 고유로 오인하지 않게)
-    const common = m.options.every((o) => o.group.common) ? m.options[0].group.title : null;
-    if (common) ctl.appendChild(el("span", { className: "lect-caption" }, `${common} 공통 독서`));
+    // 공통 독서의 분류 라벨(「선교사 공통 독서」)은 달지 않는다 — 위의 고른 칩이 어느 전례일의 독서인지 보인다(사용자 결정
+    // 2026-11-03. 그전엔 성인의 고유로 오인하지 않게 세그먼트 · 본문 제목 · 본기도에 달았다, ADR-038 §3).
     wrap.appendChild(ctl);
   }
   return wrap.childElementCount ? wrap : null;
@@ -1006,7 +1072,6 @@ function buildCollects(m) {
   }
   const o = m.collects[Math.max(m.collectIndex, 0)];
   const art = el("article", { className: "lect-collect chapter-text", lang: "ko" });
-  if (o.common) art.appendChild(el("p", { className: "lect-caption" }, `${o.title} 공통 본기도`));
   art.appendChild(el("p", { className: "lect-collect-text" }, o.text));
   section.appendChild(art);
   // 송영 — 고른 본기도 뒤에 1회(ADR-036 §3).
@@ -1265,14 +1330,21 @@ function announceDay(m) {
  * @param {LectionaryModel} m @param {Map<string, BibleChapter | null>} chapters
  */
 function commit(m, chapters) {
-  // 제목 + 위 단계 꺾쇠 — 그 날짜가 든 달의 캘린더(views.js, A2): 2026-12-25의 독서에서 2026년 12월로.
-  commitLiturgicalTitle("lectionary", parseDate(m.date));
+  // 문서 제목 「전례독서」 · 오디오 바(views.js), 머리의 제목 자리에는 날짜 이동 줄(사용자 결정 2026-11-03).
+  commitLiturgicalTitle("lectionary");
+  commitTitleDateNav(m);
   clearNode($app);
+  // 날짜가 바뀌면 새 날은 맨 위부터 — 날짜 이동은 스크롤해도 보이는 머리에 있어 읽던 자리에서 누른다. 자료가 이미 있으면
+  // 스켈레톤이 그려지기 전에 이 화면이 들어와 스크롤이 그대로 남았다. 같은 날의 칩 · 세그먼트는 누른 자리로 돌아오고(라우터),
+  // 뒤로 가기는 이 뒤에 떠날 때의 스크롤을 되살린다(tab-history.js onRouteEnd).
+  const newDay = m.date !== committedDate;
+  committedDate = m.date;
 
   const root = el("div", { className: "lectionary" });
   // 붙이기 · 알리기 — 빈 전례일 화면도 같은 끝이다. 누른 컨트롤로 포커스를 돌려주는 것은 그 뒤 라우터의 몫이다(routing.js).
   const finish = () => {
     $app.appendChild(root);
+    if (newDay && window.scrollY !== 0) window.scrollTo({ top: 0, behavior: "instant" });
     announceDay(m);
   };
   root.appendChild(buildHeader(m));
@@ -1303,9 +1375,7 @@ function commit(m, chapters) {
   if (collects) root.appendChild(collects);
 
   if (m.group) {
-    const of = el("p", { className: "lect-reading-of" }, `${shortName(m.selected.observance.name)} 독서`);
-    if (m.group.common) of.appendChild(el("span", { className: "lect-caption" }, ` — ${m.group.title} 공통 독서`));
-    root.appendChild(of);
+    // 「모든 별세자의 날 독서」 같은 본문 제목은 두지 않는다 — 위의 고른 칩이 같은 이름이다(사용자 결정 2026-11-03).
     for (const slot of m.slots) root.appendChild(buildReading(m, slot, chapters));
     // 복사 — 루트에 한 번(섹션마다가 아니라): 여러 독서에 걸친 선택도 섹션마다 「본문 — 출처」로 다 싣는다. 본기도 · 카드 ·
     // 헤더 글자까지 고르면 브라우저 기본 복사(고른 것을 빠뜨리지 않게 — 자체 리뷰 2026-10-13)

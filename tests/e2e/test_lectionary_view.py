@@ -11,6 +11,7 @@
   ⑤ 기념일 칩 — 「기념일 — 본문 없음」
   ⑥ 날짜 — 오늘 · 전날/다음날 · 잘못된 날짜
   ⑦ 탭 바 — 캘린더 탭 소속이라 독서 화면에서 캘린더 탭이 활성(ADR-038 A2)
+  ⑧ 머리의 날짜 이동 줄(연도는 자리에 맞게 줄인다) · 본문 제목과 공통 라벨 없음 · 응답 반행과 송영의 색
 
 실데이터(data/ 서브모듈)가 필요하다 — 로컬 전용(CLAUDE.md 「테스트」).
 """
@@ -94,19 +95,20 @@ def test_switcher_shows_every_candidate_and_changes_body_and_color(desktop_conte
     assert page.inner_text(".lect-day").startswith("니니안")
     assert _chips(page) == ["니니안", "추계재", "*연중 24주 수요일 (짝수해)"]
     assert _colors(page) == ["자색", "백색"]
-    assert "연중 24주 수요일 독서" in page.inner_text(".lect-reading-of")
 
     page.locator(".lect-chip", has_text="추계재").click()
     page.wait_for_url("**obs=t-*")
     page.wait_for_selector(".lect-chip[aria-current]:has-text('추계재')")
     assert _colors(page) == ["자색"]
-    assert "추계재 독서" in page.inner_text(".lect-reading-of")
     assert page.locator(".lect-sets .division-tab").count() == 2
 
-    # 성인 칩 → 공통 독서 캡션(분류 라벨).
+    # 성인 칩 → 공통 독서. 본문 제목(「○○ 독서」)과 공통 분류 라벨은 두지 않는다 — 고른 칩이 어느 독서인지 보인다(사용자 결정
+    # 2026-11-03).
     page.locator(".lect-chip", has_text="니니안").click()
     page.wait_for_selector(".lect-chip[aria-current]:has-text('니니안')")
-    assert "선교사 공통 독서" in page.inner_text(".lect-reading-of")
+    assert page.locator(".lect-reading").count() > 0
+    assert page.locator(".lect-reading-of").count() == 0
+    assert page.locator(".lect-caption").count() == 0
 
 
 def test_evening_liturgies_are_chips_not_the_day(desktop_context):
@@ -169,7 +171,6 @@ def test_transfiguration_day_offers_two_readings_side_by_side(desktop_context):
     cards.nth(1).click()
     page.wait_for_url("**obs=grid%3A*")
     page.wait_for_selector(".lect-pair-card[aria-current]:has-text('연중 18주 목요일')")
-    assert "연중 18주 목요일 독서" in page.inner_text(".lect-reading-of")
 
 
 def test_destination_sunday_and_arrival_day_offer_pairs(desktop_context):
@@ -492,10 +493,11 @@ def test_copy_excludes_optional_verse_brackets(desktop_context):
     assert "(공동번역성서)" in text
 
 
-def test_ember_friday_one_button_picks_readings_and_collect_and_common_caption(desktop_context):
+def test_ember_friday_one_button_picks_readings_and_collect_without_common_caption(desktop_context):
     """추계재 금요일 — 성직후보자 · 수도자는 「독서 · 본기도」 단추 하나로 독서와 본기도를 함께 바꾼다(교차 조합이 없다 — 사용자 결정
     2026-10-13; 둘째에도 닿는다 — collect_no 가 둘 다 1, 자체 리뷰 2026-10-13). 본기도 칸에는 따로 세그먼트가 없다.
-    니니안(공통뿐인 성인)은 대안 독서 세그먼트에 「선교사 공통 독서」 캡션."""
+    니니안(공통뿐인 성인)의 대안 독서 세그먼트와 본기도에는 공통 분류 라벨을 달지 않는다(사용자 결정 2026-11-03 — 그전엔
+    「선교사 공통 독서」 캡션)."""
     page = desktop_context.new_page()
     _open(page, "lectionary/2026-09-18?obs=t-%EC%B6%94%EA%B3%84%EC%9E%AC")
     assert page.inner_text(".lect-sets .lect-control-label") == "독서 · 본기도"
@@ -510,7 +512,7 @@ def test_ember_friday_one_button_picks_readings_and_collect_and_common_caption(d
     assert page.inner_text(".lect-collect-text") != first
     _open(page, "lectionary/2026-09-16?obs=d0916-%EB%8B%88%EB%8B%88%EC%95%88")
     assert page.inner_text(".lect-sets .lect-control-label") == "대안 독서"   # 짝이 아닌 날은 그대로
-    assert "공통 독서" in page.inner_text(".lect-sets .lect-caption")
+    assert page.locator(".lect-caption").count() == 0
 
 
 def test_may1_one_button_switches_to_labour_day_readings_and_collect(desktop_context):
@@ -815,10 +817,11 @@ def test_preload_failure_shows_lectionary_error_not_previous_header(browser):
         assert page.inner_text(".empty-state-title") == "전례독서 자료를 불러오지 못했습니다"
         assert page.evaluate("() => document.title").startswith("전례독서")
         assert page.locator(".error").count() == 0
-        # 다음 행동은 「다시 불러오기」 — 그날을 다시 연다(그전엔 단추가 없었다 — PR #355 리뷰). 머리는 「캘린더로」 꺾쇠.
+        # 다음 행동은 「다시 불러오기」 — 그날을 다시 연다(그전엔 단추가 없었다 — PR #355 리뷰). 머리에는 컨트롤이 없다 — 캘린더로는
+        # 탭 바로 간다(사용자 결정 2026-11-03 — 그전엔 「캘린더로」 꺾쇠).
         assert page.inner_text(".empty-state-subtitle") == "네트워크 연결을 확인한 뒤 「다시 불러오기」를 눌러 주세요."
         assert page.locator(".state-action button").inner_text() == "다시 불러오기"
-        assert page.locator("#page-title .title-back-btn").get_attribute("href") == "/calendar"
+        assert page.locator("#page-title a").count() == 0
     finally:
         ctx.close()
 
@@ -1053,7 +1056,7 @@ def test_redraws_keep_keyboard_focus_on_the_pressed_control(desktop_context):
     assert _focused(page) == {"key": "pair:b", **ok}
     # 오늘 — 브라우저의 날짜로
     today = datetime.date(*page.evaluate("() => { const d = new Date(); return [d.getFullYear(), d.getMonth() + 1, d.getDate()]; }"))
-    _enter_on(page, ".lect-head .lect-today")
+    _enter_on(page, "#page-title .lect-today")
     page.wait_for_selector(f".lect-date time[datetime='{today.isoformat()}']")
     assert _focused(page) == {"key": "today", **ok}
     # 계산 범위 끝 — 9999-12-31 에는 「다음날」이 없다(그 화면의 「전날」은 있다)
@@ -1263,3 +1266,84 @@ def test_active_chip_and_card_keep_the_shown_track(desktop_context):
     _open(page, "lectionary/2026-08-09?track=2")
     hrefs = page.eval_on_selector_all(".lect-pair-card", "els => els.map(e => e.getAttribute('href'))")
     assert any("track=2" in h for h in hrefs), hrefs   # 트랙이 있는 쪽(연중 주일) 카드는 그 트랙을 적는다
+
+
+# ── ⑧ 머리의 날짜 이동 줄 · 본문 색(사용자 결정 2026-11-03) ──
+
+def _title_year(page):
+    return page.inner_text("#page-title .lect-date-year")
+
+
+def test_title_row_is_the_date_nav_and_the_year_shrinks_to_fit(mobile_context):
+    """머리의 제목 자리가 날짜 이동 줄(‹ 날짜 오늘 ›)이고 본문 맨 위의 날짜 줄은 없다. 위 단계 꺾쇠도 없다. 보이는 연도는 자리에
+    맞게 「2026년」 → 「26년」 → 생략으로 줄고, 넓어지면 돌아온다(화면 폭이 바뀌면 다시 잰다). 화면 낭독기는 늘 전체 날짜를 읽는다.
+    12월 30일은 가장 긴 날짜의 하나다."""
+    page = mobile_context.new_page()
+    _open(page, "lectionary/2026-12-30")
+    title = page.locator("#page-title")
+    assert title.locator("a.lect-datenav-btn[aria-label='전날']").count() == 1
+    assert title.locator("a.lect-datenav-btn[aria-label='다음날']").count() == 1
+    assert title.locator("a.lect-today").inner_text() == "오늘"
+    assert title.locator(".lect-date time").get_attribute("datetime") == "2026-12-30"
+    assert title.locator(".lect-date time .sr-only").inner_text() == "2026년 12월 30일 (수)"
+    assert title.locator(".title-back-btn").count() == 0
+    assert page.locator(".lectionary .lect-datenav").count() == 0
+    assert "전례독서" in page.evaluate("() => document.title")   # 「전례독서」는 문서 제목에 남는다
+    # 탭 영역 44px — 줄 높이는 제목 한 줄 그대로(음수 여백)
+    box = title.locator("a.lect-datenav-btn[aria-label='다음날']").bounding_box()
+    assert box and box["width"] >= 44 and box["height"] >= 44, box
+    assert title.bounding_box()["height"] < 40
+
+    def fits():
+        return page.evaluate("""() => { const l = document.querySelector('#page-title .lect-date-label');
+                                        return l.scrollWidth <= l.clientWidth; }""")
+
+    assert _title_year(page) == "2026년 " and fits()   # 390px
+    for width, year in ((375, "26년 "), (320, ""), (430, "2026년 ")):
+        page.set_viewport_size({"width": width, "height": 844})
+        page.wait_for_function("y => document.querySelector('#page-title .lect-date-year').textContent === y", arg=year)
+        assert fits(), width
+
+
+def test_title_date_steps_start_the_new_day_at_the_top(mobile_context):
+    """날짜 이동은 스크롤해도 보이는 머리에 있다 — 읽던 자리에서 다음날을 누르면 새 날은 맨 위부터이고, 포커스는 누른 단추에
+    남는다. 같은 날의 칩은 누른 자리를 지킨다(위 「다시 그린 뒤 포커스」 테스트)."""
+    page = mobile_context.new_page()
+    _open(page, "lectionary/2026-11-02")
+    page.evaluate("() => window.scrollTo({ top: 1500, behavior: 'instant' })")
+    page.wait_for_function("() => window.scrollY > 1000")
+    page.locator("#page-title a.lect-datenav-btn[aria-label='다음날']").click()
+    page.wait_for_selector("#page-title .lect-date time[datetime='2026-11-03']")
+    page.wait_for_selector(".lect-reading")
+    page.wait_for_timeout(200)
+    assert page.evaluate("() => window.scrollY") == 0
+    assert page.evaluate("() => document.activeElement.dataset.focusKey") == "next"
+
+
+def test_reading_title_and_common_labels_are_gone(desktop_context):
+    """「모든 별세자의 날 독서」 같은 본문 제목 줄이 없다 — 위의 고른 칩이 같은 이름이다. 공통 독서 · 공통 본기도의 분류 라벨도
+    없다(9.16 니니안 칩 — 공통뿐인 성인)."""
+    page = desktop_context.new_page()
+    _open(page, "lectionary/2026-11-02")
+    assert page.locator(".lect-reading-of").count() == 0
+    assert page.locator(".lect-chip[aria-current]").inner_text().startswith("모든 별세자의 날")
+    _open(page, "lectionary/2026-09-16?obs=d0916-%EB%8B%88%EB%8B%88%EC%95%88")
+    assert page.locator(".lect-reading").count() > 0
+    assert page.locator(".lect-caption").count() == 0
+    assert "공통" not in page.inner_text(".lect-collects")
+
+
+def test_psalm_response_and_collect_ending_keep_the_text_colour(desktop_context):
+    """시편의 응답 반행 · 영광송의 응답은 선창과 같은 색이고(◯ 가 경계를 보인다), 본기도 뒤 송영은 본기도 본문과 같은 색이다."""
+    page = desktop_context.new_page()
+    _open(page, "lectionary/2026-11-02")
+    colours = page.evaluate("""() => {
+      const c = (s) => getComputedStyle(document.querySelector(s)).color;
+      return { verse: c(".lect-reading[data-slot='psalm'] .verse:not(.verse-response)"),
+               response: c(".lect-reading[data-slot='psalm'] .verse.verse-response"),
+               gloria: c(".lect-gloria-line.verse-response"),
+               collect: c(".lect-collect-text"), ending: c(".lect-ending") };
+    }""")
+    assert colours["response"] == colours["verse"], colours
+    assert colours["gloria"] == colours["verse"], colours
+    assert colours["ending"] == colours["collect"], colours

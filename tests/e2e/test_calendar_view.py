@@ -99,23 +99,24 @@ def test_grid_is_six_weeks_from_sunday(desktop_context):
 
 # ── ③ 칸 → 전례독서 → 위 단계 ──
 
-def test_cell_opens_lectionary_and_up_link_returns_to_its_month(mobile_context):
-    """12월 25일 칸 → /lectionary/2026-12-25(성탄 낮) → 머리의 꺾쇠(위 단계)가 2026년 12월로 — 모바일에서도 보인다."""
+def test_cell_opens_lectionary_and_the_tab_returns_to_this_month(mobile_context):
+    """12월 25일 칸 → /lectionary/2026-12-25(성탄 낮). 머리의 제목 자리는 그날의 날짜 이동 줄이고 위 단계 꺾쇠는 없다 — 캘린더로는
+    탭 바의 캘린더 탭이 간다(사용자 결정 2026-11-03). 독서 화면도 캘린더 화면이라 탭은 이번 달로 간다(탭의 pop-to-root)."""
     page = mobile_context.new_page()
     _open(page, "calendar/2026-12")
     _cell(page, "2026-12-25").click()
     page.wait_for_url("**/lectionary/2026-12-25")
     page.wait_for_selector(".lect-day", timeout=20_000)
     assert page.inner_text(".lect-day") == "성탄 낮"
-    up = page.locator("#page-title a.title-back-btn")
-    assert up.is_visible()
-    assert up.get_attribute("aria-label") == "2026년 12월 캘린더로"
-    assert page.locator("#page-title .title-home-btn").count() == 0   # 성서 목록 집 단추는 더 이상 없다
+    assert page.locator("#page-title .title-back-btn").count() == 0
+    assert page.locator("#page-title .title-home-btn").count() == 0   # 성서 목록 집 단추도 없다
+    assert page.get_attribute("#page-title .lect-date time", "datetime") == "2026-12-25"
+    assert page.locator("#page-title a.lect-datenav-btn[aria-label='전날']").is_visible()
     # 캘린더 탭 소속 — 독서 화면에서도 캘린더 탭이 활성
     assert page.get_attribute("#tab-bar [data-tab='calendar']", "aria-current") == "page"
-    up.click()
-    page.wait_for_url("**/calendar/2026-12")
-    page.wait_for_selector(".cal-month:has-text('2026년 12월')")
+    page.locator("#tab-bar [data-tab='calendar']").click()
+    page.wait_for_url(f"{BASE}/calendar")
+    page.wait_for_selector(f".cal-month:has-text('{_this_month()[1]}')")
 
 
 # ── ④ 칸의 이름 · 색 점 · 링크 이름 ──
@@ -292,9 +293,12 @@ def test_desktop_header_calendar_entry_goes_where_the_tab_goes(desktop_context):
     page.locator("#header-calendar").click()
     page.wait_for_url("**/lectionary/2026-12-25")
     page.wait_for_selector(".lect-day:has-text('성탄 낮')", timeout=20_000)
-    # 위 단계 → 그 달 → 집 단추로 성서 목록 → 헤더 단추면 그 달로
-    page.locator("#page-title a.title-back-btn").click()
-    page.wait_for_url("**/calendar/2026-12")
+    # 독서 화면도 캘린더 화면이라 다시 누르면 이번 달(머리의 위 단계 꺾쇠는 없다 — 사용자 결정 2026-11-03)
+    page.locator("#header-calendar").click()
+    page.wait_for_url(f"{BASE}/calendar")
+    page.wait_for_selector(f".cal-month:has-text('{_this_month()[1]}')")
+    # 다른 달 → 집 단추로 성서 목록 → 헤더 단추면 그 달로
+    page.evaluate("navigate('/calendar/2026-12')")
     page.wait_for_selector(".cal-month:has-text('2026년 12월')")
     page.locator("#page-title .title-home-btn").click()
     page.wait_for_url(f"{BASE}/")

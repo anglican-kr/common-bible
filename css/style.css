@@ -617,8 +617,38 @@ a.lect-datenav-btn:focus-visible { background: var(--bg-card); }
   border-radius: var(--radius-pill);
   padding: var(--space-0_5) var(--space-2);
 }
+/* 머리의 제목 자리 — 전례독서는 「전례독서」 대신 날짜 이동 줄을 그린다(lectionary.js commitTitleDateNav,
+   사용자 결정 2026-11-03). 스크롤해도 머리와 함께 보인다. 날짜는 제목 글자(굵게, --text)이고, 자리가 모자라면
+   lectionary.js fitTitleYear 가 연도를 「2026년」 → 「26년」 → 생략으로 줄인다. 그래서 날짜 칸은 줄바꿈 없이
+   넘친 만큼을 숨겨 넘침을 잴 수 있게 한다. ‹ › 의 44px 탭 영역은 위아래 음수 여백으로 제목 줄 높이 안에 둔다. */
+#page-title:has(> .lect-date) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-1);
+}
+#page-title > .lect-datenav-btn {
+  flex-shrink: 0;
+  font-weight: 400;
+  margin-block: calc((var(--font-lg) * var(--leading-snug) - var(--touch-target)) / 2);
+}
+#page-title > .lect-date {
+  min-width: 0;
+  font-size: inherit;
+  color: var(--text);
+}
+.lect-date-label {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+#page-title .lect-today {
+  flex-shrink: 0;
+  font-weight: 400;
+}
 .lect-day {
-  margin: var(--space-2) 0 0;
+  margin: 0;
   font-size: var(--font-xl);
   font-weight: 700;
   color: var(--text);
@@ -846,13 +876,6 @@ a.lect-datenav-btn:focus-visible { background: var(--bg-card); }
   font-size: var(--font-sm);
   color: var(--text-secondary);
 }
-.lect-reading-of {
-  margin: var(--space-6) 0 0;
-  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
-  font-size: var(--font-sm);
-  font-weight: 600;
-  color: var(--text-secondary);
-}
 .lect-collects .division-tabs { margin: 0 0 var(--space-3); }
 .lect-collect { margin: 0; }
 .lect-collect-text { margin: 0 0 var(--space-3); }
@@ -865,10 +888,10 @@ a.lect-datenav-btn:focus-visible { background: var(--bg-card); }
   user-select: none;
 }
 .lect-optional-note { flex-basis: 100%; }
-/* 송영 — once, after the chosen collect (ADR-038 §3 「구현」). */
+/* 송영 — once, after the chosen collect (ADR-038 §3 「구현」). Same colour as the collect it closes
+   (사용자 결정 2026-11-03 — it was --text-secondary). */
 .lect-ending {
   margin: var(--space-3) 0 0;
-  color: var(--text-secondary);
 }
 .lect-missing {
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
@@ -876,7 +899,7 @@ a.lect-datenav-btn:focus-visible { background: var(--bg-card); }
   color: var(--danger-text);
 }
 /* 영광송 — after the psalm, typeset like a responsory couplet (poetry indent,
-   ◯ on the cantor's line, response in the secondary colour). */
+   ◯ on the cantor's line; the response keeps the text colour like the psalm's). */
 .lect-gloria {
   display: block;
   margin-top: 1.2em;
@@ -887,7 +910,6 @@ a.lect-datenav-btn:focus-visible { background: var(--bg-card); }
   display: block;
   padding-left: 2rem;
 }
-.lect-gloria-line.verse-response { color: var(--text-secondary); }
 
 /* ── 캘린더 뷰 (calendar tab, ADR-038 §1 · §2 A2) ──
    A month as a 7-column table: every day is a link to its lectionary page. The
@@ -3367,11 +3389,8 @@ mark.search-highlight {
    저장 형식에는 전례 글리프가 없다(자판 입력이 어려워서) — ◯·¶·"(N)" 은 모두
    여기서 표시로만 복원한다. */
 
-/* 응답 반행: 회중이 받는 줄. 선창과 구별되어야 하지만 본문 서체를 벗어나지는
-   않는다 — 봉독하는 눈이 두 줄을 번갈아 따라갈 만큼만 다르게. */
-.verse.verse-response {
-  color: var(--text-secondary);
-}
+/* 응답 반행(.verse-response): 회중이 받는 줄. 선창과 같은 색이고, 선창 끝의 ◯ 가
+   경계를 보인다(사용자 결정 2026-11-03 — 그전엔 --text-secondary 로 흐리게 했다). */
 
 /* 선창 끝의 계응 표지. 글자와 붙지 않게 앞 여백만 준다. */
 .responsory-mark {
