@@ -58,9 +58,9 @@
   - `e2e-reminder.sh`: 턴을 끝낼 때 e2e를 알린다.
   - `pre-pr-ledger.sh`, `post-pr-ledger.sh`: PR 생성 전의 원장 게이트와, 생성 뒤 원장에 `pr: N`을 적는 일. 다른 저장소에 여는 PR(`--repo`, `-R`로 이 저장소가 아닌 곳을 가리키는 경우)은 검사하지 않는다(2026-10-24). data 저장소에는 원장이 없다.
   - `pre-commit-ledger.sh`: 머지된 원장을 고치는 커밋을 막는다.
+  - 원장 훅 셋은 훅 입력의 `cwd`(세션의 셸 위치)로 저장소를 찾는다. 작업 폴더가 세션 폴더 밖(`~/projects/worktrees/`)에 있으면 셸 위치가 명령마다 원래 폴더로 돌아가므로, 훅은 작업 폴더가 아니라 원래 폴더를 검사한다. 그래서 작업 폴더에서 PR 생성 명령을 실행하면 훅이 「main 에서는 PR 을 만들 수 없습니다」로 막고, 커밋 검사는 원래 폴더의 스테이지를 본다. 머지된 원장을 고친 커밋은 CI `Change ledger`가 다시 잡는다(2026-11-02, PR #462). 작업 폴더를 세션 폴더 안(`.claude/worktrees/`)에 두던 2026-10-31 전에는 셸 위치가 작업 폴더에 남아 그 폴더를 검사했다. 훅 파일 자체는 세션을 시작한 폴더의 것이 실행되므로, 훅을 고치면 그 폴더가 새 main을 받은 뒤에 적용된다(2026-10-26).
 - Claude Code 스킬(`.claude/skills/`)
   - `prose-batch/`: 문장 교정 반복 실행의 한 번. 열린 교정 PR의 검토 의견을 반영하거나, 진행 목록의 다음 묶음을 교정해 PR을 연다.
-  - 원장 훅 셋은 훅 입력의 `cwd`로 저장소를 찾는다. 그래서 작업 폴더(git worktree)에서는 그 폴더를 검사한다. 훅 파일 자체는 세션을 시작한 폴더의 것이 실행되므로, 훅을 고치면 그 폴더가 새 main을 받은 뒤에 적용된다(2026-10-26).
 
 ## 작업 중 함정
 
@@ -74,6 +74,7 @@
   - **데이터 서브모듈**: 원래 폴더(`~/projects/common-bible`)의 것을 참조해 받는다(`git -c protocol.file.allow=always submodule update --init --reference ~/projects/common-bible/.git/modules/data data`). 받지 않으면 실데이터 유닛 테스트는 건너뛰고(CI와 같다), e2e는 장 본문을 불러오지 못한다.
   - **e2e 서버**: 8080에서는 원래 폴더의 서버가 실행 중일 수 있다(`readlink /proc/<pid>/cwd`로 어느 폴더의 서버인지 본다). 작업 폴더의 서버는 다른 포트에 pyenv의 Python 3.14로 띄운다(`~/.pyenv/versions/3.14.6/bin/python scripts/serve.py 8091`). 시스템 `python3`(3.13)은 255자가 넘는 경로에서 `Path.exists()`가 예외를 내서, 긴 주소를 여는 e2e가 실패한다.
   - **e2e 사본**: e2e 테스트는 파일마다 주소 `localhost:8080`을 적어 두었다. 그래서 `tests/e2e`를 임시 폴더에 복사하고 포트만 바꿔 돌린다(`sed -i 's/localhost:8080/localhost:8091/' <임시>/x/e2e/*.py`). 반절 표(`half-verses.json`)를 읽는 `test_lectionary_view.py`는 테스트 파일에서 두 단계 위 폴더의 `data/`를 읽는다. 그래서 그 자리에 작업 폴더의 `data`로 가는 링크를 둔다(`<임시>/x/e2e/`에 복사했으면 `<임시>/data`).
+  - **PR 열기**: 작업 폴더에서는 원장 훅이 PR 생성 명령을 막는다(위 「Claude Code 훅」). 훅이 보는 조건을 작업 폴더에서 직접 확인한다. 원장을 커밋했는지, main에 없는 새 파일인지, `title:`과 「요약」이 있는지, 코드가 바뀐 PR이면 「갱신한 문서」에 항목이 있는지다. 그다음 REST로 연다(`gh api -X POST repos/anglican-kr/common-bible/pulls -f title=… -f head=<브랜치> -f base=main -F body=@<본문 파일>`). 본문 파일은 `bash scripts/pr_body.sh <원장>`의 출력에 Claude Code 표시 줄을 붙여 만든다. 훅이 하던 대로 원장의 `date:` 줄 위에 `pr: N`을 직접 적고 커밋해 push한다(2026-11-02, PR #462).
 - **data 저장소** 작업은 별도 클론(`~/projects/common-bible-data`)에서 한다. 앱의 `data/` 서브모듈 안에서 커밋하지 않는다. 그 저장소에는 원장이 없고 main이 보호되지 않는다. 서브모듈 운영은 README 「git 서브모듈 운영」.
 - **앱 `sync-data.yml`의 실패**는 대개 설계서의 사실 블록 대조 때문이다. 데이터가 문서의 실측치를 바꾸면 실패한다(2026-10-12, 10-13, 10-15).
 - **데이터 저장소의 `build.yml`을 고치는 PR**은 머지만으로 빌드가 실행된다. 그 워크플로의 `paths`에 자기 파일이 있기 때문이다. 손으로 다시 실행하면 동기화도 두 번 실행된다(2026-10-26, #439와 #440). 겹쳐 실행되어도 `sync-data.yml`의 동시 실행 제한과 같은 포인터 PR 확인이 자동 PR을 하나로 줄인다.
