@@ -1,4 +1,5 @@
 ---
+pr: 463
 date: 2026-11-03
 branch: feat/lectionary-header
 title: "feat: 전례독서 머리를 날짜 이동 줄로 바꿈"
