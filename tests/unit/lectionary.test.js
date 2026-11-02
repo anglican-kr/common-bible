@@ -272,6 +272,35 @@ test("collectsFor: 고른 전례일의 본기도만 — 다른 전례일 것은 
   same(ctx.collectsFor(entries, omitted).map((o) => o.id), ["d1207-암브로스"]);   // 생략된 축일도 고르면 그 본기도
 });
 
+test("buildLectionaryModel: 기리는 성인의 본기도 — 기본 독서가 평일이면 평일 본기도 다음에 성인 본기도, 송영은 성인 것(사용자 결정 2026-11-03)", () => {
+  const saint = cand(obs("d1106-레오나드", "레오나드(은수자, 6세기)", { rank: "minor_feast", precedence: 7, color: "white", sanctoral_class: "saint" }));
+  const grid = cand(obs("grid:ordinary-31-weekday-fri", "연중 31주 금요일", { rank: "feria", precedence: 8, color: "green" }));
+  const r = resolvedOf("2026-11-06", [saint, grid], saint);
+  const groupsOf = groupsOfFrom({
+    "d1106-레오나드": [group("common:saint-s1", FOUR, { common: "saint", title: "성인" })],
+    "grid:ordinary-31-weekday-fri": [group("g", FOUR)],
+  });
+  const entries = [
+    { candidate: saint, collects: [collect("common:saint-c1", "주님의 종 레오나드를", { ending: "B" })] },
+    { candidate: grid, collects: [collect("g-c", "평일 본기도")] },
+  ];
+  const q = { obs: null, track: null, set: null, collect: null };
+  const m = ctx.buildLectionaryModel(r, q, groupsOf, entries, null);
+  assert.strictEqual(m.selected, grid);
+  same(m.collects.map((o) => o.id), ["g-c"]);
+  assert.strictEqual(m.memorialCollect.id, "common:saint-c1");
+  assert.strictEqual(m.ending, "B");   // 송영은 마지막에 오는 성인 본기도의 것
+  // 격자 칩을 눌러 와도(같은 후보) 같다
+  assert.strictEqual(ctx.buildLectionaryModel(r, { ...q, obs: grid.observance.id }, groupsOf, entries, null).memorialCollect.id, "common:saint-c1");
+  // 성인 칩을 고르면 성인 본기도만
+  const s = ctx.buildLectionaryModel(r, { ...q, obs: saint.observance.id }, groupsOf, entries, null);
+  same(s.collects.map((o) => o.id), ["common:saint-c1"]);
+  assert.strictEqual(s.memorialCollect, null);
+  // 지정 전례일에 고유 독서가 있으면(기본 독서가 축일) 덧붙이지 않는다
+  const proper = groupsOfFrom({ "d1106-레오나드": [group("p", FOUR)], "grid:ordinary-31-weekday-fri": [group("g", FOUR)] });
+  assert.strictEqual(ctx.buildLectionaryModel(r, q, proper, entries, null).memorialCollect, null);
+});
+
 test("collectsFor: 같은 id 의 다른 객체로도 찾고, 본기도 없는 후보(기념일)는 빈 배열", () => {
   const memo = cand(obs("d0101-세계평화", "세계평화를 위한 기도일", { rank: "commemoration" }));
   const feast = cand(obs("d0101-거룩한-이름-예수", "거룩한 이름 예수"));

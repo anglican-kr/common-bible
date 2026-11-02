@@ -76,6 +76,7 @@ const PAGE_TITLE = LITURGICAL_VIEWS.lectionary.title;
  *   options: ReadingOption[], setIndex: number, group: ReadingGroup | null, shortGroup: ReadingGroup | null, slots: ReadingSlot[],
  *   chips: LectionaryChip[], pair: LectionaryPair | null,
  *   collects: CollectOption[], collectLabels: string[], collectIndex: number, collectsLinked: boolean, ending: "A" | "B" | "C",
+ *   memorialCollect: CollectOption | null,
  *   colors: string[], colorAlt: string[], ownColor: boolean,
  *   fast: "major" | "minor" | null, cycle: string | null, empty: boolean,
  *   hrefs: { prev: string | null, next: string | null, today: string, tracks: Array<{ track: 1 | 2, href: string, active: boolean }>, options: string[], collects: string[], pair: { a: string, b: string } | null },
@@ -372,6 +373,19 @@ function collectsFor(entries, selected) {
   // 같은 날짜에 정의된 다른 전례일의 본기도가 섞여 오면(5.1 노동자의 날 — 미결18 · 35) 고른 전례일 이름의 것을 앞세운다(안정 정렬)
   const name = selected.observance.name;
   return [...sel.collects].sort((a, b) => Number(!sameName(a.title, name)) - Number(!sameName(b.title, name)));
+}
+
+/**
+ * 기리는 성인의 본기도 — 그날의 기본 독서가 평일(격자)인 것은 지정 전례일(성인 축일)에 고유 독서가 없어서다(설계서
+ * 미결25). 그 기본 독서를 볼 때는 평일 본기도 다음에 성인의 본기도를 잇고, 송영은 그 뒤에 한 번 단다(사용자 결정
+ * 2026-11-03 — 11.6 레오나드). 성인 칩을 고르면 성인의 본기도만이다(`collectsFor`). 대체안이 여럿이면 첫째를 쓴다.
+ * @param {ResolvedDate} resolved @param {Candidate} initial @param {Candidate} selected @param {CandidateCollects[]} entries
+ * @returns {CollectOption | null}
+ */
+function memorialCollectOf(resolved, initial, selected, entries) {
+  const official = resolved.official;
+  if (selected !== initial || !isGrid(selected) || !official || official === selected || isGrid(official)) return null;
+  return collectsFor(entries, official)[0] || null;
 }
 
 /** 괄호 설명을 뗀 이름이 같은가 — 세트 · 본기도의 제목과 전례일 이름 대조. */
@@ -738,6 +752,7 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
   }
   const collectIndex = linked && setIndex >= 0 ? linked[setIndex] : pickCollect(collects, query.collect);
   const chosenCollect = collectIndex >= 0 ? collects[collectIndex] : null;
+  const memorialCollect = memorialCollectOf(resolved, initial, selected, collectEntries);
 
   const base = { obs: selected.observance.id, track, set: setIndex + 1, collect: !linked && chosenCollect ? collectIndex + 1 : null };
   // 후보마다 그 화면의 트랙 — 고른 후보는 지금 트랙, 다른 후보는 기억(없으면 첫 트랙). 칩 · 카드 링크도 이것을 적는다:
@@ -761,7 +776,8 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
 
   return {
     date, resolved, selected, initial, groups, tracks, track, options, setIndex, group, shortGroup, slots,
-    chips, pair, collects, collectLabels: collectLabels(collects), collectIndex, collectsLinked: !!linked, ending: endingCodeOf(chosenCollect),
+    chips, pair, collects, collectLabels: collectLabels(collects), collectIndex, collectsLinked: !!linked,
+    ending: endingCodeOf(memorialCollect || chosenCollect), memorialCollect,
     colors, colorAlt, ownColor, fast: fastOf(resolved),
     cycle: resolved.coord.year && CYCLE_LABEL[resolved.coord.year] ? CYCLE_LABEL[resolved.coord.year] : null,
     empty,
@@ -1089,8 +1105,10 @@ function buildCollects(m) {
   const o = m.collects[Math.max(m.collectIndex, 0)];
   const art = el("article", { className: "lect-collect chapter-text", lang: "ko" });
   art.appendChild(el("p", { className: "lect-collect-text" }, o.text));
+  // 기리는 성인의 본기도 — 평일 본기도 다음, 송영 앞(memorialCollectOf).
+  if (m.memorialCollect) art.appendChild(el("p", { className: "lect-collect-text" }, m.memorialCollect.text));
   section.appendChild(art);
-  // 송영 — 고른 본기도 뒤에 1회(ADR-036 §3).
+  // 송영 — 고른 본기도(기리는 성인의 본기도가 있으면 그 뒤) 뒤에 1회(ADR-036 §3).
   section.appendChild(el("p", { className: "lect-ending chapter-text", lang: "ko" }, ENDINGS[m.ending]));
   return section;
 }

@@ -1390,7 +1390,7 @@ def test_title_date_stays_readable_with_the_largest_font_on_320px(mobile_context
     assert page.inner_text("#page-title .lect-date-year") == "2026년 "
 
 
-def test_heading_follows_the_shown_reading_on_a_saint_day(mobile_context):
+def test_saint_day_heading_and_collects_follow_the_default_reading(mobile_context):
     """11.6 레오나드(고유 독서가 없는 축일) — 처음에는 평일 칩이 선택되어 평일 독서이고, 머리 제목은 그날의 기본 독서인
     「연중 31주 금요일」이다. 레오나드 칩을 눌러야 독서가 공통 독서로 바뀌고, 제목은 그대로다. 색은 그날의 색(백색) 그대로다
     (사용자 결정 2026-11-03 — 그전엔 머리가 지정 전례일 이름이라 성인 이름 아래 평일 독서가 보였다)."""
@@ -1402,8 +1402,14 @@ def test_heading_follows_the_shown_reading_on_a_saint_day(mobile_context):
     assert "필립 3:17-4:1" in first
     assert _colors(page) == ["백색"]
     assert page.evaluate("() => document.title").startswith("연중 31주 금요일")
+    # 본기도는 평일 본기도 다음에 레오나드의 본기도, 그 뒤에 송영 한 번. 이름 뒤 조사는 받침에 맞춘다(「레오나드를」)
+    texts = page.eval_on_selector_all(".lect-collect-text", "els => els.map(e => e.textContent)")
+    assert len(texts) == 2 and "레오나드를" in texts[1] and "레오나드" not in texts[0], texts
+    assert page.locator(".lect-ending").count() == 1
     page.locator(".lect-chip", has_text="레오나드").click()
     page.wait_for_selector(".lect-chip[aria-current]:has-text('레오나드')")
     assert page.inner_text(".lect-day") == "연중 31주 금요일"
     assert page.inner_text(".lect-reading[data-slot='first'] .lect-ref") != first
     assert _colors(page) == ["백색"]
+    texts = page.eval_on_selector_all(".lect-collect-text", "els => els.map(e => e.textContent)")
+    assert len(texts) == 1 and "레오나드를" in texts[0], texts   # 성인 칩을 고르면 성인 본기도만

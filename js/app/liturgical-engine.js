@@ -1955,11 +1955,17 @@ function findReadingsIn(lix, cal, resolved, candidate) {
   return commonReadings(lix, obs);
 }
 
+/**
+ * 끝 글자에 받침이 있는가. 공통 본기도에 넣는 이름은 모두 한글 음절로 끝난다 — 실데이터 테스트가 지킨다
+ * (`liturgical-engine.data.test.js`, 2026-11-03 기준 99개). 그래서 한글이 아닌 끝 글자는 따로 다루지 않는다.
+ */
+function hasFinalConsonant(/** @type {string} */ word) {
+  return (word.charCodeAt(word.length - 1) - 0xac00) % 28 !== 0;
+}
+
 /** 한국어 접속 조사 — 끝 글자에 받침이 있으면 「과」, 없으면 「와」(안나와 요아킴 · 키릴과 메토디우스). */
 function withParticle(/** @type {string} */ word) {
-  const code = word.charCodeAt(word.length - 1);
-  const hangul = code >= 0xac00 && code <= 0xd7a3;
-  return word + (hangul && (code - 0xac00) % 28 !== 0 ? "과" : "와");
+  return word + (hasFinalConsonant(word) ? "과" : "와");
 }
 
 /**
@@ -1972,6 +1978,15 @@ function displayNameOf(obs) {
   if (!names.length) names.push(String(obs.name || "").replace(/\s*\([^()]*\)\s*$/, ""));
   if (names.length === 1) return names[0];
   return names.slice(0, -2).map((n) => n + ", ").join("") + withParticle(names[names.length - 2]) + " " + names[names.length - 1];
+}
+
+/**
+ * 공통 본기도의 `{name}` 자리에 이름을 넣는다. 바로 뒤의 「을(를)」은 이름의 끝 글자 받침에 맞춰 하나로 고른다(사용자 결정
+ * 2026-11-03 — 「레오나드를」, 「바실을」). 원문(commons.json)의 이름 뒤 조사 표기는 「을(를)」 하나뿐이다(2026-11-03 확인).
+ * @param {string} text @param {string} name
+ */
+function fillCommonName(text, name) {
+  return text.split("{name}을(를)").join(name + (hasFinalConsonant(name) ? "을" : "를")).split("{name}").join(name);
 }
 
 /** 레코드 → 본기도 하나. */
@@ -2013,7 +2028,7 @@ function collectsOf(lix, cal, resolved, obs) {
     title: typeof entry.label === "string" ? entry.label : cls,
     collect_no: 1,
     collect_total: 1,
-    text: String(tmpl.text).split("{name}").join(displayNameOf(obs)),
+    text: fillCommonName(String(tmpl.text), displayNameOf(obs)),
     ending: e === "A" || e === "B" || e === "C" ? e : null,
     common: cls,
   }];
