@@ -1,4 +1,5 @@
 ---
+pr: 467
 date: 2026-11-04
 branch: fix/grid-chips
 title: "fix: 본문 없는 칩과 겹치는 격자 칩 감춤"
