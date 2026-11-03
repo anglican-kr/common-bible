@@ -8,7 +8,7 @@
   ② 전례일 스위처 — 칩 전부 노출, 고르면 ?obs= 와 본문 · 색이 바뀐다
   ③ 두 독서 나란히 — 선택 봉헌 당일 · 목적지 주일 · 도착일 카드 둘
   ④ 대안 세트 · 트랙 — 세그먼트, 트랙은 마지막 선택을 날짜 · 해와 무관하게 기억
-  ⑤ 기념일 칩 — 「기념일 — 본문 없음」
+  ⑤ 기념일 — 칩이 아니라 제목 아래 「… 기념일」 줄, 본문 없는 축일 칩은 「고유 본문 없음」
   ⑥ 날짜 — 오늘 · 전날/다음날 · 잘못된 날짜
   ⑦ 탭 바 — 캘린더 탭 소속이라 독서 화면에서 캘린더 탭이 활성(ADR-038 A2)
   ⑧ 머리의 날짜 이동 줄(연도는 자리에 맞게 줄인다) · 본문 제목과 공통 라벨 없음 · 응답 반행과 송영의 색
@@ -966,15 +966,17 @@ def test_bracket_set_merges_into_long_text_with_markers(desktop_context):
 
 # ── ⑤ 기념일 ──
 
-def test_commemoration_chip_renders_empty_state(desktop_context):
-    """4.5 마틴 루터 킹(기념일) 칩 — 「기념일 — 본문 없음」, 독서 · 본기도 없음. 본문 없는 축일(1.1 세계평화 기도일)은 「고유 본문 없음」."""
+def test_commemoration_is_a_line_not_a_chip(desktop_context):
+    """4.5 마틴 루터 킹(기념일)은 칩이 아니라 제목 아래 「… 기념일」 줄이다 — 고유 본기도와 독서가 없어 칩을 고르면 본문 없는
+    화면뿐이었다(사용자 결정 2026-11-03). 주소로 가리켜도 기본 독서다. 본문 없는 축일(1.1 세계평화 기도일)은 칩이고 「고유 본문 없음」."""
     page = desktop_context.new_page()
     _open(page, "lectionary/2026-04-05")
-    page.locator(".lect-chip", has_text="마틴 루터 킹").click()
-    page.wait_for_selector(".empty-state-title")
-    assert page.inner_text(".empty-state-title") == "기념일 — 본문 없음"
-    assert page.locator(".lect-reading").count() == 0
-    assert page.locator(".lect-collects").count() == 0
+    assert page.locator(".lect-chip", has_text="마틴 루터 킹").count() == 0
+    lines = page.eval_on_selector_all(".lect-day-saint", "els => els.map(e => e.textContent)")
+    assert len(lines) == 1 and lines[0].startswith("마틴 루터 킹") and lines[0].endswith(" 기념일"), lines
+    _open(page, "lectionary/2026-04-05?obs=d0405-%EB%A7%88%ED%8B%B4-%EB%A3%A8%ED%84%B0-%ED%82%B9")
+    assert page.locator(".empty-state").count() == 0
+    assert page.locator(".lect-reading").count() > 0
     # 세계평화 기도일은 2026-10-24 기도서 「월별 축일」대로 축일이 되었다 — 기념일 문구가 아니다(설계서 미결51)
     _open(page, "lectionary/2026-01-01")
     page.locator(".lect-chip", has_text="세계평화").click()
@@ -1224,8 +1226,8 @@ def test_mobile_tab_bar_marks_calendar_tab_on_lectionary(mobile_context):
     page.wait_for_selector("#tab-bar [data-tab='calendar'][aria-current='page']")
     assert page.eval_on_selector_all("#tab-bar .tab-item.active", "els => els.map(e => e.dataset.tab)") == ["calendar"]
     assert page.locator("#tab-bar .tab-indicator.is-shown").count() == 1
-    # 칩은 가로 스크롤 줄 하나 — 모바일 폭에서도 전부 DOM 에 있다.
-    assert len(_chips(page)) == 3
+    # 칩은 모바일 폭에서도 전부 DOM 에 있다 — 부활대축일과 부활 1주일(마틴 루터 킹 기념일은 칩이 아니라 이름 줄, 2026-11-03).
+    assert len(_chips(page)) == 2
     # 홈 탭을 누르면 홈 스택으로 돌아간다(읽은 장이 없으니 가로채지 않고 기본 href).
     page.locator('#tab-bar [data-tab="home"]').click()
     page.wait_for_selector(".book-list")
@@ -1406,7 +1408,7 @@ def test_saint_day_heading_and_collects_follow_the_default_reading(mobile_contex
     _open(page, "lectionary/2026-11-06")
     assert page.inner_text(".lect-day") == "연중 31주 금요일"
     # 레오나드는 칩이 아니라 제목 아래 회색 이름 줄 — 칩은 평일 하나뿐이라 칩 줄도 없다(2026-11-03)
-    assert page.inner_text(".lect-day-saints") == "레오나드(은수자, 6세기)"
+    assert page.inner_text(".lect-day-saints") == "레오나드(은수자, 6세기) 축일"
     assert page.locator(".lect-chips").count() == 0
     first = page.inner_text(".lect-reading[data-slot='first'] .lect-ref")
     assert "필립 3:17-4:1" in first
@@ -1459,3 +1461,14 @@ def test_commemorated_saint_with_proper_readings_keeps_its_chip(desktop_context)
     assert page.inner_text(".lect-reading[data-slot='first'] .lect-ref") != sunday_first
     assert page.inner_text(".lect-day") == "연중 17주일"   # 제목과 이름 줄은 그대로
     assert page.inner_text(".lect-day-saints").startswith("안나와 요아킴")
+
+
+def test_feast_lines_come_before_commemoration_lines(desktop_context):
+    """제목 아래 줄은 성인 축일(「… 축일」)이 먼저이고 기념일(「… 기념일」)이 그 아래다(사용자 결정 2026-11-03). 9.4 대 그레고리
+    (축일, 기본 독서는 평일) ∧ 여성선교센터 개관(기념일)."""
+    page = desktop_context.new_page()
+    _open(page, "lectionary/2026-09-04")
+    lines = page.eval_on_selector_all(".lect-day-saint", "els => els.map(e => e.textContent)")
+    assert len(lines) == 2, lines
+    assert lines[0].startswith("대 그레고리") and lines[0].endswith(" 축일"), lines
+    assert lines[1].startswith("여성선교센터 개관") and lines[1].endswith(" 기념일"), lines

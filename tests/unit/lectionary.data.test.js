@@ -102,15 +102,15 @@ test("A3 주기 · 색 라벨이 데이터 _vocab 과 같다(ADR-036 §4 단일 
 
 // ── 실제 날짜 — ADR-038 §3 규칙 ──
 
-test("A3 2026-04-05 부활대축일 — 본기도 대체안 셋이 세그먼트, 세트 둘(원본 세트 표지는 숨김), 슬롯 넷, 기념일은 흐린 칩", { skip: SKIP }, () => {
+test("A3 2026-04-05 부활대축일 — 본기도 대체안 셋이 세그먼트, 세트 둘(원본 세트 표지는 숨김), 슬롯 넷, 기념일은 칩이 아니라 이름 줄", { skip: SKIP }, () => {
   const m = model("2026-04-05");
   assert.strictEqual(id(m.selected), "t-부활대축일");
   assert.strictEqual(m.collects.length, 3);   // 부활대축일의 자유선택 대체안 셋 — 고른 전례일의 것만
   assert.strictEqual(m.collectIndex, 0);
   same(m.options.map((o) => [o.label, o.short]), [["독서 1", null], ["독서 2", null]]);   // 원본 세트 둘 = 「또는」 대안
   same(m.slots.map((s) => s.slot), ["first", "psalm", "second", "gospel"]);
-  same(m.chips.map((c) => [c.label, c.muted]),
-    [["부활대축일", false], ["마틴 루터 킹 · 기념일", true], ["부활 1주일 (가해)", false]]);
+  same(m.chips.map((c) => [c.label, c.muted]), [["부활대축일", false], ["부활 1주일 (가해)", false]]);
+  same(m.commemorations.map((c) => id(c)), ["d0405-마틴-루터-킹"]);   // 「… 기념일」 줄(사용자 결정 2026-11-03)
   same(plain(m.colors), ["white"]);
   assert.strictEqual(m.pair, null);
   const third = model("2026-04-05", { collect: 3 });

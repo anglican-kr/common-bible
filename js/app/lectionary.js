@@ -76,7 +76,7 @@ const PAGE_TITLE = LITURGICAL_VIEWS.lectionary.title;
  *   options: ReadingOption[], setIndex: number, group: ReadingGroup | null, shortGroup: ReadingGroup | null, slots: ReadingSlot[],
  *   chips: LectionaryChip[], pair: LectionaryPair | null,
  *   collects: CollectOption[], collectLabels: string[], collectIndex: number, collectsLinked: boolean, ending: "A" | "B" | "C",
- *   memorialCollects: CollectOption[], memorialSaints: Candidate[],
+ *   memorialCollects: CollectOption[], memorialSaints: Candidate[], commemorations: Candidate[],
  *   colors: string[], colorAlt: string[], ownColor: boolean, colorsOr: boolean,
  *   fast: "major" | "minor" | null, cycle: string | null, empty: boolean,
  *   hrefs: { prev: string | null, next: string | null, today: string, tracks: Array<{ track: 1 | 2, href: string, active: boolean }>, options: string[], collects: string[], pair: { a: string, b: string } | null },
@@ -791,8 +791,12 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
   // 기리는 성인은 칩이 없다 — 주소로 가리켜도 기본 독서다. 고유 독서가 있는 성인만 그 독서를 고르게 칩을 남긴다(사용자
   // 결정 2026-11-03 — 기념만 하는 12.29 토마스 베켓, 7.26 안나와 요아킴 등, memorialOf)
   const memorial = memorialOf(resolved, initial, collectEntries);
+  // 기념일도 칩이 아니라 같은 줄에 「… 기념일」로 보인다 — 고유 본기도와 독서가 없어 칩을 고르면 본문 없는 화면뿐이었다(사용자
+  // 결정 2026-11-03). 그날 지키는 기념일(`proper`)만 줄에 들고, 성주간에 생략된 기념일은 줄에도 칩에도 없다.
+  const isCommemoration = (/** @type {Candidate} */ c) => c !== initial && c.observance.rank === "commemoration";
+  const commemorations = resolved.candidates.filter((c) => isCommemoration(c) && c.status === "proper" && !c.evening);
   const hidden = (/** @type {Candidate} */ c) => (memorial.saints.includes(c) && !hasProperReadings(groupsOf(c)))
-    || isHiddenCandidate(c, initial, groupsOf(c));
+    || isCommemoration(c) || isHiddenCandidate(c, initial, groupsOf(c));
   const picked = selectCandidate(resolved, query.obs, groupsOf);
   const selected = picked && hidden(picked) ? initial : picked;
   if (!selected) return null;
@@ -848,7 +852,7 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
     date, resolved, selected, initial, groups, tracks, track, options, setIndex, group, shortGroup, slots,
     chips, pair, collects, collectLabels: collectLabels(collects), collectIndex, collectsLinked: !!linked,
     ending: endingCodeOf(memorialCollects[memorialCollects.length - 1] || chosenCollect), memorialCollects,
-    memorialSaints: memorial.saints,
+    memorialSaints: memorial.saints, commemorations,
     colors, colorAlt, ownColor, colorsOr, fast: fastOf(resolved),
     cycle: resolved.coord.year && CYCLE_LABEL[resolved.coord.year] ? CYCLE_LABEL[resolved.coord.year] : null,
     empty,
@@ -1058,10 +1062,15 @@ function buildHeader(m) {
   const shown = m.initial;
   const dayName = String(shown.observance.name || "");
   head.appendChild(el("h2", { className: "lect-day" }, dayName || "—"));
-  // 그날 기리는 성인 — 칩 대신 제목 아래에 한 줄씩(사용자 결정 2026-11-03, memorialOf). 다른 칩을 골라도 제목처럼 그대로다.
-  if (m.memorialSaints.length) {
+  // 그날 기리는 성인과 기념일 — 칩 대신 제목 아래에 한 줄씩, 이름 뒤에 「축일」 · 「기념일」(사용자 결정 2026-11-03,
+  // memorialOf). 다른 칩을 골라도 제목처럼 그대로다.
+  const lines = [
+    ...m.memorialSaints.map((c) => `${c.observance.name || ""} 축일`),
+    ...m.commemorations.map((c) => `${c.observance.name || ""} 기념일`),
+  ];
+  if (lines.length) {
     const saints = el("p", { className: "lect-day-saints" });
-    for (const c of m.memorialSaints) saints.appendChild(el("span", { className: "lect-day-saint" }, String(c.observance.name || "")));
+    for (const line of lines) saints.appendChild(el("span", { className: "lect-day-saint" }, line));
     head.appendChild(saints);
   }
   if (shown.status === "transferred_in" && shown.from) {

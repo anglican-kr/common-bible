@@ -748,7 +748,7 @@ test("buildLectionaryModel: 본기도 없는 전례일을 고르면 collects 가
   assert.strictEqual(m.empty, false);
 });
 
-test("buildLectionaryModel: 기념일 칩을 고르면 empty — 본문도 본기도도 없다", () => {
+test("buildLectionaryModel: 기념일은 칩이 아니라 이름 줄(commemorations) — 주소로 가리켜도 기본 독서다(사용자 결정 2026-11-03)", () => {
   const feast = cand(obs("d0101-거룩한-이름-예수", "거룩한 이름 예수", { rank: "major_feast", precedence: 3, color: "white" }));
   const memo = cand(obs("d0101-세계평화", "세계평화를 위한 기도일", { rank: "commemoration", precedence: 7 }));
   const grid = cand(obs("grid:christmas-x-weekday-thu", "성탄 목요일", { color: "white" }));
@@ -756,13 +756,14 @@ test("buildLectionaryModel: 기념일 칩을 고르면 empty — 본문도 본�
   const groupsOf = groupsOfFrom({ "d0101-거룩한-이름-예수": [group("f", FOUR)] });
   const entries = [{ candidate: feast, collects: [collect(285, "…")] }, { candidate: memo, collects: [] }, { candidate: grid, collects: [] }];
   const m = ctx.buildLectionaryModel(r, { obs: "d0101-세계평화", track: null, set: null, collect: null }, groupsOf, entries, null);
-  assert.strictEqual(m.selected, memo);
-  assert.strictEqual(m.empty, true);
-  assert.strictEqual(m.group, null);
-  same(m.chips.map((c) => c.muted), [false, true, false]);
+  assert.strictEqual(m.selected, feast);   // 기념일을 가리켜도 기본 독서 — 본문 없는 화면이 아니다
+  assert.strictEqual(m.empty, false);
+  same(m.chips.map((c) => c.candidate.observance.id), ["d0101-거룩한-이름-예수", "grid:christmas-x-weekday-thu"]);
+  same(m.commemorations.map((c) => c.observance.id), ["d0101-세계평화"]);
   const m0 = ctx.buildLectionaryModel(r, { obs: null, track: null, set: null, collect: null }, groupsOf, entries, null);
   assert.strictEqual(m0.empty, false);
   assert.strictEqual(m0.selected, feast);
+  same(m0.commemorations.map((c) => c.observance.id), ["d0101-세계평화"]);
 });
 
 test("buildLectionaryModel: 트랙 — 기억(마지막 선택)이 기본, URL 이 앞서고, href 는 칩 · 카드까지 트랙을 언제나 적는다(기억과 무관한 주소 — 자체 리뷰 2026-10-13 · 머지 전 검토 2026-10-14)", () => {
