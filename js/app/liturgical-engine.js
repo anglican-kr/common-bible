@@ -729,6 +729,28 @@ const PROPER_WEEKDAY_NAMES = {
 };
 
 /**
+ * **날짜로 이름이 정해진 평일** — 독서와 본기도 표에만 있고 정의 표에는 행이 없는 날짜 전용 평일 본문(`type: weekday`,
+ * 설계서 §5.4)의 날짜, 절기, 이름. 그날 격자 평일의 기본 본문이 이 본문이므로(§5.6 격자 경로 ①) 격자 평일도 그 본문의
+ * 이름을 단다. 제목이 「대림 3주 목요일」인데 본문은 「성탄 8일 전」이던 것을 고쳤다(사용자 결정 2026-11-03 「그날의 기본
+ * 독서 이름이 제목」). 본문을 찾는 경로 ①과 같은 조건(`type` · `season`이 그날의 절기 위치와 같을 때)에서만 쓴다. 그래서
+ * 주일(대림 3, 4주일과 성탄 1, 2주일)과 주의 세례 뒤의 1.7-1.12(연중)는 절기 위치의 이름 그대로다. 정의 표가 아니라
+ * 본문 표가 아는 날짜라 코어가 직접 갖고, 데이터와의 일치는 실데이터 테스트가 지킨다.
+ * @type {Readonly<Record<string, { season: LiturgicalSeason, name: string }>>}
+ */
+const DATED_WEEKDAY_NAMES = Object.freeze({
+  "12.17": { season: "advent", name: "성탄 8일 전" }, "12.18": { season: "advent", name: "성탄 7일 전" },
+  "12.19": { season: "advent", name: "성탄 6일 전" }, "12.20": { season: "advent", name: "성탄 5일 전" },
+  "12.21": { season: "advent", name: "성탄 4일 전" }, "12.22": { season: "advent", name: "성탄 3일 전" },
+  "12.23": { season: "advent", name: "성탄 2일 전" }, "12.24": { season: "advent", name: "성탄 1일 전" },
+  "12.30": { season: "christmas", name: "성탄주간" }, "12.31": { season: "christmas", name: "성탄주간" },
+  "01.03": { season: "christmas", name: "성탄주간" }, "01.04": { season: "christmas", name: "성탄주간" },
+  "01.05": { season: "christmas", name: "성탄주간" }, "01.07": { season: "christmas", name: "성탄주간" },
+  "01.08": { season: "christmas", name: "성탄주간" }, "01.09": { season: "christmas", name: "성탄주간" },
+  "01.10": { season: "christmas", name: "성탄주간" }, "01.11": { season: "christmas", name: "성탄주간" },
+  "01.12": { season: "christmas", name: "성탄주간" },
+});
+
+/**
  * **저녁 전례**(→ R-6.1-evening — 설계서 미결20 닫힘, 사용자 결정 2026-10-15): 그날 저녁에 드리는 감사성찬례라
  * **어떤 판정에도 참여하지 않는다** — 그날의 대표(`official`) · 색 · 재분류(`settle`)에도, 축일을 다른 날로 옮기는
  * 계산(옮김 계산, §6.5 `computeTransfers`)에도. 후보 목록 맨 끝에 `evening: true` 로 실려 독서 화면에서 칩으로 고른다.
@@ -751,7 +773,7 @@ function isEveningLiturgy(obs) {
 
 /**
  * 월·일 표기 → 내부 표준 `"MM.DD"`. 점 · 하이픈과 0 채움 유무를 다 받는다(§5.2 — 데이터에 세 표기가
- * 섞여 있다). 형식 이탈 · 없는 날(`02.30`)은 null — 그 레코드는 날짜 인덱스에 오르지 않는다(§2).
+ * 섞여 있다). 형식 이탈 · 없는 날(`02.30`)은 null — 그 레코드는 날짜 인덱스에 넣지 않는다(§2).
  * 02.29 는 실재하는 날로 받는다(윤년에만 오는 날짜 키).
  * @param {unknown} s
  * @returns {string | null}
@@ -970,9 +992,20 @@ function properWeekdayNameOf(dateStr, coord) {
 }
 
 /**
- * 격자 전례일의 표시명. 고유명 평일(위 표)은 그 이름을 쓰고, 그 밖은 절기 위치에서 만든다(「연중 3주일」 ·
- * 「사순 2주 화요일」). 성 목 · 금 · 토는 이동 축일 행이 따로 있으므로 격자는 「성주간 X요일」이다 —
- * 이동 축일 행의 이름을 빌리면 같은 본문이 후보 둘에 붙는다.
+ * 그날의 격자 평일이 날짜 전용 본문을 받으면 그 본문의 이름(`DATED_WEEKDAY_NAMES`), 아니면 undefined.
+ * @param {string} dateStr @param {LiturgicalCoord} coord
+ * @returns {string | undefined}
+ */
+function datedWeekdayNameOf(dateStr, coord) {
+  if (coord.type !== "weekday") return undefined;
+  const e = DATED_WEEKDAY_NAMES[monthDayOf(dateStr)];
+  return e && e.season === coord.season ? e.name : undefined;
+}
+
+/**
+ * 격자 전례일의 표시명. 고유명 평일(위 표)은 그 이름을, 날짜 전용 본문을 받는 평일은 그 본문의 이름을 쓰고,
+ * 그 밖은 절기 위치에서 만든다(「연중 3주일」 · 「사순 2주 화요일」). 성 목 · 금 · 토는 이동 축일 행이 따로 있으므로
+ * 격자는 「성주간 X요일」이다 — 이동 축일 행의 이름을 빌리면 같은 본문이 후보 둘에 붙는다.
  * @param {string} dateStr @param {LiturgicalCoord} coord
  * @param {string | undefined} proper  `properWeekdayNameOf(dateStr, coord)` — 호출하는 쪽(gridObservance)이 표지에도 쓰므로 한 번 센 값을 받는다
  * @returns {string}
@@ -982,6 +1015,8 @@ function gridName(dateStr, coord, proper) {
   if (coord.type === "sunday") return coord.week === null ? s + " 주일" : s + " " + coord.week + "주일";
   const w = coord.weekday ? WEEKDAY_LABEL[coord.weekday] : "";
   if (proper) return proper;
+  const dated = datedWeekdayNameOf(dateStr, coord);
+  if (dated) return dated;
   if (coord.week === null && inSpan(dateStr, "holyWeek")) return "성주간 " + w;
   return coord.week === null ? s + " " + w : s + " " + coord.week + "주 " + w;
 }
@@ -1746,9 +1781,9 @@ function requestOf(/** @type {ResolvedDate} */ resolved) {
 
 /**
  * 본문 표 하나 → 인덱스(§5.4 권장 인덱스 3). 레코드는 복사하지 않는다. 날짜 · 음력이 있는 레코드는
- * 그 키로만 닿고, 이름만 있는 레코드는 `byName` · `named` 로, 셋 다 없는 격자 레코드만 `byCoord`
- * 로 간다 — **이름 · 날짜가 있는 레코드는 폴백 해석을 하지 않는다**(§5.3 판정 규칙 — 성 토요일
- * 독서가 성주간 평일 전체에 퍼지지 않게). 날짜 표기가 깨진 레코드는 어느 경로에도 오르지 않는다(§2).
+ * 그 키의 인덱스에만 넣고, 이름만 있는 레코드는 `byName` · `named`에, 셋 다 없는 격자 레코드만
+ * `byCoord`에 넣는다 — **이름 · 날짜가 있는 레코드는 폴백 해석을 하지 않는다**(§5.3 판정 규칙 — 성 토요일
+ * 독서가 성주간 평일 전체에 퍼지지 않게). 날짜 표기가 깨진 레코드는 어느 인덱스에도 넣지 않는다(§2).
  * @param {any} table
  * @returns {TextIndex}
  */

@@ -259,7 +259,7 @@ test("A3 2026-12-25 · 12-24 — 12.25 는 성탄 낮(초기 · 미결12) · 새
   const eve = model("2026-12-24");
   assert.strictEqual(id(eve.selected), "grid:advent-4-weekday-thu");   // 그날의 대표 · 초기 선택은 대림 평일(자)
   same(plain(eve.colors), ["violet"]);
-  same(eve.chips.map((c) => c.label), ["대림 4주 목요일 (나해)", "성탄 밤 · 저녁"]);
+  same(eve.chips.map((c) => c.label), ["성탄 1일 전 (나해)", "성탄 밤 · 저녁"]);   // 날짜 전용 본문의 이름(사용자 결정 2026-11-03)
   const night = model("2026-12-24", { obs: "d1225-성탄-밤" });
   same(plain(night.colors), ["white"]);
   // 성탄 밤의 본문 · 본기도 — 12.24 에서 12.25 키로 좁힌다. 새벽(이사 62 · 루가 2:1-7, 8-20 · 본기도 276)과 가르는 값으로 고정한다
