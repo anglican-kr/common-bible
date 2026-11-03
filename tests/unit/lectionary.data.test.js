@@ -221,7 +221,7 @@ test("A3 2026-12-07 옮겨 온 성 니콜라 — 기본 독서는 옮겨 온 축
   const m = model("2026-12-07");
   assert.strictEqual(id(m.selected), "d1206-성-니콜라");   // 기본 독서는 옮겨 온 주요축일(사용자 확인 2026-11-03)
   assert.ok(m.chips.some((c) => c.label === "성 니콜라" && c.active));   // 「12월 6일에서 옮겨 지킵니다」는 머리의 문장(2026-11-03)
-  assert.ok(m.chips.find((c) => c.active).title.includes("12월 6일에서 옮겨 옴"));   // 전체 상태는 title 에
+  assert.ok(m.chips.find((c) => c.active).title.includes("12월 6일에서 옮겨 옴"));   // 전체 상태는 title에
   assert.strictEqual(m.collects.length, 1);   // 니콜라 본기도(기원 날짜에 색인된 것 — §5.6)
   same(m.memorialSaints.map((c) => id(c)), ["d1207-암브로스"]);   // 밀려서 기념만 — 이름 줄과 본기도(2026-11-03)
   assert.strictEqual(m.slots.length, 4);   // 기원 날짜에 색인된 독서가 옮겨 온 날에서 나온다(§5.6)
