@@ -2,7 +2,7 @@
 pr: 463
 date: 2026-11-03
 branch: feat/lectionary-header
-title: "feat: 전례독서 머리를 날짜 이동 줄로 바꿈"
+title: "feat: 전례독서 화면의 머리와 성인 표시 정리"
 ---
 
 ## 요약
