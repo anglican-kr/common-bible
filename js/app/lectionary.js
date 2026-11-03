@@ -742,9 +742,11 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
     || isHiddenCandidate(c, initial, groupsOf(c));
   // 칩이 있는 이름 있는 후보와 독서 · 본기도가 똑같은 격자도 칩을 만들지 않는다 — 고르면 같은 화면이다(사용자 결정 2026-11-04).
   // 대림1주일이 그렇다: 그날 기본 독서가 그해(가해 · 나해 · 다해)의 대림 1주일 독서라 「대림 1주일 (나해)」 격자가 같은 본문이다.
-  // 후보가 하나만 남으면 칩 줄을 그리지 않는다(buildChips).
+  // 후보가 하나만 남으면 칩 줄을 그리지 않는다(buildChips). 견줄 짝은 그날 지키는 이름 있는 후보뿐이다 — 생략되거나 옮겨 간
+  // 후보(흐린 칩)와 본문이 같다고 격자를 감추면 그날 지키는 쪽 칩이 사라진다(PR #467 리뷰).
   const textKey = (/** @type {Candidate} */ c) => textKeyOf(groupsOf(c), collectsFor(collectEntries, c));
-  const namedKeys = new Set(resolved.candidates.filter((c) => !isGrid(c) && !hiddenOwn(c) && !c.evening).map(textKey));
+  const namedKeys = new Set(resolved.candidates
+    .filter((c) => !isGrid(c) && !hiddenOwn(c) && !c.evening && !isMutedCandidate(c)).map(textKey));
   const hidden = (/** @type {Candidate} */ c) => hiddenOwn(c) || (isGrid(c) && c !== initial && namedKeys.has(textKey(c)));
   // 본문 없는 날 — 칩 대신 기념일 줄 아래에 이름만 한 줄씩(사용자 결정 2026-11-04). 그날 지키거나 기념만 하는 것만 싣는다.
   const textlessDays = resolved.candidates.filter((c) => !isGrid(c) && !c.evening && !isCommemoration(c) && textless(c)
@@ -1048,8 +1050,9 @@ function buildHeader(m) {
 }
 
 /**
- * 전례일 칩 줄 — 후보가 여럿인 날만 그린다. 하나뿐이면 고를 것이 없고 머리의 전례일 이름이 같아 그리지 않는다(사용자 결정
- * 2026-11-03, ADR-038 §3 「후보 전례일이 여럿이면」).
+ * 전례일 칩 줄 — 칩이 둘 이상인 날만 그린다. 하나뿐이면 고를 것이 없고 머리의 전례일 이름이 같아 그리지 않는다(사용자 결정
+ * 2026-11-03, ADR-038 §3 「후보 전례일이 여럿이면」). 후보가 여럿이어도 본문 없는 후보와 같은 본문의 격자를 빼고 하나만 남으면
+ * 그리지 않는다(2026-11-04 — 왕이신 그리스도 주일, 대림1주일).
  * @param {LectionaryModel} m @returns {HTMLElement | null}
  */
 function buildChips(m) {
@@ -1416,12 +1419,13 @@ function commit(m, chapters) {
       title: isCommemoration ? "기념일 — 본문 없음" : "고유 본문 없음",
       // 본문 없는 후보는 2026-11-04부터 칩이 없고 주소로 가리켜도 기본 독서다. 그래서 이 화면은 기본 독서 후보 자신이 비었을
       // 때만 나온다(실데이터 2025-2027에는 없다 — lectionary.data.test.js). 본문 없는 축일(세계평화 · 병자를 위한 기도일 — 기도서에
-      // 본기도가 없다, 설계서 미결51)의 문구가 따로다. 화면 글에 「관측일」을 쓰지 않는다(사용자 결정 2026-10-24)
-      subtitle: isCommemoration
-        ? "기념일은 고유 본기도와 독서를 두지 않습니다. 다른 독서를 선택하세요."
+      // 본기도가 없다, 설계서 미결51)의 문구가 따로다. 화면 글에 「관측일」을 쓰지 않는다(사용자 결정 2026-10-24). 고를 칩이
+      // 없으면(칩 줄을 그리지 않는 날) 「다른 독서를 선택하세요」를 붙이지 않는다 — 고를 것이 없다(PR #467 리뷰)
+      subtitle: (isCommemoration
+        ? "기념일은 고유 본기도와 독서를 두지 않습니다."
         : rank === "minor_feast"
-          ? "독서 본문 없이 기념하는 축일입니다. 다른 독서를 선택하세요."
-          : "따로 정한 독서가 없습니다. 다른 독서를 선택하세요.",
+          ? "독서 본문 없이 기념하는 축일입니다."
+          : "따로 정한 독서가 없습니다.") + (m.chips.length > 1 ? " 다른 독서를 선택하세요." : ""),
     }));
     finish();
     return;

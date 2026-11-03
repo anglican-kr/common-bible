@@ -731,6 +731,14 @@ test("buildLectionaryModel: 이름 있는 후보와 독서 · 본기도가 똑�
   // 본기도가 다르면 다른 화면이라 격자 칩이 남는다
   same(ctx.buildLectionaryModel(r, { obs: null, track: null, set: null, collect: null }, groupsOfFrom(same1), entriesOf([advent, grid], 9), null)
     .chips.map((c) => c.candidate.observance.id), ["t-대림1주일", "grid:advent-1-sunday"]);
+  // 흐린 후보(옮겨 간 축일)와는 견주지 않는다 — 본문이 같아도 그날 지키는 격자 칩이 남는다(PR #467 리뷰)
+  // (기본 독서는 본문이 다른 대림1주일 — 격자가 기본 독서면 이 규칙을 거치지 않는다)
+  const goneSame = { "t-대림1주일": [group("a2", FOUR)], "d1130-안드레아": [group("a1", FOUR)], "grid:advent-1-sunday": [group("a1", FOUR)] };
+  const andrewSame = cand(andrew.observance, "transferred_out", { to: "2025-12-01" });
+  const r3 = resolvedOf("2025-11-30", [advent, andrewSame, grid], advent, { coord, color: "violet", colors: ["violet"] });
+  const e3 = [{ candidate: advent, collects: [collect(6, "…")] }, { candidate: andrewSame, collects: [collect(7, "…")] }, { candidate: grid, collects: [collect(7, "…")] }];
+  same(ctx.buildLectionaryModel(r3, { obs: null, track: null, set: null, collect: null }, groupsOfFrom(goneSame), e3, null)
+    .chips.map((c) => c.candidate.observance.id), ["t-대림1주일", "d1130-안드레아", "grid:advent-1-sunday"]);
 });
 
 test("buildLectionaryModel: 트랙 — 기억(마지막 선택)이 기본, URL 이 앞서고, href 는 칩 · 카드까지 트랙을 언제나 적는다(기억과 무관한 주소 — 자체 리뷰 2026-10-13 · 머지 전 검토 2026-10-14)", () => {
