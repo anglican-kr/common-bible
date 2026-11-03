@@ -1,4 +1,5 @@
 ---
+pr: 465
 date: 2026-11-03
 branch: fix/dated-weekday-name
 title: "fix: 성탄 N일 전과 성탄주간 평일의 제목을 본문 이름으로"
