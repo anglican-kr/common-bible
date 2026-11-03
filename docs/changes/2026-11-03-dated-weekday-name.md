@@ -24,7 +24,9 @@ title: "fix: 성탄 N일 전과 성탄주간 평일의 제목을 본문 이름�
 - 유닛: `node --test tests/unit/*.test.js` 1479건 중 1478 통과, 1건은 기존 건너뜀(미결13). 실데이터(`data/`)를 연결해 돌렸다. 새 테스트 둘(합성 표의 이름 경우, 실데이터 2025-2050의 이름과 본문 일치)은 고치기 전 코드에서 실패한다.
 - 기대값을 바꾼 기존 테스트: 격자 이름 표(2026-12-19 「성탄 6일 전」, 12-30 「성탄주간」), 12.24 칩 「성탄 1일 전 (나해)」.
 - 타입 검사: `npm run typecheck` 통과.
-- e2e: 전례독서, 캘린더, 전례 렌더링, 지연 로드 88건 통과. 전체 e2e 결과는 아래에 적는다.
+- e2e: 전례독서, 캘린더, 전례 렌더링, 지연 로드 88건 통과. 전체는 398건 가운데 396 통과, 1 건너뜀, 2 실패다.
+  - `test_lectionary_view.py::test_modified_click_on_track_opens_new_page_without_touching_current`는 전체를 한꺼번에 돌릴 때만 실패했다. 따로 돌리면 통과하고, 앞의 88건 실행에서도 통과했다.
+  - `test_navigation.py::test_multi_segment_spec_the_app_does_not_write_opens_chapter[repeated-segments]`는 `main`에서도 같이 실패한다(아주 긴 주소에 로컬 서버가 빈 응답을 돌려준다). 이 PR과 관계없다.
 - 브라우저: `/lectionary/2026-12-17`의 제목이 「성탄 8일 전」인 것을 390px 폭에서 확인했다.
 
 ## 갱신한 문서
