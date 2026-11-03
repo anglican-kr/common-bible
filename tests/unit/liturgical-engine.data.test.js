@@ -616,12 +616,15 @@ test("§5.5 날짜로 이름이 정해진 평일 — 표가 데이터의 날짜 
   const table = plain(vm.runInContext("DATED_WEEKDAY_NAMES", ctx));
   // 독서와 본기도의 날짜 전용 평일 본문(`type: weekday`이고 날짜가 있는 것)이 표와 같다 — 데이터에 날짜가 늘거나 이름이 바뀌면 여기서 멈춘다
   for (const f of ["eucharist-readings.json", "eucharist-collects.json"]) {
-    const got = {};
+    // 레코드 하나하나를 표와 대조한다 — 날짜마다 하나로 모으면 같은 날짜의 앞 레코드(대체 본기도)가 덮인다
+    const dates = new Set();
     for (const e of read(f).entries) {
       if (e.type !== "weekday" || typeof e.date !== "string") continue;
-      got[ctx.normMonthDay(e.date)] = { season: e.season, name: e.name };
+      const md = ctx.normMonthDay(e.date);
+      dates.add(md);
+      same({ season: e.season, name: e.name }, table[md], `${f} ${e.id}`);
     }
-    same(got, table, f);
+    same([...dates].sort(), Object.keys(table).sort(), f);
   }
   const bad = [];
   for (let y = 2025; y <= 2050; y++) {

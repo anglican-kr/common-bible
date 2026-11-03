@@ -1877,12 +1877,8 @@ function properRecords(tix, cal, resolved, obs) {
     const same = (/** @type {TextRecord} */ r) => r.type === coord.type && r.season === coord.season;
     const dated = topLayer((tix.byDate.get(monthDayOf(resolved.date)) || []).filter(same), req);
     if (dated.length) return dated;
-    // ② is for proper weekdays only: a dated-weekday name (「성탄주간」) is shared by eleven dates, so a
-    // name lookup would pull every date's text. Those days are answered by ① above.
-    if (obs.properWeekday === true) {
-      const named = topLayer((tix.byName.get(obs.name) || []).filter(same), req);
-      if (named.length) return named;
-    }
+    const named = topLayer((tix.byName.get(obs.name) || []).filter(same), req);
+    if (named.length) return named;
     const axes = { season: coord.season, week: coord.week, type: coord.type };
     return topLayer(tix.byCoord.get(coordKey(coord.season, coord.week, coord.type)) || [], { ...req, axes });
   }
