@@ -780,7 +780,8 @@ a.lect-datenav-btn:focus-visible { background: var(--bg-card); }
 [data-theme="dark"] .lect-chip--muted[aria-current] { color: var(--bg); }
 
 /* Track (독서 1/2) and alternative-set segments — the division-tab pattern in a
-   compact size, labelled. */
+   compact size. Only the set segment that also picks the collect (5.1 · 사계재 금요일) wears a
+   visible label (「독서 · 본기도」); the others are named by aria-label alone (2026-11-03 · 11-04). */
 .lect-controls {
   display: flex;
   flex-wrap: wrap;

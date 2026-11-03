@@ -63,6 +63,9 @@ def test_easter_day_renders_collect_then_four_readings_in_order(desktop_context)
     assert page.locator(".lect-collect-text").count() == 1
     # 원본 세트 둘 = 「또는」 대안 — 완전한 세트를 통째로 고른다.
     assert page.eval_on_selector_all(".lect-sets .division-tab", "els => els.map(e => e.textContent)") == ["독서 1", "독서 2"]
+    # 세그먼트 위에 「대안 독서」 글자가 없다 — 단추 이름과 겹친다(사용자 결정 2026-11-04). 접근 가능한 이름은 그대로.
+    assert page.locator(".lect-sets .lect-control-label").count() == 0
+    assert page.get_attribute(".lect-sets [aria-label]", "aria-label") == "대안 독서"
     assert page.locator(".lect-ending").count() == 1
     # 독서 본문이 실제로 그려졌다(절 span) — 복음까지.
     for slot in SLOT_ORDER:
@@ -944,6 +947,7 @@ def test_conditional_set_condition_is_the_label(desktop_context):
     assert page.eval_on_selector_all(".lect-sets .division-tab", "els => els.map(e => e.textContent)") == ["사순 2주일", "주의 변모 주일로 지킬 때"]
     assert page.locator(".lect-sets .division-tab.active").inner_text() == "주의 변모 주일로 지킬 때"
     assert page.locator(".lect-sets .lect-caption").count() == 0
+    assert page.locator(".lect-sets .lect-control-label").count() == 0   # 조건이 단추 이름이라 위 글자가 없다(2026-11-04)
 
 
 def test_bracket_set_merges_into_long_text_with_markers(desktop_context):
