@@ -572,8 +572,9 @@ body {
    .chapter-text (serif body, same column as the chapter view); the chrome —
    date nav · day name · colour marks · observance chips · segments · slot
    headings — is sans-serif like the other in-page views. */
+/* 위 여백은 #app 기본값(--space-8, 32px)을 그대로 쓴다. 날짜 이동 줄을 머리에 둔 뒤로 본문 맨 위가 제목이라,
+   16px로 줄이면 제목이 머리 바로 밑에 붙어 보였다(사용자 결정 2026-11-03). */
 .lectionary { padding: 0; }
-#app:has(.lectionary) { padding-top: var(--space-4); }
 
 .lect-head {
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
