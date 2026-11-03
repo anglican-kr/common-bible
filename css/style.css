@@ -776,64 +776,6 @@ a.lect-datenav-btn:focus-visible { background: var(--bg-card); }
 .lect-chip--muted[aria-current] { border-style: solid; color: #fff; }
 [data-theme="dark"] .lect-chip--muted[aria-current] { color: var(--bg); }
 
-/* Side-by-side choice (ADR-038 §3 — optional transfer · transferred feast ·
-   regional festival): two cards, the reader picks. */
-.lect-pair {
-  margin: var(--space-4) 0;
-  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
-}
-.lect-pair-title {
-  margin: 0 0 var(--space-2);
-  font-size: var(--font-sm);
-  font-weight: 600;
-  color: var(--text-secondary);
-}
-.lect-pair-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--space-2);
-}
-@media (max-width: 480px) {
-  .lect-pair-row { grid-template-columns: 1fr; }
-}
-.lect-pair-card {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  min-height: var(--touch-target);
-  padding: var(--space-3) var(--space-4);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  background: var(--bg-card);
-  color: var(--text);
-  text-decoration: none;
-}
-.lect-pair-card[aria-current] {
-  border-color: var(--accent);
-  box-shadow: inset 0 0 0 1px var(--accent);
-}
-.lect-pair-label {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2);
-  font-size: var(--font-md);
-  font-weight: 700;
-}
-.lect-badge {
-  font-size: var(--font-2xs);
-  font-weight: 600;
-  line-height: 1.6;
-  color: var(--accent);
-  border: 1px solid var(--accent);
-  border-radius: var(--radius-pill);
-  padding: 0 var(--space-2);
-}
-.lect-pair-note {
-  font-size: var(--font-sm);
-  color: var(--text-secondary);
-}
-
 /* Track (독서 1/2) and alternative-set segments — the division-tab pattern in a
    compact size, labelled. */
 .lect-controls {

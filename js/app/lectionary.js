@@ -42,7 +42,7 @@ import {
 } from "./views.js";
 import { specCoversVerse, verseInstanceKeys, citationSource } from "./verse-spec.js";
 import {
-  parseDate, toKey, addDays, dayOfWeek, optionalDestOf, isComputableDate, joinNames, fillCommonName,
+  parseDate, toKey, addDays, dayOfWeek, isComputableDate, joinNames, fillCommonName,
   preloadCalendar, preloadLectionary, resolveDate, findReadings, findCollects, findHalfVerse, fastOf,
 } from "./liturgical-engine.js";
 
@@ -56,16 +56,11 @@ const $title = _$("page-title");
 let committedDate = null;
 // 이름은 views.js에 있다 — 이 모듈을 받지 못했을 때 라우터가 같은 제목으로 실패 화면을 그린다.
 const PAGE_TITLE = LITURGICAL_VIEWS.lectionary.title;
-// 이 화면의 링크(날짜 이동 · 칩 · 카드 · 세그먼트)는 #app 을 통째로 다시 그린다 — 그 링크들은 `data-focus-key` 만 달고, 라우터가
+// 이 화면의 링크(날짜 이동 · 칩 · 세그먼트)는 #app 을 통째로 다시 그린다 — 그 링크들은 `data-focus-key` 만 달고, 라우터가
 // 누른 자리를 재 두었다가 새 화면의 같은 컨트롤로 포커스를 돌려준다(WCAG 2.4.3 — routing.js, 캘린더 · 구분 탭 · 검색과 같다).
 
 /** parsePath 가 /lectionary 에서 내는 서술자(routing.js PARSE_PATH — 정의는 types.d.ts `Route`). @typedef {import("../types").LectionaryRoute} LectionaryRoute */
 /** URL 쿼리에서 온 상태 — 넷 다 없을 수 있다. @typedef {{ obs: string | null, track: 1 | 2 | null, set: number | null, collect: number | null }} LectionaryQuery */
-/** @typedef {{ label: string, note: string, official: boolean }} PairCardText */
-/**
- * 두 독서 나란히(ADR-038 §3 — 선택 봉헌 · 옮겨진 축일 · 명절). `a` 가 왼쪽 카드다.
- * @typedef {{ kind: "optional-dest" | "arrival" | "festival" | "optional-origin", a: Candidate, b: Candidate, aText: PairCardText, bText: PairCardText }} LectionaryPair
- */
 /** @typedef {{ candidate: Candidate, label: string, title: string, href: string, active: boolean, muted: boolean }} LectionaryChip */
 /** 화면의 「독서」 선택지 하나 — `short` 는 괄호 선택 구절 세트에 합쳐진 짧은 바탕 세트(〔 〕 표시의 기준). @typedef {{ group: ReadingGroup, short: ReadingGroup | null, label: string }} ReadingOption */
 /**
@@ -74,12 +69,12 @@ const PAGE_TITLE = LITURGICAL_VIEWS.lectionary.title;
  *   date: string, resolved: ResolvedDate, selected: Candidate, initial: Candidate,
  *   groups: ReadingGroup[], tracks: Array<1 | 2>, track: 1 | 2 | null,
  *   options: ReadingOption[], setIndex: number, group: ReadingGroup | null, shortGroup: ReadingGroup | null, slots: ReadingSlot[],
- *   chips: LectionaryChip[], pair: LectionaryPair | null,
+ *   chips: LectionaryChip[],
  *   collects: CollectOption[], collectLabels: string[], collectIndex: number, collectsLinked: boolean, ending: "A" | "B" | "C",
  *   memorialCollects: CollectOption[], memorialSaints: Candidate[], commemorations: Candidate[],
  *   colors: string[], colorAlt: string[], ownColor: boolean, colorsOr: boolean,
  *   fast: "major" | "minor" | null, cycle: string | null, empty: boolean,
- *   hrefs: { prev: string | null, next: string | null, today: string, tracks: Array<{ track: 1 | 2, href: string, active: boolean }>, options: string[], collects: string[], pair: { a: string, b: string } | null },
+ *   hrefs: { prev: string | null, next: string | null, today: string, tracks: Array<{ track: 1 | 2, href: string, active: boolean }>, options: string[], collects: string[] },
  * }} LectionaryModel
  */
 
@@ -87,10 +82,10 @@ const PAGE_TITLE = LITURGICAL_VIEWS.lectionary.title;
 // Exercised by tests/unit/lectionary.test.js (vm slice — no DOM) and, against
 // the real tables, by tests/unit/lectionary.data.test.js. Pure decisions only:
 // which candidate to show first, which track / set / collect, what the chips
-// and the side-by-side choice say, which colours the header wears, and how a
+// say, which colours the header wears, and how a
 // state round-trips through the URL. The test loaders slice the engine's
 // LITURGICAL_CORE + LITURGICAL_LOOKUP blocks and verse-spec's VERSE_SPEC block
-// alongside, so parseDate / toKey / addDays / dayOfWeek / optionalDestOf /
+// alongside, so parseDate / toKey / addDays / dayOfWeek /
 // fastOf / specCoversVerse / verseInstanceKeys are the real functions here.
 
 const SLOT_ORDER = ["first", "psalm", "second", "gospel"];
@@ -107,8 +102,6 @@ const WEEKDAY_KO = ["일", "월", "화", "수", "목", "금", "토"];
 const GRID_ID_PREFIX = "grid:";
 /** 파서가 괄호 선택 확장(「9:35-10:8(9-23)」)으로 만든 세트의 표지(ADR-037 §1 「대안 세트 explode」). */
 const BRACKET_NOTE = "괄호 선택 구절 포함";
-/** 선택 봉헌의 네 목적지(설계서 R-6.2-destinations) — 엔진 `OPTIONAL_KINDS` 와 같은 넷(유닛이 대조한다). */
-const OPTIONAL_TRANSFER_KINDS = ["nearby_sunday", "sunday_0102_0108", "sunday_1030_1105", "easter7_sunday"];
 
 // 송영 3종 — 고른 본기도(대체안은 세그먼트로 택1) 끝에 **1회**, 그 본기도의 `ending` 코드로(ADR-036 §3 ·
 // ADR-038 §3 「구현」 — 다른 전례일의 본기도는 열거하지 않는다). 데이터 eucharist-collects.json
@@ -523,73 +516,6 @@ function endingCodeOf(/** @type {CollectOption | null | undefined} */ last) {
   return e === "A" || e === "B" || e === "C" ? e : "A";
 }
 
-/**
- * 두 독서 나란히(ADR-038 §3 · 미결15). 하루에 하나만 — 목적지 주일의 선택 봉헌 → 축일을 옮겨 온 날 →
- * 명절 → 선택 봉헌의 당일 순으로 처음 맞는 것 하나. 없으면 null. 어느 쪽이든 **독서가 없는** 후보는 카드로 내지 않는다 —
- * 성탄 8일의 옮겨 온 날(12.27~29)과 공현 당일(1.6)의 격자는 본문이 비어 카드를 누르면 빈 화면이었다(자체 리뷰 2026-10-13).
- * @param {ResolvedDate} resolved @param {(c: Candidate) => ReadingGroup[]} [groupsOf] 없으면 본문 검사를 건너뛴다
- * @returns {LectionaryPair | null}
- */
-function pairOf(resolved, groupsOf) {
-  const cands = resolved.candidates;
-  const grid = cands.find(isGrid) || null;
-  const official = resolved.official;
-  const gridName = grid ? shortName(grid.observance.name) : "";
-  const read = (/** @type {Candidate} */ c) => !groupsOf || groupsOf(c).length > 0;
-  // 격자 카드의 설명 — 명절이 주일이면(2027-02-07 설) 그날의 격자는 주일이다
-  const gridKind = dayOfWeek(resolved.date) === 0 ? "주일" : "평일";
-
-  const optional = cands.find((c) => c.status === "optional");
-  if (optional && official && official !== optional && read(official) && read(optional)) {
-    return {
-      kind: "optional-dest", a: official, b: optional,
-      aText: { label: `${shortName(official.observance.name)} 독서`, note: "이날의 공식 독서", official: true },
-      bText: {
-        label: `${shortName(optional.observance.name)} 독서`,
-        note: optional.from ? `${monthDayLabel(optional.from)}에서 옮겨 지키는 경우` : "옮겨 지키는 경우",
-        official: false,
-      },
-    };
-  }
-  const arrived = cands.find((c) => c.status === "transferred_in");
-  if (arrived && grid && arrived !== grid && read(arrived) && read(grid)) {
-    return {
-      kind: "arrival", a: arrived, b: grid,
-      aText: {
-        label: `${shortName(arrived.observance.name)} 독서`,
-        note: arrived.from ? `${monthDayLabel(arrived.from)}에서 옮겨 옴` : "옮겨 옴",
-        official: arrived === official,
-      },
-      bText: { label: `${gridName} 독서`, note: `이날의 ${gridKind} 독서`, official: grid === official },
-    };
-  }
-  if (official && official.observance.rank === "regional_festival" && grid && grid !== official && read(official) && read(grid)) {
-    return {
-      kind: "festival", a: official, b: grid,
-      aText: { label: `${shortName(official.observance.name)} 독서`, note: "명절 — 이날의 공식 독서", official: true },
-      bText: { label: `${gridName} 독서`, note: `이날의 ${gridKind} 독서`, official: false },
-    };
-  }
-  const origin = cands.find((c) => c.status === "proper" && OPTIONAL_TRANSFER_KINDS.includes(String(c.observance.transfer_to)));
-  if (origin && grid && origin !== grid && read(origin) && read(grid)) {
-    const y = parseInt(resolved.date.slice(0, 4), 10);
-    const dest = optionalDestOf(origin.observance.transfer_to, resolved.date, y);
-    if (dest && dest !== resolved.date) {
-      const when = dest > resolved.date ? "오는" : "지난";
-      return {
-        kind: "optional-origin", a: origin, b: grid,
-        aText: { label: `${shortName(origin.observance.name)} 독서`, note: "이날 지키는 경우 — 이날의 공식 독서", official: origin === official },
-        bText: {
-          label: `${gridName} 독서`,
-          note: `${when} 주일(${monthDayLabel(dest)})로 옮겨 지키는 경우 — 이날은 ${gridKind} 독서`,
-          official: grid === official,
-        },
-      };
-    }
-  }
-  return null;
-}
-
 /** `null | 코드 | 코드 배열` 3형 → 배열. */
 function altList(/** @type {unknown} */ v) {
   if (v === null || v === undefined) return [];
@@ -795,8 +721,10 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
   // 결정 2026-11-03). 그날 지키는 기념일(`proper`)만 줄에 들고, 성주간에 생략된 기념일은 줄에도 칩에도 없다.
   const isCommemoration = (/** @type {Candidate} */ c) => c !== initial && c.observance.rank === "commemoration";
   const commemorations = resolved.candidates.filter((c) => isCommemoration(c) && c.status === "proper" && !c.evening);
-  const hidden = (/** @type {Candidate} */ c) => (memorial.saints.includes(c) && !hasProperReadings(groupsOf(c)))
-    || isCommemoration(c) || isHiddenCandidate(c, initial, groupsOf(c));
+  // 공통 독서 감추기를 끄면(HIDE_COMMON_READINGS) 공통 독서만 있는 기리는 성인도 칩으로 돌아와 그 독서를 고를 수 있다(PR #463 리뷰)
+  const hidden = (/** @type {Candidate} */ c) => isCommemoration(c)
+    || (HIDE_COMMON_READINGS && memorial.saints.includes(c) && !hasProperReadings(groupsOf(c)))
+    || isHiddenCandidate(c, initial, groupsOf(c));
   const picked = selectCandidate(resolved, query.obs, groupsOf);
   const selected = picked && hidden(picked) ? initial : picked;
   if (!selected) return null;
@@ -825,7 +753,7 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
   const memorialCollects = selected === initial ? memorial.collects : [];
 
   const base = { obs: selected.observance.id, track, set: setIndex + 1, collect: !linked && chosenCollect ? collectIndex + 1 : null };
-  // 후보마다 그 화면의 트랙 — 고른 후보는 지금 트랙, 다른 후보는 기억(없으면 첫 트랙). 칩 · 카드 링크도 이것을 적는다:
+  // 후보마다 그 화면의 트랙 — 고른 후보는 지금 트랙, 다른 후보는 기억(없으면 첫 트랙). 칩 링크도 이것을 적는다:
   // 트랙은 주소에 언제나 적으므로(hrefFor), 빼면 공유받은 「독서 2」 화면에서 지금 칩을 눌러도 보는 사람의 기억대로
   // 바뀌었다(머지 전 검토 2026-10-14).
   const trackOf = (/** @type {Candidate} */ c) => (c === selected ? track : pickTrack(groupsOf(c), null, storedTrack));
@@ -840,7 +768,6 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
       muted: isMutedCandidate(c),
     };
   });
-  const pair = pairOf(resolved, groupsOf);
   // 성인 축일이 둘 이상이고 색이 다르면 본기도 차례대로 「적색 또는 백색」(사용자 결정 2026-11-03 — memorialOf)
   const colorsOr = selected === initial && memorial.colors.length > 1;
   const { colors, colorAlt, ownColor } = colorsOr
@@ -850,7 +777,7 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
 
   return {
     date, resolved, selected, initial, groups, tracks, track, options, setIndex, group, shortGroup, slots,
-    chips, pair, collects, collectLabels: collectLabels(collects), collectIndex, collectsLinked: !!linked,
+    chips, collects, collectLabels: collectLabels(collects), collectIndex, collectsLinked: !!linked,
     ending: endingCodeOf(memorialCollects[memorialCollects.length - 1] || chosenCollect), memorialCollects,
     memorialSaints: memorial.saints, commemorations,
     colors, colorAlt, ownColor, colorsOr, fast: fastOf(resolved),
@@ -868,10 +795,6 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
       collects: collects.map((_, j) => (linked
         ? hrefFor(date, { ...base, set: linked.indexOf(j) + 1 }, defaults)
         : hrefFor(date, { ...base, collect: j + 1 }, defaults))),
-      pair: pair ? {
-        a: hrefFor(date, { obs: pair.a.observance.id, track: trackOf(pair.a), set: null, collect: null }, defaults),
-        b: hrefFor(date, { obs: pair.b.observance.id, track: trackOf(pair.b), set: null, collect: null }, defaults),
-      } : null,
     },
   };
 }
@@ -1112,27 +1035,6 @@ function buildChips(m) {
     nav.appendChild(a);
   }
   return nav;
-}
-
-/** @param {LectionaryModel} m */
-function buildPair(m) {
-  const pair = /** @type {LectionaryPair} */ (m.pair);
-  const hrefs = /** @type {{ a: string, b: string }} */ (m.hrefs.pair);
-  const section = el("section", { className: "lect-pair", "aria-label": "두 독서 가운데 고르기" });
-  section.appendChild(el("h3", { className: "lect-pair-title" }, "두 독서 가운데 고르기"));
-  const row = el("div", { className: "lect-pair-row" });
-  for (const side of /** @type {const} */ (["a", "b"])) {
-    const text = side === "a" ? pair.aText : pair.bText;
-    const card = el("a", { className: "lect-pair-card", href: hrefs[side], "data-focus-key": `pair:${side}` });
-    if (pair[side] === m.selected) card.setAttribute("aria-current", "true");
-    const label = el("span", { className: "lect-pair-label" }, text.label);
-    if (text.official) label.appendChild(el("span", { className: "lect-badge" }, "공식"));
-    card.appendChild(label);
-    card.appendChild(el("span", { className: "lect-pair-note" }, text.note));
-    row.appendChild(card);
-  }
-  section.appendChild(row);
-  return section;
 }
 
 /** @param {LectionaryModel} m */
@@ -1474,7 +1376,6 @@ function commit(m, chapters) {
   root.appendChild(buildHeader(m));
   const chips = buildChips(m);
   if (chips) root.appendChild(chips);
-  if (m.pair) root.appendChild(buildPair(m));
 
   if (m.empty) {
     const rank = m.selected.observance.rank;
@@ -1502,12 +1403,12 @@ function commit(m, chapters) {
   if (m.group) {
     // 「모든 별세자의 날 독서」 같은 본문 제목은 두지 않는다 — 위의 고른 칩이 같은 이름이다(사용자 결정 2026-11-03).
     for (const slot of m.slots) root.appendChild(buildReading(m, slot, chapters));
-    // 복사 — 루트에 한 번(섹션마다가 아니라): 여러 독서에 걸친 선택도 섹션마다 「본문 — 출처」로 다 싣는다. 본기도 · 카드 ·
+    // 복사 — 루트에 한 번(섹션마다가 아니라): 여러 독서에 걸친 선택도 섹션마다 「본문 — 출처」로 다 싣는다. 본기도 · 칩 ·
     // 헤더 글자까지 고르면 브라우저 기본 복사(고른 것을 빠뜨리지 않게 — 자체 리뷰 2026-10-13)
     // 시편 끝 영광송까지 고르면 그 시편 블록에 함께 싣는다 — 출처 줄 앞(머지 전 검토 2026-10-14; 전례 표기를 남기는 것과 같은
     // 이유 — 주보 등 전례 용도, 사용자 결정 2026-10-13).
     bindCopyAttribution(root, copyCitation, {
-      unitSelector: ".lect-reading", bailoutSelector: ".lect-head, .lect-chips, .lect-pair, .lect-controls, .lect-collects", strictRoot: true,
+      unitSelector: ".lect-reading", bailoutSelector: ".lect-head, .lect-chips, .lect-controls, .lect-collects", strictRoot: true,
       tail: { selector: ".lect-gloria", text: gloriaCopyText },
     });
   } else {

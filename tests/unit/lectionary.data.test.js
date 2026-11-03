@@ -112,7 +112,6 @@ test("A3 2026-04-05 부활대축일 — 본기도 대체안 셋이 세그먼트,
   same(m.chips.map((c) => [c.label, c.muted]), [["부활대축일", false], ["부활 1주일 (가해)", false]]);
   same(m.commemorations.map((c) => id(c)), ["d0405-마틴-루터-킹"]);   // 「… 기념일」 줄(사용자 결정 2026-11-03)
   same(plain(m.colors), ["white"]);
-  assert.strictEqual(m.pair, null);
   const third = model("2026-04-05", { collect: 3 });
   assert.strictEqual(third.collectIndex, 2);
 });
@@ -137,25 +136,8 @@ test("A3 2026-09-16 니니안 ∧ 추계재 — 초기 독서는 격자(미결25
   same(plain(saint.colors), ["violet", "white"]);
 });
 
-test("A3 2026-08-06 주의 변모(목) — 당일 카드 둘, 격자 카드는 「오는 주일(8월 9일)」", { skip: SKIP }, () => {
-  const m = model("2026-08-06");
-  assert.ok(m.pair);
-  assert.strictEqual(m.pair.kind, "optional-origin");
-  assert.strictEqual(id(m.pair.a), "d0806-주의-변모");
-  assert.strictEqual(id(m.pair.b), "grid:ordinary-18-weekday-thu");
-  assert.strictEqual(m.pair.bText.note, "오는 주일(8월 9일)로 옮겨 지키는 경우 — 이날은 평일 독서");
-  assert.strictEqual(m.pair.aText.official, true);
-  assert.strictEqual(model("2024-08-06").pair.bText.note, "지난 주일(8월 4일)로 옮겨 지키는 경우 — 이날은 평일 독서");
-  assert.strictEqual(model("2025-08-06").pair.bText.note, "지난 주일(8월 3일)로 옮겨 지키는 경우 — 이날은 평일 독서");
-});
-
-test("A3 2026-08-09 연중 19주일 — 목적지 카드 둘(주일 · 변모 optional), 트랙 토글, 평화통일주일은 본문 없는 칩", { skip: SKIP }, () => {
+test("A3 2026-08-09 연중 19주일 — 트랙 토글, 평화통일주일은 본문 없는 칩", { skip: SKIP }, () => {
   const m = model("2026-08-09");
-  assert.ok(m.pair);
-  assert.strictEqual(m.pair.kind, "optional-dest");
-  assert.strictEqual(id(m.pair.a), "grid:ordinary-19-sunday");
-  assert.strictEqual(id(m.pair.b), "d0806-주의-변모");
-  assert.strictEqual(m.pair.bText.note, "8월 6일에서 옮겨 지키는 경우");
   same(plain(m.tracks), [1, 2]);
   assert.strictEqual(m.track, 1);
   assert.strictEqual(m.chips.find((c) => id(c.candidate) === "grid:ordinary-19-sunday").label, "연중 19주일 (가해, 독서 1)");
@@ -203,13 +185,6 @@ test("A3 데이터 전수 — 독서 세트가 제목으로 갈리는 날은 본
   same([...seen].sort(), ["d0501-사도-성-필립보와-성-야고보", "t-동계재", "t-추계재", "t-춘계재", "t-하계재"].sort());
 });
 
-test("A3 두 독서 카드 — 본문 없는 격자로는 내지 않고(12.28 · 1.6), 명절이 주일이면 「이날의 주일 독서」(자체 리뷰 2026-10-13)", { skip: SKIP }, () => {
-  assert.strictEqual(model("2026-12-28").pair, null);
-  assert.strictEqual(model("2026-01-06").pair, null);
-  assert.strictEqual(model("2026-12-07").pair.kind, "arrival");   // 본문이 있는 옮겨 온 날은 그대로
-  assert.strictEqual(model("2027-02-07").pair.bText.note, "이날의 주일 독서");
-});
-
 test("A3 절 발췌 — 옮겨 실린 절(이사 40 의 41:6-7)과 다니 3 의 이중 번호를 번호만으로 고르지 않는다(자체 리뷰 2026-10-13)", { skip: SKIP }, () => {
   const bible = (b, c) => JSON.parse(fs.readFileSync(path.join(ROOT, "data", "bible", `${b}-${c}.json`), "utf8"));
   const keysOf = (b, c, spec) => plain(ctx.selectVerses(bible(b, c), spec).keys);
@@ -242,23 +217,13 @@ test("A3 데이터의 다니 3 참조는 RCL(NRSV) 계열 독서표와 같은 �
   for (const [spec, keys] of Object.entries(RCL_EQUIVALENT)) same(plain(ctx.selectVerses(dan3, spec).keys), keys, spec);
 });
 
-test("A3 2026-12-07 옮겨 온 성 니콜라 — 옮겨 온 날의 카드 둘, 칩에 「12월 6일에서 옮겨 옴」, 본기도는 고른 칩(니콜라)의 것만", { skip: SKIP }, () => {
+test("A3 2026-12-07 옮겨 온 성 니콜라 — 기본 독서는 옮겨 온 축일, 칩에 「12월 6일에서 옮겨 옴」, 본기도는 니콜라 다음에 기념만 하는 암브로스", { skip: SKIP }, () => {
   const m = model("2026-12-07");
-  assert.ok(m.pair);
-  assert.strictEqual(m.pair.kind, "arrival");
-  assert.strictEqual(id(m.pair.a), "d1206-성-니콜라");
-  assert.strictEqual(m.pair.aText.note, "12월 6일에서 옮겨 옴");
+  assert.strictEqual(id(m.selected), "d1206-성-니콜라");   // 기본 독서는 옮겨 온 주요축일(사용자 확인 2026-11-03)
   assert.ok(m.chips.some((c) => c.label === "성 니콜라 · 12월 6일에서 옮겨 옴" && c.active));
-  assert.strictEqual(m.collects.length, 1);   // 니콜라 본기도만(기원 날짜에 색인된 것 — §5.6)
+  assert.strictEqual(m.collects.length, 1);   // 니콜라 본기도(기원 날짜에 색인된 것 — §5.6)
+  same(m.memorialSaints.map((c) => id(c)), ["d1207-암브로스"]);   // 밀려서 기념만 — 이름 줄과 본기도(2026-11-03)
   assert.strictEqual(m.slots.length, 4);   // 기원 날짜에 색인된 독서가 옮겨 온 날에서 나온다(§5.6)
-});
-
-test("A3 2025-01-29 설날 — 명절 카드 둘", { skip: SKIP }, () => {
-  const m = model("2025-01-29");
-  assert.ok(m.pair);
-  assert.strictEqual(m.pair.kind, "festival");
-  assert.strictEqual(id(m.pair.a), "lunar11-설날");
-  assert.strictEqual(id(m.pair.b), "grid:ordinary-3-weekday-wed");
 });
 
 test("A3 2026-01-01 세계평화 기도일 칩 — 본문 없는 축일은 empty, 거룩한 이름 예수는 세트 둘", { skip: SKIP }, () => {

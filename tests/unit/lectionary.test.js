@@ -410,92 +410,6 @@ const transfig = (status = "proper", extra = {}) => cand(obs("d0806-주의-변�
   rank: "major_feast", precedence: 3, color: "white", transferable: true, transfer_to: "nearby_sunday",
 }), status, extra);
 
-test("pairOf: 선택 봉헌 당일(목요일) — 격자 카드에 「오는 주일(8월 9일)」", () => {
-  const grid = cand(obs("grid:ordinary-18-weekday-thu", "연중 18주 목요일", { rank: "feria", precedence: 8 }));
-  const feast = transfig();
-  const p = ctx.pairOf(resolvedOf("2026-08-06", [feast, grid], feast));
-  assert.ok(p);
-  assert.strictEqual(p.kind, "optional-origin");
-  assert.strictEqual(p.a, feast);
-  assert.strictEqual(p.b, grid);
-  assert.strictEqual(p.aText.official, true);
-  assert.strictEqual(p.bText.note, "오는 주일(8월 9일)로 옮겨 지키는 경우 — 이날은 평일 독서");
-});
-
-test("pairOf: 선택 봉헌 당일(화요일) — 「지난 주일(8월 4일)」", () => {
-  const grid = cand(obs("grid:ordinary-18-weekday-tue", "연중 18주 화요일"));
-  const feast = transfig();
-  const p = ctx.pairOf(resolvedOf("2024-08-06", [feast, grid], feast, { coord: { season: "ordinary", week: 18, type: "weekday", weekday: "tue", year: "II" } }));
-  assert.ok(p);
-  assert.strictEqual(p.bText.note, "지난 주일(8월 4일)로 옮겨 지키는 경우 — 이날은 평일 독서");
-});
-
-test("pairOf: 당일이 주일이면(2028-08-06) 목적지가 그날 자신이라 나란히 낼 것이 없다", () => {
-  const grid = cand(obs("grid:ordinary-19-sunday", "연중 19주일"));
-  const feast = transfig();
-  assert.strictEqual(ctx.pairOf(resolvedOf("2028-08-06", [feast, grid], feast)), null);
-});
-
-test("pairOf: 독서가 없는 쪽이 있으면 카드를 내지 않는다 — 성탄 8일 옮겨 온 날의 빈 격자(자체 리뷰 2026-10-13)", () => {
-  const john = cand(obs("d1227-사도-성-요한", "사도 성 요한"), "transferred_in", { from: "2026-12-27", displacedBy: "grid:christmas-1-sunday" });
-  const grid = cand(obs("grid:christmas-x-weekday-mon", "성탄 월요일"));
-  const r = resolvedOf("2026-12-28", [john, grid], john);
-  assert.ok(ctx.pairOf(r));   // groupsOf 없이는 예전대로
-  assert.strictEqual(ctx.pairOf(r, groupsOfFrom({ "d1227-사도-성-요한": [group(1, FOUR)] })), null);
-  assert.ok(ctx.pairOf(r, groupsOfFrom({ "d1227-사도-성-요한": [group(1, FOUR)], "grid:christmas-x-weekday-mon": [group(2, FOUR)] })));
-});
-
-test("pairOf: 명절이 주일이면 격자 카드는 「이날의 주일 독서」(2027-02-07 설 — 자체 리뷰 2026-10-13)", () => {
-  const seollal = cand(obs("lunar11-설날", "설날", { rank: "regional_festival", precedence: 0 }));
-  const grid = cand(obs("grid:ordinary-5-sunday", "연중 5주일"));
-  const p = ctx.pairOf(resolvedOf("2027-02-07", [seollal, grid], seollal));
-  assert.strictEqual(p.kind, "festival");
-  assert.strictEqual(p.bText.note, "이날의 주일 독서");
-  assert.strictEqual(ctx.pairOf(resolvedOf("2026-02-17", [seollal, grid], seollal)).bText.note, "이날의 평일 독서");
-});
-
-test("pairOf: 목적지 주일 — 지정 전례일(격자 주일)과 optional 후보", () => {
-  const grid = cand(obs("grid:ordinary-19-sunday", "연중 19주일", { rank: "sunday", precedence: 5 }));
-  const opt = transfig("optional", { from: "2026-08-06" });
-  const p = ctx.pairOf(resolvedOf("2026-08-09", [opt, grid], grid));
-  assert.ok(p);
-  assert.strictEqual(p.kind, "optional-dest");
-  assert.strictEqual(p.a, grid);
-  assert.strictEqual(p.b, opt);
-  assert.strictEqual(p.bText.note, "8월 6일에서 옮겨 지키는 경우");
-  assert.strictEqual(p.aText.official, true);
-});
-
-test("pairOf: 축일을 옮겨 온 날 — 옮겨 온 축일과 격자", () => {
-  const nic = cand(obs("d1206-성-니콜라", "성 니콜라"), "transferred_in", { from: "2026-12-06", displacedBy: "grid:advent-2-sunday" });
-  const grid = cand(obs("grid:advent-2-weekday-mon", "대림 2주 월요일"));
-  const omitted = cand(obs("d1207-암브로스", "암브로스"), "omitted");
-  const p = ctx.pairOf(resolvedOf("2026-12-07", [omitted, nic, grid], nic));
-  assert.ok(p);
-  assert.strictEqual(p.kind, "arrival");
-  same([p.a, p.b], [nic, grid]);
-  assert.strictEqual(p.aText.note, "12월 6일에서 옮겨 옴");
-  assert.strictEqual(p.bText.note, "이날의 평일 독서");
-});
-
-test("pairOf: 명절 — 명절과 격자 평일", () => {
-  const seol = cand(obs("lunar11-설날", "설날", { rank: "regional_festival", precedence: 0 }));
-  const grid = cand(obs("grid:ordinary-3-weekday-wed", "연중 3주 수요일"));
-  const p = ctx.pairOf(resolvedOf("2025-01-29", [seol, grid], seol));
-  assert.ok(p);
-  assert.strictEqual(p.kind, "festival");
-  assert.strictEqual(p.aText.note, "명절 — 이날의 공식 독서");
-});
-
-test("pairOf: 보통 평일 · 보통 축일은 null", () => {
-  const grid = cand(obs("grid:ordinary-18-weekday-thu", "연중 18주 목요일"));
-  assert.strictEqual(ctx.pairOf(resolvedOf("2026-08-13", [grid], grid)), null);
-  const saint = cand(obs("d0916-니니안", "니니안", { rank: "minor_feast" }));
-  assert.strictEqual(ctx.pairOf(resolvedOf("2026-09-16", [saint, grid], saint)), null);
-});
-
-// ── 색 ────────────────────────────────────────────────────────────────────────
-
 test("headerColors: 기본은 그날의 colors(병기) + colorAlt(3형 → 배열)", () => {
   const grid = cand(obs("grid:advent-3-sunday", "대림 3주일"));
   const r = resolvedOf("2026-12-13", [grid], grid, { color: "violet", colors: ["violet"], colorAlt: ["rose", "blue"] });
@@ -695,7 +609,6 @@ test("buildLectionaryModel: 사계재 날 — 초기 선택은 격자, 색은 �
   assert.strictEqual(m.options.length, 1);
   assert.strictEqual(m.group.id, "grid-s1");
   same(m.slots.map((s) => s.slot), ["first", "psalm", "second", "gospel"]);
-  assert.strictEqual(m.pair, null);
   assert.strictEqual(m.fast, "minor");   // 사계재일 — 소재일
   assert.strictEqual(m.cycle, "짝수해");
   assert.strictEqual(m.hrefs.prev, "/lectionary/2026-09-15");
@@ -833,7 +746,6 @@ test("상수: 송영 셋 · 영광송 계응 둘 · 슬롯 순서 넷 · 선택 
   assert.ok(endings.A.endsWith("아멘") && endings.C.startsWith("성자께서는"));
   same(plain(K("GLORIA")), { versicle: "영광이 성부와 성자와 성령께", response: "처음과 같이 지금도 그리고 영원히, 아멘." });
   same(plain(K("SLOT_ORDER")), ["first", "psalm", "second", "gospel"]);
-  same(plain(K("OPTIONAL_TRANSFER_KINDS")).sort(), [...K("OPTIONAL_KINDS")].sort());   // 엔진의 넷과 같다 — 한쪽만 바뀌면 깨진다
   assert.strictEqual(K("BRACKET_NOTE"), "괄호 선택 구절 포함");
 });
 

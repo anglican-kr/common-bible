@@ -6,7 +6,7 @@
 
   ① 본문 순서 — 본기도 → 제1독서 → 시편(영광송 1회) → 제2독서 → 복음, 송영 1회
   ② 전례일 스위처 — 칩 전부 노출, 고르면 ?obs= 와 본문 · 색이 바뀐다
-  ③ 두 독서 나란히 — 선택 봉헌 당일 · 목적지 주일 · 도착일 카드 둘
+  ③ 옮겨 지키는 축일 · 선택 봉헌 — 칩으로 고른다(두 독서 카드는 없다)
   ④ 대안 세트 · 트랙 — 세그먼트, 트랙은 마지막 선택을 날짜 · 해와 무관하게 기억
   ⑤ 기념일 — 칩이 아니라 제목 아래 「… 기념일」 줄, 본문 없는 축일 칩은 「고유 본문 없음」
   ⑥ 날짜 — 오늘 · 전날/다음날 · 잘못된 날짜
@@ -19,6 +19,7 @@ import re
 import datetime
 import json
 import urllib.parse
+import urllib.request
 from pathlib import Path
 
 from .conftest import CLEAR_APP_STORAGE, MOBILE_VIEWPORT, IPHONE_UA
@@ -156,31 +157,23 @@ def test_chips_wrap_so_every_chip_shows_on_phones(browser):
             ctx.close()
 
 
-# ── ③ 두 독서 나란히 ──
+# ── ③ 옮겨 지키는 축일 · 선택 봉헌 — 칩으로 고른다(두 독서 카드는 없다, 사용자 결정 2026-11-03) ──
 
-def test_transfiguration_day_offers_two_readings_side_by_side(desktop_context):
-    """8.6 주의 변모(목) — 카드 둘, 둘째 카드(격자)를 고르면 ?obs=grid:… 와 평일 독서."""
+def test_transferred_and_optional_days_choose_by_chips_without_cards(desktop_context):
+    """8.6 주의 변모(목) · 8.9 목적지 주일(optional) · 12.7 니콜라 도착일 — 「두 독서 가운데 고르기」 카드 없이 칩으로 고른다.
+    12.7 의 기본 독서는 옮겨 온 주요축일(성 니콜라)이다."""
     page = desktop_context.new_page()
     _open(page, "lectionary/2026-08-06")
-    cards = page.locator(".lect-pair-card")
-    assert cards.count() == 2
-    assert cards.nth(0).get_attribute("aria-current") == "true"
-    assert "공식" in cards.nth(0).inner_text()
-    assert "오는 주일(8월 9일)" in cards.nth(1).inner_text()
-    cards.nth(1).click()
+    assert page.locator(".lect-pair, .lect-pair-card").count() == 0
+    page.locator(".lect-chip", has_text="연중 18주 목요일").click()
     page.wait_for_url("**obs=grid%3A*")
-    page.wait_for_selector(".lect-pair-card[aria-current]:has-text('연중 18주 목요일')")
-
-
-def test_destination_sunday_and_arrival_day_offer_pairs(desktop_context):
-    """8.9 목적지 주일(optional) · 12.7 니콜라 도착일 — 카드 둘."""
-    page = desktop_context.new_page()
+    page.wait_for_selector(".lect-chip[aria-current]:has-text('연중 18주 목요일')")
     _open(page, "lectionary/2026-08-09")
-    texts = page.eval_on_selector_all(".lect-pair-card", "els => els.map(e => e.textContent)")
-    assert len(texts) == 2 and "8월 6일에서 옮겨 지키는 경우" in texts[1], texts
+    assert page.locator(".lect-pair-card").count() == 0
+    assert any("8월 6일에서 옮겨 지킬 수 있음" in t for t in _chips(page)), _chips(page)
     _open(page, "lectionary/2026-12-07")
-    texts = page.eval_on_selector_all(".lect-pair-card", "els => els.map(e => e.textContent)")
-    assert len(texts) == 2 and "12월 6일에서 옮겨 옴" in texts[0], texts
+    assert page.locator(".lect-pair-card").count() == 0
+    assert page.inner_text(".lect-chip[aria-current]").startswith("성 니콜라")
     assert "12월 6일에서 옮겨 지킵니다" in page.inner_text(".lect-day-note")
 
 
@@ -1023,7 +1016,7 @@ def _enter_on(page, selector):
 
 
 def test_redraws_keep_keyboard_focus_on_the_pressed_control(desktop_context):
-    """키보드로 날짜 이동(다음날 · 전날 · 오늘) · 전례일 칩 · 두 독서 카드 · 세그먼트(트랙 · 세트 · 본기도)를 눌러 #app 을 다시
+    """키보드로 날짜 이동(다음날 · 전날 · 오늘) · 전례일 칩 · 세그먼트(트랙 · 세트 · 본기도)를 눌러 #app 을 다시
     그려도 포커스가 새 화면의 같은 컨트롤에 있고(:focus-visible) 화면 안이다 — Enter 만 거듭 눌러 날을 넘긴다(WCAG 2.4.3 ·
     2.4.7 — PR #348 리뷰에서 넘긴 것: 그전엔 누른 링크가 사라져 포커스가 body 로 빠졌다; 캘린더의 달 이동과 같은 도우미).
     계산 범위 끝(9999-12-31)에서는 「다음날」이 자리만 남아 「오늘」로."""
@@ -1054,7 +1047,7 @@ def test_redraws_keep_keyboard_focus_on_the_pressed_control(desktop_context):
     page.wait_for_url("**set=2")
     page.wait_for_function("() => document.querySelectorAll('.lect-sets .division-tab')[1]?.classList.contains('active')")
     assert _focused(page) == {"key": "set:2", **ok}
-    # 트랙 · 본기도 세그먼트 · 두 독서 카드
+    # 트랙 · 본기도 세그먼트
     _open(page, "lectionary/2026-06-14")
     _enter_on(page, ".lect-track .division-tab:has-text('독서 2')")
     page.wait_for_selector(".lect-track .division-tab.active:has-text('독서 2')")
@@ -1063,10 +1056,6 @@ def test_redraws_keep_keyboard_focus_on_the_pressed_control(desktop_context):
     _enter_on(page, ".lect-collects .division-tab >> nth=1")
     page.wait_for_selector(".lect-collects .division-tab.active:has-text('본기도 2')")
     assert _focused(page) == {"key": "collect:2", **ok}
-    _open(page, "lectionary/2026-08-06")
-    _enter_on(page, ".lect-pair-card >> nth=1")
-    page.wait_for_selector(".lect-pair-card[aria-current]:has-text('연중 18주 목요일')")
-    assert _focused(page) == {"key": "pair:b", **ok}
     # 오늘 — 브라우저의 날짜로
     today = datetime.date(*page.evaluate("() => { const d = new Date(); return [d.getFullYear(), d.getMonth() + 1, d.getDate()]; }"))
     _enter_on(page, "#page-title .lect-today")
@@ -1267,7 +1256,7 @@ def test_gospel_copy_bridges_verse_numbers_absent_in_translation(desktop_context
 
 
 def test_active_chip_and_card_keep_the_shown_track(desktop_context):
-    """공유받은 「독서 2」 주소(보는 사람의 기억 없음)에서 지금 칩 · 카드를 눌러도 독서 2 — 칩 · 카드 링크가 화면의 트랙을 적는다
+    """공유받은 「독서 2」 주소(보는 사람의 기억 없음)에서 지금 칩을 눌러도 독서 2 — 칩 링크가 화면의 트랙을 적는다
     (머지 전 검토 2026-10-14; 종전엔 트랙 없는 링크라 기억대로 독서 1 이 됐다)."""
     page = desktop_context.new_page()
     # 칩이 여럿이고 트랙이 있는 날(연중 19주일 ∧ 평화통일주일 ∧ 주의 변모 — 후보가 하나뿐인 날은 칩 줄이 없다, 2026-11-03)
@@ -1277,9 +1266,6 @@ def test_active_chip_and_card_keep_the_shown_track(desktop_context):
     chip.click()
     page.wait_for_url("**/lectionary/2026-08-09?track=2")
     assert page.locator(".lect-track .division-tab.active").inner_text() == "독서 2"
-    _open(page, "lectionary/2026-08-09?track=2")
-    hrefs = page.eval_on_selector_all(".lect-pair-card", "els => els.map(e => e.getAttribute('href'))")
-    assert any("track=2" in h for h in hrefs), hrefs   # 트랙이 있는 쪽(연중 주일) 카드는 그 트랙을 적는다
 
 
 # ── ⑧ 머리의 날짜 이동 줄 · 본문 색(사용자 결정 2026-11-03) ──
@@ -1472,3 +1458,21 @@ def test_feast_lines_come_before_commemoration_lines(desktop_context):
     assert len(lines) == 2, lines
     assert lines[0].startswith("대 그레고리") and lines[0].endswith(" 축일"), lines
     assert lines[1].startswith("여성선교센터 개관") and lines[1].endswith(" 기념일"), lines
+
+
+def test_turning_off_common_reading_hiding_brings_saint_chips_back(desktop_context):
+    """공통 독서 감추기(lectionary.js HIDE_COMMON_READINGS)는 상수 하나로 끄고 켠다 — 끄면 공통 독서만 있는 기리는 성인(11.6
+    레오나드)도 칩으로 돌아오고, 고르면 그 공통 독서다(PR #463 리뷰). 모듈 원문을 받아 상수만 바꿔 내준다."""
+    original = urllib.request.urlopen(f"{BASE}/js/app/lectionary.js").read().decode("utf-8")
+    target = "const HIDE_COMMON_READINGS = true;"
+    assert target in original, "lectionary.js에서 HIDE_COMMON_READINGS 를 찾지 못했다 — 테스트를 고칠 것"
+    off = original.replace(target, "const HIDE_COMMON_READINGS = false;", 1)
+    page = desktop_context.new_page()
+    page.route("**/js/app/lectionary.js*",
+               lambda route: route.fulfill(status=200, content_type="text/javascript; charset=utf-8", body=off))
+    _open(page, "lectionary/2026-11-06")
+    assert page.locator(".lect-chip", has_text="레오나드").count() == 1
+    weekday_first = page.inner_text(".lect-reading[data-slot='first'] .lect-ref")
+    page.locator(".lect-chip", has_text="레오나드").click()
+    page.wait_for_selector(".lect-chip[aria-current]:has-text('레오나드')")
+    assert page.inner_text(".lect-reading[data-slot='first'] .lect-ref") != weekday_first
