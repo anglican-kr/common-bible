@@ -612,6 +612,35 @@ test("C-6.1-12 기념일은 이름 줄 — 같은 날짜에 다른 행이 없는
   same(bad, []);
 });
 
+test("§5.5 날짜로 이름이 정해진 평일 — 표가 데이터의 날짜 전용 평일 본문과 같고, 2025-2050 그 날의 격자 평일 이름이 본문 제목과 같다 (사용자 결정 2026-11-03)", { skip: SKIP }, () => {
+  const table = plain(vm.runInContext("DATED_WEEKDAY_NAMES", ctx));
+  // 독서와 본기도의 날짜 전용 평일 본문(`type: weekday`이고 날짜가 있는 것)이 표와 같다 — 데이터에 날짜가 늘거나 이름이 바뀌면 여기서 멈춘다
+  for (const f of ["eucharist-readings.json", "eucharist-collects.json"]) {
+    const got = {};
+    for (const e of read(f).entries) {
+      if (e.type !== "weekday" || typeof e.date !== "string") continue;
+      got[ctx.normMonthDay(e.date)] = { season: e.season, name: e.name };
+    }
+    same(got, table, f);
+  }
+  const bad = [];
+  for (let y = 2025; y <= 2050; y++) {
+    for (const md of Object.keys(table)) {
+      const d = `${y}-${md.replace(".", "-")}`;
+      const r = resolve(d);
+      const grid = r.candidates.find((c) => c.observance.id.startsWith("grid:"));
+      const groups = ctx.findReadingsIn(ix().lec, ix().cal, r, grid);
+      const dated = groups.length > 0 && groups.every((g) => recOf(g).date !== null && recOf(g).type === "weekday");
+      // 날짜 전용 본문을 받는 날에만, 그리고 그런 날에는 언제나 그 본문의 이름이다
+      const want = dated ? recOf(groups[0]).name : null;
+      if (dated ? grid.observance.name !== want : grid.observance.name === table[md].name) {
+        bad.push(`${d} ${grid.observance.name} / ${groups.map((g) => g.title).join(",")}`);
+      }
+    }
+  }
+  same(bad, []);
+});
+
 test("C-6.1-13 저녁 전례(R-6.1-evening) 2025~2050 — 성 토요일은 지정 전례일이 성 토요일 · 홍 · 맨 끝 부활밤, 12.24 는 지정 전례일이 낮 · 자 · 맨 끝 성탄 밤, 12.25 엔 성탄 밤 없음, 저녁 후보는 그 두 날뿐", { skip: SKIP }, () => {
   // 상수의 id 가 실데이터에 실재한다 — 표의 이름(곧 id)이 바뀌면 여기서 멈춘다
   const ids = new Set([...read("temporal-feasts.json").entries, ...read("sanctoral.json").entries].map((e) => e.id));
