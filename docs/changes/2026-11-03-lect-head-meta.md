@@ -1,4 +1,5 @@
 ---
+pr: 466
 date: 2026-11-03
 branch: style/lect-head-meta
 title: "style: 전례색과 해를 제목 바로 아래로 옮기고 제목 위 여백을 늘림"
