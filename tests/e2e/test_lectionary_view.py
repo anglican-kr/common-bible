@@ -8,7 +8,7 @@
   ② 전례일 스위처 — 칩 전부 노출, 고르면 ?obs= 와 본문 · 색이 바뀐다
   ③ 옮겨 지키는 축일 · 선택 봉헌 — 칩으로 고른다(두 독서 카드는 없다)
   ④ 대안 세트 · 트랙 — 세그먼트, 트랙은 마지막 선택을 날짜 · 해와 무관하게 기억
-  ⑤ 기념일 — 칩이 아니라 제목 아래 「… 기념일」 줄, 본문 없는 축일 칩은 「고유 본문 없음」
+  ⑤ 기념일 — 칩이 아니라 제목 아래 「… 기념일」 줄, 본문 없는 날도 칩이 아니라 그 아래 이름 줄
   ⑥ 날짜 — 오늘 · 전날/다음날 · 잘못된 날짜
   ⑦ 탭 바 — 캘린더 탭 소속이라 독서 화면에서 캘린더 탭이 활성(ADR-038 A2)
   ⑧ 머리의 날짜 이동 줄(연도는 자리에 맞게 줄인다) · 본문 제목과 공통 라벨 없음 · 응답 반행과 송영의 색
@@ -118,7 +118,7 @@ def test_evening_liturgies_are_chips_not_the_day(desktop_context):
     _open(page, "lectionary/2026-04-04")
     assert page.inner_text(".lect-day") == "성 토요일"
     assert _colors(page) == ["적색"]
-    assert _chips(page) == ["*성 토요일", "성주간 토요일 (가해)", "부활밤 · 저녁"]
+    assert _chips(page) == ["*성 토요일", "부활밤 · 저녁"]   # 성주간 토요일 격자는 본문이 없어 칩이 없다(2026-11-04)
     page.locator(".lect-chip", has_text="부활밤").click()
     page.wait_for_selector(".lect-chip[aria-current]:has-text('부활밤')")
     assert "obs=t-%EB%B6%80%ED%99%9C%EB%B0%A4" in page.url or "obs=t-부활밤" in urllib.parse.unquote(page.url)
@@ -965,7 +965,8 @@ def test_bracket_set_merges_into_long_text_with_markers(desktop_context):
 
 def test_commemoration_is_a_line_not_a_chip(desktop_context):
     """4.5 마틴 루터 킹(기념일)은 칩이 아니라 제목 아래 「… 기념일」 줄이다 — 고유 본기도와 독서가 없어 칩을 고르면 본문 없는
-    화면뿐이었다(사용자 결정 2026-11-03). 주소로 가리켜도 기본 독서다. 본문 없는 축일(1.1 세계평화 기도일)은 칩이고 「고유 본문 없음」."""
+    화면뿐이었다(사용자 결정 2026-11-03). 주소로 가리켜도 기본 독서다. 본문 없는 날(1.1 세계평화를 위한 기도일, 8.9 평화통일주일)도
+    칩이 아니라 기념일 줄 아래에 이름만 한 줄이다(사용자 결정 2026-11-04)."""
     page = desktop_context.new_page()
     _open(page, "lectionary/2026-04-05")
     assert page.locator(".lect-chip", has_text="마틴 루터 킹").count() == 0
@@ -974,13 +975,35 @@ def test_commemoration_is_a_line_not_a_chip(desktop_context):
     _open(page, "lectionary/2026-04-05?obs=d0405-%EB%A7%88%ED%8B%B4-%EB%A3%A8%ED%84%B0-%ED%82%B9")
     assert page.locator(".empty-state").count() == 0
     assert page.locator(".lect-reading").count() > 0
-    # 세계평화 기도일은 2026-10-24 기도서 「월별 축일」대로 축일이 되었다 — 기념일 문구가 아니다(설계서 미결51)
+    # 세계평화를 위한 기도일은 기도서에 본기도와 독서가 없다(설계서 미결51) — 칩이 없고 이름 줄에 「… 기도일」 그대로
     _open(page, "lectionary/2026-01-01")
-    page.locator(".lect-chip", has_text="세계평화").click()
-    page.wait_for_selector(".empty-state-title")
-    assert page.inner_text(".empty-state-title") == "고유 본문 없음"
-    assert "독서 본문 없이 기념하는 축일입니다" in page.inner_text(".empty-state")   # 사용자 결정 2026-10-24
-    assert page.locator(".lect-reading").count() == 0
+    assert page.locator(".lect-chip", has_text="세계평화").count() == 0
+    lines = page.eval_on_selector_all(".lect-day-saint", "els => els.map(e => e.textContent)")
+    assert lines[-1] == "세계평화를 위한 기도일", lines
+    _open(page, "lectionary/2026-01-01?obs=" + urllib.parse.quote("d0101-세계평화를-위한-기도일"))
+    assert page.locator(".empty-state").count() == 0
+    assert page.locator(".lect-reading").count() > 0
+    # 평화통일주일은 성인이 없는 주일이라 이름 줄이 그 한 줄뿐이다
+    _open(page, "lectionary/2026-08-09")
+    assert page.locator(".lect-chip", has_text="평화통일").count() == 0
+    assert page.eval_on_selector_all(".lect-day-saint", "els => els.map(e => e.textContent)") == ["평화통일주일"]
+
+
+def test_grid_without_own_text_or_with_same_text_has_no_chip(desktop_context):
+    """왕이신 그리스도 주일의 연중 34주일 격자는 본문이 없고, 대림1주일의 대림 1주일 격자는 본문이 같다 — 둘 다 칩이 없어 그날
+    칩 줄이 없다(사용자 결정 2026-11-04). 격자를 주소로 가리켜도 기본 독서다."""
+    page = desktop_context.new_page()
+    _open(page, "lectionary/2026-11-22")
+    assert page.inner_text(".lect-day") == "왕이신 그리스도 주일"
+    assert page.locator(".lect-chips").count() == 0
+    assert page.eval_on_selector_all(".lect-day-saint", "els => els.map(e => e.textContent)") == ["세실리아(로마의 순교자, 230년경) 축일"]
+    _open(page, "lectionary/2026-11-22?obs=grid:ordinary-34-sunday")
+    assert page.locator(".empty-state").count() == 0
+    assert "에제 34:11-16, 20-24" in page.inner_text(".lect-reading[data-slot='first']")
+    _open(page, "lectionary/2026-11-29")
+    assert page.inner_text(".lect-day") == "대림1주일"
+    assert page.locator(".lect-chips").count() == 0
+    assert page.locator(".lect-reading").count() == 4
 
 
 # ── ⑥ 날짜 ──
@@ -1082,8 +1105,10 @@ def test_redraw_after_a_fetch_keeps_the_pressed_control_where_it_was(mobile_cont
     page = mobile_context.new_page()
     _open(page, "lectionary/2026-04-05")
     seg = page.locator(".lect-sets .division-tab >> nth=1")
+    # 세그먼트를 화면 위에서 100px 자리로 — 2026-11-04부터 이날은 칩 줄이 없어(부활 1주일 격자는 본문이 없다) 세그먼트가 위로
+    # 올라왔다. 200px 자리로는 스크롤이 83px뿐이라 「맨 위가 아닌 자리」가 되지 않았다.
     page.evaluate("""(el) => { const r = el.getBoundingClientRect();
-        window.scrollTo({ top: window.scrollY + r.top - 200, behavior: 'instant' }); }""", seg.element_handle())
+        window.scrollTo({ top: window.scrollY + r.top - 100, behavior: 'instant' }); }""", seg.element_handle())
     page.evaluate("() => document.fonts.ready.then(() => 0)")   # 글꼴이 바뀌면 칩 줄이 다시 감겨 세그먼트가 움직인다
     before = page.evaluate("(el) => ({ y: scrollY, top: el.getBoundingClientRect().top })", seg.element_handle())
     assert before["y"] > 100, before   # 맨 위가 아닌 자리에서 누른다
@@ -1219,8 +1244,8 @@ def test_mobile_tab_bar_marks_calendar_tab_on_lectionary(mobile_context):
     page.wait_for_selector("#tab-bar [data-tab='calendar'][aria-current='page']")
     assert page.eval_on_selector_all("#tab-bar .tab-item.active", "els => els.map(e => e.dataset.tab)") == ["calendar"]
     assert page.locator("#tab-bar .tab-indicator.is-shown").count() == 1
-    # 칩은 모바일 폭에서도 전부 DOM에 있다 — 부활대축일과 부활 1주일(마틴 루터 킹 기념일은 칩이 아니라 이름 줄, 2026-11-03).
-    assert len(_chips(page)) == 2
+    # 부활대축일은 칩 줄이 없다 — 부활 1주일 격자는 본문이 없고(2026-11-04) 마틴 루터 킹 기념일은 이름 줄이다(2026-11-03).
+    assert page.locator(".lect-chips").count() == 0
     # 홈 탭을 누르면 홈 스택으로 돌아간다(읽은 장이 없으니 가로채지 않고 기본 href).
     page.locator('#tab-bar [data-tab="home"]').click()
     page.wait_for_selector(".book-list")

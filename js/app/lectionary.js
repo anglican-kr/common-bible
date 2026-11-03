@@ -3,8 +3,8 @@
 
 // Lectionary reading view (ADR-038 §3 — A3). Renders one day's eucharistic
 // propers at /lectionary[/YYYY-MM-DD]: collect(s) → first reading → psalm →
-// second reading → gospel, with the observance switcher (every candidate as a
-// chip — `official` is only the initial pick), the alternative-set and track
+// second reading → gospel, with the observance switcher (every candidate with
+// text of its own as a chip — `official` is only the initial pick), the alternative-set and track
 // segments, and the side-by-side choice for optional transfers / transferred
 // feasts / regional festivals. The engine decides what the day IS
 // (resolveDate · findReadings · findCollects — ADR-037 §6, design §5); this
@@ -71,7 +71,7 @@ const PAGE_TITLE = LITURGICAL_VIEWS.lectionary.title;
  *   options: ReadingOption[], setIndex: number, group: ReadingGroup | null, shortGroup: ReadingGroup | null, slots: ReadingSlot[],
  *   chips: LectionaryChip[],
  *   collects: CollectOption[], collectLabels: string[], collectIndex: number, collectsLinked: boolean, ending: "A" | "B" | "C",
- *   memorialCollects: CollectOption[], memorialSaints: Candidate[], commemorations: Candidate[],
+ *   memorialCollects: CollectOption[], memorialSaints: Candidate[], commemorations: Candidate[], textlessDays: Candidate[],
  *   colors: string[], colorAlt: string[], ownColor: boolean, colorsOr: boolean,
  *   fast: "major" | "minor" | null, cycle: string | null, empty: boolean,
  *   hrefs: { prev: string | null, next: string | null, today: string, tracks: Array<{ track: 1 | 2, href: string, active: boolean }>, options: string[], collects: string[] },
@@ -204,6 +204,15 @@ const HIDE_COMMON_READINGS = true;
 /** 공통 독서만 있어 칩을 감추는 후보인가(`HIDE_COMMON_READINGS`). 기본 독서 후보는 감추지 않는다. */
 function isHiddenCandidate(/** @type {Candidate} */ c, /** @type {Candidate} */ initial, /** @type {ReadingGroup[]} */ groups) {
   return HIDE_COMMON_READINGS && c !== initial && !isGrid(c) && groups.length > 0 && !hasProperReadings(groups);
+}
+
+/**
+ * 후보가 그리는 본문의 열쇠 — 독서 그룹과 본기도의 id를 정렬해 잇는다. 열쇠가 같은 두 후보는 고르면 같은 본문이 보인다
+ * (`buildLectionaryModel`의 칩 감추기 — 대림1주일과 대림 1주일 격자).
+ * @param {ReadingGroup[]} groups @param {CollectOption[]} collects
+ */
+function textKeyOf(groups, collects) {
+  return groups.map((g) => g.id).sort().join(",") + "|" + collects.map((k) => String(k.id)).sort().join(",");
 }
 
 /**
@@ -723,9 +732,23 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
   const isCommemoration = (/** @type {Candidate} */ c) => c !== initial && c.observance.rank === "commemoration";
   const commemorations = resolved.candidates.filter((c) => isCommemoration(c) && c.status === "proper" && !c.evening);
   // 공통 독서 감추기를 끄면(HIDE_COMMON_READINGS) 공통 독서만 있는 기리는 성인도 칩으로 돌아와 그 독서를 고를 수 있다(PR #463 리뷰)
-  const hidden = (/** @type {Candidate} */ c) => isCommemoration(c)
+  // 독서도 본기도도 없는 후보는 칩을 만들지 않는다 — 고르면 빈 화면뿐이다(사용자 결정 2026-11-04). 본문이 이동 축일 쪽에만
+  // 있는 격자(왕이신 그리스도 주일의 연중 34주일, 성지주일의 사순 주일, 부활대축일의 부활 1주일 …)와 본문 없는 날(가정주일,
+  // 평화통일주일, 세계평화를 위한 기도일, 병자를 위한 기도일 — 제목 아래 이름 줄에 보인다, `textlessDays`)이 그렇다. 엔진은
+  // 후보를 그대로 둔다(설계서 §5.5 「후보를 버리지 않는다」 — 옮김 계산이 격자를 쓴다). 기본 독서 후보는 감추지 않는다.
+  const textless = (/** @type {Candidate} */ c) => c !== initial && !groupsOf(c).length && !collectsFor(collectEntries, c).length;
+  const hiddenOwn = (/** @type {Candidate} */ c) => isCommemoration(c) || textless(c)
     || (HIDE_COMMON_READINGS && memorial.saints.includes(c) && !hasProperReadings(groupsOf(c)))
     || isHiddenCandidate(c, initial, groupsOf(c));
+  // 칩이 있는 이름 있는 후보와 독서 · 본기도가 똑같은 격자도 칩을 만들지 않는다 — 고르면 같은 화면이다(사용자 결정 2026-11-04).
+  // 대림1주일이 그렇다: 그날 기본 독서가 그해(가해 · 나해 · 다해)의 대림 1주일 독서라 「대림 1주일 (나해)」 격자가 같은 본문이다.
+  // 후보가 하나만 남으면 칩 줄을 그리지 않는다(buildChips).
+  const textKey = (/** @type {Candidate} */ c) => textKeyOf(groupsOf(c), collectsFor(collectEntries, c));
+  const namedKeys = new Set(resolved.candidates.filter((c) => !isGrid(c) && !hiddenOwn(c) && !c.evening).map(textKey));
+  const hidden = (/** @type {Candidate} */ c) => hiddenOwn(c) || (isGrid(c) && c !== initial && namedKeys.has(textKey(c)));
+  // 본문 없는 날 — 칩 대신 기념일 줄 아래에 이름만 한 줄씩(사용자 결정 2026-11-04). 그날 지키거나 기념만 하는 것만 싣는다.
+  const textlessDays = resolved.candidates.filter((c) => !isGrid(c) && !c.evening && !isCommemoration(c) && textless(c)
+    && (c.status === "proper" || c.status === "commemorated"));
   const picked = selectCandidate(resolved, query.obs, groupsOf);
   const selected = picked && hidden(picked) ? initial : picked;
   if (!selected) return null;
@@ -782,7 +805,7 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
     date, resolved, selected, initial, groups, tracks, track, options, setIndex, group, shortGroup, slots,
     chips, collects, collectLabels: collectLabels(collects), collectIndex, collectsLinked: !!linked,
     ending: endingCodeOf(memorialCollects[memorialCollects.length - 1] || chosenCollect), memorialCollects,
-    memorialSaints: memorial.saints, commemorations,
+    memorialSaints: memorial.saints, commemorations, textlessDays,
     colors, colorAlt, ownColor, colorsOr, fast: fastOf(resolved),
     cycle: resolved.coord.year && CYCLE_LABEL[resolved.coord.year] ? CYCLE_LABEL[resolved.coord.year] : null,
     empty,
@@ -1009,10 +1032,12 @@ function buildHeader(m) {
     head.appendChild(el("p", { className: "lect-day-note" }, `${monthDayLabel(shown.from)}에서 옮겨 지킵니다`));
   }
   // 그날 기리는 성인과 기념일 — 칩 대신 제목 아래에 한 줄씩, 이름 뒤에 「축일」 · 「기념일」(사용자 결정 2026-11-03,
-  // memorialOf). 다른 칩을 골라도 제목처럼 그대로다.
+  // memorialOf). 다른 칩을 골라도 제목처럼 그대로다. 그 아래에 본문 없는 날(가정주일, 세계평화를 위한 기도일 …)을 이름만
+  // 한 줄씩 — 이름이 이미 「주일」 · 「기도일」로 끝나 꼬리를 붙이지 않는다(사용자 결정 2026-11-04).
   const lines = [
     ...m.memorialSaints.map((c) => `${c.observance.name || ""} 축일`),
     ...m.commemorations.map((c) => `${c.observance.name || ""} 기념일`),
+    ...m.textlessDays.map((c) => String(c.observance.name || "")),
   ];
   if (lines.length) {
     const saints = el("p", { className: "lect-day-saints" });
@@ -1389,8 +1414,9 @@ function commit(m, chapters) {
     root.appendChild(emptyState({
       icon: null,
       title: isCommemoration ? "기념일 — 본문 없음" : "고유 본문 없음",
-      // 본문 없는 축일(세계평화 · 병자를 위한 기도일 — 기도서에 본기도가 없다, 설계서 미결51). 그 밖은 그날 본문이 다른
-      // 후보에 있는 격자(부활대축일의 부활 1주일 등)와 이름 줄 주일(가정주일). 화면 글에 「관측일」을 쓰지 않는다(사용자 결정 2026-10-24)
+      // 본문 없는 후보는 2026-11-04부터 칩이 없고 주소로 가리켜도 기본 독서다. 그래서 이 화면은 기본 독서 후보 자신이 비었을
+      // 때만 나온다(실데이터 2025-2027에는 없다 — lectionary.data.test.js). 본문 없는 축일(세계평화 · 병자를 위한 기도일 — 기도서에
+      // 본기도가 없다, 설계서 미결51)의 문구가 따로다. 화면 글에 「관측일」을 쓰지 않는다(사용자 결정 2026-10-24)
       subtitle: isCommemoration
         ? "기념일은 고유 본기도와 독서를 두지 않습니다. 다른 독서를 선택하세요."
         : rank === "minor_feast"

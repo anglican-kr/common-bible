@@ -669,7 +669,8 @@ test("buildLectionaryModel: 기념일은 칩이 아니라 이름 줄(commemorati
   const memo = cand(obs("d0101-세계평화", "세계평화를 위한 기도일", { rank: "commemoration", precedence: 7 }));
   const grid = cand(obs("grid:christmas-x-weekday-thu", "성탄 목요일", { color: "white" }));
   const r = resolvedOf("2026-01-01", [feast, memo, grid], feast, { coord: { season: "christmas", week: null, type: "weekday", weekday: "thu", year: "A" }, color: "white", colors: ["white"] });
-  const groupsOf = groupsOfFrom({ "d0101-거룩한-이름-예수": [group("f", FOUR)] });
+  // 격자에도 독서를 준다 — 본문 없는 격자는 따로 감춘다(아래 케이스)
+  const groupsOf = groupsOfFrom({ "d0101-거룩한-이름-예수": [group("f", FOUR)], "grid:christmas-x-weekday-thu": [group("g", FOUR)] });
   const entries = [{ candidate: feast, collects: [collect(285, "…")] }, { candidate: memo, collects: [] }, { candidate: grid, collects: [] }];
   const m = ctx.buildLectionaryModel(r, { obs: "d0101-세계평화", track: null, set: null, collect: null }, groupsOf, entries, null);
   assert.strictEqual(m.selected, feast);   // 기념일을 가리켜도 기본 독서 — 본문 없는 화면이 아니다
@@ -680,6 +681,56 @@ test("buildLectionaryModel: 기념일은 칩이 아니라 이름 줄(commemorati
   assert.strictEqual(m0.empty, false);
   assert.strictEqual(m0.selected, feast);
   same(m0.commemorations.map((c) => c.observance.id), ["d0101-세계평화"]);
+});
+
+test("buildLectionaryModel: 독서도 본기도도 없는 후보는 칩이 없다 — 빈 격자는 감추고 본문 없는 날은 이름 줄(textlessDays), 주소로 가리켜도 기본 독서다(사용자 결정 2026-11-04)", () => {
+  const king = cand(obs("t-왕이신-그리스도-주일", "왕이신 그리스도 주일", { rank: "major_feast", precedence: 3, color: "white" }));
+  const saint = cand(obs("d1122-세실리아", "세실리아(로마의 순교자, 230년경)", { rank: "minor_feast", precedence: 7, color: "red" }));
+  const family = cand(obs("t-가정주일", "가정주일"));
+  const gone = cand(obs("t-본문없음-옮겨감", "옮겨 간 본문 없는 날"), "transferred_out", { to: "2026-11-23" });
+  const grid = cand(obs("grid:ordinary-34-sunday", "연중 34주일", { rank: "sunday", precedence: 5, color: "green" }));
+  const r = resolvedOf("2026-11-22", [king, saint, family, gone, grid], king, { coord: { season: "ordinary", week: 34, type: "sunday", weekday: null, year: "A" }, color: "white", colors: ["white"] });
+  const groupsOf = groupsOfFrom({ "t-왕이신-그리스도-주일": [group("k", FOUR)], "d1122-세실리아": [group("s", FOUR)] });
+  const entries = [king, saint, family, gone, grid].map((c) => ({ candidate: c, collects: c === king || c === saint ? [collect(c === king ? 1 : 2, "…")] : [] }));
+  const m = ctx.buildLectionaryModel(r, { obs: null, track: null, set: null, collect: null }, groupsOf, entries, null);
+  same(m.chips.map((c) => c.candidate.observance.id), ["t-왕이신-그리스도-주일", "d1122-세실리아"]);
+  same(m.textlessDays.map((c) => c.observance.id), ["t-가정주일"]);   // 옮겨 간 날은 그날 지키지 않아 줄에도 없다
+  for (const obsId of ["grid:ordinary-34-sunday", "t-가정주일"]) {
+    const pointed = ctx.buildLectionaryModel(r, { obs: obsId, track: null, set: null, collect: null }, groupsOf, entries, null);
+    assert.strictEqual(pointed.selected, king, obsId);   // 빈 화면이 아니라 기본 독서
+    assert.strictEqual(pointed.empty, false, obsId);
+  }
+  // 본기도만 있는 격자는 칩으로 남는다 — 「독서 없음」 화면이라도 고를 본문이 있다
+  const withCollect = entries.map((e) => (e.candidate === grid ? { candidate: grid, collects: [collect(3, "…")] } : e));
+  assert.ok(ctx.buildLectionaryModel(r, { obs: null, track: null, set: null, collect: null }, groupsOf, withCollect, null)
+    .chips.some((c) => c.candidate === grid));
+  // 기본 독서 후보는 비어도 감추지 않는다 — 칩 줄은 후보가 하나라 그리지 않지만 모델에는 남는다
+  const lone = resolvedOf("2026-11-22", [grid, family], grid, { coord: { season: "ordinary", week: 34, type: "sunday", weekday: null, year: "A" } });
+  const bare = ctx.buildLectionaryModel(lone, { obs: null, track: null, set: null, collect: null }, groupsOfFrom({}), [grid, family].map((c) => ({ candidate: c, collects: [] })), null);
+  same(bare.chips.map((c) => c.candidate.observance.id), ["grid:ordinary-34-sunday"]);
+  assert.strictEqual(bare.empty, true);
+  same(bare.textlessDays.map((c) => c.observance.id), ["t-가정주일"]);
+});
+
+test("buildLectionaryModel: 이름 있는 후보와 독서 · 본기도가 똑같은 격자는 칩이 없다 — 대림1주일(사용자 결정 2026-11-04)", () => {
+  const advent = cand(obs("t-대림1주일", "대림1주일", { rank: "privileged_sunday", precedence: 2, color: "violet" }));
+  const grid = cand(obs("grid:advent-1-sunday", "대림 1주일", { rank: "privileged_sunday", precedence: 2, color: "violet" }));
+  const andrew = cand(obs("d1130-안드레아", "사도 성 안드레아", { rank: "feast", precedence: 6, color: "red" }), "transferred_out", { to: "2025-12-01" });
+  const coord = { season: "advent", week: 1, type: "sunday", weekday: null, year: "C" };
+  const same1 = { "t-대림1주일": [group("a1", FOUR)], "grid:advent-1-sunday": [group("a1", FOUR)], "d1130-안드레아": [group("an", FOUR)] };
+  const entriesOf = (cs, gridCollect = 7) => cs.map((c) => ({ candidate: c, collects: [collect(c === grid ? gridCollect : c === advent ? 7 : 8, "…")] }));
+  const r = resolvedOf("2026-11-29", [advent, grid], advent, { coord, color: "violet", colors: ["violet"] });
+  const m = ctx.buildLectionaryModel(r, { obs: null, track: null, set: null, collect: null }, groupsOfFrom(same1), entriesOf([advent, grid]), null);
+  same(m.chips.map((c) => c.candidate.observance.id), ["t-대림1주일"]);   // 하나뿐이라 칩 줄을 그리지 않는다
+  const pointed = ctx.buildLectionaryModel(r, { obs: "grid:advent-1-sunday", track: null, set: null, collect: null }, groupsOfFrom(same1), entriesOf([advent, grid]), null);
+  assert.strictEqual(pointed.selected, advent);   // 주소로 가리켜도 같은 화면 — 기본 독서
+  // 옮겨 간 축일이 있는 해(2025-11-30)는 그 칩이 남는다
+  const r2 = resolvedOf("2025-11-30", [advent, andrew, grid], advent, { coord, color: "violet", colors: ["violet"] });
+  same(ctx.buildLectionaryModel(r2, { obs: null, track: null, set: null, collect: null }, groupsOfFrom(same1), entriesOf([advent, andrew, grid]), null)
+    .chips.map((c) => c.candidate.observance.id), ["t-대림1주일", "d1130-안드레아"]);
+  // 본기도가 다르면 다른 화면이라 격자 칩이 남는다
+  same(ctx.buildLectionaryModel(r, { obs: null, track: null, set: null, collect: null }, groupsOfFrom(same1), entriesOf([advent, grid], 9), null)
+    .chips.map((c) => c.candidate.observance.id), ["t-대림1주일", "grid:advent-1-sunday"]);
 });
 
 test("buildLectionaryModel: 트랙 — 기억(마지막 선택)이 기본, URL 이 앞서고, href 는 칩 · 카드까지 트랙을 언제나 적는다(기억과 무관한 주소 — 자체 리뷰 2026-10-13 · 머지 전 검토 2026-10-14)", () => {
