@@ -56,7 +56,7 @@ const $title = _$("page-title");
 let committedDate = null;
 // 이름은 views.js에 있다 — 이 모듈을 받지 못했을 때 라우터가 같은 제목으로 실패 화면을 그린다.
 const PAGE_TITLE = LITURGICAL_VIEWS.lectionary.title;
-// 이 화면의 링크(날짜 이동 · 칩 · 세그먼트)는 #app 을 통째로 다시 그린다 — 그 링크들은 `data-focus-key` 만 달고, 라우터가
+// 이 화면의 링크(날짜 이동 · 칩 · 세그먼트)는 #app을 통째로 다시 그린다 — 그 링크들은 `data-focus-key`만 달고, 라우터가
 // 누른 자리를 재 두었다가 새 화면의 같은 컨트롤로 포커스를 돌려준다(WCAG 2.4.3 — routing.js, 캘린더 · 구분 탭 · 검색과 같다).
 
 /** parsePath 가 /lectionary 에서 내는 서술자(routing.js PARSE_PATH — 정의는 types.d.ts `Route`). @typedef {import("../types").LectionaryRoute} LectionaryRoute */

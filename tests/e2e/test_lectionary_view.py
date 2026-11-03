@@ -161,7 +161,7 @@ def test_chips_wrap_so_every_chip_shows_on_phones(browser):
 
 def test_transferred_and_optional_days_choose_by_chips_without_cards(desktop_context):
     """8.6 주의 변모(목) · 8.9 목적지 주일(optional) · 12.7 니콜라 도착일 — 「두 독서 가운데 고르기」 카드 없이 칩으로 고른다.
-    12.7 의 기본 독서는 옮겨 온 주요축일(성 니콜라)이다."""
+    12.7의 기본 독서는 옮겨 온 주요축일(성 니콜라)이다."""
     page = desktop_context.new_page()
     _open(page, "lectionary/2026-08-06")
     assert page.locator(".lect-pair, .lect-pair-card").count() == 0
