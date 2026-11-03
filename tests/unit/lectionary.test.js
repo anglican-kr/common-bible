@@ -113,6 +113,9 @@ test("chipLabel · statusSuffix: 밀림 · 옮김 · 선택 봉헌 · 기념 · 
   const r = resolvedOf("2026-12-07", [], null);
   assert.strictEqual(ctx.chipLabel(cand(obs("d1206-성-니콜라", "성 니콜라(미라의 주교)"), "transferred_in", { from: "2026-12-06" }), r, null),
     "성 니콜라 · 12월 6일에서 옮겨 옴");
+  // 머리가 같은 말을 문장으로 보이는 칩(옮겨 온 기본 독서)은 상태 표시를 붙이지 않는다(2026-11-03)
+  assert.strictEqual(ctx.chipLabel(cand(obs("d1206-성-니콜라", "성 니콜라(미라의 주교)"), "transferred_in", { from: "2026-12-06" }), r, null, true),
+    "성 니콜라");
   assert.strictEqual(ctx.chipLabel(cand(obs("d1018-루가", "성 루가"), "transferred_out", { to: "2026-10-19" }), r, null), "성 루가 · → 10월 19일");
   assert.strictEqual(ctx.chipLabel(cand(obs("d0806-주의-변모", "주의 변모"), "optional", { from: "2026-08-06" }), r, null),
     "주의 변모 · 8월 6일에서 옮겨 지킬 수 있음");
@@ -272,6 +275,119 @@ test("collectsFor: 고른 전례일의 본기도만 — 다른 전례일 것은 
   same(ctx.collectsFor(entries, omitted).map((o) => o.id), ["d1207-암브로스"]);   // 생략된 축일도 고르면 그 본기도
 });
 
+test("buildLectionaryModel: 기리는 성인의 본기도 — 기본 독서가 평일이면 평일 본기도 다음에 성인 본기도, 송영은 성인 것(사용자 결정 2026-11-03)", () => {
+  const saint = cand(obs("d1106-레오나드", "레오나드(은수자, 6세기)", { rank: "minor_feast", precedence: 7, color: "white", sanctoral_class: "saint" }));
+  const grid = cand(obs("grid:ordinary-31-weekday-fri", "연중 31주 금요일", { rank: "feria", precedence: 8, color: "green" }));
+  const r = resolvedOf("2026-11-06", [saint, grid], saint);
+  const groupsOf = groupsOfFrom({
+    "d1106-레오나드": [group("common:saint-s1", FOUR, { common: "saint", title: "성인" })],
+    "grid:ordinary-31-weekday-fri": [group("g", FOUR)],
+  });
+  const entries = [
+    { candidate: saint, collects: [collect("common:saint-c1", "주님의 종 레오나드를", { ending: "B" })] },
+    { candidate: grid, collects: [collect("g-c", "평일 본기도")] },
+  ];
+  const q = { obs: null, track: null, set: null, collect: null };
+  const m = ctx.buildLectionaryModel(r, q, groupsOf, entries, null);
+  assert.strictEqual(m.selected, grid);
+  same(m.collects.map((o) => o.id), ["g-c"]);
+  same(m.memorialCollects.map((o) => o.id), ["common:saint-c1"]);
+  assert.strictEqual(m.ending, "B");   // 송영은 마지막에 오는 성인 본기도의 것
+  // 격자 칩을 눌러 와도(같은 후보) 같다
+  same(ctx.buildLectionaryModel(r, { ...q, obs: grid.observance.id }, groupsOf, entries, null).memorialCollects.map((o) => o.id), ["common:saint-c1"]);
+  // 기리는 성인은 칩이 없고 머리 제목 아래 이름 줄에 보인다. 주소로 가리켜도 기본 독서다(2026-11-03)
+  same(m.chips.map((c) => c.candidate.observance.id), [grid.observance.id]);
+  same(m.memorialSaints.map((c) => c.observance.id), ["d1106-레오나드"]);
+  const s = ctx.buildLectionaryModel(r, { ...q, obs: saint.observance.id }, groupsOf, entries, null);
+  assert.strictEqual(s.selected, grid);
+  same(s.memorialCollects.map((o) => o.id), ["common:saint-c1"]);
+  // 지정 전례일에 고유 독서가 있으면(기본 독서가 축일) 덧붙이지 않는다
+  const proper = groupsOfFrom({ "d1106-레오나드": [group("p", FOUR)], "grid:ordinary-31-weekday-fri": [group("g", FOUR)] });
+  same(ctx.buildLectionaryModel(r, q, proper, entries, null).memorialCollects, []);
+});
+
+test("buildLectionaryModel: 성인 축일이 둘 이상 — 유형이 다르면 commons.json 의 유형 차례로 잇고 색은 「또는」, 같으면 공통 본기도 하나에 이름을 모은다(사용자 결정 2026-11-03)", () => {
+  const saintOf = (id, name, cls, color = "white") => cand(obs(id, name, { rank: "minor_feast", precedence: 7, color, sanctoral_class: cls }));
+  const grid = cand(obs("grid:christmas-weekday", "성탄 주간 목요일", { rank: "feria", precedence: 8, color: "white" }));
+  const common = (cls, label, names, ending = "A") => ({ id: `common:${cls}-c1`, title: label, collect_no: 1, collect_total: 1,
+    text: `${names.join("와 ")}의 본기도`, ending, common: cls, template: `주님의 종 {name}을(를) 기억하며`, names });
+  const q = { obs: null, track: null, set: null, collect: null };
+  const run = (saints, collectsBy) => {
+    const r = resolvedOf("2026-12-31", [...saints, grid], saints[0]);
+    const table = { [grid.observance.id]: [group("g", FOUR)] };
+    for (const c of saints) table[c.observance.id] = [group(`common:${c.observance.sanctoral_class}-s1`, FOUR, { common: c.observance.sanctoral_class })];
+    const entries = [...saints.map((c, i) => ({ candidate: c, collects: [collectsBy[i]] })), { candidate: grid, collects: [collect("g-c", "평일")] }];
+    return ctx.buildLectionaryModel(r, q, groupsOfFrom(table), entries, null);
+  };
+  // 12.31 위클리프(신학자) ∧ 실베스터(성직자, 지정 전례일 아님) — 유형이 다르다: 성직자가 먼저(commons.json 차례). 색이 같아 「또는」은 없다
+  const sylv = saintOf("d1231-실베스터", "실베스터(로마의 주교)", "pastor");
+  const wyc = saintOf("d1231-위클리프", "위클리프(종교개혁자)", "teacher");
+  const m1 = run([wyc, sylv], [common("teacher", "신학자", ["위클리프"], "C"), common("pastor", "성직자", ["실베스터"], "B")]);
+  same(m1.memorialCollects.map((o) => o.id), ["common:pastor-c1", "common:teacher-c1"]);
+  same(m1.memorialSaints.map((c) => c.observance.id), ["d1231-실베스터", "d1231-위클리프"]);   // 이름 줄도 같은 차례
+  same(m1.chips.map((c) => c.candidate.observance.id), [grid.observance.id]);
+  assert.strictEqual(m1.ending, "C");   // 송영은 마지막(신학자) 본기도의 것
+  assert.strictEqual(m1.colorsOr, false);
+  // 2.14 순교자(적색)는 맨 앞 — 선교사(백색)는 그 뒤, 색은 같은 차례로 「적색 또는 백색」
+  const val = saintOf("d0214-발렌틴", "발렌틴", "martyr", "red");
+  const cyr = saintOf("d0214-키릴과-메토디우스", "키릴과 메토디우스", "missionary");
+  const m2 = run([cyr, val], [common("missionary", "선교사", ["키릴", "메토디우스"]), common("martyr", "순교자", ["발렌틴"])]);
+  same(m2.memorialCollects.map((o) => o.id), ["common:martyr-c1", "common:missionary-c1"]);
+  same(m2.colors, ["red", "white"]);
+  assert.strictEqual(m2.colorsOr, true);
+  same(m2.colorAlt, []);
+  // 감춘 성인(공통 독서만)을 주소로 가리켜도 기본 독서 — 색도 「또는」 그대로
+  const r2 = resolvedOf("2026-02-14", [cyr, val, grid], cyr, { color: "white", colors: ["white"] });
+  const groups2 = groupsOfFrom({ [grid.observance.id]: [group("g", FOUR)], [cyr.observance.id]: [group("c", FOUR, { common: "missionary" })],
+    [val.observance.id]: [group("v", FOUR, { common: "martyr" })] });
+  const entries2 = [{ candidate: cyr, collects: [common("missionary", "선교사", ["키릴", "메토디우스"])] },
+    { candidate: val, collects: [common("martyr", "순교자", ["발렌틴"])] }, { candidate: grid, collects: [collect("g-c", "평일")] }];
+  const pick = ctx.buildLectionaryModel(r2, { ...q, obs: val.observance.id }, groups2, entries2, null);
+  assert.strictEqual(pick.selected, grid);
+  assert.strictEqual(pick.colorsOr, true);
+  same(pick.colors, ["red", "white"]);
+  // 같은 유형(순교자 둘) — 공통 본기도 하나에 이름을 모으고 조사는 마지막 이름의 받침으로
+  const a = saintOf("d0101-가", "가브리엘", "martyr");
+  const b = saintOf("d0101-나", "바실", "martyr");
+  const m3 = run([a, b], [common("martyr", "순교자", ["가브리엘"]), common("martyr", "순교자", ["바실"])]);
+  assert.strictEqual(m3.memorialCollects.length, 1);
+  assert.strictEqual(m3.memorialCollects[0].text, "주님의 종 가브리엘과 바실을 기억하며");
+  same(m3.memorialSaints.map((c) => c.observance.id), ["d0101-가", "d0101-나"]);   // 본기도는 하나여도 이름은 한 줄씩
+});
+
+test("buildLectionaryModel: 밀려서 기념만 하는 축일 — 기본 독서(주일)의 본기도 뒤에 성인 본기도를 잇고, 색은 주일 그대로(사용자 결정 2026-11-03)", () => {
+  const sunday = cand(obs("grid:ordinary-17-sunday", "연중 17주일", { rank: "sunday", precedence: 6, color: "green" }));
+  const anna = cand(obs("d0726-안나와-요아킴", "안나와 요아킴", { rank: "minor_feast", precedence: 7, color: "white", sanctoral_class: "saint" }), "commemorated");
+  const samil = cand(obs("d0301-삼일절", "삼일절", { rank: "minor_feast", precedence: 7, color: "red" }), "commemorated");   // 유형 없음 — 성인이 아니다
+  const r = resolvedOf("2026-07-26", [sunday, anna, samil], sunday, { color: "green", colors: ["green"] });
+  const groupsOf = groupsOfFrom({ [sunday.observance.id]: [group("s", FOUR)] });
+  const entries = [{ candidate: sunday, collects: [collect("s-c", "주일")] },
+    { candidate: anna, collects: [collect("common:saint-c1", "안나와 요아킴의 모범을", { common: "saint", ending: "B" })] },
+    { candidate: samil, collects: [collect("samil-c", "삼일절", { ending: "C" })] }];
+  const q = { obs: null, track: null, set: null, collect: null };
+  const m = ctx.buildLectionaryModel(r, q, groupsOf, entries, null);
+  assert.strictEqual(m.selected, sunday);
+  same(m.memorialCollects.map((o) => o.id), ["common:saint-c1"]);   // 삼일절은 잇지 않는다
+  same(m.memorialSaints.map((c) => c.observance.id), ["d0726-안나와-요아킴"]);
+  same(m.chips.map((c) => c.candidate.observance.id), ["grid:ordinary-17-sunday", "d0301-삼일절"]);   // 기리는 성인은 칩이 없다
+  // 다른 칩(삼일절)을 골라도 이름 줄은 그대로, 성인 본기도는 기본 독서에서만
+  const other = ctx.buildLectionaryModel(r, { ...q, obs: samil.observance.id }, groupsOf, entries, null);
+  same(other.memorialSaints.map((c) => c.observance.id), ["d0726-안나와-요아킴"]);
+  same(other.memorialCollects, []);
+  // 고유 독서가 있는 기리는 성인은 칩이 남는다 — 이름 줄에도 그대로 있다(사용자 결정 2026-11-03)
+  const withProper = groupsOfFrom({ [sunday.observance.id]: [group("s", FOUR)], [anna.observance.id]: [group("a", FOUR)] });
+  const kept = ctx.buildLectionaryModel(r, q, withProper, entries, null);
+  same(kept.chips.map((c) => c.candidate.observance.id), ["grid:ordinary-17-sunday", "d0726-안나와-요아킴", "d0301-삼일절"]);
+  same(kept.memorialSaints.map((c) => c.observance.id), ["d0726-안나와-요아킴"]);
+  const annaPicked = ctx.buildLectionaryModel(r, { ...q, obs: anna.observance.id }, withProper, entries, null);
+  assert.strictEqual(annaPicked.selected, anna);   // 고르면 그 고유 독서
+  same(annaPicked.collects.map((o) => o.id), ["common:saint-c1"]);
+  same(annaPicked.memorialCollects, []);
+  assert.strictEqual(m.ending, "B");
+  same(m.colors, ["green"]);
+  assert.strictEqual(m.colorsOr, false);
+});
+
 test("collectsFor: 같은 id 의 다른 객체로도 찾고, 본기도 없는 후보(기념일)는 빈 배열", () => {
   const memo = cand(obs("d0101-세계평화", "세계평화를 위한 기도일", { rank: "commemoration" }));
   const feast = cand(obs("d0101-거룩한-이름-예수", "거룩한 이름 예수"));
@@ -296,92 +412,6 @@ test("pickCollect · endingCodeOf: ?collect= 는 목록 위치로 고르고 범�
 const transfig = (status = "proper", extra = {}) => cand(obs("d0806-주의-변모", "주의 변모", {
   rank: "major_feast", precedence: 3, color: "white", transferable: true, transfer_to: "nearby_sunday",
 }), status, extra);
-
-test("pairOf: 선택 봉헌 당일(목요일) — 격자 카드에 「오는 주일(8월 9일)」", () => {
-  const grid = cand(obs("grid:ordinary-18-weekday-thu", "연중 18주 목요일", { rank: "feria", precedence: 8 }));
-  const feast = transfig();
-  const p = ctx.pairOf(resolvedOf("2026-08-06", [feast, grid], feast));
-  assert.ok(p);
-  assert.strictEqual(p.kind, "optional-origin");
-  assert.strictEqual(p.a, feast);
-  assert.strictEqual(p.b, grid);
-  assert.strictEqual(p.aText.official, true);
-  assert.strictEqual(p.bText.note, "오는 주일(8월 9일)로 옮겨 지키는 경우 — 이날은 평일 독서");
-});
-
-test("pairOf: 선택 봉헌 당일(화요일) — 「지난 주일(8월 4일)」", () => {
-  const grid = cand(obs("grid:ordinary-18-weekday-tue", "연중 18주 화요일"));
-  const feast = transfig();
-  const p = ctx.pairOf(resolvedOf("2024-08-06", [feast, grid], feast, { coord: { season: "ordinary", week: 18, type: "weekday", weekday: "tue", year: "II" } }));
-  assert.ok(p);
-  assert.strictEqual(p.bText.note, "지난 주일(8월 4일)로 옮겨 지키는 경우 — 이날은 평일 독서");
-});
-
-test("pairOf: 당일이 주일이면(2028-08-06) 목적지가 그날 자신이라 나란히 낼 것이 없다", () => {
-  const grid = cand(obs("grid:ordinary-19-sunday", "연중 19주일"));
-  const feast = transfig();
-  assert.strictEqual(ctx.pairOf(resolvedOf("2028-08-06", [feast, grid], feast)), null);
-});
-
-test("pairOf: 독서가 없는 쪽이 있으면 카드를 내지 않는다 — 성탄 8일 옮겨 온 날의 빈 격자(자체 리뷰 2026-10-13)", () => {
-  const john = cand(obs("d1227-사도-성-요한", "사도 성 요한"), "transferred_in", { from: "2026-12-27", displacedBy: "grid:christmas-1-sunday" });
-  const grid = cand(obs("grid:christmas-x-weekday-mon", "성탄 월요일"));
-  const r = resolvedOf("2026-12-28", [john, grid], john);
-  assert.ok(ctx.pairOf(r));   // groupsOf 없이는 예전대로
-  assert.strictEqual(ctx.pairOf(r, groupsOfFrom({ "d1227-사도-성-요한": [group(1, FOUR)] })), null);
-  assert.ok(ctx.pairOf(r, groupsOfFrom({ "d1227-사도-성-요한": [group(1, FOUR)], "grid:christmas-x-weekday-mon": [group(2, FOUR)] })));
-});
-
-test("pairOf: 명절이 주일이면 격자 카드는 「이날의 주일 독서」(2027-02-07 설 — 자체 리뷰 2026-10-13)", () => {
-  const seollal = cand(obs("lunar11-설날", "설날", { rank: "regional_festival", precedence: 0 }));
-  const grid = cand(obs("grid:ordinary-5-sunday", "연중 5주일"));
-  const p = ctx.pairOf(resolvedOf("2027-02-07", [seollal, grid], seollal));
-  assert.strictEqual(p.kind, "festival");
-  assert.strictEqual(p.bText.note, "이날의 주일 독서");
-  assert.strictEqual(ctx.pairOf(resolvedOf("2026-02-17", [seollal, grid], seollal)).bText.note, "이날의 평일 독서");
-});
-
-test("pairOf: 목적지 주일 — 지정 전례일(격자 주일)과 optional 후보", () => {
-  const grid = cand(obs("grid:ordinary-19-sunday", "연중 19주일", { rank: "sunday", precedence: 5 }));
-  const opt = transfig("optional", { from: "2026-08-06" });
-  const p = ctx.pairOf(resolvedOf("2026-08-09", [opt, grid], grid));
-  assert.ok(p);
-  assert.strictEqual(p.kind, "optional-dest");
-  assert.strictEqual(p.a, grid);
-  assert.strictEqual(p.b, opt);
-  assert.strictEqual(p.bText.note, "8월 6일에서 옮겨 지키는 경우");
-  assert.strictEqual(p.aText.official, true);
-});
-
-test("pairOf: 축일을 옮겨 온 날 — 옮겨 온 축일과 격자", () => {
-  const nic = cand(obs("d1206-성-니콜라", "성 니콜라"), "transferred_in", { from: "2026-12-06", displacedBy: "grid:advent-2-sunday" });
-  const grid = cand(obs("grid:advent-2-weekday-mon", "대림 2주 월요일"));
-  const omitted = cand(obs("d1207-암브로스", "암브로스"), "omitted");
-  const p = ctx.pairOf(resolvedOf("2026-12-07", [omitted, nic, grid], nic));
-  assert.ok(p);
-  assert.strictEqual(p.kind, "arrival");
-  same([p.a, p.b], [nic, grid]);
-  assert.strictEqual(p.aText.note, "12월 6일에서 옮겨 옴");
-  assert.strictEqual(p.bText.note, "이날의 평일 독서");
-});
-
-test("pairOf: 명절 — 명절과 격자 평일", () => {
-  const seol = cand(obs("lunar11-설날", "설날", { rank: "regional_festival", precedence: 0 }));
-  const grid = cand(obs("grid:ordinary-3-weekday-wed", "연중 3주 수요일"));
-  const p = ctx.pairOf(resolvedOf("2025-01-29", [seol, grid], seol));
-  assert.ok(p);
-  assert.strictEqual(p.kind, "festival");
-  assert.strictEqual(p.aText.note, "명절 — 이날의 공식 독서");
-});
-
-test("pairOf: 보통 평일 · 보통 축일은 null", () => {
-  const grid = cand(obs("grid:ordinary-18-weekday-thu", "연중 18주 목요일"));
-  assert.strictEqual(ctx.pairOf(resolvedOf("2026-08-13", [grid], grid)), null);
-  const saint = cand(obs("d0916-니니안", "니니안", { rank: "minor_feast" }));
-  assert.strictEqual(ctx.pairOf(resolvedOf("2026-09-16", [saint, grid], saint)), null);
-});
-
-// ── 색 ────────────────────────────────────────────────────────────────────────
 
 test("headerColors: 기본은 그날의 colors(병기) + colorAlt(3형 → 배열)", () => {
   const grid = cand(obs("grid:advent-3-sunday", "대림 3주일"));
@@ -567,28 +597,30 @@ function emberDay() {
   return { r, groupsOf, entries, saint, ember, grid };
 }
 
-test("buildLectionaryModel: 사계재 날 — 초기 선택은 격자, 색은 병기, 칩 셋, 본기도는 고른 격자의 것만", () => {
+test("buildLectionaryModel: 사계재 날 — 초기 선택은 격자, 색은 병기, 칩 둘(공통 독서만 있는 성인은 감춤), 본기도는 격자 다음에 성인", () => {
   const { r, groupsOf, entries, grid } = emberDay();
   const m = ctx.buildLectionaryModel(r, { obs: null, track: null, set: null, collect: null }, groupsOf, entries, null);
   assert.strictEqual(m.selected, grid);
   assert.strictEqual(m.initial, grid);
   same(plain(m.colors), ["violet", "white"]);
   assert.strictEqual(m.ownColor, false);
-  same(m.chips.map((c) => [c.label, c.active]),
-    [["니니안", false], ["추계재", false], ["연중 24주 수요일 (짝수해)", true]]);
-  same(m.collects.map((o) => o.id), [114]);   // 고른 전례일(격자)의 본기도만
-  assert.strictEqual(m.ending, "A");
+  // 니니안은 공통 독서만 있어 당분간 칩을 감춘다(HIDE_COMMON_READINGS, 사용자 결정 2026-11-03)
+  same(m.chips.map((c) => [c.label, c.active]), [["추계재", false], ["연중 24주 수요일 (짝수해)", true]]);
+  same(m.collects.map((o) => o.id), [114]);   // 고른 전례일(격자)의 본기도
+  // 그 뒤에 기리는 성인(니니안)의 본기도가 이어진다(memorialOf) — 송영은 그 성인 본기도의 것
+  assert.strictEqual(m.memorialCollects.length, entries.find((e) => e.candidate.observance.id === "d0916-니니안").collects.length ? 1 : 0);
   assert.strictEqual(m.options.length, 1);
   assert.strictEqual(m.group.id, "grid-s1");
   same(m.slots.map((s) => s.slot), ["first", "psalm", "second", "gospel"]);
-  assert.strictEqual(m.pair, null);
   assert.strictEqual(m.fast, "minor");   // 사계재일 — 소재일
   assert.strictEqual(m.cycle, "짝수해");
   assert.strictEqual(m.hrefs.prev, "/lectionary/2026-09-15");
   assert.strictEqual(m.hrefs.next, "/lectionary/2026-09-17");
-  // 초기 선택(격자)의 href 는 쿼리가 없고, 성인 칩은 obs 를 싣는다.
-  assert.strictEqual(m.chips[2].href, "/lectionary/2026-09-16");
-  assert.strictEqual(m.chips[0].href, "/lectionary/2026-09-16?obs=d0916-%EB%8B%88%EB%8B%88%EC%95%88");
+  // 초기 선택(격자)의 href는 쿼리가 없고, 다른 칩은 obs를 싣는다.
+  assert.strictEqual(m.chips[1].href, "/lectionary/2026-09-16");
+  assert.ok(m.chips[0].href.startsWith("/lectionary/2026-09-16?obs="));
+  // 감춘 성인을 주소로 가리켜도 기본 독서(격자)
+  assert.strictEqual(ctx.buildLectionaryModel(r, { obs: "d0916-니니안", track: null, set: null, collect: null }, groupsOf, entries, null).selected, grid);
 });
 
 test("buildLectionaryModel: 전날 · 다음날 링크는 교회력을 계산하는 연도(1583~9999) 안에서만 — 끝에서는 null(단추가 자리만 남는다)", () => {
@@ -632,7 +664,7 @@ test("buildLectionaryModel: 본기도 없는 전례일을 고르면 collects 가
   assert.strictEqual(m.empty, false);
 });
 
-test("buildLectionaryModel: 기념일 칩을 고르면 empty — 본문도 본기도도 없다", () => {
+test("buildLectionaryModel: 기념일은 칩이 아니라 이름 줄(commemorations) — 주소로 가리켜도 기본 독서다(사용자 결정 2026-11-03)", () => {
   const feast = cand(obs("d0101-거룩한-이름-예수", "거룩한 이름 예수", { rank: "major_feast", precedence: 3, color: "white" }));
   const memo = cand(obs("d0101-세계평화", "세계평화를 위한 기도일", { rank: "commemoration", precedence: 7 }));
   const grid = cand(obs("grid:christmas-x-weekday-thu", "성탄 목요일", { color: "white" }));
@@ -640,13 +672,14 @@ test("buildLectionaryModel: 기념일 칩을 고르면 empty — 본문도 본�
   const groupsOf = groupsOfFrom({ "d0101-거룩한-이름-예수": [group("f", FOUR)] });
   const entries = [{ candidate: feast, collects: [collect(285, "…")] }, { candidate: memo, collects: [] }, { candidate: grid, collects: [] }];
   const m = ctx.buildLectionaryModel(r, { obs: "d0101-세계평화", track: null, set: null, collect: null }, groupsOf, entries, null);
-  assert.strictEqual(m.selected, memo);
-  assert.strictEqual(m.empty, true);
-  assert.strictEqual(m.group, null);
-  same(m.chips.map((c) => c.muted), [false, true, false]);
+  assert.strictEqual(m.selected, feast);   // 기념일을 가리켜도 기본 독서 — 본문 없는 화면이 아니다
+  assert.strictEqual(m.empty, false);
+  same(m.chips.map((c) => c.candidate.observance.id), ["d0101-거룩한-이름-예수", "grid:christmas-x-weekday-thu"]);
+  same(m.commemorations.map((c) => c.observance.id), ["d0101-세계평화"]);
   const m0 = ctx.buildLectionaryModel(r, { obs: null, track: null, set: null, collect: null }, groupsOf, entries, null);
   assert.strictEqual(m0.empty, false);
   assert.strictEqual(m0.selected, feast);
+  same(m0.commemorations.map((c) => c.observance.id), ["d0101-세계평화"]);
 });
 
 test("buildLectionaryModel: 트랙 — 기억(마지막 선택)이 기본, URL 이 앞서고, href 는 칩 · 카드까지 트랙을 언제나 적는다(기억과 무관한 주소 — 자체 리뷰 2026-10-13 · 머지 전 검토 2026-10-14)", () => {
@@ -716,7 +749,6 @@ test("상수: 송영 셋 · 영광송 계응 둘 · 슬롯 순서 넷 · 선택 
   assert.ok(endings.A.endsWith("아멘") && endings.C.startsWith("성자께서는"));
   same(plain(K("GLORIA")), { versicle: "영광이 성부와 성자와 성령께", response: "처음과 같이 지금도 그리고 영원히, 아멘." });
   same(plain(K("SLOT_ORDER")), ["first", "psalm", "second", "gospel"]);
-  same(plain(K("OPTIONAL_TRANSFER_KINDS")).sort(), [...K("OPTIONAL_KINDS")].sort());   // 엔진의 넷과 같다 — 한쪽만 바뀌면 깨진다
   assert.strictEqual(K("BRACKET_NOTE"), "괄호 선택 구절 포함");
 });
 

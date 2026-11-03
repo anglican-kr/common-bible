@@ -24,7 +24,7 @@ import { showAudioPlayer, hideAudioBar } from "./audio-player.js";
 // Copy-attribution translation label shared with the lectionary view and the verse-select bar (verse-spec.js).
 import { citationSource, halfVerseMark } from "./verse-spec.js";
 
-const { _$, el, clearNode, chUnit, hangingQuoteClass, emptyState, headerIcon, HEADER_ICON_PATHS } = window.appHelpers;
+const { _$, el, clearNode, chUnit, hangingQuoteClass, emptyState } = window.appHelpers;
 const { createOverlay } = window.appOverlay;
 const {
   loadBookOrder, loadStartupBehavior,
@@ -1738,30 +1738,15 @@ const THIS_MONTH_LABEL = "이번 달 캘린더";
 
 /**
  * 머리 — 제목과 머리 컨트롤, 오디오 바는 내린다(성공 화면 · 실패 화면이 같이 쓴다). 캘린더는 성서 목록 집 단추(데스크톱 —
- * 모바일은 탭 바가 대신해 CSS가 숨긴다; 설정 · 북마크 탭 화면과 같다). 전례독서는 위 단계 — 그 날짜가 든 달의 캘린더로 가는
- * 꺾쇠다(ADR-038 §2 「구현」). 다른 탭 머리의 집 단추는 성서 목록을 뜻하고 모바일에서 숨는데(`.title-home-btn`), 이 꺾쇠는
- * 캘린더 탭 안에서 한 단계 위(iOS 캘린더의 「< 10월」)라 모바일에서도 보인다. 다른 컨트롤처럼 링크라 전역 <a> 인터셉터가 이동한다.
+ * 모바일은 탭 바가 대신해 CSS가 숨긴다; 설정 · 북마크 탭 화면과 같다). 전례독서는 머리 컨트롤이 없다 — 성공 화면은 이 제목
+ * 자리에 날짜 이동 줄을 그리고(lectionary.js), 캘린더로는 탭 바의 캘린더 탭(데스크톱은 헤더의 캘린더 단추)으로 간다(사용자 결정
+ * 2026-11-03 — 그전엔 그 날짜가 든 달로 가는 꺾쇠였다, ADR-038 §2 「구현」).
  * @param {LiturgicalView} view
- * @param {{ y: number, m: number } | null} [month]  전례독서 — 그 날짜가 든 달. 없으면(깨진 · 범위 밖 날짜 · 실패 화면) 이번 달
  */
-function commitLiturgicalTitle(view, month = null) {
+function commitLiturgicalTitle(view) {
   setTitle(LITURGICAL_VIEWS[view].title);
-  const control = view === "calendar" ? window.buildHomeBtn("/", "성서 목록으로") : buildCalendarUpLink(month);
-  $title.insertBefore(control, $title.firstChild);
+  if (view === "calendar") $title.insertBefore(window.buildHomeBtn("/", "성서 목록으로"), $title.firstChild);
   hideAudioBar();
-}
-
-/** @param {{ y: number, m: number } | null} month */
-function buildCalendarUpLink(month) {
-  const a = el("a", month
-    ? {
-      className: "title-back-btn",
-      href: `/calendar/${String(month.y).padStart(4, "0")}-${String(month.m).padStart(2, "0")}`,
-      "aria-label": `${month.y}년 ${month.m}월 캘린더로`,
-    }
-    : { className: "title-back-btn", href: "/calendar", "aria-label": "캘린더로" });
-  a.appendChild(headerIcon(HEADER_ICON_PATHS.back));   // 왼쪽 꺾쇠
-  return a;
 }
 
 /**

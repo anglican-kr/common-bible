@@ -211,10 +211,10 @@ def test_calendar_module_failure_shows_reload_that_recovers(browser):
         ctx.close()
 
 
-def test_lectionary_module_failure_shows_its_own_title_and_up_link(browser):
+def test_lectionary_module_failure_shows_its_own_title(browser):
     """엔진(liturgical-engine.js)을 받지 못하면 그것을 import하는 전례독서 모듈도 이어지지 못한다 — 전례독서의 제목 · 실패
-    화면이고(앞 화면을 남기는 공용 오류 .error가 아니다), 머리에는 휴대폰에서도 보이는 「캘린더로」 꺾쇠가 있다 — 전례독서의
-    다른 실패 화면과 같다(ADR-038 §2 「구현」; 그전엔 휴대폰에서 숨는 집 단추라 머리에 누를 것이 없었다 — PR #355 리뷰)."""
+    화면이다(앞 화면을 남기는 공용 오류 .error가 아니다). 머리에는 컨트롤이 없고 캘린더로는 탭 바가 간다 — 전례독서의 다른
+    실패 화면과 같다(사용자 결정 2026-11-03 — 그전엔 「캘린더로」 꺾쇠, ADR-038 §2 「구현」)."""
     ctx = _context(browser, mobile=True)
     page = ctx.new_page()
     try:
@@ -225,12 +225,9 @@ def test_lectionary_module_failure_shows_its_own_title_and_up_link(browser):
         assert page.evaluate("() => document.title").startswith("전례독서")
         assert page.locator(".state-action button").inner_text() == "다시 불러오기"
         assert page.locator(".error").count() == 0
-        up = page.locator("#page-title .title-back-btn")
-        assert up.get_attribute("aria-label") == "캘린더로"
-        assert up.get_attribute("href") == "/calendar"
-        box = up.bounding_box()
-        assert box and box["width"] >= 44 and box["height"] >= 44, box
-        assert page.locator("#page-title .title-home-btn").count() == 0
+        assert page.evaluate("() => document.getElementById('page-title').textContent") == "전례독서"
+        assert page.locator("#page-title a").count() == 0
+        assert page.locator("#tab-bar [data-tab='calendar']").is_visible()
     finally:
         ctx.close()
 
@@ -254,7 +251,7 @@ def test_view_that_throws_while_rendering_shows_its_failure_screen(browser):
         page.wait_for_selector(".lectionary .empty-state-title", timeout=20_000)
         assert page.inner_text(".empty-state-title") == "전례독서 자료를 불러오지 못했습니다"
         assert page.evaluate("() => document.getElementById('page-title').textContent") == "전례독서"
-        assert page.locator("#page-title .title-back-btn").count() == 1
+        assert page.locator("#page-title a").count() == 0
         assert page.locator(".state-action button").inner_text() == "다시 불러오기"
         assert page.locator(".error").count() == 0
         page.wait_for_function("() => document.getElementById('audio-bar').hidden === true")

@@ -312,6 +312,19 @@ test("C-5.6-1 트랙은 연중 주일에만 — 재의 수요일 · 성 금요�
   assert.ok(seen > 0);
 });
 
+test("공통 본기도에 넣는 이름은 모두 한글 음절로 끝난다 — 조사(을/를, 와/과)를 받침으로 고르는 전제(2026-11-03)", { skip: SKIP }, () => {
+  const bad = [];
+  let count = 0;
+  for (const o of read("sanctoral.json").entries) {
+    if (o.has_proper !== false) continue;
+    count++;
+    const names = Array.isArray(o.common_names) && o.common_names.length ? o.common_names : [ctx.displayNameOf(o)];
+    for (const n of names) if (!/[가-힣]$/.test(n)) bad.push(`${o.id} 「${n}」`);
+  }
+  assert.ok(count > 0, "공통 본기도를 쓰는 행이 없다 — 표 형식이 바뀌었으면 이 테스트를 고칠 것");
+  assert.deepStrictEqual(bad, [], "끝 글자가 한글이 아닌 이름 — 엔진 hasFinalConsonant 의 전제가 깨진다");
+});
+
 test("C-5.6-4 성인 공통 독서 폴백 — 양성 · 음성 · 불변식 79 / 13 / 17", { skip: SKIP }, () => {
   const ids = (d, p) => groupsAt(d, p).map((g) => g.id);
   // 양성 — 사베리오(has_proper 참 · 독서 0)는 missionary 세 세트, 그룹 형태는 고유와 같다
