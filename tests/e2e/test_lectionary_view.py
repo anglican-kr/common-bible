@@ -1226,7 +1226,7 @@ def test_mobile_tab_bar_marks_calendar_tab_on_lectionary(mobile_context):
     page.wait_for_selector("#tab-bar [data-tab='calendar'][aria-current='page']")
     assert page.eval_on_selector_all("#tab-bar .tab-item.active", "els => els.map(e => e.dataset.tab)") == ["calendar"]
     assert page.locator("#tab-bar .tab-indicator.is-shown").count() == 1
-    # 칩은 모바일 폭에서도 전부 DOM 에 있다 — 부활대축일과 부활 1주일(마틴 루터 킹 기념일은 칩이 아니라 이름 줄, 2026-11-03).
+    # 칩은 모바일 폭에서도 전부 DOM에 있다 — 부활대축일과 부활 1주일(마틴 루터 킹 기념일은 칩이 아니라 이름 줄, 2026-11-03).
     assert len(_chips(page)) == 2
     # 홈 탭을 누르면 홈 스택으로 돌아간다(읽은 장이 없으니 가로채지 않고 기본 href).
     page.locator('#tab-bar [data-tab="home"]').click()
