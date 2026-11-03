@@ -700,7 +700,7 @@ test("buildLectionaryModel: 사계재 날 — 초기 선택은 격자, 색은 �
   assert.strictEqual(m.cycle, "짝수해");
   assert.strictEqual(m.hrefs.prev, "/lectionary/2026-09-15");
   assert.strictEqual(m.hrefs.next, "/lectionary/2026-09-17");
-  // 초기 선택(격자)의 href 는 쿼리가 없고, 다른 칩은 obs 를 싣는다.
+  // 초기 선택(격자)의 href는 쿼리가 없고, 다른 칩은 obs를 싣는다.
   assert.strictEqual(m.chips[1].href, "/lectionary/2026-09-16");
   assert.ok(m.chips[0].href.startsWith("/lectionary/2026-09-16?obs="));
   // 감춘 성인을 주소로 가리켜도 기본 독서(격자)

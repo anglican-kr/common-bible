@@ -1150,7 +1150,7 @@ test("C-5.6-3 findCollects — 전례일별 원소 · candidates 순 · 대체�
   same(out.map((e) => e.candidate), r.candidates);
   same(out.map((e) => e.collects.map((c) => c.id)), [[21], [], []]);   // 거룩한 이름 · 세계평화(기념일) · 격자
   assert.strictEqual(collectsFor(resolve("2026-03-01"), "d0301-samil")[0].ending, "C");
-  // 공통 본기도 — {name} 치환, 이름 배열은 「A와 B」(받침이면 「과」), common_names 가 없으면 괄호 설명을 뗀다.
+  // 공통 본기도 — {name} 치환, 이름 배열은 「A와 B」(받침이면 「과」), common_names가 없으면 괄호 설명을 뗀다.
   // 이름 뒤 「을(를)」은 끝 글자 받침에 맞춰 하나로 고른다(사용자 결정 2026-11-03)
   const name = (d, id) => collectsFor(resolve(d), id)[0];
   same(plain(name("2026-07-26", "d0726-anna")),

@@ -1969,7 +1969,7 @@ function withParticle(/** @type {string} */ word) {
 }
 
 /**
- * 공통 본기도의 `{name}` 자리에 넣을 이름들. `common_names` 가 있으면 그것을, 없으면 표의 이름에서 끝의 괄호 설명
+ * 공통 본기도의 `{name}` 자리에 넣을 이름들. `common_names`가 있으면 그것을, 없으면 표의 이름에서 끝의 괄호 설명
  * (「(종교개혁자, 1384년)」)을 뗀 것 하나.
  * @param {Observance} obs @returns {string[]}
  */

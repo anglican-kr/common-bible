@@ -132,7 +132,7 @@ def test_focus_returns_after_drawer_close(browser):
 
 def test_lectionary_chips_are_keyboard_reachable(browser):
     """전례일 칩이 Tab 순서에 있고 Enter로 이동한다(모두 링크). 세그먼트도 같은 링크라 키보드 동작이 같다 — 칩으로 대표한다.
-    9.16 의 칩은 추계재와 평일 둘이다(니니안은 칩이 아니라 제목 아래 이름 줄 — 사용자 결정 2026-11-03)."""
+    9.16의 칩은 추계재와 평일 둘이다(니니안은 칩이 아니라 제목 아래 이름 줄 — 사용자 결정 2026-11-03)."""
     ctx, page = _open(browser, "lectionary/2026-09-16")
     try:
         page.wait_for_selector(".lectionary .lect-chip", timeout=20_000)
