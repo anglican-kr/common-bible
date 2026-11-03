@@ -1102,9 +1102,12 @@ function buildControls(m) {
     // 「또는」 대안 · 조건부 세트 — 조건 · 종류가 라벨이다(사용자 결정 2026-10-12). 괄호 선택 구절 세트는
     // 바탕에 합쳐져 여기 오르지 않는다(본문의 〔 〕 가 맡는다). 세트와 본기도가 제목으로 짝지어진 날(5.1 · 사계재 금요일)은
     // 이 단추 하나가 둘을 함께 고른다 — 라벨도 「독서 · 본기도」(사용자 결정 2026-10-13).
+    // 위에 그리는 글자는 「독서 · 본기도」뿐이다 — 단추가 본기도까지 바꾼다는 것을 알린다. 「대안 독서」 글자는 달지 않는다:
+    // 단추 이름이 「독서 1 · 2」나 조건(「…로 지킬 때」)이라 겹치고, 트랙 세그먼트도 글자가 없다(사용자 결정 2026-11-04,
+    // 트랙은 2026-11-03). 세그먼트의 접근 가능한 이름은 「대안 독서」 그대로다.
     const name = m.collectsLinked ? "독서 · 본기도" : "대안 독서";
     const ctl = el("div", { className: "lect-control lect-sets" });
-    ctl.appendChild(el("span", { className: "lect-control-label" }, name));
+    if (m.collectsLinked) ctl.appendChild(el("span", { className: "lect-control-label" }, name));
     ctl.appendChild(buildSegmentTabs(
       m.options.map((o, i) => ({ label: o.label, href: m.hrefs.options[i], active: i === m.setIndex, focusKey: `set:${i + 1}` })),
       { ariaLabel: name, className: "division-tabs--compact" },
