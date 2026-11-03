@@ -1154,7 +1154,8 @@ test("C-5.6-3 findCollects — 전례일별 원소 · candidates 순 · 대체�
   // 이름 뒤 「을(를)」은 끝 글자 받침에 맞춰 하나로 고른다(사용자 결정 2026-11-03)
   const name = (d, id) => collectsFor(resolve(d), id)[0];
   same(plain(name("2026-07-26", "d0726-anna")),
-    { id: "common:saint-c1", title: "성인", collect_no: 1, collect_total: 1, text: "안나와 요아킴의 모범을", ending: "A", common: "saint" });
+    { id: "common:saint-c1", title: "성인", collect_no: 1, collect_total: 1, text: "안나와 요아킴의 모범을", ending: "A", common: "saint",
+      template: "{name}의 모범을", names: ["안나", "요아킴"] });   // 원문과 이름 — 같은 유형의 성인을 모을 때 쓴다(2026-11-03)
   assert.strictEqual(name("2026-02-14", "d0214-cyril").text, "키릴과 메토디우스를 세우시어");
   assert.strictEqual(name("2026-12-31", "d1231-wycliffe").text, "위클리프를 통해");
   assert.strictEqual(ctx.fillCommonName("주님의 종 {name}을(를) 세우시어", "바실"), "주님의 종 바실을 세우시어");   // 받침 있음
@@ -1163,6 +1164,7 @@ test("C-5.6-3 findCollects — 전례일별 원소 · candidates 순 · 대체�
   // 본기도 트리거는 has_proper — 사베리오(참)는 고유 본기도, 독서만 공통
   same(collectsFor(resolve("2026-12-03"), "d1203-xavier").map((c) => [c.id, c.common]), [[24, null]]);
   assert.strictEqual(ctx.displayNameOf({ name: "가", common_names: ["가", "나", "다"] }), "가, 나와 다");
+  assert.strictEqual(ctx.joinNames(["발렌틴", "키릴", "메토디우스"]), "발렌틴, 키릴과 메토디우스");
 });
 
 test("미결12 잠정 — 1:N 좁히기: 12.25 세 갈래 · 09.29 합성 레코드는 둘 다 · 12.31 성탄주간은 성인 것이 아니다", () => {

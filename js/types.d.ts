@@ -836,6 +836,10 @@ export interface CollectOption {
   text: string;
   ending: "A" | "B" | "C" | null;
   common: string | null;
+  /** 공통 본기도만 — `{name}` 자리표시가 남은 원문과 넣은 이름들. 같은 유형의 성인이 한 날에 둘 이상이면 뷰가 이름을 모아 다시
+   * 채운다(`joinNames` · `fillCommonName`, 사용자 결정 2026-11-03). */
+  template?: string;
+  names?: string[];
 }
 
 /** `findCollects` 의 원소 — 전례일별로 키잉한다(순서는 `candidates` 순, 설계서 §5.6). */

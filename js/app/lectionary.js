@@ -42,7 +42,7 @@ import {
 } from "./views.js";
 import { specCoversVerse, verseInstanceKeys, citationSource } from "./verse-spec.js";
 import {
-  parseDate, toKey, addDays, dayOfWeek, optionalDestOf, isComputableDate,
+  parseDate, toKey, addDays, dayOfWeek, optionalDestOf, isComputableDate, joinNames, fillCommonName,
   preloadCalendar, preloadLectionary, resolveDate, findReadings, findCollects, findHalfVerse, fastOf,
 } from "./liturgical-engine.js";
 
@@ -76,8 +76,8 @@ const PAGE_TITLE = LITURGICAL_VIEWS.lectionary.title;
  *   options: ReadingOption[], setIndex: number, group: ReadingGroup | null, shortGroup: ReadingGroup | null, slots: ReadingSlot[],
  *   chips: LectionaryChip[], pair: LectionaryPair | null,
  *   collects: CollectOption[], collectLabels: string[], collectIndex: number, collectsLinked: boolean, ending: "A" | "B" | "C",
- *   memorialCollect: CollectOption | null,
- *   colors: string[], colorAlt: string[], ownColor: boolean,
+ *   memorialCollects: CollectOption[], memorialSaints: Candidate[],
+ *   colors: string[], colorAlt: string[], ownColor: boolean, colorsOr: boolean,
  *   fast: "major" | "minor" | null, cycle: string | null, empty: boolean,
  *   hrefs: { prev: string | null, next: string | null, today: string, tracks: Array<{ track: 1 | 2, href: string, active: boolean }>, options: string[], collects: string[], pair: { a: string, b: string } | null },
  * }} LectionaryModel
@@ -198,6 +198,18 @@ function chipLabel(c, resolved, track) {
 /** 고유 독서가 하나라도 있는가 — 공통(`common` 표지) 그룹만 있으면 거짓. */
 function hasProperReadings(/** @type {ReadingGroup[]} */ groups) {
   return groups.some((g) => !g.common);
+}
+
+/**
+ * 성인 공통 독서를 당분간 보이지 않는다(사용자 결정 2026-11-03). 켜져 있으면 고유 독서 없이 공통 독서만 있는 후보는 칩이
+ * 없고, `?obs=`로 가리켜도 기본 독서를 보인다(`isHiddenCandidate`). 그 성인의 본기도는 기본 독서의 본기도 뒤에 이어진다
+ * (`memorialOf`). 공통 독서가 그날의 기본 독서인 날(평일 독서가 없는 날 — `initialCandidate`)은 그대로 보인다.
+ */
+const HIDE_COMMON_READINGS = true;
+
+/** 공통 독서만 있어 칩을 감추는 후보인가(`HIDE_COMMON_READINGS`). 기본 독서 후보는 감추지 않는다. */
+function isHiddenCandidate(/** @type {Candidate} */ c, /** @type {Candidate} */ initial, /** @type {ReadingGroup[]} */ groups) {
+  return HIDE_COMMON_READINGS && c !== initial && !isGrid(c) && groups.length > 0 && !hasProperReadings(groups);
 }
 
 /**
@@ -376,16 +388,63 @@ function collectsFor(entries, selected) {
 }
 
 /**
- * 기리는 성인의 본기도 — 그날의 기본 독서가 평일(격자)인 것은 지정 전례일(성인 축일)에 고유 독서가 없어서다(설계서
- * 미결25). 그 기본 독서를 볼 때는 평일 본기도 다음에 성인의 본기도를 잇고, 송영은 그 뒤에 한 번 단다(사용자 결정
- * 2026-11-03 — 11.6 레오나드). 성인 칩을 고르면 성인의 본기도만이다(`collectsFor`). 대체안이 여럿이면 첫째를 쓴다.
- * @param {ResolvedDate} resolved @param {Candidate} initial @param {Candidate} selected @param {CandidateCollects[]} entries
- * @returns {CollectOption | null}
+ * 기리는 성인의 본기도를 잇는 차례 — 공통 본기도의 유형을 정의한 차례(`commons.json`의 `classes`)와 같다: 순교자, 성직자,
+ * 선교사, 신학자·교육자, 수도자, 성인 일반(사용자 결정 2026-11-03). 유형이 없는 성인은 그 뒤에 칩 차례로.
+ * `lectionary.data.test.js`가 데이터의 차례와 대조한다.
  */
-function memorialCollectOf(resolved, initial, selected, entries) {
-  const official = resolved.official;
-  if (selected !== initial || !isGrid(selected) || !official || official === selected || isGrid(official)) return null;
-  return collectsFor(entries, official)[0] || null;
+const MEMORIAL_CLASS_ORDER = ["martyr", "pastor", "missionary", "teacher", "monastic", "saint", "dedication", "anniversary"];
+
+/**
+ * 기리는 성인 — 그날의 기본 독서(`initial`)를 기준으로 정한다. 성인 축일은 칩으로 두지 않고 머리 제목 아래에 이름을 한 줄씩
+ * 보이며(`saints`, 사용자 결정 2026-11-03 — 고유 독서가 있는 성인은 칩도 남는다, buildLectionaryModel), 기본 독서를 볼 때 그 본기도 뒤에 성인의 본기도를 잇고(`collects`), 송영은
+ * 그 뒤에 한 번 단다(사용자 결정 2026-11-03). 잇는 성인은 성인 유형(`sanctoral_class`가 `MEMORIAL_CLASS_ORDER`의 하나)인
+ * 월별 축일 후보다 — 3.1 사순 2주일에 함께 밀린 삼일절(`national`)은 잇지 않는다.
+ * - 기본 독서가 평일(격자)이면 — 지정 전례일(성인 축일)에 고유 독서가 없어서다(설계서 미결25) — 그날 지키는 성인 축일
+ *   (`proper`)을 모두 잇는다(11.6 레오나드, 2.14 발렌틴과 키릴과 메토디우스).
+ * - 밀려서 그날 기념만 하는 축일(`commemorated` — 주일과 겹친 7.26 안나와 요아킴)은 기본 독서가 무엇이든 잇는다.
+ * 유형이 같고 공통 본기도를 쓰는 성인은 그 본기도 하나에 이름을 모으고(「A와 B를」), 다르면 `MEMORIAL_CLASS_ORDER` 차례로
+ * 잇는다. 이름도 같은 차례다. 대체안이 여럿이면 첫째를 쓴다.
+ * `colors`는 그날 지키는 성인 축일(`proper`)들의 색을 같은 차례로 겹치지 않게 모은 것 — 둘 이상이면 머리가 「적색 또는
+ * 백색」으로 보인다(buildLectionaryModel). 기념만 하는 축일은 그날의 색을 바꾸지 않아 넣지 않는다.
+ * @param {ResolvedDate} resolved @param {Candidate} initial @param {CandidateCollects[]} entries
+ * @returns {{ collects: CollectOption[], colors: string[], saints: Candidate[] }}
+ */
+function memorialOf(resolved, initial, entries) {
+  /** @type {Array<{ cls: string, collect: CollectOption, names: string[] | null, at: number, colors: string[], kept: boolean, saints: Candidate[] }>} */
+  const items = [];
+  resolved.candidates.forEach((c, at) => {
+    // 성인은 공통 본기도의 유형(MEMORIAL_CLASS_ORDER)이 있는 행이다 — 삼일절의 `national` 같은 유형은 성인이 아니다
+    const cls = c.observance.sanctoral_class;
+    if (c === initial || isGrid(c) || c.observance.kind !== "sanctoral" || typeof cls !== "string"
+      || !MEMORIAL_CLASS_ORDER.includes(cls) || c.evening) return;
+    const kept = c.status === "proper" && isGrid(initial);
+    if (!kept && c.status !== "commemorated") return;
+    const collect = collectsFor(entries, c)[0];
+    if (!collect) return;
+    const color = typeof c.observance.color === "string" ? [c.observance.color] : [];
+    const same = collect.common && collect.template && collect.names
+      ? items.find((x) => x.names && x.collect.common === collect.common) : null;
+    if (same && same.names && collect.names) {
+      same.names.push(...collect.names);
+      same.saints.push(c);
+      if (kept) { same.colors.push(...color); same.kept = true; }
+    } else {
+      items.push({ cls, collect, names: collect.common && collect.template && collect.names ? [...collect.names] : null, at,
+        colors: kept ? color : [], kept, saints: [c] });
+    }
+  });
+  const rank = (/** @type {string} */ cls) => {
+    const i = MEMORIAL_CLASS_ORDER.indexOf(cls);
+    return i < 0 ? MEMORIAL_CLASS_ORDER.length : i;
+  };
+  items.sort((a, b) => rank(a.cls) - rank(b.cls) || a.at - b.at);
+  const collects = items.map((x) => (x.names && x.collect.names && x.names.length > x.collect.names.length && x.collect.template
+    ? { ...x.collect, text: fillCommonName(x.collect.template, joinNames(x.names)), names: x.names }
+    : x.collect));
+  /** @type {string[]} */
+  const colors = [];
+  for (const x of items) for (const c of x.colors) if (!colors.includes(c)) colors.push(c);
+  return { collects, colors, saints: items.flatMap((x) => x.saints) };
 }
 
 /** 괄호 설명을 뗀 이름이 같은가 — 세트 · 본기도의 제목과 전례일 이름 대조. */
@@ -728,8 +787,15 @@ function canticleTitleOf(/** @type {BibleChapter | null | undefined} */ chapter)
 function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedTrack) {
   const date = resolved.date;
   const initial = initialCandidate(resolved, groupsOf);
-  const selected = selectCandidate(resolved, query.obs, groupsOf);
-  if (!initial || !selected) return null;
+  if (!initial) return null;
+  // 기리는 성인은 칩이 없다 — 주소로 가리켜도 기본 독서다. 고유 독서가 있는 성인만 그 독서를 고르게 칩을 남긴다(사용자
+  // 결정 2026-11-03 — 기념만 하는 12.29 토마스 베켓, 7.26 안나와 요아킴 등, memorialOf)
+  const memorial = memorialOf(resolved, initial, collectEntries);
+  const hidden = (/** @type {Candidate} */ c) => (memorial.saints.includes(c) && !hasProperReadings(groupsOf(c)))
+    || isHiddenCandidate(c, initial, groupsOf(c));
+  const picked = selectCandidate(resolved, query.obs, groupsOf);
+  const selected = picked && hidden(picked) ? initial : picked;
+  if (!selected) return null;
 
   const groups = groupsOf(selected);
   const tracks = tracksOf(groups);
@@ -752,14 +818,14 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
   }
   const collectIndex = linked && setIndex >= 0 ? linked[setIndex] : pickCollect(collects, query.collect);
   const chosenCollect = collectIndex >= 0 ? collects[collectIndex] : null;
-  const memorialCollect = memorialCollectOf(resolved, initial, selected, collectEntries);
+  const memorialCollects = selected === initial ? memorial.collects : [];
 
   const base = { obs: selected.observance.id, track, set: setIndex + 1, collect: !linked && chosenCollect ? collectIndex + 1 : null };
   // 후보마다 그 화면의 트랙 — 고른 후보는 지금 트랙, 다른 후보는 기억(없으면 첫 트랙). 칩 · 카드 링크도 이것을 적는다:
   // 트랙은 주소에 언제나 적으므로(hrefFor), 빼면 공유받은 「독서 2」 화면에서 지금 칩을 눌러도 보는 사람의 기억대로
   // 바뀌었다(머지 전 검토 2026-10-14).
   const trackOf = (/** @type {Candidate} */ c) => (c === selected ? track : pickTrack(groupsOf(c), null, storedTrack));
-  const chips = resolved.candidates.map((c) => {
+  const chips = resolved.candidates.filter((c) => !hidden(c)).map((c) => {
     const t = trackOf(c);
     return {
       candidate: c,
@@ -771,14 +837,19 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
     };
   });
   const pair = pairOf(resolved, groupsOf);
-  const { colors, colorAlt, ownColor } = headerColors(resolved, selected);
+  // 성인 축일이 둘 이상이고 색이 다르면 본기도 차례대로 「적색 또는 백색」(사용자 결정 2026-11-03 — memorialOf)
+  const colorsOr = selected === initial && memorial.colors.length > 1;
+  const { colors, colorAlt, ownColor } = colorsOr
+    ? { colors: memorial.colors, colorAlt: /** @type {string[]} */ ([]), ownColor: false }
+    : headerColors(resolved, selected);
   const empty = !groups.length && !collects.length;
 
   return {
     date, resolved, selected, initial, groups, tracks, track, options, setIndex, group, shortGroup, slots,
     chips, pair, collects, collectLabels: collectLabels(collects), collectIndex, collectsLinked: !!linked,
-    ending: endingCodeOf(memorialCollect || chosenCollect), memorialCollect,
-    colors, colorAlt, ownColor, fast: fastOf(resolved),
+    ending: endingCodeOf(memorialCollects[memorialCollects.length - 1] || chosenCollect), memorialCollects,
+    memorialSaints: memorial.saints,
+    colors, colorAlt, ownColor, colorsOr, fast: fastOf(resolved),
     cycle: resolved.coord.year && CYCLE_LABEL[resolved.coord.year] ? CYCLE_LABEL[resolved.coord.year] : null,
     empty,
     hrefs: {
@@ -987,13 +1058,23 @@ function buildHeader(m) {
   const shown = m.initial;
   const dayName = String(shown.observance.name || "");
   head.appendChild(el("h2", { className: "lect-day" }, dayName || "—"));
+  // 그날 기리는 성인 — 칩 대신 제목 아래에 한 줄씩(사용자 결정 2026-11-03, memorialOf). 다른 칩을 골라도 제목처럼 그대로다.
+  if (m.memorialSaints.length) {
+    const saints = el("p", { className: "lect-day-saints" });
+    for (const c of m.memorialSaints) saints.appendChild(el("span", { className: "lect-day-saint" }, String(c.observance.name || "")));
+    head.appendChild(saints);
+  }
   if (shown.status === "transferred_in" && shown.from) {
     head.appendChild(el("p", { className: "lect-day-note" }, `${monthDayLabel(shown.from)}에서 옮겨 지킵니다`));
   }
 
   const meta = el("p", { className: "lect-meta" });
   const colors = el("span", { className: m.ownColor ? "lect-colors lect-colors--own" : "lect-colors", role: "group", "aria-label": "전례색" });
-  for (const c of m.colors) colors.appendChild(buildColorMark(c, false));
+  // 성인 축일이 둘 이상이고 색이 다르면 「적색 또는 백색」(colorsOr) — 그 밖에 둘이면 함께 적는 색(사계재 날 [자, 백])
+  m.colors.forEach((c, i) => {
+    if (i > 0 && m.colorsOr) colors.appendChild(el("span", { className: "lect-color-or" }, "또는"));
+    colors.appendChild(buildColorMark(c, false));
+  });
   for (const c of m.colorAlt) colors.appendChild(buildColorMark(c, true));
   meta.appendChild(colors);
   if (m.cycle) meta.appendChild(el("span", { className: "lect-meta-item" }, m.cycle));
@@ -1105,10 +1186,10 @@ function buildCollects(m) {
   const o = m.collects[Math.max(m.collectIndex, 0)];
   const art = el("article", { className: "lect-collect chapter-text", lang: "ko" });
   art.appendChild(el("p", { className: "lect-collect-text" }, o.text));
-  // 기리는 성인의 본기도 — 평일 본기도 다음, 송영 앞(memorialCollectOf).
-  if (m.memorialCollect) art.appendChild(el("p", { className: "lect-collect-text" }, m.memorialCollect.text));
+  // 기리는 성인의 본기도 — 기본 독서의 본기도 다음, 송영 앞(memorialOf).
+  for (const mc of m.memorialCollects) art.appendChild(el("p", { className: "lect-collect-text" }, mc.text));
   section.appendChild(art);
-  // 송영 — 고른 본기도(기리는 성인의 본기도가 있으면 그 뒤) 뒤에 1회(ADR-036 §3).
+  // 송영 — 고른 본기도(기리는 성인의 본기도가 있으면 마지막 것) 뒤에 1회(ADR-036 §3).
   section.appendChild(el("p", { className: "lect-ending chapter-text", lang: "ko" }, ENDINGS[m.ending]));
   return section;
 }

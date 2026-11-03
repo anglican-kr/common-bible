@@ -1969,15 +1969,25 @@ function withParticle(/** @type {string} */ word) {
 }
 
 /**
- * 공통 본기도의 `{name}` 자리에 넣을 이름. `common_names` 가 있으면 그것을(배열이면 「A와 B」),
- * 없으면 표의 이름에서 끝의 괄호 설명(「(종교개혁자, 1384년)」)을 뗀 것.
- * @param {Observance} obs
+ * 공통 본기도의 `{name}` 자리에 넣을 이름들. `common_names` 가 있으면 그것을, 없으면 표의 이름에서 끝의 괄호 설명
+ * (「(종교개혁자, 1384년)」)을 뗀 것 하나.
+ * @param {Observance} obs @returns {string[]}
  */
-function displayNameOf(obs) {
+function namesOf(obs) {
   const names = Array.isArray(obs.common_names) ? obs.common_names.filter((n) => typeof n === "string" && n !== "") : [];
   if (!names.length) names.push(String(obs.name || "").replace(/\s*\([^()]*\)\s*$/, ""));
+  return names;
+}
+
+/** 이름들을 한 자리에 — 「A」, 「A와 B」, 「A, B와 C」(받침이면 「과」). @param {string[]} names */
+function joinNames(names) {
   if (names.length === 1) return names[0];
   return names.slice(0, -2).map((n) => n + ", ").join("") + withParticle(names[names.length - 2]) + " " + names[names.length - 1];
+}
+
+/** 공통 본기도의 `{name}` 자리에 넣을 이름(배열이면 「A와 B」). @param {Observance} obs */
+function displayNameOf(obs) {
+  return joinNames(namesOf(obs));
 }
 
 /**
@@ -2031,6 +2041,8 @@ function collectsOf(lix, cal, resolved, obs) {
     text: fillCommonName(String(tmpl.text), displayNameOf(obs)),
     ending: e === "A" || e === "B" || e === "C" ? e : null,
     common: cls,
+    template: String(tmpl.text),
+    names: namesOf(obs),
   }];
 }
 
@@ -2178,6 +2190,8 @@ export {
   buildOrdinalIndex, ordinalWeekOf, lunarDatesOf, spansOf, inSpan,
   preloadCalendar, preloadLectionary, resolveDate, findReadings, findCollects, findHalfVerse, fastOf,
   setActivatedOptionals,
+  // 같은 유형의 성인 둘 이상을 공통 본기도 하나에 모은다(독서 뷰 — 사용자 결정 2026-11-03).
+  joinNames, fillCommonName,
   // 선택 봉헌의 목적지 주일(§6.2) — 독서 뷰(ADR-038 §3)가 「오는/지난 주일(날짜)로 옮겨 지키는 경우」
   // 문구를 엔진과 같은 계산으로 만들기 위해 쓴다. 규칙은 그대로다 — 노출만 더했다.
   optionalDestOf,

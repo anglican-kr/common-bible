@@ -665,6 +665,14 @@ a.lect-datenav-btn:focus-visible { background: var(--bg-card); }
   color: var(--text);
   line-height: var(--leading-snug);
 }
+/* 그날 기리는 성인 — 칩 대신 제목 아래 회색 작은 글씨, 성인마다 한 줄(사용자 결정 2026-11-03). */
+.lect-day-saints {
+  margin: var(--space-1) 0 0;
+  font-size: var(--font-sm);
+  color: var(--text-secondary);
+  line-height: var(--leading-snug);
+}
+.lect-day-saint { display: block; }
 .lect-day-note {
   margin: var(--space-1) 0 0;
   font-size: var(--font-sm);

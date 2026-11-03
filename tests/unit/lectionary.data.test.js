@@ -123,16 +123,18 @@ test("A3 2026-09-16 니니안 ∧ 추계재 — 초기 독서는 격자(미결25
   assert.strictEqual(id(m.selected), "grid:ordinary-24-weekday-wed");
   same(plain(m.colors), ["violet", "white"]);
   assert.strictEqual(m.group.common, null);
-  assert.strictEqual(m.collects.length, 1);   // 격자(연중 24주간) 본기도만 — 니니안 공통은 그 칩에서
+  assert.strictEqual(m.collects.length, 1);   // 격자(연중 24주간) 본기도
+  same(m.memorialCollects.map((c) => c.common), ["missionary"]);   // 그 뒤에 니니안(선교사 공통) 본기도(2026-11-03)
   const ember = model("2026-09-16", { obs: "t-추계재" });
   same(plain(ember.colors), ["violet"]);
   assert.strictEqual(ember.ownColor, true);
   same(ember.options.map((o) => o.label), ["독서 1", "독서 2"]);
   assert.strictEqual(ember.fast, "minor");
+  // 니니안은 공통 독서만 있어 당분간 칩이 없고, 주소로 가리켜도 기본 독서(격자)다(HIDE_COMMON_READINGS, 사용자 결정 2026-11-03)
+  assert.ok(!m.chips.some((c) => id(c.candidate) === "d0916-니니안"));
   const saint = model("2026-09-16", { obs: "d0916-니니안" });
-  assert.strictEqual(saint.group.common, "missionary");
-  assert.strictEqual(saint.group.title, "선교사");   // 캡션 라벨 = commons.classes[분류].label
-  same(plain(saint.colors), ["violet", "white"]);   // 지정 전례일을 고르면 그날 색 그대로
+  assert.strictEqual(id(saint.selected), "grid:ordinary-24-weekday-wed");
+  same(plain(saint.colors), ["violet", "white"]);
 });
 
 test("A3 2026-08-06 주의 변모(목) — 당일 카드 둘, 격자 카드는 「오는 주일(8월 9일)」", { skip: SKIP }, () => {
@@ -349,7 +351,11 @@ test("A3 2026-03-01 사순 2주일 — 조건부 세트는 조건이 라벨 「�
   const m = model("2026-03-01", { set: 2 });
   same(m.options.map((o) => o.label), ["사순 2주일", "주의 변모 주일로 지킬 때"]);   // 「…로 지키는 경우」 → 「…로 지킬 때」
   assert.strictEqual(m.group.set_no, 2);
-  same(m.chips.map((c) => c.muted), [false, false, false]);   // 삼일절 · 데이빗은 주일에 밀려 「· 기념만」(사용자 결정 2026-10-24)
+  // 삼일절 · 데이빗은 주일에 밀려 「· 기념만」(사용자 결정 2026-10-24). 데이빗은 공통 독서만 있어 당분간 칩이 없고(2026-11-03),
+  // 그 본기도는 주일 본기도 뒤에 이어진다 — 삼일절(`national`)은 성인이 아니라 잇지 않는다
+  assert.ok(!m.chips.some((c) => id(c.candidate) === "d0301-데이빗"));
+  same(m.chips.map((c) => c.muted), [false, false]);
+  same(m.memorialCollects.map((c) => c.common), ["pastor"]);
 });
 
 test("A3 송가 — 즈가리야 송가는 영광송을 붙이고 창조송가(gloria:false)는 붙이지 않는다(실제 cant 장 JSON)", { skip: SKIP }, () => {
@@ -460,4 +466,9 @@ test("반절 경계 표 — 전례독서 · 성인 공통의 반절 참조마다
     assert.ok(keep, `${k} — 경계가 절을 나누지 않는다`);
     if (keep.text) assert.strictEqual(lines[keep.cut].split(keep.text).length, 2, `${k} — 「${keep.text}」가 ${keep.cut + 1}줄에 한 번 나와야 한다`);
   }
+});
+
+test("기리는 성인의 본기도를 잇는 차례(MEMORIAL_CLASS_ORDER)는 commons.json 의 유형 정의 차례와 같다(사용자 결정 2026-11-03)", { skip: SKIP }, () => {
+  const order = vm.runInContext("MEMORIAL_CLASS_ORDER", ctx);
+  assert.deepStrictEqual([...order], Object.keys(read("commons.json").classes));
 });
