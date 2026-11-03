@@ -1397,9 +1397,19 @@ def test_saint_day_heading_and_collects_follow_the_default_reading(mobile_contex
     page = mobile_context.new_page()
     _open(page, "lectionary/2026-11-06")
     assert page.inner_text(".lect-day") == "연중 31주 금요일"
-    # 제목 위에는 머리와 사이에 다른 화면과 같은 32px(#app 기본값)이 있다 — 16px이면 머리에 붙어 보였다(사용자 결정 2026-11-03)
-    gap = page.evaluate("() => document.querySelector('.lect-day').getBoundingClientRect().top - document.querySelector('#app-header').getBoundingClientRect().bottom")
-    assert gap >= 31, gap
+    # 제목 위에는 헤더와 사이에 제목 한 줄 높이만큼의 여백이 있고, 글자 크기 설정(24px)을 따라 늘어난다 — 16px이면 헤더에
+    # 붙어 보였다(사용자 결정 2026-11-03, 11-04)
+    measure = """() => {
+      const t = document.querySelector('.lect-day');
+      return { gap: t.getBoundingClientRect().top - document.querySelector('#app-header').getBoundingClientRect().bottom,
+               line: parseFloat(getComputedStyle(t).lineHeight) };
+    }"""
+    small = page.evaluate(measure)
+    assert small["gap"] >= small["line"] - 0.5, small
+    page.evaluate("() => { document.documentElement.style.fontSize = '24px'; }")
+    large = page.evaluate(measure)
+    assert large["gap"] >= large["line"] - 0.5 and large["gap"] > small["gap"], (small, large)
+    page.evaluate("() => { document.documentElement.style.fontSize = ''; }")
     # 레오나드는 칩이 아니라 제목 아래 회색 이름 줄 — 칩은 평일 하나뿐이라 칩 줄도 없다(2026-11-03)
     assert page.inner_text(".lect-day-saints") == "레오나드(은수자, 6세기) 축일"
     assert page.locator(".lect-chips").count() == 0
