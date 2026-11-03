@@ -101,11 +101,11 @@ def test_a11y_lectionary_alternate_colours(browser):
         ctx.close()
 
 
-def test_a11y_lectionary_pair_and_switcher(browser):
-    """전례독서 뷰(8.6 주의 변모 — 두 독서 카드 · 전례일 칩) — critical/serious 위반 0건."""
+def test_a11y_lectionary_switcher(browser):
+    """전례독서 뷰(8.6 주의 변모 — 전례일 칩) — critical/serious 위반 0건."""
     ctx, page = _open(browser, "lectionary/2026-08-06")
     try:
-        page.wait_for_selector(".lectionary .lect-pair-card", timeout=20_000)
+        page.wait_for_selector(".lectionary .lect-chip", timeout=20_000)
         v = _violations(page)
         assert not v, f"Lectionary pair: {len(v)} violation(s):\n{_fmt(v)}"
     finally:
