@@ -324,11 +324,16 @@ window.appHelpers = (/** @returns {AppHelpers} */ () => {
     // collapse, so the control goes to its click-time viewport top in today's
     // layout; without it (Safari before 27) the collapse itself moves the
     // content, so the control goes back to its offset within the root. A
-    // control outside the root (sticky) keeps its place by itself.
+    // control outside the root (sticky — the division tabs, the lectionary's
+    // date steps in the title row) keeps its place by itself, so the scroll is
+    // left to the view: matching its click-time top would undo a view that
+    // starts the new screen at the top, by the height the desktop header's
+    // search row regains there.
     const r0 = target.getBoundingClientRect();
-    if (SCROLL_ANCHORING) {
+    const inRoot = !!root && root.contains(target);
+    if (inRoot && SCROLL_ANCHORING) {
       scrollToInstantly(window.scrollY + r0.top - spot.top);
-    } else if (spot.offset !== null && root && root.contains(target)) {
+    } else if (inRoot && spot.offset !== null && root) {
       scrollToInstantly(spot.y + (r0.top - root.getBoundingClientRect().top) - spot.offset);
     }
     // Focus goes back after every press — keyboard and VoiceOver users follow it — but a pointer press must not

@@ -37,7 +37,7 @@
       "assertions": [
         { "date": "2026-05-27", "expect": { "official": "grid:ordinary-8-weekday-wed" } },
         { "date": "2026-05-27", "expect": { "id": "t-하계재", "status": "proper", "displacedBy": null, "observanceColor": "violet", "penitential": true } },
-        { "date": "2026-05-27", "expect": { "id": "d0527-대한성공회-초대-한국인-주교-이천환-주교-서품일", "status": "proper", "displacedBy": null } },
+        { "date": "2026-05-27", "expect": { "id": "d0527-대한성공회-초대-한국인-주교-이천환-주교-서품", "status": "proper", "displacedBy": null } },
         { "date": "2026-05-27", "expect": { "id": "t-하계재", "readings": { "sets": 2 } } },
         { "date": "2026-05-27", "expect": { "fast": true } }
       ]
@@ -142,7 +142,7 @@
       "source": ["서울교구 2024 달력 12월 면 — 12.21 김희준 서품일은 이름 줄로만, 독서는 동계재 것(옛 편집 — 2025 부터라면 날짜 본문)"],
       "assertions": [
         { "date": "2024-12-21", "expect": { "official": "grid:*", "officialReadings": { "record": "d1221-성탄-4일-전-t1-s1" } } },
-        { "date": "2024-12-21", "expect": { "id": "d1221-대한성공회-첫-한인-사제-김희준-서품일", "status": "proper", "displacedBy": null } },
+        { "date": "2024-12-21", "expect": { "id": "d1221-대한성공회-첫-한인-사제-김희준-서품", "status": "proper", "displacedBy": null } },
         { "date": "2024-12-21", "expect": { "id": "t-동계재", "status": "proper" } }
       ]
     },

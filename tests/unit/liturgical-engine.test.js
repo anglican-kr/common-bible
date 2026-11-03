@@ -1150,16 +1150,21 @@ test("C-5.6-3 findCollects — 전례일별 원소 · candidates 순 · 대체�
   same(out.map((e) => e.candidate), r.candidates);
   same(out.map((e) => e.collects.map((c) => c.id)), [[21], [], []]);   // 거룩한 이름 · 세계평화(기념일) · 격자
   assert.strictEqual(collectsFor(resolve("2026-03-01"), "d0301-samil")[0].ending, "C");
-  // 공통 본기도 — {name} 치환, 이름 배열은 「A와 B」(받침이면 「과」), common_names 가 없으면 괄호 설명을 뗀다
+  // 공통 본기도 — {name} 치환, 이름 배열은 「A와 B」(받침이면 「과」), common_names가 없으면 괄호 설명을 뗀다.
+  // 이름 뒤 「을(를)」은 끝 글자 받침에 맞춰 하나로 고른다(사용자 결정 2026-11-03)
   const name = (d, id) => collectsFor(resolve(d), id)[0];
   same(plain(name("2026-07-26", "d0726-anna")),
-    { id: "common:saint-c1", title: "성인", collect_no: 1, collect_total: 1, text: "안나와 요아킴의 모범을", ending: "A", common: "saint" });
-  assert.strictEqual(name("2026-02-14", "d0214-cyril").text, "키릴과 메토디우스을(를) 세우시어");
-  assert.strictEqual(name("2026-12-31", "d1231-wycliffe").text, "위클리프을(를) 통해");
+    { id: "common:saint-c1", title: "성인", collect_no: 1, collect_total: 1, text: "안나와 요아킴의 모범을", ending: "A", common: "saint",
+      template: "{name}의 모범을", names: ["안나", "요아킴"] });   // 원문과 이름 — 같은 유형의 성인을 모을 때 쓴다(2026-11-03)
+  assert.strictEqual(name("2026-02-14", "d0214-cyril").text, "키릴과 메토디우스를 세우시어");
+  assert.strictEqual(name("2026-12-31", "d1231-wycliffe").text, "위클리프를 통해");
+  assert.strictEqual(ctx.fillCommonName("주님의 종 {name}을(를) 세우시어", "바실"), "주님의 종 바실을 세우시어");   // 받침 있음
+  assert.strictEqual(ctx.fillCommonName("{name}교구(관구)를 위해 {name}에게", "서울"), "서울교구(관구)를 위해 서울에게");
   assert.strictEqual(name("2026-12-31", "d1231-sylvester").text, "주님의 종 실베스터에게");
   // 본기도 트리거는 has_proper — 사베리오(참)는 고유 본기도, 독서만 공통
   same(collectsFor(resolve("2026-12-03"), "d1203-xavier").map((c) => [c.id, c.common]), [[24, null]]);
   assert.strictEqual(ctx.displayNameOf({ name: "가", common_names: ["가", "나", "다"] }), "가, 나와 다");
+  assert.strictEqual(ctx.joinNames(["발렌틴", "키릴", "메토디우스"]), "발렌틴, 키릴과 메토디우스");
 });
 
 test("미결12 잠정 — 1:N 좁히기: 12.25 세 갈래 · 09.29 합성 레코드는 둘 다 · 12.31 성탄주간은 성인 것이 아니다", () => {
