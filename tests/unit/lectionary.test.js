@@ -113,6 +113,9 @@ test("chipLabel · statusSuffix: 밀림 · 옮김 · 선택 봉헌 · 기념 · 
   const r = resolvedOf("2026-12-07", [], null);
   assert.strictEqual(ctx.chipLabel(cand(obs("d1206-성-니콜라", "성 니콜라(미라의 주교)"), "transferred_in", { from: "2026-12-06" }), r, null),
     "성 니콜라 · 12월 6일에서 옮겨 옴");
+  // 머리가 같은 말을 문장으로 보이는 칩(옮겨 온 기본 독서)은 상태 표시를 붙이지 않는다(2026-11-03)
+  assert.strictEqual(ctx.chipLabel(cand(obs("d1206-성-니콜라", "성 니콜라(미라의 주교)"), "transferred_in", { from: "2026-12-06" }), r, null, true),
+    "성 니콜라");
   assert.strictEqual(ctx.chipLabel(cand(obs("d1018-루가", "성 루가"), "transferred_out", { to: "2026-10-19" }), r, null), "성 루가 · → 10월 19일");
   assert.strictEqual(ctx.chipLabel(cand(obs("d0806-주의-변모", "주의 변모"), "optional", { from: "2026-08-06" }), r, null),
     "주의 변모 · 8월 6일에서 옮겨 지킬 수 있음");

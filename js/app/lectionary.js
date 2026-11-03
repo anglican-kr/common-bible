@@ -180,12 +180,13 @@ function isMutedCandidate(/** @type {Candidate} */ c) {
  * 전례일 스위처 칩 라벨(ADR-038 §3-1): 이름 (+ 주기 라벨) (+ 독서 N) + 상태 표시. 주기는 격자(그날의
  * 주일 · 평일) 후보에만 — 성인 축일은 주기로 갈리지 않는다. 트랙은 그 후보의 독서가 트랙을 가질 때만.
  * @param {Candidate} c @param {ResolvedDate} resolved @param {1 | 2 | null} track  이 후보에 적용되는 트랙
+ * @param {boolean} [bare]  상태 표시를 붙이지 않는다 — 머리가 같은 말을 문장으로 보일 때(옮겨 온 기본 독서)
  */
-function chipLabel(c, resolved, track) {
+function chipLabel(c, resolved, track, bare = false) {
   const parts = [];
   if (isGrid(c) && resolved.coord.year && CYCLE_LABEL[resolved.coord.year]) parts.push(CYCLE_LABEL[resolved.coord.year]);
   if (track) parts.push(`독서 ${track}`);
-  return shortName(c.observance.name) + (parts.length ? ` (${parts.join(", ")})` : "") + statusSuffix(c);
+  return shortName(c.observance.name) + (parts.length ? ` (${parts.join(", ")})` : "") + (bare ? "" : statusSuffix(c));
 }
 
 /** 고유 독서가 하나라도 있는가 — 공통(`common` 표지) 그룹만 있으면 거짓. */
@@ -761,7 +762,9 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
     const t = trackOf(c);
     return {
       candidate: c,
-      label: chipLabel(c, resolved, t),
+      // 기본 독서가 옮겨 온 축일이면 「…에서 옮겨 지킵니다」는 제목 아래 문장으로만 — 칩의 「· …에서 옮겨 옴」은 겹친다
+      // (사용자 결정 2026-11-03, buildHeader). 전체 상태는 `title`에 남는다.
+      label: chipLabel(c, resolved, t, c === initial && c.status === "transferred_in"),
       title: String(c.observance.name || "") + statusSuffix(c),
       href: hrefFor(date, { obs: c.observance.id, track: t, set: null, collect: null }, defaults),
       active: c === selected,
@@ -985,6 +988,10 @@ function buildHeader(m) {
   const shown = m.initial;
   const dayName = String(shown.observance.name || "");
   head.appendChild(el("h2", { className: "lect-day" }, dayName || "—"));
+  // 제목의 전례일을 설명하므로 제목 바로 아래 — 기리는 성인 줄보다 먼저(2026-11-03)
+  if (shown.status === "transferred_in" && shown.from) {
+    head.appendChild(el("p", { className: "lect-day-note" }, `${monthDayLabel(shown.from)}에서 옮겨 지킵니다`));
+  }
   // 그날 기리는 성인과 기념일 — 칩 대신 제목 아래에 한 줄씩, 이름 뒤에 「축일」 · 「기념일」(사용자 결정 2026-11-03,
   // memorialOf). 다른 칩을 골라도 제목처럼 그대로다.
   const lines = [
@@ -995,9 +1002,6 @@ function buildHeader(m) {
     const saints = el("p", { className: "lect-day-saints" });
     for (const line of lines) saints.appendChild(el("span", { className: "lect-day-saint" }, line));
     head.appendChild(saints);
-  }
-  if (shown.status === "transferred_in" && shown.from) {
-    head.appendChild(el("p", { className: "lect-day-note" }, `${monthDayLabel(shown.from)}에서 옮겨 지킵니다`));
   }
 
   const meta = el("p", { className: "lect-meta" });

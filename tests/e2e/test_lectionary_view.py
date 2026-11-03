@@ -173,8 +173,11 @@ def test_transferred_and_optional_days_choose_by_chips_without_cards(desktop_con
     assert any("8월 6일에서 옮겨 지킬 수 있음" in t for t in _chips(page)), _chips(page)
     _open(page, "lectionary/2026-12-07")
     assert page.locator(".lect-pair-card").count() == 0
-    assert page.inner_text(".lect-chip[aria-current]").startswith("성 니콜라")
+    # 옮겨 온 것은 제목 바로 아래 문장으로만 — 칩에는 상태 표시가 없고, 문장은 기리는 성인 줄(암브로스)보다 먼저다(2026-11-03)
+    assert page.inner_text(".lect-chip[aria-current]") == "성 니콜라"
     assert "12월 6일에서 옮겨 지킵니다" in page.inner_text(".lect-day-note")
+    order = page.evaluate("""() => [...document.querySelectorAll('.lect-head > *')].map(e => e.className.split(' ')[0])""")
+    assert order.index("lect-day-note") < order.index("lect-day-saints"), order
 
 
 # ── ④ 대안 세트 · 트랙 ──
