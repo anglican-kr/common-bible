@@ -173,11 +173,12 @@ def test_transferred_and_optional_days_choose_by_chips_without_cards(desktop_con
     assert any("8월 6일에서 옮겨 지킬 수 있음" in t for t in _chips(page)), _chips(page)
     _open(page, "lectionary/2026-12-07")
     assert page.locator(".lect-pair-card").count() == 0
-    # 옮겨 온 것은 제목 바로 아래 문장으로만 — 칩에는 상태 표시가 없고, 문장은 기리는 성인 줄(암브로스)보다 먼저다(2026-11-03)
+    # 옮겨 온 것은 제목 아래 문장으로만 — 칩에는 상태 표시가 없고, 문장은 기리는 성인 줄(암브로스)보다 먼저다(2026-11-03).
+    # 전례색과 해의 줄은 제목 바로 다음, 회색 설명 줄들보다 먼저다(사용자 결정 2026-11-03)
     assert page.inner_text(".lect-chip[aria-current]") == "성 니콜라"
     assert "12월 6일에서 옮겨 지킵니다" in page.inner_text(".lect-day-note")
     order = page.evaluate("""() => [...document.querySelectorAll('.lect-head > *')].map(e => e.className.split(' ')[0])""")
-    assert order.index("lect-day-note") < order.index("lect-day-saints"), order
+    assert order == ["lect-day", "lect-meta", "lect-day-note", "lect-day-saints"], order
 
 
 # ── ④ 대안 세트 · 트랙 ──
@@ -1396,6 +1397,19 @@ def test_saint_day_heading_and_collects_follow_the_default_reading(mobile_contex
     page = mobile_context.new_page()
     _open(page, "lectionary/2026-11-06")
     assert page.inner_text(".lect-day") == "연중 31주 금요일"
+    # 제목 위에는 헤더와 사이에 제목 한 줄 높이만큼의 여백이 있고, 글자 크기 설정(24px)을 따라 늘어난다 — 16px이면 헤더에
+    # 붙어 보였다(사용자 결정 2026-11-03, 11-04)
+    measure = """() => {
+      const t = document.querySelector('.lect-day');
+      return { gap: t.getBoundingClientRect().top - document.querySelector('#app-header').getBoundingClientRect().bottom,
+               line: parseFloat(getComputedStyle(t).lineHeight) };
+    }"""
+    small = page.evaluate(measure)
+    assert small["gap"] >= small["line"] - 0.5, small
+    page.evaluate("() => { document.documentElement.style.fontSize = '24px'; }")
+    large = page.evaluate(measure)
+    assert large["gap"] >= large["line"] - 0.5 and large["gap"] > small["gap"], (small, large)
+    page.evaluate("() => { document.documentElement.style.fontSize = ''; }")
     # 레오나드는 칩이 아니라 제목 아래 회색 이름 줄 — 칩은 평일 하나뿐이라 칩 줄도 없다(2026-11-03)
     assert page.inner_text(".lect-day-saints") == "레오나드(은수자, 6세기) 축일"
     assert page.locator(".lect-chips").count() == 0

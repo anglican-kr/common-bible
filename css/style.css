@@ -572,8 +572,11 @@ body {
    .chapter-text (serif body, same column as the chapter view); the chrome —
    date nav · day name · colour marks · observance chips · segments · slot
    headings — is sans-serif like the other in-page views. */
+/* 위 여백은 제목(.lect-day) 한 줄의 높이다(기본 글자 크기에서 33.6px). rem이라 글자 크기 설정을 따라 늘어난다.
+   날짜 이동 줄을 헤더에 둔 뒤로 본문 맨 위가 제목이라, 16px로 줄였을 때 제목이 헤더 바로 밑에 붙어 보였다
+   (사용자 결정 2026-11-03, 11-04). */
 .lectionary { padding: 0; }
-#app:has(.lectionary) { padding-top: var(--space-4); }
+#app:has(.lectionary) { padding-top: calc(var(--font-xl) * var(--leading-snug)); }
 
 .lect-head {
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;

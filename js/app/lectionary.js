@@ -988,7 +988,23 @@ function buildHeader(m) {
   const shown = m.initial;
   const dayName = String(shown.observance.name || "");
   head.appendChild(el("h2", { className: "lect-day" }, dayName || "—"));
-  // 제목의 전례일을 설명하므로 제목 바로 아래 — 기리는 성인 줄보다 먼저(2026-11-03)
+
+  // 전례색과 해(가해 … , 짝수해 · 홀수해)는 제목 바로 아래, 회색 설명 줄들보다 먼저(사용자 결정 2026-11-03)
+  const meta = el("p", { className: "lect-meta" });
+  const colors = el("span", { className: m.ownColor ? "lect-colors lect-colors--own" : "lect-colors", role: "group", "aria-label": "전례색" });
+  // 성인 축일이 둘 이상이고 색이 다르면 「적색 또는 백색」(colorsOr) — 그 밖에 둘이면 함께 적는 색(사계재 날 [자, 백])
+  m.colors.forEach((c, i) => {
+    if (i > 0 && m.colorsOr) colors.appendChild(el("span", { className: "lect-color-or" }, "또는"));
+    colors.appendChild(buildColorMark(c, false));
+  });
+  for (const c of m.colorAlt) colors.appendChild(buildColorMark(c, true));
+  meta.appendChild(colors);
+  if (m.cycle) meta.appendChild(el("span", { className: "lect-meta-item" }, m.cycle));
+  if (m.fast) meta.appendChild(el("span", { className: "lect-meta-item lect-fast" }, FAST_LABEL[m.fast]));
+  for (const p of m.resolved.periods || []) meta.appendChild(el("span", { className: "lect-meta-item lect-period" }, p.name));
+  head.appendChild(meta);
+
+  // 제목의 전례일을 설명하므로 기리는 성인 줄보다 먼저(2026-11-03)
   if (shown.status === "transferred_in" && shown.from) {
     head.appendChild(el("p", { className: "lect-day-note" }, `${monthDayLabel(shown.from)}에서 옮겨 지킵니다`));
   }
@@ -1003,20 +1019,6 @@ function buildHeader(m) {
     for (const line of lines) saints.appendChild(el("span", { className: "lect-day-saint" }, line));
     head.appendChild(saints);
   }
-
-  const meta = el("p", { className: "lect-meta" });
-  const colors = el("span", { className: m.ownColor ? "lect-colors lect-colors--own" : "lect-colors", role: "group", "aria-label": "전례색" });
-  // 성인 축일이 둘 이상이고 색이 다르면 「적색 또는 백색」(colorsOr) — 그 밖에 둘이면 함께 적는 색(사계재 날 [자, 백])
-  m.colors.forEach((c, i) => {
-    if (i > 0 && m.colorsOr) colors.appendChild(el("span", { className: "lect-color-or" }, "또는"));
-    colors.appendChild(buildColorMark(c, false));
-  });
-  for (const c of m.colorAlt) colors.appendChild(buildColorMark(c, true));
-  meta.appendChild(colors);
-  if (m.cycle) meta.appendChild(el("span", { className: "lect-meta-item" }, m.cycle));
-  if (m.fast) meta.appendChild(el("span", { className: "lect-meta-item lect-fast" }, FAST_LABEL[m.fast]));
-  for (const p of m.resolved.periods || []) meta.appendChild(el("span", { className: "lect-meta-item lect-period" }, p.name));
-  head.appendChild(meta);
   return head;
 }
 
