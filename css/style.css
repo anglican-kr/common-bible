@@ -724,60 +724,44 @@ a.lect-datenav-btn:focus-visible { background: var(--bg-card); }
   height: 0.8em;
 }
 
-/* Observance switcher — every candidate, always (ADR-038 §3). Chips sit in a row
-   like words and wrap to the next line when the row is full — never a hidden
-   horizontal scroll, where the evening chip at the end of the row (「부활밤 ·
-   저녁」) vanished on phones (사용자 결정 2026-10-15 — PR #349 리뷰). Each chip is
-   capped below the row width (.lect-chip max-width), so one never overflows.
-   aria-current marks the selected one. */
-.lect-chips {
+/* 전례독서 목록(ADR-038 §3 「전례일 스위처」, 사용자 결정 2026-11-04 — 칩 줄을 대신한다). 다른 후보를 제목 아래에 한 줄씩
+   그린다. 이름은 밑줄 링크, 상태 표시는 보조 글자색이다. 긴 줄은 말줄임 없이 낱말 사이에서 줄을 바꾸고, 줄 전체가 44px 이상의 탭 영역이다. */
+.lect-choices { margin-top: var(--space-1); }
+.lect-choice {
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  padding: var(--space-1) 0 var(--space-2);
-  margin: 0 0 var(--space-2);
-  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
-}
-.lect-chip {
-  flex: 0 0 auto;
-  display: inline-flex;
   align-items: center;
+  gap: var(--space-2);
+  box-sizing: border-box;
   min-height: var(--touch-target);
-  padding: 0 var(--space-4);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-pill);
-  background: var(--bg-card);
-  color: var(--text);
-  font-size: var(--font-sm);
-  font-weight: 600;
-  text-decoration: none;
-  white-space: nowrap;
-  /* Long saint names: keep the full text in the DOM (title + screen readers) and
-     clip the visible label with an ellipsis. The cap follows the viewport —
-     ~60% of a phone's width, up to 22rem on wide screens (사용자 결정 2026-10-12). */
-  max-width: clamp(9rem, 60vw, 22rem);
-}
-.lect-chip-text {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.lect-chip[aria-current] {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #fff;
-}
-[data-theme="dark"] .lect-chip[aria-current] { color: var(--bg); }
-/* Candidates that are not kept today (omitted · transferred out · commemorations
-   with no text) stay listed — 「후보 전부 노출」 — but read as secondary. */
-.lect-chip--muted {
+  padding-block: var(--space-1);
   color: var(--text-secondary);
-  border-style: dashed;
-  font-weight: 400;
+  font-size: var(--font-base);
+  line-height: var(--leading-snug);
+  text-decoration: none;
 }
-.lect-chip--muted[aria-current] { border-style: solid; color: #fff; }
-[data-theme="dark"] .lect-chip--muted[aria-current] { color: var(--bg); }
+/* 끝의 › — 글자 크기를 따라 커지는 약화 글리프(DESIGN.md §2 --text-tertiary) */
+.lect-choice::after {
+  content: "";
+  flex: none;
+  width: 0.45em;
+  height: 0.45em;
+  margin-inline-end: 0.2em;
+  border-block-start: 2px solid var(--text-tertiary);
+  border-inline-end: 2px solid var(--text-tertiary);
+  transform: rotate(45deg);
+}
+.lect-choice-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+.lect-choice-name {
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
 
 /* Track (독서 1/2) and alternative-set segments — the division-tab pattern in a
    compact size. Only the set segment that also picks the collect (5.1 · 사계재 금요일) wears a

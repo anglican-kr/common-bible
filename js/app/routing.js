@@ -62,7 +62,7 @@ let _isInitialLoad = true;
 // ADR-031: route() 호출마다 증가. 리다이렉트(books→resume 등)로 route 가 재진입하면
 // 바깥 호출의 finally(onRouteEnd 스크롤 복원)가 이미 낡았음을 알도록 시퀀스로 검사한다.
 let _routeSeq = 0;
-// 같은 화면을 다시 그리는 링크(`data-focus-key` — 전례독서의 날짜 이동 · 칩 · 카드 · 세그먼트, 캘린더의 달 이동, 구분 탭,
+// 같은 화면을 다시 그리는 링크(`data-focus-key` — 전례독서의 날짜 이동 · 전례독서 목록 · 세그먼트, 캘린더의 달 이동, 구분 탭,
 // 검색의 페이지 이동)를 누른 자리(WCAG 2.4.3, ADR-031 §5). 아래 클릭 인터셉터가 이동 직전에 재고(helpers.js focusSpotOf),
 // route() 가 시작하자마자 꺼내 비운다 — 그래서 자리는 그것을 남긴 누름의 route() 에만 쓰인다(뒤로 가기 · 탭 전환 ·
 // 리다이렉트는 자리 없이 시작한다). 새 화면이 커밋된 뒤 finally 에서 그 route 가 여전히 최신이면 돌려준다.

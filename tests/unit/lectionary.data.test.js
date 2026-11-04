@@ -84,6 +84,8 @@ function model(d, query = NONE, stored = null) {
   return m;
 }
 const id = (c) => c.observance.id;
+/** 전례독서 목록에 보이는 글 — 이름과 상태 표시. */
+const labels = (m) => m.choices.map((c) => c.name + c.suffix);
 
 // ── 상수 ↔ 데이터 ──
 
@@ -115,14 +117,14 @@ test("A3 주기 · 색 라벨이 데이터 _vocab 과 같다(ADR-036 §4 단일 
 
 // ── 실제 날짜 — ADR-038 §3 규칙 ──
 
-test("A3 2026-04-05 부활대축일 — 본기도 대체안 셋이 세그먼트, 세트 둘(원본 세트 표지는 숨김), 슬롯 넷, 기념일은 칩이 아니라 이름 줄", { skip: SKIP }, () => {
+test("A3 2026-04-05 부활대축일 — 본기도 대체안 셋이 세그먼트, 세트 둘(원본 세트 표지는 숨김), 슬롯 넷, 기념일은 전례독서 목록이 아니라 이름 줄", { skip: SKIP }, () => {
   const m = model("2026-04-05");
   assert.strictEqual(id(m.selected), "t-부활대축일");
   assert.strictEqual(m.collects.length, 3);   // 부활대축일의 자유선택 대체안 셋 — 고른 전례일의 것만
   assert.strictEqual(m.collectIndex, 0);
   same(m.options.map((o) => [o.label, o.short]), [["독서 1", null], ["독서 2", null]]);   // 원본 세트 둘 = 「또는」 대안
   same(m.slots.map((s) => s.slot), ["first", "psalm", "second", "gospel"]);
-  same(m.chips.map((c) => [c.label, c.muted]), [["부활대축일", false]]);   // 부활 1주일 격자는 본문이 없어 칩이 없다(사용자 결정 2026-11-04)
+  same(labels(m), ["부활대축일"]);   // 부활 1주일 격자는 본문이 없어 전례독서 목록에 없다(사용자 결정 2026-11-04)
   same(m.commemorations.map((c) => id(c)), ["d0405-마틴-루터-킹"]);   // 「… 기념일」 줄(사용자 결정 2026-11-03)
   same(plain(m.colors), ["white"]);
   const third = model("2026-04-05", { collect: 3 });
@@ -142,19 +144,19 @@ test("A3 2026-09-16 니니안 ∧ 추계재 — 초기 독서는 격자(미결25
   assert.strictEqual(ember.ownColor, true);
   same(ember.options.map((o) => o.label), ["독서 1", "독서 2"]);
   assert.strictEqual(ember.fast, "minor");
-  // 니니안은 공통 독서만 있어 당분간 칩이 없고, 주소로 가리켜도 기본 독서(격자)다(HIDE_COMMON_READINGS, 사용자 결정 2026-11-03)
-  assert.ok(!m.chips.some((c) => id(c.candidate) === "d0916-니니안"));
+  // 니니안은 공통 독서만 있어 당분간 전례독서 목록에 없고, 주소로 가리켜도 기본 독서(격자)다(HIDE_COMMON_READINGS, 사용자 결정 2026-11-03)
+  assert.ok(!m.choices.some((c) => id(c.candidate) === "d0916-니니안"));
   const saint = model("2026-09-16", { obs: "d0916-니니안" });
   assert.strictEqual(id(saint.selected), "grid:ordinary-24-weekday-wed");
   same(plain(saint.colors), ["violet", "white"]);
 });
 
-test("A3 2026-08-09 연중 19주일 — 트랙 토글, 평화통일주일은 칩이 아니라 이름 줄(사용자 결정 2026-11-04)", { skip: SKIP }, () => {
+test("A3 2026-08-09 연중 19주일 — 트랙 토글, 평화통일주일은 전례독서 목록이 아니라 이름 줄(사용자 결정 2026-11-04)", { skip: SKIP }, () => {
   const m = model("2026-08-09");
   same(plain(m.tracks), [1, 2]);
   assert.strictEqual(m.track, 1);
-  assert.strictEqual(m.chips.find((c) => id(c.candidate) === "grid:ordinary-19-sunday").label, "연중 19주일 (가해, 독서 1)");
-  assert.ok(!m.chips.some((c) => id(c.candidate) === "t-평화통일주일"));
+  assert.strictEqual(m.choices.find((c) => id(c.candidate) === "grid:ordinary-19-sunday").name, "연중 19주일");
+  assert.ok(!m.choices.some((c) => id(c.candidate) === "t-평화통일주일"));
   same(m.textlessDays.map((c) => id(c)), ["t-평화통일주일"]);
   const peace = model("2026-08-09", { obs: "t-평화통일주일" });
   assert.strictEqual(id(peace.selected), "grid:ordinary-19-sunday");   // 주소로 가리켜도 기본 독서
@@ -189,10 +191,10 @@ test("A3 데이터 전수 — 독서 세트가 제목으로 갈리는 날은 본
   for (const y of [2025, 2026, 2027]) {
     let d = ctx.toKey(y, 1, 1);
     while (d.slice(0, 4) === String(y)) {
-      for (const chip of model(d).chips) {
-        const m = model(d, { obs: chip.candidate.observance.id });
-        if (new Set(m.options.map((o) => o.group.title)).size > 1 && !m.collectsLinked) bad.push(`${d} ${id(chip.candidate)}`);
-        if (m.collectsLinked) seen.add(id(chip.candidate));
+      for (const choice of model(d).choices) {
+        const m = model(d, { obs: choice.candidate.observance.id });
+        if (new Set(m.options.map((o) => o.group.title)).size > 1 && !m.collectsLinked) bad.push(`${d} ${id(choice.candidate)}`);
+        if (m.collectsLinked) seen.add(id(choice.candidate));
       }
       d = ctx.addDays(d, 1);
     }
@@ -233,28 +235,29 @@ test("A3 데이터의 다니 3 참조는 RCL(NRSV) 계열 독서표와 같은 �
   for (const [spec, keys] of Object.entries(RCL_EQUIVALENT)) same(plain(ctx.selectVerses(dan3, spec).keys), keys, spec);
 });
 
-test("A3 2026-12-07 옮겨 온 성 니콜라 — 기본 독서는 옮겨 온 축일, 옮겨 온 것은 제목 아래 문장으로만(칩에는 없다), 본기도는 니콜라 다음에 기념만 하는 암브로스", { skip: SKIP }, () => {
+test("A3 2026-12-07 옮겨 온 성 니콜라 — 기본 독서는 옮겨 온 축일, 옮겨 온 것은 제목 아래 문장, 본기도는 니콜라 다음에 기념만 하는 암브로스", { skip: SKIP }, () => {
   const m = model("2026-12-07");
   assert.strictEqual(id(m.selected), "d1206-성-니콜라");   // 기본 독서는 옮겨 온 주요축일(사용자 확인 2026-11-03)
-  assert.ok(m.chips.some((c) => c.label === "성 니콜라" && c.active));   // 「12월 6일에서 옮겨 지킵니다.」는 머리의 문장(2026-11-03)
-  assert.ok(m.chips.find((c) => c.active).title.includes("12월 6일에서 옮겨 옴"));   // 전체 상태는 title에
+  assert.ok(m.choices.some((c) => c.name === "성 니콜라" && c.active));
+  assert.strictEqual(m.selectedNote, "12월 6일에서 옮겨 지킵니다.");   // 고른 쪽의 상태는 머리의 문장(2026-11-03)
+  assert.ok(m.choices.find((c) => c.active).title.includes("12월 6일에서 옮겨 옴"));   // 전체 상태는 title에
   assert.strictEqual(m.collects.length, 1);   // 니콜라 본기도(기원 날짜에 색인된 것 — §5.6)
   same(m.memorialSaints.map((c) => id(c)), ["d1207-암브로스"]);   // 밀려서 기념만 — 이름 줄과 본기도(2026-11-03)
   assert.strictEqual(m.slots.length, 4);   // 기원 날짜에 색인된 독서가 옮겨 온 날에서 나온다(§5.6)
 });
 
-test("A3 2026-01-01 세계평화 기도일 — 본문 없는 축일은 칩이 아니라 이름 줄(사용자 결정 2026-11-04), 거룩한 이름 예수는 세트 둘", { skip: SKIP }, () => {
+test("A3 2026-01-01 세계평화 기도일 — 본문 없는 축일은 전례독서 목록이 아니라 이름 줄(사용자 결정 2026-11-04), 거룩한 이름 예수는 세트 둘", { skip: SKIP }, () => {
   const m = model("2026-01-01", { obs: "d0101-세계평화를-위한-기도일" });
   assert.strictEqual(m.empty, false);   // 기도서에 본기도와 독서가 없어(미결51) 가리켜도 기본 독서
   assert.strictEqual(id(m.selected), "d0101-거룩한-이름-예수");
-  assert.ok(!m.chips.some((c) => id(c.candidate) === "d0101-세계평화를-위한-기도일"));
+  assert.ok(!m.choices.some((c) => id(c.candidate) === "d0101-세계평화를-위한-기도일"));
   same(m.textlessDays.map((c) => id(c)), ["d0101-세계평화를-위한-기도일"]);
   const feast = model("2026-01-01");
   assert.strictEqual(id(feast.selected), "d0101-거룩한-이름-예수");
   assert.strictEqual(feast.options.length, 2);
 });
 
-test("A3 본문 없는 칩과 겹치는 칩 없음 — 2025~2050 모든 날, 칩은 독서나 본기도가 있고 본문 없는 날은 이름 줄, 본문이 같아 감춘 격자는 대림 1주일뿐(사용자 결정 2026-11-04)", { skip: SKIP }, () => {
+test("A3 본문 없는 후보와 겹치는 후보는 목록에 없음 — 2025~2050 모든 날, 목록의 후보는 독서나 본기도가 있고 본문 없는 날은 이름 줄, 본문이 같아 감춘 격자는 대림 1주일뿐(사용자 결정 2026-11-04)", { skip: SKIP }, () => {
   const bad = [];
   /** @type {Map<string, number>} */
   const textless = new Map();
@@ -266,14 +269,14 @@ test("A3 본문 없는 칩과 겹치는 칩 없음 — 2025~2050 모든 날, 칩
       const m = model(d);
       const r = m.resolved;
       const cols = ctx.findCollectsIn(ix().lec, ix().cal, r);
-      for (const chip of m.chips) {
-        const c = chip.candidate;
+      for (const choice of m.choices) {
+        const c = choice.candidate;
         const reads = ctx.findReadingsIn(ix().lec, ix().cal, r, c).length;
         const prays = cols.find((e) => e.candidate === c).collects.length;
-        if (!reads && !prays) bad.push(`${d} ${chip.label}`);
+        if (!reads && !prays) bad.push(`${d} ${choice.name}`);
       }
-      for (const c of r.candidates) {   // 본문이 있는데 칩이 없는 격자 — 이름 있는 후보와 본문이 같아 감춘 것
-        if (!id(c).startsWith("grid:") || c === m.initial || m.chips.some((x) => x.candidate === c)) continue;
+      for (const c of r.candidates) {   // 본문이 있는데 전례독서 목록에 없는 격자 — 이름 있는 후보와 본문이 같아 감춘 것
+        if (!id(c).startsWith("grid:") || c === m.initial || m.choices.some((x) => x.candidate === c)) continue;
         if (ctx.findReadingsIn(ix().lec, ix().cal, r, c).length) sameAsNamed.add(id(c));
       }
       for (const c of m.textlessDays) textless.set(c.observance.name, (textless.get(c.observance.name) || 0) + 1);
@@ -283,20 +286,20 @@ test("A3 본문 없는 칩과 겹치는 칩 없음 — 2025~2050 모든 날, 칩
   same(bad, []);
   // 본문 없는 날은 이 넷뿐이다 — 하나가 늘면 데이터가 본문 없는 전례일을 더한 것이니 이름 줄로 괜찮은지 본다
   same([...textless.keys()].sort(), ["가정주일", "병자를 위한 기도일", "세계평화를 위한 기도일", "평화통일주일"]);
-  // 그날 기본 독서가 그해의 대림 1주일 독서라 격자 칩이 같은 본문이다 — 다른 격자가 늘면 정말 같은 화면인지 본다
+  // 그날 기본 독서가 그해의 대림 1주일 독서라 격자 전례독서 목록이 같은 본문이다 — 다른 격자가 늘면 정말 같은 화면인지 본다
   same([...sameAsNamed], ["grid:advent-1-sunday"]);
-  for (const d of ["2026-11-29", "2027-11-28", "2028-12-03"]) same(model(d).chips.map((c) => c.label), ["대림1주일"], d);   // 칩 줄이 없다
-  same(model("2025-11-30").chips.map((c) => c.label), ["대림1주일"]);   // 옮겨 간 안드레아는 칩이 아니라 문장이다(2026-11-04)
-  // 왕이신 그리스도 주일은 가해 · 나해 · 다해 모두 칩에 연중 34주일이 없다
+  for (const d of ["2026-11-29", "2027-11-28", "2028-12-03"]) same(labels(model(d)), ["대림1주일"], d);   // 전례독서 목록이 없다
+  same(labels(model("2025-11-30")), ["대림1주일"]);   // 옮겨 간 안드레아는 전례독서 목록이 아니라 문장이다(2026-11-04)
+  // 왕이신 그리스도 주일은 가해 · 나해 · 다해 모두 전례독서 목록에 연중 34주일이 없다
   for (const d of ["2025-11-23", "2026-11-22", "2027-11-21"]) {
-    assert.ok(!model(d).chips.some((c) => id(c.candidate) === "grid:ordinary-34-sunday"), d);
+    assert.ok(!model(d).choices.some((c) => id(c.candidate) === "grid:ordinary-34-sunday"), d);
     assert.strictEqual(id(model(d).initial), "t-왕이신-그리스도-주일", d);
   }
 });
 
-test("A3 옮겨 간 축일 — 2025~2050 모든 날, 칩은 없고 문장 하나씩, 옮겨 간 날에 그 칩이나 독서가 있다(사용자 결정 2026-11-04)", { skip: SKIP }, () => {
+test("A3 옮겨 간 축일 — 2025~2050 모든 날, 목록에 없고 문장 하나씩, 옮겨 간 날에 그 후보나 독서가 있다(사용자 결정 2026-11-04)", { skip: SKIP }, () => {
   const m = model("2026-12-06");
-  same(m.chips.map((c) => c.label), ["대림 2주일 (나해)"]);   // 칩 줄이 없다
+  same(labels(m), ["대림 2주일"]);   // 전례독서 목록이 없다
   same(plain(m.transferNotes), ["성 니콜라 축일을 12월 7일로 옮겨 지킵니다."]);
   assert.strictEqual(id(model("2026-12-06", { obs: "d1206-성-니콜라" }).selected), id(m.initial));
   same(plain(model("2025-11-02").transferNotes), ["모든 별세자의 날을 11월 3일로 옮겨 지킵니다."]);
@@ -309,17 +312,17 @@ test("A3 옮겨 간 축일 — 2025~2050 모든 날, 칩은 없고 문장 하나
       const day = model(d);
       const out = day.resolved.candidates.filter((c) => c.status === "transferred_out");
       total += out.length;
-      if (day.chips.some((x) => x.candidate.status === "transferred_out")) bad.push(`${d} 칩이 남음`);
+      if (day.choices.some((x) => x.candidate.status === "transferred_out")) bad.push(`${d} 전례독서 목록이 남음`);
       if (day.transferNotes.length !== out.length) bad.push(`${d} 문장 ${day.transferNotes.length}개, 옮겨 간 축일 ${out.length}개`);
       // 「날 축일을」 · 「축일 축일을」 — 이름이 새로 늘면 문장이 자연스러운지 본다
       for (const note of day.transferNotes) if (/(날|축일) 축일을/.test(note)) bad.push(`${d} ${note}`);
       for (const c of out) {
-        // 칩을 뺀 만큼 그 독서가 옮겨 간 날에서 보여야 한다
+        // 전례독서 목록을 뺀 만큼 그 독서가 옮겨 간 날에서 보여야 한다
         const there = model(c.to);
         const arrived = there.resolved.candidates.find((x) => id(x) === id(c) && x.status === "transferred_in");
         if (!arrived) bad.push(`${d} ${id(c)}: ${c.to}에 옮겨 온 후보가 없음`);
         else if (ctx.hasProperReadings(ctx.findReadingsIn(ix().lec, ix().cal, there.resolved, arrived))
-          && !there.chips.some((x) => x.candidate === arrived)) bad.push(`${d} ${id(c)}: ${c.to}에 고유 독서가 있는데 칩이 없음`);
+          && !there.choices.some((x) => x.candidate === arrived)) bad.push(`${d} ${id(c)}: ${c.to}에 고유 독서가 있는데 전례독서 목록에 없음`);
       }
       d = ctx.addDays(d, 1);
     }
@@ -328,14 +331,14 @@ test("A3 옮겨 간 축일 — 2025~2050 모든 날, 칩은 없고 문장 하나
   assert.ok(total > 100, `옮겨 간 축일 ${total}건`);
 });
 
-test("A3 2026-04-04 성 토요일 — 그날의 대표 · 초기 선택은 성 토요일(홍), 부활밤은 「· 저녁」 칩으로 고르면 백(R-6.1-evening)", { skip: SKIP }, () => {
+test("A3 2026-04-04 성 토요일 — 그날의 대표 · 초기 선택은 성 토요일(홍), 부활밤은 「· 저녁」 전례독서 목록으로 고르면 백(R-6.1-evening)", { skip: SKIP }, () => {
   const m = model("2026-04-04");
   assert.strictEqual(id(m.selected), "t-성-토요일");
   same(plain(m.colors), ["red"]);
   assert.strictEqual(m.ownColor, false);
   assert.strictEqual(m.resolved.color, "red");
-  // 칩 셋 — 그날 낮(성 토요일 · 격자) 다음 저녁 전례(부활밤)
-  same(m.chips.map((c) => c.label), ["성 토요일", "부활밤 · 저녁"]);   // 성주간 토요일 격자는 본문이 없어 칩이 없다(2026-11-04)
+  // 전례독서 목록 셋 — 그날 낮(성 토요일 · 격자) 다음 저녁 전례(부활밤)
+  same(labels(m), ["성 토요일", "부활밤 · 저녁"]);   // 성주간 토요일 격자는 본문이 없어 전례독서 목록에 없다(2026-11-04)
   same(m.options.map((o) => o.label), ["독서 1", "독서 2"]);   // 성 토요일 원본 세트 둘(욥기/마태 · 애가/요한)
   const vigil = model("2026-04-04", { obs: "t-부활밤" });
   same(plain(vigil.colors), ["white"]);   // 고른 본문의 색(사용자 결정 2026-10-12)
@@ -343,15 +346,15 @@ test("A3 2026-04-04 성 토요일 — 그날의 대표 · 초기 선택은 성 �
   same(plain(model("2026-04-04", { obs: "grid:lent-x-weekday-sat" }).colors), ["red"]);
 });
 
-test("A3 2026-12-25 · 12-24 — 12.25 는 성탄 낮(초기 · 미결12) · 새벽 칩, 성탄 밤은 12.24 의 「· 저녁」 칩(R-6.1-evening)", { skip: SKIP }, () => {
+test("A3 2026-12-25 · 12-24 — 12.25 는 성탄 낮(초기 · 미결12) · 새벽 전례독서 목록, 성탄 밤은 12.24 의 「· 저녁」 전례독서 목록(R-6.1-evening)", { skip: SKIP }, () => {
   const m = model("2026-12-25");
   assert.strictEqual(id(m.selected), "d1225-성탄-낮");
-  same(m.chips.map((c) => c.label), ["성탄 낮", "성탄 새벽"]);   // 성탄 금요일 격자는 본문이 없어 칩이 없다(2026-11-04)
-  assert.strictEqual(m.collects.length, 1);   // 성탄 낮 본기도만 — 새벽은 그 칩에서
+  same(labels(m), ["성탄 낮", "성탄 새벽"]);   // 성탄 금요일 격자는 본문이 없어 전례독서 목록에 없다(2026-11-04)
+  assert.strictEqual(m.collects.length, 1);   // 성탄 낮 본기도만 — 새벽은 그 전례독서 목록에서
   const eve = model("2026-12-24");
   assert.strictEqual(id(eve.selected), "grid:advent-4-weekday-thu");   // 그날의 대표 · 초기 선택은 대림 평일(자)
   same(plain(eve.colors), ["violet"]);
-  same(eve.chips.map((c) => c.label), ["성탄 1일 전 (나해)", "성탄 밤 · 저녁"]);   // 날짜 전용 본문의 이름(사용자 결정 2026-11-03)
+  same(labels(eve), ["성탄 1일 전", "성탄 밤 · 저녁"]);   // 날짜 전용 본문의 이름(사용자 결정 2026-11-03)
   const night = model("2026-12-24", { obs: "d1225-성탄-밤" });
   same(plain(night.colors), ["white"]);
   // 성탄 밤의 본문 · 본기도 — 12.24 에서 12.25 키로 좁힌다. 새벽(이사 62 · 루가 2:1-7, 8-20 · 본기도 276)과 가르는 값으로 고정한다
@@ -409,12 +412,66 @@ test("A3 2026-03-01 사순 2주일 — 조건부 세트는 조건이 라벨 「�
   const m = model("2026-03-01", { set: 2 });
   same(m.options.map((o) => o.label), ["사순 2주일", "주의 변모 주일로 지킬 때"]);   // 「…로 지키는 경우」 → 「…로 지킬 때」
   assert.strictEqual(m.group.set_no, 2);
-  // 삼일절 · 데이빗은 주일에 밀려 「· 기념만」(사용자 결정 2026-10-24). 데이빗은 공통 독서만 있어 당분간 칩이 없고(2026-11-03),
-  // 이름 줄에만 보인다 — 주일에는 성인 본기도를 잇지 않는다(사용자 확인 2026-11-04)
-  assert.ok(!m.chips.some((c) => id(c.candidate) === "d0301-데이빗"));
-  same(m.chips.map((c) => c.muted), [false, false]);
+  // 삼일절 · 데이빗은 주일에 밀려 기념만 한다(사용자 결정 2026-10-24). 삼일절은 지역 축일이라 전례독서 목록의 링크다(2026-11-04).
+  // 데이빗은 공통 독서만 있어 당분간 목록에 없고(2026-11-03), 이름 줄에만 보인다 — 주일에는 성인 본기도를 잇지 않는다(사용자 확인 2026-11-04)
+  same(m.choices.map((c) => c.name), ["삼일절", "사순 2주일"]);
+  assert.ok(!m.choices.some((c) => id(c.candidate) === "d0301-데이빗"));
   same(m.memorialSaints.map(id), ["d0301-데이빗"]);
   same(m.memorialCollects, []);
+});
+
+test("A3 전례독서 목록 — 2025-2050 모든 날, 어느 후보를 눌러도 후보 목록은 같고 고른 후보만 active이며, 상태 문장이 그 후보의 것이다(사용자 결정 2026-11-04)", { skip: SKIP }, () => {
+  const bad = [];
+  let days = 0;
+  let longest = "";
+  for (let d = "2025-01-01"; d <= "2050-12-31"; d = ctx.addDays(d, 1)) {
+    const base = model(d);
+    if (base.choices.length < 2) continue;
+    days++;
+    const names = base.choices.map((c) => id(c.candidate)).join();
+    for (const choice of base.choices) {
+      const label = choice.name + choice.suffix;
+      if (label.length > longest.length) longest = label;
+      if (choice.name.includes("(")) bad.push(`${d} 괄호 ${choice.name}`);
+      const m = model(d, { obs: id(choice.candidate) });
+      if (id(m.selected) !== id(choice.candidate)) bad.push(`${d} ${choice.name}: 고른 후보가 다름`);
+      if (m.choices.map((c) => id(c.candidate)).join() !== names) bad.push(`${d} ${choice.name}: 후보 목록이 바뀜`);
+      if (m.choices.filter((c) => c.active).map((c) => id(c.candidate)).join() !== id(m.selected)) bad.push(`${d} ${choice.name}: active`);
+      if ((m.selectedNote !== null) !== (choice.suffix !== "")) bad.push(`${d} ${choice.name}: 상태 문장과 상태 표시가 맞지 않음(${m.selectedNote}, ${choice.suffix})`);
+    }
+  }
+  same(bad, []);
+  assert.strictEqual(days, 1617);
+  assert.ok(longest.length <= 30, longest);   // 320px에서 두 줄 안에 든다(e2e가 그 줄을 본다)
+});
+
+test("A3 기념만 하는 후보 — 2025-2050 모든 날, 누를 수 없는 글이다. 전례독서 목록에 없고, 기리는 성인이 아니면 이름 줄에 이름만 보인다. 지역 축일(삼일절, 광복절)만 링크다(사용자 결정 2026-11-04)", { skip: SKIP }, () => {
+  const bad = [];
+  const others = new Set();
+  const local = new Map();
+  let days = 0;
+  for (let d = "2025-01-01"; d <= "2050-12-31"; d = ctx.addDays(d, 1)) {
+    const m = model(d);
+    for (const c of m.choices) {
+      if (!["commemorated", "omitted"].includes(c.candidate.status)) continue;
+      if (c.candidate.observance.sanctoral_class === "national") local.set(c.name, (local.get(c.name) || 0) + 1);
+      else bad.push(`${d} ${c.name}${c.suffix}`);
+    }
+    for (const c of m.passiveDays) {
+      others.add(ctx.shortName(c.observance.name) + ctx.statusSuffix(c));
+      // 주소로 가리켜도 기본 독서다
+      if (id(model(d, { obs: id(c) }).selected) !== id(m.initial)) bad.push(`${d} ${id(c)}: 주소로 고를 수 있음`);
+    }
+    if (m.passiveDays.length) days++;
+    for (const s of m.memorialSaints) {
+      if (m.passiveDays.includes(s)) bad.push(`${d} ${id(s)}: 이름 줄에 두 번`);
+    }
+  }
+  same(bad, []);
+  // 늘면 정말 그날 고를 수 없어도 되는지 본다
+  same([...others].sort(), ["라틴 문 앞의 사도 성 요한", "사도 성 베드로의 탈옥", "성 십자가 발견"]);
+  assert.strictEqual(days, 17);
+  same([...local].sort(), [["광복절", 4], ["삼일절", 5]]);
 });
 
 test("주일에는 성인 본기도를 잇지 않는다 — 2025-2050 모든 주일, 평일에 밀려 기념만 하는 성인은 잇는다(사용자 확인 2026-11-04)", { skip: SKIP }, () => {
@@ -453,7 +510,7 @@ test("A3 송가 — 즈가리야 송가는 영광송을 붙이고 창조송가(g
 // (자체 리뷰 2026-10-13 — 그렇게 찾은 연중 12주 토요일 짝수해는 사용자가 기사를 찾아 주어 data#31 이 채웠다). 성탄절기 평일은
 // 날짜 본문(12.29~1.5)이 따로이고, 이동 축일(재의 수요일 · 성주간 · 부활 · 성령강림 · 왕이신 그리스도 …)이 있는 날은 그 이동 축일(temporal)
 // 후보가 독서를 들고 있어 격자가 비는 것이 정상이다. 알려진 누락 표는 두지 않는다 — 빈 칸이 생기면 곧바로 멈춘다.
-test("A3 2025~2027 모든 날 — 모델이 서고, 초기 선택에 복음까지 있는 독서가 있고, 칩 href 가 그 칩의 상태로 돌아오며, 격자 독서가 비지 않는다", { skip: SKIP }, () => {
+test("A3 2025~2027 모든 날 — 모델이 서고, 초기 선택에 복음까지 있는 독서가 있고, 전례독서 목록 href 가 그 전례독서 목록의 상태로 돌아오며, 격자 독서가 비지 않는다", { skip: SKIP }, () => {
   const bad = [];
   for (const y of [2025, 2026, 2027]) {
     let d = ctx.toKey(y, 1, 1);
@@ -461,12 +518,12 @@ test("A3 2025~2027 모든 날 — 모델이 서고, 초기 선택에 복음까�
       const m = model(d);
       if (!m.group) bad.push(`${d} 독서 없음`);
       else if (!m.slots.some((s) => s.slot === "gospel")) bad.push(`${d} 복음 없음`);
-      for (const c of m.chips) {   // 칩 href → 그 날짜 · 그 후보(초기 선택이면 obs 없음)
+      for (const c of m.choices) {   // 전례독서 목록 href → 그 날짜 · 그 후보(초기 선택이면 obs 없음)
         const u = new URL(c.href, "http://x");
         const obsParam = u.searchParams.get("obs");
-        if (u.pathname !== `/lectionary/${d}` || (obsParam ? obsParam !== c.candidate.observance.id : c.candidate !== m.initial)) bad.push(`${d} 칩 href ${c.href}`);
+        if (u.pathname !== `/lectionary/${d}` || (obsParam ? obsParam !== c.candidate.observance.id : c.candidate !== m.initial)) bad.push(`${d} 전례독서 목록 href ${c.href}`);
       }
-      if (!m.chips.length) bad.push(`${d} 칩 없음`);
+      if (!m.choices.length) bad.push(`${d} 전례독서 목록 없음`);
       const grid = m.resolved.candidates.find((c) => c.observance.id.startsWith("grid:"));
       const co = m.resolved.coord;
       if (grid && co && co.season !== "christmas") {
@@ -475,7 +532,7 @@ test("A3 2025~2027 모든 날 — 모델이 서고, 초기 선택에 복음까�
         const temporalOwns = m.resolved.candidates.some((c) => c !== grid && c.observance.kind === "temporal" && readsOf(c));
         if (!temporalOwns && !readsOf(grid)) bad.push(`${d} 격자 독서 없음(${key})`);
       }
-      if (!m.chips.some((c) => c.active)) bad.push(`${d} 활성 칩 없음`);
+      if (!m.choices.some((c) => c.active)) bad.push(`${d} 활성 전례독서 목록 없음`);
       if (!m.colors.length) bad.push(`${d} 색 없음`);
       if (m.empty) bad.push(`${d} empty`);   // 본기도까지 없는 날은 없다
       d = ctx.addDays(d, 1);

@@ -328,9 +328,12 @@ window.appHelpers = (/** @returns {AppHelpers} */ () => {
     // date steps in the title row) keeps its place by itself, so the scroll is
     // left to the view: matching its click-time top would undo a view that
     // starts the new screen at the top, by the height the desktop header's
-    // search row regains there.
+    // search row regains there. A press at the very top of the page stays at the
+    // top: when the redraw adds a line above the control (the lectionary's note
+    // under the title), scrolling to hold the control would push the title up
+    // under the header. A control pushed out of view comes back further down.
     const r0 = target.getBoundingClientRect();
-    const inRoot = !!root && root.contains(target);
+    const inRoot = !!root && root.contains(target) && spot.y > 0;
     if (inRoot && SCROLL_ANCHORING) {
       scrollToInstantly(window.scrollY + r0.top - spot.top);
     } else if (inRoot && spot.offset !== null && root) {

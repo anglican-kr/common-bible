@@ -85,11 +85,11 @@ test("사계재 — 2026-09-18 금(격자가 대표)은 칸 「추계재」 자�
   same(wed.colors, ["violet", "white"]);
 });
 
-test("2027-07-26 — 옮겨 온 야고보가 칸 이름, 줄에 「7월 25일에서 옮겨 옴」 · 안나와 요아킴 「기념만」", { skip: SKIP }, () => {
+test("2027-07-26 — 옮겨 온 야고보가 칸 이름, 줄에 「7월 25일에서 옮겨 옴」 · 기념만 하는 안나와 요아킴은 이름만", { skip: SKIP }, () => {
   const d = day("2027-07-26");
   assert.strictEqual(d.cellName, "사도 성 장 야고보");
   assert.strictEqual(d.primary.suffix, " · 7월 25일에서 옮겨 옴");
-  same(others(d), ["안나와 요아킴 · 기념만"]);
+  same(others(d), ["안나와 요아킴"]);
   same(d.colors, ["red"]);
 });
 
