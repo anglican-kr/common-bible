@@ -5,7 +5,7 @@
 
 ## 결정
 
-브라우저의 클래식 스크립트로 불러오는 `js/sync/state-machine.js`를 **Node 자체 테스트 러너(`node --test`)** 위에서 검증한다. 테스트 러너 의존성(jest, mocha, vitest 등)을 더하지 않는다. 자체 하네스가 `node:vm`으로 모듈을 격리된 컨텍스트에 불러온 뒤, 브라우저 전역(`window`, `localStorage`, `navigator`, `document`, `setTimeout`)을 스텁으로 바꿔 둔다.
+브라우저의 클래식 스크립트로 불러오는 `js/sync/state-machine.js`를 **Node 자체 테스트 러너**(`node --test`)로 검증한다. 테스트 러너 의존성(jest, mocha, vitest 등)을 더하지 않는다. 자체 하네스가 `node:vm`으로 모듈을 격리된 컨텍스트에 불러온 뒤, 브라우저 전역(`window`, `localStorage`, `navigator`, `document`, `setTimeout`)을 스텁으로 바꿔 둔다.
 
 이 방식을 모든 클라이언트 JS 유닛 테스트에 쓴다(2026-05-11).
 
@@ -19,8 +19,8 @@
 - **규칙 1(기본)**: `tests/unit/<source-basename>.test.js` 형식이다. 소스 파일 이름과 1:1로 짝짓는다. 한 모듈에 테스트 파일 하나다.
 - **규칙 2(영역 구분)**: 모듈 안의 영역(예: PKCE primitives와 Drive REST, search history와 settings storage)은 테스트 파일 안에서 `// ── <영역> ──` 주석 구역으로 나눈다. `search.test.js`가 이미 이 방식을 쓰고 있었다.
 - **규칙 3(모듈이 너무 커질 때)**: `tests/unit/<basename>/<concern>.test.js`처럼 디렉터리로 나눈다. 지금은 그런 경우가 없다.
-- 적용: `search-history.test.js` → `storage.test.js`(storage.js의 다른 부분도 나중에 같은 파일에 합친다), `transport-pkce.test.js` → `transport.test.js`.
-- CI 워크플로(`tests/unit/*.test.js` glob)가 새 파일 이름을 저절로 집어, workflow YAML을 바꾸지 않았다.
+- 적용: `search-history.test.js`는 `storage.test.js`로(storage.js의 다른 부분도 나중에 같은 파일에 합친다), `transport-pkce.test.js`는 `transport.test.js`로 바꿨다.
+- CI 워크플로(`tests/unit/*.test.js` 패턴)가 새 파일을 자동으로 찾아 실행해, 워크플로 파일을 바꾸지 않았다.
 - 실데이터에 기대는 테스트와 문서 검사의 예외 둘은 `tests/README.md` §1에 있다.
 
 ## 맥락
@@ -29,7 +29,7 @@ ADR-004는 **데이터 파이프라인**의 테스트 전략을 다루고, 그 �
 
 - 상태 머신의 분기 회귀. 예를 들어 iOS에서 동기화를 켜면(ENABLE) 자동 리디렉션이 일어나, 사용자가 누르지 않았는데 OAuth가 시작된다.
 - 카운터와 상한의 회귀. 예를 들어 리디렉션 시도 횟수(redirect attempts)가 상한을 넘으면, 「동의 필요」(NEEDS_CONSENT)에서 「오류」(ERROR)로 두 번 넘어간다.
-- 일부만 온 응답 처리. 예를 들어 GIS Token Client가 빈 응답을 주면, 로그인 실패(IDENTITY_FAIL)로 받아 넘겨야 한다.
+- 일부만 온 응답 처리. 예를 들어 GIS Token Client가 빈 응답을 주면, 로그인 실패(IDENTITY_FAIL)로 처리해야 한다.
 
 이런 회귀는 e2e에서는 외부 네트워크와 UI를 거쳐야 재현되는데, 결과가 그때그때 다르고 느리다. 또 ADR-011의 동기화 코드는 검수를 받은 뒤 함부로 손대기 어려워 회귀 비용이 매우 높다.
 
@@ -46,12 +46,12 @@ Node 22부터 `node --test`는 안정 기능이고, `--watch`, `--test-name-patt
 
 ### jsdom이나 happy-dom을 함께 쓰기 (2026-05-11에 허용했다가 같은 날 채택 안 함)
 
-- ADR-018 모듈 분할을 마친(2026-05-10) 뒤 앱 레이어의 다루지 않던 영역으로 유닛 테스트를 넓히다가, vm과 손으로 만든 스텁만으로는 모든 영역에 맞지 않는다는 것이 드러났다. 살펴보니(Claude 메모 `project_unit_test_expansion.md`의 계기에 닿은 때) `js/app/`의 다루지 않던 영역 가운데 약 70%(1500줄+)는 기존 방식으로 다룰 수 있었다. 나머지는 jsdom 정도가 필요해 보였다.
+- ADR-018 모듈 분할을 마친(2026-05-10) 뒤 앱 레이어의 다루지 않던 영역으로 유닛 테스트를 넓히다가, vm과 손으로 만든 스텁만으로는 모든 영역에 맞지 않는다는 것이 드러났다. 살펴보니(Claude 메모 `project_unit_test_expansion.md`의 계기에 이른 때) `js/app/`의 다루지 않던 영역 가운데 약 70%(1500줄+)는 기존 방식으로 다룰 수 있었다. 나머지는 jsdom 정도가 필요해 보였다.
   - `js/app/views-routing.js`의 `startScrollTracking`: `Element.getBoundingClientRect()`로 레이아웃을 계산한다.
   - `js/app/views-routing.js`의 Pull-to-refresh: `touchstart`/`touchmove`/`touchend` 시퀀스와 `transform`/`opacity` 트랜지션.
   - `js/app/settings-ui.js`의 아이콘 색 바꾸기: Canvas 2D context(`getImageData`/`putImageData`)와 Font Loading API(`document.fonts.ready`).
-- 그래서 `node:vm`과 손으로 만든 스텁을 기본으로 두되, 이 영역에 한해 `jsdom`(가벼운 쪽이 낫다면 `happy-dom`)을 devDependency로 들이도록 허용했다. 「0 의존성」 원칙을 「Node 말고는 0 의존성」으로 완화하고, 첫 jsdom PR이 저장소 루트의 `package.json` 신설(`devDependencies`만, `dependencies`는 빈 채로), `package-lock.json` 커밋, `.gitignore`에 `node_modules/` 추가, `.github/workflows/test.yml`의 `unit` job에 `npm ci` 단계 삽입을 함께 하기로 했다. 기본은 `harness.js`의 vm과 손으로 만든 스텁이고, jsdom은 레이아웃, Canvas, 터치 제스처가 본질인 함수에만 쓰며, jsdom을 쓰는 테스트 파일은 머리 주석에 이유를 적기로 했다.
-- 채택 안 함 2026-05-11 · 이유: 앱 레이어에서 jsdom 없이 할 수 있는 유닛 테스트 확장 1차(PR #106·#108·#109·#110·#112·#113)를 마치고 실제로 도입할지 다시 검토하다가, 결정적인 사실을 찾았다. **jsdom과 happy-dom 모두 진짜 레이아웃 계산을 하지 않는다.** `Element.getBoundingClientRect()`는 `{x:0, y:0, width:0, height:0}`을 돌려준다. CSS 엔진을 구현하지 않았기 때문이다. Canvas 2D context는 jsdom에서는 별도의 `canvas` npm 패키지(네이티브 C++ 컴파일)를 설치해야 하고, happy-dom은 지원하지 않는다.
+- 그래서 `node:vm`과 손으로 만든 스텁을 기본으로 두되, 이 영역에 한해 `jsdom`(가벼운 쪽이 낫다면 `happy-dom`)을 `devDependencies`에 들이도록 허용했다. 「0 의존성」 원칙을 「Node 말고는 0 의존성」으로 완화하고, 첫 jsdom PR이 저장소 루트의 `package.json` 신설(`devDependencies`만, `dependencies`는 빈 채로), `package-lock.json` 커밋, `.gitignore`에 `node_modules/` 추가, `.github/workflows/test.yml`의 `unit` 작업에 `npm ci` 단계 삽입을 함께 하기로 했다. 기본은 `harness.js`의 vm과 손으로 만든 스텁이고, jsdom은 레이아웃, Canvas, 터치 제스처가 본질인 함수에만 쓰며, jsdom을 쓰는 테스트 파일은 머리 주석에 이유를 적기로 했다.
+- 채택 안 함(2026-05-11). 이유: 앱 레이어에서 jsdom 없이 할 수 있는 유닛 테스트 확장 1차(PR #106, #108, #109, #110, #112, #113)를 마치고 실제로 도입할지 다시 검토하다가, 결정적인 사실을 찾았다. **jsdom과 happy-dom 모두 진짜 레이아웃 계산을 하지 않는다.** `Element.getBoundingClientRect()`는 `{x:0, y:0, width:0, height:0}`을 돌려준다. CSS 엔진을 구현하지 않았기 때문이다. Canvas 2D context는 jsdom에서는 별도의 `canvas` npm 패키지(네이티브 C++ 컴파일)를 설치해야 하고, happy-dom은 지원하지 않는다.
   - `startScrollTracking`의 `getBoundingClientRect`: jsdom도 0을 돌려주므로 **해결할 수 없다**.
   - Pull-to-refresh의 터치 제스처와 transform 트랜지션: 흉내는 낼 수 있지만, 레이아웃에 기대는 부분이 약하다.
   - settings-ui의 Canvas 아이콘 색칠: 별도 네이티브 패키지와 Font API 처리가 따로 필요해 도입 비용이 크다.
@@ -87,7 +87,7 @@ vm.runInContext(SOURCE, sandbox);
 const machine = sandbox.window.createSyncMachine();
 ```
 
-테스트마다 `loadMachine(opts)`로 **새 컨텍스트**를 만들어, 클로저(`_state`, `_ctx`, `_token`)가 케이스 사이에 새지 않게 한다.
+테스트마다 `loadMachine(opts)`로 **새 컨텍스트**를 만들어, 클로저(`_state`, `_ctx`, `_token`)의 값이 케이스 사이에 넘어가지 않게 한다.
 
 ### 시간 제어
 
@@ -95,7 +95,7 @@ const machine = sandbox.window.createSyncMachine();
 - `fireAllTimers()` 도우미로 쌓인 타이머를 명시적으로 실행한다.
 - `drain()`(1× `setImmediate`)으로 `_syncCycle`의 마이크로태스크가 끝나기를 기다린다.
 
-가상의 시간 정보를 참조하므로 결과가 늘 같다.
+시간을 가상으로 다루므로 결과가 늘 같다.
 
 ### 1차 검증 시나리오 (PR #42, 30+ 케이스)
 
@@ -136,7 +136,7 @@ jobs:
 ## 채택 이유 요약
 
 - **0 의존성**: Node에 들어 있는 것만 쓴다. 2026-05-06 당시에는 `package.json` 자체가 없었다(`dependencies`/`devDependencies`를 빈 채로 두는 원칙). 지금 `package.json`의 `devDependencies`에는 타입 검사용 `typescript` 하나뿐이고(ADR-012), 유닛 테스트가 쓰는 패키지는 없다.
-- **결과가 늘 같다**: vm 컨텍스트 안에서 가상의 시간 정보를 참조하고, DOM과 네트워크도 스텁으로 바꿔 떼어 낸다.
+- **결과가 늘 같다**: `node:vm` 컨텍스트 안에서 시간을 가상으로 다루고, DOM과 네트워크도 스텁으로 바꿔 떼어 낸다.
 - **빠르다**: PR #42의 30+ 케이스가 200ms 안에 끝났다.
 - **타입 검사와 함께 쓰기 좋다**: ADR-012의 JSDoc 타입을 그대로 가져올 수 있다(`@typedef {import("../../js/types")...}`). 테스트가 도메인 타입을 그대로 쓴다.
 - **리팩터링 안전망**: 앞으로 동기화 레이어를 고칠 때, 회귀 시나리오를 재현할 수 있는 형태로 쌓아 갈 수 있다.
