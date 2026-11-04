@@ -179,7 +179,7 @@ def test_transferred_and_optional_days_choose_by_chips_without_cards(desktop_con
     # 옮겨 온 것은 제목 아래 문장으로만 — 칩에는 상태 표시가 없고, 문장은 기리는 성인 줄(암브로스)보다 먼저다(2026-11-03).
     # 전례색과 해의 줄은 제목 바로 다음, 회색 설명 줄들보다 먼저다(사용자 결정 2026-11-03)
     assert page.inner_text(".lect-chip[aria-current]") == "성 니콜라"
-    assert "12월 6일에서 옮겨 지킵니다" in page.inner_text(".lect-day-note")
+    assert "12월 6일에서 옮겨 지킵니다." in page.inner_text(".lect-day-note")
     order = page.evaluate("""() => [...document.querySelectorAll('.lect-head > *')].map(e => e.className.split(' ')[0])""")
     assert order == ["lect-day", "lect-meta", "lect-day-note", "lect-day-saints"], order
 
@@ -702,7 +702,7 @@ _HALF_VERSE_VIEWS = [  # (표 키 「책:장:절+a|b」, 날짜, 쿼리, 슬롯)
     ("mark:6:6a", "2025-02-05", "", "gospel"),
     ("mic:5:4a", "2027-12-19", "", "first"),
     ("num:14:1a", "2025-08-06", "obs=grid%3Aordinary-18-weekday-wed", "first"),
-    ("num:21:4b", "2025-09-14", "obs=d0914-%EC%84%B1-%EC%8B%AD%EC%9E%90%EA%B0%80%EC%9D%98-%EB%82%A0", "first"),
+    ("num:21:4b", "2025-09-15", "obs=d0914-%EC%84%B1-%EC%8B%AD%EC%9E%90%EA%B0%80%EC%9D%98-%EB%82%A0", "first"),   # 9.14 주일에서 옮겨 온 날 — 옮겨 간 날(9.14)에는 칩이 없다(2026-11-04)
     ("phil:3:4b", "2025-04-06", "", "second"),
     ("rev:1:4b", "2027-11-21", "", "second"),
     ("rev:21:6a", "2027-10-31", "obs=d1101-%EB%AA%A8%EB%93%A0-%EC%84%B1%EC%9D%B8%EC%9D%98-%EB%82%A0", "second"),
@@ -1025,6 +1025,26 @@ def test_grid_without_own_text_or_with_same_text_has_no_chip(desktop_context):
     assert page.inner_text(".lect-day") == "대림1주일"
     assert page.locator(".lect-chips").count() == 0
     assert page.locator(".lect-reading").count() == 4
+
+
+def test_transferred_out_feast_is_a_sentence_not_a_chip(desktop_context):
+    """옮겨 간 축일은 원래 날짜에서 칩이 아니라 제목 아래 문장이다(사용자 결정 2026-11-04). 주소로 가리켜도 그날 독서이고,
+    옮겨 간 날(12.7)에는 그 칩과 독서가 그대로 있다."""
+    page = desktop_context.new_page()
+    _open(page, "lectionary/2026-12-06")
+    assert page.inner_text(".lect-day") == "대림 2주일"
+    assert page.locator(".lect-chips").count() == 0
+    assert page.inner_text(".lect-day-note") == "성 니콜라 축일을 12월 7일로 옮겨 지킵니다."
+    order = page.evaluate("""() => [...document.querySelectorAll('.lect-head > *')].map(e => e.className.split(' ')[0])""")
+    assert order == ["lect-day", "lect-meta", "lect-day-note"], order
+    first = page.inner_text(".lect-reading[data-slot='first']")
+    _open(page, "lectionary/2026-12-06?obs=d1206-성-니콜라")
+    assert page.inner_text(".lect-reading[data-slot='first']") == first
+    _open(page, "lectionary/2026-12-07")
+    assert page.inner_text(".lect-chip[aria-current]") == "성 니콜라"
+    # 「날」로 끝나는 이름은 「축일」을 붙이지 않는다
+    _open(page, "lectionary/2025-11-02")
+    assert page.inner_text(".lect-day-note") == "모든 별세자의 날을 11월 3일로 옮겨 지킵니다."
 
 
 # ── ⑥ 날짜 ──
