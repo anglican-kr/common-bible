@@ -236,7 +236,7 @@ test("A3 데이터의 다니 3 참조는 RCL(NRSV) 계열 독서표와 같은 �
 test("A3 2026-12-07 옮겨 온 성 니콜라 — 기본 독서는 옮겨 온 축일, 옮겨 온 것은 제목 아래 문장으로만(칩에는 없다), 본기도는 니콜라 다음에 기념만 하는 암브로스", { skip: SKIP }, () => {
   const m = model("2026-12-07");
   assert.strictEqual(id(m.selected), "d1206-성-니콜라");   // 기본 독서는 옮겨 온 주요축일(사용자 확인 2026-11-03)
-  assert.ok(m.chips.some((c) => c.label === "성 니콜라" && c.active));   // 「12월 6일에서 옮겨 지킵니다」는 머리의 문장(2026-11-03)
+  assert.ok(m.chips.some((c) => c.label === "성 니콜라" && c.active));   // 「12월 6일에서 옮겨 지킵니다.」는 머리의 문장(2026-11-03)
   assert.ok(m.chips.find((c) => c.active).title.includes("12월 6일에서 옮겨 옴"));   // 전체 상태는 title에
   assert.strictEqual(m.collects.length, 1);   // 니콜라 본기도(기원 날짜에 색인된 것 — §5.6)
   same(m.memorialSaints.map((c) => id(c)), ["d1207-암브로스"]);   // 밀려서 기념만 — 이름 줄과 본기도(2026-11-03)
@@ -286,12 +286,46 @@ test("A3 본문 없는 칩과 겹치는 칩 없음 — 2025~2050 모든 날, 칩
   // 그날 기본 독서가 그해의 대림 1주일 독서라 격자 칩이 같은 본문이다 — 다른 격자가 늘면 정말 같은 화면인지 본다
   same([...sameAsNamed], ["grid:advent-1-sunday"]);
   for (const d of ["2026-11-29", "2027-11-28", "2028-12-03"]) same(model(d).chips.map((c) => c.label), ["대림1주일"], d);   // 칩 줄이 없다
-  same(model("2025-11-30").chips.map((c) => c.label), ["대림1주일", "사도 성 안드레아 · → 12월 1일"]);
+  same(model("2025-11-30").chips.map((c) => c.label), ["대림1주일"]);   // 옮겨 간 안드레아는 칩이 아니라 문장이다(2026-11-04)
   // 왕이신 그리스도 주일은 가해 · 나해 · 다해 모두 칩에 연중 34주일이 없다
   for (const d of ["2025-11-23", "2026-11-22", "2027-11-21"]) {
     assert.ok(!model(d).chips.some((c) => id(c.candidate) === "grid:ordinary-34-sunday"), d);
     assert.strictEqual(id(model(d).initial), "t-왕이신-그리스도-주일", d);
   }
+});
+
+test("A3 옮겨 간 축일 — 2025~2050 모든 날, 칩은 없고 문장 하나씩, 옮겨 간 날에 그 칩이나 독서가 있다(사용자 결정 2026-11-04)", { skip: SKIP }, () => {
+  const m = model("2026-12-06");
+  same(m.chips.map((c) => c.label), ["대림 2주일 (나해)"]);   // 칩 줄이 없다
+  same(plain(m.transferNotes), ["성 니콜라 축일을 12월 7일로 옮겨 지킵니다."]);
+  assert.strictEqual(id(model("2026-12-06", { obs: "d1206-성-니콜라" }).selected), id(m.initial));
+  same(plain(model("2025-11-02").transferNotes), ["모든 별세자의 날을 11월 3일로 옮겨 지킵니다."]);
+
+  const bad = [];
+  let total = 0;
+  for (let y = 2025; y <= 2050; y++) {
+    let d = ctx.toKey(y, 1, 1);
+    while (d.slice(0, 4) === String(y)) {
+      const day = model(d);
+      const out = day.resolved.candidates.filter((c) => c.status === "transferred_out");
+      total += out.length;
+      if (day.chips.some((x) => x.candidate.status === "transferred_out")) bad.push(`${d} 칩이 남음`);
+      if (day.transferNotes.length !== out.length) bad.push(`${d} 문장 ${day.transferNotes.length}개, 옮겨 간 축일 ${out.length}개`);
+      // 「날 축일을」 · 「축일 축일을」 — 이름이 새로 늘면 문장이 자연스러운지 본다
+      for (const note of day.transferNotes) if (/(날|축일) 축일을/.test(note)) bad.push(`${d} ${note}`);
+      for (const c of out) {
+        // 칩을 뺀 만큼 그 독서가 옮겨 간 날에서 보여야 한다
+        const there = model(c.to);
+        const arrived = there.resolved.candidates.find((x) => id(x) === id(c) && x.status === "transferred_in");
+        if (!arrived) bad.push(`${d} ${id(c)}: ${c.to}에 옮겨 온 후보가 없음`);
+        else if (ctx.hasProperReadings(ctx.findReadingsIn(ix().lec, ix().cal, there.resolved, arrived))
+          && !there.chips.some((x) => x.candidate === arrived)) bad.push(`${d} ${id(c)}: ${c.to}에 고유 독서가 있는데 칩이 없음`);
+      }
+      d = ctx.addDays(d, 1);
+    }
+  }
+  same(bad, []);
+  assert.ok(total > 100, `옮겨 간 축일 ${total}건`);
 });
 
 test("A3 2026-04-04 성 토요일 — 그날의 대표 · 초기 선택은 성 토요일(홍), 부활밤은 「· 저녁」 칩으로 고르면 백(R-6.1-evening)", { skip: SKIP }, () => {

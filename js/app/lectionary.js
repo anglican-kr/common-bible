@@ -72,7 +72,7 @@ const PAGE_TITLE = LITURGICAL_VIEWS.lectionary.title;
  *   chips: LectionaryChip[],
  *   collects: CollectOption[], collectLabels: string[], collectIndex: number, collectsLinked: boolean, ending: "A" | "B" | "C",
  *   memorialCollects: CollectOption[], memorialSaints: Candidate[], commemorations: Candidate[], textlessDays: Candidate[],
- *   dedicationLines: string[],
+ *   dedicationLines: string[], transferNotes: string[],
  *   colors: string[], colorAlt: string[], ownColor: boolean, colorsOr: boolean,
  *   fast: "major" | "minor" | null, cycle: string | null, empty: boolean,
  *   hrefs: { prev: string | null, next: string | null, today: string, tracks: Array<{ track: 1 | 2, href: string, active: boolean }>, options: string[], collects: string[] },
@@ -168,7 +168,7 @@ function statusSuffix(c) {
   if (c.observance.rank === "commemoration") return " · 기념일";
   switch (c.status) {
     case "transferred_in": return c.from ? ` · ${monthDayLabel(c.from)}에서 옮겨 옴` : " · 옮겨 옴";
-    case "transferred_out": return c.to ? ` · → ${monthDayLabel(c.to)}` : " · 옮겨 감";
+    case "transferred_out": return c.to ? ` · → ${monthDayLabel(c.to)}` : " · 옮겨 감";   // 칩은 없다 — 캘린더 모델(`nameOfCandidate`)이 쓴다
     case "optional": return c.from ? ` · ${monthDayLabel(c.from)}에서 옮겨 지킬 수 있음` : " · 옮겨 지킬 수 있음";
     case "commemorated": return " · 기념만";
     case "omitted": return " · 생략";
@@ -176,9 +176,19 @@ function statusSuffix(c) {
   }
 }
 
-/** 생략된 · 옮겨 간 후보와 기념일 — 칩을 흐리게 그린다(사계재는 지정 자격이 없어도 고를 독서가 있어 흐리지 않는다). */
+/** 생략된 후보와 기념일 — 칩을 흐리게 그린다(사계재는 지정 자격이 없어도 고를 독서가 있어 흐리지 않는다). */
 function isMutedCandidate(/** @type {Candidate} */ c) {
-  return c.status === "omitted" || c.status === "transferred_out" || c.observance.rank === "commemoration";
+  return c.status === "omitted" || c.observance.rank === "commemoration";
+}
+
+/**
+ * 원래 날짜에서 옮겨 간 축일을 알리는 제목 아래 문장 — 「성 니콜라 축일을 12월 7일로 옮겨 지킵니다.」(사용자 결정 2026-11-04).
+ * 이름이 「날」로 끝나는 둘(성 십자가의 날, 모든 별세자의 날)은 「날 축일을」이 되지 않게 「축일」을 붙이지 않는다.
+ * @param {string | null | undefined} name @param {string} to  옮겨 가는 날짜
+ */
+function transferOutNote(name, to) {
+  const short = shortName(name);
+  return `${short.endsWith("날") ? `${short}을` : `${short} 축일을`} ${monthDayLabel(to)}로 옮겨 지킵니다.`;
 }
 
 /**
@@ -758,13 +768,14 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
   // 평화통일주일, 세계평화를 위한 기도일, 병자를 위한 기도일 — 제목 아래 이름 줄에 보인다, `textlessDays`)이 그렇다. 엔진은
   // 후보를 그대로 둔다(설계서 §5.5 「후보를 버리지 않는다」 — 옮김 계산이 격자를 쓴다). 기본 독서 후보는 감추지 않는다.
   const textless = (/** @type {Candidate} */ c) => c !== initial && !groupsOf(c).length && !collectsFor(collectEntries, c).length;
-  const hiddenOwn = (/** @type {Candidate} */ c) => isCommemoration(c) || textless(c)
+  // 옮겨 간 축일도 칩을 만들지 않는다 — 제목 아래 문장으로 알리고(`transferNotes`), 그 독서는 옮겨 간 날에 있다(사용자 결정 2026-11-04)
+  const hiddenOwn = (/** @type {Candidate} */ c) => c.status === "transferred_out" || isCommemoration(c) || textless(c)
     || (HIDE_COMMON_READINGS && memorial.saints.includes(c) && !hasProperReadings(groupsOf(c)))
     || isHiddenCandidate(c, initial, groupsOf(c));
   // 칩이 있는 이름 있는 후보와 독서 · 본기도가 똑같은 격자도 칩을 만들지 않는다 — 고르면 같은 화면이다(사용자 결정 2026-11-04).
   // 대림1주일이 그렇다: 그날 기본 독서가 그해(가해 · 나해 · 다해)의 대림 1주일 독서라 「대림 1주일 (나해)」 격자가 같은 본문이다.
-  // 후보가 하나만 남으면 칩 줄을 그리지 않는다(buildChips). 견줄 짝은 그날 지키는 이름 있는 후보뿐이다 — 생략되거나 옮겨 간
-  // 후보(흐린 칩)와 본문이 같다고 격자를 감추면 그날 지키는 쪽 칩이 사라진다(PR #467 리뷰).
+  // 후보가 하나만 남으면 칩 줄을 그리지 않는다(buildChips). 견줄 짝은 그날 지키는 이름 있는 후보뿐이다 — 생략된 후보(흐린 칩)나
+  // 옮겨 간 후보와 본문이 같다고 격자를 감추면 그날 지키는 쪽 칩이 사라진다(PR #467 리뷰).
   const textKey = (/** @type {Candidate} */ c) => textKeyOf(groupsOf(c), collectsFor(collectEntries, c));
   const namedKeys = new Set(resolved.candidates
     .filter((c) => !isGrid(c) && !hiddenOwn(c) && !c.evening && !isMutedCandidate(c)).map(textKey));
@@ -772,6 +783,8 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
   // 본문 없는 날 — 칩 대신 기념일 줄 아래에 이름만 한 줄씩(사용자 결정 2026-11-04). 그날 지키거나 기념만 하는 것만 싣는다.
   const textlessDays = resolved.candidates.filter((c) => !isGrid(c) && !c.evening && !isCommemoration(c) && textless(c)
     && (c.status === "proper" || c.status === "commemorated"));
+  const transferNotes = resolved.candidates.flatMap((c) => (c.status === "transferred_out" && c.to
+    ? [transferOutNote(c.observance.name, c.to)] : []));
   const picked = selectCandidate(resolved, query.obs, groupsOf);
   const selected = picked && hidden(picked) ? initial : picked;
   if (!selected) return null;
@@ -808,7 +821,7 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
     const t = trackOf(c);
     return {
       candidate: c,
-      // 기본 독서가 옮겨 온 축일이면 「…에서 옮겨 지킵니다」는 제목 아래 문장으로만 — 칩의 「· …에서 옮겨 옴」은 겹친다
+      // 기본 독서가 옮겨 온 축일이면 「…에서 옮겨 지킵니다.」는 제목 아래 문장으로만 — 칩의 「· …에서 옮겨 옴」은 겹친다
       // (사용자 결정 2026-11-03, buildHeader). 전체 상태는 `title`에 남는다.
       label: chipLabel(c, resolved, t, c === initial && c.status === "transferred_in"),
       title: String(c.observance.name || "") + statusSuffix(c),
@@ -828,7 +841,7 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
     date, resolved, selected, initial, groups, tracks, track, options, setIndex, group, shortGroup, slots,
     chips, collects, collectLabels: collectLabels(collects), collectIndex, collectsLinked: !!linked,
     ending: endingCodeOf(memorialCollects[memorialCollects.length - 1] || chosenCollect), memorialCollects,
-    memorialSaints: memorial.saints, commemorations, textlessDays, dedicationLines: dedicationLines(dedications),
+    memorialSaints: memorial.saints, commemorations, textlessDays, dedicationLines: dedicationLines(dedications), transferNotes,
     colors, colorAlt, ownColor, colorsOr, fast: fastOf(resolved),
     cycle: resolved.coord.year && CYCLE_LABEL[resolved.coord.year] ? CYCLE_LABEL[resolved.coord.year] : null,
     empty,
@@ -1052,8 +1065,10 @@ function buildHeader(m) {
 
   // 제목의 전례일을 설명하므로 기리는 성인 줄보다 먼저(2026-11-03)
   if (shown.status === "transferred_in" && shown.from) {
-    head.appendChild(el("p", { className: "lect-day-note" }, `${monthDayLabel(shown.from)}에서 옮겨 지킵니다`));
+    head.appendChild(el("p", { className: "lect-day-note" }, `${monthDayLabel(shown.from)}에서 옮겨 지킵니다.`));
   }
+  // 그날에서 옮겨 간 축일 — 칩 대신 같은 자리의 문장으로(사용자 결정 2026-11-04, transferOutNote)
+  for (const note of m.transferNotes) head.appendChild(el("p", { className: "lect-day-note" }, note));
   // 그날 기리는 성인과 기념일 — 칩 대신 제목 아래에 한 줄씩, 이름 뒤에 「축일」 · 「기념일」(사용자 결정 2026-11-03,
   // memorialOf). 다른 칩을 골라도 제목처럼 그대로다. 그 아래에 본문 없는 날(가정주일, 세계평화를 위한 기도일 …)을 이름만
   // 한 줄씩 — 이름이 이미 「주일」 · 「기도일」로 끝나 꼬리를 붙이지 않는다(사용자 결정 2026-11-04). 맨 아래에 그날 축성되거나
