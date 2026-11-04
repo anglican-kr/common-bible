@@ -79,7 +79,7 @@
 | `neverDeparts` | 연도 범위 확인 항목. 그 식별자가 어느 해에도 `departures`에 나타나지 않는다 |
 | `official` | 그날 `official`의 식별자. `"grid:*"`는 「격자 합성 후보이면 된다」(주간 번호를 문서가 적지 않은 경우) |
 | `color`, `colors` | `ResolvedDate.color`(정식 전례색 `white`, `red`, `green`, `violet`)와 `ResolvedDate.colors`(함께 적는 목록. 사계재 날 축일이 지정 전례일이면 [자, 축일 색], 그 밖은 `[color]`. R-6.4-ember-color를 본다) |
-| `observanceColor` | 그 후보의 `observance.color`(뷰가 칩을 선택할 때 쓰는 색. 사계재는 `violet`) |
+| `observanceColor` | 그 후보의 `observance.color`(뷰가 그 후보를 고를 때 쓰는 색. 사계재는 `violet`) |
 | `penitential`, `fast` | 후보의 `penitential`과 그날의 소재일 여부(엔진 `fastOf(resolved) === "minor"`. 대재일은 `"major"`라 `fast`가 아니다) |
 | `coord` | `ResolvedDate.coord`의 부분집합 `{season, week, type}` |
 | `grid` | 그날 격자 합성 후보의 `{status}` |

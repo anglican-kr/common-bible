@@ -274,7 +274,7 @@ test("calendarDay: 선택 봉헌(「옮겨 지킬 수 있음」)은 월간 칸�
   same(d.others, [{ name: "승천대축일", title: "승천대축일", suffix: " · 5월 14일에서 옮겨 지킬 수 있음", away: false }]);
 });
 
-test("calendarDay: 옮겨 온 대표는 줄에서 「… 에서 옮겨 옴」, 기념만 하는 후보는 「기념만」", () => {
+test("calendarDay: 옮겨 온 대표는 줄에서 「… 에서 옮겨 옴」, 기념만 하는 후보는 이름만", () => {
   const james = cand(obs("d0725-사도-성-장-야고보", "사도 성 장 야고보", { rank: "major_feast", color: "red" }), "transferred_in",
     { from: "2027-07-25", displacedBy: "grid:ordinary-17-sunday" });
   const anne = cand(obs("d0726-안나와-요아킴", "안나와 요아킴(성모 마리아의 양친)", { rank: "major_feast", color: "white" }), "commemorated",
@@ -283,7 +283,7 @@ test("calendarDay: 옮겨 온 대표는 줄에서 「… 에서 옮겨 옴」, �
     { official: james, color: "red", colors: ["red"] }));
   assert.strictEqual(d.cellName, "사도 성 장 야고보");
   same(d.primary, { name: "사도 성 장 야고보", title: "사도 성 장 야고보", suffix: " · 7월 25일에서 옮겨 옴", away: false });
-  same(d.others, [{ name: "안나와 요아킴", title: "안나와 요아킴(성모 마리아의 양친)", suffix: " · 기념만", away: false }]);
+  same(d.others, [{ name: "안나와 요아킴", title: "안나와 요아킴(성모 마리아의 양친)", suffix: "", away: false }]);
 });
 
 test("calendarDay: 색은 그날의 정식 색(병기 포함) — 선택 대체색(장미 · 청)은 싣지 않는다 · colors 가 없으면 color 하나", () => {

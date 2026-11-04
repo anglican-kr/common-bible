@@ -80,7 +80,7 @@ def test_a11y_chapter_text(browser):
 
 
 def test_a11y_lectionary_view(browser):
-    """전례독서 뷰(부활대축일 — 본기도 세그먼트 · 칩 · 독서 넷) — critical/serious 위반 0건."""
+    """전례독서 뷰(부활대축일 — 본기도 세그먼트 · 독서 넷) — critical/serious 위반 0건."""
     ctx, page = _open(browser, "lectionary/2026-04-05")
     try:
         page.wait_for_selector(".lectionary .lect-reading[data-slot='gospel'] .verse", timeout=20_000)
@@ -102,10 +102,10 @@ def test_a11y_lectionary_alternate_colours(browser):
 
 
 def test_a11y_lectionary_switcher(browser):
-    """전례독서 뷰(8.6 주의 변모 — 전례일 칩) — critical/serious 위반 0건."""
+    """전례독서 뷰(8.6 주의 변모 — 전례독서 목록) — critical/serious 위반 0건."""
     ctx, page = _open(browser, "lectionary/2026-08-06")
     try:
-        page.wait_for_selector(".lectionary .lect-chip", timeout=20_000)
+        page.wait_for_selector(".lectionary .lect-choice", timeout=20_000)
         v = _violations(page)
         assert not v, f"Lectionary pair: {len(v)} violation(s):\n{_fmt(v)}"
     finally:
