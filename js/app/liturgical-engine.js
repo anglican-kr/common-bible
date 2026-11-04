@@ -37,6 +37,7 @@
 /** @typedef {import("../types").LiturgicalColorAlt} LiturgicalColorAlt */
 /** @typedef {import("../types").LiturgicalFast} LiturgicalFast */
 /** @typedef {import("../types").HalfVerse} HalfVerse */
+/** @typedef {import("../types").ParishDedication} ParishDedication */
 /** @typedef {import("../types").WeekdayCode} WeekdayCode */
 /** @typedef {import("../types").Observance} Observance */
 /** @typedef {import("../types").Candidate} Candidate */
@@ -82,7 +83,7 @@
  * @typedef {{
  *   readings: TextIndex, collects: TextIndex,
  *   commons: Record<string, CommonClass>, canticles: Record<string, unknown>,
- *   halfVerses: Map<string, HalfVerse>,
+ *   halfVerses: Map<string, HalfVerse>, dedications: Map<string, ParishDedication[]>,
  * }} LectionaryIndex
  */
 
@@ -135,10 +136,12 @@ let calendarPromise = null;
 let lectionaryIndex = null;
 /** @type {Promise<LectionaryIndex> | null} */
 let lectionaryPromise = null;
-// 반절 경계 표를 받았는가 · 다시 받는 중인가(§3.5) — 못 받았으면 다음 진입마다 이 표만 뒤에서 다시 받는다.
-let halfVersesLoaded = false;
-/** @type {Promise<void> | null} */
-let halfVersesRetry = null;
+// 받지 못해도 묶음을 막지 않는 표(반절 경계 표, 본당 표 — §3.5) 가운데 아직 못 받은 것과 다시 받는 중인 것. 못 받은
+// 표는 다음 진입마다 그 표만 뒤에서 다시 받는다.
+/** @type {Set<string>} */
+const optionalMissing = new Set();
+/** @type {Map<string, Promise<void>>} */
+const optionalRetries = new Map();
 
 // ── BEGIN LITURGICAL_CORE ──
 // 날짜 산술 · computus · 오프셋 전개 · 절기 구간 · 연중 주차 · 주기 산정 · 기간 축.
@@ -1816,8 +1819,9 @@ function coordKey(/** @type {unknown} */ season, /** @type {unknown} */ week, /*
 
 /**
  * 독서 묶음 다섯 표 → 인덱스. `commons.classes`는 배열이 아니라 **맵**이고, `canticles`는 래퍼조차
- * 없는 id → 객체 맵이다(§5.2). 반절 경계 표는 「bookId:장:절+a|b」 키로 찾는다(`halfVerseKey`).
- * @param {{readings?: any, collects?: any, commons?: any, canticles?: any, halfVerses?: any} | null} tables
+ * 없는 id → 객체 맵이다(§5.2). 반절 경계 표는 「bookId:장:절+a|b」 키로 찾는다(`halfVerseKey`). 본당 표
+ * (`local-observances`)는 축성일 「MM.DD」 키로 찾는다(`buildDedicationIndex`).
+ * @param {{readings?: any, collects?: any, commons?: any, canticles?: any, halfVerses?: any, localObservances?: any} | null} tables
  * @returns {LectionaryIndex}
  */
 function buildLectionaryIndex(tables) {
@@ -1829,7 +1833,28 @@ function buildLectionaryIndex(tables) {
     commons: classes && typeof classes === "object" && !Array.isArray(classes) ? classes : {},
     canticles: t.canticles && typeof t.canticles === "object" ? t.canticles : {},
     halfVerses: buildHalfVerseIndex(t.halfVerses),
+    dedications: buildDedicationIndex(t.localObservances),
   };
+}
+
+/**
+ * 본당 표(`local-observances.json`) → 축성일 「MM.DD」 키의 Map. 값은 그날 축성되거나 축복된 교회들이고, 차례는 표의
+ * 차례(파서가 날짜, 이름 순으로 정렬한다)다. 축성일과 종류(축성, 축복)만 읽는다 — 본당 축일의 등급 격상(ADR-036 B2
+ * `scope` 오버레이)은 아직 없고, 옮김 계산도 본당 표를 보지 않는다(§4.9). 표가 없거나 형식이 깨졌으면 빈 Map이다.
+ * @param {any} table @returns {Map<string, ParishDedication[]>}
+ */
+function buildDedicationIndex(table) {
+  /** @type {Map<string, ParishDedication[]>} */
+  const map = new Map();
+  for (const p of (table && Array.isArray(table.parishes) ? table.parishes : [])) {
+    const d = p && p.dedication;
+    if (!d || typeof d.date !== "string" || typeof p.name !== "string") continue;
+    if (d.kind !== "consecration" && d.kind !== "blessing") continue;
+    const list = map.get(d.date);
+    const entry = { name: p.name, kind: /** @type {ParishDedication["kind"]} */ (d.kind) };
+    if (list) list.push(entry); else map.set(d.date, [entry]);
+  }
+  return map;
 }
 
 /** 반절 경계 표 → 「bookId:장:절+a|b」 키의 Map. 표가 없거나 형식이 깨졌으면 빈 Map이다. @param {any} table */
@@ -2107,10 +2132,11 @@ const CALENDAR_FILES = ["sanctoral", "temporal-feasts", "periods", "ordinal-week
 /** 독서 묶음(§3.5) — 대형 표 넷, 독서 뷰 진입 · `findReadings`/`findCollects` 전에. */
 const LECTIONARY_FILES = ["eucharist-readings", "eucharist-collects", "commons", "canticles"];
 /**
- * 반절 경계 표(§3.5) — 독서 묶음과 함께 싣되, 받지 못해도 묶음을 막지 않는다. 업데이트 뒤 처음 오프라인으로 열면
- * 데이터 캐시에 이 표만 없을 수 있다(PR #365 리뷰). 그때는 반절 대신 절 전체를 그린다.
+ * 독서 묶음과 함께 싣되, 받지 못해도 묶음을 막지 않는 표(§3.5). 업데이트 뒤 처음 오프라인으로 열면 데이터 캐시에 이
+ * 표들만 없을 수 있다(PR #365 리뷰). 받지 못한 표는 빈 인덱스로 세운다 — 반절 경계 표가 없으면 반절 대신 절 전체를,
+ * 본당 표가 없으면 축성일 줄 없이 그린다. 받은 표를 인덱스의 어느 자리에 세우는지는 `setOptionalTable`이 정한다.
  */
-const HALF_VERSE_FILE = "half-verses";
+const OPTIONAL_FILES = ["half-verses", "local-observances"];
 
 /** @param {string} name @returns {Promise<any>} */
 function fetchLectionaryJson(name) {
@@ -2136,36 +2162,54 @@ function preloadCalendar() {
 }
 
 /**
- * 독서 묶음을 싣는다. 캐시 규칙은 `preloadCalendar`와 같다(한쪽만 고치면 증상이 절반만 사라진다). 반절 경계 표는
- * 함께 받되 실패를 받아들여, 인덱스를 빈 표로 세운다. 묶음 promise는 그대로 캐시하고, 다음 진입마다 반절 표만 뒤에서
- * 다시 받는다(`retryHalfVerses`). 큰 표 넷을 다시 받지 않고, 다시 그리기도 기다리게 하지 않는다(PR #365 리뷰 2회차).
+ * 독서 묶음을 싣는다. 캐시 규칙은 `preloadCalendar`와 같다(한쪽만 고치면 증상이 절반만 사라진다). 선택 표
+ * (`OPTIONAL_FILES` — 반절 경계 표, 본당 표)는 함께 받되 실패를 받아들여, 인덱스를 빈 표로 세운다. 묶음 promise는
+ * 그대로 캐시하고, 다음 진입마다 받지 못한 선택 표만 뒤에서 다시 받는다(`retryOptional`). 큰 표 넷을 다시 받지 않고,
+ * 다시 그리기도 기다리게 하지 않는다(PR #365 리뷰 2회차).
  * @returns {Promise<LectionaryIndex>}
  */
 function preloadLectionary() {
   if (lectionaryPromise) {
-    if (lectionaryIndex && !halfVersesLoaded) retryHalfVerses();
+    if (lectionaryIndex) for (const file of optionalMissing) retryOptional(file);
     return lectionaryPromise;
   }
   return (lectionaryPromise = Promise.all([
     ...LECTIONARY_FILES.map(fetchLectionaryJson),
-    fetchLectionaryJson(HALF_VERSE_FILE).catch(() => null),
+    ...OPTIONAL_FILES.map((file) => fetchLectionaryJson(file).catch(() => null)),
   ])
-    .then(([readings, collects, commons, canticles, halfVerses]) => {
-      halfVersesLoaded = halfVerses !== null;
-      return (lectionaryIndex = buildLectionaryIndex({ readings, collects, commons, canticles, halfVerses }));
+    .then((tables) => {
+      const [readings, collects, commons, canticles] = tables;
+      const lix = buildLectionaryIndex({ readings, collects, commons, canticles });
+      optionalMissing.clear();
+      OPTIONAL_FILES.forEach((file, i) => {
+        const table = tables[LECTIONARY_FILES.length + i];
+        if (table === null) optionalMissing.add(file);
+        else setOptionalTable(lix, file, table);
+      });
+      return (lectionaryIndex = lix);
     })
     .catch((e) => { lectionaryPromise = null; throw e; }));
 }
 
-/** 받지 못한 반절 경계 표를 뒤에서 다시 받는다. 받으면 그다음 그리기부터 반절을 그린다. 동시에는 한 번만 낸다. */
-function retryHalfVerses() {
-  halfVersesRetry ??= fetchLectionaryJson(HALF_VERSE_FILE)
+/** 받은 선택 표를 인덱스의 제자리에 세운다. @param {LectionaryIndex} lix @param {string} file @param {any} table */
+function setOptionalTable(lix, file, table) {
+  if (file === "half-verses") lix.halfVerses = buildHalfVerseIndex(table);
+  else if (file === "local-observances") lix.dedications = buildDedicationIndex(table);
+}
+
+/**
+ * 받지 못한 선택 표 하나를 뒤에서 다시 받는다. 받으면 그다음 그리기부터 쓴다(반절, 축성일 줄). 표마다 동시에는 한 번만 낸다.
+ * @param {string} file
+ */
+function retryOptional(file) {
+  if (optionalRetries.has(file)) return;
+  optionalRetries.set(file, fetchLectionaryJson(file)
     .then((table) => {
-      if (lectionaryIndex) lectionaryIndex.halfVerses = buildHalfVerseIndex(table);
-      halfVersesLoaded = true;
+      if (lectionaryIndex) setOptionalTable(lectionaryIndex, file, table);
+      optionalMissing.delete(file);
     })
     .catch(() => {})
-    .finally(() => { halfVersesRetry = null; });
+    .finally(() => { optionalRetries.delete(file); }));
 }
 
 /**
@@ -2214,6 +2258,19 @@ function findHalfVerse(bookId, chapter, verse, half) {
   if (!lectionaryIndex) throw new Error("preloadLectionary() must be awaited before findHalfVerse()");
   return lectionaryIndex.halfVerses.get(halfVerseKey(bookId, chapter, verse, half)) || null;
 }
+
+/**
+ * 그날(양력 월일) 축성되거나 축복된 교회들 — 표의 차례 그대로, 없으면 빈 배열. 본당 표를 받지 못했으면 빈 배열이다
+ * (선택 표 — §3.5). 프리로드 규칙은 `findReadings`와 같다. 「북.」 성당을 빼는 일은 화면이 한다(ADR-038 §3).
+ * @param {string} dateStr "YYYY-MM-DD" @returns {ParishDedication[]}
+ */
+function findDedications(dateStr) {
+  if (!lectionaryIndex) throw new Error("preloadLectionary() must be awaited before findDedications()");
+  const p = parseDate(dateStr);
+  if (!p) return [];
+  const key = `${String(p.m).padStart(2, "0")}.${String(p.d).padStart(2, "0")}`;
+  return (lectionaryIndex.dedications.get(key) || []).map((e) => ({ ...e }));
+}
 // ── END LITURGICAL_PRELOAD ──
 
 export {
@@ -2223,7 +2280,7 @@ export {
   easterDate, advent1Date, baptismDate, liturgicalYearOf, yearAnchors,
   seasonOf, sundayCycle, weekdayCycle, evalRule,
   buildOrdinalIndex, ordinalWeekOf, lunarDatesOf, spansOf, inSpan,
-  preloadCalendar, preloadLectionary, resolveDate, findReadings, findCollects, findHalfVerse, fastOf,
+  preloadCalendar, preloadLectionary, resolveDate, findReadings, findCollects, findHalfVerse, findDedications, fastOf,
   setActivatedOptionals,
   // 같은 유형의 성인 둘 이상을 공통 본기도 하나에 모은다(독서 뷰 — 사용자 결정 2026-11-03).
   joinNames, fillCommonName,

@@ -376,7 +376,7 @@ function resolveDate(dateStr) → {
   3. 좁힌 고유 독서가 0건이다.
   4. `classes[cls].readings`가 비어 있지 않다.
 
-  하나라도 거짓이면 **빈 배열**이다. `apostle`, `evangelist`, `lord`, `national`은 공통이 없고(모두 고유 독서가 있다. 빠지면 누락 신호다), `anniversary`는 독서 세트가 0이라 빈 배열이 맞다(「고정 전례독서 없음 — 그날 절기 주일 독서를 쓴다」, data `calendar/commons.md`). 그날의 절기 독서를 `findReadings`가 대신 찾아 주지는 않는다. 격자 후보가 `candidates`에 `proper`로 이미 있으므로(§5.5 「후보를 버리지 않는다」) 화면이 그 후보를 고르면 된다. B2가 `local-observances`를 실으면(미결2) 키가 `dedication.common`, `observance.common`(§5.4 목록)으로 바뀔 뿐 규칙은 같다.
+  하나라도 거짓이면 **빈 배열**이다. `apostle`, `evangelist`, `lord`, `national`은 공통이 없고(모두 고유 독서가 있다. 빠지면 누락 신호다), `anniversary`는 독서 세트가 0이라 빈 배열이 맞다(「고정 전례독서 없음 — 그날 절기 주일 독서를 쓴다」, data `calendar/commons.md`). 그날의 절기 독서를 `findReadings`가 대신 찾아 주지는 않는다. 격자 후보가 `candidates`에 `proper`로 이미 있으므로(§5.5 「후보를 버리지 않는다」) 화면이 그 후보를 고르면 된다. B2가 본당 축일을 후보로 세우면(본당 표 `local-observances`는 2026-11-04부터 독서 묶음에 실리지만, 지금은 축성일 줄에만 쓴다 — §3.5) 키가 `dedication.common`, `observance.common`(§5.4 목록)으로 바뀔 뿐 규칙은 같다.
 
   **고유와 공통은 함께 내지 않는다.** 고유 독서가 하나라도 있으면 공통은 내지 않는다. 기도서의 공통은 「고유가 없는 성인」을 위한 것이지 대안이 아니다. 섞으면 화면의 「대안 독서」 세그먼트에 기도서에 없는 선택지가 생긴다.
 
