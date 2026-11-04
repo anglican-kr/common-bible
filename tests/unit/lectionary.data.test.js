@@ -363,10 +363,29 @@ test("A3 2026-03-01 사순 2주일 — 조건부 세트는 조건이 라벨 「�
   same(m.options.map((o) => o.label), ["사순 2주일", "주의 변모 주일로 지킬 때"]);   // 「…로 지키는 경우」 → 「…로 지킬 때」
   assert.strictEqual(m.group.set_no, 2);
   // 삼일절 · 데이빗은 주일에 밀려 「· 기념만」(사용자 결정 2026-10-24). 데이빗은 공통 독서만 있어 당분간 칩이 없고(2026-11-03),
-  // 그 본기도는 주일 본기도 뒤에 이어진다 — 삼일절(`national`)은 성인이 아니라 잇지 않는다
+  // 이름 줄에만 보인다 — 주일에는 성인 본기도를 잇지 않는다(사용자 확인 2026-11-04)
   assert.ok(!m.chips.some((c) => id(c.candidate) === "d0301-데이빗"));
   same(m.chips.map((c) => c.muted), [false, false]);
-  same(m.memorialCollects.map((c) => c.common), ["pastor"]);
+  same(m.memorialSaints.map(id), ["d0301-데이빗"]);
+  same(m.memorialCollects, []);
+});
+
+test("주일에는 성인 본기도를 잇지 않는다 — 2025-2050 모든 주일, 평일에 밀려 기념만 하는 성인은 잇는다(사용자 확인 2026-11-04)", { skip: SKIP }, () => {
+  let weekdays = 0;
+  for (let d = "2025-01-01"; d <= "2050-12-31"; d = ctx.addDays(d, 1)) {
+    const m = model(d);
+    if (ctx.dayOfWeek(d) === 0) {
+      same(m.memorialCollects, [], d);
+    } else if (m.memorialSaints.some((c) => c.status === "commemorated")) {
+      assert.ok(m.memorialCollects.length > 0, `${d} 평일 기념 성인의 본기도`);
+      weekdays++;
+    }
+  }
+  assert.ok(weekdays > 0, "평일에 밀려 기념만 하는 성인이 있는 날");
+  // 7.26 주일의 안나와 요아킴은 이름 줄에만
+  const anna = model("2026-07-26");
+  same(anna.memorialSaints.map(id), ["d0726-안나와-요아킴"]);
+  same(anna.memorialCollects, []);
 });
 
 test("A3 송가 — 즈가리야 송가는 영광송을 붙이고 창조송가(gloria:false)는 붙이지 않는다(실제 cant 장 JSON)", { skip: SKIP }, () => {
