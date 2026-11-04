@@ -1,4 +1,5 @@
 ---
+pr: 473
 date: 2026-11-05
 branch: feat/lectionary-choice-rows
 title: "feat: 전례일 칩을 제목 아래 전례독서 목록으로 바꿈"
