@@ -1,4 +1,5 @@
 ---
+pr: 471
 date: 2026-11-04
 branch: fix/sunday-saint-collect
 title: "fix: 주일에는 기리는 성인의 본기도를 잇지 않음"
