@@ -771,6 +771,15 @@ const LEC_TABLES = {
     { bookId: "gen", chapter: 12, verse: 4, half: "a", line: 1, text: "길을 옮겨 갔다." },
     { bookId: "rom", chapter: 3, verse: 22, half: "b", whole: true },
   ] },
+  // 본당 표(데이터 lectionary/local-observances.json) — 같은 날 축성 · 축복이 섞인 날, 북한 성당, 깨진 행
+  localObservances: { _meta: {}, _vocab: {}, dioceses: [], parishes: [
+    { id: "par-가", name: "가성당", diocese: "서울", dedication: { date: "04.21", kind: "consecration" } },
+    { id: "par-나", name: "나성당", diocese: "대전", dedication: { date: "04.21", kind: "blessing" } },
+    { id: "par-다", name: "북.다성당", diocese: null, dedication: { date: "04.21", kind: "consecration" } },
+    { id: "par-라", name: "라성당", diocese: "부산", dedication: { date: "05.02", kind: "consecration" } },
+    { id: "par-마", name: "마성당", diocese: "부산", dedication: null },
+    { id: "par-바", name: "바성당", diocese: "부산", dedication: { date: "05.02", kind: "patron" } },
+  ] },
 };
 
 const CAL = ctx.buildCalendarIndex(CAL_TABLES);
@@ -1943,7 +1952,7 @@ function loadEngine(fetchImpl) {
   };
   vm.createContext(c);
   vm.runInContext(STATE_PRELUDE + ' const DATA_DIR = "/data"; let calendarIndex = null; let calendarPromise = null;'
-    + " let lectionaryIndex = null; let lectionaryPromise = null; let halfVersesLoaded = false; let halfVersesRetry = null;",
+    + " let lectionaryIndex = null; let lectionaryPromise = null; const optionalMissing = new Set(); const optionalRetries = new Map();",
     c, { filename: "prelude" });
   for (const b of ["LITURGICAL_CORE", "LITURGICAL_LOOKUP", "LITURGICAL_PRELOAD"]) {
     vm.runInContext(extractBlock(b, SOURCE), c, { filename: `liturgical-engine.js#${b}` });
@@ -1955,6 +1964,7 @@ const FILES = {
   "ordinal-weeks": CAL_TABLES.ordinalWeeks, "kasi-lunar": CAL_TABLES.kasi,
   "eucharist-readings": LEC_TABLES.readings, "eucharist-collects": LEC_TABLES.collects,
   commons: LEC_TABLES.commons, canticles: LEC_TABLES.canticles, "half-verses": LEC_TABLES.halfVerses,
+  "local-observances": LEC_TABLES.localObservances,
 };
 /** fetch 가짜 — 요청한 URL 을 적고, `fail` 에 든 파일은 500 으로 답한다. */
 function fakeFetch(calls, fail = new Set()) {
@@ -1971,6 +1981,7 @@ test("C-3.4-1 프리로드 전 동기 API 는 명확한 메시지로 throw", () 
   assert.throws(() => e.findReadings({}, {}), /preloadLectionary\(\) must be awaited before findReadings\(\)/);
   assert.throws(() => e.findCollects({}), /preloadLectionary\(\) must be awaited before findCollects\(\)/);
   assert.throws(() => e.findHalfVerse("lps", 104, 35, "b"), /preloadLectionary\(\) must be awaited before findHalfVerse\(\)/);
+  assert.throws(() => e.findDedications("2026-04-21"), /preloadLectionary\(\) must be awaited before findDedications\(\)/);
 });
 
 test("C-3.5-1 반절 경계 표는 독서 묶음과 함께 실리고 「책:장:절+상하」로 찾는다 — 없으면 null(절 전체를 그린다, 사용자 결정 2026-10-22)", async () => {
@@ -2015,6 +2026,47 @@ test("C-3.5-2 반절 경계 표를 받지 못해도 독서 묶음은 선다 — 
   await e.preloadLectionary();
   await settle();
   assert.strictEqual(calls.length, 0);
+});
+
+test("C-3.5-3 본당 표는 독서 묶음과 함께 실리고 양력 월일로 찾는다 — 표의 차례, 축성일이 없거나 종류가 다른 행은 뺀다(사용자 결정 2026-11-04)", async () => {
+  const e = loadEngine(fakeFetch([]));
+  await e.preloadLectionary();
+  // 해와 상관없이 월일로 찾는다. 「북.」 성당도 그대로 낸다 — 빼는 일은 화면이 한다(lectionary.js dedicationLines)
+  const want = [{ name: "가성당", kind: "consecration" }, { name: "나성당", kind: "blessing" }, { name: "북.다성당", kind: "consecration" }];
+  same(plain(e.findDedications("2026-04-21")), want);
+  same(plain(e.findDedications("1999-04-21")), want);
+  same(plain(e.findDedications("2026-05-02")), [{ name: "라성당", kind: "consecration" }]);   // 종류가 다른 「바성당」은 뺀다
+  same(plain(e.findDedications("2026-04-22")), []);
+  same(plain(e.findDedications("2026-02-30")), []);                                          // 잘못된 날짜
+  // 돌려준 배열을 고쳐도 인덱스는 그대로다
+  e.findDedications("2026-04-21")[0].name = "바뀜";
+  assert.strictEqual(e.findDedications("2026-04-21")[0].name, "가성당");
+  // 표가 없거나 형식이 깨져도 인덱스는 선다 — 조회는 빈 배열
+  assert.strictEqual(e.buildLectionaryIndex({ ...LEC_TABLES, localObservances: null }).dedications.size, 0);
+  assert.strictEqual(e.buildLectionaryIndex({ ...LEC_TABLES, localObservances: { parishes: {} } }).dedications.size, 0);
+});
+
+test("C-3.5-4 본당 표를 받지 못해도 독서 묶음은 선다 — 축성일 줄 없이 그리고, 다음 진입마다 이 표만 뒤에서 다시 받는다", async () => {
+  const settle = () => new Promise((r) => setTimeout(r, 0));
+  const calls = [];
+  const fail = new Set(["local-observances", "half-verses"]);
+  const e = loadEngine(fakeFetch(calls, fail));
+  await e.preloadLectionary();                                   // 거부하지 않는다
+  same(plain(e.findDedications("2026-04-21")), []);
+  // 다음 진입 — 받지 못한 선택 표 둘만 다시 받는다(표마다 동시에 둘이 와도 한 번)
+  calls.length = 0;
+  fail.delete("local-observances");
+  e.preloadLectionary();
+  e.preloadLectionary();
+  await settle();
+  same(calls.slice().sort(), ["/data/lectionary/half-verses.json", "/data/lectionary/local-observances.json"]);
+  assert.strictEqual(e.findDedications("2026-04-21").length, 3);  // 본당 표는 받았다
+  assert.strictEqual(e.findHalfVerse("lps", 104, 35, "b"), null);  // 반절 표는 아직이다
+  // 그다음 진입은 아직 못 받은 반절 표만 다시 받는다
+  calls.length = 0;
+  await e.preloadLectionary();
+  await settle();
+  same(calls, ["/data/lectionary/half-verses.json"]);
 });
 
 test("C-3.4-2 동시 프리로드는 파일당 fetch 1회 · 실패한 프리로드는 캐시되지 않고 재시도가 다시 fetch", async () => {

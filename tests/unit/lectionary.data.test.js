@@ -62,7 +62,7 @@ function ix() {
   });
   const lec = ctx.buildLectionaryIndex({
     readings: read("eucharist-readings.json"), collects: read("eucharist-collects.json"),
-    commons: read("commons.json"), canticles: read("canticles.json"),
+    commons: read("commons.json"), canticles: read("canticles.json"), localObservances: read("local-observances.json"),
   });
   return (built = { cal, lec });
 }
@@ -77,7 +77,9 @@ function model(d, query = NONE, stored = null) {
     if (!cache.has(c.observance.id)) cache.set(c.observance.id, ctx.findReadingsIn(ix().lec, ix().cal, r, c));
     return cache.get(c.observance.id);
   };
-  const m = ctx.buildLectionaryModel(r, { ...NONE, ...query }, groupsOf, ctx.findCollectsIn(ix().lec, ix().cal, r), stored);
+  // 공개 래퍼의 findDedications(PRELOAD 블록 — 여기서는 싣지 않는다)와 같은 조회
+  const dedications = ix().lec.dedications.get(`${d.slice(5, 7)}.${d.slice(8, 10)}`) || [];
+  const m = ctx.buildLectionaryModel(r, { ...NONE, ...query }, groupsOf, ctx.findCollectsIn(ix().lec, ix().cal, r), stored, dedications);
   assert.ok(m, `${d} 모델이 null`);
   return m;
 }
@@ -88,6 +90,17 @@ const id = (c) => c.observance.id;
 test("A3 송영 상수 셋이 eucharist-collects.json _meta.endings 와 글자까지 같다", { skip: SKIP }, () => {
   const endings = read("eucharist-collects.json")._meta.endings;
   same(plain(K("ENDINGS")), endings);
+});
+
+test("A3 축성일 줄의 꼬리가 본당 표 _vocab 에 「일」을 붙인 것과 같고, 표의 종류는 모두 꼬리가 있다", { skip: SKIP }, () => {
+  const table = read("local-observances.json");
+  const label = K("DEDICATION_LABEL");
+  same(Object.keys(label), Object.keys(table._vocab.dedication_kind));
+  for (const [k, v] of Object.entries(table._vocab.dedication_kind)) assert.strictEqual(label[k], `${v}일`, k);
+  for (const p of table.parishes) {
+    assert.ok(p.dedication && /^\d{2}\.\d{2}$/.test(p.dedication.date), `${p.name} 축성일`);
+    assert.ok(p.dedication.kind in label, `${p.name} 종류 ${p.dedication.kind}`);
+  }
 });
 
 test("A3 주기 · 색 라벨이 데이터 _vocab 과 같다(ADR-036 §4 단일 출처)", { skip: SKIP }, () => {
@@ -482,4 +495,15 @@ test("반절 경계 표 — 전례독서 · 성인 공통의 반절 참조마다
 test("기리는 성인의 본기도를 잇는 차례(MEMORIAL_CLASS_ORDER)는 commons.json 의 유형 정의 차례와 같다(사용자 결정 2026-11-03)", { skip: SKIP }, () => {
   const order = vm.runInContext("MEMORIAL_CLASS_ORDER", ctx);
   assert.deepStrictEqual([...order], Object.keys(read("commons.json").classes));
+});
+
+test("축성일 줄 — 실제 본당 표에서 축성과 축복이 섞인 날은 두 줄, 같은 종류는 한 줄에 모으고, 북한 성당뿐인 날은 줄이 없다(사용자 결정 2026-11-04)", { skip: SKIP }, () => {
+  same(model("2026-04-21").dedicationLines, ["강릉성당 축성일", "세종성당, 청주산남성당 축복일"]);
+  same(model("2026-09-01").dedicationLines, ["일산성당, 초지성당, 행신성당 축성일"]);
+  same(model("2026-05-16").dedicationLines, []);   // 북.버드내성당 · 북.장림성당
+  same(model("2026-01-31").dedicationLines, ["용인성당 축성일"]);
+  // 어느 날이든 「북.」 성당은 줄에 없다
+  for (let d = "2026-01-01"; d <= "2026-12-31"; d = ctx.addDays(d, 1)) {
+    for (const line of model(d).dedicationLines) assert.ok(!line.includes("북."), `${d} ${line}`);
+  }
 });
