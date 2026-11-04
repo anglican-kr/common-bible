@@ -1,4 +1,5 @@
 ---
+pr: 470
 date: 2026-11-04
 branch: feat/parish-dedications
 title: "feat: 전례독서 제목 아래에 교회 축성일과 축복일 표시"
