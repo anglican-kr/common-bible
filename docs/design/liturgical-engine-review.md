@@ -1371,7 +1371,7 @@ GitHub 토픽 [lectionary](https://github.com/topics/lectionary), [liturgical-ca
 
 2026-09-20에 채택했다. 케이스는 `tests/fixtures/liturgical/{transfers,optionals,winners}.cases.json`에 있고, 스키마, id 규칙, 쓰는 방법의 기준은 [그 README](../../tests/fixtures/liturgical/README.md)다. 이 부록이 제안한 모양(LiturgicalCalendarAPI `LitCalTest.json` 계열. 예: `christmas-triad-chain-2027`의 2027-12-26 연쇄)에 `kind`, `group`, `canon`, `checks`, `source`, `status`를 더했다. 제안에서 바뀐 것은 다음과 같다.
 
-- id는 자유 문자열 대신 `T-2027-12-27-christmas-triad` 형식이다(README 「id 규칙」).
+- id는 자유 문자열 대신 `T-2027-12-27-christmas-triad` 형식이다(README 「식별자 규칙」).
 - `rule`(기도서 원문의 위치. 예: 「주요축일 나-1」)은 `canon`(R- 규칙 마커, 설계서 절)과 `source`(외부 근거)로 나눴다.
 - `applies.since/until`(기도서 개정이나 사제 확인으로 규칙이 바뀐 **발효 연도**)은 README 스키마에 없다. 필요해지면 README에 더한다.
 

@@ -58,10 +58,10 @@
 | `docs/decisions/010-bookmark-feature.md` | 291 | #461 |
 | `docs/decisions/011-bookmark-sync.md` | 583 | #464 |
 | `docs/decisions/012-typescript-incremental-adoption.md` | 72 | #461 |
-| `docs/decisions/013-client-js-unit-tests.md` | 82 | 대기 |
-| `docs/decisions/014-search-history.md` | 100 | 대기 |
-| `docs/decisions/015-storage-strategy.md` | 117 | 대기 |
-| `docs/decisions/016-audio-cache-lru.md` | 104 | 대기 |
+| `docs/decisions/013-client-js-unit-tests.md` | 82 | #469 |
+| `docs/decisions/014-search-history.md` | 100 | #469 |
+| `docs/decisions/015-storage-strategy.md` | 117 | #469 |
+| `docs/decisions/016-audio-cache-lru.md` | 104 | #469 |
 | `docs/decisions/017-oauth-bff-proxy.md` | 78 | 대기 |
 | `docs/decisions/018-app-modularization.md` | 70 | 대기 |
 | `docs/decisions/019-esm-module-system.md` | 65 | 대기 |

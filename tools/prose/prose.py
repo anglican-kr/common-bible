@@ -277,13 +277,18 @@ TERMS = """
 |이동 패스|near-leaf|leaf 모듈|승자|패자|품계|동률|동점|성인력|좌석|가상 점유자|점유자|센티널|사다리|결손|상태 꼬리|꼬리말|이름표|스팬|드리프트|가드
 |골든 덤프|만성|선재|고아|기각|줄임 명칭|전사|확증|명문화|승계|잔존|수렴|일원화|도출|부합|함의|소급|발현|동형|소관|준용|착수|명기|환원|이관|편승|상이
 |귀속|귀결|자명|판본|재진술|반증|기제|화면 낭독기|화면 읽기 프로그램|스크린리더|chrome
+|콘텐츠 어드레스|쿼터|오리진|트리 렌더|시트 드래그
 """.replace("\n", "")
 # Words that are wrong only in one sense (the table says which); a person or agent decides.
 TERMS_CONTEXT = "도착|출발|떠난|켜다|켜진|꺼진|이동|좌표|temporal|sanctoral|무음|풀린다|풀었다|채운다|걷는다|걷기|듣지 않는다|소비자|지정 독서|부른다|불린다|불리는|불렸다|불려|지나친|옆 항목|이웃|이긴다|이겼다|이기는|이기고|이길|병합이[^.\n]{0,40}?(?:고르|고른|고를|골라|골랐)"
 # 「가르다」 and its passive 「갈리다」 (docs/writing.md 「용어」). The lookaheads skip 「가르치다」 (teach),
 # 「갈라지다」 (allowed), 「갈라티아」 and 「갈라디아」 (Galatians); 「갈래」 (a noun) and 「가리다」 (cover) never match.
 TERMS_CONTEXT += "|가르(?![치침쳐쳤친칠칩마])|가른|가를|갈라(?![지진져졌짐티디])|갈랐|갈린|갈릴|갈려|갈렸|갈리(?:는|면|고|지|기|며|게)"
-RE_TERM = re.compile(r"(?<![가-힣])(?:" + TERMS + r")")
+# English words with a decided Korean term. They stay judgement calls: a gloss in parentheses
+# (「링 버퍼(ring buffer)」) is allowed, and 「DOM id」 or the git remote `origin` keep the English.
+TERMS_CONTEXT += "|[Pp]ull-to-refresh|save modal|tree render|drag handle|sheet drag|primitives|ring buffer|quota"
+TERMS_CONTEXT += r"|origin(?![/A-Za-z])|(?<![-_./#])id(?![-_:A-Za-z0-9]|\.[A-Za-z])"
+RE_TERM =re.compile(r"(?<![가-힣])(?:" + TERMS + r")")
 RE_TERM_CONTEXT = re.compile(r"(?<![가-힣A-Za-z])(?:" + TERMS_CONTEXT + r")")
 RE_KKOL = re.compile(r"(?<![가-힣])꼴(?:[을이은로의에도만]|(?![가-힣]))")
 

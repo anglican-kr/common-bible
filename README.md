@@ -138,7 +138,7 @@ git submodule update --init --recursive
 
 | 시나리오 | 동작 |
 |---------|-----|
-| 첫 연결 ("연결" 클릭) | `accounts.google.com`으로 페이지 전체를 리디렉션하고, 동의 화면(consent)을 거쳐 `?code=…`가 붙은 callback으로 돌아온다. 같은 origin의 `/oauth/token`에 POST해 access token과 refresh token을 받으면 IDLE이 된다 |
+| 첫 연결 ("연결" 클릭) | `accounts.google.com`으로 페이지 전체를 리디렉션하고, 동의 화면(consent)을 거쳐 `?code=…`가 붙은 callback으로 돌아온다. 같은 출처의 `/oauth/token`에 POST해 access token과 refresh token을 받으면 IDLE이 된다 |
 | 앱 재실행 (refresh token 보유) | IndexedDB에 AES-GCM으로 암호화해 둔 refresh token으로 백그라운드에서 `/oauth/token`에 POST해 access token을 갱신하고 IDLE이 된다. 화면 변화가 없고 팝업, 리디렉션, 깜박임도 없다. |
 | 앱 재실행 (refresh token 없음) | NEEDS_CONSENT 상태가 되고, 설정 화면에 "연결" 단추가 보인다 |
 | 탭 활성화 | `visibilitychange` 이벤트로 `pollSync()`를 한 번 호출해 다른 기기의 변경분을 새로고침 없이 자동으로 가져온다. 사이클이 끝난 지 15초 안이면 건너뛰고, 도는 중이면 버린다. OFFLINE이고 기기가 온라인이면 다시 시도한다 |
@@ -149,7 +149,7 @@ git submodule update --init --recursive
 | 연결 해제 때 「파일도 삭제」를 누르면 | 자격 증명(IDB의 refresh token과 계정 키)을 먼저 지우고, 진행 중인 사이클을 10초까지 기다린 뒤 appDataFolder의 `sync.json`을 모두 지운다(만료된 토큰이면 한 번 갱신한다). 지우지 못하면 스낵바로 알리고, 다시 연결할 때까지 설정에 안내를 남긴다 |
 | 다른 탭에서 로그아웃 | 공유 켬 표지(`bible-drive-sync`)가 "0"이 되면(`storage` 이벤트) 이 탭도 멈춘다 |
 
-**OAuth /token BFF**: `/oauth/token`은 nginx가 같은 origin에서 받은 요청에 서버 쪽에서 `client_secret`을 넣은 뒤 `oauth2.googleapis.com/token`으로 전달한다. Google "Web application" 클라이언트 유형은 RFC 7636에서 벗어나 PKCE에서도 secret을 요구하고, GitHub secret scanner가 secret을 자동으로 무효화할 위험도 있다. 이 두 문제를 피하려는 것이다 ([ADR-017](docs/decisions/017-oauth-bff-proxy.md), `common-bible-server/nginx/oauth-proxy.example.conf`).
+**OAuth /token BFF**: `/oauth/token`은 nginx가 같은 출처에서 받은 요청에 서버 쪽에서 `client_secret`을 넣은 뒤 `oauth2.googleapis.com/token`으로 전달한다. Google "Web application" 클라이언트 유형은 RFC 7636에서 벗어나 PKCE에서도 secret을 요구하고, GitHub secret scanner가 secret을 자동으로 무효화할 위험도 있다. 이 두 문제를 피하려는 것이다 ([ADR-017](docs/decisions/017-oauth-bff-proxy.md), `common-bible-server/nginx/oauth-proxy.example.conf`).
 
 운영 안전장치:
 - **무한 리디렉션 상한**: localStorage 카운터가 상한(3회)을 넘으면 ERROR 상태로 강제로 넘어간다. SYNC_DONE에서만 0으로 되돌린다.
