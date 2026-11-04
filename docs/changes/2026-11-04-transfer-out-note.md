@@ -1,4 +1,5 @@
 ---
+pr: 472
 date: 2026-11-04
 branch: feat/transfer-out-note
 title: "feat: 옮겨 간 축일의 칩을 제목 아래 문장으로 바꿈"
