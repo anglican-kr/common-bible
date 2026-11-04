@@ -212,7 +212,7 @@ ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` 약 6,000줄이 도메�
 | `js/app/bookmark-core.js`          | DOM이 없는 북마크 로직(트리 조회, 삽입, 삭제, href와 공유, 정렬과 최근 본 순서, 활성 경로 판정 함수, 옛 버전 절 범위 옮기기 `migrateLegacyBookmark`). `window` 파사드 없이 다른 모듈이 `import`로 쓴다(자기 `<script>` 태그는 있다. ADR-034) | ~455    |
 | `js/app/bookmark-modals.js`        | 북마크 모달 7종(확인, 새 폴더, 폴더 콤보박스, 저장과 편집, 병합, 가져오기, 이동 선택기)과 렌더 콜백 의존성 주입, 하나로 모은 Esc 스택(`closeTopmostModal`)(ADR-034). 가져오기는 항목을 하나씩 검사해 어긋난 것만 빼고 들이고(`_sanitizeImportItems`. ADR-040), 옛 버전의 절 범위는 들이면서 옮긴다 | ~1,150  |
 | `js/app/bookmark.js`               | 북마크 **드로어와 헤더의 조정 모듈**. 드로어 생명주기, 헤더 버튼, 초기화 연결, 파사드, `keydown` 처리와 Drive 연결 해제 모달(「파일 유지」, 「파일도 삭제」)을 맡는다. 트리 그리기, 제스처, 선택, ⋯ 메뉴, 절 선택은 아래 5개 모듈로 나눴다(ADR-034 후속, 2026-06-11) | ~570    |
-| `js/app/bookmark-tree.js`          | 트리 렌더링. 행별 빌더(스와이프 액션, 드래그 핸들, 선택 원, 폴더 읽기 버튼), `renderBookmarkTree`(드로어 본문과 전체 화면), `_rerenderActiveBookmarkTree` 허브, `renderBookmarksView`, 드로어 키보드 내비게이션 | ~640    |
+| `js/app/bookmark-tree.js`          | 트리 그리기. 행별 빌더(스와이프 액션, 드래그 핸들, 선택 원, 폴더 읽기 버튼), `renderBookmarkTree`(드로어 본문과 전체 화면), `_rerenderActiveBookmarkTree` 허브, `renderBookmarksView`, 드로어 키보드 내비게이션 | ~640    |
 | `js/app/bookmark-gestures.js`      | 제스처 엔진. 드래그로 순서 바꾸기(≡ 핸들에서만 시작한다. ADR-010 개정), 스와이프 액션 노출, 스와이프를 놓을 때의 계산(`SWIPE_GESTURE` 마커 블록, 유닛 테스트), 통합 포인터 핸들러      | ~505    |
 | `js/app/bookmark-select.js`        | 선택 삭제 모드. 선택 상태, 폴더를 고르면 안의 항목도 고르는 계산(`BOOKMARK_SELECT` 마커 블록), `#bm-select-bar` 독(공유, 이동, 삭제), 전체 선택 ([ADR-029](decisions/029-mobile-tab-bar.md) 개정) | ~365    |
 | `js/app/bookmark-menu.js`          | 전체 화면 제목 줄의 액션. ⋯ 오버플로 메뉴(새 폴더, 내보내기, 가져오기, 선택), 정렬 기준과 순서 라디오, 🛈 안내 팝오버, `exportBookmarks`                                       | ~440    |
@@ -331,7 +331,7 @@ ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` 약 6,000줄이 도메�
 - **캐시와 304**: fileId, ETag, 마지막으로 맞춘 문서의 지문을 캐시해 두고(`bible-drive-cache-*`) 목록 요청을 건너뛴다. 조건부 GET(`If-None-Match`)이 304를 돌려주면 내려받지 않고, 로컬 문서의 지문이 다르면 올리기만 한다. 구글이 앱에 ETag를 주지 않아 운영에서는 304가 오지 않는다(2026-10-30 확인, known-issues §42).
 - **실패 처리**: 응답에 따라 다르게 처리한다. 401은 조용한 갱신으로 처리한다(갱신 토큰이 없으면 NEEDS_CONSENT, 새 토큰도 거절되면 상한에서 ERROR). 412는 다시 병합한다(세 번까지, 그 뒤에는 스낵바와 IDLE). 운영에서는 ETag가 없어 412가 오지 않는다(위 「캐시와 304」). 코드 오류(`no_token`, 예외)는 ERROR다. 그 밖의 실패(`http_<status>`. 네트워크 0, 403, 429, 5xx 등)는 1, 2, 4, 8, 16초로 백오프하고, 그래도 실패하면 네트워크 실패만 OFFLINE으로, HTTP 실패는 IDLE로 둔다(다음 요청이 다시 시도한다). 기기가 오프라인이면 곧바로 OFFLINE이다. 전송 함수는 실패를 「없음」과 다른 값(상태 코드)으로 돌려주고, 본문을 읽지 못한 2xx도 실패로 본다([coding-pitfalls.md](coding-pitfalls.md) §28).
 - **카운터 상한**: `MAX_REAUTH=3`(반복되는 401), `MAX_CONFLICTS=3`(412 ETag), `MAX_NET_RETRIES=5`(1, 2, 4, 8, 16초로 점점 늘리는 대기), `MAX_REDIRECT_ATTEMPTS=3`(끝없는 리디렉션 방지).
-- **연결 해제**: 「파일 유지」는 토큰을 폐기하고(Google `/revoke`), IndexedDB의 갱신 토큰과 계정 키를 지우고, 켬 표지를 "0"으로 쓴 뒤 `_stopSync`를 호출한다. 「파일도 삭제」는 페이지가 닫혀도 남으면 안 되는 것을 먼저 지운다. IndexedDB의 갱신 토큰(한 번 갱신할 몫은 메모리에만 둔다), 켬 표지, 계정 키가 그것이다. 그다음 토큰을 상태 머신에서 곧바로 지워 동기화를 멈추고, 진행 중인 사이클이 이미 보낸 요청을 10초까지 기다린 뒤 appDataFolder의 `sync.json`을 모두 지운다(목록, 캐시된 id, 이 페이지가 만든 id를 대상으로 하며, 404는 이미 없는 것으로 보고, 401이면 한 번 갱신하고, 기다림 시간을 넘겼으면 한 번 더 기다렸다가 다시 시도한다). 끝나면 토큰을 폐기한다. 결과는 `true`, `false`, `null`이고, 삭제를 확인하지 못하면 스낵바와 설정의 안내를 남긴다(`bible-drive-delete-pending`. 다시 연결할 때까지 남는다).
+- **연결 해제**: 「파일 유지」는 토큰을 폐기하고(Google `/revoke`), IndexedDB의 갱신 토큰과 계정 키를 지우고, 켬 표지를 "0"으로 쓴 뒤 `_stopSync`를 호출한다. 「파일도 삭제」는 페이지가 닫혀도 남으면 안 되는 것을 먼저 지운다. IndexedDB의 갱신 토큰(한 번 갱신할 몫은 메모리에만 둔다), 켬 표지, 계정 키가 그것이다. 그다음 토큰을 상태 머신에서 곧바로 지워 동기화를 멈추고, 진행 중인 사이클이 이미 보낸 요청을 10초까지 기다린 뒤 appDataFolder의 `sync.json`을 모두 지운다(목록, 캐시된 식별자, 이 페이지가 만든 식별자를 대상으로 하며, 404는 이미 없는 것으로 보고, 401이면 한 번 갱신하고, 기다림 시간을 넘겼으면 한 번 더 기다렸다가 다시 시도한다). 끝나면 토큰을 폐기한다. 결과는 `true`, `false`, `null`이고, 삭제를 확인하지 못하면 스낵바와 설정의 안내를 남긴다(`bible-drive-delete-pending`. 다시 연결할 때까지 남는다).
 - **병합 정책**: 항목마다 마지막 수정 시각(`_u`, 밀리초)과 삭제 표시(툼스톤)를 함께 저장한다. 항목 단위로 나중에 수정한 쪽을 남기고, 파일 전체를 단위로 하지 않는다. 그래서 서로 다른 기기에서 다른 북마크를 추가해도 둘 다 보존된다.
 
 진입과 복귀 시나리오는 [README §Google Drive 동기화](../README.md#google-drive-동기화-북마크-설정-읽기-위치)의 표를 본다.
@@ -394,7 +394,7 @@ ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` 약 6,000줄이 도메�
 | `localStorage` | `bible-drive-sync` | 켬 표지("0", "1"). 다른 탭은 이 키의 `storage` 이벤트로 로그아웃을 안다 | (메타) |
 | `localStorage` | `bible-drive-sync-email` | 마지막 인증 이메일 (OAuth `login_hint`) | (메타) |
 | `localStorage` | `bible-drive-cache-file-id`, `bible-drive-cache-etag`, `bible-drive-cache-synced-hash` | 동기화 캐시. fileId, ETag, 마지막으로 맞춘 문서의 지문을 담고, 목록 요청과 내려받기를 건너뛰는 데 쓴다. 구글이 ETag를 보내지 않아 운영에서는 ETag가 비어 있다 | (메타) |
-| `localStorage` | `bible-drive-base-ids` | 기준 목록. 마지막으로 내려받아 병합한 드라이브 파일에 살아 있던 북마크 id를 이 기기가 처음 본 날별로 묶어 파일 id와 함께 두고, 아직 병합 판단에는 쓰지 않는다(ADR-011 Phase 2c) | (메타) |
+| `localStorage` | `bible-drive-base-ids` | 기준 목록. 마지막으로 내려받아 병합한 드라이브 파일에 살아 있던 북마크 식별자를 이 기기가 처음 본 날별로 묶어 파일 식별자와 함께 두고, 아직 병합 판단에는 쓰지 않는다(ADR-011 Phase 2c) | (메타) |
 | `localStorage` | `bible-drive-redirect-attempts` | 끝없는 리디렉션을 막는 카운터(상한 3) | (메타) |
 | `localStorage` | `bible-drive-delete-pending` | 끝나지 않은 「파일도 삭제」. 설정에 남는 안내이며 다시 연결하면 지운다 | 로컬 전용 |
 | `localStorage` | `bible-audio-pos` | 오디오 재생 위치 | 로컬 전용 |
@@ -413,7 +413,7 @@ ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` 약 6,000줄이 도메�
 | Cache Storage | `fonts` (FONT_CACHE) | Google Font 파일 | (영구) |
 | Google Drive (`appDataFolder`) | `sync.json` | 동기화 페이로드(v2 문서, `schemaVersion`, `deviceId`)와 ETag | ☁️ 원격 |
 
-동기화 대상이 아닌 항목(오디오 위치, 정렬, 캐시 등)은 의도적으로 기기에만 둔다. 기기 ID는 올리는 페이로드에 실린다. 지금 버전의 병합은 이 값을 읽지 않지만, 2026-10-31 전의 버전은 시각이 같을 때 남길 사본을 정하는 데 이 값을 읽으므로 계속 싣는다. 옛 키(`bible-drive-sync-updated`와 `bible-drive-silent-blocked`)는 지우기만 한다. 첫 북마크를 저장할 때와 첫 오디오를 재생할 때 `navigator.storage.persist()`를 한 번 요청한다(저장소 정리에 대비한 것이다. 아래 「알려진 한계」의 ITP). 동기화 페이로드 스키마는 `js/types.d.ts`의 `SyncDoc` 타입과 `js/sync/store-v2.js:1`의 헤더 주석에 정의되어 있다.
+동기화 대상이 아닌 항목(오디오 위치, 정렬, 캐시 등)은 의도적으로 기기에만 둔다. 기기 식별자는 올리는 페이로드에 실린다. 지금 버전의 병합은 이 값을 읽지 않지만, 2026-10-31 전의 버전은 시각이 같을 때 남길 사본을 정하는 데 이 값을 읽으므로 계속 싣는다. 옛 키(`bible-drive-sync-updated`와 `bible-drive-silent-blocked`)는 지우기만 한다. 첫 북마크를 저장할 때와 첫 오디오를 재생할 때 `navigator.storage.persist()`를 한 번 요청한다(저장소 정리에 대비한 것이다. 아래 「알려진 한계」의 ITP). 동기화 페이로드 스키마는 `js/types.d.ts`의 `SyncDoc` 타입과 `js/sync/store-v2.js:1`의 헤더 주석에 정의되어 있다.
 
 ## 6. 정적 타입 검사: JSDoc과 `tsc --noEmit`
 

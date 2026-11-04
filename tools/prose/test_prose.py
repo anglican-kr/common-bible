@@ -83,6 +83,21 @@ class CheckLineTest(unittest.TestCase):
         self.assertIn("term", checks("하단 chrome을 숨긴다"))
         self.assertNotIn("term", checks("Android Chrome과 chromium에서 확인한다"))
 
+    def test_decided_terms_for_cache_and_storage(self):
+        self.assertIn("term", checks("Google Font 콘텐츠 어드레스 파일을 둔다"))
+        self.assertIn("term", checks("저장 공간의 쿼터를 넘는다"))
+        self.assertIn("term?", checks("같은 origin에 둔다"))
+        self.assertIn("term?", checks("메모리 ring buffer에 남긴다"))
+        self.assertIn("term?", checks("설정 화면의 Pull-to-refresh를 뺀다"))
+
+    def test_id_needs_judgement_but_not_code_or_file_names(self):
+        self.assertIn("term?", checks("기기 id를 저장한다"))
+        self.assertIn("term?", checks("기기 id. 올리는 값이다"))
+        self.assertNotIn("term?", checks("`id` 속성을 읽는다"))
+        self.assertNotIn("term?", checks("user-id와 id.json을 읽는다"))
+        self.assertNotIn("term?", checks("클라이언트 ID를 등록한다"))
+        self.assertNotIn("term?", checks("origin/main과 견준다"))
+
     def test_winning_needs_judgement(self):
         self.assertIn("term?", checks("다른 기기의 수정이 병합에서 이긴다"))
         self.assertNotIn("term?", checks("줄이기는 채택하지 않았다"))

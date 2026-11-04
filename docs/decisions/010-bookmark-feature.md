@@ -27,7 +27,7 @@ Phase 1 완료 후 "어제 읽던 곳을 빠르게 찾는" 사용 패턴이 주�
 
 ### 데이터 스키마
 
-옛 키 `"bible-bookmarks"`에 아래 트리를 그대로 두고, 동기화 저장소 `"bible-bookmarks-v2"`가 같은 목록을 항목마다 부모 id, 순서, 시각을 붙여 평탄화해 함께 둔다(`storage.js saveBookmarks`, ADR-011). 쓰는 순서와 저장이 거절될 때의 처리는 ADR-015 D7에 있다. 가져오기가 받는 형식도 이 스키마다(ADR-040).
+옛 키 `"bible-bookmarks"`에 아래 트리를 그대로 두고, 동기화 저장소 `"bible-bookmarks-v2"`가 같은 목록을 항목마다 부모 식별자, 순서, 시각을 붙여 평탄화해 함께 둔다(`storage.js saveBookmarks`, ADR-011). 쓰는 순서와 저장이 거절될 때의 처리는 ADR-015 D7에 있다. 가져오기가 받는 형식도 이 스키마다(ADR-040).
 
 ```js
 type VerseSpec = string  // "all" | "3" | "1-17" | "1-5,10-15" — 절 번호 단위(「북마크 저장」). 2026-06-06 전의 앱은 "3a" · "3a,3b,5-7" 같은 줄 글자도 저장했다(「옛 저장값」)
@@ -118,7 +118,7 @@ const isHighlightedSpan = hlSegments
 | `mergeVerseSpecs(specA, specB)` | `verse-spec.js` | 두 절 범위의 합집합을 만든다(합치기). 절 번호 단위로 적는다 |
 | `migrateLegacyBookmark(bm, books)` | `bookmark-core.js` | 북마크 하나의 옛 절 범위와 옛 기본 이름을 옮긴다(「옛 저장값」) |
 | `rewriteBookmarks(patch)` | `storage.js` | 저장된 두 사본을 수정 시각(`_u`)을 올리지 않고 고쳐 쓴다 |
-| `_findParentFolderId(store, id)` | `bookmark-core.js` | 북마크가 속한 폴더 ID를 돌려준다(최상위는 null) |
+| `_findParentFolderId(store, id)` | `bookmark-core.js` | 북마크가 속한 폴더 식별자를 돌려준다(최상위는 null) |
 | `_isActiveBookmark(bm)` | `bookmark-core.js` | `window.location.pathname === _bookmarkHref(bm)` |
 | `_hasActiveDescendant(folder)` | `bookmark-core.js` | 활성 북마크를 품고 있는지 재귀로 확인한다 |
 | `generateId()` | `storage.js` | `Date.now().toString(36) + random` |
@@ -228,7 +228,7 @@ li.bm-bookmark                       (role="treeitem", data-id)
 ⋯ 더 보기 메뉴에 정렬 기준 그룹(제목, 직접 정렬, 추가된 날짜, 최근에 본 날짜, 수정한 날짜)이 있고, 그 **아래에 「오름차순/내림차순」 두 번째 라디오 그룹**이 있다(Apple Music 패턴).
 
 - 방향은 활성 기준에 적용되고 **기준별로 방향을 따로 기억**한다. `직접 정렬(manual)`은 방향 개념이 없어 두 행을 **비활성(흐리게)** 처리한다.
-- 기준과 방향은 기기마다 따로 두는 보기 설정이다. `localStorage`의 `bible-bookmark-sort`, `bible-bookmark-sort-dir`(`{mode: "asc"|"desc"}` 맵)에 저장하며 Drive로 동기화하지 않는다(ADR-011의 범위 밖). 「최근에 본」 시각은 `bible-bookmark-viewed`(id → 시각)에 둔다.
+- 기준과 방향은 기기마다 따로 두는 보기 설정이다. `localStorage`의 `bible-bookmark-sort`, `bible-bookmark-sort-dir`(`{mode: "asc"|"desc"}` 맵)에 저장하며 Drive로 동기화하지 않는다(ADR-011의 범위 밖). 「최근에 본」 시각은 `bible-bookmark-viewed`(식별자 → 시각)에 둔다.
 - 기준별 **자연 기본값**(제목 `asc`, created/modified/viewed `desc`)을 두어, 방향을 한 번도 바꾸지 않은 사용자는 방향 선택이 생기기 전과 같은 순서를 본다.
 - **구현:** **오름차순 기준 비교 함수** `_bookmarkAscComparator`를 쓰고, `sortBookmarkNodes`가 `desc`일 때 부호를 뒤집는다(폴더를 앞에 모으는 방식은 그대로다). `getBookmarkSortDir`와 `setBookmarkSortDir`는 `manual`과 잘못된 값을 거부한다. 메뉴는 `오름/내림` 라디오 2행과 구분선을 둔다(가로 모드에서는 11행이 되지만 ADR-030 후속⁷의 스크롤로 모두 볼 수 있다).
 - **기준별 설명 문구(혼동 방지):** 「오름/내림」은 추상적이고, 그 뜻이 기준마다 뒤집힌다(제목은 오름차순이 가나다순이고, 추가된 날짜는 오름차순이 오래된 순이다). 그래서 각 방향 행의 라벨 뒤에 **활성 기준에 맞는 설명을 흐린 색으로** 붙인다(제목은 `가나다순`/`ㅎ→ㄱ`, 날짜류는 `오래된 순`/`최신·최근 순`, 최근에 본은 `오래전 본 순`/`최근 본 순`). `syncDirChecks`가 메뉴를 열 때 갱신하므로, 문구는 고정이 아니라 기준에 따라 바뀐다. 괄호는 **CSS만으로**(`::before`, `::after`) 그리므로 스크린 리더는 단어만 읽고, 직접 정렬일 때는 설명이 없어 `:empty`로 괄호까지 숨긴다. HIG를 따라 앞쪽 체크 열과 라벨 형식을 유지한다.
@@ -334,7 +334,7 @@ li.bm-bookmark                       (role="treeitem", data-id)
 - 채택 안 함(2026-10-22, 사용자 결정). 이유: 옮긴 값이 동기화로 바로 퍼지지만, 시작할 때의 옮기기가 동기화보다 먼저 돌아 다른 기기에서 고친 내용을 덮을 수 있다. 재검토: 없음
 
 #### 시작할 때만 옮긴다(동기화로 받은 것은 다음 시작 때)
-- 채택 안 함(2026-10-22, 구현 중). 이유: 시각이 같은 두 사본은 병합하면 한쪽이 남는다(그때는 기기 id 순서, 2026-10-31부터 드라이브의 사본). 드라이브에 옛 표기가 남아 있으면 동기화할 때마다 옛 표기가 돌아온다(실제 `mergeDocs`로 확인, ADR-011). 재검토: 없음
+- 채택 안 함(2026-10-22, 구현 중). 이유: 시각이 같은 두 사본은 병합하면 한쪽이 남는다(그때는 기기 식별자 순서, 2026-10-31부터 드라이브의 사본). 드라이브에 옛 표기가 남아 있으면 동기화할 때마다 옛 표기가 돌아온다(실제 `mergeDocs`로 확인, ADR-011). 재검토: 없음
 
 #### 옛 기본 이름은 그대로 둔다
 - 채택 안 함(2026-10-22, 사용자 결정). 이유: 목록의 한 행에 이름 「이사 10:16aa」와 참조 「이사 10:16」이 함께 보인다. 합치기도 이미 제목을 다시 짓는다. 재검토: 없음
