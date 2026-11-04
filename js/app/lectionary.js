@@ -422,7 +422,9 @@ const MEMORIAL_CLASS_ORDER = ["martyr", "pastor", "missionary", "teacher", "mona
  * 월별 축일 후보다 — 3.1 사순 2주일에 함께 밀린 삼일절(`national`)은 잇지 않는다.
  * - 기본 독서가 평일(격자)이면 — 지정 전례일(성인 축일)에 고유 독서가 없어서다(설계서 미결25) — 그날 지키는 성인 축일
  *   (`proper`)을 모두 잇는다(11.6 레오나드, 2.14 발렌틴과 키릴과 메토디우스).
- * - 밀려서 그날 기념만 하는 축일(`commemorated` — 주일과 겹친 7.26 안나와 요아킴)은 기본 독서가 무엇이든 잇는다.
+ * - 밀려서 그날 기념만 하는 축일(`commemorated` — 옮겨 온 축일과 겹친 12.29 토마스 베켓)은 기본 독서가 무엇이든 잇는다.
+ * - 다만 주일에는 성인의 본기도를 잇지 않는다(사용자 확인 2026-11-04). 주일과 겹쳐 기념만 하는 성인(7.26 안나와 요아킴)은
+ *   이름 줄에만 보인다. 책자도 그 주일에 이름만 적는다(설계서 미결47).
  * 유형이 같고 공통 본기도를 쓰는 성인은 그 본기도 하나에 이름을 모으고(「A와 B를」), 다르면 `MEMORIAL_CLASS_ORDER` 차례로
  * 잇는다. 이름도 같은 차례다. 대체안이 여럿이면 첫째를 쓴다.
  * `colors`는 그날 지키는 성인 축일(`proper`)들의 색을 같은 차례로 겹치지 않게 모은 것 — 둘 이상이면 머리가 「적색 또는
@@ -465,7 +467,7 @@ function memorialOf(resolved, initial, entries) {
   /** @type {string[]} */
   const colors = [];
   for (const x of items) for (const c of x.colors) if (!colors.includes(c)) colors.push(c);
-  return { collects, colors, saints: items.flatMap((x) => x.saints) };
+  return { collects: dayOfWeek(resolved.date) === 0 ? [] : collects, colors, saints: items.flatMap((x) => x.saints) };
 }
 
 /** 괄호 설명을 뗀 이름이 같은가 — 세트 · 본기도의 제목과 전례일 이름 대조. */

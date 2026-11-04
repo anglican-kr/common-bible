@@ -1497,14 +1497,16 @@ def test_two_saints_on_a_weekday_follow_the_class_order(desktop_context):
 
 
 def test_commemorated_saint_with_proper_readings_keeps_its_chip(desktop_context):
-    """7.26(2026, 주일) 안나와 요아킴은 주일에 밀려 기념만 한다 — 이름은 제목 아래 줄에 보이고, 주일 본기도 뒤에 성인 본기도가
-    이어진다. 고유 독서가 있어 칩도 남고, 고르면 그 고유 독서다(사용자 결정 2026-11-03)."""
+    """7.26(2026, 주일) 안나와 요아킴은 주일에 밀려 기념만 한다 — 이름은 제목 아래 줄에 보이고, 주일에는 성인 본기도를 잇지
+    않는다(사용자 확인 2026-11-04). 고유 독서가 있어 칩도 남고, 고르면 그 고유 독서다(사용자 결정 2026-11-03). 평일에 밀려
+    기념만 하는 성인(12.29 토마스 베켓)은 기본 독서의 본기도 뒤에 성인 본기도를 잇는다."""
     page = desktop_context.new_page()
+    collects = lambda: page.eval_on_selector_all(".lect-collect-text", "els => els.map(e => e.textContent)")
     _open(page, "lectionary/2026-07-26")
     assert page.inner_text(".lect-day") == "연중 17주일"
     assert page.inner_text(".lect-day-saints").startswith("안나와 요아킴")
-    texts = page.eval_on_selector_all(".lect-collect-text", "els => els.map(e => e.textContent)")
-    assert len(texts) == 2 and "안나와 요아킴" in texts[1], texts
+    texts = collects()
+    assert len(texts) == 1 and "안나와 요아킴" not in texts[0], texts
     assert _colors(page) == ["녹색"]
     sunday_first = page.inner_text(".lect-reading[data-slot='first'] .lect-ref")
     page.locator(".lect-chip", has_text="안나와 요아킴").click()
@@ -1512,6 +1514,10 @@ def test_commemorated_saint_with_proper_readings_keeps_its_chip(desktop_context)
     assert page.inner_text(".lect-reading[data-slot='first'] .lect-ref") != sunday_first
     assert page.inner_text(".lect-day") == "연중 17주일"   # 제목과 이름 줄은 그대로
     assert page.inner_text(".lect-day-saints").startswith("안나와 요아킴")
+    _open(page, "lectionary/2026-12-29")
+    assert page.inner_text(".lect-day-saints").startswith("토마스 베켓")
+    texts = collects()
+    assert len(texts) == 2 and "토마스 베켓" in texts[1], texts
 
 
 def test_feast_lines_come_before_commemoration_lines(desktop_context):
