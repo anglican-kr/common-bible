@@ -734,6 +734,26 @@ test("buildLectionaryModel: 독서도 본기도도 없는 후보는 칩이 없�
   same(bare.textlessDays.map((c) => c.observance.id), ["t-가정주일"]);
 });
 
+test("buildLectionaryModel: 그날 축성 · 축복된 교회는 종류마다 한 줄, 이름을 쉼표로 잇고 꼬리는 한 번 — 「북.」 성당은 뺀다(사용자 결정 2026-11-04)", () => {
+  const grid = cand(obs("grid:easter-4-weekday-tue", "부활 4주 화요일", { rank: "feria", precedence: 8, color: "white" }));
+  const r = resolvedOf("2026-04-21", [grid], grid);
+  const groupsOf = groupsOfFrom({ "grid:easter-4-weekday-tue": [group("g", FOUR)] });
+  const entries = [{ candidate: grid, collects: [collect("g-c", "…")] }];
+  const q = { obs: null, track: null, set: null, collect: null };
+  const lines = (dedications) => plain(ctx.buildLectionaryModel(r, q, groupsOf, entries, null, dedications).dedicationLines);
+  // 표의 차례가 축복 먼저여도 축성일 줄이 먼저다
+  same(lines([
+    { name: "세종성당", kind: "blessing" }, { name: "강릉성당", kind: "consecration" },
+    { name: "북.장림성당", kind: "consecration" }, { name: "청주산남성당", kind: "blessing" },
+  ]), ["강릉성당 축성일", "세종성당, 청주산남성당 축복일"]);
+  same(lines([{ name: "일산성당", kind: "consecration" }, { name: "초지성당", kind: "consecration" }, { name: "행신성당", kind: "consecration" }]),
+    ["일산성당, 초지성당, 행신성당 축성일"]);
+  // 북한 성당뿐인 날, 교회가 없는 날, 인자를 넘기지 않은 호출(테스트의 옛 호출)은 줄이 없다
+  same(lines([{ name: "북.버드내성당", kind: "consecration" }, { name: "북.장림성당", kind: "consecration" }]), []);
+  same(lines([]), []);
+  same(plain(ctx.buildLectionaryModel(r, q, groupsOf, entries, null).dedicationLines), []);
+});
+
 test("buildLectionaryModel: 이름 있는 후보와 독서 · 본기도가 똑같은 격자는 칩이 없다 — 대림1주일(사용자 결정 2026-11-04)", () => {
   const advent = cand(obs("t-대림1주일", "대림1주일", { rank: "privileged_sunday", precedence: 2, color: "violet" }));
   const grid = cand(obs("grid:advent-1-sunday", "대림 1주일", { rank: "privileged_sunday", precedence: 2, color: "violet" }));

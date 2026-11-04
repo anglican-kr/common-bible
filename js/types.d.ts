@@ -813,6 +813,15 @@ export interface HalfVerse {
 }
 
 /**
+ * 그날 축성되거나 축복된 교회 하나 — 데이터 `lectionary/local-observances.json`의 `parishes[]`(원료는 데이터 저장소
+ * `liturgical/calendar/parishes.md`). `name`은 표의 이름 그대로다(북한에 있던 성당은 「북.」으로 시작한다).
+ */
+export interface ParishDedication {
+  name: string;
+  kind: "consecration" | "blessing";
+}
+
+/**
  * `findReadings` 의 그룹 — 세트 하나가 그룹 하나. 고유는 본문 레코드에서, 성인 공통은
  * `commons.json` 에서 만든다(`common` 이 분류 키, id `common:<class>-s<set>`) — 설계서 §5.6.
  */

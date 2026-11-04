@@ -43,7 +43,7 @@ import {
 import { specCoversVerse, verseInstanceKeys, citationSource } from "./verse-spec.js";
 import {
   parseDate, toKey, addDays, dayOfWeek, isComputableDate, joinNames, fillCommonName,
-  preloadCalendar, preloadLectionary, resolveDate, findReadings, findCollects, findHalfVerse, fastOf,
+  preloadCalendar, preloadLectionary, resolveDate, findReadings, findCollects, findHalfVerse, findDedications, fastOf,
 } from "./liturgical-engine.js";
 
 const { _$, el, clearNode, emptyState, isModifiedClick } = window.appHelpers;
@@ -72,6 +72,7 @@ const PAGE_TITLE = LITURGICAL_VIEWS.lectionary.title;
  *   chips: LectionaryChip[],
  *   collects: CollectOption[], collectLabels: string[], collectIndex: number, collectsLinked: boolean, ending: "A" | "B" | "C",
  *   memorialCollects: CollectOption[], memorialSaints: Candidate[], commemorations: Candidate[], textlessDays: Candidate[],
+ *   dedicationLines: string[],
  *   colors: string[], colorAlt: string[], ownColor: boolean, colorsOr: boolean,
  *   fast: "major" | "minor" | null, cycle: string | null, empty: boolean,
  *   hrefs: { prev: string | null, next: string | null, today: string, tracks: Array<{ track: 1 | 2, href: string, active: boolean }>, options: string[], collects: string[] },
@@ -98,6 +99,10 @@ const CYCLE_LABEL = { A: "가해", B: "나해", C: "다해", I: "홀수해", II:
 const COLOR_LABEL = { white: "백색", red: "적색", green: "녹색", violet: "자색", rose: "장미색", blue: "청색" };
 /** @type {Record<string, string>} */
 const FAST_LABEL = { major: "대재일", minor: "소재일" };
+// 축성일 줄의 꼬리 — 데이터 local-observances.json `_vocab.dedication_kind`(「축성」 · 「축복」)에 「일」을 붙인 것이다
+// (lectionary.data.test.js가 대조한다). 키의 차례가 줄의 차례다 — 축성일(주요축일)이 축복일(기념일)보다 먼저.
+/** @type {Record<"consecration" | "blessing", string>} */
+const DEDICATION_LABEL = { consecration: "축성일", blessing: "축복일" };
 const WEEKDAY_KO = ["일", "월", "화", "수", "목", "금", "토"];
 const GRID_ID_PREFIX = "grid:";
 /** 파서가 괄호 선택 확장(「9:35-10:8(9-23)」)으로 만든 세트의 표지(ADR-037 §1 「대안 세트 explode」). */
@@ -388,6 +393,19 @@ function collectsFor(entries, selected) {
   // 같은 날짜에 정의된 다른 전례일의 본기도가 섞여 오면(5.1 노동자의 날 — 미결18 · 35) 고른 전례일 이름의 것을 앞세운다(안정 정렬)
   const name = selected.observance.name;
   return [...sel.collects].sort((a, b) => Number(!sameName(a.title, name)) - Number(!sameName(b.title, name)));
+}
+
+/**
+ * 그날 축성되거나 축복된 교회(엔진 `findDedications`) → 제목 아래 줄(사용자 결정 2026-11-04). 종류마다 한 줄이고, 교회
+ * 이름을 쉼표로 이은 뒤 「축성일」 · 「축복일」을 한 번만 붙인다(「일산성당, 초지성당, 행신성당 축성일」). 축성일 줄이
+ * 먼저다(`DEDICATION_LABEL`의 차례). 「북.」으로 시작하는 성당(북한에 있던 성당)은 싣지 않고, 주보성인도 보이지 않는다(같은 결정).
+ * @param {import("../types").ParishDedication[]} entries @returns {string[]}
+ */
+function dedicationLines(entries) {
+  return /** @type {Array<keyof typeof DEDICATION_LABEL>} */ (Object.keys(DEDICATION_LABEL)).flatMap((kind) => {
+    const names = entries.filter((e) => e.kind === kind && !e.name.startsWith("북.")).map((e) => e.name);
+    return names.length ? [`${names.join(", ")} ${DEDICATION_LABEL[kind]}`] : [];
+  });
 }
 
 /**
@@ -720,9 +738,10 @@ function canticleTitleOf(/** @type {BibleChapter | null | undefined} */ chapter)
  * @param {ResolvedDate} resolved @param {LectionaryQuery} query
  * @param {(c: Candidate) => ReadingGroup[]} groupsOf @param {CandidateCollects[]} collectEntries
  * @param {1 | 2 | null} storedTrack  기억된 트랙 — 마지막으로 고른 것(해를 넘어 유지)
+ * @param {import("../types").ParishDedication[]} [dedications]  그날 축성되거나 축복된 교회(엔진 `findDedications`)
  * @returns {LectionaryModel | null}  후보가 하나도 없으면 null(유효한 날짜에는 격자가 언제나 있어 생기지 않는다)
  */
-function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedTrack) {
+function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedTrack, dedications = []) {
   const date = resolved.date;
   const initial = initialCandidate(resolved, groupsOf);
   if (!initial) return null;
@@ -809,7 +828,7 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
     date, resolved, selected, initial, groups, tracks, track, options, setIndex, group, shortGroup, slots,
     chips, collects, collectLabels: collectLabels(collects), collectIndex, collectsLinked: !!linked,
     ending: endingCodeOf(memorialCollects[memorialCollects.length - 1] || chosenCollect), memorialCollects,
-    memorialSaints: memorial.saints, commemorations, textlessDays,
+    memorialSaints: memorial.saints, commemorations, textlessDays, dedicationLines: dedicationLines(dedications),
     colors, colorAlt, ownColor, colorsOr, fast: fastOf(resolved),
     cycle: resolved.coord.year && CYCLE_LABEL[resolved.coord.year] ? CYCLE_LABEL[resolved.coord.year] : null,
     empty,
@@ -1037,11 +1056,13 @@ function buildHeader(m) {
   }
   // 그날 기리는 성인과 기념일 — 칩 대신 제목 아래에 한 줄씩, 이름 뒤에 「축일」 · 「기념일」(사용자 결정 2026-11-03,
   // memorialOf). 다른 칩을 골라도 제목처럼 그대로다. 그 아래에 본문 없는 날(가정주일, 세계평화를 위한 기도일 …)을 이름만
-  // 한 줄씩 — 이름이 이미 「주일」 · 「기도일」로 끝나 꼬리를 붙이지 않는다(사용자 결정 2026-11-04).
+  // 한 줄씩 — 이름이 이미 「주일」 · 「기도일」로 끝나 꼬리를 붙이지 않는다(사용자 결정 2026-11-04). 맨 아래에 그날 축성되거나
+  // 축복된 교회를 종류마다 한 줄씩(같은 날 사용자 결정 — dedicationLines).
   const lines = [
     ...m.memorialSaints.map((c) => `${c.observance.name || ""} 축일`),
     ...m.commemorations.map((c) => `${c.observance.name || ""} 기념일`),
     ...m.textlessDays.map((c) => String(c.observance.name || "")),
+    ...m.dedicationLines,
   ];
   if (lines.length) {
     const saints = el("p", { className: "lect-day-saints" });
@@ -1497,7 +1518,7 @@ async function renderLectionaryView(parsed) {
     if (!g) { g = findReadings(resolved, c); groupsCache.set(key, g); }
     return g;
   };
-  const model = buildLectionaryModel(resolved, parsed, groupsOf, findCollects(resolved), loadLectionaryTrack());
+  const model = buildLectionaryModel(resolved, parsed, groupsOf, findCollects(resolved), loadLectionaryTrack(), findDedications(date));
   if (!model) return pickAnotherDate("이 날짜는 교회력에 없습니다");
 
   const chapters = await loadSlotChapters(model.slots);

@@ -993,6 +993,23 @@ def test_commemoration_is_a_line_not_a_chip(desktop_context):
     assert page.eval_on_selector_all(".lect-day-saint", "els => els.map(e => e.textContent)") == ["평화통일주일"]
 
 
+def test_parish_dedications_are_lines_below_the_day_names(desktop_context):
+    """그날 축성되거나 축복된 교회는 이름 줄 맨 아래에 종류마다 한 줄이다. 교회 이름을 쉼표로 잇고 「축성일」 · 「축복일」은
+    한 번만 붙이며, 「북.」으로 시작하는 성당(북한에 있던 성당)은 보이지 않는다(사용자 결정 2026-11-04). 데이터 본당 표
+    (local-observances.json) 2026-04-21은 축성 하나(강릉), 축복 둘(세종, 청주산남), 05-16은 북한 성당 둘뿐이다."""
+    page = desktop_context.new_page()
+    _open(page, "lectionary/2026-04-21")
+    lines = page.eval_on_selector_all(".lect-day-saint", "els => els.map(e => e.textContent)")
+    assert lines[-2:] == ["강릉성당 축성일", "세종성당, 청주산남성당 축복일"], lines
+    # 다른 전례일(안셀름, 부활 4주 화요일 격자)을 골라도 제목 아래 줄은 그대로다
+    for obs in ["d0421-안셀름", "grid:easter-4-weekday-tue"]:
+        _open(page, "lectionary/2026-04-21?obs=" + urllib.parse.quote(obs))
+        assert page.eval_on_selector_all(".lect-day-saint", "els => els.map(e => e.textContent)")[-2:] == lines[-2:], obs
+    _open(page, "lectionary/2026-05-16")
+    assert "북." not in page.inner_text(".lect-head")
+    assert "축성일" not in page.inner_text(".lect-head")
+
+
 def test_grid_without_own_text_or_with_same_text_has_no_chip(desktop_context):
     """왕이신 그리스도 주일의 연중 34주일 격자는 본문이 없고, 대림1주일의 대림 1주일 격자는 본문이 같다 — 둘 다 칩이 없어 그날
     칩 줄이 없다(사용자 결정 2026-11-04). 격자를 주소로 가리켜도 기본 독서다."""
@@ -1440,8 +1457,9 @@ def test_saint_day_heading_and_collects_follow_the_default_reading(mobile_contex
     large = page.evaluate(measure)
     assert large["gap"] >= large["line"] - 0.5 and large["gap"] > small["gap"], (small, large)
     page.evaluate("() => { document.documentElement.style.fontSize = ''; }")
-    # 레오나드는 칩이 아니라 제목 아래 회색 이름 줄 — 칩은 평일 하나뿐이라 칩 줄도 없다(2026-11-03)
-    assert page.inner_text(".lect-day-saints") == "레오나드(은수자, 6세기) 축일"
+    # 레오나드는 칩이 아니라 제목 아래 회색 이름 줄 — 칩은 평일 하나뿐이라 칩 줄도 없다(2026-11-03). 그 아래 줄은 그날의
+    # 축성일(삼흥리성당, 2026-11-04)이다
+    assert page.eval_on_selector_all(".lect-day-saint", "els => els.map(e => e.textContent)") == ["레오나드(은수자, 6세기) 축일", "삼흥리성당 축성일"]
     assert page.locator(".lect-chips").count() == 0
     first = page.inner_text(".lect-reading[data-slot='first'] .lect-ref")
     assert "필립 3:17-4:1" in first
