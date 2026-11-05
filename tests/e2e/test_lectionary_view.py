@@ -687,10 +687,10 @@ def test_missing_half_verse_table_draws_whole_verses(browser):
 # 이 목록도 다시 만든다(그 화면에 반절이 없으면 「verse not drawn」으로 실패한다).
 _HALF_VERSE_VIEWS = [  # (표 키 「책:장:절+a|b」, 날짜, 쿼리, 슬롯)
     ("1cor:12:31a", "2025-01-26", "", "second"),
-    ("1cor:12:31b", "2026-09-16", "", "first"),
     ("1cor:2:10b", "2026-09-01", "", "first"),
     ("1kgs:21:21a", "2025-06-15", "obs=grid%3Aordinary-11-sunday", "first"),
     ("1sam:24:23a", "2026-01-23", "", "first"),
+    ("1tim:6:2b", "2027-09-17", "", "first"),
     ("2cor:11:21b", "2025-06-20", "", "first"),
     ("2cor:5:20b", "2025-03-05", "", "second"),
     ("2kgs:19:21a", "2026-06-23", "", "first"),
@@ -707,7 +707,6 @@ _HALF_VERSE_VIEWS = [  # (표 키 「책:장:절+a|b」, 날짜, 쿼리, 슬롯)
     ("amos:6:1a", "2025-09-28", "track=2", "first"),
     ("exod:19:8a", "2026-06-14", "track=2", "first"),
     ("gen:12:4a", "2026-03-01", "", "first"),
-    ("gen:27:5a", "2025-07-05", "", "first"),
     ("gen:28:19a", "2026-07-19", "", "first"),
     ("gen:2:4a", "2025-02-11", "", "first"),
     ("gen:2:4b", "2025-02-12", "", "first"),
@@ -1574,13 +1573,34 @@ def test_days_only_commemorated_are_plain_text_without_links(desktop_context):
     _open(page, "lectionary/2027-08-15")
     assert "광복절" in _choices(page), _choices(page)
     _open(page, "lectionary/2026-12-29")
-    assert page.locator(".lect-head a").count() == 0
+    assert _choices(page) == ["성탄주간"]   # 그날의 평일 독서는 고를 수 있고, 토마스 베켓은 링크가 아니다(2026-11-05)
     assert any(line.startswith("토마스 베켓") and line.endswith(" 축일") for line in name_lines()), name_lines()
     texts = collects()
     assert len(texts) == 2 and "토마스 베켓" in texts[1], texts
     _open(page, "lectionary/2026-12-06")
     assert page.inner_text(".lect-day-note") == "성 니콜라 축일을 12월 7일로 옮겨 지킵니다."
     assert page.locator(".lect-head a").count() == 0
+
+
+def test_jan_2_is_a_christmas_weekday_with_the_saint_on_the_name_line(desktop_context):
+    """1.2와 12.29는 기도서 486쪽이 날짜로 고정한 평일 독서다(사용자 결정 2026-11-05). 제목은 「성탄주간」,
+    성인은 이름 줄이고, 본기도는 성탄 주간 본기도 뒤에 성인 공통 본기도를 잇는다. 1.8 루시안과 같다."""
+    page = desktop_context.new_page()
+    collects = lambda: page.eval_on_selector_all(".lect-collect-text", "els => els.map(e => e.textContent)")
+    name_lines = lambda: page.eval_on_selector_all(".lect-day-saint", "els => els.map(e => e.textContent)")
+    _open(page, "lectionary/2027-01-02")
+    assert page.inner_text(".lect-day") == "성탄주간"
+    assert any(line.startswith("바실") and "그레고리" in line and line.endswith(" 축일") for line in name_lines()), name_lines()
+    assert page.inner_text(".lect-reading[data-slot='first'] .lect-ref") == "1요한 2:22-28"
+    assert page.locator(".lect-choices").count() == 0
+    assert page.locator(".lect-collects .division-tab").count() == 2   # 성탄 주간 본기도 1 · 2
+    texts = collects()
+    assert len(texts) == 2 and "바실" not in texts[0] and "바실" in texts[1], texts
+    _open(page, "lectionary/2028-12-29")
+    assert page.inner_text(".lect-day") == "성탄주간"
+    assert any(line.startswith("토마스 베켓") and line.endswith(" 축일") for line in name_lines()), name_lines()
+    texts = collects()
+    assert len(texts) == 2 and "토마스 베켓" in texts[1], texts
 
 
 def test_feast_lines_come_before_commemoration_lines(desktop_context):

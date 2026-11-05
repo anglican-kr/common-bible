@@ -912,7 +912,8 @@ test("§5.5 격자 전례일 id · 이름 · precedence — 절기 위치에서 
     ["2027-01-03", "grid:christmas-2-sunday", "성탄 2주일", 2],
     ["2022-12-25", "grid:christmas-x-sunday", "성탄 주일", 2],
     ["2026-12-30", "grid:christmas-x-weekday-wed", "성탄주간", 8],
-    ["2027-01-02", "grid:christmas-x-weekday-sat", "성탄 토요일", 8],          // 날짜 전용 본문이 없는 날
+    ["2027-01-01", "grid:christmas-x-weekday-fri", "성탄 금요일", 8],          // 날짜 전용 본문이 없는 날
+    ["2027-01-02", "grid:christmas-x-weekday-sat", "성탄주간", 8],             // 기도서 486쪽의 날짜 고정 독서(2026-11-05)
   ];
   for (const [d, id, name, prec] of cases) {
     const g = gridOf(resolve(d)).observance;
