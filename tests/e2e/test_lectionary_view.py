@@ -418,7 +418,7 @@ def test_reading_cards_without_a_track_are_not_remembered(desktop_context):
     page.locator(".lect-card", has_text="독서 2").click()
     page.wait_for_url("**/lectionary/2026-12-13?set=2")
     page.wait_for_selector(".lect-card.active:has-text('독서 2')")
-    assert page.inner_text(".lect-reading[data-slot='psalm'] .lect-ref").startswith("루가 1:46")
+    assert page.inner_text(".lect-reading[data-slot='psalm'] .lect-ref") == "루가 1:46하-55 (성모송가)"
     page.evaluate("() => window.navigate('/lectionary/2026-04-05')")
     page.wait_for_selector(".lect-date time[datetime='2026-04-05']")
     page.locator(".lect-card", has_text="독서 2").click()
@@ -1128,6 +1128,20 @@ def test_canticle_copy_cites_canticle_name(desktop_context):
     text = page.evaluate(_LECT_COPY_ACROSS, [sel, sel])
     assert "(공동번역성서)" not in text, text[-80:]
     assert re.search(r"\n\n— \S.*송가 1 \(대한성공회 기도서\)$", text), text[-80:]
+
+
+def test_magnificat_is_named_one_way(desktop_context):
+    """성모송가는 어느 날이나 라벨이 「루가 1:46하-55 (성모송가)」이고 옆에 이름을 다시 붙이지 않으며, 복사 출처도 「성모송가」다
+    (사용자 결정 2026-11-05). 원본 표기가 서로 달랐던 네 날을 본다."""
+    page = desktop_context.new_page()
+    psalm = ".lect-reading[data-slot='psalm']"
+    for path in ("lectionary/2026-12-20", "lectionary/2026-01-13", "lectionary/2026-08-15", "lectionary/2026-12-08?set=2"):
+        _open(page, path)
+        assert page.inner_text(f"{psalm} .lect-ref") == "루가 1:46하-55 (성모송가)", path
+        assert page.locator(f"{psalm} .lect-canticle").count() == 0, path
+    sel = f"{psalm} article.chapter-text .verse[data-vref]"
+    text = page.evaluate(_LECT_COPY_ACROSS, [sel, sel])
+    assert re.search(r"\n\n— 성모송가 1 \(대한성공회 기도서\)$", text), text[-80:]
 
 
 def test_psalm_copy_keeps_liturgical_marks_and_section_headings(desktop_context):
