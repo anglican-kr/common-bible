@@ -1,4 +1,5 @@
 ---
+pr: 474
 date: 2026-11-05
 branch: fix/booklet-tool
 title: "fix: 책자 대조 도구를 전례독서 목록 모델에 맞춤"
