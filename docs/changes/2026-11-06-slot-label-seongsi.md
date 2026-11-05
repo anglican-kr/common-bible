@@ -1,4 +1,5 @@
 ---
+pr: 492
 date: 2026-11-06
 branch: fix/slot-label-seongsi
 title: "fix: 전례독서 화면의 시편 칸 이름을 「성시」로 고침"
