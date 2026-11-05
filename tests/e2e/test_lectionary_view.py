@@ -1789,6 +1789,19 @@ def test_days_only_commemorated_are_plain_text_without_links(desktop_context):
     assert page.locator(".lect-head a").count() == 0
 
 
+def test_ash_wednesday_moves_off_seollal(desktop_context):
+    """재의 수요일이 설과 겹치면 다음날로 옮겨 지킨다(2032, 사용자 결정 2026-11-05). 재의 수요일은 축일이 아니라 「축일」을 붙이지 않고,
+    옮겨 온 날에는 그날 평일 독서를 목록에서 고를 수 있다."""
+    page = desktop_context.new_page()
+    _open(page, "lectionary/2032-02-11")
+    assert page.inner_text(".lect-day") == "설날"
+    assert page.inner_text(".lect-day-note") == "재의 수요일을 2월 12일로 옮겨 지킵니다."
+    _open(page, "lectionary/2032-02-12")
+    assert page.inner_text(".lect-day") == "재의 수요일"
+    assert page.inner_text(".lect-day-note") == "2월 11일에서 옮겨 지킵니다."
+    assert _choices(page) == ["재의 수요일 후 목요일"]
+
+
 def test_jan_2_is_a_christmas_weekday_with_the_saint_on_the_name_line(desktop_context):
     """1.2와 12.29는 기도서 486쪽이 날짜로 고정한 평일 독서다(사용자 결정 2026-11-05). 제목은 성탄 평일의 이름,
     성인은 이름 줄이고, 본기도는 성탄 주간 본기도 뒤에 성인 공통 본기도를 잇는다. 1.8 루시안과 같다."""
