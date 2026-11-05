@@ -28,6 +28,7 @@ on:
       - 'tests/unit/calendar.data.test.js'
       - 'tests/unit/citations.data.test.js'
       - 'tests/fixtures/liturgical/**'
+      - 'tools/booklet/engine-dump.mjs'
       - '.github/workflows/engine-data.yml'
   workflow_dispatch:
 
