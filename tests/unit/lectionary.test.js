@@ -823,6 +823,7 @@ test("buildLectionaryModel: 옮겨 간 축일은 전례독서 목록에 없고 �
   same(m.choices.map((c) => c.candidate.observance.id), ["grid:advent-2-sunday"]);   // 하나뿐이라 전례독서 목록을 그리지 않는다
   // 이름은 괄호 설명을 뗀 것이고, 「날」로 끝나는 이름은 「축일」을 붙이지 않는다. 해를 넘어도 월일만 적는다
   same(plain(m.transferNotes), ["성 니콜라 축일을 12월 7일로 옮겨 지킵니다.", "모든 별세자의 날을 1월 2일로 옮겨 지킵니다."]);
+  assert.strictEqual(ctx.transferOutNote("재의 수요일", "2032-02-12"), "재의 수요일을 2월 12일로 옮겨 지킵니다.");
   const pointed = ctx.buildLectionaryModel(r, { obs: "d1206-성-니콜라", track: null, set: null, collect: null }, groupsOf, entries, null);
   assert.strictEqual(pointed.selected, sunday);
   // 옮겨 온 쪽(transferred_in)과 옮겨 지킬 수 있는 쪽(optional)은 전례독서 목록 그대로다 — 그 독서를 고르는 자리다

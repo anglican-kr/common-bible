@@ -29,7 +29,7 @@
   - **옮겨 온 축일에 밀린 축일의 기념**(→ R-6.1-prec7-omit): T-2027-07-26-anna-joachim-commemorated.
   - **우선순위가 같은 경우(잠정)**: T-2029-06-01-visitation-vs-corpus-christi, T-2038-06-25-john-baptist-vs-corpus-christi.
   - **동시 봉헌**: T-2050-09-29-founding-day-co-observed.
-  - **명절**: T-2040-09-22-matthew-chuseok, T-2049-02-03-presentation-seollal, T-2032-02-12-ash-wednesday-seollal(skip).
+  - **명절**: T-2040-09-22-matthew-chuseok, T-2049-02-03-presentation-seollal, T-2032-02-12-ash-wednesday-seollal.
   - **2024, 2025 책자**: T-2025-06-30-peter-paul, T-2025-08-25-bartholomew, T-2025-09-15-holy-cross, T-2025-09-22-matthew, T-2024-09-09-nativity-of-mary, T-2024-12-09-immaculate-conception, T-2025-11-03-all-souls, T-2033-09-09-nativity-of-mary-chuseok.
 - `optionals.cases.json`
   - **승천**: O-2026-05-17-ascension, O-2024-05-12-ascension, O-2025-06-01-ascension.
@@ -93,7 +93,7 @@
     - **합성: 보호 기간에서 밀린 둘은 서열 순**(→ R-6.3-guard-order). 먼저 밀린 낮은 쪽보다 뒤에 밀린 높은 쪽이 부활 2주 월요일에 먼저 배정되고, 같은 서열이면 원래 날짜 순이다(C-6.5-22, C-6.5-19).
     - **합성: 선착순과 기원 순**(그 밖의 옮겨 온 축일). 이틀 연속 가변 대축일에 밀린 둘이 같은 날을 노리면 먼저 밀린 쪽이 배정된다(우선순위가 높아도, `id` 순이 아니다. C-6.5-7, C-6.5-9). 1900-2100 실데이터에서 서열 순과 달라지는 사례는 보호 기간의 6해뿐이고, 그것은 R-6.3-guard-order가 맡는다.
     - 보호 기간 케이스는 같은 부활절 날짜의 과거 연도(미국 성공회 2008, 2011, 2013, 2014, 2016, 2018, 2019)와 대조해 일치했었다. 보호 기간 뒤로 옮기던 때의 대조라 지금 결론(책자대로)과는 일부러 다르다(검토 문서 X-2).
-  - **④ 명절.** T-2040-09-22-matthew-chuseok, T-2049-02-03-presentation-seollal(선택 봉헌 종류인데 밀려 옮김, §6.2), T-2032-02-12-ash-wednesday-seollal(skip. 미결13, 데이터를 고친 뒤 켠다).
+  - **④ 명절.** T-2040-09-22-matthew-chuseok, T-2049-02-03-presentation-seollal(선택 봉헌 종류인데 밀려 옮김, §6.2), T-2032-02-12-ash-wednesday-seollal(미결13 닫힘, 2026-11-05).
   - **⑤ 우선순위가 같은 경우(잠정, 미결14).** T-2029-06-01-visitation-vs-corpus-christi, T-2038-06-25-john-baptist-vs-corpus-christi.
   - **⑥ 연도 경계.** 합성 표(12.31 `next_day` 주요축일과, 그날을 차지하는 **가변** 상위 후보. 고정일끼리는 동시 봉헌이라 옮기지 않는다. 유닛은 12.31이 성탄 1주일인 2028)로 `resolveDate("Y+1-01-01")`에 `from: "Y-12-31"` 옮겨 온 축일이 보이는지, 그리고 `Y+1` 캐시만 먼저 만들어도 같은 결과인지(이월 경로) 본다.
     - **해를 넘긴 선착순.** 12월 축일 둘이 같은 1월 날을 노리면 먼저 밀린 쪽이 배정되고 다음은 그다음 날이다(`isFree`가 해를 넘긴 날짜에서 이 계산의 옮겨 온 축일과 다음 해 배정을 함께 보는지).

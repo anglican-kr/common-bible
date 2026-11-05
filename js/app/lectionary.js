@@ -185,12 +185,14 @@ function statusSuffix(c) {
 
 /**
  * 원래 날짜에서 옮겨 간 축일을 알리는 제목 아래 문장 — 「성 니콜라 축일을 12월 7일로 옮겨 지킵니다.」(사용자 결정 2026-11-04).
- * 이름이 「날」로 끝나는 둘(성 십자가의 날, 모든 별세자의 날)은 「날 축일을」이 되지 않게 「축일」을 붙이지 않는다.
+ * 이름이 「날」로 끝나는 둘(성 십자가의 날, 모든 별세자의 날)은 「날 축일을」이 되지 않게, 재의 수요일(설과 겹친 2032-02-11)은 축일이
+ * 아니므로 「축일」을 붙이지 않는다.
  * @param {string | null | undefined} name @param {string} to  옮겨 가는 날짜
  */
 function transferOutNote(name, to) {
   const short = shortName(name);
-  return `${short.endsWith("날") ? `${short}을` : `${short} 축일을`} ${monthDayLabel(to)}로 옮겨 지킵니다.`;
+  const bare = short.endsWith("날") || short === "재의 수요일";
+  return `${bare ? `${short}을` : `${short} 축일을`} ${monthDayLabel(to)}로 옮겨 지킵니다.`;
 }
 
 /**

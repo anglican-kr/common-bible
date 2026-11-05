@@ -735,6 +735,21 @@ test("책자 대조의 엔진 덤프(tools/booklet/engine-dump.mjs) — 지금 �
   }
 });
 
+test("2032-02-11 재의 수요일이 설과 겹치면 다음날로 옮긴다 — 11일은 설날, 12일은 재의 수요일이고 평일을 고를 수 있다(사용자 결정 2026-11-05)", { skip: SKIP }, () => {
+  const seollal = model("2032-02-11");
+  assert.strictEqual(id(seollal.selected), "lunar11-설날");
+  same(plain(seollal.transferNotes), ["재의 수요일을 2월 12일로 옮겨 지킵니다."]);
+  same(seollal.collects.map((c) => c.title), ["설날"]);
+  assert.strictEqual(seollal.fast, "minor");
+  const ash = model("2032-02-12");
+  assert.strictEqual(id(ash.selected), "t-재의-수요일");
+  assert.strictEqual(ash.selectedNote, "2월 11일에서 옮겨 지킵니다.");
+  same(plain(ash.colors), ["violet"]);
+  assert.strictEqual(ash.fast, "major");
+  assert.strictEqual(ash.slots[0].label, "요엘 2:1-2, 12-17");
+  assert.ok(labels(ash).includes("재의 수요일 후 목요일"), labels(ash).join());
+});
+
 test("1.2와 12.29 — 기도서 486쪽이 날짜로 고정한 평일 독서라 제목은 성탄 평일의 이름, 성인은 이름 줄, 본기도는 성탄 주간 뒤에 성인(사용자 결정 2026-11-05)", { skip: SKIP }, () => {
   for (const [d, saint, name, first, title] of [
     ["2027-01-02", "d0102-바실과-나지안조의-그레고리", "바실과 그레고리", "1요한 2:22-28", "성탄 1주 토요일"],
