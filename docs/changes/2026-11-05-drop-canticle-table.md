@@ -1,4 +1,5 @@
 ---
+pr: 490
 date: 2026-11-05
 branch: refactor/drop-canticle-table
 title: "refactor: 전례독서 묶음에서 쓰지 않는 송가 표를 뺌"
