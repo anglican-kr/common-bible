@@ -1,4 +1,5 @@
 ---
+pr: 476
 date: 2026-11-05
 branch: fix/lectionary-saint-weekday
 title: "fix: 1.2와 12.29의 제목과 본기도를 성탄주간 평일로 바꿈"
