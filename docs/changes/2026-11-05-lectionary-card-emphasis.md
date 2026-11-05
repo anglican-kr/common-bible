@@ -1,4 +1,5 @@
 ---
+pr: 479
 date: 2026-11-05
 branch: style/lectionary-card-emphasis
 title: "style: 독서 카드의 다른 성구와 고른 카드 표시를 고침"
