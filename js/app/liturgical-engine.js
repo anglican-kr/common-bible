@@ -734,7 +734,7 @@ const PROPER_WEEKDAY_NAMES = {
 /**
  * **날짜로 이름이 정해진 평일** — 독서와 본기도 표에만 있고 정의 표에는 행이 없는 날짜 전용 평일 본문(`type: weekday`,
  * 설계서 §5.4)의 날짜, 절기, 이름. 그날 격자 평일의 기본 본문이 이 본문이므로(§5.6 격자 경로 ①) 격자 평일도 그 본문의
- * 이름을 단다. 제목이 「대림 3주 목요일」인데 본문은 「성탄 8일 전」이던 것을 고쳤다(사용자 결정 2026-11-03 「그날의 기본
+ * 이름을 단다(성탄 평일의 제목만 주일 기준으로 만든다 — `christmasWeekdayName`). 제목이 「대림 3주 목요일」인데 본문은 「성탄 8일 전」이던 것을 고쳤다(사용자 결정 2026-11-03 「그날의 기본
  * 독서 이름이 제목」). 본문을 찾는 경로 ①과 같은 조건(`type` · `season`이 그날의 절기 위치와 같을 때)에서만 쓴다. 그래서
  * 주일(대림 3, 4주일과 성탄 1, 2주일)과 주의 세례 뒤의 1.7-1.12(연중)는 절기 위치의 이름 그대로다. 정의 표가 아니라
  * 본문 표가 아는 날짜라 코어가 직접 갖고, 데이터와의 일치는 실데이터 테스트가 지킨다.
@@ -963,6 +963,11 @@ function seasonWeekOf(dateStr, season, ordinal) {
   if (dayOfWeek(dateStr) !== 0) return null;
   const md = monthDayOf(dateStr);
   if (md === "12.25") return null;
+  return christmasSundayNo(md);
+}
+
+/** 성탄 주일의 번호(`MM.DD`) — 12.26-1.1의 주일이 1, 1.2 이후의 주일이 2. 12.25와 그 앞의 주일은 부르는 쪽이 거른다. @param {string} md */
+function christmasSundayNo(md) {
   return md >= "12.26" || md === "01.01" ? 1 : 2;
 }
 
@@ -997,14 +1002,29 @@ function properWeekdayNameOf(dateStr, coord) {
 }
 
 /**
- * 그날의 격자 평일이 날짜 전용 본문을 받으면 그 본문의 이름(`DATED_WEEKDAY_NAMES`), 아니면 undefined.
+ * 성탄 평일의 제목(사용자 결정 2026-11-05) — 주일 기준으로 센다. 그 주의 주일이 성탄 N주일이면 「성탄 N주 X요일」이고, 경계는 주일
+ * 이름과 같다(`christmasSundayNo`). 12.25 뒤 첫 주일이 오기 전의 평일(12.25가 월, 화, 일요일인 해의 12.29-12.31)은 그 주에
+ * 번호 붙은 주일이 없어 「성탄 후 X요일」이다.
+ * @param {string} dateStr  날짜 전용 본문이 있는 성탄 평일(12.29-1.12)
+ * @param {string} weekday  「월요일」 등
+ * @returns {string}
+ */
+function christmasWeekdayName(dateStr, weekday) {
+  const md = monthDayOf(/** @type {string} */ (sundayOfWeek(dateStr)));
+  return md >= "12.01" && md <= "12.25" ? `성탄 후 ${weekday}` : `성탄 ${christmasSundayNo(md)}주 ${weekday}`;
+}
+
+/**
+ * 그날의 격자 평일이 날짜 전용 본문을 받으면 제목(`DATED_WEEKDAY_NAMES`), 아니면 undefined. 「성탄 N일 전」은 본문의 이름 그대로이고,
+ * 본문 이름이 모두 「성탄주간」인 성탄 평일만 주일 기준의 이름을 만든다(`christmasWeekdayName`).
  * @param {string} dateStr @param {LiturgicalCoord} coord
  * @returns {string | undefined}
  */
 function datedWeekdayNameOf(dateStr, coord) {
-  if (coord.type !== "weekday") return undefined;
+  if (coord.type !== "weekday" || !coord.weekday) return undefined;
   const e = DATED_WEEKDAY_NAMES[monthDayOf(dateStr)];
-  return e && e.season === coord.season ? e.name : undefined;
+  if (!e || e.season !== coord.season) return undefined;
+  return e.season === "christmas" ? christmasWeekdayName(dateStr, WEEKDAY_LABEL[coord.weekday]) : e.name;
 }
 
 /**

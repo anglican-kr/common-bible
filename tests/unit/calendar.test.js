@@ -119,6 +119,7 @@ test("buildMonthGrid: 2026년 10월 — 1일(목)이 든 주의 일요일 9.27 �
   const calls = [];
   const m = ctx.buildMonthGrid(2026, 10, "2026-10-15", (d) => { calls.push(d); return plainDay(d); });
   assert.strictEqual(m.title, "2026년 10월");
+  assert.strictEqual(m.shortTitle, "2026.10");
   assert.strictEqual(m.weeks.length, 6);
   for (const w of m.weeks) assert.strictEqual(w.length, 7);
   const cells = m.weeks.flat();

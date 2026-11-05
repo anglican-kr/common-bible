@@ -11,7 +11,7 @@
   ⑤ 기념일 — 전례독서 목록이 아니라 제목 아래 「… 기념일」 줄, 본문 없는 날도 그 아래 이름 줄
   ⑥ 날짜 — 오늘 · 전날/다음날 · 잘못된 날짜
   ⑦ 탭 바 — 캘린더 탭 소속이라 독서 화면에서 캘린더 탭이 활성(ADR-038 A2)
-  ⑧ 머리의 날짜 이동 줄(연도는 자리에 맞게 줄인다) · 본문 제목과 공통 라벨 없음 · 응답 반행과 송영의 색
+  ⑧ 머리의 날짜 이동 줄(날짜 글자만 가운데) · 본문 제목과 공통 라벨 없음 · 응답 반행과 송영의 색
 
 실데이터(data/ 서브모듈)가 필요하다 — 로컬 전용(CLAUDE.md 「테스트」).
 """
@@ -1568,14 +1568,24 @@ def test_gospel_copy_bridges_verse_numbers_absent_in_translation(desktop_context
 
 # ── ⑧ 머리의 날짜 이동 줄 · 본문 색(사용자 결정 2026-11-03) ──
 
-def _title_year(page):
-    return page.inner_text("#page-title .lect-date-year")
+def _title_date(page):
+    """머리에 보이는 날짜 글자와 「오늘」, 앞뒤 단추의 자리."""
+    return page.evaluate("""() => {
+      const r = (s) => document.querySelector(s).getBoundingClientRect();
+      const shown = document.querySelector('#page-title .lect-date-label [aria-hidden]');
+      const d = shown.getBoundingClientRect(), t = r('#page-title .lect-today');
+      return { text: shown.textContent, left: d.left, right: d.right, mid: (d.left + d.right) / 2, top: d.top, bottom: d.bottom,
+               todayLeft: t.left, todayRight: t.right, todayMid: (t.top + t.bottom) / 2,
+               prev: r("#page-title a.lect-datenav-btn[aria-label='전날']").right,
+               next: r("#page-title a.lect-datenav-btn[aria-label='다음날']").left,
+               height: r('#page-title').height, scrollWidth: document.documentElement.scrollWidth };
+    }""")
 
 
-def test_title_row_is_the_date_nav_and_the_year_shrinks_to_fit(mobile_context):
-    """머리의 제목 자리가 날짜 이동 줄(‹ 날짜 오늘 ›)이고 본문 맨 위의 날짜 줄은 없다. 위 단계 꺾쇠도 없다. 보이는 연도는 자리에
-    맞게 「2026년」, 「26년」, 생략의 차례로 줄고, 넓어지면 돌아온다(화면 폭이 바뀌면 다시 잰다). 스크린 리더는 늘 전체 날짜를 읽는다.
-    12월 30일은 가장 긴 날짜의 하나다."""
+def test_title_row_is_the_date_nav_and_only_the_date_text_is_centered(mobile_context):
+    """머리의 제목 자리가 날짜 이동 줄(‹ 날짜 오늘 ›)이고 본문 맨 위의 날짜 줄은 없다. 위 단계 꺾쇠도 없다. 보이는 날짜는 YY.MM.DD이고
+    요일이 없으며, 스크린 리더는 전체 날짜를 읽는다. 「오늘」의 폭을 빼고 날짜 글자만 화면 가운데에 두고, 「오늘」은 그 오른쪽이다
+    (사용자 결정 2026-11-05)."""
     page = mobile_context.new_page()
     _open(page, "lectionary/2026-12-30")
     title = page.locator("#page-title")
@@ -1592,15 +1602,14 @@ def test_title_row_is_the_date_nav_and_the_year_shrinks_to_fit(mobile_context):
     assert box and box["width"] >= 44 and box["height"] >= 44, box
     assert title.bounding_box()["height"] < 40
 
-    def fits():
-        return page.evaluate("""() => { const l = document.querySelector('#page-title .lect-date-label');
-                                        return l.scrollWidth <= l.clientWidth; }""")
-
-    assert _title_year(page) == "2026년 " and fits()   # 390px
-    for width, year in ((375, "26년 "), (320, ""), (430, "2026년 ")):
+    assert _title_date(page)["text"] == "26.12.30"
+    for width in (320, 375, 390, 430):
         page.set_viewport_size({"width": width, "height": 844})
-        page.wait_for_function("y => document.querySelector('#page-title .lect-date-year').textContent === y", arg=year)
-        assert fits(), width
+        state = _title_date(page)
+        assert abs(state["mid"] - width / 2) <= 1, (width, state)
+        assert state["todayLeft"] >= state["right"] and state["todayRight"] <= state["next"], (width, state)
+    _open(page, "lectionary/2027-01-02")   # 월과 일은 두 자리다
+    assert _title_date(page)["text"] == "27.01.02"
 
 
 def test_title_date_steps_start_the_new_day_at_the_top(mobile_context):
@@ -1659,29 +1668,18 @@ def test_single_candidate_day_has_no_choice_rows(mobile_context):
     assert page.locator(".lect-choice").count() == 1
 
 
-def test_title_date_stays_readable_with_the_largest_font_on_320px(mobile_context):
-    """글자 크기 24px(설정의 가장 큰 값)로 320px에서는 연도를 빼도 넘친다 — 「오늘」을 날짜 아래 줄로 내리고, 그래도 넘치면
-    날짜를 줄바꿈해 다 보인다(PR #463 리뷰). 넓히면 한 줄로 돌아온다."""
+def test_title_date_stays_on_one_line_with_the_largest_font_on_320px(mobile_context):
+    """글자 크기 24px(설정의 가장 큰 값)로 320px에서도 날짜와 「오늘」이 한 줄에 다 보인다. 자리가 모자라면 왼쪽 빈칸이 줄어
+    날짜가 가운데에서 조금 왼쪽으로 옮겨 가고, 앞뒤 단추와 겹치거나 가로로 넘치지 않는다."""
     page = mobile_context.new_page()
     page.set_viewport_size({"width": 320, "height": 700})
     _open(page, "lectionary/2026-12-30")
     page.evaluate("() => { document.documentElement.style.fontSize = '24px'; }")
-    page.wait_for_function("() => document.querySelector('#page-title .lect-date').classList.contains('lect-date--stack')")
-    page.wait_for_timeout(200)
-    state = page.evaluate("""() => {
-      const l = document.querySelector('#page-title .lect-date-label');
-      const r = (s) => document.querySelector(s).getBoundingClientRect();
-      return { year: document.querySelector('#page-title .lect-date-year').textContent, fits: l.scrollWidth <= l.clientWidth,
-               today: r('#page-title .lect-today').right, next: r("#page-title a.lect-datenav-btn[aria-label='다음날']").right,
-               label: r('#page-title .lect-date-label').bottom, todayTop: r('#page-title .lect-today').top };
-    }""")
-    assert state["year"] == "" and state["fits"], state
-    assert state["today"] <= 320 and state["next"] <= 320, state
-    assert state["todayTop"] >= state["label"] - 1, state   # 「오늘」은 날짜 아래 줄
-    page.evaluate("() => { document.documentElement.style.fontSize = ''; }")
-    page.set_viewport_size({"width": 430, "height": 844})
-    page.wait_for_function("() => !document.querySelector('#page-title .lect-date').classList.contains('lect-date--stack')")
-    assert page.inner_text("#page-title .lect-date-year") == "2026년 "
+    state = _title_date(page)
+    assert state["left"] >= state["prev"] and state["todayLeft"] >= state["right"] and state["todayRight"] <= state["next"], state
+    assert state["top"] <= state["todayMid"] <= state["bottom"], state   # 「오늘」은 날짜와 같은 줄
+    assert state["scrollWidth"] == 320, state
+    assert state["height"] < 44, state   # 「오늘」이 두 줄로 꺾이면 머리가 높아진다
 
 
 def test_saint_day_heading_and_collects_follow_the_default_reading(mobile_context):
@@ -1782,7 +1780,7 @@ def test_days_only_commemorated_are_plain_text_without_links(desktop_context):
     _open(page, "lectionary/2027-08-15")
     assert "광복절" in _choices(page), _choices(page)
     _open(page, "lectionary/2026-12-29")
-    assert _choices(page) == ["성탄주간"]   # 그날의 평일 독서는 고를 수 있고, 토마스 베켓은 링크가 아니다(2026-11-05)
+    assert _choices(page) == ["성탄 1주 화요일"]   # 그날의 평일 독서는 고를 수 있고, 토마스 베켓은 링크가 아니다(2026-11-05)
     assert any(line.startswith("토마스 베켓") and line.endswith(" 축일") for line in name_lines()), name_lines()
     texts = collects()
     assert len(texts) == 2 and "토마스 베켓" in texts[1], texts
@@ -1792,13 +1790,13 @@ def test_days_only_commemorated_are_plain_text_without_links(desktop_context):
 
 
 def test_jan_2_is_a_christmas_weekday_with_the_saint_on_the_name_line(desktop_context):
-    """1.2와 12.29는 기도서 486쪽이 날짜로 고정한 평일 독서다(사용자 결정 2026-11-05). 제목은 「성탄주간」,
+    """1.2와 12.29는 기도서 486쪽이 날짜로 고정한 평일 독서다(사용자 결정 2026-11-05). 제목은 성탄 평일의 이름,
     성인은 이름 줄이고, 본기도는 성탄 주간 본기도 뒤에 성인 공통 본기도를 잇는다. 1.8 루시안과 같다."""
     page = desktop_context.new_page()
     collects = lambda: page.eval_on_selector_all(".lect-collect-text", "els => els.map(e => e.textContent)")
     name_lines = lambda: page.eval_on_selector_all(".lect-day-saint", "els => els.map(e => e.textContent)")
     _open(page, "lectionary/2027-01-02")
-    assert page.inner_text(".lect-day") == "성탄주간"
+    assert page.inner_text(".lect-day") == "성탄 1주 토요일"
     assert any(line.startswith("바실") and "그레고리" in line and line.endswith(" 축일") for line in name_lines()), name_lines()
     assert page.inner_text(".lect-reading[data-slot='first'] .lect-ref") == "1요한 2:22-28"
     assert page.locator(".lect-choices").count() == 0
@@ -1806,7 +1804,7 @@ def test_jan_2_is_a_christmas_weekday_with_the_saint_on_the_name_line(desktop_co
     texts = collects()
     assert len(texts) == 2 and "바실" not in texts[0] and "바실" in texts[1], texts
     _open(page, "lectionary/2028-12-29")
-    assert page.inner_text(".lect-day") == "성탄주간"
+    assert page.inner_text(".lect-day") == "성탄 후 금요일"
     assert any(line.startswith("토마스 베켓") and line.endswith(" 축일") for line in name_lines()), name_lines()
     texts = collects()
     assert len(texts) == 2 and "토마스 베켓" in texts[1], texts

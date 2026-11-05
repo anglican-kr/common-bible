@@ -357,3 +357,49 @@ def test_month_nav_keeps_keyboard_focus_on_the_pressed_control(desktop_context):
     page.wait_for_selector(".cal-month:has-text('9999년 12월')")
     assert page.locator(".lect-datenav-btn[aria-label='다음 달']").count() == 0
     assert _focused(page)["key"] == "today"
+
+
+def _month_nav(page):
+    """달 이동 줄에 보이는 달 글자와 「오늘」, 다음 달 단추의 자리."""
+    return page.evaluate("""() => {
+      const short = document.querySelector('.cal-month-short');
+      const shown = getComputedStyle(short).display === 'none' ? document.querySelector('.cal-month-full') : short;
+      const m = shown.getBoundingClientRect(), t = document.querySelector('.cal-head .lect-today').getBoundingClientRect();
+      const next = document.querySelector(".cal-head a.lect-datenav-btn[data-focus-key='next']").getBoundingClientRect();
+      return { text: shown.textContent, mid: (m.left + m.right) / 2, right: m.right, top: m.top, bottom: m.bottom,
+               todayLeft: t.left, todayRight: t.right, todayMid: (t.top + t.bottom) / 2, next: next.left,
+               scrollWidth: document.documentElement.scrollWidth };
+    }""")
+
+
+def test_month_nav_centers_only_the_month_text_and_shortens_when_narrow(mobile_context):
+    """달 이동 줄은 달의 글자만 가운데에 두고 「오늘」은 그 오른쪽에 둔다. 「오늘」의 폭이 글자를 밀지 않는다. 가장 긴 달이 들어가지
+    않는 폭에서는 모든 달을 YYYY.MM으로 줄이고, 스크린 리더는 전체 이름을 읽는다(사용자 결정 2026-11-05)."""
+    page = mobile_context.new_page()
+    _open(page, "calendar/2027-12")
+    for width, text in ((320, "2027.12"), (360, "2027년 12월"), (390, "2027년 12월"), (430, "2027년 12월")):
+        page.set_viewport_size({"width": width, "height": 844})
+        state = _month_nav(page)
+        assert state["text"] == text, (width, state)
+        assert abs(state["mid"] - width / 2) <= 1, (width, state)
+        assert state["todayLeft"] >= state["right"] and state["todayRight"] <= state["next"], (width, state)
+        assert state["scrollWidth"] == width, (width, state)
+    page.set_viewport_size({"width": 320, "height": 844})
+    assert page.locator(".cal-month-full").inner_text() == "2027년 12월"   # 숨겼어도 읽는다
+    assert page.get_attribute(".cal-month-short", "aria-hidden") == "true"
+    _open(page, "calendar/2027-05")   # 짧은 달도 같은 폭에서 같이 줄고, 월은 두 자리다
+    assert _month_nav(page)["text"] == "2027.05"
+
+
+def test_month_nav_stays_on_one_line_with_the_largest_font_on_320px(mobile_context):
+    """글자 크기 24px로 320px에서도 달과 「오늘」이 한 줄에 다 보인다. 자리가 모자라면 글자가 왼쪽으로 옮겨 가고, 앞뒤 단추와
+    겹치거나 가로로 넘치지 않는다."""
+    page = mobile_context.new_page()
+    page.set_viewport_size({"width": 320, "height": 700})
+    _open(page, "calendar/2027-12")
+    page.evaluate("() => { document.documentElement.style.fontSize = '24px'; }")
+    state = _month_nav(page)
+    assert state["text"] == "2027.12", state
+    assert state["todayLeft"] >= state["right"] and state["todayRight"] <= state["next"], state
+    assert state["top"] <= state["todayMid"] <= state["bottom"], state
+    assert state["scrollWidth"] == 320, state

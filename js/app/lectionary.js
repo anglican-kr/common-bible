@@ -1002,27 +1002,25 @@ function buildDateNav(o) {
   return nav;
 }
 
-/** 머리 날짜의 연도 — 「2026년」, 「26년」, 생략 가운데 자리에 맞는 첫 단계를 쓴다(사용자 결정 2026-11-03). */
-const TITLE_YEAR_STEPS = [
-  (/** @type {number} */ y) => `${y}년 `,
-  (/** @type {number} */ y) => `${String(y % 100).padStart(2, "0")}년 `,
-  () => "",
-];
+/**
+ * 머리에 보이는 날짜 — "2026-12-28" → "26.12.28"(YY.MM.DD, 요일 없음, 사용자 결정 2026-11-05). 스크린 리더는 숨긴 전체 날짜를 읽는다.
+ * @param {{ y: number, m: number, d: number }} p
+ */
+function titleDateText(p) {
+  return [p.y % 100, p.m, p.d].map((n) => String(n).padStart(2, "0")).join(".");
+}
 
 /**
  * 전례독서의 머리 — 제목 자리에 날짜 이동 줄을 그린다(사용자 결정 2026-11-03: 스크롤해도 날짜와 「오늘」이 보이고 하루씩 옮길
  * 수 있게. 그전엔 본문 맨 위 줄이었고, 머리에는 「전례독서」와 캘린더로 가는 꺾쇠가 있었다). 「전례독서」는 문서 제목(setTitle)에
- * 남는다. 보이는 날짜는 자리에 맞게 줄이고(`fitTitleDate`), 스크린 리더는 숨긴 전체 날짜를 읽는다.
+ * 남는다. 보이는 날짜는 짧은 표기이고(`titleDateText`), 스크린 리더는 숨긴 전체 날짜를 읽는다.
  * @param {LectionaryModel} m
  */
 function commitTitleDateNav(m) {
   const p = /** @type {{ y: number, m: number, d: number }} */ (parseDate(m.date));
   const label = el("time", { className: "lect-date-label", datetime: m.date });
   label.appendChild(el("span", { className: "sr-only" }, dateLabel(m.date)));
-  const shown = el("span", { "aria-hidden": "true" });
-  shown.appendChild(el("span", { className: "lect-date-year", "data-year": String(p.y) }, TITLE_YEAR_STEPS[0](p.y)));
-  shown.appendChild(document.createTextNode(`${p.m}월 ${p.d}일 (${WEEKDAY_KO[dayOfWeek(m.date)]})`));
-  label.appendChild(shown);
+  label.appendChild(el("span", { "aria-hidden": "true" }, titleDateText(p)));
   clearNode($title);
   for (const part of dateNavParts({
     title: label,
@@ -1030,45 +1028,6 @@ function commitTitleDateNav(m) {
     prev: { href: m.hrefs.prev, label: "전날" },
     next: { href: m.hrefs.next, label: "다음날" },
   })) $title.appendChild(part);
-  watchTitleDate();
-  fitTitleDate();
-}
-
-/**
- * 머리 날짜가 넘치면 연도를 한 단계씩 줄인다. 날짜 칸(`.lect-date-label`)은 줄바꿈 없이 넘친 만큼을 숨기므로, 그 칸의 글자
- * 폭이 칸보다 넓은지로 넘침을 잰다. 연도를 빼도 넘치면(320px에 글자 크기 24px — PR #463 리뷰) 「오늘」을 날짜 아래 줄로
- * 내리고(`.lect-date--stack`), 그래도 넘치면 날짜를 줄바꿈한다(`.lect-date--wrap`) — 큰 글자를 쓰는 사람도 날짜를 다 읽는다.
- * 스타일시트가 오기 전(Safari — coding-pitfalls §41)에는 칸이 줄지 않아 연도를 그대로 두고, 스타일이 들어와 머리 크기가
- * 바뀌면 `watchTitleDate`가 다시 잰다.
- */
-function fitTitleDate() {
-  const label = /** @type {HTMLElement | null} */ ($title.querySelector(".lect-date-label"));
-  const year = label && /** @type {HTMLElement | null} */ (label.querySelector(".lect-date-year"));
-  const mid = label && label.parentElement;
-  if (!label || !year || !mid) return;
-  const overflows = () => label.scrollWidth > label.clientWidth;
-  mid.classList.remove("lect-date--stack", "lect-date--wrap");
-  const y = Number(year.dataset.year);
-  for (const step of TITLE_YEAR_STEPS) {
-    year.textContent = step(y);
-    if (!overflows()) return;
-  }
-  mid.classList.add("lect-date--stack");
-  if (overflows()) mid.classList.add("lect-date--wrap");
-}
-
-/** @type {ResizeObserver | null} */
-let titleDateObserver = null;
-/**
- * 화면 폭 · 글자 크기가 바뀌거나 글꼴이 들어오면 다시 잰다(머리는 화면이 바뀌어도 그대로라 한 번만 단다). 웹 글꼴(Noto Sans KR)은
- * 글자 묶음별로 늦게 들어와 머리 크기는 그대로인 채 날짜 폭만 넓힌다 — 360px에서 연도를 줄인 날짜가 2px 넘쳤다(2026-11-03 실측).
- * 다른 화면에서는 날짜 칸이 없어 바로 끝난다.
- */
-function watchTitleDate() {
-  if (titleDateObserver || typeof ResizeObserver === "undefined") return;
-  titleDateObserver = new ResizeObserver(() => fitTitleDate());
-  titleDateObserver.observe($title);
-  if (document.fonts) document.fonts.addEventListener("loadingdone", () => fitTitleDate());
 }
 
 /** 색 점 + 라벨 하나. */
