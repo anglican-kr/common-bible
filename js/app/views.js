@@ -236,7 +236,7 @@ let _prevDivisionIdx = null;
 /**
  * Generic segmented tab row — the sliding-indicator pattern the division tabs
  * established, reusable by any "pick one of N" control that routes through a
- * link per option (the lectionary view's collect / set / track segments,
+ * link per option (the lectionary view's set / track segments,
  * ADR-038 §3). Options are anchors so deep links, the back button and keyboard
  * navigation keep working without bespoke handlers. `startIdx` is where the
  * indicator is painted first: pass the previously selected index to animate

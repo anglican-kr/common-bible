@@ -494,7 +494,7 @@ function pickCollect(/** @type {CollectOption[]} */ options, /** @type {number |
 }
 
 /**
- * 본기도 세그먼트 라벨 — `collect_no` 가 서로 다르면 「본기도 N」, 겹치면 제목에서 낱말 단위로 공통 앞부분 · 뒷부분을 뗀
+ * 본기도 대체안의 이름 — `collect_no` 가 서로 다르면 「본기도 N」, 겹치면 제목에서 낱말 단위로 공통 앞부분 · 뒷부분을 뗀
  * 부분(「성직후보자」 · 「수도자」 — 「…의 성소를 위한 추계재 금요일」; 모두 소유격 「의」로 끝나면 그것도 뗀다), 그래도
  * 가를 수 없으면 제목 전체, 그것도 같으면 「본기도 N」(위치).
  * @param {CollectOption[]} options @returns {string[]}
@@ -1151,18 +1151,39 @@ function buildControls(m) {
   return wrap.childElementCount ? wrap : null;
 }
 
+/**
+ * 본기도 대체안 번호 — 제목 옆 같은 줄의 작은 번호(「본기도 ❶ 2」, 사용자 결정 2026-11-05). 세그먼트는 기도문 한 문단을 바꾸는
+ * 선택에 한 줄을 통째로 썼다. 보이는 글자는 이름에서 「본기도 」를 뗀 것이고 접근 가능한 이름은 이름 전체라, 보이는 글자가
+ * 이름 안에 있다(WCAG 2.5.3). 제목으로 가른 이름(`collectLabels` — 번호가 겹치는 경우)은 그대로 보인다.
+ * @param {LectionaryModel} m
+ */
+function buildCollectNumbers(m) {
+  const nav = el("nav", { className: "lect-collect-nums", "aria-label": "본기도 대체안" });
+  m.collects.forEach((_, i) => {
+    const label = m.collectLabels[i];
+    const active = i === m.collectIndex;
+    const a = el("a", {
+      className: active ? "lect-collect-num active" : "lect-collect-num",
+      href: m.hrefs.collects[i],
+      "aria-label": label,
+      "data-focus-key": `collect:${i + 1}`,
+    });
+    if (active) a.setAttribute("aria-current", "page");
+    a.appendChild(el("span", { className: "lect-collect-num-mark" }, label.replace(/^본기도 /, "")));
+    nav.appendChild(a);
+  });
+  return nav;
+}
+
 /** @param {LectionaryModel} m */
 function buildCollects(m) {
   if (!m.collects.length) return null;
   const section = el("section", { className: "lect-section lect-collects", "data-slot": "collect" });
-  section.appendChild(el("h3", { className: "lect-slot" }, "본기도"));
-  // 세트와 짝지어진 날은 위의 「독서 · 본기도」 단추가 고른다 — 따로 세그먼트를 두지 않는다(사용자 결정 2026-10-13).
-  if (m.collects.length > 1 && !m.collectsLinked) {
-    section.appendChild(buildSegmentTabs(
-      m.collects.map((_, i) => ({ label: m.collectLabels[i], href: m.hrefs.collects[i], active: i === m.collectIndex, focusKey: `collect:${i + 1}` })),
-      { ariaLabel: "본기도 대체안", className: "division-tabs--compact" },
-    ));
-  }
+  const head = el("div", { className: "lect-section-head lect-collect-head" });
+  head.appendChild(el("h3", { className: "lect-slot" }, "본기도"));
+  // 세트와 짝지어진 날은 위의 「독서 · 본기도」 단추가 고른다 — 따로 번호를 두지 않는다(사용자 결정 2026-10-13).
+  if (m.collects.length > 1 && !m.collectsLinked) head.appendChild(buildCollectNumbers(m));
+  section.appendChild(head);
   const o = m.collects[Math.max(m.collectIndex, 0)];
   const art = el("article", { className: "lect-collect chapter-text", lang: "ko" });
   art.appendChild(el("p", { className: "lect-collect-text" }, o.text));

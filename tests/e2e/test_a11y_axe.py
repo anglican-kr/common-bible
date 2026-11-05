@@ -80,7 +80,7 @@ def test_a11y_chapter_text(browser):
 
 
 def test_a11y_lectionary_view(browser):
-    """전례독서 뷰(부활대축일 — 본기도 세그먼트 · 독서 넷) — critical/serious 위반 0건."""
+    """전례독서 뷰(부활대축일 — 본기도 번호 · 독서 넷) — critical/serious 위반 0건."""
     ctx, page = _open(browser, "lectionary/2026-04-05")
     try:
         page.wait_for_selector(".lectionary .lect-reading[data-slot='gospel'] .verse", timeout=20_000)
