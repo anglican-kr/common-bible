@@ -1,4 +1,5 @@
 ---
+pr: 493
 date: 2026-11-05
 branch: feat/settings-sections
 title: "feat: 설정을 섹션 다섯으로 나누고 시작 페이지와 대체 독서 표시를 더함"
@@ -33,3 +34,4 @@ title: "feat: 설정을 섹션 다섯으로 나누고 시작 페이지와 대체
 - 주제 문서 `design-system.md`, `routing.md`, `liturgical.md`의 지금 동작, 결정, 남은 일. `DESIGN.md` §6의 설정 섹션, 선택 상자, 전례독서 목록.
 - 설계서 `05-lookup-layer.md`, `09-open-items.md`(미결18, 미결49)의 09.29 화면 설명.
 - CLAUDE.md 「ADR 워크플로우」 1. `privacy.html`.
+- 디자인 시스템 아티팩트의 `Settings`, `LectionaryHead`(설명과 미리보기), `bundle.css`.
