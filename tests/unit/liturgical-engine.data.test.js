@@ -509,12 +509,15 @@ test("C-6.1-2 A 특례 1.5 — 2031-02-02 주의 봉헌(주일) · 2034-01-01 �
   same(gridIn(resolve("2034-01-01")).observance.precedence, 2);   // 절기 주일보다도 선순위다
 });
 
-test("C-6.1-3 명절 > 대재일 — 2032-02-11 설이 지정 전례일, 재의 수요일은 proper 로 남고 옮기지 않는다(미결13 — 데이터 transferable: false)", { skip: SKIP }, () => {
+test("C-6.1-3 명절 > 대재일 — 2032-02-11 설이 지정 전례일, 재의 수요일은 2.12로 옮겨 그날이 대재일이다(미결13 닫힘, 사용자 결정 2026-11-05)", { skip: SKIP }, () => {
   const r = resolve("2032-02-11");
   same(offId(r), "lunar11-설날");
   const ash = pick(r, "t-재의-수요일");
-  same([ash.status, "displacedBy" in ash, ash.observance.transferable], ["proper", false, false]);
-  same(ctx.fastOf(r), "major");
+  same([ash.status, ash.to, ash.observance.transferable], ["transferred_out", "2032-02-12", true]);
+  same(ctx.fastOf(r), "minor");   // 사순 평일의 소재일 — 2035-02-08의 설과 같다
+  const moved = resolve("2032-02-12");
+  same(offId(moved), "t-재의-수요일");
+  same(ctx.fastOf(moved), "major");
 });
 
 test("C-6.1-4 명절 ∧ 연중 주일 — 설 2027 · 2030 · 2034 · 2037 · 2040 · 2050, 추석 2032 · 2035 · 2039 · 2042: 명절 지정 전례일, 주일 격자 proper", { skip: SKIP }, () => {

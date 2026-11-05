@@ -1,4 +1,4 @@
-# data 00b192eee48d44a84b47579447331b3f263a007b · activated=∅ · MAX_SHIFT=30
+# data 6d894d0191ad3d61698cb2e34d829cd600be51b8 · activated=∅ · MAX_SHIFT=30
 1900-03-25 → 1900-03-26  d0325-성모수태고지  by:grid:lent-4-sunday  shift:1
 1900-07-22 → 1900-07-23  d0722-성-막달라-마리아  by:grid:ordinary-16-sunday  shift:1
 1900-10-28 → 1900-10-29  d1028-사도-성-시몬과-유다  by:grid:ordinary-30-sunday  shift:1
@@ -594,6 +594,7 @@
 2031-11-30 → 2031-12-01  d1130-사도-성-안드레아  by:t-대림1주일  shift:1
 2031-12-28 → 2031-12-29  d1228-죄-없는-어린이들의-순교  by:grid:christmas-1-sunday  shift:1
 2032-01-25 → 2032-01-26  d0125-사도-성-바울로의-회심  by:grid:ordinary-3-sunday  shift:1
+2032-02-11 → 2032-02-12  t-재의-수요일  by:lunar11-설날  shift:1
 2032-03-25 → 2032-04-05  d0325-성모수태고지  by:t-성-목요일  shift:11
 2032-04-25 → 2032-04-26  d0425-성-마르코  by:grid:easter-5-sunday  shift:1
 2032-07-25 → 2032-07-26  d0725-사도-성-장-야고보  by:grid:ordinary-17-sunday  shift:1

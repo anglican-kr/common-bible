@@ -390,13 +390,12 @@
       "id": "T-2032-02-12-ash-wednesday-seollal",
       "kind": "transfer",
       "group": "④",
-      "title": "명절 — 2032 설 = 재의 수요일 → 2.12 (데이터 수정 후)",
-      "status": "skip",
+      "title": "명절 — 2032 설 = 재의 수요일 → 2.12",
+      "status": "confirmed",
       "issue": "미결13",
-      "skip": "미결13 — 데이터의 재의 수요일이 transferable: false 라 옮기지 않는다. calendar/ 표에서 transferable: true · transfer_to: next_day 로 고친 뒤 켠다",
       "canon": ["R-6.2-destinations"],
       "checks": ["C-6.5-11"],
-      "source": ["KASI 범위 안 유일한 겹침 2032-02-11"],
+      "source": ["KASI 범위 안 유일한 겹침 2032-02-11", "사용자 결정 2026-11-05"],
       "assertions": [
         { "date": "2032-02-12", "expect": { "id": "t-재의-수요일", "status": "transferred_in", "from": "2032-02-11", "displacedBy": "lunar11-설날" } }
       ]
