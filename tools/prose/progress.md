@@ -62,11 +62,11 @@
 | `docs/decisions/014-search-history.md` | 100 | #469 |
 | `docs/decisions/015-storage-strategy.md` | 117 | #469 |
 | `docs/decisions/016-audio-cache-lru.md` | 104 | #469 |
-| `docs/decisions/017-oauth-bff-proxy.md` | 78 | 진행 |
-| `docs/decisions/018-app-modularization.md` | 70 | 진행 |
-| `docs/decisions/019-esm-module-system.md` | 65 | 진행 |
-| `docs/decisions/020-monorepo-split.md` | 62 | 진행 |
-| `docs/decisions/021-pwa-versioning-content-hash.md` | 98 | 진행 |
+| `docs/decisions/017-oauth-bff-proxy.md` | 78 | #475 |
+| `docs/decisions/018-app-modularization.md` | 70 | #475 |
+| `docs/decisions/019-esm-module-system.md` | 65 | #475 |
+| `docs/decisions/020-monorepo-split.md` | 62 | #475 |
+| `docs/decisions/021-pwa-versioning-content-hash.md` | 98 | #475 |
 | `docs/decisions/022-citations-and-annotations.md` | 182 | 대기 |
 | `docs/decisions/023-settings-toggle-switches.md` | 50 | 대기 |
 | `docs/decisions/024-book-list-tabs-and-header-nav.md` | 55 | 대기 |
