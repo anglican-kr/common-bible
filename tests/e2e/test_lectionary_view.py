@@ -150,18 +150,19 @@ def test_collect_numbers_fit_narrow_screen_with_largest_text(mobile_context):
 # ── ② 전례일 스위처 ──
 
 def test_switcher_shows_every_candidate_and_changes_body_and_color(desktop_context):
-    """9.16 니니안 ∧ 추계재 — 초기 독서는 격자(미결25), 색 [자, 백]; 추계재를 고르면 ?obs=, 제목 추계재, 색 [자], 그 독서."""
+    """9.16 니니안 ∧ 추계재 — 초기 독서는 격자(미결25), 색 [자, 백]; 사계재 줄을 고르면 ?obs=, 제목은 본문의 제목(사용자 결정 2026-11-05), 색 [자], 그 독서."""
     page = desktop_context.new_page()
     _open(page, "lectionary/2026-09-16")
     assert page.inner_text(".lect-day") == "연중 24주 수요일"   # 기본 독서(격자)의 이름 — 지정 전례일은 니니안(2026-11-03)
     # 니니안은 전례독서 목록이 아니라 제목 아래 이름 줄(2026-11-03)
     assert page.inner_text(".lect-day-saints").startswith("니니안")
-    assert _choices(page) == ["추계재"]
+    assert _choices(page) == ["성직자의 성소를 위한 추계재"]
     assert _colors(page) == ["자색", "백색"]
 
     page.locator(".lect-choice", has_text="추계재").click()
     page.wait_for_url("**obs=t-*")
     page.wait_for_selector(".lect-day:has-text('추계재')")
+    assert page.inner_text(".lect-day") == "성직자의 성소를 위한 추계재"
     assert _choices(page) == ["연중 24주 수요일"]
     assert _colors(page) == ["자색"]
     assert page.locator(".lect-card").count() == 2
@@ -225,7 +226,9 @@ def test_choice_rows_fit_on_phones_and_large_type(browser):
       over: document.documentElement.scrollWidth - document.documentElement.clientWidth,
     })"""
     expected = {
-        "2025-06-11": ["하계재", "연중 10주 수요일"],
+        "2025-06-11": ["성직자의 성소를 위한 하계재", "연중 10주 수요일"],
+        "2026-12-18": ["성직후보자의 성소를 위한 동계재", "수도자의 성소를 위한 동계재"],
+        "2026-05-01": ["노동자의 날", "부활 4주 금요일"],
         "2028-01-02": ["공현대축일 · 1월 6일에서 옮겨 지킬 수 있음"],
         "2100-10-31": ["모든 성인의 날 · 11월 1일에서 옮겨 지킬 수 있음"],
     }
@@ -318,7 +321,7 @@ def test_reading_cards_sit_above_first_reading_and_list_every_item(desktop_conte
     order = page.eval_on_selector_all(".lectionary > *", "els => els.map(e => e.dataset.slot || e.className)")
     at = order.index("lect-section lect-cards")
     assert (order[at - 1], order[at + 1]) == ("collect", "first"), order
-    assert page.locator(".lect-controls").count() == 0
+    assert page.locator(".lectionary .division-tab").count() == 0
     assert page.inner_text(".lect-cards .lect-slot") == "독서"
     cards = page.eval_on_selector_all(".lect-card", """els => els.map((c) => ({
         name: c.querySelector('.lect-card-name').textContent,
@@ -720,42 +723,46 @@ def test_copy_excludes_optional_verse_brackets(desktop_context):
     assert "(공동번역성서)" in text
 
 
-def test_ember_friday_one_button_picks_readings_and_collect_without_common_caption(desktop_context):
-    """추계재 금요일 — 성직후보자 · 수도자는 「독서 · 본기도」 단추 하나로 독서와 본기도를 함께 바꾼다(교차 조합이 없다 — 사용자 결정
-    2026-10-13; 둘째에도 닿는다 — collect_no가 둘 다 1, 자체 리뷰 2026-10-13). 본기도 칸에는 따로 번호가 없다.
+def test_ember_friday_two_rows_pick_title_readings_and_collect_without_common_caption(desktop_context):
+    """추계재 금요일 — 성직후보자와 수도자는 전례독서 목록의 두 줄이고, 누르면 제목과 독서와 본기도가 함께 바뀐다(교차 조합이 없다 — 사용자 결정
+    2026-10-13, 2026-11-05). 탭 단추와 「독서 · 본기도」 글자는 없고, 본기도 칸에도 번호가 없다.
     니니안(공통뿐인 성인)은 전례독서 목록에 없어 주소로 가리켜도 기본 독서(격자)이고, 공통 분류 라벨은 어디에도 없다(사용자 결정
     2026-11-03 — 그전엔 「선교사 공통 독서」 캡션)."""
     page = desktop_context.new_page()
-    _open(page, "lectionary/2026-09-18?obs=t-%EC%B6%94%EA%B3%84%EC%9E%AC")
-    assert page.inner_text(".lect-sets .lect-control-label") == "독서 · 본기도"
-    tabs = page.locator(".lect-sets .division-tab")
-    assert [tabs.nth(i).inner_text() for i in range(tabs.count())] == ["성직후보자", "수도자"]
-    assert page.locator(".lect-collects .lect-collect-num").count() == 0
-    first = page.inner_text(".lect-collect-text")
-    tabs.nth(1).click()
+    _open(page, "lectionary/2026-09-18")
+    assert page.inner_text(".lect-day") == "연중 24주 금요일"
+    assert _choices(page) == ["성직후보자의 성소를 위한 추계재", "수도자의 성소를 위한 추계재"]
+    page.locator(".lect-choice", has_text="수도자의 성소").click()
     page.wait_for_url("**set=2")
     assert "collect=" not in page.url
-    page.wait_for_selector(".lect-sets .division-tab.active:has-text('수도자')")
-    assert page.inner_text(".lect-collect-text") != first
+    page.wait_for_selector(".lect-day:has-text('수도자의 성소를 위한 추계재')")
+    assert _choices(page) == ["성직후보자의 성소를 위한 추계재", "연중 24주 금요일"]
+    assert page.inner_text(".lect-collect-text").startswith("주 예수 그리스도여")
+    assert "사무상 3:1-10" in page.inner_text(".lect-reading[data-slot='first'] .lect-ref")
+    assert page.locator(".lect-collects .lect-collect-num").count() == 0
+    assert page.locator(".lectionary .division-tab").count() == 0
+    assert "독서 · 본기도" not in page.inner_text(".lectionary")
+    page.wait_for_function("() => document.title.includes('수도자의 성소를 위한 추계재')")
     _open(page, "lectionary/2026-09-16?obs=d0916-%EB%8B%88%EB%8B%88%EC%95%88")
     assert page.inner_text(".lect-day").startswith("연중 24주 수요일")
     assert page.locator(".lect-caption").count() == 0
 
 
-def test_may1_one_button_switches_to_labour_day_readings_and_collect(desktop_context):
-    """5.1 — 사도 성 필립보와 성 야고보가 먼저이고, 지역 축일인 노동자의 날은 「독서 · 본기도」 단추 하나로 독서와 본기도를 함께
-    고른다(사용자 결정 2026-10-13 — 「대안 독서는 사도 축일, 본기도는 노동자의 날」 같은 교차 조합은 없다)."""
+def test_may1_row_switches_to_labour_day_title_readings_and_collect(desktop_context):
+    """5.1 — 사도 성 필립보와 성 야고보가 먼저이고, 지역 축일인 노동자의 날은 전례독서 목록의 한 줄로 제목과 독서와 본기도를 함께
+    고른다(사용자 결정 2026-10-13, 2026-11-05 — 「대안 독서는 사도 축일, 본기도는 노동자의 날」 같은 교차 조합은 없다)."""
     page = desktop_context.new_page()
     _open(page, "lectionary/2026-05-01")
-    tabs = page.locator(".lect-sets .division-tab")
-    assert [tabs.nth(i).inner_text() for i in range(tabs.count())] == ["사도 성 필립보와 성 야고보", "노동자의 날"]
-    assert page.locator(".lect-sets .division-tab.active").inner_text() == "사도 성 필립보와 성 야고보"
+    assert page.inner_text(".lect-day") == "사도 성 필립보와 성 야고보"
+    assert _choices(page) == ["노동자의 날", "부활 4주 금요일"]
+    assert page.locator(".lectionary .division-tab").count() == 0
     assert page.locator(".lect-collects .lect-collect-num").count() == 0
     collect0 = page.inner_text(".lect-collect-text")
     first0 = page.inner_text(".lect-reading[data-slot='first'] .lect-ref")
-    tabs.nth(1).click()
+    page.locator(".lect-choice", has_text="노동자의 날").click()
     page.wait_for_url("**/lectionary/2026-05-01?set=2")
-    page.wait_for_selector(".lect-sets .division-tab.active:has-text('노동자의 날')")
+    page.wait_for_selector(".lect-day:has-text('노동자의 날')")
+    assert _choices(page) == ["사도 성 필립보와 성 야고보", "부활 4주 금요일"]
     assert page.inner_text(".lect-collect-text") != collect0
     assert page.inner_text(".lect-reading[data-slot='first'] .lect-ref") != first0
 
@@ -1070,17 +1077,17 @@ def test_year_outside_gregorian_range_is_rejected_not_hung(desktop_context):
     assert page.locator(".state-action a").get_attribute("href") == "/calendar"
 
 
-def test_long_segment_labels_wrap_at_320px(browser):
-    """320px — 「사도 성 필립보와 성 야고보」 세그먼트가 가로 스크롤을 만들지 않는다(WCAG 1.4.10). 독서 카드는 따로 본다."""
+def test_long_ember_title_wraps_at_320px(browser):
+    """320px — 「성직후보자의 성소를 위한 동계재」 제목이 잘리거나 가로 스크롤을 만들지 않고, 낱말 사이에서 꺾인다(WCAG 1.4.10). 줄은 전례독서 목록 시험이 본다."""
     ctx = browser.new_context(viewport={"width": 320, "height": 640})
     page = ctx.new_page()
     try:
-        _open(page, "lectionary/2026-05-01")
-        assert page.locator(".lect-sets .division-tab").count() >= 2
+        _open(page, "lectionary/2026-12-18?obs=t-%EB%8F%99%EA%B3%84%EC%9E%AC")
+        assert page.inner_text(".lect-day") == "성직후보자의 성소를 위한 동계재"
         assert page.evaluate("() => document.documentElement.scrollWidth") <= 320
-        over = page.evaluate("""() => [...document.querySelectorAll('.lect-sets .division-tab')]
-            .some(t => t.scrollWidth > t.clientWidth + 1)""")
+        over = page.evaluate("""() => { const t = document.querySelector('.lect-day'); return t.scrollWidth > t.clientWidth + 1; }""")
         assert not over
+        assert page.evaluate("() => getComputedStyle(document.querySelector('.lect-day')).wordBreak") == "keep-all"
     finally:
         ctx.close()
 
@@ -1186,7 +1193,6 @@ def test_bracket_set_merges_into_long_text_with_markers(desktop_context):
     """연중 11주일 가해 — 괄호 선택 구절 세트는 카드가 아니라 긴 본문 + 〔 〕 표시 + 「짧게 읽으면 …」 주석."""
     page = desktop_context.new_page()
     _open(page, "lectionary/2026-06-14")
-    assert page.locator(".lect-sets").count() == 0          # 단추 없음
     assert page.locator(".lect-card").count() == 2          # 트랙마다 한 장 — 괄호 세트는 합쳐져 카드가 늘지 않는다
     note = page.locator(".lect-optional-note")
     assert note.count() == 1 and "짧게 읽으면" in note.inner_text()

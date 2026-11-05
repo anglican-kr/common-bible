@@ -141,7 +141,9 @@ test("A3 2026-09-16 니니안 ∧ 추계재 — 초기 독서는 격자(미결25
   assert.strictEqual(m.group.common, null);
   assert.strictEqual(m.collects.length, 1);   // 격자(연중 24주간) 본기도
   same(m.memorialCollects.map((c) => c.common), ["missionary"]);   // 그 뒤에 니니안(선교사 공통) 본기도(2026-11-03)
+  same(labels(m), ["성직자의 성소를 위한 추계재", "연중 24주 수요일"]);
   const ember = model("2026-09-16", { obs: "t-추계재" });
+  assert.strictEqual(ember.dayName, "성직자의 성소를 위한 추계재");
   same(plain(ember.colors), ["violet"]);
   assert.strictEqual(ember.ownColor, true);
   same(ember.options.map((o) => o.label), ["독서 1", "독서 2"]);
@@ -169,22 +171,54 @@ test("A3 2026-08-09 연중 19주일 — 트랙 토글, 평화통일주일은 전
   same(plain(moved.colors), ["white"]);   // 변모를 고르면 그 축일의 백
 });
 
-test("A3 5.1 · 사계재 금요일 — 독서 세트와 본기도가 같은 제목으로 짝지어져 단추 하나(?set=)로 함께 바뀌고, 고른 전례일의 것이 먼저다(사용자 결정 2026-10-13)", { skip: SKIP }, () => {
+test("A3 5.1 · 사계재 금요일 — 독서 세트와 본기도가 같은 제목으로 짝지어져 전례독서 목록의 줄(?set=)로 함께 바뀌고, 고른 전례일의 것이 먼저이며, 제목이 따라간다(사용자 결정 2026-10-13, 2026-11-05)", { skip: SKIP }, () => {
+  const rows = (m) => m.choices.map((c) => [c.name, c.active]);
   const m = model("2026-05-01");
   assert.strictEqual(m.collectsLinked, true);
-  same(m.options.map((o) => o.label), ["사도 성 필립보와 성 야고보", "노동자의 날"]);
+  assert.strictEqual(m.dayName, "사도 성 필립보와 성 야고보");
+  same(rows(m), [["사도 성 필립보와 성 야고보", true], ["노동자의 날", false], ["부활 4주 금요일", false]]);
   assert.strictEqual(m.collects[m.collectIndex].title, "사도 성 필립보와 성 야고보");
-  same(plain(m.hrefs.options), ["/lectionary/2026-05-01", "/lectionary/2026-05-01?set=2"]);
+  same(m.choices.slice(0, 2).map((c) => c.href), ["/lectionary/2026-05-01", "/lectionary/2026-05-01?set=2"]);
   const labour = model("2026-05-01", { set: 2 });
+  assert.strictEqual(labour.dayName, "노동자의 날");
+  same(rows(labour), [["사도 성 필립보와 성 야고보", false], ["노동자의 날", true], ["부활 4주 금요일", false]]);
   assert.strictEqual(labour.group.title, "노동자의 날");
   assert.strictEqual(labour.collects[labour.collectIndex].title, "노동자의 날");
   const crossed = model("2026-05-01", { collect: 2 });   // 교차 조합은 없다 — ?collect= 는 읽지 않는다
   assert.strictEqual(crossed.collects[crossed.collectIndex].title, "사도 성 필립보와 성 야고보");
+  same(rows(model("2026-09-18")), [["성직후보자의 성소를 위한 추계재", false], ["수도자의 성소를 위한 추계재", false], ["연중 24주 금요일", true]]);
   const ember = model("2026-09-18", { obs: "t-추계재" });
   assert.strictEqual(ember.collectsLinked, true);
-  same(ember.options.map((o) => o.label), ["성직후보자", "수도자"]);
+  assert.strictEqual(ember.dayName, "성직후보자의 성소를 위한 추계재");
   const second = model("2026-09-18", { obs: "t-추계재", set: 2 });
+  assert.strictEqual(second.dayName, "수도자의 성소를 위한 추계재");
   assert.strictEqual(second.collects[second.collectIndex].id, 237);
+});
+
+test("A3 사계재 — 2025-2050 모든 날, 수 · 금 · 토의 줄이 정해진 제목이고(금요일은 둘), 줄을 누르면 제목과 독서와 본기도가 그 제목이다(사용자 결정 2026-11-05)", { skip: SKIP }, () => {
+  const INTENTIONS = { 3: ["성직자"], 5: ["성직후보자", "수도자"], 6: ["모든 신자"] };
+  const isEmberCandidate = (c) => !!(c.observance.rule && c.observance.rule.kind === "ember_wfs");
+  const bad = [];
+  let days = 0;
+  for (let d = "2025-01-01"; d <= "2050-12-31"; d = ctx.addDays(d, 1)) {
+    const base = model(d);
+    const ember = base.resolved.candidates.find(isEmberCandidate);
+    if (!ember) continue;
+    days++;
+    const want = INTENTIONS[new Date(`${d}T00:00:00Z`).getUTCDay()].map((n) => `${n}의 성소를 위한 ${ember.observance.name}`);
+    const rows = base.choices.filter((c) => isEmberCandidate(c.candidate));
+    if (rows.map((c) => c.name).join() !== want.join()) bad.push(`${d} 줄: ${rows.map((c) => c.name)}`);
+    rows.forEach((row, i) => {
+      const q = new URL(row.href, "http://x").searchParams;
+      const m = model(d, { obs: q.get("obs"), set: Number(q.get("set")) || null });
+      const active = m.choices.filter((c) => c.active).map((c) => c.name).join();
+      if (m.dayName !== want[i] || active !== want[i]) bad.push(`${d} 제목 ${m.dayName}, 활성 줄 ${active}`);
+      if (m.group.title !== want[i]) bad.push(`${d} 독서 ${m.group.title}`);
+      if (m.collects[m.collectIndex].title !== want[i]) bad.push(`${d} 본기도 ${m.collects[m.collectIndex].title}`);
+    });
+  }
+  same(bad, []);
+  assert.strictEqual(days, 312);
 });
 
 test("A3 데이터 전수 — 독서 세트가 제목으로 갈리는 날은 본기도도 같은 제목으로 짝지어진다(5.1 · 사계재 금요일 넷뿐 — 사용자 결정 2026-10-13의 지킴이)", { skip: SKIP }, () => {
@@ -456,7 +490,7 @@ test("A3 사순 2주일 — 조건이 카드 이름이고, 고르면 제목만 �
   assert.strictEqual(m.slots[3].label, "마르 9:2-9");
 });
 
-test("A3 5.1 과 사계재 금요일 — 카드가 아니라 「독서 · 본기도」 단추다(사용자 결정 2026-11-05)", { skip: SKIP }, () => {
+test("A3 5.1 과 사계재 금요일 — 카드가 아니라 전례독서 목록의 줄이다(사용자 결정 2026-11-05)", { skip: SKIP }, () => {
   const may1 = model("2026-05-01");
   assert.strictEqual(may1.collectsLinked, true);
   assert.strictEqual(may1.cards, null);

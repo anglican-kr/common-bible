@@ -131,8 +131,8 @@ def test_focus_returns_after_drawer_close(browser):
 # ── 전례독서 뷰 (ADR-038 §3) ──────────────────────────────────────────────────
 
 def test_lectionary_choice_rows_are_keyboard_reachable(browser):
-    """전례독서 목록이 Tab 순서에 있고 Enter로 이동한다(링크). 세그먼트도 같은 링크라 키보드 동작이 같다 — 전례독서 목록으로 대표한다.
-    9.16의 줄은 추계재 하나다(니니안은 제목 아래 이름 줄 — 사용자 결정 2026-11-03). 고르면 제목이 추계재이고, 포커스는 같은 자리의 줄에 있다."""
+    """전례독서 목록이 Tab 순서에 있고 Enter로 이동한다(링크). 독서 카드도 같은 링크라 키보드 동작이 같다 — 전례독서 목록으로 대표한다.
+    9.16의 줄은 사계재 하나다(니니안은 제목 아래 이름 줄 — 사용자 결정 2026-11-03). 고르면 제목이 그 사계재이고, 포커스는 같은 자리의 줄에 있다."""
     ctx, page = _open(browser, "lectionary/2026-09-16")
     try:
         page.wait_for_selector(".lectionary .lect-choice", timeout=20_000)
@@ -141,7 +141,7 @@ def test_lectionary_choice_rows_are_keyboard_reachable(browser):
         page.keyboard.press("Shift+Tab")
         page.keyboard.press("Tab")
         assert page.evaluate("() => document.activeElement.classList.contains('lect-choice')")
-        assert page.evaluate("() => document.activeElement.textContent") == "추계재"
+        assert page.evaluate("() => document.activeElement.textContent") == "성직자의 성소를 위한 추계재"
         page.keyboard.press("Enter")
         page.wait_for_url("**obs=t-*")
         page.wait_for_selector(".lect-day:has-text('추계재')")
