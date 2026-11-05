@@ -59,8 +59,7 @@ for (let d = from; d <= to; d = ctx.addDays(d, 1)) {
     view: m ? { initial: m.initial.observance.id, selected: m.selected.observance.id, track: m.track, tracks: m.tracks, cycle: m.cycle,
       colors: m.colors, colorAlt: m.colorAlt, ownColor: m.ownColor, empty: m.empty,
       options: m.options.map((o) => ({ label: o.label, slots: slotsOf(o.group), short: o.short ? slotsOf(o.short) : null })),
-      chips: m.chips.map((c) => ({ id: c.candidate.observance.id, label: c.label, muted: c.muted })),
-      pair: m.pair ? { a: m.pair.a.observance.id, aText: m.pair.aText, b: m.pair.b.observance.id, bText: m.pair.bText } : null } : null,
+      choices: m.choices.map((c) => ({ id: c.candidate.observance.id, name: c.name, suffix: c.suffix, active: c.active })) } : null,
   }));
 }
 fs.writeFileSync(out, JSON.stringify(result, null, 0));

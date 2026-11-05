@@ -12,7 +12,9 @@ import test from "node:test";
 import assert from "node:assert";
 import vm from "node:vm";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
+import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -615,5 +617,27 @@ test("축성일 줄 — 실제 본당 표에서 축성과 축복이 섞인 날�
   // 어느 날이든 「북.」 성당은 줄에 없다
   for (let d = "2026-01-01"; d <= "2026-12-31"; d = ctx.addDays(d, 1)) {
     for (const line of model(d).dedicationLines) assert.ok(!line.includes("북."), `${d} ${line}`);
+  }
+});
+
+// 도구는 이 파일과 같은 조합으로 뷰 모델을 읽는 별도 스크립트라, 모델의 값을 지워도 다른 시험이 알아채지 못한다. #473 에서
+// `chips` 를 뺀 뒤 도구가 오류로 멈추고 있었다(2026-11-05 발견). 저녁 전례가 있는 12.24와 세트가 셋인 12.25를 실제로 실행해 본다.
+test("책자 대조의 엔진 덤프(tools/booklet/engine-dump.mjs) — 지금 뷰 모델로 끝까지 돌고, compare.py 가 읽는 값을 낸다", { skip: SKIP }, () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "engine-dump-"));
+  try {
+    const out = path.join(dir, "engine.json");
+    execFileSync(process.execPath, [path.join(ROOT, "tools/booklet/engine-dump.mjs"), "2026-12-24", "2026-12-25", out], { cwd: ROOT, stdio: "pipe" });
+    const days = JSON.parse(fs.readFileSync(out, "utf8"));
+    assert.deepStrictEqual(days.map((d) => d.date), ["2026-12-24", "2026-12-25"]);
+    for (const d of days) {
+      assert.ok(!d.error, d.date);
+      assert.ok(d.view && typeof d.view.initial === "string", `${d.date} view.initial`);
+      assert.ok(Array.isArray(d.view.choices), `${d.date} view.choices`);
+      assert.ok(d.official && d.color && d.candidates.length, `${d.date} official · color · candidates`);
+      for (const c of d.candidates) assert.ok(Array.isArray(d.groups[c.id]), `${d.date} groups[${c.id}]`);
+    }
+    assert.ok(days[0].candidates.some((c) => c.evening), "12.24의 성탄 밤은 저녁 후보다 — compare.py 가 12.25 세트를 찾을 때 쓴다");
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
   }
 });
