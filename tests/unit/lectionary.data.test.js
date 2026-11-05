@@ -735,23 +735,23 @@ test("책자 대조의 엔진 덤프(tools/booklet/engine-dump.mjs) — 지금 �
   }
 });
 
-test("1.2와 12.29 — 기도서 486쪽이 날짜로 고정한 평일 독서라 제목은 성탄주간, 성인은 이름 줄, 본기도는 성탄 주간 뒤에 성인(사용자 결정 2026-11-05)", { skip: SKIP }, () => {
-  for (const [d, saint, name, first] of [
-    ["2027-01-02", "d0102-바실과-나지안조의-그레고리", "바실과 그레고리", "1요한 2:22-28"],
-    ["2028-12-29", "d1229-토마스-베켓", "토마스 베켓", "1요한 2:3-11"],
+test("1.2와 12.29 — 기도서 486쪽이 날짜로 고정한 평일 독서라 제목은 성탄 평일의 이름, 성인은 이름 줄, 본기도는 성탄 주간 뒤에 성인(사용자 결정 2026-11-05)", { skip: SKIP }, () => {
+  for (const [d, saint, name, first, title] of [
+    ["2027-01-02", "d0102-바실과-나지안조의-그레고리", "바실과 그레고리", "1요한 2:22-28", "성탄 1주 토요일"],
+    ["2028-12-29", "d1229-토마스-베켓", "토마스 베켓", "1요한 2:3-11", "성탄 후 금요일"],
   ]) {
     const m = model(d);
     assert.ok(id(m.selected).startsWith("grid:christmas-x-weekday-"), d);
-    assert.strictEqual(m.selected.observance.name, "성탄주간", d);
+    assert.strictEqual(m.selected.observance.name, title, d);
     assert.strictEqual(m.slots[0].label, first, d);
     same(m.collects.map((c) => c.title), ["성탄주간", "성탄주간"], d);
     same(m.memorialSaints.map(id), [saint], d);
     same(m.memorialCollects.map((c) => plain(c.names).join("과 ")), [name], d);
-    same(labels(m), ["성탄주간"], d);   // 후보가 하나뿐이라 화면에 전례독서 목록을 그리지 않는다
+    same(labels(m), [title], d);   // 후보가 하나뿐이라 화면에 전례독서 목록을 그리지 않는다
   }
   // 죄 없는 어린이들이 옮겨 오는 해에는 제목이 어린이들이고, 그날의 평일 독서를 목록에서 고른다
   const moved = model("2026-12-29");
   assert.strictEqual(id(moved.selected), "d1228-죄-없는-어린이들의-순교");
-  assert.ok(labels(moved).includes("성탄주간"), labels(moved).join());
+  assert.ok(labels(moved).includes("성탄 1주 화요일"), labels(moved).join());
   same(moved.memorialSaints.map(id), ["d1229-토마스-베켓"]);
 });

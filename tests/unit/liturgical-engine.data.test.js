@@ -626,6 +626,8 @@ test("C-6.1-12 기념일은 이름 줄 — 같은 날짜에 다른 행이 없는
   same(bad, []);
 });
 
+const CHRISTMAS_WEEKDAY = /^성탄 (?:[12]주|후) [월화수목금토]요일$/;
+
 test("§5.5 날짜로 이름이 정해진 평일 — 표가 데이터의 날짜 전용 평일 본문과 같고, 2025-2050 그 날의 격자 평일 이름이 본문 제목과 같다 (사용자 결정 2026-11-03)", { skip: SKIP }, () => {
   const table = plain(vm.runInContext("DATED_WEEKDAY_NAMES", ctx));
   // 독서와 본기도의 날짜 전용 평일 본문(`type: weekday`이고 날짜가 있는 것)이 표와 같다 — 데이터에 날짜가 늘거나 이름이 바뀌면 여기서 멈춘다
@@ -648,14 +650,37 @@ test("§5.5 날짜로 이름이 정해진 평일 — 표가 데이터의 날짜 
       const grid = r.candidates.find((c) => c.observance.id.startsWith("grid:"));
       const groups = ctx.findReadingsIn(ix().lec, ix().cal, r, grid);
       const dated = groups.length > 0 && groups.every((g) => recOf(g).date !== null && recOf(g).type === "weekday");
-      // 날짜 전용 본문을 받는 날에만, 그리고 그런 날에는 언제나 그 본문의 이름이다
-      const want = dated ? recOf(groups[0]).name : null;
-      if (dated ? grid.observance.name !== want : grid.observance.name === table[md].name) {
+      // 날짜 전용 본문을 받는 날에만, 그리고 그런 날에는 언제나 그 본문의 이름이다. 본문 이름이 「성탄주간」인 성탄 평일만 주일 기준의 이름이다
+      const name = grid.observance.name;
+      const right = !dated ? name !== table[md].name && !CHRISTMAS_WEEKDAY.test(name)
+        : table[md].season === "christmas" ? CHRISTMAS_WEEKDAY.test(name) : name === recOf(groups[0]).name;
+      if (!right) {
         bad.push(`${d} ${grid.observance.name} / ${groups.map((g) => g.title).join(",")}`);
       }
     }
   }
   same(bad, []);
+});
+
+test("§5.5 성탄 평일의 제목 2025-2050 — 한 성탄절기 안에서 겹치지 않고, 「성탄 후 X요일」은 22일이고, 구글 달력의 번호와 같다 (사용자 결정 2026-11-05)", { skip: SKIP }, () => {
+  const table = plain(vm.runInContext("DATED_WEEKDAY_NAMES", ctx));
+  const christmas = Object.keys(table).filter((md) => table[md].season === "christmas");
+  const nameOn = (d) => resolve(d).candidates.find((c) => c.observance.id.startsWith("grid:")).observance.name;
+  /** @type {Record<string, string[]>} */
+  const seasons = {};
+  for (let y = 2025; y <= 2050; y++) {
+    for (const md of christmas) {
+      const name = nameOn(`${y}-${md.replace(".", "-")}`);
+      if (!CHRISTMAS_WEEKDAY.test(name)) continue;   // 주일, 주의 세례 뒤의 연중 평일
+      (seasons[md < "06" ? y - 1 : y] ??= []).push(name);
+    }
+  }
+  const names = Object.values(seasons);
+  assert.strictEqual(names.length, 27);
+  same(names.filter((ns) => new Set(ns).size !== ns.length), []);
+  assert.strictEqual(names.flat().filter((n) => n.startsWith("성탄 후")).length, 22);
+  // 달력의 제목(2025-01-07 「성탄2주 화요일」, 2026-01-05 「성탄2주 월요일」)
+  same(["2025-01-07", "2026-01-05"].map(nameOn), ["성탄 2주 화요일", "성탄 2주 월요일"]);
 });
 
 test("C-6.1-13 저녁 전례(R-6.1-evening) 2025~2050 — 성 토요일은 지정 전례일이 성 토요일 · 홍 · 맨 끝 부활밤, 12.24 는 지정 전례일이 낮 · 자 · 맨 끝 성탄 밤, 12.25 엔 성탄 밤 없음, 저녁 후보는 그 두 날뿐", { skip: SKIP }, () => {

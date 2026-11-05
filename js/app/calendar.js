@@ -61,7 +61,7 @@ const PAGE_TITLE = LITURGICAL_VIEWS.calendar.title;
 /**
  * 월간 화면이 그리는 것 전부 — 순수 함수 `buildMonthGrid` 의 반환. DOM 은 이것만 읽는다.
  * @typedef {{
- *   year: number, month: number, title: string, weeks: CalendarCell[][],
+ *   year: number, month: number, title: string, shortTitle: string, weeks: CalendarCell[][],
  *   hrefs: { prev: string | null, next: string | null, today: string },
  * }} CalendarMonth
  */
@@ -255,7 +255,7 @@ function buildMonthGrid(y, m, today, resolve) {
     weeks.push(row);
   }
   return {
-    year: y, month: m, title: `${y}년 ${m}월`, weeks,
+    year: y, month: m, title: `${y}년 ${m}월`, shortTitle: `${y}.${String(m).padStart(2, "0")}`, weeks,
     hrefs: { prev: monthHref(y, m - 1), next: monthHref(y, m + 1), today: "/calendar" },
   };
 }
@@ -276,10 +276,14 @@ function announceMonth(/** @type {CalendarMonth} */ model) {
 /** @param {CalendarMonth} model */
 function buildMonthHead(model) {
   const head = el("header", { className: "cal-head" });
+  // 폭이 모자라면 CSS가 짧은 표기를 보인다(사용자 결정 2026-11-05). 스크린 리더는 언제나 전체 이름을 읽는다.
+  const month = el("h2", { className: "cal-month" });
+  month.appendChild(el("span", { className: "cal-month-full" }, model.title));
+  month.appendChild(el("span", { className: "cal-month-short", "aria-hidden": "true" }, model.shortTitle));
   // 전례독서의 날짜 이동 줄과 같은 줄 — 이전 · 다음 달은 계산 범위 밖이면 자리만 지킨다
   head.appendChild(buildDateNav({
     ariaLabel: "달 이동",
-    title: el("h2", { className: "cal-month" }, model.title),
+    title: month,
     todayHref: model.hrefs.today,
     prev: { href: model.hrefs.prev, label: "이전 달" },
     next: { href: model.hrefs.next, label: "다음 달" },
