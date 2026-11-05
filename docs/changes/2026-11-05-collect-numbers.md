@@ -1,4 +1,5 @@
 ---
+pr: 477
 date: 2026-11-05
 branch: style/collect-numbers
 title: "style: 본기도 대체안 탭을 제목 옆 번호로 바꿈"
