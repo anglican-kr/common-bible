@@ -862,6 +862,83 @@ a.lect-datenav-btn:focus-visible { background: var(--bg-card); }
   color: var(--bg);
 }
 .lect-collect-num:active .lect-collect-num-mark { opacity: 0.7; }
+/* 독서 카드 — 「또는」이 있는 날의 독서를 고른다(사용자 결정 2026-11-05). 독서만 바꾸므로 본기도 아래에 있다. 접으면 카드 대신 제목 옆에
+   본기도 번호와 같은 부품이 남는다. 이름이 있으면 알약(.lect-cards-pills)이고, 「독서 N」이면 번호다. */
+.lect-cards .lect-section-head { margin-bottom: var(--space-2); }
+.lect-cards [hidden] { display: none; }
+.lect-cards-pills { column-gap: var(--space-2); }
+.lect-cards-pills .lect-collect-num-mark {
+  height: auto;
+  min-height: 2em;
+  padding-inline: 0.85em;
+  border: 1px solid var(--border);
+  white-space: normal;
+  word-break: keep-all;
+}
+.lect-cards-pills .lect-collect-num.active .lect-collect-num-mark { border-color: var(--accent); }
+/* 접기 단추 — 칸은 44px이고, 음수 여백으로 제목 줄 높이를 늘리지 않는다. 꺾쇠는 전례독서 목록의 ›와 같은 약화 글리프다. */
+.lect-cards-fold {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-1);
+  min-width: var(--touch-target);
+  min-height: var(--touch-target);
+  margin-block: calc((var(--font-md) * var(--leading-relaxed) - var(--touch-target)) / 2);
+  margin-inline-start: auto;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: var(--font-sm);
+  cursor: pointer;
+}
+.lect-cards-fold:hover { color: var(--text); }
+.lect-cards-fold::after {
+  content: "";
+  flex: none;
+  width: 0.45em;
+  height: 0.45em;
+  margin-inline-end: 0.2em;
+  border-block-start: 2px solid var(--text-tertiary);
+  border-inline-end: 2px solid var(--text-tertiary);
+  transform: translateY(20%) rotate(-45deg);
+}
+.lect-cards-fold[aria-expanded="false"]::after { transform: translateY(-20%) rotate(135deg); }
+/* 카드 두 장을 나란히 — 같은 항목끼리 줄이 맞도록 카드가 부모의 줄을 나눠 쓴다(subgrid. 지원하지 않는 브라우저에서는 줄만 어긋난다).
+   7.5rem은 320px 화면의 기본 글자에서 두 칸이 들어가는 폭이다. 글자가 커져 두 칸이 들어가지 않으면 한 칸씩 쌓는다(WCAG 1.4.10). */
+.lect-cards-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(7.5rem, 100%), 1fr));
+  gap: var(--space-1) var(--space-2);
+  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+}
+.lect-card {
+  display: grid;
+  grid-row: span var(--lect-card-rows, 5);
+  grid-template-rows: subgrid;
+  box-sizing: border-box;
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: var(--font-sm);
+  line-height: var(--leading-snug);
+  text-decoration: none;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+.lect-card.active {
+  background: var(--bg-card);
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent), var(--shadow-1);
+}
+.lect-card:active { opacity: 0.7; }
+.lect-card-name { font-weight: 600; color: var(--text-secondary); }
+.lect-card.active .lect-card-name { color: var(--accent); }
+/* 두 카드에 같은 성구는 옅게, 다른 성구는 진하게 — 무엇이 다른지 한눈에 보이게 한다. 글자 대비는 둘 다 4.5:1 이상이다(DESIGN.md §2). */
+.lect-card-ref { color: var(--text-secondary); }
+.lect-card-ref--differs { color: var(--text); }
 .lect-collect { margin: 0; }
 .lect-collect-text { margin: 0 0 var(--space-3); }
 /* 괄호 선택 구절 — the booklet's "(9-23)": the long text is the reading, the

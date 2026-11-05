@@ -4,9 +4,8 @@
 // Lectionary reading view (ADR-038 §3 — A3). Renders one day's eucharistic
 // propers at /lectionary[/YYYY-MM-DD]: collect(s) → first reading → psalm →
 // second reading → gospel, with the observance switcher (every candidate with
-// text of its own as a link row under the title — `official` is only the initial pick), the alternative-set and track
-// segments, and the side-by-side choice for optional transfers / transferred
-// feasts / regional festivals. The engine decides what the day IS
+// text of its own as a link row under the title — `official` is only the initial pick) and the reading cards
+// (every day with an 「또는」 alternative or a track — they fold into pills or numbers). The engine decides what the day IS
 // (resolveDate · findReadings · findCollects — ADR-037 §6, design §5); this
 // module only decides what to SHOW and draws it. Rendering follows
 // bookmark-read.js (ADR-035): load every chapter JSON first → staleness check →
@@ -23,10 +22,10 @@
 //   미결20 성 토요일 · 성탄 밤: 저녁 전례 — 엔진이 부활밤(성 토요일 저녁) · 성탄 밤(12.24 저녁)을 그날의 대표에서 빼고
 //          후보 끝에 `evening` 으로 싣는다(사용자 결정 2026-10-15, 닫힘). 전례독서 목록의 상태 표시 「· 저녁」, 헤더 색은 「고른 본문의 색」
 //          — 성 토요일(그날의 대표)은 홍, 부활밤을 누르면 백.
-//   미결38 대안 세트: 「또는」 대안은 「독서 1 · 독서 2」(완전한 세트를 통째로 바꾼다), 조건부는 「…로 지킬 때」가
-//          라벨, 괄호 선택 구절 세트는 바탕 세트에 합쳐 긴 본문 + 〔 〕 표시. (닫힘)
+//   미결38 대안 세트: 「또는」 대안과 트랙은 달라지는 항목 수와 상관없이 독서 카드로 통째로 고른다(사용자 결정 2026-11-05), 조건부는
+//          「…로 지킬 때」가 카드 이름, 괄호 선택 구절 세트는 바탕 세트에 합쳐 긴 본문 + 〔 〕 표시. (닫힘)
 //   미결42 전례독서 목록의 이름은 괄호 설명을 뗀 이름이고, 전체 이름은 title 속성. 주기와 독서 N은 붙이지 않는다 — 제목 아래 줄과
-//          세그먼트에 있다(2026-11-04). (닫힘)
+//          독서 카드에 있다(2026-11-04). (닫힘)
 
 /** @typedef {import("../types").ResolvedDate} ResolvedDate */
 /** @typedef {import("../types").Candidate} Candidate */
@@ -48,7 +47,7 @@ import {
 } from "./liturgical-engine.js";
 
 const { _$, el, clearNode, emptyState, isModifiedClick } = window.appHelpers;
-const { loadLectionaryTrack, saveLectionaryTrack } = window.appStorage;
+const { loadLectionaryTrack, saveLectionaryTrack, loadLectionaryCardsFolded, saveLectionaryCardsFolded } = window.appStorage;
 
 const $app = _$("app");
 // 머리의 제목(<h1>) — 이 화면은 그 자리에 날짜 이동 줄을 그린다(commitTitleDateNav).
@@ -57,7 +56,7 @@ const $title = _$("page-title");
 let committedDate = null;
 // 이름은 views.js에 있다 — 이 모듈을 받지 못했을 때 라우터가 같은 제목으로 실패 화면을 그린다.
 const PAGE_TITLE = LITURGICAL_VIEWS.lectionary.title;
-// 이 화면의 링크(날짜 이동 · 전례독서 목록 · 세그먼트)는 #app을 통째로 다시 그린다 — 그 링크들은 `data-focus-key`만 달고, 라우터가
+// 이 화면의 링크(날짜 이동 · 전례독서 목록 · 독서 카드)는 #app을 통째로 다시 그린다 — 그 링크들은 `data-focus-key`만 달고, 라우터가
 // 누른 자리를 재 두었다가 새 화면의 같은 컨트롤로 포커스를 돌려준다(WCAG 2.4.3 — routing.js, 캘린더 · 구분 탭 · 검색과 같다).
 
 /** parsePath 가 /lectionary 에서 내는 서술자(routing.js PARSE_PATH — 정의는 types.d.ts `Route`). @typedef {import("../types").LectionaryRoute} LectionaryRoute */
@@ -65,10 +64,15 @@ const PAGE_TITLE = LITURGICAL_VIEWS.lectionary.title;
 /** 제목 아래 전례독서 목록의 후보 하나 — `name`은 괄호 설명을 뗀 이름, `suffix`는 상태 표시. @typedef {{ candidate: Candidate, name: string, suffix: string, title: string, href: string, active: boolean }} LectionaryChoice */
 /** 화면의 「독서」 선택지 하나 — `short` 는 괄호 선택 구절 세트에 합쳐진 짧은 바탕 세트(〔 〕 표시의 기준). @typedef {{ group: ReadingGroup, short: ReadingGroup | null, label: string }} ReadingOption */
 /**
+ * 독서 카드 한 장 — 고를 수 있는 독서 한 벌(ADR-038 §3 「대안 세트·트랙 전환」). `refs`는 그 독서의 모든 항목이고, `differs`는 다른
+ * 카드와 성구가 다른 항목이다. `focusKey`는 다시 그린 뒤 포커스를 돌려줄 자리(`track:N`, `set:N`)다. 트랙이 없는 날은 `track`이 null이다.
+ * @typedef {{ name: string, refs: Array<{ label: string, differs: boolean }>, href: string, active: boolean, focusKey: string, track: 1 | 2 | null }} ReadingCard
+ */
+/**
  * 뷰가 그리는 것 전부 — 순수 함수 `buildLectionaryModel` 의 반환. DOM 은 이것만 읽는다.
  * @typedef {{
- *   date: string, resolved: ResolvedDate, selected: Candidate, initial: Candidate,
- *   groups: ReadingGroup[], tracks: Array<1 | 2>, track: 1 | 2 | null,
+ *   date: string, resolved: ResolvedDate, selected: Candidate, initial: Candidate, dayName: string,
+ *   groups: ReadingGroup[], tracks: Array<1 | 2>, track: 1 | 2 | null, cards: ReadingCard[] | null,
  *   options: ReadingOption[], setIndex: number, group: ReadingGroup | null, shortGroup: ReadingGroup | null, slots: ReadingSlot[],
  *   choices: LectionaryChoice[], selectedNote: string | null,
  *   collects: CollectOption[], collectLabels: string[], collectIndex: number, collectsLinked: boolean, ending: "A" | "B" | "C",
@@ -108,8 +112,11 @@ const WEEKDAY_KO = ["일", "월", "화", "수", "목", "금", "토"];
 const GRID_ID_PREFIX = "grid:";
 /** 파서가 괄호 선택 확장(「9:35-10:8(9-23)」)으로 만든 세트의 표지(ADR-037 §1 「대안 세트 explode」). */
 const BRACKET_NOTE = "괄호 선택 구절 포함";
+// 연중 주일 트랙의 이름 — 앞쪽은 구약 연속 독서, 뒤쪽은 복음 주제에 따른 독서다(2024 책자 일러두기, 기도서 471쪽, 사용자 결정 2026-11-05).
+/** @type {Record<1 | 2, string>} */
+const TRACK_NAME = { 1: "연속 독서", 2: "복음 주제" };
 
-// 송영 3종 — 고른 본기도(대체안은 세그먼트로 택1) 끝에 **1회**, 그 본기도의 `ending` 코드로(ADR-036 §3 ·
+// 송영 3종 — 고른 본기도(대체안은 번호로 택1) 끝에 **1회**, 그 본기도의 `ending` 코드로(ADR-036 §3 ·
 // ADR-038 §3 「구현」 — 다른 전례일의 본기도는 열거하지 않는다). 데이터 eucharist-collects.json
 // `_meta.endings` 와 글자까지 같아야 한다(실데이터 테스트가 대조). A · B 의 선택 규정은 설계서
 // 미결37 — 데이터가 B 를 배정하지 않으므로 레코드의 코드를 그대로 받고, 코드가 없으면 A 다.
@@ -323,7 +330,7 @@ function findBracketBase(options, g) {
 /**
  * 고른 트랙의 세트들 → 화면의 「독서」 선택지(사용자 결정 2026-10-12 — ADR-038 §3 「구현」).
  * - 괄호 선택 구절 세트(`BRACKET_NOTE`)는 자기 바탕 세트에 **합친다** — 긴 본문을 그리고 짧은 본문과의 차이를
- *   〔 〕 로 표시한다(`short` 가 그 바탕). 세그먼트에 오르지 않는다.
+ *   〔 〕 로 표시한다(`short`가 그 바탕). 카드에 오르지 않는다.
  * - 남는 선택지가 둘 이상이면 「또는」 대안이다 — 대안이 있는 슬롯만 바꾼 **완전한 세트**를 통째로 고른다(ADR-037
  *   §1): 「독서 1」「독서 2」. 조건부 세트는 조건(「…로 지킬 때」)이 라벨이고 그 바탕 세트는 전례일 이름이다.
  * - 제목이 갈리는 세트들(미결12 — 좁히기에 실패해 남은 것 전부가 온 날)은 제목으로 가른다.
@@ -372,6 +379,47 @@ function optionalVerseTest(slot, shortSlot) {
   const covers = (/** @type {ReadingSlot} */ s, /** @type {number} */ ch, /** @type {number} */ n) =>
     (s.refs || []).some((r) => r.chapter === ch && specCoversVerse(r.verseSpec, n));
   return (chapter, n) => covers(slot, chapter, n) && !covers(shortSlot, chapter, n);
+}
+
+/**
+ * 독서 카드 — 「또는」이 있는 날은 달라지는 항목 수와 상관없이 모두 카드로 고른다(사용자 결정 2026-11-05, ADR-038 §3). 트랙이 있는 날은
+ * 트랙마다, 그 밖에는 세트마다 한 장이다. 앞쪽끼리, 뒤쪽끼리 묶인 독서이므로 항목을 따로 고르지 않는다(사용자 확정 2026-11-05).
+ * 세트와 본기도가 짝지어진 날(5.1, 사계재 금요일)은 전례일이 갈리는 날이라 카드가 아니라 「독서 · 본기도」 단추다. 고를 것이 없으면 null.
+ * @param {{ groups: ReadingGroup[], baseName: string, options: ReadingOption[], setIndex: number, linked: boolean,
+ *   trackHrefs: Array<{ track: 1 | 2, href: string, active: boolean }>, optionHrefs: string[] }} a
+ * @returns {ReadingCard[] | null}
+ */
+function readingCards({ groups, baseName, options, setIndex, linked, trackHrefs, optionHrefs }) {
+  /** @type {Array<{ name: string, group: ReadingGroup, href: string, active: boolean, focusKey: string, track: 1 | 2 | null }>} */
+  const picks = [];
+  if (trackHrefs.length > 1) {
+    for (const t of trackHrefs) {
+      // 트랙마다 선택지는 하나다(괄호 선택 구절 세트는 바탕에 합쳐진다) — 실데이터 테스트가 지킨다(lectionary.data.test.js).
+      const { group } = readingOptions(setsOf(groups, t.track), baseName)[0];
+      picks.push({ name: TRACK_NAME[t.track], group, href: t.href, active: t.active, focusKey: `track:${t.track}`, track: t.track });
+    }
+  } else if (options.length > 1 && !linked) {
+    options.forEach((o, i) => {
+      picks.push({ name: o.label, group: o.group, href: optionHrefs[i], active: i === setIndex, focusKey: `set:${i + 1}`, track: null });
+    });
+  } else {
+    return null;
+  }
+  const labelOf = (/** @type {ReadingGroup} */ g, /** @type {string} */ slot) => (slotsInOrder(g).find((s) => s.slot === slot) || { label: null }).label;
+  return picks.map(({ group, ...card }) => ({
+    ...card,
+    refs: slotsInOrder(group).map((s) => ({ label: s.label || "", differs: picks.some((p) => labelOf(p.group, s.slot) !== s.label) })),
+  }));
+}
+
+/**
+ * 조건부 세트를 고르면 제목이 그 조건의 이름이다 — 사순 2주일에 「주의 변모 주일로 지킬 때」를 고르면 「주의 변모 주일」이다. 색과 본기도는
+ * 고른 전례일 그대로다(사용자 결정 2026-11-05 — 2025, 2026 책자가 이날을 자색으로 적고 복음만 「또는」으로 싣는다). 조건이 없으면 null.
+ * @param {ReadingGroup | null} group @returns {string | null}
+ */
+function conditionTitle(group) {
+  const cond = group ? setCondition(group) : null;
+  return cond ? cond.replace(/로 지킬 때$/, "") : null;
 }
 
 /** 슬롯을 **이름**으로 고른 순서 — 위치로 우기지 않는다(ADR-037 §1 「슬롯 배정」). 없는 슬롯은 건너뛴다. */
@@ -820,6 +868,11 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
   // 후보마다 그 화면의 트랙 — 고른 후보는 지금 트랙, 다른 후보는 기억(없으면 첫 트랙). 트랙은 주소에 언제나 적으므로(hrefFor),
   // 전례독서 목록의 링크도 이것을 적는다(머지 전 검토 2026-10-14).
   const trackOf = (/** @type {Candidate} */ c) => (c === selected ? track : pickTrack(groupsOf(c), null, storedTrack));
+  // 본기도 선택(`collect`)은 독서와 독립된 축이라 트랙 · 세트를 바꿔도 유지한다(Copilot 리뷰 1회차) — 세트와 본기도가
+  // 제목으로 짝지어진 날만 예외로, 세트가 본기도를 정한다(`linked` — 그때 본기도 링크는 짝 세트의 링크와 같다).
+  // 트랙이 바뀌면 세트는 그 트랙의 첫 세트로 돌아간다(세트는 트랙에 딸린 것).
+  const trackHrefs = tracks.map((t) => ({ track: t, href: hrefFor(date, { ...base, track: t, set: null }, defaults), active: t === track }));
+  const optionHrefs = options.map((_, i) => hrefFor(date, { ...base, set: i + 1 }, defaults));
   const choices = resolved.candidates.filter((c) => !hidden(c)).map((c) => ({
     candidate: c,
     name: shortName(c.observance.name),
@@ -836,7 +889,9 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
   const empty = !groups.length && !collects.length;
 
   return {
-    date, resolved, selected, initial, groups, tracks, track, options, setIndex, group, shortGroup, slots,
+    date, resolved, selected, initial, dayName: conditionTitle(group) || String(selected.observance.name || ""),
+    groups, tracks, track, options, setIndex, group, shortGroup, slots,
+    cards: readingCards({ groups, baseName: shortName(selected.observance.name), options, setIndex, linked: !!linked, trackHrefs, optionHrefs }),
     choices, selectedNote: selectedNoteOf(selected), collects, collectLabels: collectLabels(collects), collectIndex, collectsLinked: !!linked,
     ending: endingCodeOf(memorialCollects[memorialCollects.length - 1] || chosenCollect), memorialCollects,
     memorialSaints: memorial.saints, passiveDays, commemorations, textlessDays, dedicationLines: dedicationLines(dedications), transferNotes,
@@ -847,11 +902,8 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
       prev: stepHref(date, -1),
       next: stepHref(date, 1),
       today: "/lectionary",
-      // 본기도 선택(`collect`)은 독서와 독립된 축이라 트랙 · 세트를 바꿔도 유지한다(Copilot 리뷰 1회차) — 세트와 본기도가
-      // 제목으로 짝지어진 날만 예외로, 세트가 본기도를 정한다(`linked` — 그때 본기도 링크는 짝 세트의 링크와 같다).
-      // 트랙이 바뀌면 세트는 그 트랙의 첫 세트로 돌아간다(세트는 트랙에 딸린 것).
-      tracks: tracks.map((t) => ({ track: t, href: hrefFor(date, { ...base, track: t, set: null }, defaults), active: t === track })),
-      options: options.map((_, i) => hrefFor(date, { ...base, set: i + 1 }, defaults)),
+      tracks: trackHrefs,
+      options: optionHrefs,
       collects: collects.map((_, j) => (linked
         ? hrefFor(date, { ...base, set: linked.indexOf(j) + 1 }, defaults)
         : hrefFor(date, { ...base, collect: j + 1 }, defaults))),
@@ -1041,9 +1093,8 @@ function buildHeader(m) {
 
   // 이름은 고른 전례일의 것이다(사용자 결정 2026-11-04 — 그전엔 다른 전례일을 골라도 기본 독서의 이름이라 제목과 본문이 어긋났다).
   // 처음에는 그날의 기본 독서(initialCandidate)를 고른 것이라, 고유 독서가 없는 축일의 날은 평일 이름이다(11.6 레오나드 날은
-  // 「연중 31주 금요일」, 2026-11-03). 색은 그대로 headerColors.
-  const dayName = String(m.selected.observance.name || "");
-  head.appendChild(el("h2", { className: "lect-day" }, dayName || "—"));
+  // 「연중 31주 금요일」, 2026-11-03). 조건부 세트를 고르면 그 조건의 이름이다(conditionTitle). 색은 그대로 headerColors.
+  head.appendChild(el("h2", { className: "lect-day" }, m.dayName || "—"));
 
   // 전례색과 해(가해 … , 짝수해 · 홀수해)는 제목 바로 아래, 회색 설명 줄들보다 먼저(사용자 결정 2026-11-03)
   const meta = el("p", { className: "lect-meta" });
@@ -1103,52 +1154,110 @@ function buildChoices(m) {
   return nav;
 }
 
-/** @param {LectionaryModel} m */
+/**
+ * 세트와 본기도가 제목으로 짝지어진 날(5.1, 사계재 금요일)의 「독서 · 본기도」 단추 — 전례일이 갈리는 날이고 본기도까지 함께 바뀌어
+ * 본기도 위에 둔다(사용자 결정 2026-10-13, 2026-11-05). 그 밖의 「또는」 대안과 트랙은 독서 카드다(buildReadingCards).
+ * @param {LectionaryModel} m
+ */
 function buildControls(m) {
+  if (!m.collectsLinked || m.options.length < 2) return null;
+  const name = "독서 · 본기도";
+  const ctl = el("div", { className: "lect-control lect-sets" });
+  ctl.appendChild(el("span", { className: "lect-control-label" }, name));
+  ctl.appendChild(buildSegmentTabs(
+    m.options.map((o, i) => ({ label: o.label, href: m.hrefs.options[i], active: i === m.setIndex, focusKey: `set:${i + 1}` })),
+    { ariaLabel: name, className: "division-tabs--compact" },
+  ));
+  // 공통 독서의 분류 라벨(「선교사 공통 독서」)은 달지 않는다 — 제목이 어느 전례일의 독서인지 보인다(사용자 결정
+  // 2026-11-03. 그전엔 성인의 고유로 오인하지 않게 세그먼트 · 본문 제목 · 본기도에 달았다, ADR-038 §3).
   const wrap = el("div", { className: "lect-controls" });
-  if (m.tracks.length > 1) {
-    // 위에 「독서」 글자를 달지 않는다 — 단추 이름이 「독서 1」 「독서 2」다(사용자 결정 2026-11-03). 세그먼트의 접근 가능한
-    // 이름은 「독서 트랙」 그대로다.
-    const ctl = el("div", { className: "lect-control lect-track" });
-    const seg = buildSegmentTabs(
-      m.hrefs.tracks.map((t) => ({ label: `독서 ${t.track}`, href: t.href, active: t.active, focusKey: `track:${t.track}` })),
-      { ariaLabel: "독서 트랙", className: "division-tabs--compact" },
-    );
-    // Remember the choice — the last-picked track is the default on every day and in every year until the reader picks
-    // again (사용자 결정 2026-10-13 — ADR-038 §3). The global <a> interceptor navigates after this listener runs.
-    seg.querySelectorAll("a").forEach((a, i) => {
-      a.addEventListener("click", (e) => {
-        // 라우터(routing.js)가 가로채는 기본 클릭일 때만 — Ctrl/Cmd · Shift · 가운데 버튼은 새 탭 · 창으로 가는
-        // 표준 링크 동작이라 지금 탭의 URL 과 기억을 건드리지 않는다(Copilot 리뷰 3회차; 조건은 라우터와 같은
-        // helpers.js isModifiedClick 하나 — PR #348 리뷰).
-        if (e.defaultPrevented || isModifiedClick(e)) return;
-        // 지금 항목의 주소에는 렌더할 때 이미 트랙이 적혀 있어(renderLectionaryView — withTrack) 기억을 바꿔도 뒤로 가기가
-        // 이 화면으로 돌아온다(Copilot 리뷰 1 · 5회차의 클릭 때 보정을 렌더 때로 옮겼다 — 자체 리뷰 2026-10-13).
-        saveLectionaryTrack(m.hrefs.tracks[i].track);
-      });
+  wrap.appendChild(ctl);
+  return wrap;
+}
+
+/**
+ * 트랙을 고르면 기억한다 — 연중 주일의 트랙만이다. 마지막 트랙이 날짜와 해를 가리지 않고 기본값이다(사용자 결정 2026-10-13, ADR-038 §3).
+ * 부활주일 같은 날의 카드는 뜻이 달라 기억하지 않는다(사용자 결정 2026-11-05). 전역 <a> 가로채기는 이 리스너 뒤에 이동한다.
+ * @param {HTMLElement} a @param {1 | 2 | null} track
+ */
+function rememberTrackOnClick(a, track) {
+  if (!track) return;
+  a.addEventListener("click", (e) => {
+    // 라우터(routing.js)가 가로채는 기본 클릭일 때만 — Ctrl/Cmd · Shift · 가운데 버튼은 새 탭 · 창으로 가는
+    // 표준 링크 동작이라 지금 탭의 URL과 기억을 건드리지 않는다(Copilot 리뷰 3회차; 조건은 라우터와 같은
+    // helpers.js isModifiedClick 하나 — PR #348 리뷰).
+    if (e.defaultPrevented || isModifiedClick(e)) return;
+    // 지금 항목의 주소에는 렌더할 때 이미 트랙이 적혀 있어(renderLectionaryView — withTrack) 기억을 바꿔도 뒤로 가기가
+    // 이 화면으로 돌아온다(Copilot 리뷰 1 · 5회차의 클릭 때 보정을 렌더 때로 옮겼다 — 자체 리뷰 2026-10-13).
+    saveLectionaryTrack(track);
+  });
+}
+
+/**
+ * 독서 카드 — 고를 수 있는 독서마다 모든 항목의 성구를 적은 카드다. 두 독서를 누르지 않고 견주고, 주보의 성구로 찾을 수 있다. 접으면 카드 대신
+ * 제목 옆에 이름 알약이나 번호가 남아 그 자리에서 바꿀 수 있다(사용자 결정 2026-11-05, ADR-038 §3). 접기는 화면 안의 동작이라 주소에 적지 않고
+ * 다시 그리지 않는다. 포커스는 누른 단추에 그대로 있다.
+ * @param {LectionaryModel} m @returns {HTMLElement | null}
+ */
+function buildReadingCards(m) {
+  if (!m.cards) return null;
+  const section = el("section", { className: "lect-section lect-cards" });
+  const head = el("div", { className: "lect-section-head lect-collect-head" });
+  head.appendChild(el("h3", { className: "lect-slot" }, "독서"));
+
+  // 접은 모양 — 이름이 「독서 N」이면 본기도 번호와 같은 번호이고, 이름이 있으면 알약이다. 포커스 자리를 카드와 나눈다(같은 화면에 함께 있다).
+  const numbered = m.cards.every((c) => /^독서 \d+$/.test(c.name));
+  const pills = el("nav", { className: numbered ? "lect-collect-nums" : "lect-collect-nums lect-cards-pills", "aria-label": "독서 선택" });
+  for (const c of m.cards) {
+    const a = el("a", {
+      className: c.active ? "lect-collect-num active" : "lect-collect-num",
+      href: c.href,
+      "aria-label": c.name,
+      "data-focus-key": `folded:${c.focusKey}`,
     });
-    ctl.appendChild(seg);
-    wrap.appendChild(ctl);
+    if (c.active) a.setAttribute("aria-current", "page");
+    a.appendChild(el("span", { className: "lect-collect-num-mark" }, numbered ? c.name.replace(/^독서 /, "") : c.name));
+    rememberTrackOnClick(a, c.track);
+    pills.appendChild(a);
   }
-  if (m.options.length > 1) {
-    // 「또는」 대안 · 조건부 세트 — 조건 · 종류가 라벨이다(사용자 결정 2026-10-12). 괄호 선택 구절 세트는
-    // 바탕에 합쳐져 여기 오르지 않는다(본문의 〔 〕 가 맡는다). 세트와 본기도가 제목으로 짝지어진 날(5.1 · 사계재 금요일)은
-    // 이 단추 하나가 둘을 함께 고른다 — 라벨도 「독서 · 본기도」(사용자 결정 2026-10-13).
-    // 위에 그리는 글자는 「독서 · 본기도」뿐이다 — 단추가 본기도까지 바꾼다는 것을 알린다. 「대안 독서」 글자는 달지 않는다:
-    // 단추 이름이 「독서 1 · 2」나 조건(「…로 지킬 때」)이라 겹치고, 트랙 세그먼트도 글자가 없다(사용자 결정 2026-11-04,
-    // 트랙은 2026-11-03). 세그먼트의 접근 가능한 이름은 「대안 독서」 그대로다.
-    const name = m.collectsLinked ? "독서 · 본기도" : "대안 독서";
-    const ctl = el("div", { className: "lect-control lect-sets" });
-    if (m.collectsLinked) ctl.appendChild(el("span", { className: "lect-control-label" }, name));
-    ctl.appendChild(buildSegmentTabs(
-      m.options.map((o, i) => ({ label: o.label, href: m.hrefs.options[i], active: i === m.setIndex, focusKey: `set:${i + 1}` })),
-      { ariaLabel: name, className: "division-tabs--compact" },
-    ));
-    // 공통 독서의 분류 라벨(「선교사 공통 독서」)은 달지 않는다 — 제목이 어느 전례일의 독서인지 보인다(사용자 결정
-    // 2026-11-03. 그전엔 성인의 고유로 오인하지 않게 세그먼트 · 본문 제목 · 본기도에 달았다, ADR-038 §3).
-    wrap.appendChild(ctl);
+  head.appendChild(pills);
+
+  const button = el("button", { type: "button", className: "lect-cards-fold", "aria-controls": "lect-cards-list" });
+  const buttonText = el("span", {}, "접기");
+  button.appendChild(buttonText);
+  head.appendChild(button);
+  section.appendChild(head);
+
+  // 펼친 모양 — 카드 두 장을 나란히, 같은 항목끼리 줄을 맞춘다(한 장의 줄 수는 항목 수 + 이름 줄)
+  const list = el("nav", { className: "lect-cards-list", id: "lect-cards-list", "aria-label": "독서 선택" });
+  const rows = Math.max(...m.cards.map((c) => c.refs.length)) + 1;
+  list.style.setProperty("--lect-card-rows", String(rows));
+  for (const c of m.cards) {
+    const a = el("a", { className: c.active ? "lect-card active" : "lect-card", href: c.href, "data-focus-key": c.focusKey });
+    if (c.active) a.setAttribute("aria-current", "page");
+    a.appendChild(el("span", { className: "lect-card-name" }, c.name));
+    for (const r of c.refs) {
+      a.appendChild(el("span", { className: r.differs ? "lect-card-ref lect-card-ref--differs" : "lect-card-ref" }, r.label));
+    }
+    rememberTrackOnClick(a, c.track);
+    list.appendChild(a);
   }
-  return wrap.childElementCount ? wrap : null;
+  section.appendChild(list);
+
+  const applyFolded = (/** @type {boolean} */ folded) => {
+    pills.hidden = !folded;
+    list.hidden = folded;
+    buttonText.hidden = folded;
+    button.setAttribute("aria-expanded", String(!folded));
+    button.setAttribute("aria-label", folded ? "독서 목록 펼치기" : "독서 목록 접기");
+  };
+  applyFolded(loadLectionaryCardsFolded());
+  button.addEventListener("click", () => {
+    const folded = !list.hidden;
+    applyFolded(folded);
+    saveLectionaryCardsFolded(folded);
+  });
+  return section;
 }
 
 /**
@@ -1437,7 +1546,7 @@ function withTrack(search, track) {
  * @param {LectionaryModel} m
  */
 function announceDay(m) {
-  announce(`${dateLabel(m.date)} — ${shortName(m.selected.observance.name)} ${PAGE_TITLE}`);
+  announce(`${dateLabel(m.date)} — ${shortName(m.dayName)} ${PAGE_TITLE}`);
 }
 
 /**
@@ -1451,7 +1560,7 @@ function commit(m, chapters) {
   commitTitleDateNav(m);
   clearNode($app);
   // 날짜가 바뀌면 새 날은 맨 위부터 — 날짜 이동은 스크롤해도 보이는 머리에 있어 읽던 자리에서 누른다. 자료가 이미 있으면
-  // 스켈레톤이 그려지기 전에 이 화면이 들어와 스크롤이 그대로 남았다. 같은 날의 전례독서 목록 · 세그먼트는 누른 자리로 돌아오고(라우터),
+  // 스켈레톤이 그려지기 전에 이 화면이 들어와 스크롤이 그대로 남았다. 같은 날의 전례독서 목록 · 독서 카드는 누른 자리로 돌아오고(라우터),
   // 뒤로 가기는 이 뒤에 떠날 때의 스크롤을 되살린다(tab-history.js onRouteEnd).
   const newDay = m.date !== committedDate;
   committedDate = m.date;
@@ -1489,6 +1598,9 @@ function commit(m, chapters) {
   if (controls) root.appendChild(controls);
   const collects = buildCollects(m);
   if (collects) root.appendChild(collects);
+  // 독서 카드는 독서만 바꾸므로 본기도 아래, 제1독서 바로 위에 둔다(사용자 결정 2026-11-05)
+  const cards = buildReadingCards(m);
+  if (cards) root.appendChild(cards);
 
   if (m.group) {
     // 「모든 별세자의 날 독서」 같은 본문 제목은 두지 않는다 — 머리의 제목이 같은 이름이다(사용자 결정 2026-11-03).
@@ -1498,7 +1610,7 @@ function commit(m, chapters) {
     // 시편 끝 영광송까지 고르면 그 시편 블록에 함께 싣는다 — 출처 줄 앞(머지 전 검토 2026-10-14; 전례 표기를 남기는 것과 같은
     // 이유 — 주보 등 전례 용도, 사용자 결정 2026-10-13).
     bindCopyAttribution(root, copyCitation, {
-      unitSelector: ".lect-reading", bailoutSelector: ".lect-head, .lect-controls, .lect-collects", strictRoot: true,
+      unitSelector: ".lect-reading", bailoutSelector: ".lect-head, .lect-controls, .lect-collects, .lect-cards", strictRoot: true,
       tail: { selector: ".lect-gloria", text: gloriaCopyText },
     });
   } else {
@@ -1560,7 +1672,7 @@ async function renderLectionaryView(parsed) {
     if (search !== location.search) history.replaceState(history.state, "", location.pathname + search);
   }
   // 문서 제목도 머리처럼 고른 전례일의 이름이다(2026-11-04, buildHeader).
-  return `${shortName(model.selected.observance.name)} ${PAGE_TITLE}`;
+  return `${shortName(model.dayName)} ${PAGE_TITLE}`;
 }
 
 // 캘린더 탭(calendar.js — ADR-038 §2 A2)이 같은 이름 · 날짜 · 색 규칙을 쓴다(복제 금지 — 칸 · 줄의 이름이 전례독서 목록과 같아야 한다).

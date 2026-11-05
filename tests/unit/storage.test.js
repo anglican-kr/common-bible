@@ -212,6 +212,19 @@ test("loadLectionaryTrack/saveLectionaryTrack: 마지막으로 고른 트랙 하
   assert.equal(h.appStorage.loadLectionaryTrack(), 1);
 });
 
+test("loadLectionaryCardsFolded/saveLectionaryCardsFolded: 처음에는 펼치고, 접으면 기억하며, 펼치면 지운다(사용자 결정 2026-11-05)", () => {
+  const h = loadStorage();
+  assert.equal(h.appStorage.loadLectionaryCardsFolded(), false);
+  h.appStorage.saveLectionaryCardsFolded(true);
+  assert.equal(h.appStorage.loadLectionaryCardsFolded(), true);
+  assert.equal(h.localStorage.getItem("bible-lectionary-cards-folded"), "1");
+  h.appStorage.saveLectionaryCardsFolded(false);
+  assert.equal(h.appStorage.loadLectionaryCardsFolded(), false);
+  assert.equal(h.localStorage.getItem("bible-lectionary-cards-folded"), null);
+  // 다른 값은 펼친 것으로 읽는다
+  assert.equal(loadStorage({ localStorageInit: { "bible-lectionary-cards-folded": "0" } }).appStorage.loadLectionaryCardsFolded(), false);
+});
+
 test("loadLectionaryTrack: 1 · 2 가 아닌 값 · 이 PR 의 옛 전례년별 표 · 읽기 실패는 null(뷰가 1 을 기본으로 삼는다)", () => {
   const read = (/** @type {string} */ raw) => loadStorage({ localStorageInit: { "bible-lectionary-track": raw } }).appStorage.loadLectionaryTrack();
   assert.equal(read("3"), null);

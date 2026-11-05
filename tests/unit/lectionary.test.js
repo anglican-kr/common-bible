@@ -855,6 +855,79 @@ test("buildLectionaryModel: 트랙 — 기억(마지막 선택)이 기본, URL �
   assert.strictEqual(overridden.choices[0].href, "/lectionary/2026-06-14?track=1");
 });
 
+// ── 독서 카드(사용자 결정 2026-11-05, ADR-038 §3 「대안 세트·트랙 전환」) ──
+
+const ALT_TRACK = [slot("first", "hos", 6, "1-6", "호세 6:1-6"), slot("psalm", "lps", 50, "7-15", "시편 50:7-15"), FOUR[2], FOUR[3]];
+const NO_QUERY = { obs: null, track: null, set: null, collect: null };
+/** 후보 하나인 날의 모델 — 독서 그룹만 바꿔 카드를 본다. */
+function cardsModel(groups, { query = NO_QUERY, stored = null, name = "연중 11주일", collects = [collect(59, "…")] } = {}) {
+  const sunday = cand(obs("grid:ordinary-11-sunday", name, { rank: "sunday", precedence: 5, color: "green" }));
+  const r = resolvedOf("2026-06-14", [sunday], sunday, { coord: { season: "ordinary", week: 11, type: "sunday", weekday: null, year: "A" } });
+  return ctx.buildLectionaryModel(r, query, groupsOfFrom({ "grid:ordinary-11-sunday": groups }), [{ candidate: sunday, collects }], stored);
+}
+
+test("독서 카드: 트랙마다 한 장 — 이름은 연속 독서와 복음 주제, 모든 항목을 적고 다른 항목을 표시하며, 고른 트랙이 활성", () => {
+  const groups = [group("t1", FOUR, { reading_track: 1 }), group("t2", ALT_TRACK, { reading_track: 2 })];
+  const m = cardsModel(groups, { stored: 2 });
+  same(m.cards.map((c) => [c.name, c.active, c.focusKey, c.track, c.href]), [
+    ["연속 독서", false, "track:1", 1, "/lectionary/2026-06-14?track=1"],
+    ["복음 주제", true, "track:2", 2, "/lectionary/2026-06-14?track=2"],
+  ]);
+  same(m.cards[0].refs, [
+    { label: "창세 12:1-9", differs: true }, { label: "시편 33:1-12", differs: true },
+    { label: "로마 4:13-25", differs: false }, { label: "마태 9:9-13, 18-26", differs: false },
+  ]);
+  same(m.cards[1].refs.map((r) => r.label), ["호세 6:1-6", "시편 50:7-15", "로마 4:13-25", "마태 9:9-13, 18-26"]);
+});
+
+test("독서 카드: 괄호 선택 구절 세트는 바탕에 합쳐 트랙마다 한 장이고, 긴 본문의 성구를 적는다", () => {
+  const m = cardsModel(TRACKED);
+  same(m.cards.map((c) => c.name), ["연속 독서", "복음 주제"]);
+  same(m.cards[0].refs.map((r) => r.label), ["창세 12:1-9", "시편 33:1-12", "로마 4:13-25", "마태 9:9-13, 18-31"]);
+  // 두 트랙의 항목이 모두 같으면 표시할 것이 없다
+  assert.ok(m.cards.every((c) => c.refs.every((r) => !r.differs)));
+});
+
+test("독서 카드: 항목 하나만 다른 「또는」 대안도 카드다 — 세트마다 한 장, 트랙이 없어 기억하지 않는다", () => {
+  const psalmAlt = [FOUR[0], slot("psalm", "lps", 95, "1-7", "시편 95:1-7"), FOUR[2], FOUR[3]];
+  const m = cardsModel([group("a", FOUR, { set_no: 1, set_total: 2 }), group("b", psalmAlt, { set_no: 2, set_total: 2 })], { query: { ...NO_QUERY, set: 2 } });
+  same(m.cards.map((c) => [c.name, c.active, c.focusKey, c.track, c.href]), [
+    ["독서 1", false, "set:1", null, "/lectionary/2026-06-14"],
+    ["독서 2", true, "set:2", null, "/lectionary/2026-06-14?set=2"],
+  ]);
+  same(m.cards[1].refs.map((r) => r.differs), [false, true, false, false]);
+});
+
+test("독서 카드: 고를 것이 없으면 없다 — 세트 하나, 괄호 선택 구절뿐인 날", () => {
+  assert.strictEqual(cardsModel([group("a", FOUR)]).cards, null);
+  const bracketOnly = [group("a", FOUR, { set_no: 1, set_total: 2 }), group("b", FOUR_LONG, { set_no: 2, set_total: 2, set_note: "괄호 선택 구절 포함" })];
+  assert.strictEqual(cardsModel(bracketOnly).cards, null);
+});
+
+test("독서 카드: 세트와 본기도가 제목으로 짝지어진 날은 카드가 아니라 「독서 · 본기도」 단추다(사용자 결정 2026-11-05)", () => {
+  const groups = [group("a", FOUR, { title: "성직후보자의 성소를 위한 추계재 금요일" }), group("b", ALT_TRACK, { title: "수도자의 성소를 위한 추계재 금요일" })];
+  const collects = [collect(1, "x", { title: "성직후보자의 성소를 위한 추계재 금요일" }), collect(2, "y", { title: "수도자의 성소를 위한 추계재 금요일" })];
+  const m = cardsModel(groups, { collects });
+  assert.strictEqual(m.collectsLinked, true);
+  assert.strictEqual(m.cards, null);
+  assert.strictEqual(m.options.length, 2);
+});
+
+test("조건부 세트: 조건이 카드 이름이고, 고르면 제목이 그 조건의 이름이다 — 고른 전례일과 본기도는 그대로(사용자 결정 2026-11-05)", () => {
+  const transfig = [FOUR[0], FOUR[1], FOUR[2], slot("gospel", "mark", 9, "2-9", "마르 9:2-9")];
+  const groups = [group("l1", FOUR, { set_no: 1, set_total: 2 }), group("l2", transfig, { set_no: 2, set_total: 2, set_note: "주의 변모 주일로 지키는 경우" })];
+  const base = cardsModel(groups, { name: "사순 2주일" });
+  same(base.cards.map((c) => c.name), ["사순 2주일", "주의 변모 주일로 지킬 때"]);
+  assert.strictEqual(base.dayName, "사순 2주일");
+  const m = cardsModel(groups, { name: "사순 2주일", query: { ...NO_QUERY, set: 2 } });
+  assert.strictEqual(m.dayName, "주의 변모 주일");
+  assert.strictEqual(m.selected.observance.name, "사순 2주일");
+  same(m.colors, ["green"]);
+  assert.strictEqual(m.collects[0].id, 59);
+  assert.strictEqual(ctx.conditionTitle(null), null);
+  assert.strictEqual(ctx.conditionTitle(group("a", FOUR, { set_note: "원본 세트 1" })), null);
+});
+
 test("buildLectionaryModel: 본기도 대체안 — ?collect 는 목록 위치, href 와 송영이 따라간다", () => {
   const easter = cand(obs("t-부활대축일", "부활대축일", { rank: "principal", precedence: 1, color: "white" }));
   const r = resolvedOf("2026-04-05", [easter], easter, { coord: { season: "easter", week: 1, type: "sunday", weekday: null, year: "A" }, color: "white", colors: ["white"] });

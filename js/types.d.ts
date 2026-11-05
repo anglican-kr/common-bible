@@ -1039,6 +1039,9 @@ export interface AppStorage {
   // (사용자 결정 2026-10-13). 로컬 전용(Drive 동기화 없음).
   loadLectionaryTrack: () => 1 | 2 | null;
   saveLectionaryTrack: (track: 1 | 2) => void;
+  // 전례독서의 독서 카드를 접어 두었는가(ADR-038 §3). 한 번 접으면 모든 날에 접힌 채로 보인다(사용자 결정 2026-11-05). 로컬 전용.
+  loadLectionaryCardsFolded: () => boolean;
+  saveLectionaryCardsFolded: (folded: boolean) => void;
 
   // Install nudge state
   _loadNudgeState: () => InstallNudgeState;

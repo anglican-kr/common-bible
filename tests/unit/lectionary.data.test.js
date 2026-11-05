@@ -396,11 +396,70 @@ test("A3 2024-03-24 성지주일 나해 — 긴 수난 · 짧은 수난 「독�
   assert.strictEqual(isOpt(15, 47), true);
 });
 
-test("A3 2026-11-22 왕이신 그리스도 가해 — 표지 없는 「또는」 대안(시편 100 / 95)도 「독서 1 · 2」", { skip: SKIP }, () => {
-  const m = model("2026-11-22");
-  same(m.options.map((o) => o.label), ["독서 1", "독서 2"]);
-  const psalms = m.options.map((o) => o.group.readings.find((r) => r.slot === "psalm").label);
-  assert.notStrictEqual(psalms[0], psalms[1]);
+test("A3 왕이신 그리스도 주일 — 시편만 「또는」인 가해와 다해도 나해처럼 트랙 둘이다(사용자 결정 2026-11-05)", { skip: SKIP }, () => {
+  const psalmOf = (c) => c.refs[1].label;
+  const yearA = model("2026-11-22");
+  same(plain(yearA.tracks), [1, 2]);
+  same(yearA.cards.map((c) => c.name), ["연속 독서", "복음 주제"]);
+  same(yearA.cards.map(psalmOf), ["시편 100", "시편 95:1-7"]);
+  same(yearA.cards[0].refs.map((r) => r.differs), [false, true, false, false]);
+  const yearC = model("2025-11-23");
+  same(plain(yearC.tracks), [1, 2]);
+  assert.ok(psalmOf(yearC.cards[0]).startsWith("루가 1:68-79"), psalmOf(yearC.cards[0]));
+  assert.strictEqual(psalmOf(yearC.cards[1]), "시편 46");
+  same(plain(model("2027-11-21").tracks), [1, 2]);
+  // 기억된 트랙을 따른다 — 복음 주제로 읽던 사람은 이 주일에도 복음 주제 쪽 시편을 먼저 본다
+  assert.strictEqual(model("2026-11-22", NONE, 2).slots[1].label, "시편 95:1-7");
+});
+
+test("A3 독서 카드 — 2025-2050 모든 날: 「또는」이나 트랙이 있는 날에만 있고, 고른 카드의 성구가 화면의 독서와 같으며 다른 항목을 표시한다", { skip: SKIP }, () => {
+  const tally = { track: 0, set: 0 };
+  for (let d = "2025-01-01"; d <= "2050-12-31"; d = ctx.addDays(d, 1)) {
+    const m = model(d);
+    // 트랙마다 선택지는 하나다 — 카드는 트랙의 첫 선택지만 싣는다(readingCards). 또는 대안이 트랙 안에 생기면 여기서 멈춘다.
+    if (m.tracks.length > 1) assert.strictEqual(m.options.length, 1, d);
+    assert.strictEqual(!!m.cards, m.tracks.length > 1 || (m.options.length > 1 && !m.collectsLinked), d);
+    if (!m.cards) continue;
+    tally[m.tracks.length > 1 ? "track" : "set"] += 1;
+    assert.strictEqual(new Set(m.cards.map((c) => c.name)).size, m.cards.length, `${d} 이름이 겹친다`);
+    assert.strictEqual(m.cards.filter((c) => c.active).length, 1, d);
+    const active = m.cards.find((c) => c.active);
+    same(active.refs.map((r) => r.label), m.slots.map((s) => s.label), d);
+    // 같은 자리끼리 표시가 같고, 다른 항목이 하나는 있다
+    for (const c of m.cards) {
+      same(c.refs.map((r) => r.differs), active.refs.map((r) => r.differs), d);
+      assert.ok(c.refs.some((r) => r.differs), `${d} ${c.name}에 다른 항목이 없다`);
+    }
+  }
+  assert.ok(tally.track > 500 && tally.set > 500, JSON.stringify(tally));
+});
+
+test("A3 부활대축일 — 앞쪽끼리, 뒤쪽끼리 묶인 카드이고 트랙이 아니라 기억하지 않는다(사용자 확정 2026-11-05)", { skip: SKIP }, () => {
+  const m = model("2027-03-28", NONE, 2);
+  assert.strictEqual(m.track, null);
+  same(m.cards.map((c) => [c.name, c.track, c.active]), [["독서 1", null, true], ["독서 2", null, false]]);
+  same(m.cards.map((c) => c.refs.map((r) => r.label)), [
+    ["사도 10:34-43", "시편 118:1-2, 14-24", "1고린 15:1-11", "요한 20:1-18"],
+    ["이사 25:6-9", "시편 118:1-2, 14-24", "사도 10:34-43", "마르 16:1-8"],
+  ]);
+  same(m.cards[0].refs.map((r) => r.differs), [true, false, true, true]);
+});
+
+test("A3 사순 2주일 — 조건이 카드 이름이고, 고르면 제목만 「주의 변모 주일」이다. 색과 본기도는 그대로(사용자 결정 2026-11-05)", { skip: SKIP }, () => {
+  const base = model("2027-02-21");
+  same(base.cards.map((c) => c.name), ["사순 2주일", "주의 변모 주일로 지킬 때"]);
+  assert.strictEqual(base.dayName, "사순 2주일");
+  const m = model("2027-02-21", { set: 2 });
+  assert.strictEqual(m.dayName, "주의 변모 주일");
+  same(plain(m.colors), plain(base.colors));
+  assert.strictEqual(m.collects[0].id, base.collects[0].id);
+  assert.strictEqual(m.slots[3].label, "마르 9:2-9");
+});
+
+test("A3 5.1 과 사계재 금요일 — 카드가 아니라 「독서 · 본기도」 단추다(사용자 결정 2026-11-05)", { skip: SKIP }, () => {
+  const may1 = model("2026-05-01");
+  assert.strictEqual(may1.collectsLinked, true);
+  assert.strictEqual(may1.cards, null);
 });
 
 test("A3 2024-12-24 성탄 1일 전 — 날짜 전용 본문, 본기도 대체안 둘, 대체 청색", { skip: SKIP }, () => {

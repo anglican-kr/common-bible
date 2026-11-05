@@ -43,9 +43,12 @@ window.appStorage = (/** @returns {AppStorage} */ () => {
   const BOOKMARK_KEY = "bible-bookmarks";
   const INSTALL_NUDGE_KEY = "bible-install-nudge";
   const SEARCH_HISTORY_KEY = "bible-search-history";
-  // ADR-038 §3 — 전례독서 뷰의 독서 1/2 선택. 값 하나 "1" | "2" — 마지막으로 고른 트랙이 날짜 · 해와
+  // ADR-038 §3 — 전례독서 뷰의 연중 주일 트랙 선택(카드 「연속 독서」, 「복음 주제」). 값 하나 "1" | "2" — 마지막으로 고른 트랙이 날짜 · 해와
   // 무관하게 기본값이다(사용자 결정 2026-10-13 · ADR-036 §2 독서 연속성). 로컬 전용.
   const LECTIONARY_TRACK_KEY = "bible-lectionary-track";
+  // ADR-038 §3 — 전례독서의 독서 카드를 접어 두었는가. 값 "1"이면 접음이고, 없으면 펼침이다. 한 번 접으면 모든 날에 접힌
+  // 채로 보인다(사용자 결정 2026-11-05). 로컬 전용.
+  const LECTIONARY_CARDS_FOLDED_KEY = "bible-lectionary-cards-folded";
   const SEARCH_HISTORY_MAX = 30; // storage cap (LRU)
 
   // ── UI-shared constants (consumed by settings-ui in Phase 3) ──
@@ -524,6 +527,26 @@ window.appStorage = (/** @returns {AppStorage} */ () => {
     try { localStorage.setItem(LECTIONARY_TRACK_KEY, String(track)); } catch { /* quota / private mode */ }
   }
 
+  /**
+   * 독서 카드를 접어 두었는가 — 처음에는 펼친다(사용자 결정 2026-11-05). 읽기에 실패하면 펼친다.
+   * @returns {boolean}
+   */
+  function loadLectionaryCardsFolded() {
+    try {
+      return localStorage.getItem(LECTIONARY_CARDS_FOLDED_KEY) === "1";
+    } catch {
+      return false;
+    }
+  }
+
+  /** @param {boolean} folded */
+  function saveLectionaryCardsFolded(folded) {
+    try {
+      if (folded) localStorage.setItem(LECTIONARY_CARDS_FOLDED_KEY, "1");
+      else localStorage.removeItem(LECTIONARY_CARDS_FOLDED_KEY);
+    } catch { /* quota / private mode */ }
+  }
+
   return {
     FONT_SIZES, DEFAULT_FONT_SIZE, COLOR_SCHEMES, SEARCH_HISTORY_MAX,
     saveReadingPosition, loadReadingPosition, clearReadingPosition,
@@ -539,6 +562,7 @@ window.appStorage = (/** @returns {AppStorage} */ () => {
     loadBookOrder, saveBookOrder,
     generateId, loadBookmarks, saveBookmarks, rewriteBookmarks, projectedStorageChars,
     loadLectionaryTrack, saveLectionaryTrack,
+    loadLectionaryCardsFolded, saveLectionaryCardsFolded,
     _loadNudgeState, _saveNudgeState,
     _maybeRequestPersist,
   };

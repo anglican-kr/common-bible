@@ -7,7 +7,7 @@
   ① 본문 순서 — 본기도 → 제1독서 → 시편(영광송 1회) → 제2독서 → 복음, 송영 1회
   ② 전례일 스위처 — 고를 본문이 있는 후보는 제목 아래 전례독서 목록, 고르면 ?obs= 와 제목 · 본문 · 색이 바뀐다
   ③ 옮겨 지키는 축일 · 선택 봉헌 — 전례독서 목록으로 고른다(두 독서 카드는 없다)
-  ④ 대안 세트 · 트랙 — 세그먼트, 트랙은 마지막 선택을 날짜 · 해와 무관하게 기억
+  ④ 독서 카드 — 「또는」 대안과 트랙을 카드로 고르고 접으면 알약이나 번호, 트랙은 마지막 선택을 날짜 · 해와 무관하게 기억
   ⑤ 기념일 — 전례독서 목록이 아니라 제목 아래 「… 기념일」 줄, 본문 없는 날도 그 아래 이름 줄
   ⑥ 날짜 — 오늘 · 전날/다음날 · 잘못된 날짜
   ⑦ 탭 바 — 캘린더 탭 소속이라 독서 화면에서 캘린더 탭이 활성(ADR-038 A2)
@@ -57,15 +57,12 @@ def test_easter_day_renders_collect_then_four_readings_in_order(desktop_context)
     assert page.inner_text(".lect-day") == "부활대축일"
     assert _colors(page) == ["백색"]
     # 본기도가 독서보다 앞에 온다.
-    sections = page.eval_on_selector_all(".lect-section", "els => els.map(e => e.dataset.slot)")
+    sections = page.eval_on_selector_all(".lect-section[data-slot]", "els => els.map(e => e.dataset.slot)")
     assert sections == ["collect"] + SLOT_ORDER, sections
-    assert page.eval_on_selector_all(".lect-collect-num", "els => els.map(e => [e.textContent, e.getAttribute('aria-label')])") == [["1", "본기도 1"], ["2", "본기도 2"], ["3", "본기도 3"]]
+    assert page.eval_on_selector_all(".lect-collects .lect-collect-num", "els => els.map(e => [e.textContent, e.getAttribute('aria-label')])") == [["1", "본기도 1"], ["2", "본기도 2"], ["3", "본기도 3"]]
     assert page.locator(".lect-collect-text").count() == 1
-    # 원본 세트 둘 = 「또는」 대안 — 완전한 세트를 통째로 고른다.
-    assert page.eval_on_selector_all(".lect-sets .division-tab", "els => els.map(e => e.textContent)") == ["독서 1", "독서 2"]
-    # 세그먼트 위에 「대안 독서」 글자가 없다 — 단추 이름과 겹친다(사용자 결정 2026-11-04). 접근 가능한 이름은 그대로.
-    assert page.locator(".lect-sets .lect-control-label").count() == 0
-    assert page.get_attribute(".lect-sets [aria-label]", "aria-label") == "대안 독서"
+    # 원본 세트 둘 = 「또는」 대안 — 독서 카드로 통째로 고른다(사용자 결정 2026-11-05).
+    assert page.eval_on_selector_all(".lect-card-name", "els => els.map(e => e.textContent)") == ["독서 1", "독서 2"]
     assert page.locator(".lect-ending").count() == 1
     # 독서 본문이 실제로 그려졌다(절 span) — 복음까지.
     for slot in SLOT_ORDER:
@@ -84,11 +81,11 @@ def test_collect_alternative_number_switches_text_and_url(desktop_context):
     page = desktop_context.new_page()
     _open(page, "lectionary/2026-04-05")
     first = page.inner_text(".lect-collect-text")
-    assert page.get_attribute(".lect-collect-num.active", "aria-label") == "본기도 1"
-    page.locator(".lect-collect-num").nth(1).click()
+    assert page.get_attribute(".lect-collects .lect-collect-num.active", "aria-label") == "본기도 1"
+    page.locator(".lect-collects .lect-collect-num").nth(1).click()
     page.wait_for_url("**/lectionary/2026-04-05?collect=2")
-    page.wait_for_selector(".lect-collect-num.active[aria-label='본기도 2'][aria-current='page']")
-    assert page.locator(".lect-collect-num.active").count() == 1
+    page.wait_for_selector(".lect-collects .lect-collect-num.active[aria-label='본기도 2'][aria-current='page']")
+    assert page.locator(".lect-collects .lect-collect-num.active").count() == 1
     assert page.inner_text(".lect-collect-text") != first
 
 
@@ -96,8 +93,8 @@ _COLLECT_ROW_METRICS = """() => {
   const rect = (el) => el.getBoundingClientRect();
   const slot = rect(document.querySelector('.lect-collects .lect-slot'));
   const text = rect(document.querySelector('.lect-collect-text'));
-  const nums = [...document.querySelectorAll('.lect-collect-num')].map(rect);
-  const mark = getComputedStyle(document.querySelector('.lect-collect-num.active .lect-collect-num-mark'));
+  const nums = [...document.querySelectorAll('.lect-collects .lect-collect-num')].map(rect);
+  const mark = getComputedStyle(document.querySelector('.lect-collects .lect-collect-num.active .lect-collect-num-mark'));
   const root = getComputedStyle(document.documentElement);
   const probe = document.createElement('i');
   probe.style.cssText = 'color: var(--accent); background-color: var(--bg)';
@@ -131,7 +128,7 @@ def test_collect_numbers_share_the_heading_row(desktop_context):
     assert 7 <= m["slotGap"] <= 9, m
     # 번호가 없는 날(본기도 하나)도 제목과 기도문의 간격이 같다
     _open(page, "lectionary/2026-07-26")
-    assert page.locator(".lect-collect-num").count() == 0
+    assert page.locator(".lect-collects .lect-collect-num").count() == 0
     gap = page.evaluate("""() => document.querySelector('.lect-collect-text').getBoundingClientRect().top
       - document.querySelector('.lect-collects .lect-slot').getBoundingClientRect().bottom""")
     assert abs(gap - m["slotGap"]) < 0.5, (gap, m)
@@ -167,7 +164,7 @@ def test_switcher_shows_every_candidate_and_changes_body_and_color(desktop_conte
     page.wait_for_selector(".lect-day:has-text('추계재')")
     assert _choices(page) == ["연중 24주 수요일"]
     assert _colors(page) == ["자색"]
-    assert page.locator(".lect-sets .division-tab").count() == 2
+    assert page.locator(".lect-card").count() == 2
 
     # 다른 전례일을 골라도 이름 줄은 그대로다. 본문 제목(「○○ 독서」)과 공통 분류 라벨은 없다(사용자 결정 2026-11-03).
     assert page.inner_text(".lect-day-saints").startswith("니니안")
@@ -280,40 +277,146 @@ def test_transferred_and_optional_days_choose_by_rows_without_cards(desktop_cont
 # ── ④ 대안 세트 · 트랙 ──
 
 def test_track_toggle_persists_across_days_and_years(desktop_context):
-    """연중 11주일 — 독서 2 를 고르면 ?track=2 와 localStorage 기억, 다음 주일도 이듬해 주일도 기억대로 독서 2(사용자 결정
-    2026-10-13 — 「한번 선택하면 계속 일관성 있게 같은 트랙이 기본값」; 종전엔 전례년마다 따로 기억해 해가 바뀌면 독서 1)."""
+    """연중 11주일 — 복음 주제를 고르면 ?track=2와 localStorage 기억, 다음 주일도 이듬해 주일도 기억대로 복음 주제(사용자 결정
+    2026-10-13 — 「한번 선택하면 계속 일관성 있게 같은 트랙이 기본값」; 종전엔 전례년마다 따로 기억해 해가 바뀌면 연속 독서)."""
     page = desktop_context.new_page()
     _open(page, "lectionary/2026-06-14")
-    assert page.locator(".lect-track .division-tab").count() == 2
-    assert page.locator(".lect-track .division-tab.active").inner_text() == "독서 1"
-    # 세그먼트 위에 「독서」 글자가 없다 — 단추 이름이 「독서 1 · 2」다(사용자 결정 2026-11-03). 접근 가능한 이름은 그대로.
-    assert page.locator(".lect-track .lect-control-label").count() == 0
-    assert page.get_attribute(".lect-track [aria-label]", "aria-label") == "독서 트랙"
-    page.locator(".lect-track .division-tab", has_text="독서 2").click()
+    assert page.locator("nav[aria-label='독서 선택'] .lect-card").count() == 2
+    assert page.locator(".lect-card.active .lect-card-name").inner_text() == "연속 독서"
+    page.locator(".lect-card", has_text="복음 주제").click()
     page.wait_for_url("**/lectionary/2026-06-14?track=2")
-    page.wait_for_selector(".lect-track .division-tab.active:has-text('독서 2')")
+    page.wait_for_selector(".lect-card.active:has-text('복음 주제')")
     assert page.evaluate("() => localStorage.getItem('bible-lectionary-track')") == "2"   # 전례년 키 없이 값 하나
     # 다음 주일로는 앱 안에서 이동한다 — desktop_context 의 init script 가 page.goto 마다
     # 앱 저장소(이 키 포함)를 지우므로, 전체 로드로 가면 기억이 아니라 초기화를 보게 된다.
     page.evaluate("() => window.navigate('/lectionary/2026-06-21')")
     page.wait_for_url("**/lectionary/2026-06-21")
     page.wait_for_selector(".lect-date time[datetime='2026-06-21']")
-    assert page.locator(".lect-track .division-tab.active").inner_text() == "독서 2"
-    assert page.locator(".lect-choices").count() == 0   # 후보가 하나뿐인 주일 — 전례독서 목록이 없고 트랙은 세그먼트가 보인다(2026-11-03)
+    assert page.locator(".lect-card.active .lect-card-name").inner_text() == "복음 주제"
+    assert page.locator(".lect-choices").count() == 0   # 후보가 하나뿐인 주일 — 전례독서 목록이 없고 트랙은 카드가 보인다(2026-11-05)
     # 기억에서 온 트랙도 주소에 적힌다 — 같은 주소가 기억과 무관하게 같은 화면(자체 리뷰 2026-10-13).
     assert page.evaluate("() => location.search") == "?track=2"
-    # 이듬해(전례년 2027 — 대림 2026 뒤)의 연중 주일도 독서 2.
+    # 이듬해(전례년 2027 — 대림 2026 뒤)의 연중 주일도 복음 주제.
     page.evaluate("() => window.navigate('/lectionary/2027-06-20')")
     page.wait_for_selector(".lect-date time[datetime='2027-06-20']")
-    assert page.locator(".lect-track .division-tab.active").inner_text() == "독서 2"
+    assert page.locator(".lect-card.active .lect-card-name").inner_text() == "복음 주제"
     assert page.evaluate("() => location.search") == "?track=2"
-    # 다시 독서 1 을 고르면 그것이 새 기본값 — 앞 해의 주일로 돌아가도 독서 1.
-    page.locator(".lect-track .division-tab", has_text="독서 1").click()
+    # 다시 연속 독서를 고르면 그것이 새 기본값 — 앞 해의 주일로 돌아가도 연속 독서.
+    page.locator(".lect-card", has_text="연속 독서").click()
     page.wait_for_url("**/lectionary/2027-06-20?track=1")
     assert page.evaluate("() => localStorage.getItem('bible-lectionary-track')") == "1"
     page.evaluate("() => window.navigate('/lectionary/2026-06-21')")
     page.wait_for_selector(".lect-date time[datetime='2026-06-21']")
-    assert page.locator(".lect-track .division-tab.active").inner_text() == "독서 1"
+    assert page.locator(".lect-card.active .lect-card-name").inner_text() == "연속 독서"
+
+
+def test_reading_cards_sit_above_first_reading_and_list_every_item(desktop_context):
+    """연중 11주일 — 독서 카드는 본기도 아래, 제1독서 바로 위에 있다. 네 항목을 모두 적고 두 카드에서 다른 성구를 표시하며, 같은 항목끼리
+    줄이 맞는다. 고른 카드의 성구가 아래 독서 제목과 같다(사용자 결정 2026-11-05)."""
+    page = desktop_context.new_page()
+    _open(page, "lectionary/2026-06-14")
+    order = page.eval_on_selector_all(".lectionary > *", "els => els.map(e => e.dataset.slot || e.className)")
+    at = order.index("lect-section lect-cards")
+    assert (order[at - 1], order[at + 1]) == ("collect", "first"), order
+    assert page.locator(".lect-controls").count() == 0
+    assert page.inner_text(".lect-cards .lect-slot") == "독서"
+    cards = page.eval_on_selector_all(".lect-card", """els => els.map((c) => ({
+        name: c.querySelector('.lect-card-name').textContent,
+        refs: [...c.querySelectorAll('.lect-card-ref')].map((r) => r.textContent),
+        differs: [...c.querySelectorAll('.lect-card-ref')].map((r) => r.classList.contains('lect-card-ref--differs')),
+    }))""")
+    assert [c["name"] for c in cards] == ["연속 독서", "복음 주제"]
+    assert [c["differs"] for c in cards] == [[True, True, False, False]] * 2
+    assert cards[0]["refs"] == page.eval_on_selector_all(".lect-reading .lect-ref", "els => els.map(e => e.textContent)")
+    assert page.get_attribute(".lect-card.active", "aria-current") == "page"
+    tops = page.evaluate("""() => [...document.querySelectorAll('.lect-card')].map((c) =>
+        [...c.querySelectorAll('.lect-card-ref')].map((r) => Math.round(r.getBoundingClientRect().top)))""")
+    assert tops[0] == tops[1], tops
+
+
+def test_reading_cards_fold_into_pills_and_stay_folded_on_every_day(mobile_context):
+    """접으면 카드가 사라지고 제목 옆에 이름 알약이 남아 그 자리에서 바꾼다. 한 번 접으면 다른 날도 접혀 있고, 이름이 「독서 N」인 날은 본기도와
+    같은 번호다. 포커스는 접기 단추에 남는다(사용자 결정 2026-11-05)."""
+    page = mobile_context.new_page()
+    _open(page, "lectionary/2026-06-14")
+    fold = page.locator(".lect-cards-fold")
+    assert (fold.inner_text(), fold.get_attribute("aria-expanded"), fold.get_attribute("aria-label")) == ("접기", "true", "독서 목록 접기")
+    assert page.locator(".lect-cards-list").is_visible()
+    assert not page.locator(".lect-cards-pills").is_visible()
+
+    fold.focus()
+    page.keyboard.press("Enter")
+    assert (fold.inner_text(), fold.get_attribute("aria-expanded"), fold.get_attribute("aria-label")) == ("", "false", "독서 목록 펼치기")
+    assert page.evaluate("() => document.activeElement.classList.contains('lect-cards-fold')")
+    assert not page.locator(".lect-cards-list").is_visible()
+    assert page.evaluate("() => localStorage.getItem('bible-lectionary-cards-folded')") == "1"
+    pills = page.locator(".lect-cards-pills .lect-collect-num")
+    assert [pills.nth(i).inner_text() for i in range(pills.count())] == ["연속 독서", "복음 주제"]
+    assert page.locator(".lect-cards-pills .lect-collect-num.active").inner_text() == "연속 독서"
+
+    # 접은 채로 바꾼다 — 트랙을 기억하고, 포커스는 누른 알약으로 돌아오며, 접힌 그대로다
+    page.locator(".lect-cards-pills .lect-collect-num", has_text="복음 주제").focus()
+    page.keyboard.press("Enter")
+    page.wait_for_url("**/lectionary/2026-06-14?track=2")
+    page.wait_for_selector(".lect-cards-pills .lect-collect-num.active:has-text('복음 주제')")
+    assert page.evaluate("() => localStorage.getItem('bible-lectionary-track')") == "2"
+    assert page.evaluate("() => document.activeElement.dataset.focusKey") == "folded:track:2"
+    assert not page.locator(".lect-cards-list").is_visible()
+
+    # 다른 날도 접혀 있다. 이름이 「독서 N」이면 번호이고 스크린 리더는 「독서 1」로 읽는다
+    page.evaluate("() => window.navigate('/lectionary/2026-04-05')")
+    page.wait_for_selector(".lect-date time[datetime='2026-04-05']")
+    assert not page.locator(".lect-cards-list").is_visible()
+    assert page.locator(".lect-cards-pills").count() == 0
+    nums = page.eval_on_selector_all(".lect-cards .lect-collect-num", "els => els.map(e => [e.textContent, e.getAttribute('aria-label')])")
+    assert nums == [["1", "독서 1"], ["2", "독서 2"]]
+
+    # 펼치면 기억을 지운다
+    page.locator(".lect-cards-fold").click()
+    assert page.locator(".lect-cards-list").is_visible()
+    assert not page.locator(".lect-cards .lect-collect-nums").is_visible()
+    assert page.evaluate("() => localStorage.getItem('bible-lectionary-cards-folded')") is None
+
+
+def test_reading_cards_without_a_track_are_not_remembered(desktop_context):
+    """대림 3주일 나해 — 시편 하나만 달라도 카드다. 부활대축일의 둘째 독서를 골라도 연중 주일의 트랙 기억은 그대로다(뜻이 달라 기억하지 않는다 —
+    사용자 결정 2026-11-05)."""
+    page = desktop_context.new_page()
+    _open(page, "lectionary/2026-12-13")
+    assert page.eval_on_selector_all(".lect-card-name", "els => els.map(e => e.textContent)") == ["독서 1", "독서 2"]
+    flags = page.eval_on_selector_all(".lect-card:first-child .lect-card-ref", "els => els.map(e => e.classList.contains('lect-card-ref--differs'))")
+    assert flags == [False, True, False, False]
+    page.locator(".lect-card", has_text="독서 2").click()
+    page.wait_for_url("**/lectionary/2026-12-13?set=2")
+    page.wait_for_selector(".lect-card.active:has-text('독서 2')")
+    assert page.inner_text(".lect-reading[data-slot='psalm'] .lect-ref").startswith("루가 1:46")
+    page.evaluate("() => window.navigate('/lectionary/2026-04-05')")
+    page.wait_for_selector(".lect-date time[datetime='2026-04-05']")
+    page.locator(".lect-card", has_text="독서 2").click()
+    page.wait_for_url("**/lectionary/2026-04-05?set=2")
+    assert page.evaluate("() => localStorage.getItem('bible-lectionary-track')") is None
+    page.evaluate("() => window.navigate('/lectionary/2026-06-14')")
+    page.wait_for_selector(".lect-date time[datetime='2026-06-14']")
+    assert page.locator(".lect-card.active .lect-card-name").inner_text() == "연속 독서"
+
+
+def test_reading_cards_fit_narrow_screen_with_largest_text(mobile_context):
+    """320px 기본 글자에서는 두 장이 나란하고, 가장 큰 글자에서는 한 장씩 쌓이며 가로로 넘치지 않는다. 접은 알약과 접기 단추의 탭 영역은 44px이다
+    (WCAG 1.4.10, 사용자 결정 2026-11-05). 긴 이름이 있는 사순 2주일로 본다."""
+    page = mobile_context.new_page()
+    page.set_viewport_size({"width": 320, "height": 640})
+    _open(page, "lectionary/2026-03-01")
+    lefts = page.eval_on_selector_all(".lect-card", "els => els.map(e => Math.round(e.getBoundingClientRect().left))")
+    assert lefts[0] < lefts[1], lefts
+    page.evaluate("() => { document.documentElement.style.fontSize = '24px'; }")
+    lefts = page.eval_on_selector_all(".lect-card", "els => els.map(e => Math.round(e.getBoundingClientRect().left))")
+    assert lefts[0] == lefts[1], lefts
+    assert page.evaluate("() => document.documentElement.scrollWidth") <= 320
+    page.locator(".lect-cards-fold").click()
+    assert page.evaluate("() => document.documentElement.scrollWidth") <= 320
+    sizes = page.eval_on_selector_all(".lect-cards .lect-collect-num, .lect-cards-fold", """els => els.map((e) => {
+        const r = e.getBoundingClientRect(); return [Math.round(r.width), Math.round(r.height)]; })""")
+    assert all(w >= 44 and h >= 44 for w, h in sizes), sizes
 
 
 def test_cross_chapter_reading_keeps_every_chapter(desktop_context):
@@ -329,32 +432,32 @@ def test_cross_chapter_reading_keeps_every_chapter(desktop_context):
 
 
 def test_back_after_track_change_returns_to_previous_track(desktop_context):
-    """트랙 없는 URL 에서 독서 2 를 고른 뒤 뒤로 가기 — 기억이 2 로 바뀌었어도 이전 화면(독서 1)으로 돌아온다(Copilot 1회차)."""
+    """트랙 없는 URL에서 복음 주제를 고른 뒤 뒤로 가기 — 기억이 2로 바뀌었어도 이전 화면(연속 독서)으로 돌아온다(Copilot 1회차)."""
     page = desktop_context.new_page()
     _open(page, "lectionary/2026-06-14")
-    assert page.locator(".lect-track .division-tab.active").inner_text() == "독서 1"
-    page.locator(".lect-track .division-tab", has_text="독서 2").click()
+    assert page.locator(".lect-card.active .lect-card-name").inner_text() == "연속 독서"
+    page.locator(".lect-card", has_text="복음 주제").click()
     page.wait_for_url("**/lectionary/2026-06-14?track=2")
-    page.wait_for_selector(".lect-track .division-tab.active:has-text('독서 2')")
+    page.wait_for_selector(".lect-card.active:has-text('복음 주제')")
     page.go_back()
     page.wait_for_url("**/lectionary/2026-06-14?track=1")   # 저장 전에 지금 항목에 트랙을 명시해 둔 것
-    page.wait_for_selector(".lect-track .division-tab.active:has-text('독서 1')")
-    # 기억은 2 그대로 — 다음에 트랙 없이 열면 독서 2.
+    page.wait_for_selector(".lect-card.active:has-text('연속 독서')")
+    # 기억은 2 그대로 — 다음에 트랙 없이 열면 복음 주제.
     assert page.evaluate("() => localStorage.getItem('bible-lectionary-track')") == "2"
 
 
 def test_back_after_track_change_from_malformed_track_url(desktop_context):
-    """`?track=3` 처럼 깨진 값으로 연 화면(독서 1 로 떨어짐)에서 독서 2 를 고른 뒤 뒤로 가기 — 깨진 URL 이 바뀐 기억(2)으로
+    """`?track=3`처럼 깨진 값으로 연 화면(연속 독서로 떨어짐)에서 복음 주제를 고른 뒤 뒤로 가기 — 깨진 URL이 바뀐 기억(2)으로
     읽히지 않게 저장 전에 지금 항목에 track=1 을 명시한다(Copilot 5회차)."""
     page = desktop_context.new_page()
     _open(page, "lectionary/2026-06-14?track=3")
-    assert page.locator(".lect-track .division-tab.active").inner_text() == "독서 1"
-    page.locator(".lect-track .division-tab", has_text="독서 2").click()
+    assert page.locator(".lect-card.active .lect-card-name").inner_text() == "연속 독서"
+    page.locator(".lect-card", has_text="복음 주제").click()
     page.wait_for_url("**/lectionary/2026-06-14?track=2")
-    page.wait_for_selector(".lect-track .division-tab.active:has-text('독서 2')")
+    page.wait_for_selector(".lect-card.active:has-text('복음 주제')")
     page.go_back()
     page.wait_for_url("**/lectionary/2026-06-14?track=1")
-    page.wait_for_selector(".lect-track .division-tab.active:has-text('독서 1')")
+    page.wait_for_selector(".lect-card.active:has-text('연속 독서')")
 
 
 def test_stale_lectionary_preload_failure_does_not_overwrite_new_route(browser):
@@ -598,7 +701,7 @@ def test_ember_friday_one_button_picks_readings_and_collect_without_common_capti
     assert page.inner_text(".lect-sets .lect-control-label") == "독서 · 본기도"
     tabs = page.locator(".lect-sets .division-tab")
     assert [tabs.nth(i).inner_text() for i in range(tabs.count())] == ["성직후보자", "수도자"]
-    assert page.locator(".lect-collect-num").count() == 0
+    assert page.locator(".lect-collects .lect-collect-num").count() == 0
     first = page.inner_text(".lect-collect-text")
     tabs.nth(1).click()
     page.wait_for_url("**set=2")
@@ -618,7 +721,7 @@ def test_may1_one_button_switches_to_labour_day_readings_and_collect(desktop_con
     tabs = page.locator(".lect-sets .division-tab")
     assert [tabs.nth(i).inner_text() for i in range(tabs.count())] == ["사도 성 필립보와 성 야고보", "노동자의 날"]
     assert page.locator(".lect-sets .division-tab.active").inner_text() == "사도 성 필립보와 성 야고보"
-    assert page.locator(".lect-collect-num").count() == 0
+    assert page.locator(".lect-collects .lect-collect-num").count() == 0
     collect0 = page.inner_text(".lect-collect-text")
     first0 = page.inner_text(".lect-reading[data-slot='first'] .lect-ref")
     tabs.nth(1).click()
@@ -939,17 +1042,16 @@ def test_year_outside_gregorian_range_is_rejected_not_hung(desktop_context):
 
 
 def test_long_segment_labels_wrap_at_320px(browser):
-    """320px — 「사도 성 필립보와 성 야고보」 · 「주의 변모 주일로 지킬 때」 세그먼트가 가로 스크롤을 만들지 않는다(WCAG 1.4.10)."""
+    """320px — 「사도 성 필립보와 성 야고보」 세그먼트가 가로 스크롤을 만들지 않는다(WCAG 1.4.10). 독서 카드는 따로 본다."""
     ctx = browser.new_context(viewport={"width": 320, "height": 640})
     page = ctx.new_page()
     try:
-        for day in ("2026-05-01", "2026-03-01"):
-            _open(page, f"lectionary/{day}")
-            assert page.locator(".lect-sets .division-tab").count() >= 2
-            assert page.evaluate("() => document.documentElement.scrollWidth") <= 320, day
-            over = page.evaluate("""() => [...document.querySelectorAll('.lect-sets .division-tab')]
-                .some(t => t.scrollWidth > t.clientWidth + 1)""")
-            assert not over, day
+        _open(page, "lectionary/2026-05-01")
+        assert page.locator(".lect-sets .division-tab").count() >= 2
+        assert page.evaluate("() => document.documentElement.scrollWidth") <= 320
+        over = page.evaluate("""() => [...document.querySelectorAll('.lect-sets .division-tab')]
+            .some(t => t.scrollWidth > t.clientWidth + 1)""")
+        assert not over
     finally:
         ctx.close()
 
@@ -1016,38 +1118,47 @@ def test_verse_ids_are_unique_across_slots_and_chapters(desktop_context):
 
 
 def test_back_to_earlier_day_keeps_its_track_after_memory_changes(desktop_context):
-    """06-07(독서 1)에서 06-14 로 가서 독서 2 를 고른 뒤 06-07 로 돌아와도 독서 1 — 렌더 때 그 항목에 트랙을 적어 두므로
+    """06-07(연속 독서)에서 06-14로 가서 복음 주제를 고른 뒤 06-07로 돌아와도 연속 독서 — 렌더 때 그 항목에 트랙을 적어 두므로
     바뀐 기억으로 다시 읽히지 않는다(자체 리뷰 2026-10-13)."""
     page = desktop_context.new_page()
     _open(page, "lectionary/2026-06-07")
     page.wait_for_url("**/lectionary/2026-06-07?track=1")
     page.evaluate("() => window.navigate('/lectionary/2026-06-14')")
     page.wait_for_url("**/lectionary/2026-06-14?track=1")
-    page.locator(".lect-track .division-tab", has_text="독서 2").click()
+    page.locator(".lect-card", has_text="복음 주제").click()
     page.wait_for_url("**/lectionary/2026-06-14?track=2")
     page.go_back()
     page.wait_for_url("**/lectionary/2026-06-14?track=1")
     page.go_back()
     page.wait_for_url("**/lectionary/2026-06-07?track=1")
-    page.wait_for_selector(".lect-track .division-tab.active:has-text('독서 1')")
+    page.wait_for_selector(".lect-card.active:has-text('연속 독서')")
 
 
 def test_conditional_set_condition_is_the_label(desktop_context):
-    """사순 2주일 가해 — 조건이 라벨: 「사순 2주일」 / 「주의 변모 주일로 지킬 때」, 캡션 줄 없음(미결38)."""
+    """사순 2주일 가해 — 조건이 카드 이름이다: 「사순 2주일」 / 「주의 변모 주일로 지킬 때」(미결38). 고르면 제목만 「주의 변모 주일」로 바뀌고
+    색과 본기도는 그대로다(사용자 결정 2026-11-05)."""
     page = desktop_context.new_page()
-    _open(page, "lectionary/2026-03-01?set=2")
-    assert page.eval_on_selector_all(".lect-sets .division-tab", "els => els.map(e => e.textContent)") == ["사순 2주일", "주의 변모 주일로 지킬 때"]
-    assert page.locator(".lect-sets .division-tab.active").inner_text() == "주의 변모 주일로 지킬 때"
-    assert page.locator(".lect-sets .lect-caption").count() == 0
-    assert page.locator(".lect-sets .lect-control-label").count() == 0   # 조건이 단추 이름이라 위 글자가 없다(2026-11-04)
+    _open(page, "lectionary/2026-03-01")
+    assert page.eval_on_selector_all(".lect-card-name", "els => els.map(e => e.textContent)") == ["사순 2주일", "주의 변모 주일로 지킬 때"]
+    assert page.inner_text(".lect-day") == "사순 2주일"
+    colors = _colors(page)
+    collect = page.inner_text(".lect-collect-text")
+    page.locator(".lect-card", has_text="주의 변모 주일로 지킬 때").click()
+    page.wait_for_url("**/lectionary/2026-03-01?set=2")
+    page.wait_for_selector(".lect-day:has-text('주의 변모 주일')")
+    assert page.locator(".lect-card.active .lect-card-name").inner_text() == "주의 변모 주일로 지킬 때"
+    assert page.inner_text(".lect-reading[data-slot='gospel'] .lect-ref") == "마태 17:1-9"
+    assert _colors(page) == colors
+    assert page.inner_text(".lect-collect-text") == collect
+    page.wait_for_function("() => document.title.includes('주의 변모 주일')")
 
 
 def test_bracket_set_merges_into_long_text_with_markers(desktop_context):
-    """연중 11주일 가해 — 괄호 선택 구절 세트는 세그먼트가 아니라 긴 본문 + 〔 〕 표시 + 「짧게 읽으면 …」 주석."""
+    """연중 11주일 가해 — 괄호 선택 구절 세트는 카드가 아니라 긴 본문 + 〔 〕 표시 + 「짧게 읽으면 …」 주석."""
     page = desktop_context.new_page()
     _open(page, "lectionary/2026-06-14")
-    assert page.locator(".lect-sets").count() == 0          # 대안 세그먼트 없음(합쳐짐)
-    assert page.locator(".lect-track").count() == 1         # 트랙 토글은 그대로
+    assert page.locator(".lect-sets").count() == 0          # 단추 없음
+    assert page.locator(".lect-card").count() == 2          # 트랙마다 한 장 — 괄호 세트는 합쳐져 카드가 늘지 않는다
     note = page.locator(".lect-optional-note")
     assert note.count() == 1 and "짧게 읽으면" in note.inner_text()
     brackets = page.locator(".lect-bracket")
@@ -1161,17 +1272,20 @@ def test_bare_route_shows_today_and_day_steppers_work(desktop_context):
 
 
 def _focused(page):
-    """지금 포커스 — 그 컨트롤의 자리(data-focus-key) · 화면 안인지 · :focus-visible."""
+    """지금 포커스 — 그 컨트롤의 자리(data-focus-key) · 화면 안인지(브라우저가 화면 끝에 맞출 때 소수점 차이가 남아 1px 여유를 둔다) · :focus-visible."""
     return page.evaluate("""() => {
         const a = document.activeElement;
         const r = a ? a.getBoundingClientRect() : null;
-        return { key: a?.dataset?.focusKey || null, inView: !!r && r.top >= 0 && r.bottom <= innerHeight,
+        return { key: a?.dataset?.focusKey || null, inView: !!r && r.top >= 0 && r.bottom <= innerHeight + 1,
                  visible: !!a?.matches(':focus-visible') };
     }""")
 
 
 def _enter_on(page, selector):
+    """사람이 Tab으로 갈 때처럼 브라우저의 부드러운 스크롤이 끝난 뒤 누른다 — 독서 카드는 높아서 화면 아래쪽에 걸치기 쉽다."""
     page.locator(selector).focus()
+    page.wait_for_function("""() => { const r = document.activeElement.getBoundingClientRect();
+        return r.top >= 0 && r.bottom <= innerHeight + 1; }""")
     page.keyboard.press("Enter")
 
 
@@ -1200,21 +1314,21 @@ def test_redraws_keep_keyboard_focus_on_the_pressed_control(desktop_context):
     page.wait_for_url("**/lectionary/2026-09-16")
     page.wait_for_selector(".lect-day:has-text('연중 24주 수요일')")
     assert _focused(page) == {"key": "choice:0", **ok}
-    # 세트 세그먼트(추계재 — 독서 1 · 2)
+    # 세트 카드(추계재 — 독서 1 · 2)
     _enter_on(page, ".lect-choice:has-text('추계재')")
     page.wait_for_selector(".lect-day:has-text('추계재')")
-    _enter_on(page, ".lect-sets .division-tab >> nth=1")
+    _enter_on(page, ".lect-card >> nth=1")
     page.wait_for_url("**set=2")
-    page.wait_for_function("() => document.querySelectorAll('.lect-sets .division-tab')[1]?.classList.contains('active')")
+    page.wait_for_function("() => document.querySelectorAll('.lect-card')[1]?.classList.contains('active')")
     assert _focused(page) == {"key": "set:2", **ok}
-    # 트랙 세그먼트 · 본기도 번호
+    # 트랙 카드 · 본기도 번호
     _open(page, "lectionary/2026-06-14")
-    _enter_on(page, ".lect-track .division-tab:has-text('독서 2')")
-    page.wait_for_selector(".lect-track .division-tab.active:has-text('독서 2')")
+    _enter_on(page, ".lect-card:has-text('복음 주제')")
+    page.wait_for_selector(".lect-card.active:has-text('복음 주제')")
     assert _focused(page) == {"key": "track:2", **ok}
     _open(page, "lectionary/2026-04-05")
-    _enter_on(page, ".lect-collect-num >> nth=1")
-    page.wait_for_selector(".lect-collect-num.active[aria-label='본기도 2']")
+    _enter_on(page, ".lect-collects .lect-collect-num >> nth=1")
+    page.wait_for_selector(".lect-collects .lect-collect-num.active[aria-label='본기도 2']")
     assert _focused(page) == {"key": "collect:2", **ok}
     # 오늘 — 브라우저의 날짜로
     today = datetime.date(*page.evaluate("() => { const d = new Date(); return [d.getFullYear(), d.getMonth() + 1, d.getDate()]; }"))
@@ -1237,18 +1351,18 @@ def test_redraw_after_a_fetch_keeps_the_pressed_control_where_it_was(mobile_cont
     아래로 밀리고, 화면 아래쪽 컨트롤이면 화면 밖으로 나갔다(2.4.7). 포커스와 함께 누른 때의 화면 위치로 돌아온다."""
     page = mobile_context.new_page()
     _open(page, "lectionary/2026-04-05")
-    seg = page.locator(".lect-sets .division-tab >> nth=1")
-    # 세그먼트를 화면 위에서 100px 자리로 — 2026-11-04부터 이날은 전례독서 목록이 없어(부활 1주일 격자는 본문이 없다) 세그먼트가 위로
+    seg = page.locator(".lect-card >> nth=1")
+    # 카드를 화면 위에서 100px 자리로 — 2026-11-04부터 이날은 전례독서 목록이 없어(부활 1주일 격자는 본문이 없다) 컨트롤이 위로
     # 올라왔다. 200px 자리로는 스크롤이 83px뿐이라 「맨 위가 아닌 자리」가 되지 않았다.
     page.evaluate("""(el) => { const r = el.getBoundingClientRect();
         window.scrollTo({ top: window.scrollY + r.top - 100, behavior: 'instant' }); }""", seg.element_handle())
-    page.evaluate("() => document.fonts.ready.then(() => 0)")   # 글꼴이 바뀌면 전례독서 목록이 다시 감겨 세그먼트가 움직인다
+    page.evaluate("() => document.fonts.ready.then(() => 0)")   # 글꼴이 바뀌면 전례독서 목록이 다시 감겨 카드가 움직인다
     before = page.evaluate("(el) => ({ y: scrollY, top: el.getBoundingClientRect().top })", seg.element_handle())
     assert before["y"] > 100, before   # 맨 위가 아닌 자리에서 누른다
     seg.focus()
     page.keyboard.press("Enter")
     page.wait_for_url("**/lectionary/2026-04-05?set=2")
-    page.wait_for_selector(".lect-sets .division-tab.active:has-text('독서 2')")   # 복원은 이 커밋 안에서 끝난다
+    page.wait_for_selector(".lect-card.active:has-text('독서 2')")   # 복원은 이 커밋 안에서 끝난다
     assert _focused(page) == {"key": "set:2", "inView": True, "visible": True}
     after = page.evaluate("() => ({ y: scrollY, top: document.activeElement.getBoundingClientRect().top })")
     assert abs(after["top"] - before["top"]) <= 2, (before, after)
@@ -1269,7 +1383,7 @@ def test_slow_redraw_keeps_the_pressed_control_in_place_on_desktop(desktop_conte
     page = desktop_context.new_page()
     for scroll_back in (None, 40):
         _open(page, "lectionary/2026-04-05")
-        seg = page.locator(".lect-sets .division-tab >> nth=1")
+        seg = page.locator(".lect-card >> nth=1")
         page.evaluate("""(el) => { const r = el.getBoundingClientRect();
             window.scrollTo({ top: window.scrollY + r.top - 170, behavior: 'instant' }); }""", seg.element_handle())
         page.wait_for_timeout(400)   # 머리가 접히는 전환(0.25s)
@@ -1281,7 +1395,7 @@ def test_slow_redraw_keeps_the_pressed_control_in_place_on_desktop(desktop_conte
         _slow_chapters(page, 400)
         seg.focus()
         page.keyboard.press("Enter")
-        page.wait_for_selector(".lect-sets .division-tab.active:has-text('독서 2')", timeout=20_000)
+        page.wait_for_selector(".lect-card.active:has-text('독서 2')", timeout=20_000)
         page.wait_for_timeout(600)   # 머리가 다시 접히는 전환까지
         page.unroute("**/data/bible/**")
         assert _focused(page) == {"key": "set:2", "inView": True, "visible": True}
@@ -1296,12 +1410,12 @@ def test_slow_redraw_leaves_focus_the_reader_moved_elsewhere(desktop_context):
     page = desktop_context.new_page()
     _open(page, "lectionary/2026-04-05")
     _slow_chapters(page, 800)
-    page.locator(".lect-sets .division-tab >> nth=1").focus()
+    page.locator(".lect-card >> nth=1").focus()
     page.keyboard.press("Enter")
     page.wait_for_selector(".loading")
     page.locator("#search-input").focus()
     page.keyboard.type("love")
-    page.wait_for_selector(".lect-sets .division-tab.active:has-text('독서 2')", timeout=20_000)
+    page.wait_for_selector(".lect-card.active:has-text('독서 2')", timeout=20_000)
     page.keyboard.type("ly")
     page.unroute("**/data/bible/**")
     assert page.evaluate("() => document.activeElement.id") == "search-input"
@@ -1341,14 +1455,14 @@ def test_modified_click_on_track_opens_new_page_without_touching_current(browser
     try:
         _open(page, "lectionary/2026-06-14")
         page.wait_for_url("**/lectionary/2026-06-14?track=1")
-        assert page.locator(".lect-track .division-tab.active").inner_text() == "독서 1"
+        assert page.locator(".lect-card.active .lect-card-name").inner_text() == "연속 독서"
         assert page.evaluate("() => localStorage.getItem('bible-lectionary-track')") is None
         with ctx.expect_page() as opened:
-            page.locator(".lect-track .division-tab", has_text="독서 2").click(modifiers=["ControlOrMeta"])
+            page.locator(".lect-card", has_text="복음 주제").click(modifiers=["ControlOrMeta"])
         new_page = opened.value
         new_page.wait_for_url("**/lectionary/2026-06-14?track=2")   # 새 탭이 링크 href 로 간다
         assert page.url.endswith("/lectionary/2026-06-14?track=1")   # 지금 탭은 그대로
-        assert page.locator(".lect-track .division-tab.active").inner_text() == "독서 1"
+        assert page.locator(".lect-card.active .lect-card-name").inner_text() == "연속 독서"
         # 검사가 없으면 클릭 리스너가 기억을 2로 바꾼다
         assert page.evaluate("() => localStorage.getItem('bible-lectionary-track')") is None
         new_page.close()
@@ -1363,9 +1477,9 @@ def test_shared_link_with_state_lands_on_same_screen(desktop_context):
     _open(page, f"lectionary/2026-08-09?obs={obs}")
     assert "주의 변모" in page.inner_text(".lect-day")
     _open(page, "lectionary/2026-06-14?track=2")
-    assert page.locator(".lect-track .division-tab.active").inner_text() == "독서 2"
+    assert page.locator(".lect-card.active .lect-card-name").inner_text() == "복음 주제"
     _open(page, "lectionary/2026-04-05?set=2")
-    assert page.locator(".lect-sets .division-tab.active").inner_text() == "독서 2"
+    assert page.locator(".lect-card.active .lect-card-name").inner_text() == "독서 2"
 
 
 # ── ⑦ 탭 바 ──
@@ -1653,7 +1767,7 @@ def test_jan_2_is_a_christmas_weekday_with_the_saint_on_the_name_line(desktop_co
     assert any(line.startswith("바실") and "그레고리" in line and line.endswith(" 축일") for line in name_lines()), name_lines()
     assert page.inner_text(".lect-reading[data-slot='first'] .lect-ref") == "1요한 2:22-28"
     assert page.locator(".lect-choices").count() == 0
-    assert page.locator(".lect-collect-num").count() == 2   # 성탄 주간 본기도 1 · 2
+    assert page.locator(".lect-collects .lect-collect-num").count() == 2   # 성탄 주간 본기도 1 · 2
     texts = collects()
     assert len(texts) == 2 and "바실" not in texts[0] and "바실" in texts[1], texts
     _open(page, "lectionary/2028-12-29")
