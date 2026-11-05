@@ -596,13 +596,21 @@ test("A3 송가 — 즈가리야 송가는 영광송을 붙이고 창조송가(g
   assert.strictEqual(ctx.canticleTitleOf(cant(11)), "즈가리야 송가");
 });
 
-test("A3 성모송가 — 라벨은 어느 날이나 한 가지이고, 장 제목의 이름이 라벨 안에 있어 옆에 이름을 다시 붙이지 않는다(사용자 결정 2026-11-05)", { skip: SKIP }, () => {
-  const rows = read("eucharist-readings.json").entries.flatMap((e) => e.readings).filter((r) => r.canticle === "magnificat");
-  assert.strictEqual(rows.length, 10);
-  assert.deepStrictEqual([...new Set(rows.map((r) => r.label))], ["루가 1:46하-55 (성모송가)"]);
-  const title = ctx.canticleTitleOf(JSON.parse(fs.readFileSync(path.join(ROOT, "data", "bible", "cant-12.json"), "utf8")));
-  assert.strictEqual(title, "성모송가");
-  assert.ok(rows[0].label.includes(title));
+test("A3 송가 라벨 — 어느 날이나 한 가지이고, 장 제목의 이름이 라벨 안에 있어 옆에 이름을 다시 붙이지 않는다(사용자 결정 2026-11-05)", { skip: SKIP }, () => {
+  const rows = read("eucharist-readings.json").entries.flatMap((e) => e.readings);
+  for (const [id, chapter, name, label, count] of [
+    ["magnificat", 12, "성모송가", "루가 1:46하-55 (성모송가)", 10],
+    ["benedictus", 11, "즈가리야 송가", "루가 1:68-79 (즈가리야 송가)", 2],
+    ["ecce-deus", 4, "이사야 첫째 송가", "이사 12:2-6 (이사야 첫째 송가)", 2],
+    ["te-deum", 2, "하느님 찬미송가", "하느님 찬미송가", 1],
+  ]) {
+    const mine = rows.filter((r) => r.canticle === id);
+    assert.strictEqual(mine.length, count, id);
+    assert.deepStrictEqual([...new Set(mine.map((r) => r.label))], [label], id);
+    const title = ctx.canticleTitleOf(JSON.parse(fs.readFileSync(path.join(ROOT, "data", "bible", `cant-${chapter}.json`), "utf8")));
+    assert.strictEqual(title, name, id);
+    assert.ok(label.includes(title), id);
+  }
 });
 
 // ── 전수 — 2025~2027 모든 날 ──

@@ -1144,6 +1144,26 @@ def test_magnificat_is_named_one_way(desktop_context):
     assert re.search(r"\n\n— 성모송가 1 \(대한성공회 기도서\)$", text), text[-80:]
 
 
+def test_other_canticles_are_named_one_way(desktop_context):
+    """즈가리야 송가와 이사야 첫째 송가도 어느 날이나 「성구 (이름)」 한 표기이고 옆에 이름을 다시 붙이지 않는다. 원본 표기가
+    서로 달랐던 두 날씩을 본다. 기도서가 성구를 적지 않는 하느님 찬미송가는 이름만 적고, 복사 출처도 그 이름이다(사용자 결정 2026-11-05)."""
+    page = desktop_context.new_page()
+    psalm = ".lect-reading[data-slot='psalm']"
+    for path, label in (
+        ("lectionary/2027-12-05", "루가 1:68-79 (즈가리야 송가)"),
+        ("lectionary/2028-11-26", "루가 1:68-79 (즈가리야 송가)"),
+        ("lectionary/2027-12-12", "이사 12:2-6 (이사야 첫째 송가)"),
+        ("lectionary/2028-11-19", "이사 12:2-6 (이사야 첫째 송가)"),
+        ("lectionary/2027-11-22?set=2", "하느님 찬미송가"),
+    ):
+        _open(page, path)
+        assert page.inner_text(f"{psalm} .lect-ref") == label, path
+        assert page.locator(f"{psalm} .lect-canticle").count() == 0, path
+    sel = f"{psalm} article.chapter-text .verse[data-vref]"
+    text = page.evaluate(_LECT_COPY_ACROSS, [sel, sel])
+    assert re.search(r"\n\n— 하느님 찬미송가 1 \(대한성공회 기도서\)$", text), text[-80:]
+
+
 def test_psalm_copy_keeps_liturgical_marks_and_section_headings(desktop_context):
     """대림 4주일(2026-12-20) 시편 89:1-4, 19-27 을 통째로 복사하면 ◯ · ¶ · 부 소제목이 다 실린다 — 「(1)」 · 「(2)」는 제 줄,
     ¶ 뒤 한 칸, 출처는 「(대한성공회 기도서)」(사용자 결정 2026-10-13 — known-issues §4). 종전엔 「(1)」이 빠지고 「(2)그 옛날」로

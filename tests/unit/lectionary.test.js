@@ -596,7 +596,7 @@ test("slotVerseRuns: 같은 장의 ref 둘이 겹치면 한 번만, 없는 장�
 test("wantsGloria: 전례시편은 장을 불러왔으면 언제나, 송가는 gloria:false 가 아닐 때, 다른 슬롯 · 일반 성서 · 불러오지 못한 장은 아니다", () => {
   const psalm = slot("psalm", "lps", 23, "all", "시편 23");
   assert.strictEqual(ctx.wantsGloria(psalm, CHAPTER), true);
-  const cant = slot("psalm", "cant", 11, "all", "루가 1:68-79(즈가리야 송가)");
+  const cant = slot("psalm", "cant", 11, "all", "루가 1:68-79 (즈가리야 송가)");
   assert.strictEqual(ctx.wantsGloria(cant, { book_id: "cant", chapter: 11, verses: [] }), true);
   assert.strictEqual(ctx.wantsGloria(cant, { book_id: "cant", chapter: 3, gloria: false, verses: [] }), false);
   assert.strictEqual(ctx.wantsGloria(cant, null), false);   // 장을 못 불러오면 붙이지 않는다
