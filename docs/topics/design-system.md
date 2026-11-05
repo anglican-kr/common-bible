@@ -76,7 +76,7 @@ HTML 요소에 `hidden` 속성을 붙이면(`<button hidden>`) 화면에서 숨�
 
 - **초안 검토**: 사용자가 아직 초안을 보지 않았다. 검토 의견을 반영해 다듬는다.
 - **캘린더 2단계를 디자인부터**: 주간 보기와 목록 보기(ADR-038 §2)를 코드보다 먼저 이 시스템으로 그려 본다.
-- **전례독서 화면의 남은 옛 모양**: 2026-11-05에 `LectionaryHead`, `LectionaryReading`, `bundle.css`를 맞췄다. `ReadingPairCards`(카드는 2026-11-03에 없어졌다)는 아직 옛 모양이다. #463, #466, #467, #472는 `DESIGN.md`를 고쳤지만 아티팩트를 맞추지 않았다.
+- **전례독서 화면의 옛 모양**: 2026-11-05에 `LectionaryHead`, `LectionaryReading`, `bundle.css`를 맞췄다. 없어진 옛 카드를 보이던 `ReadingPairCards`는 같은 날 독서 카드로 바꿨다. #463, #466, #467, #472는 `DESIGN.md`를 고쳤지만 아티팩트를 맞추지 않았다.
 
 ### known-issues §23 — 디자인 시스템 초안에서 찾은 CSS 어긋남 셋 (2026-10-18)
 

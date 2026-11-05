@@ -32,15 +32,15 @@ collects.rank_null             = 3
 collects.color_null            = 1
 collects.collect_total_gt1     = 35
 readings.total                 = 936
-readings.set_no.1              = 846
-readings.set_no.2              = 89
+readings.set_no.1              = 848
+readings.set_no.2              = 87
 readings.set_no.3              = 1
-readings.set_total_gt1         = 179
+readings.set_total_gt1         = 175
 readings.slot.first            = 936
 readings.slot.psalm            = 936
 readings.slot.second           = 389
 readings.slot.gospel           = 936
-readings.reading_track_nonnull = 179
+readings.reading_track_nonnull = 183
 readings.weekday_null          = 399
 sanctoral.total                = 149
 sanctoral.has_proper           = 50
@@ -333,7 +333,7 @@ function resolveDate(dateStr) → {
 
   **전례일에 날짜를 심어 인자 하나로 두는 안은 버렸다.** `Observance.date`는 「이 전례일은 해마다 `MM.DD`에 온다」는 뜻이고, §5.4 권장 인덱스 3이 그 뜻으로 키를 잡는다. 격자 전례일에 「마침 물어본 날」을 같은 필드로 넣으면 한 필드가 두 뜻을 갖는다. 별도 필드(`occurrence`)를 두면 충돌은 피하지만, 물어본 날짜는 전례일이 무엇인지가 아니라 그 조회의 값이라 이미 `resolved.date`에 있다. 그리고 `Observance`는 화면, 검색과 함께 쓰는 `types.d.ts` 공유 타입이라(§3.2), 조회마다 달라지는 값을 거기 넣지 않는다. 엔진이 격자 전례일에 다는 것은 `name`, `properWeekday` 같은 「무엇인가」뿐이다(§1.3, §5.5).
 - `findReadings(resolved, candidate)`는 `reading_track`과 `set_no`별 **그룹**을 낸다. `set_no` 정렬은 결정적이어야 하고(기사의 배열 순서에 기대지 않는다), **옛 연도판을 뒤로**, 인쇄된 세트 번호 순으로, 본 독서를 대안보다 앞에 둔다(ADR-037 §1 「세트 번호」). 분포는 위 facts `readings.set_no.*`와 `readings.set_total_gt1`이다.
-- `reading_track`은 **연중 주일에만** 있다. 실측으로 null이 아닌 것(위 facts `readings.reading_track_nonnull`)이 모두 `(season: ordinary, type: sunday)`였다(ADR-037 §1 「트랙은 연중 주일에만」 확인, 2026-10-24 다시 확인). 재의 수요일, 성 금요일, 부활대축일의 `2`는 트랙이 아니라 **대안 세트**다. 엔진이 이것을 「독서 2」로 이름 붙이면 안 된다.
+- `reading_track`은 **연중 주일에만** 있다. 실측으로 null이 아닌 것(위 facts `readings.reading_track_nonnull`)이 모두 `(season: ordinary, type: sunday)`였다(ADR-037 §1 「트랙은 연중 주일에만」 확인, 2026-10-24와 왕이신 그리스도 주일 가해, 다해를 트랙으로 옮긴 2026-11-05에 다시 확인). 재의 수요일, 성 금요일, 부활대축일의 `2`는 트랙이 아니라 **대안 세트**다. 엔진이 이것을 「독서 2」로 이름 붙이면 안 된다.
 - **독서 칸은 넷이지만 다 있지는 않다.** 칸별 건수는 위 facts `readings.slot.*`다. `second`가 없는 레코드는 545건이고 대개 평일(531)이라 정상이다(2026-10-24 실측). **`gospel`은 이제 빠짐없이 있다.** 종전에 복음이 없던 **단 하나**(12.31 거룩한 이름 예수 전야)는 화면이 처리해야 할 예외가 아니라 **잘못 실린 레코드**였고, 저녁기도로 판정돼 빠졌다(data PR#23). 그래도 화면은 **자리가 아니라 `slot` 이름으로 읽어야 한다**(ADR-037 §1 「슬롯 배정」). 마지막 칸이 늘 복음인 것은 지금 데이터가 그럴 뿐이다. 데이터 쪽 검증도 개수를 세지 않고 「남은 레코드에는 전부 복음이 있다」를 직접 확인한다(data `tests/test_lectionary.py`). 복음 없는 레코드가 다시 들어오면 성무일과가 새어 들었거나 원료가 깨진 것이다.
 - 시편 칸의 `bookId`는 전례시편 `lps`이고, 송가일 때는 `cant`와 `canticle` 키가 붙는다. 드물게 구약 본문을 그대로 가리키는 시편 칸도 있다. 사무엘상 2장(연중 33주일 나해, 2건), 토비트 13장, 요나 2장이다(2026-10-24 실측).
 - `findCollects(resolved)`는 **`ResolvedDate`를 받는다**(전례일 하나가 아니라). 두 축을 **구분해서** 돌려주기 때문이다(ADR-038 §3).
@@ -382,7 +382,7 @@ function resolveDate(dateStr) → {
 
   **반환 형태는 고유와 같다.** 세트 하나가 그룹 하나다(`reading_track: null`, `set_no: k`, `set_total: N`, `set_note: null`, `readings: slots`).
   - 칸 객체 `{slot, bookId, refs, label}`는 본문 표와 **형태가 같아서**(같은 파서 경로. `parse_commons`가 `parse_readings`의 칸 배정과 검증을 다시 쓴다) 그대로 넘긴다.
-  - `set_no`는 인쇄 순서(`set`)를 그대로 쓰므로 §5.3의 결정성 요구를 이미 만족하고, ADR-038 §3의 「대안 독서」 세그먼트(`set_total > 1`)가 그대로 받는다.
+  - `set_no`는 인쇄 순서(`set`)를 그대로 쓰므로 §5.3의 결정성 요구를 이미 만족하고, ADR-038 §3의 독서 카드(`set_total > 1`)가 그대로 받는다.
   - 여기에 **출처 표지 `common: "<class_key>"`**를 붙인다(고유는 `null`). 화면이 「순교자 공통 독서」라고 설명을 달 수 있게 하려는 것이다. 본기도 폴백은 `{name}` 치환으로 출처가 드러나지만, 독서에는 자리표시가 없어 이 표지가 유일한 단서다.
   - 합성 그룹의 `id`는 **`common:<class>-s<set>`**다(결정적이다. `common:`은 전례일 id의 `grid:`, `guard:`처럼 정의 표와 본문 표의 id에 나타나지 않는 예약 접두사다).
   - **조용히 한 세트를 고르지 않는다.** 기도서가 「다음 중 하나」로 인쇄한 것이라 모두 내고 화면이 고른다(첫 세트가 기본).
