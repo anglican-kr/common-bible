@@ -71,7 +71,6 @@ ADR이 정한 모델과 실제 JSON 사이에는 **엔진이 처리해야 하는
 | kasi-lunar | `{_meta, years}` |
 | commons | `{_meta, _vocab, classes}` (배열이 아니라 **맵**) |
 | local-observances | `{_meta, _vocab, dioceses, parishes}` |
-| canticles | `_meta`도 없는 순수한 **id에서 객체로 가는 맵** |
 | search-lectionary | `_meta` 없이 `{names, cov, books}` (전례독서 검색 색인, ADR-037 §5) |
 
 **날짜 표기가 세 가지 섞여 있다.** 이 계층에서 가장 조용히 깨지는 자리다.
@@ -153,7 +152,6 @@ d1230-성탄주간-t1-s1             name="성탄주간"     weekday=null  date=
 - **temporal-feasts ↔ readings/collects**. 키: **`coord_name` ↔ `name`**(`aliases`도 키). 정의 표가 조인용 이름 필드를 따로 갖고 있다. 24건 가운데 `coord_name: null` 7건(대림1주일, 가정주일, 평화통일주일, 사계재 4)은 이름 조인 대상이 아니다. 대림1주일은 격자의 절기 위치(`advent-1-sun-*`)로만 조회된다.
 - **local-observances → commons**. 키: `dedication.common`, `observance.common` → `classes[키]`. 문자열로 바로 가리킨다.
 - **local-observances → sanctoral**. 키: `patron_refs[].sanctoral_id`. 52건 모두 실제 id를 가리킨다(2026-10-24 실측).
-- **readings → canticles**. 키: `readings[].canticle` → `canticles[키]`. 5종(`magnificat` `benedictus` `ecce-deus` `benedicite` `te-deum`).
 
 **이름 조인을 믿기 어려운 이유**는 같은 날인데 표기가 다르기 때문이다.
 

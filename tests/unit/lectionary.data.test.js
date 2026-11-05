@@ -64,7 +64,7 @@ function ix() {
   });
   const lec = ctx.buildLectionaryIndex({
     readings: read("eucharist-readings.json"), collects: read("eucharist-collects.json"),
-    commons: read("commons.json"), canticles: read("canticles.json"), localObservances: read("local-observances.json"),
+    commons: read("commons.json"), localObservances: read("local-observances.json"),
   });
   return (built = { cal, lec });
 }

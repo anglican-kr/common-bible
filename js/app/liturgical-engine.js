@@ -82,7 +82,7 @@
 /**
  * @typedef {{
  *   readings: TextIndex, collects: TextIndex,
- *   commons: Record<string, CommonClass>, canticles: Record<string, unknown>,
+ *   commons: Record<string, CommonClass>,
  *   halfVerses: Map<string, HalfVerse>, dedications: Map<string, ParishDedication[]>,
  * }} LectionaryIndex
  */
@@ -1840,10 +1840,9 @@ function coordKey(/** @type {unknown} */ season, /** @type {unknown} */ week, /*
 }
 
 /**
- * 독서 묶음 다섯 표 → 인덱스. `commons.classes`는 배열이 아니라 **맵**이고, `canticles`는 래퍼조차
- * 없는 id → 객체 맵이다(§5.2). 반절 경계 표는 「bookId:장:절+a|b」 키로 찾는다(`halfVerseKey`). 본당 표
+ * 독서 묶음 다섯 표 → 인덱스. `commons.classes`는 배열이 아니라 **맵**이다(§5.2). 반절 경계 표는 「bookId:장:절+a|b」 키로 찾는다(`halfVerseKey`). 본당 표
  * (`local-observances`)는 축성일 「MM.DD」 키로 찾는다(`buildDedicationIndex`).
- * @param {{readings?: any, collects?: any, commons?: any, canticles?: any, halfVerses?: any, localObservances?: any} | null} tables
+ * @param {{readings?: any, collects?: any, commons?: any, halfVerses?: any, localObservances?: any} | null} tables
  * @returns {LectionaryIndex}
  */
 function buildLectionaryIndex(tables) {
@@ -1853,7 +1852,6 @@ function buildLectionaryIndex(tables) {
     readings: buildTextIndex(t.readings),
     collects: buildTextIndex(t.collects),
     commons: classes && typeof classes === "object" && !Array.isArray(classes) ? classes : {},
-    canticles: t.canticles && typeof t.canticles === "object" ? t.canticles : {},
     halfVerses: buildHalfVerseIndex(t.halfVerses),
     dedications: buildDedicationIndex(t.localObservances),
   };
@@ -2151,8 +2149,8 @@ function findCollectsIn(lix, cal, resolved) {
 
 /** 캘린더 묶음(§3.5) — 소형 표 다섯, 캘린더 진입 · `resolveDate` 전에. */
 const CALENDAR_FILES = ["sanctoral", "temporal-feasts", "periods", "ordinal-weeks", "kasi-lunar"];
-/** 독서 묶음(§3.5) — 대형 표 넷, 독서 뷰 진입 · `findReadings`/`findCollects` 전에. */
-const LECTIONARY_FILES = ["eucharist-readings", "eucharist-collects", "commons", "canticles"];
+/** 독서 묶음(§3.5) — 대형 표 셋, 독서 뷰 진입 · `findReadings`/`findCollects` 전에. */
+const LECTIONARY_FILES = ["eucharist-readings", "eucharist-collects", "commons"];
 /**
  * 독서 묶음과 함께 싣되, 받지 못해도 묶음을 막지 않는 표(§3.5). 업데이트 뒤 처음 오프라인으로 열면 데이터 캐시에 이
  * 표들만 없을 수 있다(PR #365 리뷰). 받지 못한 표는 빈 인덱스로 세운다 — 반절 경계 표가 없으면 반절 대신 절 전체를,
@@ -2186,7 +2184,7 @@ function preloadCalendar() {
 /**
  * 독서 묶음을 싣는다. 캐시 규칙은 `preloadCalendar`와 같다(한쪽만 고치면 증상이 절반만 사라진다). 선택 표
  * (`OPTIONAL_FILES` — 반절 경계 표, 본당 표)는 함께 받되 실패를 받아들여, 인덱스를 빈 표로 세운다. 묶음 promise는
- * 그대로 캐시하고, 다음 진입마다 받지 못한 선택 표만 뒤에서 다시 받는다(`retryOptional`). 큰 표 넷을 다시 받지 않고,
+ * 그대로 캐시하고, 다음 진입마다 받지 못한 선택 표만 뒤에서 다시 받는다(`retryOptional`). 큰 표 셋을 다시 받지 않고,
  * 다시 그리기도 기다리게 하지 않는다(PR #365 리뷰 2회차).
  * @returns {Promise<LectionaryIndex>}
  */
@@ -2200,8 +2198,8 @@ function preloadLectionary() {
     ...OPTIONAL_FILES.map((file) => fetchLectionaryJson(file).catch(() => null)),
   ])
     .then((tables) => {
-      const [readings, collects, commons, canticles] = tables;
-      const lix = buildLectionaryIndex({ readings, collects, commons, canticles });
+      const [readings, collects, commons] = tables;
+      const lix = buildLectionaryIndex({ readings, collects, commons });
       optionalMissing.clear();
       OPTIONAL_FILES.forEach((file, i) => {
         const table = tables[LECTIONARY_FILES.length + i];

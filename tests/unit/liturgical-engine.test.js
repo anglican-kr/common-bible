@@ -764,7 +764,6 @@ const LEC_TABLES = {
     saint: { label: "성인", collect: { text: "{name}의 모범을", ending: "A" }, readings: [{ set: 1, slots: [slot("first", "s1")] }] },
     anniversary: { label: "설립일", collect: { text: "{name}", ending: "A" }, readings: [] },
   } },
-  canticles: { magnificat: { name: "성모송가" } },
   // 반절 경계 표(데이터 lectionary/half-verses.json) — 줄 경계 · 줄 안 문구 · 「전체」
   halfVerses: { _meta: {}, entries: [
     { bookId: "lps", chapter: 104, verse: 35, half: "b", line: 2, text: null },
@@ -1241,7 +1240,7 @@ test("§2 표 누락은 빈 결과로 처리한다 — 래퍼 · 배열 · 행 �
     const cal = ctx.buildCalendarIndex({ sanctoral: bad, temporal: bad, periods: bad, ordinalWeeks: bad, kasi: bad });
     const r = ctx.resolveDateIn(cal, "2026-06-10", ctx.EMPTY_PASS());
     same(r.candidates.map((x) => x.observance.id), ["grid:ordinary-x-weekday-wed"], JSON.stringify(bad));
-    const lix = ctx.buildLectionaryIndex({ readings: bad, collects: bad, commons: bad, canticles: bad });
+    const lix = ctx.buildLectionaryIndex({ readings: bad, collects: bad, commons: bad });
     same(ctx.findReadingsIn(lix, cal, r, r.candidates[0]), []);
     same(plain(ctx.findCollectsIn(lix, cal, r)).map((e) => e.collects), [[]]);
   }
@@ -1979,7 +1978,7 @@ const FILES = {
   sanctoral: CAL_TABLES.sanctoral, "temporal-feasts": CAL_TABLES.temporal, periods: CAL_TABLES.periods,
   "ordinal-weeks": CAL_TABLES.ordinalWeeks, "kasi-lunar": CAL_TABLES.kasi,
   "eucharist-readings": LEC_TABLES.readings, "eucharist-collects": LEC_TABLES.collects,
-  commons: LEC_TABLES.commons, canticles: LEC_TABLES.canticles, "half-verses": LEC_TABLES.halfVerses,
+  commons: LEC_TABLES.commons, "half-verses": LEC_TABLES.halfVerses,
   "local-observances": LEC_TABLES.localObservances,
 };
 /** fetch 가짜 — 요청한 URL 을 적고, `fail` 에 든 파일은 500 으로 답한다. */

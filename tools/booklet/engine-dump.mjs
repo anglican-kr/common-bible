@@ -33,7 +33,7 @@ vm.runInContext(extractBlock("VERSE_SPEC", VS), ctx, { filename: "verse-spec" })
 if (LECT) vm.runInContext(extractBlock("LECTIONARY_MODEL", LECT), ctx, { filename: "lectionary-model" });
 const read = (p) => JSON.parse(src(path.join("data/lectionary", p)));
 const cal = ctx.buildCalendarIndex({ sanctoral: read("sanctoral.json"), temporal: read("temporal-feasts.json"), periods: read("periods.json"), ordinalWeeks: read("ordinal-weeks.json"), kasi: read("kasi-lunar.json") });
-const lec = ctx.buildLectionaryIndex({ readings: read("eucharist-readings.json"), collects: read("eucharist-collects.json"), commons: read("commons.json"), canticles: read("canticles.json") });
+const lec = ctx.buildLectionaryIndex({ readings: read("eucharist-readings.json"), collects: read("eucharist-collects.json"), commons: read("commons.json") });
 const plain = (v) => JSON.parse(JSON.stringify(v));
 const NONE = { obs: null, track: null, set: null, collect: null };
 const slotsOf = (g) => { const o = {}; for (const s of (g && g.readings) || []) if (s) o[s.slot] = s.label; return o; };
