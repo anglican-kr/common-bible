@@ -59,7 +59,7 @@ def test_easter_day_renders_collect_then_four_readings_in_order(desktop_context)
     # 본기도가 독서보다 앞에 온다.
     sections = page.eval_on_selector_all(".lect-section", "els => els.map(e => e.dataset.slot)")
     assert sections == ["collect"] + SLOT_ORDER, sections
-    assert page.eval_on_selector_all(".lect-collects .division-tab", "els => els.map(e => e.textContent)") == ["본기도 1", "본기도 2", "본기도 3"]
+    assert page.eval_on_selector_all(".lect-collect-num", "els => els.map(e => [e.textContent, e.getAttribute('aria-label')])") == [["1", "본기도 1"], ["2", "본기도 2"], ["3", "본기도 3"]]
     assert page.locator(".lect-collect-text").count() == 1
     # 원본 세트 둘 = 「또는」 대안 — 완전한 세트를 통째로 고른다.
     assert page.eval_on_selector_all(".lect-sets .division-tab", "els => els.map(e => e.textContent)") == ["독서 1", "독서 2"]
@@ -79,15 +79,75 @@ def test_easter_day_renders_collect_then_four_readings_in_order(desktop_context)
     assert page.title() == "부활대축일 전례독서 — 공동번역성서"
 
 
-def test_collect_alternative_segment_switches_text_and_url(desktop_context):
-    """본기도 대체안 세그먼트 → ?collect=2, 본문이 바뀐다."""
+def test_collect_alternative_number_switches_text_and_url(desktop_context):
+    """본기도 대체안 번호를 누르면 주소에 ?collect=2가 적히고, 본문이 바뀌며 고른 번호가 옮겨 간다."""
     page = desktop_context.new_page()
     _open(page, "lectionary/2026-04-05")
     first = page.inner_text(".lect-collect-text")
-    page.locator(".lect-collects .division-tab").nth(1).click()
+    assert page.get_attribute(".lect-collect-num.active", "aria-label") == "본기도 1"
+    page.locator(".lect-collect-num").nth(1).click()
     page.wait_for_url("**/lectionary/2026-04-05?collect=2")
-    page.wait_for_selector(".lect-collects .division-tab.active:has-text('본기도 2')")
+    page.wait_for_selector(".lect-collect-num.active[aria-label='본기도 2'][aria-current='page']")
+    assert page.locator(".lect-collect-num.active").count() == 1
     assert page.inner_text(".lect-collect-text") != first
+
+
+_COLLECT_ROW_METRICS = """() => {
+  const rect = (el) => el.getBoundingClientRect();
+  const slot = rect(document.querySelector('.lect-collects .lect-slot'));
+  const text = rect(document.querySelector('.lect-collect-text'));
+  const nums = [...document.querySelectorAll('.lect-collect-num')].map(rect);
+  const mark = getComputedStyle(document.querySelector('.lect-collect-num.active .lect-collect-num-mark'));
+  const root = getComputedStyle(document.documentElement);
+  const probe = document.createElement('i');
+  probe.style.cssText = 'color: var(--accent); background-color: var(--bg)';
+  document.body.appendChild(probe);
+  const tokens = getComputedStyle(probe);
+  const out = {
+    slotGap: text.top - slot.bottom,
+    sameRow: nums.every((n) => n.top < slot.bottom && n.bottom > slot.top),
+    sizes: nums.map((n) => [Math.round(n.width), Math.round(n.height)]),
+    markBg: mark.backgroundColor, markColor: mark.color,
+    accent: tokens.color, bg: tokens.backgroundColor,
+    tabs: document.querySelectorAll('.lect-collects .division-tabs').length,
+    overflow: document.documentElement.scrollWidth - innerWidth,
+    root: parseFloat(root.fontSize),
+  };
+  probe.remove();
+  return out;
+}"""
+
+
+def test_collect_numbers_share_the_heading_row(desktop_context):
+    """번호는 제목 옆 같은 줄이고 탭 영역은 44px이다. 고른 번호는 --accent로 채운 원에 --bg 글자다(사용자 결정 2026-11-05).
+    제목과 기도문의 간격은 독서 제목과 같은 8px이고, 번호가 있어도 줄이 늘지 않는다."""
+    page = desktop_context.new_page()
+    _open(page, "lectionary/2026-04-05")
+    m = page.evaluate(_COLLECT_ROW_METRICS)
+    assert m["tabs"] == 0
+    assert m["sameRow"], m
+    assert m["sizes"] == [[44, 44]] * 3, m
+    assert m["markBg"] == m["accent"] and m["markColor"] == m["bg"], m
+    assert 7 <= m["slotGap"] <= 9, m
+    # 번호가 없는 날(본기도 하나)도 제목과 기도문의 간격이 같다
+    _open(page, "lectionary/2026-07-26")
+    assert page.locator(".lect-collect-num").count() == 0
+    gap = page.evaluate("""() => document.querySelector('.lect-collect-text').getBoundingClientRect().top
+      - document.querySelector('.lect-collects .lect-slot').getBoundingClientRect().bottom""")
+    assert abs(gap - m["slotGap"]) < 0.5, (gap, m)
+
+
+def test_collect_numbers_fit_narrow_screen_with_largest_text(mobile_context):
+    """320px 폭에 가장 큰 글자에서도 번호가 제목 옆 한 줄에 있고 가로로 넘치지 않는다. 세그먼트는 여기서 「본기도 / 1」로 꺾였다."""
+    page = mobile_context.new_page()
+    page.set_viewport_size({"width": 320, "height": 640})
+    _open(page, "lectionary/2026-04-05")
+    page.evaluate("() => { document.documentElement.style.fontSize = '24px'; }")
+    m = page.evaluate(_COLLECT_ROW_METRICS)
+    assert m["root"] == 24
+    assert m["sameRow"], m
+    assert m["sizes"] == [[44, 44]] * 3, m
+    assert m["overflow"] == 0, m
 
 
 # ── ② 전례일 스위처 ──
@@ -530,7 +590,7 @@ def test_copy_excludes_optional_verse_brackets(desktop_context):
 
 def test_ember_friday_one_button_picks_readings_and_collect_without_common_caption(desktop_context):
     """추계재 금요일 — 성직후보자 · 수도자는 「독서 · 본기도」 단추 하나로 독서와 본기도를 함께 바꾼다(교차 조합이 없다 — 사용자 결정
-    2026-10-13; 둘째에도 닿는다 — collect_no 가 둘 다 1, 자체 리뷰 2026-10-13). 본기도 칸에는 따로 세그먼트가 없다.
+    2026-10-13; 둘째에도 닿는다 — collect_no가 둘 다 1, 자체 리뷰 2026-10-13). 본기도 칸에는 따로 번호가 없다.
     니니안(공통뿐인 성인)은 전례독서 목록에 없어 주소로 가리켜도 기본 독서(격자)이고, 공통 분류 라벨은 어디에도 없다(사용자 결정
     2026-11-03 — 그전엔 「선교사 공통 독서」 캡션)."""
     page = desktop_context.new_page()
@@ -538,7 +598,7 @@ def test_ember_friday_one_button_picks_readings_and_collect_without_common_capti
     assert page.inner_text(".lect-sets .lect-control-label") == "독서 · 본기도"
     tabs = page.locator(".lect-sets .division-tab")
     assert [tabs.nth(i).inner_text() for i in range(tabs.count())] == ["성직후보자", "수도자"]
-    assert page.locator(".lect-collects .division-tab").count() == 0
+    assert page.locator(".lect-collect-num").count() == 0
     first = page.inner_text(".lect-collect-text")
     tabs.nth(1).click()
     page.wait_for_url("**set=2")
@@ -558,7 +618,7 @@ def test_may1_one_button_switches_to_labour_day_readings_and_collect(desktop_con
     tabs = page.locator(".lect-sets .division-tab")
     assert [tabs.nth(i).inner_text() for i in range(tabs.count())] == ["사도 성 필립보와 성 야고보", "노동자의 날"]
     assert page.locator(".lect-sets .division-tab.active").inner_text() == "사도 성 필립보와 성 야고보"
-    assert page.locator(".lect-collects .division-tab").count() == 0
+    assert page.locator(".lect-collect-num").count() == 0
     collect0 = page.inner_text(".lect-collect-text")
     first0 = page.inner_text(".lect-reading[data-slot='first'] .lect-ref")
     tabs.nth(1).click()
@@ -1116,7 +1176,7 @@ def _enter_on(page, selector):
 
 
 def test_redraws_keep_keyboard_focus_on_the_pressed_control(desktop_context):
-    """키보드로 날짜 이동(다음날 · 전날 · 오늘) · 전례독서 목록 · 세그먼트(트랙 · 세트 · 본기도)를 눌러 #app을 다시
+    """키보드로 날짜 이동(다음날 · 전날 · 오늘) · 전례독서 목록 · 세그먼트(트랙 · 세트) · 본기도 번호를 눌러 #app을 다시
     그려도 포커스가 새 화면의 같은 컨트롤에 있고(:focus-visible) 화면 안이다 — Enter 만 거듭 눌러 날을 넘긴다(WCAG 2.4.3 ·
     2.4.7 — PR #348 리뷰에서 넘긴 것: 그전엔 누른 링크가 사라져 포커스가 body 로 빠졌다; 캘린더의 달 이동과 같은 도우미).
     계산 범위 끝(9999-12-31)에서는 「다음날」이 자리만 남아 「오늘」로."""
@@ -1147,14 +1207,14 @@ def test_redraws_keep_keyboard_focus_on_the_pressed_control(desktop_context):
     page.wait_for_url("**set=2")
     page.wait_for_function("() => document.querySelectorAll('.lect-sets .division-tab')[1]?.classList.contains('active')")
     assert _focused(page) == {"key": "set:2", **ok}
-    # 트랙 · 본기도 세그먼트
+    # 트랙 세그먼트 · 본기도 번호
     _open(page, "lectionary/2026-06-14")
     _enter_on(page, ".lect-track .division-tab:has-text('독서 2')")
     page.wait_for_selector(".lect-track .division-tab.active:has-text('독서 2')")
     assert _focused(page) == {"key": "track:2", **ok}
     _open(page, "lectionary/2026-04-05")
-    _enter_on(page, ".lect-collects .division-tab >> nth=1")
-    page.wait_for_selector(".lect-collects .division-tab.active:has-text('본기도 2')")
+    _enter_on(page, ".lect-collect-num >> nth=1")
+    page.wait_for_selector(".lect-collect-num.active[aria-label='본기도 2']")
     assert _focused(page) == {"key": "collect:2", **ok}
     # 오늘 — 브라우저의 날짜로
     today = datetime.date(*page.evaluate("() => { const d = new Date(); return [d.getFullYear(), d.getMonth() + 1, d.getDate()]; }"))
@@ -1593,7 +1653,7 @@ def test_jan_2_is_a_christmas_weekday_with_the_saint_on_the_name_line(desktop_co
     assert any(line.startswith("바실") and "그레고리" in line and line.endswith(" 축일") for line in name_lines()), name_lines()
     assert page.inner_text(".lect-reading[data-slot='first'] .lect-ref") == "1요한 2:22-28"
     assert page.locator(".lect-choices").count() == 0
-    assert page.locator(".lect-collects .division-tab").count() == 2   # 성탄 주간 본기도 1 · 2
+    assert page.locator(".lect-collect-num").count() == 2   # 성탄 주간 본기도 1 · 2
     texts = collects()
     assert len(texts) == 2 and "바실" not in texts[0] and "바실" in texts[1], texts
     _open(page, "lectionary/2028-12-29")

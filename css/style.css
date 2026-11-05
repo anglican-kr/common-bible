@@ -825,7 +825,43 @@ a.lect-datenav-btn:focus-visible { background: var(--bg-card); }
   font-size: var(--font-sm);
   color: var(--text-secondary);
 }
-.lect-collects .division-tabs { margin: 0 0 var(--space-3); }
+/* 본기도 대체안 번호 — 제목 옆 같은 줄(사용자 결정 2026-11-05). 칸은 44px이고, 음수 여백으로 제목 줄 높이를 늘리지 않는다.
+   고른 번호는 --accent로 채운 원에 --bg 글자와 굵은 글씨다. 제목으로 가른 긴 이름(collectLabels)은 원이 알약으로 늘어난다. */
+.lect-collect-head { align-items: center; column-gap: var(--space-1); }
+.lect-collect-nums {
+  display: inline-flex;
+  flex-wrap: wrap;
+  margin-block: calc((var(--font-md) * var(--leading-relaxed) - var(--touch-target)) / 2);
+}
+.lect-collect-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--touch-target);
+  min-height: var(--touch-target);
+  font-size: var(--font-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+  text-decoration: none;
+}
+.lect-collect-num:hover { color: var(--text); }
+.lect-collect-num.active { font-weight: 600; }
+.lect-collect-num-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-width: 1.65em;
+  height: 1.65em;
+  padding-inline: 0.4em;
+  border-radius: var(--radius-pill);
+  white-space: nowrap;
+}
+.lect-collect-num.active .lect-collect-num-mark {
+  background: var(--accent);
+  color: var(--bg);
+}
+.lect-collect-num:active .lect-collect-num-mark { opacity: 0.7; }
 .lect-collect { margin: 0; }
 .lect-collect-text { margin: 0 0 var(--space-3); }
 /* 괄호 선택 구절 — the booklet's "(9-23)": the long text is the reading, the
