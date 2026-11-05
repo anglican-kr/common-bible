@@ -1,4 +1,5 @@
 ---
+pr: 487
 date: 2026-11-05
 branch: fix/canticle-labels
 title: "fix: 다른 송가의 표기도 한 가지로 통일"
