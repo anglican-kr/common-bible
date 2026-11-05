@@ -26,6 +26,8 @@ window.appSettings = (/** @returns {AppSettings} */ () => {
     FONT_SIZES, DEFAULT_FONT_SIZE, COLOR_SCHEMES,
     loadFontSize, saveFontSize,
     loadStartupBehavior, saveStartupBehavior,
+    loadStartPage, saveStartPage,
+    loadLectionaryAltShow, saveLectionaryAltShow,
     loadColorScheme, saveColorScheme,
     loadTheme, saveTheme,
     loadBookOrder, saveBookOrder,
@@ -319,9 +321,44 @@ window.appSettings = (/** @returns {AppSettings} */ () => {
     return row;
   }
 
+  // ── Select row component ──
+  /**
+   * Build a settings row: a label on the left, a native <select> on the right, so
+   * each OS shows its own picker. Changing it updates state in place — no rebuild
+   * — so focus stays on the control (same reason as makeToggleRow).
+   * @param {Object} opts
+   * @param {string} opts.labelText
+   * @param {string} opts.value
+   * @param {[string, string][]} opts.options  [value, visible text]
+   * @param {(value: string) => void} opts.onChange
+   * @returns {HTMLDivElement}
+   */
+  function makeSelectRow({ labelText, value, options, onChange }) {
+    const row = el("div", { className: "settings-row" });
+    const id = `settings-select-${++_toggleIdSeq}`;
+    row.appendChild(el("label", { className: "settings-label", for: id }, labelText));
+    const wrap = el("span", { className: "settings-select-wrap" });
+    const select = el("select", { className: "settings-select", id });
+    for (const [optValue, text] of options) {
+      select.appendChild(el("option", { value: optValue }, text));
+    }
+    select.value = value;
+    select.addEventListener("change", () => onChange(select.value));
+    wrap.appendChild(select);
+    row.appendChild(wrap);
+    return row;
+  }
+
+  /** @param {string} title @returns {HTMLElement} */
+  function makeSection(title) {
+    const section = el("section", { className: "settings-section" });
+    section.appendChild(el("h2", { className: "settings-section-title" }, title));
+    return section;
+  }
+
   // ── Settings section builder (shared) ──
-  // Builds the settings sections (reading toggles, typography/appearance, app
-  // lifecycle, about) into a target container. Reused by BOTH the desktop
+  // Builds the settings sections (시작, 성서, 전례독서, 모양, 시스템) and the about
+  // lines into a target container. Reused by BOTH the desktop
   // popover (initSettings → rebuild) and the mobile full-screen view
   // (renderSettingsView), so section construction stays identical (ADR-029 / P2).
   //
@@ -338,13 +375,9 @@ window.appSettings = (/** @returns {AppSettings} */ () => {
   function buildSettingsSections(target, { rerender, dismiss }) {
     clearNode(target);
 
-    // ── Section 1: Reading-experience toggles ──
-    // Four boolean settings rendered as OS-native toggle switches (see
-    // makeToggleRow). Toggling updates state in place — no rebuild —
-    // so focus stays on the switch and the segmented re-render is avoided.
-    const section1 = el("section", { className: "settings-section" });
-
-    // Startup behavior: ON = resume last reading position, OFF = home.
+    // Startup behavior: ON = resume last reading position, OFF = home. Built ahead
+    // of the 시작 section: the start page below hides this row, which applies only
+    // when the app opens on the book list. The saved value stays while hidden.
     const startupRow = makeToggleRow({
       labelText: "읽던 페이지에서 시작",
       checked: loadStartupBehavior() === "resume",
@@ -353,6 +386,27 @@ window.appSettings = (/** @returns {AppSettings} */ () => {
         announce(on ? "마지막 읽던 페이지로 시작" : "첫 페이지로 시작");
       },
     });
+    startupRow.hidden = loadStartPage() === "lectionary";
+
+    // ── Section: 시작 ──
+    const startSection = makeSection("시작");
+    startSection.appendChild(makeSelectRow({
+      labelText: "시작 페이지",
+      value: loadStartPage(),
+      options: [["bible", "성서"], ["lectionary", "전례독서"]],
+      onChange: (value) => {
+        const page = value === "lectionary" ? "lectionary" : "bible";
+        saveStartPage(page);
+        startupRow.hidden = page === "lectionary";
+        announce(page === "lectionary" ? "전례독서로 시작" : "성서로 시작");
+      },
+    }));
+    target.appendChild(startSection);
+
+    // ── Section: 성서 ──
+    // Boolean settings rendered as OS-native toggle switches (see makeToggleRow).
+    // Toggling updates state in place — no rebuild — so focus stays on the switch.
+    const bibleSection = makeSection("성서");
 
     // Deuterocanon placement: ON = mixed into the OT (vulgate order),
     // OFF = separate section (canonical). Caption reflects the active state.
@@ -392,14 +446,29 @@ window.appSettings = (/** @returns {AppSettings} */ () => {
       },
     });
 
-    section1.appendChild(startupRow);
-    section1.appendChild(orderRow);
-    section1.appendChild(citeRow);
-    section1.appendChild(audioRow);
-    target.appendChild(section1);
+    bibleSection.appendChild(startupRow);
+    bibleSection.appendChild(orderRow);
+    bibleSection.appendChild(citeRow);
+    bibleSection.appendChild(audioRow);
+    target.appendChild(bibleSection);
 
-    // ── Section 2: Typography & appearance ──
-    const section2 = el("section", { className: "settings-section" });
+    // ── Section: 전례독서 ──
+    const lectionarySection = makeSection("전례독서");
+    lectionarySection.appendChild(makeToggleRow({
+      labelText: "대체 독서 표시",
+      checked: loadLectionaryAltShow(),
+      onToggle: (on) => {
+        saveLectionaryAltShow(on);
+        // The desktop popover opens over the lectionary, whose list must follow. A
+        // redraw closes the popover, as the 외경 toggle does over the book list.
+        if (parsePath().view === "lectionary") route();
+        announce(on ? "대체 독서 표시" : "대체 독서 숨김");
+      },
+    }));
+    target.appendChild(lectionarySection);
+
+    // ── Section: 모양 ──
+    const appearanceSection = makeSection("모양");
 
     // Font size
     const sizeRow = el("div", { className: "settings-row" });
@@ -434,7 +503,7 @@ window.appSettings = (/** @returns {AppSettings} */ () => {
     sizeGroup.appendChild(btnReset);
     sizeGroup.appendChild(btnPlus);
     sizeRow.appendChild(sizeGroup);
-    section2.appendChild(sizeRow);
+    appearanceSection.appendChild(sizeRow);
 
     // Theme
     const themeRow = el("div", { className: "settings-row" });
@@ -452,7 +521,7 @@ window.appSettings = (/** @returns {AppSettings} */ () => {
       themeGroup.appendChild(tbtn);
     }
     themeRow.appendChild(themeGroup);
-    section2.appendChild(themeRow);
+    appearanceSection.appendChild(themeRow);
 
     // Color scheme
     const colorRow = el("div", { className: "settings-row" });
@@ -475,16 +544,16 @@ window.appSettings = (/** @returns {AppSettings} */ () => {
       swatches.appendChild(swatchBtn);
     }
     colorRow.appendChild(swatches);
-    section2.appendChild(colorRow);
-    target.appendChild(section2);
+    appearanceSection.appendChild(colorRow);
+    target.appendChild(appearanceSection);
 
-    // ── Section 3: App lifecycle (install, drive sync, cache) ──
+    // ── Section: 시스템 (install, drive sync, update, cache) ──
     const showInstall = !!window.install && window.install.detectPlatform() !== "installed";
     const showCache = "caches" in window;
     const showDrive = !!window.driveSync;
     const showUpdateCheck = "serviceWorker" in navigator;
     if (showInstall || showCache || showDrive || showUpdateCheck) {
-      const section3 = el("section", { className: "settings-section" });
+      const systemSection = makeSection("시스템");
 
       if (showInstall) {
         const installRow = el("div", { className: "settings-row" });
@@ -495,7 +564,7 @@ window.appSettings = (/** @returns {AppSettings} */ () => {
           openInstallModal();
         });
         installRow.appendChild(installBtn);
-        section3.appendChild(installRow);
+        systemSection.appendChild(installRow);
       }
 
       if (showDrive) {
@@ -528,11 +597,11 @@ window.appSettings = (/** @returns {AppSettings} */ () => {
           connectBtn.addEventListener("click", () => { dismiss(); window.driveSync.signIn(); });
           driveRow.appendChild(connectBtn);
         }
-        section3.appendChild(driveRow);
+        systemSection.appendChild(driveRow);
         // An unfinished 「파일도 삭제」 (failed, or the page closed mid-way) — stays until a delete succeeds,
         // the user reconnects or keeps the file (the snackbar at the time was gone in seconds).
         if (!driveAuthed && window.driveSync.isDeletePending()) {
-          section3.appendChild(el("p", { className: "settings-drive-note" },
+          systemSection.appendChild(el("p", { className: "settings-drive-note" },
             "Drive에 동기화 파일이 남아 있을 수 있습니다. 지우려면 다시 연결한 뒤 「해제」에서 「파일도 삭제」를 눌러 주세요."));
         }
 
@@ -566,7 +635,7 @@ window.appSettings = (/** @returns {AppSettings} */ () => {
           });
           infoRow.appendChild(diagBtn);
         }
-        section3.appendChild(infoRow);
+        systemSection.appendChild(infoRow);
 
         const toggleInfo = () => { const open = infoRow.hidden; infoRow.hidden = !open; infoBtn.setAttribute("aria-expanded", String(open)); };
         infoBtn.addEventListener("click", toggleInfo);
@@ -577,7 +646,7 @@ window.appSettings = (/** @returns {AppSettings} */ () => {
         if (!driveAuthed) {
           const statusText = window.driveSync.getStatus();
           if (statusText === "ERROR") {
-            section3.appendChild(el("p", { style: "font-size:0.78rem;color:var(--accent);padding:0 0.25rem 0.25rem;margin:0;" }, "세션 만료. 재연결해 주세요."));
+            systemSection.appendChild(el("p", { style: "font-size:0.78rem;color:var(--accent);padding:0 0.25rem 0.25rem;margin:0;" }, "세션 만료. 재연결해 주세요."));
           }
         }
       }
@@ -623,7 +692,7 @@ window.appSettings = (/** @returns {AppSettings} */ () => {
           }
         });
         updateRow.appendChild(updateBtn);
-        section3.appendChild(updateRow);
+        systemSection.appendChild(updateRow);
       }
 
       if (showCache) {
@@ -655,10 +724,10 @@ window.appSettings = (/** @returns {AppSettings} */ () => {
         clearBtn.appendChild(document.createTextNode("초기화"));
         clearBtn.addEventListener("click", () => clearAllCaches());
         cacheRow.appendChild(clearBtn);
-        section3.appendChild(cacheRow);
+        systemSection.appendChild(cacheRow);
       }
 
-      target.appendChild(section3);
+      target.appendChild(systemSection);
     }
 
     // About
@@ -830,7 +899,7 @@ window.appSettings = (/** @returns {AppSettings} */ () => {
         // pointer activation, focus the popover container itself to avoid a
         // stray :focus-visible ring on the first button (iOS Safari).
         if (/** @type {MouseEvent} */ (e).detail === 0) {
-          const first = /** @type {HTMLElement | null} */ (popover.querySelector('button, a[href], input'));
+          const first = /** @type {HTMLElement | null} */ (popover.querySelector('button, a[href], input, select'));
           if (first) first.focus();
         } else {
           popover.focus();

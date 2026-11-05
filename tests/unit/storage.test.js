@@ -225,6 +225,31 @@ test("loadLectionaryCardsFolded/saveLectionaryCardsFolded: 처음에는 펼치�
   assert.equal(loadStorage({ localStorageInit: { "bible-lectionary-cards-folded": "0" } }).appStorage.loadLectionaryCardsFolded(), false);
 });
 
+test("loadStartPage/saveStartPage: 처음에는 성서, 모르는 값도 성서이고, 저장하면 동기화에 알린다(ADR-041 §2)", () => {
+  const h = loadStorage();
+  assert.equal(h.appStorage.loadStartPage(), "bible");
+  h.appStorage.saveStartPage("lectionary");
+  assert.equal(h.appStorage.loadStartPage(), "lectionary");
+  assert.equal(h.localStorage.getItem("bible-start-page"), "lectionary");
+  assert.deepEqual(h.syncStoreV2._calls.saveSetting, [{ key: "startPage", val: "lectionary" }]);
+  assert.equal(h.driveSync._calls.scheduleUpload, 1);
+  assert.equal(loadStorage({ localStorageInit: { "bible-start-page": "prayer-book" } }).appStorage.loadStartPage(), "bible");
+});
+
+test("loadLectionaryAltShow/saveLectionaryAltShow: 처음에는 숨기고, 동기화가 쓰는 true/false도 읽는다(ADR-041 §4)", () => {
+  const h = loadStorage();
+  assert.equal(h.appStorage.loadLectionaryAltShow(), false);
+  h.appStorage.saveLectionaryAltShow(true);
+  assert.equal(h.appStorage.loadLectionaryAltShow(), true);
+  assert.equal(h.localStorage.getItem("bible-lectionary-alt-show"), "1");
+  assert.deepEqual(h.syncStoreV2._calls.saveSetting, [{ key: "lectionaryAltShow", val: true }]);
+  assert.equal(h.driveSync._calls.scheduleUpload, 1);
+  h.appStorage.saveLectionaryAltShow(false);
+  assert.equal(h.appStorage.loadLectionaryAltShow(), false);
+  assert.equal(loadStorage({ localStorageInit: { "bible-lectionary-alt-show": "true" } }).appStorage.loadLectionaryAltShow(), true);
+  assert.equal(loadStorage({ localStorageInit: { "bible-lectionary-alt-show": "false" } }).appStorage.loadLectionaryAltShow(), false);
+});
+
 test("loadLectionaryTrack: 1 · 2 가 아닌 값 · 이 PR 의 옛 전례년별 표 · 읽기 실패는 null(뷰가 1 을 기본으로 삼는다)", () => {
   const read = (/** @type {string} */ raw) => loadStorage({ localStorageInit: { "bible-lectionary-track": raw } }).appStorage.loadLectionaryTrack();
   assert.equal(read("3"), null);

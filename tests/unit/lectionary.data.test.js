@@ -71,7 +71,7 @@ function ix() {
 const resolve = (d) => ctx.resolveDateIn(ix().cal, d, ctx.transfersOf(ix().cal, Number(d.slice(0, 4))));
 const NONE = { obs: null, track: null, set: null, collect: null };
 /** 실제 표 위의 뷰 모델 — 공개 래퍼가 하는 것과 같은 조합. */
-function model(d, query = NONE, stored = null) {
+function model(d, query = NONE, stored = null, showAlternates = true) {
   const r = resolve(d);
   assert.ok(r, `${d} 를 풀 수 없다`);
   const cache = new Map();
@@ -81,7 +81,7 @@ function model(d, query = NONE, stored = null) {
   };
   // 공개 래퍼의 findDedications(PRELOAD 블록 — 여기서는 싣지 않는다)와 같은 조회
   const dedications = ix().lec.dedications.get(`${d.slice(5, 7)}.${d.slice(8, 10)}`) || [];
-  const m = ctx.buildLectionaryModel(r, { ...NONE, ...query }, groupsOf, ctx.findCollectsIn(ix().lec, ix().cal, r), stored, dedications);
+  const m = ctx.buildLectionaryModel(r, { ...NONE, ...query }, groupsOf, ctx.findCollectsIn(ix().lec, ix().cal, r), stored, dedications, showAlternates);
   assert.ok(m, `${d} 모델이 null`);
   return m;
 }
@@ -786,4 +786,42 @@ test("1.2와 12.29 — 기도서 486쪽이 날짜로 고정한 평일 독서라 
   assert.strictEqual(id(moved.selected), "d1228-죄-없는-어린이들의-순교");
   assert.ok(labels(moved).includes("성탄 1주 화요일"), labels(moved).join());
   same(moved.memorialSaints.map(id), ["d1229-토마스-베켓"]);
+});
+
+test("A3 대체 독서 표시를 끄면 2025-2050년에 평일, 주일 줄 811개만 사라진다(사용자 결정 2026-11-05, ADR-041 §4)", { skip: SKIP }, () => {
+  let arrivedRows = 0;
+  let ownDateRows = 0;
+  for (let t = Date.UTC(2025, 0, 1); t <= Date.UTC(2050, 11, 31); t += 86_400_000) {
+    const d = new Date(t).toISOString().slice(0, 10);
+    const on = model(d);
+    const off = model(d, NONE, null, false);
+    const shown = new Set(off.choices.map((c) => c.href));
+    for (const row of on.choices) {
+      if (shown.has(row.href)) continue;
+      assert.ok(id(row.candidate).startsWith("grid:"), `${d} ${row.name} 격자가 아닌 줄이 사라졌다`);
+      if (on.initial.status === "transferred_in") arrivedRows++;
+      else {
+        assert.ok(["principal", "major_feast"].includes(on.initial.observance.rank), `${d} ${on.dayName}`);
+        ownDateRows++;
+      }
+    }
+    assert.strictEqual(off.dayName, on.dayName, d);   // 제목과 기본 독서는 그대로다
+    assert.strictEqual(id(off.selected), id(on.selected), d);
+  }
+  assert.strictEqual(arrivedRows, 114);
+  assert.strictEqual(ownDateRows, 697);
+});
+
+test("A3 대체 독서 표시를 꺼도 사계재, 옮겨 지킬 수 있는 축일, 등급이 축일이거나 명절인 날의 줄은 남는다(ADR-041 §4)", { skip: SKIP }, () => {
+  const off = (d) => model(d, NONE, null, false).choices.filter((c) => !c.active).map((c) => c.name + c.suffix);
+  same(off("2025-06-30"), []);                    // 옮겨 온 사도 성 베드로와 바울로
+  same(off("2026-06-29"), []);                    // 제 날짜
+  same(off("2040-09-22"), ["모든 신자의 성소를 위한 추계재"]);   // 옮겨 온 날의 사계재
+  same(off("2025-06-11"), ["성직자의 성소를 위한 하계재"]);      // 제 날짜 주요축일의 사계재
+  same(off("2026-01-04"), ["공현대축일 · 1월 6일에서 옮겨 지킬 수 있음"]);
+  same(off("2025-12-24"), ["성탄 밤 · 저녁"]);
+  same(off("2025-11-16"), ["추수감사주일"]);
+  same(off("2025-07-29"), ["연중 17주 화요일"]);   // 축일(성 마리아와 마르타)
+  same(off("2025-01-29"), ["연중 3주 수요일"]);    // 명절(설날)
+  same(off("2026-05-01"), ["노동자의 날"]);
 });

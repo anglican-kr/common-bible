@@ -289,6 +289,42 @@ test("collectsFor: 고른 전례일의 본기도만 — 다른 전례일 것은 
   same(ctx.collectsFor(entries, omitted).map((o) => o.id), ["d1207-암브로스"]);   // 생략된 축일도 고르면 그 본기도
 });
 
+test("buildLectionaryModel: 대체 독서 표시를 끄면 옮겨 온 날과 대축일, 주요축일의 평일 줄을 숨긴다(사용자 결정 2026-11-05, ADR-041 §4)", () => {
+  const Q = { obs: null, track: null, set: null, collect: null };
+  const gridId = "grid:ordinary-13-weekday-mon";
+  const rowsOf = (feast, others = []) => {
+    const grid = cand(obs(gridId, "연중 13주 월요일", { rank: "feria", precedence: 8, color: "green" }));
+    const cs = [feast, ...others, grid];
+    const groupsOf = (c) => [group(c.observance.id, FOUR)];
+    const r = resolvedOf("2026-06-29", cs, feast);
+    const entries = cs.map((c) => ({ candidate: c, collects: [collect(c.observance.id, c.observance.id)] }));
+    return (show, query = Q) => ctx.buildLectionaryModel(r, query, groupsOf, entries, null, [], show);
+  };
+  const names = (m) => m.choices.filter((c) => !c.active).map((c) => c.name);
+  const major = cand(obs("d0629-베드로", "사도 성 베드로와 바울로", { rank: "major_feast", precedence: 3, color: "red" }));
+
+  // 제 날짜의 주요축일 — 끄면 평일 줄이 없고, 켜면 있다. 인자를 주지 않으면 켠 것이다(모델 시험의 기본).
+  same(names(rowsOf(major)(false)), []);
+  same(names(rowsOf(major)(true)), ["연중 13주 월요일"]);
+  same(names(rowsOf(major)()), ["연중 13주 월요일"]);
+  // 대축일도 같다
+  same(names(rowsOf(cand(obs("t-승천", "승천대축일", { rank: "principal", precedence: 1, color: "white" })))(false)), []);
+  // 옮겨 온 축일은 등급을 가리지 않는다
+  same(names(rowsOf(cand(obs("d1102-별세자", "모든 별세자의 날", { rank: "minor_feast", precedence: 7, color: "white" }), "transferred_in", { from: "2026-06-28" }))(false)), []);
+  // 제 날짜의 축일과 명절은 평일 줄이 남는다
+  same(names(rowsOf(cand(obs("d0729-마리아", "성 마리아와 마르타", { rank: "minor_feast", precedence: 7, color: "white" })))(false)), ["연중 13주 월요일"]);
+  same(names(rowsOf(cand(obs("t-설날", "설날", { rank: "regional_festival", precedence: 7, color: "white" })))(false)), ["연중 13주 월요일"]);
+  // 격자가 아닌 줄은 늘 남는다 — 사계재, 옮겨 지킬 수 있는 축일, 저녁 전례
+  const ember = cand(obs("t-하계재", "하계재", { rank: "feria", precedence: 8, color: "purple", is_ember: true }));
+  const optional = cand(obs("d0806-변모", "주의 변모", { rank: "major_feast", precedence: 3, color: "white" }), "optional", { from: "2026-08-06" });
+  const evening = cand(obs("t-부활밤", "부활밤", { rank: "principal", precedence: 1, color: "white" }), "proper", { evening: true });
+  same(names(rowsOf(major, [ember, optional, evening])(false)), ["하계재", "주의 변모", "부활밤"]);
+  // 설정은 줄만 감춘다 — 주소로 가리키면 그 독서를 보이고, 기본 독서로 돌아가지 않는다(공유한 링크의 본문이 받는 사람의 설정에 따라 바뀌지 않게)
+  const byUrl = rowsOf(major)(false, { ...Q, obs: gridId });
+  assert.strictEqual(byUrl.selected.observance.id, gridId);
+  same(names(byUrl), ["사도 성 베드로와 바울로"]);
+});
+
 test("buildLectionaryModel: 기리는 성인의 본기도 — 기본 독서가 평일이면 평일 본기도 다음에 성인 본기도, 송영은 성인 것(사용자 결정 2026-11-03)", () => {
   const saint = cand(obs("d1106-레오나드", "레오나드(은수자, 6세기)", { rank: "minor_feast", precedence: 7, color: "white", sanctoral_class: "saint" }));
   const grid = cand(obs("grid:ordinary-31-weekday-fri", "연중 31주 금요일", { rank: "feria", precedence: 8, color: "green" }));

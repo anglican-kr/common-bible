@@ -22,7 +22,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-from .conftest import CLEAR_APP_STORAGE, MOBILE_VIEWPORT, IPHONE_UA
+from .conftest import CLEAR_APP_STORAGE, MOBILE_VIEWPORT, IPHONE_UA, SHOW_ALT_READINGS, open_settings
 
 BASE = "http://localhost:8080"
 
@@ -235,6 +235,7 @@ def test_choice_rows_fit_on_phones_and_large_type(browser):
     for width, font in ((320, None), (375, None), (320, "24px")):
         ctx = browser.new_context(viewport={"width": width, "height": 740}, user_agent=IPHONE_UA)
         ctx.add_init_script(CLEAR_APP_STORAGE)
+        ctx.add_init_script(SHOW_ALT_READINGS)
         try:
             page = ctx.new_page()
             for date, rows in expected.items():
@@ -258,6 +259,7 @@ def test_choice_rows_fit_on_phones_and_large_type(browser):
 def test_transferred_and_optional_days_choose_by_rows_without_cards(desktop_context):
     """8.6 주의 변모(목) · 8.9 목적지 주일(optional) · 12.7 니콜라 도착일 — 「두 독서 가운데 고르기」 카드 없이 전례독서 목록으로 고른다.
     12.7의 기본 독서는 옮겨 온 주요축일(성 니콜라)이다."""
+    desktop_context.add_init_script(SHOW_ALT_READINGS)
     page = desktop_context.new_page()
     _open(page, "lectionary/2026-08-06")
     assert page.locator(".lect-pair, .lect-pair-card").count() == 0
@@ -751,6 +753,7 @@ def test_ember_friday_two_rows_pick_title_readings_and_collect_without_common_ca
 def test_may1_row_switches_to_labour_day_title_readings_and_collect(desktop_context):
     """5.1 — 사도 성 필립보와 성 야고보가 먼저이고, 지역 축일인 노동자의 날은 전례독서 목록의 한 줄로 제목과 독서와 본기도를 함께
     고른다(사용자 결정 2026-10-13, 2026-11-05 — 「대안 독서는 사도 축일, 본기도는 노동자의 날」 같은 교차 조합은 없다)."""
+    desktop_context.add_init_script(SHOW_ALT_READINGS)
     page = desktop_context.new_page()
     _open(page, "lectionary/2026-05-01")
     assert page.inner_text(".lect-day") == "사도 성 필립보와 성 야고보"
@@ -1781,6 +1784,7 @@ def test_days_only_commemorated_are_plain_text_without_links(desktop_context):
     2026-11-04). 기리는 성인이 아닌 5.3 성 십자가 발견은 이름 줄에 이름만 보인다. 「기념만」 문구는 어디에도 없다. 지역 축일(3.1 삼일절, 8.15 광복절)만
     예외로 링크이고, 누르면 그 독서다. 평일에 밀려 기념만 하는 성인(12.29 토마스 베켓)은 기본 독서의
     본기도 뒤에 성인 본기도를 잇는다. 옮겨 간 축일의 원래 날짜(12.6)도 문장뿐이고 제목 영역에 링크가 없다."""
+    desktop_context.add_init_script(SHOW_ALT_READINGS)
     page = desktop_context.new_page()
     collects = lambda: page.eval_on_selector_all(".lect-collect-text", "els => els.map(e => e.textContent)")
     name_lines = lambda: page.eval_on_selector_all(".lect-day-saint", "els => els.map(e => e.textContent)")
@@ -1826,6 +1830,7 @@ def test_days_only_commemorated_are_plain_text_without_links(desktop_context):
 def test_ash_wednesday_moves_off_seollal(desktop_context):
     """재의 수요일이 설과 겹치면 다음날로 옮겨 지킨다(2032, 사용자 결정 2026-11-05). 재의 수요일은 축일이 아니라 「축일」을 붙이지 않고,
     옮겨 온 날에는 그날 평일 독서를 목록에서 고를 수 있다."""
+    desktop_context.add_init_script(SHOW_ALT_READINGS)
     page = desktop_context.new_page()
     _open(page, "lectionary/2032-02-11")
     assert page.inner_text(".lect-day") == "설날"
@@ -1884,3 +1889,41 @@ def test_turning_off_common_reading_hiding_brings_saint_rows_back(desktop_contex
     page.locator(".lect-choice", has_text="레오나드").click()
     page.wait_for_selector(".lect-day:has-text('레오나드')")
     assert page.inner_text(".lect-reading[data-slot='first'] .lect-ref") != weekday_first
+
+
+# ── 대체 독서 표시 — 설정으로 그날의 평일, 주일 줄을 숨긴다(ADR-041 §4) ──
+
+def test_alternate_rows_are_hidden_by_default(desktop_context):
+    """처음에는 옮겨 온 날과 주요 축일의 평일 줄이 없다. 옮겨 왔다는 문장, 사계재, 옮겨 지킬 수 있는 축일, 축일의 평일 줄은 그대로다."""
+    page = desktop_context.new_page()
+    _open(page, "lectionary/2025-06-30")
+    assert page.inner_text(".lect-day") == "사도 성 베드로와 바울로"
+    assert page.inner_text(".lect-day-note") == "6월 29일에서 옮겨 지킵니다."
+    assert page.locator(".lect-choices").count() == 0
+    _open(page, "lectionary/2026-06-29")
+    assert page.locator(".lect-choices").count() == 0
+    _open(page, "lectionary/2040-09-22")
+    assert _choices(page) == ["모든 신자의 성소를 위한 추계재"]
+    _open(page, "lectionary/2026-01-04")
+    assert _choices(page) == ["공현대축일 · 1월 6일에서 옮겨 지킬 수 있음"]
+    _open(page, "lectionary/2025-07-29")
+    assert _choices(page) == ["연중 17주 화요일"]
+
+
+def test_alternate_setting_shows_rows_in_place_and_a_link_still_opens_when_off(desktop_context):
+    """켜면 그 화면에 줄이 생기고 값이 저장된다. 꺼도 주소로 가리키면 그 독서를 보인다 — 공유한 링크가 받는 사람의 설정에 따라 다른 본문이 되지 않는다."""
+    page = desktop_context.new_page()
+    _open(page, "lectionary/2026-06-29")
+    pop = open_settings(page)
+    sw = pop.get_by_role("switch", name="대체 독서 표시")
+    assert sw.is_checked() is False
+    sw.click()
+    page.wait_for_selector(".lect-choice:has-text('연중 13주 월요일')")
+    assert page.evaluate("() => localStorage.getItem('bible-lectionary-alt-show')") == "1"
+    assert open_settings(page).get_by_role("switch", name="대체 독서 표시").is_checked() is True
+    page.keyboard.press("Escape")
+    href = page.get_attribute(".lect-choice:has-text('연중 13주 월요일')", "href")
+    page.evaluate("() => localStorage.setItem('bible-lectionary-alt-show', '0')")
+    page.goto(f"{BASE}{href}")
+    page.wait_for_selector(".lect-day:has-text('연중 13주 월요일')", timeout=20_000)
+    assert _choices(page) == ["사도 성 베드로와 바울로"]

@@ -42,7 +42,7 @@ import {
 
 const { _$, clearNode, chUnit, isModifiedClick, focusSpotOf, restoreFocusSpot } = window.appHelpers;
 const {
-  loadStartupBehavior, loadReadingPosition, saveReadingPosition, loadBookOrder,
+  loadStartupBehavior, loadStartPage, loadReadingPosition, saveReadingPosition, loadBookOrder,
 } = window.appStorage;
 const { dismissLaunchScreen } = window.appSettings;
 const { readingContext } = window;
@@ -554,6 +554,12 @@ async function route() {
       const gear = document.querySelector("#settings-anchor .settings-btn");
       if (gear) gear.click();
       trackPageView();
+      return;
+    }
+
+    // 시작 페이지 — 앱을 「/」로 열 때만 적용한다. 그 뒤에 탭이나 뒤로 가기로 오는 「/」는 성서 목록이다(사용자 결정 2026-11-05).
+    if (view === "books" && isInitialLoad && loadStartPage() === "lectionary") {
+      navigate("/lectionary");
       return;
     }
 

@@ -121,7 +121,7 @@ window.appHelpers = (/** @returns {AppHelpers} */ () => {
     function handler(e) {
       if (e.key !== "Tab") return;
       const focusable = /** @type {NodeListOf<HTMLElement>} */ (
-        container.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])')
+        container.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])')
       );
       if (!focusable.length) return;
       const first = focusable[0];

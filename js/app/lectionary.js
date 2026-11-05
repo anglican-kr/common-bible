@@ -47,7 +47,7 @@ import {
 } from "./liturgical-engine.js";
 
 const { _$, el, clearNode, emptyState, isModifiedClick } = window.appHelpers;
-const { loadLectionaryTrack, saveLectionaryTrack, loadLectionaryCardsFolded, saveLectionaryCardsFolded } = window.appStorage;
+const { loadLectionaryTrack, saveLectionaryTrack, loadLectionaryCardsFolded, saveLectionaryCardsFolded, loadLectionaryAltShow } = window.appStorage;
 
 const $app = _$("app");
 // 머리의 제목(<h1>) — 이 화면은 그 자리에 날짜 이동 줄을 그린다(commitTitleDateNav).
@@ -778,14 +778,26 @@ function canticleTitleOf(/** @type {BibleChapter | null | undefined} */ chapter)
 }
 
 /**
+ * 대체 독서인가 — 축일이 옮겨 온 날과 제 날짜의 대축일, 주요축일에 그날의 평일, 주일 독서다. 설정 「대체 독서 표시」를 끄면 전례독서 목록에서
+ * 숨긴다(사용자 결정 2026-11-05, ADR-038 §3). 격자만 드니 사계재, 옮겨 지킬 수 있는 축일, 저녁 전례, 추수감사주일처럼 이름 있는 줄은 늘 보이고,
+ * 등급이 축일이거나 명절인 날(성 마리아와 마르타, 설날)의 평일 줄도 남는다.
+ * @param {Candidate} c @param {Candidate} initial  그날의 기본 독서 후보
+ */
+function isAlternateReading(c, initial) {
+  if (!isGrid(c) || c === initial) return false;
+  return initial.status === "transferred_in" || ["principal", "major_feast"].includes(String(initial.observance.rank));
+}
+
+/**
  * 뷰 모델 전부(순수). `groupsOf` 는 `findReadings(resolved, c)` 를 감싼 것 — 후보마다 한 번 호출한다.
  * @param {ResolvedDate} resolved @param {LectionaryQuery} query
  * @param {(c: Candidate) => ReadingGroup[]} groupsOf @param {CandidateCollects[]} collectEntries
  * @param {1 | 2 | null} storedTrack  기억된 트랙 — 마지막으로 고른 것(해를 넘어 유지)
  * @param {import("../types").ParishDedication[]} [dedications]  그날 축성되거나 축복된 교회(엔진 `findDedications`)
+ * @param {boolean} [showAlternates]  대체 독서의 줄을 전례독서 목록에 보이는가(설정 「대체 독서 표시」)
  * @returns {LectionaryModel | null}  후보가 하나도 없으면 null(유효한 날짜에는 격자가 언제나 있어 생기지 않는다)
  */
-function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedTrack, dedications = []) {
+function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedTrack, dedications = [], showAlternates = true) {
   const date = resolved.date;
   const initial = initialCandidate(resolved, groupsOf);
   if (!initial) return null;
@@ -860,7 +872,8 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
   const optionHrefs = options.map((_, i) => hrefFor(date, { ...base, set: i + 1 }, defaults));
   // 목록의 줄은 후보마다 하나이고, 세트와 본기도가 짝지어진 후보(5.1, 사계재 금요일)는 세트마다 하나다 — 이름이 곧 그 세트의
   // 제목이고 누르면 제목으로 올라간다(사용자 결정 2026-11-05. 전에는 「독서 · 본기도」 단추였다).
-  const choices = resolved.candidates.filter((c) => !hidden(c)).flatMap((c) => {
+  // 설정이 감추는 것은 줄뿐이다 — `hidden`과 달리 주소로 가리키면 그 독서를 보인다. 공유한 링크가 받는 사람의 설정에 따라 다른 본문이 되지 않게 한다.
+  const choices = resolved.candidates.filter((c) => !hidden(c) && (showAlternates || c === selected || !isAlternateReading(c, initial))).flatMap((c) => {
     const own = c === selected;
     const sets = own ? options : readingOptions(setsOf(groupsOf(c), trackOf(c)), shortName(c.observance.name));
     const pair = own ? !!linked : !!linkCollects(sets, collectsFor(collectEntries, c));
@@ -1588,7 +1601,7 @@ async function renderLectionaryView(parsed) {
     if (!g) { g = findReadings(resolved, c); groupsCache.set(key, g); }
     return g;
   };
-  const model = buildLectionaryModel(resolved, parsed, groupsOf, findCollects(resolved), loadLectionaryTrack(), findDedications(date));
+  const model = buildLectionaryModel(resolved, parsed, groupsOf, findCollects(resolved), loadLectionaryTrack(), findDedications(date), loadLectionaryAltShow());
   if (!model) return pickAnotherDate("이 날짜는 교회력에 없습니다");
 
   const chapters = await loadSlotChapters(model.slots);
