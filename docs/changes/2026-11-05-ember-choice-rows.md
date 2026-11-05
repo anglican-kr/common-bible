@@ -1,4 +1,5 @@
 ---
+pr: 481
 date: 2026-11-05
 branch: feat/ember-choice-rows
 title: "feat: 사계재 제목을 지향까지 보이고 금요일과 5.1을 전례독서 목록으로 고름"
