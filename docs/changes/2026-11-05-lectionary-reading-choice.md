@@ -1,4 +1,5 @@
 ---
+pr: 478
 date: 2026-11-05
 branch: feat/lectionary-reading-choice
 title: "feat: 독서 1, 2 탭을 독서 카드로 바꿈"
