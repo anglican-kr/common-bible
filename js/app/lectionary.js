@@ -37,13 +37,13 @@
 
 import { loadChapter } from "./data-fetch.js";
 import {
-  appendVerses, buildSegmentTabs, bindCopyAttribution, formatVerseRanges, absentVerseNumbers,
+  appendVerses, bindCopyAttribution, formatVerseRanges, absentVerseNumbers,
   LITURGICAL_VIEWS, THIS_MONTH_LABEL, commitLiturgicalTitle, renderLiturgicalFailure, renderLiturgicalLoadFailure,
 } from "./views.js";
 import { specCoversVerse, verseInstanceKeys, citationSource } from "./verse-spec.js";
 import {
   parseDate, toKey, addDays, dayOfWeek, isComputableDate, joinNames, fillCommonName,
-  preloadCalendar, preloadLectionary, resolveDate, findReadings, findCollects, findHalfVerse, findDedications, fastOf,
+  preloadCalendar, preloadLectionary, resolveDate, findReadings, findCollects, findHalfVerse, findDedications, fastOf, isEmber,
 } from "./liturgical-engine.js";
 
 const { _$, el, clearNode, emptyState, isModifiedClick } = window.appHelpers;
@@ -61,7 +61,7 @@ const PAGE_TITLE = LITURGICAL_VIEWS.lectionary.title;
 
 /** parsePath 가 /lectionary 에서 내는 서술자(routing.js PARSE_PATH — 정의는 types.d.ts `Route`). @typedef {import("../types").LectionaryRoute} LectionaryRoute */
 /** URL 쿼리에서 온 상태 — 넷 다 없을 수 있다. @typedef {{ obs: string | null, track: 1 | 2 | null, set: number | null, collect: number | null }} LectionaryQuery */
-/** 제목 아래 전례독서 목록의 후보 하나 — `name`은 괄호 설명을 뗀 이름, `suffix`는 상태 표시. @typedef {{ candidate: Candidate, name: string, suffix: string, title: string, href: string, active: boolean }} LectionaryChoice */
+/** 제목 아래 전례독서 목록의 줄 하나(후보 하나, 세트와 본기도가 짝지어진 후보는 세트 하나) — `name`은 괄호 설명을 뗀 이름, `suffix`는 상태 표시. @typedef {{ candidate: Candidate, name: string, suffix: string, title: string, href: string, active: boolean }} LectionaryChoice */
 /** 화면의 「독서」 선택지 하나 — `short` 는 괄호 선택 구절 세트에 합쳐진 짧은 바탕 세트(〔 〕 표시의 기준). @typedef {{ group: ReadingGroup, short: ReadingGroup | null, label: string }} ReadingOption */
 /**
  * 독서 카드 한 장 — 고를 수 있는 독서 한 벌(ADR-038 §3 「대안 세트·트랙 전환」). `refs`는 그 독서의 모든 항목이고, `differs`는 다른
@@ -384,7 +384,7 @@ function optionalVerseTest(slot, shortSlot) {
 /**
  * 독서 카드 — 「또는」이 있는 날은 달라지는 항목 수와 상관없이 모두 카드로 고른다(사용자 결정 2026-11-05, ADR-038 §3). 트랙이 있는 날은
  * 트랙마다, 그 밖에는 세트마다 한 장이다. 앞쪽끼리, 뒤쪽끼리 묶인 독서이므로 항목을 따로 고르지 않는다(사용자 확정 2026-11-05).
- * 세트와 본기도가 짝지어진 날(5.1, 사계재 금요일)은 전례일이 갈리는 날이라 카드가 아니라 「독서 · 본기도」 단추다. 고를 것이 없으면 null.
+ * 세트와 본기도가 짝지어진 날(5.1, 사계재 금요일)은 전례일이 갈리는 날이라 카드가 아니라 전례독서 목록의 줄이다. 고를 것이 없으면 null.
  * @param {{ groups: ReadingGroup[], baseName: string, options: ReadingOption[], setIndex: number, linked: boolean,
  *   trackHrefs: Array<{ track: 1 | 2, href: string, active: boolean }>, optionHrefs: string[] }} a
  * @returns {ReadingCard[] | null}
@@ -542,41 +542,19 @@ function pickCollect(/** @type {CollectOption[]} */ options, /** @type {number |
 }
 
 /**
- * 본기도 대체안의 이름 — `collect_no` 가 서로 다르면 「본기도 N」, 겹치면 제목에서 낱말 단위로 공통 앞부분 · 뒷부분을 뗀
- * 부분(「성직후보자」 · 「수도자」 — 「…의 성소를 위한 추계재 금요일」; 모두 소유격 「의」로 끝나면 그것도 뗀다), 그래도
- * 가를 수 없으면 제목 전체, 그것도 같으면 「본기도 N」(위치).
+ * 본기도 대체안의 이름 — 「본기도 N」. 번호가 겹치면(데이터에 없는 경우다) 위치로 매긴다. 번호가 겹치던 5.1과 사계재 금요일은
+ * 전례독서 목록의 줄로 고른다(2026-11-05, 줄에서 고르므로 번호를 그리지 않는다).
  * @param {CollectOption[]} options @returns {string[]}
  */
 function collectLabels(options) {
   const nos = options.map((o) => o.collect_no);
-  if (new Set(nos).size === nos.length) return nos.map((n) => `본기도 ${n}`);
-  const t = distinctTitles(options.map((o) => o.title || ""));
-  return options.map((_, i) => (t ? t[i] : `본기도 ${i + 1}`));
+  const distinct = new Set(nos).size === nos.length;
+  return options.map((o, i) => `본기도 ${distinct ? o.collect_no : i + 1}`);
 }
 
 /**
- * 제목들을 가르는 짧은 이름 — 낱말 단위로 공통 앞부분 · 뒷부분을 뗀 부분(모두 소유격 「의」로 끝나면 그것도 뗀다), 그래도
- * 가를 수 없으면 제목 전체, 그것도 같으면 null. 본기도 라벨(`collectLabels`)과 독서 · 본기도 짝 단추가 함께 쓴다.
- * @param {string[]} raw @returns {string[] | null}
- */
-function distinctTitles(raw) {
-  const titles = raw.map((t) => shortName(t || ""));
-  const words = titles.map((t) => t.split(/\s+/).filter(Boolean));
-  const at = (/** @type {string[]} */ w, /** @type {number} */ i) => w[i];
-  let pre = 0;
-  while (words.every((w) => w.length > pre + 1 && at(w, pre) === at(words[0], pre))) pre++;
-  let suf = 0;
-  while (words.every((w) => w.length - suf - 1 > pre && at(w, w.length - 1 - suf) === at(words[0], words[0].length - 1 - suf))) suf++;
-  let mids = words.map((w) => w.slice(pre, w.length - suf).join(" "));
-  if (mids.every((x) => x.length > 1 && x.endsWith("의"))) mids = mids.map((x) => x.slice(0, -1));
-  const distinct = mids.every((x) => x) && new Set(mids).size === mids.length;
-  const full = titles.every((x) => x) && new Set(titles).size === titles.length;
-  return distinct ? mids : full ? titles : null;
-}
-
-/**
- * 독서 세트와 본기도가 같은 제목으로 1:1 짝지어지는 날 — 세트마다 짝 본기도의 위치, 아니면 null. 그런 날은 단추 하나로
- * 둘을 함께 고른다 — 「대안 독서와 본기도가 교차해서 쓰이는 경우(대안 독서는 사도 축일, 본기도는 노동자의 날)는 없다」
+ * 독서 세트와 본기도가 같은 제목으로 1:1 짝지어지는 날 — 세트마다 짝 본기도의 위치, 아니면 null. 그런 날은
+ * 전례독서 목록의 한 줄로 둘을 함께 고른다 — 「대안 독서와 본기도가 교차해서 쓰이는 경우(대안 독서는 사도 축일, 본기도는 노동자의 날)는 없다」
  * (사용자 결정 2026-10-13). 실데이터에서는 5.1(사도 성 필립보와 성 야고보 ∧ 노동자의 날)과 사계재 금요일 넷(성직후보자 ∧
  * 수도자)뿐이다(2025~2028 전수 — lectionary.data.test.js). 「또는」 독서 1 · 2 와 본기도 1 · 2 · 3 처럼 제목으로 갈리지
  * 않는 대안은 짝이 아니라 따로 고른다(Copilot 리뷰 1회차 — 독립된 축).
@@ -593,6 +571,15 @@ function linkCollects(options, collects) {
     out.push(j);
   }
   return out;
+}
+
+/**
+ * 제목과 전례독서 목록에 보이는 이름 — 사계재는 표의 이름(「동계재」)이 아니라 그날 본문의 제목이다(「수도자의 성소를 위한 동계재」).
+ * 세트가 제목으로 갈리는 날(5.1)은 그 세트의 제목이다(사용자 결정 2026-11-05). 그 밖과 본문이 없는 때는 전례일 이름이다.
+ * @param {Candidate} c @param {ReadingGroup | null} group @param {boolean} linked  세트와 본기도가 짝지어졌는가(`linkCollects`)
+ */
+function choiceNameOf(c, group, linked) {
+  return (linked || isEmber(c.observance)) && group && group.title ? group.title : String(c.observance.name || "");
 }
 
 /** 고른 본기도의 송영 코드 — 코드가 없으면 A(ADR-036 §3 기본). @returns {"A" | "B" | "C"} */
@@ -853,13 +840,9 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
   const slots = slotsInOrder(group);
 
   const collects = collectsFor(collectEntries, selected);
-  // 세트와 본기도가 같은 제목으로 짝지어지는 날은 세트가 본기도까지 정한다 — `?collect=` 는 읽지도 쓰지도 않고, 단추 라벨은
-  // 제목을 가르는 짧은 이름(「성직후보자」 · 「수도자」)이다(사용자 결정 2026-10-13 — `linkCollects`).
+  // 세트와 본기도가 같은 제목으로 짝지어지는 날은 세트가 본기도까지 정한다 — `?collect=` 는 읽지도 쓰지도 않고(사용자 결정
+  // 2026-10-13 — `linkCollects`), 세트마다 전례독서 목록의 한 줄이다(아래 `choices`, 사용자 결정 2026-11-05).
   const linked = linkCollects(options, collects);
-  if (linked) {
-    const short = distinctTitles(options.map((o) => o.group.title || ""));
-    if (short) options.forEach((o, i) => { o.label = short[i]; });
-  }
   const collectIndex = linked && setIndex >= 0 ? linked[setIndex] : pickCollect(collects, query.collect);
   const chosenCollect = collectIndex >= 0 ? collects[collectIndex] : null;
   const memorialCollects = selected === initial ? memorial.collects : [];
@@ -869,18 +852,29 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
   // 전례독서 목록의 링크도 이것을 적는다(머지 전 검토 2026-10-14).
   const trackOf = (/** @type {Candidate} */ c) => (c === selected ? track : pickTrack(groupsOf(c), null, storedTrack));
   // 본기도 선택(`collect`)은 독서와 독립된 축이라 트랙 · 세트를 바꿔도 유지한다(Copilot 리뷰 1회차) — 세트와 본기도가
-  // 제목으로 짝지어진 날만 예외로, 세트가 본기도를 정한다(`linked` — 그때 본기도 링크는 짝 세트의 링크와 같다).
+  // 제목으로 짝지어진 날만 예외로, 세트가 본기도를 정한다(`linked`).
   // 트랙이 바뀌면 세트는 그 트랙의 첫 세트로 돌아간다(세트는 트랙에 딸린 것).
   const trackHrefs = tracks.map((t) => ({ track: t, href: hrefFor(date, { ...base, track: t, set: null }, defaults), active: t === track }));
   const optionHrefs = options.map((_, i) => hrefFor(date, { ...base, set: i + 1 }, defaults));
-  const choices = resolved.candidates.filter((c) => !hidden(c)).map((c) => ({
-    candidate: c,
-    name: shortName(c.observance.name),
-    suffix: statusSuffix(c),
-    title: String(c.observance.name || "") + statusSuffix(c),
-    href: hrefFor(date, { obs: c.observance.id, track: trackOf(c), set: null, collect: null }, defaults),
-    active: c === selected,
-  }));
+  // 목록의 줄은 후보마다 하나이고, 세트와 본기도가 짝지어진 후보(5.1, 사계재 금요일)는 세트마다 하나다 — 이름이 곧 그 세트의
+  // 제목이고 누르면 제목으로 올라간다(사용자 결정 2026-11-05. 전에는 「독서 · 본기도」 단추였다).
+  const choices = resolved.candidates.filter((c) => !hidden(c)).flatMap((c) => {
+    const own = c === selected;
+    const sets = own ? options : readingOptions(setsOf(groupsOf(c), trackOf(c)), shortName(c.observance.name));
+    const pair = own ? !!linked : !!linkCollects(sets, collectsFor(collectEntries, c));
+    const rows = pair ? sets.map((o) => o.group) : [sets.length ? sets[0].group : null];
+    return rows.map((g, i) => {
+      const name = choiceNameOf(c, g, pair);
+      return {
+        candidate: c,
+        name: shortName(name),
+        suffix: statusSuffix(c),
+        title: name + statusSuffix(c),
+        href: hrefFor(date, { obs: c.observance.id, track: trackOf(c), set: pair ? i + 1 : null, collect: null }, defaults),
+        active: own && (!pair || i === setIndex),
+      };
+    });
+  });
   // 성인 축일이 둘 이상이고 색이 다르면 본기도 차례대로 「적색 또는 백색」(사용자 결정 2026-11-03 — memorialOf)
   const colorsOr = selected === initial && memorial.colors.length > 1;
   const { colors, colorAlt, ownColor } = colorsOr
@@ -889,7 +883,7 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
   const empty = !groups.length && !collects.length;
 
   return {
-    date, resolved, selected, initial, dayName: conditionTitle(group) || String(selected.observance.name || ""),
+    date, resolved, selected, initial, dayName: conditionTitle(group) || choiceNameOf(selected, group, !!linked),
     groups, tracks, track, options, setIndex, group, shortGroup, slots,
     cards: readingCards({ groups, baseName: shortName(selected.observance.name), options, setIndex, linked: !!linked, trackHrefs, optionHrefs }),
     choices, selectedNote: selectedNoteOf(selected), collects, collectLabels: collectLabels(collects), collectIndex, collectsLinked: !!linked,
@@ -904,9 +898,7 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
       today: "/lectionary",
       tracks: trackHrefs,
       options: optionHrefs,
-      collects: collects.map((_, j) => (linked
-        ? hrefFor(date, { ...base, set: linked.indexOf(j) + 1 }, defaults)
-        : hrefFor(date, { ...base, collect: j + 1 }, defaults))),
+      collects: collects.map((_, j) => hrefFor(date, { ...base, collect: j + 1 }, defaults)),
     },
   };
 }
@@ -1155,27 +1147,6 @@ function buildChoices(m) {
 }
 
 /**
- * 세트와 본기도가 제목으로 짝지어진 날(5.1, 사계재 금요일)의 「독서 · 본기도」 단추 — 전례일이 갈리는 날이고 본기도까지 함께 바뀌어
- * 본기도 위에 둔다(사용자 결정 2026-10-13, 2026-11-05). 그 밖의 「또는」 대안과 트랙은 독서 카드다(buildReadingCards).
- * @param {LectionaryModel} m
- */
-function buildControls(m) {
-  if (!m.collectsLinked || m.options.length < 2) return null;
-  const name = "독서 · 본기도";
-  const ctl = el("div", { className: "lect-control lect-sets" });
-  ctl.appendChild(el("span", { className: "lect-control-label" }, name));
-  ctl.appendChild(buildSegmentTabs(
-    m.options.map((o, i) => ({ label: o.label, href: m.hrefs.options[i], active: i === m.setIndex, focusKey: `set:${i + 1}` })),
-    { ariaLabel: name, className: "division-tabs--compact" },
-  ));
-  // 공통 독서의 분류 라벨(「선교사 공통 독서」)은 달지 않는다 — 제목이 어느 전례일의 독서인지 보인다(사용자 결정
-  // 2026-11-03. 그전엔 성인의 고유로 오인하지 않게 세그먼트 · 본문 제목 · 본기도에 달았다, ADR-038 §3).
-  const wrap = el("div", { className: "lect-controls" });
-  wrap.appendChild(ctl);
-  return wrap;
-}
-
-/**
  * 트랙을 고르면 기억한다 — 연중 주일의 트랙만이다. 마지막 트랙이 날짜와 해를 가리지 않고 기본값이다(사용자 결정 2026-10-13, ADR-038 §3).
  * 부활주일 같은 날의 카드는 뜻이 달라 기억하지 않는다(사용자 결정 2026-11-05). 전역 <a> 가로채기는 이 리스너 뒤에 이동한다.
  * @param {HTMLElement} a @param {1 | 2 | null} track
@@ -1263,7 +1234,7 @@ function buildReadingCards(m) {
 /**
  * 본기도 대체안 번호 — 제목 옆 같은 줄의 작은 번호(「본기도 ❶ 2」, 사용자 결정 2026-11-05). 세그먼트는 기도문 한 문단을 바꾸는
  * 선택에 한 줄을 통째로 썼다. 보이는 글자는 이름에서 「본기도 」를 뗀 것이고 접근 가능한 이름은 이름 전체라, 보이는 글자가
- * 이름 안에 있다(WCAG 2.5.3). 제목으로 가른 이름(`collectLabels` — 번호가 겹치는 경우)은 그대로 보인다.
+ * 이름 안에 있다(WCAG 2.5.3).
  * @param {LectionaryModel} m
  */
 function buildCollectNumbers(m) {
@@ -1290,7 +1261,7 @@ function buildCollects(m) {
   const section = el("section", { className: "lect-section lect-collects", "data-slot": "collect" });
   const head = el("div", { className: "lect-section-head lect-collect-head" });
   head.appendChild(el("h3", { className: "lect-slot" }, "본기도"));
-  // 세트와 짝지어진 날은 위의 「독서 · 본기도」 단추가 고른다 — 따로 번호를 두지 않는다(사용자 결정 2026-10-13).
+  // 세트와 짝지어진 날은 전례독서 목록의 줄이 고른다 — 따로 번호를 두지 않는다(사용자 결정 2026-10-13, 2026-11-05).
   if (m.collects.length > 1 && !m.collectsLinked) head.appendChild(buildCollectNumbers(m));
   section.appendChild(head);
   const o = m.collects[Math.max(m.collectIndex, 0)];
@@ -1594,8 +1565,6 @@ function commit(m, chapters) {
     return;
   }
 
-  const controls = buildControls(m);
-  if (controls) root.appendChild(controls);
   const collects = buildCollects(m);
   if (collects) root.appendChild(collects);
   // 독서 카드는 독서만 바꾸므로 본기도 아래, 제1독서 바로 위에 둔다(사용자 결정 2026-11-05)
@@ -1610,7 +1579,7 @@ function commit(m, chapters) {
     // 시편 끝 영광송까지 고르면 그 시편 블록에 함께 싣는다 — 출처 줄 앞(머지 전 검토 2026-10-14; 전례 표기를 남기는 것과 같은
     // 이유 — 주보 등 전례 용도, 사용자 결정 2026-10-13).
     bindCopyAttribution(root, copyCitation, {
-      unitSelector: ".lect-reading", bailoutSelector: ".lect-head, .lect-controls, .lect-collects, .lect-cards", strictRoot: true,
+      unitSelector: ".lect-reading", bailoutSelector: ".lect-head, .lect-collects, .lect-cards", strictRoot: true,
       tail: { selector: ".lect-gloria", text: gloriaCopyText },
     });
   } else {

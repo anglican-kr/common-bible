@@ -506,12 +506,10 @@ test("selectVerses: spec 범위 + 병합 절(range_end) + 전체 장 기준 인�
   assert.strictEqual(ctx.selectVerses({ verses: [] }, "1-3").verses.length, 0);
 });
 
-test("collectLabels · pickCollect: 번호가 겹치면 제목의 다른 부분으로 가르고, ?collect= 는 위치다(자체 리뷰 2026-10-13)", () => {
+test("collectLabels · pickCollect: 이름은 「본기도 N」이고 번호가 겹치면 위치로 매기며, ?collect= 는 위치다(자체 리뷰 2026-10-13, 2026-11-05)", () => {
   same(ctx.collectLabels([collect(1, "a", { collect_no: 1 }), collect(2, "b", { collect_no: 2 })]), ["본기도 1", "본기도 2"]);
-  const ember = [collect(234, "a", { title: "성직후보자의 성소를 위한 추계재 금요일" }), collect(237, "b", { title: "수도자의 성소를 위한 추계재 금요일" })];
-  same(ctx.collectLabels(ember), ["성직후보자", "수도자"]);
-  same(ctx.collectLabels([collect(293, "a", { title: "노동자의 날" }), collect(294, "b", { title: "사도 성 필립보와 성 야고보" })]), ["노동자의 날", "사도 성 필립보와 성 야고보"]);
-  same(ctx.collectLabels([collect(1, "a", { title: "같다" }), collect(2, "b", { title: "같다" })]), ["본기도 1", "본기도 2"]);
+  const ember = [collect(234, "a", { title: "성직후보자의 성소를 위한 추계재" }), collect(237, "b", { title: "수도자의 성소를 위한 추계재" })];
+  same(ctx.collectLabels(ember), ["본기도 1", "본기도 2"]);
   assert.strictEqual(ctx.pickCollect(ember, 2), 1);
   assert.strictEqual(ctx.pickCollect(ember, 3), 0);
   assert.strictEqual(ctx.pickCollect(ember, null), 0);
@@ -537,22 +535,25 @@ test("linkCollects: 세트와 본기도가 같은 제목으로 1:1 이면 세트
   assert.strictEqual(ctx.linkCollects([], []), null);
 });
 
-test("buildLectionaryModel: 세트와 본기도가 짝지어진 날 — ?set= 이 본기도까지 정하고, ?collect= 는 읽지도 쓰지도 않으며, 라벨은 제목을 가르는 짧은 이름(사용자 결정 2026-10-13)", () => {
-  const ember = cand(obs("t-추계재", "추계재", { rank: "commemoration", color: "violet" }));
+test("buildLectionaryModel: 세트와 본기도가 짝지어진 날 — 세트마다 전례독서 목록의 한 줄이고, ?set= 이 본기도와 제목까지 정하며, ?collect= 는 읽지도 쓰지도 않는다(사용자 결정 2026-10-13, 2026-11-05)", () => {
+  const ember = cand(obs("t-추계재", "추계재", { rank: "feria", color: "violet", rule: { kind: "ember_wfs" } }));
   const r = resolvedOf("2026-09-18", [ember], ember, { coord: { season: "ordinary", week: 24, type: "weekday", weekday: "fri", year: "II" }, color: "green", colors: ["green"] });
   const groupsOf = groupsOfFrom({ "t-추계재": [
-    group("s1", FOUR, { title: "성직후보자의 성소를 위한 추계재 금요일" }), group("s2", FOUR, { title: "수도자의 성소를 위한 추계재 금요일" })] });
+    group("s1", FOUR, { title: "성직후보자의 성소를 위한 추계재" }), group("s2", FOUR, { title: "수도자의 성소를 위한 추계재" })] });
   const entries = [{ candidate: ember, collects: [
-    collect(234, "a", { title: "성직후보자의 성소를 위한 추계재 금요일", collect_no: 1 }), collect(237, "b", { title: "수도자의 성소를 위한 추계재 금요일", collect_no: 1, ending: "C" })] }];
+    collect(234, "a", { title: "성직후보자의 성소를 위한 추계재", collect_no: 1 }), collect(237, "b", { title: "수도자의 성소를 위한 추계재", collect_no: 1, ending: "C" })] }];
   const m = ctx.buildLectionaryModel(r, { obs: null, track: null, set: 2, collect: 1 }, groupsOf, entries, null);
   assert.strictEqual(m.collectsLinked, true);
-  same(m.options.map((o) => o.label), ["성직후보자", "수도자"]);
+  same(m.choices.map((c) => [c.name, c.active, c.href]), [
+    ["성직후보자의 성소를 위한 추계재", false, "/lectionary/2026-09-18"],
+    ["수도자의 성소를 위한 추계재", true, "/lectionary/2026-09-18?set=2"],   // collect 를 쓰지 않는다
+  ]);
+  assert.strictEqual(m.dayName, "수도자의 성소를 위한 추계재");
   assert.strictEqual(m.group.id, "s2");
   assert.strictEqual(m.collects[m.collectIndex].id, 237);   // ?collect=1 은 무시 — 세트 2 의 짝
   assert.strictEqual(m.ending, "C");
-  same(plain(m.hrefs.options), ["/lectionary/2026-09-18", "/lectionary/2026-09-18?set=2"]);   // collect 를 쓰지 않는다
-  same(plain(m.hrefs.collects), ["/lectionary/2026-09-18", "/lectionary/2026-09-18?set=2"]);   // 본기도 링크도 짝 세트로
   const first = ctx.buildLectionaryModel(r, { obs: null, track: null, set: null, collect: 2 }, groupsOf, entries, null);
+  assert.strictEqual(first.dayName, "성직후보자의 성소를 위한 추계재");
   assert.strictEqual(first.collects[first.collectIndex].id, 234);   // 세트 1(기본)의 짝 — 교차 조합은 없다
 });
 
@@ -615,14 +616,14 @@ test("canticleTitleOf: 장 제목의 한국어 부분만", () => {
 /** 사계재 날(2026-09-16 같은 날) — 지정 전례일인 성인(공통만) · 사계재(세트 둘) · 격자(그 평일의 독서). */
 function emberDay() {
   const saint = cand(obs("d0916-니니안", "니니안(갈로웨이의 주교)", { rank: "minor_feast", precedence: 7, color: "white", sanctoral_class: "missionary", has_proper: false }));
-  const ember = cand(obs("t-추계재", "추계재", { rank: "feria", precedence: 8, color: "violet", penitential: true, type: "fast" }));
+  const ember = cand(obs("t-추계재", "추계재", { rank: "feria", precedence: 8, color: "violet", penitential: true, type: "fast", rule: { kind: "ember_wfs" } }));
   const grid = cand(obs("grid:ordinary-24-weekday-wed", "연중 24주 수요일", { rank: "feria", precedence: 8, color: "green" }));
   const r = resolvedOf("2026-09-16", [saint, ember, grid], saint, {
     coord: { season: "ordinary", week: 24, type: "weekday", weekday: "wed", year: "II" }, color: "white", colors: ["violet", "white"],
   });
   const groupsOf = groupsOfFrom({
     "d0916-니니안": [1, 2, 3].map((n) => group(`common:missionary-s${n}`, FOUR, { common: "missionary", title: "선교사", set_no: n, set_total: 3 })),
-    "t-추계재": [group("ember-s1", FOUR, { set_no: 1, set_total: 2 }), group("ember-s2", FOUR, { set_no: 2, set_total: 2 })],
+    "t-추계재": [1, 2].map((n) => group(`ember-s${n}`, FOUR, { title: "성직자의 성소를 위한 추계재", set_no: n, set_total: 2 })),
     "grid:ordinary-24-weekday-wed": [group("grid-s1", FOUR)],
   });
   const entries = [
@@ -641,7 +642,7 @@ test("buildLectionaryModel: 사계재 날 — 초기 선택은 격자, 색은 �
   same(plain(m.colors), ["violet", "white"]);
   assert.strictEqual(m.ownColor, false);
   // 니니안은 공통 독서만 있어 당분간 전례독서 목록을 감춘다(HIDE_COMMON_READINGS, 사용자 결정 2026-11-03)
-  same(m.choices.map((c) => [c.name, c.active]), [["추계재", false], ["연중 24주 수요일", true]]);
+  same(m.choices.map((c) => [c.name, c.active]), [["성직자의 성소를 위한 추계재", false], ["연중 24주 수요일", true]]);   // 표의 이름이 아니라 본문의 제목(사용자 결정 2026-11-05)
   same(m.collects.map((o) => o.id), [114]);   // 고른 전례일(격자)의 본기도
   // 그 뒤에 기리는 성인(니니안)의 본기도가 이어진다(memorialOf) — 송영은 그 성인 본기도의 것
   assert.strictEqual(m.memorialCollects.length, entries.find((e) => e.candidate.observance.id === "d0916-니니안").collects.length ? 1 : 0);
@@ -680,6 +681,8 @@ test("buildLectionaryModel: 추계재를 고르면 색은 자 하나, 「독서 
   const { r, groupsOf, entries, ember } = emberDay();
   const m = ctx.buildLectionaryModel(r, { obs: "t-추계재", track: null, set: 2, collect: null }, groupsOf, entries, null);
   assert.strictEqual(m.selected, ember);
+  assert.strictEqual(m.dayName, "성직자의 성소를 위한 추계재");
+  same(m.choices.map((c) => [c.name, c.active]), [["성직자의 성소를 위한 추계재", true], ["연중 24주 수요일", false]]);   // 세트 둘이어도 제목이 같아 한 줄
   same(plain(m.colors), ["violet"]);
   assert.strictEqual(m.ownColor, true);
   same(m.options.map((o) => o.label), ["독서 1", "독서 2"]);
@@ -698,6 +701,15 @@ test("buildLectionaryModel: 본기도 없는 전례일을 고르면 collects 가
   same(m.collects, []);
   assert.strictEqual(m.ending, "A");
   assert.strictEqual(m.empty, false);
+});
+
+test("choiceNameOf: 사계재와 세트가 제목으로 갈리는 날은 본문의 제목, 그 밖과 본문이 없는 때는 전례일 이름(사용자 결정 2026-11-05)", () => {
+  const { ember, grid } = emberDay();
+  const g = group("x", FOUR, { title: "본문의 제목" });
+  assert.strictEqual(ctx.choiceNameOf(ember, g, false), "본문의 제목");
+  assert.strictEqual(ctx.choiceNameOf(ember, null, false), "추계재");
+  assert.strictEqual(ctx.choiceNameOf(grid, g, false), "연중 24주 수요일");   // 평일 본문의 제목(「연중24주 수요일」)은 쓰지 않는다
+  assert.strictEqual(ctx.choiceNameOf(grid, g, true), "본문의 제목");
 });
 
 test("buildLectionaryModel: 기념일은 전례독서 목록이 아니라 이름 줄(commemorations) — 주소로 가리켜도 기본 독서다(사용자 결정 2026-11-03)", () => {
@@ -904,13 +916,13 @@ test("독서 카드: 고를 것이 없으면 없다 — 세트 하나, 괄호 �
   assert.strictEqual(cardsModel(bracketOnly).cards, null);
 });
 
-test("독서 카드: 세트와 본기도가 제목으로 짝지어진 날은 카드가 아니라 「독서 · 본기도」 단추다(사용자 결정 2026-11-05)", () => {
-  const groups = [group("a", FOUR, { title: "성직후보자의 성소를 위한 추계재 금요일" }), group("b", ALT_TRACK, { title: "수도자의 성소를 위한 추계재 금요일" })];
-  const collects = [collect(1, "x", { title: "성직후보자의 성소를 위한 추계재 금요일" }), collect(2, "y", { title: "수도자의 성소를 위한 추계재 금요일" })];
+test("독서 카드: 세트와 본기도가 제목으로 짝지어진 날은 카드가 아니라 전례독서 목록의 줄이다(사용자 결정 2026-11-05)", () => {
+  const groups = [group("a", FOUR, { title: "성직후보자의 성소를 위한 추계재" }), group("b", ALT_TRACK, { title: "수도자의 성소를 위한 추계재" })];
+  const collects = [collect(1, "x", { title: "성직후보자의 성소를 위한 추계재" }), collect(2, "y", { title: "수도자의 성소를 위한 추계재" })];
   const m = cardsModel(groups, { collects });
   assert.strictEqual(m.collectsLinked, true);
   assert.strictEqual(m.cards, null);
-  assert.strictEqual(m.options.length, 2);
+  same(m.choices.map((c) => c.name), ["성직후보자의 성소를 위한 추계재", "수도자의 성소를 위한 추계재"]);
 });
 
 test("조건부 세트: 조건이 카드 이름이고, 고르면 제목이 그 조건의 이름이다 — 고른 전례일과 본기도는 그대로(사용자 결정 2026-11-05)", () => {
