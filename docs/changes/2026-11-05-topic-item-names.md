@@ -1,4 +1,5 @@
 ---
+pr: 489
 date: 2026-11-05
 branch: docs/topic-item-names
 title: "docs: 주제 문서의 「맨 위 항목」을 항목 이름으로 고침"
