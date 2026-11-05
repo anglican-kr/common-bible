@@ -1583,6 +1583,27 @@ def test_days_only_commemorated_are_plain_text_without_links(desktop_context):
     assert page.locator(".lect-head a").count() == 0
 
 
+def test_jan_2_is_a_christmas_weekday_with_the_saint_on_the_name_line(desktop_context):
+    """1.2와 12.29는 기도서 486쪽이 날짜로 고정한 평일 독서다(사용자 결정 2026-11-05). 제목은 「성탄주간」,
+    성인은 이름 줄이고, 본기도는 성탄 주간 본기도 뒤에 성인 공통 본기도를 잇는다. 1.8 루시안과 같다."""
+    page = desktop_context.new_page()
+    collects = lambda: page.eval_on_selector_all(".lect-collect-text", "els => els.map(e => e.textContent)")
+    name_lines = lambda: page.eval_on_selector_all(".lect-day-saint", "els => els.map(e => e.textContent)")
+    _open(page, "lectionary/2027-01-02")
+    assert page.inner_text(".lect-day") == "성탄주간"
+    assert "바실과 나지안조의 그레고리 축일" in name_lines(), name_lines()
+    assert page.inner_text(".lect-reading[data-slot='first'] .lect-ref") == "1요한 2:22-28"
+    assert page.locator(".lect-choices").count() == 0
+    assert page.locator(".lect-collects .division-tab").count() == 2   # 성탄 주간 본기도 1 · 2
+    texts = collects()
+    assert len(texts) == 2 and "바실" not in texts[0] and "바실" in texts[1], texts
+    _open(page, "lectionary/2028-12-29")
+    assert page.inner_text(".lect-day") == "성탄주간"
+    assert any(line.startswith("토마스 베켓") and line.endswith(" 축일") for line in name_lines()), name_lines()
+    texts = collects()
+    assert len(texts) == 2 and "토마스 베켓" in texts[1], texts
+
+
 def test_feast_lines_come_before_commemoration_lines(desktop_context):
     """제목 아래 줄은 성인 축일(「… 축일」)이 먼저이고 기념일(「… 기념일」)이 그 아래다(사용자 결정 2026-11-03). 9.4 대 그레고리
     (축일, 기본 독서는 평일) ∧ 여성선교센터 개관(기념일)."""

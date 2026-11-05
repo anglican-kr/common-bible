@@ -325,15 +325,16 @@ test("공통 본기도에 넣는 이름은 모두 한글 음절로 끝난다 —
   assert.deepStrictEqual(bad, [], "끝 글자가 한글이 아닌 이름 — 엔진 hasFinalConsonant 의 전제가 깨진다");
 });
 
-test("C-5.6-4 성인 공통 독서 폴백 — 양성 · 음성 · 불변식 79 / 13 / 17", { skip: SKIP }, () => {
+test("C-5.6-4 성인 공통 독서 폴백 — 양성 · 음성 · 불변식 81 / 11 / 17", { skip: SKIP }, () => {
   const ids = (d, p) => groupsAt(d, p).map((g) => g.id);
   // 양성 — 사베리오(has_proper 참 · 독서 0)는 missionary 세 세트, 그룹 형태는 고유와 같다
   const xav = groupsAt("2025-12-03", "d1203");
   same(xav.map((g) => [g.id, g.set_no, g.set_total, g.reading_track, g.common]),
     [1, 2, 3].map((n) => [`common:missionary-s${n}`, n, 3, null, "missionary"]));
-  // 양성 — 자기 날짜에 남의 본문이 있는 넷
+  // 양성 — 자기 날짜에 남의 본문이 있는 여섯(1.2, 12.29는 기도서 486쪽의 평일 독서, 사용자 결정 2026-11-05)
   for (const [d, p, cls] of [["2026-01-08", "d0108", "martyr"], ["2026-12-31", "d1231-실베스터", "pastor"],
-    ["2026-12-31", "d1231-위클리프", "teacher"], ["2026-03-01", "d0301-데이빗", "pastor"]]) {
+    ["2026-12-31", "d1231-위클리프", "teacher"], ["2026-03-01", "d0301-데이빗", "pastor"],
+    ["2026-01-02", "d0102", "pastor"], ["2028-12-29", "d1229", "martyr"]]) {
     const got = ids(d, p);
     assert.ok(got.length > 0 && got.every((id) => id.startsWith(`common:${cls}-s`)), `${p} ${got}`);
   }
@@ -354,7 +355,7 @@ test("C-5.6-4 성인 공통 독서 폴백 — 양성 · 음성 · 불변식 79 /
     if (gs.length > 0 && gs.every((g) => g.common !== null)) fallback++;
     else if (row.sanctoral_class in commons && gs.length > 0 && gs.every((g) => g.common === null)) properWithCommon++;
   }
-  same([fallback, properWithCommon, memorialEmpty], [79, 13, 17]);
+  same([fallback, properWithCommon, memorialEmpty], [81, 11, 17]);
 });
 
 test("§5.6 본기도 폴백은 빈틈 없이 닫힌다 — has_proper 참은 고유, 거짓은 공통 하나({name} 치환), 기념일과 성인 분류 없는 기도일은 없음", { skip: SKIP }, () => {

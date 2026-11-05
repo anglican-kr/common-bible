@@ -359,11 +359,11 @@ test("A3 2026-12-25 · 12-24 — 12.25 는 성탄 낮(초기 · 미결12) · 새
   same(labels(eve), ["성탄 1일 전", "성탄 밤 · 저녁"]);   // 날짜 전용 본문의 이름(사용자 결정 2026-11-03)
   const night = model("2026-12-24", { obs: "d1225-성탄-밤" });
   same(plain(night.colors), ["white"]);
-  // 성탄 밤의 본문 · 본기도 — 12.24 에서 12.25 키로 좁힌다. 새벽(이사 62 · 루가 2:1-7, 8-20 · 본기도 276)과 가르는 값으로 고정한다
+  // 성탄 밤의 본문 · 본기도 — 12.24 에서 12.25 키로 좁힌다. 새벽(이사 62 · 루가 2:1-7, 8-20 · 본기도 280)과 가르는 값으로 고정한다
   // (「루가 2:1」 로 시작하는지만 보면 새벽 본문도 통과했다 — PR #349 리뷰)
   assert.strictEqual(night.group.title, "성탄 밤");
   same(night.slots.map((sl) => sl.label), ["이사 9:1-6", "시편 96", "디도 2:11-14", "루가 2:1-14, 15-20"]);
-  same(night.collects.map((c) => c.id), [275]);
+  same(night.collects.map((c) => c.id), [279]);
 });
 
 test("A3 2026-06-14 연중 11주일 — 트랙 기억이 기본, URL 이 앞서고, 괄호 선택 구절 세트는 바탕에 합쳐져 긴 본문 + 선택 구절", { skip: SKIP }, () => {
@@ -443,7 +443,7 @@ test("A3 전례독서 목록 — 2025-2050 모든 날, 어느 후보를 눌러�
     }
   }
   same(bad, []);
-  assert.strictEqual(days, 1617);
+  assert.strictEqual(days, 1629);
   assert.ok(longest.length <= 30, longest);   // 320px에서 두 줄 안에 든다(e2e가 그 줄을 본다)
 });
 
@@ -565,7 +565,7 @@ test("A3 데이터 전수 — 괄호 선택 구절 세트는 모두 바탕에 �
     }
   }
   same(bad, []);
-  assert.strictEqual(merged, 34);   // pitfalls §21 실측(2026-10-12) — 데이터가 바뀌면 여기서 다시 센다
+  assert.strictEqual(merged, 38);   // pitfalls §21 실측(2026-10-12), 기도서 표 대조로 넷 더함(2026-11-05) — 데이터가 바뀌면 여기서 다시 센다
 });
 
 // ── 반절 경계 표 ↔ 앱이 그리는 줄(사용자 결정 2026-10-22, 데이터 liturgical/half-verses.md) ──
@@ -640,4 +640,25 @@ test("책자 대조의 엔진 덤프(tools/booklet/engine-dump.mjs) — 지금 �
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test("1.2와 12.29 — 기도서 486쪽이 날짜로 고정한 평일 독서라 제목은 성탄주간, 성인은 이름 줄, 본기도는 성탄 주간 뒤에 성인(사용자 결정 2026-11-05)", { skip: SKIP }, () => {
+  for (const [d, saint, name, first] of [
+    ["2027-01-02", "d0102-바실과-나지안조의-그레고리", "바실과 그레고리", "1요한 2:22-28"],
+    ["2028-12-29", "d1229-토마스-베켓", "토마스 베켓", "1요한 2:3-11"],
+  ]) {
+    const m = model(d);
+    assert.ok(id(m.selected).startsWith("grid:christmas-x-weekday-"), d);
+    assert.strictEqual(m.selected.observance.name, "성탄주간", d);
+    assert.strictEqual(m.slots[0].label, first, d);
+    same(m.collects.map((c) => c.title), ["성탄주간", "성탄주간"], d);
+    same(m.memorialSaints.map(id), [saint], d);
+    same(m.memorialCollects.map((c) => plain(c.names).join("과 ")), [name], d);
+    same(labels(m), ["성탄주간"], d);   // 후보가 하나뿐이라 화면에 전례독서 목록을 그리지 않는다
+  }
+  // 죄 없는 어린이들이 옮겨 오는 해에는 제목이 어린이들이고, 그날의 평일 독서를 목록에서 고른다
+  const moved = model("2026-12-29");
+  assert.strictEqual(id(moved.selected), "d1228-죄-없는-어린이들의-순교");
+  assert.ok(labels(moved).includes("성탄주간"), labels(moved).join());
+  same(moved.memorialSaints.map(id), ["d1229-토마스-베켓"]);
 });
