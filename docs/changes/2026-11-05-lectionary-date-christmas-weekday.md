@@ -1,4 +1,5 @@
 ---
+pr: 482
 date: 2026-11-05
 branch: feat/lectionary-date-christmas-weekday
 title: "feat: 전례독서 머리 날짜를 YY.MM.DD로, 성탄 평일 제목을 성탄 N주 X요일로 바꿈"
