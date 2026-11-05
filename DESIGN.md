@@ -234,7 +234,7 @@ iOS와 macOS에서는 `-apple-system`이 SF Pro로 해석되어 HIG의 네이티
 - `--max-width: 720px`: 읽기 칼럼 폭이다. 본문, 헤더, 시트 데스크탑 폭의 상한이다.
 - 안전 영역: 고정 요소와 스티키 요소는 `env(safe-area-inset-*)`로 노치와 홈 인디케이터를
   가리지 않게 한다(헤더 `top`, 시트와 탭바 `padding-bottom`).
-- 스크롤바는 전역으로 숨긴다(`scrollbar-width: none`).
+- 스크롤바는 전역으로 숨긴다(`scrollbar-width: none`). 내용이 잘린 줄 모를 수 있는 곳은 얇게 보인다(`.title-action-menu`, `.settings-popover`).
 
 ---
 

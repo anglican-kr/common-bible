@@ -21,7 +21,7 @@ import { loadBooks, loadChapter, loadPrologue } from "./data-fetch.js";
 import { isWellFormedSpec } from "./verse-spec.js";
 import {
   renderBookList, renderChapterList, renderChapter, renderPrologue,
-  renderLoading, renderError, divisionOrder, DIVISION_LABELS, renderLiturgicalLoadFailure,
+  renderLoading, renderError, divisionOrder, DIVISION_LABELS, renderLiturgicalLoadFailure, setLectionaryLoadFallback,
 } from "./views.js";
 // The calendar tab and the lectionary view (ADR-038 §1-§3) are not imported
 // here: route() loads them with import() the first time one of their routes
@@ -356,7 +356,10 @@ async function openLazyView(view, load, parsed, isStale) {
     const loaded = await loadViewModule(load);
     if (loaded) loadedViews.set(view, loaded);
     if (isStale()) return null;
-    if (!loaded) return renderLiturgicalLoadFailure(view);
+    if (!loaded) {
+      const title = renderLiturgicalLoadFailure(view);
+      return isStale() ? null : title;   // the fallback may have routed elsewhere
+    }
     render = loaded;
   }
   try {
@@ -364,8 +367,27 @@ async function openLazyView(view, load, parsed, isStale) {
     return isStale() ? null : title;
   } catch (err) {
     console.error(err);
-    return isStale() ? null : renderLiturgicalLoadFailure(view);
+    if (isStale()) return null;
+    const title = renderLiturgicalLoadFailure(view);
+    return isStale() ? null : title;   // the fallback may have routed elsewhere
   }
+}
+
+/**
+ * 앱을 새로 여는 탐색인가 — 새로고침과 뒤로 가기로 다시 불러온 페이지는 아니다. 그때는 보던 화면에 머문다(사용자 결정 2026-11-06, ADR-041 §2).
+ * 자동 새로고침(서비스 워커 교체)과 당겨서 새로고침도 `reload`로 온다.
+ * @returns {boolean}
+ */
+function isFreshLaunch() {
+  const nav = /** @type {PerformanceNavigationTiming | undefined} */ (performance.getEntriesByType("navigation")[0]);
+  return nav?.type !== "reload" && nav?.type !== "back_forward";
+}
+
+/** 시작 페이지로 연 전례독서를 받지 못했다 — 앱을 열자마자 막히지 않게 성서 목록을 연다(사용자 결정 2026-11-06, ADR-041 §2). */
+function openBookListInstead() {
+  history.replaceState(null, "", "/");
+  route();
+  window._showSyncSnackbar?.("전례독서를 불러오지 못해 성서 목록을 엽니다.");
 }
 
 async function route() {
@@ -528,6 +550,7 @@ async function route() {
       const title = view === "calendar"
         ? await openLazyView("calendar", loadCalendarView, parsed, isStale)
         : await openLazyView("lectionary", loadLectionaryView, parsed, isStale);
+      setLectionaryLoadFallback(null);   // 앱을 연 첫 화면에만 쓴다 — 그 뒤에 여는 전례독서는 실패 화면이다
       if (title === null) return;
       updatePageMeta({ title, description: LAZY_VIEW_DESCRIPTIONS[view] });
       trackPageView();
@@ -557,8 +580,9 @@ async function route() {
       return;
     }
 
-    // 시작 페이지 — 앱을 「/」로 열 때만 적용한다. 그 뒤에 탭이나 뒤로 가기로 오는 「/」는 성서 목록이다(사용자 결정 2026-11-05).
-    if (view === "books" && isInitialLoad && loadStartPage() === "lectionary") {
+    // 시작 페이지 — 앱을 「/」로 새로 열 때만 적용한다. 그 뒤에 탭이나 뒤로 가기로 오는 「/」는 성서 목록이다(사용자 결정 2026-11-05).
+    if (view === "books" && isInitialLoad && isFreshLaunch() && loadStartPage() === "lectionary") {
+      setLectionaryLoadFallback(openBookListInstead);
       navigate("/lectionary");
       return;
     }
@@ -567,7 +591,7 @@ async function route() {
     if (isStale()) return;
 
     if (view === "books") {
-      if (isInitialLoad && loadStartupBehavior() === "resume") {
+      if (isInitialLoad && isFreshLaunch() && loadStartupBehavior() === "resume") {
         const savedPos = loadReadingPosition();
         if (savedPos && savedPos.bookId) {
           navigate(`/${savedPos.bookId}/${savedPos.chapter}?resume=1`);

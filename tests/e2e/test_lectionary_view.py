@@ -1894,7 +1894,7 @@ def test_turning_off_common_reading_hiding_brings_saint_rows_back(desktop_contex
 # ── 대체 독서 표시 — 설정으로 그날의 평일, 주일 줄을 숨긴다(ADR-041 §4) ──
 
 def test_alternate_rows_are_hidden_by_default(desktop_context):
-    """처음에는 옮겨 온 날과 주요 축일의 평일 줄이 없다. 옮겨 왔다는 문장, 사계재, 옮겨 지킬 수 있는 축일, 축일의 평일 줄은 그대로다."""
+    """처음에는 옮겨 온 날과 대축일, 주요축일의 평일, 주일 줄이 없다. 옮겨 왔다는 문장, 사계재, 옮겨 지킬 수 있는 축일, 축일의 평일 줄은 그대로다."""
     page = desktop_context.new_page()
     _open(page, "lectionary/2025-06-30")
     assert page.inner_text(".lect-day") == "사도 성 베드로와 바울로"
@@ -1923,7 +1923,8 @@ def test_alternate_setting_shows_rows_in_place_and_a_link_still_opens_when_off(d
     assert open_settings(page).get_by_role("switch", name="대체 독서 표시").is_checked() is True
     page.keyboard.press("Escape")
     href = page.get_attribute(".lect-choice:has-text('연중 13주 월요일')", "href")
-    page.evaluate("() => localStorage.setItem('bible-lectionary-alt-show', '0')")
+    # 저장소를 비우는 스크립트(CLEAR_APP_STORAGE)가 주소를 열 때마다 실행되므로, 그 뒤에 값을 넣어 끈 상태를 만든다
+    desktop_context.add_init_script("localStorage.setItem('bible-lectionary-alt-show', '0')")
     page.goto(f"{BASE}{href}")
     page.wait_for_selector(".lect-day:has-text('연중 13주 월요일')", timeout=20_000)
     assert _choices(page) == ["사도 성 베드로와 바울로"]

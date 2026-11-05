@@ -133,6 +133,95 @@ def test_lectionary_start_page_opens_lectionary_only_on_launch(browser):
         ctx.close()
 
 
+def test_reload_stays_on_book_list_with_lectionary_start(browser):
+    """새로고침은 앱을 새로 여는 것이 아니다 — 성서 목록에 머문다(ADR-041 §2)."""
+    ctx = browser.new_context()
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    ctx.add_init_script("localStorage.setItem('bible-start-page', 'lectionary')")
+    page = ctx.new_page()
+    try:
+        page.goto(BASE)
+        page.wait_for_selector(".lectionary", timeout=20_000)
+        page.go_back()
+        page.wait_for_selector(".book-list")
+        page.reload()
+        page.wait_for_selector(".book-list")
+        page.wait_for_timeout(300)
+        assert page.evaluate("() => location.pathname") == "/"
+        assert page.locator(".lectionary").count() == 0
+    finally:
+        ctx.close()
+
+
+def test_reload_stays_on_book_list_with_resume(browser):
+    """「읽던 페이지에서 시작」의 이동도 같다. 장을 새로고침할 때의 절 복원은 이동이 아니라 그대로다."""
+    ctx = browser.new_context()
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    ctx.add_init_script("localStorage.setItem('bible-last-read', JSON.stringify({ bookId: 'john', chapter: 3, verse: 20 }))")
+    page = ctx.new_page()
+    try:
+        page.goto(BASE)
+        page.wait_for_selector(".chapter-text")
+        assert page.evaluate("() => location.pathname") == "/john/3"
+        page.go_back()
+        page.wait_for_selector(".book-list")
+        page.reload()
+        page.wait_for_selector(".book-list")
+        page.wait_for_timeout(300)
+        assert page.evaluate("() => location.pathname") == "/"
+        page.goto(f"{BASE}/john/3")
+        page.wait_for_selector(".chapter-text")
+        page.wait_for_function("() => window.scrollY > 0")
+        page.reload()
+        page.wait_for_selector(".chapter-text")
+        page.wait_for_function("() => window.scrollY > 0")
+        assert page.evaluate("() => location.pathname") == "/john/3"
+    finally:
+        ctx.close()
+
+
+def test_start_page_opens_book_list_when_lectionary_cannot_load(browser):
+    """자료나 화면 모듈을 받지 못하면 앱을 열자마자 막히지 않고 성서 목록이 열린다. 전례독서 주소를 직접 열면 실패 화면 그대로다."""
+    for blocked in ("**/data/lectionary/**", "**/js/app/lectionary.js*"):
+        ctx = browser.new_context()
+        ctx.add_init_script(CLEAR_APP_STORAGE)
+        ctx.add_init_script("localStorage.setItem('bible-start-page', 'lectionary')")
+        ctx.route(blocked, lambda route: route.abort())
+        page = ctx.new_page()
+        try:
+            page.goto(BASE)
+            page.wait_for_selector(".book-list", timeout=20_000)
+            assert page.evaluate("() => location.pathname") == "/", blocked
+            assert page.get_by_text("전례독서를 불러오지 못해 성서 목록을 엽니다.").is_visible(), blocked
+            assert page.locator(".lectionary .empty-state").count() == 0, blocked
+            page.goto(f"{BASE}/lectionary")
+            page.wait_for_selector(".empty-state .state-action, .state-action", timeout=20_000)
+            assert page.evaluate("() => location.pathname") == "/lectionary", blocked
+        finally:
+            ctx.close()
+
+
+def test_popover_shows_a_thin_scrollbar_on_a_short_window(browser):
+    """창 높이 768px에서 팝오버가 스크롤되고 스크롤 막대가 보이며, 맨 아래 줄까지 갈 수 있다(ADR-041 §1)."""
+    ctx = browser.new_context(viewport={"width": 1280, "height": 768})
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    page = ctx.new_page()
+    try:
+        _open(page)
+        pop = open_settings(page)
+        facts = page.evaluate("""() => {
+          const p = document.querySelector('.settings-popover');
+          return { over: p.scrollHeight - p.clientHeight, bar: getComputedStyle(p).scrollbarWidth };
+        }""")
+        assert facts["over"] > 0, facts
+        assert facts["bar"] == "thin", facts
+        about = pop.locator(".settings-about")
+        about.scroll_into_view_if_needed()
+        assert about.is_visible()
+    finally:
+        ctx.close()
+
+
 def test_home_tab_shows_book_list_after_lectionary_start(browser):
     ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA)
     ctx.add_init_script(CLEAR_APP_STORAGE)

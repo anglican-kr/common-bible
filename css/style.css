@@ -469,16 +469,29 @@ body {
      the 0.5rem horizontal padding (≈ 17.85rem content). */
   width: 19rem;
   max-width: calc(100vw - 1rem);
-  /* When content (Drive info expanded, small viewport, large font) exceeds
-     vertical space, the popover scrolls instead of being clipped. Scrollbar
-     is hidden visually but scrolling still works via touch/wheel/keyboard. */
+  /* When content exceeds vertical space the popover scrolls instead of being
+     clipped. Unlike the rest of the app the scrollbar stays visible (thin):
+     the five sections are taller than a laptop window, and without it the
+     rows below the fold look missing (ADR-041 §1). */
   max-height: calc(100vh - 5rem);
   overflow-y: auto;
-  scrollbar-width: none; /* Firefox */
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--text) 24%, transparent) transparent;
 }
 
+/* Safari before 18.2 has no scrollbar-width; undo the global display:none. */
 .settings-popover::-webkit-scrollbar {
-  display: none; /* WebKit (Safari, Chrome) */
+  display: block;
+  width: 7px;
+}
+.settings-popover::-webkit-scrollbar-track {
+  background: transparent;
+}
+.settings-popover::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--text) 24%, transparent);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  border-radius: 999px;
 }
 
 /* Container is programmatically focused on pointer-driven open so the first

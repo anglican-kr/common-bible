@@ -1784,6 +1784,15 @@ function buildReloadButton() {
   return button;
 }
 
+// 시작 페이지로 연 전례독서를 받지 못했을 때 실패 화면 대신 할 일 — 한 번만 쓴다(사용자 결정 2026-11-06, ADR-041 §2).
+/** @type {(() => void) | null} */
+let _lectionaryLoadFallback = null;
+
+/** @param {(() => void) | null} fallback */
+function setLectionaryLoadFallback(fallback) {
+  _lectionaryLoadFallback = fallback;
+}
+
 /**
  * 자료나 화면 모듈을 받지 못했을 때(연결이 끊김 · 캐시 없음 · 배포 사이의 어긋남)의 실패 화면 — 사용자에게는 같은 일이라
  * 화면도 같다.
@@ -1791,6 +1800,12 @@ function buildReloadButton() {
  * @returns {string} 페이지 메타의 제목
  */
 function renderLiturgicalLoadFailure(view) {
+  if (view === "lectionary" && _lectionaryLoadFallback) {
+    const fallback = _lectionaryLoadFallback;
+    _lectionaryLoadFallback = null;
+    fallback();
+    return LITURGICAL_VIEWS[view].title;
+  }
   return renderLiturgicalFailure(view, {
     message: LITURGICAL_VIEWS[view].loadFailure,
     subtitle: `네트워크 연결을 확인한 뒤 「${RELOAD_LABEL}」를 눌러 주세요.`,
@@ -1843,4 +1858,5 @@ export {
   renderLoading, renderError,
   appendVerses,
   LITURGICAL_VIEWS, THIS_MONTH_LABEL, commitLiturgicalTitle, renderLiturgicalFailure, renderLiturgicalLoadFailure,
+  setLectionaryLoadFallback,
 };
