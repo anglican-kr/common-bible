@@ -114,7 +114,7 @@ function preloadCalendar() {
 | 묶음 | 파일 | 크기 | 언제 |
 |---|---|---|---|
 | **캘린더** | `sanctoral`, `temporal-feasts`, `periods`, `ordinal-weeks`, `kasi-lunar` | 약 108KB | 캘린더 탭에 들어갈 때, `resolveDate` 전에 |
-| **독서** | `eucharist-readings`, `eucharist-collects`, `commons`, `canticles`, `half-verses`, `local-observances` | 약 1.7MB | 독서 화면에 들어갈 때, `findReadings`, `findCollects`, `findHalfVerse`, `findDedications` 전에 |
+| **독서** | `eucharist-readings`, `eucharist-collects`, `commons`, `half-verses`, `local-observances` | 약 1.7MB | 독서 화면에 들어갈 때, `findReadings`, `findCollects`, `findHalfVerse`, `findDedications` 전에 |
 
 **근거**: 캘린더는 "그날이 어떤 전례일인가 + 무슨 색인가"만 알면 되고, 그것은 정의 표에서 나온다. 1.2MB짜리 독서 파일을 달력을 열 때마다 받게 하면 첫 진입이 느려지고, 오프라인 캐시에 미리 받아 둘 양도 필요 이상으로 커진다. 큰 묶음은 독서 화면으로 들어가는 순간에만 싣는다.
 

@@ -161,7 +161,7 @@ function ix() {
   });
   const lec = ctx.buildLectionaryIndex({
     readings: read("eucharist-readings.json"), collects: read("eucharist-collects.json"),
-    commons: read("commons.json"), canticles: read("canticles.json"),
+    commons: read("commons.json"),
   });
   const rec = new Map(read("eucharist-readings.json").entries.map((e) => [e.id, e]));
   const col = new Map(read("eucharist-collects.json").entries.map((e) => [e.id, e]));
