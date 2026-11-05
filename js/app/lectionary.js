@@ -96,7 +96,7 @@ const PAGE_TITLE = LITURGICAL_VIEWS.lectionary.title;
 
 const SLOT_ORDER = ["first", "psalm", "second", "gospel"];
 /** @type {Record<string, string>} */
-const SLOT_LABEL = { first: "제1독서", psalm: "시편", second: "제2독서", gospel: "복음" };
+const SLOT_LABEL = { first: "제1독서", psalm: "성시", second: "제2독서", gospel: "복음" };
 // 한글 라벨은 데이터 `_vocab` 그대로 — lectionary.data.test.js 가 표와 대조한다(ADR-036 §4 단일 출처).
 /** @type {Record<string, string>} */
 const CYCLE_LABEL = { A: "가해", B: "나해", C: "다해", I: "홀수해", II: "짝수해" };
