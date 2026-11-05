@@ -1,4 +1,5 @@
 ---
+pr: 483
 date: 2026-11-05
 branch: fix/ash-wednesday-seollal
 title: "fix: 재의 수요일이 설과 겹치면 다음날로 옮겨 지킴"
