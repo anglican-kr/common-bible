@@ -334,6 +334,32 @@ def test_reading_cards_sit_above_first_reading_and_list_every_item(desktop_conte
     assert tops[0] == tops[1], tops
 
 
+def test_reading_card_marks_differing_refs_and_selected_border(desktop_context):
+    """다른 성구는 굵기 500이고 같은 성구는 400이다. 고른 카드의 테두리는 고르지 않은 카드와 같은 1px이고 --accent의 60%이며, 이름 아래에 가로선이 있다.
+    웹 글꼴을 쓰는 기기에서도 500으로 보이도록 글꼴 목록에 500이 있다(사용자 결정 2026-11-05)."""
+    page = desktop_context.new_page()
+    _open(page, "lectionary/2026-06-14")
+    s = page.evaluate("""() => {
+        const cs = (sel) => getComputedStyle(document.querySelector(sel));
+        const active = cs('.lect-card.active'), other = cs('.lect-card:not(.active)');
+        return {
+            differs: cs('.lect-card-ref--differs').fontWeight,
+            same: cs('.lect-card-ref:not(.lect-card-ref--differs)').fontWeight,
+            widths: [active.borderTopWidth, other.borderTopWidth],
+            activeColor: active.borderTopColor,
+            shadow: active.boxShadow,
+            line: cs('.lect-card-name').borderBottomWidth,
+            fonts: document.querySelector('link[rel=stylesheet][href*="fonts.googleapis"]').href,
+        };
+    }""")
+    assert (s["differs"], s["same"]) == ("500", "400"), s
+    assert s["widths"] == ["1px", "1px"], s
+    assert s["activeColor"].endswith("/ 0.6)"), s
+    assert "inset" not in s["shadow"], s
+    assert s["line"] == "1px", s
+    assert "Noto+Sans+KR:wght@400;500;700" in s["fonts"], s
+
+
 def test_reading_cards_fold_into_pills_and_stay_folded_on_every_day(mobile_context):
     """접으면 카드가 사라지고 제목 옆에 이름 알약이 남아 그 자리에서 바꾼다. 한 번 접으면 다른 날도 접혀 있고, 이름이 「독서 N」인 날은 본기도와
     같은 번호다. 포커스는 접기 단추에 남는다(사용자 결정 2026-11-05)."""
@@ -408,6 +434,9 @@ def test_reading_cards_fit_narrow_screen_with_largest_text(mobile_context):
     _open(page, "lectionary/2026-03-01")
     lefts = page.eval_on_selector_all(".lect-card", "els => els.map(e => Math.round(e.getBoundingClientRect().left))")
     assert lefts[0] < lefts[1], lefts
+    # 한쪽 이름이 두 줄이어도 이름 아래 가로선의 높이가 같다
+    lines = page.eval_on_selector_all(".lect-card-name", "els => els.map(e => Math.round(e.getBoundingClientRect().bottom))")
+    assert lines[0] == lines[1], lines
     page.evaluate("() => { document.documentElement.style.fontSize = '24px'; }")
     lefts = page.eval_on_selector_all(".lect-card", "els => els.map(e => Math.round(e.getBoundingClientRect().left))")
     assert lefts[0] == lefts[1], lefts
