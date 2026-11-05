@@ -1,4 +1,5 @@
 ---
+pr: 484
 date: 2026-11-05
 branch: fix/magnificat-label
 title: "fix: 성모송가 표기를 「루가 1:46하-55 (성모송가)」로 통일"
