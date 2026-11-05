@@ -80,7 +80,7 @@ def test_easter_day_renders_collect_then_four_readings_in_order(desktop_context)
 
 
 def test_collect_alternative_number_switches_text_and_url(desktop_context):
-    """본기도 대체안 번호 → ?collect=2, 본문이 바뀌고 고른 번호가 옮겨 간다."""
+    """본기도 대체안 번호를 누르면 주소에 ?collect=2가 적히고, 본문이 바뀌며 고른 번호가 옮겨 간다."""
     page = desktop_context.new_page()
     _open(page, "lectionary/2026-04-05")
     first = page.inner_text(".lect-collect-text")
@@ -590,7 +590,7 @@ def test_copy_excludes_optional_verse_brackets(desktop_context):
 
 def test_ember_friday_one_button_picks_readings_and_collect_without_common_caption(desktop_context):
     """추계재 금요일 — 성직후보자 · 수도자는 「독서 · 본기도」 단추 하나로 독서와 본기도를 함께 바꾼다(교차 조합이 없다 — 사용자 결정
-    2026-10-13; 둘째에도 닿는다 — collect_no 가 둘 다 1, 자체 리뷰 2026-10-13). 본기도 칸에는 따로 번호가 없다.
+    2026-10-13; 둘째에도 닿는다 — collect_no가 둘 다 1, 자체 리뷰 2026-10-13). 본기도 칸에는 따로 번호가 없다.
     니니안(공통뿐인 성인)은 전례독서 목록에 없어 주소로 가리켜도 기본 독서(격자)이고, 공통 분류 라벨은 어디에도 없다(사용자 결정
     2026-11-03 — 그전엔 「선교사 공통 독서」 캡션)."""
     page = desktop_context.new_page()
