@@ -255,9 +255,9 @@ $home?.addEventListener("click", (e) => {
   }
 });
 
-// ADR-038 §1 (A2): 캘린더 탭 — 홈과 같은 방식(ADR-031). 다른 탭에서 오면 마지막으로 보던
-// 캘린더 화면(전례독서 /lectionary/… 포함)으로 복원하고, 이미 캘린더 탭이면 가로채지 않아 정적
-// href="/calendar"(이번 달)로 pop-to-root 한다 — 전례독서를 보다 탭을 다시 누르면 이번 달 달력.
+// ADR-038 §1: 캘린더 탭. 다른 탭에서 오면 마지막으로 보던 캘린더 화면(전례독서 /lectionary/… 포함)으로,
+// 전례독서에서 누르면 마지막 캘린더 보기로 간다(사용자 결정 2026-11-07, 갈 곳은 tab-history.js calendarTabDest).
+// 캘린더 보기에서 누르면 가로채지 않아 정적 href="/calendar"(이번 달)로 간다.
 // 데스크톱 헤더의 캘린더 단추(#header-calendar — 탭 바가 없는 넓은 화면의 입구)도 이 처리기를 단다 —
 // 탭과 같은 곳으로 간다(사용자 결정 2026-10-15 · PR #348 리뷰; 그전엔 정적 href 뿐이라 늘 이번 달이었다).
 // 가로 모드의 스크롤 축소(.collapsed)에서는 탭이 다 보여 이 탭도 눌린다 — 같은 동작이고, 라우트가
@@ -268,13 +268,11 @@ function enterCalendarTab(e) {
   // 이동(PUSH)이 뷰가 정한 스크롤 대신 옛 위치로 튄다(전역 <a> 인터셉터와 같은 조건, helpers.js).
   if (isModifiedClick(e)) return;
   const th = W.tabHistory;
-  if (!th || th.tabOf(th.fullPath()) === "calendar") return;
+  const dest = th?.calendarTabDest();
+  if (!th || !dest) return;
+  e.preventDefault();
   th.requestRestore(); // 탭 전환(POP 의미론) → 그 화면의 스크롤 복원
-  const dest = th.lastPath("calendar");
-  if (dest && dest !== "/calendar") {
-    e.preventDefault();
-    W.navigate(dest);
-  }
+  W.navigate(dest);
 }
 document.querySelector('#tab-bar [data-tab="calendar"]')?.addEventListener("click", enterCalendarTab);
 document.getElementById("header-calendar")?.addEventListener("click", enterCalendarTab);

@@ -225,6 +225,25 @@ test("loadLectionaryCardsFolded/saveLectionaryCardsFolded: 처음에는 펼치�
   assert.equal(loadStorage({ localStorageInit: { "bible-lectionary-cards-folded": "0" } }).appStorage.loadLectionaryCardsFolded(), false);
 });
 
+test("loadCalendarLastView/saveCalendarLastView: 마지막 캘린더 보기의 주소를 기억하고, 캘린더 주소가 아니면 없는 것으로 읽는다(ADR-038 §1)", () => {
+  const h = loadStorage();
+  assert.equal(h.appStorage.loadCalendarLastView(), null);
+  h.appStorage.saveCalendarLastView("/calendar/2026-12");
+  assert.equal(h.appStorage.loadCalendarLastView(), "/calendar/2026-12");
+  assert.equal(h.localStorage.getItem("bible-calendar-last-view"), "/calendar/2026-12");
+  h.appStorage.saveCalendarLastView("/calendar");
+  assert.equal(h.appStorage.loadCalendarLastView(), "/calendar");
+  const read = (/** @type {string} */ raw) => loadStorage({ localStorageInit: { "bible-calendar-last-view": raw } }).appStorage.loadCalendarLastView();
+  assert.equal(read("/calendar/list"), "/calendar/list");
+  for (const bad of ["", "/lectionary/2026-12-25", "/calendarx", "//example.com/calendar", "calendar/2026-12"]) {
+    assert.equal(read(bad), null, bad);
+  }
+  // 읽기와 쓰기에 실패해도 던지지 않는다(사생활 보호 모드, 저장 공간 부족)
+  const failing = loadStorage({ localStorageThrowOn: new Set(["bible-calendar-last-view"]) });
+  assert.equal(failing.appStorage.loadCalendarLastView(), null);
+  assert.doesNotThrow(() => failing.appStorage.saveCalendarLastView("/calendar/2026-12"));
+});
+
 test("loadStartPage/saveStartPage: 처음에는 성서, 모르는 값도 성서이고, 저장하면 동기화에 알린다(ADR-041 §2)", () => {
   const h = loadStorage();
   assert.equal(h.appStorage.loadStartPage(), "bible");

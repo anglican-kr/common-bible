@@ -52,6 +52,8 @@ window.appStorage = (/** @returns {AppStorage} */ () => {
   // 채로 보인다(사용자 결정 2026-11-05). 로컬 전용.
   const LECTIONARY_CARDS_FOLDED_KEY = "bible-lectionary-cards-folded";
   const LECTIONARY_ALT_SHOW_KEY = "bible-lectionary-alt-show"; // "1"/"0" or "true"/"false" via sync; default OFF when unset
+  // ADR-038 §1 — 캘린더 탭이 돌아갈 마지막 캘린더 보기의 주소. 앱을 다시 열어도 이어진다(사용자 결정 2026-11-07). 로컬 전용.
+  const CALENDAR_LAST_VIEW_KEY = "bible-calendar-last-view";
   const SEARCH_HISTORY_MAX = 30; // storage cap (LRU)
 
   // ── UI-shared constants (consumed by settings-ui in Phase 3) ──
@@ -586,6 +588,24 @@ window.appStorage = (/** @returns {AppStorage} */ () => {
   }
 
   /**
+   * 마지막으로 본 캘린더 보기의 주소. 없거나 캘린더 주소가 아니면 null이고, 그때 탭은 이번 달로 간다(ADR-038 §1).
+   * @returns {string | null}
+   */
+  function loadCalendarLastView() {
+    try {
+      const path = localStorage.getItem(CALENDAR_LAST_VIEW_KEY);
+      return path !== null && /^\/calendar(\/|$)/.test(path) ? path : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** @param {string} path */
+  function saveCalendarLastView(path) {
+    try { localStorage.setItem(CALENDAR_LAST_VIEW_KEY, path); } catch { /* quota / private mode */ }
+  }
+
+  /**
    * 대체 독서(대축일, 주요축일, 고유 독서가 있는 축일에 그날의 평일, 주일 줄)를 전례독서 목록에 보이는가 — 처음에는 숨긴다(사용자 결정 2026-11-05).
    * 동기화가 쓰는 "true"/"false"도 읽는다(`loadCiteShow`와 같다).
    * @returns {boolean}
@@ -626,6 +646,7 @@ window.appStorage = (/** @returns {AppStorage} */ () => {
     loadLectionaryTrack, saveLectionaryTrack,
     loadLectionaryCardsFolded, saveLectionaryCardsFolded,
     loadLectionaryAltShow, saveLectionaryAltShow,
+    loadCalendarLastView, saveCalendarLastView,
     _loadNudgeState, _saveNudgeState,
     _maybeRequestPersist,
   };
