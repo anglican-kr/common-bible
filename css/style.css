@@ -3030,19 +3030,21 @@ mark.search-highlight {
   border-top-right-radius: 0;
   border-bottom-right-radius: 0;
 }
-.verse.verse-poetry.verse-highlight.verse-highlight-join-prev {
+/* :not(.verse-selected): the selection can end inside a highlighted range, so a
+   selected span takes its corners from the selection's rules. */
+.verse.verse-poetry.verse-highlight.verse-highlight-join-prev:not(.verse-selected) {
   border-top-left-radius: 0;
   border-top-right-radius: 0;
   border-bottom-left-radius: 5px;
   border-bottom-right-radius: 5px;
 }
-.verse.verse-poetry.verse-highlight.verse-highlight-join-next {
+.verse.verse-poetry.verse-highlight.verse-highlight-join-next:not(.verse-selected) {
   border-bottom-left-radius: 0;
   border-bottom-right-radius: 0;
   border-top-left-radius: 5px;
   border-top-right-radius: 5px;
 }
-.verse.verse-poetry.verse-highlight.verse-highlight-join-prev.verse-highlight-join-next {
+.verse.verse-poetry.verse-highlight.verse-highlight-join-prev.verse-highlight-join-next:not(.verse-selected) {
   border-radius: 0;
 }
 
@@ -3668,7 +3670,10 @@ body.cites-shown :is(.verse-selected, .verse-highlight) + .cite-chip {
 body.cites-shown :is(.verse-selected, .verse-highlight) + .cite-chip--poetry {
   border-radius: 0 0 var(--radius-sm) var(--radius-sm);
 }
-body.cites-shown :is(.verse-selected-join-next, .verse-highlight-join-next) + .cite-chip {
+/* A selected span follows the selection's run, not the address highlight's: the
+   selection can end inside a highlighted range. */
+body.cites-shown .verse-selected-join-next + .cite-chip,
+body.cites-shown .verse-highlight-join-next:not(.verse-selected) + .cite-chip {
   border-radius: 0;
 }
 

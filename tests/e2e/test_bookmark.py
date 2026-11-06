@@ -300,16 +300,21 @@ def test_merge_into_pre205_bookmark_keeps_its_verses(browser):
 
 
 # 인용 칩은 절 요소의 자식이 아니라 형제다. 그래서 절의 배경을 물려받지 못한다(ADR-022 §6).
-def _enter_select_with_chip(browser, path: str):
+def _enter_select(browser, path: str):
     ctx = browser.new_context()
     ctx.add_init_script(CLEAR_APP_STORAGE)
     ctx.add_init_script("try { localStorage.setItem('bible-cite-coachmark-seen','1'); } catch(_) {}")
     page = ctx.new_page()
     _open_chapter_and_wait(page, path)
-    page.wait_for_selector(".cite-chip")
-    book, chapter = path.split("/")
+    book, chapter, *_ = path.split("/")
     page.evaluate(f"() => enterVerseSelectMode('{book}', {chapter})")
     page.wait_for_selector("#verse-select-bar:not([hidden])")
+    return ctx, page
+
+
+def _enter_select_with_chip(browser, path: str):
+    ctx, page = _enter_select(browser, path)
+    page.wait_for_selector(".cite-chip")
     return ctx, page
 
 
@@ -406,4 +411,30 @@ def test_highlighted_range_covers_its_cite_chip(browser):
     assert m["chipBg"] != "rgba(0, 0, 0, 0)"
     assert m["chipTop"] == m["spanTop"]
     assert m["chipEndRadius"] == "0px"
+    ctx.close()
+
+
+def test_selected_chip_in_highlighted_range_rounds_where_selection_ends(browser):
+    """`/gal/3/6-10` 에서 6절만 고르면 선택은 칩에서 끝난다. 주소 강조가 뒤로 이어져도 칩의 끝 모서리는 둥글다."""
+    ctx, page = _enter_select_with_chip(browser, "gal/3/6-10")
+    page.click("#v6")
+
+    m = page.evaluate(_CHIP_AND_SPAN, ".verse-selected + .cite-chip")
+    assert m["chipBg"] == m["spanBg"]
+    assert m["chipEndRadius"] != "0px"
+    ctx.close()
+
+
+def test_selected_poetry_in_highlighted_range_rounds_where_selection_ends(browser):
+    """`/ps/23/1-6` 에서 3절만 고르면 주소 강조가 앞뒤로 이어져도 선택의 위아래 끝 모서리는 둥글다."""
+    ctx, page = _enter_select(browser, "ps/23/1-6")
+    page.click("#v3")
+
+    corners = page.evaluate("""async () => {
+      await Promise.all(document.getAnimations().filter((a) => a instanceof CSSTransition).map((a) => a.finished));
+      const spans = [...document.querySelectorAll('.verse-selected')];
+      return [getComputedStyle(spans[0]).borderTopLeftRadius, getComputedStyle(spans.at(-1)).borderBottomRightRadius];
+    }""")
+    assert corners[0] != "0px"
+    assert corners[1] != "0px"
     ctx.close()
