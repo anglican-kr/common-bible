@@ -1,4 +1,5 @@
 ---
+pr: 500
 date: 2026-11-06
 branch: feat/optional-transfer-weekday
 title: "feat: 옮겨 지킬 수 있는 축일의 평일 대체 독서 표시"
