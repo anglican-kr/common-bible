@@ -200,7 +200,7 @@ ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` 약 6,000줄이 도메�
 | ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
 | `js/app/helpers.js`                | 공통 DOM 헬퍼(`_$`/`el`/`clearNode`/`setInert`/`trapFocus`)와 `emptyState` 빌더. 헤더 아이콘을 그리는 `headerIcon`과 `HEADER_ICON_PATHS`(헤더 아이콘 SVG 규격 하나와 글리프마다 path 하나. 집 단추와 인용 시트 뒤로 단추가 함께 쓴다). 새 탭에서 열리는 클릭인지 판정하는 `isModifiedClick`(전역 `<a>` 인터셉터와 탭 처리기가 함께 쓴다). 같은 화면을 다시 그린 뒤 누른 컨트롤로 포커스와 화면 위치를 돌려주는 `focusSpotOf`와 `restoreFocusSpot`(라우터가 연결한다. 포커스를 잃었을 때만 돌려주고, `#app` 밖의 고정된 컨트롤은 포커스만 돌려준다. ADR-031 §5) | ~360    |
 | `js/app/overlay.js`                | 오버레이 생명주기를 한 곳에서 맡는 컨트롤러 `createOverlay`(scrim, `trapFocus`, Esc 키, `inert`, 포커스 복원, 애니메이션을 거친 닫기), 시트 팩토리, 열린 오버레이를 모두 닫는 `closeAllOverlays()`와 그 등록부 ([ADR-032](decisions/032-component-view-layer.md), ADR-034 PR5b) | ~330    |
-| `js/app/storage.js`                | localStorage 헬퍼, UI 공유 상수, 북마크 두 사본을 수정 시각을 올리지 않고 고쳐 쓰는 `rewriteBookmarks`, 전례독서 트랙 기억(`bible-lectionary-track`)과 독서 카드 접힘 기억(`bible-lectionary-cards-folded`)                                      | ~625    |
+| `js/app/storage.js`                | localStorage 헬퍼, UI 공유 상수, 북마크 두 사본을 수정 시각을 올리지 않고 고쳐 쓰는 `rewriteBookmarks`, 전례독서 트랙 기억(`bible-lectionary-track`)과 독서 카드 접힘 기억(`bible-lectionary-cards-folded`), 마지막 캘린더 보기(`bible-calendar-last-view`)                                      | ~660    |
 | `js/app/settings-ui.js`            | 설정 팝오버와 모바일 설정 화면(섹션 다섯, ADR-041), 외관 적용, 인용과 주석 토글, Drive 줄(연결, 해제, 진단 복사, 끝나지 않은 삭제를 알리는 `.settings-drive-note`). 로그인 상태가 바뀌면 두 화면을 모두 다시 그린다 | ~950    |
 | `js/app/install.js`                | PWA 설치 감지, 안내 모달, 설치 안내 넛지                                                                                                                                          | ~495    |
 | `js/app/search.js`                 | 검색 워커 연결, 결과 그리기, 이력 패널, 시트([ADR-033](decisions/033-search-options.md)). 쪽 링크는 포커스 키를 달고(라우터가 포커스를 돌려준다. ADR-031 §5), 쪽이 바뀌면 라이브 영역이 말로 알린다. 결과 건수 줄은 `h2`다 | ~1,595  |
@@ -220,7 +220,7 @@ ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` 약 6,000줄이 도메�
 | `js/app/bookmark-read.js`          | 북마크 모아 읽기. 폴더 단위 연속 읽기 화면이다(`appendVerses`로 절 부분집합을 그리고, 인접한 연속 본문은 합치고, 중첩 폴더는 소제목으로 나눈다) ([ADR-035](decisions/035-bookmark-reading-view.md)) | ~475    |
 | `js/app/citations.js`              | 인용 칩의 중복 제거와 그리기, 인용 본문 바텀 시트(확장 화면, 드래그로 크기 조절), 주석이 붙는 낱말의 위 첨자, 클릭 툴팁([ADR-022](decisions/022-citations-and-annotations.md)). 시트 머리의 뒤로 꺾쇠는 `headerIcon`으로 그린다 | ~1,135  |
 | `js/app/parallels.js`              | 단락 단위 병행 본문. `chapter.parallels`를 범위 시작 절의 ※ 표지로 그리고, 누르면 주석과 같은 모양의 툴팁이 나온다. 그 안의 출처를 누르면 `#cite-sheet`가 열린다 ([ADR-027](decisions/027-source-dsl-and-parallel-passages.md)) | ~295    |
-| `js/app/tab-history.js`            | 탭별 라우트와 스크롤 위치 복원. 뒤로 가기와 같은 방식(POP)으로 `popstate`와 탭 전환에서만 복원한다. `/lectionary`와 `/calendar`는 캘린더 탭이다 ([ADR-031](decisions/031-tab-history-restore.md))           | ~140    |
+| `js/app/tab-history.js`            | 탭별 라우트와 스크롤 위치 복원. 뒤로 가기와 같은 방식(POP)으로 `popstate`와 탭 전환에서만 복원한다. `/lectionary`와 `/calendar`는 캘린더 탭이고, 마지막 캘린더 보기를 따로 기억한다 ([ADR-031](decisions/031-tab-history-restore.md))           | ~175    |
 | `js/app/data-fetch.js`             | 데이터 가져오기(books, version, chapter, prologue 요청과 `booksCache`, `appVersion` 캐시). 다른 모듈에 의존하지 않는다(ADR-034 PR2)                                                                   | ~90     |
 | `js/app/audio-player.js`           | 장별 mp3 플레이어 UI, 재생 상태, `#audio-bar` 생명주기(ADR-034 PR1)                                                                                                    | ~240    |
 | `js/app/views.js`                  | 렌더 헬퍼, 화면 그리기 함수(코드의 `Views` 구역), `appendVerses` 절 그리기, 세그먼트 탭 빌더 `buildSegmentTabs`(구분 탭과 독서 뷰 세그먼트가 함께 쓴다. 항목의 `focusKey`로 라우터가 다시 그린 뒤 포커스를 돌려준다), 책 이름과 헤더를 자동으로 짧게 표시하는 처리, 캘린더와 전례독서의 머리와 전체 화면 실패(`commitLiturgicalTitle`, `renderLiturgicalFailure`. 두 화면 모듈과 라우터가 함께 쓴다. 화면 모듈을 받지 못해도 그릴 수 있게 부팅 모듈에 둔다). 데이터 가져오기는 data-fetch.js로, 오디오는 audio-player.js로, 탭 인디케이터는 tabbar.js로, 라우팅은 routing.js로 옮겼고, 당겨서 새로 고침(PTR)은 제거했다(ADR-034) | ~1,840 |
@@ -400,6 +400,7 @@ ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` 약 6,000줄이 도메�
 | `localStorage` | `bible-audio-pos` | 오디오 재생 위치 | 로컬 전용 |
 | `localStorage` | `bible-lectionary-track` | 전례독서 트랙 기억. 값은 하나(`1` 또는 `2`)이고, 마지막 선택이 날짜와 해에 상관없이 기본값이 된다(사용자 결정 2026-10-13, ADR-038 §3) | 로컬 전용 |
 | `localStorage` | `bible-lectionary-cards-folded` | 전례독서의 독서 카드를 접어 둔 상태. 접으면 `1`이고 펼치면 키를 지운다. 모든 날에 같이 쓴다(사용자 결정 2026-11-05, ADR-038 §3) | 로컬 전용 |
+| `localStorage` | `bible-calendar-last-view` | 캘린더 탭이 돌아갈 마지막 캘린더 보기의 주소. 앱을 다시 열어도 이어지고, 제대로 그린 보기만 저장한다(사용자 결정 2026-11-07, ADR-038 §1) | 로컬 전용 |
 | `localStorage` | `bible-search-history` | 검색 이력 (LRU, [ADR-014](decisions/014-search-history.md)) | 로컬 전용 |
 | `localStorage` | `bible-bookmark-sort`, `bible-bookmark-sort-dir`, `bible-bookmark-viewed` | 북마크 정렬 기준, 방향, 최근 본 시각 | 로컬 전용 |
 | `localStorage` | `bible-install-nudge`, `bible-cite-coachmark-seen` | 설치 안내 넛지 상태, 인용 칩 안내를 봤는지 여부 | 로컬 전용 |

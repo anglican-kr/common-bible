@@ -1054,6 +1054,9 @@ export interface AppStorage {
   // 전례독서 목록에 대체 독서의 줄을 보이는가(ADR-038 §3). 처음에는 숨긴다(사용자 결정 2026-11-05).
   loadLectionaryAltShow: () => boolean;
   saveLectionaryAltShow: (on: boolean) => void;
+  // 캘린더 탭이 돌아갈 마지막 캘린더 보기의 주소(ADR-038 §1). 앱을 다시 열어도 이어진다(사용자 결정 2026-11-07). 로컬 전용.
+  loadCalendarLastView: () => string | null;
+  saveCalendarLastView: (path: string) => void;
 
   // Install nudge state
   _loadNudgeState: () => InstallNudgeState;
@@ -1244,6 +1247,8 @@ declare global {
       requestRestore: () => void;
       lastPath: (tab: "home" | "search" | "bookmarks" | "settings" | "calendar") => string;
       recordPath: (path: string) => void;
+      rememberCalendarView: () => void;
+      calendarTabDest: () => string | null;
       _scrollMemory: Map<string, number>;
       _lastPathForTab: Record<"home" | "search" | "bookmarks" | "settings" | "calendar", string>;
     };

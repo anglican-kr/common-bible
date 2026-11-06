@@ -388,6 +388,7 @@ async function renderCalendarView(parsed) {
   if (isStale()) return PAGE_TITLE;
   const model = buildMonthGrid(target.y, target.m, today, resolveDate);
   commitMonth(model);
+  window.tabHistory?.rememberCalendarView();   // 제대로 그린 보기만 기억한다 — 위의 실패 화면은 남지 않는다(ADR-038 §1)
   return `${model.title} ${PAGE_TITLE}`;
 }
 

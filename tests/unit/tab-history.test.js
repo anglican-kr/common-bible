@@ -41,9 +41,9 @@ const TABOF_BLOCK = extractBlock("TABOF");
 // Evaluate the sliced block in a bare vm and pull out tabOf.
 const ctx = { module: { exports: {} } };
 vm.createContext(ctx);
-vm.runInContext(`${TABOF_BLOCK}\nmodule.exports = tabOf;`, ctx);
-/** @type {(p: string) => string} */
-const tabOf = ctx.module.exports;
+vm.runInContext(`${TABOF_BLOCK}\nmodule.exports = { tabOf, pickCalendarTabDest };`, ctx);
+/** @type {{ tabOf: (p: string) => string, pickCalendarTabDest: (current: string, lastInTab: string, lastView: string) => string | null }} */
+const { tabOf, pickCalendarTabDest } = ctx.module.exports;
 
 test("tabOf: 루트('/')는 home", () => {
   assert.equal(tabOf("/"), "home");
@@ -101,4 +101,25 @@ test("tabOf: /lectionary 와 /calendar 는 calendar(ADR-038 §1 · §3 — 캘�
   assert.equal(tabOf("/calendar"), "calendar");
   assert.equal(tabOf("/calendar/2026-04"), "calendar");
   assert.equal(tabOf("/lectionaryx"), "home");
+});
+
+test("pickCalendarTabDest: 다른 탭에서는 이 탭의 마지막 화면이다(전례독서 포함, ADR-038 §1)", () => {
+  assert.equal(pickCalendarTabDest("/bookmarks", "/lectionary/2026-12-25", "/calendar/2026-12"), "/lectionary/2026-12-25");
+  assert.equal(pickCalendarTabDest("/john/3", "/calendar/2026-12", "/calendar/2026-12"), "/calendar/2026-12");
+  assert.equal(pickCalendarTabDest("/", "/calendar", "/calendar"), "/calendar");
+});
+
+test("pickCalendarTabDest: 전례독서에서는 마지막 캘린더 보기다(사용자 결정 2026-11-07)", () => {
+  const view = "/calendar/2026-12";
+  assert.equal(pickCalendarTabDest("/lectionary", "/lectionary", view), view);
+  assert.equal(pickCalendarTabDest("/lectionary/2027-01-01", "/lectionary/2027-01-01", view), view);
+  assert.equal(pickCalendarTabDest("/lectionary/2026-12-25?obs=t-x&track=2", "/lectionary/2026-12-25?obs=t-x&track=2", view), view);
+  assert.equal(pickCalendarTabDest("/lectionary?track=1", "/lectionary?track=1", "/calendar"), "/calendar");
+});
+
+test("pickCalendarTabDest: 캘린더 보기에서는 null이다(가로채지 않아 정적 href로 이번 달)", () => {
+  assert.equal(pickCalendarTabDest("/calendar", "/calendar", "/calendar"), null);
+  assert.equal(pickCalendarTabDest("/calendar/2026-12", "/calendar/2026-12", "/calendar/2026-12"), null);
+  // 잘못된 주소의 실패 화면에서도 이번 달로 빠져나간다
+  assert.equal(pickCalendarTabDest("/calendar/2026-13", "/calendar/2026-13", "/calendar/2026-12"), null);
 });

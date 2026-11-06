@@ -99,9 +99,9 @@ def test_grid_is_six_weeks_from_sunday(desktop_context):
 
 # ── ③ 칸 → 전례독서 → 위 단계 ──
 
-def test_cell_opens_lectionary_and_the_tab_returns_to_this_month(mobile_context):
+def test_cell_opens_lectionary_and_the_tab_returns_to_the_last_month(mobile_context):
     """12월 25일 칸을 누르면 /lectionary/2026-12-25(성탄 낮)다. 머리의 제목 자리는 그날의 날짜 이동 줄이고 위 단계 꺾쇠는 없다 — 캘린더로는
-    탭 바의 캘린더 탭이 간다(사용자 결정 2026-11-03). 독서 화면도 캘린더 화면이라 탭은 이번 달로 간다(탭의 pop-to-root)."""
+    탭 바의 캘린더 탭이 간다(사용자 결정 2026-11-03). 탭은 마지막으로 본 달로 돌아간다(사용자 결정 2026-11-07)."""
     page = mobile_context.new_page()
     _open(page, "calendar/2026-12")
     _cell(page, "2026-12-25").click()
@@ -115,8 +115,8 @@ def test_cell_opens_lectionary_and_the_tab_returns_to_this_month(mobile_context)
     # 캘린더 탭 소속 — 독서 화면에서도 캘린더 탭이 활성
     assert page.get_attribute("#tab-bar [data-tab='calendar']", "aria-current") == "page"
     page.locator("#tab-bar [data-tab='calendar']").click()
-    page.wait_for_url(f"{BASE}/calendar")
-    page.wait_for_selector(f".cal-month:has-text('{_this_month()[1]}')")
+    page.wait_for_url(f"{BASE}/calendar/2026-12")
+    page.wait_for_selector(".cal-month:has-text('2026년 12월')")
 
 
 # ── ④ 칸의 이름 · 색 점 · 링크 이름 ──
@@ -166,8 +166,8 @@ def test_advent_sunday_marks_the_new_liturgical_year(desktop_context):
 
 # ── ⑤ 탭 복원 ──
 
-def test_calendar_tab_restores_last_screen_and_retap_pops_to_this_month(mobile_context):
-    """캘린더 → 12.25 독서 → 북마크 탭 → 캘린더 탭이면 그 독서 화면으로 돌아오고, 캘린더 탭을 다시 누르면 이번 달."""
+def test_calendar_tab_steps_back_from_reading_to_month_to_this_month(mobile_context):
+    """캘린더 → 12.25 독서 → 북마크 탭 → 캘린더 탭이면 그 독서 화면으로 돌아온다. 다시 누르면 마지막 달, 한 번 더 누르면 이번 달(ADR-038 §1)."""
     page = mobile_context.new_page()
     _open(page, "calendar/2026-12")
     _cell(page, "2026-12-25").click()
@@ -179,8 +179,89 @@ def test_calendar_tab_restores_last_screen_and_retap_pops_to_this_month(mobile_c
     page.wait_for_url("**/lectionary/2026-12-25")
     page.wait_for_selector(".lect-day:has-text('성탄 낮')", timeout=20_000)
     page.locator("#tab-bar [data-tab='calendar']").click()
+    page.wait_for_url(f"{BASE}/calendar/2026-12")
+    page.wait_for_selector(".cal-month:has-text('2026년 12월')")
+    page.locator("#tab-bar [data-tab='calendar']").click()
     page.wait_for_url(f"{BASE}/calendar")
     page.wait_for_selector(f".cal-month:has-text('{_this_month()[1]}')")
+
+
+def test_calendar_tab_returns_to_the_month_from_another_tab(mobile_context):
+    """달력을 보다 다른 탭에 다녀오면 그 달이다(이번 달이 아니다)."""
+    page = mobile_context.new_page()
+    _open(page, "calendar/2027-03")
+    page.locator("#tab-bar [data-tab='bookmarks']").click()
+    page.wait_for_url("**/bookmarks")
+    page.locator("#tab-bar [data-tab='calendar']").click()
+    page.wait_for_url(f"{BASE}/calendar/2027-03")
+    page.wait_for_selector(".cal-month:has-text('2027년 3월')")
+
+
+def test_calendar_tab_keeps_the_last_month_while_reading_steps_into_another_month(mobile_context):
+    """독서에서 날짜를 넘겨 다음 달로 가도, 탭은 그 날짜의 달이 아니라 마지막으로 본 달로 돌아간다(사용자 결정 2026-11-07)."""
+    page = mobile_context.new_page()
+    _open(page, "calendar/2026-12")
+    _cell(page, "2026-12-31").click()
+    page.wait_for_url("**/lectionary/2026-12-31")
+    page.wait_for_selector(".lect-day", timeout=20_000)
+    page.locator("#page-title a.lect-datenav-btn[aria-label='다음날']").click()
+    page.wait_for_url("**/lectionary/2027-01-01*")
+    page.wait_for_selector(".lect-day", timeout=20_000)
+    page.locator("#tab-bar [data-tab='calendar']").click()
+    page.wait_for_url(f"{BASE}/calendar/2026-12")
+
+
+def test_calendar_tab_restores_the_month_scroll_from_reading(mobile_context):
+    """독서에서 탭으로 돌아오면 달력의 스크롤도 떠날 때 자리다."""
+    page = mobile_context.new_page()
+    page.set_viewport_size({"width": 390, "height": 420})
+    _open(page, "calendar/2026-12")
+    page.evaluate("window.scrollTo(0, 120)")
+    page.wait_for_function("() => Math.abs(window.scrollY - 120) < 2")
+    page.evaluate("document.querySelector(\".cal-grid a.cal-cell[href='/lectionary/2026-12-25']\").click()")
+    page.wait_for_url("**/lectionary/2026-12-25")
+    page.wait_for_selector(".lect-day", timeout=20_000)
+    page.locator("#tab-bar [data-tab='calendar']").click()
+    page.wait_for_url(f"{BASE}/calendar/2026-12")
+    page.wait_for_selector(".cal-grid")
+    page.wait_for_function("() => Math.abs(window.scrollY - 120) < 2")
+
+
+def test_calendar_position_survives_reopening_the_app(mobile_context):
+    """앱을 다시 열어도 마지막 달로 돌아간다. 전례독서 화면과 잘못된 주소는 기억하지 않는다(ADR-038 §1)."""
+    page = mobile_context.new_page()
+    _open(page, "calendar/2027-03")
+    _cell(page, "2027-03-21").click()
+    page.wait_for_url("**/lectionary/2027-03-21")
+    page.wait_for_selector(".lect-day", timeout=20_000)
+    _open(page, "calendar/2026-13")   # 실패 화면 — 기억하지 않는다
+    assert page.locator(".calendar .empty-state-title").count() == 1
+    page.goto(f"{BASE}/bookmarks")
+    page.locator("#tab-bar [data-tab='calendar']").click()
+    page.wait_for_url(f"{BASE}/calendar/2027-03")
+    page.wait_for_selector(".cal-month:has-text('2027년 3월')")
+    assert page.evaluate("() => localStorage.getItem('bible-calendar-last-view')") == "/calendar/2027-03"
+    # 「오늘」로 이번 달에 가면 그것이 새 위치다
+    page.locator(".lect-today").click()
+    page.wait_for_url(f"{BASE}/calendar")
+    page.wait_for_selector(f".cal-month:has-text('{_this_month()[1]}')")
+    page.goto(f"{BASE}/bookmarks")
+    page.locator("#tab-bar [data-tab='calendar']").click()
+    page.wait_for_url(f"{BASE}/calendar")
+
+
+def test_calendar_tab_from_lectionary_start_page_goes_to_the_saved_month(mobile_context):
+    """시작 화면으로 전례독서를 연 뒤 탭을 누르면 저장해 둔 달이다(앱을 새로 열어 그 세션에 달력을 본 적이 없어도)."""
+    mobile_context.add_init_script("""
+      localStorage.setItem('bible-start-page', 'lectionary');
+      localStorage.setItem('bible-calendar-last-view', '/calendar/2027-03');
+    """)
+    page = mobile_context.new_page()
+    page.goto(f"{BASE}/")
+    page.wait_for_selector(".lect-day", timeout=20_000)
+    page.locator("#tab-bar [data-tab='calendar']").click()
+    page.wait_for_url(f"{BASE}/calendar/2027-03")
+    page.wait_for_selector(".cal-month:has-text('2027년 3월')")
 
 
 def test_modifier_click_on_calendar_tab_leaves_this_page_alone(mobile_context):
@@ -281,8 +362,8 @@ def test_desktop_header_has_calendar_entry_and_home_button(desktop_context):
 
 
 def test_desktop_header_calendar_entry_goes_where_the_tab_goes(desktop_context):
-    """헤더의 캘린더 단추는 탭과 같은 곳으로 — 다른 화면에서는 마지막 캘린더 화면(독서 포함), 캘린더 화면에서는 이번 달
-    (사용자 결정 2026-10-15 · PR #348 리뷰 — 그전엔 정적 href 라 늘 이번 달이었다)."""
+    """헤더의 캘린더 단추는 탭과 같은 곳으로 — 다른 화면에서는 마지막 캘린더 화면(독서 포함), 독서에서는 마지막 달, 달력에서는 이번 달
+    (사용자 결정 2026-10-15, 2026-11-07 · PR #348 리뷰 — 그전엔 정적 href 라 늘 이번 달이었다)."""
     page = desktop_context.new_page()
     _open(page, "calendar/2026-12")
     _cell(page, "2026-12-25").click()
@@ -293,13 +374,11 @@ def test_desktop_header_calendar_entry_goes_where_the_tab_goes(desktop_context):
     page.locator("#header-calendar").click()
     page.wait_for_url("**/lectionary/2026-12-25")
     page.wait_for_selector(".lect-day:has-text('성탄 낮')", timeout=20_000)
-    # 독서 화면도 캘린더 화면이라 다시 누르면 이번 달(머리의 위 단계 꺾쇠는 없다 — 사용자 결정 2026-11-03)
+    # 독서 화면에서 누르면 마지막으로 본 달(머리의 위 단계 꺾쇠는 없다 — 사용자 결정 2026-11-03, 2026-11-07)
     page.locator("#header-calendar").click()
-    page.wait_for_url(f"{BASE}/calendar")
-    page.wait_for_selector(f".cal-month:has-text('{_this_month()[1]}')")
-    # 다른 달을 연 뒤 집 단추로 성서 목록에 가고, 헤더 단추를 누르면 그 달로 돌아온다
-    page.evaluate("navigate('/calendar/2026-12')")
+    page.wait_for_url(f"{BASE}/calendar/2026-12")
     page.wait_for_selector(".cal-month:has-text('2026년 12월')")
+    # 집 단추로 성서 목록에 가고, 헤더 단추를 누르면 그 달로 돌아온다
     page.locator("#page-title .title-home-btn").click()
     page.wait_for_url(f"{BASE}/")
     page.wait_for_selector(".book-list")
