@@ -71,6 +71,8 @@ export interface SyncFlatItem {
 
 // ── Settings ─────────────────────────────────────────────────────────────────
 
+export type StartPage = "bible" | "lectionary";
+
 export type SettingKey =
   | "fontSize"
   | "colorScheme"
@@ -1018,8 +1020,9 @@ export interface AppStorage {
   // Settings
   loadStartupBehavior: () => string;
   saveStartupBehavior: (val: string) => void;
-  loadStartPage: () => "bible" | "lectionary";
-  saveStartPage: (page: "bible" | "lectionary") => void;
+  START_PAGES: Record<StartPage, { label: string; path: string }>;
+  loadStartPage: () => StartPage;
+  saveStartPage: (page: StartPage) => void;
   loadFontSize: () => number;
   saveFontSize: (size: number) => void;
   loadColorScheme: () => ColorSchemeId;
@@ -1344,6 +1347,8 @@ declare global {
     applyTheme?: (theme: string) => void;
     applyCiteShow?: (on: boolean) => void;
     applyAudioShow?: (on: boolean) => void;
+    // routing.js: redraws the open view when a synced setting changed what it shows; state-machine.js calls it.
+    redrawIfSyncedSettingsChanged?: () => Promise<void> | undefined;
     // Manual SW update check — set by app.js inside registerServiceWorker()
     // so it can capture the registration and reuse showUpdateToast(). Returns
     // a status object the caller can surface as transient feedback.

@@ -40,6 +40,15 @@ CLEAR_APP_STORAGE = """
 """
 
 
+# 스크린 리더에 알리는 글을 차례대로 window.__said에 모은다 — `page.evaluate(RECORD_ANNOUNCEMENTS)`.
+RECORD_ANNOUNCEMENTS = """() => {
+  window.__said = [];
+  const live = document.getElementById('a11y-announce');
+  new MutationObserver(() => { if (live.textContent) window.__said.push(live.textContent); })
+    .observe(live, { childList: true, characterData: true, subtree: true });
+}"""
+
+
 # 설정 「대체 독서 표시」를 켠 기기 — 평일 줄을 눌러 보는 시험에 쓴다(기본값은 숨김, ADR-041 §4).
 SHOW_ALT_READINGS = "try { localStorage.setItem('bible-lectionary-alt-show', '1'); } catch (_) {}"
 

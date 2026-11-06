@@ -1,5 +1,5 @@
 """E2E: 설정 팝오버 — 섹션, 시작 페이지, 시작 화면, 책 순서, 글자 크기, 테마, 색상, 캐시, 영속성."""
-from .conftest import CLEAR_APP_STORAGE, MOBILE_VIEWPORT, IPHONE_UA, open_settings
+from .conftest import CLEAR_APP_STORAGE, MOBILE_VIEWPORT, IPHONE_UA, RECORD_ANNOUNCEMENTS, open_settings
 
 BASE = "http://localhost:8080"
 
@@ -266,6 +266,91 @@ def test_keyboard_opens_on_select_and_focus_stays_trapped(browser):
         assert page.evaluate("() => document.activeElement.tagName") == "A"
         page.keyboard.press("Tab")         # 마지막에서 앞으로 — 선택 상자로 돌아온다
         assert page.evaluate("() => document.activeElement.tagName") == "SELECT"
+    finally:
+        ctx.close()
+
+
+LIST_IS_OPEN = "() => document.querySelector('.settings-popover .settings-select').matches(':open')"
+# Chromium은 목록을 연 채 누른 Esc를 페이지로 보내지 않는다. 보내는 브라우저에서 일어날 일을 키 입력 사건을 직접 내어 본다.
+ESC_REACHES_PAGE = """() => document.querySelector('.settings-popover .settings-select')
+  .dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))"""
+
+
+def test_escape_on_open_select_list_keeps_popover(browser):
+    """목록을 연 채 Esc가 페이지까지 와도 팝오버를 닫지 않는다. 목록이 닫혀 있으면 포커스가 선택 상자에 있어도 닫는다(ADR-041 §9)."""
+    ctx = browser.new_context()
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    page = ctx.new_page()
+    try:
+        _open(page)
+        pop = open_settings(page)
+        pop.get_by_label("시작 페이지").click()
+        page.wait_for_function(LIST_IS_OPEN)
+        page.evaluate(ESC_REACHES_PAGE)
+        assert pop.is_visible()
+        page.keyboard.press("Escape")      # 목록이 받아 목록만 닫는다
+        page.wait_for_function(f"() => !({LIST_IS_OPEN})()")
+        assert pop.is_visible()
+        page.evaluate(ESC_REACHES_PAGE)    # 이제 닫힌 선택 상자다
+        pop.wait_for(state="hidden")
+    finally:
+        ctx.close()
+
+
+# ── 토글 결과 알림 ─────────────────────────────────────────────────────────────
+
+def test_toggle_result_is_announced_after_the_view_redraws(browser):
+    """토글이 화면을 다시 그리면 화면 제목을 알린 뒤에 결과를 알린다. 스크린 리더가 듣는 마지막 말이 토글 결과다."""
+    for path, ready, switch, said in (
+        ("", ".book-list", "외경", "구약에 외경 포함"),
+        ("/deuterocanon", ".book-list", "외경", "구약에 외경 포함"),   # 외경 탭이 없어져 구약으로 옮긴 뒤에 알린다
+        ("/lectionary/2026-06-29", ".lectionary", "대체 독서 표시", "대체 독서 표시"),
+    ):
+        ctx = browser.new_context()
+        ctx.add_init_script(CLEAR_APP_STORAGE)
+        page = ctx.new_page()
+        try:
+            page.goto(f"{BASE}{path}")
+            page.wait_for_selector(ready, timeout=20_000)
+            pop = open_settings(page)
+            page.evaluate(RECORD_ANNOUNCEMENTS)
+            pop.get_by_role("switch", name=switch).click()
+            page.wait_for_function("(said) => window.__said.at(-1) === said", arg=said)
+            page.wait_for_timeout(300)   # 다시 그리는 일이 다 끝난 뒤에도 그 말이 남아 있다
+            assert page.evaluate("() => window.__said.at(-1)") == said, path
+            assert page.inner_text("#a11y-announce") == said, path
+        finally:
+            ctx.close()
+
+
+def test_toggle_result_keeps_the_title_of_a_view_opened_meanwhile(browser):
+    """자료를 받는 동안 토글을 누르고 다른 화면으로 옮기면, 다시 그리기가 끝나도 새 화면의 제목 알림이 남는다."""
+    ctx = browser.new_context()
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    page = ctx.new_page()
+    held = []
+    try:
+        _open(page)
+        page.route("**/data/lectionary/**", lambda route: held.append(route))   # 전례독서 자료를 받지 못한 채 머문다
+        page.evaluate("() => window.navigate('/lectionary/2026-06-29')")
+        page.wait_for_selector(".loading")
+        for _ in range(100):             # 자료 요청이 나갈 때까지 기다린다
+            if held:
+                break
+            page.wait_for_timeout(50)
+        assert held
+        pop = open_settings(page)
+        page.evaluate(RECORD_ANNOUNCEMENTS)
+        pop.get_by_role("switch", name="대체 독서 표시").click()
+        page.evaluate("() => window.navigate('/john/3')")
+        page.wait_for_selector(".chapter-text")
+        page.wait_for_function("() => window.__said.length > 0")
+        title = page.evaluate("() => window.__said.at(-1)")
+        assert "3" in title, title
+        for route in held:
+            route.continue_()
+        page.wait_for_timeout(500)       # 옛 다시 그리기가 끝난 뒤에도 새 화면의 제목이 남아 있다
+        assert page.evaluate("() => window.__said.at(-1)") == title
     finally:
         ctx.close()
 

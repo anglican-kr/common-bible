@@ -303,10 +303,10 @@ test("buildLectionaryModel: 대체 독서 표시를 끄면 대축일, 주요축�
   const names = (m) => m.choices.filter((c) => !c.active).map((c) => c.name);
   const major = cand(obs("d0629-베드로", "사도 성 베드로와 바울로", { rank: "major_feast", precedence: 3, color: "red" }));
 
-  // 제 날짜의 주요축일 — 끄면 평일 줄이 없고, 켜면 있다. 인자를 주지 않으면 켠 것이다(모델 시험의 기본).
+  // 제 날짜의 주요축일 — 끄면 평일 줄이 없고, 켜면 있다. 인자를 빠뜨려도 앱의 기본값처럼 숨긴다.
   same(names(rowsOf(major)(false)), []);
   same(names(rowsOf(major)(true)), ["연중 13주 월요일"]);
-  same(names(rowsOf(major)()), ["연중 13주 월요일"]);
+  same(names(rowsOf(major)()), []);
   // 대축일도 같다
   same(names(rowsOf(cand(obs("t-승천", "승천대축일", { rank: "principal", precedence: 1, color: "white" })))(false)), []);
   // 옮겨 온 날이든 제 날짜든 같다
@@ -759,7 +759,7 @@ test("buildLectionaryModel: 기념일은 전례독서 목록이 아니라 이름
   // 격자에도 독서를 준다 — 본문 없는 격자는 따로 감춘다(아래 케이스)
   const groupsOf = groupsOfFrom({ "d0101-거룩한-이름-예수": [group("f", FOUR)], "grid:christmas-x-weekday-thu": [group("g", FOUR)] });
   const entries = [{ candidate: feast, collects: [collect(285, "…")] }, { candidate: memo, collects: [] }, { candidate: grid, collects: [] }];
-  const m = ctx.buildLectionaryModel(r, { obs: "d0101-세계평화", track: null, set: null, collect: null }, groupsOf, entries, null);
+  const m = ctx.buildLectionaryModel(r, { obs: "d0101-세계평화", track: null, set: null, collect: null }, groupsOf, entries, null, [], true);
   assert.strictEqual(m.selected, feast);   // 기념일을 가리켜도 기본 독서 — 본문 없는 화면이 아니다
   assert.strictEqual(m.empty, false);
   same(m.choices.map((c) => c.candidate.observance.id), ["d0101-거룩한-이름-예수", "grid:christmas-x-weekday-thu"]);
@@ -789,7 +789,7 @@ test("buildLectionaryModel: 독서도 본기도도 없는 후보는 전례독서
   }
   // 본기도만 있는 격자는 전례독서 목록으로 남는다 — 「독서 없음」 화면이라도 고를 본문이 있다
   const withCollect = entries.map((e) => (e.candidate === grid ? { candidate: grid, collects: [collect(3, "…")] } : e));
-  assert.ok(ctx.buildLectionaryModel(r, { obs: null, track: null, set: null, collect: null }, groupsOf, withCollect, null)
+  assert.ok(ctx.buildLectionaryModel(r, { obs: null, track: null, set: null, collect: null }, groupsOf, withCollect, null, [], true)
     .choices.some((c) => c.candidate === grid));
   // 기본 독서 후보는 비어도 감추지 않는다 — 전례독서 목록은 후보가 하나라 그리지 않지만 모델에는 남는다
   const lone = resolvedOf("2026-11-22", [grid, family], grid, { coord: { season: "ordinary", week: 34, type: "sunday", weekday: null, year: "A" } });
@@ -871,7 +871,7 @@ test("buildLectionaryModel: 옮겨 간 축일은 전례독서 목록에 없고 �
   const r2 = resolvedOf("2026-12-07", [arrived, weekday], arrived, { coord: { season: "advent", week: 2, type: "weekday", weekday: "mon", year: null } });
   const m2 = ctx.buildLectionaryModel(r2, { obs: null, track: null, set: null, collect: null },
     groupsOfFrom({ "d1206-성-니콜라": [group("n", FOUR)], "grid:advent-2-weekday-mon": [group("w", FOUR)] }),
-    [arrived, weekday].map((c, i) => ({ candidate: c, collects: [collect(i + 1, "…")] })), null);
+    [arrived, weekday].map((c, i) => ({ candidate: c, collects: [collect(i + 1, "…")] })), null, [], true);
   same(m2.choices.map((c) => c.candidate.observance.id), ["d1206-성-니콜라", "grid:advent-2-weekday-mon"]);
   same(plain(m2.transferNotes), []);
 });

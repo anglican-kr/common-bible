@@ -2339,6 +2339,63 @@ test("77. 병합 결과를 저장한 뒤 브라우저가 옛 키 몇 개의 쓰�
   assert.equal(h.machine.getState(), "IDLE");
 });
 
+test("77b. 병합 결과를 저장하면 옛 키를 쓴 뒤 열린 화면을 다시 그릴지 판단하게 한다. 수정 시각이 늦어지지 않아도 같은 시각의 사본이 값을 바꿀 수 있어 판단하고, 저장하지 못하면 하지 않는다(ADR-041 §8)", async () => {
+  const run = async (opts) => {
+    const h = mergeSaveMachine(opts);
+    const calls = [];
+    h.ctx.redrawIfSyncedSettingsChanged = () => { calls.push(h.legacy.length); };
+    h.machine.enable();
+    await h.drain(8);
+    return calls;
+  };
+  assert.deepEqual(await run({}), [1], "옛 키를 쓴 뒤에 호출한다 — 설정을 다시 읽어 견주기 때문이다");
+  assert.deepEqual(await run({ outcome: "full" }), []);
+  assert.deepEqual(await run({ v2: { mergeDocs: (l) => l } }), [1], "다른 기기의 변경으로 세지 않는 병합도 판단하게 한다");
+});
+
+test("77c. 동기화가 화면을 다시 그리면 안내는 그 뒤에 띄운다 — 다시 그린 화면의 제목 알림이 안내를 덮지 않게(ADR-041 §8)", async () => {
+  const h = mergeSaveMachine();
+  let finishRedraw;
+  h.ctx.redrawIfSyncedSettingsChanged = () => new Promise((resolve) => { finishRedraw = resolve; });
+  h.machine.enable();
+  await h.drain(8);
+  assert.deepEqual(h.snackbar, [], "다시 그리는 동안에는 띄우지 않는다");
+  finishRedraw();
+  await h.drain(2);
+  assert.deepEqual(h.snackbar, ["다른 기기에서 변경된 데이터를 불러왔습니다."]);
+});
+
+test("77d. 다시 그리는 동안 오류 안내가 뜨거나 다른 화면으로 옮기면 늦은 성공 안내를 띄우지 않는다 — 더 새로운 안내와 제목을 덮지 않게", async () => {
+  const pendingRedraw = (h) => {
+    let finish;
+    h.ctx.redrawIfSyncedSettingsChanged = () => new Promise((resolve) => { finish = resolve; });
+    return () => finish();
+  };
+
+  // 사이클의 남은 단계(올리기)가 실패해 오류 안내가 먼저 뜬다
+  const failed = mergeSaveMachine();
+  const finishFailed = pendingRedraw(failed);
+  failed.stubs.T.uploadSyncFile = async () => { throw new Error("boom"); };
+  failed.machine.enable();
+  await failed.drain(8);
+  assert.deepEqual(failed.snackbar, ["동기화 중 오류가 발생했습니다. 설정에서 재연결해 주세요."]);
+  finishFailed();
+  await failed.drain(2);
+  assert.deepEqual(failed.snackbar, ["동기화 중 오류가 발생했습니다. 설정에서 재연결해 주세요."], "오류 안내가 마지막에 남는다");
+
+  // 다시 그리는 동안 사용자가 다른 화면으로 옮겼다
+  const moved = mergeSaveMachine();
+  const finishMoved = pendingRedraw(moved);
+  let seq = 1;
+  moved.ctx.routeSeq = () => seq;
+  moved.machine.enable();
+  await moved.drain(8);
+  seq = 2;
+  finishMoved();
+  await moved.drain(2);
+  assert.deepEqual(moved.snackbar, [], "새 화면의 제목 알림을 덮지 않는다");
+});
+
 // ── Group 20: 기준 목록 1단계 (사용자 결정 2026-10-31) ─────────────────────────────────────────────
 // 기준 목록은 마지막으로 내려받아 병합한 드라이브 파일에 살아 있던 북마크 id다(store-v2.js saveBaseIds). 병합 결과를 저장한
 // 뒤, 올리기 전에 내려받은 파일로 쓴다. 올린 문서로 만들면, 쓰기 보호가 없어(known-issues §42) 그 파일을 덮어쓴 기기와 겹칠

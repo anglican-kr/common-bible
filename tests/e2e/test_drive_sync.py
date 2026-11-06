@@ -24,7 +24,7 @@ import urllib.parse
 import pytest
 from playwright.sync_api import Page, BrowserContext, Route
 
-from .conftest import FULL_STORAGE, fill_storage
+from .conftest import FULL_STORAGE, RECORD_ANNOUNCEMENTS, fill_storage
 
 
 BASE_URL = "http://localhost:8080"
@@ -382,6 +382,127 @@ def test_upload_then_download(browser, fake_drive, fake_oauth):
     finally:
         page_a.context.close()
         page_b.context.close()
+
+
+def test_synced_setting_redraws_only_the_view_it_changes(browser, fake_drive, fake_oauth):
+    """다른 기기에서 바꾼 대체 독서 표시와 외경이 열린 화면에 바로 보인다. 그 값을 쓰지 않는 변경과 화면은 다시 그리지 않는다(ADR-041 §8)."""
+    fake_drive.reset()
+    page_a = _make_page(browser, fake_drive, fake_oauth)
+    page_b = _make_page(browser, fake_drive, fake_oauth)
+
+    def go(path: str, ready: str):
+        page_b.evaluate("(path) => window.navigate(path)", path)
+        page_b.wait_for_selector(ready, timeout=20_000)
+        # 화면을 다시 그리면 이 표시가 사라진다
+        page_b.evaluate("(ready) => { document.querySelector(ready).dataset.keep = '1'; }", ready)
+
+    def from_a(change: str):
+        page_a.evaluate(change)
+        _sync_now(page_a)
+        _sync_now(page_b)
+
+    try:
+        for page in (page_a, page_b):
+            _load(page)
+            _enable_sync(page)
+            _wait_idle(page)
+
+        # 전례독서 — 북마크만 바뀌면 그대로이고, 대체 독서 표시가 바뀌면 줄이 생긴다
+        go("/lectionary/2026-06-29", ".lectionary")
+        assert page_b.locator(".lect-choice:has-text('연중 13주 월요일')").count() == 0
+        _add_bookmark(page_a, "Genesis 1")
+        _sync_now(page_a)
+        _sync_now(page_b)
+        assert "Genesis 1" in _bookmark_names(page_b)
+        assert page_b.locator(".lectionary[data-keep='1']").count() == 1
+        # 다시 그린 화면의 제목 알림이 동기화 결과 안내를 덮지 않는다
+        page_b.evaluate(RECORD_ANNOUNCEMENTS)
+        from_a("window.appStorage.saveLectionaryAltShow(true)")
+        page_b.wait_for_selector(".lect-choice:has-text('연중 13주 월요일')")
+        page_b.wait_for_timeout(300)
+        assert page_b.evaluate("() => window.__said.at(-1)") == "다른 기기에서 변경된 데이터를 불러왔습니다."
+
+        # 데스크톱의 설정 주소는 성서 목록 위에 설정을 연다. 목록이 보이니 같게 다시 그린다
+        tab = "a[href='/deuterocanon']"
+        go("/settings", ".book-list")
+        assert page_b.locator(tab).count() == 1
+        from_a("window.appStorage.saveBookOrder('vulgate')")
+        page_b.wait_for_selector(tab, state="detached")
+        page_b.wait_for_selector(".settings-popover:not([hidden])")
+        from_a("window.appStorage.saveBookOrder('canonical')")
+        page_b.wait_for_selector(tab)
+
+        # 성서 목록 — 외경이 구약에 들어가면 외경 탭이 없어지고 그 주소는 구약으로 옮긴다
+        go("/deuterocanon", ".book-list")
+        from_a("window.appStorage.saveBookOrder('vulgate')")
+        page_b.wait_for_function("() => location.pathname === '/old_testament'")
+
+        # 장 화면은 외경 값을 쓰지 않아 다시 그리지 않는다
+        go("/john/3", ".chapter-text")
+        from_a("window.appStorage.saveBookOrder('canonical')")
+        assert page_b.evaluate("() => localStorage.getItem('bible-book-order')") == "canonical"
+        assert page_b.locator(".chapter-text[data-keep='1']").count() == 1
+    finally:
+        page_a.context.close()
+        page_b.context.close()
+
+
+def test_sync_notice_keeps_the_title_of_a_view_opened_during_the_redraw(browser, fake_drive, fake_oauth):
+    """동기화가 다시 그리는 동안 다른 화면으로 옮기면, 늦은 동기화 안내가 새 화면의 제목 알림을 덮지 않는다(ADR-041 §8)."""
+    fake_drive.reset()
+    page_a = _make_page(browser, fake_drive, fake_oauth)
+    page_b = _make_page(browser, fake_drive, fake_oauth)
+    held = []
+    try:
+        for page in (page_a, page_b):
+            _load(page)
+            _enable_sync(page)
+            _wait_idle(page)
+        page_b.route("**/data/lectionary/**", lambda route: held.append(route))   # 전례독서 자료를 받지 못한 채 머문다
+        page_b.evaluate("() => window.navigate('/lectionary/2026-06-29')")
+        page_b.wait_for_selector(".loading")
+        page_a.evaluate("window.appStorage.saveLectionaryAltShow(true)")
+        _sync_now(page_a)
+        _sync_now(page_b)
+        assert page_b.evaluate("() => localStorage.getItem('bible-lectionary-alt-show')") == "true"
+        page_b.evaluate(RECORD_ANNOUNCEMENTS)
+        page_b.evaluate("() => window.navigate('/john/3')")
+        page_b.wait_for_selector(".chapter-text")
+        page_b.wait_for_function("() => window.__said.length > 0")
+        title = page_b.evaluate("() => window.__said.at(-1)")
+        assert "3" in title, title
+        for route in held:
+            route.continue_()
+        page_b.wait_for_timeout(500)
+        assert page_b.evaluate("() => window.__said.at(-1)") == title
+    finally:
+        page_a.context.close()
+        page_b.context.close()
+
+
+def test_drive_copy_with_equal_time_redraws_open_view(browser, fake_drive, fake_oauth):
+    """수정 시각이 같은 사본은 「다른 기기의 변경」으로 세지 않지만 병합은 드라이브의 값을 남긴다. 열린 화면도 저장된 그 값을 따른다(ADR-041 §8)."""
+    fake_drive.reset()
+    page = _make_page(browser, fake_drive, fake_oauth)
+    row = ".lect-choice:has-text('연중 13주 월요일')"
+    try:
+        _load(page)
+        _enable_sync(page)
+        _wait_idle(page)
+        page.evaluate("window.appStorage.saveLectionaryAltShow(false)")
+        _sync_now(page)
+        page.evaluate("(path) => window.navigate(path)", "/lectionary/2026-06-29")
+        page.wait_for_selector(".lectionary", timeout=20_000)
+        assert page.locator(row).count() == 0
+        with fake_drive._lock:
+            fake_drive._file["settings"]["lectionaryAltShow"]["v"] = True   # 시각은 그대로 두고 값만 다른 사본
+            fake_drive._etag_n += 1
+            fake_drive._etag = f"etag-{fake_drive._etag_n}"
+        _sync_now(page)
+        assert page.evaluate("() => localStorage.getItem('bible-lectionary-alt-show')") == "true"
+        page.wait_for_selector(row)
+    finally:
+        page.context.close()
 
 
 def test_concurrent_adds_both_preserved(browser, fake_drive, fake_oauth):
