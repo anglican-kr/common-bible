@@ -44,6 +44,7 @@ import { specCoversVerse, verseInstanceKeys, citationSource } from "./verse-spec
 import {
   parseDate, toKey, addDays, dayOfWeek, isComputableDate, joinNames, fillCommonName,
   preloadCalendar, preloadLectionary, resolveDate, findReadings, findCollects, findHalfVerse, findDedications, fastOf, isEmber,
+  optionalDestOf,
 } from "./liturgical-engine.js";
 
 const { _$, el, clearNode, emptyState, isModifiedClick } = window.appHelpers;
@@ -184,15 +185,60 @@ function statusSuffix(c) {
 }
 
 /**
+ * 문장 속 축일 이름 — 짧은 이름 뒤에 「축일」을 붙인다(「성 니콜라 축일」). 이름이 「날」로 끝나면(성 십자가의 날, 모든 별세자의 날,
+ * 모든 성인의 날) 「날 축일」이 되지 않게, 「축일」로 끝나면(승천대축일) 「대축일 축일」이 되지 않게, 재의 수요일(설과 겹친 2032-02-11)은
+ * 축일이 아니므로 붙이지 않는다.
+ * @param {string | null | undefined} name
+ */
+function feastPhraseOf(name) {
+  const short = shortName(name);
+  return short.endsWith("날") || short.endsWith("축일") || short === "재의 수요일" ? short : `${short} 축일`;
+}
+
+/**
  * 원래 날짜에서 옮겨 간 축일을 알리는 제목 아래 문장 — 「성 니콜라 축일을 12월 7일로 옮겨 지킵니다.」(사용자 결정 2026-11-04).
- * 이름이 「날」로 끝나는 둘(성 십자가의 날, 모든 별세자의 날)은 「날 축일을」이 되지 않게, 재의 수요일(설과 겹친 2032-02-11)은 축일이
- * 아니므로 「축일」을 붙이지 않는다.
  * @param {string | null | undefined} name @param {string} to  옮겨 가는 날짜
  */
 function transferOutNote(name, to) {
-  const short = shortName(name);
-  const bare = short.endsWith("날") || short === "재의 수요일";
-  return `${bare ? `${short}을` : `${short} 축일을`} ${monthDayLabel(to)}로 옮겨 지킵니다.`;
+  return `${feastPhraseOf(name)}을 ${monthDayLabel(to)}로 옮겨 지킵니다.`;
+}
+
+/**
+ * 기본 독서가 옮겨 지킬 수 있는 축일(공현, 주의 봉헌, 주의 변모, 모든 성인, 승천)이면 그 축일을 옮겨 지킬 수 있는 주일, 아니면 null.
+ * 그 주일을 고르면 이날은 평일 독서를 읽는다(사용자 결정 2026-11-06, ADR-041 §4). 엔진이 그 주일에 `optional` 후보를 넣는 것과
+ * 같은 계산(`optionalDestOf`)이다. 축일이 주일에 온 해는 옮길 곳이 없어 null이다. 설과 겹쳐 다음날로 옮겨 온 축일(2049-02-03
+ * 주의 봉헌)은 원래 날짜로 구한다. 옮겨 지키기로 해서 주일에 온 축일(엔진 `activated`)은 그날이 곧 그 주일이라 null이다.
+ * @param {Candidate} initial  그날의 기본 독서 후보 @param {string} date @returns {string | null}
+ */
+function optionalSundayOf(initial, date) {
+  if (isGrid(initial) || (initial.status !== "proper" && initial.status !== "transferred_in")) return null;
+  const origin = initial.status === "transferred_in" && initial.from ? initial.from : date;
+  const p = parseDate(origin);
+  const sunday = p ? optionalDestOf(initial.observance.transfer_to, origin, p.y) : null;
+  return sunday && sunday !== origin && sunday !== date ? sunday : null;
+}
+
+/**
+ * 옮겨 지킬 수 있는 축일의 원래 날짜에 그 축일 줄의 상태 표시 — 「· 1월 31일로 옮겨 지킬 수 있음」. 목적지 주일의 「· 2월 2일에서 옮겨 지킬 수 있음」과
+ * 짝이다(사용자 결정 2026-11-06). 축일을 고르면 같은 말을 제목 아래 문장으로 보인다(`optionalOriginNote`).
+ * @param {string} sunday  옮겨 지킬 수 있는 주일
+ */
+function optionalOriginSuffix(sunday) {
+  return ` · ${monthDayLabel(sunday)}로 옮겨 지킬 수 있음`;
+}
+
+/** 옮겨 지킬 수 있는 축일의 원래 날짜에 축일을 고르면 제목 아래에 보이는 문장 — 「1월 31일로 옮겨 지킬 수 있습니다.」 @param {string} sunday */
+function optionalOriginNote(sunday) {
+  return `${monthDayLabel(sunday)}로 옮겨 지킬 수 있습니다.`;
+}
+
+/**
+ * 옮겨 지킬 수 있는 축일이 평일에 온 날, 평일 독서를 고르면 제목 아래에 보이는 문장 — 「주의 봉헌 축일을 1월 31일로 옮겨 지킬 때 읽습니다.」
+ * 전례독서 목록에서 줄 이름 뒤에 있던 「· 주의 봉헌 축일 대체 독서」는 누르면 이름이 제목으로 올라가 자리가 없으므로 문장으로 옮긴다(`selectedNoteOf`와 같다).
+ * @param {string | null | undefined} name  축일 이름 @param {string} sunday  옮겨 지킬 수 있는 주일
+ */
+function optionalAlternateNote(name, sunday) {
+  return `${feastPhraseOf(name)}을 ${monthDayLabel(sunday)}로 옮겨 지킬 때 읽습니다.`;
 }
 
 /**
@@ -781,6 +827,7 @@ function canticleTitleOf(/** @type {BibleChapter | null | undefined} */ chapter)
  * 대체 독서인가 — 기본 독서가 대축일, 주요축일, 고유 독서가 있는 축일인 날에 그날의 평일, 주일 독서다. 설정 「대체 독서 표시」를 끄면 전례독서 목록에서
  * 숨긴다(사용자 결정 2026-11-05, 2026-11-06, ADR-041 §4). 격자만 드니 사계재, 옮겨 지킬 수 있는 축일, 저녁 전례, 추수감사주일처럼 이름 있는 줄은 늘 보이고,
  * 삼일절과 명절(설날, 추석)의 평일 줄도 남는다. 공통 독서만 있는 축일은 격자가 기본 독서라 여기 들지 않으므로(`initialCandidate`), 등급이 축일인 기본 독서는 고유 독서가 있다.
+ * 옮겨 지킬 수 있는 축일이 평일에 온 날의 평일 줄은 대체 독서이지만 숨기지 않는다(`optionalSundayOf`, 사용자 결정 2026-11-06).
  * @param {Candidate} c @param {Candidate} initial  그날의 기본 독서 후보
  */
 function isAlternateReading(c, initial) {
@@ -874,18 +921,26 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
   // 목록의 줄은 후보마다 하나이고, 세트와 본기도가 짝지어진 후보(5.1, 사계재 금요일)는 세트마다 하나다 — 이름이 곧 그 세트의
   // 제목이고 누르면 제목으로 올라간다(사용자 결정 2026-11-05. 전에는 「독서 · 본기도」 단추였다).
   // 설정이 감추는 것은 줄뿐이다 — `hidden`과 달리 주소로 가리키면 그 독서를 보인다. 공유한 링크가 받는 사람의 설정에 따라 다른 본문이 되지 않게 한다.
-  const choices = resolved.candidates.filter((c) => !hidden(c) && (showAlternates || c === selected || !isAlternateReading(c, initial))).flatMap((c) => {
+  // 옮겨 지킬 수 있는 축일이 평일에 온 날은 평일 줄을 설정과 상관없이 보이고, 이름 뒤에 「· 주의 봉헌 축일 대체 독서」를 붙인다 — 그 축일을
+  // 주일로 옮겨 지키면 이날 읽는 독서다. 축일 줄에는 「· 1월 31일로 옮겨 지킬 수 있음」을 붙인다(사용자 결정 2026-11-06, ADR-041 §4).
+  const optionalSunday = optionalSundayOf(initial, date);
+  const originSuffix = (/** @type {Candidate} */ c) => (optionalSunday && c === initial ? optionalOriginSuffix(optionalSunday) : "");
+  const alternateSuffix = (/** @type {Candidate} */ c) => (optionalSunday && isGrid(c) ? ` · ${feastPhraseOf(initial.observance.name)} 대체 독서` : "");
+  const choices = resolved.candidates.filter((c) => !hidden(c)
+    && (showAlternates || optionalSunday || c === selected || !isAlternateReading(c, initial))).flatMap((c) => {
     const own = c === selected;
     const sets = own ? options : readingOptions(setsOf(groupsOf(c), trackOf(c)), shortName(c.observance.name));
     const pair = own ? !!linked : !!linkCollects(sets, collectsFor(collectEntries, c));
     const rows = pair ? sets.map((o) => o.group) : [sets.length ? sets[0].group : null];
+    // 설과 겹쳐 옮겨 온 축일(2049-02-03)은 줄에 「· 2월 2일에서 옮겨 옴」만 둔다 — 둘을 이으면 41자라 폭 320px에서 두 줄을 넘는다. 문장은 둘 다 알린다.
+    const suffix = (statusSuffix(c) || originSuffix(c)) + alternateSuffix(c);
     return rows.map((g, i) => {
       const name = choiceNameOf(c, g, pair);
       return {
         candidate: c,
         name: shortName(name),
-        suffix: statusSuffix(c),
-        title: name + statusSuffix(c),
+        suffix,
+        title: name + suffix,
         href: hrefFor(date, { obs: c.observance.id, track: trackOf(c), set: pair ? i + 1 : null, collect: null }, defaults),
         active: own && (!pair || i === setIndex),
       };
@@ -902,7 +957,14 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
     date, resolved, selected, initial, dayName: conditionTitle(group) || choiceNameOf(selected, group, !!linked),
     groups, tracks, track, options, setIndex, group, shortGroup, slots,
     cards: readingCards({ groups, baseName: shortName(selected.observance.name), options, setIndex, linked: !!linked, trackHrefs, optionHrefs }),
-    choices, selectedNote: selectedNoteOf(selected), collects, collectLabels: collectLabels(collects), collectIndex, collectsLinked: !!linked,
+    choices,
+    // 설과 겹쳐 옮겨 온 해(2049-02-03)는 「2월 2일에서 옮겨 지킵니다. 1월 31일로 옮겨 지킬 수 있습니다.」 두 문장이다
+    selectedNote: [
+      selectedNoteOf(selected),
+      originSuffix(selected) && optionalSunday ? optionalOriginNote(optionalSunday) : null,
+      alternateSuffix(selected) && optionalSunday ? optionalAlternateNote(initial.observance.name, optionalSunday) : null,
+    ].filter(Boolean).join(" ") || null,
+    collects, collectLabels: collectLabels(collects), collectIndex, collectsLinked: !!linked,
     ending: endingCodeOf(memorialCollects[memorialCollects.length - 1] || chosenCollect), memorialCollects,
     memorialSaints: memorial.saints, passiveDays, commemorations, textlessDays, dedicationLines: dedicationLines(dedications), transferNotes,
     colors, colorAlt, ownColor, colorsOr, fast: fastOf(resolved),

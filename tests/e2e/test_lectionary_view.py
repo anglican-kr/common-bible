@@ -231,6 +231,9 @@ def test_choice_rows_fit_on_phones_and_large_type(browser):
         "2026-05-01": ["노동자의 날", "부활 4주 금요일"],
         "2028-01-02": ["공현대축일 · 1월 6일에서 옮겨 지킬 수 있음"],
         "2100-10-31": ["모든 성인의 날 · 11월 1일에서 옮겨 지킬 수 있음"],
+        # 옮겨 지킬 수 있는 축일의 원래 날짜 — 평일 줄과, 평일을 고른 뒤의 축일 줄(사용자 결정 2026-11-06)
+        "2027-11-01": ["연중 31주 월요일 · 모든 성인의 날 대체 독서"],
+        "2027-11-01?obs=grid%3Aordinary-31-weekday-mon": ["모든 성인의 날 · 10월 31일로 옮겨 지킬 수 있음"],
     }
     for width, font in ((320, None), (375, None), (320, "24px")):
         ctx = browser.new_context(viewport={"width": width, "height": 740}, user_agent=IPHONE_UA)
@@ -1912,6 +1915,32 @@ def test_alternate_rows_are_hidden_by_default(desktop_context):
     assert page.locator(".lect-choices").count() == 0
     _open(page, "lectionary/2025-01-29")
     assert _choices(page) == ["연중 3주 수요일"]
+
+
+def test_optional_feast_weekday_row_shows_by_default_with_feast_name(desktop_context):
+    """옮겨 지킬 수 있는 축일이 평일에 온 날은 기본값(숨김)에서도 평일 줄이 보이고, 이름 뒤에 그 축일의 대체 독서임을 적는다. 축일의 제목 아래에는
+    옮겨 지킬 수 있는 주일을, 평일 줄을 누르면 그 주일로 옮겨 지킬 때 읽는 독서임을 알린다(사용자 결정 2026-11-06, ADR-041 §4)."""
+    page = desktop_context.new_page()
+    _open(page, "lectionary/2027-02-02")
+    assert page.inner_text(".lect-day") == "주의 봉헌"
+    assert page.inner_text(".lect-day-note") == "1월 31일로 옮겨 지킬 수 있습니다."
+    assert _choices(page) == ["연중 4주 화요일 · 주의 봉헌 축일 대체 독서"]
+    row = page.locator(".lect-choice", has_text="연중 4주 화요일")
+    assert row.locator(".lect-choice-name").inner_text() == "연중 4주 화요일"   # 밑줄 링크는 이름뿐이다
+    row.click()
+    page.wait_for_selector(".lect-day:has-text('연중 4주 화요일')")
+    assert page.inner_text(".lect-day-note") == "주의 봉헌 축일을 1월 31일로 옮겨 지킬 때 읽습니다."
+    assert _choices(page) == ["주의 봉헌 · 1월 31일로 옮겨 지킬 수 있음"]
+    _open(page, "lectionary/2026-05-14")
+    assert _choices(page) == ["부활 6주 목요일 · 승천대축일 대체 독서"]
+    # 공현대축일(1.6)은 평일 독서가 없어 줄이 없지만, 옮겨 지킬 수 있는 주일은 알린다
+    _open(page, "lectionary/2026-01-06")
+    assert page.inner_text(".lect-day-note") == "1월 4일로 옮겨 지킬 수 있습니다."
+    assert page.locator(".lect-choices").count() == 0
+    # 축일이 주일에 온 해는 옮길 주일이 없어 그날의 주일 줄을 숨기고 문장도 없다
+    _open(page, "lectionary/2025-02-02")
+    assert page.locator(".lect-choices").count() == 0
+    assert page.locator(".lect-day-note").count() == 0
 
 
 def test_alternate_setting_shows_rows_in_place_and_a_link_still_opens_when_off(desktop_context):
