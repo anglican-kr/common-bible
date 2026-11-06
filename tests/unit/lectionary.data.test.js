@@ -336,9 +336,9 @@ test("A3 본문 없는 후보와 겹치는 후보는 목록에 없음 — 2025~2
 test("A3 옮겨 간 축일 — 2025~2050 모든 날, 목록에 없고 문장 하나씩, 옮겨 간 날에 그 후보나 독서가 있다(사용자 결정 2026-11-04)", { skip: SKIP }, () => {
   const m = model("2026-12-06");
   same(labels(m), ["대림 2주일"]);   // 전례독서 목록이 없다
-  same(plain(m.transferNotes), ["성 니콜라 축일은 12월 7일로 옮겨 감"]);
+  same(plain(m.transferNotes), ["성 니콜라 축일을 12월 7일로 옮김"]);
   assert.strictEqual(id(model("2026-12-06", { obs: "d1206-성-니콜라" }).selected), id(m.initial));
-  same(plain(model("2025-11-02").transferNotes), ["모든 별세자의 날은 11월 3일로 옮겨 감"]);
+  same(plain(model("2025-11-02").transferNotes), ["모든 별세자의 날을 11월 3일로 옮김"]);
 
   const bad = [];
   let total = 0;
@@ -755,7 +755,7 @@ test("책자 대조의 엔진 덤프(tools/booklet/engine-dump.mjs) — 지금 �
 test("2032-02-11 재의 수요일이 설과 겹치면 다음날로 옮긴다 — 11일은 설날, 12일은 재의 수요일이고 평일을 고를 수 있다(사용자 결정 2026-11-05)", { skip: SKIP }, () => {
   const seollal = model("2032-02-11");
   assert.strictEqual(id(seollal.selected), "lunar11-설날");
-  same(plain(seollal.transferNotes), ["재의 수요일은 2월 12일로 옮겨 감"]);
+  same(plain(seollal.transferNotes), ["재의 수요일을 2월 12일로 옮김"]);
   same(seollal.collects.map((c) => c.title), ["설날"]);
   assert.strictEqual(seollal.fast, "minor");
   const ash = model("2032-02-12");

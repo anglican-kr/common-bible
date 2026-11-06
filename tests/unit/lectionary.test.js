@@ -334,7 +334,7 @@ test("feastPhraseOf · optionalSundayOf: 문장 속 축일 이름과, 옮겨 지
   assert.strictEqual(ctx.feastPhraseOf("승천대축일"), "승천대축일");          // 「대축일 축일」이 되지 않는다
   assert.strictEqual(ctx.feastPhraseOf("모든 성인의 날"), "모든 성인의 날");  // 「날 축일」이 되지 않는다
   assert.strictEqual(ctx.feastPhraseOf("재의 수요일"), "재의 수요일");
-  assert.strictEqual(ctx.transferOutNote("모든 별세자의 날", "2025-11-03"), "모든 별세자의 날은 11월 3일로 옮겨 감");
+  assert.strictEqual(ctx.transferOutNote("모든 별세자의 날", "2025-11-03"), "모든 별세자의 날을 11월 3일로 옮김");
 
   const presentation = obs("d0202-주의-봉헌", "주의 봉헌", { rank: "major_feast", precedence: 3, transfer_to: "nearby_sunday" });
   // 2027-02-02(화)의 가까운 주일은 1.31이다 — 앞 주일이 더 가깝다
@@ -929,8 +929,8 @@ test("buildLectionaryModel: 옮겨 간 축일은 전례독서 목록에 없고 �
   const m = ctx.buildLectionaryModel(r, { obs: null, track: null, set: null, collect: null }, groupsOf, entries, null);
   same(m.choices.map((c) => c.candidate.observance.id), ["grid:advent-2-sunday"]);   // 하나뿐이라 전례독서 목록을 그리지 않는다
   // 이름은 괄호 설명을 뗀 것이고, 「날」로 끝나는 이름은 「축일」을 붙이지 않는다. 해를 넘어도 월일만 적는다
-  same(plain(m.transferNotes), ["성 니콜라 축일은 12월 7일로 옮겨 감", "모든 별세자의 날은 1월 2일로 옮겨 감"]);
-  assert.strictEqual(ctx.transferOutNote("재의 수요일", "2032-02-12"), "재의 수요일은 2월 12일로 옮겨 감");
+  same(plain(m.transferNotes), ["성 니콜라 축일을 12월 7일로 옮김", "모든 별세자의 날을 1월 2일로 옮김"]);
+  assert.strictEqual(ctx.transferOutNote("재의 수요일", "2032-02-12"), "재의 수요일을 2월 12일로 옮김");
   const pointed = ctx.buildLectionaryModel(r, { obs: "d1206-성-니콜라", track: null, set: null, collect: null }, groupsOf, entries, null);
   assert.strictEqual(pointed.selected, sunday);
   // 옮겨 온 쪽(transferred_in)과 옮겨 지킬 수 있는 쪽(optional)은 전례독서 목록 그대로다 — 그 독서를 고르는 자리다

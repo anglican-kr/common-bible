@@ -1312,7 +1312,7 @@ def test_transferred_out_feast_is_a_sentence_not_a_chip(desktop_context):
     _open(page, "lectionary/2026-12-06")
     assert page.inner_text(".lect-day") == "대림 2주일"
     assert page.locator(".lect-choices").count() == 0
-    assert page.inner_text(".lect-day-note") == "성 니콜라 축일은 12월 7일로 옮겨 감"
+    assert page.inner_text(".lect-day-note") == "성 니콜라 축일을 12월 7일로 옮김"
     order = page.evaluate("""() => [...document.querySelectorAll('.lect-head > *')].map(e => e.className.split(' ')[0])""")
     assert order == ["lect-day", "lect-meta", "lect-day-note"], order
     first = page.inner_text(".lect-reading[data-slot='first']")
@@ -1322,7 +1322,7 @@ def test_transferred_out_feast_is_a_sentence_not_a_chip(desktop_context):
     assert page.inner_text(".lect-day").startswith("성 니콜라")
     # 「날」로 끝나는 이름은 「축일」을 붙이지 않는다
     _open(page, "lectionary/2025-11-02")
-    assert page.inner_text(".lect-day-note") == "모든 별세자의 날은 11월 3일로 옮겨 감"
+    assert page.inner_text(".lect-day-note") == "모든 별세자의 날을 11월 3일로 옮김"
 
 
 # ── ⑥ 날짜 ──
@@ -1827,7 +1827,7 @@ def test_days_only_commemorated_are_plain_text_without_links(desktop_context):
     texts = collects()
     assert len(texts) == 2 and "토마스 베켓" in texts[1], texts
     _open(page, "lectionary/2026-12-06")
-    assert page.inner_text(".lect-day-note") == "성 니콜라 축일은 12월 7일로 옮겨 감"
+    assert page.inner_text(".lect-day-note") == "성 니콜라 축일을 12월 7일로 옮김"
     assert page.locator(".lect-head a").count() == 0
 
 
@@ -1838,7 +1838,7 @@ def test_ash_wednesday_moves_off_seollal(desktop_context):
     page = desktop_context.new_page()
     _open(page, "lectionary/2032-02-11")
     assert page.inner_text(".lect-day") == "설날"
-    assert page.inner_text(".lect-day-note") == "재의 수요일은 2월 12일로 옮겨 감"
+    assert page.inner_text(".lect-day-note") == "재의 수요일을 2월 12일로 옮김"
     _open(page, "lectionary/2032-02-12")
     assert page.inner_text(".lect-day") == "재의 수요일"
     assert page.inner_text(".lect-day-note") == "2월 11일에서 옮겨 옴"

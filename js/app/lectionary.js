@@ -196,12 +196,12 @@ function feastPhraseOf(name) {
 }
 
 /**
- * 원래 날짜에서 옮겨 간 축일을 알리는 제목 아래 안내 — 「성 니콜라 축일은 12월 7일로 옮겨 감」(사용자 결정 2026-11-04). 옮겨 온 날의
- * 「12월 6일에서 옮겨 옴」과 짝을 이루어 간결하게 쓴다(사용자 결정 2026-11-06). 이름은 모두 받침으로 끝나(「축일」, 「날」, 「수요일」) 「은」이다.
+ * 원래 날짜에서 옮겨 간 축일을 알리는 제목 아래 안내 — 「성 니콜라 축일을 12월 7일로 옮김」(사용자 결정 2026-11-04, 문구는 2026-11-06).
+ * 이름은 모두 받침으로 끝나(「축일」, 「날」, 「수요일」) 「을」이다.
  * @param {string | null | undefined} name @param {string} to  옮겨 가는 날짜
  */
 function transferOutNote(name, to) {
-  return `${feastPhraseOf(name)}은 ${monthDayLabel(to)}로 옮겨 감`;
+  return `${feastPhraseOf(name)}을 ${monthDayLabel(to)}로 옮김`;
 }
 
 /**
