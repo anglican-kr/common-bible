@@ -275,7 +275,7 @@ test("A3 2026-12-07 옮겨 온 성 니콜라 — 기본 독서는 옮겨 온 축
   const m = model("2026-12-07");
   assert.strictEqual(id(m.selected), "d1206-성-니콜라");   // 기본 독서는 옮겨 온 주요축일(사용자 확인 2026-11-03)
   assert.ok(m.choices.some((c) => c.name === "성 니콜라" && c.active));
-  assert.strictEqual(m.selectedNote, "12월 6일에서 옮겨 지킵니다.");   // 고른 쪽의 상태는 머리의 문장(2026-11-03)
+  assert.strictEqual(m.selectedNote, "12월 6일에서 옮겨 옴");   // 고른 쪽의 상태는 제목 아래 안내(2026-11-03, 2026-11-06)
   assert.ok(m.choices.find((c) => c.active).title.includes("12월 6일에서 옮겨 옴"));   // 전체 상태는 title에
   assert.strictEqual(m.collects.length, 1);   // 니콜라 본기도(기원 날짜에 색인된 것 — §5.6)
   same(m.memorialSaints.map((c) => id(c)), ["d1207-암브로스"]);   // 밀려서 기념만 — 이름 줄과 본기도(2026-11-03)
@@ -336,9 +336,9 @@ test("A3 본문 없는 후보와 겹치는 후보는 목록에 없음 — 2025~2
 test("A3 옮겨 간 축일 — 2025~2050 모든 날, 목록에 없고 문장 하나씩, 옮겨 간 날에 그 후보나 독서가 있다(사용자 결정 2026-11-04)", { skip: SKIP }, () => {
   const m = model("2026-12-06");
   same(labels(m), ["대림 2주일"]);   // 전례독서 목록이 없다
-  same(plain(m.transferNotes), ["성 니콜라 축일을 12월 7일로 옮겨 지킵니다."]);
+  same(plain(m.transferNotes), ["성 니콜라 축일은 12월 7일로 옮겨 감"]);
   assert.strictEqual(id(model("2026-12-06", { obs: "d1206-성-니콜라" }).selected), id(m.initial));
-  same(plain(model("2025-11-02").transferNotes), ["모든 별세자의 날을 11월 3일로 옮겨 지킵니다."]);
+  same(plain(model("2025-11-02").transferNotes), ["모든 별세자의 날은 11월 3일로 옮겨 감"]);
 
   const bad = [];
   let total = 0;
@@ -755,12 +755,12 @@ test("책자 대조의 엔진 덤프(tools/booklet/engine-dump.mjs) — 지금 �
 test("2032-02-11 재의 수요일이 설과 겹치면 다음날로 옮긴다 — 11일은 설날, 12일은 재의 수요일이고 평일을 고를 수 있다(사용자 결정 2026-11-05)", { skip: SKIP }, () => {
   const seollal = model("2032-02-11");
   assert.strictEqual(id(seollal.selected), "lunar11-설날");
-  same(plain(seollal.transferNotes), ["재의 수요일을 2월 12일로 옮겨 지킵니다."]);
+  same(plain(seollal.transferNotes), ["재의 수요일은 2월 12일로 옮겨 감"]);
   same(seollal.collects.map((c) => c.title), ["설날"]);
   assert.strictEqual(seollal.fast, "minor");
   const ash = model("2032-02-12");
   assert.strictEqual(id(ash.selected), "t-재의-수요일");
-  assert.strictEqual(ash.selectedNote, "2월 11일에서 옮겨 지킵니다.");
+  assert.strictEqual(ash.selectedNote, "2월 11일에서 옮겨 옴");
   same(plain(ash.colors), ["violet"]);
   assert.strictEqual(ash.fast, "major");
   assert.strictEqual(ash.slots[0].label, "요엘 2:1-2, 12-17");
@@ -830,10 +830,13 @@ test("A3 옮겨 지킬 수 있는 축일이 평일에 온 날은 대체 독서 �
     assert.notStrictEqual(new Date(t).getUTCDay(), 0, `${d} 주일에 온 축일은 옮길 주일이 없다`);
     const feast = off.initial;
     perFeast[id(feast)] = (perFeast[id(feast)] || 0) + 1;
-    // 줄을 누르면 제목 아래에 문장이 보이고, 그 주일에는 엔진이 같은 축일을 「옮겨 지킬 수 있음」 후보로 넣었다
+    // 줄을 누르면 같은 말이 제목 아래에 보이고, 목록의 축일 줄이 가리키는 주일에는 엔진이 같은 축일을 「옮겨 지킬 수 있음」 후보로 넣었다
     const pressed = model(d, { ...NONE, obs: id(row.candidate) }, null, false);
-    const m = /을 (\d+)월 (\d+)일로 옮겨 지킬 때 읽습니다\.$/.exec(pressed.selectedNote || "");
-    assert.ok(m, `${d} ${pressed.selectedNote}`);
+    assert.strictEqual(pressed.selectedNote, row.suffix.slice(" · ".length), d);
+    const feastRow = pressed.choices.find((c) => id(c.candidate) === id(feast));
+    const m = /(\d+)월 (\d+)일로 옮겨 지킬 수 있음$/.exec(feastRow ? feastRow.suffix : "");
+    assert.ok(m || id(feast) === "d0202-주의-봉헌" && d === "2049-02-03", `${d} ${feastRow && feastRow.suffix}`);   // 2049-02-03 줄은 「옮겨 옴」만
+    if (!m) continue;
     const sunday = `${d.slice(0, 4)}-${m[1].padStart(2, "0")}-${m[2].padStart(2, "0")}`;
     assert.ok(resolve(sunday).candidates.some((c) => c.status === "optional" && id(c) === id(feast)), `${d} → ${sunday}`);
   }
@@ -842,13 +845,13 @@ test("A3 옮겨 지킬 수 있는 축일이 평일에 온 날은 대체 독서 �
   const presentation = model("2027-02-02", NONE, null, false);
   same(labels(presentation), ["주의 봉헌 · 1월 31일로 옮겨 지킬 수 있음", "연중 4주 화요일 · 주의 봉헌 축일 대체 독서"]);
   assert.strictEqual(presentation.selectedNote, "1월 31일로 옮겨 지킬 수 있음");
-  assert.strictEqual(model("2027-02-02", { ...NONE, obs: "grid:ordinary-4-weekday-tue" }).selectedNote, "주의 봉헌 축일을 1월 31일로 옮겨 지킬 때 읽습니다.");
+  assert.strictEqual(model("2027-02-02", { ...NONE, obs: "grid:ordinary-4-weekday-tue" }).selectedNote, "주의 봉헌 축일 대체 독서");
   same(labels(model("2026-05-14", NONE, null, false)), ["승천대축일 · 5월 17일로 옮겨 지킬 수 있음", "부활 6주 목요일 · 승천대축일 대체 독서"]);
   same(labels(model("2027-11-01", NONE, null, false)), ["모든 성인의 날 · 10월 31일로 옮겨 지킬 수 있음", "연중 31주 월요일 · 모든 성인의 날 대체 독서"]);
   // 설과 겹쳐 옮겨 온 해는 원래 날짜(2.2)로 주일을 구한다
   const moved = model("2049-02-03", NONE, null, false);
   same(labels(moved), ["주의 봉헌 · 2월 2일에서 옮겨 옴", "연중 4주 수요일 · 주의 봉헌 축일 대체 독서"]);   // 줄에는 하나만 — 둘을 이으면 폭 320px에서 두 줄을 넘는다
-  assert.strictEqual(moved.selectedNote, "2월 2일에서 옮겨 지킵니다. 1월 31일로 옮겨 지킬 수 있음");
+  assert.strictEqual(moved.selectedNote, "2월 2일에서 옮겨 옴 · 1월 31일로 옮겨 지킬 수 있음");
   // 주일에 온 해는 옮길 주일이 없어 그대로 숨기고 문장도 없다
   const sunday = model("2025-02-02", NONE, null, false);
   same(labels(sunday), ["주의 봉헌"]);

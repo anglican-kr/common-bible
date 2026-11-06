@@ -176,7 +176,7 @@ def test_switcher_shows_every_candidate_and_changes_body_and_color(desktop_conte
 def test_title_follows_the_choice_and_stays_in_place(desktop_context):
     """제목은 고른 전례일의 이름이다(사용자 결정 2026-11-04 — 그전엔 다른 후보를 골라도 기본 독서의 이름에 머물러 제목과 본문이 어긋났다).
     저녁 전례(설계서 R-6.1-evening — 사용자 결정 2026-10-15)의 대표는 그대로다: 성 토요일의 대표는 성 토요일(적색)이고, 부활밤을
-    누르면 제목 부활밤, 「저녁에 드립니다.」, 백색, 부활밤 복음, ?obs=, 문서 제목도 부활밤이다. 그 문장이 줄 위에 생겨도 맨 위에서 눌렀으면
+    누르면 제목 부활밤, 「저녁 전례」, 백색, 부활밤 복음, ?obs=, 문서 제목도 부활밤이다. 그 문장이 줄 위에 생겨도 맨 위에서 눌렀으면
     화면을 스크롤하지 않아 제목과 머리 사이의 여백이 그대로다(사용자 결정 2026-11-03, 11-04). 줄을 누르면 돌아온다.
     성탄 밤은 12.24에 있고 12.25에는 없다."""
     page = desktop_context.new_page()
@@ -190,7 +190,7 @@ def test_title_follows_the_choice_and_stays_in_place(desktop_context):
     page.locator(".lect-choice", has_text="부활밤").click()
     page.wait_for_selector(".lect-day:has-text('부활밤')")
     assert "obs=t-%EB%B6%80%ED%99%9C%EB%B0%A4" in page.url or "obs=t-부활밤" in urllib.parse.unquote(page.url)
-    assert page.inner_text(".lect-day-note") == "저녁에 드립니다."
+    assert page.inner_text(".lect-day-note") == "저녁 전례"
     assert _choices(page) == ["성 토요일"]
     assert _colors(page) == ["백색"]
     assert "마태 28:1-10" in page.inner_text(".lect-reading[data-slot='gospel']")
@@ -277,7 +277,7 @@ def test_transferred_and_optional_days_choose_by_rows_without_cards(desktop_cont
     # 옮겨 온 것은 제목 아래 문장이고, 문장은 기리는 성인 줄(암브로스)보다 먼저다(2026-11-03). 전례독서 목록은 맨 아래다(2026-11-04).
     # 전례색과 해의 줄은 제목 바로 다음, 회색 설명 줄들보다 먼저다(사용자 결정 2026-11-03)
     assert page.inner_text(".lect-day").startswith("성 니콜라")
-    assert "12월 6일에서 옮겨 지킵니다." in page.inner_text(".lect-day-note")
+    assert "12월 6일에서 옮겨 옴" in page.inner_text(".lect-day-note")
     order = page.evaluate("""() => [...document.querySelectorAll('.lect-head > *')].map(e => e.className.split(' ')[0])""")
     assert order == ["lect-day", "lect-meta", "lect-day-note", "lect-day-saints", "lect-choices"], order
 
@@ -1312,7 +1312,7 @@ def test_transferred_out_feast_is_a_sentence_not_a_chip(desktop_context):
     _open(page, "lectionary/2026-12-06")
     assert page.inner_text(".lect-day") == "대림 2주일"
     assert page.locator(".lect-choices").count() == 0
-    assert page.inner_text(".lect-day-note") == "성 니콜라 축일을 12월 7일로 옮겨 지킵니다."
+    assert page.inner_text(".lect-day-note") == "성 니콜라 축일은 12월 7일로 옮겨 감"
     order = page.evaluate("""() => [...document.querySelectorAll('.lect-head > *')].map(e => e.className.split(' ')[0])""")
     assert order == ["lect-day", "lect-meta", "lect-day-note"], order
     first = page.inner_text(".lect-reading[data-slot='first']")
@@ -1322,7 +1322,7 @@ def test_transferred_out_feast_is_a_sentence_not_a_chip(desktop_context):
     assert page.inner_text(".lect-day").startswith("성 니콜라")
     # 「날」로 끝나는 이름은 「축일」을 붙이지 않는다
     _open(page, "lectionary/2025-11-02")
-    assert page.inner_text(".lect-day-note") == "모든 별세자의 날을 11월 3일로 옮겨 지킵니다."
+    assert page.inner_text(".lect-day-note") == "모든 별세자의 날은 11월 3일로 옮겨 감"
 
 
 # ── ⑥ 날짜 ──
@@ -1827,7 +1827,7 @@ def test_days_only_commemorated_are_plain_text_without_links(desktop_context):
     texts = collects()
     assert len(texts) == 2 and "토마스 베켓" in texts[1], texts
     _open(page, "lectionary/2026-12-06")
-    assert page.inner_text(".lect-day-note") == "성 니콜라 축일을 12월 7일로 옮겨 지킵니다."
+    assert page.inner_text(".lect-day-note") == "성 니콜라 축일은 12월 7일로 옮겨 감"
     assert page.locator(".lect-head a").count() == 0
 
 
@@ -1838,10 +1838,10 @@ def test_ash_wednesday_moves_off_seollal(desktop_context):
     page = desktop_context.new_page()
     _open(page, "lectionary/2032-02-11")
     assert page.inner_text(".lect-day") == "설날"
-    assert page.inner_text(".lect-day-note") == "재의 수요일을 2월 12일로 옮겨 지킵니다."
+    assert page.inner_text(".lect-day-note") == "재의 수요일은 2월 12일로 옮겨 감"
     _open(page, "lectionary/2032-02-12")
     assert page.inner_text(".lect-day") == "재의 수요일"
-    assert page.inner_text(".lect-day-note") == "2월 11일에서 옮겨 지킵니다."
+    assert page.inner_text(".lect-day-note") == "2월 11일에서 옮겨 옴"
     assert _choices(page) == ["재의 수요일 후 목요일"]
 
 
@@ -1902,7 +1902,7 @@ def test_alternate_rows_are_hidden_by_default(desktop_context):
     page = desktop_context.new_page()
     _open(page, "lectionary/2025-06-30")
     assert page.inner_text(".lect-day") == "사도 성 베드로와 바울로"
-    assert page.inner_text(".lect-day-note") == "6월 29일에서 옮겨 지킵니다."
+    assert page.inner_text(".lect-day-note") == "6월 29일에서 옮겨 옴"
     assert page.locator(".lect-choices").count() == 0
     _open(page, "lectionary/2026-06-29")
     assert page.locator(".lect-choices").count() == 0
@@ -1929,7 +1929,7 @@ def test_optional_feast_weekday_row_shows_by_default_with_feast_name(desktop_con
     assert row.locator(".lect-choice-name").inner_text() == "연중 4주 화요일"   # 밑줄 링크는 이름뿐이다
     row.click()
     page.wait_for_selector(".lect-day:has-text('연중 4주 화요일')")
-    assert page.inner_text(".lect-day-note") == "주의 봉헌 축일을 1월 31일로 옮겨 지킬 때 읽습니다."
+    assert page.inner_text(".lect-day-note") == "주의 봉헌 축일 대체 독서"
     assert _choices(page) == ["주의 봉헌 · 1월 31일로 옮겨 지킬 수 있음"]
     # 목적지 주일의 안내도 같은 형식이다
     _open(page, "lectionary/2027-01-31")
