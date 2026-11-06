@@ -114,9 +114,9 @@ test("statusSuffix: 옮김 · 선택 봉헌 · 생략 · 기념일 · 저녁 상
 });
 
 test("selectedNoteOf: 고른 전례일의 상태 문장 — 상태 표시가 있는 후보만 문장이 있다(사용자 결정 2026-11-04)", () => {
-  assert.strictEqual(ctx.selectedNoteOf(cand(obs("t-부활밤", "부활밤"), "proper", { evening: true })), "저녁에 드립니다.");
-  assert.strictEqual(ctx.selectedNoteOf(cand(obs("d1206-성-니콜라", "성 니콜라"), "transferred_in", { from: "2026-12-06" })), "12월 6일에서 옮겨 지킵니다.");
-  assert.strictEqual(ctx.selectedNoteOf(cand(obs("d0806-주의-변모", "주의 변모"), "optional", { from: "2026-08-06" })), "8월 6일에서 옮겨 지킬 수 있습니다.");
+  assert.strictEqual(ctx.selectedNoteOf(cand(obs("t-부활밤", "부활밤"), "proper", { evening: true })), "저녁 전례");
+  assert.strictEqual(ctx.selectedNoteOf(cand(obs("d1206-성-니콜라", "성 니콜라"), "transferred_in", { from: "2026-12-06" })), "12월 6일에서 옮겨 옴");
+  assert.strictEqual(ctx.selectedNoteOf(cand(obs("d0806-주의-변모", "주의 변모"), "optional", { from: "2026-08-06" })), "8월 6일에서 옮겨 지킬 수 있음");
   assert.strictEqual(ctx.selectedNoteOf(cand(obs("d0806-주의-변모", "주의 변모"))), null);
   // 기념만 하거나 생략하는 후보는 누를 수 없어 문장이 없다
   assert.strictEqual(ctx.selectedNoteOf(cand(obs("d1213-루시아", "루시아"), "commemorated")), null);
@@ -326,6 +326,74 @@ test("buildLectionaryModel: 대체 독서 표시를 끄면 대축일, 주요축�
   const byUrl = rowsOf(major)(false, { ...Q, obs: gridId });
   assert.strictEqual(byUrl.selected.observance.id, gridId);
   same(names(byUrl), ["사도 성 베드로와 바울로"]);
+});
+
+test("feastPhraseOf · optionalSundayOf: 문장 속 축일 이름과, 옮겨 지킬 수 있는 축일의 주일(사용자 결정 2026-11-06, ADR-041 §4)", () => {
+  assert.strictEqual(ctx.feastPhraseOf("주의 봉헌"), "주의 봉헌 축일");
+  assert.strictEqual(ctx.feastPhraseOf("성 니콜라(미라의 주교)"), "성 니콜라 축일");
+  assert.strictEqual(ctx.feastPhraseOf("승천대축일"), "승천대축일");          // 「대축일 축일」이 되지 않는다
+  assert.strictEqual(ctx.feastPhraseOf("모든 성인의 날"), "모든 성인의 날");  // 「날 축일」이 되지 않는다
+  assert.strictEqual(ctx.feastPhraseOf("재의 수요일"), "재의 수요일");
+  assert.strictEqual(ctx.transferOutNote("모든 별세자의 날", "2025-11-03"), "모든 별세자의 날을 11월 3일로 옮김");
+
+  const presentation = obs("d0202-주의-봉헌", "주의 봉헌", { rank: "major_feast", precedence: 3, transfer_to: "nearby_sunday" });
+  // 2027-02-02(화)의 가까운 주일은 1.31이다 — 앞 주일이 더 가깝다
+  assert.strictEqual(ctx.optionalSundayOf(cand(presentation), "2027-02-02"), "2027-01-31");
+  assert.strictEqual(ctx.optionalSundayOf(cand(presentation), "2026-02-02"), "2026-02-01");   // 월요일은 앞 주일
+  // 주일에 온 해는 옮길 주일이 없다
+  assert.strictEqual(ctx.optionalSundayOf(cand(presentation), "2025-02-02"), null);
+  // 설과 겹쳐 다음날로 옮겨 온 해는 원래 날짜로 구한다(2049-02-02 설날 → 2.3)
+  assert.strictEqual(ctx.optionalSundayOf(cand(presentation, "transferred_in", { from: "2049-02-02" }), "2049-02-03"), "2049-01-31");
+  // 옮겨 지키기로 해서 주일에 온 축일은 그날이 곧 그 주일이다
+  assert.strictEqual(ctx.optionalSundayOf(cand(presentation, "transferred_in", { from: "2027-02-02" }), "2027-01-31"), null);
+  // 승천은 부활 7주일, 모든 성인의 날은 10.30-11.5의 주일
+  const ascension = obs("t-승천대축일", "승천대축일", { rank: "principal", precedence: 1, transfer_to: "easter7_sunday" });
+  assert.strictEqual(ctx.optionalSundayOf(cand(ascension), "2026-05-14"), "2026-05-17");
+  const allSaints = obs("d1101-모든-성인의-날", "모든 성인의 날", { rank: "principal", precedence: 1, transfer_to: "sunday_1030_1105" });
+  assert.strictEqual(ctx.optionalSundayOf(cand(allSaints), "2027-11-01"), "2027-10-31");
+  // 밀려 옮김만 하는 축일, 격자, 그 주일의 「옮겨 지킬 수 있음」 후보는 없다
+  assert.strictEqual(ctx.optionalSundayOf(cand(obs("d0629-베드로", "사도 성 베드로와 바울로", { transfer_to: "next_free_day" })), "2026-06-29"), null);
+  assert.strictEqual(ctx.optionalSundayOf(cand(obs("grid:ordinary-4-weekday-tue", "연중 4주 화요일", { transfer_to: "nearby_sunday" })), "2027-02-02"), null);
+  assert.strictEqual(ctx.optionalSundayOf(cand(presentation, "optional", { from: "2027-02-02" }), "2027-01-31"), null);
+});
+
+test("buildLectionaryModel: 옮겨 지킬 수 있는 축일이 평일에 온 날은 대체 독서 표시를 꺼도 평일 줄이 보이고, 줄과 문장이 옮겨 지킬 수 있는 주일을 알린다(사용자 결정 2026-11-06, ADR-041 §4)", () => {
+  const Q = { obs: null, track: null, set: null, collect: null };
+  const gridId = "grid:ordinary-4-weekday-tue";
+  const modelOf = (feast, date, show, query = Q) => {
+    const grid = cand(obs(gridId, "연중 4주 화요일", { rank: "feria", precedence: 8, color: "green" }));
+    const cs = [feast, grid];
+    const groupsOf = (c) => [group(c.observance.id, FOUR)];
+    const entries = cs.map((c) => ({ candidate: c, collects: [collect(c.observance.id, c.observance.id)] }));
+    return ctx.buildLectionaryModel(resolvedOf(date, cs, feast), query, groupsOf, entries, null, [], show);
+  };
+  const rows = (m) => m.choices.filter((c) => !c.active).map((c) => c.name + c.suffix);
+  const presentation = cand(obs("d0202-주의-봉헌", "주의 봉헌", { rank: "major_feast", precedence: 3, color: "white", transfer_to: "nearby_sunday" }));
+
+  // 끄든 켜든 평일 줄이 보이고 이름 뒤에 「· 주의 봉헌 축일 대체 독서」
+  same(rows(modelOf(presentation, "2027-02-02", false)), ["연중 4주 화요일 · 주의 봉헌 축일 대체 독서"]);
+  same(rows(modelOf(presentation, "2027-02-02", true)), ["연중 4주 화요일 · 주의 봉헌 축일 대체 독서"]);
+  assert.strictEqual(modelOf(presentation, "2027-02-02", false).choices.find((c) => !c.active).title, "연중 4주 화요일 · 주의 봉헌 축일 대체 독서");
+  // 축일(기본 독서)의 제목 아래에는 옮겨 지킬 수 있는 주일을 알린다 — 목적지 주일의 「2월 2일에서 옮겨 지킬 수 있음」과 같은 형식이다
+  assert.strictEqual(modelOf(presentation, "2027-02-02", false).selectedNote, "1월 31일로 옮겨 지킬 수 있음");
+  // 평일 줄을 누르면 제목 아래에 그 독서를 읽는 때를 알리고, 목록의 축일 줄에 상태 표시가 붙는다
+  const pressed = modelOf(presentation, "2027-02-02", false, { ...Q, obs: gridId });
+  assert.strictEqual(pressed.selected.observance.id, gridId);
+  assert.strictEqual(pressed.selectedNote, "주의 봉헌 축일 대체 독서");
+  same(rows(pressed), ["주의 봉헌 · 1월 31일로 옮겨 지킬 수 있음"]);
+  // 설과 겹쳐 옮겨 온 해는 두 상태를 함께 알린다
+  const moved = cand(presentation.observance, "transferred_in", { from: "2049-02-02" });
+  assert.strictEqual(modelOf(moved, "2049-02-03", false).selectedNote, "2월 2일에서 옮겨 옴 · 1월 31일로 옮겨 지킬 수 있음");
+  same(rows(modelOf(moved, "2049-02-03", false, { ...Q, obs: gridId })), ["주의 봉헌 · 2월 2일에서 옮겨 옴"]);   // 줄에는 하나만(폭 320px에서 두 줄 안)
+  // 「대축일」로 끝나는 이름에는 「축일」을 덧붙이지 않는다
+  const ascension = cand(obs("t-승천대축일", "승천대축일", { rank: "principal", precedence: 1, color: "white", transfer_to: "easter7_sunday" }));
+  same(rows(modelOf(ascension, "2026-05-14", false)), ["연중 4주 화요일 · 승천대축일 대체 독서"]);
+  assert.strictEqual(modelOf(ascension, "2026-05-14", false, { ...Q, obs: gridId }).selectedNote, "승천대축일 대체 독서");
+  // 주일에 온 해는 옮길 주일이 없어 종전대로 끄면 숨기고, 켜도 꼬리가 없으며 문장도 없다
+  same(rows(modelOf(presentation, "2025-02-02", false)), []);
+  same(rows(modelOf(presentation, "2025-02-02", true)), ["연중 4주 화요일"]);
+  assert.strictEqual(modelOf(presentation, "2025-02-02", true).selectedNote, null);
+  same(rows(modelOf(presentation, "2025-02-02", true, { ...Q, obs: gridId })), ["주의 봉헌"]);
 });
 
 test("buildLectionaryModel: 기리는 성인의 본기도 — 기본 독서가 평일이면 평일 본기도 다음에 성인 본기도, 송영은 성인 것(사용자 결정 2026-11-03)", () => {
@@ -861,8 +929,8 @@ test("buildLectionaryModel: 옮겨 간 축일은 전례독서 목록에 없고 �
   const m = ctx.buildLectionaryModel(r, { obs: null, track: null, set: null, collect: null }, groupsOf, entries, null);
   same(m.choices.map((c) => c.candidate.observance.id), ["grid:advent-2-sunday"]);   // 하나뿐이라 전례독서 목록을 그리지 않는다
   // 이름은 괄호 설명을 뗀 것이고, 「날」로 끝나는 이름은 「축일」을 붙이지 않는다. 해를 넘어도 월일만 적는다
-  same(plain(m.transferNotes), ["성 니콜라 축일을 12월 7일로 옮겨 지킵니다.", "모든 별세자의 날을 1월 2일로 옮겨 지킵니다."]);
-  assert.strictEqual(ctx.transferOutNote("재의 수요일", "2032-02-12"), "재의 수요일을 2월 12일로 옮겨 지킵니다.");
+  same(plain(m.transferNotes), ["성 니콜라 축일을 12월 7일로 옮김", "모든 별세자의 날을 1월 2일로 옮김"]);
+  assert.strictEqual(ctx.transferOutNote("재의 수요일", "2032-02-12"), "재의 수요일을 2월 12일로 옮김");
   const pointed = ctx.buildLectionaryModel(r, { obs: "d1206-성-니콜라", track: null, set: null, collect: null }, groupsOf, entries, null);
   assert.strictEqual(pointed.selected, sunday);
   // 옮겨 온 쪽(transferred_in)과 옮겨 지킬 수 있는 쪽(optional)은 전례독서 목록 그대로다 — 그 독서를 고르는 자리다
