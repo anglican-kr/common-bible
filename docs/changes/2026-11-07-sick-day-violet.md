@@ -1,4 +1,5 @@
 ---
+pr: 506
 date: 2026-11-07
 branch: feat/sick-day-violet
 title: "feat: 병자를 위한 기도일을 고를 때만 자색으로 표시"
