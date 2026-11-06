@@ -1436,7 +1436,7 @@ declare global {
   function renderSearchResults(query: string, page: number, autoNavigate?: boolean, opts?: { filterBooks?: string[] }): Promise<void>;
   function renderSearchView(state?: { filterBooks?: string[] }): Promise<void>;
   function isMobile(): boolean;
-  function appendTextWithHighlight(target: Node, text: string, query: string | null): void;
+  function highlightTextNodes(nodes: ReadonlyArray<Text>, query: string | null): void;
   function consumeSearchAutoNavigate(): boolean;
   function openDriveDisconnectModal(): void;
   function closeDriveDisconnectModal(): void;

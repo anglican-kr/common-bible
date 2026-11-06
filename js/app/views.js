@@ -1021,6 +1021,10 @@ function appendVerses(article, verses, opts = {}) {
     // Verse number (rendered via CSS ::before to exclude from clipboard)
     const dataV = formatVerseNumber(v);
 
+    // Text nodes of this verse, in reading order — highlighted together after the verse is drawn.
+    /** @type {Text[]} */
+    const verseTextNodes = [];
+
     /** @param {HTMLElement} target @param {string} raw @param {{ noTrailingSpace?: boolean }} [opts] */
     function appendSegText(target, raw, opts) {
       const hasPilcrow = raw.startsWith("¶");
@@ -1038,7 +1042,9 @@ function appendVerses(article, verses, opts = {}) {
       // `'그는…`. Punctuation glues to the next segment in Korean prose.
       const isPunctOnly = /^[\s'"“”‘’«»‹›()…,.;:!?¶·]+$/.test(textContent);
       const suffix = (opts && opts.noTrailingSpace) || isPunctOnly ? "" : " ";
-      appendTextWithHighlight(target, textContent + suffix, hlQuery);
+      const node = document.createTextNode(textContent + suffix);
+      target.appendChild(node);
+      if (hlQuery) verseTextNodes.push(node);
     }
 
     // Count total lines across all segments to determine if multi-part
@@ -1164,6 +1170,10 @@ function appendVerses(article, verses, opts = {}) {
 
       prevSegType = seg.type;
     }
+
+    // Search highlight: a match can run across this verse's pieces (a `<cite>` splits
+    // a verse; each line of a poem is a piece), so they are searched together.
+    if (hlQuery) window.highlightTextNodes(verseTextNodes, hlQuery);
 
     prevVerseEndType = segs[segs.length - 1]?.type;
     isFirst = false;

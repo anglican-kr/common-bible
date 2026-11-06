@@ -189,3 +189,58 @@ def test_search_result_hl_strips_in_operator(page, base_url):
     assert "hl=" in href
     assert "in%3A" not in href and "%EC%9A%94%ED%95%9C" not in href, \
         f"Expected stripped keyword in hl=, got {href!r}"
+
+
+# ── 장 화면의 강조: 조각 경계 ──────────────────────────────────────────────
+
+
+def _chapter_text(page):
+    return page.evaluate("() => document.querySelector('article.chapter-text').textContent")
+
+
+def _search_and_open(page, base_url, query, href_prefix):
+    """검색창에 query를 쳐서 href_prefix로 가는 결과를 눌러 장 화면(?hl=)을 연다."""
+    page.goto(base_url)
+    wait_app_ready(page)
+    page.fill("#search-input", query)
+    page.press("#search-input", "Enter")
+    page.wait_for_selector(".search-result-item:not(.ref-match-item)", timeout=8_000)
+    link = page.locator(f'.search-result-item a[href^="{href_prefix}"]')
+    assert link.count() == 1, f"{query!r}: {href_prefix} 결과가 {link.count()}건"
+    link.first.click()
+    page.wait_for_selector("article.chapter-text mark.search-highlight", timeout=8_000)
+
+
+def _marks(page):
+    return page.evaluate(
+        "() => Array.from(document.querySelectorAll('article.chapter-text mark.search-highlight')).map(m => m.textContent)"
+    )
+
+
+def test_search_phrase_across_cite_is_found_and_highlighted_in_chapter(page, base_url):
+    """갈라 3:8을 `아브라함에게 너로`로 찾으면 결과에 나오고, 연 장 화면은 인용 앞뒤 조각에 걸쳐 강조한다.
+
+    장 화면은 한 절을 인용(<cite>) 경계에서 조각으로 나눠 그린다(「…아브라함에게 “」 + 「너로 말미암아…」).
+    인덱스는 조각 사이에 공백 한 칸을 넣어 `아브라함에게 “ 너로`로 저장하므로, 따옴표를 지우면 공백이 둘이 된다.
+    그 공백을 접지 않으면 검색이 이 절을 찾지 못했다. 강조는 본문을 한 글자도 바꾸면 안 된다."""
+    page.goto(f"{base_url}/gal/3")
+    page.wait_for_selector("article.chapter-text .verse", timeout=8_000)
+    plain = _chapter_text(page)
+
+    _search_and_open(page, base_url, "아브라함에게 너로", "/gal/3/8")
+
+    # 첫 강조는 조각 끝의 간격용 공백까지 감싸므로 앞뒤 공백은 비교에서 뺀다.
+    assert [m.strip() for m in _marks(page)] == ["아브라함에게 “", "너로"]
+    assert _chapter_text(page) == plain, "강조가 본문을 바꿨다(글이 빠지거나 겹쳤다)"
+
+
+def test_search_phrase_across_poem_lines_is_highlighted_in_chapter(page, base_url):
+    """시는 줄마다 조각이라 줄 끝에서 다음 줄로 이어지는 검색어도 두 줄에 걸쳐 강조한다(시편 23:1)."""
+    page.goto(f"{base_url}/ps/23")
+    page.wait_for_selector("article.chapter-text .verse", timeout=8_000)
+    plain = _chapter_text(page)
+
+    _search_and_open(page, base_url, "나의 목자, 아쉬울 것", "/ps/23/1")
+
+    assert [m.strip() for m in _marks(page)] == ["나의 목자,", "아쉬울 것"]
+    assert _chapter_text(page) == plain, "강조가 본문을 바꿨다(글이 빠지거나 겹쳤다)"

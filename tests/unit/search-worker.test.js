@@ -186,6 +186,17 @@ test("gatherResults: 따옴표를 무시하고 일치한다(ADR-005, 2026-11-06)
   assert.deepEqual(ctx.gatherResults("생겨라! 하시자", ["nt"], null).map((r) => r.v), [3]);
 });
 
+test("gatherResults: 따옴표를 지워 공백이 겹치는 본문과 원문에 공백이 둘인 본문을 공백 한 칸의 검색어로 찾는다(ADR-005, 2026-11-06)", () => {
+  ctx._setChunks({
+    nt: { books: ["gal", "genesis"], bArr: [0, 0, 1], cArr: [3, 3, 1], vArr: [8, 9, 3],
+      // 인덱스는 인용으로 나뉜 조각 사이에 공백 한 칸을 넣는다: `아브라함에게 “ 너로`.
+      tArr: ["성서는 아브라함에게 “ 너로 말미암아 복을 받으리라. ”는 복음을 전했다.", "관계 없는 절", "하느님께서  빛이  생겨라 하시자"] },
+  });
+  assert.deepEqual(ctx.gatherResults("아브라함에게 너로", ["nt"], null).map((r) => r.v), [8]);
+  assert.deepEqual(ctx.gatherResults("아브라함에게  “ 너로", ["nt"], null).map((r) => r.v), [8]);
+  assert.deepEqual(ctx.gatherResults("빛이 생겨라 하시자", ["nt"], null).map((r) => r.v), [3]);
+});
+
 test("gatherResults: 따옴표만 친 검색어는 결과가 없다", () => {
   ctx._setChunks(CHUNKS);
   assert.deepEqual(ctx.gatherResults('"', ["ot"], null), []);
