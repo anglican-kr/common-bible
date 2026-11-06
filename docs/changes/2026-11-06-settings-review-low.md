@@ -1,4 +1,5 @@
 ---
+pr: 495
 date: 2026-11-06
 branch: fix/settings-review-low
 title: "fix: 동기화한 설정의 화면 반영과 토글 알림, Esc 처리를 고침"
