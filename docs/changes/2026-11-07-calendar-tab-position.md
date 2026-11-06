@@ -1,4 +1,5 @@
 ---
+pr: 507
 date: 2026-11-07
 branch: feat/calendar-tab-position
 title: "feat: 캘린더 탭이 마지막으로 본 위치로 돌아감"
