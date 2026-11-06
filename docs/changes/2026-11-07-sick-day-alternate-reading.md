@@ -1,4 +1,5 @@
 ---
+pr: 505
 date: 2026-11-07
 branch: feat/sick-day-alternate-reading
 title: "feat: 병자를 위한 기도일 대체 독서 추가"
