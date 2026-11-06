@@ -1447,7 +1447,7 @@ test("R-6.3-holy-week-guard 성주간의 prec 7 은 생략 — guard 는 실제 
   // 부활 8일 평일의 축일은 생략하지 않는다 — 그날의 대표이고 그 성인의 색이다(책자 2025-04-23 조오지 [홍], 사용자 결정 2026-10-24)
   const wed = rb("2026-04-08");
   same([fate(wed, "d0408-minor"), officialId(wed), wed.color], [["proper", null], "d0408-minor", "red"]);
-  same(ctx.guardCandidates("2026-04-05").length, 0);   // 부활대축일부터 밖 — guard 는 성지주일 다음 날부터 성 토요일까지뿐이다
+  same(ctx.guardCandidates("2026-04-05").length, 0);   // 부활대축일부터 밖 — guard는 성지주일 다음 날부터 성 토요일까지뿐이다
   same(ctx.guardCandidates("2026-04-04").map((c) => c.observance.id), ["guard:holy-week"]);
 });
 
