@@ -199,7 +199,7 @@ in:요한                    → 키워드 없음 → 검색 차단 (안내 표�
 
 - 검색 워커(`js/search-worker.js`)와 화면 코드(`js/app/search.js`)가 따옴표를 지우는 함수(`normalizeForMatch`, 검색어용 `normalizeQuery`)와 일치 범위를 찾는 함수(`findMatchRanges`)를 같은 코드로 한 벌씩 둔다. 워커는 모듈을 가져올 수 없는 클래식 스크립트라 화면 모듈과 코드를 나눠 쓰지 못한다(`IN_RE`도 같은 방식으로 두 벌이다). 두 벌의 코드가 글자까지 같은지 `tests/unit/search.test.js`가 확인한다.
 - 워커는 청크마다 따옴표를 지우고 공백을 접은 소문자 본문을 처음 검색할 때 한 번 만들어 둔다.
-- 인덱서(`common-bible-data`의 `src/search_indexer.py`)의 `segments_text`가 조각을 잇는다. 색인은 그 저장소의 빌드(`build.yml`)가 `main`에서 다시 만든다.
+- 인덱서(`common-bible-data`의 `src/search_indexer.py`)의 `segments_text`가 조각을 잇는다. 색인은 그 저장소의 파이프라인이 만들고, 인덱서를 바꾼 PR은 다시 만든 색인과 `bible-manifest.json`을 함께 올린다(`pipeline.yml`의 drift 검사).
 - 화면은 `js/app/views.js`의 `pieceTrailingSpace`가 조각 끝의 공백을 정한다. 칩이 뒤따르는 조각, 부호만 있는 조각, 여는 따옴표로 끝나는 조각에는 공백이 없다. 인덱서와 같은 글이 되도록 두 곳의 규칙을 맞춰 둔다.
 - 장 화면의 강조는 `highlightTextNodes`(`js/app/search.js`)가 맡는다. 한 절의 본문 조각(글 노드)을 받아 위 규칙대로 찾고, 조각마다 겹치는 부분을 `<mark>`로 바꿔 넣는다. 결과 목록의 발췌는 같은 분할 함수(`splitPiecesByMatches`)를 쓴다.
 
