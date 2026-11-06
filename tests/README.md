@@ -95,7 +95,10 @@ python3 scripts/serve.py 8080
 # 3. 실행
 pytest tests/e2e/ -v
 pytest tests/e2e/test_bookmark_sort.py -q   # 개별 파일
+pytest tests/e2e/test_a11y_axe.py::test_a11y_search_results -q   # 시험 한 건
 ```
+
+> 바꾼 코드와 관련된 파일만 돌린다. 전체는 13분쯤 걸린다(사용자 결정 2026-11-07, `docs/workflow.md` 「작업 중 함정」).
 
 > 서버가 `http://localhost:8080`에서 실행 중이어야 한다. `conftest.py`의 `base_url`이 8080을 코드에 고정해 두었으므로 다른 포트는 쓸 수 없다.
 
