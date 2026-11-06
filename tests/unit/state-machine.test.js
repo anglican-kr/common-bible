@@ -2339,7 +2339,7 @@ test("77. 병합 결과를 저장한 뒤 브라우저가 옛 키 몇 개의 쓰�
   assert.equal(h.machine.getState(), "IDLE");
 });
 
-test("77b. 다른 기기의 변경을 저장하면 옛 키를 쓴 뒤 열린 화면을 다시 그릴지 판단하게 하고, 저장하지 못하거나 변경이 없으면 하지 않는다(ADR-041 §8)", async () => {
+test("77b. 병합 결과를 저장하면 옛 키를 쓴 뒤 열린 화면을 다시 그릴지 판단하게 한다. 수정 시각이 늦어지지 않아도 같은 시각의 사본이 값을 바꿀 수 있어 판단하고, 저장하지 못하면 하지 않는다(ADR-041 §8)", async () => {
   const run = async (opts) => {
     const h = mergeSaveMachine(opts);
     const calls = [];
@@ -2350,7 +2350,7 @@ test("77b. 다른 기기의 변경을 저장하면 옛 키를 쓴 뒤 열린 화
   };
   assert.deepEqual(await run({}), [1], "옛 키를 쓴 뒤에 호출한다 — 설정을 다시 읽어 견주기 때문이다");
   assert.deepEqual(await run({ outcome: "full" }), []);
-  assert.deepEqual(await run({ v2: { mergeDocs: (l) => l } }), []);
+  assert.deepEqual(await run({ v2: { mergeDocs: (l) => l } }), [1], "다른 기기의 변경으로 세지 않는 병합도 판단하게 한다");
 });
 
 // ── Group 20: 기준 목록 1단계 (사용자 결정 2026-10-31) ─────────────────────────────────────────────

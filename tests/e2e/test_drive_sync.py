@@ -433,6 +433,31 @@ def test_synced_setting_redraws_only_the_view_it_changes(browser, fake_drive, fa
         page_b.context.close()
 
 
+def test_drive_copy_with_equal_time_redraws_open_view(browser, fake_drive, fake_oauth):
+    """수정 시각이 같은 사본은 「다른 기기의 변경」으로 세지 않지만 병합은 드라이브의 값을 남긴다. 열린 화면도 저장된 그 값을 따른다(ADR-041 §8)."""
+    fake_drive.reset()
+    page = _make_page(browser, fake_drive, fake_oauth)
+    row = ".lect-choice:has-text('연중 13주 월요일')"
+    try:
+        _load(page)
+        _enable_sync(page)
+        _wait_idle(page)
+        page.evaluate("window.appStorage.saveLectionaryAltShow(false)")
+        _sync_now(page)
+        page.evaluate("(path) => window.navigate(path)", "/lectionary/2026-06-29")
+        page.wait_for_selector(".lectionary", timeout=20_000)
+        assert page.locator(row).count() == 0
+        with fake_drive._lock:
+            fake_drive._file["settings"]["lectionaryAltShow"]["v"] = True   # 시각은 그대로 두고 값만 다른 사본
+            fake_drive._etag_n += 1
+            fake_drive._etag = f"etag-{fake_drive._etag_n}"
+        _sync_now(page)
+        assert page.evaluate("() => localStorage.getItem('bible-lectionary-alt-show')") == "true"
+        page.wait_for_selector(row)
+    finally:
+        page.context.close()
+
+
 def test_concurrent_adds_both_preserved(browser, fake_drive, fake_oauth):
     """Devices A and B each add a different bookmark; both survive after sync."""
     fake_drive.reset()
