@@ -778,14 +778,15 @@ function canticleTitleOf(/** @type {BibleChapter | null | undefined} */ chapter)
 }
 
 /**
- * 대체 독서인가 — 축일이 옮겨 온 날과 제 날짜의 대축일, 주요축일에 그날의 평일, 주일 독서다. 설정 「대체 독서 표시」를 끄면 전례독서 목록에서
- * 숨긴다(사용자 결정 2026-11-05, ADR-038 §3). 격자만 드니 사계재, 옮겨 지킬 수 있는 축일, 저녁 전례, 추수감사주일처럼 이름 있는 줄은 늘 보이고,
- * 등급이 축일이거나 명절인 날(성 마리아와 마르타, 설날)의 평일 줄도 남는다.
+ * 대체 독서인가 — 기본 독서가 대축일, 주요축일, 고유 독서가 있는 축일인 날에 그날의 평일, 주일 독서다. 설정 「대체 독서 표시」를 끄면 전례독서 목록에서
+ * 숨긴다(사용자 결정 2026-11-05, 2026-11-06, ADR-041 §4). 격자만 드니 사계재, 옮겨 지킬 수 있는 축일, 저녁 전례, 추수감사주일처럼 이름 있는 줄은 늘 보이고,
+ * 삼일절과 명절(설날, 추석)의 평일 줄도 남는다. 공통 독서만 있는 축일은 격자가 기본 독서라 여기 들지 않으므로(`initialCandidate`), 등급이 축일인 기본 독서는 고유 독서가 있다.
  * @param {Candidate} c @param {Candidate} initial  그날의 기본 독서 후보
  */
 function isAlternateReading(c, initial) {
   if (!isGrid(c) || c === initial) return false;
-  return initial.status === "transferred_in" || ["principal", "major_feast"].includes(String(initial.observance.rank));
+  const { rank, sanctoral_class: cls } = initial.observance;
+  return rank === "principal" || rank === "major_feast" || (rank === "minor_feast" && cls !== "national");
 }
 
 /**

@@ -1696,6 +1696,7 @@ def test_psalm_response_and_collect_ending_keep_the_text_colour(desktop_context)
 def test_single_candidate_day_has_no_choice_rows(mobile_context):
     """후보 전례일이 하나뿐인 날(2026-11-07 연중 31주 토요일)은 전례독서 목록을 그리지 않는다 — 고를 것이 없고 머리의 전례일 이름이
     같다(사용자 결정 2026-11-03, ADR-038 §3 「후보 전례일이 여럿이면」). 여럿인 날(11-02)은 그대로다."""
+    mobile_context.add_init_script(SHOW_ALT_READINGS)
     page = mobile_context.new_page()
     _open(page, "lectionary/2026-11-07")
     assert page.locator(".lect-choices").count() == 0
@@ -1894,7 +1895,7 @@ def test_turning_off_common_reading_hiding_brings_saint_rows_back(desktop_contex
 # ── 대체 독서 표시 — 설정으로 그날의 평일, 주일 줄을 숨긴다(ADR-041 §4) ──
 
 def test_alternate_rows_are_hidden_by_default(desktop_context):
-    """처음에는 옮겨 온 날과 대축일, 주요축일의 평일, 주일 줄이 없다. 옮겨 왔다는 문장, 사계재, 옮겨 지킬 수 있는 축일, 축일의 평일 줄은 그대로다."""
+    """처음에는 대축일, 주요축일, 고유 독서가 있는 축일의 평일 줄이 없다. 옮겨 왔다는 문장, 사계재, 옮겨 지킬 수 있는 축일, 명절의 평일 줄은 그대로다."""
     page = desktop_context.new_page()
     _open(page, "lectionary/2025-06-30")
     assert page.inner_text(".lect-day") == "사도 성 베드로와 바울로"
@@ -1906,8 +1907,11 @@ def test_alternate_rows_are_hidden_by_default(desktop_context):
     assert _choices(page) == ["모든 신자의 성소를 위한 추계재"]
     _open(page, "lectionary/2026-01-04")
     assert _choices(page) == ["공현대축일 · 1월 6일에서 옮겨 지킬 수 있음"]
-    _open(page, "lectionary/2025-07-29")
-    assert _choices(page) == ["연중 17주 화요일"]
+    _open(page, "lectionary/2026-12-08")
+    assert page.inner_text(".lect-day") == "성모시태"
+    assert page.locator(".lect-choices").count() == 0
+    _open(page, "lectionary/2025-01-29")
+    assert _choices(page) == ["연중 3주 수요일"]
 
 
 def test_alternate_setting_shows_rows_in_place_and_a_link_still_opens_when_off(desktop_context):

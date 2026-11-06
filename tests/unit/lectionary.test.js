@@ -289,7 +289,7 @@ test("collectsFor: 고른 전례일의 본기도만 — 다른 전례일 것은 
   same(ctx.collectsFor(entries, omitted).map((o) => o.id), ["d1207-암브로스"]);   // 생략된 축일도 고르면 그 본기도
 });
 
-test("buildLectionaryModel: 대체 독서 표시를 끄면 옮겨 온 날과 대축일, 주요축일의 평일 줄을 숨긴다(사용자 결정 2026-11-05, ADR-041 §4)", () => {
+test("buildLectionaryModel: 대체 독서 표시를 끄면 대축일, 주요축일, 고유 독서가 있는 축일의 평일 줄을 숨긴다(사용자 결정 2026-11-06, ADR-041 §4)", () => {
   const Q = { obs: null, track: null, set: null, collect: null };
   const gridId = "grid:ordinary-13-weekday-mon";
   const rowsOf = (feast, others = []) => {
@@ -309,10 +309,13 @@ test("buildLectionaryModel: 대체 독서 표시를 끄면 옮겨 온 날과 대
   same(names(rowsOf(major)()), ["연중 13주 월요일"]);
   // 대축일도 같다
   same(names(rowsOf(cand(obs("t-승천", "승천대축일", { rank: "principal", precedence: 1, color: "white" })))(false)), []);
-  // 옮겨 온 축일은 등급을 가리지 않는다
+  // 옮겨 온 날이든 제 날짜든 같다
   same(names(rowsOf(cand(obs("d1102-별세자", "모든 별세자의 날", { rank: "minor_feast", precedence: 7, color: "white" }), "transferred_in", { from: "2026-06-28" }))(false)), []);
-  // 제 날짜의 축일과 명절은 평일 줄이 남는다
-  same(names(rowsOf(cand(obs("d0729-마리아", "성 마리아와 마르타", { rank: "minor_feast", precedence: 7, color: "white" })))(false)), ["연중 13주 월요일"]);
+  // 고유 독서가 있는 축일도 숨긴다
+  same(names(rowsOf(cand(obs("d1208-성모시태", "성모시태", { rank: "minor_feast", precedence: 7, color: "white", sanctoral_class: "lord" })))(false)), []);
+  same(names(rowsOf(cand(obs("d0729-마리아", "성 마리아와 마르타", { rank: "minor_feast", precedence: 7, color: "white", sanctoral_class: "saint" })))(false)), []);
+  // 삼일절과 명절은 평일 줄이 남는다
+  same(names(rowsOf(cand(obs("d0301-삼일절", "삼일절", { rank: "minor_feast", precedence: 7, color: "white", sanctoral_class: "national" })))(false)), ["연중 13주 월요일"]);
   same(names(rowsOf(cand(obs("t-설날", "설날", { rank: "regional_festival", precedence: 7, color: "white" })))(false)), ["연중 13주 월요일"]);
   // 격자가 아닌 줄은 늘 남는다 — 사계재, 옮겨 지킬 수 있는 축일, 저녁 전례
   const ember = cand(obs("t-하계재", "하계재", { rank: "feria", precedence: 8, color: "purple", is_ember: true }));
