@@ -54,4 +54,5 @@ title: "fix: 인용 조각 앞뒤의 공백 처리"
 - `docs/decisions/005-search-indexing-strategy.md`: 「일치 규칙」(본문의 공백 접기, 인덱서의 이음 규칙, 두 번 찾는 강조), 「구현」, 「검토한 대안」의 「인덱서가 모든 조각 사이에 공백을 넣지 않기」.
 - `docs/topics/search.md`: 「지금 동작」에 공백 접기, 조각을 넘는 강조, 조각 끝의 공백. 「남은 일」에 색인이 다시 만들어지기를 기다리는 일과 `¶` 4절.
 - `docs/topics/bible-text.md`: 「지금 동작」에 조각 끝의 공백 규칙.
+- `CLAUDE.md` 「커밋 메시지 규칙」: 데이터 저장소의 커밋과 PR 제목도 같은 규칙을 따른다(사용자 결정 2026-11-07).
 - `CLAUDE.md` 「테스트」, `docs/workflow.md` 「작업 중 함정」, `tests/README.md` §3: e2e는 수정한 코드와 관련된 파일만 돌린다. `docs/workflow.md`에는 데이터 저장소의 파이프라인 코드를 바꾼 PR이 산출물과 매니페스트를 함께 올려야 한다는 함정도 적었다. `tests/README.md` 표의 시험 건수도 바뀐 파일만 고쳤다.
