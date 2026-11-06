@@ -198,14 +198,15 @@ function normalizeForMatch(s) {
 }
 
 /**
- * The query side of normalizeForMatch, trimmed again: dropping quotes can
- * leave edge spaces (`" '` → " "), and a lone space would match nearly every
- * verse. "" means there is nothing to search for.
+ * The query side of normalizeForMatch, with whitespace collapsed again:
+ * dropping a quote can leave a lone space (`" '` → " ") that would match
+ * nearly every verse, or a double space (`빛이 " 생겨라`) that matches none.
+ * "" means there is nothing to search for.
  * @param {string} q
  * @returns {string}
  */
 function normalizeQuery(q) {
-  return normalizeForMatch(q).trim();
+  return normalizeForMatch(q).replace(/\s+/g, " ").trim();
 }
 
 /**

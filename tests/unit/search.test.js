@@ -1383,3 +1383,26 @@ test("normalizeQuery: 따옴표를 지운 뒤 앞뒤 공백도 지운다", () =>
   assert.strictEqual(q.normalizeQuery(`" '`), "");
   assert.strictEqual(q.normalizeQuery(`" 빛이 생겨라 "`), "빛이 생겨라");
 });
+
+test("normalizeQuery: 가운데에 홀로 있는 따옴표를 지운 뒤 공백을 한 칸으로 접는다", () => {
+  const q = loadQuoteMatch();
+  assert.strictEqual(q.normalizeQuery(`빛이 " 생겨라`), "빛이 생겨라");
+  assert.deepEqual(
+    Array.from(q.findMatchRanges("하느님께서 “빛이 생겨라!”", `빛이 " 생겨라`), (r) => Array.from(r)),
+    [[7, 13]],
+  );
+});
+
+test("buildSnippet: 따옴표를 사이에 둔 늦은 일치에서 일치 앞을 잘라 보이고 강조한다", () => {
+  const h = loadPureHelpers();
+  // The match starts at 61 (> 40), so the snippet is clipped 30 chars before it.
+  const text = "ㄱ".repeat(60) + " “빛이 생겨라!” 하시자 " + "ㄴ".repeat(120);
+  const frag = h.buildSnippet(text, "빛이 생겨라! 하시자");
+  const span = frag.children[0];
+  const out = recursiveText(span);
+  assert.ok(out.startsWith("…"), `expected leading ellipsis, got: ${out.slice(0, 5)}`);
+  assert.ok(out.endsWith("…"), `expected trailing ellipsis, got tail: ${out.slice(-5)}`);
+  const mark = span.children.find((c) => c.tagName === "MARK");
+  assert.ok(mark, "expected a <mark>");
+  assert.strictEqual(recursiveText(mark), "빛이 생겨라!” 하시자");
+});
