@@ -244,7 +244,7 @@ test("applyToLegacyKeys 는 아는 키만 localStorage 에 쓴다", () => {
   );
 });
 
-test("applyToLegacyKeys는 시작 페이지와 대체 독서 표시를 앱이 읽는 키에 쓴다(ADR-041 §8)", () => {
+test("applyToLegacyKeys는 시작 화면과 대체 독서 표시를 앱이 읽는 키에 쓴다(ADR-041 §8)", () => {
   const { store, localStorage } = load();
   store.applyToLegacyKeys(doc({
     settings: {

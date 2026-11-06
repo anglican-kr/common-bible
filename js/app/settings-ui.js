@@ -322,11 +322,43 @@ window.appSettings = (/** @returns {AppSettings} */ () => {
     return row;
   }
 
+  // ── Segment row component ──
+  /**
+   * Build a settings row: a label on the left, a .btn-group of values on the right.
+   * Picking one updates state in place — no rebuild — so focus stays on the button
+   * (same reason as makeToggleRow). The group takes the label as its name, since a
+   * button alone says 「성서」 without saying what it sets.
+   * @param {Object} opts
+   * @param {string} opts.labelText
+   * @param {string} opts.value
+   * @param {[string, string][]} opts.options  [value, visible text]
+   * @param {(value: string) => void} opts.onChange
+   * @returns {HTMLDivElement}
+   */
+  function makeSegmentRow({ labelText, value, options, onChange }) {
+    const row = el("div", { className: "settings-row" });
+    const labelId = `settings-segment-${++_toggleIdSeq}`;
+    row.appendChild(el("span", { className: "settings-label", id: labelId }, labelText));
+    const group = el("div", { className: "btn-group", role: "group", "aria-labelledby": labelId });
+    for (const [optValue, text] of options) {
+      const btn = el("button", { className: "toolbar-btn", "aria-pressed": String(optValue === value) }, text);
+      btn.addEventListener("click", () => {
+        if (btn.getAttribute("aria-pressed") === "true") return;
+        for (const other of group.children) other.setAttribute("aria-pressed", String(other === btn));
+        onChange(optValue);
+      });
+      group.appendChild(btn);
+    }
+    row.appendChild(group);
+    return row;
+  }
+
   // ── Select row component ──
   /**
    * Build a settings row: a label on the left, a native <select> on the right, so
    * each OS shows its own picker. Changing it updates state in place — no rebuild
    * — so focus stays on the control (same reason as makeToggleRow).
+   * No row calls this yet: 세례명 and 소속교회 will (ADR-041 §9).
    * @param {Object} opts
    * @param {string} opts.labelText
    * @param {string} opts.value
@@ -401,8 +433,8 @@ window.appSettings = (/** @returns {AppSettings} */ () => {
 
     // ── Section: 시작 ──
     const startSection = makeSection("시작");
-    startSection.appendChild(makeSelectRow({
-      labelText: "시작 페이지",
+    startSection.appendChild(makeSegmentRow({
+      labelText: "시작 화면",
       value: loadStartPage(),
       options: Object.entries(START_PAGES).map(([value, { label }]) => [value, label]),
       onChange: (value) => {
