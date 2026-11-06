@@ -271,6 +271,8 @@ test("buildCiteChip: prose → inline class only", () => {
   assert.equal(node.attrs["data-cite-tradition"], undefined);
   assert.equal(node.attrs["data-cite-parallels"], undefined);
   assert.equal(node.textContent, "(이사 53:5)");
+  // The small label is an inner span so the outer box keeps the verse's font height (ADR-022 §6).
+  assert.equal(node.children[0].attrs.className, "cite-chip-label");
 });
 
 test("buildCiteChip: poetry → cite-chip--poetry block class", () => {
