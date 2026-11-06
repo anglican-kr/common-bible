@@ -24,7 +24,7 @@ import urllib.parse
 import pytest
 from playwright.sync_api import Page, BrowserContext, Route
 
-from .conftest import FULL_STORAGE, fill_storage
+from .conftest import FULL_STORAGE, RECORD_ANNOUNCEMENTS, fill_storage
 
 
 BASE_URL = "http://localhost:8080"
@@ -416,12 +416,7 @@ def test_synced_setting_redraws_only_the_view_it_changes(browser, fake_drive, fa
         assert "Genesis 1" in _bookmark_names(page_b)
         assert page_b.locator(".lectionary[data-keep='1']").count() == 1
         # 다시 그린 화면의 제목 알림이 동기화 결과 안내를 덮지 않는다
-        page_b.evaluate("""() => {
-          window.__said = [];
-          const live = document.getElementById('a11y-announce');
-          new MutationObserver(() => { if (live.textContent) window.__said.push(live.textContent); })
-            .observe(live, { childList: true, characterData: true, subtree: true });
-        }""")
+        page_b.evaluate(RECORD_ANNOUNCEMENTS)
         from_a("window.appStorage.saveLectionaryAltShow(true)")
         page_b.wait_for_selector(".lect-choice:has-text('연중 13주 월요일')")
         page_b.wait_for_timeout(300)
@@ -447,6 +442,39 @@ def test_synced_setting_redraws_only_the_view_it_changes(browser, fake_drive, fa
         from_a("window.appStorage.saveBookOrder('canonical')")
         assert page_b.evaluate("() => localStorage.getItem('bible-book-order')") == "canonical"
         assert page_b.locator(".chapter-text[data-keep='1']").count() == 1
+    finally:
+        page_a.context.close()
+        page_b.context.close()
+
+
+def test_sync_notice_keeps_the_title_of_a_view_opened_during_the_redraw(browser, fake_drive, fake_oauth):
+    """동기화가 다시 그리는 동안 다른 화면으로 옮기면, 늦은 동기화 안내가 새 화면의 제목 알림을 덮지 않는다(ADR-041 §8)."""
+    fake_drive.reset()
+    page_a = _make_page(browser, fake_drive, fake_oauth)
+    page_b = _make_page(browser, fake_drive, fake_oauth)
+    held = []
+    try:
+        for page in (page_a, page_b):
+            _load(page)
+            _enable_sync(page)
+            _wait_idle(page)
+        page_b.route("**/data/lectionary/**", lambda route: held.append(route))   # 전례독서 자료를 받지 못한 채 머문다
+        page_b.evaluate("() => window.navigate('/lectionary/2026-06-29')")
+        page_b.wait_for_selector(".loading")
+        page_a.evaluate("window.appStorage.saveLectionaryAltShow(true)")
+        _sync_now(page_a)
+        _sync_now(page_b)
+        assert page_b.evaluate("() => localStorage.getItem('bible-lectionary-alt-show')") == "true"
+        page_b.evaluate(RECORD_ANNOUNCEMENTS)
+        page_b.evaluate("() => window.navigate('/john/3')")
+        page_b.wait_for_selector(".chapter-text")
+        page_b.wait_for_function("() => window.__said.length > 0")
+        title = page_b.evaluate("() => window.__said.at(-1)")
+        assert "3" in title, title
+        for route in held:
+            route.continue_()
+        page_b.wait_for_timeout(500)
+        assert page_b.evaluate("() => window.__said.at(-1)") == title
     finally:
         page_a.context.close()
         page_b.context.close()

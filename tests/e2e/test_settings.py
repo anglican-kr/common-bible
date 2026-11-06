@@ -1,5 +1,5 @@
 """E2E: 설정 팝오버 — 섹션, 시작 페이지, 시작 화면, 책 순서, 글자 크기, 테마, 색상, 캐시, 영속성."""
-from .conftest import CLEAR_APP_STORAGE, MOBILE_VIEWPORT, IPHONE_UA, open_settings
+from .conftest import CLEAR_APP_STORAGE, MOBILE_VIEWPORT, IPHONE_UA, RECORD_ANNOUNCEMENTS, open_settings
 
 BASE = "http://localhost:8080"
 
@@ -298,14 +298,6 @@ def test_escape_on_open_select_list_keeps_popover(browser):
 
 
 # ── 토글 결과 알림 ─────────────────────────────────────────────────────────────
-
-RECORD_ANNOUNCEMENTS = """() => {
-  window.__said = [];
-  const live = document.getElementById('a11y-announce');
-  new MutationObserver(() => { if (live.textContent) window.__said.push(live.textContent); })
-    .observe(live, { childList: true, characterData: true, subtree: true });
-}"""
-
 
 def test_toggle_result_is_announced_after_the_view_redraws(browser):
     """토글이 화면을 다시 그리면 화면 제목을 알린 뒤에 결과를 알린다. 스크린 리더가 듣는 마지막 말이 토글 결과다."""

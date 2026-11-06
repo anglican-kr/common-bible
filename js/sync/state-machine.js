@@ -174,8 +174,12 @@ function createSyncMachine({ onStateChange } = {}) {
     if (typeof window.rebuildDriveSyncSection === "function") window.rebuildDriveSyncSection();
   }
 
+  // How many notices this machine has shown: a notice held back for a redraw checks that nothing newer came first.
+  let _snackbarCount = 0;
+
   /** @param {string} msg */
   function _snackbar(msg) {
+    _snackbarCount++;
     if (typeof window._showSyncSnackbar === "function") window._showSyncSnackbar(msg);
   }
 
@@ -653,10 +657,14 @@ function createSyncMachine({ onStateChange } = {}) {
       if (s.theme?.v       != null && typeof window.applyTheme       === "function") window.applyTheme(/** @type {string} */ (s.theme.v));
       if (s.citeShow?.v    != null && typeof window.applyCiteShow    === "function") window.applyCiteShow(/** @type {boolean} */ (s.citeShow.v));
       if (s.audioShow?.v   != null && typeof window.applyAudioShow   === "function") window.applyAudioShow(/** @type {boolean} */ (s.audioShow.v));
-      // A redrawn view announces its title. Say this after it, or a screen reader hears only the title.
       const notify = () => _snackbar("다른 기기에서 변경된 데이터를 불러왔습니다.");
-      if (redrawn) redrawn.finally(notify);
-      else notify();
+      if (redrawn) {
+        // A redrawn view announces its title: say this after it, or a screen reader hears only the title. Dropped if
+        // something newer came meanwhile: an error from the rest of this cycle, or the user moved to another view.
+        const seq = window.routeSeq?.();
+        const said = _snackbarCount;
+        redrawn.finally(() => { if (window.routeSeq?.() === seq && _snackbarCount === said) notify(); });
+      } else notify();
     }
     return outcome;
   }
