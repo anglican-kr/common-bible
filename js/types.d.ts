@@ -727,6 +727,8 @@ export interface Observance {
   transferable?: boolean;
   transfer_to?: TransferTo | null;
   outranks_sunday?: boolean;
+  // 고유 독서가 기본 독서가 아니라 대체 독서인 축일(2.11 병자를 위한 기도일 — ADR-038 §3). 월별 축일 표에만 있다.
+  alternate_readings?: boolean;
   color: LiturgicalColor | null;
   // `null | 스칼라 | 배열` 3형(ADR-036 §4 · 설계서 §5.2) — 대림 3주일은 ["rose", "blue"] 둘 다 허용한다.
   color_alt?: CodeField<LiturgicalColorAlt>;

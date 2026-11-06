@@ -364,7 +364,7 @@ test("§5.6 본기도 폴백은 빈틈 없이 닫힌다 — has_proper 참은 �
   for (const row of read("sanctoral.json").entries) {
     const d = heldOn(row.id, row.date ? `2028-${row.date.replace(".", "-")}` : ctx.lunarDatesOf(kasi, 2028)[row.lunar]);
     const cs = collectsAt(d, row.id);
-    // 성인 분류가 없는 축일(세계평화 · 병자를 위한 기도일 — 기도서에 본기도가 없다, 미결51)은 공통도 없다
+    // 성인 분류가 없는 축일(세계평화 — 기도서에 본기도가 없다, 미결51)은 공통도 없다. 병자를 위한 기도일은 2026-11-07부터 고유 본기도가 있다
     const ok = row.rank === "commemoration" ? cs.length === 0
       : row.has_proper ? cs.length > 0 && cs.every((c) => c.common === null)
         : row.sanctoral_class === null ? cs.length === 0

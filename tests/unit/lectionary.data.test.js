@@ -320,8 +320,8 @@ test("A3 본문 없는 후보와 겹치는 후보는 목록에 없음 — 2025~2
     }
   }
   same(bad, []);
-  // 본문 없는 날은 이 넷뿐이다 — 하나가 늘면 데이터가 본문 없는 전례일을 더한 것이니 이름 줄로 괜찮은지 본다
-  same([...textless.keys()].sort(), ["가정주일", "병자를 위한 기도일", "세계평화를 위한 기도일", "평화통일주일"]);
+  // 본문 없는 날은 이 셋뿐이다 — 하나가 늘면 데이터가 본문 없는 전례일을 더한 것이니 이름 줄로 괜찮은지 본다
+  same([...textless.keys()].sort(), ["가정주일", "세계평화를 위한 기도일", "평화통일주일"]);
   // 그날 기본 독서가 그해의 대림 1주일 독서라 격자 전례독서 목록이 같은 본문이다 — 다른 격자가 늘면 정말 같은 화면인지 본다
   same([...sameAsNamed], ["grid:advent-1-sunday"]);
   for (const d of ["2026-11-29", "2027-11-28", "2028-12-03"]) same(labels(model(d)), ["대림1주일"], d);   // 전례독서 목록이 없다
@@ -536,7 +536,7 @@ test("A3 전례독서 목록 — 2025-2050 모든 날, 어느 후보를 눌러�
     }
   }
   same(bad, []);
-  assert.strictEqual(days, 1629);
+  assert.strictEqual(days, 1654);   // 2.11의 대체 독서 줄로 25일이 늘었다(2032-02-11은 설날의 평일 줄이 있어 전에도 목록이 있었다)
   assert.ok(longest.length <= 30, `${longest.length} ${longest}`);   // 320px에서 두 줄 안에 든다(e2e가 그 줄을 본다)
 });
 
@@ -549,7 +549,8 @@ test("A3 기념만 하는 후보 — 2025-2050 모든 날, 누를 수 없는 글
     const m = model(d);
     for (const c of m.choices) {
       if (!["commemorated", "omitted"].includes(c.candidate.status)) continue;
-      if (c.candidate.observance.sanctoral_class === "national") local.set(c.name, (local.get(c.name) || 0) + 1);
+      const o = c.candidate.observance;
+      if (o.sanctoral_class === "national" || o.alternate_readings) local.set(c.name, (local.get(c.name) || 0) + 1);
       else bad.push(`${d} ${c.name}${c.suffix}`);
     }
     for (const c of m.passiveDays) {
@@ -566,7 +567,41 @@ test("A3 기념만 하는 후보 — 2025-2050 모든 날, 누를 수 없는 글
   // 늘면 정말 그날 고를 수 없어도 되는지 본다
   same([...others].sort(), ["라틴 문 앞의 사도 성 요한", "사도 성 베드로의 탈옥", "성 십자가 발견"]);
   assert.strictEqual(days, 17);
-  same([...local].sort(), [["광복절", 4], ["삼일절", 5]]);
+  // 2.11의 대체 독서도 기념만 하는 해(주일 2029, 2035, 2046, 설날 2032, 재의 수요일 2043)에 줄이 있다(사용자 결정 2026-11-07)
+  same([...local].sort(), [["광복절", 4], ["병자를 위한 기도일", 5], ["삼일절", 5]]);
+});
+
+test("2.11 병자를 위한 기도일 — 2025-2050 모든 해, 기본 독서는 그날의 것이고 이 독서는 설정과 상관없이 「대체 독서」 줄로 고른다(사용자 결정 2026-11-07, ADR-038 §3)", { skip: SKIP }, () => {
+  const OBS = "d0211-병자를-위한-기도일";
+  let official = 0;
+  for (let y = 2025; y <= 2050; y++) {
+    const d = `${y}-02-11`;
+    const m = model(d);
+    assert.notStrictEqual(id(m.selected), OBS, d);   // 처음에는 그날의 기본 독서다
+    same(m.textlessDays.map(id), [], d);
+    for (const on of [true, false]) {
+      const rows = model(d, NONE, null, on).choices.filter((c) => id(c.candidate) === OBS);
+      same(rows.map((c) => c.name + c.suffix), ["병자를 위한 기도일 · 대체 독서"], `${d} ${on}`);
+    }
+    assert.ok(!m.passiveDays.some((c) => id(c) === OBS), d);   // 줄이 있으니 이름 줄에 두 번 보이지 않는다
+    if (id(resolve(d).official) === OBS) official++;
+
+    const p = model(d, { ...NONE, obs: OBS });
+    assert.strictEqual(id(p.selected), OBS, d);
+    assert.strictEqual(p.dayName, "병자를 위한 기도일", d);
+    assert.strictEqual(p.selectedNote, "대체 독서", d);
+    // 독서는 시편만 다른 두 세트이고, 본기도의 이름 자리는 줄바꿈 없는 공백이다
+    same(p.options.map((o) => o.group.readings.map((r) => r.label).join(" / ")), [
+      "열왕하 20:1-5 / 시편 13 / 야고 5:13-16 / 마르 2:1-12",
+      "열왕하 20:1-5 / 시편 86:1-7 / 야고 5:13-16 / 마르 2:1-12",
+    ], d);
+    same(p.collects.length, 1, d);
+    assert.match(p.collects[0].text, /구하오니, \(\u00a0+\)을\/를 돌아보시어/, d);
+    assert.strictEqual(p.ending, "A", d);
+    // 그날의 기본 독서로 돌아갈 줄이 늘 있다
+    assert.ok(p.choices.some((c) => id(c.candidate) === id(m.selected)), d);
+  }
+  assert.strictEqual(official, 21);   // 등급은 축일 그대로다 — 기념만 하는 5해(위 시험)를 뺀 해에 그날의 대표다
 });
 
 test("주일에는 성인 본기도를 잇지 않는다 — 2025-2050 모든 주일, 평일에 밀려 기념만 하는 성인은 잇는다(사용자 확인 2026-11-04)", { skip: SKIP }, () => {
@@ -820,7 +855,7 @@ test("A3 옮겨 지킬 수 있는 축일이 평일에 온 날은 대체 독서 �
   for (let t = Date.UTC(2025, 0, 1); t <= Date.UTC(2050, 11, 31); t += 86_400_000) {
     const d = new Date(t).toISOString().slice(0, 10);
     const off = model(d, NONE, null, false);
-    const rows = off.choices.filter((c) => c.suffix.endsWith(" 대체 독서"));
+    const rows = off.choices.filter((c) => c.suffix.endsWith(" 대체 독서") && id(c.candidate).startsWith("grid:"));   // 2.11의 대체 독서 줄은 아래 시험이 본다
     if (!rows.length) continue;
     const on = model(d);
     same(labels(off), labels(on), d);   // 설정을 켜도 같은 줄, 같은 이름이다
