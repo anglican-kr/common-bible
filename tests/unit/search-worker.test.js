@@ -177,6 +177,21 @@ test("gatherResults: 매칭 없으면 빈 배열", () => {
   assert.deepEqual(ctx.gatherResults("없는단어", ["ot"], null), []);
 });
 
+test("gatherResults: 따옴표를 무시하고 일치한다(ADR-005, 2026-11-06)", () => {
+  ctx._setChunks({
+    nt: { books: ["genesis"], bArr: [0, 0], cArr: [1, 1], vArr: [3, 4],
+      tArr: ["하느님께서 “빛이 생겨라!” 하시자 빛이 생겨났다.", "그 빛이 하느님 보시기에 좋았다."] },
+  });
+  assert.deepEqual(ctx.gatherResults('"빛이 생겨라!"', ["nt"], null).map((r) => r.v), [3]);
+  assert.deepEqual(ctx.gatherResults("생겨라! 하시자", ["nt"], null).map((r) => r.v), [3]);
+});
+
+test("gatherResults: 따옴표만 친 검색어는 결과가 없다", () => {
+  ctx._setChunks(CHUNKS);
+  assert.deepEqual(ctx.gatherResults('"', ["ot"], null), []);
+  assert.deepEqual(ctx.gatherResults("“ ’", ["ot"], null), []);
+});
+
 test("gatherResults: 로드되지 않은 청크는 건너뜀", () => {
   ctx._setChunks(CHUNKS);
   assert.deepEqual(ctx.gatherResults("사랑", ["missing"], null), []);

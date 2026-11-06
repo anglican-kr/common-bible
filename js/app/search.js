@@ -113,6 +113,72 @@ function doSearch(query, page, pageSize, onPartial, opts) {
 // target via parameters and creates new nodes via `el` / createTextNode /
 // createDocumentFragment — no reliance on the module-level $X anchors.
 // Test loader extracts this block with a minimal Element stub + el shim.
+// ── BEGIN QUOTE_MATCH ──
+// Two identical copies: js/search-worker.js (a classic worker script, which
+// cannot import a module) and js/app/search.js. tests/unit/search.test.js
+// checks that they stay the same.
+// 검색은 따옴표 여섯 가지를 무시한다(ADR-005 「따옴표를 무시하는 일치」, 사용자 결정
+// 2026-11-06). 성서 본문에는 아포스트로피가 없어 홑따옴표까지 지워도 잃는 일치가 없다.
+const QUOTE_CHARS_RE = /["'“”‘’]/g;
+
+/**
+ * Lowercase and drop quote characters — the form both query and verse text
+ * are compared in.
+ * @param {string} s
+ * @returns {string}
+ */
+function normalizeForMatch(s) {
+  return s.toLowerCase().replace(QUOTE_CHARS_RE, "");
+}
+
+/**
+ * The query side of normalizeForMatch, trimmed again: dropping quotes can
+ * leave edge spaces (`" '` → " "), and a lone space would match nearly every
+ * verse. "" means there is nothing to search for.
+ * @param {string} q
+ * @returns {string}
+ */
+function normalizeQuery(q) {
+  return normalizeForMatch(q).trim();
+}
+
+/**
+ * Non-overlapping [start, end) ranges of `query` in `text`, compared with
+ * quotes ignored and mapped back to offsets in the original `text`. Quotes at
+ * either edge of a match fall outside its range; quotes inside it stay in.
+ * Returns [] when the query is empty once quotes (and edge spaces) are dropped.
+ * @param {string} text
+ * @param {string} query
+ * @returns {Array<[number, number]>}
+ */
+function findMatchRanges(text, query) {
+  const q = normalizeQuery(query);
+  if (!q) return [];
+  const lower = text.toLowerCase();
+  // pos[k] = offset in `text` of the k-th kept (non-quote) character. Assumes
+  // toLowerCase keeps length, as the substring highlight did before.
+  /** @type {number[]} */
+  const pos = [];
+  let kept = "";
+  for (let i = 0; i < lower.length; i++) {
+    const ch = lower[i];
+    if (ch === '"' || ch === "'" || ch === "“" || ch === "”" || ch === "‘" || ch === "’") continue;
+    pos.push(i);
+    kept += ch;
+  }
+  /** @type {Array<[number, number]>} */
+  const ranges = [];
+  let from = 0;
+  let idx = kept.indexOf(q, from);
+  while (idx !== -1) {
+    ranges.push([pos[idx], pos[idx + q.length - 1] + 1]);
+    from = idx + q.length;
+    idx = kept.indexOf(q, from);
+  }
+  return ranges;
+}
+// ── END QUOTE_MATCH ──
+
 // Text highlight helper: splits text on query matches and wraps in <mark>
 /**
  * @param {Node} target
@@ -124,19 +190,16 @@ function appendTextWithHighlight(target, text, query) {
     target.appendChild(document.createTextNode(text));
     return;
   }
-  const lower = text.toLowerCase();
-  const qLower = query.toLowerCase();
-  let pos = 0;
-  let idx = lower.indexOf(qLower, pos);
-  if (idx === -1) {
+  const ranges = findMatchRanges(text, query);
+  if (ranges.length === 0) {
     target.appendChild(document.createTextNode(text));
     return;
   }
-  while (idx !== -1) {
-    if (idx > pos) target.appendChild(document.createTextNode(text.substring(pos, idx)));
-    target.appendChild(el("mark", { className: "search-highlight", role: "presentation" }, text.substring(idx, idx + query.length)));
-    pos = idx + query.length;
-    idx = lower.indexOf(qLower, pos);
+  let pos = 0;
+  for (const [start, end] of ranges) {
+    if (start > pos) target.appendChild(document.createTextNode(text.substring(pos, start)));
+    target.appendChild(el("mark", { className: "search-highlight", role: "presentation" }, text.substring(start, end)));
+    pos = end;
   }
   if (pos < text.length) target.appendChild(document.createTextNode(text.substring(pos)));
 }
@@ -150,9 +213,8 @@ function buildSnippet(text, query) {
   const frag = document.createDocumentFragment();
   const span = el("span", { className: "search-result-text" });
 
-  const lower = text.toLowerCase();
-  const qLower = query.toLowerCase();
-  const matchIdx = lower.indexOf(qLower);
+  const first = findMatchRanges(text, query)[0];
+  const matchIdx = first ? first[0] : -1;
 
   // Show ~40 chars before/after match
   let displayText = text;
