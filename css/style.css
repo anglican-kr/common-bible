@@ -1415,19 +1415,22 @@ a.cal-cell:focus-visible { background: var(--bg-card); }
   border-radius: 0;
 }
 
-/* Settings popover: every .btn-group bar (외경 / 시작 화면 / 인용·주석 /
-   글자 크기 / 테마) shares the same total width so the right edge of the
-   popover stays visually aligned across rows. Buttons inside divide the
-   shared width equally regardless of their text length. */
+/* Settings popover: every .btn-group bar (시작 화면 / 글자 크기 / 테마) shares
+   the same total width so the right edge of the popover stays visually aligned
+   across rows. Buttons inside divide the shared width equally regardless of
+   their text length. Grid, not flex: the buttons after the first have no left
+   border, and flex:1 would leave them 1px narrower. */
 .settings-popover .settings-row > .btn-group,
 .settings-view .settings-row > .btn-group {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
   width: 11rem;
   flex-shrink: 0;
 }
 
 .settings-popover .settings-row > .btn-group .toolbar-btn,
 .settings-view .settings-row > .btn-group .toolbar-btn {
-  flex: 1;
   min-width: 0;
 }
 
@@ -1494,19 +1497,25 @@ a.cal-cell:focus-visible { background: var(--bg-card); }
   cursor: pointer;
 }
 
+/* The caption sits beside the label and drops below it only when both no longer
+   fit on one line (large font sizes). */
 .settings-toggle-text {
   display: flex;
-  flex-direction: column;
-  gap: var(--space-0_5);
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-0_5) var(--space-2);
   min-width: 0;
 }
 
-/* Dynamic caption (외경): always present so toggling never shifts layout.
-   Fixed to one line height; both phrases fit on a single line. */
+/* .settings-label's min-width would open a gap between 「외경」 and its caption. */
+.settings-toggle-text .settings-label {
+  min-width: 0;
+}
+
+/* Dynamic caption (외경): always present, only the phrase changes on toggle. */
 .settings-toggle-caption {
   font-size: var(--font-xs);
   line-height: var(--leading-tight);
-  min-height: 1.3em;
   color: var(--text-secondary);
 }
 

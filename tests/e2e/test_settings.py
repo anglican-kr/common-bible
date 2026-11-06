@@ -1,4 +1,4 @@
-"""E2E: 설정 팝오버 — 섹션, 시작 페이지, 시작 화면, 책 순서, 글자 크기, 테마, 색상, 캐시, 영속성."""
+"""E2E: 설정 팝오버 — 섹션, 시작 화면, 읽던 페이지에서 시작, 책 순서, 글자 크기, 테마, 색상, 캐시, 영속성."""
 from .conftest import CLEAR_APP_STORAGE, MOBILE_VIEWPORT, IPHONE_UA, RECORD_ANNOUNCEMENTS, open_settings
 
 BASE = "http://localhost:8080"
@@ -61,38 +61,96 @@ def test_mobile_settings_view_has_the_same_sections(browser):
     page = ctx.new_page()
     try:
         page.goto(f"{BASE}/settings")
-        page.wait_for_selector(".settings-view .settings-select")
+        page.wait_for_selector(".settings-view .btn-group")
         _assert_sections(page.evaluate(SECTION_FACTS, ".settings-view"))
     finally:
         ctx.close()
 
 
-# ── 시작 페이지 (ADR-041 §2, §3) ──────────────────────────────────────────────
+# ── 시작 화면 (ADR-041 §2, §3, §9) ────────────────────────────────────────────
 
-def test_start_page_select_saves_and_hides_resume_row_keeping_its_value(browser):
-    """전례독서를 고르면 값이 저장되고 「읽던 페이지에서 시작」이 숨는다. 포커스는 선택 상자에 남고, 성서로 되돌리면 전의 값으로 돌아온다."""
+def _start_button(pop, name):
+    return pop.get_by_role("group", name="시작 화면").get_by_role("button", name=name, exact=True)
+
+
+def test_start_page_buttons_save_and_hide_resume_row_keeping_its_value(browser):
+    """전례독서를 누르면 값이 저장되고 「읽던 페이지에서 시작」이 숨는다. 포커스는 누른 단추에 남고, 성서로 되돌리면 전의 값으로 돌아온다."""
     ctx = browser.new_context()
     ctx.add_init_script(CLEAR_APP_STORAGE)
     page = ctx.new_page()
     try:
         _open(page)
         pop = open_settings(page)
-        select = pop.get_by_label("시작 페이지")
-        assert select.input_value() == "bible"
+        bible, lectionary = _start_button(pop, "성서"), _start_button(pop, "전례독서")
+        assert bible.get_attribute("aria-pressed") == "true"
+        assert lectionary.get_attribute("aria-pressed") == "false"
         resume = pop.get_by_role("switch", name="읽던 페이지에서 시작")
         resume.click()   # home — 숨기는 동안 값을 지키는지 본다
-        select.focus()   # 사용자는 선택 상자를 눌러 고른다. select_option은 포커스를 옮기지 않는다
-        select.select_option("lectionary")
+        lectionary.click()
         assert _ls(page, "bible-start-page") == "lectionary"
+        assert bible.get_attribute("aria-pressed") == "false"
+        assert lectionary.get_attribute("aria-pressed") == "true"
         assert resume.is_visible() is False
-        assert page.evaluate("() => document.activeElement.tagName") == "SELECT"
-        select.select_option("bible")
+        assert page.evaluate("() => document.activeElement.textContent") == "전례독서"
+        bible.click()
         assert _ls(page, "bible-start-page") == "bible"
         assert resume.is_visible() is True
         assert resume.is_checked() is False
         assert _ls(page, "bible-startup") == "home"
     finally:
         ctx.close()
+
+
+def test_pressing_the_chosen_start_page_changes_nothing(browser):
+    """이미 고른 단추를 다시 눌러도 다시 저장하거나 알리지 않는다."""
+    ctx = browser.new_context()
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    page = ctx.new_page()
+    try:
+        _open(page)
+        pop = open_settings(page)
+        page.evaluate(RECORD_ANNOUNCEMENTS)
+        _start_button(pop, "성서").click()
+        assert _ls(page, "bible-start-page") is None
+        assert page.evaluate("() => window.__said.length") == 0
+        assert _start_button(pop, "성서").get_attribute("aria-pressed") == "true"
+    finally:
+        ctx.close()
+
+
+SEGMENT_WIDTHS = """(root) => [...document.querySelector(root).querySelectorAll('.settings-row > .btn-group')].map((g) => {
+  const box = g.getBoundingClientRect();
+  return { right: box.right, width: box.width, buttons: [...g.children].map((b) => b.getBoundingClientRect().width) };
+})"""
+
+
+def test_segment_groups_share_width_and_buttons_divide_it_equally(browser):
+    """시작 화면, 글자 크기, 테마의 묶음은 폭과 오른쪽 끝이 같고, 단추는 묶음 안에서 폭이 같다. 글자를 키워도 같다."""
+    for root, options, font in (
+        (".settings-popover", {}, 18),
+        (".settings-view", {"viewport": MOBILE_VIEWPORT, "user_agent": IPHONE_UA}, 18),
+        (".settings-view", {"viewport": {"width": 320, "height": 640}, "user_agent": IPHONE_UA}, 24),
+    ):
+        ctx = browser.new_context(**options)
+        ctx.add_init_script(CLEAR_APP_STORAGE)
+        ctx.add_init_script(f"localStorage.setItem('bible-font-size', '{font}')")
+        page = ctx.new_page()
+        try:
+            if root == ".settings-popover":
+                _open(page)
+                open_settings(page)
+            else:
+                page.goto(f"{BASE}/settings")
+                page.wait_for_selector(".settings-view .btn-group")
+            groups = page.evaluate(SEGMENT_WIDTHS, root)
+            assert [len(g["buttons"]) for g in groups] == [2, 3, 3], root
+            assert len({g["width"] for g in groups}) == 1, groups
+            assert len({g["right"] for g in groups}) == 1, groups
+            for g in groups:
+                assert max(g["buttons"]) - min(g["buttons"]) < 0.1, g   # 소수점 아래 반올림만 남는다
+                assert abs(sum(g["buttons"]) - g["width"]) < 0.1, g
+        finally:
+            ctx.close()
 
 
 def test_resume_row_stays_hidden_when_reopened_with_lectionary_start(browser):
@@ -104,7 +162,7 @@ def test_resume_row_stays_hidden_when_reopened_with_lectionary_start(browser):
         page.goto(f"{BASE}/john/3")
         page.wait_for_selector("#settings-anchor .settings-btn")
         pop = open_settings(page)
-        assert pop.get_by_label("시작 페이지").input_value() == "lectionary"
+        assert _start_button(pop, "전례독서").get_attribute("aria-pressed") == "true"
         assert pop.get_by_role("switch", name="읽던 페이지에서 시작").is_visible() is False
     finally:
         ctx.close()
@@ -250,8 +308,8 @@ def test_default_start_page_keeps_book_list(browser):
         ctx.close()
 
 
-def test_keyboard_opens_on_select_and_focus_stays_trapped(browser):
-    """키보드로 열면 첫 컨트롤인 선택 상자에 포커스가 가고, 포커스 가두기가 선택 상자를 센다."""
+def test_keyboard_opens_on_first_control_and_focus_stays_trapped(browser):
+    """키보드로 열면 첫 컨트롤인 시작 화면의 첫 단추에 포커스가 가고, 포커스가 팝오버 안에서 돈다."""
     ctx = browser.new_context()
     ctx.add_init_script(CLEAR_APP_STORAGE)
     page = ctx.new_page()
@@ -260,16 +318,24 @@ def test_keyboard_opens_on_select_and_focus_stays_trapped(browser):
         page.locator("#settings-anchor .settings-btn").focus()
         page.keyboard.press("Enter")
         page.wait_for_selector(".settings-popover:not([hidden])")
-        assert page.evaluate("() => document.activeElement.tagName") == "SELECT"
+        assert page.evaluate("() => document.activeElement.textContent") == "성서"
         page.keyboard.press("Shift+Tab")   # 첫 컨트롤에서 뒤로 — 팝오버의 마지막 링크로 돈다
         assert page.evaluate("() => !!document.activeElement.closest('.settings-popover')")
         assert page.evaluate("() => document.activeElement.tagName") == "A"
-        page.keyboard.press("Tab")         # 마지막에서 앞으로 — 선택 상자로 돌아온다
-        assert page.evaluate("() => document.activeElement.tagName") == "SELECT"
+        page.keyboard.press("Tab")         # 마지막에서 앞으로 — 첫 단추로 돌아온다
+        assert page.evaluate("() => document.activeElement.textContent") == "성서"
     finally:
         ctx.close()
 
 
+# 세례명과 소속교회의 선택 상자(ADR-041 §9)가 아직 화면에 없어, 팝오버에 하나를 넣어 Esc 처리를 본다.
+ADD_SELECT = """() => {
+  const select = document.createElement('select');
+  select.className = 'settings-select';
+  select.setAttribute('aria-label', '시험 목록');
+  select.innerHTML = '<option>가</option><option>나</option>';
+  document.querySelector('.settings-popover .settings-section').append(select);
+}"""
 LIST_IS_OPEN = "() => document.querySelector('.settings-popover .settings-select').matches(':open')"
 # Chromium은 목록을 연 채 누른 Esc를 페이지로 보내지 않는다. 보내는 브라우저에서 일어날 일을 키 입력 사건을 직접 내어 본다.
 ESC_REACHES_PAGE = """() => document.querySelector('.settings-popover .settings-select')
@@ -284,7 +350,8 @@ def test_escape_on_open_select_list_keeps_popover(browser):
     try:
         _open(page)
         pop = open_settings(page)
-        pop.get_by_label("시작 페이지").click()
+        page.evaluate(ADD_SELECT)
+        pop.get_by_label("시험 목록").click()
         page.wait_for_function(LIST_IS_OPEN)
         page.evaluate(ESC_REACHES_PAGE)
         assert pop.is_visible()
@@ -355,7 +422,7 @@ def test_toggle_result_keeps_the_title_of_a_view_opened_meanwhile(browser):
         ctx.close()
 
 
-# ── 시작 화면 ─────────────────────────────────────────────────────────────────
+# ── 읽던 페이지에서 시작 ──────────────────────────────────────────────────────
 
 def test_startup_home(browser):
     """토글 OFF → bible-startup = 'home', 스위치 미체크."""
@@ -445,6 +512,49 @@ def test_book_order_canonical(browser):
         assert pop.locator(".settings-toggle-caption").first.inner_text() == "별도 섹션에 표시"
     finally:
         ctx.close()
+
+
+def test_book_order_caption_sits_right_of_its_label(browser):
+    """「외경」의 설명은 이름 오른쪽 같은 줄에 있고, 행의 높이는 다른 토글 행과 같다. 좁은 화면에 큰 글자여도 스위치와 겹치지 않는다(ADR-023 §2)."""
+    for root, options, font in (
+        (".settings-popover", {}, 18),
+        (".settings-view", {"viewport": MOBILE_VIEWPORT, "user_agent": IPHONE_UA}, 18),
+        (".settings-view", {"viewport": {"width": 320, "height": 640}, "user_agent": IPHONE_UA}, 24),
+    ):
+        ctx = browser.new_context(**options)
+        ctx.add_init_script(CLEAR_APP_STORAGE)
+        ctx.add_init_script(f"localStorage.setItem('bible-font-size', '{font}')")
+        page = ctx.new_page()
+        try:
+            if root == ".settings-popover":
+                _open(page)
+                open_settings(page)
+            else:
+                page.goto(f"{BASE}/settings")
+                page.wait_for_selector(".settings-view .settings-toggle-caption")
+            facts = page.evaluate("""(root) => {
+              const caption = document.querySelector(root).querySelector('.settings-toggle-caption');
+              const row = caption.closest('.settings-toggle-row');
+              const box = (el) => el.getBoundingClientRect();
+              return {
+                text: caption.textContent,
+                labelRight: box(row.querySelector('.settings-label')).right,
+                labelBottom: box(row.querySelector('.settings-label')).bottom,
+                captionLeft: box(caption).left,
+                captionRight: box(caption).right,
+                captionTop: box(caption).top,
+                switchLeft: box(row.querySelector('.switch')).left,
+                height: box(row).height,
+                plainHeight: box(row.nextElementSibling).height,
+              };
+            }""", root)
+            assert facts["text"] == "별도 섹션에 표시", root      # 두 문구 가운데 긴 쪽이다
+            assert facts["captionLeft"] > facts["labelRight"], facts
+            assert facts["captionTop"] < facts["labelBottom"], facts   # 이름 아래로 내려가지 않았다
+            assert facts["captionRight"] < facts["switchLeft"], facts
+            assert facts["height"] == facts["plainHeight"], facts
+        finally:
+            ctx.close()
 
 
 # ── 글자 크기 ─────────────────────────────────────────────────────────────────
