@@ -1,4 +1,5 @@
 ---
+pr: 496
 date: 2026-11-06
 branch: style/start-page-segment
 title: "style: 시작 화면을 세그먼트로 바꾸고 외경 설명을 옮김"
