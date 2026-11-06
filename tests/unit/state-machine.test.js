@@ -2348,7 +2348,7 @@ test("77b. 다른 기기의 변경을 저장하면 옛 키를 쓴 뒤 열린 화
     await h.drain(8);
     return calls;
   };
-  assert.deepEqual(await run({}), [1], "옛 키를 쓴 뒤에 부른다 — 설정을 다시 읽어 견주기 때문이다");
+  assert.deepEqual(await run({}), [1], "옛 키를 쓴 뒤에 호출한다 — 설정을 다시 읽어 견주기 때문이다");
   assert.deepEqual(await run({ outcome: "full" }), []);
   assert.deepEqual(await run({ v2: { mergeDocs: (l) => l } }), []);
 });

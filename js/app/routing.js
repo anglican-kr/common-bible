@@ -383,7 +383,7 @@ function isFreshLaunch() {
 let _drawnWith = { altShow: loadLectionaryAltShow(), bookOrder: loadBookOrder() };
 
 /**
- * 동기화로 받은 값이 열려 있는 화면의 내용을 바꾸면 다시 그린다(ADR-041 §8). 다른 기기의 변경을 받을 때마다 부르지만, 값이
+ * 동기화로 받은 값이 열려 있는 화면의 내용을 바꾸면 다시 그린다(ADR-041 §8). 다른 기기의 변경을 받을 때마다 호출되지만, 값이
  * 그대로이거나 그 값을 쓰지 않는 화면이면 다시 그리지 않아 읽던 위치와 열린 창이 그대로 남는다.
  */
 function redrawIfSyncedSettingsChanged() {
