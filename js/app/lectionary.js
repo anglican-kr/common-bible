@@ -292,14 +292,15 @@ function textKeyOf(groups, collects) {
 /**
  * 초기 선택(ADR-038 §3 — `official` 이 초기 선택). 단 하나의 예외가 미결25(사용자 확정 2026-10-12, 닫힘)다: 지정 전례일의 독서가
  * 공통뿐이면(고유 독서 없는 축일) 책자대로 그날의 격자 독서를 먼저 보인다 — 헤더 제목과 본기도는 고른 전례일의 것이고 색은 고른
- * 본문의 색(`headerColors` — 격자면 그날의 병기 `colors` + 대체색)이다.
+ * 본문의 색(`headerColors` — 격자면 그날의 병기 `colors` + 대체색)이다. 고유 독서가 대체 독서인 축일(`alternate_readings` — 2.11 병자를
+ * 위한 기도일, 사용자 결정 2026-11-07)도 격자를 먼저 보이고, 그 독서는 전례독서 목록의 줄로 고른다.
  * @param {ResolvedDate} resolved @param {(c: Candidate) => ReadingGroup[]} groupsOf
  * @returns {Candidate | null}
  */
 function initialCandidate(resolved, groupsOf) {
   const official = resolved.official || resolved.candidates[0] || null;
   if (!official) return null;
-  if (hasProperReadings(groupsOf(official))) return official;
+  if (!official.observance.alternate_readings && hasProperReadings(groupsOf(official))) return official;
   const grid = resolved.candidates.find((c) => isGrid(c) && c.status === "proper" && groupsOf(c).length > 0);
   return grid || official;
 }
@@ -865,13 +866,14 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
   // 공통 독서 감추기를 끄면(HIDE_COMMON_READINGS) 공통 독서만 있는 기리는 성인도 전례독서 목록으로 돌아와 그 독서를 고를 수 있다(PR #463 리뷰)
   // 독서도 본기도도 없는 후보는 전례독서 목록에 넣지 않는다 — 눌러도 빈 화면뿐이다(사용자 결정 2026-11-04). 본문이 이동 축일 쪽에만
   // 있는 격자(왕이신 그리스도 주일의 연중 34주일, 성지주일의 사순 주일, 부활대축일의 부활 1주일 …)와 본문 없는 날(가정주일,
-  // 평화통일주일, 세계평화를 위한 기도일, 병자를 위한 기도일 — 제목 아래 이름 줄에 보인다, `textlessDays`)이 그렇다. 엔진은
+  // 평화통일주일, 세계평화를 위한 기도일 — 제목 아래 이름 줄에 보인다, `textlessDays`)이 그렇다. 엔진은
   // 후보를 그대로 둔다(설계서 §5.5 「후보를 버리지 않는다」 — 옮김 계산이 격자를 쓴다). 기본 독서 후보는 감추지 않는다.
   const textless = (/** @type {Candidate} */ c) => c !== initial && !groupsOf(c).length && !collectsFor(collectEntries, c).length;
   // 기념만 하거나 생략하는 후보는 누를 수 없는 글이다 — 고유 독서가 있어도 그날 화면을 옮기지 않는다(사용자 결정 2026-11-04). 기리는
   // 성인은 이름 줄의 「이름 축일」이고, 그 밖(성 십자가 발견, 사도 성 베드로의 탈옥 …)은 이름 줄에 이름만 보인다(`passiveDays`). 지역 축일
   // (`national` — 기념만 하는 날이 있는 것은 삼일절, 광복절)은 예외로 전례독서 목록에 둔다 — 주일에 지키지 않더라도 그날 독서를 볼 수 있게 한다(같은 날 사용자 결정).
-  const isPassive = (/** @type {Candidate} */ c) => c !== initial && c.observance.sanctoral_class !== "national"
+  // 대체 독서인 축일(2.11 병자를 위한 기도일)도 그렇다 — 2.11이면 어느 해든 읽을 수 있게 넣은 독서다(사용자 결정 2026-11-07).
+  const isPassive = (/** @type {Candidate} */ c) => c !== initial && c.observance.sanctoral_class !== "national" && !c.observance.alternate_readings
     && (c.status === "commemorated" || c.status === "omitted");
   // 옮겨 간 축일도 전례독서 목록에 넣지 않는다 — 제목 아래 안내로 알리고(`transferNotes`), 그 독서는 옮겨 간 날에 있다(사용자 결정 2026-11-04)
   const hiddenOwn = (/** @type {Candidate} */ c) => c.status === "transferred_out" || isCommemoration(c) || textless(c) || isPassive(c)
@@ -932,7 +934,10 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
   // 주일로 옮겨 지키면 이날 읽는 독서다. 축일 줄에는 「· 1월 31일로 옮겨 지킬 수 있음」을 붙인다(사용자 결정 2026-11-06, ADR-041 §4).
   const optionalSunday = optionalSundayOf(initial, date);
   const originSuffix = (/** @type {Candidate} */ c) => (optionalSunday && c === initial ? optionalOriginSuffix(optionalSunday) : "");
-  const alternateSuffix = (/** @type {Candidate} */ c) => (optionalSunday && isGrid(c) ? ` · ${alternateLabelOf(initial.observance.name)}` : "");
+  // 대체 독서인 축일(2.11 병자를 위한 기도일)은 줄 이름이 곧 축일 이름이라 「대체 독서」만 붙인다(사용자 결정 2026-11-07, ADR-038 §3).
+  const alternateNote = (/** @type {Candidate} */ c) => (c.observance.alternate_readings ? "대체 독서"
+    : optionalSunday && isGrid(c) ? alternateLabelOf(initial.observance.name) : null);
+  const alternateSuffix = (/** @type {Candidate} */ c) => { const note = alternateNote(c); return note ? ` · ${note}` : ""; };
   const choices = resolved.candidates.filter((c) => !hidden(c)
     && (showAlternates || optionalSunday || c === selected || !isAlternateReading(c, initial))).flatMap((c) => {
     const own = c === selected;
@@ -969,7 +974,7 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
     selectedNote: [
       selectedNoteOf(selected),
       originSuffix(selected) && optionalSunday ? optionalOriginNote(optionalSunday) : null,
-      alternateSuffix(selected) ? alternateLabelOf(initial.observance.name) : null,
+      alternateNote(selected),
     ].filter(Boolean).join(" · ") || null,
     collects, collectLabels: collectLabels(collects), collectIndex, collectsLinked: !!linked,
     ending: endingCodeOf(memorialCollects[memorialCollects.length - 1] || chosenCollect), memorialCollects,
@@ -1596,7 +1601,7 @@ function commit(m, chapters) {
       icon: null,
       title: isCommemoration ? "기념일 — 본문 없음" : "고유 본문 없음",
       // 본문 없는 후보는 2026-11-04부터 전례독서 목록에 없고 주소로 가리켜도 기본 독서다. 그래서 이 화면은 기본 독서 후보 자신이 비었을
-      // 때만 나온다(실데이터 2025-2027에는 없다 — lectionary.data.test.js). 본문 없는 축일(세계평화 · 병자를 위한 기도일 — 기도서에
+      // 때만 나온다(실데이터 2025-2027에는 없다 — lectionary.data.test.js). 본문 없는 축일(세계평화 — 기도서에
       // 본기도가 없다, 설계서 미결51)의 문구가 따로다. 화면 글에 「관측일」을 쓰지 않는다(사용자 결정 2026-10-24). 고를 후보가
       // 없으면(전례독서 목록이 없는 날) 「다른 독서를 선택하세요」를 붙이지 않는다 — 고를 것이 없다(PR #467 리뷰)
       subtitle: (isCommemoration

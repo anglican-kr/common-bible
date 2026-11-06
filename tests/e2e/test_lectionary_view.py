@@ -1245,6 +1245,40 @@ def test_bracket_set_merges_into_long_text_with_markers(desktop_context):
 
 # ── ⑤ 기념일 ──
 
+def test_sick_day_is_an_alternate_reading(mobile_context):
+    """2.11 병자를 위한 기도일 — 처음 화면은 그날의 평일이고, 「대체 독서」 줄을 누르면 그 본기도와 독서를 보인다. 본기도의 이름 자리는
+    줄바꿈 없는 공백이라 줄어들거나 줄이 나뉘지 않는다(사용자 결정 2026-11-07, ADR-038 §3)."""
+    page = mobile_context.new_page()
+    page.set_viewport_size({"width": 320, "height": 720})
+    _open(page, "lectionary/2028-02-11")
+    assert page.inner_text(".lect-day") == "연중 5주 금요일"
+    assert _choices(page) == ["병자를 위한 기도일 · 대체 독서"], _choices(page)
+    assert page.locator(".lect-day-note").count() == 0
+    assert page.locator(".lect-day-saint", has_text="병자").count() == 0
+
+    page.locator(".lect-choice", has_text="병자를 위한 기도일").click()
+    page.locator(".lect-day", has_text="병자를 위한 기도일").wait_for()
+    assert "obs=" in page.url
+    assert page.inner_text(".lect-day-note") == "대체 독서"
+    assert _choices(page) == ["연중 5주 금요일"], _choices(page)
+    assert _colors(page) == ["녹색"]
+    labels = page.eval_on_selector_all(".lect-card-name", "els => els.map(e => e.textContent)")
+    assert labels == ["독서 1", "독서 2"], labels
+    blank = page.evaluate("""() => {
+      const node = document.querySelector('.lect-collect-text').firstChild;
+      const text = node.textContent;
+      const range = document.createRange();
+      range.setStart(node, text.indexOf('(') + 1);
+      range.setEnd(node, text.indexOf(')'));
+      return { text: range.toString(), rects: range.getClientRects().length, width: range.getBoundingClientRect().width,
+               after: text.slice(text.indexOf(')') + 1, text.indexOf(')') + 4) };
+    }""")
+    assert set(blank["text"]) == {"\u00a0"}, blank
+    assert blank["rects"] == 1, blank     # 줄이 나뉘지 않는다
+    assert blank["width"] > 48, blank     # 공백이 하나로 줄어들지 않았다(세 글자 이름이 들어간다)
+    assert blank["after"] == "을/를", blank
+
+
 def test_commemoration_is_a_line_not_a_chip(desktop_context):
     """4.5 마틴 루터 킹(기념일)은 전례독서 목록이 아니라 제목 아래 「… 기념일」 줄이다 — 고유 본기도와 독서가 없어 전례독서 목록을 고르면 본문 없는
     화면뿐이었다(사용자 결정 2026-11-03). 주소로 가리켜도 기본 독서다. 본문 없는 날(1.1 세계평화를 위한 기도일, 8.9 평화통일주일)도

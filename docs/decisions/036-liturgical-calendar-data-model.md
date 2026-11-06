@@ -12,7 +12,7 @@
 
 **구현 현황**: 데이터 몫은 끝났고(2026-07-27 D4·D5), 앱 몫(우선순위와 옮김 엔진 B1, `scope` 오버레이 B2)이 남았다.
 
-- **본기도**: `lectionary/eucharist-collects.json` = **327 entries**(2026-11-05 — 기도서 486쪽대로 1.2, 12.29에 성탄 주간 본기도를 넣었다, `{_meta, _vocab, entries}`). 전례일 키·본문·`_vocab`·분류 필드를 담는다. 파이프라인은 `liturgical/`의 `fetch.py`·`parse_collects.py`·`normalize.py`(산출물·html 캐시는 gitignore)이고, 중간 산출물은 `liturgical/collects-dedup.json`이다 — 발행본과 basename 이 같아 혼동을 부르던 자리라 이름을 달리했다. 성인 공통은 `lectionary/commons.json`. 둘 다 CI(`build.yml`) 파이프라인에 편입돼 매니페스트가 해시한다(ADR-021의 캐시 무효화를 그대로 따른다).
+- **본기도**: `lectionary/eucharist-collects.json` = **328 entries**(2026-11-07 — 기도서 103쪽의 「병자」 본기도를 2.11에 넣었다, `{_meta, _vocab, entries}`). 전례일 키·본문·`_vocab`·분류 필드를 담는다. 파이프라인은 `liturgical/`의 `fetch.py`·`parse_collects.py`·`normalize.py`(산출물·html 캐시는 gitignore)이고, 중간 산출물은 `liturgical/collects-dedup.json`이다 — 발행본과 basename 이 같아 혼동을 부르던 자리라 이름을 달리했다. 성인 공통은 `lectionary/commons.json`. 둘 다 CI(`build.yml`) 파이프라인에 편입돼 매니페스트가 해시한다(ADR-021의 캐시 무효화를 그대로 따른다).
 - **교회력 정의 표**: `calendar/{sanctoral,temporal,periods,parishes,dioceses}.md` → `lectionary/{sanctoral,temporal-feasts,periods,local-observances}.json` (`parse_sanctoral·temporal·periods·local.py` + 공유 `calendar_common.py`). 설·추석 표는 `kasi-lunar.txt` → `kasi-lunar.json`(본 ADR §9).
 - **분류 필드 7종**: 판정은 `classification.py`: 이름일은 표가 기준, 격자일만 절기 위치에서 파생(절기 주일→`privileged_sunday`, 연중 주일→`sunday`, 평일→`feria`, 절기 기본색). **등급과 전례색은 독립 축**으로 다룬다 — 표의 등급 칸이 비어도 색 칸은 채워져 있을 수 있다(→ 설계서 §6.4). 추측으로 채우지 않은 것은 리포트에 남겼다 — 분류 시점 334건 중 등급 미해소 5·전례색 미해소 2였고, 현재 건수는 설계서 §5.2 facts `collects.rank_null`, `collects.color_null` 이다(남은 물음은 설계서 미결35).
 
