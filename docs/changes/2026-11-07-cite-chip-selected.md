@@ -1,4 +1,5 @@
 ---
+pr: 503
 date: 2026-11-07
 branch: style/cite-chip-selected
 title: "style: 선택한 절의 배경을 인용 칩까지 칠함"
