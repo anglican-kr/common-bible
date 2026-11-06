@@ -180,23 +180,23 @@ def test_reload_stays_on_book_list_with_resume(browser):
         ctx.close()
 
 
-def test_start_page_opens_book_list_when_lectionary_cannot_load(browser):
-    """자료나 화면 모듈을 받지 못하면 앱을 열자마자 막히지 않고 성서 목록이 열린다. 전례독서 주소를 직접 열면 실패 화면 그대로다."""
+def test_start_page_shows_failure_screen_when_lectionary_cannot_load(browser):
+    """자료나 화면 모듈을 받지 못하면 전례독서 주소를 직접 열었을 때와 같은 실패 화면이다. 성서 목록으로 옮기지 않고, 홈 탭으로 갈 수 있다(ADR-041 §2)."""
     for blocked in ("**/data/lectionary/**", "**/js/app/lectionary.js*"):
-        ctx = browser.new_context()
+        ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA)
         ctx.add_init_script(CLEAR_APP_STORAGE)
         ctx.add_init_script("localStorage.setItem('bible-start-page', 'lectionary')")
         ctx.route(blocked, lambda route: route.abort())
         page = ctx.new_page()
         try:
             page.goto(BASE)
-            page.wait_for_selector(".book-list", timeout=20_000)
-            assert page.evaluate("() => location.pathname") == "/", blocked
-            assert page.get_by_text("전례독서를 불러오지 못해 성서 목록을 엽니다.").is_visible(), blocked
-            assert page.locator(".lectionary .empty-state").count() == 0, blocked
-            page.goto(f"{BASE}/lectionary")
-            page.wait_for_selector(".empty-state .state-action, .state-action", timeout=20_000)
+            page.wait_for_selector(".state-action button", timeout=20_000)
+            assert page.inner_text(".state-action button") == "다시 불러오기", blocked
             assert page.evaluate("() => location.pathname") == "/lectionary", blocked
+            assert page.locator(".book-list").count() == 0, blocked
+            page.locator("#tab-bar [data-tab='home']").click()
+            page.wait_for_selector(".book-list")
+            assert page.evaluate("() => location.pathname") == "/", blocked
         finally:
             ctx.close()
 
