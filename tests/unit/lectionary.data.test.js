@@ -862,8 +862,12 @@ test("A3 옮겨 지킬 수 있는 축일이 평일에 온 날은 대체 독서 �
 test("A3 옮겨 지킬 수 있는 축일의 원래 날짜는 모두 옮겨 지킬 수 있는 주일을 알리고, 그 주일에는 엔진의 「옮겨 지킬 수 있음」 줄이 있다(사용자 결정 2026-11-06)", { skip: SKIP }, () => {
   /** @type {Record<string, number>} */
   const perFeast = {};
+  // 양쪽 방향을 함께 본다 — 화면이 알린 (축일, 원래 날짜) → 주일과, 엔진이 주일에 넣은 `optional` 후보의 (축일, from) → 주일이 같다
+  const announced = new Map();
+  const engine = new Map();
   for (let t = Date.UTC(2025, 0, 1); t <= Date.UTC(2050, 11, 31); t += 86_400_000) {
     const d = new Date(t).toISOString().slice(0, 10);
+    for (const c of resolve(d).candidates) if (c.status === "optional") engine.set(`${id(c)}@${c.from}`, d);
     const m = model(d, NONE, null, false);
     const note = /(\d+)월 (\d+)일로 옮겨 지킬 수 있음$/.exec(m.selectedNote || "");
     if (!note) continue;
@@ -872,8 +876,10 @@ test("A3 옮겨 지킬 수 있는 축일의 원래 날짜는 모두 옮겨 지�
     const opt = resolve(sunday).candidates.find((c) => c.status === "optional" && id(c) === id(m.initial));
     assert.ok(opt, `${d} → ${sunday}`);
     assert.strictEqual(opt.from, m.initial.status === "transferred_in" ? m.initial.from : d, d);
+    announced.set(`${id(m.initial)}@${opt.from}`, sunday);
     perFeast[id(m.initial)] = (perFeast[id(m.initial)] || 0) + 1;
   }
+  same(Object.fromEntries([...announced].sort()), Object.fromEntries([...engine].sort()));
   // 26년 × 다섯 축일에서 주일에 온 날을 뺀 것이다. 2049년 주의 봉헌은 설과 겹쳐 2.3에서 알린다.
   same(perFeast, { "d0106-공현대축일": 22, "t-승천대축일": 26, "d0202-주의-봉헌": 22, "d0806-주의-변모": 23, "d1101-모든-성인의-날": 22 });
 });

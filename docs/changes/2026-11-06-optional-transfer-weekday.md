@@ -28,11 +28,12 @@ title: "feat: 옮겨 지킬 수 있는 축일의 평일 대체 독서 표시"
 
 - `node --test tests/unit/*.test.js`: 1,532 통과(실데이터 포함, 데이터 서브모듈 de3c765).
 - `npm run typecheck`: 통과.
-- 실데이터: 2025-2050년의 대체 독서 줄 93개 모두 목적지 주일에 엔진의 `optional` 후보가 있고, 원래 날짜의 안내 115개(공현 22 포함)도 그렇다.
+- 실데이터: 2025-2050년의 대체 독서 줄 93개 모두 목적지 주일에 엔진의 `optional` 후보가 있고, 원래 날짜의 안내 115개(공현 22 포함)도 그렇다. 거꾸로 엔진이 주일에 넣은 `optional` 후보마다 원래 날짜(옮겨 온 해는 옮겨 온 날)에 안내가 있는지도 같은 시험이 본다.
+- 서브에이전트 코드 리뷰: 정확성 버그 없음. 1900-2100년 모든 날에서 화면이 알린 주일과 엔진의 `optional` 후보가 양쪽으로 맞고(890건), 다섯 축일을 옮겨 지키기로 한 경우(`setActivatedOptionals`)에도 대체 독서 줄과 안내가 나오지 않았다. 지적한 문서 둘(ADR-038의 가장 긴 줄, 「오는」·「지난」 문구)과 반대 방향 시험을 고쳤다.
 - e2e(Playwright, 로컬): `test_lectionary_view.py`의 새 시험 하나와 관련 시험 넷(`alternate_rows_are_hidden`, `alternate_setting`, `transferred_and_optional_days`, `choice_rows_fit`, 320px 줄 폭에 새 줄 둘을 더함) 통과. 새 시험은 목적지 주일(2027-01-31)의 안내도 본다. 전체 e2e는 돌리지 않았다.
 
 ## 갱신한 문서
 
 - `docs/decisions/041-settings-structure-and-lectionary-preferences.md` §4: 늘 보이는 줄에 대체 독서 줄과 원래 날짜의 문장을 더하고, 숨는 줄 수(908, 707)와 예를 고쳤다.
-- `docs/decisions/038-calendar-lectionary-ui.md` §3: 대체 독서 표시 요약, 카드에만 있던 설명을 줄과 문장으로 되살린 것, 「검토한 대안 C」의 재검토 조건이 충족된 것.
+- `docs/decisions/038-calendar-lectionary-ui.md` §3: 대체 독서 표시 요약, 카드에만 있던 설명을 줄과 문장으로 되살린 것, 「검토한 대안 C」의 재검토 조건이 충족된 것, 가장 긴 줄(30자 둘), 당일 안내가 날짜만 쓰는 것.
 - `docs/topics/liturgical.md` 「지금 동작」: 새 항목, 대체 독서 표시 항목의 줄 수.
