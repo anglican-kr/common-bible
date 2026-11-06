@@ -2339,6 +2339,20 @@ test("77. 병합 결과를 저장한 뒤 브라우저가 옛 키 몇 개의 쓰�
   assert.equal(h.machine.getState(), "IDLE");
 });
 
+test("77b. 다른 기기의 변경을 저장하면 옛 키를 쓴 뒤 열린 화면을 다시 그릴지 판단하게 하고, 저장하지 못하거나 변경이 없으면 하지 않는다(ADR-041 §8)", async () => {
+  const run = async (opts) => {
+    const h = mergeSaveMachine(opts);
+    const calls = [];
+    h.ctx.redrawIfSyncedSettingsChanged = () => { calls.push(h.legacy.length); };
+    h.machine.enable();
+    await h.drain(8);
+    return calls;
+  };
+  assert.deepEqual(await run({}), [1], "옛 키를 쓴 뒤에 부른다 — 설정을 다시 읽어 견주기 때문이다");
+  assert.deepEqual(await run({ outcome: "full" }), []);
+  assert.deepEqual(await run({ v2: { mergeDocs: (l) => l } }), []);
+});
+
 // ── Group 20: 기준 목록 1단계 (사용자 결정 2026-10-31) ─────────────────────────────────────────────
 // 기준 목록은 마지막으로 내려받아 병합한 드라이브 파일에 살아 있던 북마크 id다(store-v2.js saveBaseIds). 병합 결과를 저장한
 // 뒤, 올리기 전에 내려받은 파일로 쓴다. 올린 문서로 만들면, 쓰기 보호가 없어(known-issues §42) 그 파일을 덮어쓴 기기와 겹칠

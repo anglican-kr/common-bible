@@ -30,6 +30,7 @@ window.appStorage = (/** @returns {AppStorage} */ () => {
   /** @typedef {import("../types").SyncFlatItem} SyncFlatItem */
   /** @typedef {import("../types").SaveOutcome} SaveOutcome */
   /** @typedef {import("../types").InstallNudgeState} InstallNudgeState */
+  /** @typedef {import("../types").StartPage} StartPage */
   // ── Storage keys (private to this module) ──
   const STORAGE_KEY = "bible-last-read";
   const FONT_SIZE_KEY = "bible-font-size";
@@ -236,19 +237,30 @@ window.appStorage = (/** @returns {AppStorage} */ () => {
   // ── Start page ──
 
   /**
+   * 시작 페이지의 값마다 선택 상자에 보일 이름과 앱을 「/」로 새로 열 때 갈 주소(ADR-041 §2). 값이 늘면 여기에 한 줄을 더한다.
+   * 「/」는 옮기지 않고 성서 목록에 머무는 값이고, 「읽던 페이지에서 시작」은 이 값에서만 쓰인다(§3).
+   * @type {Record<StartPage, { label: string, path: string }>}
+   */
+  const START_PAGES = {
+    bible: { label: "성서", path: "/" },
+    lectionary: { label: "전례독서", path: "/lectionary" },
+  };
+
+  /**
    * 앱을 「/」로 열 때 처음 보일 화면(사용자 결정 2026-11-05). 모르는 값은 성서다 — 기도서처럼 값이 늘어난 판이 동기화로 보낸 값을
    * 옛 판이 받아도 앱이 열린다.
-   * @returns {"bible" | "lectionary"}
+   * @returns {StartPage}
    */
   function loadStartPage() {
     try {
-      return localStorage.getItem(START_PAGE_KEY) === "lectionary" ? "lectionary" : "bible";
+      const page = localStorage.getItem(START_PAGE_KEY);
+      return page !== null && Object.hasOwn(START_PAGES, page) ? /** @type {StartPage} */ (page) : "bible";
     } catch {
       return "bible";
     }
   }
 
-  /** @param {"bible" | "lectionary"} page */
+  /** @param {StartPage} page */
   function saveStartPage(page) {
     try {
       localStorage.setItem(START_PAGE_KEY, page);
@@ -597,7 +609,7 @@ window.appStorage = (/** @returns {AppStorage} */ () => {
   }
 
   return {
-    FONT_SIZES, DEFAULT_FONT_SIZE, COLOR_SCHEMES, SEARCH_HISTORY_MAX,
+    FONT_SIZES, DEFAULT_FONT_SIZE, COLOR_SCHEMES, SEARCH_HISTORY_MAX, START_PAGES,
     saveReadingPosition, loadReadingPosition, clearReadingPosition,
     saveAudioTime, loadAudioTime, clearAudioTime,
     normalizeSearchQuery, loadSearchHistory, loadSearchHistoryEntries, saveSearchHistory,

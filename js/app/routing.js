@@ -42,7 +42,8 @@ import {
 
 const { _$, clearNode, chUnit, isModifiedClick, focusSpotOf, restoreFocusSpot } = window.appHelpers;
 const {
-  loadStartupBehavior, loadStartPage, loadReadingPosition, saveReadingPosition, loadBookOrder,
+  START_PAGES, loadStartupBehavior, loadStartPage, loadReadingPosition, saveReadingPosition, loadBookOrder,
+  loadLectionaryAltShow,
 } = window.appStorage;
 const { dismissLaunchScreen } = window.appSettings;
 const { readingContext } = window;
@@ -378,10 +379,25 @@ function isFreshLaunch() {
   return nav?.type !== "reload" && nav?.type !== "back_forward";
 }
 
+// 지금 화면을 그릴 때 읽은 설정. 동기화로 받은 값이 화면을 바꾸는지 redrawIfSyncedSettingsChanged가 이 값과 견준다.
+let _drawnWith = { altShow: loadLectionaryAltShow(), bookOrder: loadBookOrder() };
+
+/**
+ * 동기화로 받은 값이 열려 있는 화면의 내용을 바꾸면 다시 그린다(ADR-041 §8). 다른 기기의 변경을 받을 때마다 부르지만, 값이
+ * 그대로이거나 그 값을 쓰지 않는 화면이면 다시 그리지 않아 읽던 위치와 열린 창이 그대로 남는다.
+ */
+function redrawIfSyncedSettingsChanged() {
+  const { view } = parsePath();
+  const changed = view === "lectionary"
+    ? loadLectionaryAltShow() !== _drawnWith.altShow
+    : (view === "books" || view === "division") && loadBookOrder() !== _drawnWith.bookOrder;
+  if (changed) route();
+}
 
 async function route() {
   const isInitialLoad = _isInitialLoad;
   _isInitialLoad = false;
+  _drawnWith = { altShow: loadLectionaryAltShow(), bookOrder: loadBookOrder() };
   // 이 route 를 시작한 누름의 자리(위 `_pendingFocusSpot`) — await 앞에서 꺼내 비운다.
   const focusSpot = _pendingFocusSpot;
   _pendingFocusSpot = null;
@@ -569,9 +585,12 @@ async function route() {
     }
 
     // 시작 페이지 — 앱을 「/」로 새로 열 때만 적용한다. 그 뒤에 탭이나 뒤로 가기로 오는 「/」는 성서 목록이다(사용자 결정 2026-11-05).
-    if (view === "books" && isInitialLoad && isFreshLaunch() && loadStartPage() === "lectionary") {
-      navigate("/lectionary");
-      return;
+    if (view === "books" && isInitialLoad && isFreshLaunch()) {
+      const { path } = START_PAGES[loadStartPage()];
+      if (path !== "/") {
+        navigate(path);
+        return;
+      }
     }
 
     const books = await loadBooks();
@@ -786,6 +805,7 @@ window.addEventListener("popstate", () => {
 window.parsePath = parsePath;
 window.route = route;
 window.navigate = navigate;
+window.redrawIfSyncedSettingsChanged = redrawIfSyncedSettingsChanged;
 // Monotonic route counter (ADR-031): async view renderers (search.js) read this
 // before awaiting and bail if it changed, so a late completion never overwrites
 // a newer view (ADR-033).

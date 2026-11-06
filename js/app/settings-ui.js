@@ -19,11 +19,12 @@
 // later in whichever module destructures it (helpers.js does the same for `AppHelpers`).
 window.appSettings = (/** @returns {AppSettings} */ () => {
   /** @typedef {import("../types").ColorSchemeEntry} ColorSchemeEntry */
+  /** @typedef {import("../types").StartPage} StartPage */
 
   const { _$, el, clearNode } = window.appHelpers;
   const { createOverlay } = window.appOverlay;
   const {
-    FONT_SIZES, DEFAULT_FONT_SIZE, COLOR_SCHEMES,
+    FONT_SIZES, DEFAULT_FONT_SIZE, COLOR_SCHEMES, START_PAGES,
     loadFontSize, saveFontSize,
     loadStartupBehavior, saveStartupBehavior,
     loadStartPage, saveStartPage,
@@ -386,19 +387,19 @@ window.appSettings = (/** @returns {AppSettings} */ () => {
         announce(on ? "마지막 읽던 페이지로 시작" : "첫 페이지로 시작");
       },
     });
-    startupRow.hidden = loadStartPage() === "lectionary";
+    startupRow.hidden = START_PAGES[loadStartPage()].path !== "/";
 
     // ── Section: 시작 ──
     const startSection = makeSection("시작");
     startSection.appendChild(makeSelectRow({
       labelText: "시작 페이지",
       value: loadStartPage(),
-      options: [["bible", "성서"], ["lectionary", "전례독서"]],
+      options: Object.entries(START_PAGES).map(([value, { label }]) => [value, label]),
       onChange: (value) => {
-        const page = value === "lectionary" ? "lectionary" : "bible";
+        const page = /** @type {StartPage} */ (value);
         saveStartPage(page);
-        startupRow.hidden = page === "lectionary";
-        announce(page === "lectionary" ? "전례독서로 시작" : "성서로 시작");
+        startupRow.hidden = START_PAGES[page].path !== "/";
+        announce(`${START_PAGES[page].label}로 시작`);
       },
     }));
     target.appendChild(startSection);
@@ -414,10 +415,11 @@ window.appSettings = (/** @returns {AppSettings} */ () => {
       labelText: "외경",
       checked: loadBookOrder() === "vulgate",
       getCaption: (on) => (on ? "구약에 포함" : "별도 섹션에 표시"),
-      onToggle: (on) => {
+      onToggle: async (on) => {
         saveBookOrder(on ? "vulgate" : "canonical");
         const { view } = parsePath();
-        if (view !== "chapter" && view !== "prologue") route();
+        // route() announces the view it draws. Announce after it, or that replaces the toggle's result.
+        if (view !== "chapter" && view !== "prologue") await route();
         announce(on ? "구약에 외경 포함" : "외경 분리");
       },
     });
@@ -457,11 +459,12 @@ window.appSettings = (/** @returns {AppSettings} */ () => {
     lectionarySection.appendChild(makeToggleRow({
       labelText: "대체 독서 표시",
       checked: loadLectionaryAltShow(),
-      onToggle: (on) => {
+      onToggle: async (on) => {
         saveLectionaryAltShow(on);
         // The desktop popover opens over the lectionary, whose list must follow. A
         // redraw closes the popover, as the 외경 toggle does over the book list.
-        if (parsePath().view === "lectionary") route();
+        // route() announces the view it draws. Announce after it, or that replaces the toggle's result.
+        if (parsePath().view === "lectionary") await route();
         announce(on ? "대체 독서 표시" : "대체 독서 숨김");
       },
     }));

@@ -270,6 +270,66 @@ def test_keyboard_opens_on_select_and_focus_stays_trapped(browser):
         ctx.close()
 
 
+LIST_IS_OPEN = "() => document.querySelector('.settings-popover .settings-select').matches(':open')"
+# Chromium은 목록을 연 채 누른 Esc를 페이지로 보내지 않는다. 보내는 브라우저에서 일어날 일을 키 입력 사건을 직접 내어 본다.
+ESC_REACHES_PAGE = """() => document.querySelector('.settings-popover .settings-select')
+  .dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))"""
+
+
+def test_escape_on_open_select_list_keeps_popover(browser):
+    """목록을 연 채 Esc가 페이지까지 와도 팝오버를 닫지 않는다. 목록이 닫혀 있으면 포커스가 선택 상자에 있어도 닫는다(ADR-041 §9)."""
+    ctx = browser.new_context()
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    page = ctx.new_page()
+    try:
+        _open(page)
+        pop = open_settings(page)
+        pop.get_by_label("시작 페이지").click()
+        page.wait_for_function(LIST_IS_OPEN)
+        page.evaluate(ESC_REACHES_PAGE)
+        assert pop.is_visible()
+        page.keyboard.press("Escape")      # 목록이 받아 목록만 닫는다
+        page.wait_for_function(f"() => !({LIST_IS_OPEN})()")
+        assert pop.is_visible()
+        page.evaluate(ESC_REACHES_PAGE)    # 이제 닫힌 선택 상자다
+        pop.wait_for(state="hidden")
+    finally:
+        ctx.close()
+
+
+# ── 토글 결과 알림 ─────────────────────────────────────────────────────────────
+
+RECORD_ANNOUNCEMENTS = """() => {
+  window.__said = [];
+  const live = document.getElementById('a11y-announce');
+  new MutationObserver(() => { if (live.textContent) window.__said.push(live.textContent); })
+    .observe(live, { childList: true, characterData: true, subtree: true });
+}"""
+
+
+def test_toggle_result_is_announced_after_the_view_redraws(browser):
+    """토글이 화면을 다시 그리면 화면 제목을 알린 뒤에 결과를 알린다. 스크린 리더가 듣는 마지막 말이 토글 결과다."""
+    for path, ready, switch, said in (
+        ("", ".book-list", "외경", "구약에 외경 포함"),
+        ("/lectionary/2026-06-29", ".lectionary", "대체 독서 표시", "대체 독서 표시"),
+    ):
+        ctx = browser.new_context()
+        ctx.add_init_script(CLEAR_APP_STORAGE)
+        page = ctx.new_page()
+        try:
+            page.goto(f"{BASE}{path}")
+            page.wait_for_selector(ready, timeout=20_000)
+            pop = open_settings(page)
+            page.evaluate(RECORD_ANNOUNCEMENTS)
+            pop.get_by_role("switch", name=switch).click()
+            page.wait_for_function("(said) => window.__said.at(-1) === said", arg=said)
+            page.wait_for_timeout(300)   # 다시 그리는 일이 다 끝난 뒤에도 그 말이 남아 있다
+            assert page.evaluate("() => window.__said.at(-1)") == said, path
+            assert page.inner_text("#a11y-announce") == said, path
+        finally:
+            ctx.close()
+
+
 # ── 시작 화면 ─────────────────────────────────────────────────────────────────
 
 def test_startup_home(browser):

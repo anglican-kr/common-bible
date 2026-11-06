@@ -794,11 +794,11 @@ function isAlternateReading(c, initial) {
  * @param {ResolvedDate} resolved @param {LectionaryQuery} query
  * @param {(c: Candidate) => ReadingGroup[]} groupsOf @param {CandidateCollects[]} collectEntries
  * @param {1 | 2 | null} storedTrack  기억된 트랙 — 마지막으로 고른 것(해를 넘어 유지)
- * @param {import("../types").ParishDedication[]} [dedications]  그날 축성되거나 축복된 교회(엔진 `findDedications`)
- * @param {boolean} [showAlternates]  대체 독서의 줄을 전례독서 목록에 보이는가(설정 「대체 독서 표시」)
+ * @param {import("../types").ParishDedication[] | undefined} dedications  그날 축성되거나 축복된 교회(엔진 `findDedications`)
+ * @param {boolean} showAlternates  대체 독서의 줄을 전례독서 목록에 보이는가(설정 「대체 독서 표시」). 기본값을 두지 않는다 — 값은 설정에서 받는다
  * @returns {LectionaryModel | null}  후보가 하나도 없으면 null(유효한 날짜에는 격자가 언제나 있어 생기지 않는다)
  */
-function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedTrack, dedications = [], showAlternates = true) {
+function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedTrack, dedications = [], showAlternates) {
   const date = resolved.date;
   const initial = initialCandidate(resolved, groupsOf);
   if (!initial) return null;

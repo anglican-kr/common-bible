@@ -47,8 +47,18 @@ function announce(msg) {
 
 // `trapFocus` was extracted to js/app/helpers.js (ADR-018 Phase 1).
 
+// `matches(":open")` throws where the selector is unknown (Chrome < 133, Firefox < 136, Safari < 26.5).
+const SUPPORTS_OPEN_SELECTOR = CSS.supports("selector(:open)");
+
+/** @param {EventTarget | null} target @returns {boolean} */
+function isOpenSelect(target) {
+  return SUPPORTS_OPEN_SELECTOR && target instanceof HTMLSelectElement && target.matches(":open");
+}
+
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
+    // The list of an open <select> takes this key for itself: settings stay up for the next one (ADR-041 §9).
+    if (isOpenSelect(e.target)) return;
     // Escape closes the topmost layer first: open popovers → tab-bar search
     // morph (ADR-030). Each layer returns so a single Escape never collapses
     // two layers at once.

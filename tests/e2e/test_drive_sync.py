@@ -384,6 +384,55 @@ def test_upload_then_download(browser, fake_drive, fake_oauth):
         page_b.context.close()
 
 
+def test_synced_setting_redraws_only_the_view_it_changes(browser, fake_drive, fake_oauth):
+    """다른 기기에서 바꾼 대체 독서 표시와 외경이 열린 화면에 바로 보인다. 그 값을 쓰지 않는 변경과 화면은 다시 그리지 않는다(ADR-041 §8)."""
+    fake_drive.reset()
+    page_a = _make_page(browser, fake_drive, fake_oauth)
+    page_b = _make_page(browser, fake_drive, fake_oauth)
+
+    def go(path: str, ready: str):
+        page_b.evaluate("(path) => window.navigate(path)", path)
+        page_b.wait_for_selector(ready, timeout=20_000)
+        # 화면을 다시 그리면 이 표시가 사라진다
+        page_b.evaluate("(ready) => { document.querySelector(ready).dataset.keep = '1'; }", ready)
+
+    def from_a(change: str):
+        page_a.evaluate(change)
+        _sync_now(page_a)
+        _sync_now(page_b)
+
+    try:
+        for page in (page_a, page_b):
+            _load(page)
+            _enable_sync(page)
+            _wait_idle(page)
+
+        # 전례독서 — 북마크만 바뀌면 그대로이고, 대체 독서 표시가 바뀌면 줄이 생긴다
+        go("/lectionary/2026-06-29", ".lectionary")
+        assert page_b.locator(".lect-choice:has-text('연중 13주 월요일')").count() == 0
+        _add_bookmark(page_a, "Genesis 1")
+        _sync_now(page_a)
+        _sync_now(page_b)
+        assert "Genesis 1" in _bookmark_names(page_b)
+        assert page_b.locator(".lectionary[data-keep='1']").count() == 1
+        from_a("window.appStorage.saveLectionaryAltShow(true)")
+        page_b.wait_for_selector(".lect-choice:has-text('연중 13주 월요일')")
+
+        # 성서 목록 — 외경이 구약에 들어가면 외경 탭이 없어지고 그 주소는 구약으로 옮긴다
+        go("/deuterocanon", ".book-list")
+        from_a("window.appStorage.saveBookOrder('vulgate')")
+        page_b.wait_for_function("() => location.pathname === '/old_testament'")
+
+        # 장 화면은 외경 값을 쓰지 않아 다시 그리지 않는다
+        go("/john/3", ".chapter-text")
+        from_a("window.appStorage.saveBookOrder('canonical')")
+        assert page_b.evaluate("() => localStorage.getItem('bible-book-order')") == "canonical"
+        assert page_b.locator(".chapter-text[data-keep='1']").count() == 1
+    finally:
+        page_a.context.close()
+        page_b.context.close()
+
+
 def test_concurrent_adds_both_preserved(browser, fake_drive, fake_oauth):
     """Devices A and B each add a different bookmark; both survive after sync."""
     fake_drive.reset()

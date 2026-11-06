@@ -234,6 +234,15 @@ test("loadStartPage/saveStartPage: 처음에는 성서, 모르는 값도 성서�
   assert.deepEqual(h.syncStoreV2._calls.saveSetting, [{ key: "startPage", val: "lectionary" }]);
   assert.equal(h.driveSync._calls.scheduleUpload, 1);
   assert.equal(loadStorage({ localStorageInit: { "bible-start-page": "prayer-book" } }).appStorage.loadStartPage(), "bible");
+  // 표의 값만 읽는다 — 동기화로 온 값이 일반 객체의 속성 이름이어도 성서다
+  assert.equal(loadStorage({ localStorageInit: { "bible-start-page": "constructor" } }).appStorage.loadStartPage(), "bible");
+});
+
+test("START_PAGES: 시작 페이지의 값마다 이름과 주소가 있고, 성서만 「/」에 머문다(ADR-041 §2, §3)", () => {
+  const { START_PAGES } = loadStorage().appStorage;
+  assert.deepEqual(Object.keys(START_PAGES), ["bible", "lectionary"]);
+  assert.deepEqual({ ...START_PAGES.bible }, { label: "성서", path: "/" });
+  assert.deepEqual({ ...START_PAGES.lectionary }, { label: "전례독서", path: "/lectionary" });
 });
 
 test("loadLectionaryAltShow/saveLectionaryAltShow: 처음에는 숨기고, 동기화가 쓰는 true/false도 읽는다(ADR-041 §4)", () => {

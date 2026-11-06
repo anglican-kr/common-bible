@@ -650,6 +650,8 @@ function createSyncMachine({ onStateChange } = {}) {
       if (s.theme?.v       != null && typeof window.applyTheme       === "function") window.applyTheme(/** @type {string} */ (s.theme.v));
       if (s.citeShow?.v    != null && typeof window.applyCiteShow    === "function") window.applyCiteShow(/** @type {boolean} */ (s.citeShow.v));
       if (s.audioShow?.v   != null && typeof window.applyAudioShow   === "function") window.applyAudioShow(/** @type {boolean} */ (s.audioShow.v));
+      // The apply* above change the look in place. A setting that changes a view's content (ADR-041 §8) needs a redraw.
+      window.redrawIfSyncedSettingsChanged?.();
       _snackbar("다른 기기에서 변경된 데이터를 불러왔습니다.");
     }
     return outcome;
