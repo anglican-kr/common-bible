@@ -183,36 +183,39 @@ const IN_RE = /(?:^|\s)in:\s*(\S+)/g;
 // Two identical copies: js/search-worker.js (a classic worker script, which
 // cannot import a module) and js/app/search.js. tests/unit/search.test.js
 // checks that they stay the same.
-// 검색은 따옴표 여섯 가지를 무시한다(ADR-005 「따옴표를 무시하는 일치」, 사용자 결정
-// 2026-11-06). 성서 본문에는 아포스트로피가 없어 홑따옴표까지 지워도 잃는 일치가 없다.
+// 검색은 따옴표 여섯 가지를 무시하고, 이어진 공백을 한 칸으로 본다(ADR-005 「따옴표를
+// 무시하는 일치」, 사용자 결정 2026-11-06). 성서 본문에는 아포스트로피가 없어 홑따옴표까지
+// 지워도 잃는 일치가 없다. 공백도 접는 까닭: 인덱스는 인용으로 나뉜 조각 사이에 공백 한 칸을
+// 넣어, 따옴표를 지우면 `아브라함에게 “ 너로`가 공백 둘이 된다.
 const QUOTE_CHARS_RE = /["'“”‘’]/g;
+const WHITESPACE_CHAR_RE = /\s/;
 
 /**
- * Lowercase and drop quote characters — the form both query and verse text
- * are compared in.
+ * Lowercase, drop quote characters and fold each run of whitespace to one
+ * space — the form both query and verse text are compared in.
  * @param {string} s
  * @returns {string}
  */
 function normalizeForMatch(s) {
-  return s.toLowerCase().replace(QUOTE_CHARS_RE, "");
+  return s.toLowerCase().replace(QUOTE_CHARS_RE, "").replace(/\s+/g, " ");
 }
 
 /**
- * The query side of normalizeForMatch, with whitespace collapsed again:
- * dropping a quote can leave a lone space (`" '` → " ") that would match
- * nearly every verse, or a double space (`빛이 " 생겨라`) that matches none.
+ * The query side of normalizeForMatch, trimmed: dropping a quote can leave a
+ * lone space (`" '` → " ") that would match nearly every verse.
  * "" means there is nothing to search for.
  * @param {string} q
  * @returns {string}
  */
 function normalizeQuery(q) {
-  return normalizeForMatch(q).replace(/\s+/g, " ").trim();
+  return normalizeForMatch(q).trim();
 }
 
 /**
- * Non-overlapping [start, end) ranges of `query` in `text`, compared with
- * quotes ignored and mapped back to offsets in the original `text`. Quotes at
- * either edge of a match fall outside its range; quotes inside it stay in.
+ * Non-overlapping [start, end) ranges of `query` in `text`, compared the way
+ * normalizeForMatch does (quotes ignored, whitespace runs as one space) and
+ * mapped back to offsets in the original `text`. Quotes at either edge of a
+ * match fall outside its range; quotes inside it stay in.
  * Returns [] when the query is empty once quotes (and edge spaces) are dropped.
  * @param {string} text
  * @param {string} query
@@ -222,16 +225,21 @@ function findMatchRanges(text, query) {
   const q = normalizeQuery(query);
   if (!q) return [];
   const lower = text.toLowerCase();
-  // pos[k] = offset in `text` of the k-th kept (non-quote) character. Assumes
+  // `kept` is normalizeForMatch(text); pos[k] = offset in `text` of its k-th
+  // character (a whitespace run is represented by its first character). Assumes
   // toLowerCase keeps length, as the substring highlight did before.
   /** @type {number[]} */
   const pos = [];
   let kept = "";
+  let afterSpace = false;
   for (let i = 0; i < lower.length; i++) {
     const ch = lower[i];
     if (ch === '"' || ch === "'" || ch === "“" || ch === "”" || ch === "‘" || ch === "’") continue;
+    const space = WHITESPACE_CHAR_RE.test(ch);
+    if (space && afterSpace) continue;
+    afterSpace = space;
     pos.push(i);
-    kept += ch;
+    kept += space ? " " : ch;
   }
   /** @type {Array<[number, number]>} */
   const ranges = [];

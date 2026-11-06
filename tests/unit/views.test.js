@@ -1,7 +1,7 @@
 // ── Unit tests for js/app/views.js ──────────────────────────────────
 // Run with: node --test tests/unit/views.test.js
 //
-// Same vm + BEGIN/END marker slice approach as bookmark.test.js. Eight marker
+// Same vm + BEGIN/END marker slice approach as bookmark.test.js. Nine marker
 // pairs cover the testable surface; Pull-to-refresh / startScrollTracking /
 // Audio Player remain out of scope — those need touch gestures or
 // `getBoundingClientRect` and are deferred until jsdom adoption (ADR-013
@@ -26,6 +26,8 @@
 //     inclusive range, either direction, verse-unit boundary expansion).
 //   - VERSE_NUMBER block — formatVerseNumber. Verse-number display string:
 //     plain / dual [N_M] / LXX-only [_N] / cross-ref / range / half verse (「2ㄱ」).
+//   - PIECE_SPACE block — pieceTrailingSpace. The space drawn after a verse piece, and the
+//     pieces that get none (before a cite chip, punctuation only, ends with an opening quote).
 
 import test from "node:test";
 import assert from "node:assert";
@@ -317,6 +319,16 @@ function loadVerseNumber() {
     filename: "views-verse-number.js",
   });
   return { formatVerseNumber: ctx.formatVerseNumber };
+}
+
+// ── PIECE_SPACE loader ───────────────────────────────────────────────────────
+// Pure: the space drawn after a verse piece. No DOM, no globals.
+
+function loadPieceSpace() {
+  const ctx = { String, RegExp };
+  vm.createContext(ctx);
+  vm.runInContext(extractBlock("PIECE_SPACE"), ctx, { filename: "views-piece-space.js" });
+  return { pieceTrailingSpace: ctx.pieceTrailingSpace };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1237,4 +1249,37 @@ test("formatVerseNumber: 데이터의 반쪽 절은 인쇄본대로 「2ㄱ」 �
   const { formatVerseNumber } = loadVerseNumber();
   assert.equal(formatVerseNumber({ number: 2, part: "a" }), "2ㄱ");
   assert.equal(formatVerseNumber({ number: 2, part: "b" }), "2ㄴ");
+});
+
+// ── PIECE_SPACE ──────────────────────────────────────────────────────────────
+
+test("pieceTrailingSpace: 보통 조각은 끝에 공백 한 칸", () => {
+  const { pieceTrailingSpace } = loadPieceSpace();
+  assert.equal(pieceTrailingSpace("하느님께서 하늘과 땅을 지어내셨다."), " ");
+  assert.equal(pieceTrailingSpace("”는 복음을 미리 전해 주었던 것입니다."), " ");
+});
+
+test("pieceTrailingSpace: 출처 칩이 뒤따르는 조각에는 공백이 없다(칩의 안쪽 여백이 간격)", () => {
+  const { pieceTrailingSpace } = loadPieceSpace();
+  assert.equal(pieceTrailingSpace("너로 말미암아 만백성이 복을 받으리라.", true), "");
+});
+
+test("pieceTrailingSpace: 부호뿐인 조각에는 공백이 없다", () => {
+  const { pieceTrailingSpace } = loadPieceSpace();
+  for (const t of ["“", "‘", ",", ".", "”", ")", "…", " "]) assert.equal(pieceTrailingSpace(t), "", JSON.stringify(t));
+});
+
+test("pieceTrailingSpace: 여는 따옴표로 끝나는 조각에는 공백이 없다(갈라 3:8의 「아브라함에게 “」)", () => {
+  const { pieceTrailingSpace } = loadPieceSpace();
+  assert.equal(pieceTrailingSpace("그래서 성서는 아브라함에게 “"), "");
+  assert.equal(pieceTrailingSpace("예수께서 말씀하셨다. ‘"), "");
+});
+
+test("pieceTrailingSpace: 닫는 따옴표로 끝나거나 따옴표가 가운데에 있는 조각은 공백을 둔다", () => {
+  const { pieceTrailingSpace } = loadPieceSpace();
+  assert.equal(pieceTrailingSpace("빛이 생겨라!”"), " ");
+  assert.equal(pieceTrailingSpace("하느님께서 “빛이 생겨라!” 하시자"), " ");
+  assert.equal(pieceTrailingSpace("그가 ‘예’ 하고 대답하였다."), " ");
+  // 곧은 따옴표는 여닫이를 알 수 없어 건드리지 않는다.
+  assert.equal(pieceTrailingSpace('그가 말하였다. "'), " ");
 });

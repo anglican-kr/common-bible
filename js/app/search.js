@@ -117,36 +117,39 @@ function doSearch(query, page, pageSize, onPartial, opts) {
 // Two identical copies: js/search-worker.js (a classic worker script, which
 // cannot import a module) and js/app/search.js. tests/unit/search.test.js
 // checks that they stay the same.
-// 검색은 따옴표 여섯 가지를 무시한다(ADR-005 「따옴표를 무시하는 일치」, 사용자 결정
-// 2026-11-06). 성서 본문에는 아포스트로피가 없어 홑따옴표까지 지워도 잃는 일치가 없다.
+// 검색은 따옴표 여섯 가지를 무시하고, 이어진 공백을 한 칸으로 본다(ADR-005 「따옴표를
+// 무시하는 일치」, 사용자 결정 2026-11-06). 성서 본문에는 아포스트로피가 없어 홑따옴표까지
+// 지워도 잃는 일치가 없다. 공백도 접는 까닭: 인덱스는 인용으로 나뉜 조각 사이에 공백 한 칸을
+// 넣어, 따옴표를 지우면 `아브라함에게 “ 너로`가 공백 둘이 된다.
 const QUOTE_CHARS_RE = /["'“”‘’]/g;
+const WHITESPACE_CHAR_RE = /\s/;
 
 /**
- * Lowercase and drop quote characters — the form both query and verse text
- * are compared in.
+ * Lowercase, drop quote characters and fold each run of whitespace to one
+ * space — the form both query and verse text are compared in.
  * @param {string} s
  * @returns {string}
  */
 function normalizeForMatch(s) {
-  return s.toLowerCase().replace(QUOTE_CHARS_RE, "");
+  return s.toLowerCase().replace(QUOTE_CHARS_RE, "").replace(/\s+/g, " ");
 }
 
 /**
- * The query side of normalizeForMatch, with whitespace collapsed again:
- * dropping a quote can leave a lone space (`" '` → " ") that would match
- * nearly every verse, or a double space (`빛이 " 생겨라`) that matches none.
+ * The query side of normalizeForMatch, trimmed: dropping a quote can leave a
+ * lone space (`" '` → " ") that would match nearly every verse.
  * "" means there is nothing to search for.
  * @param {string} q
  * @returns {string}
  */
 function normalizeQuery(q) {
-  return normalizeForMatch(q).replace(/\s+/g, " ").trim();
+  return normalizeForMatch(q).trim();
 }
 
 /**
- * Non-overlapping [start, end) ranges of `query` in `text`, compared with
- * quotes ignored and mapped back to offsets in the original `text`. Quotes at
- * either edge of a match fall outside its range; quotes inside it stay in.
+ * Non-overlapping [start, end) ranges of `query` in `text`, compared the way
+ * normalizeForMatch does (quotes ignored, whitespace runs as one space) and
+ * mapped back to offsets in the original `text`. Quotes at either edge of a
+ * match fall outside its range; quotes inside it stay in.
  * Returns [] when the query is empty once quotes (and edge spaces) are dropped.
  * @param {string} text
  * @param {string} query
@@ -156,16 +159,21 @@ function findMatchRanges(text, query) {
   const q = normalizeQuery(query);
   if (!q) return [];
   const lower = text.toLowerCase();
-  // pos[k] = offset in `text` of the k-th kept (non-quote) character. Assumes
+  // `kept` is normalizeForMatch(text); pos[k] = offset in `text` of its k-th
+  // character (a whitespace run is represented by its first character). Assumes
   // toLowerCase keeps length, as the substring highlight did before.
   /** @type {number[]} */
   const pos = [];
   let kept = "";
+  let afterSpace = false;
   for (let i = 0; i < lower.length; i++) {
     const ch = lower[i];
     if (ch === '"' || ch === "'" || ch === "“" || ch === "”" || ch === "‘" || ch === "’") continue;
+    const space = WHITESPACE_CHAR_RE.test(ch);
+    if (space && afterSpace) continue;
+    afterSpace = space;
     pos.push(i);
-    kept += ch;
+    kept += space ? " " : ch;
   }
   /** @type {Array<[number, number]>} */
   const ranges = [];
@@ -180,29 +188,88 @@ function findMatchRanges(text, query) {
 }
 // ── END QUOTE_MATCH ──
 
+/**
+ * Split text pieces into parts, marking what matches `query`. The pieces are
+ * adjacent text of one verse (the chapter view draws a verse as several pieces:
+ * around a `<cite>`, one per line of a poem), so a match can run across pieces.
+ * They are joined as they are drawn and searched once with findMatchRanges — the
+ * text the search index holds, since the indexer (common-bible-data
+ * `segments_text`) glues the pieces the view draws tight. When that finds
+ * nothing they are joined with one space, the text of the index before that
+ * change: the two repositories ship separately, so either index can be in use.
+ * Each piece then gets only the part of every range that overlaps it. A piece
+ * with no overlap comes back as one unmarked part, an empty piece as no part.
+ * @param {ReadonlyArray<string>} texts
+ * @param {string | null} query
+ * @returns {Array<Array<{ text: string, mark: boolean }>>} parts per piece, in order
+ */
+function splitPiecesByMatches(texts, query) {
+  let ranges = query ? findMatchRanges(texts.join(""), query) : [];
+  let gap = 0; // what joins two pieces: nothing, or one space
+  if (query && ranges.length === 0 && texts.length > 1) {
+    ranges = findMatchRanges(texts.join(" "), query);
+    gap = 1;
+  }
+  let base = 0;
+  return texts.map((text) => {
+    const end = base + text.length;
+    /** @type {Array<{ text: string, mark: boolean }>} */
+    const parts = [];
+    let pos = 0;
+    for (const [s, e] of ranges) {
+      const a = Math.max(s, base) - base;
+      const b = Math.min(e, end) - base;
+      if (a >= b) continue;
+      if (a > pos) parts.push({ text: text.substring(pos, a), mark: false });
+      parts.push({ text: text.substring(a, b), mark: true });
+      pos = b;
+    }
+    if (pos < text.length) parts.push({ text: text.substring(pos), mark: false });
+    base = end + gap; // the joining space, if any, belongs to no piece
+    return parts;
+  });
+}
+
+/**
+ * The nodes for one piece's parts: a text node, or a <mark> for a matched part.
+ * @param {ReadonlyArray<{ text: string, mark: boolean }>} parts
+ * @returns {Node[]}
+ */
+function partsToNodes(parts) {
+  return parts.map((part) => (part.mark
+    ? el("mark", { className: "search-highlight", role: "presentation" }, part.text)
+    : document.createTextNode(part.text)));
+}
+
 // Text highlight helper: splits text on query matches and wraps in <mark>
 /**
  * @param {Node} target
  * @param {string} text
- * @param {string | null} query  empty or null → plain text (the chapter view passes null when nothing is highlighted)
+ * @param {string | null} query  empty or null → plain text
  */
 function appendTextWithHighlight(target, text, query) {
-  if (!query) {
+  if (!query || !text) {
     target.appendChild(document.createTextNode(text));
     return;
   }
-  const ranges = findMatchRanges(text, query);
-  if (ranges.length === 0) {
-    target.appendChild(document.createTextNode(text));
-    return;
-  }
-  let pos = 0;
-  for (const [start, end] of ranges) {
-    if (start > pos) target.appendChild(document.createTextNode(text.substring(pos, start)));
-    target.appendChild(el("mark", { className: "search-highlight", role: "presentation" }, text.substring(start, end)));
-    pos = end;
-  }
-  if (pos < text.length) target.appendChild(document.createTextNode(text.substring(pos)));
+  for (const node of partsToNodes(splitPiecesByMatches([text], query)[0])) target.appendChild(node);
+}
+
+/**
+ * Highlight `query` in the text nodes of one verse, in reading order (the chapter
+ * view's ?hl=). A match may run across nodes: each node is replaced by its text
+ * and <mark> parts, and a node without a match stays as it is.
+ * @param {ReadonlyArray<Text>} nodes
+ * @param {string | null} query  empty or null → nothing to highlight
+ */
+function highlightTextNodes(nodes, query) {
+  if (!query) return;
+  const partsPerNode = splitPiecesByMatches(nodes.map((node) => node.data), query);
+  nodes.forEach((node, i) => {
+    const parts = partsPerNode[i];
+    if (parts.length === 1 && !parts[0].mark) return;
+    node.replaceWith(...partsToNodes(parts));
+  });
 }
 
 // Build snippet with highlighted query for search results
@@ -1637,7 +1704,7 @@ function consumeSearchAutoNavigate() {
 
 // Window facade for legacy app.js callers (route handler invokes
 // renderSearchResults / renderSearchView / isMobile / consumeSearchAutoNavigate,
-// chapter renderer reuses appendTextWithHighlight for ?hl= snippet highlighting).
+// chapter renderer calls highlightTextNodes for ?hl= highlighting).
 // ADR-030: 탭 바 하단 모핑 입력이 검색을 커밋할 때 재사용.
 window.commitTopSearch = commitTopSearch;
 window.renderSearchResults = renderSearchResults;
@@ -1650,10 +1717,10 @@ window.syncSearchFields = syncSearchFields;
 // matching the header/in-page clears (ADR-033 개정 B, Bugbot).
 window.navigateSearch = navigateSearch;
 window.isMobile = isMobile;
-window.appendTextWithHighlight = appendTextWithHighlight;
+window.highlightTextNodes = highlightTextNodes;
 window.consumeSearchAutoNavigate = consumeSearchAutoNavigate;
 
 export {
   renderSearchResults, renderSearchView,
-  isMobile, appendTextWithHighlight, consumeSearchAutoNavigate,
+  isMobile, highlightTextNodes, consumeSearchAutoNavigate,
 };

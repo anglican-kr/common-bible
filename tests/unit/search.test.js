@@ -10,7 +10,7 @@
 //
 // Coverage:
 //   - WORKER block (ensureSearchWorker/doSearch + state) — Worker stub
-//   - PURE HELPERS block (appendTextWithHighlight/buildSnippet/
+//   - PURE HELPERS block (appendTextWithHighlight/highlightTextNodes/buildSnippet/
 //     buildSearchPagination) — minimal Element + el shim
 //   - IS_MOBILE block — window.matchMedia stub
 //   - AUTO_NAVIGATE block (consumeSearchAutoNavigate) — pure state
@@ -69,6 +69,14 @@ function makeDom() {
       this.parentNode = null;
     }
     get textContent() { return this.data; }
+    /** Text.replaceWith: swap this node for `nodes` in its parent (highlightTextNodes). */
+    replaceWith(...nodes) {
+      const parent = this.parentNode;
+      if (!parent) return;
+      parent.children.splice(parent.children.indexOf(this), 1, ...nodes);
+      for (const n of nodes) n.parentNode = parent;
+      this.parentNode = null;
+    }
   }
 
   class StubElement {
@@ -249,6 +257,8 @@ function loadPureHelpers() {
     ctx,
     document,
     appendTextWithHighlight: ctx.appendTextWithHighlight,
+    splitPiecesByMatches: ctx.splitPiecesByMatches,
+    highlightTextNodes: ctx.highlightTextNodes,
     buildSnippet: ctx.buildSnippet,
     buildSearchPagination: ctx.buildSearchPagination,
     buildSearchUrl: ctx.buildSearchUrl,
@@ -1376,6 +1386,171 @@ test("appendTextWithHighlight: 따옴표만 친 검색어는 강조하지 않는
   h.appendTextWithHighlight(target, "“빛이 생겨라!”", `"`);
   assert.strictEqual(target.children.length, 1);
   assert.strictEqual(target.children[0].nodeType, 3);
+});
+
+// 장 화면은 한 절을 조각으로 나눠 그린다(인용 앞뒤, 시의 줄마다). 조각 끝의 간격용 공백까지 그대로 넣는다.
+test("splitPiecesByMatches: 인용을 사이에 둔 일치를 조각마다 나눠 준다 (갈라 3:8)", () => {
+  const h = loadPureHelpers();
+  // 화면이 그리는 모양: 여는 따옴표로 끝난 조각과 칩이 뒤따르는 조각에는 끝 공백이 없다.
+  const parts = h.splitPiecesByMatches(
+    ["성서는 아브라함에게 “", "너로 말미암아 복을 받으리라.", "”는 복음을 전했다. "],
+    "아브라함에게 너로",
+  );
+  assert.deepEqual(parts, [
+    [{ text: "성서는 ", mark: false }, { text: "아브라함에게 “", mark: true }],
+    [{ text: "너로", mark: true }, { text: " 말미암아 복을 받으리라.", mark: false }],
+    [{ text: "”는 복음을 전했다. ", mark: false }],
+  ]);
+});
+
+test("splitPiecesByMatches: 새 색인처럼 조각을 붙여 이은 글에서 찾는다(화면에 보이는 대로 이어 친 문구)", () => {
+  const h = loadPureHelpers();
+  // 칩이 뒤따르는 조각 끝에는 공백이 없다: 화면 글은 `받으리라.”는 복음`.
+  assert.deepEqual(h.splitPiecesByMatches(["너로 말미암아 복을 받으리라.", "”는 복음을 전했다. "], "받으리라.”는 복음"), [
+    [{ text: "너로 말미암아 복을 ", mark: false }, { text: "받으리라.", mark: true }],
+    [{ text: "”는 복음", mark: true }, { text: "을 전했다. ", mark: false }],
+  ]);
+});
+
+test("splitPiecesByMatches: 옛 색인처럼 조각 사이에 공백 한 칸을 둔 문구도 찾는다", () => {
+  const h = loadPureHelpers();
+  // 옛 색인은 조각 사이에 공백을 넣어 `받으리라. ”는 복음`이다. 두 저장소가 따로 배포되므로 둘 다 맞아야 한다.
+  assert.deepEqual(h.splitPiecesByMatches(["너로 말미암아 복을 받으리라.", "”는 복음을 전했다. "], "받으리라. 는 복음"), [
+    [{ text: "너로 말미암아 복을 ", mark: false }, { text: "받으리라.", mark: true }],
+    [{ text: "”는 복음", mark: true }, { text: "을 전했다. ", mark: false }],
+  ]);
+  // 둘 다 맞지 않는 문구는 강조가 없다.
+  const none = h.splitPiecesByMatches(["너로 말미암아 복을 받으리라.", "”는 복음을 전했다. "], "받으리라 복음");
+  assert.ok(none.every((parts) => parts.every((p) => !p.mark)));
+});
+
+test("splitPiecesByMatches: 붙여 이은 글에서 찾으면 공백 한 칸으로 이은 글은 보지 않는다", () => {
+  const h = loadPureHelpers();
+  // `가나`가 두 조각에 걸쳐 있으면 붙여 이은 글의 범위를 쓴다: 공백 한 칸으로 이은 글에는 이 범위가 없다.
+  assert.deepEqual(h.splitPiecesByMatches(["가", "나다"], "가나"), [
+    [{ text: "가", mark: true }], [{ text: "나", mark: true }, { text: "다", mark: false }],
+  ]);
+});
+
+test("splitPiecesByMatches: 시의 줄 사이에 걸친 일치", () => {
+  const h = loadPureHelpers();
+  assert.deepEqual(
+    h.splitPiecesByMatches(["야훼는 나의 목자, ", "아쉬울 것 없어라. ", "푸른 풀밭에 누워 "], "목자, 아쉬울 것"),
+    [
+      [{ text: "야훼는 나의 ", mark: false }, { text: "목자, ", mark: true }],
+      [{ text: "아쉬울 것", mark: true }, { text: " 없어라. ", mark: false }],
+      [{ text: "푸른 풀밭에 누워 ", mark: false }],
+    ],
+  );
+});
+
+test("splitPiecesByMatches: 일치가 여러 조각에 흩어져도 조각마다 제 몫만 받고 빈 부분이 없다", () => {
+  const h = loadPureHelpers();
+  assert.deepEqual(h.splitPiecesByMatches(["사랑 ", "은 ", "사랑"], "사랑"), [
+    [{ text: "사랑", mark: true }, { text: " ", mark: false }],
+    [{ text: "은 ", mark: false }],
+    [{ text: "사랑", mark: true }],
+  ]);
+});
+
+test("splitPiecesByMatches: 조각을 이으면 본문 그대로이고 빈 부분이 없다", () => {
+  const h = loadPureHelpers();
+  const cases = [
+    [["성서는 아브라함에게 “ ", "너로 말미암아 복을 받으리라.", "”는 복음을 전했다. "], "아브라함에게 너로"],
+    [["사랑 ", "사랑 ", "사랑"], "사랑 사랑"],
+    [["가나다 ", "라마바"], "다 라"],
+    [["가", "나", "다", "라"], "나 다"],
+    [["abc ", "DEF "], "c d"],
+    [["하나 ", "", "둘"], "하나 둘"],
+    [["“", "빛이 생겨라!” ", "하시자"], "생겨라! 하시자"],
+  ];
+  for (const [pieces, query] of cases) {
+    const parts = h.splitPiecesByMatches(pieces, query);
+    assert.strictEqual(parts.length, pieces.length);
+    parts.forEach((ps, i) => {
+      assert.strictEqual(ps.map((p) => p.text).join(""), pieces[i], `${query}: 조각 ${i}`);
+      assert.ok(ps.every((p) => p.text !== ""), `${query}: 조각 ${i}에 빈 부분`);
+    });
+  }
+});
+
+test("splitPiecesByMatches: 일치가 없거나 검색어가 비면 조각마다 표시 없는 한 부분이고, 빈 조각은 부분이 없다", () => {
+  const h = loadPureHelpers();
+  assert.deepEqual(h.splitPiecesByMatches(["사랑은 ", "오래 참고"], "축복"), [
+    [{ text: "사랑은 ", mark: false }], [{ text: "오래 참고", mark: false }],
+  ]);
+  assert.deepEqual(h.splitPiecesByMatches(["가", "나"], null), [[{ text: "가", mark: false }], [{ text: "나", mark: false }]]);
+  assert.deepEqual(h.splitPiecesByMatches(["가", "", "나"], `"`), [[{ text: "가", mark: false }], [], [{ text: "나", mark: false }]]);
+});
+
+// ── highlightTextNodes — 장 화면이 한 절의 글 노드를 한꺼번에 강조 ─────────────
+
+function verseWithPieces(h, pieces) {
+  const verse = h.document.createElement("span");
+  verse.appendChild(h.document.createElement("sup"));
+  const nodes = pieces.map((t) => verse.appendChild(h.document.createTextNode(t)));
+  return { verse, nodes };
+}
+
+test("highlightTextNodes: 조각을 넘는 일치를 감싸고 본문은 한 글자도 바뀌지 않는다", () => {
+  const h = loadPureHelpers();
+  const { verse, nodes } = verseWithPieces(h, ["성서는 아브라함에게 “", "너로 말미암아 복을 받으리라.", "”는 복음을 전했다. "]);
+  const before = verse.textContent;
+  h.highlightTextNodes(nodes, "아브라함에게 너로");
+  assert.strictEqual(verse.textContent, before);
+  const kinds = verse.children.map((c) => (c.tagName === "MARK" ? `mark:${c.textContent}` : c.tagName || `text:${c.data}`));
+  assert.deepEqual(kinds, ["SUP", "text:성서는 ", "mark:아브라함에게 “", "mark:너로", "text: 말미암아 복을 받으리라.", "text:”는 복음을 전했다. "]);
+  // 일치가 없는 조각은 같은 노드로 남고, 바뀐 조각의 옛 노드는 빠진다.
+  assert.ok(verse.children.includes(nodes[2]));
+  assert.ok(!verse.children.includes(nodes[0]) && !verse.children.includes(nodes[1]));
+  assert.ok(verse.children.filter((c) => c.tagName === "MARK").every((m) => m.attributes.class === "search-highlight" && m.attributes.role === "presentation"));
+});
+
+test("highlightTextNodes: 닫는 따옴표를 사이에 둔 문구를 화면에 보이는 대로 쳐도, 옛 색인의 모양으로 쳐도 강조한다", () => {
+  const h = loadPureHelpers();
+  for (const query of ["받으리라.”는 복음", "받으리라. 는 복음"]) {
+    const { verse, nodes } = verseWithPieces(h, ["성서는 아브라함에게 “", "너로 말미암아 복을 받으리라.", "”는 복음을 전했다. "]);
+    const before = verse.textContent;
+    h.highlightTextNodes(nodes, query);
+    assert.strictEqual(verse.textContent, before, query);
+    const marks = verse.children.filter((c) => c.tagName === "MARK").map((m) => m.textContent);
+    assert.deepEqual(marks, ["받으리라.", "”는 복음"], query);
+  }
+});
+
+test("highlightTextNodes: 검색어가 비었거나 일치가 없으면 노드를 건드리지 않는다", () => {
+  const h = loadPureHelpers();
+  for (const query of [null, "", `"`, "없는말"]) {
+    const { verse, nodes } = verseWithPieces(h, ["사랑은 ", "오래 참고"]);
+    h.highlightTextNodes(nodes, query);
+    assert.deepEqual(verse.children.slice(1), nodes, `검색어 ${JSON.stringify(query)}`);
+  }
+});
+
+test("normalizeForMatch: 이어진 공백(줄바꿈과 탭 포함)을 한 칸으로 접는다", () => {
+  const q = loadQuoteMatch();
+  assert.strictEqual(q.normalizeForMatch("아브라함에게 “ 너로"), "아브라함에게 너로");
+  assert.strictEqual(q.normalizeForMatch("가  나\t\n다"), "가 나 다");
+  assert.strictEqual(q.normalizeForMatch(" 가 "), " 가 ");
+});
+
+test("findMatchRanges: 이어진 공백도 공백 한 칸의 검색어와 맞고, 범위는 원래 본문의 위치다", () => {
+  const q = loadQuoteMatch();
+  assert.deepEqual(Array.from(q.findMatchRanges("아브라함에게 “ 너로 말미암아", "아브라함에게 너로")[0]), [0, 11]);
+  assert.deepEqual(Array.from(q.findMatchRanges("빛이  생겨라", "빛이 생겨라")[0]), [0, 7]);
+});
+
+test("findMatchRanges: 일치 여부가 normalizeForMatch로 비교한 결과와 같다", () => {
+  const q = loadQuoteMatch();
+  const texts = ["아브라함에게 “ 너로 말미암아", "빛이  생겨라", "A\tB\nC", "“ ‘ 가 ’ ”", "   ", "가나다", "하느님께서 “빛이 생겨라!” 하시자"];
+  const queries = ["아브라함에게 너로", "빛이 생겨라", "a b c", "가", "나다", "생겨라! 하시자", "생겨라!” 하시자", "없는말"];
+  for (const t of texts) {
+    for (const query of queries) {
+      const found = q.findMatchRanges(t, query).length > 0;
+      const expected = q.normalizeQuery(query) !== "" && q.normalizeForMatch(t).includes(q.normalizeQuery(query));
+      assert.strictEqual(found, expected, `${JSON.stringify(t)} / ${JSON.stringify(query)}`);
+    }
+  }
 });
 
 test("normalizeQuery: 따옴표를 지운 뒤 앞뒤 공백도 지운다", () => {

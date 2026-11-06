@@ -79,6 +79,8 @@
 
 본문 데이터 변경 자체는 `common-bible-data` 저장소에서 `data:` 커밋으로 남긴다. 앱 저장소에서는 서브모듈 포인터 갱신을 `data:` 또는 `chore:`로 기록한다.
 
+`common-bible-data` 저장소의 커밋과 PR 제목도 같은 규칙과 타입을 쓴다(그 저장소는 검증 테스트용 `test`도 둔다). 파이프라인 코드는 `feat`나 `fix`, 산출물과 매니페스트를 다시 만드는 커밋은 `chore`다. 그 저장소에서 커밋하기 전에 최근 이력으로 관례를 짐작하지 않고 이 규칙과 그 저장소 `CLAUDE.md`의 「커밋 메시지 규칙」을 읽는다(사용자 결정 2026-11-07).
+
 ## 브랜치 보호와 작업 흐름
 
 `main`은 보호 브랜치다(2026-05-29 적용). 모든 변경은 토픽 브랜치, PR, 머지 순서를 따른다.
@@ -118,7 +120,7 @@ git branch -D <topic-branch>   # squash 커밋은 브랜치 커밋과 이어지�
 ## 테스트
 
 - **유닛**(ADR-013, CI 자동): `node --test tests/unit/*.test.js`(CI와 같다), 한 파일은 `node --test tests/unit/<소스 basename>.test.js`. 한 모듈에 테스트 파일 하나이고, 실데이터 의존 케이스와 문서 검사의 예외는 `tests/README.md` §1. 타입 검사는 `npm run typecheck`.
-- **e2e**(Playwright, 로컬 전용): `python3 scripts/serve.py 8080`을 띄우고 `pytest tests/e2e/ -v`. `python -m http.server`는 `/gen/1` 같은 History API 경로를 404로 돌려주고 강제 새로고침도 깨지므로 쓰지 않는다. 처음 한 번 `pip install pytest-playwright`, `playwright install chromium`. 작업 폴더에서는 다른 포트로 띄운다(`docs/workflow.md` 「작업 중 함정」). 기능을 구현한 뒤에는 유닛과 e2e를 모두 실행하고 결과를 보고한다.
+- **e2e**(Playwright, 로컬 전용): `python3 scripts/serve.py 8080`을 띄우고 `pytest tests/e2e/ -v`. `python -m http.server`는 `/gen/1` 같은 History API 경로를 404로 돌려주고 강제 새로고침도 깨지므로 쓰지 않는다. 처음 한 번 `pip install pytest-playwright`, `playwright install chromium`. 작업 폴더에서는 다른 포트로 띄운다(`docs/workflow.md` 「작업 중 함정」). 기능을 구현한 뒤에는 유닛을 모두 실행하고, e2e는 수정한 코드와 관련된 파일만 골라 실행해 결과를 보고한다. 전체 e2e는 13분쯤 걸려 매번 돌리지 않는다(사용자 결정 2026-11-07, `docs/workflow.md` 「작업 중 함정」).
 - **데이터 파이프라인**(Level 1-3, ADR-004): 데이터 저장소의 `validate.yml`이 push 때 실행한다. 로컬은 `cd data && pytest tests/`.
 
 ## 데이터 수정과 릴리스

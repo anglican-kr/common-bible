@@ -921,6 +921,28 @@ function _verseRangeKeys(allKeys, anchorKey, targetKey, unitFn) {
 }
 // ── END VERSE_SELECTION ──
 
+// ── BEGIN PIECE_SPACE ──
+// The chapter view draws a verse as several pieces (around a `<cite>`, one per line of a poem). Each piece
+// is its own inline element, so a space after it keeps the words apart. These pieces get none:
+//   - the piece before a cite chip — the chip's own padding is the gap (ADR-022 §6 dev-server tweak);
+//   - a piece of punctuation only — it glues to the next piece in Korean prose (a stray opening quote split
+//     off when a cite begins mid-quote: `“<cite>…</cite>`);
+//   - a piece that ends with an opening quote — the quoted text sits against it (`“너로`, not `“ 너로`).
+// The search index joins a verse's pieces the same way (common-bible-data src/search_indexer.py segments_text).
+const PIECE_PUNCT_ONLY_RE = /^[\s'"“”‘’«»‹›()…,.;:!?¶·]+$/;
+
+/**
+ * The text drawn after a piece: one space, or "" where the next piece must sit against it.
+ * @param {string} text  the piece, without its leading ¶
+ * @param {boolean} [noTrailingSpace]  a cite chip follows the piece
+ * @returns {string}
+ */
+function pieceTrailingSpace(text, noTrailingSpace) {
+  if (noTrailingSpace || PIECE_PUNCT_ONLY_RE.test(text) || /[“‘]$/.test(text)) return "";
+  return " ";
+}
+// ── END PIECE_SPACE ──
+
 // Render a list of verses into `article` as inline verse spans + inter-verse
 // break markers + cite chips. Extracted from renderChapter so the bookmark
 // reading view (ADR-035) can render verse subsets through the same logic. Does
@@ -1021,6 +1043,10 @@ function appendVerses(article, verses, opts = {}) {
     // Verse number (rendered via CSS ::before to exclude from clipboard)
     const dataV = formatVerseNumber(v);
 
+    // Text nodes of this verse, in reading order — highlighted together after the verse is drawn.
+    /** @type {Text[]} */
+    const verseTextNodes = [];
+
     /** @param {HTMLElement} target @param {string} raw @param {{ noTrailingSpace?: boolean }} [opts] */
     function appendSegText(target, raw, opts) {
       const hasPilcrow = raw.startsWith("¶");
@@ -1028,17 +1054,11 @@ function appendVerses(article, verses, opts = {}) {
         target.appendChild(el("span", { className: "pilcrow", "aria-hidden": "true" }, "¶"));
       }
       const textContent = hasPilcrow ? raw.replace(/^¶\s*/, "") : raw;
-      // Trailing space normally separates this span from the next inline
-      // sibling (verse continuation). When a cite chip will be appended right
-      // after this segment, the chip's own padding provides the gap — skip
-      // the trailing space to avoid a double-gap (ADR-022 §6 dev-server tweak).
-      // Also skip when the segment is punctuation-only (e.g. a stray opening
-      // quote split off when a cite begins mid-quote like `'<cite>…</cite>'`):
-      // appending a space would force `' 그는…` instead of the intended
-      // `'그는…`. Punctuation glues to the next segment in Korean prose.
-      const isPunctOnly = /^[\s'"“”‘’«»‹›()…,.;:!?¶·]+$/.test(textContent);
-      const suffix = (opts && opts.noTrailingSpace) || isPunctOnly ? "" : " ";
-      appendTextWithHighlight(target, textContent + suffix, hlQuery);
+      // The space after the piece, or none where the next piece sits against it (pieceTrailingSpace).
+      const suffix = pieceTrailingSpace(textContent, opts && opts.noTrailingSpace);
+      const node = document.createTextNode(textContent + suffix);
+      target.appendChild(node);
+      if (hlQuery) verseTextNodes.push(node);
     }
 
     // Count total lines across all segments to determine if multi-part
@@ -1164,6 +1184,10 @@ function appendVerses(article, verses, opts = {}) {
 
       prevSegType = seg.type;
     }
+
+    // Search highlight: a match can run across this verse's pieces (a `<cite>` splits
+    // a verse; each line of a poem is a piece), so they are searched together.
+    if (hlQuery) window.highlightTextNodes(verseTextNodes, hlQuery);
 
     prevVerseEndType = segs[segs.length - 1]?.type;
     isFirst = false;
