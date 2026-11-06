@@ -1253,6 +1253,7 @@ def test_sick_day_is_an_alternate_reading(mobile_context):
     _open(page, "lectionary/2028-02-11")
     assert page.inner_text(".lect-day") == "연중 5주 금요일"
     assert _choices(page) == ["병자를 위한 기도일 · 대체 독서"], _choices(page)
+    assert _colors(page) == ["녹색"]
     assert page.locator(".lect-day-note").count() == 0
     assert page.locator(".lect-day-saint", has_text="병자").count() == 0
 
@@ -1261,7 +1262,7 @@ def test_sick_day_is_an_alternate_reading(mobile_context):
     assert "obs=" in page.url
     assert page.inner_text(".lect-day-note") == "대체 독서"
     assert _choices(page) == ["연중 5주 금요일"], _choices(page)
-    assert _colors(page) == ["녹색"]
+    assert _colors(page) == ["자색"]   # 고를 때만 기도서의 자색이다
     labels = page.eval_on_selector_all(".lect-card-name", "els => els.map(e => e.textContent)")
     assert labels == ["독서 1", "독서 2"], labels
     blank = page.evaluate("""() => {
@@ -1277,6 +1278,11 @@ def test_sick_day_is_an_alternate_reading(mobile_context):
     assert blank["rects"] == 1, blank     # 줄이 나뉘지 않는다
     assert blank["width"] > 48, blank     # 공백이 하나로 줄어들지 않았다(세 글자 이름이 들어간다)
     assert blank["after"] == "을/를", blank
+    # 캘린더 칸은 그날의 전례일 색이다
+    page.goto(f"{BASE}/calendar/2028-02")
+    cell = page.locator('a[href="/lectionary/2028-02-11"]').first
+    cell.wait_for()
+    assert cell.get_attribute("aria-label") == "2월 11일 금요일, 병자를 위한 기도일, 녹색"
 
 
 def test_commemoration_is_a_line_not_a_chip(desktop_context):

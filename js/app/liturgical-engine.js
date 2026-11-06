@@ -1622,7 +1622,7 @@ function isEmber(/** @type {Observance} */ obs) {
  * 성주간 · 부활 8일(`holyWeek` ∪ `easterOctave`, §4.10)에는 이동 축일인 지정 전례일이 덮지 못한다(E−1 의 지정 전례일은 성 토요일
  * 행 — 부활밤은 저녁 전례라 색에 참여하지 않는다, → R-6.1-evening). 그날 지키는 월별 축일(주요축일 — 제자리든 옮겨 왔든,
  * 부활 8일 평일의 축일)이 지정 전례일이면 그 축일 색이다(→ R-6.3-holy-week-guard — 성주간의 prec 7 축일은 생략되어 지정 전례일이 되지 않는다). 지정 전례일의 색이 비었으면
- * (2.11 병자를 위한 기도일) 바탕이 남는다. 사계재 날은 **자**다(→ R-6.4-ember-color):
+ * 바탕이 남는다. 대체 독서인 축일(2.11 병자를 위한 기도일)의 색도 덮지 않는다 — 그 본문을 고를 때만 쓴다(사용자 결정 2026-11-07, ADR-038 §3). 사계재 날은 **자**다(→ R-6.4-ember-color):
  * 바탕이 남으면(지정 전례일이 격자) 그날 색이 자이고, 축일이 덮으면 그 색이 대표로 남고 `colors` 에 자를 앞세워
  * 병기한다(책자의 [자/백] 순). `colors` 는 병기 목록이라 병기가 없는 날은 `[color]` 다. `omitted` ·
  * `commemorated` 후보와 기념일은 색에 기여하지 않는다.
@@ -1632,7 +1632,8 @@ function isEmber(/** @type {Observance} */ obs) {
 function dayColorsOf(dateStr, grid, official, cands) {
   const guarded = (inSpan(dateStr, "holyWeek") || inSpan(dateStr, "easterOctave"))
     && !(official && official.observance.kind === "sanctoral");
-  const top = official && official.observance.color && !guarded ? official.observance : grid.observance;
+  const covers = official && official.observance.color && !official.observance.alternate_readings && !guarded;
+  const top = covers ? official.observance : grid.observance;
   const color = top.color;
   const colorAlt = top.color_alt ?? null;
   if (!color) return { color: null, colorAlt, colors: [] };
