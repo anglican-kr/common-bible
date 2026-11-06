@@ -890,7 +890,7 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
   // 본문 없는 날 — 기념일 줄 아래에 이름만 한 줄씩(사용자 결정 2026-11-04). 그날 지키거나 기념만 하는 것만 싣는다.
   const textlessDays = resolved.candidates.filter((c) => !isGrid(c) && !c.evening && !isCommemoration(c) && textless(c)
     && (c.status === "proper" || c.status === "commemorated"));
-  // 공통 독서만 있어 감춘 후보는 넣지 않는다 — 성주간에 생략되는 성인(토마스 크랜머 등)은 책자에도 없고 화면에 보인 적이 없다.
+  // 공통 독서만 있어 감춘 후보는 넣지 않는다 — 성주간 평일에 생략되는 성인(2035-03-21 토마스 크랜머 등)은 화면에 보인 적이 없다.
   const passiveDays = resolved.candidates.filter((c) => isPassive(c) && !isCommemoration(c) && !textless(c) && !memorial.saints.includes(c)
     && !isHiddenCandidate(c, initial, groupsOf(c)));
   const transferNotes = resolved.candidates.flatMap((c) => (c.status === "transferred_out" && c.to

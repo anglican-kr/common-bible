@@ -470,6 +470,15 @@ test("C-P-2 transferGuard = E−7..E+7", () => {
   assert.strictEqual(ctx.inSpan(ctx.addDays(E, 8), "transferGuard"), false);
 });
 
+test("§4.10 holyWeekAfterPalm = E−6..E−1 — 성지주일은 들지 않고 성 토요일까지(→ R-6.3-holy-week-guard)", () => {
+  const E = ctx.spansOf(2026).easterOctave[0].from;
+  assert.strictEqual(ctx.inSpan(ctx.addDays(E, -7), "holyWeek"), true);
+  assert.strictEqual(ctx.inSpan(ctx.addDays(E, -7), "holyWeekAfterPalm"), false);
+  assert.strictEqual(ctx.inSpan(ctx.addDays(E, -6), "holyWeekAfterPalm"), true);
+  assert.strictEqual(ctx.inSpan(ctx.addDays(E, -1), "holyWeekAfterPalm"), true);
+  assert.strictEqual(ctx.inSpan(E, "holyWeekAfterPalm"), false);
+});
+
 test("C-P-3 색 보호 = holyWeek ∪ easterOctave · 승천 기간은 E+40 시작", () => {
   const E = ctx.easterDate(2026);
   const s = ctx.spansOf(2026);
@@ -1272,6 +1281,7 @@ const B1_TABLES = {
     SAN("d0621-movable", "06.21", "합성 옮길 수 있는 축일", { transferable: true, transfer_to: "next_day" }),
     SAN("d0815-a", "08.15", "합성 성모안식", { rank: "major_feast", precedence: 3, priority_group: "A" }),
     SAN("d0815-minor", "08.15", "합성 광복절"),
+    SAN("d0329-minor", "03.29", "합성 성지주일 축일"),
     SAN("d0330-minor", "03.30", "합성 성주간 축일"),
     SAN("d0402-minor", "04.02", "합성 성 목요일 축일"),
     SAN("d0408-minor", "04.08", "합성 부활 8일 순교 축일", { color: "red" }),
@@ -1423,6 +1433,10 @@ test("C-6.1-6 prec 7 축일은 그날 기념 — 가변인 상위에 밀리면 c
 });
 
 test("R-6.3-holy-week-guard 성주간의 prec 7 은 생략 — guard 는 실제 후보가 없을 때만 displacedBy, 지정 전례일은 되지 않는다 · 부활 8일 평일의 축일은 그날의 대표", () => {
+  // 성지주일의 축일은 생략하지 않고 그날 기념한다 — 다른 절기 주일과 같다(규정 「절기주일에 지켜야 한다면 기념한다」, 사용자 결정 2026-11-07)
+  const palm = rb("2026-03-29");
+  same(fate(palm, "d0329-minor"), ["commemorated", officialId(palm)]);
+  same(ctx.guardCandidates("2026-03-29").length, 0);
   const mon = rb("2026-03-30");   // 성주간 월요일
   same(fate(mon, "d0330-minor"), ["omitted", "guard:holy-week"]);
   same(officialId(mon), "grid:lent-x-weekday-mon");
@@ -1433,7 +1447,7 @@ test("R-6.3-holy-week-guard 성주간의 prec 7 은 생략 — guard 는 실제 
   // 부활 8일 평일의 축일은 생략하지 않는다 — 그날의 대표이고 그 성인의 색이다(책자 2025-04-23 조오지 [홍], 사용자 결정 2026-10-24)
   const wed = rb("2026-04-08");
   same([fate(wed, "d0408-minor"), officialId(wed), wed.color], [["proper", null], "d0408-minor", "red"]);
-  same(ctx.guardCandidates("2026-04-05").length, 0);   // 부활대축일부터 밖 — guard 는 성주간(성지주일 ~ 성 토요일)뿐이다
+  same(ctx.guardCandidates("2026-04-05").length, 0);   // 부활대축일부터 밖 — guard는 성지주일 다음 날부터 성 토요일까지뿐이다
   same(ctx.guardCandidates("2026-04-04").map((c) => c.observance.id), ["guard:holy-week"]);
 });
 
