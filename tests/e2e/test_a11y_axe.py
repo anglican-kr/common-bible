@@ -102,8 +102,8 @@ def test_a11y_lectionary_alternate_colours(browser):
 
 
 def test_a11y_lectionary_switcher(browser):
-    """전례독서 뷰(8.6 주의 변모 — 전례독서 목록) — critical/serious 위반 0건."""
-    ctx, page = _open(browser, "lectionary/2026-08-06")
+    """전례독서 뷰(8.9 주일 — 옮겨 지킬 수 있는 주의 변모의 전례독서 목록) — critical/serious 위반 0건."""
+    ctx, page = _open(browser, "lectionary/2026-08-09")
     try:
         page.wait_for_selector(".lectionary .lect-choice", timeout=20_000)
         v = _violations(page)

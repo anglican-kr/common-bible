@@ -27,6 +27,7 @@ CLEAR_APP_STORAGE = """
     'bible-drive-sync', 'bible-drive-sync-email', 'bible-drive-sync-updated',
     'bible-bookmarks-v2', 'bible-sync-meta',
     'bible-lectionary-track', 'bible-lectionary-cards-folded',
+    'bible-start-page', 'bible-lectionary-alt-show',
   ];
   for (const k of keys) try { localStorage.removeItem(k); } catch(_) {}
   // Suppress the install-promo nudge so the #install-scrim overlay never covers
@@ -37,6 +38,10 @@ CLEAR_APP_STORAGE = """
   try { localStorage.setItem('bible-install-nudge', JSON.stringify({ visits: 0, nextShow: 9999, neverShow: true })); } catch(_) {}
 })();
 """
+
+
+# 설정 「대체 독서 표시」를 켠 기기 — 평일 줄을 눌러 보는 시험에 쓴다(기본값은 숨김, ADR-041 §4).
+SHOW_ALT_READINGS = "try { localStorage.setItem('bible-lectionary-alt-show', '1'); } catch (_) {}"
 
 
 # Init script for a device whose storage is full (known-issues §15.4): `Storage.prototype.setItem` throws

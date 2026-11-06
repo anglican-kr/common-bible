@@ -1,5 +1,5 @@
-"""E2E: 설정 팝오버 — 시작 화면, 책 순서, 글자 크기, 테마, 색상, 캐시, 영속성."""
-from .conftest import CLEAR_APP_STORAGE, open_settings
+"""E2E: 설정 팝오버 — 섹션, 시작 페이지, 시작 화면, 책 순서, 글자 크기, 테마, 색상, 캐시, 영속성."""
+from .conftest import CLEAR_APP_STORAGE, MOBILE_VIEWPORT, IPHONE_UA, open_settings
 
 BASE = "http://localhost:8080"
 
@@ -15,6 +15,259 @@ def _ls(page, key):
 
 def _html_attr(page, attr):
     return page.evaluate(f"() => document.documentElement.getAttribute({repr(attr)})")
+
+
+# ── 섹션 (ADR-041 §1) ────────────────────────────────────────────────────────
+
+SECTIONS = ["시작", "성서", "전례독서", "모양", "시스템"]
+SECTION_FACTS = """(root) => [...document.querySelector(root).querySelectorAll('.settings-section')].map((s) => ({
+  tag: s.firstElementChild.tagName,
+  title: s.firstElementChild.textContent,
+  rule: getComputedStyle(s).borderTopWidth,
+}))"""
+
+
+def _assert_sections(facts):
+    assert [f["title"] for f in facts] == SECTIONS
+    assert all(f["tag"] == "H2" for f in facts)
+    assert facts[0]["rule"] == "0px"          # 첫 섹션 위에는 선이 없고, 그 뒤 섹션마다 가로선이 있다
+    assert all(f["rule"] == "1px" for f in facts[1:])
+
+
+def test_popover_has_labeled_sections_in_order(browser):
+    ctx = browser.new_context()
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    page = ctx.new_page()
+    try:
+        _open(page)
+        pop = open_settings(page)
+        _assert_sections(page.evaluate(SECTION_FACTS, ".settings-popover"))
+        # 항목이 제 섹션에 있다
+        bible = pop.locator(".settings-section", has=page.locator("h2", has_text="성서"))
+        assert bible.get_by_role("switch").count() == 4
+        lectionary = pop.locator(".settings-section", has=page.locator("h2", has_text="전례독서"))
+        assert lectionary.get_by_role("switch", name="대체 독서 표시").is_checked() is False
+        appearance = pop.locator(".settings-section", has=page.locator("h2", has_text="모양"))
+        assert appearance.get_by_role("button", name="글자 크게").count() == 1
+        system = pop.locator(".settings-section", has=page.locator("h2", has_text="시스템"))
+        assert system.get_by_role("button", name="업데이트 지금 확인").count() == 1
+    finally:
+        ctx.close()
+
+
+def test_mobile_settings_view_has_the_same_sections(browser):
+    ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA)
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    page = ctx.new_page()
+    try:
+        page.goto(f"{BASE}/settings")
+        page.wait_for_selector(".settings-view .settings-select")
+        _assert_sections(page.evaluate(SECTION_FACTS, ".settings-view"))
+    finally:
+        ctx.close()
+
+
+# ── 시작 페이지 (ADR-041 §2, §3) ──────────────────────────────────────────────
+
+def test_start_page_select_saves_and_hides_resume_row_keeping_its_value(browser):
+    """전례독서를 고르면 값이 저장되고 「읽던 페이지에서 시작」이 숨는다. 포커스는 선택 상자에 남고, 성서로 되돌리면 전의 값으로 돌아온다."""
+    ctx = browser.new_context()
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    page = ctx.new_page()
+    try:
+        _open(page)
+        pop = open_settings(page)
+        select = pop.get_by_label("시작 페이지")
+        assert select.input_value() == "bible"
+        resume = pop.get_by_role("switch", name="읽던 페이지에서 시작")
+        resume.click()   # home — 숨기는 동안 값을 지키는지 본다
+        select.focus()   # 사용자는 선택 상자를 눌러 고른다. select_option은 포커스를 옮기지 않는다
+        select.select_option("lectionary")
+        assert _ls(page, "bible-start-page") == "lectionary"
+        assert resume.is_visible() is False
+        assert page.evaluate("() => document.activeElement.tagName") == "SELECT"
+        select.select_option("bible")
+        assert _ls(page, "bible-start-page") == "bible"
+        assert resume.is_visible() is True
+        assert resume.is_checked() is False
+        assert _ls(page, "bible-startup") == "home"
+    finally:
+        ctx.close()
+
+
+def test_resume_row_stays_hidden_when_reopened_with_lectionary_start(browser):
+    ctx = browser.new_context()
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    ctx.add_init_script("localStorage.setItem('bible-start-page', 'lectionary')")
+    page = ctx.new_page()
+    try:
+        page.goto(f"{BASE}/john/3")
+        page.wait_for_selector("#settings-anchor .settings-btn")
+        pop = open_settings(page)
+        assert pop.get_by_label("시작 페이지").input_value() == "lectionary"
+        assert pop.get_by_role("switch", name="읽던 페이지에서 시작").is_visible() is False
+    finally:
+        ctx.close()
+
+
+def test_lectionary_start_page_opens_lectionary_only_on_launch(browser):
+    """「/」로 열면 읽던 위치가 있어도 오늘의 전례독서다. 뒤로 가기로 온 「/」는 성서 목록이고, 다른 주소로 열면 그 주소다."""
+    ctx = browser.new_context()
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    ctx.add_init_script("""
+      localStorage.setItem('bible-start-page', 'lectionary');
+      localStorage.setItem('bible-last-read', JSON.stringify({ bookId: 'john', chapter: 3, verse: null }));
+    """)
+    page = ctx.new_page()
+    try:
+        page.goto(BASE)
+        page.wait_for_selector(".lectionary", timeout=20_000)
+        assert page.evaluate("() => location.pathname") == "/lectionary"
+        page.go_back()
+        page.wait_for_selector(".book-list")
+        assert page.evaluate("() => location.pathname") == "/"
+        page.goto(f"{BASE}/john/3")
+        page.wait_for_selector(".chapter-text")
+        assert page.evaluate("() => location.pathname") == "/john/3"
+    finally:
+        ctx.close()
+
+
+def test_reload_stays_on_book_list_with_lectionary_start(browser):
+    """새로고침은 앱을 새로 여는 것이 아니다 — 성서 목록에 머문다(ADR-041 §2)."""
+    ctx = browser.new_context()
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    ctx.add_init_script("localStorage.setItem('bible-start-page', 'lectionary')")
+    page = ctx.new_page()
+    try:
+        page.goto(BASE)
+        page.wait_for_selector(".lectionary", timeout=20_000)
+        page.go_back()
+        page.wait_for_selector(".book-list")
+        page.reload()
+        page.wait_for_selector(".book-list")
+        page.wait_for_timeout(300)
+        assert page.evaluate("() => location.pathname") == "/"
+        assert page.locator(".lectionary").count() == 0
+    finally:
+        ctx.close()
+
+
+def test_reload_stays_on_book_list_with_resume(browser):
+    """「읽던 페이지에서 시작」의 이동도 같다. 장을 새로고침할 때의 절 복원은 이동이 아니라 그대로다."""
+    ctx = browser.new_context()
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    ctx.add_init_script("localStorage.setItem('bible-last-read', JSON.stringify({ bookId: 'john', chapter: 3, verse: 20 }))")
+    page = ctx.new_page()
+    try:
+        page.goto(BASE)
+        page.wait_for_selector(".chapter-text")
+        assert page.evaluate("() => location.pathname") == "/john/3"
+        page.go_back()
+        page.wait_for_selector(".book-list")
+        page.reload()
+        page.wait_for_selector(".book-list")
+        page.wait_for_timeout(300)
+        assert page.evaluate("() => location.pathname") == "/"
+        page.goto(f"{BASE}/john/3")
+        page.wait_for_selector(".chapter-text")
+        page.wait_for_function("() => window.scrollY > 0")
+        page.reload()
+        page.wait_for_selector(".chapter-text")
+        page.wait_for_function("() => window.scrollY > 0")
+        assert page.evaluate("() => location.pathname") == "/john/3"
+    finally:
+        ctx.close()
+
+
+def test_start_page_shows_failure_screen_when_lectionary_cannot_load(browser):
+    """자료나 화면 모듈을 받지 못하면 전례독서 주소를 직접 열었을 때와 같은 실패 화면이다. 성서 목록으로 옮기지 않고, 홈 탭으로 갈 수 있다(ADR-041 §2)."""
+    for blocked in ("**/data/lectionary/**", "**/js/app/lectionary.js*"):
+        ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA)
+        ctx.add_init_script(CLEAR_APP_STORAGE)
+        ctx.add_init_script("localStorage.setItem('bible-start-page', 'lectionary')")
+        ctx.route(blocked, lambda route: route.abort())
+        page = ctx.new_page()
+        try:
+            page.goto(BASE)
+            page.wait_for_selector(".state-action button", timeout=20_000)
+            assert page.inner_text(".state-action button") == "다시 불러오기", blocked
+            assert page.evaluate("() => location.pathname") == "/lectionary", blocked
+            assert page.locator(".book-list").count() == 0, blocked
+            page.locator("#tab-bar [data-tab='home']").click()
+            page.wait_for_selector(".book-list")
+            assert page.evaluate("() => location.pathname") == "/", blocked
+        finally:
+            ctx.close()
+
+
+def test_popover_shows_a_thin_scrollbar_on_a_short_window(browser):
+    """창 높이 768px에서 팝오버가 스크롤되고 스크롤 막대가 보이며, 맨 아래 줄까지 갈 수 있다(ADR-041 §1)."""
+    ctx = browser.new_context(viewport={"width": 1280, "height": 768})
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    page = ctx.new_page()
+    try:
+        _open(page)
+        pop = open_settings(page)
+        facts = page.evaluate("""() => {
+          const p = document.querySelector('.settings-popover');
+          return { over: p.scrollHeight - p.clientHeight, bar: getComputedStyle(p).scrollbarWidth };
+        }""")
+        assert facts["over"] > 0, facts
+        assert facts["bar"] == "thin", facts
+        about = pop.locator(".settings-about")
+        about.scroll_into_view_if_needed()
+        assert about.is_visible()
+    finally:
+        ctx.close()
+
+
+def test_home_tab_shows_book_list_after_lectionary_start(browser):
+    ctx = browser.new_context(viewport=MOBILE_VIEWPORT, user_agent=IPHONE_UA)
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    ctx.add_init_script("localStorage.setItem('bible-start-page', 'lectionary')")
+    page = ctx.new_page()
+    try:
+        page.goto(BASE)
+        page.wait_for_selector(".lectionary", timeout=20_000)
+        page.locator("#tab-bar [data-tab='home']").click()
+        page.wait_for_selector(".book-list")
+        assert page.evaluate("() => location.pathname") == "/"
+    finally:
+        ctx.close()
+
+
+def test_default_start_page_keeps_book_list(browser):
+    """기본값은 전과 같다 — 읽던 위치가 없으면 「/」는 성서 목록이다."""
+    ctx = browser.new_context()
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    page = ctx.new_page()
+    try:
+        page.goto(BASE)
+        page.wait_for_selector(".book-list")
+        assert page.evaluate("() => location.pathname") == "/"
+    finally:
+        ctx.close()
+
+
+def test_keyboard_opens_on_select_and_focus_stays_trapped(browser):
+    """키보드로 열면 첫 컨트롤인 선택 상자에 포커스가 가고, 포커스 가두기가 선택 상자를 센다."""
+    ctx = browser.new_context()
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    page = ctx.new_page()
+    try:
+        _open(page)
+        page.locator("#settings-anchor .settings-btn").focus()
+        page.keyboard.press("Enter")
+        page.wait_for_selector(".settings-popover:not([hidden])")
+        assert page.evaluate("() => document.activeElement.tagName") == "SELECT"
+        page.keyboard.press("Shift+Tab")   # 첫 컨트롤에서 뒤로 — 팝오버의 마지막 링크로 돈다
+        assert page.evaluate("() => !!document.activeElement.closest('.settings-popover')")
+        assert page.evaluate("() => document.activeElement.tagName") == "A"
+        page.keyboard.press("Tab")         # 마지막에서 앞으로 — 선택 상자로 돌아온다
+        assert page.evaluate("() => document.activeElement.tagName") == "SELECT"
+    finally:
+        ctx.close()
 
 
 # ── 시작 화면 ─────────────────────────────────────────────────────────────────

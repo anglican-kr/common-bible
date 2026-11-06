@@ -30,8 +30,10 @@ const _SETTING_LS_KEYS = {
   theme:           "bible-theme",
   bookOrder:       "bible-book-order",
   startupBehavior: "bible-startup",
+  startPage:       "bible-start-page",
   citeShow:        "bible-cite-show",
   audioShow:       "bible-audio-show",
+  lectionaryAltShow: "bible-lectionary-alt-show",
 };
 const _LR_KEY = "bible-last-read";
 
@@ -182,8 +184,10 @@ function _emptyDoc() {
       theme:           { v: null, _u: 0 },
       bookOrder:       { v: null, _u: 0 },
       startupBehavior: { v: null, _u: 0 },
+      startPage:       { v: null, _u: 0 },
       citeShow:        { v: null, _u: 0 },
       audioShow:       { v: null, _u: 0 },
+      lectionaryAltShow: { v: null, _u: 0 },
     },
     lastRead: { v: null, _u: 0 },
   };

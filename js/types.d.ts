@@ -77,8 +77,10 @@ export type SettingKey =
   | "theme"
   | "bookOrder"
   | "startupBehavior"
+  | "startPage"
   | "citeShow"
-  | "audioShow";
+  | "audioShow"
+  | "lectionaryAltShow";
 
 // Per-setting value type. All settings store one MTimed wrapper; the inner
 // value type is intentionally `unknown` so that store-v2 can index by a
@@ -1016,6 +1018,8 @@ export interface AppStorage {
   // Settings
   loadStartupBehavior: () => string;
   saveStartupBehavior: (val: string) => void;
+  loadStartPage: () => "bible" | "lectionary";
+  saveStartPage: (page: "bible" | "lectionary") => void;
   loadFontSize: () => number;
   saveFontSize: (size: number) => void;
   loadColorScheme: () => ColorSchemeId;
@@ -1042,6 +1046,9 @@ export interface AppStorage {
   // 전례독서의 독서 카드를 접어 두었는가(ADR-038 §3). 한 번 접으면 모든 날에 접힌 채로 보인다(사용자 결정 2026-11-05). 로컬 전용.
   loadLectionaryCardsFolded: () => boolean;
   saveLectionaryCardsFolded: (folded: boolean) => void;
+  // 전례독서 목록에 대체 독서의 줄을 보이는가(ADR-038 §3). 처음에는 숨긴다(사용자 결정 2026-11-05).
+  loadLectionaryAltShow: () => boolean;
+  saveLectionaryAltShow: (on: boolean) => void;
 
   // Install nudge state
   _loadNudgeState: () => InstallNudgeState;

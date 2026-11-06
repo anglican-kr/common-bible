@@ -139,6 +139,8 @@ Phase 2를 진행하며 그 전제가 두 번 깨졌다.
 | 키 | 형식 | 정의 위치 |
 | --- | --- | --- |
 | `bible-startup` | `"resume" \| "home"` | ADR-010, `js/app.js` |
+| `bible-start-page` | `"bible" \| "lectionary"` | ADR-041, `js/app/storage.js` |
+| `bible-lectionary-alt-show` | `"1" \| "0"`, 동기화를 거치면 `"true" \| "false"` | ADR-041, `js/app/storage.js` |
 | `bible-font-size` | `"1"`–`"7"` | `js/app.js` |
 | `bible-color-scheme` | `"light" \| "dark" \| "auto"` | `js/app.js` |
 | `bible-theme` | 테마 이름 문자열 | `js/app.js` |

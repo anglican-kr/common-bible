@@ -37,6 +37,7 @@ window.appStorage = (/** @returns {AppStorage} */ () => {
   const BOOK_ORDER_KEY = "bible-book-order";
   const COLOR_SCHEME_KEY = "bible-color-scheme";
   const STARTUP_BEHAVIOR_KEY = "bible-startup"; // "resume" | "home"
+  const START_PAGE_KEY = "bible-start-page"; // "bible" | "lectionary"; unset = "bible"
   const CITE_SHOW_KEY = "bible-cite-show"; // "1"/"0" (saveCiteShow) or "true"/"false" (sync applyToLegacyKeys); default ON when unset
   const AUDIO_SHOW_KEY = "bible-audio-show"; // "1"/"0" or "true"/"false" via sync; default ON when unset
   const AUDIO_POS_KEY = "bible-audio-pos";
@@ -49,6 +50,7 @@ window.appStorage = (/** @returns {AppStorage} */ () => {
   // ADR-038 §3 — 전례독서의 독서 카드를 접어 두었는가. 값 "1"이면 접음이고, 없으면 펼침이다. 한 번 접으면 모든 날에 접힌
   // 채로 보인다(사용자 결정 2026-11-05). 로컬 전용.
   const LECTIONARY_CARDS_FOLDED_KEY = "bible-lectionary-cards-folded";
+  const LECTIONARY_ALT_SHOW_KEY = "bible-lectionary-alt-show"; // "1"/"0" or "true"/"false" via sync; default OFF when unset
   const SEARCH_HISTORY_MAX = 30; // storage cap (LRU)
 
   // ── UI-shared constants (consumed by settings-ui in Phase 3) ──
@@ -229,6 +231,30 @@ window.appStorage = (/** @returns {AppStorage} */ () => {
     localStorage.setItem(STARTUP_BEHAVIOR_KEY, val);
     window.syncStoreV2?.saveSetting("startupBehavior", val);
     if (window.driveSync) window.driveSync.scheduleUpload();
+  }
+
+  // ── Start page ──
+
+  /**
+   * 앱을 「/」로 열 때 처음 보일 화면(사용자 결정 2026-11-05). 모르는 값은 성서다 — 기도서처럼 값이 늘어난 판이 동기화로 보낸 값을
+   * 옛 판이 받아도 앱이 열린다.
+   * @returns {"bible" | "lectionary"}
+   */
+  function loadStartPage() {
+    try {
+      return localStorage.getItem(START_PAGE_KEY) === "lectionary" ? "lectionary" : "bible";
+    } catch {
+      return "bible";
+    }
+  }
+
+  /** @param {"bible" | "lectionary"} page */
+  function saveStartPage(page) {
+    try {
+      localStorage.setItem(START_PAGE_KEY, page);
+      window.syncStoreV2?.saveSetting("startPage", page);
+      if (window.driveSync) window.driveSync.scheduleUpload();
+    } catch (_) {}
   }
 
   // ── Cite/note visibility (ADR-022) ──
@@ -547,6 +573,29 @@ window.appStorage = (/** @returns {AppStorage} */ () => {
     } catch { /* quota / private mode */ }
   }
 
+  /**
+   * 대체 독서(대축일, 주요축일, 고유 독서가 있는 축일에 그날의 평일, 주일 줄)를 전례독서 목록에 보이는가 — 처음에는 숨긴다(사용자 결정 2026-11-05).
+   * 동기화가 쓰는 "true"/"false"도 읽는다(`loadCiteShow`와 같다).
+   * @returns {boolean}
+   */
+  function loadLectionaryAltShow() {
+    try {
+      const v = localStorage.getItem(LECTIONARY_ALT_SHOW_KEY);
+      return v === "1" || v === "true";
+    } catch {
+      return false;
+    }
+  }
+
+  /** @param {boolean} on */
+  function saveLectionaryAltShow(on) {
+    try {
+      localStorage.setItem(LECTIONARY_ALT_SHOW_KEY, on ? "1" : "0");
+      window.syncStoreV2?.saveSetting("lectionaryAltShow", on);
+      if (window.driveSync) window.driveSync.scheduleUpload();
+    } catch (_) {}
+  }
+
   return {
     FONT_SIZES, DEFAULT_FONT_SIZE, COLOR_SCHEMES, SEARCH_HISTORY_MAX,
     saveReadingPosition, loadReadingPosition, clearReadingPosition,
@@ -554,6 +603,7 @@ window.appStorage = (/** @returns {AppStorage} */ () => {
     normalizeSearchQuery, loadSearchHistory, loadSearchHistoryEntries, saveSearchHistory,
     pushSearchHistory, removeSearchHistory, clearSearchHistory,
     loadStartupBehavior, saveStartupBehavior,
+    loadStartPage, saveStartPage,
     loadCiteShow, saveCiteShow,
     loadAudioShow, saveAudioShow,
     loadFontSize, saveFontSize,
@@ -563,6 +613,7 @@ window.appStorage = (/** @returns {AppStorage} */ () => {
     generateId, loadBookmarks, saveBookmarks, rewriteBookmarks, projectedStorageChars,
     loadLectionaryTrack, saveLectionaryTrack,
     loadLectionaryCardsFolded, saveLectionaryCardsFolded,
+    loadLectionaryAltShow, saveLectionaryAltShow,
     _loadNudgeState, _saveNudgeState,
     _maybeRequestPersist,
   };

@@ -244,6 +244,18 @@ test("applyToLegacyKeys 는 아는 키만 localStorage 에 쓴다", () => {
   );
 });
 
+test("applyToLegacyKeys는 시작 페이지와 대체 독서 표시를 앱이 읽는 키에 쓴다(ADR-041 §8)", () => {
+  const { store, localStorage } = load();
+  store.applyToLegacyKeys(doc({
+    settings: {
+      startPage: { v: "lectionary", _u: 1 },
+      lectionaryAltShow: { v: true, _u: 1 },
+    },
+  }));
+  assert.equal(localStorage.getItem("bible-start-page"), "lectionary");
+  assert.equal(localStorage.getItem("bible-lectionary-alt-show"), "true");
+});
+
 // ── 저장 결과 (known-issues §15.4, 실패를 성공과 같은 값으로 돌려주지 않는다) ──
 
 test("applyToLegacyKeys는 브라우저가 거절한 키를 돌려주고, 나머지 키는 그대로 쓴다", () => {

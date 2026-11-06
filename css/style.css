@@ -469,16 +469,29 @@ body {
      the 0.5rem horizontal padding (≈ 17.85rem content). */
   width: 19rem;
   max-width: calc(100vw - 1rem);
-  /* When content (Drive info expanded, small viewport, large font) exceeds
-     vertical space, the popover scrolls instead of being clipped. Scrollbar
-     is hidden visually but scrolling still works via touch/wheel/keyboard. */
+  /* When content exceeds vertical space the popover scrolls instead of being
+     clipped. Unlike the rest of the app the scrollbar stays visible (thin):
+     the five sections are taller than a laptop window, and without it the
+     rows below the fold look missing (ADR-041 §1). */
   max-height: calc(100vh - 5rem);
   overflow-y: auto;
-  scrollbar-width: none; /* Firefox */
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--text) 24%, transparent) transparent;
 }
 
+/* Safari before 18.2 has no scrollbar-width; undo the global display:none. */
 .settings-popover::-webkit-scrollbar {
-  display: none; /* WebKit (Safari, Chrome) */
+  display: block;
+  width: 7px;
+}
+.settings-popover::-webkit-scrollbar-track {
+  background: transparent;
+}
+.settings-popover::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--text) 24%, transparent);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  border-radius: 999px;
 }
 
 /* Container is programmatically focused on pointer-driven open so the first
@@ -1310,6 +1323,56 @@ a.cal-cell:focus-visible { background: var(--bg-card); }
   margin-top: var(--space-2);
   padding-top: var(--space-2);
   border-top: 1px solid var(--border);
+}
+
+.settings-section-title {
+  margin: 0 0 var(--space-1);
+  font-size: var(--font-xs);
+  font-weight: 600;
+  line-height: var(--leading-tight);
+  color: var(--text-secondary);
+}
+
+/* The start page hides 「읽던 페이지에서 시작」; display:flex above would keep it. */
+.settings-row[hidden] {
+  display: none;
+}
+
+/* Native <select> in the toolbar-btn's box. The chevron is drawn on the wrapper:
+   a <select> has no ::after, and appearance:none removes the OS arrow. */
+.settings-select-wrap {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.settings-select-wrap::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: 0.75em;
+  width: 0.4em;
+  height: 0.4em;
+  border-right: 1.5px solid var(--text-secondary);
+  border-bottom: 1.5px solid var(--text-secondary);
+  font-size: var(--font-xs);
+  transform: translateY(-70%) rotate(45deg);
+  pointer-events: none;
+}
+
+.settings-select {
+  -webkit-appearance: none;
+  appearance: none;
+  font-family: inherit;
+  font-size: var(--font-xs);
+  color: var(--text);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  height: 28px;
+  min-width: 8em;
+  padding: 0 2em 0 0.7em;
+  cursor: pointer;
 }
 
 .settings-action-btn {

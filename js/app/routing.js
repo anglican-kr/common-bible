@@ -42,7 +42,7 @@ import {
 
 const { _$, clearNode, chUnit, isModifiedClick, focusSpotOf, restoreFocusSpot } = window.appHelpers;
 const {
-  loadStartupBehavior, loadReadingPosition, saveReadingPosition, loadBookOrder,
+  loadStartupBehavior, loadStartPage, loadReadingPosition, saveReadingPosition, loadBookOrder,
 } = window.appStorage;
 const { dismissLaunchScreen } = window.appSettings;
 const { readingContext } = window;
@@ -368,6 +368,17 @@ async function openLazyView(view, load, parsed, isStale) {
   }
 }
 
+/**
+ * 앱을 새로 여는 탐색인가 — 새로고침과 뒤로 가기로 다시 불러온 페이지는 아니다. 그때는 보던 화면에 머문다(사용자 결정 2026-11-06, ADR-041 §2).
+ * 자동 새로고침(서비스 워커 교체)과 당겨서 새로고침도 `reload`로 온다.
+ * @returns {boolean}
+ */
+function isFreshLaunch() {
+  const nav = /** @type {PerformanceNavigationTiming | undefined} */ (performance.getEntriesByType("navigation")[0]);
+  return nav?.type !== "reload" && nav?.type !== "back_forward";
+}
+
+
 async function route() {
   const isInitialLoad = _isInitialLoad;
   _isInitialLoad = false;
@@ -557,11 +568,17 @@ async function route() {
       return;
     }
 
+    // 시작 페이지 — 앱을 「/」로 새로 열 때만 적용한다. 그 뒤에 탭이나 뒤로 가기로 오는 「/」는 성서 목록이다(사용자 결정 2026-11-05).
+    if (view === "books" && isInitialLoad && isFreshLaunch() && loadStartPage() === "lectionary") {
+      navigate("/lectionary");
+      return;
+    }
+
     const books = await loadBooks();
     if (isStale()) return;
 
     if (view === "books") {
-      if (isInitialLoad && loadStartupBehavior() === "resume") {
+      if (isInitialLoad && isFreshLaunch() && loadStartupBehavior() === "resume") {
         const savedPos = loadReadingPosition();
         if (savedPos && savedPos.bookId) {
           navigate(`/${savedPos.bookId}/${savedPos.chapter}?resume=1`);
