@@ -1,4 +1,5 @@
 ---
+pr: 499
 date: 2026-11-06
 branch: feat/search-ignore-quotes
 title: "feat: 검색에서 따옴표를 무시"
