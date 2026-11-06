@@ -297,3 +297,113 @@ def test_merge_into_pre205_bookmark_keeps_its_verses(browser):
     store = page.evaluate("() => window.syncStoreV2.loadBookmarks()")
     assert [(b["verseSpec"], b["label"]) for b in store] == [("1,16", "이사 10:1,16")]
     ctx.close()
+
+
+# 인용 칩은 절 요소의 자식이 아니라 형제다. 그래서 절의 배경을 물려받지 못한다(ADR-022 §6).
+def _enter_select_with_chip(browser, path: str):
+    ctx = browser.new_context()
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    ctx.add_init_script("try { localStorage.setItem('bible-cite-coachmark-seen','1'); } catch(_) {}")
+    page = ctx.new_page()
+    _open_chapter_and_wait(page, path)
+    page.wait_for_selector(".cite-chip")
+    book, chapter = path.split("/")
+    page.evaluate(f"() => enterVerseSelectMode('{book}', {chapter})")
+    page.wait_for_selector("#verse-select-bar:not([hidden])")
+    return ctx, page
+
+
+# 칩과 그 앞 절 조각의 배경, 위아래, 안쪽 모서리를 잰다. `chip` 은 `.cite-chip` 을 찾는 선택자다.
+_CHIP_AND_SPAN = """async (chip) => {
+  // 선택 모드의 절 배경에는 전환 효과가 있다. 끝난 뒤의 값을 잰다.
+  await Promise.all(document.getAnimations().filter((a) => a instanceof CSSTransition).map((a) => a.finished));
+  const c = document.querySelector(chip);
+  const s = c.previousElementSibling;
+  const box = (e) => [...e.getClientRects()].at(-1);
+  const cs = getComputedStyle(c), ss = getComputedStyle(s);
+  return {
+    chipBg: cs.backgroundColor, spanBg: ss.backgroundColor,
+    chipTop: c.getClientRects()[0].top, chipBottom: c.getClientRects()[0].bottom,
+    spanTop: box(s).top, spanBottom: box(s).bottom,
+    chipEndRadius: cs.borderTopRightRadius, spanEndRadius: ss.borderTopRightRadius,
+    chipBottomRadius: cs.borderBottomRightRadius, spanBottomRadius: ss.borderBottomRightRadius,
+  };
+}"""
+
+
+def test_selected_verse_background_runs_through_its_cite_chip(browser):
+    """갈라 3:8은 인용 칩이 절 가운데에 있다. 고르면 칩도 절과 같은 색과 높이로 칠해지고, 선택을 해제하면 배경이 없어진다."""
+    ctx, page = _enter_select_with_chip(browser, "gal/3")
+    chip = '.cite-chip[data-cite-src="창세 12:3"]'
+
+    before = page.evaluate(_CHIP_AND_SPAN, chip)
+    assert before["chipBg"] == "rgba(0, 0, 0, 0)"
+
+    page.click("#v8")
+    m = page.evaluate(_CHIP_AND_SPAN, chip)
+    assert m["chipBg"] == m["spanBg"]
+    assert m["chipBg"] != "rgba(0, 0, 0, 0)"
+    # 글자가 작아도 배경은 턱 없이 이어진다.
+    assert m["chipTop"] == m["spanTop"]
+    assert m["chipBottom"] == m["spanBottom"]
+    # 칩 뒤에도 고른 조각이 이어지므로 안쪽 모서리는 둥글지 않다.
+    assert m["chipEndRadius"] == "0px"
+    assert m["spanEndRadius"] == "0px"
+
+    page.click("#v8")
+    assert page.evaluate(_CHIP_AND_SPAN, chip)["chipBg"] == "rgba(0, 0, 0, 0)"
+    ctx.close()
+
+
+def test_cite_chip_closes_a_selected_run_with_round_corners(browser):
+    """갈라 3:6은 칩으로 끝난다. 절의 끝 모서리는 평평해지고 칩의 바깥 모서리가 둥글다."""
+    ctx, page = _enter_select_with_chip(browser, "gal/3")
+    page.click("#v6")
+
+    m = page.evaluate(_CHIP_AND_SPAN, ".verse-selected + .cite-chip")
+    assert m["chipBg"] == m["spanBg"]
+    assert m["spanEndRadius"] == "0px"
+    assert m["chipEndRadius"] != "0px"
+    ctx.close()
+
+
+def test_selected_poetry_verse_background_reaches_its_cite_chip(browser):
+    """로마 11:8의 운문 칩은 절 아래 따로 한 줄이다. 칩과 절 사이에 빈틈이 없고 절의 아래 모서리는 평평하다."""
+    ctx, page = _enter_select_with_chip(browser, "rom/11")
+    page.click("#v8")
+
+    m = page.evaluate(_CHIP_AND_SPAN, ".verse-poetry.verse-selected + .cite-chip--poetry")
+    assert m["chipBg"] == m["spanBg"]
+    assert m["chipTop"] == m["spanBottom"]
+    assert m["spanBottomRadius"] == "0px"
+    ctx.close()
+
+
+def test_selected_cite_chip_label_keeps_contrast_in_dark_theme(browser):
+    """어두운 테마의 선택 배경에서 회색 글자는 3.98:1로 WCAG AA에 못 미쳐 본문 글자색을 쓴다."""
+    ctx, page = _enter_select_with_chip(browser, "gal/3")
+    page.evaluate("() => document.documentElement.setAttribute('data-theme', 'dark')")
+    page.click("#v8")
+
+    colors = page.evaluate("""() => {
+      const c = document.querySelector('.verse-selected + .cite-chip');
+      return [getComputedStyle(c.querySelector('.cite-chip-label')).color, getComputedStyle(c.previousElementSibling).color];
+    }""")
+    assert colors[0] == colors[1]
+    ctx.close()
+
+
+def test_highlighted_range_covers_its_cite_chip(browser):
+    """주소의 절 구간 강조(`/gal/3/8-10`)도 칩까지 칠한다."""
+    ctx = browser.new_context()
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    page = ctx.new_page()
+    _open_chapter_and_wait(page, "gal/3/8-10")
+    page.wait_for_selector(".verse-highlight + .cite-chip")
+
+    m = page.evaluate(_CHIP_AND_SPAN, ".verse-highlight + .cite-chip")
+    assert m["chipBg"] == m["spanBg"]
+    assert m["chipBg"] != "rgba(0, 0, 0, 0)"
+    assert m["chipTop"] == m["spanTop"]
+    assert m["chipEndRadius"] == "0px"
+    ctx.close()

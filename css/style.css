@@ -3050,6 +3050,15 @@ mark.search-highlight {
   background: rgba(196, 154, 108, 0.12) !important;
 }
 
+/* The chip after a highlighted span: corners are set with the chip rules (ADR-022). */
+.verse-highlight + .cite-chip {
+  background: rgba(107, 58, 42, 0.08);
+}
+
+[data-theme="dark"] .verse-highlight + .cite-chip {
+  background: rgba(196, 154, 108, 0.12);
+}
+
 /* ── Search Pagination ── */
 .search-pagination {
   display: flex;
@@ -3588,41 +3597,79 @@ mark.search-highlight {
   display: none;
 }
 
+/* The outer box keeps the verse's font: an inline box paints its background to
+   its own font's height, so a selected verse's background runs through the chip
+   without a step. The small label is the inner span. */
 body.cites-shown .cite-chip {
   display: inline;
-  /* No margin: appendSegText adds no trailing space to the piece before a chip
-     (pieceTrailingSpace in views.js), so this padding is the only gap on both
-     sides — it also keeps the hover background readable. */
-  margin: 0;
-  padding: 0 0.2em;
+  cursor: pointer;
+}
+
+body.cites-shown .cite-chip:focus-visible {
+  outline: none;
+}
+
+.cite-chip-label,
+body.cites-shown .cite-chip--poetry {
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
   font-size: 0.78em;
   color: var(--text-secondary);
-  background: transparent;
-  border: none;
-  border-radius: 3px;
-  cursor: pointer;
   line-height: var(--leading-tight);
-  vertical-align: baseline;
 }
 
-body.cites-shown .cite-chip:hover,
-body.cites-shown .cite-chip:focus-visible {
+.cite-chip-label {
+  /* No margin: appendSegText adds no trailing space to the piece before a chip
+     (pieceTrailingSpace in views.js), so this padding is the only gap on both
+     sides — it also keeps the hover background readable. */
+  padding: 0 0.2em;
+  border-radius: 3px;
+}
+
+body.cites-shown .cite-chip:hover .cite-chip-label,
+body.cites-shown .cite-chip:focus-visible .cite-chip-label,
+body.cites-shown .cite-chip--poetry:hover,
+body.cites-shown .cite-chip--poetry:focus-visible {
   background: var(--border);
   color: var(--text);
-  outline: none;
 }
 
 /* Poetry-segment chip renders on its own line below the verse (ADR-022 §6 운문 예외).
    Indent matches `.verse.verse-poetry` (2rem padding-left) so the chip aligns with
-   the poetry body text rather than the verse-number gutter. */
+   the poetry body text rather than the verse-number gutter. The gap above is padding,
+   not margin, so a selected verse's background reaches the chip. */
 body.cites-shown .cite-chip--poetry {
   display: block;
-  margin-left: 0;
-  margin-top: 0.2em;
+  padding-top: 0.2em;
   /* .verse.verse-poetry 와 동일하게 2rem (거터 결합값, 토큰 스냅 제외). */
   padding-left: 2rem;
   text-align: left;
+}
+
+.cite-chip--poetry .cite-chip-label {
+  padding: 0;
+  font-size: 1em;
+}
+
+/* A chip is a sibling of its verse's spans, not a child, so it does not inherit
+   the verse's background. It takes the highlight of the span in front of it
+   (.verse-selected · .verse-highlight set the color) and closes the run's corners:
+   the span gives up the corners that face the chip, the chip rounds the far ones. */
+body.cites-shown :is(.verse-selected, .verse-highlight):not(.verse-poetry):has(+ .cite-chip) {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+body.cites-shown .verse-poetry:is(.verse-selected, .verse-highlight):has(+ .cite-chip) {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+body.cites-shown :is(.verse-selected, .verse-highlight) + .cite-chip {
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+body.cites-shown :is(.verse-selected, .verse-highlight) + .cite-chip--poetry {
+  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+}
+body.cites-shown :is(.verse-selected-join-next, .verse-highlight-join-next) + .cite-chip {
+  border-radius: 0;
 }
 
 /* ── ADR-027 parallel-passage anchor (footnote pattern) ──────────────────
@@ -5734,6 +5781,10 @@ body.verse-select-active .verse[data-vref] {
   transition: background var(--duration-instant);
 }
 
+body.verse-select-active .cite-chip {
+  transition: background var(--duration-instant);
+}
+
 body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
   background: color-mix(in srgb, var(--accent) 10%, transparent);
   border-radius: var(--radius-sm);
@@ -5746,10 +5797,17 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
    leaving a visible darker column between adjacent selected verses. Pre-
    mixing with --bg makes "shadow alone", "box alone", and "shadow + box"
    all render the same color. */
-.verse.verse-selected {
+.verse.verse-selected,
+.verse.verse-selected + .cite-chip {
   --selected-bg: color-mix(in srgb, var(--accent) 20%, var(--bg));
   background: var(--selected-bg) !important;
   border-radius: var(--radius-sm);
+}
+
+/* --text-secondary on the selected background is 3.98:1 in the dark theme, under
+   WCAG AA for this small text; the light theme's 4.91:1 keeps the gray. */
+[data-theme="dark"] .verse.verse-selected + .cite-chip .cite-chip-label {
+  color: var(--text);
 }
 
 /* Extend the highlight 0.15em on each side without affecting inline layout.
@@ -5773,6 +5831,10 @@ body.verse-select-active .verse[data-vref]:not(.verse-selected):hover {
 }
 .verse.verse-selected.verse-selected-join-prev.verse-selected-join-next:not(.verse-poetry) {
   box-shadow: none;
+}
+/* The chip closing a run carries the extension on its far side. */
+.verse.verse-selected:not(.verse-poetry, .verse-selected-join-next) + .cite-chip {
+  box-shadow: 0.15em 0 0 var(--selected-bg);
 }
 
 /* In a run of consecutive selected verses, flatten the corners that abut

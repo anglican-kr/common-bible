@@ -156,6 +156,10 @@ window.appCitations = (/** @returns {AppCitations} */ () => {
    * `initCiteSheet` since a span gets none for free. Data attributes carry
    * src/tradition/parallels for the click delegation.
    *
+   * The small label is an inner span: an inline box paints its background to its
+   * own font's height, so the outer box keeps the verse's font and a selected
+   * verse's background runs through the chip without a step on any font.
+   *
    * @param {string} src
    * @param {ReadonlyArray<CiteParallelRef> | null | undefined} parallels
    * @param {string | null | undefined} tradition
@@ -179,7 +183,7 @@ window.appCitations = (/** @returns {AppCitations} */ () => {
       // notation as source markdown so `_parseParallelsAttr` can round-trip.
       attrs["data-cite-parallels"] = _serializeParallelsAttr(parallels);
     }
-    return el("span", attrs, label);
+    return el("span", attrs, el("span", { className: "cite-chip-label" }, label));
   }
 
   // Variant-style marker used when a note has no text anchor (typical case:

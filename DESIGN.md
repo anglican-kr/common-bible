@@ -309,7 +309,7 @@ HIG의 절제된 깊이 표현이다. 라이트 기준 값이며, **다크에서
 | 바텀 시트 / 사이드 패널 | `#cite-sheet`·`#bookmark-drawer`·`.book-filter-sheet` | 모바일과 터치: 하단 시트(상단 `--radius-xl`, `--shadow-sheet`, 핸들, 높이 드래그 리사이즈, 안전 영역). `pointer:fine`이고 ≥769px: 우측 패널(`--shadow-drawer`, 좌측 가장자리 폭 리사이즈) | ADR-022·032 |
 | 모달 | install/disconnect/bookmark 다이얼로그 | 중앙 정렬, `--radius-modal`, `--shadow-4`, scrim `rgba(0,0,0,.45)` | ADR-008 |
 | 툴팁(주석) | `.note-tooltip`·`.note-anchor`(※) | 클릭 트리거, footnote 패턴 | ADR-022·027 |
-| 인용 칩 | `.cite-chip` | 옅은 회색 칩, 클릭하면 인용 시트 | ADR-022 |
+| 인용 칩 | `.cite-chip`·`.cite-chip-label` | 옅은 회색 칩, 클릭하면 인용 시트. 앞 절을 고르거나 강조하면 같은 배경색을 받는다 | ADR-022 |
 | 토글 스위치 | `.settings` 토글 | iOS, Material, desktop 변형. ON일 때 `--accent`. 상태 설명(`.settings-toggle-caption`, 외경)은 이름 오른쪽 같은 줄에 `--font-xs`, `--text-secondary`로 두고, 들어가지 않으면 이름 아래로 내린다 | ADR-023 |
 | 세그먼트 | `.btn-group`·`.toolbar-btn[aria-pressed]` | 설정에서 값을 고르는 단추 묶음이다(시작 화면, 글자 크기, 테마). 묶음의 폭은 모두 11rem이고 단추가 그 폭을 똑같이 나눈다. 왼쪽 테두리가 없는 단추도 폭이 같도록 `grid`로 나눈다 | ADR-041 |
 | 설정 섹션 | `.settings-section`·`.settings-section-title` | 설정의 묶음이다. 차례는 시작, 성서, 전례독서, 모양, 시스템이다. 이름은 `<h2>`이고 `--font-xs`, 굵기 600, `--text-secondary`다. 첫 섹션 뒤로 섹션마다 위에 `--border` 1px 가로선을 둔다 | ADR-041 |
