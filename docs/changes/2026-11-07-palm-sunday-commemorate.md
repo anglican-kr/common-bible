@@ -1,4 +1,5 @@
 ---
+pr: 504
 date: 2026-11-07
 branch: fix/palm-sunday-commemorate
 title: "fix: 성지주일에 걸린 축일을 기념으로 처리"
