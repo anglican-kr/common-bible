@@ -2353,6 +2353,18 @@ test("77b. 병합 결과를 저장하면 옛 키를 쓴 뒤 열린 화면을 다
   assert.deepEqual(await run({ v2: { mergeDocs: (l) => l } }), [1], "다른 기기의 변경으로 세지 않는 병합도 판단하게 한다");
 });
 
+test("77c. 동기화가 화면을 다시 그리면 안내는 그 뒤에 띄운다 — 다시 그린 화면의 제목 알림이 안내를 덮지 않게(ADR-041 §8)", async () => {
+  const h = mergeSaveMachine();
+  let finishRedraw;
+  h.ctx.redrawIfSyncedSettingsChanged = () => new Promise((resolve) => { finishRedraw = resolve; });
+  h.machine.enable();
+  await h.drain(8);
+  assert.deepEqual(h.snackbar, [], "다시 그리는 동안에는 띄우지 않는다");
+  finishRedraw();
+  await h.drain(2);
+  assert.deepEqual(h.snackbar, ["다른 기기에서 변경된 데이터를 불러왔습니다."]);
+});
+
 // ── Group 20: 기준 목록 1단계 (사용자 결정 2026-10-31) ─────────────────────────────────────────────
 // 기준 목록은 마지막으로 내려받아 병합한 드라이브 파일에 살아 있던 북마크 id다(store-v2.js saveBaseIds). 병합 결과를 저장한
 // 뒤, 올리기 전에 내려받은 파일로 쓴다. 올린 문서로 만들면, 쓰기 보호가 없어(known-issues §42) 그 파일을 덮어쓴 기기와 겹칠

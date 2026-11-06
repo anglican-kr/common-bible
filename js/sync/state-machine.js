@@ -642,7 +642,7 @@ function createSyncMachine({ onStateChange } = {}) {
     else if (typeof window.renderBookmarkTree === "function") window.renderBookmarkTree();
     // The saved values may now differ from what the open view drew, with or without a newer time: of two copies with
     // the same time the merge keeps Drive's. The function compares them and redraws only then (ADR-041 §8).
-    window.redrawIfSyncedSettingsChanged?.();
+    const redrawn = window.redrawIfSyncedSettingsChanged?.();
     if (hadRemoteChanges) {
       // SyncSettings stores `MTimed<unknown>`; the apply* helpers expect
       // narrowed primitive types. Cast at the boundary — runtime guarantees
@@ -653,7 +653,10 @@ function createSyncMachine({ onStateChange } = {}) {
       if (s.theme?.v       != null && typeof window.applyTheme       === "function") window.applyTheme(/** @type {string} */ (s.theme.v));
       if (s.citeShow?.v    != null && typeof window.applyCiteShow    === "function") window.applyCiteShow(/** @type {boolean} */ (s.citeShow.v));
       if (s.audioShow?.v   != null && typeof window.applyAudioShow   === "function") window.applyAudioShow(/** @type {boolean} */ (s.audioShow.v));
-      _snackbar("다른 기기에서 변경된 데이터를 불러왔습니다.");
+      // A redrawn view announces its title. Say this after it, or a screen reader hears only the title.
+      const notify = () => _snackbar("다른 기기에서 변경된 데이터를 불러왔습니다.");
+      if (redrawn) redrawn.finally(notify);
+      else notify();
     }
     return outcome;
   }

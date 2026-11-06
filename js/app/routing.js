@@ -384,17 +384,25 @@ let _drawnWith = { altShow: loadLectionaryAltShow(), bookOrder: loadBookOrder() 
 
 /**
  * 동기화로 받은 값이 열려 있는 화면의 내용을 바꾸면 다시 그린다(ADR-041 §8). 병합 결과를 저장할 때마다 호출되지만, 값이
- * 그대로이거나 그 값을 쓰지 않는 화면이면 다시 그리지 않아 읽던 위치와 열린 창이 그대로 남는다.
+ * 그대로이거나 그 값을 쓰지 않는 화면이면 다시 그리지 않아 읽던 위치와 열린 창이 그대로 남는다. 외경은 화면에 성서 목록이
+ * 있는지로 본다. 데스크톱의 설정, 북마크, 빈 검색 주소도 성서 목록을 그리기 때문이다.
+ * @returns {Promise<void> | undefined} 다시 그릴 때 그 끝을 알리는 약속. 다시 그린 화면이 제목을 알리므로 동기화 안내는 그 뒤에 띄운다
  */
 function redrawIfSyncedSettingsChanged() {
-  const { view } = parsePath();
-  const changed = view === "lectionary"
+  const changed = parsePath().view === "lectionary"
     ? loadLectionaryAltShow() !== _drawnWith.altShow
-    : (view === "books" || view === "division") && loadBookOrder() !== _drawnWith.bookOrder;
-  if (changed) route();
+    : $app.querySelector(".book-list") !== null && loadBookOrder() !== _drawnWith.bookOrder;
+  return changed ? route() : undefined;
 }
 
 async function route() {
+  // In vulgate mode, deuterocanon has no separate tab — redirect to old_testament. Ahead of the sequence number below,
+  // so a caller of route() holds the number of the route that draws the view (settings-ui.js redrawThenAnnounce).
+  const target = parsePath();
+  if (target.view === "division" && target.division === "deuterocanon" && loadBookOrder() === "vulgate") {
+    history.pushState(null, "", "/old_testament");
+    return route();
+  }
   const isInitialLoad = _isInitialLoad;
   _isInitialLoad = false;
   _drawnWith = { altShow: loadLectionaryAltShow(), bookOrder: loadBookOrder() };
@@ -613,11 +621,6 @@ async function route() {
 
     if (view === "division") {
       const { division } = parsed;
-      // In vulgate mode, deuterocanon has no separate tab — redirect to old_testament
-      if (division === "deuterocanon" && loadBookOrder() === "vulgate") {
-        navigate("/old_testament");
-        return;
-      }
       dismissLaunchScreen(); // Start fade-out immediately
       renderBookList(books, division);
       const divLabel = DIVISION_LABELS[division] ?? division;

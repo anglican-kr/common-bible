@@ -350,6 +350,16 @@ window.appSettings = (/** @returns {AppSettings} */ () => {
     return row;
   }
 
+  // route() announces the view it draws, so a toggle's result goes after it, or that replaces the result. If the user
+  // has moved on by then, the new view's title stays.
+  /** @param {string} msg */
+  async function redrawThenAnnounce(msg) {
+    const drawing = route();
+    const seq = window.routeSeq?.();
+    await drawing;
+    if (window.routeSeq?.() === seq) announce(msg);
+  }
+
   /** @param {string} title @returns {HTMLElement} */
   function makeSection(title) {
     const section = el("section", { className: "settings-section" });
@@ -415,12 +425,12 @@ window.appSettings = (/** @returns {AppSettings} */ () => {
       labelText: "외경",
       checked: loadBookOrder() === "vulgate",
       getCaption: (on) => (on ? "구약에 포함" : "별도 섹션에 표시"),
-      onToggle: async (on) => {
+      onToggle: (on) => {
         saveBookOrder(on ? "vulgate" : "canonical");
         const { view } = parsePath();
-        // route() announces the view it draws. Announce after it, or that replaces the toggle's result.
-        if (view !== "chapter" && view !== "prologue") await route();
-        announce(on ? "구약에 외경 포함" : "외경 분리");
+        const result = on ? "구약에 외경 포함" : "외경 분리";
+        if (view === "chapter" || view === "prologue") announce(result);
+        else redrawThenAnnounce(result);
       },
     });
 
@@ -459,13 +469,13 @@ window.appSettings = (/** @returns {AppSettings} */ () => {
     lectionarySection.appendChild(makeToggleRow({
       labelText: "대체 독서 표시",
       checked: loadLectionaryAltShow(),
-      onToggle: async (on) => {
+      onToggle: (on) => {
         saveLectionaryAltShow(on);
+        const result = on ? "대체 독서 표시" : "대체 독서 숨김";
         // The desktop popover opens over the lectionary, whose list must follow. A
         // redraw closes the popover, as the 외경 toggle does over the book list.
-        // route() announces the view it draws. Announce after it, or that replaces the toggle's result.
-        if (parsePath().view === "lectionary") await route();
-        announce(on ? "대체 독서 표시" : "대체 독서 숨김");
+        if (parsePath().view === "lectionary") redrawThenAnnounce(result);
+        else announce(result);
       },
     }));
     target.appendChild(lectionarySection);

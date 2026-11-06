@@ -311,6 +311,7 @@ def test_toggle_result_is_announced_after_the_view_redraws(browser):
     """토글이 화면을 다시 그리면 화면 제목을 알린 뒤에 결과를 알린다. 스크린 리더가 듣는 마지막 말이 토글 결과다."""
     for path, ready, switch, said in (
         ("", ".book-list", "외경", "구약에 외경 포함"),
+        ("/deuterocanon", ".book-list", "외경", "구약에 외경 포함"),   # 외경 탭이 없어져 구약으로 옮긴 뒤에 알린다
         ("/lectionary/2026-06-29", ".lectionary", "대체 독서 표시", "대체 독서 표시"),
     ):
         ctx = browser.new_context()
@@ -328,6 +329,38 @@ def test_toggle_result_is_announced_after_the_view_redraws(browser):
             assert page.inner_text("#a11y-announce") == said, path
         finally:
             ctx.close()
+
+
+def test_toggle_result_keeps_the_title_of_a_view_opened_meanwhile(browser):
+    """자료를 받는 동안 토글을 누르고 다른 화면으로 옮기면, 다시 그리기가 끝나도 새 화면의 제목 알림이 남는다."""
+    ctx = browser.new_context()
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    page = ctx.new_page()
+    held = []
+    try:
+        _open(page)
+        page.route("**/data/lectionary/**", lambda route: held.append(route))   # 전례독서 자료를 받지 못한 채 머문다
+        page.evaluate("() => window.navigate('/lectionary/2026-06-29')")
+        page.wait_for_selector(".loading")
+        for _ in range(100):             # 자료 요청이 나갈 때까지 기다린다
+            if held:
+                break
+            page.wait_for_timeout(50)
+        assert held
+        pop = open_settings(page)
+        page.evaluate(RECORD_ANNOUNCEMENTS)
+        pop.get_by_role("switch", name="대체 독서 표시").click()
+        page.evaluate("() => window.navigate('/john/3')")
+        page.wait_for_selector(".chapter-text")
+        page.wait_for_function("() => window.__said.length > 0")
+        title = page.evaluate("() => window.__said.at(-1)")
+        assert "3" in title, title
+        for route in held:
+            route.continue_()
+        page.wait_for_timeout(500)       # 옛 다시 그리기가 끝난 뒤에도 새 화면의 제목이 남아 있다
+        assert page.evaluate("() => window.__said.at(-1)") == title
+    finally:
+        ctx.close()
 
 
 # ── 시작 화면 ─────────────────────────────────────────────────────────────────

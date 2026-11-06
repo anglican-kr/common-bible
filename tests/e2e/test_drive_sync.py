@@ -415,8 +415,27 @@ def test_synced_setting_redraws_only_the_view_it_changes(browser, fake_drive, fa
         _sync_now(page_b)
         assert "Genesis 1" in _bookmark_names(page_b)
         assert page_b.locator(".lectionary[data-keep='1']").count() == 1
+        # 다시 그린 화면의 제목 알림이 동기화 결과 안내를 덮지 않는다
+        page_b.evaluate("""() => {
+          window.__said = [];
+          const live = document.getElementById('a11y-announce');
+          new MutationObserver(() => { if (live.textContent) window.__said.push(live.textContent); })
+            .observe(live, { childList: true, characterData: true, subtree: true });
+        }""")
         from_a("window.appStorage.saveLectionaryAltShow(true)")
         page_b.wait_for_selector(".lect-choice:has-text('연중 13주 월요일')")
+        page_b.wait_for_timeout(300)
+        assert page_b.evaluate("() => window.__said.at(-1)") == "다른 기기에서 변경된 데이터를 불러왔습니다."
+
+        # 데스크톱의 설정 주소는 성서 목록 위에 설정을 연다. 목록이 보이니 같게 다시 그린다
+        tab = "a[href='/deuterocanon']"
+        go("/settings", ".book-list")
+        assert page_b.locator(tab).count() == 1
+        from_a("window.appStorage.saveBookOrder('vulgate')")
+        page_b.wait_for_selector(tab, state="detached")
+        page_b.wait_for_selector(".settings-popover:not([hidden])")
+        from_a("window.appStorage.saveBookOrder('canonical')")
+        page_b.wait_for_selector(tab)
 
         # 성서 목록 — 외경이 구약에 들어가면 외경 탭이 없어지고 그 주소는 구약으로 옮긴다
         go("/deuterocanon", ".book-list")

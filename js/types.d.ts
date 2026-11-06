@@ -1348,7 +1348,7 @@ declare global {
     applyCiteShow?: (on: boolean) => void;
     applyAudioShow?: (on: boolean) => void;
     // routing.js: redraws the open view when a synced setting changed what it shows; state-machine.js calls it.
-    redrawIfSyncedSettingsChanged?: () => void;
+    redrawIfSyncedSettingsChanged?: () => Promise<void> | undefined;
     // Manual SW update check — set by app.js inside registerServiceWorker()
     // so it can capture the registration and reuse showUpdateToast(). Returns
     // a status object the caller can surface as transient feedback.
