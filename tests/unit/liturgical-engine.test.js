@@ -1508,6 +1508,13 @@ test("C-6.1-11 · C-6.1-12 사계재 · 기념일은 지정 전례일이 아니�
   same(tm.color, "white");
 });
 
+test("R-6.4-color-order 대체 독서인 축일의 색은 그날 색을 덮지 않는다 — 그 본문을 고를 때만 쓴다(사용자 결정 2026-11-07, ADR-038 §3)", () => {
+  const grid = { observance: { color: "green", color_alt: null } };
+  const feast = (extra) => ({ status: "proper", observance: { id: "d0211-x", kind: "sanctoral", color: "violet", color_alt: null, ...extra } });
+  assert.deepStrictEqual([...ctx.dayColorsOf("2028-02-11", grid, feast({}), []).colors], ["violet"]);
+  assert.deepStrictEqual([...ctx.dayColorsOf("2028-02-11", grid, feast({ alternate_readings: true }), []).colors], ["green"]);
+});
+
 test("commemorate_only — 밀린 주일로 정의된 C 그룹(합성)은 commemorated(displacedBy), 지정 전례일이면 색이 비어 절기 바탕", () => {
   const r = rb("2022-11-20");   // 11월 셋째 주일 = 왕이신 그리스도 주일(대림1 2022-11-27)
   same(officialId(r), "t-kingship");

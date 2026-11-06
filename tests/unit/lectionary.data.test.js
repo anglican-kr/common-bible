@@ -578,6 +578,7 @@ test("2.11 병자를 위한 기도일 — 2025-2050 모든 해, 기본 독서는
     const d = `${y}-02-11`;
     const m = model(d);
     assert.notStrictEqual(id(m.selected), OBS, d);   // 처음에는 그날의 기본 독서다
+    same(m.colors, resolve(d).colors, d);
     same(m.textlessDays.map(id), [], d);
     for (const on of [true, false]) {
       const rows = model(d, NONE, null, on).choices.filter((c) => id(c.candidate) === OBS);
@@ -590,6 +591,7 @@ test("2.11 병자를 위한 기도일 — 2025-2050 모든 해, 기본 독서는
     assert.strictEqual(id(p.selected), OBS, d);
     assert.strictEqual(p.dayName, "병자를 위한 기도일", d);
     assert.strictEqual(p.selectedNote, "대체 독서", d);
+    same(p.colors, ["violet"], d);   // 고르면 기도서의 자색이다(사용자 결정 2026-11-07)
     // 독서는 시편만 다른 두 세트이고, 본기도의 이름 자리는 줄바꿈 없는 공백이다
     same(p.options.map((o) => o.group.readings.map((r) => r.label).join(" / ")), [
       "열왕하 20:1-5 / 시편 13 / 야고 5:13-16 / 마르 2:1-12",
@@ -602,6 +604,9 @@ test("2.11 병자를 위한 기도일 — 2025-2050 모든 해, 기본 독서는
     assert.ok(p.choices.some((c) => id(c.candidate) === id(m.selected)), d);
   }
   assert.strictEqual(official, 21);   // 등급은 축일 그대로다 — 기념만 하는 5해(위 시험)를 뺀 해에 그날의 대표다
+  // 그날의 색은 자색으로 덮이지 않는다 — 처음 화면과 캘린더 칸은 그날의 전례일 색이다
+  same(resolve("2028-02-11").colors, ["green"]);
+  same(model("2028-02-11").colors, ["green"]);
 });
 
 test("주일에는 성인 본기도를 잇지 않는다 — 2025-2050 모든 주일, 평일에 밀려 기념만 하는 성인은 잇는다(사용자 확인 2026-11-04)", { skip: SKIP }, () => {
