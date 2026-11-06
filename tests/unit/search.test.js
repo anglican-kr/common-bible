@@ -1391,28 +1391,45 @@ test("appendTextWithHighlight: 따옴표만 친 검색어는 강조하지 않는
 // 장 화면은 한 절을 조각으로 나눠 그린다(인용 앞뒤, 시의 줄마다). 조각 끝의 간격용 공백까지 그대로 넣는다.
 test("splitPiecesByMatches: 인용을 사이에 둔 일치를 조각마다 나눠 준다 (갈라 3:8)", () => {
   const h = loadPureHelpers();
+  // 화면이 그리는 모양: 여는 따옴표로 끝난 조각과 칩이 뒤따르는 조각에는 끝 공백이 없다.
   const parts = h.splitPiecesByMatches(
-    ["성서는 아브라함에게 “ ", "너로 말미암아 복을 받으리라.", "”는 복음을 전했다. "],
+    ["성서는 아브라함에게 “", "너로 말미암아 복을 받으리라.", "”는 복음을 전했다. "],
     "아브라함에게 너로",
   );
   assert.deepEqual(parts, [
-    [{ text: "성서는 ", mark: false }, { text: "아브라함에게 “ ", mark: true }],
+    [{ text: "성서는 ", mark: false }, { text: "아브라함에게 “", mark: true }],
     [{ text: "너로", mark: true }, { text: " 말미암아 복을 받으리라.", mark: false }],
     [{ text: "”는 복음을 전했다. ", mark: false }],
   ]);
 });
 
-test("splitPiecesByMatches: 조각 끝에 공백이 없어도(인용 칩이 뒤따르는 조각) 인덱스처럼 공백 한 칸으로 이어 찾는다", () => {
+test("splitPiecesByMatches: 새 색인처럼 조각을 붙여 이은 글에서 찾는다(화면에 보이는 대로 이어 친 문구)", () => {
   const h = loadPureHelpers();
-  const pieces = ["너로 말미암아 복을 받으리라.", "”는 복음을 전했다. "];
-  // 인덱스는 조각 사이에 공백 한 칸을 넣어 `받으리라. ”는 복음`이다.
-  assert.deepEqual(h.splitPiecesByMatches(pieces, "받으리라. 는 복음"), [
+  // 칩이 뒤따르는 조각 끝에는 공백이 없다: 화면 글은 `받으리라.”는 복음`.
+  assert.deepEqual(h.splitPiecesByMatches(["너로 말미암아 복을 받으리라.", "”는 복음을 전했다. "], "받으리라.”는 복음"), [
     [{ text: "너로 말미암아 복을 ", mark: false }, { text: "받으리라.", mark: true }],
     [{ text: "”는 복음", mark: true }, { text: "을 전했다. ", mark: false }],
   ]);
-  // 붙여 친 `받으리라.”는`은 인덱스에 없는 글이라 워커도 찾지 못한다(docs/topics/search.md 「남은 일」).
-  const none = h.splitPiecesByMatches(pieces, "받으리라.는 복음");
+});
+
+test("splitPiecesByMatches: 옛 색인처럼 조각 사이에 공백 한 칸을 둔 문구도 찾는다", () => {
+  const h = loadPureHelpers();
+  // 옛 색인은 조각 사이에 공백을 넣어 `받으리라. ”는 복음`이다. 두 저장소가 따로 배포되므로 둘 다 맞아야 한다.
+  assert.deepEqual(h.splitPiecesByMatches(["너로 말미암아 복을 받으리라.", "”는 복음을 전했다. "], "받으리라. 는 복음"), [
+    [{ text: "너로 말미암아 복을 ", mark: false }, { text: "받으리라.", mark: true }],
+    [{ text: "”는 복음", mark: true }, { text: "을 전했다. ", mark: false }],
+  ]);
+  // 둘 다 맞지 않는 문구는 강조가 없다.
+  const none = h.splitPiecesByMatches(["너로 말미암아 복을 받으리라.", "”는 복음을 전했다. "], "받으리라 복음");
   assert.ok(none.every((parts) => parts.every((p) => !p.mark)));
+});
+
+test("splitPiecesByMatches: 붙여 이은 글에서 찾으면 공백 한 칸으로 이은 글은 보지 않는다", () => {
+  const h = loadPureHelpers();
+  // `가나`가 두 조각에 걸쳐 있으면 붙여 이은 글의 범위를 쓴다: 공백 한 칸으로 이은 글에는 이 범위가 없다.
+  assert.deepEqual(h.splitPiecesByMatches(["가", "나다"], "가나"), [
+    [{ text: "가", mark: true }], [{ text: "나", mark: true }, { text: "다", mark: false }],
+  ]);
 });
 
 test("splitPiecesByMatches: 시의 줄 사이에 걸친 일치", () => {
@@ -1477,16 +1494,28 @@ function verseWithPieces(h, pieces) {
 
 test("highlightTextNodes: 조각을 넘는 일치를 감싸고 본문은 한 글자도 바뀌지 않는다", () => {
   const h = loadPureHelpers();
-  const { verse, nodes } = verseWithPieces(h, ["성서는 아브라함에게 “ ", "너로 말미암아 복을 받으리라.", "”는 복음을 전했다. "]);
+  const { verse, nodes } = verseWithPieces(h, ["성서는 아브라함에게 “", "너로 말미암아 복을 받으리라.", "”는 복음을 전했다. "]);
   const before = verse.textContent;
   h.highlightTextNodes(nodes, "아브라함에게 너로");
   assert.strictEqual(verse.textContent, before);
   const kinds = verse.children.map((c) => (c.tagName === "MARK" ? `mark:${c.textContent}` : c.tagName || `text:${c.data}`));
-  assert.deepEqual(kinds, ["SUP", "text:성서는 ", "mark:아브라함에게 “ ", "mark:너로", "text: 말미암아 복을 받으리라.", "text:”는 복음을 전했다. "]);
+  assert.deepEqual(kinds, ["SUP", "text:성서는 ", "mark:아브라함에게 “", "mark:너로", "text: 말미암아 복을 받으리라.", "text:”는 복음을 전했다. "]);
   // 일치가 없는 조각은 같은 노드로 남고, 바뀐 조각의 옛 노드는 빠진다.
   assert.ok(verse.children.includes(nodes[2]));
   assert.ok(!verse.children.includes(nodes[0]) && !verse.children.includes(nodes[1]));
   assert.ok(verse.children.filter((c) => c.tagName === "MARK").every((m) => m.attributes.class === "search-highlight" && m.attributes.role === "presentation"));
+});
+
+test("highlightTextNodes: 닫는 따옴표를 사이에 둔 문구를 화면에 보이는 대로 쳐도, 옛 색인의 모양으로 쳐도 강조한다", () => {
+  const h = loadPureHelpers();
+  for (const query of ["받으리라.”는 복음", "받으리라. 는 복음"]) {
+    const { verse, nodes } = verseWithPieces(h, ["성서는 아브라함에게 “", "너로 말미암아 복을 받으리라.", "”는 복음을 전했다. "]);
+    const before = verse.textContent;
+    h.highlightTextNodes(nodes, query);
+    assert.strictEqual(verse.textContent, before, query);
+    const marks = verse.children.filter((c) => c.tagName === "MARK").map((m) => m.textContent);
+    assert.deepEqual(marks, ["받으리라.", "”는 복음"], query);
+  }
 });
 
 test("highlightTextNodes: 검색어가 비었거나 일치가 없으면 노드를 건드리지 않는다", () => {

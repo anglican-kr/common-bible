@@ -244,3 +244,32 @@ def test_search_phrase_across_poem_lines_is_highlighted_in_chapter(page, base_ur
 
     assert [m.strip() for m in _marks(page)] == ["나의 목자,", "아쉬울 것"]
     assert _chapter_text(page) == plain, "강조가 본문을 바꿨다(글이 빠지거나 겹쳤다)"
+
+
+def test_search_phrase_across_cite_and_closing_quote_is_highlighted_in_chapter(page, base_url):
+    """인용 조각 바로 뒤의 닫는 따옴표(`받으리라.”는 복음`)를 넘는 문구도 장 화면에서 두 조각에 걸쳐 강조한다.
+
+    검색 색인은 인용 조각 뒤에 공백을 넣었다가 넣지 않도록 바뀐다(데이터 저장소 인덱서). 그래서 찾아지는 문구가
+    색인에 따라 다르다: 옛 색인은 `받으리라. 는 복음`, 새 색인은 화면에 보이는 대로 `받으리라.”는 복음`. 어느 색인이
+    쓰이든 둘 중 하나는 찾아져야 하고, 찾아진 문구는 강조가 두 조각에 걸쳐야 한다."""
+    page.goto(f"{base_url}/gal/3")
+    page.wait_for_selector("article.chapter-text .verse", timeout=8_000)
+    plain = _chapter_text(page)
+
+    found = None
+    for query in ("받으리라.”는 복음", "받으리라. 는 복음"):
+        page.goto(base_url)
+        wait_app_ready(page)
+        page.fill("#search-input", query)
+        page.press("#search-input", "Enter")
+        page.wait_for_selector(".search-count, .empty-state", timeout=8_000)
+        link = page.locator('.search-result-item a[href^="/gal/3/8"]')
+        if link.count() == 1:
+            link.first.click()
+            page.wait_for_selector("article.chapter-text mark.search-highlight", timeout=8_000)
+            found = query
+            break
+    assert found, "두 문구 가운데 어느 것도 갈라 3:8을 찾지 못했다"
+
+    assert [m.strip() for m in _marks(page)] == ["받으리라.", "”는 복음"], found
+    assert _chapter_text(page) == plain, "강조가 본문을 바꿨다(글이 빠지거나 겹쳤다)"

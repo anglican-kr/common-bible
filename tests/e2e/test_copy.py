@@ -150,6 +150,37 @@ def test_copy_excludes_citation_chip_and_note_marker(page):
     assert "※" not in text, f"note marker leaked into copy: {text!r}"
 
 
+# ── 인용 앞의 여는 따옴표 뒤에는 공백이 없다 ─────────────────────────────────
+
+_SELECT_GAL_3_8 = """
+  const spans = [...document.querySelectorAll('article.chapter-text .verse')]
+    .filter(s => /^8[a-z]?$/.test(s.getAttribute('data-vref')));
+  const r = document.createRange();
+  r.setStartBefore(spans[0]);
+  r.setEndAfter(spans[spans.length - 1]);
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(r);
+"""
+
+
+def test_no_space_between_opening_quote_and_quoted_passage(page):
+    """갈라 3:8 `아브라함에게 “<cite>너로 …</cite>”는 복음` — 원본에는 여는 따옴표와 인용문 사이에 공백이 없다.
+
+    화면이 조각(앞, 인용, 뒤) 끝마다 붙이던 공백 한 칸이 `“ 너로`로 보였고 복사한 글에도 들어갔다.
+    여는 따옴표로 끝나는 조각에는 공백을 붙이지 않는다(pieceTrailingSpace)."""
+    page.context.grant_permissions(["clipboard-read", "clipboard-write"])
+    page.goto(f"{BASE}/gal/3")
+    page.wait_for_selector("article.chapter-text .verse")
+    page.wait_for_timeout(150)
+
+    before_quote = page.locator('article.chapter-text .verse[data-vref="8a"]').first.text_content()
+    assert before_quote.endswith("아브라함에게 “"), repr(before_quote[-12:])
+
+    text = _copy_text(page, _SELECT_GAL_3_8)
+    assert "아브라함에게 “너로 말미암아 만백성이 복을 받으리라.”는 복음" in text, text
+
+
 # ── Verse-select bar 복사 button ─────────────────────────────────────────────
 
 def test_verse_select_copy_button_emits_text_with_citation(page):

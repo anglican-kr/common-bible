@@ -192,16 +192,24 @@ function findMatchRanges(text, query) {
  * Split text pieces into parts, marking what matches `query`. The pieces are
  * adjacent text of one verse (the chapter view draws a verse as several pieces:
  * around a `<cite>`, one per line of a poem), so a match can run across pieces.
- * They are joined with one space — the way the search index joins a verse's
- * segments (search_indexer.py) — and searched once with findMatchRanges; each
- * piece then gets only the part of every range that overlaps it. A piece with no
- * overlap comes back as one unmarked part, an empty piece as no part.
+ * They are joined as they are drawn and searched once with findMatchRanges — the
+ * text the search index holds, since the indexer (common-bible-data
+ * `segments_text`) glues the pieces the view draws tight. When that finds
+ * nothing they are joined with one space, the text of the index before that
+ * change: the two repositories ship separately, so either index can be in use.
+ * Each piece then gets only the part of every range that overlaps it. A piece
+ * with no overlap comes back as one unmarked part, an empty piece as no part.
  * @param {ReadonlyArray<string>} texts
  * @param {string | null} query
  * @returns {Array<Array<{ text: string, mark: boolean }>>} parts per piece, in order
  */
 function splitPiecesByMatches(texts, query) {
-  const ranges = query ? findMatchRanges(texts.join(" "), query) : [];
+  let ranges = query ? findMatchRanges(texts.join(""), query) : [];
+  let gap = 0; // what joins two pieces: nothing, or one space
+  if (query && ranges.length === 0 && texts.length > 1) {
+    ranges = findMatchRanges(texts.join(" "), query);
+    gap = 1;
+  }
   let base = 0;
   return texts.map((text) => {
     const end = base + text.length;
@@ -217,7 +225,7 @@ function splitPiecesByMatches(texts, query) {
       pos = b;
     }
     if (pos < text.length) parts.push({ text: text.substring(pos), mark: false });
-    base = end + 1; // the joining space belongs to no piece
+    base = end + gap; // the joining space, if any, belongs to no piece
     return parts;
   });
 }

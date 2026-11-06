@@ -3590,8 +3590,9 @@ mark.search-highlight {
 
 body.cites-shown .cite-chip {
   display: inline;
-  /* No left-margin — the trailing space appended by appendSegText already
-     provides a natural gap. Small padding keeps hover background readable. */
+  /* No margin: appendSegText adds no trailing space to the piece before a chip
+     (pieceTrailingSpace in views.js), so this padding is the only gap on both
+     sides — it also keeps the hover background readable. */
   margin: 0;
   padding: 0 0.2em;
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
