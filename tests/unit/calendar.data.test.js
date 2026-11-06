@@ -125,6 +125,15 @@ test("전례년 경계(미결3) — 2026-11-29 대림 1주일에 「나해 시�
   }
 });
 
+test("성지주일의 축일은 주간과 목록 줄에 보통 글로, 성주간 평일의 축일은 흐린 「· 생략」으로 보인다 — 2027-03-21 · 2035-03-21 토마스 크랜머(사용자 결정 2026-11-07)", { skip: SKIP }, () => {
+  const palm = day("2027-03-21");
+  assert.strictEqual(palm.cellName, "성지주일");
+  const kept = palm.others.find((o) => o.name === "토마스 크랜머");
+  assert.deepStrictEqual([kept.suffix, kept.away], ["", false]);
+  const omitted = day("2035-03-21").others.find((o) => o.name === "토마스 크랜머");
+  assert.deepStrictEqual([omitted.suffix, omitted.away], [" · 생략", true]);
+});
+
 test("고유명 평일 — 2026-03-30 성주간 월요일 · 2026-02-19 재의 수요일 후 목요일은 격자여도 칸 이름이 있다", { skip: SKIP }, () => {
   assert.strictEqual(day("2026-03-30").cellName, "성주간 월요일");
   assert.strictEqual(day("2026-02-19").cellName, "재의 수요일 후 목요일");

@@ -660,6 +660,8 @@ function spansOf(y) {
   /** @type {Record<string, Span[]>} */
   const table = {
     holyWeek: [{ from: off(-7), to: off(-1) }],
+    // 축일을 생략하는 기간(guard). 성지주일의 축일은 다른 절기 주일처럼 그날 기념한다(→ R-6.3-holy-week-guard, 사용자 결정 2026-11-07).
+    holyWeekAfterPalm: [{ from: off(-6), to: off(-1) }],
     easterOctave: [{ from: off(0), to: off(7) }],
     transferGuard: [{ from: off(-7), to: off(7) }],
     // 승천일(E+39)은 **제외** — 기도서 원문 「승천일 이후 성령강림주일 전까지」(§4.10).
@@ -1222,16 +1224,17 @@ function ownObservancesOn(index, dateStr) {
 const GUARD_ID = GUARD_PREFIX + "holy-week";
 
 /**
- * 성주간(성지주일 ~ 성 토요일 — `spansOf().holyWeek`, §4.10)의 가상 후보. 그 안의 날에는 유효
+ * 성지주일 다음 날부터 성 토요일까지(`spansOf().holyWeekAfterPalm`, §4.10)의 가상 후보. 그 안의 날에는 유효
  * precedence 1 · `transferable: false` 인 합성 후보 하나, 밖의 날에는 빈 배열이다. 지정 전례일 · 재분류
- * (`settle`)의 순위에만 들어가 성주간의 prec 7 축일을 생략시킨다 — 부활 8일의 평일 축일은 그날 지킨다(책자,
- * 사용자 결정 2026-10-24 → R-6.3-holy-week-guard). 옮김 계산은 이것을 보지 않는다(주요축일은 그날 지키고
+ * (`settle`)의 순위에만 들어가 그 기간의 prec 7 축일을 생략시킨다 — 부활 8일의 평일 축일은 그날 지키고(책자,
+ * 사용자 결정 2026-10-24), 성지주일의 축일은 그날 기념한다(기도서 「절기주일에 지켜야 한다면 기념한다」, 사용자 결정
+ * 2026-11-07 → R-6.3-holy-week-guard). 옮김 계산은 이것을 보지 않는다(주요축일은 그날 지키고
  * 그날의 대축일 · 주일에 질 때만 옮긴다). 그날의 후보(§5.5 출처 ①~⑤)로는 내지 않는다 — 뷰에 보이지 않는다.
  * @param {string} dateStr
  * @returns {Candidate[]}
  */
 function guardCandidates(dateStr) {
-  if (!inSpan(dateStr, "holyWeek")) return [];
+  if (!inSpan(dateStr, "holyWeekAfterPalm")) return [];
   return [{
     observance: {
       id: GUARD_ID, kind: "temporal", name: "성주간", aliases: null,
@@ -1353,8 +1356,8 @@ function displacerOf(ranked, c, staying) {
  * 옮겨 간 것과 선택 봉헌은 순위에 들지 않는다)와 보호 기간의 guard 를 순위대로 세우고, 밀린(`displacerOf`)
  * 고유 후보 가운데
  *  - prec 7 **축일**(`minor_feast` · `transferable` 아님)은 옮기지 않고 그날 `commemorated`(→ R-6.1-prec7-omit —
- *    기도서 「지켜야 한다면 기념한다」와 책자가 그 주일에 이름을 적는 관행, 사용자 결정 2026-10-24). 성주간에서만
- *    `omitted` 다 — guard 도 밀어낸다(→ R-6.3-holy-week-guard). 부활 8일의 평일에는 밀리지 않아 그날의 대표다(책자는
+ *    기도서 「지켜야 한다면 기념한다」와 책자가 그 주일에 이름을 적는 관행, 사용자 결정 2026-10-24). 성지주일을 뺀
+ *    성주간에서만 `omitted` 다 — guard 도 밀어낸다(→ R-6.3-holy-week-guard). 부활 8일의 평일에는 밀리지 않아 그날의 대표다(책자는
  *    그 성인의 색, 독서는 그날 평일 것 — 사용자 결정 2026-10-24). `transferable` 인 축일 셋도 성주간에 그날 남았으면
  *    `omitted` 다 — guard 에만 밀려 옮김 계산이 옮기지 않았어도(옮김 계산은 guard 를 보지 않는다) 성주간의 prec 7 은
  *    생략이다(그 셋의 날짜는 성주간에 들지 않아 실데이터에는 없다),
@@ -1385,8 +1388,8 @@ function settle(dateStr, cands) {
     if (!by) continue;
     // 옮길 수 있는 축일이 proper 로 남았으면 옮김 계산이 옮기지 않은 것이다 — 성주간이면 guard 에만 밀린 것이라 생략(성주간의
     // prec 7 은 생략), 밖에서는 옮길 날 수의 상한에 걸린 것(`defects`)이다
-    const omit = minor && inSpan(dateStr, "holyWeek");
-    // 성주간 밖에서 밀린 축일(옮길 수 없는 prec 7)은 그날 기념한다(→ R-6.1-prec7-omit) — 부활대축일 · 부활 2주일에 걸린 것도
+    const omit = minor && inSpan(dateStr, "holyWeekAfterPalm");
+    // 그 밖에서 밀린 축일(옮길 수 없는 prec 7)은 그날 기념한다(→ R-6.1-prec7-omit) — 성지주일 · 부활대축일 · 부활 2주일에 걸린 것도
     const kept = minor && !omit && o.transferable !== true;
     if (omit || kept || commemorate) reclassified.set(c, { observance: o, status: omit ? "omitted" : "commemorated", displacedBy: by.observance.id });
   }

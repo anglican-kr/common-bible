@@ -46,6 +46,7 @@
   - **지정 전례일**: W-2025-02-02-presentation-over-sunday, W-2024-09-29-michael-over-sunday, W-2025-03-25-annunciation-lent-tuesday, W-2027-08-15-assumption-on-sunday, W-2027-09-26-korean-martyrs-on-sunday(주일에 밀려 옮김. 잠정, 미결48).
   - **밀린 축일의 기념**: W-2026-12-13-lucia-on-sunday, W-2026-09-13-chrysostom-on-sunday, W-2026-05-03-finding-of-cross-on-sunday, W-2023-12-03-xavier-on-advent-1.
   - **부활 8일 평일의 축일**(→ R-6.3-holy-week-guard): W-2025-04-23-george-easter-octave.
+  - **성지주일의 축일과 성주간 평일의 생략**(→ R-6.1-prec7-omit, R-6.3-holy-week-guard): W-2027-03-21-cranmer-palm-sunday.
   - **기념일 이름 줄**: W-2025-07-06-thomas-more-on-sunday.
   - **명절**: W-2025-01-29-seollal, W-2025-10-06-chuseok, W-2026-09-25-chuseok-not-in-booklet.
   - **색(미결30)**: W-2026-05-15-matthias-color, W-2025-12-29-holy-innocents-color(잠정), W-2026-06-05-boniface-color.
