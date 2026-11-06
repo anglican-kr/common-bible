@@ -587,6 +587,20 @@ test("주일에는 성인 본기도를 잇지 않는다 — 2025-2050 모든 주
   same(anna.memorialCollects, []);
 });
 
+test("A3 성지주일의 토마스 크랜머 — 이름 줄에만 보이고 본기도는 잇지 않는다, 성주간 평일에는 어느 줄에도 없다(사용자 결정 2026-11-07)", { skip: SKIP }, () => {
+  for (const d of ["2027-03-21", "2032-03-21"]) {
+    const m = model(d);
+    same(id(m.selected), "t-성지주일", d);
+    same(m.memorialSaints.map(id), ["d0321-토마스-크랜머"], d);
+    same(m.memorialCollects, [], d);
+    assert.ok(!m.choices.some((c) => id(c.candidate) === "d0321-토마스-크랜머"), `${d} 전례독서 목록에 없다`);
+  }
+  const weekday = model("2035-03-21");
+  same(weekday.memorialSaints, []);
+  assert.ok(!weekday.choices.some((c) => id(c.candidate) === "d0321-토마스-크랜머"));
+  assert.ok(!weekday.passiveDays.some((c) => id(c) === "d0321-토마스-크랜머"));
+});
+
 test("A3 송가 — 즈가리야 송가는 영광송을 붙이고 창조송가(gloria:false)는 붙이지 않는다(실제 cant 장 JSON)", { skip: SKIP }, () => {
   const cant = (n) => JSON.parse(fs.readFileSync(path.join(ROOT, "data", "bible", `cant-${n}.json`), "utf8"));
   const slot = (n) => ({ slot: "psalm", bookId: "cant", refs: [{ chapter: n, verseSpec: "all" }], label: "" });

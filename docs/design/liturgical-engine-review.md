@@ -717,7 +717,7 @@ GitHub 토픽 [lectionary](https://github.com/topics/lectionary), [liturgical-ca
   - **바뀐 것**: 사용자 결정 2026-10-24로 바뀌었다. 그 전에는 밀린 prec 7을 생략했다. 같은 날 부활 8일 평일의 축일도 책자대로 그날의 대표가 됐다(W-2025-04-23-george-easter-octave).
   - **기도서와 다른 것**: 기도서 원문 「축일」은 주일이나 대축일, 주요축일, 성주간, 부활1주간과 겹치면 생략한다고 적었다. 엔진은 책자대로 기념하고, 부활 8일 평일에는 그날 지킨다(사용자 결정, 사제 확인은 미결46).
   - **옮겨 온 축일에 밀린 축일**: T-2027-12-27-christmas-triad, T-2025-12-29-holy-innocents(토마스 베켓), T-2026-12-07-nicholas(암브로스. 교구 달력이 니콜라 아래에 이름을 실었다, C-6.5-4b), T-2027-07-26-anna-joachim-commemorated(야고보에 밀린 안나와 요아킴)
-  - **주일에 밀린 축일**: W-2026-12-13-lucia-on-sunday, W-2026-09-13-chrysostom-on-sunday, W-2026-05-03-finding-of-cross-on-sunday, W-2023-12-03-xavier-on-advent-1, T-2026-07-27-anna-joachim(잠정, 미결27)
+  - **주일에 밀린 축일**: W-2027-03-21-cranmer-palm-sunday(성지주일, 2026-11-07), W-2026-12-13-lucia-on-sunday, W-2026-09-13-chrysostom-on-sunday, W-2026-05-03-finding-of-cross-on-sunday, W-2023-12-03-xavier-on-advent-1, T-2026-07-27-anna-joachim(잠정, 미결27)
     - 루시아는 교구 달력이 대림 3주일 독서 위에 이름만 실었다. `has_proper: false`라 고유 본문이 없고, 엔진은 순교자 공통 독서를 낸다(X-5).
   - **기념일은 이 집합이 아니다**: 기념일은 언제나 `proper`다(2026-09-17, C-6.1-12). 토마스 모어는 2026-10-24에 기념일이 되어 그 항목으로 옮겼다.
   - **예외**: 성모 탄신, 성모시태, 모든 별세자의 날은 prec 7이어도 `transferable`이라 기념하지 않고 옮긴다(2026-09-19, 미결31 확정). 픽스처 T-2024-09-09-nativity-of-mary, T-2024-12-09-immaculate-conception, T-2025-11-03-all-souls, T-2033-09-09-nativity-of-mary-chuseok가 본다.

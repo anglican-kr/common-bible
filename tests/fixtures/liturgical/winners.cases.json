@@ -324,12 +324,30 @@
       "canon": ["R-6.3-holy-week-guard", "R-6.4-color-order"],
       "checks": ["C-6.1-6", "X-11"],
       "source": ["2025 책자 — 4.23(수) [홍] 조오지 이름, 독서는 부활 1주 수요일(사도 3:1-10 / 시편 105:1-9 / 루가 24:13-35)", "2025 책자 — 4.21(월) [백] 안셀름 이름, 독서는 부활 1주 월요일", "사용자 결정 2026-10-24 — 부활 8일 평일의 축일 색은 책자대로"],
-      "note": "2026-10-24 까지는 부활 8일의 축일도 guard 가 생략시켜 그날 색이 백이었다. 지금 guard 는 성주간(성지주일 ~ 성 토요일)뿐이다 — 2027 책자는 성지주일의 토마스 크랜머를 싣지 않았다. 조오지와 안셀름은 고유 독서가 없어 화면은 그날 평일 독서를 먼저 보인다(뷰의 초기 선택 — 미결25).",
+      "note": "2026-10-24 까지는 부활 8일의 축일도 guard 가 생략시켜 그날 색이 백이었다. 지금 guard 는 성지주일 다음 날부터 성 토요일까지다(→ W-2027-03-21-cranmer-palm-sunday). 조오지와 안셀름은 고유 독서가 없어 화면은 그날 평일 독서를 먼저 보인다(뷰의 초기 선택 — 미결25).",
       "assertions": [
         { "date": "2025-04-23", "expect": { "official": "d0423-조오지", "color": "red", "grid": { "status": "proper" } } },
         { "date": "2025-04-23", "expect": { "id": "d0423-조오지", "status": "proper", "displacedBy": null } },
-        { "date": "2025-04-21", "expect": { "official": "d0421-안셀름", "color": "white" } },
-        { "date": "2027-03-21", "expect": { "id": "d0321-토마스-크랜머", "status": "omitted", "displacedBy": "t-성지주일" } }
+        { "date": "2025-04-21", "expect": { "official": "d0421-안셀름", "color": "white" } }
+      ]
+    },
+    {
+      "id": "W-2027-03-21-cranmer-palm-sunday",
+      "kind": "winner",
+      "group": "⑩",
+      "title": "성지주일의 축일은 그날 기념한다 — 토마스 크랜머 commemorated, 성주간 평일에는 그대로 생략",
+      "status": "confirmed",
+      "issue": "미결46",
+      "canon": ["R-6.1-prec7-omit", "R-6.3-holy-week-guard"],
+      "checks": ["C-6.1-6"],
+      "source": ["교회력 규정 「축일」 — 「지역고유축일이나 절기주일에 지켜야 한다면 기념한다」", "데이터 temporal.md — 성지주일은 절기주일", "2027 책자 수정 검토본 — 3.21 기념일(사용자 확인 2026-11-07)", "사용자 결정 2026-11-07"],
+      "note": "2026-11-07 까지는 성주간 전체에서 축일을 생략해 2027-03-21 이 omitted 였다. 성 목요일과 성 금요일에는 실제 후보가 displacedBy 이고, 그날 고유 후보가 평일뿐인 월요일부터 수요일까지는 guard 다.",
+      "assertions": [
+        { "date": "2027-03-21", "expect": { "official": "t-성지주일", "color": "red" } },
+        { "date": "2027-03-21", "expect": { "id": "d0321-토마스-크랜머", "status": "commemorated", "displacedBy": "t-성지주일" } },
+        { "date": "2032-03-21", "expect": { "id": "d0321-토마스-크랜머", "status": "commemorated", "displacedBy": "t-성지주일" } },
+        { "date": "2035-03-21", "expect": { "id": "d0321-토마스-크랜머", "status": "omitted", "displacedBy": "guard:holy-week" } },
+        { "date": "2038-04-23", "expect": { "id": "d0423-조오지", "status": "omitted", "displacedBy": "t-성-금요일" } }
       ]
     },
     {
