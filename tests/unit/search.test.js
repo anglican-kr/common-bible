@@ -1308,3 +1308,101 @@ test("bookName: _bookMap이 null이어도 id 폴백(안전)", () => {
   scope._setBookMap(null);
   assert.equal(scope.bookName("john"), "john");
 });
+
+// ── QUOTE_MATCH — 따옴표를 무시하는 일치(ADR-005, 2026-11-06) ────────────────
+
+function loadQuoteMatch() {
+  const ctx = { String, Array };
+  vm.createContext(ctx);
+  vm.runInContext(extractBlock("QUOTE_MATCH"), ctx, { filename: "search-quote-match.js" });
+  return ctx;
+}
+
+test("QUOTE_MATCH: 검색 워커와 화면 코드의 두 사본이 같다", () => {
+  const workerSource = fs.readFileSync(path.resolve(__dirname, "../../js/search-worker.js"), "utf8");
+  const begin = "// ── BEGIN QUOTE_MATCH ──";
+  const end = "// ── END QUOTE_MATCH ──";
+  const inWorker = workerSource.slice(workerSource.indexOf(begin), workerSource.indexOf(end) + end.length);
+  assert.ok(workerSource.includes(begin) && workerSource.includes(end), "worker block markers");
+  assert.strictEqual(extractBlock("QUOTE_MATCH"), inWorker);
+});
+
+test("normalizeForMatch: 따옴표 여섯 가지를 지우고 소문자로 바꾼다", () => {
+  const q = loadQuoteMatch();
+  assert.strictEqual(q.normalizeForMatch(`"빛이" '생겨라' “Amen” ‘x’`), "빛이 생겨라 amen x");
+});
+
+test("findMatchRanges: 곧은 따옴표 검색어가 곱슬 따옴표 본문을 찾는다", () => {
+  const q = loadQuoteMatch();
+  const text = "하느님께서 “빛이 생겨라!” 하시자";
+  // Edge quotes of the query drop out, so the range covers 빛…! only.
+  assert.deepEqual(Array.from(q.findMatchRanges(text, `"빛이 생겨라!"`), (r) => Array.from(r)), [[7, 14]]);
+  assert.strictEqual(text.slice(7, 14), "빛이 생겨라!");
+});
+
+test("findMatchRanges: 따옴표 없는 검색어가 따옴표를 사이에 둔 본문을 찾고, 가운데 따옴표는 범위에 든다", () => {
+  const q = loadQuoteMatch();
+  const text = "하느님께서 “빛이 생겨라!” 하시자";
+  const ranges = Array.from(q.findMatchRanges(text, "빛이 생겨라! 하시자"), (r) => Array.from(r));
+  assert.deepEqual(ranges, [[7, text.length]]);
+  assert.strictEqual(text.slice(...ranges[0]), "빛이 생겨라!” 하시자");
+});
+
+test("findMatchRanges: 겹치지 않는 여러 범위, 대소문자 무시", () => {
+  const q = loadQuoteMatch();
+  assert.deepEqual(Array.from(q.findMatchRanges("Aa ‘aa’ AA", "aa"), (r) => Array.from(r)), [[0, 2], [4, 6], [8, 10]]);
+});
+
+test("findMatchRanges: 따옴표만 친 검색어는 범위가 없다", () => {
+  const q = loadQuoteMatch();
+  assert.deepEqual(Array.from(q.findMatchRanges("“빛이 생겨라!”", `" '`)), []);
+  assert.deepEqual(Array.from(q.findMatchRanges("“빛이 생겨라!”", `"`)), []);
+});
+
+test("appendTextWithHighlight: 따옴표를 사이에 둔 일치를 원래 본문 위치로 감싼다", () => {
+  const h = loadPureHelpers();
+  const target = h.document.createElement("p");
+  h.appendTextWithHighlight(target, "하느님께서 “빛이 생겨라!” 하시자 빛이 생겨났다.", "빛이 생겨라! 하시자");
+  assert.strictEqual(target.children.length, 3);
+  assert.strictEqual(target.children[0].data, "하느님께서 “");
+  assert.strictEqual(target.children[1].tagName, "MARK");
+  assert.strictEqual(recursiveText(target.children[1]), "빛이 생겨라!” 하시자");
+  assert.strictEqual(target.children[2].data, " 빛이 생겨났다.");
+});
+
+test("appendTextWithHighlight: 따옴표만 친 검색어는 강조하지 않는다", () => {
+  const h = loadPureHelpers();
+  const target = h.document.createElement("p");
+  h.appendTextWithHighlight(target, "“빛이 생겨라!”", `"`);
+  assert.strictEqual(target.children.length, 1);
+  assert.strictEqual(target.children[0].nodeType, 3);
+});
+
+test("normalizeQuery: 따옴표를 지운 뒤 앞뒤 공백도 지운다", () => {
+  const q = loadQuoteMatch();
+  assert.strictEqual(q.normalizeQuery(`" '`), "");
+  assert.strictEqual(q.normalizeQuery(`" 빛이 생겨라 "`), "빛이 생겨라");
+});
+
+test("normalizeQuery: 가운데에 홀로 있는 따옴표를 지운 뒤 공백을 한 칸으로 접는다", () => {
+  const q = loadQuoteMatch();
+  assert.strictEqual(q.normalizeQuery(`빛이 " 생겨라`), "빛이 생겨라");
+  assert.deepEqual(
+    Array.from(q.findMatchRanges("하느님께서 “빛이 생겨라!”", `빛이 " 생겨라`), (r) => Array.from(r)),
+    [[7, 13]],
+  );
+});
+
+test("buildSnippet: 따옴표를 사이에 둔 늦은 일치에서 일치 앞을 잘라 보이고 강조한다", () => {
+  const h = loadPureHelpers();
+  // The match starts at 61 (> 40), so the snippet is clipped 30 chars before it.
+  const text = "ㄱ".repeat(60) + " “빛이 생겨라!” 하시자 " + "ㄴ".repeat(120);
+  const frag = h.buildSnippet(text, "빛이 생겨라! 하시자");
+  const span = frag.children[0];
+  const out = recursiveText(span);
+  assert.ok(out.startsWith("…"), `expected leading ellipsis, got: ${out.slice(0, 5)}`);
+  assert.ok(out.endsWith("…"), `expected trailing ellipsis, got tail: ${out.slice(-5)}`);
+  const mark = span.children.find((c) => c.tagName === "MARK");
+  assert.ok(mark, "expected a <mark>");
+  assert.strictEqual(recursiveText(mark), "빛이 생겨라!” 하시자");
+});

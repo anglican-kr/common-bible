@@ -35,6 +35,7 @@
  * @property {Uint16Array} cArr
  * @property {Uint16Array} vArr
  * @property {string[]} tArr
+ * @property {string[]} [nArr]  tArr normalized for matching (normalizeForMatch), built on first search
  *
  * @typedef RawChunkPayload
  * @property {string[]} books
@@ -178,6 +179,73 @@ const REF_RE = /^([가-힣a-zA-Z0-9\s]+?)\s*(\d+)\s*:\s*(\d+)(?:\s*[-–]\s*(\d+
 // alias is ignored (`사랑 in: 요한` works the same as `사랑 in:요한`).
 const IN_RE = /(?:^|\s)in:\s*(\S+)/g;
 
+// ── BEGIN QUOTE_MATCH ──
+// Two identical copies: js/search-worker.js (a classic worker script, which
+// cannot import a module) and js/app/search.js. tests/unit/search.test.js
+// checks that they stay the same.
+// 검색은 따옴표 여섯 가지를 무시한다(ADR-005 「따옴표를 무시하는 일치」, 사용자 결정
+// 2026-11-06). 성서 본문에는 아포스트로피가 없어 홑따옴표까지 지워도 잃는 일치가 없다.
+const QUOTE_CHARS_RE = /["'“”‘’]/g;
+
+/**
+ * Lowercase and drop quote characters — the form both query and verse text
+ * are compared in.
+ * @param {string} s
+ * @returns {string}
+ */
+function normalizeForMatch(s) {
+  return s.toLowerCase().replace(QUOTE_CHARS_RE, "");
+}
+
+/**
+ * The query side of normalizeForMatch, with whitespace collapsed again:
+ * dropping a quote can leave a lone space (`" '` → " ") that would match
+ * nearly every verse, or a double space (`빛이 " 생겨라`) that matches none.
+ * "" means there is nothing to search for.
+ * @param {string} q
+ * @returns {string}
+ */
+function normalizeQuery(q) {
+  return normalizeForMatch(q).replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Non-overlapping [start, end) ranges of `query` in `text`, compared with
+ * quotes ignored and mapped back to offsets in the original `text`. Quotes at
+ * either edge of a match fall outside its range; quotes inside it stay in.
+ * Returns [] when the query is empty once quotes (and edge spaces) are dropped.
+ * @param {string} text
+ * @param {string} query
+ * @returns {Array<[number, number]>}
+ */
+function findMatchRanges(text, query) {
+  const q = normalizeQuery(query);
+  if (!q) return [];
+  const lower = text.toLowerCase();
+  // pos[k] = offset in `text` of the k-th kept (non-quote) character. Assumes
+  // toLowerCase keeps length, as the substring highlight did before.
+  /** @type {number[]} */
+  const pos = [];
+  let kept = "";
+  for (let i = 0; i < lower.length; i++) {
+    const ch = lower[i];
+    if (ch === '"' || ch === "'" || ch === "“" || ch === "”" || ch === "‘" || ch === "’") continue;
+    pos.push(i);
+    kept += ch;
+  }
+  /** @type {Array<[number, number]>} */
+  const ranges = [];
+  let from = 0;
+  let idx = kept.indexOf(q, from);
+  while (idx !== -1) {
+    ranges.push([pos[idx], pos[idx + q.length - 1] + 1]);
+    from = idx + q.length;
+    idx = kept.indexOf(q, from);
+  }
+  return ranges;
+}
+// ── END QUOTE_MATCH ──
+
 /**
  * @param {string} raw
  * @returns {ParsedQuery}
@@ -233,7 +301,9 @@ function tryVerseRef(query) {
  * @returns {MatchedRow[]}
  */
 function gatherResults(q, chunkNames, restrictBooks) {
-  const qLower = q.toLowerCase();
+  const qNorm = normalizeQuery(q);
+  // A query of quotes alone normalizes to "" — which every verse contains.
+  if (!qNorm) return [];
   const hasRestrict = !!(restrictBooks && restrictBooks.size > 0);
   /** @type {MatchedRow[]} */
   const allMatched = [];
@@ -241,11 +311,13 @@ function gatherResults(q, chunkNames, restrictBooks) {
     const chunk = loadedChunks[name];
     if (!chunk) continue;
     const { books, bArr, cArr, vArr, tArr } = chunk;
+    // Normalize each chunk once (on its first search), not per query.
+    if (!chunk.nArr) chunk.nArr = tArr.map(normalizeForMatch);
+    const nArr = chunk.nArr;
     const n = tArr.length;
     for (let i = 0; i < n; i++) {
       if (hasRestrict && !(/** @type {Set<string>} */ (restrictBooks)).has(books[bArr[i]])) continue;
-      const tLower = tArr[i].toLowerCase();
-      if (!tLower.includes(qLower)) continue;
+      if (!nArr[i].includes(qNorm)) continue;
       allMatched.push({
         b: books[bArr[i]],
         c: cArr[i],
