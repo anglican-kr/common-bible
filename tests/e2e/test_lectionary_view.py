@@ -1923,7 +1923,7 @@ def test_optional_feast_weekday_row_shows_by_default_with_feast_name(desktop_con
     page = desktop_context.new_page()
     _open(page, "lectionary/2027-02-02")
     assert page.inner_text(".lect-day") == "주의 봉헌"
-    assert page.inner_text(".lect-day-note") == "1월 31일로 옮겨 지킬 수 있습니다."
+    assert page.inner_text(".lect-day-note") == "1월 31일로 옮겨 지킬 수 있음"
     assert _choices(page) == ["연중 4주 화요일 · 주의 봉헌 축일 대체 독서"]
     row = page.locator(".lect-choice", has_text="연중 4주 화요일")
     assert row.locator(".lect-choice-name").inner_text() == "연중 4주 화요일"   # 밑줄 링크는 이름뿐이다
@@ -1931,11 +1931,16 @@ def test_optional_feast_weekday_row_shows_by_default_with_feast_name(desktop_con
     page.wait_for_selector(".lect-day:has-text('연중 4주 화요일')")
     assert page.inner_text(".lect-day-note") == "주의 봉헌 축일을 1월 31일로 옮겨 지킬 때 읽습니다."
     assert _choices(page) == ["주의 봉헌 · 1월 31일로 옮겨 지킬 수 있음"]
+    # 목적지 주일의 안내도 같은 형식이다
+    _open(page, "lectionary/2027-01-31")
+    page.locator(".lect-choice", has_text="주의 봉헌").click()
+    page.wait_for_selector(".lect-day:has-text('주의 봉헌')")
+    assert page.inner_text(".lect-day-note") == "2월 2일에서 옮겨 지킬 수 있음"
     _open(page, "lectionary/2026-05-14")
     assert _choices(page) == ["부활 6주 목요일 · 승천대축일 대체 독서"]
     # 공현대축일(1.6)은 평일 독서가 없어 줄이 없지만, 옮겨 지킬 수 있는 주일은 알린다
     _open(page, "lectionary/2026-01-06")
-    assert page.inner_text(".lect-day-note") == "1월 4일로 옮겨 지킬 수 있습니다."
+    assert page.inner_text(".lect-day-note") == "1월 4일로 옮겨 지킬 수 있음"
     assert page.locator(".lect-choices").count() == 0
     # 축일이 주일에 온 해는 옮길 주일이 없어 그날의 주일 줄을 숨기고 문장도 없다
     _open(page, "lectionary/2025-02-02")

@@ -841,14 +841,14 @@ test("A3 옮겨 지킬 수 있는 축일이 평일에 온 날은 대체 독서 �
   // 줄과 문장의 실제 글 — 축일 줄(고른 줄이라 화면에서는 제목이다)에도 옮겨 지킬 수 있는 주일이 붙는다
   const presentation = model("2027-02-02", NONE, null, false);
   same(labels(presentation), ["주의 봉헌 · 1월 31일로 옮겨 지킬 수 있음", "연중 4주 화요일 · 주의 봉헌 축일 대체 독서"]);
-  assert.strictEqual(presentation.selectedNote, "1월 31일로 옮겨 지킬 수 있습니다.");
+  assert.strictEqual(presentation.selectedNote, "1월 31일로 옮겨 지킬 수 있음");
   assert.strictEqual(model("2027-02-02", { ...NONE, obs: "grid:ordinary-4-weekday-tue" }).selectedNote, "주의 봉헌 축일을 1월 31일로 옮겨 지킬 때 읽습니다.");
   same(labels(model("2026-05-14", NONE, null, false)), ["승천대축일 · 5월 17일로 옮겨 지킬 수 있음", "부활 6주 목요일 · 승천대축일 대체 독서"]);
   same(labels(model("2027-11-01", NONE, null, false)), ["모든 성인의 날 · 10월 31일로 옮겨 지킬 수 있음", "연중 31주 월요일 · 모든 성인의 날 대체 독서"]);
   // 설과 겹쳐 옮겨 온 해는 원래 날짜(2.2)로 주일을 구한다
   const moved = model("2049-02-03", NONE, null, false);
   same(labels(moved), ["주의 봉헌 · 2월 2일에서 옮겨 옴", "연중 4주 수요일 · 주의 봉헌 축일 대체 독서"]);   // 줄에는 하나만 — 둘을 이으면 폭 320px에서 두 줄을 넘는다
-  assert.strictEqual(moved.selectedNote, "2월 2일에서 옮겨 지킵니다. 1월 31일로 옮겨 지킬 수 있습니다.");
+  assert.strictEqual(moved.selectedNote, "2월 2일에서 옮겨 지킵니다. 1월 31일로 옮겨 지킬 수 있음");
   // 주일에 온 해는 옮길 주일이 없어 그대로 숨기고 문장도 없다
   const sunday = model("2025-02-02", NONE, null, false);
   same(labels(sunday), ["주의 봉헌"]);
@@ -856,7 +856,7 @@ test("A3 옮겨 지킬 수 있는 축일이 평일에 온 날은 대체 독서 �
   // 공현대축일(1.6)은 평일 독서가 없어 줄이 없지만, 옮겨 지킬 수 있는 주일은 알린다
   const epiphany = model("2026-01-06", NONE, null, false);
   same(labels(epiphany), ["공현대축일 · 1월 4일로 옮겨 지킬 수 있음"]);
-  assert.strictEqual(epiphany.selectedNote, "1월 4일로 옮겨 지킬 수 있습니다.");
+  assert.strictEqual(epiphany.selectedNote, "1월 4일로 옮겨 지킬 수 있음");
 });
 
 test("A3 옮겨 지킬 수 있는 축일의 원래 날짜는 모두 옮겨 지킬 수 있는 주일을 알리고, 그 주일에는 엔진의 「옮겨 지킬 수 있음」 줄이 있다(사용자 결정 2026-11-06)", { skip: SKIP }, () => {
@@ -865,7 +865,7 @@ test("A3 옮겨 지킬 수 있는 축일의 원래 날짜는 모두 옮겨 지�
   for (let t = Date.UTC(2025, 0, 1); t <= Date.UTC(2050, 11, 31); t += 86_400_000) {
     const d = new Date(t).toISOString().slice(0, 10);
     const m = model(d, NONE, null, false);
-    const note = /(\d+)월 (\d+)일로 옮겨 지킬 수 있습니다\.$/.exec(m.selectedNote || "");
+    const note = /(\d+)월 (\d+)일로 옮겨 지킬 수 있음$/.exec(m.selectedNote || "");
     if (!note) continue;
     const sunday = `${d.slice(0, 4)}-${note[1].padStart(2, "0")}-${note[2].padStart(2, "0")}`;
     assert.strictEqual(new Date(`${sunday}T00:00:00Z`).getUTCDay(), 0, `${d} → ${sunday}`);

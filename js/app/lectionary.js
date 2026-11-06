@@ -220,16 +220,20 @@ function optionalSundayOf(initial, date) {
 
 /**
  * 옮겨 지킬 수 있는 축일의 원래 날짜에 그 축일 줄의 상태 표시 — 「· 1월 31일로 옮겨 지킬 수 있음」. 목적지 주일의 「· 2월 2일에서 옮겨 지킬 수 있음」과
- * 짝이다(사용자 결정 2026-11-06). 축일을 고르면 같은 말을 제목 아래 문장으로 보인다(`optionalOriginNote`).
+ * 짝이다(사용자 결정 2026-11-06). 축일을 고르면 같은 말을 제목 아래에 보인다(`optionalOriginNote`).
  * @param {string} sunday  옮겨 지킬 수 있는 주일
  */
 function optionalOriginSuffix(sunday) {
   return ` · ${monthDayLabel(sunday)}로 옮겨 지킬 수 있음`;
 }
 
-/** 옮겨 지킬 수 있는 축일의 원래 날짜에 축일을 고르면 제목 아래에 보이는 문장 — 「1월 31일로 옮겨 지킬 수 있습니다.」 @param {string} sunday */
+/**
+ * 옮겨 지킬 수 있는 축일의 원래 날짜에 축일을 고르면 제목 아래에 보이는 안내 — 「1월 31일로 옮겨 지킬 수 있음」. 목적지 주일의 「2월 2일에서 옮겨 지킬 수 있음」과
+ * 같은 형식이다(사용자 결정 2026-11-06).
+ * @param {string} sunday
+ */
 function optionalOriginNote(sunday) {
-  return `${monthDayLabel(sunday)}로 옮겨 지킬 수 있습니다.`;
+  return `${monthDayLabel(sunday)}로 옮겨 지킬 수 있음`;
 }
 
 /**
@@ -251,7 +255,8 @@ function selectedNoteOf(c) {
   if (c.evening) return "저녁에 드립니다.";
   switch (c.status) {
     case "transferred_in": return c.from ? `${monthDayLabel(c.from)}에서 옮겨 지킵니다.` : "옮겨 지킵니다.";
-    case "optional": return c.from ? `${monthDayLabel(c.from)}에서 옮겨 지킬 수 있습니다.` : "옮겨 지킬 수 있습니다.";
+    // 선택 봉헌은 원래 날짜의 안내(「1월 31일로 옮겨 지킬 수 있음」)와 같은 형식이다(사용자 결정 2026-11-06)
+    case "optional": return c.from ? `${monthDayLabel(c.from)}에서 옮겨 지킬 수 있음` : "옮겨 지킬 수 있음";
     default: return null;
   }
 }
@@ -958,7 +963,7 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
     groups, tracks, track, options, setIndex, group, shortGroup, slots,
     cards: readingCards({ groups, baseName: shortName(selected.observance.name), options, setIndex, linked: !!linked, trackHrefs, optionHrefs }),
     choices,
-    // 설과 겹쳐 옮겨 온 해(2049-02-03)는 「2월 2일에서 옮겨 지킵니다. 1월 31일로 옮겨 지킬 수 있습니다.」 두 문장이다
+    // 설과 겹쳐 옮겨 온 해(2049-02-03)는 「2월 2일에서 옮겨 지킵니다. 1월 31일로 옮겨 지킬 수 있음」이다
     selectedNote: [
       selectedNoteOf(selected),
       originSuffix(selected) && optionalSunday ? optionalOriginNote(optionalSunday) : null,
