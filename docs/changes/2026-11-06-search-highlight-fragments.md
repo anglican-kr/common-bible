@@ -1,4 +1,5 @@
 ---
+pr: 501
 date: 2026-11-06
 branch: fix/search-highlight-fragments
 title: "fix: 인용 조각 앞뒤의 공백 처리"
