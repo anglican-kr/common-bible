@@ -881,7 +881,14 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
   // 있는 격자(왕이신 그리스도 주일의 연중 34주일, 성지주일의 사순 주일, 부활대축일의 부활 1주일 …)와 본문 없는 날(가정주일,
   // 평화통일주일, 세계평화를 위한 기도일 — 제목 아래 이름 줄에 보인다, `textlessDays`)이 그렇다. 엔진은
   // 후보를 그대로 둔다(설계서 §5.5 「후보를 버리지 않는다」 — 옮김 계산이 격자를 쓴다). 기본 독서 후보는 감추지 않는다.
-  const textless = (/** @type {Candidate} */ c) => c !== initial && !groupsOf(c).length && !collectsFor(collectEntries, c).length;
+  // 자기 독서가 없이 같은 날 이름 있는 다른 전례일의 독서 레코드를 그대로 받는 후보도 본문 없는 날로 본다 — 본기도가 없고 독서는 남의
+  // 것이라 눌러도 그 전례일과 같은 화면이다. 9.29 대한성공회 선교 기념일(주요축일C)이 성 미카엘의 독서를 받는다(날짜 조인, 설계서 §5.4
+  // 미결12). 2025-2050에 이 날뿐이다(사용자 결정 2026-11-07, ADR-041 §6).
+  const readingIds = (/** @type {Candidate} */ c) => groupsOf(c).map((g) => g.id).join();
+  const borrowsReadings = (/** @type {Candidate} */ c) => !isGrid(c) && !!readingIds(c)
+    && resolved.candidates.some((o) => o !== c && !isGrid(o) && readingIds(o) === readingIds(c));
+  const textless = (/** @type {Candidate} */ c) => c !== initial && (!groupsOf(c).length || borrowsReadings(c))
+    && !collectsFor(collectEntries, c).length;
   // 기념만 하거나 생략하는 후보는 누를 수 없는 글이다 — 고유 독서가 있어도 그날 화면을 옮기지 않는다(사용자 결정 2026-11-04). 기리는
   // 성인은 이름 줄의 「이름 축일」이고, 그 밖(성 십자가 발견, 사도 성 베드로의 탈옥 …)은 이름 줄에 이름만 보인다(`passiveDays`). 지역 축일
   // (`national` — 기념만 하는 날이 있는 것은 삼일절, 광복절)은 예외로 전례독서 목록에 둔다 — 주일에 지키지 않더라도 그날 독서를 볼 수 있게 한다(같은 날 사용자 결정).
