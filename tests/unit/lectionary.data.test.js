@@ -321,8 +321,9 @@ test("A3 본문 없는 후보와 겹치는 후보는 목록에 없음 — 2025~2
     }
   }
   same(bad, []);
-  // 본문 없는 날은 이 셋뿐이다 — 하나가 늘면 데이터가 본문 없는 전례일을 더한 것이니 이름 줄로 괜찮은지 본다
-  same([...textless.keys()].sort(), ["가정주일", "세계평화를 위한 기도일", "평화통일주일"]);
+  // 본문 없는 날은 이 넷뿐이다 — 하나가 늘면 데이터가 본문 없는 전례일을 더한 것이니 이름 줄로 괜찮은지 본다. 대한성공회 선교 기념일은
+  // 자기 본기도가 없고 성 미카엘의 독서를 받아 본문 없는 날로 본다(사용자 결정 2026-11-07)
+  same([...textless.keys()].sort(), ["가정주일", "대한성공회 선교 기념일", "세계평화를 위한 기도일", "평화통일주일"]);
   // 그날 기본 독서가 그해의 대림 1주일 독서라 격자 전례독서 목록이 같은 본문이다 — 다른 격자가 늘면 정말 같은 화면인지 본다
   same([...sameAsNamed], ["grid:advent-1-sunday"]);
   for (const d of ["2026-11-29", "2027-11-28", "2028-12-03"]) same(labels(model(d)), ["대림1주일"], d);   // 전례독서 목록이 없다
@@ -780,8 +781,9 @@ test("9.29 — 제목은 성 미카엘, 이름 줄은 「1992년 9월 29일 관�
     const m = model(d, NONE, null, false);
     assert.strictEqual(m.dayName, "성 미카엘과 모든 천사들", d);
     same(labels(m), ["성 미카엘과 모든 천사들"], d);   // 하나뿐이라 화면에 목록이 없다
-    same([...m.foundingLines, ...m.commemorations.map((c) => `${c.observance.name} 기념일`)],
+    same([...m.foundingLines, ...m.textlessDays.map((c) => c.observance.name)],
       ["1992년 9월 29일 관구설립일", "대한성공회 선교 기념일"], d);
+    same(m.textlessDays.map((c) => c.observance.rank), ["major_feast"], d);   // 등급은 주요축일C — 「기념일」은 이름이다
     assert.ok(m.collects[m.collectIndex].text.startsWith("영원히 살아계신 하느님, 천사와 인간들에게"), d);
     same(m.memorialCollects.map((c) => c.text), ["전능하신 하느님, 땅끝까지 이르러 복음을 전하라 명령하시고 이곳에 대한성공회 관구를 세우심을 감사하나이다. "
       + "구하오니, 주님께서 세우신 이 관구를 기억하시고 성령의 은총을 내리시어 모든 성직자와 신자들이 주님의 거룩하신 뜻을 받들어 살게 하시고, "

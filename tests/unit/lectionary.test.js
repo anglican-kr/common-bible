@@ -887,6 +887,34 @@ test("buildLectionaryModel: 그날 축성 · 축복된 교회는 종류마다 �
   same(plain(ctx.buildLectionaryModel(r, q, groupsOf, entries, null).dedicationLines), []);
 });
 
+test("buildLectionaryModel: 본기도 없이 그날 지키는 다른 전례일의 독서를 그대로 받는 후보는 이름 줄 — 빌려 준 쪽이 옮겨 갔거나 본기도가 없으면 목록에 남는다(사용자 결정 2026-11-07, PR #510 리뷰)", () => {
+  const q = { obs: null, track: null, set: null, collect: null };
+  const ids = (cs) => cs.map((c) => c.observance.id);
+  const mich = cand(obs("d0929-mich", "성 미카엘과 모든 천사들", { rank: "major_feast", precedence: 3, color: "white" }));
+  const mission = cand(obs("d0929-mission", "대한성공회 선교 기념일", { rank: "major_feast", precedence: 4, color: "white" }));
+  const grid = cand(obs("grid:ordinary-26-weekday-wed", "연중 26주 수요일", { rank: "feria", precedence: 8, color: "green" }));
+  const shared = [group("joint", FOUR)];
+  const groupsOf = groupsOfFrom({ "d0929-mich": shared, "d0929-mission": shared, "grid:ordinary-26-weekday-wed": [group("g", FOUR)] });
+  const entries = (lender) => [{ candidate: lender, collects: [collect("m-c", "미카엘")] }, { candidate: mission, collects: [] },
+    { candidate: grid, collects: [collect("g-c", "연중")] }];
+  // 9.29 — 빌려 준 성 미카엘이 그날의 기본 독서이고 본기도가 있다 → 이름 줄
+  const m = ctx.buildLectionaryModel(resolvedOf("2027-09-29", [mich, mission, grid], mich), q, groupsOf, entries(mich), null, [], true);
+  same(ids(m.textlessDays), ["d0929-mission"]);
+  assert.ok(!m.choices.some((c) => c.candidate === mission));
+  // 빌려 준 쪽이 옮겨 갔으면 그 독서를 고를 곳이 없어지므로 목록에 남는다
+  const away = cand(mich.observance, "transferred_out", { to: "2027-09-30" });
+  const m2 = ctx.buildLectionaryModel(resolvedOf("2027-09-29", [grid, away, mission], grid), q, groupsOf, entries(away), null, [], true);
+  same(ids(m2.textlessDays), []);
+  assert.ok(m2.choices.some((c) => c.candidate === mission));
+  // 본기도 없는 두 후보가 같은 독서를 받으면 서로를 근거로 감추지 않는다
+  const twin = cand(obs("d0929-twin", "다른 기념", { rank: "major_feast", precedence: 4, color: "white" }));
+  const groupsOf3 = groupsOfFrom({ "d0929-mission": shared, "d0929-twin": shared, "grid:ordinary-26-weekday-wed": [group("g", FOUR)] });
+  const entries3 = [{ candidate: grid, collects: [collect("g-c", "연중")] }, { candidate: mission, collects: [] }, { candidate: twin, collects: [] }];
+  const m3 = ctx.buildLectionaryModel(resolvedOf("2027-09-29", [grid, mission, twin], grid), q, groupsOf3, entries3, null, [], true);
+  same(ids(m3.textlessDays), []);
+  same(ids(m3.choices.map((c) => c.candidate)).filter((x) => x.startsWith("d0929")), ["d0929-mission", "d0929-twin"]);
+});
+
 test("buildLectionaryModel: 관구 설립일에는 「1992년 9월 29일 관구설립일」 줄을 두고, 그 본기도를 고른 전례일의 본기도 뒤에 잇는다 — 주일에도, 다른 전례일을 골라도(사용자 결정 2026-11-05, 2026-11-07)", () => {
   const mich = cand(obs("d0929-mich", "성 미카엘과 모든 천사들", { rank: "major_feast", precedence: 3, color: "white" }));
   const grid = cand(obs("grid:ordinary-26-sunday", "연중 26주일", { rank: "sunday", precedence: 5, color: "green" }));
