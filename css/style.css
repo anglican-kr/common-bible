@@ -1111,9 +1111,10 @@ a.cal-cell:focus-visible { background: var(--bg-card); }
 
 /* 목록 보기(ADR-038 §2) — 모든 날을 한 줄씩. 글의 차례와 색은 전례독서 제목 영역(.lect-head)과 같고 글자가 작다. 달 이름은 칸의 가로선과
    같은 선으로 나눈다. 위쪽 줄을 더해도 보던 줄이 그 자리에 있는 것은 브라우저의 스크롤 고정이 맡는다. Safari 27 전에는 코드가 고친다(ADR-038 §2).
-   스크롤 고정은 화면 맨 위의 내용을 기준으로 삼는다. 상단 바에 가려진 줄이 기준이면 글꼴을 늦게 받아 그 줄의 높이가 바뀔 때 보던 줄이 밀리므로, 접힌
-   상단 바의 높이를 알린다. 상단 바 묶음은 상태 표시줄 높이만큼 위 여백이 있어 그만큼 더한다(#sticky-group). */
-html:has(.cal-list) { scroll-padding-top: calc(60px + env(safe-area-inset-top)); }
+   스크롤 고정은 화면 맨 위의 내용을 기준으로 삼는다. 상단 바에 가려진 줄이 기준이면 글꼴을 늦게 받아 그 줄의 높이가 바뀔 때 보던 줄이 밀리므로,
+   상단 바의 높이를 알린다. 그 높이는 글자 크기, 상태 표시줄 높이, 데스크톱에서 접히는 윗줄에 따라 바뀌어 숫자로 적지 않고 잰 값을 쓴다
+   (--top-bar-h, helpers.js publishBarHeight). */
+html:has(.cal-list) { scroll-padding-top: var(--top-bar-h); }
 .cal-list-month {
   margin: 0;
   padding: var(--space-6) 0 var(--space-2);

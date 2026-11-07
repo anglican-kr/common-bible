@@ -41,7 +41,7 @@ import {
 // header control, failure screen) lives in views.js. sw.js still precaches all
 // three for offline, and tests/unit/sw.test.js follows these import() calls.
 
-const { _$, clearNode, chUnit, isModifiedClick, focusSpotOf, restoreFocusSpot } = window.appHelpers;
+const { _$, clearNode, chUnit, isModifiedClick, focusSpotOf, restoreFocusSpot, barBottom } = window.appHelpers;
 const {
   START_PAGES, loadStartupBehavior, loadStartPage, loadReadingPosition, saveReadingPosition, loadBookOrder,
   loadLectionaryAltShow,
@@ -70,6 +70,13 @@ let _routeSeq = 0;
 // 리다이렉트는 자리 없이 시작한다). 새 화면이 커밋된 뒤 finally 에서 그 route 가 여전히 최신이면 돌려준다.
 /** @type {import("../types").FocusSpot | null} */
 let _pendingFocusSpot = null;
+/**
+ * The verse being read is the last one that starts at or above this far below the top bar. A verse whose first
+ * line starts just under the bar is already in view, while the one before it ends under the bar or on that line.
+ * The bar's height is measured (helpers.js barBottom) — it was 80 from the top of the screen, that bottom plus
+ * this margin at the default font size, so under a 62px status-bar inset it could save a verse the bar covered whole.
+ */
+const READING_LINE_BELOW_BAR_PX = 20;
 /** @param {string} bookId @param {number} chapter */
 function startScrollTracking(bookId, chapter) {
   if (_scrollTrackCleanup) _scrollTrackCleanup();
@@ -79,13 +86,14 @@ function startScrollTracking(bookId, chapter) {
     if (timer !== null) clearTimeout(timer);
     timer = setTimeout(() => {
       const verses = document.querySelectorAll(".verse[data-vref]");
+      const readingLine = barBottom() + READING_LINE_BELOW_BAR_PX;
       /** @type {number | null} */
       let currentVerse = null;
       for (const v of verses) {
         const n = parseInt(v.getAttribute("data-vref") ?? "", 10);
         if (!Number.isFinite(n)) continue;
         const top = v.getBoundingClientRect().top;
-        if (top <= 80) {
+        if (top <= readingLine) {
           currentVerse = n;
         } else {
           break;

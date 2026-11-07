@@ -38,7 +38,10 @@ import {
   CYCLE_LABEL, COLOR_LABEL, WEEKDAY_KO,
 } from "./lectionary.js";
 
-const { _$, el, clearNode, HEADER_ICON_PATHS, SCROLL_ANCHORING, focusSpotOf, restoreFocusSpot } = window.appHelpers;
+// barBottom: 상단 바의 아래쪽(화면 위에서 잰 값). 데스크톱은 스크롤하면 윗줄이 접혀 값이 바뀐다(views.js initCompactHeader).
+const {
+  _$, el, clearNode, HEADER_ICON_PATHS, SCROLL_ANCHORING, focusSpotOf, restoreFocusSpot, barBottom, scrollUnderBar,
+} = window.appHelpers;
 
 const $app = _$("app");
 // 이름은 views.js에 있다 — 이 모듈을 받지 못했을 때 라우터가 같은 제목으로 실패 화면을 그린다.
@@ -568,43 +571,15 @@ function buildRow(row) {
   return li;
 }
 
-/** 목록을 연 뒤 상단 바가 접히기를 기다리는 시간. 전환 0.25초에 스크롤 감지를 늦게 시작하는 시간(views.js initCompactHeader)을 더했다. */
-const BAR_COLLAPSE_WAIT_MS = 1000;
-
-/** 상단 바의 아래쪽 — 화면 위에서 잰 값이다. 데스크톱은 스크롤하면 윗줄이 접혀 값이 바뀐다(views.js initCompactHeader). */
-function barBottom() {
-  return document.getElementById("sticky-group")?.getBoundingClientRect().bottom ?? 0;
-}
-
 /**
  * 그 날짜의 줄이 상단 바 바로 아래에 오게 스크롤한다. 달의 첫 줄이면 달 이름이 함께 보이게 달 이름부터 둔다. 데스크톱은 스크롤하면 상단 바가 접히므로
- * 접힌 뒤에 다시 맞춘다. 스크롤 고정이 있는 브라우저는 접히는 동안 줄을 화면의 그 자리에 두어 상단 바와 줄 사이가 벌어진다. 그사이 독자가 스크롤을
- * 시작하면 맞추지 않는다.
+ * 접힌 뒤에 다시 맞추고, 그사이 독자가 스크롤을 시작하면 맞추지 않는다(helpers.js `scrollUnderBar`, 이어 읽기와 같다).
  * @param {string} date
  */
 function scrollToRow(date) {
   const row = $app.querySelector(`li[data-date="${date}"]`);
   if (!row) return;
-  const target = row.previousElementSibling ? row : row.closest("section") ?? row;
-  const place = () => {
-    if (!target.isConnected) return;
-    window.scrollTo({ top: window.scrollY + target.getBoundingClientRect().top - barBottom(), behavior: "instant" });
-  };
-  place();
-  requestAnimationFrame(place);
-  const waiting = new AbortController();
-  const { signal } = waiting;
-  const stop = () => waiting.abort();
-  const collapsing = document.getElementById("breadcrumb-row");
-  collapsing?.addEventListener("transitionend", (e) => {
-    if (e.target !== collapsing) return;   // 안의 검색창이 낸 전환은 보지 않는다
-    stop();
-    place();
-  }, { signal });
-  for (const type of ["wheel", "touchstart", "pointerdown", "keydown"]) {
-    window.addEventListener(type, stop, { passive: true, signal });
-  }
-  setTimeout(stop, BAR_COLLAPSE_WAIT_MS);
+  scrollUnderBar(row.previousElementSibling ? row : row.closest("section") ?? row);
 }
 
 /** 달 하나의 묶음 — 달 이름과 줄 목록. @param {string} ym  "YYYY-MM" @param {string} title */

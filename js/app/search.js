@@ -15,7 +15,7 @@
 
 import { verseNumberSpec } from "./verse-spec.js";
 
-const { _$, el, clearNode, chUnit, emptyState } = window.appHelpers;
+const { _$, el, clearNode, chUnit, emptyState, barBottom } = window.appHelpers;
 const {
   SEARCH_HISTORY_MAX,
   loadSearchHistory, loadSearchHistoryEntries,
@@ -1258,9 +1258,9 @@ async function renderSearchResults(query, page, autoNavigate = false, opts = {})
 
   resultsTarget.appendChild(el("div", { className: "loading", "aria-live": "polite" }, "검색 중…"));
 
-  // Estimate page size from available viewport height
-  const headerH = document.getElementById("app-header")?.offsetHeight || 80;
-  const availH = window.innerHeight - headerH - 40;
+  // Estimate page size from the viewport height below the top bar. The bar is measured (helpers.js barBottom):
+  // #app-header alone left out the status-bar inset, which is padding on #sticky-group.
+  const availH = window.innerHeight - barBottom() - 40;
   const itemH = 80;
   const pageSize = Math.max(5, Math.floor(availH / itemH));
 

@@ -25,7 +25,7 @@ import { showAudioPlayer, hideAudioBar } from "./audio-player.js";
 // and the verse instance keys a tapped verse is looked up by (verse-spec.js).
 import { citationSource, halfVerseMark, selectionCitation, formatVerseRanges, verseInstanceKeys } from "./verse-spec.js";
 
-const { _$, el, clearNode, chUnit, hangingQuoteClass, emptyState } = window.appHelpers;
+const { _$, el, clearNode, chUnit, hangingQuoteClass, emptyState, scrollUnderBar } = window.appHelpers;
 const { createOverlay } = window.appOverlay;
 const {
   loadBookOrder, loadStartupBehavior,
@@ -1676,13 +1676,17 @@ function renderChapter(data, book, opts) {
   // or chip click, and when toggle is OFF or chapter has no chips).
   window.appCitations?.maybeShowCoachmark();
 
-  // Scroll to highlighted verse, resumed position, or top
+  // Scroll to highlighted verse, resumed position, or top. A highlighted verse goes to the middle of the screen. The
+  // verse being read goes right under the top bar — where the reading-position tracker (routing.js) reads it back —
+  // not to the top of the screen, which the bar covers; on desktop again once the bar's top row has collapsed.
   const scrollVerse = hlVerse || (opts && opts.resumeVerse) || null;
   if (scrollVerse) {
     const target = findVerseAnchor(document, scrollVerse);
     if (target) {
-      const behavior = hlVerse ? "smooth" : "instant";
-      requestAnimationFrame(() => target.scrollIntoView({ behavior, block: hlVerse ? "center" : "start" }));
+      requestAnimationFrame(() => {
+        if (hlVerse) target.scrollIntoView({ behavior: "smooth", block: "center" });
+        else scrollUnderBar(target);
+      });
     }
   } else {
     window.scrollTo(0, 0);

@@ -743,7 +743,8 @@ def test_list_opens_at_the_row_of_the_address(mobile_context):
 @pytest.mark.only_browser("chromium")
 def test_list_row_and_scroll_padding_follow_the_status_bar_height(mobile_context):
     """상태 표시줄 높이(`env(safe-area-inset-top)`)가 62px이어도 주소의 줄이 상단 바 바로 아래에 온다. 스크롤 여백(`scroll-padding-top`)은
-    접힌 상단 바 60px에 그 높이를 더한 값이고, 상단 바 아래쪽과 같다(2026-11-07, 상단 바 묶음이 그 높이를 안쪽 위 여백으로 둔다)."""
+    잰 상단 바 높이라 상단 바 아래쪽과 같고, 기본 글자 크기의 휴대폰에서는 접힌 상단 바 60px에 그 높이를 더한 값이다(2026-11-07, 상단 바 묶음이
+    그 높이를 안쪽 위 여백으로 둔다)."""
     inset = 62
     page = mobile_context.new_page()
     emulate_status_bar(page, inset)
@@ -751,8 +752,8 @@ def test_list_row_and_scroll_padding_follow_the_status_bar_height(mobile_context
     assert abs(_row_top_under_head(page, "2026-12-15")) <= 2
     bar, padding = page.evaluate("""() => [document.getElementById('sticky-group').getBoundingClientRect().bottom,
         parseFloat(getComputedStyle(document.documentElement).scrollPaddingTop)]""")
-    assert padding == 60 + inset, padding
-    assert abs(bar - padding) <= 1, (bar, padding)
+    assert abs(bar - padding) <= 0.5, (bar, padding)
+    assert abs(padding - (60 + inset)) <= 1, padding
 
 
 def test_list_rows_are_announced_as_a_list(mobile_context):
@@ -995,6 +996,35 @@ def test_desktop_list_leaves_the_scroll_alone_once_the_reader_scrolls(desktop_co
     page.mouse.wheel(0, 400)
     page.wait_for_timeout(700)
     assert _month_top_under_head(page, "2026-12") < -200
+
+
+@pytest.mark.parametrize("width, font", [(390, 16), (390, 24), (1280, 24)], ids=["phone-16", "phone-24", "desktop-24"])
+def test_list_scroll_padding_is_the_measured_bar_height(browser, width, font):
+    """목록의 스크롤 여백(`scroll-padding-top`)은 잰 상단 바의 높이다(`--top-bar-h`, helpers.js `publishBarHeight`). 상단 바는 글자 크기를
+    따라 높아지고 낮아진다(글자 크기 16px에서 약 57px, 24px에서 약 70px). 데스크톱은 윗줄(검색 칸)이 펼쳐져 있으면 그만큼 더 높고, 윗줄이 접히거나
+    펼쳐지면 여백도 따라간다. 60px로 적었을 때는 그 차이만큼 스크롤 고정이 상단 바에 가려진 줄을 기준으로 삼거나 보이는 줄을 건너뛰었다."""
+    ctx = browser.new_context(viewport={"width": width, "height": 800}, user_agent=IPHONE_UA if width < 769 else None)
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    ctx.add_init_script(f"localStorage.setItem('bible-font-size', '{font}');")
+    measure = """() => ({
+        padding: parseFloat(getComputedStyle(document.documentElement).scrollPaddingTop),
+        bar: document.getElementById('sticky-group').getBoundingClientRect().bottom,
+    })"""
+    try:
+        page = ctx.new_page()
+        _open_list(page, "calendar/list/2026-12-15")
+        page.wait_for_timeout(1000)
+        state = page.evaluate(measure)
+        assert abs(state["padding"] - state["bar"]) <= 0.5, state
+        if width >= 769:
+            # 열린 뒤 윗줄이 접혀 있는지는 스크롤 감지가 언제 시작했는지에 달려 있어, 지금과 반대로 바꿔 본다(views.js initCompactHeader가 바꾸는 클래스)
+            page.evaluate("() => document.getElementById('app-header').classList.toggle('compact')")
+            page.wait_for_timeout(500)   # 윗줄이 접히거나 펼쳐지는 전환(0.25초)을 넘긴다
+            flipped = page.evaluate(measure)
+            assert abs(flipped["bar"] - state["bar"]) > 30, (state, flipped)
+            assert abs(flipped["padding"] - flipped["bar"]) <= 0.5, (state, flipped)
+    finally:
+        ctx.close()
 
 
 def test_list_month_end_row_reaches_under_the_bar(mobile_context):
