@@ -433,12 +433,14 @@ window.appCitations = (/** @returns {AppCitations} */ () => {
     window.addEventListener("resize", reposition);
     // The sticky header can change height with no scroll event after it — the
     // desktop header re-expands over a transition once a scroll has reached the
-    // top. That moves the anchor (the header is in flow) and the edge the
-    // tooltip stays below, so follow the header's size too.
+    // top, and iOS can change the status-bar inset, which is the header's
+    // padding-top (#sticky-group). That moves the anchor (the header is in flow)
+    // and the edge the tooltip stays below, so follow the header's size too. The
+    // border box counts that padding; the default content box would miss it.
     const bar = document.getElementById("sticky-group");
     if (bar && typeof ResizeObserver !== "undefined") {
       _tooltipBarObserver = new ResizeObserver(reposition);
-      _tooltipBarObserver.observe(bar);
+      _tooltipBarObserver.observe(bar, { box: "border-box" });
     }
   }
 

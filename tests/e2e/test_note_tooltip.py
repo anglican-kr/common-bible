@@ -4,7 +4,9 @@
 (`js/app/citations.js`의 `_positionNoteTooltip`). 화면 위쪽에는 상단 바(`#sticky-group`)가 고정돼 툴팁보다
 앞에 그려지므로, 위의 자리는 화면 맨 위가 아니라 상단 바 아래쪽에서 끝난다. 열왕기상 5:6의 주석 「사천」을 쓴다.
 """
-from .conftest import CLEAR_APP_STORAGE, MOBILE_VIEWPORT
+import pytest
+
+from .conftest import CLEAR_APP_STORAGE, MOBILE_VIEWPORT, emulate_status_bar
 
 BASE = "http://localhost:8080"
 ANCHOR = ".note-anchor:not(.note-anchor--variant)"
@@ -105,6 +107,26 @@ def test_note_tooltip_follows_header_reexpanding_at_top(browser):
         m = page.evaluate(_MEASURE)
         assert m["placement"] == "above", m
         assert abs(m["anchorTop"] - m["bottom"] - 8) < 1, m
+        assert m["top"] >= m["bar"], m
+        assert m["visible"], m
+    finally:
+        ctx.close()
+
+
+@pytest.mark.only_browser("chromium")
+def test_note_tooltip_follows_status_bar_height_change(browser):
+    """툴팁을 연 채 상태 표시줄 높이가 바뀌면(아이폰 홈 화면 앱이 상태 표시줄 밑까지 그리기 시작할 때) 상단 바 묶음의 위 여백이 늘어
+    본문이 내려간다. 스크롤 이벤트도 창 크기 이벤트도 없지만, 툴팁은 표지를 따라가 간격 8px을 지키고 상단 바에 가리지 않는다."""
+    ctx, page = _open_chapter(browser, {"width": 1280, "height": 800})
+    try:
+        _tap_anchor(page)
+        before = page.evaluate(_MEASURE)
+        emulate_status_bar(page, 62)
+        page.evaluate(_SETTLE)
+        m = page.evaluate(_MEASURE)
+        assert m["anchorTop"] > before["anchorTop"] + 50, (before, m)   # 본문이 내려갔다
+        gap = m["anchorTop"] - m["bottom"] if m["placement"] == "above" else m["top"] - m["anchorBottom"]
+        assert abs(gap - 8) < 1, m
         assert m["top"] >= m["bar"], m
         assert m["visible"], m
     finally:
