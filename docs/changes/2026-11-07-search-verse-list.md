@@ -1,4 +1,5 @@
 ---
+pr: 514
 date: 2026-11-07
 branch: fix/search-verse-list
 title: "fix: 구절 표기 검색 보강"
