@@ -1,4 +1,5 @@
 ---
+pr: 518
 date: 2026-11-07
 branch: fix/verse-copy-citation
 title: "fix: 절 선택 복사와 장 본문 복사의 출처 통일"
