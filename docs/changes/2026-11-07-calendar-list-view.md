@@ -34,11 +34,13 @@ title: "feat: 캘린더 목록 보기"
 
 - `calendarDay`의 `others`(옛 계획의 줄 이름)는 그대로다. 줄은 이제 전례독서 모델을 쓰지만, 실데이터 시험들이 이 값으로 엔진의 후보를 확인한다. 지울지는 무한 스크롤 PR에서 본다.
 - 설정의 기본 캘린더(ADR-041 §10)는 넣지 않았다. 마지막 보기를 기억하므로 필요한지부터 사용자에게 묻는다.
+- 월말 날짜의 줄은 아래에 줄이 모자라 상단 바 바로 아래까지 올라오지 않는다(2026-12-31 등). 줄은 화면에 보인다. 다음 PR에서 다음 달이 이어지면 없어지므로, 그때 지울 여백을 넣지 않았다.
 
 ## 검증
 
 - 유닛 `node --test tests/unit/*.test.js`: 1,580건 통과(15건 더함. 2025-2030년의 모든 날에 줄의 글이 제목 영역과 같은지 보는 실데이터 시험 포함). 타입 검사 `npm run typecheck`: 통과.
 - e2e(작업 폴더 서버, Chromium): 목록, 상단 바, 탭, 설정을 지나는 파일을 골라 188건 통과했다. `test_calendar_view.py`(목록 13건 더함), `test_lectionary_view.py`(`buildHeader`를 고쳤다), `test_liturgical_lazy_load.py`, `test_tabbar.py`, `test_settings.py`, `test_a11y_axe.py`(목록 1건 더함)다.
+- 리뷰를 반영하고 `main`(#510)을 합친 뒤 다시 돌렸다. 유닛 1,581건, 타입 검사, e2e `test_calendar_view.py`, `test_tabbar.py`, `test_lectionary_view.py` 134건이 통과했다.
 - 폭 390px, 폭 320px에 글자 24px, 다크, 데스크톱의 화면을 스크린샷으로 보았다.
 - 전체 e2e와 WebKit, 실제 아이폰은 확인하지 않았다. 전체는 13분쯤 걸려 관련 파일만 골랐다(사용자 결정 2026-11-07). 실제 기기는 dev 배포 때 본다.
 
@@ -50,3 +52,10 @@ title: "feat: 캘린더 목록 보기"
 - `docs/topics/liturgical.md`: 지금 동작, 남은 일
 - `docs/architecture.md`: 모듈 표
 - 디자인 시스템 아티팩트: `CalendarList`를 더함. `CalendarMonth`, `Header`, `LectionaryHead`의 설명과 미리보기, `bundle.css`.
+
+## 리뷰 반영
+
+1회차(Copilot).
+
+- 탭을 거듭 누르면 같은 주소가 방문 기록에 쌓인다: 재현했다(더한 e2e가 고치기 전에 실패했다). 이미 그 주소면 다시 그리기만 하게 고쳤다.
+- 월말 날짜의 줄을 위해 하단 여백을 더하라는 지적: 재현했지만 따르지 않았다. 위 「일부러 바꾸지 않은 것」에 있다.

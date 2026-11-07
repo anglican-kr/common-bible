@@ -735,6 +735,29 @@ def test_tab_in_list_keeps_the_list_and_goes_to_today(mobile_context):
     assert _row(page, datetime.date.today().isoformat()).is_visible()
 
 
+def test_tab_in_list_does_not_add_history_entries_at_the_same_address(mobile_context):
+    """이미 /calendar/list이면 캘린더 탭을 거듭 눌러도 방문 기록이 늘지 않아, 뒤로 가기가 앞 화면으로 간다. 다시 그려서 오늘 줄로 돌아온다."""
+    page = mobile_context.new_page()
+    _open(page, "calendar/2026-12")
+    page.locator("#tab-bar [data-tab='calendar']").click()   # 월간에서 다시 누르면 이번 달
+    page.wait_for_url(f"{BASE}/calendar")
+    page.wait_for_selector(".cal-grid")
+    page.locator("#page-title .title-view-btn").click()
+    page.wait_for_url(f"{BASE}/calendar/list")
+    page.wait_for_selector(".cal-rows")
+    length = page.evaluate("() => history.length")
+    page.evaluate("() => window.scrollTo({ top: 0, behavior: 'instant' })")
+    for _ in range(3):
+        page.locator("#tab-bar [data-tab='calendar']").click()
+        page.wait_for_timeout(150)
+    assert page.evaluate("() => history.length") == length
+    assert page.locator(".cal-rows").count() == 1
+    assert _row(page, datetime.date.today().isoformat()).is_visible()
+    page.go_back()
+    page.wait_for_url(f"{BASE}/calendar")
+    page.wait_for_selector(".cal-grid")
+
+
 def test_only_the_list_loads_the_lectionary_tables(mobile_context):
     """줄의 글을 정하려고 목록은 독서 묶음을 받는다. 월간은 받지 않는다(ADR-038 §2)."""
     page = mobile_context.new_page()
