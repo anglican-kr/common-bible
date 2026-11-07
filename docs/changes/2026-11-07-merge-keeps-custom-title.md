@@ -1,4 +1,5 @@
 ---
+pr: 515
 date: 2026-11-07
 branch: fix/merge-keeps-custom-title
 title: "fix: 북마크 합치기의 사용자 제목 유지"
