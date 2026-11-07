@@ -16,12 +16,13 @@
 /** @typedef {import("../types").BooksData} BooksData */
 /** @typedef {import("../types").BookEntry} BookEntry */
 /** @typedef {import("../types").Route} Route */
+/** @typedef {import("./views.js").BibleFailureKind} BibleFailureKind */
 
 import { loadBooks, loadChapter, loadPrologue } from "./data-fetch.js";
 import { isWellFormedSpec } from "./verse-spec.js";
 import {
   renderBookList, renderChapterList, renderChapter, renderPrologue,
-  renderLoading, renderError, divisionOrder, DIVISION_LABELS, renderLiturgicalLoadFailure,
+  renderLoading, renderBibleFailure, divisionOrder, DIVISION_LABELS, renderLiturgicalLoadFailure,
 } from "./views.js";
 // The calendar tab and the lectionary view (ADR-038 §1-§3) are not imported
 // here: route() loads them with import() the first time one of their routes
@@ -295,6 +296,20 @@ function trackPageView() {
   });
 }
 
+/**
+ * 성서 화면의 전체 화면 실패를 그린다(ADR-024 §6). 페이지 메타와 방문 기록은 캘린더의 실패 화면과 같다. 페이지 제목은 머리의
+ * 제목이고 방문 기록도 남긴다. 읽던 위치는 저장하지 않고 스크롤도 추적하지 않는다. `route()`가 시작할 때 추적을 멈췄고, 저장은
+ * 장을 그린 뒤에만 하기 때문이다. 그래서 「이어읽기」가 없는 장을 가리키지 않는다.
+ * @param {BibleFailureKind} kind
+ * @param {BookEntry | null} book  머리의 책. `null`이면 성서 목록의 머리다
+ * @param {number} [chapter]  `"no-chapter"`의 장 번호
+ */
+function showBibleFailure(kind, book, chapter) {
+  updatePageMeta({ title: renderBibleFailure(kind, book, chapter) });
+  dismissLaunchScreen();
+  trackPageView();
+}
+
 // ── Views loaded on first visit (ADR-038 §2 「구현」) ──
 
 /**
@@ -467,6 +482,10 @@ async function route() {
   // URL filters across back/forward, pagination and tab restore.
   window.syncSearchFields?.();
 
+  // 주소의 책. 자료를 받지 못했을 때 실패 화면의 머리가 이 책의 것이 된다(아래 `catch`). 책을 찾기 전에 실패하면 `null`이라
+  // 성서 목록의 머리다.
+  /** @type {BookEntry | null} */
+  let book = null;
   try {
     if (view === "search") {
       if (parsed.query) {
@@ -641,10 +660,10 @@ async function route() {
     }
 
     const { bookId } = parsed;
-    const book = books.find((b) => b.id === bookId);
+    book = books.find((b) => b.id === bookId) ?? null;
     if (!book) {
-      renderError("해당 성서를 찾을 수 없습니다.");
-      dismissLaunchScreen();
+      // 없는 책이나 경로(`/xyz`)는 성서 목록의 머리에 「없는 주소입니다」와 「성서 목록」이다(사용자 결정 2026-11-07).
+      showBibleFailure("no-page", null);
       return;
     }
 
@@ -657,6 +676,28 @@ async function route() {
       });
       trackPageView();
       return;
+    }
+
+    // 책은 있고 그 뒤가 없는 주소는 그 책의 머리에 「없는 주소입니다」와 「장 목록」이다(ADR-024 §6, 구현하며 정함).
+    // A missing prologue is told from books.json instead of fetching `<book>-prologue.json`, whose failure read as a load
+    // error. parsePath's parseInt gives NaN for a segment that isn't a number (`/john/` · `/john/abc`), and NaN fails
+    // both range comparisons — without the integer check it would fetch `john-NaN.json` (PR #353 리뷰, 2026-10-17).
+    // Safe integers only, so a long run of digits never reads 「…에는 1e+21장이 없습니다」.
+    if (view === "prologue" && !book.has_prologue) {
+      showBibleFailure("no-page", book);
+      return;
+    }
+    if (view === "chapter") {
+      const { chapter } = parsed;
+      if (!Number.isSafeInteger(chapter) || chapter < 1) {
+        showBibleFailure("no-page", book);
+        return;
+      }
+      if (chapter > book.chapter_count) {
+        // 「요한의 복음서에는 99장이 없습니다」와 「장 목록」이다(사용자 결정 2026-11-07).
+        showBibleFailure("no-chapter", book, chapter);
+        return;
+      }
     }
 
     // For chapter/prologue: dismiss as soon as the loading placeholder appears,
@@ -678,14 +719,7 @@ async function route() {
     }
 
     if (view === "chapter") {
-      const { chapter } = parsed;
-      // parsePath's parseInt gives NaN for a segment that isn't a number (`/john/` · `/john/abc`), and NaN fails
-      // both range comparisons — without the integer check it would fetch `john-NaN.json` and show the load
-      // failure instead of this notice (PR #353 리뷰, 2026-10-17).
-      if (!Number.isInteger(chapter) || chapter < 1 || chapter > book.chapter_count) {
-        renderError("해당 장을 찾을 수 없습니다.");
-        return;
-      }
+      const { chapter } = parsed;   // checked above — a whole number within the book
       const data = await loadChapter(bookId, chapter);
       if (isStale()) return;
       const savedPos = loadReadingPosition();
@@ -716,10 +750,13 @@ async function route() {
   } catch (err) {
     console.error(err);
     // A route a newer one already replaced fails quietly — its late rejection (a chapter fetch that failed after the
-    // user moved on to the calendar) must not paint the shared error over the screen now showing. Same guard as after
+    // user moved on to the calendar) must not paint the failure screen over the screen now showing. Same guard as after
     // every await above (review 2026-10-18 — main had the gap too).
     if (isStale()) return;
-    renderError("데이터를 불러올 수 없습니다.");
+    // 자료를 받지 못했거나(오프라인에서 받아 두지 않은 장, 성서 목록) 그리다 오류가 났다. 캘린더와 같은 「다시 불러오기」 화면이다
+    // (사용자 결정 2026-11-07). 머리는 책을 찾았으면 그 책의 것, 아니면 성서 목록의 것이다(구현하며 정함). 검색, 북마크, 설정
+    // 화면이 성서 목록을 받지 못해 여기 오면 그 화면들도 성서 목록의 머리다.
+    showBibleFailure("load", book);
   } finally {
     dismissLaunchScreen(); // safety fallback (already a no-op if called above)
     // ADR-031: 이 호출이 여전히 최신 라우트일 때만 새 경로 기록 + 스크롤 복원.

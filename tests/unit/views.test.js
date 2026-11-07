@@ -1,7 +1,7 @@
 // ── Unit tests for js/app/views.js ──────────────────────────────────
 // Run with: node --test tests/unit/views.test.js
 //
-// Same vm + BEGIN/END marker slice approach as bookmark.test.js. Nine marker
+// Same vm + BEGIN/END marker slice approach as bookmark.test.js. Ten marker
 // pairs cover the testable surface; Pull-to-refresh / startScrollTracking /
 // Audio Player remain out of scope — those need touch gestures or
 // `getBoundingClientRect` and are deferred until jsdom adoption (ADR-013
@@ -28,6 +28,8 @@
 //     plain / dual [N_M] / LXX-only [_N] / cross-ref / range / half verse (「2ㄱ」).
 //   - PIECE_SPACE block — pieceTrailingSpace. The space drawn after a verse piece, and the
 //     pieces that get none (before a cite chip, punctuation only, ends with an opening quote).
+//   - FAILURE_TEXT block — bibleFailureText. The copy of the Bible screens' full-screen failure
+//     (missing chapter, no such page, data not received; psalms count 편) + the shared reload subtitle.
 
 import test from "node:test";
 import assert from "node:assert";
@@ -329,6 +331,21 @@ function loadPieceSpace() {
   vm.createContext(ctx);
   vm.runInContext(extractBlock("PIECE_SPACE"), ctx, { filename: "views-piece-space.js" });
   return { pieceTrailingSpace: ctx.pieceTrailingSpace };
+}
+
+// ── FAILURE_TEXT loader ──────────────────────────────────────────────────────
+// Pure: the copy of the full-screen failure screens. chUnit is a shim like the POPOVER loader's (helpers.test.js checks
+// the real one). The result is made in the vm's realm, so tests compare a JSON copy.
+
+function loadFailureText() {
+  const ctx = { String, chUnit: (bookId) => (bookId === "ps" ? "편" : "장") };
+  vm.createContext(ctx);
+  vm.runInContext(extractBlock("FAILURE_TEXT"), ctx, { filename: "views-failure-text.js" });
+  return {
+    /** @param {...any} args */
+    bibleFailureText: (...args) => JSON.parse(JSON.stringify(ctx.bibleFailureText(...args))),
+    RELOAD_SUBTITLE: vm.runInContext("RELOAD_SUBTITLE", ctx),
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1282,4 +1299,59 @@ test("pieceTrailingSpace: 닫는 따옴표로 끝나거나 따옴표가 가운�
   assert.equal(pieceTrailingSpace("그가 ‘예’ 하고 대답하였다."), " ");
   // 곧은 따옴표는 여닫이를 알 수 없어 건드리지 않는다.
   assert.equal(pieceTrailingSpace('그가 말하였다. "'), " ");
+});
+
+// ── FAILURE_TEXT ─────────────────────────────────────────────────────────────
+// 성서 화면의 실패 화면에 쓸 글(ADR-024 §6, 사용자 결정 2026-11-07). 그전엔 「해당 장을 찾을 수 없습니다.」 같은 한 줄이었다.
+
+const JOHN = { id: "john", name_ko: "요한의 복음서" };
+
+test("bibleFailureText: 없는 장은 「요한의 복음서에는 99장이 없습니다」와 그 책의 「장 목록」", () => {
+  const { bibleFailureText } = loadFailureText();
+  assert.deepEqual(bibleFailureText("no-chapter", JOHN, 99), {
+    message: "요한의 복음서에는 99장이 없습니다",
+    subtitle: "「장 목록」을 눌러 다른 장을 골라 주세요.",
+    link: { label: "장 목록", href: "/john" },
+  });
+});
+
+test("bibleFailureText: 시편은 장 대신 편이다(chUnit — 장 선택 단추의 「편 선택」과 같다)", () => {
+  const { bibleFailureText } = loadFailureText();
+  const psalms = { id: "ps", name_ko: "시편" };
+  assert.deepEqual(bibleFailureText("no-chapter", psalms, 151), {
+    message: "시편에는 151편이 없습니다",
+    subtitle: "「편 목록」을 눌러 다른 편을 골라 주세요.",
+    link: { label: "편 목록", href: "/ps" },
+  });
+  assert.equal(bibleFailureText("no-page", psalms).subtitle, "「편 목록」을 눌러 편을 골라 주세요.");
+});
+
+test("bibleFailureText: 책을 모르는 없는 주소(/xyz)는 「성서 목록」으로 보낸다", () => {
+  const { bibleFailureText } = loadFailureText();
+  assert.deepEqual(bibleFailureText("no-page", null), {
+    message: "없는 주소입니다",
+    subtitle: "「성서 목록」을 눌러 책을 골라 주세요.",
+    link: { label: "성서 목록", href: "/" },
+  });
+});
+
+test("bibleFailureText: 책은 있고 그 뒤가 없는 주소(/john/abc · 머리말이 없는 책의 머리말)는 그 책의 「장 목록」으로 보낸다", () => {
+  const { bibleFailureText } = loadFailureText();
+  assert.deepEqual(bibleFailureText("no-page", JOHN), {
+    message: "없는 주소입니다",
+    subtitle: "「장 목록」을 눌러 장을 골라 주세요.",
+    link: { label: "장 목록", href: "/john" },
+  });
+});
+
+test("bibleFailureText: 자료를 받지 못하면 링크 없이 「다시 불러오기」 — 부제는 캘린더 · 전례독서와 같은 글이다", () => {
+  const { bibleFailureText, RELOAD_SUBTITLE } = loadFailureText();
+  assert.equal(RELOAD_SUBTITLE, "네트워크 연결을 확인한 뒤 「다시 불러오기」를 눌러 주세요.");
+  for (const book of [JOHN, null]) {
+    assert.deepEqual(bibleFailureText("load", book), {
+      message: "성서 자료를 불러오지 못했습니다",
+      subtitle: RELOAD_SUBTITLE,
+      link: null,
+    });
+  }
 });
