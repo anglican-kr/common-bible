@@ -81,7 +81,8 @@ function model(d, query = NONE, stored = null, showAlternates = true) {
   };
   // 공개 래퍼의 findDedications(PRELOAD 블록 — 여기서는 싣지 않는다)와 같은 조회
   const dedications = ix().lec.dedications.get(`${d.slice(5, 7)}.${d.slice(8, 10)}`) || [];
-  const m = ctx.buildLectionaryModel(r, { ...NONE, ...query }, groupsOf, ctx.findCollectsIn(ix().lec, ix().cal, r), stored, dedications, showAlternates);
+  const foundings = ctx.findFoundingsIn(ix().lec, `${d.slice(5, 7)}.${d.slice(8, 10)}`);
+  const m = ctx.buildLectionaryModel(r, { ...NONE, ...query }, groupsOf, ctx.findCollectsIn(ix().lec, ix().cal, r), stored, dedications, showAlternates, foundings);
   assert.ok(m, `${d} 모델이 null`);
   return m;
 }
@@ -614,7 +615,8 @@ test("주일에는 성인 본기도를 잇지 않는다 — 2025-2050 모든 주
   for (let d = "2025-01-01"; d <= "2050-12-31"; d = ctx.addDays(d, 1)) {
     const m = model(d);
     if (ctx.dayOfWeek(d) === 0) {
-      same(m.memorialCollects, [], d);
+      // 관구 설립 본기도(9.29)는 성인의 본기도가 아니라 주일에도 잇는다(ADR-041 §6)
+      same(m.memorialCollects.filter((c) => c.common !== "anniversary"), [], d);
     } else if (m.memorialSaints.some((c) => c.status === "commemorated")) {
       assert.ok(m.memorialCollects.length > 0, `${d} 평일 기념 성인의 본기도`);
       weekdays++;
@@ -771,6 +773,22 @@ test("반절 경계 표 — 전례독서 · 성인 공통의 반절 참조마다
 test("기리는 성인의 본기도를 잇는 차례(MEMORIAL_CLASS_ORDER)는 commons.json 의 유형 정의 차례와 같다(사용자 결정 2026-11-03)", { skip: SKIP }, () => {
   const order = vm.runInContext("MEMORIAL_CLASS_ORDER", ctx);
   assert.deepStrictEqual([...order], Object.keys(read("commons.json").classes));
+});
+
+test("9.29 — 제목은 성 미카엘, 이름 줄은 「1992년 9월 29일 관구설립일」과 「대한성공회 선교 기념일」, 본기도는 미카엘 뒤에 관구 설립 본기도, 전례독서 목록에 설립 기념일 줄이 없다(사용자 결정 2026-11-05, 2026-11-07)", { skip: SKIP }, () => {
+  for (const d of ["2027-09-29", "2030-09-29"]) {   // 수요일, 주일
+    const m = model(d, NONE, null, false);
+    assert.strictEqual(m.dayName, "성 미카엘과 모든 천사들", d);
+    same(labels(m), ["성 미카엘과 모든 천사들"], d);   // 하나뿐이라 화면에 목록이 없다
+    same([...m.foundingLines, ...m.commemorations.map((c) => `${c.observance.name} 기념일`)],
+      ["1992년 9월 29일 관구설립일", "대한성공회 선교 기념일"], d);
+    assert.ok(m.collects[m.collectIndex].text.startsWith("영원히 살아계신 하느님, 천사와 인간들에게"), d);
+    same(m.memorialCollects.map((c) => c.text), ["전능하신 하느님, 땅끝까지 이르러 복음을 전하라 명령하시고 이곳에 대한성공회 관구를 세우심을 감사하나이다. "
+      + "구하오니, 주님께서 세우신 이 관구를 기억하시고 성령의 은총을 내리시어 모든 성직자와 신자들이 주님의 거룩하신 뜻을 받들어 살게 하시고, "
+      + "마음과 힘을 다해 주님의 지상명령을 이루게 하소서."], d);
+    same(plain(m.colors), ["white"], d);
+  }
+  same(model("2027-09-28").foundingLines, []);
 });
 
 test("축성일 줄 — 실제 본당 표에서 축성과 축복이 섞인 날은 두 줄, 같은 종류는 한 줄에 모으고, 북한 성당뿐인 날은 줄이 없다(사용자 결정 2026-11-04)", { skip: SKIP }, () => {

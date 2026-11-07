@@ -38,6 +38,7 @@
 /** @typedef {import("../types").LiturgicalFast} LiturgicalFast */
 /** @typedef {import("../types").HalfVerse} HalfVerse */
 /** @typedef {import("../types").ParishDedication} ParishDedication */
+/** @typedef {import("../types").ProvinceFounding} ProvinceFounding */
 /** @typedef {import("../types").WeekdayCode} WeekdayCode */
 /** @typedef {import("../types").Observance} Observance */
 /** @typedef {import("../types").Candidate} Candidate */
@@ -84,6 +85,7 @@
  *   readings: TextIndex, collects: TextIndex,
  *   commons: Record<string, CommonClass>,
  *   halfVerses: Map<string, HalfVerse>, dedications: Map<string, ParishDedication[]>,
+ *   province: {name: string, date: string, year: number | null} | null,
  * }} LectionaryIndex
  */
 
@@ -1845,7 +1847,7 @@ function coordKey(/** @type {unknown} */ season, /** @type {unknown} */ week, /*
 
 /**
  * 독서 묶음 다섯 표 → 인덱스. `commons.classes`는 배열이 아니라 **맵**이다(§5.2). 반절 경계 표는 「bookId:장:절+a|b」 키로 찾는다(`halfVerseKey`). 본당 표
- * (`local-observances`)는 축성일 「MM.DD」 키로 찾는다(`buildDedicationIndex`).
+ * (`local-observances`)는 축성일 「MM.DD」 키로 찾고(`buildDedicationIndex`), 같은 표의 관구 설립일도 읽는다(`provinceOf`).
  * @param {{readings?: any, collects?: any, commons?: any, halfVerses?: any, localObservances?: any} | null} tables
  * @returns {LectionaryIndex}
  */
@@ -1858,7 +1860,18 @@ function buildLectionaryIndex(tables) {
     commons: classes && typeof classes === "object" && !Array.isArray(classes) ? classes : {},
     halfVerses: buildHalfVerseIndex(t.halfVerses),
     dedications: buildDedicationIndex(t.localObservances),
+    province: provinceOf(t.localObservances),
   };
+}
+
+/**
+ * 본당 표(`local-observances.json`)의 관구 설립일(`province`) — 이름, 「MM.DD」, 설립연도. 없거나 형식이 깨졌으면 null이다.
+ * @param {any} table @returns {{name: string, date: string, year: number | null} | null}
+ */
+function provinceOf(table) {
+  const p = table && table.province;
+  if (!p || typeof p.name !== "string" || typeof p.founded !== "string" || !/^\d{2}\.\d{2}$/.test(p.founded)) return null;
+  return { name: p.name, date: p.founded, year: Number.isInteger(p.founded_year) ? p.founded_year : null };
 }
 
 /**
@@ -2131,6 +2144,39 @@ function collectsOf(lix, cal, resolved, obs) {
 }
 
 /**
+ * 설립일 공통 본기도(`commons.json`의 `anniversary`)를 관구 설립일로 채운다(ADR-041 §6). 원문의 「{name}교구(관구)」는
+ * 「대한성공회 관구」로, 뒤쪽 「교구(관구)」는 「관구」로 고른다(사용자 결정 2026-11-05 — 「이곳에 대한성공회 관구를
+ * 세우심을 감사하나이다… 이 관구를 기억하시고」). 공통 본기도가 없으면 null이다.
+ * @param {LectionaryIndex} lix @param {string} name @returns {CollectOption | null}
+ */
+function provinceCollectOf(lix, name) {
+  const entry = commonClassOf(lix, "anniversary");
+  const tmpl = entry && entry.collect && typeof entry.collect.text === "string" ? entry.collect : null;
+  if (!entry || !tmpl) return null;
+  const e = tmpl.ending;
+  return {
+    id: COMMON_PREFIX + "anniversary-c1",
+    title: typeof entry.label === "string" ? entry.label : "anniversary",
+    collect_no: 1,
+    collect_total: 1,
+    text: String(tmpl.text).split("{name}교구(관구)").join(name + " 관구").split("교구(관구)").join("관구").split("{name}").join(name),
+    ending: e === "A" || e === "B" || e === "C" ? e : null,
+    common: "anniversary",
+  };
+}
+
+/**
+ * 그날(「MM.DD」)이 관구 설립일이면 그 설립일 하나를 담은 배열, 아니면 빈 배열(ADR-041 §6). 모든 사용자에게 같다 —
+ * 소속교회 설정과 무관하다. 전례일 후보가 아니라 화면이 덧붙이는 것이라 교회력 판정(대표, 색, 옮김)에 끼지 않는다.
+ * @param {LectionaryIndex} lix @param {string} monthDay 「MM.DD」 @returns {ProvinceFounding[]}
+ */
+function findFoundingsIn(lix, monthDay) {
+  const p = lix.province;
+  if (!p || p.date !== monthDay) return [];
+  return [{ name: p.name, date: p.date, year: p.year, collect: provinceCollectOf(lix, p.name) }];
+}
+
+/**
  * 그날의 본기도(§5.6 · ADR-038 §3) — **두 축을 구분한다**: 원소 하나가 전례일 하나(`{candidate,
  * collects}`, 순서는 `candidates` 순)이고 그 안의 `collects` 가 같은 전례일의 대체안이다. 뷰는
  * 고른 후보의 것을 앞에 두고 나머지를 열거한다 — 재배열만 하고 재조회하지 않는다. 기념일 후보의
@@ -2218,7 +2264,7 @@ function preloadLectionary() {
 /** 받은 선택 표를 인덱스의 제자리에 세운다. @param {LectionaryIndex} lix @param {string} file @param {any} table */
 function setOptionalTable(lix, file, table) {
   if (file === "half-verses") lix.halfVerses = buildHalfVerseIndex(table);
-  else if (file === "local-observances") lix.dedications = buildDedicationIndex(table);
+  else if (file === "local-observances") { lix.dedications = buildDedicationIndex(table); lix.province = provinceOf(table); }
 }
 
 /**
@@ -2295,6 +2341,18 @@ function findDedications(dateStr) {
   const key = `${String(p.m).padStart(2, "0")}.${String(p.d).padStart(2, "0")}`;
   return (lectionaryIndex.dedications.get(key) || []).map((e) => ({ ...e }));
 }
+
+/**
+ * 그날이 관구 설립일이면 그 설립일(`findFoundingsIn`). 본당 표를 받지 못했으면 빈 배열이다(선택 표 — §3.5). 프리로드 규칙은
+ * `findReadings`와 같다.
+ * @param {string} dateStr "YYYY-MM-DD" @returns {ProvinceFounding[]}
+ */
+function findFoundings(dateStr) {
+  if (!lectionaryIndex) throw new Error("preloadLectionary() must be awaited before findFoundings()");
+  const p = parseDate(dateStr);
+  if (!p) return [];
+  return findFoundingsIn(lectionaryIndex, `${String(p.m).padStart(2, "0")}.${String(p.d).padStart(2, "0")}`);
+}
 // ── END LITURGICAL_PRELOAD ──
 
 export {
@@ -2304,7 +2362,7 @@ export {
   easterDate, advent1Date, baptismDate, liturgicalYearOf, yearAnchors,
   seasonOf, sundayCycle, weekdayCycle, evalRule,
   buildOrdinalIndex, ordinalWeekOf, lunarDatesOf, spansOf, inSpan,
-  preloadCalendar, preloadLectionary, resolveDate, findReadings, findCollects, findHalfVerse, findDedications, fastOf,
+  preloadCalendar, preloadLectionary, resolveDate, findReadings, findCollects, findHalfVerse, findDedications, findFoundings, fastOf,
   setActivatedOptionals,
   // 같은 유형의 성인 둘 이상을 공통 본기도 하나에 모은다(독서 뷰 — 사용자 결정 2026-11-03).
   joinNames, fillCommonName,

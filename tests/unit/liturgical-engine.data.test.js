@@ -325,7 +325,7 @@ test("공통 본기도에 넣는 이름은 모두 한글 음절로 끝난다 —
   assert.deepStrictEqual(bad, [], "끝 글자가 한글이 아닌 이름 — 엔진 hasFinalConsonant 의 전제가 깨진다");
 });
 
-test("C-5.6-4 성인 공통 독서 폴백 — 양성 · 음성 · 불변식 81 / 11 / 17", { skip: SKIP }, () => {
+test("C-5.6-4 성인 공통 독서 폴백 — 양성 · 음성 · 불변식 81 / 11 / 18", { skip: SKIP }, () => {
   const ids = (d, p) => groupsAt(d, p).map((g) => g.id);
   // 양성 — 사베리오(has_proper 참 · 독서 0)는 missionary 세 세트, 그룹 형태는 고유와 같다
   const xav = groupsAt("2025-12-03", "d1203");
@@ -355,7 +355,7 @@ test("C-5.6-4 성인 공통 독서 폴백 — 양성 · 음성 · 불변식 81 /
     if (gs.length > 0 && gs.every((g) => g.common !== null)) fallback++;
     else if (row.sanctoral_class in commons && gs.length > 0 && gs.every((g) => g.common === null)) properWithCommon++;
   }
-  same([fallback, properWithCommon, memorialEmpty], [81, 11, 17]);
+  same([fallback, properWithCommon, memorialEmpty], [81, 11, 18]);   // 기념일 18 — 9.29 대한성공회 선교(2026-11-07)
 });
 
 test("§5.6 본기도 폴백은 빈틈 없이 닫힌다 — has_proper 참은 고유, 거짓은 공통 하나({name} 치환), 기념일과 성인 분류 없는 기도일은 없음", { skip: SKIP }, () => {
@@ -412,7 +412,9 @@ test("미결12 잠정 — 실데이터 1:N 좁히기 (C-5.6-5 는 미결12 가 �
     assert.ok(gs.length > 0 && gs.every((g) => recOf(g).name === name), id);
   }
   const mich = groupsAt("2026-09-29", "d0929-성-미카엘").map((g) => g.id);
-  same(groupsAt("2026-09-29", "d0929-대한성공회").map((g) => g.id), mich);   // 슬래시 합성 레코드 — 둘 다 같은 것
+  // 슬래시 합성 레코드(「성 미카엘과 모든 천사들 / 대한성공회 설립 기념일」)는 미카엘의 것이다. 같은 날의 대한성공회 선교는
+  // 기념일이라 본문이 없다(사용자 결정 2026-11-07)
+  same(groupsAt("2026-09-29", "d0929-대한성공회").map((g) => g.id), []);
   assert.ok(mich.length > 0);
   for (const [p, name] of [["d0815-광복절", "광복절"], ["d0815-성모안식", "성모안식"], ["d0101-거룩한", "거룩한 이름 예수"]]) {
     const gs = groupsAt(p.startsWith("d0101") ? "2026-01-01" : "2026-08-15", p);

@@ -210,7 +210,7 @@
       "id": "W-2024-09-29-michael-over-sunday",
       "kind": "winner",
       "group": "⑩",
-      "title": "성 미카엘(A prec 3, 주일) > 연중 26주일 — official 미카엘, 설립 기념일은 proper",
+      "title": "성 미카엘(A prec 3, 주일) > 연중 26주일 — official 미카엘, 대한성공회 선교 기념일은 proper",
       "status": "confirmed",
       "canon": ["R-6.1-ladder", "R-6.5-year-pass"],
       "checks": ["X-12", "C-6.1-2", "C-6.1-5"],
@@ -218,7 +218,7 @@
       "note": "같은 고정 날짜의 두 전례일은 충돌이 아니라 동시 봉헌 — 옮기지 않고 높은 쪽 official, 낮은 쪽 proper(둘 다 본기도·독서를 만들고 독자가 고른다, 미결18).",
       "assertions": [
         { "date": "2024-09-29", "expect": { "official": "d0929-성-미카엘과-모든-천사들", "color": "white" } },
-        { "date": "2024-09-29", "expect": { "id": "d0929-대한성공회-설립-기념일", "status": "proper" } },
+        { "date": "2024-09-29", "expect": { "id": "d0929-대한성공회-선교", "status": "proper" } },
         { "date": "2024-09-29", "expect": { "id": "grid:ordinary-26-sunday", "status": "proper" } }
       ]
     },
