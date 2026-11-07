@@ -375,7 +375,7 @@ ADR-018 모듈 분할(2026-05-10)로 옛 단일 `app.js` 약 6,000줄이 도메�
 
 캐시는 네 가지 이름으로 나뉜다(`sw.js`):
 
-- `SHELL_CACHE`(예: `shell-1.6.4`): 셸과 부팅에 필요한 메타 정보, 그리고 부팅할 때 싣지 않는 교회력 모듈 셋을 담는다. 교회력 모듈 셋은 설치할 때 미리 받는다. 교회력 표는 처음 쓸 때 `DATA_CACHE`에 들어가므로, 오프라인에서 열리는 캘린더와 전례독서는 온라인에서 한 번 연 화면이다. 이름은 `importScripts('/sw-version.js')`로 `self.APP_VERSION`을 읽어 `"shell-" + APP_VERSION`으로 정한다. 릴리스마다 갱신한다.
+- `SHELL_CACHE`(예: `shell-2.0.0`): 셸과 부팅에 필요한 메타 정보, 그리고 부팅할 때 싣지 않는 교회력 모듈 셋을 담는다. 교회력 모듈 셋은 설치할 때 미리 받는다. 교회력 표는 처음 쓸 때 `DATA_CACHE`에 들어가므로, 오프라인에서 열리는 캘린더와 전례독서는 온라인에서 한 번 연 화면이다. 이름은 `importScripts('/sw-version.js')`로 `self.APP_VERSION`을 읽어 `"shell-" + APP_VERSION`으로 정한다. 릴리스마다 갱신한다.
 - `DATA_CACHE`(`"data"`): 본문 장 JSON(73권 1328장, 머리말, 전례시편 150, 송가 13), 검색 청크 셋, 교회력 표, 전례독서 표를 담는다. 이름은 고정이고, 항목별 무효화는 `js/manifest-sync.js`가 맡는다(ADR-021).
 - `AUDIO_CACHE`(`"audio"`): 장별 mp3를 담는다. 무효화 방식은 `DATA_CACHE`와 같다.
 - `FONT_CACHE`(`"fonts"`): Google Font 파일을 담는다. 콘텐츠 주소를 기준으로 하므로 사실상 영구하다.

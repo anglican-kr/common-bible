@@ -130,4 +130,4 @@ git branch -D <topic-branch>   # squash 커밋은 브랜치 커밋과 이어지�
 1. 데이터 저장소에서 `source/*.md`를 고치고 PR로 main에 머지한다.
 2. main의 `build.yml`이 파이프라인과 매니페스트를 다시 만들고, 같은 실행 안에서 산출물을 검증(ADR-004)한 뒤 자동으로 커밋한다.
 3. 앱 저장소의 `sync-data.yml`이 서브모듈 포인터와 `sitemap.xml`을 자동으로 올린다(버전은 올리지 않는다).
-4. 사용자가 정한 때 `python scripts/release.py patch`를 실행하면 push, 태그, GitHub Release까지 이어진다. 그다음 `deploy.sh dev`와 `deploy.sh promote`를 차례로 실행한다(태그와 릴리스 노트의 규칙은 `docs/workflow.md` 「릴리스」).
+4. 사용자가 정한 때 작업 폴더에서 `python scripts/release.py <patch|minor|major>`로 버전을 올린다. 스크립트는 `version.json`과 `sw-version.js`를 고쳐 커밋까지만 한다. 그 커밋을 릴리스 PR로 머지한 뒤 태그와 GitHub Release를 만들고, `deploy.sh dev`와 `deploy.sh promote`를 차례로 실행한다(태그와 릴리스 노트의 규칙은 `docs/workflow.md` 「릴리스」).
