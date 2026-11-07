@@ -15,9 +15,9 @@
 //
 // 사용자 결정(2026-10-15 — A2 계획의 잠정안 일괄 승인, coding-pitfalls §24):
 //   칸 이름은 하나 — 그날의 대표(엔진의 official). 대표가 이름 없는 평일(격자)이면 사계재 · 기념일처럼 이름 있는
-//   다른 후보, 주일 · 고유명 평일(성주간 월~수 · 재의 수요일 후 목~토)은 격자 이름. 나머지 후보는 주간 · 목록 줄과
+//   다른 후보, 주일 · 고유명 평일(성주간 월~수 · 재의 수요일 후 목~토)은 격자 이름. 나머지 후보는 목록 줄과
 //   전례독서 목록에서 본다.
-//   선택 봉헌(「옮겨 지킬 수 있음」)은 월간 칸에 보이지 않는다 — 주간 · 목록 줄의 보조 이름으로.
+//   선택 봉헌(「옮겨 지킬 수 있음」)은 월간 칸에 보이지 않는다 — 목록 줄의 보조 이름으로.
 //   전례년이 바뀌는 날(대림 1주일)에 「나해 시작」 같은 표지(설계서 미결3 — 엔진의 liturgicalYearOf로 가른다).
 //   독서 성구는 달력에 싣지 않는다(설계서 미결41) — 독서 묶음(1.6MB)을 달력에서 받지 않으려고.
 //   탭 이름 · 화면 제목은 「캘린더」(사용자 「"교회력"은 "캘린더"로」 2026-10-15) — 교회력 자체를 말하는 문구는 그대로.
@@ -33,7 +33,7 @@ import {
   LITURGICAL_VIEWS, THIS_MONTH_LABEL, commitLiturgicalTitle, renderLiturgicalFailure, renderLiturgicalLoadFailure,
 } from "./views.js";
 import {
-  shortName, statusSuffix, isGrid, todayKey, buildDateNav,
+  shortName, statusSuffix, isGrid, todayKey, commitDateBar,
   CYCLE_LABEL, COLOR_LABEL, WEEKDAY_KO,
 } from "./lectionary.js";
 
@@ -45,11 +45,11 @@ const PAGE_TITLE = LITURGICAL_VIEWS.calendar.title;
 
 /** parsePath 가 /calendar 에서 내는 서술자(routing.js PARSE_PATH — 정의는 types.d.ts `Route`). @typedef {import("../types").CalendarRoute} CalendarRoute */
 /**
- * 이름 하나 — 줄(주간 · 목록)의 이름 줄 원소. `away` 는 그날 지키지 않는 후보(옮겨 감 · 생략)라 흐리게 그린다.
+ * 이름 하나 — 목록 줄의 이름 줄 원소. `away` 는 그날 지키지 않는 후보(옮겨 감 · 생략)라 흐리게 그린다.
  * @typedef {{ name: string, title: string, suffix: string, away: boolean }} CalendarName
  */
 /**
- * 교회력 하루 — 월간 칸 · 주간 줄 · 목록 줄이 같이 쓰는 표시 단위(`calendarDay` 의 반환).
+ * 교회력 하루 — 월간 칸과 목록 줄이 같이 쓰는 표시 단위(`calendarDay` 의 반환).
  * @typedef {{
  *   date: string, day: number, weekday: number, href: string | null,
  *   cellName: string, cellTitle: string, cellSuffix: string,
@@ -125,14 +125,14 @@ function cellCandidateOf(resolved) {
   if (resolved.coord && resolved.coord.type === "sunday") return official;
   if (official.observance.properWeekday === true) return official;
   // 저녁 전례(성탄 밤 — 12.24 저녁)는 그날의 이름이 아니다(→ 설계서 R-6.1-evening — 그날 낮의 대표 · 색에 참여하지 않는다) —
-  // 칸에 실으면 「성탄 밤」 이름에 그날 색(자) 점이 붙는다(PR #349 리뷰). 주간 · 목록 줄에는 「· 저녁」 상태 표시로 남는다.
+  // 칸에 실으면 「성탄 밤」 이름에 그날 색(자) 점이 붙는다(PR #349 리뷰). 목록 줄에는 「· 저녁」 상태 표시로 남는다.
   return resolved.candidates.find((c) => !isGrid(c) && !isAwayCandidate(c) && c.status !== "optional" && !c.evening) || null;
 }
 
 /**
  * 월간 칸에 쓰는 짧은 이름 — `shortName`에 더해 번호 붙은 주일은 「대림1주」처럼 줄인다(ADR-038 §2):
  * 「연중 32주일」 → 「연중32주」 · 「대림1주일」 → 「대림1주」. 폰의 칸 폭(약 4글자)에 한 줄로 들어간다.
- * 번호 없는 주일(성지주일 · 삼위일체 주일)과 평일 이름은 그대로. 줄(주간 · 목록)과 링크 이름은 줄이지 않은 이름이다.
+ * 번호 없는 주일(성지주일 · 삼위일체 주일)과 평일 이름은 그대로. 목록 줄과 링크 이름은 줄이지 않은 이름이다.
  * @param {string | null | undefined} name
  */
 function cellLabel(name) {
@@ -268,27 +268,27 @@ function buildMonthGrid(y, m, today, resolve) {
 // PR #348 리뷰). 그 링크들은 `data-focus-key`(범위 끝에서 자리만 남는 앞뒤 단추는 `data-focus-fallback` 「오늘」도)만 달고,
 // 라우터가 누른 자리를 재 두었다가 새 화면의 같은 컨트롤로 포커스를 돌려준다(routing.js — 전례독서 · 구분 탭 · 검색과 같다).
 
+/** 지금 그려 둔 달 — 달이 바뀌었는지 `commitMonth`가 본다. @type {string | null} */
+let committedMonth = null;
+
 /** 같은 화면 안에서 달이 바뀌면 고정 문구(setTitle) 대신 그 달을 읽힌다 — 전례독서의 announceDay 와 같은 몫. */
 function announceMonth(/** @type {CalendarMonth} */ model) {
   announce(`${model.title} ${PAGE_TITLE}`);
 }
 
-/** @param {CalendarMonth} model */
-function buildMonthHead(model) {
-  const head = el("header", { className: "cal-head" });
+/** 머리의 제목 자리에 달 이동 줄을 그린다 — 전례독서와 같은 줄이다(사용자 결정 2026-11-07). @param {CalendarMonth} model */
+function commitMonthBar(model) {
   // 폭이 모자라면 CSS가 짧은 표기를 보인다(사용자 결정 2026-11-05). 스크린 리더는 언제나 전체 이름을 읽는다.
-  const month = el("h2", { className: "cal-month" });
+  const month = el("span", { className: "cal-month" });
   month.appendChild(el("span", { className: "cal-month-full" }, model.title));
   month.appendChild(el("span", { className: "cal-month-short", "aria-hidden": "true" }, model.shortTitle));
-  // 전례독서의 날짜 이동 줄과 같은 줄 — 이전 · 다음 달은 계산 범위 밖이면 자리만 지킨다
-  head.appendChild(buildDateNav({
-    ariaLabel: "달 이동",
+  // 이전 · 다음 달은 계산 범위 밖이면 자리만 지킨다
+  commitDateBar({
     title: month,
     todayHref: model.hrefs.today,
     prev: { href: model.hrefs.prev, label: "이전 달" },
     next: { href: model.hrefs.next, label: "다음 달" },
-  }));
-  return head;
+  });
 }
 
 /** 색 점 줄 — 장식(aria-hidden). 색 이름은 링크 이름이 싣는다. @param {string[]} colors */
@@ -311,7 +311,7 @@ function buildCell(cell) {
   inner.appendChild(el("span", { className: "cal-date" }, String(cell.day)));
   if (cell.colors.length) inner.appendChild(buildDots(cell.colors));
   // 앞뒤 달의 칸은 이름을 싣지 않는다 — 그 달 화면에서 본다(링크 이름에는 남는다).
-  // 전례년 첫날 표지는 칸 폭에 맞게 주기만(「나해」) — 「나해 시작」 전체는 title · 링크 이름 · 주간 · 목록 줄에.
+  // 전례년 첫날 표지는 칸 폭에 맞게 주기만(「나해」) — 「나해 시작」 전체는 title · 링크 이름 · 목록 줄에.
   if (cell.inMonth && cell.yearStart) inner.appendChild(el("span", { className: "cal-mark", title: cell.yearStart }, cell.cycle || cell.yearStart));
   if (cell.inMonth && cell.cellName) {
     const name = el("span", { className: "cal-name" }, cell.cellName);
@@ -346,12 +346,17 @@ function buildMonthTable(model) {
  * @param {CalendarMonth} model
  */
 function commitMonth(model) {
-  commitLiturgicalTitle("calendar");   // 제목 + 성서 목록 집 단추(views.js)
+  commitLiturgicalTitle("calendar");   // 문서 제목(views.js)
+  commitMonthBar(model);
   clearNode($app);
   const root = el("div", { className: "calendar" });
-  root.appendChild(buildMonthHead(model));
   root.appendChild(buildMonthTable(model));
   $app.appendChild(root);
+  // 달이 바뀌면 새 달은 맨 위부터 — 달 이동은 스크롤해도 보이는 머리에 있어 읽던 자리에서 누른다(전례독서의 날짜 이동과 같다).
+  // 뒤로 가기와 탭 전환은 이 뒤에 떠날 때의 스크롤을 되살린다(tab-history.js onRouteEnd).
+  const monthKey = `${model.year}-${model.month}`;
+  if (monthKey !== committedMonth && window.scrollY !== 0) window.scrollTo({ top: 0, behavior: "instant" });
+  committedMonth = monthKey;
   announceMonth(model);
 }
 

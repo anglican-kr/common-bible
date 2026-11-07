@@ -903,8 +903,8 @@ export interface AppHelpers {
   }) => HTMLElement;
   /** 헤더 아이콘의 SVG — path `d` 만 받는다(규격은 helpers.js 한 곳). 단추 · 링크와 그 동작은 호출 쪽 몫. */
   headerIcon: (d: string) => SVGSVGElement;
-  /** 헤더 아이콘의 path — 글리프마다 하나(`back` 왼쪽 꺾쇠 · `home` 집). 같은 글리프를 그리는 곳은 모두 이것을 `headerIcon` 에 넘긴다. */
-  HEADER_ICON_PATHS: Readonly<{ back: string; home: string }>;
+  /** 헤더 아이콘의 path — 글리프마다 하나(`back` 왼쪽 꺾쇠 · `home` 집 · `viewMonth` 칸 아홉 개). 같은 글리프를 그리는 곳은 모두 이것을 `headerIcon` 에 넘긴다. */
+  HEADER_ICON_PATHS: Readonly<{ back: string; home: string; viewMonth: string }>;
   isModifiedClick: (e: Event) => boolean;
   /** 같은 화면을 다시 그리는 링크(`data-focus-key`)를 누른 자리 — 라우터가 이동 직전에 잰다(routing.js). 키가 없으면 null. */
   focusSpotOf: (a: Element, e: Event, root: Element | null) => FocusSpot | null;

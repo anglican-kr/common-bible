@@ -79,7 +79,7 @@ def test_month_nav_links_step_months_and_back_returns(desktop_context):
     page.go_back()
     page.wait_for_url("**/calendar/2026-12")
     page.wait_for_selector(".cal-month:has-text('2026년 12월')")
-    page.locator(".cal-head .lect-today").click()
+    page.locator("#page-title .lect-today").click()
     page.wait_for_url(f"{BASE}/calendar")
     page.wait_for_selector(f".cal-month:has-text('{_this_month()[1]}')")
 
@@ -100,16 +100,15 @@ def test_grid_is_six_weeks_from_sunday(desktop_context):
 # ── ③ 칸 → 전례독서 → 위 단계 ──
 
 def test_cell_opens_lectionary_and_the_tab_returns_to_the_last_month(mobile_context):
-    """12월 25일 칸을 누르면 /lectionary/2026-12-25(성탄 낮)다. 머리의 제목 자리는 그날의 날짜 이동 줄이고 위 단계 꺾쇠는 없다 — 캘린더로는
-    탭 바의 캘린더 탭이 간다(사용자 결정 2026-11-03). 탭은 마지막으로 본 달로 돌아간다(사용자 결정 2026-11-07)."""
+    """12월 25일 칸을 누르면 /lectionary/2026-12-25(성탄 낮)다. 머리의 제목 자리는 그날의 날짜 이동 줄이다. 탭은 마지막으로 본 달로
+    돌아간다(사용자 결정 2026-11-07)."""
     page = mobile_context.new_page()
     _open(page, "calendar/2026-12")
     _cell(page, "2026-12-25").click()
     page.wait_for_url("**/lectionary/2026-12-25")
     page.wait_for_selector(".lect-day", timeout=20_000)
     assert page.inner_text(".lect-day") == "성탄 낮"
-    assert page.locator("#page-title .title-back-btn").count() == 0
-    assert page.locator("#page-title .title-home-btn").count() == 0   # 성서 목록 집 단추도 없다
+    assert not page.locator("#page-title .title-home-btn").is_visible()   # 집 단추는 탭 바가 없는 데스크톱에만 보인다
     assert page.get_attribute("#page-title .lect-date time", "datetime") == "2026-12-25"
     assert page.locator("#page-title a.lect-datenav-btn[aria-label='전날']").is_visible()
     # 캘린더 탭 소속 — 독서 화면에서도 캘린더 탭이 활성
@@ -405,7 +404,7 @@ def test_header_calendar_entry_hidden_on_mobile(mobile_context):
 def _focused(page):
     return page.evaluate("""() => {
         const a = document.activeElement;
-        return { key: a?.dataset?.focusKey || null, inHead: !!a?.closest('.cal-head'), visible: !!a?.matches(':focus-visible') };
+        return { key: a?.dataset?.focusKey || null, inHead: !!a?.closest('#page-title'), visible: !!a?.matches(':focus-visible') };
     }""")
 
 
@@ -426,7 +425,7 @@ def test_month_nav_keeps_keyboard_focus_on_the_pressed_control(desktop_context):
     page.keyboard.press("Enter")
     page.wait_for_selector(".cal-month:has-text('2027년 1월')")
     assert _focused(page)["key"] == "prev"
-    page.locator(".cal-head .lect-today").focus()
+    page.locator("#page-title .lect-today").focus()
     page.keyboard.press("Enter")
     page.wait_for_selector(f".cal-month:has-text('{_this_month()[1]}')")
     assert _focused(page)["key"] == "today"
@@ -443,42 +442,126 @@ def _month_nav(page):
     return page.evaluate("""() => {
       const short = document.querySelector('.cal-month-short');
       const shown = getComputedStyle(short).display === 'none' ? document.querySelector('.cal-month-full') : short;
-      const m = shown.getBoundingClientRect(), t = document.querySelector('.cal-head .lect-today').getBoundingClientRect();
-      const next = document.querySelector(".cal-head a.lect-datenav-btn[data-focus-key='next']").getBoundingClientRect();
+      const m = shown.getBoundingClientRect(), t = document.querySelector('#page-title .lect-today').getBoundingClientRect();
+      const prev = document.querySelector("#page-title a.lect-datenav-btn[data-focus-key='prev']").getBoundingClientRect();
+      const next = document.querySelector("#page-title a.lect-datenav-btn[data-focus-key='next']").getBoundingClientRect();
       return { text: shown.textContent, mid: (m.left + m.right) / 2, right: m.right, top: m.top, bottom: m.bottom,
-               todayLeft: t.left, todayRight: t.right, todayMid: (t.top + t.bottom) / 2, next: next.left,
+               todayLeft: t.left, todayRight: t.right, todayMid: (t.top + t.bottom) / 2, prev: prev.left, next: next.right,
                scrollWidth: document.documentElement.scrollWidth };
     }""")
 
 
 def test_month_nav_centers_only_the_month_text_and_shortens_when_narrow(mobile_context):
-    """달 이동 줄은 달의 글자만 가운데에 두고 「오늘」은 그 오른쪽에 둔다. 「오늘」의 폭이 글자를 밀지 않는다. 가장 긴 달이 들어가지
-    않는 폭에서는 모든 달을 YYYY.MM으로 줄이고, 스크린 리더는 전체 이름을 읽는다(사용자 결정 2026-11-05)."""
+    """달의 글자는 화면 가운데에 있고 「오늘」은 왼쪽 칸이다. 「오늘」의 폭이 글자를 밀지 않는다. 가장 긴 달이 들어가지 않으면 모든 달을
+    YYYY.MM으로 줄이고, 스크린 리더는 전체 이름을 읽는다(사용자 결정 2026-11-05, 배치는 2026-11-07)."""
     page = mobile_context.new_page()
     _open(page, "calendar/2027-12")
-    for width, text in ((320, "2027.12"), (360, "2027년 12월"), (390, "2027년 12월"), (430, "2027년 12월")):
+    for width in (320, 360, 390, 430):
         page.set_viewport_size({"width": width, "height": 844})
         state = _month_nav(page)
-        assert state["text"] == text, (width, state)
+        assert state["text"] == "2027년 12월", (width, state)
         assert abs(state["mid"] - width / 2) <= 1, (width, state)
-        assert state["todayLeft"] >= state["right"] and state["todayRight"] <= state["next"], (width, state)
+        assert state["todayRight"] <= state["prev"], (width, state)
         assert state["scrollWidth"] == width, (width, state)
     page.set_viewport_size({"width": 320, "height": 844})
+    page.evaluate("() => { document.documentElement.style.fontSize = '20px'; }")
+    state = _month_nav(page)
+    assert state["text"] == "2027.12", state
+    assert abs(state["mid"] - 160) <= 1, state
     assert page.locator(".cal-month-full").inner_text() == "2027년 12월"   # 숨겼어도 읽는다
     assert page.get_attribute(".cal-month-short", "aria-hidden") == "true"
-    _open(page, "calendar/2027-05")   # 짧은 달도 같은 폭에서 같이 줄고, 월은 두 자리다
+    page.evaluate("() => { document.documentElement.style.fontSize = ''; }")
+    _open(page, "calendar/2027-05")   # 짧은 달도 같은 조건에서 같이 줄고, 월은 두 자리다
+    page.evaluate("() => { document.documentElement.style.fontSize = '20px'; }")
     assert _month_nav(page)["text"] == "2027.05"
 
 
 def test_month_nav_stays_on_one_line_with_the_largest_font_on_320px(mobile_context):
-    """글자 크기 24px로 320px에서도 달과 「오늘」이 한 줄에 다 보인다. 자리가 모자라면 글자가 왼쪽으로 옮겨 가고, 앞뒤 단추와
-    겹치거나 가로로 넘치지 않는다."""
+    """글자 크기 24px로 320px에서도 달과 「오늘」이 한 줄에 다 보인다. 「오늘」이 ‹ 와 겹치거나 가로로 넘치지 않는다."""
     page = mobile_context.new_page()
     page.set_viewport_size({"width": 320, "height": 700})
     _open(page, "calendar/2027-12")
     page.evaluate("() => { document.documentElement.style.fontSize = '24px'; }")
     state = _month_nav(page)
     assert state["text"] == "2027.12", state
-    assert state["todayLeft"] >= state["right"] and state["todayRight"] <= state["next"], state
+    assert state["todayRight"] <= state["prev"], state
     assert state["top"] <= state["todayMid"] <= state["bottom"], state
     assert state["scrollWidth"] == 320, state
+
+
+# ── ⑨ 세 화면의 같은 상단 바(사용자 결정 2026-11-07) ──
+
+def _bar(page):
+    """상단 바 세 칸의 자리. 화면에 보이지 않는 칸은 None 이다."""
+    return page.evaluate("""() => {
+      const box = (s) => { const e = document.querySelector('#page-title ' + s); if (!e) return null;
+                           const r = e.getBoundingClientRect(); return r.width ? { left: r.left, right: r.right } : null; };
+      return { home: box('.title-home-btn'), today: box('.lect-today'), prev: box("a.lect-datenav-btn[data-focus-key='prev']"),
+               next: box("a.lect-datenav-btn[data-focus-key='next']"), view: box('.title-view-btn') };
+    }""")
+
+
+def test_month_and_lectionary_share_the_head_row(mobile_context):
+    """월간과 전례독서의 상단 바는 같은 세 칸이고 「오늘」과 ‹ ›가 같은 자리에 있다. 달력에서 날짜를 눌러도 단추가 움직이지 않는다.
+    「캘린더」 글자와 표 위의 달 이동 줄은 없고, 「캘린더」는 문서 제목에 남는다."""
+    page = mobile_context.new_page()
+    for width in (320, 390, 430):
+        page.set_viewport_size({"width": width, "height": 844})
+        _open(page, "calendar/2027-12")
+        month = _bar(page)
+        assert "캘린더" in page.evaluate("() => document.title")
+        assert "캘린더" not in page.inner_text("#page-title")
+        assert page.locator(".calendar .lect-today").count() == 0
+        assert page.locator("#page-title .title-view-btn").count() == 0   # 월간의 오른쪽 칸은 목록 보기를 만들 때 채운다
+        page.goto(f"{BASE}/lectionary/2026-12-30")
+        page.wait_for_selector(".lect-day", timeout=20_000)
+        day = _bar(page)
+        for key in ("today", "prev", "next"):
+            assert abs(month[key]["left"] - day[key]["left"]) <= 1, (width, key, month, day)
+        assert day["today"]["right"] <= day["prev"]["left"] and day["next"]["right"] <= day["view"]["left"], (width, day)
+        assert day["view"]["right"] - day["view"]["left"] >= 44, (width, day)
+        assert day["home"] is None and month["home"] is None   # 모바일은 탭 바가 집 단추를 대신한다
+
+
+def test_lectionary_view_button_goes_to_the_month_of_the_date_shown(mobile_context):
+    """전례독서 상단 바의 오른쪽 단추는 지금 보는 날짜가 든 달로 간다. ‹ ›로 달을 넘겼으면 넘긴 날짜의 달이다. 탭 바의 캘린더 탭은 마지막으로
+    본 보기로 가므로 다르다(ADR-038 §1)."""
+    page = mobile_context.new_page()
+    page.goto(f"{BASE}/lectionary/2027-01-01")
+    page.wait_for_selector(".lect-day", timeout=20_000)
+    button = page.locator("#page-title .title-view-btn")
+    assert button.get_attribute("aria-label") == "월간으로 보기"
+    assert button.get_attribute("title") == "월간으로 보기"
+    assert button.get_attribute("href") == "/calendar/2027-01"
+    page.locator("#page-title a.lect-datenav-btn[aria-label='전날']").click()
+    page.wait_for_selector("#page-title .lect-date time[datetime='2026-12-31']")
+    page.locator("#page-title .title-view-btn").click()
+    page.wait_for_url(f"{BASE}/calendar/2026-12")
+    page.wait_for_selector(".cal-month:has-text('2026년 12월')")
+
+
+def test_desktop_head_keeps_the_book_list_button_on_both_views(desktop_context):
+    """탭 바가 없는 데스크톱은 「오늘」 앞의 집 단추가 성서 목록의 입구다. 월간과 전례독서에 모두 있고 두 칸이 겹치지 않는다."""
+    page = desktop_context.new_page()
+    for path in ("calendar/2026-12", "lectionary/2026-12-30"):
+        page.goto(f"{BASE}/{path}")
+        page.wait_for_selector("#page-title .lect-date", timeout=20_000)
+        state = _bar(page)
+        assert state["home"] and state["home"]["right"] <= state["today"]["left"], (path, state)
+    page.locator("#page-title .title-home-btn").click()
+    page.wait_for_selector(".book-list", timeout=20_000)
+
+
+def test_month_steps_start_the_new_month_at_the_top(mobile_context):
+    """달 이동은 스크롤해도 보이는 머리에 있다. 스크롤한 자리에서 다음 달을 누르면 새 달은 맨 위부터이고 포커스는 누른 단추에 남는다
+    (전례독서의 날짜 이동과 같다)."""
+    page = mobile_context.new_page()
+    page.set_viewport_size({"width": 390, "height": 400})
+    _open(page, "calendar/2026-12")
+    page.evaluate("() => window.scrollTo({ top: 300, behavior: 'instant' })")
+    page.wait_for_function("() => window.scrollY > 100")
+    page.locator("#page-title a.lect-datenav-btn[data-focus-key='next']").click()
+    page.wait_for_selector(".cal-month:has-text('2027년 1월')")
+    page.wait_for_timeout(200)
+    assert page.evaluate("() => window.scrollY") == 0
+    assert page.evaluate("() => document.activeElement.dataset.focusKey") == "next"
