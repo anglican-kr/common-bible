@@ -38,7 +38,7 @@ import {
   CYCLE_LABEL, COLOR_LABEL, WEEKDAY_KO,
 } from "./lectionary.js";
 
-const { _$, el, clearNode, HEADER_ICON_PATHS, SCROLL_ANCHORING } = window.appHelpers;
+const { _$, el, clearNode, HEADER_ICON_PATHS, SCROLL_ANCHORING, focusSpotOf, restoreFocusSpot } = window.appHelpers;
 
 const $app = _$("app");
 // 이름은 views.js에 있다 — 이 모듈을 받지 못했을 때 라우터가 같은 제목으로 실패 화면을 그린다.
@@ -694,7 +694,7 @@ function trimList(list) {
 
 /**
  * 스크롤을 따라 상단 바를 고친다. 다시 그리지 않고 글자와 주소만 바꿔, 누르던 단추와 포커스를 잃지 않는다. 계산 범위 끝에서는 단추가 자리만 남으므로
- * 통째로 다시 그린다.
+ * 통째로 다시 그린다. 라우터를 거치지 않으므로 포커스는 여기서 돌려준다. 사라진 단추에 있었으면 「오늘」로 간다(WCAG 2.4.3).
  * @param {ListMonth} model
  */
 function updateMonthBar(model) {
@@ -702,7 +702,10 @@ function updateMonthBar(model) {
   const prev = bar.querySelector('a[data-focus-key="prev"]');
   const next = bar.querySelector('a[data-focus-key="next"]');
   if (!prev !== !model.hrefs.prev || !next !== !model.hrefs.next) {
+    const active = document.activeElement;
+    const spot = active && focusSpotOf(active, new Event("scroll"), null);
     commitMonthBar(model, HEADER_ICON_PATHS.viewMonth);
+    restoreFocusSpot(spot, null);
     return;
   }
   const full = bar.querySelector(".cal-month-full");

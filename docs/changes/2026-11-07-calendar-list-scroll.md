@@ -53,3 +53,9 @@ title: "feat: 캘린더 목록 무한 스크롤"
 - `docs/topics/liturgical.md`: 지금 동작, 남은 일
 - `docs/architecture.md`: 모듈 표
 - 디자인 시스템 아티팩트: `CalendarList`의 설명, `bundle.css`
+
+## 리뷰 반영
+
+1회차(Copilot).
+
+- 계산 범위 끝의 달로 스크롤하면 상단 바를 다시 그려 포커스가 사라진다는 지적: 재현했다(더한 e2e가 고치기 전에 실패했다). 라우터를 거치지 않는 경로라 돌려주는 코드가 없었다. 라우터가 쓰는 `focusSpotOf`와 `restoreFocusSpot`으로 같은 단추에 돌려주고, 사라진 ‹ › 단추에 있었으면 「오늘」로 옮긴다. 반영 뒤 유닛 1,584건, 타입 검사, e2e `test_calendar_view.py` 58건이 통과했다.

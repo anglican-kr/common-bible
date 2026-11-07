@@ -1083,6 +1083,19 @@ def test_list_stops_at_the_ends_of_the_computable_range(mobile_context):
     assert errors == []
 
 
+def test_list_keeps_focus_when_the_bar_redraws_at_the_range_end(mobile_context):
+    """스크롤로 계산 범위 끝의 달에 가면 상단 바를 다시 그린다. 포커스는 같은 단추에 남고, 사라진 단추에 있었으면 「오늘」로 간다(WCAG 2.4.3)."""
+    page = mobile_context.new_page()
+    focused = "() => document.activeElement.dataset.focusKey"
+    for key, expected in (("view", "view"), ("prev", "today")):
+        _open_list(page, "calendar/list/1583-02-15")
+        page.locator(f"#page-title a[data-focus-key='{key}']").focus()
+        page.evaluate("() => window.scrollTo({ top: 0, behavior: 'instant' })")
+        page.wait_for_selector(".cal-month-full:has-text('1583년 1월')")
+        assert page.locator("#page-title a[data-focus-key='prev']").count() == 0
+        assert page.evaluate(focused) == expected
+
+
 def test_only_the_list_loads_the_lectionary_tables(mobile_context):
     """줄의 글을 정하려고 목록은 독서 묶음을 받는다. 월간은 받지 않는다(ADR-038 §2)."""
     page = mobile_context.new_page()
