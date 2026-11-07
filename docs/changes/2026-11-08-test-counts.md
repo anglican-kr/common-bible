@@ -1,4 +1,5 @@
 ---
+pr: 527
 date: 2026-11-08
 branch: docs/test-counts
 title: "docs: 시험 건수 다시 세기와 쌓은 브랜치의 squash 메시지 함정"
