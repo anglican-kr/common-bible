@@ -95,6 +95,10 @@ function _after(now, ...prev) {
   return Math.max(now, m + 1);
 }
 
+// A record's time to compare: one that is not a finite number counts as 0, as in _after.
+/** @param {unknown} t @returns {number} */
+function _time(t) { return typeof t === "number" && Number.isFinite(t) ? t : 0; }
+
 // Recursively walk a bookmark tree and produce a flat {[id]: node} map.
 // Each node gets parentId and _order; _u is preserved if already set.
 /**
@@ -131,45 +135,103 @@ function _flattenTree(nodes, parentId, out, now) {
   return out;
 }
 
-// Reconstruct a bookmark tree from a flat map.
+/** @param {string} a @param {string} b @returns {number} */
+function _idOrder(a, b) { return a < b ? -1 : a > b ? 1 : 0; }
+
+// Siblings in display order. Equal values break on id: two devices that each move an item to the front give both the
+// same value, and the document's key order (each merge puts its own keys first) showed them differently per device
+// (4th review).
+/** @param {SyncFlatItem} a @param {SyncFlatItem} b @returns {number} */
+function _siblingOrder(a, b) { return (a._order ?? 0) - (b._order ?? 0) || _idOrder(a.id, b.id); }
+
+// Reconstruct a bookmark tree from a flat map. Every item shows once, in a tree that depends on the items alone, not
+// on the order of the map's keys — so every device draws one document the same way.
 // Tombstoned items must already be filtered out before calling.
 /**
  * @param {{ [id: string]: SyncFlatItem }} items
  * @returns {BookmarkTreeNode[]}
  */
 function bookmarkTreeFromFlat(items) {
+  const nodes = Object.values(items);
   // A Map, not a plain object: every id is looked up here as a parent, and a plain object's inherited names
   // (toString …) made the whole list fail to load (known-issues §15.2).
   /** @type {Map<string, SyncFlatItem[]>} */
   const byParent = new Map();
-  for (const node of Object.values(items)) {
+  for (const node of nodes) {
     const p = node.parentId ?? "";
     const siblings = byParent.get(p);
     if (siblings) siblings.push(node);
     else byParent.set(p, [node]);
   }
-  /**
-   * @param {string} parentId
-   * @returns {BookmarkTreeNode[]}
-   */
+  /** @type {Set<SyncFlatItem>} */
+  const placed = new Set();
+  /** @param {SyncFlatItem} flat @returns {BookmarkTreeNode} */
+  function place(flat) {
+    placed.add(flat);
+    const { parentId: _p, _order: _o, _u: _t, ...rest } = flat;
+    const kids = build(rest.id);
+    if (kids.length)             return /** @type {BookmarkTreeNode} */ ({ ...rest, children: kids });
+    if (rest.type === "folder")  return /** @type {BookmarkTreeNode} */ ({ ...rest, children: [] });
+    return /** @type {BookmarkTreeNode} */ (rest);
+  }
+  /** @param {string} parentId @returns {BookmarkTreeNode[]} */
   function build(parentId) {
     return (byParent.get(parentId) ?? [])
-      // Equal values break on id: two devices that each move an item to the front give both the same value, and the
-      // document's key order (each merge puts its own keys first) showed them differently per device (4th review).
-      .sort((a, b) => (a._order ?? 0) - (b._order ?? 0) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
-      .map((flat) => {
-        const { parentId: _p, _order: _o, _u: _t, ...rest } = flat;
-        const kids = build(rest.id);
-        if (kids.length)             return /** @type {BookmarkTreeNode} */ ({ ...rest, children: kids });
-        if (rest.type === "folder")  return /** @type {BookmarkTreeNode} */ ({ ...rest, children: [] });
-        return /** @type {BookmarkTreeNode} */ (rest);
-      });
+      .filter((node) => !placed.has(node))   // going round, a cycle comes back to its head, placed first
+      .sort(_siblingOrder)
+      .flatMap((node) => (placed.has(node) ? [] : [place(node)]));   // placed meanwhile: two records share an id
   }
-  // No item has the id "__proto__" (_flattenTree), but an older build saved what such a folder held under it as the
-  // parent: nothing reached those items, and the next save tombstoned them on every device (PR #438 review). They are
-  // read after the top level — their _order was counted inside the lost folder, so mixed in they would reorder the
-  // untouched top-level items, whose new times would then beat other devices' edits (2nd review).
-  return [...build(""), ...build("__proto__")];
+  const tree = build("");
+
+  // What the top level does not reach shows after it (부모 잃은 항목은 맨 위 항목 뒤에 보인다, 사용자 결정 2026-11-07).
+  // Its parent was deleted on another device while this one was put in it, or it is "__proto__", which no item has
+  // (_flattenTree) but an older build left as the parent of what such a folder held. Or two devices moved two folders
+  // into each other unawares, and the merge made each the other's parent. Left out, it showed nowhere, and the next
+  // save tombstoned it and all it holds on every device (known-issues §32, PR #438 review). Not mixed in with the top
+  // level: its _order was counted under its parent, and the untouched top-level items it reordered would take new
+  // times that beat other devices' edits (2nd review).
+  // Each item left heads a group or leads to one: walking up, it meets a parent that is no item here (it heads the
+  // group of that parent's id), or comes round a cycle. A cycle is cut at its record with the earliest time (the
+  // smaller id when equal): the merge keeps the later copy of a record, and here the later records' parents stand.
+  /** @type {Map<string, SyncFlatItem>} */
+  const byId = new Map(nodes.map((node) => [node.id, node]));
+  /** @type {Map<SyncFlatItem, SyncFlatItem>} */
+  const headOf = new Map();
+  for (const start of nodes) {
+    if (placed.has(start) || headOf.has(start)) continue;
+    /** @type {SyncFlatItem[]} */
+    const path = [];
+    /** @type {Map<SyncFlatItem, number>} */
+    const seen = new Map();
+    /** @type {SyncFlatItem} */
+    let node = start;
+    /** @type {SyncFlatItem} */
+    let head;
+    for (;;) {
+      const known = headOf.get(node);
+      if (known) { head = known; break; }
+      const at = seen.get(node);
+      if (at !== undefined) {
+        head = path.slice(at).reduce((a, b) => {
+          const ta = _time(a._u), tb = _time(b._u);
+          return tb < ta || (tb === ta && b.id < a.id) ? b : a;
+        });
+        break;
+      }
+      seen.set(node, path.length);
+      path.push(node);
+      const parent = byId.get(node.parentId ?? "");
+      if (!parent || placed.has(parent)) { head = node; break; }
+      node = parent;
+    }
+    for (const n of path) headOf.set(n, head);
+  }
+  // Grouped by the parent each head names, in id order (an app id starts with its creation time in base 36, so mostly
+  // the folder made first comes first; "__proto__" sorts before those); within a group as siblings are.
+  const heads = [...new Set(headOf.values())]
+    .sort((a, b) => _idOrder(a.parentId ?? "", b.parentId ?? "") || _siblingOrder(a, b));
+  for (const head of heads) if (!placed.has(head)) tree.push(place(head));
+  return tree;
 }
 
 // ── Empty document ────────────────────────────────────────────────────────────
