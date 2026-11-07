@@ -16,7 +16,10 @@
 //     `article.querySelectorAll` stub (selectedSpanVrefs).
 //     The save serializer (verseNumberSpec), the move of the pre-#205 forms
 //     (wholeVerseSpec) and the verse-select citation are in verse-spec.test.js
-//   - BOOKMARK_LEGACY block (with VERSE_SPEC) — migrateLegacyBookmark, the
+//   - BOOKMARK_LABEL block (with VERSE_SPEC, and helpers.js's chUnit) —
+//     defaultBookmarkLabel and changeBookmarkRange: the default name, and the
+//     name when a range changes (a merge keeps a title the user wrote)
+//   - BOOKMARK_LEGACY block (with VERSE_SPEC and BOOKMARK_LABEL) — migrateLegacyBookmark, the
 //     move of a pre-#205 bookmark's verse range and old default name
 //   - BOOKMARK_QUERY block — _isDescendant / _walkBookmarks / findExistingChapterBookmarks
 //     / _findItemInStore / _findParentFolderId / removeItemById / insertItem
@@ -1294,18 +1297,45 @@ const LEGACY_BOOKS = [
   { id: "gen", name_ko: "창세기", short_name_ko: "창세", chapter_count: 50 },
   { id: "nah", name_ko: "나훔", short_name_ko: "나훔", chapter_count: 3 },
 ];
+const LABEL_BOOKS = [...LEGACY_BOOKS, { id: "ps", name_ko: "시편", short_name_ko: "시편", chapter_count: 150 }];
+
+// chUnit (the chapter unit — 「편」 for the psalms) is helpers.js's: bookmark-core.js reads it from window.appHelpers.
+// The test runs that file for it rather than restate the rule.
+const HELPERS_SOURCE = stripEsmMarker(fs.readFileSync(path.resolve(__dirname, "../../js/app/helpers.js"), "utf8"));
+function realChUnit() {
+  const ctx = { window: {}, Object, Array, String, Math, Number, JSON, console, Error };
+  vm.createContext(ctx);
+  vm.runInContext(HELPERS_SOURCE, ctx, { filename: "helpers.js" });
+  return ctx.window.appHelpers.chUnit;
+}
+
+// ── BOOKMARK_LABEL loader ────────────────────────────────────────────────────
+// The block calls chUnit (destructured at the top of bookmark-core.js, outside the blocks). VERSE_SPEC comes along for
+// mergeVerseSpecs, so a test merges as the merge dialog does.
+
+function loadBookmarkLabel() {
+  const ctx = { Object, Array, Set, String, Math, Number, JSON, console, Error, parseInt, chUnit: realChUnit() };
+  vm.createContext(ctx);
+  vm.runInContext(extractBlock("VERSE_SPEC", VERSE_SPEC_SOURCE), ctx, { filename: "verse-spec.js" });
+  vm.runInContext(extractBlock("BOOKMARK_LABEL", BOOKMARK_CORE_SOURCE), ctx, { filename: "bookmark-core.js" });
+  return {
+    defaultBookmarkLabel: ctx.defaultBookmarkLabel,
+    changeBookmarkRange: ctx.changeBookmarkRange,
+    mergeVerseSpecs: ctx.mergeVerseSpecs,
+  };
+}
 
 // ── BOOKMARK_LEGACY loader ───────────────────────────────────────────────────
-// The block calls wholeVerseSpec (an import of bookmark-core.js) — the VERSE_SPEC block stands in for it — and the
-// store's loadBookmarks · rewriteBookmarks (window.appStorage) and window.loadBooks · getBooksCache, stubbed here.
-// `calls` records what the startup move asked for.
+// The block calls wholeVerseSpec (an import of bookmark-core.js) — the VERSE_SPEC block stands in for it —
+// changeBookmarkRange (the BOOKMARK_LABEL block, with chUnit), and the store's loadBookmarks · rewriteBookmarks
+// (window.appStorage) and window.loadBooks · getBooksCache, stubbed here. `calls` records what the startup move asked for.
 
 function loadBookmarkLegacy({ stored = [], books = LEGACY_BOOKS, booksCached = true, booksFail = false, storeThrows = false } = {}) {
   const calls = { loadBooks: 0, rewrites: [], rerenders: 0 };
   // The book list arrives a task later, as a fetch does — so a test that awaits the move sees whether it waited.
   const later = (settle) => new Promise((resolve, reject) => setTimeout(() => settle(resolve, reject), 0));
   const ctx = {
-    Object, Array, Set, String, Math, Number, JSON, console, Error, parseInt, Promise,
+    Object, Array, Set, String, Math, Number, JSON, console, Error, parseInt, Promise, chUnit: realChUnit(),
     loadBookmarks: () => { if (storeThrows) throw new TypeError("unreadable"); return stored; },
     rewriteBookmarks: (patch) => { calls.rewrites.push(patch); },
     window: {
@@ -1319,6 +1349,7 @@ function loadBookmarkLegacy({ stored = [], books = LEGACY_BOOKS, booksCached = t
   };
   vm.createContext(ctx);
   vm.runInContext(extractBlock("VERSE_SPEC", VERSE_SPEC_SOURCE), ctx, { filename: "verse-spec.js" });
+  vm.runInContext(extractBlock("BOOKMARK_LABEL", BOOKMARK_CORE_SOURCE), ctx, { filename: "bookmark-core.js" });
   vm.runInContext(extractBlock("BOOKMARK_LEGACY", BOOKMARK_CORE_SOURCE), ctx, { filename: "bookmark-core.js" });
   return {
     migrateLegacyBookmark: ctx.migrateLegacyBookmark,
@@ -1427,6 +1458,71 @@ test("_buildSharePayload: multiple → {title, text} list of label + absolute ur
     p.text,
     "창세기 1장\nhttps://bible.anglican.kr/gen/1\n\n요한 3장\nhttps://bible.anglican.kr/john/3/16",
   );
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BOOKMARK_LABEL 블록: 기본 이름과, 범위가 바뀔 때의 이름. 합치기는 사용자가 고친 제목을 그대로 둔다(2026-11-07,
+// known-issues §19.1)
+// ─────────────────────────────────────────────────────────────────────────────
+
+test("defaultBookmarkLabel: 「책 장:범위」 with the short book name, a whole chapter 「책 N장」 — 「편」 for the psalms", () => {
+  const h = loadBookmarkLabel();
+  const name = (bookId, chapter, verseSpec) => h.defaultBookmarkLabel({ bookId, chapter, verseSpec }, LABEL_BOOKS);
+  assert.equal(name("isa", 7, "14"), "이사 7:14");
+  assert.equal(name("isa", 7, "1,14"), "이사 7:1,14");
+  assert.equal(name("nah", 1, "1-9"), "나훔 1:1-9");
+  assert.equal(name("isa", 7, "all"), "이사 7장");
+  assert.equal(name("ps", 23, "all"), "시편 23편");
+  assert.equal(name("ps", 23, "1-3"), "시편 23:1-3");
+});
+
+test("defaultBookmarkLabel: a book not in the list, or no list yet, starts with the book id — as the save dialog's did", () => {
+  const h = loadBookmarkLabel();
+  assert.equal(h.defaultBookmarkLabel({ bookId: "xyz", chapter: 2, verseSpec: "3" }, LABEL_BOOKS), "xyz 2:3");
+  assert.equal(h.defaultBookmarkLabel({ bookId: "isa", chapter: 7, verseSpec: "14" }, null), "isa 7:14");
+  assert.equal(h.defaultBookmarkLabel({ bookId: "ps", chapter: 23, verseSpec: "all" }, undefined), "ps 23편");
+});
+
+test("changeBookmarkRange: a merge keeps a title the user wrote — main renamed it 「이사 7:1,14」 (known-issues §19.1)", () => {
+  const h = loadBookmarkLabel();
+  const bm = { type: "bookmark", id: "a", bookId: "isa", chapter: 7, verseSpec: "14", label: "임마누엘의 징조", note: "" };
+  h.changeBookmarkRange(bm, h.mergeVerseSpecs(bm.verseSpec, "1"), LABEL_BOOKS);
+  assert.deepEqual({ ...bm }, { type: "bookmark", id: "a", bookId: "isa", chapter: 7, verseSpec: "1,14", label: "임마누엘의 징조", note: "" });
+});
+
+test("changeBookmarkRange: a default name follows the merged range — verses, the whole chapter, an old 「16aa」", () => {
+  const h = loadBookmarkLabel();
+  const merge = (bm, incoming) => {
+    h.changeBookmarkRange(bm, h.mergeVerseSpecs(bm.verseSpec, incoming), LABEL_BOOKS);
+    return [bm.verseSpec, bm.label];
+  };
+  assert.deepEqual(merge({ bookId: "isa", chapter: 7, verseSpec: "14", label: "이사 7:14" }, "1"), ["1,14", "이사 7:1,14"]);
+  // 「이 장 저장」을 합치면 장 전체가 된다
+  assert.deepEqual(merge({ bookId: "isa", chapter: 7, verseSpec: "14", label: "이사 7:14" }, "all"), ["all", "이사 7장"]);
+  assert.deepEqual(merge({ bookId: "ps", chapter: 23, verseSpec: "all", label: "시편 23편" }, "1-3"), ["all", "시편 23편"]);
+  // 옮기기 전의 옛 표기에 합친 경우. e2e test_merge_into_pre205_bookmark_keeps_its_verses와 같다
+  assert.deepEqual(merge({ bookId: "isa", chapter: 10, verseSpec: "16aa", label: "이사 10:16aa" }, "1"), ["1,16", "이사 10:1,16"]);
+});
+
+test("changeBookmarkRange: only the exact default name of the range before is made again — near misses stay", () => {
+  const h = loadBookmarkLabel();
+  // 긴 책 이름(2026-04-25 첫 구현만 제안했고 릴리스에 들어간 적이 없다), 뒤의 빈칸, 다른 범위의 기본 이름, 빈 이름
+  for (const label of ["이사야 7:14", "이사 7:14 ", "이사 7:1", "이사 7장", "", undefined]) {
+    const bm = { bookId: "isa", chapter: 7, verseSpec: "14", label };
+    h.changeBookmarkRange(bm, "1,14", LABEL_BOOKS);
+    assert.deepEqual([bm.verseSpec, bm.label], ["1,14", label], String(label));
+  }
+  // 장 전체 북마크도 이름을 고쳤으면 그대로다
+  const whole = { bookId: "isa", chapter: 7, verseSpec: "all", label: "이사야서 7장 전체" };
+  h.changeBookmarkRange(whole, h.mergeVerseSpecs("all", "14"), LABEL_BOOKS);
+  assert.deepEqual([whole.verseSpec, whole.label], ["all", "이사야서 7장 전체"]);
+});
+
+test("changeBookmarkRange: without the book list a name made with it is not taken for a default name", () => {
+  const h = loadBookmarkLabel();
+  const bm = { bookId: "isa", chapter: 7, verseSpec: "14", label: "이사 7:14" };
+  h.changeBookmarkRange(bm, "1,14", null);
+  assert.deepEqual([bm.verseSpec, bm.label], ["1,14", "이사 7:14"]);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -21,11 +21,11 @@ import {
   _selectAllState, _forgetViewed, removeItemById,
   collectFolderOptions, insertItem, _findItemInStore,
   findExistingChapterBookmarks, _findParentFolderId, _walkBookmarks, migrateLegacyBookmark,
-  commitBookmarks,
+  commitBookmarks, defaultBookmarkLabel, changeBookmarkRange,
 } from "./bookmark-core.js";
 import { verseNumberSpec, selectedSpanVrefs, mergeVerseSpecs, isWellFormedSpec } from "./verse-spec.js";
 
-const { _$, el, clearNode, chUnit } = window.appHelpers;
+const { _$, el, clearNode } = window.appHelpers;
 const { createOverlay } = window.appOverlay;
 const { loadBookmarks, generateId, projectedStorageChars } = window.appStorage;
 const { readingContext } = window;
@@ -445,17 +445,8 @@ function _showSaveModal(mode, bookId, chapter, verseSpec, existing) {
   const store = loadBookmarks();
   const folderOptions = collectFolderOptions(store);
 
-  const book = (window.getBooksCache() ?? []).find(b => b.id === bookId);
-  const bookName = book ? (book.short_name_ko || book.name_ko) : bookId;
-  const unit = chUnit(bookId ?? "");
-  let defaultLabel;
-  if (existing) {
-    defaultLabel = existing.label;
-  } else if (verseSpec === "all") {
-    defaultLabel = `${bookName} ${chapter}${unit}`;
-  } else {
-    defaultLabel = `${bookName} ${chapter}:${verseSpec}`;
-  }
+  // A new bookmark starts with its default name (「이사 7:14」, 「이사 7장」); an edit shows the name it has.
+  const defaultLabel = existing ? existing.label : defaultBookmarkLabel({ bookId, chapter, verseSpec }, window.getBooksCache());
 
   clearNode($bmSaveBody);
   $bmSaveTitle.textContent = existing ? "북마크 수정" : "북마크 저장";
@@ -640,17 +631,9 @@ function openMergeDialog(candidates, incomingSpec, mode, fallbackContext = null)
     const merged = mergeVerseSpecs(target.verseSpec ?? "all", incomingSpec);
     const store = loadBookmarks();
     const found = _findItemInStore(store, target.id);
-    if (found && found.item.type === "bookmark") {
-      found.item.verseSpec = merged;
-      // Sync label to reflect the merged verse spec
-      const targetBookId = target.bookId ?? "";
-      const book = (window.getBooksCache() ?? []).find((b) => b.id === targetBookId);
-      const bookName = book ? (book.short_name_ko || book.name_ko) : targetBookId;
-      const unit = chUnit(targetBookId);
-      found.item.label = merged === "all"
-        ? `${bookName} ${target.chapter}${unit}`
-        : `${bookName} ${target.chapter}:${merged}`;
-    }
+    // The title follows the merged range only while it is the default name — a title the user wrote stays (known-issues
+    // §19.1; it used to be made again every time).
+    if (found && found.item.type === "bookmark") changeBookmarkRange(found.item, merged, window.getBooksCache());
     if (!commitBookmarks(store)) { cleanup(); return; }   // nothing typed to keep; the verse selection stays
     _deps.rerenderActiveBookmarkTree();
     _deps.refreshBookmarkHeaderBtn();
