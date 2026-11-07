@@ -588,7 +588,7 @@ window.appStorage = (/** @returns {AppStorage} */ () => {
   }
 
   /**
-   * 마지막으로 본 캘린더 보기의 주소. 없거나 캘린더 주소가 아니면 null이고, 그때 탭은 이번 달로 간다(ADR-038 §1).
+   * 마지막으로 본 캘린더 보기의 주소. 없거나 캘린더 주소가 아니면 null이고, 그때 탭은 이번 달로 간다. 좁은 화면은 오늘 줄의 목록이다(ADR-038 §1).
    * @returns {string | null}
    */
   function loadCalendarLastView() {

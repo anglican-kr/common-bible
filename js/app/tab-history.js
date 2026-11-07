@@ -71,9 +71,11 @@ window.tabHistory = (() => {
 
   /** @type {Map<string, number>} */
   const scrollMemory = new Map();
-  // 마지막으로 본 캘린더 보기(달, 구현한 뒤에는 목록). 전례독서에서 탭을 누르면 여기로 돌아온다. 앱을 다시 열어도 이어지도록
-  // 저장해 둔 값으로 시작하고, 저장한 값이 없으면 이번 달이다. 모듈 스크립트는 문서 순서로 실행되므로 storage.js 가 먼저다.
-  let lastCalendarView = window.appStorage?.loadCalendarLastView() ?? "/calendar";
+  // 마지막으로 본 캘린더 보기(달이나 목록). 전례독서에서 탭을 누르면 여기로 돌아온다. 앱을 다시 열어도 이어지도록 저장해 둔 값으로
+  // 시작한다. 저장한 값이 없으면 이번 달이고, 탭 슬롯이 줄어드는 좁은 화면은 오늘 줄의 목록이다(ADR-038 §2). 모듈 스크립트는 문서
+  // 순서로 실행되므로 storage.js가 먼저다.
+  let lastCalendarView = window.appStorage?.loadCalendarLastView()
+    ?? (window.matchMedia("(max-width: 339px)").matches ? "/calendar/list" : "/calendar");
   /** @type {Record<"home"|"search"|"bookmarks"|"settings"|"calendar", string>} */
   const lastPathForTab = {
     home: "/",
@@ -103,9 +105,10 @@ window.tabHistory = (() => {
   }
 
   // route() 시작 시 호출 — 떠나는 경로(currentPath)의 스크롤을 기억한다. DOM 이 아직
-  // 옛 화면이고 manual 이라 window.scrollY 가 떠나는 페이지 기준이다.
+  // 옛 화면이고 `manual`이라 `window.scrollY`가 떠나는 페이지 기준이다. 목록은 먼 달을 내려
+  // 스크롤 값으로 위치를 되살릴 수 없어 저장하지 않는다. 뷰가 주소의 날짜 줄로 둔다(ADR-038 §1).
   function onRouteStart() {
-    scrollMemory.set(currentPath, window.scrollY || 0);
+    if (!isCalendarListPath(currentPath)) scrollMemory.set(currentPath, window.scrollY || 0);
   }
 
   // route()가 새 경로 렌더를 마친 직후 호출(중복/리다이렉트는 route의 시퀀스 검사가
@@ -118,8 +121,7 @@ window.tabHistory = (() => {
     lastPathForTab[tabOf(path)] = path;
     const doRestore = restoreNext;
     restoreNext = false; // 1회성 소비
-    // 목록은 먼 달을 내려 스크롤 값으로 위치를 되살릴 수 없다. 뷰가 주소의 날짜 줄로 둔다(ADR-038 §1).
-    if (!doRestore || isCalendarListPath(path)) return;
+    if (!doRestore) return;
     const y = scrollMemory.get(path);
     if (y == null) return; // 기억 없음 → 뷰가 정한 스크롤(보통 최상단) 유지
     window.scrollTo(0, y);

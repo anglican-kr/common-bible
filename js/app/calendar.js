@@ -82,9 +82,10 @@ const PAGE_TITLE = LITURGICAL_VIEWS.calendar.title;
  */
 /**
  * 그려 둔 목록. `first`와 `last`는 그려 둔 첫날과 끝날이고, `above`와 `below`는 줄 앞뒤의 경계 요소다. 경계가 화면에 가까워지면 줄을 더한다.
+ * `top`은 주소에 남긴 맨 위 줄의 날짜이고, `isStale`은 이 목록을 그린 라우트가 낡았는지 본다.
  * @typedef {{
- *   root: HTMLElement, above: HTMLElement, below: HTMLElement, first: string, last: string, month: string, today: string,
- *   rowOf: (date: string) => ListRow | null,
+ *   root: HTMLElement, above: HTMLElement, below: HTMLElement, first: string, last: string, month: string, today: string, top: string,
+ *   rowOf: (date: string) => ListRow | null, isStale: () => boolean,
  * }} ListView
  */
 /** 전례독서 모델. @typedef {import("./lectionary.js").LectionaryModel} LectionaryModel */
@@ -292,6 +293,15 @@ function buildMonthGrid(y, m, today, resolve) {
 function listHref(y, m) {
   const month = monthHref(y, m);
   return month && `${month.replace("/calendar/", "/calendar/list/")}-01`;
+}
+
+/**
+ * 그 줄을 맨 위에 두는 목록 주소(ADR-038 §2). 오늘 줄에는 날짜를 적지 않아, 다음 날 다시 열면 그날의 오늘 줄이다(사용자 결정 2026-11-07).
+ * @param {string} date  "YYYY-MM-DD"
+ * @param {string} today  "YYYY-MM-DD"
+ */
+function listPathOf(date, today) {
+  return date === today ? "/calendar/list" : `/calendar/list/${date}`;
 }
 
 /**
@@ -632,9 +642,15 @@ function addListRows(list, dates, atStart) {
   else list.last = dates[dates.length - 1];
 }
 
-/** 상단 바 바로 아래의 달 묶음. 소수점 값이 어긋나도 이전 달이 잡히지 않게 1px을 둔다. @param {HTMLElement} root */
+/**
+ * 상단 바 밑으로 이만큼만 보이는 줄은 보던 줄이 아니다. 줄을 상단 바 바로 아래에 두어도 소수점 값이 어긋나고, 웹 글꼴을 늦게 받으면 스크롤 고정이 지켜도
+ * 약 2px 밀린다(2026-11-07 측정). 그 앞줄을 맨 위 줄로 치면 스크롤하지 않았는데 주소가 하루 앞날로 밀리고 달 이름이 앞달이 된다.
+ */
+const ROW_PEEK_PX = 8;
+
+/** 상단 바 바로 아래의 달 묶음. @param {HTMLElement} root */
 function sectionUnderBar(root) {
-  const bottom = barBottom() + 1;
+  const bottom = barBottom() + ROW_PEEK_PX;
   for (const section of root.querySelectorAll("section")) {
     if (section.getBoundingClientRect().bottom > bottom) return section;
   }
@@ -643,7 +659,7 @@ function sectionUnderBar(root) {
 
 /** 상단 바 바로 아래의 줄. @param {HTMLElement} root */
 function rowUnderBar(root) {
-  const bottom = barBottom() + 1;
+  const bottom = barBottom() + ROW_PEEK_PX;
   for (const li of sectionUnderBar(root)?.querySelectorAll("li") ?? []) {
     if (li.getBoundingClientRect().bottom > bottom) return li;
   }
@@ -717,13 +733,40 @@ function updateMonthBar(model) {
   bar.querySelector(".title-view-btn")?.setAttribute("href", model.hrefs.view);
 }
 
-/** 상단 바의 달을 맨 위 줄의 달로 맞춘다(ADR-038 §2). @param {ListView} list */
+/** 목록의 문서 제목. @param {ListMonth} model */
+function listTitleOf(model) {
+  return `${model.title} ${PAGE_TITLE} 목록`;
+}
+
+/** 상단 바의 달과 문서 제목을 맨 위 줄의 달로 맞춘다(ADR-038 §2). @param {ListView} list */
 function followTopMonth(list) {
   const ym = sectionUnderBar(list.root)?.dataset.month;
   if (!ym || ym === list.month) return;
   list.month = ym;
   const p = /** @type {{ y: number, m: number, d: number }} */ (parseDate(`${ym}-01`));
-  updateMonthBar(listMonthOf(p.y, p.m, list.today));
+  const model = listMonthOf(p.y, p.m, list.today);
+  updateMonthBar(model);
+  document.title = `${listTitleOf(model)} — 공동번역성서`;
+}
+
+/**
+ * 방문 기록 항목을 늘리지 않고 목록의 주소를 바꾼다. 탭과 앱 다시 열기도 이 주소로 돌아오게 함께 기억한다(ADR-038 §1). `gtag`가 `history`의
+ * `replaceState`를 덮어써 주소가 바뀔 때마다 방문 통계를 보내므로 원본을 호출한다. 그대로 호출하면 스크롤이 멈출 때마다 방문이 1건씩
+ * 기록된다(사용자 결정 2026-11-07, ADR-038 §2).
+ * @param {string} path
+ */
+function replaceListAddress(path) {
+  History.prototype.replaceState.call(history, history.state, "", path);
+  window.tabHistory?.recordPath(path);
+  window.tabHistory?.rememberCalendarView();
+}
+
+/** 맨 위 줄이 바뀌었으면 주소에 남긴다(ADR-038 §2). 바뀌지 않았으면 주소를 건드리지 않는다. @param {ListView} list */
+function saveTopRow(list) {
+  const date = rowUnderBar(list.root)?.dataset.date;
+  if (!date || date === list.top) return;
+  list.top = date;
+  replaceListAddress(listPathOf(date, list.today));
 }
 
 /** 경계가 화면에서 이만큼(줄 25개쯤) 가까워지면 줄을 더한다. */
@@ -737,7 +780,8 @@ let stopList = null;
 /**
  * 위아래로 이어 붙이기 시작한다(ADR-038 §2). 아래쪽은 스크롤 중에도 더한다. 위쪽은 스크롤 고정이 있는 브라우저에서만 스크롤 중에 더하고, 없으면 스크롤이
  * 멈추고 손을 뗀 뒤에 더한다. Safari 27 전의 iOS는 관성 스크롤 중에 스크롤 값을 바꾸면 관성이 끊기기 때문이다(WebKit 버그 187449). 먼 줄 내리기는
- * 어느 브라우저에서나 멈춘 뒤에 한다.
+ * 어느 브라우저에서나 멈춘 뒤에 한다. 멈춘 뒤에는 맨 위 줄을 주소에 남긴다. 데스크톱에서 상단 바가 접히는 동안에는 맨 위 줄이 달라 보이지만, 스크롤 고정이
+ * 프레임마다 스크롤 값을 고쳐 스크롤 이벤트가 이어지므로 멈춤 판단은 접힌 뒤 줄을 다시 맞춘 다음에 실행된다(`scrollToRow`).
  * @param {ListView} list
  */
 function startListScroll(list) {
@@ -778,6 +822,14 @@ function startListScroll(list) {
     cancelAnimationFrame(frame);
     if (stopList === stop) stopList = null;
   };
+  // 낡은 라우트가 남기면 새 화면의 주소를 덮어쓴다. 다른 화면으로 가는 동안에는 이 목록이 아직 문서에 남아 있을 수 있다.
+  const savePosition = () => {
+    if (!root.isConnected) {
+      stop();
+      return;
+    }
+    if (!list.isStale()) saveTopRow(list);
+  };
   const settled = () => {
     if (!root.isConnected) {
       stop();
@@ -793,6 +845,7 @@ function startListScroll(list) {
       observer.observe(above);
       observer.observe(below);
     }
+    savePosition();
   };
   const armSettle = () => {
     clearTimeout(timer);
@@ -838,6 +891,10 @@ function startListScroll(list) {
   window.addEventListener("touchstart", () => { touching = true; }, { passive: true, signal });
   window.addEventListener("touchend", release, { passive: true, signal });
   window.addEventListener("touchcancel", release, { passive: true, signal });
+  // 스크롤이 멈추기 전에 누르거나 화면을 떠나도 남긴다. 캡처 단계라 링크가 주소를 옮기기 전에 지금 항목에 적는다.
+  window.addEventListener("click", savePosition, { capture: true, signal });
+  window.addEventListener("pagehide", savePosition, { signal });
+  document.addEventListener("visibilitychange", savePosition, { signal });
   observer.observe(above);
   observer.observe(below);
   stopList = stop;
@@ -849,8 +906,9 @@ function startListScroll(list) {
  * @param {string} anchor  "YYYY-MM-DD" — 상단 바 바로 아래에 둘 줄
  * @param {string} today  "YYYY-MM-DD"
  * @param {(date: string) => ListRow | null} rowOf
+ * @param {() => boolean} isStale
  */
-function commitList(month, anchor, today, rowOf) {
+function commitList(month, anchor, today, rowOf, isStale) {
   stopList?.();
   commitLiturgicalTitle("calendar");   // 문서 제목(views.js)
   commitMonthBar(month, HEADER_ICON_PATHS.viewMonth);
@@ -862,12 +920,15 @@ function commitList(month, anchor, today, rowOf) {
   $app.appendChild(root);
   const dates = [...listDatesBefore(anchor, LIST_DAYS_BEFORE), anchor, ...listDatesAfter(anchor, LIST_DAYS_AFTER)];
   /** @type {ListView} */
-  const list = { root, above, below, first: dates[0], last: anchor, month: anchor.slice(0, 7), today, rowOf };
+  const list = { root, above, below, first: dates[0], last: anchor, month: anchor.slice(0, 7), today, top: anchor, rowOf, isStale };
   addListRows(list, dates, false);
   committedMonth = null;   // 월간으로 돌아가면 맨 위부터다
   scrollToRow(anchor);
   startListScroll(list);
-  announce(`${month.title} ${PAGE_TITLE} 목록`);
+  announce(listTitleOf(month));
+  // 전례독서의 오른쪽 단추나 공유한 주소로 오늘 날짜의 줄을 열어도 오늘 줄의 주소로 맞춘다(ADR-038 §2)
+  const path = listPathOf(anchor, today);
+  if (location.pathname !== path) replaceListAddress(path);
 }
 
 /**
@@ -900,9 +961,9 @@ async function renderListView(param, today, isStale) {
     const resolved = resolveDate(date);
     const m = resolved && lectionaryModelOf(resolved, { obs: null, track: null, set: null, collect: null });
     return m ? listRowOf(m, today) : null;
-  });
+  }, isStale);
   window.tabHistory?.rememberCalendarView();
-  return `${month.title} ${PAGE_TITLE} 목록`;
+  return listTitleOf(month);
 }
 
 /**
