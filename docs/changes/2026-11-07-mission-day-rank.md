@@ -1,4 +1,5 @@
 ---
+pr: 510
 date: 2026-11-07
 branch: claude/add-diocese-founding-prayer-xrm027
 title: "fix: 9.29 선교 기념일을 주요축일로 되돌림"
