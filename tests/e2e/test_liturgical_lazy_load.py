@@ -369,7 +369,7 @@ def test_late_chapter_failure_does_not_paint_over_calendar(browser):
             held[0].abort()
         page.evaluate(TWO_FRAMES)
         assert page.locator(".cal-grid").count() == 1
-        assert page.locator(".error").count() == 0
+        assert page.locator("#app .empty-state").count() == 0
         assert urllib.parse.urlparse(page.url).path == "/calendar"
     finally:
         ctx.close()

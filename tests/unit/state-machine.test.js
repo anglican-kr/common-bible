@@ -2659,3 +2659,46 @@ test("84. 30일 규칙의 조건이면 병합 기록에 세기만 하고, 북마
   assert.deepEqual(A.ids(), ["x", "y"], "지우지 않는다");
   assert.deepEqual(drive.alive(), ["x", "y"], "지금처럼 드라이브에 다시 올린다");
 });
+
+// 부모 잃은 항목(known-issues §32, 사용자 결정 2026-11-07): 한 기기가 지운 폴더에 다른 기기가 넣은 북마크는 병합 결과에서
+// 부모를 잃는다. 그 북마크는 맨 위 항목 뒤에 보이고, 어느 기기든 다음 저장에서 맨 위 항목으로 저장한다.
+const folderNode = (id, children) => ({ type: "folder", id, name: id, children });
+const lastMerge = (dev) => dev.h.logEntries.filter((e) => e.kind === "ACTION" && e.event === "MERGE").at(-1);
+
+test("85. 한 기기가 지운 폴더에 다른 기기가 넣은 북마크는 두 기기 모두에 보이고, 한 기기가 저장하면 맨 위 항목으로 모든 기기에 남는다", async () => {
+  const clock = { now: Date.UTC(2026, 10, 7) };
+  const drive = fakeDrive();
+  const A = realDevice(drive, clock), B = realDevice(drive, clock);
+  A.store.saveBookmarks([bmNode("a"), folderNode("f", [bmNode("c")])]);
+  await A.open();
+  await B.open();
+  assert.deepEqual(B.ids(), ["a", "c", "f"]);
+
+  clock.now += 1000;
+  A.store.saveBookmarks([bmNode("a")]);                                        // A가 폴더를 지운다
+  await A.sync();
+  clock.now += 1000;
+  B.store.saveBookmarks([bmNode("a"), folderNode("f", [bmNode("c"), bmNode("x")])]);   // 그사이 B가 그 폴더에 넣는다
+  await B.sync();
+  assert.deepEqual(B.ids(), ["a", "x"], "B에는 넣은 북마크가 맨 위 항목 뒤에 보인다");
+  assert.equal(lastMerge(B).hadRemoteChanges, true, "B에 보이던 폴더가 지워졌다");
+  assert.deepEqual(drive.alive(), ["a", "x"]);
+  assert.equal(drive.doc.bookmarks.items.x.parentId, "f");
+
+  await A.sync();
+  assert.deepEqual(A.ids(), ["a", "x"], "폴더를 지운 A에도 보인다");
+  assert.equal(lastMerge(A).hadRemoteChanges, true, "A에 없던 북마크가 들어왔다");
+  assert.equal(lastMerge(A).baseWouldDrop, 0);
+
+  clock.now += 1000;
+  A.store.saveBookmarks(A.store.loadBookmarks());     // A가 목록을 저장한다. 어느 북마크를 고치든 목록 전체를 저장한다
+  await A.sync();
+  assert.deepEqual(drive.alive(), ["a", "x"], "삭제 기록이 되지 않는다");
+  assert.equal(drive.doc.bookmarks.items.x.parentId, null, "맨 위 항목으로 올라갔다");
+  await B.sync();
+  assert.deepEqual(JSON.parse(JSON.stringify(B.store.loadBookmarks())).map((n) => n.id), ["a", "x"]);
+  assert.equal(B.store.loadLocal().bookmarks.items.x.parentId, null);
+  assert.equal(lastMerge(B).hadRemoteChanges, true, "자리는 그대로지만 기록이 바뀌어 한 번 알린다");
+  await B.sync();
+  assert.equal(lastMerge(B).hadRemoteChanges, false);
+});
