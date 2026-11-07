@@ -41,7 +41,7 @@
   "note": "…",
   "assertions": [
     { "date": "2025-12-01", "note": "…", "expect": { "id": "d1130-사도-성-안드레아", "status": "transferred_in", "from": "2025-11-30", "displacedBy": "t-대림1주일" } },
-    { "years": [1900, 2100], "expect": { "neverDeparts": "d0929-대한성공회-선교" } }
+    { "years": [1900, 2100], "expect": { "neverDeparts": "d0929-대한성공회-선교-기념일" } }
   ]
 }
 ```
