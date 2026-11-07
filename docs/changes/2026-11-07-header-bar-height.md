@@ -39,6 +39,8 @@ title: "fix: 상단 바 높이를 재어 쓰고 이어 읽기 위치 바로잡�
 
 ## 검증
 
+- main(#475, #525, #526)을 다시 합친 뒤: `docs/known-issues.md`(「다음 번호 §53부터」, §48-§52 차례)와 `tests/README.md`(붙은 두 줄을 양쪽이 하나씩 고침)의 충돌을 풀었다. 유닛 1663건, 타입 검사, 문서 검사 통과. e2e 열 파일(`test_note_tooltip.py`, `test_cite_sheet.py`, `test_copy.py`, `test_features.py`, `test_search.py`, `test_navigation.py`, `test_calendar_view.py`, `test_lectionary_view.py`, `test_a11y_keyboard.py`, `test_tabbar.py`) 313건 가운데 312건이 통과했다(10분 10초, 포트 8095). 실패한 1건(`test_view_button_switches_between_month_and_list_keeping_the_month`)은 시간 초과였고, 그 시험만 다섯 번과 `test_calendar_view.py` 전체(95건)를 다시 돌려 모두 통과해 긴 실행 중의 일시적인 시간 초과로 보았다.
+- 실제 기기: 합친 상태(`5e83169`)를 dev에 올린 뒤, 사용자가 이어 읽기(상단 바 바로 아래에 오고 다시 들어가도 같은 절), 주석 툴팁(상단 바 아래의 표지에서 아래로 뒤집힘), 캘린더 목록의 줄 맞춤을 보고 모두 문제없다고 했다(2026-11-08).
 - main(#522, #523)을 합친 뒤: 유닛 1662건, 타입 검사, e2e `test_note_tooltip.py`, `test_cite_sheet.py`, `test_features.py`, `test_search.py` 44건 통과(포트 8095). 합칠 때 #522의 같은 변경과 겹친 다섯 파일은 이 브랜치 쪽으로 풀었다.
 - 유닛: `node --test tests/unit/*.test.js` 1662건 통과(+8, `helpers.test.js`). `npm run typecheck` 통과. 새 유닛 8건은 고치기 전의 `helpers.js`에서 모두 실패한다.
 - e2e(작업 폴더 서버 8095, 고치기 전 코드를 내보낸 서버 8097). 새 시험 11건:
