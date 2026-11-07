@@ -661,6 +661,11 @@ def _scroll_up_by_frames(page, step, frames):
     }""", {"step": step, "frames": frames})
 
 
+def _touch(page, kind, fingers_left):
+    """터치 사건을 낸다. 코드는 화면에 남은 손가락 수(`touches`)를 본다."""
+    page.evaluate("""([kind, left]) => window.dispatchEvent(Object.assign(new Event(kind), { touches: Array(left) }))""", [kind, fingers_left])
+
+
 def _viewport_top(page, date):
     """그 날짜의 줄 위쪽이 화면 위에서 떨어진 거리."""
     return page.evaluate("""d => document.querySelector(`li[data-date="${d}"]`).getBoundingClientRect().top""", date)
@@ -916,14 +921,17 @@ def test_list_without_scroll_anchoring_adds_rows_above_after_scrolling_stops(mob
     _open_list(page, "calendar/list/2026-12-15")
     page.wait_for_timeout(1000)   # 처음의 위쪽 채우기를 기다린다
     first = _dates(page)[0]
-    page.evaluate("() => window.dispatchEvent(new Event('touchstart'))")
+    _touch(page, "touchstart", 2)
     seen = _scroll_up_by_frames(page, 40, 20)
     assert set(seen["firsts"]) == {first}
     page.wait_for_timeout(500)
     assert _dates(page)[0] == first
+    _touch(page, "touchend", 1)   # 두 손가락 가운데 하나만 뗀다
+    page.wait_for_timeout(500)
+    assert _dates(page)[0] == first
     row = _dates(page)[40]
     before = _viewport_top(page, row)
-    page.evaluate("() => window.dispatchEvent(new Event('touchend'))")
+    _touch(page, "touchend", 0)
     page.wait_for_function("d => document.querySelector('li[data-date]').dataset.date < d", arg=first)
     page.wait_for_timeout(100)
     assert abs(_viewport_top(page, row) - before) <= 2

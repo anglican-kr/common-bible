@@ -830,9 +830,10 @@ function startListScroll(list) {
       if (root.isConnected) followTopMonth(list);
     });
   }, { passive: true, signal });
-  const release = () => {
-    touching = false;
-    armSettle();
+  /** 손가락 하나를 떼도 이벤트가 나온다. 남은 손가락이 있으면 계속 기다린다. @param {TouchEvent} e */
+  const release = (e) => {
+    touching = e.touches.length > 0;
+    if (!touching) armSettle();
   };
   window.addEventListener("touchstart", () => { touching = true; }, { passive: true, signal });
   window.addEventListener("touchend", release, { passive: true, signal });
