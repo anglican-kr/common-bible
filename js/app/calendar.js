@@ -761,12 +761,16 @@ function replaceListAddress(path) {
   window.tabHistory?.rememberCalendarView();
 }
 
-/** 맨 위 줄이 바뀌었으면 주소에 남긴다(ADR-038 §2). 바뀌지 않았으면 주소를 건드리지 않는다. @param {ListView} list */
+/**
+ * 맨 위 줄이 바뀌었으면 주소에 남긴다(ADR-038 §2). 바뀌지 않았으면 주소를 건드리지 않아, 오늘을 보다 닫으면 다음 날 그날의 오늘 줄이 열린다. 앱을 켜 둔 채
+ * 날이 바뀔 수 있으므로 오늘은 목록을 그린 때가 아니라 지금으로 잰다.
+ * @param {ListView} list
+ */
 function saveTopRow(list) {
   const date = rowUnderBar(list.root)?.dataset.date;
   if (!date || date === list.top) return;
   list.top = date;
-  replaceListAddress(listPathOf(date, list.today));
+  replaceListAddress(listPathOf(date, todayKey(new Date())));
 }
 
 /** 경계가 화면에서 이만큼(줄 25개쯤) 가까워지면 줄을 더한다. */

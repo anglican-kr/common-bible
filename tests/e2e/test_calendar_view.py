@@ -1136,6 +1136,24 @@ def test_scrolling_back_to_today_drops_the_date_from_the_address(mobile_context)
     assert page.evaluate("() => localStorage.getItem('bible-calendar-last-view')") == "/calendar/list"
 
 
+def test_list_left_open_overnight_uses_the_new_today_for_the_address(mobile_context):
+    """목록을 켜 둔 채 날이 바뀌면 주소를 남기는 때의 오늘을 쓴다. 새 오늘 줄은 날짜가 없고, 어제가 된 줄은 날짜가 있다(PR #513 리뷰)."""
+    page = mobile_context.new_page()
+    page.clock.set_fixed_time(datetime.datetime(2026, 12, 15, 12))
+    _open_list(page, "calendar/list")
+    assert page.locator("li[data-date='2026-12-15'] a[aria-current='date']").count() == 1
+    page.clock.set_fixed_time(datetime.datetime(2026, 12, 16, 12))
+    put_under_bar = """d => {
+        const bar = document.getElementById('sticky-group').getBoundingClientRect().bottom;
+        window.scrollBy({ top: document.querySelector(`li[data-date="${d}"]`).getBoundingClientRect().top - bar, behavior: 'instant' });
+    }"""
+    page.evaluate(put_under_bar, "2026-12-16")
+    page.wait_for_timeout(400)   # 멈춤 판단(0.2초)을 넘긴다
+    assert page.url == f"{BASE}/calendar/list"
+    page.evaluate(put_under_bar, "2026-12-15")
+    page.wait_for_url(f"{BASE}/calendar/list/2026-12-15")
+
+
 @both_anchorings
 def test_back_to_the_list_returns_to_the_top_row_and_leaving_stops_the_list(mobile_context, anchoring):
     """뒤로 가기는 누른 줄이 아니라 맨 위 줄로 돌아온다. 떠난 뒤에는 목록이 상단 바를 건드리지 않는다."""
