@@ -322,7 +322,7 @@ window.appCitations = (/** @returns {AppCitations} */ () => {
   /** @type {(() => void) | null} */
   let _tooltipReposListener = null;
   /** @type {ResizeObserver | null} */
-  let _tooltipBarObserver = null;
+  let _tooltipSizeObserver = null;
   // Truncate anchor label in tooltip if it exceeds this many characters.
   const TOOLTIP_ANCHOR_MAX = 18;
 
@@ -431,16 +431,22 @@ window.appCitations = (/** @returns {AppCitations} */ () => {
     _tooltipReposListener = reposition;
     window.addEventListener("scroll", reposition, true);
     window.addEventListener("resize", reposition);
-    // The sticky header can change height with no scroll event after it — the
-    // desktop header re-expands over a transition once a scroll has reached the
-    // top, and iOS can change the status-bar inset, which is the header's
-    // padding-top (#sticky-group). That moves the anchor (the header is in flow)
-    // and the edge the tooltip stays below, so follow the header's size too. The
-    // border box counts that padding; the default content box would miss it.
-    const bar = document.getElementById("sticky-group");
-    if (bar && typeof ResizeObserver !== "undefined") {
-      _tooltipBarObserver = new ResizeObserver(reposition);
-      _tooltipBarObserver.observe(bar, { box: "border-box" });
+    // Follow two sizes too, which change with no scroll or resize event:
+    //  - the sticky header (#sticky-group): the desktop header re-expands over a
+    //    transition once a scroll has reached the top, and iOS can change the
+    //    status-bar inset, which is the header's padding-top. That moves the
+    //    anchor (the header is in flow) and the edge the tooltip stays below. The
+    //    border box counts that padding; the default content box would miss it.
+    //  - the tooltip itself: a web font that arrives after it opened can rewrap
+    //    its text, and a taller or shorter tooltip placed above the anchor would
+    //    cover the anchor or drift away from it.
+    // Repositioning moves the tooltip without resizing it — its left edge is
+    // clamped so its width fits — so this cannot loop.
+    if (typeof ResizeObserver !== "undefined") {
+      _tooltipSizeObserver = new ResizeObserver(reposition);
+      _tooltipSizeObserver.observe(tt, { box: "border-box" });
+      const bar = document.getElementById("sticky-group");
+      if (bar) _tooltipSizeObserver.observe(bar, { box: "border-box" });
     }
   }
 
@@ -450,9 +456,9 @@ window.appCitations = (/** @returns {AppCitations} */ () => {
       window.removeEventListener("resize", _tooltipReposListener);
       _tooltipReposListener = null;
     }
-    if (_tooltipBarObserver) {
-      _tooltipBarObserver.disconnect();
-      _tooltipBarObserver = null;
+    if (_tooltipSizeObserver) {
+      _tooltipSizeObserver.disconnect();
+      _tooltipSizeObserver = null;
     }
   }
 
