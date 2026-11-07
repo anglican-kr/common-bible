@@ -867,6 +867,15 @@ function spokenVerseNumber(v, bookId) {
   if (v.alt_ref == null) return verse;
   return bookId === "esth" ? `${verse} 추가 본문 ${v.alt_ref}` : `${verse}, 그리스어 번호 ${v.alt_ref}`;
 }
+// 괄호 번호가 있는 장(`has_dual_numbering`)의 본문 위 안내. 괄호 번호는 두 책 모두 70인역 그리스어 사본의 절 번호다.
+// 에스델에서는 괄호가 붙은 절이 추가 본문이라는 것도 밝혀, 절을 누를 때의 안내(「17절 추가 본문 1」)와 같은 낱말을
+// 쓴다(사용자 결정 2026-11-07, 데이터 저장소 ADR-003 패턴 4). The book tells the two apart, as in spokenVerseNumber.
+/** @param {string} bookId @returns {string} */
+function dualNumberingNote(bookId) {
+  return bookId === "esth"
+    ? "※ 괄호 안 번호는 70인역 그리스어 사본에 있는 추가 본문의 절 번호입니다."
+    : "※ 괄호 안 번호는 70인역 그리스어 사본의 절 번호입니다.";
+}
 // The element a verse deep-link should scroll to. The exact id wins; otherwise
 // the first rendered span whose number matches. The fallback is what makes
 // `/dan/3/24`, `/job/27/24`, `/hos/14/14` work: those verses render under an
@@ -1421,7 +1430,7 @@ function renderChapter(data, book, opts) {
 
   if (data.has_dual_numbering) {
     $app.appendChild(
-      el("p", { className: "dual-numbering-note" }, "※ 괄호 안 번호는 70인역 사본(그리스어)의 절 번호입니다.")
+      el("p", { className: "dual-numbering-note" }, dualNumberingNote(book.id))
     );
   }
 

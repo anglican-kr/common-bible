@@ -619,6 +619,21 @@ def test_verse_tap_announces_the_verse_the_number_shows(page):
         expect(page.locator("#a11y-announce")).to_have_text(words)
 
 
+def test_dual_numbering_note_names_the_esther_additions(page):
+    """괄호 번호가 있는 장의 본문 위 안내. 에스델은 괄호가 붙은 절을 추가 본문이라고 밝혀, 절을 누를 때의 안내
+    「17절 추가 본문 1」과 같은 낱말을 쓴다(known-issues §49, 사용자 결정 2026-11-07). 괄호 번호가 없는 장에는 안내가 없다."""
+    cases = [
+        ("esth/4", "※ 괄호 안 번호는 70인역 그리스어 사본에 있는 추가 본문의 절 번호입니다."),
+        ("esth/1", "※ 괄호 안 번호는 70인역 그리스어 사본에 있는 추가 본문의 절 번호입니다."),
+        ("dan/3", "※ 괄호 안 번호는 70인역 그리스어 사본의 절 번호입니다."),
+    ]
+    for path, note in cases:
+        _open_chapter(page, path)
+        expect(page.locator(".dual-numbering-note")).to_have_text(note)
+    _open_chapter(page, "esth/2")
+    expect(page.locator(".dual-numbering-note")).to_have_count(0)
+
+
 def test_verse_select_half_verses_cite_printed_letters(page):
     """재현 표(2026-10-21)의 네 장과 나훔 1. 범위 끝이 반쪽 절이면 그 반쪽 절에서 멈추고, 출처는 「ㄱ · ㄴ」으로 적는다.
     막대와 출처의 구간은 쉼표와 한 칸으로 나눈다(사용자 결정 2026-11-07 — 종전 출처는 「이사야 7:7,8ㄱ」)."""
