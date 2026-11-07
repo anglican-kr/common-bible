@@ -397,7 +397,10 @@ function redrawIfSyncedSettingsChanged() {
   const changed = here.view === "lectionary" || (here.view === "calendar" && here.mode === "list")   // 목록 줄도 전례독서 목록의 글을 싣는다
     ? loadLectionaryAltShow() !== _drawnWith.altShow
     : $app.querySelector(".book-list") !== null && loadBookOrder() !== _drawnWith.bookOrder;
-  return changed ? route() : undefined;
+  if (!changed) return undefined;
+  // 캘린더 목록은 맨 위 줄을 스크롤이 멈출 때 주소에 남긴다. route()가 순번을 올리면 낡은 화면이라 남기지 못하므로 그 전에 알린다(ADR-038 §2).
+  window.dispatchEvent(new Event("route:before-redraw"));
+  return route();
 }
 
 async function route() {

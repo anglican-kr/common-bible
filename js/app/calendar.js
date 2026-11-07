@@ -891,10 +891,11 @@ function startListScroll(list) {
   window.addEventListener("touchstart", () => { touching = true; }, { passive: true, signal });
   window.addEventListener("touchend", release, { passive: true, signal });
   window.addEventListener("touchcancel", release, { passive: true, signal });
-  // 스크롤이 멈추기 전에 누르거나 화면을 떠나도 남긴다. 캡처 단계라 링크가 주소를 옮기기 전에 지금 항목에 적는다.
+  // 스크롤이 멈추기 전에 누르거나, 화면을 떠나거나, 동기화로 받은 설정이 다시 그려도 남긴다. 캡처 단계라 링크가 주소를 옮기기 전에 지금 항목에 적는다.
   window.addEventListener("click", savePosition, { capture: true, signal });
   window.addEventListener("pagehide", savePosition, { signal });
   document.addEventListener("visibilitychange", savePosition, { signal });
+  window.addEventListener("route:before-redraw", savePosition, { signal });
   observer.observe(above);
   observer.observe(below);
   stopList = stop;

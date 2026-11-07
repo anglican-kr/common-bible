@@ -1254,6 +1254,21 @@ def test_redraw_after_a_synced_setting_keeps_the_top_row(mobile_context):
     assert page.url == f"{BASE}/calendar/list/2027-01-15"
 
 
+def test_redraw_before_scrolling_stops_keeps_the_top_row(mobile_context):
+    """스크롤이 멈추기 전에 동기화로 받은 설정이 목록을 다시 그려도 보던 줄이 그대로다. 라우터가 순번을 올리기 전에 맨 위 줄을 남긴다(PR #513 리뷰)."""
+    page = mobile_context.new_page()
+    _open_list(page, "calendar/list/2026-12-15")
+    page.evaluate("""() => {
+        const bar = document.getElementById('sticky-group').getBoundingClientRect().bottom;
+        window.scrollBy({ top: document.querySelector('li[data-date="2026-12-30"]').getBoundingClientRect().top - bar, behavior: 'instant' });
+        localStorage.setItem('bible-lectionary-alt-show', '1');
+        return window.redrawIfSyncedSettingsChanged();
+    }""")
+    page.wait_for_timeout(100)
+    assert page.url == f"{BASE}/calendar/list/2026-12-30"
+    assert abs(_row_top_under_head(page, "2026-12-30")) <= 2
+
+
 def test_setting_toggle_in_the_settings_tab_keeps_the_top_row(mobile_context):
     """설정 탭에서 대체 독서 토글을 바꾸고 돌아와도 보던 줄이 그대로다(ADR-041 §4)."""
     page = mobile_context.new_page()
