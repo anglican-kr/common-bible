@@ -138,3 +138,10 @@ def open_settings(page):
 def close_popovers(page) -> None:
     """Dismiss any open popovers/modals by pressing Escape."""
     page.keyboard.press("Escape")
+
+
+def emulate_status_bar(page, inset) -> None:
+    """iOS가 홈 화면 앱을 상태 표시줄 밑까지 그리는 상태를 시뮬레이션한다. `env(safe-area-inset-top)`이 `inset`px이 된다.
+    Chrome 개발자 도구 프로토콜(CDP)의 기능이라 Chromium에서만 된다. 쓰는 시험에 `@pytest.mark.only_browser("chromium")`을 붙인다."""
+    cdp = page.context.new_cdp_session(page)
+    cdp.send("Emulation.setSafeAreaInsetsOverride", {"insets": {"top": inset, "topMax": inset}})

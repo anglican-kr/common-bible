@@ -20,7 +20,7 @@ import re
 
 import pytest
 
-from .conftest import CLEAR_APP_STORAGE, IPHONE_UA
+from .conftest import CLEAR_APP_STORAGE, IPHONE_UA, emulate_status_bar
 
 BASE = "http://localhost:8080"
 
@@ -738,6 +738,21 @@ def test_list_opens_at_the_row_of_the_address(mobile_context):
     _open_list(page, "calendar/list/2026-12-01")
     assert abs(_month_top_under_head(page, "2026-12")) <= 2
     assert _row(page, "2026-12-01").is_visible()
+
+
+@pytest.mark.only_browser("chromium")
+def test_list_row_and_scroll_padding_follow_the_status_bar_height(mobile_context):
+    """상태 표시줄 높이(`env(safe-area-inset-top)`)가 62px이어도 주소의 줄이 상단 바 바로 아래에 온다. 스크롤 여백(`scroll-padding-top`)은
+    접힌 상단 바 60px에 그 높이를 더한 값이고, 상단 바 아래쪽과 같다(2026-11-07, 상단 바 묶음이 그 높이를 안쪽 위 여백으로 둔다)."""
+    inset = 62
+    page = mobile_context.new_page()
+    emulate_status_bar(page, inset)
+    _open_list(page, "calendar/list/2026-12-15")
+    assert abs(_row_top_under_head(page, "2026-12-15")) <= 2
+    bar, padding = page.evaluate("""() => [document.getElementById('sticky-group').getBoundingClientRect().bottom,
+        parseFloat(getComputedStyle(document.documentElement).scrollPaddingTop)]""")
+    assert padding == 60 + inset, padding
+    assert abs(bar - padding) <= 1, (bar, padding)
 
 
 def test_list_rows_are_announced_as_a_list(mobile_context):
