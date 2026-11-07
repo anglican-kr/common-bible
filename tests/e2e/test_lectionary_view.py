@@ -1775,6 +1775,46 @@ def test_title_date_stays_on_one_line_with_the_largest_font_on_320px(mobile_cont
     assert state["height"] < 44, state   # 「오늘」이 두 줄로 꺾이면 머리가 높아진다
 
 
+def _under_status_bar(page, inset):
+    """iOS가 홈 화면 앱을 상태 표시줄 밑까지 그리는 상태 — `env(safe-area-inset-top)`을 그 높이로 흉내 낸다(Chromium의 CDP)."""
+    cdp = page.context.new_cdp_session(page)
+    cdp.send("Emulation.setSafeAreaInsetsOverride", {"insets": {"top": inset, "topMax": inset}})
+
+
+def _head_geometry(page):
+    return page.evaluate("""() => {
+      const bar = document.getElementById('sticky-group').getBoundingClientRect();
+      return { scrollY: window.scrollY, barTop: bar.top, barBottom: bar.bottom,
+               dateRow: document.getElementById('page-title').getBoundingClientRect().top,
+               heading: document.querySelector('.lect-day').getBoundingClientRect().top };
+    }""")
+
+
+def test_heading_clears_the_header_when_the_page_runs_under_the_status_bar(mobile_context):
+    """상태 표시줄 높이(`env(safe-area-inset-top)`)가 62px이어도 맨 위에서 제목이 상단 바에 가려지지 않는다. 상단 바 묶음은 맨 위에 붙고
+    그 높이를 안쪽 위 여백으로 둔다(2026-11-07, 아이폰 홈 화면 앱에서 제목이 상단 바 밑에 가려졌다). 날짜를 옮겨도 같고, 스크롤해도 본문이
+    시계 자리에 비치지 않는다."""
+    page = mobile_context.new_page()
+    _under_status_bar(page, 62)
+    _open(page, "lectionary/2026-10-23")
+    g = _head_geometry(page)
+    assert g["scrollY"] == 0, g
+    assert g["heading"] >= g["barBottom"], g   # 제목이 상단 바 밑에 있지 않다
+    assert g["barTop"] == 0, g   # 상태 표시줄 자리도 상단 바 배경이다
+    assert g["dateRow"] >= 62, g   # 「오늘 ‹ 날짜 ›」 줄은 시계 아래
+
+    page.click('a[data-focus-key="next"]')
+    page.wait_for_selector('time.lect-date-label[datetime="2026-10-24"]')
+    g = _head_geometry(page)
+    assert g["scrollY"] == 0 and g["heading"] >= g["barBottom"], g
+
+    page.evaluate("() => window.scrollTo({ top: 300, behavior: 'instant' })")
+    page.wait_for_function("() => window.scrollY === 300")
+    behind_clock = page.evaluate("""() => document.getElementById('sticky-group')
+      .contains(document.elementFromPoint(window.innerWidth / 2, 31))""")
+    assert behind_clock, "스크롤한 본문이 상태 표시줄 자리에 보인다"
+
+
 def test_saint_day_heading_and_collects_follow_the_default_reading(mobile_context):
     """11.6 레오나드(고유 독서가 없는 축일) — 처음에는 평일 전례독서 목록이 선택되어 평일 독서이고, 머리 제목은 그날의 기본 독서인
     「연중 31주 금요일」이다. 레오나드는 전례독서 목록 대신 제목 아래 이름 줄에 보이고, 공통 독서는 당분간 보이지 않는다. 색은 그날의 색(백색) 그대로다
