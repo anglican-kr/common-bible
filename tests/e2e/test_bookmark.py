@@ -299,6 +299,64 @@ def test_merge_into_pre205_bookmark_keeps_its_verses(browser):
     ctx.close()
 
 
+def _save_isa7_14(page, title=None) -> None:
+    """이사 7:14를 골라 저장 대화상자를 연다. 제목 칸의 기본 이름을 확인하고, `title`이 있으면 그 제목으로 바꿔 저장한다."""
+    page.evaluate("() => enterVerseSelectMode('isa', 7)")
+    page.wait_for_selector("#verse-select-bar:not([hidden])")
+    page.click("#v14")
+    page.click("#verse-select-bookmark-btn")
+    page.wait_for_selector("#bm-save-modal:not([hidden])")
+    assert page.locator("#bm-label-input").input_value() == "이사 7:14"
+    if title is not None:
+        page.locator("#bm-label-input").fill(title)
+    page.locator("#bm-save-modal .bm-btn-primary").click()
+    page.wait_for_selector("#bm-save-modal", state="hidden")
+
+
+def _merge_isa7_1(page) -> None:
+    """이사 7:1을 골라 저장을 누르고, 합치기 대화상자에서 「합치기」를 누른다."""
+    page.evaluate("() => enterVerseSelectMode('isa', 7)")
+    page.wait_for_selector("#verse-select-bar:not([hidden])")
+    page.click("#v1")
+    page.click("#verse-select-bookmark-btn")
+    page.wait_for_selector("#bm-merge-modal:not([hidden])")
+    page.click("#bm-merge-yes")
+    page.wait_for_selector("#bm-merge-modal", state="hidden")
+
+
+def test_merge_keeps_a_title_the_user_wrote(browser):
+    """「임마누엘의 징조」로 저장한 이사 7:14에 1절을 합치면 범위만 「1,14」로 넓어지고 제목은 그대로다. 목록의 참조 줄은
+    합친 범위다. main은 제목을 「이사 7:1,14」로 바꿨다(known-issues §19.1, 2026-10-22 재현)."""
+    ctx = browser.new_context()
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    page = ctx.new_page()
+    _open_chapter_and_wait(page, "isa/7")
+    _save_isa7_14(page, "임마누엘의 징조")
+    _merge_isa7_1(page)
+    store = page.evaluate("() => window.syncStoreV2.loadBookmarks()")
+    assert [(b["verseSpec"], b["label"]) for b in store] == [("1,14", "임마누엘의 징조")]
+    page.locator(".title-bookmark-btn").click()
+    page.wait_for_selector("#bookmark-drawer:not([hidden])")
+    row = page.locator("#bookmark-drawer li.bm-bookmark")
+    assert row.locator(".bm-bookmark-label").inner_text() == "임마누엘의 징조"
+    assert row.locator(".bm-bookmark-ref").inner_text() == "이사 7:1,14"
+    ctx.close()
+
+
+def test_merge_renames_the_default_title(browser):
+    """저장 대화상자가 제안한 이름 그대로 저장한 이사 7:14에 1절을 합치면 제목도 합친 범위 「이사 7:1,14」가 된다. 합치기가
+    저장 대화상자의 기본 이름을 알아보는지 본다(두 곳이 같은 함수 `defaultBookmarkLabel`을 쓴다)."""
+    ctx = browser.new_context()
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    page = ctx.new_page()
+    _open_chapter_and_wait(page, "isa/7")
+    _save_isa7_14(page)
+    _merge_isa7_1(page)
+    store = page.evaluate("() => window.syncStoreV2.loadBookmarks()")
+    assert [(b["verseSpec"], b["label"]) for b in store] == [("1,14", "이사 7:1,14")]
+    ctx.close()
+
+
 # 인용 칩은 절 요소의 자식이 아니라 형제다. 그래서 절의 배경을 물려받지 못한다(ADR-022 §6).
 def _enter_select(browser, path: str):
     ctx = browser.new_context()

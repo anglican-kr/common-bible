@@ -21,13 +21,13 @@
 /** @typedef {import("../types").BookmarkTreeBookmark} BookmarkTreeBookmark */
 /** @typedef {import("../types").BookmarkTreeFolder} BookmarkTreeFolder */
 
-const { _$, el, clearNode, chUnit, emptyState } = window.appHelpers;
+const { _$, el, clearNode, emptyState } = window.appHelpers;
 const { loadBookmarks } = window.appStorage;
 
 import {
   sortBookmarkNodes, getBookmarkSort, markBookmarkViewed, _forgetViewed,
   _isActiveBookmark, _hasActiveDescendant, _bookmarkHref, BOOKMARK_ADD_HELP,
-  _walkBookmarks, _findItemInStore, removeItemById, setRenderPathname, commitBookmarks,
+  _walkBookmarks, _findItemInStore, removeItemById, setRenderPathname, commitBookmarks, defaultBookmarkLabel,
 } from "./bookmark-core.js";
 import {
   _setupDragHandle, closeSwipedRow, resetSwipedRow, closeSwipedRowIfOutside,
@@ -152,12 +152,8 @@ function _buildBookmarkItem(bm, depth) {
   typeIcon.appendChild(_buildBookmarkTypeIcon(isActive));
   const link = el("a", { className: "bm-bookmark-link", href: _bookmarkHref(bm), draggable: "false" });
   link.appendChild(el("span", { className: "bm-bookmark-label" }, bm.label));
-  const book = (window.getBooksCache() ?? []).find(b => b.id === bm.bookId);
-  const bookName = book ? (book.short_name_ko || book.name_ko) : bm.bookId;
-  const refText = bm.verseSpec === "all"
-    ? `${bookName} ${bm.chapter}${chUnit(bm.bookId ?? "")}`
-    : `${bookName} ${bm.chapter}:${bm.verseSpec}`;
-  link.appendChild(el("span", { className: "bm-bookmark-ref" }, refText));
+  // The reference line is the default name of the bookmark's range, made by the one function the save dialog uses.
+  link.appendChild(el("span", { className: "bm-bookmark-ref" }, defaultBookmarkLabel(bm, window.getBooksCache())));
   link.addEventListener("click", (e) => {
     e.preventDefault();
     // In select mode the row click (below) toggles selection; never navigate.
