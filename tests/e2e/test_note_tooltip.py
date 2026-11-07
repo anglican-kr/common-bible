@@ -4,7 +4,9 @@
 (`js/app/citations.js`의 `_positionNoteTooltip`). 화면 위쪽에는 상단 바(`#sticky-group`)가 고정돼 툴팁보다
 앞에 그려지므로, 위의 자리는 화면 맨 위가 아니라 상단 바 아래쪽에서 끝난다. 열왕기상 5:6의 주석 「사천」을 쓴다.
 """
-from .conftest import CLEAR_APP_STORAGE, MOBILE_VIEWPORT
+import pytest
+
+from .conftest import CLEAR_APP_STORAGE, MOBILE_VIEWPORT, emulate_status_bar
 
 BASE = "http://localhost:8080"
 ANCHOR = ".note-anchor:not(.note-anchor--variant)"
@@ -39,6 +41,14 @@ _MEASURE = f"""() => {{
     visible: !!hit && tt.contains(hit),
   }};
 }}"""
+
+# 창의 스크롤과 창 크기 이벤트를 기록한다. 크기 감시만으로 자리를 다시 잡는지 보는 시험이, 그사이 이 이벤트가 없었는지 확인한다.
+_RECORD_EVENTS = """() => {
+  window.__tooltipEvents = [];
+  const note = (e) => window.__tooltipEvents.push(e.type);
+  window.addEventListener('scroll', note, true);
+  window.addEventListener('resize', note);
+}"""
 
 
 def _open_chapter(browser, viewport):
@@ -93,8 +103,8 @@ def test_note_tooltip_follows_scroll_and_flips_before_header(browser):
 
 
 def test_note_tooltip_follows_header_reexpanding_at_top(browser):
-    """데스크톱 상단 바는 스크롤하면 접히고, 맨 위로 돌아오면 스크롤이 끝난 뒤 다시 펴지며 본문을 아래로 민다. 그때도
-    툴팁과 표지의 간격은 8px로 남고, 펴진 상단 바에 툴팁이 가리지 않는다."""
+    """데스크톱 상단 바는 스크롤하면 접히고, 맨 위에서 10px 안으로 돌아오면 0.25초 동안 다시 펴지며 본문을 아래로 민다
+    (`views.js`의 `initCompactHeader`). 그때도 툴팁과 표지의 간격은 8px로 남고, 펴진 상단 바에 툴팁이 가리지 않는다."""
     ctx, page = _open_chapter(browser, {"width": 1280, "height": 800})
     try:
         page.evaluate("() => window.scrollTo({ top: 200, behavior: 'instant' })")
@@ -107,5 +117,54 @@ def test_note_tooltip_follows_header_reexpanding_at_top(browser):
         assert abs(m["anchorTop"] - m["bottom"] - 8) < 1, m
         assert m["top"] >= m["bar"], m
         assert m["visible"], m
+    finally:
+        ctx.close()
+
+
+@pytest.mark.only_browser("chromium")
+def test_note_tooltip_follows_status_bar_height_change(browser):
+    """Chromium에서 툴팁을 연 채 상태 표시줄 높이만 바꾸면(창 크기와 스크롤은 그대로) 상단 바 묶음의 위 여백이 늘어 본문이
+    내려간다. 툴팁은 상단 바의 크기 변화를 받아 표지를 따라가 간격 8px을 지키고 상단 바에 가리지 않는다. 아이폰에서 이 값이
+    바뀔 때 창 크기 이벤트도 오는지는 확인하지 못했다(원장 `docs/changes/2026-11-07-note-tooltip-inset.md`)."""
+    ctx, page = _open_chapter(browser, {"width": 1280, "height": 800})
+    try:
+        _tap_anchor(page)
+        before = page.evaluate(_MEASURE)
+        page.evaluate(_RECORD_EVENTS)
+        emulate_status_bar(page, 62)
+        page.evaluate(_SETTLE)
+        # 스크롤이나 창 크기 이벤트가 오면 고치기 전 코드도 자리를 다시 잡아, 이 시험이 크기 감시를 시험하지 못한다
+        assert page.evaluate("() => window.__tooltipEvents") == [], "시뮬레이션이 스크롤이나 창 크기 이벤트를 보냈다"
+        m = page.evaluate(_MEASURE)
+        assert m["anchorTop"] > before["anchorTop"] + 50, (before, m)   # 본문이 내려갔다
+        gap = m["anchorTop"] - m["bottom"] if m["placement"] == "above" else m["top"] - m["anchorBottom"]
+        assert abs(gap - 8) < 1, m
+        assert m["top"] >= m["bar"], m
+        assert m["visible"], m
+    finally:
+        ctx.close()
+
+
+def test_note_tooltip_follows_its_own_height_change(browser):
+    """툴팁을 연 뒤 툴팁 자신의 높이가 바뀌어도(웹 글꼴이 늦게 도착해 줄이 다시 나뉠 때) 표지 위의 툴팁이 자리를 다시 잡아,
+    표지를 덮지 않고 간격 8px을 지킨다. 글꼴 대신 툴팁에 한 줄을 더해 높이를 바꾼다. 스크롤과 창 크기 이벤트는 없다."""
+    ctx, page = _open_chapter(browser, {"width": 1280, "height": 800})
+    try:
+        _tap_anchor(page)
+        before = page.evaluate(_MEASURE)
+        assert before["placement"] == "above", before
+        page.evaluate(_RECORD_EVENTS)
+        page.evaluate("""() => {
+          const line = document.createElement('p');
+          line.textContent = '늦게 도착한 글꼴로 줄이 다시 나뉜 경우';
+          document.getElementById('note-tooltip').appendChild(line);
+        }""")
+        page.evaluate(_SETTLE)
+        assert page.evaluate("() => window.__tooltipEvents") == [], "스크롤이나 창 크기 이벤트가 있었다"
+        m = page.evaluate(_MEASURE)
+        assert m["bottom"] - m["top"] > before["bottom"] - before["top"] + 5, (before, m)   # 툴팁이 높아졌다
+        assert m["placement"] == "above", m
+        assert abs(m["anchorTop"] - m["bottom"] - 8) < 1, m   # 표지를 덮지 않는다
+        assert m["top"] >= m["bar"], m
     finally:
         ctx.close()
