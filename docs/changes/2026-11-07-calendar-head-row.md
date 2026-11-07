@@ -1,4 +1,5 @@
 ---
+pr: 509
 date: 2026-11-07
 branch: feat/calendar-head-row
 title: "feat: 캘린더와 전례독서의 상단 바 일관성 맞추기"
@@ -38,6 +39,7 @@ title: "feat: 캘린더와 전례독서의 상단 바 일관성 맞추기"
 
 - 유닛 `node --test tests/unit/*.test.js`: 1,562건 통과. 타입 검사 `npm run typecheck`: 통과.
 - e2e(작업 폴더 서버, Chromium): 상단 바를 그리는 파일을 골라 170건 통과했다. `test_calendar_view.py`, `test_lectionary_view.py`, `test_liturgical_lazy_load.py`, `test_navigation.py`(집 단추), `test_tabbar.py`(캘린더 탭), `test_a11y_axe.py`(두 화면의 접근성)다. 더한 시험은 두 화면의 칸 자리 비교, 오른쪽 단추, 데스크톱 집 단추, 달 이동 뒤 맨 위다.
+- `main`(#508)을 합친 뒤 유닛 1,565건과 타입 검사, 관련 e2e 51건(`test_calendar_view.py`, `test_liturgical_lazy_load.py`, `test_lectionary_view.py`에서 달력, 제목, 오늘, 다시 그리기에 관련된 것)이 다시 통과했다. 충돌은 `docs/topics/liturgical.md`의 「지금 동작」 맨 위뿐이었고 양쪽을 모두 남겼다.
 - 폭 320, 390, 1280px과 글자 18, 20, 24px에서 칸의 좌표를 재어 겹침과 가로 넘침이 없고 ‹ ›가 두 화면에서 같은 자리인 것을 확인했다. 스크린샷도 눈으로 보았다.
 - 전체 e2e와 WebKit은 돌리지 않았다. 전체는 13분쯤 걸려 관련 파일만 골랐다(사용자 결정 2026-11-07). 상단 바는 `:has()`와 `@container`를 쓰는데 둘 다 전에도 같은 자리에 쓰던 것이다. 실제 아이폰 확인은 dev 배포 때 한다.
 
@@ -49,3 +51,4 @@ title: "feat: 캘린더와 전례독서의 상단 바 일관성 맞추기"
 - `docs/topics/liturgical.md`: 지금 동작
 - `docs/architecture.md`: 모듈 표, ADR 인덱스
 - `docs/writing.md`: 용어
+- 디자인 시스템 아티팩트: `CalendarMonth`, `Header`, `LectionaryHead`의 설명과 미리보기, `bundle.css`. `bundle.css`는 지금 CSS로 다시 만들어, 전에 옮기지 않았던 규칙의 차이도 없어졌다.
