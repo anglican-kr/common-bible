@@ -118,7 +118,8 @@ window.tabHistory = (() => {
     lastPathForTab[tabOf(path)] = path;
     const doRestore = restoreNext;
     restoreNext = false; // 1회성 소비
-    if (!doRestore) return;
+    // 목록은 먼 달을 내려 스크롤 값으로 위치를 되살릴 수 없다. 뷰가 주소의 날짜 줄로 둔다(ADR-038 §1).
+    if (!doRestore || isCalendarListPath(path)) return;
     const y = scrollMemory.get(path);
     if (y == null) return; // 기억 없음 → 뷰가 정한 스크롤(보통 최상단) 유지
     window.scrollTo(0, y);

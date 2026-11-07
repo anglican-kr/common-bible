@@ -262,7 +262,7 @@ window.appHelpers = (/** @returns {AppHelpers} */ () => {
   }
 
   // Whether the browser holds the visible content still when something above it changes size (CSS scroll
-  // anchoring — Chrome · Edge · Firefox, Safari 27+). restoreFocusSpot depends on it.
+  // anchoring — Chrome · Edge · Firefox, Safari 27+). restoreFocusSpot and the calendar list depend on it.
   const SCROLL_ANCHORING = typeof CSS !== "undefined" && typeof CSS.supports === "function"
     && CSS.supports("overflow-anchor", "auto");
 
@@ -360,7 +360,7 @@ window.appHelpers = (/** @returns {AppHelpers} */ () => {
 
   return {
     _$, chUnit, el, clearNode, hangingQuoteClass, setInert, trapFocus, dragReleaseAction, emptyState, headerIcon,
-    HEADER_ICON_PATHS, isModifiedClick, focusSpotOf, restoreFocusSpot,
+    HEADER_ICON_PATHS, isModifiedClick, focusSpotOf, restoreFocusSpot, SCROLL_ANCHORING,
   };
 })();
 

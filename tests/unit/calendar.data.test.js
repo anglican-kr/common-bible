@@ -279,7 +279,8 @@ test("목록 줄 — 2025-2030의 모든 날에 줄이 있고 글이 제목 영�
   }
 });
 
-test("목록 — 달마다 그 달의 날 수만큼 줄이 있다", { skip: SKIP }, () => {
-  assert.strictEqual(ctx.buildMonthList(2026, 12, "2026-11-07", rowOf).rows.length, 31);
-  assert.strictEqual(ctx.buildMonthList(2028, 2, "2026-11-07", rowOf).rows.length, 29);
+test("목록 — 위아래로 이어지는 날짜마다 줄이 있다(달과 해를 넘을 때 포함)", { skip: SKIP }, () => {
+  for (const d of [...ctx.listDatesBefore("2027-01-15", 40), ...ctx.listDatesAfter("2028-02-15", 40)]) {
+    assert.strictEqual(rowOf(d).date, d);
+  }
 });

@@ -16,6 +16,9 @@
 실데이터(data/ 서브모듈)가 필요하다 — 로컬 전용(CLAUDE.md 「테스트」).
 """
 import datetime
+import re
+
+import pytest
 
 from .conftest import CLEAR_APP_STORAGE, IPHONE_UA
 
@@ -569,6 +572,26 @@ def test_month_steps_start_the_new_month_at_the_top(mobile_context):
 
 # ── ⑩ 목록 보기(사용자 결정 2026-11-07, ADR-038 §2 「목록 보기」) ──
 
+# Safari 27 전을 흉내 낸다. 코드의 판별 값을 거짓으로 하고 브라우저의 스크롤 고정도 끈다.
+NO_SCROLL_ANCHORING = """
+const supports = CSS.supports.bind(CSS);
+CSS.supports = (...args) => args[0] === 'overflow-anchor' ? false : supports(...args);
+document.addEventListener('DOMContentLoaded', () => {
+    document.documentElement.style.overflowAnchor = 'none';
+    document.body.style.overflowAnchor = 'none';
+});
+"""
+both_anchorings = pytest.mark.parametrize("anchoring", [True, False], ids=["anchoring", "no-anchoring"])
+
+
+def _list_page(context, anchoring):
+    """스크롤 고정이 없는 경우에는 웹 글꼴을 막는다. Safari 27 전의 기기는 모두 애플 기기라 줄에 시스템 글꼴을 쓰고 웹 글꼴을 받지 않는다."""
+    if not anchoring:
+        context.add_init_script(NO_SCROLL_ANCHORING)
+        context.route(re.compile(r"fonts\.(googleapis|gstatic)\.com"), lambda route: route.abort())
+    return context.new_page()
+
+
 def _open_list(page, path):
     page.goto(f"{BASE}/{path}")
     page.wait_for_selector(".cal-rows", timeout=20_000)
@@ -577,6 +600,79 @@ def _open_list(page, path):
 
 def _row(page, date):
     return page.locator(f"li[data-date='{date}'] a.cal-row")
+
+
+def _month_top_under_head(page, month):
+    """그 달 묶음의 위쪽과 상단 바 아래쪽의 거리."""
+    return page.evaluate("""m => document.querySelector(`section[data-month="${m}"]`).getBoundingClientRect().top
+        - document.getElementById('sticky-group').getBoundingClientRect().bottom""", month)
+
+
+def _scroll_down_until(page, date):
+    """그 날짜의 줄이 그려질 때까지 맨 아래로 스크롤하고, 그 줄을 상단 바 바로 아래에 둔다."""
+    page.evaluate("""async d => {
+        const frame = () => new Promise(requestAnimationFrame);
+        const find = () => document.querySelector(`li[data-date="${d}"]`);
+        for (let i = 0; i < 600 && !find(); i++) {
+            window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'instant' });
+            await frame();
+        }
+        const bar = document.getElementById('sticky-group').getBoundingClientRect().bottom;
+        window.scrollTo({ top: scrollY + find().getBoundingClientRect().top - bar, behavior: 'instant' });
+        await frame();
+        await frame();
+    }""", date)
+
+
+def _row_tops_from_the_top(page, date, frames=60):
+    """맨 위로 보낸 뒤 프레임마다 그 줄의 화면 위치를 잰다. 줄을 더하는 순간을 놓치지 않게 페이지 안에서 잰다."""
+    return page.evaluate("""async ({ date, frames }) => {
+        const row = document.querySelector(`li[data-date="${date}"]`);
+        window.scrollTo({ top: 0, behavior: 'instant' });
+        const tops = [];
+        for (let i = 0; i < frames; i++) {
+            await new Promise(requestAnimationFrame);
+            tops.push(row.getBoundingClientRect().top);
+        }
+        return tops;
+    }""", {"date": date, "frames": frames})
+
+
+def _largest_jump(tops):
+    return max(abs(b - a) for a, b in zip(tops, tops[1:]))
+
+
+def _scroll_up_by_frames(page, step, frames):
+    """프레임마다 위로 스크롤하며 맨 위 줄의 날짜와 스크롤 값, 보던 줄이 프레임마다 움직인 거리를 잰다."""
+    return page.evaluate("""async ({ step, frames }) => {
+        const seen = () => [...document.querySelectorAll('li[data-date]')].find((li) => li.getBoundingClientRect().top > 100);
+        const firsts = [], ys = [], moved = [];
+        let row = seen(), top = row.getBoundingClientRect().top;
+        for (let i = 0; i < frames; i++) {
+            window.scrollBy({ top: -step, behavior: 'instant' });
+            await new Promise(requestAnimationFrame);
+            moved.push(row.getBoundingClientRect().top - top);
+            firsts.push(document.querySelector('li[data-date]').dataset.date);
+            ys.push(window.scrollY);
+            row = seen();
+            top = row.getBoundingClientRect().top;
+        }
+        return { firsts, ys, moved };
+    }""", {"step": step, "frames": frames})
+
+
+def _viewport_top(page, date):
+    """그 날짜의 줄 위쪽이 화면 위에서 떨어진 거리."""
+    return page.evaluate("""d => document.querySelector(`li[data-date="${d}"]`).getBoundingClientRect().top""", date)
+
+
+def _dates(page):
+    return page.evaluate("() => [...document.querySelectorAll('li[data-date]')].map((li) => li.dataset.date)")
+
+
+def _assert_consecutive(dates):
+    days = [datetime.date.fromisoformat(d) for d in dates]
+    assert all(b - a == datetime.timedelta(days=1) for a, b in zip(days, days[1:])), dates
 
 
 def _row_top_under_head(page, date):
@@ -598,7 +694,7 @@ def test_view_button_switches_between_month_and_list_keeping_the_month(mobile_co
     page.wait_for_selector(".cal-rows")
     assert page.inner_text(".cal-month") == "2026년 12월"
     assert page.locator(".cal-grid").count() == 0
-    assert page.locator(".cal-row").count() == 31
+    assert page.locator("section[data-month='2026-12'] .cal-list-month").inner_text() == "2026년 12월"
     assert page.evaluate("() => document.title").startswith("2026년 12월 캘린더 목록")
     assert page.evaluate("() => document.activeElement.dataset.focusKey") == "view"
     button = page.locator("#page-title .title-view-btn")
@@ -632,8 +728,8 @@ def test_list_opens_at_the_row_of_the_address(mobile_context):
     _open_list(page, "calendar/list/2026-12-15")
     assert abs(_row_top_under_head(page, "2026-12-15")) <= 2
     _open_list(page, "calendar/list/2026-12-01")
-    assert page.locator(".cal-list-month").is_visible()
-    assert page.evaluate("() => window.scrollY") <= 2
+    assert abs(_month_top_under_head(page, "2026-12")) <= 2
+    assert _row(page, "2026-12-01").is_visible()
 
 
 def test_list_rows_are_announced_as_a_list(mobile_context):
@@ -641,14 +737,15 @@ def test_list_rows_are_announced_as_a_list(mobile_context):
     page = mobile_context.new_page()
     _open(page, "calendar/list/2026-12-25")
     page.wait_for_selector(".cal-rows")
-    assert page.locator("ul.cal-rows").get_attribute("role") == "list"
+    roles = page.eval_on_selector_all("ul.cal-rows", "uls => uls.map((ul) => ul.getAttribute('role'))")
+    assert roles and set(roles) == {"list"}
 
 
 def test_list_shows_every_day_with_the_lectionary_head_text(mobile_context):
     """평범한 평일도 줄이 있고, 줄의 글은 눌러서 간 전례독서의 제목 영역과 같다. 줄 끝에 ›를 두지 않는다."""
     page = mobile_context.new_page()
     _open_list(page, "calendar/list/2026-11-12")
-    assert page.locator(".cal-row").count() == 30
+    assert page.locator("section[data-month='2026-11'] .cal-row").count() == 30
     plain = _row(page, "2026-11-12")
     assert plain.locator(".cal-row-title").inner_text() == "연중 32주 목요일"
     assert plain.locator(".cal-row-day").inner_text() == "12"
@@ -710,7 +807,7 @@ def test_list_month_steps_and_today(mobile_context):
     page.wait_for_url(f"{BASE}/calendar/list/2027-01-01")
     page.wait_for_selector(".cal-month:has-text('2027년 1월')")
     page.wait_for_timeout(100)
-    assert page.evaluate("() => window.scrollY") <= 2
+    assert abs(_month_top_under_head(page, "2027-01")) <= 2
     assert page.evaluate("() => document.activeElement.dataset.focusKey") == "next"
     page.locator("#page-title a.lect-datenav-btn[data-focus-key='prev']").click()
     page.wait_for_url(f"{BASE}/calendar/list/2026-12-01")
@@ -759,11 +856,231 @@ def test_tab_in_list_does_not_add_history_entries_at_the_same_address(mobile_con
         page.locator("#tab-bar [data-tab='calendar']").click()
         page.wait_for_timeout(150)
     assert page.evaluate("() => history.length") == length
-    assert page.locator(".cal-rows").count() == 1
+    assert page.locator(".cal-list").count() == 1
     assert _row(page, datetime.date.today().isoformat()).is_visible()
     page.go_back()
     page.wait_for_url(f"{BASE}/calendar")
     page.wait_for_selector(".cal-grid")
+
+
+def test_list_continues_below_and_the_bar_follows_the_top_row(mobile_context):
+    """아래로 넘기면 줄이 이어지고, 달마다 달 이름이 하나씩 있으며, 상단 바의 달과 단추들이 맨 위 줄의 달을 따라간다(ADR-038 §2)."""
+    page = mobile_context.new_page()
+    _open_list(page, "calendar/list/2026-12-15")
+    prev_btn = page.locator("#page-title a[data-focus-key='prev']")
+    prev_btn.focus()
+    _scroll_down_until(page, "2027-01-15")
+    page.wait_for_selector(".cal-month-full:has-text('2027년 1월')")
+    assert page.locator("section[data-month='2027-01'] .cal-list-month").count() == 1
+    _assert_consecutive(_dates(page))
+    assert prev_btn.get_attribute("href") == "/calendar/list/2026-12-01"
+    assert page.locator("#page-title a[data-focus-key='next']").get_attribute("href") == "/calendar/list/2027-02-01"
+    assert page.locator(".cal-month-short").text_content() == "2027.01"
+    # 다시 그리지 않고 고치므로 단추와 포커스가 그대로다
+    assert page.evaluate("() => document.activeElement.dataset.focusKey") == "prev"
+    assert page.url == f"{BASE}/calendar/list/2026-12-15"
+    page.locator("#page-title .title-view-btn").click()
+    page.wait_for_url(f"{BASE}/calendar/2027-01")
+    page.wait_for_selector(".cal-grid")
+
+
+@both_anchorings
+def test_list_continues_above_holding_the_row_in_place(mobile_context, anchoring):
+    """맨 위로 올리면 위쪽 줄이 이어지고, 보던 줄은 그 자리에 있다. 스크롤 값이 0이면 브라우저가 고치지 않아 코드가 고친다(ADR-038 §2)."""
+    page = _list_page(mobile_context, anchoring)
+    _open_list(page, "calendar/list/2026-12-15")
+    page.wait_for_timeout(1000)   # 처음의 위쪽 채우기를 기다린다
+    first = _dates(page)[0]
+    tops = _row_tops_from_the_top(page, first)
+    assert _largest_jump(tops) <= 2
+    assert _dates(page)[0] < first
+    assert page.evaluate("() => window.scrollY") > 0
+    _assert_consecutive(_dates(page))
+
+
+def test_list_adds_rows_above_while_scrolling_when_the_browser_holds_the_row(mobile_context):
+    """스크롤 고정이 있으면 스크롤 중에도 위쪽 줄을 더해, 빠르게 위로 넘겨도 맨 위에서 멈추지 않고 보던 줄이 튀지 않는다(사용자 결정 2026-11-07)."""
+    page = mobile_context.new_page()
+    _open_list(page, "calendar/list/2026-12-15")
+    page.wait_for_timeout(800)
+    seen = _scroll_up_by_frames(page, 150, 60)
+    assert seen["firsts"][-1] < seen["firsts"][0]
+    assert min(seen["ys"]) > 0
+    assert all(abs(d - 150) <= 2 for d in seen["moved"]), seen["moved"]
+    _assert_consecutive(_dates(page))
+
+
+def test_list_without_scroll_anchoring_adds_rows_above_after_scrolling_stops(mobile_context):
+    """스크롤 고정이 없으면(Safari 27 전) 스크롤 중에도, 손가락이 닿아 있는 동안에도 위쪽 줄을 더하지 않는다. 관성이 끊기기 때문이다(WebKit 버그 187449)."""
+    page = _list_page(mobile_context, False)
+    _open_list(page, "calendar/list/2026-12-15")
+    page.wait_for_timeout(1000)   # 처음의 위쪽 채우기를 기다린다
+    first = _dates(page)[0]
+    page.evaluate("() => window.dispatchEvent(new Event('touchstart'))")
+    seen = _scroll_up_by_frames(page, 40, 20)
+    assert set(seen["firsts"]) == {first}
+    page.wait_for_timeout(500)
+    assert _dates(page)[0] == first
+    row = _dates(page)[40]
+    before = _viewport_top(page, row)
+    page.evaluate("() => window.dispatchEvent(new Event('touchend'))")
+    page.wait_for_function("d => document.querySelector('li[data-date]').dataset.date < d", arg=first)
+    page.wait_for_timeout(100)
+    assert abs(_viewport_top(page, row) - before) <= 2
+    _assert_consecutive(_dates(page))
+
+
+@both_anchorings
+def test_desktop_list_holds_the_row_when_the_header_collapses(desktop_context, anchoring):
+    """데스크톱은 맨 위에서 위쪽 줄을 더하면 상단 바의 윗줄이 접힌다. 줄은 그 높이(약 46px)보다 많이 움직이지 않고 화면에 남는다."""
+    page = _list_page(desktop_context, anchoring)
+    _open_list(page, "calendar/list/2026-12-15")
+    page.wait_for_timeout(1000)
+    first = _dates(page)[0]
+    tops = _row_tops_from_the_top(page, first)
+    assert _largest_jump(tops) <= 50
+    assert page.evaluate("() => window.scrollY") > 0
+    bar = page.evaluate("() => document.getElementById('sticky-group').getBoundingClientRect().bottom")
+    assert bar < tops[-1] < page.viewport_size["height"]
+    _scroll_down_until(page, "2027-02-10")
+    page.wait_for_selector(".cal-month-full:has-text('2027년 2월')")
+
+
+@both_anchorings
+def test_desktop_list_puts_the_row_under_the_collapsed_bar(desktop_context, anchoring):
+    """월간에서 목록으로 가면 상단 바가 접히는데, 접힌 뒤에도 줄이 상단 바 바로 아래에 있다."""
+    page = _list_page(desktop_context, anchoring)
+    _open(page, "calendar/2026-12")
+    page.wait_for_timeout(1000)   # 상단 바가 스크롤을 감지하기 시작하기를 기다린다
+    page.locator("#page-title .title-view-btn").click()
+    page.wait_for_selector(".cal-rows")
+    page.wait_for_function("() => document.getElementById('app-header').classList.contains('compact')")
+    page.wait_for_timeout(500)
+    assert abs(_month_top_under_head(page, "2026-12")) <= 2
+
+
+def test_desktop_list_leaves_the_scroll_alone_once_the_reader_scrolls(desktop_context):
+    """상단 바가 접히는 동안 독자가 스크롤을 시작하면 줄을 다시 맞추지 않는다."""
+    page = desktop_context.new_page()
+    _open(page, "calendar/2026-12")
+    page.wait_for_timeout(1000)
+    page.mouse.move(640, 400)
+    page.locator("#page-title .title-view-btn").click()
+    page.wait_for_selector(".cal-rows")
+    page.mouse.move(640, 400)
+    page.mouse.wheel(0, 400)
+    page.wait_for_timeout(700)
+    assert _month_top_under_head(page, "2026-12") < -200
+
+
+def test_list_month_end_row_reaches_under_the_bar(mobile_context):
+    """달의 끝날도 상단 바 바로 아래에 온다. 다음 달이 이어지기 때문이다. 웹 글꼴을 늦게 받아 위쪽 줄의 줄바꿈이 바뀌어도 그 자리에 있다."""
+    page = mobile_context.new_page()
+    _open_list(page, "calendar/list/2026-12-31")
+    page.wait_for_function("() => document.fonts.status === 'loaded'", timeout=15_000)
+    page.wait_for_timeout(1000)
+    assert abs(_row_top_under_head(page, "2026-12-31")) <= 2
+    assert page.inner_text(".cal-month") == "2026년 12월"
+
+
+@both_anchorings
+def test_list_takes_down_far_rows_holding_the_row_in_place(mobile_context, anchoring):
+    """멀리 넘기면 스크롤이 멈춘 뒤 먼 줄을 내려 약 200일만 둔다. 보던 줄은 그 자리에 있고, 다시 올리면 위쪽 줄이 이어진다."""
+    page = _list_page(mobile_context, anchoring)
+    _open_list(page, "calendar/list/2026-12-15")
+    _scroll_down_until(page, "2027-12-15")
+    before = _viewport_top(page, "2027-12-15")
+    page.wait_for_function("() => document.querySelectorAll('li[data-date]').length <= 196")
+    page.wait_for_timeout(100)
+    assert abs(_viewport_top(page, "2027-12-15") - before) <= 2
+    assert page.locator("li[data-date='2026-12-15']").count() == 0
+    assert page.locator("section[data-month='2026-12']").count() == 0
+    _assert_consecutive(_dates(page))
+    first = _dates(page)[0]
+    page.evaluate("() => window.scrollTo({ top: 0, behavior: 'instant' })")
+    page.wait_for_function("d => document.querySelector('li[data-date]').dataset.date < d", arg=first)
+    _assert_consecutive(_dates(page))
+
+
+def test_list_keeps_the_focused_row_when_taking_down_far_rows(mobile_context):
+    """포커스가 있는 줄은 멀어져도 내리지 않는다. 키보드와 스크린 리더 사용자가 자리를 잃지 않는다."""
+    page = mobile_context.new_page()
+    _open_list(page, "calendar/list/2026-12-15")
+    page.evaluate("""() => document.querySelector('li[data-date="2026-12-20"] a').focus({ preventScroll: true })""")
+    _scroll_down_until(page, "2027-12-15")
+    page.wait_for_timeout(600)
+    assert page.evaluate("() => document.activeElement.closest('li')?.dataset.date") == "2026-12-20"
+    _assert_consecutive(_dates(page))
+
+
+def test_list_scrolling_fetches_nothing(mobile_context):
+    """스크롤 중에는 자료를 받지 않는다. 받아 둔 표로 그날을 계산한다(ADR-038 §2)."""
+    page = mobile_context.new_page()
+    _open_list(page, "calendar/list/2026-12-15")
+    page.wait_for_timeout(500)
+    requests = []
+    page.on("request", lambda r: requests.append(r.url) if r.resource_type in ("fetch", "xhr") and r.url.startswith(BASE) else None)
+    _scroll_down_until(page, "2027-06-15")
+    page.evaluate("() => window.scrollTo({ top: 0, behavior: 'instant' })")
+    page.wait_for_timeout(600)
+    assert requests == []
+
+
+def test_back_to_the_list_goes_to_the_address_row_and_leaving_stops_the_list(mobile_context):
+    """뒤로 가기는 스크롤 값을 되살리지 않고 주소의 날짜 줄로 돌아온다. 떠난 뒤에는 목록이 상단 바를 건드리지 않는다."""
+    page = mobile_context.new_page()
+    _open_list(page, "calendar/list/2026-12-15")
+    _scroll_down_until(page, "2027-01-15")
+    _row(page, "2027-01-15").click()
+    page.wait_for_url("**/lectionary/2027-01-15")
+    page.wait_for_selector(".lect-day", timeout=20_000)
+    page.wait_for_timeout(400)
+    assert page.locator(".cal-month").count() == 0
+    assert page.locator("#page-title .lect-date time").get_attribute("datetime") == "2027-01-15"
+    page.go_back()
+    page.wait_for_url(f"{BASE}/calendar/list/2026-12-15")
+    page.wait_for_selector(".cal-rows")
+    page.wait_for_timeout(100)
+    assert abs(_row_top_under_head(page, "2026-12-15")) <= 2
+    assert page.inner_text(".cal-month") == "2026년 12월"
+
+
+def test_tab_in_scrolled_list_goes_back_to_today(mobile_context):
+    """멀리 넘겨 둔 목록에서 탭을 누르면 오늘 줄로 간다."""
+    page = mobile_context.new_page()
+    _open_list(page, "calendar/list")
+    today = datetime.date.today()
+    _scroll_down_until(page, (today + datetime.timedelta(days=70)).isoformat())
+    page.wait_for_timeout(100)
+    page.locator("#tab-bar [data-tab='calendar']").click()
+    page.wait_for_selector(f".cal-month:has-text('{_this_month()[1]}')")
+    page.wait_for_timeout(100)
+    assert page.url == f"{BASE}/calendar/list"
+    assert _row(page, today.isoformat()).is_visible()
+
+
+def test_list_stops_at_the_ends_of_the_computable_range(mobile_context):
+    """계산 범위의 끝에서 줄이 멈추고, 상단 바의 단추는 그 끝에서 자리만 남는다."""
+    page = mobile_context.new_page()
+    errors = []
+    page.on("pageerror", lambda e: errors.append(str(e)))
+    _open_list(page, "calendar/list/1583-01-20")
+    prev_btn = page.locator("#page-title a[data-focus-key='prev']")
+    assert prev_btn.count() == 0
+    page.wait_for_selector("li[data-date='1583-01-01']", state="attached", timeout=20_000)
+    page.wait_for_timeout(500)
+    assert _dates(page)[0] == "1583-01-01"
+    _scroll_down_until(page, "1583-02-15")
+    page.wait_for_selector(".cal-month-full:has-text('1583년 2월')")
+    assert prev_btn.count() == 1
+    page.evaluate("() => window.scrollTo({ top: 0, behavior: 'instant' })")
+    page.wait_for_selector(".cal-month-full:has-text('1583년 1월')")
+    assert prev_btn.count() == 0
+    _open_list(page, "calendar/list/9999-12-30")
+    assert page.locator("#page-title a[data-focus-key='next']").count() == 0
+    page.wait_for_timeout(300)
+    assert _dates(page)[-1] == "9999-12-31"
+    assert errors == []
 
 
 def test_only_the_list_loads_the_lectionary_tables(mobile_context):
