@@ -780,7 +780,7 @@ const LEC_TABLES = {
     { bookId: "rom", chapter: 3, verse: 22, half: "b", whole: true },
   ] },
   // 본당 표(데이터 lectionary/local-observances.json) — 같은 날 축성 · 축복이 섞인 날, 북한 성당, 깨진 행
-  localObservances: { _meta: {}, _vocab: {}, dioceses: [], parishes: [
+  localObservances: { _meta: {}, _vocab: {}, province: { id: "province-대한성공회", name: "대한성공회", founded: "09.29", founded_year: 1992 }, dioceses: [], parishes: [
     { id: "par-가", name: "가성당", diocese: "서울", dedication: { date: "04.21", kind: "consecration" } },
     { id: "par-나", name: "나성당", diocese: "대전", dedication: { date: "04.21", kind: "blessing" } },
     { id: "par-다", name: "북.다성당", diocese: null, dedication: { date: "04.21", kind: "consecration" } },
@@ -2080,6 +2080,26 @@ test("C-3.5-3 본당 표는 독서 묶음과 함께 실리고 양력 월일로 �
   // 표가 없거나 형식이 깨져도 인덱스는 선다 — 조회는 빈 배열
   assert.strictEqual(e.buildLectionaryIndex({ ...LEC_TABLES, localObservances: null }).dedications.size, 0);
   assert.strictEqual(e.buildLectionaryIndex({ ...LEC_TABLES, localObservances: { parishes: {} } }).dedications.size, 0);
+});
+
+test("관구 설립일 — 본당 표의 province를 양력 월일로 찾고, 설립일 공통 본기도의 「교구(관구)」를 「관구」로 고른다(ADR-041 §6)", async () => {
+  const e = loadEngine(fakeFetch([]));
+  assert.throws(() => e.findFoundings("2026-09-29"), /preloadLectionary\(\) must be awaited before findFoundings\(\)/);
+  await e.preloadLectionary();
+  const [f] = e.findFoundings("2027-09-29");
+  same([f.name, f.date, f.year], ["대한성공회", "09.29", 1992]);
+  same([f.collect.id, f.collect.common, f.collect.ending, f.collect.text], ["common:anniversary-c1", "anniversary", "A", "대한성공회"]);
+  same(plain(e.findFoundings("2027-09-28")), []);
+  same(plain(e.findFoundings("2026-02-30")), []);
+  // 실제 원문 — 앞의 「{name}교구(관구)」와 뒤의 「교구(관구)」를 함께 고른다(사용자 결정 2026-11-05)
+  const lix = e.buildLectionaryIndex({ ...LEC_TABLES, commons: { classes: { anniversary: { label: "교구·관구 설립일",
+    collect: { text: "이곳에 {name}교구(관구)를 세우심을 감사하나이다. 이 교구(관구)를 기억하시고", ending: "A" }, readings: [] } } } });
+  assert.strictEqual(e.findFoundingsIn(lix, "09.29")[0].collect.text, "이곳에 대한성공회 관구를 세우심을 감사하나이다. 이 관구를 기억하시고");
+  // 공통 본기도가 없으면 줄만 있고 본기도는 없다. 표가 없거나 형식이 깨지면 관구 설립일이 없다
+  assert.strictEqual(e.findFoundingsIn(e.buildLectionaryIndex({ ...LEC_TABLES, commons: { classes: {} } }), "09.29")[0].collect, null);
+  for (const lo of [null, { parishes: [] }, { province: { name: "대한성공회", founded: "9.29" } }]) {
+    same(plain(e.findFoundingsIn(e.buildLectionaryIndex({ ...LEC_TABLES, localObservances: lo }), "09.29")), []);
+  }
 });
 
 test("C-3.5-4 본당 표를 받지 못해도 독서 묶음은 선다 — 축성일 줄 없이 그리고, 다음 진입마다 이 표만 뒤에서 다시 받는다", async () => {
