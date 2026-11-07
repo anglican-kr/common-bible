@@ -437,7 +437,8 @@ const installOverlay = createOverlay({
     document.body.style.position = "";
     document.body.style.top = "";
     document.body.style.width = "";
-    window.scrollTo(0, scrollY);
+    // 루트의 `smooth`를 따르면 페이지가 맨 위에서부터 움직이고, 그 사이 캘린더 목록은 맨 위에 왔다고 보고 줄을 더해 보던 줄을 잃는다(pitfalls §42)
+    window.scrollTo({ top: scrollY, behavior: "instant" });
   },
 });
 
