@@ -3,6 +3,8 @@ verse-select 복사 button, and pure-poetry whole-verse selection."""
 
 import re
 
+from playwright.sync_api import expect
+
 BASE = "http://localhost:8080"
 
 _COPY_TEMPLATE = """
@@ -585,6 +587,36 @@ def test_half_verse_numbers_show_printed_letters(page):
     page.wait_for_function("() => document.querySelector('#a11y-announce').textContent === '8ㄱ절'")
     page.click('.verse[data-vkey="7/7b"]')
     page.wait_for_function("() => document.querySelector('#a11y-announce').textContent === '7절'")
+
+
+# ── 절을 누르면 읽어 주는 번호: 화면의 번호가 가리키는 절 (known-issues §17.1, 사용자 결정 2026-11-07) ──────────
+# 화면의 절 번호는 스크린 리더에 읽히지 않고, 절을 누를 때만 라이브 영역이 읽는다. 종전에는 `data-vref`의 번호만 읽어
+# 「41:6」 「(24)」 「24(91)」 「17(1)」이 같은 장의 6절, 24절, 17절과 같게 들렸다. 줄의 절에서 뜻으로 읽게 했다.
+
+def test_verse_tap_announces_the_verse_the_number_shows(page):
+    """이사 40장의 41:6은 「41장 6절」, 이 장의 6절은 「6절」이다. 다니 3장의 (24)는 「그리스어 추가 본문 24절」, 24(91)은
+    「24절, 그리스어 번호 91」이다. 에스 4장의 17(1)은 「17절 추가 본문 1」, 히브리 본문 17절은 「17절」이다. 여러 줄인 절은
+    어느 줄을 눌러도 같다(종전 넷 모두 번호만 「6절」 「24절」 「24절」 「17절」)."""
+    cases = [
+        ("isa/40", "6_c41/6b", "41:6", "41장 6절"),
+        ("isa/40", "6/6b", "6", "6절"),
+        ("dan/3", "24_lxx/24", "(24)", "그리스어 추가 본문 24절"),
+        ("dan/3", "24_91/24", "24(91)", "24절, 그리스어 번호 91"),
+        ("dan/3", "23/23", "23", "23절"),
+        ("esth/4", "17_1/17", "17(1)", "17절 추가 본문 1"),
+        ("esth/4", "17_2/17b", "17(2)", "17절 추가 본문 2"),
+        ("esth/4", "17/17", "17", "17절"),
+    ]
+    opened = None
+    for path, vkey, shown, words in cases:
+        if path != opened:
+            _open_chapter(page, path)
+            opened = path
+        line = page.locator(f'.verse[data-vkey="{vkey}"]')
+        first = page.locator(f'.verse[data-vkey^="{vkey.split("/")[0]}/"] .verse-num')
+        assert first.get_attribute("data-v") == shown, (vkey, first.get_attribute("data-v"))
+        line.click()
+        expect(page.locator("#a11y-announce")).to_have_text(words)
 
 
 def test_verse_select_half_verses_cite_printed_letters(page):
