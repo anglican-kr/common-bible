@@ -1,4 +1,5 @@
 ---
+pr: 522
 date: 2026-11-07
 branch: fix/header-safe-area
 title: "fix: 상단 바가 본문 첫 부분을 가리는 문제 수정"
