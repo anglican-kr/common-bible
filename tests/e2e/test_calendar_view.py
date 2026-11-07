@@ -1096,6 +1096,17 @@ def test_list_keeps_focus_when_the_bar_redraws_at_the_range_end(mobile_context):
         assert page.evaluate(focused) == expected
 
 
+def test_desktop_list_keeps_focus_on_the_home_button_when_the_bar_redraws(desktop_context):
+    """데스크톱의 집 단추도 상단 바를 다시 그린 뒤 포커스를 잃지 않는다(WCAG 2.4.3)."""
+    page = desktop_context.new_page()
+    _open_list(page, "calendar/list/1583-02-15")
+    page.locator("#page-title .title-home-btn").focus()
+    page.evaluate("() => window.scrollTo({ top: 0, behavior: 'instant' })")
+    page.wait_for_selector(".cal-month-full:has-text('1583년 1월')")
+    assert page.locator("#page-title a[data-focus-key='prev']").count() == 0
+    assert page.evaluate("() => document.activeElement.classList.contains('title-home-btn')")
+
+
 def test_only_the_list_loads_the_lectionary_tables(mobile_context):
     """줄의 글을 정하려고 목록은 독서 묶음을 받는다. 월간은 받지 않는다(ADR-038 §2)."""
     page = mobile_context.new_page()

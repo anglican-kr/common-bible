@@ -52,6 +52,7 @@ title: "feat: 캘린더 목록 무한 스크롤"
 - DESIGN.md: §6 캘린더 목록
 - `docs/topics/liturgical.md`: 지금 동작, 남은 일
 - `docs/architecture.md`: 모듈 표
+- `docs/workflow.md`: 「리뷰」에 Copilot 리뷰를 강도를 정해 요청하는 방법
 - 디자인 시스템 아티팩트: `CalendarList`의 설명, `bundle.css`
 
 ## 리뷰 반영
@@ -59,3 +60,7 @@ title: "feat: 캘린더 목록 무한 스크롤"
 1회차(Copilot).
 
 - 계산 범위 끝의 달로 스크롤하면 상단 바를 다시 그려 포커스가 사라진다는 지적: 재현했다(더한 e2e가 고치기 전에 실패했다). 라우터를 거치지 않는 경로라 돌려주는 코드가 없었다. 라우터가 쓰는 `focusSpotOf`와 `restoreFocusSpot`으로 같은 단추에 돌려주고, 사라진 ‹ › 단추에 있었으면 「오늘」로 옮긴다. 반영 뒤 유닛 1,584건, 타입 검사, e2e `test_calendar_view.py` 58건이 통과했다.
+
+2회차(Copilot, Balanced).
+
+- 데스크톱의 집 단추에 `data-focus-key`가 없어 1회차의 포커스 복원에서 빠진다는 지적(리뷰 본문의 「이전에 놓친 지적」이라 스레드가 없다): 재현했다(더한 e2e가 고치기 전에 실패했다). 상단 바를 그리는 `commitDateBar`에서 집 단추에 키를 달았다. 라우터는 `<a>`를 누를 때만 이 키를 재므로 `<button>`인 집 단추를 눌렀을 때의 동작은 바뀌지 않는다. 반영 뒤 유닛 1,584건, 타입 검사, e2e `test_calendar_view.py`와 `test_lectionary_view.py` 138건이 통과했다.
