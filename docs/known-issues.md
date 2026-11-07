@@ -169,7 +169,8 @@ ADR-038 §3의 렌더 기반이 복원하는 전례 표기는 계응 ◯(`.respo
 
 ## 16. 절 선택 복사 수정(§5) 중 찾은 후속 (2026-10-21)
 
-- §16.1 · §16.2 → [topics/bookmark.md](topics/bookmark.md)
+- **known-issues §16.1** 절 선택 복사의 출처가 장 본문 복사와 세 군데 다르던 것은 2026-11-07에 고쳤다. 이 번역에 없는 절 번호를 지나는 구간, 쉼표 뒤 띄어쓰기, 데이터의 반쪽 절이다. 이제 두 복사가 같은 함수로 출처를 적는다(ADR-010 「세그먼트와 저장 표기」, 원장 `docs/changes/2026-11-07-verse-copy-citation.md`).
+- §16.2 → [topics/bookmark.md](topics/bookmark.md)
 
 ---
 
