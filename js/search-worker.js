@@ -191,6 +191,9 @@ const REF_RE = new RegExp(`^([가-힣a-zA-Z0-9\\s]+?)\\s*(${REF_VERSES}|${REF_CH
 // The end of a range that runs to the end of its chapter: the largest number an address takes (the highest verse
 // number is 176). The chapter view clips it to the chapter's last verse. js/app/search.js verseRefTargets reads it too.
 const REF_CHAPTER_END = 999;
+// More segments than a reference can mean: the longest book has 150 chapters, and a lectionary label has at most 5
+// segments. A long enough list otherwise builds a million segments that the app sorts on the main thread.
+const REF_MAX_SEGMENTS = 200;
 
 // Operator: in:<book-alias>  (one or more, OR'd). Greedy on alias to allow
 // hangul/letters/digits without spaces. Whitespace between `in:` and the
@@ -304,16 +307,19 @@ function refPoint(text) {
 
 /**
  * The chapters and verses REF_RE matched, one part per chapter. A range or verse with no chapter of its own belongs to
- * the chapter the one before it ended in ("9:35-10:1, 5-8" → 10:5-8). null when it names no real span: chapter 0, or a
- * range that ends in an earlier chapter.
+ * the chapter the one before it ended in ("9:35-10:1, 5-8" → 10:5-8). null when it names no real span: chapter 0, a
+ * range with an end of verse 0 (a lone verse 0 still opens the chapter), a range that ends in an earlier chapter, or
+ * more than REF_MAX_SEGMENTS segments.
  * @param {string} body
  * @returns {VerseRefPart[] | null}
  */
 function refParts(body) {
   /** @type {Map<number, string[]>} */
   const byChapter = new Map();
+  let segmentCount = 0;
   /** @param {number} chapter @param {string} segment */
   const add = (chapter, segment) => {
+    segmentCount++;
     const segments = byChapter.get(chapter);
     if (segments) segments.push(segment);
     else byChapter.set(chapter, [segment]);
@@ -323,25 +329,25 @@ function refParts(body) {
     for (const item of body.split(",")) {
       const [from, to] = item.split(/[-–]/).map(refPoint);
       chapter = from.chapter ?? chapter;
+      const endChapter = to ? to.chapter ?? chapter : chapter;
       if (!to) {
         add(chapter, `${from.verse}`);
-        continue;
-      }
-      const endChapter = to.chapter ?? chapter;
-      if (endChapter < chapter) return null;
-      if (endChapter === chapter) {
+      } else if (endChapter < chapter || from.verse === 0 || to.verse === 0) {
+        return null;
+      } else if (endChapter === chapter) {
         add(chapter, `${from.verse}-${to.verse}`);
-        continue;
+      } else {
+        add(chapter, `${from.verse}-${REF_CHAPTER_END}`);
+        for (let c = chapter + 1; c < endChapter; c++) add(c, `1-${REF_CHAPTER_END}`);
+        add(endChapter, `1-${to.verse}`);
+        chapter = endChapter;
       }
-      add(chapter, `${from.verse}-${REF_CHAPTER_END}`);
-      for (let c = chapter + 1; c < endChapter; c++) add(c, `1-${REF_CHAPTER_END}`);
-      add(endChapter, `1-${to.verse}`);
-      chapter = endChapter;
+      if (segmentCount > REF_MAX_SEGMENTS) return null;
     }
   } else {
     for (const item of body.split(",")) add(parseInt(item, 10), `1-${REF_CHAPTER_END}`);
   }
-  if (byChapter.has(0)) return null;
+  if (byChapter.has(0) || segmentCount > REF_MAX_SEGMENTS) return null;
   return [...byChapter].map(([chapter, segments]) => ({ chapter, verses: segments.join(",") }));
 }
 
