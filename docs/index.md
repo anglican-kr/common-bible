@@ -20,7 +20,7 @@
 | 작업 방식, 훅, CI | `workflow.md` | CLAUDE.md 「브랜치 보호」 「지식 베이스 루프」, `changes/README.md`(원장 형식), `.claude/hooks/*.sh` 머리 주석 |
 | 문체, 용어, 릴리스 노트 | `writing.md` | CLAUDE.md 「컨벤션」 |
 
-여러 주제에 걸치는 함정은 `coding-pitfalls.md`에 전문이 있다(pitfalls §1, §3, §4, §5, §9, §10, §11, §35와 부록 A, B). 같은 곳을 건드린 이전 변경은 `git log --format='%h %s' -- <파일>`이나 `grep -ril <키워드> docs/changes/`로 찾는다.
+여러 주제에 걸치는 함정은 `coding-pitfalls.md`에 전문이 있다(pitfalls §1, §3, §4, §5, §9, §10, §11, §35, §41, §42, §43과 부록 A, B). 같은 곳을 건드린 이전 변경은 `git log --format='%h %s' -- <파일>`이나 `grep -ril <키워드> docs/changes/`로 찾는다.
 
 ## 페이지 한 줄 훅
 

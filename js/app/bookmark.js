@@ -331,7 +331,7 @@ const drawerOverlay = createOverlay({
     document.body.style.position = "";
     document.body.style.top = "";
     document.body.style.width = "";
-    window.scrollTo(0, scrollY);
+    window.scrollTo({ top: scrollY, behavior: "instant" });   // 루트의 `smooth`를 따르면 페이지가 맨 위에서부터 움직인다(install.js와 같다, pitfalls §42)
   },
   closeTransition: (panel, finalizeHide) => {
     panel.classList.add("drawer-closing");

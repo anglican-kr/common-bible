@@ -492,6 +492,12 @@ test("listMonthOf: 앞뒤 달은 1일의 줄, 오른쪽 단추는 그 달", () =
   assert.strictEqual(ctx.listMonthOf(2026, 12, "2026-10-15").hrefs.next, "/calendar/list/2027-01-01");
 });
 
+test("listPathOf: 오늘 줄에는 날짜를 적지 않고, 다른 날은 날짜를 적는다(사용자 결정 2026-11-07)", () => {
+  assert.strictEqual(ctx.listPathOf("2026-10-15", "2026-10-15"), "/calendar/list");
+  assert.strictEqual(ctx.listPathOf("2026-10-14", "2026-10-15"), "/calendar/list/2026-10-14");
+  assert.strictEqual(ctx.listPathOf("2027-01-01", "2026-10-15"), "/calendar/list/2027-01-01");
+});
+
 test("listDatesBefore, listDatesAfter: 날짜 차례로 달과 해를 넘고, 윤년 2월을 지나며, 그 날짜는 빼고 낸다", () => {
   same(ctx.listDatesBefore("2027-01-02", 3), ["2026-12-30", "2026-12-31", "2027-01-01"]);
   same(ctx.listDatesAfter("2026-12-30", 3), ["2026-12-31", "2027-01-01", "2027-01-02"]);

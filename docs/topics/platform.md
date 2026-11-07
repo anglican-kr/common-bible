@@ -144,6 +144,7 @@ index.html은 모듈(`<script type="module">`)을 적힌 순서대로 실행한�
 - **known-issues §12.4** **pitfalls §31(영어 뒤 조사 붙여 쓰기) 전에 쓴 문서에 띄어 쓴 곳이 많다**(문서). #354는 그 PR에서 쓰거나 고친 줄만 고쳤다. 머지된 원장은 고칠 수 없으므로, 나머지(정리 층 문서와 코드 주석)를 따로 한꺼번에 정리할지 정한다.
 - **known-issues §12.5** **`architecture.md` §4.3 아래쪽 그림**(상태 머신, 전송, 저장 상자)의 테두리가 한글 폭 때문에 어긋나 있다. 내용은 맞다. 오래된 일이다.
 - **known-issues §13.5** **WebKit이 `books.json`을 두 번 받는다**(main부터). `index.html`의 `<link rel="preload" … as="fetch" crossorigin>`으로 미리 받은 것을 `pre-fetch.js`의 `fetch()`가 쓰지 못해, 「preloaded but not used」 경고가 난다. **고치는 법**: preload 링크의 요청 방식(credentials 등)을 `fetch()`와 맞추거나, 둘 중 하나만 둔다. WebKit과 Chromium 둘 다에서 요청 수로 확인한다.
+- **known-issues §46** **앱 안에서 화면을 옮길 때마다 구글 애널리틱스에 방문이 2건 기록된다**(2026-11-07 dev에서 수집 요청을 세어 확인, 보고서의 숫자는 보지 못했다). 라우터가 화면마다 직접 보내는 기록(`routing.js trackPageView`)과, 주소가 바뀌면 저절로 나가는 기록(Page changes based on browser history events, pitfalls §43)이 겹친다. **고치는 길은 둘이다**: 애널리틱스 관리 화면의 향상된 측정에서 그 설정을 끄거나(`route()`의 모든 갈래가 `trackPageView`를 호출해 빠지는 화면이 없다), `trackPageView`를 지운다. 설정을 끄면 그날부터 보고서의 숫자가 줄어들므로 사용자가 정한다. 설정을 끄면 캘린더 목록의 원본 메서드 호출(ADR-038 「검토한 대안 — 목록 위치와 방문 통계」)도 평범한 `replaceState`로 되돌린다.
 
 ### known-issues §30 — `coding-pitfalls.md`와 주제 문서의 긴 사례 고쳐 쓰기 (2026-10-24)
 
