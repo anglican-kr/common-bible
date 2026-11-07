@@ -1,4 +1,5 @@
 ---
+pr: 511
 date: 2026-11-07
 branch: feat/calendar-list-view
 title: "feat: 캘린더 목록 보기"
@@ -48,3 +49,4 @@ title: "feat: 캘린더 목록 보기"
 - 설계서 `03-placement-layers.md`: §3.5 목록의 독서 묶음
 - `docs/topics/liturgical.md`: 지금 동작, 남은 일
 - `docs/architecture.md`: 모듈 표
+- 디자인 시스템 아티팩트: `CalendarList`를 더함. `CalendarMonth`, `Header`, `LectionaryHead`의 설명과 미리보기, `bundle.css`.
