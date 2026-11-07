@@ -143,7 +143,7 @@ ADR-038 §3의 렌더 기반이 복원하는 전례 표기는 계응 ◯(`.respo
 
 ## 13. PR #355(지연 로드) 리뷰에서 넘긴 후속 (2026-10-18)
 
-- §13.1 → [topics/routing.md](topics/routing.md)
+- **known-issues §13.1** 성서 화면의 잘못된 주소가 본문만 바꾸는 오류 한 줄이라 앞 화면의 머리, 장 선택, 오디오 바가 남던 것은 2026-11-07에 고쳤다. 받지 못한 자료와 머리말이 없는 책의 머리말까지 캘린더와 같은 전체 화면 실패로 보인다(ADR-024 §6, 원장 `docs/changes/2026-11-07-bible-route-failure.md`).
 - §13.2 · §13.3 · §13.4 → [topics/liturgical.md](topics/liturgical.md)
 - §13.5 → [topics/platform.md](topics/platform.md)
 
