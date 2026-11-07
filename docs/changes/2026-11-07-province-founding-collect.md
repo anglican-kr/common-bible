@@ -1,4 +1,5 @@
 ---
+pr: 508
 date: 2026-11-07
 branch: claude/add-diocese-founding-prayer-xrm027
 title: "feat: 9.29에 관구 설립 본기도 덧붙임"
