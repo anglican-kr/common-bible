@@ -25,7 +25,13 @@
 ## 리뷰
 
 - 리뷰를 반영한 뒤 다시 볼 때는 범위를 고친 커밋으로 좁히고(예: `6af65c2..949b160`), 확실한 것만 보며, 재현되는 것만 지적으로 받는다. 고칠 것과 넘길 것의 기준, 그리고 3회차는 없다는 것을 결과를 보기 전에 정해 사용자에게 먼저 말한다.
-- 리뷰는 읽기 전용 서브에이전트에게 갈래별로 맡긴다. Copilot은 크레딧이 없다(사용자 2026-10-21).
+- 리뷰는 읽기 전용 서브에이전트에게 갈래별로 맡긴다. Copilot은 2026-10-21에 크레딧이 없었고, 2026-11에는 리뷰를 낸다(#507-#512).
+- Copilot에게 강도를 정해 리뷰를 요청할 때는 GraphQL `requestCopilotCodeReview`에 `reviewEffort`(`LITE`, `BALANCED`, `MAX`, `AUTO`)를 넘긴다. `gh pr edit`와 MCP 도구 `request_copilot_review`에는 강도를 정하는 값이 없다. 실행한 강도는 리뷰 본문 끝의 `Review effort`에 적힌다(2026-11-07, #512).
+
+  ```bash
+  gh api graphql -f query='mutation($id:ID!){requestCopilotCodeReview(input:{pullRequestId:$id,reviewEffort:BALANCED}){success failureReason}}' -f id="$(gh pr view <N> --json id --jq .id)"
+  ```
+
 - 외부 리뷰(Copilot 등)를 요청했다면 머지 전에 제출을 기다려 결과를 확인한다. `gh api repos/anglican-kr/<저장소>/pulls/<N>/reviews`에서 `user.login == "copilot-pull-request-reviewer[bot]"`인 것만 센다. 저장소는 미해결 리뷰 코멘트가 있으면 머지를 막으므로, 고친 뒤 코멘트마다 답글을 달고 스레드를 모두 해결됨으로 표시한다(사용자 지시 2026-08-01).
 
 ## 릴리스

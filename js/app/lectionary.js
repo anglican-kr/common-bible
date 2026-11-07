@@ -1137,7 +1137,9 @@ function buildDateStep(dir, href, label) {
  */
 function commitDateBar(o) {
   const start = el("span", { className: "lect-bar-start" });
-  start.appendChild(window.buildHomeBtn("/", "성서 목록으로"));
+  const home = window.buildHomeBtn("/", "성서 목록으로");
+  home.setAttribute("data-focus-key", "home");   // 캘린더 목록이 스크롤 중에 이 줄을 다시 그릴 때 포커스를 돌려줄 자리(calendar.js updateMonthBar)
+  start.appendChild(home);
   start.appendChild(el("a", { className: "lect-today", href: o.todayHref, "data-focus-key": "today" }, "오늘"));
   const mid = el("span", { className: "lect-bar-mid" });
   mid.appendChild(buildDateStep("prev", o.prev.href, o.prev.label));

@@ -907,6 +907,8 @@ export interface AppHelpers {
   /** 헤더 아이콘의 path — 글리프마다 하나(`back` 왼쪽 꺾쇠 · `home` 집 · `viewMonth` 칸 아홉 개 · `viewList` 점과 줄). 같은 글리프를 그리는 곳은 모두 이것을 `headerIcon` 에 넘긴다. */
   HEADER_ICON_PATHS: Readonly<{ back: string; home: string; viewMonth: string; viewList: string }>;
   isModifiedClick: (e: Event) => boolean;
+  /** 위쪽 내용이 바뀌어도 브라우저가 보던 내용을 그 자리에 두는가(스크롤 고정 — Chrome · Edge · Firefox, Safari 27+). */
+  SCROLL_ANCHORING: boolean;
   /** 같은 화면을 다시 그리는 링크(`data-focus-key`)를 누른 자리 — 라우터가 이동 직전에 잰다(routing.js). 키가 없으면 null. */
   focusSpotOf: (a: Element, e: Event, root: Element | null) => FocusSpot | null;
   /**

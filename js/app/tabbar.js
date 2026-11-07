@@ -272,8 +272,7 @@ function enterCalendarTab(e) {
   if (!th || !dest) return;
   e.preventDefault();
   const here = th.fullPath();
-  // 탭 전환(POP 의미론) → 그 화면의 스크롤 복원. 목록에서 다시 누르면 오늘 줄로 가는 것이라 떠날 때의 스크롤을 되살리지 않는다.
-  if (!th.isCalendarListPath(here)) th.requestRestore();
+  th.requestRestore();   // 탭 전환(POP 의미론) → 그 화면의 스크롤 복원. 목록 주소는 onRouteEnd가 건너뛰어 오늘 줄로 간다.
   // 이미 그 주소면 다시 그리기만 한다 — 같은 주소가 방문 기록에 쌓이면 뒤로 가기가 같은 화면을 되풀이한다(routing.js의 링크 처리와 같다).
   if (dest === here) W.route?.();
   else W.navigate(dest);

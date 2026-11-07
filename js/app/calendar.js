@@ -2,7 +2,8 @@
 "use strict";
 
 // Calendar tab (ADR-038 §1 · §2 — A2). The church calendar a month at a time at
-// /calendar[/YYYY-MM]: every day is a link to its lectionary page
+// /calendar[/YYYY-MM], or as a list without ends at /calendar/list[/YYYY-MM-DD]:
+// every day is a link to its lectionary page
 // (/lectionary/YYYY-MM-DD — the A3 view), showing the day's representative name
 // and its liturgical colour dots. The engine decides what each day IS
 // (resolveDate — ADR-037 §6, design §5.5); this module only decides what a cell
@@ -37,7 +38,7 @@ import {
   CYCLE_LABEL, COLOR_LABEL, WEEKDAY_KO,
 } from "./lectionary.js";
 
-const { _$, el, clearNode, HEADER_ICON_PATHS } = window.appHelpers;
+const { _$, el, clearNode, HEADER_ICON_PATHS, SCROLL_ANCHORING, focusSpotOf, restoreFocusSpot } = window.appHelpers;
 
 const $app = _$("app");
 // 이름은 views.js에 있다 — 이 모듈을 받지 못했을 때 라우터가 같은 제목으로 실패 화면을 그린다.
@@ -73,11 +74,18 @@ const PAGE_TITLE = LITURGICAL_VIEWS.calendar.title;
  * }} ListRow
  */
 /**
- * 목록 화면이 그리는 것 전부 — 순수 함수 `buildMonthList` 의 반환.
+ * 목록의 상단 바가 보이는 달 — 순수 함수 `listMonthOf` 의 반환.
  * @typedef {{
- *   year: number, month: number, title: string, shortTitle: string, rows: ListRow[],
+ *   year: number, month: number, title: string, shortTitle: string,
  *   hrefs: { prev: string | null, next: string | null, today: string, view: string },
- * }} CalendarList
+ * }} ListMonth
+ */
+/**
+ * 그려 둔 목록. `first`와 `last`는 그려 둔 첫날과 끝날이고, `above`와 `below`는 줄 앞뒤의 경계 요소다. 경계가 화면에 가까워지면 줄을 더한다.
+ * @typedef {{
+ *   root: HTMLElement, above: HTMLElement, below: HTMLElement, first: string, last: string, month: string, today: string,
+ *   rowOf: (date: string) => ListRow | null,
+ * }} ListView
  */
 /** 전례독서 모델. @typedef {import("./lectionary.js").LectionaryModel} LectionaryModel */
 
@@ -96,7 +104,7 @@ const CAL_WEEKS = 6;
 const CAL_WEEKDAY_FULL = ["일요일", "월요일", "화요일", "수요일", "목요일", "금요일", "토요일"];
 
 /**
- * "YYYY-MM" → {y, m}. 형식이 틀리거나 교회력을 계산하는 연도(엔진 `isComputableYear` — 1583~9999) 밖이면 null.
+ * "YYYY-MM" → {y, m}. 형식이 틀리거나 교회력을 계산하는 연도(엔진 `isComputableYear` — 1583-9999) 밖이면 null.
  * @param {string | null | undefined} s
  * @returns {{ y: number, m: number } | null}
  */
@@ -244,7 +252,7 @@ function gridDate(from, n) {
 
 /**
  * 월간 표(ADR-038 §2): 그달 1일이 든 주의 일요일부터 6주 42칸. 앞뒤 달의 칸도 같은 링크다(흐리게 · 이름 없이 —
- * DOM 이 가린다). 계산 범위(1583~9999) 밖의 칸은 날짜만 있고 링크가 없다 — 그 날짜는 `resolve` 를 호출하지 않는다.
+ * DOM 이 가린다). 계산 범위(1583-9999) 밖의 칸은 날짜만 있고 링크가 없다 — 그 날짜는 `resolve` 를 호출하지 않는다.
  * `resolve` 는 엔진 `resolveDate`(프리로드 뒤 동기)다 — 연도 캐시가 있어 42번 호출해도 부활절 계산은 해마다 한 번이다
  * (설계서 §4.9 「computus 최대 세 번」).
  * @param {number} y @param {number} m  1~12
@@ -327,30 +335,83 @@ function listRowOf(m, today) {
   };
 }
 
+/** 한 번에 더하고 내리는 줄 수(한 주, ADR-038 §2). */
+const LIST_STEP_DAYS = 7;
+/** 처음에 그리는 줄 — 주소의 날짜 앞 2주와 뒤 4주. */
+const LIST_DAYS_BEFORE = 14;
+const LIST_DAYS_AFTER = 28;
+/** 화면에 두는 줄 수(약 200일, ADR-038 §2). */
+const LIST_MAX_ROWS = 196;
+
 /**
- * 목록 화면 — 그 달의 모든 날을 한 줄씩(ADR-038 §2). `rowOf` 가 null 을 내는 날은 건너뛴다.
+ * 그 날짜 바로 앞의 n일을 날짜 차례로. 계산 범위(1583-9999) 밖은 뺀다 — 범위 끝이면 빈 배열이다.
+ * @param {string} date @param {number} n
+ * @returns {string[]}
+ */
+function listDatesBefore(date, n) {
+  /** @type {string[]} */
+  const dates = [];
+  for (let i = n; i >= 1; i--) {
+    const d = addDays(date, -i);
+    if (d !== null && isComputableDate(d)) dates.push(d);
+  }
+  return dates;
+}
+
+/**
+ * 그 날짜 바로 뒤의 n일을 날짜 차례로. 계산 범위 밖은 뺀다.
+ * @param {string} date @param {number} n
+ * @returns {string[]}
+ */
+function listDatesAfter(date, n) {
+  /** @type {string[]} */
+  const dates = [];
+  for (let i = 1; i <= n; i++) {
+    const d = addDays(date, i);
+    if (d !== null && isComputableDate(d)) dates.push(d);
+  }
+  return dates;
+}
+
+/**
+ * 목록의 상단 바가 보이는 달(ADR-038 §2). ‹ ›는 앞뒤 달 1일의 줄, 오른쪽 단추는 그 달의 월간이다.
  * @param {number} y @param {number} m  1~12
  * @param {string} today  "YYYY-MM-DD"
- * @param {(date: string) => ListRow | null} rowOf
- * @returns {CalendarList}
+ * @returns {ListMonth}
  */
-function buildMonthList(y, m, today, rowOf) {
-  /** @type {ListRow[]} */
-  const rows = [];
-  for (let d = 1; d <= 31; d++) {
-    const date = toKey(y, m, d);
-    if (!parseDate(date)) break;
-    const row = rowOf(date);
-    if (row) rows.push(row);
-  }
+function listMonthOf(y, m, today) {
   const key = `${String(y).padStart(4, "0")}-${String(m).padStart(2, "0")}`;
   return {
-    year: y, month: m, title: `${y}년 ${m}월`, shortTitle: `${y}.${String(m).padStart(2, "0")}`, rows,
+    year: y, month: m, title: `${y}년 ${m}월`, shortTitle: `${y}.${String(m).padStart(2, "0")}`,
     hrefs: {
       prev: listHref(y, m - 1), next: listHref(y, m + 1), today: "/calendar/list",
       view: today.slice(0, 7) === key ? "/calendar" : `/calendar/${key}`,
     },
   };
+}
+
+/**
+ * 줄이 너무 많으면 보던 줄에서 먼 쪽부터 한 주씩 내린다(ADR-038 §2). 내릴 줄 수를 낸다.
+ * @param {number} total  그려 둔 줄 수
+ * @param {number} topIndex  상단 바 바로 아래 줄의 차례
+ * @returns {{ above: number, below: number }}
+ */
+function listTrimOf(total, topIndex) {
+  let above = topIndex;
+  let below = total - topIndex - 1;
+  const cut = { above: 0, below: 0 };
+  while (above + below + 1 > LIST_MAX_ROWS) {
+    if (above >= below) {
+      const n = Math.min(LIST_STEP_DAYS, above);
+      above -= n;
+      cut.above += n;
+    } else {
+      const n = Math.min(LIST_STEP_DAYS, below);
+      below -= n;
+      cut.below += n;
+    }
+  }
+  return cut;
 }
 // ── END CALENDAR_MODEL ──
 
@@ -371,7 +432,7 @@ function announceMonth(/** @type {CalendarMonth} */ model) {
 
 /**
  * 상단 바의 제목 자리에 달 이동 줄을 그린다 — 전례독서와 같은 줄이다(사용자 결정 2026-11-07).
- * @param {CalendarMonth | CalendarList} model
+ * @param {CalendarMonth | ListMonth} model
  * @param {string} icon  오른쪽 단추의 아이콘 — 누르면 갈 보기
  */
 function commitMonthBar(model, icon) {
@@ -446,6 +507,7 @@ function buildMonthTable(model) {
  * @param {CalendarMonth} model
  */
 function commitMonth(model) {
+  stopList?.();
   commitLiturgicalTitle("calendar");   // 문서 제목(views.js)
   commitMonthBar(model, HEADER_ICON_PATHS.viewList);
   clearNode($app);
@@ -496,43 +558,316 @@ function buildRow(row) {
   return li;
 }
 
+/** 목록을 연 뒤 상단 바가 접히기를 기다리는 시간. 전환 0.25초에 스크롤 감지를 늦게 시작하는 시간(views.js initCompactHeader)을 더했다. */
+const BAR_COLLAPSE_WAIT_MS = 1000;
+
+/** 상단 바의 아래쪽 — 화면 위에서 잰 값이다. 데스크톱은 스크롤하면 윗줄이 접혀 값이 바뀐다(views.js initCompactHeader). */
+function barBottom() {
+  return document.getElementById("sticky-group")?.getBoundingClientRect().bottom ?? 0;
+}
+
 /**
- * 그 날짜의 줄이 상단 바 바로 아래에 오게 스크롤한다. 달의 첫 줄이면 달 이름이 함께 보이게 페이지 맨 위로 간다. 데스크톱은 스크롤하면 상단 바의
- * 윗줄이 접혀 높이가 바뀌므로(views.js initCompactHeader) 다음 프레임에 한 번 더 맞춘다.
+ * 그 날짜의 줄이 상단 바 바로 아래에 오게 스크롤한다. 달의 첫 줄이면 달 이름이 함께 보이게 달 이름부터 둔다. 데스크톱은 스크롤하면 상단 바가 접히므로
+ * 접힌 뒤에 다시 맞춘다. 스크롤 고정이 있는 브라우저는 접히는 동안 줄을 화면의 그 자리에 두어 상단 바와 줄 사이가 벌어진다. 그사이 독자가 스크롤을
+ * 시작하면 맞추지 않는다.
  * @param {string} date
  */
 function scrollToRow(date) {
   const row = $app.querySelector(`li[data-date="${date}"]`);
   if (!row) return;
+  const target = row.previousElementSibling ? row : row.closest("section") ?? row;
   const place = () => {
-    const below = document.getElementById("sticky-group")?.getBoundingClientRect().bottom ?? 0;
-    const top = row.previousElementSibling ? window.scrollY + row.getBoundingClientRect().top - below : 0;
-    window.scrollTo({ top, behavior: "instant" });
+    if (!target.isConnected) return;
+    window.scrollTo({ top: window.scrollY + target.getBoundingClientRect().top - barBottom(), behavior: "instant" });
   };
   place();
   requestAnimationFrame(place);
+  const waiting = new AbortController();
+  const { signal } = waiting;
+  const stop = () => waiting.abort();
+  const collapsing = document.getElementById("breadcrumb-row");
+  collapsing?.addEventListener("transitionend", (e) => {
+    if (e.target !== collapsing) return;   // 안의 검색창이 낸 전환은 보지 않는다
+    stop();
+    place();
+  }, { signal });
+  for (const type of ["wheel", "touchstart", "pointerdown", "keydown"]) {
+    window.addEventListener(type, stop, { passive: true, signal });
+  }
+  setTimeout(stop, BAR_COLLAPSE_WAIT_MS);
+}
+
+/** 달 하나의 묶음 — 달 이름과 줄 목록. @param {string} ym  "YYYY-MM" @param {string} title */
+function buildListSection(ym, title) {
+  const section = el("section", { "aria-label": title, "data-month": ym });
+  section.appendChild(el("h2", { className: "cal-list-month" }, title));
+  section.appendChild(el("ul", { className: "cal-rows", role: "list" }));
+  return section;
+}
+
+/**
+ * 줄을 맨 앞이나 맨 뒤에 더한다. 달이 바뀌면 달 묶음을 새로 만든다.
+ * @param {ListView} list
+ * @param {string[]} dates  날짜 차례
+ * @param {boolean} atStart
+ */
+function addListRows(list, dates, atStart) {
+  for (const date of atStart ? [...dates].reverse() : dates) {
+    const row = list.rowOf(date);
+    if (!row) continue;
+    const ym = date.slice(0, 7);
+    let section = list.root.querySelector(`section[data-month="${ym}"]`);
+    if (!section) {
+      const p = /** @type {{ y: number, m: number, d: number }} */ (parseDate(date));
+      section = buildListSection(ym, listMonthOf(p.y, p.m, list.today).title);
+      if (atStart) list.above.after(section);
+      else list.below.before(section);
+    }
+    const rows = /** @type {HTMLElement} */ (section.querySelector("ul"));
+    if (atStart) rows.prepend(buildRow(row));
+    else rows.append(buildRow(row));
+  }
+  if (!dates.length) return;
+  if (atStart) list.first = dates[0];
+  else list.last = dates[dates.length - 1];
+}
+
+/** 상단 바 바로 아래의 달 묶음. 소수점 값이 어긋나도 이전 달이 잡히지 않게 1px을 둔다. @param {HTMLElement} root */
+function sectionUnderBar(root) {
+  const bottom = barBottom() + 1;
+  for (const section of root.querySelectorAll("section")) {
+    if (section.getBoundingClientRect().bottom > bottom) return section;
+  }
+  return null;
+}
+
+/** 상단 바 바로 아래의 줄. @param {HTMLElement} root */
+function rowUnderBar(root) {
+  const bottom = barBottom() + 1;
+  for (const li of sectionUnderBar(root)?.querySelectorAll("li") ?? []) {
+    if (li.getBoundingClientRect().bottom > bottom) return li;
+  }
+  return null;
+}
+
+/**
+ * 위쪽 줄을 바꾸는 동안 보던 줄을 그 자리에 둔다(ADR-038 §2). 스크롤 고정이 있는 브라우저는 스스로 지키므로 줄이 움직이지 않아 아무것도 고치지 않는다.
+ * 다만 스크롤 값이 0이면 브라우저도 고치지 않아 여기서 고친다. 이 함수는 스크롤 중에도 실행되므로 같은 태스크 안에서만 잰다. 다음 프레임까지 기다리면
+ * 그사이 독자가 움직인 만큼을 되돌린다.
+ * @param {HTMLElement} root
+ * @param {() => void} change
+ */
+function keepRowInPlace(root, change) {
+  const row = rowUnderBar(root);
+  const before = row?.getBoundingClientRect().top ?? 0;
+  change();
+  if (!row?.isConnected) return;
+  const moved = row.getBoundingClientRect().top - before;
+  if (moved) window.scrollBy({ top: moved, behavior: "instant" });
+}
+
+/**
+ * 먼 줄을 내린다. 포커스가 있는 줄은 지킨다.
+ * @param {ListView} list
+ * @returns {boolean}  내렸으면 true
+ */
+function trimList(list) {
+  const rows = /** @type {HTMLElement[]} */ (Array.from(list.root.querySelectorAll("li[data-date]")));
+  const top = rows.indexOf(/** @type {HTMLElement} */ (rowUnderBar(list.root)));
+  if (top < 0) return false;
+  const cut = listTrimOf(rows.length, top);
+  if (!cut.above && !cut.below) return false;
+  const focused = rows.findIndex((li) => li.contains(document.activeElement));
+  const above = focused >= 0 && focused < top ? Math.min(cut.above, focused) : cut.above;
+  const below = focused > top ? Math.min(cut.below, rows.length - 1 - focused) : cut.below;
+  keepRowInPlace(list.root, () => {
+    for (const li of rows.slice(0, above)) li.remove();
+    for (const li of rows.slice(rows.length - below)) li.remove();
+    for (const section of list.root.querySelectorAll("section")) {
+      if (!section.querySelector("li")) section.remove();
+    }
+  });
+  list.first = rows[above].dataset.date ?? list.first;
+  list.last = rows[rows.length - 1 - below].dataset.date ?? list.last;
+  return above + below > 0;
+}
+
+/**
+ * 스크롤을 따라 상단 바를 고친다. 다시 그리지 않고 글자와 주소만 바꿔, 누르던 단추와 포커스를 잃지 않는다. 계산 범위 끝에서는 단추가 자리만 남으므로
+ * 통째로 다시 그린다. 라우터를 거치지 않으므로 포커스는 여기서 돌려준다. 사라진 단추에 있었으면 「오늘」로 간다(WCAG 2.4.3).
+ * @param {ListMonth} model
+ */
+function updateMonthBar(model) {
+  const bar = _$("page-title");
+  const prev = bar.querySelector('a[data-focus-key="prev"]');
+  const next = bar.querySelector('a[data-focus-key="next"]');
+  if (!prev !== !model.hrefs.prev || !next !== !model.hrefs.next) {
+    const active = document.activeElement;
+    const spot = active && focusSpotOf(active, new Event("scroll"), null);
+    commitMonthBar(model, HEADER_ICON_PATHS.viewMonth);
+    restoreFocusSpot(spot, null);
+    return;
+  }
+  const full = bar.querySelector(".cal-month-full");
+  const short = bar.querySelector(".cal-month-short");
+  if (full) full.textContent = model.title;
+  if (short) short.textContent = model.shortTitle;
+  if (model.hrefs.prev) prev?.setAttribute("href", model.hrefs.prev);
+  if (model.hrefs.next) next?.setAttribute("href", model.hrefs.next);
+  bar.querySelector(".title-view-btn")?.setAttribute("href", model.hrefs.view);
+}
+
+/** 상단 바의 달을 맨 위 줄의 달로 맞춘다(ADR-038 §2). @param {ListView} list */
+function followTopMonth(list) {
+  const ym = sectionUnderBar(list.root)?.dataset.month;
+  if (!ym || ym === list.month) return;
+  list.month = ym;
+  const p = /** @type {{ y: number, m: number, d: number }} */ (parseDate(`${ym}-01`));
+  updateMonthBar(listMonthOf(p.y, p.m, list.today));
+}
+
+/** 경계가 화면에서 이만큼(줄 25개쯤) 가까워지면 줄을 더한다. */
+const LIST_EDGE_MARGIN_PX = 2000;
+/** 스크롤 이벤트가 이만큼 없으면 멈춘 것으로 본다. `scrollend`는 Safari 26.2부터라 쓰지 않는다. Safari 27 전의 iOS는 관성의 끝자락에 고쳐도 관성이 끊기므로 넉넉히 둔다. */
+const LIST_SETTLE_MS = 200;
+
+/** 지금 목록의 이어 붙이기를 멈춘다 — 목록을 다시 그리거나 월간으로 갈 때. @type {(() => void) | null} */
+let stopList = null;
+
+/**
+ * 위아래로 이어 붙이기 시작한다(ADR-038 §2). 아래쪽은 스크롤 중에도 더한다. 위쪽은 스크롤 고정이 있는 브라우저에서만 스크롤 중에 더하고, 없으면 스크롤이
+ * 멈추고 손을 뗀 뒤에 더한다. Safari 27 전의 iOS는 관성 스크롤 중에 스크롤 값을 바꾸면 관성이 끊기기 때문이다(WebKit 버그 187449). 먼 줄 내리기는
+ * 어느 브라우저에서나 멈춘 뒤에 한다.
+ * @param {ListView} list
+ */
+function startListScroll(list) {
+  const { root, above, below } = list;
+  const listeners = new AbortController();
+  let wantAbove = false;
+  let touching = false;
+  let timer = 0;
+  let frame = 0;
+
+  /** 콜백은 한 번 나온 뒤 경계가 계속 가까워도 다시 나오지 않으므로, 다시 관찰해 다음 프레임의 콜백을 받는다. @param {HTMLElement} edge */
+  const observeAgain = (edge) => {
+    observer.unobserve(edge);
+    observer.observe(edge);
+  };
+  const growBelow = () => {
+    const dates = listDatesAfter(list.last, LIST_STEP_DAYS);
+    if (!dates.length) {
+      observer.unobserve(below);
+      return;
+    }
+    addListRows(list, dates, false);
+    observeAgain(below);
+  };
+  const growAbove = () => {
+    const dates = listDatesBefore(list.first, LIST_STEP_DAYS);
+    if (!dates.length) {
+      observer.unobserve(above);
+      return;
+    }
+    keepRowInPlace(root, () => addListRows(list, dates, true));
+    observeAgain(above);
+  };
+  const stop = () => {
+    listeners.abort();
+    observer.disconnect();
+    clearTimeout(timer);
+    cancelAnimationFrame(frame);
+    if (stopList === stop) stopList = null;
+  };
+  const settled = () => {
+    if (!root.isConnected) {
+      stop();
+      return;
+    }
+    if (touching) return;   // 손을 떼면 다시 잰다
+    if (wantAbove) {
+      wantAbove = false;
+      growAbove();
+    }
+    if (trimList(list)) {
+      // 범위 끝에서 관찰을 멈췄을 수 있다. 이미 관찰 중이면 아무 일도 없다.
+      observer.observe(above);
+      observer.observe(below);
+    }
+  };
+  const armSettle = () => {
+    clearTimeout(timer);
+    timer = window.setTimeout(settled, LIST_SETTLE_MS);
+  };
+  const observer = new IntersectionObserver((entries) => {
+    // 다른 화면으로 가면 경계가 문서에서 빠져 콜백이 나온다. 여기서 정리한다.
+    if (!root.isConnected) {
+      stop();
+      return;
+    }
+    for (const entry of entries) {
+      if (entry.target === below) {
+        if (entry.isIntersecting) growBelow();
+      } else if (!entry.isIntersecting) {
+        wantAbove = false;
+      } else if (SCROLL_ANCHORING) {
+        growAbove();
+      } else {
+        wantAbove = true;
+        armSettle();
+      }
+    }
+  }, { rootMargin: `${LIST_EDGE_MARGIN_PX}px 0px` });
+
+  const { signal } = listeners;
+  window.addEventListener("scroll", () => {
+    if (!root.isConnected) {
+      stop();
+      return;
+    }
+    armSettle();
+    frame ||= requestAnimationFrame(() => {
+      frame = 0;
+      if (root.isConnected) followTopMonth(list);
+    });
+  }, { passive: true, signal });
+  /** 손가락 하나를 떼도 이벤트가 나온다. 남은 손가락이 있으면 계속 기다린다. @param {TouchEvent} e */
+  const release = (e) => {
+    touching = e.touches.length > 0;
+    if (!touching) armSettle();
+  };
+  window.addEventListener("touchstart", () => { touching = true; }, { passive: true, signal });
+  window.addEventListener("touchend", release, { passive: true, signal });
+  window.addEventListener("touchcancel", release, { passive: true, signal });
+  observer.observe(above);
+  observer.observe(below);
+  stopList = stop;
 }
 
 /**
  * Commit the list view — synchronous, called only after both bundles are loaded and the route is still current.
- * @param {CalendarList} model
+ * @param {ListMonth} month  주소의 날짜가 든 달
  * @param {string} anchor  "YYYY-MM-DD" — 상단 바 바로 아래에 둘 줄
+ * @param {string} today  "YYYY-MM-DD"
+ * @param {(date: string) => ListRow | null} rowOf
  */
-function commitList(model, anchor) {
+function commitList(month, anchor, today, rowOf) {
+  stopList?.();
   commitLiturgicalTitle("calendar");   // 문서 제목(views.js)
-  commitMonthBar(model, HEADER_ICON_PATHS.viewMonth);
+  commitMonthBar(month, HEADER_ICON_PATHS.viewMonth);
   clearNode($app);
   const root = el("div", { className: "calendar cal-list" });
-  const section = el("section", { "aria-label": model.title });
-  section.appendChild(el("h2", { className: "cal-list-month" }, model.title));
-  const list = el("ul", { className: "cal-rows", role: "list" });
-  for (const row of model.rows) list.appendChild(buildRow(row));
-  section.appendChild(list);
-  root.appendChild(section);
+  const above = el("div", { "aria-hidden": "true" });
+  const below = el("div", { "aria-hidden": "true" });
+  root.append(above, below);
   $app.appendChild(root);
+  const dates = [...listDatesBefore(anchor, LIST_DAYS_BEFORE), anchor, ...listDatesAfter(anchor, LIST_DAYS_AFTER)];
+  /** @type {ListView} */
+  const list = { root, above, below, first: dates[0], last: anchor, month: anchor.slice(0, 7), today, rowOf };
+  addListRows(list, dates, false);
   committedMonth = null;   // 월간으로 돌아가면 맨 위부터다
   scrollToRow(anchor);
-  announce(`${model.title} ${PAGE_TITLE} 목록`);
+  startListScroll(list);
+  announce(`${month.title} ${PAGE_TITLE} 목록`);
 }
 
 /**
@@ -560,14 +895,14 @@ async function renderListView(param, today, isStale) {
     return renderLiturgicalLoadFailure("calendar");
   }
   if (isStale()) return PAGE_TITLE;
-  const model = buildMonthList(target.y, target.m, today, (date) => {
+  const month = listMonthOf(target.y, target.m, today);
+  commitList(month, anchor, today, (date) => {
     const resolved = resolveDate(date);
     const m = resolved && lectionaryModelOf(resolved, { obs: null, track: null, set: null, collect: null });
     return m ? listRowOf(m, today) : null;
   });
-  commitList(model, anchor);
   window.tabHistory?.rememberCalendarView();
-  return `${model.title} ${PAGE_TITLE} 목록`;
+  return `${month.title} ${PAGE_TITLE} 목록`;
 }
 
 /**

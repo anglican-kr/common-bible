@@ -481,19 +481,39 @@ test("listRowOf: 색이 둘이면 함께 적고, 성인의 색이 다르면 「�
   assert.ok(either.label.includes("적색 또는 백색"), either.label);
 });
 
-test("buildMonthList: 그 달의 모든 날을 차례로 — 앞뒤 달은 1일의 줄, 오른쪽 단추는 그 달", () => {
-  const seen = [];
-  const m = ctx.buildMonthList(2028, 2, "2026-10-15", (date) => { seen.push(date); return { date }; });
-  assert.strictEqual(seen.length, 29);   // 윤년 2월
-  assert.strictEqual(seen[0], "2028-02-01");
-  assert.strictEqual(seen[28], "2028-02-29");
+test("listMonthOf: 앞뒤 달은 1일의 줄, 오른쪽 단추는 그 달", () => {
+  const m = ctx.listMonthOf(2028, 2, "2026-10-15");
   assert.strictEqual(m.title, "2028년 2월");
   assert.strictEqual(m.shortTitle, "2028.02");
   same(m.hrefs, { prev: "/calendar/list/2028-01-01", next: "/calendar/list/2028-03-01", today: "/calendar/list", view: "/calendar/2028-02" });
-  const here = ctx.buildMonthList(2026, 10, "2026-10-15", () => null);
-  assert.strictEqual(here.hrefs.view, "/calendar");   // 이번 달
-  same(here.rows, []);   // null 을 낸 날은 건너뛴다
-  assert.strictEqual(ctx.buildMonthList(9999, 12, "2026-10-15", () => null).hrefs.next, null);   // 계산 범위 끝
-  assert.strictEqual(ctx.buildMonthList(1583, 1, "2026-10-15", () => null).hrefs.prev, null);
-  assert.strictEqual(ctx.buildMonthList(2026, 12, "2026-10-15", () => null).hrefs.next, "/calendar/list/2027-01-01");
+  assert.strictEqual(ctx.listMonthOf(2026, 10, "2026-10-15").hrefs.view, "/calendar");   // 이번 달
+  assert.strictEqual(ctx.listMonthOf(9999, 12, "2026-10-15").hrefs.next, null);   // 계산 범위 끝
+  assert.strictEqual(ctx.listMonthOf(1583, 1, "2026-10-15").hrefs.prev, null);
+  assert.strictEqual(ctx.listMonthOf(2026, 12, "2026-10-15").hrefs.next, "/calendar/list/2027-01-01");
+});
+
+test("listDatesBefore, listDatesAfter: 날짜 차례로 달과 해를 넘고, 윤년 2월을 지나며, 그 날짜는 빼고 낸다", () => {
+  same(ctx.listDatesBefore("2027-01-02", 3), ["2026-12-30", "2026-12-31", "2027-01-01"]);
+  same(ctx.listDatesAfter("2026-12-30", 3), ["2026-12-31", "2027-01-01", "2027-01-02"]);
+  same(ctx.listDatesAfter("2028-02-28", 2), ["2028-02-29", "2028-03-01"]);
+  same(ctx.listDatesBefore("2027-03-01", 1), ["2027-02-28"]);
+});
+
+test("listDatesBefore, listDatesAfter: 계산 범위 끝에서는 범위 안의 날만 내고, 끝이면 빈 배열이다", () => {
+  same(ctx.listDatesBefore("1583-01-03", 7), ["1583-01-01", "1583-01-02"]);
+  same(ctx.listDatesBefore("1583-01-01", 7), []);
+  same(ctx.listDatesAfter("9999-12-30", 7), ["9999-12-31"]);
+  same(ctx.listDatesAfter("9999-12-31", 7), []);
+});
+
+test("listTrimOf: 줄이 196개 이하면 내리지 않고, 넘으면 먼 쪽부터 한 주씩 내린다", () => {
+  same(ctx.listTrimOf(196, 100), { above: 0, below: 0 });
+  same(ctx.listTrimOf(197, 150), { above: 7, below: 0 });   // 위가 멀다
+  same(ctx.listTrimOf(197, 20), { above: 0, below: 7 });   // 아래가 멀다
+  same(ctx.listTrimOf(400, 390), { above: 210, below: 0 });   // 멀리 내려왔다
+  const both = ctx.listTrimOf(400, 200);   // 가운데면 양쪽에서 번갈아 내린다
+  assert.ok(both.above > 0 && both.below > 0, JSON.stringify(both));
+  assert.ok(400 - both.above - both.below <= 196);
+  assert.strictEqual(both.above % 7, 0);
+  assert.strictEqual(both.below % 7, 0);
 });
