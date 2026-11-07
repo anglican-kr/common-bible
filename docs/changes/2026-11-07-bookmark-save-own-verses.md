@@ -1,4 +1,5 @@
 ---
+pr: 516
 date: 2026-11-07
 branch: fix/bookmark-save-own-verses
 title: "fix: 북마크 저장에서 옮겨 실린 절과 그리스어 추가 본문 제외"
