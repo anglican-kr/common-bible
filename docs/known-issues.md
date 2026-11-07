@@ -169,7 +169,8 @@ ADR-038 §3의 렌더 기반이 복원하는 전례 표기는 계응 ◯(`.respo
 
 ## 16. 절 선택 복사 수정(§5) 중 찾은 후속 (2026-10-21)
 
-- §16.1 · §16.2 → [topics/bookmark.md](topics/bookmark.md)
+- §16.1 → [topics/bookmark.md](topics/bookmark.md)
+- §16.2 → [topics/bookmark.md](topics/bookmark.md). 2026-11-07에 범위를 줄였다. 이 장의 절과 함께 고른 옮겨 실린 절과 그리스어 추가 본문은 북마크에 저장하지 않는다(원장 `docs/changes/2026-11-07-bookmark-save-own-verses.md`). 남은 것은 그 절만 고른 북마크와 에스델 추가 본문의 북마크다.
 
 ---
 
