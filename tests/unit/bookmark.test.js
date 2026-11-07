@@ -13,7 +13,7 @@
 //   - VERSE_SPEC block — verse spec parse / compare / serialize / merge
 //     + isWellFormedSpec, the check a spec from outside (import file ·
 //     address) must pass, over specs written with a tiny
-//     `article.querySelectorAll` stub (selectedSpanVrefs · selectionCitation).
+//     `article.querySelectorAll` stub (selectedSpanVrefs).
 //     The save serializer (verseNumberSpec), the move of the pre-#205 forms
 //     (wholeVerseSpec) and the verse-select citation are in verse-spec.test.js
 //   - BOOKMARK_LABEL block (with VERSE_SPEC, and helpers.js's chUnit) —
@@ -128,8 +128,8 @@ function sampleStore() {
 }
 
 // ── VERSE_SPEC loader ────────────────────────────────────────────────────────
-// `selectedSpanVrefs` · `selectionCitation` call `article.querySelectorAll`
-// and read `.getAttribute("data-vref")` · `("data-vkey")`. We pass a tiny stub
+// `selectedSpanVrefs` calls `article.querySelectorAll` and reads
+// `.getAttribute("data-vref")` · `("data-vkey")`. We pass a tiny stub
 // article — no full DOM needed for this slice.
 
 function loadVerseSpec() {
@@ -145,7 +145,6 @@ function loadVerseSpec() {
     verseNumberSpec: ctx.verseNumberSpec,
     wholeVerseSpec: ctx.wholeVerseSpec,
     selectedSpanVrefs: ctx.selectedSpanVrefs,
-    selectionCitation: ctx.selectionCitation,
     _compareRefs: ctx._compareRefs,
     selectedVersesToSpec: ctx.selectedVersesToSpec,
     mergeVerseSpecs: ctx.mergeVerseSpecs,
@@ -153,13 +152,13 @@ function loadVerseSpec() {
 }
 
 /**
- * Tiny article stub for `selectedSpanVrefs` · `selectionCitation`. Each ref
- * string in `verseSpans` becomes one element with a `.getAttribute("data-vref")`
- * that returns the string. `querySelectorAll(...)` returns them all, regardless
- * of selector specifics — every selector those functions use matches all spans.
+ * Tiny article stub for `selectedSpanVrefs`. Each ref string in `verseSpans`
+ * becomes one element with a `.getAttribute("data-vref")` that returns the
+ * string. `querySelectorAll(...)` returns them all, regardless of selector
+ * specifics — every selector that function uses matches all spans.
  */
 function makeStubArticle(verseSpans) {
-  // `data-vkey` is "<i>/<ref>" — one key per span, as views.js appendVerses gives (selectionCitation reads it).
+  // `data-vkey` is "<i>/<ref>" — one key per span, as views.js appendVerses gives (selectedSpanVrefs reads it).
   const elements = verseSpans.map((ref, i) => ({
     getAttribute(name) { return name === "data-vref" ? ref : name === "data-vkey" ? `${i}/${ref}` : null; },
     classList: { contains: () => false },
@@ -2291,10 +2290,10 @@ test("isWellFormedSpec: what got through before is rejected (PR #359 review)", (
   assert.deepEqual(rejected.filter((spec) => h.isWellFormedSpec(spec)).map((spec) => spec.slice(0, 24)), []);
 });
 
-// Every spec the app writes passes: today's 저장 (verseNumberSpec) and 합치기 (mergeVerseSpecs), and the half-verse
-// form the verse-select citation keeps (selectionCitation). Synthetic
-// chapters shaped like the data — half verses ("3a" "3b"), merged verses ("7-8"), verses drawn in lines ("9a" … up to
-// "p"), and both at once ("8aa", "7-8a") — from a fixed seed, so no real data is needed (the public CI has none).
+// Every spec the app writes passes: today's 저장 (verseNumberSpec) and 합치기 (mergeVerseSpecs). The verse-select
+// citation is not a spec since 2026-11-07 — it is text for people (selectionCitation → formatVerseRanges, 「7-8, 9ㄱ」).
+// Synthetic chapters shaped like the data — half verses ("3a" "3b"), merged verses ("7-8"), verses drawn in lines ("9a"
+// … up to "p"), and both at once ("8aa", "7-8a") — from a fixed seed, so no real data is needed (the public CI has none).
 // Checked once against the real data too: 34,003 specs today's app writes, 60,384 the pre-#205 app wrote — all pass.
 test("isWellFormedSpec: every spec the app writes over synthetic chapters is accepted", () => {
   const v = loadVerseSpec();
@@ -2307,7 +2306,7 @@ test("isWellFormedSpec: every spec the app writes over synthetic chapters is acc
   let checked = 0;
   for (let c = 0; c < 120; c++) {
     const refs = [];
-    // Mostly short chapters (selectionCitation scans the whole chapter for each pick); every tenth up to 176 (Psalm 119)
+    // Mostly short chapters; every tenth up to 176 (Psalm 119)
     const last = 5 + Math.floor(rnd() * (c % 10 === 0 ? 172 : 30));
     for (let n = 1; n <= last;) {
       const kind = rnd();
@@ -2326,7 +2325,7 @@ test("isWellFormedSpec: every spec the app writes over synthetic chapters is acc
     const article = makeStubArticle(refs);
     const keys = refs.map((r, i) => `${i}/${r}`);
     const written = [];
-    for (let t = 0; t < 9; t++) {
+    for (let t = 0; t < 18; t++) {
       let pick;
       if (t % 3 === 0) {
         const a = Math.floor(rnd() * keys.length);
@@ -2336,7 +2335,6 @@ test("isWellFormedSpec: every spec the app writes over synthetic chapters is acc
       }
       if (!pick.length) continue;
       written.push(v.verseNumberSpec(v.selectedSpanVrefs(new Set(pick), article)));
-      written.push(v.selectedVersesToSpec(v.selectionCitation(new Set(pick), article).refs));
     }
     const saved = written.length;
     for (let i = 1; i < saved; i++) written.push(v.mergeVerseSpecs(written[i - 1], written[i]));

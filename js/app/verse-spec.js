@@ -3,10 +3,13 @@
 
 // Verse-spec utilities — extracted from bookmark.js (ADR-034 후속 PR1). Verse
 // spec parsing/serialization shared across modules: bookmark.js (save/copy),
-// views.js (system-copy serializer), routing.js (parsePath verse deep-links).
+// views.js and lectionary.js (system-copy serializer and citation), routing.js
+// (parsePath verse deep-links).
 // No bookmark/app state — operates on strings, arrays, and passed-in DOM nodes;
 // serializeVerseRange uses the global `document` for a self-contained range→text
 // transform. Leaf module: no imports.
+
+/** @typedef {import("../types").VerseRun} VerseRun */
 
 // ── Verse spec utilities ──
 // ── BEGIN VERSE_SPEC ──
@@ -138,38 +141,45 @@ function selectedSpanVrefs(selected, article) {
 }
 
 /**
- * What a verse-select selection cites — the bar's 「…절 선택됨」 and the 복사 citation (citationVerseSpec turns `refs`
- * into the text). A ref is a verse number, never a line: the selection unit is a whole verse (views.js
- * `_verseSelectionUnit` — 사용자 결정 2026-10-22), so a multi-line verse cites its number ("3a,3b" → "3", a merged
- * verse "7-8a,7-8b" → "7-8"). The one unit smaller than a verse is a data half verse (이사 7 의 8a · 8b — 9a 를 사이에
- * 두고 나뉘어 실림): one half alone cites as that half ("8a", lines "8aa,8ab" included), both halves as "8". `chapter`
- * is null for the open chapter's own numbering.
+ * What a citation names — the verse-select bar's 「…절 선택됨」 and 복사, and the copy of a drag selection (views.js
+ * bindCopyAttribution — the chapter view and the lectionary). Both copies write their verse part with this function and
+ * formatVerseRanges (사용자 결정 2026-11-07, known-issues §16.1 — till then they wrote one selection three ways apart).
+ * `selected` holds the `data-vkey` of the spans picked: verse-select picks whole verses (views.js `_verseSelectionUnit`
+ * — 사용자 결정 2026-10-22), a drag copy the spans whose text the selection overlaps.
  *
- * The numbers follow the chapter's own numbering, as the drag-copy citation does (views.js bindCopyAttribution —
- * pre-merge review 2026-10-14): spans moved in from another chapter (`verse-cross-ref`, 이사 40 의 41:6-7) and
- * Greek-only additions (`verse-lxx`, 다니 3 의 (24)-(90)) are left out unless nothing else is selected — then their
- * numbers alone, and moved-in verses under their own chapter (`data-chapter-ref` → 「41:6-7」, 사용자 결정
- * 2026-10-21 — 「40:6-7」 named chapter 40's own verses). And where two verses of that numbering share a number
- * (에스델 4:17 과 그 추가 본문, a ¶ clause and its verse — 전례시편, a duplicated source marker — 토비 11:15), any
- * selection there cites the number. Verses are told apart by the instance key less its part letter: the two halves of
- * a data half verse are parts of one verse, not two verses.
+ * A run counts verses, never lines: a multi-line verse runs as its number ("3a,3b" → [3, 3]), a merged verse with both
+ * ends ("7-8a,7-8b" → [7, 8]), and verses in a row join ("6,7-8a,…,9" → [6, 9]). The one unit smaller than a verse is a
+ * data half verse (이사 7장의 8a와 8b는 9a를 사이에 두고 나뉘어 실린다): the spans of one half cite that half —
+ * [8, 8, "a"], 「8ㄱ」 — and spans of both halves the verse (사용자 결정 2026-11-07); a drag copy picks a half with any
+ * line of it. A half stands alone — no run starts or ends on one (나훔 1장에서 1절부터 2ㄱ까지는 「1, 2ㄱ」, 사용자 결정
+ * 2026-10-22). Numbers this translation does not have (the article's `data-absent`, 마르 9장의 44절과 46절) do not
+ * break a run (「9:43-48」 — 사용자 결정 2026-10-14, verse-select since 2026-11-07).
+ *
+ * The numbers follow the chapter's own numbering (pre-merge review 2026-10-14): spans moved in from another chapter
+ * (`verse-cross-ref`, 이사 40장의 41:6-7) and Greek-only additions (`verse-lxx`, 다니 3장의 (24)-(90)) are left out
+ * unless nothing else is picked — then their numbers alone, which `data-absent` (the chapter's own numbering) does not
+ * bridge, and moved-in verses under their own chapter (`data-chapter-ref` → 「41:6-7」, 사용자 결정 2026-10-21 —
+ * 「40:6-7」 named chapter 40's own verses). And where two verses of that numbering share a number (에스델 4:17과 그
+ * 추가 본문, a ¶ clause and its verse — 전례시편, a duplicated source marker — 토비 11:15), any pick there cites the
+ * number. Verses are told apart by the instance key less its part letter: the two halves of a data half verse are parts
+ * of one verse, not two verses. `chapter` is null for the open chapter's own numbering.
  * @param {ReadonlySet<string>} selected `data-vkey` values
- * @param {ParentNode | null | undefined} article
- * @returns {{ chapter: number | null, refs: string[] }}
+ * @param {Element | null | undefined} article
+ * @returns {{ chapter: number | null, runs: VerseRun[] }}
  */
 function selectionCitation(selected, article) {
-  if (!article) return { chapter: null, refs: [] };
+  if (!article) return { chapter: null, runs: [] };
   const spans = [...article.querySelectorAll(".verse[data-vkey]")];
   /** @param {Element} s */
   const foreign = (s) => isOtherNumbering(s);
   /** @param {Element} s */
   const isSelected = (s) => selected.has(s.getAttribute("data-vkey") ?? "");
   const picked = spans.filter(isSelected);
-  if (!picked.length) return { chapter: null, refs: [] };
+  if (!picked.length) return { chapter: null, runs: [] };
   const ownNumbering = picked.some((s) => !foreign(s));
   const fromChapters = new Set(picked.map((s) => s.getAttribute("data-chapter-ref")));
   const fromChapter = !ownNumbering && fromChapters.size === 1 ? [...fromChapters][0] : null;
-  /** @type {Map<number, { lines: number, sel: string[], halves: Set<string>, verses: Set<string> }>} */
+  /** @type {Map<number, { halves: Set<string>, sel: string[], selHalves: Set<string>, verses: Set<string> }>} */
   const byNumber = new Map();
   for (const s of spans) {
     if (foreign(s) === ownNumbering) continue;
@@ -178,49 +188,66 @@ function selectionCitation(selected, article) {
     const instance = key.slice(0, key.indexOf("/"));
     const n = parseInt(ref, 10);
     let g = byNumber.get(n);
-    if (!g) byNumber.set(n, g = { lines: 0, sel: [], halves: new Set(), verses: new Set() });
-    g.lines++;
+    if (!g) byNumber.set(n, g = { halves: new Set(), sel: [], selHalves: new Set(), verses: new Set() });
+    const half = /^\d+([a-p])/.exec(instance)?.[1] ?? "";   // "" — a line of a whole verse
+    g.halves.add(half);
     g.verses.add(instance.replace(/^(\d+)[a-p]/, "$1"));
     if (isSelected(s)) {
       g.sel.push(ref);
-      g.halves.add(/^\d+[a-p]/.exec(instance)?.[0] ?? "");   // "" — a line of a whole verse
+      g.selHalves.add(half);
     }
   }
-  const refs = [];
-  for (const { lines, sel, halves, verses } of byNumber.values()) {
+  /** @type {VerseRun[]} */
+  const items = [];
+  for (const [n, { halves, sel, selHalves, verses }] of byNumber) {
     if (!sel.length) continue;
-    if (verses.size === 1 && sel.length < lines && !halves.has("")) {
-      refs.push(...[...halves].sort());
+    if (verses.size === 1 && !selHalves.has("") && selHalves.size < halves.size) {
+      for (const part of selHalves) items.push([n, n, part]);
     } else {
       // 글자를 모두 뗀다 — 병합 절 「7-8a」「7-8b」는 「7-8」(끝 번호를 잃지 않게, Copilot 리뷰 9회차), 데이터의
       // 반쪽 절이 다시 두 줄인 「8aa」…「8bb」는 「8」(줄 글자 하나만 떼면 「8a」가 됐다 — 자체 리뷰 2026-10-13)
-      refs.push(...new Set(sel.map((r) => r.replace(/[a-z]+$/, ""))));
+      for (const r of new Set(sel.map((x) => x.replace(/[a-z]+$/, "")))) {
+        const [a, b = a] = r.split("-").map(Number);
+        items.push([a, b]);
+      }
     }
   }
-  return { chapter: fromChapter ? Number(fromChapter) : null, refs };
+  items.sort((x, y) => x[0] - y[0] || (x[2] ?? "").localeCompare(y[2] ?? ""));
+  const absent = new Set(ownNumbering
+    ? (article.getAttribute("data-absent") ?? "").split(",").filter(Boolean).map(Number) : []);
+  /** @type {VerseRun[]} */
+  const runs = [];
+  for (const [a, b, part] of items) {
+    const last = runs[runs.length - 1];
+    if (!part && last && !last[2] && onlyAbsentBetween(last[1], a, absent)) last[1] = Math.max(last[1], b);
+    else runs.push(part ? [a, b, part] : [a, b]);
+  }
+  return { chapter: fromChapter ? Number(fromChapter) : null, runs };
 }
 
 /**
- * The citation a person reads — the verse-select bar's 「…절 선택됨」 and the 복사 citation, from selectionCitation's
- * `refs`. The numbers are those selectedVersesToSpec writes in the spec grammar of addresses, written two ways it does
- * not: a merged verse joins the run around it (나훔 1:1-9 — 「1-6,7-8,9」 before), and a data half verse takes the
- * printed letter (「9a」 → 「9ㄱ」). A bookmark stores the same selection in verse numbers alone (verseNumberSpec — it
- * joins the runs too, and drops the half verse's letter).
- * @param {string[]} refs
+ * Are the numbers strictly between `a` and `b` all ones this translation does not have — true when none lie between.
+ * 없는 절은 건너뛴 절이 아니다(마르 9:43-48 — 사용자 결정 2026-10-14).
+ * @param {number} a @param {number} b @param {ReadonlySet<number>} absent @returns {boolean}
+ */
+function onlyAbsentBetween(a, b, absent) {
+  for (let k = a + 1; k < b; k++) if (!absent.has(k)) return false;
+  return true;
+}
+
+/**
+ * A citation's verse runs (selectionCitation) as a person reads them — 「1-3, 5, 8ㄱ」. Runs part with a comma and a
+ * space (사용자 결정 2026-11-07 — the verse-select citation had none, 「7-8,9ㄱ」), and a data half verse takes the
+ * printed letter (halfVerseMark). The verse-select bar, both copies and the lectionary's canticle citation write with it.
+ * @param {ReadonlyArray<VerseRun>} runs
  * @returns {string}
  */
-function citationVerseSpec(refs) {
-  const nums = refs.flatMap((r) => {
-    const m = /^(\d+)-(\d+)$/.exec(r);
-    if (!m) return [r];
-    const a = Number(m[1]);
-    return Array.from({ length: Number(m[2]) - a + 1 }, (_, i) => String(a + i));
-  });
-  return selectedVersesToSpec(nums).replace(/(\d)([a-p])(?=,|$)/g, (_, d, p) => d + halfVerseMark(p));
+function formatVerseRanges(runs) {
+  return runs.map(([a, b, part]) => (part ? `${a}${halfVerseMark(part)}` : a === b ? `${a}` : `${a}-${b}`)).join(", ");
 }
 
 // 데이터의 반쪽 절(`part`)을 사람이 읽는 표기로 — 인쇄본은 「이사 7:8ㄱ」 「8ㄴ」이다(사용자 결정 2026-10-22). 화면의 절
-// 번호와 절 선택 출처가 쓴다. 주소의 반쪽 절 글자는 「a」 · 「b」 그대로다(ADR-040). 북마크는 반쪽 절도 번호로 저장한다
+// 번호와 복사 출처가 쓴다. 주소의 반쪽 절 글자는 「a」 · 「b」 그대로다(ADR-040). 북마크는 반쪽 절도 번호로 저장한다
 // (ADR-010). 데이터의 `part`는 a · b뿐이다.
 /** @param {string} part @returns {string} */
 function halfVerseMark(part) {
@@ -467,7 +494,7 @@ window.serializeVerseRange = serializeVerseRange;
 window.verseInstanceKeys = verseInstanceKeys;
 
 export {
-  parseVerseSpec, isWellFormedSpec, selectedSpanVrefs, selectionCitation, citationVerseSpec, halfVerseMark,
+  parseVerseSpec, isWellFormedSpec, selectedSpanVrefs, selectionCitation, formatVerseRanges, halfVerseMark,
   verseNumberSpec, wholeVerseSpec, selectedVersesToSpec, mergeVerseSpecs, serializeVerseRange, citationSource,
   specCoversVerse, chapterMaxVerse, verseInstanceKey, verseInstanceKeys,
 };

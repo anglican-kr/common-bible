@@ -21,8 +21,9 @@
 // instead of through the window facade. applyAudioShow stays facade-only
 // (settings-ui / state-machine read it) so it is not imported here.
 import { showAudioPlayer, hideAudioBar } from "./audio-player.js";
-// Copy-attribution translation label shared with the lectionary view and the verse-select bar (verse-spec.js).
-import { citationSource, halfVerseMark, verseInstanceKeys } from "./verse-spec.js";
+// The copy citation — its verse part and translation label — shared with the lectionary view and the verse-select bar,
+// and the verse instance keys a tapped verse is looked up by (verse-spec.js).
+import { citationSource, halfVerseMark, selectionCitation, formatVerseRanges, verseInstanceKeys } from "./verse-spec.js";
 
 const { _$, el, clearNode, chUnit, hangingQuoteClass, emptyState } = window.appHelpers;
 const { createOverlay } = window.appOverlay;
@@ -1252,21 +1253,21 @@ function appendVerses(article, verses, opts = {}) {
  * or leaves `root` with `strictRoot`, the browser's own copy runs instead so nothing
  * the user selected is dropped (self-review 2026-10-13).
  *
- * Reference numbers are the verses actually selected — merged verses keep both ends
- * (「7-8」), excerpt gaps stay gaps (「2, 14」) — as continuous integer runs. Two exceptions (pre-merge review
- * 2026-10-14): numbers this translation does not have (the article's `data-absent` — 마르 9:44 · 46) do not break a
- * run (「9:43-48」, as on main — user decision 2026-10-14), and spans whose number belongs to another numbering — moved
- * in from another chapter (`verse-cross-ref`, 이사 40 의 41:6-7) or a Greek-only addition (`verse-lxx`, 다니 3) — are
- * left out of the numbers unless nothing else was selected (otherwise 「이사야 40:6-7, 19-20」 · 「다니엘 3:1-90」). When
- * only moved-in verses were selected, `chapterRef` is the chapter they come from, so the reference names that chapter
- * (「이사야 41:6-7」 — 사용자 결정 2026-10-21; 「40:6-7」 named chapter 40's own verses).
+ * Reference numbers are the verses actually selected, as the verse-select bar cites them: the spans whose text the
+ * selection overlaps go to verse-spec.js `selectionCitation` as the picked spans (사용자 결정 2026-11-07, known-issues
+ * §16.1 — the two copies had cited one selection three ways apart). So merged verses keep both ends (「7-8」), excerpt
+ * gaps stay gaps (「2, 14」), numbers this translation does not have do not break a run (「9:43-48」 — 사용자 결정
+ * 2026-10-14), a data half verse one half of which was touched is that half (「7:7, 8ㄱ」 — 사용자 결정 2026-11-07),
+ * and spans moved in from another chapter or Greek-only additions count only when nothing else was selected — then
+ * `chapterRef` is the chapter moved-in verses come from (「이사야 41:6-7」 — 사용자 결정 2026-10-21).
  * `tail` (the lectionary's 영광송 after a psalm) is extra text inside a unit that is not a verse: when the selection
  * covers it, its text follows the unit's verses, before the reference.
  * @param {HTMLElement} root
- * @param {(unit: HTMLElement, runs: Array<{ article: HTMLElement, ranges: Array<[number, number]>, firstNum: number, lastNum: number, atStart: boolean, atEnd: boolean, chapterRef: number | null }>) => string} citeOf
- *   the text after 「— 」 for one unit; `runs` = per article in document order — `ranges` the selected verse numbers
- *   as continuous runs, `atStart`/`atEnd` whether the selection reached the article's first/last numbered verse,
- *   `chapterRef` the chapter the numbers belong to when it is not the article's (only moved-in verses selected)
+ * @param {(unit: HTMLElement, runs: Array<{ article: HTMLElement, ranges: import("../types").VerseRun[], atStart: boolean, atEnd: boolean, chapterRef: number | null }>) => string} citeOf
+ *   the text after 「— 」 for one unit; `runs` = per article in document order — `ranges` the selected verses as runs
+ *   (selectionCitation — formatVerseRanges writes them), `atStart`/`atEnd` whether the selection reached the article's
+ *   first/last numbered verse, `chapterRef` the chapter the numbers belong to when it is not the article's (only
+ *   moved-in verses selected)
  * @param {{ unitSelector?: string, bailoutSelector?: string, strictRoot?: boolean, tail?: { selector: string, text: (el: Element) => string } }} [opts]
  */
 function bindCopyAttribution(root, citeOf, opts = {}) {
@@ -1299,17 +1300,13 @@ function bindCopyAttribution(root, citeOf, opts = {}) {
       const text = parts.join("\n\n");
       if (!articles.length) return text;   // 영광송만 걸친 단위 — 본문 절이 없으니 출처도 없다
       const runs = articles.map(({ article, spans }) => {
-        const own = spans.filter((s) => !s.classList.contains("verse-cross-ref") && !s.classList.contains("verse-lxx"));
-        const nums = [...new Set((own.length ? own : spans).flatMap(vrefNumbers))].sort((x, y) => x - y);
-        const fromChapters = new Set(spans.map((s) => s.getAttribute("data-chapter-ref")));
-        const fromChapter = !own.length && fromChapters.size === 1 ? [...fromChapters][0] : null;
-        // `data-absent` lists the article's own numbering — not the chapter moved-in verses come from
-        const absent = new Set(fromChapter ? [] : (article.getAttribute("data-absent") || "").split(",").filter(Boolean).map(Number));
+        const picked = new Set(spans.map((s) => s.getAttribute("data-vkey") ?? ""));
+        const { chapter, runs: ranges } = selectionCitation(picked, article);
         const numbered = article.querySelectorAll(".verse[data-vref]");
         return {
-          article, ranges: numberRuns(nums, absent), firstNum: nums[0], lastNum: nums[nums.length - 1],
+          article, ranges,
           atStart: numbered[0] === spans[0], atEnd: numbered[numbered.length - 1] === spans[spans.length - 1],
-          chapterRef: fromChapter ? Number(fromChapter) : null,
+          chapterRef: chapter,
         };
       });
       return `${text}\n\n— ${citeOf(unit, runs)}`;
@@ -1329,40 +1326,11 @@ function overlapsText(/** @type {Range} */ range, /** @type {Node} */ node) {
   return /[^\s\u2060]/.test(r.toString());
 }
 
-/** `data-vref` 의 절 번호들 — 「7-8a」 → [7, 8] · 「11b」 → [11] · 「3」 → [3]. @param {Element} v @returns {number[]} */
-function vrefNumbers(v) {
-  const m = /^(\d+)(?:-(\d+))?/.exec(v.getAttribute("data-vref") || "");
-  if (!m) return [];
-  const a = Number(m[1]), b = m[2] ? Number(m[2]) : a;
-  return Array.from({ length: Math.max(0, b - a) + 1 }, (_, i) => a + i);
-}
-
-/**
- * 정렬된 번호 → 연속 구간. 사이에 이 번역에 없는 번호(`absent`)만 있으면 이어진 구간이다 — 없는 절은 건너뛴 절이
- * 아니다(마르 9:43-48 — 사용자 결정 2026-10-14).
- * @param {number[]} nums @param {Set<number>} [absent] @returns {Array<[number, number]>}
- */
-function numberRuns(nums, absent) {
-  /** @type {Array<[number, number]>} */
-  const out = [];
-  for (const n of nums) {
-    const last = out[out.length - 1];
-    if (last && n > last[1] && onlyAbsentBetween(last[1], n, absent)) last[1] = n;
-    else if (!last || n > last[1]) out.push([n, n]);
-  }
-  return out;
-}
-
-/** a 와 b 사이의 번호가 모두 이 번역에 없는가(사이가 비면 참). @param {number} a @param {number} b @param {Set<number>} [absent] */
-function onlyAbsentBetween(a, b, absent) {
-  for (let k = a + 1; k < b; k++) if (!absent || !absent.has(k)) return false;
-  return true;
-}
-
 /**
  * 이 장에서 이 번역에 없는 절 번호 — 1 부터 장의 마지막 절까지 가운데 어느 절도 덮지 않는 번호(병합 절은 끝까지 덮는다).
  * 다른 장에서 옮겨 실린 절(`chapter_ref`)과 그리스어 추가 본문(`lxx_only`)은 이 장의 번호 체계가 아니라 세지 않는다.
- * 장 본문 · 전례독서의 `<article data-absent>` 가 되어 복사 출처가 읽는다(마르 9 → [44, 46]).
+ * 장 본문과 전례독서의 `<article data-absent>`가 되어, 복사 출처와 절 선택 막대가 읽는다(마르 9장은 [44, 46],
+ * verse-spec.js selectionCitation).
  * @param {import("../types").BibleVerse[]} verses @returns {number[]}
  */
 function absentVerseNumbers(verses) {
@@ -1379,11 +1347,6 @@ function absentVerseNumbers(verses) {
   const out = [];
   for (let n = 1; n <= last; n++) if (!have.has(n)) out.push(n);
   return out;
-}
-
-/** 구간 → 「1-3, 5」. @param {Array<[number, number]>} ranges */
-function formatVerseRanges(ranges) {
-  return ranges.map(([a, b]) => (a === b ? `${a}` : `${a}-${b}`)).join(", ");
 }
 
 /**
@@ -1990,7 +1953,7 @@ window.renderError = renderError;
 // last is the liturgical view shell calendar.js · lectionary.js · routing.js share.
 export {
   setTitle, setTitleWithChapterPicker,
-  buildDivisionTabs, buildSegmentTabs, bindCopyAttribution, formatVerseRanges, absentVerseNumbers, divisionLabels, divisionOrder, effectiveDivision,
+  buildDivisionTabs, buildSegmentTabs, bindCopyAttribution, absentVerseNumbers, divisionLabels, divisionOrder, effectiveDivision,
   bookListPath,
   initCompactHeader, initScrollElevation,
   _verseSelectionUnit, _verseRangeKeys,

@@ -114,26 +114,34 @@ test("verseInstanceKeys: 빈 입력은 빈 배열", () => {
   assert.deepStrictEqual(plain(ctx.verseInstanceKeys(null)), []);
 });
 
-// ── selectionCitation · selectedSpanVrefs ──
-// 절 선택 막대의 「…절 선택됨」 · 복사 출처. 선택은 줄마다 다른 `data-vkey`(인스턴스 키 "/" data-vref)로 하고, 출처는
-// 그 줄들의 `data-vref`로 적는다. 장 이름을 붙인 발췌(이사 40, 다니 3, 에스 4, 이사 7, 1사무 24, 욥 31, 나훔 1,
-// 이사 10, 판관 17)는 실제 화면의 키와 표지에서 뽑았다(2026-10-21 · 10-22 덤프). 가운데 절이나 절의 뒷줄을 뺀 곳이
-// 있다. 이름 없는 발췌는 규칙을 보이려고 만든 것이다. 화면은 절 전체를 고르므로(views.js `_verseSelectionUnit`, 사용자 결정 2026-10-22)
-// 한 줄만 고른 경우는 생기지 않지만, 생겨도 출처에 줄 글자를 쓰지 않는다는 것을 함께 본다.
+// ── selectionCitation · formatVerseRanges · selectedSpanVrefs ──
+// 절 선택 막대의 「…절 선택됨」, 절 선택 복사, 장 본문과 전례독서의 끌어 선택 복사가 같은 두 함수로 출처를 적는다(사용자
+// 결정 2026-11-07, known-issues §16.1). 선택은 줄마다 다른 `data-vkey`(인스턴스 키 "/" data-vref)로 하고, 출처는 그
+// 줄들의 `data-vref`로 적는다. 끌어 선택 복사는 글자가 겹친 줄을 고른 줄로 넘긴다(views.js bindCopyAttribution). 장
+// 이름을 붙인 발췌(이사 40, 다니 3, 에스 4, 이사 7, 1사무 24, 욥 31, 나훔 1, 이사 10, 판관 17, 마르 9)는 실제 화면의
+// 키와 표지에서 뽑았다(2026-10-21 · 10-22 · 11-07 덤프). 가운데 절이나 절의 뒷줄을 뺀 곳이 있다. 이름 없는 발췌는
+// 규칙을 보이려고 만든 것이다. 절 선택은 절 전체를 고르지만(views.js `_verseSelectionUnit`, 사용자 결정 2026-10-22),
+// 끌어 선택 복사는 한 줄만 고를 수 있다. 어느 쪽이든 출처에 줄 글자를 쓰지 않는다.
 
-/** @param {Array<[string, string?, string?]>} rows [data-vkey, class list, data-chapter-ref] in document order */
-function articleOf(rows) {
+/**
+ * @param {Array<[string, string?, string?]>} rows [data-vkey, class list, data-chapter-ref] in document order
+ * @param {string | null} [absent] the article's `data-absent`
+ */
+function articleOf(rows, absent = null) {
   const elements = rows.map(([key, cls = "", chapterRef = null]) => ({
     getAttribute: (k) => (k === "data-vkey" ? key : k === "data-vref" ? key.slice(key.indexOf("/") + 1)
       : k === "data-chapter-ref" ? chapterRef : null),
     classList: { contains: (c) => cls.split(" ").includes(c) },
   }));
-  return { querySelectorAll: (sel) => (sel === ".verse[data-vkey]" ? elements : []) };
+  return {
+    querySelectorAll: (sel) => (sel === ".verse[data-vkey]" ? elements : []),
+    getAttribute: (k) => (k === "data-absent" ? absent : null),
+  };
 }
-/** 「장:절」 — 이 장의 번호면 장 없이 절만. 사람이 읽는 표기(citationVerseSpec)로. */
+/** 「장:절」 — 이 장의 번호면 장 없이 절만. 사람이 읽는 표기(formatVerseRanges)로. */
 const citeSpec = (keys, article) => {
-  const { chapter, refs } = ctx.selectionCitation(new Set(keys), article);
-  return `${chapter != null ? `${chapter}:` : ""}${ctx.citationVerseSpec(refs)}`;
+  const { chapter, runs } = ctx.selectionCitation(new Set(keys), article);
+  return `${chapter != null ? `${chapter}:` : ""}${ctx.formatVerseRanges(runs)}`;
 };
 const linesOf = (rows, verse) => rows.map(([k]) => k).filter((k) => k.startsWith(`${verse}/`));
 /** 운문 여러 줄 — 줄 글자마다 [「인스턴스/번호+글자」, "verse-poetry"]. */
@@ -226,27 +234,39 @@ test("selectionCitation: 병합 절 「7-8a」「7-8b」를 다 고르면 「7-8
   // 병합 절도 앞뒤 구간에 잇는다(나훔 1 — 종전 「7-8,9」 「5-6,7-8,9」).
   assert.strictEqual(citeSpec(["7/7-8a", "7/7-8b", "9/9"], a), "7-9");
   assert.strictEqual(citeSpec(["5/5", "6/6", "7/7-8a", "7/7-8b", "9/9"], a), "5-9");
-  assert.strictEqual(citeSpec(["5/5", "7/7-8a", "7/7-8b"], a), "5,7-8");
+  assert.strictEqual(citeSpec(["5/5", "7/7-8a", "7/7-8b"], a), "5, 7-8");
 });
 
+// 이사 7 — 8a · 9a · 8b · 9b 순서로 실리고, 반쪽 절이 다시 두 줄이다.
+const ISA7 = [...poem("7", "7", "ab"), ...poem("8a", "8a", "ab"), ...poem("9a", "9a", "ab"), ...poem("8b", "8b", "ab"),
+  ...poem("9b", "9b", "ab")];
+
 test("selectionCitation: 데이터의 반쪽 절 — 둘 다 고르면 번호, 한쪽이면 인쇄본대로 「8ㄱ」(사용자 결정 2026-10-22, 종전 「8aa,8ab」)", () => {
-  // 이사 7 — 8a · 9a · 8b · 9b 순서로 실린다.
-  const a = articleOf([...poem("7", "7", "ab"), ...poem("8a", "8a", "ab"), ...poem("9a", "9a", "ab"), ...poem("8b", "8b", "ab"),
-    ...poem("9b", "9b", "ab")]);
+  const a = articleOf(ISA7);
   assert.strictEqual(citeSpec(["8a/8aa", "8a/8ab", "8b/8ba", "8b/8bb"], a), "8");
   assert.strictEqual(citeSpec(["8a/8aa", "8a/8ab"], a), "8ㄱ");
   assert.strictEqual(citeSpec(["8b/8ba", "8b/8bb"], a), "8ㄴ");
   // 7 → 9ㄱ 범위: 8은 반쪽이 둘 다, 9는 ㄱ만(종전 막대 「7-8, 9aa, 9ab」).
-  assert.strictEqual(citeSpec(["7/7a", "7/7b", "8a/8aa", "8a/8ab", "9a/9aa", "9a/9ab", "8b/8ba", "8b/8bb"], a), "7-8,9ㄱ");
-  assert.strictEqual(citeSpec(["7/7a", "7/7b", "8a/8aa", "8a/8ab"], a), "7,8ㄱ");
-  // refs 는 저장 표기 그대로 — 주소와 북마크의 문법(ADR-010 · 040)
-  assert.deepStrictEqual(plain(ctx.selectionCitation(new Set(["8a/8aa", "8a/8ab", "9a/9aa", "9a/9ab"]), a).refs), ["8a", "9a"]);
+  assert.strictEqual(citeSpec(["7/7a", "7/7b", "8a/8aa", "8a/8ab", "9a/9aa", "9a/9ab", "8b/8ba", "8b/8bb"], a), "7-8, 9ㄱ");
+  assert.strictEqual(citeSpec(["7/7a", "7/7b", "8a/8aa", "8a/8ab"], a), "7, 8ㄱ");
+  // 반쪽 절 하나는 [n, n, part] — 구간을 시작하지도 끝내지도 않는다
+  assert.deepStrictEqual(plain(ctx.selectionCitation(new Set(["8a/8aa", "8a/8ab", "9a/9aa", "9a/9ab"]), a).runs),
+    [[8, 8, "a"], [9, 9, "a"]]);
+});
+
+test("selectionCitation: 끌어 선택 복사는 반쪽 절 줄의 글자를 조금이라도 고르면 그 반쪽 — 두 반쪽이면 그 절", () => {
+  const a = articleOf(ISA7);
+  // 종전 장 본문 복사는 반쪽 절도 절 번호로 적었다 — 「7:7-8」 · 「7:8」 · 「7:8-9」
+  assert.strictEqual(citeSpec(["7/7a", "7/7b", "8a/8aa"], a), "7, 8ㄱ");       // 8ㄱ의 첫 줄에서 멈춘 선택
+  assert.strictEqual(citeSpec(["8a/8aa"], a), "8ㄱ");                          // 한 줄 안의 몇 글자
+  assert.strictEqual(citeSpec(["8a/8ab", "9a/9aa", "9a/9ab", "8b/8ba"], a), "8, 9ㄱ");   // 8은 두 반쪽의 글자를 다 골랐고 9는 ㄱ만
+  assert.strictEqual(citeSpec(ISA7.map(([k]) => k), a), "7-9");
 });
 
 test("selectionCitation: 한 줄짜리 반쪽 절(1사무 24:5ㄱ)과 줄 수가 다른 반쪽 절(욥 31:40ㄱ 두 줄 · 40ㄴ 한 줄)", () => {
   const sam = articleOf([["4/4"], ["5a/5a"], ["7/7"], ["8a/8a"], ["5b/5b"], ["6/6"], ["8b/8b"], ["9/9"]]);
   assert.strictEqual(citeSpec(["5a/5a"], sam), "5ㄱ");
-  assert.strictEqual(citeSpec(["4/4", "5a/5a", "7/7"], sam), "4,5ㄱ,7");
+  assert.strictEqual(citeSpec(["4/4", "5a/5a", "7/7"], sam), "4, 5ㄱ, 7");
   assert.strictEqual(citeSpec(["5a/5a", "5b/5b"], sam), "5");
   // 욥 31 — 38-40ㄱ 이 8절 뒤에 실리고 40ㄴ(산문 한 줄)은 장 끝에 있다(사이의 절은 뺐다).
   const job = articleOf([...poem("39", "39", "ab"), ...poem("40a", "40a", "ab"), ...poem("9", "9", "ab"), ["40b/40b"]]);
@@ -262,8 +282,8 @@ const NAH1 = [["1/1"], ...poem("2a", "2a", "ab"), ...poem("3", "3", "abcde"), ..
 test("selectionCitation: 나훔 1 — 2ㄱ 은 1절 뒤, 2ㄴ 은 9절 뒤에 실린다(사용자 결정 2026-10-22, 종전 1 → 2ㄱ 이 「1-6,7-8,9」)", () => {
   const a = articleOf(NAH1);
   const keys = NAH1.map(([k]) => k);
-  assert.strictEqual(citeSpec(["1/1", ...linesOf(NAH1, "2a")], a), "1,2ㄱ");
-  assert.strictEqual(citeSpec(keys.slice(0, keys.indexOf("2b/2ba")), a), "1,2ㄱ,3-9");
+  assert.strictEqual(citeSpec(["1/1", ...linesOf(NAH1, "2a")], a), "1, 2ㄱ");
+  assert.strictEqual(citeSpec(keys.slice(0, keys.indexOf("2b/2ba")), a), "1, 2ㄱ, 3-9");
   assert.strictEqual(citeSpec(keys, a), "1-10");
   assert.strictEqual(citeSpec(linesOf(NAH1, "7"), a), "7-8");
 });
@@ -272,22 +292,41 @@ test("selectionCitation: ㄴ 이 ㄱ 보다 앞에 실린 장 — 이사 10(18�
   const ISA10 = [...poem("15", "15", "abcd"), ...poem("16a", "16a", "ab"), ...poem("18b", "18b", "ab"),
     ...poem("16b", "16b", "ab"), ...poem("17", "17", "abc"), ...poem("18a", "18a", "ab"), ...poem("19", "19", "ab")];
   const isa = articleOf(ISA10);
-  assert.strictEqual(citeSpec([...linesOf(ISA10, "16a"), ...linesOf(ISA10, "18b"), ...linesOf(ISA10, "16b")], isa), "16,18ㄴ");
+  assert.strictEqual(citeSpec([...linesOf(ISA10, "16a"), ...linesOf(ISA10, "18b"), ...linesOf(ISA10, "16b")], isa), "16, 18ㄴ");
   assert.strictEqual(citeSpec(linesOf(ISA10, "18b"), isa), "18ㄴ");
   assert.strictEqual(citeSpec(ISA10.map(([k]) => k).filter((k) => !k.startsWith("19/")), isa), "15-18");
   const judg = articleOf([["1/1"], ["2a/2a"], ["3b/3b"], ["2b/2b"], ["3a/3a"], ["4/4"]]);
   assert.strictEqual(citeSpec(["3b/3b"], judg), "3ㄴ");
-  assert.strictEqual(citeSpec(["1/1", "2a/2a", "3b/3b"], judg), "1,2ㄱ,3ㄴ");
+  assert.strictEqual(citeSpec(["1/1", "2a/2a", "3b/3b"], judg), "1, 2ㄱ, 3ㄴ");
   assert.strictEqual(citeSpec(["1/1", "2a/2a", "3b/3b", "2b/2b", "3a/3a"], judg), "1-3");
 });
 
-test("citationVerseSpec: 병합 절을 구간에 잇고 반쪽 절은 「ㄱ · ㄴ」 — 저장 표기(selectedVersesToSpec)와 다른 두 곳", () => {
-  assert.strictEqual(ctx.citationVerseSpec(["6", "7-8", "9"]), "6-9");
-  assert.strictEqual(ctx.selectedVersesToSpec(["6", "7-8", "9"]), "6,7-8,9");
-  assert.strictEqual(ctx.citationVerseSpec(["7-8"]), "7-8");
-  assert.strictEqual(ctx.citationVerseSpec(["1", "7-8"]), "1,7-8");
-  assert.strictEqual(ctx.citationVerseSpec(["7", "8", "9a"]), "7-8,9ㄱ");
-  assert.strictEqual(ctx.citationVerseSpec(["9b", "12", "13"]), "9ㄴ,12-13");
+// 마르 9 — 공동번역에 44절과 46절이 없다(`<article data-absent="44,46">`, views.js absentVerseNumbers).
+const MARK9 = [["42/42"], ["43/43"], ["45/45"], ["47/47"], ["48/48"], ["49/49"]];
+
+test("selectionCitation: 이 번역에 없는 절 번호만 사이에 있으면 잇는다 — 장 본문 복사처럼 「9:43-48」(사용자 결정 2026-10-14 · 11-07)", () => {
+  const a = articleOf(MARK9, "44,46");
+  assert.strictEqual(citeSpec(["43/43", "45/45", "47/47", "48/48"], a), "43-48");   // 종전 절 선택 「43,45,47-48」
+  assert.strictEqual(citeSpec(["43/43", "45/45"], a), "43-45");
+  // 있는 절(45)을 건너뛰면 끊는다. 건너뛴 절은 쉼표다.
+  assert.strictEqual(citeSpec(["43/43", "47/47"], a), "43, 47");
+  // 없는 번호를 모르는 화면(`data-absent`가 없다)에서는 번호대로
+  assert.strictEqual(citeSpec(["43/43", "45/45"], articleOf(MARK9)), "43, 45");
+});
+
+test("selectionCitation: 다른 번호 체계만 고르면 data-absent로 잇지 않는다 — 그 장 자신의 번호다", () => {
+  // 장의 6절이 없는 것으로 적힌 화면에서 옮겨 실린 41:5와 41:7만 골라도 「41:5, 7」이다(41장의 6절은 따로 있다).
+  const a = articleOf([["5/5"], ["5_c41/5", "verse-cross-ref", "41"], ["7_c41/7", "verse-cross-ref", "41"], ["7/7"]], "6");
+  assert.strictEqual(citeSpec(["5_c41/5", "7_c41/7"], a), "41:5, 7");
+  assert.strictEqual(citeSpec(["5/5", "7/7"], a), "5-7");
+});
+
+test("formatVerseRanges: 구간은 쉼표와 한 칸으로, 반쪽 절은 「ㄱ · ㄴ」(사용자 결정 2026-11-07 — 종전 절 선택은 「7-8,9ㄱ」)", () => {
+  assert.strictEqual(ctx.formatVerseRanges([[1, 3], [5, 5], [8, 8, "a"]]), "1-3, 5, 8ㄱ");
+  assert.strictEqual(ctx.formatVerseRanges([[7, 8], [9, 9, "a"]]), "7-8, 9ㄱ");
+  assert.strictEqual(ctx.formatVerseRanges([[9, 9, "b"], [12, 13]]), "9ㄴ, 12-13");
+  assert.strictEqual(ctx.formatVerseRanges([[43, 48]]), "43-48");
+  assert.strictEqual(ctx.formatVerseRanges([]), "");
 });
 
 test("halfVerseMark: a 는 「ㄱ」, b 는 「ㄴ」", () => {
@@ -295,9 +334,9 @@ test("halfVerseMark: a 는 「ㄱ」, b 는 「ㄴ」", () => {
   assert.strictEqual(ctx.halfVerseMark("b"), "ㄴ");
 });
 
-test("selectionCitation: 기사가 없거나 고른 줄이 화면에 없으면 빈 refs", () => {
-  assert.deepStrictEqual(plain(ctx.selectionCitation(new Set(["3/3"]), null)), { chapter: null, refs: [] });
-  assert.deepStrictEqual(plain(ctx.selectionCitation(new Set(["9/9"]), articleOf([["3/3"]]))), { chapter: null, refs: [] });
+test("selectionCitation: 기사가 없거나 고른 줄이 화면에 없으면 빈 runs", () => {
+  assert.deepStrictEqual(plain(ctx.selectionCitation(new Set(["3/3"]), null)), { chapter: null, runs: [] });
+  assert.deepStrictEqual(plain(ctx.selectionCitation(new Set(["9/9"]), articleOf([["3/3"]]))), { chapter: null, runs: [] });
 });
 
 test("selectedSpanVrefs: 저장할 줄의 data-vref를 문서 순서로 모은다. 이 장의 절과 함께 고른 옮겨 실린 절은 뺀다(사용자 결정 2026-11-07)", () => {

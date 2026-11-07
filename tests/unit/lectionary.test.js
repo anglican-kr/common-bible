@@ -1181,6 +1181,16 @@ test("halfVerseRanges: 하로 자른 절은 구간을 열고, 상으로 자른 �
   same(plain(ctx.halfVerseRanges([[1, 9]], H({}))), [{ a: 1, b: 9, aHalf: "", bHalf: "" }]);
 });
 
+test("halfVerseRanges: 데이터의 반쪽 절 구간(「8ㄱ」)은 part 를 달고 그대로 둔다 — 이사 7:1-9 에서 7절과 8ㄱ(사용자 결정 2026-11-07)", () => {
+  const H = (o) => new Map(Object.entries(o).map(([k, v]) => [Number(k), v]));
+  same(plain(ctx.halfVerseRanges([[7, 7], [8, 8, "a"]], H({}))), [
+    { a: 7, b: 7, aHalf: "", bHalf: "" }, { a: 8, b: 8, aHalf: "", bHalf: "", part: "a" }]);
+  // 전례독서의 상 · 하는 다른 절에만 붙는다 — 「사무상 24:2-23상」을 5ㄴ부터 끝까지 고르면(5ㄴ 6 8ㄴ 9 … 순서) 「5ㄴ, 6, 8ㄴ, 9-23상」
+  same(plain(ctx.halfVerseRanges([[5, 5, "b"], [6, 6], [8, 8, "b"], [9, 23]], H({ 23: "a" }))), [
+    { a: 5, b: 5, aHalf: "", bHalf: "", part: "b" }, { a: 6, b: 6, aHalf: "", bHalf: "" },
+    { a: 8, b: 8, aHalf: "", bHalf: "", part: "b" }, { a: 9, b: 23, aHalf: "", bHalf: "상" }]);
+});
+
 // ── 제목 영역의 글(캘린더 목록 줄과 같이 쓴다, ADR-038 §2) ──
 
 test("headLinesOf: 제목, 해와 대재일과 기도 주간, 안내, 이름 줄, 다른 전례일의 차례", () => {
