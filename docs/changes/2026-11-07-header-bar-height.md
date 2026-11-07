@@ -1,4 +1,5 @@
 ---
+pr: 524
 date: 2026-11-07
 branch: fix/header-bar-height
 title: "fix: 상단 바 높이를 재어 쓰고 이어 읽기 위치 바로잡기"
