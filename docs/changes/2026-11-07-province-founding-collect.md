@@ -27,6 +27,7 @@ title: "feat: 9.29에 관구 설립 본기도 덧붙임"
 - 화면: Node Playwright로 폭 390px의 `/lectionary/2027-09-29`를 그려 제목 아래 두 줄과 본기도 순서를 보았다. 콘솔 오류는 외부 글꼴 요청의 터널 실패 하나뿐이다.
 - 사실 토큰 비교(`docs_facts_snapshot.py --diff HEAD WORKTREE`): 사라진 토큰 둘(「51건」, 옛 전례일 id)과 새 토큰 둘(「50건」, 「29일」)은 의도한 것이다.
 - 돌리지 않은 것: e2e. 이 환경에 pytest-playwright가 없다. 머지 전에 `test_lectionary_view.py`와 `test_calendar_view.py`를 돌린다.
+- PR을 연 뒤 데이터 main에 data#64(성 요셉 복음 대안)가 들어왔다. 데이터 브랜치에 main을 합치고(매니페스트 충돌은 다시 만들어 풀었다) 데이터 시험 3,290건과 앱 유닛 1,565건을 다시 돌려 통과했다. data#64가 독서 레코드를 하나 늘려 설계서 facts 블록의 독서 수치 여덟 개(938→939 등)도 이 PR에서 맞췄다. data#64의 자동 포인터 PR이 이 대조에서 막혔을 자리다.
 - 데이터 서브모듈 포인터는 이 PR에서 올리지 않았다. 데이터 PR이 머지되면 포인터와 사이트맵을 이 PR에 올린다. 그 전까지 앱은 옛 데이터로 전과 같이 그린다(`province`가 없으면 줄과 본기도가 없다).
 
 ## 갱신한 문서
@@ -35,6 +36,6 @@ title: "feat: 9.29에 관구 설립 본기도 덧붙임"
 - `docs/decisions/041-settings-structure-and-lectionary-preferences.md`: 상태, §6, §11, 검토한 대안 D.
 - `docs/decisions/038-calendar-lectionary-ui.md`: 성인이 둘 이상인 날짜의 예.
 - `docs/design/liturgical-engine/03-placement-layers.md`: 공개 래퍼, 본당 표.
-- `docs/design/liturgical-engine/05-lookup-layer.md`: facts 블록, 날짜 조인 수, 폴백 표, 후보 상태 ③.
+- `docs/design/liturgical-engine/05-lookup-layer.md`: facts 블록(data#64의 독서 수치 포함), 날짜 조인 수, 폴백 표, 후보 상태 ③.
 - `docs/design/liturgical-engine/06-rank-transfer-color.md`: 고정일끼리의 겹침.
 - `docs/design/liturgical-engine/09-open-items.md`: 미결18, 미결49.
