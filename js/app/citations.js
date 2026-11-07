@@ -321,6 +321,8 @@ window.appCitations = (/** @returns {AppCitations} */ () => {
   let _currentNoteAnchor = null;
   /** @type {(() => void) | null} */
   let _tooltipReposListener = null;
+  /** @type {ResizeObserver | null} */
+  let _tooltipBarObserver = null;
   // Truncate anchor label in tooltip if it exceeds this many characters.
   const TOOLTIP_ANCHOR_MAX = 18;
 
@@ -340,6 +342,16 @@ window.appCitations = (/** @returns {AppCitations} */ () => {
    * Position the tooltip just above the anchor element; if not enough room
    * above, flip below. Clamp horizontally to viewport edges.
    *
+   * "Room above" ends at the bottom of the sticky header (#sticky-group), not
+   * at the viewport top: the header paints over the tooltip (z-index 20 > 15),
+   * so a tooltip placed in that band would open half hidden. The header's
+   * bottom is read on every call — the header differs by view, collapses on
+   * desktop scroll (views.js initCompactHeader), and an iOS home-screen app
+   * adds the status bar's safe area to it. The scroll/resize follower calls
+   * this too; once the anchor itself scrolls under the header the tooltip
+   * slides under with it (the z-index order is meant for that — css/style.css
+   * #note-tooltip).
+   *
    * @param {HTMLElement} tt
    * @param {HTMLElement} anchorEl
    */
@@ -353,15 +365,17 @@ window.appCitations = (/** @returns {AppCitations} */ () => {
     const vw = window.innerWidth;
     const vh = window.innerHeight;
     const GAP = 8;
+    const barBottom = document.getElementById("sticky-group")?.getBoundingClientRect().bottom ?? 0;
+    const minTop = Math.max(0, barBottom) + GAP;
     let top = aRect.top - ttRect.height - GAP;
     let placedAbove = true;
-    if (top < GAP) {
+    if (top < minTop) {
       top = aRect.bottom + GAP;
       placedAbove = false;
     }
     // If even below overflows, clamp to viewport bottom.
     if (top + ttRect.height + GAP > vh) {
-      top = Math.max(GAP, vh - ttRect.height - GAP);
+      top = Math.max(minTop, vh - ttRect.height - GAP);
     }
     let left = aRect.left + aRect.width / 2 - ttRect.width / 2;
     left = Math.max(GAP, Math.min(left, vw - ttRect.width - GAP));
@@ -408,27 +422,42 @@ window.appCitations = (/** @returns {AppCitations} */ () => {
     _currentNoteAnchor = anchorEl;
 
     // Follow anchor on scroll/resize so the tooltip stays glued to its anchor.
-    if (_tooltipReposListener) {
-      window.removeEventListener("scroll", _tooltipReposListener, true);
-      window.removeEventListener("resize", _tooltipReposListener);
-    }
-    _tooltipReposListener = () => {
+    _stopFollowingNoteAnchor();
+    const reposition = () => {
       if (_currentNoteAnchor && !tt.hidden) {
         _positionNoteTooltip(tt, _currentNoteAnchor);
       }
     };
-    window.addEventListener("scroll", _tooltipReposListener, true);
-    window.addEventListener("resize", _tooltipReposListener);
+    _tooltipReposListener = reposition;
+    window.addEventListener("scroll", reposition, true);
+    window.addEventListener("resize", reposition);
+    // The sticky header can change height with no scroll event after it — the
+    // desktop header re-expands over a transition once a scroll has reached the
+    // top. That moves the anchor (the header is in flow) and the edge the
+    // tooltip stays below, so follow the header's size too.
+    const bar = document.getElementById("sticky-group");
+    if (bar && typeof ResizeObserver !== "undefined") {
+      _tooltipBarObserver = new ResizeObserver(reposition);
+      _tooltipBarObserver.observe(bar);
+    }
   }
 
-  function closeNoteTooltip() {
-    const tt = /** @type {HTMLElement | null} */ (document.getElementById("note-tooltip"));
-    if (tt) tt.hidden = true;
+  function _stopFollowingNoteAnchor() {
     if (_tooltipReposListener) {
       window.removeEventListener("scroll", _tooltipReposListener, true);
       window.removeEventListener("resize", _tooltipReposListener);
       _tooltipReposListener = null;
     }
+    if (_tooltipBarObserver) {
+      _tooltipBarObserver.disconnect();
+      _tooltipBarObserver = null;
+    }
+  }
+
+  function closeNoteTooltip() {
+    const tt = /** @type {HTMLElement | null} */ (document.getElementById("note-tooltip"));
+    if (tt) tt.hidden = true;
+    _stopFollowingNoteAnchor();
     if (_currentNoteAnchor && typeof _currentNoteAnchor.focus === "function") {
       _currentNoteAnchor.focus();
     }
