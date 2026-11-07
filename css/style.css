@@ -595,13 +595,7 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
   margin-bottom: var(--space-4);
 }
-.lect-datenav {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-}
-/* ‹ › day steppers — ≥44px hit area (HIG), round like the dock controls. */
+/* ‹ › steppers — ≥44px hit area (HIG), round like the dock controls. */
 .lect-datenav-btn {
   display: inline-flex;
   align-items: center;
@@ -618,22 +612,67 @@ body {
    light up like a button (same scoping as a.cal-cell). */
 a.lect-datenav-btn:hover,
 a.lect-datenav-btn:focus-visible { background: var(--bg-card); }
-/* 날짜나 달의 글자만 가운데에 두고 「오늘」은 그 오른쪽에 둔다(사용자 결정 2026-11-05). 가운데 칸의 양옆을 1fr로 같게
-   나누어 「오늘」의 폭이 글자의 자리를 밀지 않는다. 폭이 모자라면 왼쪽 빈칸이 먼저 줄어든다. */
-.lect-date {
-  flex: 1;
-  min-width: 0;
+/* 캘린더와 전례독서의 머리(DESIGN.md §6, 사용자 결정 2026-11-07) — 왼쪽 칸 「오늘」, 가운데 칸 ‹ 글자 ›, 오른쪽 칸 보기 전환 단추.
+   양옆 칸을 1fr로 같게 나누어 글자가 화면 가운데에 있고, 「오늘」과 단추의 폭이 글자의 자리를 밀지 않는다. max-content는 글자가 아주
+   클 때 칸을 지키려는 것이다. 좁아지면 가운데 칸이 옮겨 가고 겹치지 않는다. */
+#page-title:has(> .lect-bar-mid) {
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  grid-template-columns: minmax(max-content, 1fr) auto minmax(max-content, 1fr);
   align-items: center;
-  font-size: var(--font-sm);
-  color: var(--text-secondary);
+  container-type: inline-size;
 }
-.lect-date > :first-child { grid-column: 2; }
-.lect-today {
-  grid-column: 3;
+.lect-bar-start {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
   justify-self: start;
-  margin-inline-start: var(--space-2);
+}
+.lect-bar-mid {
+  display: flex;
+  align-items: center;
+}
+.lect-bar-end {
+  display: flex;
+  justify-self: end;
+}
+/* 44px 탭 영역을 위아래 음수 여백으로 제목 줄 높이 안에 둔다. 글자 칸 쪽으로 8px씩 겹쳐 폭을 아끼고 ‹ ›가 글자에 붙어 보인다. 글자 칸은
+   눌리지 않으므로 겹쳐도 되고, ‹ › 를 위에 두어 탭 영역을 지킨다. */
+.lect-bar-mid > .lect-datenav-btn {
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
+  font-weight: 400;
+  margin-block: calc((var(--font-lg) * var(--leading-snug) - var(--touch-target)) / 2);
+}
+.lect-bar-mid > :first-child { margin-inline-end: -8px; }
+.lect-bar-mid > :last-child { margin-inline-start: -8px; }
+/* 글자 칸의 폭은 가장 긴 글자(「2027년 12월」)에 맞춰 고정한다. 달이 바뀌어도, 세 화면을 오가도 ‹ ›가 움직이지 않는다. */
+.lect-date {
+  min-width: 6.5rem;
+  text-align: center;
+  white-space: nowrap;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+/* 탭 바가 없는 데스크톱의 성서 목록 입구 — 다른 화면의 머리에서는 절대 위치이지만 여기서는 왼쪽 칸 안에 둔다. */
+.lect-bar-start > .title-back-btn {
+  position: static;
+  transform: none;
+  margin-block: calc((var(--font-lg) * var(--leading-snug) - var(--icon-btn-touch)) / 2);
+}
+.title-view-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--touch-target);
+  height: var(--touch-target);
+  margin-block: calc((var(--font-lg) * var(--leading-snug) - var(--touch-target)) / 2);
+  color: var(--accent);
+  transition: opacity var(--duration-fast);
+}
+.title-view-btn:hover { opacity: 0.7; }
+.title-view-btn:active { opacity: 0.4; }
+.lect-today {
   white-space: nowrap;
   font-size: var(--font-xs);
   color: var(--accent);
@@ -641,28 +680,6 @@ a.lect-datenav-btn:focus-visible { background: var(--bg-card); }
   border: 1px solid var(--border);
   border-radius: var(--radius-pill);
   padding: var(--space-0_5) var(--space-2);
-}
-/* 머리의 제목 자리 — 전례독서는 「전례독서」 대신 날짜 이동 줄을 그린다(lectionary.js commitTitleDateNav,
-   사용자 결정 2026-11-03). 스크롤해도 머리와 함께 보인다. 날짜는 제목 글자(굵게, --text)다.
-   ‹ › 의 44px 탭 영역은 위아래 음수 여백으로 제목 줄 높이 안에 둔다. */
-#page-title:has(> .lect-date) {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-1);
-}
-#page-title > .lect-datenav-btn {
-  flex-shrink: 0;
-  font-weight: 400;
-  margin-block: calc((var(--font-lg) * var(--leading-snug) - var(--touch-target)) / 2);
-}
-#page-title > .lect-date {
-  font-size: inherit;
-  color: var(--text);
-}
-.lect-date-label {
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
 }
 #page-title .lect-today {
   font-weight: 400;
@@ -962,8 +979,8 @@ a.lect-datenav-btn:focus-visible { background: var(--bg-card); }
 
 /* ── 캘린더 뷰 (calendar tab, ADR-038 §1 · §2 A2) ──
    A month as a 7-column table: every day is a link to its lectionary page. The
-   date nav row reuses the lectionary's .lect-datenav / .lect-datenav-btn /
-   .lect-today (DESIGN.md §6 「날짜 이동 줄」). Sans-serif like the other in-page
+   date nav is the head row shared with the lectionary (DESIGN.md §6 「날짜 이동
+   줄」). Sans-serif like the other in-page
    chrome. table-layout: fixed pins each column to 1/7 of the width whatever the
    names say — the paused 1.6.0 calendar ran off phone screens because its cells
    were flex items that could not shrink below their content (min-width trap). */
@@ -972,21 +989,12 @@ a.lect-datenav-btn:focus-visible { background: var(--bg-card); }
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
 }
 #app:has(.calendar) { padding-top: var(--space-4); }
-.cal-head { margin-bottom: var(--space-3); }
-.cal-month {
-  margin: 0;
-  font-size: var(--font-lg);
-  font-weight: 700;
-  color: var(--text);
-  line-height: var(--leading-snug);
-  white-space: nowrap;
-}
-/* 가운데 칸이 가장 긴 달(「2027년 12월」)과 그 양옆의 「오늘」 폭을 담지 못하면 모든 달을 「2027.12」로 줄인다(사용자 결정
-   2026-11-05). 달마다 따로 재면 달을 넘길 때 표기가 바뀐다. 12.25rem은 기본 글자에서 재 본 필요한 폭(220px)이다.
-   전체 이름은 .sr-only처럼 숨겨 스크린 리더가 읽는다. */
-.cal-head .lect-date { container-type: inline-size; }
+/* 머리가 가장 긴 달(「2027년 12월」)과 양옆 칸을 담지 못하면 모든 달을 「2027.12」로 줄인다(사용자 결정 2026-11-05). 달마다 따로 재면
+   달을 넘길 때 표기가 바뀐다. 15.9rem은 머리 폭의 기준이다. 기본 글자(18px)면 286px이라 폭 320px 화면(머리 288px)까지 전체 이름이고,
+   글자 크기와 함께 커진다. 전체 이름은 .sr-only처럼 숨겨 스크린 리더가 읽는다. 글자 칸은 전례독서의 날짜(「26.12.28」)가 들어가는 폭까지 줄인다. */
 .cal-month-short { display: none; }
-@container (max-width: 12.25rem) {
+@container (max-width: 15.9rem) {
+  .lect-date { min-width: 5rem; }
   .cal-month-full {
     position: absolute;
     width: 1px;
@@ -1704,7 +1712,8 @@ a.cal-cell:focus-visible { background: var(--bg-card); }
 .title-back-icon,
 .title-bookmark-btn svg,
 .settings-btn svg,
-.header-calendar-btn svg {
+.header-calendar-btn svg,
+.title-view-btn svg {
   width: 1.45rem;
   height: 1.45rem;
 }

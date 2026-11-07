@@ -47,7 +47,7 @@ import {
   optionalDestOf,
 } from "./liturgical-engine.js";
 
-const { _$, el, clearNode, emptyState, isModifiedClick } = window.appHelpers;
+const { _$, el, clearNode, emptyState, isModifiedClick, headerIcon, HEADER_ICON_PATHS } = window.appHelpers;
 const { loadLectionaryTrack, saveLectionaryTrack, loadLectionaryCardsFolded, saveLectionaryCardsFolded, loadLectionaryAltShow } = window.appStorage;
 
 const $app = _$("app");
@@ -1065,31 +1065,32 @@ function buildDateStep(dir, href, label) {
 }
 
 /**
- * 날짜 이동 줄의 세 칸 — ‹ · 가운데(제목 + 「오늘」) · ›. 「오늘」의 `data-focus-key`는 `today` — 앞뒤 단추가 자리만 남는 범위
- * 끝에서 포커스가 돌아갈 대체 자리다. 셋 다 문장 안 요소(`<a>` · `<span>`)라 머리의 `<h1>` 안에도 넣을 수 있다(전례독서).
+ * 캘린더와 전례독서의 머리(DESIGN.md §6 「날짜 이동 줄」, 사용자 결정 2026-11-07). 왼쪽 칸은 「오늘」, 가운데 칸은 ‹ 글자 ›,
+ * 오른쪽 칸은 보기 전환 단추다. 화면마다 다른 것은 가운데 글자(날짜 `<time>` · 달)와 라벨, 단추가 가는 곳뿐이다. 모두 문장 안
+ * 요소(`<a>` · `<span>` · `<button>`)라 머리의 `<h1>` 안에 넣을 수 있다. 「오늘」의 `data-focus-key`는 `today` — 앞뒤 단추가 자리만
+ * 남는 범위 끝에서 포커스가 돌아갈 대체 자리다. 집 단추는 탭 바가 없는 데스크톱의 성서 목록 입구이고, 모바일은 CSS가 숨긴다.
  * @param {{ title: HTMLElement, todayHref: string,
- *   prev: { href: string | null, label: string }, next: { href: string | null, label: string } }} o
- * @returns {HTMLElement[]}
+ *   prev: { href: string | null, label: string }, next: { href: string | null, label: string },
+ *   view?: { href: string, label: string, icon: string } }} o
  */
-function dateNavParts(o) {
-  const mid = el("span", { className: "lect-date" });
-  mid.appendChild(o.title);
-  mid.appendChild(el("a", { className: "lect-today", href: o.todayHref, "data-focus-key": "today" }, "오늘"));
-  return [buildDateStep("prev", o.prev.href, o.prev.label), mid, buildDateStep("next", o.next.href, o.next.label)];
-}
-
-/**
- * 날짜 이동 줄(DESIGN.md §6 「날짜 이동 줄」). 캘린더의 달 이동이 본문 맨 위에 쓴다(ADR-038 2단계의 주간 화면도 이것을 쓴다).
- * 전례독서는 같은 세 칸을 머리의 제목 자리에 그린다(`commitTitleDateNav`). 화면마다 다른 것은 가운데 제목 요소(날짜
- * `<time>` · 달 `<h2>`)와 라벨뿐이다.
- * @param {{ ariaLabel: string, title: HTMLElement, todayHref: string,
- *   prev: { href: string | null, label: string }, next: { href: string | null, label: string } }} o
- * @returns {HTMLElement}
- */
-function buildDateNav(o) {
-  const nav = el("nav", { className: "lect-datenav", "aria-label": o.ariaLabel });
-  for (const part of dateNavParts(o)) nav.appendChild(part);
-  return nav;
+function commitDateBar(o) {
+  const start = el("span", { className: "lect-bar-start" });
+  start.appendChild(window.buildHomeBtn("/", "성서 목록으로"));
+  start.appendChild(el("a", { className: "lect-today", href: o.todayHref, "data-focus-key": "today" }, "오늘"));
+  const mid = el("span", { className: "lect-bar-mid" });
+  mid.appendChild(buildDateStep("prev", o.prev.href, o.prev.label));
+  mid.appendChild(el("span", { className: "lect-date" }, o.title));
+  mid.appendChild(buildDateStep("next", o.next.href, o.next.label));
+  const end = el("span", { className: "lect-bar-end" });
+  if (o.view) {
+    end.appendChild(el("a", {
+      className: "title-view-btn", href: o.view.href, "aria-label": o.view.label, title: o.view.label, "data-focus-key": "view",
+    }, headerIcon(o.view.icon)));
+  }
+  clearNode($title);
+  $title.appendChild(start);
+  $title.appendChild(mid);
+  $title.appendChild(end);
 }
 
 /**
@@ -1102,8 +1103,8 @@ function titleDateText(p) {
 
 /**
  * 전례독서의 머리 — 제목 자리에 날짜 이동 줄을 그린다(사용자 결정 2026-11-03: 스크롤해도 날짜와 「오늘」이 보이고 하루씩 옮길
- * 수 있게. 그전엔 본문 맨 위 줄이었고, 머리에는 「전례독서」와 캘린더로 가는 꺾쇠가 있었다). 「전례독서」는 문서 제목(setTitle)에
- * 남는다. 보이는 날짜는 짧은 표기이고(`titleDateText`), 스크린 리더는 숨긴 전체 날짜를 읽는다.
+ * 수 있게. 그전엔 본문 맨 위 줄이었고, 머리에는 「전례독서」가 있었다). 「전례독서」는 문서 제목(setTitle)에 남는다. 보이는 날짜는
+ * 짧은 표기이고(`titleDateText`), 스크린 리더는 숨긴 전체 날짜를 읽는다. 오른쪽 단추는 그 날짜가 든 달로 간다(ADR-038 §2).
  * @param {LectionaryModel} m
  */
 function commitTitleDateNav(m) {
@@ -1111,13 +1112,13 @@ function commitTitleDateNav(m) {
   const label = el("time", { className: "lect-date-label", datetime: m.date });
   label.appendChild(el("span", { className: "sr-only" }, dateLabel(m.date)));
   label.appendChild(el("span", { "aria-hidden": "true" }, titleDateText(p)));
-  clearNode($title);
-  for (const part of dateNavParts({
+  commitDateBar({
     title: label,
     todayHref: m.hrefs.today,
     prev: { href: m.hrefs.prev, label: "전날" },
     next: { href: m.hrefs.next, label: "다음날" },
-  })) $title.appendChild(part);
+    view: { href: `/calendar/${m.date.slice(0, 7)}`, label: "월간으로 보기", icon: HEADER_ICON_PATHS.viewMonth },
+  });
 }
 
 /** 색 점 + 라벨 하나. */
@@ -1696,6 +1697,6 @@ async function renderLectionaryView(parsed) {
 // 캘린더 탭(calendar.js — ADR-038 §2 A2)이 같은 이름 · 날짜 · 색 규칙을 쓴다(복제 금지 — 칸 · 줄의 이름이 전례독서 목록과 같아야 한다).
 export {
   renderLectionaryView, buildLectionaryModel,
-  shortName, statusSuffix, isGrid, todayKey, buildDateNav,
+  shortName, statusSuffix, isGrid, todayKey, commitDateBar,
   CYCLE_LABEL, COLOR_LABEL, WEEKDAY_KO,
 };

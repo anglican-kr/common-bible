@@ -1656,16 +1656,16 @@ def _title_date(page):
       const d = shown.getBoundingClientRect(), t = r('#page-title .lect-today');
       return { text: shown.textContent, left: d.left, right: d.right, mid: (d.left + d.right) / 2, top: d.top, bottom: d.bottom,
                todayLeft: t.left, todayRight: t.right, todayMid: (t.top + t.bottom) / 2,
-               prev: r("#page-title a.lect-datenav-btn[aria-label='전날']").right,
-               next: r("#page-title a.lect-datenav-btn[aria-label='다음날']").left,
+               prev: r("#page-title a.lect-datenav-btn[aria-label='전날']").left,
+               next: r("#page-title a.lect-datenav-btn[aria-label='다음날']").right,
+               view: r('#page-title .title-view-btn').left,
                height: r('#page-title').height, scrollWidth: document.documentElement.scrollWidth };
     }""")
 
 
 def test_title_row_is_the_date_nav_and_only_the_date_text_is_centered(mobile_context):
-    """머리의 제목 자리가 날짜 이동 줄(‹ 날짜 오늘 ›)이고 본문 맨 위의 날짜 줄은 없다. 위 단계 꺾쇠도 없다. 보이는 날짜는 YY.MM.DD이고
-    요일이 없으며, 스크린 리더는 전체 날짜를 읽는다. 「오늘」의 폭을 빼고 날짜 글자만 화면 가운데에 두고, 「오늘」은 그 오른쪽이다
-    (사용자 결정 2026-11-05)."""
+    """머리의 제목 자리가 날짜 이동 줄(오늘, ‹ 날짜 ›, 보기 전환 단추)이고 본문 맨 위의 날짜 줄은 없다. 보이는 날짜는 YY.MM.DD이고
+    요일이 없으며, 스크린 리더는 전체 날짜를 읽는다. 날짜 글자는 화면 가운데에 있다(사용자 결정 2026-11-05, 배치는 2026-11-07)."""
     page = mobile_context.new_page()
     _open(page, "lectionary/2026-12-30")
     title = page.locator("#page-title")
@@ -1674,8 +1674,8 @@ def test_title_row_is_the_date_nav_and_only_the_date_text_is_centered(mobile_con
     assert title.locator("a.lect-today").inner_text() == "오늘"
     assert title.locator(".lect-date time").get_attribute("datetime") == "2026-12-30"
     assert title.locator(".lect-date time .sr-only").inner_text() == "2026년 12월 30일 (수)"
-    assert title.locator(".title-back-btn").count() == 0
-    assert page.locator(".lectionary .lect-datenav").count() == 0
+    assert title.locator(".title-view-btn").get_attribute("href") == "/calendar/2026-12"
+    assert not title.locator(".title-home-btn").is_visible()   # 집 단추는 탭 바가 없는 데스크톱에만 보인다
     assert "전례독서" in page.evaluate("() => document.title")   # 「전례독서」는 문서 제목에 남는다
     # 탭 영역 44px — 줄 높이는 제목 한 줄 그대로(음수 여백)
     box = title.locator("a.lect-datenav-btn[aria-label='다음날']").bounding_box()
@@ -1687,7 +1687,7 @@ def test_title_row_is_the_date_nav_and_only_the_date_text_is_centered(mobile_con
         page.set_viewport_size({"width": width, "height": 844})
         state = _title_date(page)
         assert abs(state["mid"] - width / 2) <= 1, (width, state)
-        assert state["todayLeft"] >= state["right"] and state["todayRight"] <= state["next"], (width, state)
+        assert state["todayRight"] <= state["prev"] and state["next"] <= state["view"], (width, state)
     _open(page, "lectionary/2027-01-02")   # 월과 일은 두 자리다
     assert _title_date(page)["text"] == "27.01.02"
 
@@ -1757,7 +1757,7 @@ def test_title_date_stays_on_one_line_with_the_largest_font_on_320px(mobile_cont
     _open(page, "lectionary/2026-12-30")
     page.evaluate("() => { document.documentElement.style.fontSize = '24px'; }")
     state = _title_date(page)
-    assert state["left"] >= state["prev"] and state["todayLeft"] >= state["right"] and state["todayRight"] <= state["next"], state
+    assert state["todayRight"] <= state["prev"] and state["next"] <= state["view"], state   # 세 칸이 겹치지 않는다
     assert state["top"] <= state["todayMid"] <= state["bottom"], state   # 「오늘」은 날짜와 같은 줄
     assert state["scrollWidth"] == 320, state
     assert state["height"] < 44, state   # 「오늘」이 두 줄로 꺾이면 머리가 높아진다

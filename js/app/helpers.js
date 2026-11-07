@@ -196,6 +196,9 @@ window.appHelpers = (/** @returns {AppHelpers} */ () => {
     back: "M15.5 5 8.5 12l7 7",
     // House — the reading headers' way up to the book list
     home: "M3 11.5 12 4l9 7.5M5.5 9.8V19a1 1 0 0 0 1 1h11a1 1 0 0 0 1-1V9.8",
+    // Nine cells — the calendar's month view (the head's view switch shows where it goes, ADR-038 §2). Not the tab
+    // bar's calendar glyph: the tab means the whole tab, this means that one view.
+    viewMonth: "M5.5 4.5h13a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-13a1 1 0 0 1-1-1v-13a1 1 0 0 1 1-1zM4.5 9.5h15M4.5 14.5h15M9.5 4.5v15M14.5 4.5v15",
   });
 
   /**

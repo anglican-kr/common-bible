@@ -112,7 +112,7 @@ def test_calendar_tab_loads_the_three_modules_once(browser):
         page.wait_for_selector(".cal-grid", timeout=20_000)
         assert sorted(seen) == sorted(LAZY), seen
         month = page.inner_text(".cal-month")
-        page.locator(".cal-head a.lect-datenav-btn[data-focus-key='next']").click()
+        page.locator("#page-title a.lect-datenav-btn[data-focus-key='next']").click()
         # 새 달 이름이 그려질 때까지 — 누르자마자 「불러오는 중…」이 .cal-month를 지워 「다르다」만으로는 바로 참이다
         page.wait_for_function(
             "m => { const t = document.querySelector('.cal-month')?.textContent; return !!t && t !== m; }", arg=month)
@@ -136,7 +136,7 @@ def test_redraw_does_not_paint_loading_frame(browser):
         page.evaluate(WATCH_LOADING_FRAMES)
         for _ in range(5):
             month = page.inner_text(".cal-month")
-            page.locator(".cal-head a.lect-datenav-btn[data-focus-key='next']").click()
+            page.locator("#page-title a.lect-datenav-btn[data-focus-key='next']").click()
             page.wait_for_function(
                 "m => { const t = document.querySelector('.cal-month')?.textContent; return !!t && t !== m; }", arg=month)
         page.evaluate(TWO_FRAMES)
