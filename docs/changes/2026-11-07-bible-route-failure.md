@@ -1,4 +1,5 @@
 ---
+pr: 521
 date: 2026-11-07
 branch: fix/bible-route-failure
 title: "fix: 성서 화면의 오류 안내를 전체 화면 실패로 변경"
