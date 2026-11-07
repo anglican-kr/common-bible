@@ -14,7 +14,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { stripEsmMarker, makeLocalStorage } from "./harness.js";
+import { stripEsmMarker, makeLocalStorage, loadStoreV2 } from "./harness.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SOURCE = stripEsmMarker(
@@ -694,6 +694,153 @@ test("값을 더 나눌 수 없으면 그 폴더만 0부터 다시 매긴다", (
   store.saveBookmarks([treeBm("a"), treeBm("x"), treeBm("b")]);
   assert.deepEqual(ordersOf(store, ["a", "x", "b"]), [0, 1, 2]);
   assert.deepEqual(plain(store.loadBookmarks()).map((n) => n.id), ["a", "x", "b"]);
+});
+
+// ── 부모 잃은 항목 (known-issues §32, 사용자 결정 2026-11-07) ──
+// 목록은 맨 위 항목부터 부모 식별자를 따라 다시 만든다. 한 기기가 지운 폴더에 다른 기기가 넣은 북마크는 병합 결과에서
+// 부모를 잃고, 두 기기가 서로 모르고 두 폴더를 서로의 안으로 옮기면 병합 결과에서 두 폴더가 서로의 부모가 된다. 둘 다 그
+// 목록에 들지 않아 보이지 않았고, 어느 기기든 다음 저장이 그 항목을 삭제 기록으로 바꿔 모든 기기에서 지웠다. 이제 그런
+// 항목은 맨 위 항목 뒤에 보이고, 다음 저장에서 맨 위 항목으로 저장된다.
+
+const T_LOST = Date.UTC(2026, 10, 7, 9);
+const treeFolder = (id, children = []) => ({ type: "folder", id, name: id, children });
+/** Merges `remote` into the device's stored document and saves the result, as a sync cycle does. */
+function mergeInto(dev, remote) {
+  const merged = plain(dev.store.mergeDocs(plain(dev.store.loadLocal()), plain(remote), "dev"));
+  dev.store.saveLocal(merged);
+  return merged;
+}
+
+// A와 B가 폴더 `f`(안에 `c`)를 함께 가진 뒤, A가 `f`를 지우고 그사이 B가 `f`에 `x`를 넣는다.
+function deletedFolderCase() {
+  const clock = { now: T_LOST };
+  const A = loadStoreV2({ clock }), B = loadStoreV2({ clock });
+  A.store.saveBookmarks([treeBm("a"), treeFolder("f", [treeBm("c")])]);
+  B.store.saveLocal(plain(A.store.loadLocal()));
+  clock.now += 1000;
+  A.store.saveBookmarks([treeBm("a")]);
+  clock.now += 1000;
+  B.store.saveBookmarks([treeBm("a"), treeFolder("f", [treeBm("c"), treeBm("x")])]);
+  return { clock, A, B };
+}
+
+test("한 기기가 지운 폴더에 다른 기기가 넣은 북마크는 병합 뒤 맨 위 항목 뒤에 보이고, 다음 저장에서 지우지 않고 맨 위 항목으로 저장한다", () => {
+  const { clock, B, A } = deletedFolderCase();
+  const merged = mergeInto(B, A.store.loadLocal());
+  assert.equal(merged.bookmarks.items.x.parentId, "f", "병합 결과에서 x는 지워진 폴더를 부모로 둔다");
+  assert.deepEqual(Object.keys(merged.bookmarks.tombstones).sort(), ["c", "f"]);
+  assert.deepEqual(plain(B.store.loadBookmarks()), [treeBm("a"), treeBm("x")]);
+  B.store.applyToLegacyKeys(merged);
+  assert.deepEqual(JSON.parse(B.localStorage.getItem("bible-bookmarks")), [treeBm("a"), treeBm("x")], "옛 키의 사본에도 든다");
+
+  const before = plain(B.store.loadLocal()).bookmarks.items;
+  clock.now += 1000;
+  B.store.saveBookmarks(B.store.loadBookmarks());
+  const { items, tombstones } = plain(B.store.loadLocal()).bookmarks;
+  assert.equal(Object.hasOwn(tombstones, "x"), false, "삭제 기록이 되지 않는다");
+  assert.deepEqual([items.x.parentId, items.x._order], [null, 1]);
+  assert.ok(items.x._u > before.x._u, "새 수정 시각을 받아 다른 기기로 간다");
+  assert.equal(items.a._u, before.a._u, "손대지 않은 맨 위 항목은 수정 시각이 그대로다");
+});
+
+test("폴더를 지운 기기도 받은 북마크를 맨 위 항목 뒤에 보고, 한 기기가 저장해 맨 위 항목이 된 북마크는 다른 기기가 병합해도 남는다", () => {
+  const { clock, A, B } = deletedFolderCase();
+  mergeInto(B, A.store.loadLocal());                    // B가 동기화해 `x`를 드라이브에 올린다
+  mergeInto(A, B.store.loadLocal());                    // 폴더를 지운 A가 받는다
+  assert.deepEqual(plain(A.store.loadBookmarks()), [treeBm("a"), treeBm("x")]);
+
+  clock.now += 1000;
+  A.store.saveBookmarks([...A.store.loadBookmarks(), treeBm("d")]);   // A에서 무엇이든 저장한다
+  const a = plain(A.store.loadLocal()).bookmarks;
+  assert.equal(Object.hasOwn(a.tombstones, "x"), false);
+  assert.equal(a.items.x.parentId, null);
+  mergeInto(B, A.store.loadLocal());
+  assert.deepEqual(plain(B.store.loadBookmarks()), [treeBm("a"), treeBm("x"), treeBm("d")]);
+  assert.equal(plain(B.store.loadLocal()).bookmarks.items.x.parentId, null, "B의 x도 맨 위 항목이다");
+});
+
+test("두 기기가 서로 모르고 두 폴더를 서로의 안으로 옮기면, 먼저 옮긴 폴더의 부모 연결을 끊어 맨 위 항목 뒤에 보이고 두 기기가 같은 목록을 본다", () => {
+  const clock = { now: T_LOST };
+  const A = loadStoreV2({ clock }), B = loadStoreV2({ clock });
+  A.store.saveBookmarks([treeBm("a"), treeFolder("fx", [treeBm("x1")]), treeFolder("fy", [treeBm("y1")])]);
+  B.store.saveLocal(plain(A.store.loadLocal()));
+  clock.now += 1000;
+  A.store.saveBookmarks([treeBm("a"), treeFolder("fy", [treeBm("y1"), treeFolder("fx", [treeBm("x1")])])]);   // A가 `fx`를 `fy` 안으로 옮긴다
+  clock.now += 1000;
+  B.store.saveBookmarks([treeBm("a"), treeFolder("fx", [treeBm("x1"), treeFolder("fy", [treeBm("y1")])])]);   // B가 `fy`를 `fx` 안으로 옮긴다
+  const docA = plain(A.store.loadLocal()), docB = plain(B.store.loadLocal());
+  const toA = mergeInto(A, docB);
+  mergeInto(B, docA);                                   // 병합은 자기 기기의 키를 먼저 넣으므로 두 문서는 키 순서가 다르다
+  assert.deepEqual([toA.bookmarks.items.fx.parentId, toA.bookmarks.items.fy.parentId], ["fy", "fx"], "병합 결과에서 두 폴더가 서로의 부모다");
+
+  // `fx`의 기록이 더 이르다(A가 먼저 옮겼다). 그 부모 연결을 끊으면 나중에 옮긴 B의 것(`fy`를 `fx` 안으로)이 남는다.
+  const expected = [treeBm("a"), treeFolder("fx", [treeBm("x1"), treeFolder("fy", [treeBm("y1")])])];
+  assert.deepEqual(plain(A.store.loadBookmarks()), expected);
+  assert.deepEqual(plain(B.store.loadBookmarks()), expected);
+
+  clock.now += 1000;
+  A.store.saveBookmarks(A.store.loadBookmarks());
+  const { items, tombstones } = plain(A.store.loadLocal()).bookmarks;
+  assert.deepEqual(Object.keys(tombstones), [], "두 폴더와 그 안의 항목이 삭제 기록이 되지 않는다");
+  assert.deepEqual([items.fx.parentId, items.fy.parentId], [null, "fx"]);
+  mergeInto(B, A.store.loadLocal());
+  assert.deepEqual(plain(B.store.loadBookmarks()), expected);
+  assert.equal(plain(B.store.loadLocal()).bookmarks.items.fx.parentId, null);
+});
+
+/** A flat item: a folder when the id starts with "f" (as `seeded`), else a bookmark. */
+const flatAt = (id, parentId, _order, _u = 5) => (id.startsWith("f")
+  ? { type: "folder", id, name: id, parentId, _order, _u }
+  : { ...flatBm(id, _u), parentId, _order });
+
+test("부모를 잃은 항목은 잃은 부모의 식별자 순서로 묶어 맨 위 항목 뒤에 놓고, 묶음 안은 순서 값과 식별자 순서다. 부모가 __proto__인 항목도 같다", () => {
+  const { store } = load();
+  const items = {
+    a: flatAt("a", null, 0), b: flatAt("b", null, 1),
+    m: flatAt("m", "p2", 1), fn: flatAt("fn", "p2", 0), n1: flatAt("n1", "fn", 0),
+    k: flatAt("k", "p1", 0),
+    z: flatAt("z", "__proto__", 0),
+  };
+  const tree = plain(store.bookmarkTreeFromFlat(items));
+  assert.deepEqual(treeIds(tree), ["a", "b", "z", "k", "fn", "n1", "m"]);
+  assert.deepEqual(tree[4].children.map((n) => n.id), ["n1"], "아래 항목은 함께 온다");
+  assert.deepEqual(plain(store.bookmarkTreeFromFlat(Object.fromEntries(Object.entries(items).reverse()))), tree);
+});
+
+test("고리는 수정 시각이 가장 이른 항목의 부모 연결을 끊고, 시각이 같으면 식별자가 작은 항목에서 끊는다. 고리 아래의 항목도 함께 온다", () => {
+  const { store } = load();
+  const items = {
+    a: flatAt("a", null, 0),
+    // `fp`의 부모는 `fr`, `fr`의 부모는 `fq`, `fq`의 부모는 `fp`이고 시각은 7, 9, 5다. 가장 이른 `fq`에서 끊는다.
+    fp: flatAt("fp", "fr", 0, 7), fq: flatAt("fq", "fp", 0, 5), fr: flatAt("fr", "fq", 0, 9), h: flatAt("h", "fr", 1),
+    // `fs`와 `ft`는 서로의 부모이고 시각이 같다. 식별자가 작은 `fs`에서 끊는다.
+    fs: flatAt("fs", "ft", 0, 3), ft: flatAt("ft", "fs", 0, 3),
+  };
+  const tree = plain(store.bookmarkTreeFromFlat(items));
+  assert.deepEqual(treeIds(tree), ["a", "fq", "fr", "fp", "h", "fs", "ft"]);
+  assert.deepEqual(tree.map((n) => n.id), ["a", "fq", "fs"]);
+  assert.deepEqual(plain(store.bookmarkTreeFromFlat(Object.fromEntries(Object.entries(items).reverse()))), tree);
+});
+
+test("부모 연결이 어떻든 살아 있는 항목은 모두 한 번씩 보이고, 문서의 키 순서가 달라도 같은 목록이다", () => {
+  const { store } = load();
+  let seed = 7;
+  const rand = (n) => { seed = (seed * 48271) % 2147483647; return Math.floor((seed / 2147483647) * n); };
+  for (let round = 0; round < 300; round++) {
+    const count = 1 + rand(10);
+    const ids = Array.from({ length: count }, (_, i) => (rand(2) ? "f" : "b") + i);
+    const items = {};
+    for (const id of ids) {
+      const r = rand(count + 3);
+      items[id] = flatAt(id, r < count ? ids[r] : [null, "gone", "__proto__"][r - count], rand(3), rand(4));
+    }
+    const tree = plain(store.bookmarkTreeFromFlat(items));
+    assert.deepEqual([...treeIds(tree)].sort(), [...ids].sort(), JSON.stringify(items));
+    const keys = Object.keys(items);
+    for (let i = keys.length - 1; i > 0; i--) { const j = rand(i + 1); [keys[i], keys[j]] = [keys[j], keys[i]]; }
+    const shuffled = Object.fromEntries(keys.map((k) => [k, items[k]]));
+    assert.deepEqual(plain(store.bookmarkTreeFromFlat(shuffled)), tree, JSON.stringify(items));
+  }
 });
 
 // ── 값을 null로 바꿔 둔 설정 키의 정리와 북마크 삭제 기록 (사용자 결정 2026-10-31, known-issues §39) ──

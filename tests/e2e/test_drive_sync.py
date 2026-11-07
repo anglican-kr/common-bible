@@ -705,6 +705,66 @@ def test_merge_refused_by_full_storage_keeps_drive_as_it_was(browser, fake_drive
         page_b.context.close()
 
 
+def _bm(id_: str, name: str) -> dict:
+    """A bookmark node the drawer shows by its label (`_bookmark_names` reads the name)."""
+    return {"id": id_, "type": "bookmark", "name": name, "label": name,
+            "bookId": "gen", "chapter": 1, "vref": "gen 1:1", "verseSpec": "1"}
+
+
+def test_bookmark_put_in_folder_deleted_elsewhere_stays(browser, fake_drive, fake_oauth):
+    """한 기기가 지운 폴더에 다른 기기가 넣은 북마크는 목록의 맨 위 항목 뒤에 보이고, 다음 저장에서 지워지지 않는다.
+
+    known-issues §32: 병합 결과에서 그 북마크는 지워진 폴더를 부모로 둔다. 전에는 목록에 나오지 않았고, 어느 기기든
+    다음 저장이 삭제 기록으로 바꿔 모든 기기에서 지웠다. 이제 맨 위 항목 뒤에 보이고, 다음 저장에서 맨 위 항목으로
+    저장된다(사용자 결정 2026-11-07).
+    """
+    fake_drive.reset()
+    page_a = _make_page(browser, fake_drive, fake_oauth)
+    page_b = _make_page(browser, fake_drive, fake_oauth)
+    save_tree = "(tree) => window.syncStoreV2.saveBookmarks(tree)"
+    try:
+        _load(page_a)
+        _enable_sync(page_a)
+        page_a.evaluate(save_tree, [_bm("bm-top", "Top"),
+                                    {"id": "folder-x", "type": "folder", "name": "Folder",
+                                     "children": [_bm("bm-in", "In-Folder")]}])
+        _sync_now(page_a)
+
+        _load(page_b)
+        _enable_sync(page_b)
+        _wait_idle(page_b)
+        assert _bookmark_names(page_b) == ["Top", "In-Folder"]
+
+        page_a.evaluate(save_tree, [_bm("bm-top", "Top")])     # A가 폴더를 지운다
+        _sync_now(page_a)
+
+        page_b.evaluate("""(bm) => {
+            const tree = window.syncStoreV2.loadBookmarks();
+            tree.find((n) => n.id === 'folder-x').children.push(bm);
+            window.syncStoreV2.saveBookmarks(tree);
+        }""", _bm("bm-put", "Put-In-Folder"))                   # 그사이 B가 그 폴더에 넣는다
+        page_b.evaluate("window.openBookmarkDrawer(null, null)")
+        page_b.wait_for_selector("#bookmark-drawer:not([hidden])")
+        _sync_now(page_b)
+        page_b.locator("#bookmark-drawer li.bm-bookmark[data-id='bm-put']").wait_for(state="visible", timeout=5_000)
+        assert page_b.locator("#bookmark-drawer li.bm-folder").count() == 0
+        assert _bookmark_names(page_b) == ["Top", "Put-In-Folder"]
+
+        _sync_now(page_a)
+        assert _bookmark_names(page_a) == ["Top", "Put-In-Folder"]
+        _add_bookmark(page_a, "After")                          # A에서 무엇이든 저장한다
+        _sync_now(page_a)
+        assert _drive_names(fake_drive) == ["After", "Put-In-Folder", "Top"], "삭제 기록이 되지 않는다"
+        with fake_drive._lock:
+            assert fake_drive._file["bookmarks"]["items"]["bm-put"]["parentId"] is None, "맨 위 항목으로 올라갔다"
+
+        _sync_now(page_b)
+        assert _bookmark_names(page_b) == ["Top", "Put-In-Folder", "After"]
+    finally:
+        page_a.context.close()
+        page_b.context.close()
+
+
 # ── v1.3.0: Drive 연결 해제 모달 ─────────────────────────────────────────────
 
 def test_drive_disconnect_keep_file(browser, fake_drive, fake_oauth):
