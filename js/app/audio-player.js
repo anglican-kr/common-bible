@@ -70,18 +70,23 @@ function audioManifestKey(bookId, chapter) {
 }
 
 /**
- * fetch() that gives up after NETWORK_WAIT_MS, or as soon as `signal` aborts (the player was torn down).
+ * fetch() that gives up after NETWORK_WAIT_MS, or as soon as `signal` aborts (the player was torn down). `read` takes
+ * what it needs from the response, the body included, inside that same window: fetch() settles once the headers are in,
+ * and a server that then stalls mid-body kept a body read waiting past the limit, and past leaving the chapter
+ * (PR #520 review).
+ * @template T
  * @param {string} url @param {RequestInit} init @param {AbortSignal} signal
- * @returns {Promise<Response>}
+ * @param {(res: Response) => Promise<T> | T} read
+ * @returns {Promise<T>}
  */
-async function _fetchWithin(url, init, signal) {
+async function _fetchWithin(url, init, signal, read) {
   const ctl = new AbortController();
   const stop = () => ctl.abort();
   const timer = setTimeout(stop, NETWORK_WAIT_MS);
   if (signal.aborted) stop();
   else signal.addEventListener("abort", stop);
   try {
-    return await fetch(url, { ...init, signal: ctl.signal });
+    return await read(await fetch(url, { ...init, signal: ctl.signal }));
   } finally {
     clearTimeout(timer);
     signal.removeEventListener("abort", stop);
@@ -95,17 +100,20 @@ async function _fetchWithin(url, init, signal) {
  * @param {string} key @param {AbortSignal} signal @returns {Promise<boolean>}
  */
 async function audioListed(key, signal) {
-  try {
-    /** @type {Response | undefined} */
-    let res;
-    try {
-      res = await caches.match(AUDIO_MANIFEST_URL);
-    } catch { /* no Cache Storage (insecure context, some private modes): ask the network */ }
-    if (!res) res = await _fetchWithin(AUDIO_MANIFEST_URL, {}, signal);
+  /** @param {Response} res @returns {Promise<boolean>} */
+  const lists = async (res) => {
     if (!res.ok) return false;
     const manifest = await res.json();
     const entries = manifest && manifest.entries;
     return typeof entries === "object" && entries !== null && Object.prototype.hasOwnProperty.call(entries, key);
+  };
+  try {
+    /** @type {Response | undefined} */
+    let cached;
+    try {
+      cached = await caches.match(AUDIO_MANIFEST_URL);
+    } catch { /* no Cache Storage (insecure context, some private modes): ask the network */ }
+    return cached ? await lists(cached) : await _fetchWithin(AUDIO_MANIFEST_URL, {}, signal, lists);
   } catch {
     return false;
   }
@@ -133,8 +141,7 @@ async function audioStored(src) {
 async function serverReachable(src, signal) {
   if (navigator.onLine === false) return false;
   try {
-    await _fetchWithin(src, { method: "HEAD", cache: "no-store" }, signal);
-    return true;
+    return await _fetchWithin(src, { method: "HEAD", cache: "no-store" }, signal, () => true);   // any answer will do
   } catch {
     return false;
   }

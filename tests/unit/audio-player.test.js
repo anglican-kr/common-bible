@@ -15,6 +15,7 @@
 //   - 목록에 없는 장과 저장된 장은 네트워크에 묻지 않는다
 //   - 목록은 Cache Storage의 사본을 먼저 읽고, 사본이 없을 때만 받는다. 읽지 못하면 「준비 중」이다
 //   - 장을 떠나면(플레이어의 신호 중단) 기다리던 요청을 멈춘다
+//   - 기다리는 시간과 플레이어의 신호는 목록의 본문을 다 읽을 때까지 지킨다(본문이 멈춘 목록, PR #520 리뷰)
 
 import test from "node:test";
 import assert from "node:assert";
@@ -63,6 +64,16 @@ const answers = (status) => async () => response(status);
 const hangs = (url, init) => new Promise((_, reject) => {
   init.signal.addEventListener("abort", () => reject(new Error("AbortError")));
 });
+/** The manifest's headers arrive, then its body stalls until the request is aborted; every other request fails. */
+const manifestBodyStalls = async (url, init) => {
+  if (url !== MANIFEST_URL) throw new TypeError("Failed to fetch");
+  return {
+    ok: true, status: 200,
+    json: () => new Promise((_, reject) => {
+      init.signal.addEventListener("abort", () => reject(new Error("AbortError")));
+    }),
+  };
+};
 
 /**
  * Run the block in a fresh vm.
@@ -186,6 +197,22 @@ test("목록을 읽지 못하면 준비 중 안내, 서버에 HEAD 요청을 보
   assert.deepStrictEqual(device.requests.map((r) => r.method), ["GET"]);
 });
 
+test("목록을 받다가 본문이 멈추면 기다리는 시간(5초) 뒤 준비 중 안내, HEAD 요청은 보내지 않는다", async () => {
+  // PR #520 리뷰: 응답 머리가 오면 타이머를 지워, 본문이 멈추면 안내가 나오지 않았다.
+  const device = load({ saved: new Map(), onLine: true, network: manifestBodyStalls });
+  let notice = null;
+  noticeFor(device, GEN_1, "audio/gen-1.mp3").then((n) => { notice = n; });
+  await settle();
+  assert.equal(notice, null, "본문을 받는 동안은 정하지 않는다");
+  const timer = device.timers.find((t) => !t.cleared);
+  assert.ok(timer, "본문을 다 읽을 때까지 기다리는 시간의 타이머가 남아 있다");
+  assert.equal(timer.ms, 5000);
+  timer.fn();
+  await settle();
+  assert.equal(notice, "unavailable", "목록을 읽지 못했으므로 준비 중 안내");
+  assert.deepStrictEqual(device.requests.map((r) => r.method), ["GET"]);
+});
+
 test("목록 형식이 잘못되면(entries 없음, JSON이 아님) 준비 중 안내", async () => {
   const broken = [
     response(200, { format: 1 }),
@@ -211,5 +238,20 @@ test("장을 떠나면(플레이어의 신호 중단) 기다리던 HEAD 요청�
   await settle();
   assert.equal(device.requests[0].init.signal.aborted, true, "요청이 취소된다");
   assert.equal(settled, true, "확인이 끝나서 화면 코드가 신호를 보고 안내를 버린다");
+  assert.ok(device.timers.every((t) => t.cleared), "기다리는 시간의 타이머도 지운다");
+});
+
+test("장을 떠나면 받고 있던 목록의 본문 읽기도 멈추고 확인을 끝낸다", async () => {
+  // PR #520 리뷰: 응답 머리가 오면 플레이어의 신호를 떼어, 장을 떠나도 본문 읽기가 남았다.
+  const device = load({ saved: new Map(), onLine: true, network: manifestBodyStalls });
+  const player = new AbortController();
+  let settled = false;
+  device.audioErrorNotice(GEN_1, "audio/gen-1.mp3", player.signal).then(() => { settled = true; });
+  await settle();
+  assert.equal(settled, false, "본문을 받는 동안은 끝나지 않는다");
+  player.abort();
+  await settle();
+  assert.equal(device.requests[0].init.signal.aborted, true, "목록 요청이 취소된다");
+  assert.equal(settled, true);
   assert.ok(device.timers.every((t) => t.cleared), "기다리는 시간의 타이머도 지운다");
 });
