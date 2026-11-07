@@ -233,7 +233,9 @@ iOS와 macOS에서는 `-apple-system`이 SF Pro로 해석되어 HIG의 네이티
 
 - `--max-width: 720px`: 읽기 칼럼 폭이다. 본문, 헤더, 시트 데스크탑 폭의 상한이다.
 - 안전 영역: 고정 요소와 스티키 요소는 `env(safe-area-inset-*)`로 노치와 홈 인디케이터를
-  가리지 않게 한다(헤더 `top`, 시트와 탭바 `padding-bottom`).
+  가리지 않게 한다(헤더 묶음 `padding-top`, 시트와 탭바 `padding-bottom`). 스티키 요소의 `top`에는
+  넣지 않는다. `top`은 화면에 보이는 자리만 옮기고 문서 안의 자리는 그대로라, 맨 위에서 그 높이만큼
+  본문을 덮는다. 아이폰 홈 화면 앱이 상태 표시줄 밑까지 그릴 때 전례독서 제목이 가려졌다(2026-11-07).
 - 스크롤바는 전역으로 숨긴다(`scrollbar-width: none`). 내용이 잘린 줄 모를 수 있는 곳은 얇게 보인다(`.title-action-menu`, `.settings-popover`).
 
 ---

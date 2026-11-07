@@ -320,9 +320,18 @@ body {
   pointer-events: none;
 }
 
+/* The status-bar inset is padding inside the pinned block, not its `top`. A
+   sticky `top` only moves the block on screen while its slot in the flow stays
+   at y=0, so when iOS draws the page under the status bar (inset > 0 — a
+   Home Screen app does this now and then) the header covered the first inset
+   of #app even at scroll top (the lectionary title, 2026-11-07), and content
+   scrolled up showed through behind the clock. As padding the inset pushes
+   #app down and its opaque background fills the status-bar area. With an
+   inset of 0 nothing changes. */
 #sticky-group {
   position: sticky;
-  top: env(safe-area-inset-top);
+  top: 0;
+  padding-top: env(safe-area-inset-top);
   z-index: 20;
   /* Opaque so the resume banner / division tabs slots don't let scrolling
      content show through their side padding while pinned. */
@@ -1103,8 +1112,8 @@ a.cal-cell:focus-visible { background: var(--bg-card); }
 /* 목록 보기(ADR-038 §2) — 모든 날을 한 줄씩. 글의 차례와 색은 전례독서 제목 영역(.lect-head)과 같고 글자가 작다. 달 이름은 칸의 가로선과
    같은 선으로 나눈다. 위쪽 줄을 더해도 보던 줄이 그 자리에 있는 것은 브라우저의 스크롤 고정이 맡는다. Safari 27 전에는 코드가 고친다(ADR-038 §2).
    스크롤 고정은 화면 맨 위의 내용을 기준으로 삼는다. 상단 바에 가려진 줄이 기준이면 글꼴을 늦게 받아 그 줄의 높이가 바뀔 때 보던 줄이 밀리므로, 접힌
-   상단 바의 높이를 알린다. */
-html:has(.cal-list) { scroll-padding-top: 60px; }
+   상단 바의 높이를 알린다. 상단 바 묶음은 상태 표시줄 높이만큼 위 여백이 있어 그만큼 더한다(#sticky-group). */
+html:has(.cal-list) { scroll-padding-top: calc(60px + env(safe-area-inset-top)); }
 .cal-list-month {
   margin: 0;
   padding: var(--space-6) 0 var(--space-2);

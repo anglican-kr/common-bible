@@ -22,7 +22,9 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-from .conftest import CLEAR_APP_STORAGE, MOBILE_VIEWPORT, IPHONE_UA, SHOW_ALT_READINGS, open_settings
+import pytest
+
+from .conftest import CLEAR_APP_STORAGE, MOBILE_VIEWPORT, IPHONE_UA, SHOW_ALT_READINGS, emulate_status_bar, open_settings
 
 BASE = "http://localhost:8080"
 
@@ -1773,6 +1775,42 @@ def test_title_date_stays_on_one_line_with_the_largest_font_on_320px(mobile_cont
     assert state["top"] <= state["todayMid"] <= state["bottom"], state   # 「오늘」은 날짜와 같은 줄
     assert state["scrollWidth"] == 320, state
     assert state["height"] < 44, state   # 「오늘」이 두 줄로 꺾이면 머리가 높아진다
+
+
+def _head_geometry(page):
+    return page.evaluate("""() => {
+      const bar = document.getElementById('sticky-group').getBoundingClientRect();
+      return { scrollY: window.scrollY, barTop: bar.top, barBottom: bar.bottom,
+               dateRow: document.getElementById('page-title').getBoundingClientRect().top,
+               heading: document.querySelector('.lect-day').getBoundingClientRect().top };
+    }""")
+
+
+@pytest.mark.only_browser("chromium")
+def test_heading_clears_the_header_when_the_page_runs_under_the_status_bar(mobile_context):
+    """상태 표시줄 높이(`env(safe-area-inset-top)`)가 62px이어도 맨 위에서 제목이 상단 바에 가려지지 않는다. 상단 바 묶음은 맨 위에
+    고정되고 그 높이를 안쪽 위 여백으로 둔다(2026-11-07, 아이폰 홈 화면 앱에서 제목이 상단 바 밑에 가려졌다). 날짜를 옮겨도 같고,
+    스크롤해도 본문이 시계 자리에 비치지 않는다."""
+    inset = 62
+    page = mobile_context.new_page()
+    emulate_status_bar(page, inset)
+    _open(page, "lectionary/2026-10-23")
+    g = _head_geometry(page)
+    assert g["scrollY"] == 0, g
+    assert g["heading"] >= g["barBottom"], g   # 제목이 상단 바 밑에 있지 않다
+    assert g["barTop"] == 0, g   # 상태 표시줄 자리도 상단 바 배경이다
+    assert g["dateRow"] >= inset, g   # 「오늘 ‹ 날짜 ›」 줄은 시계 아래
+
+    page.click('a[data-focus-key="next"]')
+    page.wait_for_selector('time.lect-date-label[datetime="2026-10-24"]')
+    g = _head_geometry(page)
+    assert g["scrollY"] == 0 and g["heading"] >= g["barBottom"], g
+
+    page.evaluate("() => window.scrollTo({ top: 300, behavior: 'instant' })")
+    page.wait_for_function("() => window.scrollY === 300")
+    behind_clock = page.evaluate("""y => document.getElementById('sticky-group')
+      .contains(document.elementFromPoint(window.innerWidth / 2, y))""", inset / 2)   # 상태 표시줄 자리의 가운데
+    assert behind_clock, "스크롤한 본문이 상태 표시줄 자리에 보인다"
 
 
 def test_saint_day_heading_and_collects_follow_the_default_reading(mobile_context):
