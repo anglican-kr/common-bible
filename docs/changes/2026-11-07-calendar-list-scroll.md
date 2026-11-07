@@ -40,9 +40,9 @@ title: "feat: 캘린더 목록 무한 스크롤"
 ## 검증
 
 - 유닛 `node --test tests/unit/*.test.js`: 1,584건 통과. 타입 검사 `npm run typecheck`: 통과.
-- e2e(작업 폴더 서버, Chromium): `test_calendar_view.py`, `test_tabbar.py`, `test_a11y_axe.py` 87건 통과. 앞서 돌린 `test_tabbar.py`, `test_a11y_axe.py`, `test_lectionary_view.py`, `test_settings.py`, `test_liturgical_lazy_load.py`는 151건 통과했고, 그 뒤의 코드 변경은 `scrollToRow`의 전환 사건 대상 확인 하나다. 목록 시험 30건은 불안정한지 보려고 3번 더 돌려 모두 통과했다.
+- e2e(작업 폴더 서버, Chromium): 마지막 코드(`7a1a184`)에서 `test_calendar_view.py`, `test_tabbar.py`, `test_a11y_axe.py`, `test_lectionary_view.py`, `test_settings.py`, `test_liturgical_lazy_load.py` 210건 통과. 목록 시험 30건은 리뷰를 반영하기 전에 불안정한지 보려고 3번 더 돌려 모두 통과했다.
 - 스크롤 고정이 없는 경우는 `CSS.supports`와 `overflow-anchor`를 바꾸어 Chromium에서 흉내 냈다. 위쪽 줄 이어짐, 먼 줄 내리기, 데스크톱 상단 바 시험을 두 경우로 돌린다.
-- Firefox 150: 스크롤 시험 13건 통과. 저장소의 e2e는 Chromium만 돌리므로 스크래치 사본에서 서비스 워커를 막고 돌렸다. 막지 않으면 첫 방문에 서비스 워커가 제어를 맡으며 페이지를 새로 고쳐 시험이 깨진다. 앱의 다른 경로(`gen/1`)도 같다.
+- Firefox 150: 리뷰를 반영하기 전에 스크롤 시험 13건 통과. 저장소의 e2e는 Chromium만 돌리므로 스크래치 사본에서 서비스 워커를 막고 돌렸다. 막지 않으면 첫 방문에 서비스 워커가 제어를 맡으며 페이지를 새로 고쳐 시험이 깨진다. 앱의 다른 경로(`gen/1`)도 같다.
 - 측정 스크립트로 위로 스크롤을 흉내 냈다. 프레임마다 150px씩 120프레임을 올려도 Chromium과 Firefox 모두 튄 프레임이 0건이고 스크롤 값이 0이 되지 않았다. 코드로 스크롤 값을 바꾼 것이고 실제 손가락의 관성 스크롤은 아니다.
 - 실제 아이폰과 WebKit, 전체 e2e는 돌리지 않았다. 이 컴퓨터의 WebKit은 앱 화면을 띄우지 못해 dev 배포 때 본다(`docs/topics/liturgical.md` 「남은 일」). 전체 e2e는 13분쯤 걸려 관련 파일만 골랐다(사용자 결정 2026-11-07).
 
@@ -68,3 +68,7 @@ title: "feat: 캘린더 목록 무한 스크롤"
 3회차(Copilot, Balanced).
 
 - 손가락 하나만 떼도 `touchend`가 나와, 다른 손가락이 화면에 있는데 위쪽 줄을 더하고 스크롤 값을 고친다는 지적(리뷰 본문의 「이전에 놓친 지적」이라 스레드가 없다): 재현했다(시험을 넓혀 고치기 전에 실패하는 것을 보았다). `touches`로 남은 손가락을 보아 모두 뗀 뒤에만 보호를 푼다. 스크롤 고정이 있는 브라우저에서는 먼 줄 내리기의 때만 달라진다. 반영 뒤 유닛 1,584건, 타입 검사, e2e `test_calendar_view.py` 59건이 통과했다.
+
+4회차(Copilot, Balanced).
+
+- 고칠 지적은 없었고, 사람이 판단해 보라는 항목이 하나 있었다. 엔진이 기기 시간대로 날짜를 계산해, 2011-12-30이 없는 태평양 아피아 시간대의 2011년 12월에 12.31이 두 번 나온다는 내용이다. 재현했다. 월간 표도 #512 전부터 같고, 다른 해와 서울 시간대에서는 생기지 않는다. 흔하지 않은 경우라 고치지 않는다(사용자 결정 2026-11-07).
