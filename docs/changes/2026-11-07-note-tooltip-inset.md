@@ -1,4 +1,5 @@
 ---
+pr: 526
 date: 2026-11-07
 branch: fix/note-tooltip-inset
 title: "fix: 주석 툴팁이 상태 표시줄 높이 변화도 따라가기"
