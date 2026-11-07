@@ -45,7 +45,7 @@ title: "feat: 캘린더 목록 위치 기억"
 ## 검증
 
 - 유닛 `node --test tests/unit/*.test.js`: 1,585건 통과. 타입 검사 `npm run typecheck`: 통과.
-- e2e(작업 폴더 서버, Chromium): `test_calendar_view.py` 90건, `test_drive_sync.py` 23건 통과. `test_tabbar.py`, `test_a11y_axe.py`, `test_lectionary_view.py`, `test_settings.py`, `test_liturgical_lazy_load.py`, `test_install_guide.py`, `test_bookmark.py` 188건 통과.
+- e2e(작업 폴더 서버, Chromium): `test_calendar_view.py` 91건, `test_drive_sync.py` 23건 통과. `test_tabbar.py`, `test_a11y_axe.py`, `test_lectionary_view.py`, `test_settings.py`, `test_liturgical_lazy_load.py`, `test_install_guide.py`, `test_bookmark.py` 188건 통과.
 - Firefox 150: 위치 기억 시험 42건 통과. 저장소의 e2e는 Chromium만 돌리므로 스크래치 사본에서 서비스 워커를 막고 돌렸다.
 - 고친 코드를 하나씩 되돌려 시험이 실패하는지 보았다(14가지). 처음에 둘을 잡지 못해, 스크롤 값 저장은 시험을 더했고 위의 보호 코드는 지웠다. 줄 기준을 1px로 되돌린 경우는 글꼴을 받는 때에 따라 실패해서 매번 잡지는 못한다.
 - 실제 아이폰과 WebKit, 전체 e2e는 돌리지 않았다. 이 컴퓨터의 WebKit은 앱 화면을 띄우지 못해 dev 배포 때 본다(`docs/topics/liturgical.md` 「남은 일」). 전체 e2e는 13분쯤 걸려 관련 파일만 골랐다(사용자 결정 2026-11-07).
@@ -65,3 +65,9 @@ title: "feat: 캘린더 목록 위치 기억"
 1회차(Copilot, Balanced).
 
 - 스크롤이 멈추기 전에 동기화로 받은 설정이 목록을 다시 그리면 주소가 아직 옛 날짜라 보던 줄을 잃는다는 지적: 재현했다(더한 e2e가 고치기 전에 실패했다). 손가락을 화면에 댄 채로 있으면 멈춤 판단이 미뤄지므로 200ms보다 길게 생길 수 있다. `route()`가 순번을 올리면 목록이 낡은 화면이 되어 남기지 못하므로, 라우터가 그 전에 `route:before-redraw`를 알리고 목록이 맨 위 줄을 남긴다. 다른 화면의 주소를 지키는 검사는 그대로다.
+
+2회차(Copilot, Balanced).
+
+- 목록을 켜 둔 채 날이 바뀌면 `list.today`가 어제에 머물러, 새 오늘 줄에 날짜 있는 주소를, 어제가 된 줄에 날짜 없는 주소를 남긴다는 지적(리뷰 본문의 「이전에 놓친 지적」이라 스레드가 없다): 재현했다(더한 e2e가 고치기 전에 실패했다). 주소를 남기는 때의 오늘로 계산한다.
+- 같은 지적의 「줄이 같더라도 오늘 여부가 바뀌면 주소를 갱신」은 따르지 않았다. 오늘을 보다 닫으면 다음 날 그날의 오늘 줄이 열리도록 정한 사용자 결정(2026-11-07)과 어긋난다.
+- 줄의 오늘 표시(`aria-current`, 동그라미)는 다시 그릴 때까지 어제에 남는다. 월간 표도 같은 기존 동작이라 이 PR에서 바꾸지 않았다.
