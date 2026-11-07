@@ -1,4 +1,5 @@
 ---
+pr: 525
 date: 2026-11-07
 branch: fix/esther-number-note
 title: "fix: 에스델 장 머리 안내에 추가 본문을 밝힘"
