@@ -13,6 +13,8 @@
 /** @typedef {import("../types").SearchHistoryList} SearchHistoryList */
 /** @typedef {import("../types").BooksData} BooksData */
 
+import { verseNumberSpec } from "./verse-spec.js";
+
 const { _$, el, clearNode, chUnit, emptyState } = window.appHelpers;
 const {
   SEARCH_HISTORY_MAX,
@@ -305,6 +307,29 @@ function buildSnippet(text, query) {
 }
 
 /**
+ * Where each chapter of a verse reference from the worker leads, and its verses as the card shows them (ADR-005
+ * 「구절 표기와 구절 바로가기」). The typed numbers go into the address's form (ascending, no overlap — "18-19,16" →
+ * "16,18-19"): parsePath opens any other list without a highlight (ADR-040). An end of 999 is the end of the chapter
+ * (js/search-worker.js REF_CHAPTER_END) — the chapter view clips it. The whole chapter, or a reference that names no
+ * verse (`창세 1:0`), opens the chapter.
+ * @param {{ bookId: string, parts: ReadonlyArray<{ chapter: number, verses: string }> }} ref
+ * @returns {Array<{ chapter: number, path: string, verses: string }>}
+ */
+function verseRefTargets(ref) {
+  return ref.parts.map(({ chapter, verses }) => {
+    const chapterPath = `/${ref.bookId}/${chapter}`;
+    const spec = verseNumberSpec(verses.split(","));
+    if (spec === "all" || spec === "1-999") return { chapter, path: chapterPath, verses: "" };
+    const shown = spec.replace(/,/g, ", ");
+    return {
+      chapter,
+      path: `${chapterPath}/${spec}`,
+      verses: shown.endsWith("-999") ? `${shown.slice(0, -"-999".length)}절부터` : `${shown}절`,
+    };
+  });
+}
+
+/**
  * Build a /search URL from structured state (ADR-033). Pure — uses only
  * encodeURIComponent — so the book-picker scope (`in=`) round-trips through the
  * URL (mirrors parsePath). `page` is dropped when 1; empty params are omitted.
@@ -408,26 +433,21 @@ function renderSearchResultList(container, result, query, page, pageSize, pagina
 
   const list = el("ul", { className: "search-results", role: "list" });
 
-  // 1. Display Reference Match Card if exists
+  // 1. Display Reference Match Cards if any — one per chapter
   if (hasRef) {
     const ref = result.refMatch;
     const unit = chUnit(ref.bookId);
-    let label = `${ref.bookNameKo} ${ref.chapter}${unit}`;
-    if (ref.verse) label += ` ${ref.verse}절`;
-    if (ref.verseEnd) label += `-${ref.verseEnd}절`;
+    for (const { chapter, path, verses } of verseRefTargets(ref)) {
+      let label = `${ref.bookNameKo} ${chapter}${unit}`;
+      if (verses) label += ` ${verses}`;
 
-    let path = `/${ref.bookId}/${ref.chapter}`;
-    if (ref.verse) {
-      path += `/${ref.verse}`;
-      if (ref.verseEnd) path += `-${ref.verseEnd}`;
+      const li = el("li", { className: "search-result-item ref-match-item" });
+      const link = el("a", { href: path, className: "search-result-ref-card" });
+      link.appendChild(el("span", { className: "search-result-ref-label" }, "구절 바로가기"));
+      link.appendChild(el("span", { className: "search-result-ref-title" }, label));
+      li.appendChild(link);
+      list.appendChild(li);
     }
-
-    const li = el("li", { className: "search-result-item ref-match-item" });
-    const link = el("a", { href: path, className: "search-result-ref-card" });
-    link.appendChild(el("span", { className: "search-result-ref-label" }, "구절 바로가기"));
-    link.appendChild(el("span", { className: "search-result-ref-title" }, label));
-    li.appendChild(link);
-    list.appendChild(li);
   }
 
   // 2. Display existing Search Results
@@ -1271,22 +1291,19 @@ async function renderSearchResults(query, page, autoNavigate = false, opts = {})
 
   // Verse reference match — navigate only when explicitly confirmed (Enter key).
   // On debounce, show a clickable card so partial input (e.g. "요한 3:1" while
-  // typing "요한 3:16") doesn't cause premature navigation.
+  // typing "요한 3:16") doesn't cause premature navigation. A reference across
+  // chapters never navigates: the app can't tell which chapter to open first (ADR-005).
   if (result.refMatch) {
-    const ref = result.refMatch;
-    let path = `/${ref.bookId}/${ref.chapter}`;
-    if (ref.verse) {
-      path += `/${ref.verse}`;
-      if (ref.verseEnd) path += `-${ref.verseEnd}`;
-    }
-    if (autoNavigate) {
+    const targets = verseRefTargets(result.refMatch);
+    if (autoNavigate && targets.length === 1) {
       dismissLaunchScreen();
-      history.replaceState(null, "", path);
+      history.replaceState(null, "", targets[0].path);
       window.route();
     } else {
       // Show the refMatch as a clickable result, and ensure UI is visible
       renderSearchResultList(resultsTarget, result, query, page, pageSize, paginationBuilder);
       dismissLaunchScreen();
+      window.announce(`"${query}" 구절 바로가기 ${targets.length}개`);
     }
     return;
   }

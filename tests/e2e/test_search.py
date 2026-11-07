@@ -36,6 +36,147 @@ def test_verse_reference_navigates_to_chapter(page, base_url):
     assert page.evaluate("location.pathname").startswith("/john/3")
 
 
+def _highlighted_verses(page):
+    """강조된 절 번호. 시의 절은 줄마다 나뉘어 `data-vref`가 「10a」 「10b」라 번호만 본다."""
+    return page.locator("article.chapter-text .verse-highlight").evaluate_all(
+        "els => [...new Set(els.map(e => String(parseInt(e.dataset.vref, 10))))]"
+    )
+
+
+def test_verse_list_opens_chapter_and_highlights_only_those_verses(page, base_url):
+    """쉼표로 이은 구절은 그 장을 열고 적은 절만 강조한다."""
+    page.goto(base_url)
+    wait_app_ready(page)
+
+    page.fill("#search-input", "요한 3:16, 18-19")
+    page.press("#search-input", "Enter")
+
+    page.wait_for_function("() => location.pathname === '/john/3/16,18-19'", timeout=5000)
+    page.wait_for_selector("article.chapter-text .verse-highlight", timeout=5000)
+    assert _highlighted_verses(page) == ["16", "18", "19"]
+
+
+def test_verse_list_typed_out_of_order_still_highlights(page, base_url):
+    """순서를 뒤바꿔 쳐도 주소 검사를 통과하는 표기로 바꿔 강조한다(ADR-040)."""
+    page.goto(base_url)
+    wait_app_ready(page)
+
+    page.fill("#search-input", "요한 3:18-19, 16")
+    page.press("#search-input", "Enter")
+
+    page.wait_for_function("() => location.pathname === '/john/3/16,18-19'", timeout=5000)
+    page.wait_for_selector("article.chapter-text .verse-highlight", timeout=5000)
+    assert _highlighted_verses(page) == ["16", "18", "19"]
+
+
+def test_verse_list_url_shows_ref_card(page, base_url):
+    """검색 주소로 바로 들어오면 구절 바로가기 카드를 보인다."""
+    page.goto(f"{base_url}/search?q=%EC%9A%94%ED%95%9C%203%3A16%2C%2018-19")
+
+    card = page.locator(".search-result-ref-card")
+    card.wait_for(timeout=8000)
+    assert card.get_attribute("href") == "/john/3/16,18-19"
+    assert page.inner_text(".search-result-ref-title").endswith("3장 16, 18-19절")
+
+
+def _commit_search(page, base_url, query):
+    page.goto(base_url)
+    wait_app_ready(page)
+    page.fill("#search-input", query)
+    page.press("#search-input", "Enter")
+
+
+def _ref_cards(page):
+    page.wait_for_selector(".search-result-ref-card", timeout=8000)
+    return page.locator(".search-result-ref-card").evaluate_all(
+        "els => els.map(e => [e.getAttribute('href'), e.querySelector('.search-result-ref-title').textContent])"
+    )
+
+
+def test_verses_in_two_chapters_show_a_card_per_chapter(page, base_url):
+    """뒤에 장을 다시 적으면 Enter를 쳐도 이동하지 않고 장마다 카드를 보이며, 카드를 눌렀다 돌아올 수 있다."""
+    _commit_search(page, base_url, "사무상 18:6-9, 19:1-7")
+
+    cards = _ref_cards(page)
+    assert [c[0] for c in cards] == ["/1sam/18/6-9", "/1sam/19/1-7"]
+    assert cards[0][1].endswith("18장 6-9절") and cards[1][1].endswith("19장 1-7절")
+    assert page.evaluate("location.pathname") == "/search"
+
+    page.locator(".search-result-ref-card").nth(1).click()
+    page.wait_for_selector("article.chapter-text .verse-highlight", timeout=5000)
+    assert page.evaluate("location.pathname") == "/1sam/19/1-7"
+    assert _highlighted_verses(page) == ["1", "2", "3", "4", "5", "6", "7"]
+
+    page.go_back()
+    assert len(_ref_cards(page)) == 2
+
+
+def test_range_across_chapters_clips_to_the_last_verse(page, base_url):
+    """장을 넘는 범위의 앞 장은 그 절부터 끝까지 강조하고, 주소는 실제 마지막 절로 바뀐다."""
+    _commit_search(page, base_url, "이사 61:10-62:3")
+
+    cards = _ref_cards(page)
+    assert [c[0] for c in cards] == ["/isa/61/10-999", "/isa/62/1-3"]
+    assert cards[0][1].endswith("61장 10절부터") and cards[1][1].endswith("62장 1-3절")
+
+    page.locator(".search-result-ref-card").first.click()
+    page.wait_for_selector("article.chapter-text .verse-highlight", timeout=5000)
+    assert _highlighted_verses(page) == ["10", "11"]
+    page.wait_for_function("() => location.pathname === '/isa/61/10-11'", timeout=3000)
+
+
+def test_verses_after_a_range_across_chapters_belong_to_its_last_chapter(page, base_url):
+    """여러 구간에 장 끝까지 가는 구간이 끼어도 강조되고, 뒤의 구간은 끝 장의 절이다."""
+    _commit_search(page, base_url, "민수 13:1-2, 25-14:1상, 26-35")
+
+    cards = _ref_cards(page)
+    assert [c[0] for c in cards] == ["/num/13/1-2,25-999", "/num/14/1,26-35"]
+    assert cards[0][1].endswith("13장 1-2, 25절부터") and cards[1][1].endswith("14장 1, 26-35절")
+
+    page.locator(".search-result-ref-card").first.click()
+    page.wait_for_selector("article.chapter-text .verse-highlight", timeout=5000)
+    highlighted = _highlighted_verses(page)
+    assert highlighted[:3] == ["1", "2", "25"] and "3" not in highlighted
+    page.wait_for_function("() => /^\\/num\\/13\\/1-2,25-\\d\\d$/.test(location.pathname)", timeout=3000)
+
+
+def test_chapter_only_opens_the_chapter(page, base_url):
+    """장만 적으면 그 장을 강조 없이 연다."""
+    _commit_search(page, base_url, "시편 116")
+
+    page.wait_for_function("() => location.pathname === '/ps/116'", timeout=5000)
+    page.wait_for_selector("article.chapter-text .verse", timeout=5000)
+    assert _highlighted_verses(page) == []
+
+
+def test_two_chapters_show_two_cards(page, base_url):
+    _commit_search(page, base_url, "시편 42, 43")
+
+    assert _ref_cards(page) == [["/ps/42", "시편 42편"], ["/ps/43", "시편 43편"]]
+
+
+def test_half_verse_mark_opens_the_whole_verse(page, base_url):
+    """상, 하 표시는 지우고 절 전체를 강조한다."""
+    _commit_search(page, base_url, "사도 2:42-47상")
+
+    page.wait_for_function("() => location.pathname === '/acts/2/42-47'", timeout=5000)
+    page.wait_for_selector("article.chapter-text .verse-highlight", timeout=5000)
+    assert _highlighted_verses(page) == ["42", "43", "44", "45", "46", "47"]
+
+
+def test_keyword_with_comma_still_searches_text(page, base_url):
+    """쉼표가 든 낱말 검색어는 구절로 읽지 않고 본문에서 찾는다."""
+    page.goto(base_url)
+    wait_app_ready(page)
+
+    page.fill("#search-input", "나의 목자, 아쉬울 것")
+    page.press("#search-input", "Enter")
+
+    # 시편은 마지막에 읽는 구약 묶음에 있어, 결과 수가 먼저 보여도 아직 없을 수 있다.
+    page.wait_for_selector('.search-result-item a[href^="/ps/23/1"]', timeout=8000)
+    assert page.locator(".ref-match-item").count() == 0
+
+
 def test_worker_error_surfaces_to_ui(browser):
     """Worker meta-load failure must show an error in the UI, not hang."""
     ctx = browser.new_context(service_workers="block")
