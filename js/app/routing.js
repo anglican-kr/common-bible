@@ -150,11 +150,15 @@ function parsePath() {
   if (pathname === "bookmarks") return { view: "bookmarks" };
   if (pathname === "settings") return { view: "settings" };
 
-  // Calendar tab (ADR-038 §1 · §2 A2): /calendar (this month) · /calendar/YYYY-MM.
+  // Calendar tab (ADR-038 §1 · §2 A2): /calendar (this month) · /calendar/YYYY-MM · /calendar/list[/YYYY-MM-DD].
   // Resolved ahead of the generic single-segment split so "calendar" is never
   // read as a book id. The month itself is validated by the view (like the
   // lectionary's date) — anything else under /calendar/ reaches it as `month`
   // and gets the view's invalid-date notice.
+  if (pathname === "calendar/list" || pathname.startsWith("calendar/list/")) {
+    const rest = pathname === "calendar/list" ? "" : pathname.slice("calendar/list/".length);
+    return { view: "calendar", mode: "list", date: rest ? decodeOrRaw(rest) : null };
+  }
   if (pathname === "calendar" || pathname.startsWith("calendar/")) {
     const rest = pathname === "calendar" ? "" : pathname.slice("calendar/".length);
     return { view: "calendar", mode: "month", month: rest ? decodeOrRaw(rest) : null };
@@ -389,7 +393,8 @@ let _drawnWith = { altShow: loadLectionaryAltShow(), bookOrder: loadBookOrder() 
  * @returns {Promise<void> | undefined} 다시 그릴 때 그 끝을 알리는 약속. 다시 그린 화면이 제목을 알리므로 동기화 안내는 그 뒤에 띄운다
  */
 function redrawIfSyncedSettingsChanged() {
-  const changed = parsePath().view === "lectionary"
+  const here = parsePath();
+  const changed = here.view === "lectionary" || (here.view === "calendar" && here.mode === "list")   // 목록 줄도 전례독서 목록의 글을 싣는다
     ? loadLectionaryAltShow() !== _drawnWith.altShow
     : $app.querySelector(".book-list") !== null && loadBookOrder() !== _drawnWith.bookOrder;
   return changed ? route() : undefined;

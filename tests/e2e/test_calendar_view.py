@@ -512,11 +512,11 @@ def test_month_and_lectionary_share_the_head_row(mobile_context):
         assert "캘린더" in page.evaluate("() => document.title")
         assert "캘린더" not in page.inner_text("#page-title")
         assert page.locator(".calendar .lect-today").count() == 0
-        assert page.locator("#page-title .title-view-btn").count() == 0   # 월간의 오른쪽 칸은 목록 보기를 만들 때 채운다
+        assert page.get_attribute("#page-title .title-view-btn", "aria-label") == "목록으로 보기"
         page.goto(f"{BASE}/lectionary/2026-12-30")
         page.wait_for_selector(".lect-day", timeout=20_000)
         day = _bar(page)
-        for key in ("today", "prev", "next"):
+        for key in ("today", "prev", "next", "view"):
             assert abs(month[key]["left"] - day[key]["left"]) <= 1, (width, key, month, day)
         assert day["today"]["right"] <= day["prev"]["left"] and day["next"]["right"] <= day["view"]["left"], (width, day)
         assert day["view"]["right"] - day["view"]["left"] >= 44, (width, day)
@@ -565,3 +565,242 @@ def test_month_steps_start_the_new_month_at_the_top(mobile_context):
     page.wait_for_timeout(200)
     assert page.evaluate("() => window.scrollY") == 0
     assert page.evaluate("() => document.activeElement.dataset.focusKey") == "next"
+
+
+# ── ⑩ 목록 보기(사용자 결정 2026-11-07, ADR-038 §2 「목록 보기」) ──
+
+def _open_list(page, path):
+    page.goto(f"{BASE}/{path}")
+    page.wait_for_selector(".cal-rows", timeout=20_000)
+    page.wait_for_timeout(100)
+
+
+def _row(page, date):
+    return page.locator(f"li[data-date='{date}'] a.cal-row")
+
+
+def _row_top_under_head(page, date):
+    """그 날짜의 줄 위쪽과 상단 바 아래쪽의 거리."""
+    return page.evaluate("""d => document.querySelector(`li[data-date="${d}"]`).getBoundingClientRect().top
+        - document.getElementById('sticky-group').getBoundingClientRect().bottom""", date)
+
+
+def test_view_button_switches_between_month_and_list_keeping_the_month(mobile_context):
+    """월간의 오른쪽 단추는 목록으로, 목록의 단추는 월간으로 간다. 보던 달을 유지하고, 아이콘은 누르면 갈 보기를 보인다."""
+    page = mobile_context.new_page()
+    _open(page, "calendar/2026-12")
+    button = page.locator("#page-title .title-view-btn")
+    assert button.get_attribute("aria-label") == "목록으로 보기"
+    box = button.bounding_box()
+    assert box and box["width"] >= 44 and box["height"] >= 44, box
+    button.click()
+    page.wait_for_url(f"{BASE}/calendar/list/2026-12-01")
+    page.wait_for_selector(".cal-rows")
+    assert page.inner_text(".cal-month") == "2026년 12월"
+    assert page.locator(".cal-grid").count() == 0
+    assert page.locator(".cal-row").count() == 31
+    assert page.evaluate("() => document.title").startswith("2026년 12월 캘린더 목록")
+    assert page.evaluate("() => document.activeElement.dataset.focusKey") == "view"
+    button = page.locator("#page-title .title-view-btn")
+    assert button.get_attribute("aria-label") == "월간으로 보기"
+    assert button.get_attribute("href") == "/calendar/2026-12"
+    button.click()
+    page.wait_for_url(f"{BASE}/calendar/2026-12")
+    page.wait_for_selector(".cal-grid")
+
+
+def test_this_month_switches_to_todays_row(mobile_context):
+    """이번 달에서 목록으로 가면 주소는 /calendar/list이고 오늘 줄에 표시가 있다. 월간으로 돌아가면 /calendar다."""
+    page = mobile_context.new_page()
+    _open(page, "calendar")
+    page.locator("#page-title .title-view-btn").click()
+    page.wait_for_url(f"{BASE}/calendar/list")
+    page.wait_for_selector(".cal-rows")
+    today = datetime.date.today().isoformat()
+    row = _row(page, today)
+    assert row.get_attribute("aria-current") == "date"
+    assert row.get_attribute("aria-label").startswith("오늘, ")
+    assert row.is_visible()
+    assert page.locator(".cal-row--today").count() == 1
+    page.locator("#page-title .title-view-btn").click()
+    page.wait_for_url(f"{BASE}/calendar")
+
+
+def test_list_opens_at_the_row_of_the_address(mobile_context):
+    """주소의 날짜 줄이 상단 바 바로 아래에 온다. 달의 첫날이면 달 이름부터 보인다."""
+    page = mobile_context.new_page()
+    _open_list(page, "calendar/list/2026-12-15")
+    assert abs(_row_top_under_head(page, "2026-12-15")) <= 2
+    _open_list(page, "calendar/list/2026-12-01")
+    assert page.locator(".cal-list-month").is_visible()
+    assert page.evaluate("() => window.scrollY") <= 2
+
+
+def test_list_rows_are_announced_as_a_list(mobile_context):
+    """글머리표를 없앤 목록은 Safari가 목록으로 알리지 않을 수 있어 role="list"를 둔다(성서 목록, 검색 목록과 같다)."""
+    page = mobile_context.new_page()
+    _open(page, "calendar/list/2026-12-25")
+    page.wait_for_selector(".cal-rows")
+    assert page.locator("ul.cal-rows").get_attribute("role") == "list"
+
+
+def test_list_shows_every_day_with_the_lectionary_head_text(mobile_context):
+    """평범한 평일도 줄이 있고, 줄의 글은 눌러서 간 전례독서의 제목 영역과 같다. 줄 끝에 ›를 두지 않는다."""
+    page = mobile_context.new_page()
+    _open_list(page, "calendar/list/2026-11-12")
+    assert page.locator(".cal-row").count() == 30
+    plain = _row(page, "2026-11-12")
+    assert plain.locator(".cal-row-title").inner_text() == "연중 32주 목요일"
+    assert plain.locator(".cal-row-day").inner_text() == "12"
+    assert plain.locator(".cal-row-weekday").inner_text() == "목"
+    assert plain.locator(".cal-row-line").count() == 0
+    assert "녹색" in plain.locator(".cal-row-meta").inner_text() and "짝수해" in plain.locator(".cal-row-meta").inner_text()
+    assert "›" not in plain.inner_text()
+    for date in ("2026-11-06", "2026-12-07", "2026-12-24"):
+        _open_list(page, f"calendar/list/{date}")
+        row = _row(page, date)
+        title = row.locator(".cal-row-title").inner_text()
+        lines = row.locator(".cal-row-line").all_inner_texts()
+        row.click()
+        page.wait_for_url(f"**/lectionary/{date}")
+        page.wait_for_selector(".lect-day", timeout=20_000)
+        assert page.inner_text(".lect-day") == title, date
+        shown = (page.locator(".lect-day-note").all_inner_texts()
+                 + page.locator(".lect-day-saint").all_inner_texts()
+                 + [t.replace(chr(10), "") for t in page.locator(".lect-choice-text").all_inner_texts()])
+        assert shown == lines, date
+
+
+def test_row_marks_sunday_weight_year_start_and_keeps_alternate_colours_out(mobile_context):
+    """주일과 주요축일은 제목이 굵고 평일은 보통이다. 전례년 첫날은 「나해 시작」이고, 대체색은 줄에 없다."""
+    page = mobile_context.new_page()
+    _open_list(page, "calendar/list/2026-11-29")
+    weight = lambda date: page.evaluate("""d => getComputedStyle(document.querySelector(`li[data-date="${d}"] .cal-row-title`)).fontWeight""", date)
+    assert weight("2026-11-08") == "700"
+    assert weight("2026-11-12") == "400"
+    assert _row(page, "2026-11-29").locator(".cal-mark").inner_text() == "나해 시작"
+    _open_list(page, "calendar/list/2026-12-13")
+    assert _row(page, "2026-12-13").locator(".cal-row-dot").count() == 1
+
+
+def test_lectionary_button_returns_to_the_list_at_the_date_shown(mobile_context):
+    """목록에서 들어간 전례독서의 오른쪽 단추는 목록 모양이고, 지금 보는 날짜의 줄로 돌아간다."""
+    page = mobile_context.new_page()
+    _open_list(page, "calendar/list/2026-12-15")
+    _row(page, "2026-12-15").click()
+    page.wait_for_url("**/lectionary/2026-12-15")
+    page.wait_for_selector(".lect-day", timeout=20_000)
+    button = page.locator("#page-title .title-view-btn")
+    assert button.get_attribute("aria-label") == "목록으로 보기"
+    assert button.get_attribute("href") == "/calendar/list/2026-12-15"
+    page.locator("#page-title a.lect-datenav-btn[aria-label='다음날']").click()
+    page.wait_for_selector("#page-title .lect-date time[datetime='2026-12-16']")
+    page.locator("#page-title .title-view-btn").click()
+    page.wait_for_url(f"{BASE}/calendar/list/2026-12-16")
+    page.wait_for_selector(".cal-rows")
+    page.wait_for_timeout(100)
+    assert abs(_row_top_under_head(page, "2026-12-16")) <= 2
+
+
+def test_list_month_steps_and_today(mobile_context):
+    """목록의 ‹ ›는 앞뒤 달 1일의 줄로, 「오늘」은 오늘 줄로 간다. 포커스는 누른 단추에 남는다."""
+    page = mobile_context.new_page()
+    _open_list(page, "calendar/list/2026-12-15")
+    page.locator("#page-title a.lect-datenav-btn[data-focus-key='next']").click()
+    page.wait_for_url(f"{BASE}/calendar/list/2027-01-01")
+    page.wait_for_selector(".cal-month:has-text('2027년 1월')")
+    page.wait_for_timeout(100)
+    assert page.evaluate("() => window.scrollY") <= 2
+    assert page.evaluate("() => document.activeElement.dataset.focusKey") == "next"
+    page.locator("#page-title a.lect-datenav-btn[data-focus-key='prev']").click()
+    page.wait_for_url(f"{BASE}/calendar/list/2026-12-01")
+    page.locator("#page-title .lect-today").click()
+    page.wait_for_url(f"{BASE}/calendar/list")
+    page.wait_for_selector(f".cal-month:has-text('{_this_month()[1]}')")
+    assert _row(page, datetime.date.today().isoformat()).get_attribute("aria-current") == "date"
+
+
+def test_tab_in_list_keeps_the_list_and_goes_to_today(mobile_context):
+    """목록에서 캘린더 탭을 다시 누르면 목록을 유지하고 오늘 줄로 간다(사용자 결정 2026-11-07). 전례독서와 다른 탭에서는 마지막 보기인 목록으로 돌아온다."""
+    page = mobile_context.new_page()
+    _open_list(page, "calendar/list/2027-03-15")
+    assert page.evaluate("() => localStorage.getItem('bible-calendar-last-view')") == "/calendar/list/2027-03-15"
+    _row(page, "2027-03-15").click()
+    page.wait_for_url("**/lectionary/2027-03-15")
+    page.wait_for_selector(".lect-day", timeout=20_000)
+    page.locator("#tab-bar [data-tab='calendar']").click()
+    page.wait_for_url(f"{BASE}/calendar/list/2027-03-15")
+    page.wait_for_selector(".cal-rows")
+    page.locator("#tab-bar [data-tab='bookmarks']").click()
+    page.wait_for_url(f"{BASE}/bookmarks")
+    page.locator("#tab-bar [data-tab='calendar']").click()
+    page.wait_for_url(f"{BASE}/calendar/list/2027-03-15")
+    page.wait_for_selector(".cal-rows")
+    page.locator("#tab-bar [data-tab='calendar']").click()
+    page.wait_for_url(f"{BASE}/calendar/list")
+    page.wait_for_selector(f".cal-month:has-text('{_this_month()[1]}')")
+    assert page.locator(".cal-grid").count() == 0
+    assert _row(page, datetime.date.today().isoformat()).is_visible()
+
+
+def test_tab_in_list_does_not_add_history_entries_at_the_same_address(mobile_context):
+    """이미 /calendar/list이면 캘린더 탭을 거듭 눌러도 방문 기록이 늘지 않아, 뒤로 가기가 앞 화면으로 간다. 다시 그려서 오늘 줄로 돌아온다."""
+    page = mobile_context.new_page()
+    _open(page, "calendar/2026-12")
+    page.locator("#tab-bar [data-tab='calendar']").click()   # 월간에서 다시 누르면 이번 달
+    page.wait_for_url(f"{BASE}/calendar")
+    page.wait_for_selector(".cal-grid")
+    page.locator("#page-title .title-view-btn").click()
+    page.wait_for_url(f"{BASE}/calendar/list")
+    page.wait_for_selector(".cal-rows")
+    length = page.evaluate("() => history.length")
+    page.evaluate("() => window.scrollTo({ top: 0, behavior: 'instant' })")
+    for _ in range(3):
+        page.locator("#tab-bar [data-tab='calendar']").click()
+        page.wait_for_timeout(150)
+    assert page.evaluate("() => history.length") == length
+    assert page.locator(".cal-rows").count() == 1
+    assert _row(page, datetime.date.today().isoformat()).is_visible()
+    page.go_back()
+    page.wait_for_url(f"{BASE}/calendar")
+    page.wait_for_selector(".cal-grid")
+
+
+def test_only_the_list_loads_the_lectionary_tables(mobile_context):
+    """줄의 글을 정하려고 목록은 독서 묶음을 받는다. 월간은 받지 않는다(ADR-038 §2)."""
+    page = mobile_context.new_page()
+    urls = []
+    page.on("request", lambda r: urls.append(r.url))
+    _open(page, "calendar/2026-12")
+    assert not any("eucharist-readings" in u for u in urls)
+    page.locator("#page-title .title-view-btn").click()
+    page.wait_for_selector(".cal-rows", timeout=20_000)
+    assert any("eucharist-readings" in u for u in urls)
+
+
+def test_list_failure_screens(mobile_context):
+    """잘못된 주소와 받지 못한 독서 묶음은 캘린더의 실패 화면이고 마지막 보기로 저장하지 않는다."""
+    page = mobile_context.new_page()
+    page.goto(f"{BASE}/calendar/list/2026-13-99")
+    page.wait_for_selector(".empty-state", timeout=20_000)
+    assert page.inner_text(".empty-state-title") == "잘못된 날짜입니다"
+    assert page.inner_text("#page-title") == "캘린더"
+    assert page.evaluate("() => localStorage.getItem('bible-calendar-last-view')") is None
+    page.route("**/lectionary/eucharist-readings.json", lambda r: r.abort())
+    page.goto(f"{BASE}/calendar/list/2026-12-01")
+    page.wait_for_selector(".empty-state", timeout=20_000)
+    assert page.inner_text(".empty-state-title") == "교회력 자료를 불러오지 못했습니다"
+    assert page.locator(".state-action button").inner_text() == "다시 불러오기"
+    assert page.evaluate("() => localStorage.getItem('bible-calendar-last-view')") is None
+
+
+def test_list_fits_narrow_screens_with_large_text(mobile_context):
+    """폭 320px에 글자 24px에서도 가로로 넘치지 않고, 긴 이름은 줄을 바꾼다."""
+    page = mobile_context.new_page()
+    page.set_viewport_size({"width": 320, "height": 700})
+    _open_list(page, "calendar/list/2026-10-10")
+    page.evaluate("() => { document.documentElement.style.fontSize = '24px'; }")
+    page.wait_for_timeout(50)
+    state = page.evaluate("""() => ({ width: document.documentElement.scrollWidth,
+        over: [...document.querySelectorAll('.cal-row-line, .cal-row-title')].filter((e) => e.getBoundingClientRect().right > innerWidth).length })""")
+    assert state == {"width": 320, "over": 0}

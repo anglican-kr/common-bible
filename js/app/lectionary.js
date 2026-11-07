@@ -1018,6 +1018,42 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
     },
   };
 }
+
+/**
+ * 제목 영역의 글 — 전례독서의 제목 영역(`buildHeader`)과 캘린더의 목록 줄(calendar.js `listRowOf`)이 같이 쓴다. 줄과 누른 화면의 글이
+ * 어긋나지 않게 하려는 것이다(사용자 결정 2026-11-07, ADR-038 §2 「목록 보기」).
+ * @param {LectionaryModel} m
+ * @returns {{ title: string, meta: { text: string, kind: "cycle" | "fast" | "period" }[], notes: string[], names: string[], others: string[] }}
+ */
+function headLinesOf(m) {
+  return {
+    title: m.dayName || "—",
+    // 해(가해 … , 짝수해 · 홀수해), 대재일과 소재일, 기도 주간의 차례(사용자 결정 2026-11-03)
+    meta: [
+      ...(m.cycle ? [{ text: m.cycle, kind: /** @type {const} */ ("cycle") }] : []),
+      ...(m.fast ? [{ text: FAST_LABEL[m.fast], kind: /** @type {const} */ ("fast") }] : []),
+      ...(m.resolved.periods || []).map((p) => ({ text: p.name, kind: /** @type {const} */ ("period") })),
+    ],
+    // 제목의 전례일을 설명하므로 기리는 성인 줄보다 먼저(2026-11-03, selectedNoteOf). 그날에서 옮겨 간 축일도 같은 자리의 안내다(2026-11-04, transferOutNote).
+    notes: [...(m.selectedNote ? [m.selectedNote] : []), ...m.transferNotes],
+    // 그날 기리는 성인과 기념일 — 제목 아래에 한 줄씩, 이름 뒤에 「축일」 · 「기념일」(사용자 결정 2026-11-03,
+    // memorialOf). 다른 전례일을 눌러도 그대로다. 성인 줄 다음은 기념만 하거나 생략하는 그 밖의 후보다 — 「성 십자가 발견」(2026-11-04).
+    // 그 아래에 본문 없는 날(가정주일, 세계평화를 위한 기도일 …)을 이름만
+    // 한 줄씩 — 이름이 이미 「주일」 · 「기도일」로 끝나 꼬리를 붙이지 않는다(사용자 결정 2026-11-04). 맨 아래에 그날 축성되거나
+    // 축복된 교회를 종류마다 한 줄씩(같은 날 사용자 결정 — dedicationLines).
+    names: [
+      ...m.memorialSaints.map((c) => `${c.observance.name || ""} 축일`),
+      ...m.passiveDays.map((c) => shortName(c.observance.name) + statusSuffix(c)),
+      // 관구 설립일 — 같은 날의 「대한성공회 선교 기념일」 줄보다 먼저(사용자 결정 2026-11-07, foundingLines)
+      ...m.foundingLines,
+      ...m.commemorations.map((c) => `${c.observance.name || ""} 기념일`),
+      ...m.textlessDays.map((c) => String(c.observance.name || "")),
+      ...m.dedicationLines,
+    ],
+    // 전례독서 목록의 다른 후보 — 고른 후보는 제목이라 없다(buildChoices)
+    others: m.choices.filter((c) => !c.active).map((c) => c.name + c.suffix),
+  };
+}
 // ── END LECTIONARY_MODEL ──
 
 // ── Chapter JSON cache ──
@@ -1130,7 +1166,7 @@ function titleDateText(p) {
 /**
  * 전례독서의 머리 — 제목 자리에 날짜 이동 줄을 그린다(사용자 결정 2026-11-03: 스크롤해도 날짜와 「오늘」이 보이고 하루씩 옮길
  * 수 있게. 그전엔 본문 맨 위 줄이었고, 머리에는 「전례독서」가 있었다). 「전례독서」는 문서 제목(setTitle)에 남는다. 보이는 날짜는
- * 짧은 표기이고(`titleDateText`), 스크린 리더는 숨긴 전체 날짜를 읽는다. 오른쪽 단추는 그 날짜가 든 달로 간다(ADR-038 §2).
+ * 짧은 표기이고(`titleDateText`), 스크린 리더는 숨긴 전체 날짜를 읽는다. 오른쪽 단추는 마지막으로 쓴 보기의 그 날짜로 간다(ADR-038 §2).
  * @param {LectionaryModel} m
  */
 function commitTitleDateNav(m) {
@@ -1138,12 +1174,16 @@ function commitTitleDateNav(m) {
   const label = el("time", { className: "lect-date-label", datetime: m.date });
   label.appendChild(el("span", { className: "sr-only" }, dateLabel(m.date)));
   label.appendChild(el("span", { "aria-hidden": "true" }, titleDateText(p)));
+  const history = window.tabHistory;
+  const toList = !!history && history.isCalendarListPath(history.lastCalendarView());
   commitDateBar({
     title: label,
     todayHref: m.hrefs.today,
     prev: { href: m.hrefs.prev, label: "전날" },
     next: { href: m.hrefs.next, label: "다음날" },
-    view: { href: `/calendar/${m.date.slice(0, 7)}`, label: "월간으로 보기", icon: HEADER_ICON_PATHS.viewMonth },
+    view: toList
+      ? { href: `/calendar/list/${m.date}`, label: "목록으로 보기", icon: HEADER_ICON_PATHS.viewList }
+      : { href: `/calendar/${m.date.slice(0, 7)}`, label: "월간으로 보기", icon: HEADER_ICON_PATHS.viewMonth },
   });
 }
 
@@ -1162,7 +1202,8 @@ function buildHeader(m) {
   // 이름은 고른 전례일의 것이다(사용자 결정 2026-11-04 — 그전엔 다른 전례일을 골라도 기본 독서의 이름이라 제목과 본문이 어긋났다).
   // 처음에는 그날의 기본 독서(initialCandidate)를 고른 것이라, 고유 독서가 없는 축일의 날은 평일 이름이다(11.6 레오나드 날은
   // 「연중 31주 금요일」, 2026-11-03). 조건부 세트를 고르면 그 조건의 이름이다(conditionTitle). 색은 그대로 headerColors.
-  head.appendChild(el("h2", { className: "lect-day" }, m.dayName || "—"));
+  const lines = headLinesOf(m);
+  head.appendChild(el("h2", { className: "lect-day" }, lines.title));
 
   // 전례색과 해(가해 … , 짝수해 · 홀수해)는 제목 바로 아래, 회색 설명 줄들보다 먼저(사용자 결정 2026-11-03)
   const meta = el("p", { className: "lect-meta" });
@@ -1174,32 +1215,15 @@ function buildHeader(m) {
   });
   for (const c of m.colorAlt) colors.appendChild(buildColorMark(c, true));
   meta.appendChild(colors);
-  if (m.cycle) meta.appendChild(el("span", { className: "lect-meta-item" }, m.cycle));
-  if (m.fast) meta.appendChild(el("span", { className: "lect-meta-item lect-fast" }, FAST_LABEL[m.fast]));
-  for (const p of m.resolved.periods || []) meta.appendChild(el("span", { className: "lect-meta-item lect-period" }, p.name));
+  for (const item of lines.meta) {
+    meta.appendChild(el("span", { className: item.kind === "cycle" ? "lect-meta-item" : `lect-meta-item lect-${item.kind}` }, item.text));
+  }
   head.appendChild(meta);
 
-  // 제목의 전례일을 설명하므로 기리는 성인 줄보다 먼저(2026-11-03, selectedNoteOf)
-  if (m.selectedNote) head.appendChild(el("p", { className: "lect-day-note" }, m.selectedNote));
-  // 그날에서 옮겨 간 축일 — 같은 자리의 안내로(사용자 결정 2026-11-04, transferOutNote)
-  for (const note of m.transferNotes) head.appendChild(el("p", { className: "lect-day-note" }, note));
-  // 그날 기리는 성인과 기념일 — 제목 아래에 한 줄씩, 이름 뒤에 「축일」 · 「기념일」(사용자 결정 2026-11-03,
-  // memorialOf). 다른 전례일을 눌러도 그대로다. 성인 줄 다음은 기념만 하거나 생략하는 그 밖의 후보다 — 「성 십자가 발견」(2026-11-04).
-  // 그 아래에 본문 없는 날(가정주일, 세계평화를 위한 기도일 …)을 이름만
-  // 한 줄씩 — 이름이 이미 「주일」 · 「기도일」로 끝나 꼬리를 붙이지 않는다(사용자 결정 2026-11-04). 맨 아래에 그날 축성되거나
-  // 축복된 교회를 종류마다 한 줄씩(같은 날 사용자 결정 — dedicationLines).
-  const lines = [
-    ...m.memorialSaints.map((c) => `${c.observance.name || ""} 축일`),
-    ...m.passiveDays.map((c) => shortName(c.observance.name) + statusSuffix(c)),
-    // 관구 설립일 — 같은 날의 「대한성공회 선교 기념일」 줄보다 먼저(사용자 결정 2026-11-07, foundingLines)
-    ...m.foundingLines,
-    ...m.commemorations.map((c) => `${c.observance.name || ""} 기념일`),
-    ...m.textlessDays.map((c) => String(c.observance.name || "")),
-    ...m.dedicationLines,
-  ];
-  if (lines.length) {
+  for (const note of lines.notes) head.appendChild(el("p", { className: "lect-day-note" }, note));
+  if (lines.names.length) {
     const saints = el("p", { className: "lect-day-saints" });
-    for (const line of lines) saints.appendChild(el("span", { className: "lect-day-saint" }, line));
+    for (const line of lines.names) saints.appendChild(el("span", { className: "lect-day-saint" }, line));
     head.appendChild(saints);
   }
   const choices = buildChoices(m);
@@ -1667,6 +1691,25 @@ function commit(m, chapters) {
 }
 
 /**
+ * 그날의 모델 — 두 묶음을 받은 뒤에 동기로 만든다. 전례독서 화면과 캘린더의 목록 줄이 같이 쓴다.
+ * @param {ResolvedDate} resolved
+ * @param {LectionaryQuery} query
+ * @returns {LectionaryModel | null}
+ */
+function lectionaryModelOf(resolved, query) {
+  const date = resolved.date;
+  /** @type {Map<string, ReadingGroup[]>} */
+  const groupsCache = new Map();
+  const groupsOf = (/** @type {Candidate} */ c) => {
+    const key = c.observance.id;
+    let g = groupsCache.get(key);
+    if (!g) { g = findReadings(resolved, c); groupsCache.set(key, g); }
+    return g;
+  };
+  return buildLectionaryModel(resolved, query, groupsOf, findCollects(resolved), loadLectionaryTrack(), findDedications(date), loadLectionaryAltShow(), findFoundings(date));
+}
+
+/**
  * Full-screen lectionary view for /lectionary[/<date>] (ADR-038 §3). Returns the
  * page title for the router's page meta. Data-first: nothing touches #app until
  * every load finished and the route is still the current one (ADR-031 guard).
@@ -1697,15 +1740,7 @@ async function renderLectionaryView(parsed) {
 
   const resolved = resolveDate(date);
   if (!resolved) return pickAnotherDate("이 날짜는 교회력에 없습니다");
-  /** @type {Map<string, ReadingGroup[]>} */
-  const groupsCache = new Map();
-  const groupsOf = (/** @type {Candidate} */ c) => {
-    const key = c.observance.id;
-    let g = groupsCache.get(key);
-    if (!g) { g = findReadings(resolved, c); groupsCache.set(key, g); }
-    return g;
-  };
-  const model = buildLectionaryModel(resolved, parsed, groupsOf, findCollects(resolved), loadLectionaryTrack(), findDedications(date), loadLectionaryAltShow(), findFoundings(date));
+  const model = lectionaryModelOf(resolved, parsed);
   if (!model) return pickAnotherDate("이 날짜는 교회력에 없습니다");
 
   const chapters = await loadSlotChapters(model.slots);
@@ -1725,6 +1760,6 @@ async function renderLectionaryView(parsed) {
 // 캘린더 탭(calendar.js — ADR-038 §2 A2)이 같은 이름 · 날짜 · 색 규칙을 쓴다(복제 금지 — 칸 · 줄의 이름이 전례독서 목록과 같아야 한다).
 export {
   renderLectionaryView, buildLectionaryModel,
-  shortName, statusSuffix, isGrid, todayKey, commitDateBar,
+  shortName, statusSuffix, isGrid, todayKey, commitDateBar, headLinesOf, lectionaryModelOf,
   CYCLE_LABEL, COLOR_LABEL, WEEKDAY_KO,
 };

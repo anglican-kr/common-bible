@@ -41,9 +41,9 @@ const TABOF_BLOCK = extractBlock("TABOF");
 // Evaluate the sliced block in a bare vm and pull out tabOf.
 const ctx = { module: { exports: {} } };
 vm.createContext(ctx);
-vm.runInContext(`${TABOF_BLOCK}\nmodule.exports = { tabOf, pickCalendarTabDest };`, ctx);
+vm.runInContext(`${TABOF_BLOCK}\nmodule.exports = { tabOf, pickCalendarTabDest, isCalendarListPath };`, ctx);
 /** @type {{ tabOf: (p: string) => string, pickCalendarTabDest: (current: string, lastInTab: string, lastView: string) => string | null }} */
-const { tabOf, pickCalendarTabDest } = ctx.module.exports;
+const { tabOf, pickCalendarTabDest, isCalendarListPath } = ctx.module.exports;
 
 test("tabOf: 루트('/')는 home", () => {
   assert.equal(tabOf("/"), "home");
@@ -117,7 +117,20 @@ test("pickCalendarTabDest: 전례독서에서는 마지막 캘린더 보기다(�
   assert.equal(pickCalendarTabDest("/lectionary?track=1", "/lectionary?track=1", "/calendar"), "/calendar");
 });
 
-test("pickCalendarTabDest: 캘린더 보기에서는 null이다(가로채지 않아 정적 href로 이번 달)", () => {
+test("pickCalendarTabDest: 목록에서 다시 누르면 보기를 유지하고 오늘 줄로 간다(사용자 결정 2026-11-07)", () => {
+  assert.equal(pickCalendarTabDest("/calendar/list", "/calendar/list", "/calendar/list"), "/calendar/list");
+  assert.equal(pickCalendarTabDest("/calendar/list/2027-03-01", "/calendar/list/2027-03-01", "/calendar/list/2027-03-01"), "/calendar/list");
+  // 전례독서에서는 마지막 보기가 목록이면 목록이고, 다른 탭에서도 그렇다
+  assert.equal(pickCalendarTabDest("/lectionary/2027-03-01", "/lectionary/2027-03-01", "/calendar/list/2027-03-01"), "/calendar/list/2027-03-01");
+  assert.equal(pickCalendarTabDest("/john/3", "/calendar/list/2027-03-01", "/calendar/list/2027-03-01"), "/calendar/list/2027-03-01");
+});
+
+test("isCalendarListPath: 목록 주소만 맞다", () => {
+  for (const p of ["/calendar/list", "/calendar/list/2026-12-06", "/calendar/list?x=1"]) assert.equal(isCalendarListPath(p), true, p);
+  for (const p of ["/calendar", "/calendar/2026-12", "/calendar/listing", "/lectionary/2026-12-06", "/"]) assert.equal(isCalendarListPath(p), false, p);
+});
+
+test("pickCalendarTabDest: 월간에서는 null이다(가로채지 않아 정적 href로 이번 달)", () => {
   assert.equal(pickCalendarTabDest("/calendar", "/calendar", "/calendar"), null);
   assert.equal(pickCalendarTabDest("/calendar/2026-12", "/calendar/2026-12", "/calendar/2026-12"), null);
   // 잘못된 주소의 실패 화면에서도 이번 달로 빠져나간다

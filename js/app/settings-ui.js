@@ -504,9 +504,10 @@ window.appSettings = (/** @returns {AppSettings} */ () => {
       onToggle: (on) => {
         saveLectionaryAltShow(on);
         const result = on ? "대체 독서 표시" : "대체 독서 숨김";
-        // The desktop popover opens over the lectionary, whose list must follow. A
+        // The desktop popover opens over the lectionary or the calendar's list, whose lines must follow. A
         // redraw closes the popover, as the 외경 toggle does over the book list.
-        if (parsePath().view === "lectionary") redrawThenAnnounce(result);
+        const here = parsePath();
+        if (here.view === "lectionary" || (here.view === "calendar" && here.mode === "list")) redrawThenAnnounce(result);
         else announce(result);
       },
     }));

@@ -199,6 +199,8 @@ window.appHelpers = (/** @returns {AppHelpers} */ () => {
     // Nine cells — the calendar's month view (the head's view switch shows where it goes, ADR-038 §2). Not the tab
     // bar's calendar glyph: the tab means the whole tab, this means that one view.
     viewMonth: "M5.5 4.5h13a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-13a1 1 0 0 1-1-1v-13a1 1 0 0 1 1-1zM4.5 9.5h15M4.5 14.5h15M9.5 4.5v15M14.5 4.5v15",
+    // Bulleted lines — the calendar's list view. Dots at the start keep it from reading as a menu (three plain lines).
+    viewList: "M9 6.5h11M9 12h11M9 17.5h11M4.5 6.5h.01M4.5 12h.01M4.5 17.5h.01",
   });
 
   /**
