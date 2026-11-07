@@ -636,6 +636,14 @@ def test_list_opens_at_the_row_of_the_address(mobile_context):
     assert page.evaluate("() => window.scrollY") <= 2
 
 
+def test_list_rows_are_announced_as_a_list(mobile_context):
+    """글머리표를 없앤 목록은 Safari가 목록으로 알리지 않을 수 있어 role="list"를 둔다(성서 목록, 검색 목록과 같다)."""
+    page = mobile_context.new_page()
+    _open(page, "calendar/list/2026-12-25")
+    page.wait_for_selector(".cal-rows")
+    assert page.locator("ul.cal-rows").get_attribute("role") == "list"
+
+
 def test_list_shows_every_day_with_the_lectionary_head_text(mobile_context):
     """평범한 평일도 줄이 있고, 줄의 글은 눌러서 간 전례독서의 제목 영역과 같다. 줄 끝에 ›를 두지 않는다."""
     page = mobile_context.new_page()

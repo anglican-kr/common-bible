@@ -525,7 +525,7 @@ function commitList(model, anchor) {
   const root = el("div", { className: "calendar cal-list" });
   const section = el("section", { "aria-label": model.title });
   section.appendChild(el("h2", { className: "cal-list-month" }, model.title));
-  const list = el("ul", { className: "cal-rows" });
+  const list = el("ul", { className: "cal-rows", role: "list" });
   for (const row of model.rows) list.appendChild(buildRow(row));
   section.appendChild(list);
   root.appendChild(section);
