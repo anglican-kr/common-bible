@@ -5,11 +5,13 @@
 // bookmark logic: query/tree ops (QUERY block, loadBookmarks-backed), href/share
 // builders (HREF), sort/last-viewed helpers (SORT, localStorage), active-route
 // highlight predicates (ACTIVE, _renderPathname set by UI via setRenderPathname),
-// the move of pre-#205 verse ranges to today's form (LEGACY — at startup, on import
+// the default name and the name rule when a range changes (LABEL — the save dialog,
+// the list's reference line, the merge and the legacy move share it), the move of
+// pre-#205 verse ranges to today's form (LEGACY — at startup, on import
 // and on a sync merge), and the one save every bookmark screen goes through (COMMIT —
 // a refused save is said through window._showSyncSnackbar). bookmark.js (UI) and
-// bookmark-modals.js import these via ESM. Deps: appStorage, localStorage,
-// verse-spec.js, window.getBooksCache.
+// bookmark-modals.js import these via ESM. Deps: appHelpers (chUnit), appStorage,
+// localStorage, verse-spec.js, window.getBooksCache.
 
 /** @typedef {import("../types").BookmarkTreeNode} BookmarkTreeNode */
 /** @typedef {import("../types").BookmarkTreeBookmark} BookmarkTreeBookmark */
@@ -17,6 +19,7 @@
 
 import { wholeVerseSpec } from "./verse-spec.js";
 
+const { chUnit } = window.appHelpers;
 const { loadBookmarks, saveBookmarks, rewriteBookmarks } = window.appStorage;
 
 // Shared guidance copy for "how bookmarks are created" — used by the empty-state
@@ -399,14 +402,51 @@ function _hasActiveDescendant(folder, pathname = _renderPathname) {
 }
 // ── END BOOKMARK_ACTIVE ──
 
-// ── BEGIN BOOKMARK_LEGACY ──
-// Exercised by tests/unit/bookmark.test.js — with the VERSE_SPEC block for wholeVerseSpec, and stubs for the store
-// (`loadBookmarks` · `rewriteBookmarks`) and `window` (`loadBooks` · `getBooksCache`).
+// ── BEGIN BOOKMARK_LABEL ──
+// Exercised by tests/unit/bookmark.test.js, with helpers.js's chUnit. A bookmark's default name is its reference with
+// the short book name: 「이사 7:14」, a whole chapter 「이사 7장」(시편은 「시편 23편」). The save dialog fills it in, the
+// list shows it under the name (bookmark-tree.js), and a range change makes it again only where the name still is it.
+// One function makes it, so the check and the name it checks against cannot drift apart (the formula sat in four
+// places before known-issues §19.1 was fixed).
 /**
- * 옛 판(2026-04-25부터 06-06 #205까지)이 저장한 절 범위의 줄 글자를 떼어 지금 표기로 옮긴다(사용자 결정 2026-10-22,
- * coding-pitfalls §38 — 「16aa」 → 「16」). 이름이 그 북마크의 옛 기본 이름(「책 장:옛 저장값」 — 저장 대화상자와
- * 합치기가 짓는 이름)과 정확히 같을 때만 새 기본 이름으로 바꾼다. 사용자가 고친 이름은 그대로 둔다. Works on a tree
- * node and on a sync store's flat item alike — both carry these fields.
+ * @param {{ bookId?: string | null, chapter?: number | null, verseSpec?: string }} bm
+ * @param {import("../types").BooksData | null | undefined} books  without the book list the name starts with the
+ *   book id, as the save dialog's always has
+ * @returns {string}
+ */
+function defaultBookmarkLabel(bm, books) {
+  const book = books?.find((b) => b.id === bm.bookId);
+  const bookName = book ? (book.short_name_ko || book.name_ko) : bm.bookId;
+  return bm.verseSpec === "all"
+    ? `${bookName} ${bm.chapter}${chUnit(bm.bookId ?? "")}`
+    : `${bookName} ${bm.chapter}:${bm.verseSpec}`;
+}
+
+/**
+ * 북마크의 절 범위를 바꾼다. 이름은 바꾸기 전 범위의 기본 이름과 정확히 같을 때만 새 범위의 기본 이름으로 바꾸고, 사용자가
+ * 고친 이름은 그대로 둔다. 합치기(2026-11-07, known-issues §19.1)와 옛 저장값 옮기기(사용자 결정 2026-10-22, coding-pitfalls
+ * §38)가 이 규칙 하나를 쓴다. 합치기는 그전에 고친 제목도 다시 지었다. 긴 책 이름으로 지은 이름(「이사야 7:14」)은 기본
+ * 이름으로 보지 않는다. 그 이름을 제안한 버전은 릴리스에 들어간 적이 없다(ADR-010 「검토한 대안」).
+ * The name is judged against the range it was made for, so it is read before the range changes.
+ * @param {{ bookId?: string, chapter?: number, verseSpec?: string, label?: string }} bm  changed in place
+ * @param {string} spec  the new range
+ * @param {import("../types").BooksData | null | undefined} books
+ */
+function changeBookmarkRange(bm, spec, books) {
+  if (bm.label === defaultBookmarkLabel(bm, books)) bm.label = defaultBookmarkLabel({ ...bm, verseSpec: spec }, books);
+  bm.verseSpec = spec;
+}
+// ── END BOOKMARK_LABEL ──
+
+// ── BEGIN BOOKMARK_LEGACY ──
+// Exercised by tests/unit/bookmark.test.js — with the VERSE_SPEC block for wholeVerseSpec, the BOOKMARK_LABEL block for
+// changeBookmarkRange, and stubs for the store (`loadBookmarks` · `rewriteBookmarks`) and `window` (`loadBooks` ·
+// `getBooksCache`).
+/**
+ * 옛 버전(2026-04-25부터 06-06 #205까지)이 저장한 절 범위의 줄 글자를 떼어 지금 표기로 옮긴다. 「16aa」는 「16」이 된다
+ * (사용자 결정 2026-10-22, coding-pitfalls §38). 이름은 합치기와 같은 규칙으로 옮긴다(`changeBookmarkRange`). 옛 기본
+ * 이름(「책 장:옛 저장값」)과 정확히 같을 때만 새 기본 이름으로 바꾸고, 사용자가 고친 이름은 그대로 둔다.
+ * Works on a tree node and on a sync store's flat item alike — both carry these fields.
  * @param {{ bookId?: string, chapter?: number, verseSpec?: string, label?: string }} bm  changed in place
  * @param {import("../types").BooksData} books
  * @returns {boolean} whether it changed
@@ -416,10 +456,7 @@ function migrateLegacyBookmark(bm, books) {
   if (typeof spec !== "string") return false;
   const next = wholeVerseSpec(spec);
   if (next === spec) return false;
-  const book = books.find((b) => b.id === bm.bookId);
-  const prefix = `${book ? (book.short_name_ko || book.name_ko) : bm.bookId} ${bm.chapter}:`;
-  if (bm.label === prefix + spec) bm.label = prefix + next;
-  bm.verseSpec = next;
+  changeBookmarkRange(bm, next, books);
   return true;
 }
 
@@ -502,6 +539,7 @@ export {
   _findParentFolderId, removeItemById, insertItem, collectFolderOptions,
   _selectAllState, _bmSelectCountLabel, _descendantIds,
   _isActiveBookmark, _hasActiveDescendant, setRenderPathname,
+  defaultBookmarkLabel, changeBookmarkRange,
   migrateLegacyBookmark, migrateStoredBookmarks, migrateLegacyBookmarkDoc,
   commitBookmarks,
 };

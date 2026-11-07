@@ -15,11 +15,16 @@ Covers:
   - multi-segment the app does not write → chapter only, no page error
       cold link: huge range · ascending huge range · 100M range · repeated segments (launch screen cleared)
       in-app navigation: huge range
+  - full-screen failure of the Bible screens (ADR-024 §6, known-issues §13.1) — missing chapter (/john/99, /ps/151),
+      unknown path (/xyz), no such page in a book (/john/abc · /john/ · /john/0 · /john/prologue), data not received
+      (chapter · books.json): the head of the screen, no audio bar, not saved as the reading position
 """
 
 import re
 
 import pytest
+
+from .conftest import CLEAR_APP_STORAGE
 
 BASE = "http://localhost:8080"
 
@@ -259,29 +264,186 @@ def test_home_btn_on_book_in_no_tab_lands_on_book_list(browser, path):
         page.locator("#page-title .title-home-btn").click()
         page.wait_for_selector(".book-list", timeout=5_000)
         assert page.evaluate("() => location.pathname") == "/"
-        assert "찾을 수 없습니다" not in page.locator("#app").inner_text()
+        assert page.locator("#app .empty-state").count() == 0
     finally:
         ctx.close()
 
 
-@pytest.mark.parametrize("path", ["john/", "john/abc"])
-def test_non_numeric_chapter_says_not_found(browser, path):
-    """장 자리가 숫자가 아니면 「해당 장을 찾을 수 없습니다.」 — 범위 밖 장(`/john/0` · `/john/99`)과 같은 안내.
+# ── 성서 화면의 실패 화면(ADR-024 §6, known-issues §13.1) ─────────────────────
+# 그전엔 `route()`가 본문만 오류 한 줄(`.error`)로 바꿔 앞 화면의 머리(「요한의 복음서 3장」), 장 선택, 오디오 바가 남았다.
+# 이제 캘린더와 같은 전체 화면 실패다. 머리는 그 책의 장 목록 머리, 책을 모르면 성서 목록의 머리다(사용자 결정 2026-11-07).
 
-    그전엔 parseInt 의 NaN 이 범위 검사를 지나 `john-NaN.json` 을 요청하고 「데이터를 불러올 수 없습니다.」가
-    떴다(PR #353 리뷰, 2026-10-17 — routing.js route() 의 정수 검사)."""
-    ctx = browser.new_context()
+LAST_READ = "() => JSON.parse(localStorage.getItem('bible-last-read') || 'null')"
+AUDIO_BAR_HIDDEN = "() => document.getElementById('audio-bar').hidden"
+ANNOUNCED = "t => document.getElementById('a11y-announce').textContent === t"
+
+
+def _failure_context(browser):
+    """서비스 워커를 막는다. `page.route`는 서비스 워커가 처리한 요청을 가로채지 못한다."""
+    ctx = browser.new_context(service_workers="block")
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    return ctx
+
+
+def _failure(page):
+    """실패 화면의 제목, 부제, 다음 행동(링크면 주소)."""
+    page.wait_for_selector("#app .empty-state-title", timeout=8_000)
+    return page.evaluate("""() => {
+      const action = document.querySelector('#app .state-action > a, #app .state-action > button');
+      return {
+        title: document.querySelector('#app .empty-state-title').textContent,
+        subtitle: document.querySelector('#app .empty-state-subtitle').textContent,
+        action: action?.textContent ?? null,
+        href: action?.getAttribute('href') ?? null,
+      };
+    }""")
+
+
+def _open_chapter_with_audio_bar(page, path="/john/3"):
+    page.goto(f"{BASE}{path}")
+    page.wait_for_selector("article.chapter-text .verse", timeout=8_000)
+    page.wait_for_function("() => document.getElementById('audio-bar').hidden === false")
+
+
+def test_missing_chapter_shows_the_book_head(browser):
+    """장을 읽다(오디오 바가 보인다) 없는 장(/john/99)으로 가면 그 책의 장 목록 머리와 실패 화면이다. 앞 장의 제목, 장 선택,
+    오디오 바가 남지 않고, 「장 목록」을 누르면 그 책의 장 목록이다. 실패한 주소는 읽던 위치가 되지 않는다."""
+    ctx = _failure_context(browser)
     page = ctx.new_page()
-    nan_requests = []
-    page.on("request", lambda r: "NaN" in r.url and nan_requests.append(r.url))
+    try:
+        _open_chapter_with_audio_bar(page)
+        page.evaluate("() => window.navigate('/john/99')")
+        assert _failure(page) == {
+            "title": "요한의 복음서에는 99장이 없습니다",
+            "subtitle": "「장 목록」을 눌러 다른 장을 골라 주세요.",
+            "action": "장 목록",
+            "href": "/john",
+        }
+        assert page.get_attribute("#page-title", "aria-label") == "요한의 복음서"
+        assert page.locator("#page-title .title-picker-btn").count() == 0
+        assert page.locator("#page-title .title-home-btn").count() == 1
+        assert page.evaluate(AUDIO_BAR_HIDDEN) is True
+        assert page.evaluate("() => document.title") == "요한의 복음서 — 공동번역성서"
+        page.wait_for_function(ANNOUNCED, arg="요한의 복음서 — 요한의 복음서에는 99장이 없습니다")
+        assert page.locator("#app .error").count() == 0
+        assert page.evaluate(LAST_READ) == {"bookId": "john", "chapter": 3, "verse": None}
+        page.locator("#app .state-action a").click()
+        page.wait_for_selector(".chapter-grid", timeout=5_000)
+        assert page.evaluate("() => location.pathname") == "/john"
+    finally:
+        ctx.close()
+
+
+def test_missing_psalm_says_pyeon(browser):
+    """시편은 장 대신 편이다(`chUnit`). 「시편에는 151편이 없습니다」와 「편 목록」이다. 처음 여는 주소여도 런치 화면이
+    닫히고, 읽던 위치는 생기지 않는다."""
+    ctx = _failure_context(browser)
+    page = ctx.new_page()
+    try:
+        page.goto(f"{BASE}/ps/151")
+        assert _failure(page) == {
+            "title": "시편에는 151편이 없습니다",
+            "subtitle": "「편 목록」을 눌러 다른 편을 골라 주세요.",
+            "action": "편 목록",
+            "href": "/ps",
+        }
+        page.wait_for_function("() => document.documentElement.classList.contains('launch-done')", timeout=5_000)
+        assert page.evaluate(LAST_READ) is None
+    finally:
+        ctx.close()
+
+
+def test_unknown_path_shows_the_book_list_head(browser):
+    """없는 경로(/xyz)는 성서 목록의 머리(「공동번역성서」)에 「없는 주소입니다」다. 「성서 목록」을 누르면 성서 목록이다."""
+    ctx = _failure_context(browser)
+    page = ctx.new_page()
+    try:
+        _open_chapter_with_audio_bar(page)
+        page.evaluate("() => window.navigate('/xyz')")
+        assert _failure(page) == {
+            "title": "없는 주소입니다",
+            "subtitle": "「성서 목록」을 눌러 책을 골라 주세요.",
+            "action": "성서 목록",
+            "href": "/",
+        }
+        assert page.evaluate("() => document.getElementById('page-title').textContent") == "공동번역성서"
+        assert page.locator("#page-title .title-home-btn").count() == 0
+        assert page.evaluate(AUDIO_BAR_HIDDEN) is True
+        assert page.evaluate("() => document.title") == "공동번역성서"
+        page.wait_for_function(ANNOUNCED, arg="공동번역성서 — 없는 주소입니다")
+        assert page.evaluate(LAST_READ)["chapter"] == 3
+        page.locator("#app .state-action a").click()
+        page.wait_for_selector(".book-list", timeout=5_000)
+        assert page.evaluate("() => location.pathname") == "/"
+    finally:
+        ctx.close()
+
+
+@pytest.mark.parametrize("path", ["john/abc", "john/", "john/0", "john/prologue"])
+def test_no_such_page_in_a_book(browser, path):
+    """책은 있고 그 뒤가 없는 주소는 그 책의 머리에 「없는 주소입니다」와 「장 목록」이다. 숫자가 아니거나 1보다 작은 장,
+    머리말이 없는 책의 머리말이 그렇다(「요한의 복음서에는 abc장이 없습니다」는 어색하다). 자료를 요청하지 않는다. 숫자가 아닌
+    장은 예전에 `john-NaN.json`을 요청했고(PR #353 리뷰), 머리말은 `john-prologue.json`을 받지 못해 「데이터를 불러올 수
+    없습니다.」였다."""
+    ctx = _failure_context(browser)
+    page = ctx.new_page()
+    bible_requests = []
+    page.on("request", lambda r: "/data/bible/" in r.url and bible_requests.append(r.url))
     try:
         page.goto(f"{BASE}/{path}")
-        page.wait_for_function(
-            "() => /찾을 수 없습니다|불러올 수 없습니다/.test(document.getElementById('app')?.innerText || '')",
-            timeout=5_000,
-        )
-        assert "해당 장을 찾을 수 없습니다." in page.locator("#app").inner_text()
-        assert nan_requests == [], nan_requests
+        assert _failure(page) == {
+            "title": "없는 주소입니다",
+            "subtitle": "「장 목록」을 눌러 장을 골라 주세요.",
+            "action": "장 목록",
+            "href": "/john",
+        }
+        assert page.get_attribute("#page-title", "aria-label") == "요한의 복음서"
+        assert bible_requests == [], bible_requests
+    finally:
+        ctx.close()
+
+
+def test_chapter_not_received_shows_reload(browser):
+    """받아 두지 않은 장을 받지 못하면(오프라인) 캘린더와 같은 「다시 불러오기」 화면이다. 머리는 그 책의 장 목록 머리이고 앞 장의
+    오디오 바가 남지 않는다. 받지 못한 장은 읽던 위치가 되지 않는다. 누르면 페이지를 새로 고쳐 그 장이 열린다."""
+    ctx = _failure_context(browser)
+    page = ctx.new_page()
+    try:
+        _open_chapter_with_audio_bar(page)
+        page.route("**/data/bible/john-4.json", lambda route: route.abort())
+        page.evaluate("() => window.navigate('/john/4')")
+        assert _failure(page) == {
+            "title": "성서 자료를 불러오지 못했습니다",
+            "subtitle": "네트워크 연결을 확인한 뒤 「다시 불러오기」를 눌러 주세요.",
+            "action": "다시 불러오기",
+            "href": None,
+        }
+        assert page.get_attribute("#page-title", "aria-label") == "요한의 복음서"
+        assert page.locator("#page-title .title-picker-btn").count() == 0
+        assert page.evaluate(AUDIO_BAR_HIDDEN) is True
+        page.wait_for_function(ANNOUNCED, arg="요한의 복음서 — 성서 자료를 불러오지 못했습니다")
+        assert page.evaluate(LAST_READ)["chapter"] == 3
+        button = page.locator("#app .state-action button")
+        assert button.bounding_box()["height"] >= 44
+        page.unroute("**/data/bible/john-4.json")
+        button.click()
+        page.wait_for_selector("article.chapter-text .verse", timeout=8_000)
+        assert page.evaluate("() => location.pathname") == "/john/4"
+        assert page.evaluate("() => performance.getEntriesByType('navigation')[0].type") == "reload"
+    finally:
+        ctx.close()
+
+
+def test_book_list_not_received_shows_the_book_list_head(browser):
+    """성서 목록(books.json)을 받지 못하면 책을 모르므로 성서 목록의 머리에 「다시 불러오기」 화면이다."""
+    ctx = _failure_context(browser)
+    page = ctx.new_page()
+    try:
+        page.route("**/data/books.json", lambda route: route.abort())
+        page.goto(f"{BASE}/john/3")
+        assert _failure(page)["title"] == "성서 자료를 불러오지 못했습니다"
+        assert page.evaluate("() => document.getElementById('page-title').textContent") == "공동번역성서"
+        assert page.locator("#app .state-action button").inner_text() == "다시 불러오기"
     finally:
         ctx.close()
 

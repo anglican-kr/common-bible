@@ -278,6 +278,64 @@ def test_merged_verse_drawn_in_lines_saves_its_range(browser):
     ctx.close()
 
 
+def _open_save_for_range(page, path: str, first: str, last: str) -> list:
+    """`path`의 장을 열어 절 선택으로 `first`를 누르고 `last`까지 Shift+클릭으로 넓힌 뒤, 저장 대화상자를 연다. 둘 다 절의
+    DOM id다. 고른 절의 DOM id(절마다 첫 줄)를 돌려준다."""
+    book, chapter = path.split("/")
+    _open_chapter_and_wait(page, path)
+    page.evaluate(f"() => enterVerseSelectMode('{book}', {chapter})")
+    page.wait_for_selector("#verse-select-bar:not([hidden])")
+    page.click(f"#{first}")
+    page.click(f"#{last}", modifiers=["Shift"])
+    ids = page.evaluate("() => [...document.querySelectorAll('article.chapter-text .verse.verse-selected')]"
+                        ".filter(v => v.id).map(v => v.id)")
+    page.click("#verse-select-bookmark-btn")
+    page.wait_for_selector("#bm-save-modal:not([hidden])")
+    return ids
+
+
+def test_verse_select_bookmark_leaves_out_moved_in_verses(browser):
+    """이사 40:19부터 20까지 골라 저장하면 사이에 옮겨 실린 41:6-7은 빼고 「19-20」으로 저장하고, 제목도 「이사 40:19-20」을
+    제안한다. 북마크를 열면 40:19-20만 강조한다. 종전엔 「6-7,19-20」으로 저장되어 40장 자신의 6-7절까지 강조했다
+    (known-issues §16.2, 사용자 결정 2026-11-07)."""
+    ctx = browser.new_context()
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    page = ctx.new_page()
+    ids = _open_save_for_range(page, "isa/40", "v19", "v20")
+    assert ids == ["v19", "v6_c41", "v7_c41", "v20"], ids   # 옮겨 실린 절도 함께 고르고, 저장에서만 뺀다
+    assert page.locator("#bm-label-input").input_value() == "이사 40:19-20"
+    page.locator("#bm-save-modal .bm-btn-primary").click()
+    page.wait_for_selector("#bm-save-modal", state="hidden")
+    store = page.evaluate("() => window.syncStoreV2.loadBookmarks()")
+    assert [(b["verseSpec"], b["label"]) for b in store] == [("19-20", "이사 40:19-20")]
+
+    page.locator(".title-bookmark-btn").click()
+    page.wait_for_selector("#bookmark-drawer:not([hidden])")
+    page.locator(".bm-bookmark-link", has_text="이사 40:19-20").click()
+    page.wait_for_url("**/isa/40/19-20")
+    page.wait_for_selector("article.chapter-text .verse-highlight")
+    lit = page.evaluate("() => [...document.querySelectorAll('article.chapter-text .verse.verse-highlight')]"
+                        ".map(v => v.getAttribute('data-vkey'))")
+    assert lit == ["19/19a", "19/19b", "19/19c", "20/20a", "20/20b"], lit
+    ctx.close()
+
+
+def test_verse_select_bookmark_leaves_out_greek_additions(browser):
+    """다니 3장에서 23절부터 히브리 24(91)절까지 고르면 사이의 그리스어 추가 본문 (24)-(90)은 빼고 「23-24」로 저장한다.
+    종전엔 「23-90」이었다(사용자 결정 2026-11-07)."""
+    ctx = browser.new_context()
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    page = ctx.new_page()
+    ids = _open_save_for_range(page, "dan/3", "v23", "v24_91")
+    assert ids[0] == "v23" and ids[-1] == "v24_91" and "v90_lxx" in ids, ids
+    assert page.locator("#bm-label-input").input_value() == "다니 3:23-24"
+    page.locator("#bm-save-modal .bm-btn-primary").click()
+    page.wait_for_selector("#bm-save-modal", state="hidden")
+    store = page.evaluate("() => window.syncStoreV2.loadBookmarks()")
+    assert [(b["verseSpec"], b["label"]) for b in store] == [("23-24", "다니 3:23-24")]
+    ctx.close()
+
+
 def test_merge_into_pre205_bookmark_keeps_its_verses(browser):
     """옛 표기 「16aa」 북마크(옮기기 전 — 이 페이지를 연 뒤 들어온 경우)에 1절을 합치면 「1,16」 — main은 「1」이 되어
     16절이 빠졌다(2026-10-22 재현)."""
@@ -296,6 +354,64 @@ def test_merge_into_pre205_bookmark_keeps_its_verses(browser):
     page.wait_for_selector("#bm-merge-modal", state="hidden")
     store = page.evaluate("() => window.syncStoreV2.loadBookmarks()")
     assert [(b["verseSpec"], b["label"]) for b in store] == [("1,16", "이사 10:1,16")]
+    ctx.close()
+
+
+def _save_isa7_14(page, title=None) -> None:
+    """이사 7:14를 골라 저장 대화상자를 연다. 제목 칸의 기본 이름을 확인하고, `title`이 있으면 그 제목으로 바꿔 저장한다."""
+    page.evaluate("() => enterVerseSelectMode('isa', 7)")
+    page.wait_for_selector("#verse-select-bar:not([hidden])")
+    page.click("#v14")
+    page.click("#verse-select-bookmark-btn")
+    page.wait_for_selector("#bm-save-modal:not([hidden])")
+    assert page.locator("#bm-label-input").input_value() == "이사 7:14"
+    if title is not None:
+        page.locator("#bm-label-input").fill(title)
+    page.locator("#bm-save-modal .bm-btn-primary").click()
+    page.wait_for_selector("#bm-save-modal", state="hidden")
+
+
+def _merge_isa7_1(page) -> None:
+    """이사 7:1을 골라 저장을 누르고, 합치기 대화상자에서 「합치기」를 누른다."""
+    page.evaluate("() => enterVerseSelectMode('isa', 7)")
+    page.wait_for_selector("#verse-select-bar:not([hidden])")
+    page.click("#v1")
+    page.click("#verse-select-bookmark-btn")
+    page.wait_for_selector("#bm-merge-modal:not([hidden])")
+    page.click("#bm-merge-yes")
+    page.wait_for_selector("#bm-merge-modal", state="hidden")
+
+
+def test_merge_keeps_a_title_the_user_wrote(browser):
+    """「임마누엘의 징조」로 저장한 이사 7:14에 1절을 합치면 범위만 「1,14」로 넓어지고 제목은 그대로다. 목록의 참조 줄은
+    합친 범위다. main은 제목을 「이사 7:1,14」로 바꿨다(known-issues §19.1, 2026-10-22 재현)."""
+    ctx = browser.new_context()
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    page = ctx.new_page()
+    _open_chapter_and_wait(page, "isa/7")
+    _save_isa7_14(page, "임마누엘의 징조")
+    _merge_isa7_1(page)
+    store = page.evaluate("() => window.syncStoreV2.loadBookmarks()")
+    assert [(b["verseSpec"], b["label"]) for b in store] == [("1,14", "임마누엘의 징조")]
+    page.locator(".title-bookmark-btn").click()
+    page.wait_for_selector("#bookmark-drawer:not([hidden])")
+    row = page.locator("#bookmark-drawer li.bm-bookmark")
+    assert row.locator(".bm-bookmark-label").inner_text() == "임마누엘의 징조"
+    assert row.locator(".bm-bookmark-ref").inner_text() == "이사 7:1,14"
+    ctx.close()
+
+
+def test_merge_renames_the_default_title(browser):
+    """저장 대화상자가 제안한 이름 그대로 저장한 이사 7:14에 1절을 합치면 제목도 합친 범위 「이사 7:1,14」가 된다. 합치기가
+    저장 대화상자의 기본 이름을 알아보는지 본다(두 곳이 같은 함수 `defaultBookmarkLabel`을 쓴다)."""
+    ctx = browser.new_context()
+    ctx.add_init_script(CLEAR_APP_STORAGE)
+    page = ctx.new_page()
+    _open_chapter_and_wait(page, "isa/7")
+    _save_isa7_14(page)
+    _merge_isa7_1(page)
+    store = page.evaluate("() => window.syncStoreV2.loadBookmarks()")
+    assert [(b["verseSpec"], b["label"]) for b in store] == [("1,14", "이사 7:1,14")]
     ctx.close()
 
 
