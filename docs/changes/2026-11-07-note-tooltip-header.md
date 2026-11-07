@@ -1,4 +1,5 @@
 ---
+pr: 523
 date: 2026-11-07
 branch: fix/note-tooltip-header
 title: "fix: 주석 툴팁이 상단 바에 가리는 문제 수정"
