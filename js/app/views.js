@@ -21,9 +21,9 @@
 // instead of through the window facade. applyAudioShow stays facade-only
 // (settings-ui / state-machine read it) so it is not imported here.
 import { showAudioPlayer, hideAudioBar } from "./audio-player.js";
-// The copy citation — its verse part and translation label — shared with the lectionary view and the verse-select bar
-// (verse-spec.js).
-import { citationSource, halfVerseMark, selectionCitation, formatVerseRanges } from "./verse-spec.js";
+// The copy citation — its verse part and translation label — shared with the lectionary view and the verse-select bar,
+// and the verse instance keys a tapped verse is looked up by (verse-spec.js).
+import { citationSource, halfVerseMark, selectionCitation, formatVerseRanges, verseInstanceKeys } from "./verse-spec.js";
 
 const { _$, el, clearNode, chUnit, hangingQuoteClass, emptyState } = window.appHelpers;
 const { createOverlay } = window.appOverlay;
@@ -214,7 +214,7 @@ function effectiveDivision(book) {
 // Where 「성서 목록으로」 (the reading views' home button · the tab bar's home tab) lands: the book's own
 // division tab. A book in no tab — 전례시편 · 송가 (`division: "liturgical"`, ADR-037 §3; reached from the
 // lectionary, a bookmark or a shared link, never from the list) — lands on the list's first screen: `/liturgical`
-// is no route — parsePath reads it as a book id and the view says 「해당 성서를 찾을 수 없습니다」.
+// is no route — parsePath reads it as a book id and route() draws the 「없는 주소입니다」 failure screen.
 /** @param {BookEntry} book @returns {string} */
 function bookListPath(book) {
   const division = effectiveDivision(book);
@@ -607,15 +607,23 @@ function setPendingBookFocus(bookId) {
   _pendingBookFocus = bookId;
 }
 
+/**
+ * 성서 목록의 머리를 그린다. 제목 「공동번역성서」와 설정 단추를 두고 오디오 바는 내린다. 성서 목록과, 책을 모르는 성서 화면의
+ * 실패 화면이 같이 쓴다(ADR-024 §6).
+ */
+function commitBookListTitle() {
+  setTitle("공동번역성서");
+  $title.appendChild(buildSettingsTrigger());
+  hideAudioBar();
+}
+
 /** @param {BooksData} books @param {string} activeDivision */
 function renderBookList(books, activeDivision) {
   const labels = divisionLabels();
   const order = divisionOrder();
   const active = order.includes(activeDivision) ? activeDivision : order[0];
 
-  setTitle("공동번역성서");
-  $title.appendChild(buildSettingsTrigger());
-  hideAudioBar();
+  commitBookListTitle();
   clearNode($app);
 
   renderResumeBanner(books);
@@ -774,13 +782,22 @@ function _observeResumeBanner(wrapper) {
   _resumeBannerObs.observe(wrapper);
 }
 
-/** @param {BookEntry} book @param {BooksData} books */
-function renderChapterList(book, books) {
+/**
+ * 장 목록의 머리를 그린다. 책 이름, 성서 목록 집 단추, 북마크 단추, 설정 단추를 두고 오디오 바는 내린다. 장 목록과 그 책의 실패
+ * 화면이 같이 쓴다(ADR-024 §6).
+ * @param {BookEntry} book
+ */
+function commitBookTitle(book) {
   setTitle(book.name_ko, NT_MOBILE_NAME[book.id]);
   $title.insertBefore(buildHomeBtn(bookListPath(book), "성서 목록으로", book.id), $title.firstChild);
   $title.appendChild(buildBookmarkHeaderBtn(book.id, null));
   $title.appendChild(buildSettingsTrigger());
   hideAudioBar();
+}
+
+/** @param {BookEntry} book @param {BooksData} books */
+function renderChapterList(book, books) {
+  commitBookTitle(book);
   clearNode($app);
 
   renderResumeBanner(books);
@@ -803,8 +820,8 @@ function renderChapterList(book, books) {
 }
 
 // ── BEGIN VERSE_NUMBER ──
-// Exercised by tests/unit/views.test.js. Pure: derives the displayed
-// verse label/number from a verse object — no DOM, no global state.
+// Exercised by tests/unit/views.test.js. Pure: derives the displayed and the
+// spoken verse label/number from a verse object — no DOM, no global state.
 
 // `mark` writes a data half verse's part letter — as is for `data-vref` (「8a」, the letter of the address and stored
 // grammar), the printed letter for the verse number on screen (「8ㄱ」 — formatVerseNumber).
@@ -827,6 +844,28 @@ function formatVerseNumber(v) {
   let dataV = v.chapter_ref ? `${v.chapter_ref}:${label}` : label;
   if (v.alt_ref != null) dataV += `(${v.alt_ref})`;
   return dataV;
+}
+
+// What a screen reader says when a verse is tapped (renderChapter): the verse that formatVerseNumber shows, in words.
+// The number on screen is aria-hidden, so this is the only way such a user hears it (docs/topics/routing.md 「확정
+// 사실」). Built like formatVerseNumber so the two name the same verse; the number alone named another verse of the
+// same chapter (known-issues §17.1).
+// 사용자 결정 2026-11-07: 쌍점과 괄호를 뜻으로 읽는다. 옮겨 실린 절은 「41장 6절」, 그리스어 추가 본문은 「그리스어 추가
+// 본문 24절」, 다니 3장의 히브리 본문은 「24절, 그리스어 번호 91」, 에스델 추가 본문은 「17절 추가 본문 1」이다. 그 밖의
+// 절은 화면의 번호에 「절」을 붙인다. 줄 글자 없이 「3절」이고(「3a절」이 아니다), 데이터의 반쪽 절은 화면의 번호처럼
+// 「8ㄱ절」이다(사용자 결정 2026-10-22).
+// `alt_ref` is the Greek (LXX) number in both books that have it (data ADR-003, pattern 4), but it marks two kinds of
+// verse: 다니 3:24-33 are Hebrew verses whose Greek numbers are 91-100, while an Esther `alt_ref` verse is a Greek
+// addition set at the Hebrew verse whose number it carries (4:17 and 4:17(1)-(30) are 31 verses). The data writes both
+// as [N_M] and has no field that tells them apart, so the book does. Any other book reads as Daniel does, the meaning
+// data ADR-003 gives `alt_ref`.
+/** @param {BibleVerse} v @param {string} bookId @returns {string} */
+function spokenVerseNumber(v, bookId) {
+  const label = formatVerseLabel(v, halfVerseMark);
+  if (v.lxx_only) return `그리스어 추가 본문 ${label}절`;
+  const verse = v.chapter_ref ? `${v.chapter_ref}장 ${label}절` : `${label}절`;
+  if (v.alt_ref == null) return verse;
+  return bookId === "esth" ? `${verse} 추가 본문 ${v.alt_ref}` : `${verse}, 그리스어 번호 ${v.alt_ref}`;
 }
 // The element a verse deep-link should scroll to. The exact id wins; otherwise
 // the first rendered span whose number matches. The fallback is what makes
@@ -1423,6 +1462,10 @@ function renderChapter(data, book, opts) {
 
   // Announce verse number on click/tap for screen reader users,
   // or toggle verse selection when in select mode.
+  // The words come from the tapped line's verse (spokenVerseNumber), found by the instance key that starts its
+  // `data-vkey` — the same keys appendVerses drew the lines with. `data-vref` holds the number alone, which two verses
+  // of one chapter can share (이사 40장의 41:6과 40:6, known-issues §17.1).
+  const verseOfKey = new Map(verseInstanceKeys(data.verses).map((key, i) => [key, data.verses[i]]));
   article.addEventListener("click", (e) => {
     const t = e.target;
     if (!(t instanceof Element)) return;
@@ -1432,9 +1475,9 @@ function renderChapter(data, book, opts) {
       e.stopPropagation(); // selection is handled by pointer events
       return;
     }
-    // 줄 글자 없이 절 번호로 — 「3a절」이 아니라 「3절」, 데이터의 반쪽 절은 화면의 번호처럼 「8ㄱ절」(사용자 결정 2026-10-22)
-    const half = /^\d+([a-p])/.exec(vs.getAttribute("data-vkey") ?? "");
-    announce(`${(vs.getAttribute("data-vref") ?? "").replace(/[a-p]+$/, "")}${half ? halfVerseMark(half[1]) : ""}절`);
+    const vkey = vs.getAttribute("data-vkey") ?? "";
+    const verse = verseOfKey.get(vkey.slice(0, vkey.indexOf("/")));
+    if (verse) announce(spokenVerseNumber(verse, book.id));
   });
 
   // ── Verse selection gestures ──
@@ -1696,10 +1739,117 @@ function renderLoading() {
   $app.appendChild(el("div", { className: "loading", "aria-live": "polite" }, "불러오는 중…"));
 }
 
-/** @param {string} msg */
+/**
+ * 본문 자리만 오류 한 줄로 바꾸고 머리는 그대로 둔다. 지금은 검색이 결과를 받지 못했을 때만 쓴다(`search.js`. 검색 화면이 머리를
+ * 그린 뒤다). 주소의 화면을 통째로 그리지 못한 실패는 아래의 전체 화면 실패다.
+ * @param {string} msg
+ */
 function renderError(msg) {
   clearNode($app);
   $app.appendChild(el("div", { className: "error", role: "alert" }, msg));
+}
+
+// ── Full-screen failure (DESIGN.md §6 「전체 화면 실패」) ──
+// 캘린더, 전례독서, 성서 화면이 주소의 화면을 통째로 그리지 못했을 때 쓴다. 머리는 그 화면의 머리를 그리는 함수가 그리고
+// (`commitLiturgicalTitle`, `commitBookTitle`, `commitBookListTitle`), 본문은 `commitFailure` 하나가 그린다. 화면마다 따로 그리면
+// 서로 달라지기 때문이다(PR #355 리뷰 2026-10-18, 성서 화면은 ADR-024 §6, 2026-11-07).
+
+// ── BEGIN FAILURE_TEXT ──
+// Exercised by tests/unit/views.test.js with a chUnit stub. Pure: the copy of the failure screens, no DOM.
+// 다음 행동의 이름. 부제가 이 이름으로 할 일을 가리킨다(coding-pitfalls §29).
+const RELOAD_LABEL = "다시 불러오기";
+const BOOK_LIST_LABEL = "성서 목록";
+// 자료나 화면 모듈을 받지 못했을 때의 부제. 캘린더, 전례독서, 성서 화면이 같다.
+const RELOAD_SUBTITLE = `네트워크 연결을 확인한 뒤 「${RELOAD_LABEL}」를 눌러 주세요.`;
+
+/** @typedef {"no-page" | "no-chapter" | "load"} BibleFailureKind */
+
+/**
+ * 성서 화면의 실패 화면에 쓸 글과 다음 행동을 정한다(ADR-024 §6).
+ * - `"no-chapter"`: 장 번호가 그 책의 장 수를 넘는다(`/john/99`). 「요한의 복음서에는 99장이 없습니다」와 링크 「장 목록」이다
+ *   (사용자 결정 2026-11-07).
+ * - `"no-page"`: 없는 주소다. 책을 모르면(`/xyz`) 링크 「성서 목록」이다(사용자 결정 2026-11-07). 책은 있고 그 뒤가 없으면
+ *   (`/john/abc`, 머리말이 없는 책의 머리말) 링크 「장 목록」이다. 「요한의 복음서에는 abc장이 없습니다」는 어색하기 때문이다
+ *   (구현하며 정함).
+ * - `"load"`: 자료를 받지 못했다. 그 자리에서 다시 하므로 링크가 아니라 「다시 불러오기」 단추다(`link`는 `null`). 캘린더와 같은
+ *   화면은 사용자 결정 2026-11-07이고, 제목의 「성서 자료」는 구현하며 정했다.
+ * 장 단위는 `chUnit`을 따라 시편은 「시편에는 151편이 없습니다」다. 링크와 부제의 「편」(「편 목록」)은 장 선택 단추의 이름
+ * 「편 선택」에 맞춰 구현하며 정했다.
+ * @param {BibleFailureKind} kind
+ * @param {BookEntry | null} book  머리의 책. `null`이면 성서 목록의 머리다
+ * @param {number} [chapter]  `"no-chapter"`의 장 번호
+ * @returns {{ message: string, subtitle: string, link: { label: string, href: string } | null }}
+ */
+function bibleFailureText(kind, book, chapter) {
+  if (kind === "load") return { message: "성서 자료를 불러오지 못했습니다", subtitle: RELOAD_SUBTITLE, link: null };
+  if (!book) {
+    return {
+      message: "없는 주소입니다",
+      subtitle: `「${BOOK_LIST_LABEL}」을 눌러 책을 골라 주세요.`,
+      link: { label: BOOK_LIST_LABEL, href: "/" },
+    };
+  }
+  const unit = chUnit(book.id);
+  const link = { label: `${unit} 목록`, href: `/${book.id}` };
+  if (kind === "no-chapter") {
+    return {
+      message: `${book.name_ko}에는 ${chapter}${unit}이 없습니다`,
+      subtitle: `「${link.label}」을 눌러 다른 ${unit}을 골라 주세요.`,
+      link,
+    };
+  }
+  return { message: "없는 주소입니다", subtitle: `「${link.label}」을 눌러 ${unit}을 골라 주세요.`, link };
+}
+// ── END FAILURE_TEXT ──
+
+/**
+ * 「다시 불러오기」 — 페이지를 새로 고친다. 화면 모듈을 받지 못했을 때 브라우저는 그 실패를 새로 고칠 때까지 기억해서(그것을
+ * 바꾼 HTML 표준 변경이 2026-07 — 엔진마다 반영 중) 화면을 다시 여는 것만으로는 풀리지 않을 수 있다(사용자 결정 2026-10-17).
+ * 교회력 자료를 받지 못했을 때도 같은 단추다 — 같은 모양의 화면에 같은 행동이고, 실패한 그 달 · 그날이 다시 열린다(리뷰
+ * 2026-10-18 — 그전의 「이번 달 캘린더」는 /calendar/2027-03에서 실패한 3월이 아니라 이번 달로 갔다). 성서 화면도 같은 단추이고,
+ * 받지 못한 그 장이 다시 열린다(2026-11-07).
+ */
+function buildReloadButton() {
+  const button = el("button", { type: "button" }, RELOAD_LABEL);
+  button.addEventListener("click", () => location.reload());
+  return button;
+}
+
+/**
+ * 전체 화면 실패의 본문을 그린다. 머리는 호출하는 쪽이 그 화면의 것으로 먼저 그린다. 앞 화면의 헤더, 제목, 오디오 바를 남기지
+ * 않으므로 본문만 바꾸는 `.error` 한 줄과 다르다(ADR-038 §3 「실패 · 범위」, ADR-024 §6). 본문은 아이콘 없는 빈 상태(제목은 안 된
+ * 것, 부제는 다음 할 일을 단추 이름으로)와 다음 행동 하나다. 라이브 영역에는 머리의 제목과 안 된 것을 함께 읽힌다. `setTitle`만으로는
+ * 제목만 들려 성공한 화면과 귀로 구별되지 않았다(리뷰 2026-10-18).
+ * @param {string} title  머리의 제목
+ * @param {{ message: string, subtitle: string, action: HTMLElement, panel?: string }} failure  `action`은 다음 행동이다(다른
+ *   화면으로 가면 링크, 그 자리에서 다시 하면 단추). `panel`은 바깥 상자의 클래스다(그 화면의 글꼴과 여백).
+ */
+function commitFailure(title, { message, subtitle, action, panel }) {
+  clearNode($app);
+  const box = el("div", panel ? { className: panel } : null);
+  box.appendChild(emptyState({ icon: null, title: message, subtitle }));
+  box.appendChild(el("p", { className: "state-action" }, action));
+  $app.appendChild(box);
+  announce(`${title} — ${message}`);
+}
+
+/**
+ * 성서 화면(성서 목록, 장 목록, 장, 머리말)의 전체 화면 실패를 그린다(ADR-024 §6). 없는 장, 없는 주소, 받지 못한 자료가 그렇다.
+ * 머리는 그 책의 장 목록 머리이고, 책을 모르면 성서 목록의 머리다(없는 장과 없는 경로는 사용자 결정 2026-11-07, 받지 못한
+ * 자료는 구현하며 정함). 그전에는 본문만 바꾸는 `.error` 한 줄이라 앞 화면의 머리, 장 선택, 오디오 바가 남았다(known-issues §13.1).
+ * @param {BibleFailureKind} kind
+ * @param {BookEntry | null} book
+ * @param {number} [chapter]  `"no-chapter"`의 장 번호
+ * @returns {string | undefined} 페이지 메타의 제목. 성서 목록의 머리면 없다(사이트 이름만 쓴다)
+ */
+function renderBibleFailure(kind, book, chapter) {
+  const { message, subtitle, link } = bibleFailureText(kind, book, chapter);
+  if (book) commitBookTitle(book); else commitBookListTitle();
+  commitFailure(book ? book.name_ko : "공동번역성서", {
+    message, subtitle,
+    action: link ? el("a", { href: link.href }, link.label) : buildReloadButton(),
+  });
+  return book?.name_ko;
 }
 
 // ── Liturgical view shell (ADR-038) ──
@@ -1719,8 +1869,7 @@ const LITURGICAL_VIEWS = Object.freeze({
   lectionary: { title: "전례독서", panel: "lectionary", loadFailure: "전례독서 자료를 불러오지 못했습니다" },
 });
 
-// 전체 화면 실패의 다음 행동 이름 — 부제가 이 이름으로 할 일을 가리킨다(coding-pitfalls §29).
-const RELOAD_LABEL = "다시 불러오기";
+// 날짜를 다시 고르러 가는 다음 행동의 이름. 부제가 이 이름으로 할 일을 가리킨다(coding-pitfalls §29).
 const THIS_MONTH_LABEL = "이번 달 캘린더";
 
 /**
@@ -1737,10 +1886,8 @@ function commitLiturgicalTitle(view) {
 }
 
 /**
- * 전체 화면 실패(DESIGN.md §6) — 캘린더 · 전례독서를 통째로 그리지 못했을 때. 머리는 그 뷰의 것이고 앞 화면의 헤더 · 제목 ·
- * 오디오 바를 남기지 않는다(ADR-038 §3 「실패 · 범위」 — 그래서 본문만 바꾸는 `.error` 한 줄이 아니다). 본문은 아이콘 없는 빈
- * 상태(제목은 안 된 것, 부제는 다음 할 일을 단추 이름으로)와 다음 행동 하나. 라이브 영역에는 제목과 안 된 것을 함께 읽힌다 —
- * setTitle 만으로는 제목만 들려 성공한 화면과 귀로 구별되지 않았다(리뷰 2026-10-18).
+ * 캘린더와 전례독서를 통째로 그리지 못했을 때의 전체 화면 실패를 그린다. 머리는 그 뷰의 것(`commitLiturgicalTitle`)이고 본문은
+ * 위의 `commitFailure`다(ADR-038 §3 「실패 · 범위」).
  * @param {LiturgicalView} view
  * @param {{ message: string, subtitle: string, action: "reload" | "this-month" }} failure  action — 「다시 불러오기」(그 자리에서
  *   다시 — 단추) 또는 「이번 달 캘린더」(날짜를 다시 고르러 — 링크)
@@ -1749,26 +1896,11 @@ function commitLiturgicalTitle(view) {
 function renderLiturgicalFailure(view, { message, subtitle, action }) {
   const { title, panel } = LITURGICAL_VIEWS[view];
   commitLiturgicalTitle(view);
-  clearNode($app);
-  const box = el("div", { className: panel });
-  box.appendChild(emptyState({ icon: null, title: message, subtitle }));
-  box.appendChild(el("p", { className: "state-action" },
-    action === "reload" ? buildReloadButton() : el("a", { href: "/calendar" }, THIS_MONTH_LABEL)));
-  $app.appendChild(box);
-  announce(`${title} — ${message}`);
+  commitFailure(title, {
+    message, subtitle, panel,
+    action: action === "reload" ? buildReloadButton() : el("a", { href: "/calendar" }, THIS_MONTH_LABEL),
+  });
   return title;
-}
-
-/**
- * 「다시 불러오기」 — 페이지를 새로 고친다. 화면 모듈을 받지 못했을 때 브라우저는 그 실패를 새로 고칠 때까지 기억해서(그것을
- * 바꾼 HTML 표준 변경이 2026-07 — 엔진마다 반영 중) 화면을 다시 여는 것만으로는 풀리지 않을 수 있다(사용자 결정 2026-10-17).
- * 교회력 자료를 받지 못했을 때도 같은 단추다 — 같은 모양의 화면에 같은 행동이고, 실패한 그 달 · 그날이 다시 열린다(리뷰
- * 2026-10-18 — 그전의 「이번 달 캘린더」는 /calendar/2027-03에서 실패한 3월이 아니라 이번 달로 갔다).
- */
-function buildReloadButton() {
-  const button = el("button", { type: "button" }, RELOAD_LABEL);
-  button.addEventListener("click", () => location.reload());
-  return button;
 }
 
 /**
@@ -1780,7 +1912,7 @@ function buildReloadButton() {
 function renderLiturgicalLoadFailure(view) {
   return renderLiturgicalFailure(view, {
     message: LITURGICAL_VIEWS[view].loadFailure,
-    subtitle: `네트워크 연결을 확인한 뒤 「${RELOAD_LABEL}」를 눌러 주세요.`,
+    subtitle: RELOAD_SUBTITLE,
     action: "reload",
   });
 }
@@ -1827,7 +1959,7 @@ export {
   _verseSelectionUnit, _verseRangeKeys,
   DIVISION_LABELS,
   renderBookList, renderChapterList, renderChapter, renderPrologue,
-  renderLoading, renderError,
+  renderLoading, renderBibleFailure,
   appendVerses,
   LITURGICAL_VIEWS, THIS_MONTH_LABEL, commitLiturgicalTitle, renderLiturgicalFailure, renderLiturgicalLoadFailure,
 };

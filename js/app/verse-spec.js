@@ -110,17 +110,34 @@ function isWellFormedSpec(spec) {
 // known-issues §5).
 
 /**
- * `data-vref` of the selected spans, document order — what the bookmark save path stores (ADR-010 — the stored spec
- * stays number-based).
+ * Is this span numbered in another numbering than the open chapter's own? A verse moved in from another chapter
+ * (`verse-cross-ref`, 이사 40의 41:6-7) and a Greek-only addition (`verse-lxx`, 다니 3의 (24)-(90)) are. The citation
+ * (selectionCitation) and the bookmark save (selectedSpanVrefs) leave such spans out whenever the selection has any of
+ * the chapter's own verses, as the drag-copy citation does (views.js bindCopyAttribution).
+ * @param {Element} span
+ * @returns {boolean}
+ */
+function isOtherNumbering(span) {
+  return span.classList.contains("verse-cross-ref") || span.classList.contains("verse-lxx");
+}
+
+/**
+ * `data-vref` of the spans a bookmark saves, document order (ADR-010: the stored spec stays number-based). The spans are
+ * the ones the citation counts (selectionCitation): with any of the chapter's own verses selected, spans in another
+ * numbering are left out. Their numbers would name the chapter's own verses of that number. 이사 40:19-20을 고르면
+ * 사이의 41:6-7도 선택되지만 저장값은 「19-20」이다. 종전 「6-7,19-20」은 40장 자신의 6-7절을 가리켰다(사용자 결정
+ * 2026-11-07, known-issues §16.2). Such spans alone still store their own numbers (41:6-7만이면 「6-7」) until a
+ * sub-verse notation exists.
  * @param {ReadonlySet<string>} selected `data-vkey` values
  * @param {ParentNode | null | undefined} article
  * @returns {string[]}
  */
 function selectedSpanVrefs(selected, article) {
   if (!article) return [];
-  return [...article.querySelectorAll(".verse[data-vkey]")]
-    .filter((s) => selected.has(s.getAttribute("data-vkey") ?? ""))
-    .map((s) => s.getAttribute("data-vref") ?? "");
+  const picked = [...article.querySelectorAll(".verse[data-vkey]")]
+    .filter((s) => selected.has(s.getAttribute("data-vkey") ?? ""));
+  const own = picked.filter((s) => !isOtherNumbering(s));
+  return (own.length ? own : picked).map((s) => s.getAttribute("data-vref") ?? "");
 }
 
 /**
@@ -154,7 +171,7 @@ function selectionCitation(selected, article) {
   if (!article) return { chapter: null, runs: [] };
   const spans = [...article.querySelectorAll(".verse[data-vkey]")];
   /** @param {Element} s */
-  const foreign = (s) => s.classList.contains("verse-cross-ref") || s.classList.contains("verse-lxx");
+  const foreign = (s) => isOtherNumbering(s);
   /** @param {Element} s */
   const isSelected = (s) => selected.has(s.getAttribute("data-vkey") ?? "");
   const picked = spans.filter(isSelected);

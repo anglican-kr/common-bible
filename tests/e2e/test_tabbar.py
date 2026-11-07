@@ -177,7 +177,7 @@ def test_home_tab_from_book_in_no_tab_lands_on_book_list(mobile_context):
     page.locator("#tab-bar .tab-item[data-tab='home']").click()
     page.wait_for_selector(".book-list", timeout=5_000)
     assert page.evaluate("() => location.pathname") == "/"
-    assert "찾을 수 없습니다" not in page.locator("#app").inner_text()
+    assert page.locator("#app .empty-state").count() == 0
 
 
 def test_book_list_does_not_collapse_on_scroll(mobile_context):

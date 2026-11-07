@@ -339,10 +339,62 @@ test("selectionCitation: 기사가 없거나 고른 줄이 화면에 없으면 �
   assert.deepStrictEqual(plain(ctx.selectionCitation(new Set(["9/9"]), articleOf([["3/3"]]))), { chapter: null, runs: [] });
 });
 
-test("selectedSpanVrefs: 고른 줄의 data-vref 를 문서 순서로 — 북마크 저장은 번호 단위 그대로(ADR-010)", () => {
+test("selectedSpanVrefs: 저장할 줄의 data-vref를 문서 순서로 모은다. 이 장의 절과 함께 고른 옮겨 실린 절은 뺀다(사용자 결정 2026-11-07)", () => {
   const a = articleOf(ISA40);
-  assert.deepStrictEqual(plain(ctx.selectedSpanVrefs(new Set(["20/20a", "6_c41/6a", "19/19a"]), a)), ["19a", "6a", "20a"]);
+  assert.deepStrictEqual(plain(ctx.selectedSpanVrefs(new Set(["20/20a", "6_c41/6a", "19/19a"]), a)), ["19a", "20a"]);   // 종전 「19a,6a,20a」
+  assert.deepStrictEqual(plain(ctx.selectedSpanVrefs(new Set(["7_c41/7b", "6_c41/6a"]), a)), ["6a", "7b"]);   // 그 절만이면 그 줄
   assert.deepStrictEqual(plain(ctx.selectedSpanVrefs(new Set(["19/19a"]), null)), []);
+});
+
+// ── 북마크 저장(selectedSpanVrefs, verseNumberSpec) ──
+// 절 선택으로 저장하는 값이다(bookmark-modals.js openSaveModal). 저장할 절은 출처와 같은 규칙으로 고른다(사용자 결정
+// 2026-11-07, known-issues §16.2). 이 장의 절을 하나라도 골랐으면 옮겨 실린 절과 그리스어 추가 본문은 저장하지 않는다. 그 절만
+// 고르면 지금처럼 그 번호로 저장한다. 저장 표기와 주소 문법은 그대로라 옛 버전도 저장값을 읽는다.
+
+const saveSpec = (keys, article) => ctx.verseNumberSpec(ctx.selectedSpanVrefs(new Set(keys), article));
+/** 옮겨 실린 운문 절의 줄. 줄마다 [「인스턴스/번호+글자」, 표지, 본래 장]이다. */
+const moved = (instance, ref, letters, chapter) => [...letters].map((l) => [`${instance}/${ref}${l}`, "verse-cross-ref verse-poetry", chapter]);
+// 이사 40장의 4-8절과 18-21절, 그리고 19절과 20절 사이에 옮겨 실린 41:6-7이다. 2026-11-07 화면의 키와 줄 수 그대로다.
+const ISA40_SAVE = [...poem("4", "4", "ab"), ...poem("5", "5", "abc"), ...poem("6", "6", "abcd"), ...poem("7", "7", "abc"),
+  ...poem("8", "8", "ab"), ...poem("18", "18", "ab"), ...poem("19", "19", "abc"), ...moved("6_c41", "6", "ab", "41"),
+  ...moved("7_c41", "7", "abcdef", "41"), ...poem("20", "20", "ab"), ...poem("21", "21", "abcd")];
+const isaLines = (...verses) => verses.flatMap((v) => linesOf(ISA40_SAVE, v));
+
+test("북마크 저장: 이사 40:19부터 20까지 고르면 사이에 옮겨 실린 41:6-7은 저장하지 않는다(종전 「6-7,19-20」)", () => {
+  const a = articleOf(ISA40_SAVE);
+  assert.strictEqual(saveSpec(isaLines("19", "6_c41", "7_c41", "20"), a), "19-20");
+  assert.strictEqual(saveSpec(isaLines("18", "19", "6_c41", "7_c41", "20", "21"), a), "18-21");   // 종전 「6-7,18-21」
+  assert.strictEqual(saveSpec(isaLines("19", "20"), a), "19-20");                                 // 19절과 20절만 눌러도 같다
+  assert.strictEqual(saveSpec(isaLines("6_c41", "7_c41", "20"), a), "20");                       // 41:6부터 20절까지, 종전 「6-7,20」
+});
+
+test("북마크 저장: 이사 40:5-7에서 이 장의 6-7절은 저장하고, 함께 고른 41:6은 5절과 7절 사이를 메우지 않는다", () => {
+  const a = articleOf(ISA40_SAVE);
+  assert.strictEqual(saveSpec(isaLines("5", "6", "7"), a), "5-7");
+  assert.strictEqual(saveSpec(isaLines("5", "6", "7", "6_c41", "7_c41"), a), "5-7");
+  // 5절과 7절에 41:6을 함께 고르면 「5,7」이다. 종전엔 41:6의 번호가 사이를 메워 「5-7」이 되어, 고르지 않은 40:6까지 저장했다.
+  assert.strictEqual(saveSpec(isaLines("5", "7", "6_c41"), a), "5,7");
+  assert.strictEqual(saveSpec(isaLines("4", "8", "6_c41", "7_c41"), a), "4,8");                  // 종전 「4,6-8」
+});
+
+test("북마크 저장: 옮겨 실린 절만 고르면 지금처럼 그 번호로 저장한다. 이사 40장의 41:6-7은 「6-7」(하위 절 표기를 정할 때 고친다)", () => {
+  const a = articleOf(ISA40_SAVE);
+  assert.strictEqual(saveSpec(isaLines("6_c41", "7_c41"), a), "6-7");
+  assert.strictEqual(saveSpec(["7_c41/7c"], a), "7");
+});
+
+test("북마크 저장: 다니 3장에서 히브리 절과 함께 고른 그리스어 추가 본문은 저장하지 않는다(종전 23절부터 24(91)절까지가 실제 장에서 「23-90」)", () => {
+  const a = articleOf(DAN3);
+  assert.strictEqual(saveSpec(DAN3.map(([k]) => k).slice(0, -2), a), "23-24");                    // 23절부터 24(91)절까지, 이 발췌에서 종전 「23-26」
+  assert.strictEqual(saveSpec(["23/23", "24_lxx/24", "25_lxx/25"], a), "23");                    // 종전 「23-25」
+  assert.strictEqual(saveSpec(["25_lxx/25", "26_lxx/26a", "26_lxx/26b", "24_91/24"], a), "24");  // 종전 「24-26」
+  assert.strictEqual(saveSpec(["24_lxx/24", "25_lxx/25"], a), "24-25");                           // 그리스어 절만이면 지금처럼
+});
+
+test("북마크 저장: 에스 4:17의 추가 본문은 이 장의 번호라 빼지 않는다. 한 번호를 여러 절이 함께 써서 「17」이다(known-issues §16.2)", () => {
+  const a = articleOf(ESTH4);
+  assert.strictEqual(saveSpec(["16/16", ...linesOf(ESTH4, "17_5")], a), "16-17");
+  assert.strictEqual(saveSpec(["17_14/17a", "17_14/17b"], a), "17");
 });
 
 // ── verseNumberSpec · wholeVerseSpec ──
