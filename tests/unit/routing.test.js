@@ -195,6 +195,13 @@ test("parsePath: /calendar/YYYY-MM → 그 달 — 검증은 뷰(깨진 값도 m
   assert.equal(parse("/calendar/%E0%A4%A").month, "%E0%A4%A");   // 깨진 퍼센트 이스케이프는 throw 하지 않는다
 });
 
+test("parsePath: /calendar/list → 목록, date null(오늘) · /calendar/list/YYYY-MM-DD → 그 날짜 — 검증은 뷰", () => {
+  assert.deepEqual(parse("/calendar/list"), { view: "calendar", mode: "list", date: null });
+  assert.deepEqual(parse("/calendar/list/2026-12-06"), { view: "calendar", mode: "list", date: "2026-12-06" });
+  assert.equal(parse("/calendar/list/2026-13-99").date, "2026-13-99");   // 깨진 값도 date 로 넘긴다
+  assert.equal(parse("/calendar/listing").mode, "month");   // 「list」로 시작할 뿐인 값은 달로 읽혀 뷰가 알린다
+});
+
 test("parsePath: 'calendar' 는 책 id 로 읽히지 않는다 — 정확 일치 · 접두 'calendar/' 만", () => {
   assert.equal(parse("/calendar").view, "calendar");
   assert.equal(parse("/calendarx").view, "chapters");

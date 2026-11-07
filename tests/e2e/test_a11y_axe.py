@@ -112,6 +112,17 @@ def test_a11y_lectionary_switcher(browser):
         ctx.close()
 
 
+def test_a11y_calendar_list(browser):
+    """캘린더 목록(2026년 12월 — 줄 · 상단 바의 전환 단추) — critical/serious 위반 0."""
+    ctx, page = _open(browser, "calendar/list/2026-12-07")
+    try:
+        page.wait_for_selector(".cal-rows", timeout=20_000)
+        v = _violations(page)
+        assert not v, f"Calendar list: {len(v)} violation(s):\n{_fmt(v)}"
+    finally:
+        ctx.close()
+
+
 def test_a11y_calendar_month(browser):
     """캘린더 월간 표(2026년 11월 — 「나해」 표지 · 앞뒤 달 칸 · 데스크톱 헤더 입구) — critical/serious 위반 0건."""
     ctx, page = _open(browser, "calendar/2026-11")

@@ -47,8 +47,16 @@ window.tabHistory = (() => {
   }
 
   /**
+   * 캘린더의 목록 보기 주소인가. @param {string} path
+   */
+  function isCalendarListPath(path) {
+    return /^\/calendar\/list(?:[/?#]|$)/.test(path);
+  }
+
+  /**
    * 캘린더 탭(데스크톱은 헤더의 캘린더 단추)을 누르면 갈 곳(ADR-038 §1). 다른 탭에서는 이 탭의 마지막 화면(전례독서 포함),
-   * 전례독서에서는 마지막 캘린더 보기다. 캘린더 보기에서는 null이다 — 가로채지 않아 정적 href(이번 달)로 간다.
+   * 전례독서에서는 마지막 캘린더 보기다. 목록에서는 보기를 유지하고 오늘 줄로 간다(사용자 결정 2026-11-07). 월간에서는 null이다 —
+   * 가로채지 않아 정적 href(이번 달)로 간다.
    * @param {string} current  지금 경로
    * @param {string} lastInTab  이 탭의 마지막 화면
    * @param {string} lastView  마지막 캘린더 보기
@@ -56,6 +64,7 @@ window.tabHistory = (() => {
    */
   function pickCalendarTabDest(current, lastInTab, lastView) {
     if (tabOf(current) !== "calendar") return lastInTab;
+    if (isCalendarListPath(current)) return "/calendar/list";
     return /^\/lectionary(?:[/?#]|$)/.test(current) ? lastView : null;
   }
   // ── END TABOF ──
@@ -147,6 +156,11 @@ window.tabHistory = (() => {
     window.appStorage?.saveCalendarLastView(lastCalendarView);
   }
 
+  /** @returns {string} 마지막으로 본 캘린더 보기의 주소. 전례독서 머리의 오른쪽 단추가 어느 보기로 갈지 본다. */
+  function getLastCalendarView() {
+    return lastCalendarView;
+  }
+
   /** @returns {string | null} 캘린더 탭을 누르면 갈 곳. null이면 정적 href로 간다. */
   function calendarTabDest() {
     return pickCalendarTabDest(fullPath(), lastPathForTab.calendar, lastCalendarView);
@@ -161,6 +175,8 @@ window.tabHistory = (() => {
     lastPath,
     recordPath,
     rememberCalendarView,
+    lastCalendarView: getLastCalendarView,
+    isCalendarListPath,
     calendarTabDest,
     // 테스트/디버그용 노출(런타임 의존 금지).
     _scrollMemory: scrollMemory,

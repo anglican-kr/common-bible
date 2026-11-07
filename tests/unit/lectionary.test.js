@@ -1152,3 +1152,33 @@ test("halfVerseRanges: 하로 자른 절은 구간을 열고, 상으로 자른 �
     { a: 10, b: 13, aHalf: "", bHalf: "" }, { a: 14, b: 20, aHalf: "하", bHalf: "" }]);
   same(plain(ctx.halfVerseRanges([[1, 9]], H({}))), [{ a: 1, b: 9, aHalf: "", bHalf: "" }]);
 });
+
+// ── 제목 영역의 글(캘린더 목록 줄과 같이 쓴다, ADR-038 §2) ──
+
+test("headLinesOf: 제목, 해와 대재일과 기도 주간, 안내, 이름 줄, 다른 전례일의 차례", () => {
+  const out = ctx.headLinesOf({
+    dayName: "연중 2주 수요일",
+    cycle: "홀수해", fast: "minor", resolved: { periods: [{ name: "그리스도인 일치를 위한 기도 주간" }] },
+    selectedNote: "1월 17일에서 옮겨 옴", transferNotes: ["누군가 축일을 1월 21일로 옮김"],
+    memorialSaints: [cand(obs("s", "파비안(순교자)"))],
+    passiveDays: [cand(obs("p", "성 십자가 발견(설명)"), "commemorated")],
+    foundingLines: ["1992년 9월 29일 관구설립일"],
+    commemorations: [cand(obs("c", "존 웨슬리(복음전도자)"))],
+    textlessDays: [cand(obs("t", "가정주일"))],
+    dedicationLines: ["강릉성당 축성일"],
+    choices: [{ name: "가", suffix: " · 저녁", active: false }, { name: "나", suffix: "", active: true }],
+  });
+  assert.strictEqual(out.title, "연중 2주 수요일");
+  same(out.meta, [{ text: "홀수해", kind: "cycle" }, { text: "소재일", kind: "fast" }, { text: "그리스도인 일치를 위한 기도 주간", kind: "period" }]);
+  same(out.notes, ["1월 17일에서 옮겨 옴", "누군가 축일을 1월 21일로 옮김"]);
+  same(out.names, ["파비안(순교자) 축일", "성 십자가 발견", "1992년 9월 29일 관구설립일", "존 웨슬리(복음전도자) 기념일", "가정주일", "강릉성당 축성일"]);
+  same(out.others, ["가 · 저녁"]);
+});
+
+test("headLinesOf: 빈 칸은 빠진다 — 이름이 없으면 줄표", () => {
+  const out = ctx.headLinesOf({
+    dayName: "", cycle: null, fast: null, resolved: {}, selectedNote: null, transferNotes: [],
+    memorialSaints: [], passiveDays: [], foundingLines: [], commemorations: [], textlessDays: [], dedicationLines: [], choices: [],
+  });
+  same(out, { title: "—", meta: [], notes: [], names: [], others: [] });
+});

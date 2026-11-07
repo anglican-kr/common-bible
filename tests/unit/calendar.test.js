@@ -131,7 +131,7 @@ test("buildMonthGrid: 2026년 10월 — 1일(목)이 든 주의 일요일 9.27 �
   same(cells.filter((c) => c.isToday).map((c) => c.date), ["2026-10-15"]);
   for (let i = 0; i < 42; i++) assert.strictEqual(cells[i].weekday, i % 7, cells[i].date);   // 일요일 시작
   assert.strictEqual(calls.length, 42);   // 칸마다 한 번 — 앞뒤 달 칸도 엔진에 묻는다
-  same(m.hrefs, { prev: "/calendar/2026-09", next: "/calendar/2026-11", today: "/calendar" });
+  same(m.hrefs, { prev: "/calendar/2026-09", next: "/calendar/2026-11", today: "/calendar", view: "/calendar/list" });   // 이번 달은 오늘 줄로
   assert.strictEqual(cells[0].href, "/lectionary/2026-09-27");
 });
 
@@ -153,7 +153,7 @@ test("buildMonthGrid: 윤년 2월(2028)은 29일까지 · 12월은 다음 해 1�
   assert.strictEqual(cells[0].date, "2026-11-29");
   assert.strictEqual(cells[41].date, "2027-01-09");
   assert.ok(cells.some((c) => c.date === "2027-01-01" && !c.inMonth));
-  same(dec.hrefs, { prev: "/calendar/2026-11", next: "/calendar/2027-01", today: "/calendar" });
+  same(dec.hrefs, { prev: "/calendar/2026-11", next: "/calendar/2027-01", today: "/calendar", view: "/calendar/list/2026-12-01" });   // 다른 달은 1일의 줄로
 });
 
 test("buildMonthGrid: 계산 범위 끝(1583년 1월 · 9999년 12월) — 범위 밖 칸은 엔진에 묻지 않고 링크가 없다", () => {
@@ -407,4 +407,93 @@ test("buildMonthGrid: 칸의 label 이 dayAriaLabel 과 같고, 오늘 칸만 �
   const cells = ctx.buildMonthGrid(2026, 10, "2026-10-15", plainDay).weeks.flat();
   for (const c of cells) assert.strictEqual(c.label, ctx.dayAriaLabel(c, c.isToday), c.date);
   same(cells.filter((c) => c.label.startsWith("오늘")).map((c) => c.date), ["2026-10-15"]);
+});
+
+// ── 목록 줄(ADR-038 §2 「목록 보기」) ────────────────────────────────────────
+
+/** 전례독서 모델 가운데 줄이 읽는 곳만. */
+const headModel = (date, resolved, extra = {}) => ({
+  date, resolved, selected: resolved.candidates[0], dayName: "연중 28주 목요일",
+  colors: ["green"], colorAlt: [], colorsOr: false, cycle: "짝수해", fast: null,
+  selectedNote: null, transferNotes: [], memorialSaints: [], passiveDays: [], foundingLines: [], commemorations: [],
+  textlessDays: [], dedicationLines: [], choices: [], ...extra,
+});
+
+test("listRowOf: 평범한 평일도 줄이 있고 보통 굵기다 — 날짜, 요일, 제목, 색, 해", () => {
+  const r = ctx.listRowOf(headModel("2026-10-15", plainDay("2026-10-15")), "2026-10-14");
+  assert.strictEqual(r.date, "2026-10-15");
+  assert.strictEqual(r.day, 15);
+  assert.strictEqual(r.weekday, "목");
+  assert.strictEqual(r.href, "/lectionary/2026-10-15");
+  assert.strictEqual(r.isToday, false);
+  assert.strictEqual(r.level, "");
+  assert.strictEqual(r.title, "연중 28주 목요일");
+  same(r.colors, [{ code: "green", name: "녹색", or: false }]);
+  same(r.meta, ["짝수해"]);
+  assert.strictEqual(r.mark, null);
+  same(r.lines, []);
+  assert.strictEqual(r.label, "10월 15일 목요일, 연중 28주 목요일, 녹색, 짝수해");
+});
+
+test("listRowOf: 글의 차례는 제목 영역과 같다 — 안내, 이름 줄, 다른 전례일", () => {
+  const resolved = resolvedOf("2026-12-07", [cand(obs("d1206", "성 니콜라", { rank: "major_feast" }))]);
+  const r = ctx.listRowOf(headModel("2026-12-07", resolved, {
+    dayName: "성 니콜라(대한성공회 수호성인)",
+    selectedNote: "12월 6일에서 옮겨 옴",
+    transferNotes: ["누군가 축일을 12월 8일로 옮김"],
+    memorialSaints: [cand(obs("d1207", "암브로스(밀라노의 주교)"))],
+    dedicationLines: ["서울산성당 축성일"],
+    choices: [{ name: "대림 2주 월요일", suffix: "", active: false }, { name: "성 니콜라", suffix: "", active: true }],
+    colors: ["white"], fast: "minor",
+  }), "2026-12-07");
+  same(r.meta, ["짝수해", "소재일"]);
+  same(r.lines, ["12월 6일에서 옮겨 옴", "누군가 축일을 12월 8일로 옮김", "암브로스(밀라노의 주교) 축일", "서울산성당 축성일", "대림 2주 월요일"]);
+  assert.strictEqual(r.level, "major");
+  assert.strictEqual(r.isToday, true);
+  assert.ok(r.label.startsWith("오늘, 12월 7일 월요일, 성 니콜라(대한성공회 수호성인), 백색, 짝수해, 소재일, 12월 6일에서 옮겨 옴"), r.label);
+});
+
+test("listRowOf: 굵기 — 주일과 대축일, 주요축일은 major, 축일은 minor", () => {
+  const level = (candidate, coord = WEEKDAY) => ctx.listRowOf(headModel("2026-10-15", resolvedOf("2026-10-15", [candidate], { coord })), "2026-01-01").level;
+  assert.strictEqual(level(grid("ordinary-28", "연중 28주일"), SUNDAY(28)), "major");
+  assert.strictEqual(level(cand(obs("a", "가", { rank: "principal" }))), "major");
+  assert.strictEqual(level(cand(obs("b", "나", { rank: "major_feast" }))), "major");
+  assert.strictEqual(level(cand(obs("c", "다", { rank: "minor_feast" }))), "minor");
+  assert.strictEqual(level(cand(obs("d", "라", { rank: "regional_festival" }))), "minor");
+  assert.strictEqual(level(cand(obs("e", "마", { rank: "commemoration" }))), "");
+});
+
+test("listRowOf: 전례년 첫날은 해 대신 「나해 시작」을 단다", () => {
+  const coord = SUNDAY(1, "B", "advent");
+  const resolved = resolvedOf("2026-11-29", [grid("advent-1", "대림1주일")], { coord });
+  const r = ctx.listRowOf(headModel("2026-11-29", resolved, { cycle: "나해" }), "2026-11-07");
+  assert.strictEqual(r.mark, "나해 시작");
+  same(r.meta, []);
+  assert.ok(r.label.includes("나해 시작"), r.label);
+});
+
+test("listRowOf: 색이 둘이면 함께 적고, 성인의 색이 다르면 「또는」이다 — 선택 대체색은 싣지 않는다", () => {
+  const both = ctx.listRowOf(headModel("2026-10-15", plainDay("2026-10-15"), { colors: ["violet", "white"], colorAlt: ["blue"] }), "2026-01-01");
+  same(both.colors.map((c) => [c.code, c.or]), [["violet", false], ["white", false]]);
+  assert.ok(both.label.includes("자색 · 백색"), both.label);
+  const either = ctx.listRowOf(headModel("2026-10-15", plainDay("2026-10-15"), { colors: ["red", "white"], colorsOr: true }), "2026-01-01");
+  same(either.colors.map((c) => [c.code, c.or]), [["red", false], ["white", true]]);
+  assert.ok(either.label.includes("적색 또는 백색"), either.label);
+});
+
+test("buildMonthList: 그 달의 모든 날을 차례로 — 앞뒤 달은 1일의 줄, 오른쪽 단추는 그 달", () => {
+  const seen = [];
+  const m = ctx.buildMonthList(2028, 2, "2026-10-15", (date) => { seen.push(date); return { date }; });
+  assert.strictEqual(seen.length, 29);   // 윤년 2월
+  assert.strictEqual(seen[0], "2028-02-01");
+  assert.strictEqual(seen[28], "2028-02-29");
+  assert.strictEqual(m.title, "2028년 2월");
+  assert.strictEqual(m.shortTitle, "2028.02");
+  same(m.hrefs, { prev: "/calendar/list/2028-01-01", next: "/calendar/list/2028-03-01", today: "/calendar/list", view: "/calendar/2028-02" });
+  const here = ctx.buildMonthList(2026, 10, "2026-10-15", () => null);
+  assert.strictEqual(here.hrefs.view, "/calendar");   // 이번 달
+  same(here.rows, []);   // null 을 낸 날은 건너뛴다
+  assert.strictEqual(ctx.buildMonthList(9999, 12, "2026-10-15", () => null).hrefs.next, null);   // 계산 범위 끝
+  assert.strictEqual(ctx.buildMonthList(1583, 1, "2026-10-15", () => null).hrefs.prev, null);
+  assert.strictEqual(ctx.buildMonthList(2026, 12, "2026-10-15", () => null).hrefs.next, "/calendar/list/2027-01-01");
 });

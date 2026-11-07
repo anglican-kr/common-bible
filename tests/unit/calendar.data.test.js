@@ -218,3 +218,68 @@ test("42칸 월간 표가 엔진 연도 캐시를 지킨다 — 해를 걸친 20
   // 연도 키 캐시는 인덱스 하나용이다 — 뒤의 조회가 남의 인덱스로 만든 옮김 계산을 읽지 않게
   vm.runInContext("transferCache.clear();", ctx);
 });
+
+// ── 목록 줄 — 실제 표 위의 전례독서 모델(사용자 결정 2026-11-07, ADR-038 §2 「목록 보기」) ──
+
+let lecIndex = null;
+const lec = () => (lecIndex ??= ctx.buildLectionaryIndex({
+  readings: read("eucharist-readings.json"), collects: read("eucharist-collects.json"),
+  commons: read("commons.json"), localObservances: read("local-observances.json"),
+}));
+function headModel(d) {
+  const r = resolve(d);
+  const cache = new Map();
+  const groupsOf = (c) => {
+    if (!cache.has(c.observance.id)) cache.set(c.observance.id, ctx.findReadingsIn(lec(), index(), r, c));
+    return cache.get(c.observance.id);
+  };
+  const key = `${d.slice(5, 7)}.${d.slice(8, 10)}`;
+  return ctx.buildLectionaryModel(r, { obs: null, track: null, set: null, collect: null }, groupsOf, ctx.findCollectsIn(lec(), index(), r), null,
+    lec().dedications.get(key) || [], false, ctx.findFoundingsIn(lec(), key));
+}
+const rowOf = (d) => ctx.listRowOf(headModel(d), "2026-11-07");
+
+test("목록 줄 — 11.6은 전례독서처럼 제목이 평일 이름이고 레오나드는 이름 줄이다", { skip: SKIP }, () => {
+  const r = rowOf("2026-11-06");
+  assert.strictEqual(r.title, "연중 31주 금요일");
+  assert.strictEqual(day("2026-11-06").cellName, "레오나드");   // 월간 칸은 그대로다
+  same(r.meta, ["짝수해", "소재일"]);
+  same(r.lines, ["레오나드(은수자, 6세기) 축일", "삼흥리성당 축성일"]);
+  assert.strictEqual(r.level, "");
+});
+
+test("목록 줄 — 주일, 전례년 첫날, 옮겨 온 축일, 저녁 전례, 대체색", { skip: SKIP }, () => {
+  const sunday = rowOf("2026-11-08");
+  assert.strictEqual(sunday.title, "연중 32주일");
+  assert.strictEqual(sunday.level, "major");
+  same(sunday.meta, ["가해"]);
+  const first = rowOf("2026-11-29");
+  assert.strictEqual(first.mark, "나해 시작");
+  same(first.meta, []);
+  const moved = rowOf("2026-12-07");
+  assert.ok(moved.title.startsWith("성 니콜라"), moved.title);
+  assert.strictEqual(moved.lines[0], "12월 6일에서 옮겨 옴");
+  same(rowOf("2026-12-06").lines[0], "성 니콜라 축일을 12월 7일로 옮김");
+  assert.ok(rowOf("2026-12-24").lines.includes("성탄 밤 · 저녁"));
+  same(rowOf("2026-12-13").colors.map((c) => c.code), ["violet"]);   // 대림 3주일의 장미, 청은 전례독서 머리에만
+  assert.ok(headModel("2026-12-13").colorAlt.length > 0);
+});
+
+test("목록 줄 — 2025-2030의 모든 날에 줄이 있고 글이 제목 영역과 같다", { skip: SKIP }, () => {
+  for (let d = "2025-01-01"; d <= "2030-12-31"; d = ctx.addDays(d, 1)) {
+    const m = headModel(d);
+    const head = ctx.headLinesOf(m);
+    const r = ctx.listRowOf(m, "2026-11-07");
+    assert.ok(r.title && r.title !== "—", d);
+    assert.strictEqual(r.title, head.title, d);
+    same(r.lines, [...head.notes, ...head.names, ...head.others], d);
+    assert.ok(r.colors.length > 0, d);
+    assert.ok(!/undefined|null/.test(r.label), `${d}: ${r.label}`);
+    for (const text of [r.title, ...r.meta, ...r.lines]) assert.ok(r.label.includes(text), `${d}: ${text}`);   // 보이는 글이 링크 이름에 있다(WCAG 2.5.3)
+  }
+});
+
+test("목록 — 달마다 그 달의 날 수만큼 줄이 있다", { skip: SKIP }, () => {
+  assert.strictEqual(ctx.buildMonthList(2026, 12, "2026-11-07", rowOf).rows.length, 31);
+  assert.strictEqual(ctx.buildMonthList(2028, 2, "2026-11-07", rowOf).rows.length, 29);
+});

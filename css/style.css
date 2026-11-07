@@ -1100,6 +1100,109 @@ a.cal-cell:focus-visible { background: var(--bg-card); }
   text-overflow: ellipsis;
 }
 
+/* 목록 보기(ADR-038 §2) — 모든 날을 한 줄씩. 글의 차례와 색은 전례독서 제목 영역(.lect-head)과 같고 글자가 작다. 달 이름은 칸의 가로선과
+   같은 선으로 나눈다. 스크롤 위치의 기준은 줄이라 브라우저의 스크롤 고정은 쓰지 않는다. */
+.cal-list-month {
+  margin: 0;
+  padding: var(--space-6) 0 var(--space-2);
+  font-size: var(--font-sm);
+  font-weight: 600;
+  line-height: var(--leading-snug);
+  color: var(--text-secondary);
+}
+.cal-list section:first-child .cal-list-month { padding-top: 0; }
+.cal-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cal-rows > li { border-top: 1px solid var(--border); }
+.cal-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  min-height: var(--list-row-h);
+  padding: var(--space-3) 0;
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  text-decoration: none;
+}
+.cal-row:hover,
+.cal-row:focus-visible { background: var(--bg-card); }
+.cal-row-date {
+  flex: none;
+  width: 2.2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-0_5);
+}
+.cal-row-day {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.9rem;
+  height: 1.9rem;
+  border-radius: var(--radius-pill);
+  font-size: var(--font-md);
+  font-weight: 500;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+/* 오늘은 월간 칸과 같은 원이다. --accent 위의 글자는 var(--bg)(DESIGN.md §2 규약). */
+.cal-row--today .cal-row-day {
+  background: var(--accent);
+  color: var(--bg);
+}
+.cal-row-weekday {
+  font-size: var(--font-2xs);
+  line-height: var(--leading-tight);
+  color: var(--text-secondary);
+}
+.cal-row-body {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.cal-row-title {
+  font-size: var(--font-md);
+  line-height: var(--leading-snug);
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+.cal-row--major .cal-row-title,
+.cal-row--major .cal-row-day { font-weight: 700; }
+.cal-row--minor .cal-row-title { font-weight: 500; }
+.cal-row-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-0_5) var(--space-2);
+  margin-top: var(--space-1);
+  font-size: var(--font-xs);
+  line-height: var(--leading-snug);
+  color: var(--text-secondary);
+}
+.cal-row-color {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+.cal-row-dot {
+  flex: none;
+  width: 0.6rem;
+  height: 0.6rem;
+}
+.cal-row-line {
+  margin-top: var(--space-0_5);
+  font-size: var(--font-xs);
+  line-height: var(--leading-snug);
+  color: var(--text-secondary);
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
 /* In-page search input (mirrors the header #search-bar, used in #app). */
 #search-inpage-bar {
   display: flex;

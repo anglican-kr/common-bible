@@ -271,7 +271,8 @@ function enterCalendarTab(e) {
   const dest = th?.calendarTabDest();
   if (!th || !dest) return;
   e.preventDefault();
-  th.requestRestore(); // 탭 전환(POP 의미론) → 그 화면의 스크롤 복원
+  // 탭 전환(POP 의미론) → 그 화면의 스크롤 복원. 목록에서 다시 누르면 오늘 줄로 가는 것이라 떠날 때의 스크롤을 되살리지 않는다.
+  if (!th.isCalendarListPath(th.fullPath())) th.requestRestore();
   W.navigate(dest);
 }
 document.querySelector('#tab-bar [data-tab="calendar"]')?.addEventListener("click", enterCalendarTab);

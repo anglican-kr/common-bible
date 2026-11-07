@@ -26,18 +26,18 @@
 /** @typedef {import("../types").Candidate} Candidate */
 
 import {
-  parseDate, toKey, addDays, dayOfWeek, liturgicalYearOf, preloadCalendar, resolveDate,
+  parseDate, toKey, addDays, dayOfWeek, liturgicalYearOf, preloadCalendar, preloadLectionary, resolveDate,
   MIN_YEAR, MAX_YEAR, isComputableYear, isComputableDate,
 } from "./liturgical-engine.js";
 import {
   LITURGICAL_VIEWS, THIS_MONTH_LABEL, commitLiturgicalTitle, renderLiturgicalFailure, renderLiturgicalLoadFailure,
 } from "./views.js";
 import {
-  shortName, statusSuffix, isGrid, todayKey, commitDateBar,
+  shortName, statusSuffix, isGrid, todayKey, commitDateBar, headLinesOf, lectionaryModelOf,
   CYCLE_LABEL, COLOR_LABEL, WEEKDAY_KO,
 } from "./lectionary.js";
 
-const { _$, el, clearNode } = window.appHelpers;
+const { _$, el, clearNode, HEADER_ICON_PATHS } = window.appHelpers;
 
 const $app = _$("app");
 // 이름은 views.js에 있다 — 이 모듈을 받지 못했을 때 라우터가 같은 제목으로 실패 화면을 그린다.
@@ -62,9 +62,24 @@ const PAGE_TITLE = LITURGICAL_VIEWS.calendar.title;
  * 월간 화면이 그리는 것 전부 — 순수 함수 `buildMonthGrid` 의 반환. DOM 은 이것만 읽는다.
  * @typedef {{
  *   year: number, month: number, title: string, shortTitle: string, weeks: CalendarCell[][],
- *   hrefs: { prev: string | null, next: string | null, today: string },
+ *   hrefs: { prev: string | null, next: string | null, today: string, view: string },
  * }} CalendarMonth
  */
+/**
+ * 목록 줄 하나 — 순수 함수 `listRowOf` 의 반환.
+ * @typedef {{
+ *   date: string, day: number, weekday: string, href: string, isToday: boolean, level: "major" | "minor" | "",
+ *   title: string, colors: { code: string, name: string, or: boolean }[], meta: string[], mark: string | null, lines: string[], label: string,
+ * }} ListRow
+ */
+/**
+ * 목록 화면이 그리는 것 전부 — 순수 함수 `buildMonthList` 의 반환.
+ * @typedef {{
+ *   year: number, month: number, title: string, shortTitle: string, rows: ListRow[],
+ *   hrefs: { prev: string | null, next: string | null, today: string, view: string },
+ * }} CalendarList
+ */
+/** 전례독서 모델. @typedef {import("./lectionary.js").LectionaryModel} LectionaryModel */
 
 // ── BEGIN CALENDAR_MODEL ──
 // Exercised by tests/unit/calendar.test.js (vm slice — no DOM) and, against
@@ -254,9 +269,87 @@ function buildMonthGrid(y, m, today, resolve) {
     }
     weeks.push(row);
   }
+  const key = `${String(y).padStart(4, "0")}-${String(m).padStart(2, "0")}`;
   return {
     year: y, month: m, title: `${y}년 ${m}월`, shortTitle: `${y}.${String(m).padStart(2, "0")}`, weeks,
-    hrefs: { prev: monthHref(y, m - 1), next: monthHref(y, m + 1), today: "/calendar" },
+    hrefs: {
+      prev: monthHref(y, m - 1), next: monthHref(y, m + 1), today: "/calendar",
+      // 보던 달을 유지한다. 이번 달은 오늘 줄이고 다른 달은 그 달 1일의 줄이다(ADR-038 §2).
+      view: today.slice(0, 7) === key ? "/calendar/list" : `/calendar/list/${key}-01`,
+    },
+  };
+}
+
+/** 그 달 1일의 목록 주소 — 계산 범위 밖이면 null(이전/다음 단추가 사라진다). @param {number} y @param {number} m */
+function listHref(y, m) {
+  const month = monthHref(y, m);
+  return month && `${month.replace("/calendar/", "/calendar/list/")}-01`;
+}
+
+/**
+ * 목록 줄의 굵기 — 주일과 대축일, 주요축일이 가장 굵고 축일이 그다음이며 평일은 보통 굵기다. 모든 날을 보이므로 주일과 축일을 찾기 쉽게 한다.
+ * 글꼴이 400, 500, 700을 받으므로 이 셋만 쓴다(DESIGN.md §3).
+ * @param {LectionaryModel} m
+ * @returns {"major" | "minor" | ""}
+ */
+function rowLevelOf(m) {
+  const rank = m.selected.observance.rank;
+  if (m.resolved.coord.type === "sunday" || rank === "principal" || rank === "privileged_sunday" || rank === "major_feast" || rank === "sunday") return "major";
+  return rank === "minor_feast" || rank === "regional_festival" ? "minor" : "";
+}
+
+/**
+ * 목록 줄 하나(ADR-038 §2 「목록 보기」, 사용자 결정 2026-11-07). 글은 전례독서 제목 영역과 같고(`headLinesOf`), 다른 전례일은 줄 전체가
+ * 링크라 누를 수 없는 글이다. 선택 대체색은 싣지 않는다(DESIGN.md §2). 전례년 첫날은 해 대신 「나해 시작」을 단다.
+ * @param {LectionaryModel} m
+ * @param {string} today  "YYYY-MM-DD"
+ * @returns {ListRow}
+ */
+function listRowOf(m, today) {
+  const { date } = m;
+  const head = headLinesOf(m);
+  const p = /** @type {{ y: number, m: number, d: number }} */ (parseDate(date));
+  const weekday = dayOfWeek(date);
+  const mark = calendarDay(date, m.resolved).yearStart;
+  const meta = head.meta.filter((item) => !(mark && item.kind === "cycle")).map((item) => item.text);
+  const lines = [...head.notes, ...head.names, ...head.others];
+  const isToday = date === today;
+  const colorNamesText = m.colors.map((c) => COLOR_LABEL[c] || c).join(m.colorsOr ? " 또는 " : " · ");
+  return {
+    date, day: p.d, weekday: WEEKDAY_KO[weekday], href: `/lectionary/${date}`, isToday,
+    level: rowLevelOf(m),
+    title: head.title,
+    colors: m.colors.map((c, i) => ({ code: c, name: COLOR_LABEL[c] || c, or: m.colorsOr && i > 0 })),
+    meta, mark, lines,
+    // 보이는 글을 모두 싣는다(WCAG 2.5.3). 색은 점뿐이 아니라 이름으로도 읽힌다.
+    label: [isToday ? "오늘" : null, `${p.m}월 ${p.d}일 ${CAL_WEEKDAY_FULL[weekday]}`, head.title, colorNamesText, ...meta, mark, ...lines]
+      .filter(Boolean).join(", "),
+  };
+}
+
+/**
+ * 목록 화면 — 그 달의 모든 날을 한 줄씩(ADR-038 §2). `rowOf` 가 null 을 내는 날은 건너뛴다.
+ * @param {number} y @param {number} m  1~12
+ * @param {string} today  "YYYY-MM-DD"
+ * @param {(date: string) => ListRow | null} rowOf
+ * @returns {CalendarList}
+ */
+function buildMonthList(y, m, today, rowOf) {
+  /** @type {ListRow[]} */
+  const rows = [];
+  for (let d = 1; d <= 31; d++) {
+    const date = toKey(y, m, d);
+    if (!parseDate(date)) break;
+    const row = rowOf(date);
+    if (row) rows.push(row);
+  }
+  const key = `${String(y).padStart(4, "0")}-${String(m).padStart(2, "0")}`;
+  return {
+    year: y, month: m, title: `${y}년 ${m}월`, shortTitle: `${y}.${String(m).padStart(2, "0")}`, rows,
+    hrefs: {
+      prev: listHref(y, m - 1), next: listHref(y, m + 1), today: "/calendar/list",
+      view: today.slice(0, 7) === key ? "/calendar" : `/calendar/${key}`,
+    },
   };
 }
 // ── END CALENDAR_MODEL ──
@@ -276,8 +369,12 @@ function announceMonth(/** @type {CalendarMonth} */ model) {
   announce(`${model.title} ${PAGE_TITLE}`);
 }
 
-/** 머리의 제목 자리에 달 이동 줄을 그린다 — 전례독서와 같은 줄이다(사용자 결정 2026-11-07). @param {CalendarMonth} model */
-function commitMonthBar(model) {
+/**
+ * 상단 바의 제목 자리에 달 이동 줄을 그린다 — 전례독서와 같은 줄이다(사용자 결정 2026-11-07).
+ * @param {CalendarMonth | CalendarList} model
+ * @param {string} icon  오른쪽 단추의 아이콘 — 누르면 갈 보기
+ */
+function commitMonthBar(model, icon) {
   // 폭이 모자라면 CSS가 짧은 표기를 보인다(사용자 결정 2026-11-05). 스크린 리더는 언제나 전체 이름을 읽는다.
   const month = el("span", { className: "cal-month" });
   month.appendChild(el("span", { className: "cal-month-full" }, model.title));
@@ -288,6 +385,9 @@ function commitMonthBar(model) {
     todayHref: model.hrefs.today,
     prev: { href: model.hrefs.prev, label: "이전 달" },
     next: { href: model.hrefs.next, label: "다음 달" },
+    view: icon === HEADER_ICON_PATHS.viewList
+      ? { href: model.hrefs.view, label: "목록으로 보기", icon }
+      : { href: model.hrefs.view, label: "월간으로 보기", icon },
   });
 }
 
@@ -347,7 +447,7 @@ function buildMonthTable(model) {
  */
 function commitMonth(model) {
   commitLiturgicalTitle("calendar");   // 문서 제목(views.js)
-  commitMonthBar(model);
+  commitMonthBar(model, HEADER_ICON_PATHS.viewList);
   clearNode($app);
   const root = el("div", { className: "calendar" });
   root.appendChild(buildMonthTable(model));
@@ -360,8 +460,118 @@ function commitMonth(model) {
   announceMonth(model);
 }
 
+/** 색 점과 이름. @param {ListRow} row */
+function buildRowMeta(row) {
+  const meta = el("span", { className: "cal-row-meta" });
+  for (const color of row.colors) {
+    if (color.or) meta.appendChild(el("span", {}, "또는"));
+    const item = el("span", { className: "cal-row-color" });
+    item.appendChild(el("span", { className: `cal-row-dot lit-swatch lit-swatch--${color.code}`, "aria-hidden": "true" }));
+    item.appendChild(document.createTextNode(color.name));
+    meta.appendChild(item);
+  }
+  for (const text of row.meta) meta.appendChild(el("span", {}, text));
+  if (row.mark) meta.appendChild(el("span", { className: "cal-mark" }, row.mark));
+  return meta;
+}
+
+/** 줄 전체가 그날 전례독서로 가는 링크다. @param {ListRow} row */
+function buildRow(row) {
+  const cls = ["cal-row"];
+  if (row.level) cls.push(`cal-row--${row.level}`);
+  if (row.isToday) cls.push("cal-row--today");
+  const a = el("a", { className: cls.join(" "), href: row.href, "aria-label": row.label });
+  if (row.isToday) a.setAttribute("aria-current", "date");
+  const date = el("span", { className: "cal-row-date" });
+  date.appendChild(el("span", { className: "cal-row-day" }, String(row.day)));
+  date.appendChild(el("span", { className: "cal-row-weekday" }, row.weekday));
+  a.appendChild(date);
+  const body = el("span", { className: "cal-row-body" });
+  body.appendChild(el("span", { className: "cal-row-title" }, row.title));
+  body.appendChild(buildRowMeta(row));
+  for (const line of row.lines) body.appendChild(el("span", { className: "cal-row-line" }, line));
+  a.appendChild(body);
+  const li = el("li", { "data-date": row.date });
+  li.appendChild(a);
+  return li;
+}
+
 /**
- * Full-screen calendar view for /calendar[/YYYY-MM] (ADR-038 §2). Returns the page title for the router's page meta.
+ * 그 날짜의 줄이 상단 바 바로 아래에 오게 스크롤한다. 달의 첫 줄이면 달 이름이 함께 보이게 페이지 맨 위로 간다. 데스크톱은 스크롤하면 상단 바의
+ * 윗줄이 접혀 높이가 바뀌므로(views.js initCompactHeader) 다음 프레임에 한 번 더 맞춘다.
+ * @param {string} date
+ */
+function scrollToRow(date) {
+  const row = $app.querySelector(`li[data-date="${date}"]`);
+  if (!row) return;
+  const place = () => {
+    const below = document.getElementById("sticky-group")?.getBoundingClientRect().bottom ?? 0;
+    const top = row.previousElementSibling ? window.scrollY + row.getBoundingClientRect().top - below : 0;
+    window.scrollTo({ top, behavior: "instant" });
+  };
+  place();
+  requestAnimationFrame(place);
+}
+
+/**
+ * Commit the list view — synchronous, called only after both bundles are loaded and the route is still current.
+ * @param {CalendarList} model
+ * @param {string} anchor  "YYYY-MM-DD" — 상단 바 바로 아래에 둘 줄
+ */
+function commitList(model, anchor) {
+  commitLiturgicalTitle("calendar");   // 문서 제목(views.js)
+  commitMonthBar(model, HEADER_ICON_PATHS.viewMonth);
+  clearNode($app);
+  const root = el("div", { className: "calendar cal-list" });
+  const section = el("section", { "aria-label": model.title });
+  section.appendChild(el("h2", { className: "cal-list-month" }, model.title));
+  const list = el("ul", { className: "cal-rows" });
+  for (const row of model.rows) list.appendChild(buildRow(row));
+  section.appendChild(list);
+  root.appendChild(section);
+  $app.appendChild(root);
+  committedMonth = null;   // 월간으로 돌아가면 맨 위부터다
+  scrollToRow(anchor);
+  announce(`${model.title} ${PAGE_TITLE} 목록`);
+}
+
+/**
+ * /calendar/list[/YYYY-MM-DD](ADR-038 §2 「목록 보기」). 줄의 글이 전례독서와 같아야 해서 독서 묶음도 받는다 — 월간은 받지 않는다.
+ * @param {string | null} param  주소의 날짜 — null 이면 오늘
+ * @param {string} today  "YYYY-MM-DD"
+ * @param {() => boolean} isStale
+ * @returns {Promise<string>}
+ */
+async function renderListView(param, today, isStale) {
+  const anchor = param ?? today;
+  const target = parseDate(anchor);
+  if (!target || !isComputableDate(anchor)) {
+    return renderLiturgicalFailure("calendar", {
+      message: "잘못된 날짜입니다",
+      subtitle: `주소는 /calendar/list/YYYY-MM-DD 형식이어야 합니다(${MIN_YEAR}년 ~ ${MAX_YEAR}년). 「${THIS_MONTH_LABEL}」를 눌러 주세요.`,
+      action: "this-month",
+    });
+  }
+  try {
+    await Promise.all([preloadCalendar(), preloadLectionary()]);
+  } catch (err) {
+    if (isStale()) return PAGE_TITLE;
+    console.error(err);
+    return renderLiturgicalLoadFailure("calendar");
+  }
+  if (isStale()) return PAGE_TITLE;
+  const model = buildMonthList(target.y, target.m, today, (date) => {
+    const resolved = resolveDate(date);
+    const m = resolved && lectionaryModelOf(resolved, { obs: null, track: null, set: null, collect: null });
+    return m ? listRowOf(m, today) : null;
+  });
+  commitList(model, anchor);
+  window.tabHistory?.rememberCalendarView();
+  return `${model.title} ${PAGE_TITLE} 목록`;
+}
+
+/**
+ * Full-screen calendar view for /calendar[/YYYY-MM] and /calendar/list[/YYYY-MM-DD] (ADR-038 §2). Returns the page title for the router's page meta.
  * Data-first: nothing touches #app until the calendar bundle is loaded and the route is still the current one (ADR-031 guard).
  * @param {CalendarRoute} parsed
  * @returns {Promise<string>}
@@ -372,6 +582,7 @@ async function renderCalendarView(parsed) {
   const isStale = () => entrySeq !== null && typeof routeSeq === "function" && routeSeq() !== entrySeq;
 
   const today = todayKey(new Date());
+  if (parsed.mode === "list") return renderListView(parsed.date, today, isStale);
   const target = parsed.month === null ? parseMonthParam(today.slice(0, 7)) : parseMonthParam(parsed.month);
   if (!target) {
     // 전체 화면 실패(DESIGN.md §6) — 다음 행동은 「이번 달 캘린더」(다른 화면으로 가므로 링크)
