@@ -828,6 +828,19 @@ export interface ParishDedication {
 }
 
 /**
+ * 관구 설립일 — 데이터 `lectionary/local-observances.json`의 `province`(원료는 데이터 저장소
+ * `liturgical/calendar/dioceses.md`의 관구 행). 모든 사용자에게 그날의 본기도 뒤에 관구 설립 본기도를 잇는다(ADR-041 §6).
+ * `collect`는 설립일 공통 본기도(`commons.json`의 `anniversary`)에 이름을 넣고 「교구(관구)」를 「관구」로 고른 것이다.
+ */
+export interface ProvinceFounding {
+  name: string;
+  /** 「MM.DD」 */
+  date: string;
+  year: number | null;
+  collect: CollectOption | null;
+}
+
+/**
  * `findReadings` 의 그룹 — 세트 하나가 그룹 하나. 고유는 본문 레코드에서, 성인 공통은
  * `commons.json` 에서 만든다(`common` 이 분류 키, id `common:<class>-s<set>`) — 설계서 §5.6.
  */

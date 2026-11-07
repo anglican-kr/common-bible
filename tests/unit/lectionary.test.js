@@ -887,6 +887,29 @@ test("buildLectionaryModel: 그날 축성 · 축복된 교회는 종류마다 �
   same(plain(ctx.buildLectionaryModel(r, q, groupsOf, entries, null).dedicationLines), []);
 });
 
+test("buildLectionaryModel: 관구 설립일에는 「1992년 9월 29일 관구설립일」 줄을 두고, 그 본기도를 고른 전례일의 본기도 뒤에 잇는다 — 주일에도, 다른 전례일을 골라도(사용자 결정 2026-11-05, 2026-11-07)", () => {
+  const mich = cand(obs("d0929-mich", "성 미카엘과 모든 천사들", { rank: "major_feast", precedence: 3, color: "white" }));
+  const grid = cand(obs("grid:ordinary-26-sunday", "연중 26주일", { rank: "sunday", precedence: 5, color: "green" }));
+  const r = resolvedOf("2030-09-29", [mich, grid], mich);
+  const groupsOf = groupsOfFrom({ "d0929-mich": [group("m", FOUR)], "grid:ordinary-26-sunday": [group("g", FOUR)] });
+  const entries = [{ candidate: mich, collects: [collect("m-c", "미카엘")] }, { candidate: grid, collects: [collect("g-c", "연중")] }];
+  const province = { name: "대한성공회", date: "09.29", year: 1992,
+    collect: { id: "common:anniversary-c1", title: "설립일", collect_no: 1, collect_total: 1, text: "관구", ending: "C", common: "anniversary" } };
+  const q = { obs: null, track: null, set: null, collect: null };
+  const m = ctx.buildLectionaryModel(r, q, groupsOf, entries, null, [], false, [province]);
+  same(plain(m.foundingLines), ["1992년 9월 29일 관구설립일"]);
+  same(m.memorialCollects.map((c) => c.text), ["관구"]);
+  assert.strictEqual(m.ending, "C");   // 송영은 이은 본기도 뒤에 한 번
+  // 다른 전례일을 골라도 그 전례일의 본기도 뒤에 잇는다. 줄도 그대로다
+  const other = ctx.buildLectionaryModel(r, { ...q, obs: "grid:ordinary-26-sunday" }, groupsOf, entries, null, [], true, [province]);
+  same(other.collects.map((c) => c.text), ["연중"]);
+  same(other.memorialCollects.map((c) => c.text), ["관구"]);
+  same(plain(other.foundingLines), ["1992년 9월 29일 관구설립일"]);
+  // 설립연도가 없으면 월일만, 관구 설립일이 아니면(인자를 넘기지 않은 옛 호출 포함) 줄이 없다
+  same(plain(ctx.buildLectionaryModel(r, q, groupsOf, entries, null, [], false, [{ ...province, year: null }]).foundingLines), ["9월 29일 관구설립일"]);
+  same(plain(ctx.buildLectionaryModel(r, q, groupsOf, entries, null, [], false).foundingLines), []);
+});
+
 test("buildLectionaryModel: 이름 있는 후보와 독서 · 본기도가 똑같은 격자는 전례독서 목록에 없다 — 대림1주일(사용자 결정 2026-11-04)", () => {
   const advent = cand(obs("t-대림1주일", "대림1주일", { rank: "privileged_sunday", precedence: 2, color: "violet" }));
   const grid = cand(obs("grid:advent-1-sunday", "대림 1주일", { rank: "privileged_sunday", precedence: 2, color: "violet" }));

@@ -43,7 +43,7 @@ import {
 import { specCoversVerse, verseInstanceKeys, citationSource } from "./verse-spec.js";
 import {
   parseDate, toKey, addDays, dayOfWeek, isComputableDate, joinNames, fillCommonName,
-  preloadCalendar, preloadLectionary, resolveDate, findReadings, findCollects, findHalfVerse, findDedications, fastOf, isEmber,
+  preloadCalendar, preloadLectionary, resolveDate, findReadings, findCollects, findHalfVerse, findDedications, findFoundings, fastOf, isEmber,
   optionalDestOf,
 } from "./liturgical-engine.js";
 
@@ -78,7 +78,7 @@ const PAGE_TITLE = LITURGICAL_VIEWS.lectionary.title;
  *   choices: LectionaryChoice[], selectedNote: string | null,
  *   collects: CollectOption[], collectLabels: string[], collectIndex: number, collectsLinked: boolean, ending: "A" | "B" | "C",
  *   memorialCollects: CollectOption[], memorialSaints: Candidate[], passiveDays: Candidate[], commemorations: Candidate[], textlessDays: Candidate[],
- *   dedicationLines: string[], transferNotes: string[],
+ *   foundingLines: string[], dedicationLines: string[], transferNotes: string[],
  *   colors: string[], colorAlt: string[], ownColor: boolean, colorsOr: boolean,
  *   fast: "major" | "minor" | null, cycle: string | null, empty: boolean,
  *   hrefs: { prev: string | null, next: string | null, today: string, tracks: Array<{ track: 1 | 2, href: string, active: boolean }>, options: string[], collects: string[] },
@@ -520,6 +520,18 @@ function dedicationLines(entries) {
 }
 
 /**
+ * 관구 설립일(엔진 `findFoundings`) → 제목 아래 줄 「1992년 9월 29일 관구설립일」(사용자 결정 2026-11-07). 설립연도가 없으면
+ * 「9월 29일 관구설립일」이다.
+ * @param {import("../types").ProvinceFounding[]} entries @returns {string[]}
+ */
+function foundingLines(entries) {
+  return entries.map((f) => {
+    const [m, d] = f.date.split(".").map(Number);
+    return `${f.year ? `${f.year}년 ` : ""}${m}월 ${d}일 관구설립일`;
+  });
+}
+
+/**
  * 기리는 성인의 본기도를 잇는 차례 — 공통 본기도의 유형을 정의한 차례(`commons.json`의 `classes`)와 같다: 순교자, 성직자,
  * 선교사, 신학자·교육자, 수도자, 성인 일반(사용자 결정 2026-11-03). 유형이 없는 성인은 그 뒤에 후보 차례로.
  * `lectionary.data.test.js`가 데이터의 차례와 대조한다.
@@ -851,9 +863,10 @@ function isAlternateReading(c, initial) {
  * @param {1 | 2 | null} storedTrack  기억된 트랙 — 마지막으로 고른 것(해를 넘어 유지)
  * @param {import("../types").ParishDedication[] | undefined} dedications  그날 축성되거나 축복된 교회(엔진 `findDedications`)
  * @param {boolean} showAlternates  대체 독서의 줄을 전례독서 목록에 보이는가(설정 「대체 독서 표시」). 기본값을 두지 않는다 — 값은 설정에서 받는다
+ * @param {import("../types").ProvinceFounding[]} [foundings]  그날이 관구 설립일이면 그 설립일(엔진 `findFoundings`)
  * @returns {LectionaryModel | null}  후보가 하나도 없으면 null(유효한 날짜에는 격자가 언제나 있어 생기지 않는다)
  */
-function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedTrack, dedications = [], showAlternates) {
+function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedTrack, dedications = [], showAlternates, foundings = []) {
   const date = resolved.date;
   const initial = initialCandidate(resolved, groupsOf);
   if (!initial) return null;
@@ -916,7 +929,10 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
   const linked = linkCollects(options, collects);
   const collectIndex = linked && setIndex >= 0 ? linked[setIndex] : pickCollect(collects, query.collect);
   const chosenCollect = collectIndex >= 0 ? collects[collectIndex] : null;
-  const memorialCollects = selected === initial ? memorial.collects : [];
+  // 관구 설립일(9.29)에는 고른 전례일의 본기도 뒤에 관구 설립 본기도를 잇는다. 기리는 성인과 달리 주일에도, 전례독서 목록에서 다른
+  // 전례일을 골라도 잇는다 — 모든 사용자에게 덧붙이는 본기도다(사용자 결정 2026-11-05, ADR-041 §6). 송영은 그 뒤에 한 번이다.
+  const foundingCollects = foundings.flatMap((f) => (f.collect ? [f.collect] : []));
+  const memorialCollects = [...(selected === initial ? memorial.collects : []), ...foundingCollects];
 
   const base = { obs: selected.observance.id, track, set: setIndex + 1, collect: !linked && chosenCollect ? collectIndex + 1 : null };
   // 후보마다 그 화면의 트랙 — 고른 후보는 지금 트랙, 다른 후보는 기억(없으면 첫 트랙). 트랙은 주소에 언제나 적으므로(hrefFor),
@@ -978,7 +994,7 @@ function buildLectionaryModel(resolved, query, groupsOf, collectEntries, storedT
     ].filter(Boolean).join(" · ") || null,
     collects, collectLabels: collectLabels(collects), collectIndex, collectsLinked: !!linked,
     ending: endingCodeOf(memorialCollects[memorialCollects.length - 1] || chosenCollect), memorialCollects,
-    memorialSaints: memorial.saints, passiveDays, commemorations, textlessDays, dedicationLines: dedicationLines(dedications), transferNotes,
+    memorialSaints: memorial.saints, passiveDays, commemorations, textlessDays, foundingLines: foundingLines(foundings), dedicationLines: dedicationLines(dedications), transferNotes,
     colors, colorAlt, ownColor, colorsOr, fast: fastOf(resolved),
     cycle: resolved.coord.year && CYCLE_LABEL[resolved.coord.year] ? CYCLE_LABEL[resolved.coord.year] : null,
     empty,
@@ -1165,6 +1181,8 @@ function buildHeader(m) {
   const lines = [
     ...m.memorialSaints.map((c) => `${c.observance.name || ""} 축일`),
     ...m.passiveDays.map((c) => shortName(c.observance.name) + statusSuffix(c)),
+    // 관구 설립일 — 같은 날의 「대한성공회 선교 기념일」 줄보다 먼저(사용자 결정 2026-11-07, foundingLines)
+    ...m.foundingLines,
     ...m.commemorations.map((c) => `${c.observance.name || ""} 기념일`),
     ...m.textlessDays.map((c) => String(c.observance.name || "")),
     ...m.dedicationLines,
@@ -1317,7 +1335,7 @@ function buildCollects(m) {
   const o = m.collects[Math.max(m.collectIndex, 0)];
   const art = el("article", { className: "lect-collect chapter-text", lang: "ko" });
   art.appendChild(el("p", { className: "lect-collect-text" }, o.text));
-  // 기리는 성인의 본기도 — 기본 독서의 본기도 다음, 송영 앞(memorialOf).
+  // 기리는 성인의 본기도와 관구 설립 본기도 — 고른 본기도 다음, 송영 앞(memorialOf, buildLectionaryModel의 foundingCollects).
   for (const mc of m.memorialCollects) art.appendChild(el("p", { className: "lect-collect-text" }, mc.text));
   section.appendChild(art);
   // 송영 — 고른 본기도(기리는 성인의 본기도가 있으면 마지막 것) 뒤에 1회(ADR-036 §3).
@@ -1677,7 +1695,7 @@ async function renderLectionaryView(parsed) {
     if (!g) { g = findReadings(resolved, c); groupsCache.set(key, g); }
     return g;
   };
-  const model = buildLectionaryModel(resolved, parsed, groupsOf, findCollects(resolved), loadLectionaryTrack(), findDedications(date), loadLectionaryAltShow());
+  const model = buildLectionaryModel(resolved, parsed, groupsOf, findCollects(resolved), loadLectionaryTrack(), findDedications(date), loadLectionaryAltShow(), findFoundings(date));
   if (!model) return pickAnotherDate("이 날짜는 교회력에 없습니다");
 
   const chapters = await loadSlotChapters(model.slots);

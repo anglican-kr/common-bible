@@ -31,20 +31,20 @@ collects.note                  = 1
 collects.rank_null             = 3
 collects.color_null            = 1
 collects.collect_total_gt1     = 35
-readings.total                 = 938
+readings.total                 = 939
 readings.set_no.1              = 849
-readings.set_no.2              = 88
+readings.set_no.2              = 89
 readings.set_no.3              = 1
-readings.set_total_gt1         = 177
-readings.slot.first            = 938
-readings.slot.psalm            = 938
-readings.slot.second           = 391
-readings.slot.gospel           = 938
+readings.set_total_gt1         = 179
+readings.slot.first            = 939
+readings.slot.psalm            = 939
+readings.slot.second           = 392
+readings.slot.gospel           = 939
 readings.reading_track_nonnull = 183
-readings.weekday_null          = 401
+readings.weekday_null          = 402
 sanctoral.total                = 149
-sanctoral.has_proper           = 51
-sanctoral.commemoration        = 17
+sanctoral.has_proper           = 50
+sanctoral.commemoration        = 18
 sanctoral.minor_feast          = 94
 temporal.total                 = 24
 temporal.rule_kinds            = 7
@@ -148,7 +148,7 @@ d1230-성탄주간-t1-s1             name="성탄주간"     weekday=null  date=
 
 정의 표(sanctoral, temporal-feasts)와 본문 표(readings, collects)를 잇는 키는 실측으로 정했다.
 
-- **sanctoral ↔ readings/collects**. 키: **`date`(`MM.DD`)와 `lunar`**. 고유 본기도가 있는 51건에서 날짜 조인은 **본기도 51/51, 독서 50/51이 성공**하고(`date` 49, `lunar` 2), 이름 조인은 36건만 성공한다(2026-11-07 실측). 독서에서 빠지는 하나는 프란시스 사베리오(12.03)다. **고유 본기도와 공통 독서**라 고유 독서가 없는 것이 맞다(articles-supplement의 `readings: null` 경우). **다만 그것만으로는 이날 독서를 찾지 못한다.** `commons.json`이 분류별 독서를 갖고 있고(7분류 22세트, 사베리오의 `missionary`는 3세트), §5.6의 **성인 공통 독서 폴백**이 이날을 맡는다(§9 미결11, 2026-09-17 확정). `lunar`를 빼고 `date`만으로 맞추면 설날과 추석이 떨어져 나간다.
+- **sanctoral ↔ readings/collects**. 키: **`date`(`MM.DD`)와 `lunar`**. 고유 본기도가 있는 50건에서 날짜 조인은 **본기도 50/50, 독서 49/50이 성공**하고(`date` 48, `lunar` 2), 이름 조인은 36건만 성공한다(2026-11-07 실측. 9.29 대한성공회 설립 기념일이 기념일 「대한성공회 선교」가 되어 51건에서 하나 줄었다). 독서에서 빠지는 하나는 프란시스 사베리오(12.03)다. **고유 본기도와 공통 독서**라 고유 독서가 없는 것이 맞다(articles-supplement의 `readings: null` 경우). **다만 그것만으로는 이날 독서를 찾지 못한다.** `commons.json`이 분류별 독서를 갖고 있고(7분류 22세트, 사베리오의 `missionary`는 3세트), §5.6의 **성인 공통 독서 폴백**이 이날을 맡는다(§9 미결11, 2026-09-17 확정). `lunar`를 빼고 `date`만으로 맞추면 설날과 추석이 떨어져 나간다.
 - **temporal-feasts ↔ readings/collects**. 키: **`coord_name` ↔ `name`**(`aliases`도 키). 정의 표가 조인용 이름 필드를 따로 갖고 있다. 24건 가운데 `coord_name: null` 7건(대림1주일, 가정주일, 평화통일주일, 사계재 4)은 이름 조인 대상이 아니다. 대림1주일은 격자의 절기 위치(`advent-1-sun-*`)로만 조회된다.
 - **local-observances → commons**. 키: `dedication.common`, `observance.common` → `classes[키]`. 문자열로 바로 가리킨다.
 - **local-observances → sanctoral**. 키: `patron_refs[].sanctoral_id`. 52건 모두 실제 id를 가리킨다(2026-10-24 실측).
@@ -242,7 +242,7 @@ function resolveDate(dateStr) → {
   - **다시 분류한 뒤에도 `proper`로 남는 것**은 다음과 같다.
     - ① 지정 전례일(`official`).
     - ② 격자의 주일과 평일 후보. 연중 평일 독서다. 어느 규칙도 옮기거나 생략하지 않으므로 「밀린 독서 보존」(ADR-036 §7)이 이 상태로 이루어진다.
-    - ③ 고정일끼리 함께 지킬 때 후순위인 쪽(9.29 설립 기념일, §6.5, 미결18).
+    - ③ 고정일끼리 함께 지킬 때 후순위인 쪽(8.15 광복절, 9.14 성가수도회 등, §6.5, 미결18. 9.29 대한성공회 선교도 그렇다).
     - ④ `transferable: false`인 주요축일이나 대축일이 후순위인 경우. 지금 표에서 12.25 같은 대축일은 후순위가 되지 않으므로 사례가 없다. 생기면 데이터 결함 신호다.
     - ⑤ 옮길 날 수의 상한 `MAX_SHIFT`를 넘겨 옮기지 못한 것(§6.5. `defects`에 id가 함께 실린다. 지금 표에서 사례가 없다).
     - ⑥ **지향과 이름 줄 후보인 사계재와 기념일**(→ R-6.1-ineligible). 언제나 `proper`이고 지정 전례일이 아니다. 밀린 것이 아니므로 `displacedBy`도 없고 `omitted`도 되지 않는다.
@@ -348,12 +348,12 @@ function resolveDate(dateStr) → {
 
   | 갈래 | 건수 | 처리 |
   |---|---|---|
-  | 고유 **본기도** 보유(`has_proper: true`) | 51 | 본기도 공통은 필요 없다. `apostle`(14), `evangelist`(3), `lord`(12)는 **모두** 여기 속한다. **독서까지 있다는 뜻은 아니다.** 51건 가운데 프란시스 사베리오(12.03)는 고유 독서가 없어 공통 독서를 **쓴다**(아래 「성인 공통 독서 폴백」, §9 미결11). `has_proper`는 본기도 축의 플래그다 |
+  | 고유 **본기도** 보유(`has_proper: true`) | 50 | 본기도 공통은 필요 없다. `apostle`(14), `evangelist`(3), `lord`(12)는 **모두** 여기 속한다. **독서까지 있다는 뜻은 아니다.** 50건 가운데 프란시스 사베리오(12.03)는 고유 독서가 없어 공통 독서를 **쓴다**(아래 「성인 공통 독서 폴백」, §9 미결11). `has_proper`는 본기도 축의 플래그다 |
   | 공통으로 폴백 | 80 | `martyr` 31, `pastor` 25, `monastic` 9, `teacher` 6, `saint` 6, `missionary` 3. **여섯 분류 모두 `commons.classes`에 있다.** 바실과 나지안조의 그레고리(01.02), 토마스 베켓(12.29)은 기도서에 고유 본기도가 없어 2026-10-24에 여기로 왔다 |
-  | 기념일(`commemoration`) | 17 | 본기도와 독서가 애초에 없다(§2) |
+  | 기념일(`commemoration`) | 18 | 본기도와 독서가 애초에 없다(§2). 9.29 대한성공회 선교는 2026-11-07에 주요축일C 「대한성공회 설립 기념일」에서 여기로 왔다(1992년 관구 설립과 구별, 사용자 결정) |
   | 분류 없는 축일 | 1 | 세계평화 기도일. 기도서에 본기도가 없고 `sanctoral_class`도 없어 공통을 쓰지 않는다(§2, 미결51). 병자를 위한 기도일도 분류는 없지만 고유 본기도가 있어 위 행에 든다(2026-11-07) |
 
-  `commons.classes`가 8개(위 여섯과 `dedication`, `anniversary`)뿐이어서 `apostle`, `evangelist`, `lord`, `national`이 빠진 것처럼 보이지만, **그 분류의 성인은 모두 고유 본기도를 가지므로 공통을 탈 일이 없다.** 뒤의 둘은 성인이 아니라 본당 축성일과 교구 설립일용이다.
+  `commons.classes`가 8개(위 여섯과 `dedication`, `anniversary`)뿐이어서 `apostle`, `evangelist`, `lord`, `national`이 빠진 것처럼 보이지만, **그 분류의 성인은 모두 고유 본기도를 가지므로 공통을 탈 일이 없다.** 뒤의 둘은 성인이 아니라 본당 축성일과 교구, 관구 설립일용이다. 관구 설립일(9.29)의 본기도는 화면이 그날 본기도 뒤에 잇는다(`findFoundings`, ADR-041 §6).
 - **같은 날짜에 성인이 둘 이상이면 각각 만든다**(사용자 확정 2026-09-17). 그날의 성인 후보 **각각**에 대해 본기도와 독서를 만들고, 어느 것을 볼지는 **읽는 사람이 고른다**(ADR-038 §3 전례일 스위처. 기본 선택은 `official`이고, 그 독서가 공통뿐이면 격자다, 미결25). 엔진이 지정 전례일만 남기고 나머지의 본문을 지우지 않는다. B1이 `omitted`, `commemorated`로 다시 분류한 후보도 `candidates`에 남는 이유가 이것이다(§5.5).
   - 계약을 그 모양으로 맞춘다. `findReadings`는 후보 하나를 받으므로 화면이 후보마다 호출하면 되고, `findCollects(resolved)`의 둘째 축은 **전례일별로 묶어** 스위처가 고른 전례일의 본기도를 찾게 한다. 화면은 그것만 보인다(ADR-038 §3 「구현」; 아래 `findCollects` 항. 종전 문면은 축을 구분만 했지 전례일을 알아볼 수 없어 스위처가 고를 수 없었다).
   - **기념일은 예외다.** 후보로는 남되 본기도와 독서는 빈 결과다(§2, 아래 자격 ②). 2026-04-05가 그 실례다. 후보는 부활대축일, 마틴 루터 킹, 부활 1주일 격자 셋이고, 마틴 루터 킹의 본문은 빈 결과다. 본문이 없는 축일(세계평화 기도일 01.01, §2, 미결51)도 후보로 남고 본문은 빈 결과다. 화면은 이 후보들을 제목 아래 이름 줄로 보인다(ADR-038 §3, 사용자 결정 2026-11-03, 11-04).
