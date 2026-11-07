@@ -1,4 +1,5 @@
 ---
+pr: 519
 date: 2026-11-07
 branch: fix/sync-orphan-bookmarks
 title: "fix: 동기화 뒤 북마크가 목록에서 사라지는 문제 수정"
