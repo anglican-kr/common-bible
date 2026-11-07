@@ -1,4 +1,5 @@
 ---
+pr: 517
 date: 2026-11-07
 branch: fix/verse-announce-number
 title: "fix: 절을 누를 때 읽어 주는 번호 수정"
