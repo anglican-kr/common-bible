@@ -1,4 +1,5 @@
 ---
+pr: 520
 date: 2026-11-07
 branch: fix/audio-offline-message
 title: "fix: 오프라인 오디오 안내 수정"
